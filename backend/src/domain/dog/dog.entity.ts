@@ -32,7 +32,7 @@ export class Dog {
     public treatLevel: TreatLevel,
     public manualTreatKcal: number | null,
     public medicalHistory: string | null,
-    public cachedTargetFoodKcal: number,
+    public cachedTargetFoodKcal: number, // System calculated, can be updated
   ) {
     this.validateInvariants();
   }

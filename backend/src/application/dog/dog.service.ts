@@ -15,6 +15,7 @@ import {
   DogSizeCategory,
   TreatInputMode,
   TreatLevel,
+  calculateDogEnergy,
 } from '../../domain';
 
 export interface CreateDogProfileDto {
@@ -74,7 +75,6 @@ export class DogService {
 
   /**
    * Create a new dog profile
-   * TODO: Implement full logic
    */
   async createDogProfile(dto: CreateDogProfileDto): Promise<Dog> {
     const id = randomUUID();
@@ -97,17 +97,23 @@ export class DogService {
       dto.treatLevel ?? TreatLevel.LOW,
       dto.manualTreatKcal ?? null,
       dto.medicalHistory ?? null,
-      0, // cachedTargetFoodKcal - TODO: Calculate initial value
+      0, // Will be calculated and updated after save
     );
 
-    // TODO: Calculate and set cachedTargetFoodKcal
+    // Save first to get persisted entity
+    const savedDog = await this.dogRepository.save(dog);
 
-    return this.dogRepository.save(dog);
+    // Calculate and update cachedTargetFoodKcal
+    const calcResult = calculateDogEnergy(savedDog);
+    savedDog.cachedTargetFoodKcal = Math.round(calcResult.finalFoodKcal);
+
+    // Update with calculated value
+    return this.dogRepository.save(savedDog);
   }
 
   /**
    * Update dog profile
-   * TODO: Implement full logic
+   * Recalculates cachedTargetFoodKcal if relevant fields changed
    */
   async updateDogProfile(
     dogId: string,
@@ -118,10 +124,32 @@ export class DogService {
       throw new Error(`Dog not found: ${dogId}`);
     }
 
-    // TODO: Apply updates
+    // Fields that require recalculation
+    const fieldsRequiringRecalc = [
+      'currentWeightKg',
+      'bcsScore',
+      'activityLevel',
+      'lifeStageOverride',
+      'sizeClassOverride',
+      'isNeutered',
+      'treatInputMode',
+      'treatLevel',
+      'manualTreatKcal',
+    ];
+
+    // Check if any relevant field changed
+    const needsRecalc = fieldsRequiringRecalc.some(
+      (field) => dto[field as keyof UpdateDogProfileDto] !== undefined,
+    );
+
+    // Apply updates
     dog.updateProfile(dto as Partial<Dog>);
 
-    // TODO: Recalculate cachedTargetFoodKcal if relevant fields changed
+    // Recalculate if needed
+    if (needsRecalc) {
+      const calcResult = calculateDogEnergy(dog);
+      dog.cachedTargetFoodKcal = Math.round(calcResult.finalFoodKcal);
+    }
 
     return this.dogRepository.save(dog);
   }
@@ -129,7 +157,6 @@ export class DogService {
   /**
    * Calculate energy requirement preview
    * Pure calculation function - no database writes
-   * TODO: Implement calculation logic based on Doc 07 Section 3.1
    */
   async calcPreview(dogId: string): Promise<CalcPreviewResult> {
     const dog = await this.dogRepository.findById(dogId);
@@ -137,44 +164,13 @@ export class DogService {
       throw new Error(`Dog not found: ${dogId}`);
     }
 
-    // TODO: Implement DER calculation based on Doc 07 Section 3.1
-    // Placeholder implementation for testing
-    const totalDer = this.calculateTotalDer(dog);
-    const treatDeduction = this.calculateTreatDeduction(dog, totalDer);
-    const finalFoodKcal = Math.max(0, totalDer - treatDeduction.deduction);
-    const isTreatCapped = treatDeduction.isCapped;
+    const calcResult = calculateDogEnergy(dog);
 
     return {
-      finalFoodKcal,
-      treatDeduction: treatDeduction.deduction,
-      isTreatCapped,
-      totalDer,
+      finalFoodKcal: calcResult.finalFoodKcal,
+      treatDeduction: calcResult.treatDeduction,
+      isTreatCapped: calcResult.isTreatCapped,
+      totalDer: calcResult.der,
     };
-  }
-
-  /**
-   * Calculate Total DER (placeholder)
-   * TODO: Implement based on Doc 07 Section 3.1.5
-   */
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  private calculateTotalDer(_dog: Dog): number {
-    // Placeholder: Simple calculation for testing
-    // TODO: Implement full RER * LifeStageFactor * AdultModifiers * BCS_Adjustment
-    return 500;
-  }
-
-  /**
-   * Calculate treat deduction (placeholder)
-   * TODO: Implement based on Doc 07 Section 3.1.5
-   */
-  private calculateTreatDeduction(
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _dog: Dog,
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    _totalDer: number,
-  ): { deduction: number; isCapped: boolean } {
-    // Placeholder: Simple calculation for testing
-    // TODO: Implement full treat deduction logic with 10% cap
-    return { deduction: 50, isCapped: false };
   }
 }

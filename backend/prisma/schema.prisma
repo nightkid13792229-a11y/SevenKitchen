@@ -116,18 +116,21 @@ model Order {
 
 // OrderItem is persisted only as part of the Order aggregate; no independent lifecycle or APIs (Phase 8.1 scope).
 model OrderItem {
-  id                  String  @id @default(uuid()) @map("id")
-  orderId             String  @map("order_id")
-  recipeSnapshot      Json    @map("recipe_snapshot")
-  quantityG           Float   @map("quantity_g")
-  packageCount        Int     @map("package_count")
-  packageSpecG        Int     @map("package_spec_g")
-  customRequirements  String? @map("custom_requirements")
-  dailyIntakeG        Float?  @map("daily_intake_g") // Daily intake in grams, calculated from DogCalc.finalFoodKcal ÷ Recipe.energyDensityKcalPerKg (immutable after order creation)
+  id                  String   @id @default(uuid()) @map("id")
+  orderId             String   @map("order_id")
+  recipeSnapshot      Json     @map("recipe_snapshot")
+  quantityG            Float    @map("quantity_g")
+  packageCount         Int      @map("package_count")
+  packageSpecG         Int      @map("package_spec_g")
+  customRequirements   String?  @map("custom_requirements")
+  dailyIntakeG         Float?   @map("daily_intake_g") // Daily intake in grams, calculated from DogCalc.finalFoodKcal ÷ Recipe.energyDensityKcalPerKg (immutable after order creation)
+  productionBatchId    String?  @map("production_batch_id") // Phase 8.11: Allocation lock - prevents duplicate allocation
+  allocatedAt          DateTime? @map("allocated_at") // Phase 8.11: Timestamp when item was allocated to a batch
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
+  @@index([productionBatchId])
   @@map("order_item")
 }
 

@@ -90,6 +90,9 @@ export class PrismaOrderRepository implements OrderRepository {
               packageSpecG: item.packageSpecG,
               customRequirements: item.customRequirements,
               dailyIntakeG: item.dailyIntakeG,
+              // Phase 8.11: Allocation fields (null on creation, set when allocated to batch)
+              productionBatchId: item.productionBatchId ?? null,
+              allocatedAt: item.allocatedAt ?? null,
             })),
           });
           this.logger.debug(
@@ -161,6 +164,9 @@ export class PrismaOrderRepository implements OrderRepository {
           i.customRequirements ?? null,
           // Type assertion needed: dailyIntakeG may not exist in Prisma type until migration is applied
           (i as any).dailyIntakeG ?? i.quantityG / (i.packageCount || 1), // Fallback for backward compatibility
+          // Phase 8.11: Allocation fields
+          (i as any).productionBatchId ?? null,
+          (i as any).allocatedAt ? new Date((i as any).allocatedAt) : null,
         ),
     );
 

@@ -25,6 +25,7 @@ describe('ProductionService - Phase 8.10', () => {
     findByProductionDate: jest.fn(),
     findByStatus: jest.fn(),
     save: jest.fn(),
+    allocateOrderItems: jest.fn(),
   };
 
   const mockOrderRepository: jest.Mocked<OrderRepository> = {
@@ -54,6 +55,8 @@ describe('ProductionService - Phase 8.10', () => {
     orderRepository = module.get(ORDER_REPOSITORY);
 
     jest.clearAllMocks();
+    // Reset mock implementations
+    mockProductionRepository.allocateOrderItems = jest.fn();
   });
 
   const createMockRecipeSnapshot = (id: string): RecipeSnapshot => {
@@ -326,6 +329,88 @@ describe('ProductionService - Phase 8.10', () => {
       // Assert: Even if empty, should be an array
       expect(Array.isArray(dtoUnit.sourceOrderItemIds)).toBe(true);
       expect(dtoUnit.sourceOrderItemIds.length).toBe(1); // item-1
+    });
+  });
+
+  describe('createProductionBatch - allocation lock (Phase 8.11)', () => {
+    it('should allocate OrderItems and write productionBatchId', async () => {
+      // Arrange
+      const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
+      const orderItem1 = createMockOrderItem('item-1', recipeSnapshot, 310.34);
+      const orderItem2 = createMockOrderItem('item-2', recipeSnapshot, 250.0);
+      const order = createMockPaidOrder('order-1', [orderItem1, orderItem2]);
+
+      orderRepository.findByStatus.mockResolvedValue([order]);
+      productionRepository.save.mockImplementation(async (batch) => batch);
+      (productionRepository.allocateOrderItems as jest.Mock).mockResolvedValue(2); // All 2 items allocated
+
+      // Act
+      const result = await service.createProductionBatch({
+        productionDate: '2025-01-20',
+      });
+
+      // Assert: Allocation should be called
+      expect(productionRepository.allocateOrderItems).toHaveBeenCalledWith(
+        ['item-1', 'item-2'],
+        expect.any(String), // batchId
+      );
+      expect(productionRepository.allocateOrderItems).toHaveBeenCalledTimes(1);
+    });
+
+    it('should not include already allocated items in new batch', async () => {
+      // Arrange: Create order with already allocated items
+      const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
+      const allocatedItem = new OrderItem(
+        'item-1',
+        'order-1',
+        recipeSnapshot,
+        1000,
+        5,
+        200,
+        null,
+        310.34,
+        'existing-batch-id', // Already allocated
+        new Date(),
+      );
+      const order = createMockPaidOrder('order-1', [allocatedItem]);
+
+      orderRepository.findByStatus.mockResolvedValue([order]);
+
+      // Act & Assert: Should throw error because no eligible items
+      await expect(
+        service.createProductionBatch({
+          productionDate: '2025-01-20',
+        }),
+      ).rejects.toThrow('No eligible OrderItems found');
+      
+      // Allocation should not be called
+      expect(productionRepository.allocateOrderItems).not.toHaveBeenCalled();
+    });
+
+    it('should handle concurrent allocation conflicts', async () => {
+      // Arrange
+      const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
+      const orderItem1 = createMockOrderItem('item-1', recipeSnapshot, 310.34);
+      const orderItem2 = createMockOrderItem('item-2', recipeSnapshot, 250.0);
+      const order = createMockPaidOrder('order-1', [orderItem1, orderItem2]);
+
+      orderRepository.findByStatus.mockResolvedValue([order]);
+      productionRepository.save.mockImplementation(async (batch) => batch);
+      // Simulate concurrent allocation: only 1 of 2 items allocated
+      (productionRepository.allocateOrderItems as jest.Mock).mockResolvedValue(1);
+
+      // Act
+      const result = await service.createProductionBatch({
+        productionDate: '2025-01-20',
+      });
+
+      // Assert: Batch is created, but allocation count mismatch is logged
+      expect(result).toBeDefined();
+      expect(productionRepository.allocateOrderItems).toHaveBeenCalledWith(
+        ['item-1', 'item-2'],
+        expect.any(String),
+      );
+      // Service should continue even if not all items were allocated (concurrent conflict)
     });
   });
 });

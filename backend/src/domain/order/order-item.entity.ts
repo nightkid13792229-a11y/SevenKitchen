@@ -16,6 +16,8 @@ export class OrderItem {
     public readonly packageSpecG: number,
     public readonly customRequirements: string | null,
     public readonly dailyIntakeG: number, // Daily intake in grams, calculated from DogCalc.finalFoodKcal ÷ Recipe.energyDensityKcalPerKg
+    public readonly productionBatchId: string | null = null, // Phase 8.11: Allocation lock - prevents duplicate allocation
+    public readonly allocatedAt: Date | null = null, // Phase 8.11: Timestamp when item was allocated to a batch
   ) {
     this.validateInvariants();
   }

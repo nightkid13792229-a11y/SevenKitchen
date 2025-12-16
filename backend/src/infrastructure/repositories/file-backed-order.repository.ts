@@ -32,6 +32,8 @@ interface OrderData {
     packageSpecG: number;
     customRequirements: string | null;
     dailyIntakeG?: number; // Optional for backward compatibility
+    productionBatchId?: string | null; // Phase 8.11: Allocation lock
+    allocatedAt?: string | null; // Phase 8.11: ISO timestamp string
   }>;
   pricingBreakdownSnapshot?: {
     costIngredients: number;
@@ -125,6 +127,9 @@ export class FileBackedOrderRepository
           itemData.packageSpecG,
           itemData.customRequirements,
           itemData.dailyIntakeG ?? itemData.quantityG / (itemData.packageCount || 1), // Fallback for backward compatibility
+          // Phase 8.11: Allocation fields
+          itemData.productionBatchId ?? null,
+          itemData.allocatedAt ? new Date(itemData.allocatedAt) : null,
         ),
     );
 
@@ -218,6 +223,9 @@ export class FileBackedOrderRepository
         packageSpecG: item.packageSpecG,
         customRequirements: item.customRequirements,
         dailyIntakeG: item.dailyIntakeG,
+        // Phase 8.11: Allocation fields
+        productionBatchId: item.productionBatchId ?? null,
+        allocatedAt: item.allocatedAt ? item.allocatedAt.toISOString() : null,
       })),
       pricingBreakdownSnapshot: order.pricingBreakdownSnapshot
         ? {

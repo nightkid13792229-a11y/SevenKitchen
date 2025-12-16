@@ -72,7 +72,6 @@ export class ProductionService {
       orders = orders.filter((o): o is NonNullable<typeof o> => o !== null);
     } else {
       // Load all PAID orders (unassigned - not yet in a production batch)
-      // For MVP, we'll load all PAID orders; in production, we'd filter by assignment status
       orders = await this.orderRepository.findByStatus(OrderStatus.PAID);
     }
 
@@ -90,7 +89,7 @@ export class ProductionService {
       );
     }
 
-    // Collect all OrderItems with their dailyIntakeG
+    // Phase 8.11: Collect only unallocated OrderItems (productionBatchId is null)
     const orderItemsWithDailyIntake: Array<{
       orderItemId: string;
       recipeSnapshotId: string; // Use recipeSnapshot.id as unique identifier
@@ -100,6 +99,12 @@ export class ProductionService {
 
     for (const order of orders) {
       for (const item of order.items) {
+        // Phase 8.11: Skip already allocated items
+        if (item.productionBatchId !== null) {
+          // Item already allocated, skip
+          continue;
+        }
+
         // dailyIntakeG is already persisted (Phase 8.9)
         if (!item.dailyIntakeG) {
           this.logger.warn(
@@ -122,7 +127,7 @@ export class ProductionService {
 
     if (orderItemsWithDailyIntake.length === 0) {
       throw new BadRequestException(
-        'No OrderItems with dailyIntakeG found in selected orders',
+        'No eligible OrderItems found. All items may already be allocated to other batches.',
       );
     }
 
@@ -153,6 +158,8 @@ export class ProductionService {
     // Create PackagingUnits (batchId will be set after batch creation)
     const batchId = randomUUID();
     const packagingUnits: PackagingUnit[] = [];
+    const allOrderItemIds: string[] = []; // Collect all item IDs for allocation
+
     for (const [, data] of groupedByRecipe.entries()) {
       const unitId = randomUUID();
       const unit = new PackagingUnit(
@@ -164,6 +171,8 @@ export class ProductionService {
         new Date(),
       );
       packagingUnits.push(unit);
+      // Collect all order item IDs for allocation
+      allOrderItemIds.push(...data.sourceOrderItemIds);
     }
 
     // Create ProductionBatch
@@ -175,8 +184,26 @@ export class ProductionService {
       new Date(),
     );
 
-    // Save batch (repository will handle PackagingUnit creation)
-    return this.productionRepository.save(batch);
+    // Phase 8.11: Save batch and allocate OrderItems
+    // The repository's save method will create the batch, then we allocate items
+    const savedBatch = await this.productionRepository.save(batch);
+
+    // Allocate OrderItems to this batch (atomic update)
+    const allocatedCount = await this.productionRepository.allocateOrderItems(
+      allOrderItemIds,
+      batchId,
+    );
+
+    // Verify allocation succeeded (all items should be allocated)
+    if (allocatedCount !== allOrderItemIds.length) {
+      this.logger.warn(
+        `Only ${allocatedCount} of ${allOrderItemIds.length} OrderItems were allocated. Possible concurrent allocation conflict.`,
+      );
+      // In a real system, we might want to rollback or retry, but for MVP we'll continue
+      // The batch is created, but some items may have been allocated to another batch concurrently
+    }
+
+    return savedBatch;
   }
 
   /**

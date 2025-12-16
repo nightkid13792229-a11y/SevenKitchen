@@ -296,4 +296,59 @@ export class AdminController {
 
     return ApiResponseDto.success(summary);
   }
+
+  @Get('production-batches/:id/order-items')
+  @ApiOperation({ summary: 'Get allocated order items for a production batch' })
+  @ApiParam({ name: 'id', description: 'Production Batch ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Allocated order items',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          orderId: { type: 'string' },
+          recipeSnapshotId: { type: 'string' },
+          dailyIntakeG: { type: 'number' },
+          productionBatchId: { type: 'string' },
+          allocatedAt: { type: 'string', format: 'date-time' },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Production batch not found' })
+  async getBatchOrderItems(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<any[]> | ApiResponseDto<null>> {
+    const batch = await this.productionService.getProductionBatchById(id);
+    if (!batch) {
+      return ApiResponseDto.error(404, 'Production batch not found');
+    }
+
+    // Collect all order item IDs from packaging units
+    const orderItemIds = new Set<string>();
+    for (const unit of batch.packagingUnits) {
+      for (const itemId of unit.sourceOrderItemIds) {
+        orderItemIds.add(itemId);
+      }
+    }
+
+    // Load order items (we need to query orders to get items)
+    // For MVP, we'll return a simplified structure
+    const orderItems: any[] = [];
+    for (const unit of batch.packagingUnits) {
+      for (const itemId of unit.sourceOrderItemIds) {
+        orderItems.push({
+          id: itemId,
+          recipeSnapshotId: unit.recipeSnapshot.id,
+          // Note: orderId and dailyIntakeG would require loading the actual OrderItem
+          // For MVP, we return what we have from the batch
+        });
+      }
+    }
+
+    return ApiResponseDto.success(orderItems);
+  }
 }

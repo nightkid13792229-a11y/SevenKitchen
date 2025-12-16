@@ -55,6 +55,47 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
     return records.map((r: any) => this.mapToDomain(r));
   }
 
+  /**
+   * Allocate OrderItems to a production batch (Phase 8.11)
+   * Updates OrderItems with productionBatchId and allocatedAt atomically
+   * Only updates items that are not yet allocated (productionBatchId is null)
+   */
+  async allocateOrderItems(
+    orderItemIds: string[],
+    productionBatchId: string,
+  ): Promise<number> {
+    if (orderItemIds.length === 0) {
+      return 0;
+    }
+
+    // Use raw SQL to ensure atomic allocation and avoid Prisma type issues
+    // Only update items that are not yet allocated (productionBatchId is null)
+    const now = new Date();
+    // Build parameterized query with proper escaping
+    const placeholders = orderItemIds.map((_, i) => `$${i + 3}`).join(', ');
+    
+    const query = `
+      UPDATE "order_item" 
+      SET "production_batch_id" = $1::text, "allocated_at" = $2::timestamp
+      WHERE "id" IN (${placeholders})
+      AND "production_batch_id" IS NULL
+    `;
+    
+    const result = await this.prisma.$executeRawUnsafe(
+      query,
+      productionBatchId,
+      now,
+      ...orderItemIds,
+    );
+
+    const updatedCount = typeof result === 'number' ? result : 0;
+    this.logger.debug(
+      `Allocated ${updatedCount} of ${orderItemIds.length} OrderItems to batch ${productionBatchId}`,
+    );
+
+    return updatedCount;
+  }
+
   async save(batch: ProductionBatch): Promise<ProductionBatch> {
     const existing = await this.prisma.productionBatch.findUnique({
       where: { id: batch.id },

@@ -1,0 +1,42 @@
+==========================================
+Phase 2.2 Orders API Acceptance Verification
+==========================================
+Base URL: http://localhost:3000/api/v1
+JSON Parser: node
+
+Test a) POST /api/v1/orders - Create order draft
+[0;32m✓ PASS: Create order returns 201[0m
+[0;32m✓ PASS: Response contains orderId[0m
+[0;32m✓ PASS: Response contains itemId[0m
+[0;32m✓ PASS: Order status is INIT[0m
+  Captured orderId: fecf3beb-8bcb-4f32-b43d-a1b25018e861
+  Captured itemId: af477b27-3c32-4154-b94a-360c7cfbf88d
+
+Test b) POST /api/v1/orders/{orderId}/confirm - Confirm order
+[0;32m✓ PASS: Confirm returns 200[0m
+[0;32m✓ PASS: Response code is 0[0m
+[0;32m✓ PASS: Status becomes PENDING_PAYMENT[0m
+  Status after confirm: PENDING_PAYMENT
+
+Test c) POST /api/v1/orders/{orderId}/pay - Process payment
+[0;32m✓ PASS: Pay returns 200[0m
+[0;32m✓ PASS: Response code is 0[0m
+[0;32m✓ PASS: Status becomes PAID[0m
+  Status after pay: PAID
+
+Test d) GET /api/v1/orders/{orderId} - Get order detail
+[0;32m✓ PASS: Get order returns 200[0m
+[0;32m✓ PASS: Response code is 0[0m
+[0;32m✓ PASS: Order status is PAID[0m
+[0;32m✓ PASS: Items array contains itemId[0m
+  Order status: PAID
+
+Test e) GET /api/v1/orders/items/{itemId}/snapshot - Verify snapshot immutability
+[0;32m✓ PASS: First snapshot fetch returns 200[0m
+[0;32m✓ PASS: Second snapshot fetch returns 200[0m
+[0;32m✓ PASS: Both responses have code 0[0m
+[0;32m✓ PASS: Snapshots are identical (immutable)[0m
+  Snapshots match ✓
+
+Test f) Negative: POST /api/v1/orders/{orderId2}/pay without confirm - Illegal transition
+[0;31m✗ FAIL: Pay without confirm returns 4xx[0m

@@ -1,0 +1,170 @@
+Phase 4.1 Auth Context Verification Output
+Generated: Sun Dec 14 10:54:33 CST 2025
+
+=== Test 1: GET /orders without header ===
+node:internal/modules/cjs/loader:1386
+  throw err;
+  ^
+
+Error: Cannot find module '/Users/zhaochen/Documents/SevenKitchen/backend'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.19.0
+{"code":401,"message":"X-Customer-Id header is required","data":null}
+
+=== Test 2: Create address for Customer A ===
+node:internal/modules/cjs/loader:1386
+  throw err;
+  ^
+
+Error: Cannot find module '/Users/zhaochen/Documents/SevenKitchen/backend'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.19.0
+{"code":0,"message":"Success","data":{"id":"b2dbbda5-611d-4da2-9e8a-010d73a5b27f","userId":"customer-phase4-1-a","recipientName":"Customer A Recipient","phone":"13800138000","region":{"province":"广东省","city":"深圳市","district":"南山区"},"detail":"Test Address A","isDefault":false}}
+
+=== Test 2: List addresses for Customer A ===
+node:internal/modules/cjs/loader:1386
+  throw err;
+  ^
+
+Error: Cannot find module '/Users/zhaochen/Documents/SevenKitchen/backend'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.19.0
+{"code":0,"message":"Success","data":[{"id":"5cbd8e33-f8c0-421b-8566-6024481fe98b","userId":"customer-phase4-1-a","recipientName":"Customer A Recipient","phone":"13800138000","region":{"province":"广东省","city":"深圳市","district":"南山区"},"detail":"Test Address A","isDefault":false},{"id":"b2dbbda5-611d-4da2-9e8a-010d73a5b27f","userId":"customer-phase4-1-a","recipientName":"Customer A Recipient","phone":"13800138000","region":{"province":"广东省","city":"深圳市","district":"南山区"},"detail":"Test Address A","isDefault":false}]}
+
+=== Test 3: List addresses for Customer B ===
+node:internal/modules/cjs/loader:1386
+  throw err;
+  ^
+
+Error: Cannot find module '/Users/zhaochen/Documents/SevenKitchen/backend'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.19.0
+{"code":0,"message":"Success","data":[]}
+
+=== Test 4: Create order for Customer A ===
+node:internal/modules/cjs/loader:1386
+  throw err;
+  ^
+
+Error: Cannot find module '/Users/zhaochen/Documents/SevenKitchen/backend'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.19.0
+{"code":0,"message":"Success","data":{"id":"a6856392-13f1-4b3b-b308-11857f409f67","customerId":"customer-phase4-1-a","status":"INIT","type":"FRESH_FOOD","targetProductionDate":null,"totalAmount":0,"items":[{"id":"af5e7537-eaf1-4392-a2bf-4c610a029617","orderId":"a6856392-13f1-4b3b-b308-11857f409f67","recipeSnapshot":{"id":"3fa85f64-5717-4562-b3fc-2c963f66afa7","version":1,"name":"Test Fresh Food Recipe","production_loss_rate":1.07,"nutrition_standard":"FEDIAF_2021","items":[]},"quantityG":1400,"packageCount":14,"packageSpecG":100,"customRequirements":null}]}}
+
+=== Test 4: List orders for Customer A ===
+node:internal/modules/cjs/loader:1386
+  throw err;
+  ^
+
+Error: Cannot find module '/Users/zhaochen/Documents/SevenKitchen/backend'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.19.0
+{"code":0,"message":"Success","data":[{"id":"a6856392-13f1-4b3b-b308-11857f409f67","status":"INIT","type":"FRESH_FOOD","totalAmount":0,"itemCount":1}]}
+
+=== Test 4: List orders for Customer B ===
+node:internal/modules/cjs/loader:1386
+  throw err;
+  ^
+
+Error: Cannot find module '/Users/zhaochen/Documents/SevenKitchen/backend'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.19.0
+{"code":0,"message":"Success","data":[]}
+
+=== Test 5: POST /orders without header ===
+node:internal/modules/cjs/loader:1386
+  throw err;
+  ^
+
+Error: Cannot find module '/Users/zhaochen/Documents/SevenKitchen/backend'
+    at Function._resolveFilename (node:internal/modules/cjs/loader:1383:15)
+    at defaultResolveImpl (node:internal/modules/cjs/loader:1025:19)
+    at resolveForCJSWithHooks (node:internal/modules/cjs/loader:1030:22)
+    at Function._load (node:internal/modules/cjs/loader:1192:37)
+    at TracingChannel.traceSync (node:diagnostics_channel:322:14)
+    at wrapModuleLoad (node:internal/modules/cjs/loader:237:24)
+    at Function.executeUserEntryPoint [as runMain] (node:internal/modules/run_main:171:5)
+    at node:internal/main/run_main_module:36:49 {
+  code: 'MODULE_NOT_FOUND',
+  requireStack: []
+}
+
+Node.js v22.19.0
+{"code":401,"message":"X-Customer-Id header is required","data":null}

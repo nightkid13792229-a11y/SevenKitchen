@@ -1,0 +1,48 @@
+Phase 3.2 Orders List API Verification Output
+Generated: 2025-12-13T15:50:55Z
+Base URL: http://localhost:3000/api/v1
+JSON Parser: node
+
+==========================================
+Test: a) Initial GET /orders
+Timestamp: 2025-12-13T15:50:55Z
+==========================================
+{"code":0,"message":"Success","data":[]}
+
+==========================================
+Test: b) Create Order 1
+Timestamp: 2025-12-13T15:50:55Z
+==========================================
+{"code":0,"message":"Success","data":{"id":"0e32a2de-5a47-40e0-b10d-198374681be5","customerId":"temp-customer-id","status":"INIT","type":"FRESH_FOOD","targetProductionDate":null,"totalAmount":0,"items":[{"id":"0c51dcdb-980a-4fa2-b95c-28a5a85433c6","orderId":"0e32a2de-5a47-40e0-b10d-198374681be5","recipeSnapshot":{"id":"3fa85f64-5717-4562-b3fc-2c963f66afa7","version":1,"name":"Test Fresh Food Recipe","production_loss_rate":1.07,"nutrition_standard":"FEDIAF_2021","items":[]},"quantityG":1400,"packageCount":14,"packageSpecG":100,"customRequirements":null}]}}
+
+==========================================
+Test: c) Create Order 2
+Timestamp: 2025-12-13T15:50:56Z
+==========================================
+{"code":0,"message":"Success","data":{"id":"c608cade-cfc6-4fad-acfc-d09958d2a20a","customerId":"temp-customer-id","status":"INIT","type":"FRESH_FOOD","targetProductionDate":null,"totalAmount":0,"items":[{"id":"2fd651ca-3261-47f3-b042-840407696d14","orderId":"c608cade-cfc6-4fad-acfc-d09958d2a20a","recipeSnapshot":{"id":"3fa85f64-5717-4562-b3fc-2c963f66afa7","version":1,"name":"Test Fresh Food Recipe","production_loss_rate":1.07,"nutrition_standard":"FEDIAF_2021","items":[]},"quantityG":2000,"packageCount":20,"packageSpecG":100,"customRequirements":null}]}}
+
+==========================================
+Test: d) GET /orders After Creating 2 Orders
+Timestamp: 2025-12-13T15:50:56Z
+==========================================
+{"code":0,"message":"Success","data":[{"id":"0e32a2de-5a47-40e0-b10d-198374681be5","status":"INIT","type":"FRESH_FOOD","totalAmount":0,"itemCount":1},{"id":"c608cade-cfc6-4fad-acfc-d09958d2a20a","status":"INIT","type":"FRESH_FOOD","totalAmount":0,"itemCount":1}]}
+
+==========================================
+Test: f) GET /orders/:id Detail
+Timestamp: 2025-12-13T15:50:57Z
+==========================================
+{"code":0,"message":"Success","data":{"id":"0e32a2de-5a47-40e0-b10d-198374681be5","customerId":"temp-customer-id","status":"INIT","type":"FRESH_FOOD","targetProductionDate":null,"totalAmount":0,"items":[{"id":"0c51dcdb-980a-4fa2-b95c-28a5a85433c6","orderId":"0e32a2de-5a47-40e0-b10d-198374681be5","recipeSnapshot":{"id":"3fa85f64-5717-4562-b3fc-2c963f66afa7","version":1,"name":"Test Fresh Food Recipe","production_loss_rate":1.07,"nutrition_standard":"FEDIAF_2021","items":[]},"quantityG":1400,"packageCount":14,"packageSpecG":100,"customRequirements":null}]}}
+
+==========================================
+Verification Summary
+==========================================
+Passed: 19
+Failed: 0
+
+Captured IDs:
+  orderId1: 0e32a2de-5a47-40e0-b10d-198374681be5
+  orderId2: c608cade-cfc6-4fad-acfc-d09958d2a20a
+
+Note: Customer isolation is verified by unit tests only.
+      Controller uses hardcoded 'temp-customer-id' for now.
+

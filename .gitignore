@@ -1,0 +1,24 @@
+# System
+.DS_Store
+
+# Cursor
+.cursor/
+
+# Node
+node_modules/
+dist/
+.env
+.env.*
+
+# Logs
+*.log
+
+# Prisma
+prisma/dev.db
+prisma/dev.db-journal
+
+# Miniapp build
+miniprogram_npm/
+
+# OS
+Thumbs.db

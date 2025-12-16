@@ -1,0 +1,274 @@
+/**
+ * File-Backed Order Repository Implementation
+ * Development-only persistence using JSON file storage
+ * Persists orders across server restarts without requiring a database
+ */
+
+import { Injectable, OnModuleInit } from '@nestjs/common';
+import { promises as fs } from 'fs';
+import { join } from 'path';
+import { Order } from '../../domain/order/order.entity';
+import { OrderItem } from '../../domain/order/order-item.entity';
+import { PricingBreakdownSnapshot } from '../../domain/order/pricing-breakdown-snapshot';
+import type { OrderRepository } from '../../domain/order/order.repository';
+import { OrderStatus } from '../../domain';
+
+interface OrderData {
+  id: string;
+  customerId: string;
+  status: string;
+  type: string;
+  targetProductionDate: string | null;
+  amountProduct: number;
+  amountShipping: number;
+  amountTotal: number;
+  totalAmount?: number;
+  items: Array<{
+    id: string;
+    orderId: string;
+    recipeSnapshot: any;
+    quantityG: number;
+    packageCount: number;
+    packageSpecG: number;
+    customRequirements: string | null;
+  }>;
+  pricingBreakdownSnapshot?: {
+    costIngredients: number;
+    costPackaging: number;
+    costLabor: number;
+    costOverhead: number;
+    totalProductCost: number;
+    productPrice: number;
+    shippingFee: number;
+    totalPrice: number;
+    shippingTemplateId: string | null;
+    marginStrategyName: string;
+    createdAt: string;
+    ingredientPriceVersionHash?: string | null;
+  };
+}
+
+@Injectable()
+export class FileBackedOrderRepository
+  implements OrderRepository, OnModuleInit
+{
+  private orders: Map<string, Order> = new Map();
+  private readonly dataDir: string;
+  private readonly dataFile: string;
+  private writeLock: Promise<void> = Promise.resolve();
+
+  constructor() {
+    // Use backend/.data/orders.json
+    this.dataDir = join(process.cwd(), '.data');
+    this.dataFile = join(this.dataDir, 'orders.json');
+  }
+
+  async onModuleInit(): Promise<void> {
+    await this.loadFromFile();
+  }
+
+  /**
+   * Load orders from JSON file on startup
+   */
+  private async loadFromFile(): Promise<void> {
+    try {
+      // Ensure .data directory exists
+      await fs.mkdir(this.dataDir, { recursive: true });
+
+      // Try to read existing file
+      try {
+        const fileContent = await fs.readFile(this.dataFile, 'utf-8');
+        const data: OrderData[] = JSON.parse(fileContent);
+
+        // Reconstruct Order entities from JSON
+        for (const orderData of data) {
+          const order = this.reconstructOrder(orderData);
+          this.orders.set(order.id, order);
+        }
+
+        console.log(
+          `[FileBackedOrderRepository] Loaded ${this.orders.size} orders from ${this.dataFile}`,
+        );
+      } catch (error: any) {
+        // File doesn't exist or is invalid - start with empty map
+        if (error.code === 'ENOENT') {
+          console.log(
+            `[FileBackedOrderRepository] No existing data file, starting fresh`,
+          );
+        } else {
+          console.warn(
+            `[FileBackedOrderRepository] Failed to load data: ${error.message}`,
+          );
+        }
+      }
+    } catch (error: any) {
+      console.error(
+        `[FileBackedOrderRepository] Failed to initialize: ${error.message}`,
+      );
+      // Continue with empty map - don't crash the app
+    }
+  }
+
+  /**
+   * Reconstruct Order entity from JSON data
+   */
+  private reconstructOrder(data: OrderData): Order {
+    const items = data.items.map(
+      (itemData) =>
+        new OrderItem(
+          itemData.id,
+          itemData.orderId,
+          itemData.recipeSnapshot,
+          itemData.quantityG,
+          itemData.packageCount,
+          itemData.packageSpecG,
+          itemData.customRequirements,
+        ),
+    );
+
+    let pricingBreakdown: PricingBreakdownSnapshot | undefined = undefined;
+    if (data.pricingBreakdownSnapshot) {
+      const snapshot = data.pricingBreakdownSnapshot;
+      pricingBreakdown = new PricingBreakdownSnapshot(
+        snapshot.costIngredients,
+        snapshot.costPackaging,
+        snapshot.costLabor,
+        snapshot.costOverhead,
+        snapshot.totalProductCost,
+        snapshot.productPrice,
+        snapshot.shippingFee,
+        snapshot.totalPrice,
+        snapshot.shippingTemplateId,
+        snapshot.marginStrategyName,
+        new Date(snapshot.createdAt),
+        snapshot.ingredientPriceVersionHash ?? null,
+      );
+    }
+
+    return new Order(
+      data.id,
+      data.customerId,
+      data.status as OrderStatus,
+      data.type as any,
+      data.targetProductionDate ? new Date(data.targetProductionDate) : null,
+      data.amountProduct,
+      data.amountShipping,
+      data.amountTotal,
+      items,
+      data.totalAmount,
+      pricingBreakdown,
+    );
+  }
+
+  /**
+   * Serialize orders to JSON and write to file
+   * Uses write lock to prevent concurrent write conflicts
+   */
+  private async persistToFile(): Promise<void> {
+    // Chain write operations to serialize them
+    this.writeLock = this.writeLock.then(async () => {
+      try {
+        // Ensure directory exists
+        await fs.mkdir(this.dataDir, { recursive: true });
+
+        // Serialize orders to JSON
+        const ordersArray: OrderData[] = Array.from(this.orders.values()).map(
+          (order) => this.serializeOrder(order),
+        );
+
+        // Write atomically: write to temp file, then rename
+        const tempFile = `${this.dataFile}.tmp`;
+        await fs.writeFile(tempFile, JSON.stringify(ordersArray, null, 2), 'utf-8');
+        await fs.rename(tempFile, this.dataFile);
+      } catch (error: any) {
+        console.error(
+          `[FileBackedOrderRepository] Failed to persist: ${error.message}`,
+        );
+        throw error;
+      }
+    });
+
+    return this.writeLock;
+  }
+
+  /**
+   * Serialize Order entity to JSON-compatible format
+   */
+  private serializeOrder(order: Order): OrderData {
+    return {
+      id: order.id,
+      customerId: order.customerId,
+      status: order.status,
+      type: order.type,
+      targetProductionDate: order.targetProductionDate
+        ? order.targetProductionDate.toISOString()
+        : null,
+      amountProduct: order.amountProduct,
+      amountShipping: order.amountShipping,
+      amountTotal: order.amountTotal,
+      totalAmount: order.totalAmount,
+      items: order.items.map((item) => ({
+        id: item.id,
+        orderId: item.orderId,
+        recipeSnapshot: item.recipeSnapshot,
+        quantityG: item.quantityG,
+        packageCount: item.packageCount,
+        packageSpecG: item.packageSpecG,
+        customRequirements: item.customRequirements,
+      })),
+      pricingBreakdownSnapshot: order.pricingBreakdownSnapshot
+        ? {
+            costIngredients: order.pricingBreakdownSnapshot.costIngredients,
+            costPackaging: order.pricingBreakdownSnapshot.costPackaging,
+            costLabor: order.pricingBreakdownSnapshot.costLabor,
+            costOverhead: order.pricingBreakdownSnapshot.costOverhead,
+            totalProductCost:
+              order.pricingBreakdownSnapshot.totalProductCost,
+            productPrice: order.pricingBreakdownSnapshot.productPrice,
+            shippingFee: order.pricingBreakdownSnapshot.shippingFee,
+            totalPrice: order.pricingBreakdownSnapshot.totalPrice,
+            shippingTemplateId:
+              order.pricingBreakdownSnapshot.shippingTemplateId,
+            marginStrategyName:
+              order.pricingBreakdownSnapshot.marginStrategyName,
+            createdAt:
+              order.pricingBreakdownSnapshot.createdAt.toISOString(),
+            ingredientPriceVersionHash:
+              order.pricingBreakdownSnapshot.ingredientPriceVersionHash ??
+              null,
+          }
+        : undefined,
+    };
+  }
+
+  async findById(id: string): Promise<Order | null> {
+    return Promise.resolve(this.orders.get(id) || null);
+  }
+
+  async findByCustomerId(customerId: string): Promise<Order[]> {
+    return Promise.resolve(
+      Array.from(this.orders.values()).filter(
+        (order) => order.customerId === customerId,
+      ),
+    );
+  }
+
+  async findByStatus(status: OrderStatus): Promise<Order[]> {
+    return Promise.resolve(
+      Array.from(this.orders.values()).filter(
+        (order) => order.status === status,
+      ),
+    );
+  }
+
+  async save(order: Order): Promise<Order> {
+    // Update in-memory map
+    this.orders.set(order.id, order);
+
+    // Persist to file (write-through)
+    await this.persistToFile();
+
+    return Promise.resolve(order);
+  }
+}
+

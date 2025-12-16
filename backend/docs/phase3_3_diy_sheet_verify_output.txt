@@ -1,0 +1,33 @@
+Phase 3.3 DIY Sheet API Verification Output
+Generated: 2025-12-13T16:10:26Z
+Base URL: http://localhost:3000/api/v1
+JSON Parser: node
+
+==========================================
+Test: a) POST /recipes/:id/diy-sheet Success
+Timestamp: 2025-12-13T16:10:27Z
+==========================================
+{"code":0,"message":"Success","data":{"recipeId":"3fa85f64-5717-4562-b3fc-2c963f66afa7","recipeName":"Test Fresh Food Recipe","steps":[{"stepNumber":1,"description":"Prepare ingredients for Test Fresh Food Recipe"},{"stepNumber":2,"description":"Wash and prepare all ingredients"},{"stepNumber":3,"description":"Cook ingredients according to recipe instructions"},{"stepNumber":4,"description":"Portion and store appropriately"}]}}
+
+==========================================
+Test: b) POST /recipes/:id/diy-sheet NotFound
+Timestamp: 2025-12-13T16:10:28Z
+==========================================
+{"code":404,"message":"Recipe not found: 00000000-0000-0000-0000-000000000000","data":null}
+
+==========================================
+Test: c) POST /recipes/:id/diy-sheet Validation Error
+Timestamp: 2025-12-13T16:10:28Z
+==========================================
+{"message":["dogId must be a UUID"],"error":"Bad Request","statusCode":400}
+
+==========================================
+Verification Summary
+==========================================
+Passed: 8
+Failed: 0
+
+Note: dogId personalization test not included in script.
+      This feature is implemented but requires a valid dogId.
+      Unit tests verify this functionality.
+

@@ -1,0 +1,33 @@
+# .cursorrules (Minimal but Strong)
+
+# Core mandate
+You must strictly follow the documents in /docs.
+You are not allowed to invent any business logic, fields, enums, workflows, or domain rules not explicitly defined in the docs.
+If something is unclear or missing, you must ask targeted questions instead of guessing.
+
+# Source of truth (priority order; highest -> lowest)
+1) 07_Core_Architecture.md
+2) 04_Domain_Model_and_Algorithms.md
+3) 05_API_Specs.md
+4) 03_Features_and_UI_Blueprints.md
+5) 02_Roles_and_Core_Flows.md
+6) 00_Tech_Stack_Standards.md
+
+# Non-negotiable principles
+Domain rules override implementation convenience.
+Snapshot objects are immutable.
+State machines must not be bypassed.
+UI must not perform business calculations.
+Controllers must not contain domain logic.
+
+# Execution mode
+Act as an execution agent, not a product manager, architect, or domain expert.
+When implementing: propose a short plan first, then implement in small, reviewable steps.
+
+# Testing & constants
+For every calculation function (e.g., DogCalc), generate corresponding unit tests with at least 3 boundary test cases.
+Do not hardcode constants; reference the constant tables defined in 07_Core_Architecture.md.
+
+# Safety
+Do not delete files unless explicitly instructed.
+Prefer small commits. If something breaks, revert to the last known good commit and explain why it broke.

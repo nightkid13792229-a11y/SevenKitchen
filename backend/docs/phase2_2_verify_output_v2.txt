@@ -1,0 +1,7 @@
+==========================================
+Phase 2.2 Orders API Acceptance Verification
+==========================================
+Base URL: http://localhost:3000/api/v1
+JSON Parser: node
+
+Test a) POST /api/v1/orders - Create order draft

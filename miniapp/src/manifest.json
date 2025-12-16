@@ -1,0 +1,29 @@
+{
+  "name": "SevenKitchen MVP",
+  "appid": "",
+  "description": "WeChat Mini Program MVP for Project Reborn",
+  "versionName": "1.0.0",
+  "versionCode": "100",
+  "transformPx": false,
+  "app-plus": {
+    "usingComponents": true
+  },
+  "mp-weixin": {
+    "appid": "",
+    "setting": {
+      "urlCheck": false,
+      "es6": true,
+      "enhance": true,
+      "postcss": true,
+      "minified": true
+    },
+    "usingComponents": true
+  },
+  "h5": {
+    "router": {
+      "mode": "hash"
+    }
+  }
+}
+
+

@@ -1,0 +1,61 @@
+==========================================
+Phase 2.2 Orders API Acceptance Verification
+==========================================
+Base URL: http://localhost:3000/api/v1
+JSON Parser: node
+
+Test a) POST /api/v1/orders - Create order draft
+[0;32m✓ PASS: Response contains orderId[0m
+[0;32m✓ PASS: Response contains itemId[0m
+[0;32m✓ PASS: Order status is INIT[0m
+  Captured orderId: 766e4c79-fdbe-4e01-b2d5-c9b6ff2a3490
+  Captured itemId: d7e56c06-8ef1-4f9e-a87b-96f0227da2ff
+
+Test b) POST /api/v1/orders/{orderId}/confirm - Confirm order
+[0;32m✓ PASS: Response code is 0[0m
+[0;32m✓ PASS: Status becomes PENDING_PAYMENT[0m
+  Status after confirm: PENDING_PAYMENT
+
+Test c) POST /api/v1/orders/{orderId}/pay - Process payment
+[0;32m✓ PASS: Response code is 0[0m
+[0;32m✓ PASS: Status becomes PAID[0m
+  Status after pay: PAID
+
+Test d) GET /api/v1/orders/{orderId} - Get order detail
+[0;32m✓ PASS: Response code is 0[0m
+[0;32m✓ PASS: Order status is PAID[0m
+[0;32m✓ PASS: Items array contains itemId[0m
+  Order status: PAID
+
+Test e) GET /api/v1/orders/items/{itemId}/snapshot - Verify snapshot immutability
+[0;32m✓ PASS: Both responses have code 0[0m
+[0;32m✓ PASS: Snapshots are identical (immutable)[0m
+  Snapshots match ✓
+
+Test f) Negative: POST /api/v1/orders/{orderId2}/pay without confirm - Illegal transition
+  Created orderId2: e3b7cbc3-289f-425b-ae2a-3fa35e273263 (status: INIT)
+  Pay request HTTP Status: 200
+  Response code field: 400
+  Response message: Cannot transition from INIT to PAID
+[0;32m✓ PASS: Pay without confirm returns error (code != 0)[0m
+[0;32m✓ PASS: Error code indicates bad request (400)[0m
+
+Test g) Negative: POST /api/v1/orders with non-existent recipeId - Should return 404
+[0;32m✓ PASS: Invalid recipe returns error (code != 0)[0m
+[0;32m✓ PASS: Error code indicates not found (404)[0m
+[0;32m✓ PASS: Error message contains 'Recipe not found'[0m
+  HTTP Status: 201
+  Error code: 404
+  Error message: Recipe not found: 00000000-0000-0000-0000-000000000000
+
+==========================================
+Verification Summary
+==========================================
+[0;32mPassed: 17[0m
+[0;31mFailed: 0[0m
+
+[0;32m✓ All tests PASSED[0m
+
+Captured IDs for manual verification:
+  orderId: 766e4c79-fdbe-4e01-b2d5-c9b6ff2a3490
+  itemId: d7e56c06-8ef1-4f9e-a87b-96f0227da2ff

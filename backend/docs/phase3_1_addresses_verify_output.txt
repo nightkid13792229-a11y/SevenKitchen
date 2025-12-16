@@ -1,0 +1,75 @@
+Phase 3.1 Address APIs Verification Output
+Generated: 2025-12-13T14:46:18Z
+Base URL: http://localhost:3000/api/v1
+JSON Parser: node
+
+==========================================
+Test: A) Create Address A
+Timestamp: 2025-12-13T14:46:18Z
+==========================================
+{"code":0,"message":"Success","data":{"id":"6461746c-06b2-4910-96ef-5dc030593dd7","userId":"temp-user-id","recipientName":"张三","phone":"13800138000","region":{"province":"广东省","city":"深圳市","district":"南山区"},"detail":"科技园南区123号","isDefault":true}}
+
+==========================================
+Test: B) List Addresses
+Timestamp: 2025-12-13T14:46:18Z
+==========================================
+{"code":0,"message":"Success","data":[{"id":"377190fa-7552-4d28-81c8-fd011e40e5d0","userId":"temp-user-id","recipientName":"张三","phone":"13800138000","region":{"province":"广东省","city":"深圳市","district":"南山区"},"detail":"科技园南区123号","isDefault":false},{"id":"efb63952-3697-4698-b7a7-26573d8a69ef","userId":"temp-user-id","recipientName":"李四","phone":"13900139000","region":{"province":"广东省","city":"广州市","district":"天河区"},"detail":"天河路456号","isDefault":false},{"id":"6461746c-06b2-4910-96ef-5dc030593dd7","userId":"temp-user-id","recipientName":"张三","phone":"13800138000","region":{"province":"广东省","city":"深圳市","district":"南山区"},"detail":"科技园南区123号","isDefault":true}]}
+
+==========================================
+Test: C1) Create Address B
+Timestamp: 2025-12-13T14:46:18Z
+==========================================
+{"code":0,"message":"Success","data":{"id":"ae16cc87-ff66-4e5e-aa65-997d6f0614c8","userId":"temp-user-id","recipientName":"李四","phone":"13900139000","region":{"province":"广东省","city":"广州市","district":"天河区"},"detail":"天河路456号","isDefault":true}}
+
+==========================================
+Test: C2) List Addresses After Creating B
+Timestamp: 2025-12-13T14:46:18Z
+==========================================
+{"code":0,"message":"Success","data":[{"id":"377190fa-7552-4d28-81c8-fd011e40e5d0","userId":"temp-user-id","recipientName":"张三","phone":"13800138000","region":{"province":"广东省","city":"深圳市","district":"南山区"},"detail":"科技园南区123号","isDefault":false},{"id":"efb63952-3697-4698-b7a7-26573d8a69ef","userId":"temp-user-id","recipientName":"李四","phone":"13900139000","region":{"province":"广东省","city":"广州市","district":"天河区"},"detail":"天河路456号","isDefault":false},{"id":"6461746c-06b2-4910-96ef-5dc030593dd7","userId":"temp-user-id","recipientName":"张三","phone":"13800138000","region":{"province":"广东省","city":"深圳市","district":"南山区"},"detail":"科技园南区123号","isDefault":false},{"id":"ae16cc87-ff66-4e5e-aa65-997d6f0614c8","userId":"temp-user-id","recipientName":"李四","phone":"13900139000","region":{"province":"广东省","city":"广州市","district":"天河区"},"detail":"天河路456号","isDefault":true}]}
+
+==========================================
+Test: C3) Set Address A as Default
+Timestamp: 2025-12-13T14:46:18Z
+==========================================
+{"code":0,"message":"Success","data":{"id":"6461746c-06b2-4910-96ef-5dc030593dd7","userId":"temp-user-id","recipientName":"张三","phone":"13800138000","region":{"province":"广东省","city":"深圳市","district":"南山区"},"detail":"科技园南区123号","isDefault":true}}
+
+==========================================
+Test: C4) List Addresses After Set-Default
+Timestamp: 2025-12-13T14:46:18Z
+==========================================
+{"code":0,"message":"Success","data":[{"id":"377190fa-7552-4d28-81c8-fd011e40e5d0","userId":"temp-user-id","recipientName":"张三","phone":"13800138000","region":{"province":"广东省","city":"深圳市","district":"南山区"},"detail":"科技园南区123号","isDefault":false},{"id":"efb63952-3697-4698-b7a7-26573d8a69ef","userId":"temp-user-id","recipientName":"李四","phone":"13900139000","region":{"province":"广东省","city":"广州市","district":"天河区"},"detail":"天河路456号","isDefault":false},{"id":"6461746c-06b2-4910-96ef-5dc030593dd7","userId":"temp-user-id","recipientName":"张三","phone":"13800138000","region":{"province":"广东省","city":"深圳市","district":"南山区"},"detail":"科技园南区123号","isDefault":true},{"id":"ae16cc87-ff66-4e5e-aa65-997d6f0614c8","userId":"temp-user-id","recipientName":"李四","phone":"13900139000","region":{"province":"广东省","city":"广州市","district":"天河区"},"detail":"天河路456号","isDefault":false}]}
+
+==========================================
+Test: D) Update Address A
+Timestamp: 2025-12-13T14:46:18Z
+==========================================
+{"code":0,"message":"Success","data":{"id":"6461746c-06b2-4910-96ef-5dc030593dd7","userId":"temp-user-id","recipientName":"张三（更新）","phone":"13800138000","region":{"province":"广东省","city":"深圳市","district":"南山区"},"detail":"科技园南区456号（更新）","isDefault":true}}
+
+==========================================
+Test: E1) Update Non-existent Address
+Timestamp: 2025-12-13T14:46:19Z
+==========================================
+{"code":404,"message":"Address not found: 00000000-0000-0000-0000-000000000000","data":null}
+
+==========================================
+Test: E2) Set-Default Non-existent Address
+Timestamp: 2025-12-13T14:46:19Z
+==========================================
+{"code":404,"message":"Address not found: 00000000-0000-0000-0000-000000000000","data":null}
+
+==========================================
+Test: F1) Invalid Address (Missing Fields)
+Timestamp: 2025-12-13T14:46:19Z
+==========================================
+{"message":["recipientName must be longer than or equal to 1 characters","recipientName should not be empty","phone must be longer than or equal to 1 characters","phone should not be empty","detail must be longer than or equal to 1 characters","detail should not be empty","detail must be a string"],"error":"Bad Request","statusCode":400}
+
+==========================================
+Verification Summary
+==========================================
+Passed: 25
+Failed: 0
+
+Captured IDs:
+  addressIdA: 6461746c-06b2-4910-96ef-5dc030593dd7
+  addressIdB: ae16cc87-ff66-4e5e-aa65-997d6f0614c8
+

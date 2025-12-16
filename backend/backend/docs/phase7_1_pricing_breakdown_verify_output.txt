@@ -1,0 +1,23 @@
+Phase 7.1 Pricing Breakdown Verification Output
+Generated: 2025-12-14 16:01:48 UTC
+
+Order ID: 9e2f494a-4728-4340-ba90-4aedce787675
+Customer ID: mvp-user-001
+
+Pricing Breakdown:
+- Cost Ingredients: ¥51.41664705882353
+- Cost Packaging: ¥4.76
+- Cost Labor: ¥22.47
+- Cost Overhead: ¥2.996
+- Product Price: ¥136.07107843137254
+- Shipping Fee: ¥20
+- Total Price: ¥156.07107843137254
+
+Validation:
+✓ Product price > 0
+✓ Shipping fee >= 0
+✓ Total price = product + shipping (tolerance 0.01)
+✓ All cost fields exist and are >= 0
+
+Full Response:
+{"code":0,"message":"Success","data":{"costIngredients":51.41664705882353,"costPackaging":4.76,"costLabor":22.47,"costOverhead":2.996,"totalProductCost":81.64264705882353,"productPrice":136.07107843137254,"shippingFee":20,"totalPrice":156.07107843137254,"shippingTemplateId":"8fa85f64-5717-4562-b3fc-2c963f66afa6","marginStrategyName":"targetMargin_40%","createdAt":"2025-12-14T16:01:47.664Z","ingredientPriceVersionHash":null}}

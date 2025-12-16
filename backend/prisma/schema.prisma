@@ -1,0 +1,211 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// Enums (aligned with backend/src/domain/order/enums.ts)
+// ==========================================
+
+enum OrderStatus {
+  INIT
+  PENDING_PAYMENT
+  PAID
+  WAITING_FOR_PRODUCTION
+  IN_PRODUCTION
+  READY_FOR_PACKAGING
+  READY_FOR_SHIPMENT
+  SHIPPED
+  COMPLETED
+  CANCELLED
+}
+
+enum OrderType {
+  FRESH_FOOD
+  CUSTOM_SERVICE
+}
+
+// ==========================================
+// Dog Domain Enums (aligned with backend/src/domain/dog/enums.ts)
+// ==========================================
+
+enum DogGender {
+  MALE
+  FEMALE
+}
+
+enum ActivityLevel {
+  RESTING
+  LOW
+  NORMAL
+  HIGH
+  WORKING
+}
+
+enum LifeStageOverride {
+  NONE
+  PREGNANCY
+  LACTATION
+  PUPPY
+  ADULT
+  SENIOR
+}
+
+enum DogSizeCategory {
+  SMALL
+  MEDIUM
+  LARGE
+  GIANT
+}
+
+enum TreatInputMode {
+  ESTIMATE_LEVEL
+  EXACT_KCAL
+}
+
+enum TreatLevel {
+  NONE
+  LOW
+  MODERATE
+  HIGH
+}
+
+enum RecipeStatus {
+  DRAFT
+  PUBLIC
+  PRIVATE_CUSTOM
+}
+
+// ==========================================
+// Order Persistence (Phase 8.1 Part 1)
+// ==========================================
+
+model Order {
+  id                       String   @id @default(uuid()) @map("id")
+  customerId               String   @map("customer_id")
+  dogId                    String?  @map("dog_id")
+  addressId                String?  @map("address_id")
+  status                   OrderStatus
+  type                     OrderType
+  targetProductionDate     DateTime? @map("target_production_date")
+  amountProduct            Decimal   @map("amount_product")
+  amountShipping           Decimal   @map("amount_shipping")
+  amountTotal              Decimal   @map("amount_total")
+  totalAmount              Decimal?  @map("total_amount") // legacy alias of amount_total
+  pricingBreakdownSnapshot Json?     @map("pricing_breakdown_snapshot")
+
+  items OrderItem[]
+
+  @@index([customerId])
+  @@index([status])
+  @@map("order")
+}
+
+// OrderItem is persisted only as part of the Order aggregate; no independent lifecycle or APIs (Phase 8.1 scope).
+model OrderItem {
+  id                  String  @id @default(uuid()) @map("id")
+  orderId             String  @map("order_id")
+  recipeSnapshot      Json    @map("recipe_snapshot")
+  quantityG           Float   @map("quantity_g")
+  packageCount        Int     @map("package_count")
+  packageSpecG        Int     @map("package_spec_g")
+  customRequirements  String? @map("custom_requirements")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("order_item")
+}
+
+// Address persistence (Phase 8.2 Part A) - aligns with docs/07; customer isolation via userId.
+model Address {
+  id            String @id @default(uuid()) @map("id")
+  userId        String @map("user_id")
+  recipientName String @map("recipient_name")
+  phone         String @map("phone")
+  region        Json   @map("region")
+  detail        String @map("detail")
+  isDefault     Boolean @map("is_default")
+
+  @@index([userId])
+  @@map("address")
+}
+
+// ==========================================
+// Dog Persistence (Phase 8.2 Part B)
+// ==========================================
+
+model Dog {
+  id                    String            @id @default(uuid()) @map("id")
+  ownerId               String            @map("owner_id")
+  name                  String            @map("name")
+  breedId               String            @map("breed_id")
+  birthday              DateTime          @map("birthday")
+  gender                DogGender         @map("gender")
+  isNeutered            Boolean           @map("is_neutered")
+  currentWeightKg       Float             @map("current_weight_kg")
+  bcsScore              Int               @map("bcs_score")
+  activityLevel         ActivityLevel     @map("activity_level")
+  lifeStageOverride     LifeStageOverride @map("life_stage_override")
+  sizeClassOverride     DogSizeCategory? @map("size_class_override")
+  mealsPerDay           Int               @default(2) @map("meals_per_day")
+  treatInputMode        TreatInputMode    @default(ESTIMATE_LEVEL) @map("treat_input_mode")
+  treatLevel            TreatLevel        @default(LOW) @map("treat_level")
+  manualTreatKcal       Int?              @map("manual_treat_kcal")
+  medicalHistory        String?           @map("medical_history")
+  cachedTargetFoodKcal  Int               @default(0) @map("cached_target_food_kcal")
+  createdAt             DateTime          @default(now()) @map("created_at")
+
+  @@index([ownerId])
+  @@index([ownerId, createdAt])
+  @@map("dog")
+}
+
+// ==========================================
+// Recipe Persistence (Phase 8.3)
+// ==========================================
+
+model Recipe {
+  id                    String        @id @default(uuid()) @map("id")
+  recipeId              String        @map("recipe_id")
+  version               Int           @map("version")
+  name                  String        @map("name")
+  status                RecipeStatus  @map("status")
+  energyDensityKcalPerKg Float         @map("energy_density_kcal_per_kg")
+  productionLossRate    Float         @map("production_loss_rate")
+  batchLaborHours       Float?        @map("batch_labor_hours")
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+
+  items RecipeItem[]
+
+  @@index([recipeId])
+  @@index([status])
+  @@index([createdAt])
+  @@unique([recipeId, version])
+  @@map("recipe")
+}
+
+model RecipeItem {
+  id                  String   @id @default(uuid()) @map("id")
+  recipeId            String   @map("recipe_id")
+  recipeVersion       Int      @map("recipe_version")
+  ingredientId        String   @map("ingredient_id")
+  preparationMethod   String?  @map("preparation_method")
+  ratioPercent        Float?   @map("ratio_percent")
+  isPrimarySource     Boolean  @map("is_primary_source")
+  nutrientTargetKey   String?  @map("nutrient_target_key")
+  nutrientTargetValue Float?  @map("nutrient_target_value")
+
+  recipe Recipe @relation(fields: [recipeId, recipeVersion], references: [recipeId, version], onDelete: Cascade)
+
+  @@index([recipeId, recipeVersion])
+  @@map("recipe_item")
+}

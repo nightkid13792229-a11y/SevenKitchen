@@ -1,0 +1,28 @@
+/**
+ * Order Domain Enums
+ * These enums match the Prisma schema exactly.
+ */
+
+export enum OrderStatus {
+  INIT = 'INIT',
+  PENDING_PAYMENT = 'PENDING_PAYMENT',
+  PAID = 'PAID',
+  WAITING_FOR_PRODUCTION = 'WAITING_FOR_PRODUCTION',
+  IN_PRODUCTION = 'IN_PRODUCTION',
+  READY_FOR_PACKAGING = 'READY_FOR_PACKAGING',
+  READY_FOR_SHIPMENT = 'READY_FOR_SHIPMENT',
+  SHIPPED = 'SHIPPED',
+  COMPLETED = 'COMPLETED',
+  CANCELLED = 'CANCELLED',
+}
+
+export enum OrderType {
+  FRESH_FOOD = 'FRESH_FOOD',
+  CUSTOM_SERVICE = 'CUSTOM_SERVICE',
+}
+
+export enum ProductionTaskStatus {
+  PENDING = 'PENDING',
+  IN_PROGRESS = 'IN_PROGRESS',
+  COMPLETED = 'COMPLETED',
+}

@@ -1,0 +1,40 @@
+/**
+ * Recipe Domain Types
+ * Based on 07_Core_Architecture.md Section 2.4
+ */
+
+/**
+ * Recipe Snapshot
+ * Immutable snapshot of recipe at the time of order creation.
+ * Used in OrderItem.recipe_snapshot JSON field.
+ */
+export interface RecipeSnapshot {
+  id: string; // Original Recipe UUID
+  version: number; // Recipe Version at time of order
+  name: string;
+  production_loss_rate: number; // CRITICAL: Captured at order time
+  nutrition_standard: string;
+  items: RecipeSnapshotItem[]; // List of ingredients
+}
+
+export interface RecipeSnapshotItem {
+  ingredient_id: string;
+  name: string;
+  ratio: number; // or amount logic
+}
+
+/**
+ * Nutrition Detailed Data
+ * Structure for Recipe.nutrition_detailed_data JSON field.
+ * All macronutrients use Dry Matter Basis (DM) with _dm_pct suffix.
+ */
+export interface NutritionDetailedData {
+  moisture_pct: number; // 含水量 (As Fed basis)
+  protein_dm_pct: number; // 蛋白质 (Dry Matter Basis)
+  fat_dm_pct: number; // 脂肪 (Dry Matter Basis)
+  fiber_dm_pct: number; // 纤维 (Dry Matter Basis)
+  ash_dm_pct: number; // 灰分 (Dry Matter Basis)
+  carbs_dm_pct: number; // 碳水 (Dry Matter Basis)
+  ca_p_ratio: number; // 钙磷比 (Decimal, 2 places)
+  energy_density_kcal_per_kg: number; // 热量密度 (As Fed, matching column)
+}

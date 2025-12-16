@@ -1,0 +1,66 @@
+[
+  {
+    "id": "23c05764-6458-4ccb-a71b-3474cff39c83",
+    "customerId": "mvp-user-001",
+    "status": "PAID",
+    "type": "FRESH_FOOD",
+    "targetProductionDate": null,
+    "amountProduct": 97.1936274509804,
+    "amountShipping": 15,
+    "amountTotal": 112.1936274509804,
+    "totalAmount": 112.1936274509804,
+    "items": [
+      {
+        "id": "6eaad23a-e363-4452-9bdf-3fa26933d4a4",
+        "orderId": "23c05764-6458-4ccb-a71b-3474cff39c83",
+        "recipeSnapshot": {
+          "id": "3fa85f64-5717-4562-b3fc-2c963f66afa6",
+          "version": 1,
+          "name": "Chicken Pumpkin Bowl",
+          "production_loss_rate": 1.07,
+          "nutrition_standard": "FEDIAF_2021",
+          "items": [
+            {
+              "ingredient_id": "4fa85f64-5717-4562-b3fc-2c963f66afa6",
+              "name": "鸡胸肉",
+              "ratio": 70
+            },
+            {
+              "ingredient_id": "5fa85f64-5717-4562-b3fc-2c963f66afa6",
+              "name": "南瓜",
+              "ratio": 30
+            },
+            {
+              "ingredient_id": "6fa85f64-5717-4562-b3fc-2c963f66afa6",
+              "name": "真空袋",
+              "ratio": 0
+            },
+            {
+              "ingredient_id": "7fa85f64-5717-4562-b3fc-2c963f66afa6",
+              "name": "产品标签",
+              "ratio": 0
+            }
+          ]
+        },
+        "quantityG": 1000,
+        "packageCount": 10,
+        "packageSpecG": 100,
+        "customRequirements": null
+      }
+    ],
+    "pricingBreakdownSnapshot": {
+      "costIngredients": 36.726176470588236,
+      "costPackaging": 3.4,
+      "costLabor": 16.05,
+      "costOverhead": 2.14,
+      "totalProductCost": 58.31617647058824,
+      "productPrice": 97.1936274509804,
+      "shippingFee": 15,
+      "totalPrice": 112.1936274509804,
+      "shippingTemplateId": "8fa85f64-5717-4562-b3fc-2c963f66afa6",
+      "marginStrategyName": "targetMargin_40%",
+      "createdAt": "2025-12-15T05:26:44.377Z",
+      "ingredientPriceVersionHash": null
+    }
+  }
+]

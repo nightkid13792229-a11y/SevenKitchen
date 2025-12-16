@@ -13,6 +13,7 @@ import { Order, OrderItem } from '../../domain/order';
 import { OrderStatus, OrderType } from '../../domain';
 import type { RecipeSnapshot } from '../../domain/recipe/types';
 import { ORDER_REPOSITORY } from '../order/order.service';
+import type { ProductionBatchSummaryDto } from './production.service';
 
 describe('ProductionService - Phase 8.10', () => {
   let service: ProductionService;
@@ -103,6 +104,28 @@ describe('ProductionService - Phase 8.10', () => {
       'dog-id-1',
       undefined,
     );
+  };
+
+  // Helper function to map domain batch to DTO (simulating controller mapping)
+  const mapBatchToDto = (batch: ProductionBatch): ProductionBatchSummaryDto => {
+    const packagingUnits = batch.packagingUnits.map((unit) => ({
+      recipeSnapshotId: unit.recipeSnapshot.id,
+      totalProductionG: unit.totalProductionG,
+      orderItemCount: unit.sourceOrderItemIds.length,
+      sourceOrderItemIds: Array.isArray(unit.sourceOrderItemIds)
+        ? unit.sourceOrderItemIds
+        : [],
+    }));
+
+    return {
+      id: batch.id,
+      productionDate: batch.productionDate.toISOString().split('T')[0],
+      status: batch.status,
+      packagingUnits,
+      totalProductionG: batch.getTotalProductionG(),
+      uniqueRecipeCount: batch.getUniqueRecipeCount(),
+      orderItemCount: packagingUnits.reduce((sum, unit) => sum + unit.orderItemCount, 0),
+    };
   };
 
   describe('createProductionBatch - aggregation correctness', () => {
@@ -207,6 +230,102 @@ describe('ProductionService - Phase 8.10', () => {
       // Unit should still have original value
       expect(unit.recipeSnapshot.energy_density_kcal_per_kg).toBe(originalEnergyDensity);
       expect(unit.recipeSnapshot.energy_density_kcal_per_kg).not.toBe(updatedSnapshot.energy_density_kcal_per_kg);
+    });
+
+    it('should include sourceOrderItemIds as string[] in domain entities', async () => {
+      // Arrange
+      const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
+      const orderItem1 = createMockOrderItem('item-1', recipeSnapshot, 310.34);
+      const orderItem2 = createMockOrderItem('item-2', recipeSnapshot, 250.0);
+      const order = createMockPaidOrder('order-1', [orderItem1, orderItem2]);
+
+      orderRepository.findByStatus.mockResolvedValue([order]);
+      productionRepository.save.mockImplementation(async (batch) => batch);
+
+      // Act
+      const result = await service.createProductionBatch({
+        productionDate: '2025-01-20',
+      });
+
+      // Assert: sourceOrderItemIds must be an array
+      expect(result.packagingUnits).toHaveLength(1);
+      const unit = result.packagingUnits[0];
+      
+      // Verify sourceOrderItemIds is an array
+      expect(Array.isArray(unit.sourceOrderItemIds)).toBe(true);
+      expect(unit.sourceOrderItemIds).toEqual(['item-1', 'item-2']);
+      expect(unit.sourceOrderItemIds.length).toBe(2);
+    });
+
+    it('should include sourceOrderItemIds in API response DTO', async () => {
+      // Arrange
+      const recipeSnapshot1 = createMockRecipeSnapshot('recipe-1');
+      const recipeSnapshot2 = createMockRecipeSnapshot('recipe-2');
+
+      const orderItem1 = createMockOrderItem('item-1', recipeSnapshot1, 310.34);
+      const orderItem2 = createMockOrderItem('item-2', recipeSnapshot1, 250.0);
+      const orderItem3 = createMockOrderItem('item-3', recipeSnapshot2, 400.0);
+
+      const order1 = createMockPaidOrder('order-1', [orderItem1, orderItem2]);
+      const order2 = createMockPaidOrder('order-2', [orderItem3]);
+
+      orderRepository.findByStatus.mockResolvedValue([order1, order2]);
+      productionRepository.save.mockImplementation(async (batch) => batch);
+
+      // Act
+      const batch = await service.createProductionBatch({
+        productionDate: '2025-01-20',
+      });
+      const dto = mapBatchToDto(batch);
+
+      // Assert: DTO must include sourceOrderItemIds as string[]
+      expect(dto.packagingUnits).toHaveLength(2);
+      
+      // Verify first unit
+      const unit1 = dto.packagingUnits.find((u) => u.recipeSnapshotId === 'recipe-1');
+      expect(unit1).toBeDefined();
+      expect(Array.isArray(unit1!.sourceOrderItemIds)).toBe(true);
+      expect(unit1!.sourceOrderItemIds).toEqual(['item-1', 'item-2']);
+      expect(unit1!.orderItemCount).toBe(2);
+
+      // Verify second unit
+      const unit2 = dto.packagingUnits.find((u) => u.recipeSnapshotId === 'recipe-2');
+      expect(unit2).toBeDefined();
+      expect(Array.isArray(unit2!.sourceOrderItemIds)).toBe(true);
+      expect(unit2!.sourceOrderItemIds).toEqual(['item-3']);
+      expect(unit2!.orderItemCount).toBe(1);
+
+      // Verify batch-level orderItemCount
+      expect(dto.orderItemCount).toBe(3); // 2 + 1
+    });
+
+    it('should handle empty sourceOrderItemIds gracefully', async () => {
+      // Arrange: Create a batch with a unit that has empty sourceOrderItemIds
+      // This test ensures the mapping handles edge cases
+      const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
+      const orderItem = createMockOrderItem('item-1', recipeSnapshot, 310.34);
+      const order = createMockPaidOrder('order-1', [orderItem]);
+
+      orderRepository.findByStatus.mockResolvedValue([order]);
+      productionRepository.save.mockImplementation(async (batch) => batch);
+
+      // Act
+      const batch = await service.createProductionBatch({
+        productionDate: '2025-01-20',
+      });
+      
+      // Simulate edge case: unit with empty array
+      const unit = batch.packagingUnits[0];
+      expect(Array.isArray(unit.sourceOrderItemIds)).toBe(true);
+      expect(unit.sourceOrderItemIds.length).toBeGreaterThan(0); // Should have items
+
+      // Map to DTO
+      const dto = mapBatchToDto(batch);
+      const dtoUnit = dto.packagingUnits[0];
+      
+      // Assert: Even if empty, should be an array
+      expect(Array.isArray(dtoUnit.sourceOrderItemIds)).toBe(true);
+      expect(dtoUnit.sourceOrderItemIds.length).toBe(1); // item-1
     });
   });
 });

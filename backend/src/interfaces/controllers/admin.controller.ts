@@ -182,6 +182,11 @@ export class AdminController {
               recipeSnapshotId: { type: 'string' },
               totalProductionG: { type: 'number' },
               orderItemCount: { type: 'number' },
+              sourceOrderItemIds: {
+                type: 'array',
+                items: { type: 'string' },
+                description: 'Traceability: contributing OrderItem IDs',
+              },
             },
           },
         },
@@ -203,6 +208,9 @@ export class AdminController {
         recipeSnapshotId: unit.recipeSnapshot.id,
         totalProductionG: unit.totalProductionG,
         orderItemCount: unit.sourceOrderItemIds.length,
+        sourceOrderItemIds: Array.isArray(unit.sourceOrderItemIds)
+          ? unit.sourceOrderItemIds
+          : [],
       }));
       
       const summary: ProductionBatchSummaryDto = {
@@ -241,12 +249,13 @@ export class AdminController {
           items: {
             type: 'object',
             properties: {
-              id: { type: 'string' },
-              recipeSnapshot: { type: 'object' },
+              recipeSnapshotId: { type: 'string' },
               totalProductionG: { type: 'number' },
+              orderItemCount: { type: 'number' },
               sourceOrderItemIds: {
                 type: 'array',
                 items: { type: 'string' },
+                description: 'Traceability: contributing OrderItem IDs',
               },
             },
           },
@@ -270,6 +279,9 @@ export class AdminController {
       recipeSnapshotId: unit.recipeSnapshot.id,
       totalProductionG: unit.totalProductionG,
       orderItemCount: unit.sourceOrderItemIds.length,
+      sourceOrderItemIds: Array.isArray(unit.sourceOrderItemIds)
+        ? unit.sourceOrderItemIds
+        : [],
     }));
     
     const summary: ProductionBatchSummaryDto = {

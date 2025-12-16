@@ -27,6 +27,7 @@ export interface ProductionBatchSummaryDto {
     recipeSnapshotId: string;
     totalProductionG: number;
     orderItemCount: number;
+    sourceOrderItemIds: string[]; // Traceability: contributing OrderItem IDs
   }>;
   totalProductionG: number;
   uniqueRecipeCount: number;

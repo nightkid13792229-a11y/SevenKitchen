@@ -117,6 +117,7 @@ model OrderItem {
   packageCount        Int     @map("package_count")
   packageSpecG        Int     @map("package_spec_g")
   customRequirements  String? @map("custom_requirements")
+  dailyIntakeG        Float?  @map("daily_intake_g") // Daily intake in grams, calculated from DogCalc.finalFoodKcal ÷ Recipe.energyDensityKcalPerKg (immutable after order creation)
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
 

@@ -15,6 +15,7 @@ export class OrderItem {
     public readonly packageCount: number,
     public readonly packageSpecG: number,
     public readonly customRequirements: string | null,
+    public readonly dailyIntakeG: number, // Daily intake in grams, calculated from DogCalc.finalFoodKcal ÷ Recipe.energyDensityKcalPerKg
   ) {
     this.validateInvariants();
   }
@@ -38,6 +39,12 @@ export class OrderItem {
     if (this.packageSpecG <= 0) {
       throw new ValidationError(
         `Package spec must be positive, got: ${this.packageSpecG}`,
+      );
+    }
+
+    if (this.dailyIntakeG <= 0) {
+      throw new ValidationError(
+        `Daily intake must be positive, got: ${this.dailyIntakeG}`,
       );
     }
 

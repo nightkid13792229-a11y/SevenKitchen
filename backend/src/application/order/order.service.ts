@@ -10,7 +10,7 @@ import type { RecipeRepository } from '../../domain/recipe/recipe.repository';
 import type { IngredientRepository } from '../../domain/ingredient/ingredient.repository';
 import { Order, OrderItem, PricingBreakdownSnapshot } from '../../domain/order';
 import type { PriceExplanationDto } from '../../interfaces/dto/orders/pricing-preview.dto';
-import { OrderType, OrderStatus } from '../../domain';
+import { OrderType, OrderStatus, calculateDogEnergy, calculateDailyIntakeG } from '../../domain';
 import type { RecipeSnapshot } from '../../domain/recipe/types';
 import { ORDER_REPOSITORY } from './order.service.tokens';
 import { INGREDIENT_REPOSITORY } from '../ingredient/ingredient.service';
@@ -214,12 +214,25 @@ export class OrderService {
       }
 
 
+      // Phase 8.9: Calculate dailyIntakeG from DogCalc + Recipe energy density
+      // Get DogCalc result (finalFoodKcal)
+      const dogCalcResult = calculateDogEnergy(dog, recipe.energyDensityKcalPerKg);
+      
+      // Calculate dailyIntakeG = finalFoodKcal / (energyDensityKcalPerKg / 1000)
+      // Formula: dailyIntakeG = (finalFoodKcal / energyDensityKcalPerKg) * 1000
+      const dailyIntakeG = calculateDailyIntakeG(
+        dogCalcResult.finalFoodKcal,
+        recipe.energyDensityKcalPerKg,
+      );
+
       // Create RecipeSnapshot from recipe (immutable snapshot)
+      // Phase 8.9: Include energyDensityKcalPerKg in snapshot for immutability
       const recipeSnapshot: RecipeSnapshot = {
         id: recipe.id,
         version: recipe.version,
         name: recipe.name,
         production_loss_rate: recipe.productionLossRate,
+        energy_density_kcal_per_kg: recipe.energyDensityKcalPerKg, // CRITICAL: Captured at order time
         nutrition_standard: 'FEDIAF_2021', // TODO: Get from recipe when interface is complete
         items: recipeItems.map((ri) => {
           const ingredient = ingredientMap.get(ri.ingredientId);
@@ -233,6 +246,7 @@ export class OrderService {
 
       const itemId = randomUUID();
       // Use normalized packageCount (already computed above)
+      // Phase 8.9: Include calculated dailyIntakeG (immutable after order creation)
       const orderItem = new OrderItem(
         itemId,
         orderId,
@@ -241,6 +255,7 @@ export class OrderService {
         normalizedPackageCount,
         itemDto.packageSpecG,
         itemDto.customRequirements ?? null,
+        dailyIntakeG, // Calculated from DogCalc.finalFoodKcal ÷ Recipe.energyDensityKcalPerKg
       );
 
       items.push(orderItem);

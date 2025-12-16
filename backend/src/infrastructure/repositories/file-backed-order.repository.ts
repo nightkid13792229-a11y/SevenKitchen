@@ -31,6 +31,7 @@ interface OrderData {
     packageCount: number;
     packageSpecG: number;
     customRequirements: string | null;
+    dailyIntakeG?: number; // Optional for backward compatibility
   }>;
   pricingBreakdownSnapshot?: {
     costIngredients: number;
@@ -123,6 +124,7 @@ export class FileBackedOrderRepository
           itemData.packageCount,
           itemData.packageSpecG,
           itemData.customRequirements,
+          itemData.dailyIntakeG ?? itemData.quantityG / (itemData.packageCount || 1), // Fallback for backward compatibility
         ),
     );
 
@@ -215,6 +217,7 @@ export class FileBackedOrderRepository
         packageCount: item.packageCount,
         packageSpecG: item.packageSpecG,
         customRequirements: item.customRequirements,
+        dailyIntakeG: item.dailyIntakeG,
       })),
       pricingBreakdownSnapshot: order.pricingBreakdownSnapshot
         ? {

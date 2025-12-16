@@ -501,6 +501,7 @@ export class OrdersController {
       packageCount: item.packageCount,
       packageSpecG: item.packageSpecG,
       customRequirements: item.customRequirements,
+      dailyIntakeG: item.dailyIntakeG,
     };
   }
 

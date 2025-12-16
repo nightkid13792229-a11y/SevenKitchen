@@ -262,6 +262,7 @@ describe('OrdersController (e2e)', () => {
         version: 1,
         name: 'Test Recipe',
         production_loss_rate: 1.07,
+        energy_density_kcal_per_kg: 1450, // Phase 8.9: Required field
         nutrition_standard: 'FEDIAF_2021',
         items: [],
       };
@@ -273,6 +274,7 @@ describe('OrdersController (e2e)', () => {
         14,
         100,
         null,
+        310.34, // dailyIntakeG
       );
       const order = new Order(
         'test-order-id',
@@ -311,6 +313,7 @@ describe('OrdersController (e2e)', () => {
         version: 1,
         name: 'Test Recipe',
         production_loss_rate: 1.07,
+        energy_density_kcal_per_kg: 1450, // Phase 8.9: Required field
         nutrition_standard: 'FEDIAF_2021',
         items: [],
       };
@@ -322,6 +325,7 @@ describe('OrdersController (e2e)', () => {
         14,
         100,
         null,
+        310.34, // dailyIntakeG
       );
       const order = new Order(
         'test-order-id-2',
@@ -375,6 +379,7 @@ describe('OrdersController (e2e)', () => {
         version: 1,
         name: 'Test Recipe',
         production_loss_rate: 1.07,
+        energy_density_kcal_per_kg: 1450, // Phase 8.9: Required field
         nutrition_standard: 'FEDIAF_2021',
         items: [],
       };
@@ -398,6 +403,7 @@ describe('OrdersController (e2e)', () => {
             14,
             100,
             null,
+            310.34, // dailyIntakeG
           ),
         ],
       );
@@ -419,6 +425,7 @@ describe('OrdersController (e2e)', () => {
             20,
             100,
             null,
+            310.34, // dailyIntakeG
           ),
         ],
       );
@@ -461,6 +468,7 @@ describe('OrdersController (e2e)', () => {
         version: 1,
         name: 'Test Recipe',
         production_loss_rate: 1.07,
+        energy_density_kcal_per_kg: 1450, // Phase 8.9: Required field
         nutrition_standard: 'FEDIAF_2021',
         items: [],
       };
@@ -484,6 +492,7 @@ describe('OrdersController (e2e)', () => {
             14,
             100,
             null,
+            310.34, // dailyIntakeG
           ),
         ],
       );
@@ -507,6 +516,7 @@ describe('OrdersController (e2e)', () => {
             10,
             100,
             null,
+            310.34, // dailyIntakeG
           ),
         ],
       );
@@ -616,6 +626,7 @@ describe('OrdersController (e2e)', () => {
         version: 1,
         name: 'Test Recipe',
         production_loss_rate: 1.07,
+        energy_density_kcal_per_kg: 1450, // Phase 8.9: Required field
         nutrition_standard: 'FEDIAF_2021',
         items: [],
       };
@@ -627,6 +638,7 @@ describe('OrdersController (e2e)', () => {
         14,
         100,
         null,
+        310.34, // dailyIntakeG
       );
       const order = new Order(
         'test-order-id-3',
@@ -660,6 +672,7 @@ describe('OrdersController (e2e)', () => {
         version: 1,
         name: 'Test Recipe',
         production_loss_rate: 1.07,
+        energy_density_kcal_per_kg: 1450, // Phase 8.9: Required field
         nutrition_standard: 'FEDIAF_2021',
         items: [],
       };
@@ -672,6 +685,7 @@ describe('OrdersController (e2e)', () => {
         14,
         100,
         null,
+        310.34, // dailyIntakeG
       );
 
       const order = new Order(
@@ -707,6 +721,7 @@ describe('OrdersController (e2e)', () => {
         version: 1,
         name: 'Original Recipe Name',
         production_loss_rate: 1.07,
+        energy_density_kcal_per_kg: 1450, // Phase 8.9: Required field
         nutrition_standard: 'FEDIAF_2021',
         items: [],
       };
@@ -719,6 +734,7 @@ describe('OrdersController (e2e)', () => {
         14,
         100,
         null,
+        310.34, // dailyIntakeG
       );
 
       const order = new Order(
@@ -765,6 +781,7 @@ describe('OrdersController (e2e)', () => {
         version: 1,
         name: 'Test Recipe',
         production_loss_rate: 1.07,
+        energy_density_kcal_per_kg: 1450, // Phase 8.9: Required field
         nutrition_standard: 'FEDIAF_2021',
         items: [],
       };
@@ -776,6 +793,7 @@ describe('OrdersController (e2e)', () => {
         14,
         100,
         null,
+        310.34, // dailyIntakeG
       );
 
       // Create order with pricing breakdown snapshot
@@ -836,6 +854,7 @@ describe('OrdersController (e2e)', () => {
         version: 1,
         name: 'Test Recipe',
         production_loss_rate: 1.07,
+        energy_density_kcal_per_kg: 1450, // Phase 8.9: Required field
         nutrition_standard: 'FEDIAF_2021',
         items: [],
       };
@@ -847,6 +866,7 @@ describe('OrdersController (e2e)', () => {
         14,
         100,
         null,
+        310.34, // dailyIntakeG
       );
 
       const pricingBreakdown = new PricingBreakdownSnapshot(
@@ -896,6 +916,7 @@ describe('OrdersController (e2e)', () => {
         version: 1,
         name: 'Test Recipe',
         production_loss_rate: 1.07,
+        energy_density_kcal_per_kg: 1450, // Phase 8.9: Required field
         nutrition_standard: 'FEDIAF_2021',
         items: [],
       };
@@ -907,6 +928,7 @@ describe('OrdersController (e2e)', () => {
         14,
         100,
         null,
+        310.34, // dailyIntakeG
       );
 
       // Create order without pricing breakdown snapshot (legacy order)
@@ -1232,6 +1254,7 @@ describe('OrdersController (e2e)', () => {
         version: 1,
         name: 'Test Recipe',
         production_loss_rate: 1.07,
+        energy_density_kcal_per_kg: 1450, // Phase 8.9: Required field
         nutrition_standard: 'FEDIAF_2021',
         items: [],
       };
@@ -1243,6 +1266,7 @@ describe('OrdersController (e2e)', () => {
         14,
         100,
         null,
+        310.34, // dailyIntakeG
       );
 
       const pricingBreakdown = new PricingBreakdownSnapshot(
@@ -1308,6 +1332,7 @@ describe('OrdersController (e2e)', () => {
         version: 1,
         name: 'Test Recipe',
         production_loss_rate: 1.07,
+        energy_density_kcal_per_kg: 1450, // Phase 8.9: Required field
         nutrition_standard: 'FEDIAF_2021',
         items: [],
       };
@@ -1319,6 +1344,7 @@ describe('OrdersController (e2e)', () => {
         14,
         100,
         null,
+        310.34, // dailyIntakeG
       );
 
       // Create order without pricing breakdown snapshot (legacy order)
@@ -1351,6 +1377,7 @@ describe('OrdersController (e2e)', () => {
         version: 1,
         name: 'Test Recipe',
         production_loss_rate: 1.07,
+        energy_density_kcal_per_kg: 1450, // Phase 8.9: Required field
         nutrition_standard: 'FEDIAF_2021',
         items: [],
       };
@@ -1362,6 +1389,7 @@ describe('OrdersController (e2e)', () => {
         14,
         100,
         null,
+        310.34, // dailyIntakeG
       );
 
       // Test with specific values: productPrice=100, totalProductCost=60, marginAmount should be 40

@@ -89,6 +89,7 @@ export class PrismaOrderRepository implements OrderRepository {
               packageCount: item.packageCount,
               packageSpecG: item.packageSpecG,
               customRequirements: item.customRequirements,
+              dailyIntakeG: item.dailyIntakeG,
             })),
           });
           this.logger.debug(
@@ -158,6 +159,8 @@ export class PrismaOrderRepository implements OrderRepository {
           i.packageCount,
           i.packageSpecG,
           i.customRequirements ?? null,
+          // Type assertion needed: dailyIntakeG may not exist in Prisma type until migration is applied
+          (i as any).dailyIntakeG ?? i.quantityG / (i.packageCount || 1), // Fallback for backward compatibility
         ),
     );
 

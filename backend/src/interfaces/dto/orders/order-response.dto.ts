@@ -29,6 +29,12 @@ export class OrderItemDto {
 
   @ApiPropertyOptional({ nullable: true })
   customRequirements?: string | null;
+
+  @ApiProperty({
+    example: 310.34,
+    description: 'Daily intake in grams, calculated from DogCalc.finalFoodKcal ÷ Recipe.energyDensityKcalPerKg (immutable after order creation)',
+  })
+  dailyIntakeG!: number;
 }
 
 export class OrderDto {

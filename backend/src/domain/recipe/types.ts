@@ -13,6 +13,7 @@ export interface RecipeSnapshot {
   version: number; // Recipe Version at time of order
   name: string;
   production_loss_rate: number; // CRITICAL: Captured at order time
+  energy_density_kcal_per_kg: number; // CRITICAL: Captured at order time for dailyIntakeG calculation
   nutrition_standard: string;
   items: RecipeSnapshotItem[]; // List of ingredients
 }

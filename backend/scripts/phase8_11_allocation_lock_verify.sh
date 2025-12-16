@@ -46,17 +46,20 @@ echo ""
 echo "Step 2: Login"
 LOGIN_RESPONSE=$(curl -s -X POST "${BASE_URL}/api/v1/auth/login" \
   -H "Content-Type: application/json" \
-  -d '{"phone": "13800138000", "code": "123456"}')
+  -d '{"customerId":"mvp-user-001"}')
 
-LOGIN_CODE=$(extract_json "$LOGIN_RESPONSE" "code")
-if [ "$LOGIN_CODE" != "0" ]; then
-  echo "❌ Login failed: $LOGIN_RESPONSE"
+# Extract token using node (robust parsing)
+TOKEN=$(echo "$LOGIN_RESPONSE" | node -e 'const o=JSON.parse(require("fs").readFileSync(0,"utf8"));process.stdout.write(o?.data?.token||"")')
+
+if [ -z "$TOKEN" ]; then
+  echo "❌ Login failed (empty token). Raw response:"
+  echo "$LOGIN_RESPONSE"
   exit 1
 fi
 
-TOKEN=$(extract_json "$LOGIN_RESPONSE" "data.token")
-CUSTOMER_ID=$(extract_json "$LOGIN_RESPONSE" "data.customerId")
-echo "✅ Login successful: customerId=$CUSTOMER_ID"
+# Extract customerId for logging
+CUSTOMER_ID=$(echo "$LOGIN_RESPONSE" | node -e 'const o=JSON.parse(require("fs").readFileSync(0,"utf8"));process.stdout.write(o?.data?.customerId||"")')
+echo "✅ Login successful: customerId=${CUSTOMER_ID:-mvp-user-001}"
 echo ""
 
 # Step 3: Create/confirm/pay order (reuse existing order if available)

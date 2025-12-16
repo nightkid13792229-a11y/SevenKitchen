@@ -116,13 +116,21 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
 
         // Step 2: Create PackagingUnits
         if (batch.packagingUnits.length > 0) {
-          await tx.packagingUnit.createMany({
+          await (tx as any).packagingUnit.createMany({
             data: batch.packagingUnits.map((unit) => ({
               id: unit.id,
               productionBatchId: batch.id, // Set the batchId here
               recipeSnapshot: unit.recipeSnapshot as any,
               totalProductionG: unit.totalProductionG,
               sourceOrderItemIds: unit.sourceOrderItemIds,
+              // Phase 8.12: Kitchen task fields (defaults)
+              status: (unit.status as any) || 'PENDING',
+              ingredientsUsageSnapshot: unit.ingredientsUsageSnapshot
+                ? (unit.ingredientsUsageSnapshot as any)
+                : null,
+              photosRaw: unit.photosRaw || [],
+              photosCooked: unit.photosCooked || [],
+              photosPortioned: unit.photosPortioned || [],
             })),
           });
           this.logger.debug(
@@ -154,6 +162,115 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
     return this.mapToDomain(saved);
   }
 
+  // Phase 8.12: Kitchen task operations
+  async findPackagingUnitById(id: string): Promise<PackagingUnit | null> {
+    const record = await (this.prisma as any).packagingUnit.findUnique({
+      where: { id },
+    });
+    if (!record) return null;
+    return this.mapPackagingUnitToDomain(record);
+  }
+
+  async updatePackagingUnit(unit: PackagingUnit): Promise<PackagingUnit> {
+    await (this.prisma as any).packagingUnit.update({
+      where: { id: unit.id },
+      data: {
+        status: unit.status as any,
+        ingredientsUsageSnapshot: unit.ingredientsUsageSnapshot
+          ? (unit.ingredientsUsageSnapshot as any)
+          : null,
+        photosRaw: unit.photosRaw,
+        photosCooked: unit.photosCooked,
+        photosPortioned: unit.photosPortioned,
+      },
+    });
+
+    const saved = await (this.prisma as any).packagingUnit.findUnique({
+      where: { id: unit.id },
+    });
+    if (!saved) {
+      this.logger.error(`Failed to load packaging unit after update: ${unit.id}`);
+      return unit;
+    }
+    return this.mapPackagingUnitToDomain(saved);
+  }
+
+  async findBatchesByPackagingUnitStatus(
+    status: string,
+  ): Promise<ProductionBatch[]> {
+    // Find all packaging units with the given status, then get their batches
+    // Use raw query to avoid Prisma type issues until migration is applied
+    const batchIds = await this.prisma.$queryRawUnsafe<Array<{ production_batch_id: string }>>(
+      `SELECT DISTINCT production_batch_id 
+       FROM packaging_unit 
+       WHERE status = $1`,
+      status,
+    );
+
+    // Load batches by IDs
+    const batchIdsList = batchIds.map((row) => row.production_batch_id);
+    if (batchIdsList.length === 0) {
+      return [];
+    }
+
+    const batches = await this.prisma.productionBatch.findMany({
+      where: { id: { in: batchIdsList } },
+      include: { packagingUnits: true },
+    });
+
+    return batches.map((b) => this.mapToDomain(b));
+  }
+
+  private mapPackagingUnitToDomain(pu: any): PackagingUnit {
+    // Ensure sourceOrderItemIds is always an array
+    let sourceOrderItemIds: string[] = [];
+    if (Array.isArray(pu.sourceOrderItemIds)) {
+      sourceOrderItemIds = pu.sourceOrderItemIds;
+    } else if (typeof pu.sourceOrderItemIds === 'string') {
+      try {
+        const parsed = JSON.parse(pu.sourceOrderItemIds);
+        sourceOrderItemIds = Array.isArray(parsed) ? parsed : [];
+      } catch {
+        sourceOrderItemIds = pu.sourceOrderItemIds ? [pu.sourceOrderItemIds] : [];
+      }
+    }
+
+    // Phase 8.12: Handle photos arrays
+    const photosRaw = Array.isArray(pu.photosRaw) ? pu.photosRaw : [];
+    const photosCooked = Array.isArray(pu.photosCooked) ? pu.photosCooked : [];
+    const photosPortioned = Array.isArray(pu.photosPortioned)
+      ? pu.photosPortioned
+      : [];
+
+    // Phase 8.12: Handle ingredients usage snapshot
+    let ingredientsUsageSnapshot = null;
+    if (pu.ingredientsUsageSnapshot) {
+      try {
+        ingredientsUsageSnapshot =
+          typeof pu.ingredientsUsageSnapshot === 'string'
+            ? JSON.parse(pu.ingredientsUsageSnapshot)
+            : pu.ingredientsUsageSnapshot;
+      } catch {
+        ingredientsUsageSnapshot = null;
+      }
+    }
+
+    return new PackagingUnit(
+      pu.id,
+      pu.productionBatchId,
+      pu.recipeSnapshot as unknown as RecipeSnapshot,
+      pu.totalProductionG,
+      sourceOrderItemIds,
+      pu.createdAt,
+      (pu.status as any) || 'PENDING',
+      ingredientsUsageSnapshot,
+      photosRaw,
+      photosCooked,
+      photosPortioned,
+      pu.updatedAt ? new Date(pu.updatedAt) : new Date(),
+    );
+  }
+
   private mapToDomain(record: any): ProductionBatch {
     const packagingUnits = (record.packagingUnits || []).map(
       (pu: any) => {
@@ -172,6 +289,26 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
             sourceOrderItemIds = pu.sourceOrderItemIds ? [pu.sourceOrderItemIds] : [];
           }
         }
+
+        // Phase 8.12: Handle photos arrays
+        const photosRaw = Array.isArray(pu.photosRaw) ? pu.photosRaw : [];
+        const photosCooked = Array.isArray(pu.photosCooked) ? pu.photosCooked : [];
+        const photosPortioned = Array.isArray(pu.photosPortioned)
+          ? pu.photosPortioned
+          : [];
+
+        // Phase 8.12: Handle ingredients usage snapshot
+        let ingredientsUsageSnapshot = null;
+        if (pu.ingredientsUsageSnapshot) {
+          try {
+            ingredientsUsageSnapshot =
+              typeof pu.ingredientsUsageSnapshot === 'string'
+                ? JSON.parse(pu.ingredientsUsageSnapshot)
+                : pu.ingredientsUsageSnapshot;
+          } catch {
+            ingredientsUsageSnapshot = null;
+          }
+        }
         
         return new PackagingUnit(
           pu.id,
@@ -180,6 +317,13 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
           pu.totalProductionG,
           sourceOrderItemIds,
           pu.createdAt,
+          // Phase 8.12: Kitchen task fields
+          (pu.status as any) || 'PENDING',
+          ingredientsUsageSnapshot,
+          photosRaw,
+          photosCooked,
+          photosPortioned,
+          pu.updatedAt ? new Date(pu.updatedAt) : new Date(),
         );
       },
     );

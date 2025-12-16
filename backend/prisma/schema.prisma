@@ -89,6 +89,12 @@ enum ProductionBatchStatus {
   COMPLETED
 }
 
+enum PackagingUnitStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+}
+
 // ==========================================
 // Order Persistence (Phase 8.1 Part 1)
 // ==========================================
@@ -238,15 +244,22 @@ model ProductionBatch {
 }
 
 model PackagingUnit {
-  id                  String   @id @default(uuid()) @map("id")
-  productionBatchId   String   @map("production_batch_id")
-  recipeSnapshot      Json     @map("recipe_snapshot") // Immutable RecipeSnapshot reference
-  totalProductionG    Float    @map("total_production_g") // Aggregated grams from OrderItems
-  sourceOrderItemIds  String[] @map("source_order_item_ids") // Traceability: contributing OrderItem IDs
-  createdAt           DateTime @default(now()) @map("created_at")
+  id                      String              @id @default(uuid()) @map("id")
+  productionBatchId       String              @map("production_batch_id")
+  recipeSnapshot          Json                @map("recipe_snapshot") // Immutable RecipeSnapshot reference
+  totalProductionG        Float               @map("total_production_g") // Aggregated grams from OrderItems
+  sourceOrderItemIds      String[]            @map("source_order_item_ids") // Traceability: contributing OrderItem IDs
+  status                  PackagingUnitStatus @default(PENDING) @map("status") // Phase 8.12: Kitchen task status
+  ingredientsUsageSnapshot Json?              @map("ingredients_usage_snapshot") // Phase 8.12: Stores required + actual per ingredient
+  photosRaw               String[]            @default([]) @map("photos_raw") // Phase 8.12: Raw ingredient photos
+  photosCooked            String[]            @default([]) @map("photos_cooked") // Phase 8.12: Cooked food photos
+  photosPortioned         String[]            @default([]) @map("photos_portioned") // Phase 8.12: Portioned food photos
+  createdAt               DateTime            @default(now()) @map("created_at")
+  updatedAt               DateTime            @updatedAt @map("updated_at")
 
   productionBatch ProductionBatch @relation(fields: [productionBatchId], references: [id], onDelete: Cascade)
 
   @@index([productionBatchId])
+  @@index([status])
   @@map("packaging_unit")
 }

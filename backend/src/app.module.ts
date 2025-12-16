@@ -8,6 +8,7 @@ import { AddressesController } from './interfaces/controllers/addresses.controll
 import { AuthController } from './interfaces/controllers/auth.controller';
 import { AdminController } from './interfaces/controllers/admin.controller';
 import { ShippingController } from './interfaces/controllers/shipping.controller';
+import { StaffKitchenController } from './interfaces/controllers/staff-kitchen.controller';
 import {
   DogService,
   DOG_REPOSITORY,
@@ -49,6 +50,7 @@ import { SHIPPING_TEMPLATE_REPOSITORY } from './application/shipping/shipping.se
 import type { ShippingTemplate } from './domain/shipping/shipping-fee.service';
 import { ProductionService, PRODUCTION_BATCH_REPOSITORY } from './application/production/production.service';
 import { PrismaProductionRepository } from './infrastructure/repositories/prisma-production.repository';
+import { KitchenService } from './application/kitchen/kitchen.service';
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -96,6 +98,7 @@ validatePrismaConfig();
     AuthController,
     AdminController,
     ShippingController,
+    StaffKitchenController,
   ],
   providers: [
     DogService,
@@ -211,6 +214,8 @@ validatePrismaConfig();
     },
     // Phase 8.10: Production Service
     ProductionService,
+    // Phase 8.12: Kitchen Service
+    KitchenService,
     {
       provide: PRODUCTION_BATCH_REPOSITORY,
       useFactory: (prismaService?: PrismaService) => {

@@ -31,7 +31,8 @@ echo ""
 # Step 1: Health check
 echo "Step 1: Health check"
 HEALTH_RESPONSE=$(curl -s -w "\n%{http_code}" "${BASE_URL}/api/v1/health")
-HEALTH_BODY=$(echo "$HEALTH_RESPONSE" | head -n -1)
+# Use sed to remove last line (macOS compatible, works on both BSD and GNU sed)
+HEALTH_BODY=$(echo "$HEALTH_RESPONSE" | sed '$d')
 HEALTH_CODE=$(echo "$HEALTH_RESPONSE" | tail -n 1)
 
 if [ "$HEALTH_CODE" != "200" ]; then

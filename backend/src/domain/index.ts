@@ -33,3 +33,6 @@ export * from './order/order.repository';
 
 // Address Domain
 export * from './address';
+
+// Production Domain
+export * from './production';

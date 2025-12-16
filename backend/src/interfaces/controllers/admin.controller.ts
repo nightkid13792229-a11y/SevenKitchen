@@ -16,6 +16,7 @@ import {
   UsePipes,
   ValidationPipe,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -27,6 +28,7 @@ import {
 import { IngredientService } from '../../application/ingredient/ingredient.service';
 import type { CreateIngredientDto, UpdateIngredientPriceDto } from '../../application/ingredient/ingredient.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
+import { ProductionService, type CreateProductionBatchDto, type ProductionBatchSummaryDto } from '../../application/production/production.service';
 
 @ApiTags('Admin')
 @Controller('api/v1/admin')
@@ -34,6 +36,7 @@ import { ApiResponseDto } from '../dto/common/response.dto';
 export class AdminController {
   constructor(
     private readonly ingredientService: IngredientService,
+    private readonly productionService: ProductionService,
   ) {}
 
   @Get('inventory')
@@ -134,5 +137,151 @@ export class AdminController {
       }
       throw error;
     }
+  }
+
+  // ==========================================
+  // Phase 8.10: Production Batch Endpoints
+  // ==========================================
+
+  @Post('production-batches')
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create production batch from PAID orders' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        productionDate: {
+          type: 'string',
+          format: 'date',
+          example: '2025-01-20',
+          description: 'Production date (YYYY-MM-DD)',
+        },
+        orderIds: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Optional: specific order IDs to include. If not provided, includes all PAID unassigned orders.',
+        },
+      },
+      required: ['productionDate'],
+    },
+  })
+  @ApiResponse({
+    status: 201,
+    description: 'Production batch created successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        productionDate: { type: 'string', format: 'date' },
+        status: { type: 'string', enum: ['PLANNED', 'IN_PRODUCTION', 'COMPLETED'] },
+        packagingUnits: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              recipeSnapshotId: { type: 'string' },
+              totalProductionG: { type: 'number' },
+              orderItemCount: { type: 'number' },
+            },
+          },
+        },
+        totalProductionG: { type: 'number' },
+        uniqueRecipeCount: { type: 'number' },
+        orderItemCount: { type: 'number', description: 'Total count across all packagingUnits' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid input or no PAID orders found' })
+  async createProductionBatch(
+    @Body() dto: CreateProductionBatchDto,
+  ): Promise<ApiResponseDto<ProductionBatchSummaryDto> | ApiResponseDto<null>> {
+    try {
+      const batch = await this.productionService.createProductionBatch(dto);
+
+      // Map to summary DTO
+      const packagingUnits = batch.packagingUnits.map((unit) => ({
+        recipeSnapshotId: unit.recipeSnapshot.id,
+        totalProductionG: unit.totalProductionG,
+        orderItemCount: unit.sourceOrderItemIds.length,
+      }));
+      
+      const summary: ProductionBatchSummaryDto = {
+        id: batch.id,
+        productionDate: batch.productionDate.toISOString().split('T')[0], // YYYY-MM-DD
+        status: batch.status,
+        packagingUnits,
+        totalProductionG: batch.getTotalProductionG(),
+        uniqueRecipeCount: batch.getUniqueRecipeCount(),
+        orderItemCount: packagingUnits.reduce((sum, unit) => sum + unit.orderItemCount, 0),
+      };
+
+      return ApiResponseDto.success(summary);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  @Get('production-batches/:id')
+  @ApiOperation({ summary: 'Get production batch details with traceability' })
+  @ApiParam({ name: 'id', description: 'Production Batch ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Production batch details',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        productionDate: { type: 'string', format: 'date' },
+        status: { type: 'string' },
+        packagingUnits: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              recipeSnapshot: { type: 'object' },
+              totalProductionG: { type: 'number' },
+              sourceOrderItemIds: {
+                type: 'array',
+                items: { type: 'string' },
+              },
+            },
+          },
+        },
+        totalProductionG: { type: 'number' },
+        uniqueRecipeCount: { type: 'number' },
+        orderItemCount: { type: 'number', description: 'Total count across all packagingUnits' },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Production batch not found' })
+  async getProductionBatch(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<ProductionBatchSummaryDto> | ApiResponseDto<null>> {
+    const batch = await this.productionService.getProductionBatchById(id);
+    if (!batch) {
+      return ApiResponseDto.error(404, 'Production batch not found');
+    }
+
+    const packagingUnits = batch.packagingUnits.map((unit) => ({
+      recipeSnapshotId: unit.recipeSnapshot.id,
+      totalProductionG: unit.totalProductionG,
+      orderItemCount: unit.sourceOrderItemIds.length,
+    }));
+    
+    const summary: ProductionBatchSummaryDto = {
+      id: batch.id,
+      productionDate: batch.productionDate.toISOString().split('T')[0],
+      status: batch.status,
+      packagingUnits,
+      totalProductionG: batch.getTotalProductionG(),
+      uniqueRecipeCount: batch.getUniqueRecipeCount(),
+      orderItemCount: packagingUnits.reduce((sum, unit) => sum + unit.orderItemCount, 0),
+    };
+
+    return ApiResponseDto.success(summary);
   }
 }

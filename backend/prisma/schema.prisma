@@ -83,6 +83,12 @@ enum RecipeStatus {
   PRIVATE_CUSTOM
 }
 
+enum ProductionBatchStatus {
+  PLANNED
+  IN_PRODUCTION
+  COMPLETED
+}
+
 // ==========================================
 // Order Persistence (Phase 8.1 Part 1)
 // ==========================================
@@ -209,4 +215,35 @@ model RecipeItem {
 
   @@index([recipeId, recipeVersion])
   @@map("recipe_item")
+}
+
+// ==========================================
+// Production Persistence (Phase 8.10)
+// ==========================================
+
+model ProductionBatch {
+  id              String                 @id @default(uuid()) @map("id")
+  productionDate  DateTime               @map("production_date") // YYYY-MM-DD (date only)
+  status          ProductionBatchStatus  @map("status")
+  createdAt       DateTime               @default(now()) @map("created_at")
+
+  packagingUnits PackagingUnit[]
+
+  @@index([productionDate])
+  @@index([status])
+  @@map("production_batch")
+}
+
+model PackagingUnit {
+  id                  String   @id @default(uuid()) @map("id")
+  productionBatchId   String   @map("production_batch_id")
+  recipeSnapshot      Json     @map("recipe_snapshot") // Immutable RecipeSnapshot reference
+  totalProductionG    Float    @map("total_production_g") // Aggregated grams from OrderItems
+  sourceOrderItemIds  String[] @map("source_order_item_ids") // Traceability: contributing OrderItem IDs
+  createdAt           DateTime @default(now()) @map("created_at")
+
+  productionBatch ProductionBatch @relation(fields: [productionBatchId], references: [id], onDelete: Cascade)
+
+  @@index([productionBatchId])
+  @@map("packaging_unit")
 }

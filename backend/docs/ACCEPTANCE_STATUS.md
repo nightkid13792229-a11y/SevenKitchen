@@ -22,6 +22,8 @@
 | **Phase 8.5** | ⏳ PENDING VERIFY | `phase8_5_address_persistence_smoke.sh` | Pending | `PHASE8_5_ADDRESS_PERSISTENCE.md` |
 | **Phase 8.6** | ✅ ACCEPTED | `phase8_6_comprehensive_verify.sh` | Smoke test passed (cross-domain refs, snapshot immutability, restart persistence) | `PHASE8_6_COMPREHENSIVE_VERIFY.md` |
 | **Comprehensive** | ✅ AVAILABLE | `comprehensive_verify.sh` | `comprehensive_verify_output.txt` | N/A |
+| **Phase 8.10** | ⏳ PENDING VERIFY | Production & Packaging MVP | `production.service.spec.ts` | Backend only - ProductionBatch creation from PAID orders |
+
 
 ---
 

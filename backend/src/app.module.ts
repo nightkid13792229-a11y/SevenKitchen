@@ -47,6 +47,8 @@ import { ShippingService } from './application/shipping/shipping.service';
 import { InMemoryShippingTemplateRepository } from './infrastructure/repositories/in-memory-shipping-template.repository';
 import { SHIPPING_TEMPLATE_REPOSITORY } from './application/shipping/shipping.service.tokens';
 import type { ShippingTemplate } from './domain/shipping/shipping-fee.service';
+import { ProductionService, PRODUCTION_BATCH_REPOSITORY } from './application/production/production.service';
+import { PrismaProductionRepository } from './infrastructure/repositories/prisma-production.repository';
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -55,7 +57,8 @@ const isPrismaEnabled = (): boolean => {
     process.env.ADDRESS_REPO === 'prisma' ||
     process.env.DOG_REPO === 'prisma' ||
     process.env.RECIPE_REPO === 'prisma' ||
-    process.env.SHIPPING_REPO === 'prisma'
+    process.env.SHIPPING_REPO === 'prisma' ||
+    process.env.PRODUCTION_REPO === 'prisma'
   );
 };
 
@@ -203,6 +206,27 @@ validatePrismaConfig();
         }
 
         return new InMemoryOrderRepository();
+      },
+      inject: isPrismaEnabled() ? [PrismaService] : [],
+    },
+    // Phase 8.10: Production Service
+    ProductionService,
+    {
+      provide: PRODUCTION_BATCH_REPOSITORY,
+      useFactory: (prismaService?: PrismaService) => {
+        const mode = process.env.PRODUCTION_REPO ?? 'prisma'; // Default to Prisma for production
+        if (mode === 'prisma') {
+          if (!prismaService) {
+            throw new Error(
+              'PrismaService is not available. Ensure Prisma is enabled via repo switches.',
+            );
+          }
+          return new PrismaProductionRepository(prismaService);
+        }
+        // For MVP, only Prisma is supported
+        throw new Error(
+          'Production repository only supports Prisma mode. Set PRODUCTION_REPO=prisma and ensure DATABASE_URL is set.',
+        );
       },
       inject: isPrismaEnabled() ? [PrismaService] : [],
     },

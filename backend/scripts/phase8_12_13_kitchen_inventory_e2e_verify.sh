@@ -271,7 +271,7 @@ fi
 
 BATCH_CODE_VALUE=$(echo "$BATCH_BODY" | extract_json_stdin "root?.code")
 if [ "$BATCH_CODE_VALUE" != "0" ]; then
-  local error_msg=$(echo "$BATCH_BODY" | extract_json_stdin "root?.message || 'Unknown error'")
+  error_msg=$(echo "$BATCH_BODY" | extract_json_stdin "root?.message || 'Unknown error'")
   if echo "$error_msg" | grep -q "No eligible OrderItems found"; then
     warn "No eligible OrderItems found. This may be due to existing allocation locks."
     echo ""

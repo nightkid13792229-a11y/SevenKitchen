@@ -122,29 +122,37 @@ echo ""
 
 # Step 2: Login
 echo "Step 2: Login"
-LOGIN_FULL=$(curl_with_code -X POST "${API_BASE}/auth/login" \
+LOGIN_FULL=$(curl_with_code "${API_BASE}/auth/login" \
+  -X POST \
   -H "Content-Type: application/json" \
   -d '{"customerId":"mvp-user-001"}')
 LOGIN_BODY=$(get_body "$LOGIN_FULL")
 LOGIN_CODE=$(get_http_code "$LOGIN_FULL")
+LOGIN_CURL_CMD="curl -s -w \"\\n%{http_code}\" -X POST \"${API_BASE}/auth/login\" -H \"Content-Type: application/json\" -d '{\"customerId\":\"mvp-user-001\"}'"
+
+if [ -z "$LOGIN_CODE" ]; then
+  fail "Login failed: HTTP code not found" "$LOGIN_FULL" "$LOGIN_CURL_CMD"
+fi
 
 if [ "$LOGIN_CODE" != "200" ]; then
-  fail "Login failed: HTTP $LOGIN_CODE" "$LOGIN_BODY"
+  fail "Login failed: HTTP $LOGIN_CODE" "$LOGIN_BODY" "$LOGIN_CURL_CMD"
 fi
 
 TOKEN=$(echo "$LOGIN_BODY" | extract_json_stdin "root?.data?.token || ''")
 
 if [ -z "$TOKEN" ]; then
-  fail "Login failed (empty token)" "$LOGIN_BODY"
+  fail "Login failed (empty token)" "$LOGIN_BODY" "$LOGIN_CURL_CMD"
 fi
 
 CUSTOMER_ID=$(echo "$LOGIN_BODY" | extract_json_stdin "root?.data?.customerId || 'mvp-user-001'")
+echo "HTTP_CODE:$LOGIN_CODE"
 success "Login successful: customerId=$CUSTOMER_ID"
 echo ""
 
 # Step 3: Ensure PAID order exists
 echo "Step 3: Ensure PAID order exists"
-ORDERS_FULL=$(curl_with_code -X GET "${API_BASE}/orders" \
+ORDERS_FULL=$(curl_with_code "${API_BASE}/orders" \
+  -X GET \
   -H "Authorization: Bearer $TOKEN")
 ORDERS_BODY=$(get_body "$ORDERS_FULL")
 ORDERS_CODE=$(get_http_code "$ORDERS_FULL")
@@ -168,7 +176,8 @@ fi
 if [ -z "$PAID_ORDER_ID" ]; then
   info "No PAID order found, creating new order..."
 
-  DOGS_FULL=$(curl_with_code -X GET "${API_BASE}/dogs" \
+  DOGS_FULL=$(curl_with_code "${API_BASE}/dogs" \
+    -X GET \
     -H "Authorization: Bearer $TOKEN")
   DOGS_BODY=$(get_body "$DOGS_FULL")
   DOG_ID=$(echo "$DOGS_BODY" | extract_json_stdin "(root?.data || [])[0]?.id || ''")
@@ -177,7 +186,7 @@ if [ -z "$PAID_ORDER_ID" ]; then
     fail "No dog found. Please create a dog first." "$DOGS_BODY"
   fi
 
-  RECIPES_FULL=$(curl_with_code -X GET "${API_BASE}/recipes")
+  RECIPES_FULL=$(curl_with_code "${API_BASE}/recipes" -X GET)
   RECIPES_BODY=$(get_body "$RECIPES_FULL")
   RECIPE_ID=$(echo "$RECIPES_BODY" | extract_json_stdin "(root?.data || [])[0]?.id || ''")
 
@@ -185,7 +194,8 @@ if [ -z "$PAID_ORDER_ID" ]; then
     fail "No recipe found. Please create a recipe first." "$RECIPES_BODY"
   fi
 
-  ADDRESSES_FULL=$(curl_with_code -X GET "${API_BASE}/addresses" \
+  ADDRESSES_FULL=$(curl_with_code "${API_BASE}/addresses" \
+    -X GET \
     -H "Authorization: Bearer $TOKEN")
   ADDRESSES_BODY=$(get_body "$ADDRESSES_FULL")
   ADDRESS_ID=$(echo "$ADDRESSES_BODY" | extract_json_stdin "(root?.data || []).find(a => a.isDefault)?.id || (root?.data || [])[0]?.id || ''")
@@ -194,7 +204,8 @@ if [ -z "$PAID_ORDER_ID" ]; then
     fail "No address found. Please create an address first." "$ADDRESSES_BODY"
   fi
 
-  DRAFT_FULL=$(curl_with_code -X POST "${API_BASE}/orders/draft" \
+  DRAFT_FULL=$(curl_with_code "${API_BASE}/orders/draft" \
+    -X POST \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
     -d "{\"dogId\":\"$DOG_ID\",\"recipeId\":\"$RECIPE_ID\",\"cycleDays\":7,\"addressId\":\"$ADDRESS_ID\"}")
@@ -210,7 +221,8 @@ if [ -z "$PAID_ORDER_ID" ]; then
     fail "Failed to create order draft: no order ID in response" "$DRAFT_BODY"
   fi
 
-  SUBMIT_FULL=$(curl_with_code -X POST "${API_BASE}/orders/${DRAFT_ORDER_ID}/submit" \
+  SUBMIT_FULL=$(curl_with_code "${API_BASE}/orders/${DRAFT_ORDER_ID}/submit" \
+    -X POST \
     -H "Authorization: Bearer $TOKEN")
   SUBMIT_BODY=$(get_body "$SUBMIT_FULL")
   SUBMIT_CODE=$(get_http_code "$SUBMIT_FULL")
@@ -219,7 +231,8 @@ if [ -z "$PAID_ORDER_ID" ]; then
     fail "Failed to submit order: HTTP $SUBMIT_CODE" "$SUBMIT_BODY"
   fi
 
-  PAY_FULL=$(curl_with_code -X POST "${API_BASE}/orders/${DRAFT_ORDER_ID}/pay" \
+  PAY_FULL=$(curl_with_code "${API_BASE}/orders/${DRAFT_ORDER_ID}/pay" \
+    -X POST \
     -H "Authorization: Bearer $TOKEN" \
     -H "Content-Type: application/json" \
     -d '{"paymentMethod":"WECHAT","transactionId":"test-txn-001"}')
@@ -244,7 +257,8 @@ echo ""
 
 # Step 4: Create production batch
 echo "Step 4: Create production batch"
-BATCH_FULL=$(curl_with_code -X POST "${API_BASE}/admin/production-batches" \
+BATCH_FULL=$(curl_with_code "${API_BASE}/admin/production-batches" \
+  -X POST \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d '{"productionDate":"2025-12-17"}')
@@ -291,7 +305,8 @@ fi
 
 # Also try from kitchen batches API if still not found
 if [ -z "$TASK_COUNT" ] || [ "$TASK_COUNT" = "0" ]; then
-  KITCHEN_CHECK_FULL=$(curl_with_code -X GET "${API_BASE}/staff/kitchen/batches?status=PENDING" \
+  KITCHEN_CHECK_FULL=$(curl_with_code "${API_BASE}/staff/kitchen/batches?status=PENDING" \
+    -X GET \
     -H "Authorization: Bearer $TOKEN")
   KITCHEN_CHECK_BODY=$(get_body "$KITCHEN_CHECK_FULL")
   KITCHEN_CHECK_BATCH=$(echo "$KITCHEN_CHECK_BODY" | extract_json_stdin "(root?.data || []).find(b => b.id === '$BATCH_ID')")
@@ -310,7 +325,8 @@ echo ""
 
 # Step 5: List kitchen batches with status filter
 echo "Step 5: List kitchen batches (status=PENDING)"
-KITCHEN_LIST_FULL=$(curl_with_code -X GET "${API_BASE}/staff/kitchen/batches?status=PENDING" \
+KITCHEN_LIST_FULL=$(curl_with_code "${API_BASE}/staff/kitchen/batches?status=PENDING" \
+  -X GET \
   -H "Authorization: Bearer $TOKEN")
 KITCHEN_LIST_BODY=$(get_body "$KITCHEN_LIST_FULL")
 KITCHEN_LIST_CODE=$(get_http_code "$KITCHEN_LIST_FULL")
@@ -345,7 +361,8 @@ echo ""
 
 # Step 6: Get batch detail to extract recipe snapshot
 echo "Step 6: Get batch detail"
-BATCH_DETAIL_FULL=$(curl_with_code -X GET "${API_BASE}/staff/kitchen/batches/${BATCH_ID}" \
+BATCH_DETAIL_FULL=$(curl_with_code "${API_BASE}/staff/kitchen/batches/${BATCH_ID}" \
+  -X GET \
   -H "Authorization: Bearer $TOKEN")
 BATCH_DETAIL_BODY=$(get_body "$BATCH_DETAIL_FULL")
 BATCH_DETAIL_CODE=$(get_http_code "$BATCH_DETAIL_FULL")
@@ -381,7 +398,8 @@ fi
 
 ACTUAL_G=$(node -e "console.log(Math.floor($TOTAL_PRODUCTION_G * 0.7 * 1.1));")
 
-UPDATE_TASK_FULL=$(curl_with_code -X POST "${API_BASE}/staff/kitchen/tasks/${TASK_ID}" \
+UPDATE_TASK_FULL=$(curl_with_code "${API_BASE}/staff/kitchen/tasks/${TASK_ID}" \
+  -X POST \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"ingredientsActual\":[{\"ingredientId\":\"$FIRST_INGREDIENT_ID\",\"actual_g\":$ACTUAL_G}],\"photosRaw\":[\"https://example.com/raw1.jpg\"],\"status\":\"COMPLETED\"}")
@@ -407,7 +425,8 @@ echo ""
 
 # Step 8: Verify inventory deduction
 echo "Step 8: Verify inventory deduction"
-RETRY_FULL=$(curl_with_code -X POST "${API_BASE}/admin/inventory/deductions/retry/${TASK_ID}" \
+RETRY_FULL=$(curl_with_code "${API_BASE}/admin/inventory/deductions/retry/${TASK_ID}" \
+  -X POST \
   -H "Authorization: Bearer $TOKEN")
 RETRY_BODY=$(get_body "$RETRY_FULL")
 RETRY_CODE=$(get_http_code "$RETRY_FULL")
@@ -436,7 +455,8 @@ echo ""
 
 # Step 9: Verify idempotency (retry again)
 echo "Step 9: Verify idempotency (retry again)"
-RETRY2_FULL=$(curl_with_code -X POST "${API_BASE}/admin/inventory/deductions/retry/${TASK_ID}" \
+RETRY2_FULL=$(curl_with_code "${API_BASE}/admin/inventory/deductions/retry/${TASK_ID}" \
+  -X POST \
   -H "Authorization: Bearer $TOKEN")
 RETRY2_BODY=$(get_body "$RETRY2_FULL")
 RETRY2_CODE=$(get_http_code "$RETRY2_FULL")
@@ -461,7 +481,8 @@ echo ""
 
 # Step 10: Test invalid status filter
 echo "Step 10: Test invalid status filter"
-INVALID_STATUS_FULL=$(curl_with_code -X GET "${API_BASE}/staff/kitchen/batches?status=INVALID" \
+INVALID_STATUS_FULL=$(curl_with_code "${API_BASE}/staff/kitchen/batches?status=INVALID" \
+  -X GET \
   -H "Authorization: Bearer $TOKEN")
 INVALID_STATUS_BODY=$(get_body "$INVALID_STATUS_FULL")
 INVALID_STATUS_CODE=$(get_http_code "$INVALID_STATUS_FULL")

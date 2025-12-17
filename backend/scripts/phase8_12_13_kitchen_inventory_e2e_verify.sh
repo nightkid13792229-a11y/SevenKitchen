@@ -389,8 +389,39 @@ fi
 success "Batch detail retrieved: found ingredient $FIRST_INGREDIENT_ID"
 echo ""
 
-# Step 7: Update task with actual usage and mark COMPLETED
-echo "Step 7: Update task (actual usage + COMPLETED)"
+# Step 7: Update task with two-stage status transition
+echo "Step 7: Update task (two-stage: PENDING -> IN_PROGRESS -> COMPLETED)"
+
+# Step 7a: Transition PENDING -> IN_PROGRESS (status-only, no data required)
+echo "Step 7a: Transition to IN_PROGRESS"
+UPDATE_TASK_STAGE1_FULL=$(curl_with_code "${API_BASE}/staff/kitchen/tasks/${TASK_ID}" \
+  -X POST \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"status":"IN_PROGRESS"}')
+UPDATE_TASK_STAGE1_BODY=$(get_body "$UPDATE_TASK_STAGE1_FULL")
+UPDATE_TASK_STAGE1_CODE=$(get_http_code "$UPDATE_TASK_STAGE1_FULL")
+UPDATE_TASK_STAGE1_CURL_CMD="curl -s -w \"\\n%{http_code}\" -X POST \"${API_BASE}/staff/kitchen/tasks/${TASK_ID}\" -H \"Authorization: Bearer $TOKEN\" -H \"Content-Type: application/json\" -d '{\"status\":\"IN_PROGRESS\"}'"
+
+if [ "$UPDATE_TASK_STAGE1_CODE" != "200" ]; then
+  fail "Failed to update task to IN_PROGRESS: HTTP $UPDATE_TASK_STAGE1_CODE" "$UPDATE_TASK_STAGE1_BODY" "$UPDATE_TASK_STAGE1_CURL_CMD"
+fi
+
+UPDATE_TASK_STAGE1_CODE_VALUE=$(echo "$UPDATE_TASK_STAGE1_BODY" | extract_json_stdin "root?.code")
+if [ "$UPDATE_TASK_STAGE1_CODE_VALUE" != "0" ]; then
+  fail "Failed to update task to IN_PROGRESS: code=$UPDATE_TASK_STAGE1_CODE_VALUE" "$UPDATE_TASK_STAGE1_BODY" "$UPDATE_TASK_STAGE1_CURL_CMD"
+fi
+
+UPDATE_TASK_STAGE1_STATUS=$(echo "$UPDATE_TASK_STAGE1_BODY" | extract_json_stdin "root?.data?.status || ''")
+if [ "$UPDATE_TASK_STAGE1_STATUS" != "IN_PROGRESS" ]; then
+  fail "Task status not updated to IN_PROGRESS (got: $UPDATE_TASK_STAGE1_STATUS)" "$UPDATE_TASK_STAGE1_BODY" "$UPDATE_TASK_STAGE1_CURL_CMD"
+fi
+
+success "Task updated to IN_PROGRESS"
+echo ""
+
+# Step 7b: Transition IN_PROGRESS -> COMPLETED (with actual usage data)
+echo "Step 7b: Transition to COMPLETED with actual usage"
 TOTAL_PRODUCTION_G=$(echo "$BATCH_DETAIL_BODY" | extract_json_stdin "(root?.data?.tasks || []).find(t => t.id === '$TASK_ID')?.totalProductionG || 0")
 if [ "$TOTAL_PRODUCTION_G" = "0" ]; then
   fail "totalProductionG is 0 or not found" "$BATCH_DETAIL_BODY"
@@ -398,26 +429,27 @@ fi
 
 ACTUAL_G=$(node -e "console.log(Math.floor($TOTAL_PRODUCTION_G * 0.7 * 1.1));")
 
-UPDATE_TASK_FULL=$(curl_with_code "${API_BASE}/staff/kitchen/tasks/${TASK_ID}" \
+UPDATE_TASK_STAGE2_FULL=$(curl_with_code "${API_BASE}/staff/kitchen/tasks/${TASK_ID}" \
   -X POST \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
   -d "{\"ingredientsActual\":[{\"ingredientId\":\"$FIRST_INGREDIENT_ID\",\"actual_g\":$ACTUAL_G}],\"photosRaw\":[\"https://example.com/raw1.jpg\"],\"status\":\"COMPLETED\"}")
-UPDATE_TASK_BODY=$(get_body "$UPDATE_TASK_FULL")
-UPDATE_TASK_CODE=$(get_http_code "$UPDATE_TASK_FULL")
+UPDATE_TASK_STAGE2_BODY=$(get_body "$UPDATE_TASK_STAGE2_FULL")
+UPDATE_TASK_STAGE2_CODE=$(get_http_code "$UPDATE_TASK_STAGE2_FULL")
+UPDATE_TASK_STAGE2_CURL_CMD="curl -s -w \"\\n%{http_code}\" -X POST \"${API_BASE}/staff/kitchen/tasks/${TASK_ID}\" -H \"Authorization: Bearer $TOKEN\" -H \"Content-Type: application/json\" -d '{\"ingredientsActual\":[{\"ingredientId\":\"$FIRST_INGREDIENT_ID\",\"actual_g\":$ACTUAL_G}],\"photosRaw\":[\"https://example.com/raw1.jpg\"],\"status\":\"COMPLETED\"}'"
 
-if [ "$UPDATE_TASK_CODE" != "200" ]; then
-  fail "Failed to update task: HTTP $UPDATE_TASK_CODE" "$UPDATE_TASK_BODY"
+if [ "$UPDATE_TASK_STAGE2_CODE" != "200" ]; then
+  fail "Failed to update task to COMPLETED: HTTP $UPDATE_TASK_STAGE2_CODE" "$UPDATE_TASK_STAGE2_BODY" "$UPDATE_TASK_STAGE2_CURL_CMD"
 fi
 
-UPDATE_TASK_CODE_VALUE=$(echo "$UPDATE_TASK_BODY" | extract_json_stdin "root?.code")
-if [ "$UPDATE_TASK_CODE_VALUE" != "0" ]; then
-  fail "Failed to update task: code=$UPDATE_TASK_CODE_VALUE" "$UPDATE_TASK_BODY"
+UPDATE_TASK_STAGE2_CODE_VALUE=$(echo "$UPDATE_TASK_STAGE2_BODY" | extract_json_stdin "root?.code")
+if [ "$UPDATE_TASK_STAGE2_CODE_VALUE" != "0" ]; then
+  fail "Failed to update task to COMPLETED: code=$UPDATE_TASK_STAGE2_CODE_VALUE" "$UPDATE_TASK_STAGE2_BODY" "$UPDATE_TASK_STAGE2_CURL_CMD"
 fi
 
-UPDATED_STATUS=$(echo "$UPDATE_TASK_BODY" | extract_json_stdin "root?.data?.status || ''")
-if [ "$UPDATED_STATUS" != "COMPLETED" ]; then
-  fail "Task status not updated to COMPLETED (got: $UPDATED_STATUS)" "$UPDATE_TASK_BODY"
+UPDATE_TASK_STAGE2_STATUS=$(echo "$UPDATE_TASK_STAGE2_BODY" | extract_json_stdin "root?.data?.status || ''")
+if [ "$UPDATE_TASK_STAGE2_STATUS" != "COMPLETED" ]; then
+  fail "Task status not updated to COMPLETED (got: $UPDATE_TASK_STAGE2_STATUS)" "$UPDATE_TASK_STAGE2_BODY" "$UPDATE_TASK_STAGE2_CURL_CMD"
 fi
 
 success "Task updated to COMPLETED with actual usage"

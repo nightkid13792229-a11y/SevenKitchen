@@ -164,6 +164,7 @@ describe('KitchenService - Phase 8.12', () => {
       expect(result).toHaveLength(1);
       expect(result[0].id).toBe('batch-1');
       expect(result[0].taskCount).toBe(1);
+      expect(result[0].tasks).toHaveLength(1);
       expect(productionRepository.findByStatus).toHaveBeenCalledWith('PLANNED');
     });
 

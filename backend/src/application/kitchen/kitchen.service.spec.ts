@@ -356,7 +356,7 @@ describe('KitchenService - Phase 8.12', () => {
       expect(snapshot['ingredient-1'].actual_g).toBe(750);
     });
 
-    it('should validate status transitions', async () => {
+    it('should validate status transitions (PENDING -> IN_PROGRESS without data)', async () => {
       // Arrange
       const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
       const unit = createMockPackagingUnit(
@@ -371,18 +371,36 @@ describe('KitchenService - Phase 8.12', () => {
         async (u) => u,
       );
 
-      // Act: Transition PENDING -> IN_PROGRESS
+      // Act: Transition PENDING -> IN_PROGRESS (without data)
       await service.updateTask('unit-1', {
         status: PackagingUnitStatus.IN_PROGRESS,
       });
 
       // Assert: Status updated
       expect(unit.status).toBe(PackagingUnitStatus.IN_PROGRESS);
+    });
 
-      // Act: Transition IN_PROGRESS -> COMPLETED
-      unit.status = PackagingUnitStatus.IN_PROGRESS;
+    it('should validate status transitions (IN_PROGRESS -> COMPLETED with data)', async () => {
+      // Arrange
+      const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
+      const unit = createMockPackagingUnit(
+        'unit-1',
+        'batch-1',
+        recipeSnapshot,
+        PackagingUnitStatus.IN_PROGRESS,
+      );
+
+      productionRepository.findPackagingUnitById.mockResolvedValue(unit);
+      productionRepository.updatePackagingUnit.mockImplementation(
+        async (u) => u,
+      );
+
+      // Act: Transition IN_PROGRESS -> COMPLETED (with data)
       await service.updateTask('unit-1', {
         status: PackagingUnitStatus.COMPLETED,
+        ingredientsActual: [
+          { ingredientId: 'ingredient-1', actual_g: 720 },
+        ],
       });
 
       // Assert: Status updated
@@ -491,6 +509,78 @@ describe('KitchenService - Phase 8.12', () => {
           status: PackagingUnitStatus.PENDING,
         }),
       ).rejects.toThrow('Invalid status transition');
+    });
+
+    it('should allow PENDING -> IN_PROGRESS transition without data', async () => {
+      // Arrange
+      const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
+      const unit = createMockPackagingUnit(
+        'unit-1',
+        'batch-1',
+        recipeSnapshot,
+        PackagingUnitStatus.PENDING,
+      );
+
+      productionRepository.findPackagingUnitById.mockResolvedValue(unit);
+      productionRepository.updatePackagingUnit.mockImplementation(async (u) => u);
+
+      // Act
+      const result = await service.updateTask('unit-1', {
+        status: PackagingUnitStatus.IN_PROGRESS,
+      });
+
+      // Assert
+      expect(result.status).toBe(PackagingUnitStatus.IN_PROGRESS);
+      expect(result.ingredientsUsageSnapshot).toBeNull();
+      expect(productionRepository.updatePackagingUnit).toHaveBeenCalled();
+    });
+
+    it('should reject IN_PROGRESS -> COMPLETED transition without data', async () => {
+      // Arrange
+      const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
+      const unit = createMockPackagingUnit(
+        'unit-1',
+        'batch-1',
+        recipeSnapshot,
+        PackagingUnitStatus.IN_PROGRESS,
+      );
+
+      productionRepository.findPackagingUnitById.mockResolvedValue(unit);
+
+      // Act & Assert
+      await expect(
+        service.updateTask('unit-1', {
+          status: PackagingUnitStatus.COMPLETED,
+        }),
+      ).rejects.toThrow('Cannot transition to COMPLETED without actual usage data');
+    });
+
+    it('should allow IN_PROGRESS -> COMPLETED transition with data', async () => {
+      // Arrange
+      const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
+      const unit = createMockPackagingUnit(
+        'unit-1',
+        'batch-1',
+        recipeSnapshot,
+        PackagingUnitStatus.IN_PROGRESS,
+      );
+
+      productionRepository.findPackagingUnitById.mockResolvedValue(unit);
+      productionRepository.updatePackagingUnit.mockImplementation(async (u) => u);
+
+      // Act
+      const result = await service.updateTask('unit-1', {
+        status: PackagingUnitStatus.COMPLETED,
+        ingredientsActual: [
+          { ingredientId: 'ingredient-1', actual_g: 720 },
+        ],
+      });
+
+      // Assert
+      expect(result.status).toBe(PackagingUnitStatus.COMPLETED);
+      expect(result.ingredientsUsageSnapshot).toBeDefined();
+      expect(result.ingredientsUsageSnapshot!['ingredient-1']).toBeDefined();
+      expect(productionRepository.updatePackagingUnit).toHaveBeenCalled();
     });
   });
 });

@@ -225,14 +225,7 @@ export class StaffKitchenController {
     @Body() dto: UpdateTaskDto,
   ): Promise<ApiResponseDto<any> | ApiResponseDto<null>> {
     try {
-      // Validate that either actualWeightG or ingredientsActual is provided
-      if (!dto.actualWeightG && (!dto.ingredientsActual || dto.ingredientsActual.length === 0)) {
-        throw new BadRequestException(
-          'Either actualWeightG or ingredientsActual must be provided',
-        );
-      }
-
-      // Validate that ingredientsActual items have valid structure
+      // Validate that ingredientsActual items have valid structure (if provided)
       if (dto.ingredientsActual) {
         for (const item of dto.ingredientsActual) {
           if (!item.ingredientId || typeof item.ingredientId !== 'string') {
@@ -248,6 +241,7 @@ export class StaffKitchenController {
         }
       }
 
+      // State-aware validation is handled in KitchenService.updateTask
       const unit = await this.kitchenService.updateTask(taskId, dto);
       return ApiResponseDto.success({
         id: unit.id,

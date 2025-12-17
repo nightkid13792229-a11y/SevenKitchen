@@ -122,14 +122,48 @@ describe('StaffKitchenController', () => {
   });
 
   describe('updateTask', () => {
-    it('should return 400 when neither actualWeightG nor ingredientsActual is provided', async () => {
+    it('should allow status-only update (PENDING -> IN_PROGRESS) without data', async () => {
+      // Arrange
+      const mockUnit = {
+        id: 'task-1',
+        status: PackagingUnitStatus.IN_PROGRESS,
+        ingredientsUsageSnapshot: null,
+        photosRaw: [],
+        photosCooked: [],
+        photosPortioned: [],
+      };
+      kitchenService.updateTask.mockResolvedValue(mockUnit as any);
+
       // Act
-      const result = await controller.updateTask('task-1', {} as any);
+      const result = await controller.updateTask('task-1', {
+        status: PackagingUnitStatus.IN_PROGRESS,
+      } as any);
+
+      // Assert
+      expect(result.code).toBe(0);
+      expect(result.data.status).toBe(PackagingUnitStatus.IN_PROGRESS);
+      expect(kitchenService.updateTask).toHaveBeenCalledWith('task-1', {
+        status: PackagingUnitStatus.IN_PROGRESS,
+      });
+    });
+
+    it('should return 400 when transitioning to COMPLETED without data', async () => {
+      // Arrange
+      kitchenService.updateTask.mockRejectedValue(
+        new BadRequestException(
+          'Cannot transition to COMPLETED without actual usage data. Either actualWeightG or ingredientsActual must be provided.',
+        ),
+      );
+
+      // Act
+      const result = await controller.updateTask('task-1', {
+        status: PackagingUnitStatus.COMPLETED,
+      } as any);
 
       // Assert
       expect(result.code).not.toBe(0);
-      expect(result.message).toContain('actualWeightG or ingredientsActual');
-      expect(kitchenService.updateTask).not.toHaveBeenCalled();
+      expect(result.message).toContain('COMPLETED without actual usage data');
+      expect(kitchenService.updateTask).toHaveBeenCalled();
     });
 
     it('should return 400 when ingredientsActual has invalid structure', async () => {

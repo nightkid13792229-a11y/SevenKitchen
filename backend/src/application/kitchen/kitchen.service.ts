@@ -234,6 +234,17 @@ export class KitchenService {
       throw new NotFoundException(`Task (PackagingUnit) not found: ${taskId}`);
     }
 
+    // Phase 8.12: State-aware validation
+    // COMPLETED status requires actualWeightG or ingredientsActual
+    // IN_PROGRESS status allows pure status transition without data
+    if (dto.status === PackagingUnitStatus.COMPLETED) {
+      if (!dto.actualWeightG && (!dto.ingredientsActual || dto.ingredientsActual.length === 0)) {
+        throw new BadRequestException(
+          'Cannot transition to COMPLETED without actual usage data. Either actualWeightG or ingredientsActual must be provided.',
+        );
+      }
+    }
+
     // Phase 8.12: Calculate required weights from recipeSnapshot (immutable)
     // This ensures snapshot integrity - we never read from mutable Recipe table
     let ingredientsUsageSnapshot: IngredientsUsageSnapshot | null = null;

@@ -15,6 +15,7 @@ import {
   UsePipes,
   ValidationPipe,
   NotFoundException,
+  Logger,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -31,8 +32,10 @@ import { BadRequestException } from '@nestjs/common';
 
 @ApiTags('Staff Kitchen')
 @Controller('api/v1/staff/kitchen')
-@UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
+@UsePipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
 export class StaffKitchenController {
+  private readonly logger = new Logger(StaffKitchenController.name);
+
   constructor(private readonly kitchenService: KitchenService) {}
 
   @Get('batches')
@@ -222,6 +225,29 @@ export class StaffKitchenController {
     @Body() dto: UpdateTaskDto,
   ): Promise<ApiResponseDto<any> | ApiResponseDto<null>> {
     try {
+      // Validate that either actualWeightG or ingredientsActual is provided
+      if (!dto.actualWeightG && (!dto.ingredientsActual || dto.ingredientsActual.length === 0)) {
+        throw new BadRequestException(
+          'Either actualWeightG or ingredientsActual must be provided',
+        );
+      }
+
+      // Validate that ingredientsActual items have valid structure
+      if (dto.ingredientsActual) {
+        for (const item of dto.ingredientsActual) {
+          if (!item.ingredientId || typeof item.ingredientId !== 'string') {
+            throw new BadRequestException(
+              'Each ingredientActual item must have a valid ingredientId (string)',
+            );
+          }
+          if (typeof item.actual_g !== 'number' || item.actual_g < 0) {
+            throw new BadRequestException(
+              `actual_g must be a non-negative number, got: ${item.actual_g}`,
+            );
+          }
+        }
+      }
+
       const unit = await this.kitchenService.updateTask(taskId, dto);
       return ApiResponseDto.success({
         id: unit.id,
@@ -238,6 +264,16 @@ export class StaffKitchenController {
       if (error instanceof BadRequestException) {
         return ApiResponseDto.error(400, error.message);
       }
+      
+      // Log unexpected errors with full context
+      this.logger.error('Error in updateTask:', {
+        message: error?.message,
+        stack: error?.stack,
+        taskId: taskId,
+        dto: dto,
+      });
+      
+      // Return 500 only for truly unexpected errors
       throw error;
     }
   }

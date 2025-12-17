@@ -6,9 +6,12 @@
 import { Injectable, Inject, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import type { ProductionBatchRepository } from '../../domain/production/production.repository';
 import { PackagingUnit, PackagingUnitStatus, type IngredientsUsageSnapshot } from '../../domain/production';
+import { InvalidStateTransitionError } from '../../domain/common/errors';
 import { PRODUCTION_BATCH_REPOSITORY } from '../production/production.service';
 import { InventoryService } from '../inventory/inventory.service';
 
+// UpdateTaskDto is now defined in interfaces/dto/kitchen/update-task.dto.ts
+// This interface is kept for backward compatibility with service layer
 export interface UpdateTaskDto {
   actualWeightG?: number; // Single actual weight (alternative to ingredients_actual[])
   ingredientsActual?: Array<{
@@ -240,18 +243,39 @@ export class KitchenService {
       ingredientsUsageSnapshot = {};
       
       // Get required weights from recipeSnapshot.items
-      const recipeItems = unit.recipeSnapshot.items || [];
+      const recipeItems = unit.recipeSnapshot?.items || [];
+      
+      if (recipeItems.length === 0) {
+        throw new BadRequestException(
+          'Recipe snapshot has no items. Cannot calculate required weights.',
+        );
+      }
       
       for (const actualEntry of dto.ingredientsActual) {
+        // Validate ingredientId
+        if (!actualEntry.ingredientId || typeof actualEntry.ingredientId !== 'string') {
+          throw new BadRequestException(
+            'Each ingredientActual item must have a valid ingredientId (string)',
+          );
+        }
+        
+        // Validate actual_g
+        if (typeof actualEntry.actual_g !== 'number' || actualEntry.actual_g < 0) {
+          throw new BadRequestException(
+            `actual_g must be a non-negative number for ingredient ${actualEntry.ingredientId}, got: ${actualEntry.actual_g}`,
+          );
+        }
+        
         // Find corresponding recipe item to get required weight
         // RecipeSnapshotItem uses ingredient_id (snake_case) and ratio (not ratioPercent)
+        // Support both ingredient_id and ingredientId for flexibility
         const recipeItem = recipeItems.find(
-          (ri: any) => ri.ingredient_id === actualEntry.ingredientId,
+          (ri: any) => ri.ingredient_id === actualEntry.ingredientId || ri.ingredientId === actualEntry.ingredientId,
         );
         
         if (!recipeItem) {
           throw new BadRequestException(
-            `Ingredient ${actualEntry.ingredientId} not found in recipe snapshot`,
+            `Ingredient ${actualEntry.ingredientId} not found in recipe snapshot. Available ingredients: ${recipeItems.map((ri: any) => ri.ingredient_id || ri.ingredientId).join(', ')}`,
           );
         }
 
@@ -259,6 +283,11 @@ export class KitchenService {
         // Formula: required_g = totalProductionG * (ratio / 100)
         // RecipeSnapshotItem.ratio is already a percentage (0-100)
         const ratio = recipeItem.ratio || 0;
+        if (ratio <= 0 || ratio > 100) {
+          throw new BadRequestException(
+            `Invalid ratio for ingredient ${actualEntry.ingredientId}: ${ratio}. Ratio must be between 0 and 100.`,
+          );
+        }
         const requiredG = (unit.totalProductionG * ratio) / 100;
 
         ingredientsUsageSnapshot[actualEntry.ingredientId] = {
@@ -294,7 +323,16 @@ export class KitchenService {
     // Update status if provided
     const previousStatus = unit.status;
     if (dto.status) {
-      unit.transitionTo(dto.status);
+      try {
+        unit.transitionTo(dto.status);
+      } catch (error: any) {
+        if (error instanceof InvalidStateTransitionError) {
+          throw new BadRequestException(
+            `Invalid status transition from ${previousStatus} to ${dto.status}: ${error.message}`,
+          );
+        }
+        throw error;
+      }
     }
 
     // Phase 8.13: Persist PackagingUnit updates FIRST (status + snapshot)

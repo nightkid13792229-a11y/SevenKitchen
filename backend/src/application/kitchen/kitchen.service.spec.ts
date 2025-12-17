@@ -420,5 +420,77 @@ describe('KitchenService - Phase 8.12', () => {
         }),
       ).rejects.toThrow('Ingredient non-existent-ingredient not found in recipe snapshot');
     });
+
+    it('should throw BadRequestException when recipe snapshot has no items', async () => {
+      // Arrange
+      const recipeSnapshotWithoutItems = {
+        id: 'recipe-1',
+        version: 1,
+        name: 'Test Recipe',
+        production_loss_rate: 1.07,
+        energy_density_kcal_per_kg: 1450,
+        nutrition_standard: 'FEDIAF_2021',
+        items: [], // Empty items array
+      };
+      const unit = createMockPackagingUnit(
+        'unit-1',
+        'batch-1',
+        recipeSnapshotWithoutItems as any,
+        PackagingUnitStatus.PENDING,
+      );
+
+      productionRepository.findPackagingUnitById.mockResolvedValue(unit);
+
+      // Act & Assert
+      await expect(
+        service.updateTask('unit-1', {
+          ingredientsActual: [
+            { ingredientId: 'ingredient-1', actual_g: 100 },
+          ],
+        }),
+      ).rejects.toThrow('Recipe snapshot has no items');
+    });
+
+    it('should throw BadRequestException when actual_g is negative', async () => {
+      // Arrange
+      const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
+      const unit = createMockPackagingUnit(
+        'unit-1',
+        'batch-1',
+        recipeSnapshot,
+        PackagingUnitStatus.PENDING,
+      );
+
+      productionRepository.findPackagingUnitById.mockResolvedValue(unit);
+
+      // Act & Assert
+      await expect(
+        service.updateTask('unit-1', {
+          ingredientsActual: [
+            { ingredientId: 'ingredient-1', actual_g: -10 },
+          ],
+        }),
+      ).rejects.toThrow('actual_g must be a non-negative number');
+    });
+
+    it('should throw BadRequestException for invalid status transition', async () => {
+      // Arrange
+      const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
+      const unit = createMockPackagingUnit(
+        'unit-1',
+        'batch-1',
+        recipeSnapshot,
+        PackagingUnitStatus.COMPLETED, // Already COMPLETED
+      );
+
+      productionRepository.findPackagingUnitById.mockResolvedValue(unit);
+
+      // Act & Assert: Cannot transition from COMPLETED to PENDING
+      await expect(
+        service.updateTask('unit-1', {
+          status: PackagingUnitStatus.PENDING,
+        }),
+      ).rejects.toThrow('Invalid status transition');
+    });
   });
 });

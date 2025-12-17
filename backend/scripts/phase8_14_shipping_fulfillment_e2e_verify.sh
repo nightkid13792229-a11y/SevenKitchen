@@ -6,6 +6,7 @@ set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:3000}"
 API_BASE="${BASE_URL}/api/v1"
+HEALTH_PATH="${HEALTH_PATH:-}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
@@ -96,15 +97,63 @@ SUMMARY_TRACKING_NUMBER=""
 
 # Step 1: Health check
 info "Step 1: Health check"
-HEALTH_RESPONSE=$(curl_with_code "${BASE_URL}/health")
-HEALTH_CODE=$(get_http_code "$HEALTH_RESPONSE")
-HEALTH_BODY=$(get_body "$HEALTH_RESPONSE")
+HEALTH_URL=""
+HEALTH_CODE=""
+HEALTH_BODY=""
 
-if [ -z "$HEALTH_CODE" ] || [ "$HEALTH_CODE" != "200" ]; then
-  HEALTH_CURL_CMD="curl -s -w \"\\n%{http_code}\" ${BASE_URL}/health"
-  fail "Health check failed: HTTP code ${HEALTH_CODE}" "$HEALTH_BODY" "$HEALTH_CURL_CMD"
+if [ -n "$HEALTH_PATH" ]; then
+  # Use explicit HEALTH_PATH if provided
+  HEALTH_URL="${BASE_URL}${HEALTH_PATH}"
+  HEALTH_RESPONSE=$(curl_with_code "$HEALTH_URL")
+  HEALTH_CODE=$(get_http_code "$HEALTH_RESPONSE")
+  HEALTH_BODY=$(get_body "$HEALTH_RESPONSE")
+  
+  if [ -z "$HEALTH_CODE" ] || [ "$HEALTH_CODE" != "200" ]; then
+    HEALTH_CURL_CMD="curl -s -w \"\\n%{http_code}\" \"${HEALTH_URL}\""
+    truncated_body=$(echo "$HEALTH_BODY" | head -c 300)
+    fail "Health check failed: HTTP code ${HEALTH_CODE}" "$truncated_body" "$HEALTH_CURL_CMD"
+  fi
+  success "Health check OK: ${HEALTH_URL}"
+else
+  # Try /health first, then /api/v1/health
+  HEALTH_URL_1="${BASE_URL}/health"
+  HEALTH_URL_2="${BASE_URL}/api/v1/health"
+  
+  HEALTH_RESPONSE_1=$(curl_with_code "$HEALTH_URL_1")
+  HEALTH_CODE_1=$(get_http_code "$HEALTH_RESPONSE_1")
+  HEALTH_BODY_1=$(get_body "$HEALTH_RESPONSE_1")
+  
+  if [ "$HEALTH_CODE_1" = "200" ]; then
+    HEALTH_URL="$HEALTH_URL_1"
+    HEALTH_CODE="$HEALTH_CODE_1"
+    HEALTH_BODY="$HEALTH_BODY_1"
+    success "Health check OK: ${HEALTH_URL}"
+  else
+    # Try second URL
+    HEALTH_RESPONSE_2=$(curl_with_code "$HEALTH_URL_2")
+    HEALTH_CODE_2=$(get_http_code "$HEALTH_RESPONSE_2")
+    HEALTH_BODY_2=$(get_body "$HEALTH_RESPONSE_2")
+    
+    if [ "$HEALTH_CODE_2" = "200" ]; then
+      HEALTH_URL="$HEALTH_URL_2"
+      HEALTH_CODE="$HEALTH_CODE_2"
+      HEALTH_BODY="$HEALTH_BODY_2"
+      success "Health check OK: ${HEALTH_URL}"
+    else
+      # Both failed
+      truncated_body_1=$(echo "$HEALTH_BODY_1" | head -c 300)
+      truncated_body_2=$(echo "$HEALTH_BODY_2" | head -c 300)
+      echo -e "${RED}✗ Health check failed${NC}"
+      echo -e "${RED}Attempt 1: ${HEALTH_URL_1}${NC}"
+      echo -e "${RED}  HTTP code: ${HEALTH_CODE_1}${NC}"
+      echo -e "${RED}  Response (truncated): ${truncated_body_1}${NC}"
+      echo -e "${RED}Attempt 2: ${HEALTH_URL_2}${NC}"
+      echo -e "${RED}  HTTP code: ${HEALTH_CODE_2}${NC}"
+      echo -e "${RED}  Response (truncated): ${truncated_body_2}${NC}"
+      exit 1
+    fi
+  fi
 fi
-success "Health check passed (HTTP ${HEALTH_CODE})"
 echo ""
 
 # Step 2: Login (staff)

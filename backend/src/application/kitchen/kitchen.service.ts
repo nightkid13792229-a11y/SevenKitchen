@@ -47,6 +47,19 @@ export interface KitchenBatchDetailDto {
     recipeName: string;
     totalProductionG: number;
     status: string;
+    recipeSnapshot: {
+      id: string;
+      version: number;
+      name: string;
+      production_loss_rate: number;
+      energy_density_kcal_per_kg: number;
+      nutrition_standard: string;
+      items: Array<{
+        ingredient_id: string;
+        name: string;
+        ratio: number;
+      }>;
+    };
     ingredientsUsageSnapshot: IngredientsUsageSnapshot | null;
     photosRaw: string[];
     photosCooked: string[];
@@ -147,7 +160,18 @@ export class KitchenService {
         status: batch.status,
         tasks: units.map((unit) => {
           // Defensive: ensure recipeSnapshot exists
-          const recipeSnapshot = unit.recipeSnapshot || { id: '', name: 'Unknown' };
+          const recipeSnapshot = unit.recipeSnapshot || {
+            id: '',
+            version: 1,
+            name: 'Unknown',
+            production_loss_rate: 1.0,
+            energy_density_kcal_per_kg: 0,
+            nutrition_standard: '',
+            items: [],
+          };
+          
+          // Defensive: ensure items array exists
+          const items = recipeSnapshot.items || [];
           
           // Defensive: ensure arrays exist
           const photosRaw = unit.photosRaw || [];
@@ -161,6 +185,19 @@ export class KitchenService {
             recipeName: recipeSnapshot.name || 'Unknown',
             totalProductionG: unit.totalProductionG || 0,
             status: unit.status || PackagingUnitStatus.PENDING,
+            recipeSnapshot: {
+              id: recipeSnapshot.id,
+              version: recipeSnapshot.version || 1,
+              name: recipeSnapshot.name || 'Unknown',
+              production_loss_rate: recipeSnapshot.production_loss_rate || 1.0,
+              energy_density_kcal_per_kg: recipeSnapshot.energy_density_kcal_per_kg || 0,
+              nutrition_standard: recipeSnapshot.nutrition_standard || '',
+              items: items.map((item: any) => ({
+                ingredient_id: item.ingredient_id || '',
+                name: item.name || '',
+                ratio: item.ratio || 0,
+              })),
+            },
             ingredientsUsageSnapshot: unit.ingredientsUsageSnapshot || null,
             photosRaw,
             photosCooked,

@@ -220,7 +220,7 @@ describe('KitchenService - Phase 8.12', () => {
   });
 
   describe('getBatchDetail', () => {
-    it('should return batch detail with full task information', async () => {
+    it('should return batch detail with full task information including recipeSnapshot.items', async () => {
       // Arrange
       const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
       const unit = createMockPackagingUnit(
@@ -260,6 +260,16 @@ describe('KitchenService - Phase 8.12', () => {
       expect(result.tasks[0].ingredientsUsageSnapshot).toEqual({
         'ingredient-1': { required_g: 700, actual_g: 720 },
       });
+      
+      // Phase 8.12+8.13: Verify recipeSnapshot.items are returned
+      expect(result.tasks[0].recipeSnapshot).toBeDefined();
+      expect(result.tasks[0].recipeSnapshot.id).toBe('recipe-1');
+      expect(result.tasks[0].recipeSnapshot.items).toBeDefined();
+      expect(result.tasks[0].recipeSnapshot.items).toHaveLength(2);
+      expect(result.tasks[0].recipeSnapshot.items[0].ingredient_id).toBe('ingredient-1');
+      expect(result.tasks[0].recipeSnapshot.items[0].ratio).toBe(70.0);
+      expect(result.tasks[0].recipeSnapshot.items[1].ingredient_id).toBe('ingredient-2');
+      expect(result.tasks[0].recipeSnapshot.items[1].ratio).toBe(30.0);
     });
 
     it('should throw NotFoundException when batch not found', async () => {

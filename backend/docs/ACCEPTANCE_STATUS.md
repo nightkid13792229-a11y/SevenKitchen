@@ -25,6 +25,7 @@
 | **Phase 8.10** | ⏳ PENDING VERIFY | Production & Packaging MVP | `production.service.spec.ts` | Backend only - ProductionBatch creation from PAID orders |
 | **Phase 8.11** | ⏳ PENDING VERIFY | Allocation Lock | `production.service.spec.ts`, `phase8_11_allocation_lock_verify.sh` | Prevents duplicate allocation of OrderItems to multiple batches |
 | **Phase 8.12** | ✅ ACCEPTED | Kitchen Task Data Capture MVP | `kitchen.service.spec.ts` | Staff kitchen APIs for task listing, detail view, and actual usage/photos capture |
+| **Phase 8.13** | ⏳ PENDING VERIFY | Inventory Deduction | `inventory.service.spec.ts` | Inventory deduction from kitchen task completion using actual_g, append-only ledger pattern |
 
 
 ---

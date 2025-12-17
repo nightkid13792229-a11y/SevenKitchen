@@ -51,6 +51,8 @@ import type { ShippingTemplate } from './domain/shipping/shipping-fee.service';
 import { ProductionService, PRODUCTION_BATCH_REPOSITORY } from './application/production/production.service';
 import { PrismaProductionRepository } from './infrastructure/repositories/prisma-production.repository';
 import { KitchenService } from './application/kitchen/kitchen.service';
+import { InventoryService, INVENTORY_REPOSITORY } from './application/inventory/inventory.service';
+import { PrismaInventoryRepository } from './infrastructure/repositories/prisma-inventory.repository';
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -216,6 +218,8 @@ validatePrismaConfig();
     ProductionService,
     // Phase 8.12: Kitchen Service
     KitchenService,
+    // Phase 8.13: Inventory Service
+    InventoryService,
     {
       provide: PRODUCTION_BATCH_REPOSITORY,
       useFactory: (prismaService?: PrismaService) => {
@@ -231,6 +235,25 @@ validatePrismaConfig();
         // For MVP, only Prisma is supported
         throw new Error(
           'Production repository only supports Prisma mode. Set PRODUCTION_REPO=prisma and ensure DATABASE_URL is set.',
+        );
+      },
+      inject: isPrismaEnabled() ? [PrismaService] : [],
+    },
+    // Phase 8.13: Inventory Repository
+    {
+      provide: INVENTORY_REPOSITORY,
+      useFactory: (prismaService?: PrismaService) => {
+        const mode = process.env.INVENTORY_REPO ?? 'prisma'; // Default to Prisma
+        if (mode === 'prisma') {
+          if (!prismaService) {
+            throw new Error(
+              'PrismaService is not available. Ensure Prisma is enabled via repo switches.',
+            );
+          }
+          return new PrismaInventoryRepository(prismaService);
+        }
+        throw new Error(
+          'Inventory repository only supports Prisma mode. Set INVENTORY_REPO=prisma and ensure DATABASE_URL is set.',
         );
       },
       inject: isPrismaEnabled() ? [PrismaService] : [],

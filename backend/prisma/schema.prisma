@@ -95,6 +95,10 @@ enum PackagingUnitStatus {
   COMPLETED
 }
 
+enum InventorySourceType {
+  KITCHEN_TASK
+}
+
 // ==========================================
 // Order Persistence (Phase 8.1 Part 1)
 // ==========================================
@@ -262,4 +266,23 @@ model PackagingUnit {
   @@index([productionBatchId])
   @@index([status])
   @@map("packaging_unit")
+}
+
+// ==========================================
+// Inventory Domain (Phase 8.13)
+// ==========================================
+
+model InventoryLedgerEntry {
+  id            String              @id @default(uuid()) @map("id")
+  ingredientId  String              @map("ingredient_id")
+  deltaG        Float                @map("delta_g") // negative for deduction, positive for addition
+  sourceType    InventorySourceType @map("source_type")
+  sourceId      String              @map("source_id") // PackagingUnit.id for KITCHEN_TASK
+  createdAt     DateTime            @default(now()) @map("created_at")
+
+  @@unique([sourceType, sourceId, ingredientId]) // Phase 8.13: DB-level idempotency guarantee
+  @@index([ingredientId]) // For balance queries
+  @@index([sourceType, sourceId]) // For source lookup
+  @@index([createdAt]) // For audit queries
+  @@map("inventory_ledger_entry")
 }

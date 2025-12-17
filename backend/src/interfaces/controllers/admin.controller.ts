@@ -29,6 +29,7 @@ import { IngredientService } from '../../application/ingredient/ingredient.servi
 import type { CreateIngredientDto, UpdateIngredientPriceDto } from '../../application/ingredient/ingredient.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { ProductionService, type CreateProductionBatchDto, type ProductionBatchSummaryDto } from '../../application/production/production.service';
+import { InventoryService } from '../../application/inventory/inventory.service';
 
 @ApiTags('Admin')
 @Controller('api/v1/admin')
@@ -37,6 +38,7 @@ export class AdminController {
   constructor(
     private readonly ingredientService: IngredientService,
     private readonly productionService: ProductionService,
+    private readonly inventoryService: InventoryService,
   ) {}
 
   @Get('inventory')
@@ -350,5 +352,55 @@ export class AdminController {
     }
 
     return ApiResponseDto.success(orderItems);
+  }
+
+  @Post('inventory/deductions/retry/:packagingUnitId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Retry inventory deduction for a PackagingUnit' })
+  @ApiParam({
+    name: 'packagingUnitId',
+    description: 'PackagingUnit ID to retry deduction for',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Deduction retry completed (idempotent)',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string' },
+        entriesCreated: { type: 'number' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request' })
+  @ApiResponse({ status: 404, description: 'PackagingUnit not found' })
+  async retryInventoryDeduction(
+    @Param('packagingUnitId') packagingUnitId: string,
+  ): Promise<ApiResponseDto<any>> {
+    try {
+      // Get existing entries to check if already deducted
+      const existingEntries =
+        await this.inventoryService.getEntriesByPackagingUnit(packagingUnitId);
+
+      // Attempt deduction (idempotent - will skip if already exists)
+      await this.inventoryService.deductFromKitchenTask(packagingUnitId);
+
+      // Get entries after deduction
+      const entriesAfter =
+        await this.inventoryService.getEntriesByPackagingUnit(packagingUnitId);
+
+      const entriesCreated = entriesAfter.length - existingEntries.length;
+
+      return ApiResponseDto.success({
+        message: 'Deduction retry completed',
+        entriesCreated,
+        totalEntries: entriesAfter.length,
+      });
+    } catch (error: any) {
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
   }
 }

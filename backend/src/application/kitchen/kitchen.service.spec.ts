@@ -9,11 +9,13 @@ import type { ProductionBatchRepository } from '../../domain/production/producti
 import { ProductionBatch, PackagingUnit } from '../../domain/production';
 import { ProductionBatchStatus, PackagingUnitStatus } from '../../domain/production/enums';
 import { PRODUCTION_BATCH_REPOSITORY } from '../production/production.service';
+import { InventoryService } from '../inventory/inventory.service';
 import type { RecipeSnapshot } from '../../domain/recipe/types';
 
 describe('KitchenService - Phase 8.12', () => {
   let service: KitchenService;
   let productionRepository: jest.Mocked<ProductionBatchRepository>;
+  let inventoryService: jest.Mocked<InventoryService>;
 
   const mockProductionRepository: jest.Mocked<ProductionBatchRepository> = {
     findById: jest.fn(),
@@ -26,6 +28,12 @@ describe('KitchenService - Phase 8.12', () => {
     findBatchesByPackagingUnitStatus: jest.fn(),
   };
 
+  const mockInventoryService: jest.Mocked<InventoryService> = {
+    deductFromKitchenTask: jest.fn(),
+    getBalanceByIngredient: jest.fn(),
+    getEntriesByPackagingUnit: jest.fn(),
+  } as any;
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -34,11 +42,16 @@ describe('KitchenService - Phase 8.12', () => {
           provide: PRODUCTION_BATCH_REPOSITORY,
           useValue: mockProductionRepository,
         },
+        {
+          provide: InventoryService,
+          useValue: mockInventoryService,
+        },
       ],
     }).compile();
 
     service = module.get<KitchenService>(KitchenService);
     productionRepository = module.get(PRODUCTION_BATCH_REPOSITORY);
+    inventoryService = module.get(InventoryService);
 
     jest.clearAllMocks();
   });

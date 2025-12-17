@@ -3,10 +3,11 @@
  * Phase 8.12: Kitchen Task Data Capture MVP
  */
 
-import { Injectable, Inject, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import type { ProductionBatchRepository } from '../../domain/production/production.repository';
 import { PackagingUnit, PackagingUnitStatus, type IngredientsUsageSnapshot } from '../../domain/production';
 import { PRODUCTION_BATCH_REPOSITORY } from '../production/production.service';
+import { InventoryService } from '../inventory/inventory.service';
 
 export interface UpdateTaskDto {
   actualWeightG?: number; // Single actual weight (alternative to ingredients_actual[])
@@ -56,9 +57,12 @@ export interface KitchenBatchDetailDto {
 
 @Injectable()
 export class KitchenService {
+  private readonly logger = new Logger(KitchenService.name);
+
   constructor(
     @Inject(PRODUCTION_BATCH_REPOSITORY)
     private readonly productionRepository: ProductionBatchRepository,
+    private readonly inventoryService: InventoryService,
   ) {}
 
   /**
@@ -203,11 +207,32 @@ export class KitchenService {
     );
 
     // Update status if provided
+    const previousStatus = unit.status;
     if (dto.status) {
       unit.transitionTo(dto.status);
     }
 
-    // Save to repository
-    return this.productionRepository.updatePackagingUnit(unit);
+    // Phase 8.13: Persist PackagingUnit updates FIRST (status + snapshot)
+    const savedUnit = await this.productionRepository.updatePackagingUnit(unit);
+
+    // Phase 8.13: Then trigger inventory deduction if status became COMPLETED
+    if (
+      dto.status === PackagingUnitStatus.COMPLETED &&
+      previousStatus !== PackagingUnitStatus.COMPLETED
+    ) {
+      try {
+        await this.inventoryService.deductFromKitchenTask(savedUnit.id);
+      } catch (error: any) {
+        // Error handling: Log but don't fail the status transition
+        // Status remains COMPLETED, deduction can be retried manually
+        this.logger.error(
+          `Inventory deduction failed for PackagingUnit ${savedUnit.id}:`,
+          error,
+        );
+        // Don't throw - status transition succeeded, deduction can be retried
+      }
+    }
+
+    return savedUnit;
   }
 }

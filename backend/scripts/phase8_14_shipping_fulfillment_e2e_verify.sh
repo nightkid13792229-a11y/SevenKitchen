@@ -7,6 +7,8 @@ set -euo pipefail
 BASE_URL="${BASE_URL:-http://127.0.0.1:3000}"
 API_BASE="${BASE_URL}/api/v1"
 HEALTH_PATH="${HEALTH_PATH:-}"
+STAFF_LOGIN_PATH="${STAFF_LOGIN_PATH:-}"
+STAFF_CUSTOMER_ID="${STAFF_CUSTOMER_ID:-staff-user-001}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
@@ -158,33 +160,71 @@ echo ""
 
 # Step 2: Login (staff)
 info "Step 2: Login as staff"
-LOGIN_RESPONSE=$(curl_with_code "${API_BASE}/auth/login" -X POST \
+LOGIN_URL=""
+LOGIN_BODY_JSON=""
+
+if [ -n "$STAFF_LOGIN_PATH" ]; then
+  # Use explicit STAFF_LOGIN_PATH if provided
+  LOGIN_URL="${BASE_URL}${STAFF_LOGIN_PATH}"
+  # If STAFF_LOGIN_BODY is provided, use it; otherwise use default customerId
+  if [ -n "${STAFF_LOGIN_BODY:-}" ]; then
+    LOGIN_BODY_JSON="$STAFF_LOGIN_BODY"
+  else
+    LOGIN_BODY_JSON="{\"customerId\":\"${STAFF_CUSTOMER_ID}\"}"
+  fi
+else
+  # Default: use /api/v1/auth/login with customerId
+  LOGIN_URL="${API_BASE}/auth/login"
+  LOGIN_BODY_JSON="{\"customerId\":\"${STAFF_CUSTOMER_ID}\"}"
+fi
+
+LOGIN_RESPONSE=$(curl_with_code "$LOGIN_URL" -X POST \
   -H "Content-Type: application/json" \
-  -d '{"phone":"13800138000","password":"staff123"}')
+  -d "$LOGIN_BODY_JSON")
 LOGIN_CODE=$(get_http_code "$LOGIN_RESPONSE")
 LOGIN_BODY=$(get_body "$LOGIN_RESPONSE")
 
 if [ -z "$LOGIN_CODE" ] || [ "$LOGIN_CODE" != "200" ]; then
-  LOGIN_CURL_CMD="curl -X POST -H \"Content-Type: application/json\" -d '{\"phone\":\"13800138000\",\"password\":\"staff123\"}' ${API_BASE}/auth/login"
-  fail "Login failed: HTTP code ${LOGIN_CODE}" "$LOGIN_BODY" "$LOGIN_CURL_CMD"
+  LOGIN_CURL_CMD="curl -X POST -H \"Content-Type: application/json\" -d '${LOGIN_BODY_JSON}' \"${LOGIN_URL}\""
+  truncated_body=$(echo "$LOGIN_BODY" | head -c 300)
+  fail "Staff login failed: HTTP code ${LOGIN_CODE}" "$truncated_body" "$LOGIN_CURL_CMD"
+fi
+
+LOGIN_CODE_VALUE=$(echo "$LOGIN_BODY" | extract_json_stdin "root.code")
+if [ "$LOGIN_CODE_VALUE" != "0" ]; then
+  LOGIN_CURL_CMD="curl -X POST -H \"Content-Type: application/json\" -d '${LOGIN_BODY_JSON}' \"${LOGIN_URL}\""
+  truncated_body=$(echo "$LOGIN_BODY" | head -c 300)
+  fail "Staff login failed: code ${LOGIN_CODE_VALUE}" "$truncated_body" "$LOGIN_CURL_CMD"
 fi
 
 TOKEN=$(echo "$LOGIN_BODY" | extract_json_stdin "root.data.token")
 if [ -z "$TOKEN" ]; then
-  fail "Login failed: token not found in response" "$LOGIN_BODY"
+  fail "Staff login failed: token not found in response" "$LOGIN_BODY"
 fi
-success "Login successful"
+success "Staff login OK: ${LOGIN_URL}"
 echo ""
 
 # Step 3: Create order and pay (using customer login)
 info "Step 3: Create order and pay"
+CUSTOMER_CUSTOMER_ID="${CUSTOMER_CUSTOMER_ID:-customer-user-001}"
 CUSTOMER_LOGIN_RESPONSE=$(curl_with_code "${API_BASE}/auth/login" -X POST \
   -H "Content-Type: application/json" \
-  -d '{"phone":"13800138001","password":"customer123"}')
-CUSTOMER_TOKEN=$(echo "$(get_body "$CUSTOMER_LOGIN_RESPONSE")" | extract_json_stdin "root.data.token")
+  -d "{\"customerId\":\"${CUSTOMER_CUSTOMER_ID}\"}")
+CUSTOMER_LOGIN_CODE=$(get_http_code "$CUSTOMER_LOGIN_RESPONSE")
+CUSTOMER_LOGIN_BODY=$(get_body "$CUSTOMER_LOGIN_RESPONSE")
 
+if [ "$CUSTOMER_LOGIN_CODE" != "200" ]; then
+  fail "Customer login failed: HTTP ${CUSTOMER_LOGIN_CODE}" "$CUSTOMER_LOGIN_BODY"
+fi
+
+CUSTOMER_LOGIN_CODE_VALUE=$(echo "$CUSTOMER_LOGIN_BODY" | extract_json_stdin "root.code")
+if [ "$CUSTOMER_LOGIN_CODE_VALUE" != "0" ]; then
+  fail "Customer login failed: code ${CUSTOMER_LOGIN_CODE_VALUE}" "$CUSTOMER_LOGIN_BODY"
+fi
+
+CUSTOMER_TOKEN=$(echo "$CUSTOMER_LOGIN_BODY" | extract_json_stdin "root.data.token")
 if [ -z "$CUSTOMER_TOKEN" ]; then
-  fail "Customer login failed"
+  fail "Customer login failed: token not found in response" "$CUSTOMER_LOGIN_BODY"
 fi
 
 # Create order

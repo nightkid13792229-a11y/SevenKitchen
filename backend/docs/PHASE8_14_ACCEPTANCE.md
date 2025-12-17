@@ -98,6 +98,18 @@ pnpm test -- shipping-fulfillment.service.spec staff-shipping.controller.spec pr
 
 **Expected**: All tests pass (23+ tests)
 
+### 2. Verify Staff Login
+
+The E2E script uses `/api/v1/auth/login` with `{"customerId": "staff-user-001"}` for staff authentication. The backend's auth system is customerId-based (no separate staff credentials). To test staff login manually:
+
+```bash
+curl -X POST http://127.0.0.1:3000/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"customerId":"staff-user-001"}'
+```
+
+**Expected**: Returns `{"code":0,"data":{"token":"...","customerId":"staff-user-001"}}`
+
 ### 2. Run E2E Script
 
 ```bash

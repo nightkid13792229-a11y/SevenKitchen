@@ -21,6 +21,25 @@ Phase 8.14 implements the shipping fulfillment workflow:
 - Backend server running: `cd backend && pnpm start:dev`
 - Test data: At least one Dog, Recipe, and Address exist (or will be auto-created by script)
 
+## Environment Variables
+
+The E2E script supports the following environment variables:
+
+- `BASE_URL`: Backend base URL (default: `http://127.0.0.1:3000`)
+- `HEALTH_PATH`: Explicit health check path (default: auto-detect `/health` or `/api/v1/health`)
+- `STAFF_LOGIN_PATH`: Explicit staff login endpoint (default: `/api/v1/auth/login`)
+- `STAFF_CUSTOMER_ID`: Staff user customerId for login (default: `staff-user-001`)
+- `CUSTOMER_CUSTOMER_ID`: Customer user customerId for login (default: `customer-user-001`)
+
+### Staff Login
+
+The script uses `/api/v1/auth/login` with `{"customerId": "staff-user-001"}` by default. The backend's auth system accepts any customerId string and generates a JWT token. There is no separate staff authentication - staff endpoints use the same JWT-based auth as customer endpoints.
+
+To override the staff login:
+```bash
+STAFF_CUSTOMER_ID=my-staff-id /bin/bash scripts/phase8_14_shipping_fulfillment_e2e_verify.sh
+```
+
 ## Running E2E Verification
 
 ### Standard Mode

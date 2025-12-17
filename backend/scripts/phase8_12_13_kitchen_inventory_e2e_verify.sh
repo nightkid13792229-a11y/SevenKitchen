@@ -257,6 +257,44 @@ echo ""
 
 # Step 4: Create production batch
 echo "Step 4: Create production batch"
+
+# Optional: Auto-cleanup mode (development only)
+if [ "${E2E_FORCE_FRESH_DEDUCTION:-}" = "1" ]; then
+  warn "E2E_FORCE_FRESH_DEDUCTION=1 is set. This will DELETE local development data!"
+  echo ""
+  echo "⚠️  WARNING: The following data will be deleted:"
+  echo "   - OrderItem allocation locks (production_batch_id, allocated_at)"
+  echo "   - All production batches"
+  echo "   - All packaging units"
+  echo "   - All inventory ledger entries"
+  echo ""
+  echo "Press Ctrl+C within 5 seconds to cancel..."
+  sleep 5
+  
+  info "Executing cleanup SQL..."
+  
+  # Check if DATABASE_URL is set
+  if [ -z "${DATABASE_URL:-}" ]; then
+    fail "DATABASE_URL is not set. Cannot execute cleanup SQL."
+  fi
+  
+  # Execute cleanup SQL
+  psql "$DATABASE_URL" <<EOF
+-- Clean allocation locks and production data
+UPDATE order_item SET production_batch_id = NULL, allocated_at = NULL WHERE production_batch_id IS NOT NULL;
+DELETE FROM inventory_ledger_entry;
+DELETE FROM packaging_unit;
+DELETE FROM production_batch;
+EOF
+  
+  if [ $? -eq 0 ]; then
+    success "Cleanup completed successfully"
+  else
+    fail "Cleanup SQL failed. Please check DATABASE_URL and database connection."
+  fi
+  echo ""
+fi
+
 BATCH_FULL=$(curl_with_code "${API_BASE}/admin/production-batches" \
   -X POST \
   -H "Authorization: Bearer $TOKEN" \
@@ -279,9 +317,12 @@ if [ "$BATCH_CODE_VALUE" != "0" ]; then
     echo "----------------------------------------"
     echo "-- Clean allocation locks and production data"
     echo "UPDATE order_item SET production_batch_id = NULL, allocated_at = NULL WHERE production_batch_id IS NOT NULL;"
+    echo "DELETE FROM inventory_ledger_entry;"
     echo "DELETE FROM packaging_unit;"
     echo "DELETE FROM production_batch;"
     echo "----------------------------------------"
+    echo ""
+    echo "Or set E2E_FORCE_FRESH_DEDUCTION=1 to auto-cleanup (development only)."
     echo ""
     fail "Cannot proceed without eligible OrderItems. Please clean up and retry." "$BATCH_BODY"
   else

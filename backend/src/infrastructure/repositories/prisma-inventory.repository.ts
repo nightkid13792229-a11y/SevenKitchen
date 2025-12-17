@@ -44,7 +44,6 @@ export class PrismaInventoryRepository implements InventoryRepository {
     sourceId: string,
     ingredientId: string,
   ): Promise<boolean> {
-    // @ts-expect-error - InventoryLedgerEntry may not exist in Prisma type until migration is applied
     const count = await this.prisma.inventoryLedgerEntry.count({
       where: {
         sourceType: sourceType as any,
@@ -57,7 +56,6 @@ export class PrismaInventoryRepository implements InventoryRepository {
   }
 
   async getCurrentBalanceByIngredient(ingredientId: string): Promise<number> {
-    // @ts-expect-error - InventoryLedgerEntry may not exist in Prisma type until migration is applied
     const result = await this.prisma.inventoryLedgerEntry.aggregate({
       where: {
         ingredientId,
@@ -74,7 +72,6 @@ export class PrismaInventoryRepository implements InventoryRepository {
     sourceType: InventorySourceType,
     sourceId: string,
   ): Promise<InventoryLedgerEntry[]> {
-    // @ts-expect-error - InventoryLedgerEntry may not exist in Prisma type until migration is applied
     const records = await this.prisma.inventoryLedgerEntry.findMany({
       where: {
         sourceType: sourceType as any,

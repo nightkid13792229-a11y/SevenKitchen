@@ -47,6 +47,11 @@ describe('OrdersController (e2e)', () => {
   let ingredientRepository: InMemoryIngredientRepository;
 
   beforeEach(async () => {
+    // Suppress console logs during tests
+    jest.spyOn(console, 'log').mockImplementation(() => {});
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+
     const moduleFixture: TestingModule = await Test.createTestingModule({
       imports: [
         JwtModule.register({
@@ -111,6 +116,8 @@ describe('OrdersController (e2e)', () => {
 
   afterEach(async () => {
     await app.close();
+    // Restore console methods
+    jest.restoreAllMocks();
   });
 
   // Helper function to create minimal test dog

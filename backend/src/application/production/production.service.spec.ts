@@ -57,6 +57,14 @@ describe('ProductionService - Phase 8.10', () => {
     jest.clearAllMocks();
     // Reset mock implementations
     mockProductionRepository.allocateOrderItems = jest.fn();
+    
+    // Suppress console.warn during tests (especially for allocation warnings)
+    jest.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(() => {
+    // Restore console methods
+    jest.restoreAllMocks();
   });
 
   const createMockRecipeSnapshot = (id: string): RecipeSnapshot => {

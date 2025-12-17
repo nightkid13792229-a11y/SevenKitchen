@@ -210,11 +210,14 @@ export class KitchenService {
         }),
       };
     } catch (error: any) {
-      this.logger.error('Error in getBatchDetail:', {
-        message: error?.message,
-        stack: error?.stack,
-        batchId: batchId,
-      });
+      // Only log unexpected errors, not expected NotFoundException
+      if (!(error instanceof NotFoundException)) {
+        this.logger.error('Error in getBatchDetail:', {
+          message: error?.message,
+          stack: error?.stack,
+          batchId: batchId,
+        });
+      }
       throw error;
     }
   }

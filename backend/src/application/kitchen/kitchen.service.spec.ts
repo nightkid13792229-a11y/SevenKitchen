@@ -35,6 +35,9 @@ describe('KitchenService - Phase 8.12', () => {
   } as any;
 
   beforeEach(async () => {
+    // Suppress Logger.error during tests (especially for expected NotFoundException)
+    jest.spyOn(console, 'error').mockImplementation(() => {});
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         KitchenService,
@@ -54,6 +57,11 @@ describe('KitchenService - Phase 8.12', () => {
     inventoryService = module.get(InventoryService);
 
     jest.clearAllMocks();
+  });
+
+  afterEach(() => {
+    // Restore console methods
+    jest.restoreAllMocks();
   });
 
   const createMockRecipeSnapshot = (id: string): RecipeSnapshot => {

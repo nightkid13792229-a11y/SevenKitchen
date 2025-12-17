@@ -195,9 +195,11 @@ export class ProductionService {
     );
 
     // Verify allocation succeeded (all items should be allocated)
-    if (allocatedCount !== allOrderItemIds.length) {
+    // Ensure allocatedCount is a number before comparison
+    const allocatedCountNum = typeof allocatedCount === 'number' ? allocatedCount : 0;
+    if (allocatedCountNum !== allOrderItemIds.length) {
       this.logger.warn(
-        `Only ${allocatedCount} of ${allOrderItemIds.length} OrderItems were allocated. Possible concurrent allocation conflict.`,
+        `Only ${allocatedCountNum} of ${allOrderItemIds.length} OrderItems were allocated. Possible concurrent allocation conflict.`,
       );
       // In a real system, we might want to rollback or retry, but for MVP we'll continue
       // The batch is created, but some items may have been allocated to another batch concurrently

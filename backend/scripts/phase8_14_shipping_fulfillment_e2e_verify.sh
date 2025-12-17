@@ -9,6 +9,10 @@ API_BASE="${BASE_URL}/api/v1"
 HEALTH_PATH="${HEALTH_PATH:-}"
 STAFF_LOGIN_PATH="${STAFF_LOGIN_PATH:-}"
 STAFF_CUSTOMER_ID="${STAFF_CUSTOMER_ID:-staff-user-001}"
+CUSTOMER_CUSTOMER_ID="${CUSTOMER_CUSTOMER_ID:-customer-user-001}"
+DOG_ID="${DOG_ID:-}"
+DOG_CREATE_PATH="${DOG_CREATE_PATH:-}"
+DOG_CREATE_BODY="${DOG_CREATE_BODY:-}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
@@ -227,20 +231,20 @@ if [ -z "$CUSTOMER_TOKEN" ]; then
   fail "Customer login failed: token not found in response" "$CUSTOMER_LOGIN_BODY"
 fi
 
-# Create order
+# Create order (use DOG_ID_TO_USE from Step 2.5)
 CREATE_ORDER_RESPONSE=$(curl_with_code "${API_BASE}/orders" -X POST \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ${CUSTOMER_TOKEN}" \
-  -d '{
-    "dogId": "550e8400-e29b-41d4-a716-446655440000",
-    "type": "FRESH_FOOD",
-    "items": [{
-      "recipeId": "550e8400-e29b-41d4-a716-446655440001",
-      "quantityG": 1400,
-      "packageCount": 14,
-      "packageSpecG": 100
+  -d "{
+    \"dogId\": \"${DOG_ID_TO_USE}\",
+    \"type\": \"FRESH_FOOD\",
+    \"items\": [{
+      \"recipeId\": \"550e8400-e29b-41d4-a716-446655440001\",
+      \"quantityG\": 1400,
+      \"packageCount\": 14,
+      \"packageSpecG\": 100
     }]
-  }')
+  }")
 CREATE_ORDER_CODE=$(get_http_code "$CREATE_ORDER_RESPONSE")
 CREATE_ORDER_BODY=$(get_body "$CREATE_ORDER_RESPONSE")
 

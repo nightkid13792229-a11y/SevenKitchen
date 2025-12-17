@@ -30,6 +30,9 @@ The E2E script supports the following environment variables:
 - `STAFF_LOGIN_PATH`: Explicit staff login endpoint (default: `/api/v1/auth/login`)
 - `STAFF_CUSTOMER_ID`: Staff user customerId for login (default: `staff-user-001`)
 - `CUSTOMER_CUSTOMER_ID`: Customer user customerId for login (default: `customer-user-001`)
+- `DOG_ID`: Pre-existing dog ID to use (default: auto-create a new dog)
+- `DOG_CREATE_PATH`: Explicit dog creation endpoint (default: `/api/v1/dogs`)
+- `DOG_CREATE_BODY`: Custom dog creation payload JSON (default: uses standard test dog values)
 
 ### Staff Login
 

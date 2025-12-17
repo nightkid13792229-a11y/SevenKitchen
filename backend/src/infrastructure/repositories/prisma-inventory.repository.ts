@@ -22,7 +22,6 @@ export class PrismaInventoryRepository implements InventoryRepository {
 
     // Use transaction to ensure atomicity
     await this.prisma.$transaction(async (tx) => {
-      // @ts-expect-error - InventoryLedgerEntry may not exist in Prisma type until migration is applied
       await tx.inventoryLedgerEntry.createMany({
         data: entries.map((entry) => ({
           id: entry.id,

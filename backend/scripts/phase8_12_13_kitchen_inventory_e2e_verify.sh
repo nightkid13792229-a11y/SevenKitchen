@@ -19,10 +19,15 @@ NC='\033[0m'
 fail() {
   local msg="${1:-Error}"
   local response="${2:-}"
+  local curl_cmd="${3:-}"
   echo -e "${RED}✗ ${msg}${NC}"
   if [ -n "$response" ]; then
-    local truncated=$(echo "$response" | head -c 500)
+    local truncated
+    truncated=$(echo "$response" | head -c 500)
     echo -e "${RED}Response (truncated): ${truncated}${NC}"
+  fi
+  if [ -n "$curl_cmd" ]; then
+    echo -e "${RED}Curl command: ${curl_cmd}${NC}"
   fi
   exit 1
 }
@@ -31,6 +36,7 @@ info() { echo -e "${BLUE}ℹ ${1:-Info}${NC}"; }
 success() { echo -e "${GREEN}✓ ${1:-Success}${NC}"; }
 
 # Helper: curl with HTTP code separation
+# Outputs: <body>\nHTTP_CODE:<code>
 curl_with_code() {
   local url="$1"
   shift
@@ -41,7 +47,7 @@ curl_with_code() {
   local code
   code=$(echo "$response" | tail -n 1)
   echo "$body"
-  echo "HTTP_CODE:$code" >&2
+  echo "HTTP_CODE:$code"
 }
 
 # Helper: Extract JSON field from stdin (Node.js reads from stdin)
@@ -100,10 +106,17 @@ echo "Step 1: Health check"
 HEALTH_FULL=$(curl_with_code "${API_BASE}/health")
 HEALTH_BODY=$(get_body "$HEALTH_FULL")
 HEALTH_CODE=$(get_http_code "$HEALTH_FULL")
+CURL_CMD="curl -s -w \"\\n%{http_code}\" \"${API_BASE}/health\""
+
+if [ -z "$HEALTH_CODE" ]; then
+  fail "Health check failed: HTTP code not found" "$HEALTH_FULL" "$CURL_CMD"
+fi
 
 if [ "$HEALTH_CODE" != "200" ]; then
-  fail "Health check failed: HTTP $HEALTH_CODE" "$HEALTH_BODY"
+  fail "Health check failed: HTTP $HEALTH_CODE" "$HEALTH_BODY" "$CURL_CMD"
 fi
+
+echo "HTTP_CODE:$HEALTH_CODE"
 success "Health check passed"
 echo ""
 

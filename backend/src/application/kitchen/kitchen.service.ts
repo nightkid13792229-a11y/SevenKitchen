@@ -79,10 +79,9 @@ export class KitchenService {
           status,
         );
       } else {
-        // If no status filter, get all batches with packaging units
-        // Use findByStatus to get batches, then filter to only those with packaging units
-        const allBatches = await this.productionRepository.findByStatus('PLANNED');
-        batches = allBatches.filter((b) => b.packagingUnits.length > 0);
+        // If no status filter, get all batches (including those with empty packaging units)
+        // Use findByStatus to get batches
+        batches = await this.productionRepository.findByStatus('PLANNED');
       }
 
       return batches.map((batch) => {

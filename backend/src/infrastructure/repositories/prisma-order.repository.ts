@@ -75,6 +75,10 @@ export class PrismaOrderRepository implements OrderRepository {
             pricingBreakdownSnapshot: order.pricingBreakdownSnapshot
               ? this.serializePricingSnapshot(order.pricingBreakdownSnapshot)
               : null,
+            // Phase 8.14: Shipping tracking fields
+            trackingNumber: order.trackingNumber ?? null,
+            carrierCode: order.carrierCode ?? null,
+            shippedAt: order.shippedAt ?? null,
           },
         });
 
@@ -188,6 +192,10 @@ export class PrismaOrderRepository implements OrderRepository {
       snapshot,
       record.dogId ?? undefined,
       record.addressId ?? undefined,
+      // Phase 8.14: Shipping tracking fields
+      record.trackingNumber ?? undefined,
+      record.carrierCode ?? undefined,
+      record.shippedAt ?? undefined,
     );
   }
 

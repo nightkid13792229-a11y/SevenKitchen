@@ -3,7 +3,7 @@
  * Phase 8.10: Production & Packaging MVP
  */
 
-import { Injectable, Inject, BadRequestException } from '@nestjs/common';
+import { Injectable, Inject, BadRequestException, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import type { ProductionBatchRepository } from '../../domain/production/production.repository';
 import type { OrderRepository } from '../../domain/order/order.repository';
@@ -36,6 +36,8 @@ export interface ProductionBatchSummaryDto {
 
 @Injectable()
 export class ProductionService {
+  private readonly logger = new Logger(ProductionService.name);
+
   constructor(
     @Inject(PRODUCTION_BATCH_REPOSITORY)
     private readonly productionRepository: ProductionBatchRepository,
@@ -231,10 +233,85 @@ export class ProductionService {
     return this.productionRepository.findByProductionDate(productionDate);
   }
 
-  private readonly logger = {
-    warn: (message: string) => {
-      // Simple logger for now
-      console.warn(`[ProductionService] ${message}`);
-    },
-  };
+  /**
+   * Check and complete batch if all packaging units are completed
+   * Phase 8.14: Auto-complete batch and transition orders to READY_FOR_SHIPMENT
+   * @param batchId Production batch ID
+   * @returns true if batch was completed, false otherwise
+   */
+  async checkAndCompleteBatch(batchId: string): Promise<boolean> {
+    const batch = await this.productionRepository.findById(batchId);
+    if (!batch) {
+      throw new BadRequestException(`Production batch not found: ${batchId}`);
+    }
+
+    // Only check batches that are IN_PRODUCTION
+    if (batch.status !== ProductionBatchStatus.IN_PRODUCTION) {
+      return false;
+    }
+
+    // Check if all units are completed
+    if (!batch.areAllUnitsCompleted()) {
+      return false;
+    }
+
+    // Transition batch to COMPLETED
+    batch.transitionTo(ProductionBatchStatus.COMPLETED);
+    await this.productionRepository.save(batch);
+
+    this.logger.log(
+      `Batch ${batchId} auto-completed: all ${batch.packagingUnits.length} packaging units are COMPLETED`,
+    );
+
+    // Find all orders with OrderItems in this batch
+    const orderItemIds = batch.packagingUnits.flatMap(
+      (unit) => unit.sourceOrderItemIds,
+    );
+
+    // Get unique order IDs from order items
+    const orderIds = new Set<string>();
+    for (const itemId of orderItemIds) {
+      // Find order by item ID (we need to query orders and check their items)
+      // For now, we'll use a repository method to find orders by item IDs
+      const orders = await this.orderRepository.findByStatus(
+        OrderStatus.IN_PRODUCTION,
+      );
+      for (const order of orders) {
+        if (order.items.some((item) => item.id === itemId)) {
+          orderIds.add(order.id);
+        }
+      }
+    }
+
+    // Transition all related orders to READY_FOR_SHIPMENT
+    let transitionedCount = 0;
+    for (const orderId of orderIds) {
+      const order = await this.orderRepository.findById(orderId);
+      if (!order) {
+        continue;
+      }
+
+      // Only transition orders that are IN_PRODUCTION
+      if (order.status === OrderStatus.IN_PRODUCTION) {
+        try {
+          order.transitionTo(OrderStatus.READY_FOR_SHIPMENT);
+          await this.orderRepository.save(order);
+          transitionedCount++;
+          this.logger.log(
+            `Order ${orderId} auto-transitioned to READY_FOR_SHIPMENT after batch ${batchId} completion`,
+          );
+        } catch (error) {
+          this.logger.warn(
+            `Failed to transition order ${orderId} to READY_FOR_SHIPMENT: ${error}`,
+          );
+        }
+      }
+    }
+
+    this.logger.log(
+      `Batch ${batchId} completion: ${transitionedCount} orders transitioned to READY_FOR_SHIPMENT`,
+    );
+
+    return true;
+  }
 }

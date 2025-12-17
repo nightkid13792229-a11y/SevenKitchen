@@ -140,14 +140,80 @@ describe('KitchenService - Phase 8.12', () => {
 
     it('should return all batches when no status filter provided', async () => {
       // Arrange
-      productionRepository.findByStatus.mockResolvedValue([]);
+      const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
+      const unit1 = createMockPackagingUnit(
+        'unit-1',
+        'batch-1',
+        recipeSnapshot,
+        PackagingUnitStatus.PENDING,
+      );
+      const batch = new ProductionBatch(
+        'batch-1',
+        new Date('2025-01-20'),
+        ProductionBatchStatus.PLANNED,
+        [unit1],
+        new Date(),
+      );
+
+      productionRepository.findByStatus.mockResolvedValue([batch]);
 
       // Act
       const result = await service.listBatchesByStatus();
 
       // Assert
-      expect(result).toEqual([]);
+      expect(result).toHaveLength(1);
+      expect(result[0].id).toBe('batch-1');
+      expect(result[0].taskCount).toBe(1);
       expect(productionRepository.findByStatus).toHaveBeenCalledWith('PLANNED');
+    });
+
+    it('should handle empty packagingUnits array safely', async () => {
+      // Arrange
+      const batch = new ProductionBatch(
+        'batch-1',
+        new Date('2025-01-20'),
+        ProductionBatchStatus.PLANNED,
+        [], // Empty packaging units
+        new Date(),
+      );
+
+      productionRepository.findByStatus.mockResolvedValue([batch]);
+
+      // Act
+      const result = await service.listBatchesByStatus();
+
+      // Assert
+      expect(result).toHaveLength(1);
+      expect(result[0].taskCount).toBe(0);
+      expect(result[0].tasks).toEqual([]);
+    });
+
+    it('should handle missing fields safely', async () => {
+      // Arrange
+      const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
+      const unit = createMockPackagingUnit(
+        'unit-1',
+        'batch-1',
+        recipeSnapshot,
+        PackagingUnitStatus.PENDING,
+      );
+      const batch = new ProductionBatch(
+        'batch-1',
+        new Date('2025-01-20'),
+        ProductionBatchStatus.PLANNED,
+        [unit],
+        new Date(),
+      );
+
+      productionRepository.findByStatus.mockResolvedValue([batch]);
+
+      // Act
+      const result = await service.listBatchesByStatus();
+
+      // Assert: Should not throw, should handle gracefully
+      expect(result).toHaveLength(1);
+      expect(result[0].tasks[0].recipeName).toBeDefined();
+      expect(result[0].tasks[0].recipeName).toBe('Test Recipe');
     });
   });
 

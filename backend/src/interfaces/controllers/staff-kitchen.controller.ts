@@ -77,13 +77,33 @@ export class StaffKitchenController {
   async listBatches(
     @Query('status') status?: string,
   ): Promise<ApiResponseDto<any[]>> {
-    const statusEnum =
-      status && Object.values(PackagingUnitStatus).includes(status as PackagingUnitStatus)
-        ? (status as PackagingUnitStatus)
-        : undefined;
+    try {
+      // Validate status parameter if provided
+      let statusEnum: PackagingUnitStatus | undefined = undefined;
+      if (status) {
+        const upperStatus = status.toUpperCase();
+        if (!Object.values(PackagingUnitStatus).includes(upperStatus as PackagingUnitStatus)) {
+          throw new BadRequestException(
+            `Invalid status: ${status}. Must be one of: ${Object.values(PackagingUnitStatus).join(', ')}`,
+          );
+        }
+        statusEnum = upperStatus as PackagingUnitStatus;
+      }
 
-    const batches = await this.kitchenService.listBatchesByStatus(statusEnum);
-    return ApiResponseDto.success(batches);
+      const batches = await this.kitchenService.listBatchesByStatus(statusEnum);
+      return ApiResponseDto.success(batches);
+    } catch (error: any) {
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message) as any;
+      }
+      // Log unexpected errors for debugging
+      console.error('Error in listBatches:', {
+        message: error?.message,
+        stack: error?.stack,
+        status: status,
+      });
+      throw error;
+    }
   }
 
   @Get('batches/:batchId')

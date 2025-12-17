@@ -72,34 +72,60 @@ export class KitchenService {
   async listBatchesByStatus(
     status?: PackagingUnitStatus,
   ): Promise<KitchenBatchSummaryDto[]> {
-    let batches;
-    if (status) {
-      batches = await this.productionRepository.findBatchesByPackagingUnitStatus(
-        status,
-      );
-    } else {
-      // If no status filter, get all batches (could be optimized)
-      batches = await this.productionRepository.findByStatus('PLANNED');
-    }
+    try {
+      let batches;
+      if (status) {
+        batches = await this.productionRepository.findBatchesByPackagingUnitStatus(
+          status,
+        );
+      } else {
+        // If no status filter, get all batches with packaging units
+        // Use findByStatus to get batches, then filter to only those with packaging units
+        const allBatches = await this.productionRepository.findByStatus('PLANNED');
+        batches = allBatches.filter((b) => b.packagingUnits.length > 0);
+      }
 
-    return batches.map((batch) => ({
-      id: batch.id,
-      productionDate: batch.productionDate.toISOString().split('T')[0],
-      status: batch.status,
-      taskCount: batch.packagingUnits.length,
-      tasks: batch.packagingUnits.map((unit) => ({
-        id: unit.id,
-        recipeSnapshotId: unit.recipeSnapshot.id,
-        recipeName: unit.recipeSnapshot.name,
-        totalProductionG: unit.totalProductionG,
-        status: unit.status,
-        hasPhotos:
-          unit.photosRaw.length > 0 ||
-          unit.photosCooked.length > 0 ||
-          unit.photosPortioned.length > 0,
-        hasActualUsage: unit.ingredientsUsageSnapshot !== null,
-      })),
-    }));
+      return batches.map((batch) => {
+        // Defensive: ensure packagingUnits is always an array
+        const units = batch.packagingUnits || [];
+        
+        return {
+          id: batch.id,
+          productionDate: batch.productionDate.toISOString().split('T')[0],
+          status: batch.status,
+          taskCount: units.length,
+          tasks: units.map((unit) => {
+            // Defensive: ensure recipeSnapshot exists
+            const recipeSnapshot = unit.recipeSnapshot || { id: '', name: 'Unknown' };
+            
+            // Defensive: ensure photos arrays exist
+            const photosRaw = unit.photosRaw || [];
+            const photosCooked = unit.photosCooked || [];
+            const photosPortioned = unit.photosPortioned || [];
+            
+            return {
+              id: unit.id,
+              recipeSnapshotId: recipeSnapshot.id,
+              recipeName: recipeSnapshot.name || 'Unknown',
+              totalProductionG: unit.totalProductionG || 0,
+              status: unit.status || PackagingUnitStatus.PENDING,
+              hasPhotos:
+                photosRaw.length > 0 ||
+                photosCooked.length > 0 ||
+                photosPortioned.length > 0,
+              hasActualUsage: unit.ingredientsUsageSnapshot !== null && unit.ingredientsUsageSnapshot !== undefined,
+            };
+          }),
+        };
+      });
+    } catch (error: any) {
+      this.logger.error('Error in listBatchesByStatus:', {
+        message: error?.message,
+        stack: error?.stack,
+        status: status,
+      });
+      throw error;
+    }
   }
 
   /**
@@ -107,28 +133,51 @@ export class KitchenService {
    * Phase 8.12: Kitchen batch detail view
    */
   async getBatchDetail(batchId: string): Promise<KitchenBatchDetailDto> {
-    const batch = await this.productionRepository.findById(batchId);
-    if (!batch) {
-      throw new NotFoundException(`Production batch not found: ${batchId}`);
-    }
+    try {
+      const batch = await this.productionRepository.findById(batchId);
+      if (!batch) {
+        throw new NotFoundException(`Production batch not found: ${batchId}`);
+      }
 
-    return {
-      id: batch.id,
-      productionDate: batch.productionDate.toISOString().split('T')[0],
-      status: batch.status,
-      tasks: batch.packagingUnits.map((unit) => ({
-        id: unit.id,
-        recipeSnapshotId: unit.recipeSnapshot.id,
-        recipeName: unit.recipeSnapshot.name,
-        totalProductionG: unit.totalProductionG,
-        status: unit.status,
-        ingredientsUsageSnapshot: unit.ingredientsUsageSnapshot,
-        photosRaw: unit.photosRaw,
-        photosCooked: unit.photosCooked,
-        photosPortioned: unit.photosPortioned,
-        sourceOrderItemIds: unit.sourceOrderItemIds,
-      })),
-    };
+      // Defensive: ensure packagingUnits is always an array
+      const units = batch.packagingUnits || [];
+
+      return {
+        id: batch.id,
+        productionDate: batch.productionDate.toISOString().split('T')[0],
+        status: batch.status,
+        tasks: units.map((unit) => {
+          // Defensive: ensure recipeSnapshot exists
+          const recipeSnapshot = unit.recipeSnapshot || { id: '', name: 'Unknown' };
+          
+          // Defensive: ensure arrays exist
+          const photosRaw = unit.photosRaw || [];
+          const photosCooked = unit.photosCooked || [];
+          const photosPortioned = unit.photosPortioned || [];
+          const sourceOrderItemIds = unit.sourceOrderItemIds || [];
+
+          return {
+            id: unit.id,
+            recipeSnapshotId: recipeSnapshot.id,
+            recipeName: recipeSnapshot.name || 'Unknown',
+            totalProductionG: unit.totalProductionG || 0,
+            status: unit.status || PackagingUnitStatus.PENDING,
+            ingredientsUsageSnapshot: unit.ingredientsUsageSnapshot || null,
+            photosRaw,
+            photosCooked,
+            photosPortioned,
+            sourceOrderItemIds,
+          };
+        }),
+      };
+    } catch (error: any) {
+      this.logger.error('Error in getBatchDetail:', {
+        message: error?.message,
+        stack: error?.stack,
+        batchId: batchId,
+      });
+      throw error;
+    }
   }
 
   /**

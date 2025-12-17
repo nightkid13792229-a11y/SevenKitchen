@@ -198,27 +198,36 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
   async findBatchesByPackagingUnitStatus(
     status: string,
   ): Promise<ProductionBatch[]> {
-    // Find all packaging units with the given status, then get their batches
-    // Use raw query to avoid Prisma type issues until migration is applied
-    const batchIds = await this.prisma.$queryRawUnsafe<Array<{ production_batch_id: string }>>(
-      `SELECT DISTINCT production_batch_id 
-       FROM packaging_unit 
-       WHERE status = $1`,
-      status,
-    );
+    try {
+      // Find all packaging units with the given status, then get their batches
+      // Use raw query with proper enum casting for PostgreSQL
+      const batchIds = await this.prisma.$queryRawUnsafe<Array<{ production_batch_id: string }>>(
+        `SELECT DISTINCT production_batch_id 
+         FROM packaging_unit 
+         WHERE status = $1::"PackagingUnitStatus"`,
+        status,
+      );
 
-    // Load batches by IDs
-    const batchIdsList = batchIds.map((row) => row.production_batch_id);
-    if (batchIdsList.length === 0) {
-      return [];
+      // Load batches by IDs
+      const batchIdsList = batchIds.map((row) => row.production_batch_id);
+      if (batchIdsList.length === 0) {
+        return [];
+      }
+
+      const batches = await this.prisma.productionBatch.findMany({
+        where: { id: { in: batchIdsList } },
+        include: { packagingUnits: true },
+      });
+
+      return batches.map((b) => this.mapToDomain(b));
+    } catch (error: any) {
+      this.logger.error('Error in findBatchesByPackagingUnitStatus:', {
+        message: error?.message,
+        stack: error?.stack,
+        status: status,
+      });
+      throw error;
     }
-
-    const batches = await this.prisma.productionBatch.findMany({
-      where: { id: { in: batchIdsList } },
-      include: { packagingUnits: true },
-    });
-
-    return batches.map((b) => this.mapToDomain(b));
   }
 
   private mapPackagingUnitToDomain(pu: any): PackagingUnit {

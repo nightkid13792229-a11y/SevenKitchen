@@ -3,7 +3,7 @@
  * Phase 8.10: Production & Packaging MVP
  */
 
-import { Injectable, Inject, BadRequestException } from '@nestjs/common';
+import { Injectable, Inject, BadRequestException, Logger } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import type { ProductionBatchRepository } from '../../domain/production/production.repository';
 import type { OrderRepository } from '../../domain/order/order.repository';
@@ -36,6 +36,8 @@ export interface ProductionBatchSummaryDto {
 
 @Injectable()
 export class ProductionService {
+  private readonly logger = new Logger(ProductionService.name);
+
   constructor(
     @Inject(PRODUCTION_BATCH_REPOSITORY)
     private readonly productionRepository: ProductionBatchRepository,
@@ -205,6 +207,59 @@ export class ProductionService {
       // The batch is created, but some items may have been allocated to another batch concurrently
     }
 
+    // Phase 8.14: Transition orders from PAID → WAITING_FOR_PRODUCTION → IN_PRODUCTION
+    // This ensures orders are in the correct status for batch completion detection
+    const uniqueOrderIds = new Set(orders.map((o) => o.id));
+    let transitionedCount = 0;
+    for (const orderId of uniqueOrderIds) {
+      const order = await this.orderRepository.findById(orderId);
+      if (!order) {
+        continue;
+      }
+
+      try {
+        // Transition from PAID → WAITING_FOR_PRODUCTION → IN_PRODUCTION
+        if (order.status === OrderStatus.PAID) {
+          order.transitionTo(OrderStatus.WAITING_FOR_PRODUCTION);
+          await this.orderRepository.save(order);
+          this.logger.log(
+            `Order ${orderId} transitioned from PAID to WAITING_FOR_PRODUCTION after batch ${batchId} creation`,
+          );
+        }
+
+        if (order.status === OrderStatus.WAITING_FOR_PRODUCTION) {
+          order.transitionTo(OrderStatus.IN_PRODUCTION);
+          await this.orderRepository.save(order);
+          transitionedCount++;
+          this.logger.log(
+            `Order ${orderId} transitioned from WAITING_FOR_PRODUCTION to IN_PRODUCTION after batch ${batchId} creation`,
+          );
+        }
+      } catch (error: any) {
+        this.logger.warn(
+          `Failed to transition order ${orderId} to IN_PRODUCTION: ${error}`,
+        );
+        // Continue with other orders
+      }
+    }
+
+    if (transitionedCount > 0) {
+      this.logger.log(
+        `Batch ${batchId} creation: ${transitionedCount} orders transitioned to IN_PRODUCTION`,
+      );
+    }
+
+    // Transition batch from PLANNED → IN_PRODUCTION when created
+    // This indicates the batch is ready for production work
+    if (savedBatch.status === ProductionBatchStatus.PLANNED) {
+      savedBatch.transitionTo(ProductionBatchStatus.IN_PRODUCTION);
+      const updatedBatch = await this.productionRepository.save(savedBatch);
+      this.logger.log(
+        `Batch ${batchId} transitioned from PLANNED to IN_PRODUCTION`,
+      );
+      return updatedBatch;
+    }
+
     return savedBatch;
   }
 
@@ -231,10 +286,214 @@ export class ProductionService {
     return this.productionRepository.findByProductionDate(productionDate);
   }
 
-  private readonly logger = {
-    warn: (message: string) => {
-      // Simple logger for now
-      console.warn(`[ProductionService] ${message}`);
-    },
-  };
+  /**
+   * Check and complete batch if all packaging units are completed
+   * Phase 8.14: Auto-complete batch and transition orders to READY_FOR_SHIPMENT
+   * @param batchId Production batch ID
+   * @returns true if batch was completed, false otherwise
+   */
+  async checkAndCompleteBatch(batchId: string): Promise<boolean> {
+    const batch = await this.productionRepository.findById(batchId);
+    if (!batch) {
+      throw new BadRequestException(`Production batch not found: ${batchId}`);
+    }
+
+    // Only check batches that are IN_PRODUCTION
+    if (batch.status !== ProductionBatchStatus.IN_PRODUCTION) {
+      return false;
+    }
+
+    // Phase 8.14: Check completion using database query, not domain object hydration
+    // This ensures we check the actual database state, not relying on whether
+    // packagingUnits array was properly hydrated in the domain object
+    const allUnitsCompleted = await this.productionRepository.areAllUnitsCompleted(batchId);
+    if (!allUnitsCompleted) {
+      this.logger.debug(
+        `Batch ${batchId} not ready for completion: not all units are COMPLETED (checked via database)`,
+      );
+      return false;
+    }
+
+    // Transition batch to COMPLETED
+    batch.transitionTo(ProductionBatchStatus.COMPLETED);
+    await this.productionRepository.save(batch);
+
+    // Phase 8.14: Reload batch to get all packaging units (for orderItemIds extraction)
+    // This ensures we have the complete list even if the original batch object wasn't fully hydrated
+    const reloadedBatch = await this.productionRepository.findById(batchId);
+    if (!reloadedBatch) {
+      this.logger.error(`Failed to reload batch ${batchId} after completion transition`);
+      return false;
+    }
+
+    this.logger.log(
+      `Batch ${batchId} auto-completed: all ${reloadedBatch.packagingUnits.length} packaging units are COMPLETED (verified via database)`,
+    );
+
+    // Find all orders with OrderItems in this batch
+    const orderItemIds = reloadedBatch.packagingUnits.flatMap(
+      (unit) => unit.sourceOrderItemIds || [],
+    );
+
+    if (orderItemIds.length === 0) {
+      this.logger.warn(
+        `Batch ${batchId} has no sourceOrderItemIds. Cannot find associated orders.`,
+      );
+      return true; // Batch is completed, but no orders to transition
+    }
+
+    this.logger.log(
+      `Batch ${batchId} completion: searching for orders with item IDs: ${orderItemIds.join(', ')}`,
+    );
+
+    // Get unique order IDs from order items
+    // Phase 8.14: Look for orders in IN_PRODUCTION, but also check PAID/WAITING_FOR_PRODUCTION
+    // as defensive fallback in case transitions didn't happen during batch creation
+    // Root cause fix: Match orders by item ID from sourceOrderItemIds (primary key).
+    // productionBatchId check is secondary validation but not required if item ID matches.
+    const orderIds = new Set<string>();
+    const statusesToCheck = [
+      OrderStatus.IN_PRODUCTION,
+      OrderStatus.WAITING_FOR_PRODUCTION,
+      OrderStatus.PAID,
+    ];
+
+    for (const status of statusesToCheck) {
+      const orders = await this.orderRepository.findByStatus(status);
+      this.logger.debug(
+        `Found ${orders.length} orders with status ${status} to check for batch ${batchId}`,
+      );
+      
+      for (const order of orders) {
+        // Check if any of this order's items are in the batch
+        // Primary match: item ID must be in sourceOrderItemIds
+        // Secondary validation: productionBatchId should match (if set), but don't fail if null
+        const matchingItems = order.items.filter((item) => {
+          const itemIdMatches = orderItemIds.includes(item.id);
+          if (!itemIdMatches) {
+            return false;
+          }
+          // If productionBatchId is set, it must match batchId (safety check)
+          // If productionBatchId is null, still match by item ID (allocation may not be persisted yet)
+          return item.productionBatchId === null || item.productionBatchId === batchId;
+        });
+        
+        if (matchingItems.length > 0) {
+          orderIds.add(order.id);
+          this.logger.log(
+            `Found order ${order.id} (status: ${order.status}) linked to batch ${batchId} via ${matchingItems.length} item(s): ${matchingItems.map(i => i.id).join(', ')}`,
+          );
+        } else {
+          // Debug: log why order was not matched
+          const orderItemIdsInOrder = order.items.map(i => i.id);
+          this.logger.debug(
+            `Order ${order.id} not matched: order has items [${orderItemIdsInOrder.join(', ')}], batch expects [${orderItemIds.join(', ')}]`,
+          );
+        }
+      }
+    }
+
+    if (orderIds.size === 0) {
+      this.logger.error(
+        `No orders found for batch ${batchId}. Searched for item IDs: ${orderItemIds.join(', ')}. This may indicate a data consistency issue.`,
+      );
+      // Still return true - batch is completed, but we couldn't find orders to transition
+      return true;
+    }
+
+    this.logger.log(
+      `Batch ${batchId} completion: found ${orderIds.size} order(s) to transition: ${Array.from(orderIds).join(', ')}`,
+    );
+
+    // Transition all related orders to READY_FOR_SHIPMENT
+    // State machine: IN_PRODUCTION -> READY_FOR_PACKAGING -> READY_FOR_SHIPMENT
+    let transitionedCount = 0;
+    for (const orderId of orderIds) {
+      let order = await this.orderRepository.findById(orderId);
+      if (!order) {
+        continue;
+      }
+
+      // If already in target state, skip
+      if (order.status === OrderStatus.READY_FOR_SHIPMENT) {
+        this.logger.debug(
+          `Order ${orderId} is already READY_FOR_SHIPMENT, skipping transition`,
+        );
+        transitionedCount++;
+        continue;
+      }
+
+      try {
+        // Transition through the state machine step by step
+        // Step 1: PAID -> WAITING_FOR_PRODUCTION
+        if (order.status === OrderStatus.PAID) {
+          order.transitionTo(OrderStatus.WAITING_FOR_PRODUCTION);
+          await this.orderRepository.save(order);
+          this.logger.log(
+            `Order ${orderId} transitioned from PAID to WAITING_FOR_PRODUCTION during batch ${batchId} completion`,
+          );
+          // Reload order to get updated status
+          const updatedOrder = await this.orderRepository.findById(orderId);
+          if (updatedOrder) {
+            order = updatedOrder;
+          }
+        }
+
+        // Step 2: WAITING_FOR_PRODUCTION -> IN_PRODUCTION
+        if (order.status === OrderStatus.WAITING_FOR_PRODUCTION) {
+          order.transitionTo(OrderStatus.IN_PRODUCTION);
+          await this.orderRepository.save(order);
+          this.logger.log(
+            `Order ${orderId} transitioned from WAITING_FOR_PRODUCTION to IN_PRODUCTION during batch ${batchId} completion`,
+          );
+          // Reload order to get updated status
+          const updatedOrder = await this.orderRepository.findById(orderId);
+          if (updatedOrder) {
+            order = updatedOrder;
+          }
+        }
+
+        // Step 3: IN_PRODUCTION -> READY_FOR_PACKAGING
+        if (order.status === OrderStatus.IN_PRODUCTION) {
+          order.transitionTo(OrderStatus.READY_FOR_PACKAGING);
+          await this.orderRepository.save(order);
+          this.logger.log(
+            `Order ${orderId} transitioned from IN_PRODUCTION to READY_FOR_PACKAGING during batch ${batchId} completion`,
+          );
+          // Reload order to get updated status
+          const updatedOrder = await this.orderRepository.findById(orderId);
+          if (updatedOrder) {
+            order = updatedOrder;
+          }
+        }
+
+        // Step 4: READY_FOR_PACKAGING -> READY_FOR_SHIPMENT
+        if (order.status === OrderStatus.READY_FOR_PACKAGING) {
+          order.transitionTo(OrderStatus.READY_FOR_SHIPMENT);
+          await this.orderRepository.save(order);
+          transitionedCount++;
+          this.logger.log(
+            `Order ${orderId} auto-transitioned to READY_FOR_SHIPMENT after batch ${batchId} completion`,
+          );
+        } else if (order.status === OrderStatus.READY_FOR_SHIPMENT) {
+          // Already in target state (idempotent)
+          transitionedCount++;
+          this.logger.debug(
+            `Order ${orderId} is already READY_FOR_SHIPMENT, skipping transition`,
+          );
+        }
+      } catch (error) {
+        this.logger.warn(
+          `Failed to transition order ${orderId} to READY_FOR_SHIPMENT: ${error}`,
+        );
+      }
+    }
+
+    this.logger.log(
+      `Batch ${batchId} completion: ${transitionedCount} orders transitioned to READY_FOR_SHIPMENT`,
+    );
+
+    return true;
+  }
 }
+

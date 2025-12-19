@@ -75,6 +75,12 @@ export class PrismaOrderRepository implements OrderRepository {
             pricingBreakdownSnapshot: order.pricingBreakdownSnapshot
               ? this.serializePricingSnapshot(order.pricingBreakdownSnapshot)
               : null,
+            // Phase 8.14: Shipping tracking fields
+            trackingNumber: order.trackingNumber ?? null,
+            carrierCode: order.carrierCode ?? null,
+            shippedAt: order.shippedAt ?? null,
+            // Phase 8.15: Order completion
+            completedAt: order.completedAt ?? null,
           },
         });
 
@@ -103,7 +109,7 @@ export class PrismaOrderRepository implements OrderRepository {
         }
       });
     } else {
-      // Updates: keep items and pricing snapshot immutable; update status/amounts/targetProductionDate only.
+      // Updates: keep items and pricing snapshot immutable; update status/amounts/targetProductionDate/shipping fields.
       await this.prisma.order.update({
         where: { id: order.id },
         data: {
@@ -118,6 +124,12 @@ export class PrismaOrderRepository implements OrderRepository {
           amountTotal,
           totalAmount,
           // pricingBreakdownSnapshot intentionally not updated to preserve immutability
+          // Phase 8.14: Shipping tracking fields (must be updated when order is shipped)
+          trackingNumber: order.trackingNumber ?? null,
+          carrierCode: order.carrierCode ?? null,
+          shippedAt: order.shippedAt ?? null,
+          // Phase 8.15: Order completion (must be updated when order is completed)
+          completedAt: order.completedAt ?? null,
         },
       });
     }
@@ -188,6 +200,12 @@ export class PrismaOrderRepository implements OrderRepository {
       snapshot,
       record.dogId ?? undefined,
       record.addressId ?? undefined,
+      // Phase 8.14: Shipping tracking fields
+      record.trackingNumber ?? undefined,
+      record.carrierCode ?? undefined,
+      record.shippedAt ?? undefined,
+      // Phase 8.15: Order completion
+      (record as any).completedAt ?? undefined,
     );
   }
 
@@ -225,5 +243,6 @@ export class PrismaOrderRepository implements OrderRepository {
     );
   }
 }
+
 
 

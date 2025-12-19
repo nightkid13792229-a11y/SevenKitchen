@@ -97,6 +97,34 @@ export class OrderDto {
     shippingFee: number;
     totalPrice: number;
   };
+
+  @ApiPropertyOptional({
+    description: 'Shipping tracking number (Phase 8.14)',
+    example: 'SF1234567890',
+    nullable: true,
+  })
+  trackingNumber?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Shipping carrier code (Phase 8.14)',
+    example: 'SF',
+    nullable: true,
+  })
+  carrierCode?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Shipping timestamp (Phase 8.14)',
+    example: '2025-01-20T10:30:00.000Z',
+    nullable: true,
+  })
+  shippedAt?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Completion timestamp (Phase 8.15)',
+    example: '2025-01-21T10:30:00.000Z',
+    nullable: true,
+  })
+  completedAt?: string | null;
 }
 
 export class OrderSummaryDto {
@@ -115,3 +143,4 @@ export class OrderSummaryDto {
   @ApiProperty({ example: 2 })
   itemCount!: number;
 }
+

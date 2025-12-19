@@ -9,6 +9,7 @@ import { AuthController } from './interfaces/controllers/auth.controller';
 import { AdminController } from './interfaces/controllers/admin.controller';
 import { ShippingController } from './interfaces/controllers/shipping.controller';
 import { StaffKitchenController } from './interfaces/controllers/staff-kitchen.controller';
+import { StaffShippingController } from './interfaces/controllers/staff-shipping.controller';
 import {
   DogService,
   DOG_REPOSITORY,
@@ -45,6 +46,7 @@ import { GlobalConfigService } from './application/config/global-config.service'
 import { PricingService } from './domain/pricing/pricing.service';
 import { ShippingFeeService } from './domain/shipping/shipping-fee.service';
 import { ShippingService } from './application/shipping/shipping.service';
+import { ShippingFulfillmentService } from './application/shipping/shipping-fulfillment.service';
 import { InMemoryShippingTemplateRepository } from './infrastructure/repositories/in-memory-shipping-template.repository';
 import { SHIPPING_TEMPLATE_REPOSITORY } from './application/shipping/shipping.service.tokens';
 import type { ShippingTemplate } from './domain/shipping/shipping-fee.service';
@@ -101,6 +103,7 @@ validatePrismaConfig();
     AdminController,
     ShippingController,
     StaffKitchenController,
+    StaffShippingController,
   ],
   providers: [
     DogService,
@@ -220,6 +223,8 @@ validatePrismaConfig();
     KitchenService,
     // Phase 8.13: Inventory Service
     InventoryService,
+    // Phase 8.14: Shipping Fulfillment Service
+    ShippingFulfillmentService,
     {
       provide: PRODUCTION_BATCH_REPOSITORY,
       useFactory: (prismaService?: PrismaService) => {

@@ -17,4 +17,6 @@ export interface ProductionBatchRepository {
   findPackagingUnitById(id: string): Promise<PackagingUnit | null>;
   updatePackagingUnit(unit: PackagingUnit): Promise<PackagingUnit>;
   findBatchesByPackagingUnitStatus(status: string): Promise<ProductionBatch[]>;
+  // Phase 8.14: Batch completion check (database-based, not domain-based)
+  areAllUnitsCompleted(batchId: string): Promise<boolean>;
 }

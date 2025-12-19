@@ -310,6 +310,53 @@ describe('ProductionService - Phase 8.10', () => {
       expect(dto.orderItemCount).toBe(3); // 2 + 1
     });
 
+    it('should transition orders from PAID to IN_PRODUCTION when batch is created', async () => {
+      // Arrange
+      const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
+      const orderItem = createMockOrderItem('item-1', recipeSnapshot, 310.34);
+      const order = createMockPaidOrder('order-1', [orderItem]);
+
+      orderRepository.findByStatus.mockResolvedValue([order]);
+      // Mock findById to return a fresh order instance each time (to track transitions)
+      let orderStatus = OrderStatus.PAID;
+      orderRepository.findById.mockImplementation(async (id) => {
+        const currentOrder = new Order(
+          id,
+          order.customerId,
+          orderStatus,
+          order.type,
+          order.addressId,
+          order.amountSubtotal,
+          order.amountShipping,
+          order.amountTotal,
+          order.items,
+          order.dogId,
+        );
+        return currentOrder;
+      });
+      productionRepository.save.mockImplementation(async (batch) => batch);
+      productionRepository.allocateOrderItems.mockResolvedValue(1);
+      orderRepository.save.mockImplementation(async (o) => {
+        // Track status changes
+        orderStatus = o.status;
+        return o;
+      });
+
+      // Act
+      const result = await service.createProductionBatch({
+        productionDate: '2025-01-20',
+      });
+
+      // Assert: Batch should be in IN_PRODUCTION status
+      expect(result.status).toBe(ProductionBatchStatus.IN_PRODUCTION);
+
+      // Assert: Order should be transitioned to IN_PRODUCTION
+      expect(orderRepository.findById).toHaveBeenCalledWith('order-1');
+      expect(orderRepository.save).toHaveBeenCalled();
+      // Verify final order status is IN_PRODUCTION
+      expect(orderStatus).toBe(OrderStatus.IN_PRODUCTION);
+    });
+
     it('should handle empty sourceOrderItemIds gracefully', async () => {
       // Arrange: Create a batch with a unit that has empty sourceOrderItemIds
       // This test ensures the mapping handles edge cases
@@ -453,6 +500,7 @@ describe('ProductionService - Phase 8.10', () => {
       );
 
       // Create order with items matching the batch
+      // Note: productionBatchId is null (default), which should still match via item ID
       const orderItem1 = new OrderItem(
         'item-1',
         'order-1',
@@ -462,6 +510,8 @@ describe('ProductionService - Phase 8.10', () => {
         200,
         null,
         310.34,
+        null, // productionBatchId
+        null, // allocatedAt
       );
       const orderItem2 = new OrderItem(
         'item-2',
@@ -472,6 +522,8 @@ describe('ProductionService - Phase 8.10', () => {
         200,
         null,
         250.0,
+        null, // productionBatchId
+        null, // allocatedAt
       );
       const order = new Order(
         'order-1',
@@ -487,12 +539,34 @@ describe('ProductionService - Phase 8.10', () => {
 
       productionRepository.findById.mockResolvedValue(batch);
       productionRepository.save.mockImplementation(async (b) => b);
-      // findByStatus is called multiple times (once per itemId in the loop)
-      // Each time it should return the order
-      orderRepository.findByStatus.mockResolvedValue([order]);
-      orderRepository.findById.mockResolvedValue(order);
-      orderRepository.save.mockImplementation(async (o) => {
-        // Return the order after it's been mutated
+      // findByStatus is called for each status in statusesToCheck (IN_PRODUCTION, WAITING_FOR_PRODUCTION, PAID)
+      // Mock it to return the order for IN_PRODUCTION status, empty for others
+      orderRepository.findByStatus.mockImplementation(async (status: OrderStatus) => {
+        if (status === OrderStatus.IN_PRODUCTION) {
+          return [order];
+        }
+        return [];
+      });
+      // Mock findById to return a fresh order instance each time (to track state transitions)
+      let currentOrderStatus = OrderStatus.IN_PRODUCTION;
+      orderRepository.findById.mockImplementation(async (id: string) => {
+        const currentOrder = new Order(
+          id,
+          order.customerId,
+          currentOrderStatus,
+          order.type,
+          order.addressId,
+          order.amountSubtotal,
+          order.amountShipping,
+          order.amountTotal,
+          order.items,
+          order.dogId,
+        );
+        return currentOrder;
+      });
+      orderRepository.save.mockImplementation(async (o: Order) => {
+        // Track status changes
+        currentOrderStatus = o.status;
         return o;
       });
 
@@ -504,16 +578,198 @@ describe('ProductionService - Phase 8.10', () => {
       expect(batch.status).toBe(ProductionBatchStatus.COMPLETED);
       expect(productionRepository.save).toHaveBeenCalledWith(batch);
       // Verify order repository was called to find orders
-      // Note: findByStatus is called once per itemId in the loop (item-1, item-2)
-      expect(orderRepository.findByStatus).toHaveBeenCalledWith(OrderStatus.IN_PRODUCTION);
-      // The service should find the order because:
-      // - batch has units with sourceOrderItemIds: ['item-1'], ['item-2']
-      // - order has items with IDs: 'item-1', 'item-2'
-      // - order status is IN_PRODUCTION
-      // So orderIds Set should contain 'order-1', and findById should be called
-      // However, the current implementation may have issues finding orders
-      // For now, we verify the batch completion works
-      // Order transition logic is tested in integration/E2E tests
+      // findByStatus is called for each status in statusesToCheck
+      expect(orderRepository.findByStatus).toHaveBeenCalled();
+      // Verify order was found and transitioned
+      expect(orderRepository.findById).toHaveBeenCalledWith('order-1');
+      expect(orderRepository.save).toHaveBeenCalled();
+      // Verify order status was transitioned to READY_FOR_SHIPMENT
+      const saveCalls = orderRepository.save.mock.calls;
+      expect(saveCalls.length).toBeGreaterThan(0);
+      const savedOrder = saveCalls[saveCalls.length - 1][0] as Order;
+      expect(savedOrder.status).toBe(OrderStatus.READY_FOR_SHIPMENT);
+    });
+
+    it('should transition order to READY_FOR_SHIPMENT even when productionBatchId is null on items', async () => {
+      // Arrange: Simulate case where items exist but productionBatchId not yet persisted
+      const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
+      const unit1 = new PackagingUnit(
+        'unit-1',
+        'batch-1',
+        recipeSnapshot,
+        1000,
+        ['item-1'],
+        new Date(),
+        PackagingUnitStatus.COMPLETED,
+      );
+      const batch = new ProductionBatch(
+        'batch-1',
+        new Date('2025-01-20'),
+        ProductionBatchStatus.IN_PRODUCTION,
+        [unit1],
+        new Date(),
+      );
+
+      // Order item with null productionBatchId (simulating allocation not yet persisted)
+      const orderItem1 = new OrderItem(
+        'item-1',
+        'order-1',
+        recipeSnapshot,
+        1000,
+        5,
+        200,
+        null,
+        310.34,
+        null, // productionBatchId is null
+        null,
+      );
+      const order = new Order(
+        'order-1',
+        'customer-1',
+        OrderStatus.IN_PRODUCTION,
+        OrderType.FRESH_FOOD,
+        null,
+        250.0,
+        0.0,
+        250.0,
+        [orderItem1],
+      );
+
+      productionRepository.findById.mockResolvedValue(batch);
+      productionRepository.save.mockImplementation(async (b) => b);
+      // findByStatus is called for each status in statusesToCheck (IN_PRODUCTION, WAITING_FOR_PRODUCTION, PAID)
+      // Mock it to return the order for IN_PRODUCTION status, empty for others
+      orderRepository.findByStatus.mockImplementation(async (status: OrderStatus) => {
+        if (status === OrderStatus.IN_PRODUCTION) {
+          return [order];
+        }
+        return [];
+      });
+      // Mock findById to return a fresh order instance each time (to track state transitions)
+      let currentOrderStatus = OrderStatus.IN_PRODUCTION;
+      orderRepository.findById.mockImplementation(async (id: string) => {
+        const currentOrder = new Order(
+          id,
+          order.customerId,
+          currentOrderStatus,
+          order.type,
+          order.addressId,
+          order.amountSubtotal,
+          order.amountShipping,
+          order.amountTotal,
+          order.items,
+          order.dogId,
+        );
+        return currentOrder;
+      });
+      orderRepository.save.mockImplementation(async (o: Order) => {
+        // Track status changes
+        currentOrderStatus = o.status;
+        return o;
+      });
+
+      // Act
+      const result = await service.checkAndCompleteBatch('batch-1');
+
+      // Assert: Should still find and transition order by item ID match
+      expect(result).toBe(true);
+      expect(orderRepository.save).toHaveBeenCalled();
+      const saveCalls = orderRepository.save.mock.calls;
+      expect(saveCalls.length).toBeGreaterThanOrEqual(2); // At least 2 saves: READY_FOR_PACKAGING, then READY_FOR_SHIPMENT
+      // Verify final state: READY_FOR_SHIPMENT
+      const savedOrder = saveCalls[saveCalls.length - 1][0] as Order;
+      expect(savedOrder.status).toBe(OrderStatus.READY_FOR_SHIPMENT);
+      // Verify that the order went through READY_FOR_PACKAGING (check currentOrderStatus was updated)
+      expect(currentOrderStatus).toBe(OrderStatus.READY_FOR_SHIPMENT);
+    });
+
+    it('should transition order through READY_FOR_PACKAGING intermediate state', async () => {
+      // Arrange: Create batch with all units COMPLETED
+      const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
+      const unit1 = new PackagingUnit(
+        'unit-1',
+        'batch-1',
+        recipeSnapshot,
+        1000,
+        ['item-1'],
+        new Date(),
+        PackagingUnitStatus.COMPLETED,
+      );
+      const batch = new ProductionBatch(
+        'batch-1',
+        new Date('2025-01-20'),
+        ProductionBatchStatus.IN_PRODUCTION,
+        [unit1],
+        new Date(),
+      );
+
+      const orderItem1 = new OrderItem(
+        'item-1',
+        'order-1',
+        recipeSnapshot,
+        1000,
+        5,
+        200,
+        null,
+        310.34,
+        null,
+        null,
+      );
+      const order = new Order(
+        'order-1',
+        'customer-1',
+        OrderStatus.IN_PRODUCTION,
+        OrderType.FRESH_FOOD,
+        null,
+        250.0,
+        0.0,
+        250.0,
+        [orderItem1],
+      );
+
+      productionRepository.findById.mockResolvedValue(batch);
+      productionRepository.save.mockImplementation(async (b) => b);
+      orderRepository.findByStatus.mockImplementation(async (status: OrderStatus) => {
+        if (status === OrderStatus.IN_PRODUCTION) {
+          return [order];
+        }
+        return [];
+      });
+
+      // Track status transitions
+      const statusTransitions: OrderStatus[] = [];
+      let currentOrderStatus = OrderStatus.IN_PRODUCTION;
+      orderRepository.findById.mockImplementation(async (id: string) => {
+        const currentOrder = new Order(
+          id,
+          order.customerId,
+          currentOrderStatus,
+          order.type,
+          order.addressId,
+          order.amountSubtotal,
+          order.amountShipping,
+          order.amountTotal,
+          order.items,
+          order.dogId,
+        );
+        return currentOrder;
+      });
+      orderRepository.save.mockImplementation(async (o: Order) => {
+        statusTransitions.push(o.status);
+        currentOrderStatus = o.status;
+        return o;
+      });
+
+      // Act
+      const result = await service.checkAndCompleteBatch('batch-1');
+
+      // Assert
+      expect(result).toBe(true);
+      // Verify state machine transitions: IN_PRODUCTION -> READY_FOR_PACKAGING -> READY_FOR_SHIPMENT
+      expect(statusTransitions).toHaveLength(2);
+      expect(statusTransitions[0]).toBe(OrderStatus.READY_FOR_PACKAGING);
+      expect(statusTransitions[1]).toBe(OrderStatus.READY_FOR_SHIPMENT);
+      expect(currentOrderStatus).toBe(OrderStatus.READY_FOR_SHIPMENT);
     });
 
     it('should not complete batch if any unit is not COMPLETED', async () => {
@@ -589,3 +845,4 @@ describe('ProductionService - Phase 8.10', () => {
     });
   });
 });
+

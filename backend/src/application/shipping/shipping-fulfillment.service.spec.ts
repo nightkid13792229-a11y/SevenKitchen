@@ -173,8 +173,17 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
     it('should successfully mark order as shipped with tracking info', async () => {
       // Arrange
       const order = createMockOrder('order-1', OrderStatus.READY_FOR_SHIPMENT);
-      orderRepository.findById.mockResolvedValue(order);
-      orderRepository.save.mockResolvedValue(order);
+      const shippedOrder = createMockOrder(
+        'order-1',
+        OrderStatus.SHIPPED,
+        'SF1234567890',
+        'SF',
+        new Date(),
+      );
+      orderRepository.findById
+        .mockResolvedValueOnce(order) // First call: get order to mark as shipped
+        .mockResolvedValueOnce(shippedOrder); // Second call: reload after save
+      orderRepository.save.mockResolvedValue(shippedOrder);
 
       // Act
       const result = await service.markOrderAsShipped('order-1', {
@@ -183,7 +192,7 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
       });
 
       // Assert
-      expect(orderRepository.findById).toHaveBeenCalledWith('order-1');
+      expect(orderRepository.findById).toHaveBeenCalledTimes(2); // Once to get, once to reload
       expect(orderRepository.save).toHaveBeenCalled();
       expect(result.status).toBe(OrderStatus.SHIPPED);
       expect(result.trackingNumber).toBe('SF1234567890');
@@ -290,7 +299,17 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
       // Arrange
       const beforeTime = new Date();
       const order = createMockOrder('order-1', OrderStatus.READY_FOR_SHIPMENT);
-      orderRepository.findById.mockResolvedValue(order);
+      const shippedOrder = createMockOrder(
+        'order-1',
+        OrderStatus.SHIPPED,
+        'SF1234567890',
+        'SF',
+        new Date(),
+      );
+      orderRepository.findById
+        .mockResolvedValueOnce(order) // First call: get order to mark as shipped
+        .mockResolvedValueOnce(shippedOrder); // Second call: reload after save
+      orderRepository.save.mockResolvedValue(shippedOrder);
       
       // Act
       const result = await service.markOrderAsShipped('order-1', {
@@ -306,5 +325,40 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
       expect(result.shippedAt!.getTime()).toBeGreaterThanOrEqual(beforeTime.getTime() - 100);
       expect(result.shippedAt!.getTime()).toBeLessThanOrEqual(afterTime.getTime() + 100);
     });
+
+    it('should persist and reload shipping fields correctly', async () => {
+      // Arrange
+      const order = createMockOrder('order-1', OrderStatus.READY_FOR_SHIPMENT);
+      const shippedOrder = createMockOrder(
+        'order-1',
+        OrderStatus.SHIPPED,
+        'SF1234567890',
+        'SF',
+        new Date('2025-12-17T10:30:00Z'),
+      );
+      orderRepository.findById
+        .mockResolvedValueOnce(order) // First call: get order to mark as shipped
+        .mockResolvedValueOnce(shippedOrder); // Second call: reload after save
+      orderRepository.save.mockResolvedValue(shippedOrder);
+
+      // Act
+      const result = await service.markOrderAsShipped('order-1', {
+        trackingNumber: 'SF1234567890',
+        carrierCode: 'SF',
+      });
+
+      // Assert: Verify that reloaded order contains shipping fields
+      expect(orderRepository.findById).toHaveBeenCalledTimes(2);
+      expect(orderRepository.save).toHaveBeenCalled();
+      expect(result.trackingNumber).toBe('SF1234567890');
+      expect(result.carrierCode).toBe('SF');
+      expect(result.shippedAt).toBeInstanceOf(Date);
+      // Verify that save was called with order containing shipping fields
+      const savedOrder = orderRepository.save.mock.calls[0][0] as Order;
+      expect(savedOrder.trackingNumber).toBe('SF1234567890');
+      expect(savedOrder.carrierCode).toBe('SF');
+      expect(savedOrder.shippedAt).toBeInstanceOf(Date);
+    });
   });
 });
+

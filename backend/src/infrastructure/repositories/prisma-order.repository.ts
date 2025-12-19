@@ -107,7 +107,7 @@ export class PrismaOrderRepository implements OrderRepository {
         }
       });
     } else {
-      // Updates: keep items and pricing snapshot immutable; update status/amounts/targetProductionDate only.
+      // Updates: keep items and pricing snapshot immutable; update status/amounts/targetProductionDate/shipping fields.
       await this.prisma.order.update({
         where: { id: order.id },
         data: {
@@ -122,6 +122,10 @@ export class PrismaOrderRepository implements OrderRepository {
           amountTotal,
           totalAmount,
           // pricingBreakdownSnapshot intentionally not updated to preserve immutability
+          // Phase 8.14: Shipping tracking fields (must be updated when order is shipped)
+          trackingNumber: order.trackingNumber ?? null,
+          carrierCode: order.carrierCode ?? null,
+          shippedAt: order.shippedAt ?? null,
         },
       });
     }
@@ -233,5 +237,6 @@ export class PrismaOrderRepository implements OrderRepository {
     );
   }
 }
+
 
 

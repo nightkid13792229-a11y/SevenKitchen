@@ -13,6 +13,10 @@ CUSTOMER_CUSTOMER_ID="${CUSTOMER_CUSTOMER_ID:-customer-user-001}"
 DOG_ID="${DOG_ID:-}"
 DOG_CREATE_PATH="${DOG_CREATE_PATH:-}"
 DOG_CREATE_BODY="${DOG_CREATE_BODY:-}"
+DOG_ID_TO_USE="${DOG_ID_TO_USE:-}"
+RECIPE_ID="${RECIPE_ID:-}"
+RECIPE_LIST_PATH="${RECIPE_LIST_PATH:-}"
+RECIPE_PICK_EXPR="${RECIPE_PICK_EXPR:-root.data[0].id || root.data.items[0].id || ''}"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$SCRIPT_DIR/.."
 
@@ -208,8 +212,110 @@ fi
 success "Staff login OK: ${LOGIN_URL}"
 echo ""
 
+# Step 2.5: Create dog (or reuse)
+info "Step 2.5: Create dog (or reuse)"
+if [ -n "$DOG_ID" ]; then
+  DOG_ID_TO_USE="$DOG_ID"
+  success "Using DOG_ID=${DOG_ID_TO_USE}"
+else
+  # Need customer token first for creating dog
+  CUSTOMER_LOGIN_RESPONSE_TEMP=$(curl_with_code "${API_BASE}/auth/login" -X POST \
+    -H "Content-Type: application/json" \
+    -d "{\"customerId\":\"${CUSTOMER_CUSTOMER_ID}\"}")
+  CUSTOMER_LOGIN_CODE_TEMP=$(get_http_code "$CUSTOMER_LOGIN_RESPONSE_TEMP")
+  CUSTOMER_LOGIN_BODY_TEMP=$(get_body "$CUSTOMER_LOGIN_RESPONSE_TEMP")
+
+  if [ -z "$CUSTOMER_LOGIN_CODE_TEMP" ] || [ "$CUSTOMER_LOGIN_CODE_TEMP" != "200" ]; then
+    CUSTOMER_LOGIN_CURL_CMD="curl -X POST -H \"Content-Type: application/json\" -d '{\"customerId\":\"${CUSTOMER_CUSTOMER_ID}\"}' \"${API_BASE}/auth/login\""
+    truncated_body=$(echo "$CUSTOMER_LOGIN_BODY_TEMP" | head -c 300)
+    fail "Customer login failed (for dog creation): HTTP ${CUSTOMER_LOGIN_CODE_TEMP}" "$truncated_body" "$CUSTOMER_LOGIN_CURL_CMD"
+  fi
+
+  CUSTOMER_LOGIN_CODE_VALUE_TEMP=$(echo "$CUSTOMER_LOGIN_BODY_TEMP" | extract_json_stdin "root.code")
+  if [ "$CUSTOMER_LOGIN_CODE_VALUE_TEMP" != "0" ]; then
+    truncated_body=$(echo "$CUSTOMER_LOGIN_BODY_TEMP" | head -c 300)
+    fail "Customer login failed (for dog creation): code ${CUSTOMER_LOGIN_CODE_VALUE_TEMP}" "$truncated_body"
+  fi
+
+  CUSTOMER_TOKEN_TEMP=$(echo "$CUSTOMER_LOGIN_BODY_TEMP" | extract_json_stdin "root.data.token")
+  if [ -z "$CUSTOMER_TOKEN_TEMP" ]; then
+    truncated_body=$(echo "$CUSTOMER_LOGIN_BODY_TEMP" | head -c 300)
+    fail "Customer login failed (for dog creation): token not found" "$truncated_body"
+  fi
+
+  # Determine create dog endpoint and body
+  if [ -n "$DOG_CREATE_PATH" ]; then
+    DOG_CREATE_URL="${BASE_URL}${DOG_CREATE_PATH}"
+  else
+    DOG_CREATE_URL="${API_BASE}/dogs"
+  fi
+
+  if [ -n "$DOG_CREATE_BODY" ]; then
+    DOG_CREATE_BODY_JSON="$DOG_CREATE_BODY"
+  else
+    DOG_CREATE_BODY_JSON='{
+      "name": "E2E Test Dog",
+      "breedId": "550e8400-e29b-41d4-a716-446655440000",
+      "birthday": "2020-01-01T00:00:00Z",
+      "gender": "MALE",
+      "isNeutered": false,
+      "currentWeightKg": 10.5,
+      "bcsScore": 5,
+      "activityLevel": "NORMAL",
+      "lifeStageOverride": "NONE",
+      "mealsPerDay": 2,
+      "treatInputMode": "ESTIMATE_LEVEL",
+      "treatLevel": "LOW"
+    }'
+  fi
+
+  CREATE_DOG_RESPONSE=$(curl_with_code "$DOG_CREATE_URL" -X POST \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer ${CUSTOMER_TOKEN_TEMP}" \
+    -d "$DOG_CREATE_BODY_JSON")
+  CREATE_DOG_CODE=$(get_http_code "$CREATE_DOG_RESPONSE")
+  CREATE_DOG_BODY=$(get_body "$CREATE_DOG_RESPONSE")
+
+  # Backend may return 200 or 201 here; accept both
+  if [ "$CREATE_DOG_CODE" != "200" ] && [ "$CREATE_DOG_CODE" != "201" ]; then
+    CREATE_DOG_CURL_CMD="curl -X POST -H \"Content-Type: application/json\" -H \"Authorization: Bearer ${CUSTOMER_TOKEN_TEMP}\" -d '${DOG_CREATE_BODY_JSON}' \"${DOG_CREATE_URL}\""
+    truncated_body=$(echo "$CREATE_DOG_BODY" | head -c 300)
+    fail "Create dog failed: HTTP code ${CREATE_DOG_CODE}" "$truncated_body" "$CREATE_DOG_CURL_CMD"
+  fi
+
+  CREATE_DOG_CODE_VALUE=$(echo "$CREATE_DOG_BODY" | extract_json_stdin "root.code")
+  if [ "$CREATE_DOG_CODE_VALUE" != "0" ]; then
+    CREATE_DOG_CURL_CMD="curl -X POST -H \"Content-Type: application/json\" -H \"Authorization: Bearer ${CUSTOMER_TOKEN_TEMP}\" -d '${DOG_CREATE_BODY_JSON}' \"${DOG_CREATE_URL}\""
+    truncated_body=$(echo "$CREATE_DOG_BODY" | head -c 300)
+    fail "Create dog failed: code ${CREATE_DOG_CODE_VALUE}" "$truncated_body" "$CREATE_DOG_CURL_CMD"
+  fi
+
+  # Extract dogId from response (try both data.profile.id and data.id)
+  DOG_ID_CREATED=$(echo "$CREATE_DOG_BODY" | extract_json_stdin "root.data.profile.id || root.data.id || ''")
+  if [ -z "$DOG_ID_CREATED" ]; then
+    truncated_body=$(echo "$CREATE_DOG_BODY" | head -c 300)
+    fail "Create dog failed: dog ID not found in response" "$truncated_body"
+  fi
+
+  DOG_ID_TO_USE="$DOG_ID_CREATED"
+  success "Dog created: ${DOG_ID_TO_USE}"
+fi
+
+# Ensure DOG_ID_TO_USE is set before proceeding
+if [ -z "$DOG_ID_TO_USE" ]; then
+  echo "✗ Error: DOG_ID_TO_USE is empty after Step 2.5" >&2
+  echo "  Hint: provide DOG_ID=<uuid> to reuse an existing dog." >&2
+  exit 1
+fi
+echo ""
+
 # Step 3: Create order and pay (using customer login)
 info "Step 3: Create order and pay"
+if [ -z "$DOG_ID_TO_USE" ]; then
+  echo "✗ Error: DOG_ID_TO_USE is empty at Step 3 start" >&2
+  echo "  Current DOG_ID=${DOG_ID:-<empty>}" >&2
+  exit 1
+fi
 CUSTOMER_CUSTOMER_ID="${CUSTOMER_CUSTOMER_ID:-customer-user-001}"
 CUSTOMER_LOGIN_RESPONSE=$(curl_with_code "${API_BASE}/auth/login" -X POST \
   -H "Content-Type: application/json" \
@@ -231,6 +337,62 @@ if [ -z "$CUSTOMER_TOKEN" ]; then
   fail "Customer login failed: token not found in response" "$CUSTOMER_LOGIN_BODY"
 fi
 
+# Resolve RECIPE_ID_TO_USE
+RECIPE_ID_TO_USE=""
+if [ -n "$RECIPE_ID" ]; then
+  RECIPE_ID_TO_USE="$RECIPE_ID"
+  success "Using RECIPE_ID=${RECIPE_ID_TO_USE}"
+else
+  # Try to fetch recipe from API
+  info "Resolving recipeId from API..."
+  RECIPE_LIST_URLS=()
+  
+  if [ -n "$RECIPE_LIST_PATH" ]; then
+    RECIPE_LIST_URLS+=("${BASE_URL}${RECIPE_LIST_PATH}")
+  else
+    RECIPE_LIST_URLS+=("${API_BASE}/recipes")
+    RECIPE_LIST_URLS+=("${API_BASE}/recipes/list")
+    RECIPE_LIST_URLS+=("${API_BASE}/customer/recipes")
+  fi
+  
+  RECIPE_ID_TO_USE=""
+  TRIED_URLS=()
+  
+  for LIST_URL in "${RECIPE_LIST_URLS[@]}"; do
+    TRIED_URLS+=("$LIST_URL")
+    LIST_RESPONSE=$(curl_with_code "$LIST_URL" \
+      -H "Authorization: Bearer ${CUSTOMER_TOKEN}")
+    LIST_CODE=$(get_http_code "$LIST_RESPONSE")
+    LIST_BODY=$(get_body "$LIST_RESPONSE")
+    
+    if [ "$LIST_CODE" != "200" ]; then
+      continue
+    fi
+    
+    LIST_CODE_VALUE=$(echo "$LIST_BODY" | extract_json_stdin "root.code")
+    if [ "$LIST_CODE_VALUE" != "0" ]; then
+      continue
+    fi
+    
+    # Try to extract recipe ID using the expression
+    RECIPE_ID_FOUND=$(echo "$LIST_BODY" | extract_json_stdin "${RECIPE_PICK_EXPR}")
+    if [ -n "$RECIPE_ID_FOUND" ]; then
+      RECIPE_ID_TO_USE="$RECIPE_ID_FOUND"
+      success "Recipe ID resolved from ${LIST_URL}: ${RECIPE_ID_TO_USE}"
+      break
+    fi
+  done
+  
+  if [ -z "$RECIPE_ID_TO_USE" ]; then
+    echo "✗ Error: No recipeId found. Provide RECIPE_ID=<uuid> or configure RECIPE_LIST_PATH." >&2
+    echo "  Tried URLs:" >&2
+    for url in "${TRIED_URLS[@]}"; do
+      echo "    - ${url}" >&2
+    done
+    exit 1
+  fi
+fi
+
 # Create order (use DOG_ID_TO_USE from Step 2.5)
 CREATE_ORDER_RESPONSE=$(curl_with_code "${API_BASE}/orders" -X POST \
   -H "Content-Type: application/json" \
@@ -239,7 +401,7 @@ CREATE_ORDER_RESPONSE=$(curl_with_code "${API_BASE}/orders" -X POST \
     \"dogId\": \"${DOG_ID_TO_USE}\",
     \"type\": \"FRESH_FOOD\",
     \"items\": [{
-      \"recipeId\": \"550e8400-e29b-41d4-a716-446655440001\",
+      \"recipeId\": \"${RECIPE_ID_TO_USE}\",
       \"quantityG\": 1400,
       \"packageCount\": 14,
       \"packageSpecG\": 100
@@ -279,7 +441,7 @@ echo ""
 
 # Step 4: Create production batch
 info "Step 4: Create production batch"
-BATCH_RESPONSE=$(curl_with_code "${API_BASE}/admin/production/batches" -X POST \
+BATCH_RESPONSE=$(curl_with_code "${API_BASE}/admin/production-batches" -X POST \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ${TOKEN}" \
   -d "{\"productionDate\":\"$(date +%Y-%m-%d)\"}")
@@ -309,78 +471,130 @@ if [ "$BATCH_DETAIL_CODE" != "200" ]; then
   fail "Get batch detail failed: HTTP ${BATCH_DETAIL_CODE}" "$BATCH_DETAIL_BODY"
 fi
 
-TASK_ID=$(echo "$BATCH_DETAIL_BODY" | extract_json_stdin "root.data.tasks[0].id")
-if [ -z "$TASK_ID" ]; then
-  fail "Get batch detail failed: task ID not found" "$BATCH_DETAIL_BODY"
+# Get tasks count
+TASK_COUNT=$(echo "$BATCH_DETAIL_BODY" | extract_json_stdin "root.data.tasks.length || 0")
+if [ -z "$TASK_COUNT" ] || [ "$TASK_COUNT" = "0" ]; then
+  fail "Get batch detail failed: no tasks found" "$BATCH_DETAIL_BODY"
 fi
-SUMMARY_TASK_ID="$TASK_ID"
-success "Task found: ${TASK_ID}"
+success "Found ${TASK_COUNT} task(s) in batch"
 echo ""
 
-# Step 6: Complete kitchen task (two-stage: IN_PROGRESS -> COMPLETED)
-info "Step 6a: Update task to IN_PROGRESS"
-INGREDIENT_ID=$(echo "$BATCH_DETAIL_BODY" | extract_json_stdin "root.data.tasks[0].recipeSnapshot.items[0].ingredient_id")
-if [ -z "$INGREDIENT_ID" ]; then
-  fail "Ingredient ID not found in batch detail" "$BATCH_DETAIL_BODY"
-fi
+# Step 6: Complete all kitchen tasks (two-stage: IN_PROGRESS -> COMPLETED)
+info "Step 6: Complete all tasks in batch"
+TASK_INDEX=0
+COMPLETED_TASK_COUNT=0
 
-UPDATE_IN_PROGRESS_RESPONSE=$(curl_with_code "${API_BASE}/staff/kitchen/tasks/${TASK_ID}" -X POST \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -d '{"status":"IN_PROGRESS"}')
-UPDATE_IN_PROGRESS_CODE=$(get_http_code "$UPDATE_IN_PROGRESS_RESPONSE")
-UPDATE_IN_PROGRESS_BODY=$(get_body "$UPDATE_IN_PROGRESS_RESPONSE")
+while [ $TASK_INDEX -lt $TASK_COUNT ]; do
+  # Extract task ID and ingredient ID for current task
+  TASK_ID=$(echo "$BATCH_DETAIL_BODY" | extract_json_stdin "root.data.tasks[${TASK_INDEX}].id")
+  INGREDIENT_ID=$(echo "$BATCH_DETAIL_BODY" | extract_json_stdin "root.data.tasks[${TASK_INDEX}].recipeSnapshot.items[0].ingredient_id")
+  
+  if [ -z "$TASK_ID" ]; then
+    fail "Task ID not found at index ${TASK_INDEX}" "$BATCH_DETAIL_BODY"
+  fi
+  
+  if [ -z "$INGREDIENT_ID" ]; then
+    fail "Ingredient ID not found for task ${TASK_ID} at index ${TASK_INDEX}" "$BATCH_DETAIL_BODY"
+  fi
+  
+  info "Processing task ${TASK_INDEX} of ${TASK_COUNT}: ${TASK_ID}"
+  
+  # Step 6a: Update task to IN_PROGRESS
+  UPDATE_IN_PROGRESS_RESPONSE=$(curl_with_code "${API_BASE}/staff/kitchen/tasks/${TASK_ID}" -X POST \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -d '{"status":"IN_PROGRESS"}')
+  UPDATE_IN_PROGRESS_CODE=$(get_http_code "$UPDATE_IN_PROGRESS_RESPONSE")
+  UPDATE_IN_PROGRESS_BODY=$(get_body "$UPDATE_IN_PROGRESS_RESPONSE")
+  
+  if [ "$UPDATE_IN_PROGRESS_CODE" != "200" ]; then
+    UPDATE_IN_PROGRESS_CURL_CMD="curl -X POST -H \"Content-Type: application/json\" -H \"Authorization: Bearer ${TOKEN}\" -d '{\"status\":\"IN_PROGRESS\"}' \"${API_BASE}/staff/kitchen/tasks/${TASK_ID}\""
+    truncated_body=$(echo "$UPDATE_IN_PROGRESS_BODY" | head -c 300)
+    fail "Update task ${TASK_ID} to IN_PROGRESS failed: HTTP ${UPDATE_IN_PROGRESS_CODE}" "$truncated_body" "$UPDATE_IN_PROGRESS_CURL_CMD"
+  fi
+  
+  UPDATE_CODE=$(echo "$UPDATE_IN_PROGRESS_BODY" | extract_json_stdin "root.code")
+  if [ "$UPDATE_CODE" != "0" ]; then
+    UPDATE_IN_PROGRESS_CURL_CMD="curl -X POST -H \"Content-Type: application/json\" -H \"Authorization: Bearer ${TOKEN}\" -d '{\"status\":\"IN_PROGRESS\"}' \"${API_BASE}/staff/kitchen/tasks/${TASK_ID}\""
+    truncated_body=$(echo "$UPDATE_IN_PROGRESS_BODY" | head -c 300)
+    fail "Update task ${TASK_ID} to IN_PROGRESS failed: code ${UPDATE_CODE}" "$truncated_body" "$UPDATE_IN_PROGRESS_CURL_CMD"
+  fi
+  
+  # Step 6b: Update task to COMPLETED with actual usage
+  UPDATE_COMPLETED_RESPONSE=$(curl_with_code "${API_BASE}/staff/kitchen/tasks/${TASK_ID}" -X POST \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer ${TOKEN}" \
+    -d "{\"status\":\"COMPLETED\",\"ingredientsActual\":[{\"ingredientId\":\"${INGREDIENT_ID}\",\"actual_g\":1000}]}")
+  UPDATE_COMPLETED_CODE=$(get_http_code "$UPDATE_COMPLETED_RESPONSE")
+  UPDATE_COMPLETED_BODY=$(get_body "$UPDATE_COMPLETED_RESPONSE")
+  
+  if [ "$UPDATE_COMPLETED_CODE" != "200" ]; then
+    UPDATE_COMPLETED_CURL_CMD="curl -X POST -H \"Content-Type: application/json\" -H \"Authorization: Bearer ${TOKEN}\" -d '{\"status\":\"COMPLETED\",\"ingredientsActual\":[{\"ingredientId\":\"${INGREDIENT_ID}\",\"actual_g\":1000}]}' \"${API_BASE}/staff/kitchen/tasks/${TASK_ID}\""
+    truncated_body=$(echo "$UPDATE_COMPLETED_BODY" | head -c 300)
+    fail "Update task ${TASK_ID} to COMPLETED failed: HTTP ${UPDATE_COMPLETED_CODE}" "$truncated_body" "$UPDATE_COMPLETED_CURL_CMD"
+  fi
+  
+  UPDATE_CODE=$(echo "$UPDATE_COMPLETED_BODY" | extract_json_stdin "root.code")
+  if [ "$UPDATE_CODE" != "0" ]; then
+    UPDATE_COMPLETED_CURL_CMD="curl -X POST -H \"Content-Type: application/json\" -H \"Authorization: Bearer ${TOKEN}\" -d '{\"status\":\"COMPLETED\",\"ingredientsActual\":[{\"ingredientId\":\"${INGREDIENT_ID}\",\"actual_g\":1000}]}' \"${API_BASE}/staff/kitchen/tasks/${TASK_ID}\""
+    truncated_body=$(echo "$UPDATE_COMPLETED_BODY" | head -c 300)
+    fail "Update task ${TASK_ID} to COMPLETED failed: code ${UPDATE_CODE}" "$truncated_body" "$UPDATE_COMPLETED_CURL_CMD"
+  fi
+  
+  COMPLETED_TASK_COUNT=$((COMPLETED_TASK_COUNT + 1))
+  success "Task ${TASK_ID} completed (${COMPLETED_TASK_COUNT}/${TASK_COUNT})"
+  
+  TASK_INDEX=$((TASK_INDEX + 1))
+done
 
-if [ "$UPDATE_IN_PROGRESS_CODE" != "200" ]; then
-  fail "Update task to IN_PROGRESS failed: HTTP ${UPDATE_IN_PROGRESS_CODE}" "$UPDATE_IN_PROGRESS_BODY"
-fi
-
-UPDATE_CODE=$(echo "$UPDATE_IN_PROGRESS_BODY" | extract_json_stdin "root.code")
-if [ "$UPDATE_CODE" != "0" ]; then
-  fail "Update task to IN_PROGRESS failed: code ${UPDATE_CODE}" "$UPDATE_IN_PROGRESS_BODY"
-fi
-success "Task updated to IN_PROGRESS"
-
-info "Step 6b: Update task to COMPLETED with actual usage"
-UPDATE_COMPLETED_RESPONSE=$(curl_with_code "${API_BASE}/staff/kitchen/tasks/${TASK_ID}" -X POST \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -d "{\"status\":\"COMPLETED\",\"ingredientsActual\":[{\"ingredientId\":\"${INGREDIENT_ID}\",\"actual_g\":1000}]}")
-UPDATE_COMPLETED_CODE=$(get_http_code "$UPDATE_COMPLETED_RESPONSE")
-UPDATE_COMPLETED_BODY=$(get_body "$UPDATE_COMPLETED_RESPONSE")
-
-if [ "$UPDATE_COMPLETED_CODE" != "200" ]; then
-  fail "Update task to COMPLETED failed: HTTP ${UPDATE_COMPLETED_CODE}" "$UPDATE_COMPLETED_BODY"
-fi
-
-UPDATE_CODE=$(echo "$UPDATE_COMPLETED_BODY" | extract_json_stdin "root.code")
-if [ "$UPDATE_CODE" != "0" ]; then
-  fail "Update task to COMPLETED failed: code ${UPDATE_CODE}" "$UPDATE_COMPLETED_BODY"
-fi
-success "Task updated to COMPLETED"
+SUMMARY_TASK_ID="multiple"
+success "All ${COMPLETED_TASK_COUNT} task(s) completed"
 echo ""
 
 # Step 7: Verify order is READY_FOR_SHIPMENT
 info "Step 7: Verify order is READY_FOR_SHIPMENT"
-# Wait a bit for async batch completion
-sleep 2
+# Poll for READY_FOR_SHIPMENT status (with bounded retry)
+# After all tasks are completed, batch completion should be triggered automatically
+MAX_RETRIES=10
+RETRY_DELAY=1
+ORDER_STATUS=""
+RETRY_COUNT=0
 
-ORDER_DETAIL_RESPONSE=$(curl_with_code "${API_BASE}/orders/${ORDER_ID}" \
-  -H "Authorization: Bearer ${CUSTOMER_TOKEN}")
-ORDER_DETAIL_CODE=$(get_http_code "$ORDER_DETAIL_RESPONSE")
-ORDER_DETAIL_BODY=$(get_body "$ORDER_DETAIL_RESPONSE")
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+  ORDER_DETAIL_RESPONSE=$(curl_with_code "${API_BASE}/orders/${ORDER_ID}" \
+    -H "Authorization: Bearer ${CUSTOMER_TOKEN}")
+  ORDER_DETAIL_CODE=$(get_http_code "$ORDER_DETAIL_RESPONSE")
+  ORDER_DETAIL_BODY=$(get_body "$ORDER_DETAIL_RESPONSE")
 
-if [ "$ORDER_DETAIL_CODE" != "200" ]; then
-  fail "Get order detail failed: HTTP ${ORDER_DETAIL_CODE}" "$ORDER_DETAIL_BODY"
-fi
+  if [ "$ORDER_DETAIL_CODE" != "200" ]; then
+    fail "Get order detail failed: HTTP ${ORDER_DETAIL_CODE}" "$ORDER_DETAIL_BODY"
+  fi
 
-ORDER_STATUS=$(echo "$ORDER_DETAIL_BODY" | extract_json_stdin "root.data.status")
+  ORDER_STATUS=$(echo "$ORDER_DETAIL_BODY" | extract_json_stdin "root.data.status")
+  if [ "$ORDER_STATUS" = "READY_FOR_SHIPMENT" ]; then
+    success "Order is READY_FOR_SHIPMENT"
+    break
+  fi
+
+  RETRY_COUNT=$((RETRY_COUNT + 1))
+  if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+    # Check batch status for diagnostic info
+    BATCH_CHECK_RESPONSE=$(curl_with_code "${API_BASE}/staff/kitchen/batches/${BATCH_ID}" \
+      -H "Authorization: Bearer ${TOKEN}")
+    BATCH_CHECK_CODE=$(get_http_code "$BATCH_CHECK_RESPONSE")
+    if [ "$BATCH_CHECK_CODE" = "200" ]; then
+      BATCH_CHECK_BODY=$(get_body "$BATCH_CHECK_RESPONSE")
+      BATCH_STATUS=$(echo "$BATCH_CHECK_BODY" | extract_json_stdin "root.data.status")
+      info "Order status: ${ORDER_STATUS}, Batch status: ${BATCH_STATUS}, retrying in ${RETRY_DELAY}s (attempt ${RETRY_COUNT}/${MAX_RETRIES})..."
+    else
+      info "Order status: ${ORDER_STATUS}, retrying in ${RETRY_DELAY}s (attempt ${RETRY_COUNT}/${MAX_RETRIES})..."
+    fi
+    sleep $RETRY_DELAY
+  fi
+done
+
 if [ "$ORDER_STATUS" != "READY_FOR_SHIPMENT" ]; then
-  warn "Order status is ${ORDER_STATUS}, expected READY_FOR_SHIPMENT"
-  warn "This may be expected if batch completion is still processing"
-  warn "Continuing with shipping test..."
-else
-  success "Order is READY_FOR_SHIPMENT"
+  fail "Order status is ${ORDER_STATUS}, expected READY_FOR_SHIPMENT after ${MAX_RETRIES} attempts. Batch completion may have failed."
 fi
 echo ""
 
@@ -407,19 +621,33 @@ echo ""
 # Step 9: Mark order as shipped
 info "Step 9: Mark order as shipped"
 TRACKING_NUMBER="SF$(date +%s)"
-SHIP_RESPONSE=$(curl_with_code "${API_BASE}/staff/shipping/orders/${ORDER_ID}/ship" -X POST \
+SHIP_URL="${API_BASE}/staff/shipping/orders/${ORDER_ID}/ship"
+SHIP_PAYLOAD="{\"trackingNumber\":\"${TRACKING_NUMBER}\",\"carrierCode\":\"SF\"}"
+SHIP_RESPONSE=$(curl_with_code "$SHIP_URL" -X POST \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer ${TOKEN}" \
-  -d "{\"trackingNumber\":\"${TRACKING_NUMBER}\",\"carrierCode\":\"SF\"}")
+  -d "$SHIP_PAYLOAD")
 SHIP_CODE=$(get_http_code "$SHIP_RESPONSE")
 SHIP_BODY=$(get_body "$SHIP_RESPONSE")
 
 if [ "$SHIP_CODE" != "200" ]; then
+  echo "✗ Diagnostic: Ship order failed" >&2
+  echo "  URL: ${SHIP_URL}" >&2
+  echo "  Payload: ${SHIP_PAYLOAD}" >&2
+  echo "  HTTP Code: ${SHIP_CODE}" >&2
+  truncated_body=$(echo "$SHIP_BODY" | head -c 500)
+  echo "  Response (truncated): ${truncated_body}" >&2
   fail "Ship order failed: HTTP ${SHIP_CODE}" "$SHIP_BODY"
 fi
 
 SHIP_CODE_RESULT=$(echo "$SHIP_BODY" | extract_json_stdin "root.code")
 if [ "$SHIP_CODE_RESULT" != "0" ]; then
+  echo "✗ Diagnostic: Ship order failed" >&2
+  echo "  URL: ${SHIP_URL}" >&2
+  echo "  Payload: ${SHIP_PAYLOAD}" >&2
+  echo "  Response Code: ${SHIP_CODE_RESULT}" >&2
+  truncated_body=$(echo "$SHIP_BODY" | head -c 500)
+  echo "  Response (truncated): ${truncated_body}" >&2
   fail "Ship order failed: code ${SHIP_CODE_RESULT}" "$SHIP_BODY"
 fi
 
@@ -485,3 +713,4 @@ echo "Shipped: ${SUMMARY_SHIPPED}"
 echo "Tracking Number: ${SUMMARY_TRACKING_NUMBER}"
 echo ""
 success "All steps completed successfully!"
+

@@ -489,6 +489,10 @@ export class OrdersController {
       amountTotal: order.amountTotal,
       items: order.items.map((item) => this.mapOrderItemToDto(item)),
       pricingBreakdown,
+      // Phase 8.14: Shipping tracking fields
+      trackingNumber: order.trackingNumber ?? null,
+      carrierCode: order.carrierCode ?? null,
+      shippedAt: order.shippedAt ? order.shippedAt.toISOString() : null,
     };
   }
 
@@ -546,3 +550,4 @@ export class OrdersController {
     return null;
   }
 }
+

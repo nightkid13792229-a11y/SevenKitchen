@@ -100,10 +100,20 @@ export class ShippingFulfillmentService {
     // Persist the order
     const savedOrder = await this.orderRepository.save(order);
 
+    // Reload order to ensure we have the latest persisted data (including shipping fields)
+    const reloadedOrder = await this.orderRepository.findById(orderId);
+    if (!reloadedOrder) {
+      this.logger.warn(
+        `Order ${orderId} not found after save. Returning saved order.`,
+      );
+      return savedOrder;
+    }
+
     this.logger.log(
       `Order ${orderId} marked as shipped with tracking number ${dto.trackingNumber} (carrier: ${dto.carrierCode})`,
     );
 
-    return savedOrder;
+    return reloadedOrder;
   }
 }
+

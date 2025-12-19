@@ -21,13 +21,22 @@ import {
   ApiResponse,
   ApiParam,
   ApiBody,
+  ApiProperty,
 } from '@nestjs/swagger';
+import { IsString, IsNotEmpty } from 'class-validator';
 import { ShippingFulfillmentService } from '../../application/shipping/shipping-fulfillment.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { OrderStatus } from '../../domain';
 
 export class MarkOrderAsShippedRequestDto {
+  @ApiProperty({ description: 'Tracking number', example: 'SF1234567890' })
+  @IsString()
+  @IsNotEmpty()
   trackingNumber!: string;
+
+  @ApiProperty({ description: 'Carrier code', example: 'SF' })
+  @IsString()
+  @IsNotEmpty()
   carrierCode!: string;
 }
 
@@ -93,9 +102,9 @@ export class StaffShippingController {
       return ApiResponseDto.success({
         id: order.id,
         status: order.status,
-        trackingNumber: order.trackingNumber || '',
-        carrierCode: order.carrierCode || '',
-        shippedAt: order.shippedAt?.toISOString() || '',
+        trackingNumber: order.trackingNumber ?? '',
+        carrierCode: order.carrierCode ?? '',
+        shippedAt: order.shippedAt?.toISOString() ?? '',
       });
     } catch (error: any) {
       if (error instanceof BadRequestException) {
@@ -105,3 +114,4 @@ export class StaffShippingController {
     }
   }
 }
+

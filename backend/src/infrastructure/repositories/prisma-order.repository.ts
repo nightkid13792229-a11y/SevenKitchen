@@ -79,6 +79,8 @@ export class PrismaOrderRepository implements OrderRepository {
             trackingNumber: order.trackingNumber ?? null,
             carrierCode: order.carrierCode ?? null,
             shippedAt: order.shippedAt ?? null,
+            // Phase 8.15: Order completion
+            completedAt: order.completedAt ?? null,
           },
         });
 
@@ -126,6 +128,8 @@ export class PrismaOrderRepository implements OrderRepository {
           trackingNumber: order.trackingNumber ?? null,
           carrierCode: order.carrierCode ?? null,
           shippedAt: order.shippedAt ?? null,
+          // Phase 8.15: Order completion (must be updated when order is completed)
+          completedAt: order.completedAt ?? null,
         },
       });
     }
@@ -200,6 +204,8 @@ export class PrismaOrderRepository implements OrderRepository {
       record.trackingNumber ?? undefined,
       record.carrierCode ?? undefined,
       record.shippedAt ?? undefined,
+      // Phase 8.15: Order completion
+      (record as any).completedAt ?? undefined,
     );
   }
 

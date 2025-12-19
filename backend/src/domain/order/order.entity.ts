@@ -30,6 +30,8 @@ export class Order {
     public trackingNumber?: string | null,
     public carrierCode?: string | null,
     public shippedAt?: Date | null,
+    // Phase 8.15: Order completion
+    public completedAt?: Date | null,
   ) {
     // Compute totalAmount from amountTotal if not provided
     if (this.totalAmount === undefined) {
@@ -204,5 +206,21 @@ export class Order {
     this.carrierCode = carrierCode.trim();
     this.shippedAt = new Date();
     this.transitionTo(OrderStatus.SHIPPED);
+  }
+
+  /**
+   * Mark order as completed
+   * Phase 8.15: Order Completion & Delivery Closure MVP
+   * Allowed only when order.status === SHIPPED
+   */
+  markAsCompleted(): void {
+    if (this.status !== OrderStatus.SHIPPED) {
+      throw new InvalidStateTransitionError(
+        `Cannot mark order as completed from status: ${this.status}. Order must be in SHIPPED status.`,
+      );
+    }
+
+    this.completedAt = new Date();
+    this.transitionTo(OrderStatus.COMPLETED);
   }
 }

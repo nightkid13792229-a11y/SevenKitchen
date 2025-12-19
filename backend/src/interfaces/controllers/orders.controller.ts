@@ -493,6 +493,8 @@ export class OrdersController {
       trackingNumber: order.trackingNumber ?? null,
       carrierCode: order.carrierCode ?? null,
       shippedAt: order.shippedAt ? order.shippedAt.toISOString() : null,
+      // Phase 8.15: Order completion
+      completedAt: order.completedAt ? order.completedAt.toISOString() : null,
     };
   }
 

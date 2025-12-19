@@ -702,15 +702,81 @@ fi
 success "Order verified as SHIPPED with tracking: ${FINAL_TRACKING} (${FINAL_CARRIER})"
 echo ""
 
+# Step 11: Complete order (admin endpoint)
+info "Step 11: Complete order (admin endpoint)"
+COMPLETE_RESPONSE=$(curl_with_code "${API_BASE}/admin/orders/${ORDER_ID}/complete" -X POST \
+  -H "Authorization: Bearer ${TOKEN}")
+COMPLETE_CODE=$(get_http_code "$COMPLETE_RESPONSE")
+COMPLETE_BODY=$(get_body "$COMPLETE_RESPONSE")
+
+if [ "$COMPLETE_CODE" != "200" ]; then
+  COMPLETE_CURL_CMD="curl -X POST -H \"Authorization: Bearer ${TOKEN}\" \"${API_BASE}/admin/orders/${ORDER_ID}/complete\""
+  truncated_body=$(echo "$COMPLETE_BODY" | head -c 500)
+  fail "Complete order failed: HTTP ${COMPLETE_CODE}" "$truncated_body" "$COMPLETE_CURL_CMD"
+fi
+
+COMPLETE_CODE_VALUE=$(echo "$COMPLETE_BODY" | extract_json_stdin "root.code")
+if [ "$COMPLETE_CODE_VALUE" != "0" ]; then
+  COMPLETE_CURL_CMD="curl -X POST -H \"Authorization: Bearer ${TOKEN}\" \"${API_BASE}/admin/orders/${ORDER_ID}/complete\""
+  truncated_body=$(echo "$COMPLETE_BODY" | head -c 500)
+  fail "Complete order failed: code ${COMPLETE_CODE_VALUE}" "$truncated_body" "$COMPLETE_CURL_CMD"
+fi
+
+COMPLETED_STATUS=$(echo "$COMPLETE_BODY" | extract_json_stdin "root.data.status")
+COMPLETED_AT=$(echo "$COMPLETE_BODY" | extract_json_stdin "root.data.completedAt")
+
+if [ "$COMPLETED_STATUS" != "COMPLETED" ]; then
+  fail "Order status is ${COMPLETED_STATUS}, expected COMPLETED" "$COMPLETE_BODY"
+fi
+
+if [ -z "$COMPLETED_AT" ]; then
+  fail "completedAt timestamp not set" "$COMPLETE_BODY"
+fi
+
+success "Order completed: status=${COMPLETED_STATUS}, completedAt=${COMPLETED_AT}"
+echo ""
+
+# Step 12: Verify order status is COMPLETED and completedAt is not null
+info "Step 12: Verify order status is COMPLETED and completedAt is not null"
+FINAL_COMPLETE_RESPONSE=$(curl_with_code "${API_BASE}/orders/${ORDER_ID}" \
+  -H "Authorization: Bearer ${CUSTOMER_TOKEN}")
+FINAL_COMPLETE_CODE=$(get_http_code "$FINAL_COMPLETE_RESPONSE")
+FINAL_COMPLETE_BODY=$(get_body "$FINAL_COMPLETE_RESPONSE")
+
+if [ "$FINAL_COMPLETE_CODE" != "200" ]; then
+  fail "Get final order detail failed: HTTP ${FINAL_COMPLETE_CODE}" "$FINAL_COMPLETE_BODY"
+fi
+
+FINAL_COMPLETE_STATUS=$(echo "$FINAL_COMPLETE_BODY" | extract_json_stdin "root.data.status")
+FINAL_COMPLETE_COMPLETED_AT=$(echo "$FINAL_COMPLETE_BODY" | extract_json_stdin "root.data.completedAt")
+FINAL_COMPLETE_TRACKING=$(echo "$FINAL_COMPLETE_BODY" | extract_json_stdin "root.data.trackingNumber")
+
+if [ "$FINAL_COMPLETE_STATUS" != "COMPLETED" ]; then
+  fail "Final order status is ${FINAL_COMPLETE_STATUS}, expected COMPLETED" "$FINAL_COMPLETE_BODY"
+fi
+
+if [ -z "$FINAL_COMPLETE_COMPLETED_AT" ]; then
+  fail "completedAt timestamp not persisted" "$FINAL_COMPLETE_BODY"
+fi
+
+if [ "$FINAL_COMPLETE_TRACKING" != "$TRACKING_NUMBER" ]; then
+  fail "Tracking number changed: expected ${TRACKING_NUMBER}, got ${FINAL_COMPLETE_TRACKING}" "$FINAL_COMPLETE_BODY"
+fi
+
+success "Order verified as COMPLETED with completedAt: ${FINAL_COMPLETE_COMPLETED_AT}, tracking unchanged: ${FINAL_COMPLETE_TRACKING}"
+echo ""
+
 # Summary
 echo "=========================================="
-echo "Phase 8.14 E2E Verification Summary"
+echo "Phase 8.14 + 8.15 E2E Verification Summary"
 echo "=========================================="
 echo "Order ID: ${SUMMARY_ORDER_ID}"
 echo "Batch ID: ${SUMMARY_BATCH_ID}"
 echo "Task ID: ${SUMMARY_TASK_ID}"
 echo "Shipped: ${SUMMARY_SHIPPED}"
 echo "Tracking Number: ${SUMMARY_TRACKING_NUMBER}"
+echo "Completed: YES"
+echo "Completed At: ${FINAL_COMPLETE_COMPLETED_AT}"
 echo ""
 success "All steps completed successfully!"
 

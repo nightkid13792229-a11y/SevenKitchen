@@ -118,6 +118,13 @@ export class OrderDto {
     nullable: true,
   })
   shippedAt?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Completion timestamp (Phase 8.15)',
+    example: '2025-01-21T10:30:00.000Z',
+    nullable: true,
+  })
+  completedAt?: string | null;
 }
 
 export class OrderSummaryDto {

@@ -230,6 +230,45 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
     }
   }
 
+  /**
+   * Check if all packaging units in a batch are completed (database-based)
+   * Phase 8.14: This method queries the database directly, not relying on domain object hydration
+   * @param batchId Production batch ID
+   * @returns true if all units are COMPLETED, false otherwise (or if batch has no units)
+   */
+  async areAllUnitsCompleted(batchId: string): Promise<boolean> {
+    try {
+      // Count total units for this batch
+      const totalCount = await (this.prisma as any).packagingUnit.count({
+        where: { productionBatchId: batchId },
+      });
+
+      if (totalCount === 0) {
+        // Empty batch cannot be completed
+        return false;
+      }
+
+      // Count incomplete units (status != COMPLETED)
+      const incompleteCount = await (this.prisma as any).packagingUnit.count({
+        where: {
+          productionBatchId: batchId,
+          status: { not: 'COMPLETED' },
+        },
+      });
+
+      // All units are completed if incomplete count is 0
+      return incompleteCount === 0;
+    } catch (error: any) {
+      this.logger.error('Error in areAllUnitsCompleted:', {
+        message: error?.message,
+        stack: error?.stack,
+        batchId,
+      });
+      // On error, return false to be safe (don't auto-complete)
+      return false;
+    }
+  }
+
   private mapPackagingUnitToDomain(pu: any): PackagingUnit {
     // Ensure sourceOrderItemIds is always an array
     let sourceOrderItemIds: string[] = [];

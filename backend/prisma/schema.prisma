@@ -116,6 +116,12 @@ model Order {
   amountTotal              Decimal   @map("amount_total")
   totalAmount              Decimal?  @map("total_amount") // legacy alias of amount_total
   pricingBreakdownSnapshot Json?     @map("pricing_breakdown_snapshot")
+  // Phase 8.14: Shipping tracking fields
+  trackingNumber           String?   @map("tracking_number")
+  carrierCode              String?   @map("carrier_code")
+  shippedAt                DateTime? @map("shipped_at")
+  // Phase 8.15: Order completion
+  completedAt              DateTime? @map("completed_at")
 
   items OrderItem[]
 

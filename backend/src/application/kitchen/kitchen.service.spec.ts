@@ -8,7 +8,7 @@ import { KitchenService } from './kitchen.service';
 import type { ProductionBatchRepository } from '../../domain/production/production.repository';
 import { ProductionBatch, PackagingUnit } from '../../domain/production';
 import { ProductionBatchStatus, PackagingUnitStatus } from '../../domain/production/enums';
-import { PRODUCTION_BATCH_REPOSITORY } from '../production/production.service';
+import { PRODUCTION_BATCH_REPOSITORY, ProductionService } from '../production/production.service';
 import { InventoryService } from '../inventory/inventory.service';
 import type { RecipeSnapshot } from '../../domain/recipe/types';
 
@@ -16,6 +16,7 @@ describe('KitchenService - Phase 8.12', () => {
   let service: KitchenService;
   let productionRepository: jest.Mocked<ProductionBatchRepository>;
   let inventoryService: jest.Mocked<InventoryService>;
+  let productionService: jest.Mocked<ProductionService>;
 
   const mockProductionRepository: jest.Mocked<ProductionBatchRepository> = {
     findById: jest.fn(),
@@ -34,6 +35,10 @@ describe('KitchenService - Phase 8.12', () => {
     getEntriesByPackagingUnit: jest.fn(),
   } as any;
 
+  const mockProductionService: jest.Mocked<ProductionService> = {
+    checkAndCompleteBatch: jest.fn(),
+  } as any;
+
   beforeEach(async () => {
     // Suppress Logger.error during tests (especially for expected NotFoundException)
     jest.spyOn(console, 'error').mockImplementation(() => {});
@@ -49,12 +54,17 @@ describe('KitchenService - Phase 8.12', () => {
           provide: InventoryService,
           useValue: mockInventoryService,
         },
+        {
+          provide: ProductionService,
+          useValue: mockProductionService,
+        },
       ],
     }).compile();
 
     service = module.get<KitchenService>(KitchenService);
     productionRepository = module.get(PRODUCTION_BATCH_REPOSITORY);
     inventoryService = module.get(InventoryService);
+    productionService = module.get(ProductionService);
 
     jest.clearAllMocks();
   });
@@ -589,6 +599,101 @@ describe('KitchenService - Phase 8.12', () => {
       expect(result.ingredientsUsageSnapshot).toBeDefined();
       expect(result.ingredientsUsageSnapshot!['ingredient-1']).toBeDefined();
       expect(productionRepository.updatePackagingUnit).toHaveBeenCalled();
+    });
+
+    it('should trigger batch completion check when task is updated to COMPLETED (Phase 8.14)', async () => {
+      // Arrange
+      const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
+      const unit = createMockPackagingUnit(
+        'unit-1',
+        'batch-1',
+        recipeSnapshot,
+        PackagingUnitStatus.IN_PROGRESS,
+      );
+
+      productionRepository.findPackagingUnitById.mockResolvedValue(unit);
+      productionRepository.updatePackagingUnit.mockImplementation(async (u) => u);
+      inventoryService.deductFromKitchenTask.mockResolvedValue(undefined);
+      productionService.checkAndCompleteBatch.mockResolvedValue(true);
+
+      // Act: Transition IN_PROGRESS -> COMPLETED
+      const result = await service.updateTask('unit-1', {
+        status: PackagingUnitStatus.COMPLETED,
+        ingredientsActual: [
+          { ingredientId: 'ingredient-1', actual_g: 720 },
+        ],
+      });
+
+      // Assert
+      expect(result.status).toBe(PackagingUnitStatus.COMPLETED);
+      // Verify inventory deduction was called
+      expect(inventoryService.deductFromKitchenTask).toHaveBeenCalledWith('unit-1');
+      // Verify batch completion check was triggered
+      expect(productionService.checkAndCompleteBatch).toHaveBeenCalledWith('batch-1');
+    });
+
+    it('should not trigger batch completion check if task has no productionBatchId (Phase 8.14)', async () => {
+      // Arrange: Unit without productionBatchId (edge case)
+      const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
+      const unit = createMockPackagingUnit(
+        'unit-1',
+        '', // Empty batchId
+        recipeSnapshot,
+        PackagingUnitStatus.IN_PROGRESS,
+      );
+
+      productionRepository.findPackagingUnitById.mockResolvedValue(unit);
+      productionRepository.updatePackagingUnit.mockImplementation(async (u) => u);
+      inventoryService.deductFromKitchenTask.mockResolvedValue(undefined);
+
+      // Act: Transition IN_PROGRESS -> COMPLETED
+      const result = await service.updateTask('unit-1', {
+        status: PackagingUnitStatus.COMPLETED,
+        ingredientsActual: [
+          { ingredientId: 'ingredient-1', actual_g: 720 },
+        ],
+      });
+
+      // Assert
+      expect(result.status).toBe(PackagingUnitStatus.COMPLETED);
+      // Verify inventory deduction was called
+      expect(inventoryService.deductFromKitchenTask).toHaveBeenCalledWith('unit-1');
+      // Verify batch completion check was NOT called (no batchId)
+      expect(productionService.checkAndCompleteBatch).not.toHaveBeenCalled();
+    });
+
+    it('should handle batch completion check failure gracefully (Phase 8.14)', async () => {
+      // Arrange
+      const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
+      const unit = createMockPackagingUnit(
+        'unit-1',
+        'batch-1',
+        recipeSnapshot,
+        PackagingUnitStatus.IN_PROGRESS,
+      );
+
+      productionRepository.findPackagingUnitById.mockResolvedValue(unit);
+      productionRepository.updatePackagingUnit.mockImplementation(async (u) => u);
+      inventoryService.deductFromKitchenTask.mockResolvedValue(undefined);
+      // Mock batch completion check to throw error
+      productionService.checkAndCompleteBatch.mockRejectedValue(
+        new Error('Batch completion check failed'),
+      );
+
+      // Act: Transition IN_PROGRESS -> COMPLETED
+      const result = await service.updateTask('unit-1', {
+        status: PackagingUnitStatus.COMPLETED,
+        ingredientsActual: [
+          { ingredientId: 'ingredient-1', actual_g: 720 },
+        ],
+      });
+
+      // Assert: Task should still be completed despite batch check failure
+      expect(result.status).toBe(PackagingUnitStatus.COMPLETED);
+      expect(inventoryService.deductFromKitchenTask).toHaveBeenCalledWith('unit-1');
+      // Verify batch completion check was attempted
+      expect(productionService.checkAndCompleteBatch).toHaveBeenCalledWith('batch-1');
+      // Task completion should not be affected by batch check failure
     });
   });
 });

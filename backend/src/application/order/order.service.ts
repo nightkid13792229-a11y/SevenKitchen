@@ -541,4 +541,21 @@ export class OrderService {
       explanationLines,
     };
   }
+
+  /**
+   * Complete order
+   * Phase 8.15: Order Completion & Delivery Closure MVP
+   * Transitions SHIPPED → COMPLETED
+   * @param orderId Order ID
+   * @returns Updated order
+   */
+  async completeOrder(orderId: string): Promise<Order> {
+    const order = await this.orderRepository.findById(orderId);
+    if (!order) {
+      throw new NotFoundException(`Order not found: ${orderId}`);
+    }
+
+    order.markAsCompleted();
+    return this.orderRepository.save(order);
+  }
 }

@@ -30,6 +30,8 @@ import type { CreateIngredientDto, UpdateIngredientPriceDto } from '../../applic
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { ProductionService, type CreateProductionBatchDto, type ProductionBatchSummaryDto } from '../../application/production/production.service';
 import { InventoryService } from '../../application/inventory/inventory.service';
+import { OrderService } from '../../application/order/order.service';
+import { OrderStatus } from '../../domain';
 
 @ApiTags('Admin')
 @Controller('api/v1/admin')
@@ -39,6 +41,7 @@ export class AdminController {
     private readonly ingredientService: IngredientService,
     private readonly productionService: ProductionService,
     private readonly inventoryService: InventoryService,
+    private readonly orderService: OrderService,
   ) {}
 
   @Get('inventory')
@@ -397,6 +400,50 @@ export class AdminController {
         totalEntries: entriesAfter.length,
       });
     } catch (error: any) {
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  // ==========================================
+  // Phase 8.15: Order Completion Endpoint
+  // ==========================================
+
+  @Post('orders/:orderId/complete')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Complete order (Phase 8.15)' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order completed successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        id: { type: 'string' },
+        status: { type: 'string', enum: Object.values(OrderStatus) },
+        completedAt: { type: 'string', format: 'date-time', nullable: true },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request or order status' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async completeOrder(
+    @Param('orderId') orderId: string,
+  ): Promise<ApiResponseDto<{ id: string; status: OrderStatus; completedAt: string | null }> | ApiResponseDto<null>> {
+    try {
+      const order = await this.orderService.completeOrder(orderId);
+
+      return ApiResponseDto.success({
+        id: order.id,
+        status: order.status,
+        completedAt: order.completedAt ? order.completedAt.toISOString() : null,
+      });
+    } catch (error: any) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
       if (error instanceof BadRequestException) {
         return ApiResponseDto.error(400, error.message);
       }

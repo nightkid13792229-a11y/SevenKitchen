@@ -180,6 +180,22 @@ Phase 8.14 is **ACCEPTED** and ready for production.
 - ✅ All state machine transitions strictly validated
 - ✅ Repository, Service, DTO, and Controller layers all correctly handle shipping fields
 
+## Verification Evidence
+
+**Last Verified**: 2025-12-19 (Local Time)
+
+**E2E Verification**:
+- Script: `backend/scripts/phase8_14_shipping_fulfillment_e2e_verify.sh`
+- Result: All 10 steps PASS
+- Key Evidence:
+  - Step 8: `GET /api/v1/staff/shipping/orders` → HTTP 200, returns order array
+  - Step 9: `POST /api/v1/staff/shipping/orders/:orderId/ship` → HTTP 200, `trackingNumber` and `carrierCode` match request
+  - Step 10: `GET /api/v1/orders/:id` (customer token) → HTTP 200, `trackingNumber`, `carrierCode`, `shippedAt` fields present and persisted
+
+**API Verification**:
+- `GET /api/v1/staff/shipping/orders` → HTTP 200 (verified via curl)
+- Service startup: No `UnknownDependenciesException` (ShippingFulfillmentService registered in AppModule)
+
 ## Next Steps
 
 After Phase 8.14 acceptance, consider:

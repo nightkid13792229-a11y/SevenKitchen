@@ -303,8 +303,14 @@ export class ProductionService {
       return false;
     }
 
-    // Check if all units are completed
-    if (!batch.areAllUnitsCompleted()) {
+    // Phase 8.14: Check completion using database query, not domain object hydration
+    // This ensures we check the actual database state, not relying on whether
+    // packagingUnits array was properly hydrated in the domain object
+    const allUnitsCompleted = await this.productionRepository.areAllUnitsCompleted(batchId);
+    if (!allUnitsCompleted) {
+      this.logger.debug(
+        `Batch ${batchId} not ready for completion: not all units are COMPLETED (checked via database)`,
+      );
       return false;
     }
 
@@ -312,12 +318,20 @@ export class ProductionService {
     batch.transitionTo(ProductionBatchStatus.COMPLETED);
     await this.productionRepository.save(batch);
 
+    // Phase 8.14: Reload batch to get all packaging units (for orderItemIds extraction)
+    // This ensures we have the complete list even if the original batch object wasn't fully hydrated
+    const reloadedBatch = await this.productionRepository.findById(batchId);
+    if (!reloadedBatch) {
+      this.logger.error(`Failed to reload batch ${batchId} after completion transition`);
+      return false;
+    }
+
     this.logger.log(
-      `Batch ${batchId} auto-completed: all ${batch.packagingUnits.length} packaging units are COMPLETED`,
+      `Batch ${batchId} auto-completed: all ${reloadedBatch.packagingUnits.length} packaging units are COMPLETED (verified via database)`,
     );
 
     // Find all orders with OrderItems in this batch
-    const orderItemIds = batch.packagingUnits.flatMap(
+    const orderItemIds = reloadedBatch.packagingUnits.flatMap(
       (unit) => unit.sourceOrderItemIds || [],
     );
 

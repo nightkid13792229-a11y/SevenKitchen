@@ -26,6 +26,10 @@ describe('ProductionService - Phase 8.10', () => {
     findByStatus: jest.fn(),
     save: jest.fn(),
     allocateOrderItems: jest.fn(),
+    findPackagingUnitById: jest.fn(),
+    updatePackagingUnit: jest.fn(),
+    findBatchesByPackagingUnitStatus: jest.fn(),
+    areAllUnitsCompleted: jest.fn(),
   };
 
   const mockOrderRepository: jest.Mocked<OrderRepository> = {
@@ -537,7 +541,10 @@ describe('ProductionService - Phase 8.10', () => {
         [orderItem1, orderItem2],
       );
 
-      productionRepository.findById.mockResolvedValue(batch);
+      productionRepository.findById
+        .mockResolvedValueOnce(batch) // First call: initial load
+        .mockResolvedValueOnce(batch); // Second call: reload after save
+      productionRepository.areAllUnitsCompleted.mockResolvedValue(true);
       productionRepository.save.mockImplementation(async (b) => b);
       // findByStatus is called for each status in statusesToCheck (IN_PRODUCTION, WAITING_FOR_PRODUCTION, PAID)
       // Mock it to return the order for IN_PRODUCTION status, empty for others
@@ -575,8 +582,11 @@ describe('ProductionService - Phase 8.10', () => {
 
       // Assert
       expect(result).toBe(true);
+      expect(productionRepository.areAllUnitsCompleted).toHaveBeenCalledWith('batch-1');
       expect(batch.status).toBe(ProductionBatchStatus.COMPLETED);
       expect(productionRepository.save).toHaveBeenCalledWith(batch);
+      // Verify batch was reloaded after save
+      expect(productionRepository.findById).toHaveBeenCalledTimes(2); // Once initially, once after save
       // Verify order repository was called to find orders
       // findByStatus is called for each status in statusesToCheck
       expect(orderRepository.findByStatus).toHaveBeenCalled();
@@ -587,7 +597,146 @@ describe('ProductionService - Phase 8.10', () => {
       const saveCalls = orderRepository.save.mock.calls;
       expect(saveCalls.length).toBeGreaterThan(0);
       const savedOrder = saveCalls[saveCalls.length - 1][0] as Order;
+      expect(currentOrderStatus).toBe(OrderStatus.READY_FOR_SHIPMENT);
       expect(savedOrder.status).toBe(OrderStatus.READY_FOR_SHIPMENT);
+    });
+
+    it('should complete batch even when domain object units are not hydrated (database-based check)', async () => {
+      // Arrange: Simulate scenario where batch object has empty/incomplete units array
+      // but database shows all units are COMPLETED
+      const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
+      
+      // Create batch with empty units array (simulating unhydrated state)
+      const batchWithEmptyUnits = new ProductionBatch(
+        'batch-1',
+        new Date('2025-01-20'),
+        ProductionBatchStatus.IN_PRODUCTION,
+        [], // Empty array - units not hydrated
+        new Date(),
+      );
+
+      // But when reloaded, it should have the complete units
+      const unit1 = new PackagingUnit(
+        'unit-1',
+        'batch-1',
+        recipeSnapshot,
+        1000,
+        ['item-1'],
+        new Date(),
+        PackagingUnitStatus.COMPLETED,
+      );
+      const unit2 = new PackagingUnit(
+        'unit-2',
+        'batch-1',
+        recipeSnapshot,
+        500,
+        ['item-2'],
+        new Date(),
+        PackagingUnitStatus.COMPLETED,
+      );
+      const batchWithHydratedUnits = new ProductionBatch(
+        'batch-1',
+        new Date('2025-01-20'),
+        ProductionBatchStatus.COMPLETED, // Already transitioned
+        [unit1, unit2],
+        new Date(),
+      );
+
+      // Create order with items matching the batch
+      const orderItem1 = new OrderItem(
+        'item-1',
+        'order-1',
+        recipeSnapshot,
+        1000,
+        5,
+        200,
+        null,
+        310.34,
+        null,
+        null,
+      );
+      const orderItem2 = new OrderItem(
+        'item-2',
+        'order-1',
+        recipeSnapshot,
+        500,
+        3,
+        200,
+        null,
+        250.0,
+        null,
+        null,
+      );
+      const order = new Order(
+        'order-1',
+        'customer-1',
+        OrderStatus.IN_PRODUCTION,
+        OrderType.FRESH_FOOD,
+        null,
+        250.0,
+        0.0,
+        250.0,
+        [orderItem1, orderItem2],
+      );
+
+      // Mock: Initial findById returns batch with empty units (unhydrated)
+      productionRepository.findById
+        .mockResolvedValueOnce(batchWithEmptyUnits) // First call: unhydrated
+        .mockResolvedValueOnce(batchWithHydratedUnits); // Second call: after save, reloaded with units
+      
+      // Mock: Database check says all units are completed (this is the key fix)
+      productionRepository.areAllUnitsCompleted.mockResolvedValue(true);
+      
+      productionRepository.save.mockImplementation(async (b) => {
+        // Batch status is already COMPLETED after transitionTo call in service
+        return b;
+      });
+
+      orderRepository.findByStatus.mockImplementation(async (status: OrderStatus) => {
+        if (status === OrderStatus.IN_PRODUCTION) {
+          return [order];
+        }
+        return [];
+      });
+
+      let currentOrderStatus = OrderStatus.IN_PRODUCTION;
+      orderRepository.findById.mockImplementation(async (id: string) => {
+        return new Order(
+          id,
+          order.customerId,
+          currentOrderStatus,
+          order.type,
+          order.addressId,
+          order.amountSubtotal,
+          order.amountShipping,
+          order.amountTotal,
+          order.items,
+          order.dogId,
+        );
+      });
+      orderRepository.save.mockImplementation(async (o: Order) => {
+        currentOrderStatus = o.status;
+        return o;
+      });
+
+      // Act
+      const result = await service.checkAndCompleteBatch('batch-1');
+
+      // Assert
+      expect(result).toBe(true);
+      // Verify database-based check was used (not domain method)
+      expect(productionRepository.areAllUnitsCompleted).toHaveBeenCalledWith('batch-1');
+      // Verify batch was saved with COMPLETED status
+      expect(productionRepository.save).toHaveBeenCalled();
+      const savedBatch = productionRepository.save.mock.calls[0][0] as ProductionBatch;
+      expect(savedBatch.status).toBe(ProductionBatchStatus.COMPLETED);
+      // Verify batch was reloaded to get hydrated units for orderItemIds extraction
+      expect(productionRepository.findById).toHaveBeenCalledTimes(2);
+      // Verify order was found and transitioned
+      expect(orderRepository.findByStatus).toHaveBeenCalled();
+      expect(orderRepository.findById).toHaveBeenCalledWith('order-1');
+      expect(orderRepository.save).toHaveBeenCalled();
+      expect(currentOrderStatus).toBe(OrderStatus.READY_FOR_SHIPMENT);
     });
 
     it('should transition order to READY_FOR_SHIPMENT even when productionBatchId is null on items', async () => {
@@ -635,7 +784,10 @@ describe('ProductionService - Phase 8.10', () => {
         [orderItem1],
       );
 
-      productionRepository.findById.mockResolvedValue(batch);
+      productionRepository.findById
+        .mockResolvedValueOnce(batch) // First call: initial load
+        .mockResolvedValueOnce(batch); // Second call: reload after save
+      productionRepository.areAllUnitsCompleted.mockResolvedValue(true);
       productionRepository.save.mockImplementation(async (b) => b);
       // findByStatus is called for each status in statusesToCheck (IN_PRODUCTION, WAITING_FOR_PRODUCTION, PAID)
       // Mock it to return the order for IN_PRODUCTION status, empty for others
@@ -802,12 +954,15 @@ describe('ProductionService - Phase 8.10', () => {
       );
 
       productionRepository.findById.mockResolvedValue(batch);
+      // Mock database check: not all units completed
+      productionRepository.areAllUnitsCompleted.mockResolvedValue(false);
 
       // Act
       const result = await service.checkAndCompleteBatch('batch-1');
 
       // Assert
       expect(result).toBe(false);
+      expect(productionRepository.areAllUnitsCompleted).toHaveBeenCalledWith('batch-1');
       expect(batch.status).toBe(ProductionBatchStatus.IN_PRODUCTION);
       expect(productionRepository.save).not.toHaveBeenCalled();
       expect(orderRepository.save).not.toHaveBeenCalled();
@@ -834,12 +989,14 @@ describe('ProductionService - Phase 8.10', () => {
       );
 
       productionRepository.findById.mockResolvedValue(batch);
+      productionRepository.areAllUnitsCompleted.mockResolvedValue(true);
 
       // Act
       const result = await service.checkAndCompleteBatch('batch-1');
 
       // Assert
       expect(result).toBe(false); // Should return false for already completed batch
+      expect(productionRepository.areAllUnitsCompleted).not.toHaveBeenCalled(); // Should not check if batch is not IN_PRODUCTION
       expect(batch.status).toBe(ProductionBatchStatus.COMPLETED);
       expect(productionRepository.save).not.toHaveBeenCalled();
     });

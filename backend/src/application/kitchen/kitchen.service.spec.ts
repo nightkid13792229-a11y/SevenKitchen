@@ -8,7 +8,7 @@ import { KitchenService } from './kitchen.service';
 import type { ProductionBatchRepository } from '../../domain/production/production.repository';
 import { ProductionBatch, PackagingUnit } from '../../domain/production';
 import { ProductionBatchStatus, PackagingUnitStatus } from '../../domain/production/enums';
-import { PRODUCTION_BATCH_REPOSITORY, ProductionService } from '../production/production.service';
+import { PRODUCTION_BATCH_REPOSITORY } from '../production/production.service';
 import { InventoryService } from '../inventory/inventory.service';
 import type { RecipeSnapshot } from '../../domain/recipe/types';
 
@@ -48,12 +48,6 @@ describe('KitchenService - Phase 8.12', () => {
         {
           provide: InventoryService,
           useValue: mockInventoryService,
-        },
-        {
-          provide: ProductionService,
-          useValue: {
-            checkAndCompleteBatch: jest.fn().mockResolvedValue(false),
-          },
         },
       ],
     }).compile();

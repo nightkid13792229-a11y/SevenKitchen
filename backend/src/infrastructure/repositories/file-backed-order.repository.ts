@@ -49,10 +49,6 @@ interface OrderData {
     createdAt: string;
     ingredientPriceVersionHash?: string | null;
   };
-  // Phase 8.14: Shipping tracking fields
-  trackingNumber?: string | null;
-  carrierCode?: string | null;
-  shippedAt?: string | null; // ISO timestamp string
 }
 
 @Injectable()
@@ -168,12 +164,6 @@ export class FileBackedOrderRepository
       items,
       data.totalAmount,
       pricingBreakdown,
-      // Phase 8.14: Shipping tracking fields
-      undefined, // dogId
-      undefined, // addressId
-      data.trackingNumber ?? undefined,
-      data.carrierCode ?? undefined,
-      data.shippedAt ? new Date(data.shippedAt) : undefined,
     );
   }
 
@@ -259,10 +249,6 @@ export class FileBackedOrderRepository
               null,
           }
         : undefined,
-      // Phase 8.14: Shipping tracking fields
-      trackingNumber: order.trackingNumber ?? null,
-      carrierCode: order.carrierCode ?? null,
-      shippedAt: order.shippedAt ? order.shippedAt.toISOString() : null,
     };
   }
 

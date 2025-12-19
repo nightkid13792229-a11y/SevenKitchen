@@ -26,7 +26,6 @@
 | **Phase 8.11** | ⏳ PENDING VERIFY | Allocation Lock | `production.service.spec.ts`, `phase8_11_allocation_lock_verify.sh` | Prevents duplicate allocation of OrderItems to multiple batches |
 | **Phase 8.12** | ✅ ACCEPTED | Kitchen Task Data Capture MVP | `kitchen.service.spec.ts`, `staff-kitchen.controller.spec.ts`, `phase8_12_13_kitchen_inventory_e2e_verify.sh` | Staff kitchen APIs for task listing, detail view, and actual usage/photos capture. E2E verified. See `docs/e2e/` for verification logs. Example: batchId/taskId from latest E2E log. |
 | **Phase 8.13** | ✅ ACCEPTED | Inventory Deduction | `inventory.service.spec.ts` | Inventory deduction from kitchen task completion using actual_g, append-only ledger pattern. Idempotency verified: Step 8/9 may show 0 entries (already deducted), which is expected and indicates successful idempotency. |
-| **Phase 8.14** | ⏳ READY FOR REVIEW | Production Shipment / Fulfillment MVP | `shipping-fulfillment.service.spec.ts`, `staff-shipping.controller.spec.ts`, `production.service.spec.ts`, `phase8_14_shipping_fulfillment_e2e_verify.sh` | Automatic batch completion, order transition to READY_FOR_SHIPMENT, shipping staff APIs. See `docs/e2e/PHASE8_14_SHIPPING_E2E.md` and `backend/docs/PHASE8_14_ACCEPTANCE.md`. |
 
 
 ---

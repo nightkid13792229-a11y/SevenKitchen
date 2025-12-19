@@ -3,11 +3,11 @@
  * Phase 8.12: Kitchen Task Data Capture MVP
  */
 
-import { Injectable, Inject, BadRequestException, NotFoundException, Logger, forwardRef } from '@nestjs/common';
+import { Injectable, Inject, BadRequestException, NotFoundException, Logger } from '@nestjs/common';
 import type { ProductionBatchRepository } from '../../domain/production/production.repository';
 import { PackagingUnit, PackagingUnitStatus, type IngredientsUsageSnapshot } from '../../domain/production';
 import { InvalidStateTransitionError } from '../../domain/common/errors';
-import { PRODUCTION_BATCH_REPOSITORY, ProductionService } from '../production/production.service';
+import { PRODUCTION_BATCH_REPOSITORY } from '../production/production.service';
 import { InventoryService } from '../inventory/inventory.service';
 
 // UpdateTaskDto is now defined in interfaces/dto/kitchen/update-task.dto.ts
@@ -79,8 +79,6 @@ export class KitchenService {
     @Inject(PRODUCTION_BATCH_REPOSITORY)
     private readonly productionRepository: ProductionBatchRepository,
     private readonly inventoryService: InventoryService,
-    @Inject(forwardRef(() => ProductionService))
-    private readonly productionService: ProductionService,
   ) {}
 
   /**
@@ -369,25 +367,6 @@ export class KitchenService {
           error,
         );
         // Don't throw - status transition succeeded, deduction can be retried
-      }
-
-      // Phase 8.14: Check if batch can be auto-completed after unit completion
-      try {
-        const batchCompleted = await this.productionService.checkAndCompleteBatch(
-          savedUnit.productionBatchId,
-        );
-        if (batchCompleted) {
-          this.logger.log(
-            `Batch ${savedUnit.productionBatchId} auto-completed after unit ${savedUnit.id} completion`,
-          );
-        }
-      } catch (error: any) {
-        // Error handling: Log but don't fail the unit completion
-        // Batch completion check can be retried manually
-        this.logger.warn(
-          `Batch completion check failed for batch ${savedUnit.productionBatchId}:`,
-          error,
-        );
       }
     }
 

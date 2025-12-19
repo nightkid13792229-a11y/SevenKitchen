@@ -4,7 +4,7 @@
  * Phase 8.10: Production & Packaging MVP
  */
 
-import { ProductionBatchStatus, PackagingUnitStatus } from './enums';
+import { ProductionBatchStatus } from './enums';
 import { PackagingUnit } from './packaging-unit.entity';
 import { ValidationError, InvalidStateTransitionError } from '../common/errors';
 
@@ -86,18 +86,5 @@ export class ProductionBatch {
    */
   getUniqueRecipeCount(): number {
     return this.packagingUnits.length;
-  }
-
-  /**
-   * Check if all packaging units in this batch are completed
-   * Phase 8.14: Used to determine if batch can be auto-completed
-   */
-  areAllUnitsCompleted(): boolean {
-    if (this.packagingUnits.length === 0) {
-      return false; // Empty batch cannot be completed
-    }
-    return this.packagingUnits.every(
-      (unit) => unit.status === PackagingUnitStatus.COMPLETED,
-    );
   }
 }

@@ -1,0 +1,134 @@
+name: Verify Orders Closed-Loop
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  verify-orders:
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sevenkitchen_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: backend/pnpm-lock.yaml
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+
+      - name: Install dependencies
+        run: pnpm install
+        working-directory: backend
+
+      - name: Setup database
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sevenkitchen_test
+        run: |
+          cd backend
+          pnpm prisma generate
+          pnpm prisma migrate deploy
+        continue-on-error: false
+
+      - name: Start server
+        id: start-server
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sevenkitchen_test
+          PORT: 3000
+          ORDER_REPO: prisma
+          ADDRESS_REPO: prisma
+          DOG_REPO: prisma
+          RECIPE_REPO: prisma
+          SHIPPING_REPO: prisma
+          PRODUCTION_REPO: prisma
+          INVENTORY_REPO: prisma
+        run: |
+          cd backend
+          pnpm start:dev > server.log 2>&1 &
+          echo "SERVER_PID=$!" >> $GITHUB_ENV
+          
+          # Wait for server to be ready
+          echo "Waiting for server to start..."
+          for i in {1..30}; do
+            if curl -s http://127.0.0.1:3000/api/v1/health > /dev/null 2>&1; then
+              echo "Server is ready!"
+              exit 0
+            fi
+            if [ $i -eq 30 ]; then
+              echo "Server failed to start after 30 attempts"
+              cat server.log
+              exit 1
+            fi
+            sleep 2
+          done
+        continue-on-error: false
+
+      - name: Install jq
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Assert PUBLIC recipe exists
+        env:
+          BASE: http://127.0.0.1:3000
+          CUSTOMER_ID: ci-test-user
+          SERVER_LOG_PATH: backend/server.log
+        run: |
+          cd backend
+          pnpm verify:recipe
+        continue-on-error: false
+
+      - name: Run order verification
+        env:
+          BASE: http://127.0.0.1:3000
+          CUSTOMER_ID: ci-test-user
+        run: |
+          cd backend
+          pnpm verify:orders
+        continue-on-error: false
+
+      - name: Show server logs on failure
+        if: failure()
+        run: |
+          cd backend
+          if [ -f server.log ]; then
+            echo "=== Server logs ==="
+            tail -100 server.log
+          fi
+
+      - name: Cleanup server
+        if: always()
+        run: |
+          if [ -n "$SERVER_PID" ]; then
+            echo "Killing server process $SERVER_PID"
+            kill $SERVER_PID 2>/dev/null || true
+            # Wait a bit and force kill if still running
+            sleep 2
+            kill -9 $SERVER_PID 2>/dev/null || true
+          fi
+          # Fallback: kill any remaining nest processes
+          pkill -f "nest start" || true

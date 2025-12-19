@@ -26,6 +26,10 @@ export class Order {
     // Cross-domain references
     public readonly dogId?: string,
     public readonly addressId?: string,
+    // Phase 8.14: Shipping tracking fields
+    public trackingNumber?: string | null,
+    public carrierCode?: string | null,
+    public shippedAt?: Date | null,
   ) {
     // Compute totalAmount from amountTotal if not provided
     if (this.totalAmount === undefined) {
@@ -173,5 +177,32 @@ export class Order {
       this.status === OrderStatus.SHIPPED ||
       this.status === OrderStatus.COMPLETED
     );
+  }
+
+  /**
+   * Mark order as shipped with tracking information
+   * Phase 8.14: Shipping fulfillment
+   * @param trackingNumber Shipping tracking number
+   * @param carrierCode Shipping carrier code (e.g., "SF", "YTO", "ZTO")
+   */
+  markAsShipped(trackingNumber: string, carrierCode: string): void {
+    if (this.status !== OrderStatus.READY_FOR_SHIPMENT) {
+      throw new InvalidStateTransitionError(
+        `Cannot mark order as shipped from status: ${this.status}. Order must be in READY_FOR_SHIPMENT status.`,
+      );
+    }
+
+    if (!trackingNumber || !trackingNumber.trim()) {
+      throw new ValidationError('Tracking number is required');
+    }
+
+    if (!carrierCode || !carrierCode.trim()) {
+      throw new ValidationError('Carrier code is required');
+    }
+
+    this.trackingNumber = trackingNumber.trim();
+    this.carrierCode = carrierCode.trim();
+    this.shippedAt = new Date();
+    this.transitionTo(OrderStatus.SHIPPED);
   }
 }

@@ -11,8 +11,6 @@ import {
   Param,
   HttpCode,
   HttpStatus,
-  UsePipes,
-  ValidationPipe,
   NotFoundException,
   BadRequestException,
   UseGuards,
@@ -39,6 +37,8 @@ import {
   OrderItemDto,
   OrderSummaryDto,
 } from '../dto/orders/order-response.dto';
+import { CancelOrderDto } from '../dto/orders/cancel-order.dto';
+import { PaymentDto } from '../dto/orders/payment-response.dto';
 import {
   PricingPreviewRequestDto,
   PricingPreviewResponseDto,
@@ -51,7 +51,6 @@ import type { RequestUser } from '../auth';
 
 @ApiTags('Orders')
 @Controller('api/v1/orders')
-@UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class OrdersController {
   constructor(
     private readonly orderService: OrderService,
@@ -110,7 +109,14 @@ export class OrdersController {
 
   @Post(':id/confirm')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
   @ApiOperation({ summary: 'Confirm order (submit for payment)' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiHeader({
+    name: 'X-Customer-Id',
+    description: 'Customer ID for authentication',
+    required: true,
+  })
   @ApiParam({ name: 'id', description: 'Order ID' })
   @ApiResponse({
     status: 200,
@@ -119,11 +125,20 @@ export class OrdersController {
   })
   @ApiResponse({ status: 404, description: 'Order not found' })
   @ApiResponse({ status: 400, description: 'Invalid state transition' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - X-Customer-Id header required',
+  })
   async confirmOrder(
     @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<OrderDto> | ApiResponseDto<null>> {
     try {
-      const order = await this.orderService.confirmOrder(id);
+      const order = await this.orderService.confirmOrder(
+        id,
+        'customer', // Phase 8.18: Actor attribution
+        user.customerId, // Phase 8.18: Actor ID
+      );
       const response = this.mapOrderToDto(order);
       return ApiResponseDto.success(response);
     } catch (error) {
@@ -139,7 +154,14 @@ export class OrdersController {
 
   @Post(':id/pay')
   @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
   @ApiOperation({ summary: 'Process payment (mock)' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiHeader({
+    name: 'X-Customer-Id',
+    description: 'Customer ID for authentication',
+    required: true,
+  })
   @ApiParam({ name: 'id', description: 'Order ID' })
   @ApiResponse({
     status: 200,
@@ -148,11 +170,21 @@ export class OrdersController {
   })
   @ApiResponse({ status: 404, description: 'Order not found' })
   @ApiResponse({ status: 400, description: 'Invalid state transition' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - X-Customer-Id header required',
+  })
   async payOrder(
     @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<OrderDto> | ApiResponseDto<null>> {
     try {
-      const order = await this.orderService.processPayment(id);
+      const order = await this.orderService.processPayment(
+        id,
+        'WECHAT', // Default payment method
+        'customer', // Phase 8.18: Actor attribution
+        user.customerId, // Phase 8.18: Actor ID
+      );
       const response = this.mapOrderToDto(order);
       return ApiResponseDto.success(response);
     } catch (error) {
@@ -164,6 +196,110 @@ export class OrdersController {
       }
       throw error;
     }
+  }
+
+  @Get(':id/payment')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Get payment transaction details (Phase 8.17)' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiHeader({
+    name: 'X-Customer-Id',
+    description: 'Customer ID for authentication',
+    required: true,
+  })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment transaction details',
+    type: PaymentDto,
+  })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - X-Customer-Id header required',
+  })
+  async getPaymentDetails(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<PaymentDto> | ApiResponseDto<null>> {
+    const order = await this.orderService.getOrderById(id);
+    if (!order) {
+      return ApiResponseDto.error(404, 'Order not found');
+    }
+
+    // Customer isolation: ensure customer can only access their own orders
+    if (order.customerId !== user.customerId) {
+      return ApiResponseDto.error(404, 'Order not found');
+    }
+
+    const payment: PaymentDto = {
+      paymentMethod: order.paymentMethod ?? null,
+      transactionId: order.transactionId ?? null,
+      paidAt: order.paidAt ? order.paidAt.toISOString() : null,
+      paymentStatus: order.paymentStatus ?? null,
+    };
+
+    return ApiResponseDto.success(payment);
+  }
+
+  @Get(':id/history')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Get order status history (Phase 8.18)' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiHeader({
+    name: 'X-Customer-Id',
+    description: 'Customer ID for authentication',
+    required: true,
+  })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order status history',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          fromStatus: { type: 'string' },
+          toStatus: { type: 'string' },
+          timestamp: { type: 'string', format: 'date-time' },
+          actor: { type: 'string', enum: ['customer', 'staff', 'admin', 'system'] },
+          actorId: { type: 'string', nullable: true },
+          metadata: { type: 'object', nullable: true },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - X-Customer-Id header required',
+  })
+  async getOrderHistory(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any[]> | ApiResponseDto<null>> {
+    const order = await this.orderService.getOrderById(id);
+    if (!order) {
+      return ApiResponseDto.error(404, 'Order not found') as ApiResponseDto<null>;
+    }
+
+    // Customer isolation: ensure customer can only access their own orders
+    if (order.customerId !== user.customerId) {
+      return ApiResponseDto.error(404, 'Order not found') as ApiResponseDto<null>;
+    }
+
+    const history = await this.orderService.getOrderStatusHistory(id);
+    const historyDto = history.map((h) => ({
+      fromStatus: h.fromStatus,
+      toStatus: h.toStatus,
+      timestamp: h.timestamp.toISOString(),
+      actor: h.actor,
+      actorId: h.actorId,
+      metadata: h.metadata,
+    }));
+
+    return ApiResponseDto.success(historyDto);
   }
 
   @Get()
@@ -328,6 +464,67 @@ export class OrdersController {
     }
 
     return ApiResponseDto.success(snapshot);
+  }
+
+  @Post(':id/cancel')
+  @UseGuards(AuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancel order (Phase 8.16)' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiHeader({
+    name: 'X-Customer-Id',
+    description: 'Customer ID for authentication',
+    required: true,
+  })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiBody({ type: CancelOrderDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Order cancelled successfully',
+    type: OrderDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request or order status' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - X-Customer-Id header required',
+  })
+  async cancelOrder(
+    @Param('id') id: string,
+    @Body() cancelOrderDto: CancelOrderDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<OrderDto> | ApiResponseDto<null>> {
+    try {
+      const order = await this.orderService.getOrderById(id);
+      if (!order) {
+        return ApiResponseDto.error(404, 'Order not found');
+      }
+
+      // Customer isolation: ensure customer can only cancel their own orders
+      if (order.customerId !== user.customerId) {
+        return ApiResponseDto.error(404, 'Order not found');
+      }
+
+      const cancelledOrder = await this.orderService.cancelOrder(
+        id,
+        cancelOrderDto.reason,
+        'customer',
+        user.customerId, // Phase 8.18: Actor ID
+      );
+      const response = this.mapOrderToDto(cancelledOrder);
+      return ApiResponseDto.success(response);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      if (error instanceof InvalidStateTransitionError) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
   }
 
   @Post('pricing/preview')
@@ -495,6 +692,15 @@ export class OrdersController {
       shippedAt: order.shippedAt ? order.shippedAt.toISOString() : null,
       // Phase 8.15: Order completion
       completedAt: order.completedAt ? order.completedAt.toISOString() : null,
+      // Phase 8.16: Order cancellation
+      cancelledAt: order.cancelledAt ? order.cancelledAt.toISOString() : null,
+      cancellationReason: order.cancellationReason ?? null,
+      cancelledBy: order.cancelledBy ?? null,
+      // Phase 8.17: Payment transaction tracking
+      paymentMethod: order.paymentMethod ?? null,
+      transactionId: order.transactionId ?? null,
+      paidAt: order.paidAt ? order.paidAt.toISOString() : null,
+      paymentStatus: order.paymentStatus ?? null,
     };
   }
 

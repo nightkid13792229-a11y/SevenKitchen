@@ -21,9 +21,12 @@ import { DOG_REPOSITORY } from '../dog/dog.service';
 import { ShippingService } from '../shipping/shipping.service';
 import type { AddressRepository } from '../../domain/address/address.repository';
 import { ADDRESS_REPOSITORY } from '../address/address.service';
+import type { OrderStatusHistoryRepository } from '../../domain/order/order-status-history.repository';
+import { OrderStatusHistory } from '../../domain/order/order-status-history.entity';
+import { ORDER_STATUS_HISTORY_REPOSITORY } from './order.service.tokens';
 
 // Re-export for convenience
-export { ORDER_REPOSITORY };
+export { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY };
 import { RECIPE_REPOSITORY } from '../dog/dog.service';
 
 export interface CreateOrderDraftDto {
@@ -48,6 +51,8 @@ export class OrderService {
   constructor(
     @Inject(ORDER_REPOSITORY)
     private readonly orderRepository: OrderRepository,
+    @Inject(ORDER_STATUS_HISTORY_REPOSITORY)
+    private readonly statusHistoryRepository: OrderStatusHistoryRepository,
     @Inject(RECIPE_REPOSITORY)
     private readonly recipeRepository: RecipeRepository,
     @Inject(INGREDIENT_REPOSITORY)
@@ -60,6 +65,56 @@ export class OrderService {
     @Inject(ADDRESS_REPOSITORY)
     private readonly addressRepository: AddressRepository,
   ) {}
+
+  /**
+   * Log order status transition to history
+   * Phase 8.18: Order Status History & Audit Trail
+   */
+  private async logStatusTransition(
+    order: Order,
+    fromStatus: OrderStatus,
+    toStatus: OrderStatus,
+    actor: 'customer' | 'staff' | 'admin' | 'system',
+    actorId?: string | null,
+    metadata?: Record<string, any> | null,
+  ): Promise<void> {
+    // Phase 8.18: Log status transition to history
+    // Repository should always be available when Prisma is enabled
+    if (!this.statusHistoryRepository) {
+      console.error(
+        `[CRITICAL] OrderStatusHistoryRepository not injected! Cannot log transition for order ${order.id}: ${fromStatus} -> ${toStatus}`,
+      );
+      // Don't throw - allow operation to continue, but log the issue
+      return;
+    }
+
+    try {
+      await this.statusHistoryRepository.append(
+        order.id,
+        fromStatus,
+        toStatus,
+        actor,
+        actorId,
+        metadata,
+      );
+    } catch (error) {
+      // Phase 8.18: Log errors at ERROR level and re-throw to prevent silent failures
+      console.error(
+        `[History] ERROR: Failed to log status transition for order ${order.id} (${fromStatus} -> ${toStatus}):`,
+        error,
+      );
+      // Log full error details
+      if (error instanceof Error) {
+        console.error('[History] Error message:', error.message);
+        if (error.stack) {
+          console.error('[History] Error stack:', error.stack);
+        }
+      }
+      // Re-throw to fail fast and prevent silent failures
+      // This ensures E2E tests catch history insertion failures
+      throw error;
+    }
+  }
 
   /**
    * Normalize packageCount: compute if missing, validate inputs
@@ -254,7 +309,11 @@ export class OrderService {
         itemDto.quantityG,
         normalizedPackageCount,
         itemDto.packageSpecG,
-        itemDto.customRequirements ?? null,
+        typeof itemDto.customRequirements === 'string'
+          ? itemDto.customRequirements
+          : itemDto.customRequirements !== null && itemDto.customRequirements !== undefined
+          ? JSON.stringify(itemDto.customRequirements)
+          : null,
         dailyIntakeG, // Calculated from DogCalc.finalFoodKcal ÷ Recipe.energyDensityKcalPerKg
       );
 
@@ -311,28 +370,85 @@ export class OrderService {
    * Confirm order (submit for payment)
    * Transitions INIT → PENDING_PAYMENT
    */
-  async confirmOrder(orderId: string): Promise<Order> {
+  async confirmOrder(
+    orderId: string,
+    actor: 'customer' | 'staff' | 'admin' | 'system' = 'customer',
+    actorId?: string | null,
+  ): Promise<Order> {
     const order = await this.orderRepository.findById(orderId);
     if (!order) {
       throw new NotFoundException(`Order not found: ${orderId}`);
     }
 
+    const fromStatus = order.status;
     order.transitionTo(OrderStatus.PENDING_PAYMENT);
-    return this.orderRepository.save(order);
+    const savedOrder = await this.orderRepository.save(order);
+
+    // Log status transition
+    await this.logStatusTransition(
+      savedOrder,
+      fromStatus,
+      OrderStatus.PENDING_PAYMENT,
+      actor,
+      actorId,
+    );
+
+    return savedOrder;
   }
 
   /**
    * Process payment (mock implementation)
-   * Transitions PENDING_PAYMENT → PAID
+   * Phase 8.17: Payment Transaction Tracking
+   * Transitions PENDING_PAYMENT → PAID and records payment transaction
+   * Phase 8.18: Logs status transition to history
+   * @param orderId Order ID
+   * @param paymentMethod Payment method (defaults to "WECHAT" if not provided)
+   * @param actor Who is processing the payment (defaults to "customer")
+   * @param actorId Actor ID (e.g., customerId)
+   * @returns Updated order with payment tracking fields set
    */
-  async processPayment(orderId: string): Promise<Order> {
+  async processPayment(
+    orderId: string,
+    paymentMethod: string = 'WECHAT',
+    actor: 'customer' | 'staff' | 'admin' | 'system' = 'customer',
+    actorId?: string | null,
+  ): Promise<Order> {
     const order = await this.orderRepository.findById(orderId);
     if (!order) {
       throw new NotFoundException(`Order not found: ${orderId}`);
     }
 
-    order.transitionTo(OrderStatus.PAID);
-    return this.orderRepository.save(order);
+    // Idempotency: if already paid, return existing order (no history log for idempotent calls)
+    if (order.status === OrderStatus.PAID) {
+      return order;
+    }
+
+    const fromStatus = order.status;
+
+    // Generate mock transaction ID: MOCK_<timestamp>_<random>
+    const timestamp = Date.now();
+    const random = Math.random().toString(36).substring(2, 9);
+    const transactionId = `MOCK_${timestamp}_${random}`;
+
+    // Record payment (sets paymentStatus, paidAt, transactionId, paymentMethod, and transitions to PAID)
+    order.recordPayment(paymentMethod, transactionId);
+
+    const savedOrder = await this.orderRepository.save(order);
+
+    // Log status transition with payment metadata
+    await this.logStatusTransition(
+      savedOrder,
+      fromStatus,
+      OrderStatus.PAID,
+      actor,
+      actorId,
+      {
+        paymentMethod,
+        transactionId,
+      },
+    );
+
+    return savedOrder;
   }
 
   /**
@@ -545,17 +661,96 @@ export class OrderService {
   /**
    * Complete order
    * Phase 8.15: Order Completion & Delivery Closure MVP
+   * Phase 8.18: Logs status transition to history
    * Transitions SHIPPED → COMPLETED
    * @param orderId Order ID
+   * @param actor Who is completing the order (defaults to "admin")
+   * @param actorId Actor ID (e.g., adminId)
    * @returns Updated order
    */
-  async completeOrder(orderId: string): Promise<Order> {
+  async completeOrder(
+    orderId: string,
+    actor: 'customer' | 'staff' | 'admin' | 'system' = 'admin',
+    actorId?: string | null,
+  ): Promise<Order> {
     const order = await this.orderRepository.findById(orderId);
     if (!order) {
       throw new NotFoundException(`Order not found: ${orderId}`);
     }
 
+    const fromStatus = order.status;
     order.markAsCompleted();
-    return this.orderRepository.save(order);
+    const savedOrder = await this.orderRepository.save(order);
+
+    // Log status transition
+    await this.logStatusTransition(
+      savedOrder,
+      fromStatus,
+      OrderStatus.COMPLETED,
+      actor,
+      actorId,
+    );
+
+    return savedOrder;
+  }
+
+  /**
+   * Cancel order
+   * Phase 8.16: Order Cancellation Workflow
+   * Phase 8.18: Logs status transition to history
+   * @param orderId Order ID
+   * @param reason Cancellation reason
+   * @param cancelledBy Who cancelled the order: "customer" | "admin" | "system"
+   * @param actorId Actor ID (e.g., customerId, adminId)
+   * @returns Updated order
+   * @throws NotFoundException if order not found
+   * @throws BadRequestException if cancellation is not allowed
+   */
+  async cancelOrder(
+    orderId: string,
+    reason: string,
+    cancelledBy: 'customer' | 'admin' | 'system',
+    actorId?: string | null,
+  ): Promise<Order> {
+    const order = await this.orderRepository.findById(orderId);
+    if (!order) {
+      throw new NotFoundException(`Order not found: ${orderId}`);
+    }
+
+    const fromStatus = order.status;
+
+    // Domain method handles all validation and state transitions
+    order.cancelOrder(reason, cancelledBy);
+    const savedOrder = await this.orderRepository.save(order);
+
+    // Log status transition with cancellation metadata
+    const actor: 'customer' | 'staff' | 'admin' | 'system' =
+      cancelledBy === 'customer'
+        ? 'customer'
+        : cancelledBy === 'admin'
+          ? 'admin'
+          : 'system';
+
+    await this.logStatusTransition(
+      savedOrder,
+      fromStatus,
+      OrderStatus.CANCELLED,
+      actor,
+      actorId,
+      {
+        reason,
+        cancelledBy,
+      },
+    );
+
+    return savedOrder;
+  }
+
+  /**
+   * Get order status history
+   * Phase 8.18: Order Status History & Audit Trail
+   */
+  async getOrderStatusHistory(orderId: string): Promise<OrderStatusHistory[]> {
+    return this.statusHistoryRepository.findByOrderId(orderId);
   }
 }

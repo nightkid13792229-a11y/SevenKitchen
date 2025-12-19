@@ -4,8 +4,9 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { OrderService, ORDER_REPOSITORY } from './order.service';
+import { OrderService, ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY } from './order.service';
 import type { OrderRepository } from '../../domain/order/order.repository';
+import type { OrderStatusHistoryRepository } from '../../domain/order/order-status-history.repository';
 import type { RecipeRepository } from '../../domain/recipe/recipe.repository';
 import type { IngredientRepository } from '../../domain/ingredient/ingredient.repository';
 import type { DogRepository } from '../../domain/dog/dog.repository';
@@ -91,6 +92,11 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
     calculateShippingFeePreview: jest.fn(),
   };
 
+  const mockStatusHistoryRepository: jest.Mocked<OrderStatusHistoryRepository> = {
+    append: jest.fn(),
+    findByOrderId: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -98,6 +104,10 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
         {
           provide: ORDER_REPOSITORY,
           useValue: mockOrderRepository,
+        },
+        {
+          provide: ORDER_STATUS_HISTORY_REPOSITORY,
+          useValue: mockStatusHistoryRepository,
         },
         {
           provide: RECIPE_REPOSITORY,
@@ -317,6 +327,429 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
         recipe.energyDensityKcalPerKg, // Still original, not updated
       );
       expect(orderItem.dailyIntakeG).toBe(capturedDailyIntakeG); // Still original, immutable
+    });
+  });
+});
+
+describe('OrderService - Phase 8.16: Order Cancellation', () => {
+  let service: OrderService;
+  let orderRepository: jest.Mocked<OrderRepository>;
+
+  const mockOrderRepository: jest.Mocked<OrderRepository> = {
+    findById: jest.fn(),
+    findByCustomerId: jest.fn(),
+    findByStatus: jest.fn(),
+    save: jest.fn(),
+  };
+
+  const mockStatusHistoryRepository: jest.Mocked<OrderStatusHistoryRepository> = {
+    append: jest.fn(),
+    findByOrderId: jest.fn(),
+  };
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        OrderService,
+        {
+          provide: ORDER_REPOSITORY,
+          useValue: mockOrderRepository,
+        },
+        {
+          provide: ORDER_STATUS_HISTORY_REPOSITORY,
+          useValue: mockStatusHistoryRepository,
+        },
+        {
+          provide: RECIPE_REPOSITORY,
+          useValue: {},
+        },
+        {
+          provide: INGREDIENT_REPOSITORY,
+          useValue: {},
+        },
+        {
+          provide: DOG_REPOSITORY,
+          useValue: {},
+        },
+        {
+          provide: ADDRESS_REPOSITORY,
+          useValue: {},
+        },
+        {
+          provide: PricingService,
+          useValue: {},
+        },
+        {
+          provide: GlobalConfigService,
+          useValue: {},
+        },
+        {
+          provide: ShippingService,
+          useValue: {},
+        },
+      ],
+    }).compile();
+
+    service = module.get<OrderService>(OrderService);
+    orderRepository = module.get(ORDER_REPOSITORY);
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  describe('cancelOrder', () => {
+    const createMockOrder = (status: OrderStatus) => {
+      return new Order(
+        'order-1',
+        'customer-1',
+        status,
+        OrderType.FRESH_FOOD,
+        null,
+        100,
+        10,
+        110,
+        [
+          new OrderItem(
+            'item-1',
+            'order-1',
+            {
+              id: 'recipe-1',
+              version: 1,
+              name: 'Test Recipe',
+              production_loss_rate: 0.1,
+              energy_density_kcal_per_kg: 1450,
+              nutrition_standard: 'FEDIAF_2021',
+              items: [],
+            },
+            1000,
+            10,
+            100,
+            null,
+            310.34,
+          ),
+        ],
+      );
+    };
+
+    it('should cancel order in INIT status by customer', async () => {
+      const order = createMockOrder(OrderStatus.INIT);
+      orderRepository.findById.mockResolvedValue(order);
+      orderRepository.save.mockResolvedValue(order);
+
+      const result = await service.cancelOrder(
+        'order-1',
+        'Customer requested cancellation',
+        'customer',
+      );
+
+      expect(result.status).toBe(OrderStatus.CANCELLED);
+      expect(result.cancelledAt).toBeDefined();
+      expect(result.cancellationReason).toBe('Customer requested cancellation');
+      expect(result.cancelledBy).toBe('customer');
+      expect(orderRepository.save).toHaveBeenCalledWith(order);
+    });
+
+    it('should cancel order in PENDING_PAYMENT status by customer', async () => {
+      const order = createMockOrder(OrderStatus.PENDING_PAYMENT);
+      orderRepository.findById.mockResolvedValue(order);
+      orderRepository.save.mockResolvedValue(order);
+
+      const result = await service.cancelOrder(
+        'order-1',
+        'Payment failed',
+        'customer',
+      );
+
+      expect(result.status).toBe(OrderStatus.CANCELLED);
+      expect(result.cancelledAt).toBeDefined();
+      expect(result.cancellationReason).toBe('Payment failed');
+      expect(result.cancelledBy).toBe('customer');
+    });
+
+    it('should reject customer cancellation of PAID order', async () => {
+      const order = createMockOrder(OrderStatus.PAID);
+      orderRepository.findById.mockResolvedValue(order);
+
+      await expect(
+        service.cancelOrder('order-1', 'Customer request', 'customer'),
+      ).rejects.toThrow('Customer cannot cancel order in status: PAID');
+    });
+
+    it('should cancel order in PAID status by admin', async () => {
+      const order = createMockOrder(OrderStatus.PAID);
+      orderRepository.findById.mockResolvedValue(order);
+      orderRepository.save.mockResolvedValue(order);
+
+      const result = await service.cancelOrder(
+        'order-1',
+        'Admin cancellation',
+        'admin',
+      );
+
+      expect(result.status).toBe(OrderStatus.CANCELLED);
+      expect(result.cancelledBy).toBe('admin');
+    });
+
+    it('should cancel order in IN_PRODUCTION status by admin', async () => {
+      const order = createMockOrder(OrderStatus.IN_PRODUCTION);
+      orderRepository.findById.mockResolvedValue(order);
+      orderRepository.save.mockResolvedValue(order);
+
+      const result = await service.cancelOrder(
+        'order-1',
+        'Production issue',
+        'admin',
+      );
+
+      expect(result.status).toBe(OrderStatus.CANCELLED);
+      expect(result.cancelledBy).toBe('admin');
+    });
+
+    it('should reject admin cancellation of SHIPPED order', async () => {
+      const order = createMockOrder(OrderStatus.SHIPPED);
+      orderRepository.findById.mockResolvedValue(order);
+
+      await expect(
+        service.cancelOrder('order-1', 'Admin request', 'admin'),
+      ).rejects.toThrow('Admin/system cannot cancel order in status: SHIPPED');
+    });
+
+    it('should reject admin cancellation of COMPLETED order', async () => {
+      const order = createMockOrder(OrderStatus.COMPLETED);
+      orderRepository.findById.mockResolvedValue(order);
+
+      await expect(
+        service.cancelOrder('order-1', 'Admin request', 'admin'),
+      ).rejects.toThrow('Admin/system cannot cancel order in status: COMPLETED');
+    });
+
+    it('should reject cancellation of already CANCELLED order', async () => {
+      const order = createMockOrder(OrderStatus.CANCELLED);
+      order.cancelledAt = new Date();
+      order.cancellationReason = 'Previous cancellation';
+      order.cancelledBy = 'customer';
+      orderRepository.findById.mockResolvedValue(order);
+
+      await expect(
+        service.cancelOrder('order-1', 'Another reason', 'customer'),
+      ).rejects.toThrow('Order is already cancelled');
+    });
+
+    it('should reject cancellation with empty reason', async () => {
+      const order = createMockOrder(OrderStatus.INIT);
+      orderRepository.findById.mockResolvedValue(order);
+
+      await expect(
+        service.cancelOrder('order-1', '', 'customer'),
+      ).rejects.toThrow('Cancellation reason is required');
+    });
+
+    it('should handle system cancellation', async () => {
+      const order = createMockOrder(OrderStatus.PAID);
+      orderRepository.findById.mockResolvedValue(order);
+      orderRepository.save.mockResolvedValue(order);
+
+      const result = await service.cancelOrder(
+        'order-1',
+        'System timeout',
+        'system',
+      );
+
+      expect(result.status).toBe(OrderStatus.CANCELLED);
+      expect(result.cancelledBy).toBe('system');
+    });
+  });
+});
+
+describe('OrderService - Phase 8.17: Payment Transaction Tracking', () => {
+  let service: OrderService;
+  let orderRepository: jest.Mocked<OrderRepository>;
+
+  const mockOrderRepository: jest.Mocked<OrderRepository> = {
+    findById: jest.fn(),
+    findByCustomerId: jest.fn(),
+    findByStatus: jest.fn(),
+    save: jest.fn(),
+  };
+
+  const mockStatusHistoryRepository: jest.Mocked<OrderStatusHistoryRepository> = {
+    append: jest.fn(),
+    findByOrderId: jest.fn(),
+  };
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        OrderService,
+        {
+          provide: ORDER_REPOSITORY,
+          useValue: mockOrderRepository,
+        },
+        {
+          provide: ORDER_STATUS_HISTORY_REPOSITORY,
+          useValue: mockStatusHistoryRepository,
+        },
+        {
+          provide: RECIPE_REPOSITORY,
+          useValue: {},
+        },
+        {
+          provide: INGREDIENT_REPOSITORY,
+          useValue: {},
+        },
+        {
+          provide: DOG_REPOSITORY,
+          useValue: {},
+        },
+        {
+          provide: ADDRESS_REPOSITORY,
+          useValue: {},
+        },
+        {
+          provide: PricingService,
+          useValue: {},
+        },
+        {
+          provide: GlobalConfigService,
+          useValue: {},
+        },
+        {
+          provide: ShippingService,
+          useValue: {},
+        },
+      ],
+    }).compile();
+
+    service = module.get<OrderService>(OrderService);
+    orderRepository = module.get(ORDER_REPOSITORY);
+
+    jest.clearAllMocks();
+  });
+
+  describe('processPayment', () => {
+    it('should record payment and transition to PAID', async () => {
+      const order = new Order(
+        'order-1',
+        'customer-1',
+        OrderStatus.PENDING_PAYMENT,
+        OrderType.FRESH_FOOD,
+        null,
+        100,
+        10,
+        110,
+        [new OrderItem('item-1', 'order-1', {} as any, 1000, 10, 100)],
+      );
+
+      mockOrderRepository.findById.mockResolvedValue(order);
+      mockOrderRepository.save.mockImplementation(async (o) => o);
+
+      const result = await service.processPayment('order-1');
+
+      expect(result.status).toBe(OrderStatus.PAID);
+      expect(result.paymentStatus).toBe('SUCCESS');
+      expect(result.paymentMethod).toBe('WECHAT');
+      expect(result.transactionId).toMatch(/^MOCK_\d+_[a-z0-9]+$/);
+      expect(result.paidAt).toBeInstanceOf(Date);
+      expect(orderRepository.save).toHaveBeenCalledWith(result);
+    });
+
+    it('should use default payment method WECHAT when not provided', async () => {
+      const order = new Order(
+        'order-1',
+        'customer-1',
+        OrderStatus.PENDING_PAYMENT,
+        OrderType.FRESH_FOOD,
+        null,
+        100,
+        10,
+        110,
+        [new OrderItem('item-1', 'order-1', {} as any, 1000, 10, 100)],
+      );
+
+      mockOrderRepository.findById.mockResolvedValue(order);
+      mockOrderRepository.save.mockImplementation(async (o) => o);
+
+      const result = await service.processPayment('order-1');
+
+      expect(result.paymentMethod).toBe('WECHAT');
+    });
+
+    it('should be idempotent for already PAID orders', async () => {
+      const order = new Order(
+        'order-1',
+        'customer-1',
+        OrderStatus.PAID,
+        OrderType.FRESH_FOOD,
+        null,
+        100,
+        10,
+        110,
+        [new OrderItem('item-1', 'order-1', {} as any, 1000, 10, 100)],
+        undefined, // totalAmount
+        undefined, // pricingBreakdownSnapshot
+        undefined, // dogId
+        undefined, // addressId
+        undefined, // trackingNumber
+        undefined, // carrierCode
+        undefined, // shippedAt
+        undefined, // completedAt
+        undefined, // cancelledAt
+        undefined, // cancellationReason
+        undefined, // cancelledBy
+        'WECHAT', // paymentMethod
+        'MOCK_1234567890_abc123', // transactionId
+        new Date('2025-01-01'), // paidAt
+        'SUCCESS', // paymentStatus
+      );
+
+      // Verify order has payment fields set
+      expect(order.paymentMethod).toBe('WECHAT');
+      expect(order.transactionId).toBe('MOCK_1234567890_abc123');
+      expect(order.paymentStatus).toBe('SUCCESS');
+
+      mockOrderRepository.findById.mockResolvedValue(order);
+      mockOrderRepository.save.mockImplementation(async (o) => o);
+
+      const result = await service.processPayment('order-1');
+
+      // Idempotency: should return the same order without calling save
+      expect(result).toBe(order);
+      expect(result.status).toBe(OrderStatus.PAID);
+      // Verify payment fields are preserved
+      expect(result.paymentMethod).toBe('WECHAT');
+      expect(result.transactionId).toBe('MOCK_1234567890_abc123');
+      expect(result.paymentStatus).toBe('SUCCESS');
+      expect(result.paidAt).toBeInstanceOf(Date);
+      expect(orderRepository.save).not.toHaveBeenCalled();
+    });
+
+    it('should throw NotFoundException if order not found', async () => {
+      mockOrderRepository.findById.mockResolvedValue(null);
+
+      await expect(service.processPayment('non-existent')).rejects.toThrow(
+        'Order not found: non-existent',
+      );
+    });
+
+    it('should throw InvalidStateTransitionError if order is not in PENDING_PAYMENT', async () => {
+      const order = new Order(
+        'order-1',
+        'customer-1',
+        OrderStatus.INIT,
+        OrderType.FRESH_FOOD,
+        null,
+        100,
+        10,
+        110,
+        [new OrderItem('item-1', 'order-1', {} as any, 1000, 10, 100)],
+      );
+
+      mockOrderRepository.findById.mockResolvedValue(order);
+
+      await expect(service.processPayment('order-1')).rejects.toThrow(
+        'Cannot record payment for order in status: INIT',
+      );
     });
   });
 });

@@ -1,8 +1,12 @@
 #!/bin/bash
 # Phase 8.14: Shipping Fulfillment E2E Verification
 # Verifies complete flow: order -> production -> kitchen completion -> shipping
+# Phase 8.18: Requires Prisma mode for order persistence and history logging
 
 set -euo pipefail
+
+# Phase 8.18: Ensure Prisma mode is enabled for orders and history
+export ORDER_REPO="${ORDER_REPO:-prisma}"
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:3000}"
 API_BASE="${BASE_URL}/api/v1"
@@ -437,6 +441,40 @@ if [ "$PAY_CODE" != "200" ]; then
   fail "Pay order failed: HTTP ${PAY_CODE}" "$(get_body "$PAY_RESPONSE")"
 fi
 success "Order paid: ${ORDER_ID}"
+
+# Step 3.5: Verify payment tracking fields (Phase 8.17)
+info "Step 3.5: Verify payment tracking fields"
+PAYMENT_RESPONSE=$(curl_with_code "${API_BASE}/orders/${ORDER_ID}/payment" -X GET \
+  -H "Authorization: Bearer ${CUSTOMER_TOKEN}")
+PAYMENT_CODE=$(get_http_code "$PAYMENT_RESPONSE")
+PAYMENT_BODY=$(get_body "$PAYMENT_RESPONSE")
+
+if [ "$PAYMENT_CODE" != "200" ]; then
+  fail "Get payment details failed: HTTP ${PAYMENT_CODE}" "$PAYMENT_BODY"
+fi
+
+PAYMENT_STATUS=$(echo "$PAYMENT_BODY" | extract_json_stdin "root.data.paymentStatus")
+PAYMENT_METHOD=$(echo "$PAYMENT_BODY" | extract_json_stdin "root.data.paymentMethod")
+TRANSACTION_ID=$(echo "$PAYMENT_BODY" | extract_json_stdin "root.data.transactionId")
+PAID_AT=$(echo "$PAYMENT_BODY" | extract_json_stdin "root.data.paidAt")
+
+if [ "$PAYMENT_STATUS" != "SUCCESS" ]; then
+  fail "Payment status should be SUCCESS, got: ${PAYMENT_STATUS}" "$PAYMENT_BODY"
+fi
+
+if [ "$PAYMENT_METHOD" != "WECHAT" ]; then
+  fail "Payment method should be WECHAT, got: ${PAYMENT_METHOD}" "$PAYMENT_BODY"
+fi
+
+if [ -z "$TRANSACTION_ID" ] || [[ ! "$TRANSACTION_ID" =~ ^MOCK_ ]]; then
+  fail "Transaction ID should start with MOCK_, got: ${TRANSACTION_ID}" "$PAYMENT_BODY"
+fi
+
+if [ -z "$PAID_AT" ]; then
+  fail "paidAt should be set" "$PAYMENT_BODY"
+fi
+
+success "Payment tracking verified: status=${PAYMENT_STATUS}, method=${PAYMENT_METHOD}, transactionId=${TRANSACTION_ID}, paidAt=${PAID_AT}"
 echo ""
 
 # Step 4: Create production batch
@@ -766,9 +804,203 @@ fi
 success "Order verified as COMPLETED with completedAt: ${FINAL_COMPLETE_COMPLETED_AT}, tracking unchanged: ${FINAL_COMPLETE_TRACKING}"
 echo ""
 
+# ==========================================
+# Phase 8.16: Order Cancellation Tests
+# ==========================================
+
+# Step 13: Create a new order in INIT and cancel it by customer
+info "Step 13: Create new order in INIT and cancel by customer"
+# Create a new order (reuse dog and recipe from earlier steps)
+# Use RECIPE_ID_TO_USE if available, otherwise fall back to RECIPE_ID
+RECIPE_ID_FOR_CANCEL="${RECIPE_ID_TO_USE:-${RECIPE_ID}}"
+if [ -z "$RECIPE_ID_FOR_CANCEL" ]; then
+  fail "Recipe ID not available for cancellation test. Please ensure RECIPE_ID or RECIPE_ID_TO_USE is set."
+fi
+
+CREATE_CANCEL_ORDER_RESPONSE=$(curl_with_code "${API_BASE}/orders" -X POST \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${CUSTOMER_TOKEN}" \
+  -d "{
+    \"dogId\": \"${DOG_ID_TO_USE}\",
+    \"type\": \"FRESH_FOOD\",
+    \"items\": [{
+      \"recipeId\": \"${RECIPE_ID_FOR_CANCEL}\",
+      \"quantityG\": 1000,
+      \"packageSpecG\": 100
+    }]
+  }")
+CREATE_CANCEL_ORDER_CODE=$(get_http_code "$CREATE_CANCEL_ORDER_RESPONSE")
+CREATE_CANCEL_ORDER_BODY=$(get_body "$CREATE_CANCEL_ORDER_RESPONSE")
+
+if [ "$CREATE_CANCEL_ORDER_CODE" != "201" ]; then
+  fail "Create order for cancellation test failed: HTTP ${CREATE_CANCEL_ORDER_CODE}" "$CREATE_CANCEL_ORDER_BODY"
+fi
+
+CANCEL_ORDER_ID=$(echo "$CREATE_CANCEL_ORDER_BODY" | extract_json_stdin "root.data.id")
+if [ -z "$CANCEL_ORDER_ID" ]; then
+  fail "Order ID not found in create response" "$CREATE_CANCEL_ORDER_BODY"
+fi
+
+CANCEL_ORDER_STATUS=$(echo "$CREATE_CANCEL_ORDER_BODY" | extract_json_stdin "root.data.status")
+if [ "$CANCEL_ORDER_STATUS" != "INIT" ]; then
+  fail "New order status is ${CANCEL_ORDER_STATUS}, expected INIT" "$CREATE_CANCEL_ORDER_BODY"
+fi
+
+success "Created order ${CANCEL_ORDER_ID} in INIT status"
+
+# Cancel the order
+CANCEL_RESPONSE=$(curl_with_code "${API_BASE}/orders/${CANCEL_ORDER_ID}/cancel" -X POST \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${CUSTOMER_TOKEN}" \
+  -d '{"reason": "Customer requested cancellation"}')
+CANCEL_CODE=$(get_http_code "$CANCEL_RESPONSE")
+CANCEL_BODY=$(get_body "$CANCEL_RESPONSE")
+
+if [ "$CANCEL_CODE" != "200" ]; then
+  CANCEL_CURL_CMD="curl -X POST -H \"Content-Type: application/json\" -H \"Authorization: Bearer ${CUSTOMER_TOKEN}\" -d '{\"reason\":\"Customer requested cancellation\"}' \"${API_BASE}/orders/${CANCEL_ORDER_ID}/cancel\""
+  truncated_body=$(echo "$CANCEL_BODY" | head -c 500)
+  fail "Cancel order failed: HTTP ${CANCEL_CODE}" "$truncated_body" "$CANCEL_CURL_CMD"
+fi
+
+CANCEL_CODE_VALUE=$(echo "$CANCEL_BODY" | extract_json_stdin "root.code")
+if [ "$CANCEL_CODE_VALUE" != "0" ]; then
+  CANCEL_CURL_CMD="curl -X POST -H \"Content-Type: application/json\" -H \"Authorization: Bearer ${CUSTOMER_TOKEN}\" -d '{\"reason\":\"Customer requested cancellation\"}' \"${API_BASE}/orders/${CANCEL_ORDER_ID}/cancel\""
+  truncated_body=$(echo "$CANCEL_BODY" | head -c 500)
+  fail "Cancel order failed: code ${CANCEL_CODE_VALUE}" "$truncated_body" "$CANCEL_CURL_CMD"
+fi
+
+CANCELLED_STATUS=$(echo "$CANCEL_BODY" | extract_json_stdin "root.data.status")
+if [ "$CANCELLED_STATUS" != "CANCELLED" ]; then
+  fail "Order status after cancellation is ${CANCELLED_STATUS}, expected CANCELLED" "$CANCEL_BODY"
+fi
+
+success "Order ${CANCEL_ORDER_ID} cancelled successfully: status=${CANCELLED_STATUS}"
+echo ""
+
+# Step 14: Verify cancellation fields are persisted
+info "Step 14: Verify cancellation fields are persisted"
+VERIFY_CANCEL_RESPONSE=$(curl_with_code "${API_BASE}/orders/${CANCEL_ORDER_ID}" \
+  -H "Authorization: Bearer ${CUSTOMER_TOKEN}")
+VERIFY_CANCEL_CODE=$(get_http_code "$VERIFY_CANCEL_RESPONSE")
+VERIFY_CANCEL_BODY=$(get_body "$VERIFY_CANCEL_RESPONSE")
+
+if [ "$VERIFY_CANCEL_CODE" != "200" ]; then
+  fail "Get cancelled order detail failed: HTTP ${VERIFY_CANCEL_CODE}" "$VERIFY_CANCEL_BODY"
+fi
+
+VERIFY_CANCEL_STATUS=$(echo "$VERIFY_CANCEL_BODY" | extract_json_stdin "root.data.status")
+VERIFY_CANCELLED_AT=$(echo "$VERIFY_CANCEL_BODY" | extract_json_stdin "root.data.cancelledAt")
+VERIFY_CANCELLATION_REASON=$(echo "$VERIFY_CANCEL_BODY" | extract_json_stdin "root.data.cancellationReason")
+VERIFY_CANCELLED_BY=$(echo "$VERIFY_CANCEL_BODY" | extract_json_stdin "root.data.cancelledBy")
+
+if [ "$VERIFY_CANCEL_STATUS" != "CANCELLED" ]; then
+  fail "Verified order status is ${VERIFY_CANCEL_STATUS}, expected CANCELLED" "$VERIFY_CANCEL_BODY"
+fi
+
+if [ -z "$VERIFY_CANCELLED_AT" ]; then
+  fail "cancelledAt timestamp not persisted" "$VERIFY_CANCEL_BODY"
+fi
+
+if [ "$VERIFY_CANCELLATION_REASON" != "Customer requested cancellation" ]; then
+  fail "cancellationReason not persisted correctly: expected 'Customer requested cancellation', got '${VERIFY_CANCELLATION_REASON}'" "$VERIFY_CANCEL_BODY"
+fi
+
+if [ "$VERIFY_CANCELLED_BY" != "customer" ]; then
+  fail "cancelledBy not persisted correctly: expected 'customer', got '${VERIFY_CANCELLED_BY}'" "$VERIFY_CANCEL_BODY"
+fi
+
+success "Cancellation fields verified: cancelledAt=${VERIFY_CANCELLED_AT}, reason='${VERIFY_CANCELLATION_REASON}', cancelledBy=${VERIFY_CANCELLED_BY}"
+echo ""
+
+# Step 15: Attempt to cancel COMPLETED order → expect failure
+info "Step 15: Attempt to cancel COMPLETED order → expect failure"
+CANCEL_COMPLETED_RESPONSE=$(curl_with_code "${API_BASE}/orders/${ORDER_ID}/cancel" -X POST \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer ${CUSTOMER_TOKEN}" \
+  -d '{"reason": "Should fail"}')
+CANCEL_COMPLETED_CODE=$(get_http_code "$CANCEL_COMPLETED_RESPONSE")
+CANCEL_COMPLETED_BODY=$(get_body "$CANCEL_COMPLETED_RESPONSE")
+
+# API returns 200 with error code in JSON body (not HTTP 400)
+CANCEL_COMPLETED_CODE_VALUE=$(echo "$CANCEL_COMPLETED_BODY" | extract_json_stdin "root.code")
+# API should return error code (non-zero, typically 400)
+if [ "$CANCEL_COMPLETED_CODE_VALUE" = "0" ]; then
+  fail "Expected error code when cancelling COMPLETED order, got code=0" "$CANCEL_COMPLETED_BODY"
+fi
+
+# Verify error message indicates the correct reason
+CANCEL_COMPLETED_MESSAGE=$(echo "$CANCEL_COMPLETED_BODY" | extract_json_stdin "root.message")
+if [[ ! "$CANCEL_COMPLETED_MESSAGE" =~ "COMPLETED" ]] && [[ ! "$CANCEL_COMPLETED_MESSAGE" =~ "cannot cancel" ]]; then
+  fail "Expected error message about COMPLETED order cancellation, got: ${CANCEL_COMPLETED_MESSAGE}" "$CANCEL_COMPLETED_BODY"
+fi
+
+success "Correctly rejected cancellation of COMPLETED order: code=${CANCEL_COMPLETED_CODE_VALUE}, message=${CANCEL_COMPLETED_MESSAGE}"
+echo ""
+
+# Step 16: Verify order status history after completion (Phase 8.18)
+info "Step 16: Verify order status history after completion"
+HISTORY_RESPONSE=$(curl_with_code "${API_BASE}/orders/${ORDER_ID}/history" -X GET \
+  -H "Authorization: Bearer ${CUSTOMER_TOKEN}")
+HISTORY_CODE=$(get_http_code "$HISTORY_RESPONSE")
+HISTORY_BODY=$(get_body "$HISTORY_RESPONSE")
+
+if [ "$HISTORY_CODE" != "200" ]; then
+  fail "Get order history failed: HTTP ${HISTORY_CODE}" "$HISTORY_BODY"
+fi
+
+HISTORY_COUNT=$(echo "$HISTORY_BODY" | extract_json_stdin "root.data | length")
+if [ "$HISTORY_COUNT" = "0" ] || [ -z "$HISTORY_COUNT" ]; then
+  fail "Order history should contain at least one entry, got: ${HISTORY_COUNT}" "$HISTORY_BODY"
+fi
+
+# Verify key transitions exist
+HAS_PAID=$(echo "$HISTORY_BODY" | jq -r '.data[] | select(.toStatus == "PAID") | .toStatus' | head -1)
+HAS_SHIPPED=$(echo "$HISTORY_BODY" | jq -r '.data[] | select(.toStatus == "SHIPPED") | .toStatus' | head -1)
+HAS_COMPLETED=$(echo "$HISTORY_BODY" | jq -r '.data[] | select(.toStatus == "COMPLETED") | .toStatus' | head -1)
+
+if [ "$HAS_PAID" != "PAID" ]; then
+  fail "History should contain PAID transition" "$HISTORY_BODY"
+fi
+
+if [ "$HAS_SHIPPED" != "SHIPPED" ]; then
+  fail "History should contain SHIPPED transition" "$HISTORY_BODY"
+fi
+
+if [ "$HAS_COMPLETED" != "COMPLETED" ]; then
+  fail "History should contain COMPLETED transition" "$HISTORY_BODY"
+fi
+
+success "Order status history verified: ${HISTORY_COUNT} entries, key transitions (PAID, SHIPPED, COMPLETED) present"
+echo ""
+
+# Step 17: Verify cancellation history (Phase 8.18)
+info "Step 17: Verify cancellation history"
+CANCEL_HISTORY_RESPONSE=$(curl_with_code "${API_BASE}/orders/${CANCEL_ORDER_ID}/history" -X GET \
+  -H "Authorization: Bearer ${CUSTOMER_TOKEN}")
+CANCEL_HISTORY_CODE=$(get_http_code "$CANCEL_HISTORY_RESPONSE")
+CANCEL_HISTORY_BODY=$(get_body "$CANCEL_HISTORY_RESPONSE")
+
+if [ "$CANCEL_HISTORY_CODE" != "200" ]; then
+  fail "Get cancellation order history failed: HTTP ${CANCEL_HISTORY_CODE}" "$CANCEL_HISTORY_BODY"
+fi
+
+HAS_CANCELLED=$(echo "$CANCEL_HISTORY_BODY" | jq -r '.data[] | select(.toStatus == "CANCELLED") | .toStatus' | head -1)
+CANCELLED_ACTOR=$(echo "$CANCEL_HISTORY_BODY" | jq -r '.data[] | select(.toStatus == "CANCELLED") | .actor' | head -1)
+
+if [ "$HAS_CANCELLED" != "CANCELLED" ]; then
+  fail "Cancellation history should contain CANCELLED transition" "$CANCEL_HISTORY_BODY"
+fi
+
+if [ "$CANCELLED_ACTOR" != "customer" ]; then
+  fail "Cancellation actor should be 'customer', got: ${CANCELLED_ACTOR}" "$CANCEL_HISTORY_BODY"
+fi
+
+success "Cancellation history verified: CANCELLED transition present, actor=customer"
+echo ""
+
 # Summary
 echo "=========================================="
-echo "Phase 8.14 + 8.15 E2E Verification Summary"
+echo "Phase 8.14 + 8.15 + 8.16 + 8.17 + 8.18 E2E Verification Summary"
 echo "=========================================="
 echo "Order ID: ${SUMMARY_ORDER_ID}"
 echo "Batch ID: ${SUMMARY_BATCH_ID}"
@@ -777,6 +1009,9 @@ echo "Shipped: ${SUMMARY_SHIPPED}"
 echo "Tracking Number: ${SUMMARY_TRACKING_NUMBER}"
 echo "Completed: YES"
 echo "Completed At: ${FINAL_COMPLETE_COMPLETED_AT}"
+echo "Cancelled Order ID: ${CANCEL_ORDER_ID}"
+echo "Cancellation Test: PASSED"
 echo ""
 success "All steps completed successfully!"
+exit 0
 

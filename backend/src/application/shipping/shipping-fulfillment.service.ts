@@ -5,9 +5,10 @@
 
 import { Injectable, Inject, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
 import type { OrderRepository } from '../../domain/order/order.repository';
+import type { OrderStatusHistoryRepository } from '../../domain/order/order-status-history.repository';
 import { Order } from '../../domain/order';
 import { OrderStatus } from '../../domain';
-import { ORDER_REPOSITORY } from '../order/order.service';
+import { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY } from '../order/order.service';
 
 export interface OrderReadyForShipmentDto {
   id: string;
@@ -37,6 +38,8 @@ export class ShippingFulfillmentService {
   constructor(
     @Inject(ORDER_REPOSITORY)
     private readonly orderRepository: OrderRepository,
+    @Inject(ORDER_STATUS_HISTORY_REPOSITORY)
+    private readonly statusHistoryRepository: OrderStatusHistoryRepository,
   ) {}
 
   /**
@@ -68,10 +71,13 @@ export class ShippingFulfillmentService {
   /**
    * Mark order as shipped with tracking information
    * Phase 8.14: Transitions order from READY_FOR_SHIPMENT to SHIPPED
+   * Phase 8.18: Logs status transition to history
    */
   async markOrderAsShipped(
     orderId: string,
     dto: MarkOrderAsShippedDto,
+    actor: 'customer' | 'staff' | 'admin' | 'system' = 'staff',
+    actorId?: string | null,
   ): Promise<Order> {
     const order = await this.orderRepository.findById(orderId);
     if (!order) {
@@ -94,11 +100,36 @@ export class ShippingFulfillmentService {
       throw new BadRequestException('Carrier code is required');
     }
 
+    const fromStatus = order.status;
+
     // Mark order as shipped (this will transition status to SHIPPED)
     order.markAsShipped(dto.trackingNumber.trim(), dto.carrierCode.trim());
 
     // Persist the order
     const savedOrder = await this.orderRepository.save(order);
+
+    // Log status transition with shipping metadata
+    try {
+      await this.statusHistoryRepository.append(
+        savedOrder.id,
+        fromStatus,
+        OrderStatus.SHIPPED,
+        actor,
+        actorId,
+        {
+          trackingNumber: dto.trackingNumber.trim(),
+          carrierCode: dto.carrierCode.trim(),
+        },
+      );
+    } catch (error) {
+      // Phase 8.18: Log errors at ERROR level and re-throw to prevent silent failures
+      this.logger.error(
+        `[History] ERROR: Failed to log status transition for order ${orderId}:`,
+        error,
+      );
+      // Re-throw to fail fast and prevent silent failures
+      throw error;
+    }
 
     // Reload order to ensure we have the latest persisted data (including shipping fields)
     const reloadedOrder = await this.orderRepository.findById(orderId);

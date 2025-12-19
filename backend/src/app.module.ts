@@ -55,17 +55,27 @@ import { PrismaProductionRepository } from './infrastructure/repositories/prisma
 import { KitchenService } from './application/kitchen/kitchen.service';
 import { InventoryService, INVENTORY_REPOSITORY } from './application/inventory/inventory.service';
 import { PrismaInventoryRepository } from './infrastructure/repositories/prisma-inventory.repository';
+import { PrismaOrderStatusHistoryRepository } from './infrastructure/repositories/prisma-order-status-history.repository';
+import { ORDER_STATUS_HISTORY_REPOSITORY } from './application/order/order.service.tokens';
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
-  return (
+  // Check explicit 'prisma' settings
+  if (
     process.env.ORDER_REPO === 'prisma' ||
     process.env.ADDRESS_REPO === 'prisma' ||
     process.env.DOG_REPO === 'prisma' ||
     process.env.RECIPE_REPO === 'prisma' ||
     process.env.SHIPPING_REPO === 'prisma' ||
-    process.env.PRODUCTION_REPO === 'prisma'
-  );
+    process.env.PRODUCTION_REPO === 'prisma' ||
+    process.env.INVENTORY_REPO === 'prisma'
+  ) {
+    return true;
+  }
+  // Check defaults: PRODUCTION_REPO and INVENTORY_REPO default to 'prisma' when undefined
+  const productionMode = process.env.PRODUCTION_REPO ?? 'prisma';
+  const inventoryMode = process.env.INVENTORY_REPO ?? 'prisma';
+  return productionMode === 'prisma' || inventoryMode === 'prisma';
 };
 
 // Validate DATABASE_URL when Prisma is enabled
@@ -260,6 +270,20 @@ validatePrismaConfig();
         throw new Error(
           'Inventory repository only supports Prisma mode. Set INVENTORY_REPO=prisma and ensure DATABASE_URL is set.',
         );
+      },
+      inject: isPrismaEnabled() ? [PrismaService] : [],
+    },
+    // Phase 8.18: Order Status History Repository
+    // Always available when Prisma is enabled (required for audit trail)
+    {
+      provide: ORDER_STATUS_HISTORY_REPOSITORY,
+      useFactory: (prismaService?: PrismaService) => {
+        if (!prismaService) {
+          throw new Error(
+            'PrismaService is not available. Ensure Prisma is enabled via repo switches.',
+          );
+        }
+        return new PrismaOrderStatusHistoryRepository(prismaService);
       },
       inject: isPrismaEnabled() ? [PrismaService] : [],
     },

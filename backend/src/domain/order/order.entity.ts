@@ -32,6 +32,15 @@ export class Order {
     public shippedAt?: Date | null,
     // Phase 8.15: Order completion
     public completedAt?: Date | null,
+    // Phase 8.16: Order cancellation
+    public cancelledAt?: Date | null,
+    public cancellationReason?: string | null,
+    public cancelledBy?: 'customer' | 'admin' | 'system' | null,
+    // Phase 8.17: Payment transaction tracking
+    public paymentMethod?: string | null,
+    public transactionId?: string | null,
+    public paidAt?: Date | null,
+    public paymentStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | null,
   ) {
     // Compute totalAmount from amountTotal if not provided
     if (this.totalAmount === undefined) {
@@ -103,26 +112,28 @@ export class Order {
   /**
    * Check if transition is allowed
    * State machine rules from Doc 02 Section 3.1:
-   * INIT → PENDING_PAYMENT
+   * INIT → PENDING_PAYMENT or CANCELLED
    * PENDING_PAYMENT → PAID (success) or CANCELLED (failure)
-   * PAID → WAITING_FOR_PRODUCTION
-   * WAITING_FOR_PRODUCTION → IN_PRODUCTION
-   * IN_PRODUCTION → READY_FOR_PACKAGING (when all items portioned)
-   * READY_FOR_PACKAGING → READY_FOR_SHIPMENT
-   * READY_FOR_SHIPMENT → SHIPPED
-   * SHIPPED → COMPLETED
+   * PAID → WAITING_FOR_PRODUCTION or CANCELLED (admin)
+   * WAITING_FOR_PRODUCTION → IN_PRODUCTION or CANCELLED (admin)
+   * IN_PRODUCTION → READY_FOR_PACKAGING or CANCELLED (admin)
+   * READY_FOR_PACKAGING → READY_FOR_SHIPMENT or CANCELLED (admin)
+   * READY_FOR_SHIPMENT → SHIPPED or CANCELLED (admin)
+   * SHIPPED → COMPLETED (cannot be cancelled)
+   * COMPLETED → [] (terminal, cannot be cancelled)
+   * Phase 8.16: Admin can cancel from any status except SHIPPED, COMPLETED, CANCELLED
    */
   private canTransitionTo(newStatus: OrderStatus): boolean {
     const validTransitions: Record<OrderStatus, OrderStatus[]> = {
       [OrderStatus.INIT]: [OrderStatus.PENDING_PAYMENT, OrderStatus.CANCELLED],
       [OrderStatus.PENDING_PAYMENT]: [OrderStatus.PAID, OrderStatus.CANCELLED],
-      [OrderStatus.PAID]: [OrderStatus.WAITING_FOR_PRODUCTION],
-      [OrderStatus.WAITING_FOR_PRODUCTION]: [OrderStatus.IN_PRODUCTION],
-      [OrderStatus.IN_PRODUCTION]: [OrderStatus.READY_FOR_PACKAGING],
-      [OrderStatus.READY_FOR_PACKAGING]: [OrderStatus.READY_FOR_SHIPMENT],
-      [OrderStatus.READY_FOR_SHIPMENT]: [OrderStatus.SHIPPED],
-      [OrderStatus.SHIPPED]: [OrderStatus.COMPLETED],
-      [OrderStatus.COMPLETED]: [], // Terminal state
+      [OrderStatus.PAID]: [OrderStatus.WAITING_FOR_PRODUCTION, OrderStatus.CANCELLED],
+      [OrderStatus.WAITING_FOR_PRODUCTION]: [OrderStatus.IN_PRODUCTION, OrderStatus.CANCELLED],
+      [OrderStatus.IN_PRODUCTION]: [OrderStatus.READY_FOR_PACKAGING, OrderStatus.CANCELLED],
+      [OrderStatus.READY_FOR_PACKAGING]: [OrderStatus.READY_FOR_SHIPMENT, OrderStatus.CANCELLED],
+      [OrderStatus.READY_FOR_SHIPMENT]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED],
+      [OrderStatus.SHIPPED]: [OrderStatus.COMPLETED], // Cannot be cancelled
+      [OrderStatus.COMPLETED]: [], // Terminal state, cannot be cancelled
       [OrderStatus.CANCELLED]: [], // Terminal state
     };
 
@@ -222,5 +233,92 @@ export class Order {
 
     this.completedAt = new Date();
     this.transitionTo(OrderStatus.COMPLETED);
+  }
+
+  /**
+   * Cancel order
+   * Phase 8.16: Order Cancellation Workflow
+   * @param reason Cancellation reason
+   * @param cancelledBy Who cancelled the order: "customer" | "admin" | "system"
+   * @throws InvalidStateTransitionError if order cannot be cancelled from current status
+   * @throws ValidationError if order is already cancelled
+   */
+  cancelOrder(reason: string, cancelledBy: 'customer' | 'admin' | 'system'): void {
+    // Idempotency: if already cancelled, reject clearly
+    if (this.status === OrderStatus.CANCELLED) {
+      throw new ValidationError('Order is already cancelled');
+    }
+
+    // Validate cancellation permissions based on who is cancelling
+    if (cancelledBy === 'customer') {
+      // Customer can only cancel INIT or PENDING_PAYMENT
+      if (
+        this.status !== OrderStatus.INIT &&
+        this.status !== OrderStatus.PENDING_PAYMENT
+      ) {
+        throw new InvalidStateTransitionError(
+          `Customer cannot cancel order in status: ${this.status}. Only INIT or PENDING_PAYMENT orders can be cancelled by customer.`,
+        );
+      }
+    } else {
+      // Admin or system can cancel any status except SHIPPED, COMPLETED, and CANCELLED
+      // (CANCELLED already checked above, but include for clarity)
+      if (
+        this.status === OrderStatus.SHIPPED ||
+        this.status === OrderStatus.COMPLETED
+      ) {
+        throw new InvalidStateTransitionError(
+          `Admin/system cannot cancel order in status: ${this.status}. SHIPPED and COMPLETED orders cannot be cancelled.`,
+        );
+      }
+    }
+
+    // Validate reason is provided
+    if (!reason || !reason.trim()) {
+      throw new ValidationError('Cancellation reason is required');
+    }
+
+    // Set cancellation fields
+    this.cancelledAt = new Date();
+    this.cancellationReason = reason.trim();
+    this.cancelledBy = cancelledBy;
+
+    // Transition to CANCELLED status
+    this.transitionTo(OrderStatus.CANCELLED);
+  }
+
+  /**
+   * Record payment transaction
+   * Phase 8.17: Payment Transaction Tracking
+   * @param paymentMethod Payment method (e.g., "WECHAT", "ALIPAY")
+   * @param transactionId Transaction ID (generated or from payment gateway)
+   * @throws ValidationError if paymentStatus is not SUCCESS but paidAt/transactionId are set
+   */
+  recordPayment(
+    paymentMethod: string,
+    transactionId: string,
+  ): void {
+    if (this.status !== OrderStatus.PENDING_PAYMENT) {
+      throw new InvalidStateTransitionError(
+        `Cannot record payment for order in status: ${this.status}. Order must be in PENDING_PAYMENT status.`,
+      );
+    }
+
+    if (!paymentMethod || !paymentMethod.trim()) {
+      throw new ValidationError('Payment method is required');
+    }
+
+    if (!transactionId || !transactionId.trim()) {
+      throw new ValidationError('Transaction ID is required');
+    }
+
+    // Set payment tracking fields
+    this.paymentMethod = paymentMethod.trim();
+    this.transactionId = transactionId.trim();
+    this.paidAt = new Date();
+    this.paymentStatus = 'SUCCESS';
+
+    // Transition to PAID status
+    this.transitionTo(OrderStatus.PAID);
   }
 }

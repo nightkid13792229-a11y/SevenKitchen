@@ -6,8 +6,9 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
 import { ShippingFulfillmentService } from './shipping-fulfillment.service';
-import { ORDER_REPOSITORY } from '../order/order.service';
+import { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY } from '../order/order.service';
 import type { OrderRepository } from '../../domain/order/order.repository';
+import type { OrderStatusHistoryRepository } from '../../domain/order/order-status-history.repository';
 import { Order, OrderItem } from '../../domain/order';
 import { OrderStatus, OrderType } from '../../domain';
 import type { RecipeSnapshot } from '../../domain/recipe/types';
@@ -23,6 +24,11 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
     save: jest.fn(),
   };
 
+  const mockStatusHistoryRepository: jest.Mocked<OrderStatusHistoryRepository> = {
+    append: jest.fn(),
+    findByOrderId: jest.fn(),
+  };
+
   beforeEach(async () => {
     // Suppress console logs during tests
     jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -35,6 +41,10 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
         {
           provide: ORDER_REPOSITORY,
           useValue: mockOrderRepository,
+        },
+        {
+          provide: ORDER_STATUS_HISTORY_REPOSITORY,
+          useValue: mockStatusHistoryRepository,
         },
       ],
     }).compile();

@@ -122,12 +122,40 @@ model Order {
   shippedAt                DateTime? @map("shipped_at")
   // Phase 8.15: Order completion
   completedAt              DateTime? @map("completed_at")
+  // Phase 8.16: Order cancellation
+  cancelledAt              DateTime? @map("cancelled_at")
+  cancellationReason       String?   @map("cancellation_reason")
+  cancelledBy              String?   @map("cancelled_by") // "customer" | "admin" | "system"
+  // Phase 8.17: Payment transaction tracking
+  paymentMethod            String?   @map("payment_method")
+  transactionId            String?   @map("transaction_id")
+  paidAt                   DateTime? @map("paid_at")
+  paymentStatus            String?   @map("payment_status") // "PENDING" | "SUCCESS" | "FAILED"
 
   items OrderItem[]
+  statusHistory OrderStatusHistory[]
 
   @@index([customerId])
   @@index([status])
   @@map("order")
+}
+
+// Phase 8.18: Order Status History & Audit Trail
+model OrderStatusHistory {
+  id        String      @id @default(uuid()) @map("id")
+  orderId   String      @map("order_id")
+  fromStatus OrderStatus @map("from_status")
+  toStatus  OrderStatus  @map("to_status")
+  timestamp DateTime    @default(now()) @map("timestamp")
+  actor     String      @map("actor") // "customer" | "staff" | "admin" | "system"
+  actorId   String?     @map("actor_id")
+  metadata  Json?       @map("metadata")
+
+  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([orderId, timestamp])
+  @@map("order_status_history")
 }
 
 // OrderItem is persisted only as part of the Order aggregate; no independent lifecycle or APIs (Phase 8.1 scope).

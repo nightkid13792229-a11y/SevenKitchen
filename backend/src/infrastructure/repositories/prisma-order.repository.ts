@@ -81,6 +81,15 @@ export class PrismaOrderRepository implements OrderRepository {
             shippedAt: order.shippedAt ?? null,
             // Phase 8.15: Order completion
             completedAt: order.completedAt ?? null,
+            // Phase 8.16: Order cancellation
+            cancelledAt: order.cancelledAt ?? null,
+            cancellationReason: order.cancellationReason ?? null,
+            cancelledBy: order.cancelledBy ?? null,
+            // Phase 8.17: Payment transaction tracking
+            paymentMethod: order.paymentMethod ?? null,
+            transactionId: order.transactionId ?? null,
+            paidAt: order.paidAt ?? null,
+            paymentStatus: order.paymentStatus ?? null,
           },
         });
 
@@ -130,6 +139,15 @@ export class PrismaOrderRepository implements OrderRepository {
           shippedAt: order.shippedAt ?? null,
           // Phase 8.15: Order completion (must be updated when order is completed)
           completedAt: order.completedAt ?? null,
+          // Phase 8.16: Order cancellation (must be updated when order is cancelled)
+          cancelledAt: order.cancelledAt ?? null,
+          cancellationReason: order.cancellationReason ?? null,
+          cancelledBy: order.cancelledBy ?? null,
+          // Phase 8.17: Payment transaction tracking (must be updated when payment is processed)
+          paymentMethod: order.paymentMethod ?? null,
+          transactionId: order.transactionId ?? null,
+          paidAt: order.paidAt ?? null,
+          paymentStatus: order.paymentStatus ?? null,
         },
       });
     }
@@ -206,6 +224,15 @@ export class PrismaOrderRepository implements OrderRepository {
       record.shippedAt ?? undefined,
       // Phase 8.15: Order completion
       (record as any).completedAt ?? undefined,
+      // Phase 8.16: Order cancellation
+      (record as any).cancelledAt ?? undefined,
+      (record as any).cancellationReason ?? undefined,
+      (record as any).cancelledBy ?? undefined,
+      // Phase 8.17: Payment transaction tracking
+      (record as any).paymentMethod ?? undefined,
+      (record as any).transactionId ?? undefined,
+      (record as any).paidAt ? new Date((record as any).paidAt) : undefined,
+      (record as any).paymentStatus ?? undefined,
     );
   }
 

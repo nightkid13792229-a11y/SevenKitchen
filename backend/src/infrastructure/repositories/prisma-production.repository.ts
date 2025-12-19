@@ -75,25 +75,34 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
     const placeholders = orderItemIds.map((_, i) => `$${i + 3}`).join(', ');
     
     const query = `
-      UPDATE "order_item" 
+      UPDATE "order_item"
       SET "production_batch_id" = $1::text, "allocated_at" = $2::timestamp
       WHERE "id" IN (${placeholders})
       AND "production_batch_id" IS NULL
     `;
     
-    const result = await this.prisma.$executeRawUnsafe(
-      query,
-      productionBatchId,
-      now,
-      ...orderItemIds,
-    );
+    try {
+      const result = await this.prisma.$executeRawUnsafe(
+        query,
+        productionBatchId,
+        now,
+        ...orderItemIds,
+      );
 
-    const updatedCount = typeof result === 'number' ? result : 0;
-    this.logger.debug(
-      `Allocated ${updatedCount} of ${orderItemIds.length} OrderItems to batch ${productionBatchId}`,
-    );
+      const updatedCount = typeof result === 'number' ? result : 0;
+      this.logger.debug(
+        `Allocated ${updatedCount} of ${orderItemIds.length} OrderItems to batch ${productionBatchId}`,
+      );
 
-    return updatedCount;
+      return updatedCount;
+    } catch (error) {
+      this.logger.error(`[PrismaProductionRepository] Error allocating order items:`, error);
+      if (error instanceof Error) {
+        this.logger.error(`[PrismaProductionRepository] Error stack:`, error.stack);
+        this.logger.error(`[PrismaProductionRepository] Error message:`, error.message);
+      }
+      throw error;
+    }
   }
 
   async save(batch: ProductionBatch): Promise<ProductionBatch> {

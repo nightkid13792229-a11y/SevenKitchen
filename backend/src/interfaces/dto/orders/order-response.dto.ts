@@ -125,6 +125,57 @@ export class OrderDto {
     nullable: true,
   })
   completedAt?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Cancellation timestamp (Phase 8.16)',
+    example: '2025-01-20T10:30:00.000Z',
+    nullable: true,
+  })
+  cancelledAt?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Cancellation reason (Phase 8.16)',
+    example: 'Customer requested cancellation',
+    nullable: true,
+  })
+  cancellationReason?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Who cancelled the order (Phase 8.16)',
+    example: 'customer',
+    enum: ['customer', 'admin', 'system'],
+    nullable: true,
+  })
+  cancelledBy?: 'customer' | 'admin' | 'system' | null;
+
+  @ApiPropertyOptional({
+    description: 'Payment method (Phase 8.17)',
+    example: 'WECHAT',
+    nullable: true,
+  })
+  paymentMethod?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Transaction ID (Phase 8.17)',
+    example: 'MOCK_1734638400000_abc123',
+    nullable: true,
+  })
+  transactionId?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Payment timestamp (Phase 8.17)',
+    example: '2025-01-20T10:30:00.000Z',
+    nullable: true,
+  })
+  paidAt?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Payment status (Phase 8.17)',
+    example: 'SUCCESS',
+    enum: ['PENDING', 'SUCCESS', 'FAILED'],
+    nullable: true,
+  })
+  paymentStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | null;
 }
 
 export class OrderSummaryDto {

@@ -7,10 +7,11 @@ import { Injectable, Inject, BadRequestException, Logger } from '@nestjs/common'
 import { randomUUID } from 'crypto';
 import type { ProductionBatchRepository } from '../../domain/production/production.repository';
 import type { OrderRepository } from '../../domain/order/order.repository';
+import type { OrderStatusHistoryRepository } from '../../domain/order/order-status-history.repository';
 import { ProductionBatch, PackagingUnit } from '../../domain/production';
 import { ProductionBatchStatus } from '../../domain/production/enums';
 import { OrderStatus } from '../../domain';
-import { ORDER_REPOSITORY } from '../order/order.service';
+import { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY } from '../order/order.service';
 
 export const PRODUCTION_BATCH_REPOSITORY = Symbol('ProductionBatchRepository');
 
@@ -43,6 +44,8 @@ export class ProductionService {
     private readonly productionRepository: ProductionBatchRepository,
     @Inject(ORDER_REPOSITORY)
     private readonly orderRepository: OrderRepository,
+    @Inject(ORDER_STATUS_HISTORY_REPOSITORY)
+    private readonly statusHistoryRepository: OrderStatusHistoryRepository,
   ) {}
 
   /**
@@ -188,79 +191,132 @@ export class ProductionService {
 
     // Phase 8.11: Save batch and allocate OrderItems
     // The repository's save method will create the batch, then we allocate items
-    const savedBatch = await this.productionRepository.save(batch);
+    try {
+      this.logger.debug(`[ProductionService] Saving batch ${batchId} with ${batch.packagingUnits.length} packaging units`);
+      const savedBatch = await this.productionRepository.save(batch);
+      this.logger.debug(`[ProductionService] Batch ${batchId} saved successfully`);
 
-    // Allocate OrderItems to this batch (atomic update)
-    const allocatedCount = await this.productionRepository.allocateOrderItems(
-      allOrderItemIds,
-      batchId,
-    );
-
-    // Verify allocation succeeded (all items should be allocated)
-    // Ensure allocatedCount is a number before comparison
-    const allocatedCountNum = typeof allocatedCount === 'number' ? allocatedCount : 0;
-    if (allocatedCountNum !== allOrderItemIds.length) {
-      this.logger.warn(
-        `Only ${allocatedCountNum} of ${allOrderItemIds.length} OrderItems were allocated. Possible concurrent allocation conflict.`,
+      // Allocate OrderItems to this batch (atomic update)
+      this.logger.debug(`[ProductionService] Allocating ${allOrderItemIds.length} order items to batch ${batchId}`);
+      const allocatedCount = await this.productionRepository.allocateOrderItems(
+        allOrderItemIds,
+        batchId,
       );
-      // In a real system, we might want to rollback or retry, but for MVP we'll continue
-      // The batch is created, but some items may have been allocated to another batch concurrently
-    }
+      this.logger.debug(`[ProductionService] Allocated ${allocatedCount} order items to batch ${batchId}`);
 
-    // Phase 8.14: Transition orders from PAID → WAITING_FOR_PRODUCTION → IN_PRODUCTION
-    // This ensures orders are in the correct status for batch completion detection
-    const uniqueOrderIds = new Set(orders.map((o) => o.id));
-    let transitionedCount = 0;
-    for (const orderId of uniqueOrderIds) {
-      const order = await this.orderRepository.findById(orderId);
-      if (!order) {
-        continue;
-      }
-
-      try {
-        // Transition from PAID → WAITING_FOR_PRODUCTION → IN_PRODUCTION
-        if (order.status === OrderStatus.PAID) {
-          order.transitionTo(OrderStatus.WAITING_FOR_PRODUCTION);
-          await this.orderRepository.save(order);
-          this.logger.log(
-            `Order ${orderId} transitioned from PAID to WAITING_FOR_PRODUCTION after batch ${batchId} creation`,
-          );
-        }
-
-        if (order.status === OrderStatus.WAITING_FOR_PRODUCTION) {
-          order.transitionTo(OrderStatus.IN_PRODUCTION);
-          await this.orderRepository.save(order);
-          transitionedCount++;
-          this.logger.log(
-            `Order ${orderId} transitioned from WAITING_FOR_PRODUCTION to IN_PRODUCTION after batch ${batchId} creation`,
-          );
-        }
-      } catch (error: any) {
+      // Verify allocation succeeded (all items should be allocated)
+      // Ensure allocatedCount is a number before comparison
+      const allocatedCountNum = typeof allocatedCount === 'number' ? allocatedCount : 0;
+      if (allocatedCountNum !== allOrderItemIds.length) {
         this.logger.warn(
-          `Failed to transition order ${orderId} to IN_PRODUCTION: ${error}`,
+          `Only ${allocatedCountNum} of ${allOrderItemIds.length} OrderItems were allocated. Possible concurrent allocation conflict.`,
         );
-        // Continue with other orders
+        // In a real system, we might want to rollback or retry, but for MVP we'll continue
+        // The batch is created, but some items may have been allocated to another batch concurrently
       }
-    }
 
-    if (transitionedCount > 0) {
-      this.logger.log(
-        `Batch ${batchId} creation: ${transitionedCount} orders transitioned to IN_PRODUCTION`,
-      );
-    }
+      // Phase 8.14: Transition orders from PAID → WAITING_FOR_PRODUCTION → IN_PRODUCTION
+      // This ensures orders are in the correct status for batch completion detection
+      const uniqueOrderIds = new Set(orders.map((o) => o.id));
+      let transitionedCount = 0;
+      for (const orderId of uniqueOrderIds) {
+        const order = await this.orderRepository.findById(orderId);
+        if (!order) {
+          continue;
+        }
 
-    // Transition batch from PLANNED → IN_PRODUCTION when created
-    // This indicates the batch is ready for production work
-    if (savedBatch.status === ProductionBatchStatus.PLANNED) {
-      savedBatch.transitionTo(ProductionBatchStatus.IN_PRODUCTION);
-      const updatedBatch = await this.productionRepository.save(savedBatch);
-      this.logger.log(
-        `Batch ${batchId} transitioned from PLANNED to IN_PRODUCTION`,
-      );
-      return updatedBatch;
-    }
+        try {
+          // Transition from PAID → WAITING_FOR_PRODUCTION → IN_PRODUCTION
+          // Phase 8.18: Log status transitions to history
+          if (order.status === OrderStatus.PAID) {
+            const fromStatus = order.status;
+            order.transitionTo(OrderStatus.WAITING_FOR_PRODUCTION);
+            const savedOrder = await this.orderRepository.save(order);
+            // Log status transition
+            try {
+              await this.statusHistoryRepository.append(
+                savedOrder.id,
+                fromStatus,
+                OrderStatus.WAITING_FOR_PRODUCTION,
+                'system',
+                null,
+                { batchId, triggeredBy: 'batch_creation' },
+              );
+            } catch (error) {
+              // Phase 8.18: Log errors at ERROR level and re-throw to prevent silent failures
+              this.logger.error(
+                `[History] ERROR: Failed to log status transition for order ${orderId}:`,
+                error,
+              );
+              // Re-throw to fail fast and prevent silent failures
+              throw error;
+            }
+            this.logger.log(
+              `Order ${orderId} transitioned from PAID to WAITING_FOR_PRODUCTION after batch ${batchId} creation`,
+            );
+          }
 
-    return savedBatch;
+          if (order.status === OrderStatus.WAITING_FOR_PRODUCTION) {
+            const fromStatus = order.status;
+            order.transitionTo(OrderStatus.IN_PRODUCTION);
+            const savedOrder = await this.orderRepository.save(order);
+            transitionedCount++;
+            // Log status transition
+            try {
+              await this.statusHistoryRepository.append(
+                savedOrder.id,
+                fromStatus,
+                OrderStatus.IN_PRODUCTION,
+                'system',
+                null,
+                { batchId, triggeredBy: 'batch_creation' },
+              );
+            } catch (error) {
+              // Phase 8.18: Log errors at ERROR level and re-throw to prevent silent failures
+              this.logger.error(
+                `[History] ERROR: Failed to log status transition for order ${orderId}:`,
+                error,
+              );
+              // Re-throw to fail fast and prevent silent failures
+              throw error;
+            }
+            this.logger.log(
+              `Order ${orderId} transitioned from WAITING_FOR_PRODUCTION to IN_PRODUCTION after batch ${batchId} creation`,
+            );
+          }
+        } catch (error: any) {
+          this.logger.warn(
+            `Failed to transition order ${orderId} to IN_PRODUCTION: ${error}`,
+          );
+          // Continue with other orders
+        }
+      }
+
+      if (transitionedCount > 0) {
+        this.logger.log(
+          `Batch ${batchId} creation: ${transitionedCount} orders transitioned to IN_PRODUCTION`,
+        );
+      }
+
+      // Transition batch from PLANNED → IN_PRODUCTION when created
+      // This indicates the batch is ready for production work
+      if (savedBatch.status === ProductionBatchStatus.PLANNED) {
+        savedBatch.transitionTo(ProductionBatchStatus.IN_PRODUCTION);
+        const updatedBatch = await this.productionRepository.save(savedBatch);
+        this.logger.log(
+          `Batch ${batchId} transitioned from PLANNED to IN_PRODUCTION`,
+        );
+        return updatedBatch;
+      }
+
+      return savedBatch;
+    } catch (error) {
+      this.logger.error(`[ProductionService] Error saving batch ${batchId}:`, error);
+      if (error instanceof Error) {
+        this.logger.error(`[ProductionService] Error stack:`, error.stack);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -425,10 +481,32 @@ export class ProductionService {
 
       try {
         // Transition through the state machine step by step
+        // Transition through the state machine step by step
+        // Phase 8.18: Log status transitions to history
         // Step 1: PAID -> WAITING_FOR_PRODUCTION
         if (order.status === OrderStatus.PAID) {
+          const fromStatus = order.status;
           order.transitionTo(OrderStatus.WAITING_FOR_PRODUCTION);
-          await this.orderRepository.save(order);
+          const savedOrder = await this.orderRepository.save(order);
+          // Log status transition
+          try {
+            await this.statusHistoryRepository.append(
+              savedOrder.id,
+              fromStatus,
+              OrderStatus.WAITING_FOR_PRODUCTION,
+              'system',
+              null,
+              { batchId, triggeredBy: 'batch_completion' },
+            );
+          } catch (error) {
+            // Phase 8.18: Log errors at ERROR level and re-throw to prevent silent failures
+            this.logger.error(
+              `[History] ERROR: Failed to log status transition for order ${orderId}:`,
+              error,
+            );
+            // Re-throw to fail fast and prevent silent failures
+            throw error;
+          }
           this.logger.log(
             `Order ${orderId} transitioned from PAID to WAITING_FOR_PRODUCTION during batch ${batchId} completion`,
           );
@@ -441,8 +519,28 @@ export class ProductionService {
 
         // Step 2: WAITING_FOR_PRODUCTION -> IN_PRODUCTION
         if (order.status === OrderStatus.WAITING_FOR_PRODUCTION) {
+          const fromStatus = order.status;
           order.transitionTo(OrderStatus.IN_PRODUCTION);
-          await this.orderRepository.save(order);
+          const savedOrder = await this.orderRepository.save(order);
+          // Log status transition
+          try {
+            await this.statusHistoryRepository.append(
+              savedOrder.id,
+              fromStatus,
+              OrderStatus.IN_PRODUCTION,
+              'system',
+              null,
+              { batchId, triggeredBy: 'batch_completion' },
+            );
+          } catch (error) {
+            // Phase 8.18: Log errors at ERROR level and re-throw to prevent silent failures
+            this.logger.error(
+              `[History] ERROR: Failed to log status transition for order ${orderId}:`,
+              error,
+            );
+            // Re-throw to fail fast and prevent silent failures
+            throw error;
+          }
           this.logger.log(
             `Order ${orderId} transitioned from WAITING_FOR_PRODUCTION to IN_PRODUCTION during batch ${batchId} completion`,
           );
@@ -455,8 +553,28 @@ export class ProductionService {
 
         // Step 3: IN_PRODUCTION -> READY_FOR_PACKAGING
         if (order.status === OrderStatus.IN_PRODUCTION) {
+          const fromStatus = order.status;
           order.transitionTo(OrderStatus.READY_FOR_PACKAGING);
-          await this.orderRepository.save(order);
+          const savedOrder = await this.orderRepository.save(order);
+          // Log status transition
+          try {
+            await this.statusHistoryRepository.append(
+              savedOrder.id,
+              fromStatus,
+              OrderStatus.READY_FOR_PACKAGING,
+              'system',
+              null,
+              { batchId, triggeredBy: 'batch_completion' },
+            );
+          } catch (error) {
+            // Phase 8.18: Log errors at ERROR level and re-throw to prevent silent failures
+            this.logger.error(
+              `[History] ERROR: Failed to log status transition for order ${orderId}:`,
+              error,
+            );
+            // Re-throw to fail fast and prevent silent failures
+            throw error;
+          }
           this.logger.log(
             `Order ${orderId} transitioned from IN_PRODUCTION to READY_FOR_PACKAGING during batch ${batchId} completion`,
           );
@@ -469,9 +587,29 @@ export class ProductionService {
 
         // Step 4: READY_FOR_PACKAGING -> READY_FOR_SHIPMENT
         if (order.status === OrderStatus.READY_FOR_PACKAGING) {
+          const fromStatus = order.status;
           order.transitionTo(OrderStatus.READY_FOR_SHIPMENT);
-          await this.orderRepository.save(order);
+          const savedOrder = await this.orderRepository.save(order);
           transitionedCount++;
+          // Log status transition
+          try {
+            await this.statusHistoryRepository.append(
+              savedOrder.id,
+              fromStatus,
+              OrderStatus.READY_FOR_SHIPMENT,
+              'system',
+              null,
+              { batchId, triggeredBy: 'batch_completion' },
+            );
+          } catch (error) {
+            // Phase 8.18: Log errors at ERROR level and re-throw to prevent silent failures
+            this.logger.error(
+              `[History] ERROR: Failed to log status transition for order ${orderId}:`,
+              error,
+            );
+            // Re-throw to fail fast and prevent silent failures
+            throw error;
+          }
           this.logger.log(
             `Order ${orderId} auto-transitioned to READY_FOR_SHIPMENT after batch ${batchId} completion`,
           );

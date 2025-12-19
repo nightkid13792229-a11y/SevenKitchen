@@ -7,12 +7,13 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { ProductionService, PRODUCTION_BATCH_REPOSITORY } from './production.service';
 import type { ProductionBatchRepository } from '../../domain/production/production.repository';
 import type { OrderRepository } from '../../domain/order/order.repository';
+import type { OrderStatusHistoryRepository } from '../../domain/order/order-status-history.repository';
 import { ProductionBatch, PackagingUnit } from '../../domain/production';
 import { ProductionBatchStatus, PackagingUnitStatus } from '../../domain/production/enums';
 import { Order, OrderItem } from '../../domain/order';
 import { OrderStatus, OrderType } from '../../domain';
 import type { RecipeSnapshot } from '../../domain/recipe/types';
-import { ORDER_REPOSITORY } from '../order/order.service';
+import { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY } from '../order/order.service';
 import type { ProductionBatchSummaryDto } from './production.service';
 
 describe('ProductionService - Phase 8.10', () => {
@@ -39,6 +40,11 @@ describe('ProductionService - Phase 8.10', () => {
     save: jest.fn(),
   };
 
+  const mockStatusHistoryRepository: jest.Mocked<OrderStatusHistoryRepository> = {
+    append: jest.fn(),
+    findByOrderId: jest.fn(),
+  };
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -50,6 +56,10 @@ describe('ProductionService - Phase 8.10', () => {
         {
           provide: ORDER_REPOSITORY,
           useValue: mockOrderRepository,
+        },
+        {
+          provide: ORDER_STATUS_HISTORY_REPOSITORY,
+          useValue: mockStatusHistoryRepository,
         },
       ],
     }).compile();

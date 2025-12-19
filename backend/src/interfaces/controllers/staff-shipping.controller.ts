@@ -97,6 +97,8 @@ export class StaffShippingController {
       const order = await this.shippingFulfillmentService.markOrderAsShipped(
         orderId,
         dto,
+        'staff', // Phase 8.18: Actor attribution
+        null, // Staff ID not available in current implementation
       );
 
       return ApiResponseDto.success({

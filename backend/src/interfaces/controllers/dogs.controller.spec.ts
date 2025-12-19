@@ -6,11 +6,16 @@
 /* eslint-disable @typescript-eslint/no-unsafe-argument */
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { INestApplication, ValidationPipe } from '@nestjs/common';
+import {
+  INestApplication,
+  ValidationPipe,
+  BadRequestException,
+} from '@nestjs/common';
 import request from 'supertest';
 import { JwtModule } from '@nestjs/jwt';
 import { DogsController } from './dogs.controller';
 import { UnauthorizedExceptionFilter } from '../common/unauthorized-exception.filter';
+import { BadRequestExceptionFilter } from '../common/bad-request-exception.filter';
 import {
   DogService,
   DOG_REPOSITORY,
@@ -63,9 +68,36 @@ describe('DogsController (e2e)', () => {
         transform: true,
         whitelist: true,
         forbidNonWhitelisted: true,
+        exceptionFactory: (errors) => {
+          // Format validation errors into a readable message (same as main.ts)
+          const messages = errors.map((error) => {
+            const constraints = error.constraints || {};
+            const constraintMessages = Object.values(constraints);
+            if (constraintMessages.length > 0) {
+              return `${error.property}: ${constraintMessages.join(', ')}`;
+            }
+            // Handle nested validation errors
+            if (error.children && error.children.length > 0) {
+              const childMessages = error.children
+                .map((child) => {
+                  const childConstraints = child.constraints || {};
+                  return Object.values(childConstraints).join(', ');
+                })
+                .filter((msg) => msg.length > 0);
+              if (childMessages.length > 0) {
+                return `${error.property}: ${childMessages.join(', ')}`;
+              }
+            }
+            return `${error.property}: validation failed`;
+          });
+          return new BadRequestException(messages.join('; '));
+        },
       }),
     );
-    app.useGlobalFilters(new UnauthorizedExceptionFilter());
+    app.useGlobalFilters(
+      new BadRequestExceptionFilter(),
+      new UnauthorizedExceptionFilter(),
+    );
 
     dogRepository = moduleFixture.get(DOG_REPOSITORY);
 
@@ -267,9 +299,10 @@ describe('DogsController (e2e)', () => {
       const response = await request(app.getHttpServer())
         .post('/api/v1/dogs/calc-preview')
         .send(invalidPayload)
-        .expect(400);
+        .expect(200); // BadRequestExceptionFilter returns HTTP 200 with code 400 in body
 
-      expect(response.body).toHaveProperty('statusCode', 400);
+      expect(response.body).toHaveProperty('code', 400);
+      expect(response.body).toHaveProperty('message');
     });
 
     it('should return 400 when required fields are missing', async () => {
@@ -278,10 +311,151 @@ describe('DogsController (e2e)', () => {
         // Missing other required fields
       };
 
-      await request(app.getHttpServer())
+      const response = await request(app.getHttpServer())
         .post('/api/v1/dogs/calc-preview')
         .send(incompletePayload)
-        .expect(400);
+        .expect(200); // BadRequestExceptionFilter returns HTTP 200 with code 400 in body
+
+      expect(response.body).toHaveProperty('code', 400);
+      expect(response.body).toHaveProperty('message');
+    });
+  });
+
+  describe('POST /api/v1/dogs', () => {
+    it('should create a dog with valid payload and return 200 with data.id', async () => {
+      const validPayload = {
+        name: 'Cookie',
+        breedId: '550e8400-e29b-41d4-a716-446655440000',
+        birthday: '2020-01-01T00:00:00Z',
+        gender: DogGender.FEMALE,
+        isNeutered: false,
+        currentWeightKg: 2.0,
+        bcsScore: 5,
+        activityLevel: ActivityLevel.NORMAL,
+        lifeStageOverride: LifeStageOverride.NONE,
+      };
+
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/dogs')
+        .set('X-Customer-Id', 'test-owner-id')
+        .send(validPayload)
+        .expect(201); // POST returns 201 Created
+
+      expect(response.body).toHaveProperty('code', 0);
+      expect(response.body.data).toBeDefined();
+      expect(response.body.data).toHaveProperty('profile');
+      expect(response.body.data.profile).toHaveProperty('id');
+      expect(typeof response.body.data.profile.id).toBe('string');
+      expect(response.body.data.profile.id.length).toBeGreaterThan(0);
+      expect(response.body.data.profile).toHaveProperty('name', 'Cookie');
+    });
+
+    it('should return 400 with detailed validation errors for invalid payload (user scenario)', async () => {
+      // This matches the user's actual payload that was failing
+      const invalidPayload = {
+        name: 'Cookie',
+        species: 'DOG', // Invalid: not a field in DTO
+        breed: 'Bichon', // Invalid: should be breedId (UUID)
+        gender: 'FEMALE', // Valid enum value
+        weightKg: 2.0, // Invalid: should be currentWeightKg
+        // Missing required fields: birthday, isNeutered, bcsScore, activityLevel, lifeStageOverride
+      };
+
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/dogs')
+        .set('X-Customer-Id', 'test-owner-id')
+        .send(invalidPayload)
+        .expect(200); // BadRequestExceptionFilter returns HTTP 200 with code 400 in body
+
+      expect(response.body).toHaveProperty('code', 400);
+      expect(response.body).toHaveProperty('message');
+      expect(response.body.message).toBeTruthy();
+      expect(response.body.message.length).toBeGreaterThan(0);
+      // Verify the message contains details about validation errors
+      expect(response.body.message).toContain('breedId');
+      expect(response.body.message).toContain('birthday');
+      expect(response.body.message).toContain('isNeutered');
+      expect(response.body.message).toContain('currentWeightKg');
+      expect(response.body.message).toContain('bcsScore');
+      expect(response.body.message).toContain('activityLevel');
+      expect(response.body.message).toContain('lifeStageOverride');
+      expect(response.body.data).toBeNull();
+    });
+
+    it('should return 400 with detailed error for missing required fields', async () => {
+      const incompletePayload = {
+        name: 'Cookie',
+        // Missing all other required fields
+      };
+
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/dogs')
+        .set('X-Customer-Id', 'test-owner-id')
+        .send(incompletePayload)
+        .expect(200);
+
+      expect(response.body).toHaveProperty('code', 400);
+      expect(response.body).toHaveProperty('message');
+      // Message should describe which fields are missing/invalid
+      expect(response.body.message).toBeTruthy();
+      expect(response.body.message.length).toBeGreaterThan(0);
+      expect(response.body.data).toBeNull();
+    });
+
+    it('should return 400 with detailed error for invalid enum values', async () => {
+      const invalidEnumPayload = {
+        name: 'Cookie',
+        breedId: '550e8400-e29b-41d4-a716-446655440000',
+        birthday: '2020-01-01T00:00:00Z',
+        gender: 'INVALID_GENDER', // Invalid enum value
+        isNeutered: false,
+        currentWeightKg: 2.0,
+        bcsScore: 5,
+        activityLevel: 'INVALID_ACTIVITY', // Invalid enum value
+        lifeStageOverride: LifeStageOverride.NONE,
+      };
+
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/dogs')
+        .set('X-Customer-Id', 'test-owner-id')
+        .send(invalidEnumPayload)
+        .expect(200);
+
+      expect(response.body).toHaveProperty('code', 400);
+      expect(response.body).toHaveProperty('message');
+      // Message should indicate which enum values are invalid
+      expect(response.body.message).toBeTruthy();
+      expect(response.body.message.length).toBeGreaterThan(0);
+      expect(response.body.message.toLowerCase()).toMatch(/gender|activity/i);
+      expect(response.body.data).toBeNull();
+    });
+
+    it('should return 400 with detailed error for invalid numeric constraints', async () => {
+      const invalidNumericPayload = {
+        name: 'Cookie',
+        breedId: '550e8400-e29b-41d4-a716-446655440000',
+        birthday: '2020-01-01T00:00:00Z',
+        gender: DogGender.FEMALE,
+        isNeutered: false,
+        currentWeightKg: -5, // Invalid: negative weight
+        bcsScore: 15, // Invalid: BCS must be 1-9
+        activityLevel: ActivityLevel.NORMAL,
+        lifeStageOverride: LifeStageOverride.NONE,
+      };
+
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/dogs')
+        .set('X-Customer-Id', 'test-owner-id')
+        .send(invalidNumericPayload)
+        .expect(200);
+
+      expect(response.body).toHaveProperty('code', 400);
+      expect(response.body).toHaveProperty('message');
+      // Message should indicate which numeric constraints are violated
+      expect(response.body.message).toBeTruthy();
+      expect(response.body.message.length).toBeGreaterThan(0);
+      expect(response.body.message.toLowerCase()).toMatch(/weight|bcs/i);
+      expect(response.body.data).toBeNull();
     });
   });
 

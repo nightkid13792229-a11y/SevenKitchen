@@ -1,6 +1,6 @@
 /**
  * Bad Request Exception Filter
- * Converts BadRequestException to ApiResponseDto format
+ * Converts BadRequestException to ApiResponseDto format with detailed validation errors
  */
 
 import {
@@ -23,6 +23,7 @@ export class BadRequestExceptionFilter implements ExceptionFilter {
     // Extract validation error message if available
     const exceptionResponse = exception.getResponse();
     let errorMessage = message;
+    
     if (
       typeof exceptionResponse === 'object' &&
       exceptionResponse !== null &&
@@ -31,12 +32,15 @@ export class BadRequestExceptionFilter implements ExceptionFilter {
       const messages = (exceptionResponse as { message: string | string[] })
         .message;
       if (Array.isArray(messages)) {
-        errorMessage = messages.join(', ');
-      } else {
+        // Join array of validation errors into a readable string
+        errorMessage = messages.join('; ');
+      } else if (typeof messages === 'string') {
         errorMessage = messages;
       }
     }
 
+    // If the message contains validation details (from our custom exceptionFactory),
+    // use it directly; otherwise format it
     const apiResponse = ApiResponseDto.error(400, errorMessage);
 
     response.status(HttpStatus.OK).json(apiResponse);

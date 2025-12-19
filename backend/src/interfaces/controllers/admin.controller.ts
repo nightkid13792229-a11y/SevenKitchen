@@ -32,6 +32,9 @@ import { ProductionService, type CreateProductionBatchDto, type ProductionBatchS
 import { InventoryService } from '../../application/inventory/inventory.service';
 import { OrderService } from '../../application/order/order.service';
 import { OrderStatus } from '../../domain';
+import { CancelOrderDto } from '../dto/orders/cancel-order.dto';
+import { OrderDto } from '../dto/orders/order-response.dto';
+import { InvalidStateTransitionError } from '../../domain/common/errors';
 
 @ApiTags('Admin')
 @Controller('api/v1/admin')
@@ -230,6 +233,11 @@ export class AdminController {
 
       return ApiResponseDto.success(summary);
     } catch (error) {
+      console.error('[AdminController] createProductionBatch error:', error);
+      if (error instanceof Error) {
+        console.error('[AdminController] error stack:', error.stack);
+        console.error('[AdminController] error message:', error.message);
+      }
       if (error instanceof BadRequestException) {
         return ApiResponseDto.error(400, error.message);
       }
@@ -433,7 +441,11 @@ export class AdminController {
     @Param('orderId') orderId: string,
   ): Promise<ApiResponseDto<{ id: string; status: OrderStatus; completedAt: string | null }> | ApiResponseDto<null>> {
     try {
-      const order = await this.orderService.completeOrder(orderId);
+      const order = await this.orderService.completeOrder(
+        orderId,
+        'admin', // Phase 8.18: Actor attribution
+        null, // Admin ID not available in current implementation
+      );
 
       return ApiResponseDto.success({
         id: order.id,
@@ -445,6 +457,95 @@ export class AdminController {
         return ApiResponseDto.error(404, error.message);
       }
       if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  // ==========================================
+  // Phase 8.16: Order Cancellation Endpoint
+  // ==========================================
+
+  @Post('orders/:orderId/cancel')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Cancel order (Phase 8.16)' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  @ApiBody({ type: CancelOrderDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Order cancelled successfully',
+    type: OrderDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request or order status' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async cancelOrder(
+    @Param('orderId') orderId: string,
+    @Body() cancelOrderDto: CancelOrderDto,
+  ): Promise<ApiResponseDto<OrderDto> | ApiResponseDto<null>> {
+    try {
+      const order = await this.orderService.cancelOrder(
+        orderId,
+        cancelOrderDto.reason,
+        'admin',
+        null, // Phase 8.18: Admin ID not available in current implementation
+      );
+
+      // Map to DTO (simplified - in production would use proper mapper)
+      const orderDto: OrderDto = {
+        id: order.id,
+        customerId: order.customerId,
+        dogId: order.dogId,
+        addressId: order.addressId,
+        status: order.status,
+        type: order.type,
+        targetProductionDate: order.targetProductionDate
+          ? order.targetProductionDate.toISOString()
+          : null,
+        totalAmount: order.totalAmount ?? order.amountTotal,
+        amountProduct: order.amountProduct,
+        amountShipping: order.amountShipping,
+        amountTotal: order.amountTotal,
+        items: order.items.map((item) => ({
+          id: item.id,
+          orderId: item.orderId,
+          recipeSnapshot: item.recipeSnapshot,
+          quantityG: item.quantityG,
+          packageCount: item.packageCount,
+          packageSpecG: item.packageSpecG,
+          customRequirements: item.customRequirements,
+          dailyIntakeG: item.dailyIntakeG,
+        })),
+        pricingBreakdown: order.pricingBreakdownSnapshot
+          ? {
+              costIngredients: order.pricingBreakdownSnapshot.costIngredients,
+              costPackaging: order.pricingBreakdownSnapshot.costPackaging,
+              costLabor: order.pricingBreakdownSnapshot.costLabor,
+              costOverhead: order.pricingBreakdownSnapshot.costOverhead,
+              totalProductCost: order.pricingBreakdownSnapshot.totalProductCost,
+              productPrice: order.pricingBreakdownSnapshot.productPrice,
+              shippingFee: order.pricingBreakdownSnapshot.shippingFee,
+              totalPrice: order.pricingBreakdownSnapshot.totalPrice,
+            }
+          : undefined,
+        trackingNumber: order.trackingNumber ?? null,
+        carrierCode: order.carrierCode ?? null,
+        shippedAt: order.shippedAt ? order.shippedAt.toISOString() : null,
+        completedAt: order.completedAt ? order.completedAt.toISOString() : null,
+        cancelledAt: order.cancelledAt ? order.cancelledAt.toISOString() : null,
+        cancellationReason: order.cancellationReason ?? null,
+        cancelledBy: order.cancelledBy ?? null,
+      };
+
+      return ApiResponseDto.success(orderDto);
+    } catch (error: any) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      if (error instanceof InvalidStateTransitionError) {
         return ApiResponseDto.error(400, error.message);
       }
       throw error;

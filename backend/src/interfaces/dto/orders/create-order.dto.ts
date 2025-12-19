@@ -12,7 +12,6 @@ import {
   IsNumber,
   IsInt,
   Min,
-  IsString,
   IsOptional,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -45,8 +44,7 @@ export class CreateOrderItemDto {
 
   @ApiPropertyOptional({ description: 'Custom requirements', nullable: true })
   @IsOptional()
-  @IsString()
-  customRequirements?: string | null;
+  customRequirements?: any;
 }
 
 export class CreateOrderDto {

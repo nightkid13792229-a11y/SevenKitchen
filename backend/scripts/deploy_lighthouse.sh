@@ -1,0 +1,175 @@
+#!/usr/bin/env bash
+# Lighthouse Deployment Script
+# Automated deployment script for Tencent Cloud Lighthouse (Ubuntu 22.04)
+
+set -euo pipefail
+
+# Colors
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+RED='\033[0;31m'
+BLUE='\033[0;34m'
+NC='\033[0m'
+
+# Helper functions
+info() { echo -e "${BLUE}ℹ ${1}${NC}"; }
+ok() { echo -e "${GREEN}✓ ${1}${NC}"; }
+warn() { echo -e "${YELLOW}⚠ ${1}${NC}"; }
+fail() { echo -e "${RED}✗ ${1}${NC}"; }
+
+# Resolve script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BACKEND_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+
+echo "=========================================="
+echo "SevenKitchen Backend Deployment"
+echo "=========================================="
+echo ""
+info "Backend directory: $BACKEND_DIR"
+echo ""
+
+# Change to backend directory
+cd "$BACKEND_DIR"
+
+# Step 1: Verify environment variables
+echo "Step 1: Verifying environment variables..."
+if ! bash scripts/verify_env.sh; then
+  fail "Environment variable verification failed"
+  echo "Please fix the issues and run this script again."
+  exit 1
+fi
+echo ""
+
+# Load .env file if it exists
+if [ -f .env ]; then
+  set -a
+  source .env
+  set +a
+  info "Loaded environment variables from .env"
+fi
+
+# Step 2: Ensure corepack/pnpm is available
+echo "Step 2: Ensuring pnpm is available..."
+if ! command -v pnpm >/dev/null 2>&1; then
+  info "pnpm not found, enabling corepack..."
+  if command -v corepack >/dev/null 2>&1; then
+    sudo corepack enable || {
+      warn "Failed to enable corepack with sudo, trying without..."
+      corepack enable || fail "Failed to enable corepack"
+    }
+    corepack prepare pnpm@latest --activate
+    ok "pnpm installed via corepack"
+  else
+    fail "corepack not found. Please install Node.js 18+ or install pnpm manually"
+    exit 1
+  fi
+else
+  ok "pnpm is available: $(pnpm --version)"
+fi
+echo ""
+
+# Step 3: Install dependencies
+echo "Step 3: Installing dependencies..."
+if [ ! -d node_modules ] || [ package.json -nt node_modules/.pnpm-lock.yaml ] 2>/dev/null; then
+  info "Installing/updating dependencies..."
+  pnpm install
+  ok "Dependencies installed"
+else
+  ok "Dependencies are up to date"
+fi
+echo ""
+
+# Step 4: Generate Prisma Client
+echo "Step 4: Generating Prisma Client..."
+if [ -z "${DATABASE_URL:-}" ]; then
+  warn "DATABASE_URL not set, skipping Prisma Client generation"
+  warn "Note: This may cause runtime errors if Prisma repositories are enabled"
+else
+  pnpm prisma generate
+  ok "Prisma Client generated"
+fi
+echo ""
+
+# Step 5: Run database migrations
+echo "Step 5: Running database migrations..."
+if [ -z "${DATABASE_URL:-}" ]; then
+  warn "DATABASE_URL not set, skipping migrations"
+else
+  info "Applying database migrations..."
+  if pnpm prisma migrate deploy; then
+    ok "Database migrations applied successfully"
+  else
+    fail "Database migration failed"
+    echo "Please check:"
+    echo "  1. Database is running and accessible"
+    echo "  2. DATABASE_URL is correct"
+    echo "  3. Database user has necessary permissions"
+    exit 1
+  fi
+fi
+echo ""
+
+# Step 6: Build the project
+echo "Step 6: Building the project..."
+if pnpm run build; then
+  ok "Project built successfully"
+else
+  fail "Build failed"
+  exit 1
+fi
+echo ""
+
+# Step 7: Check if systemd service is installed
+echo "Step 7: Checking service status..."
+if systemctl list-unit-files | grep -q sevenkitchen-backend.service; then
+  info "Systemd service is installed"
+  
+  # Check if service is running
+  if systemctl is-active --quiet sevenkitchen-backend; then
+    info "Service is already running, restarting..."
+    sudo systemctl restart sevenkitchen-backend
+    ok "Service restarted"
+  else
+    info "Starting service..."
+    sudo systemctl start sevenkitchen-backend
+    ok "Service started"
+  fi
+  
+  # Show service status
+  echo ""
+  sudo systemctl status sevenkitchen-backend --no-pager -l || true
+else
+  warn "Systemd service is not installed"
+  warn "To install systemd service, run: sudo bash scripts/install_systemd_service.sh"
+  echo ""
+  info "You can start the service manually with:"
+  echo "  pnpm start:prod"
+  echo ""
+  info "Or install systemd service for automatic startup:"
+  echo "  sudo bash scripts/install_systemd_service.sh"
+fi
+echo ""
+
+# Step 8: Final verification
+echo "Step 8: Running post-deployment verification..."
+if [ -f scripts/post_deploy_verify.sh ]; then
+  if bash scripts/post_deploy_verify.sh; then
+    ok "Post-deployment verification passed"
+  else
+    warn "Post-deployment verification had issues (see output above)"
+  fi
+else
+  warn "Post-deployment verification script not found, skipping"
+fi
+echo ""
+
+echo "=========================================="
+ok "Deployment completed!"
+echo "=========================================="
+echo ""
+info "Next steps:"
+echo "  1. Verify the service is running: sudo systemctl status sevenkitchen-backend"
+echo "  2. Check service logs: sudo journalctl -u sevenkitchen-backend -f"
+echo "  3. Test health endpoint: curl http://127.0.0.1:${PORT:-3000}/api/v1/health"
+echo "  4. Test public access: curl http://<your-public-ip>:${PORT:-3000}/api/v1/health"
+echo ""

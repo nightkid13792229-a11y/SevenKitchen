@@ -1,0 +1,39 @@
+version: '3.8'
+
+# Production PostgreSQL configuration for Tencent Cloud Lighthouse
+# Usage: docker compose -f deploy/docker-compose.postgres.yml up -d
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sevenkitchen-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: sevenkitchen
+      POSTGRES_PASSWORD: sevenkitchen
+      POSTGRES_DB: sevenkitchen
+      # Optional: Set timezone
+      TZ: Asia/Shanghai
+    ports:
+      - "127.0.0.1:5432:5432"  # Only bind to localhost for security
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sevenkitchen"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    # Resource limits (adjust based on server capacity)
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+volumes:
+  postgres_data:
+    driver: local

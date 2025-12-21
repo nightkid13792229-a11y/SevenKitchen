@@ -33,13 +33,34 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'pnpm'
-          cache-dependency-path: backend/pnpm-lock.yaml
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v2
+      - name: Enable corepack
+        run: corepack enable
+
+      - name: Activate pnpm
+        run: corepack prepare pnpm@8 --activate
+
+      - name: pnpm Diagnostic
+        run: |
+          echo "=== pnpm Diagnostic ==="
+          node --version
+          corepack --version
+          pnpm --version
+          which pnpm
+          echo "======================="
+
+      - name: Get pnpm store path
+        id: pnpm-store-path
+        run: echo "PNPM_STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm store cache
+        uses: actions/cache@v4
+        id: pnpm-cache
         with:
-          version: 8
+          path: ${{ env.PNPM_STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('backend/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
 
       - name: Install dependencies
         run: pnpm install

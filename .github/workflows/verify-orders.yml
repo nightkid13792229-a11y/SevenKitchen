@@ -72,6 +72,7 @@ jobs:
         run: |
           cd backend
           pnpm prisma generate
+          pnpm prisma migrate reset --force --skip-seed
           pnpm prisma migrate deploy
         continue-on-error: false
 

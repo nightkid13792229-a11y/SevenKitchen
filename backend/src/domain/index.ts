@@ -12,6 +12,7 @@ export * from './user/enums';
 // Dog Domain
 export * from './dog/enums';
 export * from './dog/dog.entity';
+export * from './dog/dog-breed.entity';
 export * from './dog/dog.repository';
 export * from './dog/constants';
 export * from './dog/dog-calc.service';

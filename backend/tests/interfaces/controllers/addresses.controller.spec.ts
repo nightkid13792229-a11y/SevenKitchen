@@ -9,16 +9,16 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { JwtModule } from '@nestjs/jwt';
-import { AddressesController } from './addresses.controller';
-import { UnauthorizedExceptionFilter } from '../common/unauthorized-exception.filter';
+import { AddressesController } from 'src/addresses.controller';
+import { UnauthorizedExceptionFilter } from 'src/common/unauthorized-exception.filter';
 import {
   AddressService,
   ADDRESS_REPOSITORY,
-} from '../../application/address/address.service';
-import { InMemoryAddressRepository } from '../../infrastructure/repositories/in-memory-address.repository';
-import { Address } from '../../domain/address/address.entity';
-import { JwtAuthService } from '../auth/jwt.service';
-import { AuthGuard } from '../auth/auth.guard';
+} from 'src/application/address/address.service';
+import { InMemoryAddressRepository } from 'src/infrastructure/repositories/in-memory-address.repository';
+import { Address } from 'src/domain/address/address.entity';
+import { JwtAuthService } from 'src/auth/jwt.service';
+import { AuthGuard } from 'src/auth/auth.guard';
 
 describe('AddressesController (e2e)', () => {
   let app: INestApplication;

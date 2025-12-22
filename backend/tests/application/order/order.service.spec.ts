@@ -4,30 +4,30 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { OrderService, ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY } from './order.service';
-import type { OrderRepository } from '../../domain/order/order.repository';
-import type { OrderStatusHistoryRepository } from '../../domain/order/order-status-history.repository';
-import type { RecipeRepository } from '../../domain/recipe/recipe.repository';
-import type { IngredientRepository } from '../../domain/ingredient/ingredient.repository';
-import type { DogRepository } from '../../domain/dog/dog.repository';
-import type { AddressRepository } from '../../domain/address/address.repository';
-import { Order, OrderItem } from '../../domain/order';
-import { OrderType, OrderStatus, calculateDogEnergy } from '../../domain';
-import { PricingService } from '../../domain/pricing/pricing.service';
-import { GlobalConfigService } from '../config/global-config.service';
-import { ShippingService } from '../shipping/shipping.service';
-import { Dog } from '../../domain/dog/dog.entity';
+import { OrderService, ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY } from 'src/order.service';
+import type { OrderRepository } from 'src/domain/order/order.repository';
+import type { OrderStatusHistoryRepository } from 'src/domain/order/order-status-history.repository';
+import type { RecipeRepository } from 'src/domain/recipe/recipe.repository';
+import type { IngredientRepository } from 'src/domain/ingredient/ingredient.repository';
+import type { DogRepository } from 'src/domain/dog/dog.repository';
+import type { AddressRepository } from 'src/domain/address/address.repository';
+import { Order, OrderItem } from 'src/domain/order';
+import { OrderType, OrderStatus, calculateDogEnergy } from 'src/domain';
+import { PricingService } from 'src/domain/pricing/pricing.service';
+import { GlobalConfigService } from 'src/config/global-config.service';
+import { ShippingService } from 'src/shipping/shipping.service';
+import { Dog } from 'src/domain/dog/dog.entity';
 import {
   DogGender,
   ActivityLevel,
   LifeStageOverride,
   TreatInputMode,
   TreatLevel,
-} from '../../domain';
-import { RECIPE_REPOSITORY } from '../dog/dog.service';
-import { INGREDIENT_REPOSITORY } from '../ingredient/ingredient.service';
-import { DOG_REPOSITORY } from '../dog/dog.service';
-import { ADDRESS_REPOSITORY } from '../address/address.service';
+} from 'src/domain';
+import { RECIPE_REPOSITORY } from 'src/dog/dog.service';
+import { INGREDIENT_REPOSITORY } from 'src/ingredient/ingredient.service';
+import { DOG_REPOSITORY } from 'src/dog/dog.service';
+import { ADDRESS_REPOSITORY } from 'src/address/address.service';
 
 describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
   let service: OrderService;

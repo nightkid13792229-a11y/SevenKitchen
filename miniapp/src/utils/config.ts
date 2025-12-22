@@ -1,23 +1,55 @@
 // utils/config.ts
-// Base URL configuration - defaults to 127.0.0.1 for WeChat DevTools compatibility
+// Base URL configuration - defaults to production API
 // Can be overridden at runtime via Network Settings page (stored in uni storage)
+// Automatically uses IP address in WeChat DevTools for stable development
 
-const DEFAULT_BASE_URL = 'http://127.0.0.1:3000/api/v1'
+const DEFAULT_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1'
+const DEV_BASE_URL = 'https://1.14.3.2/api/v1' // IP直连，用于开发态稳定连接
 const STORAGE_KEY = 'api_base_url'
 
 /**
- * Get the API base URL from storage, or return the default
+ * Detect if running in WeChat Developer Tools
+ * Returns true if platform is 'devtools', false otherwise
+ */
+function isDevTools(): boolean {
+  try {
+    const systemInfo = uni.getSystemInfoSync()
+    return systemInfo.platform?.toLowerCase() === 'devtools'
+  } catch (err) {
+    // If getSystemInfoSync fails, assume not in devtools
+    return false
+  }
+}
+
+/**
+ * Get the API base URL with automatic dev/prod switching
+ * Priority order:
+ * 1. Storage override (manual config from Network Settings page)
+ * 2. DevTools detection → use IP address
+ * 3. Production → use domain
+ * 
  * Storage takes precedence to allow runtime configuration
  */
 export function getBaseUrl(): string {
+  // Priority 1: Check storage override (manual config)
   try {
     const stored = uni.getStorageSync(STORAGE_KEY)
     if (stored && typeof stored === 'string' && stored.trim()) {
+      console.debug('[Config] Using BASE_URL from storage:', stored.trim())
       return stored.trim()
     }
   } catch (err) {
     console.warn('Failed to read BASE_URL from storage:', err)
   }
+  
+  // Priority 2: Auto-detect DevTools and use IP
+  if (isDevTools()) {
+    console.debug('[Config] Detected DevTools, using dev BASE_URL:', DEV_BASE_URL)
+    return DEV_BASE_URL
+  }
+  
+  // Priority 3: Production default
+  console.debug('[Config] Using production BASE_URL:', DEFAULT_BASE_URL)
   return DEFAULT_BASE_URL
 }
 

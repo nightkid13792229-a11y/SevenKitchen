@@ -70,6 +70,15 @@ export class DogProfileDto {
 }
 
 export class DogCalcResultDto implements CalcPreviewResult {
+  @ApiProperty({ description: 'RER (Resting Energy Requirement)', example: 350 })
+  rer!: number;
+
+  @ApiProperty({
+    description: 'Total DER (Daily Energy Requirement)',
+    example: 500,
+  })
+  totalDer!: number;
+
   @ApiProperty({ description: 'Final food kcal requirement', example: 450 })
   finalFoodKcal!: number;
 
@@ -82,11 +91,11 @@ export class DogCalcResultDto implements CalcPreviewResult {
   })
   isTreatCapped!: boolean;
 
-  @ApiProperty({
-    description: 'Total DER (Daily Energy Requirement)',
-    example: 500,
+  @ApiPropertyOptional({
+    description: 'Daily intake in grams (if recipe energy density provided)',
+    example: 375,
   })
-  totalDer!: number;
+  dailyIntakeG?: number;
 }
 
 export class DogDetailResponseDto {

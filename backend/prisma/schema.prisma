@@ -193,6 +193,31 @@ model Address {
 }
 
 // ==========================================
+// Dog Breed Persistence (Phase 4.1)
+// ==========================================
+
+model DogBreed {
+  id                    String            @id @default(uuid()) @map("id")
+  name                  String            @map("name")
+  sizeCategory          DogSizeCategory   @map("size_category")
+  growthCurveType       GrowthCurveType   @map("growth_curve_type")
+  adultAgeMonths        Int               @map("adult_age_months")
+  seniorAgeYears        Int               @map("senior_age_years")
+  averageAdultWeightKg  Float?            @map("average_adult_weight_kg")
+  createdAt             DateTime          @default(now()) @map("created_at")
+  updatedAt             DateTime          @updatedAt @map("updated_at")
+
+  @@index([sizeCategory])
+  @@map("dog_breed")
+}
+
+enum GrowthCurveType {
+  STANDARD
+  SLOW
+  VERY_SLOW
+}
+
+// ==========================================
 // Dog Persistence (Phase 8.2 Part B)
 // ==========================================
 

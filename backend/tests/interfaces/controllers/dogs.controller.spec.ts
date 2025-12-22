@@ -13,26 +13,26 @@ import {
 } from '@nestjs/common';
 import request from 'supertest';
 import { JwtModule } from '@nestjs/jwt';
-import { DogsController } from './dogs.controller';
-import { UnauthorizedExceptionFilter } from '../common/unauthorized-exception.filter';
-import { BadRequestExceptionFilter } from '../common/bad-request-exception.filter';
+import { DogsController } from 'src/dogs.controller';
+import { UnauthorizedExceptionFilter } from 'src/common/unauthorized-exception.filter';
+import { BadRequestExceptionFilter } from 'src/common/bad-request-exception.filter';
 import {
   DogService,
   DOG_REPOSITORY,
   RECIPE_REPOSITORY,
-} from '../../application/dog/dog.service';
-import { InMemoryDogRepository } from '../../infrastructure/repositories/in-memory-dog.repository';
-import { InMemoryRecipeRepository } from '../../infrastructure/repositories/in-memory-recipe.repository';
+} from 'src/application/dog/dog.service';
+import { InMemoryDogRepository } from 'src/infrastructure/repositories/in-memory-dog.repository';
+import { InMemoryRecipeRepository } from 'src/infrastructure/repositories/in-memory-recipe.repository';
 import {
   DogGender,
   ActivityLevel,
   LifeStageOverride,
   TreatInputMode,
   TreatLevel,
-} from '../../domain';
-import { Dog } from '../../domain/dog/dog.entity';
-import { JwtAuthService } from '../auth/jwt.service';
-import { AuthGuard } from '../auth/auth.guard';
+} from 'src/domain';
+import { Dog } from 'src/domain/dog/dog.entity';
+import { JwtAuthService } from 'src/auth/jwt.service';
+import { AuthGuard } from 'src/auth/auth.guard';
 
 describe('DogsController (e2e)', () => {
   let app: INestApplication;

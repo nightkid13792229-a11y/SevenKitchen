@@ -6,10 +6,10 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { JwtModule } from '@nestjs/jwt';
-import { AuthController } from './auth.controller';
-import { JwtAuthService } from '../auth/jwt.service';
-import { UnauthorizedExceptionFilter } from '../common/unauthorized-exception.filter';
-import { BadRequestExceptionFilter } from '../common/bad-request-exception.filter';
+import { AuthController } from 'src/auth.controller';
+import { JwtAuthService } from 'src/auth/jwt.service';
+import { UnauthorizedExceptionFilter } from 'src/common/unauthorized-exception.filter';
+import { BadRequestExceptionFilter } from 'src/common/bad-request-exception.filter';
 
 describe('AuthController (e2e)', () => {
   let app: INestApplication;

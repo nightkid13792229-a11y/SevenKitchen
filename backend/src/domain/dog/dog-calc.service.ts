@@ -5,6 +5,7 @@
  */
 
 import { Dog } from './dog.entity';
+import { DogBreed } from './dog-breed.entity';
 import {
   DogSizeCategory,
   LifeStageOverride,
@@ -47,18 +48,21 @@ export function calculateAgeMonths(birthday: Date): number {
 /**
  * Determine size class from dog
  * Priority: size_class_override > breed > MEDIUM (fallback)
- * Note: breed lookup not implemented yet (GAP-007), using fallback
+ * Based on docs/07_Core_Architecture.md Section 2.2
  */
 export function determineSizeClass(
   dog: Dog,
+  breed?: DogBreed | null,
 ): DogSizeCategory {
   // Priority 1: Manual override
   if (dog.sizeClassOverride) {
     return dog.sizeClassOverride;
   }
 
-  // Priority 2: Breed lookup (not implemented yet - GAP-007)
-  // TODO: Lookup DogBreed.size_category when DogBreed model is available
+  // Priority 2: Breed lookup (GAP-007 resolved)
+  if (breed) {
+    return breed.sizeCategory;
+  }
 
   // Priority 3: Fallback to MEDIUM
   return DogSizeCategory.MEDIUM;
@@ -67,27 +71,37 @@ export function determineSizeClass(
 /**
  * Get adult threshold in months for size class
  * Priority: DogBreed.adult_age_months > Size Class Default
+ * Based on docs/07_Core_Architecture.md Section 3.1.2
  */
 function getAdultThresholdMonths(
   sizeClass: DogSizeCategory,
-  // breed?: DogBreed, // TODO: Add when DogBreed model is available
+  breed?: DogBreed | null,
 ): number {
-  // TODO: If breed and breed.adult_age_months exists, return it
-  // For now, use size class defaults
+  // Priority 1: If breed and breed.adult_age_months exists, return it
+  if (breed) {
+    return breed.getAdultThresholdMonths();
+  }
+
+  // Priority 2: Use size class defaults
   return SIZE_CLASS_ADULT_THRESHOLDS[sizeClass] ?? 12;
 }
 
 /**
  * Check if dog is senior
  * Priority: DogBreed.senior_age_years > Size Class Default
+ * Based on docs/07_Core_Architecture.md Section 3.1.2
  */
 function checkIsSenior(
   ageMonths: number,
   sizeClass: DogSizeCategory,
-  // breed?: DogBreed, // TODO: Add when DogBreed model is available
+  breed?: DogBreed | null,
 ): boolean {
-  // TODO: If breed and breed.senior_age_years exists, use it
-  // For now, use size class defaults
+  // Priority 1: If breed and breed.senior_age_years exists, use it
+  if (breed) {
+    return breed.isSenior(ageMonths);
+  }
+
+  // Priority 2: Use size class defaults
   const ageYears = ageMonths / 12.0;
   const threshold = SIZE_CLASS_SENIOR_THRESHOLDS[sizeClass] ?? 10;
   return ageYears >= threshold;
@@ -101,8 +115,9 @@ function getLifeStageFactor(
   dog: Dog,
   ageMonths: number,
   sizeClass: DogSizeCategory,
+  breed?: DogBreed | null,
 ): number {
-  const adultThreshold = getAdultThresholdMonths(sizeClass);
+  const adultThreshold = getAdultThresholdMonths(sizeClass, breed);
 
   // A. Pregnancy Override
   if (dog.lifeStageOverride === LifeStageOverride.PREGNANCY) {
@@ -171,7 +186,7 @@ function getLifeStageFactor(
   }
 
   // D. Senior
-  if (checkIsSenior(ageMonths, sizeClass)) {
+  if (checkIsSenior(ageMonths, sizeClass, breed)) {
     return LIFE_STAGE_FACTORS.SENIOR;
   }
 
@@ -187,6 +202,7 @@ function isGrowthOrReproStage(
   dog: Dog,
   ageMonths: number,
   sizeClass: DogSizeCategory,
+  breed?: DogBreed | null,
 ): boolean {
   // 1. Check reproduction state
   if (
@@ -197,7 +213,7 @@ function isGrowthOrReproStage(
   }
 
   // 2. Check growth state
-  const adultThreshold = getAdultThresholdMonths(sizeClass);
+  const adultThreshold = getAdultThresholdMonths(sizeClass, breed);
   return ageMonths < adultThreshold;
 }
 
@@ -210,15 +226,16 @@ function applyAdultModifiers(
   dog: Dog,
   ageMonths: number,
   sizeClass: DogSizeCategory,
+  breed?: DogBreed | null,
 ): number {
   // Safety guard: if in growth/repro stage, return base factor unchanged
-  if (isGrowthOrReproStage(dog, ageMonths, sizeClass)) {
+  if (isGrowthOrReproStage(dog, ageMonths, sizeClass, breed)) {
     return baseFactor;
   }
 
   // Only apply modifiers to non-pregnant, non-lactating adult dogs
   let currentFactor = baseFactor;
-  const isSenior = checkIsSenior(ageMonths, sizeClass);
+  const isSenior = checkIsSenior(ageMonths, sizeClass, breed);
 
   // 2. Neutered adjustment (only for non-senior adults)
   if (!isSenior) {
@@ -284,15 +301,18 @@ export function calculateRER(weightKg: number): number {
  * Calculate Total DER (Daily Energy Requirement)
  * Based on docs/07_Core_Architecture.md Section 3.1.5 Function A
  */
-export function calculateTotalDer(dog: Dog): number {
+export function calculateTotalDer(
+  dog: Dog,
+  breed?: DogBreed | null,
+): number {
   const ageMonths = calculateAgeMonths(dog.birthday);
-  const sizeClass = determineSizeClass(dog);
+  const sizeClass = determineSizeClass(dog, breed);
 
   // 1. Calculate RER
   const rer = calculateRER(dog.currentWeightKg);
 
   // 2. Get life stage base factor
-  const stageFactor = getLifeStageFactor(dog, ageMonths, sizeClass);
+  const stageFactor = getLifeStageFactor(dog, ageMonths, sizeClass, breed);
 
   // 3. Apply adult modifiers (neuter & activity)
   const adjustedFactor = applyAdultModifiers(
@@ -300,6 +320,7 @@ export function calculateTotalDer(dog: Dog): number {
     dog,
     ageMonths,
     sizeClass,
+    breed,
   );
 
   // 4. Apply BCS adjustment
@@ -360,14 +381,17 @@ function calculateTreatDeduction(
  * Calculate fresh food needs
  * Based on docs/07_Core_Architecture.md Section 3.1.5 Function B
  */
-export function calculateFreshFoodNeeds(dog: Dog): {
+export function calculateFreshFoodNeeds(
+  dog: Dog,
+  breed?: DogBreed | null,
+): {
   finalFoodKcal: number;
   treatDeduction: number;
   isTreatCapped: boolean;
   totalDer: number;
 } {
   // 1. Get total DER
-  const totalDer = calculateTotalDer(dog);
+  const totalDer = calculateTotalDer(dog, breed);
 
   // 2. Calculate treat deduction
   const treatResult = calculateTreatDeduction(dog, totalDer);
@@ -405,9 +429,10 @@ export function calculateDailyIntakeG(
 export function calculateDogEnergy(
   dog: Dog,
   recipeEnergyDensityKcalPerKg?: number,
+  breed?: DogBreed | null,
 ): DogCalcResult {
   const rer = calculateRER(dog.currentWeightKg);
-  const needsResult = calculateFreshFoodNeeds(dog);
+  const needsResult = calculateFreshFoodNeeds(dog, breed);
 
   const result: DogCalcResult = {
     rer,

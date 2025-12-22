@@ -4,14 +4,14 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { InventoryService } from './inventory.service';
-import type { InventoryRepository } from '../../domain/inventory/inventory.repository';
-import type { ProductionBatchRepository } from '../../domain/production/production.repository';
-import { PackagingUnit, PackagingUnitStatus } from '../../domain/production';
-import { InventoryLedgerEntry, InventorySourceType } from '../../domain/inventory';
-import { INVENTORY_REPOSITORY } from './inventory.service';
-import { PRODUCTION_BATCH_REPOSITORY } from '../production/production.service';
-import type { RecipeSnapshot } from '../../domain/recipe/types';
+import { InventoryService } from 'src/inventory.service';
+import type { InventoryRepository } from 'src/domain/inventory/inventory.repository';
+import type { ProductionBatchRepository } from 'src/domain/production/production.repository';
+import { PackagingUnit, PackagingUnitStatus } from 'src/domain/production';
+import { InventoryLedgerEntry, InventorySourceType } from 'src/domain/inventory';
+import { INVENTORY_REPOSITORY } from 'src/inventory.service';
+import { PRODUCTION_BATCH_REPOSITORY } from 'src/production/production.service';
+import type { RecipeSnapshot } from 'src/domain/recipe/types';
 
 describe('InventoryService - Phase 8.13', () => {
   let service: InventoryService;

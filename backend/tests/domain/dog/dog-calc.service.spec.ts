@@ -11,8 +11,8 @@ import {
   calculateFreshFoodNeeds,
   calculateAgeMonths,
   determineSizeClass,
-} from './dog-calc.service';
-import { Dog } from './dog.entity';
+} from 'src/domain/dog/dog-calc.service';
+import { Dog } from 'src/domain/dog/dog.entity';
 import {
   DogGender,
   ActivityLevel,
@@ -20,7 +20,7 @@ import {
   DogSizeCategory,
   TreatInputMode,
   TreatLevel,
-} from './enums';
+} from 'src/domain/dog/enums';
 
 describe('DogCalcService', () => {
   const createMockDog = (overrides?: {

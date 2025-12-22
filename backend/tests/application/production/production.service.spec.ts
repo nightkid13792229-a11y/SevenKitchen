@@ -4,17 +4,17 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { ProductionService, PRODUCTION_BATCH_REPOSITORY } from './production.service';
-import type { ProductionBatchRepository } from '../../domain/production/production.repository';
-import type { OrderRepository } from '../../domain/order/order.repository';
-import type { OrderStatusHistoryRepository } from '../../domain/order/order-status-history.repository';
-import { ProductionBatch, PackagingUnit } from '../../domain/production';
-import { ProductionBatchStatus, PackagingUnitStatus } from '../../domain/production/enums';
-import { Order, OrderItem } from '../../domain/order';
-import { OrderStatus, OrderType } from '../../domain';
-import type { RecipeSnapshot } from '../../domain/recipe/types';
-import { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY } from '../order/order.service';
-import type { ProductionBatchSummaryDto } from './production.service';
+import { ProductionService, PRODUCTION_BATCH_REPOSITORY } from 'src/production.service';
+import type { ProductionBatchRepository } from 'src/domain/production/production.repository';
+import type { OrderRepository } from 'src/domain/order/order.repository';
+import type { OrderStatusHistoryRepository } from 'src/domain/order/order-status-history.repository';
+import { ProductionBatch, PackagingUnit } from 'src/domain/production';
+import { ProductionBatchStatus, PackagingUnitStatus } from 'src/domain/production/enums';
+import { Order, OrderItem } from 'src/domain/order';
+import { OrderStatus, OrderType } from 'src/domain';
+import type { RecipeSnapshot } from 'src/domain/recipe/types';
+import { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY } from 'src/order/order.service';
+import type { ProductionBatchSummaryDto } from 'src/production.service';
 
 describe('ProductionService - Phase 8.10', () => {
   let service: ProductionService;

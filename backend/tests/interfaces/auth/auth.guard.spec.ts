@@ -6,17 +6,17 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { JwtModule } from '@nestjs/jwt';
-import { DogsController } from '../controllers/dogs.controller';
-import { UnauthorizedExceptionFilter } from '../common/unauthorized-exception.filter';
+import { DogsController } from 'src/controllers/dogs.controller';
+import { UnauthorizedExceptionFilter } from 'src/common/unauthorized-exception.filter';
 import {
   DogService,
   DOG_REPOSITORY,
   RECIPE_REPOSITORY,
-} from '../../application/dog/dog.service';
-import { InMemoryDogRepository } from '../../infrastructure/repositories/in-memory-dog.repository';
-import { InMemoryRecipeRepository } from '../../infrastructure/repositories/in-memory-recipe.repository';
-import { JwtAuthService } from './jwt.service';
-import { AuthGuard } from './auth.guard';
+} from 'src/application/dog/dog.service';
+import { InMemoryDogRepository } from 'src/infrastructure/repositories/in-memory-dog.repository';
+import { InMemoryRecipeRepository } from 'src/infrastructure/repositories/in-memory-recipe.repository';
+import { JwtAuthService } from 'src/jwt.service';
+import { AuthGuard } from 'src/auth.guard';
 
 describe('AuthGuard (e2e)', () => {
   let app: INestApplication;

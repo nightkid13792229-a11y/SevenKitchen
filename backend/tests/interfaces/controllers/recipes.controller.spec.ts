@@ -8,25 +8,25 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
-import { RecipesController } from './recipes.controller';
-import { RECIPE_REPOSITORY_TOKEN } from './recipes.controller';
-import { InMemoryRecipeRepository } from '../../infrastructure/repositories/in-memory-recipe.repository';
-import { DiySheetService } from '../../application/recipe/diy-sheet.service';
+import { RecipesController } from 'src/recipes.controller';
+import { RECIPE_REPOSITORY_TOKEN } from 'src/recipes.controller';
+import { InMemoryRecipeRepository } from 'src/infrastructure/repositories/in-memory-recipe.repository';
+import { DiySheetService } from 'src/application/recipe/diy-sheet.service';
 import {
   DogService,
   DOG_REPOSITORY,
   RECIPE_REPOSITORY,
-} from '../../application/dog/dog.service';
-import { InMemoryDogRepository } from '../../infrastructure/repositories/in-memory-dog.repository';
-import type { Recipe } from '../../domain/recipe/recipe.repository';
-import { Dog } from '../../domain/dog/dog.entity';
+} from 'src/application/dog/dog.service';
+import { InMemoryDogRepository } from 'src/infrastructure/repositories/in-memory-dog.repository';
+import type { Recipe } from 'src/domain/recipe/recipe.repository';
+import { Dog } from 'src/domain/dog/dog.entity';
 import {
   DogGender,
   ActivityLevel,
   LifeStageOverride,
   TreatInputMode,
   TreatLevel,
-} from '../../domain';
+} from 'src/domain';
 
 describe('RecipesController (e2e)', () => {
   let app: INestApplication;

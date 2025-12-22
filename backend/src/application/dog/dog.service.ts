@@ -6,6 +6,7 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import type { DogRepository } from '../../domain/dog/dog.repository';
+import type { DogBreedRepository } from '../../domain/dog/dog-breed.repository';
 import type { RecipeRepository } from '../../domain/recipe/recipe.repository';
 import { Dog } from '../../domain/dog/dog.entity';
 import {
@@ -52,20 +53,25 @@ export interface UpdateDogProfileDto {
 }
 
 export interface CalcPreviewResult {
+  rer: number;
+  totalDer: number;
   finalFoodKcal: number;
   treatDeduction: number;
   isTreatCapped: boolean;
-  totalDer: number;
+  dailyIntakeG?: number;
 }
 
 export const DOG_REPOSITORY = Symbol('DogRepository');
 export const RECIPE_REPOSITORY = Symbol('RecipeRepository');
+export const DOG_BREED_REPOSITORY = Symbol('DogBreedRepository');
 
 @Injectable()
 export class DogService {
   constructor(
     @Inject(DOG_REPOSITORY)
     private readonly dogRepository: DogRepository,
+    @Inject(DOG_BREED_REPOSITORY)
+    private readonly dogBreedRepository: DogBreedRepository,
     @Inject(RECIPE_REPOSITORY)
     private readonly recipeRepository: RecipeRepository, // TODO: Will be used for recipe-based calculations
   ) {
@@ -103,8 +109,11 @@ export class DogService {
     // Save first to get persisted entity
     const savedDog = await this.dogRepository.save(dog);
 
+    // Load breed for calculation
+    const breed = await this.dogBreedRepository.findById(savedDog.breedId);
+
     // Calculate and update cachedTargetFoodKcal
-    const calcResult = calculateDogEnergy(savedDog);
+    const calcResult = calculateDogEnergy(savedDog, undefined, breed);
     savedDog.cachedTargetFoodKcal = Math.round(calcResult.finalFoodKcal);
 
     // Update with calculated value
@@ -147,7 +156,8 @@ export class DogService {
 
     // Recalculate if needed
     if (needsRecalc) {
-      const calcResult = calculateDogEnergy(dog);
+      const breed = await this.dogBreedRepository.findById(dog.breedId);
+      const calcResult = calculateDogEnergy(dog, undefined, breed);
       dog.cachedTargetFoodKcal = Math.round(calcResult.finalFoodKcal);
     }
 
@@ -164,13 +174,18 @@ export class DogService {
       throw new Error(`Dog not found: ${dogId}`);
     }
 
-    const calcResult = calculateDogEnergy(dog);
+    // Load breed for calculation
+    const breed = await this.dogBreedRepository.findById(dog.breedId);
+
+    const calcResult = calculateDogEnergy(dog, undefined, breed);
 
     return {
+      rer: calcResult.rer,
+      totalDer: calcResult.der,
       finalFoodKcal: calcResult.finalFoodKcal,
       treatDeduction: calcResult.treatDeduction,
       isTreatCapped: calcResult.isTreatCapped,
-      totalDer: calcResult.der,
+      dailyIntakeG: calcResult.dailyIntakeG,
     };
   }
 }

@@ -8,7 +8,7 @@
         <input
           v-model="baseUrl"
           class="input"
-          placeholder="例如: http://127.0.0.1:3000/api/v1"
+          placeholder="例如: https://api.sevenkitchen.cloud/api/v1"
           type="text"
         />
       </view>
@@ -38,8 +38,8 @@
     <view class="section">
       <view class="section-title">使用说明</view>
       <view class="help-text">
-        <text>• 开发环境建议使用: http://127.0.0.1:3000/api/v1</text>
-        <text>• 生产环境请使用实际服务器地址</text>
+        <text>• 默认使用生产环境: https://api.sevenkitchen.cloud/api/v1</text>
+        <text>• 开发环境可切换为: http://127.0.0.1:3000/api/v1</text>
         <text>• 修改后需要重启应用才能生效</text>
         <text>• 如果连接失败，请检查后端服务是否运行</text>
       </view>

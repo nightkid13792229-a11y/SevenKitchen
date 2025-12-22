@@ -4,13 +4,13 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { KitchenService } from './kitchen.service';
-import type { ProductionBatchRepository } from '../../domain/production/production.repository';
-import { ProductionBatch, PackagingUnit } from '../../domain/production';
-import { ProductionBatchStatus, PackagingUnitStatus } from '../../domain/production/enums';
-import { PRODUCTION_BATCH_REPOSITORY, ProductionService } from '../production/production.service';
-import { InventoryService } from '../inventory/inventory.service';
-import type { RecipeSnapshot } from '../../domain/recipe/types';
+import { KitchenService } from 'src/kitchen.service';
+import type { ProductionBatchRepository } from 'src/domain/production/production.repository';
+import { ProductionBatch, PackagingUnit } from 'src/domain/production';
+import { ProductionBatchStatus, PackagingUnitStatus } from 'src/domain/production/enums';
+import { PRODUCTION_BATCH_REPOSITORY, ProductionService } from 'src/production/production.service';
+import { InventoryService } from 'src/inventory/inventory.service';
+import type { RecipeSnapshot } from 'src/domain/recipe/types';
 
 describe('KitchenService - Phase 8.12', () => {
   let service: KitchenService;

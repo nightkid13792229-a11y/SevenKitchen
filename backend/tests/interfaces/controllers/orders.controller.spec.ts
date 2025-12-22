@@ -13,38 +13,38 @@ import {
 } from '@nestjs/common';
 import request from 'supertest';
 import { JwtModule } from '@nestjs/jwt';
-import { OrdersController } from './orders.controller';
-import { UnauthorizedExceptionFilter } from '../common/unauthorized-exception.filter';
-import { BadRequestExceptionFilter } from '../common/bad-request-exception.filter';
+import { OrdersController } from 'src/orders.controller';
+import { UnauthorizedExceptionFilter } from 'src/common/unauthorized-exception.filter';
+import { BadRequestExceptionFilter } from 'src/common/bad-request-exception.filter';
 import {
   OrderService,
   ORDER_REPOSITORY,
   ORDER_STATUS_HISTORY_REPOSITORY,
-} from '../../application/order/order.service';
-import type { OrderStatusHistoryRepository } from '../../domain/order/order-status-history.repository';
-import { RECIPE_REPOSITORY, DOG_REPOSITORY } from '../../application/dog/dog.service';
-import { INGREDIENT_REPOSITORY } from '../../application/ingredient/ingredient.service';
-import { ADDRESS_REPOSITORY } from '../../application/address/address.service';
-import { InMemoryOrderRepository } from '../../infrastructure/repositories/in-memory-order.repository';
-import { InMemoryRecipeRepository } from '../../infrastructure/repositories/in-memory-recipe.repository';
-import { InMemoryIngredientRepository } from '../../infrastructure/repositories/in-memory-ingredient.repository';
-import { InMemoryDogRepository } from '../../infrastructure/repositories/in-memory-dog.repository';
-import { InMemoryAddressRepository } from '../../infrastructure/repositories/in-memory-address.repository';
-import { PricingService } from '../../domain/pricing/pricing.service';
-import { GlobalConfigService } from '../../application/config/global-config.service';
-import { ShippingService } from '../../application/shipping/shipping.service';
-import { ShippingFeeService } from '../../domain/shipping/shipping-fee.service';
-import { SHIPPING_TEMPLATE_REPOSITORY } from '../../application/shipping/shipping.service.tokens';
-import { InMemoryShippingTemplateRepository } from '../../infrastructure/repositories/in-memory-shipping-template.repository';
-import type { Recipe } from '../../domain/recipe/recipe.repository';
-import { OrderStatus, OrderType, DogGender, ActivityLevel, LifeStageOverride, TreatInputMode, TreatLevel } from '../../domain';
-import { Order, OrderItem, PricingBreakdownSnapshot } from '../../domain/order';
-import type { RecipeSnapshot } from '../../domain/recipe/types';
-import { JwtAuthService } from '../auth/jwt.service';
-import { AuthGuard } from '../auth/auth.guard';
-import { Dog } from '../../domain/dog/dog.entity';
-import { Ingredient, IngredientType, BaseUnit } from '../../domain/ingredient';
-import { OrderStatusHistory } from '../../domain/order/order-status-history.entity';
+} from 'src/application/order/order.service';
+import type { OrderStatusHistoryRepository } from 'src/domain/order/order-status-history.repository';
+import { RECIPE_REPOSITORY, DOG_REPOSITORY } from 'src/application/dog/dog.service';
+import { INGREDIENT_REPOSITORY } from 'src/application/ingredient/ingredient.service';
+import { ADDRESS_REPOSITORY } from 'src/application/address/address.service';
+import { InMemoryOrderRepository } from 'src/infrastructure/repositories/in-memory-order.repository';
+import { InMemoryRecipeRepository } from 'src/infrastructure/repositories/in-memory-recipe.repository';
+import { InMemoryIngredientRepository } from 'src/infrastructure/repositories/in-memory-ingredient.repository';
+import { InMemoryDogRepository } from 'src/infrastructure/repositories/in-memory-dog.repository';
+import { InMemoryAddressRepository } from 'src/infrastructure/repositories/in-memory-address.repository';
+import { PricingService } from 'src/domain/pricing/pricing.service';
+import { GlobalConfigService } from 'src/application/config/global-config.service';
+import { ShippingService } from 'src/application/shipping/shipping.service';
+import { ShippingFeeService } from 'src/domain/shipping/shipping-fee.service';
+import { SHIPPING_TEMPLATE_REPOSITORY } from 'src/application/shipping/shipping.service.tokens';
+import { InMemoryShippingTemplateRepository } from 'src/infrastructure/repositories/in-memory-shipping-template.repository';
+import type { Recipe } from 'src/domain/recipe/recipe.repository';
+import { OrderStatus, OrderType, DogGender, ActivityLevel, LifeStageOverride, TreatInputMode, TreatLevel } from 'src/domain';
+import { Order, OrderItem, PricingBreakdownSnapshot } from 'src/domain/order';
+import type { RecipeSnapshot } from 'src/domain/recipe/types';
+import { JwtAuthService } from 'src/auth/jwt.service';
+import { AuthGuard } from 'src/auth/auth.guard';
+import { Dog } from 'src/domain/dog/dog.entity';
+import { Ingredient, IngredientType, BaseUnit } from 'src/domain/ingredient';
+import { OrderStatusHistory } from 'src/domain/order/order-status-history.entity';
 
 describe('OrdersController (e2e)', () => {
   let app: INestApplication;

@@ -4,17 +4,17 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { DogService, DOG_REPOSITORY, RECIPE_REPOSITORY } from './dog.service';
-import type { DogRepository } from '../../domain/dog/dog.repository';
-import type { RecipeRepository } from '../../domain/recipe/recipe.repository';
-import { Dog } from '../../domain/dog/dog.entity';
+import { DogService, DOG_REPOSITORY, RECIPE_REPOSITORY } from 'src/application/dog/dog.service';
+import type { DogRepository } from 'src/domain/dog/dog.repository';
+import type { RecipeRepository } from 'src/domain/recipe/recipe.repository';
+import { Dog } from 'src/domain/dog/dog.entity';
 import {
   DogGender,
   ActivityLevel,
   LifeStageOverride,
   TreatInputMode,
   TreatLevel,
-} from '../../domain';
+} from 'src/domain';
 
 describe('DogService', () => {
   let service: DogService;

@@ -5,13 +5,13 @@
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { NotFoundException, BadRequestException } from '@nestjs/common';
-import { ShippingFulfillmentService } from './shipping-fulfillment.service';
-import { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY } from '../order/order.service';
-import type { OrderRepository } from '../../domain/order/order.repository';
-import type { OrderStatusHistoryRepository } from '../../domain/order/order-status-history.repository';
-import { Order, OrderItem } from '../../domain/order';
-import { OrderStatus, OrderType } from '../../domain';
-import type { RecipeSnapshot } from '../../domain/recipe/types';
+import { ShippingFulfillmentService } from 'src/shipping-fulfillment.service';
+import { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY } from 'src/order/order.service';
+import type { OrderRepository } from 'src/domain/order/order.repository';
+import type { OrderStatusHistoryRepository } from 'src/domain/order/order-status-history.repository';
+import { Order, OrderItem } from 'src/domain/order';
+import { OrderStatus, OrderType } from 'src/domain';
+import type { RecipeSnapshot } from 'src/domain/recipe/types';
 
 describe('ShippingFulfillmentService - Phase 8.14', () => {
   let service: ShippingFulfillmentService;

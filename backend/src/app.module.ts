@@ -57,6 +57,8 @@ import { InventoryService, INVENTORY_REPOSITORY } from './application/inventory/
 import { PrismaInventoryRepository } from './infrastructure/repositories/prisma-inventory.repository';
 import { PrismaOrderStatusHistoryRepository } from './infrastructure/repositories/prisma-order-status-history.repository';
 import { ORDER_STATUS_HISTORY_REPOSITORY } from './application/order/order.service.tokens';
+import { PrismaDogBreedRepository } from './infrastructure/repositories/prisma-dog-breed.repository';
+import { DOG_BREED_REPOSITORY } from './application/dog/dog.service';
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -284,6 +286,19 @@ validatePrismaConfig();
           );
         }
         return new PrismaOrderStatusHistoryRepository(prismaService);
+      },
+      inject: isPrismaEnabled() ? [PrismaService] : [],
+    },
+    // Phase 4.1: Dog Breed Repository
+    {
+      provide: DOG_BREED_REPOSITORY,
+      useFactory: (prismaService?: PrismaService) => {
+        if (!prismaService) {
+          throw new Error(
+            'PrismaService is not available. Ensure Prisma is enabled via repo switches.',
+          );
+        }
+        return new PrismaDogBreedRepository(prismaService);
       },
       inject: isPrismaEnabled() ? [PrismaService] : [],
     },

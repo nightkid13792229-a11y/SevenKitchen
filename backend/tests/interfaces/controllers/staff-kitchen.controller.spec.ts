@@ -4,10 +4,10 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { StaffKitchenController } from './staff-kitchen.controller';
-import { KitchenService } from '../../application/kitchen/kitchen.service';
+import { StaffKitchenController } from 'src/staff-kitchen.controller';
+import { KitchenService } from 'src/application/kitchen/kitchen.service';
 import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { PackagingUnitStatus } from '../../domain/production';
+import { PackagingUnitStatus } from 'src/domain/production';
 
 describe('StaffKitchenController', () => {
   let controller: StaffKitchenController;

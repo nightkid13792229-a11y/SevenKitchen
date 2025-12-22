@@ -25,8 +25,9 @@ import {
   ApiSecurity,
   ApiHeader,
 } from '@nestjs/swagger';
-import { DogService, DOG_REPOSITORY } from '../../application/dog/dog.service';
+import { DogService, DOG_REPOSITORY, DOG_BREED_REPOSITORY } from '../../application/dog/dog.service';
 import type { DogRepository } from '../../domain/dog/dog.repository';
+import type { DogBreedRepository } from '../../domain/dog/dog-breed.repository';
 import { Inject } from '@nestjs/common';
 import { CreateDogDto } from '../dto/dogs/create-dog.dto';
 import { UpdateDogDto } from '../dto/dogs/update-dog.dto';
@@ -36,6 +37,7 @@ import {
   DogProfileDto,
   DogCalcResultDto,
 } from '../dto/dogs/dog-response.dto';
+import { calculateDogEnergy } from '../../domain';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { TreatInputMode, TreatLevel } from '../../domain';
 import { Dog } from '../../domain/dog/dog.entity';
@@ -49,6 +51,8 @@ export class DogsController {
   constructor(
     @Inject(DOG_REPOSITORY)
     private readonly dogRepository: DogRepository,
+    @Inject(DOG_BREED_REPOSITORY)
+    private readonly dogBreedRepository: DogBreedRepository,
     private readonly dogService: DogService,
   ) {}
 
@@ -145,6 +149,25 @@ export class DogsController {
     return ApiResponseDto.success(response);
   }
 
+  @Get('breeds')
+  @ApiOperation({ summary: 'List all dog breeds' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of dog breeds',
+  })
+  async listBreeds(): Promise<ApiResponseDto<any[]>> {
+    const breeds = await this.dogBreedRepository.findAll();
+    const breedDtos = breeds.map((breed) => ({
+      id: breed.id,
+      name: breed.name,
+      sizeCategory: breed.sizeCategory,
+      adultAgeMonths: breed.adultAgeMonths,
+      seniorAgeYears: breed.seniorAgeYears,
+      averageAdultWeightKg: breed.averageAdultWeightKg,
+    }));
+    return ApiResponseDto.success(breedDtos);
+  }
+
   @Get()
   @UseGuards(AuthGuard)
   @ApiOperation({ summary: 'List dogs for current customer' })
@@ -229,14 +252,18 @@ export class DogsController {
   async calcPreview(
     @Body() calcPreviewDto: CalcPreviewDto,
   ): Promise<ApiResponseDto<DogCalcResultDto>> {
-    // Create temporary dog entity for calculation
-    // TODO: This is a workaround - in real implementation, calcPreview should accept DTO directly
-    const tempId = 'temp-calc-id';
-    const ownerId = 'temp-owner-id';
+    // Load breed for calculation
+    const breed = await this.dogBreedRepository.findById(
+      calcPreviewDto.breedId,
+    );
+    if (!breed) {
+      return ApiResponseDto.error(400, 'Breed not found');
+    }
 
+    // Create temporary dog entity for calculation (no database save needed)
     const tempDog = new Dog(
-      tempId,
-      ownerId,
+      'temp-calc-id',
+      'temp-owner-id',
       'Temp',
       calcPreviewDto.breedId,
       new Date(calcPreviewDto.birthday),
@@ -255,16 +282,19 @@ export class DogsController {
       0,
     );
 
-    // Save temporarily for calculation
-    await this.dogRepository.save(tempDog);
+    // Direct calculation without database save
+    const calcResult = calculateDogEnergy(tempDog, undefined, breed);
 
-    try {
-      const result = await this.dogService.calcPreview(tempId);
-      return ApiResponseDto.success(result);
-    } finally {
-      // Clean up
-      await this.dogRepository.delete(tempId);
-    }
+    const result: DogCalcResultDto = {
+      rer: calcResult.rer,
+      totalDer: calcResult.der,
+      finalFoodKcal: calcResult.finalFoodKcal,
+      treatDeduction: calcResult.treatDeduction,
+      isTreatCapped: calcResult.isTreatCapped,
+      dailyIntakeG: calcResult.dailyIntakeG,
+    };
+
+    return ApiResponseDto.success(result);
   }
 
   private mapDogToProfileDto(dog: Dog): DogProfileDto {

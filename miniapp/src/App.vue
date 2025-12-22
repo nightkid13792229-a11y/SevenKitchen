@@ -37,9 +37,12 @@ onLaunch(() => {
   
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   
-  // Auto-login on app launch only if no token exists
-  // This prevents unnecessary login calls and handles errors gracefully
-  ensureAuthenticated()
+  // Delay auto-login to allow page rendering first
+  // This ensures diagnostic features (like health check) are not blocked
+  // Auto-login runs after a short delay to prioritize UI responsiveness
+  setTimeout(() => {
+    ensureAuthenticated()
+  }, 500) // 500ms delay allows initial page render
 })
 
 onShow(() => {
@@ -54,11 +57,22 @@ onHide(() => {
  * Ensure user is authenticated - only login if no token exists
  * Handles errors gracefully to prevent app crashes
  * Implements retry logic with graceful degradation
+ * 
+ * NOTE: This function is intentionally delayed on app launch to allow
+ * page rendering and diagnostic features (like health check) to work
+ * without interference. Login failures do not block UI.
  */
 let loginRetryCount = 0
 const MAX_LOGIN_RETRIES = 1
+let isLoginInProgress = false // Prevent concurrent login attempts
 
 function ensureAuthenticated() {
+  // Prevent concurrent login attempts
+  if (isLoginInProgress) {
+    console.log('→ Auto-login already in progress, skipping duplicate call')
+    return
+  }
+  
   const token = getToken()
   
   // If token exists, we're already authenticated
@@ -68,48 +82,38 @@ function ensureAuthenticated() {
   }
   
   // No token - attempt to login
+  isLoginInProgress = true
   console.log('→ No token found, attempting auto-login (attempt ' + (loginRetryCount + 1) + '/' + (MAX_LOGIN_RETRIES + 1) + ')')
   const customerId = 'mvp-user-001' // MVP hardcoded customer ID
   
   performLogin(customerId).then(() => {
     console.log('✓ Auto-login successful')
     loginRetryCount = 0 // Reset retry count on success
+    isLoginInProgress = false
     // Token is now stored via setToken() in performLogin()
   }).catch((err: any) => {
     loginRetryCount++
+    isLoginInProgress = false
     
     // Log error but don't crash the app
     console.error('✗ Auto-login failed (attempt ' + loginRetryCount + '):', err)
     
     // Retry once if we haven't exceeded max retries
+    // Use longer delay to avoid interfering with user interactions
     if (loginRetryCount <= MAX_LOGIN_RETRIES) {
-      console.log('→ Retrying auto-login in 2 seconds...')
+      console.log('→ Retrying auto-login in 3 seconds...')
       setTimeout(() => {
         ensureAuthenticated()
-      }, 2000)
+      }, 3000) // Increased from 2s to 3s to reduce interference
       return
     }
     
     // After max retries, gracefully degrade
+    // Do not show toast immediately - let user interact with app first
+    // Toast will be shown only if user tries to use a feature that requires auth
     console.warn('⚠ Auto-login failed after retries - app will continue but API calls may fail')
     console.warn('   User can still navigate the app. Login will be retried on next API call (401 handling)')
-    
-    // Show a non-blocking toast if it's a network error (backend not reachable)
-    const errorMessage = err?.message || String(err)
-    if (errorMessage.includes('网络') || errorMessage.includes('连接') || errorMessage.includes('ERR_CONNECTION')) {
-      uni.showToast({
-        title: '无法连接到服务器，请检查网络设置',
-        icon: 'none',
-        duration: 3000
-      })
-    } else {
-      // Other errors (auth, etc.)
-      uni.showToast({
-        title: '登录失败，部分功能可能不可用',
-        icon: 'none',
-        duration: 3000
-      })
-    }
+    console.warn('   Diagnostic features (health check) are not affected by login status')
     
     // Reset retry count after showing error (will retry on next app launch or 401)
     loginRetryCount = 0

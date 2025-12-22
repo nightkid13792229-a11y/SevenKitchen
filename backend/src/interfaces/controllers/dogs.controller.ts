@@ -251,7 +251,7 @@ export class DogsController {
   @ApiResponse({ status: 400, description: 'Invalid input' })
   async calcPreview(
     @Body() calcPreviewDto: CalcPreviewDto,
-  ): Promise<ApiResponseDto<DogCalcResultDto>> {
+  ): Promise<ApiResponseDto<DogCalcResultDto | null>> {
     // Load breed for calculation
     const breed = await this.dogBreedRepository.findById(
       calcPreviewDto.breedId,

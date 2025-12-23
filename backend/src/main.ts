@@ -166,7 +166,11 @@ async function bootstrap() {
     `Swagger UI is available at: http://localhost:${process.env.PORT ?? 3000}/api/docs`,
   );
 }
-bootstrap().catch((error) => {
-  console.error('Error starting the application:', error);
-  process.exit(1);
-});
+// Only execute bootstrap if this file is the entry point
+// This prevents double execution when the file is imported as a module
+if (require.main === module) {
+  bootstrap().catch((error) => {
+    console.error('Error starting the application:', error);
+    process.exit(1);
+  });
+}

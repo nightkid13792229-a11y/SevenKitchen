@@ -5,6 +5,12 @@
  */
 
 /**
+ * Virtual Breed ID for Mixed Breeds
+ * Used when dog is not a pure breed
+ */
+export const MIXED_BREED_VIRTUAL_ID = '00000000-0000-0000-0000-000000000000';
+
+/**
  * Life Stage Base Factors (RER Multipliers)
  * Source: FEDIAF (2021), WSAVA Global Nutrition Guidelines
  */
@@ -87,3 +93,4 @@ export const SIZE_CLASS_SENIOR_THRESHOLDS = {
   LARGE: 8,
   GIANT: 7,
 } as const;
+

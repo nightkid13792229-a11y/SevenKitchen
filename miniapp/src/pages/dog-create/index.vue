@@ -11,20 +11,108 @@
         <input class="input" placeholder="请输入狗狗姓名" v-model="formData.name" />
       </view>
 
-      <view class="form-item">
+      <!-- Breed Selection with Search -->
+      <view class="form-item breed-section">
         <text class="label">品种 *</text>
-        <picker 
-          mode="selector" 
-          :range="breedOptions" 
-          :range-key="'name'"
-          :value="breedIndex" 
-          @change="onBreedChange"
-          :disabled="loadingBreeds"
+
+        <!-- Selected Breed Display -->
+        <view v-if="selectedBreed || isMixedBreed" class="selected-breed-display">
+          <text class="selected-text">{{ isMixedBreed ? '混血/其他' : selectedBreed?.name }}</text>
+          <text class="change-btn" @tap="clearBreed">重新选择</text>
+        </view>
+
+        <!-- Breed Selection UI (shown when no breed selected) -->
+        <view v-else class="breed-selector">
+          <!-- Search Input -->
+          <view class="search-box">
+            <input
+              class="search-input"
+              placeholder="🔍 搜索品种（如：拉布拉多、金毛）"
+              v-model="searchKeyword"
+              @input="onSearchInput"
+            />
+          </view>
+
+          <!-- Search Results -->
+          <view v-if="searchKeyword" class="search-results">
+            <text class="section-title">搜索结果 ({{ filteredBreeds.length }}个品种)</text>
+            <view class="breed-list">
+              <view
+                v-for="breed in filteredBreeds"
+                :key="breed.id"
+                class="breed-item"
+                @tap="selectBreed(breed)"
+              >
+                {{ breed.name }}
+              </view>
+            </view>
+            <view v-if="filteredBreeds.length === 0" class="no-results">
+              未找到匹配的品种
+            </view>
+          </view>
+
+          <!-- No Search: Show Common Breeds -->
+          <view v-else>
+            <view class="section">
+              <text class="section-title">💡 常见品种 (点击快速选择)</text>
+              <view class="common-breeds">
+                <view
+                  v-for="breedName in commonBreeds"
+                  :key="breedName"
+                  class="breed-tag"
+                  @tap="selectBreedByName(breedName)"
+                >
+                  {{ breedName }}
+                </view>
+              </view>
+            </view>
+
+            <!-- All Breeds Toggle -->
+            <view class="section">
+              <view class="section-header" @tap="toggleAllBreeds">
+                <text class="section-title">📋 全部品种 ({{ breeds.length }}种)</text>
+                <text class="toggle-icon">{{ showAllBreeds ? '▲' : '▼' }}</text>
+              </view>
+              <view v-if="showAllBreeds" class="breed-list all-breeds-list">
+                <view
+                  v-for="breed in breeds"
+                  :key="breed.id"
+                  class="breed-item"
+                  @tap="selectBreed(breed)"
+                >
+                  {{ breed.name }}
+                </view>
+              </view>
+            </view>
+
+            <!-- Mixed Breed Option -->
+            <view class="section">
+              <text class="section-title">🎭 混血/不确定品种</text>
+              <view class="mixed-breed-btn" @tap="selectMixedBreed">
+                我家的狗狗是混血/其他
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- Size Class Display (Inline) -->
+      <view v-if="selectedBreed || isMixedBreed" class="form-item size-display">
+        <text class="label">📏 体型分类</text>
+        <picker
+          mode="selector"
+          :range="sizeClassOptionsForPicker"
+          :value="sizeClassIndex"
+          @change="onSizeClassChange"
         >
-          <view class="picker">
-            {{ selectedBreed?.name || (loadingBreeds ? '加载中...' : '请选择品种') }}
+          <view class="size-info" :class="{ 'size-required': isMixedBreed && !formData.sizeClassOverride }">
+            <text class="size-text">{{ getSizeClassDisplay() }}</text>
+            <text class="edit-icon">✏️</text>
           </view>
         </picker>
+        <text class="hint" :class="{ 'hint-warning': isMixedBreed && !formData.sizeClassOverride }">
+          {{ getSizeClassHint() }}
+        </text>
       </view>
 
       <view class="form-item">
@@ -100,12 +188,12 @@
       </view>
 
       <button class="btn" @tap="submit" :disabled="!canSubmit">创建档案</button>
-      
+
       <!-- Preview Calculation Button -->
       <button class="btn btn-secondary" @tap="previewCalculation" :disabled="!canPreview">
         试算喂食建议
       </button>
-      
+
       <!-- Feeding Recommendation Card -->
       <view class="recommendation-card" v-if="calcResult">
         <view class="card-title">📊 喂食建议</view>
@@ -152,12 +240,22 @@ interface FormData {
   bcsScore: number
   activityLevel: string
   lifeStageOverride: string
+  sizeClassOverride: string | null
   mealsPerDay: number
   treatInputMode: string
   treatLevel: string
   manualTreatKcal: string
   medicalHistory: string
 }
+
+// Constants
+const MIXED_BREED_VIRTUAL_ID = '00000000-0000-0000-0000-000000000000'
+const commonBreeds = [
+  '拉布拉多', '泰迪', '贵宾犬(小型)', '贵宾犬(标准)', '金毛',
+  '比熊', '哈士奇', '德牧', '边牧', '柯基',
+  '萨摩耶', '法国斗牛犬', '吉娃娃', '博美', '雪纳瑞(小型)',
+  '约克夏', '马尔济斯', '腊肠犬', '阿拉斯加', '杜宾'
+]
 
 const formData = ref<FormData>({
   name: '',
@@ -169,6 +267,7 @@ const formData = ref<FormData>({
   bcsScore: 5,
   activityLevel: 'NORMAL',
   lifeStageOverride: 'NONE',
+  sizeClassOverride: null,
   mealsPerDay: 2,
   treatInputMode: 'ESTIMATE_LEVEL',
   treatLevel: 'LOW',
@@ -179,6 +278,8 @@ const formData = ref<FormData>({
 const genderOptions = ['MALE', 'FEMALE']
 const activityLevelOptions = ['RESTING', 'LOW', 'NORMAL', 'HIGH', 'WORKING']
 const lifeStageOptions = ['NONE', 'PUPPY', 'ADULT', 'SENIOR', 'PREGNANCY', 'LACTATION']
+const sizeClassOptions = ['SMALL', 'MEDIUM', 'LARGE', 'GIANT']
+const sizeClassOptionsForPicker = ['小型犬', '中型犬', '大型犬', '巨型犬']
 const treatInputModeOptions = ['ESTIMATE_LEVEL', 'EXACT_KCAL']
 const treatLevelOptions = ['NONE', 'LOW', 'MODERATE', 'HIGH']
 
@@ -206,37 +307,51 @@ const calcResult = ref<CalcResult | null>(null)
 const loadingBreeds = ref(false)
 const calculating = ref(false)
 
-const breedOptions = computed(() => breeds.value)
-const breedIndex = computed(() => {
-  if (!selectedBreed.value) return -1
-  return breeds.value.findIndex(b => b.id === selectedBreed.value!.id)
+// New state variables
+const searchKeyword = ref('')
+const showAllBreeds = ref(false)
+const isMixedBreed = ref(false)
+
+const filteredBreeds = computed(() => {
+  if (!searchKeyword.value) {
+    return []
+  }
+  const keyword = searchKeyword.value.trim()
+  return breeds.value.filter(b => b.name.includes(keyword))
 })
 
 const genderIndex = computed(() => genderOptions.indexOf(formData.value.gender))
 const activityLevelIndex = computed(() => activityLevelOptions.indexOf(formData.value.activityLevel))
 const lifeStageIndex = computed(() => lifeStageOptions.indexOf(formData.value.lifeStageOverride))
+const sizeClassIndex = computed(() => {
+  const override = formData.value.sizeClassOverride
+  if (!override) return 0
+  return sizeClassOptions.indexOf(override)
+})
 const treatInputModeIndex = computed(() => treatInputModeOptions.indexOf(formData.value.treatInputMode))
 const treatLevelIndex = computed(() => treatLevelOptions.indexOf(formData.value.treatLevel))
 
 const canSubmit = computed(() => {
-  return formData.value.name && 
-         formData.value.breedId && 
-         formData.value.birthday && 
+  return formData.value.name &&
+         formData.value.breedId &&
+         formData.value.birthday &&
          formData.value.currentWeightKg &&
-         !calculating.value
+         !calculating.value &&
+         (isMixedBreed.value ? formData.value.sizeClassOverride !== null : true)
 })
 
 const canPreview = computed(() => {
-  return formData.value.breedId && 
-         formData.value.birthday && 
+  return formData.value.breedId &&
+         formData.value.birthday &&
          formData.value.currentWeightKg &&
-         !calculating.value
+         !calculating.value &&
+         (isMixedBreed.value ? formData.value.sizeClassOverride !== null : true)
 })
 
 onMounted(async () => {
   // Load breeds
   await loadBreeds()
-  
+
   // Check if editing existing dog
   const pages = getCurrentPages()
   const currentPage = pages[pages.length - 1] as any
@@ -279,14 +394,83 @@ async function loadBreeds() {
   }
 }
 
-function onBreedChange(e: any) {
-  const index = e.detail.value
-  if (index >= 0 && index < breeds.value.length) {
-    selectedBreed.value = breeds.value[index]
-    formData.value.breedId = selectedBreed.value.id
-    // Trigger preview calculation
-    previewCalculation()
+function onSearchInput(e: any) {
+  searchKeyword.value = e.detail.value
+}
+
+function selectBreed(breed: Breed) {
+  selectedBreed.value = breed
+  isMixedBreed.value = false
+  formData.value.breedId = breed.id
+  formData.value.sizeClassOverride = null  // Reset override
+  searchKeyword.value = ''
+  previewCalculation()
+}
+
+function selectBreedByName(name: string) {
+  const breed = breeds.value.find(b => b.name === name)
+  if (breed) {
+    selectBreed(breed)
   }
+}
+
+function selectMixedBreed() {
+  selectedBreed.value = null
+  isMixedBreed.value = true
+  formData.value.breedId = MIXED_BREED_VIRTUAL_ID
+  formData.value.sizeClassOverride = null  // User must select
+}
+
+function clearBreed() {
+  selectedBreed.value = null
+  isMixedBreed.value = false
+  formData.value.breedId = ''
+  formData.value.sizeClassOverride = null
+  searchKeyword.value = ''
+}
+
+function toggleAllBreeds() {
+  showAllBreeds.value = !showAllBreeds.value
+}
+
+function onSizeClassChange(e: any) {
+  const index = e.detail.value
+  formData.value.sizeClassOverride = sizeClassOptions[index]
+  previewCalculation()
+}
+
+function getSizeClassDisplay(): string {
+  const override = formData.value.sizeClassOverride
+  const labels: Record<string, string> = {
+    'SMALL': '小型犬',
+    'MEDIUM': '中型犬',
+    'LARGE': '大型犬',
+    'GIANT': '巨型犬'
+  }
+
+  if (isMixedBreed.value) {
+    return override ? labels[override] : '请选择'
+  }
+
+  if (override) {
+    return `${labels[override]} (手动调整)`
+  }
+
+  if (selectedBreed.value) {
+    return `${labels[selectedBreed.value.sizeCategory]} (自动匹配)`
+  }
+
+  return '请先选择品种'
+}
+
+function getSizeClassHint(): string {
+  if (isMixedBreed.value) {
+    return '混血犬需要手动选择体型分类'
+  }
+  if (formData.value.sizeClassOverride) {
+    return '点击 ✏️ 可重新调整'
+  }
+  return '点击 ✏️ 可修改系统自动判断的体型'
 }
 
 function onBirthdayChange(e: any) {
@@ -319,17 +503,13 @@ function onTreatInputModeChange(e: any) {
 
 function onTreatLevelChange(e: any) {
   formData.value.treatLevel = treatLevelOptions[e.detail.value]
-  // Trigger preview calculation when treat settings change
   previewCalculation()
 }
 
 async function previewCalculation() {
   // Only calculate if we have minimum required fields
+  // Silently return if not ready - don't show error to user
   if (!canPreview.value) {
-    uni.showToast({
-      title: '请先填写品种、生日和体重',
-      icon: 'none'
-    })
     return
   }
 
@@ -344,6 +524,7 @@ async function previewCalculation() {
       bcsScore: formData.value.bcsScore,
       activityLevel: formData.value.activityLevel,
       lifeStageOverride: formData.value.lifeStageOverride,
+      sizeClassOverride: formData.value.sizeClassOverride,
       mealsPerDay: formData.value.mealsPerDay,
       treatInputMode: formData.value.treatInputMode,
       treatLevel: formData.value.treatLevel
@@ -398,7 +579,7 @@ function submit() {
   const { name, breedId, birthday, currentWeightKg } = formData.value
 
   // Validation
-  if (!name || !formData.value.breedId || !birthday || !currentWeightKg) {
+  if (!name || !breedId || !birthday || !currentWeightKg) {
     uni.showToast({
       title: '请填写必填项',
       icon: 'none'
@@ -406,10 +587,10 @@ function submit() {
     return
   }
 
-  // Validate breed is selected
-  if (!selectedBreed.value) {
+  // For mixed breed, require size class override
+  if (isMixedBreed.value && !formData.value.sizeClassOverride) {
     uni.showToast({
-      title: '请选择品种',
+      title: '混血犬请选择体型分类',
       icon: 'none'
     })
     return
@@ -435,6 +616,7 @@ function submit() {
     bcsScore: formData.value.bcsScore,
     activityLevel: formData.value.activityLevel,
     lifeStageOverride: formData.value.lifeStageOverride,
+    sizeClassOverride: formData.value.sizeClassOverride,
     mealsPerDay: formData.value.mealsPerDay,
     treatInputMode: formData.value.treatInputMode,
     treatLevel: formData.value.treatLevel,
@@ -451,10 +633,9 @@ function submit() {
     data: payload
   }).then((res: any) => {
     if (res.code === 0 && res.data) {
-      // Handle response format: res.data.profile or res.data directly
       const createdDog = res.data.profile || res.data
       const dogId = createdDog.id
-      
+
       if (!dogId) {
         console.error('[DogCreate] Response missing dog id:', res.data)
         uni.showToast({
@@ -464,27 +645,22 @@ function submit() {
         })
         return
       }
-      
+
       console.info(`[DogCreate] Dog created successfully: id=${dogId}, name=${createdDog.name}`)
-      
-      // Store dogId (for backward compatibility)
+
       uni.setStorageSync('dogId', dogId)
-      
-      // Add to cache so it appears immediately in the list
       addDogToCache(createdDog)
-      
+
       uni.showToast({
         title: '创建成功',
         icon: 'success',
         duration: 1500
       })
 
-      // Navigate back after toast (DogList will refresh via onShow)
       setTimeout(() => {
         uni.navigateBack()
       }, 1500)
     } else {
-      // API returned error code
       const errorMsg = res.message || '创建失败'
       console.error('[DogCreate] API error:', res.code, errorMsg)
       uni.showToast({
@@ -494,18 +670,16 @@ function submit() {
       })
     }
   }).catch((err: any) => {
-    // Network or request error
     const errMsg = err?.message || String(err) || '网络错误'
     console.error('[DogCreate] Create dog error:', err)
-    
-    // Show user-friendly error (no stack traces)
+
     let userMsg = '创建失败，请稍后重试'
     if (errMsg.includes('400') || errMsg.includes('Bad Request')) {
       userMsg = '请求参数错误，请检查填写内容'
     } else if (errMsg.includes('网络') || errMsg.includes('连接') || errMsg.includes('timeout')) {
       userMsg = '网络连接失败，请检查网络设置'
     }
-    
+
     uni.showToast({
       title: userMsg,
       icon: 'none',
@@ -538,34 +712,12 @@ function submit() {
   color: #666;
 }
 
-.limitation-notice {
-  background-color: #fff7e6;
-  border: 1px solid #ffd591;
-  border-radius: 8rpx;
-  padding: 20rpx;
-  margin-bottom: 30rpx;
-}
-
-.notice-title {
-  font-size: 32rpx;
-  font-weight: bold;
-  color: #fa8c16;
-  margin-bottom: 10rpx;
-}
-
-.notice-content {
-  font-size: 28rpx;
-  color: #666;
-  line-height: 1.6;
-}
-
-.notice-content text {
-  display: block;
-  margin-bottom: 10rpx;
-}
-
 .form-item {
   margin-bottom: 30rpx;
+}
+
+.breed-section {
+  margin-bottom: 40rpx;
 }
 
 .label {
@@ -576,6 +728,166 @@ function submit() {
   font-weight: bold;
 }
 
+/* Breed Selection Styles */
+.breed-selector {
+  border: 1px solid #ddd;
+  border-radius: 8rpx;
+  overflow: hidden;
+}
+
+.search-box {
+  padding: 20rpx;
+  background-color: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.search-input {
+  width: 100%;
+  height: 70rpx;
+  border: 1px solid #ddd;
+  border-radius: 6rpx;
+  padding: 0 20rpx;
+  font-size: 28rpx;
+  box-sizing: border-box;
+}
+
+.section {
+  padding: 20rpx;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.section:last-child {
+  border-bottom: none;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15rpx;
+}
+
+.section-title {
+  font-size: 26rpx;
+  color: #666;
+  font-weight: bold;
+  display: block;
+  margin-bottom: 15rpx;
+}
+
+.toggle-icon {
+  font-size: 24rpx;
+  color: #999;
+}
+
+/* Common Breeds Tags */
+.common-breeds {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15rpx;
+}
+
+.breed-tag {
+  background-color: #e6f7ff;
+  color: #1890ff;
+  padding: 10rpx 20rpx;
+  border-radius: 20rpx;
+  font-size: 26rpx;
+  border: 1px solid #91d5ff;
+}
+
+/* Breed List */
+.breed-list {
+  max-height: 400rpx;
+  overflow-y: auto;
+}
+
+.all-breeds-list {
+  max-height: 600rpx;
+}
+
+.breed-item {
+  padding: 20rpx;
+  border-bottom: 1px solid #f0f0f0;
+  font-size: 28rpx;
+  color: #333;
+}
+
+.breed-item:last-child {
+  border-bottom: none;
+}
+
+.no-results {
+  padding: 40rpx;
+  text-align: center;
+  color: #999;
+  font-size: 26rpx;
+}
+
+/* Mixed Breed Button */
+.mixed-breed-btn {
+  background-color: #fff7e6;
+  color: #fa8c16;
+  padding: 25rpx;
+  border-radius: 8rpx;
+  text-align: center;
+  font-size: 28rpx;
+  font-weight: bold;
+  border: 1px solid #ffd591;
+}
+
+/* Selected Breed Display */
+.selected-breed-display {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20rpx;
+  background-color: #f8f9fa;
+  border: 1px solid #ddd;
+  border-radius: 8rpx;
+}
+
+.selected-text {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: bold;
+}
+
+.change-btn {
+  color: #1890ff;
+  font-size: 26rpx;
+}
+
+/* Size Class Display */
+.size-display {
+  background-color: #f8f9fa;
+  padding: 20rpx;
+  border-radius: 8rpx;
+  border: 1px solid #e9ecef;
+}
+
+.size-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15rpx;
+  background-color: #fff;
+  border: 1px solid #ddd;
+  border-radius: 6rpx;
+}
+
+.size-text {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: bold;
+}
+
+.edit-icon {
+  font-size: 32rpx;
+  color: #1890ff;
+}
+
+/* Original Input Styles */
 .input {
   width: 100%;
   height: 80rpx;
@@ -610,6 +922,16 @@ function submit() {
   font-size: 24rpx;
   color: #999;
   margin-top: 5rpx;
+}
+
+.size-required {
+  border-color: #ff4d4f !important;
+  background-color: #fff1f0 !important;
+}
+
+.hint-warning {
+  color: #ff4d4f !important;
+  font-weight: bold;
 }
 
 .btn {
@@ -700,5 +1022,3 @@ function submit() {
   line-height: 1.5;
 }
 </style>
-
-

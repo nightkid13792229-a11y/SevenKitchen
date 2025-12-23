@@ -19,6 +19,7 @@ import {
   BCS_PARAMS,
   SIZE_CLASS_ADULT_THRESHOLDS,
   SIZE_CLASS_SENIOR_THRESHOLDS,
+  MIXED_BREED_VIRTUAL_ID,
 } from './constants';
 
 /**
@@ -66,6 +67,24 @@ export function determineSizeClass(
 
   // Priority 3: Fallback to MEDIUM
   return DogSizeCategory.MEDIUM;
+}
+
+/**
+ * Validate mixed breed dog has required size class override
+ * Mixed breed dogs MUST have sizeClassOverride set
+ */
+export function validateMixedBreedDog(
+  dog: Dog,
+  breed?: DogBreed | null,
+): void {
+  // Check if this is a mixed breed (virtual breed ID or no breed found)
+  const isMixedBreed = dog.breedId === MIXED_BREED_VIRTUAL_ID || !breed;
+
+  if (isMixedBreed && !dog.sizeClassOverride) {
+    throw new Error(
+      '混血犬必须选择体型分类。请在系统中选择体型分类。'
+    );
+  }
 }
 
 /**
@@ -431,6 +450,9 @@ export function calculateDogEnergy(
   recipeEnergyDensityKcalPerKg?: number,
   breed?: DogBreed | null,
 ): DogCalcResult {
+  // Validate mixed breed dog has size class override
+  validateMixedBreedDog(dog, breed);
+
   const rer = calculateRER(dog.currentWeightKg);
   const needsResult = calculateFreshFoodNeeds(dog, breed);
 
@@ -452,3 +474,4 @@ export function calculateDogEnergy(
 
   return result;
 }
+

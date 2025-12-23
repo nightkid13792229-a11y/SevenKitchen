@@ -43,6 +43,7 @@ import { TreatInputMode, TreatLevel } from '../../domain';
 import { Dog } from '../../domain/dog/dog.entity';
 import { AuthGuard, CurrentUser } from '../auth';
 import type { RequestUser } from '../auth';
+import { MIXED_BREED_VIRTUAL_ID } from '../../domain/dog/constants';
 
 @ApiTags('Dogs')
 @Controller('api/v1/dogs')
@@ -253,11 +254,15 @@ export class DogsController {
     @Body() calcPreviewDto: CalcPreviewDto,
   ): Promise<ApiResponseDto<DogCalcResultDto | null>> {
     // Load breed for calculation
-    const breed = await this.dogBreedRepository.findById(
-      calcPreviewDto.breedId,
-    );
-    if (!breed) {
-      return ApiResponseDto.error(400, 'Breed not found');
+    // For mixed breed dogs, use virtual ID and breed will be null
+    let breed = null;
+    if (calcPreviewDto.breedId !== MIXED_BREED_VIRTUAL_ID) {
+      breed = await this.dogBreedRepository.findById(
+        calcPreviewDto.breedId,
+      );
+      if (!breed) {
+        return ApiResponseDto.error(400, 'Breed not found');
+      }
     }
 
     // Create temporary dog entity for calculation (no database save needed)

@@ -54,6 +54,20 @@ async function bootstrap() {
   logBootSummary();
   const app = await NestFactory.create(AppModule);
 
+  // Enable CORS for cross-origin requests
+  app.enableCors({
+    origin: [
+      'http://localhost:5173',           // Local admin web development
+      'http://localhost:3000',           // Local backend
+      'http://1.14.3.2:5173',            // Cloud server admin web (if needed)
+      // Add your domain here when you get one
+      // 'https://yourdomain.com',
+    ],
+    credentials: true,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: 'Content-Type, Accept, Authorization, X-Customer-Id',
+  });
+
   // Global validation pipe with detailed error messages
   app.useGlobalPipes(
     new ValidationPipe({

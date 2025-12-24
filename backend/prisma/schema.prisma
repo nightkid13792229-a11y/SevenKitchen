@@ -226,6 +226,7 @@ model Dog {
   ownerId               String            @map("owner_id")
   name                  String            @map("name")
   breedId               String            @map("breed_id")
+  customBreedName       String?           @map("custom_breed_name")
   birthday              DateTime          @map("birthday")
   gender                DogGender         @map("gender")
   isNeutered            Boolean           @map("is_neutered")

@@ -19,6 +19,7 @@ export class Dog {
     public readonly ownerId: string,
     public name: string,
     public readonly breedId: string,
+    public customBreedName: string | null,
     public readonly birthday: Date,
     public gender: DogGender,
     public isNeutered: boolean,
@@ -130,3 +131,4 @@ export class Dog {
     this.validateInvariants();
   }
 }
+

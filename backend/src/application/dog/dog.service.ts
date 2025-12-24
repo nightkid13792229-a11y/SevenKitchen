@@ -23,6 +23,7 @@ export interface CreateDogProfileDto {
   ownerId: string;
   name: string;
   breedId: string;
+  customBreedName?: string | null;
   birthday: Date;
   gender: DogGender;
   isNeutered: boolean;
@@ -90,6 +91,7 @@ export class DogService {
       dto.ownerId,
       dto.name,
       dto.breedId,
+      dto.customBreedName ?? null,
       dto.birthday,
       dto.gender,
       dto.isNeutered,

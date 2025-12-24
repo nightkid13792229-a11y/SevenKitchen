@@ -88,6 +88,7 @@ export class DogsController {
       ownerId,
       name: createDogDto.name,
       breedId: createDogDto.breedId,
+      customBreedName: createDogDto.customBreedName,
       birthday: new Date(createDogDto.birthday),
       gender: createDogDto.gender,
       isNeutered: createDogDto.isNeutered,
@@ -271,6 +272,7 @@ export class DogsController {
       'temp-owner-id',
       'Temp',
       calcPreviewDto.breedId,
+      null, // customBreedName - not applicable for calc preview
       new Date(calcPreviewDto.birthday),
       calcPreviewDto.gender,
       calcPreviewDto.isNeutered,
@@ -308,6 +310,7 @@ export class DogsController {
       ownerId: dog.ownerId,
       name: dog.name,
       breedId: dog.breedId,
+      customBreedName: dog.customBreedName,
       birthday: dog.birthday.toISOString(),
       gender: dog.gender,
       isNeutered: dog.isNeutered,

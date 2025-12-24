@@ -26,6 +26,13 @@ export class DogProfileDto {
   @ApiProperty({ example: 'uuid' })
   breedId!: string;
 
+  @ApiPropertyOptional({
+    description: 'Custom breed name (for mixed breed dogs)',
+    example: '田园犬',
+    nullable: true
+  })
+  customBreedName?: string | null;
+
   @ApiProperty({ example: '2020-01-01T00:00:00Z' })
   birthday!: string;
 
@@ -105,3 +112,4 @@ export class DogDetailResponseDto {
   @ApiProperty({ type: DogCalcResultDto })
   calcResult!: DogCalcResultDto;
 }
+

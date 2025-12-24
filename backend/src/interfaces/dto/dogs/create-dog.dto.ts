@@ -36,6 +36,15 @@ export class CreateDogDto {
   @IsUUID()
   breedId!: string;
 
+  @ApiPropertyOptional({
+    description: 'Custom breed name (for mixed breed dogs)',
+    example: '田园犬',
+    nullable: true
+  })
+  @IsOptional()
+  @IsString()
+  customBreedName?: string | null;
+
   @ApiProperty({ description: 'Birthday', example: '2020-01-01T00:00:00Z' })
   @IsDateString()
   birthday!: string;
@@ -113,3 +122,4 @@ export class CreateDogDto {
   @IsString()
   medicalHistory?: string | null;
 }
+

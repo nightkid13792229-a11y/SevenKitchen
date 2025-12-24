@@ -17,7 +17,12 @@
 
         <!-- Selected Breed Display -->
         <view v-if="selectedBreed || isMixedBreed" class="selected-breed-display">
-          <text class="selected-text">{{ isMixedBreed ? '混血/其他' : selectedBreed?.name }}</text>
+          <text class="selected-text">
+            {{ isMixedBreed
+              ? (formData.customBreedName || '混血/其他')
+              : selectedBreed?.name
+            }}
+          </text>
           <text class="change-btn" @tap="clearBreed">重新选择</text>
         </view>
 
@@ -53,9 +58,13 @@
 
           <!-- No Search: Show Common Breeds -->
           <view v-else>
+            <!-- Common Breeds (Collapsible) -->
             <view class="section">
-              <text class="section-title">💡 常见品种 (点击快速选择)</text>
-              <view class="common-breeds">
+              <view class="section-header" @tap="toggleCommonBreeds">
+                <text class="section-title">💡 常见品种</text>
+                <text class="toggle-icon">{{ showCommonBreeds ? '▲' : '▼' }}</text>
+              </view>
+              <view v-if="showCommonBreeds" class="common-breeds">
                 <view
                   v-for="breedName in commonBreeds"
                   :key="breedName"
@@ -65,31 +74,50 @@
                   {{ breedName }}
                 </view>
               </view>
+              <view v-else class="common-breeds collapsed">
+                <view
+                  v-for="breedName in commonBreeds.slice(0, 5)"
+                  :key="breedName"
+                  class="breed-tag"
+                  @tap="selectBreedByName(breedName)"
+                >
+                  {{ breedName }}
+                </view>
+              </view>
             </view>
 
-            <!-- All Breeds Toggle -->
+            <!-- All Breeds Toggle (Grouped by Size) -->
             <view class="section">
               <view class="section-header" @tap="toggleAllBreeds">
-                <text class="section-title">📋 全部品种 ({{ breeds.length }}种)</text>
+                <text class="section-title">📋 全部品种 (按体型分类)</text>
                 <text class="toggle-icon">{{ showAllBreeds ? '▲' : '▼' }}</text>
               </view>
+
               <view v-if="showAllBreeds" class="breed-list all-breeds-list">
                 <view
-                  v-for="breed in breeds"
-                  :key="breed.id"
-                  class="breed-item"
-                  @tap="selectBreed(breed)"
+                  v-for="(breedList, category) in breedsBySizeCategory"
+                  :key="category"
+                  class="size-category-group"
                 >
-                  {{ breed.name }}
+                  <view class="size-category-title">
+                    {{ sizeCategoryLabels[category] }} ({{ breedList.length }}种)
+                  </view>
+                  <view
+                    v-for="breed in breedList"
+                    :key="breed.id"
+                    class="breed-item"
+                    @tap="selectBreed(breed)"
+                  >
+                    {{ breed.name }}
+                  </view>
                 </view>
               </view>
             </view>
 
             <!-- Mixed Breed Option -->
             <view class="section">
-              <text class="section-title">🎭 混血/不确定品种</text>
               <view class="mixed-breed-btn" @tap="selectMixedBreed">
-                我家的狗狗是混血/其他
+                混血/其他
               </view>
             </view>
           </view>
@@ -222,6 +250,23 @@
         </view>
       </view>
     </view>
+
+    <!-- Custom Breed Name Input Modal -->
+    <view v-if="showCustomBreedInput" class="custom-breed-modal" @tap.self="cancelCustomBreed">
+      <view class="custom-breed-content">
+        <text class="custom-breed-title">请输入品种名称</text>
+        <input
+          class="custom-breed-input"
+          v-model="customBreedName"
+          placeholder="如：泰迪串串、田园犬等"
+          :focus="true"
+        />
+        <view class="custom-breed-actions">
+          <button class="custom-breed-btn-cancel" @tap="cancelCustomBreed">取消</button>
+          <button class="custom-breed-btn-confirm" @tap="confirmCustomBreed">确定</button>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -233,6 +278,7 @@ import { addDogToCache } from '../../utils/dog-cache'
 interface FormData {
   name: string
   breedId: string
+  customBreedName?: string
   birthday: string
   gender: string
   isNeutered: boolean
@@ -260,6 +306,7 @@ const commonBreeds = [
 const formData = ref<FormData>({
   name: '',
   breedId: '',
+  customBreedName: '',
   birthday: '',
   gender: 'MALE',
   isNeutered: false,
@@ -309,8 +356,11 @@ const calculating = ref(false)
 
 // New state variables
 const searchKeyword = ref('')
+const showCommonBreeds = ref(false)
 const showAllBreeds = ref(false)
 const isMixedBreed = ref(false)
+const showCustomBreedInput = ref(false)
+const customBreedName = ref('')
 
 const filteredBreeds = computed(() => {
   if (!searchKeyword.value) {
@@ -319,6 +369,31 @@ const filteredBreeds = computed(() => {
   const keyword = searchKeyword.value.trim()
   return breeds.value.filter(b => b.name.includes(keyword))
 })
+
+const breedsBySizeCategory = computed(() => {
+  const grouped: Record<string, typeof breeds.value> = {
+    'SMALL': [],
+    'MEDIUM': [],
+    'LARGE': [],
+    'GIANT': []
+  }
+
+  breeds.value.forEach(breed => {
+    const category = breed.sizeCategory
+    if (grouped[category]) {
+      grouped[category].push(breed)
+    }
+  })
+
+  return grouped
+})
+
+const sizeCategoryLabels: Record<string, string> = {
+  'SMALL': '小型犬',
+  'MEDIUM': '中型犬',
+  'LARGE': '大型犬',
+  'GIANT': '巨型犬'
+}
 
 const genderIndex = computed(() => genderOptions.indexOf(formData.value.gender))
 const activityLevelIndex = computed(() => activityLevelOptions.indexOf(formData.value.activityLevel))
@@ -415,18 +490,36 @@ function selectBreedByName(name: string) {
 }
 
 function selectMixedBreed() {
+  showCustomBreedInput.value = true
+}
+
+function confirmCustomBreed() {
+  const name = customBreedName.value.trim() || '混血/其他'
   selectedBreed.value = null
   isMixedBreed.value = true
   formData.value.breedId = MIXED_BREED_VIRTUAL_ID
+  formData.value.customBreedName = name
   formData.value.sizeClassOverride = null  // User must select
+  showCustomBreedInput.value = false
+  customBreedName.value = ''
+}
+
+function cancelCustomBreed() {
+  showCustomBreedInput.value = false
+  customBreedName.value = ''
 }
 
 function clearBreed() {
   selectedBreed.value = null
   isMixedBreed.value = false
   formData.value.breedId = ''
+  formData.value.customBreedName = ''
   formData.value.sizeClassOverride = null
   searchKeyword.value = ''
+}
+
+function toggleCommonBreeds() {
+  showCommonBreeds.value = !showCommonBreeds.value
 }
 
 function toggleAllBreeds() {
@@ -609,6 +702,7 @@ function submit() {
   const payload: any = {
     name,
     breedId,
+    customBreedName: formData.value.customBreedName || null,
     birthday: new Date(birthday).toISOString(),
     gender: formData.value.gender,
     isNeutered: formData.value.isNeutered,
@@ -1020,5 +1114,102 @@ function submit() {
   font-size: 26rpx;
   color: #fa8c16;
   line-height: 1.5;
+}
+
+/* Collapsed Common Breeds */
+.common-breeds.collapsed {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15rpx;
+  max-height: 80rpx;
+  overflow: hidden;
+}
+
+/* Size Category Groups */
+.size-category-group {
+  margin-bottom: 30rpx;
+}
+
+.size-category-group:last-child {
+  margin-bottom: 0;
+}
+
+.size-category-title {
+  font-size: 26rpx;
+  color: #666;
+  font-weight: bold;
+  padding: 15rpx 20rpx;
+  background-color: #f8f9fa;
+  border-radius: 4rpx;
+  margin-bottom: 10rpx;
+}
+
+/* Custom Breed Input Modal */
+.custom-breed-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+}
+
+.custom-breed-content {
+  width: 600rpx;
+  background-color: #fff;
+  border-radius: 12rpx;
+  padding: 40rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.15);
+}
+
+.custom-breed-title {
+  font-size: 32rpx;
+  color: #333;
+  font-weight: bold;
+  margin-bottom: 30rpx;
+  display: block;
+  text-align: center;
+}
+
+.custom-breed-input {
+  width: 100%;
+  height: 80rpx;
+  border: 1px solid #ddd;
+  border-radius: 8rpx;
+  padding: 0 20rpx;
+  font-size: 28rpx;
+  box-sizing: border-box;
+  margin-bottom: 30rpx;
+}
+
+.custom-breed-actions {
+  display: flex;
+  gap: 20rpx;
+}
+
+.custom-breed-btn-cancel,
+.custom-breed-btn-confirm {
+  flex: 1;
+  height: 80rpx;
+  line-height: 80rpx;
+  border-radius: 8rpx;
+  font-size: 28rpx;
+  text-align: center;
+  border: none;
+}
+
+.custom-breed-btn-cancel {
+  background-color: #f5f5f5;
+  color: #666;
+  border: 1px solid #ddd;
+}
+
+.custom-breed-btn-confirm {
+  background-color: #07c160;
+  color: #fff;
 }
 </style>

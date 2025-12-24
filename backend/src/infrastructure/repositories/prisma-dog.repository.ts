@@ -43,6 +43,7 @@ export class PrismaDogRepository implements DogRepository {
       ownerId: dog.ownerId,
       name: dog.name,
       breedId: dog.breedId,
+      customBreedName: dog.customBreedName,
       birthday: dog.birthday,
       gender: dog.gender as any,
       isNeutered: dog.isNeutered,
@@ -84,6 +85,7 @@ export class PrismaDogRepository implements DogRepository {
       record.ownerId,
       record.name,
       record.breedId,
+      record.customBreedName,
       record.birthday,
       record.gender as DogGender,
       record.isNeutered,
@@ -101,4 +103,5 @@ export class PrismaDogRepository implements DogRepository {
     );
   }
 }
+
 

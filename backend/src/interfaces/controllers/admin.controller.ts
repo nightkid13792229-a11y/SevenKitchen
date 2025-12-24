@@ -11,12 +11,14 @@ import {
   Put,
   Body,
   Param,
+  Query,
   HttpCode,
   HttpStatus,
   UsePipes,
   ValidationPipe,
   NotFoundException,
   BadRequestException,
+  Inject,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -31,10 +33,13 @@ import { ApiResponseDto } from '../dto/common/response.dto';
 import { ProductionService, type CreateProductionBatchDto, type ProductionBatchSummaryDto } from '../../application/production/production.service';
 import { InventoryService } from '../../application/inventory/inventory.service';
 import { OrderService } from '../../application/order/order.service';
+import { DogService, DOG_BREED_REPOSITORY } from '../../application/dog/dog.service';
+import type { DogBreedRepository } from '../../domain/dog/dog-breed.repository';
 import { OrderStatus } from '../../domain';
 import { CancelOrderDto } from '../dto/orders/cancel-order.dto';
 import { OrderDto } from '../dto/orders/order-response.dto';
 import { InvalidStateTransitionError } from '../../domain/common/errors';
+import { PrismaService } from '../../infrastructure/prisma.service';
 
 @ApiTags('Admin')
 @Controller('api/v1/admin')
@@ -45,6 +50,10 @@ export class AdminController {
     private readonly productionService: ProductionService,
     private readonly inventoryService: InventoryService,
     private readonly orderService: OrderService,
+    private readonly dogService: DogService,
+    @Inject(DOG_BREED_REPOSITORY)
+    private readonly dogBreedRepository: DogBreedRepository,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Get('inventory')
@@ -551,4 +560,135 @@ export class AdminController {
       throw error;
     }
   }
+
+  // ==========================================
+  // Dog Profile Management (Admin)
+  // ==========================================
+
+  @Get('dogs')
+  @ApiOperation({ summary: 'Get all dog profiles (admin only - cross-customer)' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of all dog profiles with pagination',
+  })
+  async getAllDogs(
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ): Promise<ApiResponseDto<{
+    data: any[];
+    total: number;
+    page: number;
+    pageSize: number;
+  }>> {
+    const pageNum = page ? parseInt(page, 10) : 1;
+    const pageSizeNum = pageSize ? parseInt(pageSize, 10) : 20;
+
+    // Get all dogs using Prisma (admin cross-customer access)
+    const [allDogs, totalResult] = await Promise.all([
+      this.prisma.dog.findMany({
+        orderBy: { createdAt: 'desc' },
+      }),
+      this.prisma.dog.count(),
+    ]);
+
+    // Get breeds for name mapping
+    const breeds = await this.dogBreedRepository.findAll();
+    const breedMap = new Map(breeds.map(b => [b.id, b.name]));
+
+    // Map to response format
+    const dogs = allDogs.map((dog: any) => ({
+      id: dog.id,
+      ownerId: dog.ownerId,
+      name: dog.name,
+      breedId: dog.breedId,
+      customBreedName: dog.customBreedName,
+      breedName: dog.customBreedName || breedMap.get(dog.breedId) || '未知品种',
+      birthday: dog.birthday.toISOString(),
+      gender: dog.gender,
+      isNeutered: dog.isNeutered,
+      currentWeightKg: dog.currentWeightKg,
+      bcsScore: dog.bcsScore,
+      activityLevel: dog.activityLevel,
+      lifeStageOverride: dog.lifeStageOverride,
+      sizeClassOverride: dog.sizeClassOverride,
+      mealsPerDay: dog.mealsPerDay,
+      treatInputMode: dog.treatInputMode,
+      treatLevel: dog.treatLevel,
+      manualTreatKcal: dog.manualTreatKcal,
+      medicalHistory: dog.medicalHistory,
+      cachedTargetFoodKcal: dog.cachedTargetFoodKcal,
+      createdAt: dog.createdAt ? dog.createdAt.toISOString() : undefined,
+    }));
+
+    // Pagination
+    const total = totalResult;
+    const start = (pageNum - 1) * pageSizeNum;
+    const end = start + pageSizeNum;
+    const paginatedDogs = dogs.slice(start, end);
+
+    return ApiResponseDto.success({
+      data: paginatedDogs,
+      total,
+      page: pageNum,
+      pageSize: pageSizeNum,
+    });
+  }
+
+  @Get('dogs/:id')
+  @ApiOperation({ summary: 'Get dog profile detail (admin only)' })
+  @ApiParam({ name: 'id', description: 'Dog ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Dog profile with calc result',
+  })
+  @ApiResponse({ status: 404, description: 'Dog not found' })
+  async getDogDetail(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<any> | ApiResponseDto<null>> {
+    // Get dog from Prisma to have createdAt
+    const dogRecord = await this.prisma.dog.findUnique({
+      where: { id },
+    });
+
+    if (!dogRecord) {
+      return ApiResponseDto.error(404, 'Dog not found');
+    }
+
+    // Get breed info
+    const breed = await this.dogBreedRepository.findById(dogRecord.breedId);
+
+    // Get calc result
+    const calcResult = await this.dogService.calcPreview(dogRecord.id);
+
+    // Map profile
+    const profile = {
+      id: dogRecord.id,
+      ownerId: dogRecord.ownerId,
+      name: dogRecord.name,
+      breedId: dogRecord.breedId,
+      customBreedName: dogRecord.customBreedName,
+      breedName: dogRecord.customBreedName || breed?.name || '未知品种',
+      birthday: dogRecord.birthday.toISOString(),
+      gender: dogRecord.gender,
+      isNeutered: dogRecord.isNeutered,
+      currentWeightKg: dogRecord.currentWeightKg,
+      bcsScore: dogRecord.bcsScore,
+      activityLevel: dogRecord.activityLevel,
+      lifeStageOverride: dogRecord.lifeStageOverride,
+      sizeClassOverride: dogRecord.sizeClassOverride,
+      mealsPerDay: dogRecord.mealsPerDay,
+      treatInputMode: dogRecord.treatInputMode,
+      treatLevel: dogRecord.treatLevel,
+      manualTreatKcal: dogRecord.manualTreatKcal,
+      medicalHistory: dogRecord.medicalHistory,
+      cachedTargetFoodKcal: dogRecord.cachedTargetFoodKcal,
+      createdAt: dogRecord.createdAt ? dogRecord.createdAt.toISOString() : undefined,
+    };
+
+    return ApiResponseDto.success({
+      profile,
+      calcResult,
+    });
+  }
 }
+

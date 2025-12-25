@@ -41,6 +41,11 @@ export interface CreateDogProfileDto {
 
 export interface UpdateDogProfileDto {
   name?: string;
+  breedId?: string;
+  customBreedName?: string | null;
+  birthday?: Date;
+  gender?: DogGender;
+  isNeutered?: boolean;
   currentWeightKg?: number;
   bcsScore?: number;
   activityLevel?: ActivityLevel;
@@ -137,6 +142,7 @@ export class DogService {
 
     // Fields that require recalculation
     const fieldsRequiringRecalc = [
+      'breedId',
       'currentWeightKg',
       'bcsScore',
       'activityLevel',
@@ -156,7 +162,7 @@ export class DogService {
     // Apply updates
     dog.updateProfile(dto as Partial<Dog>);
 
-    // Recalculate if needed
+    // Recalculate if needed (use updated breedId)
     if (needsRecalc) {
       const breed = await this.dogBreedRepository.findById(dog.breedId);
       const calcResult = calculateDogEnergy(dog, undefined, breed);

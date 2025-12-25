@@ -436,135 +436,144 @@ export class AppModule implements OnModuleInit {
     const PRODUCT_LABEL_ID = '7fa85f64-5717-4562-b3fc-2c963f66afa6';
     const CALCIUM_SUPPLEMENT_ID = '8fa85f64-5717-4562-b3fc-2c963f66afa7';
 
-    // Check if ingredients already exist (idempotent)
-    const existingChicken = await this.ingredientRepository.findById(
-      CHICKEN_BREAST_ID,
-    );
-    if (existingChicken) {
-      console.log('[Seed] Ingredients exist, skipping seed');
-      return;
-    }
+    const seeded: string[] = [];
 
     // 1. Chicken breast (FOOD)
-    const chickenBreast = new Ingredient(
-      CHICKEN_BREAST_ID,
-      '鸡胸肉',
-      IngredientType.FOOD,
-      'Kirkland', // brand
-      '1kg装', // product_model
-      '山姆会员店', // purchase_channel
-      null, // notes
-      BaseUnit.G,
-      null, // unit_display_label (uses default "克")
-      'kg', // purchase_unit
-      1000.0, // purchase_to_base_ratio (1kg = 1000g)
-      45.0, // current_price_per_purchase_unit (45 CNY per kg)
-      null, // weight_g (not needed for base_unit=G)
-      null, // max_capacity_g
-      {
-        cfct_class: '畜肉类',
-        edible_yield_rate: 1.0, // No bones, 100% yield
-        main_nutrients_desc: '高蛋白，低脂肪',
-      },
-    );
+    if (!(await this.ingredientRepository.findById(CHICKEN_BREAST_ID))) {
+      const chickenBreast = new Ingredient(
+        CHICKEN_BREAST_ID,
+        '鸡胸肉',
+        IngredientType.FOOD,
+        'Kirkland', // brand
+        '1kg装', // product_model
+        '山姆会员店', // purchase_channel
+        null, // notes
+        BaseUnit.G,
+        null, // unit_display_label (uses default "克")
+        'kg', // purchase_unit
+        1000.0, // purchase_to_base_ratio (1kg = 1000g)
+        45.0, // current_price_per_purchase_unit (45 CNY per kg)
+        null, // weight_g (not needed for base_unit=G)
+        null, // max_capacity_g
+        {
+          cfct_class: '畜肉类',
+          edible_yield_rate: 1.0, // No bones, 100% yield
+          main_nutrients_desc: '高蛋白，低脂肪',
+        },
+      );
+      await this.ingredientRepository.save(chickenBreast);
+      seeded.push('鸡胸肉');
+    }
 
     // 2. Pumpkin (FOOD)
-    const pumpkin = new Ingredient(
-      PUMPKIN_ID,
-      '南瓜',
-      IngredientType.FOOD,
-      '本地供应商',
-      '500g装',
-      '拼多多',
-      null,
-      BaseUnit.G,
-      null,
-      'kg',
-      1000.0,
-      8.0, // 8 CNY per kg
-      null,
-      null,
-      {
-        cfct_class: '蔬菜类',
-        edible_yield_rate: 0.85, // 85% yield after peeling
-        main_nutrients_desc: '富含纤维和β-胡萝卜素',
-      },
-    );
+    if (!(await this.ingredientRepository.findById(PUMPKIN_ID))) {
+      const pumpkin = new Ingredient(
+        PUMPKIN_ID,
+        '南瓜',
+        IngredientType.FOOD,
+        '本地供应商',
+        '500g装',
+        '拼多多',
+        null,
+        BaseUnit.G,
+        null,
+        'kg',
+        1000.0,
+        8.0, // 8 CNY per kg
+        null,
+        null,
+        {
+          cfct_class: '蔬菜类',
+          edible_yield_rate: 0.85, // 85% yield after peeling
+          main_nutrients_desc: '富含纤维和β-胡萝卜素',
+        },
+      );
+      await this.ingredientRepository.save(pumpkin);
+      seeded.push('南瓜');
+    }
 
     // 3. Vacuum bag (PACKAGING, consumable)
-    const vacuumBag = new Ingredient(
-      VACUUM_BAG_ID,
-      '真空袋',
-      IngredientType.PACKAGING,
-      '通用包装',
-      '标准真空袋',
-      '1688',
-      null,
-      BaseUnit.PCS,
-      null,
-      '包',
-      100.0, // 1 package = 100 pcs
-      15.0, // 15 CNY per package (0.15 CNY per bag)
-      5.0, // weight_g: 5g per bag
-      null, // max_capacity_g (not applicable for bags)
-      {
-        is_consumable: true,
-      },
-    );
+    if (!(await this.ingredientRepository.findById(VACUUM_BAG_ID))) {
+      const vacuumBag = new Ingredient(
+        VACUUM_BAG_ID,
+        '真空袋',
+        IngredientType.PACKAGING,
+        '通用包装',
+        '标准真空袋',
+        '1688',
+        null,
+        BaseUnit.PCS,
+        null,
+        '包',
+        100.0, // 1 package = 100 pcs
+        15.0, // 15 CNY per package (0.15 CNY per bag)
+        5.0, // weight_g: 5g per bag
+        null, // max_capacity_g (not applicable for bags)
+        {
+          is_consumable: true,
+        },
+      );
+      await this.ingredientRepository.save(vacuumBag);
+      seeded.push('真空袋');
+    }
 
     // 4. Product label (PACKAGING, consumable)
-    const productLabel = new Ingredient(
-      PRODUCT_LABEL_ID,
-      '产品标签',
-      IngredientType.PACKAGING,
-      '通用标签',
-      '标准标签',
-      '1688',
-      null,
-      BaseUnit.PCS,
-      null,
-      '包',
-      1000.0, // 1 package = 1000 pcs
-      20.0, // 20 CNY per package (0.02 CNY per label)
-      0.5, // weight_g: 0.5g per label
-      null,
-      {
-        is_consumable: true,
-      },
-    );
+    if (!(await this.ingredientRepository.findById(PRODUCT_LABEL_ID))) {
+      const productLabel = new Ingredient(
+        PRODUCT_LABEL_ID,
+        '产品标签',
+        IngredientType.PACKAGING,
+        '通用标签',
+        '标准标签',
+        '1688',
+        null,
+        BaseUnit.PCS,
+        null,
+        '包',
+        1000.0, // 1 package = 1000 pcs
+        20.0, // 20 CNY per package (0.02 CNY per label)
+        0.5, // weight_g: 0.5g per label
+        null,
+        {
+          is_consumable: true,
+        },
+      );
+      await this.ingredientRepository.save(productLabel);
+      seeded.push('产品标签');
+    }
 
     // 5. Calcium supplement (SUPPLEMENT)
-    const calciumSupplement = new Ingredient(
-      CALCIUM_SUPPLEMENT_ID,
-      '碳酸钙',
-      IngredientType.SUPPLEMENT,
-      '某品牌',
-      '500g装',
-      '1688',
-      '用于补充钙质',
-      BaseUnit.G,
-      null,
-      'kg',
-      1000.0,
-      120.0, // 120 CNY per kg
-      null,
-      null,
-      {
-        category_type: SupplementCategoryType.MINERAL,
-        active_nutrients: { '钙': 0.30 }, // 30% calcium concentration
-        production_loss_rate: 1.05,
-      },
-    );
+    if (!(await this.ingredientRepository.findById(CALCIUM_SUPPLEMENT_ID))) {
+      const calciumSupplement = new Ingredient(
+        CALCIUM_SUPPLEMENT_ID,
+        '碳酸钙',
+        IngredientType.SUPPLEMENT,
+        '某品牌',
+        '500g装',
+        '1688',
+        '用于补充钙质',
+        BaseUnit.G,
+        null,
+        'kg',
+        1000.0,
+        120.0, // 120 CNY per kg
+        null,
+        null,
+        {
+          category_type: SupplementCategoryType.MINERAL,
+          active_nutrients: { '钙': 0.30 }, // 30% calcium concentration
+          production_loss_rate: 1.05,
+        },
+      );
+      await this.ingredientRepository.save(calciumSupplement);
+      seeded.push('碳酸钙');
+    }
 
-    await this.ingredientRepository.save(chickenBreast);
-    await this.ingredientRepository.save(pumpkin);
-    await this.ingredientRepository.save(vacuumBag);
-    await this.ingredientRepository.save(productLabel);
-    await this.ingredientRepository.save(calciumSupplement);
-
-    console.log(
-      `[Seed] Seeded 5 canonical ingredients: 鸡胸肉, 南瓜, 真空袋, 产品标签, 碳酸钙`,
-    );
+    if (seeded.length > 0) {
+      console.log(`[Seed] Seeded ${seeded.length} ingredient(s): ${seeded.join(', ')}`);
+    } else {
+      console.log('[Seed] All canonical ingredients already exist, skipping seed');
+    }
   }
 
   /**

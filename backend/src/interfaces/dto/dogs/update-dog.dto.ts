@@ -8,18 +8,23 @@ import {
   IsEnum,
   IsNumber,
   IsInt,
+  IsBoolean,
+  IsDate,
   Min,
   Max,
   IsOptional,
   ValidateIf,
   MinLength,
+  IsUUID,
 } from 'class-validator';
+import { Type } from 'class-transformer';
 import {
   ActivityLevel,
   LifeStageOverride,
   DogSizeCategory,
   TreatInputMode,
   TreatLevel,
+  Gender,
 } from '../../../domain';
 
 export class UpdateDogDto {
@@ -28,6 +33,36 @@ export class UpdateDogDto {
   @IsString()
   @MinLength(1)
   name?: string;
+
+  @ApiPropertyOptional({ description: 'Breed ID' })
+  @IsOptional()
+  @IsUUID()
+  breedId?: string;
+
+  @ApiPropertyOptional({
+    description: 'Custom breed name (for mixed breed dogs)',
+    example: '田园犬',
+    nullable: true
+  })
+  @IsOptional()
+  @IsString()
+  customBreedName?: string | null;
+
+  @ApiPropertyOptional({ description: 'Birthday' })
+  @IsOptional()
+  @IsDate()
+  @Type(() => Date)
+  birthday?: Date;
+
+  @ApiPropertyOptional({ enum: Gender })
+  @IsOptional()
+  @IsEnum(Gender)
+  gender?: Gender;
+
+  @ApiPropertyOptional({ description: 'Is neutered' })
+  @IsOptional()
+  @IsBoolean()
+  isNeutered?: boolean;
 
   @ApiPropertyOptional({ description: 'Current weight in kg' })
   @IsOptional()
@@ -94,3 +129,4 @@ export class UpdateDogDto {
   @IsString()
   medicalHistory?: string | null;
 }
+

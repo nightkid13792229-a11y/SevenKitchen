@@ -141,7 +141,15 @@ export class DogsController {
     @Body() updateDogDto: UpdateDogDto,
   ): Promise<ApiResponseDto<DogDetailResponseDto>> {
     const dog = await this.dogService.updateDogProfile(id, updateDogDto);
-    const calcResult = await this.dogService.calcPreview(dog.id);
+
+    // Try to calculate preview, but don't fail if calculation fails
+    let calcResult = null;
+    try {
+      calcResult = await this.dogService.calcPreview(dog.id);
+    } catch (error: any) {
+      // Log the error but continue - allow updating dog profile even if calculation fails
+      console.warn(`[DogsController] Failed to calculate preview for updated dog ${id}:`, error.message);
+    }
 
     const response: DogDetailResponseDto = {
       profile: this.mapDogToProfileDto(dog),
@@ -231,7 +239,14 @@ export class DogsController {
       return ApiResponseDto.error(404, 'Dog not found');
     }
 
-    const calcResult = await this.dogService.calcPreview(dog.id);
+    // Try to calculate preview, but don't fail if calculation fails
+    let calcResult = null;
+    try {
+      calcResult = await this.dogService.calcPreview(dog.id);
+    } catch (error: any) {
+      // Log the error but continue - allow loading dog profile even if calculation fails
+      console.warn(`[DogsController] Failed to calculate preview for dog ${id}:`, error.message);
+    }
 
     const response: DogDetailResponseDto = {
       profile: this.mapDogToProfileDto(dog),

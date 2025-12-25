@@ -8,7 +8,12 @@
 
       <view class="form-item">
         <text class="label">姓名 *</text>
-        <input class="input" placeholder="请输入狗狗姓名" v-model="formData.name" />
+        <input
+          class="input"
+          placeholder="请输入狗狗姓名"
+          :value="String(formData.name || '')"
+          @input="e => formData.name = e.detail.value"
+        />
       </view>
 
       <!-- Breed Selection with Search -->
@@ -86,31 +91,58 @@
               </view>
             </view>
 
-            <!-- All Breeds Toggle (Grouped by Size) -->
+            <!-- All Breeds Toggle (Grouped by Size with Sidebar Navigation) -->
             <view class="section">
               <view class="section-header" @tap="toggleAllBreeds">
                 <text class="section-title">📋 全部品种 (按体型分类)</text>
                 <text class="toggle-icon">{{ showAllBreeds ? '▲' : '▼' }}</text>
               </view>
 
-              <view v-if="showAllBreeds" class="breed-list all-breeds-list">
-                <view
-                  v-for="(breedList, category) in breedsBySizeCategory"
-                  :key="category"
-                  class="size-category-group"
-                >
-                  <view class="size-category-title">
-                    {{ sizeCategoryLabels[category] }} ({{ breedList.length }}种)
-                  </view>
+              <view v-if="showAllBreeds" class="breed-selector-with-sidebar">
+                <!-- 左侧：快速导航栏 -->
+                <view class="quick-nav-sidebar">
                   <view
-                    v-for="breed in breedList"
-                    :key="breed.id"
-                    class="breed-item"
-                    @tap="selectBreed(breed)"
+                    v-for="cat in sizeCategories"
+                    :key="cat.key"
+                    class="nav-item"
+                    :class="{ active: activeCategory === cat.key }"
+                    @tap="scrollToCategory(cat.key)"
                   >
-                    {{ breed.name }}
+                    <text class="nav-icon">{{ cat.icon }}</text>
+                    <text class="nav-label">{{ cat.shortLabel }}</text>
                   </view>
                 </view>
+
+                <!-- 右侧：可滚动的品种列表 -->
+                <scroll-view
+                  class="breed-content-scroll"
+                  scroll-y
+                  :scroll-into-view="scrollToViewId"
+                  scroll-with-animation
+                  @scroll="onScroll"
+                >
+                  <view
+                    v-for="(breedList, category) in breedsBySizeCategory"
+                    :key="category"
+                    :id="'category-' + category"
+                    class="size-category-group"
+                    :data-category="category"
+                  >
+                    <view class="size-category-title" :data-icon="sizeCategories.find(c => c.key === category)?.icon">
+                      {{ sizeCategoryLabels[category] }} ({{ breedList.length }}种)
+                    </view>
+                    <view class="breed-grid">
+                      <view
+                        v-for="breed in breedList"
+                        :key="breed.id"
+                        class="breed-item"
+                        @tap="selectBreed(breed)"
+                      >
+                        {{ breed.name }}
+                      </view>
+                    </view>
+                  </view>
+                </scroll-view>
               </view>
             </view>
 
@@ -145,7 +177,7 @@
 
       <view class="form-item">
         <text class="label">生日 *</text>
-        <picker mode="date" :value="formData.birthday" @change="onBirthdayChange">
+        <picker mode="date" :value="formData.birthday || ''" @change="onBirthdayChange">
           <view class="picker">{{ formData.birthday || '请选择生日' }}</view>
         </picker>
       </view>
@@ -164,7 +196,7 @@
 
       <view class="form-item">
         <text class="label">体重(kg) *</text>
-        <input class="input" type="digit" placeholder="请输入体重" v-model="formData.currentWeightKg" />
+        <input class="input" type="text" placeholder="请输入体重" v-model="formData.currentWeightKg" />
       </view>
 
       <view class="form-item">
@@ -188,7 +220,7 @@
 
       <view class="form-item">
         <text class="label">每日餐数</text>
-        <input class="input" type="number" placeholder="请输入每日餐数" v-model="formData.mealsPerDay" />
+        <input class="input" type="text" placeholder="请输入每日餐数" v-model="formData.mealsPerDay" />
       </view>
 
       <view class="form-item">
@@ -207,7 +239,7 @@
 
       <view class="form-item" v-if="formData.treatInputMode === 'EXACT_KCAL'">
         <text class="label">每日零食能量(kcal) *</text>
-        <input class="input" type="digit" placeholder="请输入零食能量" v-model="formData.manualTreatKcal" />
+        <input class="input" type="text" placeholder="请输入零食能量" v-model="formData.manualTreatKcal" />
       </view>
 
       <view class="form-item">
@@ -215,10 +247,10 @@
         <textarea class="textarea" placeholder="请输入病史" v-model="formData.medicalHistory" />
       </view>
 
-      <button class="btn" @tap="submit" :disabled="!canSubmit">创建档案</button>
+      <button class="btn" @tap="submit" :disabled="canSubmit === false">{{ isEditMode ? '保存档案' : '创建档案' }}</button>
 
       <!-- Preview Calculation Button -->
-      <button class="btn btn-secondary" @tap="previewCalculation" :disabled="!canPreview">
+      <button class="btn btn-secondary" @tap="previewCalculation" :disabled="canPreview === false">
         试算喂食建议
       </button>
 
@@ -259,7 +291,7 @@
           class="custom-breed-input"
           v-model="customBreedName"
           placeholder="如：泰迪串串、田园犬等"
-          :focus="true"
+          focus
         />
         <view class="custom-breed-actions">
           <button class="custom-breed-btn-cancel" @tap="cancelCustomBreed">取消</button>
@@ -287,7 +319,7 @@ interface FormData {
   activityLevel: string
   lifeStageOverride: string
   sizeClassOverride: string | null
-  mealsPerDay: number
+  mealsPerDay: string
   treatInputMode: string
   treatLevel: string
   manualTreatKcal: string
@@ -315,7 +347,7 @@ const formData = ref<FormData>({
   activityLevel: 'NORMAL',
   lifeStageOverride: 'NONE',
   sizeClassOverride: null,
-  mealsPerDay: 2,
+  mealsPerDay: '2',
   treatInputMode: 'ESTIMATE_LEVEL',
   treatLevel: 'LOW',
   manualTreatKcal: '',
@@ -362,6 +394,12 @@ const isMixedBreed = ref(false)
 const showCustomBreedInput = ref(false)
 const customBreedName = ref('')
 
+// 侧边导航状态变量
+const activeCategory = ref<string>('')
+const scrollToViewId = ref<string>('')
+const categoryPositions = ref<Record<string, number>>({})
+const scrollViewHeight = ref(600) // scroll-view 的高度（单位：px）
+
 const filteredBreeds = computed(() => {
   if (!searchKeyword.value) {
     return []
@@ -395,46 +433,86 @@ const sizeCategoryLabels: Record<string, string> = {
   'GIANT': '巨型犬'
 }
 
-const genderIndex = computed(() => genderOptions.indexOf(formData.value.gender))
-const activityLevelIndex = computed(() => activityLevelOptions.indexOf(formData.value.activityLevel))
-const lifeStageIndex = computed(() => lifeStageOptions.indexOf(formData.value.lifeStageOverride))
+// 体型分类配置（用于侧边导航和视觉样式）
+const sizeCategories = [
+  { key: 'SMALL', label: '小型犬', shortLabel: '小型', icon: '🔵', color: '#1890ff' },
+  { key: 'MEDIUM', label: '中型犬', shortLabel: '中型', icon: '🟡', color: '#faad14' },
+  { key: 'LARGE', label: '大型犬', shortLabel: '大型', icon: '🟢', color: '#52c41a' },
+  { key: 'GIANT', label: '巨型犬', shortLabel: '巨型', icon: '🟣', color: '#722ed1' }
+]
+
+const genderIndex = computed(() => {
+  const idx = genderOptions.indexOf(formData.value.gender)
+  return Math.max(0, idx) // 确保返回非负整数
+})
+const activityLevelIndex = computed(() => {
+  const idx = activityLevelOptions.indexOf(formData.value.activityLevel)
+  return Math.max(0, idx) // 确保返回非负整数
+})
+const lifeStageIndex = computed(() => {
+  const idx = lifeStageOptions.indexOf(formData.value.lifeStageOverride)
+  return Math.max(0, idx) // 确保返回非负整数
+})
 const sizeClassIndex = computed(() => {
   const override = formData.value.sizeClassOverride
   if (!override) return 0
-  return sizeClassOptions.indexOf(override)
+  const idx = sizeClassOptions.indexOf(override)
+  return Math.max(0, idx) // 确保返回非负整数
 })
-const treatInputModeIndex = computed(() => treatInputModeOptions.indexOf(formData.value.treatInputMode))
-const treatLevelIndex = computed(() => treatLevelOptions.indexOf(formData.value.treatLevel))
+const treatInputModeIndex = computed(() => {
+  const idx = treatInputModeOptions.indexOf(formData.value.treatInputMode)
+  return Math.max(0, idx) // 确保返回非负整数
+})
+const treatLevelIndex = computed(() => {
+  const idx = treatLevelOptions.indexOf(formData.value.treatLevel)
+  return Math.max(0, idx) // 确保返回非负整数
+})
 
 const canSubmit = computed(() => {
-  return formData.value.name &&
-         formData.value.breedId &&
-         formData.value.birthday &&
-         formData.value.currentWeightKg &&
-         !calculating.value &&
-         (isMixedBreed.value ? formData.value.sizeClassOverride !== null : true)
+  return Boolean(
+    formData.value.name &&
+    formData.value.breedId &&
+    formData.value.birthday &&
+    formData.value.currentWeightKg &&
+    !calculating.value &&
+    (isMixedBreed.value ? formData.value.sizeClassOverride !== null : true)
+  )
 })
 
 const canPreview = computed(() => {
-  return formData.value.breedId &&
-         formData.value.birthday &&
-         formData.value.currentWeightKg &&
-         !calculating.value &&
-         (isMixedBreed.value ? formData.value.sizeClassOverride !== null : true)
+  return Boolean(
+    formData.value.breedId &&
+    formData.value.birthday &&
+    formData.value.currentWeightKg &&
+    !calculating.value &&
+    (isMixedBreed.value ? formData.value.sizeClassOverride !== null : true)
+  )
+})
+
+// Check if we're in edit mode
+const isEditMode = computed(() => {
+  const pages = getCurrentPages()
+  const currentPage = pages[pages.length - 1] as any
+  return !!currentPage.options?.dogId
 })
 
 onMounted(async () => {
-  // Load breeds
+  // Load breeds first (required for breed selection)
   await loadBreeds()
 
   // Check if editing existing dog
   const pages = getCurrentPages()
   const currentPage = pages[pages.length - 1] as any
   const dogId = currentPage.options?.dogId
+
   if (dogId) {
-    // Load existing dog - for MVP, just show form
-    // In production, would load and populate formData
+    // Edit mode: load existing dog profile
+    // Wait a bit to ensure breeds data is processed
+    setTimeout(() => {
+      loadDogProfile(dogId)
+    }, 100)
   }
+  // Create mode: show empty form
 })
 
 async function loadBreeds() {
@@ -466,6 +544,87 @@ async function loadBreeds() {
     })
   } finally {
     loadingBreeds.value = false
+  }
+}
+
+// 加载已有的狗狗档案
+async function loadDogProfile(dogId: string) {
+  try {
+    uni.showLoading({ title: '加载中...' })
+
+    const res: any = await request({
+      url: `/dogs/${dogId}`,
+      method: 'GET'
+    })
+
+    if (res.code === 0 && res.data && res.data.profile) {
+      populateFormData(res.data.profile)
+
+      console.log('[DogCreate] Dog profile loaded:', res.data.profile)
+      uni.showToast({
+        title: '加载成功',
+        icon: 'success',
+        duration: 1000
+      })
+    } else {
+      throw new Error(res.message || 'Failed to load dog profile')
+    }
+  } catch (err: any) {
+    console.error('[DogCreate] Load dog profile error:', err)
+    uni.showToast({
+      title: err.message || '加载档案失败',
+      icon: 'none',
+      duration: 2000
+    })
+  } finally {
+    uni.hideLoading()
+  }
+}
+
+// 将 API 数据填充到表单
+function populateFormData(profile: any) {
+  // 基本信息
+  formData.value.name = profile.name || ''
+  formData.value.birthday = profile.birthday ?
+    new Date(profile.birthday).toISOString().split('T')[0] : ''
+  formData.value.gender = profile.gender || 'MALE'
+  formData.value.isNeutered = profile.isNeutered ?? false
+  formData.value.currentWeightKg = profile.currentWeightKg?.toString() || ''
+  formData.value.bcsScore = profile.bcsScore || 5
+  formData.value.activityLevel = profile.activityLevel || 'NORMAL'
+  formData.value.lifeStageOverride = profile.lifeStageOverride || 'NONE'
+  formData.value.sizeClassOverride = profile.sizeClassOverride || null
+  formData.value.mealsPerDay = (profile.mealsPerDay || 2).toString()
+  formData.value.treatInputMode = profile.treatInputMode || 'ESTIMATE_LEVEL'
+  formData.value.treatLevel = profile.treatLevel || 'LOW'
+  formData.value.manualTreatKcal = profile.manualTreatKcal?.toString() || ''
+  formData.value.medicalHistory = profile.medicalHistory || ''
+
+  // 品种信息
+  formData.value.breedId = profile.breedId || ''
+  formData.value.customBreedName = profile.customBreedName || ''
+
+  // 判断是否为混血犬
+  const MIXED_BREED_VIRTUAL_ID = '00000000-0000-0000-0000-000000000000'
+  if (profile.breedId === MIXED_BREED_VIRTUAL_ID) {
+    isMixedBreed.value = true
+    selectedBreed.value = null
+  } else {
+    // 查找品种对象
+    const breed = breeds.value.find(b => b.id === profile.breedId)
+    if (breed) {
+      selectedBreed.value = breed
+      isMixedBreed.value = false
+    } else {
+      console.warn('[DogCreate] Breed not found in list:', profile.breedId)
+      selectedBreed.value = null
+      isMixedBreed.value = false
+    }
+  }
+
+  // 如果有缓存的计算结果，可以选择显示
+  if (profile.cachedTargetFoodKcal) {
+    console.log('[DogCreate] Cached target food kcal:', profile.cachedTargetFoodKcal)
   }
 }
 
@@ -524,6 +683,103 @@ function toggleCommonBreeds() {
 
 function toggleAllBreeds() {
   showAllBreeds.value = !showAllBreeds.value
+
+  // 展开时计算各分类的位置
+  if (showAllBreeds.value) {
+    // 延迟执行，确保 DOM 已完全渲染
+    // 增加延迟时间到 500ms，确保布局稳定
+    setTimeout(() => {
+      calculateCategoryPositions()
+    }, 500)
+  }
+}
+
+// 计算各分类的顶部位置（使用真实 DOM 位置）
+function calculateCategoryPositions() {
+  const positions: Record<string, number> = {}
+
+  // 使用 Promise 包装查询，确保顺序执行
+  const promises = sizeCategories.map(cat => {
+    return new Promise<number>((resolve) => {
+      const query = uni.createSelectorQuery()
+      query.select('#category-' + cat.key).boundingClientRect()
+      query.select('.breed-content-scroll').boundingClientRect()
+      query.exec((res) => {
+        if (res && res[0] && res[1]) {
+          const categoryRect = res[0]
+          const scrollRect = res[1]
+          // 计算相对于 scroll-view 内容顶部的位置
+          // categoryRect.top 是分类标题相对于视口的位置
+          // scrollRect.top 是 scroll-view 相对于视口的位置
+          // 两者相减得到分类标题相对于 scroll-view 顶部的位置
+          resolve(categoryRect.top - scrollRect.top)
+        } else {
+          resolve(0)
+        }
+      })
+    })
+  })
+
+  Promise.all(promises).then((positionValues) => {
+    sizeCategories.forEach((cat, index) => {
+      positions[cat.key] = positionValues[index]
+    })
+    categoryPositions.value = positions
+    console.log('[DogCreate] Real category positions:', positions)
+  })
+}
+
+// 滚动到指定体型分类
+function scrollToCategory(categoryKey: string) {
+  activeCategory.value = categoryKey
+  scrollToViewId.value = 'category-' + categoryKey
+
+  // 滚动完成后，高亮会由 onScroll 自动维护
+  // 这里只需设置 scrollToViewId，让 scroll-view 自动滚动
+}
+
+// 监听滚动事件，更新当前激活的分类
+function onScroll(e: any) {
+  const scrollTop = e.detail.scrollTop
+
+  // 如果还没有计算位置，先计算
+  if (Object.keys(categoryPositions.value).length === 0) {
+    calculateCategoryPositions()
+    // 位置计算是异步的，暂时返回
+    return
+  }
+
+  const positions = categoryPositions.value
+  const viewportHeight = scrollViewHeight.value // 600px
+
+  // 找到当前最可见的分类
+  // 策略：选择分类标题最接近视口顶部（但在视口上半部分）的分类
+  let bestCategory = 'SMALL'
+  let bestScore = Infinity
+
+  for (const [category, position] of Object.entries(positions)) {
+    // 计算分类标题距离视口顶部的距离
+    const distanceFromTop = position - scrollTop
+
+    // 如果分类标题在视口上半部分（距离顶部 0 到 viewportHeight/2 之间）
+    // 并且距离越小越好
+    if (distanceFromTop >= 0 && distanceFromTop <= viewportHeight / 2) {
+      if (distanceFromTop < bestScore) {
+        bestScore = distanceFromTop
+        bestCategory = category
+      }
+    }
+    // 如果所有分类都在视口上方（滚动到底部），选择最后一个
+    else if (scrollTop > position) {
+      // 找出所有位置小于 scrollTop 的分类中，最大的那个
+      const currentBestPos = positions[bestCategory]
+      if (position > currentBestPos) {
+        bestCategory = category
+      }
+    }
+  }
+
+  activeCategory.value = bestCategory
 }
 
 function onSizeClassChange(e: any) {
@@ -575,7 +831,8 @@ function onGenderChange(e: any) {
 }
 
 function onNeuteredChange(e: any) {
-  formData.value.isNeutered = e.detail.value
+  // switch 组件的 value 是布尔值，确保正确赋值
+  formData.value.isNeutered = !!e.detail.value
 }
 
 function onBcsChange(e: any) {
@@ -697,7 +954,13 @@ function submit() {
     return
   }
 
-  uni.showLoading({ title: '创建中...' })
+  // Check if we're in edit mode
+  const pages = getCurrentPages()
+  const currentPage = pages[pages.length - 1] as any
+  const dogId = currentPage.options?.dogId
+  const isEditMode = !!dogId
+
+  uni.showLoading({ title: isEditMode ? '保存中...' : '创建中...' })
 
   const payload: any = {
     name,
@@ -711,7 +974,7 @@ function submit() {
     activityLevel: formData.value.activityLevel,
     lifeStageOverride: formData.value.lifeStageOverride,
     sizeClassOverride: formData.value.sizeClassOverride,
-    mealsPerDay: formData.value.mealsPerDay,
+    mealsPerDay: parseInt(formData.value.mealsPerDay) || 2,
     treatInputMode: formData.value.treatInputMode,
     treatLevel: formData.value.treatLevel,
     medicalHistory: formData.value.medicalHistory || null
@@ -721,32 +984,40 @@ function submit() {
     payload.manualTreatKcal = parseFloat(formData.value.manualTreatKcal)
   }
 
-  request({
-    url: '/dogs',
-    method: 'POST',
+  // Use different endpoint for edit vs create
+  const requestConfig = {
+    url: isEditMode ? `/dogs/${dogId}` : '/dogs',
+    method: isEditMode ? 'PUT' : 'POST',
     data: payload
-  }).then((res: any) => {
-    if (res.code === 0 && res.data) {
-      const createdDog = res.data.profile || res.data
-      const dogId = createdDog.id
+  }
 
-      if (!dogId) {
+  request(requestConfig).then((res: any) => {
+    if (res.code === 0 && res.data) {
+      const updatedDog = res.data.profile || res.data
+      const resultDogId = updatedDog.id
+
+      if (!resultDogId) {
         console.error('[DogCreate] Response missing dog id:', res.data)
         uni.showToast({
-          title: '创建失败：响应格式错误',
+          title: isEditMode ? '保存失败：响应格式错误' : '创建失败：响应格式错误',
           icon: 'none',
           duration: 2000
         })
         return
       }
 
-      console.info(`[DogCreate] Dog created successfully: id=${dogId}, name=${createdDog.name}`)
+      console.info(`[DogCreate] Dog ${isEditMode ? 'updated' : 'created'} successfully: id=${resultDogId}, name=${updatedDog.name}`)
 
-      uni.setStorageSync('dogId', dogId)
-      addDogToCache(createdDog)
+      // Update cache
+      if (isEditMode) {
+        addDogToCache(updatedDog)
+      } else {
+        uni.setStorageSync('dogId', resultDogId)
+        addDogToCache(updatedDog)
+      }
 
       uni.showToast({
-        title: '创建成功',
+        title: isEditMode ? '保存成功' : '创建成功',
         icon: 'success',
         duration: 1500
       })
@@ -755,7 +1026,7 @@ function submit() {
         uni.navigateBack()
       }, 1500)
     } else {
-      const errorMsg = res.message || '创建失败'
+      const errorMsg = res.message || (isEditMode ? '保存失败' : '创建失败')
       console.error('[DogCreate] API error:', res.code, errorMsg)
       uni.showToast({
         title: errorMsg,
@@ -765,9 +1036,9 @@ function submit() {
     }
   }).catch((err: any) => {
     const errMsg = err?.message || String(err) || '网络错误'
-    console.error('[DogCreate] Create dog error:', err)
+    console.error('[DogCreate]', isEditMode ? 'Update' : 'Create', 'dog error:', err)
 
-    let userMsg = '创建失败，请稍后重试'
+    let userMsg = isEditMode ? '保存失败，请稍后重试' : '创建失败，请稍后重试'
     if (errMsg.includes('400') || errMsg.includes('Bad Request')) {
       userMsg = '请求参数错误，请检查填写内容'
     } else if (errMsg.includes('网络') || errMsg.includes('连接') || errMsg.includes('timeout')) {
@@ -1125,9 +1396,71 @@ function submit() {
   overflow: hidden;
 }
 
-/* Size Category Groups */
+/* Size Category Groups with Sidebar Navigation */
+.breed-selector-with-sidebar {
+  display: flex;
+  height: 600rpx;
+  border: 1px solid #ddd;
+  border-radius: 8rpx;
+  overflow: hidden;
+  background-color: #fff;
+}
+
+/* 侧边快速导航栏 */
+.quick-nav-sidebar {
+  width: 100rpx;
+  background-color: #f5f5f5;
+  border-right: 1px solid #e8e8e8;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20rpx 10rpx;
+  border-bottom: 1px solid #e8e8e8;
+  transition: all 0.3s ease;
+  cursor: pointer;
+}
+
+.nav-item:last-child {
+  border-bottom: none;
+}
+
+.nav-item.active {
+  background-color: #fff;
+  box-shadow: 0 0 10rpx rgba(0, 0, 0, 0.1);
+  border-left: 3px solid #1890ff;
+}
+
+.nav-icon {
+  font-size: 28rpx;
+  margin-bottom: 4rpx;
+}
+
+.nav-label {
+  font-size: 20rpx;
+  color: #666;
+}
+
+.nav-item.active .nav-label {
+  color: #1890ff;
+  font-weight: bold;
+}
+
+/* 品种内容滚动区 */
+.breed-content-scroll {
+  flex: 1;
+  height: 100%;
+  overflow-y: auto;
+}
+
 .size-category-group {
-  margin-bottom: 30rpx;
+  margin-bottom: 20rpx;
 }
 
 .size-category-group:last-child {
@@ -1135,13 +1468,68 @@ function submit() {
 }
 
 .size-category-title {
-  font-size: 26rpx;
-  color: #666;
+  font-size: 28rpx;
   font-weight: bold;
-  padding: 15rpx 20rpx;
-  background-color: #f8f9fa;
+  padding: 20rpx;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
   border-radius: 4rpx;
-  margin-bottom: 10rpx;
+  margin-bottom: 15rpx;
+}
+
+/* 不同分类的颜色主题 */
+.size-category-group[data-category="SMALL"] .size-category-title {
+  background: linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%);
+  color: #0050b3;
+  border-left: 4px solid #1890ff;
+}
+
+.size-category-group[data-category="MEDIUM"] .size-category-title {
+  background: linear-gradient(135deg, #fffbe6 0%, #fff1b8 100%);
+  color: #ad6800;
+  border-left: 4px solid #faad14;
+}
+
+.size-category-group[data-category="LARGE"] .size-category-title {
+  background: linear-gradient(135deg, #f6ffed 0%, #d9f7be 100%);
+  color: #389e0d;
+  border-left: 4px solid #52c41a;
+}
+
+.size-category-group[data-category="GIANT"] .size-category-title {
+  background: linear-gradient(135deg, #f9f0ff 0%, #efdbff 100%);
+  color: #722ed1;
+  border-left: 4px solid #722ed1;
+}
+
+/* 品种网格布局 */
+.breed-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 15rpx;
+  padding: 0 20rpx 20rpx 20rpx;
+}
+
+.breed-item {
+  background-color: #fff;
+  border: 1px solid #d9d9d9;
+  border-radius: 6rpx;
+  padding: 15rpx 25rpx;
+  font-size: 26rpx;
+  color: #333;
+  text-align: center;
+  min-width: 120rpx;
+  transition: all 0.2s ease;
+  cursor: pointer;
+}
+
+.breed-item:active {
+  background-color: #e6f7ff;
+  border-color: #1890ff;
+  transform: scale(0.95);
 }
 
 /* Custom Breed Input Modal */

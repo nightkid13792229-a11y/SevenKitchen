@@ -24,8 +24,8 @@ import {
   DogSizeCategory,
   TreatInputMode,
   TreatLevel,
-  Gender,
 } from '../../../domain';
+import { DogGender } from '../../../domain/dog/enums';
 
 export class UpdateDogDto {
   @ApiPropertyOptional({ description: 'Dog name' })
@@ -54,10 +54,10 @@ export class UpdateDogDto {
   @Type(() => Date)
   birthday?: Date;
 
-  @ApiPropertyOptional({ enum: Gender })
+  @ApiPropertyOptional({ enum: DogGender })
   @IsOptional()
-  @IsEnum(Gender)
-  gender?: Gender;
+  @IsEnum(DogGender)
+  gender?: DogGender;
 
   @ApiPropertyOptional({ description: 'Is neutered' })
   @IsOptional()

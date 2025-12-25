@@ -109,7 +109,7 @@ export class DogDetailResponseDto {
   @ApiProperty({ type: DogProfileDto })
   profile!: DogProfileDto;
 
-  @ApiProperty({ type: DogCalcResultDto })
-  calcResult!: DogCalcResultDto;
+  @ApiProperty({ type: DogCalcResultDto, required: false, nullable: true })
+  calcResult?: DogCalcResultDto | null;
 }
 

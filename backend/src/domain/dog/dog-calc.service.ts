@@ -77,8 +77,10 @@ export function validateMixedBreedDog(
   dog: Dog,
   breed?: DogBreed | null,
 ): void {
-  // Check if this is a mixed breed (virtual breed ID or no breed found)
-  const isMixedBreed = dog.breedId === MIXED_BREED_VIRTUAL_ID || !breed;
+  // Check if this is a mixed breed (only via virtual breed ID)
+  // A dog with a non-mixed breedId should not be considered mixed breed
+  // just because the breed lookup fails (breed may not be in database)
+  const isMixedBreed = dog.breedId === MIXED_BREED_VIRTUAL_ID;
 
   if (isMixedBreed && !dog.sizeClassOverride) {
     throw new Error(

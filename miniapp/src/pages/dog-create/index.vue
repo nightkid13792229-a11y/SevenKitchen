@@ -907,7 +907,7 @@ async function previewCalculation() {
       activityLevel: formData.value.activityLevel,
       lifeStageOverride: formData.value.lifeStageOverride,
       sizeClassOverride: formData.value.sizeClassOverride,
-      mealsPerDay: formData.value.mealsPerDay,
+      mealsPerDay: parseInt(formData.value.mealsPerDay) || 2,
       treatInputMode: formData.value.treatInputMode,
       treatLevel: formData.value.treatLevel
     }

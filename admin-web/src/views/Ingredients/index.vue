@@ -66,21 +66,21 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="baseUnit" label="基准单位" width="100" align="center">
-          <template #default="{ row }">
-            {{ BaseUnitLabels[row.baseUnit] }}
-          </template>
-        </el-table-column>
-
         <el-table-column prop="currentPricePerPurchaseUnit" label="采购单价" width="120" align="right">
           <template #default="{ row }">
             ¥{{ formatPrice(row.currentPricePerPurchaseUnit) }} / {{ row.purchaseUnit }}
           </template>
         </el-table-column>
 
-        <el-table-column prop="unitCost" label="单位成本" width="120" align="right">
+        <el-table-column prop="purchaseChannel" label="采购渠道" width="120">
           <template #default="{ row }">
-            ¥{{ formatPrice(row.unitCost) }} / {{ BaseUnitLabels[row.baseUnit] }}
+            {{ row.purchaseChannel || '-' }}
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="notes" label="备注" width="150">
+          <template #default="{ row }">
+            {{ row.notes || '-' }}
           </template>
         </el-table-column>
 

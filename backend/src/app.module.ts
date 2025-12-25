@@ -40,7 +40,7 @@ import {
 } from './application/ingredient/ingredient.service';
 import { InMemoryIngredientRepository } from './infrastructure/repositories/in-memory-ingredient.repository';
 import { Ingredient } from './domain/ingredient';
-import { IngredientType, BaseUnit } from './domain/ingredient/enums';
+import { IngredientType, BaseUnit, SupplementCategoryType } from './domain/ingredient/enums';
 import { randomUUID } from 'crypto';
 import { GlobalConfigService } from './application/config/global-config.service';
 import { PricingService } from './domain/pricing/pricing.service';
@@ -434,6 +434,7 @@ export class AppModule implements OnModuleInit {
     const PUMPKIN_ID = '5fa85f64-5717-4562-b3fc-2c963f66afa6';
     const VACUUM_BAG_ID = '6fa85f64-5717-4562-b3fc-2c963f66afa6';
     const PRODUCT_LABEL_ID = '7fa85f64-5717-4562-b3fc-2c963f66afa6';
+    const CALCIUM_SUPPLEMENT_ID = '8fa85f64-5717-4562-b3fc-2c963f66afa7';
 
     // Check if ingredients already exist (idempotent)
     const existingChicken = await this.ingredientRepository.findById(
@@ -532,13 +533,37 @@ export class AppModule implements OnModuleInit {
       },
     );
 
+    // 5. Calcium supplement (SUPPLEMENT)
+    const calciumSupplement = new Ingredient(
+      CALCIUM_SUPPLEMENT_ID,
+      '碳酸钙',
+      IngredientType.SUPPLEMENT,
+      '某品牌',
+      '500g装',
+      '1688',
+      '用于补充钙质',
+      BaseUnit.G,
+      null,
+      'kg',
+      1000.0,
+      120.0, // 120 CNY per kg
+      null,
+      null,
+      {
+        category_type: SupplementCategoryType.MINERAL,
+        active_nutrients: { '钙': 0.30 }, // 30% calcium concentration
+        production_loss_rate: 1.05,
+      },
+    );
+
     await this.ingredientRepository.save(chickenBreast);
     await this.ingredientRepository.save(pumpkin);
     await this.ingredientRepository.save(vacuumBag);
     await this.ingredientRepository.save(productLabel);
+    await this.ingredientRepository.save(calciumSupplement);
 
     console.log(
-      `[Seed] Seeded 4 canonical ingredients: 鸡胸肉, 南瓜, 真空袋, 产品标签`,
+      `[Seed] Seeded 5 canonical ingredients: 鸡胸肉, 南瓜, 真空袋, 产品标签, 碳酸钙`,
     );
   }
 

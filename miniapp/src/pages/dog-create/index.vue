@@ -184,14 +184,44 @@
 
       <view class="form-item">
         <text class="label">性别</text>
-        <picker mode="selector" :range="genderOptions" :value="genderIndex" @change="onGenderChange">
-          <view class="picker">{{ formData.gender }}</view>
-        </picker>
+        <view class="gender-selector">
+          <view
+            class="gender-option gender-option-male"
+            :class="{ active: formData.gender === 'MALE' }"
+            @tap="selectGender('MALE')"
+          >
+            <text class="gender-icon">♂</text>
+            <text class="gender-label">公</text>
+          </view>
+          <view
+            class="gender-option gender-option-female"
+            :class="{ active: formData.gender === 'FEMALE' }"
+            @tap="selectGender('FEMALE')"
+          >
+            <text class="gender-icon">♀</text>
+            <text class="gender-label">母</text>
+          </view>
+        </view>
       </view>
 
       <view class="form-item">
         <text class="label">是否绝育</text>
-        <switch :checked="formData.isNeutered" @change="onNeuteredChange" />
+        <view class="neutered-selector">
+          <view
+            class="neutered-option"
+            :class="{ active: formData.isNeutered === true }"
+            @tap="selectNeutered(true)"
+          >
+            <text class="neutered-label">是</text>
+          </view>
+          <view
+            class="neutered-option"
+            :class="{ active: formData.isNeutered === false }"
+            @tap="selectNeutered(false)"
+          >
+            <text class="neutered-label">否</text>
+          </view>
+        </view>
       </view>
 
       <view class="form-item">
@@ -200,15 +230,63 @@
       </view>
 
       <view class="form-item">
-        <text class="label">BCS评分 (1-9)</text>
-        <slider :min="1" :max="9" :value="formData.bcsScore" step="1" show-value @change="onBcsChange" />
+        <text class="label">BCS评分 (1-9分)</text>
+        <view class="bcs-score-row">
+          <slider
+            class="bcs-slider"
+            :min="1"
+            :max="9"
+            :value="formData.bcsScore"
+            step="1"
+            show-value
+            @change="onBcsChange"
+          />
+          <text class="bcs-body-status" :style="{ color: bcsStatusColor }">
+            身材：{{ bcsStatusText }}
+          </text>
+        </view>
       </view>
 
+      <!-- BCS体态示意图弹窗 -->
+      <uni-popup ref="bcsPopup" type="center" :show="showBcsGuide" @close="onCloseBcsGuide">
+        <view class="bcs-guide-popup" @tap.stop>
+          <view class="bcs-guide-title">BCS体态评分标准</view>
+
+          <!-- BCS评分图片 -->
+          <view class="bcs-image-container">
+            <image
+              class="bcs-guide-image"
+              :src="bcsGuideImageUrl"
+              mode="widthFix"
+              @load="onBcsImageLoad"
+              @error="onBcsImageError"
+            />
+            <!-- 加载失败提示 -->
+            <view v-if="bcsImageError" class="bcs-image-error">
+              <text>图片加载失败，请稍后重试</text>
+            </view>
+          </view>
+        </view>
+      </uni-popup>
+
       <view class="form-item">
-        <text class="label">活动水平</text>
-        <picker mode="selector" :range="activityLevelOptions" :value="activityLevelIndex" @change="onActivityLevelChange">
-          <view class="picker">{{ formData.activityLevel }}</view>
-        </picker>
+        <text class="label">活动水平 *</text>
+
+        <view class="activity-level-container">
+          <view
+            v-for="option in activityLevelConfigs"
+            :key="option.value"
+            class="activity-level-option"
+            :class="{ active: formData.activityLevel === option.value }"
+            @tap="selectActivityLevel(option.value)"
+          >
+            <view class="activity-level-header">
+              <text class="activity-level-label">{{ option.label }}</text>
+              <text class="activity-level-coefficient">×{{ option.coefficient }}</text>
+            </view>
+            <text class="activity-level-description">{{ option.description }}</text>
+          </view>
+        </view>
       </view>
 
       <view class="form-item">
@@ -355,8 +433,47 @@ const formData = ref<FormData>({
   medicalHistory: ''
 })
 
-const genderOptions = ['MALE', 'FEMALE']
-const activityLevelOptions = ['RESTING', 'LOW', 'NORMAL', 'HIGH', 'WORKING']
+// 活动水平配置
+interface ActivityLevelOption {
+  value: string
+  label: string
+  description: string
+  coefficient: number
+}
+
+const activityLevelConfigs: ActivityLevelOption[] = [
+  {
+    value: 'RESTING',
+    label: '休息',
+    description: '几乎不运动，主要时间休息',
+    coefficient: 0.8
+  },
+  {
+    value: 'LOW',
+    label: '低活动',
+    description: '偶尔散步，每日运动少于30分钟',
+    coefficient: 0.9
+  },
+  {
+    value: 'NORMAL',
+    label: '正常活动',
+    description: '每日散步1-2小时，正常活动量',
+    coefficient: 1.0
+  },
+  {
+    value: 'HIGH',
+    label: '高活动',
+    description: '每日运动2-4小时，经常跑步或玩耍',
+    coefficient: 1.2
+  },
+  {
+    value: 'WORKING',
+    label: '工作犬',
+    description: '高强度训练或工作，如搜救犬、警犬',
+    coefficient: 1.5
+  }
+]
+
 const lifeStageOptions = ['NONE', 'PUPPY', 'ADULT', 'SENIOR', 'PREGNANCY', 'LACTATION']
 const sizeClassOptions = ['SMALL', 'MEDIUM', 'LARGE', 'GIANT']
 const sizeClassOptionsForPicker = ['小型犬', '中型犬', '大型犬', '巨型犬']
@@ -397,6 +514,12 @@ const showAllBreeds = ref(false)
 const isMixedBreed = ref(false)
 const showCustomBreedInput = ref(false)
 const customBreedName = ref('')
+const showBcsGuide = ref(false)
+
+// BCS评分图URL
+const bcsGuideImageUrl = ref('https://lhcos-3c860-1392823718.cos.ap-chengdu.myqcloud.com/bcs-chart.png')
+const bcsImageError = ref(false)
+const bcsGuideShown = ref(false) // 记录是否已显示过BCS图
 
 // 侧边导航状态变量
 const activeCategory = ref<string>('')
@@ -445,14 +568,6 @@ const sizeCategories = [
   { key: 'GIANT', label: '巨型犬', shortLabel: '巨型', icon: '🟣', color: '#722ed1' }
 ]
 
-const genderIndex = computed(() => {
-  const idx = genderOptions.indexOf(formData.value.gender)
-  return Math.max(0, idx) // 确保返回非负整数
-})
-const activityLevelIndex = computed(() => {
-  const idx = activityLevelOptions.indexOf(formData.value.activityLevel)
-  return Math.max(0, idx) // 确保返回非负整数
-})
 const lifeStageIndex = computed(() => {
   const idx = lifeStageOptions.indexOf(formData.value.lifeStageOverride)
   return Math.max(0, idx) // 确保返回非负整数
@@ -472,12 +587,33 @@ const treatLevelIndex = computed(() => {
   return Math.max(0, idx) // 确保返回非负整数
 })
 
+// BCS身材状态文字
+const bcsStatusText = computed(() => {
+  const score = formData.value.bcsScore
+  if (score <= 2) return '很瘦'
+  if (score === 3) return '偏瘦'
+  if (score >= 4 && score <= 5) return '标准'
+  if (score >= 6 && score <= 7) return '偏胖'
+  return '很胖'
+})
+
+// BCS身材状态颜色
+const bcsStatusColor = computed(() => {
+  const score = formData.value.bcsScore
+  if (score <= 2) return '#ff4d4f' // 红色
+  if (score === 3) return '#faad14' // 深黄色
+  if (score >= 4 && score <= 5) return '#52c41a' // 绿色
+  if (score >= 6 && score <= 7) return '#faad14' // 深黄色
+  return '#ff4d4f' // 红色
+})
+
 const canSubmit = computed(() => {
   return Boolean(
     formData.value.name &&
     formData.value.breedId &&
     formData.value.birthday &&
     formData.value.currentWeightKg &&
+    formData.value.activityLevel &&
     !calculating.value &&
     (isMixedBreed.value ? formData.value.sizeClassOverride !== null : true)
   )
@@ -525,6 +661,15 @@ onMounted(async () => {
     }, 100)
   } else {
     console.log('[DogCreate] onMounted: create mode, no dogId')
+
+    // Auto-show BCS guide on first load (delay 1.5s)
+    setTimeout(() => {
+      if (!bcsGuideShown.value) {
+        showBcsGuide.value = true
+        bcsGuideShown.value = true
+        console.log('[DogCreate] Auto-showing BCS guide')
+      }
+    }, 1500)
   }
 })
 
@@ -858,22 +1003,41 @@ function onBirthdayChange(e: any) {
   formData.value.birthday = e.detail.value
 }
 
-function onGenderChange(e: any) {
-  formData.value.gender = genderOptions[e.detail.value]
+// 选择性别
+function selectGender(gender: 'MALE' | 'FEMALE') {
+  formData.value.gender = gender
 }
 
-function onNeuteredChange(e: any) {
-  // switch 组件的 value 是布尔值，确保正确赋值
-  formData.value.isNeutered = !!e.detail.value
+// 选择是否绝育
+function selectNeutered(value: boolean) {
+  formData.value.isNeutered = value
 }
 
 function onBcsChange(e: any) {
   formData.value.bcsScore = e.detail.value
 }
 
-function onActivityLevelChange(e: any) {
-  formData.value.activityLevel = activityLevelOptions[e.detail.value]
+// 选择活动水平
+function selectActivityLevel(value: string) {
+  formData.value.activityLevel = value
 }
+
+// BCS弹窗相关函数
+function onBcsImageLoad() {
+  console.log('[BCS Guide] Image loaded successfully')
+  bcsImageError.value = false
+}
+
+function onBcsImageError() {
+  console.error('[BCS Guide] Failed to load BCS guide image')
+  bcsImageError.value = true
+}
+
+function onCloseBcsGuide() {
+  showBcsGuide.value = false
+  bcsGuideShown.value = true
+}
+
 
 function onLifeStageChange(e: any) {
   formData.value.lifeStageOverride = lifeStageOptions[e.detail.value]
@@ -958,10 +1122,10 @@ async function previewCalculation() {
 }
 
 function submit() {
-  const { name, breedId, birthday, currentWeightKg } = formData.value
+  const { name, breedId, birthday, currentWeightKg, activityLevel } = formData.value
 
   // Validation
-  if (!name || !breedId || !birthday || !currentWeightKg) {
+  if (!name || !breedId || !birthday || !currentWeightKg || !activityLevel) {
     uni.showToast({
       title: '请填写必填项',
       icon: 'none'
@@ -1637,5 +1801,210 @@ function submit() {
 .custom-breed-btn-confirm {
   background-color: #07c160;
   color: #fff;
+}
+
+/* Gender Selector */
+.gender-selector {
+  display: flex;
+  gap: 20rpx;
+}
+
+.gender-option {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  padding: 18rpx 20rpx;
+  background-color: #f5f5f5;
+  border: 2px solid #e0e0e0;
+  border-radius: 12rpx;
+  transition: all 0.3s;
+}
+
+.gender-option-male.active {
+  background-color: #e6f7ff;
+  border-color: #1890ff;
+}
+
+.gender-option-male.active .gender-icon,
+.gender-option-male.active .gender-label {
+  color: #1890ff;
+  font-weight: bold;
+}
+
+.gender-option-female.active {
+  background-color: #fff0f6;
+  border-color: #FF99CC;
+}
+
+.gender-option-female.active .gender-icon,
+.gender-option-female.active .gender-label {
+  color: #FF99CC;
+  font-weight: bold;
+}
+
+.gender-icon {
+  font-size: 36rpx;
+  color: #666;
+}
+
+.gender-label {
+  font-size: 26rpx;
+  color: #666;
+}
+
+/* Neutered Selector */
+.neutered-selector {
+  display: flex;
+  gap: 20rpx;
+}
+
+.neutered-option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18rpx 20rpx;
+  background-color: #f5f5f5;
+  border: 2px solid #e0e0e0;
+  border-radius: 12rpx;
+  transition: all 0.3s;
+}
+
+.neutered-option.active {
+  background-color: #e6f7ff;
+  border-color: #1890ff;
+}
+
+.neutered-label {
+  font-size: 28rpx;
+  color: #666;
+}
+
+.neutered-option.active .neutered-label {
+  color: #1890ff;
+  font-weight: bold;
+}
+
+/* BCS Score Row */
+.bcs-score-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.bcs-slider {
+  flex: 1;
+  min-width: 0;
+}
+
+.bcs-body-status {
+  font-size: 26rpx;
+  font-weight: bold;
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 8rpx 12rpx;
+  background-color: #f5f5f5;
+  border-radius: 8rpx;
+}
+
+/* Activity Level Options */
+.activity-level-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.activity-level-option {
+  padding: 20rpx;
+  background-color: #f5f5f5;
+  border: 2px solid #e0e0e0;
+  border-radius: 12rpx;
+  transition: all 0.3s;
+}
+
+.activity-level-option.active {
+  background-color: #e6f7ff;
+  border-color: #1890ff;
+}
+
+.activity-level-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8rpx;
+}
+
+.activity-level-label {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.activity-level-option.active .activity-level-label {
+  color: #1890ff;
+}
+
+.activity-level-coefficient {
+  font-size: 26rpx;
+  font-weight: bold;
+  color: #ff4d4f;
+  background-color: #fff1f0;
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
+}
+
+.activity-level-description {
+  font-size: 24rpx;
+  color: #666;
+  line-height: 1.5;
+}
+
+/* BCS Guide Popup */
+.bcs-guide-popup {
+  width: 650rpx;
+  max-height: 85vh;
+  background-color: #fff;
+  border-radius: 16rpx;
+  padding: 30rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.bcs-guide-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  text-align: center;
+  color: #333;
+  margin-bottom: 20rpx;
+  width: 100%;
+}
+
+.bcs-image-container {
+  width: 100%;
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.bcs-guide-image {
+  width: 100%;
+  height: auto;
+  border-radius: 8rpx;
+  display: block;
+}
+
+.bcs-image-error {
+  padding: 60rpx 20rpx;
+  text-align: center;
+  color: #999;
+  font-size: 26rpx;
 }
 </style>

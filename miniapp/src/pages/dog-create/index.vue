@@ -1013,6 +1013,12 @@ function submit() {
     payload.manualTreatKcal = parseFloat(formData.value.manualTreatKcal)
   }
 
+  // Debug log: Show submit payload
+  console.log('[DogCreate] Submit payload:', JSON.stringify(payload, null, 2))
+  console.log('[DogCreate] Submit payload breedId:', payload.breedId)
+  console.log('[DogCreate] formData.breedId:', formData.value.breedId)
+  console.log('[DogCreate] selectedBreed:', selectedBreed.value)
+
   // Use different endpoint for edit vs create
   const requestConfig = {
     url: isEditModeValue ? `/dogs/${dogId.value}` : '/dogs',
@@ -1021,8 +1027,11 @@ function submit() {
   }
 
   request(requestConfig).then((res: any) => {
+    console.log('[DogCreate] Submit response:', res)
     if (res.code === 0 && res.data) {
       const updatedDog = res.data.profile || res.data
+      console.log('[DogCreate] Updated dog data:', updatedDog)
+      console.log('[DogCreate] Updated dog breedId:', updatedDog.breedId)
       const resultDogId = updatedDog.id
 
       if (!resultDogId) {

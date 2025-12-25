@@ -303,7 +303,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onLoad } from 'vue'
 import { request } from '../../utils/api'
 import { addDogToCache } from '../../utils/dog-cache'
 
@@ -385,6 +385,9 @@ const selectedBreed = ref<Breed | null>(null)
 const calcResult = ref<CalcResult | null>(null)
 const loadingBreeds = ref(false)
 const calculating = ref(false)
+
+// Store dogId for edit mode
+const dogId = ref<string | null>(null)
 
 // New state variables
 const searchKeyword = ref('')
@@ -489,30 +492,39 @@ const canPreview = computed(() => {
   )
 })
 
-// Check if we're in edit mode
+// Check if we're in edit mode (use dogId ref instead of getCurrentPages)
 const isEditMode = computed(() => {
-  const pages = getCurrentPages()
-  const currentPage = pages[pages.length - 1] as any
-  return !!currentPage.options?.dogId
+  return !!dogId.value
+})
+
+// onLoad lifecycle hook - receives page parameters
+onLoad((options: any) => {
+  console.log('[DogCreate] onLoad called with options:', options)
+
+  // Store dogId if provided (edit mode)
+  if (options?.dogId) {
+    dogId.value = options.dogId
+    console.log('[DogCreate] Edit mode detected, dogId:', dogId.value)
+  } else {
+    console.log('[DogCreate] Create mode')
+  }
 })
 
 onMounted(async () => {
   // Load breeds first (required for breed selection)
   await loadBreeds()
 
-  // Check if editing existing dog
-  const pages = getCurrentPages()
-  const currentPage = pages[pages.length - 1] as any
-  const dogId = currentPage.options?.dogId
-
-  if (dogId) {
+  // Check if editing existing dog (use dogId ref set in onLoad)
+  if (dogId.value) {
     // Edit mode: load existing dog profile
+    console.log('[DogCreate] onMounted: loading dog profile for edit mode')
     // Wait a bit to ensure breeds data is processed
     setTimeout(() => {
-      loadDogProfile(dogId)
+      loadDogProfile(dogId.value!)
     }, 100)
+  } else {
+    console.log('[DogCreate] onMounted: create mode, no dogId')
   }
-  // Create mode: show empty form
 })
 
 async function loadBreeds() {
@@ -550,6 +562,7 @@ async function loadBreeds() {
 // 加载已有的狗狗档案
 async function loadDogProfile(dogId: string) {
   try {
+    console.log('[DogCreate] loadDogProfile called with dogId:', dogId)
     uni.showLoading({ title: '加载中...' })
 
     const res: any = await request({
@@ -557,16 +570,19 @@ async function loadDogProfile(dogId: string) {
       method: 'GET'
     })
 
+    console.log('[DogCreate] loadDogProfile API response:', res)
+
     if (res.code === 0 && res.data && res.data.profile) {
       populateFormData(res.data.profile)
 
-      console.log('[DogCreate] Dog profile loaded:', res.data.profile)
+      console.log('[DogCreate] Dog profile loaded successfully:', res.data.profile)
       uni.showToast({
         title: '加载成功',
         icon: 'success',
         duration: 1000
       })
     } else {
+      console.error('[DogCreate] API response format error:', res)
       throw new Error(res.message || 'Failed to load dog profile')
     }
   } catch (err: any) {
@@ -583,6 +599,8 @@ async function loadDogProfile(dogId: string) {
 
 // 将 API 数据填充到表单
 function populateFormData(profile: any) {
+  console.log('[DogCreate] populateFormData called with profile:', profile)
+
   // 基本信息
   formData.value.name = profile.name || ''
   formData.value.birthday = profile.birthday ?
@@ -604,23 +622,36 @@ function populateFormData(profile: any) {
   formData.value.breedId = profile.breedId || ''
   formData.value.customBreedName = profile.customBreedName || ''
 
+  console.log('[DogCreate] Breed info - breedId:', formData.value.breedId, 'customBreedName:', formData.value.customBreedName)
+
   // 判断是否为混血犬
   const MIXED_BREED_VIRTUAL_ID = '00000000-0000-0000-0000-000000000000'
   if (profile.breedId === MIXED_BREED_VIRTUAL_ID) {
     isMixedBreed.value = true
     selectedBreed.value = null
+    console.log('[DogCreate] Detected mixed breed dog')
   } else {
     // 查找品种对象
     const breed = breeds.value.find(b => b.id === profile.breedId)
     if (breed) {
       selectedBreed.value = breed
       isMixedBreed.value = false
+      console.log('[DogCreate] Found breed in list:', breed)
     } else {
       console.warn('[DogCreate] Breed not found in list:', profile.breedId)
       selectedBreed.value = null
       isMixedBreed.value = false
     }
   }
+
+  console.log('[DogCreate] Form data after populate:', {
+    name: formData.value.name,
+    breedId: formData.value.breedId,
+    customBreedName: formData.value.customBreedName,
+    sizeClassOverride: formData.value.sizeClassOverride,
+    isMixedBreed: isMixedBreed.value,
+    selectedBreed: selectedBreed.value?.name
+  })
 
   // 如果有缓存的计算结果，可以选择显示
   if (profile.cachedTargetFoodKcal) {
@@ -954,13 +985,10 @@ function submit() {
     return
   }
 
-  // Check if we're in edit mode
-  const pages = getCurrentPages()
-  const currentPage = pages[pages.length - 1] as any
-  const dogId = currentPage.options?.dogId
-  const isEditMode = !!dogId
+  // Check if we're in edit mode (use dogId ref)
+  const isEditModeValue = !!dogId.value
 
-  uni.showLoading({ title: isEditMode ? '保存中...' : '创建中...' })
+  uni.showLoading({ title: isEditModeValue ? '保存中...' : '创建中...' })
 
   const payload: any = {
     name,
@@ -986,8 +1014,8 @@ function submit() {
 
   // Use different endpoint for edit vs create
   const requestConfig = {
-    url: isEditMode ? `/dogs/${dogId}` : '/dogs',
-    method: isEditMode ? 'PUT' : 'POST',
+    url: isEditModeValue ? `/dogs/${dogId.value}` : '/dogs',
+    method: isEditModeValue ? 'PUT' : 'POST',
     data: payload
   }
 
@@ -999,17 +1027,17 @@ function submit() {
       if (!resultDogId) {
         console.error('[DogCreate] Response missing dog id:', res.data)
         uni.showToast({
-          title: isEditMode ? '保存失败：响应格式错误' : '创建失败：响应格式错误',
+          title: isEditModeValue ? '保存失败：响应格式错误' : '创建失败：响应格式错误',
           icon: 'none',
           duration: 2000
         })
         return
       }
 
-      console.info(`[DogCreate] Dog ${isEditMode ? 'updated' : 'created'} successfully: id=${resultDogId}, name=${updatedDog.name}`)
+      console.info(`[DogCreate] Dog ${isEditModeValue ? 'updated' : 'created'} successfully: id=${resultDogId}, name=${updatedDog.name}`)
 
       // Update cache
-      if (isEditMode) {
+      if (isEditModeValue) {
         addDogToCache(updatedDog)
       } else {
         uni.setStorageSync('dogId', resultDogId)
@@ -1017,7 +1045,7 @@ function submit() {
       }
 
       uni.showToast({
-        title: isEditMode ? '保存成功' : '创建成功',
+        title: isEditModeValue ? '保存成功' : '创建成功',
         icon: 'success',
         duration: 1500
       })
@@ -1026,7 +1054,7 @@ function submit() {
         uni.navigateBack()
       }, 1500)
     } else {
-      const errorMsg = res.message || (isEditMode ? '保存失败' : '创建失败')
+      const errorMsg = res.message || (isEditModeValue ? '保存失败' : '创建失败')
       console.error('[DogCreate] API error:', res.code, errorMsg)
       uni.showToast({
         title: errorMsg,
@@ -1036,9 +1064,9 @@ function submit() {
     }
   }).catch((err: any) => {
     const errMsg = err?.message || String(err) || '网络错误'
-    console.error('[DogCreate]', isEditMode ? 'Update' : 'Create', 'dog error:', err)
+    console.error('[DogCreate]', isEditModeValue ? 'Update' : 'Create', 'dog error:', err)
 
-    let userMsg = isEditMode ? '保存失败，请稍后重试' : '创建失败，请稍后重试'
+    let userMsg = isEditModeValue ? '保存失败，请稍后重试' : '创建失败，请稍后重试'
     if (errMsg.includes('400') || errMsg.includes('Bad Request')) {
       userMsg = '请求参数错误，请检查填写内容'
     } else if (errMsg.includes('网络') || errMsg.includes('连接') || errMsg.includes('timeout')) {

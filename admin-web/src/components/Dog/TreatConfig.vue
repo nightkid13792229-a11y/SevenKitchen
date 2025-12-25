@@ -10,8 +10,8 @@
         :model-value="treatInputMode"
         @update:model-value="handleModeChange"
       >
-        <el-radio :label="TreatInputMode.ESTIMATE_LEVEL">估算模式</el-radio>
-        <el-radio :label="TreatInputMode.EXACT_KCAL">精确模式</el-radio>
+        <el-radio :value="TreatInputMode.ESTIMATE_LEVEL">估算模式</el-radio>
+        <el-radio :value="TreatInputMode.EXACT_KCAL">精确模式</el-radio>
       </el-radio-group>
     </div>
 
@@ -25,7 +25,7 @@
         <el-radio
           v-for="(label, level) in TreatLevelLabels"
           :key="level"
-          :label="level as TreatLevel"
+          :value="level as TreatLevel"
         >
           {{ label }}
         </el-radio>

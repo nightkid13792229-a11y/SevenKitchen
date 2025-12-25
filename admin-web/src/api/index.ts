@@ -22,9 +22,10 @@ const api = axios.create({
 // Request interceptor
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    const token = localStorage.getItem('admin_token')
-    if (token && config.headers) {
-      config.headers.Authorization = `Bearer ${token}`
+    // For admin system, use X-Customer-Id instead of Bearer token
+    // This allows admin to access all customer data
+    if (config.headers) {
+      config.headers['X-Customer-Id'] = 'admin-system'
     }
     return config
   },

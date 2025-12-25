@@ -303,7 +303,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onLoad } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 import { addDogToCache } from '../../utils/dog-cache'
 

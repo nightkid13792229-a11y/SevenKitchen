@@ -347,6 +347,12 @@
       <view class="treat-section">
         <text class="section-label">零食设置（选填）</text>
 
+        <!-- 新增：未选择模式时的提示 -->
+        <view v-if="!formData.treatInputMode" class="treat-mode-hint">
+          <text class="hint-icon">💡</text>
+          <text class="hint-text">请先选择零食热量输入方式</text>
+        </view>
+
         <!-- 零食输入模式（卡片单选，左右布局） -->
         <view class="treat-mode-selector">
           <view class="card-options card-options-horizontal">
@@ -530,7 +536,7 @@ const formData = ref<FormData>({
   lifeStageOverride: 'NONE',
   sizeClassOverride: null,
   mealsPerDay: '2',
-  treatInputMode: 'ESTIMATE_LEVEL',
+  treatInputMode: '',
   treatLevel: 'LOW',
   manualTreatKcal: '',
   medicalHistory: ''
@@ -1517,9 +1523,13 @@ function submit() {
     lifeStageOverride: formData.value.lifeStageOverride,
     sizeClassOverride: formData.value.sizeClassOverride,
     mealsPerDay: parseInt(formData.value.mealsPerDay) || 2,
-    treatInputMode: formData.value.treatInputMode,
-    treatLevel: formData.value.treatLevel,
     medicalHistory: formData.value.medicalHistory || null
+  }
+
+  // 只有当用户选择了零食输入模式时才发送相关字段
+  if (formData.value.treatInputMode) {
+    payload.treatInputMode = formData.value.treatInputMode
+    payload.treatLevel = formData.value.treatLevel
   }
 
   if (formData.value.treatInputMode === 'EXACT_KCAL') {
@@ -2604,6 +2614,29 @@ function submit() {
   font-weight: 500;
   display: block;
   margin-bottom: 12rpx;
+}
+
+/* 零食模式提示 */
+.treat-mode-hint {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 20rpx;
+  margin-bottom: 20rpx;
+  background-color: #fffbe6;
+  border: 1px solid #ffe58f;
+  border-radius: 8rpx;
+}
+
+.hint-icon {
+  font-size: 32rpx;
+  flex-shrink: 0;
+}
+
+.hint-text {
+  font-size: 26rpx;
+  color: #ad6800;
+  line-height: 1.5;
 }
 
 /* 零食输入模式选择器 */

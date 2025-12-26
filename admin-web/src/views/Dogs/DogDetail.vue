@@ -67,8 +67,8 @@
           <el-col :span="12">
             <el-form-item label="性别" prop="gender">
               <el-radio-group v-model="formData.gender">
-                <el-radio :label="DogGender.MALE">公 ♂</el-radio>
-                <el-radio :label="DogGender.FEMALE">母 ♀</el-radio>
+                <el-radio :value="DogGender.MALE">公 ♂</el-radio>
+                <el-radio :value="DogGender.FEMALE">母 ♀</el-radio>
               </el-radio-group>
             </el-form-item>
           </el-col>
@@ -250,7 +250,7 @@ const route = useRoute()
 
 // Computed
 const dogId = computed(() => route.params.id as string)
-const isEditMode = computed(() => route.params.mode === 'edit' || route.path === '/dogs/create')
+const isEditMode = computed(() => route.name === 'DogEdit' || route.path === '/dogs/create')
 const isMixedBreed = computed(() => formData.value.breedId === MIXED_BREED_VIRTUAL_ID)
 
 // Data

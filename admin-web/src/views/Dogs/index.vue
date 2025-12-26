@@ -46,14 +46,6 @@
       stripe
       style="width: 100%"
     >
-      <el-table-column prop="id" label="ID" width="120">
-        <template #default="{ row }">
-          <el-tooltip :content="row.id" placement="top">
-            <span class="id-text">{{ row.id.slice(0, 8) }}...</span>
-          </el-tooltip>
-        </template>
-      </el-table-column>
-
       <el-table-column prop="name" label="姓名" width="120" />
 
       <el-table-column prop="breedName" label="品种" width="150">

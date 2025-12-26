@@ -17,6 +17,10 @@
           <el-icon><PriceTag /></el-icon>
           <span>档案管理</span>
         </el-menu-item>
+        <el-menu-item index="/ingredients">
+          <el-icon><Goods /></el-icon>
+          <span>原料管理</span>
+        </el-menu-item>
         <el-menu-item index="/recipes">
           <el-icon><Food /></el-icon>
           <span>食谱管理</span>
@@ -77,7 +81,8 @@ import {
   Operation,
   User,
   ArrowDown,
-  PriceTag
+  PriceTag,
+  Goods
 } from '@element-plus/icons-vue'
 
 const route = useRoute()

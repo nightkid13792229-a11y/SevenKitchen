@@ -16,6 +16,29 @@
         />
       </view>
 
+      <!-- 性别 -->
+      <view class="form-item">
+        <text class="label">性别</text>
+        <view class="gender-selector">
+          <view
+            class="gender-option gender-option-male"
+            :class="{ active: formData.gender === 'MALE' }"
+            @tap="selectGender('MALE')"
+          >
+            <text class="gender-icon">♂</text>
+            <text class="gender-label">公</text>
+          </view>
+          <view
+            class="gender-option gender-option-female"
+            :class="{ active: formData.gender === 'FEMALE' }"
+            @tap="selectGender('FEMALE')"
+          >
+            <text class="gender-icon">♀</text>
+            <text class="gender-label">母</text>
+          </view>
+        </view>
+      </view>
+
       <!-- Breed Selection with Search -->
       <view class="form-item breed-section">
         <text class="label">品种 *</text>
@@ -182,40 +205,137 @@
         </picker>
       </view>
 
-      <view class="form-item">
-        <text class="label">性别</text>
-        <picker mode="selector" :range="genderOptions" :value="genderIndex" @change="onGenderChange">
-          <view class="picker">{{ formData.gender }}</view>
-        </picker>
-      </view>
-
-      <view class="form-item">
-        <text class="label">是否绝育</text>
-        <switch :checked="formData.isNeutered" @change="onNeuteredChange" />
-      </view>
-
+      <!-- 身体状态区 -->
       <view class="form-item">
         <text class="label">体重(kg) *</text>
         <input class="input" type="text" placeholder="请输入体重" v-model="formData.currentWeightKg" />
       </view>
 
       <view class="form-item">
-        <text class="label">BCS评分 (1-9)</text>
-        <slider :min="1" :max="9" :value="formData.bcsScore" step="1" show-value @change="onBcsChange" />
+        <text class="label">BCS评分 (1-9分)</text>
+        <view class="bcs-score-row">
+          <slider
+            class="bcs-slider"
+            :min="1"
+            :max="9"
+            :value="formData.bcsScore"
+            step="1"
+            show-value
+            @change="onBcsChange"
+          />
+          <text class="bcs-body-status" :style="{ color: bcsStatusColor }">
+            身材：{{ bcsStatusText }}
+          </text>
+        </view>
+      </view>
+
+      <!-- BCS体态示意图弹窗 -->
+      <uni-popup ref="bcsPopup" type="center" :show="showBcsGuide" @close="onCloseBcsGuide">
+        <view class="bcs-guide-popup" @tap.stop>
+          <view class="bcs-guide-title">BCS体态评分标准</view>
+
+          <!-- BCS评分图片 -->
+          <view class="bcs-image-container">
+            <image
+              class="bcs-guide-image"
+              :src="bcsGuideImageUrl"
+              mode="widthFix"
+              @load="onBcsImageLoad"
+              @error="onBcsImageError"
+            />
+            <!-- 加载失败提示 -->
+            <view v-if="bcsImageError" class="bcs-image-error">
+              <text>图片加载失败，请稍后重试</text>
+            </view>
+          </view>
+        </view>
+      </uni-popup>
+
+      <view class="form-item">
+        <text class="label">是否绝育</text>
+        <view class="neutered-selector">
+          <view
+            class="neutered-option"
+            :class="{ active: formData.isNeutered === true }"
+            @tap="selectNeutered(true)"
+          >
+            <text class="neutered-label">是</text>
+          </view>
+          <view
+            class="neutered-option"
+            :class="{ active: formData.isNeutered === false }"
+            @tap="selectNeutered(false)"
+          >
+            <text class="neutered-label">否</text>
+          </view>
+        </view>
       </view>
 
       <view class="form-item">
-        <text class="label">活动水平</text>
-        <picker mode="selector" :range="activityLevelOptions" :value="activityLevelIndex" @change="onActivityLevelChange">
-          <view class="picker">{{ formData.activityLevel }}</view>
-        </picker>
+        <text class="label">活动水平 *</text>
+
+        <view class="activity-level-container">
+          <view
+            v-for="option in activityLevelConfigs"
+            :key="option.value"
+            class="activity-level-option"
+            :class="{ active: formData.activityLevel === option.value }"
+            @tap="selectActivityLevel(option.value)"
+          >
+            <view class="activity-level-header">
+              <text class="activity-level-label">{{ option.label }}</text>
+            </view>
+            <text class="activity-level-description">{{ option.description }}</text>
+          </view>
+        </view>
       </view>
 
-      <view class="form-item">
+      <!-- 生命阶段（自动匹配 + 手动选择） -->
+      <view class="form-item life-stage-section">
         <text class="label">生命阶段</text>
-        <picker mode="selector" :range="lifeStageOptions" :value="lifeStageIndex" @change="onLifeStageChange">
-          <view class="picker">{{ formData.lifeStageOverride }}</view>
-        </picker>
+
+        <!-- 已填写生日：显示自动匹配结果 -->
+        <view v-if="formData.birthday" class="life-stage-content">
+          <!-- 自动匹配结果展示 -->
+          <view class="auto-match-result">
+            <text class="auto-match-text">{{ autoDetectedLifeStage.label }}（{{ autoDetectedLifeStage.detail }}）</text>
+            <text class="auto-match-label">- 自动匹配</text>
+          </view>
+
+          <!-- 未手动覆盖：显示手动选择按钮 -->
+          <view v-if="!isLifeStageOverride" class="manual-select-trigger" @tap="enableLifeStageOverride">
+            <text class="manual-select-text">手动选择生命阶段</text>
+            <text class="manual-select-icon">▶</text>
+          </view>
+
+          <!-- 已手动覆盖：显示手动选择面板 -->
+          <view v-else class="life-stage-override-panel">
+            <view class="override-title">请选择生命阶段</view>
+            <view class="override-options">
+              <view
+                v-for="option in lifeStageOverrideOptions"
+                :key="option.value"
+                class="override-option"
+                :class="{ active: formData.lifeStageOverride === option.value }"
+                @tap="selectLifeStageOverride(option.value)"
+              >
+                <text class="override-option-label">{{ option.label }}</text>
+                <text class="override-option-desc">{{ option.description }}</text>
+              </view>
+            </view>
+
+            <!-- 取消按钮 -->
+            <view class="cancel-override-btn" @tap="cancelLifeStageOverride">
+              <text class="cancel-override-icon">✖️</text>
+              <text class="cancel-override-text">取消，返回自动匹配</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 未填写生日时的提示 -->
+        <view v-else class="life-stage-prompt">
+          <text class="prompt-text">请先选择狗狗的生日，系统将自动判断生命阶段</text>
+        </view>
       </view>
 
       <view class="form-item">
@@ -223,28 +343,89 @@
         <input class="input" type="text" placeholder="请输入每日餐数" v-model="formData.mealsPerDay" />
       </view>
 
-      <view class="form-item">
-        <text class="label">零食输入模式</text>
-        <picker mode="selector" :range="treatInputModeOptions" :value="treatInputModeIndex" @change="onTreatInputModeChange">
-          <view class="picker">{{ formData.treatInputMode }}</view>
-        </picker>
+      <!-- 零食设置区（卡片式） -->
+      <view class="treat-section">
+        <text class="section-label">零食设置（选填）</text>
+
+        <!-- 零食输入模式（卡片单选，左右布局） -->
+        <view class="treat-mode-selector">
+          <view class="card-options card-options-horizontal">
+            <view
+              v-for="mode in treatInputModeOptions"
+              :key="mode.value"
+              class="card-option card-option-simple"
+              :class="{ active: formData.treatInputMode === mode.value }"
+              @tap="selectTreatInputMode(mode.value)"
+            >
+              <text class="card-label-simple">{{ mode.label }}</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 估算模式：零食量选择 -->
+        <view v-if="formData.treatInputMode === 'ESTIMATE_LEVEL'" class="treat-level-selector">
+          <text class="field-label">零食量（大概）</text>
+          <view class="card-options">
+            <view
+              v-for="level in treatLevelOptions"
+              :key="level.value"
+              class="card-option treat-level-card"
+              :class="{ active: formData.treatLevel === level.value }"
+              @tap="selectTreatLevel(level.value)"
+            >
+              <view class="card-radio">
+                <view v-if="formData.treatLevel === level.value" class="radio-checked"></view>
+              </view>
+              <view class="card-content">
+                <text class="card-label">{{ level.label }}</text>
+                <text class="card-desc">{{ level.description }}（{{ level.detail }}）</text>
+              </view>
+            </view>
+          </view>
+        </view>
+
+        <!-- 精确模式：手动输入 -->
+        <view v-if="formData.treatInputMode === 'EXACT_KCAL'" class="treat-exact-input">
+          <text class="field-label">每日零食能量(kcal) *</text>
+          <input
+            class="input input-white-bg"
+            type="text"
+            placeholder="请输入每日零食能量"
+            v-model="formData.manualTreatKcal"
+          />
+        </view>
       </view>
 
-      <view class="form-item" v-if="formData.treatInputMode === 'ESTIMATE_LEVEL'">
-        <text class="label">零食习惯</text>
-        <picker mode="selector" :range="treatLevelOptions" :value="treatLevelIndex" @change="onTreatLevelChange">
-          <view class="picker">{{ formData.treatLevel }}</view>
-        </picker>
-      </view>
+      <!-- 健康记录区（折叠面板） -->
+      <view class="health-record-section">
+        <view class="health-record-header" @tap="toggleHealthRecord">
+          <text class="health-record-title">📋 健康记录（选填）</text>
+          <text class="toggle-icon">{{ showHealthRecord ? '▼' : '▶' }}</text>
+        </view>
 
-      <view class="form-item" v-if="formData.treatInputMode === 'EXACT_KCAL'">
-        <text class="label">每日零食能量(kcal) *</text>
-        <input class="input" type="text" placeholder="请输入零食能量" v-model="formData.manualTreatKcal" />
-      </view>
+        <view v-if="showHealthRecord" class="health-record-content">
+          <view class="form-item">
+            <text class="label">病史描述</text>
+            <textarea class="textarea" placeholder="请输入病史（选填）" v-model="formData.medicalHistory" />
+          </view>
 
-      <view class="form-item">
-        <text class="label">病史</text>
-        <textarea class="textarea" placeholder="请输入病史" v-model="formData.medicalHistory" />
+          <view class="form-item">
+            <text class="label">过敏食物</text>
+            <textarea class="textarea" placeholder="请记录过敏的食物（选填）" />
+          </view>
+
+          <view class="form-item">
+            <text class="label">挑食食物</text>
+            <textarea class="textarea" placeholder="请记录不爱吃或挑食的食物（选填）" />
+          </view>
+
+          <view class="form-item">
+            <text class="label">检查报告存档</text>
+            <view class="placeholder-box">
+              <text class="placeholder-text">📁 敬请期待：检查报告上传功能即将上线</text>
+            </view>
+          </view>
+        </view>
       </view>
 
       <button class="btn" @tap="submit" :disabled="canSubmit === false">{{ isEditMode ? '保存档案' : '创建档案' }}</button>
@@ -355,13 +536,121 @@ const formData = ref<FormData>({
   medicalHistory: ''
 })
 
-const genderOptions = ['MALE', 'FEMALE']
-const activityLevelOptions = ['RESTING', 'LOW', 'NORMAL', 'HIGH', 'WORKING']
+// 活动水平配置
+interface ActivityLevelOption {
+  value: string
+  label: string
+  description: string
+  coefficient: number
+}
+
+const activityLevelConfigs: ActivityLevelOption[] = [
+  {
+    value: 'RESTING',
+    label: '休息',
+    description: '几乎不运动，主要时间休息',
+    coefficient: 0.8
+  },
+  {
+    value: 'LOW',
+    label: '低活动',
+    description: '偶尔散步，每日运动少于30分钟',
+    coefficient: 0.9
+  },
+  {
+    value: 'NORMAL',
+    label: '正常活动',
+    description: '每日散步1-2小时，正常活动量',
+    coefficient: 1.0
+  },
+  {
+    value: 'HIGH',
+    label: '高活动',
+    description: '每日运动2-4小时，经常跑步或玩耍',
+    coefficient: 1.2
+  },
+  {
+    value: 'WORKING',
+    label: '工作犬',
+    description: '高强度训练或工作，如搜救犬、警犬',
+    coefficient: 1.5
+  }
+]
+
 const lifeStageOptions = ['NONE', 'PUPPY', 'ADULT', 'SENIOR', 'PREGNANCY', 'LACTATION']
+
+// 生命阶段手动覆盖选项（排除 NONE）
+const lifeStageOverrideOptions = [
+  { value: 'PUPPY', label: '幼犬期', description: '成长发育阶段，需要更高能量' },
+  { value: 'ADULT', label: '成年期', description: '成年犬，标准能量需求' },
+  { value: 'SENIOR', label: '老年期', description: '老年犬，新陈代谢减缓' },
+  { value: 'PREGNANCY', label: '妊娠期', description: '怀孕母犬，需要额外营养' },
+  { value: 'LACTATION', label: '哺乳期', description: '哺乳母犬，高能量需求' }
+]
 const sizeClassOptions = ['SMALL', 'MEDIUM', 'LARGE', 'GIANT']
 const sizeClassOptionsForPicker = ['小型犬', '中型犬', '大型犬', '巨型犬']
-const treatInputModeOptions = ['ESTIMATE_LEVEL', 'EXACT_KCAL']
-const treatLevelOptions = ['NONE', 'LOW', 'MODERATE', 'HIGH']
+
+// ========== 零食设置选项（卡片式） ==========
+
+// 零食输入模式选项
+interface TreatInputModeOption {
+  value: string
+  label: string
+  description: string
+}
+
+const treatInputModeOptions: TreatInputModeOption[] = [
+  {
+    value: 'ESTIMATE_LEVEL',
+    label: '估算零食热量（推荐）',
+    description: '根据零食量等级自动计算'
+  },
+  {
+    value: 'EXACT_KCAL',
+    label: '精确输入零食热量',
+    description: '手动输入具体热量值'
+  }
+]
+
+// 零食量选项
+interface TreatLevelOption {
+  value: string
+  label: string
+  percent: string
+  description: string
+  detail: string // 括弧内的详细说明
+}
+
+const treatLevelOptions: TreatLevelOption[] = [
+  {
+    value: 'NONE',
+    label: '不给零食',
+    percent: '0%',
+    description: '占每日总能量需求约0%',
+    detail: '完全不给零食'
+  },
+  {
+    value: 'LOW',
+    label: '较少',
+    percent: '3%',
+    description: '占每日总能量需求约3%',
+    detail: '偶尔给小零食'
+  },
+  {
+    value: 'MODERATE',
+    label: '适中',
+    percent: '6%',
+    description: '占每日总能量需求约6%',
+    detail: '每天都有小零食'
+  },
+  {
+    value: 'HIGH',
+    label: '较多',
+    percent: '10%',
+    description: '占每日总能量需求约10%',
+    detail: '经常给零食或大零食'
+  }
+]
 
 interface Breed {
   id: string
@@ -397,6 +686,14 @@ const showAllBreeds = ref(false)
 const isMixedBreed = ref(false)
 const showCustomBreedInput = ref(false)
 const customBreedName = ref('')
+const showBcsGuide = ref(false)
+
+// BCS评分图URL
+const bcsGuideImageUrl = ref('https://lhcos-3c860-1392823718.cos.ap-chengdu.myqcloud.com/bcs-chart.png')
+const bcsImageError = ref(false)
+const bcsGuideShown = ref(false) // 记录是否已显示过BCS图
+const showHealthRecord = ref(false) // 健康记录折叠面板展开状态
+const showLifeStageOverride = ref(false) // 生命阶段手动覆盖折叠面板
 
 // 侧边导航状态变量
 const activeCategory = ref<string>('')
@@ -445,14 +742,6 @@ const sizeCategories = [
   { key: 'GIANT', label: '巨型犬', shortLabel: '巨型', icon: '🟣', color: '#722ed1' }
 ]
 
-const genderIndex = computed(() => {
-  const idx = genderOptions.indexOf(formData.value.gender)
-  return Math.max(0, idx) // 确保返回非负整数
-})
-const activityLevelIndex = computed(() => {
-  const idx = activityLevelOptions.indexOf(formData.value.activityLevel)
-  return Math.max(0, idx) // 确保返回非负整数
-})
 const lifeStageIndex = computed(() => {
   const idx = lifeStageOptions.indexOf(formData.value.lifeStageOverride)
   return Math.max(0, idx) // 确保返回非负整数
@@ -463,14 +752,150 @@ const sizeClassIndex = computed(() => {
   const idx = sizeClassOptions.indexOf(override)
   return Math.max(0, idx) // 确保返回非负整数
 })
-const treatInputModeIndex = computed(() => {
-  const idx = treatInputModeOptions.indexOf(formData.value.treatInputMode)
-  return Math.max(0, idx) // 确保返回非负整数
+
+// BCS身材状态文字
+const bcsStatusText = computed(() => {
+  const score = formData.value.bcsScore
+  if (score <= 2) return '很瘦'
+  if (score === 3) return '偏瘦'
+  if (score >= 4 && score <= 5) return '标准'
+  if (score >= 6 && score <= 7) return '偏胖'
+  return '很胖'
 })
-const treatLevelIndex = computed(() => {
-  const idx = treatLevelOptions.indexOf(formData.value.treatLevel)
-  return Math.max(0, idx) // 确保返回非负整数
+
+// BCS身材状态颜色
+const bcsStatusColor = computed(() => {
+  const score = formData.value.bcsScore
+  if (score <= 2) return '#ff4d4f' // 红色
+  if (score === 3) return '#faad14' // 深黄色
+  if (score >= 4 && score <= 5) return '#52c41a' // 绿色
+  if (score >= 6 && score <= 7) return '#faad14' // 深黄色
+  return '#ff4d4f' // 红色
 })
+
+// ========== 生命阶段自动计算逻辑 ==========
+
+/**
+ * 计算狗狗的年龄（月）
+ */
+const calculateAgeMonths = computed(() => {
+  if (!formData.value.birthday) return 0
+  const birthday = new Date(formData.value.birthday)
+  const today = new Date()
+  const diffTime = today.getTime() - birthday.getTime()
+  const diffDays = diffTime / (1000 * 60 * 60 * 24)
+  return Math.floor(diffDays / 30.4375) // 平均每月30.4375天
+})
+
+/**
+ * 获取体型分类的成年标准（月）
+ */
+const getAdultThresholdMonths = computed(() => {
+  const sizeClass = getCurrentSizeClass.value
+  const thresholds: Record<string, number> = {
+    'SMALL': 10,
+    'MEDIUM': 12,
+    'LARGE': 18,
+    'GIANT': 24
+  }
+  // 如果有品种且品种有自定义成年标准，使用品种的
+  if (selectedBreed.value && selectedBreed.value.adultAgeMonths) {
+    return selectedBreed.value.adultAgeMonths
+  }
+  return thresholds[sizeClass] || 12
+})
+
+/**
+ * 获取体型分类的老年标准（年）
+ */
+const getSeniorThresholdYears = computed(() => {
+  const sizeClass = getCurrentSizeClass.value
+  const thresholds: Record<string, number> = {
+    'SMALL': 11,
+    'MEDIUM': 10,
+    'LARGE': 8,
+    'GIANT': 7
+  }
+  // 如果有品种且品种有自定义老年标准，使用品种的
+  if (selectedBreed.value && selectedBreed.value.seniorAgeYears) {
+    return selectedBreed.value.seniorAgeYears
+  }
+  return thresholds[sizeClass] || 10
+})
+
+/**
+ * 获取当前体型分类
+ */
+const getCurrentSizeClass = computed(() => {
+  // 优先使用手动覆盖
+  if (formData.value.sizeClassOverride) {
+    return formData.value.sizeClassOverride
+  }
+  // 使用品种的体型分类
+  if (selectedBreed.value) {
+    return selectedBreed.value.sizeCategory
+  }
+  return 'MEDIUM' // 默认中型
+})
+
+/**
+ * 计算自动识别的生命阶段
+ */
+const autoDetectedLifeStage = computed(() => {
+  const ageMonths = calculateAgeMonths.value
+  const adultThreshold = getAdultThresholdMonths.value
+  const ageYears = ageMonths / 12.0
+  const seniorThreshold = getSeniorThresholdYears.value
+
+  // 判断生命阶段
+  if (ageMonths < adultThreshold) {
+    // 幼犬期 - 根据月龄显示详细信息
+    if (ageMonths < 4) {
+      return { stage: 'PUPPY', label: '幼犬期', detail: `${ageMonths}个月（快速成长期）` }
+    } else if (ageMonths < 6) {
+      return { stage: 'PUPPY', label: '幼犬期', detail: `${ageMonths}个月（成长期）` }
+    } else if (ageMonths < 12) {
+      return { stage: 'PUPPY', label: '幼犬期', detail: `${ageMonths}个月` }
+    } else {
+      return { stage: 'PUPPY', label: '幼犬期', detail: `${ageMonths}个月（接近成年）` }
+    }
+  } else if (ageYears >= seniorThreshold) {
+    // 老年期
+    return { stage: 'SENIOR', label: '老年期', detail: `${Math.floor(ageYears)}岁` }
+  } else {
+    // 成年期
+    return { stage: 'ADULT', label: '成年期', detail: `${Math.floor(ageYears)}岁` }
+  }
+})
+
+/**
+ * 显示的生命阶段文本（如果有手动覆盖则显示覆盖后的，否则显示自动识别的）
+ */
+const displayLifeStage = computed(() => {
+  const override = formData.value.lifeStageOverride
+  if (override && override !== 'NONE') {
+    // 显示手动覆盖的选项
+    const labels: Record<string, string> = {
+      'PUPPY': '幼犬期（手动覆盖）',
+      'ADULT': '成年期（手动覆盖）',
+      'SENIOR': '老年期（手动覆盖）',
+      'PREGNANCY': '妊娠期',
+      'LACTATION': '哺乳期'
+    }
+    return labels[override] || override
+  }
+  // 显示自动识别的
+  return autoDetectedLifeStage.value.label
+})
+
+/**
+ * 判断是否处于手动覆盖模式
+ */
+const isLifeStageOverride = computed(() => {
+  return formData.value.lifeStageOverride && formData.value.lifeStageOverride !== 'NONE'
+})
+
+// ========== 生命阶段计算逻辑结束 ==========
 
 const canSubmit = computed(() => {
   return Boolean(
@@ -478,6 +903,7 @@ const canSubmit = computed(() => {
     formData.value.breedId &&
     formData.value.birthday &&
     formData.value.currentWeightKg &&
+    formData.value.activityLevel &&
     !calculating.value &&
     (isMixedBreed.value ? formData.value.sizeClassOverride !== null : true)
   )
@@ -525,6 +951,15 @@ onMounted(async () => {
     }, 100)
   } else {
     console.log('[DogCreate] onMounted: create mode, no dogId')
+
+    // Auto-show BCS guide on first load (delay 1.5s)
+    setTimeout(() => {
+      if (!bcsGuideShown.value) {
+        showBcsGuide.value = true
+        bcsGuideShown.value = true
+        console.log('[DogCreate] Auto-showing BCS guide')
+      }
+    }, 1500)
   }
 })
 
@@ -858,35 +1293,113 @@ function onBirthdayChange(e: any) {
   formData.value.birthday = e.detail.value
 }
 
-function onGenderChange(e: any) {
-  formData.value.gender = genderOptions[e.detail.value]
+// 选择性别
+function selectGender(gender: 'MALE' | 'FEMALE') {
+  formData.value.gender = gender
 }
 
-function onNeuteredChange(e: any) {
-  // switch 组件的 value 是布尔值，确保正确赋值
-  formData.value.isNeutered = !!e.detail.value
+// 选择是否绝育
+function selectNeutered(value: boolean) {
+  formData.value.isNeutered = value
 }
 
 function onBcsChange(e: any) {
   formData.value.bcsScore = e.detail.value
 }
 
-function onActivityLevelChange(e: any) {
-  formData.value.activityLevel = activityLevelOptions[e.detail.value]
+// 选择活动水平
+function selectActivityLevel(value: string) {
+  formData.value.activityLevel = value
 }
+
+// BCS弹窗相关函数
+function onBcsImageLoad() {
+  console.log('[BCS Guide] Image loaded successfully')
+  bcsImageError.value = false
+}
+
+function onBcsImageError() {
+  console.error('[BCS Guide] Failed to load BCS guide image')
+  bcsImageError.value = true
+}
+
+function onCloseBcsGuide() {
+  showBcsGuide.value = false
+  bcsGuideShown.value = true
+}
+
+// 切换健康记录折叠面板
+function toggleHealthRecord() {
+  showHealthRecord.value = !showHealthRecord.value
+}
+
+// ========== 生命阶段选择函数 ==========
+
+/**
+ * 保持自动识别
+ */
+function keepAutoDetectedLifeStage() {
+  formData.value.lifeStageOverride = 'NONE'
+  showLifeStageOverride.value = false
+}
+
+/**
+ * 切换到手动覆盖模式
+ */
+function enableLifeStageOverride() {
+  showLifeStageOverride.value = true
+  // 如果当前还没有设置覆盖，默认设置为幼犬期
+  if (!formData.value.lifeStageOverride || formData.value.lifeStageOverride === 'NONE') {
+    formData.value.lifeStageOverride = 'PUPPY'
+  }
+}
+
+/**
+ * 选择手动覆盖的生命阶段
+ */
+function selectLifeStageOverride(stage: string) {
+  formData.value.lifeStageOverride = stage
+}
+
+/**
+ * 取消手动覆盖，恢复自动识别
+ */
+function cancelLifeStageOverride() {
+  formData.value.lifeStageOverride = 'NONE'
+  showLifeStageOverride.value = false
+}
+
+// ========== 生命阶段选择函数结束 ==========
 
 function onLifeStageChange(e: any) {
   formData.value.lifeStageOverride = lifeStageOptions[e.detail.value]
 }
 
-function onTreatInputModeChange(e: any) {
-  formData.value.treatInputMode = treatInputModeOptions[e.detail.value]
+// ========== 零食选择函数 ==========
+
+/**
+ * 选择零食输入模式
+ */
+function selectTreatInputMode(mode: string) {
+  formData.value.treatInputMode = mode
+  // 切换模式时设置默认值
+  if (mode === 'ESTIMATE_LEVEL') {
+    // 估算模式：使用默认LOW级别
+    if (!formData.value.treatLevel || formData.value.treatLevel === 'NONE') {
+      formData.value.treatLevel = 'LOW'
+    }
+  }
+  // 精确模式不需要特殊处理，保持原有输入值
 }
 
-function onTreatLevelChange(e: any) {
-  formData.value.treatLevel = treatLevelOptions[e.detail.value]
-  previewCalculation()
+/**
+ * 选择零食量级别
+ */
+function selectTreatLevel(level: string) {
+  formData.value.treatLevel = level
 }
+
+// ========== 零食选择函数结束 ==========
 
 async function previewCalculation() {
   // Only calculate if we have minimum required fields
@@ -907,7 +1420,7 @@ async function previewCalculation() {
       activityLevel: formData.value.activityLevel,
       lifeStageOverride: formData.value.lifeStageOverride,
       sizeClassOverride: formData.value.sizeClassOverride,
-      mealsPerDay: formData.value.mealsPerDay,
+      mealsPerDay: parseInt(formData.value.mealsPerDay) || 2,
       treatInputMode: formData.value.treatInputMode,
       treatLevel: formData.value.treatLevel
     }
@@ -958,10 +1471,10 @@ async function previewCalculation() {
 }
 
 function submit() {
-  const { name, breedId, birthday, currentWeightKg } = formData.value
+  const { name, breedId, birthday, currentWeightKg, activityLevel } = formData.value
 
   // Validation
-  if (!name || !breedId || !birthday || !currentWeightKg) {
+  if (!name || !breedId || !birthday || !currentWeightKg || !activityLevel) {
     uni.showToast({
       title: '请填写必填项',
       icon: 'none'
@@ -1013,6 +1526,12 @@ function submit() {
     payload.manualTreatKcal = parseFloat(formData.value.manualTreatKcal)
   }
 
+  // Debug log: Show submit payload
+  console.log('[DogCreate] Submit payload:', JSON.stringify(payload, null, 2))
+  console.log('[DogCreate] Submit payload breedId:', payload.breedId)
+  console.log('[DogCreate] formData.breedId:', formData.value.breedId)
+  console.log('[DogCreate] selectedBreed:', selectedBreed.value)
+
   // Use different endpoint for edit vs create
   const requestConfig = {
     url: isEditModeValue ? `/dogs/${dogId.value}` : '/dogs',
@@ -1021,8 +1540,11 @@ function submit() {
   }
 
   request(requestConfig).then((res: any) => {
+    console.log('[DogCreate] Submit response:', res)
     if (res.code === 0 && res.data) {
       const updatedDog = res.data.profile || res.data
+      console.log('[DogCreate] Updated dog data:', updatedDog)
+      console.log('[DogCreate] Updated dog breedId:', updatedDog.breedId)
       const resultDogId = updatedDog.id
 
       if (!resultDogId) {
@@ -1052,8 +1574,12 @@ function submit() {
       })
 
       setTimeout(() => {
-        uni.navigateBack()
-      }, 1500)
+        // 跳转到狗狗档案列表页面
+    // dog-profile-list 是 tabBar 页面，必须使用 switchTab
+    uni.switchTab({
+      url: '/pages/dog-profile-list/index'
+    })
+  }, 1500)
     } else {
       const errorMsg = res.message || (isEditModeValue ? '保存失败' : '创建失败')
       console.error('[DogCreate] API error:', res.code, errorMsg)
@@ -1628,5 +2154,583 @@ function submit() {
 .custom-breed-btn-confirm {
   background-color: #07c160;
   color: #fff;
+}
+
+/* Gender Selector */
+.gender-selector {
+  display: flex;
+  gap: 20rpx;
+}
+
+.gender-option {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  padding: 18rpx 20rpx;
+  background-color: #f5f5f5;
+  border: 2px solid #e0e0e0;
+  border-radius: 12rpx;
+  transition: all 0.3s;
+}
+
+.gender-option-male.active {
+  background-color: #e6f7ff;
+  border-color: #1890ff;
+}
+
+.gender-option-male.active .gender-icon,
+.gender-option-male.active .gender-label {
+  color: #1890ff;
+  font-weight: bold;
+}
+
+.gender-option-female.active {
+  background-color: #fff0f6;
+  border-color: #FF99CC;
+}
+
+.gender-option-female.active .gender-icon,
+.gender-option-female.active .gender-label {
+  color: #FF99CC;
+  font-weight: bold;
+}
+
+.gender-icon {
+  font-size: 36rpx;
+  color: #666;
+}
+
+.gender-label {
+  font-size: 26rpx;
+  color: #666;
+}
+
+/* Neutered Selector */
+.neutered-selector {
+  display: flex;
+  gap: 20rpx;
+}
+
+.neutered-option {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18rpx 20rpx;
+  background-color: #f5f5f5;
+  border: 2px solid #e0e0e0;
+  border-radius: 12rpx;
+  transition: all 0.3s;
+}
+
+.neutered-option.active {
+  background-color: #e6f7ff;
+  border-color: #1890ff;
+}
+
+.neutered-label {
+  font-size: 28rpx;
+  color: #666;
+}
+
+.neutered-option.active .neutered-label {
+  color: #1890ff;
+  font-weight: bold;
+}
+
+/* BCS Score Row */
+.bcs-score-row {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.bcs-slider {
+  flex: 1;
+  min-width: 0;
+}
+
+.bcs-body-status {
+  font-size: 26rpx;
+  font-weight: bold;
+  white-space: nowrap;
+  flex-shrink: 0;
+  padding: 8rpx 12rpx;
+  background-color: #f5f5f5;
+  border-radius: 8rpx;
+}
+
+/* Activity Level Options */
+.activity-level-container {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.activity-level-option {
+  padding: 20rpx;
+  background-color: #f5f5f5;
+  border: 2px solid #e0e0e0;
+  border-radius: 12rpx;
+  transition: all 0.3s;
+}
+
+.activity-level-option.active {
+  background-color: #e6f7ff;
+  border-color: #1890ff;
+}
+
+.activity-level-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8rpx;
+}
+
+.activity-level-label {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.activity-level-option.active .activity-level-label {
+  color: #1890ff;
+}
+
+.activity-level-coefficient {
+  font-size: 26rpx;
+  font-weight: bold;
+  color: #ff4d4f;
+  background-color: #fff1f0;
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
+}
+
+.activity-level-description {
+  font-size: 24rpx;
+  color: #666;
+  line-height: 1.5;
+}
+
+/* BCS Guide Popup */
+.bcs-guide-popup {
+  width: 650rpx;
+  max-height: 85vh;
+  background-color: #fff;
+  border-radius: 16rpx;
+  padding: 30rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.bcs-guide-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  text-align: center;
+  color: #333;
+  margin-bottom: 20rpx;
+  width: 100%;
+}
+
+.bcs-image-container {
+  width: 100%;
+  flex: 1;
+  overflow-y: auto;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+}
+
+.bcs-guide-image {
+  width: 100%;
+  height: auto;
+  border-radius: 8rpx;
+  display: block;
+}
+
+.bcs-image-error {
+  padding: 60rpx 20rpx;
+  text-align: center;
+  color: #999;
+  font-size: 26rpx;
+}
+
+/* Health Record Section */
+.health-record-section {
+  margin-bottom: 20rpx;
+  background-color: #f9f9f9;
+  border-radius: 12rpx;
+  overflow: hidden;
+}
+
+.health-record-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24rpx 30rpx;
+  background-color: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12rpx;
+  cursor: pointer;
+}
+
+.health-record-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.toggle-icon {
+  font-size: 24rpx;
+  color: #999;
+  transition: transform 0.3s;
+}
+
+.health-record-content {
+  padding: 20rpx 30rpx;
+  background-color: #f9f9f9;
+}
+
+.placeholder-box {
+  padding: 40rpx 20rpx;
+  background-color: #fff;
+  border: 2px dashed #d0d0d0;
+  border-radius: 8rpx;
+  text-align: center;
+}
+
+.placeholder-text {
+  font-size: 26rpx;
+  color: #999;
+}
+
+/* ========== 生命阶段样式 ========== */
+
+.life-stage-section {
+  background-color: #f8f9fa;
+  border-radius: 12rpx;
+  padding: 24rpx;
+  border: 1px solid #e9ecef;
+}
+
+/* 生命阶段内容区域 */
+.life-stage-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+/* 自动匹配结果展示 */
+.auto-match-result {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 20rpx;
+  background: linear-gradient(135deg, #e6f7ff 0%, #f0f9ff 100%);
+  border-radius: 8rpx;
+  border-left: 4px solid #1890ff;
+  flex-wrap: wrap;
+}
+
+.auto-match-text {
+  font-size: 30rpx;
+  color: #1890ff;
+  font-weight: bold;
+}
+
+.auto-match-label {
+  font-size: 26rpx;
+  color: #666;
+  font-weight: 500;
+}
+
+/* 手动选择触发按钮 */
+.manual-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  padding: 24rpx;
+  background-color: #fff;
+  border: 2px dashed #d0d0d0;
+  border-radius: 12rpx;
+  transition: all 0.3s;
+}
+
+.manual-select-trigger:active {
+  background-color: #f5f5f5;
+  border-color: #1890ff;
+}
+
+.manual-select-text {
+  font-size: 28rpx;
+  color: #1890ff;
+  font-weight: 500;
+}
+
+.manual-select-icon {
+  font-size: 24rpx;
+  color: #1890ff;
+}
+
+/* 未填写生日提示 */
+.life-stage-prompt {
+  padding: 32rpx;
+  background-color: #fffbe6;
+  border-radius: 8rpx;
+  text-align: center;
+  border: 1px solid #ffe58f;
+}
+
+.prompt-text {
+  font-size: 26rpx;
+  color: #ad6800;
+  line-height: 1.6;
+}
+
+/* 手动选择面板 */
+.life-stage-override-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  padding: 20rpx;
+  background-color: #fff;
+  border-radius: 8rpx;
+  border: 2px solid #e0e0e0;
+}
+
+.override-title {
+  font-size: 26rpx;
+  color: #666;
+  font-weight: bold;
+  padding-bottom: 12rpx;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.override-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.override-option {
+  padding: 16rpx;
+  background-color: #f5f5f5;
+  border: 2px solid #e0e0e0;
+  border-radius: 8rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  transition: all 0.2s;
+}
+
+.override-option.active {
+  background-color: #e6f7ff;
+  border-color: #1890ff;
+}
+
+.override-option-label {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+.override-option.active .override-option-label {
+  color: #1890ff;
+  font-weight: bold;
+}
+
+.override-option-desc {
+  font-size: 24rpx;
+  color: #999;
+  line-height: 1.4;
+}
+
+/* 取消按钮 */
+.cancel-override-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  padding: 20rpx;
+  margin-top: 8rpx;
+  background-color: #f5f5f5;
+  border: 1px solid #d0d0d0;
+  border-radius: 8rpx;
+  transition: all 0.2s;
+}
+
+.cancel-override-btn:active {
+  background-color: #e8e8e8;
+}
+
+.cancel-override-icon {
+  font-size: 28rpx;
+  color: #999;
+}
+
+.cancel-override-text {
+  font-size: 26rpx;
+  color: #666;
+  font-weight: 500;
+}
+
+/* ========== 零食设置样式 ========== */
+
+.treat-section {
+  background-color: #f8f9fa;
+  border-radius: 12rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+}
+
+.section-label {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #333;
+  display: block;
+  margin-bottom: 20rpx;
+}
+
+.field-label {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 500;
+  display: block;
+  margin-bottom: 12rpx;
+}
+
+/* 零食输入模式选择器 */
+.treat-mode-selector,
+.treat-level-selector {
+  margin-bottom: 20rpx;
+}
+
+.treat-exact-input {
+  margin-bottom: 20rpx;
+}
+
+/* 卡片选项容器 */
+.card-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+/* 横向布局的卡片选项容器 */
+.card-options-horizontal {
+  flex-direction: row;
+  gap: 16rpx;
+}
+
+/* 单个卡片 */
+.card-option {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 20rpx;
+  background-color: #fff;
+  border: 2px solid #e0e0e0;
+  border-radius: 12rpx;
+  transition: all 0.3s;
+}
+
+.card-option.active {
+  background-color: #e6f7ff;
+  border-color: #1890ff;
+}
+
+/* 简化卡片（无圆圈，用于输入模式选择） */
+.card-option-simple {
+  flex: 1;
+  justify-content: center;
+  padding: 24rpx 16rpx;
+}
+
+/* 单选按钮 */
+.card-radio {
+  width: 40rpx;
+  height: 40rpx;
+  border: 3px solid #d0d0d0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.card-option.active .card-radio {
+  border-color: #1890ff;
+}
+
+.radio-checked {
+  width: 20rpx;
+  height: 20rpx;
+  background-color: #1890ff;
+  border-radius: 50%;
+}
+
+/* 卡片内容 */
+.card-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.card-label {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+.card-option.active .card-label {
+  color: #1890ff;
+  font-weight: bold;
+}
+
+.card-label-simple {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 500;
+  flex: 1;
+  text-align: center;
+}
+
+.card-option-simple.active .card-label-simple {
+  color: #1890ff;
+  font-weight: bold;
+}
+
+.card-desc {
+  font-size: 24rpx;
+  color: #999;
+  line-height: 1.4;
+}
+
+/* 零食量卡片特殊样式 */
+.treat-level-card .card-label {
+  font-size: 28rpx;
+}
+
+/* 精确输入框 */
+.treat-exact-input .input {
+  width: 100%;
+  height: 80rpx;
+  border: 1px solid #ddd;
+  border-radius: 8rpx;
+  padding: 0 20rpx;
+  font-size: 28rpx;
+  box-sizing: border-box;
+}
+
+.input-white-bg {
+  background-color: #ffffff !important;
 }
 </style>

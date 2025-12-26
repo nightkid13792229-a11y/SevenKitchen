@@ -467,6 +467,118 @@
         <view class="calc-warning" v-if="calcResult.isTreatCapped">
           ⚠️ 零食热量已超过安全上限(10%)，系统已自动调整为安全最大值
         </view>
+
+        <!-- 计算过程折叠区 -->
+        <view class="calc-process-section" v-if="calcResult.calcDetails">
+          <view class="process-toggle" @tap="toggleCalcProcess">
+            <text class="process-toggle-text">计算过程</text>
+            <text class="process-toggle-icon">{{ showCalcProcess ? '▼' : '▶' }}</text>
+          </view>
+
+          <view v-if="showCalcProcess && calcResult.calcDetails" class="process-content">
+            <!-- 步骤1：基础信息 -->
+            <view class="process-step">
+              <text class="step-title">基础信息</text>
+              <view class="step-row">
+                <text class="step-label">体重:</text>
+                <text class="step-value">{{ calcResult.calcDetails.weightKg }} kg</text>
+              </view>
+              <view class="step-row">
+                <text class="step-label">年龄:</text>
+                <text class="step-value">{{ calcResult.calcDetails.ageMonths }} 个月</text>
+              </view>
+              <view class="step-row">
+                <text class="step-label">体型:</text>
+                <text class="step-value">{{ getSizeClassLabel(calcResult.calcDetails.sizeClass) }}</text>
+              </view>
+              <view class="step-row">
+                <text class="step-label">生命阶段:</text>
+                <text class="step-value">{{ getLifeStageLabel(calcResult.calcDetails.lifeStage) }}</text>
+              </view>
+            </view>
+
+            <!-- 步骤2：RER -->
+            <view class="process-step">
+              <text class="step-title">1. RER (静息能量需求)</text>
+              <view class="formula-box">
+                <text class="formula-text">
+                  70 × {{ calcResult.calcDetails.weightKg }}^0.75 = {{ calcResult.rer?.toFixed(1) }} kcal/天
+                </text>
+              </view>
+            </view>
+
+            <!-- 步骤3：各项系数 -->
+            <view class="process-step">
+              <text class="step-title">2. 各项系数</text>
+              <view class="coefficient-grid">
+                <view class="coef-item">
+                  <text class="coef-name">生命阶段系数</text>
+                  <text class="coef-value">{{ calcResult.calcDetails.stageFactor.toFixed(2) }}</text>
+                </view>
+                <view class="coef-item">
+                  <text class="coef-name">活动水平系数</text>
+                  <text class="coef-value">{{ calcResult.calcDetails.activityMultiplier.toFixed(2) }}</text>
+                </view>
+                <view class="coef-item">
+                  <text class="coef-name">绝育系数</text>
+                  <text class="coef-value">{{ calcResult.calcDetails.neuterMultiplier.toFixed(2) }}</text>
+                </view>
+                <view class="coef-item">
+                  <text class="coef-name">BCS系数</text>
+                  <text class="coef-value">{{ calcResult.calcDetails.bcsMultiplier.toFixed(2) }}</text>
+                </view>
+              </view>
+            </view>
+
+            <!-- 步骤4：总DER -->
+            <view class="process-step">
+              <text class="step-title">3. 总DER计算</text>
+              <view class="formula-box">
+                <text class="formula-text">
+                  {{ calcResult.rer?.toFixed(1) }} × {{ calcResult.calcDetails.stageFactor.toFixed(2) }}
+                  × {{ calcResult.calcDetails.activityMultiplier.toFixed(2) }}
+                  × {{ calcResult.calcDetails.neuterMultiplier.toFixed(2) }}
+                  × {{ calcResult.calcDetails.bcsMultiplier.toFixed(2) }}
+                  = {{ calcResult.totalDer?.toFixed(1) }} kcal/天
+                </text>
+              </view>
+            </view>
+
+            <!-- 步骤5：零食扣除 -->
+            <view class="process-step" v-if="calcResult.treatDeduction && calcResult.treatDeduction > 0">
+              <text class="step-title">4. 零食扣除</text>
+              <view class="step-row">
+                <text class="step-label">模式:</text>
+                <text class="step-value">{{ calcResult.calcDetails.treatMode === 'ESTIMATE_LEVEL' ? '估算模式' : '精确模式' }}</text>
+              </view>
+              <view class="step-row" v-if="calcResult.calcDetails.treatLevel">
+                <text class="step-label">级别:</text>
+                <text class="step-value">{{ getTreatLevelLabel(calcResult.calcDetails.treatLevel) }}</text>
+              </view>
+              <view class="step-row" v-if="calcResult.calcDetails.treatPercentage !== undefined">
+                <text class="step-label">占比:</text>
+                <text class="step-value">{{ calcResult.calcDetails.treatPercentage }}%</text>
+              </view>
+              <view class="formula-box">
+                <text class="formula-text">
+                  扣除: {{ calcResult.totalDer?.toFixed(1) }} × {{ calcResult.calcDetails.treatPercentage }}%
+                  = {{ calcResult.treatDeduction?.toFixed(1) }} kcal/天
+                </text>
+              </view>
+            </view>
+
+            <!-- 步骤6：最终结果 -->
+            <view class="process-step final-step">
+              <text class="step-title">5. 最终鲜食热量</text>
+              <view class="formula-box highlight">
+                <text class="formula-text">
+                  {{ calcResult.totalDer?.toFixed(1) }} - {{ calcResult.treatDeduction?.toFixed(1) || 0 }}
+                  = {{ calcResult.finalFoodKcal?.toFixed(1) }} kcal/天
+                </text>
+              </view>
+            </view>
+          </view>
+        </view>
       </view>
     </view>
 
@@ -674,11 +786,25 @@ interface CalcResult {
   treatDeduction?: number
   isTreatCapped?: boolean
   dailyIntakeG?: number
+  calcDetails?: {
+    weightKg: number
+    ageMonths: number
+    sizeClass: string
+    lifeStage: string
+    stageFactor: number
+    activityMultiplier: number
+    neuterMultiplier: number
+    bcsMultiplier: number
+    treatMode: string
+    treatLevel?: string
+    treatPercentage?: number
+  }
 }
 
 const breeds = ref<Breed[]>([])
 const selectedBreed = ref<Breed | null>(null)
 const calcResult = ref<CalcResult | null>(null)
+const showCalcProcess = ref(false) // 控制计算过程展开/折叠
 const loadingBreeds = ref(false)
 const calculating = ref(false)
 
@@ -1407,6 +1533,54 @@ function selectTreatLevel(level: string) {
 
 // ========== 零食选择函数结束 ==========
 
+/**
+ * 切换计算过程展示
+ */
+function toggleCalcProcess() {
+  showCalcProcess.value = !showCalcProcess.value
+}
+
+/**
+ * 获取体型分类中文标签
+ */
+function getSizeClassLabel(sizeClass: string): string {
+  const labels: Record<string, string> = {
+    'SMALL': '小型犬',
+    'MEDIUM': '中型犬',
+    'LARGE': '大型犬',
+    'GIANT': '巨型犬'
+  }
+  return labels[sizeClass] || sizeClass
+}
+
+/**
+ * 获取生命阶段中文标签
+ */
+function getLifeStageLabel(lifeStage: string): string {
+  const labels: Record<string, string> = {
+    'PUPPY': '幼犬期',
+    'ADULT': '成年期',
+    'SENIOR': '老年期',
+    'PREGNANCY': '孕期',
+    'LACTATION': '哺乳期'
+  }
+  return labels[lifeStage] || lifeStage
+}
+
+/**
+ * 获取零食级别中文标签
+ */
+function getTreatLevelLabel(treatLevel?: string): string {
+  if (!treatLevel) return '-'
+  const labels: Record<string, string> = {
+    'NONE': '不给零食',
+    'LOW': '较少',
+    'MODERATE': '适中',
+    'HIGH': '较多'
+  }
+  return labels[treatLevel] || treatLevel
+}
+
 async function previewCalculation() {
   // Only calculate if we have minimum required fields
   // Silently return if not ready - don't show error to user
@@ -1452,7 +1626,8 @@ async function previewCalculation() {
         finalFoodKcal: res.data.finalFoodKcal,
         treatDeduction: res.data.treatDeduction,
         isTreatCapped: res.data.isTreatCapped,
-        dailyIntakeG: res.data.dailyIntakeG
+        dailyIntakeG: res.data.dailyIntakeG,
+        calcDetails: res.data.calcDetails
       }
       console.log('[DogCreate] Preview calculation result:', calcResult.value)
       uni.showToast({
@@ -1950,6 +2125,128 @@ function submit() {
   font-size: 26rpx;
   color: #fa8c16;
   line-height: 1.5;
+}
+
+/* 计算过程折叠区样式 */
+.calc-process-section {
+  margin-top: 20rpx;
+  border-top: 1px solid #e9ecef;
+  padding-top: 20rpx;
+}
+
+.process-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15rpx 20rpx;
+  background-color: #f0f2f5;
+  border-radius: 6rpx;
+  cursor: pointer;
+}
+
+.process-toggle-text {
+  font-size: 28rpx;
+  font-weight: 500;
+  color: #333;
+}
+
+.process-toggle-icon {
+  font-size: 24rpx;
+  color: #666;
+  transition: transform 0.3s;
+}
+
+.process-content {
+  margin-top: 20rpx;
+}
+
+.process-step {
+  background-color: #fff;
+  border: 1px solid #e9ecef;
+  border-radius: 8rpx;
+  padding: 20rpx;
+  margin-bottom: 15rpx;
+}
+
+.step-title {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 15rpx;
+  display: block;
+}
+
+.step-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 8rpx 0;
+  font-size: 26rpx;
+}
+
+.step-label {
+  color: #666;
+}
+
+.step-value {
+  color: #333;
+  font-weight: 500;
+}
+
+.formula-box {
+  background-color: #f8f9fa;
+  border-left: 3px solid #1890ff;
+  padding: 15rpx;
+  margin-top: 10rpx;
+  border-radius: 4rpx;
+}
+
+.formula-text {
+  font-size: 26rpx;
+  color: #333;
+  line-height: 1.6;
+  font-family: 'Courier New', monospace;
+}
+
+.formula-box.highlight {
+  background-color: #e6f7ff;
+  border-left-color: #52c41a;
+}
+
+.coefficient-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12rpx;
+  margin-top: 10rpx;
+}
+
+.coef-item {
+  background-color: #fafafa;
+  padding: 12rpx;
+  border-radius: 4rpx;
+  text-align: center;
+}
+
+.coef-name {
+  display: block;
+  font-size: 24rpx;
+  color: #666;
+  margin-bottom: 6rpx;
+}
+
+.coef-value {
+  display: block;
+  font-size: 28rpx;
+  color: #1890ff;
+  font-weight: bold;
+}
+
+.final-step {
+  background-color: #f6ffed;
+  border-color: #b7eb8f;
+}
+
+.final-step .step-title {
+  color: #52c41a;
 }
 
 /* Collapsed Common Breeds */

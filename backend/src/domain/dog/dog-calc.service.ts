@@ -33,6 +33,27 @@ export interface DogCalcResult {
   isTreatCapped: boolean; // Whether treat deduction hit 10% cap
   finalFoodKcal: number; // Final food kcal requirement (kcal/day)
   dailyIntakeG?: number; // Daily intake in grams (if recipe energy density provided)
+
+  // Optional: Detailed calculation breakdown for UI display
+  // Includes intermediate values to show full calculation process
+  calcDetails?: {
+    // Input snapshot
+    weightKg: number;
+    ageMonths: number;
+    sizeClass: string;
+    lifeStage: string;
+
+    // Intermediate calculation values
+    stageFactor: number;
+    activityMultiplier: number;
+    neuterMultiplier: number;
+    bcsMultiplier: number;
+
+    // Treat calculation details
+    treatMode: string;
+    treatLevel?: string;
+    treatPercentage?: number;
+  };
 }
 
 /**
@@ -447,11 +468,17 @@ export function calculateDailyIntakeG(
 /**
  * Main calculation function
  * Returns complete DogCalcResult
+ *
+ * @param dog - Dog entity with all required fields
+ * @param recipeEnergyDensityKcalPerKg - Optional recipe energy density for calculating daily intake in grams
+ * @param breed - Optional breed information for breed-specific calculations
+ * @param includeDetails - Optional flag to include detailed calculation breakdown (default: false for backward compatibility)
  */
 export function calculateDogEnergy(
   dog: Dog,
   recipeEnergyDensityKcalPerKg?: number,
   breed?: DogBreed | null,
+  includeDetails: boolean = false,
 ): DogCalcResult {
   // Validate mixed breed dog has size class override
   validateMixedBreedDog(dog, breed);
@@ -475,6 +502,86 @@ export function calculateDogEnergy(
     );
   }
 
+  // Optional: Include detailed calculation breakdown
+  if (includeDetails) {
+    const ageMonths = calculateAgeMonths(dog.birthday);
+    const sizeClass = determineSizeClass(dog, breed);
+    const lifeStage = getLifeStageDisplay(dog, ageMonths, sizeClass, breed);
+    const stageFactor = getLifeStageFactor(dog, ageMonths, sizeClass, breed);
+
+    // Calculate individual modifiers
+    const activityMultiplier = ACTIVITY_MULTIPLIERS[dog.activityLevel] ?? ACTIVITY_MULTIPLIERS.NORMAL;
+    let neuterMultiplier = 1.0;
+    const isSenior = checkIsSenior(ageMonths, sizeClass, breed);
+
+    if (!isGrowthOrReproStage(dog, ageMonths, sizeClass, breed) && !isSenior) {
+      neuterMultiplier = dog.isNeutered
+        ? LIFE_STAGE_FACTORS.ADULT_NEUTERED / stageFactor
+        : LIFE_STAGE_FACTORS.ADULT_INTACT / stageFactor;
+    }
+
+    const bcsMultiplier = getBcsAdjustment(dog.bcsScore);
+
+    // Calculate treat percentage
+    let treatPercentage: number | undefined;
+    if (dog.treatInputMode === TreatInputMode.ESTIMATE_LEVEL && dog.treatLevel) {
+      treatPercentage = getTreatPercentage(dog.treatLevel);
+    }
+
+    result.calcDetails = {
+      weightKg: dog.currentWeightKg,
+      ageMonths,
+      sizeClass,
+      lifeStage,
+      stageFactor,
+      activityMultiplier,
+      neuterMultiplier,
+      bcsMultiplier,
+      treatMode: dog.treatInputMode,
+      treatLevel: dog.treatLevel ?? undefined,
+      treatPercentage,
+    };
+  }
+
   return result;
+}
+
+/**
+ * Get life stage display string
+ * Returns a human-readable life stage description
+ */
+function getLifeStageDisplay(
+  dog: Dog,
+  ageMonths: number,
+  sizeClass: DogSizeCategory,
+  breed?: DogBreed | null,
+): string {
+  if (dog.lifeStageOverride === LifeStageOverride.PREGNANCY) return 'PREGNANCY';
+  if (dog.lifeStageOverride === LifeStageOverride.LACTATION) return 'LACTATION';
+  if (dog.lifeStageOverride === LifeStageOverride.PUPPY) return 'PUPPY';
+  if (dog.lifeStageOverride === LifeStageOverride.SENIOR) return 'SENIOR';
+  if (dog.lifeStageOverride === LifeStageOverride.ADULT) return 'ADULT';
+
+  // Auto-detect based on age
+  const adultThreshold = getAdultThresholdMonths(sizeClass, breed);
+  if (ageMonths < adultThreshold) return 'PUPPY';
+
+  const isSenior = checkIsSenior(ageMonths, sizeClass, breed);
+  if (isSenior) return 'SENIOR';
+
+  return 'ADULT';
+}
+
+/**
+ * Get treat percentage from treat level
+ */
+function getTreatPercentage(treatLevel: TreatLevel): number {
+  const percentages: Record<TreatLevel, number> = {
+    [TreatLevel.NONE]: 0,
+    [TreatLevel.LOW]: 3,
+    [TreatLevel.MODERATE]: 6,
+    [TreatLevel.HIGH]: 10,
+  };
+  return percentages[treatLevel] ?? 3;
 }
 

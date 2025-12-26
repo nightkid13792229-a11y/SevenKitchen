@@ -8,6 +8,7 @@ import { randomUUID } from 'crypto';
 import type { DogRepository } from '../../domain/dog/dog.repository';
 import type { DogBreedRepository } from '../../domain/dog/dog-breed.repository';
 import type { RecipeRepository } from '../../domain/recipe/recipe.repository';
+import { PrismaService } from '../../infrastructure/prisma.service';
 import { Dog } from '../../domain/dog/dog.entity';
 import {
   DogGender,
@@ -18,6 +19,8 @@ import {
   TreatLevel,
   calculateDogEnergy,
 } from '../../domain';
+import { DogBreed } from '../../domain/dog/dog-breed.entity';
+import { GrowthCurveType } from '../../domain/dog/enums';
 
 export interface CreateDogProfileDto {
   ownerId: string;
@@ -185,7 +188,8 @@ export class DogService {
     // Load breed for calculation
     const breed = await this.dogBreedRepository.findById(dog.breedId);
 
-    const calcResult = calculateDogEnergy(dog, undefined, breed);
+    // Calculate with detailed breakdown for UI display
+    const calcResult = calculateDogEnergy(dog, undefined, breed, true);
 
     return {
       rer: calcResult.rer,
@@ -196,4 +200,162 @@ export class DogService {
       dailyIntakeG: calcResult.dailyIntakeG,
     };
   }
+
+  // ==================== Breed Management Methods ====================
+
+  /**
+   * Create new breed
+   */
+  async createBreed(dto: CreateBreedDto): Promise<DogBreed> {
+    const exists = await this.dogBreedRepository.existsByName(dto.name);
+    if (exists) {
+      throw new Error(`Breed with name "${dto.name}" already exists`);
+    }
+
+    const breed = new DogBreed(
+      randomUUID(),
+      dto.name,
+      dto.sizeCategory,
+      dto.growthCurveType,
+      dto.adultAgeMonths,
+      dto.seniorAgeYears,
+      dto.averageAdultWeightKg ?? null,
+    );
+
+    return this.dogBreedRepository.save(breed);
+  }
+
+  /**
+   * Update breed
+   */
+  async updateBreed(id: string, dto: UpdateBreedDto): Promise<DogBreed> {
+    const existing = await this.dogBreedRepository.findById(id);
+    if (!existing) {
+      throw new Error(`Breed not found: ${id}`);
+    }
+
+    if (dto.name) {
+      const exists = await this.dogBreedRepository.existsByName(dto.name, id);
+      if (exists) {
+        throw new Error(`Breed with name "${dto.name}" already exists`);
+      }
+    }
+
+    const updated = new DogBreed(
+      id,
+      dto.name ?? existing.name,
+      dto.sizeCategory ?? existing.sizeCategory,
+      dto.growthCurveType ?? existing.growthCurveType,
+      dto.adultAgeMonths ?? existing.adultAgeMonths,
+      dto.seniorAgeYears ?? existing.seniorAgeYears,
+      dto.averageAdultWeightKg !== undefined ? dto.averageAdultWeightKg : existing.averageAdultWeightKg,
+    );
+
+    const result = await this.dogBreedRepository.update(id, updated);
+    if (!result) {
+      throw new Error(`Failed to update breed: ${id}`);
+    }
+    return result;
+  }
+
+  /**
+   * Delete breed
+   */
+  async deleteBreed(id: string): Promise<void> {
+    const exists = await this.dogBreedRepository.findById(id);
+    if (!exists) {
+      throw new Error(`Breed not found: ${id}`);
+    }
+
+    await this.dogBreedRepository.delete(id);
+  }
+
+  /**
+   * Check breed usage
+   */
+  async checkBreedUsage(
+    id: string,
+  ): Promise<{ count: number; dogs: Array<{ id: string; name: string; ownerId: string }> }> {
+    const count = await this.dogBreedRepository.countUsage(id);
+    const dogs = await this.dogBreedRepository.findUsage(id, 10);
+    return { count, dogs };
+  }
+
+  /**
+   * Get custom breed statistics
+   */
+  async getCustomBreedStats(): Promise<Array<{
+    breedName: string;
+    usageCount: number;
+    firstUsedAt: Date;
+    avgWeight: number;
+    estimatedSizeCategory: DogSizeCategory;
+  }>> {
+    const prisma = await this.getPrismaService();
+
+    const stats = await prisma.$queryRaw<
+      Array<{
+        breed_name: string;
+        usage_count: bigint;
+        first_used_at: Date;
+        avg_weight: number;
+      }>
+    >`
+      SELECT
+        custom_breed_name as "breed_name",
+        COUNT(*) as "usage_count",
+        MIN(created_at) as "first_used_at",
+        AVG(current_weight_kg) as "avg_weight"
+      FROM dog
+      WHERE custom_breed_name IS NOT NULL
+      GROUP BY custom_breed_name
+      ORDER BY "usage_count" DESC
+    `;
+
+    return stats.map(stat => ({
+      breedName: stat.breed_name,
+      usageCount: Number(stat.usage_count),
+      firstUsedAt: stat.first_used_at,
+      avgWeight: stat.avg_weight,
+      estimatedSizeCategory: this.estimateSizeCategory(stat.avg_weight),
+    }));
+  }
+
+  /**
+   * Estimate size category from weight
+   */
+  private estimateSizeCategory(weightKg: number): DogSizeCategory {
+    if (weightKg < 10) return DogSizeCategory.SMALL;
+    if (weightKg < 25) return DogSizeCategory.MEDIUM;
+    if (weightKg < 45) return DogSizeCategory.LARGE;
+    return DogSizeCategory.GIANT;
+  }
+
+  /**
+   * Get PrismaService (helper for raw queries)
+   */
+  private async getPrismaService() {
+    const { PrismaService } = await import('../../infrastructure/prisma.service');
+    const module = await import('../../infrastructure/prisma.service');
+    return module.PrismaService.getInstance();
+  }
+}
+
+// DTOs for breed management
+export interface CreateBreedDto {
+  name: string;
+  sizeCategory: DogSizeCategory;
+  growthCurveType: GrowthCurveType;
+  adultAgeMonths: number;
+  seniorAgeYears: number;
+  averageAdultWeightKg?: number;
+}
+
+export interface UpdateBreedDto {
+  name?: string;
+  sizeCategory?: DogSizeCategory;
+  growthCurveType?: GrowthCurveType;
+  adultAgeMonths?: number;
+  seniorAgeYears?: number;
+  averageAdultWeightKg?: number;
 }

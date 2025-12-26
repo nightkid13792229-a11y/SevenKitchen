@@ -1,0 +1,290 @@
+<template>
+  <div class="breed-table-section">
+    <div class="section-header">
+      <h3>系统预定义品种</h3>
+      <el-button type="primary" @click="handleCreate" :icon="Plus">
+        新增品种
+      </el-button>
+    </div>
+
+    <!-- Filters -->
+    <div class="filter-bar">
+      <el-radio-group v-model="sizeFilter" @change="handleFilter">
+        <el-radio-button value="">全部</el-radio-button>
+        <el-radio-button :value="DogSizeCategory.SMALL">小型</el-radio-button>
+        <el-radio-button :value="DogSizeCategory.MEDIUM">中型</el-radio-button>
+        <el-radio-button :value="DogSizeCategory.LARGE">大型</el-radio-button>
+        <el-radio-button :value="DogSizeCategory.GIANT">巨型</el-radio-button>
+      </el-radio-group>
+
+      <el-input
+        v-model="searchText"
+        placeholder="搜索品种名称/体重"
+        clearable
+        style="width: 250px"
+        @input="handleSearch"
+      >
+        <template #prefix>
+          <el-icon><Search /></el-icon>
+        </template>
+      </el-input>
+    </div>
+
+    <!-- Table -->
+    <el-card v-loading="loading" shadow="never">
+      <el-table :data="displayData" stripe style="width: 100%">
+        <el-table-column prop="name" label="品种名称" width="150" fixed="left" />
+
+        <el-table-column prop="sizeCategory" label="体型" width="100" align="center">
+          <template #default="{ row }">
+            <el-tag :type="getSizeTagType(row.sizeCategory)">
+              {{ getSizeLabel(row.sizeCategory) }}
+            </el-tag>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="adultAgeMonths" label="成年月龄" width="100" align="center">
+          <template #default="{ row }">
+            {{ row.adultAgeMonths }}个月
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="seniorAgeYears" label="老年年龄" width="100" align="center">
+          <template #default="{ row }">
+            {{ row.seniorAgeYears }}岁
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="averageAdultWeightKg" label="平均体重" width="120" align="right">
+          <template #default="{ row }">
+            {{ row.averageAdultWeightKg ? row.averageAdultWeightKg.toFixed(1) + 'kg' : '-' }}
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="createdAt" label="创建时间" width="120">
+          <template #default="{ row }">
+            {{ isSystemBreed(row) ? '系统预设' : formatDate(row.createdAt) }}
+          </template>
+        </el-table-column>
+
+        <el-table-column label="操作" width="150" fixed="right" align="center">
+          <template #default="{ row }">
+            <el-button
+              type="primary"
+              size="small"
+              link
+              @click="handleEdit(row)"
+            >
+              编辑
+            </el-button>
+            <el-divider direction="vertical" />
+            <el-button
+              type="danger"
+              size="small"
+              link
+              @click="handleDelete(row)"
+            >
+              删除
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <!-- Empty State -->
+      <div v-if="displayData.length === 0 && !loading" class="empty-state">
+        <el-empty :description="searchText || sizeFilter ? '未找到匹配的品种' : '暂无品种数据'" />
+      </div>
+    </el-card>
+
+    <!-- Breed Form Dialog -->
+    <BreedFormComponent
+      v-model:visible="dialogVisible"
+      :breed="currentBreed"
+      @submit="handleSubmit"
+    />
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus, Search } from '@element-plus/icons-vue'
+import { DogSizeCategory, DogSizeLabels } from '@/types/dog'
+import type { DogBreed, BreedForm } from '@/types/breed'
+import { breedApi } from '@/api'
+import BreedFormComponent from './BreedForm.vue'
+
+interface Props {
+  data: DogBreed[]
+  loading: boolean
+}
+
+interface Emits {
+  (e: 'refresh'): void
+}
+
+const props = defineProps<Props>()
+const emit = defineEmits<Emits>()
+
+const searchText = ref('')
+const sizeFilter = ref<string>('')
+const dialogVisible = ref(false)
+const currentBreed = ref<DogBreed | null>(null)
+
+// 计算显示的数据
+const displayData = computed(() => {
+  let result = props.data
+
+  // 按体型筛选
+  if (sizeFilter.value) {
+    result = result.filter(item => item.sizeCategory === sizeFilter.value)
+  }
+
+  // 按搜索文本筛选
+  if (searchText.value) {
+    const search = searchText.value.toLowerCase()
+    result = result.filter(item => {
+      const nameMatch = item.name.toLowerCase().includes(search)
+      const weightMatch = item.averageAdultWeightKg?.toString().includes(search)
+      return nameMatch || weightMatch
+    })
+  }
+
+  return result
+})
+
+const getSizeTagType = (size: string) => {
+  const typeMap: Record<string, any> = {
+    SMALL: 'success',
+    MEDIUM: 'primary',
+    LARGE: 'warning',
+    GIANT: 'danger'
+  }
+  return typeMap[size] || ''
+}
+
+const getSizeLabel = (size: string) => {
+  return DogSizeLabels[size as DogSizeCategory] || size
+}
+
+const formatDate = (dateStr: string) => {
+  return dateStr.slice(0, 10)
+}
+
+const isSystemBreed = (breed: DogBreed) => {
+  // 假设2024年之前创建的是系统预设品种
+  return new Date(breed.createdAt).getFullYear() < 2024
+}
+
+const handleFilter = () => {
+  // 筛选是响应式的，无需额外处理
+}
+
+const handleSearch = () => {
+  // 搜索是响应式的，无需额外处理
+}
+
+const handleCreate = () => {
+  currentBreed.value = null
+  dialogVisible.value = true
+}
+
+const handleEdit = (breed: DogBreed) => {
+  currentBreed.value = breed
+  dialogVisible.value = true
+}
+
+const handleSubmit = async (data: BreedForm) => {
+  try {
+    if (data.id) {
+      await breedApi.update(data.id, data)
+      ElMessage.success('品种更新成功')
+    } else {
+      await breedApi.create(data)
+      ElMessage.success('品种创建成功')
+    }
+    dialogVisible.value = false
+    emit('refresh')
+  } catch (error: any) {
+    ElMessage.error(error.message || '操作失败')
+  }
+}
+
+const handleDelete = async (breed: DogBreed) => {
+  try {
+    // 检查品种使用情况
+    const usage = await breedApi.checkUsage(breed.id)
+
+    if (usage.count > 0) {
+      // 有狗狗在使用该品种，显示警告
+      const dogList = usage.dogs
+        .map(d => `- ${d.name} (ID: ${d.id})`)
+        .join('\n')
+
+      await ElMessageBox.alert(
+        `该品种正在被 ${usage.count} 只狗狗使用，无法删除。\n\n使用该品种的狗狗：\n${dogList}`,
+        '无法删除',
+        {
+          type: 'warning',
+          confirmButtonText: '我知道了'
+        }
+      )
+      return
+    }
+
+    // 无狗狗使用，显示确认对话框
+    await ElMessageBox.confirm(
+      `确定要删除品种"${breed.name}"吗？此操作不可恢复。`,
+      '确认删除',
+      {
+        type: 'warning',
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消'
+      }
+    )
+
+    // 用户确认后执行删除
+    await breedApi.delete(breed.id)
+    ElMessage.success('品种删除成功')
+    emit('refresh')
+  } catch (error: any) {
+    // 用户取消操作不显示错误
+    if (error === 'cancel') {
+      return
+    }
+    ElMessage.error(error.message || '删除失败')
+  }
+}
+</script>
+
+<style scoped>
+.breed-table-section {
+  margin-bottom: 40px;
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.section-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.filter-bar {
+  display: flex;
+  gap: 16px;
+  margin-bottom: 20px;
+  align-items: center;
+}
+
+.empty-state {
+  padding: 60px 0;
+  text-align: center;
+}
+</style>

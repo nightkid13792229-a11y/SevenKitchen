@@ -73,6 +73,7 @@ export interface CalcPreviewResult {
 export const DOG_REPOSITORY = Symbol('DogRepository');
 export const RECIPE_REPOSITORY = Symbol('RecipeRepository');
 export const DOG_BREED_REPOSITORY = Symbol('DogBreedRepository');
+export const PRISMA_SERVICE = Symbol('PrismaService');
 
 @Injectable()
 export class DogService {
@@ -83,6 +84,8 @@ export class DogService {
     private readonly dogBreedRepository: DogBreedRepository,
     @Inject(RECIPE_REPOSITORY)
     private readonly recipeRepository: RecipeRepository, // TODO: Will be used for recipe-based calculations
+    @Inject(PRISMA_SERVICE)
+    private readonly prisma: PrismaService,
   ) {
     // Suppress unused warning - will be used in future implementations
     void this.recipeRepository;
@@ -291,9 +294,7 @@ export class DogService {
     avgWeight: number;
     estimatedSizeCategory: DogSizeCategory;
   }>> {
-    const prisma = await this.getPrismaService();
-
-    const stats = await prisma.$queryRaw<
+    const stats = await this.prisma.$queryRaw<
       Array<{
         breed_name: string;
         usage_count: bigint;
@@ -312,7 +313,7 @@ export class DogService {
       ORDER BY "usage_count" DESC
     `;
 
-    return stats.map(stat => ({
+    return stats.map((stat: any) => ({
       breedName: stat.breed_name,
       usageCount: Number(stat.usage_count),
       firstUsedAt: stat.first_used_at,
@@ -329,15 +330,6 @@ export class DogService {
     if (weightKg < 25) return DogSizeCategory.MEDIUM;
     if (weightKg < 45) return DogSizeCategory.LARGE;
     return DogSizeCategory.GIANT;
-  }
-
-  /**
-   * Get PrismaService (helper for raw queries)
-   */
-  private async getPrismaService() {
-    const { PrismaService } = await import('../../infrastructure/prisma.service');
-    const module = await import('../../infrastructure/prisma.service');
-    return module.PrismaService.getInstance();
   }
 }
 

@@ -3,10 +3,16 @@
     <!-- Header -->
     <div class="page-header">
       <h2>档案管理</h2>
-      <el-button type="primary" @click="handleCreate">
-        <el-icon><Plus /></el-icon>
-        新增档案
-      </el-button>
+      <div class="header-actions">
+        <el-button @click="handleBreedManagement">
+          <el-icon><List /></el-icon>
+          品种管理
+        </el-button>
+        <el-button type="primary" @click="handleCreate">
+          <el-icon><Plus /></el-icon>
+          新增档案
+        </el-button>
+      </div>
     </div>
 
     <!-- Filters -->
@@ -140,7 +146,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { Plus, Search } from '@element-plus/icons-vue'
+import { Plus, Search, List } from '@element-plus/icons-vue'
 import { dogApi } from '@/api/dogs'
 import type { DogProfile, DogBreed } from '@/types/dog'
 import { calculateAge } from '@/types/dog'
@@ -213,6 +219,10 @@ const handleCreate = () => {
   router.push('/dogs/create')
 }
 
+const handleBreedManagement = () => {
+  router.push('/breeds')
+}
+
 const handleView = (row: DogProfile) => {
   router.push(`/dogs/${row.id}`)
 }
@@ -254,6 +264,12 @@ onMounted(() => {
   margin: 0;
   font-size: 20px;
   color: #303133;
+}
+
+.header-actions {
+  display: flex;
+  gap: 12px;
+  align-items: center;
 }
 
 .filter-bar {

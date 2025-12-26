@@ -107,6 +107,7 @@ export class DogCalcResultDto implements CalcPreviewResult {
   @ApiPropertyOptional({
     description: 'Detailed calculation breakdown (includes intermediate values)',
     type: 'object',
+    additionalProperties: true,
     example: {
       weightKg: 10.5,
       ageMonths: 36,

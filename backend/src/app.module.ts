@@ -14,6 +14,7 @@ import {
   DogService,
   DOG_REPOSITORY,
   RECIPE_REPOSITORY,
+  PRISMA_SERVICE,
 } from './application/dog/dog.service';
 import { InMemoryDogRepository } from './infrastructure/repositories/in-memory-dog.repository';
 import { PrismaDogRepository } from './infrastructure/repositories/prisma-dog.repository';
@@ -168,6 +169,10 @@ validatePrismaConfig();
               });
               return new PrismaService();
             },
+          },
+          {
+            provide: PRISMA_SERVICE,
+            useExisting: PrismaService,
           },
         ]
       : []),

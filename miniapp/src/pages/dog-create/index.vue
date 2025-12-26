@@ -16,6 +16,29 @@
         />
       </view>
 
+      <!-- 性别 -->
+      <view class="form-item">
+        <text class="label">性别</text>
+        <view class="gender-selector">
+          <view
+            class="gender-option gender-option-male"
+            :class="{ active: formData.gender === 'MALE' }"
+            @tap="selectGender('MALE')"
+          >
+            <text class="gender-icon">♂</text>
+            <text class="gender-label">公</text>
+          </view>
+          <view
+            class="gender-option gender-option-female"
+            :class="{ active: formData.gender === 'FEMALE' }"
+            @tap="selectGender('FEMALE')"
+          >
+            <text class="gender-icon">♀</text>
+            <text class="gender-label">母</text>
+          </view>
+        </view>
+      </view>
+
       <!-- Breed Selection with Search -->
       <view class="form-item breed-section">
         <text class="label">品种 *</text>
@@ -182,48 +205,7 @@
         </picker>
       </view>
 
-      <view class="form-item">
-        <text class="label">性别</text>
-        <view class="gender-selector">
-          <view
-            class="gender-option gender-option-male"
-            :class="{ active: formData.gender === 'MALE' }"
-            @tap="selectGender('MALE')"
-          >
-            <text class="gender-icon">♂</text>
-            <text class="gender-label">公</text>
-          </view>
-          <view
-            class="gender-option gender-option-female"
-            :class="{ active: formData.gender === 'FEMALE' }"
-            @tap="selectGender('FEMALE')"
-          >
-            <text class="gender-icon">♀</text>
-            <text class="gender-label">母</text>
-          </view>
-        </view>
-      </view>
-
-      <view class="form-item">
-        <text class="label">是否绝育</text>
-        <view class="neutered-selector">
-          <view
-            class="neutered-option"
-            :class="{ active: formData.isNeutered === true }"
-            @tap="selectNeutered(true)"
-          >
-            <text class="neutered-label">是</text>
-          </view>
-          <view
-            class="neutered-option"
-            :class="{ active: formData.isNeutered === false }"
-            @tap="selectNeutered(false)"
-          >
-            <text class="neutered-label">否</text>
-          </view>
-        </view>
-      </view>
-
+      <!-- 身体状态区 -->
       <view class="form-item">
         <text class="label">体重(kg) *</text>
         <input class="input" type="text" placeholder="请输入体重" v-model="formData.currentWeightKg" />
@@ -270,6 +252,26 @@
       </uni-popup>
 
       <view class="form-item">
+        <text class="label">是否绝育</text>
+        <view class="neutered-selector">
+          <view
+            class="neutered-option"
+            :class="{ active: formData.isNeutered === true }"
+            @tap="selectNeutered(true)"
+          >
+            <text class="neutered-label">是</text>
+          </view>
+          <view
+            class="neutered-option"
+            :class="{ active: formData.isNeutered === false }"
+            @tap="selectNeutered(false)"
+          >
+            <text class="neutered-label">否</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="form-item">
         <text class="label">活动水平 *</text>
 
         <view class="activity-level-container">
@@ -282,18 +284,58 @@
           >
             <view class="activity-level-header">
               <text class="activity-level-label">{{ option.label }}</text>
-              <text class="activity-level-coefficient">×{{ option.coefficient }}</text>
             </view>
             <text class="activity-level-description">{{ option.description }}</text>
           </view>
         </view>
       </view>
 
-      <view class="form-item">
+      <!-- 生命阶段（自动匹配 + 手动选择） -->
+      <view class="form-item life-stage-section">
         <text class="label">生命阶段</text>
-        <picker mode="selector" :range="lifeStageOptions" :value="lifeStageIndex" @change="onLifeStageChange">
-          <view class="picker">{{ formData.lifeStageOverride }}</view>
-        </picker>
+
+        <!-- 已填写生日：显示自动匹配结果 -->
+        <view v-if="formData.birthday" class="life-stage-content">
+          <!-- 自动匹配结果展示 -->
+          <view class="auto-match-result">
+            <text class="auto-match-text">{{ autoDetectedLifeStage.label }}（{{ autoDetectedLifeStage.detail }}）</text>
+            <text class="auto-match-label">- 自动匹配</text>
+          </view>
+
+          <!-- 未手动覆盖：显示手动选择按钮 -->
+          <view v-if="!isLifeStageOverride" class="manual-select-trigger" @tap="enableLifeStageOverride">
+            <text class="manual-select-text">手动选择生命阶段</text>
+            <text class="manual-select-icon">▶</text>
+          </view>
+
+          <!-- 已手动覆盖：显示手动选择面板 -->
+          <view v-else class="life-stage-override-panel">
+            <view class="override-title">请选择生命阶段</view>
+            <view class="override-options">
+              <view
+                v-for="option in lifeStageOverrideOptions"
+                :key="option.value"
+                class="override-option"
+                :class="{ active: formData.lifeStageOverride === option.value }"
+                @tap="selectLifeStageOverride(option.value)"
+              >
+                <text class="override-option-label">{{ option.label }}</text>
+                <text class="override-option-desc">{{ option.description }}</text>
+              </view>
+            </view>
+
+            <!-- 取消按钮 -->
+            <view class="cancel-override-btn" @tap="cancelLifeStageOverride">
+              <text class="cancel-override-icon">✖️</text>
+              <text class="cancel-override-text">取消，返回自动匹配</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 未填写生日时的提示 -->
+        <view v-else class="life-stage-prompt">
+          <text class="prompt-text">请先选择狗狗的生日，系统将自动判断生命阶段</text>
+        </view>
       </view>
 
       <view class="form-item">
@@ -301,28 +343,89 @@
         <input class="input" type="text" placeholder="请输入每日餐数" v-model="formData.mealsPerDay" />
       </view>
 
-      <view class="form-item">
-        <text class="label">零食输入模式</text>
-        <picker mode="selector" :range="treatInputModeOptions" :value="treatInputModeIndex" @change="onTreatInputModeChange">
-          <view class="picker">{{ formData.treatInputMode }}</view>
-        </picker>
+      <!-- 零食设置区（卡片式） -->
+      <view class="treat-section">
+        <text class="section-label">零食设置（选填）</text>
+
+        <!-- 零食输入模式（卡片单选，左右布局） -->
+        <view class="treat-mode-selector">
+          <view class="card-options card-options-horizontal">
+            <view
+              v-for="mode in treatInputModeOptions"
+              :key="mode.value"
+              class="card-option card-option-simple"
+              :class="{ active: formData.treatInputMode === mode.value }"
+              @tap="selectTreatInputMode(mode.value)"
+            >
+              <text class="card-label-simple">{{ mode.label }}</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 估算模式：零食量选择 -->
+        <view v-if="formData.treatInputMode === 'ESTIMATE_LEVEL'" class="treat-level-selector">
+          <text class="field-label">零食量（大概）</text>
+          <view class="card-options">
+            <view
+              v-for="level in treatLevelOptions"
+              :key="level.value"
+              class="card-option treat-level-card"
+              :class="{ active: formData.treatLevel === level.value }"
+              @tap="selectTreatLevel(level.value)"
+            >
+              <view class="card-radio">
+                <view v-if="formData.treatLevel === level.value" class="radio-checked"></view>
+              </view>
+              <view class="card-content">
+                <text class="card-label">{{ level.label }}</text>
+                <text class="card-desc">{{ level.description }}（{{ level.detail }}）</text>
+              </view>
+            </view>
+          </view>
+        </view>
+
+        <!-- 精确模式：手动输入 -->
+        <view v-if="formData.treatInputMode === 'EXACT_KCAL'" class="treat-exact-input">
+          <text class="field-label">每日零食能量(kcal) *</text>
+          <input
+            class="input input-white-bg"
+            type="text"
+            placeholder="请输入每日零食能量"
+            v-model="formData.manualTreatKcal"
+          />
+        </view>
       </view>
 
-      <view class="form-item" v-if="formData.treatInputMode === 'ESTIMATE_LEVEL'">
-        <text class="label">零食习惯</text>
-        <picker mode="selector" :range="treatLevelOptions" :value="treatLevelIndex" @change="onTreatLevelChange">
-          <view class="picker">{{ formData.treatLevel }}</view>
-        </picker>
-      </view>
+      <!-- 健康记录区（折叠面板） -->
+      <view class="health-record-section">
+        <view class="health-record-header" @tap="toggleHealthRecord">
+          <text class="health-record-title">📋 健康记录（选填）</text>
+          <text class="toggle-icon">{{ showHealthRecord ? '▼' : '▶' }}</text>
+        </view>
 
-      <view class="form-item" v-if="formData.treatInputMode === 'EXACT_KCAL'">
-        <text class="label">每日零食能量(kcal) *</text>
-        <input class="input" type="text" placeholder="请输入零食能量" v-model="formData.manualTreatKcal" />
-      </view>
+        <view v-if="showHealthRecord" class="health-record-content">
+          <view class="form-item">
+            <text class="label">病史描述</text>
+            <textarea class="textarea" placeholder="请输入病史（选填）" v-model="formData.medicalHistory" />
+          </view>
 
-      <view class="form-item">
-        <text class="label">病史</text>
-        <textarea class="textarea" placeholder="请输入病史" v-model="formData.medicalHistory" />
+          <view class="form-item">
+            <text class="label">过敏食物</text>
+            <textarea class="textarea" placeholder="请记录过敏的食物（选填）" />
+          </view>
+
+          <view class="form-item">
+            <text class="label">挑食食物</text>
+            <textarea class="textarea" placeholder="请记录不爱吃或挑食的食物（选填）" />
+          </view>
+
+          <view class="form-item">
+            <text class="label">检查报告存档</text>
+            <view class="placeholder-box">
+              <text class="placeholder-text">📁 敬请期待：检查报告上传功能即将上线</text>
+            </view>
+          </view>
+        </view>
       </view>
 
       <button class="btn" @tap="submit" :disabled="canSubmit === false">{{ isEditMode ? '保存档案' : '创建档案' }}</button>
@@ -475,10 +578,79 @@ const activityLevelConfigs: ActivityLevelOption[] = [
 ]
 
 const lifeStageOptions = ['NONE', 'PUPPY', 'ADULT', 'SENIOR', 'PREGNANCY', 'LACTATION']
+
+// 生命阶段手动覆盖选项（排除 NONE）
+const lifeStageOverrideOptions = [
+  { value: 'PUPPY', label: '幼犬期', description: '成长发育阶段，需要更高能量' },
+  { value: 'ADULT', label: '成年期', description: '成年犬，标准能量需求' },
+  { value: 'SENIOR', label: '老年期', description: '老年犬，新陈代谢减缓' },
+  { value: 'PREGNANCY', label: '妊娠期', description: '怀孕母犬，需要额外营养' },
+  { value: 'LACTATION', label: '哺乳期', description: '哺乳母犬，高能量需求' }
+]
 const sizeClassOptions = ['SMALL', 'MEDIUM', 'LARGE', 'GIANT']
 const sizeClassOptionsForPicker = ['小型犬', '中型犬', '大型犬', '巨型犬']
-const treatInputModeOptions = ['ESTIMATE_LEVEL', 'EXACT_KCAL']
-const treatLevelOptions = ['NONE', 'LOW', 'MODERATE', 'HIGH']
+
+// ========== 零食设置选项（卡片式） ==========
+
+// 零食输入模式选项
+interface TreatInputModeOption {
+  value: string
+  label: string
+  description: string
+}
+
+const treatInputModeOptions: TreatInputModeOption[] = [
+  {
+    value: 'ESTIMATE_LEVEL',
+    label: '估算零食热量（推荐）',
+    description: '根据零食量等级自动计算'
+  },
+  {
+    value: 'EXACT_KCAL',
+    label: '精确输入零食热量',
+    description: '手动输入具体热量值'
+  }
+]
+
+// 零食量选项
+interface TreatLevelOption {
+  value: string
+  label: string
+  percent: string
+  description: string
+  detail: string // 括弧内的详细说明
+}
+
+const treatLevelOptions: TreatLevelOption[] = [
+  {
+    value: 'NONE',
+    label: '不给零食',
+    percent: '0%',
+    description: '占每日总能量需求约0%',
+    detail: '完全不给零食'
+  },
+  {
+    value: 'LOW',
+    label: '较少',
+    percent: '3%',
+    description: '占每日总能量需求约3%',
+    detail: '偶尔给小零食'
+  },
+  {
+    value: 'MODERATE',
+    label: '适中',
+    percent: '6%',
+    description: '占每日总能量需求约6%',
+    detail: '每天都有小零食'
+  },
+  {
+    value: 'HIGH',
+    label: '较多',
+    percent: '10%',
+    description: '占每日总能量需求约10%',
+    detail: '经常给零食或大零食'
+  }
+]
 
 interface Breed {
   id: string
@@ -520,6 +692,8 @@ const showBcsGuide = ref(false)
 const bcsGuideImageUrl = ref('https://lhcos-3c860-1392823718.cos.ap-chengdu.myqcloud.com/bcs-chart.png')
 const bcsImageError = ref(false)
 const bcsGuideShown = ref(false) // 记录是否已显示过BCS图
+const showHealthRecord = ref(false) // 健康记录折叠面板展开状态
+const showLifeStageOverride = ref(false) // 生命阶段手动覆盖折叠面板
 
 // 侧边导航状态变量
 const activeCategory = ref<string>('')
@@ -578,14 +752,6 @@ const sizeClassIndex = computed(() => {
   const idx = sizeClassOptions.indexOf(override)
   return Math.max(0, idx) // 确保返回非负整数
 })
-const treatInputModeIndex = computed(() => {
-  const idx = treatInputModeOptions.indexOf(formData.value.treatInputMode)
-  return Math.max(0, idx) // 确保返回非负整数
-})
-const treatLevelIndex = computed(() => {
-  const idx = treatLevelOptions.indexOf(formData.value.treatLevel)
-  return Math.max(0, idx) // 确保返回非负整数
-})
 
 // BCS身材状态文字
 const bcsStatusText = computed(() => {
@@ -606,6 +772,130 @@ const bcsStatusColor = computed(() => {
   if (score >= 6 && score <= 7) return '#faad14' // 深黄色
   return '#ff4d4f' // 红色
 })
+
+// ========== 生命阶段自动计算逻辑 ==========
+
+/**
+ * 计算狗狗的年龄（月）
+ */
+const calculateAgeMonths = computed(() => {
+  if (!formData.value.birthday) return 0
+  const birthday = new Date(formData.value.birthday)
+  const today = new Date()
+  const diffTime = today.getTime() - birthday.getTime()
+  const diffDays = diffTime / (1000 * 60 * 60 * 24)
+  return Math.floor(diffDays / 30.4375) // 平均每月30.4375天
+})
+
+/**
+ * 获取体型分类的成年标准（月）
+ */
+const getAdultThresholdMonths = computed(() => {
+  const sizeClass = getCurrentSizeClass.value
+  const thresholds: Record<string, number> = {
+    'SMALL': 10,
+    'MEDIUM': 12,
+    'LARGE': 18,
+    'GIANT': 24
+  }
+  // 如果有品种且品种有自定义成年标准，使用品种的
+  if (selectedBreed.value && selectedBreed.value.adultAgeMonths) {
+    return selectedBreed.value.adultAgeMonths
+  }
+  return thresholds[sizeClass] || 12
+})
+
+/**
+ * 获取体型分类的老年标准（年）
+ */
+const getSeniorThresholdYears = computed(() => {
+  const sizeClass = getCurrentSizeClass.value
+  const thresholds: Record<string, number> = {
+    'SMALL': 11,
+    'MEDIUM': 10,
+    'LARGE': 8,
+    'GIANT': 7
+  }
+  // 如果有品种且品种有自定义老年标准，使用品种的
+  if (selectedBreed.value && selectedBreed.value.seniorAgeYears) {
+    return selectedBreed.value.seniorAgeYears
+  }
+  return thresholds[sizeClass] || 10
+})
+
+/**
+ * 获取当前体型分类
+ */
+const getCurrentSizeClass = computed(() => {
+  // 优先使用手动覆盖
+  if (formData.value.sizeClassOverride) {
+    return formData.value.sizeClassOverride
+  }
+  // 使用品种的体型分类
+  if (selectedBreed.value) {
+    return selectedBreed.value.sizeCategory
+  }
+  return 'MEDIUM' // 默认中型
+})
+
+/**
+ * 计算自动识别的生命阶段
+ */
+const autoDetectedLifeStage = computed(() => {
+  const ageMonths = calculateAgeMonths.value
+  const adultThreshold = getAdultThresholdMonths.value
+  const ageYears = ageMonths / 12.0
+  const seniorThreshold = getSeniorThresholdYears.value
+
+  // 判断生命阶段
+  if (ageMonths < adultThreshold) {
+    // 幼犬期 - 根据月龄显示详细信息
+    if (ageMonths < 4) {
+      return { stage: 'PUPPY', label: '幼犬期', detail: `${ageMonths}个月（快速成长期）` }
+    } else if (ageMonths < 6) {
+      return { stage: 'PUPPY', label: '幼犬期', detail: `${ageMonths}个月（成长期）` }
+    } else if (ageMonths < 12) {
+      return { stage: 'PUPPY', label: '幼犬期', detail: `${ageMonths}个月` }
+    } else {
+      return { stage: 'PUPPY', label: '幼犬期', detail: `${ageMonths}个月（接近成年）` }
+    }
+  } else if (ageYears >= seniorThreshold) {
+    // 老年期
+    return { stage: 'SENIOR', label: '老年期', detail: `${Math.floor(ageYears)}岁` }
+  } else {
+    // 成年期
+    return { stage: 'ADULT', label: '成年期', detail: `${Math.floor(ageYears)}岁` }
+  }
+})
+
+/**
+ * 显示的生命阶段文本（如果有手动覆盖则显示覆盖后的，否则显示自动识别的）
+ */
+const displayLifeStage = computed(() => {
+  const override = formData.value.lifeStageOverride
+  if (override && override !== 'NONE') {
+    // 显示手动覆盖的选项
+    const labels: Record<string, string> = {
+      'PUPPY': '幼犬期（手动覆盖）',
+      'ADULT': '成年期（手动覆盖）',
+      'SENIOR': '老年期（手动覆盖）',
+      'PREGNANCY': '妊娠期',
+      'LACTATION': '哺乳期'
+    }
+    return labels[override] || override
+  }
+  // 显示自动识别的
+  return autoDetectedLifeStage.value.label
+})
+
+/**
+ * 判断是否处于手动覆盖模式
+ */
+const isLifeStageOverride = computed(() => {
+  return formData.value.lifeStageOverride && formData.value.lifeStageOverride !== 'NONE'
+})
+
+// ========== 生命阶段计算逻辑结束 ==========
 
 const canSubmit = computed(() => {
   return Boolean(
@@ -1038,19 +1328,78 @@ function onCloseBcsGuide() {
   bcsGuideShown.value = true
 }
 
+// 切换健康记录折叠面板
+function toggleHealthRecord() {
+  showHealthRecord.value = !showHealthRecord.value
+}
+
+// ========== 生命阶段选择函数 ==========
+
+/**
+ * 保持自动识别
+ */
+function keepAutoDetectedLifeStage() {
+  formData.value.lifeStageOverride = 'NONE'
+  showLifeStageOverride.value = false
+}
+
+/**
+ * 切换到手动覆盖模式
+ */
+function enableLifeStageOverride() {
+  showLifeStageOverride.value = true
+  // 如果当前还没有设置覆盖，默认设置为幼犬期
+  if (!formData.value.lifeStageOverride || formData.value.lifeStageOverride === 'NONE') {
+    formData.value.lifeStageOverride = 'PUPPY'
+  }
+}
+
+/**
+ * 选择手动覆盖的生命阶段
+ */
+function selectLifeStageOverride(stage: string) {
+  formData.value.lifeStageOverride = stage
+}
+
+/**
+ * 取消手动覆盖，恢复自动识别
+ */
+function cancelLifeStageOverride() {
+  formData.value.lifeStageOverride = 'NONE'
+  showLifeStageOverride.value = false
+}
+
+// ========== 生命阶段选择函数结束 ==========
 
 function onLifeStageChange(e: any) {
   formData.value.lifeStageOverride = lifeStageOptions[e.detail.value]
 }
 
-function onTreatInputModeChange(e: any) {
-  formData.value.treatInputMode = treatInputModeOptions[e.detail.value]
+// ========== 零食选择函数 ==========
+
+/**
+ * 选择零食输入模式
+ */
+function selectTreatInputMode(mode: string) {
+  formData.value.treatInputMode = mode
+  // 切换模式时设置默认值
+  if (mode === 'ESTIMATE_LEVEL') {
+    // 估算模式：使用默认LOW级别
+    if (!formData.value.treatLevel || formData.value.treatLevel === 'NONE') {
+      formData.value.treatLevel = 'LOW'
+    }
+  }
+  // 精确模式不需要特殊处理，保持原有输入值
 }
 
-function onTreatLevelChange(e: any) {
-  formData.value.treatLevel = treatLevelOptions[e.detail.value]
-  previewCalculation()
+/**
+ * 选择零食量级别
+ */
+function selectTreatLevel(level: string) {
+  formData.value.treatLevel = level
 }
+
+// ========== 零食选择函数结束 ==========
 
 async function previewCalculation() {
   // Only calculate if we have minimum required fields
@@ -1225,8 +1574,12 @@ function submit() {
       })
 
       setTimeout(() => {
-        uni.navigateBack()
-      }, 1500)
+        // 跳转到狗狗档案列表页面
+    // dog-profile-list 是 tabBar 页面，必须使用 switchTab
+    uni.switchTab({
+      url: '/pages/dog-profile-list/index'
+    })
+  }, 1500)
     } else {
       const errorMsg = res.message || (isEditModeValue ? '保存失败' : '创建失败')
       console.error('[DogCreate] API error:', res.code, errorMsg)
@@ -2006,5 +2359,378 @@ function submit() {
   text-align: center;
   color: #999;
   font-size: 26rpx;
+}
+
+/* Health Record Section */
+.health-record-section {
+  margin-bottom: 20rpx;
+  background-color: #f9f9f9;
+  border-radius: 12rpx;
+  overflow: hidden;
+}
+
+.health-record-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24rpx 30rpx;
+  background-color: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12rpx;
+  cursor: pointer;
+}
+
+.health-record-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.toggle-icon {
+  font-size: 24rpx;
+  color: #999;
+  transition: transform 0.3s;
+}
+
+.health-record-content {
+  padding: 20rpx 30rpx;
+  background-color: #f9f9f9;
+}
+
+.placeholder-box {
+  padding: 40rpx 20rpx;
+  background-color: #fff;
+  border: 2px dashed #d0d0d0;
+  border-radius: 8rpx;
+  text-align: center;
+}
+
+.placeholder-text {
+  font-size: 26rpx;
+  color: #999;
+}
+
+/* ========== 生命阶段样式 ========== */
+
+.life-stage-section {
+  background-color: #f8f9fa;
+  border-radius: 12rpx;
+  padding: 24rpx;
+  border: 1px solid #e9ecef;
+}
+
+/* 生命阶段内容区域 */
+.life-stage-content {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+/* 自动匹配结果展示 */
+.auto-match-result {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 20rpx;
+  background: linear-gradient(135deg, #e6f7ff 0%, #f0f9ff 100%);
+  border-radius: 8rpx;
+  border-left: 4px solid #1890ff;
+  flex-wrap: wrap;
+}
+
+.auto-match-text {
+  font-size: 30rpx;
+  color: #1890ff;
+  font-weight: bold;
+}
+
+.auto-match-label {
+  font-size: 26rpx;
+  color: #666;
+  font-weight: 500;
+}
+
+/* 手动选择触发按钮 */
+.manual-select-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+  padding: 24rpx;
+  background-color: #fff;
+  border: 2px dashed #d0d0d0;
+  border-radius: 12rpx;
+  transition: all 0.3s;
+}
+
+.manual-select-trigger:active {
+  background-color: #f5f5f5;
+  border-color: #1890ff;
+}
+
+.manual-select-text {
+  font-size: 28rpx;
+  color: #1890ff;
+  font-weight: 500;
+}
+
+.manual-select-icon {
+  font-size: 24rpx;
+  color: #1890ff;
+}
+
+/* 未填写生日提示 */
+.life-stage-prompt {
+  padding: 32rpx;
+  background-color: #fffbe6;
+  border-radius: 8rpx;
+  text-align: center;
+  border: 1px solid #ffe58f;
+}
+
+.prompt-text {
+  font-size: 26rpx;
+  color: #ad6800;
+  line-height: 1.6;
+}
+
+/* 手动选择面板 */
+.life-stage-override-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  padding: 20rpx;
+  background-color: #fff;
+  border-radius: 8rpx;
+  border: 2px solid #e0e0e0;
+}
+
+.override-title {
+  font-size: 26rpx;
+  color: #666;
+  font-weight: bold;
+  padding-bottom: 12rpx;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+.override-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.override-option {
+  padding: 16rpx;
+  background-color: #f5f5f5;
+  border: 2px solid #e0e0e0;
+  border-radius: 8rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+  transition: all 0.2s;
+}
+
+.override-option.active {
+  background-color: #e6f7ff;
+  border-color: #1890ff;
+}
+
+.override-option-label {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+.override-option.active .override-option-label {
+  color: #1890ff;
+  font-weight: bold;
+}
+
+.override-option-desc {
+  font-size: 24rpx;
+  color: #999;
+  line-height: 1.4;
+}
+
+/* 取消按钮 */
+.cancel-override-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  padding: 20rpx;
+  margin-top: 8rpx;
+  background-color: #f5f5f5;
+  border: 1px solid #d0d0d0;
+  border-radius: 8rpx;
+  transition: all 0.2s;
+}
+
+.cancel-override-btn:active {
+  background-color: #e8e8e8;
+}
+
+.cancel-override-icon {
+  font-size: 28rpx;
+  color: #999;
+}
+
+.cancel-override-text {
+  font-size: 26rpx;
+  color: #666;
+  font-weight: 500;
+}
+
+/* ========== 零食设置样式 ========== */
+
+.treat-section {
+  background-color: #f8f9fa;
+  border-radius: 12rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+}
+
+.section-label {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #333;
+  display: block;
+  margin-bottom: 20rpx;
+}
+
+.field-label {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 500;
+  display: block;
+  margin-bottom: 12rpx;
+}
+
+/* 零食输入模式选择器 */
+.treat-mode-selector,
+.treat-level-selector {
+  margin-bottom: 20rpx;
+}
+
+.treat-exact-input {
+  margin-bottom: 20rpx;
+}
+
+/* 卡片选项容器 */
+.card-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+/* 横向布局的卡片选项容器 */
+.card-options-horizontal {
+  flex-direction: row;
+  gap: 16rpx;
+}
+
+/* 单个卡片 */
+.card-option {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 20rpx;
+  background-color: #fff;
+  border: 2px solid #e0e0e0;
+  border-radius: 12rpx;
+  transition: all 0.3s;
+}
+
+.card-option.active {
+  background-color: #e6f7ff;
+  border-color: #1890ff;
+}
+
+/* 简化卡片（无圆圈，用于输入模式选择） */
+.card-option-simple {
+  flex: 1;
+  justify-content: center;
+  padding: 24rpx 16rpx;
+}
+
+/* 单选按钮 */
+.card-radio {
+  width: 40rpx;
+  height: 40rpx;
+  border: 3px solid #d0d0d0;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.card-option.active .card-radio {
+  border-color: #1890ff;
+}
+
+.radio-checked {
+  width: 20rpx;
+  height: 20rpx;
+  background-color: #1890ff;
+  border-radius: 50%;
+}
+
+/* 卡片内容 */
+.card-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.card-label {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+.card-option.active .card-label {
+  color: #1890ff;
+  font-weight: bold;
+}
+
+.card-label-simple {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 500;
+  flex: 1;
+  text-align: center;
+}
+
+.card-option-simple.active .card-label-simple {
+  color: #1890ff;
+  font-weight: bold;
+}
+
+.card-desc {
+  font-size: 24rpx;
+  color: #999;
+  line-height: 1.4;
+}
+
+/* 零食量卡片特殊样式 */
+.treat-level-card .card-label {
+  font-size: 28rpx;
+}
+
+/* 精确输入框 */
+.treat-exact-input .input {
+  width: 100%;
+  height: 80rpx;
+  border: 1px solid #ddd;
+  border-radius: 8rpx;
+  padding: 0 20rpx;
+  font-size: 28rpx;
+  box-sizing: border-box;
+}
+
+.input-white-bg {
+  background-color: #ffffff !important;
 }
 </style>

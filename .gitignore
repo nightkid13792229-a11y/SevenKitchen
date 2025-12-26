@@ -22,3 +22,7 @@ miniprogram_npm/
 
 # OS
 Thumbs.db
+
+# Local scripts with sensitive info
+claude_code_zai_env.sh
+backend/scripts/remote_deploy.sh

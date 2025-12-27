@@ -305,7 +305,7 @@ export class DogsController {
     );
 
     // Direct calculation without database save
-    const calcResult = calculateDogEnergy(tempDog, undefined, breed);
+    const calcResult = calculateDogEnergy(tempDog, undefined, breed, true);
 
     const result: DogCalcResultDto = {
       rer: calcResult.rer,
@@ -314,6 +314,7 @@ export class DogsController {
       treatDeduction: calcResult.treatDeduction,
       isTreatCapped: calcResult.isTreatCapped,
       dailyIntakeG: calcResult.dailyIntakeG,
+      calcDetails: calcResult.calcDetails,
     };
 
     return ApiResponseDto.success(result);

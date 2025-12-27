@@ -33,6 +33,24 @@ export interface DogCalcResult {
   isTreatCapped: boolean; // Whether treat deduction hit 10% cap
   finalFoodKcal: number; // Final food kcal requirement (kcal/day)
   dailyIntakeG?: number; // Daily intake in grams (if recipe energy density provided)
+  calcDetails?: {
+    // Input snapshot
+    weightKg: number;
+    ageMonths: number;
+    sizeClass: string;
+    lifeStage: string;
+
+    // Coefficients
+    stageFactor: number;
+    activityMultiplier: number;
+    neuterMultiplier: number;
+    bcsMultiplier: number;
+
+    // Treat info
+    treatMode: string;
+    treatLevel?: string;
+    treatPercentage?: number;
+  };
 }
 
 /**
@@ -452,6 +470,7 @@ export function calculateDogEnergy(
   dog: Dog,
   recipeEnergyDensityKcalPerKg?: number,
   breed?: DogBreed | null,
+  includeDetails: boolean = false,
 ): DogCalcResult {
   // Validate mixed breed dog has size class override
   validateMixedBreedDog(dog, breed);
@@ -473,6 +492,76 @@ export function calculateDogEnergy(
       needsResult.finalFoodKcal,
       recipeEnergyDensityKcalPerKg,
     );
+  }
+
+  // Add detailed calculation breakdown if requested
+  if (includeDetails) {
+    const ageMonths = calculateAgeMonths(dog.birthday);
+    const sizeClass = determineSizeClass(dog, breed);
+
+    // Get life stage
+    let lifeStage: string;
+    if (dog.lifeStageOverride !== LifeStageOverride.NONE) {
+      lifeStage = dog.lifeStageOverride;
+    } else if (isGrowthOrReproStage(dog, ageMonths, sizeClass, breed)) {
+      lifeStage = 'GROWTH';
+    } else if (checkIsSenior(ageMonths, sizeClass, breed)) {
+      lifeStage = 'SENIOR';
+    } else {
+      lifeStage = 'ADULT';
+    }
+
+    // Get coefficients
+    const stageFactor = getLifeStageFactor(dog, ageMonths, sizeClass, breed);
+
+    let activityMultiplier: number;
+    if (lifeStage === 'ADULT') {
+      activityMultiplier = ACTIVITY_MULTIPLIERS[dog.activityLevel] ?? ACTIVITY_MULTIPLIERS.NORMAL;
+    } else {
+      activityMultiplier = 1.0;
+    }
+
+    let neuterMultiplier: number;
+    if (lifeStage === 'ADULT') {
+      const isSenior = checkIsSenior(ageMonths, sizeClass, breed);
+      if (isSenior) {
+        neuterMultiplier = 1.0;
+      } else {
+        neuterMultiplier = dog.isNeutered ? LIFE_STAGE_FACTORS.ADULT_NEUTERED : LIFE_STAGE_FACTORS.ADULT_INTACT;
+        // Normalize by dividing by adult base factor to get multiplier
+        neuterMultiplier = neuterMultiplier / LIFE_STAGE_FACTORS.ADULT_NEUTERED;
+      }
+    } else {
+      neuterMultiplier = 1.0;
+    }
+
+    const bcsMultiplier = getBcsAdjustment(dog.bcsScore);
+
+    // Get treat percentage
+    let treatPercentage: number | undefined;
+    if (dog.treatInputMode === 'ESTIMATE_LEVEL' && dog.treatLevel) {
+      if (dog.treatLevel === TreatLevel.LOW) {
+        treatPercentage = Math.round(TREAT_LIMITS.LOW_RATIO * 100);
+      } else if (dog.treatLevel === TreatLevel.MODERATE) {
+        treatPercentage = Math.round(TREAT_LIMITS.MODERATE_RATIO * 100);
+      } else if (dog.treatLevel === TreatLevel.HIGH) {
+        treatPercentage = Math.round(TREAT_LIMITS.HIGH_RATIO * 100);
+      }
+    }
+
+    result.calcDetails = {
+      weightKg: dog.currentWeightKg,
+      ageMonths,
+      sizeClass,
+      lifeStage,
+      stageFactor,
+      activityMultiplier,
+      neuterMultiplier,
+      bcsMultiplier,
+      treatMode: dog.treatInputMode,
+      treatLevel: dog.treatLevel ?? undefined,
+      treatPercentage,
+    };
   }
 
   return result;

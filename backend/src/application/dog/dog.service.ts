@@ -65,6 +65,7 @@ export interface CalcPreviewResult {
   treatDeduction: number;
   isTreatCapped: boolean;
   dailyIntakeG?: number;
+  calcDetails?: Record<string, any>;
 }
 
 export const DOG_REPOSITORY = Symbol('DogRepository');
@@ -185,7 +186,7 @@ export class DogService {
     // Load breed for calculation
     const breed = await this.dogBreedRepository.findById(dog.breedId);
 
-    const calcResult = calculateDogEnergy(dog, undefined, breed);
+    const calcResult = calculateDogEnergy(dog, undefined, breed, true);
 
     return {
       rer: calcResult.rer,
@@ -194,6 +195,7 @@ export class DogService {
       treatDeduction: calcResult.treatDeduction,
       isTreatCapped: calcResult.isTreatCapped,
       dailyIntakeG: calcResult.dailyIntakeG,
+      calcDetails: calcResult.calcDetails,
     };
   }
 }

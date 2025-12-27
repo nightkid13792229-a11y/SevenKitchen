@@ -461,6 +461,82 @@
         <view class="calc-warning" v-if="calcResult.isTreatCapped">
           ⚠️ 零食热量已超过安全上限(10%)，系统已自动调整为安全最大值
         </view>
+
+        <!-- 计算过程折叠区 -->
+        <view class="calc-process-section" v-if="calcResult.calcDetails">
+          <view class="process-toggle" @tap="toggleCalcProcess">
+            <text class="process-toggle-text">计算过程</text>
+            <text class="process-toggle-icon">{{ showCalcProcess ? '▼' : '▶' }}</text>
+          </view>
+
+          <view v-if="showCalcProcess && calcResult.calcDetails" class="process-content">
+            <!-- 基础信息 -->
+            <view class="process-step">
+              <text class="step-title">基础信息</text>
+              <view class="step-info">
+                <text class="info-item">体重: {{ calcResult.calcDetails.weightKg }} kg</text>
+                <text class="info-item">年龄: {{ calcResult.calcDetails.ageMonths }} 月</text>
+                <text class="info-item">体型: {{ getSizeClassLabel(calcResult.calcDetails.sizeClass) }}</text>
+                <text class="info-item">生命周期: {{ getLifeStageLabel(calcResult.calcDetails.lifeStage) }}</text>
+              </view>
+            </view>
+
+            <!-- RER计算 -->
+            <view class="process-step">
+              <text class="step-title">1. RER (静息能量需求)</text>
+              <view class="formula-box">
+                <text class="formula-text">
+                  70 × {{ calcResult.calcDetails.weightKg }}^0.75 = {{ calcResult.rer?.toFixed(1) }} kcal/天
+                </text>
+              </view>
+            </view>
+
+            <!-- DER系数 -->
+            <view class="process-step">
+              <text class="step-title">2. DER系数</text>
+              <view class="coefficients-box">
+                <text class="coeff-item">阶段系数: {{ calcResult.calcDetails.stageFactor }}</text>
+                <text class="coeff-item">活动系数: {{ calcResult.calcDetails.activityMultiplier }}</text>
+                <text class="coeff-item">绝育系数: {{ calcResult.calcDetails.neuterMultiplier }}</text>
+                <text class="coeff-item">体况系数: {{ calcResult.calcDetails.bcsMultiplier }}</text>
+              </view>
+            </view>
+
+            <!-- 总DER -->
+            <view class="process-step">
+              <text class="step-title">3. 总DER计算</text>
+              <view class="formula-box">
+                <text class="formula-text">
+                  {{ calcResult.rer?.toFixed(1) }} × {{ calcResult.calcDetails.stageFactor }} × {{ calcResult.calcDetails.activityMultiplier }} × {{ calcResult.calcDetails.neuterMultiplier }} × {{ calcResult.calcDetails.bcsMultiplier }} = {{ calcResult.totalDer?.toFixed(1) }} kcal/天
+                </text>
+              </view>
+            </view>
+
+            <!-- 零食扣除 -->
+            <view class="process-step" v-if="calcResult.treatDeduction > 0">
+              <text class="step-title">4. 零食热量扣除</text>
+              <view class="treat-box">
+                <text class="treat-mode">模式: {{ getTreatModeLabel(calcResult.calcDetails.treatMode) }}</text>
+                <text class="treat-level" v-if="calcResult.calcDetails.treatLevel">
+                  级别: {{ getTreatLevelLabel(calcResult.calcDetails.treatLevel) }} ({{ calcResult.calcDetails.treatPercentage }}%)
+                </text>
+                <text class="treat-deduction">
+                  扣除: {{ calcResult.totalDer?.toFixed(1) }} × {{ calcResult.calcDetails.treatPercentage }}% = {{ calcResult.treatDeduction?.toFixed(1) }} kcal/天
+                </text>
+              </view>
+            </view>
+
+            <!-- 最终热量 -->
+            <view class="process-step final-step">
+              <text class="step-title">5. 最终鲜食热量需求</text>
+              <view class="formula-box">
+                <text class="formula-text">
+                  {{ calcResult.totalDer?.toFixed(1) }} - {{ calcResult.treatDeduction?.toFixed(1) || 0 }} = {{ calcResult.finalFoodKcal?.toFixed(1) }} kcal/天
+                </text>
+              </view>
+            </view>
+          </view>
+        </view>
       </view>
     </view>
 
@@ -530,7 +606,7 @@ const formData = ref<FormData>({
   lifeStageOverride: 'NONE',
   sizeClassOverride: null,
   mealsPerDay: '2',
-  treatInputMode: 'ESTIMATE_LEVEL',
+  treatInputMode: '',
   treatLevel: 'LOW',
   manualTreatKcal: '',
   medicalHistory: ''
@@ -673,6 +749,7 @@ interface CalcResult {
 const breeds = ref<Breed[]>([])
 const selectedBreed = ref<Breed | null>(null)
 const calcResult = ref<CalcResult | null>(null)
+const showCalcProcess = ref(false)
 const loadingBreeds = ref(false)
 const calculating = ref(false)
 
@@ -1446,7 +1523,8 @@ async function previewCalculation() {
         finalFoodKcal: res.data.finalFoodKcal,
         treatDeduction: res.data.treatDeduction,
         isTreatCapped: res.data.isTreatCapped,
-        dailyIntakeG: res.data.dailyIntakeG
+        dailyIntakeG: res.data.dailyIntakeG,
+        calcDetails: res.data.calcDetails
       }
       console.log('[DogCreate] Preview calculation result:', calcResult.value)
       uni.showToast({
@@ -1469,6 +1547,55 @@ async function previewCalculation() {
     calculating.value = false
   }
 }
+
+// ========== 计算过程辅助函数 ==========
+
+function toggleCalcProcess() {
+  showCalcProcess.value = !showCalcProcess.value
+}
+
+function getSizeClassLabel(sizeClass: string): string {
+  const labels: Record<string, string> = {
+    'SMALL': '小型犬',
+    'MEDIUM': '中型犬',
+    'LARGE': '大型犬',
+    'GIANT': '巨型犬'
+  }
+  return labels[sizeClass] || sizeClass
+}
+
+function getLifeStageLabel(lifeStage: string): string {
+  const labels: Record<string, string> = {
+    'GROWTH': '生长期',
+    'ADULT': '成年期',
+    'SENIOR': '老年期',
+    'PREGNANCY': '妊娠期',
+    'LACTATION': '哺乳期',
+    'PUPPY': '幼犬期'
+  }
+  return labels[lifeStage] || lifeStage
+}
+
+function getTreatModeLabel(treatMode: string): string {
+  const labels: Record<string, string> = {
+    'ESTIMATE_LEVEL': '估算级别',
+    'EXACT_KCAL': '精确热量'
+  }
+  return labels[treatMode] || treatMode
+}
+
+function getTreatLevelLabel(treatLevel?: string): string {
+  if (!treatLevel) return ''
+  const labels: Record<string, string> = {
+    'NONE': '无零食',
+    'LOW': '少量',
+    'MODERATE': '适量',
+    'HIGH': '较多'
+  }
+  return labels[treatLevel] || treatLevel
+}
+
+// ========== 计算过程辅助函数结束 ==========
 
 function submit() {
   const { name, breedId, birthday, currentWeightKg, activityLevel } = formData.value
@@ -2733,4 +2860,120 @@ function submit() {
 .input-white-bg {
   background-color: #ffffff !important;
 }
+
+/* ========== 计算过程样式 ========== */
+.calc-process-section {
+  margin-top: 20rpx;
+  border-top: 1px solid #e9ecef;
+  padding-top: 20rpx;
+}
+
+.process-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 20rpx;
+  background-color: #f0f2f5;
+  border-radius: 8rpx;
+  cursor: pointer;
+}
+
+.process-toggle-text {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.process-toggle-icon {
+  font-size: 24rpx;
+  color: #1890ff;
+}
+
+.process-content {
+  margin-top: 20rpx;
+}
+
+.process-step {
+  margin-bottom: 24rpx;
+  padding: 20rpx;
+  background-color: #fafafa;
+  border-radius: 8rpx;
+  border-left: 3px solid #1890ff;
+}
+
+.process-step.final-step {
+  background-color: #f6ffed;
+  border-left-color: #52c41a;
+}
+
+.step-title {
+  display: block;
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 12rpx;
+}
+
+.step-info {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.info-item {
+  font-size: 26rpx;
+  color: #666;
+  line-height: 1.5;
+}
+
+.formula-box {
+  background-color: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 6rpx;
+  padding: 15rpx;
+  margin-top: 10rpx;
+}
+
+.formula-text {
+  font-size: 26rpx;
+  color: #333;
+  font-family: 'Courier New', monospace;
+  line-height: 1.6;
+  word-break: break-all;
+}
+
+.coefficients-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  margin-top: 10rpx;
+}
+
+.coeff-item {
+  font-size: 26rpx;
+  color: #666;
+  line-height: 1.5;
+}
+
+.treat-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  margin-top: 10rpx;
+}
+
+.treat-mode,
+.treat-level,
+.treat-deduction {
+  font-size: 26rpx;
+  color: #666;
+  line-height: 1.5;
+}
+
+.treat-mode {
+  font-weight: bold;
+  color: #333;
+}
+
+/* ========== 计算过程样式结束 ========== */
 </style>

@@ -103,6 +103,26 @@ export class DogCalcResultDto implements CalcPreviewResult {
     example: 375,
   })
   dailyIntakeG?: number;
+
+  @ApiPropertyOptional({
+    description: 'Detailed calculation breakdown (includes intermediate values)',
+    type: 'object',
+    additionalProperties: true,
+    example: {
+      weightKg: 10.5,
+      ageMonths: 36,
+      sizeClass: 'MEDIUM',
+      lifeStage: 'ADULT',
+      stageFactor: 1.6,
+      activityMultiplier: 1.0,
+      neuterMultiplier: 1.0,
+      bcsMultiplier: 1.0,
+      treatMode: 'ESTIMATE_LEVEL',
+      treatLevel: 'LOW',
+      treatPercentage: 3,
+    },
+  })
+  calcDetails?: Record<string, any>;
 }
 
 export class DogDetailResponseDto {

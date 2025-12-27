@@ -45,6 +45,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '编辑档案' }
       },
       {
+        path: 'breeds',
+        name: 'Breeds',
+        component: () => import('@/views/Breeds/index.vue'),
+        meta: { title: '品种管理' }
+      },
+      {
         path: 'ingredients',
         name: 'Ingredients',
         component: () => import('@/views/Ingredients/index.vue'),

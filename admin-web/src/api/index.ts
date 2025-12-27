@@ -104,4 +104,7 @@ export const productionApi = {
     api.get(`/admin/production-batches/${id}`)
 }
 
+// Re-export breed API
+export { breedApi } from './breeds'
+
 export default api

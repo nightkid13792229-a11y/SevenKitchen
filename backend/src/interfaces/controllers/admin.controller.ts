@@ -9,6 +9,7 @@ import {
   Get,
   Post,
   Put,
+  Delete,
   Body,
   Param,
   Query,
@@ -39,6 +40,13 @@ import { OrderStatus } from '../../domain';
 import { CancelOrderDto } from '../dto/orders/cancel-order.dto';
 import { OrderDto } from '../dto/orders/order-response.dto';
 import { InvalidStateTransitionError } from '../../domain/common/errors';
+import {
+  CreateBreedDto,
+  UpdateBreedDto,
+  BreedResponseDto,
+  CustomBreedStatsDto,
+  BreedUsageCheckDto,
+} from '../dto/breeds';
 import { PrismaService } from '../../infrastructure/prisma.service';
 
 @ApiTags('Admin')
@@ -689,6 +697,141 @@ export class AdminController {
       profile,
       calcResult,
     });
+  }
+
+  // ==================== Breed Management Endpoints ====================
+
+  @Get('breeds')
+  @ApiOperation({ summary: 'Get all system breeds' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of all breeds',
+    schema: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/BreedResponseDto' },
+    },
+  })
+  async getBreeds(): Promise<ApiResponseDto<BreedResponseDto[]>> {
+    const breeds = await this.dogBreedRepository.findAll();
+    const data = breeds.map(b => this.mapToBreedResponseDto(b));
+
+    return ApiResponseDto.success(data);
+  }
+
+  @Get('breeds/custom-stats')
+  @ApiOperation({ summary: 'Get custom breed statistics' })
+  @ApiResponse({
+    status: 200,
+    description: 'Custom breed usage statistics',
+    schema: {
+      type: 'array',
+      items: { $ref: '#/components/schemas/CustomBreedStatsDto' },
+    },
+  })
+  async getCustomBreedStats(): Promise<ApiResponseDto<CustomBreedStatsDto[]>> {
+    const stats = await this.dogService.getCustomBreedStats();
+
+    return ApiResponseDto.success(stats as any);
+  }
+
+  @Get('breeds/:id/usage')
+  @ApiOperation({ summary: 'Check breed usage' })
+  @ApiResponse({
+    status: 200,
+    description: 'Breed usage statistics',
+    schema: { $ref: '#/components/schemas/BreedUsageCheckDto' },
+  })
+  async checkBreedUsage(@Param('id') id: string): Promise<ApiResponseDto<BreedUsageCheckDto>> {
+    const breed = await this.dogBreedRepository.findById(id);
+    if (!breed) {
+      throw new NotFoundException(`Breed not found: ${id}`);
+    }
+
+    const usage = await this.dogService.checkBreedUsage(id);
+
+    return ApiResponseDto.success(usage as any);
+  }
+
+  @Get('breeds/:id')
+  @ApiOperation({ summary: 'Get breed by ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Breed details',
+    schema: { $ref: '#/components/schemas/BreedResponseDto' },
+  })
+  async getBreedById(@Param('id') id: string): Promise<ApiResponseDto<BreedResponseDto>> {
+    const breed = await this.dogBreedRepository.findById(id);
+    if (!breed) {
+      throw new NotFoundException(`Breed not found: ${id}`);
+    }
+
+    return ApiResponseDto.success(this.mapToBreedResponseDto(breed));
+  }
+
+  @Post('breeds')
+  @ApiOperation({ summary: 'Create new breed' })
+  @ApiResponse({
+    status: 201,
+    description: 'Breed created successfully',
+    schema: { $ref: '#/components/schemas/BreedResponseDto' },
+  })
+  async createBreed(@Body() dto: CreateBreedDto): Promise<ApiResponseDto<BreedResponseDto>> {
+    try {
+      const breed = await this.dogService.createBreed(dto as any);
+
+      return ApiResponseDto.success(this.mapToBreedResponseDto(breed));
+    } catch (error: any) {
+      throw new BadRequestException(error.message);
+    }
+  }
+
+  @Put('breeds/:id')
+  @ApiOperation({ summary: 'Update breed' })
+  @ApiResponse({
+    status: 200,
+    description: 'Breed updated successfully',
+    schema: { $ref: '#/components/schemas/BreedResponseDto' },
+  })
+  async updateBreed(
+    @Param('id') id: string,
+    @Body() dto: UpdateBreedDto,
+  ): Promise<ApiResponseDto<BreedResponseDto>> {
+    try {
+      const breed = await this.dogService.updateBreed(id, dto as any);
+
+      return ApiResponseDto.success(this.mapToBreedResponseDto(breed));
+    } catch (error: any) {
+      throw new BadRequestException(error.message);
+    }
+  }
+
+  @Delete('breeds/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete breed' })
+  @ApiResponse({ status: 204, description: 'Breed deleted successfully' })
+  async deleteBreed(@Param('id') id: string): Promise<void> {
+    try {
+      await this.dogService.deleteBreed(id);
+    } catch (error: any) {
+      throw new NotFoundException(error.message);
+    }
+  }
+
+  /**
+   * Map DogBreed entity to response DTO
+   */
+  private mapToBreedResponseDto(breed: any): BreedResponseDto {
+    return {
+      id: breed.id,
+      name: breed.name,
+      sizeCategory: breed.sizeCategory,
+      growthCurveType: breed.growthCurveType,
+      adultAgeMonths: breed.adultAgeMonths,
+      seniorAgeYears: breed.seniorAgeYears,
+      averageAdultWeightKg: breed.averageAdultWeightKg ?? undefined,
+      createdAt: new Date(), // TODO: Get from actual record
+      updatedAt: new Date(), // TODO: Get from actual record
+    };
   }
 }
 

@@ -90,6 +90,19 @@
         </el-table-column>
       </el-table>
 
+      <!-- Pagination -->
+      <div v-if="filteredData.length > 0" class="pagination-container">
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="total"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="handleSizeChange"
+          @current-change="handlePageChange"
+        />
+      </div>
+
       <!-- Empty State -->
       <div v-if="displayData.length === 0 && !loading" class="empty-state">
         <el-empty :description="searchText || sizeFilter ? '未找到匹配的品种' : '暂无品种数据'" />
@@ -130,9 +143,11 @@ const searchText = ref('')
 const sizeFilter = ref<string>('')
 const dialogVisible = ref(false)
 const currentBreed = ref<DogBreed | null>(null)
+const currentPage = ref(1)
+const pageSize = ref(10)
 
-// 计算显示的数据
-const displayData = computed(() => {
+// 计算筛选后的数据
+const filteredData = computed(() => {
   let result = props.data
 
   // 按体型筛选
@@ -152,6 +167,27 @@ const displayData = computed(() => {
 
   return result
 })
+
+// 计算分页后的数据
+const displayData = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  const end = start + pageSize.value
+  return filteredData.value.slice(start, end)
+})
+
+// 计算总数
+const total = computed(() => filteredData.value.length)
+
+// 处理页码变化
+const handlePageChange = (page: number) => {
+  currentPage.value = page
+}
+
+// 处理每页数量变化
+const handleSizeChange = (size: number) => {
+  pageSize.value = size
+  currentPage.value = 1 // 重置到第一页
+}
 
 const getSizeTagType = (size: string) => {
   const typeMap: Record<string, any> = {
@@ -177,11 +213,13 @@ const isSystemBreed = (breed: DogBreed) => {
 }
 
 const handleFilter = () => {
-  // 筛选是响应式的，无需额外处理
+  // 筛选改变时重置到第一页
+  currentPage.value = 1
 }
 
 const handleSearch = () => {
-  // 搜索是响应式的，无需额外处理
+  // 搜索改变时重置到第一页
+  currentPage.value = 1
 }
 
 const handleCreate = () => {
@@ -281,6 +319,13 @@ const handleDelete = async (breed: DogBreed) => {
   gap: 16px;
   margin-bottom: 20px;
   align-items: center;
+}
+
+.pagination-container {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 20px;
+  padding: 16px 0;
 }
 
 .empty-state {

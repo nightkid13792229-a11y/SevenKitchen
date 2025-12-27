@@ -49,7 +49,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { request } from '../../utils/api'
+import { request, waitForToken } from '../../utils/api'
 import { getBaseUrl } from '../../utils/config'
 import { getCachedDogs, setCachedDogs, type DogDto } from '../../utils/dog-cache'
 
@@ -75,7 +75,10 @@ onMounted(() => {
 })
 
 // Reload when page is shown (e.g., navigating back from create page)
-onShow(() => {
+onShow(async () => {
+  // Wait for token to be ready before making API requests
+  // This prevents 401 errors from race conditions with auto-login
+  await waitForToken()
   loadDogs()
 })
 
@@ -168,11 +171,15 @@ function performHealthCheck() {
       timeout: 5000,
       success: (res: any) => {
         // Health endpoint returns { status: 'ok', timestamp: '...' } directly
+        console.log('[HealthCheck] Response received:', res)
+        console.log('[HealthCheck] StatusCode:', res.statusCode)
+        console.log('[HealthCheck] Data:', res.data)
+
         const data = res.data
         if (res.statusCode === 200 && data && data.status === 'ok' && data.timestamp) {
           // Format timestamp for display
           const date = new Date(data.timestamp)
-          const timeStr = date.toLocaleString('zh-CN', { 
+          const timeStr = date.toLocaleString('zh-CN', {
             year: 'numeric',
             month: '2-digit',
             day: '2-digit',
@@ -180,11 +187,13 @@ function performHealthCheck() {
             minute: '2-digit',
             second: '2-digit'
           })
+          console.log('[HealthCheck] ✓ Success:', timeStr)
           resolve({
             type: 'success',
             message: `API OK - ${timeStr}`
           })
         } else {
+          console.warn('[HealthCheck] ✗ Invalid response format')
           resolve({
             type: 'error',
             message: 'API Unreachable - Invalid response'

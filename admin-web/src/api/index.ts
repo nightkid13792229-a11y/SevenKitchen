@@ -90,7 +90,7 @@ export const orderApi = {
 
 export const inventoryApi = {
   list: (): Promise<any[]> =>
-    api.get('/admin/inventory'),
+    api.get('/admin/ingredients'),
   updatePrice: (id: string, price: number): Promise<any> =>
     api.put(`/admin/ingredients/${id}/price`, { currentPricePerPurchaseUnit: price })
 }
@@ -106,5 +106,8 @@ export const productionApi = {
 
 // Re-export breed API
 export { breedApi } from './breeds'
+
+// Re-export ingredient tag API
+export { ingredientTagApi } from './ingredientTags'
 
 export default api

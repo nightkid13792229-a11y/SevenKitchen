@@ -26,10 +26,13 @@
     </el-form-item>
 
     <el-form-item label="品牌">
-      <el-input
+      <el-autocomplete
         v-model="formData.brand"
-        placeholder="请输入品牌"
-        maxlength="50"
+        :fetch-suggestions="querySearchBrands"
+        placeholder="搜索或输入品牌"
+        clearable
+        style="width: 200px"
+        :trigger-on-focus="false"
       />
     </el-form-item>
 
@@ -42,10 +45,13 @@
     </el-form-item>
 
     <el-form-item label="采购渠道">
-      <el-input
+      <el-autocomplete
         v-model="formData.purchaseChannel"
-        placeholder="如：山姆会员店、拼多多"
-        maxlength="100"
+        :fetch-suggestions="querySearchChannels"
+        placeholder="搜索或输入采购渠道"
+        clearable
+        style="width: 200px"
+        :trigger-on-focus="false"
       />
     </el-form-item>
 
@@ -60,11 +66,43 @@
       />
     </el-form-item>
 
+    <el-form-item label="标签分类">
+      <el-select
+        v-model="selectedTagIds"
+        multiple
+        collapse-tags
+        collapse-tags-tooltip
+        placeholder="选择标签"
+        style="width: 100%"
+      >
+        <el-option
+          v-for="tag in allTags"
+          :key="tag.id"
+          :label="tag.name"
+          :value="tag.id"
+        >
+          <div class="tag-option">
+            <el-tag
+              v-if="tag.color"
+              :color="tag.color"
+              size="small"
+              effect="plain"
+            >
+              {{ tag.name }}
+            </el-tag>
+            <span v-else>{{ tag.name }}</span>
+            <span class="tag-description">{{ tag.description || '' }}</span>
+          </div>
+        </el-option>
+      </el-select>
+      <div class="hint-text">可选择多个标签进行分类</div>
+    </el-form-item>
+
     <!-- 单位与成本 -->
     <div class="section-title">单位与成本</div>
 
     <el-form-item label="基准单位" prop="baseUnit">
-      <el-radio-group v-model="formData.baseUnit">
+      <el-radio-group v-model="formData.baseUnit" @change="handleBaseUnitChange">
         <el-radio :value="BaseUnit.G">克 (G)</el-radio>
         <el-radio :value="BaseUnit.ML">毫升 (ML)</el-radio>
         <el-radio :value="BaseUnit.PCS">个/件 (PCS)</el-radio>
@@ -285,8 +323,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, computed } from 'vue'
+import { ref, reactive, watch, computed, onMounted } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { ingredientTagApi, type IngredientTag } from '@/api/ingredientTags'
+import { ingredientApi } from '@/api/ingredients'
+import type { Ingredient } from '@/types/ingredient'
 import {
   IngredientType,
   BaseUnit,
@@ -314,6 +356,9 @@ const emit = defineEmits<Emits>()
 
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
+const allTags = ref<IngredientTag[]>([])
+const allIngredients = ref<Ingredient[]>([])
+const selectedTagIds = ref<string[]>([])
 
 const formData = reactive<IngredientForm>({
   id: props.ingredient?.id,
@@ -330,7 +375,8 @@ const formData = reactive<IngredientForm>({
   currentPricePerPurchaseUnit: props.ingredient?.currentPricePerPurchaseUnit ?? 0,
   weightG: props.ingredient?.weightG,
   maxCapacityG: props.ingredient?.maxCapacityG,
-  properties: props.ingredient?.properties || getDefaultProperties(IngredientType.FOOD)
+  properties: props.ingredient?.properties || getDefaultProperties(IngredientType.FOOD),
+  tagIds: props.ingredient?.tagIds || []
 })
 
 // 类型特定属性
@@ -425,6 +471,16 @@ function handleTypeChange() {
   }
 }
 
+function handleBaseUnitChange() {
+  // 当切换baseUnit时，处理density字段
+  if (formData.type === IngredientType.FOOD) {
+    if (formData.baseUnit !== BaseUnit.ML) {
+      // 如果不是ML类型，清除density字段以避免验证问题
+      delete foodProperties.density_g_per_ml
+    }
+  }
+}
+
 function handleActiveNutrientsChange(value: string) {
   try {
     supplementProperties.active_nutrients = JSON.parse(value || '{}')
@@ -443,6 +499,47 @@ function syncProperties() {
   }
 }
 
+// Load tags
+const loadTags = async () => {
+  try {
+    allTags.value = await ingredientTagApi.list()
+  } catch (error: any) {
+    console.error('Failed to load tags:', error)
+  }
+}
+
+// Load all ingredients for brand/channel suggestions
+const loadIngredients = async () => {
+  try {
+    allIngredients.value = await ingredientApi.list()
+  } catch (error: any) {
+    console.error('Failed to load ingredients:', error)
+  }
+}
+
+// Query search brands
+const querySearchBrands = (queryString: string, cb: any) => {
+  const brands = [...new Set(allIngredients.value.map(i => i.brand).filter((b): b is string => Boolean(b)))]
+  const results = queryString
+    ? brands.filter(b => b.toLowerCase().includes(queryString.toLowerCase()))
+    : brands
+  cb(results.map(b => ({ value: b })))
+}
+
+// Query search channels
+const querySearchChannels = (queryString: string, cb: any) => {
+  const channels = [...new Set(allIngredients.value.map(i => i.purchaseChannel).filter((c): c is string => Boolean(c)))]
+  const results = queryString
+    ? channels.filter(c => c.toLowerCase().includes(queryString.toLowerCase()))
+    : channels
+  cb(results.map(c => ({ value: c })))
+}
+
+// Watch for tagIds changes
+watch(selectedTagIds, (newIds) => {
+  formData.tagIds = newIds
+})
+
 // Watch for ingredient changes
 watch(() => props.ingredient, (newIngredient) => {
   if (newIngredient) {
@@ -457,8 +554,23 @@ watch(() => props.ingredient, (newIngredient) => {
     } else if (newIngredient.type === IngredientType.PACKAGING) {
       Object.assign(packagingProperties, newIngredient.properties as PackagingProperties)
     }
+
+    // Update selected tag IDs
+    if (newIngredient.tagIds) {
+      selectedTagIds.value = newIngredient.tagIds
+    }
   }
+
+  // Reload ingredients data whenever form is opened (ingredient prop changes)
+  // This ensures brand/channel suggestions are up-to-date
+  loadIngredients()
 }, { immediate: true })
+
+// Lifecycle
+onMounted(() => {
+  loadTags()
+  // loadIngredients() is called by watch with immediate: true
+})
 
 // 表单验证规则
 const formRules: FormRules = {
@@ -484,7 +596,21 @@ const formRules: FormRules = {
     { type: 'number', min: 0, message: '采购单价必须大于等于0', trigger: 'blur' }
   ],
   weightG: [
-    { type: 'number', min: 0.1, message: '单个重量必须大于0', trigger: 'blur' }
+    {
+      type: 'number',
+      min: 0.1,
+      message: '单个重量必须大于0',
+      trigger: 'blur',
+      validator: (rule, value, callback) => {
+        if (formData.baseUnit === BaseUnit.PCS && (value === null || value === undefined)) {
+          callback(new Error('PCS类型必须填写单个重量'))
+        } else if (formData.baseUnit === BaseUnit.PCS && value !== null && value < 0.1) {
+          callback(new Error('单个重量必须大于0'))
+        } else {
+          callback()
+        }
+      }
+    }
   ]
 }
 
@@ -492,12 +618,51 @@ const handleSubmit = async () => {
   if (!formRef.value) return
 
   try {
+    // 基础验证
     await formRef.value.validate()
+
+    // 类型特定属性验证
+    if (formData.type === IngredientType.FOOD) {
+      // 食材验证
+      if (!foodProperties.cfct_class) {
+        throw new Error('请选择CFCT分类')
+      }
+      if (!foodProperties.edible_yield_rate || foodProperties.edible_yield_rate < 0.1 || foodProperties.edible_yield_rate > 1.0) {
+        throw new Error('可食部比率必须在0.1到1.0之间')
+      }
+      if (formData.baseUnit === BaseUnit.ML && (!foodProperties.density_g_per_ml || foodProperties.density_g_per_ml <= 0)) {
+        throw new Error('ML类型必须输入密度且必须大于0')
+      }
+    } else if (formData.type === IngredientType.SUPPLEMENT) {
+      // 补剂验证
+      if (!supplementProperties.category_type) {
+        throw new Error('请选择营养分类')
+      }
+      if (!supplementProperties.active_nutrients || Object.keys(supplementProperties.active_nutrients).length === 0) {
+        throw new Error('请至少添加一种有效成分')
+      }
+      // 验证active_nutrients JSON格式
+      try {
+        if (typeof activeNutrientsJson.value === 'string' && activeNutrientsJson.value) {
+          JSON.parse(activeNutrientsJson.value)
+        }
+      } catch (e) {
+        throw new Error('有效成分浓度JSON格式不正确')
+      }
+    } else if (formData.type === IngredientType.PACKAGING) {
+      // 包材验证
+      if (packagingProperties.is_consumable === null || packagingProperties.is_consumable === undefined) {
+        throw new Error('请选择消耗品类型')
+      }
+    }
+
     syncProperties()
     submitting.value = true
     emit('submit', { ...formData })
-  } catch {
+  } catch (error: any) {
     // Validation failed
+    const message = error?.message || '表单验证失败'
+    ElMessage.error(message)
   } finally {
     submitting.value = false
   }
@@ -537,5 +702,17 @@ const handleCancel = () => {
   font-size: 16px;
   font-weight: 500;
   color: #409eff;
+}
+
+.tag-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tag-description {
+  color: #909399;
+  font-size: 12px;
 }
 </style>

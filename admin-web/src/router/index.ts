@@ -57,6 +57,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '原料管理' }
       },
       {
+        path: 'ingredient-tags',
+        name: 'IngredientTags',
+        component: () => import('@/views/IngredientTags/index.vue'),
+        meta: { title: '原料标签管理' }
+      },
+      {
         path: 'recipes',
         name: 'Recipes',
         component: () => import('@/views/Recipes.vue'),

@@ -39,6 +39,7 @@ import {
   IngredientService,
   INGREDIENT_REPOSITORY,
 } from './application/ingredient/ingredient.service';
+import { PrismaIngredientRepository } from './infrastructure/repositories/prisma-ingredient.repository';
 import { InMemoryIngredientRepository } from './infrastructure/repositories/in-memory-ingredient.repository';
 import { Ingredient } from './domain/ingredient';
 import { IngredientType, BaseUnit, SupplementCategoryType } from './domain/ingredient/enums';
@@ -60,6 +61,8 @@ import { PrismaOrderStatusHistoryRepository } from './infrastructure/repositorie
 import { ORDER_STATUS_HISTORY_REPOSITORY } from './application/order/order.service.tokens';
 import { PrismaDogBreedRepository } from './infrastructure/repositories/prisma-dog-breed.repository';
 import { DOG_BREED_REPOSITORY } from './application/dog/dog.service';
+import { IngredientTagService, INGREDIENT_TAG_REPOSITORY } from './application/ingredient-tag/ingredient-tag.service';
+import { PrismaIngredientTagRepository } from './infrastructure/repositories/prisma-ingredient-tag.repository';
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -200,7 +203,12 @@ validatePrismaConfig();
     IngredientService,
     {
       provide: INGREDIENT_REPOSITORY,
-      useClass: InMemoryIngredientRepository,
+      useClass: PrismaIngredientRepository,
+    },
+    IngredientTagService,
+    {
+      provide: INGREDIENT_TAG_REPOSITORY,
+      useClass: PrismaIngredientTagRepository,
     },
     GlobalConfigService,
     PricingService,

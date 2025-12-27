@@ -6,13 +6,13 @@
 
 <script setup lang="ts">
 import { onLaunch, onShow, onHide } from '@dcloudio/uni-app'
-import { getToken, performLogin } from './utils/api'
+import { getToken, performLogin, markTokenReady } from './utils/api'
 
 onLaunch(() => {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
   console.log('SevenKitchen Miniapp - App Launch')
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-  
+
   // Log configuration state
   try {
     const { getBaseUrl, getDefaultBaseUrl } = require('./utils/config')
@@ -20,13 +20,13 @@ onLaunch(() => {
     const currentBaseUrl = getBaseUrl()
     const defaultBaseUrl = getDefaultBaseUrl()
     const token = getToken()
-    
+
     console.log('📡 BASE_URL:', currentBaseUrl)
     if (currentBaseUrl !== defaultBaseUrl) {
       console.log('   (overridden from storage, default:', defaultBaseUrl + ')')
     }
     console.log('🔑 Token:', token ? 'Present ✓' : 'Not found (will auto-login)')
-    
+
     // Detect build mode (dev vs build)
     // @ts-ignore - uni compilation mode
     const isDev = typeof __UNI_PLATFORM__ !== 'undefined' && process.env.NODE_ENV === 'development'
@@ -34,15 +34,14 @@ onLaunch(() => {
   } catch (err) {
     console.warn('Failed to log startup config:', err)
   }
-  
+
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
-  
-  // Delay auto-login to allow page rendering first
-  // This ensures diagnostic features (like health check) are not blocked
-  // Auto-login runs after a short delay to prioritize UI responsiveness
-  setTimeout(() => {
-    ensureAuthenticated()
-  }, 500) // 500ms delay allows initial page render
+
+  // IMPORTANT: Start auto-login immediately WITHOUT delay
+  // The delay was causing race conditions where pages would load
+  // before authentication was ready, resulting in 401 errors.
+  // By starting login immediately, we ensure pages can wait via waitForToken()
+  ensureAuthenticated()
 })
 
 onShow(() => {
@@ -72,24 +71,27 @@ function ensureAuthenticated() {
     console.log('→ Auto-login already in progress, skipping duplicate call')
     return
   }
-  
+
   const token = getToken()
-  
+
   // If token exists, we're already authenticated
   if (token) {
     console.log('✓ Token found in storage, skipping login')
+    markTokenReady() // Mark token ready for waiting pages
     return
   }
-  
+
   // No token - attempt to login
   isLoginInProgress = true
   console.log('→ No token found, attempting auto-login (attempt ' + (loginRetryCount + 1) + '/' + (MAX_LOGIN_RETRIES + 1) + ')')
   const customerId = 'mvp-user-001' // MVP hardcoded customer ID
-  
+
   performLogin(customerId).then(() => {
     console.log('✓ Auto-login successful')
     loginRetryCount = 0 // Reset retry count on success
     isLoginInProgress = false
+    // Mark token ready for waiting pages
+    markTokenReady()
     // Token is now stored via setToken() in performLogin()
   }).catch((err: any) => {
     loginRetryCount++

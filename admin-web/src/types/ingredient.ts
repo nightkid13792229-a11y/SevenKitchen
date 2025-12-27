@@ -111,6 +111,8 @@ export interface IngredientForm {
   weightG?: number
   maxCapacityG?: number
   properties: FoodProperties | SupplementProperties | PackagingProperties
+  tagIds?: string[]  // 标签ID数组
+  tags?: any[]  // 标签完整信息（用于显示）
 }
 
 // CFCT分类选项

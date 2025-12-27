@@ -58,6 +58,7 @@ async function bootstrap() {
   app.enableCors({
     origin: [
       'http://localhost:5173',           // Local admin web development
+      'http://localhost:5174',           // Local admin web development (fallback port)
       'http://localhost:3000',           // Local backend
       'http://1.14.3.2:5173',            // Cloud server admin web (if needed)
       // Add your domain here when you get one

@@ -327,6 +327,13 @@ export class ProductionService {
   }
 
   /**
+   * Get all production batches
+   */
+  async getAllProductionBatches(): Promise<ProductionBatch[]> {
+    return this.productionRepository.findAll();
+  }
+
+  /**
    * List production batches by production date
    */
   async listProductionBatchesByDate(

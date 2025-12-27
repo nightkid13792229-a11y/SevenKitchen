@@ -25,6 +25,23 @@ export interface CreateIngredientDto {
   weightG?: number | null;
   maxCapacityG?: number | null;
   properties: Record<string, any>;
+  tagIds?: string[];
+}
+
+export interface UpdateIngredientDto {
+  name?: string;
+  brand?: string | null;
+  productModel?: string | null;
+  purchaseChannel?: string | null;
+  notes?: string | null;
+  unitDisplayLabel?: string | null;
+  purchaseUnit?: string;
+  purchaseToBaseRatio?: number;
+  currentPricePerPurchaseUnit?: number;
+  weightG?: number | null;
+  maxCapacityG?: number | null;
+  properties?: Record<string, any>;
+  tagIds?: string[];
 }
 
 export interface UpdateIngredientPriceDto {
@@ -92,7 +109,51 @@ export class IngredientService {
       dto.properties,
     );
 
-    return this.ingredientRepository.save(ingredient);
+    return this.ingredientRepository.save(ingredient, dto.tagIds);
+  }
+
+  /**
+   * Update ingredient
+   */
+  async updateIngredient(id: string, dto: UpdateIngredientDto): Promise<Ingredient> {
+    const existing = await this.ingredientRepository.findById(id);
+    if (!existing) {
+      throw new NotFoundException(`Ingredient not found: ${id}`);
+    }
+
+    const data: any = {};
+    if (dto.name !== undefined) data.name = dto.name;
+    if (dto.brand !== undefined) data.brand = dto.brand;
+    if (dto.productModel !== undefined) data.productModel = dto.productModel;
+    if (dto.purchaseChannel !== undefined) data.purchaseChannel = dto.purchaseChannel;
+    if (dto.notes !== undefined) data.notes = dto.notes;
+    if (dto.unitDisplayLabel !== undefined) data.unitDisplayLabel = dto.unitDisplayLabel;
+    if (dto.purchaseUnit !== undefined) data.purchaseUnit = dto.purchaseUnit;
+    if (dto.purchaseToBaseRatio !== undefined) data.purchaseToBaseRatio = dto.purchaseToBaseRatio;
+    if (dto.currentPricePerPurchaseUnit !== undefined) data.currentPricePerPurchaseUnit = dto.currentPricePerPurchaseUnit;
+    if (dto.weightG !== undefined) data.weightG = dto.weightG;
+    if (dto.maxCapacityG !== undefined) data.maxCapacityG = dto.maxCapacityG;
+    if (dto.properties !== undefined) data.properties = dto.properties;
+
+    const updated = await this.ingredientRepository.update(id, data);
+
+    // Update tag associations if provided
+    if (dto.tagIds !== undefined) {
+      await this.ingredientRepository.setTags(id, dto.tagIds);
+    }
+
+    return updated;
+  }
+
+  /**
+   * Get ingredient tags
+   */
+  async getIngredientTags(id: string): Promise<any[]> {
+    const ingredient = await this.ingredientRepository.findById(id);
+    if (!ingredient) {
+      throw new NotFoundException(`Ingredient not found: ${id}`);
+    }
+    return this.ingredientRepository.getTags(id);
   }
 
   /**
@@ -110,5 +171,18 @@ export class IngredientService {
       throw new NotFoundException(`Ingredient not found: ${id}`);
     }
     return ingredient;
+  }
+
+  /**
+   * Delete ingredient
+   */
+  async deleteIngredient(id: string): Promise<void> {
+    // Check if ingredient exists
+    const ingredient = await this.ingredientRepository.findById(id);
+    if (!ingredient) {
+      throw new NotFoundException(`Ingredient not found: ${id}`);
+    }
+
+    await this.ingredientRepository.delete(id);
   }
 }

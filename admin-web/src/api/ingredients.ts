@@ -9,7 +9,7 @@ export const ingredientApi = {
    * 获取所有原料列表
    */
   list: (): Promise<Ingredient[]> =>
-    api.get('/admin/inventory'),
+    api.get('/admin/ingredients'),
 
   /**
    * 获取单个原料详情
@@ -33,5 +33,17 @@ export const ingredientApi = {
    * 更新原料价格
    */
   updatePrice: (id: string, price: number): Promise<Ingredient> =>
-    api.put(`/admin/ingredients/${id}/price`, { currentPricePerPurchaseUnit: price })
+    api.put(`/admin/ingredients/${id}/price`, { currentPricePerPurchaseUnit: price }),
+
+  /**
+   * 删除原料
+   */
+  delete: (id: string): Promise<void> =>
+    api.delete(`/admin/ingredients/${id}`),
+
+  /**
+   * 获取原料使用情况
+   */
+  getUsage: (id: string): Promise<any[]> =>
+    api.get(`/admin/ingredients/${id}/usage`)
 }

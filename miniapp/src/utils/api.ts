@@ -81,6 +81,8 @@ export function setToken(token: string): void {
 export function clearToken(): void {
   try {
     uni.removeStorageSync('token')
+    // Reset token ready state when token is cleared
+    resetTokenReady()
   } catch (err) {
     console.error('Failed to clear token from storage:', err)
   }
@@ -88,6 +90,60 @@ export function clearToken(): void {
 
 // Login function that can be called from App.vue
 let loginPromise: Promise<string> | null = null
+
+// Token ready Promise - used by pages to wait for auto-login completion
+let tokenReadyResolve: (() => void) | null = null
+let tokenReadyPromise: Promise<void> | null = null
+let isTokenReady = false // Cache token ready state to avoid creating duplicate promises
+
+/**
+ * Wait for token to be ready (either exists or auto-login completes)
+ * Returns immediately if token already exists, otherwise waits for auto-login
+ * This prevents 401 errors from race conditions between page load and auto-login
+ */
+export function waitForToken(): Promise<void> {
+  // If token already exists, return immediately (most common case)
+  if (getToken()) {
+    return Promise.resolve()
+  }
+
+  // If token is already marked ready (from previous login), return immediately
+  if (isTokenReady) {
+    return Promise.resolve()
+  }
+
+  // Create token ready promise if not exists
+  if (!tokenReadyPromise) {
+    tokenReadyPromise = new Promise<void>((resolve) => {
+      tokenReadyResolve = resolve
+    })
+  }
+
+  return tokenReadyPromise
+}
+
+/**
+ * Mark token as ready (called by App.vue after successful login)
+ * Resolves all pending waitForToken() calls
+ */
+export function markTokenReady(): void {
+  isTokenReady = true
+  if (tokenReadyResolve) {
+    tokenReadyResolve()
+    tokenReadyResolve = null // Clear resolve function
+  }
+  tokenReadyPromise = null // Clear promise (next call will create new one if needed)
+}
+
+/**
+ * Reset token ready state (called when token is cleared/401 occurs)
+ * Next waitForToken() call will wait for new login
+ */
+export function resetTokenReady(): void {
+  isTokenReady = false
+  tokenReadyPromise = null
+  tokenReadyResolve = null
+}
 
 export function performLogin(customerId: string = 'mvp-user-001'): Promise<string> {
   // Prevent concurrent login requests
@@ -156,17 +212,32 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
       data: options.data,
       header,
       success: (res: any) => {
+        // Check if response data exists
+        if (!res.data) {
+          const errorMsg = `服务器响应格式错误`
+          console.error('[API] No response data - res.keys:', Object.keys(res), 'statusCode:', res.statusCode)
+          uni.showToast({
+            title: normalizeMsg(errorMsg),
+            icon: 'none',
+            duration: 2000
+          })
+          reject(new Error(errorMsg))
+          return
+        }
+
         const response = res.data as ApiResponse<T>
-        
+
         // Handle 401 Unauthorized - retry with fresh login
         if (res.statusCode === 401 && !options.retryOn401) {
           console.log('401 Unauthorized, attempting to re-login and retry')
           clearToken()
-          
+
           // Attempt to re-login and retry the request once
           console.log('→ Attempting re-login after 401...')
           performLogin().then((newToken) => {
             console.log('✓ Re-login successful, retrying original request')
+            // Mark token as ready for other waiting requests
+            markTokenReady()
             // Retry the original request with new token
             request<T>({
               ...options,
@@ -185,19 +256,19 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
           })
           return
         }
-        
+
         // Handle unified response format
         if (response.code !== 0) {
           // Show error toast (non-blocking)
           const errorMsg = normalizeMsg(response.message || '请求失败')
           console.warn('API error:', response.code, errorMsg)
-          
+
           uni.showToast({
             title: errorMsg,
             icon: 'none',
             duration: 2000
           })
-          
+
           // Reject but don't crash - caller can handle gracefully
           reject(new Error(errorMsg))
           return

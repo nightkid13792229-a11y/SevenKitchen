@@ -237,15 +237,62 @@
           <!-- BCS评分图片 -->
           <view class="bcs-image-container">
             <image
+              v-if="!showBcsFallback"
               class="bcs-guide-image"
               :src="bcsGuideImageUrl"
               mode="widthFix"
               @load="onBcsImageLoad"
               @error="onBcsImageError"
             />
-            <!-- 加载失败提示 -->
-            <view v-if="bcsImageError" class="bcs-image-error">
-              <text>图片加载失败，请稍后重试</text>
+
+            <!-- 降级内容：图片加载失败时显示文字描述 -->
+            <view v-if="showBcsFallback" class="bcs-fallback-content">
+              <view class="bcs-fallback-title">BCS体态评分标准（9分制）</view>
+
+              <view class="bcs-table">
+                <!-- 1-3分：偏瘦 -->
+                <view class="bcs-row bcs-row-thin">
+                  <view class="bcs-score-group">
+                    <text class="bcs-score">1-3分</text>
+                    <text class="bcs-label">偏瘦 ⚠️</text>
+                  </view>
+                  <view class="bcs-desc">
+                    <text class="bcs-desc-item">• 肋骨：肉眼可见，极易触摸</text>
+                    <text class="bcs-desc-item">• 腰部：明显凹陷</text>
+                    <text class="bcs-desc-item">• 腹部：严重内收</text>
+                  </view>
+                </view>
+
+                <!-- 4-5分：标准 -->
+                <view class="bcs-row bcs-row-ideal">
+                  <view class="bcs-score-group">
+                    <text class="bcs-score">4-5分</text>
+                    <text class="bcs-label">标准 ✅</text>
+                  </view>
+                  <view class="bcs-desc">
+                    <text class="bcs-desc-item">• 肋骨：可触摸但不明显</text>
+                    <text class="bcs-desc-item">• 腰部：从上方可见</text>
+                    <text class="bcs-desc-item">• 腹部：略微抬起</text>
+                  </view>
+                </view>
+
+                <!-- 6-9分：超重 -->
+                <view class="bcs-row bcs-row-overweight">
+                  <view class="bcs-score-group">
+                    <text class="bcs-score">6-9分</text>
+                    <text class="bcs-label">超重 ⚠️</text>
+                  </view>
+                  <view class="bcs-desc">
+                    <text class="bcs-desc-item">• 肋骨：难以触摸</text>
+                    <text class="bcs-desc-item">• 腰部：不可见</text>
+                    <text class="bcs-desc-item">• 腹部：明显隆起</text>
+                  </view>
+                </view>
+              </view>
+
+              <view class="bcs-tip">
+                <text class="bcs-tip-text">💡 建议：保持4-5分的理想状态，有助于狗狗健康长寿</text>
+              </view>
             </view>
           </view>
         </view>
@@ -606,7 +653,7 @@ const formData = ref<FormData>({
   lifeStageOverride: 'NONE',
   sizeClassOverride: null,
   mealsPerDay: '2',
-  treatInputMode: '',
+  treatInputMode: null as string | null,
   treatLevel: 'LOW',
   manualTreatKcal: '',
   medicalHistory: ''
@@ -765,10 +812,11 @@ const showCustomBreedInput = ref(false)
 const customBreedName = ref('')
 const showBcsGuide = ref(false)
 
-// BCS评分图URL
-const bcsGuideImageUrl = ref('https://lhcos-3c860-1392823718.cos.ap-chengdu.myqcloud.com/bcs-chart.png')
+// BCS评分图URL - 使用本地图片资源（注意：文件名必须匹配实际文件名，区分大小写）
+const bcsGuideImageUrl = ref('/static/images/BCS-chart.png')
 const bcsImageError = ref(false)
 const bcsGuideShown = ref(false) // 记录是否已显示过BCS图
+const showBcsFallback = ref(false) // 是否显示降级内容（图片加载失败时）
 const showHealthRecord = ref(false) // 健康记录折叠面板展开状态
 const showLifeStageOverride = ref(false) // 生命阶段手动覆盖折叠面板
 
@@ -1022,10 +1070,8 @@ onMounted(async () => {
   if (dogId.value) {
     // Edit mode: load existing dog profile
     console.log('[DogCreate] onMounted: loading dog profile for edit mode')
-    // Wait a bit to ensure breeds data is processed
-    setTimeout(() => {
-      loadDogProfile(dogId.value!)
-    }, 100)
+    // Directly load after breeds are loaded (no need for setTimeout since we awaited loadBreeds)
+    await loadDogProfile(dogId.value!)
   } else {
     console.log('[DogCreate] onMounted: create mode, no dogId')
 
@@ -1151,9 +1197,21 @@ function populateFormData(profile: any) {
       isMixedBreed.value = false
       console.log('[DogCreate] Found breed in list:', breed)
     } else {
-      console.warn('[DogCreate] Breed not found in list:', profile.breedId)
-      selectedBreed.value = null
+      // 找不到品种时，创建临时品种对象（防止数据丢失）
+      console.warn('[DogCreate] Breed not found in list:', profile.breedId, '- creating temp breed object')
+      selectedBreed.value = {
+        id: profile.breedId,
+        name: profile.customBreedName || '未知品种',
+        sizeCategory: profile.sizeClassOverride || 'MEDIUM',
+        adultAgeMonths: 12,
+        seniorAgeYears: 10,
+        averageAdultWeightKg: undefined
+      }
       isMixedBreed.value = false
+      // 保持原有的 breedId 和 customBreedName
+      formData.value.breedId = profile.breedId
+      formData.value.customBreedName = profile.customBreedName || ''
+      formData.value.sizeClassOverride = profile.sizeClassOverride || null
     }
   }
 
@@ -1396,8 +1454,9 @@ function onBcsImageLoad() {
 }
 
 function onBcsImageError() {
-  console.error('[BCS Guide] Failed to load BCS guide image')
+  console.error('[BCS Guide] Failed to load BCS guide image, showing fallback content')
   bcsImageError.value = true
+  showBcsFallback.value = true // 显示降级内容
 }
 
 function onCloseBcsGuide() {
@@ -1498,7 +1557,7 @@ async function previewCalculation() {
       lifeStageOverride: formData.value.lifeStageOverride,
       sizeClassOverride: formData.value.sizeClassOverride,
       mealsPerDay: parseInt(formData.value.mealsPerDay) || 2,
-      treatInputMode: formData.value.treatInputMode,
+      treatInputMode: formData.value.treatInputMode || 'ESTIMATE_LEVEL',
       treatLevel: formData.value.treatLevel
     }
 
@@ -1609,6 +1668,16 @@ function submit() {
     return
   }
 
+  // Validate weight is a valid number
+  const weight = parseFloat(currentWeightKg)
+  if (isNaN(weight) || weight <= 0 || weight > 200) {
+    uni.showToast({
+      title: '请输入有效的体重(0.1-200kg)',
+      icon: 'none'
+    })
+    return
+  }
+
   // For mixed breed, require size class override
   if (isMixedBreed.value && !formData.value.sizeClassOverride) {
     uni.showToast({
@@ -1644,7 +1713,7 @@ function submit() {
     lifeStageOverride: formData.value.lifeStageOverride,
     sizeClassOverride: formData.value.sizeClassOverride,
     mealsPerDay: parseInt(formData.value.mealsPerDay) || 2,
-    treatInputMode: formData.value.treatInputMode,
+    treatInputMode: formData.value.treatInputMode || 'ESTIMATE_LEVEL',
     treatLevel: formData.value.treatLevel,
     medicalHistory: formData.value.medicalHistory || null
   }
@@ -1701,12 +1770,20 @@ function submit() {
       })
 
       setTimeout(() => {
-        // 跳转到狗狗档案列表页面
-    // dog-profile-list 是 tabBar 页面，必须使用 switchTab
-    uni.switchTab({
-      url: '/pages/dog-profile-list/index'
-    })
-  }, 1500)
+        // 根据模式选择不同的跳转逻辑
+        if (isEditModeValue) {
+          // 编辑模式：返回上一页（通常返回到列表页）
+          uni.navigateBack({
+            delta: 1
+          })
+        } else {
+          // 创建模式：跳转到狗狗档案列表页面
+          // dog-profile-list 是 tabBar 页面，必须使用 switchTab
+          uni.switchTab({
+            url: '/pages/dog-profile-list/index'
+          })
+        }
+      }, 1500)
     } else {
       const errorMsg = res.message || (isEditModeValue ? '保存失败' : '创建失败')
       console.error('[DogCreate] API error:', res.code, errorMsg)
@@ -2486,6 +2563,94 @@ function submit() {
   text-align: center;
   color: #999;
   font-size: 26rpx;
+}
+
+/* BCS降级内容样式 */
+.bcs-fallback-content {
+  padding: 30rpx;
+  background-color: #fafafa;
+  border-radius: 8rpx;
+}
+
+.bcs-fallback-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+  text-align: center;
+  margin-bottom: 30rpx;
+}
+
+.bcs-table {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.bcs-row {
+  background-color: #fff;
+  border-radius: 12rpx;
+  padding: 24rpx;
+  border-left: 6rpx solid #ccc;
+}
+
+.bcs-row-thin {
+  border-left-color: #ff4d4f;
+  background-color: #fff1f0;
+}
+
+.bcs-row-ideal {
+  border-left-color: #52c41a;
+  background-color: #f6ffed;
+}
+
+.bcs-row-overweight {
+  border-left-color: #faad14;
+  background-color: #fffbe6;
+}
+
+.bcs-score-group {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
+.bcs-score {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.bcs-label {
+  font-size: 24rpx;
+  color: #666;
+  margin-top: 8rpx;
+}
+
+.bcs-desc {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.bcs-desc-item {
+  font-size: 24rpx;
+  color: #666;
+  line-height: 1.6;
+}
+
+.bcs-tip {
+  margin-top: 30rpx;
+  padding: 20rpx;
+  background-color: #e6f7ff;
+  border-radius: 8rpx;
+  border-left: 4rpx solid #1890ff;
+}
+
+.bcs-tip-text {
+  font-size: 24rpx;
+  color: #0050b3;
+  line-height: 1.6;
 }
 
 /* Health Record Section */

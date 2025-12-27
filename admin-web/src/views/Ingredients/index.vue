@@ -11,10 +11,13 @@
     <!-- Filters -->
     <div class="filter-bar">
       <el-select
-        v-model="filterType"
+        v-model="filterTypes"
         placeholder="筛选类型"
         clearable
-        style="width: 150px"
+        multiple
+        collapse-tags
+        collapse-tags-tooltip
+        style="width: 200px"
         @change="handleFilter"
       >
         <el-option label="食材" :value="IngredientType.FOOD" />
@@ -34,16 +37,67 @@
         </template>
       </el-input>
 
+      <el-input
+        v-model="minPrice"
+        placeholder="最低单价"
+        clearable
+        style="width: 130px"
+        type="number"
+        @input="handleFilter"
+      >
+        <template #prefix>¥</template>
+      </el-input>
+
+      <el-input
+        v-model="maxPrice"
+        placeholder="最高单价"
+        clearable
+        style="width: 130px"
+        type="number"
+        @input="handleFilter"
+      >
+        <template #prefix>¥</template>
+      </el-input>
+
+      <el-date-picker
+        v-model="dateRange"
+        type="daterange"
+        range-separator="至"
+        start-placeholder="开始日期"
+        end-placeholder="结束日期"
+        clearable
+        style="width: 260px"
+        @change="handleFilter"
+      />
+
+      <el-button @click="resetFilters">重置</el-button>
       <el-button @click="loadData" :icon="Refresh">刷新</el-button>
     </div>
 
     <!-- Table -->
     <el-card v-loading="loading">
+      <!-- 批量操作栏 -->
+      <div v-if="selectedIngredients.length > 0" class="batch-actions">
+        <span class="selected-count">已选择 {{ selectedIngredients.length }} 项</span>
+        <el-button type="danger" size="small" @click="handleBatchDelete">
+          批量删除
+        </el-button>
+        <el-button type="primary" size="small" @click="handleExport">
+          导出选中
+        </el-button>
+        <el-button size="small" @click="clearSelection">
+          取消选择
+        </el-button>
+      </div>
+
       <el-table
+        ref="tableRef"
         :data="filteredData"
         stripe
         style="width: 100%"
+        @selection-change="handleSelectionChange"
       >
+        <el-table-column type="selection" width="55" />
         <el-table-column prop="name" label="原料名称" width="180" />
 
         <el-table-column prop="type" label="类型" width="100">
@@ -84,7 +138,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="120" fixed="right">
+        <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
             <el-button
               type="primary"
@@ -94,13 +148,29 @@
             >
               编辑
             </el-button>
+            <el-button
+              type="info"
+              size="small"
+              link
+              @click="handleViewUsage(row)"
+            >
+              使用情况
+            </el-button>
+            <el-button
+              type="danger"
+              size="small"
+              link
+              @click="handleDelete(row)"
+            >
+              删除
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
 
       <!-- Empty State -->
       <div v-if="filteredData.length === 0 && !loading" class="empty-state">
-        <el-empty :description="searchText || filterType ? '未找到匹配的原料' : '暂无原料数据'" />
+        <el-empty :description="searchText || filterTypes.length > 0 ? '未找到匹配的原料' : '暂无原料数据'" />
       </div>
     </el-card>
 
@@ -117,12 +187,80 @@
         @cancel="dialogVisible = false"
       />
     </el-dialog>
+
+    <!-- Usage Dialog -->
+    <el-dialog
+      v-model="usageDialogVisible"
+      title="原料使用情况"
+      width="700px"
+    >
+      <div v-loading="loadingUsage">
+        <div class="usage-header">
+          <h3>{{ currentIngredientForUsage?.name }}</h3>
+          <el-tag :type="getTypeTagType(currentIngredientForUsage?.type || '')">
+            {{ IngredientTypeLabels[currentIngredientForUsage?.type || ''] }}
+          </el-tag>
+        </div>
+
+        <el-divider />
+
+        <!-- 配方使用情况 -->
+        <div class="usage-section">
+          <h4>配方使用情况</h4>
+          <p v-if="usageRecipes.length === 0" class="empty-usage">
+            该原料未被任何配方使用
+          </p>
+          <el-table v-else :data="usageRecipes" style="width: 100%">
+            <el-table-column prop="recipeId" label="配方ID" width="150" />
+            <el-table-column prop="recipeName" label="配方名称" width="200" />
+            <el-table-column prop="ratioPercent" label="用量比例" width="120">
+              <template #default="{ row }">
+                {{ row.ratioPercent ? `${row.ratioPercent.toFixed(1)}%` : '-' }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="isPrimarySource" label="是否主料" width="100">
+              <template #default="{ row }">
+                <el-tag v-if="row.isPrimarySource" type="success" size="small">主料</el-tag>
+                <el-tag v-else type="info" size="small">辅料</el-tag>
+              </template>
+            </el-table-column>
+          </el-table>
+        </div>
+
+        <el-divider />
+
+        <!-- 警告提示 -->
+        <el-alert
+          v-if="usageRecipes.length > 0"
+          title="无法删除"
+          type="warning"
+          :closable="false"
+          show-icon
+        >
+          该原料被 {{ usageRecipes.length }} 个配方使用，删除前需要先修改配方
+        </el-alert>
+        <el-alert
+          v-else
+          title="可以删除"
+          type="success"
+          :closable="false"
+          show-icon
+        >
+          该原料未被任何配方使用，可以安全删除
+        </el-alert>
+      </div>
+
+      <template #footer>
+        <el-button @click="usageDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import type { ElTable } from 'element-plus'
 import { Plus, Search, Refresh } from '@element-plus/icons-vue'
 import { ingredientApi } from '@/api/ingredients'
 import {
@@ -139,9 +277,18 @@ import IngredientFormComponent from './IngredientForm.vue'
 const loading = ref(false)
 const ingredients = ref<Ingredient[]>([])
 const searchText = ref('')
-const filterType = ref<string>('')
+const filterTypes = ref<string[]>([])
+const minPrice = ref<number | null>(null)
+const maxPrice = ref<number | null>(null)
+const dateRange = ref<[Date, Date] | null>(null)
 const dialogVisible = ref(false)
 const currentIngredient = ref<IngredientForm | undefined>(undefined)
+const tableRef = ref<InstanceType<typeof ElTable>>()
+const selectedIngredients = ref<Ingredient[]>([])
+const usageDialogVisible = ref(false)
+const loadingUsage = ref(false)
+const currentIngredientForUsage = ref<Ingredient | null>(null)
+const usageRecipes = ref<any[]>([])
 
 // Computed
 const dialogTitle = computed(() => {
@@ -151,6 +298,7 @@ const dialogTitle = computed(() => {
 const filteredData = computed(() => {
   let result = ingredients.value
 
+  // 文本搜索（名称或品牌）
   if (searchText.value) {
     const search = searchText.value.toLowerCase()
     result = result.filter(item =>
@@ -159,8 +307,28 @@ const filteredData = computed(() => {
     )
   }
 
-  if (filterType.value) {
-    result = result.filter(item => item.type === filterType.value)
+  // 类型筛选（多选）
+  if (filterTypes.value && filterTypes.value.length > 0) {
+    result = result.filter(item => filterTypes.value.includes(item.type))
+  }
+
+  // 价格范围筛选
+  if (minPrice.value !== null && minPrice.value !== undefined) {
+    result = result.filter(item => item.currentPricePerPurchaseUnit >= minPrice.value!)
+  }
+
+  if (maxPrice.value !== null && maxPrice.value !== undefined) {
+    result = result.filter(item => item.currentPricePerPurchaseUnit <= maxPrice.value!)
+  }
+
+  // 日期范围筛选
+  if (dateRange.value && dateRange.value.length === 2) {
+    const [startDate, endDate] = dateRange.value
+    result = result.filter(item => {
+      if (!item.createdAt) return false
+      const itemDate = new Date(item.createdAt)
+      return itemDate >= startDate && itemDate <= endDate
+    })
   }
 
   return result
@@ -186,6 +354,14 @@ const handleFilter = () => {
   // Filter is reactive via computed
 }
 
+const resetFilters = () => {
+  filterTypes.value = []
+  searchText.value = ''
+  minPrice.value = null
+  maxPrice.value = null
+  dateRange.value = null
+}
+
 const handleCreate = () => {
   currentIngredient.value = undefined
   dialogVisible.value = true
@@ -194,6 +370,124 @@ const handleCreate = () => {
 const handleEdit = (ingredient: Ingredient) => {
   currentIngredient.value = { ...ingredient }
   dialogVisible.value = true
+}
+
+const handleViewUsage = async (ingredient: Ingredient) => {
+  currentIngredientForUsage.value = ingredient
+  usageDialogVisible.value = true
+  loadingUsage.value = true
+
+  try {
+    const usage = await ingredientApi.getUsage(ingredient.id)
+    usageRecipes.value = usage
+  } catch (error: any) {
+    ElMessage.error(error.message || '获取使用情况失败')
+    usageRecipes.value = []
+  } finally {
+    loadingUsage.value = false
+  }
+}
+
+const handleDelete = async (ingredient: Ingredient) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除原料"${ingredient.name}"吗？此操作不可恢复。`,
+      '删除确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+
+    loading.value = true
+    await ingredientApi.delete(ingredient.id)
+    ElMessage.success('删除成功')
+    await loadData()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || '删除失败')
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleSelectionChange = (selection: Ingredient[]) => {
+  selectedIngredients.value = selection
+}
+
+const clearSelection = () => {
+  tableRef.value?.clearSelection()
+}
+
+const handleBatchDelete = async () => {
+  if (selectedIngredients.value.length === 0) {
+    ElMessage.warning('请先选择要删除的原料')
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除选中的 ${selectedIngredients.value.length} 个原料吗？此操作不可恢复。`,
+      '批量删除确认',
+      {
+        confirmButtonText: '确定',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+
+    loading.value = true
+    const deletePromises = selectedIngredients.value.map(ing => ingredientApi.delete(ing.id))
+    await Promise.all(deletePromises)
+
+    ElMessage.success(`成功删除 ${selectedIngredients.value.length} 个原料`)
+    clearSelection()
+    await loadData()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || '批量删除失败')
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleExport = () => {
+  if (selectedIngredients.value.length === 0) {
+    ElMessage.warning('请先选择要导出的原料')
+    return
+  }
+
+  // 简单CSV导出
+  const headers = ['ID', '名称', '类型', '品牌', '采购单位', '采购单价', '单位成本']
+  const rows = selectedIngredients.value.map(ing => [
+    ing.id,
+    ing.name,
+    IngredientTypeLabels[ing.type],
+    ing.brand || '',
+    ing.purchaseUnit,
+    ing.currentPricePerPurchaseUnit.toFixed(2),
+    ing.unitCost.toFixed(4)
+  ])
+
+  const csvContent = [
+    headers.join(','),
+    ...rows.map(row => row.join(','))
+  ].join('\n')
+
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' })
+  const link = document.createElement('a')
+  const url = URL.createObjectURL(blob)
+  link.setAttribute('href', url)
+  link.setAttribute('download', `ingredients_${new Date().toISOString().slice(0, 10)}.csv`)
+  link.style.visibility = 'hidden'
+  document.body.appendChild(link)
+  link.click()
+  document.body.removeChild(link)
+
+  ElMessage.success(`成功导出 ${selectedIngredients.value.length} 个原料`)
 }
 
 const handleSubmit = async (data: IngredientForm) => {
@@ -256,10 +550,57 @@ onMounted(() => {
   display: flex;
   gap: 12px;
   margin-bottom: 20px;
+  flex-wrap: wrap;
+}
+
+.batch-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background-color: #f5f7fa;
+  border-radius: 4px;
+  margin-bottom: 16px;
+}
+
+.selected-count {
+  color: #606266;
+  font-size: 14px;
+  font-weight: 500;
 }
 
 .empty-state {
   padding: 40px 0;
   text-align: center;
+}
+
+.usage-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.usage-header h3 {
+  margin: 0;
+  font-size: 18px;
+  color: #303133;
+}
+
+.usage-section {
+  margin: 20px 0;
+}
+
+.usage-section h4 {
+  margin: 0 0 12px 0;
+  font-size: 16px;
+  color: #606266;
+}
+
+.empty-usage {
+  color: #909399;
+  font-size: 14px;
+  text-align: center;
+  padding: 20px 0;
 }
 </style>

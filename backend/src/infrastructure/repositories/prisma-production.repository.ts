@@ -55,6 +55,14 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
     return records.map((r: any) => this.mapToDomain(r));
   }
 
+  async findAll(): Promise<ProductionBatch[]> {
+    const records = await this.prisma.productionBatch.findMany({
+      include: { packagingUnits: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    return records.map((r: any) => this.mapToDomain(r));
+  }
+
   /**
    * Allocate OrderItems to a production batch (Phase 8.11)
    * Updates OrderItems with productionBatchId and allocatedAt atomically

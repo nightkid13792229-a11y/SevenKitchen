@@ -100,6 +100,22 @@ enum InventorySourceType {
 }
 
 // ==========================================
+// Ingredient Domain Enums (aligned with backend/src/domain/ingredient/enums.ts)
+// ==========================================
+
+enum IngredientType {
+  FOOD
+  SUPPLEMENT
+  PACKAGING
+}
+
+enum BaseUnit {
+  G
+  ML
+  PCS
+}
+
+// ==========================================
 // Order Persistence (Phase 8.1 Part 1)
 // ==========================================
 
@@ -331,6 +347,82 @@ model PackagingUnit {
 // ==========================================
 // Inventory Domain (Phase 8.13)
 // ==========================================
+
+model Ingredient {
+  id                              String   @id @default(uuid())
+  name                            String
+  type                            IngredientType
+  brand                           String?  @db.VarChar(100)
+  productModel                    String?  @map("product_model") @db.VarChar(100)
+  purchaseChannel                 String?  @map("purchase_channel") @db.VarChar(200)
+  notes                           String?  @db.Text
+
+  // 单位与成本
+  baseUnit                        BaseUnit @map("base_unit")
+  unitDisplayLabel                String?  @map("unit_display_label") @db.VarChar(50)
+  purchaseUnit                    String   @map("purchase_unit") @db.VarChar(50)
+  purchaseToBaseRatio            Float    @map("purchase_to_base_ratio")
+  currentPricePerPurchaseUnit     Decimal  @map("current_price_per_purchase_unit") @db.Decimal(10, 2)
+
+  // 物理属性
+  weightG                         Float?   @map("weight_g")
+  maxCapacityG                    Float?   @map("max_capacity_g")
+
+  // 差异化属性 (JSON)
+  properties                      Json
+
+  // 标签关联（多对多）
+  tags                            IngredientTagAssignment[]
+
+  createdAt                       DateTime @default(now()) @map("created_at")
+  updatedAt                       DateTime @updatedAt @map("updated_at")
+
+  @@unique([name, brand, productModel])
+  @@index([type])
+  @@index([name])
+  @@map("ingredient")
+}
+
+// IngredientTag - 原料标签分类（支持层级结构）
+model IngredientTag {
+  id               String   @id @default(uuid())
+  name             String   @db.VarChar(100)
+  description      String?  @db.Text
+  parentId         String?  @map("parent_id")
+  sort             Int      @default(0)
+  color            String?  @db.VarChar(20)  // 标签颜色（前端展示用）
+
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  // Self-relation for hierarchical structure
+  parent           IngredientTag?  @relation("TagHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children         IngredientTag[] @relation("TagHierarchy")
+
+  // Relations to ingredients
+  assignments      IngredientTagAssignment[]
+
+  @@index([parentId])
+  @@index([sort])
+  @@map("ingredient_tag")
+}
+
+// Many-to-many relation table
+model IngredientTagAssignment {
+  id               String   @id @default(uuid())
+  ingredientId     String   @map("ingredient_id")
+  tagId            String   @map("tag_id")
+
+  createdAt        DateTime @default(now()) @map("created_at")
+
+  ingredient       Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  tag              IngredientTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([ingredientId, tagId])
+  @@index([ingredientId])
+  @@index([tagId])
+  @@map("ingredient_tag_assignment")
+}
 
 model InventoryLedgerEntry {
   id            String              @id @default(uuid()) @map("id")

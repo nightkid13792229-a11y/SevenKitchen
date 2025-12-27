@@ -29,12 +29,13 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { IngredientService } from '../../application/ingredient/ingredient.service';
-import type { CreateIngredientDto, UpdateIngredientPriceDto } from '../../application/ingredient/ingredient.service';
+import type { CreateIngredientDto, UpdateIngredientDto, UpdateIngredientPriceDto } from '../../application/ingredient/ingredient.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { ProductionService, type CreateProductionBatchDto, type ProductionBatchSummaryDto } from '../../application/production/production.service';
 import { InventoryService } from '../../application/inventory/inventory.service';
 import { OrderService } from '../../application/order/order.service';
 import { DogService, DOG_BREED_REPOSITORY } from '../../application/dog/dog.service';
+import { IngredientTagService, type CreateTagDto, type UpdateTagDto } from '../../application/ingredient-tag/ingredient-tag.service';
 import type { DogBreedRepository } from '../../domain/dog/dog-breed.repository';
 import { OrderStatus } from '../../domain';
 import { CancelOrderDto } from '../dto/orders/cancel-order.dto';
@@ -59,6 +60,7 @@ export class AdminController {
     private readonly inventoryService: InventoryService,
     private readonly orderService: OrderService,
     private readonly dogService: DogService,
+    private readonly ingredientTagService: IngredientTagService,
     @Inject(DOG_BREED_REPOSITORY)
     private readonly dogBreedRepository: DogBreedRepository,
     private readonly prisma: PrismaService,
@@ -86,7 +88,7 @@ export class AdminController {
   })
   async getInventory(): Promise<ApiResponseDto<any[]>> {
     const ingredients = await this.ingredientService.getAllIngredients();
-    
+
     // Map to inventory response format
     const inventory = ingredients.map((ing) => ({
       id: ing.id,
@@ -110,6 +112,68 @@ export class AdminController {
     return ApiResponseDto.success(inventory);
   }
 
+  @Get('ingredients')
+  @ApiOperation({ summary: 'Get all ingredients' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of all ingredients',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          name: { type: 'string' },
+          type: { type: 'string', enum: ['FOOD', 'SUPPLEMENT', 'PACKAGING'] },
+          brand: { type: 'string' },
+          productModel: { type: 'string' },
+          baseUnit: { type: 'string', enum: ['G', 'ML', 'PCS'] },
+          purchaseUnit: { type: 'string' },
+          currentPricePerPurchaseUnit: { type: 'number' },
+          unitCost: { type: 'number' },
+          properties: { type: 'object' },
+        },
+      },
+    },
+  })
+  async getAllIngredients(): Promise<ApiResponseDto<any[]>> {
+    const ingredients = await this.ingredientService.getAllIngredients();
+
+    // Get createdAt from Prisma directly
+    const ingredientIds = ingredients.map(ing => ing.id);
+    const prismaIngredients = await this.prisma.ingredient.findMany({
+      where: { id: { in: ingredientIds } },
+      select: { id: true, createdAt: true, updatedAt: true }
+    });
+
+    const createdAtMap = new Map(prismaIngredients.map(p => [p.id, p.createdAt.toISOString()]));
+    const updatedAtMap = new Map(prismaIngredients.map(p => [p.id, p.updatedAt.toISOString()]));
+
+    // Map to ingredient response format
+    const ingredientList = ingredients.map((ing) => ({
+      id: ing.id,
+      name: ing.name,
+      type: ing.type,
+      brand: ing.brand,
+      productModel: ing.productModel,
+      purchaseChannel: ing.purchaseChannel,
+      notes: ing.notes,
+      baseUnit: ing.baseUnit,
+      unitDisplayLabel: ing.unitDisplayLabel,
+      purchaseUnit: ing.purchaseUnit,
+      purchaseToBaseRatio: ing.purchaseToBaseRatio,
+      currentPricePerPurchaseUnit: Number(ing.currentPricePerPurchaseUnit),
+      unitCost: ing.getUnitCost(),
+      weightG: ing.weightG,
+      maxCapacityG: ing.maxCapacityG,
+      properties: ing.properties,
+      createdAt: createdAtMap.get(ing.id) || new Date().toISOString(),
+      updatedAt: updatedAtMap.get(ing.id) || new Date().toISOString(),
+    }));
+
+    return ApiResponseDto.success(ingredientList);
+  }
+
   @Post('ingredients')
   @ApiOperation({ summary: 'Create ingredient' })
   @ApiBody({ schema: { type: 'object' } })
@@ -127,6 +191,37 @@ export class AdminController {
       type: ingredient.type,
       currentPricePerPurchaseUnit: Number(ingredient.currentPricePerPurchaseUnit),
     });
+  }
+
+  @Put('ingredients/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update ingredient' })
+  @ApiParam({ name: 'id', description: 'Ingredient ID' })
+  @ApiBody({ schema: { type: 'object' } })
+  @ApiResponse({
+    status: 200,
+    description: 'Ingredient updated',
+  })
+  @ApiResponse({ status: 404, description: 'Ingredient not found' })
+  async updateIngredient(
+    @Param('id') id: string,
+    @Body() dto: UpdateIngredientDto,
+  ): Promise<ApiResponseDto<any>> {
+    try {
+      const ingredient = await this.ingredientService.updateIngredient(id, dto);
+      return ApiResponseDto.success({
+        id: ingredient.id,
+        name: ingredient.name,
+        type: ingredient.type,
+        currentPricePerPurchaseUnit: Number(ingredient.currentPricePerPurchaseUnit),
+        unitCost: ingredient.getUnitCost(),
+      });
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw new NotFoundException('Ingredient not found');
+      }
+      throw error;
+    }
   }
 
   @Put('ingredients/:id/price')
@@ -164,9 +259,116 @@ export class AdminController {
     }
   }
 
+  @Delete('ingredients/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete ingredient' })
+  @ApiParam({ name: 'id', description: 'Ingredient ID' })
+  @ApiResponse({ status: 204, description: 'Ingredient deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Ingredient not found' })
+  async deleteIngredient(@Param('id') id: string): Promise<void> {
+    try {
+      await this.ingredientService.deleteIngredient(id);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw error;
+    }
+  }
+
+  @Get('ingredients/:id/usage')
+  @ApiOperation({ summary: 'Get ingredient usage in recipes' })
+  @ApiParam({ name: 'id', description: 'Ingredient ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of recipes using this ingredient',
+  })
+  @ApiResponse({ status: 404, description: 'Ingredient not found' })
+  async getIngredientUsage(@Param('id') id: string): Promise<ApiResponseDto<any[]>> {
+    try {
+      // Check if ingredient exists
+      await this.ingredientService.getIngredientById(id);
+
+      // Query RecipeItem table for recipes using this ingredient
+      const recipeItems = await this.prisma.recipeItem.findMany({
+        where: { ingredientId: id },
+        include: {
+          recipe: {
+            select: {
+              recipeId: true,
+              name: true,
+            }
+          }
+        }
+      });
+
+      const usage = recipeItems.map((item: any) => ({
+        recipeId: item.recipe.recipeId,
+        recipeName: item.recipe.name,
+        ratioPercent: item.ratioPercent,
+        isPrimarySource: item.isPrimarySource,
+      }));
+
+      return ApiResponseDto.success(usage);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.success([]) as any;
+      }
+      throw error;
+    }
+  }
+
   // ==========================================
   // Phase 8.10: Production Batch Endpoints
   // ==========================================
+
+  @Get('production-batches')
+  @ApiOperation({ summary: 'Get all production batches' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of all production batches',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          productionDate: { type: 'string', format: 'date' },
+          status: { type: 'string', enum: ['PLANNED', 'IN_PRODUCTION', 'COMPLETED'] },
+          totalProductionG: { type: 'number' },
+          uniqueRecipeCount: { type: 'number' },
+          orderItemCount: { type: 'number' },
+        },
+      },
+    },
+  })
+  async getAllProductionBatches(): Promise<ApiResponseDto<ProductionBatchSummaryDto[]>> {
+    const batches = await this.productionService.getAllProductionBatches();
+
+    // Map to summary DTOs
+    const summaries = batches.map((batch) => {
+      const packagingUnits = batch.packagingUnits.map((unit) => ({
+        recipeSnapshotId: unit.recipeSnapshot.id,
+        totalProductionG: unit.totalProductionG,
+        orderItemCount: unit.sourceOrderItemIds.length,
+        sourceOrderItemIds: Array.isArray(unit.sourceOrderItemIds)
+          ? unit.sourceOrderItemIds
+          : [],
+      }));
+
+      return {
+        id: batch.id,
+        productionDate: batch.productionDate.toISOString().split('T')[0],
+        status: batch.status,
+        packagingUnits,
+        totalProductionG: batch.getTotalProductionG(),
+        uniqueRecipeCount: batch.getUniqueRecipeCount(),
+        orderItemCount: packagingUnits.reduce((sum, unit) => sum + unit.orderItemCount, 0),
+      };
+    });
+
+    return ApiResponseDto.success(summaries);
+  }
 
   @Post('production-batches')
   @HttpCode(HttpStatus.CREATED)
@@ -832,6 +1034,154 @@ export class AdminController {
       createdAt: new Date(), // TODO: Get from actual record
       updatedAt: new Date(), // TODO: Get from actual record
     };
+  }
+
+  // ==================== Ingredient Tag Management Endpoints ====================
+
+  @Get('ingredient-tags')
+  @ApiOperation({ summary: 'Get all ingredient tags' })
+  @ApiResponse({
+    status: 200,
+    description: 'List of all tags (flat structure)',
+  })
+  async getAllIngredientTags(): Promise<ApiResponseDto<any[]>> {
+    const tags = await this.ingredientTagService.getAllTags();
+    const data = tags.map(tag => ({
+      id: tag.id,
+      name: tag.name,
+      description: tag.description,
+      parentId: tag.parentId,
+      sort: tag.sort,
+      color: tag.color,
+    }));
+    return ApiResponseDto.success(data);
+  }
+
+  @Get('ingredient-tags/hierarchy')
+  @ApiOperation({ summary: 'Get ingredient tag hierarchy' })
+  @ApiResponse({
+    status: 200,
+    description: 'All tags (frontend will build tree)',
+  })
+  async getIngredientTagHierarchy(): Promise<ApiResponseDto<any[]>> {
+    const tags = await this.ingredientTagService.getTagHierarchy();
+    const data = tags.map(tag => ({
+      id: tag.id,
+      name: tag.name,
+      description: tag.description,
+      parentId: tag.parentId,
+      sort: tag.sort,
+      color: tag.color,
+    }));
+    return ApiResponseDto.success(data);
+  }
+
+  @Get('ingredient-tags/root')
+  @ApiOperation({ summary: 'Get root tags (no parent)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Root tags only',
+  })
+  async getRootIngredientTags(): Promise<ApiResponseDto<any[]>> {
+    const tags = await this.ingredientTagService.getRootTags();
+    const data = tags.map(tag => ({
+      id: tag.id,
+      name: tag.name,
+      description: tag.description,
+      sort: tag.sort,
+      color: tag.color,
+    }));
+    return ApiResponseDto.success(data);
+  }
+
+  @Get('ingredient-tags/:id')
+  @ApiOperation({ summary: 'Get tag by ID' })
+  @ApiResponse({ status: 200, description: 'Tag details' })
+  @ApiResponse({ status: 404, description: 'Tag not found' })
+  async getIngredientTagById(@Param('id') id: string): Promise<ApiResponseDto<any>> {
+    const tag = await this.ingredientTagService.getTagById(id);
+    return ApiResponseDto.success({
+      id: tag.id,
+      name: tag.name,
+      description: tag.description,
+      parentId: tag.parentId,
+      sort: tag.sort,
+      color: tag.color,
+    });
+  }
+
+  @Get('ingredient-tags/:id/children')
+  @ApiOperation({ summary: 'Get tag children' })
+  @ApiResponse({ status: 200, description: 'List of child tags' })
+  async getIngredientTagChildren(@Param('id') id: string): Promise<ApiResponseDto<any[]>> {
+    const children = await this.ingredientTagService.getChildren(id);
+    const data = children.map(tag => ({
+      id: tag.id,
+      name: tag.name,
+      description: tag.description,
+      sort: tag.sort,
+      color: tag.color,
+    }));
+    return ApiResponseDto.success(data);
+  }
+
+  @Post('ingredient-tags')
+  @ApiOperation({ summary: 'Create new tag' })
+  @ApiResponse({ status: 201, description: 'Tag created' })
+  @ApiResponse({ status: 400, description: 'Invalid input' })
+  async createIngredientTag(@Body() dto: CreateTagDto): Promise<ApiResponseDto<any>> {
+    const tag = await this.ingredientTagService.createTag(dto);
+    return ApiResponseDto.success({
+      id: tag.id,
+      name: tag.name,
+      description: tag.description,
+      parentId: tag.parentId,
+      sort: tag.sort,
+      color: tag.color,
+    });
+  }
+
+  @Put('ingredient-tags/:id')
+  @ApiOperation({ summary: 'Update tag' })
+  @ApiResponse({ status: 200, description: 'Tag updated' })
+  @ApiResponse({ status: 404, description: 'Tag not found' })
+  async updateIngredientTag(
+    @Param('id') id: string,
+    @Body() dto: UpdateTagDto
+  ): Promise<ApiResponseDto<any>> {
+    const tag = await this.ingredientTagService.updateTag(id, dto);
+    return ApiResponseDto.success({
+      id: tag.id,
+      name: tag.name,
+      description: tag.description,
+      parentId: tag.parentId,
+      sort: tag.sort,
+      color: tag.color,
+    });
+  }
+
+  @Delete('ingredient-tags/:id')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete tag' })
+  @ApiResponse({ status: 200, description: 'Tag deleted' })
+  @ApiResponse({ status: 400, description: 'Tag has children or is in use' })
+  async deleteIngredientTag(@Param('id') id: string): Promise<ApiResponseDto<void>> {
+    await this.ingredientTagService.deleteTag(id);
+    return ApiResponseDto.success(null);
+  }
+
+  @Get('ingredients/:id/tags')
+  @ApiOperation({ summary: 'Get tags for an ingredient' })
+  @ApiResponse({ status: 200, description: 'List of tags' })
+  async getIngredientTags(@Param('id') id: string): Promise<ApiResponseDto<any[]>> {
+    const tags = await this.ingredientTagService.getTagsByIngredient(id);
+    const data = tags.map(tag => ({
+      id: tag.id,
+      name: tag.name,
+      description: tag.description,
+      color: tag.color,
+    }));
+    return ApiResponseDto.success(data);
   }
 }
 

@@ -8,6 +8,7 @@ import { PackagingUnit } from './packaging-unit.entity';
 
 export interface ProductionBatchRepository {
   findById(id: string): Promise<ProductionBatch | null>;
+  findAll(): Promise<ProductionBatch[]>;
   findByProductionDate(date: Date): Promise<ProductionBatch[]>;
   findByStatus(status: string): Promise<ProductionBatch[]>;
   save(batch: ProductionBatch): Promise<ProductionBatch>;

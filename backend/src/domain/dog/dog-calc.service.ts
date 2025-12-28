@@ -40,11 +40,15 @@ export interface DogCalcResult {
     sizeClass: string;
     lifeStage: string;
 
-    // Coefficients
+    // Final coefficient after applying neuter & activity modifiers
     stageFactor: number;
-    activityMultiplier: number;
-    neuterMultiplier: number;
+
+    // BCS adjustment
     bcsMultiplier: number;
+
+    // Additional info for display (not used in calculation)
+    isNeutered: boolean;
+    activityLevel: string;
 
     // Treat info
     treatMode: string;
@@ -371,6 +375,41 @@ export function calculateTotalDer(
 }
 
 /**
+ * Calculate Total DER with detailed breakdown
+ * Returns both the result and the calculation details
+ */
+export function calculateTotalDerWithDetails(
+  dog: Dog,
+  breed?: DogBreed | null,
+): { der: number; adjustedFactor: number; bcsCoeff: number } {
+  const ageMonths = calculateAgeMonths(dog.birthday);
+  const sizeClass = determineSizeClass(dog, breed);
+
+  // 1. Calculate RER
+  const rer = calculateRER(dog.currentWeightKg);
+
+  // 2. Get life stage base factor
+  const stageFactor = getLifeStageFactor(dog, ageMonths, sizeClass, breed);
+
+  // 3. Apply adult modifiers (neuter & activity)
+  const adjustedFactor = applyAdultModifiers(
+    stageFactor,
+    dog,
+    ageMonths,
+    sizeClass,
+    breed,
+  );
+
+  // 4. Apply BCS adjustment
+  const bcsCoeff = getBcsAdjustment(dog.bcsScore);
+
+  // 5. Calculate DER
+  const der = rer * adjustedFactor * bcsCoeff;
+
+  return { der, adjustedFactor, bcsCoeff };
+}
+
+/**
  * Calculate treat deduction
  * Based on docs/07_Core_Architecture.md Section 3.1.5 Function B
  */
@@ -511,31 +550,8 @@ export function calculateDogEnergy(
       lifeStage = 'ADULT';
     }
 
-    // Get coefficients
-    const stageFactor = getLifeStageFactor(dog, ageMonths, sizeClass, breed);
-
-    let activityMultiplier: number;
-    if (lifeStage === 'ADULT') {
-      activityMultiplier = ACTIVITY_MULTIPLIERS[dog.activityLevel] ?? ACTIVITY_MULTIPLIERS.NORMAL;
-    } else {
-      activityMultiplier = 1.0;
-    }
-
-    let neuterMultiplier: number;
-    if (lifeStage === 'ADULT') {
-      const isSenior = checkIsSenior(ageMonths, sizeClass, breed);
-      if (isSenior) {
-        neuterMultiplier = 1.0;
-      } else {
-        neuterMultiplier = dog.isNeutered ? LIFE_STAGE_FACTORS.ADULT_NEUTERED : LIFE_STAGE_FACTORS.ADULT_INTACT;
-        // Normalize by dividing by adult base factor to get multiplier
-        neuterMultiplier = neuterMultiplier / LIFE_STAGE_FACTORS.ADULT_NEUTERED;
-      }
-    } else {
-      neuterMultiplier = 1.0;
-    }
-
-    const bcsMultiplier = getBcsAdjustment(dog.bcsScore);
+    // Get calculation details with adjusted factor
+    const { adjustedFactor, bcsCoeff } = calculateTotalDerWithDetails(dog, breed);
 
     // Get treat percentage
     let treatPercentage: number | undefined;
@@ -554,10 +570,10 @@ export function calculateDogEnergy(
       ageMonths,
       sizeClass,
       lifeStage,
-      stageFactor,
-      activityMultiplier,
-      neuterMultiplier,
-      bcsMultiplier,
+      stageFactor: adjustedFactor, // Use adjusted factor (includes neuter & activity)
+      bcsMultiplier: bcsCoeff,
+      isNeutered: dog.isNeutered,
+      activityLevel: dog.activityLevel,
       treatMode: dog.treatInputMode,
       treatLevel: dog.treatLevel ?? undefined,
       treatPercentage,

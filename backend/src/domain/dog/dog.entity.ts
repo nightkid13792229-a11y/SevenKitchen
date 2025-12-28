@@ -33,6 +33,8 @@ export class Dog {
     public treatLevel: TreatLevel,
     public manualTreatKcal: number | null,
     public medicalHistory: string | null,
+    public allergyFoods: string | null,
+    public pickyFoods: string | null,
     public cachedTargetFoodKcal: number, // System calculated, can be updated
   ) {
     this.validateInvariants();
@@ -111,6 +113,9 @@ export class Dog {
     if (updates.sizeClassOverride !== undefined) {
       this.sizeClassOverride = updates.sizeClassOverride;
     }
+    if (updates.customBreedName !== undefined) {
+      this.customBreedName = updates.customBreedName;
+    }
     if (updates.mealsPerDay !== undefined) {
       this.mealsPerDay = updates.mealsPerDay;
     }
@@ -125,6 +130,12 @@ export class Dog {
     }
     if (updates.medicalHistory !== undefined) {
       this.medicalHistory = updates.medicalHistory;
+    }
+    if (updates.allergyFoods !== undefined) {
+      this.allergyFoods = updates.allergyFoods;
+    }
+    if (updates.pickyFoods !== undefined) {
+      this.pickyFoods = updates.pickyFoods;
     }
 
     // Re-validate invariants after update

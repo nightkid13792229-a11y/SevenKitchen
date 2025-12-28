@@ -181,7 +181,7 @@
 
       <!-- Size Class Display (Inline) -->
       <view v-if="selectedBreed || isMixedBreed" class="form-item size-display">
-        <text class="label">📏 体型分类</text>
+        <text class="label">体型分类</text>
         <picker
           mode="selector"
           :range="sizeClassOptionsForPicker"
@@ -190,7 +190,7 @@
         >
           <view class="size-info" :class="{ 'size-required': isMixedBreed && !formData.sizeClassOverride }">
             <text class="size-text">{{ getSizeClassDisplay() }}</text>
-            <text class="edit-icon">✏️</text>
+            <text class="manual-select-btn">手动选择</text>
           </view>
         </picker>
         <text class="hint" :class="{ 'hint-warning': isMixedBreed && !formData.sizeClassOverride }">
@@ -203,6 +203,54 @@
         <picker mode="date" :value="formData.birthday || ''" @change="onBirthdayChange">
           <view class="picker">{{ formData.birthday || '请选择生日' }}</view>
         </picker>
+      </view>
+
+      <!-- 生命阶段（自动匹配 + 手动选择） -->
+      <view class="form-item life-stage-section">
+        <text class="label">生命阶段</text>
+
+        <!-- 已填写生日：显示结果 -->
+        <view v-if="formData.birthday" class="life-stage-content">
+          <!-- 当前生命阶段展示 -->
+          <view class="auto-match-result">
+            <text class="auto-match-text">{{ displayLifeStageText }}（{{ displayLifeStageDetail }}）</text>
+            <text class="auto-match-label">{{ isLifeStageOverride ? '- 手动选择' : '- 自动匹配' }}</text>
+          </view>
+
+          <!-- 未手动覆盖：显示手动选择按钮 -->
+          <view v-if="!isLifeStageOverride" class="manual-select-trigger" @tap="enableLifeStageOverride">
+            <text class="manual-select-text">手动选择生命阶段</text>
+            <text class="manual-select-icon">▶</text>
+          </view>
+
+          <!-- 已手动覆盖：显示恢复自动匹配按钮 -->
+          <view v-else class="manual-select-trigger" @tap="restoreAutoMatch">
+            <text class="manual-select-text">恢复自动匹配</text>
+            <text class="manual-select-icon">↺</text>
+          </view>
+
+          <!-- 手动选择面板（展开时显示） -->
+          <view v-if="showLifeStageOverride" class="life-stage-override-panel">
+            <view class="override-title">请选择生命阶段</view>
+            <view class="override-options">
+              <view
+                v-for="option in lifeStageOverrideOptions"
+                :key="option.value"
+                class="override-option"
+                :class="{ active: formData.lifeStageOverride === option.value }"
+                @tap="selectLifeStageOverride(option.value)"
+              >
+                <text class="override-option-label">{{ option.label }}</text>
+                <text class="override-option-desc">{{ option.description }}</text>
+              </view>
+            </view>
+          </view>
+        </view>
+
+        <!-- 未填写生日时的提示 -->
+        <view v-else class="life-stage-prompt">
+          <text class="prompt-text">请先选择品种和生日，系统将自动判断</text>
+        </view>
       </view>
 
       <!-- 身体状态区 -->
@@ -236,14 +284,16 @@
 
           <!-- BCS评分图片 -->
           <view class="bcs-image-container">
-            <image
-              v-if="!showBcsFallback"
-              class="bcs-guide-image"
-              :src="bcsGuideImageUrl"
-              mode="widthFix"
-              @load="onBcsImageLoad"
-              @error="onBcsImageError"
-            />
+            <view class="bcs-image-wrapper">
+              <image
+                v-if="!showBcsFallback"
+                class="bcs-guide-image"
+                :src="bcsGuideImageUrl"
+                mode="widthFix"
+                @load="onBcsImageLoad"
+                @error="onBcsImageError"
+              />
+            </view>
 
             <!-- 降级内容：图片加载失败时显示文字描述 -->
             <view v-if="showBcsFallback" class="bcs-fallback-content">
@@ -334,54 +384,6 @@
             </view>
             <text class="activity-level-description">{{ option.description }}</text>
           </view>
-        </view>
-      </view>
-
-      <!-- 生命阶段（自动匹配 + 手动选择） -->
-      <view class="form-item life-stage-section">
-        <text class="label">生命阶段</text>
-
-        <!-- 已填写生日：显示自动匹配结果 -->
-        <view v-if="formData.birthday" class="life-stage-content">
-          <!-- 自动匹配结果展示 -->
-          <view class="auto-match-result">
-            <text class="auto-match-text">{{ autoDetectedLifeStage.label }}（{{ autoDetectedLifeStage.detail }}）</text>
-            <text class="auto-match-label">- 自动匹配</text>
-          </view>
-
-          <!-- 未手动覆盖：显示手动选择按钮 -->
-          <view v-if="!isLifeStageOverride" class="manual-select-trigger" @tap="enableLifeStageOverride">
-            <text class="manual-select-text">手动选择生命阶段</text>
-            <text class="manual-select-icon">▶</text>
-          </view>
-
-          <!-- 已手动覆盖：显示手动选择面板 -->
-          <view v-else class="life-stage-override-panel">
-            <view class="override-title">请选择生命阶段</view>
-            <view class="override-options">
-              <view
-                v-for="option in lifeStageOverrideOptions"
-                :key="option.value"
-                class="override-option"
-                :class="{ active: formData.lifeStageOverride === option.value }"
-                @tap="selectLifeStageOverride(option.value)"
-              >
-                <text class="override-option-label">{{ option.label }}</text>
-                <text class="override-option-desc">{{ option.description }}</text>
-              </view>
-            </view>
-
-            <!-- 取消按钮 -->
-            <view class="cancel-override-btn" @tap="cancelLifeStageOverride">
-              <text class="cancel-override-icon">✖️</text>
-              <text class="cancel-override-text">取消，返回自动匹配</text>
-            </view>
-          </view>
-        </view>
-
-        <!-- 未填写生日时的提示 -->
-        <view v-else class="life-stage-prompt">
-          <text class="prompt-text">请先选择狗狗的生日，系统将自动判断生命阶段</text>
         </view>
       </view>
 
@@ -479,108 +481,135 @@
 
       <!-- Preview Calculation Button -->
       <button class="btn btn-secondary" @tap="previewCalculation" :disabled="canPreview === false">
-        试算喂食建议
+        每日能量计算
       </button>
 
       <!-- Feeding Recommendation Card -->
       <view class="recommendation-card" v-if="calcResult">
-        <view class="card-title">📊 喂食建议</view>
+        <view class="card-title">喂食建议</view>
         <view class="calc-item">
-          <text class="calc-label">静息能量需求 (RER):</text>
-          <text class="calc-value">{{ calcResult.rer?.toFixed(1) || 'N/A' }} kcal/天</text>
-        </view>
-        <view class="calc-item">
-          <text class="calc-label">每日总能量需求 (DER):</text>
+          <text class="calc-label">总能量需求 (DER):</text>
           <text class="calc-value">{{ calcResult.totalDer?.toFixed(1) || 'N/A' }} kcal/天</text>
         </view>
-        <view class="calc-item highlight-item">
-          <text class="calc-label">每日建议能量 (鲜食):</text>
-          <text class="calc-value highlight">{{ calcResult.finalFoodKcal?.toFixed(1) || 'N/A' }} kcal/天</text>
-        </view>
-        <view class="calc-item" v-if="calcResult.dailyIntakeG">
-          <text class="calc-label">每日建议鲜食摄入量:</text>
-          <text class="calc-value highlight">{{ calcResult.dailyIntakeG.toFixed(0) }} g/天</text>
-        </view>
         <view class="calc-item" v-if="calcResult.treatDeduction && calcResult.treatDeduction > 0">
-          <text class="calc-label">零食扣减:</text>
+          <text class="calc-label">零食能量估算:</text>
           <text class="calc-value">{{ calcResult.treatDeduction.toFixed(1) }} kcal/天</text>
+        </view>
+        <view class="calc-item highlight-item">
+          <text class="calc-label">每日主食能量:</text>
+          <text class="calc-value highlight">{{ calcResult.finalFoodKcal?.toFixed(1) || 'N/A' }} kcal/天</text>
         </view>
         <view class="calc-warning" v-if="calcResult.isTreatCapped">
           ⚠️ 零食热量已超过安全上限(10%)，系统已自动调整为安全最大值
         </view>
 
         <!-- 计算过程折叠区 -->
-        <view class="calc-process-section" v-if="calcResult.calcDetails">
+        <view class="calc-process-section" v-if="calcResult && calcResult.rer">
           <view class="process-toggle" @tap="toggleCalcProcess">
             <text class="process-toggle-text">计算过程</text>
             <text class="process-toggle-icon">{{ showCalcProcess ? '▼' : '▶' }}</text>
           </view>
 
           <view v-if="showCalcProcess && calcResult.calcDetails" class="process-content">
-            <!-- 基础信息 -->
+            <!-- 步骤①：算出基础代谢 -->
             <view class="process-step">
-              <text class="step-title">基础信息</text>
-              <view class="step-info">
-                <text class="info-item">体重: {{ calcResult.calcDetails.weightKg }} kg</text>
-                <text class="info-item">年龄: {{ calcResult.calcDetails.ageMonths }} 月</text>
-                <text class="info-item">体型: {{ getSizeClassLabel(calcResult.calcDetails.sizeClass) }}</text>
-                <text class="info-item">生命周期: {{ getLifeStageLabel(calcResult.calcDetails.lifeStage) }}</text>
+              <text class="step-title">步骤①：算出基础代谢</text>
+              <view class="step-desc">
+                根据狗狗的体重，计算它躺着不动时需要的热量
               </view>
-            </view>
-
-            <!-- RER计算 -->
-            <view class="process-step">
-              <text class="step-title">1. RER (静息能量需求)</text>
               <view class="formula-box">
                 <text class="formula-text">
-                  70 × {{ calcResult.calcDetails.weightKg }}^0.75 = {{ calcResult.rer?.toFixed(1) }} kcal/天
+                  基础代谢 = 70 × 体重^0.75
+                </text>
+                <text class="formula-text">
+                  = 70 × {{ calcResult.calcDetails.weightKg }}^0.75
+                </text>
+                <text class="formula-text">
+                  = {{ calcResult.rer?.toFixed(1) }} kcal/天
                 </text>
               </view>
-            </view>
-
-            <!-- DER系数 -->
-            <view class="process-step">
-              <text class="step-title">2. DER系数</text>
-              <view class="coefficients-box">
-                <text class="coeff-item">阶段系数: {{ calcResult.calcDetails.stageFactor }}</text>
-                <text class="coeff-item">活动系数: {{ calcResult.calcDetails.activityMultiplier }}</text>
-                <text class="coeff-item">绝育系数: {{ calcResult.calcDetails.neuterMultiplier }}</text>
-                <text class="coeff-item">体况系数: {{ calcResult.calcDetails.bcsMultiplier }}</text>
+              <view class="step-tip">
+                💡 这是国际通用的兽医营养学公式，您可以用计算器验证
               </view>
             </view>
 
-            <!-- 总DER -->
+            <!-- 步骤②：根据狗狗情况调整 -->
             <view class="process-step">
-              <text class="step-title">3. 总DER计算</text>
+              <text class="step-title">步骤②：根据狗狗情况调整</text>
+              <view class="step-desc">
+                考虑狗狗的{{ getLifeStageLabel(calcResult.calcDetails.lifeStage) }}阶段、{{ getActivityLevelText(calcResult.calcDetails.activityLevel) }}、{{ calcResult.calcDetails.isNeutered ? '已绝育' : '未绝育' }}、体型胖瘦，计算总热量需求
+              </view>
               <view class="formula-box">
                 <text class="formula-text">
-                  {{ calcResult.rer?.toFixed(1) }} × {{ calcResult.calcDetails.stageFactor }} × {{ calcResult.calcDetails.activityMultiplier }} × {{ calcResult.calcDetails.neuterMultiplier }} × {{ calcResult.calcDetails.bcsMultiplier }} = {{ calcResult.totalDer?.toFixed(1) }} kcal/天
+                  总热量 = 基础代谢 × 系数
                 </text>
+                <text class="formula-text">
+                  = {{ calcResult.rer?.toFixed(1) }} × {{ calcResult.calcDetails.stageFactor.toFixed(2) }} × {{ calcResult.calcDetails.bcsMultiplier.toFixed(1) }}
+                </text>
+                <text class="formula-text">
+                  = {{ calcResult.totalDer?.toFixed(1) }} kcal/天
+                </text>
+              </view>
+              <view class="step-tip">
+                📌 系数计算过程（{{ calcResult.calcDetails.stageFactor.toFixed(2) }} × {{ calcResult.calcDetails.bcsMultiplier.toFixed(1) }} = {{ (calcResult.calcDetails.stageFactor * calcResult.calcDetails.bcsMultiplier).toFixed(2) }}）：
+              </view>
+              <view class="step-tip">
+                ① 生命阶段系数：{{ getStageFactorBase(calcResult.calcDetails) }}
+              </view>
+              <view class="step-tip">
+                ② 活动水平调整：× {{ getActivityMultiplier(calcResult.calcDetails.activityLevel) }}（{{ getActivityLevelText(calcResult.calcDetails.activityLevel) }}）
+              </view>
+              <view class="step-tip">
+                ③ BCS体型调整：× {{ calcResult.calcDetails.bcsMultiplier.toFixed(1) }}（{{ getBcsText(calcResult.calcDetails.bcsMultiplier) }}）
               </view>
             </view>
 
-            <!-- 零食扣除 -->
-            <view class="process-step" v-if="calcResult.treatDeduction > 0">
-              <text class="step-title">4. 零食热量扣除</text>
-              <view class="treat-box">
-                <text class="treat-mode">模式: {{ getTreatModeLabel(calcResult.calcDetails.treatMode) }}</text>
-                <text class="treat-level" v-if="calcResult.calcDetails.treatLevel">
-                  级别: {{ getTreatLevelLabel(calcResult.calcDetails.treatLevel) }} ({{ calcResult.calcDetails.treatPercentage }}%)
-                </text>
-                <text class="treat-deduction">
-                  扣除: {{ calcResult.totalDer?.toFixed(1) }} × {{ calcResult.calcDetails.treatPercentage }}% = {{ calcResult.treatDeduction?.toFixed(1) }} kcal/天
-                </text>
-              </view>
-            </view>
-
-            <!-- 最终热量 -->
-            <view class="process-step final-step">
-              <text class="step-title">5. 最终鲜食热量需求</text>
+            <!-- 步骤③：扣除零食，得到主食热量 -->
+            <view class="process-step final-step" v-if="calcResult.treatDeduction && calcResult.treatDeduction > 0">
+              <text class="step-title">步骤③：扣除零食，得到主食热量</text>
               <view class="formula-box">
                 <text class="formula-text">
-                  {{ calcResult.totalDer?.toFixed(1) }} - {{ calcResult.treatDeduction?.toFixed(1) || 0 }} = {{ calcResult.finalFoodKcal?.toFixed(1) }} kcal/天
+                  零食热量 = {{ calcResult.totalDer?.toFixed(1) }} × {{ calcResult.calcDetails.treatPercentage }}% = {{ calcResult.treatDeduction?.toFixed(1) }} kcal/天
+                </text>
+                <text class="formula-text">
+                </text>
+                <text class="formula-text">
+                  主食热量 = 总热量 - 零食热量
+                </text>
+                <text class="formula-text">
+                  = {{ calcResult.totalDer?.toFixed(1) }} - {{ calcResult.treatDeduction?.toFixed(1) }}
+                </text>
+                <text class="formula-text formula-result">
+                  = {{ calcResult.finalFoodKcal?.toFixed(1) }} kcal/天 ✅
                 </text>
               </view>
+              <view class="step-tip">
+                ✅ 这就是每天需要喂的主食热量
+              </view>
+            </view>
+
+            <!-- 没有零食的情况 -->
+            <view class="process-step final-step" v-else>
+              <text class="step-title">步骤③：得出主食热量</text>
+              <view class="formula-box">
+                <text class="formula-text">
+                  因为没有给零食，所以：
+                </text>
+                <text class="formula-text">
+                  主食热量 = 总热量 = {{ calcResult.totalDer?.toFixed(1) }} kcal/天 ✅
+                </text>
+              </view>
+              <view class="step-tip">
+                ✅ 这就是每天需要喂的主食热量
+              </view>
+            </view>
+          </view>
+
+          <!-- 当calcDetails不存在时显示提示 -->
+          <view v-else-if="showCalcProcess && !calcResult.calcDetails" class="process-step">
+            <text class="step-title">暂无详细计算过程</text>
+            <view class="formula-box">
+              <text class="formula-text">当前版本未返回详细计算步骤，请确认后端配置。</text>
             </view>
           </view>
         </view>
@@ -791,6 +820,19 @@ interface CalcResult {
   treatDeduction?: number
   isTreatCapped?: boolean
   dailyIntakeG?: number
+  calcDetails?: {
+    weightKg: number
+    ageMonths: number
+    sizeClass: string
+    lifeStage: string
+    stageFactor: number
+    bcsMultiplier: number
+    isNeutered: boolean
+    activityLevel: string
+    treatMode: string
+    treatLevel?: string
+    treatPercentage?: number
+  }
 }
 
 const breeds = ref<Breed[]>([])
@@ -799,6 +841,13 @@ const calcResult = ref<CalcResult | null>(null)
 const showCalcProcess = ref(false)
 const loadingBreeds = ref(false)
 const calculating = ref(false)
+
+// 后端返回的生命阶段信息（用于显示）
+const backendLifeStageInfo = ref<{
+  stage: string
+  label: string
+  detail: string
+} | null>(null)
 
 // Store dogId for edit mode
 const dogId = ref<string | null>(null)
@@ -818,7 +867,7 @@ const bcsImageError = ref(false)
 const bcsGuideShown = ref(false) // 记录是否已显示过BCS图
 const showBcsFallback = ref(false) // 是否显示降级内容（图片加载失败时）
 const showHealthRecord = ref(false) // 健康记录折叠面板展开状态
-const showLifeStageOverride = ref(false) // 生命阶段手动覆盖折叠面板
+const showLifeStageOverride = ref(false) // 生命阶段手动选择面板展开状态
 
 // 侧边导航状态变量
 const activeCategory = ref<string>('')
@@ -965,8 +1014,22 @@ const getCurrentSizeClass = computed(() => {
 
 /**
  * 计算自动识别的生命阶段
+ * 优先使用后端返回的结果，如果没有则使用前端简化逻辑（仅作为fallback）
+ * 注意：必须先选择品种（或混血犬选择体型分类）才能进行生命阶段判断
  */
 const autoDetectedLifeStage = computed(() => {
+  // 优先使用后端返回的生命阶段信息
+  if (backendLifeStageInfo.value) {
+    return backendLifeStageInfo.value
+  }
+
+  // Fallback：前端简化计算逻辑（用于未触发计算时的即时显示）
+  // 但前提是必须已经选择了品种（或混血犬选择了体型分类）
+  if (!selectedBreed.value && !formData.value.sizeClassOverride) {
+    // 没有品种信息，无法判断生命阶段
+    return null
+  }
+
   const ageMonths = calculateAgeMonths.value
   const adultThreshold = getAdultThresholdMonths.value
   const ageYears = ageMonths / 12.0
@@ -979,16 +1042,19 @@ const autoDetectedLifeStage = computed(() => {
       return { stage: 'PUPPY', label: '幼犬期', detail: `${ageMonths}个月（快速成长期）` }
     } else if (ageMonths < 6) {
       return { stage: 'PUPPY', label: '幼犬期', detail: `${ageMonths}个月（成长期）` }
-    } else if (ageMonths < 12) {
-      return { stage: 'PUPPY', label: '幼犬期', detail: `${ageMonths}个月` }
     } else {
-      return { stage: 'PUPPY', label: '幼犬期', detail: `${ageMonths}个月（接近成年）` }
+      // 6个月及以上，统一显示月龄
+      return { stage: 'PUPPY', label: '幼犬期', detail: `${ageMonths}个月` }
     }
   } else if (ageYears >= seniorThreshold) {
     // 老年期
     return { stage: 'SENIOR', label: '老年期', detail: `${Math.floor(ageYears)}岁` }
   } else {
     // 成年期
+    // 对于不足1岁的成年犬，显示月龄而不是"0岁"
+    if (ageYears < 1) {
+      return { stage: 'ADULT', label: '成年期', detail: `${ageMonths}个月` }
+    }
     return { stage: 'ADULT', label: '成年期', detail: `${Math.floor(ageYears)}岁` }
   }
 })
@@ -1010,7 +1076,7 @@ const displayLifeStage = computed(() => {
     return labels[override] || override
   }
   // 显示自动识别的
-  return autoDetectedLifeStage.value.label
+  return autoDetectedLifeStage.value?.label || '请先选择品种'
 })
 
 /**
@@ -1018,6 +1084,40 @@ const displayLifeStage = computed(() => {
  */
 const isLifeStageOverride = computed(() => {
   return formData.value.lifeStageOverride && formData.value.lifeStageOverride !== 'NONE'
+})
+
+/**
+ * 显示的生命阶段文本（手动或自动）
+ */
+const displayLifeStageText = computed(() => {
+  if (isLifeStageOverride.value) {
+    // 手动选择：显示手动选择的阶段
+    const override = formData.value.lifeStageOverride
+    const labels: Record<string, string> = {
+      'PUPPY': '幼犬期',
+      'ADULT': '成年期',
+      'SENIOR': '老年期',
+      'PREGNANCY': '妊娠期',
+      'LACTATION': '哺乳期'
+    }
+    return labels[override] || override
+  }
+  // 自动匹配：显示自动识别的阶段
+  if (!autoDetectedLifeStage.value) {
+    return '请先选择品种'
+  }
+  return autoDetectedLifeStage.value.label
+})
+
+/**
+ * 显示的生命阶段详情（手动或自动）
+ */
+const displayLifeStageDetail = computed(() => {
+  // 手动选择和自动匹配都显示年龄信息，保持格式一致
+  if (!autoDetectedLifeStage.value) {
+    return ''
+  }
+  return autoDetectedLifeStage.value.detail
 })
 
 // ========== 生命阶段计算逻辑结束 ==========
@@ -1134,6 +1234,63 @@ async function loadDogProfile(dogId: string) {
     if (res.code === 0 && res.data && res.data.profile) {
       populateFormData(res.data.profile)
 
+      // 如果有计算结果，从中提取生命阶段信息
+      if (res.data.calcResult && res.data.calcResult.calcDetails) {
+        const details = res.data.calcResult.calcDetails
+        const lifeStage = details.lifeStage
+        const ageMonths = details.ageMonths
+
+        // 根据后端返回的 lifeStage 生成显示文本
+        const labels: Record<string, string> = {
+          'PUPPY': '幼犬期',
+          'ADULT': '成年期',
+          'SENIOR': '老年期',
+          'PREGNANCY': '妊娠期',
+          'LACTATION': '哺乳期'
+        }
+
+        // 生成详细信息文本
+        let detailText = ''
+        if (lifeStage === 'PUPPY') {
+          if (ageMonths < 4) {
+            detailText = `${ageMonths}个月（快速成长期）`
+          } else if (ageMonths < 6) {
+            detailText = `${ageMonths}个月（成长期）`
+          } else {
+            // 6个月及以上，统一显示月龄
+            detailText = `${ageMonths}个月`
+          }
+        } else {
+          // 成年期和老年期
+          // 对于不足1岁的成年犬，显示月龄而不是"0岁"
+          const ageYears = Math.floor(ageMonths / 12)
+          if (ageYears < 1) {
+            detailText = `${ageMonths}个月`
+          } else {
+            detailText = `${ageYears}岁`
+          }
+        }
+
+        backendLifeStageInfo.value = {
+          stage: lifeStage,
+          label: labels[lifeStage] || lifeStage,
+          detail: detailText
+        }
+
+        // 同时存储计算结果
+        calcResult.value = {
+          rer: res.data.calcResult.rer,
+          totalDer: res.data.calcResult.totalDer,
+          finalFoodKcal: res.data.calcResult.finalFoodKcal,
+          treatDeduction: res.data.calcResult.treatDeduction,
+          isTreatCapped: res.data.calcResult.isTreatCapped,
+          dailyIntakeG: res.data.calcResult.dailyIntakeG,
+          calcDetails: details
+        }
+
+        console.log('[DogCreate] Loaded backend life stage info:', backendLifeStageInfo.value)
+      }
+
       console.log('[DogCreate] Dog profile loaded successfully:', res.data.profile)
       uni.showToast({
         title: '加载成功',
@@ -1240,7 +1397,8 @@ function selectBreed(breed: Breed) {
   formData.value.breedId = breed.id
   formData.value.sizeClassOverride = null  // Reset override
   searchKeyword.value = ''
-  previewCalculation()
+  // 品种变化会影响生命阶段，清空后端数据
+  backendLifeStageInfo.value = null
 }
 
 function selectBreedByName(name: string) {
@@ -1263,6 +1421,8 @@ function confirmCustomBreed() {
   formData.value.sizeClassOverride = null  // User must select
   showCustomBreedInput.value = false
   customBreedName.value = ''
+  // 品种变化会影响生命阶段，清空后端数据
+  backendLifeStageInfo.value = null
 }
 
 function cancelCustomBreed() {
@@ -1273,6 +1433,8 @@ function cancelCustomBreed() {
 function clearBreed() {
   selectedBreed.value = null
   isMixedBreed.value = false
+  // 品种变化会影响生命阶段，清空后端数据
+  backendLifeStageInfo.value = null
   formData.value.breedId = ''
   formData.value.customBreedName = ''
   formData.value.sizeClassOverride = null
@@ -1387,7 +1549,8 @@ function onScroll(e: any) {
 function onSizeClassChange(e: any) {
   const index = e.detail.value
   formData.value.sizeClassOverride = sizeClassOptions[index]
-  previewCalculation()
+  // 体型分类变化会影响生命阶段，清空后端数据
+  backendLifeStageInfo.value = null
 }
 
 function getSizeClassDisplay(): string {
@@ -1418,14 +1581,14 @@ function getSizeClassHint(): string {
   if (isMixedBreed.value) {
     return '混血犬需要手动选择体型分类'
   }
-  if (formData.value.sizeClassOverride) {
-    return '点击 ✏️ 可重新调整'
-  }
-  return '点击 ✏️ 可修改系统自动判断的体型'
+  // 非混血犬不显示提示
+  return ''
 }
 
 function onBirthdayChange(e: any) {
   formData.value.birthday = e.detail.value
+  // 生日变化会影响生命阶段，清空后端数据
+  backendLifeStageInfo.value = null
 }
 
 // 选择性别
@@ -1472,37 +1635,32 @@ function toggleHealthRecord() {
 // ========== 生命阶段选择函数 ==========
 
 /**
- * 保持自动识别
- */
-function keepAutoDetectedLifeStage() {
-  formData.value.lifeStageOverride = 'NONE'
-  showLifeStageOverride.value = false
-}
-
-/**
- * 切换到手动覆盖模式
+ * 展开手动选择面板
  */
 function enableLifeStageOverride() {
+  console.log('[LifeStage] enableLifeStageOverride called')
   showLifeStageOverride.value = true
-  // 如果当前还没有设置覆盖，默认设置为幼犬期
-  if (!formData.value.lifeStageOverride || formData.value.lifeStageOverride === 'NONE') {
-    formData.value.lifeStageOverride = 'PUPPY'
-  }
+  console.log('[LifeStage] showLifeStageOverride set to:', showLifeStageOverride.value)
 }
 
 /**
- * 选择手动覆盖的生命阶段
+ * 选择手动覆盖的生命阶段（选中后自动收起面板）
  */
 function selectLifeStageOverride(stage: string) {
+  console.log('[LifeStage] selectLifeStageOverride called with:', stage)
   formData.value.lifeStageOverride = stage
+  showLifeStageOverride.value = false // 自动收起面板
+  console.log('[LifeStage] Panel closed, lifeStageOverride set to:', formData.value.lifeStageOverride)
 }
 
 /**
- * 取消手动覆盖，恢复自动识别
+ * 恢复自动匹配（清除手动覆盖）
  */
-function cancelLifeStageOverride() {
+function restoreAutoMatch() {
+  console.log('[LifeStage] restoreAutoMatch called')
   formData.value.lifeStageOverride = 'NONE'
   showLifeStageOverride.value = false
+  console.log('[LifeStage] Restored to auto match')
 }
 
 // ========== 生命阶段选择函数结束 ==========
@@ -1586,6 +1744,53 @@ async function previewCalculation() {
         calcDetails: res.data.calcDetails
       }
       console.log('[DogCreate] Preview calculation result:', calcResult.value)
+
+      // 从后端返回的 calcDetails 中提取生命阶段信息
+      if (res.data.calcDetails) {
+        const details = res.data.calcDetails
+        const lifeStage = details.lifeStage
+        const ageMonths = details.ageMonths
+
+        // 根据后端返回的 lifeStage 生成显示文本
+        const labels: Record<string, string> = {
+          'PUPPY': '幼犬期',
+          'ADULT': '成年期',
+          'SENIOR': '老年期',
+          'PREGNANCY': '妊娠期',
+          'LACTATION': '哺乳期'
+        }
+
+        // 生成详细信息文本
+        let detailText = ''
+        if (lifeStage === 'PUPPY') {
+          if (ageMonths < 4) {
+            detailText = `${ageMonths}个月（快速成长期）`
+          } else if (ageMonths < 6) {
+            detailText = `${ageMonths}个月（成长期）`
+          } else {
+            // 6个月及以上，统一显示月龄
+            detailText = `${ageMonths}个月`
+          }
+        } else {
+          // 成年期和老年期
+          // 对于不足1岁的成年犬，显示月龄而不是"0岁"
+          const ageYears = Math.floor(ageMonths / 12)
+          if (ageYears < 1) {
+            detailText = `${ageMonths}个月`
+          } else {
+            detailText = `${ageYears}岁`
+          }
+        }
+
+        backendLifeStageInfo.value = {
+          stage: lifeStage,
+          label: labels[lifeStage] || lifeStage,
+          detail: detailText
+        }
+
+        console.log('[DogCreate] Backend life stage info:', backendLifeStageInfo.value)
+      }
+
       uni.showToast({
         title: '计算完成',
         icon: 'success',
@@ -1652,6 +1857,65 @@ function getTreatLevelLabel(treatLevel?: string): string {
     'HIGH': '较多'
   }
   return labels[treatLevel] || treatLevel
+}
+
+function getActivityLevelText(activityLevel: string): string {
+  const texts: Record<string, string> = {
+    'LOW': '低活动量',
+    'NORMAL': '正常活动量',
+    'HIGH': '高活动量'
+  }
+  return texts[activityLevel] || activityLevel
+}
+
+function getBcsText(bcsMultiplier: number): string {
+  // 根据bcsMultiplier判断体况
+  if (bcsMultiplier >= 1.1) return '偏瘦（需要增加热量）'
+  if (bcsMultiplier === 1.0) return '标准体型'
+  if (bcsMultiplier < 1.0 && bcsMultiplier >= 0.6) return '偏胖（需要减少热量）'
+  return '未知'
+}
+
+/**
+ * 获取生命阶段基础系数说明
+ */
+function getStageFactorBase(details: any): string {
+  const stage = details.lifeStage
+
+  if (stage === 'PUPPY') {
+    // 幼犬期：系数根据月龄和体型细分，这里显示总体说明
+    return `${details.stageFactor.toFixed(1)}（幼犬期，根据月龄和体型确定）`
+  } else if (stage === 'ADULT') {
+    // 成年期：根据绝育状态显示不同基准
+    if (details.isNeutered) {
+      return '1.6（已绝育基准）'
+    } else {
+      return '1.8（未绝育基准）'
+    }
+  } else if (stage === 'SENIOR') {
+    return '1.4（老年期基准）'
+  } else if (stage === 'PREGNANCY') {
+    return '3.0（妊娠期）'
+  } else if (stage === 'LACTATION') {
+    return '4.0（哺乳期）'
+  }
+
+  // 其他情况（如手动覆盖）返回实际值
+  return `${details.stageFactor.toFixed(2)}（${getLifeStageLabel(stage)}）`
+}
+
+/**
+ * 获取活动水平系数
+ */
+function getActivityMultiplier(level: string): string {
+  const multipliers: Record<string, string> = {
+    'RESTING': '0.8',
+    'LOW': '0.9',
+    'NORMAL': '1.0',
+    'HIGH': '1.2',
+    'WORKING': '1.5'
+  }
+  return multipliers[level] || '1.0'
 }
 
 // ========== 计算过程辅助函数结束 ==========
@@ -2009,6 +2273,15 @@ function submit() {
 .edit-icon {
   font-size: 32rpx;
   color: #1890ff;
+}
+
+.manual-select-btn {
+  font-size: 26rpx;
+  color: #1890ff;
+  padding: 8rpx 20rpx;
+  background-color: #e6f7ff;
+  border-radius: 4rpx;
+  white-space: nowrap;
 }
 
 /* Original Input Styles */
@@ -2530,6 +2803,7 @@ function submit() {
   display: flex;
   flex-direction: column;
   align-items: center;
+  box-sizing: border-box;
 }
 
 .bcs-guide-title {
@@ -2539,6 +2813,7 @@ function submit() {
   color: #333;
   margin-bottom: 20rpx;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .bcs-image-container {
@@ -2547,12 +2822,20 @@ function submit() {
   overflow-y: auto;
   position: relative;
   display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+}
+
+.bcs-image-wrapper {
+  width: 100%;
+  display: flex;
   justify-content: center;
-  align-items: flex-start;
+  align-items: center;
 }
 
 .bcs-guide-image {
-  width: 100%;
+  max-width: 100%;
   height: auto;
   border-radius: 8rpx;
   display: block;
@@ -2746,29 +3029,27 @@ function submit() {
 .manual-select-trigger {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 12rpx;
-  padding: 24rpx;
-  background-color: #fff;
-  border: 2px dashed #d0d0d0;
-  border-radius: 12rpx;
+  justify-content: flex-start;
+  gap: 8rpx;
+  padding: 12rpx 0;
+  background: transparent;
+  border: none;
   transition: all 0.3s;
 }
 
 .manual-select-trigger:active {
-  background-color: #f5f5f5;
-  border-color: #1890ff;
+  opacity: 0.6;
 }
 
 .manual-select-text {
-  font-size: 28rpx;
-  color: #1890ff;
-  font-weight: 500;
+  font-size: 26rpx;
+  color: #999;
+  font-weight: 400;
 }
 
 .manual-select-icon {
-  font-size: 24rpx;
-  color: #1890ff;
+  font-size: 22rpx;
+  color: #999;
 }
 
 /* 未填写生日提示 */
@@ -2842,35 +3123,6 @@ function submit() {
   font-size: 24rpx;
   color: #999;
   line-height: 1.4;
-}
-
-/* 取消按钮 */
-.cancel-override-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8rpx;
-  padding: 20rpx;
-  margin-top: 8rpx;
-  background-color: #f5f5f5;
-  border: 1px solid #d0d0d0;
-  border-radius: 8rpx;
-  transition: all 0.2s;
-}
-
-.cancel-override-btn:active {
-  background-color: #e8e8e8;
-}
-
-.cancel-override-icon {
-  font-size: 28rpx;
-  color: #999;
-}
-
-.cancel-override-text {
-  font-size: 26rpx;
-  color: #666;
-  font-weight: 500;
 }
 
 /* ========== 零食设置样式 ========== */
@@ -3079,6 +3331,24 @@ function submit() {
   margin-bottom: 12rpx;
 }
 
+.step-desc {
+  font-size: 26rpx;
+  color: #666;
+  line-height: 1.6;
+  margin-bottom: 10rpx;
+}
+
+.step-tip {
+  font-size: 24rpx;
+  color: #0050b3;
+  line-height: 1.6;
+  margin-top: 10rpx;
+  background-color: #e6f7ff;
+  padding: 10rpx 12rpx;
+  border-radius: 4rpx;
+  border-left: 3px solid #1890ff;
+}
+
 .step-info {
   display: flex;
   flex-direction: column;
@@ -3103,8 +3373,19 @@ function submit() {
   font-size: 26rpx;
   color: #333;
   font-family: 'Courier New', monospace;
-  line-height: 1.6;
+  line-height: 1.8;
   word-break: break-all;
+  display: block;
+  margin-bottom: 4rpx;
+}
+
+.formula-result {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #52c41a;
+  margin-top: 10rpx;
+  padding-top: 10rpx;
+  border-top: 2px dashed #d9d9d9;
 }
 
 .coefficients-box {

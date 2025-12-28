@@ -256,6 +256,8 @@ model Dog {
   treatLevel            TreatLevel        @default(LOW) @map("treat_level")
   manualTreatKcal       Int?              @map("manual_treat_kcal")
   medicalHistory        String?           @map("medical_history")
+  allergyFoods          String?           @map("allergy_foods")
+  pickyFoods            String?           @map("picky_foods")
   cachedTargetFoodKcal  Int               @default(0) @map("cached_target_food_kcal")
   createdAt             DateTime          @default(now()) @map("created_at")
 

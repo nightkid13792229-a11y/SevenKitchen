@@ -4,10 +4,6 @@
     <div class="page-header">
       <h2>档案管理</h2>
       <div class="header-actions">
-        <el-button @click="handleBreedManagement">
-          <el-icon><List /></el-icon>
-          品种管理
-        </el-button>
         <el-button type="primary" @click="handleCreate">
           <el-icon><Plus /></el-icon>
           新增档案
@@ -91,6 +87,22 @@
         </template>
       </el-table-column>
 
+      <el-table-column prop="activityLevel" label="活动水平" width="100" align="center">
+        <template #default="{ row }">
+          <el-tag :type="getActivityLevelType(row.activityLevel)" size="small">
+            {{ getActivityLevelLabel(row.activityLevel) }}
+          </el-tag>
+        </template>
+      </el-table-column>
+
+      <el-table-column prop="lifeStageOverride" label="生命阶段" width="100" align="center">
+        <template #default="{ row }">
+          <el-tag :type="getLifeStageType(row.lifeStageOverride)" size="small">
+            {{ getLifeStageLabel(row.lifeStageOverride) }}
+          </el-tag>
+        </template>
+      </el-table-column>
+
       <el-table-column prop="ownerId" label="客户 ID" width="120">
         <template #default="{ row }">
           <el-tooltip :content="row.ownerId" placement="top">
@@ -105,7 +117,7 @@
         </template>
       </el-table-column>
 
-      <el-table-column label="操作" width="180" fixed="right">
+      <el-table-column label="操作" width="240" fixed="right" align="center">
         <template #default="{ row }">
           <el-button
             type="primary"
@@ -115,6 +127,7 @@
           >
             详情
           </el-button>
+          <el-divider direction="vertical" />
           <el-button
             type="primary"
             size="small"
@@ -122,6 +135,15 @@
             @click="handleEdit(row)"
           >
             编辑
+          </el-button>
+          <el-divider direction="vertical" />
+          <el-button
+            type="danger"
+            size="small"
+            link
+            @click="handleDelete(row)"
+          >
+            删除
           </el-button>
         </template>
       </el-table-column>
@@ -145,11 +167,12 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
-import { Plus, Search, List } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus, Search } from '@element-plus/icons-vue'
 import { dogApi } from '@/api/dogs'
 import type { DogProfile, DogBreed } from '@/types/dog'
-import { calculateAge } from '@/types/dog'
+import { calculateAge, ActivityLevelLabels, LifeStageLabels } from '@/types/dog'
+import { ActivityLevel, LifeStageOverride } from '@/types/dog'
 
 const router = useRouter()
 
@@ -219,16 +242,41 @@ const handleCreate = () => {
   router.push('/dogs/create')
 }
 
-const handleBreedManagement = () => {
-  router.push('/breeds')
-}
-
 const handleView = (row: DogProfile) => {
   router.push(`/dogs/${row.id}`)
 }
 
 const handleEdit = (row: DogProfile) => {
   router.push(`/dogs/${row.id}/edit`)
+}
+
+const handleDelete = async (row: DogProfile) => {
+  try {
+    await ElMessageBox.confirm(
+      `确定要删除狗狗档案"${row.name}"吗？此操作不可恢复。`,
+      '确认删除',
+      {
+        type: 'warning',
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消'
+      }
+    )
+
+    await dogApi.delete(row.id)
+    ElMessage.success('档案删除成功')
+
+    // Reload data
+    if (tableData.value.length === 1 && currentPage.value > 1) {
+      currentPage.value -= 1
+    }
+    loadData()
+  } catch (error: any) {
+    // 用户取消操作不显示错误
+    if (error === 'cancel') {
+      return
+    }
+    ElMessage.error(error.message || '删除失败')
+  }
 }
 
 const formatDate = (dateStr: string) => {
@@ -239,6 +287,38 @@ const getBCSType = (score: number) => {
   if (score <= 3) return 'info'
   if (score <= 5) return 'success'
   return 'warning'
+}
+
+const getActivityLevelLabel = (level: string) => {
+  return ActivityLevelLabels[level as ActivityLevel] || level
+}
+
+const getActivityLevelType = (level: string) => {
+  const typeMap: Record<string, any> = {
+    [ActivityLevel.RESTING]: 'info',
+    [ActivityLevel.LOW]: 'info',
+    [ActivityLevel.NORMAL]: 'success',
+    [ActivityLevel.HIGH]: 'warning',
+    [ActivityLevel.WORKING]: 'danger'
+  }
+  return typeMap[level] || 'info'
+}
+
+const getLifeStageLabel = (stage: string) => {
+  if (stage === LifeStageOverride.NONE) return '自动'
+  return LifeStageLabels[stage as LifeStageOverride] || stage
+}
+
+const getLifeStageType = (stage: string) => {
+  const typeMap: Record<string, any> = {
+    [LifeStageOverride.NONE]: 'info',
+    [LifeStageOverride.PUPPY]: 'success',
+    [LifeStageOverride.ADULT]: 'primary',
+    [LifeStageOverride.SENIOR]: 'warning',
+    [LifeStageOverride.PREGNANCY]: 'danger',
+    [LifeStageOverride.LACTATION]: 'danger'
+  }
+  return typeMap[stage] || 'info'
 }
 
 // Lifecycle

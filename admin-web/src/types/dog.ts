@@ -110,6 +110,8 @@ export interface DogProfile {
   treatLevel: TreatLevel
   manualTreatKcal: number | null
   medicalHistory: string | null
+  allergyFoods: string | null
+  pickyFoods: string | null
   cachedTargetFoodKcal: number
   createdAt?: string
 }
@@ -125,6 +127,19 @@ export interface DogCalcResult {
   treatDeduction: number
   isTreatCapped: boolean
   dailyIntakeG?: number
+  calcDetails?: {
+    weightKg: number
+    ageMonths: number
+    sizeClass: string
+    lifeStage: string
+    stageFactor: number
+    bcsMultiplier: number
+    isNeutered: boolean
+    activityLevel: string
+    treatMode: string
+    treatLevel?: string
+    treatPercentage?: number
+  }
 }
 
 /**

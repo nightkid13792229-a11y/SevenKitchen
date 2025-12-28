@@ -99,6 +99,8 @@ export class PrismaDogRepository implements DogRepository {
       record.treatLevel as TreatLevel,
       record.manualTreatKcal,
       record.medicalHistory,
+      record.allergyFoods,
+      record.pickyFoods,
       record.cachedTargetFoodKcal,
     );
   }

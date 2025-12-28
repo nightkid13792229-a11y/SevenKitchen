@@ -67,8 +67,18 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="150" fixed="right" align="center">
+        <el-table-column label="操作" width="250" fixed="right" align="center">
           <template #default="{ row }">
+            <el-button
+              type="success"
+              size="small"
+              link
+              @click="handleToggleCommonBreed(row)"
+            >
+              <el-icon><StarFilled v-if="isCommonBreed(row.name)" /><Star v-else /></el-icon>
+              {{ isCommonBreed(row.name) ? '已在常见' : '加入常见' }}
+            </el-button>
+            <el-divider direction="vertical" />
             <el-button
               type="primary"
               size="small"
@@ -121,7 +131,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search } from '@element-plus/icons-vue'
+import { Plus, Search, Star, StarFilled } from '@element-plus/icons-vue'
 import { DogSizeCategory, DogSizeLabels } from '@/types/dog'
 import type { DogBreed, BreedForm } from '@/types/breed'
 import { breedApi } from '@/api'
@@ -136,6 +146,8 @@ interface Emits {
   (e: 'refresh'): void
 }
 
+const STORAGE_KEY = 'sevenkitchen_common_breeds'
+
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
@@ -145,6 +157,57 @@ const dialogVisible = ref(false)
 const currentBreed = ref<DogBreed | null>(null)
 const currentPage = ref(1)
 const pageSize = ref(10)
+const commonBreeds = ref<string[]>([])
+
+// Load common breeds from localStorage
+const loadCommonBreeds = () => {
+  try {
+    const stored = localStorage.getItem(STORAGE_KEY)
+    if (stored) {
+      commonBreeds.value = JSON.parse(stored)
+    }
+  } catch (error) {
+    console.error('Failed to load common breeds:', error)
+  }
+}
+
+// Save common breeds to localStorage
+const saveCommonBreeds = () => {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(commonBreeds.value))
+  } catch (error) {
+    console.error('Failed to save common breeds:', error)
+  }
+}
+
+// Check if breed is in common list
+const isCommonBreed = (breedName: string) => {
+  return commonBreeds.value.includes(breedName)
+}
+
+// Toggle breed in common list
+const handleToggleCommonBreed = (breed: DogBreed) => {
+  const index = commonBreeds.value.indexOf(breed.name)
+  if (index > -1) {
+    // Remove
+    commonBreeds.value.splice(index, 1)
+    ElMessage.success(`已从常见品种移除"${breed.name}"`)
+  } else {
+    // Add
+    if (commonBreeds.value.length >= 20) {
+      ElMessage.warning('常见品种最多只能添加20个')
+      return
+    }
+    commonBreeds.value.push(breed.name)
+    ElMessage.success(`已将"${breed.name}"加入常见品种`)
+  }
+  saveCommonBreeds()
+  // Notify parent to refresh common breeds manager
+  emit('refresh')
+}
+
+// Load on mount
+loadCommonBreeds()
 
 // 计算筛选后的数据
 const filteredData = computed(() => {

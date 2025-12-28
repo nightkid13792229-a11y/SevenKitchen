@@ -106,8 +106,12 @@ export class DogsController {
 
     const calcResult = await this.dogService.calcPreview(dog.id);
 
+    // Fetch breed for name mapping
+    const breed = await this.dogBreedRepository.findById(dog.breedId);
+    const breedMap = new Map(breed ? [[dog.breedId, breed.name]] : []);
+
     const response: DogDetailResponseDto = {
-      profile: this.mapDogToProfileDto(dog),
+      profile: this.mapDogToProfileDto(dog, breedMap),
       calcResult,
     };
 
@@ -151,8 +155,12 @@ export class DogsController {
       console.warn(`[DogsController] Failed to calculate preview for updated dog ${id}:`, error.message);
     }
 
+    // Fetch breed for name mapping
+    const breed = await this.dogBreedRepository.findById(dog.breedId);
+    const breedMap = new Map(breed ? [[dog.breedId, breed.name]] : []);
+
     const response: DogDetailResponseDto = {
-      profile: this.mapDogToProfileDto(dog),
+      profile: this.mapDogToProfileDto(dog, breedMap),
       calcResult,
     };
 
@@ -204,8 +212,12 @@ export class DogsController {
 
     const dogs = await this.dogRepository.findByOwnerId(ownerId);
 
+    // Fetch all breeds for name mapping (performance optimization)
+    const breeds = await this.dogBreedRepository.findAll();
+    const breedMap = new Map(breeds.map(b => [b.id, b.name]));
+
     const profiles: DogProfileDto[] = dogs.map((dog) =>
-      this.mapDogToProfileDto(dog),
+      this.mapDogToProfileDto(dog, breedMap),
     );
 
     return ApiResponseDto.success(profiles);
@@ -248,8 +260,12 @@ export class DogsController {
       console.warn(`[DogsController] Failed to calculate preview for dog ${id}:`, error.message);
     }
 
+    // Fetch breed for name mapping
+    const breed = await this.dogBreedRepository.findById(dog.breedId);
+    const breedMap = new Map(breed ? [[dog.breedId, breed.name]] : []);
+
     const response: DogDetailResponseDto = {
-      profile: this.mapDogToProfileDto(dog),
+      profile: this.mapDogToProfileDto(dog, breedMap),
       calcResult,
     };
 
@@ -300,7 +316,9 @@ export class DogsController {
       calcPreviewDto.treatInputMode ?? TreatInputMode.ESTIMATE_LEVEL,
       calcPreviewDto.treatLevel ?? TreatLevel.LOW,
       calcPreviewDto.manualTreatKcal ?? null,
-      null,
+      null, // medicalHistory
+      null, // allergyFoods
+      null, // pickyFoods
       0,
     );
 
@@ -320,12 +338,19 @@ export class DogsController {
     return ApiResponseDto.success(result);
   }
 
-  private mapDogToProfileDto(dog: Dog): DogProfileDto {
+  private mapDogToProfileDto(
+    dog: Dog,
+    breedMap?: Map<string, string>,
+  ): DogProfileDto {
+    // Determine breed name: custom breed name takes priority, then lookup from breed map
+    const breedName = dog.customBreedName || breedMap?.get(dog.breedId) || null;
+
     return {
       id: dog.id,
       ownerId: dog.ownerId,
       name: dog.name,
       breedId: dog.breedId,
+      breedName,
       customBreedName: dog.customBreedName,
       birthday: dog.birthday.toISOString(),
       gender: dog.gender,

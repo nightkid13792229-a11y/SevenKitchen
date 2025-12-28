@@ -37,9 +37,14 @@
       </view>
       <scroll-view scroll-x class="dog-scroll">
         <view class="dog-card" v-for="dog in dogs" :key="dog.id" @tap="goToDogDetail(dog.id)">
-          <view class="dog-avatar">{{ dog.breedName ? dog.breedName.charAt(0) : '🐕' }}</view>
           <view class="dog-info">
-            <text class="dog-name">{{ dog.name }}</text>
+            <view class="dog-name-row">
+              <text class="dog-name">{{ dog.name }}</text>
+              <text class="dog-gender" :class="dog.gender === 'MALE' ? 'male' : 'female'">
+                {{ dog.gender === 'MALE' ? '♂' : '♀' }}
+              </text>
+            </view>
+            <text class="dog-breed">{{ dog.breedName || '未知品种' }}</text>
             <text class="dog-detail">{{ dog.currentWeightKg }}kg · {{ dog.ageText }}</text>
           </view>
         </view>
@@ -274,32 +279,35 @@ const goToAddressList = () => {
 }
 
 .dog-card {
-  display: inline-block;
-  width: 120px;
+  display: inline-flex;
+  align-items: center;
+  min-width: 140px;
+  max-width: 160px;
   background: #f8f8f8;
   border-radius: 8px;
   padding: 15px;
   margin-right: 12px;
-  text-align: center;
   vertical-align: top;
 }
 
-.dog-avatar {
-  width: 50px;
-  height: 50px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
+.dog-card.add-dog {
+  border: 1px dashed #ccc;
+  background: white;
+  flex-direction: column;
   justify-content: center;
-  font-size: 24px;
-  margin: 0 auto 10px;
 }
 
 .dog-info {
   display: flex;
   flex-direction: column;
   gap: 4px;
+  width: 100%;
+}
+
+.dog-name-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
 
 .dog-name {
@@ -308,14 +316,30 @@ const goToAddressList = () => {
   color: #333;
 }
 
+.dog-gender {
+  font-size: 12px;
+  font-weight: bold;
+}
+
+.dog-gender.male {
+  color: #1890ff;
+}
+
+.dog-gender.female {
+  color: #ff69b4;
+}
+
+.dog-breed {
+  font-size: 11px;
+  color: #999;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .dog-detail {
   font-size: 12px;
   color: #999;
-}
-
-.add-dog {
-  border: 1px dashed #ccc;
-  background: white;
 }
 
 .add-icon {

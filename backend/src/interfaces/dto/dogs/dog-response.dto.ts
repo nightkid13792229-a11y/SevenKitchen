@@ -27,6 +27,13 @@ export class DogProfileDto {
   breedId!: string;
 
   @ApiPropertyOptional({
+    description: 'Breed name (from breed table or custom breed name)',
+    example: '金毛寻回犬',
+    nullable: true
+  })
+  breedName?: string | null;
+
+  @ApiPropertyOptional({
     description: 'Custom breed name (for mixed breed dogs)',
     example: '田园犬',
     nullable: true

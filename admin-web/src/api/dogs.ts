@@ -44,6 +44,8 @@ export interface CreateDogDto {
   treatLevel?: TreatLevel
   manualTreatKcal?: number | null
   medicalHistory?: string | null
+  allergyFoods?: string | null
+  pickyFoods?: string | null
 }
 
 /**
@@ -61,6 +63,8 @@ export interface UpdateDogDto {
   treatLevel?: TreatLevel
   manualTreatKcal?: number | null
   medicalHistory?: string | null
+  allergyFoods?: string | null
+  pickyFoods?: string | null
 }
 
 /**
@@ -126,6 +130,13 @@ export const dogApi = {
    */
   calcPreview: (data: CalcPreviewDto): Promise<DogCalcResult> => {
     return api.post('/dogs/calc-preview', data)
+  },
+
+  /**
+   * Delete dog profile (admin only)
+   */
+  delete: (id: string): Promise<void> => {
+    return api.delete(`/admin/dogs/${id}`)
   }
 }
 

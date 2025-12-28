@@ -40,6 +40,8 @@ export interface CreateDogProfileDto {
   treatLevel?: TreatLevel;
   manualTreatKcal?: number | null;
   medicalHistory?: string | null;
+  allergyFoods?: string | null;
+  pickyFoods?: string | null;
 }
 
 export interface UpdateDogProfileDto {
@@ -59,6 +61,8 @@ export interface UpdateDogProfileDto {
   treatLevel?: TreatLevel;
   manualTreatKcal?: number | null;
   medicalHistory?: string | null;
+  allergyFoods?: string | null;
+  pickyFoods?: string | null;
 }
 
 export interface CalcPreviewResult {
@@ -117,6 +121,8 @@ export class DogService {
       dto.treatLevel ?? TreatLevel.LOW,
       dto.manualTreatKcal ?? null,
       dto.medicalHistory ?? null,
+      dto.allergyFoods ?? null,
+      dto.pickyFoods ?? null,
       0, // Will be calculated and updated after save
     );
 

@@ -3,7 +3,7 @@
     <!-- Header -->
     <div class="page-header">
       <el-button @click="handleBack" :icon="ArrowLeft">返回</el-button>
-      <h2>{{ isEditMode ? '编辑档案' : '档案详情' }}</h2>
+      <h2>{{ isCreateMode ? '新增档案' : (isEditMode ? '编辑档案' : '档案详情') }}</h2>
     </div>
 
     <el-card v-loading="loading">
@@ -12,7 +12,7 @@
         :model="formData"
         :rules="formRules"
         label-width="120px"
-        :disabled="!isEditMode"
+        :disabled="isViewMode"
       >
         <!-- Basic Info -->
         <div class="section-title">基本信息</div>
@@ -42,11 +42,80 @@
           </el-col>
         </el-row>
 
+        <!-- Common Breeds Quick Select -->
+        <el-form-item label="常见品种">
+          <div class="common-breeds-scroll">
+            <el-tag
+              v-for="breedName in commonBreeds"
+              :key="breedName"
+              class="common-breed-tag"
+              @click="selectBreedByName(breedName)"
+              :type="isBreedSelected(breedName) ? 'primary' : 'info'"
+              style="cursor: pointer"
+            >
+              {{ breedName }}
+            </el-tag>
+          </div>
+        </el-form-item>
+
+        <!-- Breeds by Size Category -->
+        <el-form-item label="按体型选择">
+          <div class="size-category-selector">
+            <el-button
+              v-for="category in sizeCategories"
+              :key="category.key"
+              :type="expandedSizeCategory === category.key ? 'primary' : 'default'"
+              :class="{ 'is-active': expandedSizeCategory === category.key }"
+              @click="toggleSizeCategory(category.key)"
+              class="size-category-btn"
+            >
+              {{ category.label }} ({{ getBreedsBySize(category.key).length }}种)
+            </el-button>
+          </div>
+
+          <div v-if="expandedSizeCategory" class="breeds-by-size-expanded">
+            <el-tag
+              v-for="breed in getBreedsBySize(expandedSizeCategory)"
+              :key="breed.id"
+              class="breed-tag"
+              @click="formData.breedId = breed.id; handleBreedChange()"
+              :type="formData.breedId === breed.id ? 'primary' : 'info'"
+              style="cursor: pointer"
+            >
+              {{ breed.name }}
+            </el-tag>
+          </div>
+        </el-form-item>
+
         <!-- Custom Breed Name (only for mixed breeds) -->
         <el-row v-if="isMixedBreed" :gutter="20">
           <el-col :span="12">
             <el-form-item label="自定义品种名" prop="customBreedName">
               <el-input v-model="formData.customBreedName" placeholder="如：田园犬、金毛边牧混血" />
+            </el-form-item>
+          </el-col>
+        </el-row>
+
+        <!-- Size Class Override (moved here) -->
+        <el-row :gutter="20">
+          <el-col :span="12">
+            <el-form-item label="体型分类" prop="sizeClassOverride">
+              <el-select
+                v-model="formData.sizeClassOverride"
+                placeholder="系统自动匹配"
+                clearable
+                style="width: 100%"
+              >
+                <el-option
+                  v-for="(label, value) in DogSizeLabels"
+                  :key="value"
+                  :label="label"
+                  :value="value"
+                />
+              </el-select>
+              <div class="hint-text" v-if="!formData.sizeClassOverride">
+                系统将根据品种自动判断体型，点击选择可修改
+              </div>
             </el-form-item>
           </el-col>
         </el-row>
@@ -65,19 +134,63 @@
             </el-form-item>
           </el-col>
           <el-col :span="12">
-            <el-form-item label="性别" prop="gender">
-              <el-radio-group v-model="formData.gender">
-                <el-radio :value="DogGender.MALE">公 ♂</el-radio>
-                <el-radio :value="DogGender.FEMALE">母 ♀</el-radio>
-              </el-radio-group>
+            <el-form-item label="生命阶段" prop="lifeStageOverride">
+              <el-select v-model="formData.lifeStageOverride" placeholder="请选择" style="width: 100%">
+                <el-option
+                  v-for="(label, value) in LifeStageLabels"
+                  :key="value"
+                  :label="label"
+                  :value="value"
+                />
+              </el-select>
+              <div class="hint-text" v-if="formData.lifeStageOverride === LifeStageOverride.NONE && calcResult?.calcDetails">
+                自动识别: {{ getLifeStageLabel(calcResult.calcDetails.lifeStage) }}
+              </div>
             </el-form-item>
           </el-col>
         </el-row>
 
         <el-row :gutter="20">
           <el-col :span="12">
+            <el-form-item label="性别" prop="gender">
+              <div class="gender-cards">
+                <div
+                  class="gender-card"
+                  :class="{ 'is-active': formData.gender === DogGender.MALE }"
+                  @click="formData.gender = DogGender.MALE"
+                >
+                  <span class="gender-icon">♂</span>
+                  <span class="gender-label">公</span>
+                </div>
+                <div
+                  class="gender-card"
+                  :class="{ 'is-active': formData.gender === DogGender.FEMALE }"
+                  @click="formData.gender = DogGender.FEMALE"
+                >
+                  <span class="gender-icon">♀</span>
+                  <span class="gender-label">母</span>
+                </div>
+              </div>
+            </el-form-item>
+          </el-col>
+          <el-col :span="12">
             <el-form-item label="是否绝育" prop="isNeutered">
-              <el-switch v-model="formData.isNeutered" />
+              <div class="neutered-cards">
+                <div
+                  class="neutered-card"
+                  :class="{ 'is-active': formData.isNeutered === true }"
+                  @click="formData.isNeutered = true"
+                >
+                  <span class="neutered-label">是</span>
+                </div>
+                <div
+                  class="neutered-card"
+                  :class="{ 'is-active': formData.isNeutered === false }"
+                  @click="formData.isNeutered = false"
+                >
+                  <span class="neutered-label">否</span>
+                </div>
+              </div>
             </el-form-item>
           </el-col>
         </el-row>
@@ -106,14 +219,21 @@
         </el-form-item>
 
         <el-form-item label="活动水平" prop="activityLevel">
-          <el-select v-model="formData.activityLevel" placeholder="请选择活动水平" style="width: 200px">
-            <el-option
-              v-for="(label, value) in ActivityLevelLabels"
-              :key="value"
-              :label="label"
-              :value="value"
-            />
-          </el-select>
+          <div class="activity-level-cards">
+            <div
+              v-for="option in activityLevelConfigs"
+              :key="option.value"
+              class="activity-level-card"
+              :class="{ 'is-active': formData.activityLevel === option.value }"
+              @click="formData.activityLevel = option.value"
+            >
+              <div class="activity-level-header">
+                <span class="activity-level-label">{{ option.label }}</span>
+                <span class="activity-level-coefficient">×{{ option.coefficient }}</span>
+              </div>
+              <div class="activity-level-description">{{ option.description }}</div>
+            </div>
+          </div>
         </el-form-item>
 
         <!-- Nutrition Settings -->
@@ -130,33 +250,6 @@
               />
             </el-form-item>
           </el-col>
-          <el-col :span="12">
-            <el-form-item label="生命阶段" prop="lifeStageOverride">
-              <el-select v-model="formData.lifeStageOverride" placeholder="请选择" style="width: 100%">
-                <el-option
-                  v-for="(label, value) in LifeStageLabels"
-                  :key="value"
-                  :label="label"
-                  :value="value"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="体型覆盖" prop="sizeClassOverride">
-              <el-select v-model="formData.sizeClassOverride" placeholder="未设置" clearable style="width: 100%">
-                <el-option
-                  v-for="(label, value) in DogSizeLabels"
-                  :key="value"
-                  :label="label"
-                  :value="value"
-                />
-              </el-select>
-            </el-form-item>
-          </el-col>
         </el-row>
 
         <el-form-item label="零食配置">
@@ -171,46 +264,66 @@
           <el-input
             v-model="formData.medicalHistory"
             type="textarea"
-            :rows="4"
+            :rows="3"
             placeholder="如有特殊病史请记录，如：心脏病、胰腺炎、过敏史等"
           />
         </el-form-item>
 
+        <el-form-item label="过敏食物" prop="allergyFoods">
+          <el-input
+            v-model="formData.allergyFoods"
+            type="textarea"
+            :rows="2"
+            placeholder="记录过敏的食材，如：鸡肉、牛肉、大豆等"
+          />
+        </el-form-item>
+
+        <el-form-item label="挑食食物" prop="pickyFoods">
+          <el-input
+            v-model="formData.pickyFoods"
+            type="textarea"
+            :rows="2"
+            placeholder="记录不爱吃或挑食的食物"
+          />
+        </el-form-item>
+
         <!-- Calc Result (Read-only) -->
-        <div v-if="calcResult && !isEditMode" class="section-title">喂食建议</div>
-        <div v-if="calcResult && !isEditMode" class="calc-result">
-          <el-row :gutter="20">
-            <el-col :span="8">
-              <div class="calc-item">
-                <span class="calc-label">RER</span>
-                <span class="calc-value">{{ calcResult.rer }} kcal</span>
-              </div>
-            </el-col>
-            <el-col :span="8">
-              <div class="calc-item">
-                <span class="calc-label">DER</span>
-                <span class="calc-value">{{ calcResult.totalDer }} kcal</span>
-              </div>
-            </el-col>
-            <el-col :span="8">
-              <div class="calc-item">
-                <span class="calc-label">鲜食需求</span>
-                <span class="calc-value">{{ calcResult.finalFoodKcal }} kcal</span>
-              </div>
-            </el-col>
-          </el-row>
-          <el-row v-if="calcResult.dailyIntakeG" :gutter="20" style="margin-top: 12px">
-            <el-col :span="24">
-              <div class="calc-item">
-                <span class="calc-label">每日建议摄入</span>
-                <span class="calc-value">{{ calcResult.dailyIntakeG }} g</span>
-              </div>
-            </el-col>
-          </el-row>
+        <div v-if="calcResult" class="section-title">喂食建议</div>
+        <div v-if="calcResult" class="feeding-recommendation">
+          <!-- Warning if treats are capped -->
+          <div v-if="calcResult.isTreatCapped" class="treat-warning">
+            <el-icon class="warning-icon"><Warning /></el-icon>
+            <span>零食能量已超过10%上限，已自动调整为10%</span>
+          </div>
+
+          <!-- Energy Summary Cards -->
+          <div class="energy-cards">
+            <div class="energy-card total-der">
+              <div class="energy-label">总能量需求 (DER)</div>
+              <div class="energy-value">{{ calcResult.totalDer.toFixed(1) }} <span class="unit">kcal/天</span></div>
+            </div>
+
+            <div v-if="calcResult.treatDeduction > 0" class="energy-card treat">
+              <div class="energy-label">零食能量估算</div>
+              <div class="energy-value">-{{ calcResult.treatDeduction.toFixed(1) }} <span class="unit">kcal/天</span></div>
+            </div>
+
+            <div class="energy-card main-food">
+              <div class="energy-label">每日主食能量</div>
+              <div class="energy-value highlight">{{ calcResult.finalFoodKcal.toFixed(1) }} <span class="unit">kcal/天</span></div>
+            </div>
+          </div>
+
+          <!-- Daily Intake -->
+          <div v-if="calcResult.dailyIntakeG" class="daily-intake">
+            <div class="intake-label">每日建议喂食量</div>
+            <div class="intake-value">{{ calcResult.dailyIntakeG.toFixed(1) }} <span class="unit">克/天</span></div>
+            <div class="intake-hint">分 {{ formData.mealsPerDay }} 餐喂食，每餐约 {{ Math.round(calcResult.dailyIntakeG / formData.mealsPerDay) }} 克</div>
+          </div>
         </div>
 
         <!-- Actions -->
-        <el-form-item v-if="isEditMode">
+        <el-form-item v-if="isCreateMode || isEditMode">
           <el-button type="primary" @click="handleSubmit" :loading="submitting">保存</el-button>
           <el-button @click="handleCancel">取消</el-button>
         </el-form-item>
@@ -220,13 +333,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { ElMessage, type FormInstance, type FormRules } from 'element-plus'
-import { ArrowLeft } from '@element-plus/icons-vue'
+import { ArrowLeft, Warning } from '@element-plus/icons-vue'
 import BCSSlider from '@/components/Dog/BCSSlider.vue'
 import TreatConfig from '@/components/Dog/TreatConfig.vue'
-import { dogApi } from '@/api/dogs'
+import { dogApi, type UpdateDogDto, type CalcPreviewDto } from '@/api/dogs'
 import {
   DogGender,
   ActivityLevel,
@@ -241,16 +354,85 @@ import {
   type DogProfile,
   type DogBreed,
   type DogDetailResponse,
-  type DogCalcResult,
-  type UpdateDogDto
+  type DogCalcResult
 } from '@/types/dog'
+
+// Common breeds for quick selection
+const DEFAULT_COMMON_BREEDS = [
+  '拉布拉多', '泰迪', '贵宾犬(小型)', '贵宾犬(标准)', '金毛',
+  '比熊', '哈士奇', '德牧', '边牧', '柯基',
+  '萨摩耶', '法国斗牛犬', '吉娃娃', '博美', '雪纳瑞（迷你）',
+  '约克夏', '马尔济斯', '腊肠犬', '阿拉斯加', '杜宾'
+]
+
+// Load common breeds from localStorage or use defaults
+const loadCommonBreedsFromStorage = (): string[] => {
+  try {
+    const stored = localStorage.getItem('sevenkitchen_common_breeds')
+    if (stored) {
+      return JSON.parse(stored)
+    }
+  } catch (error) {
+    console.error('Failed to load common breeds:', error)
+  }
+  return [...DEFAULT_COMMON_BREEDS]
+}
+
+const commonBreeds = ref<string[]>(loadCommonBreedsFromStorage())
+
+// Expanded size category
+const expandedSizeCategory = ref<string | null>(null)
+
+// Size categories for grouping
+const sizeCategories = [
+  { key: 'SMALL', label: '小型犬' },
+  { key: 'MEDIUM', label: '中型犬' },
+  { key: 'LARGE', label: '大型犬' },
+  { key: 'GIANT', label: '巨型犬' }
+]
+
+// Activity level configurations
+const activityLevelConfigs = [
+  {
+    value: ActivityLevel.RESTING,
+    label: '休息',
+    description: '几乎不运动，主要时间休息',
+    coefficient: 0.8
+  },
+  {
+    value: ActivityLevel.LOW,
+    label: '低活动',
+    description: '偶尔散步，每日运动少于30分钟',
+    coefficient: 0.9
+  },
+  {
+    value: ActivityLevel.NORMAL,
+    label: '正常活动',
+    description: '每日散步1-2小时，正常活动量',
+    coefficient: 1.0
+  },
+  {
+    value: ActivityLevel.HIGH,
+    label: '高活动',
+    description: '每日运动2-4小时，经常跑步或玩耍',
+    coefficient: 1.2
+  },
+  {
+    value: ActivityLevel.WORKING,
+    label: '工作犬',
+    description: '高强度训练或工作，如搜救犬、警犬',
+    coefficient: 1.5
+  }
+]
 
 const router = useRouter()
 const route = useRoute()
 
 // Computed
 const dogId = computed(() => route.params.id as string)
-const isEditMode = computed(() => route.name === 'DogEdit' || route.path === '/dogs/create')
+const isCreateMode = computed(() => route.name === 'DogCreate')
+const isEditMode = computed(() => route.name === 'DogEdit')
+const isViewMode = computed(() => route.name === 'DogDetail')
 const isMixedBreed = computed(() => formData.value.breedId === MIXED_BREED_VIRTUAL_ID)
 
 // Data
@@ -277,7 +459,9 @@ const formData = ref({
   treatInputMode: TreatInputMode.ESTIMATE_LEVEL,
   treatLevel: TreatLevel.LOW,
   manualTreatKcal: null as number | null,
-  medicalHistory: ''
+  medicalHistory: '',
+  allergyFoods: '',
+  pickyFoods: ''
 })
 
 const formRules: FormRules = {
@@ -290,7 +474,8 @@ const formRules: FormRules = {
 
 // Methods
 const loadDogDetail = async () => {
-  if (dogId.value === 'create') return
+  // Skip loading if in create mode
+  if (isCreateMode.value) return
 
   loading.value = true
   try {
@@ -314,10 +499,20 @@ const loadDogDetail = async () => {
       treatInputMode: profile.treatInputMode,
       treatLevel: profile.treatLevel,
       manualTreatKcal: profile.manualTreatKcal,
-      medicalHistory: profile.medicalHistory || ''
+      medicalHistory: profile.medicalHistory || '',
+      allergyFoods: profile.allergyFoods || '',
+      pickyFoods: profile.pickyFoods || ''
     }
 
     calcResult.value = response.calcResult
+
+    // Auto-match size category if sizeClassOverride is null
+    if (!formData.value.sizeClassOverride && formData.value.breedId) {
+      const breed = breeds.value.find(b => b.id === formData.value.breedId)
+      if (breed) {
+        formData.value.sizeClassOverride = breed.sizeCategory as DogSizeCategory
+      }
+    }
   } catch (error: any) {
     ElMessage.error(error.message || '加载失败')
   } finally {
@@ -333,9 +528,113 @@ const loadBreeds = async () => {
   }
 }
 
+// Preview calculation for life stage display
+const previewCalc = async () => {
+  // Skip if required fields are missing
+  if (!formData.value.breedId || !formData.value.birthday || !formData.value.currentWeightKg) {
+    calcResult.value = null
+    return
+  }
+
+  try {
+    const previewData: CalcPreviewDto = {
+      breedId: formData.value.breedId,
+      // Only include customBreedName if breedId is NOT the mixed breed virtual ID
+      ...(formData.value.breedId !== MIXED_BREED_VIRTUAL_ID && formData.value.customBreedName ? {
+        customBreedName: formData.value.customBreedName
+      } : {}),
+      birthday: formData.value.birthday,
+      gender: formData.value.gender,
+      isNeutered: formData.value.isNeutered,
+      currentWeightKg: formData.value.currentWeightKg,
+      bcsScore: formData.value.bcsScore,
+      activityLevel: formData.value.activityLevel,
+      lifeStageOverride: formData.value.lifeStageOverride,
+      sizeClassOverride: formData.value.sizeClassOverride || undefined,
+      mealsPerDay: formData.value.mealsPerDay,
+      treatInputMode: formData.value.treatInputMode,
+      treatLevel: formData.value.treatLevel,
+      manualTreatKcal: formData.value.manualTreatKcal || undefined
+    }
+
+    calcResult.value = await dogApi.calcPreview(previewData)
+  } catch (error: any) {
+    console.error('Failed to preview calculation:', error)
+    calcResult.value = null
+  }
+}
+
+// Watch for form data changes to update life stage preview
+watch(
+  () => [
+    formData.value.breedId,
+    formData.value.birthday,
+    formData.value.currentWeightKg,
+    formData.value.bcsScore,
+    formData.value.activityLevel,
+    formData.value.lifeStageOverride,
+    formData.value.sizeClassOverride,
+    formData.value.gender,
+    formData.value.isNeutered
+  ],
+  () => {
+    previewCalc()
+  },
+  { deep: true }
+)
+
 const handleBreedChange = () => {
   // Reset custom breed name when breed changes
   formData.value.customBreedName = ''
+
+  // Auto-match size category from breed
+  if (formData.value.breedId) {
+    const breed = breeds.value.find(b => b.id === formData.value.breedId)
+    if (breed) {
+      formData.value.sizeClassOverride = breed.sizeCategory as DogSizeCategory
+    }
+  } else {
+    formData.value.sizeClassOverride = null
+  }
+}
+
+const toggleSizeCategory = (categoryKey: string) => {
+  if (expandedSizeCategory.value === categoryKey) {
+    // If already expanded, collapse it
+    expandedSizeCategory.value = null
+  } else {
+    // Otherwise, expand the clicked category
+    expandedSizeCategory.value = categoryKey
+  }
+}
+
+const selectBreedByName = (breedName: string) => {
+  const breed = breeds.value.find(b => b.name === breedName)
+  if (breed) {
+    formData.value.breedId = breed.id
+    handleBreedChange()
+  }
+}
+
+const isBreedSelected = (breedName: string) => {
+  const breed = breeds.value.find(b => b.name === breedName)
+  return breed && formData.value.breedId === breed.id
+}
+
+const getBreedsBySize = (sizeCategory: string) => {
+  return breeds.value.filter(b => b.sizeCategory === sizeCategory)
+}
+
+const getLifeStageLabel = (lifeStage: string) => {
+  const stageMap: Record<string, string> = {
+    'GROWTH': '生长期',
+    'PUPPY': '幼犬',
+    'ADULT': '成犬',
+    'SENIOR': '老年',
+    'PREGNANCY': '妊娠期',
+    'LACTATION': '哺乳期'
+  }
+  return stageMap[lifeStage] || lifeStage
 }
 
 const handleSubmit = async () => {
@@ -349,7 +648,7 @@ const handleSubmit = async () => {
 
   submitting.value = true
   try {
-    if (dogId.value === 'create') {
+    if (isCreateMode.value) {
       // Create new dog (requires ownerId, need to handle this)
       ElMessage.warning('创建功能需要指定客户ID，暂未实现')
     } else {
@@ -380,7 +679,7 @@ const handleSubmit = async () => {
 }
 
 const handleCancel = () => {
-  if (dogId.value === 'create') {
+  if (isCreateMode.value) {
     router.push('/dogs')
   } else {
     router.push(`/dogs/${dogId.value}`)
@@ -452,5 +751,308 @@ onMounted(() => {
   font-size: 18px;
   font-weight: 500;
   color: #303133;
+}
+
+/* Feeding Recommendation Styles */
+.feeding-recommendation {
+  padding: 20px;
+  background-color: #f5f7fa;
+  border-radius: 12px;
+}
+
+.treat-warning {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px;
+  margin-bottom: 16px;
+  background-color: #fff6e6;
+  border: 1px solid #ffd591;
+  border-radius: 8px;
+  color: #fa8c16;
+  font-size: 14px;
+}
+
+.warning-icon {
+  font-size: 18px;
+}
+
+.energy-cards {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.energy-card {
+  flex: 1;
+  padding: 16px;
+  border-radius: 12px;
+  background-color: #fff;
+  border: 2px solid #e8e8e8;
+  transition: all 0.3s;
+}
+
+.energy-card.total-der {
+  border-color: #b7eb8f;
+  background: linear-gradient(135deg, #f6ffed 0%, #ffffff 100%);
+}
+
+.energy-card.treat {
+  border-color: #ffd591;
+  background: linear-gradient(135deg, #fffbe6 0%, #ffffff 100%);
+}
+
+.energy-card.main-food {
+  border-color: #1890ff;
+  background: linear-gradient(135deg, #e6f7ff 0%, #ffffff 100%);
+}
+
+.energy-label {
+  font-size: 13px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.energy-value {
+  font-size: 24px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.energy-value .unit {
+  font-size: 14px;
+  font-weight: 400;
+  color: #999;
+  margin-left: 4px;
+}
+
+.energy-value.highlight {
+  color: #1890ff;
+}
+
+.daily-intake {
+  padding: 20px;
+  margin-bottom: 16px;
+  background-color: #fff;
+  border-radius: 12px;
+  text-align: center;
+  border: 2px solid #1890ff;
+}
+
+.intake-label {
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 8px;
+}
+
+.intake-value {
+  font-size: 32px;
+  font-weight: 700;
+  color: #1890ff;
+  margin-bottom: 8px;
+}
+
+.intake-value .unit {
+  font-size: 16px;
+  font-weight: 400;
+  color: #999;
+  margin-left: 4px;
+}
+
+.intake-hint {
+  font-size: 13px;
+  color: #999;
+}
+
+.common-breeds-scroll {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  max-height: 120px;
+  overflow-y: auto;
+  padding: 8px;
+  background-color: #f5f7fa;
+  border-radius: 8px;
+}
+
+.common-breed-tag {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+.breeds-by-size {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 8px;
+}
+
+.breeds-by-size-expanded {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 16px;
+  margin-top: 12px;
+  background-color: #f5f7fa;
+  border-radius: 8px;
+  min-height: 60px;
+}
+
+.size-category-selector {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.size-category-btn {
+  flex: 1;
+  min-width: 120px;
+}
+
+.breed-tag {
+  padding: 6px 12px;
+  font-size: 13px;
+  margin: 2px;
+}
+
+.activity-level-cards {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.activity-level-card {
+  flex: 1;
+  min-width: 150px;
+  padding: 16px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+  background-color: #fff;
+}
+
+.activity-level-card:hover {
+  border-color: #1890ff;
+}
+
+.activity-level-card.is-active {
+  border-color: #1890ff;
+  background-color: #e6f7ff;
+}
+
+.activity-level-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.activity-level-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.activity-level-card.is-active .activity-level-label {
+  color: #1890ff;
+}
+
+.activity-level-coefficient {
+  font-size: 14px;
+  font-weight: bold;
+  color: #ff4d4f;
+  background-color: #fff1f0;
+  padding: 4px 12px;
+  border-radius: 6px;
+}
+
+.activity-level-description {
+  font-size: 13px;
+  color: #666;
+  line-height: 1.5;
+}
+
+.gender-cards {
+  display: flex;
+  gap: 16px;
+}
+
+.gender-card {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+  background-color: #f5f5f5;
+}
+
+.gender-card:hover {
+  border-color: #1890ff;
+}
+
+.gender-card.is-active {
+  background-color: #e6f7ff;
+  border-color: #1890ff;
+}
+
+.gender-card.is-active .gender-icon,
+.gender-card.is-active .gender-label {
+  color: #1890ff;
+  font-weight: bold;
+}
+
+.gender-icon {
+  font-size: 24px;
+  color: #666;
+}
+
+.gender-label {
+  font-size: 16px;
+  color: #666;
+}
+
+.neutered-cards {
+  display: flex;
+  gap: 16px;
+}
+
+.neutered-card {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px 20px;
+  border: 2px solid #e0e0e0;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.3s;
+  background-color: #f5f5f5;
+}
+
+.neutered-card:hover {
+  border-color: #1890ff;
+}
+
+.neutered-card.is-active {
+  background-color: #e6f7ff;
+  border-color: #1890ff;
+}
+
+.neutered-card.is-active .neutered-label {
+  color: #1890ff;
+  font-weight: bold;
+}
+
+.neutered-label {
+  font-size: 15px;
+  color: #666;
 }
 </style>

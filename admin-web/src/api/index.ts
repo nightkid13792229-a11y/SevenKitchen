@@ -37,6 +37,11 @@ api.interceptors.request.use(
 // Response interceptor - extract data directly
 api.interceptors.response.use(
   (response: AxiosResponse<ApiResponse>) => {
+    // Handle 204 No Content (successful DELETE, etc.)
+    if (response.status === 204) {
+      return null
+    }
+
     const res = response.data
 
     if (res.code === 0) {

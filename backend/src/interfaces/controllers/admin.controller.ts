@@ -901,6 +901,48 @@ export class AdminController {
     });
   }
 
+  @Delete('dogs/:id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete dog profile (admin only)' })
+  @ApiParam({ name: 'id', description: 'Dog ID' })
+  @ApiResponse({ status: 204, description: 'Dog profile deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Dog not found' })
+  @ApiResponse({ status: 400, description: 'Cannot delete dog with active orders' })
+  async deleteDog(
+    @Param('id') id: string,
+  ): Promise<void> {
+    // Check if dog exists
+    const dog = await this.prisma.dog.findUnique({
+      where: { id },
+    });
+
+    if (!dog) {
+      throw new NotFoundException(`Dog not found: ${id}`);
+    }
+
+    // Check for active orders
+    const activeOrders = await this.prisma.order.findMany({
+      where: {
+        dogId: id,
+        status: {
+          notIn: [OrderStatus.COMPLETED, OrderStatus.CANCELLED],
+        },
+      },
+    });
+
+    if (activeOrders.length > 0) {
+      throw new BadRequestException(
+        `Cannot delete dog profile: ${activeOrders.length} active order(s) found. ` +
+        `Please cancel or complete the orders first.`
+      );
+    }
+
+    // Delete the dog profile
+    await this.prisma.dog.delete({
+      where: { id },
+    });
+  }
+
   // ==================== Breed Management Endpoints ====================
 
   @Get('breeds')

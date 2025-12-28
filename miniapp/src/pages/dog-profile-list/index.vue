@@ -1,29 +1,24 @@
 <template>
   <view class="container">
-    <view class="build-marker">BUILD: 2025-12-22-1501</view>
-    
-    <!-- Health Check Entry -->
-    <view class="health-check-section">
-      <view class="health-check-entry" @tap="performHealthCheck">
-        <text class="health-check-label">系统状态/健康检查</text>
-        <text class="health-check-icon">→</text>
-      </view>
-      <view v-if="healthCheckStatus" class="health-check-result" :class="healthCheckStatus.type">
-        <text>{{ healthCheckStatus.message }}</text>
-      </view>
-    </view>
-    
     <view class="dog-list">
-      <view 
-        v-for="dog in dogs" 
+      <view
+        v-for="dog in dogs"
         :key="dog.id"
-        class="dog-item"
+        class="dog-card"
         @tap="viewDog(dog.id)"
       >
-        <view class="dog-name">{{ dog.name }}</view>
-        <view class="dog-info">
-          <text>ID: {{ dog.id }}</text>
-          <text v-if="dog.currentWeightKg">体重: {{ dog.currentWeightKg }}kg</text>
+        <view class="dog-main-info">
+          <view class="name-row">
+            <text class="dog-name">{{ dog.name }}</text>
+            <text class="gender-icon" :class="dog.gender === 'MALE' ? 'male' : 'female'">
+              {{ dog.gender === 'MALE' ? '♂' : '♀' }}
+            </text>
+          </view>
+          <text class="dog-breed">{{ dog.breedName || '未知品种' }}</text>
+        </view>
+        <view class="dog-stats">
+          <text class="stat-text">{{ dog.currentWeightKg }}kg · {{ calculateAgeText(dog.birthday) }}</text>
+          <text class="arrow">›</text>
         </view>
       </view>
       
@@ -41,7 +36,7 @@
     </view>
     
     <view class="bottom-bar">
-      <button class="btn-add" @tap="createDog">创建狗狗档案（BUILD:1501）</button>
+      <button class="btn-add" @tap="createDog">＋ 添加狗狗档案</button>
     </view>
   </view>
 </template>
@@ -50,25 +45,20 @@
 import { ref, onMounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { request, waitForToken } from '../../utils/api'
-import { getBaseUrl } from '../../utils/config'
 import { getCachedDogs, setCachedDogs, type DogDto } from '../../utils/dog-cache'
 
 interface DogProfile {
   id: string
   name: string
+  gender?: string
+  breedName?: string
+  birthday: string
   currentWeightKg?: number
 }
 
 const dogs = ref<DogProfile[]>([])
 const isLoading = ref(false)
 const loadError = ref(false)
-
-// Health check state
-interface HealthCheckStatus {
-  type: 'success' | 'error'
-  message: string
-}
-const healthCheckStatus = ref<HealthCheckStatus | null>(null)
 
 onMounted(() => {
   loadDogs()
@@ -140,152 +130,103 @@ function createDog() {
   })
 }
 
-/**
- * Perform health check by calling GET /api/v1/health
- * Non-blocking diagnostic function - does not affect business flows
- * Uses uni.request directly to avoid auth/retry wrapper logic
- */
-function performHealthCheck() {
-  // Clear previous status
-  healthCheckStatus.value = null
-  
-  const baseUrl = getBaseUrl()
-  const healthUrl = `${baseUrl}/health`
-  
-  // Create timeout promise (5 seconds)
-  const timeoutPromise = new Promise<never>((_, reject) => {
-    setTimeout(() => {
-      reject(new Error('timeout'))
-    }, 5000)
-  })
-  
-  // Create health check request using uni.request directly
-  // Health endpoint returns plain { status: 'ok', timestamp: '...' } without wrapper
-  const healthCheckPromise = new Promise<{ type: 'success' | 'error'; message: string }>((resolve, reject) => {
-    uni.request({
-      url: healthUrl,
-      method: 'GET',
-      header: {
-        'Content-Type': 'application/json'
-      },
-      timeout: 5000,
-      success: (res: any) => {
-        // Health endpoint returns { status: 'ok', timestamp: '...' } directly
-        console.log('[HealthCheck] Response received:', res)
-        console.log('[HealthCheck] StatusCode:', res.statusCode)
-        console.log('[HealthCheck] Data:', res.data)
-
-        const data = res.data
-        if (res.statusCode === 200 && data && data.status === 'ok' && data.timestamp) {
-          // Format timestamp for display
-          const date = new Date(data.timestamp)
-          const timeStr = date.toLocaleString('zh-CN', {
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-          })
-          console.log('[HealthCheck] ✓ Success:', timeStr)
-          resolve({
-            type: 'success',
-            message: `API OK - ${timeStr}`
-          })
-        } else {
-          console.warn('[HealthCheck] ✗ Invalid response format')
-          resolve({
-            type: 'error',
-            message: 'API Unreachable - Invalid response'
-          })
-        }
-      },
-      fail: (err: any) => {
-        // Determine error type for user-friendly message
-        const errMsg = err?.errMsg || String(err) || ''
-        let errorHint = 'network error'
-        
-        if (errMsg.includes('timeout') || errMsg.includes('超时')) {
-          errorHint = 'timeout'
-        } else if (errMsg.includes('CONNECTION') || errMsg.includes('连接')) {
-          errorHint = 'connection failed'
-        } else if (errMsg.includes('fail')) {
-          errorHint = 'request failed'
-        }
-        
-        reject(new Error(errorHint))
-      }
-    })
-  })
-  
-  // Race between health check and timeout
-  Promise.race([healthCheckPromise, timeoutPromise])
-    .then((result) => {
-      healthCheckStatus.value = result
-    })
-    .catch((err) => {
-      // Timeout or other error
-      const errMsg = err?.message || String(err) || ''
-      if (errMsg.includes('timeout')) {
-        healthCheckStatus.value = {
-          type: 'error',
-          message: 'API Unreachable - timeout'
-        }
-      } else {
-        healthCheckStatus.value = {
-          type: 'error',
-          message: `API Unreachable - ${errMsg}`
-        }
-      }
-    })
+// 计算年龄文本
+function calculateAgeText(birthday: string) {
+  const birth = new Date(birthday)
+  const now = new Date()
+  const months = Math.floor((now.getTime() - birth.getTime()) / (1000 * 60 * 60 * 24 * 30))
+  if (months < 12) {
+    return `${months}个月`
+  }
+  const years = Math.floor(months / 12)
+  return `${years}岁`
 }
 </script>
 
 <style scoped>
 .container {
   padding: 20rpx;
-  padding-top: 60rpx;
   padding-bottom: 120rpx;
-}
-
-.build-marker {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  background-color: #f0f0f0;
-  color: #666;
-  font-size: 20rpx;
-  text-align: center;
-  padding: 8rpx 0;
-  z-index: 9999;
-  border-bottom: 1px solid #e0e0e0;
 }
 
 .dog-list {
   padding: 20rpx 0;
 }
 
-.dog-item {
+/* 狗狗卡片样式 */
+.dog-card {
   background-color: #fff;
   padding: 30rpx;
   margin-bottom: 20rpx;
-  border-radius: 8rpx;
+  border-radius: 12rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: all 0.3s ease;
+}
+
+.dog-card:active {
+  transform: scale(0.98);
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
+}
+
+.dog-main-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.name-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
 }
 
 .dog-name {
   font-size: 32rpx;
   font-weight: bold;
-  margin-bottom: 10rpx;
+  color: #333;
 }
 
-.dog-info {
-  display: flex;
-  justify-content: space-between;
-  font-size: 24rpx;
+.gender-icon {
+  font-size: 28rpx;
+  font-weight: bold;
+}
+
+.gender-icon.male {
+  color: #1890ff;
+}
+
+.gender-icon.female {
+  color: #ff69b4;
+}
+
+.dog-breed {
+  font-size: 26rpx;
   color: #999;
 }
 
+.dog-stats {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 8rpx;
+}
+
+.stat-text {
+  font-size: 26rpx;
+  color: #666;
+}
+
+.arrow {
+  font-size: 32rpx;
+  color: #ccc;
+  font-weight: bold;
+}
+
+/* 空状态样式 */
 .empty-state {
   text-align: center;
   padding: 100rpx 0;
@@ -308,6 +249,7 @@ function performHealthCheck() {
   font-size: 28rpx;
 }
 
+/* 错误状态样式 */
 .error-state {
   text-align: center;
   padding: 100rpx 0;
@@ -330,6 +272,7 @@ function performHealthCheck() {
   font-size: 28rpx;
 }
 
+/* 底部按钮栏 */
 .bottom-bar {
   position: fixed;
   bottom: 0;
@@ -338,59 +281,23 @@ function performHealthCheck() {
   background-color: #fff;
   padding: 20rpx;
   border-top: 1px solid #eee;
+  box-shadow: 0 -2rpx 8rpx rgba(0, 0, 0, 0.04);
 }
 
 .btn-add {
   width: 100%;
   height: 88rpx;
   line-height: 88rpx;
-  background-color: #07c160;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: #fff;
-  border-radius: 8rpx;
+  border-radius: 12rpx;
   font-size: 32rpx;
+  font-weight: bold;
+  border: none;
 }
 
-/* Health Check Styles - Minimal, low-emphasis */
-.health-check-section {
-  margin: 20rpx 0;
-  padding: 0;
-}
-
-.health-check-entry {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background-color: #f8f8f8;
-  padding: 20rpx 30rpx;
-  border-radius: 8rpx;
-  margin-bottom: 10rpx;
-  cursor: pointer;
-}
-
-.health-check-label {
-  font-size: 28rpx;
-  color: #666;
-}
-
-.health-check-icon {
-  font-size: 28rpx;
-  color: #999;
-}
-
-.health-check-result {
-  padding: 10rpx 30rpx;
-  font-size: 24rpx;
-  border-radius: 4rpx;
-}
-
-.health-check-result.success {
-  color: #07c160;
-  background-color: #f0f9f4;
-}
-
-.health-check-result.error {
-  color: #fa5151;
-  background-color: #fef0f0;
+.btn-add::after {
+  border: none;
 }
 </style>
 

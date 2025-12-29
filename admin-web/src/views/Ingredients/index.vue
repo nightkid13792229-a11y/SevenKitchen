@@ -74,6 +74,34 @@
       <el-button @click="loadData" :icon="Refresh">刷新</el-button>
     </div>
 
+    <!-- Statistics Panel -->
+    <div class="stats-panel">
+      <div class="stat-item">
+        <span class="stat-label">总计:</span>
+        <span class="stat-value">{{ totalCount }} 条</span>
+      </div>
+      <el-divider direction="vertical" />
+      <div class="stat-item">
+        <span class="stat-label">食材:</span>
+        <span class="stat-value stat-food">{{ typeStats.FOOD }} 条</span>
+      </div>
+      <el-divider direction="vertical" />
+      <div class="stat-item">
+        <span class="stat-label">补剂:</span>
+        <span class="stat-value stat-supplement">{{ typeStats.SUPPLEMENT }} 条</span>
+      </div>
+      <el-divider direction="vertical" />
+      <div class="stat-item">
+        <span class="stat-label">包材:</span>
+        <span class="stat-value stat-packaging">{{ typeStats.PACKAGING }} 条</span>
+      </div>
+      <el-divider direction="vertical" v-if="hasActiveFilters" />
+      <div class="stat-item" v-if="hasActiveFilters">
+        <span class="stat-label">筛选结果:</span>
+        <span class="stat-value stat-filtered">{{ filteredCount }} 条</span>
+      </div>
+    </div>
+
     <!-- Table -->
     <el-card v-loading="loading">
       <!-- 批量操作栏 -->
@@ -92,7 +120,7 @@
 
       <el-table
         ref="tableRef"
-        :data="filteredData"
+        :data="paginatedData"
         stripe
         style="width: 100%"
         @selection-change="handleSelectionChange"
@@ -171,6 +199,19 @@
       <!-- Empty State -->
       <div v-if="filteredData.length === 0 && !loading" class="empty-state">
         <el-empty :description="searchText || filterTypes.length > 0 ? '未找到匹配的原料' : '暂无原料数据'" />
+      </div>
+
+      <!-- Pagination -->
+      <div v-if="filteredData.length > 0" class="pagination-container">
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="pageSizes"
+          :total="filteredCount"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="handleSizeChange"
+          @current-change="handlePageChange"
+        />
       </div>
     </el-card>
 
@@ -290,9 +331,45 @@ const loadingUsage = ref(false)
 const currentIngredientForUsage = ref<Ingredient | null>(null)
 const usageRecipes = ref<any[]>([])
 
+// Pagination
+const currentPage = ref(1)
+const pageSize = ref(20)
+const pageSizes = [20, 50, 100]
+
 // Computed
 const dialogTitle = computed(() => {
   return currentIngredient.value?.id ? '编辑原料' : '新增原料'
+})
+
+// 总数统计
+const totalCount = computed(() => ingredients.value.length)
+
+// 各类型统计
+const typeStats = computed(() => ({
+  FOOD: ingredients.value.filter(item => item.type === IngredientType.FOOD).length,
+  SUPPLEMENT: ingredients.value.filter(item => item.type === IngredientType.SUPPLEMENT).length,
+  PACKAGING: ingredients.value.filter(item => item.type === IngredientType.PACKAGING).length
+}))
+
+// 筛选结果数量
+const filteredCount = computed(() => filteredData.value.length)
+
+// 是否有激活的筛选条件
+const hasActiveFilters = computed(() => {
+  return !!(
+    searchText.value ||
+    (filterTypes.value && filterTypes.value.length > 0) ||
+    minPrice.value !== null ||
+    maxPrice.value !== null ||
+    dateRange.value
+  )
+})
+
+// 分页数据
+const paginatedData = computed(() => {
+  const start = (currentPage.value - 1) * pageSize.value
+  const end = start + pageSize.value
+  return filteredData.value.slice(start, end)
 })
 
 const filteredData = computed(() => {
@@ -347,11 +424,25 @@ const loadData = async () => {
 }
 
 const handleSearch = () => {
-  // Search is reactive via computed
+  // 重置到第一页
+  currentPage.value = 1
 }
 
 const handleFilter = () => {
-  // Filter is reactive via computed
+  // 重置到第一页
+  currentPage.value = 1
+}
+
+const handlePageChange = (page: number) => {
+  currentPage.value = page
+  // 滚动到表格顶部
+  window.scrollTo({ top: 0, behavior: 'smooth' })
+}
+
+const handleSizeChange = (size: number) => {
+  pageSize.value = size
+  // 重置到第一页
+  currentPage.value = 1
 }
 
 const resetFilters = () => {
@@ -360,6 +451,7 @@ const resetFilters = () => {
   minPrice.value = null
   maxPrice.value = null
   dateRange.value = null
+  currentPage.value = 1
 }
 
 const handleCreate = () => {
@@ -551,6 +643,57 @@ onMounted(() => {
   gap: 12px;
   margin-bottom: 20px;
   flex-wrap: wrap;
+}
+
+.stats-panel {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  margin-bottom: 20px;
+  background-color: #f5f7fa;
+  border-radius: 4px;
+  border-left: 4px solid #409eff;
+}
+
+.stat-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.stat-label {
+  font-size: 14px;
+  color: #606266;
+  font-weight: 500;
+}
+
+.stat-value {
+  font-size: 16px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.stat-food {
+  color: #67c23a;
+}
+
+.stat-supplement {
+  color: #e6a23c;
+}
+
+.stat-packaging {
+  color: #909399;
+}
+
+.stat-filtered {
+  color: #409eff;
+}
+
+.pagination-container {
+  margin-top: 20px;
+  display: flex;
+  justify-content: flex-end;
 }
 
 .batch-actions {

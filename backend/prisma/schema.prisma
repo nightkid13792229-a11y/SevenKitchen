@@ -49,6 +49,16 @@ enum ActivityLevel {
   WORKING
 }
 
+// ==========================================
+// User Domain Enums (aligned with backend/src/domain/user/enums.ts)
+// ==========================================
+
+enum UserRole {
+  CUSTOMER
+  STAFF
+  ADMIN
+}
+
 enum LifeStageOverride {
   NONE
   PREGNANCY
@@ -150,6 +160,7 @@ model Order {
 
   items OrderItem[]
   statusHistory OrderStatusHistory[]
+  customer User @relation(fields: [customerId], references: [id], onDelete: Cascade)
 
   @@index([customerId])
   @@index([status])
@@ -194,6 +205,29 @@ model OrderItem {
   @@map("order_item")
 }
 
+// ==========================================
+// User Persistence (Phase 8.19)
+// ==========================================
+
+model User {
+  id              String      @id @default(uuid()) @map("id")
+  phone           String?     @unique @map("phone") @db.VarChar(20)
+  wechatOpenid    String?     @unique @map("wechat_openid") @db.VarChar(100)
+  nickname        String?     @map("nickname") @db.VarChar(100)
+  role            UserRole    @default(CUSTOMER) @map("role")
+  createdAt       DateTime    @default(now()) @map("created_at")
+  updatedAt       DateTime    @updatedAt @map("updated_at")
+
+  // Relations
+  dogs            Dog[]
+  addresses       Address[]
+  orders          Order[]
+
+  @@index([wechatOpenid])
+  @@index([phone])
+  @@map("user")
+}
+
 // Address persistence (Phase 8.2 Part A) - aligns with docs/07; customer isolation via userId.
 model Address {
   id            String @id @default(uuid()) @map("id")
@@ -203,6 +237,8 @@ model Address {
   region        Json   @map("region")
   detail        String @map("detail")
   isDefault     Boolean @map("is_default")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
   @@map("address")
@@ -260,6 +296,8 @@ model Dog {
   pickyFoods            String?           @map("picky_foods")
   cachedTargetFoodKcal  Int               @default(0) @map("cached_target_food_kcal")
   createdAt             DateTime          @default(now()) @map("created_at")
+
+  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
   @@index([ownerId])
   @@index([ownerId, createdAt])

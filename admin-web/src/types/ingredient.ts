@@ -89,6 +89,7 @@ export interface Ingredient {
   weightG: number | null
   maxCapacityG: number | null
   properties: FoodProperties | SupplementProperties | PackagingProperties
+  tagIds: string[]  // 标签ID数组
   stock?: number  // 库存占位符（MVP阶段）
   createdAt: string
   updatedAt: string
@@ -115,19 +116,21 @@ export interface IngredientForm {
   tags?: any[]  // 标签完整信息（用于显示）
 }
 
-// CFCT分类选项
+// CFCT分类选项（基于 WS/T 464-2015《食物成分数据表达规范》）
 export const CFCT_CLASS_OPTIONS = [
-  '畜肉类',
-  '禽肉类',
-  '鱼虾类',
-  '蛋类',
-  '奶及奶制品',
-  '大豆及其制品',
-  '谷薯类',
-  '蔬菜类',
-  '水果类',
+  '谷类及制品',
+  '薯类及制品',
+  '干豆类及制品',
+  '蔬菜类及制品',
+  '菌藻类',
+  '水果类及制品',
   '坚果种子类',
+  '畜肉类及制品',
+  '禽肉类及制品',
+  '乳类及制品',
+  '蛋类及制品',
+  '水产类',
   '油脂类',
-  '糖类',
+  '调味品类',
   '其他'
 ]

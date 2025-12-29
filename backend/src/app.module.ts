@@ -8,6 +8,7 @@ import { AddressesController } from './interfaces/controllers/addresses.controll
 import { AuthController } from './interfaces/controllers/auth.controller';
 import { AdminController } from './interfaces/controllers/admin.controller';
 import { ShippingController } from './interfaces/controllers/shipping.controller';
+import { UsersController } from './interfaces/controllers/users.controller';
 import { StaffKitchenController } from './interfaces/controllers/staff-kitchen.controller';
 import { StaffShippingController } from './interfaces/controllers/staff-shipping.controller';
 import {
@@ -120,6 +121,7 @@ validatePrismaConfig();
     ShippingController,
     StaffKitchenController,
     StaffShippingController,
+    UsersController,
   ],
   providers: [
     DogService,

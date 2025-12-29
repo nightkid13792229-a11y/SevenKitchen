@@ -9,7 +9,7 @@
     {
       "path": "pages/dog-profile-list/index",
       "style": {
-        "navigationBarTitleText": "狗狗档案"
+        "navigationBarTitleText": "爱犬信息"
       }
     },
     {
@@ -71,6 +71,12 @@
       "style": {
         "navigationBarTitleText": "网络设置"
       }
+    },
+    {
+      "path": "pages/owner-info/index",
+      "style": {
+        "navigationBarTitleText": "主人信息"
+      }
     }
   ],
   "globalStyle": {
@@ -95,7 +101,7 @@
         "pagePath": "pages/dog-profile-list/index",
         "iconPath": "static/tabbar/dog.png",
         "selectedIconPath": "static/tabbar/dog-active.png",
-        "text": "狗狗档案"
+        "text": "我的爱犬"
       },
       {
         "pagePath": "pages/recipe-list/index",

@@ -139,15 +139,25 @@ export class AdminController {
   async getAllIngredients(): Promise<ApiResponseDto<any[]>> {
     const ingredients = await this.ingredientService.getAllIngredients();
 
-    // Get createdAt from Prisma directly
+    // Get createdAt and tagIds from Prisma directly
     const ingredientIds = ingredients.map(ing => ing.id);
     const prismaIngredients = await this.prisma.ingredient.findMany({
       where: { id: { in: ingredientIds } },
-      select: { id: true, createdAt: true, updatedAt: true }
+      select: {
+        id: true,
+        createdAt: true,
+        updatedAt: true,
+        tags: {
+          select: {
+            tagId: true
+          }
+        }
+      }
     });
 
     const createdAtMap = new Map(prismaIngredients.map(p => [p.id, p.createdAt.toISOString()]));
     const updatedAtMap = new Map(prismaIngredients.map(p => [p.id, p.updatedAt.toISOString()]));
+    const tagIdsMap = new Map(prismaIngredients.map(p => [p.id, p.tags.map(t => t.tagId)]));
 
     // Map to ingredient response format
     const ingredientList = ingredients.map((ing) => ({
@@ -167,6 +177,7 @@ export class AdminController {
       weightG: ing.weightG,
       maxCapacityG: ing.maxCapacityG,
       properties: ing.properties,
+      tagIds: tagIdsMap.get(ing.id) || [],
       createdAt: createdAtMap.get(ing.id) || new Date().toISOString(),
       updatedAt: updatedAtMap.get(ing.id) || new Date().toISOString(),
     }));

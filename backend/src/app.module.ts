@@ -41,10 +41,10 @@ import {
   INGREDIENT_REPOSITORY,
 } from './application/ingredient/ingredient.service';
 import { PrismaIngredientRepository } from './infrastructure/repositories/prisma-ingredient.repository';
-import { InMemoryIngredientRepository } from './infrastructure/repositories/in-memory-ingredient.repository';
-import { Ingredient } from './domain/ingredient';
-import { IngredientType, BaseUnit, SupplementCategoryType } from './domain/ingredient/enums';
-import { randomUUID } from 'crypto';
+// import { InMemoryIngredientRepository } from './infrastructure/repositories/in-memory-ingredient.repository'; // NOTE: Currently unused
+// import { Ingredient } from './domain/ingredient'; // NOTE: Currently unused (seed disabled)
+// import { IngredientType, BaseUnit, SupplementCategoryType } from './domain/ingredient/enums'; // NOTE: Currently unused (seed disabled)
+// import { randomUUID } from 'crypto'; // NOTE: Currently unused (seed disabled)
 import { GlobalConfigService } from './application/config/global-config.service';
 import { PricingService } from './domain/pricing/pricing.service';
 import { ShippingFeeService } from './domain/shipping/shipping-fee.service';
@@ -64,6 +64,8 @@ import { PrismaDogBreedRepository } from './infrastructure/repositories/prisma-d
 import { DOG_BREED_REPOSITORY } from './application/dog/dog.service';
 import { IngredientTagService, INGREDIENT_TAG_REPOSITORY } from './application/ingredient-tag/ingredient-tag.service';
 import { PrismaIngredientTagRepository } from './infrastructure/repositories/prisma-ingredient-tag.repository';
+import { WechatModule } from './infrastructure/wechat/wechat.module';
+import { SmsModule } from './infrastructure/sms/sms.module';
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -109,6 +111,8 @@ validatePrismaConfig();
         expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as any,
       },
     }),
+    WechatModule,
+    SmsModule,
   ],
   controllers: [
     DogsController,
@@ -321,274 +325,21 @@ validatePrismaConfig();
 })
 export class AppModule implements OnModuleInit {
   constructor(
-    // Inject using RECIPE_REPOSITORY token - same instance used by controllers via RECIPE_REPOSITORY_TOKEN (aliased)
-    @Inject(RECIPE_REPOSITORY)
-    private readonly recipeRepository: InMemoryRecipeRepository,
-    @Inject(INGREDIENT_REPOSITORY)
-    private readonly ingredientRepository: InMemoryIngredientRepository,
     @Inject(SHIPPING_TEMPLATE_REPOSITORY)
     private readonly shippingTemplateRepository: InMemoryShippingTemplateRepository,
   ) {}
 
   async onModuleInit() {
+    // ✅ 方案B: 禁用自动seed数据，允许用户完全控制原料和配方
     // Phase 5: Seed ingredients first
-    await this.seedIngredients();
+    // await this.seedIngredients();
 
     // Phase 6: Seed shipping template
     await this.seedShippingTemplate();
 
-    // Seed ONE canonical recipe for Phase 4.3 - MVP end-to-end testing
-    // Fixed UUID v4 ensures idempotent seeding and passes @IsUUID('4') validation
-    const CANONICAL_RECIPE_ID = '3fa85f64-5717-4562-b3fc-2c963f66afa6';
-
-    // Check if recipe already exists (idempotent)
-    const existingRecipe =
-      await this.recipeRepository.findById(CANONICAL_RECIPE_ID);
-    if (existingRecipe) {
-      // Verify it's PUBLIC and visible
-      const publicRecipes = await this.recipeRepository.findPublicRecipes();
-      const isPublic = existingRecipe.status === 'PUBLIC';
-      console.log(
-        `[Seed] Recipe exists (id=${CANONICAL_RECIPE_ID}), status=${existingRecipe.status}, PUBLIC=${isPublic}, total PUBLIC recipes=${publicRecipes.length}`,
-      );
-      if (!isPublic) {
-        console.warn(
-          `[Seed] WARNING: Recipe exists but status is not PUBLIC. Re-seeding...`,
-        );
-        // Continue to re-seed below
-      } else {
-        return; // Recipe exists and is PUBLIC, skip seeding
-      }
-    }
-
-    // Get seeded ingredient IDs
-    const ingredients = await this.ingredientRepository.findAll();
-    const chickenBreast = ingredients.find((i) => i.name === '鸡胸肉');
-    const pumpkin = ingredients.find((i) => i.name === '南瓜');
-    const vacuumBag = ingredients.find((i) => i.name === '真空袋');
-    const productLabel = ingredients.find((i) => i.name === '产品标签');
-
-    if (!chickenBreast || !pumpkin || !vacuumBag || !productLabel) {
-      console.error(
-        '[Seed] ERROR: Required ingredients not found. Recipe seeding failed.',
-      );
-      console.error(
-        `[Seed] Found ingredients: ${ingredients.map((i) => i.name).join(', ')}`,
-      );
-      // Don't throw - allow server to start, but log error
-      return;
-    }
-
-    // Seed canonical recipe with items
-    // CRITICAL: status must be 'PUBLIC' (exact string match) for findPublicRecipes() to return it
-    const seedRecipe = {
-      id: CANONICAL_RECIPE_ID,
-      version: 1,
-      name: 'Chicken Pumpkin Bowl',
-      status: 'PUBLIC' as const, // Explicitly PUBLIC status
-      energyDensityKcalPerKg: 1200, // 120 kcal/100g = 1200 kcal/kg
-      productionLossRate: 1.07,
-      batchLaborHours: 2.0,
-      items: [
-        {
-          id: randomUUID(),
-          ingredientId: chickenBreast.id,
-          ratioPercent: 70.0,
-          isPrimarySource: true,
-        },
-        {
-          id: randomUUID(),
-          ingredientId: pumpkin.id,
-          ratioPercent: 30.0,
-          isPrimarySource: false,
-        },
-        // Packaging items (consumable, per pack)
-        {
-          id: randomUUID(),
-          ingredientId: vacuumBag.id,
-          ratioPercent: null,
-          isPrimarySource: false,
-        },
-        {
-          id: randomUUID(),
-          ingredientId: productLabel.id,
-          ratioPercent: null,
-          isPrimarySource: false,
-        },
-      ],
-    };
-
-    await this.recipeRepository.save(seedRecipe);
-    
-    // Verify the recipe was saved and is PUBLIC
-    const savedRecipe = await this.recipeRepository.findById(CANONICAL_RECIPE_ID);
-    const publicRecipes = await this.recipeRepository.findPublicRecipes();
-    const isPublic = savedRecipe?.status === 'PUBLIC';
-    
-    console.log(
-      `[Seed] Seeded MVP recipe: Chicken Pumpkin Bowl (id=${CANONICAL_RECIPE_ID})`,
-    );
-    console.log(
-      `[Seed] Verification: saved=${!!savedRecipe}, status=${savedRecipe?.status}, PUBLIC=${isPublic}, total PUBLIC recipes=${publicRecipes.length}`,
-    );
-    
-    if (!isPublic || publicRecipes.length === 0) {
-      console.error(
-        `[Seed] ERROR: Recipe was saved but is not visible in findPublicRecipes(). This is a critical issue.`,
-      );
-    }
-  }
-
-  /**
-   * Seed canonical ingredients for MVP
-   * Phase 5: Ingredients + Recipe Costing
-   */
-  private async seedIngredients(): Promise<void> {
-    // Fixed UUID v4 for idempotent seeding
-    const CHICKEN_BREAST_ID = '4fa85f64-5717-4562-b3fc-2c963f66afa6';
-    const PUMPKIN_ID = '5fa85f64-5717-4562-b3fc-2c963f66afa6';
-    const VACUUM_BAG_ID = '6fa85f64-5717-4562-b3fc-2c963f66afa6';
-    const PRODUCT_LABEL_ID = '7fa85f64-5717-4562-b3fc-2c963f66afa6';
-    const CALCIUM_SUPPLEMENT_ID = '8fa85f64-5717-4562-b3fc-2c963f66afa7';
-
-    const seeded: string[] = [];
-
-    // 1. Chicken breast (FOOD)
-    if (!(await this.ingredientRepository.findById(CHICKEN_BREAST_ID))) {
-      const chickenBreast = new Ingredient(
-        CHICKEN_BREAST_ID,
-        '鸡胸肉',
-        IngredientType.FOOD,
-        'Kirkland', // brand
-        '1kg装', // product_model
-        '山姆会员店', // purchase_channel
-        null, // notes
-        BaseUnit.G,
-        null, // unit_display_label (uses default "克")
-        'kg', // purchase_unit
-        1000.0, // purchase_to_base_ratio (1kg = 1000g)
-        45.0, // current_price_per_purchase_unit (45 CNY per kg)
-        null, // weight_g (not needed for base_unit=G)
-        null, // max_capacity_g
-        {
-          cfct_class: '畜肉类',
-          edible_yield_rate: 1.0, // No bones, 100% yield
-          main_nutrients_desc: '高蛋白，低脂肪',
-        },
-      );
-      await this.ingredientRepository.save(chickenBreast);
-      seeded.push('鸡胸肉');
-    }
-
-    // 2. Pumpkin (FOOD)
-    if (!(await this.ingredientRepository.findById(PUMPKIN_ID))) {
-      const pumpkin = new Ingredient(
-        PUMPKIN_ID,
-        '南瓜',
-        IngredientType.FOOD,
-        '本地供应商',
-        '500g装',
-        '拼多多',
-        null,
-        BaseUnit.G,
-        null,
-        'kg',
-        1000.0,
-        8.0, // 8 CNY per kg
-        null,
-        null,
-        {
-          cfct_class: '蔬菜类',
-          edible_yield_rate: 0.85, // 85% yield after peeling
-          main_nutrients_desc: '富含纤维和β-胡萝卜素',
-        },
-      );
-      await this.ingredientRepository.save(pumpkin);
-      seeded.push('南瓜');
-    }
-
-    // 3. Vacuum bag (PACKAGING, consumable)
-    if (!(await this.ingredientRepository.findById(VACUUM_BAG_ID))) {
-      const vacuumBag = new Ingredient(
-        VACUUM_BAG_ID,
-        '真空袋',
-        IngredientType.PACKAGING,
-        '通用包装',
-        '标准真空袋',
-        '1688',
-        null,
-        BaseUnit.PCS,
-        null,
-        '包',
-        100.0, // 1 package = 100 pcs
-        15.0, // 15 CNY per package (0.15 CNY per bag)
-        5.0, // weight_g: 5g per bag
-        null, // max_capacity_g (not applicable for bags)
-        {
-          is_consumable: true,
-        },
-      );
-      await this.ingredientRepository.save(vacuumBag);
-      seeded.push('真空袋');
-    }
-
-    // 4. Product label (PACKAGING, consumable)
-    if (!(await this.ingredientRepository.findById(PRODUCT_LABEL_ID))) {
-      const productLabel = new Ingredient(
-        PRODUCT_LABEL_ID,
-        '产品标签',
-        IngredientType.PACKAGING,
-        '通用标签',
-        '标准标签',
-        '1688',
-        null,
-        BaseUnit.PCS,
-        null,
-        '包',
-        1000.0, // 1 package = 1000 pcs
-        20.0, // 20 CNY per package (0.02 CNY per label)
-        0.5, // weight_g: 0.5g per label
-        null,
-        {
-          is_consumable: true,
-        },
-      );
-      await this.ingredientRepository.save(productLabel);
-      seeded.push('产品标签');
-    }
-
-    // 5. Calcium supplement (SUPPLEMENT)
-    if (!(await this.ingredientRepository.findById(CALCIUM_SUPPLEMENT_ID))) {
-      const calciumSupplement = new Ingredient(
-        CALCIUM_SUPPLEMENT_ID,
-        '碳酸钙',
-        IngredientType.SUPPLEMENT,
-        '某品牌',
-        '500g装',
-        '1688',
-        '用于补充钙质',
-        BaseUnit.G,
-        null,
-        'kg',
-        1000.0,
-        120.0, // 120 CNY per kg
-        null,
-        null,
-        {
-          category_type: SupplementCategoryType.MINERAL,
-          active_nutrients: { '钙': 0.30 }, // 30% calcium concentration
-          production_loss_rate: 1.05,
-        },
-      );
-      await this.ingredientRepository.save(calciumSupplement);
-      seeded.push('碳酸钙');
-    }
-
-    if (seeded.length > 0) {
-      console.log(`[Seed] Seeded ${seeded.length} ingredient(s): ${seeded.join(', ')}`);
-    } else {
-      console.log('[Seed] All canonical ingredients already exist, skipping seed');
-    }
+    // ✅ 禁用配方自动seed（依赖被禁用的原料seed）
+    // 如需启用配方seed，请先启用原料seed
+    return; // 跳过配方seed
   }
 
   /**

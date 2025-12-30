@@ -59,6 +59,12 @@ enum UserRole {
   ADMIN
 }
 
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  BANNED
+}
+
 enum LifeStageOverride {
   NONE
   PREGNANCY
@@ -213,8 +219,13 @@ model User {
   id              String      @id @default(uuid()) @map("id")
   phone           String?     @unique @map("phone") @db.VarChar(20)
   wechatOpenid    String?     @unique @map("wechat_openid") @db.VarChar(100)
+  wechatUnionid   String?     @unique @map("wechat_unionid") @db.VarChar(100)
   nickname        String?     @map("nickname") @db.VarChar(100)
+  avatarUrl       String?     @map("avatar_url") @db.Text
+  password        String?     @map("password") @db.VarChar(255)
   role            UserRole    @default(CUSTOMER) @map("role")
+  status          UserStatus  @default(ACTIVE) @map("status")
+  lastLoginAt     DateTime?   @map("last_login_at")
   createdAt       DateTime    @default(now()) @map("created_at")
   updatedAt       DateTime    @updatedAt @map("updated_at")
 

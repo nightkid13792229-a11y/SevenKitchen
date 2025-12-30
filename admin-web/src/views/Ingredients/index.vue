@@ -142,9 +142,32 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="purchaseUnit" label="采购单位" width="100" align="center">
+        <el-table-column prop="cfct_class" label="CFCT分类" width="140">
           <template #default="{ row }">
-            {{ row.purchaseUnit }}
+            <span v-if="row.type === 'FOOD' && row.properties?.cfct_class">
+              {{ row.properties.cfct_class }}
+            </span>
+            <span v-else style="color: #909399;">-</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="productModel" label="产品型号规格" width="140">
+          <template #default="{ row }">
+            {{ row.productModel || '-' }}
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="tags" label="标签分类" width="180">
+          <template #default="{ row }">
+            <el-tag
+              v-for="tag in (row.tags || [])"
+              :key="tag.id"
+              size="small"
+              style="margin-right: 4px; margin-bottom: 2px;"
+            >
+              {{ tag.name }}
+            </el-tag>
+            <span v-if="!row.tags || row.tags.length === 0" style="color: #909399;">-</span>
           </template>
         </el-table-column>
 

@@ -270,7 +270,11 @@
         style="width: 200px"
       />
       <span class="unit-label">克</span>
-      <span class="hint-text">PCS类型必填</span>
+      <span class="hint-text">
+        <span v-if="formData.type === IngredientType.PACKAGING">必填（装箱算法需要）</span>
+        <span v-else-if="formData.type === IngredientType.SUPPLEMENT">可选（用于运费计算，不填默认为0）</span>
+        <span v-else>可选</span>
+      </span>
     </el-form-item>
 
     <el-form-item
@@ -365,7 +369,7 @@
         </el-select>
       </el-form-item>
 
-      <el-form-item label="有效成分浓度" prop="active_nutrients">
+      <el-form-item label="有效成分含量" prop="active_nutrients">
         <div class="nutrient-editor">
           <!-- 成分列表表格 -->
           <div class="nutrient-list">
@@ -391,7 +395,7 @@
                 :step="1"
                 :precision="0"
                 controls-position="right"
-                placeholder="含量"
+                :placeholder="formData.baseUnit === BaseUnit.PCS ? '每粒含量' : '每克含量'"
                 style="width: 120px"
                 @change="(val: number) => calculateConcentration(nutrient, val)"
               />
@@ -409,12 +413,6 @@
                   :value="unit.value"
                 />
               </el-select>
-
-              <!-- 浓度值显示（只读） -->
-              <div class="concentration-display">
-                <span class="concentration-label">浓度:</span>
-                <span class="concentration-value">{{ nutrient.value.toFixed(4) }}</span>
-              </div>
 
               <!-- 删除按钮 -->
               <el-button
@@ -439,7 +437,14 @@
             添加成分
           </el-button>
 
-          <span class="hint-text">直接填写产品标签上的含量（如：500mg），系统自动计算浓度</span>
+          <div class="hint-text" style="margin-top: 8px;">
+            <div v-if="formData.baseUnit === BaseUnit.PCS">
+              💡 输入每粒胶囊/片剂的营养素含量（查看产品标签）
+            </div>
+            <div v-else>
+              💡 输入每克粉末的营养素含量
+            </div>
+          </div>
         </div>
       </el-form-item>
 
@@ -491,7 +496,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch, computed, onMounted } from 'vue'
+import { ref, reactive, watch, computed, onMounted, nextTick } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { Plus, CircleCheck, Delete } from '@element-plus/icons-vue'
@@ -700,15 +705,12 @@ const calculateConcentration = (nutrient: NutrientItem, displayValue: number | u
   // 将显示值转换为克数
   const valueInGrams = displayValue * (unitConversions[nutrient.unit] || 0.001)
 
-  // 计算浓度值（考虑基准单位和采购单位的转换比例）
-  // 如果基准单位是 G（克），直接使用克数
-  // 如果基准单位是 PCS（个/件），也需要转换为每克的含量
-  const ratio = formData.purchaseToBaseRatio || 1
-
-  // 浓度 = (含量克数 / 采购单位转基准单位比例)
-  // 例如：1粒含500mg，purchaseToBaseRatio=1（1粒=1粒）
-  // 假设1粒≈1g，则浓度 = 0.5g / 1 = 0.5
-  nutrient.value = valueInGrams / ratio
+  // ✅ Bug 1 修复: 直接存储"每基准单位的含量(克)"
+  // 根据文档: active_nutrients的Value是"每1个基准单位(1g粉 or 1粒) 含有的数值"
+  // - PCS类型: value = 每粒含有的克数
+  // - G类型: value = 每克粉末含有的克数
+  // 不需要除以purchaseToBaseRatio或weightG!
+  nutrient.value = valueInGrams
 }
 
 // 监听成分列表变化，同步到active_nutrients对象
@@ -907,14 +909,19 @@ const querySearchIngredients = (queryString: string, cb: any) => {
 
   const searchLower = queryString.toLowerCase()
   const results: Array<{ value: string; item: Ingredient }> = []
+  const addedNames = new Set<string>() // 用于追踪已添加的名称，去重
 
   allIngredients.value.forEach(ingredient => {
     // 排除当前编辑的原料
     if (formData.id && ingredient.id === formData.id) return
 
+    // 检查名称是否已经添加过（去重）
+    if (addedNames.has(ingredient.name)) return
+
     // 完全匹配
     if (ingredient.name.toLowerCase().includes(searchLower)) {
       results.push({ value: ingredient.name, item: ingredient })
+      addedNames.add(ingredient.name) // 标记名称为已添加
       return
     }
 
@@ -922,6 +929,7 @@ const querySearchIngredients = (queryString: string, cb: any) => {
     const pinyin = convertToPinyin(ingredient.name)
     if (pinyin.includes(searchLower)) {
       results.push({ value: ingredient.name, item: ingredient })
+      addedNames.add(ingredient.name) // 标记名称为已添加
     }
   })
 
@@ -1111,8 +1119,47 @@ watch(selectedTagIds, (newIds) => {
 })
 
 // Watch for ingredient changes
-watch(() => props.ingredient, (newIngredient) => {
-  if (newIngredient) {
+watch(() => props.ingredient, (newIngredient, oldIngredient) => {
+  // 只在从编辑切换到新增时重置表单
+  if (oldIngredient && !newIngredient) {
+    // ✅ 修复：当新增原料时，重置表单数据（清除 id 等字段）
+    formData.id = undefined
+    formData.name = ''
+    formData.type = IngredientType.FOOD
+    formData.brand = ''
+    formData.productModel = ''
+    formData.purchaseChannel = ''
+    formData.notes = ''
+    formData.baseUnit = BaseUnit.G
+    formData.unitDisplayLabel = ''
+    formData.purchaseUnit = 'kg'
+    formData.purchaseToBaseRatio = 1.0
+    formData.currentPricePerPurchaseUnit = 0
+    formData.weightG = undefined
+    formData.maxCapacityG = undefined
+    formData.properties = getDefaultProperties(IngredientType.FOOD)
+    formData.tagIds = []
+
+    // 重置类型特定属性
+    Object.assign(foodProperties, getDefaultFoodProperties())
+    Object.assign(supplementProperties, getDefaultSupplementProperties())
+    Object.assign(packagingProperties, getDefaultPackagingProperties())
+
+    // 重置其他状态
+    selectedTagIds.value = []
+    nutrientList.value = [{ name: '', value: 0, displayValue: 0, unit: 'mg' }]
+    similarIngredients.value = []
+    similarUnits.value = []
+
+    // 清除表单验证状态
+    nextTick(() => {
+      formRef.value?.clearValidate()
+    })
+  } else if (newIngredient) {
+    // ✅ 重置相似原料提示和单位提示
+    similarIngredients.value = []
+    similarUnits.value = []
+
     Object.assign(formData, newIngredient)
 
     // Update type-specific properties
@@ -1120,13 +1167,16 @@ watch(() => props.ingredient, (newIngredient) => {
       Object.assign(foodProperties, newIngredient.properties as FoodProperties)
     } else if (newIngredient.type === IngredientType.SUPPLEMENT) {
       Object.assign(supplementProperties, newIngredient.properties as SupplementProperties)
-      // 转换active_nutrients对象为nutrientList数组
+      // ✅ Bug 2 修复: 转换active_nutrients对象为nutrientList数组
+      // active_nutrients中存储的是"每基准单位的含量(克)"
+      // 需要转换为用户界面显示的数值(默认mg)
       const nutrients = (newIngredient.properties as SupplementProperties).active_nutrients || {}
       const nutrientArray = Object.entries(nutrients).map(([name, value]) => {
-        // 将浓度值转换为显示值（默认单位mg）
-        // 例如：浓度0.5 → 500mg
-        const displayValue = value * 1000  // 假设默认单位是mg
-        return { name, value, displayValue, unit: 'mg' }
+        // 直接将克数转换为毫克显示
+        // value是每基准单位含有的克数，displayValue是显示的mg值
+        const displayValue = value / 0.001  // 转换为mg
+        const unit = 'mg'
+        return { name, value, displayValue, unit }
       })
       nutrientList.value = nutrientArray.length > 0 ? nutrientArray : [{ name: '', value: 0, displayValue: 0, unit: 'mg' }]
     } else if (newIngredient.type === IngredientType.PACKAGING) {
@@ -1137,17 +1187,22 @@ watch(() => props.ingredient, (newIngredient) => {
     if (newIngredient.tagIds) {
       selectedTagIds.value = newIngredient.tagIds
     }
+
+    // 清除表单验证状态
+    nextTick(() => {
+      formRef.value?.clearValidate()
+    })
   }
 
   // Reload ingredients data whenever form is opened (ingredient prop changes)
   // This ensures brand/channel suggestions are up-to-date
   loadIngredients()
-}, { immediate: true })
+})
 
 // Lifecycle
 onMounted(() => {
   loadTags()
-  // loadIngredients() is called by watch with immediate: true
+  loadIngredients()  // ✅ 确保组件加载时获取原料列表
 })
 
 // 表单验证规则
@@ -1180,9 +1235,12 @@ const formRules: FormRules = {
       message: '单个重量必须大于0',
       trigger: 'blur',
       validator: (rule, value, callback) => {
-        if (formData.baseUnit === BaseUnit.PCS && (value === null || value === undefined)) {
-          callback(new Error('PCS类型必须填写单个重量'))
-        } else if (formData.baseUnit === BaseUnit.PCS && value !== null && value < 0.1) {
+        // ✅ 方案A: 只有包材类型的PCS才强制要求weightG
+        if (formData.type === IngredientType.PACKAGING &&
+            formData.baseUnit === BaseUnit.PCS &&
+            (value === null || value === undefined)) {
+          callback(new Error('包材(PCS类型)必须填写单个重量'))
+        } else if (value !== null && value !== undefined && value < 0.1) {
           callback(new Error('单个重量必须大于0'))
         } else {
           callback()

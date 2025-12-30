@@ -21,6 +21,10 @@
           <el-icon><Star /></el-icon>
           <span>品种管理</span>
         </el-menu-item>
+        <el-menu-item index="/users">
+          <el-icon><User /></el-icon>
+          <span>用户管理</span>
+        </el-menu-item>
         <el-menu-item index="/ingredients">
           <el-icon><Goods /></el-icon>
           <span>原料管理</span>

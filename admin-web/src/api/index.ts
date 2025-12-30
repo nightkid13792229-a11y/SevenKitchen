@@ -22,11 +22,17 @@ const api = axios.create({
 // Request interceptor
 api.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
-    // For admin system, use X-Customer-Id instead of Bearer token
-    // This allows admin to access all customer data
-    if (config.headers) {
+    // Priority 1: Use Bearer token if available
+    const token = localStorage.getItem('admin_token')
+    if (token && config.headers) {
+      config.headers['Authorization'] = `Bearer ${token}`
+    }
+
+    // Priority 2: Fallback to X-Customer-Id (backward compatibility)
+    if (!token && config.headers) {
       config.headers['X-Customer-Id'] = 'admin-system'
     }
+
     return config
   },
   (error) => {
@@ -114,5 +120,8 @@ export { breedApi } from './breeds'
 
 // Re-export ingredient tag API
 export { ingredientTagApi } from './ingredientTags'
+
+// Re-export user API
+export { userApi } from './users'
 
 export default api

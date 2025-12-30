@@ -69,6 +69,7 @@ import { ElMessage } from 'element-plus'
 import type { FormInstance, FormRules } from 'element-plus'
 import { User, Lock } from '@element-plus/icons-vue'
 import { useUserStore } from '@/store/user'
+import api from '@/api'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -98,11 +99,19 @@ const handleLogin = async () => {
     await loginFormRef.value.validate()
     loading.value = true
 
-    // 模拟登录 - MVP 阶段使用固定 token
-    // 真实环境需要调用后端登录接口
-    const mockToken = `admin_token_${Date.now()}`
-    userStore.setToken(mockToken)
-    userStore.setUserInfo({ username: loginForm.username })
+    // 调用真实的后端登录接口
+    const response = await api.post('/auth/admin-login', {
+      username: loginForm.username,
+      password: loginForm.password,
+    })
+
+    // 存储token和用户信息
+    userStore.setToken(response.token)
+    userStore.setUserInfo({
+      username: response.username,
+      userId: response.userId,
+      role: response.role,
+    })
 
     ElMessage.success('登录成功')
     router.push('/dashboard')

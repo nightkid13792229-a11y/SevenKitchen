@@ -23,7 +23,9 @@ export class AuthGuard implements CanActivate {
       user?: RequestUser;
     }>();
 
+    let userId: string | undefined;
     let customerId: string | undefined;
+    let role: string = 'CUSTOMER'; // Default role
 
     // Priority 1: Check Authorization Bearer token
     const authHeader = request.headers.authorization;
@@ -32,7 +34,9 @@ export class AuthGuard implements CanActivate {
       if (bearerMatch && bearerMatch[1]) {
         try {
           const payload = this.jwtAuthService.validateToken(bearerMatch[1]);
+          userId = payload.userId;
           customerId = payload.customerId;
+          role = payload.role;
         } catch (error) {
           throw new UnauthorizedException('Invalid token');
         }
@@ -40,25 +44,28 @@ export class AuthGuard implements CanActivate {
     }
 
     // Priority 2: Fallback to X-Customer-Id header (backward compatibility)
-    if (!customerId) {
+    if (!userId) {
       const headerCustomerId = request.headers['x-customer-id'];
       if (
         headerCustomerId &&
         typeof headerCustomerId === 'string' &&
         headerCustomerId.trim() !== ''
       ) {
+        userId = headerCustomerId.trim();
         customerId = headerCustomerId.trim();
       }
     }
 
-    // If neither method provided valid customerId, throw error
-    if (!customerId) {
+    // If neither method provided valid ID, throw error
+    if (!userId) {
       throw new UnauthorizedException('Unauthorized');
     }
 
     // Attach user to request
     const user: RequestUser = {
-      customerId,
+      userId,
+      customerId: customerId || userId,
+      role,
     };
     request.user = user;
 

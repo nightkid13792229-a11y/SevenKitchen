@@ -4,5 +4,7 @@
  */
 
 export interface RequestUser {
-  customerId: string;
+  userId: string;
+  customerId: string; // Backward compatibility
+  role: string;
 }

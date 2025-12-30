@@ -305,4 +305,62 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
   })
 }
 
+// Auth API
+export const authApi = {
+  /**
+   * 微信授权登录
+   */
+  wechatLogin: (code: string, userInfo: { nickname?: string; avatarUrl?: string }) => {
+    return request<{
+      token: string;
+      userId: string;
+      role: string;
+      isNewUser: boolean;
+      user: {
+        id: string;
+        nickname?: string;
+        avatarUrl?: string;
+        role: string;
+      };
+    }>({
+      url: '/auth/wechat-login',
+      method: 'POST',
+      data: { code, userInfo },
+    });
+  },
 
+  /**
+   * 发送短信验证码
+   */
+  sendSmsCode: (phone: string) => {
+    return request<{
+      success: boolean;
+      expireIn?: number;
+    }>({
+      url: '/auth/send-sms',
+      method: 'POST',
+      data: { phone },
+    });
+  },
+
+  /**
+   * 手机号验证码登录（员工登录）
+   */
+  phoneLogin: (phone: string, code: string) => {
+    return request<{
+      token: string;
+      userId: string;
+      role: string;
+      user: {
+        id: string;
+        phone: string;
+        nickname?: string;
+        role: string;
+      };
+    }>({
+      url: '/auth/phone-login',
+      method: 'POST',
+      data: { phone, code },
+    });
+  },
+};

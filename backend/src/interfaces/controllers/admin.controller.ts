@@ -20,6 +20,7 @@ import {
   NotFoundException,
   BadRequestException,
   Inject,
+  UseGuards,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -49,6 +50,9 @@ import {
   BreedUsageCheckDto,
 } from '../dto/breeds';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import { CreateStaffDto, UpdateStaffDto, StaffResponseDto } from '../dto/admin/staff.dto';
+import { AdminGuard } from '../guards/role.guard';
+import { AuthGuard } from '../auth/auth.guard';
 
 @ApiTags('Admin')
 @Controller('api/v1/admin')
@@ -61,9 +65,9 @@ export class AdminController {
     private readonly orderService: OrderService,
     private readonly dogService: DogService,
     private readonly ingredientTagService: IngredientTagService,
+    private readonly prisma: PrismaService,
     @Inject(DOG_BREED_REPOSITORY)
     private readonly dogBreedRepository: DogBreedRepository,
-    private readonly prisma: PrismaService,
   ) {}
 
   @Get('inventory')
@@ -139,7 +143,7 @@ export class AdminController {
   async getAllIngredients(): Promise<ApiResponseDto<any[]>> {
     const ingredients = await this.ingredientService.getAllIngredients();
 
-    // Get createdAt and tagIds from Prisma directly
+    // Get createdAt and tags from Prisma directly
     const ingredientIds = ingredients.map(ing => ing.id);
     const prismaIngredients = await this.prisma.ingredient.findMany({
       where: { id: { in: ingredientIds } },
@@ -149,7 +153,13 @@ export class AdminController {
         updatedAt: true,
         tags: {
           select: {
-            tagId: true
+            tag: {
+              select: {
+                id: true,
+                name: true,
+                color: true
+              }
+            }
           }
         }
       }
@@ -157,7 +167,14 @@ export class AdminController {
 
     const createdAtMap = new Map(prismaIngredients.map(p => [p.id, p.createdAt.toISOString()]));
     const updatedAtMap = new Map(prismaIngredients.map(p => [p.id, p.updatedAt.toISOString()]));
-    const tagIdsMap = new Map(prismaIngredients.map(p => [p.id, p.tags.map(t => t.tagId)]));
+    const tagsMap = new Map(prismaIngredients.map(p => [
+      p.id,
+      p.tags.map(t => t.tag)
+    ]));
+    const tagIdsMap = new Map(prismaIngredients.map(p => [
+      p.id,
+      p.tags.map(t => t.tag.id)
+    ]));
 
     // Map to ingredient response format
     const ingredientList = ingredients.map((ing) => ({
@@ -178,6 +195,7 @@ export class AdminController {
       maxCapacityG: ing.maxCapacityG,
       properties: ing.properties,
       tagIds: tagIdsMap.get(ing.id) || [],
+      tags: tagsMap.get(ing.id) || [],
       createdAt: createdAtMap.get(ing.id) || new Date().toISOString(),
       updatedAt: updatedAtMap.get(ing.id) || new Date().toISOString(),
     }));
@@ -1235,6 +1253,219 @@ export class AdminController {
       color: tag.color,
     }));
     return ApiResponseDto.success(data);
+  }
+
+  // ==================== 用户管理接口（统一） ====================
+
+  @Get('users')
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiOperation({ summary: '获取用户列表（支持角色筛选）' })
+  @ApiResponse({ status: 200, description: '用户列表' })
+  async getUsers(
+    @Query('role') role?: string,
+  ): Promise<ApiResponseDto<StaffResponseDto[]>> {
+    // 构建查询条件
+    const where: any = {};
+
+    if (role && ['CUSTOMER', 'STAFF', 'ADMIN'].includes(role)) {
+      where.role = role;
+    }
+
+    const userList = await this.prisma.user.findMany({
+      where,
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const data = userList.map((user) => ({
+      id: user.id,
+      phone: user.phone || '',
+      nickname: user.nickname || '',
+      role: user.role,
+      status: user.status,
+      lastLoginAt: user.lastLoginAt,
+      createdAt: user.createdAt,
+    }));
+
+    return ApiResponseDto.success(data);
+  }
+
+  @Post('users')
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiOperation({ summary: '创建用户（员工）账号' })
+  @ApiResponse({ status: 200, description: '用户创建成功' })
+  async createUser(
+    @Body() dto: CreateStaffDto,
+  ): Promise<ApiResponseDto<StaffResponseDto | null>> {
+    // 检查手机号是否已存在
+    const existingUser = await this.prisma.user.findUnique({
+      where: { phone: dto.phone },
+    });
+
+    if (existingUser) {
+      return ApiResponseDto.error(400, '该手机号已被使用');
+    }
+
+    // 创建员工账号（角色固定为STAFF）
+    const newUser = await this.prisma.user.create({
+      data: {
+        phone: dto.phone,
+        nickname: dto.nickname,
+        role: 'STAFF',
+        status: 'ACTIVE',
+      },
+    });
+
+    const data: StaffResponseDto = {
+      id: newUser.id,
+      phone: newUser.phone!,
+      nickname: newUser.nickname!,
+      role: newUser.role,
+      status: newUser.status,
+      createdAt: newUser.createdAt,
+    };
+
+    return ApiResponseDto.success(data);
+  }
+
+  @Put('users/:id')
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiOperation({ summary: '更新用户信息' })
+  @ApiResponse({ status: 200, description: '更新成功' })
+  async updateUser(
+    @Param('id') id: string,
+    @Body() dto: UpdateStaffDto,
+  ): Promise<ApiResponseDto<StaffResponseDto>> {
+    const updatedUser = await this.prisma.user.update({
+      where: { id },
+      data: dto,
+    });
+
+    const data: StaffResponseDto = {
+      id: updatedUser.id,
+      phone: updatedUser.phone!,
+      nickname: updatedUser.nickname!,
+      role: updatedUser.role,
+      status: updatedUser.status,
+      lastLoginAt: updatedUser.lastLoginAt,
+      createdAt: updatedUser.createdAt,
+    };
+
+    return ApiResponseDto.success(data);
+  }
+
+  @Delete('users/:id')
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiOperation({ summary: '删除用户账号' })
+  @ApiResponse({ status: 200, description: '删除成功' })
+  async deleteUser(@Param('id') id: string): Promise<ApiResponseDto<void>> {
+    await this.prisma.user.delete({
+      where: { id },
+    });
+
+    return ApiResponseDto.success(null);
+  }
+
+  // ==================== 员工管理接口（向后兼容） ====================
+
+  @Get('staff')
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiOperation({ summary: '获取员工列表' })
+  @ApiResponse({ status: 200, description: '员工列表' })
+  async getStaffList(): Promise<ApiResponseDto<StaffResponseDto[]>> {
+    const staffList = await this.prisma.user.findMany({
+      where: {
+        role: { in: ['STAFF', 'ADMIN'] },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const data = staffList.map((user) => ({
+      id: user.id,
+      phone: user.phone!,
+      nickname: user.nickname || '',
+      role: user.role,
+      status: user.status,
+      lastLoginAt: user.lastLoginAt,
+      createdAt: user.createdAt,
+    }));
+
+    return ApiResponseDto.success(data);
+  }
+
+  @Post('staff')
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiOperation({ summary: '创建员工账号' })
+  @ApiResponse({ status: 200, description: '员工创建成功' })
+  async createStaff(
+    @Body() dto: CreateStaffDto,
+  ): Promise<ApiResponseDto<StaffResponseDto | null>> {
+    // 检查手机号是否已存在
+    const existingUser = await this.prisma.user.findUnique({
+      where: { phone: dto.phone },
+    });
+
+    if (existingUser) {
+      return ApiResponseDto.error(400, '该手机号已被使用');
+    }
+
+    // 创建员工账号
+    const newStaff = await this.prisma.user.create({
+      data: {
+        phone: dto.phone,
+        nickname: dto.nickname,
+        role: 'STAFF',
+        status: 'ACTIVE',
+      },
+    });
+
+    const data: StaffResponseDto = {
+      id: newStaff.id,
+      phone: newStaff.phone!,
+      nickname: newStaff.nickname!,
+      role: newStaff.role,
+      status: newStaff.status,
+      createdAt: newStaff.createdAt,
+    };
+
+    return ApiResponseDto.success(data);
+  }
+
+  @Put('staff/:id')
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiOperation({ summary: '更新员工信息' })
+  @ApiResponse({ status: 200, description: '更新成功' })
+  async updateStaff(
+    @Param('id') id: string,
+    @Body() dto: UpdateStaffDto,
+  ): Promise<ApiResponseDto<StaffResponseDto>> {
+    const updatedStaff = await this.prisma.user.update({
+      where: { id },
+      data: dto,
+    });
+
+    const data: StaffResponseDto = {
+      id: updatedStaff.id,
+      phone: updatedStaff.phone!,
+      nickname: updatedStaff.nickname!,
+      role: updatedStaff.role,
+      status: updatedStaff.status,
+      lastLoginAt: updatedStaff.lastLoginAt,
+      createdAt: updatedStaff.createdAt,
+    };
+
+    return ApiResponseDto.success(data);
+  }
+
+  @Delete('staff/:id')
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiOperation({ summary: '删除员工账号' })
+  @ApiResponse({ status: 200, description: '删除成功' })
+  async deleteStaff(@Param('id') id: string): Promise<ApiResponseDto<void>> {
+    await this.prisma.user.delete({
+      where: { id },
+    });
+
+    return ApiResponseDto.success(null);
   }
 }
 

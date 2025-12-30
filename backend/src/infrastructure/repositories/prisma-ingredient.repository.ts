@@ -32,7 +32,7 @@ export class PrismaIngredientRepository implements IngredientRepository {
 
   async findAll(): Promise<Ingredient[]> {
     const records = await this.prisma.ingredient.findMany({
-      orderBy: { createdAt: 'desc' }
+      orderBy: { updatedAt: 'desc' }
     });
     return records.map(r => this.mapToDomain(r));
   }

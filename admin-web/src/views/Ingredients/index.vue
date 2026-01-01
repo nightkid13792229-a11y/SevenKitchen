@@ -244,11 +244,12 @@
       :title="dialogTitle"
       width="800px"
       :close-on-click-modal="false"
+      @close="handleDialogClose"
     >
       <IngredientFormComponent
         :ingredient="currentIngredient"
         @submit="handleSubmit"
-        @cancel="dialogVisible = false"
+        @cancel="handleDialogClose"
       />
     </el-dialog>
 
@@ -322,7 +323,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, nextTick } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ElTable } from 'element-plus'
 import { Plus, Search, Refresh } from '@element-plus/icons-vue'
@@ -482,9 +483,28 @@ const handleCreate = () => {
   dialogVisible.value = true
 }
 
-const handleEdit = (ingredient: Ingredient) => {
-  currentIngredient.value = { ...ingredient }
-  dialogVisible.value = true
+const handleDialogClose = () => {
+  dialogVisible.value = false
+  currentIngredient.value = undefined  // 重置状态，避免污染
+}
+
+const handleEdit = async (ingredient: Ingredient) => {
+  // Fetch full ingredient details including properties
+  try {
+    loading.value = true
+    const fullIngredient = await ingredientApi.getDetail(ingredient.id)
+
+    // Open dialog first
+    dialogVisible.value = true
+
+    // Then set the ingredient data after dialog is mounted
+    await nextTick()
+    currentIngredient.value = fullIngredient
+  } catch (error: any) {
+    ElMessage.error(error.message || '获取原料详情失败')
+  } finally {
+    loading.value = false
+  }
 }
 
 const handleViewUsage = async (ingredient: Ingredient) => {
@@ -616,6 +636,7 @@ const handleSubmit = async (data: IngredientForm) => {
       ElMessage.success('创建成功')
     }
     dialogVisible.value = false
+    currentIngredient.value = undefined  // 重置状态，避免污染
     await loadData()
   } catch (error: any) {
     ElMessage.error(error.message || '操作失败')

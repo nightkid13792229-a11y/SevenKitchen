@@ -19,6 +19,14 @@ export interface FoodProperties {
 }
 
 /**
+ * 有效成分含量值（包含数值和单位）
+ */
+export interface ActiveNutrientValue {
+  value: number;  // 显示的数值（原始输入值）
+  unit: string;   // 单位 (mg, g, μg, IU, %)
+}
+
+/**
  * Supplement Properties (when Ingredient.type === 'SUPPLEMENT')
  */
 export interface SupplementProperties {
@@ -27,9 +35,9 @@ export interface SupplementProperties {
 
   // 有效成分浓度表 (Key-Value Map)
   // 允许一款补剂包含多种营养素。
-  // Key: 营养素标准代码 (e.g. "calcium_mg", "vitamin_d3_iu")
-  // Value: 每1个基准单位(1g粉 or 1粒) 含有的数值
-  active_nutrients: Record<string, number>;
+  // Key: 营养素名称 (e.g. "钙", "维生素D3", "EPA")
+  // Value: {value: 显示数值, unit: 单位} - 保存用户输入的原始值和单位
+  active_nutrients: Record<string, ActiveNutrientValue>;
 
   // 个性化损耗率 (Override Global)
   // 默认建议 1.05 (5%)。鱼油可设为 1.0, 易损粉末设为 1.10

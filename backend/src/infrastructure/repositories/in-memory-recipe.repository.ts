@@ -7,6 +7,8 @@ import { Injectable } from '@nestjs/common';
 import type {
   Recipe,
   RecipeRepository,
+  FindRecipesOptions,
+  FilterOptions,
 } from '../../domain/recipe/recipe.repository';
 
 @Injectable()
@@ -45,11 +47,22 @@ export class InMemoryRecipeRepository implements RecipeRepository {
     return Promise.resolve(recipe || null);
   }
 
-  async findPublicRecipes(): Promise<Recipe[]> {
+  async findPublicRecipes(_options?: FindRecipesOptions): Promise<Recipe[]> {
+    // TODO: Implement filtering logic
     return Promise.resolve(
       Array.from(this.recipes.values()).filter(
         (r) => r.status === 'PUBLIC', // TODO: Use enum when Recipe interface is fully defined
       ),
     );
+  }
+
+  async getFilterOptions(): Promise<FilterOptions> {
+    // TODO: Implement filter options aggregation
+    return Promise.resolve({
+      lifeStages: [],
+      healthTags: [],
+      ingredientTags: [],
+      total: this.recipes.size,
+    });
   }
 }

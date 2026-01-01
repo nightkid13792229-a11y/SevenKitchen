@@ -3,7 +3,14 @@
     {
       "path": "pages/home/index",
       "style": {
-        "navigationBarTitleText": "七号厨房"
+        "navigationBarTitleText": "七号厨房",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/me/index",
+      "style": {
+        "navigationBarTitleText": "我的"
       }
     },
     {
@@ -16,12 +23,6 @@
       "path": "pages/dog-create/index",
       "style": {
         "navigationBarTitleText": "创建狗狗档案"
-      }
-    },
-    {
-      "path": "pages/recipe-list/index",
-      "style": {
-        "navigationBarTitleText": "食谱列表"
       }
     },
     {
@@ -61,6 +62,72 @@
       }
     },
     {
+      "path": "pages/calculate-portion/index",
+      "style": {
+        "navigationBarTitleText": "饭量计算"
+      }
+    },
+    {
+      "path": "pages/weight-management/index",
+      "style": {
+        "navigationBarTitleText": "体重管理"
+      }
+    },
+    {
+      "path": "pages/health-management/index",
+      "style": {
+        "navigationBarTitleText": "健康管理"
+      }
+    },
+    {
+      "path": "pages/health-management/vaccines/list",
+      "style": {
+        "navigationBarTitleText": "疫苗记录"
+      }
+    },
+    {
+      "path": "pages/health-management/vaccines/edit",
+      "style": {
+        "navigationBarTitleText": "编辑疫苗记录"
+      }
+    },
+    {
+      "path": "pages/health-management/checkups/list",
+      "style": {
+        "navigationBarTitleText": "体检记录"
+      }
+    },
+    {
+      "path": "pages/health-management/checkups/edit",
+      "style": {
+        "navigationBarTitleText": "编辑体检记录"
+      }
+    },
+    {
+      "path": "pages/health-management/medical-records/list",
+      "style": {
+        "navigationBarTitleText": "病历记录"
+      }
+    },
+    {
+      "path": "pages/health-management/medical-records/edit",
+      "style": {
+        "navigationBarTitleText": "编辑病历记录"
+      }
+    },
+    {
+      "path": "pages/health-management/allergies/list",
+      "style": {
+        "navigationBarTitleText": "过敏记录"
+      }
+    },
+    {
+      "path": "pages/health-management/allergies/edit",
+      "style": {
+        "navigationBarTitleText": "编辑过敏记录"
+      }
+    },
+    {
       "path": "pages/snapshot/index",
       "style": {
         "navigationBarTitleText": "食谱快照"
@@ -76,6 +143,12 @@
       "path": "pages/owner-info/index",
       "style": {
         "navigationBarTitleText": "主人信息"
+      }
+    },
+    {
+      "path": "pages/login/index",
+      "style": {
+        "navigationBarTitleText": "微信登录"
       }
     }
   ],
@@ -98,31 +171,10 @@
         "text": "首页"
       },
       {
-        "pagePath": "pages/dog-profile-list/index",
-        "iconPath": "static/tabbar/dog.png",
-        "selectedIconPath": "static/tabbar/dog-active.png",
-        "text": "我的爱犬"
-      },
-      {
-        "pagePath": "pages/recipe-list/index",
-        "iconPath": "static/tabbar/recipe.png",
-        "selectedIconPath": "static/tabbar/recipe-active.png",
-        "text": "食谱橱窗"
-      },
-      {
-        "pagePath": "pages/orders-list/index",
-        "iconPath": "static/tabbar/order.png",
-        "selectedIconPath": "static/tabbar/order-active.png",
-        "text": "我的订单"
-      }
-    ]
-  },
-  "condition": {
-    "current": 0,
-    "list": [
-      {
-        "name": "食谱列表",
-        "path": "pages/recipe-list/index"
+        "pagePath": "pages/me/index",
+        "iconPath": "static/tabbar/me.png",
+        "selectedIconPath": "static/tabbar/me-active.png",
+        "text": "我的"
       }
     ]
   }

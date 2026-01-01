@@ -629,6 +629,9 @@ const packagingProperties = reactive<PackagingProperties>(
   (formData.type === IngredientType.PACKAGING ? formData.properties : getDefaultPackagingProperties())
 )
 
+// 编辑模式判断
+const isEdit = computed(() => !!props.ingredient?.id)
+
 // 有效成分列表管理
 interface NutrientItem {
   name: string
@@ -713,14 +716,30 @@ const calculateConcentration = (nutrient: NutrientItem, displayValue: number | u
   nutrient.value = valueInGrams
 }
 
+// 将显示值和单位转换为克数（用于内部计算）
+const convertToGrams = (displayValue: number, unit: string): number => {
+  const unitConversions: Record<string, number> = {
+    'mg': 0.001,      // 1mg = 0.001g
+    'g': 1,           // 1g = 1g
+    'μg': 0.000001,   // 1μg = 0.000001g
+    'IU': 0.001,      // 1IU ≈ 0.001g (简化处理，实际需要根据具体营养素换算)
+    '%': 0.01         // 1% = 0.01g
+  }
+  return displayValue * (unitConversions[unit] || 0.001)
+}
+
 // 监听成分列表变化，同步到active_nutrients对象
 watch(
   () => nutrientList.value,
   (newList) => {
-    const activeNutrients: Record<string, number> = {}
+    const activeNutrients: Record<string, {value: number, unit: string}> = {}
     newList.forEach(item => {
-      if (item.name && item.value > 0) {
-        activeNutrients[item.name] = item.value
+      if (item.name && item.displayValue > 0) {
+        // 保存原始显示值和单位
+        activeNutrients[item.name] = {
+          value: item.displayValue,
+          unit: item.unit
+        }
       }
     })
     supplementProperties.active_nutrients = activeNutrients
@@ -1167,16 +1186,14 @@ watch(() => props.ingredient, (newIngredient, oldIngredient) => {
       Object.assign(foodProperties, newIngredient.properties as FoodProperties)
     } else if (newIngredient.type === IngredientType.SUPPLEMENT) {
       Object.assign(supplementProperties, newIngredient.properties as SupplementProperties)
-      // ✅ Bug 2 修复: 转换active_nutrients对象为nutrientList数组
-      // active_nutrients中存储的是"每基准单位的含量(克)"
-      // 需要转换为用户界面显示的数值(默认mg)
+      // ✅ 从active_nutrients读取原始值和单位（新格式: {value: number, unit: string}）
       const nutrients = (newIngredient.properties as SupplementProperties).active_nutrients || {}
-      const nutrientArray = Object.entries(nutrients).map(([name, value]) => {
-        // 直接将克数转换为毫克显示
-        // value是每基准单位含有的克数，displayValue是显示的mg值
-        const displayValue = value / 0.001  // 转换为mg
-        const unit = 'mg'
-        return { name, value, displayValue, unit }
+      const nutrientArray = Object.entries(nutrients).map(([name, data]) => {
+        // data 现在是 {value: number, unit: string} 格式
+        const displayValue = (data as any).value  // 原始显示值
+        const unit = (data as any).unit           // 单位
+        const valueInGrams = convertToGrams(displayValue, unit)  // 转换为克用于内部计算
+        return { name, value: valueInGrams, displayValue, unit }
       })
       nutrientList.value = nutrientArray.length > 0 ? nutrientArray : [{ name: '', value: 0, displayValue: 0, unit: 'mg' }]
     } else if (newIngredient.type === IngredientType.PACKAGING) {

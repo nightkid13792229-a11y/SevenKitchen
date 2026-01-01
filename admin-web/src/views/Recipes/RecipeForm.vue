@@ -1,0 +1,1882 @@
+<template>
+  <div class="recipe-form-page">
+    <el-page-header @back="handleBack" class="page-header">
+      <template #content>
+        {{ isReadOnly ? '查看食谱' : (isEdit ? '编辑食谱' : '新建食谱') }}
+      </template>
+    </el-page-header>
+
+    <el-card v-loading="loading" class="form-card">
+      <el-form
+        ref="formRef"
+        :model="form"
+        :rules="rules"
+        :disabled="isReadOnly"
+        label-width="140px"
+        @submit.prevent="handleSubmit"
+      >
+        <!-- Basic Info -->
+        <div class="form-section">
+          <h3 class="section-title">基础信息</h3>
+
+          <el-form-item label="食谱名称" prop="name">
+            <el-input
+              v-model="form.name"
+              placeholder="请输入食谱名称"
+              maxlength="100"
+              show-word-limit
+            />
+          </el-form-item>
+
+          <el-form-item label="封面图" prop="coverImageUrl">
+            <div class="image-upload">
+              <el-upload
+                class="cover-uploader"
+                :show-file-list="false"
+                :before-upload="handleCoverUpload"
+                accept="image/*"
+              >
+                <img v-if="form.coverImageUrl" :src="form.coverImageUrl" class="cover-image" />
+                <div v-else class="upload-placeholder">
+                  <el-icon><Plus /></el-icon>
+                  <span>上传封面</span>
+                </div>
+              </el-upload>
+              <div v-if="form.coverImageUrl" class="image-actions">
+                <el-button size="small" type="danger" @click="removeCoverImage">
+                  删除
+                </el-button>
+              </div>
+            </div>
+            <div class="upload-tips">
+              <el-icon color="#909399"><InfoFilled /></el-icon>
+              <span>图片要求：16:9比例，文件大小≤200KB</span>
+            </div>
+          </el-form-item>
+
+          <el-form-item label="详情图集">
+            <div class="detail-images-upload">
+              <div class="image-list">
+                <div
+                  v-for="(image, index) in form.detailImages"
+                  :key="index"
+                  class="image-item"
+                >
+                  <el-image :src="image" fit="cover" class="detail-image" />
+                  <div class="image-mask">
+                    <el-icon @click="removeDetailImage(index)"><Delete /></el-icon>
+                  </div>
+                </div>
+              </div>
+              <el-upload
+                :show-file-list="false"
+                :before-upload="handleDetailImageUpload"
+                accept="image/*"
+                class="upload-btn"
+              >
+                <div class="upload-placeholder-small">
+                  <el-icon><Plus /></el-icon>
+                </div>
+              </el-upload>
+            </div>
+          </el-form-item>
+
+          <el-form-item label="视频链接">
+            <el-input
+              v-model="form.videoUrl"
+              placeholder="请输入视频链接（可选）"
+            />
+          </el-form-item>
+
+          <el-form-item label="食谱描述">
+            <el-input
+              v-model="form.description"
+              type="textarea"
+              :rows="4"
+              placeholder="请输入食谱描述"
+              maxlength="500"
+              show-word-limit
+            />
+          </el-form-item>
+
+          <el-form-item label="设计来源">
+            <!-- View mode: display as text -->
+            <div v-if="isReadOnly" style="padding: 0 11px; color: #606266;">
+              {{ form.designSource || '-' }}
+            </div>
+            <!-- Edit mode: display as select -->
+            <div v-else style="display: flex; gap: 8px">
+              <el-select
+                v-model="form.designSource"
+                placeholder="请选择设计来源"
+                style="flex: 1"
+                clearable
+                filterable
+                allow-create
+              >
+                <el-option
+                  v-for="source in designSources"
+                  :key="source.id"
+                  :label="source.name"
+                  :value="source.name"
+                />
+              </el-select>
+              <el-button @click="showDesignSourceDialog">管理</el-button>
+            </div>
+            <div v-if="!isReadOnly" style="margin-top: 8px; color: #909399; font-size: 12px">
+              💡 提示：可从列表选择，或手动输入新的设计来源
+            </div>
+          </el-form-item>
+
+          <el-form-item label="食谱状态">
+            <el-select v-model="form.status" placeholder="请选择食谱状态" style="width: 100%">
+              <el-option label="草稿" :value="RecipeStatus.DRAFT" />
+              <el-option label="公开食谱" :value="RecipeStatus.PUBLIC" />
+              <el-option label="私密定制" :value="RecipeStatus.PRIVATE_CUSTOM" />
+            </el-select>
+            <div style="margin-top: 8px; color: #909399; font-size: 12px">
+              💡 提示：
+              <br />• 草稿：仅管理员可见，可继续编辑
+              <br />• 公开食谱：所有用户可见，可用于生成订单
+              <br />• 私密定制：仅对特定用户可见的定制食谱
+            </div>
+          </el-form-item>
+        </div>
+
+        <!-- Ingredients -->
+        <div class="form-section">
+          <h3 class="section-title">原料清单</h3>
+
+          <div class="ingredients-section">
+            <div class="ingredients-header">
+              <h3>已选原料</h3>
+              <el-button type="primary" :icon="Plus" @click="showAddIngredientDialog">
+                添加原料
+              </el-button>
+            </div>
+
+            <el-card v-if="form.items && form.items.length > 0" shadow="never">
+              <!-- Table Header -->
+              <div class="ingredients-table-header">
+                <div class="header-cell header-drag" v-if="!isReadOnly"></div>
+                <div class="header-cell">原料名称</div>
+                <div class="header-cell">类型</div>
+                <div class="header-cell">制备方法</div>
+                <div class="header-cell">占比%</div>
+                <div class="header-cell">营养目标</div>
+                <div class="header-cell">操作</div>
+              </div>
+
+              <!-- Draggable Items -->
+              <VueDraggable
+                v-model="form.items"
+                item-key="ingredientId"
+                handle=".drag-handle"
+                :animation="150"
+                ghost-class="sortable-ghost"
+                chosen-class="sortable-chosen"
+                drag-class="sortable-drag"
+                :disabled="isReadOnly"
+              >
+                <template #item="{ element: item, index }">
+                  <div class="ingredient-row">
+                    <div class="row-cell row-drag" v-if="!isReadOnly">
+                      <span class="drag-handle">⋮⋮</span>
+                    </div>
+                    <div class="row-cell ingredient-name">{{ item.ingredientName }}</div>
+                    <div class="row-cell ingredient-type">
+                      <el-tag :type="getTypeTagType(item.ingredientType)" size="small">
+                        {{ IngredientTypeLabels[item.ingredientType] || item.ingredientType }}
+                      </el-tag>
+                    </div>
+                    <div class="row-cell preparation-method">
+                      {{ formatPreparationMethods(item.preparationMethod) }}
+                    </div>
+                    <div class="row-cell ratio-percent">
+                      {{ item.ratioPercent !== undefined ? item.ratioPercent + '%' : '-' }}
+                    </div>
+                    <div class="row-cell nutrient-target">
+                      <span v-if="item.nutrientTargetKey">
+                        {{ formatNutrientTarget(item) }}
+                      </span>
+                      <span v-else>-</span>
+                    </div>
+                    <div class="row-cell row-buttons">
+                      <el-button type="primary" size="small" link @click="editIngredient(item, index)">
+                        编辑
+                      </el-button>
+                      <el-divider direction="vertical" />
+                      <el-button type="danger" size="small" link @click="removeIngredient(index)">
+                        删除
+                      </el-button>
+                    </div>
+                  </div>
+                </template>
+              </VueDraggable>
+            </el-card>
+
+            <el-card v-else shadow="never">
+              <el-empty description="暂无原料，请点击上方按钮添加" :image-size="80" />
+            </el-card>
+          </div>
+        </div>
+
+        <!-- Nutrition Info -->
+        <div class="form-section">
+          <h3 class="section-title">营养信息</h3>
+
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="营养标准" prop="nutritionStandard">
+                <el-select v-model="form.nutritionStandard" placeholder="请选择营养标准" style="width: 100%">
+                  <el-option label="NRC 2006" :value="NutritionStandard.NRC_2006" />
+                  <el-option label="FEDIAF 2021" :value="NutritionStandard.FEDIAF_2021" />
+                  <el-option label="FEDIAF 2024" :value="NutritionStandard.FEDIAF_2024" />
+                  <el-option label="AAFCO 2022" :value="NutritionStandard.AAFCO_2022" />
+                </el-select>
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="能量密度" prop="energyDensityKcalPerKg">
+                <el-input-number
+                  v-model="form.energyDensityKcalPerKg"
+                  :min="0"
+                  :max="10000"
+                  :precision="0"
+                  placeholder="请输入能量密度"
+                  style="width: calc(100% - 70px)"
+                />
+                <span class="unit-label">kcal/kg</span>
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="蛋白质 (DM%)">
+                <el-input-number
+                  v-model="nutritionData.protein_dm_pct"
+                  :min="0"
+                  :max="100"
+                  :precision="2"
+                  placeholder="蛋白质"
+                  style="width: 100%"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="脂肪 (DM%)">
+                <el-input-number
+                  v-model="nutritionData.fat_dm_pct"
+                  :min="0"
+                  :max="100"
+                  :precision="2"
+                  placeholder="脂肪"
+                  style="width: 100%"
+                />
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="灰分 (DM%)">
+                <el-input-number
+                  v-model="nutritionData.ash_dm_pct"
+                  :min="0"
+                  :max="100"
+                  :precision="2"
+                  placeholder="灰分"
+                  style="width: 100%"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="含水量 (%)">
+                <el-input-number
+                  v-model="nutritionData.moisture_pct"
+                  :min="0"
+                  :max="100"
+                  :precision="2"
+                  placeholder="含水量"
+                  style="width: 100%"
+                />
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="膳食纤维 (DM%)">
+                <el-input-number
+                  v-model="nutritionData.fiber_dm_pct"
+                  :min="0"
+                  :max="100"
+                  :precision="2"
+                  placeholder="膳食纤维"
+                  style="width: 100%"
+                />
+              </el-form-item>
+            </el-col>
+            <el-col :span="12">
+              <el-form-item label="碳水 (DM%)">
+                <el-input-number
+                  v-model="nutritionData.carbs_dm_pct"
+                  :min="0"
+                  :max="100"
+                  :precision="2"
+                  placeholder="碳水"
+                  style="width: 100%"
+                />
+              </el-form-item>
+            </el-col>
+          </el-row>
+
+          <el-row :gutter="20">
+            <el-col :span="12">
+              <el-form-item label="钙磷比">
+                <el-input-number
+                  v-model="nutritionData.ca_p_ratio"
+                  :min="0"
+                  :max="5"
+                  :precision="2"
+                  placeholder="钙磷比"
+                  style="width: 100%"
+                />
+              </el-form-item>
+            </el-col>
+          </el-row>
+        </div>
+
+        <!-- Target Audience -->
+        <div class="form-section">
+          <h3 class="section-title">目标受众</h3>
+
+          <el-form-item label="适用生命阶段">
+            <el-checkbox-group v-model="form.applicableLifeStages">
+              <el-checkbox
+                v-for="option in lifeStageOptions"
+                :key="option.value"
+                :value="option.value"
+              >
+                {{ option.label }}
+              </el-checkbox>
+            </el-checkbox-group>
+          </el-form-item>
+
+          <el-form-item label="健康标签">
+            <div style="display: flex; gap: 8px; margin-bottom: 8px">
+              <el-checkbox-group v-model="form.targetHealthTags" style="flex: 1">
+                <el-checkbox
+                  v-for="option in healthTagOptions"
+                  :key="option.value"
+                  :value="option.value"
+                >
+                  {{ option.label }}
+                </el-checkbox>
+              </el-checkbox-group>
+              <el-button @click="showHealthTagDialog">管理</el-button>
+            </div>
+            <div style="color: #909399; font-size: 12px">
+              💡 提示：点击"管理"按钮可以添加、编辑或删除健康标签
+            </div>
+          </el-form-item>
+        </div>
+
+        <!-- Production Info -->
+        <div class="form-section">
+          <h3 class="section-title">生产信息</h3>
+
+          <el-form-item label="生产损耗率 (%)">
+            <el-input-number
+              v-model="form.productionLossRate"
+              :min="0"
+              :max="50"
+              :precision="2"
+              placeholder="生产损耗率"
+            />
+          </el-form-item>
+
+          <el-form-item label="工时 (小时)">
+            <el-input-number
+              v-model="form.batchLaborHours"
+              :min="0"
+              :max="24"
+              :precision="1"
+              placeholder="工时"
+            />
+          </el-form-item>
+
+          <el-form-item label="烹饪步骤">
+            <el-input
+              v-model="form.productionSteps"
+              type="textarea"
+              :rows="6"
+              placeholder="请输入烹饪步骤"
+              maxlength="2000"
+              show-word-limit
+            />
+          </el-form-item>
+        </div>
+
+        <!-- Actions -->
+        <el-form-item>
+          <!-- View Mode: Show Edit button -->
+          <template v-if="isReadOnly">
+            <el-button
+              type="primary"
+              :disabled="false"
+              @click="handleEnterEditMode"
+            >
+              编辑
+            </el-button>
+            <el-button :disabled="false" @click="handleBack">返回</el-button>
+          </template>
+
+          <!-- Edit/Create Mode: Show Save buttons -->
+          <template v-else>
+            <el-button
+              type="primary"
+              :loading="submitting"
+              :disabled="false"
+              @click="handleSubmit"
+            >
+              {{ isEdit ? '保存更新' : '创建食谱' }}
+            </el-button>
+            <el-button :disabled="false" @click="handleSaveDraft">保存草稿</el-button>
+            <el-button :disabled="false" @click="handleBack">取消</el-button>
+          </template>
+        </el-form-item>
+      </el-form>
+    </el-card>
+
+    <!-- Add/Edit Ingredient Dialog -->
+    <el-dialog
+      v-model="ingredientDialogVisible"
+      :title="editingIngredientIndex >= 0 ? '编辑原料' : '添加原料'"
+      width="600px"
+      @close="resetIngredientForm"
+    >
+      <el-form :model="ingredientForm" label-width="120px">
+        <el-form-item label="原料" required>
+          <el-select
+            v-model="ingredientForm.ingredientId"
+            placeholder="请选择原料"
+            filterable
+            :disabled="editingIngredientIndex >= 0"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="ingredient in availableIngredients"
+              :key="ingredient.id"
+              :label="ingredient.name"
+              :value="ingredient.id"
+            >
+              <div style="display: flex; flex-direction: column; gap: 4px">
+                <div style="display: flex; align-items: center; gap: 8px">
+                  <span style="font-weight: 500">{{ ingredient.name }}</span>
+                  <span v-if="ingredient.brand" style="color: #909399; font-size: 12px">
+                    {{ ingredient.brand }}
+                  </span>
+                  <span v-if="ingredient.productModel" style="color: #909399; font-size: 12px">
+                    {{ ingredient.productModel }}
+                  </span>
+                </div>
+                <div style="display: flex; gap: 16px; font-size: 12px; color: #67c23a">
+                  <span v-if="ingredient.purchaseChannel">
+                    📍 {{ ingredient.purchaseChannel }}
+                  </span>
+                  <span>
+                    💰 ¥{{ ingredient.currentPricePerPurchaseUnit }}/{{ ingredient.purchaseUnit }}
+                  </span>
+                  <span style="color: #909399">
+                    {{ IngredientTypeLabels[ingredient.type] || ingredient.type }}
+                  </span>
+                </div>
+              </div>
+            </el-option>
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="制备方法">
+          <div style="display: flex; gap: 8px; margin-bottom: 8px">
+            <div class="tag-selector-wrapper" style="flex: 1">
+              <div v-if="preparationMethods.length > 0" class="tag-list">
+                <el-tag
+                  v-for="method in preparationMethods"
+                  :key="method.id"
+                  class="tag-item"
+                  :type="ingredientForm.preparationMethods.includes(method.id) ? 'primary' : 'info'"
+                  @click="togglePreparationMethod(method.id)"
+                  style="cursor: pointer"
+                >
+                  {{ method.name }}
+                </el-tag>
+              </div>
+              <div v-else class="empty-tags-state">
+                <el-empty description="暂无制备方法" :image-size="60" />
+              </div>
+            </div>
+            <el-button @click="showPreparationMethodDialog">管理</el-button>
+          </div>
+          <div style="color: #909399; font-size: 12px">
+            💡 提示：点击标签选择制备方法，可多选
+          </div>
+        </el-form-item>
+
+        <el-form-item label="占比 (%)">
+          <el-input-number
+            v-model="ingredientForm.ratioPercent"
+            :min="0"
+            :max="100"
+            :precision="2"
+            placeholder="0-100"
+            style="width: 100%"
+          />
+        </el-form-item>
+
+        <el-divider content-position="left">营养目标（补剂专用，可选）</el-divider>
+
+        <el-form-item label="营养素">
+          <el-select
+            v-model="ingredientForm.nutrientTargetKey"
+            placeholder="请选择营养素"
+            style="width: 100%"
+            :disabled="!selectedIngredientIsSupplement"
+            clearable
+          >
+            <el-option
+              v-for="(label, key) in availableNutrients"
+              :key="key"
+              :label="label"
+              :value="key"
+            />
+          </el-select>
+          <div v-if="!selectedIngredientIsSupplement && ingredientForm.ingredientId" style="margin-top: 8px; color: #f56c6c; font-size: 12px">
+            ⚠️ 仅补剂类型原料可设置营养目标
+          </div>
+        </el-form-item>
+
+        <el-form-item label="目标值">
+          <el-input-number
+            v-model="ingredientForm.nutrientTargetValue"
+            :min="0"
+            :precision="2"
+            :disabled="!ingredientForm.nutrientTargetKey"
+            placeholder="目标数值"
+            style="width: 100%"
+          />
+          <div style="display: flex; align-items: center; margin-top: 8px;">
+            <span v-if="nutrientUnit" style="margin-right: 12px; color: #909399; font-size: 12px">
+              单位: {{ nutrientUnit }}
+            </span>
+            <span style="color: #606266; font-size: 12px">
+              💡 设置该补剂在食谱中的目标含量（例如：每1000g食谱含钙1200mg）
+            </span>
+          </div>
+        </el-form-item>
+      </el-form>
+
+      <template #footer>
+        <el-button @click="ingredientDialogVisible = false">取消</el-button>
+        <el-button type="primary" @click="saveIngredient">确定</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Design Source Management Dialog -->
+    <el-dialog
+      v-model="designSourceDialogVisible"
+      title="管理设计来源"
+      width="600px"
+    >
+      <div style="margin-bottom: 16px">
+        <el-input
+          v-model="newDesignSourceName"
+          placeholder="输入新的设计来源名称"
+          style="width: calc(100% - 80px); margin-right: 8px"
+          @keyup.enter="addDesignSource"
+        />
+        <el-button type="primary" @click="addDesignSource">添加</el-button>
+      </div>
+
+      <el-table :data="designSources" style="width: 100%" border>
+        <el-table-column prop="name" label="名称" />
+        <el-table-column label="操作" width="150" align="center">
+          <template #default="{ row }">
+            <el-button
+              size="small"
+              @click="editDesignSource(row)"
+            >
+              编辑
+            </el-button>
+            <el-button
+              size="small"
+              type="danger"
+              @click="deleteDesignSource(row.id)"
+            >
+              删除
+            </el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <template #footer>
+        <el-button @click="designSourceDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Health Tag Management Dialog -->
+    <el-dialog
+      v-model="healthTagDialogVisible"
+      title="管理健康标签"
+      width="600px"
+    >
+      <div style="margin-bottom: 16px">
+        <el-input
+          v-model="newHealthTagName"
+          placeholder="输入新的健康标签名称"
+          style="width: calc(100% - 80px); margin-right: 8px"
+          @keyup.enter="addHealthTag"
+        />
+        <el-button type="primary" @click="addHealthTag">添加</el-button>
+      </div>
+
+      <el-table :data="healthTags" style="width: 100%" border>
+        <el-table-column prop="name" label="名称" />
+        <el-table-column label="操作" width="150" align="center">
+          <template #default="{ row }">
+            <el-button size="small" @click="editHealthTag(row)">编辑</el-button>
+            <el-button size="small" type="danger" @click="deleteHealthTag(row.id)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <template #footer>
+        <el-button @click="healthTagDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+
+    <!-- Preparation Method Management Dialog -->
+    <el-dialog
+      v-model="preparationMethodDialogVisible"
+      title="管理制备方法"
+      width="600px"
+    >
+      <div style="margin-bottom: 16px">
+        <el-input
+          v-model="newPreparationMethodName"
+          placeholder="输入新的制备方法名称（如：煮熟、切碎、蒸熟等）"
+          style="width: calc(100% - 80px); margin-right: 8px"
+          @keyup.enter="addPreparationMethod"
+        />
+        <el-button type="primary" @click="addPreparationMethod">添加</el-button>
+      </div>
+
+      <el-table :data="preparationMethods" style="width: 100%" border>
+        <el-table-column prop="name" label="名称" />
+        <el-table-column label="操作" width="150" align="center">
+          <template #default="{ row }">
+            <el-button size="small" @click="editPreparationMethod(row)">编辑</el-button>
+            <el-button size="small" type="danger" @click="deletePreparationMethod(row.id)">删除</el-button>
+          </template>
+        </el-table-column>
+      </el-table>
+
+      <template #footer>
+        <el-button @click="preparationMethodDialogVisible = false">关闭</el-button>
+      </template>
+    </el-dialog>
+  </div>
+</template>
+
+<script setup lang="ts">
+import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
+import { ElMessage, ElMessageBox } from 'element-plus';
+import type { FormInstance, FormRules, UploadProps } from 'element-plus';
+import { Plus, Delete, InfoFilled } from '@element-plus/icons-vue';
+import VueDraggable from 'vuedraggable';
+import { recipeApi } from '@/api/recipes';
+import { recipeHealthTagApi } from '@/api/recipeHealthTags';
+import { preparationMethodApi } from '@/api/preparationMethods';
+import { inventoryApi } from '@/api';
+import { IngredientTypeLabels } from '@/types/ingredient';
+import {
+  RecipeStatus,
+  NutritionStandard,
+  type RecipeForm,
+  type RecipeItem,
+  type NutritionDetailedData,
+} from '@/types/recipe';
+
+// Enum option type
+interface EnumOption {
+  value: string;
+  label: string;
+}
+
+const router = useRouter();
+const route = useRoute();
+
+const recipeId = computed(() => route.params.id as string | undefined);
+const isEdit = computed(() => !!recipeId.value);
+const isReadOnly = computed(() => route.query.mode === 'view');
+
+// Form data
+const formRef = ref<FormInstance>();
+const loading = ref(false);
+const submitting = ref(false);
+
+const form = reactive<RecipeForm>({
+  name: '',
+  coverImageUrl: undefined,
+  detailImages: [],
+  videoUrl: undefined,
+  description: undefined,
+  designSource: undefined,
+  nutritionStandard: NutritionStandard.FEDIAF_2021,
+  energyDensityKcalPerKg: 1500,
+  items: [],
+  productionLossRate: 7,
+  batchLaborHours: 2,
+  productionSteps: undefined,
+  applicableLifeStages: [],
+  targetHealthTags: [],
+  status: RecipeStatus.DRAFT,
+});
+
+const nutritionData = reactive<NutritionDetailedData>({
+  moisture_pct: 70,
+  protein_dm_pct: 25,
+  fat_dm_pct: 15,
+  fiber_dm_pct: 3,
+  ash_dm_pct: 7,
+  carbs_dm_pct: 50,
+  ca_p_ratio: 1.2,
+  energy_density_kcal_per_kg: 1500,
+});
+
+// Ingredients data
+const availableIngredients = ref<any[]>([]);
+const ingredientDialogVisible = ref(false);
+const editingIngredientIndex = ref(-1);
+const ingredientForm = reactive({
+  ingredientId: '',
+  preparationMethods: [] as string[],
+  ratioPercent: undefined as number | undefined,
+  nutrientTargetKey: '',
+  nutrientTargetValue: undefined as number | undefined,
+});
+
+// Computed properties for nutrient target fields
+const selectedIngredient = computed(() => {
+  return availableIngredients.value.find(
+    (ing) => ing.id === ingredientForm.ingredientId
+  );
+});
+
+const selectedIngredientIsSupplement = computed(() => {
+  return selectedIngredient.value?.type === 'SUPPLEMENT';
+});
+
+const availableNutrients = computed(() => {
+  if (!selectedIngredient.value || !selectedIngredientIsSupplement.value) {
+    return {};
+  }
+
+  const activeNutrients = (selectedIngredient.value.properties as any)?.active_nutrients || {};
+
+  const result: Record<string, string> = {};
+  for (const [name, data] of Object.entries(activeNutrients)) {
+    // 新格式: data = {value: number, unit: string}
+    const nutrientValue = (data as any).value;
+    const nutrientUnit = (data as any).unit;
+    result[name] = `${name} (${nutrientValue} ${nutrientUnit} per ${selectedIngredient.value?.baseUnit || 'unit'})`;
+  }
+
+  return result;
+});
+
+const nutrientUnit = computed(() => {
+  if (!ingredientForm.nutrientTargetKey || !selectedIngredient.value) {
+    return '';
+  }
+
+  // 从 active_nutrients 对象中获取单位（新格式）
+  const activeNutrients = (selectedIngredient.value.properties as any)?.active_nutrients || {};
+  const nutrientData = activeNutrients[ingredientForm.nutrientTargetKey];
+
+  if (nutrientData && typeof nutrientData === 'object') {
+    return (nutrientData as any).unit || '';
+  }
+
+  return '';
+});
+
+// Watch for ingredient type changes to clear nutrient targets if not supplement
+watch(() => ingredientForm.ingredientId, () => {
+  const ingredient = availableIngredients.value.find(
+    (ing) => ing.id === ingredientForm.ingredientId
+  );
+
+  // Clear nutrient target fields if not a supplement
+  if (ingredient && ingredient.type !== 'SUPPLEMENT') {
+    ingredientForm.nutrientTargetKey = '';
+    ingredientForm.nutrientTargetValue = undefined;
+  }
+});
+
+// Metadata (enum options)
+const lifeStageOptions = ref<EnumOption[]>([]);
+const healthTagOptions = ref<EnumOption[]>([]);
+
+// Design source management
+const designSources = ref<Array<{ id: string; name: string }>>([]);
+const designSourceDialogVisible = ref(false);
+const newDesignSourceName = ref('');
+
+// Health tag management
+const healthTags = ref<Array<{ id: string; name: string }>>([]);
+const healthTagDialogVisible = ref(false);
+const newHealthTagName = ref('');
+
+// Helper function to map health tags to enum options
+const updateHealthTagOptions = (healthTagsData: any[]) => {
+  // Now using UUIDs directly from database, no hardcoded enum mapping
+  healthTagOptions.value = (healthTagsData || [])
+    .map((tag: any) => ({
+      value: tag.id, // Use UUID directly
+      label: tag.name,
+    }));
+  healthTags.value = healthTagsData || [];
+};
+
+// Preparation method management
+const preparationMethods = ref<Array<{ id: string; name: string }>>([]);
+const preparationMethodDialogVisible = ref(false);
+const newPreparationMethodName = ref('');
+
+// Form rules
+const rules: FormRules = {
+  name: [{ required: true, message: '请输入食谱名称', trigger: 'blur' }],
+  nutritionStandard: [{ required: true, message: '请选择营养标准', trigger: 'change' }],
+  energyDensityKcalPerKg: [{ required: true, message: '请输入能量密度', trigger: 'blur' }],
+};
+
+// Methods
+const loadRecipeDetail = async () => {
+  if (!recipeId.value) return;
+
+  loading.value = true;
+  try {
+    // Response interceptor already extracts data, so response is the actual recipe data
+    const detail = await recipeApi.getDetail(recipeId.value);
+
+    Object.assign(form, {
+      name: detail.name,
+      coverImageUrl: detail.coverImageUrl,
+      detailImages: detail.detailImages || [],
+      videoUrl: detail.videoUrl,
+      description: detail.description,
+      designSource: detail.designSource,
+      nutritionStandard: detail.nutritionStandard,
+      energyDensityKcalPerKg: detail.energyDensityKcalPerKg,
+      productionLossRate: detail.productionLossRate,
+      batchLaborHours: detail.batchLaborHours,
+      productionSteps: detail.productionSteps,
+      applicableLifeStages: detail.applicableLifeStages,
+      targetHealthTags: detail.targetHealthTags,
+      status: detail.status,
+      items: detail.items || [],
+    });
+
+    if (detail.nutritionDetailedData) {
+      Object.assign(nutritionData, detail.nutritionDetailedData);
+    }
+  } catch (error: any) {
+    ElMessage.error(error.message || '加载食谱详情失败');
+  } finally {
+    loading.value = false;
+  }
+};
+
+const handleCoverUpload: UploadProps['beforeUpload'] = async (file) => {
+  const isImage = file.type.startsWith('image/');
+  if (!isImage) {
+    ElMessage.error('只能上传图片文件');
+    return false;
+  }
+
+  // Check file size (200KB = 200 * 1024 bytes)
+  const maxSize = 200 * 1024;
+  if (file.size > maxSize) {
+    ElMessage.error(`图片大小不能超过 200KB（当前大小：${(file.size / 1024).toFixed(2)} KB）`);
+    return false;
+  }
+
+  // Check image aspect ratio (16:9)
+  const ratio = await checkImageAspectRatio(file);
+  if (!ratio.valid) {
+    ElMessage.error(`图片比例必须为 16:9（当前比例：${ratio.currentRatio}）`);
+    return false;
+  }
+
+  try {
+    const result = await recipeApi.uploadImage(file);
+    form.coverImageUrl = result.url;
+    ElMessage.success('上传成功');
+  } catch (error: any) {
+    ElMessage.error(error.message || '上传失败');
+  }
+
+  return false;
+};
+
+// Helper function to check image aspect ratio
+const checkImageAspectRatio = (file: File): Promise<{ valid: boolean; currentRatio: string }> => {
+  return new Promise((resolve) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const width = img.naturalWidth;
+      const height = img.naturalHeight;
+      const ratio = width / height;
+      const targetRatio = 16 / 9;
+
+      // Allow 5% tolerance
+      const tolerance = 0.05;
+      const isValid = Math.abs(ratio - targetRatio) <= tolerance;
+
+      resolve({
+        valid: isValid,
+        currentRatio: `${width}:${height}`
+      });
+    };
+
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve({ valid: true, currentRatio: 'unknown' }); // Allow upload if we can't check
+    };
+
+    img.src = url;
+  });
+};
+
+const handleDetailImageUpload: UploadProps['beforeUpload'] = async (file) => {
+  const isImage = file.type.startsWith('image/');
+  if (!isImage) {
+    ElMessage.error('只能上传图片文件');
+    return false;
+  }
+
+  const isLt5M = file.size / 1024 / 1024 < 5;
+  if (!isLt5M) {
+    ElMessage.error('图片大小不能超过 5MB');
+    return false;
+  }
+
+  try {
+    const result = await recipeApi.uploadImage(file);
+    form.detailImages!.push(result.url);
+    ElMessage.success('上传成功');
+  } catch (error: any) {
+    ElMessage.error(error.message || '上传失败');
+  }
+
+  return false;
+};
+
+const removeDetailImage = async (index: number) => {
+  const imageUrl = form.detailImages![index];
+
+  // 从URL中提取key (格式: https://bucket.cos.region.myqcloud.com/recipes/timestamp-random.ext)
+  const match = imageUrl.match(/\/recipes\/(.+)$/);
+  if (match) {
+    const key = `recipes/${match[1]}`;
+
+    try {
+      await recipeApi.deleteImage(key);
+      ElMessage.success('图片已删除');
+    } catch (error: any) {
+      ElMessage.error(error.message || '删除失败');
+      return; // 如果删除失败，不从列表中移除
+    }
+  }
+
+  form.detailImages!.splice(index, 1);
+};
+
+const removeCoverImage = async () => {
+  if (!form.coverImageUrl) return;
+
+  // 从URL中提取key
+  const match = form.coverImageUrl.match(/\/recipes\/(.+)$/);
+  if (match) {
+    const key = `recipes/${match[1]}`;
+
+    try {
+      await recipeApi.deleteImage(key);
+      ElMessage.success('图片已删除');
+    } catch (error: any) {
+      ElMessage.error(error.message || '删除失败');
+      return; // 如果删除失败，不删除
+    }
+  }
+
+  form.coverImageUrl = undefined;
+};
+
+const handleSubmit = async () => {
+  if (!formRef.value) return;
+
+  await formRef.value.validate(async (valid) => {
+    if (!valid) return;
+
+    submitting.value = true;
+    try {
+      // Combine nutrition data into form
+      const submitData: RecipeForm = {
+        ...form,
+        nutritionDetailedData: { ...nutritionData },
+      };
+
+      if (isEdit.value) {
+        await recipeApi.update(recipeId.value!, submitData);
+        ElMessage.success('更新成功');
+      } else {
+        await recipeApi.create(submitData);
+        ElMessage.success('创建成功');
+      }
+
+      router.push('/recipes');
+    } catch (error: any) {
+      ElMessage.error(error.message || '操作失败');
+    } finally {
+      submitting.value = false;
+    }
+  });
+};
+
+const handleSaveDraft = async () => {
+  if (!formRef.value) return;
+
+  await formRef.value.validate(async (valid) => {
+    if (!valid) return;
+
+    submitting.value = true;
+    try {
+      const submitData: RecipeForm = {
+        ...form,
+        nutritionDetailedData: { ...nutritionData },
+        status: RecipeStatus.DRAFT,
+      };
+
+      if (isEdit.value) {
+        await recipeApi.update(recipeId.value!, submitData);
+        ElMessage.success('草稿保存成功');
+      } else {
+        await recipeApi.create(submitData);
+        ElMessage.success('草稿创建成功');
+      }
+
+      router.push('/recipes');
+    } catch (error: any) {
+      ElMessage.error(error.message || '保存失败');
+    } finally {
+      submitting.value = false;
+    }
+  });
+};
+
+const handleBack = () => {
+  router.back();
+};
+
+const handleEnterEditMode = () => {
+  // Remove mode query parameter to enter edit mode
+  router.push({
+    path: route.path,
+    query: {},
+  });
+};
+
+// Ingredients management
+const loadAvailableIngredients = async () => {
+  try {
+    const response = await inventoryApi.list();
+    availableIngredients.value = response || [];
+  } catch (error: any) {
+    ElMessage.error(error.message || '加载原料列表失败');
+  }
+};
+
+// Metadata loading
+const loadMetadata = async () => {
+  try {
+    const [lifeStages, healthTagsData, designSourcesData, preparationMethodsData] = await Promise.all([
+      recipeApi.getLifeStages(),
+      recipeHealthTagApi.list(),
+      recipeApi.getDesignSources(),
+      preparationMethodApi.list(),
+    ]);
+    lifeStageOptions.value = lifeStages || [];
+    updateHealthTagOptions(healthTagsData || []);
+    designSources.value = designSourcesData || [];
+    preparationMethods.value = preparationMethodsData || [];
+  } catch (error: any) {
+    ElMessage.error(error.message || '加载元数据失败');
+  }
+};
+
+// Design source management
+const showDesignSourceDialog = async () => {
+  designSourceDialogVisible.value = true;
+  // Reload design sources to get latest data
+  try {
+    const response = await recipeApi.getDesignSources();
+    designSources.value = response || [];
+  } catch (error: any) {
+    ElMessage.error(error.message || '加载设计来源列表失败');
+  }
+};
+
+const addDesignSource = async () => {
+  if (!newDesignSourceName.value.trim()) {
+    ElMessage.warning('请输入设计来源名称');
+    return;
+  }
+
+  try {
+    await recipeApi.createDesignSource({ name: newDesignSourceName.value.trim() });
+    ElMessage.success('添加成功');
+    newDesignSourceName.value = '';
+
+    // Reload design sources
+    const response = await recipeApi.getDesignSources();
+    designSources.value = response || [];
+  } catch (error: any) {
+    ElMessage.error(error.message || '添加失败');
+  }
+};
+
+const editDesignSource = async (row: { id: string; name: string }) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入新的名称', '编辑设计来源', {
+      inputValue: row.name,
+      inputPattern: /.+/,
+      inputErrorMessage: '名称不能为空',
+    });
+
+    if (value) {
+      await recipeApi.updateDesignSource(row.id, { name: value.trim() });
+      ElMessage.success('更新成功');
+
+      // Reload design sources
+      const response = await recipeApi.getDesignSources();
+      designSources.value = response || [];
+    }
+  } catch (error: any) {
+    // User cancelled the prompt
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || '更新失败');
+    }
+  }
+};
+
+const deleteDesignSource = async (id: string) => {
+  try {
+    await ElMessageBox.confirm('确认删除该设计来源？', '提示', {
+      type: 'warning',
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
+    });
+
+    await recipeApi.deleteDesignSource(id);
+    ElMessage.success('删除成功');
+
+    // Reload design sources
+    const response = await recipeApi.getDesignSources();
+    designSources.value = response || [];
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || '删除失败');
+    }
+  }
+};
+
+// Health tag management
+const showHealthTagDialog = async () => {
+  healthTagDialogVisible.value = true;
+  try {
+    const response = await recipeHealthTagApi.list();
+    healthTags.value = response || [];
+  } catch (error: any) {
+    ElMessage.error(error.message || '加载健康标签列表失败');
+  }
+};
+
+const addHealthTag = async () => {
+  if (!newHealthTagName.value.trim()) {
+    ElMessage.warning('请输入健康标签名称');
+    return;
+  }
+
+  try {
+    await recipeHealthTagApi.create({ name: newHealthTagName.value.trim() });
+    ElMessage.success('添加成功');
+    newHealthTagName.value = '';
+
+    // Reload health tags
+    const healthTagsData = await recipeHealthTagApi.list();
+    updateHealthTagOptions(healthTagsData || []);
+  } catch (error: any) {
+    ElMessage.error(error.message || '添加失败');
+  }
+};
+
+const editHealthTag = async (row: { id: string; name: string }) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入新的名称', '编辑健康标签', {
+      inputValue: row.name,
+      inputPattern: /.+/,
+      inputErrorMessage: '名称不能为空',
+    });
+
+    if (value) {
+      await recipeHealthTagApi.update(row.id, { name: value.trim() });
+      ElMessage.success('更新成功');
+
+      // Reload health tags
+      const healthTagsData = await recipeHealthTagApi.list();
+      updateHealthTagOptions(healthTagsData || []);
+    }
+  } catch (error: any) {
+    // User cancelled the prompt
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || '更新失败');
+    }
+  }
+};
+
+const deleteHealthTag = async (id: string) => {
+  try {
+    await ElMessageBox.confirm('确认删除该健康标签？', '提示', {
+      type: 'warning',
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
+    });
+
+    await recipeHealthTagApi.delete(id);
+    ElMessage.success('删除成功');
+
+    // Reload health tags
+    const healthTagsData = await recipeHealthTagApi.list();
+    updateHealthTagOptions(healthTagsData || []);
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || '删除失败');
+    }
+  }
+};
+
+// Preparation method management
+const showPreparationMethodDialog = async () => {
+  preparationMethodDialogVisible.value = true;
+  // Reload preparation methods to get latest data
+  try {
+    const response = await preparationMethodApi.list();
+    preparationMethods.value = response || [];
+  } catch (error: any) {
+    ElMessage.error(error.message || '加载制备方法列表失败');
+  }
+};
+
+const addPreparationMethod = async () => {
+  if (!newPreparationMethodName.value.trim()) {
+    ElMessage.warning('请输入制备方法名称');
+    return;
+  }
+
+  try {
+    await preparationMethodApi.create({ name: newPreparationMethodName.value.trim() });
+    ElMessage.success('添加成功');
+    newPreparationMethodName.value = '';
+
+    // Reload preparation methods
+    const response = await preparationMethodApi.list();
+    preparationMethods.value = response || [];
+  } catch (error: any) {
+    ElMessage.error(error.message || '添加失败');
+  }
+};
+
+const editPreparationMethod = async (row: { id: string; name: string }) => {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入新的名称', '编辑制备方法', {
+      inputValue: row.name,
+      inputPattern: /.+/,
+      inputErrorMessage: '名称不能为空',
+    });
+
+    if (value) {
+      await preparationMethodApi.update(row.id, { name: value.trim() });
+      ElMessage.success('更新成功');
+
+      // Reload preparation methods
+      const response = await preparationMethodApi.list();
+      preparationMethods.value = response || [];
+    }
+  } catch (error: any) {
+    // User cancelled the prompt
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || '更新失败');
+    }
+  }
+};
+
+const deletePreparationMethod = async (id: string) => {
+  try {
+    await ElMessageBox.confirm('确认删除该制备方法？', '提示', {
+      type: 'warning',
+      confirmButtonText: '确认',
+      cancelButtonText: '取消',
+    });
+
+    await preparationMethodApi.delete(id);
+    ElMessage.success('删除成功');
+
+    // Reload preparation methods
+    const response = await preparationMethodApi.list();
+    preparationMethods.value = response || [];
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || '删除失败');
+    }
+  }
+};
+
+const togglePreparationMethod = (methodId: string) => {
+  const index = ingredientForm.preparationMethods.indexOf(methodId);
+  if (index > -1) {
+    ingredientForm.preparationMethods.splice(index, 1);
+  } else {
+    ingredientForm.preparationMethods.push(methodId);
+  }
+};
+
+const showAddIngredientDialog = () => {
+  editingIngredientIndex.value = -1;
+  resetIngredientForm();
+  ingredientDialogVisible.value = true;
+};
+
+const resetIngredientForm = () => {
+  ingredientForm.ingredientId = '';
+  ingredientForm.preparationMethods = [];
+  ingredientForm.ratioPercent = undefined;
+  ingredientForm.nutrientTargetKey = '';
+  ingredientForm.nutrientTargetValue = undefined;
+};
+
+const saveIngredient = () => {
+  // Validate
+  if (!ingredientForm.ingredientId) {
+    ElMessage.warning('请选择原料');
+    return;
+  }
+
+  // Find ingredient info
+  const ingredient = availableIngredients.value.find(
+    (ing) => ing.id === ingredientForm.ingredientId
+  );
+
+  if (!ingredient) {
+    ElMessage.error('未找到原料信息');
+    return;
+  }
+
+  // Create item object
+  const item: RecipeItem = {
+    id: editingIngredientIndex.value >= 0
+      ? (form.items![editingIngredientIndex.value]?.id || '')
+      : '',
+    ingredientId: ingredientForm.ingredientId,
+    ingredientName: ingredient.name,
+    ingredientType: ingredient.type,
+    preparationMethod: ingredientForm.preparationMethods.length > 0
+      ? ingredientForm.preparationMethods.join(', ')
+      : undefined,
+    ratioPercent: ingredientForm.ratioPercent,
+    nutrientTargetKey: ingredientForm.nutrientTargetKey || undefined,
+    nutrientTargetValue: ingredientForm.nutrientTargetValue || undefined,
+  };
+
+  if (!form.items) {
+    form.items = [];
+  }
+
+  if (editingIngredientIndex.value >= 0) {
+    // Update existing
+    form.items[editingIngredientIndex.value] = item;
+    ElMessage.success('原料更新成功');
+  } else {
+    // Add new
+    form.items.push(item);
+    ElMessage.success('原料添加成功');
+  }
+
+  ingredientDialogVisible.value = false;
+};
+
+const editIngredient = (row: RecipeItem, index: number) => {
+  editingIngredientIndex.value = index;
+  ingredientForm.ingredientId = row.ingredientId;
+  ingredientForm.preparationMethods = row.preparationMethod
+    ? row.preparationMethod.split(', ').filter(id => id.trim())
+    : [];
+  ingredientForm.ratioPercent = row.ratioPercent;
+  ingredientForm.nutrientTargetKey = row.nutrientTargetKey || '';
+  ingredientForm.nutrientTargetValue = row.nutrientTargetValue;
+  ingredientDialogVisible.value = true;
+};
+
+const removeIngredient = (index: number) => {
+  form.items!.splice(index, 1);
+  ElMessage.success('原料删除成功');
+};
+
+// Format nutrient target for display
+const formatNutrientTarget = (row: any) => {
+  const key = row.nutrientTargetKey;
+  const value = row.nutrientTargetValue;
+
+  if (!key || value === undefined) return '-';
+
+  // Get unit from ingredient's active_nutrients
+  let unit = '';
+  if (row.ingredient && row.ingredient.properties) {
+    const activeNutrients = (row.ingredient.properties as any).active_nutrients || {};
+    const nutrientData = activeNutrients[key];
+    if (nutrientData && typeof nutrientData === 'object') {
+      unit = (nutrientData as any).unit || '';
+    }
+  }
+
+  return `${key}: ${value}${unit}`;
+};
+
+// Format preparation methods for display
+const formatPreparationMethods = (preparationMethodIds: string | undefined) => {
+  if (!preparationMethodIds) return '-';
+
+  const ids = preparationMethodIds.split(', ');
+  const names = ids
+    .map(id => preparationMethods.value.find(m => m.id === id)?.name)
+    .filter(Boolean);
+
+  return names.length > 0 ? names.join('、') : '-';
+};
+
+// Get tag type for ingredient type
+const getTypeTagType = (type: string) => {
+  const typeMap: Record<string, any> = {
+    FOOD: 'success',
+    SUPPLEMENT: 'warning',
+    PACKAGING: 'info'
+  };
+  return typeMap[type] || '';
+};
+
+// Lifecycle
+onMounted(async () => {
+  loadMetadata();
+  loadAvailableIngredients();
+  if (isEdit.value) {
+    await loadRecipeDetail();
+  }
+});
+</script>
+
+<style scoped>
+.recipe-form-page {
+  padding: 20px;
+}
+
+.page-header {
+  margin-bottom: 20px;
+}
+
+.form-card {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.form-section {
+  margin-bottom: 40px;
+  padding-bottom: 30px;
+  border-bottom: 1px solid #eee;
+}
+
+.form-section:last-child {
+  border-bottom: none;
+}
+
+.section-title {
+  margin: 0 0 20px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.ingredients-section {
+  width: 100%;
+}
+
+.ingredients-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.ingredients-header h3 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #303133;
+}
+
+.image-upload {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+}
+
+.cover-uploader {
+  border: 1px dashed #d9d9d9;
+  border-radius: 6px;
+  cursor: pointer;
+  overflow: hidden;
+  transition: all 0.3s;
+}
+
+.cover-uploader:hover {
+  border-color: #409eff;
+}
+
+.cover-image {
+  width: 320px;
+  height: 180px;
+  display: block;
+  object-fit: cover;
+}
+
+.upload-placeholder {
+  width: 320px;
+  height: 180px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #8c939d;
+  font-size: 14px;
+}
+
+.upload-tips {
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #909399;
+}
+
+.upload-placeholder .el-icon {
+  font-size: 32px;
+  margin-bottom: 8px;
+}
+
+.image-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-images-upload {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.image-list {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.image-item {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  border-radius: 4px;
+  overflow: hidden;
+  cursor: move;
+}
+
+.detail-image {
+  width: 100%;
+  height: 100%;
+}
+
+.image-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: none;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+}
+
+.image-item:hover .image-mask {
+  display: flex;
+}
+
+.upload-btn {
+  width: 120px;
+  height: 120px;
+}
+
+.upload-placeholder-small {
+  width: 100%;
+  height: 100%;
+  border: 1px dashed #d9d9d9;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #8c939d;
+  font-size: 24px;
+  cursor: pointer;
+}
+
+.upload-placeholder-small:hover {
+  border-color: #409eff;
+  color: #409eff;
+}
+
+.unit-label {
+  margin-left: 8px;
+  color: #909399;
+  font-size: 14px;
+}
+
+/* Tag selector styles for preparation methods */
+.tag-selector-wrapper {
+  width: 100%;
+}
+
+.tag-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  max-height: 120px;
+  overflow-y: auto;
+  padding: 8px;
+  background-color: #f5f7fa;
+  border-radius: 8px;
+}
+
+.tag-item {
+  flex-shrink: 0;
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+.empty-tags-state {
+  padding: 20px;
+  text-align: center;
+}
+
+/* Drag handle styles */
+.drag-handle {
+  cursor: move !important;
+  color: #909399;
+  font-size: 16px;
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  user-select: none;
+  padding: 4px;
+  pointer-events: auto !important;  /* Ensure pointer events are captured */
+  touch-action: none;  /* Prevent default touch actions */
+  min-width: 24px;
+  min-height: 24px;
+  position: relative;
+  z-index: 10;
+}
+
+.drag-handle:hover {
+  color: #409eff;
+  transform: scale(1.2);
+}
+
+.drag-handle:active {
+  cursor: grabbing !important;
+}
+
+/* Ingredients Table Header */
+.ingredients-table-header {
+  display: flex;
+  align-items: center;
+  padding: 12px 8px;
+  background-color: #f5f7fa;
+  border-bottom: 1px solid #ebeef5;
+  font-weight: 600;
+  color: #606266;
+  font-size: 14px;
+}
+
+.header-cell {
+  flex-shrink: 0;
+  padding: 0 8px;
+}
+
+.header-cell:first-child {
+  width: 50px;
+  justify-content: center;
+  display: flex;
+}
+
+.header-cell:nth-child(2) {
+  width: 180px;
+}
+
+.header-cell:nth-child(3) {
+  width: 120px;
+  justify-content: center;
+  display: flex;
+}
+
+.header-cell:nth-child(4) {
+  width: 150px;
+}
+
+.header-cell:nth-child(5) {
+  width: 120px;
+  justify-content: flex-end;
+  display: flex;
+}
+
+.header-cell:nth-child(6) {
+  width: 200px;
+}
+
+.header-cell:nth-child(7) {
+  flex: 1;
+  justify-content: center;
+  display: flex;
+  min-width: 150px;
+}
+
+/* Ingredient Row */
+.ingredient-row {
+  display: flex;
+  align-items: center;
+  padding: 12px 8px;
+  border-bottom: 1px solid #ebeef5;
+  transition: background-color 0.2s;
+  cursor: default;
+}
+
+.ingredient-row:hover {
+  background-color: #f5f7fa;
+}
+
+.row-cell {
+  flex-shrink: 0;
+  padding: 0 8px;
+  display: flex;
+  align-items: center;
+  font-size: 14px;
+}
+
+.row-cell:first-child {
+  width: 50px;
+  justify-content: center;
+}
+
+.row-cell:nth-child(2) {
+  width: 180px;
+  font-weight: 500;
+}
+
+.row-cell:nth-child(3) {
+  width: 120px;
+  justify-content: center;
+}
+
+.row-cell:nth-child(4) {
+  width: 150px;
+}
+
+.row-cell:nth-child(5) {
+  width: 120px;
+  justify-content: flex-end;
+}
+
+.row-cell:nth-child(6) {
+  width: 200px;
+}
+
+.row-cell:nth-child(7) {
+  flex: 1;
+  justify-content: center;
+  gap: 8px;
+  min-width: 150px;
+}
+
+/* Drag Handle */
+.drag-handle {
+  cursor: grab;
+  color: #909399;
+  font-size: 18px;
+  display: inline-block;
+  user-select: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.drag-handle:hover {
+  color: #409eff;
+  background-color: #ecf5ff;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Sortable styles */
+.sortable-ghost {
+  opacity: 0.4;
+  background-color: #f0f9ff !important;
+}
+
+.sortable-chosen {
+  background-color: #e1f3ff !important;
+}
+
+.sortable-drag {
+  opacity: 0.9;
+  background-color: #d1e9ff !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+</style>

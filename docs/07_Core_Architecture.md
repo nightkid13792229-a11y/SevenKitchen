@@ -345,10 +345,9 @@ enum LifeStage {
     - *Example: "去皮蒸熟", "切成1cm方块", "磨粉"*
 
 // --- Mode 1: Food (食材/大料) ---
-- `ratio_percent`: Float?  
+- `ratio_percent`: Float?
     - *Display Logic:* - No Profile: Show %.
         - With Profile/Order: Show % AND Calculated Grams.
-- `is_primary_source`: Boolean
 
 // --- Mode 2: Supplement (补剂/小料) ---
 - `nutrient_target_key`: String? 

@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -10,9 +7,463 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ==========================================
-// Enums (aligned with backend/src/domain/order/enums.ts)
-// ==========================================
+model Order {
+  id                       String               @id @default(uuid()) @map("id")
+  customerId               String               @map("customer_id")
+  status                   OrderStatus
+  type                     OrderType
+  targetProductionDate     DateTime?            @map("target_production_date")
+  amountProduct            Decimal              @map("amount_product")
+  amountShipping           Decimal              @map("amount_shipping")
+  amountTotal              Decimal              @map("amount_total")
+  totalAmount              Decimal?             @map("total_amount")
+  pricingBreakdownSnapshot Json?                @map("pricing_breakdown_snapshot")
+  addressId                String?              @map("address_id")
+  dogId                    String?              @map("dog_id")
+  cancelledAt              DateTime?            @map("cancelled_at")
+  cancellationReason       String?              @map("cancellation_reason")
+  cancelledBy              String?              @map("cancelled_by")
+  paymentMethod            String?              @map("payment_method")
+  transactionId            String?              @map("transaction_id")
+  paidAt                   DateTime?            @map("paid_at")
+  paymentStatus            String?              @map("payment_status")
+  trackingNumber           String?              @map("tracking_number")
+  carrierCode              String?              @map("carrier_code")
+  shippedAt                DateTime?            @map("shipped_at")
+  completedAt              DateTime?            @map("completed_at")
+  customer                 User                 @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items                    OrderItem[]
+  statusHistory            OrderStatusHistory[]
+
+  @@index([customerId])
+  @@index([status])
+  @@map("order")
+}
+
+model OrderStatusHistory {
+  id         String      @id @default(uuid()) @map("id")
+  orderId    String      @map("order_id")
+  fromStatus OrderStatus @map("from_status")
+  toStatus   OrderStatus @map("to_status")
+  timestamp  DateTime    @default(now()) @map("timestamp")
+  actor      String      @map("actor")
+  actorId    String?     @map("actor_id")
+  metadata   Json?       @map("metadata")
+  order      Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([orderId, timestamp])
+  @@map("order_status_history")
+}
+
+model OrderItem {
+  id                 String    @id @default(uuid()) @map("id")
+  orderId            String    @map("order_id")
+  recipeSnapshot     Json      @map("recipe_snapshot")
+  quantityG          Float     @map("quantity_g")
+  packageCount       Int       @map("package_count")
+  packageSpecG       Int       @map("package_spec_g")
+  customRequirements String?   @map("custom_requirements")
+  dailyIntakeG       Float?    @map("daily_intake_g")
+  allocatedAt        DateTime? @map("allocated_at")
+  productionBatchId  String?   @map("production_batch_id")
+  order              Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@index([productionBatchId])
+  @@map("order_item")
+}
+
+model User {
+  id            String     @id @default(uuid()) @map("id")
+  phone         String?    @unique @map("phone") @db.VarChar(20)
+  wechatOpenid  String?    @unique @map("wechat_openid") @db.VarChar(100)
+  nickname      String?    @map("nickname") @db.VarChar(100)
+  role          UserRole   @default(CUSTOMER) @map("role")
+  createdAt     DateTime   @default(now()) @map("created_at")
+  updatedAt     DateTime   @updatedAt @map("updated_at")
+  avatarUrl     String?    @map("avatar_url")
+  lastLoginAt   DateTime?  @map("last_login_at")
+  status        UserStatus @default(ACTIVE) @map("status")
+  wechatUnionid String?    @unique @map("wechat_unionid") @db.VarChar(100)
+  password      String?    @map("password") @db.VarChar(255)
+  addresses     Address[]
+  dogs          Dog[]
+  orders        Order[]
+
+  @@index([wechatOpenid])
+  @@index([phone])
+  @@map("user")
+}
+
+model Address {
+  id            String  @id @default(uuid()) @map("id")
+  userId        String  @map("user_id")
+  recipientName String  @map("recipient_name")
+  phone         String  @map("phone")
+  region        Json    @map("region")
+  detail        String  @map("detail")
+  isDefault     Boolean @map("is_default")
+  user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("address")
+}
+
+model DogBreed {
+  id                   String          @id @default(uuid()) @map("id")
+  name                 String          @map("name")
+  sizeCategory         DogSizeCategory @map("size_category")
+  growthCurveType      GrowthCurveType @map("growth_curve_type")
+  adultAgeMonths       Int             @map("adult_age_months")
+  seniorAgeYears       Int             @map("senior_age_years")
+  averageAdultWeightKg Float?          @map("average_adult_weight_kg")
+  createdAt            DateTime        @default(now()) @map("created_at")
+  updatedAt            DateTime        @updatedAt @map("updated_at")
+
+  @@index([sizeCategory])
+  @@map("dog_breed")
+}
+
+model Dog {
+  id                   String            @id @default(uuid()) @map("id")
+  ownerId              String            @map("owner_id")
+  name                 String            @map("name")
+  breedId              String            @map("breed_id")
+  birthday             DateTime          @map("birthday")
+  gender               DogGender         @map("gender")
+  isNeutered           Boolean           @map("is_neutered")
+  currentWeightKg      Float             @map("current_weight_kg")
+  bcsScore             Int               @map("bcs_score")
+  activityLevel        ActivityLevel     @map("activity_level")
+  lifeStageOverride    LifeStageOverride @map("life_stage_override")
+  sizeClassOverride    DogSizeCategory?  @map("size_class_override")
+  mealsPerDay          Int               @default(2) @map("meals_per_day")
+  treatInputMode       TreatInputMode    @default(ESTIMATE_LEVEL) @map("treat_input_mode")
+  treatLevel           TreatLevel        @default(LOW) @map("treat_level")
+  manualTreatKcal      Int?              @map("manual_treat_kcal")
+  medicalHistory       String?           @map("medical_history")
+  cachedTargetFoodKcal Int               @default(0) @map("cached_target_food_kcal")
+  createdAt            DateTime          @default(now()) @map("created_at")
+  customBreedName      String?           @map("custom_breed_name")
+  allergyFoods         String?           @map("allergy_foods")
+  pickyFoods           String?           @map("picky_foods")
+  allergyRecords       AllergyRecord[]
+  checkupRecords       CheckupRecord[]
+  owner                User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  medicalRecords       MedicalRecord[]
+  vaccineRecords       VaccineRecord[]
+  weightRecords        WeightRecord[]
+
+  @@index([ownerId])
+  @@index([ownerId, createdAt])
+  @@map("dog")
+}
+
+model Recipe {
+  id                     String                      @id @default(uuid()) @map("id")
+  recipeId               String                      @map("recipe_id")
+  version                Int                         @map("version")
+  name                   String                      @map("name")
+  status                 RecipeStatus                @map("status")
+  energyDensityKcalPerKg Float                       @map("energy_density_kcal_per_kg")
+  productionLossRate     Float                       @map("production_loss_rate")
+  batchLaborHours        Float?                      @map("batch_labor_hours")
+  createdAt              DateTime                    @default(now()) @map("created_at")
+  updatedAt              DateTime                    @updatedAt @map("updated_at")
+  applicableLifeStages   Json                        @default("[]") @map("applicable_life_stages")
+  coverImageUrl          String?                     @map("cover_image_url")
+  description            String?                     @map("description")
+  detailImages           Json?                       @map("detail_images")
+  diyGenCount            Int                         @default(0) @map("diy_gen_count")
+  favoriteCount          Int                         @default(0) @map("favorite_count")
+  likeCount              Int                         @default(0) @map("like_count")
+  nutritionDetailedData  Json?                       @map("nutrition_detailed_data")
+  nutritionStandard      String                      @default("FEDIAF_2021") @map("nutrition_standard")
+  productionSteps        String?                     @map("production_steps")
+  salesCount             Int                         @default(0) @map("sales_count")
+  targetHealthTags       Json                        @default("[]") @map("target_health_tags")
+  videoUrl               String?                     @map("video_url")
+  designSource           String?                     @map("design_source")
+  healthTagAssignments   RecipeHealthTagAssignment[]
+  items                  RecipeItem[]
+
+  @@unique([recipeId, version])
+  @@index([recipeId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("recipe")
+}
+
+model RecipeItem {
+  id                  String  @id @default(uuid()) @map("id")
+  recipeId            String  @map("recipe_id")
+  recipeVersion       Int     @map("recipe_version")
+  ingredientId        String  @map("ingredient_id")
+  preparationMethod   String? @map("preparation_method")
+  ratioPercent        Float?  @map("ratio_percent")
+  nutrientTargetKey   String? @map("nutrient_target_key")
+  nutrientTargetValue Float?  @map("nutrient_target_value")
+  sortOrder           Int     @default(0) @map("sort_order")
+  recipe              Recipe  @relation(fields: [recipeId, recipeVersion], references: [recipeId, version], onDelete: Cascade)
+  ingredient          Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+
+  @@index([recipeId, recipeVersion])
+  @@map("recipe_item")
+}
+
+model DesignSource {
+  id        String   @id @default(uuid()) @map("id")
+  name      String   @map("name")
+  isActive  Boolean  @default(true) @map("is_active")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@index([isActive])
+  @@map("design_source")
+}
+
+model RecipeHealthTag {
+  id          String                      @id @default(uuid()) @map("id")
+  name        String                      @db.VarChar(100)
+  description String?
+  parentId    String?                     @map("parent_id")
+  sort        Int                         @default(0)
+  color       String?                     @db.VarChar(20)
+  createdAt   DateTime                    @default(now()) @map("created_at")
+  updatedAt   DateTime                    @updatedAt @map("updated_at")
+  parent      RecipeHealthTag?            @relation("HealthTagHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children    RecipeHealthTag[]           @relation("HealthTagHierarchy")
+  assignments RecipeHealthTagAssignment[]
+
+  @@index([parentId])
+  @@index([sort])
+  @@map("recipe_health_tag")
+}
+
+model RecipeHealthTagAssignment {
+  id          String          @id @default(uuid()) @map("id")
+  recipeId    String          @map("recipe_id")
+  healthTagId String          @map("health_tag_id")
+  createdAt   DateTime        @default(now()) @map("created_at")
+  healthTag   RecipeHealthTag @relation(fields: [healthTagId], references: [id], onDelete: Cascade)
+  recipe      Recipe          @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@unique([recipeId, healthTagId])
+  @@index([recipeId])
+  @@index([healthTagId])
+  @@map("recipe_health_tag_assignment")
+}
+
+model PreparationMethod {
+  id          String   @id @default(uuid()) @map("id")
+  name        String   @unique @db.VarChar(50)
+  description String?
+  sort        Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@index([sort])
+  @@map("preparation_method")
+}
+
+model ProductionBatch {
+  id             String                @id @default(uuid()) @map("id")
+  productionDate DateTime              @map("production_date")
+  status         ProductionBatchStatus @map("status")
+  createdAt      DateTime              @default(now()) @map("created_at")
+  packagingUnits PackagingUnit[]
+
+  @@index([productionDate])
+  @@index([status])
+  @@map("production_batch")
+}
+
+model PackagingUnit {
+  id                       String              @id @default(uuid()) @map("id")
+  productionBatchId        String              @map("production_batch_id")
+  recipeSnapshot           Json                @map("recipe_snapshot")
+  totalProductionG         Float               @map("total_production_g")
+  sourceOrderItemIds       String[]            @map("source_order_item_ids")
+  createdAt                DateTime            @default(now()) @map("created_at")
+  ingredientsUsageSnapshot Json?               @map("ingredients_usage_snapshot")
+  photosCooked             String[]            @default([]) @map("photos_cooked")
+  photosPortioned          String[]            @default([]) @map("photos_portioned")
+  photosRaw                String[]            @default([]) @map("photos_raw")
+  status                   PackagingUnitStatus @default(PENDING) @map("status")
+  updatedAt                DateTime            @updatedAt @map("updated_at")
+  productionBatch          ProductionBatch     @relation(fields: [productionBatchId], references: [id], onDelete: Cascade)
+
+  @@index([productionBatchId])
+  @@index([status])
+  @@map("packaging_unit")
+}
+
+model Ingredient {
+  id                          String                    @id @default(uuid())
+  name                        String
+  type                        IngredientType
+  brand                       String?                   @db.VarChar(100)
+  productModel                String?                   @map("product_model") @db.VarChar(100)
+  purchaseChannel             String?                   @map("purchase_channel") @db.VarChar(200)
+  notes                       String?
+  baseUnit                    BaseUnit                  @map("base_unit")
+  unitDisplayLabel            String?                   @map("unit_display_label") @db.VarChar(50)
+  purchaseUnit                String                    @map("purchase_unit") @db.VarChar(50)
+  purchaseToBaseRatio         Float                     @map("purchase_to_base_ratio")
+  currentPricePerPurchaseUnit Decimal                   @map("current_price_per_purchase_unit") @db.Decimal(10, 2)
+  weightG                     Float?                    @map("weight_g")
+  maxCapacityG                Float?                    @map("max_capacity_g")
+  properties                  Json
+  createdAt                   DateTime                  @default(now()) @map("created_at")
+  updatedAt                   DateTime                  @updatedAt @map("updated_at")
+  tags                        IngredientTagAssignment[]
+  recipeItems                 RecipeItem[]
+
+  @@unique([name, brand, productModel])
+  @@index([type])
+  @@index([name])
+  @@map("ingredient")
+}
+
+model IngredientTag {
+  id          String                    @id @default(uuid())
+  name        String                    @db.VarChar(100)
+  description String?
+  parentId    String?                   @map("parent_id")
+  sort        Int                       @default(0)
+  color       String?                   @db.VarChar(20)
+  createdAt   DateTime                  @default(now()) @map("created_at")
+  updatedAt   DateTime                  @updatedAt @map("updated_at")
+  parent      IngredientTag?            @relation("TagHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
+  children    IngredientTag[]           @relation("TagHierarchy")
+  assignments IngredientTagAssignment[]
+
+  @@index([parentId])
+  @@index([sort])
+  @@map("ingredient_tag")
+}
+
+model IngredientTagAssignment {
+  id           String        @id @default(uuid())
+  ingredientId String        @map("ingredient_id")
+  tagId        String        @map("tag_id")
+  createdAt    DateTime      @default(now()) @map("created_at")
+  ingredient   Ingredient    @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  tag          IngredientTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([ingredientId, tagId])
+  @@index([ingredientId])
+  @@index([tagId])
+  @@map("ingredient_tag_assignment")
+}
+
+model InventoryLedgerEntry {
+  id           String              @id @default(uuid()) @map("id")
+  ingredientId String              @map("ingredient_id")
+  deltaG       Float               @map("delta_g")
+  sourceType   InventorySourceType @map("source_type")
+  sourceId     String              @map("source_id")
+  createdAt    DateTime            @default(now()) @map("created_at")
+
+  @@unique([sourceType, sourceId, ingredientId])
+  @@index([ingredientId])
+  @@index([sourceType, sourceId])
+  @@index([createdAt])
+  @@map("inventory_ledger_entry")
+}
+
+model WeightRecord {
+  id              String   @id @default(uuid()) @map("id")
+  dogId           String   @map("dog_id")
+  recordDate      DateTime @map("record_date") @db.Date
+  weightKg        Float    @map("weight_kg")
+  note            String?  @map("note")
+  syncedToProfile Boolean  @default(false) @map("synced_to_profile")
+  createdAt       DateTime @default(now()) @map("created_at")
+  dog             Dog      @relation(fields: [dogId], references: [id], onDelete: Cascade)
+
+  @@index([dogId, recordDate])
+  @@map("weight_record")
+}
+
+model VaccineRecord {
+  id              String        @id @default(uuid()) @map("id")
+  dogId           String        @map("dog_id")
+  vaccineName     String        @map("vaccine_name")
+  vaccinationDate DateTime      @map("vaccination_date") @db.Date
+  nextDueDate     DateTime?     @map("next_due_date") @db.Date
+  notes           String?       @map("notes")
+  status          VaccineStatus @default(COMPLETED) @map("status")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  dog             Dog           @relation(fields: [dogId], references: [id], onDelete: Cascade)
+
+  @@index([dogId])
+  @@index([dogId, vaccinationDate])
+  @@index([nextDueDate])
+  @@map("vaccine_record")
+}
+
+model CheckupRecord {
+  id              String   @id @default(uuid()) @map("id")
+  dogId           String   @map("dog_id")
+  checkupType     String   @map("checkup_type")
+  checkupDate     DateTime @map("checkup_date") @db.Date
+  findings        String?  @map("findings")
+  recommendations String?  @map("recommendations")
+  veterinarian    String?  @map("veterinarian")
+  attachments     String[] @default([]) @map("attachments")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  dog             Dog      @relation(fields: [dogId], references: [id], onDelete: Cascade)
+
+  @@index([dogId])
+  @@index([dogId, checkupDate])
+  @@map("checkup_record")
+}
+
+model MedicalRecord {
+  id             String        @id @default(uuid()) @map("id")
+  dogId          String        @map("dog_id")
+  visitDate      DateTime      @map("visit_date") @db.Date
+  chiefComplaint String        @map("chief_complaint")
+  diagnosis      String        @map("diagnosis")
+  treatment      String?       @map("treatment")
+  medications    String[]      @default([]) @map("medications")
+  status         MedicalStatus @default(TREATING) @map("status")
+  followUpDate   DateTime?     @map("follow_up_date") @db.Date
+  veterinarian   String?       @map("veterinarian")
+  notes          String?       @map("notes")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  dog            Dog           @relation(fields: [dogId], references: [id], onDelete: Cascade)
+
+  @@index([dogId])
+  @@index([dogId, visitDate])
+  @@index([status])
+  @@map("medical_record")
+}
+
+model AllergyRecord {
+  id            String       @id @default(uuid()) @map("id")
+  dogId         String       @map("dog_id")
+  allergen      String       @map("allergen")
+  allergenType  AllergenType @map("allergen_type")
+  discoveryDate DateTime     @map("discovery_date") @db.Date
+  symptoms      String       @map("symptoms")
+  severity      Severity     @default(MILD) @map("severity")
+  confirmedBy   ConfirmedBy  @default(VET) @map("confirmed_by")
+  treatment     String?      @map("treatment")
+  notes         String?      @map("notes")
+  createdAt     DateTime     @default(now()) @map("created_at")
+  updatedAt     DateTime     @updatedAt @map("updated_at")
+  dog           Dog          @relation(fields: [dogId], references: [id], onDelete: Cascade)
+
+  @@index([dogId])
+  @@index([dogId, allergenType])
+  @@map("allergy_record")
+}
 
 enum OrderStatus {
   INIT
@@ -32,10 +483,6 @@ enum OrderType {
   CUSTOM_SERVICE
 }
 
-// ==========================================
-// Dog Domain Enums (aligned with backend/src/domain/dog/enums.ts)
-// ==========================================
-
 enum DogGender {
   MALE
   FEMALE
@@ -48,10 +495,6 @@ enum ActivityLevel {
   HIGH
   WORKING
 }
-
-// ==========================================
-// User Domain Enums (aligned with backend/src/domain/user/enums.ts)
-// ==========================================
 
 enum UserRole {
   CUSTOMER
@@ -115,10 +558,6 @@ enum InventorySourceType {
   KITCHEN_TASK
 }
 
-// ==========================================
-// Ingredient Domain Enums (aligned with backend/src/domain/ingredient/enums.ts)
-// ==========================================
-
 enum IngredientType {
   FOOD
   SUPPLEMENT
@@ -131,361 +570,37 @@ enum BaseUnit {
   PCS
 }
 
-// ==========================================
-// Order Persistence (Phase 8.1 Part 1)
-// ==========================================
-
-model Order {
-  id                       String   @id @default(uuid()) @map("id")
-  customerId               String   @map("customer_id")
-  dogId                    String?  @map("dog_id")
-  addressId                String?  @map("address_id")
-  status                   OrderStatus
-  type                     OrderType
-  targetProductionDate     DateTime? @map("target_production_date")
-  amountProduct            Decimal   @map("amount_product")
-  amountShipping           Decimal   @map("amount_shipping")
-  amountTotal              Decimal   @map("amount_total")
-  totalAmount              Decimal?  @map("total_amount") // legacy alias of amount_total
-  pricingBreakdownSnapshot Json?     @map("pricing_breakdown_snapshot")
-  // Phase 8.14: Shipping tracking fields
-  trackingNumber           String?   @map("tracking_number")
-  carrierCode              String?   @map("carrier_code")
-  shippedAt                DateTime? @map("shipped_at")
-  // Phase 8.15: Order completion
-  completedAt              DateTime? @map("completed_at")
-  // Phase 8.16: Order cancellation
-  cancelledAt              DateTime? @map("cancelled_at")
-  cancellationReason       String?   @map("cancellation_reason")
-  cancelledBy              String?   @map("cancelled_by") // "customer" | "admin" | "system"
-  // Phase 8.17: Payment transaction tracking
-  paymentMethod            String?   @map("payment_method")
-  transactionId            String?   @map("transaction_id")
-  paidAt                   DateTime? @map("paid_at")
-  paymentStatus            String?   @map("payment_status") // "PENDING" | "SUCCESS" | "FAILED"
-
-  items OrderItem[]
-  statusHistory OrderStatusHistory[]
-  customer User @relation(fields: [customerId], references: [id], onDelete: Cascade)
-
-  @@index([customerId])
-  @@index([status])
-  @@map("order")
-}
-
-// Phase 8.18: Order Status History & Audit Trail
-model OrderStatusHistory {
-  id        String      @id @default(uuid()) @map("id")
-  orderId   String      @map("order_id")
-  fromStatus OrderStatus @map("from_status")
-  toStatus  OrderStatus  @map("to_status")
-  timestamp DateTime    @default(now()) @map("timestamp")
-  actor     String      @map("actor") // "customer" | "staff" | "admin" | "system"
-  actorId   String?     @map("actor_id")
-  metadata  Json?       @map("metadata")
-
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
-  @@index([orderId])
-  @@index([orderId, timestamp])
-  @@map("order_status_history")
-}
-
-// OrderItem is persisted only as part of the Order aggregate; no independent lifecycle or APIs (Phase 8.1 scope).
-model OrderItem {
-  id                  String   @id @default(uuid()) @map("id")
-  orderId             String   @map("order_id")
-  recipeSnapshot      Json     @map("recipe_snapshot")
-  quantityG            Float    @map("quantity_g")
-  packageCount         Int      @map("package_count")
-  packageSpecG         Int      @map("package_spec_g")
-  customRequirements   String?  @map("custom_requirements")
-  dailyIntakeG         Float?   @map("daily_intake_g") // Daily intake in grams, calculated from DogCalc.finalFoodKcal ÷ Recipe.energyDensityKcalPerKg (immutable after order creation)
-  productionBatchId    String?  @map("production_batch_id") // Phase 8.11: Allocation lock - prevents duplicate allocation
-  allocatedAt          DateTime? @map("allocated_at") // Phase 8.11: Timestamp when item was allocated to a batch
-
-  order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
-  @@index([orderId])
-  @@index([productionBatchId])
-  @@map("order_item")
-}
-
-// ==========================================
-// User Persistence (Phase 8.19)
-// ==========================================
-
-model User {
-  id              String      @id @default(uuid()) @map("id")
-  phone           String?     @unique @map("phone") @db.VarChar(20)
-  wechatOpenid    String?     @unique @map("wechat_openid") @db.VarChar(100)
-  wechatUnionid   String?     @unique @map("wechat_unionid") @db.VarChar(100)
-  nickname        String?     @map("nickname") @db.VarChar(100)
-  avatarUrl       String?     @map("avatar_url") @db.Text
-  password        String?     @map("password") @db.VarChar(255)
-  role            UserRole    @default(CUSTOMER) @map("role")
-  status          UserStatus  @default(ACTIVE) @map("status")
-  lastLoginAt     DateTime?   @map("last_login_at")
-  createdAt       DateTime    @default(now()) @map("created_at")
-  updatedAt       DateTime    @updatedAt @map("updated_at")
-
-  // Relations
-  dogs            Dog[]
-  addresses       Address[]
-  orders          Order[]
-
-  @@index([wechatOpenid])
-  @@index([phone])
-  @@map("user")
-}
-
-// Address persistence (Phase 8.2 Part A) - aligns with docs/07; customer isolation via userId.
-model Address {
-  id            String @id @default(uuid()) @map("id")
-  userId        String @map("user_id")
-  recipientName String @map("recipient_name")
-  phone         String @map("phone")
-  region        Json   @map("region")
-  detail        String @map("detail")
-  isDefault     Boolean @map("is_default")
-
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@map("address")
-}
-
-// ==========================================
-// Dog Breed Persistence (Phase 4.1)
-// ==========================================
-
-model DogBreed {
-  id                    String            @id @default(uuid()) @map("id")
-  name                  String            @map("name")
-  sizeCategory          DogSizeCategory   @map("size_category")
-  growthCurveType       GrowthCurveType   @map("growth_curve_type")
-  adultAgeMonths        Int               @map("adult_age_months")
-  seniorAgeYears        Int               @map("senior_age_years")
-  averageAdultWeightKg  Float?            @map("average_adult_weight_kg")
-  createdAt             DateTime          @default(now()) @map("created_at")
-  updatedAt             DateTime          @updatedAt @map("updated_at")
-
-  @@index([sizeCategory])
-  @@map("dog_breed")
-}
-
 enum GrowthCurveType {
   STANDARD
   SLOW
   VERY_SLOW
 }
 
-// ==========================================
-// Dog Persistence (Phase 8.2 Part B)
-// ==========================================
-
-model Dog {
-  id                    String            @id @default(uuid()) @map("id")
-  ownerId               String            @map("owner_id")
-  name                  String            @map("name")
-  breedId               String            @map("breed_id")
-  customBreedName       String?           @map("custom_breed_name")
-  birthday              DateTime          @map("birthday")
-  gender                DogGender         @map("gender")
-  isNeutered            Boolean           @map("is_neutered")
-  currentWeightKg       Float             @map("current_weight_kg")
-  bcsScore              Int               @map("bcs_score")
-  activityLevel         ActivityLevel     @map("activity_level")
-  lifeStageOverride     LifeStageOverride @map("life_stage_override")
-  sizeClassOverride     DogSizeCategory? @map("size_class_override")
-  mealsPerDay           Int               @default(2) @map("meals_per_day")
-  treatInputMode        TreatInputMode    @default(ESTIMATE_LEVEL) @map("treat_input_mode")
-  treatLevel            TreatLevel        @default(LOW) @map("treat_level")
-  manualTreatKcal       Int?              @map("manual_treat_kcal")
-  medicalHistory        String?           @map("medical_history")
-  allergyFoods          String?           @map("allergy_foods")
-  pickyFoods            String?           @map("picky_foods")
-  cachedTargetFoodKcal  Int               @default(0) @map("cached_target_food_kcal")
-  createdAt             DateTime          @default(now()) @map("created_at")
-
-  owner User @relation(fields: [ownerId], references: [id], onDelete: Cascade)
-
-  @@index([ownerId])
-  @@index([ownerId, createdAt])
-  @@map("dog")
+enum VaccineStatus {
+  COMPLETED
+  SCHEDULED
+  OVERDUE
 }
 
-// ==========================================
-// Recipe Persistence (Phase 8.3)
-// ==========================================
-
-model Recipe {
-  id                    String        @id @default(uuid()) @map("id")
-  recipeId              String        @map("recipe_id")
-  version               Int           @map("version")
-  name                  String        @map("name")
-  status                RecipeStatus  @map("status")
-  energyDensityKcalPerKg Float         @map("energy_density_kcal_per_kg")
-  productionLossRate    Float         @map("production_loss_rate")
-  batchLaborHours       Float?        @map("batch_labor_hours")
-  createdAt             DateTime      @default(now()) @map("created_at")
-  updatedAt             DateTime      @updatedAt @map("updated_at")
-
-  items RecipeItem[]
-
-  @@index([recipeId])
-  @@index([status])
-  @@index([createdAt])
-  @@unique([recipeId, version])
-  @@map("recipe")
+enum MedicalStatus {
+  TREATING
+  RECOVERED
+  CHRONIC
 }
 
-model RecipeItem {
-  id                  String   @id @default(uuid()) @map("id")
-  recipeId            String   @map("recipe_id")
-  recipeVersion       Int      @map("recipe_version")
-  ingredientId        String   @map("ingredient_id")
-  preparationMethod   String?  @map("preparation_method")
-  ratioPercent        Float?   @map("ratio_percent")
-  isPrimarySource     Boolean  @map("is_primary_source")
-  nutrientTargetKey   String?  @map("nutrient_target_key")
-  nutrientTargetValue Float?  @map("nutrient_target_value")
-
-  recipe Recipe @relation(fields: [recipeId, recipeVersion], references: [recipeId, version], onDelete: Cascade)
-
-  @@index([recipeId, recipeVersion])
-  @@map("recipe_item")
+enum AllergenType {
+  FOOD
+  ENVIRONMENTAL
+  MEDICATION
 }
 
-// ==========================================
-// Production Persistence (Phase 8.10)
-// ==========================================
-
-model ProductionBatch {
-  id              String                 @id @default(uuid()) @map("id")
-  productionDate  DateTime               @map("production_date") // YYYY-MM-DD (date only)
-  status          ProductionBatchStatus  @map("status")
-  createdAt       DateTime               @default(now()) @map("created_at")
-
-  packagingUnits PackagingUnit[]
-
-  @@index([productionDate])
-  @@index([status])
-  @@map("production_batch")
+enum Severity {
+  MILD
+  MODERATE
+  SEVERE
 }
 
-model PackagingUnit {
-  id                      String              @id @default(uuid()) @map("id")
-  productionBatchId       String              @map("production_batch_id")
-  recipeSnapshot          Json                @map("recipe_snapshot") // Immutable RecipeSnapshot reference
-  totalProductionG        Float               @map("total_production_g") // Aggregated grams from OrderItems
-  sourceOrderItemIds      String[]            @map("source_order_item_ids") // Traceability: contributing OrderItem IDs
-  status                  PackagingUnitStatus @default(PENDING) @map("status") // Phase 8.12: Kitchen task status
-  ingredientsUsageSnapshot Json?              @map("ingredients_usage_snapshot") // Phase 8.12: Stores required + actual per ingredient
-  photosRaw               String[]            @default([]) @map("photos_raw") // Phase 8.12: Raw ingredient photos
-  photosCooked            String[]            @default([]) @map("photos_cooked") // Phase 8.12: Cooked food photos
-  photosPortioned         String[]            @default([]) @map("photos_portioned") // Phase 8.12: Portioned food photos
-  createdAt               DateTime            @default(now()) @map("created_at")
-  updatedAt               DateTime            @updatedAt @map("updated_at")
-
-  productionBatch ProductionBatch @relation(fields: [productionBatchId], references: [id], onDelete: Cascade)
-
-  @@index([productionBatchId])
-  @@index([status])
-  @@map("packaging_unit")
-}
-
-// ==========================================
-// Inventory Domain (Phase 8.13)
-// ==========================================
-
-model Ingredient {
-  id                              String   @id @default(uuid())
-  name                            String
-  type                            IngredientType
-  brand                           String?  @db.VarChar(100)
-  productModel                    String?  @map("product_model") @db.VarChar(100)
-  purchaseChannel                 String?  @map("purchase_channel") @db.VarChar(200)
-  notes                           String?  @db.Text
-
-  // 单位与成本
-  baseUnit                        BaseUnit @map("base_unit")
-  unitDisplayLabel                String?  @map("unit_display_label") @db.VarChar(50)
-  purchaseUnit                    String   @map("purchase_unit") @db.VarChar(50)
-  purchaseToBaseRatio            Float    @map("purchase_to_base_ratio")
-  currentPricePerPurchaseUnit     Decimal  @map("current_price_per_purchase_unit") @db.Decimal(10, 2)
-
-  // 物理属性
-  weightG                         Float?   @map("weight_g")
-  maxCapacityG                    Float?   @map("max_capacity_g")
-
-  // 差异化属性 (JSON)
-  properties                      Json
-
-  // 标签关联（多对多）
-  tags                            IngredientTagAssignment[]
-
-  createdAt                       DateTime @default(now()) @map("created_at")
-  updatedAt                       DateTime @updatedAt @map("updated_at")
-
-  @@unique([name, brand, productModel])
-  @@index([type])
-  @@index([name])
-  @@map("ingredient")
-}
-
-// IngredientTag - 原料标签分类（支持层级结构）
-model IngredientTag {
-  id               String   @id @default(uuid())
-  name             String   @db.VarChar(100)
-  description      String?  @db.Text
-  parentId         String?  @map("parent_id")
-  sort             Int      @default(0)
-  color            String?  @db.VarChar(20)  // 标签颜色（前端展示用）
-
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
-
-  // Self-relation for hierarchical structure
-  parent           IngredientTag?  @relation("TagHierarchy", fields: [parentId], references: [id], onDelete: Restrict)
-  children         IngredientTag[] @relation("TagHierarchy")
-
-  // Relations to ingredients
-  assignments      IngredientTagAssignment[]
-
-  @@index([parentId])
-  @@index([sort])
-  @@map("ingredient_tag")
-}
-
-// Many-to-many relation table
-model IngredientTagAssignment {
-  id               String   @id @default(uuid())
-  ingredientId     String   @map("ingredient_id")
-  tagId            String   @map("tag_id")
-
-  createdAt        DateTime @default(now()) @map("created_at")
-
-  ingredient       Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
-  tag              IngredientTag @relation(fields: [tagId], references: [id], onDelete: Cascade)
-
-  @@unique([ingredientId, tagId])
-  @@index([ingredientId])
-  @@index([tagId])
-  @@map("ingredient_tag_assignment")
-}
-
-model InventoryLedgerEntry {
-  id            String              @id @default(uuid()) @map("id")
-  ingredientId  String              @map("ingredient_id")
-  deltaG        Float                @map("delta_g") // negative for deduction, positive for addition
-  sourceType    InventorySourceType @map("source_type")
-  sourceId      String              @map("source_id") // PackagingUnit.id for KITCHEN_TASK
-  createdAt     DateTime            @default(now()) @map("created_at")
-
-  @@unique([sourceType, sourceId, ingredientId]) // Phase 8.13: DB-level idempotency guarantee
-  @@index([ingredientId]) // For balance queries
-  @@index([sourceType, sourceId]) // For source lookup
-  @@index([createdAt]) // For audit queries
-  @@map("inventory_ledger_entry")
+enum ConfirmedBy {
+  VET
+  OWNER
 }

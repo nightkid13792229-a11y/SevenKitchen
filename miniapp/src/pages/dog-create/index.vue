@@ -2042,8 +2042,8 @@ function submit() {
           })
         } else {
           // 创建模式：跳转到狗狗档案列表页面
-          // dog-profile-list 是 tabBar 页面，必须使用 switchTab
-          uni.switchTab({
+          // dog-profile-list 不是 tabBar 页面，使用 redirectTo
+          uni.redirectTo({
             url: '/pages/dog-profile-list/index'
           })
         }

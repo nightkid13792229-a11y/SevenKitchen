@@ -27,8 +27,19 @@ export class WechatService {
     this.appSecret = process.env.WECHAT_APP_SECRET || '';
 
     if (!this.appId || !this.appSecret) {
-      this.logger.warn('WeChat credentials not configured');
+      this.logger.warn('WeChat credentials not configured - Using mock mode for development');
     }
+  }
+
+  /**
+   * Check if running in mock mode (no WeChat credentials)
+   */
+  private isMockMode(): boolean {
+    // Check if credentials are missing or are placeholder values
+    const isPlaceholder = this.appId === 'your_wechat_app_id' ||
+                          this.appSecret === 'your_wechat_app_secret';
+    const isMissing = !this.appId || !this.appSecret;
+    return isMissing || isPlaceholder;
   }
 
   /**
@@ -36,6 +47,21 @@ export class WechatService {
    * @param code 微信小程序wx.login()获取的code
    */
   async code2Session(code: string): Promise<WechatUserInfo> {
+    // Mock mode for development (when WeChat credentials are not configured)
+    if (this.isMockMode()) {
+      this.logger.log('Using mock WeChat authentication for development');
+
+      // Generate a consistent mock openid based on the code
+      const mockOpenid = `mock_openid_${code.substring(0, 8)}`;
+
+      return {
+        openid: mockOpenid,
+        unionid: `mock_unionid_${code.substring(0, 8)}`,
+        sessionKey: 'mock_session_key',
+      };
+    }
+
+    // Production mode with real WeChat API
     const url = 'https://api.weixin.qq.com/sns/jscode2session';
     const params = {
       appid: this.appId,

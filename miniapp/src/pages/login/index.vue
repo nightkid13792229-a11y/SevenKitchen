@@ -19,9 +19,8 @@
         <text v-else>登录中...</text>
       </button>
 
-      <!-- 员工登录入口 -->
-      <view class="staff-login-link" @click="goToStaffLogin">
-        <text class="link-text">员工登录</text>
+      <view class="login-tip">
+        <text class="tip-text">员工可通过微信登录，系统自动识别员工身份</text>
       </view>
     </view>
 
@@ -40,7 +39,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
-import { authApi } from '../../utils/api';
+import { request } from '../../utils/api';
 
 const loading = ref(false);
 
@@ -48,13 +47,13 @@ onLoad(() => {
   // 检查是否已登录
   const token = uni.getStorageSync('token');
   if (token) {
-    uni.redirectTo({ url: '/pages/home/index' });
+    uni.switchTab({ url: '/pages/home/index' });
   }
 });
 
 // 微信授权登录
 const handleWechatLogin = async (e: any) => {
-  if (e.detail.errMsg !== 'getUserInfo:ok') {
+  if (e.detail.errMsg !== 'getUserInfo:ok' && e.detail.errMsg !== 'getUserInfo:ok') {
     uni.showToast({
       title: '需要授权才能登录',
       icon: 'none',
@@ -65,43 +64,72 @@ const handleWechatLogin = async (e: any) => {
   loading.value = true;
 
   try {
-    // 1. 获取微信code
-    const loginRes = await uni.login({
-      provider: 'weixin',
+    // 1. 获取微信code（使用 Promise 包装以兼容微信小程序）
+    const res = await new Promise((resolve, reject) => {
+      uni.login({
+        provider: 'weixin',
+        success: (res) => resolve(res),
+        fail: (err) => reject(err)
+      });
     });
 
-    if (!loginRes[1].code) {
+    if (!res?.code) {
+      console.error('uni.login 返回数据格式错误:', res);
       throw new Error('获取微信code失败');
     }
 
-    const code = loginRes[1].code;
+    const code = res.code;
 
     // 2. 调用后端微信登录接口
-    const response = await authApi.wechatLogin(code, e.detail.userInfo);
+    const response = await request({
+      url: '/auth/wechat-login',
+      method: 'POST',
+      data: {
+        code,
+        userInfo: e.detail.userInfo
+      }
+    });
+
+    console.log('[Login] Backend response:', response);
 
     if (response.code === 0) {
-      const { token, user, isNewUser } = response.data;
+      const { token, user, isNewUser, role } = response.data;
+
+      console.log('[Login] Extracted data:', { token, user, isNewUser, role });
+
+      if (!token) {
+        throw new Error('后端未返回token');
+      }
 
       // 3. 保存token和用户信息
       uni.setStorageSync('token', token);
       uni.setStorageSync('user', user);
+      console.log('[Login] Token and user saved to storage');
 
       // 4. 新用户提示
       if (isNewUser) {
         uni.showToast({
           title: '欢迎加入七号厨房！',
           icon: 'success',
+          duration: 2000
+        });
+      } else if (role === 'STAFF' || role === 'ADMIN') {
+        uni.showToast({
+          title: '欢迎回来，' + (role === 'ADMIN' ? '管理员' : '员工'),
+          icon: 'success',
+          duration: 2000
         });
       }
 
       // 5. 跳转到首页
       setTimeout(() => {
-        uni.redirectTo({ url: '/pages/home/index' });
+        uni.switchTab({ url: '/pages/home/index' });
       }, 500);
     } else {
       throw new Error(response.message || '登录失败');
     }
   } catch (error: any) {
+    console.error('登录失败:', error);
     uni.showToast({
       title: error.message || '登录失败，请重试',
       icon: 'none',
@@ -109,11 +137,6 @@ const handleWechatLogin = async (e: any) => {
   } finally {
     loading.value = false;
   }
-};
-
-// 跳转到员工登录页
-const goToStaffLogin = () => {
-  uni.navigateTo({ url: '/pages/login/staff' });
 };
 
 // 显示用户协议
@@ -135,7 +158,7 @@ const showPrivacyPolicy = () => {
 };
 </script>
 
-<style scoped lang="scss">
+<style scoped>
 .login-container {
   min-height: 100vh;
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -191,21 +214,22 @@ const showPrivacyPolicy = () => {
   font-weight: 500;
   border: none;
   margin-bottom: 32rpx;
-
-  &:disabled {
-    opacity: 0.7;
-  }
 }
 
-.staff-login-link {
+.wechat-login-btn:disabled {
+  opacity: 0.7;
+}
+
+.login-tip {
   text-align: center;
   margin-top: 24rpx;
+  padding: 0 40rpx;
+}
 
-  .link-text {
-    color: #fff;
-    font-size: 28rpx;
-    text-decoration: underline;
-  }
+.login-tip .tip-text {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 24rpx;
+  line-height: 1.5;
 }
 
 .agreement-section {
@@ -218,10 +242,10 @@ const showPrivacyPolicy = () => {
   color: rgba(255, 255, 255, 0.7);
   text-align: center;
   line-height: 1.6;
+}
 
-  .link {
-    color: #fff;
-    text-decoration: underline;
-  }
+.agreement-text .link {
+  color: #fff;
+  text-decoration: underline;
 }
 </style>

@@ -3,14 +3,22 @@
  * Domain layer repository interface (no Prisma dependency)
  */
 
+export interface IngredientRef {
+  id: string;
+  name: string;
+  type?: string;
+  properties?: any;
+}
+
 export interface RecipeItem {
   id: string;
   ingredientId: string;
   preparationMethod?: string | null;
   ratioPercent?: number | null;
-  isPrimarySource: boolean;
+  sortOrder?: number | null;
   nutrientTargetKey?: string | null;
   nutrientTargetValue?: number | null;
+  ingredient?: IngredientRef;
 }
 
 export interface Recipe {
@@ -21,13 +29,45 @@ export interface Recipe {
   energyDensityKcalPerKg: number;
   productionLossRate: number;
   batchLaborHours?: number;
+  coverImageUrl?: string | null;
+  targetHealthTags?: string[];
+  applicableLifeStages?: string[];
   items?: RecipeItem[]; // Recipe items with ingredient references
-  // TODO: Add more fields as needed
+  designSource?: string | null;
+  nutritionStandard?: string;
+  nutritionDetailedData?: any;
+  description?: string | null;
+}
+
+export interface FindRecipesOptions {
+  lifeStage?: string;
+  healthTags?: string[];
+  excludeTags?: string[];
+}
+
+export interface FilterOptions {
+  lifeStages: Array<{
+    value: string;
+    label: string;
+    count: number;
+  }>;
+  healthTags: Array<{
+    value: string;
+    label: string;
+    count: number;
+  }>;
+  ingredientTags: Array<{
+    value: string;
+    label: string;
+    count: number;
+  }>;
+  total: number;
 }
 
 export interface RecipeRepository {
   findById(id: string): Promise<Recipe | null>;
   findByIdAndVersion(id: string, version: number): Promise<Recipe | null>;
-  findPublicRecipes(): Promise<Recipe[]>;
+  findPublicRecipes(options?: FindRecipesOptions): Promise<Recipe[]>;
+  getFilterOptions(): Promise<FilterOptions>;
   save(recipe: Recipe): Promise<Recipe>;
 }

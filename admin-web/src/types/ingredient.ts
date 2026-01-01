@@ -58,11 +58,17 @@ export interface FoodProperties {
   density_g_per_ml?: number       // 密度- 仅当 base_unit == 'ML' 时必需
 }
 
+// 有效成分含量值（包含数值和单位）
+export interface ActiveNutrientValue {
+  value: number  // 显示的数值（原始输入值）
+  unit: string   // 单位 (mg, g, μg, IU, %)
+}
+
 // 补剂属性
 export interface SupplementProperties {
-  category_type: string                    // 营养分类
-  active_nutrients: Record<string, number> // 有效成分浓度表
-  production_loss_rate?: number            // 个性化损耗率
+  category_type: string                                    // 营养分类
+  active_nutrients: Record<string, ActiveNutrientValue>   // 有效成分浓度表（保存原始值和单位）
+  production_loss_rate?: number                            // 个性化损耗率
 }
 
 // 包材属性

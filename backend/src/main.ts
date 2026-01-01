@@ -72,9 +72,9 @@ async function bootstrap() {
   // Global validation pipe with detailed error messages
   app.useGlobalPipes(
     new ValidationPipe({
-      transform: true,
-      whitelist: true,
-      forbidNonWhitelisted: true,
+      transform: false,  // Disable transform to avoid class-transformer issues
+      whitelist: false,
+      forbidNonWhitelisted: false,  // 暂时关闭以允许查询参数通过
       exceptionFactory: (errors) => {
         // Format validation errors into a readable message with nested field paths
         const formatError = (error: any, prefix = ''): string[] => {

@@ -83,6 +83,9 @@ export function clearToken(): void {
     uni.removeStorageSync('token')
     // Reset token ready state when token is cleared
     resetTokenReady()
+    // Clear dogs cache to prevent showing user data after logout
+    uni.removeStorageSync('dogs_cache')
+    console.info('[Auth] Cleared token and dogs cache')
   } catch (err) {
     console.error('Failed to clear token from storage:', err)
   }
@@ -206,12 +209,16 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
       header['Authorization'] = `Bearer ${token}`
     }
     
+    console.log('[API Request]', options.method || 'GET', url)
+
     uni.request({
       url,
       method: options.method || 'GET',
       data: options.data,
       header,
       success: (res: any) => {
+        console.log('[API Response]', 'statusCode:', res.statusCode, 'data:', res.data)
+
         // Check if response data exists
         if (!res.data) {
           const errorMsg = `服务器响应格式错误`
@@ -226,34 +233,23 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
         }
 
         const response = res.data as ApiResponse<T>
+        console.log('[API Parsed Response]', response)
 
-        // Handle 401 Unauthorized - retry with fresh login
-        if (res.statusCode === 401 && !options.retryOn401) {
-          console.log('401 Unauthorized, attempting to re-login and retry')
+        // Handle 401 Unauthorized - don't auto-login with test account
+        if (res.statusCode === 401) {
+          console.warn('401 Unauthorized - User needs to login')
           clearToken()
+          resetTokenReady()
 
-          // Attempt to re-login and retry the request once
-          console.log('→ Attempting re-login after 401...')
-          performLogin().then((newToken) => {
-            console.log('✓ Re-login successful, retrying original request')
-            // Mark token as ready for other waiting requests
-            markTokenReady()
-            // Retry the original request with new token
-            request<T>({
-              ...options,
-              retryOn401: true // Prevent infinite retry loops
-            }).then(resolve).catch(reject)
-          }).catch((loginErr) => {
-            console.error('✗ Re-login failed:', loginErr)
-            // Show error but don't block - user can still navigate
-            uni.showToast({
-              title: normalizeMsg('登录已过期，部分功能可能不可用'),
-              icon: 'none',
-              duration: 3000
-            })
-            // Reject gracefully - caller can handle
-            reject(new Error('Authentication failed'))
+          // Show toast提示用户登录
+          uni.showToast({
+            title: '请先登录',
+            icon: 'none',
+            duration: 2000
           })
+
+          // Reject with auth error - caller can handle (e.g., redirect to login)
+          reject(new Error('Authentication required'))
           return
         }
 
@@ -364,3 +360,643 @@ export const authApi = {
     });
   },
 };
+
+// Health Records API
+export const healthApi = {
+  // ==================== Vaccine Records ====================
+
+  /**
+   * 获取狗狗的所有疫苗记录
+   */
+  getVaccines: (dogId: string) => {
+    return request<{
+      total: number;
+      records: Array<{
+        id: string;
+        dogId: string;
+        vaccineName: string;
+        vaccinationDate: string;
+        nextDueDate: string | null;
+        notes: string | null;
+        status: 'COMPLETED' | 'SCHEDULED' | 'OVERDUE';
+        createdAt: string;
+        updatedAt: string;
+      }>;
+    }>({
+      url: `/dogs/${dogId}/vaccines`,
+      method: 'GET',
+    });
+  },
+
+  /**
+   * 获取单个疫苗记录（用于编辑页面）
+   */
+  getVaccine: (dogId: string, vaccineId: string) => {
+    return request<{
+      id: string;
+      dogId: string;
+      vaccineName: string;
+      vaccinationDate: string;
+      nextDueDate: string | null;
+      notes: string | null;
+      status: 'COMPLETED' | 'SCHEDULED' | 'OVERDUE';
+      createdAt: string;
+      updatedAt: string;
+    }>({
+      url: `/dogs/${dogId}/vaccines/${vaccineId}`,
+      method: 'GET',
+    });
+  },
+
+  /**
+   * 获取即将到期的疫苗
+   */
+  getUpcomingVaccines: (dogId: string, days: number = 30) => {
+    return request<{
+      total: number;
+      records: Array<{
+        id: string;
+        dogId: string;
+        vaccineName: string;
+        vaccinationDate: string;
+        nextDueDate: string | null;
+        notes: string | null;
+        status: 'COMPLETED' | 'SCHEDULED' | 'OVERDUE';
+        createdAt: string;
+        updatedAt: string;
+      }>;
+    }>({
+      url: `/dogs/${dogId}/vaccines/upcoming?days=${days}`,
+      method: 'GET',
+    });
+  },
+
+  /**
+   * 创建疫苗记录
+   */
+  createVaccine: (dogId: string, data: {
+    vaccineName: string;
+    vaccinationDate: string;
+    nextDueDate?: string;
+    notes?: string;
+    status?: 'COMPLETED' | 'SCHEDULED' | 'OVERDUE';
+  }) => {
+    return request<{
+      id: string;
+      dogId: string;
+      vaccineName: string;
+      vaccinationDate: string;
+      nextDueDate: string | null;
+      notes: string | null;
+      status: 'COMPLETED' | 'SCHEDULED' | 'OVERDUE';
+      createdAt: string;
+      updatedAt: string;
+    }>({
+      url: `/dogs/${dogId}/vaccines`,
+      method: 'POST',
+      data,
+    });
+  },
+
+  /**
+   * 更新疫苗记录
+   */
+  updateVaccine: (dogId: string, vaccineId: string, data: {
+    vaccineName?: string;
+    vaccinationDate?: string;
+    nextDueDate?: string;
+    notes?: string;
+    status?: 'COMPLETED' | 'SCHEDULED' | 'OVERDUE';
+  }) => {
+    return request<{
+      id: string;
+      dogId: string;
+      vaccineName: string;
+      vaccinationDate: string;
+      nextDueDate: string | null;
+      notes: string | null;
+      status: 'COMPLETED' | 'SCHEDULED' | 'OVERDUE';
+      createdAt: string;
+      updatedAt: string;
+    }>({
+      url: `/dogs/${dogId}/vaccines/${vaccineId}`,
+      method: 'PUT',
+      data,
+    });
+  },
+
+  /**
+   * 删除疫苗记录
+   */
+  deleteVaccine: (dogId: string, vaccineId: string) => {
+    return request<null>({
+      url: `/dogs/${dogId}/vaccines/${vaccineId}`,
+      method: 'DELETE',
+    });
+  },
+
+  // ==================== Checkup Records ====================
+
+  /**
+   * 获取狗狗的所有体检记录
+   */
+  getCheckups: (dogId: string) => {
+    return request<{
+      total: number;
+      records: Array<{
+        id: string;
+        dogId: string;
+        checkupType: string;
+        checkupDate: string;
+        findings: string | null;
+        recommendations: string | null;
+        veterinarian: string | null;
+        attachments: string[];
+        createdAt: string;
+        updatedAt: string;
+      }>;
+    }>({
+      url: `/dogs/${dogId}/checkups`,
+      method: 'GET',
+    });
+  },
+
+  /**
+   * 获取单个体检记录（用于编辑页面）
+   */
+  getCheckup: (dogId: string, checkupId: string) => {
+    return request<{
+      id: string;
+      dogId: string;
+      checkupType: string;
+      checkupDate: string;
+      findings: string | null;
+      recommendations: string | null;
+      veterinarian: string | null;
+      attachments: string[];
+      createdAt: string;
+      updatedAt: string;
+    }>({
+      url: `/dogs/${dogId}/checkups/${checkupId}`,
+      method: 'GET',
+    });
+  },
+
+  /**
+   * 创建体检记录
+   */
+  createCheckup: (dogId: string, data: {
+    checkupType: string;
+    checkupDate: string;
+    findings?: string;
+    recommendations?: string;
+    veterinarian?: string;
+    attachments?: string[];
+  }) => {
+    return request<{
+      id: string;
+      dogId: string;
+      checkupType: string;
+      checkupDate: string;
+      findings: string | null;
+      recommendations: string | null;
+      veterinarian: string | null;
+      attachments: string[];
+      createdAt: string;
+      updatedAt: string;
+    }>({
+      url: `/dogs/${dogId}/checkups`,
+      method: 'POST',
+      data,
+    });
+  },
+
+  /**
+   * 更新体检记录
+   */
+  updateCheckup: (dogId: string, checkupId: string, data: {
+    checkupType?: string;
+    checkupDate?: string;
+    findings?: string;
+    recommendations?: string;
+    veterinarian?: string;
+    attachments?: string[];
+  }) => {
+    return request<{
+      id: string;
+      dogId: string;
+      checkupType: string;
+      checkupDate: string;
+      findings: string | null;
+      recommendations: string | null;
+      veterinarian: string | null;
+      attachments: string[];
+      createdAt: string;
+      updatedAt: string;
+    }>({
+      url: `/dogs/${dogId}/checkups/${checkupId}`,
+      method: 'PUT',
+      data,
+    });
+  },
+
+  /**
+   * 删除体检记录
+   */
+  deleteCheckup: (dogId: string, checkupId: string) => {
+    return request<null>({
+      url: `/dogs/${dogId}/checkups/${checkupId}`,
+      method: 'DELETE',
+    });
+  },
+
+  // ==================== Medical Records ====================
+
+  /**
+   * 获取狗狗的所有病历记录
+   */
+  getMedicalRecords: (dogId: string, status?: string) => {
+    const url = status
+      ? `/dogs/${dogId}/medical-records?status=${status}`
+      : `/dogs/${dogId}/medical-records`;
+
+    return request<{
+      total: number;
+      records: Array<{
+        id: string;
+        dogId: string;
+        visitDate: string;
+        chiefComplaint: string;
+        diagnosis: string;
+        treatment: string | null;
+        medications: string[];
+        status: 'TREATING' | 'RECOVERED' | 'CHRONIC';
+        followUpDate: string | null;
+        veterinarian: string | null;
+        notes: string | null;
+        createdAt: string;
+        updatedAt: string;
+      }>;
+    }>({
+      url,
+      method: 'GET',
+    });
+  },
+
+  /**
+   * 获取单个病历记录（用于编辑页面）
+   */
+  getMedicalRecord: (dogId: string, recordId: string) => {
+    return request<{
+      id: string;
+      dogId: string;
+      visitDate: string;
+      chiefComplaint: string;
+      diagnosis: string;
+      treatment: string | null;
+      medications: string[];
+      status: 'TREATING' | 'RECOVERED' | 'CHRONIC';
+      followUpDate: string | null;
+      veterinarian: string | null;
+      notes: string | null;
+      createdAt: string;
+      updatedAt: string;
+    }>({
+      url: `/dogs/${dogId}/medical-records/${recordId}`,
+      method: 'GET',
+    });
+  },
+
+  /**
+   * 创建病历记录
+   */
+  createMedicalRecord: (dogId: string, data: {
+    visitDate: string;
+    chiefComplaint: string;
+    diagnosis: string;
+    treatment?: string;
+    medications?: string[];
+    status?: 'TREATING' | 'RECOVERED' | 'CHRONIC';
+    followUpDate?: string;
+    veterinarian?: string;
+    notes?: string;
+  }) => {
+    return request<{
+      id: string;
+      dogId: string;
+      visitDate: string;
+      chiefComplaint: string;
+      diagnosis: string;
+      treatment: string | null;
+      medications: string[];
+      status: 'TREATING' | 'RECOVERED' | 'CHRONIC';
+      followUpDate: string | null;
+      veterinarian: string | null;
+      notes: string | null;
+      createdAt: string;
+      updatedAt: string;
+    }>({
+      url: `/dogs/${dogId}/medical-records`,
+      method: 'POST',
+      data,
+    });
+  },
+
+  /**
+   * 更新病历记录
+   */
+  updateMedicalRecord: (dogId: string, recordId: string, data: {
+    visitDate?: string;
+    chiefComplaint?: string;
+    diagnosis?: string;
+    treatment?: string;
+    medications?: string[];
+    status?: 'TREATING' | 'RECOVERED' | 'CHRONIC';
+    followUpDate?: string;
+    veterinarian?: string;
+    notes?: string;
+  }) => {
+    return request<{
+      id: string;
+      dogId: string;
+      visitDate: string;
+      chiefComplaint: string;
+      diagnosis: string;
+      treatment: string | null;
+      medications: string[];
+      status: 'TREATING' | 'RECOVERED' | 'CHRONIC';
+      followUpDate: string | null;
+      veterinarian: string | null;
+      notes: string | null;
+      createdAt: string;
+      updatedAt: string;
+    }>({
+      url: `/dogs/${dogId}/medical-records/${recordId}`,
+      method: 'PUT',
+      data,
+    });
+  },
+
+  /**
+   * 删除病历记录
+   */
+  deleteMedicalRecord: (dogId: string, recordId: string) => {
+    return request<null>({
+      url: `/dogs/${dogId}/medical-records/${recordId}`,
+      method: 'DELETE',
+    });
+  },
+
+  // ==================== Allergy Records ====================
+
+  /**
+   * 获取狗狗的所有过敏记录
+   */
+  getAllergies: (dogId: string) => {
+    return request<{
+      total: number;
+      records: Array<{
+        id: string;
+        dogId: string;
+        allergen: string;
+        allergenType: 'FOOD' | 'ENVIRONMENTAL' | 'MEDICATION';
+        discoveryDate: string;
+        symptoms: string;
+        severity: 'MILD' | 'MODERATE' | 'SEVERE';
+        confirmedBy: 'VET' | 'OWNER';
+        treatment: string | null;
+        notes: string | null;
+        createdAt: string;
+        updatedAt: string;
+      }>;
+    }>({
+      url: `/dogs/${dogId}/allergies`,
+      method: 'GET',
+    });
+  },
+
+  /**
+   * 获取单个过敏记录（用于编辑页面）
+   */
+  getAllergy: (dogId: string, allergyId: string) => {
+    return request<{
+      id: string;
+      dogId: string;
+      allergen: string;
+      allergenType: 'FOOD' | 'ENVIRONMENTAL' | 'MEDICATION';
+      discoveryDate: string;
+      symptoms: string;
+      severity: 'MILD' | 'MODERATE' | 'SEVERE';
+      confirmedBy: 'VET' | 'OWNER';
+      treatment: string | null;
+      notes: string | null;
+      createdAt: string;
+      updatedAt: string;
+    }>({
+      url: `/dogs/${dogId}/allergies/${allergyId}`,
+      method: 'GET',
+    });
+  },
+
+  /**
+   * 创建过敏记录
+   */
+  createAllergy: (dogId: string, data: {
+    allergen: string;
+    allergenType: 'FOOD' | 'ENVIRONMENTAL' | 'MEDICATION';
+    discoveryDate: string;
+    symptoms: string;
+    severity?: 'MILD' | 'MODERATE' | 'SEVERE';
+    confirmedBy?: 'VET' | 'OWNER';
+    treatment?: string;
+    notes?: string;
+  }) => {
+    return request<{
+      id: string;
+      dogId: string;
+      allergen: string;
+      allergenType: 'FOOD' | 'ENVIRONMENTAL' | 'MEDICATION';
+      discoveryDate: string;
+      symptoms: string;
+      severity: 'MILD' | 'MODERATE' | 'SEVERE';
+      confirmedBy: 'VET' | 'OWNER';
+      treatment: string | null;
+      notes: string | null;
+      createdAt: string;
+      updatedAt: string;
+    }>({
+      url: `/dogs/${dogId}/allergies`,
+      method: 'POST',
+      data,
+    });
+  },
+
+  /**
+   * 更新过敏记录
+   */
+  updateAllergy: (dogId: string, allergyId: string, data: {
+    allergen?: string;
+    allergenType?: 'FOOD' | 'ENVIRONMENTAL' | 'MEDICATION';
+    discoveryDate?: string;
+    symptoms?: string;
+    severity?: 'MILD' | 'MODERATE' | 'SEVERE';
+    confirmedBy?: 'VET' | 'OWNER';
+    treatment?: string;
+    notes?: string;
+  }) => {
+    return request<{
+      id: string;
+      dogId: string;
+      allergen: string;
+      allergenType: 'FOOD' | 'ENVIRONMENTAL' | 'MEDICATION';
+      discoveryDate: string;
+      symptoms: string;
+      severity: 'MILD' | 'MODERATE' | 'SEVERE';
+      confirmedBy: 'VET' | 'OWNER';
+      treatment: string | null;
+      notes: string | null;
+      createdAt: string;
+      updatedAt: string;
+    }>({
+      url: `/dogs/${dogId}/allergies/${allergyId}`,
+      method: 'PUT',
+      data,
+    });
+  },
+
+  /**
+   * 删除过敏记录
+   */
+  deleteAllergy: (dogId: string, allergyId: string) => {
+    return request<null>({
+      url: `/dogs/${dogId}/allergies/${allergyId}`,
+      method: 'DELETE',
+    });
+  },
+
+  // ==================== Health Summary ====================
+
+  /**
+   * 获取健康数据汇总（用于导出）
+   */
+  exportHealthData: (dogId: string) => {
+    return request<{
+      dog: {
+        id: string;
+        name: string;
+        breed: string;
+        birthday: string;
+        gender: string;
+      };
+      vaccines: Array<any>;
+      checkups: Array<any>;
+      medicalRecords: Array<any>;
+      allergies: Array<any>;
+      exportDate: string;
+    }>({
+      url: `/dogs/${dogId}/health/export`,
+      method: 'GET',
+    });
+  },
+
+  /**
+   * 订阅疫苗到期提醒
+   */
+  subscribeVaccineReminder: (dogId: string, vaccineIds: string[], daysBefore?: number) => {
+    return request<{
+      subscribedCount: number;
+    }>({
+      url: `/dogs/${dogId}/vaccines/subscribe-reminder`,
+      method: 'POST',
+      data: { vaccineIds, daysBefore: daysBefore || 7 },
+    });
+  },
+
+  /**
+   * 发送即将到期疫苗通知
+   */
+  notifyUpcomingVaccines: (dogId: string) => {
+    return request<{
+      notifiedCount: number;
+    }>({
+      url: `/dogs/${dogId}/vaccines/upcoming/notify`,
+      method: 'GET',
+    });
+  },
+};
+
+/**
+ * 上传健康记录图片到COS
+ * @param filePath 本地文件路径
+ */
+export function uploadHealthImage(filePath: string): Promise<{ url: string; key: string }> {
+  return new Promise((resolve, reject) => {
+    uni.uploadFile({
+      url: `${getBaseUrl()}/health/upload-image`,
+      filePath,
+      name: 'file',
+      header: {
+        'Authorization': `Bearer ${getToken()}`,
+      },
+      success: (uploadRes: any) => {
+        if (uploadRes.statusCode === 200 || uploadRes.statusCode === 201) {
+          try {
+            const response = JSON.parse(uploadRes.data)
+            if (response.code === 0 && response.data) {
+              resolve(response.data)
+            } else {
+              reject(new Error(response.message || '上传失败'))
+            }
+          } catch (err) {
+            reject(new Error('解析响应失败'))
+          }
+        } else {
+          reject(new Error(`上传失败: ${uploadRes.statusCode}`))
+        }
+      },
+      fail: (err) => {
+        console.error('[Upload] Upload failed:', err)
+        reject(err)
+      },
+    })
+  })
+}
+
+// ==================== WeChat Subscription Message ====================
+
+/**
+ * 请求订阅消息权限
+ * @param templateId 模板ID
+ * @param scene 订阅场景值
+ */
+export function requestSubscriptionMessage(templateId: string, scene: number = 1): Promise<boolean> {
+  return new Promise((resolve) => {
+    uni.requestSubscribeMessage({
+      tmplIds: [templateId],
+      scene,
+      success: (res: any) => {
+        console.log('[Subscription] Request success:', res)
+        if (res[templateId] === 'accept') {
+          resolve(true)
+        } else if (res[templateId] === 'reject') {
+          uni.showToast({
+            title: '您已拒绝订阅消息',
+            icon: 'none',
+          })
+          resolve(false)
+        } else {
+          // 用户点击了关闭或其他操作
+          resolve(false)
+        }
+      },
+      fail: (err: any) => {
+        console.error('[Subscription] Request failed:', err)
+        uni.showToast({
+          title: '订阅失败',
+          icon: 'none',
+        })
+        resolve(false)
+      },
+    })
+  })
+}

@@ -8,13 +8,18 @@ import {
   Post,
   Get,
   Put,
+  Delete,
   Body,
   Param,
+  Query,
   HttpCode,
   HttpStatus,
   ValidationPipe,
   UsePipes,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
+  BadRequestException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -24,11 +29,15 @@ import {
   ApiBody,
   ApiSecurity,
   ApiHeader,
+  ApiQuery,
+  ApiConsumes,
 } from '@nestjs/swagger';
 import { DogService, DOG_REPOSITORY, DOG_BREED_REPOSITORY } from '../../application/dog/dog.service';
 import type { DogRepository } from '../../domain/dog/dog.repository';
 import type { DogBreedRepository } from '../../domain/dog/dog-breed.repository';
 import { Inject } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import { CreateDogDto } from '../dto/dogs/create-dog.dto';
 import { UpdateDogDto } from '../dto/dogs/update-dog.dto';
 import { CalcPreviewDto } from '../dto/dogs/calc-preview.dto';
@@ -44,6 +53,9 @@ import { Dog } from '../../domain/dog/dog.entity';
 import { AuthGuard, CurrentUser } from '../auth';
 import type { RequestUser } from '../auth';
 import { MIXED_BREED_VIRTUAL_ID } from '../../domain/dog/constants';
+import { WeightRecordService } from '../../application/weight-record/weight-record.service';
+import { CreateWeightRecordDto } from '../dto/weight-record/create-weight-record.dto';
+import { WeightRecordResponseDto, WeightRecordListResponseDto } from '../dto/weight-record/weight-record-response.dto';
 
 @ApiTags('Dogs')
 @Controller('api/v1/dogs')
@@ -55,6 +67,8 @@ export class DogsController {
     @Inject(DOG_BREED_REPOSITORY)
     private readonly dogBreedRepository: DogBreedRepository,
     private readonly dogService: DogService,
+    private readonly weightRecordService: WeightRecordService,
+    private readonly cosService: TencentCosService,
   ) {}
 
   @Post()
@@ -338,6 +352,117 @@ export class DogsController {
     return ApiResponseDto.success(result);
   }
 
+  // ==========================================
+  // Weight Record Endpoints
+  // ==========================================
+
+  @Post(':dogId/weight-records')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Create a weight record for a dog' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiParam({ name: 'dogId', description: 'Dog ID' })
+  @ApiBody({ type: CreateWeightRecordDto })
+  @ApiResponse({
+    status: 201,
+    description: 'Weight record created successfully',
+    type: WeightRecordResponseDto,
+  })
+  async createWeightRecord(
+    @Param('dogId') dogId: string,
+    @Body() dto: CreateWeightRecordDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<WeightRecordResponseDto>> {
+    const record = await this.weightRecordService.create(user.customerId, {
+      ...dto,
+      dogId,
+    });
+
+    return ApiResponseDto.success(this.mapWeightRecordToDto(record));
+  }
+
+  @Get(':dogId/weight-records')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Get weight records for a dog' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiParam({ name: 'dogId', description: 'Dog ID' })
+  @ApiQuery({ name: 'limit', required: false, type: Number })
+  @ApiQuery({ name: 'offset', required: false, type: Number })
+  @ApiResponse({
+    status: 200,
+    description: 'Weight records retrieved successfully',
+    type: WeightRecordListResponseDto,
+  })
+  async getWeightRecords(
+    @Param('dogId') dogId: string,
+    @Query('limit') limit?: number,
+    @Query('offset') offset?: number,
+    @CurrentUser() user?: RequestUser,
+  ): Promise<ApiResponseDto<WeightRecordListResponseDto>> {
+    const result = await this.weightRecordService.findByDogId(
+      user!.customerId,
+      dogId,
+      limit ? parseInt(limit.toString()) : undefined,
+      offset ? parseInt(offset.toString()) : undefined
+    );
+
+    return ApiResponseDto.success({
+      total: result.total,
+      records: result.records.map((r) => this.mapWeightRecordToDto(r)),
+    });
+  }
+
+  @Delete('weight-records/:recordId')
+  @UseGuards(AuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Delete a weight record' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiParam({ name: 'recordId', description: 'Weight record ID' })
+  @ApiResponse({ status: 200, description: 'Weight record deleted successfully' })
+  async deleteWeightRecord(
+    @Param('recordId') recordId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<null>> {
+    await this.weightRecordService.delete(user.customerId, recordId);
+    return ApiResponseDto.success(null);
+  }
+
+  @Put('weight-records/:recordId/sync')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Update syncedToProfile flag' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiParam({ name: 'recordId', description: 'Weight record ID' })
+  @ApiBody({ schema: { type: 'object', properties: { synced: { type: 'boolean' } } } })
+  @ApiResponse({
+    status: 200,
+    description: 'Sync flag updated successfully',
+    type: WeightRecordResponseDto,
+  })
+  async updateWeightRecordSynced(
+    @Param('recordId') recordId: string,
+    @Body('synced') synced: boolean,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<WeightRecordResponseDto>> {
+    const record = await this.weightRecordService.updateSyncedToProfile(
+      user.customerId,
+      recordId,
+      synced
+    );
+
+    return ApiResponseDto.success(this.mapWeightRecordToDto(record));
+  }
+
+  private mapWeightRecordToDto(record: any): WeightRecordResponseDto {
+    return {
+      id: record.id,
+      dogId: record.dogId,
+      recordDate: record.recordDate.toISOString().split('T')[0],
+      weightKg: record.weightKg,
+      note: record.note,
+      syncedToProfile: record.syncedToProfile,
+      createdAt: record.createdAt.toISOString(),
+    };
+  }
+
   private mapDogToProfileDto(
     dog: Dog,
     breedMap?: Map<string, string>,
@@ -367,5 +492,72 @@ export class DogsController {
       medicalHistory: dog.medicalHistory,
       cachedTargetFoodKcal: dog.cachedTargetFoodKcal,
     };
+  }
+
+  // ==================== Dog Avatar Upload ====================
+
+  @Post(':id/avatar')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Upload dog avatar image' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiConsumes('multipart/form-data')
+  @ApiParam({ name: 'id', description: 'Dog ID' })
+  @ApiResponse({
+    status: 201,
+    description: 'Avatar uploaded successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        code: { type: 'number', example: 0 },
+        message: { type: 'string' },
+        data: {
+          type: 'object',
+          properties: {
+            url: { type: 'string', description: 'Avatar image URL' },
+            key: { type: 'string', description: 'COS object key' },
+          },
+        },
+      },
+    },
+  })
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadDogAvatar(
+    @Param('id') dogId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: RequestUser,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+
+    // Validate file size (5MB max)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      throw new BadRequestException('File size exceeds 5MB limit');
+    }
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      throw new BadRequestException('Invalid file type. Only JPG, PNG, GIF, and WEBP are allowed');
+    }
+
+    // Verify dog ownership
+    const dog = await this.dogRepository.findById(dogId);
+    if (!dog) {
+      throw new BadRequestException('Dog not found');
+    }
+    if (dog.ownerId !== user.customerId) {
+      throw new BadRequestException('Access denied');
+    }
+
+    try {
+      const result = await this.cosService.uploadImage(file, file.originalname, 'dogs/avatars');
+
+      return ApiResponseDto.success(result);
+    } catch (error) {
+      console.error('[DogsController] Avatar upload failed:', error);
+      throw new BadRequestException('Failed to upload avatar');
+    }
   }
 }

@@ -1,5 +1,19 @@
 <template>
   <view class="home-container">
+    <!-- 登录引导Banner（游客模式显示） -->
+    <view v-if="showLoginBanner && !isLoggedIn" class="login-banner">
+      <view class="banner-content">
+        <text class="banner-icon">🔔</text>
+        <view class="banner-text">
+          <text class="banner-title">登录后可创建狗狗档案，获得专属定制食谱和喂食建议</text>
+        </view>
+        <view class="banner-actions">
+          <text class="banner-login-btn" @tap="goToLogin">立即登录</text>
+          <text class="banner-close" @tap="closeBanner">×</text>
+        </view>
+      </view>
+    </view>
+
     <!-- 顶部欢迎区 -->
     <view class="header-section">
       <view class="welcome-text">Hi，欢迎来到七号厨房 🍖</view>
@@ -8,21 +22,21 @@
 
     <!-- 快捷功能入口 -->
     <view class="quick-actions">
-      <view class="action-item" @tap="goToDogList">
-        <view class="action-icon">🐕</view>
-        <text class="action-text">狗狗档案</text>
+      <view class="action-item" @tap="goToCommunity">
+        <view class="action-icon">🏠</view>
+        <text class="action-text">爱犬社区</text>
       </view>
-      <view class="action-item" @tap="goToRecipeList">
-        <view class="action-icon">🍲</view>
-        <text class="action-text">食谱橱窗</text>
+      <view class="action-item" @tap="goToHealthManagement">
+        <view class="action-icon">💊</view>
+        <text class="action-text">健康管理</text>
       </view>
-      <view class="action-item" @tap="goToOrderList">
-        <view class="action-icon">📦</view>
-        <text class="action-text">我的订单</text>
+      <view class="action-item" @tap="goToWeightManagement">
+        <view class="action-icon">⚖️</view>
+        <text class="action-text">体重管理</text>
       </view>
-      <view class="action-item" @tap="goToAddressList">
-        <view class="action-icon">📍</view>
-        <text class="action-text">收货地址</text>
+      <view class="action-item" @tap="goToCalculatePortion">
+        <view class="action-icon">🍽️</view>
+        <text class="action-text">饭量计算</text>
       </view>
     </view>
 
@@ -63,47 +77,370 @@
       <button class="create-btn" @tap="goToDogCreate">创建档案</button>
     </view>
 
-    <!-- 推荐食谱 -->
-    <view class="section" v-if="recommendedRecipes.length > 0">
-      <view class="section-header">
-        <text class="section-title">推荐食谱</text>
-        <view class="section-more" @tap="goToRecipeList">
-          <text>查看全部</text>
-          <text class="arrow">›</text>
+    <!-- 食谱橱窗标题 -->
+    <view class="recipe-showcase-header">
+      <text class="section-title">食谱橱窗</text>
+      <text class="recipe-count">共 {{ totalCount }} 道食谱</text>
+      <text v-if="activeFiltersCount > 0" class="clear-all" @tap="clearAllFilters">清除筛选</text>
+    </view>
+
+    <!-- 固定筛选栏 -->
+    <view class="filter-bar">
+      <text class="filter-title">筛选食谱</text>
+      <view class="filter-buttons">
+        <!-- 生命阶段按钮 -->
+        <view
+          :class="['filter-btn', { active: filterState.selectedLifeStage }]"
+          @tap="openLifeStageDrawer"
+        >
+          <text class="filter-btn-text">{{ getLifeStageButtonText() }}</text>
+          <text class="dropdown-arrow">▼</text>
+          <text
+            v-if="filterState.selectedLifeStage"
+            class="remove-icon"
+            @tap.stop="removeLifeStage"
+          >×</text>
+        </view>
+
+        <!-- 健康标签按钮 -->
+        <view
+          :class="['filter-btn', { active: filterState.selectedHealthTags.length > 0 }]"
+          @tap="openHealthTagsDrawer"
+        >
+          <text class="filter-btn-text">{{ getHealthTagsButtonText() }}</text>
+          <text class="dropdown-arrow">▼</text>
+          <text
+            v-if="filterState.selectedHealthTags.length > 0"
+            class="remove-icon"
+            @tap.stop="removeHealthTags"
+          >×</text>
+        </view>
+
+        <!-- 不吃这些按钮 -->
+        <view
+          :class="['filter-btn', { excluded: filterState.excludedIngredientTags.length > 0 }]"
+          @tap="openExcludedTagsDrawer"
+        >
+          <text class="filter-btn-text">{{ getExcludedTagsButtonText() }}</text>
+          <text class="dropdown-arrow">▼</text>
+          <text
+            v-if="filterState.excludedIngredientTags.length > 0"
+            class="remove-icon"
+            @tap.stop="removeExcludedTags"
+          >×</text>
         </view>
       </view>
-      <view class="recipe-list">
-        <view class="recipe-card" v-for="recipe in recommendedRecipes" :key="recipe.id" @tap="goToRecipeDetail(recipe.id)">
-          <image class="recipe-image" :src="recipe.coverImageUrl || '/static/placeholder.png'" mode="aspectFill" />
-          <view class="recipe-info">
-            <text class="recipe-name">{{ recipe.name }}</text>
-            <view class="recipe-tags">
-              <text class="tag" v-for="(tag, index) in recipe.tags" :key="index">{{ tag }}</text>
-            </view>
-            <view class="recipe-energy">
-              <text class="energy-text">{{ recipe.energyDensityKcalPerKg }} kcal/kg</text>
+    </view>
+
+    <!-- 食谱列表信息流 -->
+    <view class="recipe-list">
+      <view
+        v-for="recipe in recipes"
+        :key="recipe.id"
+        class="recipe-card"
+        @tap="viewRecipe(recipe.id)"
+      >
+        <!-- 封面图 -->
+        <image
+          v-if="recipe.coverImageUrl"
+          class="recipe-cover"
+          :src="recipe.coverImageUrl"
+          mode="aspectFill"
+        />
+        <view v-else class="recipe-cover placeholder">
+          <text class="placeholder-text">{{ recipe.name.charAt(0) }}</text>
+        </view>
+
+        <!-- 食谱信息 -->
+        <view class="recipe-info">
+          <view class="recipe-name">{{ recipe.name }}</view>
+
+          <!-- 生命阶段和健康标签合并 -->
+          <view
+            v-if="(recipe.applicableLifeStages && recipe.applicableLifeStages.length > 0) ||
+                   (recipe.targetHealthTags && recipe.targetHealthTags.length > 0)"
+            class="tags-row"
+          >
+            <text class="tags-label">适用于：</text>
+            <view class="tags">
+              <!-- 生命阶段标签 -->
+              <text
+                v-for="stage in recipe.applicableLifeStages"
+                :key="'stage-' + stage"
+                class="tag life-stage-tag"
+              >
+                {{ getLifeStageLabel(stage) }}
+              </text>
+              <!-- 健康标签 -->
+              <text
+                v-for="tag in recipe.targetHealthTags"
+                :key="'health-' + tag"
+                class="tag health-tag"
+              >
+                {{ getHealthTagLabel(tag) }}
+              </text>
             </view>
           </view>
+
+          <!-- 主要原料 (前6名) -->
+          <view v-if="recipe.items && recipe.items.length > 0" class="ingredients">
+            <text class="ingredients-label">主要原料：</text>
+            <text class="ingredients-list">
+              {{ recipe.items.map((item: RecipeItem) => item.name).join('、') }}
+            </text>
+          </view>
         </view>
+      </view>
+
+      <!-- 加载状态 -->
+      <view v-if="loading" class="loading-state">
+        <text>加载中...</text>
+      </view>
+
+      <!-- 没有更多 -->
+      <view v-if="!hasMore && recipes.length > 0" class="no-more">
+        <text>没有更多了</text>
+      </view>
+
+      <!-- 空状态 -->
+      <view v-if="recipes.length === 0 && !loading" class="empty-recipe-state">
+        <view class="empty-icon">🍖</view>
+        <view class="empty-title">暂无食谱</view>
+        <view class="empty-subtitle">当前筛选条件下没有找到食谱</view>
+        <button class="btn-reset" @tap="resetFilters">重置筛选</button>
+      </view>
+    </view>
+
+    <!-- 生命阶段筛选抽屉 -->
+    <view v-if="showLifeStageDrawer" class="drawer-mask" @tap="closeAllDrawers">
+      <view class="drawer-content" @tap.stop>
+        <view class="drawer-header">
+          <text class="drawer-title">适用生命阶段</text>
+          <text class="close-btn" @tap="closeAllDrawers">×</text>
+        </view>
+        <scroll-view class="drawer-body" scroll-y>
+          <view class="tag-grid">
+            <view
+              v-for="stage in filterOptions.lifeStages"
+              :key="stage.value"
+              class="tag-item"
+              :class="{ active: filterState.selectedLifeStage === stage.value }"
+              @tap="selectLifeStage(stage.value)"
+            >
+              {{ stage.label }}
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+    </view>
+
+    <!-- 健康标签筛选抽屉 -->
+    <view v-if="showHealthTagsDrawer" class="drawer-mask" @tap="applyHealthTagsFilter">
+      <view class="drawer-content" @tap.stop>
+        <view class="drawer-header">
+          <text class="drawer-title">健康标签</text>
+          <text class="close-btn" @tap="applyHealthTagsFilter">×</text>
+        </view>
+        <scroll-view class="drawer-body" scroll-y>
+          <view class="tag-grid">
+            <view
+              v-for="tag in filterOptions.healthTags"
+              :key="tag.value"
+              class="tag-item"
+              :class="{ active: filterState.selectedHealthTags.includes(tag.value) }"
+              @tap="toggleHealthTag(tag.value)"
+            >
+              {{ tag.label }}
+            </view>
+          </view>
+        </scroll-view>
+      </view>
+    </view>
+
+    <!-- 不吃这些筛选抽屉 -->
+    <view v-if="showExcludedTagsDrawer" class="drawer-mask" @tap="applyExcludedTagsFilter">
+      <view class="drawer-content" @tap.stop>
+        <view class="drawer-header">
+          <text class="drawer-title">🚫 不吃这些</text>
+          <text class="close-btn" @tap="applyExcludedTagsFilter">×</text>
+        </view>
+        <scroll-view class="drawer-body" scroll-y>
+          <view class="drawer-desc">排除包含以下食材的食谱</view>
+
+          <!-- 已选排除 -->
+          <view v-if="filterState.excludedIngredientTags.length > 0" class="excluded-tags">
+            <text class="excluded-label">已选排除：</text>
+            <view
+              v-for="tag in filterState.excludedIngredientTags"
+              :key="tag"
+              class="excluded-tag"
+              @tap="removeExcludedTag(tag)"
+            >
+              {{ getIngredientTagLabel(tag) }} ×
+            </view>
+          </view>
+
+          <view class="section-subtitle">选择要排除的食材标签</view>
+          <view class="tag-grid">
+            <view
+              v-for="tag in filterOptions.ingredientTags"
+              :key="tag.value"
+              class="tag-item"
+              :class="{ excluded: filterState.excludedIngredientTags.includes(tag.value) }"
+              @tap="toggleExcludedTag(tag.value)"
+            >
+              {{ tag.label }}
+            </view>
+          </view>
+        </scroll-view>
       </view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { request } from '../../utils/api'
+import { ref, onMounted, computed } from 'vue'
+import { onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
+import { request, getToken } from '../../utils/api'
+
+interface RecipeItem {
+  ingredientId: string
+  name: string
+  ratio: number
+}
+
+interface Recipe {
+  id: string
+  name: string
+  version: number
+  status: string
+  energyDensityKcalPerKg: number
+  coverImageUrl?: string
+  targetHealthTags: string[]
+  applicableLifeStages: string[]
+  items: RecipeItem[]
+}
+
+// 筛选选项类型
+interface FilterOption {
+  value: string
+  label: string
+  count: number
+}
+
+interface FilterOptions {
+  lifeStages: FilterOption[]
+  healthTags: FilterOption[]
+  ingredientTags: FilterOption[]
+}
+
+// 筛选状态
+interface FilterState {
+  selectedLifeStage: string | null
+  selectedHealthTags: string[]
+  excludedIngredientTags: string[]
+}
+
+// 登录状态
+const isLoggedIn = ref(false)
+const showLoginBanner = ref(true)
 
 // 狗狗列表
 const dogs = ref<any[]>([])
 
-// 推荐食谱
-const recommendedRecipes = ref<any[]>([])
+// 食谱数据
+const recipes = ref<Recipe[]>([])
+const loading = ref(false)
+const hasMore = ref(true)
+const totalCount = ref(0)
+
+// 筛选相关
+const showLifeStageDrawer = ref(false)
+const showHealthTagsDrawer = ref(false)
+const showExcludedTagsDrawer = ref(false)
+const filterOptions = ref<FilterOptions>({
+  lifeStages: [],
+  healthTags: [],
+  ingredientTags: []
+})
+const filterState = ref<FilterState>({
+  selectedLifeStage: null,
+  selectedHealthTags: [],
+  excludedIngredientTags: []
+})
+
+// 健康标签UUID到名称的映射（动态加载）
+const healthTagUuidLabelMap = ref<Record<string, string>>({})
+
+// 计算已选筛选数量
+const activeFiltersCount = computed(() => {
+  let count = 0
+  if (filterState.value.selectedLifeStage) count++
+  count += filterState.value.selectedHealthTags.length
+  count += filterState.value.excludedIngredientTags.length
+  return count
+})
+
+// 检查登录状态
+const checkLoginStatus = () => {
+  const token = getToken()
+  isLoggedIn.value = !!token
+  console.log('[Home] 登录状态检查:', isLoggedIn.value)
+}
 
 // 页面加载
 onMounted(() => {
-  loadDogList()
-  loadRecommendedRecipes()
+  console.log('[Home] onMounted')
+  checkLoginStatus()
+
+  // 检查是否已关闭过Banner（当天有效）
+  const bannerClosed = uni.getStorageSync('loginBannerClosed')
+  const bannerClosedDate = uni.getStorageSync('loginBannerClosedDate')
+  const today = new Date().toDateString()
+
+  if (bannerClosed && bannerClosedDate === today) {
+    showLoginBanner.value = false
+  }
+
+  // 加载数据（只在已登录时）
+  if (isLoggedIn.value) {
+    loadDogList()
+  } else {
+    // 未登录时确保清空狗狗数据
+    if (dogs.value.length > 0) {
+      console.log('[Home] Not logged in, clearing dog data')
+      dogs.value = []
+    }
+  }
+
+  // 加载筛选项和食谱
+  loadFilterOptions()
+  loadRecipes()
+})
+
+// 页面显示时重新检查登录状态（解决switchTab后不更新的问题）
+onShow(() => {
+  console.log('[Home] onShow - 重新检查登录状态')
+  console.log('[Home] Current dogs count:', dogs.value.length)
+
+  checkLoginStatus()
+
+  // 根据登录状态处理狗狗数据
+  if (isLoggedIn.value) {
+    // 已登录：每次都重新加载狗狗数据（确保显示最新数据）
+    console.log('[Home] Logged in, reloading dog list')
+    loadDogList()
+  } else {
+    // 未登录：清空狗狗数据（避免显示前一个用户的数据）
+    console.log('[Home] Not logged in, current dogs count:', dogs.value.length)
+    if (dogs.value.length > 0) {
+      console.log('[Home] User logged out, clearing dog data')
+      dogs.value = []
+      console.log('[Home] Dog data cleared, new count:', dogs.value.length)
+    } else {
+      console.log('[Home] No dog data to clear')
+    }
+  }
 })
 
 // 加载狗狗列表
@@ -136,21 +473,324 @@ const calculateAgeText = (birthday: string) => {
   return `${years}岁`
 }
 
-// 加载推荐食谱
-const loadRecommendedRecipes = async () => {
-  try {
-    const res = await request({
-      url: '/recipes',
-      method: 'GET'
-    })
+// ==================== 食谱相关方法 ====================
+
+// 加载筛选项
+function loadFilterOptions() {
+  request({
+    url: '/recipes/filter-options',
+    method: 'GET'
+  }).then((res: any) => {
     if (res.code === 0 && res.data) {
-      // 只显示前 4 个作为推荐
-      recommendedRecipes.value = res.data.slice(0, 4)
+      // 建立健康标签UUID到label的映射
+      const uuidMap: Record<string, string> = {}
+      if (res.data.healthTags && Array.isArray(res.data.healthTags)) {
+        res.data.healthTags.forEach((tag: any) => {
+          if (tag.value && tag.label) {
+            uuidMap[tag.value] = tag.label
+          }
+        })
+      }
+      healthTagUuidLabelMap.value = uuidMap
+
+      // 添加"全部"选项
+      filterOptions.value = {
+        lifeStages: [
+          { value: '', label: '全部', count: res.data.total || 0 },
+          ...res.data.lifeStages || []
+        ],
+        healthTags: [
+          { value: '', label: '全部', count: res.data.total || 0 },
+          ...res.data.healthTags || []
+        ],
+        ingredientTags: res.data.ingredientTags || []
+      }
     }
-  } catch (err) {
-    console.error('加载食谱失败:', err)
+  }).catch((err: any) => {
+    console.error('[Home] Load filter options error:', err)
+  })
+}
+
+// 加载食谱
+function loadRecipes(isRefresh = false) {
+  if (loading.value) return
+
+  loading.value = true
+
+  if (!isRefresh) {
+    uni.showLoading({ title: '加载中...' })
+  }
+
+  // 构建筛选参数
+  const params: any = {}
+  if (filterState.value.selectedLifeStage) {
+    params.lifeStage = filterState.value.selectedLifeStage
+  }
+  if (filterState.value.selectedHealthTags.length > 0) {
+    params.healthTags = filterState.value.selectedHealthTags.join(',')
+  }
+  if (filterState.value.excludedIngredientTags.length > 0) {
+    params.excludeTags = filterState.value.excludedIngredientTags.join(',')
+  }
+
+  request({
+    url: '/recipes',
+    method: 'GET',
+    data: params
+  }).then((res: any) => {
+    console.log('[Home] Recipes Response:', {
+      code: res.code,
+      dataLength: res.data?.length || 0,
+      data: res.data
+    })
+
+    if (res.code === 0 && res.data) {
+      if (isRefresh) {
+        recipes.value = res.data
+      } else {
+        recipes.value = [...recipes.value, ...res.data]
+      }
+
+      // 更新总数
+      totalCount.value = res.data.length
+
+      // TODO: 根据实际返回的数据量判断是否还有更多
+      hasMore.value = res.data.length >= 10
+    } else {
+      console.warn('[Home] Unexpected response:', res)
+    }
+  }).catch((err: any) => {
+    console.error('[Home] Load recipes error:', err)
+    uni.showToast({
+      title: '加载失败',
+      icon: 'none'
+    })
+  }).finally(() => {
+    loading.value = false
+    uni.hideLoading()
+    if (isRefresh) {
+      uni.stopPullDownRefresh()
+    }
+  })
+}
+
+// ==================== 筛选相关方法 ====================
+
+// 打开生命阶段抽屉
+function openLifeStageDrawer() {
+  showLifeStageDrawer.value = true
+}
+
+// 打开健康标签抽屉
+function openHealthTagsDrawer() {
+  showHealthTagsDrawer.value = true
+}
+
+// 打开排除标签抽屉
+function openExcludedTagsDrawer() {
+  showExcludedTagsDrawer.value = true
+}
+
+// 关闭所有抽屉
+function closeAllDrawers() {
+  showLifeStageDrawer.value = false
+  showHealthTagsDrawer.value = false
+  showExcludedTagsDrawer.value = false
+  // 选择后自动应用筛选
+  recipes.value = []
+  hasMore.value = true
+  loadRecipes()
+}
+
+// 获取生命阶段按钮文字
+function getLifeStageButtonText(): string {
+  if (filterState.value.selectedLifeStage) {
+    const stage = filterOptions.value.lifeStages.find(
+      s => s.value === filterState.value.selectedLifeStage
+    )
+    return stage ? `生命阶段: ${stage.label}` : '生命阶段'
+  }
+  return '生命阶段'
+}
+
+// 获取健康标签按钮文字
+function getHealthTagsButtonText(): string {
+  if (filterState.value.selectedHealthTags.length > 0) {
+    const count = filterState.value.selectedHealthTags.length
+    return `健康标签(${count})`
+  }
+  return '健康标签'
+}
+
+// 获取排除标签按钮文字
+function getExcludedTagsButtonText(): string {
+  if (filterState.value.excludedIngredientTags.length > 0) {
+    const count = filterState.value.excludedIngredientTags.length
+    return `不吃这些(${count})`
+  }
+  return '不吃这些'
+}
+
+// 快速删除生命阶段
+function removeLifeStage() {
+  filterState.value.selectedLifeStage = null
+  recipes.value = []
+  hasMore.value = true
+  loadRecipes()
+}
+
+// 快速删除健康标签
+function removeHealthTags() {
+  filterState.value.selectedHealthTags = []
+  recipes.value = []
+  hasMore.value = true
+  loadRecipes()
+}
+
+// 快速删除排除标签
+function removeExcludedTags() {
+  filterState.value.excludedIngredientTags = []
+  recipes.value = []
+  hasMore.value = true
+  loadRecipes()
+}
+
+// 选择生命阶段
+function selectLifeStage(stage: string) {
+  if (filterState.value.selectedLifeStage === stage) {
+    filterState.value.selectedLifeStage = null
+  } else {
+    filterState.value.selectedLifeStage = stage
+  }
+  closeAllDrawers()
+}
+
+// 切换健康标签
+function toggleHealthTag(tag: string) {
+  const index = filterState.value.selectedHealthTags.indexOf(tag)
+  if (index > -1) {
+    filterState.value.selectedHealthTags.splice(index, 1)
+  } else {
+    filterState.value.selectedHealthTags.push(tag)
   }
 }
+
+// 应用健康标签筛选
+function applyHealthTagsFilter() {
+  showHealthTagsDrawer.value = false
+  recipes.value = []
+  hasMore.value = true
+  loadRecipes()
+}
+
+// 切换排除食材标签
+function toggleExcludedTag(tag: string) {
+  const index = filterState.value.excludedIngredientTags.indexOf(tag)
+  if (index > -1) {
+    filterState.value.excludedIngredientTags.splice(index, 1)
+  } else {
+    filterState.value.excludedIngredientTags.push(tag)
+  }
+}
+
+// 应用排除标签筛选
+function applyExcludedTagsFilter() {
+  showExcludedTagsDrawer.value = false
+  recipes.value = []
+  hasMore.value = true
+  loadRecipes()
+}
+
+// 移除已选排除标签
+function removeExcludedTag(tag: string) {
+  const index = filterState.value.excludedIngredientTags.indexOf(tag)
+  if (index > -1) {
+    filterState.value.excludedIngredientTags.splice(index, 1)
+  }
+}
+
+// 获取食材标签名称
+function getIngredientTagLabel(tagId: string): string {
+  const tag = filterOptions.value.ingredientTags.find(t => t.value === tagId)
+  return tag?.label || tagId
+}
+
+// 清除所有筛选
+function clearAllFilters() {
+  filterState.value = {
+    selectedLifeStage: null,
+    selectedHealthTags: [],
+    excludedIngredientTags: []
+  }
+  recipes.value = []
+  hasMore.value = true
+  loadRecipes()
+}
+
+// 重置筛选
+function resetFilters() {
+  clearAllFilters()
+}
+
+// 查看食谱详情
+function viewRecipe(recipeId: string) {
+  uni.navigateTo({
+    url: `/pages/recipe-detail/index?recipeId=${recipeId}`
+  })
+}
+
+// 获取生命阶段标签
+function getLifeStageLabel(stage: string): string {
+  const map: Record<string, string> = {
+    'PUPPY': '幼犬',
+    'ADULT': '成犬',
+    'SENIOR': '老年犬',
+    'PREGNANCY': '妊娠期',
+    'LACTATION': '哺乳期',
+  }
+  return map[stage] || stage
+}
+
+// 获取健康标签
+function getHealthTagLabel(tagOrUuid: string): string {
+  // 优先使用动态映射（UUID -> label）
+  if (healthTagUuidLabelMap.value[tagOrUuid]) {
+    return healthTagUuidLabelMap.value[tagOrUuid]
+  }
+
+  // 兼容旧的枚举值（用于向后兼容）
+  const enumMap: Record<string, string> = {
+    'HEALTHY': '健康',
+    'PICKY_EATER': '挑食',
+    'SENSITIVE_STOMACH': '敏感胃',
+    'PANCREATITIS_SUPPORT': '胰腺炎友好',
+    'LOW_FAT': '低脂',
+    'SKIN_COAT_CARE': '护肤',
+  }
+
+  if (enumMap[tagOrUuid]) {
+    return enumMap[tagOrUuid]
+  }
+
+  // 如果都找不到，返回原始值
+  return tagOrUuid
+}
+
+// 下拉刷新
+onPullDownRefresh(() => {
+  recipes.value = []
+  hasMore.value = true
+  loadRecipes(true)
+})
+
+// 上拉加载更多
+onReachBottom(() => {
+  if (!loading.value && hasMore.value) {
+    loadRecipes()
+  }
+})
+
+// ==================== 跳转方法 ====================
 
 // 跳转到狗狗列表
 const goToDogList = () => {
@@ -164,17 +804,7 @@ const goToDogCreate = () => {
 
 // 跳转到狗狗详情
 const goToDogDetail = (dogId: string) => {
-  uni.navigateTo({ url: `/pages/dog-create/index?id=${dogId}` })
-}
-
-// 跳转到食谱列表
-const goToRecipeList = () => {
-  uni.navigateTo({ url: '/pages/recipe-list/index' })
-}
-
-// 跳转到食谱详情
-const goToRecipeDetail = (recipeId: string) => {
-  uni.navigateTo({ url: `/pages/recipe-detail/index?id=${recipeId}` })
+  uni.navigateTo({ url: `/pages/dog-create/index?dogId=${dogId}` })
 }
 
 // 跳转到订单列表
@@ -182,9 +812,67 @@ const goToOrderList = () => {
   uni.navigateTo({ url: '/pages/orders-list/index' })
 }
 
-// 跳转到地址列表
-const goToAddressList = () => {
-  uni.navigateTo({ url: '/pages/address-list/index' })
+// 跳转到体重管理
+const goToWeightManagement = () => {
+  if (!isLoggedIn.value) {
+    checkLoginAndNavigate('/pages/weight-management/index')
+    return
+  }
+  uni.navigateTo({ url: '/pages/weight-management/index' })
+}
+
+// 跳转到饭量计算
+const goToCalculatePortion = () => {
+  uni.navigateTo({ url: '/pages/calculate-portion/index' })
+}
+
+// 关闭登录Banner
+const closeBanner = () => {
+  showLoginBanner.value = false
+  const today = new Date().toDateString()
+  uni.setStorageSync('loginBannerClosed', true)
+  uni.setStorageSync('loginBannerClosedDate', today)
+}
+
+// 跳转登录页
+const goToLogin = () => {
+  uni.navigateTo({
+    url: '/pages/login/index'
+  })
+}
+
+// 跳转到爱犬社区
+const goToCommunity = () => {
+  uni.showToast({
+    title: '功能开发中，敬请期待',
+    icon: 'none'
+  })
+}
+
+// 跳转到健康管理
+const goToHealthManagement = () => {
+  if (!isLoggedIn.value) {
+    checkLoginAndNavigate('/pages/health-management/index')
+    return
+  }
+  uni.navigateTo({ url: '/pages/health-management/index' })
+}
+
+// 检查登录状态并跳转
+const checkLoginAndNavigate = (url: string) => {
+  if (!isLoggedIn.value) {
+    uni.showModal({
+      title: '提示',
+      content: '该功能需要登录后使用，是否立即登录？',
+      success: (res) => {
+        if (res.confirm) {
+          goToLogin()
+        }
+      }
+    })
+    return
+  }
+  uni.navigateTo({ url })
 }
 </script>
 
@@ -194,6 +882,56 @@ const goToAddressList = () => {
   background-color: #f5f5f5;
   padding-bottom: 20px;
 }
+
+/* 登录引导Banner */
+.login-banner {
+  background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+  padding: 24rpx 32rpx;
+}
+
+.banner-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.banner-icon {
+  font-size: 40rpx;
+  margin-right: 16rpx;
+}
+
+.banner-text {
+  flex: 1;
+  margin-right: 16rpx;
+}
+
+.banner-title {
+  font-size: 28rpx;
+  color: #333;
+  line-height: 40rpx;
+}
+
+.banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.banner-login-btn {
+  background: #fff;
+  color: #e17055;
+  padding: 12rpx 24rpx;
+  border-radius: 20rpx;
+  font-size: 24rpx;
+  font-weight: bold;
+}
+
+.banner-close {
+  font-size: 48rpx;
+  color: #333;
+  line-height: 1;
+}
+
 
 /* 顶部欢迎区 */
 .header-section {
@@ -276,18 +1014,32 @@ const goToAddressList = () => {
 /* 狗狗卡片 */
 .dog-scroll {
   white-space: nowrap;
+  /* 确保右侧有padding，让最后一张卡片右边也有空间 */
+  padding-right: 20rpx;
+  /* 强制容器不换行 */
+  overflow-x: scroll;
+  /* 隐藏滚动条但保留滚动功能 */
+  -webkit-overflow-scrolling: touch;
+}
+
+.dog-scroll::-webkit-scrollbar {
+  display: none;
 }
 
 .dog-card {
   display: inline-flex;
   align-items: center;
-  min-width: 140px;
-  max-width: 160px;
+  /* 强制固定宽度，确保能明显露出下一张卡片 */
+  width: 220rpx !important;
+  min-width: 220rpx !important;
+  max-width: 220rpx !important;
+  flex-shrink: 0 !important; /* 防止卡片被压缩 */
   background: #f8f8f8;
   border-radius: 8px;
   padding: 15px;
-  margin-right: 12px;
+  margin-right: 20rpx; /* 增加卡片间距 */
   vertical-align: top;
+  box-sizing: border-box !important;
 }
 
 .dog-card.add-dog {
@@ -391,60 +1143,464 @@ const goToAddressList = () => {
   font-size: 14px;
 }
 
-/* 食谱卡片 */
-.recipe-list {
+/* ==================== 食谱橱窗样式 ==================== */
+
+/* 筛选区域 */
+.filter-bar {
+  background-color: #fff;
+  padding: 20rpx 0;
+  border-bottom: 1rpx solid #e5e5e5;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.filter-scroll {
+  white-space: nowrap;
+}
+
+.filter-group {
   display: flex;
-  flex-direction: column;
-  gap: 12px;
+  padding: 0 20rpx;
+}
+
+.filter-tag {
+  display: inline-block;
+  padding: 12rpx 24rpx;
+  margin-right: 16rpx;
+  border-radius: 40rpx;
+  font-size: 28rpx;
+  background-color: #f0f0f0;
+  color: #666;
+  border: 2rpx solid transparent;
+  transition: all 0.3s;
+}
+
+.filter-tag.active {
+  background-color: #07c160;
+  color: #fff;
+  border-color: #07c160;
+}
+
+/* 食谱列表 */
+.recipe-list {
+  padding: 20rpx;
 }
 
 .recipe-card {
-  display: flex;
-  background: #f8f8f8;
-  border-radius: 8px;
+  background-color: #fff;
+  border-radius: 16rpx;
   overflow: hidden;
+  margin-bottom: 24rpx;
+  box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.08);
 }
 
-.recipe-image {
-  width: 100px;
-  height: 100px;
-  flex-shrink: 0;
+/* 封面图 */
+.recipe-cover {
+  width: 100%;
+  height: 360rpx;
+  background-color: #f0f0f0;
 }
 
-.recipe-info {
-  flex: 1;
-  padding: 10px 12px;
+.recipe-cover.placeholder {
   display: flex;
-  flex-direction: column;
-  justify-content: space-between;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+
+.placeholder-text {
+  font-size: 120rpx;
+  font-weight: bold;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* 食谱信息 */
+.recipe-info {
+  padding: 24rpx;
 }
 
 .recipe-name {
-  font-size: 15px;
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 16rpx;
+  line-height: 1.4;
+}
+
+.tags-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-bottom: 16rpx;
+  gap: 8rpx;
+}
+
+.tags-label {
+  font-size: 26rpx;
+  color: #666;
+  flex-shrink: 0;
+}
+
+.tags-row .tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+}
+
+.tags {
+  display: flex;
+  flex-wrap: wrap;
+  margin-bottom: 16rpx;
+  gap: 8rpx;
+}
+
+.tag {
+  display: inline-block;
+  padding: 6rpx 16rpx;
+  border-radius: 6rpx;
+  font-size: 22rpx;
+  white-space: nowrap;
+}
+
+.life-stage-tag {
+  background-color: #e3f2fd;
+  color: #1976d2;
+}
+
+.health-tag {
+  background-color: #fff3e0;
+  color: #f57c00;
+}
+
+.ingredients {
+  font-size: 26rpx;
+  color: #666;
+  line-height: 1.6;
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.ingredients-label {
+  color: #999;
+  flex-shrink: 0;
+}
+
+.ingredients-list {
+  flex: 1;
+}
+
+/* 状态 */
+.loading-state,
+.no-more {
+  text-align: center;
+  padding: 40rpx 0;
+  color: #999;
+  font-size: 28rpx;
+}
+
+.empty-recipe-state {
+  text-align: center;
+  padding: 120rpx 40rpx;
+}
+
+.empty-recipe-state .empty-icon {
+  font-size: 120rpx;
+  margin-bottom: 24rpx;
+}
+
+.empty-recipe-state .empty-title {
+  font-size: 36rpx;
+  font-weight: bold;
+  margin-bottom: 16rpx;
+  color: #333;
+}
+
+.empty-recipe-state .empty-subtitle {
+  font-size: 28rpx;
+  line-height: 1.6;
+  margin-bottom: 40rpx;
+  color: #999;
+}
+
+.btn-reset {
+  width: 240rpx;
+  height: 72rpx;
+  line-height: 72rpx;
+  background-color: #07c160;
+  color: #fff;
+  border-radius: 40rpx;
+  font-size: 28rpx;
+}
+
+/* ==================== 筛选相关样式 ==================== */
+
+/* 食谱橱窗标题 */
+.recipe-showcase-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 32rpx 30rpx 20rpx;
+  background: #fff;
+  gap: 16rpx;
+}
+
+.recipe-showcase-header .section-title {
+  font-size: 40rpx;
+  font-weight: bold;
+  color: #333;
+  flex-shrink: 0;
+}
+
+.recipe-count {
+  font-size: 26rpx;
+  color: #999;
+  margin-left: auto;
+}
+
+.clear-all {
+  font-size: 26rpx;
+  color: #667eea;
+  flex-shrink: 0;
+}
+
+/* 固定筛选栏（吸顶） */
+.filter-bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: #fff;
+  padding: 20rpx 30rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.filter-title {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #333;
+  flex-shrink: 0;
+}
+
+.filter-buttons {
+  display: flex;
+  gap: 16rpx;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  flex: 1;
+}
+
+.filter-buttons::-webkit-scrollbar {
+  display: none;
+}
+
+.filter-btn {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 16rpx 24rpx;
+  background: #f5f5f5;
+  border-radius: 40rpx;
+  font-size: 26rpx;
+  color: #666;
+  white-space: nowrap;
+  border: 2rpx solid transparent;
+  transition: all 0.3s;
+  flex-shrink: 0;
+}
+
+.filter-btn.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  border-color: #667eea;
+}
+
+.filter-btn.excluded {
+  background: #ffebee;
+  color: #f44336;
+  border-color: #f44336;
+}
+
+.filter-btn-text {
+  max-width: 300rpx;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.dropdown-arrow {
+  font-size: 20rpx;
+  color: #999;
+  margin-left: 4rpx;
+  flex-shrink: 0;
+}
+
+.filter-btn.active .dropdown-arrow {
+  color: #fff;
+}
+
+.filter-btn.excluded .dropdown-arrow {
+  color: #f44336;
+}
+
+.remove-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32rpx;
+  height: 32rpx;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  font-size: 28rpx;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+/* 筛选抽屉遮罩 */
+.drawer-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 999;
+  animation: fadeIn 0.3s;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* 筛选抽屉内容 */
+.drawer-content {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: #fff;
+  border-radius: 32rpx 32rpx 0 0;
+  max-height: 60vh;
+  display: flex;
+  flex-direction: column;
+  animation: slideUp 0.3s ease-out;
+}
+
+@keyframes slideUp {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+/* 抽屉头部 */
+.drawer-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 32rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+  flex-shrink: 0;
+}
+
+.drawer-title {
+  font-size: 36rpx;
   font-weight: bold;
   color: #333;
 }
 
-.recipe-tags {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.tag {
-  background: #e8f4f8;
-  color: #2980b9;
-  font-size: 11px;
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
-.recipe-energy {
-  margin-top: 4px;
-}
-
-.energy-text {
-  font-size: 12px;
+.close-btn {
+  font-size: 60rpx;
   color: #999;
+  line-height: 1;
+}
+
+/* 抽屉主体 */
+.drawer-body {
+  flex: 1;
+  padding: 32rpx;
+}
+
+.drawer-desc {
+  font-size: 26rpx;
+  color: #999;
+  margin-bottom: 24rpx;
+  padding: 16rpx 20rpx;
+  background: #fff3e0;
+  border-radius: 8rpx;
+  border-left: 4rpx solid #ff9800;
+}
+
+/* 标签网格 */
+.tag-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.tag-item {
+  padding: 16rpx 32rpx;
+  background: #f5f5f5;
+  border-radius: 40rpx;
+  font-size: 28rpx;
+  color: #333;
+  border: 2rpx solid transparent;
+  transition: all 0.3s;
+}
+
+.tag-item.active {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  border-color: #667eea;
+}
+
+.tag-item.excluded {
+  background: #ffebee;
+  color: #f44336;
+  border-color: #f44336;
+  text-decoration: line-through;
+}
+
+/* 已选排除标签 */
+.excluded-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-bottom: 24rpx;
+  padding: 20rpx;
+  background: #fff3e0;
+  border-radius: 12rpx;
+}
+
+.excluded-label {
+  font-size: 26rpx;
+  color: #f57c00;
+  align-self: center;
+}
+
+.excluded-tag {
+  padding: 8rpx 20rpx;
+  background: #fff;
+  border-radius: 24rpx;
+  font-size: 24rpx;
+  color: #f57c00;
+  border: 1rpx solid #ff9800;
+}
+
+.section-subtitle {
+  font-size: 28rpx;
+  color: #666;
+  margin-bottom: 16rpx;
+  font-weight: bold;
 }
 </style>

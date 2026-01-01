@@ -1,4 +1,5 @@
 import { Module, OnModuleInit, Inject } from '@nestjs/common';
+import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
 import { DogsController } from './interfaces/controllers/dogs.controller';
 import { RecipesController } from './interfaces/controllers/recipes.controller';
@@ -11,6 +12,9 @@ import { ShippingController } from './interfaces/controllers/shipping.controller
 import { UsersController } from './interfaces/controllers/users.controller';
 import { StaffKitchenController } from './interfaces/controllers/staff-kitchen.controller';
 import { StaffShippingController } from './interfaces/controllers/staff-shipping.controller';
+import { HealthRecordsController } from './interfaces/controllers/health-records.controller';
+import { HealthNotificationController } from './interfaces/controllers/health-notification.controller';
+import { HealthUploadController } from './interfaces/controllers/health-upload.controller';
 import {
   DogService,
   DOG_REPOSITORY,
@@ -25,6 +29,7 @@ import { InMemoryOrderRepository } from './infrastructure/repositories/in-memory
 import { FileBackedOrderRepository } from './infrastructure/repositories/file-backed-order.repository';
 import { PrismaOrderRepository } from './infrastructure/repositories/prisma-order.repository';
 import { PrismaService } from './infrastructure/prisma.service';
+import { RecipeService } from './application/recipe/recipe.service';
 import { InMemoryAddressRepository } from './infrastructure/repositories/in-memory-address.repository';
 import { PrismaAddressRepository } from './infrastructure/repositories/prisma-address.repository';
 import { RECIPE_REPOSITORY_TOKEN } from './interfaces/controllers/recipes.controller';
@@ -64,8 +69,18 @@ import { PrismaDogBreedRepository } from './infrastructure/repositories/prisma-d
 import { DOG_BREED_REPOSITORY } from './application/dog/dog.service';
 import { IngredientTagService, INGREDIENT_TAG_REPOSITORY } from './application/ingredient-tag/ingredient-tag.service';
 import { PrismaIngredientTagRepository } from './infrastructure/repositories/prisma-ingredient-tag.repository';
+import { TencentCosService } from './infrastructure/services/tencent-cos.service';
 import { WechatModule } from './infrastructure/wechat/wechat.module';
 import { SmsModule } from './infrastructure/sms/sms.module';
+import { WeightRecordService } from './application/weight-record/weight-record.service';
+import { PrismaWeightRecordRepository } from './infrastructure/repositories/prisma-weight-record.repository';
+import { HealthService, VACCINE_RECORD_REPOSITORY, CHECKUP_RECORD_REPOSITORY, MEDICAL_RECORD_REPOSITORY, ALLERGY_RECORD_REPOSITORY } from './application/health/health.service';
+import {
+  PrismaVaccineRecordRepository,
+  PrismaCheckupRecordRepository,
+  PrismaMedicalRecordRepository,
+  PrismaAllergyRecordRepository
+} from './infrastructure/repositories/prisma-health.repository';
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -105,6 +120,10 @@ validatePrismaConfig();
 
 @Module({
   imports: [
+    ConfigModule.forRoot({
+      isGlobal: true,
+      envFilePath: '.env',
+    }),
     JwtModule.register({
       secret: process.env.JWT_SECRET || 'dev-secret-key-change-in-production',
       signOptions: {
@@ -126,6 +145,9 @@ validatePrismaConfig();
     StaffKitchenController,
     StaffShippingController,
     UsersController,
+    HealthRecordsController,
+    HealthNotificationController,
+    HealthUploadController,
   ],
   providers: [
     DogService,
@@ -186,6 +208,7 @@ validatePrismaConfig();
         ]
       : []),
     OrderService,
+    RecipeService,
     AddressService,
     {
       provide: ADDRESS_REPOSITORY,
@@ -216,6 +239,7 @@ validatePrismaConfig();
       provide: INGREDIENT_TAG_REPOSITORY,
       useClass: PrismaIngredientTagRepository,
     },
+    TencentCosService,
     GlobalConfigService,
     PricingService,
     ShippingFeeService,
@@ -318,6 +342,83 @@ validatePrismaConfig();
           );
         }
         return new PrismaDogBreedRepository(prismaService);
+      },
+      inject: isPrismaEnabled() ? [PrismaService] : [],
+    },
+    // Weight Record Service and Repository
+    WeightRecordService,
+    {
+      provide: 'PrismaWeightRecordRepository',
+      useFactory: (prismaService?: PrismaService) => {
+        if (!prismaService) {
+          throw new Error(
+            'PrismaService is not available. Ensure Prisma is enabled via repo switches.',
+          );
+        }
+        return new PrismaWeightRecordRepository(prismaService);
+      },
+      inject: isPrismaEnabled() ? [PrismaService] : [],
+    },
+    {
+      provide: 'PrismaDogRepository',
+      useFactory: (prismaService?: PrismaService) => {
+        if (!prismaService) {
+          throw new Error(
+            'PrismaService is not available. Ensure Prisma is enabled via repo switches.',
+          );
+        }
+        const { PrismaDogRepository } = require('./infrastructure/repositories/prisma-dog.repository');
+        return new PrismaDogRepository(prismaService);
+      },
+      inject: isPrismaEnabled() ? [PrismaService] : [],
+    },
+    // Health Records Service and Repositories
+    HealthService,
+    {
+      provide: VACCINE_RECORD_REPOSITORY,
+      useFactory: (prismaService?: PrismaService) => {
+        if (!prismaService) {
+          throw new Error(
+            'PrismaService is not available. Ensure Prisma is enabled via repo switches.',
+          );
+        }
+        return new PrismaVaccineRecordRepository(prismaService);
+      },
+      inject: isPrismaEnabled() ? [PrismaService] : [],
+    },
+    {
+      provide: CHECKUP_RECORD_REPOSITORY,
+      useFactory: (prismaService?: PrismaService) => {
+        if (!prismaService) {
+          throw new Error(
+            'PrismaService is not available. Ensure Prisma is enabled via repo switches.',
+          );
+        }
+        return new PrismaCheckupRecordRepository(prismaService);
+      },
+      inject: isPrismaEnabled() ? [PrismaService] : [],
+    },
+    {
+      provide: MEDICAL_RECORD_REPOSITORY,
+      useFactory: (prismaService?: PrismaService) => {
+        if (!prismaService) {
+          throw new Error(
+            'PrismaService is not available. Ensure Prisma is enabled via repo switches.',
+          );
+        }
+        return new PrismaMedicalRecordRepository(prismaService);
+      },
+      inject: isPrismaEnabled() ? [PrismaService] : [],
+    },
+    {
+      provide: ALLERGY_RECORD_REPOSITORY,
+      useFactory: (prismaService?: PrismaService) => {
+        if (!prismaService) {
+          throw new Error(
+            'PrismaService is not available. Ensure Prisma is enabled via repo switches.',
+          );
+        }
+        return new PrismaAllergyRecordRepository(prismaService);
       },
       inject: isPrismaEnabled() ? [PrismaService] : [],
     },

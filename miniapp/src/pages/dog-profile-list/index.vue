@@ -1,13 +1,5 @@
 <template>
   <view class="container">
-    <!-- 主人信息按钮 -->
-    <view class="owner-info-bar">
-      <button class="btn-owner-info" @tap="goToOwnerInfo">
-        <text class="owner-icon">👤</text>
-        <text class="owner-text">主人信息</text>
-      </button>
-    </view>
-
     <view class="dog-list">
       <view
         v-for="dog in dogs"
@@ -138,13 +130,6 @@ function createDog() {
   })
 }
 
-function goToOwnerInfo() {
-  // 跳转到主人信息页面（待创建）
-  uni.navigateTo({
-    url: '/pages/owner-info/index'
-  })
-}
-
 // 计算年龄文本
 function calculateAgeText(birthday: string) {
   const birth = new Date(birthday)
@@ -162,39 +147,6 @@ function calculateAgeText(birthday: string) {
 .container {
   padding: 20rpx;
   padding-bottom: 120rpx;
-}
-
-/* 主人信息按钮栏 */
-.owner-info-bar {
-  margin-bottom: 20rpx;
-}
-
-.btn-owner-info {
-  width: 100%;
-  height: 88rpx;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: #fff;
-  border-radius: 12rpx;
-  font-size: 32rpx;
-  font-weight: bold;
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12rpx;
-  box-shadow: 0 4rpx 12rpx rgba(102, 126, 234, 0.3);
-}
-
-.btn-owner-info::after {
-  border: none;
-}
-
-.owner-icon {
-  font-size: 36rpx;
-}
-
-.owner-text {
-  font-size: 32rpx;
 }
 
 .dog-list {

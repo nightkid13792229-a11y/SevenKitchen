@@ -12,18 +12,18 @@
       </view>
 
       <view class="form-item">
-        <text class="label">省份 *</text>
-        <input class="input" placeholder="请输入省份" v-model="formData.province" />
-      </view>
-
-      <view class="form-item">
-        <text class="label">城市 *</text>
-        <input class="input" placeholder="请输入城市" v-model="formData.city" />
-      </view>
-
-      <view class="form-item">
-        <text class="label">区县 *</text>
-        <input class="input" placeholder="请输入区县" v-model="formData.district" />
+        <text class="label">所在地区 *</text>
+        <picker
+          mode="region"
+          :value="regionValue"
+          @change="onRegionChange"
+        >
+          <view class="picker-input">
+            <text v-if="regionText" class="selected-text">{{ regionText }}</text>
+            <text v-else class="placeholder">请选择省/市/区</text>
+            <text class="arrow">▼</text>
+          </view>
+        </picker>
       </view>
 
       <view class="form-item">
@@ -68,6 +68,40 @@ const formData = ref<FormData>({
 
 const addressId = ref<string | null>(null)
 
+// 省市区选择器相关
+const regionValue = ref<string[]>([]) // picker的值数组 [省, 市, 区]
+const regionText = ref('') // 显示文本 "省 市 区"
+
+// 当picker选择变化时
+function onRegionChange(e: any) {
+  const value = e.detail.value
+  regionValue.value = value
+
+  // 更新formData
+  formData.value.province = value[0] || ''
+  formData.value.city = value[1] || ''
+  formData.value.district = value[2] || ''
+
+  // 更新显示文本
+  updateRegionText()
+}
+
+// 更新地区显示文本
+function updateRegionText() {
+  const { province, city, district } = formData.value
+  const parts = [province, city, district].filter(Boolean)
+  regionText.value = parts.join(' ')
+}
+
+// 初始化regionValue和regionText（用于编辑已有地址时）
+function initRegionValue() {
+  const { province, city, district } = formData.value
+  if (province || city || district) {
+    regionValue.value = [province, city, district]
+    updateRegionText()
+  }
+}
+
 onMounted(() => {
   const pages = getCurrentPages()
   const currentPage = pages[pages.length - 1] as any
@@ -80,7 +114,7 @@ onMounted(() => {
 
 function loadAddress() {
   uni.showLoading({ title: '加载中...' })
-  
+
   // Note: There's no GET /addresses/:id endpoint
   // Load from list and find the one
   request({
@@ -99,6 +133,8 @@ function loadAddress() {
           detail: address.detail,
           isDefault: address.isDefault
         }
+        // 初始化省市区选择器
+        initRegionValue()
       }
     }
   }).catch((err: any) => {
@@ -198,6 +234,38 @@ function save() {
   padding: 0 20rpx;
   font-size: 28rpx;
   box-sizing: border-box;
+}
+
+/* 省市区选择器样式 */
+.picker-input {
+  width: 100%;
+  height: 80rpx;
+  border: 1px solid #ddd;
+  border-radius: 8rpx;
+  padding: 0 20rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-sizing: border-box;
+  background-color: #fff;
+}
+
+.selected-text {
+  flex: 1;
+  font-size: 28rpx;
+  color: #333;
+}
+
+.picker-input .placeholder {
+  flex: 1;
+  font-size: 28rpx;
+  color: #999;
+}
+
+.arrow {
+  font-size: 24rpx;
+  color: #999;
+  margin-left: 10rpx;
 }
 
 .textarea {

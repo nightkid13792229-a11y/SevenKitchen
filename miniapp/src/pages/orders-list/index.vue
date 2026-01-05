@@ -1,5 +1,19 @@
 <template>
   <view class="container">
+    <!-- 状态筛选Tab -->
+    <view class="status-tabs">
+      <view
+        v-for="tab in statusTabs"
+        :key="tab.value"
+        class="tab-item"
+        :class="{ active: selectedStatus === tab.value }"
+        @tap="selectStatus(tab.value)"
+      >
+        <text class="tab-text">{{ tab.label }}</text>
+        <text v-if="tab.count > 0" class="tab-count">({{ tab.count }})</text>
+      </view>
+    </view>
+
     <view class="order-list">
       <view
         v-for="order in orders"
@@ -55,6 +69,18 @@ interface Order {
   items?: any[]
 }
 
+// 状态筛选Tab
+const selectedStatus = ref<string>('ALL')
+
+const statusTabs = ref<Array<{label: string, value: string, count: number}>>([
+  { label: '全部', value: 'ALL', count: 0 },
+  { label: '待付款', value: 'PENDING_PAYMENT', count: 0 },
+  { label: '生产中', value: 'IN_PRODUCTION', count: 0 },
+  { label: '已发货', value: 'SHIPPED', count: 0 },
+  { label: '已完成', value: 'COMPLETED', count: 0 }
+])
+
+const allOrders = ref<Order[]>([])
 const orders = ref<Order[]>([])
 
 onMounted(() => {
@@ -87,13 +113,50 @@ function loadOrders() {
       })
     }
     if (res.code === 0 && res.data) {
-      orders.value = res.data
+      allOrders.value = res.data
+      updateStatusCounts()
+      filterOrders()
     }
   }).catch((err: any) => {
     console.error('Load orders error:', err)
   }).finally(() => {
     uni.hideLoading()
   })
+}
+
+// 更新各状态订单数量
+function updateStatusCounts() {
+  statusTabs.value[0].count = allOrders.value.length // 全部
+  statusTabs.value[1].count = allOrders.value.filter(o => o.status === 'PENDING_PAYMENT').length
+  statusTabs.value[2].count = allOrders.value.filter(o =>
+    o.status === 'IN_PRODUCTION' ||
+    o.status === 'READY_FOR_PACKAGING' ||
+    o.status === 'READY_FOR_SHIPMENT'
+  ).length
+  statusTabs.value[3].count = allOrders.value.filter(o => o.status === 'SHIPPED').length
+  statusTabs.value[4].count = allOrders.value.filter(o => o.status === 'COMPLETED').length
+}
+
+// 根据选中状态筛选订单
+function filterOrders() {
+  if (selectedStatus.value === 'ALL') {
+    orders.value = allOrders.value
+  } else if (selectedStatus.value === 'IN_PRODUCTION') {
+    // 生产中包含多个状态
+    orders.value = allOrders.value.filter(o =>
+      o.status === 'IN_PRODUCTION' ||
+      o.status === 'READY_FOR_PACKAGING' ||
+      o.status === 'READY_FOR_SHIPMENT'
+    )
+  } else {
+    orders.value = allOrders.value.filter(o => o.status === selectedStatus.value)
+  }
+}
+
+// 选择状态
+function selectStatus(status: string) {
+  selectedStatus.value = status
+  filterOrders()
 }
 
 function viewOrder(orderId: string) {
@@ -187,6 +250,56 @@ function formatDogsText(order: Order): string {
 <style scoped>
 .container {
   padding: 20rpx;
+  padding-top: 0;
+}
+
+/* 状态筛选Tab */
+.status-tabs {
+  display: flex;
+  background-color: #fff;
+  padding: 20rpx;
+  margin-bottom: 20rpx;
+  border-radius: 16rpx;
+  overflow-x: auto;
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.tab-item {
+  flex-shrink: 0;
+  padding: 12rpx 24rpx;
+  margin-right: 16rpx;
+  border-radius: 20rpx;
+  background-color: #f5f5f5;
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+  transition: all 0.3s;
+}
+
+.tab-item.active {
+  background-color: #1890ff;
+}
+
+.tab-text {
+  font-size: 26rpx;
+  color: #666;
+}
+
+.tab-item.active .tab-text {
+  color: #fff;
+  font-weight: bold;
+}
+
+.tab-count {
+  font-size: 22rpx;
+  color: #999;
+}
+
+.tab-item.active .tab-count {
+  color: rgba(255, 255, 255, 0.9);
 }
 
 .order-list {

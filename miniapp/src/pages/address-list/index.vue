@@ -40,6 +40,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 
 interface Address {
@@ -62,7 +63,9 @@ onMounted(() => {
   const pages = getCurrentPages()
   const currentPage = pages[pages.length - 1] as any
   mode.value = currentPage.options?.mode || 'manage'
-  
+})
+
+onShow(() => {
   loadAddresses()
 })
 

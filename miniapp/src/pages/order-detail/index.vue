@@ -150,6 +150,37 @@
         </view>
       </view>
     </view>
+
+    <!-- 底部操作按钮 -->
+    <view class="bottom-actions" v-if="order">
+      <!-- 待付款状态 -->
+      <view v-if="order.status === 'PENDING_PAYMENT'" class="action-buttons">
+        <button class="btn-action btn-cancel" @tap="cancelOrder">取消订单</button>
+        <button class="btn-action btn-primary" @tap="payOrder">立即付款</button>
+      </view>
+
+      <!-- 待付款之后的已付款状态 -->
+      <view v-else-if="order.status === 'PAID' || order.status === 'WAITING_FOR_PRODUCTION' || order.status === 'IN_PRODUCTION'" class="action-buttons">
+        <button class="btn-action btn-secondary" @tap="contactService">联系客服</button>
+      </view>
+
+      <!-- 已发货状态 -->
+      <view v-else-if="order.status === 'SHIPPED'" class="action-buttons">
+        <button class="btn-action btn-secondary" @tap="viewLogistics">查看物流</button>
+        <button class="btn-action btn-primary" @tap="confirmReceived">确认收货</button>
+      </view>
+
+      <!-- 已完成状态 -->
+      <view v-else-if="order.status === 'COMPLETED'" class="action-buttons">
+        <button class="btn-action btn-secondary" @tap="buyAgain">再次购买</button>
+        <button class="btn-action btn-primary" @tap="writeReview">评价</button>
+      </view>
+
+      <!-- 已取消状态 -->
+      <view v-else-if="order.status === 'CANCELLED'" class="action-buttons">
+        <button class="btn-action btn-secondary" @tap="buyAgain">再次购买</button>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -380,17 +411,174 @@ function viewSnapshot(itemId: string) {
     url: `/pages/snapshot/index?itemId=${itemId}`
   })
 }
+
+// 取消订单
+async function cancelOrder() {
+  uni.showModal({
+    title: '确认取消',
+    content: '确定要取消这个订单吗？',
+    success: async (res) => {
+      if (res.confirm) {
+        try {
+          uni.showLoading({ title: '取消中...' })
+          const result = await request({
+            url: `/orders/${orderId.value}/cancel`,
+            method: 'POST'
+          })
+          if (result.code === 0) {
+            uni.showToast({
+              title: '订单已取消',
+              icon: 'success'
+            })
+            // 重新加载订单详情
+            loadOrderDetail()
+          }
+        } catch (error) {
+          uni.showToast({
+            title: '取消失败',
+            icon: 'none'
+          })
+        } finally {
+          uni.hideLoading()
+        }
+      }
+    }
+  })
+}
+
+// 立即付款
+function payOrder() {
+  uni.showToast({
+    title: '跳转支付...',
+    icon: 'none'
+  })
+  // TODO: 调用支付API
+}
+
+// 联系客服
+function contactService() {
+  uni.showModal({
+    title: '联系客服',
+    content: '客服电话：400-123-4567\n工作时间：9:00-18:00',
+    showCancel: false
+  })
+}
+
+// 查看物流
+function viewLogistics() {
+  uni.showToast({
+    title: '查看物流...',
+    icon: 'none'
+  })
+  // TODO: 跳转到物流详情页
+}
+
+// 确认收货
+async function confirmReceived() {
+  uni.showModal({
+    title: '确认收货',
+    content: '确认已收到商品吗？',
+    success: async (res) => {
+      if (res.confirm) {
+        try {
+          uni.showLoading({ title: '确认中...' })
+          const result = await request({
+            url: `/orders/${orderId.value}/confirm`,
+            method: 'POST'
+          })
+          if (result.code === 0) {
+            uni.showToast({
+              title: '已确认收货',
+              icon: 'success'
+            })
+            loadOrderDetail()
+          }
+        } catch (error) {
+          uni.showToast({
+            title: '确认失败',
+            icon: 'none'
+          })
+        } finally {
+          uni.hideLoading()
+        }
+      }
+    }
+  })
+}
+
+// 再次购买
+function buyAgain() {
+  uni.showToast({
+    title: '跳转到订购页...',
+    icon: 'none'
+  })
+  // TODO: 将订单商品加入购物车，跳转到订购页
+}
+
+// 评价
+function writeReview() {
+  uni.showToast({
+    title: '评价功能开发中...',
+    icon: 'none'
+  })
+  // TODO: 跳转到评价页
+}
 </script>
 
 <style scoped>
 .order-detail-page {
   min-height: 100vh;
   background-color: #f5f5f5;
-  padding-bottom: 40rpx;
+  padding-bottom: 140rpx;
 }
 
 .order-detail {
   padding: 20rpx;
+}
+
+/* 底部操作按钮 */
+.bottom-actions {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: #fff;
+  padding: 16rpx 20rpx;
+  border-top: 1rpx solid #e5e5e5;
+  box-shadow: 0 -2rpx 8rpx rgba(0, 0, 0, 0.06);
+  z-index: 100;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 16rpx;
+}
+
+.btn-action {
+  flex: 1;
+  height: 88rpx;
+  line-height: 88rpx;
+  border-radius: 44rpx;
+  font-size: 28rpx;
+  border: none;
+  text-align: center;
+}
+
+.btn-cancel {
+  background-color: #fff;
+  color: #999;
+  border: 1rpx solid #ddd;
+}
+
+.btn-primary {
+  background-color: #1890ff;
+  color: #fff;
+}
+
+.btn-secondary {
+  background-color: #fff;
+  color: #1890ff;
+  border: 1rpx solid #1890ff;
 }
 
 .order-type-tag {

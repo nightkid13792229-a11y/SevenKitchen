@@ -59,17 +59,12 @@
 
             <!-- 规格说明 -->
             <view class="item-spec">
-              <text>{{ item.cycleDays }}天 × {{ item.dailyIntakeG }}g/天 = {{ item.totalGrams }}g</text>
-            </view>
-
-            <!-- 分装方案 -->
-            <view class="package-info">
-              <text class="package-text">{{ item.packageCount }}包 × {{ item.packageSpecG }}g @ ¥{{ item.unitPrice.toFixed(2) }}/包</text>
+              <text>{{ item.packageCount }}餐 × {{ Math.round(item.packageSpecG) }}g/餐</text>
             </view>
 
             <!-- 小计 -->
             <view class="item-price">
-              <text>小计: ¥{{ item.totalPrice.toFixed(2) }}</text>
+              <text>小计: ¥{{ Math.round(item.totalPrice) }}</text>
             </view>
           </view>
         </view>
@@ -86,24 +81,35 @@
       <view class="price-summary">
         <view class="summary-row">
           <text class="label">商品金额（{{ cartItems.length }}件）:</text>
-          <text class="value">¥{{ totalProductAmount.toFixed(2) }}</text>
+          <text class="value">¥{{ Math.round(totalProductAmount).toFixed(2) }}</text>
         </view>
         <view class="summary-row">
-          <text class="label">运费:</text>
-          <text class="value">¥{{ estimatedShippingFee.toFixed(2) }}</text>
+          <text class="label">运费（包邮）:</text>
+          <text class="value">¥0.00</text>
         </view>
         <view class="summary-row total">
           <text class="label">合计:</text>
-          <text class="value highlight">¥{{ totalAmount.toFixed(2) }}</text>
+          <text class="value highlight">¥{{ Math.round(totalAmount).toFixed(2) }}</text>
         </view>
+      </view>
+    </view>
+
+    <!-- 制作和配送说明 -->
+    <view class="section shipping-note-section">
+      <view class="section-title">
+        <text class="title-icon">📅</text>
+        <text class="title-text">制作和配送说明</text>
+      </view>
+      <view class="note-content">
+        <text class="note-text">下单后第2天开始制作，采购加制作预计1天，急冻预计1天，运输预计1到2天</text>
       </view>
     </view>
 
     <!-- 底部操作栏 -->
     <view class="bottom-bar">
-      <view class="total-info">
+      <view class="total-info-inline">
         <text class="total-label">合计:</text>
-        <text class="total-value">¥{{ totalAmount.toFixed(2) }}</text>
+        <text class="total-value">¥{{ Math.round(totalAmount).toFixed(2) }}</text>
       </view>
       <button
         class="btn-submit"
@@ -136,6 +142,8 @@ interface CartItem {
   packageSpecG: number
   unitPrice: number
   totalPrice: number
+  preparationMethod?: string  // 制作要求：口感
+  cookingMethod?: string     // 制作要求：烹饪
 }
 
 interface Address {
@@ -148,6 +156,7 @@ interface Address {
 
 const cartItems = ref<CartItem[]>([])
 const selectedAddress = ref<Address | null>(null)
+const orderMode = ref<'cart' | 'directBuy'>('cart') // 订单模式
 
 // 按狗狗分组
 const groupedItems = computed(() => {
@@ -174,8 +183,16 @@ const totalProductAmount = computed(() => {
   return cartItems.value.reduce((sum, item) => sum + item.totalPrice, 0)
 })
 
+// 获取每日餐数（从第一个商品计算）
+const mealsPerDay = computed(() => {
+  if (cartItems.value.length === 0) return 2
+  const firstItem = cartItems.value[0]
+  return Math.round(firstItem.packageCount / firstItem.cycleDays)
+})
+
+// 运费：从购物车API获取（如果购物车返回了运费）
 const estimatedShippingFee = computed(() => {
-  return 33.00
+  return 0
 })
 
 const totalAmount = computed(() => {
@@ -183,9 +200,47 @@ const totalAmount = computed(() => {
 })
 
 onMounted(() => {
-  loadCart()
-  loadDefaultAddress()
+  const pages = getCurrentPages()
+  const currentPage = pages[pages.length - 1] as any
+  const options = currentPage.options || {}
+
+  // 检查是否为立即购买模式
+  if (options.mode === 'directBuy') {
+    orderMode.value = 'directBuy'
+    loadDirectBuyItem(options)
+    loadDefaultAddress()
+  } else {
+    orderMode.value = 'cart'
+    loadCart()
+    loadDefaultAddress()
+  }
 })
+
+// 加载立即购买的商品
+function loadDirectBuyItem(options: any) {
+  const item: CartItem = {
+    id: 'direct-buy-temp', // 临时ID
+    dogId: options.dogId || '',
+    dogName: decodeURIComponent(options.dogName || ''),
+    dogBreedName: decodeURIComponent(options.dogBreedName || ''),
+    dogWeightKg: Number(options.dogWeightKg) || 0,
+    recipeId: options.recipeId || '',
+    recipeName: decodeURIComponent(options.recipeName || ''),
+    recipeCoverImage: decodeURIComponent(options.recipeCoverImage || ''),
+    cycleDays: Number(options.cycleDays) || 0,
+    dailyIntakeG: Number(options.dailyIntakeG) || 0,
+    totalGrams: Number(options.totalGrams) || 0,
+    packageCount: Number(options.packageCount) || 0,
+    packageSpecG: Number(options.packageSpecG) || 0,
+    unitPrice: Number(options.unitPrice) || 0,
+    totalPrice: Number(options.totalPrice) || 0,
+    preparationMethod: decodeURIComponent(options.preparationMethod || ''),
+    cookingMethod: decodeURIComponent(options.cookingMethod || ''),
+  }
+
+  cartItems.value = [item]
+  console.log('Direct buy item loaded:', item)
+}
 
 async function loadCart() {
   try {
@@ -245,7 +300,7 @@ async function submitOrder() {
 
   if (cartItems.value.length === 0) {
     uni.showToast({
-      title: '购物车为空',
+      title: '商品为空',
       icon: 'none'
     })
     return
@@ -254,15 +309,40 @@ async function submitOrder() {
   try {
     uni.showLoading({ title: '提交订单...' })
 
-    const res = await request({
-      url: '/orders',
-      method: 'POST',
-      data: {
-        type: 'FRESH_FOOD',
-        addressId: selectedAddress.value.id,
-        cartItemIds: cartItems.value.map(item => item.id)
-      }
-    })
+    let res: any
+
+    if (orderMode.value === 'directBuy') {
+      // 立即购买模式：直接创建订单
+      res = await request({
+        url: '/orders',
+        method: 'POST',
+        data: {
+          type: 'FRESH_FOOD',
+          addressId: selectedAddress.value.id,
+          directBuyItem: {
+            dogId: cartItems.value[0].dogId,
+            recipeId: cartItems.value[0].recipeId,
+            cycleDays: cartItems.value[0].cycleDays,
+            dailyIntakeG: cartItems.value[0].dailyIntakeG,
+            packageCount: cartItems.value[0].packageCount,
+            packageSpecG: cartItems.value[0].packageSpecG,
+            preparationMethod: cartItems.value[0].preparationMethod,
+            cookingMethod: cartItems.value[0].cookingMethod,
+          }
+        }
+      })
+    } else {
+      // 购物车模式：使用购物车项ID
+      res = await request({
+        url: '/orders',
+        method: 'POST',
+        data: {
+          type: 'FRESH_FOOD',
+          addressId: selectedAddress.value.id,
+          cartItemIds: cartItems.value.map(item => item.id)
+        }
+      })
+    }
 
     if (res.code === 0 && res.data) {
       uni.showToast({
@@ -278,6 +358,7 @@ async function submitOrder() {
       }, 1500)
     }
   } catch (error) {
+    console.error('Submit order error:', error)
     uni.showToast({
       title: '提交失败',
       icon: 'none'
@@ -298,7 +379,7 @@ function goToAddressList() {
 .checkout-page {
   min-height: 100vh;
   background-color: #f5f5f5;
-  padding-bottom: 140rpx;
+  padding-bottom: 240rpx;
 }
 
 .section {
@@ -506,6 +587,25 @@ function goToAddressList() {
   font-size: 36rpx;
 }
 
+/* 制作和配送说明 */
+.shipping-note-section {
+  background-color: #fff;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+}
+
+.note-content {
+  padding: 20rpx;
+  background-color: #f9f9f9;
+  border-radius: 12rpx;
+}
+
+.note-text {
+  font-size: 26rpx;
+  color: #333;
+  line-height: 1.6;
+}
+
 /* 底部操作栏 */
 .bottom-bar {
   position: fixed;
@@ -515,42 +615,50 @@ function goToAddressList() {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 16rpx;
   padding: 16rpx 20rpx;
   background-color: #fff;
   border-top: 1rpx solid #e5e5e5;
+  z-index: 100;
 }
 
-.total-info {
+.total-info-inline {
   display: flex;
-  flex-direction: column;
-  gap: 4rpx;
+  align-items: center;
+  gap: 8rpx;
+  flex: 1;
 }
 
 .total-label {
-  font-size: 24rpx;
-  color: #666;
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 500;
 }
 
 .total-value {
-  font-size: 36rpx;
+  font-size: 40rpx;
   font-weight: bold;
   color: #ff4d4f;
 }
 
 .btn-submit {
-  width: 300rpx;
+  min-width: 200rpx;
   height: 88rpx;
   line-height: 88rpx;
+  padding: 0 40rpx;
   background-color: #1890ff;
   color: #fff;
   border-radius: 44rpx;
-  font-size: 32rpx;
+  font-size: 28rpx;
+  font-weight: bold;
   border: none;
   text-align: center;
+  box-shadow: 0 4rpx 12rpx rgba(24, 144, 255, 0.3);
 }
 
 .btn-submit[disabled] {
   background-color: #ccc;
   color: #999;
+  box-shadow: none;
 }
 </style>

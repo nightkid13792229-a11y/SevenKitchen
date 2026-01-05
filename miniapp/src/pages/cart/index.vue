@@ -29,6 +29,15 @@
           class="cart-item"
           :class="{ 'invalid-item': !item.isValid }"
         >
+          <!-- 勾选框 -->
+          <view class="checkbox-wrapper" v-if="item.isValid">
+            <checkbox
+              :checked="item.selected"
+              @tap="toggleSelect(item.id)"
+              color="#1890ff"
+            />
+          </view>
+
           <image
             v-if="item.recipeCoverImage"
             :src="item.recipeCoverImage"
@@ -49,12 +58,7 @@
 
             <!-- 规格说明 -->
             <view v-if="item.isValid" class="item-spec">
-              <text>{{ item.cycleDays }}天 × {{ Math.round(item.dailyIntakeG) }}g/天 = {{ Math.round(item.totalGrams) }}g</text>
-            </view>
-
-            <!-- 分装方案（重点展示）-->
-            <view v-if="item.isValid" class="package-info highlight">
-              <text class="package-text">{{ item.packageCount }}包 × {{ Math.round(item.packageSpecG) }}g/包</text>
+              <text>{{ item.packageCount }}餐 × {{ Math.round(item.packageSpecG) }}g/餐</text>
             </view>
 
             <!-- 小计 -->
@@ -70,41 +74,20 @@
           </view>
         </view>
       </view>
-
-      <!-- 收货地址 -->
-      <view class="address-section" @tap="goToAddressList">
-        <view class="section-title">📍 收货地址</view>
-        <view v-if="selectedAddress" class="address-card">
-          <view class="address-info">
-            <text class="recipient">{{ selectedAddress.recipientName }} {{ selectedAddress.phone }}</text>
-            <text class="detail">{{ selectedAddress.regionText }} {{ selectedAddress.detailAddress }}</text>
-          </view>
-          <text class="arrow">→</text>
-        </view>
-        <view v-else class="no-address">
-          <text>请选择收货地址</text>
-          <text class="arrow">→</text>
-        </view>
-      </view>
-
-      <!-- 价格汇总 -->
-      <view class="price-summary">
-        <view class="summary-row total">
-          <text class="label">商品金额（{{ validItemsCount }}件）:</text>
-          <text class="value highlight">¥{{ Math.round(totalProductAmount) }}</text>
-        </view>
-      </view>
     </view>
 
     <!-- 底部操作栏 -->
     <view v-if="cartItems.length > 0" class="bottom-bar">
-      <button class="btn-continue" @tap="goShopping">继续购物</button>
+      <view class="total-info">
+        <text class="total-label">总计:</text>
+        <text class="total-value">¥{{ Math.round(selectedTotalAmount) }}</text>
+      </view>
       <button
         class="btn-checkout"
-        :disabled="!selectedAddress || validItemsCount === 0"
+        :disabled="selectedValidItemsCount === 0"
         @tap="goToCheckout"
       >
-        去结算({{ validItemsCount }})
+        去结算({{ selectedValidItemsCount }})
       </button>
     </view>
   </view>
@@ -112,6 +95,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 
 interface CartItem {
@@ -132,18 +116,10 @@ interface CartItem {
   totalPrice: number
   isValid: boolean  // 商品是否有效
   invalidReason?: string  // 失效原因
-}
-
-interface Address {
-  id: string
-  recipientName: string
-  phone: string
-  regionText: string
-  detailAddress: string
+  selected: boolean // 是否勾选
 }
 
 const cartItems = ref<CartItem[]>([])
-const selectedAddress = ref<Address | null>(null)
 
 // 按狗狗分组
 const groupedItems = computed(() => {
@@ -172,19 +148,30 @@ const totalProductAmount = computed(() => {
     .reduce((sum, item) => sum + item.totalPrice, 0)
 })
 
-const estimatedShippingFee = computed(() => {
-  // 调用运费计算API（简化为固定值）
-  return 33.00
-})
-
-const totalAmount = computed(() => {
-  return totalProductAmount.value + estimatedShippingFee.value
-})
-
 // 有效商品数量
 const validItemsCount = computed(() => {
   return cartItems.value.filter(item => item.isValid).length
 })
+
+// 已勾选的有效商品数量
+const selectedValidItemsCount = computed(() => {
+  return cartItems.value.filter(item => item.isValid && item.selected).length
+})
+
+// 已勾选商品的总金额
+const selectedTotalAmount = computed(() => {
+  return cartItems.value
+    .filter(item => item.isValid && item.selected)
+    .reduce((sum, item) => sum + item.totalPrice, 0)
+})
+
+// 切换商品的勾选状态
+function toggleSelect(itemId: string) {
+  const item = cartItems.value.find(i => i.id === itemId)
+  if (item) {
+    item.selected = !item.selected
+  }
+}
 
 // 获取失效原因的文本
 function getInvalidReasonText(reason?: string): string {
@@ -198,7 +185,11 @@ function getInvalidReasonText(reason?: string): string {
 
 onMounted(() => {
   loadCart()
-  loadDefaultAddress()
+})
+
+onShow(() => {
+  // 每次页面显示时刷新购物车数据
+  loadCart()
 })
 
 async function loadCart() {
@@ -214,7 +205,12 @@ async function loadCart() {
     console.log('[Cart] Items:', res.data?.items)
 
     if (res.code === 0 && res.data) {
-      cartItems.value = res.data.items || []
+      // 为所有有效商品设置默认勾选状态
+      const items = res.data.items || []
+      cartItems.value = items.map(item => ({
+        ...item,
+        selected: item.isValid // 有效商品默认勾选
+      }))
       console.log('[Cart] Loaded cart items count:', cartItems.value.length)
       console.log('[Cart] Cart items:', cartItems.value)
     } else {
@@ -227,38 +223,6 @@ async function loadCart() {
   } finally {
     uni.hideLoading()
   }
-}
-
-async function loadDefaultAddress() {
-  try {
-    const res = await request({
-      url: '/addresses',
-      method: 'GET'
-    })
-
-    if (res.code === 0 && res.data && res.data.length > 0) {
-      const defaultAddr = res.data.find((addr: any) => addr.isDefault) || res.data[0]
-      if (defaultAddr) {
-        selectedAddress.value = {
-          id: defaultAddr.id,
-          recipientName: defaultAddr.recipientName,
-          phone: defaultAddr.phone,
-          regionText: formatRegionText(defaultAddr.region),
-          detailAddress: defaultAddr.detailAddress
-        }
-      }
-    }
-  } catch (error) {
-    console.error('Load address error:', error)
-  }
-}
-
-function formatRegionText(region: any): string {
-  if (!region) return ''
-  if (typeof region === 'string') return region
-
-  const parts = [region.province, region.city, region.district].filter(Boolean)
-  return parts.join('')
 }
 
 async function deleteItem(itemId: string) {
@@ -309,22 +273,8 @@ function showConfirmDialog(options: { title: string; content: string }): Promise
 }
 
 function goToCheckout() {
-  if (!selectedAddress.value) {
-    uni.showToast({
-      title: '请先选择收货地址',
-      icon: 'none'
-    })
-    return
-  }
-
   uni.navigateTo({
     url: '/pages/checkout/index'
-  })
-}
-
-function goToAddressList() {
-  uni.navigateTo({
-    url: '/pages/address-list/index?mode=select'
   })
 }
 
@@ -429,6 +379,12 @@ function goShopping() {
   border-bottom: none;
 }
 
+/* 勾选框 */
+.checkbox-wrapper {
+  flex-shrink: 0;
+  padding-right: 10rpx;
+}
+
 /* 失效商品样式 */
 .cart-item.invalid-item {
   opacity: 0.6;
@@ -490,27 +446,6 @@ function goShopping() {
   color: #999;
 }
 
-.package-info {
-  padding: 8rpx 12rpx;
-  background-color: #f0f9ff;
-  border-radius: 6rpx;
-  border-left: 3rpx solid #1890ff;
-}
-
-.package-info.highlight {
-  border-left-color: #ff9800;
-  background-color: #fff7e6;
-}
-
-.package-text {
-  font-size: 24rpx;
-  color: #1890ff;
-}
-
-.package-info.highlight .package-text {
-  color: #ff9800;
-}
-
 .item-price {
   display: flex;
   justify-content: space-between;
@@ -546,98 +481,6 @@ function goShopping() {
   border: none;
 }
 
-/* 收货地址 */
-.address-section {
-  background-color: #fff;
-  border-radius: 16rpx;
-  padding: 24rpx;
-  margin-bottom: 20rpx;
-}
-
-.section-title {
-  font-size: 30rpx;
-  font-weight: bold;
-  color: #333;
-  margin-bottom: 20rpx;
-}
-
-.address-card {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.address-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.recipient {
-  font-size: 28rpx;
-  color: #333;
-  font-weight: 500;
-}
-
-.detail {
-  font-size: 26rpx;
-  color: #666;
-}
-
-.no-address {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 28rpx;
-  color: #999;
-}
-
-.arrow {
-  font-size: 32rpx;
-  color: #999;
-  margin-left: 20rpx;
-}
-
-/* 价格汇总 */
-.price-summary {
-  background-color: #fff;
-  border-radius: 16rpx;
-  padding: 24rpx;
-  margin-bottom: 20rpx;
-}
-
-.summary-row {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 16rpx;
-  font-size: 28rpx;
-}
-
-.summary-row:last-child {
-  margin-bottom: 0;
-}
-
-.summary-row.total {
-  padding-top: 16rpx;
-  font-size: 32rpx;
-  font-weight: bold;
-  border-top: 1rpx solid #f0f0f0;
-}
-
-.label {
-  color: #666;
-}
-
-.value {
-  color: #333;
-}
-
-.value.highlight {
-  color: #ff4d4f;
-  font-size: 36rpx;
-}
-
 /* 底部操作栏 */
 .bottom-bar {
   position: fixed;
@@ -645,31 +488,46 @@ function goShopping() {
   left: 0;
   right: 0;
   display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 16rpx;
   padding: 16rpx 20rpx;
   background-color: #fff;
   border-top: 1rpx solid #e5e5e5;
+  z-index: 100;
 }
 
-.btn-continue,
-.btn-checkout {
+.total-info {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
   flex: 1;
+}
+
+.total-label {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+.total-value {
+  font-size: 40rpx;
+  font-weight: bold;
+  color: #ff4d4f;
+}
+
+.btn-checkout {
+  min-width: 200rpx;
   height: 88rpx;
   line-height: 88rpx;
-  border-radius: 44rpx;
-  font-size: 28rpx;
-  border: none;
-  text-align: center;
-}
-
-.btn-continue {
-  background-color: #f5f5f5;
-  color: #333;
-}
-
-.btn-checkout {
+  padding: 0 40rpx;
   background-color: #1890ff;
   color: #fff;
+  border-radius: 44rpx;
+  font-size: 28rpx;
+  font-weight: bold;
+  border: none;
+  text-align: center;
 }
 
 .btn-checkout[disabled] {

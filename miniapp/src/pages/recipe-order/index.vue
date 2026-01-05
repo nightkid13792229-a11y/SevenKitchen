@@ -536,6 +536,26 @@
           </view>
         </view>
 
+        <!-- 原料清单 -->
+        <view class="breakdown-group">
+          <view class="breakdown-group-title clickable" @tap="toggleIngredientDetails">
+            <text>📋 原料清单</text>
+            <text class="toggle-icon-small">{{ showIngredientDetails ? '▲' : '▼' }}</text>
+          </view>
+          <view v-if="showIngredientDetails && pricePreview.pricingBreakdown?.ingredientDetails" class="detail-box">
+            <view class="ingredient-header">
+              <text class="ingredient-header-item">原料名称</text>
+              <text class="ingredient-header-item">采购渠道</text>
+              <text class="ingredient-header-item">用量</text>
+            </view>
+            <view v-for="(ingredient, idx) in pricePreview.pricingBreakdown.ingredientDetails" :key="idx" class="ingredient-row">
+              <text class="ingredient-item">{{ ingredient.name }}</text>
+              <text class="ingredient-item">{{ ingredient.purchaseChannel || '-' }}</text>
+              <text class="ingredient-item">{{ ingredient.amount.toFixed(3) }}{{ ingredient.unit }}</text>
+            </view>
+          </view>
+        </view>
+
         <!-- 价格计算 -->
         <view class="breakdown-group">
           <view class="breakdown-group-title">价格计算</view>
@@ -557,7 +577,7 @@
         <view class="breakdown-group final">
           <view class="breakdown-item final clickable" @tap="toggleWeightDetails">
             <text class="breakdown-label">物流重量</text>
-            <text class="breakdown-value">{{ ((pricePreview.pricingBreakdown?.weightPackagingG || 0) / 1000).toFixed(2) }}kg</text>
+            <text class="breakdown-value">{{ ((totalGrams + (pricePreview.pricingBreakdown?.weightPackagingG || 0)) / 1000).toFixed(2) }}kg</text>
             <text class="toggle-icon-small">{{ showWeightDetails ? '▲' : '▼' }}</text>
           </view>
 
@@ -625,11 +645,11 @@
             </view>
             <view class="detail-row">
               <text class="detail-label">包装材料总重：</text>
-              <text class="detail-value">{{ ((pricePreview.pricingBreakdown.weightPackagingG || 0) - totalGrams).toFixed(0) }}g</text>
+              <text class="detail-value">{{ (pricePreview.pricingBreakdown.weightPackagingG || 0).toFixed(0) }}g</text>
             </view>
             <view class="detail-row">
               <text class="detail-label">物流总重量：</text>
-              <text class="detail-value final">{{ (pricePreview.pricingBreakdown.weightPackagingG || 0).toFixed(0) }}g = {{ ((pricePreview.pricingBreakdown.weightPackagingG || 0) / 1000).toFixed(2) }}kg</text>
+              <text class="detail-value final">{{ ((totalGrams + (pricePreview.pricingBreakdown.weightPackagingG || 0))).toFixed(0) }}g = {{ ((totalGrams + (pricePreview.pricingBreakdown.weightPackagingG || 0)) / 1000).toFixed(2) }}kg</text>
             </view>
           </view>
 
@@ -1241,6 +1261,9 @@ async function addToCart() {
         dogId: selectedDogId.value,
         recipeId: recipeId.value,
         cycleDays: selectedCycleDays.value,
+        dailyIntakeG: Math.round(displayDailyIntakeG.value),
+        packageCount: totalPackages.value,
+        packageSpecG: Math.round(perMealG.value),
         preparationMethod: preparationMethod.value || undefined,
         cookingMethod: cookingMethod.value || undefined,
       }
@@ -1253,6 +1276,7 @@ async function addToCart() {
       })
     }
   } catch (error) {
+    console.error('Add to cart error:', error)
     uni.showToast({
       title: '添加失败',
       icon: 'none'
@@ -1263,13 +1287,35 @@ async function addToCart() {
 }
 
 async function buyNow() {
-  if (!canAddToCart.value) return
+  if (!canBuyNow.value) return
 
-  // 先加入购物车，然后跳转到购物车页面
-  await addToCart()
+  // 直接跳转到订单确认页，通过URL参数传递商品信息
+  const params = {
+    dogId: selectedDogId.value,
+    dogName: selectedDog.value?.name || '',
+    dogBreedName: selectedDog.value?.breedName || '',
+    dogWeightKg: selectedDog.value?.currentWeightKg || 0,
+    recipeId: recipeId.value,
+    recipeName: recipe.value.name,
+    recipeCoverImage: recipe.value.coverImageUrl || '',
+    cycleDays: selectedCycleDays.value,
+    dailyIntakeG: Math.round(displayDailyIntakeG.value),
+    totalGrams: Math.round(totalGrams.value),
+    packageCount: totalPackages.value,
+    packageSpecG: Math.round(perMealG.value),
+    unitPrice: pricePerMeal.value,
+    totalPrice: pricePreview.value?.amountTotal || 0,
+    preparationMethod: preparationMethod.value || '',
+    cookingMethod: cookingMethod.value || '',
+  }
+
+  // 将参数编码到URL中
+  const queryString = Object.keys(params)
+    .map(key => `${key}=${encodeURIComponent(params[key])}`)
+    .join('&')
 
   uni.navigateTo({
-    url: '/pages/cart/index'
+    url: `/pages/checkout/index?mode=directBuy&${queryString}`
   })
 }
 
@@ -2371,4 +2417,42 @@ function goToCreateDog() {
   background-color: #ccc;
   color: #999;
 }
+
+/* 原料清单样式 */
+.ingredient-header {
+  display: flex;
+  justify-content: space-between;
+  padding: 12rpx 16rpx;
+  background-color: #f5f5f5;
+  border-radius: 8rpx;
+  font-weight: bold;
+  font-size: 26rpx;
+  margin-bottom: 8rpx;
+}
+
+.ingredient-header-item {
+  flex: 1;
+  text-align: center;
+  color: #333;
+}
+
+.ingredient-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 12rpx 16rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+  font-size: 26rpx;
+}
+
+.ingredient-row:last-child {
+  border-bottom: none;
+}
+
+.ingredient-item {
+  flex: 1;
+  text-align: center;
+  color: #666;
+  word-break: break-all;
+}
+
 </style>

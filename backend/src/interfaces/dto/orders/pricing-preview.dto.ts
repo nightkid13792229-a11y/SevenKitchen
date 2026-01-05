@@ -167,6 +167,9 @@ export class IngredientCostItemDto {
 
   @ApiProperty({ description: 'Calculation explanation' })
   calculation!: string;
+
+  @ApiPropertyOptional({ description: 'Purchase channel' })
+  purchaseChannel?: string;
 }
 
 /**

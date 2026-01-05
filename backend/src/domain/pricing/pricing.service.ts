@@ -79,6 +79,7 @@ export interface IngredientCostItem {
   unitCost: number;
   cost: number;
   calculation: string;
+  purchaseChannel?: string;  // 采购渠道
 }
 
 export interface PackagingPerPackConsumables {
@@ -210,6 +211,7 @@ export class PricingService {
       unitCost: number;
       cost: number;
       calculation: string;
+      purchaseChannel?: string;
     }[] = [];
 
     console.log('[PricingService] Starting cost calculation:', {
@@ -269,7 +271,8 @@ export class PricingService {
           unit: 'kg',
           unitCost: unitCost,
           cost: itemCost,
-          calculation: `净需求${itemNetNeededKg.toFixed(3)}kg ÷ 出成率${yieldRate} = 毛需求${itemGrossPurchaseKg.toFixed(3)}kg × ${unitCost.toFixed(4)}元/g = ${itemCost.toFixed(2)}元`
+          calculation: `净需求${itemNetNeededKg.toFixed(3)}kg ÷ 出成率${yieldRate} = 毛需求${itemGrossPurchaseKg.toFixed(3)}kg × ${unitCost.toFixed(4)}元/g = ${itemCost.toFixed(2)}元`,
+          purchaseChannel: ingredient.purchaseChannel || undefined,
         });
 
         // Convert kg to g, then multiply by unit cost (per g)
@@ -343,7 +346,8 @@ export class PricingService {
           unit: 'g',
           unitCost: unitCost,
           cost: itemCost,
-          calculation: `营养需求${totalNutrientNeeded.toFixed(3)}mg ÷ 浓度${concentration} = 理论用量${unitsTheoretical.toFixed(3)}g × 损耗率${customLoss} = 实际用量${unitsNeeded.toFixed(3)}g × ${unitCost.toFixed(4)}元/g = ${itemCost.toFixed(2)}元`
+          calculation: `营养需求${totalNutrientNeeded.toFixed(3)}mg ÷ 浓度${concentration} = 理论用量${unitsTheoretical.toFixed(3)}g × 损耗率${customLoss} = 实际用量${unitsNeeded.toFixed(3)}g × ${unitCost.toFixed(4)}元/g = ${itemCost.toFixed(2)}元`,
+          purchaseChannel: ingredient.purchaseChannel || undefined,
         });
 
         costIngredients += itemCost;
@@ -413,6 +417,15 @@ export class PricingService {
     const weightPackagingG = packagingResult.weightG;
 
     // Collect packaging cost details from breakdown
+    console.log('[PricingService] PackagingResult breakdown:', {
+      shippingContainersCount: packagingResult.breakdown.shippingContainers.length,
+      shippingContainers: packagingResult.breakdown.shippingContainers.map(c => ({
+        boxName: c.boxName,
+        boxSpec: c.boxSpec,
+        cost: c.cost
+      }))
+    });
+
     const packagingDetails = {
       perPackConsumables: {
         vacuumBagName: packagingResult.breakdown.perPackConsumables.vacuumBagName,

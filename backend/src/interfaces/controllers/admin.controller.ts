@@ -1558,6 +1558,48 @@ export class AdminController {
     }
   }
 
+  @Post('upload-package-image')
+  @UseGuards(AuthGuard, AdminGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Upload package example image to Tencent COS' })
+  @ApiResponse({ status: 201, description: 'Image uploaded successfully' })
+  @ApiResponse({ status: 400, description: 'Upload failed' })
+  async uploadPackageImage(
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<ApiResponseDto<any>> {
+    try {
+      // 上传到独立的 package-images 目录
+      const result = await this.cosService.uploadImage(file, file.originalname, 'package-images');
+      return ApiResponseDto.success(result);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  @Post('upload-shipping-logo')
+  @UseGuards(AuthGuard, AdminGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Upload shipping company logo to Tencent COS' })
+  @ApiResponse({ status: 201, description: 'Logo uploaded successfully' })
+  @ApiResponse({ status: 400, description: 'Upload failed' })
+  async uploadShippingLogo(
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<ApiResponseDto<any>> {
+    try {
+      // 上传到独立的 shipping-logos 目录
+      const result = await this.cosService.uploadImage(file, file.originalname, 'shipping-logos');
+      return ApiResponseDto.success(result);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
   @Delete('recipes/delete-image')
   @UseGuards(AuthGuard, AdminGuard)
   @ApiOperation({ summary: 'Delete recipe image from Tencent COS' })

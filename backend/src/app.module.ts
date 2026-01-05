@@ -15,6 +15,9 @@ import { StaffShippingController } from './interfaces/controllers/staff-shipping
 import { HealthRecordsController } from './interfaces/controllers/health-records.controller';
 import { HealthNotificationController } from './interfaces/controllers/health-notification.controller';
 import { HealthUploadController } from './interfaces/controllers/health-upload.controller';
+import { CartController } from './interfaces/cart/cart.controller';
+import { GlobalConfigController, PublicGlobalConfigController } from './interfaces/controllers/global-config.controller';
+import { ShippingTemplateController } from './interfaces/controllers/shipping-template.controller';
 import {
   DogService,
   DOG_REPOSITORY,
@@ -56,6 +59,7 @@ import { ShippingFeeService } from './domain/shipping/shipping-fee.service';
 import { ShippingService } from './application/shipping/shipping.service';
 import { ShippingFulfillmentService } from './application/shipping/shipping-fulfillment.service';
 import { InMemoryShippingTemplateRepository } from './infrastructure/repositories/in-memory-shipping-template.repository';
+import { PrismaShippingTemplateRepository } from './infrastructure/repositories/prisma-shipping-template.repository';
 import { SHIPPING_TEMPLATE_REPOSITORY } from './application/shipping/shipping.service.tokens';
 import type { ShippingTemplate } from './domain/shipping/shipping-fee.service';
 import { ProductionService, PRODUCTION_BATCH_REPOSITORY } from './application/production/production.service';
@@ -81,6 +85,10 @@ import {
   PrismaMedicalRecordRepository,
   PrismaAllergyRecordRepository
 } from './infrastructure/repositories/prisma-health.repository';
+import { CartService } from './application/cart/cart.service';
+import { PrismaCartRepository } from './infrastructure/persistence/cart/cart.repository.prisma';
+import { CartRepository } from './domain/cart';
+import { PackagingService } from './domain/packaging/packaging.service';
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -148,6 +156,10 @@ validatePrismaConfig();
     HealthRecordsController,
     HealthNotificationController,
     HealthUploadController,
+    CartController,
+    GlobalConfigController,
+    PublicGlobalConfigController,
+    ShippingTemplateController,
   ],
   providers: [
     DogService,
@@ -242,11 +254,13 @@ validatePrismaConfig();
     TencentCosService,
     GlobalConfigService,
     PricingService,
+    PackagingService,
     ShippingFeeService,
     ShippingService,
+    PrismaShippingTemplateRepository,
     {
       provide: SHIPPING_TEMPLATE_REPOSITORY,
-      useClass: InMemoryShippingTemplateRepository,
+      useExisting: PrismaShippingTemplateRepository,
     },
     {
       provide: ORDER_REPOSITORY,
@@ -419,6 +433,20 @@ validatePrismaConfig();
           );
         }
         return new PrismaAllergyRecordRepository(prismaService);
+      },
+      inject: isPrismaEnabled() ? [PrismaService] : [],
+    },
+    // Cart Service and Repository
+    CartService,
+    {
+      provide: 'CartRepository',
+      useFactory: (prismaService?: PrismaService) => {
+        if (!prismaService) {
+          throw new Error(
+            'PrismaService is not available. Ensure Prisma is enabled via repo switches.',
+          );
+        }
+        return new PrismaCartRepository(prismaService);
       },
       inject: isPrismaEnabled() ? [PrismaService] : [],
     },

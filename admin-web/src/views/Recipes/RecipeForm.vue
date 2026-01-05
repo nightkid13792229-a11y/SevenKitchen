@@ -162,8 +162,8 @@
                 <div class="header-cell">原料名称</div>
                 <div class="header-cell">类型</div>
                 <div class="header-cell">制备方法</div>
-                <div class="header-cell">占比%</div>
-                <div class="header-cell">营养目标</div>
+                <div class="header-cell">占比</div>
+                <div class="header-cell nutrient-target-header">营养目标</div>
                 <div class="header-cell">操作</div>
               </div>
 
@@ -193,7 +193,7 @@
                       {{ formatPreparationMethods(item.preparationMethod) }}
                     </div>
                     <div class="row-cell ratio-percent">
-                      {{ item.ratioPercent !== undefined ? item.ratioPercent + '%' : '-' }}
+                      {{ (item.ratioPercent !== null && item.ratioPercent !== undefined) ? item.ratioPercent + '%' : '-' }}
                     </div>
                     <div class="row-cell nutrient-target">
                       <span v-if="item.nutrientTargetKey">
@@ -387,7 +387,7 @@
         <div class="form-section">
           <h3 class="section-title">生产信息</h3>
 
-          <el-form-item label="生产损耗率 (%)">
+          <el-form-item label="生产损耗率">
             <el-input-number
               v-model="form.productionLossRate"
               :min="0"
@@ -395,6 +395,7 @@
               :precision="2"
               placeholder="生产损耗率"
             />
+            <span class="form-item-tip">举例：如果生产损耗率为7%，这里需要填1.07。</span>
           </el-form-item>
 
           <el-form-item label="工时 (小时)">
@@ -524,57 +525,65 @@
           </div>
         </el-form-item>
 
-        <el-form-item label="占比 (%)">
-          <el-input-number
-            v-model="ingredientForm.ratioPercent"
-            :min="0"
-            :max="100"
-            :precision="2"
-            placeholder="0-100"
-            style="width: 100%"
-          />
-        </el-form-item>
-
-        <el-divider content-position="left">营养目标（补剂专用，可选）</el-divider>
-
-        <el-form-item label="营养素">
-          <el-select
-            v-model="ingredientForm.nutrientTargetKey"
-            placeholder="请选择营养素"
-            style="width: 100%"
-            :disabled="!selectedIngredientIsSupplement"
-            clearable
-          >
-            <el-option
-              v-for="(label, key) in availableNutrients"
-              :key="key"
-              :label="label"
-              :value="key"
+        <!-- 食材类型：显示占比 -->
+        <template v-if="ingredientForm.ingredientId && selectedIngredient && selectedIngredient.type === 'FOOD'">
+          <el-form-item label="占比 (%)">
+            <el-input-number
+              v-model="ingredientForm.ratioPercent"
+              :min="0"
+              :max="100"
+              :precision="2"
+              placeholder="0-100"
+              style="width: 100%"
             />
-          </el-select>
-          <div v-if="!selectedIngredientIsSupplement && ingredientForm.ingredientId" style="margin-top: 8px; color: #f56c6c; font-size: 12px">
-            ⚠️ 仅补剂类型原料可设置营养目标
-          </div>
-        </el-form-item>
+            <div style="color: #909399; font-size: 12px; margin-top: 4px">
+              💡 食材类型需设置占比，表示该食材在食谱中的重量占比
+            </div>
+          </el-form-item>
+        </template>
 
-        <el-form-item label="目标值">
-          <el-input-number
-            v-model="ingredientForm.nutrientTargetValue"
-            :min="0"
-            :precision="2"
-            :disabled="!ingredientForm.nutrientTargetKey"
-            placeholder="目标数值"
-            style="width: 100%"
-          />
-          <div style="display: flex; align-items: center; margin-top: 8px;">
-            <span v-if="nutrientUnit" style="margin-right: 12px; color: #909399; font-size: 12px">
-              单位: {{ nutrientUnit }}
-            </span>
-            <span style="color: #606266; font-size: 12px">
-              💡 设置该补剂在食谱中的目标含量（例如：每1000g食谱含钙1200mg）
-            </span>
-          </div>
-        </el-form-item>
+        <!-- 补剂类型：显示营养目标 -->
+        <template v-if="ingredientForm.ingredientId && selectedIngredient && selectedIngredient.type === 'SUPPLEMENT'">
+          <el-divider content-position="left">营养目标</el-divider>
+
+          <el-form-item label="营养素">
+            <el-select
+              v-model="ingredientForm.nutrientTargetKey"
+              placeholder="请选择营养素"
+              style="width: 100%"
+              clearable
+            >
+              <el-option
+                v-for="(label, key) in availableNutrients"
+                :key="key"
+                :label="label"
+                :value="key"
+              />
+            </el-select>
+            <div style="color: #909399; font-size: 12px; margin-top: 4px">
+              💡 补剂类型需设置营养目标，表示该补剂在食谱中的目标含量
+            </div>
+          </el-form-item>
+
+          <el-form-item label="目标值">
+            <el-input-number
+              v-model="ingredientForm.nutrientTargetValue"
+              :min="0"
+              :precision="2"
+              :disabled="!ingredientForm.nutrientTargetKey"
+              placeholder="目标数值"
+              style="width: 100%"
+            />
+            <div style="display: flex; align-items: center; margin-top: 8px;">
+              <span v-if="nutrientUnit" style="margin-right: 12px; color: #909399; font-size: 12px">
+                单位: {{ nutrientUnit }}
+              </span>
+              <span style="color: #606266; font-size: 12px">
+                💡 设置该补剂在食谱中的目标含量（例如：每1000g食谱含钙1200mg）
+              </span>
+            </div>
+          </el-form-item>
+        </template>
       </el-form>
 
       <template #footer>
@@ -889,6 +898,19 @@ const loadRecipeDetail = async () => {
       status: detail.status,
       items: detail.items || [],
     });
+
+    // 预填充营养素单位信息到 items
+    if (form.items && form.items.length > 0) {
+      form.items = form.items.map((item: any) => {
+        if (item.nutrientTargetKey && item.ingredient?.properties?.active_nutrients) {
+          const nutrientData = item.ingredient.properties.active_nutrients[item.nutrientTargetKey];
+          if (nutrientData && typeof nutrientData === 'object') {
+            item._nutrientUnit = nutrientData.unit || '';
+          }
+        }
+        return item;
+      });
+    }
 
     if (detail.nutritionDetailedData) {
       Object.assign(nutritionData, detail.nutritionDetailedData);
@@ -1397,7 +1419,18 @@ const saveIngredient = () => {
     return;
   }
 
-  // Create item object
+  // 根据原料类型进行验证
+  if (ingredient.type === 'FOOD' && ingredientForm.ratioPercent === undefined) {
+    ElMessage.warning('食材类型请设置占比');
+    return;
+  }
+
+  if (ingredient.type === 'SUPPLEMENT' && !ingredientForm.nutrientTargetKey) {
+    ElMessage.warning('补剂类型请设置营养目标');
+    return;
+  }
+
+  // Create item object - 根据原料类型保存相应字段
   const item: RecipeItem = {
     id: editingIngredientIndex.value >= 0
       ? (form.items![editingIngredientIndex.value]?.id || '')
@@ -1408,9 +1441,18 @@ const saveIngredient = () => {
     preparationMethod: ingredientForm.preparationMethods.length > 0
       ? ingredientForm.preparationMethods.join(', ')
       : undefined,
-    ratioPercent: ingredientForm.ratioPercent,
-    nutrientTargetKey: ingredientForm.nutrientTargetKey || undefined,
-    nutrientTargetValue: ingredientForm.nutrientTargetValue || undefined,
+    // 食材类型：保存占比，清除营养目标
+    ...(ingredient.type === 'FOOD' && {
+      ratioPercent: ingredientForm.ratioPercent,
+      nutrientTargetKey: undefined,
+      nutrientTargetValue: undefined,
+    }),
+    // 补剂类型：保存营养目标，清除占比
+    ...(ingredient.type === 'SUPPLEMENT' && {
+      ratioPercent: undefined,
+      nutrientTargetKey: ingredientForm.nutrientTargetKey || undefined,
+      nutrientTargetValue: ingredientForm.nutrientTargetValue || undefined,
+    }),
   };
 
   if (!form.items) {
@@ -1454,9 +1496,11 @@ const formatNutrientTarget = (row: any) => {
 
   if (!key || value === undefined) return '-';
 
-  // Get unit from ingredient's active_nutrients
-  let unit = '';
-  if (row.ingredient && row.ingredient.properties) {
+  // 优先使用预填充的单位
+  let unit = row._nutrientUnit || '';
+
+  // 降级：从 ingredient 对象获取（备选）
+  if (!unit && row.ingredient?.properties?.active_nutrients) {
     const activeNutrients = (row.ingredient.properties as any).active_nutrients || {};
     const nutrientData = activeNutrients[key];
     if (nutrientData && typeof nutrientData === 'object') {
@@ -1779,6 +1823,15 @@ onMounted(async () => {
   width: 200px;
 }
 
+/* 营养目标列增加左边距 */
+.nutrient-target-header {
+  padding-left: 16px !important;
+}
+
+.row-cell.nutrient-target {
+  padding-left: 16px !important;
+}
+
 .header-cell:nth-child(7) {
   flex: 1;
   justify-content: center;
@@ -1878,5 +1931,12 @@ onMounted(async () => {
   opacity: 0.9;
   background-color: #d1e9ff !important;
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* Form item tip */
+.form-item-tip {
+  margin-left: 12px;
+  font-size: 12px;
+  color: #909399;
 }
 </style>

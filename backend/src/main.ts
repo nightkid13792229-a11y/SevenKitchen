@@ -173,12 +173,16 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
-  await app.listen(process.env.PORT ?? 3000);
+  const port = process.env.PORT ?? 3000;
+  await app.listen(port, '0.0.0.0'); // Listen on all network interfaces for LAN access
   console.log(
-    `Application is running on: http://localhost:${process.env.PORT ?? 3000}`,
+    `Application is running on: http://localhost:${port}`,
   );
   console.log(
-    `Swagger UI is available at: http://localhost:${process.env.PORT ?? 3000}/api/docs`,
+    `LAN access available at: http://192.168.31.43:${port} (or your local IP)`,
+  );
+  console.log(
+    `Swagger UI is available at: http://localhost:${port}/api/docs`,
   );
 }
 // Only execute bootstrap if this file is the entry point

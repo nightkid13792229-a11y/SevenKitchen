@@ -65,6 +65,8 @@ model OrderItem {
   packageSpecG       Int       @map("package_spec_g")
   customRequirements String?   @map("custom_requirements")
   dailyIntakeG       Float?    @map("daily_intake_g")
+  preparationMethod  String?   @map("preparation_method") @db.VarChar(20)
+  cookingMethod      String?   @map("cooking_method") @db.VarChar(20)
   allocatedAt        DateTime? @map("allocated_at")
   productionBatchId  String?   @map("production_batch_id")
   order              Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -72,6 +74,42 @@ model OrderItem {
   @@index([orderId])
   @@index([productionBatchId])
   @@map("order_item")
+}
+
+model CartItem {
+  id                String   @id @default(uuid()) @map("id")
+  cartId            String   @map("cart_id")
+  dogId             String   @map("dog_id")
+  recipeId          String   @map("recipe_id")
+  cycleDays         Int      @map("cycle_days")
+  dailyIntakeG      Float    @map("daily_intake_g")
+  totalGrams        Float    @map("total_grams")
+  packageCount      Int      @map("package_count")
+  packageSpecG      Int      @map("package_spec_g")
+  unitPrice         Decimal  @map("unit_price") @db.Decimal(10, 2)
+  totalPrice        Decimal  @map("total_price") @db.Decimal(10, 2)
+  preparationMethod String?  @map("preparation_method") @db.VarChar(20)
+  cookingMethod     String?  @map("cooking_method") @db.VarChar(20)
+  createdAt         DateTime @default(now()) @map("created_at")
+  cart              Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+
+  @@index([cartId])
+  @@index([dogId])
+  @@index([recipeId])
+  @@unique([cartId, dogId, recipeId, cycleDays])
+  @@map("cart_item")
+}
+
+model Cart {
+  id        String     @id @default(uuid()) @map("id")
+  customerId String    @unique @map("customer_id")
+  createdAt DateTime   @default(now()) @map("created_at")
+  updatedAt DateTime   @updatedAt @map("updated_at")
+  customer  User       @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  items     CartItem[]
+
+  @@index([customerId])
+  @@map("cart")
 }
 
 model User {
@@ -90,6 +128,7 @@ model User {
   addresses     Address[]
   dogs          Dog[]
   orders        Order[]
+  cart          Cart?
 
   @@index([wechatOpenid])
   @@index([phone])
@@ -603,4 +642,39 @@ enum Severity {
 enum ConfirmedBy {
   VET
   OWNER
+}
+
+model GlobalConfig {
+  id                          String   @id @default("singleton") @map("id")
+  laborHourlyRate             Decimal  @default(30) @map("labor_hourly_rate")
+  minOrderWeightG             Int      @default(1000) @map("min_order_weight_g")
+  defaultBatchCapacityG       Decimal  @default(5000) @map("default_batch_capacity_g")
+  targetMargin                Decimal  @default(0.4) @map("target_margin")
+  overheadCostPerKg           Decimal  @default(2) @map("overhead_cost_per_kg")
+  targetBatchUtilization      Decimal  @default(0.8) @map("target_batch_utilization")
+  supplementLossRate          Decimal  @default(1.05) @map("supplement_loss_rate")
+  defaultProductLabelId       String?  @map("default_product_label_id")
+  defaultIcePackId            String?  @map("default_ice_pack_id")
+  defaultShippingTemplateId   String?  @map("default_shipping_template_id")
+  packageExampleImageUrl      String?  @map("package_example_image_url")
+  shippingCompanyLogoUrl      String?  @map("shipping_company_logo_url")
+  createdAt                   DateTime @default(now()) @map("created_at")
+  updatedAt                   DateTime @updatedAt @map("updated_at")
+
+  @@map("global_config")
+}
+
+model ShippingTemplate {
+  id             String   @id @default(uuid()) @map("id")
+  name           String   @map("name")
+  baseWeightKg   Decimal  @map("base_weight_kg")
+  baseFee        Decimal  @map("base_fee")
+  stepWeightKg   Decimal  @map("step_weight_kg")
+  stepFee        Decimal  @map("step_fee")
+  vasFeePerOrder Decimal  @map("vas_fee_per_order")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("shipping_template")
 }

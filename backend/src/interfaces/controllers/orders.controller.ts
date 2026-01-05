@@ -86,6 +86,11 @@ export class OrdersController {
     try {
       const customerId = user.customerId;
 
+      // Validate either cartItemIds or (dogId + items) is provided
+      if (!createOrderDto.cartItemIds && (!createOrderDto.dogId || !createOrderDto.items)) {
+        return ApiResponseDto.error(400, 'Either cartItemIds or (dogId + items) must be provided');
+      }
+
       const order = await this.orderService.createOrderDraft({
         customerId,
         dogId: createOrderDto.dogId,
@@ -94,6 +99,7 @@ export class OrdersController {
           ? new Date(createOrderDto.targetProductionDate)
           : null,
         items: createOrderDto.items,
+        cartItemIds: createOrderDto.cartItemIds,
         addressId: createOrderDto.addressId,
       });
 
@@ -102,6 +108,9 @@ export class OrdersController {
     } catch (error) {
       if (error instanceof NotFoundException) {
         return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
       }
       throw error;
     }

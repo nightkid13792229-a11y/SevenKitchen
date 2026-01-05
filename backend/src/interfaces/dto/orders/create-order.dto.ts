@@ -16,6 +16,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { OrderType } from '../../../domain';
+import { PreparationMethod, CookingMethod } from '../../../domain/order';
 
 export class CreateOrderItemDto {
   @ApiProperty({ description: 'Recipe ID', example: 'uuid' })
@@ -42,25 +43,63 @@ export class CreateOrderItemDto {
   @Min(1)
   packageSpecG!: number;
 
-  @ApiPropertyOptional({ description: 'Custom requirements', nullable: true })
+  @ApiPropertyOptional({
+    description: 'Order cycle days',
+    example: 7,
+  })
   @IsOptional()
-  customRequirements?: any;
+  @IsInt()
+  @Min(1)
+  cycleDays?: number;
+
+  @ApiPropertyOptional({
+    description: 'Daily food intake in grams',
+    example: 312,
+  })
+  @IsOptional()
+  @IsNumber()
+  @Min(1)
+  dailyIntakeG?: number;
+
+  @ApiPropertyOptional({
+    description: 'Preparation method',
+    enum: PreparationMethod,
+  })
+  @IsOptional()
+  @IsEnum(PreparationMethod)
+  preparationMethod?: PreparationMethod;
+
+  @ApiPropertyOptional({
+    description: 'Cooking method',
+    enum: CookingMethod,
+  })
+  @IsOptional()
+  @IsEnum(CookingMethod)
+  cookingMethod?: CookingMethod;
 }
 
 export class CreateOrderDto {
-  @ApiProperty({ description: 'Dog ID', example: 'uuid' })
+  @ApiPropertyOptional({ description: 'Dog ID (required if not using cart)', example: 'uuid' })
+  @IsOptional()
   @IsUUID()
-  dogId!: string;
+  dogId?: string;
 
   @ApiProperty({ enum: OrderType, example: OrderType.FRESH_FOOD })
   @IsEnum(OrderType)
   type!: OrderType;
 
-  @ApiProperty({ type: [CreateOrderItemDto], description: 'Order items' })
+  @ApiPropertyOptional({ type: [CreateOrderItemDto], description: 'Order items (required if not using cart)' })
+  @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateOrderItemDto)
-  items!: CreateOrderItemDto[];
+  items?: CreateOrderItemDto[];
+
+  @ApiPropertyOptional({ description: 'Cart item IDs (if creating from cart)', example: ['uuid1', 'uuid2'] })
+  @IsOptional()
+  @IsArray()
+  @IsUUID('4', { each: true })
+  cartItemIds?: string[];
 
   @ApiPropertyOptional({ description: 'Address ID', example: 'uuid' })
   @IsOptional()

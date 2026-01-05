@@ -7,7 +7,7 @@
 import { ValidationError } from '../common/errors';
 
 export interface ShippingFeeInput {
-  region: {
+  region?: {
     province: string;
     city: string;
     district: string;

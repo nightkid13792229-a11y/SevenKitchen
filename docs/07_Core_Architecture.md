@@ -1034,8 +1034,7 @@ def calculate_order_price_details(dog, recipe, daily_g, days, discount_rate=1.0)
     # 1. 基础物理量
     # ==========================================
     meals_per_day = dog.meals_per_day
-    # 向上取整到 5g (分装规格)
-    single_pack_spec_g = ceil_to_5g(daily_g / meals_per_day)
+    single_pack_spec_g = daily_g / meals_per_day
     total_packs = meals_per_day * days
     
     # 生产投料净重

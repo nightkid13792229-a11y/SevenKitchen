@@ -413,24 +413,9 @@ function generateDiySheet() {
 }
 
 function goToOrder() {
-  const storedDogId = uni.getStorageSync('dogId')
-  if (!storedDogId) {
-    uni.showModal({
-      title: '提示',
-      content: '请先创建狗狗档案',
-      success: (res) => {
-        if (res.confirm) {
-          uni.navigateTo({
-            url: `/pages/dog-create/index?redirect=order&recipeId=${recipeId.value}`
-          })
-        }
-      }
-    })
-    return
-  }
-
+  // 跳转到新的订购配置页面
   uni.navigateTo({
-    url: `/pages/order-config/index?recipeId=${recipeId.value}&dogId=${storedDogId}`
+    url: `/pages/recipe-order/index?recipeId=${recipeId.value}`
   })
 }
 

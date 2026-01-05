@@ -15,6 +15,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { OrderType } from '../../../domain';
+import { PreparationMethod, CookingMethod } from '../../../domain/order';
 
 /**
  * Pricing Preview Item DTO
@@ -45,9 +46,31 @@ export class PricingPreviewItemDto {
   @Min(1)
   packageSpecG!: number;
 
-  @ApiPropertyOptional({ description: 'Custom requirements', nullable: true })
+  @ApiProperty({ description: 'Order cycle days', example: 7 })
+  @IsInt()
+  @Min(1)
+  cycleDays!: number;
+
+  @ApiProperty({ description: 'Daily food intake in grams', example: 312 })
+  @IsNumber()
+  @Min(1)
+  dailyIntakeG!: number;
+
+  @ApiPropertyOptional({
+    description: 'Preparation method',
+    enum: PreparationMethod,
+  })
   @IsOptional()
-  customRequirements?: string | null;
+  @IsEnum(PreparationMethod)
+  preparationMethod?: PreparationMethod;
+
+  @ApiPropertyOptional({
+    description: 'Cooking method',
+    enum: CookingMethod,
+  })
+  @IsOptional()
+  @IsEnum(CookingMethod)
+  cookingMethod?: CookingMethod;
 }
 
 export class PricingPreviewRequestDto {
@@ -72,26 +95,6 @@ export class PricingPreviewRequestDto {
   @ApiProperty({ enum: OrderType, example: OrderType.FRESH_FOOD })
   @IsEnum(OrderType)
   type!: OrderType;
-}
-
-export class PricingBreakdownDto {
-  @ApiProperty({ description: 'Cost of ingredients', example: 50.0 })
-  costIngredients!: number;
-
-  @ApiProperty({ description: 'Cost of packaging', example: 2.0 })
-  costPackaging!: number;
-
-  @ApiProperty({ description: 'Cost of labor', example: 10.0 })
-  costLabor!: number;
-
-  @ApiProperty({ description: 'Cost of overhead', example: 5.0 })
-  costOverhead!: number;
-
-  @ApiProperty({ description: 'Total product cost', example: 67.0 })
-  totalProductCost!: number;
-
-  @ApiProperty({ description: 'Product price (with margin)', example: 111.67 })
-  productPrice!: number;
 }
 
 /**
@@ -138,6 +141,191 @@ export class PriceExplanationDto {
     ],
   })
   explanationLines!: string[];
+}
+
+/**
+ * Detailed Ingredient Cost Breakdown
+ */
+export class IngredientCostItemDto {
+  @ApiProperty({ description: 'Ingredient name' })
+  name!: string;
+
+  @ApiProperty({ description: 'Ingredient type', enum: ['FOOD', 'SUPPLEMENT'] })
+  type!: string;
+
+  @ApiProperty({ description: 'Amount used (kg or g)' })
+  amount!: number;
+
+  @ApiProperty({ description: 'Unit' })
+  unit!: string;
+
+  @ApiProperty({ description: 'Unit cost (per g)' })
+  unitCost!: number;
+
+  @ApiProperty({ description: 'Total cost' })
+  cost!: number;
+
+  @ApiProperty({ description: 'Calculation explanation' })
+  calculation!: string;
+}
+
+/**
+ * Detailed Packaging Cost Breakdown
+ */
+export class PackagingPerPackConsumablesDto {
+  @ApiProperty({ description: 'Vacuum bag name' })
+  vacuumBagName!: string;
+
+  @ApiProperty({ description: 'Vacuum bag spec' })
+  vacuumBagSpec!: string;
+
+  @ApiProperty({ description: 'Label name' })
+  labelName!: string;
+
+  @ApiProperty({ description: 'Label spec' })
+  labelSpec!: string;
+
+  @ApiProperty({ description: 'Vacuum bag cost per pack' })
+  vacuumBagCostPerPack!: number;
+
+  @ApiProperty({ description: 'Label cost per pack' })
+  labelCostPerPack!: number;
+
+  @ApiProperty({ description: 'Vacuum bag total cost' })
+  vacuumBagTotalCost!: number;
+
+  @ApiProperty({ description: 'Label total cost' })
+  labelTotalCost!: number;
+
+  @ApiProperty({ description: 'Total cost' })
+  totalCost!: number;
+
+  @ApiProperty({ description: 'Calculation explanation' })
+  calculation!: string;
+
+  @ApiProperty({ description: 'Vacuum bags count' })
+  vacuumBagsCount!: number;
+
+  @ApiProperty({ description: 'Labels count' })
+  labelsCount!: number;
+}
+
+export class PackagingShippingContainerDto {
+  @ApiProperty({ description: 'Box name' })
+  boxName!: string;
+
+  @ApiProperty({ description: 'Box spec' })
+  boxSpec!: string;
+
+  @ApiProperty({ description: 'Thermal bag name' })
+  thermalBagName!: string;
+
+  @ApiProperty({ description: 'Thermal bag spec' })
+  thermalBagSpec!: string;
+
+  @ApiProperty({ description: 'Number of ice packs' })
+  icePacks!: number;
+
+  @ApiProperty({ description: 'Box cost' })
+  boxCost!: number;
+
+  @ApiProperty({ description: 'Thermal bag cost' })
+  thermalBagCost!: number;
+
+  @ApiProperty({ description: 'Ice pack cost' })
+  icePackCost!: number;
+
+  @ApiProperty({ description: 'Total cost' })
+  totalCost!: number;
+
+  @ApiProperty({ description: 'Weight' })
+  weight!: number;
+
+  @ApiProperty({ description: 'Boxes count' })
+  boxesCount!: number;
+
+  @ApiProperty({ description: 'Thermal bags count' })
+  thermalBagsCount!: number;
+
+  @ApiProperty({ description: 'Calculation explanation' })
+  calculation!: string;
+}
+
+export class PackagingCostDetailDto {
+  @ApiProperty({ description: 'Per-pack consumables breakdown' })
+  perPackConsumables!: PackagingPerPackConsumablesDto;
+
+  @ApiProperty({ description: 'Shipping containers breakdown', type: [PackagingShippingContainerDto] })
+  shippingContainers!: PackagingShippingContainerDto[];
+}
+
+/**
+ * Detailed Labor Cost Breakdown
+ */
+export class LaborCostDetailDto {
+  @ApiProperty({ description: 'Standard batch output (kg)' })
+  standardBatchOutputKg!: number;
+
+  @ApiProperty({ description: 'Standard labor cost per kg' })
+  standardLaborCostPerKg!: number;
+
+  @ApiProperty({ description: 'Raw input weight (kg)' })
+  rawInputWeightKg!: number;
+
+  @ApiProperty({ description: 'Total cost' })
+  totalCost!: number;
+
+  @ApiProperty({ description: 'Calculation explanation' })
+  calculation!: string;
+}
+
+/**
+ * Detailed Overhead Cost Breakdown
+ */
+export class OverheadCostDetailDto {
+  @ApiProperty({ description: 'Overhead cost per kg' })
+  overheadCostPerKg!: number;
+
+  @ApiProperty({ description: 'Raw input weight (kg)' })
+  rawInputWeightKg!: number;
+
+  @ApiProperty({ description: 'Total cost' })
+  totalCost!: number;
+
+  @ApiProperty({ description: 'Calculation explanation' })
+  calculation!: string;
+}
+
+export class PricingBreakdownDto {
+  @ApiProperty({ description: 'Cost of ingredients', example: 50.0 })
+  costIngredients!: number;
+
+  @ApiProperty({ description: 'Cost of packaging', example: 2.0 })
+  costPackaging!: number;
+
+  @ApiProperty({ description: 'Cost of labor', example: 10.0 })
+  costLabor!: number;
+
+  @ApiProperty({ description: 'Cost of overhead', example: 5.0 })
+  costOverhead!: number;
+
+  @ApiProperty({ description: 'Total product cost', example: 67.0 })
+  totalProductCost!: number;
+
+  @ApiProperty({ description: 'Product price (with margin)', example: 111.67 })
+  productPrice!: number;
+
+  @ApiPropertyOptional({ description: 'Detailed ingredient cost breakdown' })
+  ingredientDetails?: IngredientCostItemDto[];
+
+  @ApiPropertyOptional({ description: 'Detailed packaging cost breakdown' })
+  packagingDetails?: PackagingCostDetailDto;
+
+  @ApiPropertyOptional({ description: 'Detailed labor cost breakdown' })
+  laborDetails?: LaborCostDetailDto;
+
+  @ApiPropertyOptional({ description: 'Detailed overhead cost breakdown' })
+  overheadDetails?: OverheadCostDetailDto;
 }
 
 /**

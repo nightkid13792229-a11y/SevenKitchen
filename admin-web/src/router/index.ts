@@ -115,6 +115,12 @@ const routes: RouteRecordRaw[] = [
         name: 'Production',
         component: () => import('@/views/Production.vue'),
         meta: { title: '生产管理' }
+      },
+      {
+        path: 'global-config',
+        name: 'GlobalConfig',
+        component: () => import('@/views/GlobalConfig.vue'),
+        meta: { title: '全局配置' }
       }
     ]
   }

@@ -49,6 +49,10 @@
           <el-icon><Operation /></el-icon>
           <span>生产管理</span>
         </el-menu-item>
+        <el-menu-item index="/global-config">
+          <el-icon><Setting /></el-icon>
+          <span>全局配置</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 
@@ -95,7 +99,8 @@ import {
   ArrowDown,
   PriceTag,
   Goods,
-  Star
+  Star,
+  Setting
 } from '@element-plus/icons-vue'
 
 const route = useRoute()

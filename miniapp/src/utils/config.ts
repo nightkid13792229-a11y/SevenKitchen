@@ -4,7 +4,7 @@
 // Automatically uses IP address in WeChat DevTools for stable development
 
 const DEFAULT_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1'
-const DEV_BASE_URL = 'http://localhost:3000/api/v1' // 本地开发服务器
+const DEV_BASE_URL = 'http://192.168.31.43:3000/api/v1' // 本地开发服务器（使用局域网IP，微信开发者工具无法访问localhost）
 const STORAGE_KEY = 'api_base_url'
 
 /**

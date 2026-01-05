@@ -447,7 +447,7 @@ function calculateTreatDeduction(
     // TreatLevel.NONE -> ratio = 0
 
     const deduction = totalDer * ratio;
-    const isCapped = deduction >= maxTreatAllowance;
+    const isCapped = deduction > maxTreatAllowance;
 
     return {
       deduction: isCapped ? maxTreatAllowance : deduction,

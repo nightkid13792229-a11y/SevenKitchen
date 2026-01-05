@@ -24,6 +24,7 @@ import { ADDRESS_REPOSITORY } from '../address/address.service';
 import type { OrderStatusHistoryRepository } from '../../domain/order/order-status-history.repository';
 import { OrderStatusHistory } from '../../domain/order/order-status-history.entity';
 import { ORDER_STATUS_HISTORY_REPOSITORY } from './order.service.tokens';
+import type { CartRepository } from '../../domain/cart';
 
 // Re-export for convenience
 export { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY };
@@ -31,10 +32,11 @@ import { RECIPE_REPOSITORY } from '../dog/dog.service';
 
 export interface CreateOrderDraftDto {
   customerId: string;
-  dogId: string;
+  dogId?: string;
   type: OrderType;
   targetProductionDate?: Date | null;
-  items: CreateOrderItemDto[];
+  items?: CreateOrderItemDto[];
+  cartItemIds?: string[];
   addressId?: string;
 }
 
@@ -43,6 +45,8 @@ export interface CreateOrderItemDto {
   quantityG: number;
   packageCount?: number; // Optional - will be computed if missing
   packageSpecG: number;
+  cycleDays?: number; // Order cycle days
+  dailyIntakeG?: number; // Daily food intake in grams
   customRequirements?: string | null;
 }
 
@@ -64,6 +68,8 @@ export class OrderService {
     private readonly shippingService: ShippingService,
     @Inject(ADDRESS_REPOSITORY)
     private readonly addressRepository: AddressRepository,
+    @Inject('CartRepository')
+    private readonly cartRepository: CartRepository,
   ) {}
 
   /**
@@ -158,9 +164,144 @@ export class OrderService {
    * Create order draft
    * Creates order in INIT status with recipe snapshots and calculated pricing
    * Phase 5: Integrates ingredient costing and pricing calculation
+   * Supports creating from cart items (when cartItemIds is provided)
    */
   async createOrderDraft(dto: CreateOrderDraftDto): Promise<Order> {
     const orderId = randomUUID();
+
+    // If cartItemIds is provided, load cart items and convert to order items
+    if (dto.cartItemIds && dto.cartItemIds.length > 0) {
+      return this.createOrderFromCart(dto, orderId);
+    }
+
+    // Original flow: create from provided items
+    return this.createOrderFromItems(dto, orderId);
+  }
+
+  /**
+   * Create order from cart items
+   */
+  private async createOrderFromCart(dto: CreateOrderDraftDto, orderId: string): Promise<Order> {
+    if (!dto.cartItemIds || dto.cartItemIds.length === 0) {
+      throw new BadRequestException('cartItemIds is required');
+    }
+
+    // Load cart items
+    const cartItems = await this.cartRepository.findItemsByIds(dto.cartItemIds);
+
+    if (cartItems.length !== dto.cartItemIds.length) {
+      throw new NotFoundException('Some cart items not found');
+    }
+
+    // Validate all cart items belong to the customer
+    const cart = await this.cartRepository.findByCustomerId(dto.customerId);
+    const cartItemIdsInCart = new Set(cart.items.map(item => item.id));
+
+    for (const cartItem of cartItems) {
+      if (!cartItemIdsInCart.has(cartItem.id)) {
+        throw new BadRequestException('Cart item does not belong to customer');
+      }
+    }
+
+    // Get first dog from cart items (all cart items should be for the same customer)
+    const firstCartItem = cartItems[0];
+    const dog = await this.dogRepository.findById(firstCartItem.dogId);
+    if (!dog) {
+      throw new NotFoundException(`Dog not found: ${firstCartItem.dogId}`);
+    }
+
+    const orderItems: OrderItem[] = [];
+    let totalProductPrice = 0;
+
+    // Process each cart item
+    for (const cartItem of cartItems) {
+      const recipe = await this.recipeRepository.findById(cartItem.recipeId);
+      if (!recipe) {
+        throw new NotFoundException(`Recipe not found: ${cartItem.recipeId}`);
+      }
+
+      // Create order item from cart item
+      const orderItem = new OrderItem(
+        randomUUID(),
+        orderId,
+        {
+          id: recipe.id,
+          version: recipe.version,
+          name: recipe.name,
+          production_loss_rate: recipe.productionLossRate,
+          energy_density_kcal_per_kg: recipe.energyDensityKcalPerKg,
+          nutrition_standard: recipe.nutritionStandard || 'FEDIAF_2021',
+          items: [], // Simplified for cart orders
+        },
+        cartItem.totalGrams,
+        cartItem.packageCount,
+        cartItem.packageSpecG,
+        null, // customRequirements
+        cartItem.dailyIntakeG,
+      );
+
+      orderItems.push(orderItem);
+      totalProductPrice += cartItem.totalPrice;
+    }
+
+    // Calculate shipping fee
+    const totalWeightG = orderItems.reduce((sum, item) => sum + item.quantityG, 0);
+    const shippingResult = await this.shippingService.calculateShippingFeePreview({
+      region: {
+        province: 'default',
+        city: 'default',
+        district: 'default',
+      },
+      totalWeightG,
+    });
+    const shippingFee = shippingResult.amountShipping;
+
+    // Create order
+    const amountTotal = totalProductPrice + shippingFee;
+
+    const order = new Order(
+      orderId,
+      dto.customerId,
+      OrderStatus.INIT,
+      dto.type,
+      dto.targetProductionDate || null,
+      totalProductPrice,
+      shippingFee,
+      amountTotal,
+      orderItems,
+      undefined, // totalAmount (computed by constructor)
+      undefined, // pricingBreakdownSnapshot (will be calculated on confirm)
+      dto.addressId,
+      dog.id, // Use first dog's ID
+    );
+
+    // Save order
+    await this.orderRepository.save(order);
+
+    // Log status transition
+    await this.logStatusTransition(
+      order,
+      OrderStatus.INIT,
+      OrderStatus.INIT,
+      'customer',
+      dto.customerId,
+      { source: 'cart' },
+    );
+
+    return order;
+  }
+
+  /**
+   * Create order from provided items (original flow)
+   */
+  private async createOrderFromItems(dto: CreateOrderDraftDto, orderId: string): Promise<Order> {
+    if (!dto.dogId) {
+      throw new BadRequestException('dogId is required when not using cart');
+    }
+
+    if (!dto.items || dto.items.length === 0) {
+      throw new BadRequestException('items is required when not using cart');
+    }
 
     // Load dog profile for pricing calculation
     const dog = await this.dogRepository.findById(dto.dogId);
@@ -219,18 +360,20 @@ export class OrderService {
       // For MVP, derive days and dailyG from order item
       // Assumption: quantityG = total grams, packageCount = days, packageSpecG = grams per pack
       // dailyG = total / days = quantityG / packageCount
-      const globalConfig = this.globalConfigService.getGlobalConfig();
-      
+      const globalConfig = await this.globalConfigService.getGlobalConfig();
+
       // Normalize packageCount (compute if missing, validate inputs)
       const normalizedPackageCount = this.normalizePackageCount(
         itemDto.quantityG,
         itemDto.packageCount,
         itemDto.packageSpecG,
       );
-      const days = normalizedPackageCount;
-      const dailyG = itemDto.quantityG / days;
-      
-      pricing = this.pricingService.calculateOrderPrice({
+
+      // Use frontend-provided cycleDays and dailyIntakeG if available
+      const days = itemDto.cycleDays ?? normalizedPackageCount;
+      const dailyG = itemDto.dailyIntakeG ?? (itemDto.quantityG / days);
+
+      pricing = await this.pricingService.calculateOrderPrice({
         dog: {
           mealsPerDay: dog.mealsPerDay || 2,
         },
@@ -244,6 +387,7 @@ export class OrderService {
         days,
         discountRate: 1.0,
         globalConfig,
+        singlePackSpecG: itemDto.packageSpecG, // Use frontend-provided package spec
       });
 
       // Calculate shipping fee if address is provided
@@ -330,7 +474,7 @@ export class OrderService {
     const amountTotal = amountProduct + amountShipping;
 
     // Phase 7.1: Create pricing breakdown snapshot
-    const globalConfig = this.globalConfigService.getGlobalConfig();
+    const globalConfig = await this.globalConfigService.getGlobalConfig();
     const marginStrategyName = `targetMargin_${(globalConfig.targetMargin * 100).toFixed(0)}%`;
     const pricingBreakdownSnapshot = new PricingBreakdownSnapshot(
       pricing.costIngredients,
@@ -505,16 +649,71 @@ export class OrderService {
       costOverhead: number;
       totalProductCost: number;
       productPrice: number;
+      weightPackagingG?: number;
+      ingredientDetails?: Array<{
+        name: string;
+        type: string;
+        amount: number;
+        unit: string;
+        unitCost: number;
+        cost: number;
+        calculation: string;
+      }>;
+      packagingDetails?: {
+        perPackConsumables: {
+          vacuumBagName: string;
+          vacuumBagSpec: string;
+          labelName: string;
+          labelSpec: string;
+          vacuumBagCostPerPack: number;
+          labelCostPerPack: number;
+          vacuumBagTotalCost: number;
+          labelTotalCost: number;
+          totalCost: number;
+          weightPerPack: number;
+          calculation: string;
+          vacuumBagsCount: number;
+          labelsCount: number;
+        };
+        shippingContainers: Array<{
+          boxName: string;
+          boxSpec: string;
+          thermalBagName: string;
+          thermalBagSpec: string;
+          icePacks: number;
+          boxCost: number;
+          thermalBagCost: number;
+          icePackCost: number;
+          totalCost: number;
+          weight: number;
+          boxesCount: number;
+          thermalBagsCount: number;
+          calculation: string;
+        }>;
+      };
+      laborDetails?: {
+        standardBatchOutputKg: number;
+        standardLaborCostPerKg: number;
+        rawInputWeightKg: number;
+        totalCost: number;
+        calculation: string;
+      };
+      overheadDetails?: {
+        overheadCostPerKg: number;
+        rawInputWeightKg: number;
+        totalCost: number;
+        calculation: string;
+      };
     } | null;
   }> {
     // Load dog profile
-    const dog = await this.dogRepository.findById(dto.dogId);
+    const dog = await this.dogRepository.findById(dto.dogId!);
     if (!dog) {
       throw new NotFoundException(`Dog not found: ${dto.dogId}`);
     }
 
     // Calculate pricing for first item (MVP: assume single item orders)
-    if (dto.items.length === 0) {
+    if (!dto.items || dto.items.length === 0) {
       throw new NotFoundException('Order must have at least one item');
     }
 
@@ -526,10 +725,28 @@ export class OrderService {
 
     // Load ingredients for recipe items
     const recipeItems = recipe.items || [];
+    console.log('[PricingPreview] Recipe items loaded:', {
+      recipeId: recipe.id,
+      recipeName: recipe.name,
+      itemsCount: recipeItems.length,
+      items: recipeItems.map(ri => ({
+        ingredientId: ri.ingredientId,
+        ratioPercent: ri.ratioPercent,
+        nutrientTargetKey: ri.nutrientTargetKey,
+        nutrientTargetValue: ri.nutrientTargetValue,
+      }))
+    });
+
     const ingredientIds = recipeItems.map((ri) => ri.ingredientId);
     const ingredients = await this.ingredientRepository.findByIds(
       ingredientIds,
     );
+
+    console.log('[PricingPreview] Ingredients loaded:', {
+      requestedIds: ingredientIds.length,
+      found: ingredients.length,
+      ingredientIds: ingredients.map(ing => ing.id),
+    });
 
     // Create map for quick lookup
     const ingredientMap = new Map(
@@ -554,18 +771,20 @@ export class OrderService {
     });
 
     // Calculate product pricing
-    const globalConfig = this.globalConfigService.getGlobalConfig();
-    
+    const globalConfig = await this.globalConfigService.getGlobalConfig();
+
     // Normalize packageCount (compute if missing, validate inputs)
     const normalizedPackageCount = this.normalizePackageCount(
       itemDto.quantityG,
       itemDto.packageCount,
       itemDto.packageSpecG,
     );
-    const days = normalizedPackageCount;
-    const dailyG = itemDto.quantityG / days;
 
-    const pricing = this.pricingService.calculateOrderPrice({
+    // Use frontend-provided cycleDays and dailyIntakeG if available
+    const days = itemDto.cycleDays ?? normalizedPackageCount;
+    const dailyG = itemDto.dailyIntakeG ?? (itemDto.quantityG / days);
+
+    const pricing = await this.pricingService.calculateOrderPrice({
       dog: {
         mealsPerDay: dog.mealsPerDay || 2,
       },
@@ -579,30 +798,24 @@ export class OrderService {
       days,
       discountRate: 1.0,
       globalConfig,
+      singlePackSpecG: itemDto.packageSpecG, // Use frontend-provided package spec
     });
 
-    // Calculate shipping fee if address is provided
+    // Calculate shipping fee using default shipping template
     let shippingFee = 0;
-    if (dto.addressId) {
-      try {
-        const address = await this.addressRepository.findById(dto.addressId);
-        if (address) {
-          // For preview, we use the quantityG as the total weight (simplified)
-          // In production, this would include packaging weight from pricing calculation
-          const totalWeightG = itemDto.quantityG;
+    try {
+      // Use total weight including packaging from pricing calculation
+      const totalWeightG = pricing.weightPackagingG || itemDto.quantityG;
 
-          const shippingResult =
-            await this.shippingService.calculateShippingFeePreview({
-              region: address.region,
-              totalWeightG,
-              shippingTemplateId: null, // Use default active template
-            });
-          shippingFee = shippingResult.amountShipping;
-        }
-      } catch (error) {
-        // Address not found or shipping calculation failed - shipping fee remains 0
-        // In production, you might want to log this or handle it differently
-      }
+      const shippingResult =
+        await this.shippingService.calculateShippingFeePreview({
+          totalWeightG,
+          shippingTemplateId: null, // Use default active template
+        });
+      shippingFee = shippingResult.amountShipping;
+    } catch (error) {
+      // Shipping calculation failed - shipping fee remains 0
+      console.error('[PreviewPricing] Shipping calculation failed:', error);
     }
 
     return {
@@ -616,6 +829,11 @@ export class OrderService {
         costOverhead: pricing.costOverhead,
         totalProductCost: pricing.totalProductCost,
         productPrice: pricing.productPrice,
+        weightPackagingG: pricing.weightPackagingG,
+        ingredientDetails: pricing.ingredientDetails,
+        packagingDetails: pricing.packagingDetails,
+        laborDetails: pricing.laborDetails,
+        overheadDetails: pricing.overheadDetails,
       },
     };
   }

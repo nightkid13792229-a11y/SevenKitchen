@@ -32,15 +32,17 @@ import {
   ApiQuery,
   ApiConsumes,
 } from '@nestjs/swagger';
-import { DogService, DOG_REPOSITORY, DOG_BREED_REPOSITORY } from '../../application/dog/dog.service';
+import { DogService, DOG_REPOSITORY, DOG_BREED_REPOSITORY, RECIPE_REPOSITORY } from '../../application/dog/dog.service';
 import type { DogRepository } from '../../domain/dog/dog.repository';
 import type { DogBreedRepository } from '../../domain/dog/dog-breed.repository';
+import type { RecipeRepository } from '../../domain/recipe/recipe.repository';
 import { Inject } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import { CreateDogDto } from '../dto/dogs/create-dog.dto';
 import { UpdateDogDto } from '../dto/dogs/update-dog.dto';
 import { CalcPreviewDto } from '../dto/dogs/calc-preview.dto';
+import { CalcDogForRecipeDto } from '../dto/dogs/calc-for-recipe.dto';
 import {
   DogDetailResponseDto,
   DogProfileDto,
@@ -66,6 +68,8 @@ export class DogsController {
     private readonly dogRepository: DogRepository,
     @Inject(DOG_BREED_REPOSITORY)
     private readonly dogBreedRepository: DogBreedRepository,
+    @Inject(RECIPE_REPOSITORY)
+    private readonly recipeRepository: RecipeRepository,
     private readonly dogService: DogService,
     private readonly weightRecordService: WeightRecordService,
     private readonly cosService: TencentCosService,
@@ -492,6 +496,106 @@ export class DogsController {
       medicalHistory: dog.medicalHistory,
       cachedTargetFoodKcal: dog.cachedTargetFoodKcal,
     };
+  }
+
+  // ==================== Calculate Dog for Recipe ====================
+
+  /**
+   * Calculate dog's daily food intake for a specific recipe
+   * POST /api/v1/dogs/:id/calc-for-recipe
+   *
+   * This endpoint returns both kcal needs and gram amounts based on recipe energy density.
+   * It's used in the recipe order page to initialize the per-meal feeding amount.
+   */
+  @Post(':id/calc-for-recipe')
+  @UseGuards(AuthGuard)
+  @ApiOperation({
+    summary: 'Calculate daily food intake for a specific recipe',
+    description: 'Returns both kcal needs and gram amounts based on recipe energy density. Used for recipe order page.'
+  })
+  @ApiSecurity('X-Customer-Id')
+  @ApiHeader({
+    name: 'X-Customer-Id',
+    description: 'Customer ID for authentication',
+    required: true,
+  })
+  @ApiParam({ name: 'id', description: 'Dog ID' })
+  @ApiBody({ type: CalcDogForRecipeDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Calculation result with daily intake in grams',
+    schema: {
+      type: 'object',
+      properties: {
+        code: { type: 'number', example: 0 },
+        message: { type: 'string', example: 'Success' },
+        data: {
+          type: 'object',
+          properties: {
+            rer: { type: 'number', description: 'Resting Energy Requirement (kcal/day)', example: 417.2 },
+            totalDer: { type: 'number', description: 'Total Daily Energy Requirement (kcal/day)', example: 667.5 },
+            finalFoodKcal: { type: 'number', description: 'Final food kcal needed (after treat deduction)', example: 647.5 },
+            treatDeduction: { type: 'number', description: 'Treat calories deducted (kcal/day)', example: 20.0 },
+            isTreatCapped: { type: 'boolean', description: 'Whether treat deduction hit 10% safety cap', example: false },
+            dailyIntakeG: { type: 'number', description: 'Daily food intake in grams', example: 447 },
+            perMealIntakeG: { type: 'number', description: 'Per-meal food intake in grams', example: 224 },
+            mealsPerDay: { type: 'number', description: 'Number of meals per day', example: 2 },
+            calcDetails: { type: 'object', description: 'Detailed calculation breakdown for display' }
+          }
+        }
+      }
+    }
+  })
+  @ApiResponse({ status: 400, description: 'Invalid input' })
+  @ApiResponse({ status: 404, description: 'Dog or recipe not found' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - X-Customer-Id header required',
+  })
+  async calcForRecipe(
+    @Param('id') dogId: string,
+    @Body() dto: CalcDogForRecipeDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    // 1. Verify dog ownership
+    const dog = await this.dogRepository.findById(dogId);
+    if (!dog || dog.ownerId !== user.customerId) {
+      return ApiResponseDto.error(404, 'Dog not found');
+    }
+
+    // 2. Load recipe to get energy density
+    const recipe = await this.recipeRepository.findById(dto.recipeId);
+    if (!recipe) {
+      return ApiResponseDto.error(404, 'Recipe not found');
+    }
+
+    // 3. Load breed for calculation
+    const breed = await this.dogBreedRepository.findById(dog.breedId);
+
+    // 4. Calculate energy needs WITH recipe energy density
+    const calcResult = calculateDogEnergy(
+      dog,
+      recipe.energyDensityKcalPerKg,  // ✅ Key: pass energy density for gram calculation
+      breed,
+      true  // includeDetails
+    );
+
+    // 5. Build response
+    const response = {
+      rer: calcResult.rer,
+      totalDer: calcResult.der,
+      finalFoodKcal: calcResult.finalFoodKcal,
+      treatDeduction: calcResult.treatDeduction,
+      isTreatCapped: calcResult.isTreatCapped,
+      dailyIntakeG: calcResult.dailyIntakeG || 0,
+      perMealIntakeG: calcResult.dailyIntakeG
+        ? Math.round(calcResult.dailyIntakeG / dog.mealsPerDay)
+        : 0,
+      mealsPerDay: dog.mealsPerDay,
+      calcDetails: calcResult.calcDetails || {}
+    };
+
+    return ApiResponseDto.success(response);
   }
 
   // ==================== Dog Avatar Upload ====================

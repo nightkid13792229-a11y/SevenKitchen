@@ -75,6 +75,17 @@ export interface CalcPreviewResult {
   calcDetails?: Record<string, any>;
 }
 
+export interface CalcForRecipeResult {
+  rer: number;
+  totalDer: number;
+  finalFoodKcal: number;
+  treatDeduction: number;
+  isTreatCapped: boolean;
+  dailyIntakeG: number;
+  perMealIntakeG: number;
+  mealsPerDay: number;
+}
+
 export const DOG_REPOSITORY = Symbol('DogRepository');
 export const RECIPE_REPOSITORY = Symbol('RecipeRepository');
 export const DOG_BREED_REPOSITORY = Symbol('DogBreedRepository');
@@ -209,6 +220,102 @@ export class DogService {
       isTreatCapped: calcResult.isTreatCapped,
       dailyIntakeG: calcResult.dailyIntakeG,
       calcDetails: calcResult.calcDetails,
+    };
+  }
+
+  /**
+   * CalcForRecipe - Calculate dog energy needs for a specific recipe
+   * This version includes the recipe's energy density to calculate daily intake in grams
+   * Used in cart and checkout flows
+   */
+  async calcForRecipe(dogId: string, recipeId: string): Promise<CalcForRecipeResult> {
+    const dog = await this.dogRepository.findById(dogId);
+    if (!dog) {
+      throw new Error(`Dog not found: ${dogId}`);
+    }
+
+    // Load recipe to get energy density
+    const recipe = await this.recipeRepository.findById(recipeId);
+    if (!recipe) {
+      throw new Error(`Recipe not found: ${recipeId}`);
+    }
+
+    // Load breed for calculation
+    const breed = await this.dogBreedRepository.findById(dog.breedId);
+
+    // Calculate with recipe energy density
+    const calcResult = calculateDogEnergy(
+      dog,
+      recipe.energyDensityKcalPerKg,
+      breed,
+      true
+    );
+
+    // ========== 详细计算日志 ==========
+    console.log('========== calcForRecipe 详细计算日志 ==========');
+    console.log('[输入] dogId:', dogId);
+    console.log('[输入] recipeId:', recipeId);
+    console.log('[狗狗数据]', {
+      id: dog.id,
+      name: dog.name,
+      weightKg: dog.currentWeightKg,
+      mealsPerDay: dog.mealsPerDay,
+      bcsScore: dog.bcsScore,
+      activityLevel: dog.activityLevel,
+      isNeutered: dog.isNeutered,
+      lifeStageOverride: dog.lifeStageOverride,
+      sizeClassOverride: dog.sizeClassOverride,
+      treatInputMode: dog.treatInputMode,
+      treatLevel: dog.treatLevel,
+      manualTreatKcal: dog.manualTreatKcal,
+      breedId: dog.breedId
+    });
+    console.log('[食谱数据]', {
+      id: recipe.id,
+      name: recipe.name,
+      energyDensityKcalPerKg: recipe.energyDensityKcalPerKg,
+      productionLossRate: recipe.productionLossRate
+    });
+    console.log('[品种数据]', breed ? {
+      id: breed.id,
+      name: breed.name,
+      sizeCategory: breed.sizeCategory,
+      growthCurveType: breed.growthCurveType,
+      adultAgeMonths: breed.adultAgeMonths,
+      seniorAgeYears: breed.seniorAgeYears,
+      averageAdultWeightKg: breed.averageAdultWeightKg
+    } : 'breed is null');
+    console.log('[能量计算结果]', {
+      rer: calcResult.rer,
+      der: calcResult.der,
+      finalFoodKcal: calcResult.finalFoodKcal,
+      treatDeduction: calcResult.treatDeduction,
+      isTreatCapped: calcResult.isTreatCapped,
+      dailyIntakeG: calcResult.dailyIntakeG,
+      calcDetails: calcResult.calcDetails
+    });
+    const perMealG = calcResult.dailyIntakeG ? Math.round(calcResult.dailyIntakeG / dog.mealsPerDay) : 0;
+    console.log('[最终返回值]', {
+      rer: calcResult.rer,
+      totalDer: calcResult.der,
+      finalFoodKcal: calcResult.finalFoodKcal,
+      treatDeduction: calcResult.treatDeduction,
+      isTreatCapped: calcResult.isTreatCapped,
+      dailyIntakeG: calcResult.dailyIntakeG || 0,
+      perMealIntakeG: perMealG,
+      mealsPerDay: dog.mealsPerDay
+    });
+    console.log('===========================================');
+
+    return {
+      rer: calcResult.rer,
+      totalDer: calcResult.der,
+      finalFoodKcal: calcResult.finalFoodKcal,
+      treatDeduction: calcResult.treatDeduction,
+      isTreatCapped: calcResult.isTreatCapped,
+      dailyIntakeG: calcResult.dailyIntakeG || 0,
+      perMealIntakeG: perMealG,
+      mealsPerDay: dog.mealsPerDay,
     };
   }
 

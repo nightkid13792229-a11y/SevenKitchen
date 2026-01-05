@@ -395,7 +395,8 @@ export class OrderService {
         try {
           const address = await this.addressRepository.findById(dto.addressId);
           if (address) {
-            // Use quantityG as total weight for shipping (simplified, in production would include packaging)
+            // Calculate total shipping weight (food weight only, packaging weight will be added after pricing calculation)
+            // TODO: Include packaging weight in shipping fee calculation for accurate pricing
             const totalWeightG = itemDto.quantityG;
             const shippingResult =
               await this.shippingService.calculateShippingFeePreview({
@@ -804,8 +805,8 @@ export class OrderService {
     // Calculate shipping fee using default shipping template
     let shippingFee = 0;
     try {
-      // Use total weight including packaging from pricing calculation
-      const totalWeightG = pricing.weightPackagingG || itemDto.quantityG;
+      // Calculate total shipping weight (food + packaging materials)
+      const totalWeightG = itemDto.quantityG + (pricing.weightPackagingG || 0);
 
       const shippingResult =
         await this.shippingService.calculateShippingFeePreview({

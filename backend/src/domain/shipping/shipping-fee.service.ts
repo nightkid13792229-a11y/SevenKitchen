@@ -71,9 +71,9 @@ export class ShippingFeeService {
     // Calculate additional fees for weight exceeding base weight
     if (totalWeightKg > template.baseWeightKg) {
       const extraWeight = totalWeightKg - template.baseWeightKg;
-      // Calculate number of steps (ceil to ensure we charge for partial steps)
-      const steps = Math.ceil(extraWeight / template.stepWeightKg);
-      shippingFee += steps * template.stepFee;
+      // Calculate continuous weight fee (no rounding, charge for actual weight)
+      const stepFeePerKg = template.stepFee / template.stepWeightKg;
+      shippingFee += extraWeight * stepFeePerKg;
     }
 
     // Build description
@@ -104,9 +104,9 @@ export class ShippingFeeService {
     }
 
     const extraWeight = weightKg - template.baseWeightKg;
-    const steps = Math.ceil(extraWeight / template.stepWeightKg);
-    const stepFeeTotal = steps * template.stepFee;
+    const stepFeePerKg = template.stepFee / template.stepWeightKg;
+    const stepFeeTotal = extraWeight * stepFeePerKg;
 
-    return `${template.name}: 首重${template.baseWeightKg}kg内 ${template.baseFee}元 + 续重${steps}个${template.stepWeightKg}kg (${stepFeeTotal}元) + 增值服务费${template.vasFeePerOrder}元 = ${finalFee}元`;
+    return `${template.name}: 首重${template.baseWeightKg}kg内 ${template.baseFee}元 + 续重${extraWeight.toFixed(3)}kg (${stepFeeTotal.toFixed(2)}元) + 增值服务费${template.vasFeePerOrder}元 = ${finalFee}元`;
   }
 }

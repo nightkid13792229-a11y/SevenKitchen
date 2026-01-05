@@ -91,7 +91,7 @@ export class PackagingService {
     const allPackaging = await this.ingredientRepo.findByType(IngredientType.PACKAGING);
     const boxes = allPackaging
       .filter(item => item.name.includes('泡沫箱'))
-      .sort((a, b) => (b.maxCapacityG || 0) - (a.maxCapacityG || 0)); // Sort by capacity descending
+      .sort((a, b) => (a.maxCapacityG || 0) - (b.maxCapacityG || 0)); // Sort by capacity ascending (smallest first)
 
     if (boxes.length === 0) {
       throw new NotFoundException('No foam box SKUs found in database');
@@ -102,15 +102,29 @@ export class PackagingService {
 
     const containers: ShippingContainer[] = [];
     let remainingWeight = foodWeightG;
+    let iteration = 0;
+
+    console.log('[PackagingService] Starting bin packing algorithm:', {
+      foodWeightG,
+      boxesAvailable: boxes.map(b => ({
+        name: b.productModel,
+        capacityG: b.maxCapacityG
+      }))
+    });
 
     while (remainingWeight > 0) {
+      iteration++;
+      console.log(`[PackagingService] Iteration ${iteration}: remainingWeight = ${remainingWeight}g`);
+
       // Greedy strategy: select smallest box that can fit remaining weight
-      const box =
+      const selectedBox =
         boxes.find((b) => b.maxCapacityG && b.maxCapacityG >= remainingWeight) ||
         boxes[boxes.length - 1]; // Fallback: use largest box
 
+      console.log(`[PackagingService] Selected box: ${selectedBox.productModel} (capacity: ${selectedBox.maxCapacityG}g)`);
+
       // Find matching thermal bag (extract box number: "3号箱" -> "3")
-      const boxNumMatch = box.productModel?.match(/(\d+)号/);
+      const boxNumMatch = selectedBox.productModel?.match(/(\d+)号/);
       const boxNum = boxNumMatch ? boxNumMatch[1] : '';
 
       const bag = thermalBags.find(b =>
@@ -119,7 +133,7 @@ export class PackagingService {
 
       if (!bag) {
         throw new NotFoundException(
-          `No matching thermal bag found for ${box.name}`,
+          `No matching thermal bag found for ${selectedBox.name}`,
         );
       }
 
@@ -132,13 +146,22 @@ export class PackagingService {
         throw new NotFoundException('Ice pack not found');
       }
 
+      // Calculate ice packs based on box number
+      // 4号箱: 3个冰袋, 3号箱: 5个冰袋
+      const icePacksMap: Record<string, number> = {
+        '4': 3,
+        '3': 5,
+      };
+      const icePacks = icePacksMap[boxNum] || 3; // Default to 3 if box number not found
+
       containers.push({
-        boxItem: box,
+        boxItem: selectedBox,
         thermalItem: bag,
-        icePacks: 2,
+        icePacks: icePacks,
       });
 
-      remainingWeight -= (box.maxCapacityG || foodWeightG);
+      remainingWeight -= (selectedBox.maxCapacityG || foodWeightG);
+      console.log(`[PackagingService] After packing: remainingWeight = ${remainingWeight}g`);
     }
 
     return containers;
@@ -228,9 +251,18 @@ export class PackagingService {
       });
     }
 
+    // Calculate total ice packs
+    const totalIcePacks = containers.reduce((sum, c) => sum + c.icePacks, 0);
+
     console.log('[PackagingService] Shipping containers:', {
       totalFoodWeightG,
       containersCount: containers.length,
+      totalIcePacks,
+      containersBreakdown: containers.map(c => ({
+        boxName: c.boxItem.name,
+        boxSpec: c.boxItem.productModel,
+        icePacks: c.icePacks,
+      })),
       totalCost: cost.toFixed(2),
       totalWeightG: weight.toFixed(0),
     });

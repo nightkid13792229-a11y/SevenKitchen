@@ -154,6 +154,8 @@ export class CartService {
         quantityG: totalGrams,
         packageCount: packageCount,
         packageSpecG: singlePackSpecG,
+        cycleDays: dto.cycleDays,
+        dailyIntakeG: dailyIntakeG,
       }]
     });
 
@@ -202,14 +204,16 @@ export class CartService {
 
     console.log('========== CartService.addToCart 结束 ==========');
 
-    // Return with enriched data
+    // Return with enriched data (using calculated prices)
     return this.toItemResponseDto(
       cartItem,
       dog.name,
       dog.customBreedName || '',
       dog.currentWeightKg,
       recipe.name,
-      recipe.coverImageUrl || null
+      recipe.coverImageUrl || null,
+      unitPrice,
+      totalPrice
     );
   }
 
@@ -280,6 +284,38 @@ export class CartService {
           continue;
         }
 
+        // Calculate real-time price for checkout items
+        let realTimeUnitPrice = item.unitPrice;
+        let realTimeTotalPrice = item.totalPrice;
+
+        try {
+          const pricingResult = await this.orderService.previewPricing({
+            customerId,
+            dogId: item.dogId,
+            type: OrderType.FRESH_FOOD,
+            items: [{
+              recipeId: item.recipeId,
+              quantityG: item.totalGrams,
+              packageCount: item.packageCount,
+              packageSpecG: item.packageSpecG,
+              cycleDays: item.cycleDays,
+              dailyIntakeG: item.dailyIntakeG,
+            }]
+          });
+
+          realTimeTotalPrice = pricingResult.amountTotal;
+          realTimeUnitPrice = item.packageCount > 0
+            ? pricingResult.amountTotal / item.packageCount
+            : 0;
+
+          this.logger.debug(`Real-time price calculated for checkout item ${item.id}: ${realTimeTotalPrice.toFixed(2)}`);
+        } catch (error) {
+          // If pricing calculation fails, use stored snapshot price
+          this.logger.warn(`Failed to calculate real-time price for checkout item ${item.id}, using snapshot price`, error);
+          realTimeUnitPrice = item.unitPrice;
+          realTimeTotalPrice = item.totalPrice;
+        }
+
         enrichedItems.push(this.toItemResponseDto(
           item,
           dog.name,
@@ -287,6 +323,8 @@ export class CartService {
           dog.currentWeightKg,
           recipe.name,
           recipe.coverImageUrl || null,
+          realTimeUnitPrice,
+          realTimeTotalPrice,
         ));
       } catch (error) {
         // 捕获异常，标记为失效商品
@@ -362,6 +400,38 @@ export class CartService {
           continue;
         }
 
+        // Calculate real-time price for valid items
+        let realTimeUnitPrice = item.unitPrice;
+        let realTimeTotalPrice = item.totalPrice;
+
+        try {
+          const pricingResult = await this.orderService.previewPricing({
+            customerId: cart.customerId,
+            dogId: item.dogId,
+            type: OrderType.FRESH_FOOD,
+            items: [{
+              recipeId: item.recipeId,
+              quantityG: item.totalGrams,
+              packageCount: item.packageCount,
+              packageSpecG: item.packageSpecG,
+              cycleDays: item.cycleDays,
+              dailyIntakeG: item.dailyIntakeG,
+            }]
+          });
+
+          realTimeTotalPrice = pricingResult.amountTotal;
+          realTimeUnitPrice = item.packageCount > 0
+            ? pricingResult.amountTotal / item.packageCount
+            : 0;
+
+          this.logger.debug(`Real-time price calculated for cart item ${item.id}: ${realTimeTotalPrice.toFixed(2)}`);
+        } catch (error) {
+          // If pricing calculation fails, use stored snapshot price
+          this.logger.warn(`Failed to calculate real-time price for cart item ${item.id}, using snapshot price`, error);
+          realTimeUnitPrice = item.unitPrice;
+          realTimeTotalPrice = item.totalPrice;
+        }
+
         items.push(this.toItemResponseDto(
           item,
           dog.name,
@@ -369,6 +439,8 @@ export class CartService {
           dog.currentWeightKg,
           recipe.name,
           recipe.coverImageUrl || null,
+          realTimeUnitPrice,
+          realTimeTotalPrice,
         ));
       } catch (error) {
         // 捕获异常，标记为失效商品
@@ -416,6 +488,8 @@ export class CartService {
     dogWeightKg: number,
     recipeName: string,
     recipeCoverImage: string | null,
+    realTimeUnitPrice: number,
+    realTimeTotalPrice: number,
   ): CartItemResponseDto {
     return {
       id: item.id,
@@ -432,8 +506,8 @@ export class CartService {
       totalGrams: item.totalGrams,
       packageCount: item.packageCount,
       packageSpecG: item.packageSpecG,
-      unitPrice: item.unitPrice,
-      totalPrice: item.totalPrice,
+      unitPrice: realTimeUnitPrice,
+      totalPrice: realTimeTotalPrice,
       preparationMethod: item.preparationMethod as PreparationMethod | null,
       cookingMethod: item.cookingMethod as CookingMethod | null,
       isValid: true,  // 有效商品

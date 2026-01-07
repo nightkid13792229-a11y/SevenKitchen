@@ -10,6 +10,7 @@ export class OrderItem {
   constructor(
     public readonly id: string,
     public readonly orderId: string,
+    public readonly dogId: string | null, // Phase 8.20: Link order item to dog for displaying dog info in order details
     public readonly recipeSnapshot: RecipeSnapshot, // Immutable snapshot
     public readonly quantityG: number,
     public readonly packageCount: number,

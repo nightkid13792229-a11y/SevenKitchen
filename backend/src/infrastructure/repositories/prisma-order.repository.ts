@@ -99,6 +99,7 @@ export class PrismaOrderRepository implements OrderRepository {
             data: order.items.map((item) => ({
               id: item.id,
               orderId: order.id, // explicit FK here
+              dogId: item.dogId ?? null, // ✅ 保存 dogId
               recipeSnapshot: item.recipeSnapshot as any,
               quantityG: item.quantityG,
               packageCount: item.packageCount,
@@ -187,6 +188,7 @@ export class PrismaOrderRepository implements OrderRepository {
         new OrderItem(
           i.id,
           i.orderId,
+          i.dogId, // Phase 8.20: Include dogId from order item
           i.recipeSnapshot as unknown as RecipeSnapshot,
           i.quantityG,
           i.packageCount,
@@ -209,12 +211,13 @@ export class PrismaOrderRepository implements OrderRepository {
       record.customerId,
       record.status as OrderStatus,
       record.type as OrderType,
+      record.createdAt,
       record.targetProductionDate,
       Number(record.amountProduct),
       Number(record.amountShipping),
       Number(record.amountTotal),
       items,
-      record.totalAmount !== null ? Number(record.totalAmount) : undefined,
+      undefined, // totalAmount - 不再从数据库读取，让 Order 实体使用精确的 amountTotal
       snapshot,
       record.dogId ?? undefined,
       record.addressId ?? undefined,

@@ -14,6 +14,7 @@ export class Order {
     public readonly customerId: string,
     public status: OrderStatus,
     public readonly type: OrderType,
+    public readonly createdAt: Date,
     public targetProductionDate: Date | null,
     public amountProduct: number,
     public amountShipping: number,

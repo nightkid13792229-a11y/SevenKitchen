@@ -22,6 +22,11 @@ export class RecipeItemDto {
   @IsOptional()
   @IsNumber()
   @Min(0)
+  exampleWeight?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
   ratioPercent?: number;
 
   @IsOptional()
@@ -260,6 +265,7 @@ export interface RecipeItemResponseDto {
   ingredientName?: string;
   ingredientType?: string;
   preparationMethod?: string;
+  exampleWeight?: number;
   ratioPercent?: number;
   nutrientTargetKey?: string;
   nutrientTargetValue?: number;

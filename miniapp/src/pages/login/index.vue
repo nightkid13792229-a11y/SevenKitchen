@@ -39,7 +39,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
-import { request } from '../../utils/api';
+import { request, setToken, markTokenReady } from '../../utils/api';
 
 const loading = ref(false);
 
@@ -101,10 +101,11 @@ const handleWechatLogin = async (e: any) => {
         throw new Error('后端未返回token');
       }
 
-      // 3. 保存token和用户信息
-      uni.setStorageSync('token', token);
+      // 3. 保存token和用户信息（使用统一的token管理函数）
+      setToken(token);
       uni.setStorageSync('user', user);
-      console.log('[Login] Token and user saved to storage');
+      markTokenReady(); // 标记token已就绪
+      console.log('[Login] Token and user saved to storage, token marked as ready');
 
       // 4. 新用户提示
       if (isNewUser) {

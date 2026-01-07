@@ -162,6 +162,7 @@
                 <div class="header-cell">原料名称</div>
                 <div class="header-cell">类型</div>
                 <div class="header-cell">制备方法</div>
+                <div class="header-cell">示例重量</div>
                 <div class="header-cell">占比</div>
                 <div class="header-cell nutrient-target-header">营养目标</div>
                 <div class="header-cell">操作</div>
@@ -192,8 +193,17 @@
                     <div class="row-cell preparation-method">
                       {{ formatPreparationMethods(item.preparationMethod) }}
                     </div>
+                    <div class="row-cell example-weight">
+                      <span v-if="item.exampleWeight !== undefined && item.exampleWeight !== null">
+                        {{ item.exampleWeight }}{{ getBaseUnitLabel(item) }}
+                      </span>
+                      <span v-else>-</span>
+                    </div>
                     <div class="row-cell ratio-percent">
-                      {{ (item.ratioPercent !== null && item.ratioPercent !== undefined) ? item.ratioPercent + '%' : '-' }}
+                      <span v-if="item.ingredientType === 'FOOD' && item.ratioPercent !== undefined && item.ratioPercent !== null">
+                        {{ item.ratioPercent.toFixed(2) }}%
+                      </span>
+                      <span v-else>-</span>
                     </div>
                     <div class="row-cell nutrient-target">
                       <span v-if="item.nutrientTargetKey">
@@ -525,19 +535,31 @@
           </div>
         </el-form-item>
 
-        <!-- 食材类型：显示占比 -->
+        <!-- 食材类型：显示示例重量输入框，占比改为自动计算显示 -->
         <template v-if="ingredientForm.ingredientId && selectedIngredient && selectedIngredient.type === 'FOOD'">
-          <el-form-item label="占比 (%)">
+          <el-form-item label="示例重量" required>
             <el-input-number
-              v-model="ingredientForm.ratioPercent"
+              v-model="ingredientForm.exampleWeight"
               :min="0"
-              :max="100"
               :precision="2"
-              placeholder="0-100"
-              style="width: 100%"
+              :step="10"
+              placeholder="请输入示例重量"
+              style="width: calc(100% - 100px)"
             />
+            <span style="margin-left: 8px; color: #606266; font-size: 14px">
+              {{ getBaseUnitLabel(selectedIngredient) }}
+            </span>
             <div style="color: #909399; font-size: 12px; margin-top: 4px">
-              💡 食材类型需设置占比，表示该食材在食谱中的重量占比
+              💡 输入该食材的示例重量，用于计算占比
+            </div>
+          </el-form-item>
+
+          <el-form-item label="占比">
+            <div style="padding: 0 11px; color: #606266; font-size: 14px">
+              {{ calculatedRatioPercent !== null ? calculatedRatioPercent.toFixed(2) + '%' : '-' }}
+            </div>
+            <div style="color: #909399; font-size: 12px; margin-top: 4px">
+              💡 占比根据所有食材类型的示例重量自动计算
             </div>
           </el-form-item>
         </template>
@@ -772,6 +794,7 @@ const editingIngredientIndex = ref(-1);
 const ingredientForm = reactive({
   ingredientId: '',
   preparationMethods: [] as string[],
+  exampleWeight: undefined as number | undefined,
   ratioPercent: undefined as number | undefined,
   nutrientTargetKey: '',
   nutrientTargetValue: undefined as number | undefined,
@@ -832,6 +855,57 @@ watch(() => ingredientForm.ingredientId, () => {
   if (ingredient && ingredient.type !== 'SUPPLEMENT') {
     ingredientForm.nutrientTargetKey = '';
     ingredientForm.nutrientTargetValue = undefined;
+  }
+});
+
+// 计算当前编辑食材的占比
+const calculatedRatioPercent = computed(() => {
+  if (!ingredientForm.exampleWeight || ingredientForm.exampleWeight <= 0) {
+    return null;
+  }
+
+  // 获取所有FOOD类型的食材示例重量
+  const foodItems = (form.items || []).filter(
+    (item: any) => item.ingredientType === 'FOOD' && item.exampleWeight !== undefined && item.exampleWeight !== null
+  );
+
+  // 计算总重量（包括当前正在编辑的食材）
+  let totalWeight = 0;
+  foodItems.forEach((item: any) => {
+    // 如果是正在编辑的食材，使用表单中的值
+    if (item.ingredientId === ingredientForm.ingredientId) {
+      totalWeight += ingredientForm.exampleWeight || 0;
+    } else {
+      totalWeight += item.exampleWeight || 0;
+    }
+  });
+
+  // 如果总重量为0，返回null
+  if (totalWeight === 0) {
+    return null;
+  }
+
+  // 计算占比
+  return (ingredientForm.exampleWeight / totalWeight) * 100;
+});
+
+// 获取基准单位标签
+const getBaseUnitLabel = (ingredient: any) => {
+  if (!ingredient || !ingredient.baseUnit) return '';
+
+  const unitMap: Record<string, string> = {
+    'G': 'g',
+    'ML': 'ml',
+    'PCS': '个'
+  };
+
+  return unitMap[ingredient.baseUnit] || ingredient.baseUnit;
+};
+
+// 监听示例重量变化，自动更新占比
+watch(() => ingredientForm.exampleWeight, (newWeight) => {
+  if (newWeight !== undefined && newWeight !== null) {
+    ingredientForm.ratioPercent = calculatedRatioPercent.value || undefined;
   }
 });
 
@@ -1397,6 +1471,7 @@ const showAddIngredientDialog = () => {
 const resetIngredientForm = () => {
   ingredientForm.ingredientId = '';
   ingredientForm.preparationMethods = [];
+  ingredientForm.exampleWeight = undefined;
   ingredientForm.ratioPercent = undefined;
   ingredientForm.nutrientTargetKey = '';
   ingredientForm.nutrientTargetValue = undefined;
@@ -1420,9 +1495,11 @@ const saveIngredient = () => {
   }
 
   // 根据原料类型进行验证
-  if (ingredient.type === 'FOOD' && ingredientForm.ratioPercent === undefined) {
-    ElMessage.warning('食材类型请设置占比');
-    return;
+  if (ingredient.type === 'FOOD') {
+    if (ingredientForm.exampleWeight === undefined || ingredientForm.exampleWeight <= 0) {
+      ElMessage.warning('食材类型请输入示例重量');
+      return;
+    }
   }
 
   if (ingredient.type === 'SUPPLEMENT' && !ingredientForm.nutrientTargetKey) {
@@ -1441,14 +1518,16 @@ const saveIngredient = () => {
     preparationMethod: ingredientForm.preparationMethods.length > 0
       ? ingredientForm.preparationMethods.join(', ')
       : undefined,
-    // 食材类型：保存占比，清除营养目标
+    // 食材类型：保存示例重量和占比
     ...(ingredient.type === 'FOOD' && {
+      exampleWeight: ingredientForm.exampleWeight,
       ratioPercent: ingredientForm.ratioPercent,
       nutrientTargetKey: undefined,
       nutrientTargetValue: undefined,
     }),
-    // 补剂类型：保存营养目标，清除占比
+    // 补剂类型：保存营养目标
     ...(ingredient.type === 'SUPPLEMENT' && {
+      exampleWeight: undefined,
       ratioPercent: undefined,
       nutrientTargetKey: ingredientForm.nutrientTargetKey || undefined,
       nutrientTargetValue: ingredientForm.nutrientTargetValue || undefined,
@@ -1462,14 +1541,35 @@ const saveIngredient = () => {
   if (editingIngredientIndex.value >= 0) {
     // Update existing
     form.items[editingIngredientIndex.value] = item;
+    // 重新计算所有FOOD类型的占比
+    recalculateAllRatios();
     ElMessage.success('原料更新成功');
   } else {
     // Add new
     form.items.push(item);
+    // 重新计算所有FOOD类型的占比
+    recalculateAllRatios();
     ElMessage.success('原料添加成功');
   }
 
   ingredientDialogVisible.value = false;
+};
+
+// 重新计算所有FOOD类型食材的占比
+const recalculateAllRatios = () => {
+  const foodItems = form.items.filter(
+    (item: any) => item.ingredientType === 'FOOD' && item.exampleWeight !== undefined && item.exampleWeight !== null
+  );
+
+  const totalWeight = foodItems.reduce((sum: number, item: any) => sum + (item.exampleWeight || 0), 0);
+
+  if (totalWeight > 0) {
+    form.items.forEach((item: any) => {
+      if (item.ingredientType === 'FOOD' && item.exampleWeight) {
+        item.ratioPercent = (item.exampleWeight / totalWeight) * 100;
+      }
+    });
+  }
 };
 
 const editIngredient = (row: RecipeItem, index: number) => {
@@ -1478,6 +1578,7 @@ const editIngredient = (row: RecipeItem, index: number) => {
   ingredientForm.preparationMethods = row.preparationMethod
     ? row.preparationMethod.split(', ').filter(id => id.trim())
     : [];
+  ingredientForm.exampleWeight = row.exampleWeight;
   ingredientForm.ratioPercent = row.ratioPercent;
   ingredientForm.nutrientTargetKey = row.nutrientTargetKey || '';
   ingredientForm.nutrientTargetValue = row.nutrientTargetValue;
@@ -1820,6 +1921,12 @@ onMounted(async () => {
 }
 
 .header-cell:nth-child(6) {
+  width: 120px;
+  justify-content: flex-end;
+  display: flex;
+}
+
+.header-cell:nth-child(7) {
   width: 200px;
 }
 
@@ -1832,7 +1939,7 @@ onMounted(async () => {
   padding-left: 16px !important;
 }
 
-.header-cell:nth-child(7) {
+.header-cell:nth-child(8) {
   flex: 1;
   justify-content: center;
   display: flex;
@@ -1886,10 +1993,15 @@ onMounted(async () => {
 }
 
 .row-cell:nth-child(6) {
-  width: 200px;
+  width: 120px;
+  justify-content: flex-end;
 }
 
 .row-cell:nth-child(7) {
+  width: 200px;
+}
+
+.row-cell:nth-child(8) {
   flex: 1;
   justify-content: center;
   gap: 8px;

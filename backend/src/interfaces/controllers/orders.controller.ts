@@ -27,7 +27,9 @@ import {
 import { OrderService } from '../../application/order/order.service';
 import { Inject } from '@nestjs/common';
 import { ORDER_REPOSITORY } from '../../application/order/order.service.tokens';
+import { DOG_REPOSITORY } from '../../application/dog/dog.service';
 import type { OrderRepository } from '../../domain/order/order.repository';
+import type { DogRepository } from '../../domain/dog/dog.repository';
 import { Order, OrderItem } from '../../domain/order';
 import { OrderStatus } from '../../domain';
 import { InvalidStateTransitionError } from '../../domain/common/errors';
@@ -56,6 +58,8 @@ export class OrdersController {
     private readonly orderService: OrderService,
     @Inject(ORDER_REPOSITORY)
     private readonly orderRepository: OrderRepository,
+    @Inject(DOG_REPOSITORY)
+    private readonly dogRepository: DogRepository,
   ) {}
 
   @Post()
@@ -86,9 +90,9 @@ export class OrdersController {
     try {
       const customerId = user.customerId;
 
-      // Validate either cartItemIds or (dogId + items) is provided
-      if (!createOrderDto.cartItemIds && (!createOrderDto.dogId || !createOrderDto.items)) {
-        return ApiResponseDto.error(400, 'Either cartItemIds or (dogId + items) must be provided');
+      // Validate: at least one of snapshotId, cartItemIds, or (dogId + items) must be provided
+      if (!createOrderDto.snapshotId && !createOrderDto.cartItemIds && (!createOrderDto.dogId || !createOrderDto.items)) {
+        return ApiResponseDto.error(400, 'Either snapshotId, cartItemIds, or (dogId + items) must be provided');
       }
 
       const order = await this.orderService.createOrderDraft({
@@ -100,10 +104,11 @@ export class OrdersController {
           : null,
         items: createOrderDto.items,
         cartItemIds: createOrderDto.cartItemIds,
+        snapshotId: createOrderDto.snapshotId,
         addressId: createOrderDto.addressId,
       });
 
-      const response = this.mapOrderToDto(order);
+      const response = await this.mapOrderToDto(order);
       return ApiResponseDto.success(response);
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -148,7 +153,7 @@ export class OrdersController {
         'customer', // Phase 8.18: Actor attribution
         user.customerId, // Phase 8.18: Actor ID
       );
-      const response = this.mapOrderToDto(order);
+      const response = await this.mapOrderToDto(order);
       return ApiResponseDto.success(response);
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -194,7 +199,7 @@ export class OrdersController {
         'customer', // Phase 8.18: Actor attribution
         user.customerId, // Phase 8.18: Actor ID
       );
-      const response = this.mapOrderToDto(order);
+      const response = await this.mapOrderToDto(order);
       return ApiResponseDto.success(response);
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -373,7 +378,7 @@ export class OrdersController {
       return ApiResponseDto.error(404, 'Order not found');
     }
 
-    const response = this.mapOrderToDto(order);
+    const response = await this.mapOrderToDto(order);
     return ApiResponseDto.success(response);
   }
 
@@ -520,7 +525,7 @@ export class OrdersController {
         'customer',
         user.customerId, // Phase 8.18: Actor ID
       );
-      const response = this.mapOrderToDto(cancelledOrder);
+      const response = await this.mapOrderToDto(cancelledOrder);
       return ApiResponseDto.success(response);
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -664,7 +669,7 @@ export class OrdersController {
     }
   }
 
-  private mapOrderToDto(order: Order): OrderDto {
+  private async mapOrderToDto(order: Order): Promise<OrderDto> {
     // Map pricing breakdown snapshot if available
     const pricingBreakdown = order.pricingBreakdownSnapshot
       ? {
@@ -679,6 +684,34 @@ export class OrdersController {
         }
       : undefined;
 
+    // Fetch dog information for each item
+    // For single-item orders (direct buy mode), use order amountProduct as item totalPrice
+    const itemTotalPrice = order.items.length === 1 ? order.amountProduct : undefined;
+
+    console.log('[Order Detail] Order items count:', order.items.length);
+    console.log('[Order Detail] itemTotalPrice:', itemTotalPrice);
+    console.log('[Order Detail] order.amountProduct:', order.amountProduct);
+    console.log('[Order Detail] order.amountTotal:', order.amountTotal);
+
+    const items = await Promise.all(
+      order.items.map((item) => this.mapOrderItemToDto(item, itemTotalPrice)),
+    );
+
+    // Debug logging for amount issue
+    console.log('[Order Detail] order.totalAmount:', order.totalAmount);
+    console.log('[Order Detail] order.amountTotal:', order.amountTotal);
+    console.log('[Order Detail] order.amountProduct:', order.amountProduct);
+    console.log('[Order Detail] order.amountShipping:', order.amountShipping);
+
+    // 计算预计发货日期（制作日期 + 1天）
+    let estimatedShippingDate = null;
+    if (order.targetProductionDate) {
+      const shippingDate = new Date(order.targetProductionDate);
+      shippingDate.setDate(shippingDate.getDate() + 1);
+      estimatedShippingDate = shippingDate.toISOString();
+      console.log('[Order Detail] Estimated shipping date:', estimatedShippingDate);
+    }
+
     return {
       id: order.id,
       customerId: order.customerId,
@@ -689,11 +722,12 @@ export class OrdersController {
       targetProductionDate: order.targetProductionDate
         ? order.targetProductionDate.toISOString()
         : null,
+      estimatedShippingDate, // 新增：预计发货日期
       totalAmount: order.totalAmount ?? order.amountTotal,
       amountProduct: order.amountProduct,
       amountShipping: order.amountShipping,
       amountTotal: order.amountTotal,
-      items: order.items.map((item) => this.mapOrderItemToDto(item)),
+      items,
       pricingBreakdown,
       // Phase 8.14: Shipping tracking fields
       trackingNumber: order.trackingNumber ?? null,
@@ -710,19 +744,42 @@ export class OrdersController {
       transactionId: order.transactionId ?? null,
       paidAt: order.paidAt ? order.paidAt.toISOString() : null,
       paymentStatus: order.paymentStatus ?? null,
+      createdAt: order.createdAt.toISOString(),
     };
   }
 
-  private mapOrderItemToDto(item: OrderItem): OrderItemDto {
+  private async mapOrderItemToDto(
+    item: OrderItem,
+    totalPrice?: number,
+  ): Promise<OrderItemDto> {
+    // Fetch dog information if dogId is present
+    let dogInfo = undefined;
+    if (item.dogId) {
+      const dog = await this.dogRepository.findById(item.dogId);
+      if (dog) {
+        dogInfo = {
+          id: dog.id,
+          name: dog.name,
+          breedName: dog.customBreedName ?? undefined,
+          weightKg: dog.currentWeightKg,
+        };
+      }
+    }
+
+    console.log('[mapOrderItemToDto] Item ID:', item.id, 'dogId:', item.dogId, 'dogInfo:', dogInfo, 'totalPrice:', totalPrice);
+
     return {
       id: item.id,
       orderId: item.orderId,
+      dogId: item.dogId,
       recipeSnapshot: item.recipeSnapshot,
       quantityG: item.quantityG,
       packageCount: item.packageCount,
       packageSpecG: item.packageSpecG,
       customRequirements: item.customRequirements,
       dailyIntakeG: item.dailyIntakeG,
+      dog: dogInfo,
+      totalPrice: totalPrice,
     };
   }
 

@@ -13,6 +13,9 @@ export class OrderItemDto {
   @ApiProperty({ example: 'uuid' })
   orderId!: string;
 
+  @ApiPropertyOptional({ example: 'uuid', nullable: true })
+  dogId?: string | null;
+
   @ApiProperty({
     description: 'Recipe snapshot (immutable)',
   })
@@ -35,6 +38,22 @@ export class OrderItemDto {
     description: 'Daily intake in grams, calculated from DogCalc.finalFoodKcal ÷ Recipe.energyDensityKcalPerKg (immutable after order creation)',
   })
   dailyIntakeG!: number;
+
+  @ApiPropertyOptional({
+    description: 'Dog information (if available)',
+  })
+  dog?: {
+    id: string;
+    name: string;
+    breedName?: string;
+    weightKg?: number;
+  };
+
+  @ApiPropertyOptional({
+    description: 'Total price for this item (calculated from order pricing breakdown)',
+    example: 111.67,
+  })
+  totalPrice?: number;
 }
 
 export class OrderDto {
@@ -59,6 +78,13 @@ export class OrderDto {
   @ApiPropertyOptional({ nullable: true })
   targetProductionDate?: string | null;
 
+  @ApiPropertyOptional({
+    description: 'Estimated shipping date (production date + 1 day)',
+    example: '2025-01-16T00:00:00.000Z',
+    nullable: true,
+  })
+  estimatedShippingDate?: string | null;
+
   @ApiProperty({ example: 299.99 })
   totalAmount!: number;
 
@@ -70,6 +96,12 @@ export class OrderDto {
 
   @ApiProperty({ example: 265.99, description: 'Total amount (Phase 6)' })
   amountTotal!: number;
+
+  @ApiProperty({
+    description: 'Order creation timestamp',
+    example: '2025-01-20T10:30:00.000Z',
+  })
+  createdAt!: string;
 
   @ApiProperty({ type: [OrderItemDto] })
   items!: OrderItemDto[];

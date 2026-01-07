@@ -102,7 +102,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { getToken, clearToken, request } from '../../utils/api'
 
 interface UserInfo {
@@ -265,8 +266,8 @@ function handleLogout() {
   })
 }
 
-onMounted(() => {
-  // 检查登录状态
+onShow(() => {
+  // 检查登录状态（每次显示页面时都会执行）
   const token = getToken()
   if (token) {
     loadUserInfo()

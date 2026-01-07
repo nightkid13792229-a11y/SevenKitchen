@@ -17,6 +17,7 @@ export interface GlobalConfig {
   defaultShippingTemplateId: string | null;
   packageExampleImageUrl: string | null;
   shippingCompanyLogoUrl: string | null;
+  paymentTimeoutMinutes: number;
 }
 
 export type GlobalConfigUpdate = Partial<GlobalConfig>;

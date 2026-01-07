@@ -14,6 +14,7 @@ export interface RecipeItem {
   id: string;
   ingredientId: string;
   preparationMethod?: string | null;
+  exampleWeight?: number | null;
   ratioPercent?: number | null;
   sortOrder?: number | null;
   nutrientTargetKey?: string | null;

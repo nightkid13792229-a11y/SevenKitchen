@@ -25,6 +25,7 @@ import type { OrderStatusHistoryRepository } from '../../domain/order/order-stat
 import { OrderStatusHistory } from '../../domain/order/order-status-history.entity';
 import { ORDER_STATUS_HISTORY_REPOSITORY } from './order.service.tokens';
 import type { CartRepository } from '../../domain/cart';
+import type { IOrderPricingSnapshotRepository } from '../../domain/order-pricing-snapshot/order-pricing-snapshot.repository.interface';
 
 // Re-export for convenience
 export { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY };
@@ -37,6 +38,7 @@ export interface CreateOrderDraftDto {
   targetProductionDate?: Date | null;
   items?: CreateOrderItemDto[];
   cartItemIds?: string[];
+  snapshotId?: string;  // ✅ 新增：快照ID（立即购买）
   addressId?: string;
 }
 
@@ -70,6 +72,8 @@ export class OrderService {
     private readonly addressRepository: AddressRepository,
     @Inject('CartRepository')
     private readonly cartRepository: CartRepository,
+    @Inject('IOrderPricingSnapshotRepository')
+    private readonly pricingSnapshotRepository: IOrderPricingSnapshotRepository,
   ) {}
 
   /**
@@ -169,13 +173,204 @@ export class OrderService {
   async createOrderDraft(dto: CreateOrderDraftDto): Promise<Order> {
     const orderId = randomUUID();
 
-    // If cartItemIds is provided, load cart items and convert to order items
+    // ✅ Priority 1: 如果提供 snapshotId，从快照创建（立即购买）
+    if (dto.snapshotId) {
+      return this.createOrderFromSnapshot(dto, dto.snapshotId, orderId);
+    }
+
+    // Priority 2: 如果提供 cartItemIds，从购物车创建
     if (dto.cartItemIds && dto.cartItemIds.length > 0) {
       return this.createOrderFromCart(dto, orderId);
     }
 
-    // Original flow: create from provided items
+    // Priority 3: 从items参数创建（DEPRECATED - 仅用于向后兼容）
     return this.createOrderFromItems(dto, orderId);
+  }
+
+  /**
+   * Create order from pricing snapshot (IMMEDIATE BUY - security enhancement)
+   * Phase: Price tampering prevention
+   */
+  private async createOrderFromSnapshot(
+    dto: CreateOrderDraftDto,
+    snapshotId: string,
+    orderId: string
+  ): Promise<Order> {
+    console.log('[CreateOrderFromSnapshot] Loading snapshot:', snapshotId);
+
+    // 1. 验证快照
+    const snapshot = await this.pricingSnapshotRepository.findById(snapshotId);
+
+    if (!snapshot) {
+      throw new NotFoundException('Pricing snapshot not found or expired');
+    }
+
+    if (!snapshot.belongsToCustomer(dto.customerId)) {
+      throw new BadRequestException('Pricing snapshot does not belong to this customer');
+    }
+
+    if (!snapshot.canBeUsed()) {
+      if (snapshot.used) {
+        throw new BadRequestException('Pricing snapshot already used');
+      }
+      if (snapshot.isExpired()) {
+        throw new BadRequestException('Pricing snapshot has expired');
+      }
+    }
+
+    // 2. 处理制作日期
+    let productionDate = dto.targetProductionDate;
+
+    // 默认值：如果未提供制作日期，默认为明天
+    if (!productionDate) {
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+      tomorrow.setHours(0, 0, 0, 0);
+      productionDate = tomorrow;
+      console.log('[CreateOrderFromSnapshot] No production date provided, using tomorrow:', productionDate.toISOString());
+    } else {
+      // 如果提供了日期，将时间部分清零
+      productionDate.setHours(0, 0, 0, 0);
+    }
+
+    // 验证：制作日期不能早于今天
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    if (productionDate < today) {
+      throw new BadRequestException('制作日期不能早于今天');
+    }
+
+    // 验证：制作日期不能超过90天
+    const maxDate = new Date();
+    maxDate.setDate(maxDate.getDate() + 90);
+    maxDate.setHours(0, 0, 0, 0);
+    if (productionDate > maxDate) {
+      throw new BadRequestException('制作日期不能超过90天后');
+    }
+
+    console.log('[CreateOrderFromSnapshot] Production date validated:', productionDate.toISOString());
+
+    // 3. 从快照获取数据
+    const { requestParams, pricingResult } = snapshot;
+    const itemParams = requestParams.items[0]; // MVP: 只支持单商品
+
+    console.log('[CreateOrderFromSnapshot] Request params:', JSON.stringify(requestParams, null, 2));
+    console.log('[CreateOrderFromSnapshot] Using pricing from snapshot:', {
+      amountProduct: pricingResult.amountProduct,
+      amountShipping: pricingResult.amountShipping,
+      amountTotal: pricingResult.amountTotal,
+    });
+
+    // 4. 加载必要的数据（recipe, dog, address）
+    const recipe = await this.recipeRepository.findById(itemParams.recipeId);
+    if (!recipe) {
+      throw new NotFoundException(`Recipe not found: ${itemParams.recipeId}`);
+    }
+
+    console.log('[CreateOrderFromSnapshot] Loading dog with ID:', requestParams.dogId);
+    const dog = await this.dogRepository.findById(requestParams.dogId!);
+    if (!dog) {
+      throw new NotFoundException(`Dog not found: ${requestParams.dogId}`);
+    }
+    console.log('[CreateOrderFromSnapshot] Dog loaded:', dog.name);
+
+    // 5. 创建 RecipeSnapshot
+    const recipeItems = recipe.items || [];
+    const ingredientIds = recipeItems.map((ri) => ri.ingredientId);
+    const ingredients = await this.ingredientRepository.findByIds(ingredientIds);
+    const ingredientMap = new Map(ingredients.map((ing) => [ing.id, ing]));
+
+    const recipeSnapshot: RecipeSnapshot = {
+      id: recipe.id,
+      version: recipe.version,
+      name: recipe.name,
+      production_loss_rate: recipe.productionLossRate,
+      energy_density_kcal_per_kg: recipe.energyDensityKcalPerKg,
+      nutrition_standard: 'FEDIAF_2021',
+      items: recipeItems.map((ri) => {
+        const ingredient = ingredientMap.get(ri.ingredientId);
+        return {
+          ingredient_id: ri.ingredientId,
+          name: ingredient?.name || 'Unknown',
+          ratio: ri.ratioPercent ?? 0,
+        };
+      }),
+    };
+
+    // 6. 计算 dailyIntakeG
+    const dogCalcResult = calculateDogEnergy(dog, recipe.energyDensityKcalPerKg);
+    const dailyIntakeG = calculateDailyIntakeG(
+      dogCalcResult.finalFoodKcal,
+      recipe.energyDensityKcalPerKg,
+    );
+
+    // 7. 创建 OrderItem
+    console.log('[CreateOrderFromSnapshot] Creating OrderItem with dogId:', requestParams.dogId);
+    const orderItem = new OrderItem(
+      randomUUID(),
+      orderId,
+      requestParams.dogId!,
+      recipeSnapshot,
+      itemParams.quantityG,
+      itemParams.packageCount,
+      itemParams.packageSpecG,
+      null, // customRequirements
+      dailyIntakeG,
+    );
+    console.log('[CreateOrderFromSnapshot] OrderItem created, dogId:', orderItem.dogId);
+
+    // 8. 创建 PricingBreakdownSnapshot
+    const pricingBreakdownSnapshot = new PricingBreakdownSnapshot(
+      pricingResult.pricingBreakdown.costIngredients,
+      pricingResult.pricingBreakdown.costPackaging,
+      pricingResult.pricingBreakdown.costLabor,
+      pricingResult.pricingBreakdown.costOverhead,
+      pricingResult.pricingBreakdown.totalProductCost,
+      pricingResult.pricingBreakdown.productPrice,
+      pricingResult.amountShipping,
+      pricingResult.amountTotal,
+      null, // shippingTemplateId
+      'targetMargin_40%', // marginStrategyName (简化)
+      new Date(),
+      null, // ingredientPriceVersionHash
+    );
+
+    // 9. 创建订单（使用快照价格，不重新计算）
+    const order = new Order(
+      orderId,
+      dto.customerId,
+      OrderStatus.INIT,
+      dto.type,
+      new Date(),
+      productionDate, // ✅ 使用处理后的制作日期
+      pricingResult.amountProduct,  // ✅ 使用快照价格
+      pricingResult.amountShipping,  // ✅ 使用快照运费
+      pricingResult.amountTotal,     // ✅ 使用快照总价
+      [orderItem],
+      undefined, // totalAmount (computed by constructor)
+      pricingBreakdownSnapshot,
+      dto.addressId,
+      requestParams.dogId,
+    );
+
+    // 10. 保存订单
+    await this.orderRepository.save(order);
+
+    // 11. 标记快照已使用
+    await this.pricingSnapshotRepository.markAsUsed(snapshotId);
+    console.log('[CreateOrderFromSnapshot] Snapshot marked as used:', snapshotId);
+
+    // 12. 记录状态转换
+    await this.logStatusTransition(
+      order,
+      OrderStatus.INIT,
+      OrderStatus.INIT,
+      'customer',
+      dto.customerId,
+      { source: 'snapshot', snapshotId },
+    );
+
+    return order;
   }
 
   /**
@@ -224,6 +419,7 @@ export class OrderService {
       const orderItem = new OrderItem(
         randomUUID(),
         orderId,
+        cartItem.dogId, // Save dogId to link order item with dog
         {
           id: recipe.id,
           version: recipe.version,
@@ -264,6 +460,7 @@ export class OrderService {
       dto.customerId,
       OrderStatus.INIT,
       dto.type,
+      new Date(),
       dto.targetProductionDate || null,
       totalProductPrice,
       shippingFee,
@@ -450,6 +647,7 @@ export class OrderService {
       const orderItem = new OrderItem(
         itemId,
         orderId,
+        dto.dogId, // Save dogId to link order item with dog
         recipeSnapshot,
         itemDto.quantityG,
         normalizedPackageCount,
@@ -474,6 +672,21 @@ export class OrderService {
     const amountShipping = shippingFee;
     const amountTotal = amountProduct + amountShipping;
 
+    // Debug logging for pricing discrepancy
+    console.log('[Create Order From Items] Pricing calculation:');
+    console.log('  productPrice:', pricing.productPrice);
+    console.log('  shippingFee:', shippingFee);
+    console.log('  amountProduct:', amountProduct);
+    console.log('  amountShipping:', amountShipping);
+    console.log('  amountTotal:', amountTotal);
+    console.log('  Input params:', {
+      quantityG: dto.items[0].quantityG,
+      packageCount: dto.items[0].packageCount,
+      packageSpecG: dto.items[0].packageSpecG,
+      cycleDays: dto.items[0].cycleDays,
+      dailyIntakeG: dto.items[0].dailyIntakeG,
+    });
+
     // Phase 7.1: Create pricing breakdown snapshot
     const globalConfig = await this.globalConfigService.getGlobalConfig();
     const marginStrategyName = `targetMargin_${(globalConfig.targetMargin * 100).toFixed(0)}%`;
@@ -497,6 +710,7 @@ export class OrderService {
       dto.customerId,
       OrderStatus.INIT,
       dto.type,
+      new Date(),
       dto.targetProductionDate ?? null,
       amountProduct,
       amountShipping,
@@ -643,6 +857,7 @@ export class OrderService {
     amountProduct: number;
     amountShipping: number;
     amountTotal: number;
+    snapshotId: string;  // ✅ 新增：快照ID
     pricingBreakdown?: {
       costIngredients: number;
       costPackaging: number;
@@ -819,7 +1034,20 @@ export class OrderService {
       console.error('[PreviewPricing] Shipping calculation failed:', error);
     }
 
-    return {
+    // Debug logging for pricing comparison
+    console.log('[PreviewPricing] Pricing calculation:');
+    console.log('  productPrice:', pricing.productPrice);
+    console.log('  shippingFee:', shippingFee);
+    console.log('  amountTotal:', pricing.productPrice + shippingFee);
+    console.log('  Input params:', {
+      quantityG: itemDto.quantityG,
+      packageCount: itemDto.packageCount,
+      packageSpecG: itemDto.packageSpecG,
+      cycleDays: itemDto.cycleDays,
+      dailyIntakeG: itemDto.dailyIntakeG,
+    });
+
+    const pricingResult = {
       amountProduct: pricing.productPrice,
       amountShipping: shippingFee,
       amountTotal: pricing.productPrice + shippingFee,
@@ -836,6 +1064,31 @@ export class OrderService {
         laborDetails: pricing.laborDetails,
         overheadDetails: pricing.overheadDetails,
       },
+    };
+
+    // ✅ Save pricing snapshot to database
+    const snapshot = await this.pricingSnapshotRepository.create({
+      customerId: dto.customerId,
+      requestParams: {
+        dogId: dto.dogId,
+        items: [{
+          recipeId: itemDto.recipeId,
+          quantityG: itemDto.quantityG,
+          packageCount: itemDto.packageCount,
+          packageSpecG: itemDto.packageSpecG,
+          cycleDays: itemDto.cycleDays,
+          dailyIntakeG: itemDto.dailyIntakeG,
+        }]
+      },
+      pricingResult,
+      expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15分钟过期
+    });
+
+    console.log('[PreviewPricing] Snapshot created:', snapshot.id);
+
+    return {
+      ...pricingResult,
+      snapshotId: snapshot.id,  // 返回快照ID
     };
   }
 
@@ -885,12 +1138,14 @@ export class OrderService {
    * @param orderId Order ID
    * @param actor Who is completing the order (defaults to "admin")
    * @param actorId Actor ID (e.g., adminId)
+   * @param metadata Optional metadata for status transition
    * @returns Updated order
    */
   async completeOrder(
     orderId: string,
     actor: 'customer' | 'staff' | 'admin' | 'system' = 'admin',
     actorId?: string | null,
+    metadata?: Record<string, any> | null,
   ): Promise<Order> {
     const order = await this.orderRepository.findById(orderId);
     if (!order) {
@@ -908,6 +1163,7 @@ export class OrderService {
       OrderStatus.COMPLETED,
       actor,
       actorId,
+      metadata,
     );
 
     return savedOrder;

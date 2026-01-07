@@ -53,5 +53,19 @@ export class UpdateGlobalConfigDto {
 
   @IsOptional()
   @IsString()
+  defaultShippingTemplateId?: string | null;
+
+  @IsOptional()
+  @IsString()
   packageExampleImageUrl?: string | null;
+
+  @IsOptional()
+  @IsString()
+  shippingCompanyLogoUrl?: string | null;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(5)
+  @Max(180)
+  paymentTimeoutMinutes?: number;
 }

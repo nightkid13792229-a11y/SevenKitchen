@@ -851,6 +851,7 @@ export class AdminController {
         cancelledAt: order.cancelledAt ? order.cancelledAt.toISOString() : null,
         cancellationReason: order.cancellationReason ?? null,
         cancelledBy: order.cancelledBy ?? null,
+        createdAt: order.createdAt.toISOString(),
       };
 
       return ApiResponseDto.success(orderDto);

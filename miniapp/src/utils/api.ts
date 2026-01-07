@@ -219,6 +219,13 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
       success: (res: any) => {
         console.log('[API Response]', 'statusCode:', res.statusCode, 'data:', res.data)
 
+        // Handle 204 No Content (DELETE responses)
+        if (res.statusCode === 204) {
+          console.log('[API] 204 No Content - treating as success')
+          resolve({ code: 0, message: 'Success', data: null } as ApiResponse<T>)
+          return
+        }
+
         // Check if response data exists
         if (!res.data) {
           const errorMsg = `服务器响应格式错误`
@@ -269,7 +276,7 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
           reject(new Error(errorMsg))
           return
         }
-        
+
         resolve(response)
       },
       fail: (err: any) => {

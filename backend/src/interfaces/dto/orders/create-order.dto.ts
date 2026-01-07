@@ -88,7 +88,7 @@ export class CreateOrderDto {
   @IsEnum(OrderType)
   type!: OrderType;
 
-  @ApiPropertyOptional({ type: [CreateOrderItemDto], description: 'Order items (required if not using cart)' })
+  @ApiPropertyOptional({ type: [CreateOrderItemDto], description: 'Order items (DEPRECATED - use snapshotId instead)' })
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
@@ -100,6 +100,14 @@ export class CreateOrderDto {
   @IsArray()
   @IsUUID('4', { each: true })
   cartItemIds?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Pricing snapshot ID (if creating from preview - IMMEDIATE BUY)',
+    example: 'uuid',
+  })
+  @IsOptional()
+  @IsUUID()
+  snapshotId?: string;
 
   @ApiPropertyOptional({ description: 'Address ID', example: 'uuid' })
   @IsOptional()

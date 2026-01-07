@@ -105,8 +105,9 @@ export class RecipesController {
       const applicableLifeStages = recipe.applicableLifeStages || [];
       const targetHealthTags = recipe.targetHealthTags || [];
 
-      // Get top 6 ingredients by ratio
+      // Get top 6 ingredients by ratio (only FOOD type)
       const topIngredients = (recipe.items || [])
+        .filter((item: any) => item.ingredient?.type === 'FOOD' && item.ratioPercent != null)
         .sort((a: any, b: any) => (b.ratioPercent || 0) - (a.ratioPercent || 0))
         .slice(0, 6)
         .map((item: any) => ({
@@ -203,17 +204,29 @@ export class RecipesController {
             item.preparationMethod as string,
           );
 
-          return {
+          const ingredientType = item.ingredient?.type;
+
+          // Only FOOD type has ratio, SUPPLEMENT has nutrient target
+          const result: any = {
             ingredientId: item.ingredientId,
             name: item.ingredient?.name || 'Unknown',
             preparationMethod: preparationMethods?.join('、') || undefined,
-            ratio: item.ratioPercent || 0,
             sortOrder: item.sortOrder || 0,
-            nutrientTargetKey: item.nutrientTargetKey || undefined,
-            nutrientTargetValue: item.nutrientTargetValue || undefined,
-            ingredientType: item.ingredient?.type || undefined,
+            ingredientType: ingredientType || undefined,
             properties: (item.ingredient as any)?.properties || undefined,
           };
+
+          // FOOD type: include ratio
+          if (ingredientType === 'FOOD') {
+            result.ratio = item.ratioPercent != null ? item.ratioPercent : 0;
+          }
+          // SUPPLEMENT type: include nutrient target
+          else if (ingredientType === 'SUPPLEMENT') {
+            result.nutrientTargetKey = item.nutrientTargetKey || undefined;
+            result.nutrientTargetValue = item.nutrientTargetValue || undefined;
+          }
+
+          return result;
         }),
     );
 

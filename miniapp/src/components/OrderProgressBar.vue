@@ -32,20 +32,20 @@ const props = defineProps<{
 
 const steps = [
   {
-    key: 'PENDING_PAYMENT',
-    label: '待付款',
-    icon: '💳',
-    backendStatus: ['INIT', 'PENDING_PAYMENT']
+    key: 'PAID',
+    label: '已付款',
+    icon: '✓',
+    backendStatus: ['PAID']
   },
   {
     key: 'IN_PRODUCTION',
     label: '生产中',
     icon: '👨‍🍳',
-    backendStatus: ['PAID', 'WAITING_FOR_PRODUCTION', 'IN_PRODUCTION', 'READY_FOR_PACKAGING']
+    backendStatus: ['WAITING_FOR_PRODUCTION', 'IN_PRODUCTION', 'READY_FOR_PACKAGING']
   },
   {
-    key: 'FREEZING_PENDING_SHIPMENT',
-    label: '急冻中，\n待发货',
+    key: 'READY_FOR_SHIPMENT',
+    label: '急冻中\n待发货',
     icon: '❄️',
     backendStatus: ['READY_FOR_SHIPMENT']
   },

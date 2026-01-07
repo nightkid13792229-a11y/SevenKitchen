@@ -8,6 +8,7 @@ import {
   Get,
   Post,
   Put,
+  Delete,
   Body,
   Param,
   HttpCode,
@@ -181,6 +182,21 @@ export class AddressesController {
       }
       throw error;
     }
+  }
+
+  @Delete(':id')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete an address' })
+  @ApiParam({ name: 'id', description: 'Address ID' })
+  @ApiResponse({
+    status: 204,
+    description: 'Address deleted successfully',
+  })
+  @ApiResponse({ status: 404, description: 'Address not found' })
+  async deleteAddress(
+    @Param('id') id: string,
+  ): Promise<void> {
+    return this.addressService.deleteAddress(id);
   }
 
   private mapAddressToDto(address: Address): AddressDto {

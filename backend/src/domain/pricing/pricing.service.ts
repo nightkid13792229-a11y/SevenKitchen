@@ -24,12 +24,14 @@ export interface GlobalConfig {
   defaultShippingTemplateId: string | null;
   packageExampleImageUrl: string | null;
   shippingCompanyLogoUrl: string | null;
+  paymentTimeoutMinutes: number;
 }
 
 export interface RecipeItem {
   ingredientId: string;
   ingredient: Ingredient;
   ratioPercent?: number | null;
+  exampleWeight?: number | null;
   nutrientTargetKey?: string | null;
   nutrientTargetValue?: number | null;
 }
@@ -80,6 +82,9 @@ export interface IngredientCostItem {
   cost: number;
   calculation: string;
   purchaseChannel?: string;  // 采购渠道
+  brand?: string;             // 品牌
+  displayUnit?: string;       // 显示单位（前端用于显示）
+  netAmount?: number;         // 净需求（不含生产损耗和出肉率，用于前端显示和补剂用量计算）
 }
 
 export interface PackagingPerPackConsumables {
@@ -176,12 +181,10 @@ export class PricingService {
     const singlePackSpecG = input.singlePackSpecG || (dailyG / mealsPerDay);
     const totalPacks = mealsPerDay * days;
 
-    // 生产投料净重 (Net production input weight)
-    const totalNetWeightKg = (singlePackSpecG * totalPacks) / 1000.0;
-
     // 生产投料毛重 (含烹饪损耗) (Gross input weight with production loss)
+    // 单位：kg (从 totalNetFoodWeightG 转换)
     const rawInputWeightKg =
-      totalNetWeightKg * recipe.productionLossRate;
+      (totalNetFoodWeightG / 1000.0) * recipe.productionLossRate;
 
     console.log('========== PricingService 步骤1: 基础物理量 ==========');
     console.log('[输入]', {
@@ -192,9 +195,9 @@ export class PricingService {
     });
     console.log('[计算结果]', {
       totalNetFoodWeightG,
+      totalNetWeightKg: totalNetFoodWeightG / 1000.0,
       singlePackSpecG,
       totalPacks,
-      totalNetWeightKg,
       rawInputWeightKg
     });
     console.log('==========================================');
@@ -203,23 +206,14 @@ export class PricingService {
     // 2. 核心成本计算 (Product Cost)
     // ==========================================
     let costIngredients = 0;
-    const ingredientDetails: {
-      name: string;
-      type: string;
-      amount: number;
-      unit: string;
-      unitCost: number;
-      cost: number;
-      calculation: string;
-      purchaseChannel?: string;
-    }[] = [];
+    const ingredientDetails: IngredientCostItem[] = [];
 
     console.log('[PricingService] Starting cost calculation:', {
       recipeId: recipe.id,
       itemsCount: recipe.items.length,
       dailyG,
       days,
-      totalNetWeightKg,
+      totalNetWeightKg: totalNetFoodWeightG / 1000.0,
       rawInputWeightKg,
     });
 
@@ -242,12 +236,14 @@ export class PricingService {
           );
         }
 
+        // 不含生产损耗和出肉率的净需求（用于前端显示和补剂用量计算）
+        // 单位：kg (从 totalNetFoodWeightG 转换)
         const itemNetNeededKg =
-          rawInputWeightKg * (item.ratioPercent / 100.0);
+          (totalNetFoodWeightG / 1000.0) * (item.ratioPercent / 100.0);
 
-        // 出肉率校准 (Yield rate adjustment)
+        // 出肉率校准（用于成本计算）
         const yieldRate = ingredient.getEdibleYieldRate();
-        const itemGrossPurchaseKg = itemNetNeededKg / yieldRate;
+        const itemGrossPurchaseKg = (itemNetNeededKg / yieldRate) * recipe.productionLossRate;
 
         const unitCost = ingredient.getUnitCost();
         const itemCost = itemGrossPurchaseKg * 1000 * unitCost;
@@ -271,8 +267,11 @@ export class PricingService {
           unit: 'kg',
           unitCost: unitCost,
           cost: itemCost,
-          calculation: `净需求${itemNetNeededKg.toFixed(3)}kg ÷ 出成率${yieldRate} = 毛需求${itemGrossPurchaseKg.toFixed(3)}kg × ${unitCost.toFixed(4)}元/g = ${itemCost.toFixed(2)}元`,
+          calculation: `净需求${itemNetNeededKg.toFixed(3)}kg ÷ 出成率${yieldRate} × 损耗率${recipe.productionLossRate} = 毛需求${itemGrossPurchaseKg.toFixed(3)}kg × ${unitCost.toFixed(4)}元/g = ${itemCost.toFixed(2)}元`,
           purchaseChannel: ingredient.purchaseChannel || undefined,
+          brand: (ingredient as any).brand || undefined,
+          displayUnit: 'g',  // 前端显示时转换为克
+          netAmount: itemNetNeededKg,  // 净需求（不含生产损耗和出肉率）
         });
 
         // Convert kg to g, then multiply by unit cost (per g)
@@ -315,8 +314,10 @@ export class PricingService {
           );
         }
 
-        // Total nutrient needed: target_val * raw_input_weight_kg
-        const totalNutrientNeeded = targetVal * rawInputWeightKg;
+        // Total nutrient needed: target_val * total_food_net_weight_kg
+        // 补剂用量基于食材类原料的总净重，而不是所有原料的毛重
+        // 单位：mg 或 μg (totalFoodNetWeightKg 单位为 kg)
+        const totalNutrientNeeded = targetVal * (totalNetFoodWeightG / 1000.0);
         const unitsTheoretical = totalNutrientNeeded / concentration;
 
         // Read ingredient-specific loss rate (default to global)
@@ -330,6 +331,9 @@ export class PricingService {
 
         console.log('[PricingService] SUPPLEMENT cost:', {
           name: ingredient.name,
+          targetVal,
+          totalFoodNetWeightKg: totalNetFoodWeightG / 1000.0,  // 食材总净重
+          rawInputWeightKg,      // 所有原料毛重（对比用）
           totalNutrientNeeded,
           unitsTheoretical,
           customLoss,
@@ -348,6 +352,9 @@ export class PricingService {
           cost: itemCost,
           calculation: `营养需求${totalNutrientNeeded.toFixed(3)}mg ÷ 浓度${concentration} = 理论用量${unitsTheoretical.toFixed(3)}g × 损耗率${customLoss} = 实际用量${unitsNeeded.toFixed(3)}g × ${unitCost.toFixed(4)}元/g = ${itemCost.toFixed(2)}元`,
           purchaseChannel: ingredient.purchaseChannel || undefined,
+          brand: (ingredient as any).brand || undefined,
+          displayUnit: ingredient.unitDisplayLabel || 'g',  // 使用显示单位标签
+          netAmount: unitsNeeded,  // 补剂没有出肉率，净需求 = 用量
         });
 
         costIngredients += itemCost;

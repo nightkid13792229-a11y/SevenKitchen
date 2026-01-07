@@ -158,15 +158,15 @@
       }
     },
     {
-      "path": "pages/cart/index",
-      "style": {
-        "navigationBarTitleText": "购物车"
-      }
-    },
-    {
       "path": "pages/checkout/index",
       "style": {
         "navigationBarTitleText": "确认订单"
+      }
+    },
+    {
+      "path": "pages/recipe-diy/index",
+      "style": {
+        "navigationBarTitleText": "DIY食谱配置"
       }
     }
   ],
@@ -187,12 +187,6 @@
         "iconPath": "static/tabbar/home.png",
         "selectedIconPath": "static/tabbar/home-active.png",
         "text": "首页"
-      },
-      {
-        "pagePath": "pages/cart/index",
-        "iconPath": "static/tabbar/cart.png",
-        "selectedIconPath": "static/tabbar/cart-active.png",
-        "text": "购物车"
       },
       {
         "pagePath": "pages/me/index",

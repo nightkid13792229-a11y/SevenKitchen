@@ -70,12 +70,6 @@
               <text class="recipe-version">v{{ item.recipeSnapshot?.version }}</text>
             </view>
 
-            <view class="item-info">
-              <text class="info-row-text">订阅周期: {{ item.cycleDays }}天</text>
-              <text class="info-row-text">每日喂食: {{ item.dailyIntakeG }}g/天</text>
-              <text class="info-row-text">总重量: {{ item.quantityG }}g</text>
-            </view>
-
             <!-- 分装方案（重点展示）-->
             <view class="package-info highlight">
               <view class="package-row">
@@ -91,25 +85,6 @@
             <button class="btn-view-snapshot" @tap="viewSnapshot(item.id)">
               查看配方快照 →
             </button>
-          </view>
-        </view>
-      </view>
-
-      <!-- 价格汇总（简化版）-->
-      <view class="section price-section">
-        <view class="section-title">💰 价格汇总</view>
-        <view class="price-summary">
-          <view class="summary-row">
-            <text class="label">商品金额（{{ order.items?.length || 0 }}件）:</text>
-            <text class="value">¥{{ formatAmount(order.amountProduct || 0) }}</text>
-          </view>
-          <view class="summary-row">
-            <text class="label">运费:</text>
-            <text class="value">¥{{ formatAmount(order.amountShipping || 0) }}</text>
-          </view>
-          <view class="summary-row total">
-            <text class="label">订单金额:</text>
-            <text class="value highlight">¥{{ formatAmount(order.amountTotal || order.totalAmount) }}</text>
           </view>
         </view>
       </view>
@@ -153,14 +128,13 @@
 
     <!-- 底部操作按钮 -->
     <view class="bottom-actions" v-if="order">
-      <!-- 待付款状态 -->
-      <view v-if="order.status === 'PENDING_PAYMENT'" class="action-buttons">
-        <button class="btn-action btn-cancel" @tap="cancelOrder">取消订单</button>
-        <button class="btn-action btn-primary" @tap="payOrder">立即付款</button>
+      <!-- 生产中状态 -->
+      <view v-if="order.status === 'PAID' || order.status === 'WAITING_FOR_PRODUCTION' || order.status === 'IN_PRODUCTION' || order.status === 'READY_FOR_PACKAGING'" class="action-buttons">
+        <button class="btn-action btn-secondary" @tap="contactService">联系客服</button>
       </view>
 
-      <!-- 待付款之后的已付款状态 -->
-      <view v-else-if="order.status === 'PAID' || order.status === 'WAITING_FOR_PRODUCTION' || order.status === 'IN_PRODUCTION'" class="action-buttons">
+      <!-- 急冻中待发货状态 -->
+      <view v-else-if="order.status === 'READY_FOR_SHIPMENT'" class="action-buttons">
         <button class="btn-action btn-secondary" @tap="contactService">联系客服</button>
       </view>
 
@@ -278,6 +252,15 @@ async function loadOrderDetail() {
 
     if (res.code === 0 && res.data) {
       order.value = res.data
+      // Debug logging
+      console.log('[Order Detail] API Response:', res.data)
+      console.log('[Order Detail] Order amountProduct:', res.data.amountProduct)
+      console.log('[Order Detail] Order amountTotal:', res.data.amountTotal)
+      console.log('[Order Detail] Order items:', res.data.items)
+      if (res.data.items && res.data.items.length > 0) {
+        console.log('[Order Detail] First item totalPrice:', res.data.items[0].totalPrice)
+        console.log('[Order Detail] First item packageCount:', res.data.items[0].packageCount)
+      }
     }
   } catch (error) {
     console.error('Load order detail error:', error)
@@ -447,12 +430,52 @@ async function cancelOrder() {
 }
 
 // 立即付款
-function payOrder() {
-  uni.showToast({
-    title: '跳转支付...',
-    icon: 'none'
-  })
-  // TODO: 调用支付API
+async function payOrder() {
+  try {
+    // 开发环境：显示模拟支付确认
+    const confirmed = await new Promise<boolean>((resolve) => {
+      uni.showModal({
+        title: '模拟支付',
+        content: '测试环境下使用模拟支付，确定继续吗？',
+        success: (res) => resolve(res.confirm),
+        fail: () => resolve(false)
+      })
+    })
+
+    if (!confirmed) {
+      return
+    }
+
+    uni.showLoading({ title: '正在处理支付...' })
+
+    // 调用后端支付API
+    const res = await request({
+      url: `/orders/${orderId.value}/pay`,
+      method: 'POST'
+    })
+
+    if (res.code === 0 && res.data) {
+      uni.showToast({
+        title: '支付成功',
+        icon: 'success'
+      })
+
+      // 刷新订单详情
+      await loadOrderDetail()
+    } else {
+      throw new Error(res.message || '支付失败')
+    }
+
+  } catch (error) {
+    console.error('Payment error:', error)
+    const errorMessage = error instanceof Error ? error.message : '支付失败，请重试'
+    uni.showToast({
+      title: errorMessage,
+      icon: 'none'
+    })
+  } finally {
+    uni.hideLoading()
+  }
 }
 
 // 联系客服
@@ -751,18 +774,6 @@ function writeReview() {
   border-radius: 4rpx;
 }
 
-.item-info {
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-  margin-bottom: 16rpx;
-}
-
-.info-row-text {
-  font-size: 26rpx;
-  color: #666;
-}
-
 .package-info {
   padding: 16rpx;
   background-color: #fff7e6;
@@ -810,36 +821,6 @@ function writeReview() {
   color: #1890ff;
   border-radius: 8rpx;
   font-size: 26rpx;
-}
-
-/* 价格汇总 */
-.price-summary {
-  padding: 20rpx;
-  background-color: #f9f9f9;
-  border-radius: 12rpx;
-}
-
-.summary-row {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 16rpx;
-  font-size: 28rpx;
-}
-
-.summary-row:last-child {
-  margin-bottom: 0;
-}
-
-.summary-row.total {
-  padding-top: 16rpx;
-  font-size: 32rpx;
-  font-weight: bold;
-  border-top: 1rpx solid #e8e8e8;
-}
-
-.value.highlight {
-  color: #ff4d4f;
-  font-size: 36rpx;
 }
 
 /* 物流信息 */

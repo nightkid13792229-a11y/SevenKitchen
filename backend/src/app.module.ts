@@ -1,6 +1,7 @@
 import { Module, OnModuleInit, Inject } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
+import { ScheduleModule } from '@nestjs/schedule';
 import { DogsController } from './interfaces/controllers/dogs.controller';
 import { RecipesController } from './interfaces/controllers/recipes.controller';
 import { HealthController } from './interfaces/controllers/health.controller';
@@ -15,9 +16,9 @@ import { StaffShippingController } from './interfaces/controllers/staff-shipping
 import { HealthRecordsController } from './interfaces/controllers/health-records.controller';
 import { HealthNotificationController } from './interfaces/controllers/health-notification.controller';
 import { HealthUploadController } from './interfaces/controllers/health-upload.controller';
-import { CartController } from './interfaces/cart/cart.controller';
 import { GlobalConfigController, PublicGlobalConfigController } from './interfaces/controllers/global-config.controller';
 import { ShippingTemplateController } from './interfaces/controllers/shipping-template.controller';
+import { OrderSchedulerService } from './application/scheduler/order-scheduler.service';
 import {
   DogService,
   DOG_REPOSITORY,
@@ -85,10 +86,9 @@ import {
   PrismaMedicalRecordRepository,
   PrismaAllergyRecordRepository
 } from './infrastructure/repositories/prisma-health.repository';
-import { CartService } from './application/cart/cart.service';
-import { PrismaCartRepository } from './infrastructure/persistence/cart/cart.repository.prisma';
-import { CartRepository } from './domain/cart';
 import { PackagingService } from './domain/packaging/packaging.service';
+import { PrismaOrderPricingSnapshotRepository } from './infrastructure/repositories/prisma-order-pricing-snapshot.repository';
+import type { IOrderPricingSnapshotRepository } from './domain/order-pricing-snapshot/order-pricing-snapshot.repository.interface';
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -138,6 +138,7 @@ validatePrismaConfig();
         expiresIn: (process.env.JWT_EXPIRES_IN || '7d') as any,
       },
     }),
+    ScheduleModule.forRoot(),
     WechatModule,
     SmsModule,
   ],
@@ -156,7 +157,6 @@ validatePrismaConfig();
     HealthRecordsController,
     HealthNotificationController,
     HealthUploadController,
-    CartController,
     GlobalConfigController,
     PublicGlobalConfigController,
     ShippingTemplateController,
@@ -436,20 +436,21 @@ validatePrismaConfig();
       },
       inject: isPrismaEnabled() ? [PrismaService] : [],
     },
-    // Cart Service and Repository
-    CartService,
+    // Pricing Snapshot Repository (for order creation security)
     {
-      provide: 'CartRepository',
+      provide: 'IOrderPricingSnapshotRepository',
       useFactory: (prismaService?: PrismaService) => {
         if (!prismaService) {
           throw new Error(
             'PrismaService is not available. Ensure Prisma is enabled via repo switches.',
           );
         }
-        return new PrismaCartRepository(prismaService);
+        return new PrismaOrderPricingSnapshotRepository(prismaService);
       },
       inject: isPrismaEnabled() ? [PrismaService] : [],
     },
+    // Order Scheduler Service
+    OrderSchedulerService,
   ],
 })
 export class AppModule implements OnModuleInit {

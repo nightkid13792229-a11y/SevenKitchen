@@ -87,11 +87,17 @@
           <text v-if="item.preparationMethod" class="method-text">{{ item.preparationMethod }}</text>
           <text v-else class="method-text">-</text>
         </view>
-        <text v-if="item.ratio && item.ratio > 0" class="ingredient-ratio">
-          {{ item.ratio }}%
+        <!-- 食材类型：显示占比 -->
+        <text v-if="item.ingredientType === 'FOOD' && item.ratio && item.ratio > 0" class="ingredient-ratio">
+          {{ formatRatio(item.ratio) }}%
         </text>
-        <text v-else class="ingredient-ratio nutrient-target-value">
+        <!-- 补剂类型：显示营养目标值 -->
+        <text v-else-if="item.ingredientType === 'SUPPLEMENT' && item.nutrientTargetValue" class="ingredient-ratio nutrient-target-value">
           每kg添加{{ item.nutrientTargetValue }}{{ getNutrientUnit(item) }}{{ item.nutrientTargetKey }}
+        </text>
+        <!-- 其他情况：显示占位符 -->
+        <text v-else class="ingredient-ratio">
+          -
         </text>
       </view>
     </view>
@@ -213,10 +219,10 @@ interface RecipeItem {
   ingredientId: string
   name: string
   preparationMethod?: string
-  ratio: number
+  ratio?: number  // 食材类型才有此字段
   sortOrder: number
-  nutrientTargetKey?: string
-  nutrientTargetValue?: number
+  nutrientTargetKey?: string  // 补剂类型才有此字段
+  nutrientTargetValue?: number  // 补剂类型才有此字段
   ingredientType?: string
   properties?: any
 }
@@ -370,45 +376,9 @@ function previewImage() {
 }
 
 function generateDiySheet() {
-  const storedDogId = uni.getStorageSync('dogId')
-  if (!storedDogId) {
-    uni.showModal({
-      title: '提示',
-      content: '请先选择狗狗档案',
-      confirmText: '去选择',
-      success: (res) => {
-        if (res.confirm) {
-          uni.navigateTo({
-            url: '/pages/dog-profile-list/index?redirect=diy&recipeId=' + recipeId.value
-          })
-        }
-      }
-    })
-    return
-  }
-
-  uni.showLoading({ title: '生成中...' })
-
-  request({
-    url: `/recipes/${recipeId.value}/diy-sheet`,
-    method: 'POST',
-    data: { dogId: storedDogId }
-  }).then((res: any) => {
-    if (res.code === 0 && res.data) {
-      // TODO: 跳转到DIY详情页
-      uni.showToast({
-        title: '生成成功',
-        icon: 'success'
-      })
-    }
-  }).catch((err: any) => {
-    console.error('Generate DIY sheet error:', err)
-    uni.showToast({
-      title: '生成失败',
-      icon: 'none'
-    })
-  }).finally(() => {
-    uni.hideLoading()
+  // 直接跳转到DIY配置页面
+  uni.navigateTo({
+    url: `/pages/recipe-diy/index?recipeId=${recipeId.value}`
   })
 }
 
@@ -496,6 +466,11 @@ function getNutrientUnit(item: RecipeItem): string {
 function formatNumber(value: number | undefined | null): string {
   if (value === null || value === undefined) return '-'
   return value.toFixed(1)
+}
+
+function formatRatio(value: number | undefined | null): string {
+  if (value === null || value === undefined) return '-'
+  return value.toFixed(2)
 }
 
 function formatCalciumPhosphorusRatio(ratio: string | number | undefined | null): string {

@@ -102,6 +102,18 @@ export class AddressService {
   }
 
   /**
+   * Delete an address
+   */
+  async deleteAddress(addressId: string): Promise<void> {
+    const address = await this.addressRepository.findById(addressId);
+    if (!address) {
+      throw new NotFoundException(`Address not found: ${addressId}`);
+    }
+
+    await this.addressRepository.delete(addressId);
+  }
+
+  /**
    * Helper: Unset default flag for all addresses of a user except the specified one
    */
   private async unsetOtherDefaults(

@@ -1,8 +1,8 @@
 <template>
   <view class="container">
     <view class="address-list">
-      <view 
-        v-for="address in addresses" 
+      <view
+        v-for="address in addresses"
         :key="address.id"
         class="address-item"
         @tap="onAddressTap(address.id)"
@@ -16,22 +16,36 @@
           <view class="address-text">
             <text>{{ address.region.province }} {{ address.region.city }} {{ address.region.district }} {{ address.detail }}</text>
           </view>
-        </view>
-        <view class="address-actions" v-if="mode === 'manage'">
-          <button 
-            class="btn-small" 
-            @tap.stop="setDefault(address.id)"
-            :disabled="address.isDefault"
-          >
-            {{ address.isDefault ? '已默认' : '设默认' }}
-          </button>
+          <view class="address-footer" v-if="mode === 'manage'">
+            <view class="footer-left">
+              <button
+                class="btn-small btn-edit"
+                @tap.stop="editAddress(address.id)"
+              >
+                编辑
+              </button>
+              <button
+                v-if="!address.isDefault"
+                class="btn-small btn-default"
+                @tap.stop="setDefault(address.id)"
+              >
+                设为默认地址
+              </button>
+            </view>
+            <button
+              class="btn-small btn-delete"
+              @tap.stop="deleteAddress(address.id)"
+            >
+              删除
+            </button>
+          </view>
         </view>
       </view>
       <view v-if="addresses.length === 0" class="empty-state">
         <text>暂无地址</text>
       </view>
     </view>
-    
+
     <view class="bottom-bar">
       <button class="btn-add" @tap="addAddress">新增地址</button>
     </view>
@@ -112,7 +126,7 @@ function addAddress() {
 
 function setDefault(addressId: string) {
   uni.showLoading({ title: '设置中...' })
-  
+
   request({
     url: `/addresses/${addressId}/set-default`,
     method: 'POST'
@@ -128,6 +142,54 @@ function setDefault(addressId: string) {
     console.error('Set default error:', err)
   }).finally(() => {
     uni.hideLoading()
+  })
+}
+
+function editAddress(addressId: string) {
+  uni.navigateTo({
+    url: `/pages/address-edit/index?id=${addressId}`
+  })
+}
+
+function deleteAddress(addressId: string) {
+  console.log('[Delete Address] Starting delete for address:', addressId)
+
+  uni.showModal({
+    title: '确认删除',
+    content: '确定要删除这个地址吗？',
+    success: (res) => {
+      if (res.confirm) {
+        uni.showLoading({ title: '删除中...' })
+
+        console.log('[Delete Address] Sending DELETE request to:', `/addresses/${addressId}`)
+
+        request({
+          url: `/addresses/${addressId}`,
+          method: 'DELETE'
+        }).then((result: any) => {
+          console.log('[Delete Address] Delete success:', result)
+          // DELETE 204 No Content 没有响应体，直接处理成功
+          uni.showToast({
+            title: '删除成功',
+            icon: 'success'
+          })
+          loadAddresses()
+        }).catch((err: any) => {
+          console.error('[Delete Address] Delete failed:', err)
+          console.error('[Delete Address] Error details:', {
+            message: err?.message,
+            stack: err?.stack,
+            name: err?.name
+          })
+          uni.showToast({
+            title: '删除失败',
+            icon: 'none'
+          })
+        }).finally(() => {
+          uni.hideLoading()
+        })
+      }
+    }
   })
 }
 </script>
@@ -147,13 +209,12 @@ function setDefault(addressId: string) {
   padding: 30rpx;
   margin-bottom: 20rpx;
   border-radius: 8rpx;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
 }
 
 .address-content {
-  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
 }
 
 .address-header {
@@ -188,16 +249,50 @@ function setDefault(addressId: string) {
   line-height: 1.5;
 }
 
-.address-actions {
-  margin-left: 20rpx;
+.address-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 8rpx;
+  border-top: 1rpx solid #f0f0f0;
+}
+
+.footer-left {
+  display: flex;
+  gap: 12rpx;
+  flex-shrink: 0;
 }
 
 .btn-small {
   font-size: 24rpx;
-  padding: 10rpx 20rpx;
+  border-radius: 4rpx;
+  border: none;
+  outline: none;
+  margin: 0;
+  display: inline-block;
+  overflow: visible;
+}
+
+.btn-small::after {
+  border: none;
+}
+
+.btn-default {
   background-color: #1890ff;
   color: #fff;
-  border-radius: 4rpx;
+  padding: 5rpx 10rpx;
+}
+
+.btn-edit {
+  background-color: #faad14;
+  color: #fff;
+  padding: 5rpx 10rpx;
+}
+
+.btn-delete {
+  color: #999;
+  padding: 5rpx 0;
+  background-color: transparent;
 }
 
 .empty-state {

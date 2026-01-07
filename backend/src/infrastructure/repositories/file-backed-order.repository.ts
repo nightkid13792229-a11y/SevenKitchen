@@ -18,6 +18,7 @@ interface OrderData {
   customerId: string;
   status: string;
   type: string;
+  createdAt?: string; // ISO timestamp string
   targetProductionDate: string | null;
   amountProduct: number;
   amountShipping: number;
@@ -26,6 +27,7 @@ interface OrderData {
   items: Array<{
     id: string;
     orderId: string;
+    dogId?: string | null; // Phase 8.20: Link to dog
     recipeSnapshot: any;
     quantityG: number;
     packageCount: number;
@@ -121,6 +123,7 @@ export class FileBackedOrderRepository
         new OrderItem(
           itemData.id,
           itemData.orderId,
+          itemData.dogId ?? null, // Phase 8.20: dogId parameter
           itemData.recipeSnapshot,
           itemData.quantityG,
           itemData.packageCount,
@@ -157,6 +160,7 @@ export class FileBackedOrderRepository
       data.customerId,
       data.status as OrderStatus,
       data.type as any,
+      data.createdAt ? new Date(data.createdAt) : new Date(),
       data.targetProductionDate ? new Date(data.targetProductionDate) : null,
       data.amountProduct,
       data.amountShipping,

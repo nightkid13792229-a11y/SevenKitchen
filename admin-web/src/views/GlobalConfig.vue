@@ -106,6 +106,19 @@
           <span class="form-tip">单个订单的最小重量要求</span>
         </el-form-item>
 
+        <el-form-item label="支付超时时间（分钟）" prop="paymentTimeoutMinutes">
+          <el-input-number
+            v-model="form.paymentTimeoutMinutes"
+            :min="5"
+            :max="180"
+            :step="5"
+            :precision="0"
+            :controls="true"
+            style="width: 300px"
+          />
+          <span class="form-tip">未支付订单超时自动取消时间（建议30分钟）</span>
+        </el-form-item>
+
         <el-divider content-position="left">包材配置</el-divider>
 
         <el-form-item label="默认产品标签ID" prop="defaultProductLabelId">
@@ -359,6 +372,7 @@ const form = ref<GlobalConfig>({
   defaultShippingTemplateId: null,
   packageExampleImageUrl: null,
   shippingCompanyLogoUrl: null,
+  paymentTimeoutMinutes: 30,
 })
 
 const rules: FormRules = {
@@ -389,6 +403,10 @@ const rules: FormRules = {
   minOrderWeightG: [
     { required: true, message: '请输入最小订单重量', trigger: 'blur' },
     { type: 'number', min: 100, message: '不能小于100克', trigger: 'blur' },
+  ],
+  paymentTimeoutMinutes: [
+    { required: true, message: '请输入支付超时时间', trigger: 'blur' },
+    { type: 'number', min: 5, max: 180, message: '范围5-180分钟之间', trigger: 'blur' },
   ],
 }
 

@@ -2,7 +2,7 @@
   <view class="order-detail-page">
     <view v-if="order" class="order-detail">
       <!-- 订单类型标签 -->
-      <view class="order-type-tag">💳 鲜食制作订单</view>
+      <view class="order-type-tag">鲜食制作订单</view>
 
       <!-- 订单进度条 -->
       <view class="progress-section">
@@ -11,7 +11,7 @@
 
       <!-- 订单基本信息 -->
       <view class="section info-section">
-        <view class="section-title">订单信息</view>
+        <view class="section-title">基本信息</view>
         <view class="info-row">
           <text class="label">订单编号:</text>
           <text class="value order-id">{{ formatOrderId(order.id) }}</text>
@@ -20,7 +20,7 @@
         <view class="info-row">
           <text class="label">订单状态:</text>
           <text class="value status" :style="{ color: getStatusColor(order.status) }">
-            {{ getStatusIcon(order.status) }} {{ getStatusText(order.status) }}
+            {{ getStatusText(order.status) }}
           </text>
         </view>
         <view class="info-row">
@@ -35,7 +35,7 @@
 
       <!-- 收货信息 -->
       <view class="section address-section" v-if="order.address">
-        <view class="section-title">📍 收货信息</view>
+        <view class="section-title">收货信息</view>
         <view class="address-card">
           <view class="address-info">
             <text class="recipient">{{ order.address.recipientName }} {{ order.address.phone }}</text>
@@ -44,54 +44,9 @@
         </view>
       </view>
 
-      <!-- 商品明细 -->
-      <view class="section items-section">
-        <view class="section-title">📦 商品明细</view>
-
-        <!-- 按狗狗分组 -->
-        <view
-          v-for="group in groupedItems"
-          :key="group.dogId"
-          class="dog-group"
-        >
-          <view class="dog-header">
-            <text class="dog-icon">🐶</text>
-            <text class="dog-name">{{ group.dogName }}</text>
-            <text class="dog-detail">{{ group.dogBreedName }} | {{ group.dogWeightKg }}kg</text>
-          </view>
-
-          <view
-            v-for="item in group.items"
-            :key="item.id"
-            class="order-item-card"
-          >
-            <view class="item-header">
-              <text class="recipe-name">{{ item.recipeSnapshot?.name }}</text>
-              <text class="recipe-version">v{{ item.recipeSnapshot?.version }}</text>
-            </view>
-
-            <!-- 分装方案（重点展示）-->
-            <view class="package-info highlight">
-              <view class="package-row">
-                <text class="package-label">分装方案:</text>
-                <text class="package-value">{{ item.packageCount }}包 × {{ item.packageSpecG }}g</text>
-              </view>
-              <view class="package-row">
-                <text class="package-label">单包价格:</text>
-                <text class="package-price">¥{{ calculateUnitPrice(item).toFixed(2) }}/包</text>
-              </view>
-            </view>
-
-            <button class="btn-view-snapshot" @tap="viewSnapshot(item.id)">
-              查看配方快照 →
-            </button>
-          </view>
-        </view>
-      </view>
-
       <!-- 支付信息 -->
       <view class="section payment-section" v-if="order.paidAt">
-        <view class="section-title">💳 支付信息</view>
+        <view class="section-title">支付信息</view>
         <view class="info-row">
           <text class="label">支付方式:</text>
           <text class="value">{{ getPaymentMethodText(order.paymentMethod) }}</text>
@@ -107,9 +62,129 @@
         </view>
       </view>
 
+      <!-- 商品信息 -->
+      <view class="section items-section">
+        <view class="section-title">商品信息</view>
+
+        <!-- 按狗狗分组 -->
+        <view
+          v-for="group in groupedItems"
+          :key="group.dogId"
+          class="dog-group"
+        >
+          <view class="dog-header">
+            <text class="dog-name">{{ group.dogName }}</text>
+            <text class="dog-detail">{{ group.dogBreedName }} | {{ group.dogWeightKg }}kg</text>
+          </view>
+
+          <view
+            v-for="item in group.items"
+            :key="item.id"
+            class="order-item-card"
+          >
+            <view class="item-header">
+              <text class="recipe-name">{{ item.recipeSnapshot?.name }}</text>
+              <text class="recipe-version">v{{ item.recipeSnapshot?.version }}</text>
+            </view>
+
+            <!-- 订购信息 -->
+            <view class="extended-info">
+              <view class="info-row-small">
+                <text class="info-label">总净重:</text>
+                <text class="info-value-small">{{ Math.round(item.quantityG) }}g</text>
+              </view>
+              <view class="info-row-small">
+                <text class="info-label">总餐数:</text>
+                <text class="info-value-small">{{ item.packageCount }}餐</text>
+              </view>
+              <view class="info-row-small" v-if="item.dailyIntakeG && item.dog?.mealsPerDay">
+                <text class="info-label">每餐饭量:</text>
+                <text class="info-value-small">{{ Math.round(item.dailyIntakeG / (item.dog.mealsPerDay || 1)) }}g/餐</text>
+              </view>
+            </view>
+
+            <button class="btn-view-snapshot" @tap="viewSnapshot(item)">
+              查看食谱快照
+            </button>
+          </view>
+        </view>
+      </view>
+
+      <!-- 售后服务（仅在SHIPPED或COMPLETED状态显示） -->
+      <view class="section aftersale-section" v-if="order.status === 'SHIPPED' || order.status === 'COMPLETED'">
+        <view class="section-title">售后服务</view>
+        <view class="aftersale-buttons">
+          <button class="btn-aftersale" @tap="applyAftersale">
+            <text class="btn-text">申请售后</text>
+          </button>
+          <button class="btn-aftersale" @tap="applyRefund">
+            <text class="btn-text">申请退款</text>
+          </button>
+          <button class="btn-aftersale" @tap="contactSevenDad">
+            <text class="btn-text">联系Seven爸</text>
+          </button>
+        </view>
+      </view>
+
+      <!-- 评价及建议（仅在COMPLETED状态显示） -->
+      <view class="section review-section" v-if="order.status === 'COMPLETED'">
+        <view class="section-title">评价及建议</view>
+
+        <view class="review-rating">
+          <text class="rating-label">评分：</text>
+          <view class="star-rating">
+            <text
+              v-for="star in 5"
+              :key="star"
+              class="star"
+              :class="{ active: star <= reviewRating }"
+              @tap="setRating(star)"
+            >
+              {{ star <= reviewRating ? '●' : '○' }}
+            </text>
+          </view>
+        </view>
+
+        <view class="review-content">
+          <text class="content-label">评价内容：</text>
+          <textarea
+            class="review-textarea"
+            v-model="reviewText"
+            placeholder="请输入您的评价和建议..."
+            maxlength="500"
+          />
+          <view class="char-count">{{ reviewText.length }}/500</view>
+        </view>
+
+        <view class="review-images">
+          <text class="images-label">添加图片：</text>
+          <view class="image-upload">
+            <view
+              v-for="(img, index) in reviewImages"
+              :key="index"
+              class="image-item"
+            >
+              <image :src="img" mode="aspectFill" class="uploaded-image" />
+              <view class="btn-remove-image" @tap="removeImage(index)">×</view>
+            </view>
+            <view
+              v-if="reviewImages.length < 9"
+              class="btn-add-image"
+              @tap="chooseImage"
+            >
+              <text class="add-icon">+</text>
+              <text class="add-text">添加图片</text>
+            </view>
+          </view>
+          <text class="image-hint">最多可上传9张图片</text>
+        </view>
+
+        <button class="btn-submit-review" @tap="submitReview">提交评价</button>
+      </view>
+
       <!-- 物流信息（仅在SHIPPED状态显示）-->
       <view class="section shipping-section" v-if="order.status === 'SHIPPED' && order.trackingNumber">
-        <view class="section-title">🚚 物流信息</view>
+        <view class="section-title">物流信息</view>
         <view class="info-row">
           <text class="label">快递公司:</text>
           <text class="value">{{ getCarrierName(order.carrierCode) }}</text>
@@ -125,6 +200,9 @@
         </view>
       </view>
     </view>
+
+    <!-- 食谱快照弹窗 -->
+    <RecipeSnapshotModal ref="snapshotModal" />
 
     <!-- 底部操作按钮 -->
     <view class="bottom-actions" v-if="order">
@@ -162,6 +240,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { request } from '../../utils/api'
 import OrderProgressBar from '../../components/OrderProgressBar.vue'
+import RecipeSnapshotModal from '../../components/RecipeSnapshotModal.vue'
 
 interface OrderItem {
   id: string
@@ -169,11 +248,26 @@ interface OrderItem {
   dogName?: string
   dogBreedName?: string
   dogWeightKg?: number
-  recipeSnapshot?: {
-    name: string
-    version: number
+  dog?: {
+    mealsPerDay?: number
   }
-  cycleDays?: number
+  recipeSnapshot?: {
+    id: string
+    version: number
+    name: string
+    nutrition_standard: string
+    energy_density_kcal_per_kg: number
+    production_loss_rate: number
+    items: Array<{
+      ingredient_id: string
+      name: string
+      ratio: number
+      ingredient_type?: string
+      nutrient_target_key?: string
+      nutrient_target_value?: number
+      properties?: any
+    }>
+  }
   dailyIntakeG?: number
   quantityG: number
   packageCount: number
@@ -207,6 +301,12 @@ interface Order {
 
 const order = ref<Order | null>(null)
 const orderId = ref('')
+const snapshotModal = ref<InstanceType<typeof RecipeSnapshotModal> | null>(null)
+
+// 评价相关
+const reviewRating = ref(0)
+const reviewText = ref('')
+const reviewImages = ref<string[]>([])
 
 // 按狗狗分组
 const groupedItems = computed(() => {
@@ -276,13 +376,12 @@ function formatOrderId(id: string): string {
 function formatTime(timeStr?: string): string {
   if (!timeStr) return '-'
   const date = new Date(timeStr)
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const hour = String(date.getHours()).padStart(2, '0')
+  const minute = String(date.getMinutes()).padStart(2, '0')
+  return `${year}/${month}/${day} ${hour}:${minute}`
 }
 
 function formatAmount(amount?: number): string {
@@ -296,14 +395,15 @@ function calculateUnitPrice(item: OrderItem): number {
 }
 
 function getStatusText(status: string): string {
+  // 合并为5个主要状态
   const statusMap: Record<string, string> = {
     INIT: '待确认',
     PENDING_PAYMENT: '待付款',
     PAID: '已付款',
-    WAITING_FOR_PRODUCTION: '待生产',
+    WAITING_FOR_PRODUCTION: '生产中',
     IN_PRODUCTION: '生产中',
     READY_FOR_PACKAGING: '生产中',
-    READY_FOR_SHIPMENT: '急冻中，待发货',
+    READY_FOR_SHIPMENT: '急冻中待发货',
     SHIPPED: '已发货',
     COMPLETED: '已完成',
     CANCELLED: '已取消'
@@ -389,10 +489,10 @@ function copyTrackingNumber() {
   })
 }
 
-function viewSnapshot(itemId: string) {
-  uni.navigateTo({
-    url: `/pages/snapshot/index?itemId=${itemId}`
-  })
+function viewSnapshot(item: OrderItem) {
+  if (!item.recipeSnapshot) return
+
+  snapshotModal.value?.open(item.recipeSnapshot)
 }
 
 // 取消订单
@@ -530,21 +630,227 @@ async function confirmReceived() {
 }
 
 // 再次购买
-function buyAgain() {
-  uni.showToast({
-    title: '跳转到订购页...',
-    icon: 'none'
-  })
-  // TODO: 将订单商品加入购物车，跳转到订购页
+async function buyAgain() {
+  if (!order.value?.items || order.value.items.length === 0) {
+    uni.showToast({
+      title: '订单中没有商品',
+      icon: 'none'
+    })
+    return
+  }
+
+  const firstItem = order.value.items[0]
+  const recipeId = firstItem.recipeSnapshot?.id
+
+  if (!recipeId) {
+    uni.showToast({
+      title: '食谱信息不完整',
+      icon: 'none'
+    })
+    return
+  }
+
+  try {
+    // 检查食谱状态
+    uni.showLoading({ title: '检查中...' })
+
+    const res = await request({
+      url: `/recipes/${recipeId}`,
+      method: 'GET'
+    })
+
+    if (res.code === 0 && res.data) {
+      const recipe = res.data
+
+      // 检查食谱是否已下架
+      if (recipe.status !== 'ACTIVE') {
+        uni.showModal({
+          title: '提示',
+          content: '该食谱已下架，无法再次购买',
+          showCancel: false
+        })
+        return
+      }
+
+      // 构建完整参数用于自动配置
+      const dogId = firstItem.dogId || ''
+      const packageCount = firstItem.packageCount || 7
+      const packageSpecG = firstItem.packageSpecG || 100
+      const dailyIntakeG = firstItem.dailyIntakeG || 0
+      const mealsPerDay = firstItem.dog?.mealsPerDay || 1
+      const perMealG = dailyIntakeG / mealsPerDay
+
+      // 构建URL参数
+      const params = new URLSearchParams({
+        recipeId,
+        ...(dogId && { dogId }),
+        autoConfig: 'true',
+        packageCount: String(packageCount),
+        packageSpecG: String(packageSpecG),
+        perMealG: String(Math.round(perMealG))
+      })
+
+      // 跳转到订购成品页
+      uni.hideLoading()
+      uni.navigateTo({
+        url: `/pages/recipe-order/index?${params.toString()}`
+      })
+    } else {
+      throw new Error('获取食谱信息失败')
+    }
+  } catch (error) {
+    console.error('Check recipe error:', error)
+    uni.showToast({
+      title: '检查食谱失败',
+      icon: 'none'
+    })
+  } finally {
+    uni.hideLoading()
+  }
 }
 
-// 评价
-function writeReview() {
+// 申请售后
+function applyAftersale() {
   uni.showToast({
-    title: '评价功能开发中...',
+    title: '售后申请功能开发中...',
     icon: 'none'
   })
-  // TODO: 跳转到评价页
+  // TODO: 跳转到售后申请页面
+}
+
+// 申请退款
+async function applyRefund() {
+  uni.showModal({
+    title: '申请退款',
+    content: '确定要申请退款吗？',
+    success: async (res) => {
+      if (res.confirm) {
+        try {
+          uni.showLoading({ title: '提交中...' })
+          const result = await request({
+            url: `/orders/${orderId.value}/refund`,
+            method: 'POST'
+          })
+          if (result.code === 0) {
+            uni.showToast({
+              title: '退款申请已提交',
+              icon: 'success'
+            })
+          } else {
+            throw new Error(result.message || '申请失败')
+          }
+        } catch (error) {
+          console.error('Apply refund error:', error)
+          uni.showToast({
+            title: '申请失败',
+            icon: 'none'
+          })
+        } finally {
+          uni.hideLoading()
+        }
+      }
+    }
+  })
+}
+
+// 联系Seven爸
+function contactSevenDad() {
+  uni.showModal({
+    title: '联系Seven爸',
+    content: '客服微信：SevenDad\n客服电话：400-123-4567\n工作时间：9:00-18:00',
+    confirmText: '复制微信号',
+    cancelText: '关闭',
+    success: (res) => {
+      if (res.confirm) {
+        uni.setClipboardData({
+          data: 'SevenDad',
+          success: () => {
+            uni.showToast({ title: '微信号已复制', icon: 'success' })
+          }
+        })
+      }
+    }
+  })
+}
+
+// 设置评分
+function setRating(star: number) {
+  reviewRating.value = star
+}
+
+// 选择图片
+function chooseImage() {
+  const remainingCount = 9 - reviewImages.value.length
+  uni.chooseImage({
+    count: remainingCount,
+    sizeType: ['compressed'],
+    sourceType: ['album', 'camera'],
+    success: (res) => {
+      reviewImages.value.push(...res.tempFilePaths)
+    }
+  })
+}
+
+// 删除图片
+function removeImage(index: number) {
+  reviewImages.value.splice(index, 1)
+}
+
+// 提交评价
+async function submitReview() {
+  if (reviewRating.value === 0) {
+    uni.showToast({
+      title: '请先评分',
+      icon: 'none'
+    })
+    return
+  }
+
+  if (!reviewText.value.trim()) {
+    uni.showToast({
+      title: '请输入评价内容',
+      icon: 'none'
+    })
+    return
+  }
+
+  try {
+    uni.showLoading({ title: '提交中...' })
+
+    // TODO: 实现图片上传到服务器
+    // const uploadedImages = await uploadImages(reviewImages.value)
+
+    const result = await request({
+      url: `/orders/${orderId.value}/review`,
+      method: 'POST',
+      data: {
+        rating: reviewRating.value,
+        content: reviewText.value,
+        images: reviewImages.value // 暂时使用本地路径，实际应该上传后的URL
+      }
+    })
+
+    if (result.code === 0) {
+      uni.showToast({
+        title: '评价提交成功',
+        icon: 'success'
+      })
+      // 清空评价表单
+      reviewRating.value = 0
+      reviewText.value = ''
+      reviewImages.value = []
+    } else {
+      throw new Error(result.message || '提交失败')
+    }
+  } catch (error) {
+    console.error('Submit review error:', error)
+    uni.showToast({
+      title: '提交失败',
+      icon: 'none'
+    })
+  } finally {
+    uni.hideLoading()
+  }
 }
 </script>
 
@@ -730,10 +1036,6 @@ function writeReview() {
   margin-bottom: 16rpx;
 }
 
-.dog-icon {
-  font-size: 28rpx;
-}
-
 .dog-name {
   font-size: 28rpx;
   font-weight: bold;
@@ -821,6 +1123,213 @@ function writeReview() {
   color: #1890ff;
   border-radius: 8rpx;
   font-size: 26rpx;
+}
+
+/* 扩展信息 */
+.extended-info {
+  margin-top: 16rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx solid #e8e8e8;
+}
+
+.info-row-small {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12rpx;
+  font-size: 26rpx;
+}
+
+.info-row-small:last-child {
+  margin-bottom: 0;
+}
+
+.info-label {
+  color: #666;
+  margin-right: 12rpx;
+}
+
+.info-value-small {
+  color: #333;
+  font-weight: 500;
+}
+
+.info-value-small.price {
+  color: #ff4d4f;
+  font-weight: bold;
+}
+
+/* 售后服务 */
+.aftersale-section {
+  margin-bottom: 20rpx;
+}
+
+.aftersale-buttons {
+  display: flex;
+  gap: 16rpx;
+}
+
+.btn-aftersale {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24rpx 16rpx;
+  background-color: #f9f9f9;
+  border-radius: 12rpx;
+  border: none;
+}
+
+.btn-aftersale .btn-text {
+  font-size: 26rpx;
+  color: #333;
+}
+
+/* 评价及建议 */
+.review-section {
+  margin-bottom: 20rpx;
+}
+
+.review-rating {
+  display: flex;
+  align-items: center;
+  margin-bottom: 24rpx;
+}
+
+.rating-label {
+  font-size: 28rpx;
+  color: #333;
+  margin-right: 16rpx;
+}
+
+.star-rating {
+  display: flex;
+  gap: 8rpx;
+}
+
+.star {
+  font-size: 48rpx;
+  color: #ddd;
+}
+
+.star.active {
+  color: #FFD700;
+}
+
+.review-content {
+  margin-bottom: 24rpx;
+}
+
+.content-label {
+  font-size: 28rpx;
+  color: #333;
+  display: block;
+  margin-bottom: 12rpx;
+}
+
+.review-textarea {
+  width: 100%;
+  min-height: 200rpx;
+  padding: 16rpx;
+  background-color: #f9f9f9;
+  border-radius: 8rpx;
+  font-size: 28rpx;
+  color: #333;
+  border: 1rpx solid #e5e5e5;
+}
+
+.char-count {
+  text-align: right;
+  font-size: 24rpx;
+  color: #999;
+  margin-top: 8rpx;
+}
+
+.review-images {
+  margin-bottom: 24rpx;
+}
+
+.images-label {
+  font-size: 28rpx;
+  color: #333;
+  display: block;
+  margin-bottom: 12rpx;
+}
+
+.image-upload {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+}
+
+.image-item {
+  position: relative;
+  width: 160rpx;
+  height: 160rpx;
+}
+
+.uploaded-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 8rpx;
+}
+
+.btn-remove-image {
+  position: absolute;
+  top: -8rpx;
+  right: -8rpx;
+  width: 40rpx;
+  height: 40rpx;
+  background-color: rgba(0, 0, 0, 0.6);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font-size: 32rpx;
+  line-height: 1;
+}
+
+.btn-add-image {
+  width: 160rpx;
+  height: 160rpx;
+  background-color: #f9f9f9;
+  border: 2rpx dashed #ddd;
+  border-radius: 8rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.add-icon {
+  font-size: 60rpx;
+  color: #999;
+  line-height: 1;
+}
+
+.add-text {
+  font-size: 22rpx;
+  color: #999;
+  margin-top: 8rpx;
+}
+
+.image-hint {
+  font-size: 24rpx;
+  color: #999;
+  margin-top: 8rpx;
+  display: block;
+}
+
+.btn-submit-review {
+  width: 100%;
+  height: 88rpx;
+  line-height: 88rpx;
+  background-color: #1890ff;
+  color: #fff;
+  border-radius: 44rpx;
+  font-size: 28rpx;
+  border: none;
 }
 
 /* 物流信息 */

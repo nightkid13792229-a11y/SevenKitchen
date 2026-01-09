@@ -369,6 +369,22 @@
         </el-select>
       </el-form-item>
 
+      <el-form-item label="添加时机" prop="add_timing">
+        <el-select
+          v-model="supplementProperties.add_timing"
+          placeholder="请选择添加时机"
+          style="width: 200px"
+        >
+          <el-option
+            v-for="timing in SUPPLEMENT_ADD_TIMING_OPTIONS"
+            :key="timing.value"
+            :label="timing.label"
+            :value="timing.value"
+          />
+        </el-select>
+        <span class="hint-text">补剂添加到食谱中的时机</span>
+      </el-form-item>
+
       <el-form-item label="有效成分含量" prop="active_nutrients">
         <div class="nutrient-editor">
           <!-- 成分列表表格 -->
@@ -460,6 +476,52 @@
         />
         <span class="hint-text">可选，覆盖全局默认值1.05</span>
       </el-form-item>
+
+      <el-divider content-position="left">购买链接配置</el-divider>
+
+      <el-form-item label="启用购买链接">
+        <el-switch v-model="hasPurchaseLink" />
+        <span class="hint-text">启用后，小程序端将显示"去购买"按钮</span>
+      </el-form-item>
+
+      <template v-if="hasPurchaseLink">
+        <el-form-item label="平台类型">
+          <el-select v-model="purchaseLinkConfig.platform" placeholder="请选择平台" style="width: 200px">
+            <el-option label="淘宝/天猫" value="TAOBAO" />
+            <el-option label="京东" value="JD" />
+            <el-option label="拼多多" value="PINDUODUO" />
+            <el-option label="其他小程序" value="OTHER" />
+            <el-option label="网页链接" value="WEBVIEW" />
+          </el-select>
+        </el-form-item>
+
+        <el-form-item label="购买链接">
+          <el-input
+            v-model="purchaseLinkConfig.url"
+            placeholder="请输入商品购买链接"
+            style="width: 400px"
+          />
+        </el-form-item>
+
+        <template v-if="purchaseLinkConfig.platform !== 'WEBVIEW'">
+          <el-form-item label="小程序AppID">
+            <el-input
+              v-model="purchaseLinkConfig.mini_program_appid"
+              placeholder="请输入目标小程序AppID"
+              style="width: 400px"
+            />
+            <span class="hint-text">淘宝: wxa1693a824e8c4747, 京东: wx... </span>
+          </el-form-item>
+
+          <el-form-item label="小程序路径">
+            <el-input
+              v-model="purchaseLinkConfig.mini_program_path"
+              placeholder="例如: pages/product/detail?id=123"
+              style="width: 400px"
+            />
+          </el-form-item>
+        </template>
+      </template>
     </template>
 
     <!-- 包材属性 -->
@@ -507,8 +569,10 @@ import {
   IngredientType,
   BaseUnit,
   SupplementCategoryType,
+  SupplementAddTiming,
   IngredientTypeLabels,
   BaseUnitLabels,
+  SupplementAddTimingLabels,
   CFCT_CLASS_OPTIONS,
   type IngredientForm,
   type FoodProperties,
@@ -628,6 +692,49 @@ const supplementProperties = reactive<SupplementProperties>(
 const packagingProperties = reactive<PackagingProperties>(
   (formData.type === IngredientType.PACKAGING ? formData.properties : getDefaultPackagingProperties())
 )
+
+// 购买链接配置
+const hasPurchaseLink = ref(!!supplementProperties.purchase_link)
+const purchaseLinkConfig = reactive<PurchaseLinkConfig>(
+  supplementProperties.purchase_link || {
+    url: '',
+    platform: 'TAOBAO',
+    mini_program_appid: '',
+    mini_program_path: ''
+  }
+)
+
+// 编辑模式：初始化购买链接配置
+if (formData.type === IngredientType.SUPPLEMENT && supplementProperties.purchase_link) {
+  Object.assign(purchaseLinkConfig, supplementProperties.purchase_link)
+  hasPurchaseLink.value = true
+}
+
+// 监听购买链接启用状态变化
+watch(hasPurchaseLink, (newValue) => {
+  if (newValue) {
+    // 启用购买链接
+    if (!supplementProperties.purchase_link) {
+      supplementProperties.purchase_link = {
+        url: '',
+        platform: 'TAOBAO',
+        mini_program_appid: '',
+        mini_program_path: ''
+      }
+      Object.assign(purchaseLinkConfig, supplementProperties.purchase_link)
+    }
+  } else {
+    // 禁用购买链接
+    supplementProperties.purchase_link = undefined
+  }
+})
+
+// 监听购买链接配置变化，同步到supplementProperties
+watch(purchaseLinkConfig, (newValue) => {
+  if (hasPurchaseLink.value) {
+    supplementProperties.purchase_link = { ...newValue }
+  }
+}, { deep: true })
 
 // 编辑模式判断
 const isEdit = computed(() => !!props.ingredient?.id)
@@ -758,6 +865,12 @@ const SUPPLEMENT_CATEGORY_OPTIONS = Object.entries({
   [SupplementCategoryType.OTHER]: '其他'
 }).map(([value, label]) => ({ value, label }))
 
+// 补剂添加时机选项
+const SUPPLEMENT_ADD_TIMING_OPTIONS = Object.entries({
+  [SupplementAddTiming.BEFORE_MIXING]: '制作中（须拌匀）',
+  [SupplementAddTiming.BEFORE_MEAL]: '饭前（冷却后）'
+}).map(([value, label]) => ({ value, label }))
+
 // 计算属性
 const calculatedUnitCost = computed(() => {
   const cost = formData.currentPricePerPurchaseUnit / formData.purchaseToBaseRatio
@@ -787,7 +900,9 @@ function getDefaultFoodProperties(): FoodProperties {
 function getDefaultSupplementProperties(): SupplementProperties {
   return {
     category_type: '',
-    active_nutrients: {}
+    active_nutrients: {},
+    production_loss_rate: undefined,
+    purchase_link: undefined
   }
 }
 
@@ -818,6 +933,14 @@ function handleTypeChange() {
     Object.assign(foodProperties, defaultProps)
   } else if (formData.type === IngredientType.SUPPLEMENT) {
     Object.assign(supplementProperties, defaultProps)
+    // 重置购买链接配置
+    hasPurchaseLink.value = false
+    Object.assign(purchaseLinkConfig, {
+      url: '',
+      platform: 'TAOBAO',
+      mini_program_appid: '',
+      mini_program_path: ''
+    })
   } else if (formData.type === IngredientType.PACKAGING) {
     Object.assign(packagingProperties, defaultProps)
   }

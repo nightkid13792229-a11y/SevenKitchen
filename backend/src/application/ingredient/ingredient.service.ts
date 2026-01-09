@@ -6,7 +6,7 @@
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import type { IngredientRepository } from '../../domain/ingredient/ingredient.repository';
 import { Ingredient } from '../../domain/ingredient';
-import { IngredientType } from '../../domain/ingredient/enums';
+import { IngredientType, BaseUnit } from '../../domain/ingredient/enums';
 
 export const INGREDIENT_REPOSITORY = Symbol('INGREDIENT_REPOSITORY');
 
@@ -34,6 +34,7 @@ export interface UpdateIngredientDto {
   productModel?: string | null;
   purchaseChannel?: string | null;
   notes?: string | null;
+  baseUnit?: BaseUnit;
   unitDisplayLabel?: string | null;
   purchaseUnit?: string;
   purchaseToBaseRatio?: number;
@@ -42,6 +43,7 @@ export interface UpdateIngredientDto {
   maxCapacityG?: number | null;
   properties?: Record<string, any>;
   tagIds?: string[];
+  type?: IngredientType;
 }
 
 export interface UpdateIngredientPriceDto {
@@ -127,6 +129,7 @@ export class IngredientService {
     if (dto.productModel !== undefined) data.productModel = dto.productModel;
     if (dto.purchaseChannel !== undefined) data.purchaseChannel = dto.purchaseChannel;
     if (dto.notes !== undefined) data.notes = dto.notes;
+    if (dto.baseUnit !== undefined) data.baseUnit = dto.baseUnit;
     if (dto.unitDisplayLabel !== undefined) data.unitDisplayLabel = dto.unitDisplayLabel;
     if (dto.purchaseUnit !== undefined) data.purchaseUnit = dto.purchaseUnit;
     if (dto.purchaseToBaseRatio !== undefined) data.purchaseToBaseRatio = dto.purchaseToBaseRatio;
@@ -134,6 +137,7 @@ export class IngredientService {
     if (dto.weightG !== undefined) data.weightG = dto.weightG;
     if (dto.maxCapacityG !== undefined) data.maxCapacityG = dto.maxCapacityG;
     if (dto.properties !== undefined) data.properties = dto.properties;
+    if (dto.type !== undefined) data.type = dto.type;
 
     const updated = await this.ingredientRepository.update(id, data);
 

@@ -25,11 +25,39 @@ export interface GlobalConfig {
   packageExampleImageUrl: string | null;
   shippingCompanyLogoUrl: string | null;
   paymentTimeoutMinutes: number;
+  equipmentRecommendations?: EquipmentRecommendations | null;
+}
+
+// 设备推荐相关接口
+export interface EquipmentRecommendations {
+  meatGrinder?: EquipmentRecommendation;
+  blender?: EquipmentRecommendation;
+  grinder?: EquipmentRecommendation;
+  vacuumSealer?: EquipmentRecommendation;
+  vacuumBag?: EquipmentRecommendation;
+}
+
+export interface EquipmentRecommendation {
+  equipmentType: string;
+  name: string;
+  brand: string;
+  productModel?: string;
+  recommendationReason?: string;
+  imageUrl?: string;
+  purchaseLink?: PurchaseLink;
+}
+
+export interface PurchaseLink {
+  url?: string;
+  mini_program_appid?: string;
+  mini_program_path?: string;
+  type: 'external' | 'mini_program';
 }
 
 export interface RecipeItem {
   ingredientId: string;
   ingredient: Ingredient;
+  preparationMethod?: string | null;  // 添加时机/制备方法
   ratioPercent?: number | null;
   exampleWeight?: number | null;
   nutrientTargetKey?: string | null;
@@ -85,6 +113,12 @@ export interface IngredientCostItem {
   brand?: string;             // 品牌
   displayUnit?: string;       // 显示单位（前端用于显示）
   netAmount?: number;         // 净需求（不含生产损耗和出肉率，用于前端显示和补剂用量计算）
+  productModel?: string;      // 规格
+  ingredientId?: string;      // 原料ID
+  properties?: any;           // 完整的properties对象（包含purchase_link等）
+  preparationMethod?: string; // 添加时机/制备方法
+  nutrientTargetKey?: string; // 营养素名称（补剂用）
+  nutrientTargetValue?: number; // 营养目标值（补剂用）
 }
 
 export interface PackagingPerPackConsumables {
@@ -269,9 +303,13 @@ export class PricingService {
           cost: itemCost,
           calculation: `净需求${itemNetNeededKg.toFixed(3)}kg ÷ 出成率${yieldRate} × 损耗率${recipe.productionLossRate} = 毛需求${itemGrossPurchaseKg.toFixed(3)}kg × ${unitCost.toFixed(4)}元/g = ${itemCost.toFixed(2)}元`,
           purchaseChannel: ingredient.purchaseChannel || undefined,
-          brand: (ingredient as any).brand || undefined,
+          brand: ingredient.brand || undefined,
+          productModel: ingredient.productModel || undefined,
+          preparationMethod: item.preparationMethod || undefined,
+          ingredientId: ingredient.id,
           displayUnit: 'g',  // 前端显示时转换为克
           netAmount: itemNetNeededKg,  // 净需求（不含生产损耗和出肉率）
+          properties: ingredient.properties,  // 添加完整properties
         });
 
         // Convert kg to g, then multiply by unit cost (per g)
@@ -342,6 +380,22 @@ export class PricingService {
           itemCost,
         });
 
+        // For SUPPLEMENTS: preparationMethod is actually "添加时机" (Adding Timing)
+        // Convert enum values to Chinese display names (must match admin-web labels)
+        const addTimingEnum = (ingredient.properties as any)?.add_timing;
+        const addTimingMap: Record<string, string> = {
+          'BEFORE_MIXING': '制作中（须拌匀）',
+          'BEFORE_MEAL': '饭前（冷却后）',
+        };
+
+        const finalPrepMethod = addTimingEnum ? addTimingMap[addTimingEnum] || addTimingEnum : undefined;
+
+        console.log('[PricingService] SUPPLEMENT 添加时机:', {
+          name: ingredient.name,
+          addTimingEnum,
+          finalPrepMethod,
+        });
+
         // Collect detailed data for SUPPLEMENT
         ingredientDetails.push({
           name: ingredient.name,
@@ -352,9 +406,15 @@ export class PricingService {
           cost: itemCost,
           calculation: `营养需求${totalNutrientNeeded.toFixed(3)}mg ÷ 浓度${concentration} = 理论用量${unitsTheoretical.toFixed(3)}g × 损耗率${customLoss} = 实际用量${unitsNeeded.toFixed(3)}g × ${unitCost.toFixed(4)}元/g = ${itemCost.toFixed(2)}元`,
           purchaseChannel: ingredient.purchaseChannel || undefined,
-          brand: (ingredient as any).brand || undefined,
+          brand: ingredient.brand || undefined,
+          productModel: ingredient.productModel || undefined,
+          preparationMethod: finalPrepMethod,
+          ingredientId: ingredient.id,
           displayUnit: ingredient.unitDisplayLabel || 'g',  // 使用显示单位标签
           netAmount: unitsNeeded,  // 补剂没有出肉率，净需求 = 用量
+          properties: ingredient.properties,  // 添加完整properties（包含purchase_link）
+          nutrientTargetKey: item.nutrientTargetKey,        // 营养素名称
+          nutrientTargetValue: item.nutrientTargetValue,    // 营养目标值
         });
 
         costIngredients += itemCost;

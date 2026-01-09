@@ -22,6 +22,10 @@ export interface RecipeSnapshotItem {
   ingredient_id: string;
   name: string;
   ratio: number; // or amount logic
+  ingredient_type?: string; // 'FOOD' | 'SUPPLEMENT' | 'PACKAGING'
+  nutrient_target_key?: string; // 补剂类型：营养素名称（如"钙"、"维生素D3"）
+  nutrient_target_value?: number; // 补剂类型：营养目标值
+  properties?: any; // 补剂类型：完整属性（包含active_nutrients等）
 }
 
 /**

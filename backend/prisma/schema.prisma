@@ -96,6 +96,7 @@ model User {
   addresses     Address[]
   dogs          Dog[]
   orders        Order[]
+  diySheets     DIYSheet[]
 
   @@index([wechatOpenid])
   @@index([phone])
@@ -641,10 +642,32 @@ model GlobalConfig {
   packageExampleImageUrl      String?  @map("package_example_image_url")
   shippingCompanyLogoUrl      String?  @map("shipping_company_logo_url")
   paymentTimeoutMinutes       Int      @default(30) @map("payment_timeout_minutes")
+  equipmentRecommendations    Json?    @map("equipment_recommendations")
   createdAt                   DateTime @default(now()) @map("created_at")
   updatedAt                   DateTime @updatedAt @map("updated_at")
 
   @@map("global_config")
+}
+
+model DIYSheet {
+  id              String    @id @default(uuid()) @map("id")
+  userId          String    @map("user_id")
+  recipeId        String    @map("recipe_id")
+  recipeName      String    @map("recipe_name") @db.VarChar(200)
+  dogId           String    @map("dog_id")
+  dogName         String    @map("dog_name") @db.VarChar(100)
+  cycleDays       Int       @map("cycle_days")
+  perMealG        Float     @map("per_meal_g")
+  dailyIntakeG    Float     @map("daily_intake_g")
+  purchaseList    Json      @map("purchase_list")
+  productionSteps String?   @map("production_steps") @db.Text
+  createdAt       DateTime  @default(now()) @map("created_at")
+  updatedAt       DateTime  @updatedAt @map("updated_at")
+  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@map("diy_sheet")
 }
 
 model ShippingTemplate {

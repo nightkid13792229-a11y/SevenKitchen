@@ -24,8 +24,9 @@ import { ADDRESS_REPOSITORY } from '../address/address.service';
 import type { OrderStatusHistoryRepository } from '../../domain/order/order-status-history.repository';
 import { OrderStatusHistory } from '../../domain/order/order-status-history.entity';
 import { ORDER_STATUS_HISTORY_REPOSITORY } from './order.service.tokens';
-import type { CartRepository } from '../../domain/cart';
+// import type { CartRepository } from '../../domain/cart';  // Cart功能已移除
 import type { IOrderPricingSnapshotRepository } from '../../domain/order-pricing-snapshot/order-pricing-snapshot.repository.interface';
+import { PrismaService } from '../../infrastructure/prisma.service';
 
 // Re-export for convenience
 export { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY };
@@ -70,10 +71,11 @@ export class OrderService {
     private readonly shippingService: ShippingService,
     @Inject(ADDRESS_REPOSITORY)
     private readonly addressRepository: AddressRepository,
-    @Inject('CartRepository')
-    private readonly cartRepository: CartRepository,
+    // @Inject('CartRepository')
+    // private readonly cartRepository: CartRepository,  // Cart功能已移除
     @Inject('IOrderPricingSnapshotRepository')
     private readonly pricingSnapshotRepository: IOrderPricingSnapshotRepository,
+    private readonly prisma: PrismaService,
   ) {}
 
   /**
@@ -293,6 +295,10 @@ export class OrderService {
           ingredient_id: ri.ingredientId,
           name: ingredient?.name || 'Unknown',
           ratio: ri.ratioPercent ?? 0,
+          ingredient_type: ingredient?.type,
+          nutrient_target_key: ri.nutrientTargetKey ?? undefined,
+          nutrient_target_value: ri.nutrientTargetValue ?? undefined,
+          properties: ingredient?.properties,
         };
       }),
     };
@@ -382,21 +388,25 @@ export class OrderService {
     }
 
     // Load cart items
-    const cartItems = await this.cartRepository.findItemsByIds(dto.cartItemIds);
+    // const cartItems = await this.cartRepository.findItemsByIds(dto.cartItemIds);
 
-    if (cartItems.length !== dto.cartItemIds.length) {
-      throw new NotFoundException('Some cart items not found');
-    }
+    // if (cartItems.length !== dto.cartItemIds.length) {
+    //   throw new NotFoundException('Some cart items not found');
+    // }
 
+    const cartItems: any[] = [];  // Cart功能已移除，临时占位
+    throw new BadRequestException('Cart functionality has been removed');
+
+    /* ========== 以下代码已废弃（Cart功能移除）==========
     // Validate all cart items belong to the customer
-    const cart = await this.cartRepository.findByCustomerId(dto.customerId);
-    const cartItemIdsInCart = new Set(cart.items.map(item => item.id));
+    // const cart = await this.cartRepository.findByCustomerId(dto.customerId);
+    // const cartItemIdsInCart = new Set(cart.items.map((item: any) => item.id));
 
-    for (const cartItem of cartItems) {
-      if (!cartItemIdsInCart.has(cartItem.id)) {
-        throw new BadRequestException('Cart item does not belong to customer');
-      }
-    }
+    // for (const cartItem of cartItems) {
+    //   if (!cartItemIdsInCart.has(cartItem.id)) {
+    //     throw new BadRequestException('Cart item does not belong to customer');
+    //   }
+    // }
 
     // Get first dog from cart items (all cart items should be for the same customer)
     const firstCartItem = cartItems[0];
@@ -486,6 +496,7 @@ export class OrderService {
     );
 
     return order;
+    ========== 废弃代码结束 ========== */
   }
 
   /**
@@ -531,10 +542,57 @@ export class OrderService {
         ingredientIds,
       );
 
+      // Load preparation methods for recipe items
+      // preparationMethod can be: single UUID, comma-separated UUIDs, or null
+      const allPrepMethodIds: string[] = [];
+      recipeItems.forEach((ri) => {
+        if (ri.preparationMethod) {
+          // Split by comma and trim whitespace
+          const ids = ri.preparationMethod.split(',').map(id => id.trim()).filter(id => id);
+          allPrepMethodIds.push(...ids);
+        }
+      });
+
+      console.log('[OrderService] PreparationMethod IDs:', {
+        totalItems: recipeItems.length,
+        allIds: allPrepMethodIds,
+        uniqueCount: new Set(allPrepMethodIds).size
+      });
+
+      const uniquePrepMethodIds = Array.from(new Set(allPrepMethodIds));
+      const preparationMethods = await this.prisma.preparationMethod.findMany({
+        where: { id: { in: uniquePrepMethodIds } },
+        select: { id: true, name: true },
+      });
+
+      console.log('[OrderService] PreparationMethods from DB:', {
+        searchIds: uniquePrepMethodIds,
+        found: preparationMethods.length,
+        methods: preparationMethods
+      });
+
+      const prepMethodMap = new Map(
+        preparationMethods.map((pm) => [pm.id, pm.name]),
+      );
+
       // Create map for quick lookup
       const ingredientMap = new Map(
         ingredients.map((ing) => [ing.id, ing]),
       );
+
+      // Helper function to convert preparationMethod IDs to names
+      const convertPrepMethodIdsToNames = (prepMethodIds: string | null | undefined): string | null => {
+        if (!prepMethodIds) return null;
+
+        // Split by comma and trim
+        const ids = prepMethodIds.split(',').map(id => id.trim()).filter(id => id);
+
+        // Map each ID to its name, fallback to original ID if not found
+        const names = ids.map(id => prepMethodMap.get(id) || id);
+
+        // Join with comma
+        return names.join(', ');
+      };
 
       // Build enriched recipe items with ingredient objects for pricing
       const pricingRecipeItems: PricingRecipeItem[] = recipeItems.map((ri) => {
@@ -544,9 +602,20 @@ export class OrderService {
             `Ingredient not found: ${ri.ingredientId}`,
           );
         }
+
+        // Convert preparationMethod ID(s) to name(s)
+        const prepMethodName = convertPrepMethodIdsToNames(ri.preparationMethod);
+
+        console.log('[OrderService] RecipeItem preparationMethod:', {
+          ingredientName: ingredient.name,
+          originalIds: ri.preparationMethod,
+          mappedNames: prepMethodName
+        });
+
         return {
           ingredientId: ri.ingredientId,
           ingredient,
+          preparationMethod: prepMethodName,
           ratioPercent: ri.ratioPercent ?? null,
           nutrientTargetKey: ri.nutrientTargetKey ?? null,
           nutrientTargetValue: ri.nutrientTargetValue ?? null,
@@ -637,6 +706,10 @@ export class OrderService {
             ingredient_id: ri.ingredientId,
             name: ingredient?.name || 'Unknown',
             ratio: ri.ratioPercent ?? 0,
+            ingredient_type: ingredient?.type,
+            nutrient_target_key: ri.nutrientTargetKey ?? undefined,
+            nutrient_target_value: ri.nutrientTargetValue ?? undefined,
+            properties: ingredient?.properties,
           };
         }),
       };
@@ -958,6 +1031,33 @@ export class OrderService {
       ingredientIds,
     );
 
+    // Load preparation methods for recipe items
+    // preparationMethod can be: single UUID, comma-separated UUIDs, or null
+    const allPrepMethodIds: string[] = [];
+    recipeItems.forEach((ri) => {
+      if (ri.preparationMethod) {
+        // Split by comma and trim whitespace
+        const ids = ri.preparationMethod.split(',').map(id => id.trim()).filter(id => id);
+        allPrepMethodIds.push(...ids);
+      }
+    });
+
+    const uniquePrepMethodIds = Array.from(new Set(allPrepMethodIds));
+    const preparationMethods = await this.prisma.preparationMethod.findMany({
+      where: { id: { in: uniquePrepMethodIds } },
+      select: { id: true, name: true },
+    });
+
+    console.log('[PricingPreview] PreparationMethods loaded:', {
+      searchIds: uniquePrepMethodIds,
+      found: preparationMethods.length,
+      methods: preparationMethods
+    });
+
+    const prepMethodMap = new Map(
+      preparationMethods.map((pm) => [pm.id, pm.name]),
+    );
+
     console.log('[PricingPreview] Ingredients loaded:', {
       requestedIds: ingredientIds.length,
       found: ingredients.length,
@@ -969,6 +1069,20 @@ export class OrderService {
       ingredients.map((ing) => [ing.id, ing]),
     );
 
+    // Helper function to convert preparationMethod IDs to names
+    const convertPrepMethodIdsToNames = (prepMethodIds: string | null | undefined): string | null => {
+      if (!prepMethodIds) return null;
+
+      // Split by comma and trim
+      const ids = prepMethodIds.split(',').map(id => id.trim()).filter(id => id);
+
+      // Map each ID to its name, fallback to original ID if not found
+      const names = ids.map(id => prepMethodMap.get(id) || id);
+
+      // Join with comma
+      return names.join(', ');
+    };
+
     // Build enriched recipe items with ingredient objects for pricing
     const pricingRecipeItems: PricingRecipeItem[] = recipeItems.map((ri) => {
       const ingredient = ingredientMap.get(ri.ingredientId);
@@ -977,9 +1091,14 @@ export class OrderService {
           `Ingredient not found: ${ri.ingredientId}`,
         );
       }
+
+      // Convert preparationMethod ID(s) to name(s)
+      const prepMethodName = convertPrepMethodIdsToNames(ri.preparationMethod);
+
       return {
         ingredientId: ri.ingredientId,
         ingredient,
+        preparationMethod: prepMethodName,
         ratioPercent: ri.ratioPercent ?? null,
         nutrientTargetKey: ri.nutrientTargetKey ?? null,
         nutrientTargetValue: ri.nutrientTargetValue ?? null,

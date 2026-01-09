@@ -168,6 +168,18 @@
       "style": {
         "navigationBarTitleText": "DIY食谱配置"
       }
+    },
+    {
+      "path": "pages/diy-sheet/index",
+      "style": {
+        "navigationBarTitleText": "DIY制作单"
+      }
+    },
+    {
+      "path": "pages/diy-sheet-list/index",
+      "style": {
+        "navigationBarTitleText": "我的制作单"
+      }
     }
   ],
   "globalStyle": {

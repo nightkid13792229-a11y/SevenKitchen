@@ -27,11 +27,24 @@ export interface ActiveNutrientValue {
 }
 
 /**
+ * 购买链接配置
+ */
+export interface PurchaseLinkConfig {
+  url: string;                     // 购买链接URL
+  platform: 'TAOBAO' | 'JD' | 'PINDUODUO' | 'OTHER' | 'WEBVIEW';  // 平台类型
+  mini_program_appid?: string;     // 小程序appid（跳转小程序时必需）
+  mini_program_path?: string;      // 小程序路径（跳转小程序时必需）
+}
+
+/**
  * Supplement Properties (when Ingredient.type === 'SUPPLEMENT')
  */
 export interface SupplementProperties {
   // 营养类型分类
   category_type: string; // Options: "MINERAL", "VITAMIN", "AMINO_ACID", "FATTY_ACID", "PROBIOTIC", "FUNCTIONAL", "OTHER"
+
+  // 添加时机
+  add_timing?: 'BEFORE_MIXING' | 'BEFORE_MEAL'; // 添加时机: "搅拌前（生产中）" 或 "饭前（加热后）"
 
   // 有效成分浓度表 (Key-Value Map)
   // 允许一款补剂包含多种营养素。
@@ -42,6 +55,9 @@ export interface SupplementProperties {
   // 个性化损耗率 (Override Global)
   // 默认建议 1.05 (5%)。鱼油可设为 1.0, 易损粉末设为 1.10
   production_loss_rate?: number;
+
+  // 购买链接配置
+  purchase_link?: PurchaseLinkConfig;
 }
 
 /**

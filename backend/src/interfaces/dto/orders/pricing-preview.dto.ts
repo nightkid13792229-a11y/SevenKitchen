@@ -170,6 +170,24 @@ export class IngredientCostItemDto {
 
   @ApiPropertyOptional({ description: 'Purchase channel' })
   purchaseChannel?: string;
+
+  @ApiPropertyOptional({ description: 'Brand name' })
+  brand?: string;
+
+  @ApiPropertyOptional({ description: 'Product model/specification' })
+  productModel?: string;
+
+  @ApiPropertyOptional({ description: 'Preparation method (for supplements)' })
+  preparationMethod?: string;
+
+  @ApiPropertyOptional({ description: 'Ingredient ID' })
+  ingredientId?: string;
+
+  @ApiPropertyOptional({ description: 'Nutrient target key (for supplements)' })
+  nutrientTargetKey?: string;
+
+  @ApiPropertyOptional({ description: 'Nutrient target value (for supplements)' })
+  nutrientTargetValue?: number;
 }
 
 /**

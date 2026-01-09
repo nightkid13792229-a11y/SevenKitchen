@@ -18,6 +18,7 @@ import { HealthNotificationController } from './interfaces/controllers/health-no
 import { HealthUploadController } from './interfaces/controllers/health-upload.controller';
 import { GlobalConfigController, PublicGlobalConfigController } from './interfaces/controllers/global-config.controller';
 import { ShippingTemplateController } from './interfaces/controllers/shipping-template.controller';
+import { DIYSheetsController } from './interfaces/controllers/diy-sheets.controller';
 import { OrderSchedulerService } from './application/scheduler/order-scheduler.service';
 import {
   DogService,
@@ -43,6 +44,7 @@ import {
   ADDRESS_REPOSITORY,
 } from './application/address/address.service';
 import { DiySheetService } from './application/recipe/diy-sheet.service';
+import { DIYSheetStorageService } from './application/diy-sheet/diy-sheet-storage.service';
 import { JwtAuthService } from './interfaces/auth/jwt.service';
 import { AuthGuard } from './interfaces/auth/auth.guard';
 import {
@@ -160,6 +162,7 @@ validatePrismaConfig();
     GlobalConfigController,
     PublicGlobalConfigController,
     ShippingTemplateController,
+    DIYSheetsController,
   ],
   providers: [
     DogService,
@@ -239,6 +242,7 @@ validatePrismaConfig();
       inject: isPrismaEnabled() ? [PrismaService] : [],
     },
     DiySheetService,
+    DIYSheetStorageService,
     JwtAuthService,
     AuthGuard,
     IngredientService,

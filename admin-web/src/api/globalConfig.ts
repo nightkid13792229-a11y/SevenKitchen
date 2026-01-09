@@ -18,6 +18,18 @@ export interface GlobalConfig {
   packageExampleImageUrl: string | null;
   shippingCompanyLogoUrl: string | null;
   paymentTimeoutMinutes: number;
+  equipmentRecommendations: EquipmentRecommendation[] | null;
+}
+
+export interface EquipmentRecommendation {
+  id: string;
+  name: string;
+  brand: string;
+  specification: string;
+  reason: string;
+  imageUrl: string | null;
+  purchaseLinkType: 'external' | 'miniprogram';
+  purchaseLink: string;
 }
 
 export type GlobalConfigUpdate = Partial<GlobalConfig>;

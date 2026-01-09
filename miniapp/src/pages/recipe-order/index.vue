@@ -965,15 +965,31 @@ const foodCount = computed(() => {
   return foodIngredients.value.length
 })
 
-onMounted(() => {
+// 自动配置参数（从订单详情页"再次购买"传递）
+const autoConfigParams = ref<{
+  dogId?: string
+  packageCount?: number
+  perMealG?: number
+}>({})
+
+onMounted(async () => {
   const pages = getCurrentPages()
   const currentPage = pages[pages.length - 1] as any
 
   recipeId.value = currentPage.options?.recipeId || ''
 
+  // 解析自动配置参数
+  if (currentPage.options?.autoConfig === 'true') {
+    autoConfigParams.value = {
+      dogId: currentPage.options?.dogId,
+      packageCount: currentPage.options?.packageCount ? Number(currentPage.options.packageCount) : undefined,
+      perMealG: currentPage.options?.perMealG ? Number(currentPage.options.perMealG) : undefined,
+    }
+  }
+
   if (recipeId.value) {
     loadRecipeDetail()
-    loadDogs()
+    await loadDogs()
     loadGlobalConfig()
   }
 })
@@ -1001,9 +1017,21 @@ async function loadDogs() {
     if (res.code === 0 && res.data) {
       dogs.value = res.data
 
-      // 自动选中第一个狗狗
+      // 自动选中狗狗（优先使用自动配置参数中的 dogId）
       if (dogs.value.length > 0 && !selectedDogId.value) {
-        selectDog(dogs.value[0].id)
+        if (autoConfigParams.value.dogId) {
+          // 检查指定的 dogId 是否存在
+          const dogExists = dogs.value.find(d => d.id === autoConfigParams.value.dogId)
+          if (dogExists) {
+            selectDog(autoConfigParams.value.dogId!)
+          } else {
+            // 如果指定的狗狗不存在，选中第一个
+            selectDog(dogs.value[0].id)
+          }
+        } else {
+          // 没有自动配置参数，选中第一个
+          selectDog(dogs.value[0].id)
+        }
       }
     }
   } catch (error) {
@@ -1101,6 +1129,9 @@ async function loadDogCalcResult(dogId: string) {
       })
       console.log('========== [RecipeOrder] loadDogCalcResult 结束 ==========')
 
+      // 应用自动配置参数（如果有）
+      applyAutoConfig()
+
       // 加载价格预览
       loadPricePreview()
     }
@@ -1112,6 +1143,41 @@ async function loadDogCalcResult(dogId: string) {
       title: '饭量计算失败',
       icon: 'none'
     })
+  }
+}
+
+// 应用自动配置参数
+function applyAutoConfig() {
+  const params = autoConfigParams.value
+
+  // 应用每餐饭量（如果有）
+  if (params.perMealG && params.perMealG > 0) {
+    perMealG.value = params.perMealG
+    systemCalculatedPerMealG.value = params.perMealG
+    displayDailyIntakeG.value = params.perMealG * (selectedDog.value?.mealsPerDay || 2)
+    isPerMealModified.value = true
+    console.log('[AutoConfig] 已设置每餐饭量:', params.perMealG)
+  }
+
+  // 应用订购周期（如果有）
+  if (params.packageCount) {
+    // 从 packageCount 推算 cycleDays
+    // 例如：packageCount=14 对应 cycleDays=7（假设每天2餐）
+    // cycleDays = packageCount / mealsPerDay
+    const mealsPerDay = selectedDog.value?.mealsPerDay || 2
+    const cycleDays = Math.round(params.packageCount / mealsPerDay)
+
+    // 检查是否匹配预设选项，如果不匹配则使用自定义
+    const presetOption = cycleOptions.find(opt => opt.packageCount === params.packageCount)
+    if (presetOption) {
+      selectedCycleDays.value = presetOption.days
+      customDays.value = ''
+      console.log('[AutoConfig] 已设置订购周期（预设）:', presetOption.days, '天')
+    } else {
+      selectedCycleDays.value = cycleDays
+      customDays.value = String(cycleDays)
+      console.log('[AutoConfig] 已设置订购周期（自定义）:', cycleDays, '天')
+    }
   }
 }
 

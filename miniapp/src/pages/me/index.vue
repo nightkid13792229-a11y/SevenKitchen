@@ -2,16 +2,16 @@
   <view class="me-container">
     <!-- 未登录状态 -->
     <view v-if="!isLoggedIn" class="not-logged-in">
-      <view class="login-avatar">👤</view>
+      <view class="login-avatar">未登录</view>
       <text class="login-title">未登录</text>
       <button class="login-btn" @tap="goToLogin">微信一键登录</button>
 
       <view class="benefits-section">
         <text class="benefits-title">登录后可享受：</text>
-        <view class="benefit-item">✓ 创建狗狗档案</view>
-        <view class="benefit-item">✓ 个性化定制食谱</view>
-        <view class="benefit-item">✓ 在线下单购买</view>
-        <view class="benefit-item">✓ 查看订单状态</view>
+        <view class="benefit-item">创建狗狗档案</view>
+        <view class="benefit-item">个性化定制食谱</view>
+        <view class="benefit-item">在线下单购买</view>
+        <view class="benefit-item">查看订单状态</view>
       </view>
     </view>
 
@@ -21,7 +21,7 @@
       <view class="user-card" @tap="editUserInfo">
         <view class="user-avatar">
           <image v-if="userInfo.avatarUrl" :src="userInfo.avatarUrl" class="avatar-img" />
-          <text v-else class="avatar-placeholder">👤</text>
+          <text v-else class="avatar-placeholder">头像</text>
         </view>
         <view class="user-info">
           <text class="user-name">{{ userInfo.nickname || '未设置昵称' }}</text>
@@ -30,30 +30,27 @@
             <text class="role-text">{{ roleLabel }}</text>
           </view>
         </view>
-        <text class="card-arrow">›</text>
       </view>
 
       <!-- 功能列表 -->
       <view class="function-list">
         <view class="function-item" @tap="goToDogList">
-          <view class="function-icon">🐕</view>
           <text class="function-text">我的狗狗</text>
           <text class="function-count">({{ userInfo.dogCount || 0 }}只)</text>
-          <text class="arrow">›</text>
         </view>
 
         <view class="function-item" @tap="goToOrderList">
-          <view class="function-icon">📦</view>
           <text class="function-text">我的订单</text>
           <text class="function-count">({{ userInfo.orderCount || 0 }}笔)</text>
-          <text class="arrow">›</text>
         </view>
 
         <view class="function-item" @tap="goToAddressList">
-          <view class="function-icon">📍</view>
           <text class="function-text">收货地址</text>
           <text class="function-count">({{ userInfo.addressCount || 0 }}个)</text>
-          <text class="arrow">›</text>
+        </view>
+
+        <view class="function-item" @tap="goToDiySheetList">
+          <text class="function-text">我的制作单</text>
         </view>
       </view>
 
@@ -62,29 +59,11 @@
         <view class="section-title">员工功能</view>
         <view class="function-list">
           <view class="function-item" @tap="goToProduction">
-            <view class="function-icon">🛠</view>
             <text class="function-text">生产管理</text>
-            <text class="arrow">›</text>
           </view>
           <view class="function-item" @tap="goToInventory">
-            <view class="function-icon">📊</view>
             <text class="function-text">库存管理</text>
-            <text class="arrow">›</text>
           </view>
-        </view>
-      </view>
-
-      <!-- 其他功能 -->
-      <view class="function-list">
-        <view class="function-item" @tap="contactService">
-          <view class="function-icon">📞</view>
-          <text class="function-text">联系客服</text>
-          <text class="arrow">›</text>
-        </view>
-        <view class="function-item" @tap="showAbout">
-          <view class="function-icon">ℹ️</view>
-          <text class="function-text">关于我们</text>
-          <text class="arrow">›</text>
         </view>
       </view>
 
@@ -193,6 +172,13 @@ function goToAddressList() {
   })
 }
 
+// 跳转我的制作单列表
+function goToDiySheetList() {
+  uni.navigateTo({
+    url: '/pages/diy-sheet-list/index'
+  })
+}
+
 // 跳转生产管理（员工功能）
 function goToProduction() {
   uni.showToast({
@@ -213,24 +199,6 @@ function goToInventory() {
 function editUserInfo() {
   uni.navigateTo({
     url: '/pages/owner-info/index'
-  })
-}
-
-// 联系客服
-function contactService() {
-  uni.showModal({
-    title: '联系客服',
-    content: '客服电话：400-123-4567\n工作时间：9:00-18:00',
-    showCancel: false
-  })
-}
-
-// 关于我们
-function showAbout() {
-  uni.showModal({
-    title: '关于七号厨房',
-    content: '七号厨房 v1.0.0\n\n专业的狗狗鲜食定制服务平台\n\n为您的爱犬提供\n科学、健康、定制化的饮食方案',
-    showCancel: false
   })
 }
 
@@ -299,7 +267,8 @@ onShow(() => {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 80rpx;
+  font-size: 28rpx;
+  color: #999;
   margin-bottom: 32rpx;
 }
 
@@ -407,6 +376,11 @@ onShow(() => {
   font-weight: 300;
 }
 
+.avatar-placeholder {
+  font-size: 24rpx;
+  color: #999;
+}
+
 .function-list {
   background: #fff;
   margin-top: 20rpx;
@@ -415,17 +389,13 @@ onShow(() => {
 .function-item {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   padding: 32rpx;
   border-bottom: 1rpx solid #f0f0f0;
 }
 
 .function-item:last-child {
   border-bottom: none;
-}
-
-.function-icon {
-  font-size: 40rpx;
-  margin-right: 24rpx;
 }
 
 .function-text {
@@ -436,12 +406,6 @@ onShow(() => {
 
 .function-count {
   font-size: 24rpx;
-  color: #999;
-  margin-right: 16rpx;
-}
-
-.arrow {
-  font-size: 32rpx;
   color: #999;
 }
 

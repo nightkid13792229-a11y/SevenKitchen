@@ -42,6 +42,7 @@ export class GlobalConfigService {
       packageExampleImageUrl: config.packageExampleImageUrl,
       shippingCompanyLogoUrl: config.shippingCompanyLogoUrl,
       paymentTimeoutMinutes: (config as any).paymentTimeoutMinutes ?? 30,
+      equipmentRecommendations: (config as any).equipmentRecommendations ?? null,
     };
   }
 
@@ -66,6 +67,7 @@ export class GlobalConfigService {
       packageExampleImageUrl: string | null;
       shippingCompanyLogoUrl: string | null;
       paymentTimeoutMinutes: number;
+      equipmentRecommendations: any;
     }>,
   ): Promise<GlobalConfig> {
     // Build update data object with only provided fields
@@ -83,6 +85,7 @@ export class GlobalConfigService {
     if (dto.packageExampleImageUrl !== undefined) updateData.packageExampleImageUrl = dto.packageExampleImageUrl;
     if (dto.shippingCompanyLogoUrl !== undefined) updateData.shippingCompanyLogoUrl = dto.shippingCompanyLogoUrl;
     if (dto.paymentTimeoutMinutes !== undefined) updateData.paymentTimeoutMinutes = dto.paymentTimeoutMinutes;
+    if (dto.equipmentRecommendations !== undefined) updateData.equipmentRecommendations = dto.equipmentRecommendations;
 
     // Update or create the config record
     const config = await this.prisma.globalConfig.upsert({
@@ -109,6 +112,7 @@ export class GlobalConfigService {
       packageExampleImageUrl: config.packageExampleImageUrl,
       shippingCompanyLogoUrl: config.shippingCompanyLogoUrl,
       paymentTimeoutMinutes: (config as any).paymentTimeoutMinutes ?? 30,
+      equipmentRecommendations: (config as any).equipmentRecommendations ?? null,
     };
   }
 
@@ -130,6 +134,7 @@ export class GlobalConfigService {
       packageExampleImageUrl: null,
       shippingCompanyLogoUrl: null,
       paymentTimeoutMinutes: 30,
+      equipmentRecommendations: null,
     };
   }
 }

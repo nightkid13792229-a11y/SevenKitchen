@@ -27,6 +27,12 @@ export enum SupplementCategoryType {
   OTHER = 'OTHER'                // 其他
 }
 
+// 补剂添加时机枚举
+export enum SupplementAddTiming {
+  BEFORE_MIXING = 'BEFORE_MIXING',     // 制作中（须拌匀）
+  BEFORE_MEAL = 'BEFORE_MEAL'          // 饭前（冷却后）
+}
+
 // 类型标签映射
 export const IngredientTypeLabels: Record<IngredientType, string> = {
   [IngredientType.FOOD]: '食材',
@@ -50,6 +56,11 @@ export const SupplementCategoryLabels: Record<SupplementCategoryType, string> = 
   [SupplementCategoryType.OTHER]: '其他'
 }
 
+export const SupplementAddTimingLabels: Record<SupplementAddTiming, string> = {
+  [SupplementAddTiming.BEFORE_MIXING]: '制作中（须拌匀）',
+  [SupplementAddTiming.BEFORE_MEAL]: '饭前（冷却后）'
+}
+
 // 食材属性
 export interface FoodProperties {
   cfct_class: string              // CFCT分类 (e.g. "畜肉类", "蔬菜类")
@@ -64,11 +75,21 @@ export interface ActiveNutrientValue {
   unit: string   // 单位 (mg, g, μg, IU, %)
 }
 
+// 购买链接配置
+export interface PurchaseLinkConfig {
+  url: string                  // 购买链接URL
+  platform: 'TAOBAO' | 'JD' | 'PINDUODUO' | 'OTHER' | 'WEBVIEW'  // 平台类型
+  mini_program_appid?: string  // 小程序appid（跳转小程序时必需）
+  mini_program_path?: string   // 小程序路径（跳转小程序时必需）
+}
+
 // 补剂属性
 export interface SupplementProperties {
   category_type: string                                    // 营养分类
+  add_timing?: string                                      // 添加时机
   active_nutrients: Record<string, ActiveNutrientValue>   // 有效成分浓度表（保存原始值和单位）
   production_loss_rate?: number                            // 个性化损耗率
+  purchase_link?: PurchaseLinkConfig                       // 购买链接配置
 }
 
 // 包材属性

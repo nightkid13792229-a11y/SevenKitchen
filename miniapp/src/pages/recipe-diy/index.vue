@@ -460,6 +460,21 @@ async function loadDogs() {
     if (res.code === 0 && res.data) {
       dogs.value = res.data
       console.log('[RecipeDiy] 狗狗列表加载成功, 数量:', res.data.length)
+
+      // 自动选择第一只狗狗（如果还没有选择狗狗）
+      if (res.data.length > 0 && !selectedDogId.value) {
+        const firstDog = res.data[0]
+        console.log('[RecipeDiy] 自动选择第一只狗狗:', firstDog)
+
+        selectedDogId.value = firstDog.id
+        selectedDog.value = firstDog
+
+        // 调用饭量计算API
+        await loadDogCalc(firstDog.id)
+
+        // 校验生命阶段
+        checkLifeStageMatch()
+      }
     }
   } catch (error) {
     console.error('[RecipeDiy] Load dogs error:', error)
@@ -745,17 +760,10 @@ function navigateToSheet() {
     .map(key => `${key}=${encodeURIComponent(params[key])}`)
     .join('&')
 
-  // TODO: 跳转到制作单页面（暂时提示）
-  uni.showModal({
-    title: '功能开发中',
-    content: '制作单页面正在开发中，敬请期待！',
-    showCancel: false
+  // 跳转到制作单页面
+  uni.navigateTo({
+    url: `/pages/diy-sheet/index?${queryString}`
   })
-
-  // 实际跳转代码（待制作单页面完成后启用）
-  // uni.navigateTo({
-  //   url: `/pages/diy-sheet/index?${queryString}`
-  // })
 }
 
 function goToCreateDog() {

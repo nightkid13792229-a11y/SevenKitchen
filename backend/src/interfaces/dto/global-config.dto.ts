@@ -68,4 +68,7 @@ export class UpdateGlobalConfigDto {
   @Min(5)
   @Max(180)
   paymentTimeoutMinutes?: number;
+
+  @IsOptional()
+  equipmentRecommendations?: any;
 }

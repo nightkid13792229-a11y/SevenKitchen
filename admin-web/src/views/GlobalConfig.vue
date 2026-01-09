@@ -219,6 +219,23 @@
           <div class="form-tip">建议尺寸：200×200px，支持jpg、png格式，大小不超过2MB</div>
         </el-form-item>
 
+        <el-divider content-position="left">制作设备推荐配置</el-divider>
+
+        <el-form-item label="推荐设备管理">
+          <div class="equipment-buttons">
+            <el-button
+              v-for="equipment in defaultEquipments"
+              :key="equipment.id"
+              type="primary"
+              plain
+              @click="handleEditEquipment(equipment.id)"
+            >
+              {{ equipment.name }}
+            </el-button>
+          </div>
+          <span class="form-tip">点击按钮配置各设备的推荐信息</span>
+        </el-form-item>
+
         <el-form-item>
           <el-button type="primary" @click="handleSubmit" :loading="saving">
             保存配置
@@ -333,6 +350,85 @@
         <p style="margin-top: 12px; color: #606266;">{{ previewResult.ruleAppliedDescription }}</p>
       </div>
     </el-dialog>
+
+    <!-- 设备推荐配置对话框 -->
+    <el-dialog
+      v-model="equipmentDialogVisible"
+      :title="`配置${currentEquipment?.name || ''}`"
+      width="700px"
+      @close="handleEquipmentDialogClose"
+    >
+      <el-form :model="editingEquipment" label-width="120px">
+        <el-form-item label="设备名称">
+          <el-input v-model="editingEquipment.name" placeholder="输入设备名称" style="width: 100%" />
+        </el-form-item>
+
+        <el-form-item label="推荐品牌">
+          <el-input v-model="editingEquipment.brand" placeholder="输入推荐品牌" style="width: 100%" />
+        </el-form-item>
+
+        <el-form-item label="规格">
+          <el-input v-model="editingEquipment.specification" placeholder="输入规格信息" style="width: 100%" />
+        </el-form-item>
+
+        <el-form-item label="推荐理由">
+          <el-input
+            v-model="editingEquipment.reason"
+            type="textarea"
+            :rows="3"
+            placeholder="输入推荐理由"
+            style="width: 100%"
+          />
+        </el-form-item>
+
+        <el-form-item label="设备图片">
+          <div class="image-upload-container">
+            <div v-if="editingEquipment.imageUrl" class="uploaded-image">
+              <el-image
+                :src="editingEquipment.imageUrl"
+                fit="contain"
+                style="width: 200px; height: 150px; border-radius: 4px; border: 1px solid #dcdfe6;"
+                :preview-src-list="[editingEquipment.imageUrl]"
+              />
+              <el-button type="danger" size="small" @click="handleRemoveEquipmentImage" style="margin-top: 8px">
+                删除图片
+              </el-button>
+            </div>
+            <div v-else class="upload-placeholder">
+              <el-icon :size="40" color="#dcdfe6"><Picture /></el-icon>
+              <div class="upload-text">点击上传设备图片</div>
+              <el-button type="primary" size="small" @click="handleUploadEquipmentImage">
+                选择图片
+              </el-button>
+            </div>
+          </div>
+          <div class="form-tip">建议尺寸：400×400px，支持jpg、png格式，大小不超过2MB</div>
+        </el-form-item>
+
+        <el-form-item label="购买链接类型">
+          <el-radio-group v-model="editingEquipment.purchaseLinkType">
+            <el-radio value="external">外部链接</el-radio>
+            <el-radio value="miniprogram">小程序</el-radio>
+          </el-radio-group>
+        </el-form-item>
+
+        <el-form-item label="购买链接">
+          <el-input
+            v-model="editingEquipment.purchaseLink"
+            :placeholder="editingEquipment.purchaseLinkType === 'external' ? '输入https://开头的链接' : '输入小程序路径，如：pages/product/detail?id=xxx'"
+            style="width: 100%"
+          />
+          <div class="form-tip">
+            {{ editingEquipment.purchaseLinkType === 'external' ? '外部链接：用户点击后在浏览器中打开' : '小程序路径：用户点击后在当前小程序内跳转' }}
+          </div>
+        </el-form-item>
+
+        <el-form-item>
+          <el-button type="primary" @click="handleSaveEquipment" :loading="savingEquipment">保存</el-button>
+          <el-button @click="equipmentDialogVisible = false">取消</el-button>
+        </el-form-item>
+      </el-form>
+    </el-dialog>
   </div>
 </template>
 
@@ -340,7 +436,7 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Picture } from '@element-plus/icons-vue'
-import { globalConfigApi, type GlobalConfig } from '@/api/globalConfig'
+import { globalConfigApi, type GlobalConfig, type EquipmentRecommendation } from '@/api/globalConfig'
 import { shippingTemplateApi, type ShippingTemplate, type CreateShippingTemplateDto, type ShippingFeeResult } from '@/api/shippingTemplates'
 
 const formRef = ref<FormInstance>()
@@ -358,6 +454,29 @@ const previewWeight = ref(1000)
 const previewResult = ref<ShippingFeeResult | null>(null)
 const currentPreviewTemplateId = ref<string | null>(null)
 
+// 设备推荐相关状态
+const equipmentDialogVisible = ref(false)
+const savingEquipment = ref(false)
+const currentEquipment = ref<{ id: string; name: string } | null>(null)
+const editingEquipment = ref<EquipmentRecommendation>({
+  id: '',
+  name: '',
+  brand: '',
+  specification: '',
+  reason: '',
+  imageUrl: null,
+  purchaseLinkType: 'external',
+  purchaseLink: '',
+})
+
+const defaultEquipments = [
+  { id: 'meat-grinder', name: '绞肉机' },
+  { id: 'blender', name: '搅拌机' },
+  { id: 'grinder', name: '研磨机' },
+  { id: 'vacuum-sealer', name: '真空机' },
+  { id: 'vacuum-bag', name: '真空袋' },
+]
+
 const form = ref<GlobalConfig>({
   id: 'singleton',
   laborHourlyRate: 30.0,
@@ -373,6 +492,7 @@ const form = ref<GlobalConfig>({
   packageExampleImageUrl: null,
   shippingCompanyLogoUrl: null,
   paymentTimeoutMinutes: 30,
+  equipmentRecommendations: null,
 })
 
 const rules: FormRules = {
@@ -681,6 +801,120 @@ const handleCalculatePreview = async () => {
   }
 }
 
+// 设备推荐相关函数
+const handleEditEquipment = (equipmentId: string) => {
+  const equipment = defaultEquipments.find(e => e.id === equipmentId)
+  if (!equipment) return
+
+  currentEquipment.value = equipment
+
+  // 查找已保存的配置
+  const savedConfig = form.value.equipmentRecommendations?.find(r => r.id === equipmentId)
+
+  editingEquipment.value = {
+    id: equipmentId,
+    name: equipment.name,
+    brand: savedConfig?.brand || '',
+    specification: savedConfig?.specification || '',
+    reason: savedConfig?.reason || '',
+    imageUrl: savedConfig?.imageUrl || null,
+    purchaseLinkType: savedConfig?.purchaseLinkType || 'external',
+    purchaseLink: savedConfig?.purchaseLink || '',
+  }
+
+  equipmentDialogVisible.value = true
+}
+
+const handleEquipmentDialogClose = () => {
+  editingEquipment.value = {
+    id: '',
+    name: '',
+    brand: '',
+    specification: '',
+    reason: '',
+    imageUrl: null,
+    purchaseLinkType: 'external',
+    purchaseLink: '',
+  }
+  currentEquipment.value = null
+}
+
+const handleSaveEquipment = async () => {
+  if (!editingEquipment.value.name) {
+    ElMessage.warning('请输入设备名称')
+    return
+  }
+
+  savingEquipment.value = true
+  try {
+    // 获取当前的设备推荐列表
+    let recommendations = form.value.equipmentRecommendations || []
+
+    // 查找并更新或添加新配置
+    const existingIndex = recommendations.findIndex(r => r.id === editingEquipment.value.id)
+    if (existingIndex >= 0) {
+      recommendations[existingIndex] = { ...editingEquipment.value }
+    } else {
+      recommendations.push({ ...editingEquipment.value })
+    }
+
+    // 保存到全局配置
+    await globalConfigApi.update({ equipmentRecommendations: recommendations })
+
+    // 更新本地表单
+    form.value.equipmentRecommendations = recommendations
+
+    ElMessage.success('设备配置保存成功')
+    equipmentDialogVisible.value = false
+  } catch (error) {
+    ElMessage.error('保存设备配置失败')
+    console.error(error)
+  } finally {
+    savingEquipment.value = false
+  }
+}
+
+const handleUploadEquipmentImage = () => {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = 'image/jpeg,image/png'
+
+  input.onchange = async (e: Event) => {
+    const target = e.target as HTMLInputElement
+    const file = target.files?.[0]
+    if (!file) return
+
+    // 验证文件大小
+    if (file.size > 2 * 1024 * 1024) {
+      ElMessage.error('图片大小不能超过2MB')
+      return
+    }
+
+    // 验证文件类型
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      ElMessage.error('只支持JPG和PNG格式')
+      return
+    }
+
+    try {
+      // 上传到临时路径（实际项目中需要调用专门的图片上传接口）
+      const result = await globalConfigApi.uploadPackageImage(file)
+      editingEquipment.value.imageUrl = result.url
+      ElMessage.success('图片上传成功')
+    } catch (error: any) {
+      console.error('Upload error:', error)
+      ElMessage.error(error.message || '上传失败')
+    }
+  }
+
+  input.click()
+}
+
+const handleRemoveEquipmentImage = () => {
+  editingEquipment.value.imageUrl = null
+  ElMessage.success('已删除图片')
+}
+
 onMounted(() => {
   loadConfig()
   loadShippingTemplates()
@@ -749,5 +983,12 @@ onMounted(() => {
 .upload-text {
   font-size: 14px;
   color: #909399;
+}
+
+/* 设备按钮样式 */
+.equipment-buttons {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 </style>

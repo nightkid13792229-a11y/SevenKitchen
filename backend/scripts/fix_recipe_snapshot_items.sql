@@ -79,3 +79,4 @@ SELECT
     COUNT(*) FILTER (WHERE recipe_snapshot::jsonb->'items' IS NULL 
                      OR jsonb_array_length(COALESCE(recipe_snapshot::jsonb->'items', '[]'::jsonb)) = 0) as units_missing_items
 FROM packaging_unit;
+

@@ -24,3 +24,4 @@ export interface OrderStatusHistoryRepository {
    */
   findByOrderId(orderId: string): Promise<OrderStatusHistory[]>;
 }
+

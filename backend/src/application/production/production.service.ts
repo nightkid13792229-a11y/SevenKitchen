@@ -215,8 +215,8 @@ export class ProductionService {
         // The batch is created, but some items may have been allocated to another batch concurrently
       }
 
-      // Phase 8.14: Transition orders from PAID → WAITING_FOR_PRODUCTION → IN_PRODUCTION
-      // This ensures orders are in the correct status for batch completion detection
+      // Phase 9: Transition orders from PAID → IN_PRODUCTION
+      // Simplified flow aligned with e-commerce standards
       const uniqueOrderIds = new Set(orders.map((o) => o.id));
       let transitionedCount = 0;
       for (const orderId of uniqueOrderIds) {
@@ -226,37 +226,9 @@ export class ProductionService {
         }
 
         try {
-          // Transition from PAID → WAITING_FOR_PRODUCTION → IN_PRODUCTION
+          // Phase 9: Direct transition PAID → IN_PRODUCTION (removed WAITING_FOR_PRODUCTION)
           // Phase 8.18: Log status transitions to history
           if (order.status === OrderStatus.PAID) {
-            const fromStatus = order.status;
-            order.transitionTo(OrderStatus.WAITING_FOR_PRODUCTION);
-            const savedOrder = await this.orderRepository.save(order);
-            // Log status transition
-            try {
-              await this.statusHistoryRepository.append(
-                savedOrder.id,
-                fromStatus,
-                OrderStatus.WAITING_FOR_PRODUCTION,
-                'system',
-                null,
-                { batchId, triggeredBy: 'batch_creation' },
-              );
-            } catch (error) {
-              // Phase 8.18: Log errors at ERROR level and re-throw to prevent silent failures
-              this.logger.error(
-                `[History] ERROR: Failed to log status transition for order ${orderId}:`,
-                error,
-              );
-              // Re-throw to fail fast and prevent silent failures
-              throw error;
-            }
-            this.logger.log(
-              `Order ${orderId} transitioned from PAID to WAITING_FOR_PRODUCTION after batch ${batchId} creation`,
-            );
-          }
-
-          if (order.status === OrderStatus.WAITING_FOR_PRODUCTION) {
             const fromStatus = order.status;
             order.transitionTo(OrderStatus.IN_PRODUCTION);
             const savedOrder = await this.orderRepository.save(order);
@@ -281,7 +253,7 @@ export class ProductionService {
               throw error;
             }
             this.logger.log(
-              `Order ${orderId} transitioned from WAITING_FOR_PRODUCTION to IN_PRODUCTION after batch ${batchId} creation`,
+              `Order ${orderId} transitioned from PAID to IN_PRODUCTION after batch ${batchId} creation`,
             );
           }
         } catch (error: any) {
@@ -415,9 +387,9 @@ export class ProductionService {
     // Root cause fix: Match orders by item ID from sourceOrderItemIds (primary key).
     // productionBatchId check is secondary validation but not required if item ID matches.
     const orderIds = new Set<string>();
+    // Phase 9: Simplified status check - only check PAID and IN_PRODUCTION
     const statusesToCheck = [
       OrderStatus.IN_PRODUCTION,
-      OrderStatus.WAITING_FOR_PRODUCTION,
       OrderStatus.PAID,
     ];
 
@@ -472,63 +444,19 @@ export class ProductionService {
     // State machine: IN_PRODUCTION -> READY_FOR_PACKAGING -> READY_FOR_SHIPMENT
     let transitionedCount = 0;
     for (const orderId of orderIds) {
-      let order = await this.orderRepository.findById(orderId);
+      const order = await this.orderRepository.findById(orderId);
       if (!order) {
         continue;
       }
 
-      // If already in target state, skip
-      if (order.status === OrderStatus.READY_FOR_SHIPMENT) {
-        this.logger.debug(
-          `Order ${orderId} is already READY_FOR_SHIPMENT, skipping transition`,
-        );
-        transitionedCount++;
-        continue;
-      }
-
       try {
-        // Transition through the state machine step by step
-        // Transition through the state machine step by step
-        // Phase 8.18: Log status transitions to history
-        // Step 1: PAID -> WAITING_FOR_PRODUCTION
+        // Phase 9: Simplified flow - only PAID → IN_PRODUCTION
+        // Orders stay in IN_PRODUCTION after batch completion (manual shipping required)
         if (order.status === OrderStatus.PAID) {
-          const fromStatus = order.status;
-          order.transitionTo(OrderStatus.WAITING_FOR_PRODUCTION);
-          const savedOrder = await this.orderRepository.save(order);
-          // Log status transition
-          try {
-            await this.statusHistoryRepository.append(
-              savedOrder.id,
-              fromStatus,
-              OrderStatus.WAITING_FOR_PRODUCTION,
-              'system',
-              null,
-              { batchId, triggeredBy: 'batch_completion' },
-            );
-          } catch (error) {
-            // Phase 8.18: Log errors at ERROR level and re-throw to prevent silent failures
-            this.logger.error(
-              `[History] ERROR: Failed to log status transition for order ${orderId}:`,
-              error,
-            );
-            // Re-throw to fail fast and prevent silent failures
-            throw error;
-          }
-          this.logger.log(
-            `Order ${orderId} transitioned from PAID to WAITING_FOR_PRODUCTION during batch ${batchId} completion`,
-          );
-          // Reload order to get updated status
-          const updatedOrder = await this.orderRepository.findById(orderId);
-          if (updatedOrder) {
-            order = updatedOrder;
-          }
-        }
-
-        // Step 2: WAITING_FOR_PRODUCTION -> IN_PRODUCTION
-        if (order.status === OrderStatus.WAITING_FOR_PRODUCTION) {
           const fromStatus = order.status;
           order.transitionTo(OrderStatus.IN_PRODUCTION);
           const savedOrder = await this.orderRepository.save(order);
+          transitionedCount++;
           // Log status transition
           try {
             await this.statusHistoryRepository.append(
@@ -549,96 +477,28 @@ export class ProductionService {
             throw error;
           }
           this.logger.log(
-            `Order ${orderId} transitioned from WAITING_FOR_PRODUCTION to IN_PRODUCTION during batch ${batchId} completion`,
+            `Order ${orderId} transitioned from PAID to IN_PRODUCTION after batch ${batchId} completion`,
           );
-          // Reload order to get updated status
-          const updatedOrder = await this.orderRepository.findById(orderId);
-          if (updatedOrder) {
-            order = updatedOrder;
-          }
-        }
-
-        // Step 3: IN_PRODUCTION -> READY_FOR_PACKAGING
-        if (order.status === OrderStatus.IN_PRODUCTION) {
-          const fromStatus = order.status;
-          order.transitionTo(OrderStatus.READY_FOR_PACKAGING);
-          const savedOrder = await this.orderRepository.save(order);
-          // Log status transition
-          try {
-            await this.statusHistoryRepository.append(
-              savedOrder.id,
-              fromStatus,
-              OrderStatus.READY_FOR_PACKAGING,
-              'system',
-              null,
-              { batchId, triggeredBy: 'batch_completion' },
-            );
-          } catch (error) {
-            // Phase 8.18: Log errors at ERROR level and re-throw to prevent silent failures
-            this.logger.error(
-              `[History] ERROR: Failed to log status transition for order ${orderId}:`,
-              error,
-            );
-            // Re-throw to fail fast and prevent silent failures
-            throw error;
-          }
-          this.logger.log(
-            `Order ${orderId} transitioned from IN_PRODUCTION to READY_FOR_PACKAGING during batch ${batchId} completion`,
-          );
-          // Reload order to get updated status
-          const updatedOrder = await this.orderRepository.findById(orderId);
-          if (updatedOrder) {
-            order = updatedOrder;
-          }
-        }
-
-        // Step 4: READY_FOR_PACKAGING -> READY_FOR_SHIPMENT
-        if (order.status === OrderStatus.READY_FOR_PACKAGING) {
-          const fromStatus = order.status;
-          order.transitionTo(OrderStatus.READY_FOR_SHIPMENT);
-          const savedOrder = await this.orderRepository.save(order);
-          transitionedCount++;
-          // Log status transition
-          try {
-            await this.statusHistoryRepository.append(
-              savedOrder.id,
-              fromStatus,
-              OrderStatus.READY_FOR_SHIPMENT,
-              'system',
-              null,
-              { batchId, triggeredBy: 'batch_completion' },
-            );
-          } catch (error) {
-            // Phase 8.18: Log errors at ERROR level and re-throw to prevent silent failures
-            this.logger.error(
-              `[History] ERROR: Failed to log status transition for order ${orderId}:`,
-              error,
-            );
-            // Re-throw to fail fast and prevent silent failures
-            throw error;
-          }
-          this.logger.log(
-            `Order ${orderId} auto-transitioned to READY_FOR_SHIPMENT after batch ${batchId} completion`,
-          );
-        } else if (order.status === OrderStatus.READY_FOR_SHIPMENT) {
-          // Already in target state (idempotent)
+        } else if (order.status === OrderStatus.IN_PRODUCTION) {
+          // Already in IN_PRODUCTION (idempotent)
           transitionedCount++;
           this.logger.debug(
-            `Order ${orderId} is already READY_FOR_SHIPMENT, skipping transition`,
+            `Order ${orderId} is already IN_PRODUCTION, staying in this state after batch ${batchId} completion`,
           );
         }
       } catch (error) {
         this.logger.warn(
-          `Failed to transition order ${orderId} to READY_FOR_SHIPMENT: ${error}`,
+          `Failed to transition order ${orderId} to IN_PRODUCTION: ${error}`,
         );
       }
     }
 
     this.logger.log(
-      `Batch ${batchId} completion: ${transitionedCount} orders transitioned to READY_FOR_SHIPMENT`,
+      `Batch ${batchId} completion: ${transitionedCount} orders in IN_PRODUCTION status`,
     );
 
     return true;
   }
 }
+
 

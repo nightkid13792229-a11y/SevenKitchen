@@ -39,3 +39,4 @@ export class DiySheetResponseDto {
   })
   recommendedDailyIntakeG?: number;
 }
+

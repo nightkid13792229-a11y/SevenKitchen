@@ -21,23 +21,51 @@
         class="order-item"
         @tap="viewOrder(order.id)"
       >
-        <!-- 订单类型标签 -->
-        <view class="order-type-tag">💳 鲜食制作订单</view>
-
+        <!-- 订单时间和状态 -->
         <view class="order-header">
           <text class="order-time">{{ formatTime(order.createdAt) }}</text>
           <text class="order-status" :style="{ color: getStatusColor(order.status) }">
-            {{ getStatusIcon(order.status) }} {{ getStatusText(order.status) }}
+            {{ getStatusText(order.status) }}
           </text>
         </view>
 
-        <!-- 狗狗信息 -->
-        <view class="order-dogs">
-          <text class="dogs-icon">🐶</text>
-          <text class="dogs-text">{{ formatDogsText(order) }}</text>
+        <!-- 商品数量 -->
+        <view class="order-summary">
+          <text class="summary-text">{{ order.itemCount || 0 }}件商品</text>
         </view>
 
-        <!-- 金额（只显示总价）-->
+        <!-- 如果有详细商品信息，显示更多信息 -->
+        <template v-if="order.firstItem">
+          <!-- 狗狗信息 -->
+          <view class="order-dogs">
+            <text class="dogs-text">{{ formatDogInfo(order) }}</text>
+          </view>
+
+          <!-- 商品信息：食谱名称、总餐数、每餐重量 -->
+          <view class="order-items">
+            <view class="recipe-header">
+              <image
+                v-if="getRecipeCoverImage(order)"
+                class="recipe-cover"
+                :src="getRecipeCoverImage(order)"
+                mode="aspectFill"
+              />
+              <text class="recipe-name">{{ getRecipeName(order) }}</text>
+            </view>
+            <view class="meal-info">
+              <text class="meal-text">共{{ getTotalMeals(order) }}餐</text>
+              <text class="meal-separator">·</text>
+              <text class="meal-text">每餐{{ getMealWeight(order) }}g</text>
+            </view>
+          </view>
+
+          <!-- 收货地址 -->
+          <view class="order-address" v-if="order.address">
+            <text class="address-text">{{ formatAddress(order.address) }}</text>
+          </view>
+        </template>
+
+        <!-- 金额 -->
         <view class="order-amount">
           <text class="amount-label">订单金额:</text>
           <text class="amount-value">¥{{ formatAmount(order.totalAmount) }}</text>
@@ -66,7 +94,27 @@ interface Order {
   totalAmount?: number
   itemCount?: number
   createdAt?: string
-  items?: any[]
+  firstItem?: {
+    dog?: {
+      name?: string
+      breedName?: string
+      weightKg?: number
+      mealsPerDay?: number
+    }
+    recipeSnapshot?: {
+      id: string
+      name: string
+      coverImageUrl?: string | null
+    }
+    packageCount: number
+    packageSpecG: number
+    dailyIntakeG?: number
+  }
+  address?: {
+    recipientName: string
+    regionText: string
+    detailAddress: string
+  }
 }
 
 // 状态筛选Tab
@@ -76,8 +124,10 @@ const statusTabs = ref<Array<{label: string, value: string, count: number}>>([
   { label: '全部', value: 'ALL', count: 0 },
   { label: '待付款', value: 'PENDING_PAYMENT', count: 0 },
   { label: '生产中', value: 'IN_PRODUCTION', count: 0 },
+  { label: '急冻中', value: 'FREEZING', count: 0 },
   { label: '已发货', value: 'SHIPPED', count: 0 },
-  { label: '已完成', value: 'COMPLETED', count: 0 }
+  { label: '已完成', value: 'COMPLETED', count: 0 },
+  { label: '售后中', value: 'AFTERSALE', count: 0 }
 ])
 
 const allOrders = ref<Order[]>([])
@@ -111,6 +161,11 @@ function loadOrders() {
         code: res.code,
         orderCount: res.data?.length || 0,
       })
+      console.log('[OrdersList] Orders Data:', JSON.stringify(res.data, null, 2))
+      if (res.data && res.data.length > 0) {
+        console.log('[OrdersList] First Order:', JSON.stringify(res.data[0], null, 2))
+        console.log('[OrdersList] First Order Items:', res.data[0].items)
+      }
     }
     if (res.code === 0 && res.data) {
       allOrders.value = res.data
@@ -125,29 +180,23 @@ function loadOrders() {
 }
 
 // 更新各状态订单数量
+// Phase 9: Simplified status counts aligned with e-commerce standards
+// Phase 9.1: Added FREEZING and AFTERSALE status counts
 function updateStatusCounts() {
   statusTabs.value[0].count = allOrders.value.length // 全部
   statusTabs.value[1].count = allOrders.value.filter(o => o.status === 'PENDING_PAYMENT').length
-  statusTabs.value[2].count = allOrders.value.filter(o =>
-    o.status === 'IN_PRODUCTION' ||
-    o.status === 'READY_FOR_PACKAGING' ||
-    o.status === 'READY_FOR_SHIPMENT'
-  ).length
-  statusTabs.value[3].count = allOrders.value.filter(o => o.status === 'SHIPPED').length
-  statusTabs.value[4].count = allOrders.value.filter(o => o.status === 'COMPLETED').length
+  statusTabs.value[2].count = allOrders.value.filter(o => o.status === 'IN_PRODUCTION').length
+  statusTabs.value[3].count = allOrders.value.filter(o => o.status === 'FREEZING').length
+  statusTabs.value[4].count = allOrders.value.filter(o => o.status === 'SHIPPED').length
+  statusTabs.value[5].count = allOrders.value.filter(o => o.status === 'COMPLETED').length
+  statusTabs.value[6].count = allOrders.value.filter(o => o.status === 'AFTERSALE').length
 }
 
 // 根据选中状态筛选订单
+// Phase 9: Simplified filter logic
 function filterOrders() {
   if (selectedStatus.value === 'ALL') {
     orders.value = allOrders.value
-  } else if (selectedStatus.value === 'IN_PRODUCTION') {
-    // 生产中包含多个状态
-    orders.value = allOrders.value.filter(o =>
-      o.status === 'IN_PRODUCTION' ||
-      o.status === 'READY_FOR_PACKAGING' ||
-      o.status === 'READY_FOR_SHIPMENT'
-    )
   } else {
     orders.value = allOrders.value.filter(o => o.status === selectedStatus.value)
   }
@@ -181,69 +230,99 @@ function formatAmount(amount?: number): string {
 }
 
 function getStatusText(status: string): string {
+  // Phase 9: Simplified status text aligned with e-commerce standards
+  // Phase 9.1: Added FREEZING and AFTERSALE status text
   const statusMap: Record<string, string> = {
     INIT: '待确认',
     PENDING_PAYMENT: '待付款',
     PAID: '已付款',
-    WAITING_FOR_PRODUCTION: '待生产',
-    IN_PRODUCTION: '生产中',
-    READY_FOR_PACKAGING: '生产中',
-    READY_FOR_SHIPMENT: '急冻中，待发货',
+    IN_PRODUCTION: '制作中',
+    FREEZING: '急冻中',
     SHIPPED: '已发货',
     COMPLETED: '已完成',
-    CANCELLED: '已取消'
+    CANCELLED: '已取消',
+    AFTERSALE: '售后中'
   }
   return statusMap[status] || status
 }
 
-function getStatusIcon(status: string): string {
-  const iconMap: Record<string, string> = {
-    INIT: '📝',
-    PENDING_PAYMENT: '💳',
-    PAID: '✓',
-    WAITING_FOR_PRODUCTION: '⏳',
-    IN_PRODUCTION: '👨‍🍳',
-    READY_FOR_PACKAGING: '👨‍🍳',
-    READY_FOR_SHIPMENT: '❄️',
-    SHIPPED: '🚚',
-    COMPLETED: '✅',
-    CANCELLED: '✕'
-  }
-  return iconMap[status] || ''
-}
-
 function getStatusColor(status: string): string {
+  // Phase 9: Simplified status colors aligned with e-commerce standards
+  // Phase 9.1: Added FREEZING and AFTERSALE status colors
   const colorMap: Record<string, string> = {
     INIT: '#999',
     PENDING_PAYMENT: '#ff9800',
     PAID: '#1890ff',
-    WAITING_FOR_PRODUCTION: '#1890ff',
     IN_PRODUCTION: '#1890ff',
-    READY_FOR_PACKAGING: '#1890ff',
-    READY_FOR_SHIPMENT: '#722ed1',
+    FREEZING: '#722ed1',
     SHIPPED: '#52c41a',
     COMPLETED: '#52c41a',
-    CANCELLED: '#999'
+    CANCELLED: '#999',
+    AFTERSALE: '#f5222d'
   }
   return colorMap[status] || '#999'
 }
 
-function formatDogsText(order: Order): string {
-  if (!order.items || order.items.length === 0) {
-    return order.itemCount ? `${order.itemCount}件商品` : ''
+function formatDogInfo(order: Order): string {
+  if (!order.firstItem || !order.firstItem.dog) {
+    return ''
   }
 
-  // 简化显示：只显示狗狗数量和商品数量
-  const uniqueDogs = new Set(order.items.map(item => item.dogId))
-  const dogCount = uniqueDogs.size
-  const itemCount = order.items.length
+  const dog = order.firstItem.dog
+  const dogName = dog.name || ''
+  const breedName = dog.breedName || ''
+  const weightKg = dog.weightKg || 0
 
-  if (dogCount === 1) {
-    const firstDog = order.items[0]
-    return `${firstDog.dogName || ''} (${itemCount}件商品)`
-  } else {
-    return `${dogCount}只狗狗 (${itemCount}件商品)`
+  const parts = [dogName]
+  if (breedName) parts.push(breedName)
+  if (weightKg > 0) parts.push(`${weightKg}kg`)
+
+  return parts.join(' · ')
+}
+
+function getRecipeName(order: Order): string {
+  if (!order.firstItem || !order.firstItem.recipeSnapshot) {
+    return ''
   }
+  return order.firstItem.recipeSnapshot.name || ''
+}
+
+function getRecipeCoverImage(order: Order): string {
+  if (!order.firstItem || !order.firstItem.recipeSnapshot) {
+    return ''
+  }
+  return order.firstItem.recipeSnapshot.coverImageUrl || ''
+}
+
+function getTotalMeals(order: Order): number {
+  if (!order.firstItem) {
+    return 0
+  }
+  return order.firstItem.packageCount || 0
+}
+
+function getMealWeight(order: Order): number {
+  if (!order.firstItem) {
+    return 0
+  }
+
+  const firstItem = order.firstItem
+  if (firstItem.dailyIntakeG && firstItem.dog?.mealsPerDay) {
+    return Math.round(firstItem.dailyIntakeG / firstItem.dog.mealsPerDay)
+  }
+
+  // 如果没有每日摄入量，使用包装规格
+  return firstItem.packageSpecG || 0
+}
+
+function formatAddress(address?: { regionText?: string }): string {
+  if (!address || !address.regionText) {
+    return ''
+  }
+
+  // 只显示第一个地区（市级）
+  const regions = address.regionText.split(/\s+/)
+  return regions[0] || address.regionText
 }
 </script>
 
@@ -314,16 +393,6 @@ function formatDogsText(order: Order): string {
   box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
 }
 
-.order-type-tag {
-  font-size: 24rpx;
-  color: #1890ff;
-  margin-bottom: 16rpx;
-  padding: 8rpx 16rpx;
-  background-color: #f0f9ff;
-  border-radius: 6rpx;
-  display: inline-block;
-}
-
 .order-header {
   display: flex;
   justify-content: space-between;
@@ -344,23 +413,77 @@ function formatDogsText(order: Order): string {
 }
 
 .order-dogs {
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
+  margin-bottom: 16rpx;
+}
+
+.dogs-text {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+.order-summary {
   margin-bottom: 16rpx;
   padding: 12rpx;
   background-color: #f9f9f9;
   border-radius: 8rpx;
 }
 
-.dogs-icon {
-  font-size: 28rpx;
+.summary-text {
+  font-size: 26rpx;
+  color: #666;
 }
 
-.dogs-text {
-  font-size: 26rpx;
-  color: #333;
+.order-items {
+  margin-bottom: 16rpx;
+  padding-left: 12rpx;
+}
+
+.recipe-header {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 8rpx;
+}
+
+.recipe-cover {
+  width: 80rpx;
+  height: 80rpx;
+  border-radius: 8rpx;
+  flex-shrink: 0;
+}
+
+.recipe-name {
   flex: 1;
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+.meal-info {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+}
+
+.meal-text {
+  font-size: 26rpx;
+  color: #666;
+}
+
+.meal-separator {
+  font-size: 26rpx;
+  color: #ccc;
+}
+
+.order-address {
+  margin-bottom: 16rpx;
+  padding-left: 12rpx;
+}
+
+.address-text {
+  font-size: 26rpx;
+  color: #666;
 }
 
 .order-amount {

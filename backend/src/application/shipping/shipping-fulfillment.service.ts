@@ -44,11 +44,11 @@ export class ShippingFulfillmentService {
 
   /**
    * List orders ready for shipment
-   * Phase 8.14: Returns orders with READY_FOR_SHIPMENT status
+   * Phase 9: Returns orders with IN_PRODUCTION status (simplified from READY_FOR_SHIPMENT)
    */
   async listOrdersReadyForShipment(): Promise<OrderReadyForShipmentDto[]> {
     const orders = await this.orderRepository.findByStatus(
-      OrderStatus.READY_FOR_SHIPMENT,
+      OrderStatus.IN_PRODUCTION,
     );
 
     return orders.map((order) => ({
@@ -70,7 +70,7 @@ export class ShippingFulfillmentService {
 
   /**
    * Mark order as shipped with tracking information
-   * Phase 8.14: Transitions order from READY_FOR_SHIPMENT to SHIPPED
+   * Phase 9: Transitions order from IN_PRODUCTION to SHIPPED (simplified from READY_FOR_SHIPMENT)
    * Phase 8.18: Logs status transition to history
    */
   async markOrderAsShipped(
@@ -84,10 +84,10 @@ export class ShippingFulfillmentService {
       throw new NotFoundException(`Order not found: ${orderId}`);
     }
 
-    // Validate order is in READY_FOR_SHIPMENT status
-    if (order.status !== OrderStatus.READY_FOR_SHIPMENT) {
+    // Phase 9: Validate order is in IN_PRODUCTION status (changed from READY_FOR_SHIPMENT)
+    if (order.status !== OrderStatus.IN_PRODUCTION) {
       throw new BadRequestException(
-        `Cannot mark order as shipped from status: ${order.status}. Order must be in READY_FOR_SHIPMENT status.`,
+        `Cannot mark order as shipped from status: ${order.status}. Order must be in IN_PRODUCTION status.`,
       );
     }
 
@@ -147,4 +147,5 @@ export class ShippingFulfillmentService {
     return reloadedOrder;
   }
 }
+
 

@@ -173,3 +173,4 @@ echo "  2. Check service logs: sudo journalctl -u sevenkitchen-backend -f"
 echo "  3. Test health endpoint: curl http://127.0.0.1:${PORT:-3000}/api/v1/health"
 echo "  4. Test public access: curl http://<your-public-ip>:${PORT:-3000}/api/v1/health"
 echo ""
+

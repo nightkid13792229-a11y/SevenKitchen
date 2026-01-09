@@ -140,3 +140,4 @@ export class DogDetailResponseDto {
   calcResult?: DogCalcResultDto | null;
 }
 
+

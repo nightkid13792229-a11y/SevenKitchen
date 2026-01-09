@@ -4,7 +4,7 @@
 // Automatically uses IP address in WeChat DevTools for stable development
 
 const DEFAULT_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1'
-const DEV_BASE_URL = 'http://192.168.3.50:3000/api/v1' // 本地开发服务器（使用局域网IP，微信开发者工具无法访问localhost）
+const DEV_BASE_URL = 'http://localhost:3000/api/v1' // 本地开发服务器（开发者工具可用localhost，真机调试需改为局域网IP）
 const STORAGE_KEY = 'api_base_url'
 
 /**
@@ -14,8 +14,13 @@ const STORAGE_KEY = 'api_base_url'
 function isDevTools(): boolean {
   try {
     const systemInfo = uni.getSystemInfoSync()
-    return systemInfo.platform?.toLowerCase() === 'devtools'
+    const platform = systemInfo.platform?.toLowerCase() || ''
+    console.log('[Config Debug] Platform:', systemInfo.platform, 'Lowercased:', platform)
+    const result = platform === 'devtools'
+    console.log('[Config Debug] isDevTools result:', result)
+    return result
   } catch (err) {
+    console.log('[Config Debug] getSystemInfoSync error:', err)
     // If getSystemInfoSync fails, assume not in devtools
     return false
   }
@@ -31,7 +36,13 @@ function isDevTools(): boolean {
  * Storage takes precedence to allow runtime configuration
  */
 export function getBaseUrl(): string {
-  // Priority 1: Check storage override (manual config)
+  // 开发环境：直接使用localhost，不读取Storage（避免缓存问题）
+  if (isDevTools()) {
+    console.debug('[Config] Detected DevTools, using dev BASE_URL:', DEV_BASE_URL)
+    return DEV_BASE_URL
+  }
+
+  // 生产环境：允许使用Storage配置（用于网络设置页面）
   try {
     const stored = uni.getStorageSync(STORAGE_KEY)
     if (stored && typeof stored === 'string' && stored.trim()) {
@@ -41,14 +52,8 @@ export function getBaseUrl(): string {
   } catch (err) {
     console.warn('Failed to read BASE_URL from storage:', err)
   }
-  
-  // Priority 2: Auto-detect DevTools and use IP
-  if (isDevTools()) {
-    console.debug('[Config] Detected DevTools, using dev BASE_URL:', DEV_BASE_URL)
-    return DEV_BASE_URL
-  }
-  
-  // Priority 3: Production default
+
+  // 默认生产环境地址
   console.debug('[Config] Using production BASE_URL:', DEFAULT_BASE_URL)
   return DEFAULT_BASE_URL
 }

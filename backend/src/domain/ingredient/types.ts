@@ -68,3 +68,4 @@ export interface PackagingProperties {
   is_consumable: boolean; // true=消耗品(随单扣减), false=固定资产
   linked_item_id?: string; // 关联配件 (e.g. 4号箱绑定4号袋)
 }
+

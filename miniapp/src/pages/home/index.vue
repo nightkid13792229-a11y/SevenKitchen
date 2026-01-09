@@ -73,7 +73,7 @@
     <view class="empty-dog-section" v-else>
       <view class="empty-icon">🐕</view>
       <text class="empty-title">还没有狗狗档案</text>
-      <text class="empty-desc">创建档案后，即可获得专属喂食建议</text>
+      <text class="empty-desc">创建档案后，才能使用食谱饭量计算等功能</text>
       <button class="create-btn" @tap="goToDogCreate">创建档案</button>
     </view>
 
@@ -422,6 +422,12 @@ onMounted(() => {
 onShow(() => {
   console.log('[Home] onShow - 重新检查登录状态')
   console.log('[Home] Current dogs count:', dogs.value.length)
+
+  // 更新自定义 tabBar
+  if (typeof wx.getTabBar === 'function' && wx.getTabBar()) {
+    wx.getTabBar().checkUserRole()
+    wx.getTabBar().updateSelected()
+  }
 
   checkLoginStatus()
 

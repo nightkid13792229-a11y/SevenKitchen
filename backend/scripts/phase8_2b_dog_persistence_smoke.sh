@@ -144,3 +144,4 @@ echo -e "${YELLOW}3. Run: GET /api/v1/dogs (with same token) to verify dog still
 echo "✓ Phase 8.2B Dog Persistence Smoke: PASS"
 exit 0
 
+

@@ -140,9 +140,9 @@
       }
     },
     {
-      "path": "pages/owner-info/index",
+      "path": "pages/favorite-recipes/index",
       "style": {
-        "navigationBarTitleText": "主人信息"
+        "navigationBarTitleText": "收藏的食谱"
       }
     },
     {
@@ -180,6 +180,36 @@
       "style": {
         "navigationBarTitleText": "我的制作单"
       }
+    },
+    {
+      "path": "pages/staff-workbench/index",
+      "style": {
+        "navigationBarTitleText": "工作台"
+      }
+    },
+    {
+      "path": "pages/staff-purchasing/index",
+      "style": {
+        "navigationBarTitleText": "采购管理"
+      }
+    },
+    {
+      "path": "pages/staff-production/index",
+      "style": {
+        "navigationBarTitleText": "生产管理"
+      }
+    },
+    {
+      "path": "pages/staff-shipping/index",
+      "style": {
+        "navigationBarTitleText": "发货管理"
+      }
+    },
+    {
+      "path": "pages/aftersale-apply/index",
+      "style": {
+        "navigationBarTitleText": "申请售后"
+      }
     }
   ],
   "globalStyle": {
@@ -189,6 +219,7 @@
     "backgroundColor": "#f5f5f5"
   },
   "tabBar": {
+    "custom": true,
     "color": "#7A7E83",
     "selectedColor": "#1890ff",
     "backgroundColor": "#ffffff",
@@ -199,6 +230,10 @@
         "iconPath": "static/tabbar/home.png",
         "selectedIconPath": "static/tabbar/home-active.png",
         "text": "首页"
+      },
+      {
+        "pagePath": "pages/staff-workbench/index",
+        "text": "工作台"
       },
       {
         "pagePath": "pages/me/index",

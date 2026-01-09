@@ -89,3 +89,4 @@ export class DogBreed {
     return ageYears >= this.seniorAgeYears;
   }
 }
+

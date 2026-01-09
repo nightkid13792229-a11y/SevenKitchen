@@ -870,6 +870,455 @@ export class AdminController {
   }
 
   // ==========================================
+  // Admin Order Management Endpoints
+  // ==========================================
+
+  /**
+   * GET /admin/orders - List all orders with filtering, pagination, and search
+   */
+  @Get('orders')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List all orders (admin-only, cross-customer)' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order list with pagination',
+    schema: {
+      type: 'object',
+      properties: {
+        list: {
+          type: 'array',
+          items: { $ref: '#/components/schemas/OrderDto' },
+        },
+        total: { type: 'number' },
+      },
+    },
+  })
+  @ApiResponse({ status: 400, description: 'Invalid query parameters' })
+  async listOrders(@Query() query: any): Promise<ApiResponseDto<any> | ApiResponseDto<null>> {
+    try {
+      // Parse query parameters
+      const params = {
+        keyword: query.keyword,
+        status: query.status,
+        type: query.type,
+        startDate: query.startDate ? new Date(query.startDate) : undefined,
+        endDate: query.endDate ? new Date(query.endDate) : undefined,
+        page: query.page ? parseInt(query.page, 10) : 1,
+        pageSize: query.pageSize ? parseInt(query.pageSize, 10) : 20,
+      };
+
+      const result = await this.orderService.listAllOrders(params);
+
+      // Map orders to DTOs (simplified - would use proper mapper in production)
+      const list = result.list.map((order) => ({
+        id: order.id,
+        customerId: order.customerId,
+        customerName: 'Customer', // TODO: Fetch from customer relation
+        customerPhone: '---', // TODO: Fetch from customer relation
+        dogId: order.dogId,
+        dogName: '---', // TODO: Fetch from dog relation
+        status: order.status,
+        type: order.type,
+        amountTotal: order.amountTotal,
+        addressCity: '---', // TODO: Fetch from address relation
+        addressDetail: '---', // TODO: Fetch from address relation
+        createdAt: order.createdAt.toISOString(),
+        targetProductionDate: order.targetProductionDate?.toISOString() ?? null,
+      }));
+
+      return ApiResponseDto.success({
+        list,
+        total: result.total,
+      });
+    } catch (error: any) {
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * GET /admin/orders/stats - Get order statistics
+   */
+  @Get('orders/stats')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get order statistics grouped by status' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order statistics',
+    schema: {
+      type: 'object',
+      properties: {
+        total: { type: 'number' },
+        pendingPayment: { type: 'number' },
+        paid: { type: 'number' },
+        inProduction: { type: 'number' },
+        readyForShipment: { type: 'number' },
+        shipped: { type: 'number' },
+        completed: { type: 'number' },
+        cancelled: { type: 'number' },
+      },
+    },
+  })
+  async getOrderStats(): Promise<ApiResponseDto<any>> {
+    try {
+      const stats = await this.orderService.getOrderStats();
+      return ApiResponseDto.success(stats);
+    } catch (error: any) {
+      throw error;
+    }
+  }
+
+  /**
+   * GET /admin/orders/:orderId - Get order details
+   */
+  @Get('orders/:orderId')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get order details (admin-only)' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order details',
+    type: OrderDto,
+  })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async getOrderDetail(
+    @Param('orderId') orderId: string,
+  ): Promise<ApiResponseDto<OrderDto> | ApiResponseDto<null>> {
+    try {
+      const order = await this.orderService.getOrderById(orderId);
+      if (!order) {
+        return ApiResponseDto.error(404, 'Order not found');
+      }
+
+      // Map to DTO (simplified - would use proper mapper in production)
+      const orderDto: OrderDto = {
+        id: order.id,
+        customerId: order.customerId,
+        dogId: order.dogId,
+        addressId: order.addressId,
+        status: order.status,
+        type: order.type,
+        targetProductionDate: order.targetProductionDate
+          ? order.targetProductionDate.toISOString()
+          : null,
+        totalAmount: order.totalAmount ?? order.amountTotal,
+        amountProduct: order.amountProduct,
+        amountShipping: order.amountShipping,
+        amountTotal: order.amountTotal,
+        items: order.items.map((item) => ({
+          id: item.id,
+          orderId: item.orderId,
+          recipeSnapshot: item.recipeSnapshot,
+          quantityG: item.quantityG,
+          packageCount: item.packageCount,
+          packageSpecG: item.packageSpecG,
+          customRequirements: item.customRequirements,
+          dailyIntakeG: item.dailyIntakeG,
+        })),
+        pricingBreakdown: order.pricingBreakdownSnapshot
+          ? {
+              costIngredients: order.pricingBreakdownSnapshot.costIngredients,
+              costPackaging: order.pricingBreakdownSnapshot.costPackaging,
+              costLabor: order.pricingBreakdownSnapshot.costLabor,
+              costOverhead: order.pricingBreakdownSnapshot.costOverhead,
+              totalProductCost: order.pricingBreakdownSnapshot.totalProductCost,
+              productPrice: order.pricingBreakdownSnapshot.productPrice,
+              shippingFee: order.pricingBreakdownSnapshot.shippingFee,
+              totalPrice: order.pricingBreakdownSnapshot.totalPrice,
+            }
+          : undefined,
+        trackingNumber: order.trackingNumber ?? null,
+        carrierCode: order.carrierCode ?? null,
+        shippedAt: order.shippedAt ? order.shippedAt.toISOString() : null,
+        completedAt: order.completedAt ? order.completedAt.toISOString() : null,
+        cancelledAt: order.cancelledAt ? order.cancelledAt.toISOString() : null,
+        cancellationReason: order.cancellationReason ?? null,
+        cancelledBy: order.cancelledBy ?? null,
+        createdAt: order.createdAt.toISOString(),
+      };
+
+      return ApiResponseDto.success(orderDto);
+    } catch (error: any) {
+      throw error;
+    }
+  }
+
+  /**
+   * POST /admin/orders/:orderId/ship - Ship order
+   */
+  @Post('orders/:orderId/ship')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Ship order with tracking information' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        carrierCode: { type: 'string', example: 'SF' },
+        trackingNumber: { type: 'string', example: 'SF1234567890' },
+      },
+      required: ['carrierCode', 'trackingNumber'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Order shipped successfully',
+    type: OrderDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request or order status' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async shipOrder(
+    @Param('orderId') orderId: string,
+    @Body() body: { carrierCode: string; trackingNumber: string },
+  ): Promise<ApiResponseDto<OrderDto> | ApiResponseDto<null>> {
+    try {
+      const order = await this.orderService.shipOrder(
+        orderId,
+        body.trackingNumber,
+        body.carrierCode,
+        null, // Admin ID not available in current implementation
+      );
+
+      // Map to DTO (simplified)
+      const orderDto: OrderDto = {
+        id: order.id,
+        customerId: order.customerId,
+        dogId: order.dogId,
+        addressId: order.addressId,
+        status: order.status,
+        type: order.type,
+        targetProductionDate: order.targetProductionDate
+          ? order.targetProductionDate.toISOString()
+          : null,
+        totalAmount: order.totalAmount ?? order.amountTotal,
+        amountProduct: order.amountProduct,
+        amountShipping: order.amountShipping,
+        amountTotal: order.amountTotal,
+        items: order.items.map((item) => ({
+          id: item.id,
+          orderId: item.orderId,
+          recipeSnapshot: item.recipeSnapshot,
+          quantityG: item.quantityG,
+          packageCount: item.packageCount,
+          packageSpecG: item.packageSpecG,
+          customRequirements: item.customRequirements,
+          dailyIntakeG: item.dailyIntakeG,
+        })),
+        trackingNumber: order.trackingNumber ?? null,
+        carrierCode: order.carrierCode ?? null,
+        shippedAt: order.shippedAt ? order.shippedAt.toISOString() : null,
+        completedAt: order.completedAt ? order.completedAt.toISOString() : null,
+        cancelledAt: order.cancelledAt ? order.cancelledAt.toISOString() : null,
+        cancellationReason: order.cancellationReason ?? null,
+        cancelledBy: order.cancelledBy ?? null,
+        createdAt: order.createdAt.toISOString(),
+      };
+
+      return ApiResponseDto.success(orderDto);
+    } catch (error: any) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * POST /admin/orders/:orderId/confirm-payment - Confirm payment (admin)
+   */
+  @Post('orders/:orderId/confirm-payment')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Confirm payment manually (admin)' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment confirmed successfully',
+    type: OrderDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request or order status' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async confirmPayment(
+    @Param('orderId') orderId: string,
+  ): Promise<ApiResponseDto<OrderDto> | ApiResponseDto<null>> {
+    try {
+      const order = await this.orderService.confirmPaymentAdmin(
+        orderId,
+        null, // Admin ID not available in current implementation
+      );
+
+      // Map to DTO (simplified)
+      const orderDto: OrderDto = {
+        id: order.id,
+        customerId: order.customerId,
+        dogId: order.dogId,
+        addressId: order.addressId,
+        status: order.status,
+        type: order.type,
+        targetProductionDate: order.targetProductionDate
+          ? order.targetProductionDate.toISOString()
+          : null,
+        totalAmount: order.totalAmount ?? order.amountTotal,
+        amountProduct: order.amountProduct,
+        amountShipping: order.amountShipping,
+        amountTotal: order.amountTotal,
+        items: order.items.map((item) => ({
+          id: item.id,
+          orderId: item.orderId,
+          recipeSnapshot: item.recipeSnapshot,
+          quantityG: item.quantityG,
+          packageCount: item.packageCount,
+          packageSpecG: item.packageSpecG,
+          customRequirements: item.customRequirements,
+          dailyIntakeG: item.dailyIntakeG,
+        })),
+        trackingNumber: order.trackingNumber ?? null,
+        carrierCode: order.carrierCode ?? null,
+        shippedAt: order.shippedAt ? order.shippedAt.toISOString() : null,
+        completedAt: order.completedAt ? order.completedAt.toISOString() : null,
+        cancelledAt: order.cancelledAt ? order.cancelledAt.toISOString() : null,
+        cancellationReason: order.cancellationReason ?? null,
+        cancelledBy: order.cancelledBy ?? null,
+        createdAt: order.createdAt.toISOString(),
+      };
+
+      return ApiResponseDto.success(orderDto);
+    } catch (error: any) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * POST /admin/orders/:orderId/start-production - Start production
+   */
+  @Post('orders/:orderId/start-production')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Start production (PAID → WAITING_FOR_PRODUCTION)' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Production started successfully',
+    type: OrderDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request or order status' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async startProduction(
+    @Param('orderId') orderId: string,
+  ): Promise<ApiResponseDto<OrderDto> | ApiResponseDto<null>> {
+    try {
+      const order = await this.orderService.startProduction(
+        orderId,
+        null, // Admin ID not available in current implementation
+      );
+
+      // Map to DTO (simplified)
+      const orderDto: OrderDto = {
+        id: order.id,
+        customerId: order.customerId,
+        dogId: order.dogId,
+        addressId: order.addressId,
+        status: order.status,
+        type: order.type,
+        targetProductionDate: order.targetProductionDate
+          ? order.targetProductionDate.toISOString()
+          : null,
+        totalAmount: order.totalAmount ?? order.amountTotal,
+        amountProduct: order.amountProduct,
+        amountShipping: order.amountShipping,
+        amountTotal: order.amountTotal,
+        items: order.items.map((item) => ({
+          id: item.id,
+          orderId: item.orderId,
+          recipeSnapshot: item.recipeSnapshot,
+          quantityG: item.quantityG,
+          packageCount: item.packageCount,
+          packageSpecG: item.packageSpecG,
+          customRequirements: item.customRequirements,
+          dailyIntakeG: item.dailyIntakeG,
+        })),
+        trackingNumber: order.trackingNumber ?? null,
+        carrierCode: order.carrierCode ?? null,
+        shippedAt: order.shippedAt ? order.shippedAt.toISOString() : null,
+        completedAt: order.completedAt ? order.completedAt.toISOString() : null,
+        cancelledAt: order.cancelledAt ? order.cancelledAt.toISOString() : null,
+        cancellationReason: order.cancellationReason ?? null,
+        cancelledBy: order.cancelledBy ?? null,
+        createdAt: order.createdAt.toISOString(),
+      };
+
+      return ApiResponseDto.success(orderDto);
+    } catch (error: any) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * GET /admin/orders/:orderId/history - Get order status history
+   */
+  @Get('orders/:orderId/history')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get order status history' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order status history',
+    schema: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          fromStatus: { type: 'string' },
+          toStatus: { type: 'string' },
+          timestamp: { type: 'string', format: 'date-time' },
+          actor: { type: 'string' },
+          actorId: { type: 'string', nullable: true },
+          metadata: { type: 'object', nullable: true },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async getOrderHistory(
+    @Param('orderId') orderId: string,
+  ): Promise<ApiResponseDto<any[]> | ApiResponseDto<null>> {
+    try {
+      const history = await this.orderService.getOrderStatusHistory(orderId);
+
+      const historyDto = history.map((h) => ({
+        fromStatus: h.fromStatus,
+        toStatus: h.toStatus,
+        timestamp: h.timestamp.toISOString(),
+        actor: h.actor,
+        actorId: h.actorId,
+        metadata: h.metadata,
+      }));
+
+      return ApiResponseDto.success(historyDto);
+    } catch (error: any) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      throw error;
+    }
+  }
+
+  // ==========================================
   // Dog Profile Management (Admin)
   // ==========================================
 
@@ -2277,3 +2726,4 @@ export class AdminController {
     }
   }
 }
+

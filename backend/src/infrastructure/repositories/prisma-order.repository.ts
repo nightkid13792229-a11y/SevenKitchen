@@ -272,7 +272,125 @@ export class PrismaOrderRepository implements OrderRepository {
       raw.ingredientPriceVersionHash ?? null,
     );
   }
+
+  /**
+   * Find all orders with filtering, pagination, and search
+   * Admin-only method for cross-customer order management
+   */
+  async findAll(params?: {
+    customerId?: string;
+    status?: OrderStatus;
+    type?: OrderType;
+    keyword?: string;
+    startDate?: Date;
+    endDate?: Date;
+    page?: number;
+    pageSize?: number;
+  }): Promise<{ list: Order[]; total: number }> {
+    const page = params?.page ?? 1;
+    const pageSize = params?.pageSize ?? 20;
+    const skip = (page - 1) * pageSize;
+
+    // Build where clause
+    const where: Prisma.OrderWhereInput = {};
+
+    if (params?.customerId) {
+      where.customerId = params.customerId;
+    }
+
+    if (params?.status) {
+      if (Array.isArray(params.status)) {
+        where.status = { in: params.status };
+      } else {
+        where.status = params.status;
+      }
+    }
+
+    if (params?.type) {
+      where.type = params.type;
+    }
+
+    if (params?.startDate || params?.endDate) {
+      where.createdAt = {};
+      if (params.startDate) {
+        where.createdAt.gte = params.startDate;
+      }
+      if (params.endDate) {
+        where.createdAt.lte = params.endDate;
+      }
+    }
+
+    // Keyword search: order ID, customer nickname/phone
+    if (params?.keyword) {
+      where.OR = [
+        { id: { contains: params.keyword, mode: 'insensitive' } },
+        { customer: { nickname: { contains: params.keyword, mode: 'insensitive' } } },
+        { customer: { phone: { contains: params.keyword, mode: 'insensitive' } } },
+      ];
+    }
+
+    // Execute count and list queries in parallel
+    const [total, records] = await Promise.all([
+      this.prisma.order.count({ where }),
+      this.prisma.order.findMany({
+        where,
+        include: {
+          items: true,
+          customer: {
+            select: {
+              id: true,
+              nickname: true,
+              phone: true,
+            },
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: pageSize,
+      }),
+    ]);
+
+    const list = records.map((r) => this.mapToDomain(r));
+    return { list, total };
+  }
+
+  /**
+   * Get order statistics grouped by status
+   * Phase 9: Simplified statistics aligned with e-commerce standards
+   */
+  async getStats(): Promise<{
+    total: number;
+    pendingPayment: number;
+    paid: number;
+    inProduction: number;
+    shipped: number;
+    completed: number;
+    cancelled: number;
+  }> {
+    const stats = await this.prisma.order.groupBy({
+      by: ['status'],
+      _count: {
+        status: true,
+      },
+    });
+
+    const countMap = stats.reduce((acc, item) => {
+      acc[item.status] = item._count.status;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return {
+      total: await this.prisma.order.count(),
+      pendingPayment: countMap[OrderStatus.PENDING_PAYMENT] ?? 0,
+      paid: countMap[OrderStatus.PAID] ?? 0,
+      inProduction: countMap[OrderStatus.IN_PRODUCTION] ?? 0,
+      shipped: countMap[OrderStatus.SHIPPED] ?? 0,
+      completed: countMap[OrderStatus.COMPLETED] ?? 0,
+      cancelled: countMap[OrderStatus.CANCELLED] ?? 0,
+    };
+  }
 }
+
 
 
 

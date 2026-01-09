@@ -11,3 +11,4 @@ export interface AddressRepository {
   save(address: Address): Promise<Address>;
   delete(id: string): Promise<void>;
 }
+

@@ -24,3 +24,4 @@ export interface IngredientRepository {
   setTags(ingredientId: string, tagIds: string[]): Promise<void>;
   getTags(ingredientId: string): Promise<any[]>;
 }
+

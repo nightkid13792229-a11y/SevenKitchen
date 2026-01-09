@@ -92,3 +92,4 @@ The plugin might need explicit configuration options. Check the plugin's documen
 - `vite.config.ts` - Simplified to use plugin defaults
 - `scripts/mp-weixin-verify.sh` - Created verification script
 - `QUICKSTART.md` - Updated with build instructions
+

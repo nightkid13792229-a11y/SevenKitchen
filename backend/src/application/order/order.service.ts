@@ -1347,4 +1347,275 @@ export class OrderService {
   async getOrderStatusHistory(orderId: string): Promise<OrderStatusHistory[]> {
     return this.statusHistoryRepository.findByOrderId(orderId);
   }
+
+  // ==========================================
+  // Admin-only methods for order management
+  // ==========================================
+
+  /**
+   * List all orders with filtering, pagination, and search
+   * Admin-only method for cross-customer order management
+   */
+  async listAllOrders(params?: {
+    customerId?: string;
+    status?: OrderStatus;
+    type?: OrderType;
+    keyword?: string;
+    startDate?: Date;
+    endDate?: Date;
+    page?: number;
+    pageSize?: number;
+  }): Promise<{ list: Order[]; total: number }> {
+    return this.orderRepository.findAll(params);
+  }
+
+  /**
+   * Ship order with tracking information
+   * Phase 9: Simplified shipping flow
+   * Transitions IN_PRODUCTION → SHIPPED
+   */
+  async shipOrder(
+    orderId: string,
+    trackingNumber: string,
+    carrierCode: string,
+    actorId?: string | null,
+  ): Promise<Order> {
+    const order = await this.orderRepository.findById(orderId);
+    if (!order) {
+      throw new NotFoundException(`Order not found: ${orderId}`);
+    }
+
+    const fromStatus = order.status;
+    order.markAsShipped(trackingNumber, carrierCode);
+    const savedOrder = await this.orderRepository.save(order);
+
+    // Log status transition
+    await this.logStatusTransition(
+      savedOrder,
+      fromStatus,
+      OrderStatus.SHIPPED,
+      'admin',
+      actorId,
+      { trackingNumber, carrierCode },
+    );
+
+    return savedOrder;
+  }
+
+  /**
+   * Confirm payment (admin manual confirmation)
+   * Transitions PENDING_PAYMENT → PAID
+   */
+  async confirmPaymentAdmin(
+    orderId: string,
+    actorId?: string | null,
+  ): Promise<Order> {
+    const order = await this.orderRepository.findById(orderId);
+    if (!order) {
+      throw new NotFoundException(`Order not found: ${orderId}`);
+    }
+
+    const fromStatus = order.status;
+    const transactionId = `ADMIN-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+    order.recordPayment('ADMIN', transactionId);
+    const savedOrder = await this.orderRepository.save(order);
+
+    // Log status transition
+    await this.logStatusTransition(
+      savedOrder,
+      fromStatus,
+      OrderStatus.PAID,
+      'admin',
+      actorId,
+      { paymentMethod: 'ADMIN', transactionId, confirmedBy: 'admin' },
+    );
+
+    return savedOrder;
+  }
+
+  /**
+   * Start production
+   * Phase 9: Simplified production flow
+   * Transitions PAID → IN_PRODUCTION
+   *
+   * Note: This replaces the previous two-step process:
+   * - Old: PAID → WAITING_FOR_PRODUCTION → IN_PRODUCTION → READY_FOR_PACKAGING
+   * - New: PAID → IN_PRODUCTION (includes scheduling, production, and packaging)
+   */
+  async startProduction(
+    orderId: string,
+    actorId?: string | null,
+  ): Promise<Order> {
+    const order = await this.orderRepository.findById(orderId);
+    if (!order) {
+      throw new NotFoundException(`Order not found: ${orderId}`);
+    }
+
+    const fromStatus = order.status;
+    order.transitionTo(OrderStatus.IN_PRODUCTION);
+    const savedOrder = await this.orderRepository.save(order);
+
+    // Log status transition
+    await this.logStatusTransition(
+      savedOrder,
+      fromStatus,
+      OrderStatus.IN_PRODUCTION,
+      'admin',
+      actorId,
+      null,
+    );
+
+    return savedOrder;
+  }
+
+  /**
+   * Get order statistics grouped by status
+   * Phase 9: Simplified statistics aligned with e-commerce standards
+   */
+  async getOrderStats(): Promise<{
+    total: number;
+    pendingPayment: number;
+    paid: number;
+    inProduction: number;
+    shipped: number;
+    completed: number;
+    cancelled: number;
+  }> {
+    return this.orderRepository.getStats();
+  }
+
+  /**
+   * Mark order as freezing (急冻中待发货)
+   * Phase 9.1: Freezing status after production photos uploaded
+   * @param orderId Order ID
+   * @param actorId ID of the staff member performing the action
+   */
+  async markAsFreezing(
+    orderId: string,
+    actorId?: string | null,
+  ): Promise<Order> {
+    const order = await this.orderRepository.findById(orderId);
+    if (!order) {
+      throw new NotFoundException(`Order not found: ${orderId}`);
+    }
+
+    const fromStatus = order.status;
+    order.markAsFreezing();
+    const savedOrder = await this.orderRepository.save(order);
+
+    // Log status transition
+    await this.logStatusTransition(
+      savedOrder,
+      fromStatus,
+      OrderStatus.FREEZING,
+      'staff',
+      actorId,
+      null,
+    );
+
+    return savedOrder;
+  }
+
+  /**
+   * Apply for aftersale (申请售后)
+   * Phase 9.1: Customer applies for aftersale
+   * @param orderId Order ID
+   * @param customerId Customer ID (for authorization)
+   * @param type Type of aftersale (REFUND, REMAKE, COMPLAINT)
+   * @param reason Customer reason for aftersale
+   * @param photos Optional array of photo URLs
+   */
+  async applyForAftersale(
+    orderId: string,
+    customerId: string,
+    type: any,
+    reason: string,
+    photos: string[] = [],
+  ): Promise<Order> {
+    const order = await this.orderRepository.findById(orderId);
+    if (!order) {
+      throw new NotFoundException(`Order not found: ${orderId}`);
+    }
+
+    // Verify ownership
+    if (order.customerId !== customerId) {
+      throw new BadRequestException('You can only apply for aftersale on your own orders');
+    }
+
+    const fromStatus = order.status;
+    order.applyForAftersale(type, reason, photos);
+    const savedOrder = await this.orderRepository.save(order);
+
+    // Log status transition
+    await this.logStatusTransition(
+      savedOrder,
+      fromStatus,
+      OrderStatus.AFTERSALE,
+      'customer',
+      customerId,
+      { type, reason, photoCount: photos.length },
+    );
+
+    return savedOrder;
+  }
+
+  /**
+   * Resolve aftersale (解决售后)
+   * Phase 9.1: Admin/staff resolves aftersale request
+   * @param orderId Order ID
+   * @param resolutionType Type of resolution (refunded, remade, resolved)
+   * @param actorId ID of the admin/staff performing the action
+   * @param adminNote Optional admin note
+   */
+  async resolveAftersale(
+    orderId: string,
+    resolutionType: 'refunded' | 'remade' | 'resolved',
+    actorId: string,
+    adminNote?: string,
+  ): Promise<Order> {
+    const order = await this.orderRepository.findById(orderId);
+    if (!order) {
+      throw new NotFoundException(`Order not found: ${orderId}`);
+    }
+
+    const fromStatus = order.status;
+    order.resolveAftersale(resolutionType);
+    const savedOrder = await this.orderRepository.save(order);
+
+    // Determine target status based on resolution type
+    let targetStatus: OrderStatus;
+    switch (resolutionType) {
+      case 'refunded':
+        targetStatus = OrderStatus.CANCELLED;
+        break;
+      case 'remade':
+        targetStatus = OrderStatus.IN_PRODUCTION;
+        break;
+      case 'resolved':
+        targetStatus = OrderStatus.COMPLETED;
+        break;
+    }
+
+    // Log status transition
+    await this.logStatusTransition(
+      savedOrder,
+      fromStatus,
+      targetStatus,
+      'admin',
+      actorId,
+      { resolutionType, adminNote },
+    );
+
+    return savedOrder;
+  }
+
+  /**
+   * Get pending aftersale orders
+   * Phase 9.1: Admin/staff view list of orders in AFTERSALE status
+   */
+  async getPendingAftersales(): Promise<Order[]> {
+    return this.orderRepository.findByStatus(OrderStatus.AFTERSALE);
+  }
 }
+

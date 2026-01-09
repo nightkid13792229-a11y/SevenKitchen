@@ -583,3 +583,4 @@ export function calculateDogEnergy(
   return result;
 }
 
+

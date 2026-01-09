@@ -54,3 +54,4 @@ BEGIN
     ALTER TYPE "OrderStatus" ADD VALUE 'CANCELLED';
   END IF;
 END $$;
+

@@ -117,3 +117,4 @@ grep "Ledger Entries Created:" phase8_12_13_e2e_*.log | tail -1
 - **Idempotency:** The script may show "Ledger Entries Created: 0" if inventory was already deducted in a previous run. This is expected and indicates successful idempotency.
 - **macOS Compatibility:** The script is tested on macOS bash 3.2 and uses cross-platform commands.
 - **Database Safety:** Auto-cleanup mode (`E2E_FORCE_FRESH_DEDUCTION=1`) should only be used in development environments, never in production.
+

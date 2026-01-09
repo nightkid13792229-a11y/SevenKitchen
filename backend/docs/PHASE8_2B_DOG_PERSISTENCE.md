@@ -295,3 +295,4 @@ Dog created during smoke test verification (example):
 - **Computed fields:** `cachedTargetFoodKcal` is stored but calculation logic is in domain layer
 - **Defaults:** `mealsPerDay=2`, `treatInputMode=ESTIMATE_LEVEL`, `treatLevel=LOW` match domain defaults
 
+

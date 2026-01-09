@@ -117,3 +117,4 @@ The fixed migration:
 2. **Backfill:** Setting `updated_at = created_at` ensures all rows have valid timestamps
 3. **Constraint:** Only after backfill do we set NOT NULL, preventing constraint violations
 4. **Idempotent Script:** The fix script checks for column existence before adding, making it safe to run multiple times
+

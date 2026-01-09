@@ -110,3 +110,4 @@ export class ShippingFeeService {
     return `${template.name}: 首重${template.baseWeightKg}kg内 ${template.baseFee}元 + 续重${extraWeight.toFixed(3)}kg (${stepFeeTotal.toFixed(2)}元) + 增值服务费${template.vasFeePerOrder}元 = ${finalFee}元`;
   }
 }
+

@@ -34,3 +34,4 @@ export class InMemoryShippingTemplateRepository
     return Promise.resolve(template);
   }
 }
+

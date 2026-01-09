@@ -95,13 +95,13 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'orders',
         name: 'Orders',
-        component: () => import('@/views/Orders.vue'),
+        component: () => import('@/views/Orders/index.vue'),
         meta: { title: '订单管理' }
       },
       {
         path: 'orders/:id',
         name: 'OrderDetail',
-        component: () => import('@/views/OrderDetail.vue'),
+        component: () => import('@/views/Orders/Detail.vue'),
         meta: { title: '订单详情' }
       },
       {

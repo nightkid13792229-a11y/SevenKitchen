@@ -7,6 +7,7 @@ import {
   Controller,
   Post,
   Get,
+  Put,
   Body,
   Param,
   HttpCode,
@@ -25,6 +26,8 @@ import {
   ApiHeader,
 } from '@nestjs/swagger';
 import { OrderService } from '../../application/order/order.service';
+import { RecipeService } from '../../application/recipe/recipe.service';
+import { PrismaService } from '../../infrastructure/prisma.service';
 import { Inject } from '@nestjs/common';
 import { ORDER_REPOSITORY } from '../../application/order/order.service.tokens';
 import { DOG_REPOSITORY } from '../../application/dog/dog.service';
@@ -40,6 +43,8 @@ import {
   OrderSummaryDto,
 } from '../dto/orders/order-response.dto';
 import { CancelOrderDto } from '../dto/orders/cancel-order.dto';
+import { CreateAftersaleDto } from '../dto/orders/create-aftersale.dto';
+import { ResolveAftersaleDto } from '../dto/orders/resolve-aftersale.dto';
 import { PaymentDto } from '../dto/orders/payment-response.dto';
 import {
   PricingPreviewRequestDto,
@@ -56,6 +61,8 @@ import type { RequestUser } from '../auth';
 export class OrdersController {
   constructor(
     private readonly orderService: OrderService,
+    private readonly recipeService: RecipeService,
+    private readonly prisma: PrismaService,
     @Inject(ORDER_REPOSITORY)
     private readonly orderRepository: OrderRepository,
     @Inject(DOG_REPOSITORY)
@@ -340,7 +347,9 @@ export class OrdersController {
     const customerId = user.customerId;
 
     const orders = await this.orderService.listOrdersByCustomerId(customerId);
-    const summaries = orders.map((order) => this.mapOrderToSummaryDto(order));
+    const summaries = await Promise.all(
+      orders.map((order) => this.mapOrderToSummaryDto(order))
+    );
     return ApiResponseDto.success(summaries);
   }
 
@@ -783,14 +792,181 @@ export class OrdersController {
     };
   }
 
-  private mapOrderToSummaryDto(order: Order): OrderSummaryDto {
+  private async mapOrderToSummaryDto(order: Order): Promise<OrderSummaryDto> {
+    // Get first item with dog info if available
+    let firstItem = undefined;
+    if (order.items && order.items.length > 0) {
+      const item = order.items[0];
+
+      // Fetch dog information if dogId is present
+      let dogInfo = undefined;
+      if (item.dogId) {
+        const dog = await this.dogRepository.findById(item.dogId);
+        if (dog) {
+          dogInfo = {
+            id: dog.id,
+            name: dog.name,
+            breedName: dog.customBreedName ?? undefined,
+            weightKg: dog.currentWeightKg,
+            mealsPerDay: dog.mealsPerDay,
+          };
+        }
+      }
+
+      // Fetch recipe cover image using Prisma directly
+      let coverImageUrl = undefined;
+      if (item.recipeSnapshot?.id) {
+        try {
+          let recipe = await this.prisma.recipe.findUnique({
+            where: { id: item.recipeSnapshot.id },
+            select: { coverImageUrl: true }
+          });
+
+          // If not found by ID, try to find by recipe name (data consistency workaround)
+          if (!recipe && item.recipeSnapshot.name) {
+            recipe = await this.prisma.recipe.findFirst({
+              where: { name: item.recipeSnapshot.name },
+              select: { coverImageUrl: true }
+            });
+          }
+
+          if (recipe) {
+            coverImageUrl = recipe.coverImageUrl;
+          }
+        } catch (error: any) {
+          // Recipe might be deleted, ignore error
+        }
+      }
+
+      firstItem = {
+        dog: dogInfo,
+        recipeSnapshot: item.recipeSnapshot ? {
+          id: item.recipeSnapshot.id,
+          name: item.recipeSnapshot.name,
+          coverImageUrl,
+        } : undefined,
+        packageCount: item.packageCount,
+        packageSpecG: item.packageSpecG,
+        dailyIntakeG: item.dailyIntakeG,
+      };
+    }
+
+    // Get address info if addressId is present
+    let address = undefined;
+    if (order.addressId) {
+      // TODO: Fetch address from repository when address module is available
+      // For now, we'll return undefined
+    }
+
     return {
       id: order.id,
       status: order.status,
       type: order.type,
       totalAmount: order.totalAmount ?? order.amountTotal,
       itemCount: order.items.length,
+      createdAt: order.createdAt.toISOString(),
+      firstItem,
+      address,
     };
+  }
+
+  /**
+   * Mark order as freezing (急冻中待发货)
+   * Phase 9.1: Staff endpoint to mark order as freezing after production photos uploaded
+   */
+  @Post(':id/freezing')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Mark order as freezing (急冻中待发货)' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order marked as freezing successfully',
+    type: OrderDto,
+  })
+  async markAsFreezing(
+    @Param('id') orderId: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const order = await this.orderService.markAsFreezing(orderId, user.userId);
+    return this.mapOrderToDto(order);
+  }
+
+  /**
+   * Apply for aftersale (申请售后)
+   * Phase 9.1: Customer endpoint to apply for aftersale
+   */
+  @Post(':id/aftersale')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Apply for aftersale (申请售后)' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiBody({ type: CreateAftersaleDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Aftersale request created successfully',
+    type: OrderDto,
+  })
+  async applyForAftersale(
+    @Param('id') orderId: string,
+    @Body() dto: CreateAftersaleDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const order = await this.orderService.applyForAftersale(
+      orderId,
+      user.userId,
+      dto.type as any,
+      dto.reason,
+      dto.photos || [],
+    );
+    return this.mapOrderToDto(order);
+  }
+
+  /**
+   * Resolve aftersale (解决售后)
+   * Phase 9.1: Admin/Staff endpoint to resolve aftersale request
+   */
+  @Post(':id/aftersale/resolve')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Resolve aftersale (解决售后)' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiBody({ type: ResolveAftersaleDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Aftersale resolved successfully',
+    type: OrderDto,
+  })
+  async resolveAftersale(
+    @Param('id') orderId: string,
+    @Body() dto: ResolveAftersaleDto,
+    @CurrentUser() user: RequestUser,
+  ) {
+    const order = await this.orderService.resolveAftersale(
+      orderId,
+      dto.resolutionType,
+      user.userId,
+      dto.adminNote,
+    );
+    return this.mapOrderToDto(order);
+  }
+
+  /**
+   * Get pending aftersale orders
+   * Phase 9.1: Admin/Staff endpoint to get list of orders in AFTERSALE status
+   */
+  @Get('aftersale/pending')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Get pending aftersale orders' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiResponse({
+    status: 200,
+    description: 'List of pending aftersale orders',
+    type: [OrderDto],
+  })
+  async getPendingAftersales(@CurrentUser() user: RequestUser) {
+    const orders = await this.orderService.getPendingAftersales();
+    return Promise.all(orders.map((order) => this.mapOrderToDto(order)));
   }
 
   private async findSnapshotByItemId(
@@ -799,14 +975,13 @@ export class OrdersController {
     // Search through all orders to find the item
     // TODO: In real implementation, add findOrderItemById to repository for efficiency
     // For now, we search by iterating through orders by status
+    // Phase 9: Simplified status list (removed WAITING_FOR_PRODUCTION, READY_FOR_PACKAGING, READY_FOR_SHIPMENT)
     const statusesToSearch = [
       OrderStatus.INIT,
       OrderStatus.PENDING_PAYMENT,
       OrderStatus.PAID,
-      OrderStatus.WAITING_FOR_PRODUCTION,
       OrderStatus.IN_PRODUCTION,
-      OrderStatus.READY_FOR_PACKAGING,
-      OrderStatus.READY_FOR_SHIPMENT,
+      OrderStatus.FREEZING,
       OrderStatus.SHIPPED,
       OrderStatus.COMPLETED,
     ];
@@ -824,4 +999,5 @@ export class OrdersController {
     return null;
   }
 }
+
 

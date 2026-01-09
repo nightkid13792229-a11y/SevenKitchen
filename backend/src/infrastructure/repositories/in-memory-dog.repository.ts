@@ -31,3 +31,4 @@ export class InMemoryDogRepository implements DogRepository {
     return Promise.resolve();
   }
 }
+

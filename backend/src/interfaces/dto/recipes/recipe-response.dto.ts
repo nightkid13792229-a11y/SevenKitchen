@@ -80,3 +80,4 @@ export class RecipeDetailDto extends RecipeSummaryDto {
     ingredientType?: string;
   }>;
 }
+

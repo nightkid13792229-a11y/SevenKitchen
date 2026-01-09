@@ -17,17 +17,30 @@
 
     <!-- 已登录状态 -->
     <view v-else class="logged-in">
-      <!-- 用户信息卡片（可点击） -->
-      <view class="user-card" @tap="editUserInfo">
-        <view class="user-avatar">
-          <image v-if="userInfo.avatarUrl" :src="userInfo.avatarUrl" class="avatar-img" />
-          <text v-else class="avatar-placeholder">头像</text>
+      <!-- 基本信息板块 -->
+      <view class="info-section">
+        <view class="section-header">基本信息</view>
+
+        <view class="info-row" @tap="editNickname">
+          <view class="info-label">昵称</view>
+          <view class="info-value-wrapper">
+            <text class="info-value">{{ userInfo.nickname || '未设置' }}</text>
+            <text class="arrow">›</text>
+          </view>
         </view>
-        <view class="user-info">
-          <text class="user-name">{{ userInfo.nickname || '未设置昵称' }}</text>
-          <text class="user-phone">{{ userInfo.phone || '未绑定手机' }}</text>
-          <view v-if="isStaff" class="user-role-badge">
-            <text class="role-text">{{ roleLabel }}</text>
+
+        <view class="info-row" @tap="editPhone">
+          <view class="info-label">手机号</view>
+          <view class="info-value-wrapper">
+            <text class="info-value">{{ userInfo.phone || '未设置' }}</text>
+            <text class="arrow">›</text>
+          </view>
+        </view>
+
+        <view class="info-row">
+          <view class="info-label">账户ID</view>
+          <view class="info-value-wrapper">
+            <text class="info-value info-id">{{ userInfo.id }}</text>
           </view>
         </view>
       </view>
@@ -51,19 +64,12 @@
 
         <view class="function-item" @tap="goToDiySheetList">
           <text class="function-text">我的制作单</text>
+          <text class="function-count">({{ userInfo.diySheetCount || 0 }}张)</text>
         </view>
-      </view>
 
-      <!-- 员工专属功能 -->
-      <view v-if="isStaff" class="staff-section">
-        <view class="section-title">员工功能</view>
-        <view class="function-list">
-          <view class="function-item" @tap="goToProduction">
-            <text class="function-text">生产管理</text>
-          </view>
-          <view class="function-item" @tap="goToInventory">
-            <text class="function-text">库存管理</text>
-          </view>
+        <view class="function-item" @tap="goToFavoriteRecipes">
+          <text class="function-text">收藏的食谱</text>
+          <text class="function-count">({{ userInfo.favoriteRecipeCount || 0 }}个)</text>
         </view>
       </view>
 
@@ -94,6 +100,8 @@ interface UserInfo {
   dogCount: number
   orderCount: number
   addressCount: number
+  diySheetCount: number
+  favoriteRecipeCount: number
 }
 
 const isLoggedIn = ref(false)
@@ -103,25 +111,22 @@ const userInfo = ref<UserInfo>({
   role: 'CUSTOMER',
   dogCount: 0,
   orderCount: 0,
-  addressCount: 0
+  addressCount: 0,
+  diySheetCount: 0,
+  favoriteRecipeCount: 0
 })
 
-// 是否为员工
-const isStaff = computed(() => {
-  return userInfo.value.role === 'STAFF' || userInfo.value.role === 'ADMIN'
-})
-
-// 角色标签
-const roleLabel = computed(() => {
-  const roleMap: Record<string, string> = {
-    'STAFF': '员工',
-    'ADMIN': '管理员'
-  }
-  return roleMap[userInfo.value.role] || ''
-})
+// 标志位：防止更新后立即重新加载
+let isJustUpdated = false
+let updateTimer: NodeJS.Timeout | null = null
 
 // 加载用户信息
 async function loadUserInfo() {
+  // 如果刚刚更新过，跳过这次加载
+  if (isJustUpdated) {
+    return
+  }
+
   isLoading.value = true
   try {
     const res = await request({
@@ -179,27 +184,108 @@ function goToDiySheetList() {
   })
 }
 
-// 跳转生产管理（员工功能）
-function goToProduction() {
-  uni.showToast({
-    title: '生产管理功能开发中',
-    icon: 'none'
-  })
-}
-
-// 跳转库存管理（员工功能）
-function goToInventory() {
-  uni.showToast({
-    title: '库存管理功能开发中',
-    icon: 'none'
-  })
-}
-
-// 编辑个人信息（点击顶部卡片）
-function editUserInfo() {
+// 跳转收藏的食谱列表
+function goToFavoriteRecipes() {
   uni.navigateTo({
-    url: '/pages/owner-info/index'
+    url: '/pages/favorite-recipes/index'
   })
+}
+
+// 编辑昵称
+function editNickname() {
+  uni.showModal({
+    title: '修改昵称',
+    editable: true,
+    placeholderText: userInfo.value.nickname || '请输入昵称',
+    success: async (res) => {
+      if (res.confirm && res.content) {
+        const nickname = res.content.trim()
+        if (nickname.length < 1 || nickname.length > 20) {
+          uni.showToast({
+            title: '昵称长度必须在1-20个字符之间',
+            icon: 'none'
+          })
+          return
+        }
+
+        await updateUserInfo({ nickname })
+      }
+    }
+  })
+}
+
+// 编辑手机号
+function editPhone() {
+  uni.showModal({
+    title: '修改手机号',
+    editable: true,
+    placeholderText: userInfo.value.phone || '请输入手机号',
+    success: async (res) => {
+      if (res.confirm && res.content) {
+        const phone = res.content.trim()
+        const phoneRegex = /^1[3-9]\d{9}$/
+
+        if (!phoneRegex.test(phone)) {
+          uni.showToast({
+            title: '手机号格式不正确',
+            icon: 'none'
+          })
+          return
+        }
+
+        await updateUserInfo({ phone })
+      }
+    }
+  })
+}
+
+// 更新用户信息
+async function updateUserInfo(data: { nickname?: string; phone?: string }) {
+  isLoading.value = true
+  try {
+    const res = await request({
+      url: '/users/me',
+      method: 'PUT',
+      data
+    })
+
+    if (res.code === 0) {
+      // 使用后端返回的完整用户信息更新本地状态
+      userInfo.value = res.data
+
+      // 设置标志位，防止 onShow 触发的 loadUserInfo 覆盖刚更新的数据
+      isJustUpdated = true
+
+      // 清除之前的定时器
+      if (updateTimer) {
+        clearTimeout(updateTimer)
+      }
+
+      // 2秒后重置标志位，允许正常加载
+      updateTimer = setTimeout(() => {
+        isJustUpdated = false
+        updateTimer = null
+      }, 2000)
+
+      uni.showToast({
+        title: '更新成功',
+        icon: 'success'
+      })
+    } else {
+      uni.showToast({
+        title: res.message || '更新失败',
+        icon: 'none'
+      })
+    }
+  } catch (error) {
+    console.error('更新用户信息失败:', error)
+    uni.showToast({
+      title: '网络错误',
+      icon: 'none'
+    })
+  } finally {
+    isLoading.value = false
+  }
 }
 
 // 退出登录
@@ -216,7 +302,9 @@ function handleLogout() {
           role: 'CUSTOMER',
           dogCount: 0,
           orderCount: 0,
-          addressCount: 0
+          addressCount: 0,
+          diySheetCount: 0,
+          favoriteRecipeCount: 0
         }
         uni.showToast({
           title: '已退出登录',
@@ -235,6 +323,12 @@ function handleLogout() {
 }
 
 onShow(() => {
+  // 更新自定义 tabBar
+  if (typeof wx.getTabBar === 'function' && wx.getTabBar()) {
+    wx.getTabBar().checkUserRole()
+    wx.getTabBar().updateSelected()
+  }
+
   // 检查登录状态（每次显示页面时都会执行）
   const token = getToken()
   if (token) {
@@ -311,73 +405,54 @@ onShow(() => {
 }
 
 /* 已登录状态 */
-.user-card {
-  display: flex;
-  align-items: center;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 48rpx 32rpx;
-}
-
-.user-avatar {
-  width: 120rpx;
-  height: 120rpx;
-  border-radius: 50%;
+.info-section {
   background: #fff;
-  margin-right: 24rpx;
-  overflow: hidden;
+  margin-top: 20rpx;
+}
+
+.section-header {
+  padding: 24rpx 32rpx;
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #333;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24rpx 32rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.info-row:last-child {
+  border-bottom: none;
+}
+
+.info-label {
+  font-size: 28rpx;
+  color: #666;
+}
+
+.info-value-wrapper {
   display: flex;
   align-items: center;
-  justify-content: center;
 }
 
-.avatar-img {
-  width: 100%;
-  height: 100%;
-}
-
-.avatar-placeholder {
-  font-size: 60rpx;
-}
-
-.user-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-}
-
-.user-name {
-  font-size: 36rpx;
-  font-weight: bold;
-  color: #fff;
-  margin-bottom: 8rpx;
-}
-
-.user-phone {
+.info-value {
   font-size: 28rpx;
-  color: rgba(255, 255, 255, 0.8);
-  margin-bottom: 8rpx;
+  color: #333;
+  margin-right: 8rpx;
 }
 
-.user-role-badge {
-  align-self: flex-start;
-  background: rgba(255, 255, 255, 0.2);
-  padding: 4rpx 16rpx;
-  border-radius: 20rpx;
-}
-
-.role-text {
+.info-id {
   font-size: 24rpx;
-  color: #fff;
+  color: #999;
 }
 
-.card-arrow {
-  font-size: 48rpx;
-  color: rgba(255, 255, 255, 0.8);
-  font-weight: 300;
-}
-
-.avatar-placeholder {
-  font-size: 24rpx;
+.arrow {
+  font-size: 32rpx;
   color: #999;
 }
 
@@ -405,16 +480,6 @@ onShow(() => {
 }
 
 .function-count {
-  font-size: 24rpx;
-  color: #999;
-}
-
-.staff-section {
-  margin-top: 20rpx;
-}
-
-.section-title {
-  padding: 24rpx 32rpx;
   font-size: 24rpx;
   color: #999;
 }

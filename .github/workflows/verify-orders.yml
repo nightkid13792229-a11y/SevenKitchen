@@ -154,3 +154,4 @@ jobs:
           fi
           # Fallback: kill any remaining nest processes
           pkill -f "nest start" || true
+

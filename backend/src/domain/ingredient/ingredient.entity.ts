@@ -129,3 +129,4 @@ export class Ingredient {
     return packagingProps.is_consumable ?? false;
   }
 }
+

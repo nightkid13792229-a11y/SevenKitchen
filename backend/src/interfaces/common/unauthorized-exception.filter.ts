@@ -26,3 +26,4 @@ export class UnauthorizedExceptionFilter implements ExceptionFilter {
     response.status(HttpStatus.OK).json(apiResponse);
   }
 }
+

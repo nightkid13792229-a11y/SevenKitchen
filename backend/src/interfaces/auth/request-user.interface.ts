@@ -8,3 +8,4 @@ export interface RequestUser {
   customerId: string; // Backward compatibility
   role: string;
 }
+

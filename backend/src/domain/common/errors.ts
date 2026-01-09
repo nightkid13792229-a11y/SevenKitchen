@@ -22,3 +22,4 @@ export class InvalidStateTransitionError extends DomainError {
     super(message);
   }
 }
+

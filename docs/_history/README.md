@@ -6,3 +6,4 @@ Non-Authoritative History Notes
 - If any contradiction exists, follow doc priority per `docs/06_Cursor_Collaboration_Guide.md`.
 
 
+

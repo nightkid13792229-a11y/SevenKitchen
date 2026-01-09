@@ -16,6 +16,23 @@ const api = axios.create({
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
+  },
+  paramsSerializer: {
+    serialize: (params) => {
+      const parts: string[] = []
+      Object.keys(params).forEach(key => {
+        const value = params[key]
+        if (value !== undefined && value !== null) {
+          if (Array.isArray(value)) {
+            // Serialize arrays as multiple same-key parameters: status=PAID&status=IN_PRODUCTION
+            value.forEach(v => parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(v)}`))
+          } else {
+            parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+          }
+        }
+      })
+      return parts.join('&')
+    }
   }
 })
 
@@ -88,16 +105,8 @@ export const recipeApi = {
     api.get(`/recipes/${id}`)
 }
 
-export const orderApi = {
-  list: (params?: any): Promise<any[]> =>
-    api.get('/orders', { params }),
-  getDetail: (id: string): Promise<any> =>
-    api.get(`/orders/${id}`),
-  cancel: (id: string, reason: string): Promise<any> =>
-    api.post(`/admin/orders/${id}/cancel`, { reason }),
-  complete: (id: string): Promise<any> =>
-    api.post(`/admin/orders/${id}/complete`)
-}
+// Re-export order API
+export { orderApi } from './orders'
 
 export const inventoryApi = {
   list: (): Promise<any[]> =>

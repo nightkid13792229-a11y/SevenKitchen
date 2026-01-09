@@ -292,3 +292,4 @@ To disable Prisma persistence for Order:
 - **State Machine:** Order status transitions must follow the state machine defined in Doc 02. The domain entity enforces these rules.
 - **Customer Isolation:** Orders are always filtered by `customerId` in repository queries to ensure customer isolation.
 - **Legacy Support:** `totalAmount` field is maintained for backward compatibility but is computed from `amountTotal`.
+

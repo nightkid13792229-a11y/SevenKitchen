@@ -146,3 +146,4 @@ pnpm run build:mp-weixin
 **默认 API 地址**：`https://api.sevenkitchen.cloud/api/v1`  
 **构建输出目录**：`dist/build/mp-weixin`  
 **需要重新上传体验版**：✅ **是**
+

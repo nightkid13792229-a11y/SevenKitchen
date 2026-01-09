@@ -317,3 +317,4 @@ Recipe created during server initialization (seeded):
 - **Recipe Items:** Stored in separate `recipe_item` table with foreign key to recipe `(recipeId, version)`.
 - **Ingredient References:** `ingredientId` in RecipeItem is stored as string; no foreign key constraint (ingredient data may be system/static).
 - **Status Filtering:** `findPublicRecipes()` filters by `status = 'PUBLIC'` and returns latest version per recipeId.
+

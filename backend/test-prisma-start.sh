@@ -7,3 +7,4 @@ kill $PID 2>/dev/null || true
 wait $PID 2>/dev/null || true
 cat /tmp/prisma-start.log | head -100
 
+

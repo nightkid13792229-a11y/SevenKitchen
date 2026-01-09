@@ -1,0 +1,35 @@
+<view class="tab-bar">
+  <!-- 首页 -->
+  <view
+    class="tab-bar-item {{selected === 0 ? 'active' : ''}}"
+    data-path="/pages/home/index"
+    data-index="0"
+    bindtap="switchTab"
+  >
+    <image class="icon" src="{{selected === 0 ? list[0].selectedIconPath : list[0].iconPath}}" />
+    <text class="text">首页</text>
+  </view>
+
+  <!-- 工作台（仅员工可见） -->
+  <view
+    wx:if="{{isStaff}}"
+    class="tab-bar-item staff-item {{selected === 1 ? 'active' : ''}}"
+    data-path="/pages/staff-workbench/index"
+    data-index="1"
+    bindtap="switchTab"
+  >
+    <text class="icon">{{staffTab.icon}}</text>
+    <text class="text">工作台</text>
+  </view>
+
+  <!-- 我的 -->
+  <view
+    class="tab-bar-item {{selected === (isStaff ? 2 : 1) ? 'active' : ''}}"
+    data-path="/pages/me/index"
+    data-index="{{isStaff ? 2 : 1}}"
+    bindtap="switchTab"
+  >
+    <image class="icon" src="{{selected === (isStaff ? 2 : 1) ? list[1].selectedIconPath : list[1].iconPath}}" />
+    <text class="text">我的</text>
+  </view>
+</view>

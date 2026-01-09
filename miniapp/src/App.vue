@@ -15,6 +15,22 @@ onLaunch(() => {
 
   // Log configuration state
   try {
+    // Debug: Check platform
+    const systemInfo = uni.getSystemInfoSync()
+    const platform = (systemInfo.platform || '').toLowerCase()
+    console.log('[App Debug] Platform:', systemInfo.platform)
+    console.log('[App Debug] Platform lowercased:', platform)
+
+    // Auto-fix: If in devtools and storage has old IP, clear it
+    if (platform === 'devtools') {
+      const storedBaseUrl = uni.getStorageSync('api_base_url')
+      if (storedBaseUrl && storedBaseUrl.includes('192.168.')) {
+        console.warn('⚠️  Detected old IP in storage, clearing...')
+        uni.removeStorageSync('api_base_url')
+        console.log('✓ Storage cleared. Please restart to use correct BASE_URL')
+      }
+    }
+
     const { getBaseUrl, getDefaultBaseUrl } = require('./utils/config')
     const { getToken } = require('./utils/api')
     const currentBaseUrl = getBaseUrl()

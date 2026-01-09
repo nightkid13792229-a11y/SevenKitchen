@@ -225,5 +225,36 @@ export class OrderSummaryDto {
 
   @ApiProperty({ example: 2 })
   itemCount!: number;
+
+  @ApiProperty({
+    description: 'Order creation timestamp',
+    example: '2025-01-20T10:30:00.000Z',
+  })
+  createdAt!: string;
+
+  firstItem?: {
+    dog?: {
+      id: string;
+      name: string;
+      breedName?: string;
+      weightKg?: number;
+      mealsPerDay?: number;
+    };
+    recipeSnapshot?: {
+      id: string;
+      name: string;
+      coverImageUrl?: string | null;
+    };
+    packageCount: number;
+    packageSpecG: number;
+    dailyIntakeG?: number;
+  };
+
+  address?: {
+    recipientName: string;
+    regionText: string;
+    detailAddress: string;
+  };
 }
+
 

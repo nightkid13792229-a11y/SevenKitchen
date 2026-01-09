@@ -18,3 +18,4 @@ export class OrderStatusHistory {
     public readonly metadata: Record<string, any> | null,
   ) {}
 }
+

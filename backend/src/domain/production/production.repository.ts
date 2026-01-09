@@ -21,3 +21,4 @@ export interface ProductionBatchRepository {
   // Phase 8.14: Batch completion check (database-based, not domain-based)
   areAllUnitsCompleted(batchId: string): Promise<boolean>;
 }
+

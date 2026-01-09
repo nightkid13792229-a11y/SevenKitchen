@@ -194,28 +194,46 @@
     - total_grams
 
 ### 状态机（State Machine）
-OrderStatus：
+OrderStatus (Phase 9: E-commerce Standard):
     INIT
     PENDING_PAYMENT
     PAID
-    SCHEDULING
     IN_PRODUCTION
-    PACKAGED
     SHIPPED
-    DELIVERED
-    CANCELED
+    COMPLETED
+    CANCELLED
+
+**状态定义**:
+- **INIT**: 订单草稿已创建，尚未提交
+- **PENDING_PAYMENT**: 订单已提交，等待支付
+- **PAID**: 支付已确认，等待开始生产
+- **IN_PRODUCTION**: 订单正在制作中（包括排产、烹饪、包装）
+- **SHIPPED**: 订单已发货，具有物流单号
+- **COMPLETED**: �订单已完成（用户确认或7天自动完成）
+- **CANCELLED**: 订单已取消（由客户、管理员或系统）
 
 允许的转移（必须在 Domain 层强制）：
     INIT → PENDING_PAYMENT
     PENDING_PAYMENT → PAID
-    PAID → SCHEDULING
-    SCHEDULING → IN_PRODUCTION
-    IN_PRODUCTION → PACKAGED
-    PACKAGED → SHIPPED
-    SHIPPED → DELIVERED
-    任意状态（在未支付或支付超时前）→ CANCELED
+    PENDING_PAYMENT → CANCELLED  # 用户取消/支付超时
+    PAID → IN_PRODUCTION
+    PAID → CANCELLED             # 管理员取消
+    IN_PRODUCTION → SHIPPED
+    IN_PRODUCTION → CANCELLED    # 管理员取消
+    SHIPPED → COMPLETED          # 用户确认收货或自动完成
+
+**取消规则**:
+- 客户可取消: INIT, PENDING_PAYMENT
+- 管理员可取消: 任意状态（除SHIPPED, COMPLETED, CANCELLED）
+- 系统自动取消: 支付超时（PENDING_PAYMENT → CANCELLED）
 
 非法转移必须抛出 InvalidStateTransitionException。
+
+**Phase 9 优化说明** (2026-01-09):
+- 删除了 WAITING_FOR_PRODUCTION, READY_FOR_PACKAGING, READY_FOR_SHIPMENT 状态
+- 简化为核心7状态，对齐电商行业标准（京东、美团、标准ERP）
+- IN_PRODUCTION 状态涵盖：排产、生产、包装三个子阶段
+- 用户界面只展示7个主要状态，内部流程通过子状态或标签区分
 
 
 ------------------------------------------------------------

@@ -32,12 +32,18 @@ model Order {
   carrierCode              String?              @map("carrier_code")
   shippedAt                DateTime?            @map("shipped_at")
   completedAt              DateTime?            @map("completed_at")
+  aftersaleType            AftersaleType?       @map("aftersale_type")
+  freezingSince            DateTime?            @map("freezing_since")
+  aftersaleSince           DateTime?            @map("aftersale_since")
+  aftersaleReason          String?              @map("aftersale_reason")
+  aftersalePhotos          String[]             @default([]) @map("aftersale_photos")
   customer                 User                 @relation(fields: [customerId], references: [id], onDelete: Cascade)
   items                    OrderItem[]
   statusHistory            OrderStatusHistory[]
 
   @@index([customerId])
   @@index([status])
+  @@index([aftersaleType])
   @@map("order")
 }
 
@@ -481,14 +487,23 @@ enum OrderStatus {
   IN_PRODUCTION
   READY_FOR_PACKAGING
   READY_FOR_SHIPMENT
+  FREEZING
   SHIPPED
   COMPLETED
   CANCELLED
+  AFTERSALE
 }
 
 enum OrderType {
   FRESH_FOOD
   CUSTOM_SERVICE
+}
+
+enum AftersaleType {
+  REFUND
+  REMAKE
+  COMPLAINT
+  RESOLVED
 }
 
 enum DogGender {

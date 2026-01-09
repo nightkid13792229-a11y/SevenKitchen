@@ -48,6 +48,7 @@ export class UsersController {
             dogs: true,
             orders: true,
             addresses: true,
+            diySheets: true,
           },
         },
       },
@@ -67,6 +68,8 @@ export class UsersController {
       dogCount: userData._count.dogs,
       orderCount: userData._count.orders,
       addressCount: userData._count.addresses,
+      diySheetCount: userData._count.diySheets,
+      favoriteRecipeCount: 0, // TODO: 实现收藏功能后添加统计
     };
 
     return new ApiResponseDto(0, '成功', response);
@@ -111,6 +114,7 @@ export class UsersController {
             dogs: true,
             orders: true,
             addresses: true,
+            diySheets: true,
           },
         },
       },
@@ -126,6 +130,8 @@ export class UsersController {
       dogCount: updatedUser._count.dogs,
       orderCount: updatedUser._count.orders,
       addressCount: updatedUser._count.addresses,
+      diySheetCount: updatedUser._count.diySheets,
+      favoriteRecipeCount: 0, // TODO: 实现收藏功能后添加统计
     };
 
     return new ApiResponseDto(0, '更新成功', response);

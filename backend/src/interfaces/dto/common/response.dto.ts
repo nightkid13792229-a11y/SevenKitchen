@@ -32,3 +32,4 @@ export class ApiResponseDto<T> {
     return new ApiResponseDto(code, message, null);
   }
 }
+

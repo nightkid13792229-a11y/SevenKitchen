@@ -97,32 +97,61 @@
                 <text class="info-label">总餐数:</text>
                 <text class="info-value-small">{{ item.packageCount }}餐</text>
               </view>
-              <view class="info-row-small" v-if="item.dailyIntakeG && item.dog?.mealsPerDay">
-                <text class="info-label">每餐饭量:</text>
-                <text class="info-value-small">{{ Math.round(item.dailyIntakeG / (item.dog.mealsPerDay || 1)) }}g/餐</text>
+              <view class="info-row-small">
+                <text class="info-label">每餐重量:</text>
+                <text class="info-value-small">{{ item.packageSpecG }}g/餐</text>
               </view>
             </view>
 
-            <button class="btn-view-snapshot" @tap="viewSnapshot(item)">
-              查看食谱快照
-            </button>
           </view>
         </view>
       </view>
 
-      <!-- 售后服务（仅在SHIPPED或COMPLETED状态显示） -->
-      <view class="section aftersale-section" v-if="order.status === 'SHIPPED' || order.status === 'COMPLETED'">
+      <!-- 售后服务（FREEZING、SHIPPED或COMPLETED状态可申请） -->
+      <view class="section aftersale-section" v-if="canApplyAftersale(order.status)">
         <view class="section-title">售后服务</view>
         <view class="aftersale-buttons">
-          <button class="btn-aftersale" @tap="applyAftersale">
-            <text class="btn-text">申请售后</text>
-          </button>
-          <button class="btn-aftersale" @tap="applyRefund">
+          <button class="btn-aftersale" @tap="applyAftersaleType('REFUND')">
             <text class="btn-text">申请退款</text>
           </button>
-          <button class="btn-aftersale" @tap="contactSevenDad">
-            <text class="btn-text">联系Seven爸</text>
+          <button class="btn-aftersale" @tap="applyAftersaleType('REMAKE')">
+            <text class="btn-text">申请重做</text>
           </button>
+          <button class="btn-aftersale" @tap="applyAftersaleType('COMPLAINT')">
+            <text class="btn-text">投诉建议</text>
+          </button>
+        </view>
+      </view>
+
+      <!-- 售后信息（AFTERSALE状态显示） -->
+      <view class="section aftersale-info-section" v-if="order.status === 'AFTERSALE'">
+        <view class="section-title">售后信息</view>
+        <view class="aftersale-info">
+          <view class="info-row">
+            <text class="label">售后类型:</text>
+            <text class="value">{{ getAftersaleTypeText(order.aftersaleType) }}</text>
+          </view>
+          <view class="info-row">
+            <text class="label">申请时间:</text>
+            <text class="value">{{ formatTime(order.aftersaleSince) }}</text>
+          </view>
+          <view class="info-row">
+            <text class="label">售后原因:</text>
+            <text class="value">{{ order.aftersaleReason }}</text>
+          </view>
+          <view class="aftersale-photos" v-if="order.aftersalePhotos && order.aftersalePhotos.length > 0">
+            <text class="photos-label">凭证图片:</text>
+            <view class="photos-grid">
+              <image
+                v-for="(img, idx) in order.aftersalePhotos"
+                :key="idx"
+                :src="img"
+                mode="aspectFill"
+                class="photo-item"
+                @tap="previewAftersaleImage(idx)"
+              />
+            </view>
+          </view>
         </view>
       </view>
 
@@ -201,18 +230,17 @@
       </view>
     </view>
 
-    <!-- 食谱快照弹窗 -->
-    <RecipeSnapshotModal ref="snapshotModal" />
-
     <!-- 底部操作按钮 -->
+    <!-- Phase 9: Simplified action buttons aligned with e-commerce standards -->
+    <!-- Phase 9.1: Added FREEZING and AFTERSALE status actions -->
     <view class="bottom-actions" v-if="order">
-      <!-- 生产中状态 -->
-      <view v-if="order.status === 'PAID' || order.status === 'WAITING_FOR_PRODUCTION' || order.status === 'IN_PRODUCTION' || order.status === 'READY_FOR_PACKAGING'" class="action-buttons">
+      <!-- 生产中状态 (合并PAID和IN_PRODUCTION) -->
+      <view v-if="order.status === 'PAID' || order.status === 'IN_PRODUCTION'" class="action-buttons">
         <button class="btn-action btn-secondary" @tap="contactService">联系客服</button>
       </view>
 
-      <!-- 急冻中待发货状态 -->
-      <view v-else-if="order.status === 'READY_FOR_SHIPMENT'" class="action-buttons">
+      <!-- 急冻中状态 -->
+      <view v-else-if="order.status === 'FREEZING'" class="action-buttons">
         <button class="btn-action btn-secondary" @tap="contactService">联系客服</button>
       </view>
 
@@ -220,6 +248,11 @@
       <view v-else-if="order.status === 'SHIPPED'" class="action-buttons">
         <button class="btn-action btn-secondary" @tap="viewLogistics">查看物流</button>
         <button class="btn-action btn-primary" @tap="confirmReceived">确认收货</button>
+      </view>
+
+      <!-- 售后中状态 -->
+      <view v-else-if="order.status === 'AFTERSALE'" class="action-buttons">
+        <button class="btn-action btn-secondary" @tap="contactService">联系客服</button>
       </view>
 
       <!-- 已完成状态 -->
@@ -240,7 +273,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { request } from '../../utils/api'
 import OrderProgressBar from '../../components/OrderProgressBar.vue'
-import RecipeSnapshotModal from '../../components/RecipeSnapshotModal.vue'
 
 interface OrderItem {
   id: string
@@ -297,11 +329,15 @@ interface Order {
   paymentMethod?: string
   transactionId?: string
   paidAt?: string
+  // Phase 9.1: Aftersale fields
+  aftersaleType?: string
+  aftersaleSince?: string
+  aftersaleReason?: string
+  aftersalePhotos?: string[]
 }
 
 const order = ref<Order | null>(null)
 const orderId = ref('')
-const snapshotModal = ref<InstanceType<typeof RecipeSnapshotModal> | null>(null)
 
 // 评价相关
 const reviewRating = ref(0)
@@ -395,15 +431,12 @@ function calculateUnitPrice(item: OrderItem): number {
 }
 
 function getStatusText(status: string): string {
-  // 合并为5个主要状态
+  // Phase 9: Simplified status text aligned with e-commerce standards
   const statusMap: Record<string, string> = {
     INIT: '待确认',
     PENDING_PAYMENT: '待付款',
     PAID: '已付款',
-    WAITING_FOR_PRODUCTION: '生产中',
-    IN_PRODUCTION: '生产中',
-    READY_FOR_PACKAGING: '生产中',
-    READY_FOR_SHIPMENT: '急冻中待发货',
+    IN_PRODUCTION: '制作中',
     SHIPPED: '已发货',
     COMPLETED: '已完成',
     CANCELLED: '已取消'
@@ -412,14 +445,12 @@ function getStatusText(status: string): string {
 }
 
 function getStatusIcon(status: string): string {
+  // Phase 9: Simplified status icons aligned with e-commerce standards
   const iconMap: Record<string, string> = {
     INIT: '📝',
     PENDING_PAYMENT: '💳',
     PAID: '✓',
-    WAITING_FOR_PRODUCTION: '⏳',
     IN_PRODUCTION: '👨‍🍳',
-    READY_FOR_PACKAGING: '👨‍🍳',
-    READY_FOR_SHIPMENT: '❄️',
     SHIPPED: '🚚',
     COMPLETED: '✅',
     CANCELLED: '✕'
@@ -428,14 +459,12 @@ function getStatusIcon(status: string): string {
 }
 
 function getStatusColor(status: string): string {
+  // Phase 9: Simplified status colors aligned with e-commerce standards
   const colorMap: Record<string, string> = {
     INIT: '#999',
     PENDING_PAYMENT: '#ff9800',
     PAID: '#1890ff',
-    WAITING_FOR_PRODUCTION: '#1890ff',
     IN_PRODUCTION: '#1890ff',
-    READY_FOR_PACKAGING: '#1890ff',
-    READY_FOR_SHIPMENT: '#722ed1',
     SHIPPED: '#52c41a',
     COMPLETED: '#52c41a',
     CANCELLED: '#999'
@@ -487,12 +516,6 @@ function copyTrackingNumber() {
       uni.showToast({ title: '运单号已复制', icon: 'success' })
     }
   })
-}
-
-function viewSnapshot(item: OrderItem) {
-  if (!item.recipeSnapshot) return
-
-  snapshotModal.value?.open(item.recipeSnapshot)
 }
 
 // 取消订单
@@ -709,47 +732,53 @@ async function buyAgain() {
   }
 }
 
-// 申请售后
-function applyAftersale() {
-  uni.showToast({
-    title: '售后申请功能开发中...',
-    icon: 'none'
-  })
-  // TODO: 跳转到售后申请页面
+// 判断是否可以申请售后
+// Phase 9.1: FREEZING, SHIPPED, COMPLETED status can apply for aftersale
+function canApplyAftersale(status: string): boolean {
+  return ['FREEZING', 'SHIPPED', 'COMPLETED'].includes(status)
 }
 
-// 申请退款
+// 获取售后类型文本
+function getAftersaleTypeText(type?: string): string {
+  const typeMap: Record<string, string> = {
+    'REFUND': '申请退款',
+    'REMAKE': '申请重做',
+    'COMPLAINT': '投诉建议',
+    'RESOLVED': '已解决',
+  }
+  return typeMap[type || ''] || ''
+}
+
+// 申请售后（统一入口）
+function applyAftersaleType(type: 'REFUND' | 'REMAKE' | 'COMPLAINT') {
+  uni.navigateTo({
+    url: `/pages/aftersale-apply/index?orderId=${orderId.value}&type=${type}`
+  })
+}
+
+// 预览售后图片
+function previewAftersaleImage(index: number) {
+  if (!order.value?.aftersalePhotos || order.value.aftersalePhotos.length === 0) {
+    return
+  }
+
+  uni.previewImage({
+    current: index,
+    urls: order.value.aftersalePhotos
+  })
+}
+
+// 申请售后（旧函数，保留向后兼容）
+function applyAftersale() {
+  uni.navigateTo({
+    url: `/pages/aftersale-apply/index?orderId=${orderId.value}&type=COMPLAINT`
+  })
+}
+
+// 申请退款（旧函数，保留向后兼容）
 async function applyRefund() {
-  uni.showModal({
-    title: '申请退款',
-    content: '确定要申请退款吗？',
-    success: async (res) => {
-      if (res.confirm) {
-        try {
-          uni.showLoading({ title: '提交中...' })
-          const result = await request({
-            url: `/orders/${orderId.value}/refund`,
-            method: 'POST'
-          })
-          if (result.code === 0) {
-            uni.showToast({
-              title: '退款申请已提交',
-              icon: 'success'
-            })
-          } else {
-            throw new Error(result.message || '申请失败')
-          }
-        } catch (error) {
-          console.error('Apply refund error:', error)
-          uni.showToast({
-            title: '申请失败',
-            icon: 'none'
-          })
-        } finally {
-          uni.hideLoading()
-        }
-      }
-    }
+  uni.navigateTo({
+    url: `/pages/aftersale-apply/index?orderId=${orderId.value}&type=REFUND`
   })
 }
 
@@ -1113,16 +1142,6 @@ async function submitReview() {
   font-size: 30rpx;
   color: #ff9800;
   font-weight: bold;
-}
-
-.btn-view-snapshot {
-  width: 100%;
-  padding: 16rpx;
-  background-color: #fff;
-  border: 1rpx solid #1890ff;
-  color: #1890ff;
-  border-radius: 8rpx;
-  font-size: 26rpx;
 }
 
 /* 扩展信息 */

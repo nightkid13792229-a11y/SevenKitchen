@@ -80,3 +80,4 @@ export class JwtAuthService {
     return process.env.JWT_SECRET || 'dev-secret-key-change-in-production';
   }
 }
+

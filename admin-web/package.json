@@ -10,9 +10,12 @@
   },
   "dependencies": {
     "@element-plus/icons-vue": "^2.3.2",
+    "@nestjs/platform-express": "^11.1.11",
     "@types/sortablejs": "^1.15.9",
     "axios": "^1.13.2",
+    "cos-nodejs-sdk-v5": "^2.15.4",
     "element-plus": "^2.13.0",
+    "multer": "^2.0.2",
     "pinia": "^3.0.4",
     "sortablejs": "^1.15.6",
     "vue": "^3.5.24",

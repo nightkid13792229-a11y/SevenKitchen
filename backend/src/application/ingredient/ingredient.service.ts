@@ -190,3 +190,4 @@ export class IngredientService {
     await this.ingredientRepository.delete(id);
   }
 }
+

@@ -47,3 +47,4 @@ CREATE INDEX "dog_owner_id_idx" ON "dog"("owner_id");
 -- CreateIndex
 CREATE INDEX "dog_owner_id_created_at_idx" ON "dog"("owner_id", "created_at");
 
+

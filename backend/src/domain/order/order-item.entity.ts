@@ -54,3 +54,4 @@ export class OrderItem {
     // TODO: Add more validation rules
   }
 }
+

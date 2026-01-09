@@ -18,10 +18,6 @@
         <text v-if="!loading">微信一键登录</text>
         <text v-else>登录中...</text>
       </button>
-
-      <view class="login-tip">
-        <text class="tip-text">员工可通过微信登录，系统自动识别员工身份</text>
-      </view>
     </view>
 
     <!-- 用户协议 -->
@@ -106,6 +102,10 @@ const handleWechatLogin = async (e: any) => {
       uni.setStorageSync('user', user);
       markTokenReady(); // 标记token已就绪
       console.log('[Login] Token and user saved to storage, token marked as ready');
+
+      // 3.5. 触发自定义 tabBar 更新（通过设置标志位）
+      uni.setStorageSync('userLoginTrigger', Date.now());
+      console.log('[Login] Triggered tabBar update');
 
       // 4. 新用户提示
       if (isNewUser) {
@@ -214,23 +214,10 @@ const showPrivacyPolicy = () => {
   font-size: 32rpx;
   font-weight: 500;
   border: none;
-  margin-bottom: 32rpx;
 }
 
 .wechat-login-btn:disabled {
   opacity: 0.7;
-}
-
-.login-tip {
-  text-align: center;
-  margin-top: 24rpx;
-  padding: 0 40rpx;
-}
-
-.login-tip .tip-text {
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 24rpx;
-  line-height: 1.5;
 }
 
 .agreement-section {

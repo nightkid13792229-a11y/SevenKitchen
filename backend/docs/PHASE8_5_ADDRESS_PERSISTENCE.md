@@ -284,3 +284,4 @@ To disable Prisma persistence for Address:
 - **Atomicity:** The current implementation saves each address individually when unsetting defaults. This works correctly but is not optimally atomic. Future enhancement: Add a transaction-based method for better atomicity.
 - **Customer Isolation:** Addresses are always filtered by `userId` (mapped from `customerId` in the controller) to ensure customer isolation.
 - **Region Storage:** The `region` field is stored as JSON in the database, containing `province`, `city`, and `district` fields.
+

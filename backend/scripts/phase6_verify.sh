@@ -641,3 +641,4 @@ echo -e "  ✓ Order creation persists shipping amounts"
 echo -e "  ✓ Order detail includes amountProduct, amountShipping, amountTotal"
 echo -e "  ✓ Preview and persisted order amounts match (within rounding tolerance)"
 echo ""
+

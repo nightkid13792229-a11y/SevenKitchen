@@ -186,3 +186,4 @@ Create migration: `YYYYMMDDHHMMSS_add_order_shipping_fields`
 - ✅ Domain state machine remains authoritative
 - ✅ Snapshot integrity: no mutable Recipe reads
 - ✅ Tests clean: no console noise
+

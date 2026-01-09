@@ -498,3 +498,4 @@ echo -e "  ✓ Numeric values match pricing snapshot"
 echo -e "  ✓ No recalculation detected (all values from snapshot)"
 echo ""
 
+

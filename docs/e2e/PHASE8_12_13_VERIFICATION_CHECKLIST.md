@@ -111,3 +111,4 @@ pnpm run build
 - **Idempotency:** If inventory was already deducted in a previous run, Step 8 may show "Ledger Entries Created: 0". This is expected and indicates successful idempotency.
 - **Auto-Cleanup:** `E2E_FORCE_FRESH_DEDUCTION=1` should only be used in development environments, never in production.
 - **Log Archival:** E2E logs should be committed to `docs/e2e/` for traceability.
+

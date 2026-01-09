@@ -102,3 +102,4 @@ curl -X GET "http://127.0.0.1:3000/api/v1/staff/kitchen/batches/{batchId}" \
 ## Git Commit
 - Hash: `16c37eae6409e28f96ac57dda591dfe23aaa5208`
 - Message: `fix(phase8.12+8.13): add recipeSnapshot.items to kitchen batch detail API`
+

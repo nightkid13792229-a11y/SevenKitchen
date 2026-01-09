@@ -3,7 +3,7 @@
  * Aggregate root for Order domain
  */
 
-import { OrderStatus, OrderType } from '../index';
+import { OrderStatus, OrderType, AftersaleType } from '../index';
 import { OrderItem } from './order-item.entity';
 import { InvalidStateTransitionError, ValidationError } from '../common/errors';
 import { PricingBreakdownSnapshot } from './pricing-breakdown-snapshot';
@@ -42,6 +42,12 @@ export class Order {
     public transactionId?: string | null,
     public paidAt?: Date | null,
     public paymentStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | null,
+    // Phase 9.1: Freezing and Aftersale fields
+    public aftersaleType?: AftersaleType | null,
+    public freezingSince?: Date | null,
+    public aftersaleSince?: Date | null,
+    public aftersaleReason?: string | null,
+    public aftersalePhotos?: string[],
   ) {
     // Compute totalAmount from amountTotal if not provided
     if (this.totalAmount === undefined) {
@@ -112,30 +118,35 @@ export class Order {
 
   /**
    * Check if transition is allowed
-   * State machine rules from Doc 02 Section 3.1:
-   * INIT → PENDING_PAYMENT or CANCELLED
-   * PENDING_PAYMENT → PAID (success) or CANCELLED (failure)
-   * PAID → WAITING_FOR_PRODUCTION or CANCELLED (admin)
-   * WAITING_FOR_PRODUCTION → IN_PRODUCTION or CANCELLED (admin)
-   * IN_PRODUCTION → READY_FOR_PACKAGING or CANCELLED (admin)
-   * READY_FOR_PACKAGING → READY_FOR_SHIPMENT or CANCELLED (admin)
-   * READY_FOR_SHIPMENT → SHIPPED or CANCELLED (admin)
-   * SHIPPED → COMPLETED (cannot be cancelled)
-   * COMPLETED → [] (terminal, cannot be cancelled)
-   * Phase 8.16: Admin can cancel from any status except SHIPPED, COMPLETED, CANCELLED
+   * Phase 9: E-commerce Standard State Machine
+   *
+   * Standard Flow (aligned with JD.com, Meituan, Standard ERP):
+   * INIT → PENDING_PAYMENT → PAID → IN_PRODUCTION → SHIPPED → COMPLETED
+   *
+   * Cancellation Rules:
+   * - Customer can cancel: INIT, PENDING_PAYMENT
+   * - Admin can cancel: Any state except SHIPPED, COMPLETED, CANCELLED
+   *
+   * State Definitions:
+   * - INIT: Order draft, not yet submitted
+   * - PENDING_PAYMENT: Waiting for payment
+   * - PAID: Payment confirmed, ready for production
+   * - IN_PRODUCTION: Being prepared, cooked, and packaged
+   * - SHIPPED: Shipped with tracking (cannot be cancelled)
+   * - COMPLETED: Completed (terminal state)
+   * - CANCELLED: Cancelled (terminal state)
    */
   private canTransitionTo(newStatus: OrderStatus): boolean {
     const validTransitions: Record<OrderStatus, OrderStatus[]> = {
       [OrderStatus.INIT]: [OrderStatus.PENDING_PAYMENT, OrderStatus.CANCELLED],
       [OrderStatus.PENDING_PAYMENT]: [OrderStatus.PAID, OrderStatus.CANCELLED],
-      [OrderStatus.PAID]: [OrderStatus.WAITING_FOR_PRODUCTION, OrderStatus.CANCELLED],
-      [OrderStatus.WAITING_FOR_PRODUCTION]: [OrderStatus.IN_PRODUCTION, OrderStatus.CANCELLED],
-      [OrderStatus.IN_PRODUCTION]: [OrderStatus.READY_FOR_PACKAGING, OrderStatus.CANCELLED],
-      [OrderStatus.READY_FOR_PACKAGING]: [OrderStatus.READY_FOR_SHIPMENT, OrderStatus.CANCELLED],
-      [OrderStatus.READY_FOR_SHIPMENT]: [OrderStatus.SHIPPED, OrderStatus.CANCELLED],
-      [OrderStatus.SHIPPED]: [OrderStatus.COMPLETED], // Cannot be cancelled
-      [OrderStatus.COMPLETED]: [], // Terminal state, cannot be cancelled
-      [OrderStatus.CANCELLED]: [], // Terminal state
+      [OrderStatus.PAID]: [OrderStatus.IN_PRODUCTION, OrderStatus.CANCELLED],
+      [OrderStatus.IN_PRODUCTION]: [OrderStatus.FREEZING, OrderStatus.CANCELLED],
+      [OrderStatus.FREEZING]: [OrderStatus.SHIPPED, OrderStatus.AFTERSALE],
+      [OrderStatus.SHIPPED]: [OrderStatus.COMPLETED, OrderStatus.AFTERSALE],
+      [OrderStatus.COMPLETED]: [OrderStatus.AFTERSALE],
+      [OrderStatus.AFTERSALE]: [OrderStatus.SHIPPED, OrderStatus.COMPLETED, OrderStatus.IN_PRODUCTION, OrderStatus.CANCELLED],
+      [OrderStatus.CANCELLED]: [],
     };
 
     const allowedNextStates = validTransitions[this.status] || [];
@@ -179,15 +190,13 @@ export class Order {
 
   /**
    * Check if order snapshots are immutable
-   * Based on Doc 02/03: Snapshots become immutable once order is PAID or beyond
+   * Phase 9: Snapshots become immutable once order is PAID or beyond
+   * Based on Doc 02/03: Immutable after payment confirmation
    */
   areSnapshotsImmutable(): boolean {
     return (
       this.status === OrderStatus.PAID ||
-      this.status === OrderStatus.WAITING_FOR_PRODUCTION ||
       this.status === OrderStatus.IN_PRODUCTION ||
-      this.status === OrderStatus.READY_FOR_PACKAGING ||
-      this.status === OrderStatus.READY_FOR_SHIPMENT ||
       this.status === OrderStatus.SHIPPED ||
       this.status === OrderStatus.COMPLETED
     );
@@ -195,14 +204,15 @@ export class Order {
 
   /**
    * Mark order as shipped with tracking information
-   * Phase 8.14: Shipping fulfillment
+   * Phase 9: Shipping fulfillment (simplified from READY_FOR_SHIPMENT to IN_PRODUCTION)
    * @param trackingNumber Shipping tracking number
    * @param carrierCode Shipping carrier code (e.g., "SF", "YTO", "ZTO")
    */
   markAsShipped(trackingNumber: string, carrierCode: string): void {
-    if (this.status !== OrderStatus.READY_FOR_SHIPMENT) {
+    // Phase 9: Changed from READY_FOR_SHIPMENT to IN_PRODUCTION
+    if (this.status !== OrderStatus.IN_PRODUCTION) {
       throw new InvalidStateTransitionError(
-        `Cannot mark order as shipped from status: ${this.status}. Order must be in READY_FOR_SHIPMENT status.`,
+        `Cannot mark order as shipped from status: ${this.status}. Order must be in IN_PRODUCTION status.`,
       );
     }
 
@@ -322,4 +332,88 @@ export class Order {
     // Transition to PAID status
     this.transitionTo(OrderStatus.PAID);
   }
+
+  /**
+   * Mark order as freezing (急冻中待发货)
+   * Phase 9.1: Freezing status after production photos uploaded
+   * @throws InvalidStateTransitionError if order is not in IN_PRODUCTION status
+   */
+  markAsFreezing(): void {
+    if (this.status !== OrderStatus.IN_PRODUCTION) {
+      throw new InvalidStateTransitionError(
+        `Cannot mark order as freezing from status: ${this.status}. Order must be in IN_PRODUCTION status.`,
+      );
+    }
+
+    this.freezingSince = new Date();
+    this.transitionTo(OrderStatus.FREEZING);
+  }
+
+  /**
+   * Apply for aftersale (申请售后)
+   * Phase 9.1: Aftersale request from customer
+   * @param type Type of aftersale (REFUND, REMAKE, COMPLAINT)
+   * @param reason Customer reason for aftersale
+   * @param photos Optional array of photo URLs
+   * @throws InvalidStateTransitionError if order is not in eligible status
+   * @throws ValidationError if reason is not provided
+   */
+  applyForAftersale(type: AftersaleType, reason: string, photos: string[] = []): void {
+    const allowedStatuses = [
+      OrderStatus.FREEZING,
+      OrderStatus.SHIPPED,
+      OrderStatus.COMPLETED,
+    ];
+
+    if (!allowedStatuses.includes(this.status)) {
+      throw new InvalidStateTransitionError(
+        `Cannot apply for aftersale from status: ${this.status}. Order must be in FREEZING, SHIPPED, or COMPLETED status.`,
+      );
+    }
+
+    if (!reason || !reason.trim()) {
+      throw new ValidationError('Aftersale reason is required');
+    }
+
+    this.aftersaleType = type;
+    this.aftersaleReason = reason.trim();
+    this.aftersalePhotos = photos;
+    this.aftersaleSince = new Date();
+    this.transitionTo(OrderStatus.AFTERSALE);
+  }
+
+  /**
+   * Resolve aftersale (解决售后)
+   * Phase 9.1: Admin/staff resolves aftersale request
+   * @param resolutionType Type of resolution (refunded, remade, resolved)
+   * @throws InvalidStateTransitionError if order is not in AFTERSALE status
+   */
+  resolveAftersale(resolutionType: 'refunded' | 'remade' | 'resolved'): void {
+    if (this.status !== OrderStatus.AFTERSALE) {
+      throw new InvalidStateTransitionError(
+        `Cannot resolve aftersale from status: ${this.status}. Order must be in AFTERSALE status.`,
+      );
+    }
+
+    this.aftersaleType = AftersaleType.RESOLVED;
+
+    switch (resolutionType) {
+      case 'refunded':
+        // Transition to CANCELLED status for refund
+        this.transitionTo(OrderStatus.CANCELLED);
+        break;
+      case 'remade':
+        // Transition back to IN_PRODUCTION for remake
+        this.transitionTo(OrderStatus.IN_PRODUCTION);
+        break;
+      case 'resolved':
+        // Mark as completed (complaint resolved)
+        if (!this.completedAt) {
+          this.completedAt = new Date();
+        }
+        this.transitionTo(OrderStatus.COMPLETED);
+        break;
+    }
+  }
 }
+

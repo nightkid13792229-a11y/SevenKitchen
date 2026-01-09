@@ -289,3 +289,4 @@ This guides you through testing all user flows as a real user would.
 **If `doctor.sh` passes and app boots successfully → ✅ READY FOR REAL USER VERIFICATION**
 
 
+

@@ -533,3 +533,4 @@ echo -e "  ✓ All cost fields exist and are valid"
 echo -e "  ✓ Total price matches product + shipping"
 echo ""
 
+

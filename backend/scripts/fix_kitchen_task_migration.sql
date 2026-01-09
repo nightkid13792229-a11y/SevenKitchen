@@ -82,3 +82,4 @@ END $$;
 
 -- Step 5: Create index if it doesn't exist
 CREATE INDEX IF NOT EXISTS "packaging_unit_status_idx" ON "packaging_unit"("status");
+

@@ -99,3 +99,4 @@ This will:
 ✅ Output directory `dist/dev/mp-weixin/app.json` exists after build
 ✅ Script `mp-weixin-dev.sh` runs without errors
 
+

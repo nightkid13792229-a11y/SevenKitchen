@@ -33,3 +33,4 @@ npx tsx prisma/seed-dog-breeds.ts
 - 大丹犬 (GIANT)
 
 脚本是幂等的：如果品种已存在，会跳过创建。
+

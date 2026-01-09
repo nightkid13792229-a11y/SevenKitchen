@@ -72,3 +72,4 @@ export interface RecipeRepository {
   getFilterOptions(): Promise<FilterOptions>;
   save(recipe: Recipe): Promise<Recipe>;
 }
+

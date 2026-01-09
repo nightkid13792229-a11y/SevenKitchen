@@ -18,3 +18,4 @@ COMMENT ON COLUMN "order".shipped_at IS 'Timestamp when order was marked as ship
 --   DROP COLUMN IF EXISTS tracking_number,
 --   DROP COLUMN IF EXISTS carrier_code,
 --   DROP COLUMN IF EXISTS shipped_at;
+

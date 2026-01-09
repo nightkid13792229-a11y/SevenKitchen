@@ -25,3 +25,4 @@ CREATE INDEX "inventory_ledger_entry_created_at_idx" ON "inventory_ledger_entry"
 -- CreateUniqueConstraint
 -- Phase 8.13: DB-level idempotency guarantee
 CREATE UNIQUE INDEX "inventory_ledger_entry_source_type_source_id_ingredient_id_key" ON "inventory_ledger_entry"("source_type", "source_id", "ingredient_id");
+

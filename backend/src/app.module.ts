@@ -19,6 +19,8 @@ import { HealthUploadController } from './interfaces/controllers/health-upload.c
 import { GlobalConfigController, PublicGlobalConfigController } from './interfaces/controllers/global-config.controller';
 import { ShippingTemplateController } from './interfaces/controllers/shipping-template.controller';
 import { DIYSheetsController } from './interfaces/controllers/diy-sheets.controller';
+import { StaffProductionPhotosController } from './interfaces/controllers/staff-production-photos.controller';
+import { AftersalePhotosController } from './interfaces/controllers/aftersale-photos.controller';
 import { OrderSchedulerService } from './application/scheduler/order-scheduler.service';
 import {
   DogService,
@@ -163,6 +165,8 @@ validatePrismaConfig();
     PublicGlobalConfigController,
     ShippingTemplateController,
     DIYSheetsController,
+    StaffProductionPhotosController,
+    AftersalePhotosController,
   ],
   providers: [
     DogService,

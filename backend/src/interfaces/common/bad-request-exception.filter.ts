@@ -46,3 +46,4 @@ export class BadRequestExceptionFilter implements ExceptionFilter {
     response.status(HttpStatus.OK).json(apiResponse);
   }
 }
+

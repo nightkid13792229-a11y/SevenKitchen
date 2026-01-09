@@ -15,3 +15,4 @@ Source of truth: docs/07_Core_Architecture.md (and docs/04, docs/05).
 
 Note: This file is informational only and must not override or extend the authoritative docs.
 
+

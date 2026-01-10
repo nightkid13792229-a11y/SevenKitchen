@@ -293,7 +293,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 
 interface CartItem {
@@ -549,6 +550,63 @@ onMounted(() => {
   selectedProductionDate.value = defaultProductionDate.value
 })
 
+// onShow - 每次页面显示时重新加载地址
+onShow(() => {
+  // 只在已经加载过订单配置后才重新加载地址（避免首次加载时重复请求）
+  if (pricingSnapshotId.value) {
+    console.log('[Checkout] onShow - reloading default address')
+    loadDefaultAddress()
+  }
+})
+
+// 监听地址选择事件（从地址列表返回时）
+onMounted(() => {
+  const handleAddressSelected = (data: any) => {
+    console.log('[Checkout] Address selected event:', data)
+    if (data && data.addressId) {
+      // 加载选中的地址
+      loadAddressById(data.addressId)
+    }
+  }
+
+  uni.$on('address-selected', handleAddressSelected)
+
+  // 清理事件监听器
+  onUnmounted(() => {
+    uni.$off('address-selected', handleAddressSelected)
+  })
+})
+
+// 根据ID加载地址
+async function loadAddressById(addressId: string) {
+  try {
+    const res = await request({
+      url: '/addresses',
+      method: 'GET'
+    })
+
+    if (res.code === 0 && res.data && res.data.length > 0) {
+      const address = res.data.find((addr: any) => addr.id === addressId)
+      if (address) {
+        selectedAddress.value = {
+          id: address.id,
+          recipientName: address.recipientName,
+          phone: address.phone,
+          regionText: formatRegionText(address.region),
+          detailAddress: address.detailAddress,
+          isDefault: address.isDefault
+        }
+        uni.showToast({
+          title: '已选择地址',
+          icon: 'success'
+        })
+      }
+    }
+  } catch (error) {
+    console.error('Load address by ID error:', error)
+  }
+}
+
 function loadDirectBuyItem(options: any) {
   pricingSnapshotId.value = options.snapshotId || null
   console.log('[Checkout] Pricing Snapshot ID:', pricingSnapshotId.value)
@@ -745,7 +803,7 @@ function goToAddressList() {
 
 function goToAddAddress() {
   uni.navigateTo({
-    url: '/pages/address-create/index'
+    url: '/pages/address-edit/index'
   })
 }
 </script>

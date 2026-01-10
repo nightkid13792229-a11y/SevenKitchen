@@ -102,12 +102,17 @@ function loadAddresses() {
 
 function onAddressTap(addressId: string) {
   if (mode.value === 'select') {
-    // Select mode: return to order-config with selected addressId
+    // Select mode: return to previous page (order-config or checkout)
     const pages = getCurrentPages()
     const prevPage = pages[pages.length - 2]
-    if (prevPage && prevPage.route === 'pages/order-config/index') {
-      // Set addressId in previous page
-      uni.$emit('address-selected', addressId)
+    if (prevPage) {
+      const prevPageRoute = prevPage.route
+      console.log('[AddressList] Previous page:', prevPageRoute)
+
+      // Send event to previous page
+      uni.$emit('address-selected', { addressId, from: prevPageRoute })
+      uni.navigateBack()
+    } else {
       uni.navigateBack()
     }
   } else {

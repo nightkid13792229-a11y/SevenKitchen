@@ -327,6 +327,7 @@ const recipe = ref<Recipe>({
 })
 
 const dogs = ref<Dog[]>([])
+const breeds = ref<Breed[]>([])
 const selectedDogId = ref<string | null>(null)
 const selectedDog = ref<Dog | null>(null)
 
@@ -390,6 +391,7 @@ onMounted(() => {
   console.log('[食谱ID]', recipeId.value)
 
   if (recipeId.value) {
+    loadBreeds()
     loadHealthTagMapping()
     loadRecipe()
     loadDogs()
@@ -397,6 +399,28 @@ onMounted(() => {
 
   console.log('========== [RecipeDiy] onMounted 结束 ==========')
 })
+
+async function loadBreeds() {
+  console.log('[RecipeDiy] loadBreeds 开始')
+
+  try {
+    const res = await request({
+      url: '/dogs/breeds',
+      method: 'GET'
+    })
+
+    console.log('[RecipeDiy] loadBreeds API响应:', res)
+
+    if (res.code === 0 && res.data) {
+      breeds.value = res.data
+      console.log('[RecipeDiy] 品种列表加载成功, 数量:', res.data.length)
+    }
+  } catch (error) {
+    console.error('[RecipeDiy] Load breeds error:', error)
+  }
+
+  console.log('[RecipeDiy] loadBreeds 结束')
+}
 
 async function loadRecipe() {
   console.log('[RecipeDiy] loadRecipe 开始, recipeId:', recipeId.value)
@@ -498,14 +522,24 @@ async function onDogPickerChange(e: any) {
     const dogId = dog.id
     console.log('[狗狗ID]', dogId)
 
+    // 重要：先更新 selectedDog，再调用其他函数
     selectedDogId.value = dogId
     selectedDog.value = dog
+
+    console.log('[DEBUG] selectedDog 已更新:', selectedDog.value.name)
 
     // 调用饭量计算API
     await loadDogCalc(dogId)
 
+    console.log('[DEBUG] 准备调用 checkLifeStageMatch')
+    console.log('[DEBUG] 当前 recipe.value.applicableLifeStages:', recipe.value.applicableLifeStages)
+
     // 校验生命阶段
     checkLifeStageMatch()
+
+    console.log('[DEBUG] checkLifeStageMatch 调用完成')
+    console.log('[DEBUG] isLifeStageMatch.value:', isLifeStageMatch.value)
+    console.log('[DEBUG] showWarning.value:', showWarning.value)
   } else {
     console.error('[错误] 未找到索引对应的狗狗, index:', index, 'dogs.length:', dogs.value.length)
   }
@@ -569,48 +603,108 @@ function checkLifeStageMatch() {
 
   console.log('[RecipeDiy] 生命阶段校验:', {
     dogLifeStage,
-    applicableStages,
+    applicableStages: Array.from(applicableStages), // 将Proxy转为数组
     dogName: selectedDog.value.name
   })
 
-  isLifeStageMatch.value = applicableStages.includes(dogLifeStage)
-
-  console.log('[RecipeDiy] 校验结果:', isLifeStageMatch.value ? '匹配' : '不匹配')
-
-  if (!isLifeStageMatch.value) {
-    showWarning.value = true
+  // 如果无法判断狗狗的生命阶段（无品种信息），则不显示警告
+  if (dogLifeStage === null) {
+    console.log('[RecipeDiy] 无法判断狗狗生命阶段（无品种信息），跳过警告')
+    isLifeStageMatch.value = true  // 默认为匹配，不显示警告
+  } else {
+    isLifeStageMatch.value = applicableStages.includes(dogLifeStage)
+    console.log('[RecipeDiy] 校验结果:', isLifeStageMatch.value ? '匹配' : '不匹配')
   }
+
+  // 修复：切换狗狗时重置警告状态
+  // 无论匹配还是不匹配，都应该重置showWarning为true
+  // 这样警告卡片会根据isLifeStageMatch的值自动显示或隐藏
+  showWarning.value = true
+
+  console.log('[RecipeDiy] 警告卡片显示条件:', {
+    '!isLifeStageMatch': !isLifeStageMatch.value,
+    'selectedDog': !!selectedDog.value,
+    'showWarning': showWarning.value,
+    '应该显示警告': !isLifeStageMatch.value && selectedDog.value && showWarning.value
+  })
 
   console.log('[RecipeDiy] checkLifeStageMatch 结束')
 }
 
-function getDogLifeStage(dog: Dog): string {
+function getDogLifeStage(dog: Dog): string | null {
+  console.log('[getDogLifeStage] 开始计算狗狗生命阶段:', dog.name)
+
   // 优先使用用户设置的覆盖值
   if (dog.lifeStageOverride && dog.lifeStageOverride !== 'NONE') {
+    console.log('[getDogLifeStage] 使用用户设置的覆盖值:', dog.lifeStageOverride)
     return dog.lifeStageOverride
   }
 
   // 根据品种和年龄自动判断
   const birthday = new Date(dog.birthday)
   const now = new Date()
-  const ageInMonths = Math.floor((now.getTime() - birthday.getTime()) / (1000 * 60 * 60 * 24) / 30)
 
-  if (!dog.breed) {
-    // 无品种信息，默认按成犬处理
-    return 'ADULT'
+  console.log('[getDogLifeStage] 生日信息:', {
+    birthday: dog.birthday,
+    birthdayObj: birthday,
+    now: now,
+    timeDiff: now.getTime() - birthday.getTime()
+  })
+
+  const ageInDays = Math.floor((now.getTime() - birthday.getTime()) / (1000 * 60 * 60 * 24))
+  const ageInMonths = Math.floor(ageInDays / 30.4375) // 使用更精确的月数计算（平均每月30.4375天）
+  const ageInYears = ageInMonths / 12.0
+
+  console.log('[getDogLifeStage] 年龄计算:', {
+    ageInDays,
+    ageInMonths,
+    ageInYears
+  })
+
+  console.log('[getDogLifeStage] 检查品种信息:', {
+    breedId: dog.breedId,
+    breedName: dog.breedName
+  })
+
+  // 在本地breeds列表中查找品种对象
+  const breed = breeds.value.find(b => b.id === dog.breedId)
+
+  if (!breed || !breed.adultAgeMonths) {
+    console.log('[getDogLifeStage] 缺少完整的品种信息（breed.adultAgeMonths），返回null')
+    console.log('[getDogLifeStage] 找到的breed对象:', breed)
+    return null  // 没有品种信息，无法判断，返回null
   }
 
-  if (ageInMonths < dog.breed.adultAgeMonths) {
+  // 使用品种特定的标准
+  const adultAgeMonths = breed.adultAgeMonths
+  const seniorAgeYears = breed.seniorAgeYears || 7  // 默认7岁老年
+
+  console.log('[getDogLifeStage] 使用品种特定标准:', {
+    breedName: breed.name,
+    adultAgeMonths,
+    seniorAgeYears
+  })
+
+  if (ageInMonths < adultAgeMonths) {
+    console.log('[getDogLifeStage] 判断为幼犬（PUPPY）', { ageInMonths, adultAgeMonths })
     return 'PUPPY'  // 幼犬
-  } else if (ageInMonths >= dog.breed.seniorAgeYears * 12) {
+  } else if (ageInYears >= seniorAgeYears) {
+    console.log('[getDogLifeStage] 判断为老年犬（SENIOR）', { ageInYears, seniorAgeYears })
     return 'SENIOR'  // 老年犬
   } else {
+    console.log('[getDogLifeStage] 判断为成犬（ADULT）', { ageInMonths, ageInYears, adultAgeMonths, seniorAgeYears })
     return 'ADULT'  // 成犬
   }
 }
 
 function getDogLifeStageLabel(dog: Dog): string {
   const stage = getDogLifeStage(dog)
+
+  // 如果无法判断生命阶段，返回"未知"
+  if (stage === null) {
+    return '未知'
+  }
+
   const stageMap: Record<string, string> = {
     'PUPPY': '幼犬',
     'ADULT': '成犬',

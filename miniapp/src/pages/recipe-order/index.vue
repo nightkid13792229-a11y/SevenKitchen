@@ -39,6 +39,25 @@
       </picker>
     </view>
 
+    <!-- 生命阶段不匹配警告 -->
+    <view v-if="!isLifeStageMatch && selectedDog && showWarning" class="warning-card">
+      <view class="warning-header">
+        <text class="warning-icon">⚠️</text>
+        <text class="warning-title">生命阶段不匹配</text>
+      </view>
+      <text class="warning-text">
+        该食谱适用于"{{ getLifeStageLabel(recipe.applicableLifeStages[0]) }}"，
+        您选择的狗狗"{{ selectedDog.name }}"是"{{ getDogLifeStageLabel(selectedDog) }}"阶段，
+        可能不太适合。
+      </text>
+      <text class="warning-text">
+        建议选择其他食谱。
+      </text>
+      <button class="btn-continue" @tap="dismissWarning">
+        我已知晓，仍要继续
+      </button>
+    </view>
+
     <!-- 确定饭量 -->
     <view class="section feeding-section" v-if="selectedDog">
       <view class="section-title">
@@ -853,10 +872,15 @@ const recipe = ref<Recipe>({
 })
 
 const dogs = ref<Dog[]>([])
+const breeds = ref<Breed[]>([])
 const selectedDogId = ref('')
 const selectedCycleDays = ref(7)
 const customDays = ref('')
 const dogCalcResult = ref<CalcResult | null>(null)
+
+// 生命阶段校验
+const isLifeStageMatch = ref(true)
+const showWarning = ref(true)
 const pricePreview = ref<PricePreview | null>(null)
 const pricingSnapshotId = ref<string | null>(null)  // ✅ 新增：快照ID
 const perMealG = ref(0)
@@ -988,11 +1012,34 @@ onMounted(async () => {
   }
 
   if (recipeId.value) {
+    loadBreeds()
     loadRecipeDetail()
     await loadDogs()
     loadGlobalConfig()
   }
 })
+
+async function loadBreeds() {
+  console.log('[RecipeOrder] loadBreeds 开始')
+
+  try {
+    const res = await request({
+      url: '/dogs/breeds',
+      method: 'GET'
+    })
+
+    console.log('[RecipeOrder] loadBreeds API响应:', res)
+
+    if (res.code === 0 && res.data) {
+      breeds.value = res.data
+      console.log('[RecipeOrder] 品种列表加载成功, 数量:', res.data.length)
+    }
+  } catch (error) {
+    console.error('[RecipeOrder] Load breeds error:', error)
+  }
+
+  console.log('[RecipeOrder] loadBreeds 结束')
+}
 
 async function loadRecipeDetail() {
   try {
@@ -1047,6 +1094,113 @@ function onDogPickerChange(e: any) {
   }
 }
 
+// ========== 生命阶段校验逻辑 ==========
+
+function checkLifeStageMatch() {
+  console.log('[RecipeOrder] checkLifeStageMatch 开始')
+
+  if (!selectedDog.value || !recipe.value) {
+    console.log('[RecipeOrder] 缺少必要数据，跳过校验')
+    return
+  }
+
+  const dogLifeStage = getDogLifeStage(selectedDog.value)
+  const applicableStages = recipe.value.applicableLifeStages || []
+
+  // 如果无法判断生命阶段（无品种信息），跳过警告
+  if (dogLifeStage === null) {
+    console.log('[RecipeOrder] 无法判断狗狗生命阶段（无品种信息），跳过警告')
+    isLifeStageMatch.value = true
+  } else {
+    isLifeStageMatch.value = applicableStages.includes(dogLifeStage)
+    console.log('[RecipeOrder] 校验结果:', isLifeStageMatch.value ? '匹配' : '不匹配')
+  }
+
+  // 每次切换狗狗时重置警告状态
+  showWarning.value = true
+
+  console.log('[RecipeOrder] 警告卡片显示条件:', {
+    '!isLifeStageMatch': !isLifeStageMatch.value,
+    'selectedDog': !!selectedDog.value,
+    'showWarning': showWarning.value,
+    '应该显示警告': !isLifeStageMatch.value && selectedDog.value && showWarning.value
+  })
+}
+
+function getDogLifeStage(dog: Dog): string | null {
+  console.log('[getDogLifeStage] 开始计算狗狗生命阶段:', dog.name)
+
+  // 优先使用用户设置的覆盖值
+  if (dog.lifeStageOverride && dog.lifeStageOverride !== 'NONE') {
+    console.log('[getDogLifeStage] 使用用户设置的覆盖值:', dog.lifeStageOverride)
+    return dog.lifeStageOverride
+  }
+
+  // 根据品种和年龄自动判断
+  const birthday = new Date(dog.birthday)
+  const now = new Date()
+
+  const ageInDays = Math.floor((now.getTime() - birthday.getTime()) / (1000 * 60 * 60 * 24))
+  const ageInMonths = Math.floor(ageInDays / 30.4375)
+  const ageInYears = ageInMonths / 12.0
+
+  console.log('[getDogLifeStage] 年龄计算:', {
+    ageInDays,
+    ageInMonths,
+    ageInYears
+  })
+
+  // 在本地breeds列表中查找品种对象
+  const breed = breeds.value.find(b => b.id === dog.breedId)
+
+  if (!breed || !breed.adultAgeMonths) {
+    console.log('[getDogLifeStage] 缺少完整的品种信息，返回null')
+    return null
+  }
+
+  // 使用品种特定的标准
+  const adultAgeMonths = breed.adultAgeMonths
+  const seniorAgeYears = breed.seniorAgeYears || 7
+
+  if (ageInMonths < adultAgeMonths) {
+    return 'PUPPY'
+  } else if (ageInYears >= seniorAgeYears) {
+    return 'SENIOR'
+  } else {
+    return 'ADULT'
+  }
+}
+
+function getDogLifeStageLabel(dog: Dog): string {
+  const stage = getDogLifeStage(dog)
+
+  if (stage === null) {
+    return '未知'
+  }
+
+  const stageMap: Record<string, string> = {
+    'PUPPY': '幼犬',
+    'ADULT': '成犬',
+    'SENIOR': '老年犬',
+  }
+  return stageMap[stage] || stage
+}
+
+function getLifeStageLabel(stage: string): string {
+  const stageMap: Record<string, string> = {
+    'PUPPY': '幼犬',
+    'ADULT': '成犬',
+    'SENIOR': '老年犬',
+  }
+  return stageMap[stage] || stage
+}
+
+function dismissWarning() {
+  showWarning.value = false
+}
+
+// ========== 结束：生命阶段校验逻辑 ==========
+
 async function loadGlobalConfig() {
   try {
     const res = await request({
@@ -1067,6 +1221,7 @@ async function loadGlobalConfig() {
 function selectDog(dogId: string) {
   selectedDogId.value = dogId
   loadDogCalcResult(dogId)
+  checkLifeStageMatch()  // 校验生命阶段
 }
 
 async function loadDogCalcResult(dogId: string) {
@@ -1500,6 +1655,51 @@ function goToCreateDog() {
   background-color: #fff;
   padding: 24rpx;
   margin-bottom: 20rpx;
+}
+
+/* 警告卡片 */
+.warning-card {
+  background-color: #fffbe6;
+  border: 1rpx solid #ffe58f;
+  border-radius: 12rpx;
+  padding: 20rpx;
+  margin-bottom: 20rpx;
+}
+
+.warning-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16rpx;
+}
+
+.warning-icon {
+  font-size: 32rpx;
+  margin-right: 8rpx;
+}
+
+.warning-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #856404;
+}
+
+.warning-text {
+  font-size: 26rpx;
+  color: #856404;
+  line-height: 1.6;
+  display: block;
+  margin-bottom: 8rpx;
+}
+
+.btn-continue {
+  width: 100%;
+  margin-top: 16rpx;
+  padding: 16rpx;
+  background-color: #faad14;
+  color: #fff;
+  border-radius: 8rpx;
+  font-size: 28rpx;
+  border: none;
 }
 
 .section-title {

@@ -124,12 +124,8 @@ export class DogsController {
 
     const calcResult = await this.dogService.calcPreview(dog.id);
 
-    // Fetch breed for name mapping
-    const breed = await this.dogBreedRepository.findById(dog.breedId);
-    const breedMap = new Map(breed ? [[dog.breedId, breed.name]] : []);
-
     const response: DogDetailResponseDto = {
-      profile: this.mapDogToProfileDto(dog, breedMap),
+      profile: this.mapDogToProfileDto(dog),
       calcResult,
     };
 
@@ -173,12 +169,8 @@ export class DogsController {
       console.warn(`[DogsController] Failed to calculate preview for updated dog ${id}:`, error.message);
     }
 
-    // Fetch breed for name mapping
-    const breed = await this.dogBreedRepository.findById(dog.breedId);
-    const breedMap = new Map(breed ? [[dog.breedId, breed.name]] : []);
-
     const response: DogDetailResponseDto = {
-      profile: this.mapDogToProfileDto(dog, breedMap),
+      profile: this.mapDogToProfileDto(dog),
       calcResult,
     };
 
@@ -230,12 +222,8 @@ export class DogsController {
 
     const dogs = await this.dogRepository.findByOwnerId(ownerId);
 
-    // Fetch all breeds for name mapping (performance optimization)
-    const breeds = await this.dogBreedRepository.findAll();
-    const breedMap = new Map(breeds.map(b => [b.id, b.name]));
-
     const profiles: DogProfileDto[] = dogs.map((dog) =>
-      this.mapDogToProfileDto(dog, breedMap),
+      this.mapDogToProfileDto(dog),
     );
 
     return ApiResponseDto.success(profiles);
@@ -278,12 +266,8 @@ export class DogsController {
       console.warn(`[DogsController] Failed to calculate preview for dog ${id}:`, error.message);
     }
 
-    // Fetch breed for name mapping
-    const breed = await this.dogBreedRepository.findById(dog.breedId);
-    const breedMap = new Map(breed ? [[dog.breedId, breed.name]] : []);
-
     const response: DogDetailResponseDto = {
-      profile: this.mapDogToProfileDto(dog, breedMap),
+      profile: this.mapDogToProfileDto(dog),
       calcResult,
     };
 

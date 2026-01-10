@@ -21,6 +21,7 @@ import { ShippingTemplateController } from './interfaces/controllers/shipping-te
 import { DIYSheetsController } from './interfaces/controllers/diy-sheets.controller';
 import { StaffProductionPhotosController } from './interfaces/controllers/staff-production-photos.controller';
 import { AftersalePhotosController } from './interfaces/controllers/aftersale-photos.controller';
+import { FavoritesController } from './interfaces/controllers/favorites.controller';
 import { OrderSchedulerService } from './application/scheduler/order-scheduler.service';
 import {
   DogService,
@@ -167,6 +168,7 @@ validatePrismaConfig();
     DIYSheetsController,
     StaffProductionPhotosController,
     AftersalePhotosController,
+    FavoritesController,
   ],
   providers: [
     DogService,

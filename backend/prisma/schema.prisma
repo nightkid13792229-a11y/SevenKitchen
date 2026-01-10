@@ -87,22 +87,23 @@ model OrderItem {
 
 
 model User {
-  id            String     @id @default(uuid()) @map("id")
-  phone         String?    @unique @map("phone") @db.VarChar(20)
-  wechatOpenid  String?    @unique @map("wechat_openid") @db.VarChar(100)
-  nickname      String?    @map("nickname") @db.VarChar(100)
-  role          UserRole   @default(CUSTOMER) @map("role")
-  createdAt     DateTime   @default(now()) @map("created_at")
-  updatedAt     DateTime   @updatedAt @map("updated_at")
-  avatarUrl     String?    @map("avatar_url")
-  lastLoginAt   DateTime?  @map("last_login_at")
-  status        UserStatus @default(ACTIVE) @map("status")
-  wechatUnionid String?    @unique @map("wechat_unionid") @db.VarChar(100)
-  password      String?    @map("password") @db.VarChar(255)
-  addresses     Address[]
-  dogs          Dog[]
-  orders        Order[]
-  diySheets     DIYSheet[]
+  id              String          @id @default(uuid()) @map("id")
+  phone           String?         @unique @map("phone") @db.VarChar(20)
+  wechatOpenid    String?         @unique @map("wechat_openid") @db.VarChar(100)
+  nickname        String?         @map("nickname") @db.VarChar(100)
+  role            UserRole        @default(CUSTOMER) @map("role")
+  createdAt       DateTime        @default(now()) @map("created_at")
+  updatedAt       DateTime        @updatedAt @map("updated_at")
+  avatarUrl       String?         @map("avatar_url")
+  lastLoginAt     DateTime?       @map("last_login_at")
+  status          UserStatus      @default(ACTIVE) @map("status")
+  wechatUnionid   String?         @unique @map("wechat_unionid") @db.VarChar(100)
+  password        String?         @map("password") @db.VarChar(255)
+  addresses       Address[]
+  dogs            Dog[]
+  orders          Order[]
+  diySheets       DIYSheet[]
+  favoriteRecipes FavoriteRecipe[]
 
   @@index([wechatOpenid])
   @@index([phone])
@@ -683,6 +684,20 @@ model DIYSheet {
   @@index([userId])
   @@index([userId, createdAt])
   @@map("diy_sheet")
+}
+
+model FavoriteRecipe {
+  id        String   @id @default(uuid()) @map("id")
+  userId    String   @map("user_id")
+  recipeId  String   @map("recipe_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, recipeId])
+  @@index([userId])
+  @@index([recipeId])
+  @@index([createdAt])
+  @@map("favorite_recipe")
 }
 
 model ShippingTemplate {

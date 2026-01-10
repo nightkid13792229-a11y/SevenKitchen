@@ -49,6 +49,7 @@ export class UsersController {
             orders: true,
             addresses: true,
             diySheets: true,
+            favoriteRecipes: true,
           },
         },
       },
@@ -69,7 +70,7 @@ export class UsersController {
       orderCount: userData._count.orders,
       addressCount: userData._count.addresses,
       diySheetCount: userData._count.diySheets,
-      favoriteRecipeCount: 0, // TODO: 实现收藏功能后添加统计
+      favoriteRecipeCount: userData._count.favoriteRecipes,
     };
 
     return new ApiResponseDto(0, '成功', response);
@@ -115,6 +116,7 @@ export class UsersController {
             orders: true,
             addresses: true,
             diySheets: true,
+            favoriteRecipes: true,
           },
         },
       },
@@ -131,7 +133,7 @@ export class UsersController {
       orderCount: updatedUser._count.orders,
       addressCount: updatedUser._count.addresses,
       diySheetCount: updatedUser._count.diySheets,
-      favoriteRecipeCount: 0, // TODO: 实现收藏功能后添加统计
+      favoriteRecipeCount: updatedUser._count.favoriteRecipes,
     };
 
     return new ApiResponseDto(0, '更新成功', response);

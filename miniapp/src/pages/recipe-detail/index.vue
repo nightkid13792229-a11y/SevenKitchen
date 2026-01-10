@@ -213,7 +213,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { request } from '../../utils/api'
+import { request, addFavorite, removeFavorite, checkFavorite } from '../../utils/api'
 
 interface RecipeItem {
   ingredientId: string
@@ -341,29 +341,50 @@ function loadHealthTagMapping() {
   })
 }
 
-function checkFavoriteStatus() {
+async function checkFavoriteStatus() {
   // Debug: Log recipeId
   console.log('[RecipeDetail] Checking favorite for recipeId:', recipeId.value)
 
-  // TODO: 调用收藏状态查询API
-  const favoriteStatus = uni.getStorageSync(`favorite_${recipeId.value}`)
-  console.log('[RecipeDetail] Favorite status from storage:', favoriteStatus)
-
-  isFavorite.value = favoriteStatus || false
-  console.log('[RecipeDetail] isFavorite set to:', isFavorite.value)
+  try {
+    const result = await checkFavorite(recipeId.value)
+    console.log('[RecipeDetail] Favorite status from API:', result)
+    isFavorite.value = result.isFavorite
+    console.log('[RecipeDetail] isFavorite set to:', isFavorite.value)
+  } catch (error) {
+    console.error('[RecipeDetail] Failed to check favorite status:', error)
+    // 失败时保持false状态
+    isFavorite.value = false
+  }
 }
 
-function toggleFavorite() {
-  isFavorite.value = !isFavorite.value
-
-  // TODO: 调用收藏API
-  // 暂时使用本地存储
-  uni.setStorageSync(`favorite_${recipeId.value}`, isFavorite.value)
-
-  uni.showToast({
-    title: isFavorite.value ? '已收藏' : '已取消收藏',
-    icon: 'success'
-  })
+async function toggleFavorite() {
+  try {
+    if (isFavorite.value) {
+      // 取消收藏
+      await removeFavorite(recipeId.value)
+      isFavorite.value = false
+      uni.showToast({
+        title: '已取消收藏',
+        icon: 'success'
+      })
+    } else {
+      // 添加收藏
+      await addFavorite(recipeId.value)
+      isFavorite.value = true
+      uni.showToast({
+        title: '已收藏',
+        icon: 'success'
+      })
+    }
+  } catch (error) {
+    console.error('[RecipeDetail] Failed to toggle favorite:', error)
+    uni.showToast({
+      title: (error as Error).message || '操作失败',
+      icon: 'none'
+    })
+    // 如果失败，恢复原状态
+    isFavorite.value = !isFavorite.value
+  }
 }
 
 function previewImage() {

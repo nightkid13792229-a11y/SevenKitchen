@@ -1007,3 +1007,80 @@ export function requestSubscriptionMessage(templateId: string, scene: number = 1
     })
   })
 }
+
+// ==================== Favorites API ====================
+
+/**
+ * 收藏食谱
+ * @param recipeId 食谱ID
+ */
+export function addFavorite(recipeId: string): Promise<void> {
+  return request({
+    url: `/favorites/${recipeId}`,
+    method: 'POST',
+  }).then((res) => {
+    if (res.code !== 0) {
+      throw new Error(res.message || '收藏失败')
+    }
+  })
+}
+
+/**
+ * 取消收藏食谱
+ * @param recipeId 食谱ID
+ */
+export function removeFavorite(recipeId: string): Promise<void> {
+  return request({
+    url: `/favorites/${recipeId}`,
+    method: 'DELETE',
+  }).then((res) => {
+    if (res.code !== 0) {
+      throw new Error(res.message || '取消收藏失败')
+    }
+  })
+}
+
+/**
+ * 检查是否收藏食谱
+ * @param recipeId 食谱ID
+ */
+export function checkFavorite(recipeId: string): Promise<{ isFavorite: boolean }> {
+  return request({
+    url: `/favorites/check/${recipeId}`,
+    method: 'GET',
+  }).then((res) => {
+    if (res.code !== 0) {
+      throw new Error(res.message || '检查失败')
+    }
+    return res.data
+  })
+}
+
+/**
+ * 获取收藏列表
+ * @param page 页码
+ * @param pageSize 每页数量
+ */
+export function getFavorites(page: number = 1, pageSize: number = 20): Promise<{
+  list: Array<{
+    id: string
+    recipeId: string
+    recipe: any | null
+    createdAt: string
+  }>
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}> {
+  return request({
+    url: '/favorites',
+    method: 'GET',
+    data: { page, pageSize },
+  }).then((res) => {
+    if (res.code !== 0) {
+      throw new Error(res.message || '获取收藏列表失败')
+    }
+    return res.data
+  })
+}

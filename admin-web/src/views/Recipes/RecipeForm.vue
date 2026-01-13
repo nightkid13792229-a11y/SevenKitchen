@@ -195,7 +195,7 @@
                     </div>
                     <div class="row-cell example-weight">
                       <span v-if="item.exampleWeight !== undefined && item.exampleWeight !== null">
-                        {{ item.exampleWeight }}{{ getBaseUnitLabel(item) }}
+                        {{ item.exampleWeight }}{{ getBaseUnitLabel(item.ingredient) }}
                       </span>
                       <span v-else>-</span>
                     </div>
@@ -768,7 +768,7 @@ const form = reactive<RecipeForm>({
   nutritionStandard: NutritionStandard.FEDIAF_2021,
   energyDensityKcalPerKg: 1500,
   items: [],
-  productionLossRate: 7,
+  productionLossRate: 1.07,
   batchLaborHours: 2,
   productionSteps: undefined,
   applicableLifeStages: [],
@@ -891,15 +891,27 @@ const calculatedRatioPercent = computed(() => {
 
 // 获取基准单位标签
 const getBaseUnitLabel = (ingredient: any) => {
-  if (!ingredient || !ingredient.baseUnit) return '';
+  if (!ingredient) return '';
 
-  const unitMap: Record<string, string> = {
-    'G': 'g',
-    'ML': 'ml',
-    'PCS': '个'
-  };
+  // First check if baseUnit is directly available
+  if (ingredient.baseUnit) {
+    const unitMap: Record<string, string> = {
+      'G': 'g',
+      'ML': 'ml',
+      'PCS': '个'
+    };
+    return unitMap[ingredient.baseUnit] || ingredient.baseUnit;
+  }
 
-  return unitMap[ingredient.baseUnit] || ingredient.baseUnit;
+  // Fallback: infer unit from ingredient type
+  if (ingredient.type === 'FOOD') {
+    return 'g';
+  } else if (ingredient.type === 'SUPPLEMENT') {
+    // Supplements often use different units, check properties or default
+    return 'g'; // Default to grams, can be refined
+  }
+
+  return '';
 };
 
 // 监听示例重量变化，自动更新占比

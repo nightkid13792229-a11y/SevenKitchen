@@ -208,22 +208,28 @@ export class RecipesController {
 
           // Only FOOD type has ratio, SUPPLEMENT has nutrient target
           const result: any = {
+            id: item.id,
             ingredientId: item.ingredientId,
+            ingredientName: item.ingredient?.name || 'Unknown',
             name: item.ingredient?.name || 'Unknown',
             preparationMethod: preparationMethods?.join('、') || undefined,
             sortOrder: item.sortOrder || 0,
             ingredientType: ingredientType || undefined,
-            properties: (item.ingredient as any)?.properties || undefined,
+            exampleWeight: item.exampleWeight != null ? item.exampleWeight : undefined,
+            ratioPercent: item.ratioPercent != null ? item.ratioPercent : undefined,
+            nutrientTargetKey: item.nutrientTargetKey || undefined,
+            nutrientTargetValue: item.nutrientTargetValue || undefined,
+            ingredient: item.ingredient ? {
+              id: item.ingredient.id,
+              name: item.ingredient.name,
+              type: item.ingredient.type,
+              properties: (item.ingredient as any)?.properties || undefined,
+            } : undefined,
           };
 
-          // FOOD type: include ratio
+          // FOOD type: include ratio (for backward compatibility)
           if (ingredientType === 'FOOD') {
             result.ratio = item.ratioPercent != null ? item.ratioPercent : 0;
-          }
-          // SUPPLEMENT type: include nutrient target
-          else if (ingredientType === 'SUPPLEMENT') {
-            result.nutrientTargetKey = item.nutrientTargetKey || undefined;
-            result.nutrientTargetValue = item.nutrientTargetValue || undefined;
           }
 
           return result;

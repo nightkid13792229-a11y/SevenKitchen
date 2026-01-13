@@ -166,6 +166,7 @@ export class RecipeService {
           create: dto.items.map((item: any, index: number) => ({
             ingredientId: item.ingredientId,
             preparationMethod: item.preparationMethod,
+            exampleWeight: item.exampleWeight,
             ratioPercent: item.ratioPercent,
             nutrientTargetKey: item.nutrientTargetKey,
             nutrientTargetValue: item.nutrientTargetValue,
@@ -261,6 +262,7 @@ export class RecipeService {
           create: dto.items.map((item: any, index: number) => ({
             ingredientId: item.ingredientId,
             preparationMethod: item.preparationMethod,
+            exampleWeight: item.exampleWeight,
             ratioPercent: item.ratioPercent,
             nutrientTargetKey: item.nutrientTargetKey,
             nutrientTargetValue: item.nutrientTargetValue,
@@ -602,6 +604,7 @@ export class RecipeService {
           properties: item.ingredient.properties,
         } : undefined,
         preparationMethod: item.preparationMethod || undefined,
+        exampleWeight: item.exampleWeight || undefined,
         ratioPercent: item.ratioPercent || undefined,
         nutrientTargetKey: item.nutrientTargetKey || undefined,
         nutrientTargetValue: item.nutrientTargetValue || undefined,

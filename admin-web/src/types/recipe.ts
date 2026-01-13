@@ -50,9 +50,16 @@ export interface RecipeItem {
   ingredientName?: string;
   ingredientType?: string;
   preparationMethod?: string;
+  exampleWeight?: number;
   ratioPercent?: number;
   nutrientTargetKey?: string;
   nutrientTargetValue?: number;
+  ingredient?: {
+    id: string;
+    name: string;
+    type: string;
+    properties?: any;
+  };
 }
 
 export interface RecipeSummary {

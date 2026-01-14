@@ -9,11 +9,6 @@ import { PurchaseRecordRepository } from '../../domain/purchasing/purchase-recor
 import { PurchaseRecord } from '../../domain/purchasing/purchase-record.entity';
 import { PURCHASE_RECORD_REPOSITORY } from '../../application/purchasing/purchasing.service.tokens';
 
-export const purchaseRecordRepositoryProvider = {
-  provide: PURCHASE_RECORD_REPOSITORY,
-  useClass: PrismaPurchaseRecordRepository,
-};
-
 @Injectable()
 export class PrismaPurchaseRecordRepository implements PurchaseRecordRepository {
   constructor(private readonly prisma: PrismaService) {}

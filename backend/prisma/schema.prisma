@@ -104,6 +104,9 @@ model User {
   orders          Order[]
   diySheets       DIYSheet[]
   favoriteRecipes FavoriteRecipe[]
+  createdPurchaseLists  PurchaseList[]      @relation("PurchaseListCreator")
+  submittedReimbursements Reimbursement[]   @relation("ReimbursementSubmitter")
+  reviewedReimbursements  Reimbursement[]  @relation("ReimbursementReviewer")
 
   @@index([wechatOpenid])
   @@index([phone])
@@ -334,6 +337,7 @@ model Ingredient {
   updatedAt                   DateTime                  @updatedAt @map("updated_at")
   tags                        IngredientTagAssignment[]
   recipeItems                 RecipeItem[]
+  purchaseItems               PurchaseItem[]
 
   @@unique([name, brand, productModel])
   @@index([type])
@@ -713,4 +717,114 @@ model ShippingTemplate {
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   @@map("shipping_template")
+}
+
+// ==========================================
+// Purchasing Management
+// ==========================================
+
+model PurchaseList {
+  id                 String              @id @default(uuid()) @map("id")
+  targetDate         DateTime            @map("target_date")
+  status             PurchaseListStatus  @map("status")
+  totalEstimatedCost Decimal             @map("total_estimated_cost") @db.Decimal(10, 2)
+  itemCount          Int                 @map("item_count")
+  createdById        String              @map("created_by_id")
+  sourceOrderIds     String[]            @map("source_order_ids")
+  reimbursementId    String?             @map("reimbursement_id")
+  createdAt          DateTime            @default(now()) @map("created_at")
+  updatedAt          DateTime            @updatedAt @map("updated_at")
+  startedAt          DateTime?           @map("started_at")
+  completedAt        DateTime?           @map("completed_at")
+  items              PurchaseItem[]
+  records            PurchaseRecord[]    @relation("PurchaseListRecords")
+  reimbursement      Reimbursement?      @relation(fields: [reimbursementId], references: [id])
+  createdBy          User                @relation("PurchaseListCreator", fields: [createdById], references: [id])
+
+  @@index([targetDate])
+  @@index([status])
+  @@index([createdById])
+  @@map("purchase_list")
+}
+
+model PurchaseItem {
+  id               String       @id @default(uuid()) @map("id")
+  purchaseListId   String       @map("purchase_list_id")
+  ingredientId     String       @map("ingredient_id")
+  ingredientName   String       @default("") @map("ingredient_name") @db.VarChar(200)
+  type             String?      @map("type") @db.VarChar(20)
+  quantityNeeded   Float        @map("quantity_needed")
+  quantityUnit     String       @map("quantity_unit")
+  estimatedCost    Decimal      @map("estimated_cost") @db.Decimal(10, 2)
+  purchaseChannel  String?      @map("purchase_channel") @db.VarChar(200)
+  productModel     String?      @map("product_model") @db.VarChar(100)
+  displayUnit      String?      @map("display_unit") @db.VarChar(20)
+  notes            String?      @map("notes")
+  createdAt        DateTime     @default(now()) @map("created_at")
+  purchaseList     PurchaseList @relation(fields: [purchaseListId], references: [id], onDelete: Cascade)
+  ingredient       Ingredient   @relation(fields: [ingredientId], references: [id])
+
+  @@index([purchaseListId])
+  @@index([ingredientId])
+  @@map("purchase_item")
+}
+
+model PurchaseRecord {
+  id                String    @id @default(uuid()) @map("id")
+  purchaseListId    String    @map("purchase_list_id")
+  purchaseItemId    String    @map("purchase_item_id")
+  ingredientId      String    @map("ingredient_id")
+  ingredientName    String    @map("ingredient_name") @db.VarChar(200)
+  purchaseChannel   String    @map("purchase_channel") @db.VarChar(200)
+  actualQuantity    Int       @map("actual_quantity")
+  actualCost        Decimal   @map("actual_cost") @db.Decimal(10, 2)
+  productModel      String?   @map("product_model") @db.VarChar(100)
+  notes             String?   @map("notes")
+  purchasedAt       DateTime  @default(now()) @map("purchased_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+  purchaseList      PurchaseList @relation("PurchaseListRecords", fields: [purchaseListId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseListId])
+  @@index([purchaseItemId])
+  @@index([ingredientId])
+  @@map("purchase_record")
+}
+
+model Reimbursement {
+  id                  String               @id @default(uuid()) @map("id")
+  claimNumber         String               @unique @map("claim_number") @db.VarChar(20)
+  status              ReimbursementStatus  @map("status")
+  totalActualCost     Decimal              @map("total_actual_cost") @db.Decimal(10, 2)
+  totalEstimatedCost  Decimal              @map("total_estimated_cost") @db.Decimal(10, 2)
+  receiptUrls         String[]             @map("receipt_urls")
+  submittedById       String               @map("submitted_by_id")
+  submittedAt         DateTime             @map("submitted_at")
+  reviewedById        String?              @map("reviewed_by_id")
+  reviewedAt          DateTime?            @map("reviewed_at")
+  reviewComment       String?              @map("review_comment") @db.Text
+  createdAt           DateTime             @default(now()) @map("created_at")
+  updatedAt           DateTime             @updatedAt @map("updated_at")
+  purchaseLists       PurchaseList[]
+  submittedBy         User                 @relation("ReimbursementSubmitter", fields: [submittedById], references: [id])
+  reviewedBy          User?                @relation("ReimbursementReviewer", fields: [reviewedById], references: [id])
+
+  @@index([status])
+  @@index([submittedById])
+  @@index([claimNumber])
+  @@map("reimbursement")
+}
+
+enum PurchaseListStatus {
+  DRAFT       // 草稿
+  PENDING     // 待采购
+  COMPLETED   // 采购完成
+  CANCELLED   // 已取消
+}
+
+enum ReimbursementStatus {
+  PENDING_REVIEW      // 待审核
+  APPROVED            // 已批准
+  REJECTED            // 已驳回
+  REQUIRES_RESUBMIT   // 需重新提交
 }

@@ -22,6 +22,9 @@ import { DIYSheetsController } from './interfaces/controllers/diy-sheets.control
 import { StaffProductionPhotosController } from './interfaces/controllers/staff-production-photos.controller';
 import { AftersalePhotosController } from './interfaces/controllers/aftersale-photos.controller';
 import { FavoritesController } from './interfaces/controllers/favorites.controller';
+import { StaffPurchasingController } from './interfaces/controllers/staff-purchasing.controller';
+import { AdminPurchasingController } from './interfaces/controllers/admin-purchasing.controller';
+import { StaffProductionController } from './interfaces/controllers/staff-production.controller';
 import { OrderSchedulerService } from './application/scheduler/order-scheduler.service';
 import {
   DogService,
@@ -94,6 +97,11 @@ import {
 import { PackagingService } from './domain/packaging/packaging.service';
 import { PrismaOrderPricingSnapshotRepository } from './infrastructure/repositories/prisma-order-pricing-snapshot.repository';
 import type { IOrderPricingSnapshotRepository } from './domain/order-pricing-snapshot/order-pricing-snapshot.repository.interface';
+import { PurchasingService, ReimbursementService, PURCHASE_LIST_REPOSITORY, REIMBURSEMENT_REPOSITORY, PURCHASE_RECORD_REPOSITORY } from './application/purchasing';
+import { PrismaPurchaseListRepository } from './infrastructure/repositories/prisma-purchase-list.repository';
+import { PrismaReimbursementRepository } from './infrastructure/repositories/prisma-reimbursement.repository';
+import { PrismaPurchaseRecordRepository } from './infrastructure/repositories/prisma-purchase-record.repository';
+import { StaffProductionService } from './application/production/kitchen.service';
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -158,6 +166,8 @@ validatePrismaConfig();
     ShippingController,
     StaffKitchenController,
     StaffShippingController,
+    StaffPurchasingController,
+    AdminPurchasingController,
     UsersController,
     HealthRecordsController,
     HealthNotificationController,
@@ -169,6 +179,7 @@ validatePrismaConfig();
     StaffProductionPhotosController,
     AftersalePhotosController,
     FavoritesController,
+    StaffProductionController,
   ],
   providers: [
     DogService,
@@ -461,6 +472,47 @@ validatePrismaConfig();
     },
     // Order Scheduler Service
     OrderSchedulerService,
+    // Phase 1: Purchasing Management Services
+    PurchasingService,
+    ReimbursementService,
+    // Phase 2: Staff Production Management Service
+    StaffProductionService,
+    {
+      provide: PURCHASE_LIST_REPOSITORY,
+      useFactory: (prismaService?: PrismaService) => {
+        if (!prismaService) {
+          throw new Error(
+            'PrismaService is not available. Ensure Prisma is enabled.',
+          );
+        }
+        return new PrismaPurchaseListRepository(prismaService);
+      },
+      inject: isPrismaEnabled() ? [PrismaService] : [],
+    },
+    {
+      provide: REIMBURSEMENT_REPOSITORY,
+      useFactory: (prismaService?: PrismaService) => {
+        if (!prismaService) {
+          throw new Error(
+            'PrismaService is not available. Ensure Prisma is enabled.',
+          );
+        }
+        return new PrismaReimbursementRepository(prismaService);
+      },
+      inject: isPrismaEnabled() ? [PrismaService] : [],
+    },
+    {
+      provide: PURCHASE_RECORD_REPOSITORY,
+      useFactory: (prismaService?: PrismaService) => {
+        if (!prismaService) {
+          throw new Error(
+            'PrismaService is not available. Ensure Prisma is enabled.',
+          );
+        }
+        return new PrismaPurchaseRecordRepository(prismaService);
+      },
+      inject: isPrismaEnabled() ? [PrismaService] : [],
+    },
   ],
 })
 export class AppModule implements OnModuleInit {

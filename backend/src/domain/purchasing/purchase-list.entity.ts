@@ -177,6 +177,7 @@ export class PurchaseList {
       reimbursementId: this.reimbursementId,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
+      startedAt: this.startedAt,
       completedAt: this.completedAt,
       items: this.items.map(item => item.toPrisma()),
     };
@@ -200,6 +201,7 @@ export class PurchaseList {
       reimbursementId: data.reimbursementId,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
+      startedAt: data.startedAt,
       completedAt: data.completedAt,
       items,
     });

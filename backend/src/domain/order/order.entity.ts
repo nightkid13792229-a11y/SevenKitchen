@@ -27,6 +27,22 @@ export class Order {
     // Cross-domain references
     public readonly dogId?: string,
     public readonly addressId?: string,
+    // 🔧 添加：关联对象（用于生产管理页面显示狗狗名称和收货人信息）
+    public readonly dog?: {
+      id: string;
+      name: string;
+    },
+    public readonly address?: {
+      id: string;
+      recipientName: string;
+      phone: string;
+      region: {
+        province: string;
+        city: string;
+        district?: string;
+      },
+      detail: string;
+    },
     // Phase 8.14: Shipping tracking fields
     public trackingNumber?: string | null,
     public carrierCode?: string | null,
@@ -140,7 +156,8 @@ export class Order {
     const validTransitions: Record<OrderStatus, OrderStatus[]> = {
       [OrderStatus.INIT]: [OrderStatus.PENDING_PAYMENT, OrderStatus.CANCELLED],
       [OrderStatus.PENDING_PAYMENT]: [OrderStatus.PAID, OrderStatus.CANCELLED],
-      [OrderStatus.PAID]: [OrderStatus.IN_PRODUCTION, OrderStatus.CANCELLED],
+      [OrderStatus.PAID]: [OrderStatus.WAITING_FOR_PRODUCTION, OrderStatus.CANCELLED],
+      [OrderStatus.WAITING_FOR_PRODUCTION]: [OrderStatus.IN_PRODUCTION, OrderStatus.CANCELLED],
       [OrderStatus.IN_PRODUCTION]: [OrderStatus.FREEZING, OrderStatus.CANCELLED],
       [OrderStatus.FREEZING]: [OrderStatus.SHIPPED, OrderStatus.AFTERSALE],
       [OrderStatus.SHIPPED]: [OrderStatus.COMPLETED, OrderStatus.AFTERSALE],

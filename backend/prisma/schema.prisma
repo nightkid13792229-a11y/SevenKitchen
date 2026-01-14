@@ -38,6 +38,8 @@ model Order {
   aftersaleReason          String?              @map("aftersale_reason")
   aftersalePhotos          String[]             @default([]) @map("aftersale_photos")
   customer                 User                 @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  dog                      Dog?                 @relation(fields: [dogId], references: [id], onDelete: SetNull)  // 🔧 添加：狗狗关联
+  address                  Address?             @relation(fields: [addressId], references: [id], onDelete: SetNull)  // 🔧 添加：地址关联
   items                    OrderItem[]
   statusHistory            OrderStatusHistory[]
 
@@ -122,6 +124,7 @@ model Address {
   detail        String  @map("detail")
   isDefault     Boolean @map("is_default")
   user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  orders        Order[]  // 🔧 添加：一个地址可以有多个订单
 
   @@index([userId])
   @@map("address")
@@ -171,6 +174,7 @@ model Dog {
   medicalRecords       MedicalRecord[]
   vaccineRecords       VaccineRecord[]
   weightRecords        WeightRecord[]
+  orders               Order[]           // 🔧 添加：一个狗狗可以有多个订单
 
   @@index([ownerId])
   @@index([ownerId, createdAt])

@@ -257,6 +257,16 @@ export interface RecipeDetailResponseDto extends RecipeSummaryResponseDto {
 }
 
 /**
+ * Ingredient Reference (embedded in RecipeItem)
+ */
+export interface IngredientReference {
+  id: string;
+  name: string;
+  type: string;
+  properties?: any; // Prisma JsonValue
+}
+
+/**
  * Recipe Item Response DTO
  */
 export interface RecipeItemResponseDto {
@@ -264,6 +274,7 @@ export interface RecipeItemResponseDto {
   ingredientId: string;
   ingredientName?: string;
   ingredientType?: string;
+  ingredient?: IngredientReference; // 完整的原料对象，包含properties
   preparationMethod?: string;
   exampleWeight?: number;
   ratioPercent?: number;

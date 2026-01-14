@@ -1,0 +1,135 @@
+/**
+ * Kitchen/Production DTOs
+ * DTOs for staff production management operations
+ */
+
+import { IsString, IsOptional, IsEnum, IsArray, IsNumber, Min } from 'class-validator';
+import { Type } from 'class-transformer';
+import { PackagingUnitStatus } from '../../../domain/production/enums';
+
+/**
+ * Auto Schedule Request DTO
+ */
+export class AutoScheduleDto {
+  @IsString()
+  startDate!: string; // YYYY-MM-DD format
+}
+
+/**
+ * Order Packaging Info DTO
+ * Per-order packaging information
+ */
+export class OrderPackagingInfoDto {
+  orderId!: string;
+  orderItemId!: string;
+
+  dogName!: string;
+
+  @IsNumber()
+  packageSpecG!: number; // 单包规格（g）
+
+  @IsNumber()
+  packageCount!: number; // 总袋数
+
+  recipientName?: string;
+  recipientCity?: string;
+
+  @IsOptional()
+  completedAt?: string; // 本地时间格式
+}
+
+/**
+ * Packaging Unit Detail DTO
+ */
+export class PackagingUnitDetailDto {
+  id!: string;
+
+  recipeName!: string;
+  recipeVersion!: number;
+
+  @IsNumber()
+  totalProductionG!: number;
+
+  @IsEnum(PackagingUnitStatus)
+  status!: PackagingUnitStatus;
+
+  @IsArray()
+  orderItems!: OrderPackagingInfoDto[];
+
+  // 锅号信息
+  @IsNumber()
+  currentPotNumber!: number; // 当前是第几锅
+
+  @IsNumber()
+  totalPots!: number; // 总共几锅
+
+  // 时间字段（已转换为本地时间）
+  createdAt!: string; // 本地时间格式
+  completedAt?: string; // 本地时间格式
+
+  @IsOptional()
+  photosRaw?: string[]; // 备料照片URL列表
+
+  @IsOptional()
+  ingredientsUsageSnapshot?: any; // 原料用量快照
+}
+
+/**
+ * Get Packaging Units Query DTO
+ */
+export class GetPackagingUnitsDto {
+  @IsOptional()
+  @IsEnum(PackagingUnitStatus)
+  status?: PackagingUnitStatus;
+
+  @IsOptional()
+  @Type(() => Number) // 🔧 自动将查询字符串转换为数字类型
+  @IsNumber()
+  @Min(1)
+  page?: number = 1;
+
+  @IsOptional()
+  @Type(() => Number) // 🔧 自动将查询字符串转换为数字类型
+  @IsNumber()
+  @Min(1)
+  pageSize?: number = 20;
+
+  @IsOptional()
+  @IsString()
+  targetDate?: string; // YYYY-MM-DD format
+}
+
+/**
+ * Start Production Task DTO
+ */
+export class StartProductionDto {
+  // 预留扩展字段
+}
+
+/**
+ * Upload Photos Response DTO
+ */
+export class UploadPhotosResponseDto {
+  photosRaw!: string[];
+}
+
+/**
+ * Complete Production Task DTO
+ */
+export class CompleteProductionDto {
+  // 预留扩展字段
+}
+
+/**
+ * Today's Statistics DTO
+ */
+export class TodayStatisticsDto {
+  @IsNumber()
+  todayOrders!: number; // 今日订单数
+
+  @IsNumber()
+  inProgress!: number; // 制作中数量
+
+  @IsNumber()
+  completed!: number; // 已完成数量
+}

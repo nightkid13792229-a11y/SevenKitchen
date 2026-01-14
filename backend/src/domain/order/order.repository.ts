@@ -28,6 +28,16 @@ export interface OrderRepository {
   }): Promise<{ list: Order[]; total: number }>;
 
   /**
+   * Find orders by target production date range
+   * Used by purchasing module to find orders scheduled for production
+   */
+  findByTargetProductionDateRange(params: {
+    startDate: Date;
+    endDate?: Date;
+    status?: OrderStatus;
+  }): Promise<{ list: Order[]; total: number }>;
+
+  /**
    * Get order statistics grouped by status
    * Phase 9: Simplified statistics aligned with e-commerce standards
    */

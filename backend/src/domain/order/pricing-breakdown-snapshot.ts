@@ -22,6 +22,19 @@ export class PricingBreakdownSnapshot {
     public readonly createdAt: Date,
     // Optional: ingredient price version hash (for in-memory repos, use simple seed version)
     public readonly ingredientPriceVersionHash?: string | null,
+    // Optional: ingredient details for purchasing module (Phase 1)
+    public readonly ingredientDetails?: Array<{
+      ingredientId: string;
+      name: string;
+      type: 'FOOD' | 'SUPPLEMENT' | 'PACKAGING';
+      amount: number;              // 成本计算用量（含出肉率和生产损耗率）
+      netAmount?: number;          // 净需求（不含损耗率）
+      purchaseAmount?: number;     // 采购用量（仅含生产损耗率，不含出肉率）
+      unit: string;
+      cost: number;
+      purchaseChannel?: string;
+      productModel?: string;
+    }>,
   ) {
     // Validate all cost fields are non-negative
     if (costIngredients < 0) {

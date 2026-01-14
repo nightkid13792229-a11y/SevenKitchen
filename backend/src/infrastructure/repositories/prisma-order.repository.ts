@@ -17,7 +17,11 @@ export class PrismaOrderRepository implements OrderRepository {
   async findById(id: string): Promise<Order | null> {
     const record = await this.prisma.order.findUnique({
       where: { id },
-      include: { items: true },
+      include: {
+        items: true,
+        dog: true,
+        address: true,
+      },
     });
     if (!record) return null;
     return this.mapToDomain(record);
@@ -26,7 +30,11 @@ export class PrismaOrderRepository implements OrderRepository {
   async findByCustomerId(customerId: string): Promise<Order[]> {
     const records = await this.prisma.order.findMany({
       where: { customerId },
-      include: { items: true },
+      include: {
+        items: true,
+        dog: true,
+        address: true,
+      },
       orderBy: { id: 'asc' },
     });
     return records.map((r) => this.mapToDomain(r));
@@ -35,7 +43,11 @@ export class PrismaOrderRepository implements OrderRepository {
   async findByStatus(status: OrderStatus): Promise<Order[]> {
     const records = await this.prisma.order.findMany({
       where: { status },
-      include: { items: true },
+      include: {
+        items: true,
+        dog: true,      // 🔧 添加：包含dog关联数据
+        address: true,  // 🔧 添加：包含address关联数据
+      },
       orderBy: { id: 'asc' },
     });
     return records.map((r) => this.mapToDomain(r));
@@ -156,7 +168,11 @@ export class PrismaOrderRepository implements OrderRepository {
     // Return fresh copy with items included
     const saved = await this.prisma.order.findUnique({
       where: { id: order.id },
-      include: { items: true },
+      include: {
+        items: true,
+        dog: true,
+        address: true,
+      },
     });
     if (!saved) {
       this.logger.error(`Failed to load order after save: ${order.id}`);
@@ -174,7 +190,7 @@ export class PrismaOrderRepository implements OrderRepository {
     return this.mapToDomain(saved);
   }
 
-  private mapToDomain(record: Prisma.OrderGetPayload<{ include: { items: true } }>): Order {
+  private mapToDomain(record: Prisma.OrderGetPayload<{ include: { items: true; dog: true; address: true } }>): Order {
     // Defensive check: ensure items array exists and is populated
     if (!record.items || !Array.isArray(record.items)) {
       this.logger.warn(
@@ -221,6 +237,18 @@ export class PrismaOrderRepository implements OrderRepository {
       snapshot,
       record.dogId ?? undefined,
       record.addressId ?? undefined,
+      // 🔧 添加：传入dog和address对象
+      record.dog ? {
+        id: record.dog.id,
+        name: record.dog.name,
+      } : undefined,
+      record.address ? {
+        id: record.address.id,
+        recipientName: record.address.recipientName,
+        phone: record.address.phone,
+        region: record.address.region as any,
+        detail: record.address.detail,
+      } : undefined,
       // Phase 8.14: Shipping tracking fields
       record.trackingNumber ?? undefined,
       record.carrierCode ?? undefined,
@@ -253,6 +281,7 @@ export class PrismaOrderRepository implements OrderRepository {
       marginStrategyName: snapshot.marginStrategyName,
       createdAt: snapshot.createdAt.toISOString(),
       ingredientPriceVersionHash: snapshot.ingredientPriceVersionHash ?? null,
+      ingredientDetails: snapshot.ingredientDetails ?? null, // 保存原料详情
     };
   }
 
@@ -270,6 +299,7 @@ export class PrismaOrderRepository implements OrderRepository {
       raw.marginStrategyName,
       new Date(raw.createdAt),
       raw.ingredientPriceVersionHash ?? null,
+      raw.ingredientDetails ?? undefined, // 读取原料详情
     );
   }
 
@@ -336,6 +366,8 @@ export class PrismaOrderRepository implements OrderRepository {
         where,
         include: {
           items: true,
+          dog: true,      // 🔧 添加：包含dog关联数据
+          address: true,  // 🔧 添加：包含address关联数据
           customer: {
             select: {
               id: true,
@@ -347,6 +379,54 @@ export class PrismaOrderRepository implements OrderRepository {
         orderBy: { createdAt: 'desc' },
         skip,
         take: pageSize,
+      }),
+    ]);
+
+    const list = records.map((r) => this.mapToDomain(r));
+    return { list, total };
+  }
+
+  /**
+   * Find orders by target production date range
+   * Used by purchasing module to find orders scheduled for production
+   */
+  async findByTargetProductionDateRange(params: {
+    startDate: Date;
+    endDate?: Date;
+    status?: OrderStatus;
+  }): Promise<{ list: Order[]; total: number }> {
+    const endDate = params.endDate || params.startDate;
+
+    // Build where clause
+    const where: Prisma.OrderWhereInput = {
+      targetProductionDate: {
+        gte: params.startDate,
+        lte: endDate,
+      },
+    };
+
+    if (params.status) {
+      where.status = params.status;
+    }
+
+    // Execute queries
+    const [total, records] = await Promise.all([
+      this.prisma.order.count({ where }),
+      this.prisma.order.findMany({
+        where,
+        include: {
+          items: true,
+          dog: true,      // 🔧 添加：包含dog关联数据
+          address: true,  // 🔧 添加：包含address关联数据
+          customer: {
+            select: {
+              id: true,
+              nickname: true,
+              phone: true,
+            },
+          },
+        },
+        orderBy: { targetProductionDate: 'asc' },
       }),
     ]);
 

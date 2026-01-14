@@ -88,6 +88,44 @@ export class InMemoryOrderRepository implements OrderRepository {
     return Promise.resolve({ list, total });
   }
 
+  /**
+   * Find orders by target production date range
+   * Used by purchasing module to find orders scheduled for production
+   */
+  async findByTargetProductionDateRange(params: {
+    startDate: Date;
+    endDate?: Date;
+    status?: OrderStatus;
+  }): Promise<{ list: Order[]; total: number }> {
+    const endDate = params.endDate || params.startDate;
+
+    let filtered = Array.from(this.orders.values());
+
+    // Filter by target production date range
+    filtered = filtered.filter((o) => {
+      if (!o.targetProductionDate) return false;
+      const prodDate = new Date(o.targetProductionDate);
+      return prodDate >= params.startDate && prodDate <= endDate;
+    });
+
+    // Filter by status if provided
+    if (params.status) {
+      filtered = filtered.filter((o) => o.status === params.status);
+    }
+
+    // Sort by target production date ascending
+    filtered.sort((a, b) => {
+      const aDate = a.targetProductionDate ? a.targetProductionDate.getTime() : 0;
+      const bDate = b.targetProductionDate ? b.targetProductionDate.getTime() : 0;
+      return aDate - bDate;
+    });
+
+    return Promise.resolve({
+      list: filtered,
+      total: filtered.length,
+    });
+  }
+
   async getStats(): Promise<{
     total: number;
     pendingPayment: number;

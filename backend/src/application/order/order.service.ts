@@ -223,16 +223,31 @@ export class OrderService {
     // 2. 处理制作日期
     let productionDate = dto.targetProductionDate;
 
-    // 默认值：如果未提供制作日期，默认为明天
+    // 默认值：如果未提供制作日期，根据当前时间判断（0-6点当日，6-24点次日）
     if (!productionDate) {
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      tomorrow.setHours(0, 0, 0, 0);
-      productionDate = tomorrow;
-      console.log('[CreateOrderFromSnapshot] No production date provided, using tomorrow:', productionDate.toISOString());
+      const now = new Date();
+      const hour = now.getHours(); // 使用本地时间
+
+      // 获取本地日历日期
+      const year = now.getFullYear();
+      const month = now.getMonth();
+      const day = now.getDate();
+
+      if (hour >= 0 && hour < 6) {
+        // 0-6点：当日制作
+        productionDate = new Date(year, month, day);
+        console.log('[CreateOrderFromSnapshot] No production date provided, using today (local date):', productionDate.toISOString());
+      } else {
+        // 6-24点：次日制作
+        productionDate = new Date(year, month, day + 1);
+        console.log('[CreateOrderFromSnapshot] No production date provided, using tomorrow (local date):', productionDate.toISOString());
+      }
     } else {
-      // 如果提供了日期，将时间部分清零
-      productionDate.setHours(0, 0, 0, 0);
+      // 如果提供了日期，将时间部分清零（使用本地时间）
+      const year = productionDate.getFullYear();
+      const month = productionDate.getMonth();
+      const day = productionDate.getDate();
+      productionDate = new Date(year, month, day);
     }
 
     // 验证：制作日期不能早于今天
@@ -339,6 +354,7 @@ export class OrderService {
       'targetMargin_40%', // marginStrategyName (简化)
       new Date(),
       null, // ingredientPriceVersionHash
+      pricingResult.pricingBreakdown.ingredientDetails, // 保存原料详情，用于采购清单
     );
 
     // 9. 创建订单（使用快照价格，不重新计算）
@@ -776,6 +792,7 @@ export class OrderService {
       marginStrategyName,
       new Date(),
       null, // ingredientPriceVersionHash - not available in in-memory repos
+      pricing.ingredientDetails, // 保存原料详情，用于采购清单
     );
 
     const order = new Order(

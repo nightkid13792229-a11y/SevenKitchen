@@ -104,7 +104,7 @@ export interface PricingBreakdown {
 export interface IngredientCostItem {
   name: string;
   type: string;
-  amount: number;
+  amount: number;              // 成本计算用量（含出肉率和生产损耗率）
   unit: string;
   unitCost: number;
   cost: number;
@@ -113,6 +113,7 @@ export interface IngredientCostItem {
   brand?: string;             // 品牌
   displayUnit?: string;       // 显示单位（前端用于显示）
   netAmount?: number;         // 净需求（不含生产损耗和出肉率，用于前端显示和补剂用量计算）
+  purchaseAmount?: number;    // 采购用量（仅含生产损耗率，不含出肉率）
   productModel?: string;      // 规格
   ingredientId?: string;      // 原料ID
   properties?: any;           // 完整的properties对象（包含purchase_link等）
@@ -279,6 +280,9 @@ export class PricingService {
         const yieldRate = ingredient.getEdibleYieldRate();
         const itemGrossPurchaseKg = (itemNetNeededKg / yieldRate) * recipe.productionLossRate;
 
+        // 采购用量（仅含生产损耗率，不含出肉率）
+        const itemPurchaseKg = itemNetNeededKg * recipe.productionLossRate;
+
         const unitCost = ingredient.getUnitCost();
         const itemCost = itemGrossPurchaseKg * 1000 * unitCost;
 
@@ -297,7 +301,9 @@ export class PricingService {
         ingredientDetails.push({
           name: ingredient.name,
           type: 'FOOD',
-          amount: itemGrossPurchaseKg,
+          amount: itemGrossPurchaseKg,        // 成本计算用量（含出肉率和生产损耗率）
+          netAmount: itemNetNeededKg,         // 净需求（不含生产损耗和出肉率）
+          purchaseAmount: itemPurchaseKg,     // 采购用量（仅含生产损耗率，不含出肉率）
           unit: 'kg',
           unitCost: unitCost,
           cost: itemCost,
@@ -308,7 +314,6 @@ export class PricingService {
           preparationMethod: item.preparationMethod || undefined,
           ingredientId: ingredient.id,
           displayUnit: 'g',  // 前端显示时转换为克
-          netAmount: itemNetNeededKg,  // 净需求（不含生产损耗和出肉率）
           properties: ingredient.properties,  // 添加完整properties
         });
 
@@ -400,7 +405,9 @@ export class PricingService {
         ingredientDetails.push({
           name: ingredient.name,
           type: 'SUPPLEMENT',
-          amount: unitsNeeded,
+          amount: unitsNeeded,              // 补剂的用量已含损耗率
+          netAmount: unitsNeeded,           // 补剂净需求 = 用量
+          purchaseAmount: unitsNeeded,      // 补剂采购用量 = 用量（补剂没有出肉率）
           unit: 'g',
           unitCost: unitCost,
           cost: itemCost,
@@ -411,7 +418,6 @@ export class PricingService {
           preparationMethod: finalPrepMethod,
           ingredientId: ingredient.id,
           displayUnit: ingredient.unitDisplayLabel || 'g',  // 使用显示单位标签
-          netAmount: unitsNeeded,  // 补剂没有出肉率，净需求 = 用量
           properties: ingredient.properties,  // 添加完整properties（包含purchase_link）
           nutrientTargetKey: item.nutrientTargetKey,        // 营养素名称
           nutrientTargetValue: item.nutrientTargetValue,    // 营养目标值

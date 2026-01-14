@@ -121,6 +121,32 @@ const routes: RouteRecordRaw[] = [
         name: 'GlobalConfig',
         component: () => import('@/views/GlobalConfig.vue'),
         meta: { title: '全局配置' }
+      },
+      {
+        path: 'purchasing',
+        name: 'Purchasing',
+        redirect: '/purchasing/reimbursements',
+        meta: { title: '采购管理' },
+        children: [
+          {
+            path: 'reimbursements',
+            name: 'ReimbursementList',
+            component: () => import('@/views/Purchasing/ReimbursementList.vue'),
+            meta: { title: '报销审核' }
+          },
+          {
+            path: 'reimbursements/detail',
+            name: 'ReimbursementDetail',
+            component: () => import('@/views/Purchasing/ReimbursementDetail.vue'),
+            meta: { title: '报销单详情' }
+          },
+          {
+            path: 'history',
+            name: 'PurchaseHistory',
+            component: () => import('@/views/Purchasing/PurchaseHistory.vue'),
+            meta: { title: '采购历史' }
+          }
+        ]
       }
     ]
   }

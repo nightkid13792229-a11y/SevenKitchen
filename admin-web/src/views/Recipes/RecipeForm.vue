@@ -1546,6 +1546,19 @@ const saveIngredient = () => {
     }),
   };
 
+  // ===== 新增代码：预填充营养素单位和ingredient对象 =====
+  if (ingredient.type === 'SUPPLEMENT' && ingredientForm.nutrientTargetKey) {
+    const activeNutrients = (ingredient.properties as any)?.active_nutrients || {};
+    const nutrientData = activeNutrients[ingredientForm.nutrientTargetKey];
+    if (nutrientData && typeof nutrientData === 'object') {
+      (item as any)._nutrientUnit = (nutrientData as any).unit || '';
+    }
+
+    // 同时嵌入完整的ingredient对象，确保properties可用
+    (item as any).ingredient = ingredient;
+  }
+  // ===== 新增代码结束 =====
+
   if (!form.items) {
     form.items = [];
   }
@@ -1609,15 +1622,29 @@ const formatNutrientTarget = (row: any) => {
 
   if (!key || value === undefined) return '-';
 
-  // 优先使用预填充的单位
+  // 策略1: 优先使用预填充的单位
   let unit = row._nutrientUnit || '';
 
-  // 降级：从 ingredient 对象获取（备选）
+  // 策略2: 从 row.ingredient.properties 获取
   if (!unit && row.ingredient?.properties?.active_nutrients) {
     const activeNutrients = (row.ingredient.properties as any).active_nutrients || {};
     const nutrientData = activeNutrients[key];
     if (nutrientData && typeof nutrientData === 'object') {
       unit = (nutrientData as any).unit || '';
+    }
+  }
+
+  // 策略3: 从 availableIngredients 中查找（新增）
+  if (!unit) {
+    const ingredient = availableIngredients.value.find(
+      (ing) => ing.id === row.ingredientId
+    );
+    if (ingredient?.properties?.active_nutrients) {
+      const activeNutrients = (ingredient.properties as any).active_nutrients || {};
+      const nutrientData = activeNutrients[key];
+      if (nutrientData && typeof nutrientData === 'object') {
+        unit = (nutrientData as any).unit || '';
+      }
     }
   }
 

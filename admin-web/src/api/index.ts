@@ -133,4 +133,7 @@ export { ingredientTagApi } from './ingredientTags'
 // Re-export user API
 export { userApi } from './users'
 
+// Re-export purchasing API
+export { purchasingApi } from './purchasing'
+
 export default api

@@ -23,6 +23,9 @@ export interface PurchaseListConstructor {
   startedAt?: Date;
   completedAt?: Date;
   items?: PurchaseItem[];
+  records?: any[]; // PurchaseRecord array for calculating aggregates
+  recordsCount?: number; // Computed field: number of purchase records
+  totalActualCost?: number; // Computed field: total actual cost from records
 }
 
 export class PurchaseList {
@@ -40,6 +43,8 @@ export class PurchaseList {
   public startedAt?: Date;
   public completedAt?: Date;
   public items: PurchaseItem[];
+  public recordsCount?: number; // Computed field: number of purchase records
+  public totalActualCost?: number; // Computed field: total actual cost from records
 
   constructor(data: PurchaseListConstructor) {
     this.id = data.id || uuidv4();
@@ -56,6 +61,8 @@ export class PurchaseList {
     this.startedAt = data.startedAt;
     this.completedAt = data.completedAt;
     this.items = data.items || [];
+    this.recordsCount = data.recordsCount;
+    this.totalActualCost = data.totalActualCost;
 
     this.validateInvariants();
   }
@@ -189,6 +196,17 @@ export class PurchaseList {
   static fromPrisma(data: any): PurchaseList {
     const items = data.items?.map((item: any) => PurchaseItem.fromPrisma(item)) || [];
 
+    // Calculate purchase record aggregates if records are included
+    let recordsCount: number | undefined;
+    let totalActualCost: number | undefined;
+
+    if (data.records && Array.isArray(data.records)) {
+      recordsCount = data.records.length;
+      totalActualCost = data.records.reduce((sum: number, record: any) => {
+        return sum + Number(record.actualCost);
+      }, 0);
+    }
+
     return new PurchaseList({
       id: data.id,
       targetDate: data.targetDate,
@@ -204,6 +222,8 @@ export class PurchaseList {
       startedAt: data.startedAt,
       completedAt: data.completedAt,
       items,
+      recordsCount,
+      totalActualCost,
     });
   }
 }

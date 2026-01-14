@@ -45,6 +45,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
       },
       include: {
         items: true,
+        records: true, // Include purchase records for calculating aggregates
         createdBy: {
           select: {
             id: true,
@@ -63,6 +64,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
       where: { id },
       include: {
         items: true,
+        records: true, // Include purchase records for calculating aggregates
         createdBy: {
           select: {
             id: true,
@@ -86,6 +88,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
       },
       include: {
         items: true,
+        records: true, // Include purchase records for calculating aggregates
         createdBy: {
           select: {
             id: true,
@@ -107,6 +110,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
       where: { status },
       include: {
         items: true,
+        records: true, // Include purchase records for calculating aggregates
         createdBy: {
           select: {
             id: true,
@@ -128,6 +132,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
       where: { createdById },
       include: {
         items: true,
+        records: true, // Include purchase records for calculating aggregates
         createdBy: {
           select: {
             id: true,
@@ -168,6 +173,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
         where,
         include: {
           items: true,
+          records: true, // Include purchase records for calculating aggregates
           createdBy: {
             select: {
               id: true,
@@ -219,6 +225,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
       where: { reimbursementId },
       include: {
         items: true,
+        records: true, // Include purchase records for calculating aggregates
         createdBy: {
           select: {
             id: true,

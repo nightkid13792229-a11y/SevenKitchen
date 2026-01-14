@@ -194,9 +194,45 @@
       }
     },
     {
+      "path": "pages/staff-purchasing/reimbursement/submit",
+      "style": {
+        "navigationBarTitleText": "提交报销申请"
+      }
+    },
+    {
+      "path": "pages/staff-purchasing/reimbursement/list",
+      "style": {
+        "navigationBarTitleText": "我的报销申请"
+      }
+    },
+    {
+      "path": "pages/staff-purchasing/reimbursement/detail",
+      "style": {
+        "navigationBarTitleText": "报销单详情"
+      }
+    },
+    {
+      "path": "pages/staff-purchasing/detail",
+      "style": {
+        "navigationBarTitleText": "采购清单详情"
+      }
+    },
+    {
+      "path": "pages/staff-purchasing/record-form",
+      "style": {
+        "navigationBarTitleText": "添加采购记录"
+      }
+    },
+    {
       "path": "pages/staff-production/index",
       "style": {
         "navigationBarTitleText": "生产管理"
+      }
+    },
+    {
+      "path": "pages/staff-production/detail",
+      "style": {
+        "navigationBarTitleText": "任务详情"
       }
     },
     {

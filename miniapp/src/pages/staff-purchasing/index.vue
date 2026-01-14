@@ -9,94 +9,340 @@
     <!-- 筛选器 -->
     <view class="filters">
       <view class="filter-item">
-        <text class="filter-label">日期范围</text>
-        <picker mode="date" :value="dateRange" @change="onDateChange">
+        <text class="filter-label">状态筛选</text>
+        <picker mode="selector" :range="statusOptions" range-key="label" :value="statusIndex" @change="onStatusChange">
           <view class="picker-value">
-            {{ dateRange || '请选择日期' }}
+            {{ statusOptions[statusIndex].label }}
             <text class="arrow">›</text>
           </view>
         </picker>
       </view>
     </view>
 
-    <!-- 采购清单（UI框架，待对接API） -->
-    <view class="purchase-list">
-      <view class="list-header">
-        <text class="header-title">采购清单</text>
-        <view class="header-actions">
-          <button class="action-btn" @tap="exportList">导出</button>
-        </view>
+    <!-- 采购清单列表 -->
+    <view class="purchase-lists">
+      <!-- 加载状态 -->
+      <view v-if="loading" class="loading-state">
+        <text>加载中...</text>
       </view>
 
       <!-- 空状态 -->
-      <view v-if="purchaseList.length === 0" class="empty-state">
+      <view v-else-if="purchaseLists.length === 0" class="empty-state">
         <text class="empty-icon">📋</text>
         <text class="empty-text">暂无采购清单</text>
-        <text class="empty-hint">选择日期后查看采购需求</text>
+        <text class="empty-hint">点击下方按钮生成采购清单</text>
       </view>
 
-      <!-- 采购项列表 -->
+      <!-- 采购清单列表 -->
       <view v-else class="list-items">
-        <view v-for="(item, index) in purchaseList" :key="index" class="list-item">
-          <view class="item-info">
-            <text class="item-name">{{ item.name }}</text>
-            <text class="item-spec">{{ item.spec }}</text>
+        <view
+          v-for="list in purchaseLists"
+          :key="list.id"
+          class="list-item"
+          @tap="goToDetail(list.id)"
+        >
+          <!-- 清单头部 -->
+          <view class="item-header">
+            <view class="header-left">
+              <text class="target-date">{{ formatDate(list.targetDate) }}</text>
+              <text class="create-time">创建于 {{ formatDateTime(list.createdAt) }}</text>
+            </view>
+            <view class="status-badge" :class="getStatusClass(list.status)">
+              <text>{{ getStatusText(list.status) }}</text>
+            </view>
           </view>
-          <view class="item-quantity">
-            <text class="quantity-value">{{ item.quantity }}</text>
-            <text class="quantity-unit">{{ item.unit }}</text>
+
+          <!-- 清单信息 -->
+          <view class="item-body">
+            <view class="info-row">
+              <text class="label">原料种类:</text>
+              <text class="value">{{ list.itemCount }} 种</text>
+            </view>
+            <view class="info-row" v-if="list.recordsCount !== undefined">
+              <text class="label">已录入:</text>
+              <text class="value">{{ list.recordsCount }} 种采购记录</text>
+            </view>
+            <view class="info-row" v-if="list.totalActualCost !== undefined && list.totalActualCost > 0">
+              <text class="label">实际总额:</text>
+              <text class="value cost">¥{{ list.totalActualCost.toFixed(2) }}</text>
+            </view>
+            <view class="info-row" v-if="list.sourceOrderIds && list.sourceOrderIds.length > 0">
+              <text class="label">关联订单:</text>
+              <text class="value">{{ list.sourceOrderIds.length }} 个</text>
+            </view>
+            <view class="info-row" v-if="list.completedAt">
+              <text class="label">完成时间:</text>
+              <text class="value">{{ formatDate(list.completedAt) }}</text>
+            </view>
           </view>
-          <view class="item-status" :class="item.status">
-            <text>{{ item.statusText }}</text>
+
+          <!-- 操作按钮 -->
+          <view class="item-actions">
+            <!-- 待采购状态：显示开始采购和确认完成按钮 -->
+            <template v-if="list.status === 'PENDING'">
+              <button class="action-btn start" @tap.stop="startPurchase(list.id)" v-if="!list.startedAt">
+                开始采购
+              </button>
+              <button class="action-btn complete" @tap.stop="completePurchase(list.id)">
+                确认完成
+              </button>
+            </template>
+            <!-- 已完成状态：显示查看报销按钮 -->
+            <button
+              v-if="list.status === 'COMPLETED' && !list.reimbursementId"
+              class="action-btn reimbursement"
+              @tap.stop="goToReimbursement(list.id)"
+            >
+              申请报销
+            </button>
           </view>
         </view>
       </view>
-    </view>
 
-    <!-- 统计信息 -->
-    <view class="stats-card">
-      <view class="stat-row">
-        <text class="stat-label">原料种类</text>
-        <text class="stat-value">{{ totalIngredients }} 种</text>
-      </view>
-      <view class="stat-row">
-        <text class="stat-label">预估采购总额</text>
-        <text class="stat-value highlight">¥{{ estimatedCost }}</text>
+      <!-- 加载更多 -->
+      <view v-if="hasMore && !loading && purchaseLists.length > 0" class="load-more" @tap="loadMore">
+        <text>加载更多</text>
       </view>
     </view>
 
     <!-- 底部操作栏 -->
     <view class="bottom-actions">
-      <button class="action-btn primary" @tap="confirmPurchase">确认采购</button>
+      <button class="action-btn primary" @tap="generateList" :loading="generating">
+        <text v-if="!generating">生成采购清单</text>
+        <text v-else>生成中...</text>
+      </button>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import {
+  getPurchaseLists,
+  generatePurchaseList,
+  completePurchase as completePurchaseApi,
+  startPurchase as startPurchaseApi,
+} from '@/api/purchasing';
 
-const dateRange = ref('');
-const purchaseList = ref<any[]>([]);
-const totalIngredients = ref(0);
-const estimatedCost = ref('0.00');
+// 状态筛选选项
+const statusOptions = [
+  { label: '全部', value: '' },
+  { label: '草稿', value: 'DRAFT' },
+  { label: '待采购', value: 'PENDING' },
+  { label: '已完成', value: 'COMPLETED' },
+];
+const statusIndex = ref(0);
 
+// 状态管理
+const purchaseLists = ref<any[]>([]);
+const loading = ref(false);
+const generating = ref(false);
+const currentPage = ref(1);
+const pageSize = 20;
+const total = ref(0);
+const hasMore = computed(() => purchaseLists.value.length < total.value);
+
+// 页面加载
 onMounted(() => {
-  // TODO: 加载采购清单数据
-  // loadPurchaseList();
+  loadPurchaseLists();
 });
 
-const onDateChange = (e: any) => {
-  dateRange.value = e.detail.value;
-  // TODO: 根据日期加载采购清单
-  // loadPurchaseList();
+// 加载采购清单列表
+const loadPurchaseLists = async (refresh = false) => {
+  if (refresh) {
+    currentPage.value = 1;
+    purchaseLists.value = [];
+  }
+
+  loading.value = true;
+
+  try {
+    const statusValue = statusOptions[statusIndex.value].value;
+    const params: any = {
+      page: currentPage.value,
+      pageSize,
+    };
+
+    // 只有当status不为空时才添加status参数
+    if (statusValue) {
+      params.status = statusValue;
+    }
+
+    const res: any = await getPurchaseLists(params);
+
+    if (res.code === 0) {
+      if (refresh) {
+        purchaseLists.value = res.data.list;
+      } else {
+        purchaseLists.value.push(...res.data.list);
+      }
+      total.value = res.data.total;
+    } else {
+      uni.showToast({ title: res.message || '加载失败', icon: 'none' });
+    }
+  } catch (error: any) {
+    console.error('加载采购清单失败', error);
+    uni.showToast({ title: '加载失败', icon: 'none' });
+  } finally {
+    loading.value = false;
+  }
 };
 
-const exportList = () => {
-  uni.showToast({ title: '导出功能开发中', icon: 'none' });
+// 加载更多
+const loadMore = () => {
+  if (!loading.value && hasMore.value) {
+    currentPage.value++;
+    loadPurchaseLists();
+  }
 };
 
-const confirmPurchase = () => {
-  uni.showToast({ title: '确认采购功能开发中', icon: 'none' });
+// 状态变更
+const onStatusChange = (e: any) => {
+  statusIndex.value = e.detail.value;
+  loadPurchaseLists(true);
+};
+
+// 生成采购清单
+const generateList = () => {
+  uni.showModal({
+    title: '生成采购清单',
+    content: '将根据当前待生产的订单生成采购清单，确认继续？',
+    success: async (res) => {
+      if (res.confirm) {
+        generating.value = true;
+
+        try {
+          const today = new Date().toISOString().slice(0, 10);
+          const response: any = await generatePurchaseList({
+            startDate: today,
+          });
+
+          if (response.code === 0) {
+            uni.showToast({ title: '生成成功', icon: 'success' });
+            // 刷新列表
+            loadPurchaseLists(true);
+          } else {
+            // 后端返回中文错误信息，直接显示
+            uni.showToast({ title: response.message || '生成失败', icon: 'none' });
+          }
+        } catch (error: any) {
+          console.error('生成采购清单失败', error);
+          // 显示后端返回的错误信息
+          uni.showToast({ title: error.message || '生成失败', icon: 'none' });
+        } finally {
+          generating.value = false;
+        }
+      }
+    },
+  });
+};
+
+// 确认采购完成
+const completePurchase = (id: string) => {
+  uni.showModal({
+    title: '确认采购完成',
+    content: '确认该采购清单的所有原料已采购完成？',
+    success: async (res) => {
+      if (res.confirm) {
+        try {
+          const response: any = await completePurchaseApi(id);
+
+          if (response.code === 0) {
+            uni.showToast({ title: '操作成功', icon: 'success' });
+            // 刷新列表
+            loadPurchaseLists(true);
+          } else {
+            // 显示后端返回的错误信息
+            uni.showToast({ title: response.message || '操作失败', icon: 'none' });
+          }
+        } catch (error: any) {
+          console.error('确认采购完成失败', error);
+          // 显示后端返回的错误信息
+          uni.showToast({ title: error.message || '操作失败', icon: 'none' });
+        }
+      }
+    },
+  });
+};
+
+// 开始采购
+const startPurchase = (id: string) => {
+  uni.showModal({
+    title: '开始采购',
+    content: '开始采购后可以录入采购记录，确认继续？',
+    success: async (res) => {
+      if (res.confirm) {
+        try {
+          const response: any = await startPurchaseApi(id);
+
+          if (response.code === 0) {
+            uni.showToast({ title: '操作成功', icon: 'success' });
+            // 刷新列表
+            loadPurchaseLists(true);
+          } else {
+            uni.showToast({ title: response.message || '操作失败', icon: 'none' });
+          }
+        } catch (error: any) {
+          console.error('开始采购失败', error);
+          uni.showToast({ title: error.message || '操作失败', icon: 'none' });
+        }
+      }
+    },
+  });
+};
+
+// 跳转报销申请
+const goToReimbursement = (purchaseListId: string) => {
+  uni.navigateTo({
+    url: `/pages/staff-purchasing/reimbursement/apply?purchaseListId=${purchaseListId}`,
+  });
+};
+
+// 跳转详情
+const goToDetail = (id: string) => {
+  uni.navigateTo({
+    url: `/pages/staff-purchasing/detail?id=${id}`,
+  });
+};
+
+// 获取状态文本
+const getStatusText = (status: string) => {
+  const statusMap: Record<string, string> = {
+    'DRAFT': '草稿',
+    'PENDING': '待采购',
+    'COMPLETED': '已完成',
+    'CANCELLED': '已取消',
+  };
+  return statusMap[status] || status;
+};
+
+// 获取状态样式类
+const getStatusClass = (status: string) => {
+  const classMap: Record<string, string> = {
+    'DRAFT': 'draft',
+    'PENDING': 'pending',
+    'COMPLETED': 'completed',
+    'CANCELLED': 'cancelled',
+  };
+  return classMap[status] || '';
+};
+
+// 格式化日期
+const formatDate = (dateStr: string) => {
+  const date = new Date(dateStr);
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  return `${month}月${day}日`;
+};
+
+// 格式化日期时间
+const formatDateTime = (dateStr: string) => {
+  const date = new Date(dateStr);
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  return `${month}/${day} ${hours}:${minutes}`;
 };
 </script>
 
@@ -104,7 +350,7 @@ const confirmPurchase = () => {
 .purchasing-page {
   min-height: 100vh;
   background-color: #f5f5f5;
-  padding-bottom: 120rpx;
+  padding-bottom: 140rpx;
 }
 
 .header {
@@ -158,39 +404,20 @@ const confirmPurchase = () => {
   }
 }
 
-.purchase-list {
-  background-color: #fff;
-  margin-bottom: 24rpx;
+.purchase-lists {
+  padding: 0 32rpx;
 }
 
-.list-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 32rpx;
-  border-bottom: 1rpx solid #f0f0f0;
-
-  .header-title {
-    font-size: 32rpx;
-    font-weight: bold;
-    color: #333;
-  }
-
-  .action-btn {
-    padding: 12rpx 24rpx;
-    background-color: #1890ff;
-    color: #fff;
-    border-radius: 8rpx;
-    font-size: 24rpx;
-    border: none;
-  }
-}
-
-.empty-state {
+.loading-state, .empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 80rpx 32rpx;
+
+  text {
+    font-size: 28rpx;
+    color: #999;
+  }
 
   .empty-icon {
     font-size: 120rpx;
@@ -210,105 +437,143 @@ const confirmPurchase = () => {
 }
 
 .list-items {
-  padding: 0 32rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
 }
 
 .list-item {
-  display: flex;
-  align-items: center;
-  gap: 24rpx;
-  padding: 32rpx 0;
-  border-bottom: 1rpx solid #f0f0f0;
-
-  &:last-child {
-    border-bottom: none;
-  }
-}
-
-.item-info {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.item-name {
-  font-size: 28rpx;
-  font-weight: 500;
-  color: #333;
-  display: block;
-}
-
-.item-spec {
-  font-size: 24rpx;
-  color: #999;
-  display: block;
-}
-
-.item-quantity {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4rpx;
-
-  .quantity-value {
-    font-size: 32rpx;
-    font-weight: bold;
-    color: #1890ff;
-  }
-
-  .quantity-unit {
-    font-size: 22rpx;
-    color: #999;
-  }
-}
-
-.item-status {
-  padding: 8rpx 16rpx;
-  border-radius: 8rpx;
-  font-size: 22rpx;
-
-  &.pending {
-    background-color: #fff7e6;
-    color: #fa8c16;
-  }
-
-  &.completed {
-    background-color: #f6ffed;
-    color: #52c41a;
-  }
-}
-
-.stats-card {
   background-color: #fff;
-  margin: 0 32rpx 24rpx;
-  padding: 32rpx;
   border-radius: 16rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
-}
+  padding: 24rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
 
-.stat-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16rpx 0;
+  .item-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16rpx;
+    padding-bottom: 16rpx;
+    border-bottom: 1rpx solid #f5f5f5;
 
-  &:not(:last-child) {
-    border-bottom: 1rpx solid #f0f0f0;
+    .header-left {
+      display: flex;
+      flex-direction: column;
+      gap: 8rpx;
+
+      .target-date {
+        font-size: 30rpx;
+        font-weight: bold;
+        color: #333;
+      }
+
+      .create-time {
+        font-size: 22rpx;
+        color: #999;
+      }
+    }
+
+    .status-badge {
+      padding: 8rpx 16rpx;
+      border-radius: 8rpx;
+      font-size: 22rpx;
+      font-weight: bold;
+
+      &.draft {
+        background-color: #f0f0f0;
+        color: #666;
+      }
+
+      &.pending {
+        background-color: #fff7e6;
+        color: #fa8c16;
+      }
+
+      &.completed {
+        background-color: #f6ffed;
+        color: #52c41a;
+      }
+
+      &.cancelled {
+        background-color: #ffebee;
+        color: #f44336;
+      }
+    }
+  }
+
+  .item-body {
+    margin-bottom: 16rpx;
+
+    .info-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8rpx;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+
+      .label {
+        font-size: 26rpx;
+        color: #666;
+      }
+
+      .value {
+        font-size: 26rpx;
+        color: #333;
+        font-weight: 500;
+
+        &.cost {
+          color: #ff6b6b;
+          font-weight: bold;
+        }
+      }
+    }
+  }
+
+  .item-actions {
+    padding-top: 16rpx;
+    border-top: 1rpx solid #f5f5f5;
+    display: flex;
+    gap: 12rpx;
+
+    .action-btn {
+      flex: 1;
+      height: 72rpx;
+      line-height: 72rpx;
+      border-radius: 8rpx;
+      font-size: 26rpx;
+      border: none;
+
+      &.start {
+        background-color: #52c41a;
+        color: #fff;
+      }
+
+      &.complete {
+        background-color: #1890ff;
+        color: #fff;
+      }
+
+      &.reimbursement {
+        background-color: #fa8c16;
+        color: #fff;
+      }
+
+      &:active {
+        opacity: 0.8;
+      }
+    }
   }
 }
 
-.stat-label {
-  font-size: 28rpx;
-  color: #666;
-}
+.load-more {
+  text-align: center;
+  padding: 32rpx;
 
-.stat-value {
-  font-size: 32rpx;
-  font-weight: bold;
-  color: #333;
-
-  &.highlight {
+  text {
+    font-size: 26rpx;
     color: #1890ff;
   }
 }

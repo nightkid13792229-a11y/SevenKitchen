@@ -86,7 +86,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
 
 // DEBUG flag for development logging
-const DEBUG = false
+const DEBUG = true
 
 interface Order {
   id: string
@@ -123,6 +123,8 @@ const selectedStatus = ref<string>('ALL')
 const statusTabs = ref<Array<{label: string, value: string, count: number}>>([
   { label: '全部', value: 'ALL', count: 0 },
   { label: '待付款', value: 'PENDING_PAYMENT', count: 0 },
+  { label: '已付款', value: 'PAID', count: 0 },
+  { label: '等待生产', value: 'WAITING_FOR_PRODUCTION', count: 0 },
   { label: '生产中', value: 'IN_PRODUCTION', count: 0 },
   { label: '急冻中', value: 'FREEZING', count: 0 },
   { label: '已发货', value: 'SHIPPED', count: 0 },
@@ -185,11 +187,13 @@ function loadOrders() {
 function updateStatusCounts() {
   statusTabs.value[0].count = allOrders.value.length // 全部
   statusTabs.value[1].count = allOrders.value.filter(o => o.status === 'PENDING_PAYMENT').length
-  statusTabs.value[2].count = allOrders.value.filter(o => o.status === 'IN_PRODUCTION').length
-  statusTabs.value[3].count = allOrders.value.filter(o => o.status === 'FREEZING').length
-  statusTabs.value[4].count = allOrders.value.filter(o => o.status === 'SHIPPED').length
-  statusTabs.value[5].count = allOrders.value.filter(o => o.status === 'COMPLETED').length
-  statusTabs.value[6].count = allOrders.value.filter(o => o.status === 'AFTERSALE').length
+  statusTabs.value[2].count = allOrders.value.filter(o => o.status === 'PAID').length
+  statusTabs.value[3].count = allOrders.value.filter(o => o.status === 'WAITING_FOR_PRODUCTION').length
+  statusTabs.value[4].count = allOrders.value.filter(o => o.status === 'IN_PRODUCTION').length
+  statusTabs.value[5].count = allOrders.value.filter(o => o.status === 'FREEZING').length
+  statusTabs.value[6].count = allOrders.value.filter(o => o.status === 'SHIPPED').length
+  statusTabs.value[7].count = allOrders.value.filter(o => o.status === 'COMPLETED').length
+  statusTabs.value[8].count = allOrders.value.filter(o => o.status === 'AFTERSALE').length
 }
 
 // 根据选中状态筛选订单
@@ -236,6 +240,7 @@ function getStatusText(status: string): string {
     INIT: '待确认',
     PENDING_PAYMENT: '待付款',
     PAID: '已付款',
+    WAITING_FOR_PRODUCTION: '等待生产',
     IN_PRODUCTION: '制作中',
     FREEZING: '急冻中',
     SHIPPED: '已发货',
@@ -252,7 +257,8 @@ function getStatusColor(status: string): string {
   const colorMap: Record<string, string> = {
     INIT: '#999',
     PENDING_PAYMENT: '#ff9800',
-    PAID: '#1890ff',
+    PAID: '#52c41a',
+    WAITING_FOR_PRODUCTION: '#1890ff',
     IN_PRODUCTION: '#1890ff',
     FREEZING: '#722ed1',
     SHIPPED: '#52c41a',
@@ -307,11 +313,9 @@ function getMealWeight(order: Order): number {
   }
 
   const firstItem = order.firstItem
-  if (firstItem.dailyIntakeG && firstItem.dog?.mealsPerDay) {
-    return Math.round(firstItem.dailyIntakeG / firstItem.dog.mealsPerDay)
-  }
 
-  // 如果没有每日摄入量，使用包装规格
+  // ✅ 修复：直接返回用户配置的包装规格（每袋重量 = 每餐饭量）
+  // 这是用户下单时确认并支付的数据，而不是系统推荐值
   return firstItem.packageSpecG || 0
 }
 

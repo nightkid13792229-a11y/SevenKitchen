@@ -472,16 +472,27 @@ function getIngredientTypeClass(type: string): string {
 }
 
 function getNutrientUnit(item: RecipeItem): string {
-  if (!item.properties || !item.nutrientTargetKey) return ''
+  if (!item.nutrientTargetKey) return ''
 
-  const activeNutrients = item.properties?.active_nutrients || {}
-  const nutrientData = activeNutrients[item.nutrientTargetKey]
+  let unit = ''
 
-  if (nutrientData && typeof nutrientData === 'object') {
-    return nutrientData.unit || ''
+  // 策略1: 从item.properties获取（如果有）
+  if (item.properties?.active_nutrients) {
+    const nutrientData = item.properties.active_nutrients[item.nutrientTargetKey]
+    if (nutrientData && typeof nutrientData === 'object') {
+      unit = nutrientData.unit || ''
+    }
   }
 
-  return ''
+  // 策略2: 从item.ingredient.properties获取（如果有）
+  if (!unit && (item as any).ingredient?.properties?.active_nutrients) {
+    const nutrientData = (item as any).ingredient.properties.active_nutrients[item.nutrientTargetKey]
+    if (nutrientData && typeof nutrientData === 'object') {
+      unit = nutrientData.unit || ''
+    }
+  }
+
+  return unit
 }
 
 function formatNumber(value: number | undefined | null): string {

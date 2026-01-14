@@ -699,9 +699,10 @@ async function buyAgain() {
       const dogId = firstItem.dogId || ''
       const packageCount = firstItem.packageCount || 7
       const packageSpecG = firstItem.packageSpecG || 100
-      const dailyIntakeG = firstItem.dailyIntakeG || 0
-      const mealsPerDay = firstItem.dog?.mealsPerDay || 1
-      const perMealG = dailyIntakeG / mealsPerDay
+
+      // ✅ 修复：直接使用用户配置的 packageSpecG 作为每餐饭量
+      // 而不是使用系统推荐值 (dailyIntakeG / mealsPerDay)
+      const perMealG = packageSpecG
 
       // 构建URL参数
       const params = new URLSearchParams({

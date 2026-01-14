@@ -380,23 +380,26 @@ const isBefore6AM = computed(() => {
   return hour < 6
 })
 
-// 计算最小可选制作日期
+// 计算最小可选制作日期（可以选择当天，不能选昨天及以前）
 const minProductionDate = computed(() => {
   const now = new Date()
-  if (isBefore6AM.value) {
+  return formatDateToString(now)
+})
+
+// 默认制作日期：根据当前时间判断（0-6点当日，6-24点次日）
+const defaultProductionDate = computed(() => {
+  const now = new Date()
+  const hour = now.getHours() // 使用本地时间
+
+  if (hour >= 0 && hour < 6) {
+    // 0-6点：当日制作
     return formatDateToString(now)
   } else {
-    const tomorrow = new Date(now)
+    // 6-24点：次日制作
+    const tomorrow = new Date()
     tomorrow.setDate(tomorrow.getDate() + 1)
     return formatDateToString(tomorrow)
   }
-})
-
-// 默认制作日期：明天
-const defaultProductionDate = computed(() => {
-  const tomorrow = new Date()
-  tomorrow.setDate(tomorrow.getDate() + 1)
-  return formatDateToString(tomorrow)
 })
 
 // 选中的制作日期

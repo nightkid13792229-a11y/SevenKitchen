@@ -290,7 +290,7 @@
             <text class="ingredient-item">{{ ingredient.brand || '-' }}</text>
             <text class="ingredient-item">{{ ingredient.purchaseChannel || '-' }}</text>
             <text class="ingredient-item">
-              {{ ingredient.amount.toFixed(1) }}{{ ingredient.displayUnit || ingredient.unit }}
+              {{ (ingredient.netAmount ?? ingredient.amount).toFixed(1) }}{{ ingredient.displayUnit || ingredient.unit }}
             </text>
           </view>
         </view>
@@ -738,10 +738,12 @@ interface Dog {
   id: string
   name: string
   breedName?: string
+  breedId?: string
   currentWeightKg: number
   mealsPerDay: number
   birthday?: string
   ageText?: string
+  lifeStageOverride?: string
 }
 
 interface Recipe {
@@ -750,6 +752,15 @@ interface Recipe {
   description?: string
   coverImageUrl?: string
   energyDensityKcalPerKg: number
+  applicableLifeStages?: string[]
+  targetHealthTags?: string[]
+}
+
+interface Breed {
+  id: string
+  name: string
+  adultAgeMonths: number
+  seniorAgeYears?: number
 }
 
 interface CalcResult {
@@ -1012,8 +1023,9 @@ onMounted(async () => {
   }
 
   if (recipeId.value) {
-    loadBreeds()
-    loadRecipeDetail()
+    // 必须先加载品种数据，因为狗狗生命阶段计算需要品种信息
+    await loadBreeds()
+    await loadRecipeDetail()
     await loadDogs()
     loadGlobalConfig()
   }
@@ -1106,6 +1118,20 @@ function checkLifeStageMatch() {
 
   const dogLifeStage = getDogLifeStage(selectedDog.value)
   const applicableStages = recipe.value.applicableLifeStages || []
+
+  // 详细调试日志
+  console.log('[RecipeOrder] 生命阶段校验详情:', {
+    '狗狗名字': selectedDog.value.name,
+    '狗狗生日': selectedDog.value.birthday,
+    '狗狗品种ID': selectedDog.value.breedId,
+    '生命阶段覆盖值': selectedDog.value.lifeStageOverride,
+    '计算的狗狗生命阶段': dogLifeStage,
+    '食谱适用生命阶段': applicableStages,
+    '食谱名称': recipe.value.name,
+    '检查结果': applicableStages.includes(dogLifeStage),
+    'breeds列表长度': breeds.value.length,
+    'breeds列表': breeds.value.map(b => ({ id: b.id, name: b.name, adultAgeMonths: b.adultAgeMonths }))
+  })
 
   // 如果无法判断生命阶段（无品种信息），跳过警告
   if (dogLifeStage === null) {

@@ -27,3 +27,21 @@ Thumbs.db
 # Local scripts with sensitive info
 claude_code_zai_env.sh
 backend/scripts/remote_deploy.sh
+
+# Temporary test and verification scripts
+backend/check-*.js
+backend/verify-*.js
+backend/test-*.js
+backend/*test*.js
+backend/fix-*.js
+backend/update-*.js
+backend/delete-*.js
+backend/generate-*.js
+backend/find-*.js
+backend/investigate-*.js
+backend/recheck-*.js
+backend/compare-*.js
+backend/direct-*.js
+backend/*.sql
+backend/sql/
+miniapp/verify-*.js

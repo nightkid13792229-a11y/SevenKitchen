@@ -271,6 +271,9 @@ export class OrderService {
     const { requestParams, pricingResult } = snapshot;
     const itemParams = requestParams.items[0]; // MVP: 只支持单商品
 
+    // ✅ 修复：从快照的requestParams中获取addressId（如果快照中有）
+    const addressId = requestParams.addressId || dto.addressId;
+
     console.log('[CreateOrderFromSnapshot] Request params:', JSON.stringify(requestParams, null, 2));
     console.log('[CreateOrderFromSnapshot] Using pricing from snapshot:', {
       amountProduct: pricingResult.amountProduct,
@@ -291,11 +294,49 @@ export class OrderService {
     }
     console.log('[CreateOrderFromSnapshot] Dog loaded:', dog.name);
 
-    // 5. 创建 RecipeSnapshot
+    // 5. 验证狗狗所有权（确保狗狗属于当前用户）
+    if (dog.ownerId !== dto.customerId) {
+      throw new BadRequestException('Dog does not belong to this customer');
+    }
+
+    // 6. 验证地址（如果提供了addressId）
+    if (addressId) {
+      const address = await this.addressRepository.findById(addressId);
+      if (!address) {
+        throw new NotFoundException('Address not found');
+      }
+      // 验证地址所有权
+      if (address.userId !== dto.customerId) {
+        throw new BadRequestException('Address does not belong to this customer');
+      }
+      console.log('[CreateOrderFromSnapshot] Address validated:', address.recipientName);
+    }
+
+    // 7. 创建 RecipeSnapshot
     const recipeItems = recipe.items || [];
     const ingredientIds = recipeItems.map((ri) => ri.ingredientId);
     const ingredients = await this.ingredientRepository.findByIds(ingredientIds);
     const ingredientMap = new Map(ingredients.map((ing) => [ing.id, ing]));
+
+    // 收集所有制备方法ID
+    const preparationMethodIds = new Set<string>();
+    recipeItems.forEach((ri) => {
+      if (ri.preparationMethod) {
+        const ids = typeof ri.preparationMethod === 'string'
+          ? ri.preparationMethod.split(',').map((id: string) => id.trim()).filter((id: string) => id)
+          : ri.preparationMethod;
+        if (Array.isArray(ids)) {
+          ids.forEach((id: string) => preparationMethodIds.add(id));
+        }
+      }
+    });
+
+    // 查询所有制备方法
+    const preparationMethods = await this.prisma.preparationMethod.findMany({
+      where: { id: { in: Array.from(preparationMethodIds) } },
+      select: { id: true, name: true }
+    });
+    const preparationMethodMap = new Map(preparationMethods.map(pm => [pm.id, pm.name]));
 
     const recipeSnapshot: RecipeSnapshot = {
       id: recipe.id,
@@ -306,6 +347,22 @@ export class OrderService {
       nutrition_standard: 'FEDIAF_2021',
       items: recipeItems.map((ri) => {
         const ingredient = ingredientMap.get(ri.ingredientId);
+
+        // 解析制备方法ID数组并转换为名称数组
+        // preparationMethod存储格式：逗号分隔的UUID字符串
+        let preparationMethodNames: string[] = [];
+        if (ri.preparationMethod) {
+          const methodIds = typeof ri.preparationMethod === 'string'
+            ? ri.preparationMethod.split(',').map((id: string) => id.trim()).filter((id: string) => id)
+            : ri.preparationMethod;
+
+          if (Array.isArray(methodIds)) {
+            preparationMethodNames = methodIds
+              .map((id: string) => preparationMethodMap.get(id))
+              .filter((name): name is string => !!name);
+          }
+        }
+
         return {
           ingredient_id: ri.ingredientId,
           name: ingredient?.name || 'Unknown',
@@ -314,18 +371,20 @@ export class OrderService {
           nutrient_target_key: ri.nutrientTargetKey ?? undefined,
           nutrient_target_value: ri.nutrientTargetValue ?? undefined,
           properties: ingredient?.properties,
+          preparation_methods: preparationMethodNames.length > 0 ? preparationMethodNames : undefined,
+          unit_display_label: ingredient?.unitDisplayLabel ?? undefined,
         };
       }),
     };
 
-    // 6. 计算 dailyIntakeG
+    // 8. 计算 dailyIntakeG
     const dogCalcResult = calculateDogEnergy(dog, recipe.energyDensityKcalPerKg);
     const dailyIntakeG = calculateDailyIntakeG(
       dogCalcResult.finalFoodKcal,
       recipe.energyDensityKcalPerKg,
     );
 
-    // 7. 创建 OrderItem
+    // 9. 创建 OrderItem
     console.log('[CreateOrderFromSnapshot] Creating OrderItem with dogId:', requestParams.dogId);
     const orderItem = new OrderItem(
       randomUUID(),
@@ -340,7 +399,7 @@ export class OrderService {
     );
     console.log('[CreateOrderFromSnapshot] OrderItem created, dogId:', orderItem.dogId);
 
-    // 8. 创建 PricingBreakdownSnapshot
+    // 10. 创建 PricingBreakdownSnapshot
     const pricingBreakdownSnapshot = new PricingBreakdownSnapshot(
       pricingResult.pricingBreakdown.costIngredients,
       pricingResult.pricingBreakdown.costPackaging,
@@ -357,7 +416,7 @@ export class OrderService {
       pricingResult.pricingBreakdown.ingredientDetails, // 保存原料详情，用于采购清单
     );
 
-    // 9. 创建订单（使用快照价格，不重新计算）
+    // 11. 创建订单（使用快照价格，不重新计算）
     const order = new Order(
       orderId,
       dto.customerId,
@@ -371,18 +430,18 @@ export class OrderService {
       [orderItem],
       undefined, // totalAmount (computed by constructor)
       pricingBreakdownSnapshot,
-      dto.addressId,
-      requestParams.dogId,
+      requestParams.dogId,  // ✅ 修复：dogId 和 addressId 位置交换
+      addressId,            // ✅ 修复：使用从快照中获取的addressId
     );
 
-    // 10. 保存订单
+    // 12. 保存订单
     await this.orderRepository.save(order);
 
-    // 11. 标记快照已使用
+    // 13. 标记快照已使用
     await this.pricingSnapshotRepository.markAsUsed(snapshotId);
     console.log('[CreateOrderFromSnapshot] Snapshot marked as used:', snapshotId);
 
-    // 12. 记录状态转换
+    // 14. 记录状态转换
     await this.logStatusTransition(
       order,
       OrderStatus.INIT,
@@ -718,6 +777,28 @@ export class OrderService {
         nutrition_standard: 'FEDIAF_2021', // TODO: Get from recipe when interface is complete
         items: recipeItems.map((ri) => {
           const ingredient = ingredientMap.get(ri.ingredientId);
+
+          // 解析制备方法ID数组并转换为名称数组
+          // preparationMethod存储格式：逗号分隔的UUID字符串
+          // 例如："a6409a79-402b-41d1-bfe1-031a67da0876, dd27baa4-36cb-4405-9092-0eb37e6160fa"
+          let preparationMethodNames: string[] = [];
+          if (ri.preparationMethod) {
+            const methodIds = typeof ri.preparationMethod === 'string'
+              ? ri.preparationMethod.split(',').map((id: string) => id.trim()).filter((id: string) => id)
+              : ri.preparationMethod;
+
+            if (Array.isArray(methodIds)) {
+              preparationMethodNames = methodIds
+                .map((id: string) => prepMethodMap.get(id))
+                .filter((name): name is string => !!name);
+            }
+          }
+
+          // Debug: log supplement ingredient unit display label
+          if (ingredient?.type === 'SUPPLEMENT') {
+            console.log(`[DEBUG] Supplement: ${ingredient.name}, unitDisplayLabel: ${ingredient.unitDisplayLabel}`);
+          }
+
           return {
             ingredient_id: ri.ingredientId,
             name: ingredient?.name || 'Unknown',
@@ -726,6 +807,9 @@ export class OrderService {
             nutrient_target_key: ri.nutrientTargetKey ?? undefined,
             nutrient_target_value: ri.nutrientTargetValue ?? undefined,
             properties: ingredient?.properties,
+            preparation_methods: preparationMethodNames.length > 0 ? preparationMethodNames : undefined,
+            sort_order: ri.sortOrder ?? undefined,
+            unit_display_label: ingredient?.unitDisplayLabel ?? undefined,
           };
         }),
       };
@@ -1207,6 +1291,7 @@ export class OrderService {
       customerId: dto.customerId,
       requestParams: {
         dogId: dto.dogId,
+        addressId: dto.addressId,  // ✅ 修复：保存addressId到快照
         items: [{
           recipeId: itemDto.recipeId,
           quantityG: itemDto.quantityG,

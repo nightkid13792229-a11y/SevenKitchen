@@ -32,8 +32,8 @@
           <text class="value">{{ taskDetail.recipeName }} v{{ taskDetail.recipeVersion }}</text>
         </view>
         <view class="info-row">
-          <text class="label">制作数量：</text>
-          <text class="value">{{ taskDetail.totalProductionG }}g</text>
+          <text class="label">订单编号：</text>
+          <text class="value">{{ taskDetail.orderItems?.[0]?.orderId || '-' }}</text>
         </view>
         <view class="info-row">
           <text class="label">状态：</text>
@@ -53,13 +53,10 @@
       <view class="section">
         <view class="section-title">分装信息</view>
         <view v-for="order in taskDetail.orderItems" :key="order.orderItemId" class="order-item">
-          <view class="order-header">
-            <text class="order-id">订单：{{ order.orderId }}</text>
-          </view>
           <view class="order-info">
             <view class="info-row">
-              <text class="label">狗狗：</text>
-              <text class="value">{{ order.dogName }}</text>
+              <text class="label">总净重：</text>
+              <text class="value">{{ formatDecimal(taskDetail.totalProductionG) }}g</text>
             </view>
             <view class="info-row">
               <text class="label">规格：</text>
@@ -69,32 +66,30 @@
               <text class="label">袋数：</text>
               <text class="value">{{ order.packageCount }}袋</text>
             </view>
+            <view class="info-row">
+              <text class="label">狗狗：</text>
+              <text class="value">{{ order.dogName }}</text>
+            </view>
             <view v-if="order.recipientName" class="info-row">
               <text class="label">收货人：</text>
               <text class="value">{{ order.recipientName }}（{{ order.recipientCity }}）</text>
             </view>
-            <view v-if="order.completedAt" class="info-row">
-              <text class="label">完成时间：</text>
-              <text class="value">{{ order.completedAt }}</text>
-            </view>
           </view>
-        </view>
-        <view class="total-weight">
-          <text>总净重：{{ taskDetail.totalProductionG }}g</text>
         </view>
       </view>
 
-      <!-- 原料需求清单（含生产损耗） -->
-      <view v-if="taskDetail.ingredientsUsageSnapshot" class="section">
-        <view class="section-title">原料需求清单（含生产损耗）</view>
+      <!-- 原料清单 -->
+      <view v-if="taskDetail.recipeSnapshot?.items && taskDetail.recipeSnapshot.items.length > 0" class="section">
+        <view class="section-title">原料清单（{{ totalIngredientCount }}）</view>
         <view class="ingredients-list">
           <view
             v-for="ingredient in parsedIngredients"
             :key="ingredient.id"
             class="ingredient-item"
           >
-            <text class="ingredient-name">{{ ingredient.name }} {{ ingredient.amount }}g</text>
-            <text v-if="ingredient.method" class="ingredient-method">[{{ ingredient.method }}]</text>
+            <text v-if="ingredient.type" class="ingredient-type" :class="getTypeClass(ingredient.type)">[{{ ingredient.type }}]</text>
+            <text class="ingredient-name">{{ ingredient.name }} {{ ingredient.amount }}{{ ingredient.unit }}</text>
+            <text v-if="ingredient.method" class="ingredient-method">（{{ ingredient.method }}）</text>
           </view>
         </view>
         <view class="ingredients-note">
@@ -136,6 +131,7 @@
 
       <!-- 底部按钮区域 -->
       <view v-if="taskDetail.status === 'IN_PROGRESS'" class="bottom-actions">
+        <!-- 制作中状态：显示上传和完成按钮（固定悬浮） -->
         <button
           class="action-btn upload"
           :disabled="uploadedPhotos.length < 2"
@@ -148,6 +144,13 @@
           @tap="completeTask"
         >
           完成制作
+        </button>
+      </view>
+
+      <!-- 打印按钮（非悬浮，在页面底部） -->
+      <view class="print-section">
+        <button class="print-btn" @tap="printTask">
+          🖨️ 打印任务单
         </button>
       </view>
     </view>
@@ -168,6 +171,12 @@ import {
   uploadProductionPhotos,
   completeProductionTask,
 } from '../../api/production';
+
+// 格式化函数
+function formatDecimal(value: number | null | undefined, decimals: number = 2): string {
+  if (value === null || value === undefined || isNaN(value)) return '-';
+  return value.toFixed(decimals);
+}
 
 // 任务ID
 const taskId = ref('');
@@ -197,20 +206,132 @@ const statusText = computed(() => {
 
 // 计算属性：解析原料列表
 const parsedIngredients = computed(() => {
-  if (!taskDetail.value?.ingredientsUsageSnapshot) return [];
+  if (!taskDetail.value?.recipeSnapshot?.items) return [];
 
-  const snapshot = taskDetail.value.ingredientsUsageSnapshot;
-  // 假设snapshot格式为: { ingredientId: { required_g: number, actual_g: number } }
-  // 需要根据实际API返回格式调整
-  return [];
+  const recipeSnapshot = taskDetail.value.recipeSnapshot;
+  const totalProductionG = taskDetail.value.totalProductionG;
+  const productionLossRate = recipeSnapshot.production_loss_rate || 1.1; // 默认110%（10%损耗）
+
+  // 计算理论原料总重（含损耗）= 成品重量 × 损耗率
+  // 例如：260.63g × 1.07 = 278.87g（需要准备278.87g原料才能得到260.63g成品）
+  const theoreticalWeight = totalProductionG * productionLossRate;
+
+  return recipeSnapshot.items.map((item: any) => {
+    let amount = 0;
+    let unit = 'g';
+
+    // 映射原料类型（食材/补剂/包装）
+    const typeMap: Record<string, string> = {
+      'FOOD': '食材',
+      'SUPPLEMENT': '补剂',
+      'PACKAGING': '包装',
+    };
+    const type = item.ingredient_type ? typeMap[item.ingredient_type] : '';
+
+    // 获取制备方法（多个方法用顿号分隔）
+    const preparationMethods = item.preparation_methods && item.preparation_methods.length > 0
+      ? item.preparation_methods.join('、')
+      : '';
+
+    // 根据原料类型计算用量
+    if (item.ingredient_type === 'SUPPLEMENT') {
+      // 补剂计算：基于成品净重
+      const finishedProductKG = totalProductionG / 1000; // 转换为公斤
+
+      // 步骤1: 计算该锅次需要的营养素总量
+      const totalNutrientNeeded = finishedProductKG * item.nutrient_target_value;
+
+      // 步骤2: 获取补剂每单位含量
+      const nutrientKey = item.nutrient_target_key;
+      const activeNutrientValue = item.properties?.active_nutrients?.[nutrientKey]?.value;
+      const activeNutrientUnit = item.properties?.active_nutrients?.[nutrientKey]?.unit;
+
+      if (activeNutrientValue && activeNutrientUnit) {
+        // 步骤3: 计算基础单位数
+        const baseUnits = totalNutrientNeeded / activeNutrientValue;
+
+        // 步骤4: 考虑补剂生产损耗
+        const supplementLossRate = item.properties?.production_loss_rate || 1.05;
+        const finalUnits = baseUnits * supplementLossRate;
+
+        amount = finalUnits;
+
+        // 获取单位显示标签
+        unit = item.unit_display_label || 'g';
+
+        // 🔍 调试日志
+        console.log(`[补剂] ${item.name}:`, {
+          finishedProductKG: finishedProductKG.toFixed(4),
+          nutrientTargetValue: item.nutrient_target_value,
+          totalNutrientNeeded: totalNutrientNeeded.toFixed(2),
+          activeNutrientValue: activeNutrientValue,
+          activeNutrientUnit: activeNutrientUnit,
+          baseUnits: baseUnits.toFixed(2),
+          supplementLossRate: supplementLossRate,
+          finalUnits: finalUnits.toFixed(2),
+          unit: unit
+        });
+      } else {
+        console.warn(`[补剂] ${item.name}: 缺少active_nutrients数据`);
+        amount = 0;
+        unit = 'g';
+      }
+    } else {
+      // 食材和包材：按配比计算
+      amount = theoreticalWeight * (item.ratio / 100);
+      unit = 'g';
+
+      // 🔍 调试日志
+      console.log(`[食材/包材] ${item.name}:`, {
+        productionLossRate: productionLossRate,
+        totalProductionG: totalProductionG,
+        theoreticalWeight: theoreticalWeight,
+        ratio: item.ratio,
+        calculatedAmount: amount
+      });
+    }
+
+    return {
+      id: item.ingredient_id,
+      name: item.name,
+      amount: formatDecimal(amount),
+      unit, // 单位
+      type, // 原料类型
+      method: preparationMethods, // 制备方法
+    };
+  });
+});
+
+// 计算属性：原料总数（整数）
+const totalIngredientCount = computed(() => {
+  if (!parsedIngredients.value.length) return '0';
+  return parsedIngredients.value.length.toString();
 });
 
 // 计算属性：食材类原料总重
 const totalFoodIngredientWeight = computed(() => {
-  // 计算所有FOOD类型原料的总重
-  // 待实现
-  return 0;
+  if (!parsedIngredients.value.length) return '0.00';
+
+  // 只计算 FOOD 类型的原料（使用 type 字段）
+  const total = parsedIngredients.value
+    .filter(ing => ing.type === '食材')
+    .reduce((sum, ing) => {
+      const amount = parseFloat(ing.amount);
+      return sum + (isNaN(amount) ? 0 : amount);
+    }, 0);
+
+  return formatDecimal(total);
 });
+
+// 获取类型对应的CSS类名
+const getTypeClass = (type: string) => {
+  const typeMap: Record<string, string> = {
+    '食材': 'type-food',
+    '补剂': 'type-supplement',
+    '包装': 'type-packaging',
+  };
+  return typeMap[type] || '';
+};
 
 // 页面加载
 onMounted(() => {
@@ -244,6 +365,24 @@ const loadTaskDetail = async () => {
     if (task) {
       taskDetail.value = task;
       uploadedPhotos.value = task.photosRaw || [];
+
+      // 🔍 调试日志：验证分装信息数据
+      console.log('=== Task Detail Debug ===');
+      console.log('Task ID:', task.id);
+      console.log('Total Production (g):', task.totalProductionG);
+      console.log('Order Items:', task.orderItems);
+      console.log('Recipe Snapshot:', task.recipeSnapshot);
+      console.log('Recipe Items:', task.recipeSnapshot?.items);
+
+      // 验证分装信息字段
+      task.orderItems.forEach((order: any, idx: number) => {
+        console.log(`Order ${idx + 1}:`, {
+          orderId: order.orderId,
+          dogName: order.dogName,
+          recipientName: order.recipientName,
+          recipientCity: order.recipientCity,
+        });
+      });
     } else {
       uni.showToast({
         title: '任务不存在',
@@ -374,13 +513,46 @@ const completeTask = async () => {
     },
   });
 };
+
+// 打印任务
+const printTask = () => {
+  if (!taskDetail.value) {
+    uni.showToast({
+      title: '数据加载中',
+      icon: 'none',
+    });
+    return;
+  }
+
+  // 准备打印数据
+  const printData = {
+    recipeName: taskDetail.value.recipeName,
+    recipeVersion: taskDetail.value.recipeVersion,
+    currentPotNumber: taskDetail.value.currentPotNumber,
+    totalPots: taskDetail.value.totalPots,
+    status: taskDetail.value.status,
+    totalProductionG: taskDetail.value.totalProductionG,
+    createdAt: taskDetail.value.createdAt,
+    completedAt: taskDetail.value.completedAt,
+    orderItems: taskDetail.value.orderItems || [],
+    recipeSnapshot: taskDetail.value.recipeSnapshot,
+    createdBy: taskDetail.value.createdBy || '厨房管理员', // 添加创建人字段
+  };
+
+  // 将数据编码后传递到打印页面
+  const encodedData = encodeURIComponent(JSON.stringify(printData));
+
+  uni.navigateTo({
+    url: `/pages/staff-production/print?taskData=${encodedData}`,
+  });
+};
 </script>
 
 <style scoped lang="scss">
 .detail-page {
   min-height: 100vh;
   background-color: #f5f5f5;
-  padding-bottom: 120rpx;
+  padding-bottom: 140rpx;
 }
 
 .nav-bar {
@@ -565,22 +737,46 @@ const completeTask = async () => {
 
 .ingredient-item {
   display: flex;
-  justify-content: space-between;
-  padding: 12rpx 0;
+  align-items: center;
+  gap: 6rpx;
+  padding: 14rpx 0;
   border-bottom: 1rpx solid #f0f0f0;
 
   &:last-child {
     border-bottom: none;
   }
 
+  .ingredient-type {
+    font-size: 22rpx;
+    color: #56ab91;
+    font-weight: bold;
+    flex-shrink: 0;
+
+    &.type-food {
+      color: #56ab91;  // 绿色
+    }
+
+    &.type-supplement {
+      color: #ff9800;  // 橙色
+    }
+
+    &.type-packaging {
+      color: #2196f3;  // 蓝色
+    }
+  }
+
   .ingredient-name {
-    font-size: 26rpx;
+    font-size: 28rpx;
     color: #333;
+    font-weight: 500;
+    flex: 1;
   }
 
   .ingredient-method {
     font-size: 22rpx;
     color: #999;
+    flex-shrink: 0;
+    margin-left: auto;
   }
 }
 
@@ -671,6 +867,7 @@ const completeTask = async () => {
   display: flex;
   gap: 16rpx;
   padding: 24rpx 32rpx;
+  padding-bottom: calc(24rpx + env(safe-area-inset-bottom));
   background-color: #fff;
   border-top: 1rpx solid #f0f0f0;
   box-shadow: 0 -2rpx 8rpx rgba(0, 0, 0, 0.04);
@@ -697,6 +894,27 @@ const completeTask = async () => {
       background-color: #4caf50;
       color: #fff;
     }
+  }
+}
+
+.print-section {
+  padding: 32rpx;
+  background-color: #f5f5f5;
+}
+
+.print-btn {
+  width: 100%;
+  height: 72rpx;
+  line-height: 72rpx;
+  background-color: #fff;
+  color: #1890ff;
+  border: 2rpx solid #1890ff;
+  border-radius: 8rpx;
+  font-size: 28rpx;
+  font-weight: 500;
+
+  &:active {
+    background-color: #f0f9ff;
   }
 }
 </style>

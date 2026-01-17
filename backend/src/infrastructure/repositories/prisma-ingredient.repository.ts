@@ -27,7 +27,15 @@ export class PrismaIngredientRepository implements IngredientRepository {
     const records = await this.prisma.ingredient.findMany({
       where: { id: { in: ids } }
     });
-    return records.map(r => this.mapToDomain(r));
+
+    // 创建映射表用于快速查找
+    const recordMap = new Map(records.map(r => [r.id, r]));
+
+    // 按输入 ids 的顺序返回结果
+    return ids
+      .map(id => recordMap.get(id))
+      .filter((record): record is typeof records[number] => record !== undefined)
+      .map(r => this.mapToDomain(r));
   }
 
   async findAll(): Promise<Ingredient[]> {

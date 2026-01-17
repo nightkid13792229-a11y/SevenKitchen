@@ -10,7 +10,7 @@
     <view class="stats-section">
       <view class="stat-card">
         <text class="stat-value">{{ statistics.todayOrders }}</text>
-        <text class="stat-label">今日订单</text>
+        <text class="stat-label">今日制作单</text>
       </view>
       <view class="stat-card">
         <text class="stat-value">{{ statistics.inProgress }}</text>
@@ -29,50 +29,6 @@
       </button>
       <text class="schedule-hint">将为今天到期的订单创建生产批次</text>
       <text class="schedule-warning">⚠️ 点击前会检查今天的采购清单是否已完成</text>
-    </view>
-
-    <!-- 分装信息表格（按订单展示） -->
-    <view v-if="packagingUnits.length > 0" class="packaging-section">
-      <view class="section-title">分装信息</view>
-      <view
-        v-for="(unit, idx) in packagingUnits"
-        :key="unit.id"
-        class="packaging-unit"
-      >
-        <view class="unit-header">
-          <text class="recipe-name">{{ unit.recipeName }} v{{ unit.recipeVersion }}</text>
-          <text class="pot-info">({{ unit.currentPotNumber }}/{{ unit.totalPots }})</text>
-        </view>
-
-        <!-- 按订单展示分装信息 -->
-        <view v-for="order in unit.orderItems" :key="order.orderItemId" class="order-item">
-          <view class="order-info">
-            <text class="dog-name">{{ order.dogName }}</text>
-            <text class="package-spec">{{ order.packageSpecG }}g/袋 - {{ order.packageCount }}袋</text>
-          </view>
-          <view v-if="order.recipientName" class="recipient-info">
-            <text>收货人：{{ order.recipientName }}（{{ order.recipientCity }}）</text>
-          </view>
-        </view>
-
-        <view class="unit-footer">
-          <text class="total-weight">总净重：{{ unit.totalProductionG }}g</text>
-        </view>
-      </view>
-    </view>
-
-    <!-- 原料需求清单（含生产损耗） -->
-    <view v-if="packagingUnits.length > 0 && currentUnitIngredients" class="ingredients-section">
-      <view class="section-title">原料需求清单（含生产损耗）</view>
-      <view class="ingredients-list">
-        <view v-for="ingredient in currentUnitIngredients" :key="ingredient.name" class="ingredient-item">
-          <text class="ingredient-name">{{ ingredient.name }} {{ ingredient.amount }}g</text>
-          <text v-if="ingredient.method" class="ingredient-method">[{{ ingredient.method }}]</text>
-        </view>
-      </view>
-      <view class="ingredients-summary">
-        <text>食材类原料总重：{{ totalIngredientWeight }}g</text>
-      </view>
     </view>
 
     <!-- Tab切换 -->
@@ -107,7 +63,7 @@
           <view class="task-body">
             <view class="info-row">
               <text class="label">制作数量：</text>
-              <text class="value">{{ task.totalProductionG }}g</text>
+              <text class="value">{{ formatDecimal(task.totalProductionG) }}g</text>
             </view>
             <view class="info-row">
               <text class="label">关联订单：</text>
@@ -159,7 +115,7 @@
         <view v-if="expandedHistoryId === batch.id" class="history-details">
           <view v-for="unit in batch.units" :key="unit.id" class="history-unit">
             <text class="history-recipe">{{ unit.recipeName }} ({{ unit.currentPotNumber }}/{{ unit.totalPots }})</text>
-            <text class="history-weight">{{ unit.totalProductionG }}g</text>
+            <text class="history-weight">{{ formatDecimal(unit.totalProductionG) }}g</text>
             <text class="history-time">{{ unit.completedAt }}</text>
           </view>
         </view>
@@ -177,6 +133,7 @@ import {
   startProductionTask,
   completeProductionTask,
 } from '../../api/production';
+import { formatDecimal } from '../../utils/format';
 
 // 统计数据
 const statistics = ref({
@@ -187,9 +144,6 @@ const statistics = ref({
 
 // 是否已有今天的批次
 const hasTodayBatch = ref(false);
-
-// 分装单元列表（按锅分组）
-const packagingUnits = ref<any[]>([]);
 
 // 任务列表
 const allTasks = ref<any[]>([]);
@@ -215,21 +169,6 @@ const currentTabLabel = computed(() => {
 // 计算属性：筛选后的任务列表
 const filteredTasks = computed(() => {
   return allTasks.value.filter(task => task.status === activeTab.value);
-});
-
-// 计算属性：当前展示的原料需求
-const currentUnitIngredients = computed(() => {
-  if (packagingUnits.value.length === 0) return null;
-  const unit = packagingUnits.value[0];
-  return unit.ingredientsUsageSnapshot || null;
-});
-
-// 计算属性：食材类原料总重
-const totalIngredientWeight = computed(() => {
-  if (!currentUnitIngredients.value) return 0;
-  // 假设ingredientsUsageSnapshot中包含原料信息
-  // 这里需要根据实际数据结构计算
-  return 0; // 待实现
 });
 
 // 页面加载
@@ -273,8 +212,8 @@ const autoScheduleToday = async () => {
         });
 
         hasTodayBatch.value = true;
-        loadPackagingUnits();
-        loadTodayStatistics();
+        await loadPackagingUnits();
+        await loadTodayStatistics();
       } catch (error: any) {
         uni.hideLoading();
         console.error('Auto schedule failed:', error);
@@ -298,19 +237,18 @@ const loadPackagingUnits = async () => {
 
     const units = res.data.list;
 
-    // 检查是否有今天的批次
+    // 检查是否有今天的批次（使用 createdAt 的日期部分）
     const today = new Date().toISOString().split('T')[0];
-    const hasToday = units.some(unit => unit.createdAt.startsWith(today));
+    const hasToday = units.some(unit => unit.createdAt.substring(0, 10) === today);
     hasTodayBatch.value = hasToday;
 
-    // 按状态分组：今天的任务在列表中，历史任务在历史记录中
-    allTasks.value = units.filter(unit => unit.createdAt.startsWith(today));
-    packagingUnits.value = allTasks.value;
+    // 按状态分组：未完成的任务在列表中，已完成的任务在历史记录中
+    allTasks.value = units.filter(unit => unit.status !== 'COMPLETED');
 
-    // 按日期分组历史记录
+    // 按日期分组历史记录（只包含已完成的任务）
     const historyMap = new Map<string, any[]>();
     units
-      .filter(unit => !unit.createdAt.startsWith(today))
+      .filter(unit => unit.status === 'COMPLETED')
       .forEach(unit => {
         const date = unit.createdAt.split(' ')[0];
         if (!historyMap.has(date)) {
@@ -499,120 +437,6 @@ const toggleHistory = (batchId: string) => {
   color: #333;
   padding: 0 32rpx;
   margin-bottom: 16rpx;
-}
-
-.packaging-section,
-.ingredients-section {
-  background-color: #fff;
-  margin: 0 32rpx 24rpx;
-  padding: 24rpx;
-  border-radius: 16rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
-}
-
-.packaging-unit {
-  margin-bottom: 24rpx;
-  padding-bottom: 24rpx;
-  border-bottom: 1rpx solid #f0f0f0;
-
-  &:last-child {
-    margin-bottom: 0;
-    padding-bottom: 0;
-    border-bottom: none;
-  }
-
-  .unit-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 16rpx;
-
-    .recipe-name {
-      font-size: 28rpx;
-      font-weight: bold;
-      color: #333;
-    }
-
-    .pot-info {
-      font-size: 24rpx;
-      color: #56ab91;
-      font-weight: bold;
-    }
-  }
-
-  .order-item {
-    padding: 16rpx;
-    background-color: #f9f9f9;
-    border-radius: 8rpx;
-    margin-bottom: 12rpx;
-
-    .order-info {
-      display: flex;
-      justify-content: space-between;
-      margin-bottom: 8rpx;
-
-      .dog-name {
-        font-size: 26rpx;
-        font-weight: bold;
-        color: #333;
-      }
-
-      .package-spec {
-        font-size: 24rpx;
-        color: #666;
-      }
-    }
-
-    .recipient-info {
-      font-size: 22rpx;
-      color: #999;
-    }
-  }
-
-  .unit-footer {
-    margin-top: 12rpx;
-    padding-top: 12rpx;
-    border-top: 1rpx dashed #e0e0e0;
-
-    .total-weight {
-      font-size: 24rpx;
-      color: #56ab91;
-      font-weight: bold;
-    }
-  }
-}
-
-.ingredients-list {
-  margin-bottom: 16rpx;
-}
-
-.ingredient-item {
-  display: flex;
-  justify-content: space-between;
-  padding: 12rpx 0;
-  border-bottom: 1rpx solid #f0f0f0;
-
-  &:last-child {
-    border-bottom: none;
-  }
-
-  .ingredient-name {
-    font-size: 26rpx;
-    color: #333;
-  }
-
-  .ingredient-method {
-    font-size: 22rpx;
-    color: #999;
-  }
-}
-
-.ingredients-summary {
-  padding-top: 12rpx;
-  border-top: 1rpx solid #e0e0e0;
-  font-size: 24rpx;
-  color: #56ab91;
-  font-weight: bold;
 }
 
 .tabs {

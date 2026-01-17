@@ -72,6 +72,9 @@ export class PackagingUnitDetailDto {
 
   @IsOptional()
   ingredientsUsageSnapshot?: any; // 原料用量快照
+
+  @IsOptional()
+  recipeSnapshot?: any; // 食谱快照（包含原料列表）
 }
 
 /**

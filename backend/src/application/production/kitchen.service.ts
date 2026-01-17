@@ -187,6 +187,7 @@ export class StaffProductionService {
           completedAt,
           photosRaw: unit.photosRaw || [],
           ingredientsUsageSnapshot: unit.ingredientsUsageSnapshot,
+          recipeSnapshot: unit.recipeSnapshot, // 添加完整的食谱快照（包含原料列表）
         } as PackagingUnitDetailDto;
       })
     );
@@ -338,9 +339,7 @@ export class StaffProductionService {
     // Count all packaging units
     const allUnits = batches.flatMap(b => b.packagingUnits);
 
-    const todayOrders = allUnits.reduce((count, unit) => {
-      return count + (unit.sourceOrderItemIds?.length || 0);
-    }, 0);
+    const todayTasks = allUnits.length; // 统计制作单数量（每一锅为一个制作单）
 
     const inProgress = allUnits.filter(
       u => u.status === PackagingUnitStatus.IN_PROGRESS
@@ -351,7 +350,7 @@ export class StaffProductionService {
     ).length;
 
     return {
-      todayOrders,
+      todayOrders: todayTasks, // 保持字段名不变，只修改值
       inProgress,
       completed,
     };

@@ -406,8 +406,8 @@ export class PricingService {
           name: ingredient.name,
           type: 'SUPPLEMENT',
           amount: unitsNeeded,              // 补剂的用量已含损耗率
-          netAmount: unitsNeeded,           // 补剂净需求 = 用量
-          purchaseAmount: unitsNeeded,      // 补剂采购用量 = 用量（补剂没有出肉率）
+          netAmount: unitsTheoretical,      // 补剂净需求 = 理论用量（不含损耗）
+          purchaseAmount: unitsNeeded,      // 补剂采购用量 = 实际用量（含损耗）
           unit: 'g',
           unitCost: unitCost,
           cost: itemCost,

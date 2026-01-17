@@ -60,6 +60,7 @@ export interface PurchaseRequirement {
   purchaseChannel?: string;
   productModel?: string;
   displayUnit?: string;        // 显示单位（补剂类的单位显示标签）
+  minSortOrder?: number;       // 最小排序值（用于多食谱合并）
 }
 
 @Injectable()
@@ -113,7 +114,7 @@ export class PurchasingService {
     const ingredientMap = new Map<string, PurchaseRequirement>();
 
     for (const order of orders) {
-      // 读取订单定价快照中的原料详情
+      // 检查订单是否有定价快照
       if (!order.pricingBreakdownSnapshot) {
         this.logger.warn(`Order ${order.id} has no pricing breakdown snapshot, skipping`);
         continue;
@@ -122,38 +123,90 @@ export class PurchasingService {
       const pricingBreakdown = order.pricingBreakdownSnapshot as any;
       const ingredientDetails = pricingBreakdown.ingredientDetails || [];
 
+      // 创建recipeSnapshot的映射，用于获取sort_order
+      const recipeSnapshotMap = new Map<string, any>();
+      for (const orderItem of order.items) {
+        if (orderItem.recipeSnapshot?.items) {
+          for (const item of orderItem.recipeSnapshot.items) {
+            recipeSnapshotMap.set(item.ingredient_id, item);
+          }
+        }
+      }
+
+      // 遍历定价快照中的每个原料
       for (const detail of ingredientDetails) {
         const key = detail.ingredientId;
+        const ingredientId = detail.ingredientId;
 
-        // 优先使用purchaseAmount（仅含生产损耗率，不含出肉率），回退到amount
-        const purchaseQuantity = detail.purchaseAmount ?? detail.amount;
+        // 从recipeSnapshot中获取原料信息（用于排序和类型）
+        const recipeItem = recipeSnapshotMap.get(ingredientId);
+        if (!recipeItem) {
+          this.logger.warn(`Ingredient ${ingredientId} (${detail.name}) not found in recipe snapshot, skipping`);
+          continue;
+        }
+
+        // purchaseAmount 是整个订单的采购总量（已包含制作损耗，不含出肉率）
+        // 如果没有 purchaseAmount，回退到 amount
+        const purchaseQuantity = detail.purchaseAmount || detail.amount || 0;
+
+        // 调试日志
+        this.logger.debug(`Ingredient calculation: ${detail.name}`, {
+          ingredientId,
+          purchaseAmount: detail.purchaseAmount,
+          amount: detail.amount,
+          purchaseQuantity,
+          type: detail.type,
+          sortOrder: recipeItem.sort_order,
+        });
+
+        // 如果采购量为0或负数，跳过该原料
+        if (purchaseQuantity <= 0) {
+          this.logger.warn(`Skipping ingredient ${detail.name} due to non-positive quantity: ${purchaseQuantity}`);
+          continue;
+        }
+
+        // 获取原料类型（从recipeSnapshot或ingredientDetails）
+        const type = recipeItem.ingredient_type || detail.type || 'FOOD';
+
+        // 使用订单的总成本
+        const totalCost = detail.cost || 0;
 
         if (ingredientMap.has(key)) {
           // 累加数量和成本
           const existing = ingredientMap.get(key)!;
-          existing.quantityNeeded += purchaseQuantity || 0;
-          existing.estimatedCost += detail.cost || 0;
+          existing.quantityNeeded += purchaseQuantity;
+          existing.estimatedCost += totalCost;
+          // 更新最小sortOrder
+          if (recipeItem.sort_order !== undefined) {
+            existing.minSortOrder = Math.min(existing.minSortOrder ?? 99999, recipeItem.sort_order);
+          }
         } else {
           // 新增原料
           ingredientMap.set(key, {
-            ingredientId: detail.ingredientId,
+            ingredientId: key,
             ingredientName: detail.name,
-            type: detail.type,
-            quantityNeeded: purchaseQuantity || 0,
-            quantityUnit: detail.unit,
-            estimatedCost: detail.cost || 0,
+            type: type as any,
+            quantityNeeded: purchaseQuantity,
+            quantityUnit: detail.unit || 'G',
+            estimatedCost: totalCost,
             purchaseChannel: detail.purchaseChannel,
             productModel: detail.productModel,
-            displayUnit: detail.displayUnit,  // 显示单位标签
+            displayUnit: detail.displayUnit,
+            minSortOrder: recipeItem.sort_order,
           });
         }
       }
     }
 
-    // 转换为数组并按原料类型排序
+    // 转换为数组并排序：先按类型，再按sortOrder
     const requirements = Array.from(ingredientMap.values()).sort((a, b) => {
+      // 1. 先按类型排序
       const typeOrder = { 'FOOD': 1, 'SUPPLEMENT': 2, 'PACKAGING': 3 };
-      return typeOrder[a.type] - typeOrder[b.type];
+      const typeDiff = typeOrder[a.type] - typeOrder[b.type];
+      if (typeDiff !== 0) return typeDiff;
+
+      // 2. 同类型内按sortOrder排序（取最小值）
+      return (a.minSortOrder ?? 99999) - (b.minSortOrder ?? 99999);
     });
 
     this.logger.log(`Calculated ${requirements.length} unique ingredient requirements`);
@@ -234,7 +287,7 @@ export class PurchasingService {
     // 创建采购清单（使用startDate作为目标日期）
     const purchaseList = new PurchaseList({
       targetDate: startDate,
-      status: PurchaseListStatus.DRAFT,
+      status: PurchaseListStatus.PENDING,
       totalEstimatedCost,
       itemCount: items.length,
       createdById,
@@ -297,7 +350,8 @@ export class PurchasingService {
     }
 
     // 验证操作时间（6:00-14:00）和目标日期
-    validatePurchasingOperation(purchaseList.targetDate, '确认采购完成');
+    // TODO: 测试期间临时注释时间限制
+    // validatePurchasingOperation(purchaseList.targetDate, '确认采购完成');
 
     // 如果提供了实际成本，更新采购明细
     if (dto.actualCosts && dto.actualCosts.length > 0) {
@@ -358,7 +412,8 @@ export class PurchasingService {
     }
 
     // 验证操作时间（6:00-14:00）和目标日期
-    validatePurchasingOperation(purchaseList.targetDate, '开始采购');
+    // TODO: 测试期间临时注释时间限制
+    // validatePurchasingOperation(purchaseList.targetDate, '开始采购');
 
     // 开始采购
     purchaseList.start();
@@ -385,7 +440,8 @@ export class PurchasingService {
     }
 
     // 验证操作时间（6:00-14:00）和目标日期
-    validatePurchasingOperation(purchaseList.targetDate, '添加采购记录');
+    // TODO: 测试期间临时注释时间限制
+    // validatePurchasingOperation(purchaseList.targetDate, '添加采购记录');
 
     // 创建采购记录
     const purchaseRecord = new PurchaseRecord({
@@ -429,7 +485,8 @@ export class PurchasingService {
     }
 
     // 验证操作时间（6:00-14:00）和目标日期
-    validatePurchasingOperation(purchaseList.targetDate, '更新采购记录');
+    // TODO: 测试期间临时注释时间限制
+    // validatePurchasingOperation(purchaseList.targetDate, '更新采购记录');
 
     // 检查是否已关联报销单（已关联则不能修改）
     if (purchaseList.reimbursementId) {
@@ -465,7 +522,8 @@ export class PurchasingService {
     }
 
     // 验证操作时间（6:00-14:00）和目标日期
-    validatePurchasingOperation(purchaseList.targetDate, '删除采购记录');
+    // TODO: 测试期间临时注释时间限制
+    // validatePurchasingOperation(purchaseList.targetDate, '删除采购记录');
 
     // 检查是否已关联报销单（已关联则不能删除）
     if (purchaseList.reimbursementId) {

@@ -75,27 +75,6 @@
               <text class="value">{{ formatDate(list.completedAt) }}</text>
             </view>
           </view>
-
-          <!-- 操作按钮 -->
-          <view class="item-actions">
-            <!-- 待采购状态：显示开始采购和确认完成按钮 -->
-            <template v-if="list.status === 'PENDING'">
-              <button class="action-btn start" @tap.stop="startPurchase(list.id)" v-if="!list.startedAt">
-                开始采购
-              </button>
-              <button class="action-btn complete" @tap.stop="completePurchase(list.id)">
-                确认完成
-              </button>
-            </template>
-            <!-- 已完成状态：显示查看报销按钮 -->
-            <button
-              v-if="list.status === 'COMPLETED' && !list.reimbursementId"
-              class="action-btn reimbursement"
-              @tap.stop="goToReimbursement(list.id)"
-            >
-              申请报销
-            </button>
-          </view>
         </view>
       </view>
 
@@ -117,6 +96,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import { onShow } from '@dcloudio/uni-app';
 import {
   getPurchaseLists,
   generatePurchaseList,
@@ -127,9 +107,9 @@ import {
 // 状态筛选选项
 const statusOptions = [
   { label: '全部', value: '' },
-  { label: '草稿', value: 'DRAFT' },
   { label: '待采购', value: 'PENDING' },
   { label: '已完成', value: 'COMPLETED' },
+  { label: '已取消', value: 'CANCELLED' },
 ];
 const statusIndex = ref(0);
 
@@ -145,6 +125,11 @@ const hasMore = computed(() => purchaseLists.value.length < total.value);
 // 页面加载
 onMounted(() => {
   loadPurchaseLists();
+});
+
+// 页面显示时刷新数据（从详情页返回时）
+onShow(() => {
+  loadPurchaseLists(true);
 });
 
 // 加载采购清单列表
@@ -308,7 +293,6 @@ const goToDetail = (id: string) => {
 // 获取状态文本
 const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
-    'DRAFT': '草稿',
     'PENDING': '待采购',
     'COMPLETED': '已完成',
     'CANCELLED': '已取消',

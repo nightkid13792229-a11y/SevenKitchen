@@ -49,7 +49,7 @@ export class PurchaseList {
   constructor(data: PurchaseListConstructor) {
     this.id = data.id || uuidv4();
     this.targetDate = data.targetDate;
-    this.status = data.status || PurchaseListStatus.DRAFT;
+    this.status = data.status || PurchaseListStatus.PENDING;
     this.totalEstimatedCost = data.totalEstimatedCost;
     this.itemCount = data.itemCount;
     this.createdById = data.createdById;

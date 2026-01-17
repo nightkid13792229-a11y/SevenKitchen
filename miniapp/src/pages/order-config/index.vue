@@ -64,12 +64,12 @@
         <text>{{ pricingError }}</text>
       </view>
 
-      <button 
-        class="btn" 
+      <button
+        class="btn"
         @tap="createOrder"
-        :disabled="orderCreated || isDemo"
+        :disabled="orderCreated || isDemo || addressLoading"
       >
-        {{ orderCreated ? '订单已创建' : isDemo ? 'Demo Mode: Order Creation Disabled' : '创建订单 -> 确认 -> 支付（测试）' }}
+        {{ addressLoading ? '地址加载中...' : orderCreated ? '订单已创建' : isDemo ? 'Demo Mode: Order Creation Disabled' : '创建订单 -> 确认 -> 支付（测试）' }}
       </button>
       
       <!-- Demo Mode Modal -->
@@ -115,6 +115,7 @@ const orderStatus = ref<string | null>(null)
 const orderCreated = ref(false)
 const isDemo = ref(false)
 const showDemoModal = ref(false)
+const addressLoading = ref(true) // 新增：地址加载状态
 const pricingPreview = ref<{
   amountProduct: number
   amountShipping: number
@@ -195,6 +196,7 @@ watch([dailyGrams, cycleDays, dogId, addressId, recipeId], () => {
 })
 
 function loadDefaultAddress() {
+  addressLoading.value = true
   request({
     url: '/addresses',
     method: 'GET'
@@ -203,10 +205,21 @@ function loadDefaultAddress() {
       const defaultAddr = res.data.find((addr: any) => addr.isDefault) || res.data[0]
       if (defaultAddr) {
         addressId.value = defaultAddr.id
+        console.log('[OrderConfig] Default address loaded:', defaultAddr.id)
+      } else {
+        console.warn('[OrderConfig] No address found')
       }
+    } else {
+      console.warn('[OrderConfig] No addresses in response')
     }
   }).catch((err: any) => {
-    console.error('Load address error:', err)
+    console.error('[OrderConfig] Load address error:', err)
+    uni.showToast({
+      title: '地址加载失败',
+      icon: 'none'
+    })
+  }).finally(() => {
+    addressLoading.value = false
   })
 }
 
@@ -313,7 +326,16 @@ function createOrder() {
     showDemoModal.value = true
     return
   }
-  
+
+  // 等待地址加载完成
+  if (addressLoading.value) {
+    uni.showToast({
+      title: '地址加载中，请稍候...',
+      icon: 'none'
+    })
+    return
+  }
+
   if (!dogId.value) {
     uni.showModal({
       title: '提示',

@@ -83,6 +83,21 @@ export function getPackagingUnits(params: {
       completedAt?: string; // 本地时间格式
       photosRaw?: string[]; // 备料照片URL列表
       ingredientsUsageSnapshot?: any; // 原料用量快照
+      recipeSnapshot?: {
+        id: string;
+        version: number;
+        name: string;
+        items: Array<{
+          ingredient_id: string;
+          name: string;
+          ratio: number;
+          ingredient_type?: 'FOOD' | 'SUPPLEMENT' | 'PACKAGING';
+          nutrient_target_key?: string;
+          nutrient_target_value?: number;
+          preparation_methods?: string[]; // 制备方法名称数组
+        }>;
+        production_loss_rate?: number;
+      };
     }>;
     total: number;
   }>({

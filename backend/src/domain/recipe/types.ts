@@ -26,6 +26,9 @@ export interface RecipeSnapshotItem {
   nutrient_target_key?: string; // 补剂类型：营养素名称（如"钙"、"维生素D3"）
   nutrient_target_value?: number; // 补剂类型：营养目标值
   properties?: any; // 补剂类型：完整属性（包含active_nutrients等）
+  preparation_methods?: string[]; // 制备方法名称数组（如"生重"、"熟重"、"打碎"）
+  sort_order?: number; // 原料在食谱中的顺序
+  unit_display_label?: string; // 补剂类型：单位显示标签（如"粒"、"片"、"g"）
 }
 
 /**

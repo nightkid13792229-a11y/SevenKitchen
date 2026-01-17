@@ -9,6 +9,9 @@ type RecipeWithItems = Prisma.RecipeGetPayload<{
     items: {
       include: {
         ingredient: true
+      },
+      orderBy: {
+        sortOrder: 'asc' // 按照 sortOrder 升序排列
       }
     }
     healthTagAssignments: {
@@ -32,6 +35,9 @@ export class PrismaRecipeRepository implements RecipeRepository {
         items: {
           include: {
             ingredient: true
+          },
+          orderBy: {
+            sortOrder: 'asc' // 按照 sortOrder 升序排列
           }
         },
         healthTagAssignments: {

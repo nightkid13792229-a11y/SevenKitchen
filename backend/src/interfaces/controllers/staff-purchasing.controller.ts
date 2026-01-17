@@ -84,7 +84,7 @@ export class StaffPurchasingController {
           properties: {
             id: { type: 'string' },
             targetDate: { type: 'string', format: 'date-time' },
-            status: { type: 'string', enum: ['DRAFT', 'PENDING', 'COMPLETED', 'CANCELLED'] },
+            status: { type: 'string', enum: ['PENDING', 'COMPLETED', 'CANCELLED'] },
             totalEstimatedCost: { type: 'number' },
             itemCount: { type: 'number' },
             items: {
@@ -121,7 +121,7 @@ export class StaffPurchasingController {
 
   @Get('lists')
   @ApiOperation({ summary: '查看采购清单列表' })
-  @ApiQuery({ name: 'status', required: false, enum: ['DRAFT', 'PENDING', 'COMPLETED', 'CANCELLED'], description: '筛选状态' })
+  @ApiQuery({ name: 'status', required: false, enum: ['PENDING', 'COMPLETED', 'CANCELLED'], description: '筛选状态' })
   @ApiQuery({ name: 'startDate', required: false, type: String, description: '开始日期 YYYY-MM-DD' })
   @ApiQuery({ name: 'endDate', required: false, type: String, description: '结束日期 YYYY-MM-DD' })
   @ApiQuery({ name: 'page', required: false, type: Number, description: '页码', example: 1 })

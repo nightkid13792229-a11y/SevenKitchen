@@ -35,7 +35,7 @@ export class PrismaOrderRepository implements OrderRepository {
         dog: true,
         address: true,
       },
-      orderBy: { id: 'asc' },
+      orderBy: { createdAt: 'desc' },
     });
     return records.map((r) => this.mapToDomain(r));
   }

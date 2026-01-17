@@ -12,6 +12,7 @@ import { ProductionBatch, PackagingUnit } from '../../domain/production';
 import { ProductionBatchStatus } from '../../domain/production/enums';
 import { OrderStatus } from '../../domain';
 import { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY } from '../order/order.service';
+import { GlobalConfigService } from '../config/global-config.service';
 
 export const PRODUCTION_BATCH_REPOSITORY = Symbol('ProductionBatchRepository');
 
@@ -46,6 +47,7 @@ export class ProductionService {
     private readonly orderRepository: OrderRepository,
     @Inject(ORDER_STATUS_HISTORY_REPOSITORY)
     private readonly statusHistoryRepository: OrderStatusHistoryRepository,
+    private readonly globalConfigService: GlobalConfigService,
   ) {}
 
   /**
@@ -100,6 +102,7 @@ export class ProductionService {
       recipeSnapshotId: string; // Use recipeSnapshot.id as unique identifier
       recipeSnapshot: any; // Full RecipeSnapshot for PackagingUnit
       dailyIntakeG: number;
+      quantityG: number; // OrderItem total net weight (已考虑订购周期)
     }> = [];
 
     for (const order of orders) {
@@ -126,6 +129,7 @@ export class ProductionService {
           recipeSnapshotId,
           recipeSnapshot: item.recipeSnapshot,
           dailyIntakeG: item.dailyIntakeG,
+          quantityG: item.quantityG,
         });
       }
     }
@@ -136,49 +140,165 @@ export class ProductionService {
       );
     }
 
-    // Group by recipeSnapshotId and aggregate
-    const groupedByRecipe = new Map<
-      string,
-      {
-        recipeSnapshot: any;
-        totalProductionG: number;
-        sourceOrderItemIds: string[];
-      }
-    >();
+    // Get global config for batch capacity
+    const globalConfig = await this.globalConfigService.getGlobalConfig();
+    const maxCapacityG = globalConfig.defaultBatchCapacityG; // 单锅最大容量（净重）
+
+    this.logger.log(
+      `[createProductionBatch] Batch capacity: ${maxCapacityG}g, Processing ${orderItemsWithDailyIntake.length} order items`,
+    );
+
+    // ============================================================
+    // Phase 1: 聚合阶段 (Aggregation Phase)
+    // 按 (recipe_id, version) 聚合订单 -> 计算生肉总重
+    // ============================================================
+
+    type OrderItemWithRawWeight = {
+      orderItemId: string;
+      dailyIntakeG: number;
+      quantityG: number; // OrderItem total net weight (已考虑订购周期)
+      rawWeightNeededG: number; // 生肉重量 = 净重 × (1 + 损耗率)
+    };
+
+    type ProductionGroup = {
+      recipeSnapshot: any;
+      totalRawWeightG: number; // 生肉总重（用于分锅）
+      itemQueue: OrderItemWithRawWeight[]; // 待分配的订单队列（FIFO）
+    };
+
+    const productionGroups = new Map<string, ProductionGroup>();
 
     for (const item of orderItemsWithDailyIntake) {
-      const existing = groupedByRecipe.get(item.recipeSnapshotId);
-      if (existing) {
-        existing.totalProductionG += item.dailyIntakeG;
-        existing.sourceOrderItemIds.push(item.orderItemId);
-      } else {
-        groupedByRecipe.set(item.recipeSnapshotId, {
-          recipeSnapshot: item.recipeSnapshot,
-          totalProductionG: item.dailyIntakeG,
-          sourceOrderItemIds: [item.orderItemId],
+      const recipeSnapshotId = item.recipeSnapshotId;
+      const recipeSnapshot = item.recipeSnapshot;
+
+      // 从recipe snapshot中读取损耗率
+      const lossRate = recipeSnapshot.production_loss_rate || 0.07; // 默认7%损耗
+
+      // 计算生肉重量 = 净重 × (1 + 损耗率)
+      const rawWeightNeededG = item.dailyIntakeG * (1 + lossRate);
+
+      this.logger.debug(
+        `Item ${item.orderItemId}: dailyIntake=${item.dailyIntakeG}g, lossRate=${lossRate}, rawWeight=${rawWeightNeededG}g`,
+      );
+
+      // 按recipe分组
+      if (!productionGroups.has(recipeSnapshotId)) {
+        productionGroups.set(recipeSnapshotId, {
+          recipeSnapshot,
+          totalRawWeightG: 0,
+          itemQueue: [],
         });
       }
+
+      const group = productionGroups.get(recipeSnapshotId)!;
+      group.totalRawWeightG += rawWeightNeededG;
+      group.itemQueue.push({
+        orderItemId: item.orderItemId,
+        dailyIntakeG: item.dailyIntakeG,
+        quantityG: item.quantityG,
+        rawWeightNeededG,
+      });
     }
 
-    // Create PackagingUnits (batchId will be set after batch creation)
+    this.logger.log(
+      `[createProductionBatch] Grouped into ${productionGroups.size} recipe group(s)`,
+    );
+
+    // ============================================================
+    // Phase 2: 分锅阶段 (Pot Splitting Phase)
+    // 对每个recipe组按单锅容量分锅，FIFO分配订单
+    // ============================================================
+
     const batchId = randomUUID();
     const packagingUnits: PackagingUnit[] = [];
-    const allOrderItemIds: string[] = []; // Collect all item IDs for allocation
+    const allOrderItemIds: string[] = [];
 
-    for (const [, data] of groupedByRecipe.entries()) {
-      const unitId = randomUUID();
-      const unit = new PackagingUnit(
-        unitId,
-        batchId, // Set batchId now that we have it
-        data.recipeSnapshot,
-        data.totalProductionG,
-        data.sourceOrderItemIds,
-        new Date(),
+    for (const [recipeSnapshotId, group] of productionGroups.entries()) {
+      this.logger.log(
+        `[createProductionBatch] Processing recipe ${recipeSnapshotId}: totalRawWeight=${group.totalRawWeightG}g, capacity=${maxCapacityG}g`,
       );
-      packagingUnits.push(unit);
-      // Collect all order item IDs for allocation
-      allOrderItemIds.push(...data.sourceOrderItemIds);
+
+      let remainingRawWeight = group.totalRawWeightG;
+      let potNumber = 1; // 锅序号
+
+      // 分锅循环：只要还有剩余重量，就继续创建锅
+      while (group.itemQueue.length > 0) {
+        // 本锅的生肉重量限制
+        const maxRawWeightForThisPot = Math.min(remainingRawWeight, maxCapacityG * 1.1); // 考虑损耗率后的上限
+
+        this.logger.debug(
+          `[createProductionBatch] Creating pot #${potNumber}, remaining raw weight: ${remainingRawWeight.toFixed(2)}g`,
+        );
+
+        // FIFO分配订单到本锅
+        const assignedOrderItems: OrderItemWithRawWeight[] = [];
+        let filledRawWeight = 0;
+        let filledNetWeight = 0;
+
+        // 从队列头部取订单，直到填满本锅
+        while (
+          group.itemQueue.length > 0 &&
+          filledRawWeight < maxRawWeightForThisPot
+        ) {
+          const nextItem = group.itemQueue[0]; // 预读队列头部
+
+          // 检查如果加上这个订单是否会超容（允许10%的溢出）
+          if (
+            filledRawWeight + nextItem.rawWeightNeededG >
+            maxRawWeightForThisPot * 1.1 &&
+            assignedOrderItems.length > 0
+          ) {
+            // 已有订单且再加一个会超容，停止分配
+            break;
+          }
+
+          // 从队列移除并分配到本锅
+          group.itemQueue.shift();
+          assignedOrderItems.push(nextItem);
+          filledRawWeight += nextItem.rawWeightNeededG;
+          filledNetWeight += nextItem.quantityG; // 使用订单项总净重（已考虑订购周期）
+
+          this.logger.debug(
+            `[createProductionBatch] Assigned item ${nextItem.orderItemId} to pot #${potNumber}: raw=${nextItem.rawWeightNeededG}g, net=${nextItem.dailyIntakeG}g`,
+          );
+        }
+
+        // 创建PackagingUnit
+        const unitId = randomUUID();
+        const sourceOrderItemIds = assignedOrderItems.map(
+          (item) => item.orderItemId,
+        );
+
+        const unit = new PackagingUnit(
+          unitId,
+          batchId,
+          group.recipeSnapshot,
+          filledNetWeight, // 净重（用于显示）
+          sourceOrderItemIds,
+          new Date(),
+        );
+
+        packagingUnits.push(unit);
+        allOrderItemIds.push(...sourceOrderItemIds);
+
+        this.logger.log(
+          `[createProductionBatch] Created pot #${potNumber}: ${filledNetWeight.toFixed(2)}g net (${filledRawWeight.toFixed(2)}g raw), ${assignedOrderItems.length} order(s)`,
+        );
+
+        // 更新剩余重量
+        remainingRawWeight -= filledRawWeight;
+        potNumber++;
+      }
+
+      this.logger.log(
+        `[createProductionBatch] Recipe ${recipeSnapshotId} split into ${potNumber - 1} pot(s)`,
+      );
     }
+
+    this.logger.log(
+      `[createProductionBatch] Total packaging units created: ${packagingUnits.length}`,
+    );
 
     // Create ProductionBatch
     const batch = new ProductionBatch(

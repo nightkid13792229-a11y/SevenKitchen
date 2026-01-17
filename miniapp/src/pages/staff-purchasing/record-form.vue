@@ -125,19 +125,24 @@ const formData = ref({
 
 // 页面加载
 onLoad((options: any) => {
+  console.log('[RecordForm] onLoad options:', options);
   purchaseListId.value = options.id;
+  console.log('[RecordForm] purchaseListId:', purchaseListId.value);
   loadPurchaseListDetail();
 });
 
 // 加载采购清单详情
 const loadPurchaseListDetail = async () => {
+  console.log('[RecordForm] loadPurchaseListDetail called, purchaseListId:', purchaseListId.value);
   loading.value = true;
 
   try {
     const res: any = await getPurchaseListDetail(purchaseListId.value);
+    console.log('[RecordForm] API response:', res);
 
     if (res.code === 0) {
       items.value = res.data.items || [];
+      console.log('[RecordForm] items loaded:', items.value.length);
     } else {
       uni.showToast({ title: res.message || '加载失败', icon: 'none' });
       setTimeout(() => {
@@ -145,7 +150,7 @@ const loadPurchaseListDetail = async () => {
       }, 1500);
     }
   } catch (error: any) {
-    console.error('加载采购清单详情失败', error);
+    console.error('[RecordForm] 加载采购清单详情失败', error);
     uni.showToast({ title: '加载失败', icon: 'none' });
     setTimeout(() => {
       uni.navigateBack();
@@ -302,20 +307,47 @@ const goBack = () => {
 
   .char-count {
     display: block;
-    text-align: right;
     font-size: 22rpx;
     color: #999;
+    text-align: right;
     margin-top: 8rpx;
   }
 }
 
+.form-input {
+  width: 100%;
+  height: 80rpx;
+  padding: 0 24rpx;
+  font-size: 28rpx;
+  color: #333;
+  background-color: #f5f5f5;
+  border-radius: 8rpx;
+  box-sizing: border-box;
+}
+
+.form-textarea {
+  width: 100%;
+  min-height: 160rpx;
+  padding: 16rpx 24rpx;
+  font-size: 28rpx;
+  color: #333;
+  background-color: #f5f5f5;
+  border-radius: 8rpx;
+  box-sizing: border-box;
+}
+
+.input-placeholder {
+  color: #999;
+}
+
 .picker {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 24rpx;
-  background-color: #f9f9f9;
-  border-radius: 12rpx;
+  justify-content: space-between;
+  height: 80rpx;
+  padding: 0 24rpx;
+  background-color: #f5f5f5;
+  border-radius: 8rpx;
 
   .picker-text {
     font-size: 28rpx;
@@ -333,73 +365,37 @@ const goBack = () => {
   }
 }
 
-.form-input {
-  width: 100%;
-  padding: 24rpx;
-  background-color: #f9f9f9;
-  border-radius: 12rpx;
-  font-size: 28rpx;
-  color: #333;
-  border: none;
-
-  &.input-placeholder {
-    color: #999;
-  }
-}
-
-.form-textarea {
-  width: 100%;
-  min-height: 160rpx;
-  padding: 24rpx;
-  background-color: #f9f9f9;
-  border-radius: 12rpx;
-  font-size: 28rpx;
-  color: #333;
-  border: none;
-  box-sizing: border-box;
-
-  &.input-placeholder {
-    color: #999;
-  }
-}
-
 .bottom-actions {
   position: fixed;
   bottom: 0;
   left: 0;
   right: 0;
-  background-color: #fff;
-  padding: 24rpx 32rpx;
-  box-shadow: 0 -4rpx 16rpx rgba(0, 0, 0, 0.05);
   display: flex;
-  gap: 16rpx;
-  z-index: 100;
+  gap: 24rpx;
+  padding: 24rpx 32rpx;
+  background-color: #fff;
+  box-shadow: 0 -2rpx 10rpx rgba(0, 0, 0, 0.05);
+  box-sizing: border-box;
+}
 
-  .action-btn {
-    flex: 1;
-    height: 88rpx;
-    border-radius: 16rpx;
-    font-size: 32rpx;
-    font-weight: bold;
-    border: none;
-    display: flex;
-    align-items: center;
-    justify-content: center;
+.action-btn {
+  flex: 1;
+  height: 88rpx;
+  line-height: 88rpx;
+  text-align: center;
+  border-radius: 12rpx;
+  font-size: 32rpx;
+  font-weight: 500;
+  border: none;
 
-    &.cancel {
-      background-color: #f0f0f0;
-      color: #666;
-    }
+  &.cancel {
+    background-color: #f5f5f5;
+    color: #666;
+  }
 
-    &.submit {
-      background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
-      color: #333;
-      box-shadow: 0 8rpx 16rpx rgba(253, 203, 110, 0.3);
-    }
-
-    &:active {
-      opacity: 0.8;
-    }
+  &.submit {
+    background-color: #ffd700;
+    color: #333;
   }
 }
 </style>

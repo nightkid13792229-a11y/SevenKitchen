@@ -88,12 +88,15 @@ export class PurchasingService {
   ): Promise<PurchaseRequirement[]> {
     const end = endDate || startDate;
 
-    // 创建日期范围
-    // 使用UTC时间，并将结束时间设置为第二天的开始，以覆盖整个结束日期
-    const start = new Date(`${startDate}T00:00:00.000Z`);
-    const end_date = new Date(`${end}T23:59:59.999Z`);
+    // 创建日期范围（从午夜到午夜，覆盖整天）
+    // 开始时间：2026-01-23 00:00:00（本地时间）
+    // 结束时间：2026-01-23 23:59:59.999（本地时间）
+    const start = new Date(`${startDate}T00:00:00`);
+    const end_date = new Date(`${end}T23:59:59.999`);
 
     this.logger.log(`Calculating purchase requirements from ${startDate} to ${end}`);
+    this.logger.log(`Query range (local): ${start.toString()} to ${end_date.toString()}`);
+    this.logger.log(`Query range (UTC): ${start.toISOString()} to ${end_date.toISOString()}`);
 
     // 查询制作日期范围内的待生产订单（PAID状态）
     // 使用 targetProductionDate 而不是 createdAt，因为采购需求基于制作日期
@@ -102,6 +105,8 @@ export class PurchasingService {
       startDate: start,
       endDate: end_date,
     });
+
+    this.logger.log(`Found ${orders.length} PAID orders in query range`);
 
     if (orders.length === 0) {
       this.logger.warn(`No PAID orders found with target production date in range ${startDate} - ${end}`);
@@ -223,10 +228,11 @@ export class PurchasingService {
   ): Promise<PurchaseList> {
     const end = dto.endDate || dto.startDate;
 
-    // 创建日期范围
-    // 使用UTC时间，并将结束时间设置为第二天的开始，以覆盖整个结束日期
-    const startDate = new Date(`${dto.startDate}T00:00:00.000Z`);
-    const endDate = new Date(`${end}T23:59:59.999Z`);
+    // 创建日期范围（从午夜到午夜，覆盖整天）
+    // 开始时间：2026-01-23 00:00:00（本地时间）
+    // 结束时间：2026-01-23 23:59:59.999（本地时间）
+    const startDate = new Date(`${dto.startDate}T00:00:00`);
+    const endDate = new Date(`${end}T23:59:59.999`);
 
     // 验证日期格式
     if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {

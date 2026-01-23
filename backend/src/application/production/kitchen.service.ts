@@ -47,11 +47,10 @@ export class StaffProductionService {
     this.logger.log(`[AutoSchedule] Starting auto-schedule for ${dto.startDate}`);
 
     // Step 1: Check if today's purchase list is completed
-    // 🔧 修复：使用 UTC 时间进行查询，避免时区转换问题
-    // 将 "YYYY-MM-DD" 字符串转换为 UTC 时间的当天 00:00:00
-    const today = new Date(`${dto.startDate}T00:00:00Z`);
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    // 使用本地时间午夜0点，覆盖整天
+    // 例如：2026-01-23 00:00:00 到 2026-01-24 00:00:00
+    const today = new Date(`${dto.startDate}T00:00:00`);
+    const tomorrow = new Date(`${dto.startDate}T23:59:59.999`);
 
     this.logger.log(`[AutoSchedule] Query range: ${today.toISOString()} to ${tomorrow.toISOString()}`);
 
@@ -117,8 +116,9 @@ export class StaffProductionService {
 
     // Filter by target date (via production batch)
     if (targetDate) {
-      const targetDateTime = new Date(targetDate);
-      targetDateTime.setHours(0, 0, 0, 0);
+      // 使用午夜0点避免时区转换导致日期变化
+      const targetDateTime = new Date(`${targetDate}T00:00:00`);
+      const targetEndDateTime = new Date(`${targetDate}T23:59:59.999`);
 
       // Get batches for target date
       const targetDateBatches = await this.productionRepository.findByProductionDate(targetDateTime);
@@ -327,11 +327,12 @@ export class StaffProductionService {
    * Get today's statistics
    */
   async getTodayStatistics(): Promise<TodayStatisticsDto> {
+    // 使用本地时间的今天午夜0点，避免时区问题
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const tomorrow = new Date(today);
-    tomorrow.setDate(tomorrow.getDate() + 1);
+    const todayEnd = new Date(today);
+    todayEnd.setHours(23, 59, 59, 999);
 
     // Get today's production batches
     const batches = await this.productionRepository.findByProductionDate(today);

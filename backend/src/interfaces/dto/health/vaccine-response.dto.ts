@@ -1,4 +1,5 @@
 import { Expose, Transform } from 'class-transformer'
+import { TimezoneUtil } from '../../../utils/timezone.util'
 
 export class VaccineRecordResponseDto {
   @Expose()
@@ -12,13 +13,15 @@ export class VaccineRecordResponseDto {
 
   @Expose()
   @Transform(({ value }) => {
-    return value.toISOString().split('T')[0]
+    // 使用上海时区转换，避免UTC导致的日期偏移
+    return TimezoneUtil.toShanghaiDateString(value)
   })
   vaccinationDate!: string
 
   @Expose()
   @Transform(({ value }) => {
-    return value ? value.toISOString().split('T')[0] : null
+    // 使用上海时区转换，避免UTC导致的日期偏移
+    return value ? TimezoneUtil.toShanghaiDateString(value) : null
   })
   nextDueDate!: string | null
 

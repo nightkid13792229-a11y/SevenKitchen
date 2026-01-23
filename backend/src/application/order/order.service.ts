@@ -27,6 +27,7 @@ import { ORDER_STATUS_HISTORY_REPOSITORY } from './order.service.tokens';
 // import type { CartRepository } from '../../domain/cart';  // Cart功能已移除
 import type { IOrderPricingSnapshotRepository } from '../../domain/order-pricing-snapshot/order-pricing-snapshot.repository.interface';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import { TimezoneUtil } from '../../utils/timezone.util';
 
 // Re-export for convenience
 export { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY };
@@ -223,36 +224,24 @@ export class OrderService {
     // 2. 处理制作日期
     let productionDate = dto.targetProductionDate;
 
-    // 默认值：如果未提供制作日期，根据当前时间判断（0-6点当日，6-24点次日）
+    // 默认值：如果未提供制作日期，根据上海时区判断（0-6点当日，6-24点次日）
     if (!productionDate) {
-      const now = new Date();
-      const hour = now.getHours(); // 使用本地时间
-
-      // 获取本地日历日期
-      const year = now.getFullYear();
-      const month = now.getMonth();
-      const day = now.getDate();
-
-      if (hour >= 0 && hour < 6) {
-        // 0-6点：当日制作
-        productionDate = new Date(year, month, day);
-        console.log('[CreateOrderFromSnapshot] No production date provided, using today (local date):', productionDate.toISOString());
-      } else {
-        // 6-24点：次日制作
-        productionDate = new Date(year, month, day + 1);
-        console.log('[CreateOrderFromSnapshot] No production date provided, using tomorrow (local date):', productionDate.toISOString());
-      }
+      productionDate = TimezoneUtil.calculateProductionDate();
+      console.log('[CreateOrderFromSnapshot] No production date provided, calculated from Shanghai timezone:', productionDate.toISOString());
     } else {
-      // 如果提供了日期，将时间部分清零（使用本地时间）
-      const year = productionDate.getFullYear();
-      const month = productionDate.getMonth();
-      const day = productionDate.getDate();
-      productionDate = new Date(year, month, day);
+      // 如果提供了日期，将时间部分清零（使用UTC时间）
+      const year = productionDate.getUTCFullYear();
+      const month = productionDate.getUTCMonth();
+      const day = productionDate.getUTCDate();
+      productionDate = new Date(Date.UTC(year, month, day));
     }
 
-    // 验证：制作日期不能早于今天
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // 验证：制作日期不能早于今天（使用UTC日期）
+    const today = new Date(Date.UTC(
+      new Date().getUTCFullYear(),
+      new Date().getUTCMonth(),
+      new Date().getUTCDate()
+    ));
     if (productionDate < today) {
       throw new BadRequestException('制作日期不能早于今天');
     }
@@ -345,6 +334,7 @@ export class OrderService {
       production_loss_rate: recipe.productionLossRate,
       energy_density_kcal_per_kg: recipe.energyDensityKcalPerKg,
       nutrition_standard: 'FEDIAF_2021',
+      nutrition_detailed_data: recipe.nutritionDetailedData, // 添加营养成分详细数据
       items: recipeItems.map((ri) => {
         const ingredient = ingredientMap.get(ri.ingredientId);
 
@@ -386,6 +376,10 @@ export class OrderService {
 
     // 9. 创建 OrderItem
     console.log('[CreateOrderFromSnapshot] Creating OrderItem with dogId:', requestParams.dogId);
+
+    // Extract vacuum bag spec from pricing result
+    const vacuumBagSpec = pricingResult.pricingBreakdown?.packagingDetails?.perPackConsumables?.vacuumBagSpec || null;
+
     const orderItem = new OrderItem(
       randomUUID(),
       orderId,
@@ -396,6 +390,7 @@ export class OrderService {
       itemParams.packageSpecG,
       null, // customRequirements
       dailyIntakeG,
+      vacuumBagSpec, // vacuum bag specification
     );
     console.log('[CreateOrderFromSnapshot] OrderItem created, dogId:', orderItem.dogId);
 
@@ -775,6 +770,7 @@ export class OrderService {
         production_loss_rate: recipe.productionLossRate,
         energy_density_kcal_per_kg: recipe.energyDensityKcalPerKg, // CRITICAL: Captured at order time
         nutrition_standard: 'FEDIAF_2021', // TODO: Get from recipe when interface is complete
+        nutrition_detailed_data: recipe.nutritionDetailedData, // 添加营养成分详细数据
         items: recipeItems.map((ri) => {
           const ingredient = ingredientMap.get(ri.ingredientId);
 
@@ -817,6 +813,10 @@ export class OrderService {
       const itemId = randomUUID();
       // Use normalized packageCount (already computed above)
       // Phase 8.9: Include calculated dailyIntakeG (immutable after order creation)
+
+      // Extract vacuum bag spec from pricing result
+      const vacuumBagSpec = pricing.pricingBreakdown?.packagingDetails?.perPackConsumables?.vacuumBagSpec || null;
+
       const orderItem = new OrderItem(
         itemId,
         orderId,
@@ -831,6 +831,7 @@ export class OrderService {
           ? JSON.stringify(itemDto.customRequirements)
           : null,
         dailyIntakeG, // Calculated from DogCalc.finalFoodKcal ÷ Recipe.energyDensityKcalPerKg
+        vacuumBagSpec, // vacuum bag specification
       );
 
       items.push(orderItem);
@@ -1531,6 +1532,68 @@ export class OrderService {
       'admin',
       actorId,
       { paymentMethod: 'ADMIN', transactionId, confirmedBy: 'admin' },
+    );
+
+    return savedOrder;
+  }
+
+  /**
+   * Admin confirm offline payment (线下收款确认)
+   * 管理员确认用户已通过微信完成线下支付
+   *
+   * Transitions: PENDING_PAYMENT → PAID
+   *
+   * @param orderId Order ID
+   * @param adminId Admin user ID
+   * @param actualAmount Actual payment amount received (optional, for recording discrepancies)
+   * @returns Updated order with payment tracking fields set
+   */
+  async confirmOfflinePayment(
+    orderId: string,
+    adminId: string,
+    actualAmount?: number,
+  ): Promise<Order> {
+    // 1. Load and validate order
+    const order = await this.orderRepository.findById(orderId);
+    if (!order) {
+      throw new NotFoundException(`Order not found: ${orderId}`);
+    }
+
+    // 2. Validate order status (must be PENDING_PAYMENT)
+    if (order.status !== OrderStatus.PENDING_PAYMENT) {
+      throw new BadRequestException(
+        `Only PENDING_PAYMENT orders can be confirmed. Current status: ${order.status}`,
+      );
+    }
+
+    // 3. Generate transaction ID and note
+    const transactionId = `OFFLINE_${Date.now()}_${adminId.substring(0, 8)}`;
+    let note = '';
+    if (actualAmount !== undefined) {
+      const diff = actualAmount - order.amountTotal;
+      if (Math.abs(diff) > 0.01) {
+        note = `实际收款: ¥${actualAmount.toFixed(2)}, 订单金额: ¥${order.amountTotal.toFixed(2)}, 差额: ¥${diff.toFixed(2)}`;
+      }
+    }
+
+    // 4. Record payment (sets paymentStatus, paidAt, transactionId, paymentMethod, and transitions to PAID)
+    const fromStatus = order.status;
+    order.recordPayment('OFFLINE_WECHAT', transactionId);
+    const savedOrder = await this.orderRepository.save(order);
+
+    // 5. Log status transition with payment metadata
+    await this.logStatusTransition(
+      savedOrder,
+      fromStatus,
+      OrderStatus.PAID,
+      'admin',
+      adminId,
+      {
+        paymentMethod: 'OFFLINE_WECHAT',
+        transactionId,
+        actualAmount,
+        note,
+      },
     );
 
     return savedOrder;

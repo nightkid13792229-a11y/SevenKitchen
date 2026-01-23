@@ -3,16 +3,20 @@
  * 采购时间验证工具
  *
  * 根据方案，所有采购操作必须在早上6点至下午2点之间完成
+ * 使用上海时区（Asia/Shanghai, UTC+8）进行判断
  */
+
+import { TimezoneUtil } from '../../utils/timezone.util';
 
 /**
  * 检查当前时间是否在允许的采购操作时间范围内
- * @param currentTime 当前时间（默认为当前本地时间）
- * @returns 是否在允许的时间范围内（6:00-14:00）
+ * @param currentTime 当前时间（默认为当前时间）
+ * @returns 是否在允许的时间范围内（6:00-14:00 上海时间）
  */
 export function isWithinPurchasingHours(currentTime: Date = new Date()): boolean {
-  const hour = currentTime.getHours();
-  return hour >= 6 && hour < 14;
+  // 使用上海时区的小时数进行判断
+  const shanghaiHour = TimezoneUtil.getShanghaiHour();
+  return shanghaiHour >= 6 && shanghaiHour < 14;
 }
 
 /**

@@ -1,4 +1,5 @@
 import { Expose, Transform } from 'class-transformer'
+import { TimezoneUtil } from '../../../utils/timezone.util'
 
 export class AllergyRecordResponseDto {
   @Expose()
@@ -15,7 +16,8 @@ export class AllergyRecordResponseDto {
 
   @Expose()
   @Transform(({ value }) => {
-    return value.toISOString().split('T')[0]
+    // 使用上海时区转换，避免UTC导致的日期偏移
+    return TimezoneUtil.toShanghaiDateString(value)
   })
   discoveryDate!: string
 

@@ -67,7 +67,7 @@ export interface OrderItem {
   customRequirements?: string
   dailyIntakeG: number
   productionBatchId?: string
-  allocatedAt?: Date
+  allocatedAt?: string
 }
 
 /**
@@ -92,8 +92,8 @@ export interface Order {
   customerId: string
   status: OrderStatus
   type: OrderType
-  createdAt: Date
-  targetProductionDate: Date | null
+  createdAt: string
+  targetProductionDate: string | null
   amountProduct: number
   amountShipping: number
   amountTotal: number
@@ -103,14 +103,14 @@ export interface Order {
   addressId?: string
   trackingNumber?: string
   carrierCode?: string
-  shippedAt?: Date
-  completedAt?: Date
-  cancelledAt?: Date
+  shippedAt?: string | null
+  completedAt?: string | null
+  cancelledAt?: string | null
   cancellationReason?: string
   cancelledBy?: CancelledBy
   paymentMethod?: string
   transactionId?: string
-  paidAt?: Date
+  paidAt?: string | null
   paymentStatus?: PaymentStatus
 }
 
@@ -152,7 +152,7 @@ export interface OrderHistory {
   fromStatus?: OrderStatus
   toStatus: OrderStatus
   operatedBy?: string
-  operatedAt: Date
+  operatedAt: string
   remark?: string
 }
 

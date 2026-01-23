@@ -23,6 +23,15 @@
       </el-col>
       <el-col :span="4">
         <order-stat-card
+          label="待付款"
+          :value="stats.pendingPayment"
+          type="warning"
+          :icon="Clock"
+          @click="handleStatCardClick"
+        />
+      </el-col>
+      <el-col :span="4">
+        <order-stat-card
           label="生产中"
           :value="stats.inProduction"
           type="warning"
@@ -188,7 +197,7 @@
 
         <el-table-column prop="createdAt" label="下单时间" width="160">
           <template #default="{ row }">
-            {{ formatTime(row.createdAt) }}
+            {{ formatDateTime(row.createdAt) }}
           </template>
         </el-table-column>
 
@@ -198,10 +207,18 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="250" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" size="small" @click="handleViewDetail(row.id)">
               详情
+            </el-button>
+            <el-button
+              v-if="row.status === 'PENDING_PAYMENT'"
+              type="success"
+              size="small"
+              @click="handleConfirmPayment(row)"
+            >
+              确认收款
             </el-button>
             <el-button
               v-if="canCancelOrder(row.status)"
@@ -249,6 +266,13 @@
       :order-id="currentOrder?.id"
       @submit="handleShippingSubmit"
     />
+
+    <!-- 确认收款对话框 -->
+    <confirm-payment-dialog
+      v-model="confirmPaymentDialogVisible"
+      :order="currentOrder"
+      @submit="handleConfirmPaymentSubmit"
+    />
   </div>
 </template>
 
@@ -269,9 +293,11 @@ import {
 import OrderStatCard from './components/OrderStatCard.vue'
 import CancelDialog from './components/CancelDialog.vue'
 import ShippingDialog from './components/ShippingDialog.vue'
+import ConfirmPaymentDialog from './components/ConfirmPaymentDialog.vue'
 import { orderApi } from '@/api/orders'
 import { OrderType } from '@/types/order'
 import type { OrderStatus, OrderListItem, OrderStats } from '@/types/order'
+import { formatDateTime, formatDate } from '@/utils/date'
 
 // 使枚举在模板中可用
 const OrderTypeEnum = OrderType
@@ -316,6 +342,7 @@ const pagination = reactive({
 // 对话框
 const cancelDialogVisible = ref(false)
 const shippingDialogVisible = ref(false)
+const confirmPaymentDialogVisible = ref(false)
 const currentOrder = ref<OrderListItem | null>(null)
 
 // 状态选项（仅显示管理员需要关注的状态）
@@ -486,6 +513,27 @@ const handleShippingSubmit = async (data: { carrierCode: string; trackingNumber:
   }
 }
 
+// 确认收款
+const handleConfirmPayment = (order: OrderListItem) => {
+  currentOrder.value = order
+  confirmPaymentDialogVisible.value = true
+}
+
+// 确认收款提交
+const handleConfirmPaymentSubmit = async (data: { actualAmount?: number }) => {
+  if (!currentOrder.value) return
+
+  try {
+    await orderApi.confirmOfflinePayment(currentOrder.value.id, data)
+    ElMessage.success('确认收款成功')
+    confirmPaymentDialogVisible.value = false
+    loadOrders()
+    loadStats()
+  } catch (error: any) {
+    ElMessage.error(error.message || '确认收款失败')
+  }
+}
+
 // 导出Excel
 const handleExport = async () => {
   try {
@@ -513,21 +561,6 @@ const handleExport = async () => {
   } catch (error) {
     ElMessage.error('导出失败')
   }
-}
-
-// 格式化时间
-const formatTime = (time: Date) => {
-  return new Date(time).toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit'
-  })
-}
-
-const formatDate = (date: Date) => {
-  return new Date(date).toLocaleDateString('zh-CN')
 }
 
 // 获取状态类型

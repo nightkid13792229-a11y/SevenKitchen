@@ -63,12 +63,12 @@
         </el-table-column>
         <el-table-column prop="lastLoginAt" label="最后登录" width="180">
           <template #default="{ row }">
-            {{ formatDate(row.lastLoginAt) }}
+            {{ formatDateTime(row.lastLoginAt) }}
           </template>
         </el-table-column>
         <el-table-column prop="createdAt" label="创建时间" width="180">
           <template #default="{ row }">
-            {{ formatDate(row.createdAt) }}
+            {{ formatDateTime(row.createdAt) }}
           </template>
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
@@ -119,6 +119,7 @@ import type { User } from '@/types/user'
 import { UserRole, UserStatus, UserRoleLabels, UserStatusLabels, UserRoleTagTypes } from '@/types/user'
 import { userApi } from '@/api'
 import UserForm from './UserForm.vue'
+import { formatDateTime } from '@/utils/date'
 
 const activeRole = ref<string>('')
 const searchKeyword = ref('')
@@ -215,19 +216,6 @@ const handleDelete = async (user: User) => {
 const handleFormSuccess = () => {
   formVisible.value = false
   loadUsers()
-}
-
-// Format date
-const formatDate = (dateStr: string | null | undefined) => {
-  if (!dateStr) return '-'
-  const date = new Date(dateStr)
-  return date.toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-  })
 }
 
 // Load users on mount

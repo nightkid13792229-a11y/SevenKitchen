@@ -50,6 +50,13 @@ export const orderApi = {
   },
 
   /**
+   * 确认线下收款
+   */
+  confirmOfflinePayment: (id: string, data: { actualAmount?: number }): Promise<void> => {
+    return api.post(`/admin/orders/${id}/confirm-offline-payment`, data)
+  },
+
+  /**
    * 开始生产
    */
   startProduction: (id: string): Promise<void> => {

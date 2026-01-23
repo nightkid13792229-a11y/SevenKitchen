@@ -238,6 +238,18 @@
       <!-- 操作按钮区域 -->
       <el-card class="action-card" shadow="never">
         <div class="action-buttons">
+          <!-- PENDING_PAYMENT状态：管理员确认收款或取消订单 -->
+          <template v-if="order.status === OrderStatusEnum.PENDING_PAYMENT">
+            <el-button type="success" @click="handleConfirmPayment">确认收款</el-button>
+            <el-button type="danger" @click="handleCancelOrder">取消订单</el-button>
+            <el-alert
+              title="等待用户完成线下支付后，点击确认收款按钮"
+              type="info"
+              :closable="false"
+              style="margin-top: 10px"
+            />
+          </template>
+
           <!-- PAID状态：管理员可以取消订单（等待生产批次系统自动处理） -->
           <template v-if="order.status === OrderStatusEnum.PAID">
             <el-button type="danger" @click="handleCancelOrder">取消订单</el-button>
@@ -304,6 +316,13 @@
       @submit="handleShippingSubmit"
     />
 
+    <!-- 确认收款对话框 -->
+    <confirm-payment-dialog
+      v-model="confirmPaymentDialogVisible"
+      :order="order"
+      @submit="handleConfirmPaymentSubmit"
+    />
+
     <recipe-snapshot-dialog
       v-model="snapshotDialogVisible"
       :snapshot="currentSnapshot"
@@ -318,6 +337,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import OrderTimeline from './components/OrderTimeline.vue'
 import CancelDialog from './components/CancelDialog.vue'
 import ShippingDialog from './components/ShippingDialog.vue'
+import ConfirmPaymentDialog from './components/ConfirmPaymentDialog.vue'
 import RecipeSnapshotDialog from './components/RecipeSnapshotDialog.vue'
 import { orderApi } from '@/api/orders'
 import {
@@ -349,6 +369,7 @@ const orderHistory = ref<OrderHistory[]>([])
 // 对话框
 const cancelDialogVisible = ref(false)
 const shippingDialogVisible = ref(false)
+const confirmPaymentDialogVisible = ref(false)
 const snapshotDialogVisible = ref(false)
 const currentSnapshot = ref<RecipeSnapshot | undefined>(undefined)
 
@@ -567,6 +588,24 @@ const handleCancelSubmit = async (reason: string) => {
     loadHistory()
   } catch (error) {
     ElMessage.error('取消订单失败')
+  }
+}
+
+// 确认收款
+const handleConfirmPayment = () => {
+  confirmPaymentDialogVisible.value = true
+}
+
+// 确认收款提交
+const handleConfirmPaymentSubmit = async (data: { actualAmount?: number }) => {
+  try {
+    await orderApi.confirmOfflinePayment(orderId.value, data)
+    ElMessage.success('确认收款成功')
+    confirmPaymentDialogVisible.value = false
+    loadOrder()
+    loadHistory()
+  } catch (error: any) {
+    ElMessage.error(error.message || '确认收款失败')
   }
 }
 

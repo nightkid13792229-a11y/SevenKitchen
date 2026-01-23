@@ -49,16 +49,23 @@ export class WechatService {
   async code2Session(code: string): Promise<WechatUserInfo> {
     // Mock mode for development (when WeChat credentials are not configured)
     if (this.isMockMode()) {
-      this.logger.log('Using mock WeChat authentication for development');
+      console.log('[WechatService] ===== MOCK MODE =====');
+      console.log('[WechatService] Using mock WeChat authentication for development');
+      console.log('[WechatService] appId:', this.appId);
+      console.log('[WechatService] appSecret configured:', !!this.appSecret);
 
       // Generate a consistent mock openid based on the code
       const mockOpenid = `mock_openid_${code.substring(0, 8)}`;
+      console.log('[WechatService] Generated mock openid:', mockOpenid);
 
-      return {
+      const result = {
         openid: mockOpenid,
         unionid: `mock_unionid_${code.substring(0, 8)}`,
         sessionKey: 'mock_session_key',
       };
+
+      console.log('[WechatService] Returning mock result:', result);
+      return result;
     }
 
     // Production mode with real WeChat API

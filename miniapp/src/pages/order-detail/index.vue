@@ -25,7 +25,7 @@
         </view>
         <view class="info-row">
           <text class="label">下单时间:</text>
-          <text class="value">{{ formatTime(order.createdAt) }}</text>
+          <text class="value">{{ formatDateTime(order.createdAt) }}</text>
         </view>
         <view class="info-row">
           <text class="label">订单金额:</text>
@@ -58,7 +58,69 @@
         </view>
         <view class="info-row">
           <text class="label">支付时间:</text>
-          <text class="value">{{ formatTime(order.paidAt) }}</text>
+          <text class="value">{{ formatDateTime(order.paidAt) }}</text>
+        </view>
+      </view>
+
+      <!-- 待付款状态下的支付引导 -->
+      <view
+        class="section payment-guide-section"
+        v-if="order.status === 'PENDING_PAYMENT'"
+      >
+        <view class="section-title">支付方式</view>
+
+        <view class="payment-guide-card">
+          <view class="guide-header">
+            <text class="guide-icon">💚</text>
+            <text class="guide-title">线下微信支付</text>
+          </view>
+
+          <view class="order-amount-info">
+            <text class="amount-label">订单金额:</text>
+            <text class="amount-value">¥{{ formatAmount(order.amountTotal || order.totalAmount) }}</text>
+          </view>
+
+          <view class="guide-steps">
+            <view class="step-item">
+              <text class="step-number">1</text>
+              <text class="step-text">添加客服微信: SevenDad</text>
+            </view>
+            <view class="step-item">
+              <text class="step-number">2</text>
+              <text class="step-text">发送订单号完成支付</text>
+            </view>
+            <view class="step-item">
+              <text class="step-number">3</text>
+              <text class="step-text">管理员确认后订单将进入"已付款"状态</text>
+            </view>
+          </view>
+
+          <view class="wechat-contact">
+            <text class="contact-label">客服微信号:</text>
+            <text class="contact-value">SevenDad</text>
+            <button
+              class="btn-copy-wechat"
+              @tap="copyWechatId"
+            >
+              复制微信号
+            </button>
+          </view>
+
+          <view class="order-id-copy">
+            <text class="order-id-label">订单号:</text>
+            <text class="order-id-value">{{ formatOrderId(order.id) }}</text>
+            <button
+              class="btn-copy-order-id"
+              @tap="copyOrderId"
+            >
+              复制订单号
+            </button>
+          </view>
+
+          <view class="payment-tip">
+            <text class="tip-icon">⏰</text>
+            <text class="tip-text">请尽快完成支付，订单长时间未付款可能会被取消</text>
+          </view>
         </view>
       </view>
 
@@ -72,37 +134,94 @@
           :key="group.dogId"
           class="dog-group"
         >
-          <view class="dog-header">
-            <text class="dog-name">{{ group.dogName }}</text>
-            <text class="dog-detail">{{ group.dogBreedName }} | {{ group.dogWeightKg }}kg</text>
+          <!-- 狗狗信息卡片 -->
+          <view class="dog-info-card">
+            <view class="dog-info">
+              <text class="dog-name">{{ group.dogName }}</text>
+              <text
+                class="dog-gender"
+                :class="group.dogGender === 'MALE' ? 'male' : 'female'"
+              >
+                {{ group.dogGender === 'MALE' ? '公' : '母' }}
+              </text>
+              <text class="dog-divider">|</text>
+              <text class="dog-detail">{{ group.dogBreedName }}</text>
+              <text class="dog-divider">|</text>
+              <text class="dog-detail">{{ group.dogWeightKg }}kg</text>
+            </view>
           </view>
 
+          <!-- 订单商品列表 -->
           <view
             v-for="item in group.items"
             :key="item.id"
             class="order-item-card"
           >
+            <!-- 第1层：食谱基本信息 -->
             <view class="item-header">
               <text class="recipe-name">{{ item.recipeSnapshot?.name }}</text>
               <text class="recipe-version">v{{ item.recipeSnapshot?.version }}</text>
+              <text class="nutrition-standard">{{ item.recipeSnapshot?.nutrition_standard }}</text>
             </view>
 
-            <!-- 订购信息 -->
-            <view class="extended-info">
-              <view class="info-row-small">
-                <text class="info-label">总净重:</text>
-                <text class="info-value-small">{{ Math.round(item.quantityG) }}g</text>
+            <!-- 第2层：订购信息 -->
+            <view class="package-info-card">
+              <view class="package-row">
+                <text class="package-label">总净重:</text>
+                <text class="package-value">{{ Math.round(item.quantityG) }}g</text>
               </view>
-              <view class="info-row-small">
-                <text class="info-label">总餐数:</text>
-                <text class="info-value-small">{{ item.packageCount }}餐</text>
+              <view class="package-row">
+                <text class="package-label">总餐数:</text>
+                <text class="package-value">{{ item.packageCount }}餐</text>
               </view>
-              <view class="info-row-small">
-                <text class="info-label">每餐重量:</text>
-                <text class="info-value-small">{{ item.packageSpecG }}g/餐</text>
+              <view class="package-row">
+                <text class="package-label">每餐重量:</text>
+                <text class="package-value">{{ item.packageSpecG }}g/餐</text>
+              </view>
+              <view class="package-row" v-if="order.amountTotal && getTotalPackageCount()">
+                <text class="package-label">单价:</text>
+                <text class="package-value price">¥{{ calculatePricePerMeal() }}/餐</text>
               </view>
             </view>
 
+            <!-- 第4层：原料清单（可展开/收起） -->
+            <view
+              class="ingredients-section"
+              v-if="item.recipeSnapshot?.items && item.recipeSnapshot.items.length > 0"
+            >
+              <view
+                class="ingredients-header"
+                @tap="toggleIngredients(item.id)"
+              >
+                <view class="ingredients-title-row">
+                  <text class="ingredients-title">原料清单</text>
+                  <text class="ingredients-count">（共{{ item.recipeSnapshot.items.length }}种）</text>
+                </view>
+                <text class="expand-icon">{{ expandedIngredients[item.id] ? '收起' : '展开' }}</text>
+              </view>
+
+              <view
+                class="ingredients-content"
+                :class="{ expanded: expandedIngredients[item.id] }"
+                v-if="expandedIngredients[item.id]"
+              >
+                <view
+                  v-for="(category, idx) in getGroupedIngredients(item.recipeSnapshot.items)"
+                  :key="idx"
+                  class="ingredient-category"
+                >
+                  <view class="category-title">【{{ category.typeName }}】</view>
+                  <view
+                    v-for="(ingredient, iIdx) in category.items"
+                    :key="iIdx"
+                    class="ingredient-item"
+                    @longpress="showIngredientDetail(ingredient, item)"
+                  >
+                    <text class="ingredient-text">{{ formatIngredientDisplay(ingredient, item) }}</text>
+                  </view>
+                </view>
+              </view>
+            </view>
           </view>
         </view>
       </view>
@@ -133,7 +252,7 @@
           </view>
           <view class="info-row">
             <text class="label">申请时间:</text>
-            <text class="value">{{ formatTime(order.aftersaleSince) }}</text>
+            <text class="value">{{ formatDateTime(order.aftersaleSince) }}</text>
           </view>
           <view class="info-row">
             <text class="label">售后原因:</text>
@@ -225,7 +344,7 @@
         </view>
         <view class="info-row" v-if="order.shippedAt">
           <text class="label">发货时间:</text>
-          <text class="value">{{ formatTime(order.shippedAt) }}</text>
+          <text class="value">{{ formatDateTime(order.shippedAt) }}</text>
         </view>
       </view>
     </view>
@@ -273,6 +392,20 @@
 import { ref, computed, onMounted } from 'vue'
 import { request } from '../../utils/api'
 import OrderProgressBar from '../../components/OrderProgressBar.vue'
+import { formatDateTime } from '../../utils/date'
+
+interface RecipeSnapshotItem {
+  ingredient_id: string
+  name: string
+  ratio: number
+  ingredient_type?: string
+  nutrient_target_key?: string
+  nutrient_target_value?: number
+  properties?: any
+  preparation_methods?: string[]
+  sort_order?: number
+  unit_display_label?: string
+}
 
 interface OrderItem {
   id: string
@@ -282,6 +415,7 @@ interface OrderItem {
   dogWeightKg?: number
   dog?: {
     mealsPerDay?: number
+    gender?: 'MALE' | 'FEMALE'
   }
   recipeSnapshot?: {
     id: string
@@ -290,15 +424,7 @@ interface OrderItem {
     nutrition_standard: string
     energy_density_kcal_per_kg: number
     production_loss_rate: number
-    items: Array<{
-      ingredient_id: string
-      name: string
-      ratio: number
-      ingredient_type?: string
-      nutrient_target_key?: string
-      nutrient_target_value?: number
-      properties?: any
-    }>
+    items: RecipeSnapshotItem[]
   }
   dailyIntakeG?: number
   quantityG: number
@@ -334,6 +460,16 @@ interface Order {
   aftersaleSince?: string
   aftersaleReason?: string
   aftersalePhotos?: string[]
+  // 定价快照（驼峰式，与后端保持一致）
+  pricingBreakdownSnapshot?: {
+    ingredientDetails?: Array<{
+      ingredientId: string
+      name: string
+      amount: number
+      unit: string
+      type?: string
+    }>
+  }
 }
 
 const order = ref<Order | null>(null)
@@ -343,6 +479,17 @@ const orderId = ref('')
 const reviewRating = ref(0)
 const reviewText = ref('')
 const reviewImages = ref<string[]>([])
+
+// 原料清单展开状态
+const expandedIngredients = ref<Record<string, boolean>>({})
+
+// 原料类型映射
+const ingredientTypeMap: Record<string, string> = {
+  'FOOD': '食材',
+  'VEGETABLE': '食材',
+  'SUPPLEMENT': '补剂',
+  'PACKAGING': '包装'
+}
 
 // 按狗狗分组
 const groupedItems = computed(() => {
@@ -358,6 +505,7 @@ const groupedItems = computed(() => {
         dogName: item.dog?.name || item.dogName || '未知狗狗',
         dogBreedName: item.dog?.breedName || item.dogBreedName || '',
         dogWeightKg: item.dog?.weightKg || item.dogWeightKg || 0,
+        dogGender: item.dog?.gender || 'MALE',
         items: []
       })
     }
@@ -366,6 +514,115 @@ const groupedItems = computed(() => {
 
   return Array.from(groups.values())
 })
+
+// 切换原料清单展开/收起
+function toggleIngredients(itemId: string) {
+  expandedIngredients.value[itemId] = !expandedIngredients.value[itemId]
+}
+
+// 获取分组后的原料
+function getGroupedIngredients(items: RecipeSnapshotItem[]) {
+  const groups = new Map<string, RecipeSnapshotItem[]>()
+
+  items.forEach(ingredient => {
+    const type = ingredient.ingredient_type || 'FOOD'
+    const typeName = ingredientTypeMap[type] || '其他'
+
+    if (!groups.has(typeName)) {
+      groups.set(typeName, [])
+    }
+
+    groups.get(typeName)!.push(ingredient)
+  })
+
+  // 转换为数组并排序
+  return Array.from(groups.entries()).map(([typeName, items]) => ({
+    typeName,
+    items: items.sort((a, b) => {
+      // 优先按sort_order排序
+      if (a.sort_order !== undefined && b.sort_order !== undefined) {
+        return a.sort_order - b.sort_order
+      }
+      // 然后按ratio降序排序
+      return b.ratio - a.ratio
+    })
+  }))
+}
+
+// 格式化原料显示
+function formatIngredientDisplay(ingredient: RecipeSnapshotItem, item: OrderItem): string {
+  const isSupplement = ingredient.ingredient_type === 'SUPPLEMENT'
+
+  if (isSupplement) {
+    // 补剂类型：从pricing_breakdown中获取实际用量
+    const actualAmount = getSupplementActualAmount(ingredient)
+    const unit = ingredient.unit_display_label || 'g'
+
+    if (actualAmount > 0) {
+      return `${ingredient.name} ${actualAmount}${unit}`
+    } else {
+      return `${ingredient.name}`
+    }
+  } else {
+    // 普通原料：计算实际用量（克数）
+    // ratio在数据库中存储的是百分比（如42.83），需要除以100
+    const actualAmountG = Math.round(item.quantityG * (ingredient.ratio / 100))
+    return `${ingredient.name} ${actualAmountG}g`
+  }
+}
+
+// 获取补剂的实际用量（从pricingBreakdownSnapshot）
+// 使用netAmount（不含损耗）而不是amount（含损耗）
+function getSupplementActualAmount(ingredient: RecipeSnapshotItem): number {
+  if (!order.value?.pricingBreakdownSnapshot?.ingredientDetails) {
+    return 0
+  }
+
+  const ingredientDetails = order.value.pricingBreakdownSnapshot.ingredientDetails
+  const detail = ingredientDetails.find((d: any) => d.ingredientId === ingredient.ingredient_id)
+
+  if (detail) {
+    // 使用netAmount（净需求，不含制作损耗）
+    const amount = detail.netAmount !== undefined ? detail.netAmount : detail.amount
+    // 根据单位决定保留小数位数
+    if (detail.unit === '片' || detail.unit === '粒') {
+      return Math.round(amount * 100) / 100 // 保留两位小数
+    } else if (detail.unit === 'kg') {
+      // kg转换为g
+      return Math.round(amount * 1000)
+    } else {
+      return Math.round(amount * 10) / 10 // 保留一位小数
+    }
+  }
+
+  return 0
+}
+
+// 长按查看原料详情
+function showIngredientDetail(ingredient: RecipeSnapshotItem, item: OrderItem) {
+  const isSupplement = ingredient.ingredient_type === 'SUPPLEMENT'
+  const typeName = ingredientTypeMap[ingredient.ingredient_type || ''] || '其他'
+
+  let content = `类型：${typeName}\n`
+
+  if (isSupplement) {
+    const actualAmount = getSupplementActualAmount(ingredient)
+    const unit = ingredient.unit_display_label || 'g'
+    content += `实际用量：${actualAmount}${unit}\n`
+  } else {
+    const ratio = Math.round(ingredient.ratio)
+    const actualAmountG = Math.round(item.quantityG * (ingredient.ratio / 100))
+    content += `比例：${ratio}%\n`
+    content += `实际用量：${actualAmountG}g\n`
+  }
+
+  uni.showModal({
+    title: ingredient.name,
+    content: content.trim(),
+    showCancel: false,
+    confirmText: '关闭'
+  })
+}
 
 onMounted(() => {
   const pages = getCurrentPages()
@@ -407,17 +664,6 @@ async function loadOrderDetail() {
 
 function formatOrderId(id: string): string {
   return id.substring(0, 8) + '...'
-}
-
-function formatTime(timeStr?: string): string {
-  if (!timeStr) return '-'
-  const date = new Date(timeStr)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hour = String(date.getHours()).padStart(2, '0')
-  const minute = String(date.getMinutes()).padStart(2, '0')
-  return `${year}/${month}/${day} ${hour}:${minute}`
 }
 
 function formatAmount(amount?: number): string {
@@ -489,6 +735,15 @@ function getCarrierName(code?: string): string {
     EMS: 'EMS'
   }
   return carrierMap[code || ''] || code || '-'
+}
+
+function copyWechatId() {
+  uni.setClipboardData({
+    data: 'SevenDad',
+    success: () => {
+      uni.showToast({ title: '微信号已复制', icon: 'success' })
+    }
+  })
 }
 
 function copyOrderId() {
@@ -737,6 +992,19 @@ async function buyAgain() {
 // Phase 9.1: FREEZING, SHIPPED, COMPLETED status can apply for aftersale
 function canApplyAftersale(status: string): boolean {
   return ['FREEZING', 'SHIPPED', 'COMPLETED'].includes(status)
+}
+
+// 计算总餐数
+function getTotalPackageCount(): number {
+  if (!order.value?.items) return 0
+  return order.value.items.reduce((sum, item) => sum + (item.packageCount || 0), 0)
+}
+
+// 计算每餐单价（包含运费）
+function calculatePricePerMeal(): string {
+  if (!order.value?.amountTotal || !getTotalPackageCount()) return '0.00'
+  const pricePerMeal = order.value.amountTotal / getTotalPackageCount()
+  return pricePerMeal.toFixed(2)
 }
 
 // 获取售后类型文本
@@ -1059,11 +1327,19 @@ async function submitReview() {
   border-bottom: none;
 }
 
-.dog-header {
+/* 狗狗信息卡片 */
+.dog-info-card {
+  padding: 16rpx;
+  background-color: #f9f9f9;
+  border-radius: 12rpx;
+  margin-bottom: 16rpx;
+}
+
+.dog-info {
   display: flex;
   align-items: center;
-  gap: 12rpx;
-  margin-bottom: 16rpx;
+  gap: 8rpx;
+  flex-wrap: wrap;
 }
 
 .dog-name {
@@ -1072,41 +1348,75 @@ async function submitReview() {
   color: #333;
 }
 
+.dog-gender {
+  font-size: 22rpx;
+  font-weight: normal;
+  padding: 2rpx 8rpx;
+  border-radius: 4rpx;
+  color: #666;
+  background-color: #f0f0f0;
+}
+
+.dog-divider {
+  font-size: 22rpx;
+  color: #ccc;
+  margin: 0 4rpx;
+}
+
 .dog-detail {
   font-size: 24rpx;
-  color: #999;
+  color: #666;
 }
 
 .order-item-card {
   background-color: #f9f9f9;
   border-radius: 12rpx;
   padding: 20rpx;
+  margin-bottom: 16rpx;
 }
 
+.order-item-card:last-child {
+  margin-bottom: 0;
+}
+
+/* 第1层：食谱基本信息 */
 .item-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
+  gap: 12rpx;
   margin-bottom: 16rpx;
-  padding-bottom: 12rpx;
+  padding-bottom: 16rpx;
   border-bottom: 1rpx solid #e8e8e8;
+  flex-wrap: wrap;
 }
 
 .recipe-name {
   font-size: 28rpx;
   font-weight: 500;
   color: #333;
+  flex-shrink: 0;
+}
+
+.recipe-version,
+.nutrition-standard {
+  font-size: 22rpx;
+  padding: 4rpx 10rpx;
+  border-radius: 4rpx;
+  flex-shrink: 0;
 }
 
 .recipe-version {
-  font-size: 22rpx;
-  color: #999;
-  padding: 4rpx 10rpx;
-  background-color: #fff;
-  border-radius: 4rpx;
+  color: #666;
+  background-color: #f0f0f0;
 }
 
-.package-info {
+.nutrition-standard {
+  color: #1890ff;
+  background-color: #e6f7ff;
+}
+
+/* 第2层：订购信息 */
+.package-info-card {
   padding: 16rpx;
   background-color: #fff7e6;
   border-radius: 8rpx;
@@ -1114,13 +1424,10 @@ async function submitReview() {
   border-left: 3rpx solid #ff9800;
 }
 
-.package-info.highlight {
-  border-left-color: #ff9800;
-}
-
 .package-row {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   margin-bottom: 12rpx;
 }
 
@@ -1139,44 +1446,109 @@ async function submitReview() {
   font-weight: 500;
 }
 
-.package-price {
-  font-size: 30rpx;
-  color: #ff9800;
+.package-value.price {
+  color: #ff4d4f;
   font-weight: bold;
+  font-size: 28rpx;
 }
 
-/* 扩展信息 */
-.extended-info {
+/* 原料清单 */
+.ingredients-section {
   margin-top: 16rpx;
   padding-top: 16rpx;
   border-top: 1rpx solid #e8e8e8;
 }
 
-.info-row-small {
+.ingredients-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12rpx;
-  font-size: 26rpx;
+  padding: 16rpx;
+  background-color: #f9f9f9;
+  border-radius: 8rpx;
+  margin-bottom: 16rpx;
 }
 
-.info-row-small:last-child {
+.ingredients-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  flex: 1;
+}
+
+.ingredients-title {
+  font-size: 26rpx;
+  font-weight: 500;
+  color: #333;
+}
+
+.ingredients-count {
+  font-size: 22rpx;
+  color: #999;
+}
+
+.expand-icon {
+  font-size: 22rpx;
+  color: #1890ff;
+  padding: 4rpx 8rpx;
+}
+
+.ingredients-content {
+  padding: 16rpx;
+  background-color: #fafafa;
+  border-radius: 8rpx;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease-out;
+}
+
+.ingredients-content.expanded {
+  max-height: 2000rpx;
+}
+
+.expand-hint {
+  padding: 12rpx 16rpx;
+  text-align: center;
+  background-color: #fafafa;
+  border-radius: 8rpx;
+}
+
+.hint-text {
+  font-size: 22rpx;
+  color: #999;
+}
+
+.ingredient-category {
+  margin-bottom: 16rpx;
+}
+
+.ingredient-category:last-child {
   margin-bottom: 0;
 }
 
-.info-label {
-  color: #666;
-  margin-right: 12rpx;
-}
-
-.info-value-small {
-  color: #333;
-  font-weight: 500;
-}
-
-.info-value-small.price {
-  color: #ff4d4f;
+.category-title {
+  font-size: 24rpx;
   font-weight: bold;
+  color: #333;
+  margin-bottom: 12rpx;
+  padding-left: 4rpx;
+}
+
+.ingredient-item {
+  font-size: 24rpx;
+  color: #666;
+  line-height: 36rpx;
+  padding: 4rpx 12rpx;
+  border-radius: 4rpx;
+  transition: background-color 0.2s;
+}
+
+.ingredient-item:active {
+  background-color: #e8e8e8;
+}
+
+.ingredient-text {
+  word-break: break-all;
 }
 
 /* 售后服务 */
@@ -1358,5 +1730,149 @@ async function submitReview() {
   font-family: monospace;
   font-size: 24rpx;
   word-break: break-all;
+}
+
+/* 支付方式提示 */
+.payment-guide-section {
+  background-color: #fff;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+}
+
+.payment-guide-card {
+  padding: 24rpx;
+  background: linear-gradient(135deg, #e6f7ff 0%, #f0f9ff 100%);
+  border-radius: 12rpx;
+  border-left: 4rpx solid #1890ff;
+}
+
+.guide-header {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 20rpx;
+}
+
+.guide-icon {
+  font-size: 32rpx;
+}
+
+.guide-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #1890ff;
+}
+
+.order-amount-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16rpx;
+  background-color: #fff;
+  border-radius: 8rpx;
+  margin-bottom: 20rpx;
+}
+
+.amount-label {
+  font-size: 26rpx;
+  color: #666;
+}
+
+.amount-value {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #ff4d4f;
+}
+
+.guide-steps {
+  margin-bottom: 24rpx;
+}
+
+.step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12rpx;
+  margin-bottom: 16rpx;
+}
+
+.step-item:last-child {
+  margin-bottom: 0;
+}
+
+.step-number {
+  width: 36rpx;
+  height: 36rpx;
+  line-height: 36rpx;
+  text-align: center;
+  background-color: #1890ff;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 22rpx;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.step-text {
+  flex: 1;
+  font-size: 26rpx;
+  color: #333;
+  line-height: 36rpx;
+}
+
+.wechat-contact,
+.order-id-copy {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 16rpx;
+  background-color: #fff;
+  border-radius: 8rpx;
+  margin-bottom: 16rpx;
+}
+
+.contact-label,
+.order-id-label {
+  font-size: 26rpx;
+  color: #666;
+}
+
+.contact-value,
+.order-id-value {
+  flex: 1;
+  font-size: 26rpx;
+  color: #1890ff;
+  font-weight: bold;
+  font-family: monospace;
+}
+
+.btn-copy-wechat,
+.btn-copy-order-id {
+  padding: 8rpx 20rpx;
+  background-color: #1890ff;
+  color: #fff;
+  border-radius: 6rpx;
+  font-size: 24rpx;
+  border: none;
+}
+
+.payment-tip {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 12rpx;
+  background-color: #fff7e6;
+  border-radius: 8rpx;
+}
+
+.tip-icon {
+  font-size: 28rpx;
+}
+
+.tip-text {
+  flex: 1;
+  font-size: 24rpx;
+  color: #ff9800;
+  line-height: 1.5;
 }
 </style>

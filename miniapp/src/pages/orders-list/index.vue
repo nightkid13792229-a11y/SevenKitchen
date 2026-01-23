@@ -23,7 +23,7 @@
       >
         <!-- 订单时间和状态 -->
         <view class="order-header">
-          <text class="order-time">{{ formatTime(order.createdAt) }}</text>
+          <text class="order-time">{{ formatShortDateTime(order.createdAt) }}</text>
           <text class="order-status" :style="{ color: getStatusColor(order.status) }">
             {{ getStatusText(order.status) }}
           </text>
@@ -70,6 +70,19 @@
           <text class="amount-label">订单金额:</text>
           <text class="amount-value">¥{{ formatAmount(order.totalAmount) }}</text>
         </view>
+
+        <!-- 确认收款按钮（仅管理员可见且订单状态为待付款） -->
+        <view
+          v-if="order.status === 'PENDING_PAYMENT' && isAdminUser"
+          class="order-actions"
+        >
+          <button
+            class="confirm-payment-btn"
+            @tap.stop="confirmPayment(order)"
+          >
+            确认收款
+          </button>
+        </view>
       </view>
 
       <view v-if="orders.length === 0" class="empty-state">
@@ -81,9 +94,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
+import { confirmOfflinePayment } from '../../api/orders'
+import { formatShortDateTime } from '../../utils/date'
 
 // DEBUG flag for development logging
 const DEBUG = true
@@ -134,6 +149,12 @@ const statusTabs = ref<Array<{label: string, value: string, count: number}>>([
 
 const allOrders = ref<Order[]>([])
 const orders = ref<Order[]>([])
+
+// 权限检查：只有管理员才能确认收款
+const isAdminUser = computed(() => {
+  const user = uni.getStorageSync('user')
+  return user && user.role === 'ADMIN'
+})
 
 onMounted(() => {
   loadOrders()
@@ -216,16 +237,6 @@ function viewOrder(orderId: string) {
   uni.navigateTo({
     url: `/pages/order-detail/index?id=${orderId}`
   })
-}
-
-function formatTime(timeStr?: string): string {
-  if (!timeStr) return ''
-  const date = new Date(timeStr)
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  const hour = String(date.getHours()).padStart(2, '0')
-  const minute = String(date.getMinutes()).padStart(2, '0')
-  return `${month}-${day} ${hour}:${minute}`
 }
 
 function formatAmount(amount?: number): string {
@@ -327,6 +338,84 @@ function formatAddress(address?: { regionText?: string }): string {
   // 只显示第一个地区（市级）
   const regions = address.regionText.split(/\s+/)
   return regions[0] || address.regionText
+}
+
+// 确认收款函数
+async function confirmPayment(order: Order) {
+  // 1. 显示确认对话框
+  uni.showModal({
+    title: '确认收款',
+    content: `订单金额：¥${formatAmount(order.totalAmount)}\n请输入实际收款金额（如与订单金额一致可直接确定）`,
+    editable: true, // 启用输入框
+    placeholderText: '输入实际收款金额',
+    success: async (res) => {
+      if (res.confirm) {
+        const actualAmount = res.content ? parseFloat(res.content) : order.totalAmount
+
+        // 2. 验证输入金额
+        if (isNaN(actualAmount) || actualAmount <= 0) {
+          uni.showToast({
+            title: '请输入有效的金额',
+            icon: 'none',
+          })
+          return
+        }
+
+        // 3. 金额差异警告
+        if (actualAmount !== order.totalAmount) {
+          const diff = actualAmount - (order.totalAmount || 0)
+          const diffText = diff > 0 ? `多收¥${diff.toFixed(2)}` : `少收¥${Math.abs(diff).toFixed(2)}`
+
+          const confirmAgain = await showWarningDialog(diffText)
+          if (!confirmAgain) return
+        }
+
+        // 4. 调用API确认收款
+        await submitPaymentConfirmation(order.id, actualAmount)
+      }
+    },
+  })
+}
+
+// 金额差异警告对话框
+function showWarningDialog(diffText: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    uni.showModal({
+      title: '金额差异提醒',
+      content: `实际收款与订单金额不一致：\n${diffText}\n\n是否继续确认收款？`,
+      confirmText: '继续',
+      cancelText: '取消',
+      success: (res) => {
+        resolve(res.confirm)
+      },
+    })
+  })
+}
+
+// 提交确认收款
+async function submitPaymentConfirmation(orderId: string, actualAmount: number) {
+  uni.showLoading({ title: '确认中...' })
+
+  try {
+    await confirmOfflinePayment(orderId, actualAmount)
+
+    uni.hideLoading()
+
+    uni.showToast({
+      title: '收款确认成功',
+      icon: 'success',
+      duration: 2000,
+    })
+
+    // 刷新订单列表
+    setTimeout(() => {
+      loadOrders()
+    }, 500)
+
+  } catch (error: any) {
+    uni.hideLoading()
+    console.error('Confirm payment failed:', error)
+  }
 }
 </script>
 
@@ -524,6 +613,28 @@ function formatAddress(address?: { regionText?: string }): string {
 .empty-text {
   font-size: 28rpx;
   color: #999;
+}
+
+/* 确认收款按钮 */
+.order-actions {
+  margin-top: 16rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx solid #f0f0f0;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.confirm-payment-btn {
+  background-color: #1890ff;
+  color: #fff;
+  border-radius: 8rpx;
+  padding: 16rpx 32rpx;
+  font-size: 28rpx;
+  border: none;
+}
+
+.confirm-payment-btn::after {
+  border: none;
 }
 </style>
 

@@ -23,6 +23,7 @@ import {
   GetPackagingUnitsDto,
   TodayStatisticsDto,
 } from '../../interfaces/dto/production/kitchen.dto';
+import { DateUtil } from '../../utils/date.util';
 
 @Injectable()
 export class StaffProductionService {
@@ -47,10 +48,8 @@ export class StaffProductionService {
     this.logger.log(`[AutoSchedule] Starting auto-schedule for ${dto.startDate}`);
 
     // Step 1: Check if today's purchase list is completed
-    // 使用本地时间午夜0点，覆盖整天
-    // 例如：2026-01-23 00:00:00 到 2026-01-24 00:00:00
-    const today = new Date(`${dto.startDate}T00:00:00`);
-    const tomorrow = new Date(`${dto.startDate}T23:59:59.999`);
+    // 使用统一的日期工具创建查询范围（中午12点避免时区问题）
+    const { start: today, end: tomorrow } = DateUtil.createDateRange(dto.startDate);
 
     this.logger.log(`[AutoSchedule] Query range: ${today.toISOString()} to ${tomorrow.toISOString()}`);
 
@@ -116,9 +115,8 @@ export class StaffProductionService {
 
     // Filter by target date (via production batch)
     if (targetDate) {
-      // 使用午夜0点避免时区转换导致日期变化
-      const targetDateTime = new Date(`${targetDate}T00:00:00`);
-      const targetEndDateTime = new Date(`${targetDate}T23:59:59.999`);
+      // 使用统一的日期工具创建查询范围（中午12点避免时区问题）
+      const { start: targetDateTime, end: targetEndDateTime } = DateUtil.createDateRange(targetDate);
 
       // Get batches for target date
       const targetDateBatches = await this.productionRepository.findByProductionDate(targetDateTime);
@@ -327,12 +325,8 @@ export class StaffProductionService {
    * Get today's statistics
    */
   async getTodayStatistics(): Promise<TodayStatisticsDto> {
-    // 使用本地时间的今天午夜0点，避免时区问题
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const todayEnd = new Date(today);
-    todayEnd.setHours(23, 59, 59, 999);
+    // 使用统一的日期工具获取今日查询范围（中午12点避免时区问题）
+    const { start: today, end: todayEnd } = DateUtil.createTodayRange();
 
     // Get today's production batches
     const batches = await this.productionRepository.findByProductionDate(today);

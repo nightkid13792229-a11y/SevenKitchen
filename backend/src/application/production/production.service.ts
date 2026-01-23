@@ -13,6 +13,7 @@ import { ProductionBatchStatus } from '../../domain/production/enums';
 import { OrderStatus } from '../../domain';
 import { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY } from '../order/order.service';
 import { GlobalConfigService } from '../config/global-config.service';
+import { DateUtil } from '../../utils/date.util';
 
 export const PRODUCTION_BATCH_REPOSITORY = Symbol('ProductionBatchRepository');
 
@@ -57,18 +58,13 @@ export class ProductionService {
   async createProductionBatch(
     dto: CreateProductionBatchDto,
   ): Promise<ProductionBatch> {
-    // Parse production date
-    // 使用中午12点避免时区转换导致日期变化
-    const productionDate = new Date(`${dto.productionDate}T12:00:00`);
+    // 使用统一的日期工具解析生产日期（中午12点避免时区问题）
+    const productionDate = DateUtil.getStartOfDay(dto.productionDate);
     if (isNaN(productionDate.getTime())) {
       throw new BadRequestException(
         `Invalid production date format: ${dto.productionDate}. Expected YYYY-MM-DD`,
       );
     }
-
-    // Normalize to date only (remove time component)
-    // 注意：这里使用本地时间中午12点，避免时区问题
-    productionDate.setHours(12, 0, 0, 0);
 
     // Load orders
     let orders;

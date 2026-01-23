@@ -58,7 +58,8 @@ export class ProductionService {
     dto: CreateProductionBatchDto,
   ): Promise<ProductionBatch> {
     // Parse production date
-    const productionDate = new Date(dto.productionDate);
+    // 使用中午12点避免时区转换导致日期变化
+    const productionDate = new Date(`${dto.productionDate}T12:00:00`);
     if (isNaN(productionDate.getTime())) {
       throw new BadRequestException(
         `Invalid production date format: ${dto.productionDate}. Expected YYYY-MM-DD`,
@@ -66,7 +67,8 @@ export class ProductionService {
     }
 
     // Normalize to date only (remove time component)
-    productionDate.setHours(0, 0, 0, 0);
+    // 注意：这里使用本地时间中午12点，避免时区问题
+    productionDate.setHours(12, 0, 0, 0);
 
     // Load orders
     let orders;
@@ -173,10 +175,11 @@ export class ProductionService {
       const recipeSnapshot = item.recipeSnapshot;
 
       // 从recipe snapshot中读取损耗率
-      const lossRate = recipeSnapshot.production_loss_rate || 0.07; // 默认7%损耗
+      // 注意：数据库中存储的是乘数（如 1.07），不是百分比（如 0.07）
+      const lossRate = recipeSnapshot.production_loss_rate || 1.07; // 默认7%损耗
 
-      // 计算生肉重量 = 净重 × (1 + 损耗率)
-      const rawWeightNeededG = item.dailyIntakeG * (1 + lossRate);
+      // 计算生肉重量 = 净重 × 损耗率乘数
+      const rawWeightNeededG = item.quantityG * lossRate;
 
       this.logger.debug(
         `Item ${item.orderItemId}: dailyIntake=${item.dailyIntakeG}g, lossRate=${lossRate}, rawWeight=${rawWeightNeededG}g`,
@@ -219,75 +222,97 @@ export class ProductionService {
         `[createProductionBatch] Processing recipe ${recipeSnapshotId}: totalRawWeight=${group.totalRawWeightG}g, capacity=${maxCapacityG}g`,
       );
 
+      // 获取损耗率（所有订单的损耗率应该相同，因为都是同一个recipe）
+      const lossRate = group.recipeSnapshot.production_loss_rate || 1.07;
+
       let remainingRawWeight = group.totalRawWeightG;
       let potNumber = 1; // 锅序号
 
-      // 分锅循环：只要还有剩余重量，就继续创建锅
-      while (group.itemQueue.length > 0) {
-        // 本锅的生肉重量限制
-        const maxRawWeightForThisPot = Math.min(remainingRawWeight, maxCapacityG * 1.1); // 考虑损耗率后的上限
-
-        this.logger.debug(
-          `[createProductionBatch] Creating pot #${potNumber}, remaining raw weight: ${remainingRawWeight.toFixed(2)}g`,
+      // 分锅循环：只要还有剩余生肉重量，就继续创建锅
+      while (remainingRawWeight > 0) {
+        // 计算本锅的净重：固定 maxCapacityG（5000g），最多允许 5% 溢出
+        const overflowTolerance = 0.05; // 5% 溢出容差
+        const maxNetWeightForThisPot = Math.min(
+          maxCapacityG * (1 + overflowTolerance),
+          remainingRawWeight / lossRate,
         );
 
-        // FIFO分配订单到本锅
-        const assignedOrderItems: OrderItemWithRawWeight[] = [];
-        let filledRawWeight = 0;
-        let filledNetWeight = 0;
+        // 计算本锅的生肉重量 = 净重 × 损耗率
+        const currentPotRawWeight = maxNetWeightForThisPot * lossRate;
 
-        // 从队列头部取订单，直到填满本锅
+        this.logger.debug(
+          `[createProductionBatch] Creating pot #${potNumber}: net=${maxNetWeightForThisPot.toFixed(2)}g, raw=${currentPotRawWeight.toFixed(2)}g, remaining raw=${remainingRawWeight.toFixed(2)}g`,
+        );
+
+        // 追踪本锅的生肉重量分配：{ orderItemId: allocatedRawWeightG }
+        const rawMaterialAllocations: { [orderItemId: string]: number } = {};
+        let allocatedRawWeight = 0;
+
+        // FIFO分配订单到本锅（允许订单拆分）
         while (
           group.itemQueue.length > 0 &&
-          filledRawWeight < maxRawWeightForThisPot
+          allocatedRawWeight < currentPotRawWeight
         ) {
           const nextItem = group.itemQueue[0]; // 预读队列头部
+          const remainingCapacity = currentPotRawWeight - allocatedRawWeight;
 
-          // 检查如果加上这个订单是否会超容（允许10%的溢出）
-          if (
-            filledRawWeight + nextItem.rawWeightNeededG >
-            maxRawWeightForThisPot * 1.1 &&
-            assignedOrderItems.length > 0
-          ) {
-            // 已有订单且再加一个会超容，停止分配
+          if (nextItem.rawWeightNeededG <= remainingCapacity) {
+            // 订单可以完全放入本锅
+            group.itemQueue.shift();
+
+            // 记录完整分配
+            rawMaterialAllocations[nextItem.orderItemId] = nextItem.rawWeightNeededG;
+            allocatedRawWeight += nextItem.rawWeightNeededG;
+
+            this.logger.debug(
+              `[createProductionBatch] Fully assigned item ${nextItem.orderItemId} to pot #${potNumber}: raw=${nextItem.rawWeightNeededG.toFixed(2)}g`,
+            );
+          } else {
+            // 订单需要拆分：部分分配到本锅
+            const partialRawWeight = remainingCapacity;
+
+            // 记录部分分配
+            rawMaterialAllocations[nextItem.orderItemId] = partialRawWeight;
+            allocatedRawWeight += partialRawWeight;
+
+            // 更新队列中该订单的剩余生肉重量
+            nextItem.rawWeightNeededG -= partialRawWeight;
+            nextItem.quantityG -= partialRawWeight / lossRate; // 同步更新净重
+
+            this.logger.debug(
+              `[createProductionBatch] Partially assigned item ${nextItem.orderItemId} to pot #${potNumber}: allocated=${partialRawWeight.toFixed(2)}g, remaining=${nextItem.rawWeightNeededG.toFixed(2)}g`,
+            );
+
+            // 停止分配（本锅已满）
             break;
           }
-
-          // 从队列移除并分配到本锅
-          group.itemQueue.shift();
-          assignedOrderItems.push(nextItem);
-          filledRawWeight += nextItem.rawWeightNeededG;
-          filledNetWeight += nextItem.quantityG; // 使用订单项总净重（已考虑订购周期）
-
-          this.logger.debug(
-            `[createProductionBatch] Assigned item ${nextItem.orderItemId} to pot #${potNumber}: raw=${nextItem.rawWeightNeededG}g, net=${nextItem.dailyIntakeG}g`,
-          );
         }
 
         // 创建PackagingUnit
         const unitId = randomUUID();
-        const sourceOrderItemIds = assignedOrderItems.map(
-          (item) => item.orderItemId,
-        );
+        const sourceOrderItemIds = Object.keys(rawMaterialAllocations);
 
         const unit = new PackagingUnit(
           unitId,
           batchId,
           group.recipeSnapshot,
-          filledNetWeight, // 净重（用于显示）
+          maxNetWeightForThisPot, // 净重（用于显示）
           sourceOrderItemIds,
           new Date(),
         );
+
+        // 将生肉重量分配信息附加到 unit 对象上（用于后续分装）
+        (unit as any).rawMaterialAllocations = rawMaterialAllocations;
 
         packagingUnits.push(unit);
         allOrderItemIds.push(...sourceOrderItemIds);
 
         this.logger.log(
-          `[createProductionBatch] Created pot #${potNumber}: ${filledNetWeight.toFixed(2)}g net (${filledRawWeight.toFixed(2)}g raw), ${assignedOrderItems.length} order(s)`,
+          `[createProductionBatch] Created pot #${potNumber}: ${maxNetWeightForThisPot.toFixed(2)}g net (${currentPotRawWeight.toFixed(2)}g raw), ${sourceOrderItemIds.length} order(s)`,
         );
 
-        // 更新剩余重量
-        remainingRawWeight -= filledRawWeight;
+        // 更新剩余生肉重量：扣减本锅的理论生肉重量（而不是实际填充量）
+        remainingRawWeight -= currentPotRawWeight;
         potNumber++;
       }
 
@@ -431,13 +456,15 @@ export class ProductionService {
   async listProductionBatchesByDate(
     date: string,
   ): Promise<ProductionBatch[]> {
-    const productionDate = new Date(date);
+    // 使用中午12点避免时区转换导致日期变化
+    const productionDate = new Date(`${date}T12:00:00`);
     if (isNaN(productionDate.getTime())) {
       throw new BadRequestException(
         `Invalid date format: ${date}. Expected YYYY-MM-DD`,
       );
     }
-    productionDate.setHours(0, 0, 0, 0);
+    // 设置为中午12点，避免时区问题
+    productionDate.setHours(12, 0, 0, 0);
     return this.productionRepository.findByProductionDate(productionDate);
   }
 

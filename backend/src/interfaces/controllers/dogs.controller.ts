@@ -120,6 +120,8 @@ export class DogsController {
       treatLevel: createDogDto.treatLevel,
       manualTreatKcal: createDogDto.manualTreatKcal,
       medicalHistory: createDogDto.medicalHistory,
+      allergyFoods: createDogDto.allergyFoods,
+      pickyFoods: createDogDto.pickyFoods,
     });
 
     const calcResult = await this.dogService.calcPreview(dog.id);
@@ -222,8 +224,15 @@ export class DogsController {
 
     const dogs = await this.dogRepository.findByOwnerId(ownerId);
 
+    // Load all breeds to create breed name map
+    const breeds = await this.dogBreedRepository.findAll();
+    const breedMap = new Map<string, string>();
+    breeds.forEach(breed => {
+      breedMap.set(breed.id, breed.name);
+    });
+
     const profiles: DogProfileDto[] = dogs.map((dog) =>
-      this.mapDogToProfileDto(dog),
+      this.mapDogToProfileDto(dog, breedMap),
     );
 
     return ApiResponseDto.success(profiles);
@@ -257,6 +266,10 @@ export class DogsController {
       return ApiResponseDto.error(404, 'Dog not found');
     }
 
+    // Load breed to get breed name
+    const breed = await this.dogBreedRepository.findById(dog.breedId);
+    const breedMap = breed ? new Map([[dog.breedId, breed.name]]) : new Map();
+
     // Try to calculate preview, but don't fail if calculation fails
     let calcResult = null;
     try {
@@ -267,7 +280,7 @@ export class DogsController {
     }
 
     const response: DogDetailResponseDto = {
-      profile: this.mapDogToProfileDto(dog),
+      profile: this.mapDogToProfileDto(dog, breedMap),
       calcResult,
     };
 
@@ -478,6 +491,8 @@ export class DogsController {
       treatLevel: dog.treatLevel,
       manualTreatKcal: dog.manualTreatKcal,
       medicalHistory: dog.medicalHistory,
+      allergyFoods: dog.allergyFoods,
+      pickyFoods: dog.pickyFoods,
       cachedTargetFoodKcal: dog.cachedTargetFoodKcal,
     };
   }
@@ -576,6 +591,89 @@ export class DogsController {
         ? Math.round(calcResult.dailyIntakeG / dog.mealsPerDay)
         : 0,
       mealsPerDay: dog.mealsPerDay,
+      calcDetails: calcResult.calcDetails || {}
+    };
+
+    return ApiResponseDto.success(response);
+  }
+
+  // ==================== Calculate Dog Energy (Independent) ====================
+
+  /**
+   * Calculate dog's daily energy requirement (DER)
+   * GET /api/v1/dogs/:id/energy-calculation
+   *
+   * This endpoint returns DER calculation without recipe-specific data.
+   * Used in portion calculation page to get accurate DER values.
+   */
+  @Get(':id/energy-calculation')
+  @UseGuards(AuthGuard)
+  @ApiOperation({
+    summary: 'Calculate dog daily energy requirement',
+    description: 'Returns DER (Daily Energy Requirement) calculation details. Used for portion calculation page.'
+  })
+  @ApiSecurity('X-Customer-Id')
+  @ApiHeader({
+    name: 'X-Customer-Id',
+    description: 'Customer ID for authentication',
+    required: true,
+  })
+  @ApiParam({ name: 'id', description: 'Dog ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Energy calculation result',
+    schema: {
+      type: 'object',
+      properties: {
+        code: { type: 'number', example: 0 },
+        message: { type: 'string', example: 'Success' },
+        data: {
+          type: 'object',
+          properties: {
+            rer: { type: 'number', description: 'Resting Energy Requirement (kcal/day)', example: 417.2 },
+            der: { type: 'number', description: 'Daily Energy Requirement (kcal/day)', example: 667.5 },
+            finalFoodKcal: { type: 'number', description: 'Final food kcal needed (after treat deduction)', example: 647.5 },
+            treatDeduction: { type: 'number', description: 'Treat calories deducted (kcal/day)', example: 20.0 },
+            isTreatCapped: { type: 'boolean', description: 'Whether treat deduction hit 10% safety cap', example: false },
+            calcDetails: { type: 'object', description: 'Detailed calculation breakdown for display' }
+          }
+        }
+      }
+    }
+  })
+  @ApiResponse({ status: 404, description: 'Dog not found' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - X-Customer-Id header required',
+  })
+  async getEnergyCalculation(
+    @Param('id') dogId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    // 1. Verify dog ownership
+    const dog = await this.dogRepository.findById(dogId);
+    if (!dog || dog.ownerId !== user.customerId) {
+      return ApiResponseDto.error(404, 'Dog not found');
+    }
+
+    // 2. Load breed for calculation
+    const breed = await this.dogBreedRepository.findById(dog.breedId);
+
+    // 3. Calculate energy needs WITHOUT recipe energy density
+    const calcResult = calculateDogEnergy(
+      dog,
+      undefined,  // No energy density needed for pure DER calculation
+      breed,
+      true  // includeDetails
+    );
+
+    // 4. Build response
+    const response = {
+      rer: calcResult.rer,
+      der: calcResult.der,
+      finalFoodKcal: calcResult.finalFoodKcal,
+      treatDeduction: calcResult.treatDeduction,
+      isTreatCapped: calcResult.isTreatCapped,
       calcDetails: calcResult.calcDetails || {}
     };
 

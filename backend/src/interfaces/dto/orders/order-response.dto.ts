@@ -40,6 +40,13 @@ export class OrderItemDto {
   dailyIntakeG!: number;
 
   @ApiPropertyOptional({
+    description: 'Vacuum bag specification (e.g., "12*17cm")',
+    example: '12*17cm',
+    nullable: true,
+  })
+  vacuumBagSpec?: string | null;
+
+  @ApiPropertyOptional({
     description: 'Dog information (if available)',
   })
   dog?: {
@@ -129,6 +136,11 @@ export class OrderDto {
     shippingFee: number;
     totalPrice: number;
   };
+
+  @ApiPropertyOptional({
+    description: 'Pricing breakdown snapshot (full details including ingredient amounts)',
+  })
+  pricingBreakdownSnapshot?: any;
 
   @ApiPropertyOptional({
     description: 'Shipping tracking number (Phase 8.14)',

@@ -156,17 +156,30 @@ export class AuthController {
     @Body() dto: WechatLoginRequestDto,
   ): Promise<any> {
     try {
+      console.log('=== [WeChat Login] START ===');
+      console.log('[WeChat Login] Received code:', dto.code?.substring(0, 10) + '...');
+      console.log('[WeChat Login] Received userInfo:', dto.userInfo);
+
       // Get WeChat user info
       const wechatUser = await this.wechatService.code2Session(dto.code);
+      console.log('[WeChat Login] WeChat openid:', wechatUser.openid);
+      console.log('[WeChat Login] WeChat unionid:', wechatUser.unionid);
 
       // Find or create user
       let user = await this.prisma.user.findUnique({
         where: { wechatOpenid: wechatUser.openid },
       });
 
+      console.log('[WeChat Login] Found existing user:', !!user);
+      if (user) {
+        console.log('[WeChat Login] Existing user ID:', user.id);
+        console.log('[WeChat Login] Existing user role:', user.role);
+      }
+
       let isNewUser = false;
 
       if (!user) {
+        console.log('[WeChat Login] Creating new user...');
         // Create new user
         user = await this.prisma.user.create({
           data: {
@@ -180,7 +193,10 @@ export class AuthController {
           },
         });
         isNewUser = true;
+        console.log('[WeChat Login] Created new user ID:', user.id);
+        console.log('[WeChat Login] Created new user role:', user.role);
       } else {
+        console.log('[WeChat Login] Updating existing user...');
         // Update user info
         user = await this.prisma.user.update({
           where: { id: user.id },
@@ -190,15 +206,27 @@ export class AuthController {
             lastLoginAt: new Date(),
           },
         });
+        console.log('[WeChat Login] Updated user ID:', user.id);
       }
+
+      // Verify user is actually in database
+      const verifyUser = await this.prisma.user.findUnique({
+        where: { id: user.id },
+      });
+      console.log('[WeChat Login] Verification - User exists in DB:', !!verifyUser);
 
       // Check user status
       if (user.status !== 'ACTIVE') {
+        console.log('[WeChat Login] User status is not ACTIVE:', user.status);
         return ApiResponseDto.error(403, 'User account is not active');
       }
 
       // Generate JWT token
       const token = this.jwtAuthService.generateTokenForUser(user.id, user.role);
+
+      console.log('[WeChat Login] Generated token for user:', user.id);
+      console.log('[WeChat Login] Returning - userId:', user.id, 'role:', user.role, 'isNewUser:', isNewUser);
+      console.log('=== [WeChat Login] END ===\n');
 
       return ApiResponseDto.success({
         token,
@@ -213,6 +241,8 @@ export class AuthController {
         },
       });
     } catch (error: any) {
+      console.log('[WeChat Login] ERROR:', error.message);
+      console.log('[WeChat Login] ERROR stack:', error.stack);
       return ApiResponseDto.error(500, error.message || 'WeChat login failed');
     }
   }

@@ -28,6 +28,7 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
 
   async findByProductionDate(date: Date): Promise<ProductionBatch[]> {
     // Extract date part (YYYY-MM-DD) for comparison
+    // 使用整天范围查询，兼容传入的任意时间点
     const dateStart = new Date(date);
     dateStart.setHours(0, 0, 0, 0);
     const dateEnd = new Date(date);

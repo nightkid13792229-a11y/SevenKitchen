@@ -1199,6 +1199,92 @@ export class AdminController {
   }
 
   /**
+   * POST /admin/orders/:orderId/confirm-offline-payment - Confirm offline payment (admin)
+   */
+  @Post('orders/:orderId/confirm-offline-payment')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Confirm offline WeChat payment (管理员确认线下收款)' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        actualAmount: {
+          type: 'number',
+          description: 'Actual payment amount received (optional, for recording discrepancies)',
+          example: 100.5,
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Payment confirmed successfully',
+    type: OrderDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request or order status' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async confirmOfflinePayment(
+    @Param('orderId') orderId: string,
+    @Body() body: { actualAmount?: number },
+  ): Promise<ApiResponseDto<OrderDto> | ApiResponseDto<null>> {
+    try {
+      const order = await this.orderService.confirmOfflinePayment(
+        orderId,
+        'admin', // TODO: Implement proper admin authentication
+        body.actualAmount,
+      );
+
+      // Map to DTO (simplified)
+      const orderDto: OrderDto = {
+        id: order.id,
+        customerId: order.customerId,
+        dogId: order.dogId,
+        addressId: order.addressId,
+        status: order.status,
+        type: order.type,
+        targetProductionDate: order.targetProductionDate
+          ? order.targetProductionDate.toISOString()
+          : null,
+        totalAmount: order.totalAmount ?? order.amountTotal,
+        amountProduct: order.amountProduct,
+        amountShipping: order.amountShipping,
+        amountTotal: order.amountTotal,
+        items: order.items.map((item) => ({
+          id: item.id,
+          orderId: item.orderId,
+          recipeSnapshot: item.recipeSnapshot,
+          quantityG: item.quantityG,
+          packageCount: item.packageCount,
+          packageSpecG: item.packageSpecG,
+          customRequirements: item.customRequirements,
+          dailyIntakeG: item.dailyIntakeG,
+        })),
+        trackingNumber: order.trackingNumber ?? null,
+        carrierCode: order.carrierCode ?? null,
+        paymentMethod: order.paymentMethod ?? null,
+        transactionId: order.transactionId ?? null,
+        paidAt: order.paidAt ? order.paidAt.toISOString() : null,
+        paymentStatus: order.paymentStatus ?? null,
+        createdAt: order.createdAt.toISOString(),
+      };
+
+      return ApiResponseDto.success(orderDto);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (
+        error instanceof BadRequestException ||
+        error instanceof InvalidStateTransitionError
+      ) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
    * POST /admin/orders/:orderId/start-production - Start production
    */
   @Post('orders/:orderId/start-production')

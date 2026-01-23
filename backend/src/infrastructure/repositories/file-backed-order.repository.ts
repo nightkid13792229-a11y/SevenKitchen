@@ -132,7 +132,7 @@ export class FileBackedOrderRepository
           itemData.dailyIntakeG ?? itemData.quantityG / (itemData.packageCount || 1), // Fallback for backward compatibility
           // Phase 8.11: Allocation fields
           itemData.productionBatchId ?? null,
-          itemData.allocatedAt ? new Date(itemData.allocatedAt) : null,
+          (itemData.allocatedAt ? new Date(itemData.allocatedAt) : null) as any,
         ),
     );
 

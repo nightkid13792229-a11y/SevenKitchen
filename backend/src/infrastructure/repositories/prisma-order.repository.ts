@@ -214,7 +214,7 @@ export class PrismaOrderRepository implements OrderRepository {
           (i as any).dailyIntakeG ?? i.quantityG / (i.packageCount || 1), // Fallback for backward compatibility
           // Phase 8.11: Allocation fields
           (i as any).productionBatchId ?? null,
-          (i as any).allocatedAt ? new Date((i as any).allocatedAt) : null,
+          ((i as any).allocatedAt ? new Date((i as any).allocatedAt) : null) as any,
         ),
     );
 

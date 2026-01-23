@@ -95,9 +95,9 @@ export class TencentCosService {
       });
 
       // Generate URL
-      // Use HTTP for CDN domain until SSL certificate is configured
+      // Use HTTPS for CDN domain (SSL certificate configured)
       const url = this.cdnDomain
-        ? `http://${this.cdnDomain}/${key}`
+        ? `https://${this.cdnDomain}/${key}`
         : `https://${this.bucket}.cos.${this.region}.myqcloud.com/${key}`;
 
       console.log(`[TencentCosService] Uploaded ${key} to ${url}`);

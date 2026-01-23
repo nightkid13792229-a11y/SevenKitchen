@@ -79,6 +79,12 @@ export class DogProfileDto {
   @ApiPropertyOptional({ nullable: true })
   medicalHistory?: string | null;
 
+  @ApiPropertyOptional({ description: '过敏食物', nullable: true })
+  allergyFoods?: string | null;
+
+  @ApiPropertyOptional({ description: '挑食食物', nullable: true })
+  pickyFoods?: string | null;
+
   @ApiProperty({ example: 500 })
   cachedTargetFoodKcal!: number;
 }

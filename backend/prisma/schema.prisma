@@ -75,6 +75,7 @@ model OrderItem {
   packageSpecG       Int       @map("package_spec_g")
   customRequirements String?   @map("custom_requirements")
   dailyIntakeG       Float?    @map("daily_intake_g")
+  vacuumBagSpec      String?   @map("vacuum_bag_spec") @db.VarChar(20)
   preparationMethod  String?   @map("preparation_method") @db.VarChar(20)
   cookingMethod      String?   @map("cooking_method") @db.VarChar(20)
   allocatedAt        DateTime? @map("allocated_at")

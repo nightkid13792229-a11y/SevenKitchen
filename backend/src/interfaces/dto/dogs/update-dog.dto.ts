@@ -128,6 +128,16 @@ export class UpdateDogDto {
   @IsOptional()
   @IsString()
   medicalHistory?: string | null;
+
+  @ApiPropertyOptional({ description: '过敏食物', nullable: true })
+  @IsOptional()
+  @IsString()
+  allergyFoods?: string | null;
+
+  @ApiPropertyOptional({ description: '挑食食物', nullable: true })
+  @IsOptional()
+  @IsString()
+  pickyFoods?: string | null;
 }
 
 

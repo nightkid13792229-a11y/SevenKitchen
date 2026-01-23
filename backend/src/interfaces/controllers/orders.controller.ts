@@ -738,6 +738,7 @@ export class OrdersController {
       amountTotal: order.amountTotal,
       items,
       pricingBreakdown,
+      pricingBreakdownSnapshot: order.pricingBreakdownSnapshot, // 新增：完整的定价快照
       // Phase 8.14: Shipping tracking fields
       trackingNumber: order.trackingNumber ?? null,
       carrierCode: order.carrierCode ?? null,
@@ -831,7 +832,7 @@ export class OrdersController {
           }
 
           if (recipe) {
-            coverImageUrl = recipe.coverImageUrl;
+            coverImageUrl = recipe.coverImageUrl?.replace('http://', 'https://');
           }
         } catch (error: any) {
           // Recipe might be deleted, ignore error

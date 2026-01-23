@@ -4,14 +4,16 @@
     <view class="section">
       <view class="section-title">📌 步骤1：选择狗狗</view>
 
-      <view class="dog-selector" @tap="showDogPicker">
-        <view class="selector-button">
-          <text class="selector-text">
-            {{ selectedDog ? selectedDog.name : '请选择狗狗' }}
-          </text>
-          <text class="selector-arrow">▼</text>
+      <picker mode="selector" :range="dogs" range-key="name" :value="selectedDogIndex" @change="onDogPickerChange">
+        <view class="dog-selector">
+          <view class="selector-button">
+            <text class="selector-text">
+              {{ selectedDog ? selectedDog.name : '请选择狗狗' }}
+            </text>
+            <text class="selector-arrow">▼</text>
+          </view>
         </view>
-      </view>
+      </picker>
 
       <!-- 狗狗信息卡片 -->
       <view v-if="selectedDog" class="dog-info-card">
@@ -211,24 +213,31 @@ async function loadDogs() {
   }
 }
 
-// 显示狗狗选择器
-function showDogPicker() {
+// 狗狗选择器改变事件
+function onDogPickerChange(e: any) {
+  console.log('[WeightManagement] Dog picker changed, index:', e.detail.value)
+
   if (dogs.value.length === 0) {
-    uni.showToast({
-      title: '请先创建狗狗档案',
-      icon: 'none'
+    console.warn('[WeightManagement] No dogs available, showing prompt')
+    uni.showModal({
+      title: '提示',
+      content: '您还没有创建狗狗档案，是否立即创建？',
+      confirmText: '去创建',
+      cancelText: '取消',
+      success: (res) => {
+        if (res.confirm) {
+          uni.navigateTo({
+            url: '/pages/dog-create/index'
+          })
+        }
+      }
     })
     return
   }
 
-  const dogNames = dogs.value.map(d => d.name)
-
-  uni.showActionSheet({
-    itemList: dogNames,
-    success: (res) => {
-      selectDog(res.tapIndex)
-    }
-  })
+  const index = e.detail.value
+  console.log('[WeightManagement] Dog selected at index:', index)
+  selectDog(index)
 }
 
 // 选择狗狗
@@ -487,10 +496,11 @@ function calculateAge(birthday: string): string {
 function drawChart() {
   const ctx = uni.createCanvasContext('weightChart')
 
-  // 获取系统信息来计算正确的 canvas 尺寸
-  const systemInfo = uni.getSystemInfoSync()
-  const screenWidth = systemInfo.windowWidth
-  const dpr = systemInfo.pixelRatio || 1
+  // 获取系统信息来计算正确的 canvas 尺寸（使用新API）
+  // @ts-ignore - getWindowInfo may not exist in all platforms
+  const windowInfo = uni.getWindowInfo?.() || uni.getSystemInfoSync?.()
+  const screenWidth = windowInfo?.windowWidth || 375
+  const dpr = windowInfo?.pixelRatio || 1
 
   // 计算实际可用宽度（页面宽度 - padding 40rpx - section padding 48rpx）
   // 750rpx = screenWidth px

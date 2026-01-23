@@ -178,6 +178,55 @@
       </view>
     </view>
 
+    <!-- 支付方式提示 -->
+    <view class="section payment-guide-section">
+      <view class="section-title">
+        <text class="title-text">支付方式</text>
+      </view>
+
+      <view class="payment-guide-card">
+        <view class="guide-header">
+          <text class="guide-icon">💚</text>
+          <text class="guide-title">线下微信支付</text>
+        </view>
+
+        <view class="guide-steps">
+          <view class="step-item">
+            <text class="step-number">1</text>
+            <text class="step-text">提交订单后，订单将进入"待付款"状态</text>
+          </view>
+          <view class="step-item">
+            <text class="step-number">2</text>
+            <text class="step-text">添加客服微信: SevenDad</text>
+          </view>
+          <view class="step-item">
+            <text class="step-number">3</text>
+            <text class="step-text">发送订单号完成支付</text>
+          </view>
+          <view class="step-item">
+            <text class="step-number">4</text>
+            <text class="step-text">管理员确认后订单将进入"已付款"状态</text>
+          </view>
+        </view>
+
+        <view class="wechat-contact">
+          <text class="contact-label">客服微信号:</text>
+          <text class="contact-value">SevenDad</text>
+          <button
+            class="btn-copy-wechat"
+            @tap="copyWechatId"
+          >
+            复制微信号
+          </button>
+        </view>
+
+        <view class="payment-tip">
+          <text class="tip-icon">⏰</text>
+          <text class="tip-text">请尽快完成支付，订单长时间未付款可能会被取消</text>
+        </view>
+      </view>
+    </view>
+
     <!-- 底部操作栏 -->
     <view class="bottom-bar">
       <button
@@ -185,7 +234,7 @@
         :disabled="!canSubmitOrder"
         @tap="submitOrder"
       >
-        <text class="btn-text">立即支付</text>
+        <text class="btn-text">提交订单</text>
         <text class="btn-amount">¥{{ totalAmount.toFixed(2) }}</text>
       </button>
     </view>
@@ -217,75 +266,6 @@
         </scroll-view>
         <view class="selector-footer">
           <button class="btn-manage-address" @tap="goToAddressList">管理地址</button>
-        </view>
-      </view>
-    </view>
-
-    <!-- 模拟支付弹窗 -->
-    <view v-if="showPaymentModal" class="payment-modal-overlay" @tap="closePaymentModal">
-      <view class="payment-modal" @tap.stop>
-        <view class="modal-header">
-          <text class="modal-title">选择支付方式</text>
-          <text class="modal-close" @tap="closePaymentModal">×</text>
-        </view>
-
-        <view class="modal-body">
-          <!-- 支付金额 -->
-          <view class="payment-amount">
-            <text class="amount-label">支付金额</text>
-            <text class="amount-value">¥{{ totalAmount.toFixed(2) }}</text>
-          </view>
-
-          <!-- 支付方式选择 -->
-          <view class="payment-methods">
-            <view
-              v-for="method in paymentMethods"
-              :key="method.id"
-              class="payment-method-item"
-              :class="{ active: selectedPaymentMethod === method.id }"
-              @tap="selectPaymentMethod(method.id)"
-            >
-              <text class="method-icon">{{ method.icon }}</text>
-              <view class="method-info">
-                <text class="method-name">{{ method.name }}</text>
-                <text class="method-desc">{{ method.desc }}</text>
-              </view>
-              <view class="method-radio" :class="{ checked: selectedPaymentMethod === method.id }">
-                <text v-if="selectedPaymentMethod === method.id" class="radio-dot">✓</text>
-              </view>
-            </view>
-          </view>
-
-          <!-- 支付密码输入（仅余额支付显示） -->
-          <view v-if="selectedPaymentMethod === 'BALANCE'" class="password-input">
-            <text class="password-label">请输入支付密码</text>
-            <view class="password-dots">
-              <view
-                v-for="i in 6"
-                :key="i"
-                class="dot"
-                :class="{ filled: i <= paymentPassword.length }"
-              >
-                <text v-if="i <= paymentPassword.length">●</text>
-              </view>
-            </view>
-            <input
-              class="password-input-hidden"
-              type="number"
-              maxlength="6"
-              v-model="paymentPassword"
-            />
-          </view>
-        </view>
-
-        <view class="modal-footer">
-          <button
-            class="btn-pay-confirm"
-            :disabled="!canConfirmPayment"
-            @tap="confirmPayment"
-          >
-            确认支付
-          </button>
         </view>
       </view>
     </view>
@@ -425,23 +405,6 @@ const estimatedDeliveryDateRange = computed(() => {
   return `${formatDisplayDate(formatDateToString(start))}-${formatDisplayDate(formatDateToString(end))}`
 })
 
-// ========== 模拟支付相关 ==========
-const showPaymentModal = ref(false)
-const selectedPaymentMethod = ref('WECHAT')
-const paymentPassword = ref('')
-
-const paymentMethods = [
-  { id: 'WECHAT', name: '微信支付', icon: '💚', desc: '推荐使用' },
-  { id: 'BALANCE', name: '余额支付', icon: '💰', desc: '账户余额' }
-]
-
-const canConfirmPayment = computed(() => {
-  if (selectedPaymentMethod.value === 'BALANCE') {
-    return paymentPassword.value.length === 6
-  }
-  return true
-})
-
 // ========== 计算属性 ==========
 const totalAmount = computed(() => {
   return directBuyPrice.value.amountTotal
@@ -523,21 +486,17 @@ function onProductionDateChange(e: any) {
   })
 }
 
-// ========== 支付方式选择 ==========
-function selectPaymentMethod(methodId: string) {
-  selectedPaymentMethod.value = methodId
-  paymentPassword.value = ''
-}
-
-function openPaymentModal() {
-  showPaymentModal.value = true
-  selectedPaymentMethod.value = 'WECHAT'
-  paymentPassword.value = ''
-}
-
-function closePaymentModal() {
-  showPaymentModal.value = false
-  paymentPassword.value = ''
+// ========== 复制微信号 ==========
+function copyWechatId() {
+  uni.setClipboardData({
+    data: 'SevenDad',
+    success: () => {
+      uni.showToast({
+        title: '微信号已复制',
+        icon: 'success'
+      })
+    }
+  })
 }
 
 // ========== 数据加载 ==========
@@ -721,21 +680,10 @@ async function submitOrder() {
     return
   }
 
-  openPaymentModal()
-}
-
-async function confirmPayment() {
-  if (!canConfirmPayment.value) {
-    uni.showToast({
-      title: '请输入6位支付密码',
-      icon: 'none'
-    })
-    return
-  }
-
   try {
-    uni.showLoading({ title: '支付中...' })
+    uni.showLoading({ title: '提交中...' })
 
+    // 1. 创建订单
     const createRes = await request({
       url: '/orders',
       method: 'POST',
@@ -753,6 +701,7 @@ async function confirmPayment() {
 
     const orderId = createRes.data.id
 
+    // 2. 确认订单
     const confirmRes = await request({
       url: `/orders/${orderId}/confirm`,
       method: 'POST'
@@ -762,34 +711,15 @@ async function confirmPayment() {
       throw new Error(confirmRes.message || '确认订单失败')
     }
 
-    const payRes = await request({
-      url: `/orders/${orderId}/pay`,
-      method: 'POST',
-      data: {
-        paymentMethod: selectedPaymentMethod.value === 'WECHAT' ? 'WECHAT' : 'BALANCE'
-      }
+    // 3. 跳转到订单详情页（不再调用支付接口）
+    uni.hideLoading()
+    uni.redirectTo({
+      url: `/pages/order-detail/index?orderId=${orderId}`
     })
-
-    if (payRes.code === 0) {
-      uni.showToast({
-        title: '支付成功',
-        icon: 'success'
-      })
-
-      closePaymentModal()
-
-      setTimeout(() => {
-        uni.redirectTo({
-          url: `/pages/order-detail/index?orderId=${orderId}`
-        })
-      }, 1500)
-    } else {
-      throw new Error(payRes.message || '支付失败')
-    }
   } catch (error: any) {
-    console.error('Payment error:', error)
+    console.error('Submit order error:', error)
     uni.showToast({
-      title: error.message || '支付失败',
+      title: error.message || '提交失败',
       icon: 'none'
     })
   } finally {
@@ -1280,6 +1210,124 @@ function goToAddAddress() {
   font-size: 48rpx;
   font-weight: bold;
   color: #ff4d4f;
+}
+
+/* 支付方式提示 */
+.payment-guide-section {
+  background-color: #fff;
+  padding: 24rpx;
+  margin-bottom: 20rpx;
+}
+
+.payment-guide-card {
+  padding: 24rpx;
+  background: linear-gradient(135deg, #e6f7ff 0%, #f0f9ff 100%);
+  border-radius: 12rpx;
+  border-left: 4rpx solid #1890ff;
+}
+
+.guide-header {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 20rpx;
+}
+
+.guide-icon {
+  font-size: 32rpx;
+}
+
+.guide-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #1890ff;
+}
+
+.guide-steps {
+  margin-bottom: 24rpx;
+}
+
+.step-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12rpx;
+  margin-bottom: 16rpx;
+}
+
+.step-item:last-child {
+  margin-bottom: 0;
+}
+
+.step-number {
+  width: 36rpx;
+  height: 36rpx;
+  line-height: 36rpx;
+  text-align: center;
+  background-color: #1890ff;
+  color: #fff;
+  border-radius: 50%;
+  font-size: 22rpx;
+  font-weight: bold;
+  flex-shrink: 0;
+}
+
+.step-text {
+  flex: 1;
+  font-size: 26rpx;
+  color: #333;
+  line-height: 36rpx;
+}
+
+.wechat-contact {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 16rpx;
+  background-color: #fff;
+  border-radius: 8rpx;
+  margin-bottom: 16rpx;
+}
+
+.contact-label {
+  font-size: 26rpx;
+  color: #666;
+}
+
+.contact-value {
+  flex: 1;
+  font-size: 28rpx;
+  color: #1890ff;
+  font-weight: bold;
+  font-family: monospace;
+}
+
+.btn-copy-wechat {
+  padding: 8rpx 20rpx;
+  background-color: #1890ff;
+  color: #fff;
+  border-radius: 6rpx;
+  font-size: 24rpx;
+  border: none;
+}
+
+.payment-tip {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  padding: 12rpx;
+  background-color: #fff7e6;
+  border-radius: 8rpx;
+}
+
+.tip-icon {
+  font-size: 28rpx;
+}
+
+.tip-text {
+  flex: 1;
+  font-size: 24rpx;
+  color: #ff9800;
+  line-height: 1.5;
 }
 
 /* 底部操作栏 */

@@ -1,4 +1,8 @@
 {
+  "appid": "wx2c1e8f1a2d7c2406",
+  "projectname": "SevenKitchen",
+  "description": "七号厨房小程序",
+  "compileType": "miniprogram",
   "setting": {
     "es6": true,
     "postcss": true,
@@ -12,14 +16,16 @@
       "outputPath": ""
     },
     "useCompilerPlugins": false,
-    "minifyWXML": true
+    "minifyWXML": true,
+    "condition": false
   },
-  "compileType": "miniprogram",
   "simulatorPluginLibVersion": {},
   "packOptions": {
     "ignore": [],
     "include": []
   },
-  "appid": "wxa3717e233d37df4e",
-  "editorSetting": {}
+  "editorSetting": {
+    "tabIndent": "insertSpaces",
+    "tabSize": 2
+  }
 }

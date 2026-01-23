@@ -4,14 +4,16 @@
     <view class="section">
       <view class="section-title">📌 步骤1：选择狗狗</view>
 
-      <view class="dog-selector" @tap="showDogPicker">
-        <view class="selector-button">
-          <text class="selector-text">
-            {{ selectedDog ? selectedDog.name : '请选择狗狗' }}
-          </text>
-          <text class="selector-arrow">▼</text>
+      <picker mode="selector" :range="dogs" range-key="name" :value="selectedDogIndex" @change="onDogPickerChange">
+        <view class="dog-selector">
+          <view class="selector-button">
+            <text class="selector-text">
+              {{ selectedDog ? selectedDog.name : '请选择狗狗' }}
+            </text>
+            <text class="selector-arrow">▼</text>
+          </view>
         </view>
-      </view>
+      </picker>
 
       <!-- 狗狗信息卡片 -->
       <view v-if="selectedDog" class="dog-info-card">
@@ -347,24 +349,31 @@ async function loadDogs() {
   }
 }
 
-// 显示狗狗选择器
-function showDogPicker() {
+// 狗狗选择器改变事件
+function onDogPickerChange(e: any) {
+  console.log('[HealthManagement] Dog picker changed, index:', e.detail.value)
+
   if (dogs.value.length === 0) {
-    uni.showToast({
-      title: '请先创建狗狗档案',
-      icon: 'none'
+    console.warn('[HealthManagement] No dogs available, showing prompt')
+    uni.showModal({
+      title: '提示',
+      content: '您还没有创建狗狗档案，是否立即创建？',
+      confirmText: '去创建',
+      cancelText: '取消',
+      success: (res) => {
+        if (res.confirm) {
+          uni.navigateTo({
+            url: '/pages/dog-create/index'
+          })
+        }
+      }
     })
     return
   }
 
-  const dogNames = dogs.value.map(d => d.name)
-
-  uni.showActionSheet({
-    itemList: dogNames,
-    success: (res) => {
-      selectDog(res.tapIndex)
-    }
-  })
+  const index = e.detail.value
+  console.log('[HealthManagement] Dog selected at index:', index)
+  selectDog(index)
 }
 
 // 选择狗狗

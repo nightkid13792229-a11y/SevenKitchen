@@ -149,8 +149,11 @@
 
       <!-- 打印按钮（非悬浮，在页面底部） -->
       <view class="print-section">
-        <button class="print-btn" @tap="printTask">
-          🖨️ 打印任务单
+        <button class="print-btn primary" @tap="printLabel">
+          🏷️ 打印标签
+        </button>
+        <button class="print-btn secondary" @tap="printTask">
+          🖨️ 打印制作单
         </button>
       </view>
     </view>
@@ -546,6 +549,33 @@ const printTask = () => {
     url: `/pages/staff-production/print?taskData=${encodedData}`,
   });
 };
+
+// 打印标签
+const printLabel = () => {
+  if (!taskDetail.value) {
+    uni.showToast({
+      title: '数据加载中',
+      icon: 'none',
+    });
+    return;
+  }
+
+  // 准备打印数据
+  const printData = {
+    recipeName: taskDetail.value.recipeName,
+    totalProductionG: taskDetail.value.totalProductionG,
+    createdAt: taskDetail.value.createdAt,
+    orderItems: taskDetail.value.orderItems || [],
+    recipeSnapshot: taskDetail.value.recipeSnapshot,
+  };
+
+  // 将数据编码后传递到标签打印页面
+  const encodedData = encodeURIComponent(JSON.stringify(printData));
+
+  uni.navigateTo({
+    url: `/pages/staff-production/print-label?taskData=${encodedData}`,
+  });
+};
 </script>
 
 <style scoped lang="scss">
@@ -573,6 +603,10 @@ const printTask = () => {
     font-weight: bold;
     color: #333;
   }
+}
+
+.detail-content {
+  padding-bottom: 120rpx;
 }
 
 .loading-state,
@@ -898,23 +932,45 @@ const printTask = () => {
 }
 
 .print-section {
-  padding: 32rpx;
-  background-color: #f5f5f5;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  display: flex;
+  gap: 16rpx;
+  padding: 24rpx 32rpx;
+  background-color: #fff;
+  border-top: 1rpx solid #eee;
+  box-shadow: 0 -2rpx 8rpx rgba(0, 0, 0, 0.05);
+  z-index: 999;
 }
 
 .print-btn {
-  width: 100%;
+  flex: 1;
   height: 72rpx;
   line-height: 72rpx;
-  background-color: #fff;
-  color: #1890ff;
-  border: 2rpx solid #1890ff;
   border-radius: 8rpx;
   font-size: 28rpx;
   font-weight: 500;
+  border: none;
 
-  &:active {
-    background-color: #f0f9ff;
+  &.primary {
+    background-color: #56ab91;
+    color: #fff;
+
+    &:active {
+      background-color: #4a9680;
+    }
+  }
+
+  &.secondary {
+    background-color: #fff;
+    color: #1890ff;
+    border: 2rpx solid #1890ff;
+
+    &:active {
+      background-color: #f0f9ff;
+    }
   }
 }
 </style>

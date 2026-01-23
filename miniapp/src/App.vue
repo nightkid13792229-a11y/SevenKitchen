@@ -15,10 +15,11 @@ onLaunch(() => {
 
   // Log configuration state
   try {
-    // Debug: Check platform
-    const systemInfo = uni.getSystemInfoSync()
-    const platform = (systemInfo.platform || '').toLowerCase()
-    console.log('[App Debug] Platform:', systemInfo.platform)
+    // Debug: Check platform using new API
+    // @ts-ignore - getAppBaseInfo may not exist in all platforms
+    const appBaseInfo = uni.getAppBaseInfo?.() || uni.getSystemInfoSync?.()
+    const platform = (appBaseInfo?.platform || '').toLowerCase()
+    console.log('[App Debug] Platform:', appBaseInfo?.platform)
     console.log('[App Debug] Platform lowercased:', platform)
 
     // Auto-fix: If in devtools and storage has old IP, clear it

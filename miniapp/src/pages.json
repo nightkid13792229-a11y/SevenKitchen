@@ -238,7 +238,12 @@
     {
       "path": "pages/staff-production/print",
       "style": {
-        "navigationBarTitleText": "打印预览",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/staff-production/print-label",
+      "style": {
         "navigationStyle": "custom"
       }
     },
@@ -255,6 +260,14 @@
       }
     }
   ],
+  "permission": {
+    "scope.userLocation": {
+      "desc": "您的位置信息将用于小程序位置接口的效果展示"
+    },
+    "scope.bluetooth": {
+      "desc": "您的蓝牙将用于连接标签打印机"
+    }
+  },
   "globalStyle": {
     "navigationBarTextStyle": "black",
     "navigationBarTitleText": "SevenKitchen MVP",

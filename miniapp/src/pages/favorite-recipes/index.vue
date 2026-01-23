@@ -23,7 +23,7 @@
         <image
           v-if="item.recipe?.coverImageUrl"
           class="recipe-cover"
-          :src="item.recipe.coverImageUrl"
+          :src="normalizeImageUrl(item.recipe.coverImageUrl)"
           mode="aspectFill"
         />
         <view v-else class="recipe-cover-placeholder">
@@ -66,6 +66,7 @@
 import { ref, onMounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getFavorites, removeFavorite as apiRemoveFavorite } from '../../utils/api'
+import { normalizeImageUrl } from '../../utils/config'
 
 interface FavoriteItem {
   id: string

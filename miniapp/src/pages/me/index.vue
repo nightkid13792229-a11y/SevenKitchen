@@ -323,10 +323,9 @@ function handleLogout() {
 }
 
 onShow(() => {
-  // 更新自定义 tabBar
+  // 更新自定义 tabBar（刷新权限检查）
   if (typeof wx.getTabBar === 'function' && wx.getTabBar()) {
-    wx.getTabBar().checkUserRole()
-    wx.getTabBar().updateSelected()
+    wx.getTabBar().refresh()
   }
 
   // 检查登录状态（每次显示页面时都会执行）

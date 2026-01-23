@@ -4,7 +4,7 @@
     <view class="cover-section">
       <image
         v-if="recipe.coverImageUrl"
-        :src="recipe.coverImageUrl"
+        :src="normalizeImageUrl(recipe.coverImageUrl)"
         mode="aspectFill"
         class="cover-image"
         @tap="previewImage"
@@ -214,6 +214,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { request, addFavorite, removeFavorite, checkFavorite } from '../../utils/api'
+import { normalizeImageUrl } from '../../utils/config'
 
 interface RecipeItem {
   ingredientId: string
@@ -390,9 +391,10 @@ async function toggleFavorite() {
 function previewImage() {
   if (!recipe.value.coverImageUrl) return
 
+  const normalizedUrl = normalizeImageUrl(recipe.value.coverImageUrl)
   uni.previewImage({
-    urls: [recipe.value.coverImageUrl],
-    current: recipe.value.coverImageUrl
+    urls: [normalizedUrl],
+    current: normalizedUrl
   })
 }
 

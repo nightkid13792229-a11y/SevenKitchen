@@ -26,18 +26,20 @@ Component({
   attached() {
     this.checkUserRole();
     this.updateSelected();
-
-    // 监听页面显示，每次页面显示时更新
-    this._observer = null;
   },
 
   detached() {
-    if (this._observer) {
-      this._observer.disconnect();
-    }
+    // 组件销毁时的清理工作
   },
 
   methods: {
+    // 提供给外部调用的刷新方法
+    refresh() {
+      console.log('[TabBar] Manual refresh triggered');
+      this.checkUserRole();
+      this.updateSelected();
+    },
+
     checkUserRole() {
       try {
         const user = wx.getStorageSync('user');

@@ -460,12 +460,12 @@
 
           <view class="form-item">
             <text class="label">过敏食物</text>
-            <textarea class="textarea" placeholder="请记录过敏的食物（选填）" />
+            <textarea class="textarea" placeholder="请记录过敏的食物（选填）" v-model="formData.allergyFoods" />
           </view>
 
           <view class="form-item">
             <text class="label">挑食食物</text>
-            <textarea class="textarea" placeholder="请记录不爱吃或挑食的食物（选填）" />
+            <textarea class="textarea" placeholder="请记录不爱吃或挑食的食物（选填）" v-model="formData.pickyFoods" />
           </view>
 
           <view class="form-item">
@@ -658,6 +658,8 @@ interface FormData {
   treatLevel: string
   manualTreatKcal: string
   medicalHistory: string
+  allergyFoods: string
+  pickyFoods: string
 }
 
 // Constants
@@ -685,7 +687,9 @@ const formData = ref<FormData>({
   treatInputMode: null as string | null,
   treatLevel: 'LOW',
   manualTreatKcal: '',
-  medicalHistory: ''
+  medicalHistory: '',
+  allergyFoods: '',
+  pickyFoods: ''
 })
 
 // 活动水平配置
@@ -1333,6 +1337,8 @@ function populateFormData(profile: any) {
   formData.value.treatLevel = profile.treatLevel || 'LOW'
   formData.value.manualTreatKcal = profile.manualTreatKcal?.toString() || ''
   formData.value.medicalHistory = profile.medicalHistory || ''
+  formData.value.allergyFoods = profile.allergyFoods || ''
+  formData.value.pickyFoods = profile.pickyFoods || ''
 
   // 品种信息
   formData.value.breedId = profile.breedId || ''
@@ -1979,7 +1985,9 @@ function submit() {
     mealsPerDay: parseInt(formData.value.mealsPerDay) || 2,
     treatInputMode: formData.value.treatInputMode || 'ESTIMATE_LEVEL',
     treatLevel: formData.value.treatLevel,
-    medicalHistory: formData.value.medicalHistory || null
+    medicalHistory: formData.value.medicalHistory || null,
+    allergyFoods: formData.value.allergyFoods || null,
+    pickyFoods: formData.value.pickyFoods || null
   }
 
   if (formData.value.treatInputMode === 'EXACT_KCAL') {

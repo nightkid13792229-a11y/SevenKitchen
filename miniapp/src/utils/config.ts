@@ -1,11 +1,48 @@
 // utils/config.ts
-// Base URL configuration - defaults to production API
+// Base URL configuration - defaults to DEV environment
 // Can be overridden at runtime via Network Settings page (stored in uni storage)
 // Automatically uses IP address in WeChat DevTools for stable development
 
-const DEFAULT_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1'
+const DEFAULT_BASE_URL = 'http://localhost:3000/api/v1' // 默认开发环境
 const DEV_BASE_URL = 'http://localhost:3000/api/v1' // 本地开发服务器（开发者工具可用localhost，真机调试需改为局域网IP）
+const LAN_BASE_URL = 'http://192.168.31.43:3000/api/v1' // 局域网开发服务器（真机调试使用）
+const PROD_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1' // 生产环境
 const STORAGE_KEY = 'api_base_url'
+
+/**
+ * Detect if running on real device (Android/iOS)
+ * Returns true if platform is 'android' or 'ios', false otherwise
+ */
+function isRealDevice(): boolean {
+  try {
+    // @ts-ignore - getAppBaseInfo may not exist in all platforms
+    const appBaseInfo = uni.getAppBaseInfo?.() || uni.getSystemInfoSync?.()
+    const platform = appBaseInfo?.platform?.toLowerCase() || ''
+    console.log('[Config Debug] Platform:', appBaseInfo?.platform, 'Lowercased:', platform)
+
+    // 检测是否为真机：android 或 ios
+    const result = platform === 'android' || platform === 'ios'
+    console.log('[Config Debug] isRealDevice result:', result)
+
+    // 保守策略：如果无法明确识别为开发者工具，假设是真机
+    if (platform === '' || platform === 'devtools') {
+      if (platform === 'devtools') {
+        console.log('[Config Debug] Detected DevTools')
+        return false
+      }
+      // platform 为空，无法确定，保守策略：假设是真机
+      console.log('[Config Debug] Platform empty, assuming real device')
+      return true
+    }
+
+    return result
+  } catch (err) {
+    console.log('[Config Debug] getSystemInfo error:', err)
+    // 如果检测失败，保守策略：假设是真机（使用局域网地址更安全）
+    console.log('[Config Debug] Platform detection failed, assuming real device')
+    return true
+  }
+}
 
 /**
  * Detect if running in WeChat Developer Tools
@@ -13,15 +50,13 @@ const STORAGE_KEY = 'api_base_url'
  */
 function isDevTools(): boolean {
   try {
-    const systemInfo = uni.getSystemInfoSync()
-    const platform = systemInfo.platform?.toLowerCase() || ''
-    console.log('[Config Debug] Platform:', systemInfo.platform, 'Lowercased:', platform)
+    // @ts-ignore - getAppBaseInfo may not exist in all platforms
+    const appBaseInfo = uni.getAppBaseInfo?.() || uni.getSystemInfoSync?.()
+    const platform = appBaseInfo?.platform?.toLowerCase() || ''
     const result = platform === 'devtools'
-    console.log('[Config Debug] isDevTools result:', result)
     return result
   } catch (err) {
-    console.log('[Config Debug] getSystemInfoSync error:', err)
-    // If getSystemInfoSync fails, assume not in devtools
+    // If getSystemInfo fails, assume not in devtools
     return false
   }
 }
@@ -36,13 +71,19 @@ function isDevTools(): boolean {
  * Storage takes precedence to allow runtime configuration
  */
 export function getBaseUrl(): string {
-  // 开发环境：直接使用localhost，不读取Storage（避免缓存问题）
+  // 优先级1：真机调试 → 强制使用局域网IP（忽略Storage）
+  if (isRealDevice()) {
+    console.debug('[Config] Detected real device, using LAN BASE_URL:', LAN_BASE_URL)
+    return LAN_BASE_URL
+  }
+
+  // 优先级2：开发者工具 → 使用localhost
   if (isDevTools()) {
     console.debug('[Config] Detected DevTools, using dev BASE_URL:', DEV_BASE_URL)
     return DEV_BASE_URL
   }
 
-  // 生产环境：允许使用Storage配置（用于网络设置页面）
+  // 优先级3：手动配置的地址（Storage）
   try {
     const stored = uni.getStorageSync(STORAGE_KEY)
     if (stored && typeof stored === 'string' && stored.trim()) {
@@ -53,8 +94,8 @@ export function getBaseUrl(): string {
     console.warn('Failed to read BASE_URL from storage:', err)
   }
 
-  // 默认生产环境地址
-  console.debug('[Config] Using production BASE_URL:', DEFAULT_BASE_URL)
+  // 默认开发环境地址
+  console.debug('[Config] Using default dev BASE_URL:', DEFAULT_BASE_URL)
   return DEFAULT_BASE_URL
 }
 
@@ -75,6 +116,7 @@ export function setBaseUrl(url: string): void {
 
 /**
  * Reset BASE_URL to default (clears storage)
+ * Use this to switch back to development environment
  */
 export function resetBaseUrl(): void {
   try {
@@ -90,6 +132,72 @@ export function resetBaseUrl(): void {
  */
 export function getDefaultBaseUrl(): string {
   return DEFAULT_BASE_URL
+}
+
+/**
+ * Normalize image URL to work in real device debugging mode
+ * Replaces HTTP CDN URL with HTTPS CDN URL (for historical data)
+ *
+ * @param imageUrl - Original image URL from backend
+ * @returns Normalized URL with correct protocol and host
+ *
+ * @example
+ * normalizeImageUrl('http://img.sevenkitchen.cloud/recipes/cover.jpg')
+ * // Returns: 'https://img.sevenkitchen.cloud/recipes/cover.jpg'
+ */
+export function normalizeImageUrl(imageUrl: string | undefined | null): string {
+  if (!imageUrl) {
+    console.warn('[Config] normalizeImageUrl: empty URL')
+    return ''
+  }
+
+  console.log('[Config] 🔍 normalizeImageUrl called:', imageUrl)
+
+  // Fix historical data: replace HTTP CDN URL with HTTPS
+  if (imageUrl.includes('http://img.sevenkitchen.cloud')) {
+    const normalized = imageUrl.replace('http://img.sevenkitchen.cloud', 'https://img.sevenkitchen.cloud')
+    console.log('[Config] ✅ Normalized HTTP CDN URL to HTTPS:', imageUrl, '→', normalized)
+    return normalized
+  }
+
+  // If URL is not from localhost, return as-is (already HTTPS or external)
+  if (!imageUrl.includes('localhost') && !imageUrl.includes('127.0.0.1')) {
+    console.log('[Config] ✅ URL already HTTPS/external, using as-is:', imageUrl)
+    return imageUrl
+  }
+
+  // Extract the current API server base (without /api/v1)
+  const currentBaseUrl = getBaseUrl().replace(/\/api\/v\d+$/, '')
+
+  try {
+    // Parse the URL to extract path
+    const url = new URL(imageUrl)
+
+    // Replace host with current API server
+    const normalized = `${currentBaseUrl}${url.pathname}`
+    console.log('[Config] ✅ Normalized localhost URL:', imageUrl, '→', normalized)
+    return normalized
+  } catch (err) {
+    // If URL parsing fails, try simple string replacement
+    console.warn('[Config] ⚠️ Failed to parse image URL, using fallback:', err)
+    const path = imageUrl.replace(/^https?:\/\/[^\/]+/, '')
+    return `${currentBaseUrl}${path}`
+  }
+}
+
+/**
+ * Test image loading with detailed diagnostic information
+ * @param imageUrl - Image URL to test
+ */
+export function testImageLoad(imageUrl: string): void {
+  console.log('========== Image Load Diagnostic ==========')
+  console.log('Original URL:', imageUrl)
+
+  const normalized = normalizeImageUrl(imageUrl)
+  console.log('Normalized URL:', normalized)
+
+  console.log('Current BASE_URL:', getBaseUrl())
+  console.log('==========================================')
 }
 
 // Export default for backward compatibility (but prefer getBaseUrl())

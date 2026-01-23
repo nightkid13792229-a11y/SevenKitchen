@@ -105,10 +105,9 @@ onMounted(() => {
 });
 
 onShow(() => {
-  // 更新自定义 tabBar
+  // 更新自定义 tabBar（刷新权限检查）
   if (typeof wx.getTabBar === 'function' && wx.getTabBar()) {
-    wx.getTabBar().checkUserRole();
-    wx.getTabBar().updateSelected();
+    wx.getTabBar().refresh();
   }
 });
 

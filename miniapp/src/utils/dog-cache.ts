@@ -20,6 +20,8 @@ export interface DogDto {
   treatLevel?: string
   manualTreatKcal?: number
   medicalHistory?: string
+  allergyFoods?: string
+  pickyFoods?: string
   [key: string]: any // Allow additional fields from backend
 }
 

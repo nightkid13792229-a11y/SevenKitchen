@@ -197,7 +197,13 @@ const generateList = () => {
         generating.value = true;
 
         try {
-          const today = new Date().toISOString().slice(0, 10);
+          // 获取本地日期（避免UTC时区问题）
+          const now = new Date();
+          const year = now.getFullYear();
+          const month = String(now.getMonth() + 1).padStart(2, '0');
+          const day = String(now.getDate()).padStart(2, '0');
+          const today = `${year}-${month}-${day}`;
+
           const response: any = await generatePurchaseList({
             startDate: today,
           });

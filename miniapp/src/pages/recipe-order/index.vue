@@ -5,7 +5,7 @@
       <view class="recipe-cover-wrapper">
         <image
           v-if="recipe.coverImageUrl"
-          :src="recipe.coverImageUrl"
+          :src="normalizeImageUrl(recipe.coverImageUrl)"
           class="recipe-cover"
           mode="aspectFill"
         />
@@ -733,6 +733,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { request } from '../../utils/api'
+import { normalizeImageUrl } from '../../utils/config'
 
 interface Dog {
   id: string

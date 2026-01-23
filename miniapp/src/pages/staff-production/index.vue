@@ -54,7 +54,7 @@
 
       <!-- 任务卡片 -->
       <view v-else>
-        <view v-for="task in filteredTasks" :key="task.id" class="task-card">
+        <view v-for="task in filteredTasks" :key="task.id" class="task-card" @tap="viewDetails(task)">
           <view class="task-header">
             <text class="recipe-name">{{ task.recipeName }} v{{ task.recipeVersion }}</text>
             <text class="pot-info">({{ task.currentPotNumber }}/{{ task.totalPots }})</text>
@@ -73,26 +73,6 @@
               <text class="label">创建时间：</text>
               <text class="value">{{ task.createdAt }}</text>
             </view>
-          </view>
-
-          <view class="task-actions">
-            <button class="action-btn outline" @tap="viewDetails(task)">
-              查看详情
-            </button>
-            <button
-              v-if="task.status === 'PENDING'"
-              class="action-btn primary"
-              @tap="startTask(task.id)"
-            >
-              开始制作
-            </button>
-            <button
-              v-if="task.status === 'IN_PROGRESS'"
-              class="action-btn success"
-              @tap="completeTask(task.id)"
-            >
-              完成制作
-            </button>
           </view>
         </view>
       </view>
@@ -130,7 +110,6 @@ import {
   getTodayStatistics,
   autoSchedule,
   getPackagingUnits,
-  startProductionTask,
   completeProductionTask,
 } from '../../api/production';
 import { formatDecimal } from '../../utils/format';
@@ -202,7 +181,13 @@ const autoScheduleToday = async () => {
       uni.showLoading({ title: '排单中...' });
 
       try {
-        const today = new Date().toISOString().split('T')[0];
+        // 获取本地日期（避免UTC时区问题）
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, '0');
+        const day = String(now.getDate()).padStart(2, '0');
+        const today = `${year}-${month}-${day}`;
+
         const result = await autoSchedule({ startDate: today });
 
         uni.hideLoading();
@@ -237,8 +222,13 @@ const loadPackagingUnits = async () => {
 
     const units = res.data.list;
 
-    // 检查是否有今天的批次（使用 createdAt 的日期部分）
-    const today = new Date().toISOString().split('T')[0];
+    // 检查是否有今天的批次（使用本地日期）
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const today = `${year}-${month}-${day}`;
+
     const hasToday = units.some(unit => unit.createdAt.substring(0, 10) === today);
     hasTodayBatch.value = hasToday;
 
@@ -282,26 +272,6 @@ const viewDetails = (task: any) => {
   uni.navigateTo({
     url: `/pages/staff-production/detail?id=${task.id}`,
   });
-};
-
-// 开始制作
-const startTask = async (unitId: string) => {
-  try {
-    uni.showLoading({ title: '提交中...' });
-    await startProductionTask(unitId);
-    uni.hideLoading();
-
-    uni.showToast({ title: '已开始制作', icon: 'success' });
-    loadPackagingUnits();
-    loadTodayStatistics();
-  } catch (error: any) {
-    uni.hideLoading();
-    console.error('Start task failed:', error);
-    uni.showToast({
-      title: error.message || '操作失败',
-      icon: 'none',
-    });
-  }
 };
 
 // 完成制作
@@ -490,6 +460,13 @@ const toggleHistory = (batchId: string) => {
   padding: 24rpx;
   margin-bottom: 24rpx;
   box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:active {
+    background-color: #f5f5f5;
+    transform: scale(0.98);
+  }
 
   .task-header {
     display: flex;
@@ -514,8 +491,6 @@ const toggleHistory = (batchId: string) => {
   }
 
   .task-body {
-    margin-bottom: 16rpx;
-
     .info-row {
       display: flex;
       margin-bottom: 8rpx;
@@ -530,35 +505,6 @@ const toggleHistory = (batchId: string) => {
         font-size: 26rpx;
         color: #333;
         flex: 1;
-      }
-    }
-  }
-
-  .task-actions {
-    display: flex;
-    gap: 16rpx;
-
-    .action-btn {
-      flex: 1;
-      padding: 20rpx;
-      border-radius: 8rpx;
-      font-size: 26rpx;
-      border: none;
-
-      &.outline {
-        background-color: #fff;
-        border: 1rpx solid #ddd;
-        color: #666;
-      }
-
-      &.primary {
-        background-color: #56ab91;
-        color: #fff;
-      }
-
-      &.success {
-        background-color: #4caf50;
-        color: #fff;
       }
     }
   }

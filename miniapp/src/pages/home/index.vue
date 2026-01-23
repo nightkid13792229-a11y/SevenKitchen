@@ -144,7 +144,7 @@
         <image
           v-if="recipe.coverImageUrl"
           class="recipe-cover"
-          :src="recipe.coverImageUrl"
+          :src="normalizeImageUrl(recipe.coverImageUrl)"
           mode="aspectFill"
         />
         <view v-else class="recipe-cover placeholder">
@@ -302,6 +302,7 @@
 import { ref, onMounted, computed } from 'vue'
 import { onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
+import { normalizeImageUrl } from '../../utils/config'
 
 interface RecipeItem {
   ingredientId: string
@@ -423,10 +424,9 @@ onShow(() => {
   console.log('[Home] onShow - 重新检查登录状态')
   console.log('[Home] Current dogs count:', dogs.value.length)
 
-  // 更新自定义 tabBar
+  // 更新自定义 tabBar（刷新权限检查）
   if (typeof wx.getTabBar === 'function' && wx.getTabBar()) {
-    wx.getTabBar().checkUserRole()
-    wx.getTabBar().updateSelected()
+    wx.getTabBar().refresh()
   }
 
   checkLoginStatus()

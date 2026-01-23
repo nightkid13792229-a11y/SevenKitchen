@@ -1,5 +1,8 @@
 <template>
-  <view class="print-page">
+  <view
+    class="print-page"
+    :style="{ '--status-bar-height': statusBarHeight + 'px' }"
+  >
     <!-- 隐藏的Canvas元素用于绘制 -->
     <canvas
       canvas-id="printCanvas"
@@ -14,8 +17,11 @@
 
     <!-- 预览内容 -->
     <view v-else-if="printImage" class="preview-content">
+      <!-- 状态栏占位 -->
+      <view class="status-bar" :style="{ height: statusBarHeight + 'px' }"></view>
+
       <!-- 顶部导航 -->
-      <view class="nav-bar">
+      <view class="nav-bar" :style="{ top: statusBarHeight + 'px' }">
         <view class="back-btn" @tap="goBack">
           <text>←</text>
         </view>
@@ -75,6 +81,9 @@ import { drawProductionTaskPrint, type TaskDetail } from '../../utils/canvas-pri
 const canvasWidth = 1240;
 const canvasHeight = 1754;
 
+// 状态栏高度
+const statusBarHeight = ref(0);
+
 // 状态
 const loading = ref(true);
 const printImage = ref('');
@@ -84,6 +93,10 @@ const taskDetailData = ref<TaskDetail | null>(null);
 
 // 页面加载
 onMounted(() => {
+  // 获取状态栏高度
+  const systemInfo = uni.getSystemInfoSync();
+  statusBarHeight.value = systemInfo.statusBarHeight || 0;
+
   // 获取页面参数
   const pages = getCurrentPages();
   const currentPage = pages[pages.length - 1];
@@ -231,13 +244,27 @@ const goBack = () => {
   flex-direction: column;
 }
 
+.status-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  width: 100%;
+  background-color: #fff;
+  z-index: 999;
+}
+
 .nav-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
   padding: 24rpx 32rpx;
   background-color: #fff;
   box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
+  z-index: 999;
 
   .back-btn {
     width: 64rpx;

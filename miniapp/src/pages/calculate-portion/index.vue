@@ -4,14 +4,16 @@
     <view class="section">
       <view class="section-title">📌 步骤1：选择狗狗</view>
 
-      <view class="dog-selector" @tap="showDogPicker">
-        <view class="selector-button">
-          <text class="selector-text">
-            {{ selectedDog ? selectedDog.name : '请选择狗狗' }}
-          </text>
-          <text class="selector-arrow">▼</text>
+      <picker mode="selector" :range="dogs" range-key="name" :value="selectedDogIndex" @change="onDogPickerChange">
+        <view class="dog-selector">
+          <view class="selector-button">
+            <text class="selector-text">
+              {{ selectedDog ? selectedDog.name : '请选择狗狗' }}
+            </text>
+            <text class="selector-arrow">▼</text>
+          </view>
         </view>
-      </view>
+      </picker>
 
       <!-- 狗狗信息卡片 -->
       <view v-if="selectedDog" class="dog-info-card">
@@ -31,7 +33,7 @@
         </view>
         <view class="daily-energy">
           <text class="energy-label">每日热量需求：</text>
-          <text class="energy-value">{{ calculateDER() }} kcal</text>
+          <text class="energy-value">{{ Math.round(calculateDER()) }} kcal</text>
         </view>
       </view>
     </view>
@@ -192,7 +194,7 @@
       <view class="result-card">
         <view class="result-item">
           <text class="result-label">每日热量需求</text>
-          <text class="result-value">{{ result.dailyEnergyNeed }} kcal</text>
+          <text class="result-value">{{ Math.round(result.dailyEnergyNeed) }} kcal</text>
         </view>
 
         <view class="result-item">
@@ -230,6 +232,27 @@ interface DogProfile {
   currentWeightKg?: number
   isNeutered?: boolean
   der?: number // 每日热量需求
+}
+
+interface EnergyCalculation {
+  rer: number // 静息能量需求
+  der: number // 每日能量需求
+  finalFoodKcal: number // 扣除零食后的食物热量
+  treatDeduction: number // 零食扣除
+  isTreatCapped: boolean // 是否达到10%上限
+  calcDetails: {
+    weightKg: number
+    ageMonths: number
+    sizeClass: string
+    lifeStage: string
+    stageFactor: number
+    bcsMultiplier: number
+    isNeutered: boolean
+    activityLevel: string
+    treatMode: string
+    treatLevel?: string
+    treatPercentage?: number
+  }
 }
 
 interface FoodInfo {
@@ -280,6 +303,7 @@ const energyUnits = [
 const energyUnitIndex = ref<number>(0)
 
 const result = ref<CalculationResult | null>(null)
+const energyCalculation = ref<EnergyCalculation | null>(null)
 
 // 计算值（阿特沃特模式）
 const calculatedCarbs = ref<number>(0)
@@ -327,33 +351,73 @@ async function loadDogs() {
   }
 }
 
-// 显示狗狗选择器
-function showDogPicker() {
+// 狗狗选择器改变事件
+function onDogPickerChange(e: any) {
+  console.log('[CalculatePortion] Dog picker changed, index:', e.detail.value)
+
   if (dogs.value.length === 0) {
-    uni.showToast({
-      title: '请先创建狗狗档案',
-      icon: 'none'
+    console.warn('[CalculatePortion] No dogs available, showing prompt')
+    uni.showModal({
+      title: '提示',
+      content: '您还没有创建狗狗档案，是否立即创建？',
+      confirmText: '去创建',
+      cancelText: '取消',
+      success: (res) => {
+        if (res.confirm) {
+          uni.navigateTo({
+            url: '/pages/dog-create/index'
+          })
+        }
+      }
     })
     return
   }
 
-  const dogNames = dogs.value.map(d => d.name)
-
-  uni.showActionSheet({
-    itemList: dogNames,
-    success: (res) => {
-      selectDog(res.tapIndex)
-    }
-  })
+  const index = e.detail.value
+  console.log('[CalculatePortion] Dog selected at index:', index)
+  selectDog(index)
 }
 
 // 选择狗狗
-function selectDog(index: number) {
+// 选择狗狗
+async function selectDog(index: number) {
   selectedDogIndex.value = index
   selectedDog.value = dogs.value[index]
   result.value = null // 清空之前的计算结果
+  energyCalculation.value = null // 清空之前的能量计算结果
 
   console.log('[CalculatePortion] Selected dog:', selectedDog.value?.name)
+
+  // 调用后端API获取准确的DER值
+  await loadEnergyCalculation()
+}
+
+// 加载能量计算结果
+async function loadEnergyCalculation() {
+  if (!selectedDog.value) return
+
+  try {
+    const res = await request({
+      url: `/dogs/${selectedDog.value.id}/energy-calculation`,
+      method: 'GET'
+    })
+
+    if (res.code === 0 && res.data) {
+      energyCalculation.value = res.data
+      console.info('[CalculatePortion] Energy calculation loaded:', {
+        rer: res.data.rer,
+        der: res.data.der,
+        finalFoodKcal: res.data.finalFoodKcal,
+        treatDeduction: res.data.treatDeduction
+      })
+    }
+  } catch (err) {
+    console.error('[CalculatePortion] Failed to load energy calculation:', err)
+    uni.showToast({
+      title: '加载热量计算失败',
+      icon: 'none'
+    })
+  }
 }
 
 // 切换输入模式
@@ -413,12 +477,17 @@ function normalizeEnergyDensity(value: number, unit: string): number {
 function calculateDER(): number {
   if (!selectedDog.value) return 0
 
-  // 如果后端已计算DER，直接使用
+  // 优先使用后端API返回的准确值
+  if (energyCalculation.value) {
+    return energyCalculation.value.der
+  }
+
+  // 如果API还未返回，降级使用dog.profile中的der字段
   if (selectedDog.value.der) {
     return selectedDog.value.der
   }
 
-  // 否则使用简化公式（RER × 系数）
+  // 最后降级到前端简化公式（仅作为临时降级方案）
   // RER = 70 × (体重kg)^0.75
   const weight = selectedDog.value.currentWeightKg || 0
   if (weight <= 0) return 0
@@ -432,8 +501,7 @@ function calculateDER(): number {
     multiplier = 1.8 // 成年未绝育
   }
 
-  // 这里可以根据年龄、活动量等调整系数
-  // 暂时使用固定值
+  console.warn('[CalculatePortion] Using fallback simplified DER calculation')
 
   return Math.round(rer * multiplier)
 }

@@ -5,7 +5,7 @@
       <view class="recipe-cover-wrapper">
         <image
           v-if="recipe.coverImageUrl"
-          :src="recipe.coverImageUrl"
+          :src="normalizeImageUrl(recipe.coverImageUrl)"
           class="recipe-cover"
           mode="aspectFill"
         />
@@ -215,7 +215,7 @@
       <ShareButton
         :share-path="sharePath"
         :share-title="shareTitle"
-        :share-image="recipe.coverImageUrl"
+        :share-image="normalizeImageUrl(recipe.coverImageUrl)"
         type="icon-only"
         size="large"
       />
@@ -395,6 +395,7 @@ import { request } from '../../utils/api'
 import { PrintCanvasBuilder } from '../../utils/print-canvas'
 import ShareButton from '../../components/ShareButton.vue'
 import ImagePreviewModal from '../../components/ImagePreviewModal.vue'
+import { normalizeImageUrl } from '../../utils/config'
 
 // 页面参数
 const recipeId = ref('')
@@ -1322,7 +1323,7 @@ onShareAppMessage(() => {
   return {
     title: shareTitle.value,
     path: sharePath.value,
-    imageUrl: recipe.value.coverImageUrl || '',
+    imageUrl: normalizeImageUrl(recipe.value.coverImageUrl) || '',
     success: () => {
       console.log('[DIYSheet] 分享成功')
     },
@@ -1337,7 +1338,7 @@ onShareTimeline(() => {
   return {
     title: shareTitle.value,
     query: `recipeId=${recipeId.value}&dogId=${dogId.value}&cycleDays=${cycleDays.value}&perMealG=${perMealG.value}&dailyIntakeG=${dailyIntakeG.value}`,
-    imageUrl: recipe.value.coverImageUrl || ''
+    imageUrl: normalizeImageUrl(recipe.value.coverImageUrl) || ''
   }
 })
 </script>

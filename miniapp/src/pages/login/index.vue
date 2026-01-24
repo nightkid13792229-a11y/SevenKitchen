@@ -2,7 +2,7 @@
   <view class="login-container">
     <!-- Logo区域 -->
     <view class="logo-section">
-      <image class="logo" src="/static/logo.png" mode="aspectFit"></image>
+      <image class="logo" src="../../static/logo.png" mode="aspectFit"></image>
       <text class="app-name">Seven的厨房</text>
       <text class="app-slogan">新鲜健康，为爱定制</text>
     </view>

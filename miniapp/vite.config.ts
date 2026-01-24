@@ -7,6 +7,7 @@ import uni from '@dcloudio/vite-plugin-uni'
 // The plugin will configure the entry point automatically based on the platform
 export default defineConfig({
   plugins: [uni()],
+  assetsInclude: ['**/*.png'],
 })
 
 

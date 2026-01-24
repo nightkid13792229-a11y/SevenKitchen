@@ -7,10 +7,13 @@ export enum OrderStatus {
   INIT = 'INIT',
   PENDING_PAYMENT = 'PENDING_PAYMENT',
   PAID = 'PAID',
+  PURCHASING = 'PURCHASING',
   IN_PRODUCTION = 'IN_PRODUCTION',
+  FREEZING = 'FREEZING',
   SHIPPED = 'SHIPPED',
   COMPLETED = 'COMPLETED',
-  CANCELLED = 'CANCELLED'
+  CANCELLED = 'CANCELLED',
+  AFTERSALE = 'AFTERSALE'
 }
 
 /**
@@ -137,10 +140,13 @@ export interface OrderStats {
   total: number
   pendingPayment: number
   paid: number
+  purchasing: number
   inProduction: number
+  freezing: number
   shipped: number
   completed: number
   cancelled: number
+  aftersale: number
 }
 
 /**

@@ -976,11 +976,12 @@ export class OrdersController {
     // Search through all orders to find the item
     // TODO: In real implementation, add findOrderItemById to repository for efficiency
     // For now, we search by iterating through orders by status
-    // Phase 9: Simplified status list (removed WAITING_FOR_PRODUCTION, READY_FOR_PACKAGING, READY_FOR_SHIPMENT)
+    // Phase 9: Simplified status list (removed READY_FOR_PACKAGING, READY_FOR_SHIPMENT)
     const statusesToSearch = [
       OrderStatus.INIT,
       OrderStatus.PENDING_PAYMENT,
       OrderStatus.PAID,
+      OrderStatus.PURCHASING,
       OrderStatus.IN_PRODUCTION,
       OrderStatus.FREEZING,
       OrderStatus.SHIPPED,

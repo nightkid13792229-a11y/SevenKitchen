@@ -1289,7 +1289,7 @@ export class AdminController {
    */
   @Post('orders/:orderId/start-production')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Start production (PAID → WAITING_FOR_PRODUCTION)' })
+  @ApiOperation({ summary: 'Start production (PURCHASING → IN_PRODUCTION)' })
   @ApiParam({ name: 'orderId', description: 'Order ID' })
   @ApiResponse({
     status: 200,

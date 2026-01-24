@@ -367,7 +367,7 @@ export class ProductionService {
         }
 
         try {
-          // Phase 9: Direct transition PAID → IN_PRODUCTION (removed WAITING_FOR_PRODUCTION)
+          // Phase 9: Direct transition PAID/PURCHASING → IN_PRODUCTION
           // Phase 8.18: Log status transitions to history
           if (order.status === OrderStatus.PAID) {
             const fromStatus = order.status;
@@ -817,7 +817,7 @@ export class ProductionService {
     );
 
     // Get unique order IDs from order items
-    // Phase 8.14: Look for orders in IN_PRODUCTION, but also check PAID/WAITING_FOR_PRODUCTION
+    // Phase 8.14: Look for orders in IN_PRODUCTION, but also check PAID/PURCHASING
     // as defensive fallback in case transitions didn't happen during batch creation
     // Root cause fix: Match orders by item ID from sourceOrderItemIds (primary key).
     // productionBatchId check is secondary validation but not required if item ID matches.

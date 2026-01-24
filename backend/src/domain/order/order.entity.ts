@@ -137,7 +137,7 @@ export class Order {
    * Phase 9: E-commerce Standard State Machine
    *
    * Standard Flow (aligned with JD.com, Meituan, Standard ERP):
-   * INIT → PENDING_PAYMENT → PAID → IN_PRODUCTION → SHIPPED → COMPLETED
+   * INIT → PENDING_PAYMENT → PAID → PURCHASING → IN_PRODUCTION → FREEZING → SHIPPED → COMPLETED
    *
    * Cancellation Rules:
    * - Customer can cancel: INIT, PENDING_PAYMENT
@@ -146,18 +146,21 @@ export class Order {
    * State Definitions:
    * - INIT: Order draft, not yet submitted
    * - PENDING_PAYMENT: Waiting for payment
-   * - PAID: Payment confirmed, ready for production
+   * - PAID: Payment confirmed, ready for purchasing
+   * - PURCHASING: Purchase list generated, procuring ingredients
    * - IN_PRODUCTION: Being prepared, cooked, and packaged
+   * - FREEZING: Production completed, freezing before shipment
    * - SHIPPED: Shipped with tracking (cannot be cancelled)
    * - COMPLETED: Completed (terminal state)
    * - CANCELLED: Cancelled (terminal state)
+   * - AFTERSALE: After-sale request submitted
    */
   private canTransitionTo(newStatus: OrderStatus): boolean {
     const validTransitions: Record<OrderStatus, OrderStatus[]> = {
       [OrderStatus.INIT]: [OrderStatus.PENDING_PAYMENT, OrderStatus.CANCELLED],
       [OrderStatus.PENDING_PAYMENT]: [OrderStatus.PAID, OrderStatus.CANCELLED],
-      [OrderStatus.PAID]: [OrderStatus.WAITING_FOR_PRODUCTION, OrderStatus.CANCELLED],
-      [OrderStatus.WAITING_FOR_PRODUCTION]: [OrderStatus.IN_PRODUCTION, OrderStatus.CANCELLED],
+      [OrderStatus.PAID]: [OrderStatus.PURCHASING, OrderStatus.CANCELLED],
+      [OrderStatus.PURCHASING]: [OrderStatus.IN_PRODUCTION, OrderStatus.CANCELLED],
       [OrderStatus.IN_PRODUCTION]: [OrderStatus.FREEZING, OrderStatus.CANCELLED],
       [OrderStatus.FREEZING]: [OrderStatus.SHIPPED, OrderStatus.AFTERSALE],
       [OrderStatus.SHIPPED]: [OrderStatus.COMPLETED, OrderStatus.AFTERSALE],

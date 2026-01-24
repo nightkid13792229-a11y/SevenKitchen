@@ -742,8 +742,8 @@
         </view>
 
         <view class="medical-record-actions">
-          <button class="medical-btn-cancel" @tap="closeMedicalRecordModal">取消</button>
-          <button class="medical-btn-confirm" @tap="saveMedicalRecord">保存</button>
+          <view class="medical-btn-cancel" @tap="closeMedicalRecordModal">取消</view>
+          <view class="medical-btn-confirm" @tap="saveMedicalRecord">保存</view>
         </view>
       </view>
     </view>

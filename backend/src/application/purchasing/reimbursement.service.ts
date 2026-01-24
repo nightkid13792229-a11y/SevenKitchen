@@ -188,7 +188,7 @@ export class ReimbursementService {
    * 逻辑:
    * 1. 找到报销单关联的所有采购清单
    * 2. 找到这些采购清单关联的订单(sourceOrderIds)
-   * 3. 将订单状态从 PAID → WAITING_FOR_PRODUCTION
+   * 3. 将订单状态从 PAID → PURCHASING
    */
   private async unlockProductionForReimbursement(
     reimbursement: Reimbursement
@@ -217,14 +217,14 @@ export class ReimbursementService {
       // 仅当订单状态为PAID时才解锁(防止重复解锁)
       if (order.status === OrderStatus.PAID) {
         const fromStatus = order.status;
-        order.transitionTo(OrderStatus.WAITING_FOR_PRODUCTION);
+        order.transitionTo(OrderStatus.PURCHASING);
         await this.orderRepository.save(order);
 
         // 记录状态历史
         await this.statusHistoryRepository.append(
           order.id,
           fromStatus,
-          OrderStatus.WAITING_FOR_PRODUCTION,
+          OrderStatus.PURCHASING,
           'system',
           null,
           {

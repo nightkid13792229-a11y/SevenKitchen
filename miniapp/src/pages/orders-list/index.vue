@@ -139,7 +139,7 @@ const statusTabs = ref<Array<{label: string, value: string, count: number}>>([
   { label: '全部', value: 'ALL', count: 0 },
   { label: '待付款', value: 'PENDING_PAYMENT', count: 0 },
   { label: '已付款', value: 'PAID', count: 0 },
-  { label: '等待生产', value: 'WAITING_FOR_PRODUCTION', count: 0 },
+  { label: '采购中', value: 'PURCHASING', count: 0 },
   { label: '生产中', value: 'IN_PRODUCTION', count: 0 },
   { label: '急冻中', value: 'FREEZING', count: 0 },
   { label: '已发货', value: 'SHIPPED', count: 0 },
@@ -204,12 +204,12 @@ function loadOrders() {
 
 // 更新各状态订单数量
 // Phase 9: Simplified status counts aligned with e-commerce standards
-// Phase 9.1: Added FREEZING and AFTERSALE status counts
+// Phase 9.1: Added PURCHASING, FREEZING and AFTERSALE status counts
 function updateStatusCounts() {
   statusTabs.value[0].count = allOrders.value.length // 全部
   statusTabs.value[1].count = allOrders.value.filter(o => o.status === 'PENDING_PAYMENT').length
   statusTabs.value[2].count = allOrders.value.filter(o => o.status === 'PAID').length
-  statusTabs.value[3].count = allOrders.value.filter(o => o.status === 'WAITING_FOR_PRODUCTION').length
+  statusTabs.value[3].count = allOrders.value.filter(o => o.status === 'PURCHASING').length
   statusTabs.value[4].count = allOrders.value.filter(o => o.status === 'IN_PRODUCTION').length
   statusTabs.value[5].count = allOrders.value.filter(o => o.status === 'FREEZING').length
   statusTabs.value[6].count = allOrders.value.filter(o => o.status === 'SHIPPED').length
@@ -246,12 +246,12 @@ function formatAmount(amount?: number): string {
 
 function getStatusText(status: string): string {
   // Phase 9: Simplified status text aligned with e-commerce standards
-  // Phase 9.1: Added FREEZING and AFTERSALE status text
+  // Phase 9.1: Added PURCHASING, FREEZING and AFTERSALE status text
   const statusMap: Record<string, string> = {
     INIT: '待确认',
     PENDING_PAYMENT: '待付款',
     PAID: '已付款',
-    WAITING_FOR_PRODUCTION: '等待生产',
+    PURCHASING: '采购中',
     IN_PRODUCTION: '制作中',
     FREEZING: '急冻中',
     SHIPPED: '已发货',
@@ -264,12 +264,12 @@ function getStatusText(status: string): string {
 
 function getStatusColor(status: string): string {
   // Phase 9: Simplified status colors aligned with e-commerce standards
-  // Phase 9.1: Added FREEZING and AFTERSALE status colors
+  // Phase 9.1: Added PURCHASING, FREEZING and AFTERSALE status colors
   const colorMap: Record<string, string> = {
     INIT: '#999',
     PENDING_PAYMENT: '#ff9800',
     PAID: '#52c41a',
-    WAITING_FOR_PRODUCTION: '#1890ff',
+    PURCHASING: '#faad14',
     IN_PRODUCTION: '#1890ff',
     FREEZING: '#722ed1',
     SHIPPED: '#52c41a',

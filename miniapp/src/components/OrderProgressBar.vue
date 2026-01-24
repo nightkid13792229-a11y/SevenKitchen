@@ -38,16 +38,22 @@ const steps = [
     backendStatus: ['PAID']
   },
   {
+    key: 'PURCHASING',
+    label: '采购中',
+    icon: '🛒',
+    backendStatus: ['PURCHASING']
+  },
+  {
     key: 'IN_PRODUCTION',
     label: '生产中',
     icon: '👨‍🍳',
-    backendStatus: ['WAITING_FOR_PRODUCTION', 'IN_PRODUCTION', 'READY_FOR_PACKAGING']
+    backendStatus: ['IN_PRODUCTION']
   },
   {
-    key: 'READY_FOR_SHIPMENT',
-    label: '急冻中\n待发货',
+    key: 'FREEZING',
+    label: '急冻中',
     icon: '❄️',
-    backendStatus: ['READY_FOR_SHIPMENT']
+    backendStatus: ['FREEZING']
   },
   {
     key: 'SHIPPED',

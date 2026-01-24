@@ -461,7 +461,7 @@ const canCancelOrder = (status: OrderStatus) => {
     'INIT',
     'PENDING_PAYMENT',
     'PAID',
-    'WAITING_FOR_PRODUCTION',
+    'PURCHASING',
     'IN_PRODUCTION',
     'READY_FOR_PACKAGING',
     'READY_FOR_SHIPMENT'

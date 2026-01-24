@@ -268,6 +268,20 @@ export class PurchasingService {
     });
     const sourceOrderIds = orders.map(o => o.id);
 
+    // 转换订单状态：PAID → PURCHASING
+    let transitionedCount = 0;
+    for (const order of orders) {
+      try {
+        order.transitionTo(OrderStatus.PURCHASING);
+        await this.orderRepository.save(order);
+        transitionedCount++;
+        this.logger.log(`Order ${order.id} transitioned from PAID to PURCHASING`);
+      } catch (error) {
+        this.logger.error(`Failed to transition order ${order.id} to PURCHASING: ${error}`);
+      }
+    }
+    this.logger.log(`Transitioned ${transitionedCount}/${orders.length} orders to PURCHASING status`);
+
     // 创建采购明细
     const totalEstimatedCost = requirements.reduce((sum, r) => sum + r.estimatedCost, 0);
     const items = requirements.map(req =>

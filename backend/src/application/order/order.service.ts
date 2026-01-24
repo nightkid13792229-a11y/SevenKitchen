@@ -1602,11 +1602,11 @@ export class OrderService {
   /**
    * Start production
    * Phase 9: Simplified production flow
-   * Transitions PAID → IN_PRODUCTION
+   * Transitions PURCHASING → IN_PRODUCTION
    *
    * Note: This replaces the previous two-step process:
-   * - Old: PAID → WAITING_FOR_PRODUCTION → IN_PRODUCTION → READY_FOR_PACKAGING
-   * - New: PAID → IN_PRODUCTION (includes scheduling, production, and packaging)
+   * - Old: PAID → PURCHASING → IN_PRODUCTION
+   * - New: PURCHASING → IN_PRODUCTION (after purchasing completed)
    */
   async startProduction(
     orderId: string,

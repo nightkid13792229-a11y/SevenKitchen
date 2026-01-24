@@ -261,11 +261,11 @@
             />
           </template>
 
-          <!-- 内部生产状态（WAITING_FOR_PRODUCTION, IN_PRODUCTION, READY_FOR_PACKAGING） -->
+          <!-- 内部生产状态（PURCHASING, IN_PRODUCTION, READY_FOR_PACKAGING） -->
           <!-- 生产批次系统自动流转，管理员无需操作 -->
           <template
             v-else-if="
-              order.status === OrderStatusEnum.WAITING_FOR_PRODUCTION ||
+              order.status === OrderStatusEnum.PURCHASING ||
               order.status === OrderStatusEnum.IN_PRODUCTION ||
               order.status === OrderStatusEnum.READY_FOR_PACKAGING
             "
@@ -421,7 +421,7 @@ const getStepActive = () => {
       OrderStatusEnum.READY_FOR_SHIPMENT,
       OrderStatusEnum.READY_FOR_PACKAGING,
       OrderStatusEnum.IN_PRODUCTION,
-      OrderStatusEnum.WAITING_FOR_PRODUCTION
+      OrderStatusEnum.PURCHASING
     ].includes(status)
   ) {
     return 1
@@ -439,7 +439,7 @@ const getProductionDescription = () => {
 
   const status = order.value.status
 
-  if (status === OrderStatusEnum.WAITING_FOR_PRODUCTION) return '待生产'
+  if (status === OrderStatusEnum.PURCHASING) return '待生产'
   if (status === OrderStatusEnum.IN_PRODUCTION) return '生产中'
   if (status === OrderStatusEnum.READY_FOR_PACKAGING) return '包装中'
 
@@ -474,7 +474,7 @@ const getStatusType = (status: OrderStatus) => {
     INIT: 'info',
     PENDING_PAYMENT: 'warning',
     PAID: 'success',
-    WAITING_FOR_PRODUCTION: 'primary',
+    PURCHASING: 'primary',
     IN_PRODUCTION: 'primary',
     READY_FOR_PACKAGING: 'primary',
     READY_FOR_SHIPMENT: 'primary',
@@ -491,7 +491,7 @@ const getStatusText = (status: OrderStatus) => {
     INIT: '订单创建',
     PENDING_PAYMENT: '待付款',
     PAID: '已付款',
-    WAITING_FOR_PRODUCTION: '待生产',
+    PURCHASING: '待生产',
     IN_PRODUCTION: '生产中',
     READY_FOR_PACKAGING: '包装中',
     READY_FOR_SHIPMENT: '急冻中待发货',

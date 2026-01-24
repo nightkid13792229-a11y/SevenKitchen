@@ -8,7 +8,7 @@
 
     <!-- 顶部导航 -->
     <view class="nav-bar" :style="{ top: statusBarHeight + 'px' }">
-      <view class="back-btn" @tap="goBack">← 返回</view>
+      <view class="back-btn" @tap="goBack">返回</view>
       <text class="title">打印产品标签</text>
       <view class="placeholder"></view>
     </view>
@@ -23,122 +23,12 @@
         <button class="search-btn" @tap="connectPrinter">搜索</button>
       </view>
 
-      <view class="setting-row">
-        <text class="label">打印浓度：</text>
-        <view class="darkness-selector">
-          <button
-            v-for="i in 5"
-            :key="i"
-            :class="['level-btn', { active: darkness === i }]"
-            @tap="darkness = i"
-          >
-            {{ i }}
-          </button>
-        </view>
-      </view>
-    </view>
-
-    <!-- 订单列表 -->
-    <view class="orders-list">
-      <view class="section-title">订单列表（{{ orders.length }}个）</view>
-
-      <view v-for="(order, index) in orders" :key="order.orderItemId" class="order-card">
-        <view class="order-header">
-          <text class="order-index">订单 {{ index + 1 }}</text>
-        </view>
-
-        <view class="order-content">
-          <view class="order-info">
-            <view class="info-row">
-              <text class="label">狗狗：</text>
-              <text class="value">{{ order.dogName }}</text>
-            </view>
-            <view class="info-row">
-              <text class="label">食谱：</text>
-              <text class="value">{{ order.recipeName }}</text>
-            </view>
-
-            <!-- 可编辑：重量规格 -->
-            <view class="info-row editable-row">
-              <text class="label">规格：</text>
-              <input
-                v-model.number="order.packageSpecG"
-                type="number"
-                class="edit-input"
-                @blur="onFieldChange(order)"
-              />
-              <text class="unit">g/袋 ×</text>
-              <input
-                v-model.number="order.packageCount"
-                type="number"
-                class="edit-input"
-                @blur="onFieldChange(order)"
-              />
-              <text class="unit">袋</text>
-            </view>
-
-            <!-- 可编辑：制作日期 -->
-            <view class="info-row editable-row">
-              <text class="label">制作日期：</text>
-              <picker
-                mode="date"
-                :value="order.productionDate"
-                @change="onDateChange($event, order)"
-                class="date-picker"
-              >
-                <view class="picker-value">
-                  {{ order.productionDate || '选择日期' }}
-                </view>
-              </picker>
-            </view>
-          </view>
-
-          <view class="order-actions">
-            <button class="preview-btn" @tap="previewLabel(order)">预览标签</button>
-          </view>
-        </view>
-
-        <view class="print-count-config">
-          <text class="label">打印份数：</text>
-          <view class="counter">
-            <button class="counter-btn" @tap="decreaseCount(index)">-</button>
-            <input v-model="order.printCount" type="number" class="counter-input" />
-            <button class="counter-btn" @tap="increaseCount(index)">+</button>
-          </view>
-        </view>
-      </view>
-    </view>
-
-    <!-- 底部操作按钮 -->
-    <view class="action-buttons">
-      <button class="action-btn secondary" @tap="goBack">返回</button>
-      <button class="action-btn primary" @tap="confirmPrint">确认打印</button>
-    </view>
-
-    <!-- 隐藏的Canvas用于绘制 -->
-    <canvas
-      canvas-id="labelCanvas"
-      :style="{ width: CANVAS_WIDTH + 'px', height: CANVAS_HEIGHT + 'px', position: 'fixed', left: '-9999px' }"
-    ></canvas>
-
-    <!-- 预览弹窗 -->
-    <uni-popup ref="previewPopup" type="center" class="preview-popup-wrapper">
-      <view class="preview-popup">
-        <view class="preview-header">
-          <text class="preview-title">标签预览</text>
-        </view>
-        <image v-if="previewImage" :src="previewImage" mode="widthFix" class="preview-image" />
-      </view>
-    </uni-popup>
-
-    <!-- 打印机列表弹窗 -->
-    <uni-popup ref="printerListPopup" type="center" :safe-area="false">
-      <view class="printer-list-popup">
-        <view class="popup-header">
-          <text class="popup-title">选择打印机（{{ availablePrinters.length }}台）</text>
+      <!-- 打印机列表（直接在打印机字段下方显示） -->
+      <view v-if="showPrinterList" class="printer-list-inline">
+        <view class="printer-list-header">
           <text class="close-btn" @tap="closePrinterList">×</text>
         </view>
-        <scroll-view scroll-y class="printer-list" :style="{ maxHeight: '400px' }">
+        <scroll-view scroll-y class="printer-list" :style="{ maxHeight: '300px' }">
           <view
             v-for="(printer, index) in availablePrinters"
             :key="index"
@@ -152,6 +42,171 @@
             <text class="select-icon">→</text>
           </view>
         </scroll-view>
+      </view>
+    </view>
+
+    <!-- 订单列表 -->
+    <view class="orders-list">
+      <view class="section-title">
+        订单列表（{{ orders.length }}个）
+        <text v-if="isBatchMode" class="batch-badge">批量模式：包含{{ batchCount }}个批次</text>
+      </view>
+
+      <!-- 批次分组显示 -->
+      <view v-if="isBatchMode" class="batch-groups">
+        <view v-for="(batch, batchIndex) in batchGroups" :key="batch.batchId" class="batch-group">
+          <view class="batch-header">
+            <text class="batch-title">{{ batch.batchCode || `批次${batchIndex + 1}` }}</text>
+            <text v-if="batch.isCurrentBatch" class="current-badge">当前批次</text>
+          </view>
+
+          <view v-for="(order, orderIndex) in batch.orderItems" :key="order.orderItemId" class="order-card">
+            <view class="order-header">
+              <text class="order-index">订单 {{ orderIndex + 1 }}</text>
+              <button class="preview-btn" @tap="previewLabel(order)">预览标签</button>
+            </view>
+
+            <view class="order-content">
+              <view class="order-info">
+                <view class="info-row">
+                  <text class="label">狗狗：</text>
+                  <text class="value">{{ order.dogName }}</text>
+                </view>
+                <view class="info-row">
+                  <text class="label">食谱：</text>
+                  <text class="value">{{ order.recipeName }}</text>
+                </view>
+
+                <!-- 可编辑：重量规格 -->
+                <view class="info-row editable-row">
+                  <text class="label">规格：</text>
+                  <input
+                    v-model.number="order.packageSpecG"
+                    type="number"
+                    class="edit-input"
+                    @blur="onFieldChange(order)"
+                  />
+                  <text class="unit">g/袋 ×</text>
+                  <input
+                    v-model.number="order.packageCount"
+                    type="number"
+                    class="edit-input"
+                    @blur="onFieldChange(order)"
+                  />
+                  <text class="unit">袋</text>
+                </view>
+
+                <!-- 可编辑：制作日期 -->
+                <view class="info-row editable-row">
+                  <text class="label">制作日期：</text>
+                  <picker
+                    mode="date"
+                    :value="order.productionDate"
+                    @change="onDateChange($event, order)"
+                    class="date-picker"
+                  >
+                    <view class="picker-value">
+                      {{ order.productionDate || '选择日期' }}
+                    </view>
+                  </picker>
+                </view>
+              </view>
+            </view>
+
+            <view class="print-count-config">
+              <text class="label">打印份数：</text>
+              <view class="counter">
+                <button class="counter-btn" @tap="decreaseCount(getGlobalIndex(batchIndex, orderIndex))">-</button>
+                <input v-model="order.printCount" type="number" class="counter-input" />
+                <button class="counter-btn" @tap="increaseCount(getGlobalIndex(batchIndex, orderIndex))">+</button>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+
+      <!-- 原有的单批次显示（非批量模式） -->
+      <view v-else>
+        <view v-for="(order, index) in orders" :key="order.orderItemId" class="order-card">
+          <view class="order-header">
+            <text class="order-index">订单 {{ index + 1 }}</text>
+            <button class="preview-btn" @tap="previewLabel(order)">预览标签</button>
+          </view>
+
+          <view class="order-content">
+            <view class="order-info">
+              <view class="info-row">
+                <text class="label">狗狗：</text>
+                <text class="value">{{ order.dogName }}</text>
+              </view>
+              <view class="info-row">
+                <text class="label">食谱：</text>
+                <text class="value">{{ order.recipeName }}</text>
+              </view>
+
+              <!-- 可编辑：重量规格 -->
+              <view class="info-row editable-row">
+                <text class="label">规格：</text>
+                <input
+                  v-model.number="order.packageSpecG"
+                  type="number"
+                  class="edit-input"
+                  @blur="onFieldChange(order)"
+                />
+                <text class="unit">g/袋 ×</text>
+                <input
+                  v-model.number="order.packageCount"
+                  type="number"
+                  class="edit-input"
+                  @blur="onFieldChange(order)"
+                />
+                <text class="unit">袋</text>
+              </view>
+
+              <!-- 可编辑：制作日期 -->
+              <view class="info-row editable-row">
+                <text class="label">制作日期：</text>
+                <picker
+                  mode="date"
+                  :value="order.productionDate"
+                  @change="onDateChange($event, order)"
+                  class="date-picker"
+                >
+                  <view class="picker-value">
+                    {{ order.productionDate || '选择日期' }}
+                  </view>
+                </picker>
+              </view>
+            </view>
+          </view>
+
+          <view class="print-count-config">
+            <text class="label">打印份数：</text>
+            <view class="counter">
+              <button class="counter-btn" @tap="decreaseCount(index)">-</button>
+              <input v-model="order.printCount" type="number" class="counter-input" />
+              <button class="counter-btn" @tap="increaseCount(index)">+</button>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 底部操作按钮 -->
+    <view class="action-buttons">
+      <button class="action-btn primary" @tap="confirmPrint">立即打印</button>
+    </view>
+
+    <!-- 隐藏的Canvas用于绘制 -->
+    <canvas
+      canvas-id="labelCanvas"
+      :style="{ width: CANVAS_WIDTH + 'px', height: CANVAS_HEIGHT + 'px', position: 'fixed', left: '-9999px' }"
+    ></canvas>
+
+    <!-- 预览弹窗 -->
+    <uni-popup ref="previewPopup" type="center" class="preview-popup-wrapper">
+      <view class="preview-popup">
+        <image v-if="previewImage" :src="previewImage" mode="widthFix" class="preview-image" />
       </view>
     </uni-popup>
   </view>
@@ -173,6 +228,7 @@ import {
   getLifeStageLabel,
   getHealthTagLabel
 } from '../../utils/label-mapping';
+import { getRecipeBatchesWithOrders } from '../../api/production';
 
 const CANVAS_WIDTH = 600;
 const CANVAS_HEIGHT = 800;
@@ -207,9 +263,21 @@ interface OrderPrintConfig {
 
 const orders = ref<OrderPrintConfig[]>([]);
 
+// 批量模式相关
+const isBatchMode = ref(false);  // 是否为批量模式
+const batchGroups = ref<Array<{
+  batchId: string;
+  batchCode?: string;
+  productionDate: string;
+  isCurrentBatch: boolean;
+  orderItems: OrderPrintConfig[];
+}>>([]);
+
+// 批次数量
+const batchCount = computed(() => batchGroups.value.length);
+
 // 打印机状态
 const printerName = ref('');
-const darkness = ref(3);
 
 // 预览相关
 const previewImage = ref('');
@@ -217,7 +285,7 @@ const previewPopup = ref<any>(null);
 
 // 打印机列表相关
 const availablePrinters = ref<any[]>([]);
-const printerListPopup = ref<any>(null);
+const showPrinterList = ref(false);
 
 // 总打印数量
 const totalPrintCount = computed(() => {
@@ -225,13 +293,27 @@ const totalPrintCount = computed(() => {
 });
 
 // 页面加载
-onLoad((options: any) => {
+onLoad(async (options: any) => {
   console.log('[PrintLabel] 页面加载，参数:', options);
+
+  // 加载标签映射表
+  loadHealthTagMapping();
 
   if (options.taskData) {
     try {
       const taskData = JSON.parse(decodeURIComponent(options.taskData));
-      initializeOrders(taskData);
+
+      // 检查是否需要启用批量模式
+      const recipeId = taskData.recipeSnapshot?.id;
+      const recipeVersion = taskData.recipeSnapshot?.version;
+
+      if (recipeId) {
+        // 尝试加载该食谱的所有批次
+        await loadAllBatchesForRecipe(recipeId, recipeVersion, taskData);
+      } else {
+        // 没有recipeId，使用原有逻辑
+        initializeOrders(taskData);
+      }
     } catch (error) {
       console.error('[PrintLabel] 解析任务数据失败:', error);
       uni.showToast({
@@ -240,13 +322,78 @@ onLoad((options: any) => {
       });
     }
   }
-
-  // 加载标签映射表
-  loadHealthTagMapping();
-
-  // 自动连接打印机
-  autoConnectPrinter();
 });
+
+/**
+ * 加载该食谱的所有批次
+ */
+async function loadAllBatchesForRecipe(
+  recipeId: string,
+  recipeVersion: number,
+  currentTaskData: any
+) {
+  try {
+    uni.showLoading({ title: '加载批次信息...' });
+
+    // 获取今天的日期
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const today = `${year}-${month}-${day}`;
+
+    // 调用API获取所有批次
+    const response = await getRecipeBatchesWithOrders({
+      recipeId,
+      recipeVersion,
+      targetDate: today
+    });
+
+    uni.hideLoading();
+
+    if (response.code === 0 && response.data.batches.length > 0) {
+      // 有多个批次，启用批量模式
+      isBatchMode.value = true;
+      batchGroups.value = response.data.batches;
+
+      // 展平所有订单到orders数组
+      const allOrders: OrderPrintConfig[] = [];
+      const todayDate = `${year}-${month}-${day}`;
+
+      for (const batch of response.data.batches) {
+        const batchOrders = batch.orderItems.map((item: any) => ({
+          orderItemId: item.orderItemId,
+          orderId: item.orderId,
+          dogName: item.dogName || '未知',
+          recipeName: item.recipeName || '未知食谱',
+          packageSpecG: item.packageSpecG || 500,
+          packageCount: item.packageCount || 1,
+          printCount: 2,
+          recipeSnapshot: item.recipeSnapshot,
+          createdAt: item.createdAt,
+          productionDate: todayDate
+        }));
+
+        allOrders.push(...batchOrders);
+      }
+
+      orders.value = allOrders;
+
+      console.log(`[PrintLabel] 批量模式：加载了${response.data.batches.length}个批次，共${allOrders.length}个订单`);
+    } else {
+      // 只有一个批次或没有其他批次，使用原有逻辑
+      isBatchMode.value = false;
+      initializeOrders(currentTaskData);
+    }
+  } catch (error) {
+    uni.hideLoading();
+    console.error('[PrintLabel] 加载批次信息失败:', error);
+
+    // 失败时使用原有逻辑
+    isBatchMode.value = false;
+    initializeOrders(currentTaskData);
+  }
+}
 
 // 初始化订单列表
 function initializeOrders(taskData: any) {
@@ -278,6 +425,17 @@ function initializeOrders(taskData: any) {
   }));
 
   console.log('[PrintLabel] 订单列表初始化完成，共', orders.value.length, '个订单');
+}
+
+/**
+ * 获取全局索引（用于批量模式下的打印份数调整）
+ */
+function getGlobalIndex(batchIndex: number, orderIndex: number): number {
+  let globalIndex = 0;
+  for (let i = 0; i < batchIndex; i++) {
+    globalIndex += batchGroups.value[i].orderItems.length;
+  }
+  return globalIndex + orderIndex;
 }
 
 // 自动连接打印机
@@ -314,7 +472,7 @@ async function connectPrinter() {
       }
     } else {
       // 多台打印机，显示选择列表
-      showPrinterList();
+      showPrinterListFunc();
     }
   } catch (error) {
     console.error('[PrintLabel] 连接打印机失败:', error);
@@ -338,17 +496,13 @@ async function connectPrinter() {
 }
 
 // 显示打印机列表
-function showPrinterList() {
-  if (printerListPopup.value) {
-    printerListPopup.value.open();
-  }
+function showPrinterListFunc() {
+  showPrinterList.value = true;
 }
 
 // 关闭打印机列表
 function closePrinterList() {
-  if (printerListPopup.value) {
-    printerListPopup.value.close();
-  }
+  showPrinterList.value = false;
 }
 
 // 选择打印机
@@ -649,7 +803,7 @@ function goBack() {
 }
 
 .orders-list {
-  padding: 0 32rpx;  // 只保留左右padding，移除顶部padding
+  padding: 0 32rpx;
 }
 
 .section-title {
@@ -657,6 +811,50 @@ function goBack() {
   font-weight: bold;
   color: #333;
   margin-bottom: 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.batch-badge {
+  font-size: 24rpx;
+  color: #fff;
+  background-color: #56ab91;
+  padding: 4rpx 12rpx;
+  border-radius: 12rpx;
+  font-weight: normal;
+}
+
+.batch-groups {
+  width: 100%;
+}
+
+.batch-group {
+  margin-bottom: 32rpx;
+}
+
+.batch-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16rpx 24rpx;
+  background-color: #f0f9f5;
+  border-radius: 12rpx;
+  margin-bottom: 16rpx;
+}
+
+.batch-title {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.current-badge {
+  font-size: 22rpx;
+  color: #fff;
+  background-color: #ff9800;
+  padding: 4rpx 12rpx;
+  border-radius: 8rpx;
 }
 
 .order-card {
@@ -665,6 +863,7 @@ function goBack() {
   padding: 24rpx;
   margin-bottom: 24rpx;
   box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  position: relative;
 }
 
 .order-header {
@@ -672,11 +871,25 @@ function goBack() {
   justify-content: flex-start;
   align-items: center;
   margin-bottom: 16rpx;
+  padding-right: 140rpx;  // 为预览按钮留出空间
 
   .order-index {
     font-size: 28rpx;
     font-weight: bold;
     color: #333;
+  }
+
+  .preview-btn {
+    position: absolute;
+    top: 24rpx;
+    right: 24rpx;
+    padding: 8rpx 16rpx;
+    font-size: 24rpx;
+    background-color: #56ab91;
+    color: #fff;
+    border: none;
+    border-radius: 8rpx;
+    white-space: nowrap;
   }
 }
 
@@ -747,21 +960,6 @@ function goBack() {
   }
 }
 
-.order-actions {
-  display: flex;
-  align-items: center;
-
-  .preview-btn {
-    padding: 8rpx 16rpx;
-    font-size: 24rpx;
-    background-color: #56ab91;
-    color: #fff;
-    border: none;
-    border-radius: 8rpx;
-    white-space: nowrap;
-  }
-}
-
 .print-count-config {
   display: flex;
   align-items: center;
@@ -802,7 +1000,7 @@ function goBack() {
 }
 
 .print-settings {
-  padding: 120rpx 32rpx 24rpx;  // 顶部120rpx完全避开导航栏
+  padding: 200rpx 32rpx 24rpx;  // 顶部200rpx完全避开导航栏和状态栏
 
   .setting-row {
     display: flex;
@@ -830,24 +1028,71 @@ function goBack() {
       border: none;
       border-radius: 8rpx;
     }
+  }
 
-    .darkness-selector {
+  // 打印机列表（内联样式）
+  .printer-list-inline {
+    margin-top: 16rpx;
+    background-color: #fff;
+    border-radius: 12rpx;
+    box-shadow: 0 4rpx 12rpx rgba(0, 0, 0, 0.1);
+    overflow: hidden;
+
+    .printer-list-header {
       display: flex;
-      gap: 16rpx;
+      justify-content: flex-end;
+      padding: 16rpx 24rpx;
+      background-color: #f8f9fa;
+      border-bottom: 1rpx solid #eee;
 
-      .level-btn {
-        width: 60rpx;
-        height: 60rpx;
-        border: 1rpx solid #ddd;
-        border-radius: 8rpx;
-        background-color: #fff;
-        font-size: 28rpx;
+      .close-btn {
+        font-size: 40rpx;
+        color: #999;
+        line-height: 1;
+      }
+    }
 
-        &.active {
-          background-color: #56ab91;
-          color: #fff;
-          border-color: #56ab91;
+    .printer-list {
+      max-height: 300px;
+      padding: 8rpx 0;
+    }
+
+    .printer-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 24rpx 32rpx;
+      border-bottom: 1rpx solid #f5f5f5;
+
+      &:active {
+        background-color: #f9f9f9;
+      }
+
+      &:last-child {
+        border-bottom: none;
+      }
+
+      .printer-info {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        gap: 8rpx;
+
+        .printer-name {
+          font-size: 28rpx;
+          font-weight: 500;
+          color: #333;
         }
+
+        .printer-device-id {
+          font-size: 24rpx;
+          color: #999;
+        }
+      }
+
+      .select-icon {
+        font-size: 32rpx;
+        color: #56ab91;
       }
     }
   }
@@ -858,23 +1103,17 @@ function goBack() {
   bottom: 0;
   left: 0;
   right: 0;
-  display: flex;
-  gap: 16rpx;
   padding: 24rpx 32rpx;
   background-color: #fff;
   border-top: 1rpx solid #eee;
+  z-index: 1000;
 
   .action-btn {
-    flex: 1;
-    padding: 24rpx;
+    width: 100%;
+    padding: 17rpx;
     border-radius: 12rpx;
     font-size: 28rpx;
     border: none;
-
-    &.secondary {
-      background-color: #f5f5f5;
-      color: #666;
-    }
 
     &.primary {
       background-color: #56ab91;
@@ -893,20 +1132,6 @@ function goBack() {
   position: relative;
   left: 50%;
   transform: translateX(-50%);
-
-  .preview-header {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 24rpx;
-    border-bottom: 1rpx solid #eee;
-
-    .preview-title {
-      font-size: 32rpx;
-      font-weight: bold;
-      color: #333;
-    }
-  }
 
   .preview-image {
     width: 100%;
@@ -945,73 +1170,6 @@ function goBack() {
       display: flex !important;
       justify-content: center !important;
       align-items: center !important;
-    }
-  }
-}
-
-// 打印机列表弹窗
-.printer-list-popup {
-  background-color: #fff;
-  border-radius: 16rpx 16rpx 0 0;
-  max-height: 70vh;
-
-  .popup-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 24rpx 32rpx;
-    border-bottom: 1rpx solid #eee;
-
-    .popup-title {
-      font-size: 32rpx;
-      font-weight: bold;
-      color: #333;
-    }
-
-    .close-btn {
-      font-size: 48rpx;
-      color: #999;
-      line-height: 1;
-    }
-  }
-
-  .printer-list {
-    max-height: 60vh;
-    padding: 16rpx 0;
-  }
-
-  .printer-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 24rpx 32rpx;
-    border-bottom: 1rpx solid #f5f5f5;
-
-    &:active {
-      background-color: #f9f9f9;
-    }
-
-    .printer-info {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      gap: 8rpx;
-
-      .printer-name {
-        font-size: 28rpx;
-        font-weight: 500;
-        color: #333;
-      }
-
-      .printer-device-id {
-        font-size: 24rpx;
-        color: #999;
-      }
-    }
-
-    .select-icon {
-      font-size: 32rpx;
-      color: #56ab91;
     }
   }
 }

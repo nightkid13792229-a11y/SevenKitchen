@@ -469,6 +469,61 @@ export class PrismaOrderRepository implements OrderRepository {
       cancelled: countMap[OrderStatus.CANCELLED] ?? 0,
     };
   }
+
+  /**
+   * Find an order item by ID
+   */
+  async findOrderItemById(orderItemId: string): Promise<any | null> {
+    const orderItem = await this.prisma.orderItem.findUnique({
+      where: { id: orderItemId },
+    });
+
+    if (!orderItem) {
+      return null;
+    }
+
+    return {
+      id: orderItem.id,
+      orderId: orderItem.orderId,
+      dogId: orderItem.dogId,
+      recipeSnapshot: orderItem.recipeSnapshot,
+      quantityG: orderItem.quantityG,
+      packageCount: orderItem.packageCount,
+      packageSpecG: orderItem.packageSpecG,
+      customRequirements: orderItem.customRequirements,
+      dailyIntakeG: orderItem.dailyIntakeG,
+      vacuumBagSpec: orderItem.vacuumBagSpec,
+      allocatedAt: orderItem.allocatedAt,
+      productionBatchId: orderItem.productionBatchId,
+      // Note: preparationMethod, cookingMethod, and createdAt are not in the domain entity
+      // but exist in the Prisma schema. We include them for production service use.
+      preparationMethod: (orderItem as any).preparationMethod,
+      cookingMethod: (orderItem as any).cookingMethod,
+      createdAt: (orderItem as any).createdAt,
+    };
+  }
+
+  /**
+   * Find a dog by ID
+   */
+  async findDogById(dogId: string): Promise<any | null> {
+    const dog = await this.prisma.dog.findUnique({
+      where: { id: dogId },
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+
+    if (!dog) {
+      return null;
+    }
+
+    return {
+      id: dog.id,
+      name: dog.name,
+    };
+  }
 }
 
 

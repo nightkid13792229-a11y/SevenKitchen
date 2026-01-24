@@ -16,19 +16,14 @@
 
     <!-- 顶部欢迎区 -->
     <view class="header-section">
-      <view class="welcome-text">Hi，欢迎来到七号厨房 🍖</view>
-      <view class="subtitle-text">专业的狗狗鲜食定制服务</view>
+      <view class="welcome-text">Hi~欢迎来到Seven的厨房</view>
     </view>
 
     <!-- 快捷功能入口 -->
     <view class="quick-actions">
-      <view class="action-item" @tap="goToCommunity">
-        <view class="action-icon">🏠</view>
-        <text class="action-text">爱犬社区</text>
-      </view>
-      <view class="action-item" @tap="goToHealthManagement">
-        <view class="action-icon">💊</view>
-        <text class="action-text">健康管理</text>
+      <view class="action-item" @tap="goToRecipeDIY">
+        <view class="action-icon">📝</view>
+        <text class="action-text">食谱定制</text>
       </view>
       <view class="action-item" @tap="goToWeightManagement">
         <view class="action-icon">⚖️</view>
@@ -204,7 +199,7 @@
 
       <!-- 空状态 -->
       <view v-if="recipes.length === 0 && !loading" class="empty-recipe-state">
-        <view class="empty-icon">🍖</view>
+        <view class="empty-icon">🥗</view>
         <view class="empty-title">暂无食谱</view>
         <view class="empty-subtitle">当前筛选条件下没有找到食谱</view>
         <button class="btn-reset" @tap="resetFilters">重置筛选</button>
@@ -354,6 +349,8 @@ const recipes = ref<Recipe[]>([])
 const loading = ref(false)
 const hasMore = ref(true)
 const totalCount = ref(0)
+const currentPage = ref(1)
+const pageSize = 10
 
 // 筛选相关
 const showLifeStageDrawer = ref(false)
@@ -424,12 +421,11 @@ onShow(() => {
   console.log('[Home] onShow - 重新检查登录状态')
   console.log('[Home] Current dogs count:', dogs.value.length)
 
-  // 更新自定义 tabBar（刷新权限检查）
-  if (typeof wx.getTabBar === 'function' && wx.getTabBar()) {
-    wx.getTabBar().refresh()
-  }
-
   checkLoginStatus()
+
+  // 更新自定义 TabBar 状态
+  // 注意：自定义TabBar会在页面切换时自动检测当前页面路径并更新selected状态
+  // 不需要页面主动调用更新方法
 
   // 根据登录状态处理狗狗数据
   if (isLoggedIn.value) {
@@ -521,14 +517,30 @@ function loadFilterOptions() {
 function loadRecipes(isRefresh = false) {
   if (loading.value) return
 
+  // 如果没有更多数据且不是刷新，直接返回
+  if (!hasMore.value && !isRefresh) {
+    console.log('[Home] No more recipes to load')
+    return
+  }
+
   loading.value = true
 
-  if (!isRefresh) {
+  // 只在非刷新模式时显示loading
+  const shouldShowLoading = !isRefresh
+  if (shouldShowLoading) {
     uni.showLoading({ title: '加载中...' })
   }
 
-  // 构建筛选参数
-  const params: any = {}
+  // 如果是刷新，重置页码
+  if (isRefresh) {
+    currentPage.value = 1
+  }
+
+  // 构建筛选参数和分页参数
+  const params: any = {
+    page: currentPage.value,
+    pageSize: pageSize
+  }
   if (filterState.value.selectedLifeStage) {
     params.lifeStage = filterState.value.selectedLifeStage
   }
@@ -539,6 +551,8 @@ function loadRecipes(isRefresh = false) {
     params.excludeTags = filterState.value.excludedIngredientTags.join(',')
   }
 
+  console.log('[Home] Loading recipes with params:', params)
+
   request({
     url: '/recipes',
     method: 'GET',
@@ -546,34 +560,52 @@ function loadRecipes(isRefresh = false) {
   }).then((res: any) => {
     console.log('[Home] Recipes Response:', {
       code: res.code,
-      dataLength: res.data?.length || 0,
+      dataLength: res.data?.data?.length || 0,
       data: res.data
     })
 
     if (res.code === 0 && res.data) {
+      // 后端现在返回分页数据格式：{ data: [], total, page, pageSize, hasMore }
+      const newRecipes = res.data.data || []
+
       if (isRefresh) {
-        recipes.value = res.data
+        recipes.value = newRecipes
       } else {
-        recipes.value = [...recipes.value, ...res.data]
+        recipes.value = [...recipes.value, ...newRecipes]
       }
 
-      // 更新总数
-      totalCount.value = res.data.length
+      // 更新分页状态
+      totalCount.value = res.data.total || 0
+      hasMore.value = res.data.hasMore !== undefined ? res.data.hasMore : false
 
-      // TODO: 根据实际返回的数据量判断是否还有更多
-      hasMore.value = res.data.length >= 10
+      // 如果有更多数据，页码+1
+      if (hasMore.value) {
+        currentPage.value++
+      }
+
+      console.log('[Home] Load recipes complete:', {
+        currentPage: currentPage.value,
+        hasMore: hasMore.value,
+        totalCount: totalCount.value,
+        recipesCount: recipes.value.length
+      })
     } else {
       console.warn('[Home] Unexpected response:', res)
+      hasMore.value = false
     }
   }).catch((err: any) => {
     console.error('[Home] Load recipes error:', err)
+    hasMore.value = false
     uni.showToast({
       title: '加载失败',
       icon: 'none'
     })
   }).finally(() => {
     loading.value = false
-    uni.hideLoading()
+    // 只在之前显示了loading时才隐藏
+    if (shouldShowLoading) {
+      uni.hideLoading()
+    }
     if (isRefresh) {
       uni.stopPullDownRefresh()
     }
@@ -784,8 +816,10 @@ function getHealthTagLabel(tagOrUuid: string): string {
 
 // 下拉刷新
 onPullDownRefresh(() => {
+  console.log('[Home] Pull down refresh')
   recipes.value = []
   hasMore.value = true
+  currentPage.value = 1
   loadRecipes(true)
 })
 
@@ -847,21 +881,28 @@ const goToLogin = () => {
   })
 }
 
-// 跳转到爱犬社区
-const goToCommunity = () => {
-  uni.showToast({
-    title: '功能开发中，敬请期待',
-    icon: 'none'
-  })
-}
+// 跳转到食谱定制
+const goToRecipeDIY = () => {
+  console.log('=== 点击了食谱定制按钮 ===')
+  console.log('当前登录状态:', isLoggedIn.value)
 
-// 跳转到健康管理
-const goToHealthManagement = () => {
   if (!isLoggedIn.value) {
-    checkLoginAndNavigate('/pages/health-management/index')
+    console.log('未登录，跳转到登录页')
+    checkLoginAndNavigate('/pages/custom-recipe/index')
     return
   }
-  uni.navigateTo({ url: '/pages/health-management/index' })
+
+  const targetUrl = '/pages/custom-recipe/index'
+  console.log('准备跳转到:', targetUrl)
+  uni.navigateTo({
+    url: targetUrl,
+    success: () => {
+      console.log('✅ 跳转成功')
+    },
+    fail: (err: any) => {
+      console.log('❌ 跳转失败:', err)
+    }
+  })
 }
 
 // 检查登录状态并跳转

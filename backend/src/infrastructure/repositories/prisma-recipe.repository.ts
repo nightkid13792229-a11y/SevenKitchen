@@ -152,6 +152,98 @@ export class PrismaRecipeRepository implements RecipeRepository {
     );
   }
 
+  async findPublicRecipesPaginated(options?: FindRecipesOptions): Promise<{ data: Recipe[], total: number, page: number, pageSize: number, hasMore: boolean }> {
+    // Build where clause
+    const where: Prisma.RecipeWhereInput = { status: 'PUBLIC' };
+
+    // Filter by life stage
+    if (options?.lifeStage) {
+      where.applicableLifeStages = {
+        array_contains: options.lifeStage
+      };
+    }
+
+    // Filter by health tags (any match) - using relationship table
+    if (options?.healthTags && options.healthTags.length > 0) {
+      where.healthTagAssignments = {
+        some: {
+          healthTagId: {
+            in: options.healthTags
+          }
+        }
+      };
+    }
+
+    // Get all recipes matching the basic criteria
+    const allRecipes = await this.prisma.recipe.findMany({
+      where,
+      include: {
+        items: {
+          include: {
+            ingredient: {
+              include: {
+                tags: true
+              }
+            }
+          }
+        },
+        healthTagAssignments: {
+          include: {
+            healthTag: true
+          }
+        }
+      },
+      orderBy: [{ recipeId: 'asc' }, { version: 'desc' }],
+    });
+
+    // Filter out recipes that contain excluded ingredient tags
+    let filteredRecipes = allRecipes;
+    if (options?.excludeTags && options.excludeTags.length > 0) {
+      filteredRecipes = allRecipes.filter(recipe => {
+        // Get all ingredient tag IDs for this recipe
+        const recipeTagIds = new Set<string>();
+        recipe.items?.forEach(item => {
+          item.ingredient?.tags?.forEach(tagAssignment => {
+            recipeTagIds.add(tagAssignment.tagId);
+          });
+        });
+
+        // Check if any excluded tag is present
+        return !options.excludeTags!.some(excludeTag => recipeTagIds.has(excludeTag));
+      });
+    }
+
+    // Group by recipeId and take latest version
+    const latestByRecipeId = new Map<string, RecipeWithItems>();
+    for (const recipe of filteredRecipes) {
+      const existing = latestByRecipeId.get(recipe.recipeId);
+      if (!existing || recipe.version > existing.version) {
+        latestByRecipeId.set(recipe.recipeId, recipe);
+      }
+    }
+
+    const uniqueRecipes = Array.from(latestByRecipeId.values());
+    const total = uniqueRecipes.length;
+
+    // Apply pagination
+    const page = options?.page || 1;
+    const pageSize = options?.pageSize || 10;
+    const skip = (page - 1) * pageSize;
+    const take = pageSize;
+
+    // Get paginated slice
+    const paginatedRecipes = uniqueRecipes.slice(skip, skip + take);
+    const hasMore = skip + take < total;
+
+    return {
+      data: paginatedRecipes.map((r) => this.mapToDomain(r)),
+      total,
+      page,
+      pageSize,
+      hasMore,
+    };
+  }
+
   async getFilterOptions(): Promise<FilterOptions> {
     // Get all public recipes with health tag assignments
     const allRecipes = await this.prisma.recipe.findMany({

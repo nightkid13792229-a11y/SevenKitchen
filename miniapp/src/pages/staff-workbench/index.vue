@@ -105,10 +105,11 @@ onMounted(() => {
 });
 
 onShow(() => {
-  // 更新自定义 tabBar（刷新权限检查）
-  if (typeof wx.getTabBar === 'function' && wx.getTabBar()) {
-    wx.getTabBar().refresh();
-  }
+  // 更新自定义 TabBar 状态
+  // 注意：自定义TabBar会在页面切换时自动检测当前页面路径并更新selected状态
+  // 不需要页面主动调用更新方法
+
+  checkPermission()
 });
 
 const checkPermission = () => {

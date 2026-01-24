@@ -178,3 +178,79 @@ export function completeProductionTask(unitId: string) {
     method: 'POST',
   });
 }
+
+/**
+ * 获取食谱的所有批次及订单（用于批量打印标签）
+ * 在第一个批次中可以打印该食谱所有批次的订单标签
+ */
+export function getRecipeBatchesWithOrders(params: {
+  recipeId: string;
+  recipeVersion?: number;
+  targetDate?: string; // YYYY-MM-DD格式
+}) {
+  return request<{
+    batches: Array<{
+      batchId: string;
+      batchCode?: string;
+      productionDate: string;
+      isCurrentBatch: boolean;
+      orderItems: Array<{
+        orderItemId: string;
+        orderId: string;
+        dogName: string;
+        recipeName: string;
+        packageSpecG: number;
+        packageCount: number;
+        recipeSnapshot: any;
+        createdAt: string;
+      }>;
+    }>;
+  }>({
+    url: `/staff/production/recipe-batches/${params.recipeId}`,
+    method: 'GET',
+    data: {
+      recipeVersion: params.recipeVersion,
+      targetDate: params.targetDate,
+    },
+  });
+}
+
+/**
+ * 获取批量制作单（指定日期的所有批次）
+ * 用于一次性打印所有批次的制作单
+ */
+export function getBatchProductionGuide(params: {
+  targetDate: string; // YYYY-MM-DD格式
+}) {
+  return request<{
+    productionDate: string;
+    totalBatches: number;
+    recipes: Array<{
+      recipeId: string;
+      recipeName: string;
+      recipeVersion: number;
+      totalProductionG: number;
+      totalPots: number;
+      packagingUnits: Array<{
+        unitId: string;
+        potNumber: number;
+        totalPots: number;
+        totalProductionG: number;
+        orderItems: Array<{
+          orderItemId: string;
+          orderId: string;
+          dogName: string;
+          packageSpecG: number;
+          packageCount: number;
+        }>;
+        ingredientsUsage: any;
+      }>;
+    }>;
+  }>({
+    url: '/staff/production/batch-production-guide',
+    method: 'GET',
+    data: {
+      targetDate: params.targetDate,
+    },
+  });
+}

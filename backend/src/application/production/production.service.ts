@@ -447,6 +447,298 @@ export class ProductionService {
   }
 
   /**
+   * Get all batches for a specific recipe with their order items
+   * Used for batch label printing: print all orders of a recipe across all batches
+   */
+  async getRecipeBatchesWithOrders(params: {
+    recipeId: string;
+    recipeVersion?: number;
+    targetDate?: string; // YYYY-MM-DD format
+  }): Promise<{
+    batches: Array<{
+      batchId: string;
+      batchCode?: string;
+      productionDate: string;
+      isCurrentBatch: boolean;
+      orderItems: Array<{
+        orderItemId: string;
+        orderId: string;
+        dogName: string;
+        recipeName: string;
+        packageSpecG: number;
+        packageCount: number;
+        recipeSnapshot: any;
+        createdAt: string;
+      }>;
+    }>;
+  }> {
+    const { recipeId, recipeVersion, targetDate } = params;
+
+    // Parse target date if provided
+    let productionDateFilter: Date | undefined;
+    if (targetDate) {
+      productionDateFilter = DateUtil.getStartOfDay(targetDate);
+      if (isNaN(productionDateFilter.getTime())) {
+        throw new BadRequestException(
+          `Invalid target date format: ${targetDate}. Expected YYYY-MM-DD`,
+        );
+      }
+    }
+
+    // Get all production batches that contain this recipe
+    const allBatches = await this.productionRepository.findAll();
+
+    // Filter batches that contain the recipe and match the date filter
+    const matchingBatches: Array<{
+      batchId: string;
+      batchCode?: string;
+      productionDate: string;
+      isCurrentBatch: boolean;
+      orderItems: Array<{
+        orderItemId: string;
+        orderId: string;
+        dogName: string;
+        recipeName: string;
+        packageSpecG: number;
+        packageCount: number;
+        recipeSnapshot: any;
+        createdAt: string;
+      }>;
+    }> = [];
+
+    for (const batch of allBatches) {
+      // Filter by date if specified
+      if (productionDateFilter) {
+        const batchDate = DateUtil.getStartOfDay(
+          batch.productionDate.toISOString().split('T')[0],
+        );
+        if (batchDate.getTime() !== productionDateFilter.getTime()) {
+          continue;
+        }
+      }
+
+      // Check if this batch contains the recipe
+      const matchingUnits = batch.packagingUnits.filter((unit) => {
+        const unitRecipeId = (unit.recipeSnapshot as any).id;
+        const unitRecipeVersion = (unit.recipeSnapshot as any).version;
+
+        // Match by recipeId
+        if (unitRecipeId !== recipeId) {
+          return false;
+        }
+
+        // Match by version if specified
+        if (recipeVersion !== undefined && unitRecipeVersion !== recipeVersion) {
+          return false;
+        }
+
+        return true;
+      });
+
+      if (matchingUnits.length === 0) {
+        continue;
+      }
+
+      // Collect order items from all matching units
+      const orderItems = [];
+      for (const unit of matchingUnits) {
+        const sourceOrderItemIds = unit.sourceOrderItemIds || [];
+        for (const orderItemId of sourceOrderItemIds) {
+          // Find the order item details
+          const orderItem = await this.orderRepository.findOrderItemById(orderItemId);
+          if (!orderItem) {
+            this.logger.warn(`OrderItem ${orderItemId} not found`);
+            continue;
+          }
+
+          // Get dog name
+          let dogName = '未知';
+          if (orderItem.dogId) {
+            const order = await this.orderRepository.findById(orderItem.orderId);
+            if (order?.dogId) {
+              const dog = await this.orderRepository.findDogById(order.dogId);
+              if (dog) {
+                dogName = dog.name;
+              }
+            }
+          }
+
+          orderItems.push({
+            orderItemId: orderItem.id,
+            orderId: orderItem.orderId,
+            dogName,
+            recipeName: (unit.recipeSnapshot as any).name || '未知食谱',
+            packageSpecG: orderItem.packageSpecG,
+            packageCount: orderItem.packageCount,
+            recipeSnapshot: unit.recipeSnapshot,
+            createdAt: orderItem.createdAt.toISOString(),
+          });
+        }
+      }
+
+      if (orderItems.length > 0) {
+        matchingBatches.push({
+          batchId: batch.id,
+          batchCode: this.generateBatchCode(matchingUnits[0], matchingBatches.length),
+          productionDate: batch.productionDate.toISOString().split('T')[0],
+          isCurrentBatch: false, // Will be determined by caller
+          orderItems,
+        });
+      }
+    }
+
+    return {
+      batches: matchingBatches,
+    };
+  }
+
+  /**
+   * Helper method to generate batch code
+   */
+  private generateBatchCode(unit: any, sequenceNumber: number): string {
+    const recipeSnapshot = unit.recipeSnapshot;
+    const recipeId = recipeSnapshot.id || recipeSnapshot.recipeId;
+    const version = recipeSnapshot.version;
+    const recipeShort = recipeId.substring(0, 4).toUpperCase();
+    const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+    return `${date}-${recipeShort}-V${version}-${String(sequenceNumber + 1).padStart(2, '0')}`;
+  }
+
+  /**
+   * Get all packaging units for a specific date, grouped by recipe
+   * Used for batch production guide printing
+   */
+  async getBatchProductionGuide(params: {
+    targetDate: string; // YYYY-MM-DD format
+  }): Promise<{
+    productionDate: string;
+    totalBatches: number;
+    recipes: Array<{
+      recipeId: string;
+      recipeName: string;
+      recipeVersion: number;
+      totalProductionG: number;
+      totalPots: number;
+      packagingUnits: Array<{
+        unitId: string;
+        potNumber: number;
+        totalPots: number;
+        totalProductionG: number;
+        orderItems: Array<{
+          orderItemId: string;
+          orderId: string;
+          dogName: string;
+          packageSpecG: number;
+          packageCount: number;
+        }>;
+        ingredientsUsage: any;
+      }>;
+    }>;
+  }> {
+    const { targetDate } = params;
+
+    // Parse target date
+    const productionDate = DateUtil.getStartOfDay(targetDate);
+    if (isNaN(productionDate.getTime())) {
+      throw new BadRequestException(
+        `Invalid target date format: ${targetDate}. Expected YYYY-MM-DD`,
+      );
+    }
+
+    // Get all production batches for this date
+    const batches = await this.productionRepository.findByProductionDate(productionDate);
+
+    if (batches.length === 0) {
+      return {
+        productionDate: targetDate,
+        totalBatches: 0,
+        recipes: [],
+      };
+    }
+
+    // Group by recipe
+    const recipeGroups = new Map<string, any>();
+
+    for (const batch of batches) {
+      for (const unit of batch.packagingUnits) {
+        const recipeSnapshot = unit.recipeSnapshot as any;
+        const recipeId = recipeSnapshot.id;
+        const recipeName = recipeSnapshot.name;
+        const recipeVersion = recipeSnapshot.version;
+
+        // Create recipe group if not exists
+        if (!recipeGroups.has(recipeId)) {
+          recipeGroups.set(recipeId, {
+            recipeId,
+            recipeName,
+            recipeVersion,
+            totalProductionG: 0,
+            totalPots: 0,
+            packagingUnits: [],
+          });
+        }
+
+        const group = recipeGroups.get(recipeId);
+
+        // Calculate pot numbers
+        const unitsForThisRecipe = batch.packagingUnits.filter(
+          (u) => (u.recipeSnapshot as any).id === recipeId
+        );
+        const potNumber = unitsForThisRecipe.findIndex((u) => u.id === unit.id) + 1;
+        const totalPots = unitsForThisRecipe.length;
+
+        // Collect order items
+        const orderItems = [];
+        const sourceOrderItemIds = unit.sourceOrderItemIds || [];
+        for (const orderItemId of sourceOrderItemIds) {
+          const orderItem = await this.orderRepository.findOrderItemById(orderItemId);
+          if (!orderItem) {
+            continue;
+          }
+
+          // Get dog name
+          let dogName = '未知';
+          if (orderItem.dogId) {
+            const dog = await this.orderRepository.findDogById(orderItem.dogId);
+            if (dog) {
+              dogName = dog.name;
+            }
+          }
+
+          orderItems.push({
+            orderItemId: orderItem.id,
+            orderId: orderItem.orderId,
+            dogName,
+            packageSpecG: orderItem.packageSpecG,
+            packageCount: orderItem.packageCount,
+          });
+        }
+
+        // Add to group
+        group.totalProductionG += unit.totalProductionG;
+        group.totalPots += 1;
+        group.packagingUnits.push({
+          unitId: unit.id,
+          potNumber,
+          totalPots,
+          totalProductionG: unit.totalProductionG,
+          orderItems,
+          ingredientsUsage: unit.ingredientsUsageSnapshot,
+        });
+      }
+    }
+
+    // Convert map to array
+    const recipes = Array.from(recipeGroups.values());
+
+    return {
+      productionDate: targetDate,
+      totalBatches: batches.length,
+      recipes,
+    };
+  }
+
+  /**
    * List production batches by production date
    */
   async listProductionBatchesByDate(

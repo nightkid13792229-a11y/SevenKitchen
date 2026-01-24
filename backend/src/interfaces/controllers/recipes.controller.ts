@@ -67,40 +67,48 @@ export class RecipesController {
   }
 
   @Get()
-  @ApiOperation({ summary: 'List public recipes' })
+  @ApiOperation({ summary: 'List public recipes (paginated)' })
   @ApiResponse({
     status: 200,
-    description: 'List of recipes',
-    type: [RecipeSummaryDto],
+    description: 'Paginated list of recipes',
   })
   async listRecipes(
     @Query('lifeStage') lifeStage?: string,
     @Query('healthTags') healthTags?: string,
     @Query('excludeTags') excludeTags?: string,
-  ): Promise<ApiResponseDto<RecipeSummaryDto[]>> {
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ): Promise<ApiResponseDto<any>> {
+    // Parse pagination parameters
+    const parsedPage = page ? parseInt(page, 10) : 1;
+    const parsedPageSize = pageSize ? parseInt(pageSize, 10) : 10;
+
     // Parse filter parameters
     const healthTagArray = healthTags ? healthTags.split(',') : [];
     const excludeTagArray = excludeTags ? excludeTags.split(',') : [];
 
-    const recipes = await this.recipeRepository.findPublicRecipes({
+    // Get paginated recipes
+    const paginatedResult = await this.recipeRepository.findPublicRecipesPaginated({
       lifeStage,
       healthTags: healthTagArray,
       excludeTags: excludeTagArray,
+      page: parsedPage,
+      pageSize: parsedPageSize,
     });
 
     // DEBUG: Log recipe count (development only)
     if (process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true') {
       console.log(
-        `[RecipesController] GET /recipes: found ${recipes.length} PUBLIC recipe(s)`,
+        `[RecipesController] GET /recipes: page ${parsedPage}, pageSize ${parsedPageSize}, found ${paginatedResult.data.length} PUBLIC recipe(s) (total: ${paginatedResult.total})`,
       );
-      if (recipes.length === 0) {
+      if (paginatedResult.data.length === 0) {
         console.warn(
-          `[RecipesController] WARNING: No PUBLIC recipes found. Check seeding logic.`,
+          `[RecipesController] WARNING: No PUBLIC recipes found for page ${parsedPage}. Check seeding logic.`,
         );
       }
     }
 
-    const summaries: RecipeSummaryDto[] = recipes.map((recipe: any) => {
+    const summaries: RecipeSummaryDto[] = paginatedResult.data.map((recipe: any) => {
       // Parse JSON fields
       const applicableLifeStages = recipe.applicableLifeStages || [];
       const targetHealthTags = recipe.targetHealthTags || [];
@@ -130,7 +138,14 @@ export class RecipesController {
       };
     });
 
-    return ApiResponseDto.success(summaries);
+    // Return paginated result
+    return ApiResponseDto.success({
+      data: summaries,
+      total: paginatedResult.total,
+      page: paginatedResult.page,
+      pageSize: paginatedResult.pageSize,
+      hasMore: paginatedResult.hasMore,
+    });
   }
 
   /**

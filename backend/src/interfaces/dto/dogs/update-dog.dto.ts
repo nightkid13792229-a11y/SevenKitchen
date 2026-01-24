@@ -129,6 +129,35 @@ export class UpdateDogDto {
   @IsString()
   medicalHistory?: string | null;
 
+  @ApiPropertyOptional({
+    description: 'Medical records (structured health data)',
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        chiefComplaint: { type: 'string', description: '症状或疾病' },
+        visitDate: { type: 'string', description: '发病日期 (ISO 8601)', nullable: true },
+        diagnosis: { type: 'string', description: '医生诊断结果', nullable: true },
+        notes: { type: 'string', description: '详细描述', nullable: true },
+        attachments: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '检查报告文件URL数组',
+          nullable: true,
+        },
+      },
+    },
+    nullable: true,
+  })
+  @IsOptional()
+  medicalRecords?: Array<{
+    chiefComplaint: string;
+    visitDate?: string | null;
+    diagnosis?: string | null;
+    notes?: string | null;
+    attachments?: string[] | null;
+  }> | null;
+
   @ApiPropertyOptional({ description: '过敏食物', nullable: true })
   @IsOptional()
   @IsString()

@@ -44,6 +44,16 @@ export interface FindRecipesOptions {
   lifeStage?: string;
   healthTags?: string[];
   excludeTags?: string[];
+  page?: number;
+  pageSize?: number;
+}
+
+export interface PaginatedRecipes {
+  data: Recipe[];
+  total: number;
+  page: number;
+  pageSize: number;
+  hasMore: boolean;
 }
 
 export interface FilterOptions {
@@ -69,6 +79,7 @@ export interface RecipeRepository {
   findById(id: string): Promise<Recipe | null>;
   findByIdAndVersion(id: string, version: number): Promise<Recipe | null>;
   findPublicRecipes(options?: FindRecipesOptions): Promise<Recipe[]>;
+  findPublicRecipesPaginated(options?: FindRecipesOptions): Promise<PaginatedRecipes>;
   getFilterOptions(): Promise<FilterOptions>;
   save(recipe: Recipe): Promise<Recipe>;
 }

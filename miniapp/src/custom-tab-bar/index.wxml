@@ -6,7 +6,7 @@
     data-index="0"
     bindtap="switchTab"
   >
-    <image class="icon" src="{{selected === 0 ? list[0].selectedIconPath : list[0].iconPath}}" />
+    <image class="icon" src="{{selected === 0 ? list[0].selectedIconPath : list[0].iconPath}}" mode="aspectFit" />
     <text class="text">首页</text>
   </view>
 
@@ -18,18 +18,18 @@
     data-index="1"
     bindtap="switchTab"
   >
-    <text class="icon">{{staffTab.icon}}</text>
+    <image class="icon" src="{{selected === 1 ? staffTab.selectedIconPath : staffTab.iconPath}}" mode="aspectFit" />
     <text class="text">工作台</text>
   </view>
 
   <!-- 我的 -->
   <view
-    class="tab-bar-item {{selected === (isStaff ? 2 : 1) ? 'active' : ''}}"
+    class="tab-bar-item {{isStaff && selected === 2 ? 'active' : ''}} {{!isStaff && selected === 1 ? 'active' : ''}}"
     data-path="/pages/me/index"
     data-index="{{isStaff ? 2 : 1}}"
     bindtap="switchTab"
   >
-    <image class="icon" src="{{selected === (isStaff ? 2 : 1) ? list[1].selectedIconPath : list[1].iconPath}}" />
+    <image class="icon" src="{{isStaff && selected === 2 ? list[1].selectedIconPath : list[1].iconPath}}" mode="aspectFit" />
     <text class="text">我的</text>
   </view>
 </view>

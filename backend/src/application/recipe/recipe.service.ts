@@ -21,6 +21,66 @@ export class RecipeService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
+   * Helper: Check if recipe items have changed (ingredient name, ratio, or usage amount)
+   */
+  private haveRecipeItemsChanged(
+    existingItems: Array<{
+      ingredientId: string;
+      preparationMethod: string | null;
+      ratioPercent: number | null;
+      nutrientTargetKey: string | null;
+      nutrientTargetValue: number | null;
+      sortOrder: number;
+    }>,
+    newItems: Array<{
+      ingredientId: string;
+      preparationMethod: string | null;
+      ratioPercent: number | null;
+      nutrientTargetKey: string | null;
+      nutrientTargetValue: number | null;
+    }>
+  ): boolean {
+    // If item count differs, items have changed
+    if (existingItems.length !== newItems.length) {
+      return true;
+    }
+
+    // Sort both arrays by ingredientId for comparison
+    const sortedExisting = [...existingItems].sort((a, b) => a.ingredientId.localeCompare(b.ingredientId));
+    const sortedNew = [...newItems].sort((a, b) => a.ingredientId.localeCompare(b.ingredientId));
+
+    // Compare each item
+    for (let i = 0; i < sortedExisting.length; i++) {
+      const existing = sortedExisting[i];
+      const newItem = sortedNew[i];
+
+      // Check if ingredient changed
+      if (existing.ingredientId !== newItem.ingredientId) {
+        return true;
+      }
+
+      // Check if ratio percent changed (for FOOD ingredients)
+      if (existing.ratioPercent !== newItem.ratioPercent) {
+        return true;
+      }
+
+      // Check if nutrient target value changed (for SUPPLEMENT ingredients)
+      if (existing.nutrientTargetValue !== newItem.nutrientTargetValue) {
+        return true;
+      }
+
+      // Check if preparation method changed
+      if (existing.preparationMethod !== newItem.preparationMethod) {
+        return true;
+      }
+
+      // Note: We don't check nutrientTargetKey as it's derived from the ingredient type
+    }
+
+    return false;
+  }
+
+  /**
    * Get all recipes with filters and pagination
    */
   async getAllRecipes(query: RecipeQueryDto): Promise<RecipeListResponseDto> {
@@ -214,31 +274,43 @@ export class RecipeService {
   }
 
   /**
-   * Update recipe (creates new version)
+   * Update recipe (creates new version only when ingredients change)
    */
   async updateRecipe(
     id: string,
     dto: Record<string, any>,
   ): Promise<RecipeDetailResponseDto> {
-    // Get existing recipe
+    // Get existing recipe with items
     const existing = await this.prisma.recipe.findUnique({
       where: { id },
+      include: {
+        items: true,
+      },
     });
 
     if (!existing) {
       throw new NotFoundException(`Recipe not found: ${id}`);
     }
 
-    // Increment version
-    const newVersion = existing.version + 1;
     const targetHealthTags = dto.targetHealthTags ?? undefined;
 
-    // Delete old items
-    await this.prisma.recipeItem.deleteMany({
-      where: { recipeId: existing.recipeId, recipeVersion: existing.version },
-    });
+    // Check if recipe items have changed (ingredient name, ratio, or usage amount)
+    const itemsChanged = dto.items
+      ? this.haveRecipeItemsChanged(existing.items, dto.items)
+      : false;
 
-    // Update recipe (creates new version)
+    // Only create new version if ingredients changed
+    const shouldCreateNewVersion = itemsChanged;
+    const newVersion = shouldCreateNewVersion ? existing.version + 1 : existing.version;
+
+    // Always delete old items if new items are provided (to handle updates like reordering)
+    if (dto.items) {
+      await this.prisma.recipeItem.deleteMany({
+        where: { recipeId: existing.recipeId, recipeVersion: existing.version },
+      });
+    }
+
+    // Update recipe (creates new version only if ingredients changed)
     const recipe = await this.prisma.recipe.update({
       where: { id },
       data: {

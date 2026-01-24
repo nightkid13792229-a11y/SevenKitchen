@@ -22,13 +22,13 @@ onLaunch(() => {
     console.log('[App Debug] Platform:', appBaseInfo?.platform)
     console.log('[App Debug] Platform lowercased:', platform)
 
-    // Auto-fix: If in devtools and storage has old IP, clear it
-    if (platform === 'devtools') {
-      const storedBaseUrl = uni.getStorageSync('api_base_url')
-      if (storedBaseUrl && storedBaseUrl.includes('192.168.')) {
-        console.warn('⚠️  Detected old IP in storage, clearing...')
+    // Auto-fix: Clear old port 3000 configuration from storage
+    const storedBaseUrl = uni.getStorageSync('api_base_url')
+    if (storedBaseUrl) {
+      if (storedBaseUrl.includes(':3000') || storedBaseUrl.includes(':3000/')) {
+        console.warn('⚠️  Detected old port 3000 in storage, clearing...')
         uni.removeStorageSync('api_base_url')
-        console.log('✓ Storage cleared. Please restart to use correct BASE_URL')
+        console.log('✓ Old configuration cleared. Using new port 3001')
       }
     }
 

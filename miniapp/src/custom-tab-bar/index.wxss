@@ -38,19 +38,15 @@
 }
 
 .tab-bar-item .icon {
-  width: 44rpx;
-  height: 44rpx;
+  width: 56rpx;
+  height: 56rpx;
   margin-bottom: 4rpx;
   transition: transform 0.3s;
 }
 
-.tab-bar-item image.icon {
-  width: 44rpx;
-  height: 44rpx;
-}
-
 .tab-bar-item .text {
-  font-size: 20rpx;
+  font-size: 22rpx;
   color: #7a7e83;
   transition: color 0.3s;
+  margin-top: 2rpx;
 }

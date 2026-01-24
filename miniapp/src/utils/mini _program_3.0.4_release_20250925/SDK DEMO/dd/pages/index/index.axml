@@ -1,0 +1,1120 @@
+<view class='page-container-classname' ref='saveChildRef0'>
+    <view class="cu-modal {{showPrinters?'show':''}}">
+        <view class='cu-dialog'>
+            <view class='cu-dialog-close' onTap='antmoveAction' data-antmove-tap='closeDialog'>
+            </view>
+            <view class='cu-bar bg-white justify-end'>
+                <view class='content'>
+                    打印机连接
+                </view>
+                <view a:if='{{Printers.length==0&&!nowPrint.name}}' class='content-tip'>
+                    手机蓝牙未打开或打印机未开启
+                </view>
+                <view class='connected'>
+                    当前连接：
+                    <view a:if='{{nowPrint.name}}' class='connected-content'>
+                        {{nowPrint.name}}
+                    </view>
+                    <view
+                            a:if='{{nowPrint.name}}'
+                            class='connected-close'
+                            onTap='antmoveAction'
+                            data-antmove-tap='disconnect'
+                    >
+                        断开
+                    </view>
+                </view>
+                <view class='connected'>
+                    可连列表：
+                    <view a:if='{{printerLists.length>0}}' class='connected-list'>
+                        <view
+                                a:for='{{printerLists}}'
+                                class='connected-content-item'
+                                ref-numbers='{{printerLists}}'
+                        >
+                            <view class='connected-content-list'>
+                                {{item.name}}
+                            </view>
+                            <view
+                                    data-item='{{item}}'
+                                    class='connected-close-list'
+                                    onTap='antmoveAction'
+                                    data-antmove-tap='openPrinter'
+                            >
+                                连接
+                            </view>
+                        </view>
+                    </view>
+                </view>
+            </view>
+        </view>
+    </view>
+    <view class="cu-modal {{showPrinting?'show':''}}">
+        <view class='cu-dialog'>
+            <view class='cu-bar bg-white justify-end'>
+                <view class='content'>
+                    打印信息
+                </view>
+                <view a:if='{{printingError == null}}' class='content'>
+                    当前打印第{{showOver!=3?printedCount+1:printedCount}}张
+                </view>
+                <view a:else class='content'>
+                    错误码:{{printingError.errCode}}\n错误信息:{{printingError.msg}}
+                </view>
+                <btn data-status='{{showOver}}' onTap='antmoveAction' data-antmove-tap='overPrint'>
+                    {{showOver==4?'确定':(showOver==3?'完成':(showOver==2?'取消成功':'取消'))}}
+                </btn>
+            </view>
+        </view>
+    </view>
+    <view class='rowButtonCss' >
+            <btn
+                    type='primary'
+                    class='elementAddButtonCss primary-style'
+                    onTap='antmoveAction'
+                    data-antmove-tap='addPage'
+                    style='width:240rpx;'
+            >
+                增加一页
+            </btn>
+            <view class='spacer'></view>
+            <btn
+                    type='primary'
+                    class='elementAddButtonCss primary-style'
+                    onTap='antmoveAction'
+                    data-antmove-tap='scanPrinter'
+                    style='width:240rpx;flex: 1;'
+            >
+                连接打印机
+            </btn>
+            <view class='spacer'></view>
+            <btn
+                    type='primary'
+                    class='elementAddButtonCss primary-style'
+                    onTap='antmoveAction'
+                    data-antmove-tap='print'
+                    style='width:240rpx;flex: 1;'
+            >
+                打印
+            </btn>
+    </view>
+
+    <view class='rowButtonCss'>
+        <btn
+                type='primary'
+                class='elementAddButtonCss primary-style'
+                onTap='antmoveAction'
+                data-antmove-tap='getSN'
+                style='width:240rpx;'
+        >
+            获取sn号
+        </btn>
+        <view class='spacer'></view>
+        <btn
+                type='primary'
+                class='elementAddButtonCss primary-style'
+                onTap='antmoveAction'
+                data-antmove-tap='getSoftVersion'
+                style='width:240rpx;'
+        >
+            获取软件版本
+        </btn>
+        <view class='spacer'></view>
+        <btn
+                type='primary'
+                class='elementAddButtonCss primary-style'
+                onTap='antmoveAction'
+                data-antmove-tap='getHardVersion'
+                style='width:240rpx;'
+        >
+            获取硬件版本
+        </btn>
+    </view>
+
+    <view class='rowButtonCss'>
+        <btn
+                type='primary'
+                class='elementAddButtonCss primary-style'
+                onTap='antmoveAction'
+                data-antmove-tap='getMultiple'
+                style='width:370rpx;'
+        >
+            获取倍率
+        </btn>
+        <view class='spacer'></view>
+        <btn
+                type="primary"
+                class="elementAddButtonCss primary-style"
+                onTap='antmoveAction'
+                data-antmove-tap="getSpeed"
+                style='width:370rpx;'
+        >
+            速度/质量
+        </btn>
+    </view>
+    <view class='rowButtonCss'>
+        <canvas class='showPageCanvasCss' id='test1' style='width:240rpx;'>
+        </canvas>
+        <view class='spacer'></view>
+        <btn
+                type='primary'
+                class='elementAddButtonCss primary-style'
+                onTap='antmoveAction'
+                data-antmove-tap='cancelPrint'
+                style='width:240rpx;'
+        >
+            取消打印
+        </btn>
+        <view class='spacer'></view>
+        <btn
+                type='primary'
+                class='elementAddButtonCss primary-style'
+                onTap='antmoveAction'
+                data-antmove-tap='scanBarcode'
+                style='width:240rpx;'
+        >
+            扫描条码
+        </btn>
+
+    </view>
+    <view>
+        <block a:for='{{pageModels}}' a:for-index='index' ref-numbers='{{pageModels}}'>
+            <view class='blockCss'>
+                <view class='viewRow'>
+                    第{{index+1}}页数据
+                    <btn
+                            data-item='{{index}} '
+                            class='delButtonCss'
+                            onTap='antmoveAction'
+                            data-antmove-tap='delPage'
+                    >
+                        删除此页
+                    </btn>
+                </view>
+                <block>
+                    <view class='onePageBlockCss'>
+                        <view class='viewRow'>
+                            <view class='viewRow-width'>
+                                <view class='viewRow-text'>
+                                    画板宽:
+                                </view>
+                                <custom-input
+                                        type='digit'
+                                        placeholder='请输入页面宽度'
+                                        value='{{item.w}}'
+                                        data-item='{{index}}'
+                                        class='inputCss'
+                                        onInput='inputPageWidth'
+                                >
+                                </custom-input>
+                            </view>
+                            <view class='viewRow-height'>
+                                <view class='viewRow-text'>
+                                    画板高:
+                                </view>
+                                <custom-input
+                                        type='digit'
+                                        placeholder='请输入页面高度'
+                                        value='{{item.h}}'
+                                        data-item='{{index}}'
+                                        class='inputCss'
+                                        onInput='inputPageHeight'
+                                >
+                                </custom-input>
+                            </view>
+                        </view>
+                        <view class='viewRow'>
+                            <view class='viewRow-width'>
+                                <view class='viewRow-text'>
+                                    出纸方向:
+                                </view>
+                                <custom-input
+                                        type='digit'
+                                        placeholder='请输入页面宽度'
+                                        value='{{item.rotation}}'
+                                        data-item='{{index}}'
+                                        class='inputCss'
+                                        onInput='inputPageRotation'
+                                >
+                                </custom-input>
+                            </view>
+                            <view class='viewRow-height'>
+                                <view class='viewRow-text'>
+                                    打印份数:
+                                </view>
+                                <custom-input
+                                        type='digit'
+                                        placeholder='请输入页面高度'
+                                        value='{{item.count}}'
+                                        data-item='{{index}}'
+                                        class='inputCss'
+                                        onInput='inputPageNumber'
+                                >
+                                </custom-input>
+                            </view>
+                        </view>
+                        <view a:if='{{index==0}}' class='viewRow'>
+                            <view class='viewRow-width'>
+                                <view class='viewRow-text'>
+                                    出纸类型:
+                                </view>
+                                <custom-input
+                                        type='digit'
+                                        placeholder='请输入页面宽度'
+                                        value='{{item.gapType}}'
+                                        data-item='{{index}}'
+                                        class='inputCss'
+                                        onInput='inputGapType'
+                                >
+                                </custom-input>
+                            </view>
+                            <view class='viewRow-height'>
+                                <view class='viewRow-text'>
+                                    打印浓度:
+                                </view>
+                                <custom-input
+                                        type='digit'
+                                        placeholder='请输入页面高度'
+                                        value='{{item.darkness}}'
+                                        data-item='{{index}}'
+                                        class='inputCss'
+                                        onInput='inputDarkness'
+                                >
+                                </custom-input>
+                            </view>
+                        </view>
+                        <view class="viewRow" wx:if="{{index==0}}">
+                            <view class='viewRow-width'>
+                                <view class='viewRow-text'>
+                                    epc:
+                                </view>
+                                <custom-input
+                                        type='text'
+                                        placeholder='请输入epc码，必须是4的倍数'
+                                        value='{{item.epc}}'
+                                        data-item='{{index}}'
+                                        class='inputCss'
+                                        onInput='inputEpc'
+                                >
+                                </custom-input>
+                            </view>
+                            <view class="viewRow-height">
+                                <view class="viewRow-text">高速/高质量</view>
+                                <switch
+                                        type="switch"
+                                        checked="{{item.speedChecked}}"
+                                        data-item="{{index}}"
+                                        onChange="switch2Change"
+                                />
+                            </view>
+                        </view>
+                    </view>
+                </block>
+                <view class='rowButtonCss'>
+                    <btn
+                            class='elementAddButtonCss'
+                            data-item='{{index}}'
+                            onTap='antmoveAction'
+                            data-antmove-tap='addText'
+                            style='width:auto;padding-left: 5px;padding-right: 5px'
+                    >
+                        添加文本
+                    </btn>
+                    <btn
+                            class='elementAddButtonCss'
+                            data-item='{{index}}'
+                            onTap='antmoveAction'
+                            data-antmove-tap='addLine'
+                            style='width:auto;padding-left: 5px;padding-right: 5px'
+                    >
+                        添加线条
+                    </btn>
+                    <btn
+                            class='elementAddButtonCss'
+                            data-item='{{index}}'
+                            onTap='antmoveAction'
+                            data-antmove-tap='addBarcode'
+                            style='width:auto;padding-left: 5px;padding-right: 5px'
+                    >
+                        添加条码
+                    </btn>
+                    <btn
+                            class='elementAddButtonCss'
+                            data-item='{{index}}'
+                            onTap='antmoveAction'
+                            data-antmove-tap='addQrcode'
+                            style='width:auto;padding-left: 5px;padding-right: 5px'
+                    >
+                        添加二维码
+                    </btn>
+                    <btn
+                            class='elementAddButtonCss'
+                            data-item='{{index}}'
+                            onTap='antmoveAction'
+                            data-antmove-tap='addRect'
+                            style='width:auto;padding-left: 5px;padding-right: 5px'
+                    >
+                        添加矩形框
+                    </btn>
+                    <btn
+                            class='elementAddButtonCss'
+                            data-item='{{index}}'
+                            onTap='antmoveAction'
+                            data-antmove-tap='addPicture'
+                            style='width:auto;padding-left: 5px;padding-right: 5px'
+                    >
+                        添加图片
+                    </btn>
+                </view>
+                <block
+                        a:for='{{item.elements}}'
+                        a:for-index='childIndex'
+                        a:for-item='element'
+                        ref-numbers='{{item.elements}}'
+                >
+                    <view a:if='{{element.id == 1}}'>
+                        <view class='viewRow'>
+                            第{{childIndex+1}}个元素文本
+                            <btn
+                                    data-item='{{childIndex}}'
+                                    data-parent='{{index}}'
+                                    class='delButtonCss'
+                                    onTap='antmoveAction'
+                                    data-antmove-tap='delElement'
+                            >
+                                删除
+                            </btn>
+                        </view>
+                        <view class='onePageBlockCss'>
+                            <view class='viewRow'>
+                                <view class='viewRow-width'>
+                                    <view class='viewRow-text'>
+                                        文本x:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入起始坐标x'
+                                            value='{{element.x}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementX'
+                                    >
+                                    </custom-input>
+                                </view>
+                                <view class='viewRow-height'>
+                                    <view class='viewRow-text'>
+                                        文本y:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入起始坐标y'
+                                            value='{{element.y}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementY'
+                                    >
+                                    </custom-input>
+                                </view>
+                            </view>
+                            <view class='viewRow'>
+                                <view class='viewRow-width'>
+                                    <view class='viewRow-text'>
+                                        旋转角度:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入旋转角度'
+                                            value='{{element.rotation}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementRotation'
+                                    >
+                                    </custom-input>
+                                </view>
+                                <view class='viewRow-height'>
+                                    <view class='viewRow-text'>
+                                        字体高度:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入字体高度'
+                                            value='{{element.fontSize}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementFontHeight'
+                                    >
+                                    </custom-input>
+                                </view>
+                            </view>
+                            <view class='viewRow'>
+                                <view class='viewOneRow-text'>
+                                    打印内容:
+                                </view>
+                                <custom-input
+                                        type='text'
+                                        placeholder='请输入内容'
+                                        value='{{element.value}}'
+                                        data-item='{{childIndex}}'
+                                        data-parent='{{index}}'
+                                        class='inputOneCss'
+                                        onInput='inputElementValue'
+                                >
+                                </custom-input>
+                            </view>
+                            <view class='viewRow'>
+
+                                <view>
+                                    加粗:
+                                </view>
+                                <switch
+                                        checked='{{element.options&&element.options.bold}}'
+                                        data-item='{{childIndex}}'
+                                        data-parent='{{index}}'
+                                        onChange='switchChange'
+                                >
+                                </switch>
+
+                                <view>
+                                    斜体:
+                                </view>
+                                <switch
+                                        checked='{{element.options&&element.options.italic}}'
+                                        data-item='{{childIndex}}'
+                                        data-parent='{{index}}'
+                                        onChange='switchChange2'
+                                >
+                                </switch>
+                                <view>字体:</view>
+                                <custom-input
+                                        onInput="inputFontFamily"
+                                        type="text"
+                                        placeholder="字体名称"
+                                        value="{{element.options&&element.options.family ? element.options.family : ''}}"
+                                        data-item="{{childIndex}}"
+                                        data-parent="{{index}}"
+                                        class="inputOneCss"
+                                >
+                                </custom-input>
+                            </view>
+                        </view>
+                    </view>
+                    <view a:elif='{{element.id == 2}}'>
+                        <view class='viewRow'>
+                            第{{childIndex+1}}个元素线条
+                            <btn
+                                    data-item='{{childIndex}}'
+                                    data-parent='{{index}}'
+                                    class='delButtonCss'
+                                    onTap='antmoveAction'
+                                    data-antmove-tap='delElement'
+                            >
+                                删除
+                            </btn>
+                        </view>
+                        <view class='onePageBlockCss'>
+                            <view class='viewRow'>
+                                <view class='viewRow-width'>
+                                    <view class='viewRow-text'>
+                                        线条x:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入起始坐标x'
+                                            value='{{element.x}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementX'
+                                    >
+                                    </custom-input>
+                                </view>
+                                <view class='viewRow-height'>
+                                    <view class='viewRow-text'>
+                                        线条y:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入起始坐标y'
+                                            value='{{element.y}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementY'
+                                    >
+                                    </custom-input>
+                                </view>
+                            </view>
+                            <view class='viewRow'>
+                                <view class='viewRow-width'>
+                                    <view class='viewRow-text'>
+                                        线条宽:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入旋转角度'
+                                            value='{{element.w}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementW'
+                                    >
+                                    </custom-input>
+                                </view>
+                                <view class='viewRow-height'>
+                                    <view class='viewRow-text'>
+                                        线条高:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入字体高度'
+                                            value='{{element.h}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementH'
+                                    >
+                                    </custom-input>
+                                </view>
+                            </view>
+                            <view class='viewRow'>
+                                <view class='viewRow-width'>
+                                    <view class='viewRow-text'>
+                                        线条旋转角度:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入旋转角度'
+                                            value='{{element.rotation}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementRotation'
+                                    >
+                                    </custom-input>
+                                </view>
+                            </view>
+                        </view>
+                    </view>
+                    <view a:elif='{{element.id == 3}}'>
+                        <view class='viewRow'>
+                            第{{childIndex+1}}个元素条码
+                            <btn
+                                    data-item='{{childIndex}}'
+                                    data-parent='{{index}}'
+                                    class='delButtonCss'
+                                    onTap='antmoveAction'
+                                    data-antmove-tap='delElement'
+                            >
+                                删除
+                            </btn>
+                        </view>
+                        <view class='onePageBlockCss'>
+                            <view class='viewRow'>
+                                <view class='viewRow-width'>
+                                    <view class='viewRow-text'>
+                                        条码x:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入起始坐标x'
+                                            value='{{element.x}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementX'
+                                    >
+                                    </custom-input>
+                                </view>
+                                <view class='viewRow-height'>
+                                    <view class='viewRow-text'>
+                                        条码y:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入起始坐标y'
+                                            value='{{element.y}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementY'
+                                    >
+                                    </custom-input>
+                                </view>
+                            </view>
+                            <view class='viewRow'>
+                                <view class='viewRow-width'>
+                                    <view class='viewRow-text'>
+                                        条码宽:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入旋转角度'
+                                            value='{{element.w}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementW'
+                                    >
+                                    </custom-input>
+                                </view>
+                                <view class='viewRow-height'>
+                                    <view class='viewRow-text'>
+                                        条码高:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入字体高度'
+                                            value='{{element.h}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementH'
+                                    >
+                                    </custom-input>
+                                </view>
+                            </view>
+                            <view class='viewRow'>
+                                <view class='viewRow-width'>
+                                    <view class='viewRow-text'>
+                                        旋转角度:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入旋转角度'
+                                            value='{{element.rotation}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementRotation'
+                                    >
+                                    </custom-input>
+                                </view>
+                                <view class='viewRow-height'>
+                                    <view class='viewRow-text'>
+                                        条码数据:
+                                    </view>
+                                    <custom-input
+                                            placeholder='请输入字体高度'
+                                            value='{{element.value}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementValue'
+                                    >
+                                    </custom-input>
+                                </view>
+                            </view>
+                            <view class='viewRow'>
+                                <view class='viewRow-width'>
+                                    <view class='viewRow-text'>
+                                        字体大小:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入字体大小'
+                                            value='{{element.fontSize}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementFontHeight'
+                                    >
+                                    </custom-input>
+                                </view>
+                                <view class='viewRow-height'>
+                                    <view class='viewRow-text'>
+                                        文本高度:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入文本高度'
+                                            value='{{element.fontHeight}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementBarcodeFontHeight'
+                                    >
+                                    </custom-input>
+                                </view>
+                            </view>
+                            <view class='viewRow'>
+                                <view class='viewRow-width'>
+                                    <view class='viewRow-text'>
+                                        字体位置:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入字体位置'
+                                            value='{{element.fontPosition}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementFontPosition'
+                                    >
+                                    </custom-input>
+                                </view>
+                            </view>
+                        </view>
+                    </view>
+                    <view a:elif='{{element.id == 4}}'>
+                        <view class='viewRow'>
+                            第{{childIndex+1}}个元素二维码
+                            <btn
+                                    data-item='{{childIndex}}'
+                                    data-parent='{{index}}'
+                                    class='delButtonCss'
+                                    onTap='antmoveAction'
+                                    data-antmove-tap='delElement'
+                            >
+                                删除
+                            </btn>
+                        </view>
+                        <view class='onePageBlockCss'>
+                            <view class='viewRow'>
+                                <view class='viewRow-width'>
+                                    <view class='viewRow-text'>
+                                        二维码x:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入起始坐标x'
+                                            value='{{element.x}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementX'
+                                    >
+                                    </custom-input>
+                                </view>
+                                <view class='viewRow-height'>
+                                    <view class='viewRow-text'>
+                                        二维码y:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入起始坐标y'
+                                            value='{{element.y}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementY'
+                                    >
+                                    </custom-input>
+                                </view>
+                            </view>
+                            <view class='viewRow'>
+                                <view class='viewRow-width'>
+                                    <view class='viewRow-text'>
+                                        二维码宽:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入旋转角度'
+                                            value='{{element.w}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementW'
+                                    >
+                                    </custom-input>
+                                </view>
+                                <view class='viewRow-height'>
+                                    <view class='viewRow-text'>
+                                        二维码高:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入字体高度'
+                                            value='{{element.h}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementH'
+                                    >
+                                    </custom-input>
+                                </view>
+                            </view>
+                            <view class='viewRow'>
+                                <view class='viewRow-width'>
+                                    <view class='viewRow-text'>
+                                        旋转角度:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入旋转角度'
+                                            value='{{element.rotation}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementRotation'
+                                    >
+                                    </custom-input>
+                                </view>
+                                <view class='viewRow-height'>
+                                    <view class='viewRow-text'>
+                                        条码数据:
+                                    </view>
+                                    <custom-input
+                                            type='text'
+                                            placeholder='请输入字体高度'
+                                            value='{{element.value}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementValue'
+                                    >
+                                    </custom-input>
+                                </view>
+                            </view>
+                        </view>
+                    </view>
+                    <view a:elif='{{element.id == 5}}'>
+                        <view class='viewRow'>
+                            第{{childIndex+1}}个元素矩形框
+                            <btn
+                                    data-item='{{childIndex}}'
+                                    data-parent='{{index}}'
+                                    class='delButtonCss'
+                                    onTap='antmoveAction'
+                                    data-antmove-tap='delElement'
+                            >
+                                删除
+                            </btn>
+                        </view>
+                        <view class='onePageBlockCss'>
+                            <view class='viewRow'>
+                                <view class='viewRow-width'>
+                                    <view class='viewRow-text'>
+                                        矩形x:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入起始坐标x'
+                                            value='{{element.x}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementX'
+                                    >
+                                    </custom-input>
+                                </view>
+                                <view class='viewRow-height'>
+                                    <view class='viewRow-text'>
+                                        矩形y:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入起始坐标y'
+                                            value='{{element.y}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementY'
+                                    >
+                                    </custom-input>
+                                </view>
+                            </view>
+                            <view class='viewRow'>
+                                <view class='viewRow-width'>
+                                    <view class='viewRow-text'>
+                                        矩形宽:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入旋转角度'
+                                            value='{{element.w}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementW'
+                                    >
+                                    </custom-input>
+                                </view>
+                                <view class='viewRow-height'>
+                                    <view class='viewRow-text'>
+                                        矩形高:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入字体高度'
+                                            value='{{element.h}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementH'
+                                    >
+                                    </custom-input>
+                                </view>
+                            </view>
+                            <view class='viewRow'>
+                                <view class='viewRow-width'>
+                                    <view class='viewRow-text'>
+                                        旋转角度:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入旋转角度'
+                                            value='{{element.rotation}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementRotation'
+                                    >
+                                    </custom-input>
+                                </view>
+                                <view class='viewRow-height'>
+                                    <view class='viewRow-text'>
+                                        边框宽度:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入字体高度'
+                                            value='{{element.linewidth}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementLineWidth'
+                                    >
+                                    </custom-input>
+                                </view>
+                            </view>
+                            <view class='viewRow'>
+                                <view class='viewRow-width'>
+                                    <view class='viewRow-text'>
+                                        是否填充:
+                                    </view>
+                                    <switch
+                                            checked='{{element.filled}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            onChange='filledChanged'
+                                    >
+                                    </switch>
+                                </view>
+                            </view>
+                        </view>
+                    </view>
+                    <view a:elif='{{element.id == 6}}'>
+                        <view class='viewRow'>
+                            第{{childIndex+1}}个元素图片
+                            <btn
+                                    data-item='{{childIndex}}'
+                                    data-parent='{{index}}'
+                                    class='delButtonCss'
+                                    onTap='antmoveAction'
+                                    data-antmove-tap='delElement'
+                            >
+                                删除
+                            </btn>
+                        </view>
+                        <view class='onePageBlockCss'>
+                            <view class='viewRow'>
+                                <view class='viewRow-width'>
+                                    <view class='viewRow-text'>
+                                        图片x:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入起始坐标x'
+                                            value='{{element.x}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementX'
+                                    >
+                                    </custom-input>
+                                </view>
+                                <view class='viewRow-height'>
+                                    <view class='viewRow-text'>
+                                        图片y:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入起始坐标y'
+                                            value='{{element.y}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementY'
+                                    >
+                                    </custom-input>
+                                </view>
+                            </view>
+                            <view class='viewRow'>
+                                <view class='viewRow-width'>
+                                    <view class='viewRow-text'>
+                                        图片宽:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入旋转角度'
+                                            value='{{element.w}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementW'
+                                    >
+                                    </custom-input>
+                                </view>
+                                <view class='viewRow-height'>
+                                    <view class='viewRow-text'>
+                                        图片高:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入字体高度'
+                                            value='{{element.h}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementH'
+                                    >
+                                    </custom-input>
+                                </view>
+                            </view>
+                            <view class='viewRow'>
+                                <view class='viewRow-width'>
+                                    <view class='viewRow-text'>
+                                        旋转角度:
+                                    </view>
+                                    <custom-input
+                                            type='digit'
+                                            placeholder='请输入旋转角度'
+                                            value='{{element.rotation}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            onInput='inputElementRotation'
+                                    >
+                                    </custom-input>
+                                </view>
+                                <view class='viewRow-height'>
+                                    <view class='viewRow-text'>
+                                        图片url:
+                                    </view>
+                                    <view
+                                            value='{{element.value}}'
+                                            data-item='{{childIndex}}'
+                                            data-parent='{{index}}'
+                                            class='inputCss'
+                                            style='width:80px;length=10'
+                                            onTap='selectPic'
+                                    >
+                                        {{element.value}}
+                                    </view>
+                                </view>
+                            </view>
+                        </view>
+                    </view>
+                </block>
+            </view>
+        </block>
+    </view>
+    <view class='show canvas'>
+        <canvas style='width:{{canvasWidth}}px; height:{{canvasHeight}}px;' id='test'>
+        </canvas>
+    </view>
+</view>

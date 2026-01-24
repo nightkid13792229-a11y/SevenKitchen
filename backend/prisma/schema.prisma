@@ -110,6 +110,7 @@ model User {
   createdPurchaseLists  PurchaseList[]      @relation("PurchaseListCreator")
   submittedReimbursements Reimbursement[]   @relation("ReimbursementSubmitter")
   reviewedReimbursements  Reimbursement[]  @relation("ReimbursementReviewer")
+  customRecipeOrders CustomRecipeOrder[]    @relation("CustomRecipeOrderCustomer")
 
   @@index([wechatOpenid])
   @@index([phone])
@@ -176,6 +177,7 @@ model Dog {
   vaccineRecords       VaccineRecord[]
   weightRecords        WeightRecord[]
   orders               Order[]           // 🔧 添加：一个狗狗可以有多个订单
+  customRecipeOrders   CustomRecipeOrder[] @relation("CustomRecipeOrderDog")
 
   @@index([ownerId])
   @@index([ownerId, createdAt])
@@ -207,8 +209,12 @@ model Recipe {
   targetHealthTags       Json                        @default("[]") @map("target_health_tags")
   videoUrl               String?                     @map("video_url")
   designSource           String?                     @map("design_source")
+  isCustomRecipe         Boolean                     @default(false) @map("is_custom_recipe")
+  customOrderId          String?                     @map("custom_order_id")
+  nutritionReportUrl     String?                     @map("nutrition_report_url")
   healthTagAssignments   RecipeHealthTagAssignment[]
   items                  RecipeItem[]
+  customOrder            CustomRecipeOrder?          @relation("CustomRecipeOrders")
 
   @@unique([recipeId, version])
   @@index([recipeId])
@@ -459,6 +465,7 @@ model MedicalRecord {
   followUpDate   DateTime?     @map("follow_up_date") @db.Date
   veterinarian   String?       @map("veterinarian")
   notes          String?       @map("notes")
+  attachments    String[]      @default([]) @map("attachments")
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
   dog            Dog           @relation(fields: [dogId], references: [id], onDelete: Cascade)
@@ -832,4 +839,94 @@ enum ReimbursementStatus {
   APPROVED            // 已批准
   REJECTED            // 已驳回
   REQUIRES_RESUBMIT   // 需重新提交
+}
+
+// ==========================================
+// Custom Recipe Management
+// ==========================================
+
+model CustomRecipeOrder {
+  id                    String                    @id @default(uuid()) @map("id")
+  orderId               String                    @unique @map("order_id")
+  customerId            String                    @map("customer_id")
+  dogId                 String                    @map("dog_id")
+  targetGoal            TargetGoal                @map("target_goal")
+  allergies             String[]                  @default([]) @map("allergies")
+  medicalConditions     String[]                  @default([]) @map("medical_conditions")
+  additionalNotes       String?                   @map("additional_notes") @db.Text
+  preferredIngredients  String[]                  @default([]) @map("preferred_ingredients")
+  dislikedIngredients   String[]                  @default([]) @map("disliked_ingredients")
+  attachments           Json?                     @map("attachments")
+  scheduledDate         DateTime                  @map("scheduled_date") @db.Date
+  estimatedDeliveryDate DateTime?                 @map("estimated_delivery_date") @db.Date
+  amount                Decimal                   @default(299) @db.Decimal(10, 2)
+  status                CustomRecipeStatus        @default(PENDING_PAYMENT) @map("status")
+  paymentConfirmedAt    DateTime?                 @map("payment_confirmed_at")
+  inProgressAt          DateTime?                 @map("in_progress_at")
+  deliveredAt           DateTime?                 @map("delivered_at")
+  recipeId              String?                   @unique @map("recipe_id")
+  healthInfoSyncedAt    DateTime?                 @map("health_info_synced_at")
+  createdAt             DateTime                  @default(now()) @map("created_at")
+  updatedAt             DateTime                  @updatedAt @map("updated_at")
+  customer              User                      @relation("CustomRecipeOrderCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+  dog                   Dog                       @relation("CustomRecipeOrderDog", fields: [dogId], references: [id], onDelete: Cascade)
+  recipe                Recipe?                   @relation("CustomRecipeOrders", fields: [recipeId], references: [id])
+  attachmentsRecords    CustomRecipeAttachment[]
+
+  @@index([customerId])
+  @@index([dogId])
+  @@index([status])
+  @@index([scheduledDate])
+  @@map("custom_recipe_order")
+}
+
+model CustomRecipeSchedule {
+  id               String   @id @default(uuid()) @map("id")
+  date             DateTime @map("date") @db.Date
+  capacity         Int      @default(4) @map("capacity")
+  bookedCount      Int      @default(0) @map("booked_count")
+  isAvailable      Boolean  @default(true) @map("is_available")
+  isPublicHoliday  Boolean  @default(false) @map("is_public_holiday")
+  notes            String?  @map("notes")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@unique([date])
+  @@index([date])
+  @@map("custom_recipe_schedule")
+}
+
+model CustomRecipeAttachment {
+  id         String              @id @default(uuid()) @map("id")
+  orderId    String              @map("order_id")
+  fileName   String              @map("file_name")
+  fileUrl    String              @map("file_url")
+  fileSize   Int                 @map("file_size")
+  fileType   CustomAttachmentType @map("file_type")
+  uploadedAt DateTime            @default(now()) @map("uploaded_at")
+  order      CustomRecipeOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("custom_recipe_attachment")
+}
+
+enum TargetGoal {
+  MAINTAIN          // 维持体重
+  GAIN_WEIGHT       // 增重
+  LOSE_WEIGHT       // 减重
+  HEALTH_SUPPORT    // 健康管理
+}
+
+enum CustomRecipeStatus {
+  PENDING_PAYMENT   // 待付款
+  PAID              // 已付款
+  IN_PROGRESS       // 制作中
+  DELIVERED         // 已交付
+}
+
+enum CustomAttachmentType {
+  MEDICAL_REPORT    // 体检报告
+  LAB_RESULT        // 化验结果
+  IMAGE             // 图片
+  OTHER             // 其他
 }

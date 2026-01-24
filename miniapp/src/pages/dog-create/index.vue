@@ -453,9 +453,37 @@
         </view>
 
         <view v-if="showHealthRecord" class="health-record-content">
+          <!-- 病史记录 -->
           <view class="form-item">
-            <text class="label">病史描述</text>
-            <textarea class="textarea" placeholder="请输入病史（选填）" v-model="formData.medicalHistory" />
+            <view class="medical-header">
+              <text class="label">病史记录</text>
+              <text class="add-btn" @tap="addMedicalRecord">+ 添加</text>
+            </view>
+
+            <!-- 病史记录列表 -->
+            <view v-if="formData.medicalRecords && formData.medicalRecords.length > 0" class="medical-list">
+              <view
+                v-for="(record, index) in formData.medicalRecords"
+                :key="index"
+                class="medical-item"
+              >
+                <view class="medical-item-main" @tap="editMedicalRecord(index)">
+                  <view class="medical-item-title">{{ record.chiefComplaint || '未命名' }}</view>
+                  <view class="medical-item-info">
+                    <text v-if="record.visitDate" class="info-tag">日期: {{ formatDate(record.visitDate) }}</text>
+                    <text v-if="record.diagnosis" class="info-tag diagnosis">诊断: {{ record.diagnosis }}</text>
+                  </view>
+                </view>
+                <view class="medical-item-actions">
+                  <text class="action-btn edit-btn" @tap="editMedicalRecord(index)">编辑</text>
+                  <text class="action-btn delete-btn" @tap="deleteMedicalRecord(index)">删除</text>
+                </view>
+              </view>
+            </view>
+
+            <view v-else class="empty-medical">
+              <text class="empty-text">暂无病史记录</text>
+            </view>
           </view>
 
           <view class="form-item">
@@ -467,20 +495,11 @@
             <text class="label">挑食食物</text>
             <textarea class="textarea" placeholder="请记录不爱吃或挑食的食物（选填）" v-model="formData.pickyFoods" />
           </view>
-
-          <view class="form-item">
-            <text class="label">检查报告存档</text>
-            <view class="placeholder-box">
-              <text class="placeholder-text">📁 敬请期待：检查报告上传功能即将上线</text>
-            </view>
-          </view>
         </view>
       </view>
 
-      <button class="btn" @tap="submit" :disabled="canSubmit === false">{{ isEditMode ? '保存档案' : '创建档案' }}</button>
-
-      <!-- Preview Calculation Button -->
-      <button class="btn btn-secondary" @tap="previewCalculation" :disabled="canPreview === false">
+      <!-- Preview Calculation Button (只在没有计算结果时显示) -->
+      <button v-if="!calcResult" class="btn btn-secondary" @tap="previewCalculation" :disabled="canPreview === false">
         每日能量计算
       </button>
 
@@ -502,6 +521,11 @@
         <view class="calc-warning" v-if="calcResult.isTreatCapped">
           ⚠️ 零食热量已超过安全上限(10%)，系统已自动调整为安全最大值
         </view>
+
+        <!-- 每日能量计算按钮（在结果中显示） -->
+        <button class="btn btn-inline-calc" @tap="previewCalculation" :disabled="canPreview === false">
+          重新计算
+        </button>
 
         <!-- 计算过程折叠区 -->
         <view class="calc-process-section" v-if="calcResult && calcResult.rer">
@@ -616,6 +640,13 @@
       </view>
     </view>
 
+    <!-- 固定在底部的保存按钮 -->
+    <view class="fixed-bottom-bar">
+      <button class="btn btn-save-fixed" @tap="submit" :disabled="canSubmit === false">
+        {{ isEditMode ? '保存档案' : '创建档案' }}
+      </button>
+    </view>
+
     <!-- Custom Breed Name Input Modal -->
     <view v-if="showCustomBreedInput" class="custom-breed-modal" @tap.self="cancelCustomBreed">
       <view class="custom-breed-content">
@@ -632,6 +663,90 @@
         </view>
       </view>
     </view>
+
+    <!-- Medical Record Modal -->
+    <view v-if="showMedicalRecordModal" class="medical-record-modal" @tap="closeMedicalRecordModal">
+      <view class="medical-record-mask" @tap="closeMedicalRecordModal"></view>
+      <view class="medical-record-content" @tap.stop>
+        <text class="medical-record-title">{{ isEditingMedicalRecord ? '编辑病史记录' : '添加病史记录' }}</text>
+
+        <view class="medical-form">
+          <view class="medical-form-item">
+            <text class="medical-label">症状或疾病 *</text>
+            <input
+              class="medical-input"
+              v-model="currentMedicalRecord.chiefComplaint"
+              placeholder="请输入症状或疾病名称"
+            />
+          </view>
+
+          <view class="medical-form-item">
+            <text class="medical-label">发病日期</text>
+            <picker mode="date" :value="currentMedicalRecord.visitDate" @change="onMedicalDateChange">
+              <view class="medical-picker">
+                {{ currentMedicalRecord.visitDate || '请选择发病日期' }}
+              </view>
+            </picker>
+          </view>
+
+          <view class="medical-form-item">
+            <text class="medical-label">医生诊断结果</text>
+            <input
+              class="medical-input"
+              v-model="currentMedicalRecord.diagnosis"
+              placeholder="请输入医生诊断结果"
+            />
+          </view>
+
+          <view class="medical-form-item">
+            <text class="medical-label">详细描述</text>
+            <textarea
+              class="medical-textarea"
+              v-model="currentMedicalRecord.notes"
+              placeholder="请输入详细描述（选填）"
+              :maxlength="500"
+            />
+          </view>
+
+          <!-- 检查报告上传 -->
+          <view class="medical-form-item">
+            <text class="medical-label">检查报告（图片或PDF）</text>
+
+            <!-- 已上传文件列表 -->
+            <view v-if="currentMedicalRecord.attachments && currentMedicalRecord.attachments.length > 0" class="uploaded-files">
+              <view
+                v-for="(file, index) in currentMedicalRecord.attachments"
+                :key="index"
+                class="uploaded-file-item"
+              >
+                <view class="file-info">
+                  <text class="file-icon">{{ getFileIcon(file) }}</text>
+                  <text class="file-name">{{ getFileName(file) }}</text>
+                </view>
+                <text class="file-delete" @tap="removeAttachment(index)">删除</text>
+              </view>
+            </view>
+
+            <!-- 上传按钮 -->
+            <view class="upload-buttons">
+              <button class="upload-btn" @tap="chooseImage">
+                <text class="upload-icon">📷</text>
+                <text class="upload-text">选择图片</text>
+              </button>
+              <button class="upload-btn" @tap="choosePdf">
+                <text class="upload-icon">📄</text>
+                <text class="upload-text">选择PDF</text>
+              </button>
+            </view>
+          </view>
+        </view>
+
+        <view class="medical-record-actions">
+          <button class="medical-btn-cancel" @tap="closeMedicalRecordModal">取消</button>
+          <button class="medical-btn-confirm" @tap="saveMedicalRecord">保存</button>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -640,6 +755,15 @@ import { ref, computed, onMounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 import { addDogToCache } from '../../utils/dog-cache'
+
+// 病史记录接口
+interface MedicalRecord {
+  chiefComplaint: string  // 症状或疾病（必填）
+  visitDate?: string      // 发病日期（选填）
+  diagnosis?: string      // 医生诊断结果（选填）
+  notes?: string          // 详细描述（选填）
+  attachments?: string[]  // 检查报告文件URL数组
+}
 
 interface FormData {
   name: string
@@ -657,7 +781,8 @@ interface FormData {
   treatInputMode: string
   treatLevel: string
   manualTreatKcal: string
-  medicalHistory: string
+  medicalHistory?: string  // 保留用于向后兼容
+  medicalRecords: MedicalRecord[]  // 新的病史记录列表
   allergyFoods: string
   pickyFoods: string
 }
@@ -687,7 +812,7 @@ const formData = ref<FormData>({
   treatInputMode: null as string | null,
   treatLevel: 'LOW',
   manualTreatKcal: '',
-  medicalHistory: '',
+  medicalRecords: [],
   allergyFoods: '',
   pickyFoods: ''
 })
@@ -872,6 +997,19 @@ const bcsGuideShown = ref(false) // 记录是否已显示过BCS图
 const showBcsFallback = ref(false) // 是否显示降级内容（图片加载失败时）
 const showHealthRecord = ref(false) // 健康记录折叠面板展开状态
 const showLifeStageOverride = ref(false) // 生命阶段手动选择面板展开状态
+
+// 病史记录相关状态变量
+const showMedicalRecordModal = ref(false) // 病史记录弹窗显示状态
+const isEditingMedicalRecord = ref(false) // 是否正在编辑病史记录
+const currentMedicalRecordIndex = ref(-1) // 当前编辑的病史记录索引
+const currentMedicalRecord = ref<MedicalRecord>({
+  chiefComplaint: '',
+  visitDate: '',
+  diagnosis: '',
+  notes: '',
+  attachments: []
+})
+const uploadingFile = ref(false) // 文件上传状态
 
 // 侧边导航状态变量
 const activeCategory = ref<string>('')
@@ -1638,6 +1776,314 @@ function toggleHealthRecord() {
   showHealthRecord.value = !showHealthRecord.value
 }
 
+// ========== 病史记录管理函数 ==========
+
+/**
+ * 添加病史记录
+ */
+function addMedicalRecord() {
+  isEditingMedicalRecord.value = false
+  currentMedicalRecordIndex.value = -1
+  currentMedicalRecord.value = {
+    chiefComplaint: '',
+    visitDate: '',
+    diagnosis: '',
+    notes: '',
+    attachments: []
+  }
+  showMedicalRecordModal.value = true
+}
+
+/**
+ * 编辑病史记录
+ */
+function editMedicalRecord(index: number) {
+  isEditingMedicalRecord.value = true
+  currentMedicalRecordIndex.value = index
+  // 深拷贝当前记录
+  currentMedicalRecord.value = { ...formData.value.medicalRecords[index] }
+  showMedicalRecordModal.value = true
+}
+
+/**
+ * 删除病史记录
+ */
+function deleteMedicalRecord(index: number) {
+  uni.showModal({
+    title: '确认删除',
+    content: '确定要删除这条病史记录吗？',
+    success: (res) => {
+      if (res.confirm) {
+        formData.value.medicalRecords.splice(index, 1)
+        uni.showToast({
+          title: '删除成功',
+          icon: 'success',
+          duration: 1500
+        })
+      }
+    }
+  })
+}
+
+/**
+ * 关闭病史记录弹窗
+ */
+function closeMedicalRecordModal() {
+  showMedicalRecordModal.value = false
+  currentMedicalRecord.value = {
+    chiefComplaint: '',
+    visitDate: '',
+    diagnosis: '',
+    notes: '',
+    attachments: []
+  }
+}
+
+/**
+ * 保存病史记录
+ */
+function saveMedicalRecord() {
+  // 验证必填字段
+  if (!currentMedicalRecord.value.chiefComplaint || currentMedicalRecord.value.chiefComplaint.trim() === '') {
+    uni.showToast({
+      title: '请输入症状或疾病',
+      icon: 'none',
+      duration: 2000
+    })
+    return
+  }
+
+  if (isEditingMedicalRecord.value) {
+    // 编辑模式：更新现有记录
+    formData.value.medicalRecords[currentMedicalRecordIndex.value] = { ...currentMedicalRecord.value }
+    uni.showToast({
+      title: '更新成功',
+      icon: 'success',
+      duration: 1500
+    })
+  } else {
+    // 新增模式：添加新记录
+    formData.value.medicalRecords.push({ ...currentMedicalRecord.value })
+    uni.showToast({
+      title: '添加成功',
+      icon: 'success',
+      duration: 1500
+    })
+  }
+
+  closeMedicalRecordModal()
+}
+
+/**
+ * 病历日期选择变更
+ */
+function onMedicalDateChange(e: any) {
+  currentMedicalRecord.value.visitDate = e.detail.value
+}
+
+/**
+ * 格式化日期显示
+ */
+function formatDate(dateStr: string): string {
+  if (!dateStr) return ''
+  const date = new Date(dateStr)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+/**
+ * 选择图片
+ */
+function chooseImage() {
+  uni.chooseImage({
+    count: 9, // 最多选择9张
+    sizeType: ['compressed'], // 压缩图
+    sourceType: ['album', 'camera'],
+    success: (res) => {
+      // 上传所有选中的图片
+      res.tempFilePaths.forEach((filePath: string) => {
+        uploadFile(filePath, 'image')
+      })
+    },
+    fail: (err) => {
+      console.error('[DogCreate] Choose image failed:', err)
+      uni.showToast({
+        title: '选择图片失败',
+        icon: 'none',
+        duration: 2000
+      })
+    }
+  })
+}
+
+/**
+ * 选择PDF文件
+ */
+function choosePdf() {
+  uni.chooseMessageFile({
+    count: 5, // 最多选择5个文件
+    type: 'file',
+    extension: ['pdf'], // 只显示PDF文件
+    success: (res) => {
+      console.log('[DogCreate] Choose message file success:', res)
+
+      // 检查文件类型
+      const validFiles = res.tempFiles.filter((file: any) => {
+        const fileName = file.name.toLowerCase()
+        return fileName.endsWith('.pdf')
+      })
+
+      if (validFiles.length === 0) {
+        uni.showToast({
+          title: '请选择PDF文件',
+          icon: 'none',
+          duration: 2000
+        })
+        return
+      }
+
+      // 上传所有选中的PDF文件
+      validFiles.forEach((file: any) => {
+        uploadFile(file.path, 'pdf')
+      })
+    },
+    fail: (err) => {
+      console.error('[DogCreate] Choose file failed:', err)
+      uni.showToast({
+        title: '选择文件失败',
+        icon: 'none',
+        duration: 2000
+      })
+    }
+  })
+}
+
+/**
+ * 上传文件到服务器
+ */
+function uploadFile(filePath: string, fileType: 'image' | 'pdf') {
+  if (uploadingFile.value) {
+    uni.showToast({
+      title: '正在上传中...',
+      icon: 'none',
+      duration: 1500
+    })
+    return
+  }
+
+  uploadingFile.value = true
+  uni.showLoading({ title: '上传中...' })
+
+  uni.uploadFile({
+    url: `${getApp().globalData.apiUrl}/dogs/medical-records/upload-attachment`,
+    filePath: filePath,
+    name: 'file',
+    header: {
+      'X-Customer-Id': uni.getStorageSync('userId') || ''
+    },
+    success: (res) => {
+      console.log('[DogCreate] Upload success:', res)
+      if (res.statusCode === 200) {
+        try {
+          const data = JSON.parse(res.data)
+          if (data.code === 0 && data.data && data.data.url) {
+            // 添加到attachments数组
+            if (!currentMedicalRecord.value.attachments) {
+              currentMedicalRecord.value.attachments = []
+            }
+            currentMedicalRecord.value.attachments.push(data.data.url)
+
+            uni.showToast({
+              title: '上传成功',
+              icon: 'success',
+              duration: 1500
+            })
+          } else {
+            throw new Error(data.message || '上传失败')
+          }
+        } catch (err) {
+          console.error('[DogCreate] Parse upload response failed:', err)
+          uni.showToast({
+            title: '上传失败',
+            icon: 'none',
+            duration: 2000
+          })
+        }
+      } else {
+        uni.showToast({
+          title: `上传失败 (${res.statusCode})`,
+          icon: 'none',
+          duration: 2000
+        })
+      }
+    },
+    fail: (err) => {
+      console.error('[DogCreate] Upload file failed:', err)
+      uni.showToast({
+        title: '上传失败，请重试',
+        icon: 'none',
+        duration: 2000
+      })
+    },
+    complete: () => {
+      uploadingFile.value = false
+      uni.hideLoading()
+    }
+  })
+}
+
+/**
+ * 删除附件
+ */
+function removeAttachment(index: number) {
+  uni.showModal({
+    title: '确认删除',
+    content: '确定要删除这个文件吗？',
+    success: (res) => {
+      if (res.confirm && currentMedicalRecord.value.attachments) {
+        currentMedicalRecord.value.attachments.splice(index, 1)
+        uni.showToast({
+          title: '删除成功',
+          icon: 'success',
+          duration: 1500
+        })
+      }
+    }
+  })
+}
+
+/**
+ * 获取文件图标
+ */
+function getFileIcon(url: string): string {
+  if (!url) return '📄'
+  const lowerUrl = url.toLowerCase()
+  if (lowerUrl.includes('.pdf')) return '📄'
+  if (lowerUrl.includes('.jpg') || lowerUrl.includes('.jpeg') || lowerUrl.includes('.png')) return '🖼️'
+  return '📎'
+}
+
+/**
+ * 获取文件名
+ */
+function getFileName(url: string): string {
+  if (!url) return '未知文件'
+  try {
+    const urlObj = new URL(url)
+    const pathname = urlObj.pathname
+    const parts = pathname.split('/')
+    const filename = parts[parts.length - 1]
+    // 如果文件名过长，截断显示
+    return filename.length > 20 ? filename.substring(0, 17) + '...' : filename
+  } catch {
+    return '未知文件'
+  }
+}
+
+// ========== 病史记录管理函数结束 ==========
+
 // ========== 生命阶段选择函数 ==========
 
 /**
@@ -1985,7 +2431,7 @@ function submit() {
     mealsPerDay: parseInt(formData.value.mealsPerDay) || 2,
     treatInputMode: formData.value.treatInputMode || 'ESTIMATE_LEVEL',
     treatLevel: formData.value.treatLevel,
-    medicalHistory: formData.value.medicalHistory || null,
+    medicalRecords: formData.value.medicalRecords || [],
     allergyFoods: formData.value.allergyFoods || null,
     pickyFoods: formData.value.pickyFoods || null
   }
@@ -2090,6 +2536,7 @@ function submit() {
 <style scoped>
 .container {
   padding: 20rpx;
+  padding-bottom: 140rpx; /* 为固定底部按钮留出空间 */
 }
 
 .form-section {
@@ -3430,4 +3877,365 @@ function submit() {
 }
 
 /* ========== 计算过程样式结束 ========== */
+
+/* ========== 固定底部按钮样式 ========== */
+.fixed-bottom-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: #fff;
+  padding: 20rpx;
+  box-shadow: 0 -2rpx 10rpx rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+}
+
+.btn-save-fixed {
+  width: 100%;
+  height: 88rpx;
+  line-height: 88rpx;
+  background-color: #07c160;
+  color: #fff;
+  border-radius: 8rpx;
+  font-size: 32rpx;
+  border: none;
+}
+
+.btn-save-fixed:disabled {
+  background-color: #ccc;
+  color: #999;
+}
+
+/* 内联计算按钮样式 */
+.btn-inline-calc {
+  width: 100%;
+  height: 88rpx;
+  line-height: 88rpx;
+  background-color: #1890ff;
+  color: #fff;
+  border-radius: 8rpx;
+  font-size: 30rpx;
+  margin-top: 20rpx;
+  border: none;
+}
+
+.btn-inline-calc:disabled {
+  background-color: #ccc;
+  color: #999;
+}
+
+/* ========== 病史记录样式 ========== */
+.medical-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.add-btn {
+  color: #07c160;
+  font-size: 26rpx;
+  font-weight: bold;
+  padding: 8rpx 20rpx;
+  background-color: #e6f7ff;
+  border-radius: 8rpx;
+  border: 1px solid #1890ff;
+}
+
+/* 病史记录列表 */
+.medical-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.medical-item {
+  background-color: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 12rpx;
+  padding: 20rpx;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.medical-item-main {
+  flex: 1;
+  margin-right: 20rpx;
+}
+
+.medical-item-title {
+  font-size: 30rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 10rpx;
+}
+
+.medical-item-info {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.info-tag {
+  font-size: 24rpx;
+  color: #666;
+  background-color: #f5f5f5;
+  padding: 4rpx 12rpx;
+  border-radius: 6rpx;
+}
+
+.info-tag.diagnosis {
+  color: #1890ff;
+  background-color: #e6f7ff;
+}
+
+.medical-item-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.action-btn {
+  font-size: 24rpx;
+  padding: 8rpx 16rpx;
+  border-radius: 6rpx;
+  text-align: center;
+}
+
+.edit-btn {
+  color: #1890ff;
+  background-color: #e6f7ff;
+  border: 1px solid #1890ff;
+}
+
+.delete-btn {
+  color: #ff4d4f;
+  background-color: #fff1f0;
+  border: 1px solid #ff4d4f;
+}
+
+.empty-medical {
+  padding: 60rpx 20rpx;
+  text-align: center;
+  background-color: #f9f9f9;
+  border-radius: 12rpx;
+  border: 2px dashed #e0e0e0;
+}
+
+.empty-text {
+  font-size: 26rpx;
+  color: #999;
+}
+
+/* 病史记录弹窗 */
+.medical-record-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 10000;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.medical-record-mask {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 1;
+}
+
+.medical-record-content {
+  position: relative;
+  z-index: 2;
+  width: 650rpx;
+  max-height: 80vh;
+  background-color: #fff;
+  border-radius: 16rpx;
+  padding: 40rpx;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.15);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+}
+
+.medical-record-title {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+  margin-bottom: 30rpx;
+  text-align: center;
+}
+
+.medical-form {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.medical-form-item {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.medical-label {
+  font-size: 26rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+.medical-input {
+  width: 100%;
+  height: 80rpx;
+  border: 1px solid #ddd;
+  border-radius: 8rpx;
+  padding: 0 20rpx;
+  font-size: 28rpx;
+  box-sizing: border-box;
+}
+
+.medical-picker {
+  height: 80rpx;
+  line-height: 80rpx;
+  border: 1px solid #ddd;
+  border-radius: 8rpx;
+  padding: 0 20rpx;
+  font-size: 28rpx;
+  background-color: #fff;
+}
+
+.medical-textarea {
+  width: 100%;
+  min-height: 150rpx;
+  border: 1px solid #ddd;
+  border-radius: 8rpx;
+  padding: 20rpx;
+  font-size: 28rpx;
+  box-sizing: border-box;
+}
+
+.attachment-placeholder {
+  padding: 40rpx 20rpx;
+  background-color: #f9f9f9;
+  border: 2px dashed #e0e0e0;
+  border-radius: 8rpx;
+  text-align: center;
+}
+
+.medical-record-actions {
+  display: flex;
+  gap: 20rpx;
+  margin-top: 30rpx;
+}
+
+.medical-btn-cancel,
+.medical-btn-confirm {
+  flex: 1;
+  height: 80rpx;
+  line-height: 80rpx;
+  border-radius: 8rpx;
+  font-size: 28rpx;
+  text-align: center;
+  border: none;
+}
+
+.medical-btn-cancel {
+  background-color: #f5f5f5;
+  color: #666;
+  border: 1px solid #ddd;
+}
+
+.medical-btn-confirm {
+  background-color: #07c160;
+  color: #fff;
+}
+
+/* 文件上传相关样式 */
+.uploaded-files {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  margin-bottom: 20rpx;
+}
+
+.uploaded-file-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16rpx 20rpx;
+  background-color: #f5f5f5;
+  border-radius: 8rpx;
+  border: 1px solid #e0e0e0;
+}
+
+.file-info {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  flex: 1;
+  overflow: hidden;
+}
+
+.file-icon {
+  font-size: 32rpx;
+  flex-shrink: 0;
+}
+
+.file-name {
+  font-size: 26rpx;
+  color: #333;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-delete {
+  font-size: 24rpx;
+  color: #ff4d4f;
+  padding: 8rpx 16rpx;
+  border-radius: 6rpx;
+  flex-shrink: 0;
+}
+
+.upload-buttons {
+  display: flex;
+  gap: 12rpx;
+}
+
+.upload-btn {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24rpx 20rpx;
+  background-color: #fff;
+  border: 1px dashed #1890ff;
+  border-radius: 8rpx;
+  font-size: 26rpx;
+  color: #1890ff;
+}
+
+.upload-btn::after {
+  border: none;
+}
+
+.upload-icon {
+  font-size: 36rpx;
+  margin-bottom: 8rpx;
+}
+
+.upload-text {
+  font-size: 24rpx;
+  color: #1890ff;
+}
+
+/* ========== 病史记录样式结束 ========== */
 </style>

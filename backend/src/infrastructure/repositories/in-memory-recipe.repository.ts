@@ -56,6 +56,28 @@ export class InMemoryRecipeRepository implements RecipeRepository {
     );
   }
 
+  async findPublicRecipesPaginated(_options?: FindRecipesOptions): Promise<{ data: Recipe[], total: number, page: number, pageSize: number, hasMore: boolean }> {
+    // TODO: Implement filtering logic
+    const allRecipes = Array.from(this.recipes.values()).filter(
+      (r) => r.status === 'PUBLIC',
+    );
+
+    const page = _options?.page || 1;
+    const pageSize = _options?.pageSize || 10;
+    const skip = (page - 1) * pageSize;
+
+    const paginatedRecipes = allRecipes.slice(skip, skip + pageSize);
+    const hasMore = skip + pageSize < allRecipes.length;
+
+    return Promise.resolve({
+      data: paginatedRecipes,
+      total: allRecipes.length,
+      page,
+      pageSize,
+      hasMore,
+    });
+  }
+
   async getFilterOptions(): Promise<FilterOptions> {
     // TODO: Implement filter options aggregation
     return Promise.resolve({

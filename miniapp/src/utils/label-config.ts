@@ -92,13 +92,14 @@ export const LABEL_ELEMENTS = {
   recipeName: {
     fontSize: LABEL_LAYOUT.fontSize.title,
     align: 'center' as const,
+    yOffset: 7,  // 距离顶部7mm，确保不超出预览区域
     lineHeight: LABEL_LAYOUT.lineHeight.normal,
     bold: true,
   },
 
   // 2. 制作信息
   productionInfo: {
-    fontSize: LABEL_LAYOUT.fontSize.subtitle,
+    fontSize: LABEL_LAYOUT.fontSize.body,  // 与原料内容字号相同
     align: 'center' as const,
     lineHeight: LABEL_LAYOUT.lineHeight.compact,  // 使用紧凑行高
   },
@@ -115,7 +116,7 @@ export const LABEL_ELEMENTS = {
   // 4. 原料内容
   ingredientsContent: {
     fontSize: LABEL_LAYOUT.fontSize.body,
-    align: 'center' as const,
+    align: 'center' as const,  // 居中对齐，保证左右边距一致
     lineHeight: LABEL_LAYOUT.lineHeight.compact,  // 使用紧凑行高
     maxCharsPerLine: 28,
   },
@@ -125,7 +126,7 @@ export const LABEL_ELEMENTS = {
     titleFontSize: LABEL_LAYOUT.fontSize.sectionTitle,
     titleWithDecoration: true,
     contentFontSize: LABEL_LAYOUT.fontSize.body,
-    align: 'center' as const,
+    align: 'center' as const,  // 居中对齐，保证左右边距一致
     lineHeight: LABEL_LAYOUT.lineHeight.compact,  // 使用紧凑行高
     itemsPerLine: 4,
   },

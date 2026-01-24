@@ -3,7 +3,7 @@
     <!-- Logo区域 -->
     <view class="logo-section">
       <image class="logo" src="/static/logo.png" mode="aspectFit"></image>
-      <text class="app-name">七号厨房</text>
+      <text class="app-name">Seven的厨房</text>
       <text class="app-slogan">新鲜健康，为爱定制</text>
     </view>
 
@@ -103,14 +103,35 @@ const handleWechatLogin = async (e: any) => {
       markTokenReady(); // 标记token已就绪
       console.log('[Login] Token and user saved to storage, token marked as ready');
 
-      // 3.5. 触发自定义 tabBar 更新（通过设置标志位）
+      // 3.5. 设置触发器，让TabBar的轮询监听能够检测到变化
       uni.setStorageSync('userLoginTrigger', Date.now());
-      console.log('[Login] Triggered tabBar update');
+      console.log('[Login] Set userLoginTrigger for TabBar polling');
+
+      // 3.6. 尝试直接刷新TabBar
+      setTimeout(() => {
+        try {
+          const pages = getCurrentPages()
+          const currentPage = pages[pages.length - 1]
+          if (currentPage && currentPage.$scope) {
+            const tabBar = currentPage.$scope.getTabBar()
+            if (tabBar && typeof tabBar.refresh === 'function') {
+              console.log('[Login] Triggering TabBar refresh immediately via scope')
+              tabBar.refresh()
+            } else {
+              console.log('[Login] TabBar not found in scope, relying on polling')
+            }
+          } else {
+            console.log('[Login] Current page scope not available, relying on polling')
+          }
+        } catch (error) {
+          console.log('[Login] Failed to refresh TabBar:', error.message)
+        }
+      }, 200);
 
       // 4. 新用户提示
       if (isNewUser) {
         uni.showToast({
-          title: '欢迎加入七号厨房！',
+          title: '欢迎加入Seven的厨房！',
           icon: 'success',
           duration: 2000
         });

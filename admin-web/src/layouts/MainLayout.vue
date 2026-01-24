@@ -41,6 +41,10 @@
           <el-icon><List /></el-icon>
           <span>订单管理</span>
         </el-menu-item>
+        <el-menu-item index="/custom-recipes">
+          <el-icon><EditPen /></el-icon>
+          <span>定制食谱订单</span>
+        </el-menu-item>
         <el-menu-item index="/inventory">
           <el-icon><Box /></el-icon>
           <span>库存管理</span>
@@ -100,7 +104,8 @@ import {
   PriceTag,
   Goods,
   Star,
-  Setting
+  Setting,
+  EditPen
 } from '@element-plus/icons-vue'
 
 const route = useRoute()

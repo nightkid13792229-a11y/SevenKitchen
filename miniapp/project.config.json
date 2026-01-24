@@ -1,7 +1,7 @@
 {
   "appid": "wx2c1e8f1a2d7c2406",
   "projectname": "SevenKitchen",
-  "description": "七号厨房小程序",
+  "description": "Seven的厨房小程序",
   "compileType": "miniprogram",
   "setting": {
     "es6": true,

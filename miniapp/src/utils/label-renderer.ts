@@ -136,16 +136,10 @@ export async function drawProductionLabel(
       const centerX = CANVAS_WIDTH / 2;
       const margin = mmToPx(LABEL_LAYOUT.margin.left);
 
-      let y = mmToPx(LABEL_ELEMENTS.brandTop.yOffset);
+      let y = mmToPx(LABEL_ELEMENTS.recipeName.yOffset);
 
-      // ============= 0. 顶部品牌名称 =============
-      ctx.setFontSize(mmToPx(LABEL_ELEMENTS.brandTop.fontSize));
-      ctx.setFillStyle('#000000');
-      ctx.setTextAlign('center');
-      ctx.fillText(labelData.brandName, centerX, y);
-
-      // 粗分隔线已移除
-      y += mmToPx(6);
+      // ============= 0. 顶部品牌名称已移除 =============
+      // 品牌名称已移至底部
 
       // ============= 1. 食谱名称（主标题，加粗） =============
       ctx.setFontSize(mmToPx(LABEL_ELEMENTS.recipeName.fontSize));
@@ -195,7 +189,7 @@ export async function drawProductionLabel(
       const ingredientLines = splitTextByChars(allIngredients, LABEL_ELEMENTS.ingredientsContent.maxCharsPerLine);
       ctx.setFontSize(mmToPx(LABEL_ELEMENTS.ingredientsContent.fontSize));
       ctx.setFillStyle('#333333');
-      ctx.setTextAlign('center');
+      ctx.setTextAlign('center');  // 居中对齐，保证左右边距一致
       ingredientLines.forEach((line) => {
         ctx.fillText(line, centerX, y);
         y += mmToPx(LABEL_ELEMENTS.ingredientsContent.lineHeight);
@@ -220,7 +214,7 @@ export async function drawProductionLabel(
 
         ctx.setFontSize(mmToPx(LABEL_ELEMENTS.nutrition.contentFontSize));
         ctx.setFillStyle('#000000');
-        ctx.setTextAlign('center');
+        ctx.setTextAlign('center');  // 居中对齐，保证左右边距一致
 
         // 营养成分列表（每行最多4项，防止超出边框）
         const nutritionItems = [
@@ -234,11 +228,11 @@ export async function drawProductionLabel(
           na.calciumPhosphorusRatio ? `钙磷比${na.calciumPhosphorusRatio}:1` : null,
         ].filter(Boolean);
 
-        // 分成多行显示（每行4项，用空格分隔）
+        // 分成多行显示（每行4项，用顿号分隔）
         const itemsPerLine = LABEL_ELEMENTS.nutrition.itemsPerLine || 4;
         for (let i = 0; i < nutritionItems.length; i += itemsPerLine) {
           const lineItems = nutritionItems.slice(i, i + itemsPerLine);
-          const line = lineItems.join(' ');
+          const line = lineItems.join('、');
           ctx.fillText(line, centerX, y);
           y += mmToPx(LABEL_ELEMENTS.nutrition.lineHeight);
         }
@@ -294,7 +288,13 @@ export async function drawProductionLabel(
         y += mmToPx(LABEL_ELEMENTS.cooking.lineHeight);
       });
 
-      // 注意：底部品牌名称已删除，只保留顶部品牌名称
+      // ============= 7. 底部品牌名称 =============
+      y += mmToPx(LABEL_LAYOUT.spacing.blockInternal);
+      const brandBottomY = CANVAS_HEIGHT - mmToPx(LABEL_ELEMENTS.brandBottom.yOffsetFromBottom);
+      ctx.setFontSize(mmToPx(LABEL_ELEMENTS.brandBottom.fontSize));
+      ctx.setFillStyle('#000000');
+      ctx.setTextAlign('center');
+      ctx.fillText(labelData.brandName, centerX, brandBottomY);
 
       // 绘制完成后导出图片(使用Promise确保稳定性)
       ctx.draw(false, () => {
@@ -463,15 +463,10 @@ export async function drawProductionLabelWithJCSDK(
       const margin = LABEL_LAYOUT.margin.left;
       const centerX = LABEL_LAYOUT.canvas.width / 2;
 
-      let y = LABEL_ELEMENTS.brandTop.yOffset;
+      let y = LABEL_ELEMENTS.recipeName.yOffset;
 
-      // ============= 0. 顶部品牌名称 =============
-      JCAPI.drawText(labelData.brandName, centerX, y, LABEL_ELEMENTS.brandTop.fontSize, 0, {
-        align: 'center'
-      });
-
-      // 粗分隔线已移除
-      y += 6;
+      // ============= 0. 顶部品牌名称已移除 =============
+      // 品牌名称已移至底部
 
       // ============= 1. 食谱名称 =============
       JCAPI.drawText(labelData.recipeName, centerX, y, LABEL_ELEMENTS.recipeName.fontSize, 0, {
@@ -519,7 +514,7 @@ export async function drawProductionLabelWithJCSDK(
       const ingredientLines = splitTextByChars(allIngredients, LABEL_ELEMENTS.ingredientsContent.maxCharsPerLine);
       ingredientLines.forEach((line) => {
         JCAPI.drawText(line, centerX, y, LABEL_ELEMENTS.ingredientsContent.fontSize, 0, {
-          align: 'center'
+          align: 'center'  // 居中对齐，保证左右边距一致
         });
         y += LABEL_ELEMENTS.ingredientsContent.lineHeight;
       });
@@ -552,13 +547,13 @@ export async function drawProductionLabelWithJCSDK(
           na.calciumPhosphorusRatio ? `钙磷比${na.calciumPhosphorusRatio}:1` : null,
         ].filter(Boolean);
 
-        // 分成多行显示（每行4项，用空格分隔）
+        // 分成多行显示（每行4项，用顿号分隔）
         const itemsPerLine = LABEL_ELEMENTS.nutrition.itemsPerLine || 4;
         for (let i = 0; i < nutritionItems.length; i += itemsPerLine) {
           const lineItems = nutritionItems.slice(i, i + itemsPerLine);
-          const line = lineItems.join(' ');
+          const line = lineItems.join('、');
           JCAPI.drawText(line, centerX, y, LABEL_ELEMENTS.nutrition.contentFontSize, 0, {
-            align: 'center'
+            align: 'center'  // 居中对齐，保证左右边距一致
           });
           y += LABEL_ELEMENTS.nutrition.lineHeight;
         }
@@ -610,7 +605,12 @@ export async function drawProductionLabelWithJCSDK(
         y += LABEL_ELEMENTS.cooking.lineHeight;
       });
 
-      // 注意：底部品牌名称已删除，只保留顶部品牌名称
+      // ============= 7. 底部品牌名称 =============
+      y += LABEL_LAYOUT.spacing.blockInternal;
+      const brandBottomY = LABEL_LAYOUT.canvas.height - LABEL_ELEMENTS.brandBottom.yOffsetFromBottom;
+      JCAPI.drawText(labelData.brandName, centerX, brandBottomY, LABEL_ELEMENTS.brandBottom.fontSize, 0, {
+        align: 'center'
+      });
 
       // 结束绘制（在回调中调用打印函数）
       JCAPI.endDrawLabel(() => {

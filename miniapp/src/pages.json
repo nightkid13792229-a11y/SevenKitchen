@@ -3,7 +3,7 @@
     {
       "path": "pages/home/index",
       "style": {
-        "navigationBarTitleText": "七号厨房",
+        "navigationBarTitleText": "Seven的厨房",
         "enablePullDownRefresh": true
       }
     },
@@ -71,60 +71,6 @@
       "path": "pages/weight-management/index",
       "style": {
         "navigationBarTitleText": "体重管理"
-      }
-    },
-    {
-      "path": "pages/health-management/index",
-      "style": {
-        "navigationBarTitleText": "健康管理"
-      }
-    },
-    {
-      "path": "pages/health-management/vaccines/list",
-      "style": {
-        "navigationBarTitleText": "疫苗记录"
-      }
-    },
-    {
-      "path": "pages/health-management/vaccines/edit",
-      "style": {
-        "navigationBarTitleText": "编辑疫苗记录"
-      }
-    },
-    {
-      "path": "pages/health-management/checkups/list",
-      "style": {
-        "navigationBarTitleText": "体检记录"
-      }
-    },
-    {
-      "path": "pages/health-management/checkups/edit",
-      "style": {
-        "navigationBarTitleText": "编辑体检记录"
-      }
-    },
-    {
-      "path": "pages/health-management/medical-records/list",
-      "style": {
-        "navigationBarTitleText": "病历记录"
-      }
-    },
-    {
-      "path": "pages/health-management/medical-records/edit",
-      "style": {
-        "navigationBarTitleText": "编辑病历记录"
-      }
-    },
-    {
-      "path": "pages/health-management/allergies/list",
-      "style": {
-        "navigationBarTitleText": "过敏记录"
-      }
-    },
-    {
-      "path": "pages/health-management/allergies/edit",
-      "style": {
-        "navigationBarTitleText": "编辑过敏记录"
       }
     },
     {
@@ -248,6 +194,12 @@
       }
     },
     {
+      "path": "pages/staff-production/batch-guide",
+      "style": {
+        "navigationBarTitleText": "批量制作单"
+      }
+    },
+    {
       "path": "pages/staff-shipping/index",
       "style": {
         "navigationBarTitleText": "发货管理"
@@ -257,6 +209,25 @@
       "path": "pages/aftersale-apply/index",
       "style": {
         "navigationBarTitleText": "申请售后"
+      }
+    },
+    {
+      "path": "pages/custom-recipe/index",
+      "style": {
+        "navigationBarTitleText": "食谱定制"
+      }
+    },
+    {
+      "path": "pages/custom-recipe/success",
+      "style": {
+        "navigationBarTitleText": "提交成功"
+      }
+    },
+    {
+      "path": "pages/custom-recipe/orders",
+      "style": {
+        "navigationBarTitleText": "我的定制订单",
+        "enablePullDownRefresh": true
       }
     }
   ],

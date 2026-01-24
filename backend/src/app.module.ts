@@ -25,6 +25,9 @@ import { FavoritesController } from './interfaces/controllers/favorites.controll
 import { StaffPurchasingController } from './interfaces/controllers/staff-purchasing.controller';
 import { AdminPurchasingController } from './interfaces/controllers/admin-purchasing.controller';
 import { StaffProductionController } from './interfaces/controllers/staff-production.controller';
+import { CustomRecipeController } from './interfaces/controllers/custom-recipe/custom-recipe.controller';
+import { AdminCustomRecipeController } from './interfaces/controllers/custom-recipe/admin-custom-recipe.controller';
+import { CustomRecipeService } from './application/custom-recipe/custom-recipe.service';
 import { OrderSchedulerService } from './application/scheduler/order-scheduler.service';
 import {
   DogService,
@@ -180,6 +183,8 @@ validatePrismaConfig();
     AftersalePhotosController,
     FavoritesController,
     StaffProductionController,
+    CustomRecipeController,
+    AdminCustomRecipeController,
   ],
   providers: [
     DogService,
@@ -477,6 +482,7 @@ validatePrismaConfig();
     ReimbursementService,
     // Phase 2: Staff Production Management Service
     StaffProductionService,
+    ProductionService,
     {
       provide: PURCHASE_LIST_REPOSITORY,
       useFactory: (prismaService?: PrismaService) => {
@@ -513,6 +519,8 @@ validatePrismaConfig();
       },
       inject: isPrismaEnabled() ? [PrismaService] : [],
     },
+    // Custom Recipe Service
+    CustomRecipeService,
   ],
 })
 export class AppModule implements OnModuleInit {

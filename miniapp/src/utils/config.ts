@@ -3,9 +3,9 @@
 // Can be overridden at runtime via Network Settings page (stored in uni storage)
 // Automatically uses IP address in WeChat DevTools for stable development
 
-const DEFAULT_BASE_URL = 'http://localhost:3000/api/v1' // 默认开发环境
-const DEV_BASE_URL = 'http://localhost:3000/api/v1' // 本地开发服务器（开发者工具可用localhost，真机调试需改为局域网IP）
-const LAN_BASE_URL = 'http://192.168.31.43:3000/api/v1' // 局域网开发服务器（真机调试使用）
+const DEFAULT_BASE_URL = 'http://localhost:3001/api/v1' // 默认开发环境
+const DEV_BASE_URL = 'http://localhost:3001/api/v1' // 本地开发服务器（开发者工具可用localhost，真机调试需改为局域网IP）
+const LAN_BASE_URL = 'http://192.168.31.43:3001/api/v1' // 局域网开发服务器（真机调试使用）
 const PROD_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1' // 生产环境
 const STORAGE_KEY = 'api_base_url'
 

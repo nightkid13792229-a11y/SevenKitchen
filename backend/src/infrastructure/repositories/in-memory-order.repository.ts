@@ -151,5 +151,38 @@ export class InMemoryOrderRepository implements OrderRepository {
       cancelled: countByStatus(OrderStatus.CANCELLED),
     });
   }
+
+  async findOrderItemById(orderItemId: string): Promise<any | null> {
+    for (const order of this.orders.values()) {
+      const item = order.items.find(i => i.id === orderItemId);
+      if (item) {
+        return {
+          id: item.id,
+          orderId: item.orderId,
+          dogId: item.dogId,
+          recipeSnapshot: item.recipeSnapshot,
+          quantityG: item.quantityG,
+          packageCount: item.packageCount,
+          packageSpecG: item.packageSpecG,
+          customRequirements: item.customRequirements,
+          dailyIntakeG: item.dailyIntakeG,
+          vacuumBagSpec: item.vacuumBagSpec,
+          allocatedAt: item.allocatedAt,
+          productionBatchId: item.productionBatchId,
+          // Note: These fields are not in the domain entity but included for production service
+          preparationMethod: (item as any).preparationMethod || null,
+          cookingMethod: (item as any).cookingMethod || null,
+          createdAt: (item as any).createdAt || new Date(),
+        };
+      }
+    }
+    return null;
+  }
+
+  async findDogById(dogId: string): Promise<any | null> {
+    // In-memory implementation doesn't have direct access to dogs
+    // This would need to be implemented with a proper Dog repository
+    return Promise.resolve(null);
+  }
 }
 

@@ -31,6 +31,14 @@
       <text class="schedule-warning">⚠️ 点击前会检查今天的采购清单是否已完成</text>
     </view>
 
+    <!-- 批量打印制作单按钮（有批次时显示） -->
+    <view v-if="hasTodayBatch" class="batch-print-section">
+      <button class="batch-print-btn" @tap="printBatchProductionGuide">
+        <text>🖨️ 批量打印制作单</text>
+      </button>
+      <text class="batch-print-hint">一次性打印今天所有批次的制作单</text>
+    </view>
+
     <!-- Tab切换 -->
     <view class="tabs">
       <view
@@ -111,6 +119,7 @@ import {
   autoSchedule,
   getPackagingUnits,
   completeProductionTask,
+  getBatchProductionGuide,
 } from '../../api/production';
 import { formatDecimal } from '../../utils/format';
 
@@ -310,6 +319,56 @@ const toggleHistory = (batchId: string) => {
     expandedHistoryId.value = batchId;
   }
 };
+
+// 批量打印制作单
+const printBatchProductionGuide = async () => {
+  try {
+    // 获取今天的日期
+    const now = new Date();
+    const year = now.getFullYear();
+    const month = String(now.getMonth() + 1).padStart(2, '0');
+    const day = String(now.getDate()).padStart(2, '0');
+    const today = `${year}-${month}-${day}`;
+
+    uni.showLoading({ title: '加载制作单...' });
+
+    const response = await getBatchProductionGuide({
+      targetDate: today,
+    });
+
+    uni.hideLoading();
+
+    if (response.code !== 0) {
+      uni.showToast({
+        title: response.message || '加载失败',
+        icon: 'none',
+      });
+      return;
+    }
+
+    const { productionDate, totalBatches, recipes } = response.data;
+
+    if (totalBatches === 0) {
+      uni.showToast({
+        title: '今天没有批次',
+        icon: 'none',
+      });
+      return;
+    }
+
+    // 跳转到批量制作单展示页面
+    uni.navigateTo({
+      url: `/pages/staff-production/batch-guide?data=${encodeURIComponent(JSON.stringify(response.data))}`,
+    });
+  } catch (error: any) {
+    uni.hideLoading();
+    console.error('Failed to load batch production guide:', error);
+    uni.showToast({
+      title: error.message || '加载失败',
+      icon: 'none',
+    });
+  }
+};
 </script>
 
 <style scoped lang="scss">
@@ -397,6 +456,34 @@ const toggleHistory = (batchId: string) => {
   .schedule-warning {
     font-size: 22rpx;
     color: #ff9800;
+    text-align: center;
+  }
+}
+
+.batch-print-section {
+  background-color: #fff;
+  margin: 0 32rpx 24rpx;
+  padding: 32rpx;
+  border-radius: 16rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16rpx;
+
+  .batch-print-btn {
+    background-color: #2196f3;
+    color: #fff;
+    border: none;
+    border-radius: 12rpx;
+    padding: 24rpx 48rpx;
+    font-size: 32rpx;
+    font-weight: bold;
+  }
+
+  .batch-print-hint {
+    font-size: 24rpx;
+    color: #666;
     text-align: center;
   }
 }

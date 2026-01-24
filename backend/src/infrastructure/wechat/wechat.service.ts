@@ -14,6 +14,25 @@ interface WechatAccessTokenResponse {
   errmsg: string;
 }
 
+interface SubscriptionMessageData {
+  [key: string]: {
+    value: string;
+  };
+}
+
+interface SendSubscriptionMessageParams {
+  touser: string;
+  template_id: string;
+  page?: string;
+  data: SubscriptionMessageData;
+}
+
+interface SendSubscriptionMessageResponse {
+  errcode: number;
+  errmsg: string;
+  msgid: string;
+}
+
 @Injectable()
 export class WechatService {
   private readonly logger = new Logger(WechatService.name);
@@ -129,5 +148,106 @@ export class WechatService {
       this.logger.error('Failed to get WeChat access token:', error);
       throw new Error('Failed to get WeChat access token');
     }
+  }
+
+  /**
+   * 发送微信订阅消息
+   * @param params 订阅消息参数
+   */
+  async sendSubscriptionMessage(
+    params: SendSubscriptionMessageParams,
+  ): Promise<{ success: boolean; msgid?: string; error?: string }> {
+    // Mock mode for development
+    if (this.isMockMode()) {
+      this.logger.log('===== MOCK MODE - Sending Subscription Message =====');
+      this.logger.log('To user:', params.touser);
+      this.logger.log('Template ID:', params.template_id);
+      this.logger.log('Page:', params.page || 'N/A');
+      this.logger.log('Data:', JSON.stringify(params.data, null, 2));
+
+      return {
+        success: true,
+        msgid: `mock_msgid_${Date.now()}`,
+      };
+    }
+
+    // Production mode with real WeChat API
+    try {
+      const accessToken = await this.getAccessToken();
+      const url = `https://api.weixin.qq.com/cgi-bin/message/subscribe/send?access_token=${accessToken}`;
+
+      const response = await axios.post<SendSubscriptionMessageResponse>(url, params);
+      const data = response.data;
+
+      if (data.errcode === 0) {
+        this.logger.log(`Subscription message sent successfully to ${params.touser}, msgid: ${data.msgid}`);
+        return {
+          success: true,
+          msgid: data.msgid,
+        };
+      } else {
+        this.logger.error(`Failed to send subscription message: ${data.errcode} - ${data.errmsg}`);
+        return {
+          success: false,
+          error: `${data.errcode} - ${data.errmsg}`,
+        };
+      }
+    } catch (error) {
+      this.logger.error('Failed to send subscription message:', error);
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
+
+  /**
+   * 发送定制食谱订单状态通知
+   * @param openid 用户openid
+   * @param orderId 订单号
+   * @param status 订单状态
+   * @param recipeId 食谱ID (已交付时)
+   */
+  async sendCustomRecipeOrderNotification(
+    openid: string,
+    orderId: string,
+    status: string,
+    recipeId?: string,
+  ): Promise<{ success: boolean; msgid?: string; error?: string }> {
+    const templateId = process.env.WECHAT_TEMPLATE_CUSTOM_RECIPE_ORDER || '';
+
+    if (!templateId) {
+      this.logger.warn('WeChat template ID for custom recipe order not configured');
+      return { success: false, error: 'Template ID not configured' };
+    }
+
+    const statusTextMap: Record<string, string> = {
+      PAID: '已付款',
+      IN_PROGRESS: '制作中',
+      DELIVERED: '已交付',
+    };
+
+    const statusText = statusTextMap[status] || status;
+
+    const data: SubscriptionMessageData = {
+      thing1: { value: orderId.substring(0, 20) }, // 订单号
+      thing2: { value: statusText }, // 订单状态
+    };
+
+    // 如果是已交付状态，添加食谱ID
+    if (status === 'DELIVERED' && recipeId) {
+      data.thing3 = { value: '您的定制食谱已 ready' };
+    } else {
+      data.thing3 = { value: '我们会尽快完成' };
+    }
+
+    return this.sendSubscriptionMessage({
+      touser: openid,
+      template_id: templateId,
+      page: status === 'DELIVERED' && recipeId
+        ? `pages/recipe-detail/index?id=${recipeId}`
+        : `pages/custom-recipe/orders`,
+      data,
+    });
   }
 }

@@ -24,6 +24,7 @@ import {
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { StaffProductionService } from '../../application/production/kitchen.service';
+import { ProductionService } from '../../application/production/production.service';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import {
   AutoScheduleDto,
@@ -44,6 +45,7 @@ import { StaffGuard } from '../guards/role.guard';
 export class StaffProductionController {
   constructor(
     private readonly staffProductionService: StaffProductionService,
+    private readonly productionService: ProductionService,
     private readonly cosService: TencentCosService,
   ) {}
 
@@ -258,6 +260,121 @@ export class StaffProductionController {
         id: unit.id,
         status: unit.status,
       },
+    };
+  }
+
+  @Get('recipe-batches/:recipeId')
+  @ApiOperation({ summary: 'Get all batches for a specific recipe with order items' })
+  @ApiParam({
+    name: 'recipeId',
+    description: 'Recipe ID',
+    example: 'uuid',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Recipe batches with order items',
+    schema: {
+      type: 'object',
+      properties: {
+        code: { type: 'number', example: 0 },
+        message: { type: 'string', example: 'Success' },
+        data: {
+          type: 'object',
+          properties: {
+            batches: {
+              type: 'array',
+              items: {
+                type: 'object',
+                properties: {
+                  batchId: { type: 'string' },
+                  batchCode: { type: 'string' },
+                  productionDate: { type: 'string' },
+                  isCurrentBatch: { type: 'boolean' },
+                  orderItems: {
+                    type: 'array',
+                    items: {
+                      type: 'object',
+                      properties: {
+                        orderItemId: { type: 'string' },
+                        orderId: { type: 'string' },
+                        dogName: { type: 'string' },
+                        recipeName: { type: 'string' },
+                        packageSpecG: { type: 'number' },
+                        packageCount: { type: 'number' },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  async getRecipeBatchesWithOrders(
+    @Param('recipeId') recipeId: string,
+    @Query('recipeVersion') recipeVersion?: number,
+    @Query('targetDate') targetDate?: string,
+  ): Promise<ApiResponseDto<any>> {
+    const result = await this.productionService.getRecipeBatchesWithOrders({
+      recipeId,
+      recipeVersion,
+      targetDate,
+    });
+
+    return {
+      code: 0,
+      message: 'Success',
+      data: result,
+    };
+  }
+
+  @Get('batch-production-guide')
+  @ApiOperation({ summary: 'Get batch production guide for all batches on a specific date' })
+  @ApiResponse({
+    status: 200,
+    description: 'Batch production guide',
+    schema: {
+      type: 'object',
+      properties: {
+        code: { type: 'number', example: 0 },
+        message: { type: 'string', example: 'Success' },
+        data: {
+          type: 'object',
+          properties: {
+            productionDate: { type: 'string' },
+            totalBatches: { type: 'number' },
+            recipes: {
+              type: 'array',
+              items: {
+                type: 'object',
+              },
+            },
+          },
+        },
+      },
+    },
+  })
+  async getBatchProductionGuide(
+    @Query('targetDate') targetDate: string,
+  ): Promise<ApiResponseDto<any>> {
+    if (!targetDate) {
+      return {
+        code: 400,
+        message: 'targetDate is required (YYYY-MM-DD format)',
+        data: null,
+      };
+    }
+
+    const result = await this.productionService.getBatchProductionGuide({
+      targetDate,
+    });
+
+    return {
+      code: 0,
+      message: 'Success',
+      data: result,
     };
   }
 }

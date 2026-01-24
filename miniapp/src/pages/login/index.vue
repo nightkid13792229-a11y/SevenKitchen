@@ -20,7 +20,7 @@
       </button>
     </view>
 
-    <!-- 用户协议 -->
+    <!-- 用户协议（已隐藏） -->
     <view class="agreement-section">
       <view class="agreement-text">
         登录即表示同意
@@ -178,6 +178,7 @@ const showPrivacyPolicy = () => {
     showCancel: false,
   });
 };
+
 </script>
 
 <style scoped>
@@ -244,6 +245,7 @@ const showPrivacyPolicy = () => {
 .agreement-section {
   width: 100%;
   padding-bottom: 40rpx;
+  display: none;
 }
 
 .agreement-text {

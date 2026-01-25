@@ -27,6 +27,9 @@ export interface ReimbursementConstructor {
   platformShippingFee?: number;
   platformPackagingFee?: number;
   customFees?: Array<{ description: string; amount: number }>;
+  // 关联用户对象（非持久化）
+  submittedBy?: { id: string; nickname: string; phone: string };
+  reviewedBy?: { id: string; nickname: string; phone: string };
 }
 
 export class Reimbursement {
@@ -50,6 +53,10 @@ export class Reimbursement {
   public readonly platformPackagingFee?: number;
   public readonly customFees?: Array<{ description: string; amount: number }>;
 
+  // 关联用户对象（非持久化）
+  public submittedBy?: { id: string; nickname: string; phone: string };
+  public reviewedBy?: { id: string; nickname: string; phone: string };
+
   constructor(data: ReimbursementConstructor) {
     this.id = data.id || uuidv4();
     this.claimNumber = data.claimNumber;
@@ -68,6 +75,8 @@ export class Reimbursement {
     this.platformShippingFee = data.platformShippingFee;
     this.platformPackagingFee = data.platformPackagingFee;
     this.customFees = data.customFees || [];
+    this.submittedBy = data.submittedBy;
+    this.reviewedBy = data.reviewedBy;
 
     this.validateInvariants();
   }
@@ -292,6 +301,9 @@ export class Reimbursement {
       platformShippingFee: data.platformShippingFee ? Number(data.platformShippingFee) : undefined,
       platformPackagingFee: data.platformPackagingFee ? Number(data.platformPackagingFee) : undefined,
       customFees: data.customFees || [],
+      // 包含关联的用户对象
+      submittedBy: data.submittedBy,
+      reviewedBy: data.reviewedBy,
     });
   }
 }

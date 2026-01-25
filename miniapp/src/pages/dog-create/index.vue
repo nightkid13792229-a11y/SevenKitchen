@@ -875,6 +875,7 @@ import { getBaseUrl } from '../../utils/config'
 
 // 病史记录接口
 interface MedicalRecord {
+  id?: string             // 病史记录ID（用于编辑）
   chiefComplaint: string  // 症状或疾病（必填）
   visitDate?: string      // 发病日期（选填）
   diagnosis?: string      // 医生诊断结果（选填）
@@ -2014,7 +2015,7 @@ function closeMedicalRecordModal() {
 /**
  * 保存病史记录
  */
-function saveMedicalRecord() {
+async function saveMedicalRecord() {
   // 验证必填字段
   if (!currentMedicalRecord.value.chiefComplaint || currentMedicalRecord.value.chiefComplaint.trim() === '') {
     uni.showToast({
@@ -2025,25 +2026,60 @@ function saveMedicalRecord() {
     return
   }
 
-  if (isEditingMedicalRecord.value) {
-    // 编辑模式：更新现有记录
-    formData.value.medicalRecords[currentMedicalRecordIndex.value] = { ...currentMedicalRecord.value }
-    uni.showToast({
-      title: '更新成功',
-      icon: 'success',
-      duration: 1500
-    })
+  // 编辑模式：调用 API 更新记录
+  if (isEditingMedicalRecord.value && dogId.value && currentMedicalRecord.value.id) {
+    try {
+      uni.showLoading({ title: '保存中...' })
+
+      const recordId = currentMedicalRecord.value.id
+      const updateData = {
+        chiefComplaint: currentMedicalRecord.value.chiefComplaint,
+        visitDate: currentMedicalRecord.value.visitDate || null,
+        diagnosis: currentMedicalRecord.value.diagnosis || null,
+        notes: currentMedicalRecord.value.notes || null,
+        attachments: currentMedicalRecord.value.attachments || []
+      }
+
+      await request({
+        url: `/dogs/${dogId.value}/medical-records/${recordId}`,
+        method: 'PUT',
+        data: updateData
+      })
+
+      // 更新本地数据
+      formData.value.medicalRecords[currentMedicalRecordIndex.value] = {
+        id: recordId,
+        ...updateData
+      }
+
+      uni.hideLoading()
+      uni.showToast({
+        title: '更新成功',
+        icon: 'success',
+        duration: 1500
+      })
+
+      closeMedicalRecordModal()
+    } catch (error: any) {
+      uni.hideLoading()
+      console.error('[DogCreate] Update medical record failed:', error)
+      uni.showToast({
+        title: error.message || '更新失败',
+        icon: 'none',
+        duration: 2000
+      })
+    }
   } else {
-    // 新增模式：添加新记录
+    // 新增模式：添加到本地列表（稍后保存档案时提交）
     formData.value.medicalRecords.push({ ...currentMedicalRecord.value })
     uni.showToast({
-      title: '添加成功',
+      title: '添加成功（请记得保存档案）',
       icon: 'success',
-      duration: 1500
+      duration: 2000
     })
-  }
 
-  closeMedicalRecordModal()
+    closeMedicalRecordModal()
+  }
 }
 
 /**
@@ -2666,7 +2702,7 @@ function closeCheckupRecordModal() {
 /**
  * 保存体检记录
  */
-function saveCheckupRecord() {
+async function saveCheckupRecord() {
   // 验证必填字段
   if (!currentCheckupRecord.value.checkupType || currentCheckupRecord.value.checkupType.trim() === '') {
     uni.showToast({
@@ -2688,25 +2724,62 @@ function saveCheckupRecord() {
 
   // 体检说明改为选填，不再验证
 
-  if (isEditingCheckupRecord.value) {
-    // 编辑模式：更新现有记录
-    formData.value.checkupRecords[currentCheckupRecordIndex.value] = { ...currentCheckupRecord.value }
-    uni.showToast({
-      title: '更新成功',
-      icon: 'success',
-      duration: 1500
-    })
+  // 编辑模式：调用 API 更新记录
+  if (isEditingCheckupRecord.value && dogId.value && currentCheckupRecord.value.id) {
+    try {
+      uni.showLoading({ title: '保存中...' })
+
+      const recordId = currentCheckupRecord.value.id
+      const updateData = {
+        checkupDate: currentCheckupRecord.value.checkupDate,
+        checkupType: currentCheckupRecord.value.checkupType,
+        findings: currentCheckupRecord.value.notes || '', // findings maps to notes
+        attachments: currentCheckupRecord.value.attachments || []
+      }
+
+      await request({
+        url: `/dogs/${dogId.value}/checkups/${recordId}`,
+        method: 'PUT',
+        data: updateData
+      })
+
+      // 更新本地数据
+      formData.value.checkupRecords[currentCheckupRecordIndex.value] = {
+        id: recordId,
+        checkupDate: updateData.checkupDate,
+        checkupType: updateData.checkupType,
+        notes: updateData.findings,
+        attachments: updateData.attachments
+      }
+
+      uni.hideLoading()
+      uni.showToast({
+        title: '更新成功',
+        icon: 'success',
+        duration: 1500
+      })
+
+      closeCheckupRecordModal()
+    } catch (error: any) {
+      uni.hideLoading()
+      console.error('[DogCreate] Update checkup record failed:', error)
+      uni.showToast({
+        title: error.message || '更新失败',
+        icon: 'none',
+        duration: 2000
+      })
+    }
   } else {
-    // 新增模式：添加新记录
+    // 新增模式：添加到本地列表（稍后保存档案时提交）
     formData.value.checkupRecords.push({ ...currentCheckupRecord.value })
     uni.showToast({
-      title: '添加成功',
+      title: '添加成功（请记得保存档案）',
       icon: 'success',
-      duration: 1500
+      duration: 2000
     })
-  }
 
-  closeCheckupRecordModal()
+    closeCheckupRecordModal()
+  }
 }
 
 /**

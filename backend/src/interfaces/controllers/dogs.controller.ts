@@ -417,6 +417,7 @@ export class DogsController {
       const records = await this.medicalRecordRepository.findByDogId(id);
       // Convert to DTO format
       medicalRecords = records.map((record: any) => ({
+        id: record.id,
         chiefComplaint: record.chiefComplaint,
         visitDate: record.visitDate ? record.visitDate.toISOString().split('T')[0] : null, // Only YYYY-MM-DD
         diagnosis: record.diagnosis || null,

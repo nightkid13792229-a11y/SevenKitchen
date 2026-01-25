@@ -98,6 +98,28 @@ export class Reimbursement {
     if (this.receiptUrls.length > 10) {
       throw new Error('Maximum 10 receipt photos allowed');
     }
+
+    // 验证平台运费
+    if (this.platformShippingFee !== undefined && this.platformShippingFee < 0) {
+      throw new Error('Platform shipping fee cannot be negative');
+    }
+
+    // 验证平台打包费
+    if (this.platformPackagingFee !== undefined && this.platformPackagingFee < 0) {
+      throw new Error('Platform packaging fee cannot be negative');
+    }
+
+    // 验证自定义费用
+    if (this.customFees && this.customFees.length > 0) {
+      this.customFees.forEach((fee, index) => {
+        if (!fee.description || fee.description.trim() === '') {
+          throw new Error(`Custom fee at index ${index} must have a description`);
+        }
+        if (fee.amount < 0) {
+          throw new Error(`Custom fee at index ${index} has negative amount`);
+        }
+      });
+    }
   }
 
   /**
@@ -203,6 +225,21 @@ export class Reimbursement {
   getCostDifferencePercentage(): number {
     if (this.totalEstimatedCost === 0) return 0;
     return (this.getCostDifference() / Number(this.totalEstimatedCost)) * 100;
+  }
+
+  /**
+   * 计算平台费用合计（运费 + 打包费）
+   */
+  getPlatformFeesTotal(): number {
+    return (this.platformShippingFee || 0) + (this.platformPackagingFee || 0);
+  }
+
+  /**
+   * 计算自定义费用合计
+   */
+  getCustomFeesTotal(): number {
+    if (!this.customFees || this.customFees.length === 0) return 0;
+    return this.customFees.reduce((sum, fee) => sum + fee.amount, 0);
   }
 
   /**

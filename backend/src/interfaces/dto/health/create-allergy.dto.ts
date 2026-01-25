@@ -1,4 +1,4 @@
-import { IsDateString, IsEnum, IsOptional, IsString, IsUUID } from 'class-validator'
+import { IsArray, IsDateString, IsEnum, IsOptional, IsString, IsUUID } from 'class-validator'
 
 export enum AllergenType {
   FOOD = 'FOOD',
@@ -49,4 +49,9 @@ export class CreateAllergyDto {
   @IsOptional()
   @IsString()
   notes?: string
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  attachments?: string[]
 }

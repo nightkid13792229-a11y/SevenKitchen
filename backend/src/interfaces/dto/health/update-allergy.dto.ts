@@ -1,4 +1,4 @@
-import { IsDateString, IsEnum, IsOptional, IsString, IsUUID } from 'class-validator'
+import { IsArray, IsDateString, IsEnum, IsOptional, IsString, IsUUID } from 'class-validator'
 import { AllergenType, Severity, ConfirmedBy } from './create-allergy.dto'
 
 export class UpdateAllergyDto {
@@ -37,4 +37,9 @@ export class UpdateAllergyDto {
   @IsOptional()
   @IsString()
   notes?: string
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  attachments?: string[]
 }

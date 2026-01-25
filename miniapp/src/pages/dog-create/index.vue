@@ -1182,6 +1182,32 @@ const currentCheckupRecord = ref<CheckupRecord>({
   attachments: []
 })
 
+// 过敏记录相关状态变量
+const showAllergyRecordModal = ref(false) // 过敏记录弹窗显示状态
+const isEditingAllergyRecord = ref(false) // 是否正在编辑过敏记录
+const currentAllergyRecordIndex = ref(-1) // 当前编辑的过敏记录索引
+const currentAllergyRecord = ref<AllergyRecord>({
+  allergen: '',
+  allergenType: 'FOOD',
+  discoveryDate: '',
+  symptoms: '',
+  severity: 'MILD',
+  confirmedBy: 'VET',
+  treatment: '',
+  notes: '',
+  attachments: []
+})
+// 过敏记录附件存储
+const allergyAttachmentKeys = ref<Record<number, string>>({}) // COS key存储（用于删除COS文件）
+const allergyAttachmentNames = ref<Record<number, string>>({}) // 自定义文件名存储
+
+// 过敏原类型选项
+const allergenTypeOptions = ['FOOD', 'ENVIRONMENTAL', 'MEDICATION']
+// 严重程度选项
+const severityOptions = ['MILD', 'MODERATE', 'SEVERE']
+// 确认方选项
+const confirmedByOptions = ['VET', 'OWNER']
+
 // 体检类型选项
 const checkupTypeOptions = [
   '常规体检', '血液检查', '尿液检查', '粪便检查',

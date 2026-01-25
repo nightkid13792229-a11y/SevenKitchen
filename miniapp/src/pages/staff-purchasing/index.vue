@@ -63,7 +63,7 @@
               <text class="value">{{ list.recordsCount }} 条</text>
             </view>
             <view class="info-row" v-if="list.totalActualCost !== undefined && list.totalActualCost > 0">
-              <text class="label">实际总额:</text>
+              <text class="label">采购金额:</text>
               <text class="value cost">¥{{ list.totalActualCost.toFixed(2) }}</text>
             </view>
             <view class="info-row" v-if="list.sourceOrderIds && list.sourceOrderIds.length > 0">

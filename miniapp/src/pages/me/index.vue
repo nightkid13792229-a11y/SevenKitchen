@@ -22,7 +22,7 @@
         <view class="section-header">基本信息</view>
 
         <view class="info-row" @tap="editNickname">
-          <view class="info-label">昵称</view>
+          <view class="info-label">用户昵称</view>
           <view class="info-value-wrapper">
             <text class="info-value">{{ userInfo.nickname || '未设置' }}</text>
             <text class="arrow">›</text>

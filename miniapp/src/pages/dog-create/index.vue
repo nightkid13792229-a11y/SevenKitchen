@@ -486,6 +486,39 @@
             </view>
           </view>
 
+          <!-- 体检记录 -->
+          <view class="form-item">
+            <view class="medical-header">
+              <text class="label">体检记录</text>
+              <text class="add-btn" @tap="addCheckupRecord">+ 添加</text>
+            </view>
+
+            <!-- 体检记录列表 -->
+            <view v-if="formData.checkupRecords && formData.checkupRecords.length > 0" class="medical-list">
+              <view
+                v-for="(record, index) in formData.checkupRecords"
+                :key="record.id || index"
+                class="medical-item"
+              >
+                <view class="medical-item-main" @tap="editCheckupRecord(index)">
+                  <view class="medical-item-title">{{ record.checkupType || '未命名' }}</view>
+                  <view class="medical-item-info">
+                    <text v-if="record.checkupDate" class="info-tag">日期: {{ formatDate(record.checkupDate) }}</text>
+                    <text v-if="record.attachments && record.attachments.length > 0" class="info-tag">附件: {{ record.attachments.length }}个</text>
+                  </view>
+                </view>
+                <view class="medical-item-actions">
+                  <text class="action-btn edit-btn" @tap="editCheckupRecord(index)">编辑</text>
+                  <text class="action-btn delete-btn" @tap="deleteCheckupRecord(index)">删除</text>
+                </view>
+              </view>
+            </view>
+
+            <view v-else class="empty-medical">
+              <text class="empty-text">暂无体检记录</text>
+            </view>
+          </view>
+
           <view class="form-item">
             <text class="label">过敏食物</text>
             <textarea class="textarea" placeholder="请记录过敏的食物（选填）" v-model="formData.allergyFoods" />
@@ -719,11 +752,15 @@
                 :key="index"
                 class="uploaded-file-item"
               >
-                <view class="file-info">
+                <view class="file-info" @tap.stop="handlePreviewFile" :data-index="index">
                   <text class="file-icon">{{ getFileIcon(file) }}</text>
-                  <text class="file-name">{{ getFileName(file) }}</text>
+                  <text class="file-name">{{ getFileName(file, index) }}</text>
                 </view>
-                <text class="file-delete" @tap="removeAttachment(index)">删除</text>
+                <view class="file-actions">
+                  <text class="file-preview" @tap.stop="handlePreviewFile" :data-index="index">预览</text>
+                  <text class="file-rename" @tap.stop="handleRenameAttachment" :data-index="index">重命名</text>
+                  <text class="file-delete" @tap.stop="handleRemoveAttachment" :data-index="index">删除</text>
+                </view>
               </view>
             </view>
 
@@ -747,14 +784,94 @@
         </view>
       </view>
     </view>
+
+    <!-- Checkup Record Modal -->
+    <view v-if="showCheckupRecordModal" class="medical-record-modal" @tap="closeCheckupRecordModal">
+      <view class="medical-record-mask" @tap="closeCheckupRecordModal"></view>
+      <view class="medical-record-content" @tap.stop>
+        <text class="medical-record-title">{{ isEditingCheckupRecord ? '编辑体检记录' : '添加体检记录' }}</text>
+
+        <view class="medical-form">
+          <view class="medical-form-item">
+            <text class="medical-label">体检类型 *</text>
+            <picker mode="selector" :range="checkupTypeOptions" :value="checkupTypeIndex" @change="onCheckupTypeChange">
+              <view class="medical-picker">
+                {{ currentCheckupRecord.checkupType || '请选择体检类型' }}
+              </view>
+            </picker>
+          </view>
+
+          <view class="medical-form-item">
+            <text class="medical-label">体检日期 *</text>
+            <picker mode="date" :value="currentCheckupRecord.checkupDate" @change="onCheckupDateChange">
+              <view class="medical-picker">
+                {{ currentCheckupRecord.checkupDate || '请选择体检日期' }}
+              </view>
+            </picker>
+          </view>
+
+          <view class="medical-form-item">
+            <text class="medical-label">体检说明</text>
+            <textarea
+              class="medical-textarea"
+              v-model="currentCheckupRecord.notes"
+              placeholder="请输入体检说明（选填）"
+              :maxlength="500"
+            />
+          </view>
+
+          <!-- 体检报告上传 -->
+          <view class="medical-form-item">
+            <text class="medical-label">体检报告（图片或PDF）</text>
+
+            <!-- 已上传文件列表 -->
+            <view v-if="currentCheckupRecord.attachments && currentCheckupRecord.attachments.length > 0" class="uploaded-files">
+              <view
+                v-for="(file, index) in currentCheckupRecord.attachments"
+                :key="index"
+                class="uploaded-file-item"
+              >
+                <view class="file-info" @tap.stop="handlePreviewCheckupFile" :data-index="index">
+                  <text class="file-icon">{{ getFileIcon(file) }}</text>
+                  <text class="file-name">{{ getCheckupFileName(file, index) }}</text>
+                </view>
+                <view class="file-actions">
+                  <text class="file-preview" @tap.stop="handlePreviewCheckupFile" :data-index="index">预览</text>
+                  <text class="file-rename" @tap.stop="handleRenameCheckupAttachment" :data-index="index">重命名</text>
+                  <text class="file-delete" @tap.stop="handleRemoveCheckupAttachment" :data-index="index">删除</text>
+                </view>
+              </view>
+            </view>
+
+            <!-- 上传按钮 -->
+            <view class="upload-buttons">
+              <button class="upload-btn" @tap="chooseCheckupImage">
+                <text class="upload-icon">📷</text>
+                <text class="upload-text">选择图片</text>
+              </button>
+              <button class="upload-btn" @tap="chooseCheckupPdf">
+                <text class="upload-icon">📄</text>
+                <text class="upload-text">选择PDF</text>
+              </button>
+            </view>
+          </view>
+        </view>
+
+        <view class="medical-record-actions">
+          <view class="medical-btn-cancel" @tap="closeCheckupRecordModal">取消</view>
+          <view class="medical-btn-confirm" @tap="saveCheckupRecord">保存</view>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { request } from '../../utils/api'
+import { request, getToken } from '../../utils/api'
 import { addDogToCache } from '../../utils/dog-cache'
+import { getBaseUrl } from '../../utils/config'
 
 // 病史记录接口
 interface MedicalRecord {
@@ -762,8 +879,26 @@ interface MedicalRecord {
   visitDate?: string      // 发病日期（选填）
   diagnosis?: string      // 医生诊断结果（选填）
   notes?: string          // 详细描述（选填）
-  attachments?: string[]  // 检查报告文件URL数组
+  attachments?: string[]  // 检查报告文件URL数组（后端存储格式）
 }
+
+// 体检记录接口
+interface CheckupRecord {
+  checkupDate: string     // 体检日期（必填）
+  checkupType: string     // 体检类型（必填）
+  notes: string           // 体检说明（必填）
+  attachments?: string[]  // 体检报告文件URL数组（后端存储格式）
+  id?: string             // 体检记录ID（用于编辑）
+}
+
+// 前端使用的附件接口（包含自定义名称）
+interface Attachment {
+  url: string           // 文件URL
+  customName?: string    // 自定义文件名
+}
+
+// 附件名称存储
+const attachmentNames = ref<Record<number, string>>({})
 
 interface FormData {
   name: string
@@ -783,6 +918,7 @@ interface FormData {
   manualTreatKcal: string
   medicalHistory?: string  // 保留用于向后兼容
   medicalRecords: MedicalRecord[]  // 新的病史记录列表
+  checkupRecords: CheckupRecord[]  // 体检记录列表
   allergyFoods: string
   pickyFoods: string
 }
@@ -813,6 +949,7 @@ const formData = ref<FormData>({
   treatLevel: 'LOW',
   manualTreatKcal: '',
   medicalRecords: [],
+  checkupRecords: [],
   allergyFoods: '',
   pickyFoods: ''
 })
@@ -1011,6 +1148,26 @@ const currentMedicalRecord = ref<MedicalRecord>({
 })
 const uploadingFile = ref(false) // 文件上传状态
 
+// 体检记录相关状态变量
+const showCheckupRecordModal = ref(false) // 体检记录弹窗显示状态
+const isEditingCheckupRecord = ref(false) // 是否正在编辑体检记录
+const currentCheckupRecordIndex = ref(-1) // 当前编辑的体检记录索引
+const currentCheckupRecord = ref<CheckupRecord>({
+  checkupDate: '',
+  checkupType: '',
+  notes: '',
+  attachments: []
+})
+
+// 体检类型选项
+const checkupTypeOptions = [
+  '常规体检', '血液检查', '尿液检查', '粪便检查',
+  'X光检查', 'B超检查', '心电图', '眼科检查',
+  '牙科检查', '皮肤检查', '耳道检查', '驱虫检查',
+  '心脏检查', '肝肾功能', '内分泌检查', '骨骼检查',
+  '其他'
+]
+
 // 侧边导航状态变量
 const activeCategory = ref<string>('')
 const scrollToViewId = ref<string>('')
@@ -1087,6 +1244,11 @@ const bcsStatusColor = computed(() => {
   if (score >= 4 && score <= 5) return '#52c41a' // 绿色
   if (score >= 6 && score <= 7) return '#faad14' // 深黄色
   return '#ff4d4f' // 红色
+})
+
+// 体检类型索引
+const checkupTypeIndex = computed(() => {
+  return checkupTypeOptions.indexOf(currentCheckupRecord.value.checkupType)
 })
 
 // ========== 生命阶段自动计算逻辑 ==========
@@ -1475,6 +1637,10 @@ function populateFormData(profile: any) {
   formData.value.treatLevel = profile.treatLevel || 'LOW'
   formData.value.manualTreatKcal = profile.manualTreatKcal?.toString() || ''
   formData.value.medicalHistory = profile.medicalHistory || ''
+  formData.value.medicalRecords = profile.medicalRecords || []
+  console.log('[DogCreate] Loaded medicalRecords:', formData.value.medicalRecords)
+  formData.value.checkupRecords = profile.checkupRecords || []
+  console.log('[DogCreate] Loaded checkupRecords:', formData.value.checkupRecords)
   formData.value.allergyFoods = profile.allergyFoods || ''
   formData.value.pickyFoods = profile.pickyFoods || ''
 
@@ -1882,15 +2048,32 @@ function onMedicalDateChange(e: any) {
 }
 
 /**
- * 格式化日期显示
+ * 格式化日期显示（正确处理时区）
+ * 输入格式：ISO 8601字符串，如 "2024-01-24T00:00:00.000Z" 或 "2024-01-24"
+ * 输出格式：YYYY-MM-DD（上海时区）
  */
 function formatDate(dateStr: string): string {
   if (!dateStr) return ''
-  const date = new Date(dateStr)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+
+  try {
+    // 提取日期部分（YYYY-MM-DD），忽略时间和时区信息
+    // 这样可以避免时区转换问题
+    const dateMatch = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})/)
+    if (dateMatch) {
+      const [, year, month, day] = dateMatch
+      return `${year}-${month}-${day}`
+    }
+
+    // 如果无法匹配，尝试使用Date对象解析（作为后备方案）
+    const date = new Date(dateStr)
+    const year = date.getFullYear()
+    const month = String(date.getMonth() + 1).padStart(2, '0')
+    const day = String(date.getDate()).padStart(2, '0')
+    return `${year}-${month}-${day}`
+  } catch (error) {
+    console.error('[formatDate] Failed to format date:', dateStr, error)
+    return dateStr
+  }
 }
 
 /**
@@ -1964,6 +2147,10 @@ function choosePdf() {
  * 上传文件到服务器
  */
 function uploadFile(filePath: string, fileType: 'image' | 'pdf') {
+  console.log('[DogCreate] ========== Upload File Start ==========')
+  console.log('[DogCreate] File type:', fileType)
+  console.log('[DogCreate] File path:', filePath)
+
   if (uploadingFile.value) {
     uni.showToast({
       title: '正在上传中...',
@@ -1976,24 +2163,46 @@ function uploadFile(filePath: string, fileType: 'image' | 'pdf') {
   uploadingFile.value = true
   uni.showLoading({ title: '上传中...' })
 
+  // 使用 getBaseUrl() 获取正确的API地址
+  const baseUrl = getBaseUrl()
+  const uploadUrl = `${baseUrl}/dogs/medical-records/upload-attachment`
+
+  console.log('[DogCreate] Base URL from config:', baseUrl)
+  console.log('[DogCreate] Full Upload URL:', uploadUrl)
+  console.log('[DogCreate] URL validity check:', {
+    hasProtocol: uploadUrl.startsWith('http'),
+    length: uploadUrl.length,
+    format: uploadUrl
+  })
+
+  // 获取 token 用于身份验证
+  const token = getToken()
+  console.log('[DogCreate] Token exists:', !!token, 'Token length:', token?.length || 0)
+
   uni.uploadFile({
-    url: `${getApp().globalData.apiUrl}/dogs/medical-records/upload-attachment`,
+    url: uploadUrl,
     filePath: filePath,
     name: 'file',
     header: {
+      'Authorization': `Bearer ${token}`,
       'X-Customer-Id': uni.getStorageSync('userId') || ''
     },
     success: (res) => {
       console.log('[DogCreate] Upload success:', res)
-      if (res.statusCode === 200) {
+      // 接受 200 (OK) 或 201 (Created) 作为成功状态码
+      if (res.statusCode === 200 || res.statusCode === 201) {
         try {
           const data = JSON.parse(res.data)
+          console.log('[DogCreate] Parsed response data:', data)
           if (data.code === 0 && data.data && data.data.url) {
             // 添加到attachments数组
             if (!currentMedicalRecord.value.attachments) {
               currentMedicalRecord.value.attachments = []
             }
             currentMedicalRecord.value.attachments.push(data.data.url)
+
+            console.log('[DogCreate] File URL added to attachments:', data.data.url)
+            console.log('[DogCreate] Total attachments:', currentMedicalRecord.value.attachments.length)
 
             uni.showToast({
               title: '上传成功',
@@ -2021,10 +2230,12 @@ function uploadFile(filePath: string, fileType: 'image' | 'pdf') {
     },
     fail: (err) => {
       console.error('[DogCreate] Upload file failed:', err)
+      console.error('[DogCreate] Upload URL was:', uploadUrl)
+      console.error('[DogCreate] Error details:', JSON.stringify(err))
       uni.showToast({
-        title: '上传失败，请重试',
+        title: `上传失败: ${err.errMsg || '未知错误'}`,
         icon: 'none',
-        duration: 2000
+        duration: 3000
       })
     },
     complete: () => {
@@ -2044,6 +2255,22 @@ function removeAttachment(index: number) {
     success: (res) => {
       if (res.confirm && currentMedicalRecord.value.attachments) {
         currentMedicalRecord.value.attachments.splice(index, 1)
+
+        // 清理对应的自定义名称，并调整其他名称的索引
+        const newNames: Record<number, string> = {}
+        let newIndex = 0
+        for (let i = 0; i < currentMedicalRecord.value.attachments.length; i++) {
+          if (attachmentNames.value[i]) {
+            newNames[newIndex] = attachmentNames.value[i]
+            newIndex++
+          }
+        }
+        attachmentNames.value = newNames
+
+        console.log('[Remove] Attachment deleted at index:', index)
+        console.log('[Remove] Remaining attachments:', currentMedicalRecord.value.attachments.length)
+        console.log('[Remove] Updated attachment names:', attachmentNames.value)
+
         uni.showToast({
           title: '删除成功',
           icon: 'success',
@@ -2066,23 +2293,664 @@ function getFileIcon(url: string): string {
 }
 
 /**
- * 获取文件名
+ * 获取文件名（带索引参数）
  */
-function getFileName(url: string): string {
+function getFileName(url: string, index?: number): string {
   if (!url) return '未知文件'
+
+  // 优先使用自定义名称
+  if (index !== undefined && attachmentNames.value[index]) {
+    return attachmentNames.value[index]
+  }
+
+  console.log('[getFileName] Parsing URL:', url)
+
   try {
+    // 方法1: 使用 URL API
     const urlObj = new URL(url)
     const pathname = urlObj.pathname
     const parts = pathname.split('/')
-    const filename = parts[parts.length - 1]
+    let filename = parts[parts.length - 1]
+
+    // 如果文件名为空或只有扩展名，尝试其他方法
+    if (!filename || filename === '' || filename === '/') {
+      // 方法2: 直接从完整 URL 中提取
+      const lastSlashIndex = url.lastIndexOf('/')
+      if (lastSlashIndex > -1 && lastSlashIndex < url.length - 1) {
+        filename = url.substring(lastSlashIndex + 1)
+      }
+    }
+
+    // 去除查询参数
+    const queryIndex = filename.indexOf('?')
+    if (queryIndex > -1) {
+      filename = filename.substring(0, queryIndex)
+    }
+
+    console.log('[getFileName] Extracted filename:', filename)
+
+    // 如果仍然没有文件名，根据文件类型返回默认名称
+    if (!filename || filename === '') {
+      const lowerUrl = url.toLowerCase()
+      if (lowerUrl.includes('.pdf')) return 'PDF文档'
+      if (lowerUrl.includes('.jpg') || lowerUrl.includes('.jpeg')) return '图片.jpg'
+      if (lowerUrl.includes('.png')) return '图片.png'
+      if (lowerUrl.includes('.gif')) return '图片.gif'
+      return '未知文件'
+    }
+
     // 如果文件名过长，截断显示
-    return filename.length > 20 ? filename.substring(0, 17) + '...' : filename
-  } catch {
+    return filename.length > 25 ? filename.substring(0, 22) + '...' : filename
+  } catch (err) {
+    console.error('[getFileName] Parse URL failed:', err)
+
+    // 降级方案：使用字符串操作
+    try {
+      const lastSlashIndex = url.lastIndexOf('/')
+      if (lastSlashIndex > -1 && lastSlashIndex < url.length - 1) {
+        let filename = url.substring(lastSlashIndex + 1)
+        // 去除查询参数
+        const queryIndex = filename.indexOf('?')
+        if (queryIndex > -1) {
+          filename = filename.substring(0, queryIndex)
+        }
+        return filename.length > 25 ? filename.substring(0, 22) + '...' : filename
+      }
+    } catch {
+      console.error('[getFileName] Fallback also failed')
+    }
+
     return '未知文件'
   }
 }
 
+/**
+ * 重命名附件
+ */
+function renameAttachment(index: number) {
+  console.log('[Rename] Rename attachment at index:', index)
+
+  const currentName = attachmentNames.value[index] || ''
+  const fileUrl = currentMedicalRecord.value.attachments?.[index] || ''
+  const defaultName = getFileName(fileUrl)
+
+  uni.showModal({
+    title: '重命名文件',
+    editable: true,
+    placeholderText: '请输入新的文件名',
+    content: currentName || defaultName,
+    success: (res) => {
+      if (res.confirm && res.content) {
+        const newName = res.content.trim()
+        if (newName) {
+          attachmentNames.value[index] = newName
+          console.log('[Rename] File renamed to:', newName)
+          uni.showToast({
+            title: '重命名成功',
+            icon: 'success',
+            duration: 1500
+          })
+        }
+      }
+    }
+  })
+}
+
+/**
+ * 处理文件预览事件（从模板事件中获取索引）
+ */
+function handlePreviewFile(event: any) {
+  console.log('[Preview] handlePreviewFile called')
+  const dataset = event.currentTarget.dataset
+  console.log('[Preview] Dataset:', dataset)
+  const index = Number(dataset.index)
+  console.log('[Preview] File index:', index, 'Type:', typeof index)
+
+  if (currentMedicalRecord.value.attachments && !isNaN(index) && index >= 0) {
+    const file = currentMedicalRecord.value.attachments[index]
+    console.log('[Preview] File URL:', file)
+    if (file) {
+      previewFile(file)
+    } else {
+      uni.showToast({
+        title: '文件不存在',
+        icon: 'none',
+        duration: 2000
+      })
+    }
+  } else {
+    console.error('[Preview] Invalid index or attachments')
+    uni.showToast({
+      title: '预览失败',
+      icon: 'none',
+      duration: 2000
+    })
+  }
+}
+
+/**
+ * 处理删除附件事件
+ */
+function handleRemoveAttachment(event: any) {
+  console.log('[Remove] handleRemoveAttachment called')
+  const dataset = event.currentTarget.dataset
+  const index = Number(dataset.index)
+  console.log('[Remove] File index:', index)
+
+  if (!isNaN(index) && index >= 0) {
+    removeAttachment(index)
+  } else {
+    uni.showToast({
+      title: '删除失败',
+      icon: 'none',
+      duration: 2000
+    })
+  }
+}
+
+/**
+ * 处理重命名附件事件
+ */
+function handleRenameAttachment(event: any) {
+  console.log('[Rename] handleRenameAttachment called')
+  const dataset = event.currentTarget.dataset
+  const index = Number(dataset.index)
+  console.log('[Rename] File index:', index)
+
+  if (!isNaN(index) && index >= 0) {
+    renameAttachment(index)
+  } else {
+    uni.showToast({
+      title: '重命名失败',
+      icon: 'none',
+      duration: 2000
+    })
+  }
+}
+
+/**
+ * 判断文件类型
+ */
+function getFileType(url: string): 'image' | 'pdf' | 'unknown' {
+  if (!url) return 'unknown'
+  const lowerUrl = url.toLowerCase()
+  if (lowerUrl.includes('.jpg') || lowerUrl.includes('.jpeg') || lowerUrl.includes('.png') || lowerUrl.includes('.gif') || lowerUrl.includes('.webp')) {
+    return 'image'
+  }
+  if (lowerUrl.includes('.pdf')) {
+    return 'pdf'
+  }
+  return 'unknown'
+}
+
+/**
+ * 预览文件
+ */
+function previewFile(url: string) {
+  console.log('[Preview] Preview file:', url)
+  const fileType = getFileType(url)
+
+  if (fileType === 'image') {
+    // 图片预览
+    uni.previewImage({
+      urls: [url],
+      current: url,
+      fail: (err) => {
+        console.error('[Preview] Preview image failed:', err)
+        uni.showToast({
+          title: '预览失败',
+          icon: 'none',
+          duration: 2000
+        })
+      }
+    })
+  } else if (fileType === 'pdf') {
+    // PDF预览：先下载，再打开
+    uni.showLoading({ title: '加载中...' })
+
+    uni.downloadFile({
+      url: url,
+      success: (res) => {
+        if (res.statusCode === 200) {
+          uni.openDocument({
+            filePath: res.tempFilePath,
+            fileType: 'pdf',
+            success: () => {
+              console.log('[Preview] PDF opened successfully')
+              uni.hideLoading()
+            },
+            fail: (err) => {
+              console.error('[Preview] Open PDF failed:', err)
+              uni.hideLoading()
+              uni.showToast({
+                title: '打开PDF失败',
+                icon: 'none',
+                duration: 2000
+              })
+            }
+          })
+        } else {
+          uni.hideLoading()
+          uni.showToast({
+            title: `下载失败 (${res.statusCode})`,
+            icon: 'none',
+            duration: 2000
+          })
+        }
+      },
+      fail: (err) => {
+        console.error('[Preview] Download PDF failed:', err)
+        uni.hideLoading()
+        uni.showToast({
+          title: '下载失败',
+          icon: 'none',
+          duration: 2000
+        })
+      }
+    })
+  } else {
+    uni.showToast({
+      title: '不支持的文件类型',
+      icon: 'none',
+      duration: 2000
+    })
+  }
+}
+
 // ========== 病史记录管理函数结束 ==========
+
+// ========== 体检记录管理函数 ==========
+
+/**
+ * 添加体检记录
+ */
+function addCheckupRecord() {
+  isEditingCheckupRecord.value = false
+  currentCheckupRecordIndex.value = -1
+  currentCheckupRecord.value = {
+    checkupDate: '',
+    checkupType: '',
+    notes: '',
+    attachments: []
+  }
+  showCheckupRecordModal.value = true
+}
+
+/**
+ * 编辑体检记录
+ */
+function editCheckupRecord(index: number) {
+  isEditingCheckupRecord.value = true
+  currentCheckupRecordIndex.value = index
+  // 深拷贝当前记录
+  currentCheckupRecord.value = { ...formData.value.checkupRecords[index] }
+  showCheckupRecordModal.value = true
+}
+
+/**
+ * 删除体检记录
+ */
+function deleteCheckupRecord(index: number) {
+  uni.showModal({
+    title: '确认删除',
+    content: '确定要删除这条体检记录吗？',
+    success: (res) => {
+      if (res.confirm) {
+        formData.value.checkupRecords.splice(index, 1)
+        uni.showToast({
+          title: '删除成功',
+          icon: 'success',
+          duration: 1500
+        })
+      }
+    }
+  })
+}
+
+/**
+ * 关闭体检记录弹窗
+ */
+function closeCheckupRecordModal() {
+  showCheckupRecordModal.value = false
+  currentCheckupRecord.value = {
+    checkupDate: '',
+    checkupType: '',
+    notes: '',
+    attachments: []
+  }
+}
+
+/**
+ * 保存体检记录
+ */
+function saveCheckupRecord() {
+  // 验证必填字段
+  if (!currentCheckupRecord.value.checkupType || currentCheckupRecord.value.checkupType.trim() === '') {
+    uni.showToast({
+      title: '请选择体检类型',
+      icon: 'none',
+      duration: 2000
+    })
+    return
+  }
+
+  if (!currentCheckupRecord.value.checkupDate) {
+    uni.showToast({
+      title: '请选择体检日期',
+      icon: 'none',
+      duration: 2000
+    })
+    return
+  }
+
+  // 体检说明改为选填，不再验证
+
+  if (isEditingCheckupRecord.value) {
+    // 编辑模式：更新现有记录
+    formData.value.checkupRecords[currentCheckupRecordIndex.value] = { ...currentCheckupRecord.value }
+    uni.showToast({
+      title: '更新成功',
+      icon: 'success',
+      duration: 1500
+    })
+  } else {
+    // 新增模式：添加新记录
+    formData.value.checkupRecords.push({ ...currentCheckupRecord.value })
+    uni.showToast({
+      title: '添加成功',
+      icon: 'success',
+      duration: 1500
+    })
+  }
+
+  closeCheckupRecordModal()
+}
+
+/**
+ * 体检类型选择变更
+ */
+function onCheckupTypeChange(e: any) {
+  const index = e.detail.value
+  currentCheckupRecord.value.checkupType = checkupTypeOptions[index]
+}
+
+/**
+ * 体检日期选择变更
+ */
+function onCheckupDateChange(e: any) {
+  currentCheckupRecord.value.checkupDate = e.detail.value
+}
+
+/**
+ * 选择体检图片
+ */
+function chooseCheckupImage() {
+  uni.chooseImage({
+    count: 9,
+    sizeType: ['compressed'],
+    sourceType: ['album', 'camera'],
+    success: (res) => {
+      res.tempFilePaths.forEach((filePath: string) => {
+        uploadCheckupFile(filePath, 'image')
+      })
+    },
+    fail: (err) => {
+      console.error('[DogCreate] Choose image failed:', err)
+      uni.showToast({
+        title: '选择图片失败',
+        icon: 'none',
+        duration: 2000
+      })
+    }
+  })
+}
+
+/**
+ * 选择体检PDF
+ */
+function chooseCheckupPdf() {
+  uni.chooseMessageFile({
+    count: 5,
+    type: 'file',
+    extension: ['pdf'],
+    success: (res) => {
+      const validFiles = res.tempFiles.filter((file: any) => {
+        const fileName = file.name.toLowerCase()
+        return fileName.endsWith('.pdf')
+      })
+
+      if (validFiles.length === 0) {
+        uni.showToast({
+          title: '请选择PDF文件',
+          icon: 'none',
+          duration: 2000
+        })
+        return
+      }
+
+      validFiles.forEach((file: any) => {
+        uploadCheckupFile(file.path, 'pdf')
+      })
+    },
+    fail: (err) => {
+      console.error('[DogCreate] Choose file failed:', err)
+      uni.showToast({
+        title: '选择文件失败',
+        icon: 'none',
+        duration: 2000
+      })
+    }
+  })
+}
+
+/**
+ * 上传体检文件到服务器
+ */
+function uploadCheckupFile(filePath: string, fileType: 'image' | 'pdf') {
+  if (uploadingFile.value) {
+    uni.showToast({
+      title: '正在上传中...',
+      icon: 'none',
+      duration: 1500
+    })
+    return
+  }
+
+  uploadingFile.value = true
+  uni.showLoading({ title: '上传中...' })
+
+  const baseUrl = getBaseUrl()
+  const uploadUrl = `${baseUrl}/dogs/checkup-records/upload-attachment`
+
+  const token = getToken()
+
+  uni.uploadFile({
+    url: uploadUrl,
+    filePath: filePath,
+    name: 'file',
+    header: {
+      'Authorization': `Bearer ${token}`,
+      'X-Customer-Id': uni.getStorageSync('userId') || ''
+    },
+    success: (res) => {
+      if (res.statusCode === 200 || res.statusCode === 201) {
+        try {
+          const data = JSON.parse(res.data)
+          if (data.code === 0 && data.data && data.data.url) {
+            if (!currentCheckupRecord.value.attachments) {
+              currentCheckupRecord.value.attachments = []
+            }
+            currentCheckupRecord.value.attachments.push(data.data.url)
+
+            uni.showToast({
+              title: '上传成功',
+              icon: 'success',
+              duration: 1500
+            })
+          } else {
+            throw new Error(data.message || '上传失败')
+          }
+        } catch (err) {
+          uni.showToast({
+            title: '上传失败',
+            icon: 'none',
+            duration: 2000
+          })
+        }
+      } else {
+        uni.showToast({
+          title: `上传失败 (${res.statusCode})`,
+          icon: 'none',
+          duration: 2000
+        })
+      }
+    },
+    fail: (err) => {
+      console.error('[DogCreate] Upload file failed:', err)
+      uni.showToast({
+        title: '上传失败',
+        icon: 'none',
+        duration: 2000
+      })
+    },
+    complete: () => {
+      uploadingFile.value = false
+      uni.hideLoading()
+    }
+  })
+}
+
+/**
+ * 获取体检文件名
+ */
+function getCheckupFileName(url: string, index: number) {
+  // 从URL中提取原始文件名
+  try {
+    const urlObj = new URL(url)
+    const pathname = urlObj.pathname
+    const filename = pathname.split('/').pop() || `文件${index + 1}`
+
+    // 如果有自定义名称，使用自定义名称
+    const key = `${index}_checkup`
+    return attachmentNames.value[key] || filename
+  } catch {
+    return `文件${index + 1}`
+  }
+}
+
+/**
+ * 预览体检文件
+ */
+function handlePreviewCheckupFile(event: any) {
+  const index = event.currentTarget.dataset.index
+  const url = currentCheckupRecord.value.attachments?.[index]
+
+  if (!url) return
+
+  // 判断文件类型
+  const isPdf = url.toLowerCase().endsWith('.pdf')
+
+  if (isPdf) {
+    // PDF文件：下载后打开
+    uni.downloadFile({
+      url: url,
+      success: (res) => {
+        if (res.statusCode === 200) {
+          uni.openDocument({
+            filePath: res.tempFilePath,
+            showMenu: true,
+            success: () => {
+              console.log('[DogCreate] Open PDF success')
+            },
+            fail: (err) => {
+              console.error('[DogCreate] Open PDF failed:', err)
+              uni.showToast({
+                title: '打开文件失败',
+                icon: 'none',
+                duration: 2000
+              })
+            }
+          })
+        }
+      },
+      fail: (err) => {
+        console.error('[DogCreate] Download PDF failed:', err)
+        uni.showToast({
+          title: '下载文件失败',
+          icon: 'none',
+          duration: 2000
+        })
+      }
+    })
+  } else {
+    // 图片文件：预览
+    uni.previewImage({
+      urls: currentCheckupRecord.value.attachments || [],
+      current: url,
+      fail: (err) => {
+        console.error('[DogCreate] Preview image failed:', err)
+        uni.showToast({
+          title: '预览失败',
+          icon: 'none',
+          duration: 2000
+        })
+      }
+    })
+  }
+}
+
+/**
+ * 删除体检附件
+ */
+function handleRemoveCheckupAttachment(event: any) {
+  const index = event.currentTarget.dataset.index
+
+  uni.showModal({
+    title: '确认删除',
+    content: '确定要删除这个附件吗？',
+    success: (res) => {
+      if (res.confirm && currentCheckupRecord.value.attachments) {
+        currentCheckupRecord.value.attachments.splice(index, 1)
+        uni.showToast({
+          title: '删除成功',
+          icon: 'success',
+          duration: 1500
+        })
+      }
+    }
+  })
+}
+
+/**
+ * 重命名体检附件
+ */
+function handleRenameCheckupAttachment(event: any) {
+  const index = event.currentTarget.dataset.index
+  const url = currentCheckupRecord.value.attachments?.[index]
+
+  if (!url) return
+
+  const currentName = getCheckupFileName(url, index)
+
+  uni.showModal({
+    title: '重命名附件',
+    editable: true,
+    placeholderText: currentName,
+    success: (res) => {
+      if (res.confirm && res.content) {
+        const key = `${index}_checkup`
+        attachmentNames.value[key] = res.content.trim()
+        uni.showToast({
+          title: '重命名成功',
+          icon: 'success',
+          duration: 1500
+        })
+      }
+    }
+  })
+}
+
+// ========== 体检记录管理函数结束 ==========
 
 // ========== 生命阶段选择函数 ==========
 
@@ -2432,6 +3300,7 @@ function submit() {
     treatInputMode: formData.value.treatInputMode || 'ESTIMATE_LEVEL',
     treatLevel: formData.value.treatLevel,
     medicalRecords: formData.value.medicalRecords || [],
+    checkupRecords: formData.value.checkupRecords || [],
     allergyFoods: formData.value.allergyFoods || null,
     pickyFoods: formData.value.pickyFoods || null
   }
@@ -4181,6 +5050,14 @@ function submit() {
   gap: 12rpx;
   flex: 1;
   overflow: hidden;
+  cursor: pointer;
+  padding: 8rpx;
+  border-radius: 6rpx;
+  transition: background-color 0.2s;
+}
+
+.file-info:active {
+  background-color: #f0f0f0;
 }
 
 .file-icon {
@@ -4196,12 +5073,41 @@ function submit() {
   white-space: nowrap;
 }
 
+.file-actions {
+  display: flex;
+  gap: 8rpx;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.file-preview {
+  font-size: 24rpx;
+  color: #1890ff;
+  padding: 6rpx 12rpx;
+  border-radius: 6rpx;
+  background-color: #e6f7ff;
+  border: 1rpx solid #91d5ff;
+  cursor: pointer;
+}
+
+.file-rename {
+  font-size: 24rpx;
+  color: #fa8c16;
+  padding: 6rpx 12rpx;
+  border-radius: 6rpx;
+  background-color: #fff7e6;
+  border: 1rpx solid #ffd591;
+  cursor: pointer;
+}
+
 .file-delete {
   font-size: 24rpx;
   color: #ff4d4f;
-  padding: 8rpx 16rpx;
+  padding: 6rpx 12rpx;
   border-radius: 6rpx;
-  flex-shrink: 0;
+  background-color: #fff1f0;
+  border: 1rpx solid #ffccc7;
+  cursor: pointer;
 }
 
 .upload-buttons {

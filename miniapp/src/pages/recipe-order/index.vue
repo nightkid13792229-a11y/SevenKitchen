@@ -12,6 +12,22 @@
       </view>
       <view class="recipe-info">
         <text class="recipe-name">{{ recipe.name }}</text>
+        <view class="recipe-tags">
+          <text
+            v-for="stage in recipe.applicableLifeStages"
+            :key="stage"
+            class="tag life-stage-tag"
+          >
+            {{ getLifeStageLabel(stage) }}
+          </text>
+          <text
+            v-for="tag in recipe.targetHealthTags"
+            :key="tag"
+            class="tag health-tag"
+          >
+            {{ getHealthTagLabel(tag) }}
+          </text>
+        </view>
       </view>
     </view>
 
@@ -436,8 +452,8 @@
       </view>
     </view>
 
-    <!-- 价格明细 -->
-    <view class="section price-breakdown-section" v-if="selectedDog && selectedCycleDays && pricePreview && pricePreview.pricingBreakdown">
+    <!-- 价格明细（仅管理员可见） -->
+    <view class="section price-breakdown-section" v-if="isAdminUser && selectedDog && selectedCycleDays && pricePreview && pricePreview.pricingBreakdown">
       <view class="section-title" @tap="togglePriceBreakdown">
         <view class="title-row">
           <text class="title-text">💰 价格计算明细</text>
@@ -922,6 +938,12 @@ const showLaborDetails = ref(false)
 const showOverheadDetails = ref(false)
 const showPackagingDetails = ref(false)
 
+// 权限检查：只有管理员才能查看价格计算明细
+const isAdminUser = computed(() => {
+  const user = uni.getStorageSync('user')
+  return user && user.role === 'ADMIN'
+})
+
 // 保质期说明展开状态
 const showShelfLife = ref(false)
 
@@ -930,6 +952,9 @@ const showWeightDetails = ref(false)
 
 // 计算说明展开状态
 const showCalculationDetails = ref(false)
+
+// 健康标签UUID到名称的映射（动态加载）
+const healthTagUuidLabelMap = ref<Record<string, string>>({})
 
 // 周期选项
 const cycleOptions = [
@@ -1026,6 +1051,7 @@ onMounted(async () => {
   if (recipeId.value) {
     // 必须先加载品种数据，因为狗狗生命阶段计算需要品种信息
     await loadBreeds()
+    await loadHealthTagMapping()  // 加载健康标签映射
     await loadRecipeDetail()
     await loadDogs()
     loadGlobalConfig()
@@ -1052,6 +1078,29 @@ async function loadBreeds() {
   }
 
   console.log('[RecipeOrder] loadBreeds 结束')
+}
+
+async function loadHealthTagMapping() {
+  try {
+    const res = await request({
+      url: '/recipes/filter-options',
+      method: 'GET'
+    })
+    if (res.code === 0 && res.data) {
+      // 建立健康标签UUID到label的映射
+      const uuidMap: Record<string, string> = {}
+      if (res.data.healthTags && Array.isArray(res.data.healthTags)) {
+        res.data.healthTags.forEach((tag: any) => {
+          if (tag.value && tag.label) {
+            uuidMap[tag.value] = tag.label
+          }
+        })
+      }
+      healthTagUuidLabelMap.value = uuidMap
+    }
+  } catch (error) {
+    console.error('[RecipeOrder] Load health tag mapping error:', error)
+  }
 }
 
 async function loadRecipeDetail() {
@@ -1220,6 +1269,29 @@ function getLifeStageLabel(stage: string): string {
     'SENIOR': '老年犬',
   }
   return stageMap[stage] || stage
+}
+
+function getHealthTagLabel(tagOrUuid: string): string {
+  // 优先使用动态映射（UUID -> label）
+  if (healthTagUuidLabelMap.value[tagOrUuid]) {
+    return healthTagUuidLabelMap.value[tagOrUuid]
+  }
+
+  // 兼容旧的枚举值（用于向后兼容）
+  const enumMap: Record<string, string> = {
+    'HEALTHY': '健康',
+    'PICKY_EATER': '挑食',
+    'SENSITIVE_STOMACH': '敏感胃',
+    'PANCREATITIS_SUPPORT': '胰腺炎友好',
+    'LOW_FAT': '低脂',
+    'SKIN_COAT_CARE': '护肤',
+  }
+
+  if (enumMap[tagOrUuid]) {
+    return enumMap[tagOrUuid]
+  }
+
+  return tagOrUuid
 }
 
 function dismissWarning() {
@@ -1668,6 +1740,7 @@ function goToCreateDog() {
 .recipe-info {
   display: flex;
   flex-direction: column;
+  align-items: center;
 }
 
 .recipe-name {
@@ -1675,6 +1748,32 @@ function goToCreateDog() {
   font-weight: bold;
   color: #333;
   line-height: 1.4;
+  text-align: center;
+}
+
+.recipe-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+  justify-content: center;
+  margin-top: 12rpx;
+}
+
+.recipe-tags .tag {
+  display: inline-block;
+  padding: 6rpx 16rpx;
+  border-radius: 6rpx;
+  font-size: 22rpx;
+}
+
+.recipe-tags .life-stage-tag {
+  background-color: #e3f2fd;
+  color: #1976d2;
+}
+
+.recipe-tags .health-tag {
+  background-color: #fff3e0;
+  color: #f57c00;
 }
 
 /* 通用区块 */
@@ -2835,6 +2934,7 @@ function goToCreateDog() {
   padding: 16rpx 20rpx;
   background-color: #fff;
   border-top: 1rpx solid #e5e5e5;
+  z-index: 999;
 }
 
 .btn-buy-now {

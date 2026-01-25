@@ -1776,6 +1776,35 @@ export class OrderService {
   }
 
   /**
+   * Update order total amount
+   * Admin/staff can manually adjust the order amount
+   */
+  async updateOrderAmount(orderId: string, newAmount: number): Promise<Order> {
+    const order = await this.orderRepository.findById(orderId);
+    if (!order) {
+      throw new NotFoundException(`Order not found: ${orderId}`);
+    }
+
+    // Update totalAmount using Prisma directly
+    await this.prisma.order.update({
+      where: { id: orderId },
+      data: {
+        totalAmount: newAmount,
+      },
+    });
+
+    // Fetch and return the updated order
+    const updatedOrder = await this.orderRepository.findById(orderId);
+    if (!updatedOrder) {
+      throw new NotFoundException(`Order not found after update: ${orderId}`);
+    }
+
+    console.log(`Order ${orderId} amount updated to ${newAmount}`);
+
+    return updatedOrder;
+  }
+
+  /**
    * Get pending aftersale orders
    * Phase 9.1: Admin/staff view list of orders in AFTERSALE status
    */

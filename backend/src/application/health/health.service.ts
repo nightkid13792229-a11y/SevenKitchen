@@ -237,7 +237,8 @@ export class HealthService {
       status: dto.status || 'TREATING',
       followUpDate: dto.followUpDate ? new Date(dto.followUpDate) : null,
       veterinarian: dto.veterinarian ?? null,
-      notes: dto.notes ?? null
+      notes: dto.notes ?? null,
+      attachments: dto.attachments || []
     })
 
     return this.mapMedicalRecordToDto(record)

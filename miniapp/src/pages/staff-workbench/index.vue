@@ -70,11 +70,12 @@
 
       <!-- 快捷操作 -->
       <view class="quick-actions">
-        <button class="action-btn primary" @tap="viewTodayOrders">
-          查看今日订单
-        </button>
-        <button class="action-btn secondary" @tap="viewPendingTasks">
-          查看待处理任务
+        <button
+          v-if="isAdmin"
+          class="action-btn primary"
+          @tap="viewTodayOrders"
+        >
+          查看订单
         </button>
       </view>
     </view>
@@ -96,6 +97,10 @@ const shippingCount = ref(0);
 const roleText = computed(() => {
   if (!user.value) return '';
   return user.value.role === 'ADMIN' ? '管理员' : '员工';
+});
+
+const isAdmin = computed(() => {
+  return user.value?.role === 'ADMIN';
 });
 
 onMounted(() => {
@@ -156,11 +161,7 @@ const goToShipping = () => {
 };
 
 const viewTodayOrders = () => {
-  uni.navigateTo({ url: '/pages/orders-list/index' });
-};
-
-const viewPendingTasks = () => {
-  uni.showToast({ title: '功能开发中', icon: 'none' });
+  uni.navigateTo({ url: '/pages/staff-orders/index' });
 };
 </script>
 

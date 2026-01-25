@@ -167,6 +167,33 @@ export class UpdateDogDto {
   @IsOptional()
   @IsString()
   pickyFoods?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Checkup records (体检记录)',
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        checkupDate: { type: 'string', description: '体检日期 (ISO 8601)' },
+        checkupType: { type: 'string', description: '体检类型' },
+        notes: { type: 'string', description: '体检说明', nullable: true },
+        attachments: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '体检报告文件URL数组',
+          nullable: true,
+        },
+      },
+    },
+    nullable: true,
+  })
+  @IsOptional()
+  checkupRecords?: Array<{
+    checkupDate: string;
+    checkupType: string;
+    notes?: string | null;
+    attachments?: string[] | null;
+  }> | null;
 }
 
 

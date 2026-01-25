@@ -18,7 +18,7 @@
           {{ order.dogName || '-' }}
         </el-descriptions-item>
         <el-descriptions-item label="订单金额" :span="2">
-          <span class="amount-highlight">¥{{ order.amountTotal.toFixed(2) }}</span>
+          <span class="amount-highlight">¥{{ Number(order.amountTotal).toFixed(2) }}</span>
         </el-descriptions-item>
         <el-descriptions-item label="下单时间" :span="2">
           {{ formatTime(order.createdAt) }}
@@ -114,13 +114,13 @@ const amountDiff = computed(() => {
   if (!props.order || formData.value.actualAmount === undefined) {
     return 0
   }
-  return formData.value.actualAmount - props.order.amountTotal
+  return formData.value.actualAmount - Number(props.order.amountTotal)
 })
 
 // 监听订单变化，初始化表单
 watch(() => props.order, (newOrder) => {
   if (newOrder) {
-    formData.value.actualAmount = newOrder.amountTotal
+    formData.value.actualAmount = Number(newOrder.amountTotal)
   }
 }, { immediate: true })
 

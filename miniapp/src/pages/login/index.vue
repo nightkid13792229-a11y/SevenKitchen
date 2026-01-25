@@ -14,20 +14,11 @@
         open-type="getUserInfo"
         @getuserinfo="handleWechatLogin"
         :disabled="loading"
+        @agreeprivacyauthorization="handlePrivacyAgree"
       >
         <text v-if="!loading">微信一键登录</text>
         <text v-else>登录中...</text>
       </button>
-    </view>
-
-    <!-- 用户协议（已隐藏） -->
-    <view class="agreement-section">
-      <view class="agreement-text">
-        登录即表示同意
-        <text class="link" @click="showUserAgreement">《用户协议》</text>
-        和
-        <text class="link" @click="showPrivacyPolicy">《隐私政策》</text>
-      </view>
     </view>
   </view>
 </template>
@@ -46,6 +37,11 @@ onLoad(() => {
     uni.switchTab({ url: '/pages/home/index' });
   }
 });
+
+// 处理隐私协议同意回调（空实现，用于触发微信隐私协议弹窗）
+const handlePrivacyAgree = () => {
+  // 微信小程序框架会自动处理隐私协议
+};
 
 // 微信授权登录
 const handleWechatLogin = async (e: any) => {
@@ -161,24 +157,6 @@ const handleWechatLogin = async (e: any) => {
   }
 };
 
-// 显示用户协议
-const showUserAgreement = () => {
-  uni.showModal({
-    title: '用户协议',
-    content: '这里是用户协议内容...',
-    showCancel: false,
-  });
-};
-
-// 显示隐私政策
-const showPrivacyPolicy = () => {
-  uni.showModal({
-    title: '隐私政策',
-    content: '这里是隐私政策内容...',
-    showCancel: false,
-  });
-};
-
 </script>
 
 <style scoped>
@@ -240,23 +218,5 @@ const showPrivacyPolicy = () => {
 
 .wechat-login-btn:disabled {
   opacity: 0.7;
-}
-
-.agreement-section {
-  width: 100%;
-  padding-bottom: 40rpx;
-  display: none;
-}
-
-.agreement-text {
-  font-size: 24rpx;
-  color: rgba(255, 255, 255, 0.7);
-  text-align: center;
-  line-height: 1.6;
-}
-
-.agreement-text .link {
-  color: #fff;
-  text-decoration: underline;
 }
 </style>

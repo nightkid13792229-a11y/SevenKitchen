@@ -455,7 +455,7 @@ const getActivityLabel = (level: string) => {
 <style scoped>
 .custom-recipe-page {
   padding: 20rpx;
-  padding-bottom: 100rpx;
+  padding-bottom: 180rpx;
   background: #f5f5f5;
   min-height: 100vh;
 }

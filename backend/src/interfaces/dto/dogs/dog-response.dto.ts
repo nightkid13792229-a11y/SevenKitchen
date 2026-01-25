@@ -79,11 +79,67 @@ export class DogProfileDto {
   @ApiPropertyOptional({ nullable: true })
   medicalHistory?: string | null;
 
+  @ApiPropertyOptional({
+    description: 'Medical records (structured health data)',
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        chiefComplaint: { type: 'string', description: '症状或疾病' },
+        visitDate: { type: 'string', description: '发病日期 (ISO 8601)', nullable: true },
+        diagnosis: { type: 'string', description: '医生诊断结果', nullable: true },
+        notes: { type: 'string', description: '详细描述', nullable: true },
+        attachments: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '检查报告文件URL数组',
+          nullable: true,
+        },
+      },
+    },
+    nullable: true,
+  })
+  medicalRecords?: Array<{
+    chiefComplaint: string;
+    visitDate?: string | null;
+    diagnosis?: string | null;
+    notes?: string | null;
+    attachments?: string[] | null;
+  }> | null;
+
   @ApiPropertyOptional({ description: '过敏食物', nullable: true })
   allergyFoods?: string | null;
 
   @ApiPropertyOptional({ description: '挑食食物', nullable: true })
   pickyFoods?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Checkup records (体检记录)',
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: '体检记录ID' },
+        checkupDate: { type: 'string', description: '体检日期 (ISO 8601)' },
+        checkupType: { type: 'string', description: '体检类型' },
+        notes: { type: 'string', description: '体检说明' },
+        attachments: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '体检报告文件URL数组',
+          nullable: true,
+        },
+      },
+    },
+    nullable: true,
+  })
+  checkupRecords?: Array<{
+    id: string;
+    checkupDate: string;
+    checkupType: string;
+    notes: string;
+    attachments?: string[] | null;
+  }> | null;
 
   @ApiProperty({ example: 500 })
   cachedTargetFoodKcal!: number;

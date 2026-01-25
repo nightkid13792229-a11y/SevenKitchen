@@ -291,7 +291,7 @@ validatePrismaConfig();
     {
       provide: ORDER_REPOSITORY,
       useFactory: (prismaService?: PrismaService) => {
-        const mode = process.env.ORDER_REPO ?? 'memory';
+        const mode = process.env.ORDER_REPO ?? 'prisma'; // Default to Prisma for database persistence
         if (mode === 'prisma') {
           if (!prismaService) {
             throw new Error(

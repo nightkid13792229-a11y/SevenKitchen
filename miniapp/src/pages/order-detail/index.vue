@@ -71,33 +71,27 @@
 
         <view class="payment-guide-card">
           <view class="guide-header">
-            <text class="guide-icon">💚</text>
-            <text class="guide-title">线下微信支付</text>
-          </view>
-
-          <view class="order-amount-info">
-            <text class="amount-label">订单金额:</text>
-            <text class="amount-value">¥{{ formatAmount(order.amountTotal || order.totalAmount) }}</text>
+            <text class="guide-title">支持微信及支付宝支付</text>
           </view>
 
           <view class="guide-steps">
             <view class="step-item">
               <text class="step-number">1</text>
-              <text class="step-text">添加客服微信: SevenDad</text>
+              <text class="step-text">添加Seven爸爸的微信</text>
             </view>
             <view class="step-item">
               <text class="step-number">2</text>
-              <text class="step-text">发送订单号完成支付</text>
+              <text class="step-text">复制订单号发送给Seven爸爸, 以确认优惠及最终付款金额</text>
             </view>
             <view class="step-item">
               <text class="step-number">3</text>
-              <text class="step-text">管理员确认后订单将进入"已付款"状态</text>
+              <text class="step-text">完成支付</text>
             </view>
           </view>
 
           <view class="wechat-contact">
-            <text class="contact-label">客服微信号:</text>
-            <text class="contact-value">SevenDad</text>
+            <text class="contact-label">Seven爸爸微信号:</text>
+            <text class="contact-value">zhaochengccc</text>
             <button
               class="btn-copy-wechat"
               @tap="copyWechatId"
@@ -739,7 +733,7 @@ function getCarrierName(code?: string): string {
 
 function copyWechatId() {
   uni.setClipboardData({
-    data: 'SevenDad',
+    data: 'zhaochengccc',
     success: () => {
       uni.showToast({ title: '微信号已复制', icon: 'success' })
     }
@@ -1055,13 +1049,13 @@ async function applyRefund() {
 function contactSevenDad() {
   uni.showModal({
     title: '联系Seven爸',
-    content: '客服微信：SevenDad\n客服电话：400-123-4567\n工作时间：9:00-18:00',
+    content: '客服微信：zhaochengccc\n客服电话：400-123-4567\n工作时间：9:00-18:00',
     confirmText: '复制微信号',
     cancelText: '关闭',
     success: (res) => {
       if (res.confirm) {
         uni.setClipboardData({
-          data: 'SevenDad',
+          data: 'zhaochengccc',
           success: () => {
             uni.showToast({ title: '微信号已复制', icon: 'success' })
           }

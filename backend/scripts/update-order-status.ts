@@ -11,32 +11,41 @@ async function main() {
   console.log('💰 开始更新订单状态为已付款...\n');
 
   try {
-    // 查询所有订单
+    // ⚠️ SECURITY: Only update PENDING_PAYMENT orders, exclude cancelled orders
     const orders = await prisma.order.findMany({
+      where: {
+        status: 'PENDING_PAYMENT',
+        cancelledAt: null, // ⚠️ CRITICAL: Do NOT update cancelled orders
+      },
       select: {
         id: true,
         status: true,
         paidAt: true,
         paymentMethod: true,
+        createdAt: true,
       },
     });
 
-    console.log(`📋 找到 ${orders.length} 个订单\n`);
+    console.log(`📋 找到 ${orders.length} 个待付款订单\n`);
 
     if (orders.length === 0) {
-      console.log('❌ 没有找到订单，无需修改');
+      console.log('❌ 没有找到待付款订单，无需修改');
       return;
     }
 
-    console.log('当前订单状态：');
+    console.log('待付款订单列表：');
     orders.forEach((order, index) => {
-      console.log(`  订单 ${index + 1}: ${order.status} ${order.paidAt ? '(已付款)' : '(未付款)'}`);
+      console.log(`  订单 ${index + 1}: ${order.id} - ${order.status} (创建时间: ${order.createdAt.toISOString()})`);
     });
     console.log();
 
-    // 更新所有订单为已付款状态
+    // ⚠️ SECURITY: Only update PENDING_PAYMENT orders that are not cancelled
     const now = new Date();
     const result = await prisma.order.updateMany({
+      where: {
+        status: 'PENDING_PAYMENT',
+        cancelledAt: null, // ⚠️ CRITICAL: Do NOT update cancelled orders
+      },
       data: {
         status: 'PAID',
         paidAt: now,

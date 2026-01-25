@@ -36,6 +36,9 @@ import { DogService, DOG_REPOSITORY, DOG_BREED_REPOSITORY, RECIPE_REPOSITORY } f
 import type { DogRepository } from '../../domain/dog/dog.repository';
 import type { DogBreedRepository } from '../../domain/dog/dog-breed.repository';
 import type { RecipeRepository } from '../../domain/recipe/recipe.repository';
+import { MEDICAL_RECORD_REPOSITORY, CHECKUP_RECORD_REPOSITORY } from '../../application/health/health.service';
+import type { MedicalRecordRepository } from '../../domain/health/health.repository';
+import type { CheckupRecordRepository } from '../../domain/health/health.repository';
 import { Inject } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
@@ -58,6 +61,7 @@ import { MIXED_BREED_VIRTUAL_ID } from '../../domain/dog/constants';
 import { WeightRecordService } from '../../application/weight-record/weight-record.service';
 import { CreateWeightRecordDto } from '../dto/weight-record/create-weight-record.dto';
 import { WeightRecordResponseDto, WeightRecordListResponseDto } from '../dto/weight-record/weight-record-response.dto';
+import { parseYYYYMMDD } from '../../utils/date-helpers';
 
 @ApiTags('Dogs')
 @Controller('api/v1/dogs')
@@ -70,6 +74,10 @@ export class DogsController {
     private readonly dogBreedRepository: DogBreedRepository,
     @Inject(RECIPE_REPOSITORY)
     private readonly recipeRepository: RecipeRepository,
+    @Inject(MEDICAL_RECORD_REPOSITORY)
+    private readonly medicalRecordRepository: MedicalRecordRepository,
+    @Inject(CHECKUP_RECORD_REPOSITORY)
+    private readonly checkupRecordRepository: CheckupRecordRepository,
     private readonly dogService: DogService,
     private readonly weightRecordService: WeightRecordService,
     private readonly cosService: TencentCosService,
@@ -124,6 +132,62 @@ export class DogsController {
       pickyFoods: createDogDto.pickyFoods,
     });
 
+    // Save medical records if provided
+    if (createDogDto.medicalRecords && createDogDto.medicalRecords.length > 0) {
+      try {
+        for (const record of createDogDto.medicalRecords) {
+          // 使用parseYYYYMMDD正确解析日期（处理上海时区）
+          const visitDate = record.visitDate
+            ? parseYYYYMMDD(record.visitDate.split('T')[0])
+            : new Date();
+
+          await this.medicalRecordRepository.create({
+            dogId: dog.id,
+            visitDate: visitDate,
+            chiefComplaint: record.chiefComplaint,
+            diagnosis: record.diagnosis || '',
+            treatment: null,
+            medications: [],
+            status: 'RECOVERED', // Default status for historical records
+            followUpDate: null,
+            veterinarian: null,
+            notes: record.notes || null,
+            attachments: record.attachments || [],
+          });
+        }
+        console.log(`[DogsController] Created ${createDogDto.medicalRecords.length} medical records for dog ${dog.id}`);
+      } catch (error: any) {
+        console.error(`[DogsController] Failed to save medical records for dog ${dog.id}:`, error);
+        // Don't fail the entire operation if medical records save fails
+      }
+    }
+
+    // Save checkup records if provided
+    if (createDogDto.checkupRecords && createDogDto.checkupRecords.length > 0) {
+      try {
+        for (const record of createDogDto.checkupRecords) {
+          // 使用parseYYYYMMDD正确解析日期（处理上海时区）
+          // 如果日期字符串包含时间部分，先提取日期部分
+          const dateOnly = record.checkupDate.split('T')[0];
+          const checkupDate = parseYYYYMMDD(dateOnly);
+
+          await this.checkupRecordRepository.create({
+            dogId: dog.id,
+            checkupDate: checkupDate,
+            checkupType: record.checkupType,
+            findings: record.notes || '',
+            recommendations: null,
+            veterinarian: null,
+            attachments: record.attachments || [],
+          });
+        }
+        console.log(`[DogsController] Created ${createDogDto.checkupRecords.length} checkup records for dog ${dog.id}`);
+      } catch (error: any) {
+        console.error(`[DogsController] Failed to save checkup records for dog ${dog.id}:`, error);
+        // Don't fail the entire operation if checkup records save fails
+      }
+    }
+
     const calcResult = await this.dogService.calcPreview(dog.id);
 
     const response: DogDetailResponseDto = {
@@ -161,6 +225,83 @@ export class DogsController {
     @Body() updateDogDto: UpdateDogDto,
   ): Promise<ApiResponseDto<DogDetailResponseDto>> {
     const dog = await this.dogService.updateDogProfile(id, updateDogDto);
+
+    // Update medical records if provided
+    if ('medicalRecords' in updateDogDto) {
+      try {
+        // Delete existing medical records for this dog
+        const existingRecords = await this.medicalRecordRepository.findByDogId(id);
+        for (const record of existingRecords) {
+          await this.medicalRecordRepository.delete(record.id);
+        }
+
+        // Create new medical records
+        if (updateDogDto.medicalRecords && updateDogDto.medicalRecords.length > 0) {
+          for (const record of updateDogDto.medicalRecords) {
+            // 使用parseYYYYMMDD正确解析日期（处理上海时区）
+            const visitDate = record.visitDate
+              ? parseYYYYMMDD(record.visitDate.split('T')[0])
+              : new Date();
+
+            await this.medicalRecordRepository.create({
+              dogId: id,
+              visitDate: visitDate,
+              chiefComplaint: record.chiefComplaint,
+              diagnosis: record.diagnosis || '',
+              treatment: null,
+              medications: [],
+              status: 'RECOVERED', // Default status for historical records
+              followUpDate: null,
+              veterinarian: null,
+              notes: record.notes || null,
+              attachments: record.attachments || [],
+            });
+          }
+          console.log(`[DogsController] Updated ${updateDogDto.medicalRecords.length} medical records for dog ${id}`);
+        } else {
+          console.log(`[DogsController] Cleared all medical records for dog ${id}`);
+        }
+      } catch (error: any) {
+        console.error(`[DogsController] Failed to update medical records for dog ${id}:`, error);
+        // Don't fail the entire operation if medical records update fails
+      }
+    }
+
+    // Update checkup records if provided
+    if ('checkupRecords' in updateDogDto) {
+      try {
+        // Delete existing checkup records for this dog
+        const existingCheckups = await this.checkupRecordRepository.findByDogId(id);
+        for (const checkup of existingCheckups) {
+          await this.checkupRecordRepository.delete(checkup.id);
+        }
+
+        // Create new checkup records
+        if (updateDogDto.checkupRecords && updateDogDto.checkupRecords.length > 0) {
+          for (const record of updateDogDto.checkupRecords) {
+            // 使用parseYYYYMMDD正确解析日期（处理上海时区）
+            const dateOnly = record.checkupDate.split('T')[0];
+            const checkupDate = parseYYYYMMDD(dateOnly);
+
+            await this.checkupRecordRepository.create({
+              dogId: id,
+              checkupDate: checkupDate,
+              checkupType: record.checkupType,
+              findings: record.notes || '',
+              recommendations: null,
+              veterinarian: null,
+              attachments: record.attachments || [],
+            });
+          }
+          console.log(`[DogsController] Updated ${updateDogDto.checkupRecords.length} checkup records for dog ${id}`);
+        } else {
+          console.log(`[DogsController] Cleared all checkup records for dog ${id}`);
+        }
+      } catch (error: any) {
+        console.error(`[DogsController] Failed to update checkup records for dog ${id}:`, error);
+        // Don't fail the entire operation if checkup records update fails
+      }
+    }
 
     // Try to calculate preview, but don't fail if calculation fails
     let calcResult = null;
@@ -270,6 +411,40 @@ export class DogsController {
     const breed = await this.dogBreedRepository.findById(dog.breedId);
     const breedMap = breed ? new Map([[dog.breedId, breed.name]]) : new Map();
 
+    // Load medical records
+    let medicalRecords: any[] | null = null;
+    try {
+      const records = await this.medicalRecordRepository.findByDogId(id);
+      // Convert to DTO format
+      medicalRecords = records.map((record: any) => ({
+        chiefComplaint: record.chiefComplaint,
+        visitDate: record.visitDate ? record.visitDate.toISOString() : null,
+        diagnosis: record.diagnosis || null,
+        notes: record.notes || null,
+        attachments: record.attachments || null,
+      }));
+      console.log(`[DogsController] Loaded ${medicalRecords?.length || 0} medical records for dog ${id}`);
+    } catch (error: any) {
+      console.warn(`[DogsController] Failed to load medical records for dog ${id}:`, error.message);
+    }
+
+    // Load checkup records
+    let checkupRecords: any[] | null = null;
+    try {
+      const records = await this.checkupRecordRepository.findByDogId(id);
+      // Convert to DTO format
+      checkupRecords = records.map((record: any) => ({
+        id: record.id,
+        checkupDate: record.checkupDate.toISOString(),
+        checkupType: record.checkupType,
+        notes: record.findings || null, // findings maps to notes
+        attachments: record.attachments || null,
+      }));
+      console.log(`[DogsController] Loaded ${checkupRecords?.length || 0} checkup records for dog ${id}`);
+    } catch (error: any) {
+      console.warn(`[DogsController] Failed to load checkup records for dog ${id}:`, error.message);
+    }
+
     // Try to calculate preview, but don't fail if calculation fails
     let calcResult = null;
     try {
@@ -280,7 +455,7 @@ export class DogsController {
     }
 
     const response: DogDetailResponseDto = {
-      profile: this.mapDogToProfileDto(dog, breedMap),
+      profile: this.mapDogToProfileDto(dog, breedMap, medicalRecords, checkupRecords),
       calcResult,
     };
 
@@ -467,6 +642,8 @@ export class DogsController {
   private mapDogToProfileDto(
     dog: Dog,
     breedMap?: Map<string, string>,
+    medicalRecords?: any[] | null,
+    checkupRecords?: any[] | null,
   ): DogProfileDto {
     // Determine breed name: custom breed name takes priority, then lookup from breed map
     const breedName = dog.customBreedName || breedMap?.get(dog.breedId) || null;
@@ -491,6 +668,8 @@ export class DogsController {
       treatLevel: dog.treatLevel,
       manualTreatKcal: dog.manualTreatKcal,
       medicalHistory: dog.medicalHistory,
+      medicalRecords: medicalRecords || null,
+      checkupRecords: checkupRecords || null,
       allergyFoods: dog.allergyFoods,
       pickyFoods: dog.pickyFoods,
       cachedTargetFoodKcal: dog.cachedTargetFoodKcal,
@@ -811,6 +990,68 @@ export class DogsController {
       return ApiResponseDto.success(result);
     } catch (error) {
       console.error('[DogsController] Medical attachment upload failed:', error);
+      throw new BadRequestException('Failed to upload attachment');
+    }
+  }
+
+  @Post('checkup-records/upload-attachment')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Upload checkup record attachment (image/PDF)' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiHeader({
+    name: 'X-Customer-Id',
+    description: 'Customer ID for authentication',
+    required: true,
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({
+    status: 201,
+    description: 'File uploaded successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        code: { type: 'number', example: 0 },
+        message: { type: 'string' },
+        data: {
+          type: 'object',
+          properties: {
+            url: { type: 'string', description: 'File URL' },
+            key: { type: 'string', description: 'COS object key' },
+          },
+        },
+      },
+    },
+  })
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadCheckupAttachment(
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: RequestUser,
+  ) {
+    if (!file) {
+      throw new BadRequestException('No file uploaded');
+    }
+
+    // Validate file size (10MB max)
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      throw new BadRequestException('File size exceeds 10MB limit');
+    }
+
+    // Validate file type (images + PDF)
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      throw new BadRequestException(
+        'Invalid file type. Only JPG, PNG, GIF, WEBP, and PDF are allowed',
+      );
+    }
+
+    try {
+      // Upload to temporary directory
+      const result = await this.cosService.uploadImage(file, file.originalname, 'checkup-reports/temp');
+
+      return ApiResponseDto.success(result);
+    } catch (error) {
+      console.error('[DogsController] Checkup attachment upload failed:', error);
       throw new BadRequestException('Failed to upload attachment');
     }
   }

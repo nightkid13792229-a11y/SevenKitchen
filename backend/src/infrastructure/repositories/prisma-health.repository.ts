@@ -217,7 +217,8 @@ export class PrismaMedicalRecordRepository implements MedicalRecordRepository {
         status: data.status as any,
         followUpDate: data.followUpDate,
         veterinarian: data.veterinarian,
-        notes: data.notes
+        notes: data.notes,
+        attachments: data.attachments || []
       }
     })
     return this.mapToDomain(record)
@@ -238,7 +239,8 @@ export class PrismaMedicalRecordRepository implements MedicalRecordRepository {
         status: data.status as any,
         followUpDate: data.followUpDate,
         veterinarian: data.veterinarian,
-        notes: data.notes
+        notes: data.notes,
+        attachments: data.attachments
       }
     })
     return this.mapToDomain(record)
@@ -263,6 +265,7 @@ export class PrismaMedicalRecordRepository implements MedicalRecordRepository {
       followUpDate: record.followUpDate,
       veterinarian: record.veterinarian,
       notes: record.notes,
+      attachments: record.attachments || [],
       createdAt: record.createdAt,
       updatedAt: record.updatedAt
     }

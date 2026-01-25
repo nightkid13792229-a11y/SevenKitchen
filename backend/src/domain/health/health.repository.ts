@@ -60,6 +60,7 @@ export interface MedicalRecord {
   followUpDate: Date | null
   veterinarian: string | null
   notes: string | null
+  attachments: string[]
   createdAt: Date
   updatedAt: Date
 }

@@ -44,4 +44,9 @@ export class CreateMedicalRecordDto {
   @IsOptional()
   @IsString()
   notes?: string
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  attachments?: string[]
 }

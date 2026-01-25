@@ -5,7 +5,7 @@
       <view class="banner-content">
         <text class="banner-icon">🔔</text>
         <view class="banner-text">
-          <text class="banner-title">登录后可创建狗狗档案，获得专属定制食谱和喂食建议</text>
+          <text class="banner-title">登录后可创建狗狗档案，进行饭量计算等功能</text>
         </view>
         <view class="banner-actions">
           <text class="banner-login-btn" @tap="goToLogin">立即登录</text>
@@ -66,10 +66,10 @@
 
     <!-- 无狗狗时的引导 -->
     <view class="empty-dog-section" v-else>
-      <view class="empty-icon">🐕</view>
       <text class="empty-title">还没有狗狗档案</text>
       <text class="empty-desc">创建档案后，才能使用食谱饭量计算等功能</text>
-      <button class="create-btn" @tap="goToDogCreate">创建档案</button>
+      <button v-if="!isLoggedIn" class="create-btn" @tap="goToLogin">立即登录</button>
+      <button v-else class="create-btn" @tap="goToDogCreate">创建档案</button>
     </view>
 
     <!-- 食谱橱窗标题 -->
@@ -81,7 +81,6 @@
 
     <!-- 固定筛选栏 -->
     <view class="filter-bar">
-      <text class="filter-title">筛选食谱</text>
       <view class="filter-buttons">
         <!-- 生命阶段按钮 -->
         <view
@@ -1530,23 +1529,26 @@ const checkLoginAndNavigate = (url: string) => {
 /* 筛选抽屉内容 */
 .drawer-content {
   position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0;
+  top: 100rpx; /* 从筛选栏下方开始显示 */
+  left: 30rpx;
+  right: 30rpx;
   background: #fff;
-  border-radius: 32rpx 32rpx 0 0;
-  max-height: 60vh;
+  border-radius: 16rpx;
+  max-height: 70vh;
   display: flex;
   flex-direction: column;
-  animation: slideUp 0.3s ease-out;
+  animation: slideDown 0.3s ease-out;
+  box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.15);
 }
 
-@keyframes slideUp {
+@keyframes slideDown {
   from {
-    transform: translateY(100%);
+    transform: translateY(-20rpx);
+    opacity: 0;
   }
   to {
     transform: translateY(0);
+    opacity: 1;
   }
 }
 

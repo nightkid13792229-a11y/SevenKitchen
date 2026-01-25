@@ -14,7 +14,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:3000',  // 本地后端 API
+        target: 'http://localhost:3001',  // 本地后端 API
         changeOrigin: true
       }
     }

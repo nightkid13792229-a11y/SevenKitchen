@@ -178,55 +178,6 @@
       </view>
     </view>
 
-    <!-- 支付方式提示 -->
-    <view class="section payment-guide-section">
-      <view class="section-title">
-        <text class="title-text">支付方式</text>
-      </view>
-
-      <view class="payment-guide-card">
-        <view class="guide-header">
-          <text class="guide-icon">💚</text>
-          <text class="guide-title">线下微信支付</text>
-        </view>
-
-        <view class="guide-steps">
-          <view class="step-item">
-            <text class="step-number">1</text>
-            <text class="step-text">提交订单后，订单将进入"待付款"状态</text>
-          </view>
-          <view class="step-item">
-            <text class="step-number">2</text>
-            <text class="step-text">添加客服微信: SevenDad</text>
-          </view>
-          <view class="step-item">
-            <text class="step-number">3</text>
-            <text class="step-text">发送订单号完成支付</text>
-          </view>
-          <view class="step-item">
-            <text class="step-number">4</text>
-            <text class="step-text">管理员确认后订单将进入"已付款"状态</text>
-          </view>
-        </view>
-
-        <view class="wechat-contact">
-          <text class="contact-label">客服微信号:</text>
-          <text class="contact-value">SevenDad</text>
-          <button
-            class="btn-copy-wechat"
-            @tap="copyWechatId"
-          >
-            复制微信号
-          </button>
-        </view>
-
-        <view class="payment-tip">
-          <text class="tip-icon">⏰</text>
-          <text class="tip-text">请尽快完成支付，订单长时间未付款可能会被取消</text>
-        </view>
-      </view>
-    </view>
-
     <!-- 底部操作栏 -->
     <view class="bottom-bar">
       <button
@@ -235,7 +186,6 @@
         @tap="submitOrder"
       >
         <text class="btn-text">提交订单</text>
-        <text class="btn-amount">¥{{ totalAmount.toFixed(2) }}</text>
       </button>
     </view>
 
@@ -483,19 +433,6 @@ function onProductionDateChange(e: any) {
   console.log('[Checkout] Production date changed:', {
     productionDate: selectedProductionDate.value,
     shippingDate: calculatedShippingDate.value
-  })
-}
-
-// ========== 复制微信号 ==========
-function copyWechatId() {
-  uni.setClipboardData({
-    data: 'SevenDad',
-    success: () => {
-      uni.showToast({
-        title: '微信号已复制',
-        icon: 'success'
-      })
-    }
   })
 }
 

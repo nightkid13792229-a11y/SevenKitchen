@@ -163,7 +163,7 @@
 
         <el-table-column label="狗狗" width="100">
           <template #default="{ row }">
-            {{ row.dogName || '-' }}
+            {{ row.firstItem?.dog?.name || '-' }}
           </template>
         </el-table-column>
 
@@ -185,13 +185,13 @@
 
         <el-table-column prop="amountTotal" label="总金额" width="100" align="right">
           <template #default="{ row }">
-            ¥{{ row.amountTotal.toFixed(2) }}
+            ¥{{ Number(row.amountTotal).toFixed(2) }}
           </template>
         </el-table-column>
 
         <el-table-column label="收货地址" width="180" show-overflow-tooltip>
           <template #default="{ row }">
-            {{ row.addressCity }} {{ row.addressDetail }}
+            {{ row.address?.regionText }} {{ row.address?.detailAddress }}
           </template>
         </el-table-column>
 

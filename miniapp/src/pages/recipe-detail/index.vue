@@ -295,7 +295,11 @@ onMounted(() => {
 
   if (recipeId.value) {
     loadRecipeDetail()
-    checkFavoriteStatus()
+    // 只有登录时才检查收藏状态，避免显示"请先登录"提示
+    const token = uni.getStorageSync('token')
+    if (token) {
+      checkFavoriteStatus()
+    }
   }
 })
 
@@ -351,14 +355,30 @@ async function checkFavoriteStatus() {
     console.log('[RecipeDetail] Favorite status from API:', result)
     isFavorite.value = result.isFavorite
     console.log('[RecipeDetail] isFavorite set to:', isFavorite.value)
-  } catch (error) {
+  } catch (error: any) {
     console.error('[RecipeDetail] Failed to check favorite status:', error)
-    // 失败时保持false状态
+    // 未登录或其他错误时，保持false状态，不显示错误提示
     isFavorite.value = false
   }
 }
 
 async function toggleFavorite() {
+  // 检查是否登录
+  const token = uni.getStorageSync('token')
+  if (!token) {
+    uni.showToast({
+      title: '请先登录',
+      icon: 'none'
+    })
+    // 延迟跳转到登录页
+    setTimeout(() => {
+      uni.navigateTo({
+        url: '/pages/login/index'
+      })
+    }, 1500)
+    return
+  }
+
   try {
     if (isFavorite.value) {
       // 取消收藏
@@ -377,12 +397,25 @@ async function toggleFavorite() {
         icon: 'success'
       })
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error('[RecipeDetail] Failed to toggle favorite:', error)
-    uni.showToast({
-      title: (error as Error).message || '操作失败',
-      icon: 'none'
-    })
+    // 如果是未授权错误，提示登录
+    if (error.message?.includes('401') || error.message?.includes('Unauthorized') || error.message?.includes('未授权')) {
+      uni.showToast({
+        title: '请先登录',
+        icon: 'none'
+      })
+      setTimeout(() => {
+        uni.navigateTo({
+          url: '/pages/login/index'
+        })
+      }, 1500)
+    } else {
+      uni.showToast({
+        title: error.message || '操作失败',
+        icon: 'none'
+      })
+    }
     // 如果失败，恢复原状态
     isFavorite.value = !isFavorite.value
   }
@@ -399,14 +432,46 @@ function previewImage() {
 }
 
 function generateDiySheet() {
-  // 直接跳转到DIY配置页面
+  // 检查是否登录
+  const token = uni.getStorageSync('token')
+  if (!token) {
+    uni.showToast({
+      title: '请先登录',
+      icon: 'none'
+    })
+    // 延迟跳转到登录页
+    setTimeout(() => {
+      uni.navigateTo({
+        url: '/pages/login/index'
+      })
+    }, 1500)
+    return
+  }
+
+  // 已登录，直接跳转到DIY配置页面
   uni.navigateTo({
     url: `/pages/recipe-diy/index?recipeId=${recipeId.value}`
   })
 }
 
 function goToOrder() {
-  // 跳转到新的订购配置页面
+  // 检查是否登录
+  const token = uni.getStorageSync('token')
+  if (!token) {
+    uni.showToast({
+      title: '请先登录',
+      icon: 'none'
+    })
+    // 延迟跳转到登录页
+    setTimeout(() => {
+      uni.navigateTo({
+        url: '/pages/login/index'
+      })
+    }, 1500)
+    return
+  }
+
+  // 已登录，跳转到订购配置页面
   uni.navigateTo({
     url: `/pages/recipe-order/index?recipeId=${recipeId.value}`
   })
@@ -569,6 +634,7 @@ function formatCalciumPhosphorusRatio(ratio: string | number | undefined | null)
   display: block;
   margin-bottom: 8rpx;
   line-height: 1.4;
+  text-align: center;
 }
 
 .section-label {
@@ -580,16 +646,23 @@ function formatCalciumPhosphorusRatio(ratio: string | number | undefined | null)
 
 .tags-row {
   display: flex;
+  flex-direction: column;
   align-items: center;
   flex-wrap: wrap;
   margin-bottom: 16rpx;
+  gap: 8rpx;
+}
+
+.tags-row .section-label {
+  margin-right: 0;
+  margin-bottom: 8rpx;
 }
 
 .tags-container {
   display: flex;
   flex-wrap: wrap;
   gap: 8rpx;
-  flex: 1;
+  justify-content: center;
 }
 
 .tag {

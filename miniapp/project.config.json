@@ -19,7 +19,9 @@
     "minifyWXML": true,
     "condition": false,
     "ignoreDevUnusedFiles": false,
-    "ignoreUploadUnusedFiles": false
+    "ignoreUploadUnusedFiles": false,
+    "ignoreUnusedFiles": false,
+    "filterNoDependencyFile": false
   },
   "simulatorPluginLibVersion": {},
   "packOptions": {

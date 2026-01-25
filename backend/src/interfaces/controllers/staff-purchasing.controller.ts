@@ -900,6 +900,31 @@ export class StaffPurchasingController {
     return ApiResponseDto.success(reimbursement, '获取报销单详情成功');
   }
 
+  @Delete('reimbursements/:id')
+  @ApiOperation({ summary: '删除报销单' })
+  @ApiParam({ name: 'id', description: '报销单ID' })
+  @ApiResponse({
+    status: 200,
+    description: '删除成功',
+    schema: {
+      type: 'object',
+      properties: {
+        code: { type: 'number', example: 0 },
+        message: { type: 'string', example: 'success' },
+      },
+    },
+  })
+  async deleteReimbursement(
+    @Param('id') id: string,
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<null>> {
+    this.logger.log(`Deleting reimbursement: ${id} by user ${userId}`);
+
+    await this.reimbursementService.deleteReimbursement(id, userId, false);
+
+    return ApiResponseDto.success(null, '删除成功');
+  }
+
   @Post('reimbursements/:id/resubmit')
   @ApiOperation({ summary: '重新提交被驳回的报销单' })
   @ApiParam({ name: 'id', description: '报销单ID' })

@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>批量制作单打印</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+        'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      font-size: 12px;
+      line-height: 1.6;
+      color: #333;
+      background: #f5f5f5;
+    }
+
+    /* A4纸张尺寸 */
+    @page {
+      size: A4;
+      margin: 10mm;
+    }
+
+    /* 打印样式 */
+    @media print {
+      body {
+        background: white;
+      }
+
+      .no-print {
+        display: none !important;
+      }
+
+      .page {
+        page-break-after: always;
+        page-break-inside: avoid;
+      }
+
+      .page:last-child {
+        page-break-after: auto;
+      }
+    }
+
+    /* 不打印时的屏幕显示 */
+    @media screen {
+      .container {
+        max-width: 210mm;
+        margin: 20px auto;
+        padding: 20px;
+        background: white;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+      }
+
+      .print-bar {
+        position: sticky;
+        top: 0;
+        background: #2196f3;
+        color: white;
+        padding: 15px 20px;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        z-index: 1000;
+      }
+
+      .print-btn {
+        background: white;
+        color: #2196f3;
+        border: none;
+        padding: 10px 30px;
+        border-radius: 6px;
+        font-size: 14px;
+        font-weight: bold;
+        cursor: pointer;
+        margin: 0 10px;
+      }
+
+      .print-btn:hover {
+        background: #f0f0f0;
+      }
+
+      .print-btn:active {
+        transform: scale(0.98);
+      }
+    }
+
+    .page {
+      width: 210mm;
+      min-height: 297mm;
+      padding: 10mm;
+      margin: 0 auto 20px;
+      background: white;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+    }
+
+    /* 封面页 */
+    .cover-page {
+      text-align: center;
+    }
+
+    .cover-title {
+      font-size: 36px;
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 40px;
+    }
+
+    .cover-info {
+      font-size: 18px;
+      color: #666;
+      margin-bottom: 30px;
+    }
+
+    .cover-stats {
+      text-align: left;
+      margin: 30px auto;
+      max-width: 400px;
+    }
+
+    .cover-stat-item {
+      font-size: 16px;
+      margin: 10px 0;
+      color: #333;
+    }
+
+    .recipe-list {
+      margin-top: 40px;
+      text-align: left;
+    }
+
+    .recipe-list-title {
+      font-size: 24px;
+      font-weight: bold;
+      margin-bottom: 20px;
+      color: #2196f3;
+    }
+
+    .recipe-list-item {
+      font-size: 14px;
+      margin: 8px 0;
+      color: #333;
+    }
+
+    /* 详情页 */
+    .detail-header {
+      text-align: center;
+      border-bottom: 2px solid #2196f3;
+      padding-bottom: 20px;
+      margin-bottom: 30px;
+    }
+
+    .detail-title {
+      font-size: 24px;
+      font-weight: bold;
+      color: #333;
+      margin-bottom: 15px;
+    }
+
+    .detail-subtitle {
+      font-size: 16px;
+      color: #666;
+    }
+
+    .section {
+      margin-bottom: 30px;
+    }
+
+    .section-title {
+      font-size: 18px;
+      font-weight: bold;
+      color: #2196f3;
+      margin-bottom: 15px;
+      border-left: 4px solid #2196f3;
+      padding-left: 10px;
+    }
+
+    /* 订单卡片网格 */
+    .order-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 15px;
+      margin-bottom: 20px;
+    }
+
+    .order-card {
+      border: 2px solid #333;
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .order-card-title {
+      text-align: center;
+      font-weight: bold;
+      color: #2196f3;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+
+    .order-card-field {
+      display: flex;
+      margin: 6px 0;
+      font-size: 12px;
+    }
+
+    .order-card-label {
+      color: #666;
+      min-width: 60px;
+    }
+
+    .order-card-value {
+      color: #333;
+      flex: 1;
+    }
+
+    /* 原料表格 */
+    .ingredient-table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 15px;
+    }
+
+    .ingredient-table thead {
+      background: #e3f2fd;
+    }
+
+    .ingredient-table th {
+      padding: 10px;
+      text-align: center;
+      font-weight: bold;
+      color: #1976d2;
+      border: 1px solid #333;
+      font-size: 13px;
+    }
+
+    .ingredient-table td {
+      padding: 8px 10px;
+      text-align: center;
+      border: 1px solid #333;
+      font-size: 12px;
+    }
+
+    .ingredient-table tbody tr:nth-child(even) {
+      background: #fafafa;
+    }
+
+    /* 页脚 */
+    .page-footer {
+      position: absolute;
+      bottom: 10mm;
+      left: 0;
+      right: 0;
+      text-align: center;
+      font-size: 10px;
+      color: #999;
+    }
+
+    .page {
+      position: relative;
+    }
+  </style>
+</head>
+<body>
+  <!-- 打印操作栏 -->
+  <div class="print-bar no-print">
+    <button class="print-btn" onclick="window.print()">🖨️ 打印</button>
+    <button class="print-btn" onclick="window.close()">✖️ 关闭</button>
+  </div>
+
+  <!-- 打印内容容器 -->
+  <div class="container" id="print-content">
+    <!-- 内容将通过JavaScript动态生成 -->
+  </div>
+
+  <script>
+    // 从URL参数获取数据
+    function getBatchData() {
+      const urlParams = new URLSearchParams(window.location.search);
+      const dataParam = urlParams.get('data');
+
+      if (!dataParam) {
+        alert('缺少打印数据');
+        window.close();
+        return null;
+      }
+
+      try {
+        return JSON.parse(decodeURIComponent(dataParam));
+      } catch (error) {
+        console.error('解析数据失败:', error);
+        alert('数据解析失败');
+        window.close();
+        return null;
+      }
+    }
+
+    // 格式化数字
+    function formatDecimal(value, decimals = 2) {
+      if (value === null || value === undefined || isNaN(value)) return '-';
+      return parseFloat(value).toFixed(decimals);
+    }
+
+    // 生成封面页
+    function generateCoverPage(data) {
+      const totalPots = data.recipes.reduce((sum, r) => sum + r.totalPots, 0);
+      const totalWeight = data.recipes.reduce((sum, r) => sum + r.totalProductionG, 0);
+
+      return `
+        <div class="page cover-page">
+          <h1 class="cover-title">批量制作单</h1>
+          <p class="cover-info">生产日期：${data.productionDate}</p>
+
+          <div class="cover-stats">
+            <div class="cover-stat-item">食谱数量：${data.recipes.length}个</div>
+            <div class="cover-stat-item">总锅数：${totalPots}锅</div>
+            <div class="cover-stat-item">总产量：${formatDecimal(totalWeight)}g</div>
+          </div>
+
+          <div class="recipe-list">
+            <h2 class="recipe-list-title">食谱清单</h2>
+            ${data.recipes.map((recipe, index) => `
+              <div class="recipe-list-item">
+                ${index + 1}. ${recipe.recipeName} v${recipe.recipeVersion} - ${recipe.totalPots}锅
+              </div>
+            `).join('')}
+          </div>
+
+          <div class="page-footer">Seven的厨房</div>
+        </div>
+      `;
+    }
+
+    // 生成详情页
+    function generateDetailPage(recipe, unit) {
+      const orderCards = unit.orderItems.map((order, index) => `
+        <div class="order-card">
+          <div class="order-card-title">订单${index + 1}</div>
+          <div class="order-card-field">
+            <span class="order-card-label">狗狗：</span>
+            <span class="order-card-value">${order.dogName}</span>
+          </div>
+          <div class="order-card-field">
+            <span class="order-card-label">规格：</span>
+            <span class="order-card-value">${order.packageSpecG}g/袋</span>
+          </div>
+          <div class="order-card-field">
+            <span class="order-card-label">数量：</span>
+            <span class="order-card-value">${order.packageCount}袋</span>
+          </div>
+        </div>
+      `).join('');
+
+      const ingredientsRows = unit.ingredientsUsage && unit.ingredientsUsage.length > 0
+        ? `
+            <div class="section">
+              <h3 class="section-title">原料清单（共${unit.ingredientsUsage.length}种）</h3>
+              <table class="ingredient-table">
+                <thead>
+                  <tr>
+                    <th style="width: 50%">原料名称</th>
+                    <th style="width: 50%">用量</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${unit.ingredientsUsage.map(ing => `
+                    <tr>
+                      <td>${ing.name}</td>
+                      <td>${formatDecimal(ing.amount)}${ing.unit}</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            </div>
+          `
+        : '';
+
+      return `
+        <div class="page">
+          <div class="detail-header">
+            <h1 class="detail-title">
+              ${recipe.recipeName} v${recipe.recipeVersion}
+              <br>
+              <small style="font-size: 18px; color: #666;">
+                第${unit.potNumber}锅 / 共${unit.totalPots}锅
+              </small>
+            </h1>
+            <p class="detail-subtitle">产量：${formatDecimal(unit.totalProductionG)}g</p>
+          </div>
+
+          <div class="section">
+            <h3 class="section-title">分装订单（${unit.orderItems.length}个）</h3>
+            <div class="order-grid">
+              ${orderCards}
+            </div>
+          </div>
+
+          ${ingredientsRows}
+
+          <div class="page-footer">Seven的厨房</div>
+        </div>
+      `;
+    }
+
+    // 生成所有打印页面
+    function generatePrintContent(data) {
+      let html = '';
+
+      // 封面页
+      html += generateCoverPage(data);
+
+      // 每锅一页
+      data.recipes.forEach(recipe => {
+        recipe.packagingUnits.forEach(unit => {
+          html += generateDetailPage(recipe, unit);
+        });
+      });
+
+      return html;
+    }
+
+    // 页面加载完成后生成内容
+    window.onload = function() {
+      const data = getBatchData();
+      if (!data) return;
+
+      const content = generatePrintContent(data);
+      document.getElementById('print-content').innerHTML = content;
+
+      // 自动打印（可选）
+      // setTimeout(() => window.print(), 500);
+    };
+  </script>
+</body>
+</html>

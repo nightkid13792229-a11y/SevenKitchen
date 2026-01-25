@@ -2373,63 +2373,38 @@ function getFileName(url: string, index?: number): string {
 
   console.log('[getFileName] Parsing URL:', url)
 
+  // 使用字符串操作提取文件名（小程序环境兼容）
   try {
-    // 方法1: 使用 URL API
-    const urlObj = new URL(url)
-    const pathname = urlObj.pathname
-    const parts = pathname.split('/')
-    let filename = parts[parts.length - 1]
+    const lastSlashIndex = url.lastIndexOf('/')
+    if (lastSlashIndex > -1 && lastSlashIndex < url.length - 1) {
+      let filename = url.substring(lastSlashIndex + 1)
 
-    // 如果文件名为空或只有扩展名，尝试其他方法
-    if (!filename || filename === '' || filename === '/') {
-      // 方法2: 直接从完整 URL 中提取
-      const lastSlashIndex = url.lastIndexOf('/')
-      if (lastSlashIndex > -1 && lastSlashIndex < url.length - 1) {
-        filename = url.substring(lastSlashIndex + 1)
+      // 去除查询参数
+      const queryIndex = filename.indexOf('?')
+      if (queryIndex > -1) {
+        filename = filename.substring(0, queryIndex)
       }
+
+      console.log('[getFileName] Extracted filename:', filename)
+
+      // 如果仍然没有文件名，根据文件类型返回默认名称
+      if (!filename || filename === '') {
+        const lowerUrl = url.toLowerCase()
+        if (lowerUrl.includes('.pdf')) return 'PDF文档'
+        if (lowerUrl.includes('.jpg') || lowerUrl.includes('.jpeg')) return '图片.jpg'
+        if (lowerUrl.includes('.png')) return '图片.png'
+        if (lowerUrl.includes('.gif')) return '图片.gif'
+        return '未知文件'
+      }
+
+      // 如果文件名过长，截断显示
+      return filename.length > 25 ? filename.substring(0, 22) + '...' : filename
     }
-
-    // 去除查询参数
-    const queryIndex = filename.indexOf('?')
-    if (queryIndex > -1) {
-      filename = filename.substring(0, queryIndex)
-    }
-
-    console.log('[getFileName] Extracted filename:', filename)
-
-    // 如果仍然没有文件名，根据文件类型返回默认名称
-    if (!filename || filename === '') {
-      const lowerUrl = url.toLowerCase()
-      if (lowerUrl.includes('.pdf')) return 'PDF文档'
-      if (lowerUrl.includes('.jpg') || lowerUrl.includes('.jpeg')) return '图片.jpg'
-      if (lowerUrl.includes('.png')) return '图片.png'
-      if (lowerUrl.includes('.gif')) return '图片.gif'
-      return '未知文件'
-    }
-
-    // 如果文件名过长，截断显示
-    return filename.length > 25 ? filename.substring(0, 22) + '...' : filename
   } catch (err) {
     console.error('[getFileName] Parse URL failed:', err)
-
-    // 降级方案：使用字符串操作
-    try {
-      const lastSlashIndex = url.lastIndexOf('/')
-      if (lastSlashIndex > -1 && lastSlashIndex < url.length - 1) {
-        let filename = url.substring(lastSlashIndex + 1)
-        // 去除查询参数
-        const queryIndex = filename.indexOf('?')
-        if (queryIndex > -1) {
-          filename = filename.substring(0, queryIndex)
-        }
-        return filename.length > 25 ? filename.substring(0, 22) + '...' : filename
-      }
-    } catch {
-      console.error('[getFileName] Fallback also failed')
-    }
-
-    return '未知文件'
   }
+
+  return '未知文件'
 }
 
 /**
@@ -2899,11 +2874,24 @@ function uploadCheckupFile(filePath: string, fileType: 'image' | 'pdf') {
  * 获取体检文件名
  */
 function getCheckupFileName(url: string, index: number) {
-  // 从URL中提取原始文件名
+  // 从URL中提取原始文件名（使用字符串操作，小程序环境兼容）
   try {
-    const urlObj = new URL(url)
-    const pathname = urlObj.pathname
-    const filename = pathname.split('/').pop() || `文件${index + 1}`
+    const lastSlashIndex = url.lastIndexOf('/')
+    let filename = '未知文件'
+
+    if (lastSlashIndex > -1 && lastSlashIndex < url.length - 1) {
+      filename = url.substring(lastSlashIndex + 1)
+      // 去除查询参数
+      const queryIndex = filename.indexOf('?')
+      if (queryIndex > -1) {
+        filename = filename.substring(0, queryIndex)
+      }
+    }
+
+    // 如果文件名为空，使用默认名称
+    if (!filename || filename === '') {
+      filename = `文件${index + 1}`
+    }
 
     // 如果有自定义名称，使用自定义名称
     const key = `${index}_checkup`

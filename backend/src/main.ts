@@ -5,6 +5,12 @@ import { AppModule } from './app.module';
 import { UnauthorizedExceptionFilter } from './interfaces/common/unauthorized-exception.filter';
 import { AllExceptionsFilter } from './interfaces/common/all-exceptions.filter';
 import { BadRequestExceptionFilter } from './interfaces/common/bad-request-exception.filter';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import { join } from 'path';
+import * as dotenv from 'dotenv';
+
+// 加载.env文件
+dotenv.config();
 
 // Phase 8.18: Boot logging to prove Prisma mode
 function logBootSummary() {
@@ -52,7 +58,10 @@ function logBootSummary() {
 
 async function bootstrap() {
   logBootSummary();
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+
+  // 配置静态文件服务（使用项目根目录）
+  app.useStaticAssets(join(process.cwd(), 'public'));
 
   // Enable CORS for cross-origin requests
   app.enableCors({

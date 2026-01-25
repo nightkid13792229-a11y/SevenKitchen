@@ -160,7 +160,7 @@ export class Order {
       [OrderStatus.INIT]: [OrderStatus.PENDING_PAYMENT, OrderStatus.CANCELLED],
       [OrderStatus.PENDING_PAYMENT]: [OrderStatus.PAID, OrderStatus.CANCELLED],
       [OrderStatus.PAID]: [OrderStatus.PURCHASING, OrderStatus.CANCELLED],
-      [OrderStatus.PURCHASING]: [OrderStatus.IN_PRODUCTION, OrderStatus.CANCELLED],
+      [OrderStatus.PURCHASING]: [OrderStatus.PAID, OrderStatus.IN_PRODUCTION, OrderStatus.CANCELLED],
       [OrderStatus.IN_PRODUCTION]: [OrderStatus.FREEZING, OrderStatus.CANCELLED],
       [OrderStatus.FREEZING]: [OrderStatus.SHIPPED, OrderStatus.AFTERSALE],
       [OrderStatus.SHIPPED]: [OrderStatus.COMPLETED, OrderStatus.AFTERSALE],

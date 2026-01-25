@@ -380,3 +380,13 @@ export function resubmitReimbursement(
     data,
   });
 }
+
+/**
+ * 删除报销单
+ */
+export function deleteReimbursement(id: string) {
+  return request({
+    url: `/staff/purchasing/reimbursements/${id}`,
+    method: 'DELETE',
+  });
+}

@@ -4,7 +4,7 @@
  * Phase 1: Purchasing Management Feature
  */
 
-import { Injectable, Inject, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Inject, Logger, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { REIMBURSEMENT_REPOSITORY, PURCHASE_LIST_REPOSITORY } from './purchasing.service.tokens';
 import type { ReimbursementRepository } from '../../domain/purchasing/reimbursement.repository';
 import type { PurchaseListRepository } from '../../domain/purchasing/purchase-list.repository';
@@ -363,5 +363,41 @@ export class ReimbursementService {
     }
 
     return reimbursement;
+  }
+
+  /**
+   * 删除报销单
+   */
+  async deleteReimbursement(
+    id: string,
+    requesterId: string,
+    isAdmin: boolean
+  ): Promise<void> {
+    // 1. 查询报销单
+    const reimbursement = await this.reimbursementRepository.findById(id);
+
+    if (!reimbursement) {
+      throw new BadRequestException('报销单不存在');
+    }
+
+    // 2. 权限验证
+    if (!isAdmin && reimbursement.submittedById !== requesterId) {
+      throw new ForbiddenException('您没有权限删除该报销单');
+    }
+
+    // 3. 状态验证
+    try {
+      reimbursement.canBeDeleted();
+    } catch (error: any) {
+      throw new BadRequestException(error.message);
+    }
+
+    // 4. 清空采购清单关联
+    await this.purchaseListRepository.clearReimbursementId(id);
+
+    // 5. 删除报销单
+    await this.reimbursementRepository.delete(id);
+
+    this.logger.log(`Reimbursement ${id} deleted by user ${requesterId}`);
   }
 }

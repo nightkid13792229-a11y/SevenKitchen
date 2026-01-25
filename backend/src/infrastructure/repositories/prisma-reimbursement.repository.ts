@@ -23,6 +23,12 @@ export class PrismaReimbursementRepository implements ReimbursementRepository {
       where: { id: reimbursement.id },
       update: {
         status: data.status,
+        totalActualCost: data.totalActualCost,
+        totalEstimatedCost: data.totalEstimatedCost,
+        receiptUrls: data.receiptUrls,
+        platformShippingFee: data.platformShippingFee,
+        platformPackagingFee: data.platformPackagingFee,
+        customFees: data.customFees,
         reviewedById: data.reviewedById,
         reviewedAt: data.reviewedAt,
         reviewComment: data.reviewComment,
@@ -37,6 +43,9 @@ export class PrismaReimbursementRepository implements ReimbursementRepository {
         receiptUrls: data.receiptUrls,
         submittedById: data.submittedById,
         submittedAt: data.submittedAt,
+        platformShippingFee: data.platformShippingFee,
+        platformPackagingFee: data.platformPackagingFee,
+        customFees: data.customFees,
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
       },
@@ -327,5 +336,11 @@ export class PrismaReimbursementRepository implements ReimbursementRepository {
     });
 
     return reimbursements.map(r => Reimbursement.fromPrisma(r));
+  }
+
+  async delete(id: string): Promise<void> {
+    await this.prisma.reimbursement.delete({
+      where: { id },
+    });
   }
 }

@@ -47,6 +47,16 @@
           </view>
           <text class="module-arrow">›</text>
         </view>
+
+        <!-- 报销管理 -->
+        <view class="module" @tap="goToReimbursement">
+          <view class="module-icon reimbursement">💰</view>
+          <view class="module-content">
+            <text class="module-title">报销管理</text>
+            <text class="module-desc">申请报销与查看报销记录</text>
+          </view>
+          <text class="module-arrow">›</text>
+        </view>
       </view>
 
       <!-- 快捷统计（UI框架，待对接API） -->
@@ -89,6 +99,8 @@ import { onShow } from '@dcloudio/uni-app';
 const user = ref<any>(null);
 const isStaff = ref(false);
 
+console.log('[StaffWorkbench] Component initializing...');
+
 // UI 框架数据（待对接后端 API）
 const todayOrders = ref(0);
 const pendingTasks = ref(0);
@@ -104,12 +116,14 @@ const isAdmin = computed(() => {
 });
 
 onMounted(() => {
+  console.log('[StaffWorkbench] onMounted - checking permission...');
   checkPermission();
   // TODO: 后续对接后端 API
   // loadStats();
 });
 
 onShow(() => {
+  console.log('[StaffWorkbench] onShow - checking permission...');
   // 更新自定义 TabBar 状态
   // 注意：自定义TabBar会在页面切换时自动检测当前页面路径并更新selected状态
   // 不需要页面主动调用更新方法
@@ -118,9 +132,13 @@ onShow(() => {
 });
 
 const checkPermission = () => {
+  console.log('[StaffWorkbench] checkPermission called');
+
   const storedUser = uni.getStorageSync('user');
+  console.log('[StaffWorkbench] Stored user:', storedUser);
 
   if (!storedUser || (storedUser.role !== 'STAFF' && storedUser.role !== 'ADMIN')) {
+    console.log('[StaffWorkbench] Permission denied - user:', storedUser);
     isStaff.value = false;
     uni.showToast({
       title: '权限不足',
@@ -132,6 +150,7 @@ const checkPermission = () => {
     return;
   }
 
+  console.log('[StaffWorkbench] Permission granted - user:', storedUser);
   user.value = storedUser;
   isStaff.value = true;
 };
@@ -162,6 +181,10 @@ const goToShipping = () => {
 
 const viewTodayOrders = () => {
   uni.navigateTo({ url: '/pages/staff-orders/index' });
+};
+
+const goToReimbursement = () => {
+  uni.navigateTo({ url: '/pages/staff-purchasing/reimbursement/list' });
 };
 </script>
 
@@ -277,6 +300,10 @@ const viewTodayOrders = () => {
 
   &.shipping {
     background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+  }
+
+  &.reimbursement {
+    background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
   }
 }
 

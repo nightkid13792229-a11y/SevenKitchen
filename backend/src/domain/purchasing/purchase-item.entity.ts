@@ -27,9 +27,9 @@ export class PurchaseItem {
   public readonly ingredientId: string;
   public readonly ingredientName: string;
   public readonly type?: 'FOOD' | 'SUPPLEMENT' | 'PACKAGING';  // 原料类型
-  public readonly quantityNeeded: number;
+  public quantityNeeded: number;  // 可写，用于动态更新
   public readonly quantityUnit: string;
-  public readonly estimatedCost: number;
+  public estimatedCost: number;  // 可写，用于动态更新
   public readonly purchaseChannel?: string;
   public readonly productModel?: string;
   public readonly displayUnit?: string;  // 显示单位标签

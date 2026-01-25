@@ -354,4 +354,14 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
 
     return PurchaseList.fromPrisma(result);
   }
+
+  /**
+   * 清空报销单ID（删除报销单时调用）
+   */
+  async clearReimbursementId(reimbursementId: string): Promise<void> {
+    await this.prisma.purchaseList.updateMany({
+      where: { reimbursementId },
+      data: { reimbursementId: null },
+    });
+  }
 }

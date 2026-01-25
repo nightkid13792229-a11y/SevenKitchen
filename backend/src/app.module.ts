@@ -1,3 +1,7 @@
+import * as dotenv from 'dotenv';
+// 加载.env文件（必须在所有其他导入之前）
+dotenv.config();
+
 import { Module, OnModuleInit, Inject } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';

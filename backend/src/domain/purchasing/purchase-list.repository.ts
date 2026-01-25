@@ -62,4 +62,9 @@ export interface PurchaseListRepository {
    * 检查指定日期范围是否已存在采购清单
    */
   existsByDateRange(startDate: Date, endDate: Date): Promise<boolean>;
+
+  /**
+   * 清空报销单ID（删除报销单时调用）
+   */
+  clearReimbursementId(reimbursementId: string): Promise<void>;
 }

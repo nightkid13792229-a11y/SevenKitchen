@@ -52,4 +52,9 @@ export interface ReimbursementRepository {
    * 根据审核人查找报销单
    */
   findByReviewedBy(reviewedById: string): Promise<Reimbursement[]>;
+
+  /**
+   * 删除报销单
+   */
+  delete(id: string): Promise<void>;
 }

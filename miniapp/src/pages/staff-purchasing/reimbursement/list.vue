@@ -43,24 +43,26 @@
               <text class="claim-number">{{ item.claimNumber }}</text>
               <text class="submit-date">{{ formatDateTime(item.submittedAt) }}</text>
             </view>
-            <view class="status-badge" :class="getStatusClass(item.status)">
-              <text>{{ getStatusText(item.status) }}</text>
+            <view class="header-right">
+              <view class="status-badge" :class="getStatusClass(item.status)">
+                <text>{{ getStatusText(item.status) }}</text>
+              </view>
+              <!-- 删除按钮（仅可删除状态显示） -->
+              <view
+                v-if="canDelete(item)"
+                class="delete-btn"
+                @tap.stop="confirmDelete(item)()"
+              >
+                <text class="delete-icon">🗑️</text>
+              </view>
             </view>
           </view>
 
           <!-- 金额信息 -->
           <view class="item-amount">
             <view class="amount-row">
-              <text class="label">预估金额:</text>
-              <text class="value estimated">¥{{ item.totalEstimatedCost.toFixed(2) }}</text>
-            </view>
-            <view class="amount-row">
-              <text class="label">实际金额:</text>
+              <text class="label">报销金额:</text>
               <text class="value actual">¥{{ item.totalActualCost.toFixed(2) }}</text>
-            </view>
-            <view v-if="getCostDifference(item) !== 0" class="amount-row diff" :class="{ positive: getCostDifference(item) > 0 }">
-              <text class="label">差异:</text>
-              <text class="value">{{ getCostDifference(item) > 0 ? '+' : '' }}¥{{ Math.abs(getCostDifference(item)).toFixed(2) }}</text>
             </view>
           </view>
 
@@ -96,11 +98,18 @@
     </view>
   </view>
   </view>
+
+  <!-- 底部申请按钮 -->
+  <view class="bottom-action">
+    <button class="submit-btn" @tap="goToSubmit">
+      <text>申请报销</text>
+    </button>
+  </view>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { getMyReimbursements } from '@/api/purchasing';
+import { getMyReimbursements, deleteReimbursement } from '@/api/purchasing';
 
 // 状态筛选标签
 const statusTabs = [
@@ -135,11 +144,17 @@ const loadReimbursements = async (refresh = false) => {
   loading.value = true;
 
   try {
-    const res: any = await getMyReimbursements({
-      status: currentStatus.value || undefined,
+    const params: any = {
       page: currentPage.value,
       pageSize,
-    });
+    };
+
+    // 只有在选择了具体状态时才传递 status 参数
+    if (currentStatus.value) {
+      params.status = currentStatus.value;
+    }
+
+    const res: any = await getMyReimbursements(params);
 
     if (res.code === 0) {
       if (refresh) {
@@ -180,6 +195,13 @@ const goToDetail = (id: string) => {
   });
 };
 
+// 跳转申请报销页面
+const goToSubmit = () => {
+  uni.navigateTo({
+    url: '/pages/staff-purchasing/reimbursement/submit',
+  });
+};
+
 // 获取状态文本
 const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
@@ -202,11 +224,6 @@ const getStatusClass = (status: string) => {
   return classMap[status] || '';
 };
 
-// 计算成本差异
-const getCostDifference = (item: any) => {
-  return item.totalActualCost - item.totalEstimatedCost;
-};
-
 // 格式化日期时间
 const formatDateTime = (dateStr: string) => {
   const date = new Date(dateStr);
@@ -222,13 +239,91 @@ const formatDate = (dateStr: string) => {
   const date = new Date(dateStr);
   return `${date.getMonth() + 1}/${date.getDate()}`;
 };
+
+// 判断是否可以删除（只有待审核、已驳回、需重新提交状态可以删除）
+const canDelete = (item: any) => {
+  return ['PENDING_REVIEW', 'REJECTED', 'REQUIRES_RESUBMIT'].includes(item.status);
+};
+
+// 删除报销单
+const confirmDelete = (item: any) => {
+  // 阻止冒泡，避免触发查看详情
+  return () => {
+    uni.showModal({
+      title: '确认删除',
+      content: '确认删除该报销单？',
+      success: async (res) => {
+        if (res.confirm) {
+          try {
+            const response: any = await deleteReimbursement(item.id);
+
+            if (response.code === 0) {
+              uni.showToast({
+                title: '删除成功',
+                icon: 'success',
+              });
+
+              // 刷新列表
+              loadReimbursements(true);
+            } else {
+              uni.showToast({
+                title: response.message || '删除失败',
+                icon: 'none',
+              });
+            }
+          } catch (error: any) {
+            console.error('删除报销单失败', error);
+            uni.showToast({
+              title: error.message || '删除失败',
+              icon: 'none',
+            });
+          }
+        }
+      },
+    });
+  };
+};
 </script>
 
 <style scoped lang="scss">
 .reimbursement-list-page {
   min-height: 100vh;
   background-color: #f5f5f5;
-  padding-bottom: 40rpx;
+  padding-bottom: 160rpx; // 为底部按钮留出空间
+}
+
+.bottom-action {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 24rpx 32rpx;
+  background-color: #fff;
+  box-shadow: 0 -2rpx 12rpx rgba(0, 0, 0, 0.08);
+  z-index: 100;
+}
+
+.submit-btn {
+  width: 100%;
+  height: 96rpx;
+  background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
+  border-radius: 48rpx;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4rpx 12rpx rgba(253, 203, 110, 0.4);
+
+  text {
+    font-size: 32rpx;
+    font-weight: bold;
+    color: #333;
+  }
+
+  &:active {
+    opacity: 0.8;
+    transform: scale(0.98);
+  }
 }
 
 .header {
@@ -361,6 +456,29 @@ const formatDate = (dateStr: string) => {
         color: #f57c00;
       }
     }
+
+    .header-right {
+      display: flex;
+      align-items: center;
+      gap: 12rpx;
+    }
+  }
+
+  .delete-btn {
+    padding: 8rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .delete-icon {
+      font-size: 32rpx;
+      opacity: 0.6;
+    }
+
+    &:active {
+      opacity: 1;
+      transform: scale(0.9);
+    }
   }
 
   .item-amount {
@@ -384,27 +502,7 @@ const formatDate = (dateStr: string) => {
       .value {
         font-size: 26rpx;
         font-weight: bold;
-        color: #333;
-
-        &.estimated {
-          color: #666;
-        }
-
-        &.actual {
-          color: #ff6b6b;
-        }
-      }
-
-      &.diff {
-        font-size: 24rpx;
-
-        &.positive {
-          color: #ff6b6b;
-        }
-
-        &:not(.positive) {
-          color: #51cf66;
-        }
+        color: #ff6b6b;
       }
     }
   }

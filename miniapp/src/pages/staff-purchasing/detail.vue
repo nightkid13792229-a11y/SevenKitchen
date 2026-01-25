@@ -203,23 +203,10 @@
 
       <!-- 已完成提示 -->
       <view
-        v-if="purchaseList.status === 'COMPLETED' && !purchaseList.reimbursementId"
+        v-if="purchaseList.status === 'COMPLETED'"
         class="bottom-actions completed"
       >
-        <button class="action-btn reimburse" @tap="goToReimbursement">
-          申请报销
-        </button>
-      </view>
-
-      <!-- 已有报销单 -->
-      <view
-        v-if="purchaseList.status === 'COMPLETED' && purchaseList.reimbursementId"
-        class="bottom-actions completed"
-      >
-        <text class="completed-text">✓ 采购已完成（已提交报销）</text>
-        <button class="action-btn view-reimburse" @tap="viewReimbursement" style="margin-top: 12rpx;">
-          查看报销单
-        </button>
+        <text class="completed-text">✓ 采购已完成</text>
       </view>
     </view>
 
@@ -708,20 +695,6 @@ const completePurchase = () => {
         }
       }
     },
-  });
-};
-
-// 跳转到报销申请页面
-const goToReimbursement = () => {
-  uni.navigateTo({
-    url: `/pages/staff-purchasing/reimbursement/submit?selectedListId=${purchaseListId.value}`,
-  });
-};
-
-// 查看报销单详情
-const viewReimbursement = () => {
-  uni.navigateTo({
-    url: `/pages/staff-purchasing/reimbursement/detail?id=${purchaseList.value.reimbursementId}`,
   });
 };
 

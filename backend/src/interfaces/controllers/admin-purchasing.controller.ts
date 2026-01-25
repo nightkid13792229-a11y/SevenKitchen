@@ -8,6 +8,7 @@ import {
   Controller,
   Get,
   Post,
+  Delete,
   Param,
   Query,
   Body,
@@ -28,6 +29,7 @@ import type { ReviewReimbursementDto } from '../../application/purchasing/reimbu
 import { PurchasingService } from '../../application/purchasing/purchasing.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { ReimbursementStatus, PurchaseListStatus } from '../../domain/purchasing';
+import { UserId } from '../auth/user.decorator';
 
 @ApiTags('Admin Purchasing')
 @Controller('api/v1/admin/purchasing')
@@ -154,6 +156,31 @@ export class AdminPurchasingController {
     const reimbursement = await this.reimbursementService.getReimbursementDetail(id);
 
     return ApiResponseDto.success(reimbursement, 'Reimbursement detail retrieved successfully');
+  }
+
+  @Delete('reimbursements/:id')
+  @ApiOperation({ summary: '删除报销单' })
+  @ApiParam({ name: 'id', description: '报销单ID' })
+  @ApiResponse({
+    status: 200,
+    description: '删除成功',
+    schema: {
+      type: 'object',
+      properties: {
+        code: { type: 'number', example: 0 },
+        message: { type: 'string', example: 'success' },
+      },
+    },
+  })
+  async deleteReimbursement(
+    @Param('id') id: string,
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<null>> {
+    this.logger.log(`Admin deleting reimbursement: ${id}`);
+
+    await this.reimbursementService.deleteReimbursement(id, userId, true);
+
+    return ApiResponseDto.success(null, '删除成功');
   }
 
   @Post('reimbursements/:id/review')

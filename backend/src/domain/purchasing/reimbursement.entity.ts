@@ -222,6 +222,16 @@ export class Reimbursement {
   }
 
   /**
+   * 检查是否可以删除
+   * 只有待审核、已驳回、需重新提交状态可以删除
+   */
+  canBeDeleted(): void {
+    if (this.status === ReimbursementStatus.APPROVED) {
+      throw new Error('已批准的报销单不能删除');
+    }
+  }
+
+  /**
    * 计算成本差异（实际成本 - 预估成本）
    */
   getCostDifference(): number {

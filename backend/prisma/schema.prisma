@@ -487,6 +487,7 @@ model AllergyRecord {
   confirmedBy   ConfirmedBy  @default(VET) @map("confirmed_by")
   treatment     String?      @map("treatment")
   notes         String?      @map("notes")
+  attachments   String[]     @default([]) @map("attachments")
   createdAt     DateTime     @default(now()) @map("created_at")
   updatedAt     DateTime     @updatedAt @map("updated_at")
   dog           Dog          @relation(fields: [dogId], references: [id], onDelete: Cascade)
@@ -818,6 +819,9 @@ model Reimbursement {
   platformShippingFee   Decimal? @map("platform_shipping_fee") @db.Decimal(10, 2)
   platformPackagingFee  Decimal? @map("platform_packaging_fee") @db.Decimal(10, 2)
   customFees            Json?    @map("custom_fees") @db.JsonB
+  // 报销凭证（管理员上传的转账凭证）
+  paymentProofUrls     String[] @default([]) @map("payment_proof_urls")
+  paymentProofKeys     String[] @default([]) @map("payment_proof_keys")
   createdAt           DateTime             @default(now()) @map("created_at")
   updatedAt           DateTime             @updatedAt @map("updated_at")
   purchaseLists       PurchaseList[]
@@ -837,7 +841,7 @@ enum PurchaseListStatus {
 
 enum ReimbursementStatus {
   PENDING_REVIEW      // 待审核
-  APPROVED            // 已批准
+  REIMBURSED          // 已报销
   REJECTED            // 已驳回
   REQUIRES_RESUBMIT   // 需重新提交
 }

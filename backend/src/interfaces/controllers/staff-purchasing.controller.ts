@@ -825,4 +825,33 @@ export class StaffPurchasingController {
 
     return ApiResponseDto.success(reimbursement, '报销单重新提交成功');
   }
+
+  /**
+   * 获取所有采购渠道列表
+   */
+  @Get('purchase-channels')
+  @ApiOperation({ summary: '获取所有采购渠道' })
+  @ApiResponse({
+    status: 200,
+    description: '采购渠道列表',
+    schema: {
+      type: 'object',
+      properties: {
+        code: { type: 'number', example: 0 },
+        message: { type: 'string', example: 'success' },
+        data: {
+          type: 'array',
+          items: { type: 'string' },
+          example: ['淘宝', '京东', '天猫超市', '山姆会员店', '盒马鲜生'],
+        },
+      },
+    },
+  })
+  async getPurchaseChannels(): Promise<ApiResponseDto<string[]>> {
+    this.logger.log('Fetching purchase channels');
+
+    const channels = await this.purchasingService.getPurchaseChannels();
+
+    return ApiResponseDto.success(channels, '获取采购渠道成功');
+  }
 }

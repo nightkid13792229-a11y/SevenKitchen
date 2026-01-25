@@ -1227,4 +1227,23 @@ export class PurchasingService {
 
     return this.purchaseRecordRepository.findByPurchaseListId(purchaseListId);
   }
+
+  /**
+   * 获取所有采购渠道列表
+   * 从原料数据库中提取所有不同的采购渠道
+   */
+  async getPurchaseChannels(): Promise<string[]> {
+    const ingredients = await this.ingredientRepository.findAll();
+
+    // 提取所有不同的采购渠道并过滤掉空值
+    const channels = new Set<string>();
+    ingredients.forEach(ingredient => {
+      if (ingredient.purchaseChannel) {
+        channels.add(ingredient.purchaseChannel);
+      }
+    });
+
+    // 转换为数组并按字母顺序排序
+    return Array.from(channels).sort();
+  }
 }

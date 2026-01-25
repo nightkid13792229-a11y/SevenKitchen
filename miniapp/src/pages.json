@@ -206,6 +206,19 @@
       }
     },
     {
+      "path": "pages/staff-orders/index",
+      "style": {
+        "navigationBarTitleText": "后台订单",
+        "navigationStyle": "custom"
+      }
+    },
+    {
+      "path": "pages/staff-orders/detail",
+      "style": {
+        "navigationBarTitleText": "订单详情"
+      }
+    },
+    {
       "path": "pages/aftersale-apply/index",
       "style": {
         "navigationBarTitleText": "申请售后"

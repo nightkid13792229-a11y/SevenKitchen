@@ -89,8 +89,9 @@ export class PurchasingService {
   ): Promise<PurchaseRequirement[]> {
     const end = endDate || startDate;
 
-    // 使用统一的日期工具创建查询范围（中午12点避免时区问题）
-    const { start: start_date, end: end_date } = DateUtil.createDateRange(startDate);
+    // 为targetProductionDate查询创建范围（使用午夜00:00:00，因为数据库中存储的是午夜时间）
+    const start_date = new Date(`${startDate}T00:00:00`);
+    const end_date = new Date(`${end}T23:59:59.999`);
 
     this.logger.log(`Calculating purchase requirements from ${startDate} to ${end}`);
     this.logger.log(`Query range (local): ${start_date.toString()} to ${end_date.toString()}`);
@@ -226,23 +227,28 @@ export class PurchasingService {
   ): Promise<PurchaseList> {
     const end = dto.endDate || dto.startDate;
 
-    // 使用统一的日期工具创建查询范围（中午12点避免时区问题）
-    const { start: startDate, end: endDate } = DateUtil.createDateRange(dto.startDate);
+    // 为targetProductionDate查询创建范围（使用午夜00:00:00，因为数据库中存储的是午夜时间）
+    const queryStartDate = new Date(`${dto.startDate}T00:00:00`);
+    const queryEndDate = new Date(`${end}T23:59:59.999`);
+
+    // 为采购清单的targetDate创建中午12点时间（与其他模块保持一致）
+    const targetDate = new Date(`${dto.startDate}T12:00:00`);
 
     // 验证日期格式
-    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+    if (isNaN(queryStartDate.getTime()) || isNaN(queryEndDate.getTime())) {
       throw new BadRequestException(
         `日期格式无效。期望格式：YYYY-MM-DD，实际值：${dto.startDate}`
       );
     }
 
     // 验证日期范围
-    if (endDate < startDate) {
+    if (queryEndDate < queryStartDate) {
       throw new BadRequestException('结束日期不能早于开始日期');
     }
 
-    // 检查是否已存在该日期范围的采购清单
-    const exists = await this.purchaseListRepository.existsByDateRange(startDate, endDate);
+    // 检查是否已存在该日期范围的采购清单（使用中午12点的时间）
+    const { start: checkStart, end: checkEnd } = DateUtil.createDateRange(dto.startDate);
+    const exists = await this.purchaseListRepository.existsByDateRange(checkStart, checkEnd);
     if (exists) {
       throw new ConflictException(
         `日期范围 ${dto.startDate} - ${end} 的采购清单已存在`
@@ -263,8 +269,8 @@ export class PurchasingService {
     // 查询订单ID列表（使用制作日期查询）
     const { list: orders } = await this.orderRepository.findByTargetProductionDateRange({
       status: OrderStatus.PAID,
-      startDate: startDate,
-      endDate: endDate,
+      startDate: queryStartDate,
+      endDate: queryEndDate,
     });
     const sourceOrderIds = orders.map(o => o.id);
 
@@ -299,9 +305,9 @@ export class PurchasingService {
       })
     );
 
-    // 创建采购清单（使用startDate作为目标日期）
+    // 创建采购清单（使用中午12点的targetDate）
     const purchaseList = new PurchaseList({
-      targetDate: startDate,
+      targetDate: targetDate,
       status: PurchaseListStatus.PENDING,
       totalEstimatedCost,
       itemCount: items.length,

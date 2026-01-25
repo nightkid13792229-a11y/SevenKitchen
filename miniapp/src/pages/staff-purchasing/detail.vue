@@ -85,15 +85,22 @@
           >
             <!-- 原料基本信息（始终显示） -->
             <view class="item-basic">
-              <text class="item-name">{{ item.ingredientName || '未知原料' }}</text>
-              <view v-if="item.purchaseChannel || item.productModel" class="item-specs">
-                <text v-if="item.purchaseChannel" class="spec">{{ item.purchaseChannel }}</text>
-                <text v-if="item.productModel" class="spec">{{ item.productModel }}</text>
+              <view class="item-info">
+                <text class="item-name">{{ item.ingredientName || '未知原料' }}</text>
+                <view v-if="item.purchaseChannel || item.productModel" class="item-specs">
+                  <text v-if="item.purchaseChannel" class="spec">{{ item.purchaseChannel }}</text>
+                  <text v-if="item.productModel" class="spec">{{ item.productModel }}</text>
+                </view>
+                <view class="item-quantity">
+                  <text class="quantity-label">需求: </text>
+                  <text class="quantity-value">{{ formatQuantity(item) }}</text>
+                  <text class="quantity-unit">{{ getDisplayUnit(item) }}</text>
+                </view>
               </view>
-              <view class="item-quantity">
-                <text class="quantity-label">需求: </text>
-                <text class="quantity-value">{{ formatQuantity(item) }}</text>
-                <text class="quantity-unit">{{ getDisplayUnit(item) }}</text>
+
+              <!-- 开始采购后显示的添加按钮 -->
+              <view v-if="purchaseList.startedAt" class="item-action">
+                <button class="continue-add-btn" @tap="handleContinueAdd(item)">添加采购记录</button>
               </view>
             </view>
 
@@ -102,18 +109,12 @@
               <text class="disabled-text">💡 请先点击"开始采购"</text>
             </view>
 
-            <!-- 已开始采购：显示采购记录板块 -->
-            <view v-if="purchaseList.startedAt" class="item-expanded">
+            <!-- 已开始采购且有记录：显示采购记录列表 -->
+            <view v-if="purchaseList.startedAt && item.records.length > 0" class="item-expanded">
               <view class="divider"></view>
 
-              <!-- 空状态 -->
-              <view v-if="item.records.length === 0" class="empty-records">
-                <text class="empty-title">采购记录</text>
-                <text class="empty-text">暂无采购记录</text>
-              </view>
-
               <!-- 采购记录列表 -->
-              <view v-else class="records-list">
+              <view class="records-list">
                 <view
                   v-for="record in item.records"
                   :key="record.id"
@@ -134,11 +135,6 @@
                     <button class="delete-btn" @tap="deleteRecord(record.id)">删除</button>
                   </view>
                 </view>
-              </view>
-
-              <!-- 操作按钮 -->
-              <view class="expanded-actions">
-                <button class="continue-add-btn" @tap="handleContinueAdd(item)">+ 继续添加</button>
               </view>
             </view>
           </view>
@@ -1029,49 +1025,78 @@ const getDisplayUnit = (item: any) => {
 
   .item-basic {
     padding: 24rpx;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 16rpx;
 
-    .item-name {
-      font-size: 30rpx;
-      font-weight: 500;
-      color: #333;
-      margin-bottom: 12rpx;
-      display: block;
-    }
+    .item-info {
+      flex: 1;
+      min-width: 0;
 
-    .item-specs {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 8rpx;
-      margin-bottom: 12rpx;
+      .item-name {
+        font-size: 30rpx;
+        font-weight: 500;
+        color: #333;
+        margin-bottom: 12rpx;
+        display: block;
+      }
 
-      .spec {
-        font-size: 22rpx;
-        color: #666;
-        padding: 4rpx 12rpx;
-        background-color: #f0f0f0;
-        border-radius: 4rpx;
+      .item-specs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8rpx;
+        margin-bottom: 12rpx;
+
+        .spec {
+          font-size: 22rpx;
+          color: #666;
+          padding: 4rpx 12rpx;
+          background-color: #f0f0f0;
+          border-radius: 4rpx;
+        }
+      }
+
+      .item-quantity {
+        display: flex;
+        align-items: baseline;
+        gap: 4rpx;
+
+        .quantity-label {
+          font-size: 24rpx;
+          color: #666;
+        }
+
+        .quantity-value {
+          font-size: 32rpx;
+          font-weight: bold;
+          color: #1890ff;
+        }
+
+        .quantity-unit {
+          font-size: 22rpx;
+          color: #999;
+        }
       }
     }
 
-    .item-quantity {
-      display: flex;
-      align-items: baseline;
-      gap: 4rpx;
+    .item-action {
+      flex-shrink: 0;
+      align-self: flex-end;
 
-      .quantity-label {
+      .continue-add-btn {
+        padding: 12rpx 20rpx;
+        background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+        color: #fff;
+        border-radius: 8rpx;
         font-size: 24rpx;
-        color: #666;
-      }
+        border: none;
+        line-height: 1.5;
+        white-space: nowrap;
 
-      .quantity-value {
-        font-size: 32rpx;
-        font-weight: bold;
-        color: #1890ff;
-      }
-
-      .quantity-unit {
-        font-size: 22rpx;
-        color: #999;
+        &:active {
+          opacity: 0.8;
+        }
       }
     }
   }
@@ -1089,26 +1114,8 @@ const getDisplayUnit = (item: any) => {
   .item-expanded {
     background-color: #fff;
 
-    .empty-records {
-      padding: 32rpx 24rpx;
-      text-align: center;
-
-      .empty-title {
-        font-size: 28rpx;
-        font-weight: 500;
-        color: #333;
-        margin-bottom: 16rpx;
-        display: block;
-      }
-
-      .empty-text {
-        font-size: 24rpx;
-        color: #999;
-      }
-    }
-
     .records-list {
-      padding: 0 24rpx;
+      padding: 0 24rpx 24rpx;
       display: flex;
       flex-direction: column;
       gap: 16rpx;
@@ -1181,27 +1188,6 @@ const getDisplayUnit = (item: any) => {
           &:active {
             opacity: 0.8;
           }
-        }
-      }
-    }
-
-    .expanded-actions {
-      padding: 24rpx;
-
-      .continue-add-btn {
-        width: 100%;
-        height: 72rpx;
-        border-radius: 12rpx;
-        font-size: 26rpx;
-        border: none;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
-        color: #fff;
-
-        &:active {
-          opacity: 0.8;
         }
       }
     }

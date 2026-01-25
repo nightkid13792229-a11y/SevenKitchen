@@ -44,7 +44,7 @@
           <!-- 清单头部 -->
           <view class="item-header">
             <view class="header-left">
-              <text class="target-date">{{ formatDate(list.targetDate) }}</text>
+              <text class="target-date">{{ formatDate(list.targetDate) }}（制作日期）</text>
               <text class="create-time">创建于 {{ formatDateTime(list.createdAt) }}</text>
             </view>
             <view class="status-badge" :class="getStatusClass(list.status)">
@@ -59,8 +59,8 @@
               <text class="value">{{ list.itemCount }} 种</text>
             </view>
             <view class="info-row" v-if="list.recordsCount !== undefined">
-              <text class="label">已录入:</text>
-              <text class="value">{{ list.recordsCount }} 种采购记录</text>
+              <text class="label">采购记录:</text>
+              <text class="value">{{ list.recordsCount }} 条</text>
             </view>
             <view class="info-row" v-if="list.totalActualCost !== undefined && list.totalActualCost > 0">
               <text class="label">实际总额:</text>
@@ -121,15 +121,20 @@ const currentPage = ref(1);
 const pageSize = 20;
 const total = ref(0);
 const hasMore = computed(() => purchaseLists.value.length < total.value);
+const isMounted = ref(false);
 
 // 页面加载
 onMounted(() => {
   loadPurchaseLists();
+  isMounted.value = true;
 });
 
 // 页面显示时刷新数据（从详情页返回时）
 onShow(() => {
-  loadPurchaseLists(true);
+  // 只有在页面已经mounted后才刷新，避免首次加载时重复调用
+  if (isMounted.value) {
+    loadPurchaseLists(true);
+  }
 });
 
 // 加载采购清单列表

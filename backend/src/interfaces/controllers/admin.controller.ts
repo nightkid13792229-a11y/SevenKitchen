@@ -899,6 +899,7 @@ export class AdminController {
       // Parse query parameters
       const params = {
         keyword: query.keyword,
+        orderId: query.orderId,
         status: query.status,
         type: query.type,
         startDate: query.startDate ? new Date(query.startDate) : undefined,
@@ -907,28 +908,182 @@ export class AdminController {
         pageSize: query.pageSize ? parseInt(query.pageSize, 10) : 20,
       };
 
-      const result = await this.orderService.listAllOrders(params);
+      // Build Prisma where clause
+      const where: any = {};
 
-      // Map orders to DTOs (simplified - would use proper mapper in production)
-      const list = result.list.map((order) => ({
-        id: order.id,
-        customerId: order.customerId,
-        customerName: 'Customer', // TODO: Fetch from customer relation
-        customerPhone: '---', // TODO: Fetch from customer relation
-        dogId: order.dogId,
-        dogName: '---', // TODO: Fetch from dog relation
-        status: order.status,
-        type: order.type,
-        amountTotal: order.amountTotal,
-        addressCity: '---', // TODO: Fetch from address relation
-        addressDetail: '---', // TODO: Fetch from address relation
-        createdAt: order.createdAt.toISOString(),
-        targetProductionDate: order.targetProductionDate?.toISOString() ?? null,
-      }));
+      if (params.status) {
+        where.status = params.status;
+      }
+
+      if (params.type) {
+        where.type = params.type;
+      }
+
+      if (params.orderId) {
+        where.id = {
+          contains: params.orderId,
+          mode: 'insensitive'
+        };
+      }
+
+      if (params.startDate || params.endDate) {
+        where.createdAt = {};
+        if (params.startDate) {
+          where.createdAt.gte = params.startDate;
+        }
+        if (params.endDate) {
+          where.createdAt.lte = params.endDate;
+        }
+      }
+
+      // Get total count
+      const total = await this.prisma.order.count({ where });
+
+      // Fetch orders with pagination
+      const skip = ((params.page || 1) - 1) * (params.pageSize || 20);
+      const orders = await this.prisma.order.findMany({
+        where,
+        include: {
+          items: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        skip,
+        take: params.pageSize || 20,
+      });
+
+      // Map orders to summary DTOs with full details
+      const list = await Promise.all(
+        orders.map(async (order: any) => {
+          // Fetch user information (customer)
+          let customerName = '未知客户';
+          let customerPhone = '';
+
+          try {
+            const user = await this.prisma.user.findUnique({
+              where: { id: order.customerId },
+              select: { nickname: true, phone: true }
+            });
+            if (user) {
+              customerName = user.nickname || '未知客户';
+              customerPhone = user.phone || '';
+            }
+          } catch (error) {
+            // User might be deleted, use default values
+          }
+
+          // Get first item with dog info if available
+          let firstItem = undefined;
+          if (order.items && order.items.length > 0) {
+            const item = order.items[0];
+
+            // Fetch dog information if dogId is present
+            let dogInfo = undefined;
+            if (item.dogId) {
+              try {
+                const dog = await this.prisma.dog.findUnique({
+                  where: { id: item.dogId }
+                });
+                if (dog) {
+                  dogInfo = {
+                    id: dog.id,
+                    name: dog.name,
+                    breedName: dog.customBreedName ?? undefined,
+                    weightKg: dog.currentWeightKg,
+                    mealsPerDay: dog.mealsPerDay,
+                  };
+                }
+              } catch (error) {
+                // Dog might be deleted, ignore error
+              }
+            }
+
+            // Fetch recipe cover image using Prisma directly
+            let coverImageUrl = undefined;
+            if (item.recipeSnapshot?.id) {
+              try {
+                let recipe = await this.prisma.recipe.findUnique({
+                  where: { id: item.recipeSnapshot.id },
+                  select: { coverImageUrl: true }
+                });
+
+                // If not found by ID, try to find by recipe name (data consistency workaround)
+                if (!recipe && item.recipeSnapshot.name) {
+                  recipe = await this.prisma.recipe.findFirst({
+                    where: { name: item.recipeSnapshot.name },
+                    select: { coverImageUrl: true }
+                  });
+                }
+
+                if (recipe) {
+                  coverImageUrl = recipe.coverImageUrl?.replace('http://', 'https://');
+                }
+              } catch (error: any) {
+                // Recipe might be deleted, ignore error
+              }
+            }
+
+            firstItem = {
+              dog: dogInfo,
+              recipeSnapshot: item.recipeSnapshot ? {
+                id: item.recipeSnapshot.id,
+                name: item.recipeSnapshot.name,
+                coverImageUrl,
+              } : undefined,
+              packageCount: item.packageCount,
+              packageSpecG: item.packageSpecG,
+              dailyIntakeG: item.dailyIntakeG,
+            };
+          }
+
+          // Get address info if addressId is present
+          let address = undefined;
+          if (order.addressId) {
+            try {
+              const addressData = await this.prisma.address.findUnique({
+                where: { id: order.addressId }
+              });
+              if (addressData) {
+                // Extract region text from JSON region field
+                const regionObj = addressData.region as any;
+                const regionText = regionObj ? `${regionObj.province || ''} ${regionObj.city || ''} ${regionObj.district || ''}`.trim() : '';
+
+                address = {
+                  recipientName: addressData.recipientName || '',
+                  recipientPhone: addressData.phone || '',
+                  regionText: regionText || '',
+                  detailAddress: addressData.detail || ''
+                };
+              }
+            } catch (error) {
+              // Address might be deleted, ignore error
+            }
+          }
+
+          return {
+            id: order.id,
+            status: order.status,
+            type: order.type,
+            totalAmount: order.totalAmount ?? order.amountTotal,
+            amountTotal: order.totalAmount ?? order.amountTotal,
+            amountProduct: order.amountProduct ? parseFloat(order.amountProduct.toString()) : 0,
+            amountShipping: order.amountShipping ? parseFloat(order.amountShipping.toString()) : 0,
+            itemCount: order.items.length,
+            createdAt: order.createdAt.toISOString(),
+            paidAt: order.paidAt?.toISOString() || null,
+            targetProductionDate: order.targetProductionDate?.toISOString() || null,
+            customerName,
+            customerPhone,
+            firstItem,
+            address,
+          };
+        })
+      );
 
       return ApiResponseDto.success({
         list,
-        total: result.total,
+        total,
       });
     } catch (error: any) {
       if (error instanceof BadRequestException) {
@@ -937,6 +1092,7 @@ export class AdminController {
       throw error;
     }
   }
+
 
   /**
    * GET /admin/orders/stats - Get order statistics
@@ -1041,6 +1197,48 @@ export class AdminController {
 
       return ApiResponseDto.success(orderDto);
     } catch (error: any) {
+      throw error;
+    }
+  }
+
+  /**
+   * PUT /admin/orders/:orderId/amount - Update order amount
+   */
+  @Put('orders/:orderId/amount')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update order total amount' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        amount: { type: 'number', example: 299.00 },
+      },
+      required: ['amount'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Order amount updated successfully',
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async updateOrderAmount(
+    @Param('orderId') orderId: string,
+    @Body() body: { amount: number },
+  ): Promise<ApiResponseDto<any>> {
+    try {
+      const amount = parseFloat(body.amount as any);
+      if (isNaN(amount) || amount <= 0) {
+        return ApiResponseDto.error(400, 'Invalid amount');
+      }
+
+      await this.orderService.updateOrderAmount(orderId, amount);
+      return ApiResponseDto.success({ message: 'Amount updated successfully' });
+    } catch (error: any) {
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
       throw error;
     }
   }

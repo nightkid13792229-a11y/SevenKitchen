@@ -335,6 +335,14 @@ export class Order {
       );
     }
 
+    // Check if order is already cancelled (race condition prevention)
+    if (this.cancelledAt) {
+      const reason = this.cancellationReason || 'N/A';
+      throw new InvalidStateTransitionError(
+        `Cannot record payment for cancelled order. Order was cancelled at ${this.cancelledAt.toISOString()}. Reason: ${reason}`,
+      );
+    }
+
     if (!paymentMethod || !paymentMethod.trim()) {
       throw new ValidationError('Payment method is required');
     }

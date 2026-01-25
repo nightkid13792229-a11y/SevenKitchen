@@ -1,14 +1,17 @@
 {
-  "libVersion": "3.12.1",
+  "libVersion": "3.13.0",
   "projectname": "SevenKitchen",
   "setting": {
-    "urlCheck": true,
+    "urlCheck": false,
     "coverView": true,
     "lazyloadPlaceholderEnable": false,
     "skylineRenderEnable": false,
     "preloadBackgroundData": false,
     "autoAudits": false,
     "showShadowRootInWxmlPanel": true,
-    "compileHotReLoad": true
+    "compileHotReLoad": true,
+    "ignoreDevUnusedFiles": false,
+    "ignoreUploadUnusedFiles": false,
+    "ignoreUnusedFiles": false
   }
 }

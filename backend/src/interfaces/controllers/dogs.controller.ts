@@ -435,7 +435,7 @@ export class DogsController {
       // Convert to DTO format
       checkupRecords = records.map((record: any) => ({
         id: record.id,
-        checkupDate: record.checkupDate.toISOString(),
+        checkupDate: record.checkupDate.toISOString().split('T')[0], // Only YYYY-MM-DD
         checkupType: record.checkupType,
         notes: record.findings || null, // findings maps to notes
         attachments: record.attachments || null,

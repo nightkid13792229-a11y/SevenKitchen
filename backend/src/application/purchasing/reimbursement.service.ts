@@ -24,6 +24,10 @@ export interface SubmitReimbursementDto {
   purchaseListIds: string[];
   receiptUrls: string[];
   totalActualCost: number;
+  // 新增字段
+  platformShippingFee?: number;
+  platformPackagingFee?: number;
+  customFees?: Array<{ description: string; amount: number }>;
 }
 
 export interface ReviewReimbursementDto {
@@ -52,11 +56,15 @@ export class ReimbursementService {
    * 示例: BX20260110001
    */
   async generateClaimNumber(): Promise<string> {
-    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const prefix = `BX${today}`;
+    const now = new Date();
+    // ISO格式日期用于查询 (YYYY-MM-DD)
+    const isoDate = now.toISOString().slice(0, 10);
+    // 无横杠格式用于单号 (YYYYMMDD)
+    const dateString = isoDate.replace(/-/g, '');
+    const prefix = `BX${dateString}`;
 
     // 查询今天已有的报销单数量
-    const count = await this.reimbursementRepository.countByDate(today);
+    const count = await this.reimbursementRepository.countByDate(isoDate);
     const sequence = String(count + 1).padStart(4, '0');
 
     return `${prefix}${sequence}`;
@@ -69,11 +77,7 @@ export class ReimbursementService {
     dto: SubmitReimbursementDto,
     submittedById: string
   ): Promise<Reimbursement> {
-    // 验证采购清单
-    if (dto.purchaseListIds.length === 0) {
-      throw new BadRequestException('至少需要一个采购清单');
-    }
-
+    // 验证发票照片
     if (dto.receiptUrls.length === 0) {
       throw new BadRequestException('至少需要一张发票照片');
     }
@@ -90,7 +94,7 @@ export class ReimbursementService {
       `Submitting reimbursement for ${dto.purchaseListIds.length} purchase lists by user ${submittedById}`
     );
 
-    // 查询所有采购清单
+    // 查询所有采购清单（如果有）
     const purchaseLists: PurchaseList[] = [];
     let totalEstimatedCost = 0;
 
@@ -118,6 +122,33 @@ export class ReimbursementService {
       totalEstimatedCost += list.totalEstimatedCost;
     }
 
+    // 计算采购清单总金额
+    const purchaseListsTotal = purchaseLists.reduce((sum, list) => {
+      const actualCost = list.totalActualCost ?? list.totalEstimatedCost;
+      return sum + Number(actualCost);
+    }, 0);
+
+    // 计算自定义费用总额
+    const customFeesTotal = dto.customFees?.reduce((sum, fee) => sum + (fee.amount || 0), 0) || 0;
+
+    // 验证总金额
+    const calculatedTotal = purchaseListsTotal +
+      (dto.platformShippingFee || 0) +
+      (dto.platformPackagingFee || 0) +
+      customFeesTotal;
+
+    if (Math.abs(dto.totalActualCost - calculatedTotal) > 0.01) {
+      throw new BadRequestException(
+        `报销总金额与费用明细不匹配。期望: ¥${calculatedTotal.toFixed(2)}, 实际: ¥${dto.totalActualCost.toFixed(2)}`
+      );
+    }
+
+    this.logger.log(
+      `Validated reimbursement cost details: purchaseLists=¥${purchaseListsTotal}, ` +
+      `shipping=¥${dto.platformShippingFee || 0}, packaging=¥${dto.platformPackagingFee || 0}, ` +
+      `custom=¥${customFeesTotal}, total=¥${dto.totalActualCost}`
+    );
+
     // 生成报销单号
     const claimNumber = await this.generateClaimNumber();
 
@@ -131,6 +162,10 @@ export class ReimbursementService {
       submittedById,
       submittedAt: new Date(),
       purchaseLists,
+      // 新增字段
+      platformShippingFee: dto.platformShippingFee,
+      platformPackagingFee: dto.platformPackagingFee,
+      customFees: dto.customFees || [],
     });
 
     // 保存报销单

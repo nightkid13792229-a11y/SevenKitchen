@@ -36,9 +36,10 @@ import { DogService, DOG_REPOSITORY, DOG_BREED_REPOSITORY, RECIPE_REPOSITORY } f
 import type { DogRepository } from '../../domain/dog/dog.repository';
 import type { DogBreedRepository } from '../../domain/dog/dog-breed.repository';
 import type { RecipeRepository } from '../../domain/recipe/recipe.repository';
-import { MEDICAL_RECORD_REPOSITORY, CHECKUP_RECORD_REPOSITORY } from '../../application/health/health.service';
+import { MEDICAL_RECORD_REPOSITORY, CHECKUP_RECORD_REPOSITORY, ALLERGY_RECORD_REPOSITORY } from '../../application/health/health.service';
 import type { MedicalRecordRepository } from '../../domain/health/health.repository';
 import type { CheckupRecordRepository } from '../../domain/health/health.repository';
+import type { AllergyRecordRepository } from '../../domain/health/health.repository';
 import { Inject } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
@@ -78,6 +79,8 @@ export class DogsController {
     private readonly medicalRecordRepository: MedicalRecordRepository,
     @Inject(CHECKUP_RECORD_REPOSITORY)
     private readonly checkupRecordRepository: CheckupRecordRepository,
+    @Inject(ALLERGY_RECORD_REPOSITORY)
+    private readonly allergyRecordRepository: AllergyRecordRepository,
     private readonly dogService: DogService,
     private readonly weightRecordService: WeightRecordService,
     private readonly cosService: TencentCosService,
@@ -446,6 +449,28 @@ export class DogsController {
       console.warn(`[DogsController] Failed to load checkup records for dog ${id}:`, error.message);
     }
 
+    // Load allergy records
+    let allergyRecords: any[] | null = null;
+    try {
+      const records = await this.allergyRecordRepository.findByDogId(id);
+      // Convert to DTO format
+      allergyRecords = records.map((record: any) => ({
+        id: record.id,
+        allergen: record.allergen,
+        allergenType: record.allergenType,
+        discoveryDate: record.discoveryDate.toISOString().split('T')[0], // Only YYYY-MM-DD
+        symptoms: record.symptoms,
+        severity: record.severity,
+        confirmedBy: record.confirmedBy,
+        treatment: record.treatment || null,
+        notes: record.notes || null,
+        attachments: record.attachments || [],
+      }));
+      console.log(`[DogsController] Loaded ${allergyRecords?.length || 0} allergy records for dog ${id}`);
+    } catch (error: any) {
+      console.warn(`[DogsController] Failed to load allergy records for dog ${id}:`, error.message);
+    }
+
     // Try to calculate preview, but don't fail if calculation fails
     let calcResult = null;
     try {
@@ -456,7 +481,7 @@ export class DogsController {
     }
 
     const response: DogDetailResponseDto = {
-      profile: this.mapDogToProfileDto(dog, breedMap, medicalRecords, checkupRecords),
+      profile: this.mapDogToProfileDto(dog, breedMap, medicalRecords, checkupRecords, allergyRecords),
       calcResult,
     };
 
@@ -645,6 +670,7 @@ export class DogsController {
     breedMap?: Map<string, string>,
     medicalRecords?: any[] | null,
     checkupRecords?: any[] | null,
+    allergyRecords?: any[] | null,
   ): DogProfileDto {
     // Determine breed name: custom breed name takes priority, then lookup from breed map
     const breedName = dog.customBreedName || breedMap?.get(dog.breedId) || null;
@@ -671,6 +697,7 @@ export class DogsController {
       medicalHistory: dog.medicalHistory,
       medicalRecords: medicalRecords || null,
       checkupRecords: checkupRecords || null,
+      allergyRecords: allergyRecords || null,
       allergyFoods: dog.allergyFoods,
       pickyFoods: dog.pickyFoods,
       cachedTargetFoodKcal: dog.cachedTargetFoodKcal,

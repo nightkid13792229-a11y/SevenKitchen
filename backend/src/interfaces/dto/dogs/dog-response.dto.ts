@@ -141,6 +141,43 @@ export class DogProfileDto {
     attachments?: string[] | null;
   }> | null;
 
+  @ApiPropertyOptional({
+    description: 'Allergy records (过敏记录)',
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        id: { type: 'string', description: '过敏记录ID' },
+        allergen: { type: 'string', description: '过敏原' },
+        allergenType: { type: 'string', description: '过敏原类型 (FOOD/ENVIRONMENTAL/MEDICATION)' },
+        discoveryDate: { type: 'string', description: '发现日期 (ISO 8601)' },
+        symptoms: { type: 'string', description: '症状' },
+        severity: { type: 'string', description: '严重程度 (MILD/MODERATE/SEVERE)' },
+        confirmedBy: { type: 'string', description: '确认方 (VET/OWNER)' },
+        treatment: { type: 'string', description: '治疗方案', nullable: true },
+        notes: { type: 'string', description: '备注', nullable: true },
+        attachments: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '检测报告文件URL数组',
+        },
+      },
+    },
+    nullable: true,
+  })
+  allergyRecords?: Array<{
+    id: string;
+    allergen: string;
+    allergenType: string;
+    discoveryDate: string;
+    symptoms: string;
+    severity: string;
+    confirmedBy: string;
+    treatment?: string | null;
+    notes?: string | null;
+    attachments: string[];
+  }> | null;
+
   @ApiProperty({ example: 500 })
   cachedTargetFoodKcal!: number;
 }

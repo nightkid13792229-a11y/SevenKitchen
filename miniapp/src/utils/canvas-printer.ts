@@ -501,3 +501,361 @@ function formatDateTime(dateStr: string): string {
   const minutes = String(date.getMinutes()).padStart(2, '0');
   return `${year}-${month}-${day} ${hours}:${minutes}`;
 }
+
+// ==================== 批量制作单打印 ====================
+
+export interface BatchGuideData {
+  productionDate: string;
+  totalBatches: number;
+  recipes: BatchRecipe[];
+}
+
+export interface BatchRecipe {
+  recipeId: string;
+  recipeName: string;
+  recipeVersion: string;
+  totalPots: number;
+  totalProductionG: number;
+  packagingUnits: BatchPackagingUnit[];
+}
+
+export interface BatchPackagingUnit {
+  unitId: string;
+  potNumber: number;
+  totalPots: number;
+  totalProductionG: number;
+  orderItems: BatchOrderItem[];
+  ingredientsUsage?: BatchIngredient[];
+}
+
+export interface BatchOrderItem {
+  orderItemId: string;
+  dogName: string;
+  packageSpecG: number;
+  packageCount: number;
+}
+
+export interface BatchIngredient {
+  name: string;
+  amount: number;
+  unit: string;
+}
+
+/**
+ * 绘制批量制作单（A4竖版，支持多页）
+ */
+export async function drawBatchGuidePrint(batchData: BatchGuideData): Promise<string[]> {
+  const pages: string[] = [];
+  const ctx = uni.createCanvasContext('printCanvas');
+
+  // 第一页：封面页（汇总信息）
+  pages.push(...(await drawCoverPage(ctx, batchData)));
+
+  // 每个食谱创建一页
+  for (const recipe of batchData.recipes) {
+    for (const unit of recipe.packagingUnits) {
+      pages.push(await drawPotPage(ctx, recipe, unit));
+    }
+  }
+
+  return pages;
+}
+
+/**
+ * 绘制封面页
+ */
+async function drawCoverPage(ctx: any, batchData: BatchGuideData): Promise<string[]> {
+  return new Promise((resolve, reject) => {
+    // 绘制白色背景
+    ctx.setFillStyle(COLORS.background);
+    ctx.fillRect(0, 0, A4_WIDTH, A4_HEIGHT);
+
+    let y = PADDING;
+
+    // 标题
+    ctx.setFillStyle(COLORS.title);
+    ctx.setFontSize(48);
+    ctx.setTextAlign('center');
+    ctx.fillText('批量制作单', A4_WIDTH / 2, y);
+    y += 80;
+
+    // 生产日期
+    ctx.setFillStyle(COLORS.subtitle);
+    ctx.setFontSize(28);
+    ctx.fillText(`生产日期：${batchData.productionDate}`, A4_WIDTH / 2, y);
+    y += 60;
+
+    // 统计信息
+    ctx.setFillStyle(COLORS.text);
+    ctx.setFontSize(26);
+    ctx.setTextAlign('left');
+
+    const totalPots = batchData.recipes.reduce((sum, r) => sum + r.totalPots, 0);
+    const totalWeight = batchData.recipes.reduce((sum, r) => sum + r.totalProductionG, 0);
+
+    const stats = [
+      `食谱数量：${batchData.recipes.length}个`,
+      `总锅数：${totalPots}锅`,
+      `总产量：${formatDecimal(totalWeight)}g`,
+    ];
+
+    stats.forEach((stat) => {
+      ctx.fillText(stat, PADDING, y);
+      y += 40;
+    });
+
+    y += 40;
+
+    // 食谱列表
+    ctx.setFillStyle(COLORS.sectionTitle);
+    ctx.setFontSize(30);
+    ctx.setTextAlign('left');
+    ctx.fillText('食谱清单', PADDING, y);
+    y += 40;
+
+    batchData.recipes.forEach((recipe, index) => {
+      ctx.setFillStyle(COLORS.text);
+      ctx.setFontSize(24);
+      ctx.fillText(
+        `${index + 1}. ${recipe.recipeName} v${recipe.recipeVersion} - ${recipe.totalPots}锅`,
+        PADDING,
+        y
+      );
+      y += 35;
+    });
+
+    // 页脚
+    drawFooter(ctx, A4_HEIGHT - 80);
+
+    // 生成图片
+    ctx.draw(false, () => {
+      uni.canvasToTempFilePath({
+        canvasId: 'printCanvas',
+        x: 0,
+        y: 0,
+        width: A4_WIDTH,
+        height: A4_HEIGHT,
+        destWidth: A4_WIDTH * 2,
+        destHeight: A4_HEIGHT * 2,
+        success: (res) => {
+          resolve([res.tempFilePath]);
+        },
+        fail: (err) => {
+          console.error('生成封面页失败', err);
+          reject(err);
+        },
+      });
+    });
+  });
+}
+
+/**
+ * 绘制单锅详情页
+ */
+async function drawPotPage(
+  ctx: any,
+  recipe: BatchRecipe,
+  unit: BatchPackagingUnit
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    // 绘制白色背景
+    ctx.setFillStyle(COLORS.background);
+    ctx.fillRect(0, 0, A4_WIDTH, A4_HEIGHT);
+
+    let y = PADDING;
+
+    // 标题
+    ctx.setFillStyle(COLORS.title);
+    ctx.setFontSize(36);
+    ctx.setTextAlign('center');
+    ctx.fillText(
+      `${recipe.recipeName} v${recipe.recipeVersion} - 第${unit.potNumber}锅/共${unit.totalPots}锅`,
+      A4_WIDTH / 2,
+      y
+    );
+    y += 60;
+
+    // 产量信息
+    ctx.setFillStyle(COLORS.subtitle);
+    ctx.setFontSize(24);
+    ctx.fillText(`产量：${formatDecimal(unit.totalProductionG)}g`, A4_WIDTH / 2, y);
+    y += 60;
+
+    // 分装订单
+    if (unit.orderItems && unit.orderItems.length > 0) {
+      y = drawPackagingList(ctx, unit.orderItems, y);
+    }
+
+    // 原料清单
+    if (unit.ingredientsUsage && unit.ingredientsUsage.length > 0) {
+      y = drawIngredientsListSimple(ctx, unit.ingredientsUsage, y);
+    }
+
+    // 页脚
+    drawFooter(ctx, A4_HEIGHT - 80);
+
+    // 生成图片
+    ctx.draw(false, () => {
+      uni.canvasToTempFilePath({
+        canvasId: 'printCanvas',
+        x: 0,
+        y: 0,
+        width: A4_WIDTH,
+        height: A4_HEIGHT,
+        destWidth: A4_WIDTH * 2,
+        destHeight: A4_HEIGHT * 2,
+        success: (res) => {
+          resolve(res.tempFilePath);
+        },
+        fail: (err) => {
+          console.error('生成锅详情页失败', err);
+          reject(err);
+        },
+      });
+    });
+  });
+}
+
+/**
+ * 绘制分装订单列表（简化版）
+ */
+function drawPackagingList(ctx: any, orderItems: BatchOrderItem[], y: number): number {
+  y += 20;
+
+  // 标题
+  ctx.setFillStyle(COLORS.sectionTitle);
+  ctx.setFontSize(26);
+  ctx.setTextAlign('left');
+  ctx.fillText(`分装订单（${orderItems.length}个）`, PADDING, y);
+  y += 30;
+
+  // 表头
+  const cardPadding = 20;
+  const cardHeight = 100;
+  const columnWidth = 280;
+
+  // 分组显示（每组4个）
+  for (let group = 0; group < Math.ceil(orderItems.length / 4); group++) {
+    const startIdx = group * 4;
+    const endIdx = Math.min(startIdx + 4, orderItems.length);
+    const groupOrders = orderItems.slice(startIdx, endIdx);
+
+    const startX = PADDING;
+
+    groupOrders.forEach((order, index) => {
+      const cardX = startX + index * (columnWidth + 20);
+      const cardY = y;
+
+      // 绘制边框
+      ctx.setStrokeStyle(COLORS.border);
+      ctx.setLineWidth(2);
+      ctx.strokeRect(cardX, cardY, columnWidth, cardHeight);
+
+      // 标题
+      ctx.setFillStyle(COLORS.sectionTitle);
+      ctx.setFontSize(24);
+      ctx.setTextAlign('center');
+      ctx.fillText(`订单${startIdx + index + 1}`, cardX + columnWidth / 2, cardY + 30);
+
+      // 详情
+      ctx.setFillStyle(COLORS.text);
+      ctx.setFontSize(20);
+      ctx.setTextAlign('left');
+
+      let infoY = cardY + 55;
+      const fields = [
+        { label: '狗狗', value: order.dogName },
+        { label: '规格', value: `${order.packageSpecG}g/袋` },
+        { label: '数量', value: `${order.packageCount}袋` },
+      ];
+
+      fields.forEach((field) => {
+        ctx.setFillStyle(COLORS.textSecondary);
+        ctx.fillText(field.label + '：', cardX + cardPadding, infoY);
+
+        ctx.setFillStyle(COLORS.text);
+        ctx.fillText(field.value, cardX + cardPadding + 80, infoY);
+
+        infoY += 24;
+      });
+    });
+
+    y += cardHeight + 30;
+  }
+
+  return y;
+}
+
+/**
+ * 绘制原料清单（简化版）
+ */
+function drawIngredientsListSimple(ctx: any, ingredients: BatchIngredient[], y: number): number {
+  y += 20;
+
+  // 标题
+  ctx.setFillStyle(COLORS.sectionTitle);
+  ctx.setFontSize(26);
+  ctx.setTextAlign('center');
+  ctx.fillText(`原料清单（共${ingredients.length}种）`, A4_WIDTH / 2, y);
+  y += 30;
+
+  // 表格配置
+  const headerHeight = 45;
+  const rowHeight = 40;
+  const colName = 400;
+  const colAmount = CONTENT_WIDTH - colName;
+
+  // 绘制表头
+  ctx.setFillStyle(COLORS.highlight);
+  ctx.fillRect(PADDING, y, CONTENT_WIDTH, headerHeight);
+
+  ctx.setStrokeStyle(COLORS.border);
+  ctx.setLineWidth(2);
+  ctx.strokeRect(PADDING, y, CONTENT_WIDTH, headerHeight);
+
+  ctx.setFillStyle(COLORS.sectionTitle);
+  ctx.setFontSize(24);
+  ctx.setTextAlign('center');
+
+  ctx.fillText('原料名称', PADDING + colName / 2, y + 32);
+  ctx.fillText('用量', PADDING + colName + colAmount / 2, y + 32);
+
+  y += headerHeight;
+
+  // 绘制原料列表
+  ingredients.forEach((ingredient, index) => {
+    // 背景色
+    if (index % 2 === 0) {
+      ctx.setFillStyle('#fafafa');
+      ctx.fillRect(PADDING, y, CONTENT_WIDTH, rowHeight);
+    }
+
+    // 边框
+    ctx.setStrokeStyle(COLORS.border);
+    ctx.setLineWidth(1);
+    ctx.strokeRect(PADDING, y, CONTENT_WIDTH, rowHeight);
+
+    // 竖向分隔线
+    ctx.beginPath();
+    ctx.moveTo(PADDING + colName, y);
+    ctx.lineTo(PADDING + colName, y + rowHeight);
+    ctx.stroke();
+
+    // 文字
+    ctx.setFontSize(22);
+    ctx.setTextAlign('center');
+
+    ctx.setFillStyle(COLORS.text);
+    ctx.fillText(ingredient.name, PADDING + colName / 2, y + 27);
+
+    ctx.fillText(
+      `${formatDecimal(ingredient.amount)}${ingredient.unit}`,
+      PADDING + colName + colAmount / 2,
+      y + 27
+    );
+
+    y += rowHeight;
+  });
+
+  return y + 20;
+}

@@ -30,7 +30,7 @@
       <view v-else-if="purchaseLists.length === 0" class="empty-state">
         <text class="empty-icon">📋</text>
         <text class="empty-text">暂无采购清单</text>
-        <text class="empty-hint">点击下方按钮生成采购清单</text>
+        <text class="empty-hint">点击下方按钮生成今日采购清单</text>
       </view>
 
       <!-- 采购清单列表 -->
@@ -75,6 +75,13 @@
               <text class="value">{{ formatDate(list.completedAt) }}</text>
             </view>
           </view>
+
+          <!-- 删除清单按钮 (仅PENDING状态且未关联报销单时显示) -->
+          <view v-if="list.status === 'PENDING' && !list.reimbursementId" class="item-footer">
+            <view class="delete-list-btn" @tap.stop="confirmDeletePurchaseList(list.id)">
+              删除清单
+            </view>
+          </view>
         </view>
       </view>
 
@@ -86,8 +93,11 @@
 
     <!-- 底部操作栏 -->
     <view class="bottom-actions">
+      <button class="action-btn secondary" @tap="previewList">
+        <text>预览采购需求</text>
+      </button>
       <button class="action-btn primary" @tap="generateList" :loading="generating">
-        <text v-if="!generating">生成采购清单</text>
+        <text v-if="!generating">生成今日采购清单</text>
         <text v-else>生成中...</text>
       </button>
     </view>
@@ -102,6 +112,7 @@ import {
   generatePurchaseList,
   completePurchase as completePurchaseApi,
   startPurchase as startPurchaseApi,
+  deletePurchaseList,
 } from '@/api/purchasing';
 
 // 状态筛选选项
@@ -122,6 +133,13 @@ const pageSize = 20;
 const total = ref(0);
 const hasMore = computed(() => purchaseLists.value.length < total.value);
 const isMounted = ref(false);
+
+// 预览采购需求 - 跳转到预览页面
+const previewList = () => {
+  uni.navigateTo({
+    url: '/pages/staff-purchasing/preview',
+  });
+};
 
 // 页面加载
 onMounted(() => {
@@ -192,11 +210,11 @@ const onStatusChange = (e: any) => {
   loadPurchaseLists(true);
 };
 
-// 生成采购清单
+// 生成今日采购清单
 const generateList = () => {
   uni.showModal({
-    title: '生成采购清单',
-    content: '将根据当前待生产的订单生成采购清单，确认继续？',
+    title: '生成今日采购清单',
+    content: '将根据今日制作日期的已付款订单生成采购清单，确认继续？',
     success: async (res) => {
       if (res.confirm) {
         generating.value = true;
@@ -338,6 +356,33 @@ const formatDateTime = (dateStr: string) => {
   const hours = date.getHours().toString().padStart(2, '0');
   const minutes = date.getMinutes().toString().padStart(2, '0');
   return `${month}/${day} ${hours}:${minutes}`;
+};
+
+// 确认删除采购清单
+const confirmDeletePurchaseList = (id: string) => {
+  uni.showModal({
+    title: '删除采购清单',
+    content: '确认删除该采购清单？删除后所有关联订单将回退到"已付款"状态',
+    confirmColor: '#ff4d4f',
+    success: async (res) => {
+      if (res.confirm) {
+        try {
+          const response: any = await deletePurchaseList(id);
+
+          if (response.code === 0) {
+            uni.showToast({ title: '删除成功', icon: 'success' });
+            // 刷新列表
+            loadPurchaseLists(true);
+          } else {
+            uni.showToast({ title: response.message || '删除失败', icon: 'none' });
+          }
+        } catch (error: any) {
+          console.error('删除采购清单失败', error);
+          uni.showToast({ title: error.message || '删除失败', icon: 'none' });
+        }
+      }
+    },
+  });
 };
 </script>
 
@@ -527,6 +572,27 @@ const formatDateTime = (dateStr: string) => {
     }
   }
 
+  .item-footer {
+    padding-top: 16rpx;
+    border-top: 1rpx solid #f5f5f5;
+    display: flex;
+    justify-content: flex-end;
+    align-items: center;
+
+    .delete-list-btn {
+      padding: 12rpx 32rpx;
+      background: linear-gradient(135deg, #fff1f0 0%, #ffccc7 100%);
+      color: #cf1322;
+      border-radius: 8rpx;
+      font-size: 24rpx;
+      font-weight: 500;
+
+      &:active {
+        opacity: 0.8;
+      }
+    }
+  }
+
   .item-actions {
     padding-top: 16rpx;
     border-top: 1rpx solid #f5f5f5;
@@ -582,15 +648,25 @@ const formatDateTime = (dateStr: string) => {
   background-color: #fff;
   border-top: 1rpx solid #e5e5e5;
   padding-bottom: calc(24rpx + env(safe-area-inset-bottom));
+  display: flex;
+  gap: 16rpx;
 }
 
 .action-btn {
-  width: 100%;
+  flex: 1;
   height: 96rpx;
   border-radius: 48rpx;
   font-size: 32rpx;
   font-weight: 500;
   border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &.secondary {
+    background: linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%);
+    color: #096dd9;
+  }
 
   &.primary {
     background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);

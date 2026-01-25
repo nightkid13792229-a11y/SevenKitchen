@@ -100,13 +100,17 @@ const goBack = () => {
 };
 
 const printGuide = () => {
-  // 制作单已经在页面上了，用户可以直接查看
-  // 这里可以添加打印功能，但目前先提示用户已显示
-  uni.showModal({
-    title: '提示',
-    content: '制作单已完整显示在当前页面，您可以直接查看所有批次的生产信息。如需打印，请截图保存或连接打印机。',
-    showCancel: false,
-    confirmText: '知道了',
+  if (!guideData.value) return;
+
+  // 获取后端地址（从环境变量或配置中获取）
+  const baseUrl = 'http://1.14.3.2:3000'; // TODO: 从配置文件读取
+
+  // 构建打印页面URL
+  const printUrl = `${baseUrl}/batch-print.html?data=${encodeURIComponent(JSON.stringify(guideData.value))}`;
+
+  // 跳转到H5打印页面
+  uni.navigateTo({
+    url: `/pages/common/webview?url=${encodeURIComponent(printUrl)}`,
   });
 };
 </script>

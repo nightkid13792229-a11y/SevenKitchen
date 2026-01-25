@@ -12,6 +12,27 @@
 
     <!-- 详情内容 -->
     <view v-else-if="purchaseList" class="detail-content">
+      <!-- 日期变更警告横幅 -->
+      <view v-if="dateChanges.hasChanges" class="date-change-warning">
+        <view class="warning-header">
+          <text class="warning-icon">⚠️</text>
+          <text class="warning-title">检测到 {{ dateChanges.changedOrders.length }} 个订单的制作日期已变更</text>
+        </view>
+        <view class="warning-list">
+          <view
+            v-for="(order, index) in dateChanges.changedOrders"
+            :key="index"
+            class="warning-item"
+          >
+            <text class="order-info">{{ order.orderNumber }}: {{ order.originalDate }} → {{ order.currentDate }}</text>
+            <text class="order-detail">{{ order.customerName }} · {{ order.dogName }}</text>
+          </view>
+        </view>
+        <view class="warning-actions">
+          <button class="warning-btn ignore" @tap="ignoreDateChanges">忽略</button>
+        </view>
+      </view>
+
       <!-- 状态卡片 -->
       <view class="section status-card">
         <view class="card-header">
@@ -37,102 +58,91 @@
         </view>
       </view>
 
-      <!-- 额外采购记录（已开始采购且有记录时显示） -->
-      <view v-if="purchaseList.startedAt && extraRecords.length > 0" class="section extra-records-section">
-        <view class="section-header">
-          <text class="section-title">📦 额外采购记录 ({{ extraRecords.length }})</text>
-        </view>
-        <view class="divider"></view>
-
-        <!-- 额外采购记录列表 -->
-        <view class="extra-records-list">
-          <view
-            v-for="record in extraRecords"
-            :key="record.id"
-            class="extra-record-item"
-          >
-            <view class="record-main">
-              <text class="record-name">{{ record.ingredientName }}</text>
-              <text class="record-detail">{{ record.actualQuantity }}g · ¥{{ record.actualCost.toFixed(2) }} · {{ record.purchaseChannel }}</text>
-            </view>
-            <view class="record-meta">
-              <text class="record-time">{{ formatFullDateTime(record.createdAt) }}</text>
-            </view>
-            <view v-if="purchaseList.status === 'PENDING' && !purchaseList.reimbursementId" class="record-action">
-              <button class="delete-btn" @tap="deleteRecord(record.id)">删除</button>
-            </view>
-          </view>
-        </view>
-
-        <!-- 快捷添加额外采购 -->
-        <view v-if="purchaseList.status === 'PENDING'" class="quick-add-extra">
-          <button class="quick-add-btn" @tap="openExtraRecordForm">
-            + 额外采购
-          </button>
-        </view>
-      </view>
-
       <!-- 原料明细 -->
       <view class="section">
         <text class="section-title">原料明细 ({{ items.length }})</text>
 
-        <!-- 原料列表 -->
-        <view v-if="items.length > 0" class="items-list">
+        <!-- 按类型分组显示原料 -->
+        <view v-if="groupedItems.length > 0" class="grouped-items">
           <view
-            v-for="(item, index) in items"
-            :key="index"
-            class="item-card"
+            v-for="group in groupedItems"
+            :key="group.type"
+            class="ingredient-group"
           >
-            <!-- 原料基本信息（始终显示） -->
-            <view class="item-basic">
-              <view class="item-info">
-                <text class="item-name">{{ item.ingredientName || '未知原料' }}</text>
-                <view v-if="item.purchaseChannel || item.productModel" class="item-specs">
-                  <text v-if="item.purchaseChannel" class="spec">{{ item.purchaseChannel }}</text>
-                  <text v-if="item.productModel" class="spec">{{ item.productModel }}</text>
-                </view>
-                <view class="item-quantity">
-                  <text class="quantity-label">需求: </text>
-                  <text class="quantity-value">{{ formatQuantity(item) }}</text>
-                  <text class="quantity-unit">{{ getDisplayUnit(item) }}</text>
-                </view>
-              </view>
-
-              <!-- 开始采购后显示的添加按钮 -->
-              <view v-if="purchaseList.startedAt" class="item-action">
-                <button class="continue-add-btn" @tap="handleContinueAdd(item)">添加采购记录</button>
-              </view>
+            <!-- 类型标题 -->
+            <view class="group-header">
+              <text class="group-title">{{ getTypeLabel(group.type) }} ({{ group.items.length }})</text>
             </view>
 
-            <!-- 未开始采购：提示 -->
-            <view v-if="!purchaseList.startedAt" class="item-disabled">
-              <text class="disabled-text">💡 请先点击"开始采购"</text>
-            </view>
-
-            <!-- 已开始采购且有记录：显示采购记录列表 -->
-            <view v-if="purchaseList.startedAt && item.records.length > 0" class="item-expanded">
-              <view class="divider"></view>
-
-              <!-- 采购记录列表 -->
-              <view class="records-list">
-                <view
-                  v-for="record in item.records"
-                  :key="record.id"
-                  class="record-item"
-                >
-                  <view class="record-main">
-                    <view class="record-info">
-                      <text class="record-quantity">{{ record.actualQuantity }}g</text>
-                      <text class="record-cost">¥{{ record.actualCost.toFixed(2) }}</text>
-                      <text class="record-channel">{{ record.purchaseChannel }}</text>
+            <!-- 该类型的原料列表 -->
+            <view class="items-list">
+              <view
+                v-for="(item, index) in group.items"
+                :key="index"
+                class="item-card"
+              >
+                <!-- 原料基本信息（始终显示） -->
+                <view class="item-basic">
+                  <view class="item-info">
+                    <text class="item-name">{{ item.ingredientName || '未知原料' }}</text>
+                    <view v-if="item.purchaseChannel || item.productModel" class="item-specs">
+                      <text v-if="item.purchaseChannel" class="spec">{{ item.purchaseChannel }}</text>
+                      <text v-if="item.productModel" class="spec">{{ item.productModel }}</text>
                     </view>
-                    <view class="record-details">
-                      <text v-if="record.productModel" class="detail">{{ record.productModel }}</text>
-                      <text class="detail-time">{{ formatFullDateTime(record.createdAt) }}</text>
+                    <view class="item-quantity">
+                      <text class="quantity-label">需求: </text>
+                      <text class="quantity-value">{{ formatQuantity(item) }}</text>
+                      <text class="quantity-unit">{{ getDisplayUnit(item) }}</text>
                     </view>
                   </view>
-                  <view v-if="purchaseList.status === 'PENDING' && !purchaseList.reimbursementId" class="record-actions">
-                    <button class="delete-btn" @tap="deleteRecord(record.id)">删除</button>
+
+                  <view class="item-actions">
+                    <!-- 删除原料按钮 (仅PENDING状态且未开始采购时显示) -->
+                    <button
+                      v-if="purchaseList.status === 'PENDING' && !purchaseList.startedAt"
+                      class="delete-item-btn"
+                      @tap="confirmDeleteItem(item)"
+                    >
+                      删除
+                    </button>
+
+                    <!-- 开始采购后显示的添加按钮 -->
+                    <button
+                      v-if="purchaseList.startedAt"
+                      class="continue-add-btn"
+                      @tap="handleContinueAdd(item)"
+                    >
+                      添加采购记录
+                    </button>
+                  </view>
+                </view>
+
+                <!-- 已开始采购且有记录：显示采购记录列表 -->
+                <view v-if="purchaseList.startedAt && item.records.length > 0" class="item-expanded">
+                  <view class="divider"></view>
+
+                  <!-- 采购记录列表 -->
+                  <view class="records-list">
+                    <view
+                      v-for="record in item.records"
+                      :key="record.id"
+                      class="record-item"
+                    >
+                      <view class="record-main">
+                        <view class="record-info">
+                          <text class="record-quantity">{{ record.actualQuantity }}g</text>
+                          <text class="record-cost">¥{{ record.actualCost.toFixed(2) }}</text>
+                          <text class="record-channel">{{ record.purchaseChannel }}</text>
+                        </view>
+                        <view class="record-details">
+                          <text v-if="record.productModel" class="detail">{{ record.productModel }}</text>
+                          <text class="detail-time">{{ formatFullDateTime(record.createdAt) }}</text>
+                        </view>
+                      </view>
+                      <view v-if="purchaseList.status === 'PENDING' && !purchaseList.reimbursementId" class="record-actions">
+                        <button class="delete-btn" @tap="deleteRecord(record.id)">删除</button>
+                      </view>
+                    </view>
                   </view>
                 </view>
               </view>
@@ -142,8 +152,9 @@
 
         <!-- 空状态 -->
         <view v-else class="empty-items">
-          <text class="empty-text">该分类暂无原料</text>
+          <text class="empty-text">该采购清单暂无原料</text>
         </view>
+
       </view>
 
       <!-- 关联订单 -->
@@ -177,11 +188,8 @@
           开始采购
         </button>
 
-        <!-- 已开始采购：显示额外采购和确认完成按钮 -->
+        <!-- 已开始采购：显示确认完成按钮 -->
         <template v-else>
-          <button class="action-btn extra" @tap="openExtraRecordForm">
-            额外采购
-          </button>
           <button
             class="action-btn complete"
             @tap="completePurchase"
@@ -226,28 +234,17 @@
     <view v-if="showRecordForm" class="record-form-modal" @tap="closeRecordForm">
       <view class="modal-content" @tap.stop>
         <view class="modal-header">
-          <text class="modal-title">{{ selectedIngredient ? '添加采购记录' : '额外采购原料' }}</text>
+          <text class="modal-title">添加采购记录</text>
           <text class="modal-close" @tap="closeRecordForm">×</text>
         </view>
 
         <view class="modal-body">
           <!-- 清单内原料：原料名称只读 -->
-          <view v-if="selectedIngredient" class="form-section">
+          <view class="form-section">
             <text class="form-label">原料</text>
             <view class="form-value readonly">
               {{ selectedIngredient.ingredientName }}
             </view>
-          </view>
-
-          <!-- 额外采购：原料名称可输入 -->
-          <view v-else class="form-section">
-            <text class="form-label">原料名称 *</text>
-            <input
-              v-model="extraForm.ingredientName"
-              class="form-input"
-              placeholder="请输入原料名称"
-              placeholder-class="input-placeholder"
-            />
           </view>
 
           <!-- 采购渠道 -->
@@ -331,15 +328,54 @@ import {
   getPurchaseRecords,
   deletePurchaseRecord as deletePurchaseRecordApi,
   addPurchaseRecord,
+  removeItemFromList,
+  checkOrderDateChanges,
 } from '@/api/purchasing';
 
 // 状态管理
 const purchaseListId = ref('');
 const purchaseList = ref<any>(null);
 const items = ref<any[]>([]);
-const extraRecords = ref<any[]>([]);
 const loading = ref(true);
 const completing = ref(false);
+
+// 按类型分组的原料（计算属性）
+const groupedItems = computed(() => {
+  if (items.value.length === 0) {
+    return [];
+  }
+
+  // 定义类型顺序
+  const typeOrder = ['FOOD', 'SUPPLEMENT', 'PACKAGING'];
+
+  // 按类型分组
+  const groups = new Map<string, any[]>();
+  items.value.forEach(item => {
+    const type = item.type || 'FOOD';
+    if (!groups.has(type)) {
+      groups.set(type, []);
+    }
+    groups.get(type)!.push(item);
+  });
+
+  // 按定义的顺序返回分组
+  return typeOrder
+    .filter(type => groups.has(type))
+    .map(type => ({
+      type,
+      items: groups.get(type)!,
+    }));
+});
+
+// 获取类型标签
+const getTypeLabel = (type: string) => {
+  const labels: Record<string, string> = {
+    'FOOD': '🥩 食材',
+    'SUPPLEMENT': '💊 补剂',
+    'PACKAGING': '📦 包装材料',
+  };
+  return labels[type] || type;
+};
 
 // 采购表单相关
 const showRecordForm = ref(false);
@@ -354,8 +390,10 @@ const recordForm = ref({
   notes: '',
 });
 
-const extraForm = ref({
-  ingredientName: '',
+// 日期变更检测
+const dateChanges = ref<any>({
+  hasChanges: false,
+  changedOrders: [],
 });
 
 // 页面加载
@@ -383,6 +421,9 @@ const loadDetail = async () => {
       if (res.data.startedAt) {
         await loadPurchaseRecords();
       }
+
+      // 检测日期变更
+      await checkDateChanges();
     } else {
       uni.showToast({ title: res.message || '加载失败', icon: 'none' });
     }
@@ -394,6 +435,18 @@ const loadDetail = async () => {
   }
 };
 
+// 检测日期变更
+const checkDateChanges = async () => {
+  try {
+    const res: any = await checkOrderDateChanges(purchaseListId.value);
+    if (res.code === 0) {
+      dateChanges.value = res.data;
+    }
+  } catch (error: any) {
+    console.error('检测日期变更失败', error);
+  }
+};
+
 // 加载采购记录并按原料分组
 const loadPurchaseRecords = async () => {
   try {
@@ -401,20 +454,15 @@ const loadPurchaseRecords = async () => {
     if (res.code === 0) {
       const allRecords = res.data || [];
 
-      // 分离额外采购和清单内采购
-      extraRecords.value = allRecords.filter((r: any) => r.isExtra);
-
       // 按原料ID分组
       const grouped = new Map<string, any[]>();
-      allRecords
-        .filter((r: any) => !r.isExtra)
-        .forEach((record: any) => {
-          const key = record.ingredientId;
-          if (!grouped.has(key)) {
-            grouped.set(key, []);
-          }
-          grouped.get(key)!.push(record);
-        });
+      allRecords.forEach((record: any) => {
+        const key = record.ingredientId;
+        if (!grouped.has(key)) {
+          grouped.set(key, []);
+        }
+        grouped.get(key)!.push(record);
+      });
 
       // 将采购记录关联到对应的原料卡片
       items.value.forEach(item => {
@@ -426,27 +474,10 @@ const loadPurchaseRecords = async () => {
   }
 };
 
-// 点击"添加采购记录"按钮 - 弹出表单
-const handleAddRecord = (item: any) => {
-  selectedIngredient.value = item;
-  resetRecordForm();
-  showRecordForm.value = true;
-};
-
 // 点击"继续添加采购记录"按钮
 const handleContinueAdd = (item: any) => {
   selectedIngredient.value = item;
   resetRecordForm();
-  showRecordForm.value = true;
-};
-
-// 打开额外采购表单
-const openExtraRecordForm = () => {
-  selectedIngredient.value = null;
-  resetRecordForm();
-  extraForm.value = {
-    ingredientName: '',
-  };
   showRecordForm.value = true;
 };
 
@@ -470,22 +501,9 @@ const resetRecordForm = () => {
 // 提交采购记录
 const submitRecord = async () => {
   // 表单验证
-  if (selectedIngredient.value) {
-    // 清单内原料：原料已自动填充
-    if (!recordForm.value.purchaseChannel || recordForm.value.purchaseChannel.trim().length === 0) {
-      uni.showToast({ title: '请输入采购渠道', icon: 'none' });
-      return;
-    }
-  } else {
-    // 额外采购：需要输入原料名称
-    if (!extraForm.value.ingredientName || extraForm.value.ingredientName.trim().length === 0) {
-      uni.showToast({ title: '请输入原料名称', icon: 'none' });
-      return;
-    }
-    if (!recordForm.value.purchaseChannel || recordForm.value.purchaseChannel.trim().length === 0) {
-      uni.showToast({ title: '请输入采购渠道', icon: 'none' });
-      return;
-    }
+  if (!recordForm.value.purchaseChannel || recordForm.value.purchaseChannel.trim().length === 0) {
+    uni.showToast({ title: '请输入采购渠道', icon: 'none' });
+    return;
   }
 
   if (!recordForm.value.actualQuantity || recordForm.value.actualQuantity.toString().trim().length === 0) {
@@ -526,19 +544,10 @@ const submitRecord = async () => {
       actualCost: cost,
       productModel: recordForm.value.productModel?.trim() || undefined,
       notes: recordForm.value.notes?.trim() || undefined,
+      purchaseItemId: selectedIngredient.value.id,
+      ingredientId: selectedIngredient.value.ingredientId,
+      ingredientName: selectedIngredient.value.ingredientName,
     };
-
-    if (selectedIngredient.value) {
-      // 清单内原料
-      data.purchaseItemId = selectedIngredient.value.id;
-      data.ingredientId = selectedIngredient.value.ingredientId;
-      data.ingredientName = selectedIngredient.value.ingredientName;
-    } else {
-      // 额外采购
-      data.purchaseItemId = 'extra';
-      data.ingredientId = 'extra';
-      data.ingredientName = extraForm.value.ingredientName.trim();
-    }
 
     const response: any = await addPurchaseRecord(purchaseListId.value, data);
 
@@ -766,6 +775,51 @@ const getDisplayUnit = (item: any) => {
   // 其他类型：使用quantityUnit
   return item.quantityUnit || '';
 };
+
+// ==========================================
+// 新增功能：日期变更处理
+// ==========================================
+
+// 忽略日期变更
+const ignoreDateChanges = () => {
+  dateChanges.value = {
+    hasChanges: false,
+    changedOrders: [],
+  };
+  uni.showToast({ title: '已忽略日期变更', icon: 'success' });
+};
+
+// ==========================================
+// 新增功能：删除原料
+// ==========================================
+
+// 确认删除原料
+const confirmDeleteItem = (item: any) => {
+  uni.showModal({
+    title: '删除原料',
+    content: `确认删除原料"${item.ingredientName}"？`,
+    success: async (res) => {
+      if (res.confirm) {
+        try {
+          const response: any = await removeItemFromList(purchaseListId.value, item.id);
+
+          if (response.code === 0) {
+            uni.showToast({ title: '删除成功', icon: 'success' });
+
+            // 刷新详情
+            await loadDetail();
+          } else {
+            uni.showToast({ title: response.message || '删除失败', icon: 'none' });
+          }
+        } catch (error: any) {
+          console.error('删除原料失败', error);
+          uni.showToast({ title: error.message || '删除失败', icon: 'none' });
+        }
+      }
+    },
+  });
+};
+
 </script>
 
 <style scoped lang="scss">
@@ -925,88 +979,33 @@ const getDisplayUnit = (item: any) => {
   }
 }
 
-// 额外采购记录区域
-.extra-records-section {
-  background: linear-gradient(135deg, #e8f5e9 0%, #f1f8f4 100%);
+// 原料分组容器
+.grouped-items {
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
 
-  .extra-records-list {
-    display: flex;
-    flex-direction: column;
-    gap: 16rpx;
-  }
+.ingredient-group {
+  background-color: #f9f9f9;
+  border-radius: 12rpx;
+  overflow: hidden;
 
-  .extra-record-item {
-    padding: 24rpx;
-    background-color: #fff;
-    border-radius: 12rpx;
-    border-left: 4rpx solid #52c41a;
+  .group-header {
+    background: linear-gradient(135deg, #f0f0f0 0%, #e8e8e8 100%);
+    padding: 16rpx 24rpx;
+    border-bottom: 1rpx solid #e5e5e5;
 
-    .record-main {
-      display: flex;
-      flex-direction: column;
-      gap: 8rpx;
-      margin-bottom: 12rpx;
-
-      .record-name {
-        font-size: 28rpx;
-        font-weight: 500;
-        color: #333;
-      }
-
-      .record-detail {
-        font-size: 24rpx;
-        color: #666;
-      }
-    }
-
-    .record-meta {
-      margin-bottom: 8rpx;
-
-      .record-time {
-        font-size: 22rpx;
-        color: #999;
-      }
-    }
-
-    .record-action {
-      display: flex;
-      justify-content: flex-end;
-
-      .delete-btn {
-        padding: 8rpx 24rpx;
-        background-color: #ff4d4f;
-        color: #fff;
-        border-radius: 8rpx;
-        font-size: 22rpx;
-        border: none;
-        line-height: 1.5;
-
-        &:active {
-          opacity: 0.8;
-        }
-      }
-    }
-  }
-
-  .quick-add-extra {
-    margin-top: 16rpx;
-
-    .quick-add-btn {
-      width: 100%;
-      height: 72rpx;
-      background-color: #1890ff;
-      color: #fff;
-      border-radius: 12rpx;
+    .group-title {
       font-size: 26rpx;
-      border: none;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-
-      &:active {
-        opacity: 0.8;
-      }
+      font-weight: bold;
+      color: #333;
     }
+  }
+
+  .items-list {
+    padding: 16rpx;
+    background-color: transparent;
   }
 }
 
@@ -1098,16 +1097,6 @@ const getDisplayUnit = (item: any) => {
           opacity: 0.8;
         }
       }
-    }
-  }
-
-  .item-disabled {
-    padding: 0 24rpx 24rpx;
-
-    .disabled-text {
-      font-size: 24rpx;
-      color: #999;
-      font-style: italic;
     }
   }
 
@@ -1272,12 +1261,6 @@ const getDisplayUnit = (item: any) => {
       background: linear-gradient(135deg, #52c41a 0%, #389e0d 100%);
       color: #fff;
       box-shadow: 0 8rpx 16rpx rgba(82, 196, 26, 0.3);
-    }
-
-    &.extra {
-      background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
-      color: #fff;
-      box-shadow: 0 8rpx 16rpx rgba(24, 144, 255, 0.3);
     }
 
     &.complete {
@@ -1471,6 +1454,127 @@ const getDisplayUnit = (item: any) => {
       background: linear-gradient(135deg, #faad14 0%, #d48806 100%);
       color: #fff;
     }
+
+    &:active {
+      opacity: 0.8;
+    }
+  }
+}
+
+// ==========================================
+// 新增样式：日期变更警告横幅
+// ==========================================
+.date-change-warning {
+  background: linear-gradient(135deg, #fff7e6 0%, #ffe7ba 100%);
+  margin: 0 32rpx 24rpx;
+  border-radius: 16rpx;
+  padding: 24rpx;
+  border-left: 6rpx solid #fa8c16;
+
+  .warning-header {
+    display: flex;
+    align-items: center;
+    gap: 12rpx;
+    margin-bottom: 16rpx;
+
+    .warning-icon {
+      font-size: 32rpx;
+    }
+
+    .warning-title {
+      font-size: 28rpx;
+      font-weight: bold;
+      color: #ad6800;
+    }
+  }
+
+  .warning-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12rpx;
+    margin-bottom: 16rpx;
+    padding: 16rpx;
+    background-color: rgba(255, 255, 255, 0.6);
+    border-radius: 8rpx;
+
+    .warning-item {
+      display: flex;
+      flex-direction: column;
+      gap: 4rpx;
+
+      .order-info {
+        font-size: 26rpx;
+        color: #ad6800;
+        font-weight: 500;
+      }
+
+      .order-detail {
+        font-size: 22rpx;
+        color: #8c6800;
+      }
+    }
+  }
+
+  .warning-actions {
+    display: flex;
+    gap: 12rpx;
+
+    .warning-btn {
+      flex: 1;
+      height: 72rpx;
+      border-radius: 12rpx;
+      font-size: 26rpx;
+      font-weight: 500;
+      border: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      &.ignore {
+        background-color: rgba(250, 140, 22, 0.1);
+        color: #ad6800;
+      }
+
+      &:active {
+        opacity: 0.8;
+      }
+    }
+  }
+}
+
+// ==========================================
+// 修改样式：原料卡片操作按钮
+// ==========================================
+.item-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  align-self: flex-end;
+
+  .delete-item-btn {
+    padding: 8rpx 20rpx;
+    background-color: #ff4d4f;
+    color: #fff;
+    border-radius: 8rpx;
+    font-size: 24rpx;
+    border: none;
+    line-height: 1.5;
+    white-space: nowrap;
+
+    &:active {
+      opacity: 0.8;
+    }
+  }
+
+  .continue-add-btn {
+    padding: 12rpx 20rpx;
+    background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+    color: #fff;
+    border-radius: 8rpx;
+    font-size: 24rpx;
+    border: none;
+    line-height: 1.5;
+    white-space: nowrap;
 
     &:active {
       opacity: 0.8;

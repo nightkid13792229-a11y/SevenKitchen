@@ -356,9 +356,15 @@ const printBatchProductionGuide = async () => {
       return;
     }
 
-    // 跳转到批量制作单展示页面
+    // 获取后端地址
+    const baseUrl = 'http://1.14.3.2:3001'; // TODO: 从配置文件读取
+
+    // 构建打印页面URL
+    const printUrl = `${baseUrl}/batch-print.html?data=${encodeURIComponent(JSON.stringify(response.data))}`;
+
+    // 跳转到H5打印页面
     uni.navigateTo({
-      url: `/pages/staff-production/batch-guide?data=${encodeURIComponent(JSON.stringify(response.data))}`,
+      url: `/pages/common/webview?url=${encodeURIComponent(printUrl)}`,
     });
   } catch (error: any) {
     uni.hideLoading();

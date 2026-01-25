@@ -542,11 +542,15 @@ const printTask = () => {
     createdBy: taskDetail.value.createdBy || '厨房管理员', // 添加创建人字段
   };
 
-  // 将数据编码后传递到打印页面
-  const encodedData = encodeURIComponent(JSON.stringify(printData));
+  // 获取后端地址
+  const baseUrl = 'http://1.14.3.2:3001'; // TODO: 从配置文件读取
 
+  // 构建打印页面URL
+  const printUrl = `${baseUrl}/task-print.html?data=${encodeURIComponent(JSON.stringify(printData))}`;
+
+  // 跳转到H5打印页面
   uni.navigateTo({
-    url: `/pages/staff-production/print?taskData=${encodedData}`,
+    url: `/pages/common/webview?url=${encodeURIComponent(printUrl)}`,
   });
 };
 

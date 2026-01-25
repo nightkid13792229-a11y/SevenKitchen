@@ -131,6 +131,22 @@ export class ReimbursementService {
     // 计算自定义费用总额
     const customFeesTotal = dto.customFees?.reduce((sum, fee) => sum + (fee.amount || 0), 0) || 0;
 
+    // 验证自定义费用数组中的每一项
+    if (dto.customFees && dto.customFees.length > 0) {
+      dto.customFees.forEach((fee, index) => {
+        if (!fee.description || fee.description.trim() === '') {
+          throw new BadRequestException(
+            `Custom fee at index ${index} must have a description`
+          );
+        }
+        if (fee.amount < 0) {
+          throw new BadRequestException(
+            `Custom fee at index ${index} has negative amount`
+          );
+        }
+      });
+    }
+
     // 验证总金额
     const calculatedTotal = purchaseListsTotal +
       (dto.platformShippingFee || 0) +

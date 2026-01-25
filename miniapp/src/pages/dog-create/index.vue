@@ -3487,6 +3487,638 @@ function getActivityMultiplier(level: string): string {
 
 // ========== 计算过程辅助函数结束 ==========
 
+// ========== 过敏记录函数开始 ==========
+
+/**
+ * 添加过敏记录
+ */
+function addAllergyRecord() {
+  isEditingAllergyRecord.value = false
+  currentAllergyRecordIndex.value = -1
+  currentAllergyRecord.value = {
+    allergen: '',
+    allergenType: 'FOOD',
+    discoveryDate: '',
+    symptoms: '',
+    severity: 'MILD',
+    confirmedBy: 'VET',
+    treatment: '',
+    notes: '',
+    attachments: []
+  }
+  showAllergyRecordModal.value = true
+}
+
+/**
+ * 编辑过敏记录
+ */
+function editAllergyRecord(index: number) {
+  isEditingAllergyRecord.value = true
+  currentAllergyRecordIndex.value = index
+  // 深拷贝当前记录
+  currentAllergyRecord.value = { ...formData.value.allergyRecords[index] }
+  showAllergyRecordModal.value = true
+}
+
+/**
+ * 删除过敏记录
+ */
+async function deleteAllergyRecord(index: number) {
+  const record = formData.value.allergyRecords[index]
+
+  // 如果是已有记录（有id），调用API删除
+  if (record.id && dogId.value) {
+    try {
+      uni.showModal({
+        title: '确认删除',
+        content: '确定要删除这条过敏记录吗？',
+        success: async (res) => {
+          if (res.confirm) {
+            try {
+              uni.showLoading({ title: '删除中...' })
+
+              await request({
+                url: `/dogs/${dogId.value}/allergies/${record.id}`,
+                method: 'DELETE'
+              })
+
+              // 从本地数组移除
+              formData.value.allergyRecords.splice(index, 1)
+
+              uni.hideLoading()
+              uni.showToast({
+                title: '删除成功',
+                icon: 'success',
+                duration: 1500
+              })
+            } catch (error: any) {
+              uni.hideLoading()
+              console.error('[DogCreate] Delete allergy record failed:', error)
+              uni.showToast({
+                title: error.message || '删除失败',
+                icon: 'none',
+                duration: 2000
+              })
+            }
+          }
+        }
+      })
+    } catch (error: any) {
+      console.error('[DogCreate] Delete allergy record failed:', error)
+      uni.showToast({
+        title: error.message || '删除失败',
+        icon: 'none',
+        duration: 2000
+      })
+    }
+  } else {
+    // 本地新建记录，直接删除
+    uni.showModal({
+      title: '确认删除',
+      content: '确定要删除这条过敏记录吗？',
+      success: (res) => {
+        if (res.confirm) {
+          formData.value.allergyRecords.splice(index, 1)
+          uni.showToast({
+            title: '删除成功',
+            icon: 'success',
+            duration: 1500
+          })
+        }
+      }
+    })
+  }
+}
+
+/**
+ * 关闭过敏记录弹窗
+ */
+function closeAllergyRecordModal() {
+  showAllergyRecordModal.value = false
+  currentAllergyRecord.value = {
+    allergen: '',
+    allergenType: 'FOOD',
+    discoveryDate: '',
+    symptoms: '',
+    severity: 'MILD',
+    confirmedBy: 'VET',
+    treatment: '',
+    notes: '',
+    attachments: []
+  }
+  // 清空附件存储
+  allergyAttachmentKeys.value = {}
+  allergyAttachmentNames.value = {}
+}
+
+/**
+ * 保存过敏记录
+ */
+async function saveAllergyRecord() {
+  // 验证必填字段
+  if (!currentAllergyRecord.value.allergen || currentAllergyRecord.value.allergen.trim() === '') {
+    uni.showToast({
+      title: '请输入过敏原',
+      icon: 'none',
+      duration: 2000
+    })
+    return
+  }
+
+  if (!currentAllergyRecord.value.discoveryDate) {
+    uni.showToast({
+      title: '请选择发现日期',
+      icon: 'none',
+      duration: 2000
+    })
+    return
+  }
+
+  if (!currentAllergyRecord.value.symptoms || currentAllergyRecord.value.symptoms.trim() === '') {
+    uni.showToast({
+      title: '请输入症状',
+      icon: 'none',
+      duration: 2000
+    })
+    return
+  }
+
+  // 编辑模式：调用 API 更新记录
+  if (isEditingAllergyRecord.value && dogId.value && currentAllergyRecord.value.id) {
+    try {
+      uni.showLoading({ title: '保存中...' })
+
+      const recordId = currentAllergyRecord.value.id
+      const updateData = {
+        allergen: currentAllergyRecord.value.allergen,
+        allergenType: currentAllergyRecord.value.allergenType,
+        discoveryDate: currentAllergyRecord.value.discoveryDate,
+        symptoms: currentAllergyRecord.value.symptoms,
+        severity: currentAllergyRecord.value.severity,
+        confirmedBy: currentAllergyRecord.value.confirmedBy,
+        treatment: currentAllergyRecord.value.treatment || null,
+        notes: currentAllergyRecord.value.notes || null,
+        attachments: currentAllergyRecord.value.attachments || []
+      }
+
+      await request({
+        url: `/dogs/${dogId.value}/allergies/${recordId}`,
+        method: 'PUT',
+        data: updateData
+      })
+
+      // 更新本地数据
+      formData.value.allergyRecords[currentAllergyRecordIndex.value] = {
+        id: recordId,
+        ...updateData
+      }
+
+      uni.hideLoading()
+      uni.showToast({
+        title: '更新成功',
+        icon: 'success',
+        duration: 1500
+      })
+
+      closeAllergyRecordModal()
+    } catch (error: any) {
+      uni.hideLoading()
+      console.error('[DogCreate] Update allergy record failed:', error)
+      uni.showToast({
+        title: error.message || '更新失败',
+        icon: 'none',
+        duration: 2000
+      })
+    }
+  } else {
+    // 新增模式：调用 API 创建记录
+    if (dogId.value) {
+      try {
+        uni.showLoading({ title: '保存中...' })
+
+        const createData = {
+          allergen: currentAllergyRecord.value.allergen,
+          allergenType: currentAllergyRecord.value.allergenType,
+          discoveryDate: currentAllergyRecord.value.discoveryDate,
+          symptoms: currentAllergyRecord.value.symptoms,
+          severity: currentAllergyRecord.value.severity,
+          confirmedBy: currentAllergyRecord.value.confirmedBy,
+          treatment: currentAllergyRecord.value.treatment || null,
+          notes: currentAllergyRecord.value.notes || null,
+          attachments: currentAllergyRecord.value.attachments || []
+        }
+
+        const response = await request({
+          url: `/dogs/${dogId.value}/allergies`,
+          method: 'POST',
+          data: createData
+        })
+
+        // 添加到本地列表
+        formData.value.allergyRecords.push({
+          id: response.data.id,
+          ...createData
+        })
+
+        uni.hideLoading()
+        uni.showToast({
+          title: '添加成功',
+          icon: 'success',
+          duration: 1500
+        })
+
+        closeAllergyRecordModal()
+      } catch (error: any) {
+        uni.hideLoading()
+        console.error('[DogCreate] Create allergy record failed:', error)
+        uni.showToast({
+          title: error.message || '添加失败',
+          icon: 'none',
+          duration: 2000
+        })
+      }
+    } else {
+      // 还没有dogId，添加到本地列表（稍后保存档案时提交）
+      formData.value.allergyRecords.push({ ...currentAllergyRecord.value })
+      uni.showToast({
+        title: '添加成功（请记得保存档案）',
+        icon: 'success',
+        duration: 2000
+      })
+
+      closeAllergyRecordModal()
+    }
+  }
+}
+
+/**
+ * 过敏原类型选择变更
+ */
+function onAllergenTypeChange(e: any) {
+  const index = e.detail.value
+  currentAllergyRecord.value.allergenType = allergenTypeOptions[index]
+}
+
+/**
+ * 严重程度选择变更
+ */
+function onSeverityChange(e: any) {
+  const index = e.detail.value
+  currentAllergyRecord.value.severity = severityOptions[index]
+}
+
+/**
+ * 确认方选择变更
+ */
+function onConfirmedByChange(e: any) {
+  const index = e.detail.value
+  currentAllergyRecord.value.confirmedBy = confirmedByOptions[index]
+}
+
+/**
+ * 过敏日期选择变更
+ */
+function onAllergyDateChange(e: any) {
+  currentAllergyRecord.value.discoveryDate = e.detail.value
+}
+
+/**
+ * 选择过敏检测图片
+ */
+function chooseAllergyImage() {
+  uni.chooseImage({
+    count: 9,
+    sizeType: ['compressed'],
+    sourceType: ['album', 'camera'],
+    success: (res) => {
+      res.tempFilePaths.forEach((filePath: string) => {
+        uploadAllergyFile(filePath, 'image')
+      })
+    },
+    fail: (err) => {
+      console.error('[DogCreate] Choose image failed:', err)
+      uni.showToast({
+        title: '选择图片失败',
+        icon: 'none',
+        duration: 2000
+      })
+    }
+  })
+}
+
+/**
+ * 选择过敏检测PDF
+ */
+function chooseAllergyPdf() {
+  uni.chooseMessageFile({
+    count: 5,
+    type: 'file',
+    extension: ['pdf'],
+    success: (res) => {
+      const validFiles = res.tempFiles.filter((file: any) => {
+        const fileName = file.name.toLowerCase()
+        return fileName.endsWith('.pdf')
+      })
+
+      if (validFiles.length === 0) {
+        uni.showToast({
+          title: '请选择PDF文件',
+          icon: 'none',
+          duration: 2000
+        })
+        return
+      }
+
+      validFiles.forEach((file: any) => {
+        uploadAllergyFile(file.path, 'pdf')
+      })
+    },
+    fail: (err) => {
+      console.error('[DogCreate] Choose PDF failed:', err)
+      uni.showToast({
+        title: '选择文件失败',
+        icon: 'none',
+        duration: 2000
+      })
+    }
+  })
+}
+
+/**
+ * 上传过敏检测文件
+ */
+function uploadAllergyFile(filePath: string, fileType: 'image' | 'pdf') {
+  if (uploadingFile.value) {
+    uni.showToast({
+      title: '正在上传中...',
+      icon: 'none',
+      duration: 1500
+    })
+    return
+  }
+
+  uploadingFile.value = true
+  uni.showLoading({ title: '上传中...' })
+
+  const baseUrl = getBaseUrl()
+  const uploadUrl = `${baseUrl}/dogs/allergy-records/upload-attachment`
+
+  const token = getToken()
+
+  uni.uploadFile({
+    url: uploadUrl,
+    filePath: filePath,
+    name: 'file',
+    header: {
+      'Authorization': `Bearer ${token}`,
+      'X-Customer-Id': uni.getStorageSync('userId') || ''
+    },
+    success: (res) => {
+      if (res.statusCode === 200 || res.statusCode === 201) {
+        try {
+          const data = JSON.parse(res.data)
+          if (data.code === 0 && data.data && data.data.url) {
+            if (!currentAllergyRecord.value.attachments) {
+              currentAllergyRecord.value.attachments = []
+            }
+            const currentIndex = currentAllergyRecord.value.attachments.length
+            currentAllergyRecord.value.attachments.push(data.data.url)
+
+            // 保存COS key用于后续删除
+            if (data.data.key) {
+              allergyAttachmentKeys.value[currentIndex] = data.data.key
+              console.log('[DogCreate] Allergy COS key saved:', data.data.key)
+            }
+
+            uni.showToast({
+              title: '上传成功',
+              icon: 'success',
+              duration: 1500
+            })
+          } else {
+            throw new Error(data.message || '上传失败')
+          }
+        } catch (err) {
+          uni.showToast({
+            title: '上传失败',
+            icon: 'none',
+            duration: 2000
+          })
+        }
+      } else {
+        uni.showToast({
+          title: `上传失败 (${res.statusCode})`,
+          icon: 'none',
+          duration: 2000
+        })
+      }
+    },
+    fail: (err) => {
+      console.error('[DogCreate] Upload file failed:', err)
+      uni.showToast({
+        title: '上传失败',
+        icon: 'none',
+        duration: 2000
+      })
+    },
+    complete: () => {
+      uploadingFile.value = false
+      uni.hideLoading()
+    }
+  })
+}
+
+/**
+ * 获取过敏文件名
+ */
+function getAllergyFileName(url: string, index: number) {
+  // 从URL中提取原始文件名（使用字符串操作，小程序环境兼容）
+  try {
+    const lastSlashIndex = url.lastIndexOf('/')
+    let filename = '未知文件'
+
+    if (lastSlashIndex > -1 && lastSlashIndex < url.length - 1) {
+      filename = url.substring(lastSlashIndex + 1)
+      // 去除查询参数
+      const queryIndex = filename.indexOf('?')
+      if (queryIndex > -1) {
+        filename = filename.substring(0, queryIndex)
+      }
+    }
+
+    // 如果文件名为空，使用默认名称
+    if (!filename || filename === '') {
+      filename = `文件${index + 1}`
+    }
+
+    // 如果有自定义名称，使用自定义名称
+    const key = `${index}_allergy`
+    return allergyAttachmentNames.value[key] || filename
+  } catch {
+    return `文件${index + 1}`
+  }
+}
+
+/**
+ * 预览过敏检测文件
+ */
+function handlePreviewAllergyFile(event: any) {
+  const index = event.currentTarget.dataset.index
+  const url = currentAllergyRecord.value.attachments?.[index]
+
+  if (!url) return
+
+  // 判断文件类型
+  const isPdf = url.toLowerCase().endsWith('.pdf')
+
+  if (isPdf) {
+    // PDF文件：下载后打开
+    uni.downloadFile({
+      url: url,
+      success: (res) => {
+        if (res.statusCode === 200) {
+          uni.openDocument({
+            filePath: res.tempFilePath,
+            showMenu: true,
+            success: () => {
+              console.log('[DogCreate] Open PDF success')
+            },
+            fail: (err) => {
+              console.error('[DogCreate] Open PDF failed:', err)
+              uni.showToast({
+                title: '打开文件失败',
+                icon: 'none',
+                duration: 2000
+              })
+            }
+          })
+        }
+      },
+      fail: (err) => {
+        console.error('[DogCreate] Download PDF failed:', err)
+        uni.showToast({
+          title: '下载文件失败',
+          icon: 'none',
+          duration: 2000
+        })
+      }
+    })
+  } else {
+    // 图片文件：直接预览
+    uni.previewImage({
+      urls: currentAllergyRecord.value.attachments!,
+      current: url,
+      fail: (err) => {
+        console.error('[DogCreate] Preview image failed:', err)
+        uni.showToast({
+          title: '预览图片失败',
+          icon: 'none',
+          duration: 2000
+        })
+      }
+    })
+  }
+}
+
+/**
+ * 删除过敏检测附件
+ */
+async function removeAllergyAttachment(event: any) {
+  const index = event.currentTarget.dataset.index
+  const url = currentAllergyRecord.value.attachments?.[index]
+  const cosKey = allergyAttachmentKeys.value[index]
+
+  uni.showModal({
+    title: '确认删除',
+    content: '确定要删除这个附件吗？',
+    success: async (res) => {
+      if (res.confirm) {
+        // 如果有COS key，调用后端API删除COS文件
+        if (cosKey && dogId.value) {
+          try {
+            uni.showLoading({ title: '删除中...' })
+
+            await request({
+              url: '/dogs/allergy-records/attachments',
+              method: 'DELETE',
+              data: { cosKey }
+            })
+
+            console.log('[DogCreate] COS file deleted successfully')
+          } catch (error: any) {
+            console.error('[DogCreate] Delete COS file failed:', error)
+            // 即使删除COS失败，也继续删除本地引用
+          } finally {
+            uni.hideLoading()
+          }
+        }
+
+        // 从附件列表中移除
+        currentAllergyRecord.value.attachments?.splice(index, 1)
+
+        // 清理对应的COS key和自定义名称
+        delete allergyAttachmentKeys.value[index]
+        delete allergyAttachmentNames.value[`${index}_allergy`]
+
+        // 重新索引剩余的keys和names
+        const newKeys: Record<number, string> = {}
+        const newNames: Record<number, string> = {}
+        Object.keys(allergyAttachmentKeys.value).forEach((key) => {
+          const keyIndex = parseInt(key)
+          if (keyIndex > index) {
+            newKeys[keyIndex - 1] = allergyAttachmentKeys.value[key]
+          } else if (keyIndex < index) {
+            newKeys[keyIndex] = allergyAttachmentKeys.value[key]
+          }
+        })
+        Object.keys(allergyAttachmentNames.value).forEach((key) => {
+          const keyIndex = parseInt(key.split('_')[0])
+          if (keyIndex > index) {
+            newNames[`${keyIndex - 1}_allergy`] = allergyAttachmentNames.value[key]
+          } else if (keyIndex < index) {
+            newNames[key] = allergyAttachmentNames.value[key]
+          }
+        })
+
+        allergyAttachmentKeys.value = newKeys
+        allergyAttachmentNames.value = newNames
+
+        uni.showToast({
+          title: '删除成功',
+          icon: 'success',
+          duration: 1500
+        })
+      }
+    }
+  })
+}
+
+/**
+ * 重命名过敏检测附件
+ */
+function renameAllergyAttachment(event: any) {
+  const index = event.currentTarget.dataset.index
+
+  uni.showModal({
+    title: '重命名文件',
+    editable: true,
+    placeholderText: '请输入新的文件名',
+    success: (res) => {
+      if (res.confirm && res.content) {
+        const key = `${index}_allergy`
+        allergyAttachmentNames.value[key] = res.content
+        uni.showToast({
+          title: '重命名成功',
+          icon: 'success',
+          duration: 1500
+        })
+      }
+    }
+  })
+}
+
+// ========== 过敏记录函数结束 ==========
+
 function submit() {
   const { name, breedId, birthday, currentWeightKg, activityLevel } = formData.value
 

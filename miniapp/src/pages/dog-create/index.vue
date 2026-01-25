@@ -892,6 +892,20 @@ interface CheckupRecord {
   id?: string             // 体检记录ID（用于编辑）
 }
 
+// 过敏记录接口
+interface AllergyRecord {
+  id?: string             // 过敏记录ID（用于编辑）
+  allergen: string        // 过敏原（必填）
+  allergenType: string    // 过敏原类型（必填）: FOOD/ENVIRONMENTAL/MEDICATION
+  discoveryDate: string   // 发现日期（必填）
+  symptoms: string        // 症状（必填）
+  severity: string        // 严重程度（必填）: MILD/MODERATE/SEVERE
+  confirmedBy: string     // 确认方（必填）: VET/OWNER
+  treatment?: string      // 治疗方案（选填）
+  notes?: string          // 备注（选填）
+  attachments: string[]   // 检测报告文件URL数组（必填，后端存储格式）
+}
+
 // 前端使用的附件接口（包含自定义名称）
 interface Attachment {
   url: string           // 文件URL
@@ -926,6 +940,7 @@ interface FormData {
   medicalHistory?: string  // 保留用于向后兼容
   medicalRecords: MedicalRecord[]  // 新的病史记录列表
   checkupRecords: CheckupRecord[]  // 体检记录列表
+  allergyRecords: AllergyRecord[]  // 过敏记录列表
   allergyFoods: string
   pickyFoods: string
 }
@@ -957,6 +972,7 @@ const formData = ref<FormData>({
   manualTreatKcal: '',
   medicalRecords: [],
   checkupRecords: [],
+  allergyRecords: [],
   allergyFoods: '',
   pickyFoods: ''
 })

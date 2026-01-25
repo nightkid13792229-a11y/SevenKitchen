@@ -519,6 +519,41 @@
             </view>
           </view>
 
+          <!-- 过敏记录 -->
+          <view class="form-item">
+            <view class="medical-header">
+              <text class="label">过敏记录</text>
+              <text class="add-btn" @tap="addAllergyRecord">+ 添加</text>
+            </view>
+
+            <!-- 过敏记录列表 -->
+            <view v-if="formData.allergyRecords && formData.allergyRecords.length > 0" class="medical-list">
+              <view
+                v-for="(record, index) in formData.allergyRecords"
+                :key="record.id || index"
+                class="medical-item"
+              >
+                <view class="medical-item-main" @tap="editAllergyRecord(index)">
+                  <view class="medical-item-title">{{ record.allergen || '未命名' }}</view>
+                  <view class="medical-item-info">
+                    <text v-if="record.discoveryDate" class="info-tag">日期: {{ formatDate(record.discoveryDate) }}</text>
+                    <text class="info-tag">类型: {{ getAllergenTypeLabel(record.allergenType) }}</text>
+                    <text class="info-tag">程度: {{ getSeverityLabel(record.severity) }}</text>
+                    <text v-if="record.attachments && record.attachments.length > 0" class="info-tag">附件: {{ record.attachments.length }}个</text>
+                  </view>
+                </view>
+                <view class="medical-item-actions">
+                  <text class="action-btn edit-btn" @tap="editAllergyRecord(index)">编辑</text>
+                  <text class="action-btn delete-btn" @tap="deleteAllergyRecord(index)">删除</text>
+                </view>
+              </view>
+            </view>
+
+            <view v-else class="empty-medical">
+              <text class="empty-text">暂无过敏记录</text>
+            </view>
+          </view>
+
           <view class="form-item">
             <text class="label">过敏食物</text>
             <textarea class="textarea" placeholder="请记录过敏的食物（选填）" v-model="formData.allergyFoods" />
@@ -860,6 +895,133 @@
         <view class="medical-record-actions">
           <view class="medical-btn-cancel" @tap="closeCheckupRecordModal">取消</view>
           <view class="medical-btn-confirm" @tap="saveCheckupRecord">保存</view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 过敏记录弹窗 -->
+    <view v-if="showAllergyRecordModal" class="medical-record-modal" @tap="closeAllergyRecordModal">
+      <view class="medical-record-mask" @tap="closeAllergyRecordModal"></view>
+      <view class="medical-record-content" @tap.stop>
+        <text class="medical-record-title">{{ isEditingAllergyRecord ? '编辑过敏记录' : '添加过敏记录' }}</text>
+
+        <view class="medical-form">
+          <view class="medical-form-item">
+            <text class="medical-label">过敏原 *</text>
+            <textarea
+              class="medical-textarea"
+              v-model="currentAllergyRecord.allergen"
+              placeholder="请输入过敏原，如：鸡肉、牛肉、小麦等"
+              :maxlength="200"
+            />
+          </view>
+
+          <view class="medical-form-item">
+            <text class="medical-label">过敏原类型 *</text>
+            <picker mode="selector" :range="allergenTypeOptions" :value="allergenTypeIndex" @change="onAllergenTypeChange">
+              <view class="medical-picker">
+                {{ getAllergenTypeLabel(currentAllergyRecord.allergenType) || '请选择过敏原类型' }}
+              </view>
+            </picker>
+          </view>
+
+          <view class="medical-form-item">
+            <text class="medical-label">发现日期 *</text>
+            <picker mode="date" :value="currentAllergyRecord.discoveryDate" @change="onAllergyDateChange">
+              <view class="medical-picker">
+                {{ currentAllergyRecord.discoveryDate || '请选择发现日期' }}
+              </view>
+            </picker>
+          </view>
+
+          <view class="medical-form-item">
+            <text class="medical-label">症状 *</text>
+            <textarea
+              class="medical-textarea"
+              v-model="currentAllergyRecord.symptoms"
+              placeholder="请描述过敏症状，如：皮肤瘙痒、呕吐、腹泻等"
+              :maxlength="500"
+            />
+          </view>
+
+          <view class="medical-form-item">
+            <text class="medical-label">严重程度 *</text>
+            <picker mode="selector" :range="severityOptions" :value="severityIndex" @change="onSeverityChange">
+              <view class="medical-picker">
+                {{ getSeverityLabel(currentAllergyRecord.severity) || '请选择严重程度' }}
+              </view>
+            </picker>
+          </view>
+
+          <view class="medical-form-item">
+            <text class="medical-label">确认方 *</text>
+            <picker mode="selector" :range="confirmedByOptions" :value="confirmedByIndex" @change="onConfirmedByChange">
+              <view class="medical-picker">
+                {{ currentAllergyRecord.confirmedBy === 'VET' ? '兽医' : '主人' || '请选择确认方' }}
+              </view>
+            </picker>
+          </view>
+
+          <view class="medical-form-item">
+            <text class="medical-label">治疗方案</text>
+            <textarea
+              class="medical-textarea"
+              v-model="currentAllergyRecord.treatment"
+              placeholder="请输入治疗方案（选填）"
+              :maxlength="500"
+            />
+          </view>
+
+          <view class="medical-form-item">
+            <text class="medical-label">备注</text>
+            <textarea
+              class="medical-textarea"
+              v-model="currentAllergyRecord.notes"
+              placeholder="请输入备注信息（选填）"
+              :maxlength="500"
+            />
+          </view>
+
+          <!-- 过敏检测报告上传 -->
+          <view class="medical-form-item">
+            <text class="medical-label">检测报告（图片或PDF）</text>
+
+            <!-- 已上传文件列表 -->
+            <view v-if="currentAllergyRecord.attachments && currentAllergyRecord.attachments.length > 0" class="uploaded-files">
+              <view
+                v-for="(file, index) in currentAllergyRecord.attachments"
+                :key="index"
+                class="uploaded-file-item"
+              >
+                <view class="file-info" @tap.stop="handlePreviewAllergyFile" :data-index="index">
+                  <text class="file-icon">{{ getFileIcon(file) }}</text>
+                  <text class="file-name">{{ getAllergyFileName(file, index) }}</text>
+                </view>
+                <view class="file-actions">
+                  <text class="file-preview" @tap.stop="handlePreviewAllergyFile" :data-index="index">预览</text>
+                  <text class="file-rename" @tap.stop="renameAllergyAttachment" :data-index="index">重命名</text>
+                  <text class="file-delete" @tap.stop="removeAllergyAttachment" :data-index="index">删除</text>
+                </view>
+              </view>
+            </view>
+
+            <!-- 上传按钮 -->
+            <view class="upload-buttons">
+              <button class="upload-btn" @tap="chooseAllergyImage">
+                <text class="upload-icon">📷</text>
+                <text class="upload-text">选择图片</text>
+              </button>
+              <button class="upload-btn" @tap="chooseAllergyPdf">
+                <text class="upload-icon">📄</text>
+                <text class="upload-text">选择PDF</text>
+              </button>
+            </view>
+          </view>
+        </view>
+
+        <view class="medical-record-actions">
+          <view class="medical-btn-cancel" @tap="closeAllergyRecordModal">取消</view>
+          <view class="medical-btn-confirm" @tap="saveAllergyRecord">保存</view>
         </view>
       </view>
     </view>
@@ -1298,6 +1460,19 @@ const bcsStatusColor = computed(() => {
 // 体检类型索引
 const checkupTypeIndex = computed(() => {
   return checkupTypeOptions.indexOf(currentCheckupRecord.value.checkupType)
+})
+
+// 过敏记录picker索引
+const allergenTypeIndex = computed(() => {
+  return allergenTypeOptions.indexOf(currentAllergyRecord.value.allergenType)
+})
+
+const severityIndex = computed(() => {
+  return severityOptions.indexOf(currentAllergyRecord.value.severity)
+})
+
+const confirmedByIndex = computed(() => {
+  return confirmedByOptions.indexOf(currentAllergyRecord.value.confirmedBy)
 })
 
 // ========== 生命阶段自动计算逻辑 ==========
@@ -3443,6 +3618,30 @@ function getBcsText(bcsMultiplier: number): string {
   if (bcsMultiplier === 1.0) return '标准体型'
   if (bcsMultiplier < 1.0 && bcsMultiplier >= 0.6) return '偏胖（需要减少热量）'
   return '未知'
+}
+
+/**
+ * 获取过敏原类型标签
+ */
+function getAllergenTypeLabel(type: string): string {
+  const labels: Record<string, string> = {
+    'FOOD': '食物',
+    'ENVIRONMENTAL': '环境',
+    'MEDICATION': '药物'
+  }
+  return labels[type] || type
+}
+
+/**
+ * 获取严重程度标签
+ */
+function getSeverityLabel(severity: string): string {
+  const labels: Record<string, string> = {
+    'MILD': '轻微',
+    'MODERATE': '中度',
+    'SEVERE': '严重'
+  }
+  return labels[severity] || severity
 }
 
 /**

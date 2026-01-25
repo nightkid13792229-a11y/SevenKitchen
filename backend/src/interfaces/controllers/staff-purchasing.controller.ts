@@ -15,6 +15,10 @@ import {
   ValidationPipe,
   Logger,
   UseGuards,
+  UseInterceptors,
+  BadRequestException,
+  Req,
+  UploadedFile,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -24,7 +28,9 @@ import {
   ApiQuery,
   ApiBody,
   ApiSecurity,
+  ApiConsumes,
 } from '@nestjs/swagger';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { PurchasingService } from '../../application/purchasing/purchasing.service';
 import type {
   GeneratePurchaseListDto,
@@ -39,6 +45,7 @@ import { PurchaseListStatus, ReimbursementStatus } from '../../domain/purchasing
 import { AuthGuard } from '../auth';
 import { UserId } from '../auth/user.decorator';
 import { Put, Delete } from '@nestjs/common';
+import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 
 @ApiTags('Staff Purchasing')
 @Controller('api/v1/staff/purchasing')
@@ -51,6 +58,7 @@ export class StaffPurchasingController {
   constructor(
     private readonly purchasingService: PurchasingService,
     private readonly reimbursementService: ReimbursementService,
+    private readonly cosService: TencentCosService,
   ) {}
 
   /**
@@ -679,6 +687,91 @@ export class StaffPurchasingController {
    * ==========================================
    */
 
+  @Post('upload-receipt-photo')
+  @ApiOperation({ summary: '上传报销转账/支付记录照片' })
+  @ApiConsumes('multipart/form-data')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        file: {
+          type: 'string',
+          format: 'binary',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: '上传成功',
+    schema: {
+      type: 'object',
+      properties: {
+        code: { type: 'number', example: 0 },
+        message: { type: 'string', example: 'success' },
+        data: {
+          type: 'object',
+          properties: {
+            url: { type: 'string', example: 'https://img.sevenkitchen.cloud/reimbursement-receipts/xxx.jpg' },
+            key: { type: 'string', example: 'reimbursement-receipts/xxx.jpg' },
+          },
+        },
+      },
+    },
+  })
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadReceiptPhoto(
+    @Req() req: any,
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<ApiResponseDto<any>> {
+    if (!file) {
+      throw new BadRequestException('请选择文件');
+    }
+
+    this.logger.log(`Uploading reimbursement receipt photo: ${file.originalname}, size: ${file.size}`);
+
+    try {
+      const result = await this.cosService.uploadImage(file, file.originalname, 'reimbursement-receipts');
+      return ApiResponseDto.success(result, '上传成功');
+    } catch (error) {
+      this.logger.error('Failed to upload reimbursement receipt photo:', error);
+      throw new BadRequestException('上传失败，请重试');
+    }
+  }
+
+  @Delete('reimbursement-receipts')
+  @ApiOperation({ summary: '删除报销发票照片' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        key: {
+          type: 'string',
+          description: 'COS文件Key',
+          example: 'reimbursement-receipts/1234567890-abc123.jpg',
+        },
+      },
+      required: ['key'],
+    },
+  })
+  async deleteReceiptPhoto(
+    @Body() dto: { key: string },
+  ): Promise<ApiResponseDto<any>> {
+    if (!dto.key) {
+      throw new BadRequestException('缺少文件Key');
+    }
+
+    this.logger.log(`Deleting reimbursement receipt photo: ${dto.key}`);
+
+    try {
+      await this.cosService.deleteImage(dto.key);
+      return ApiResponseDto.success(null, '删除成功');
+    } catch (error) {
+      this.logger.error('Failed to delete reimbursement receipt photo:', error);
+      throw new BadRequestException('删除失败，请重试');
+    }
+  }
+
   @Post('reimbursements')
   @ApiOperation({ summary: '提交报销申请' })
   @ApiBody({
@@ -688,7 +781,7 @@ export class StaffPurchasingController {
         purchaseListIds: {
           type: 'array',
           items: { type: 'string' },
-          description: '采购清单ID列表',
+          description: '采购清单ID列表（可选）',
         },
         receiptUrls: {
           type: 'array',
@@ -699,8 +792,29 @@ export class StaffPurchasingController {
           type: 'number',
           description: '实际采购总额',
         },
+        platformShippingFee: {
+          type: 'number',
+          description: '平台运费（可选）',
+          example: 10.00,
+        },
+        platformPackagingFee: {
+          type: 'number',
+          description: '平台打包费（可选）',
+          example: 5.00,
+        },
+        customFees: {
+          type: 'array',
+          description: '自定义费用明细（可选）',
+          items: {
+            type: 'object',
+            properties: {
+              description: { type: 'string', example: '打车费' },
+              amount: { type: 'number', example: 30.00 },
+            },
+          },
+        },
       },
-      required: ['purchaseListIds', 'receiptUrls', 'totalActualCost'],
+      required: ['receiptUrls', 'totalActualCost'],
     },
   })
   @ApiResponse({
@@ -806,6 +920,27 @@ export class StaffPurchasingController {
         totalActualCost: {
           type: 'number',
           description: '实际采购总额',
+        },
+        platformShippingFee: {
+          type: 'number',
+          description: '平台运费（可选）',
+          example: 10.00,
+        },
+        platformPackagingFee: {
+          type: 'number',
+          description: '平台打包费（可选）',
+          example: 5.00,
+        },
+        customFees: {
+          type: 'array',
+          description: '自定义费用明细（可选）',
+          items: {
+            type: 'object',
+            properties: {
+              description: { type: 'string', example: '打车费' },
+              amount: { type: 'number', example: 30.00 },
+            },
+          },
         },
       },
       required: ['purchaseListIds', 'receiptUrls', 'totalActualCost'],

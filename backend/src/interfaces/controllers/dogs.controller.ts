@@ -1055,4 +1055,92 @@ export class DogsController {
       throw new BadRequestException('Failed to upload attachment');
     }
   }
+
+  @Delete('medical-records/attachments')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: '删除病史记录附件' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiHeader({
+    name: 'X-Customer-Id',
+    description: 'Customer ID for authentication',
+    required: true,
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        key: {
+          type: 'string',
+          description: 'COS文件Key',
+          example: 'medical-reports/temp/1234567890-abc123.pdf',
+        },
+      },
+      required: ['key'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: '文件删除成功',
+  })
+  async deleteMedicalAttachment(
+    @Body() dto: { key: string },
+  ): Promise<ApiResponseDto<any>> {
+    if (!dto.key) {
+      throw new BadRequestException('缺少文件Key');
+    }
+
+    console.log('[DogsController] Deleting medical attachment:', dto.key);
+
+    try {
+      await this.cosService.deleteImage(dto.key);
+      return ApiResponseDto.success(null, '删除成功');
+    } catch (error) {
+      console.error('[DogsController] Failed to delete medical attachment:', error);
+      throw new BadRequestException('删除失败，请重试');
+    }
+  }
+
+  @Delete('checkup-records/attachments')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: '删除体检记录附件' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiHeader({
+    name: 'X-Customer-Id',
+    description: 'Customer ID for authentication',
+    required: true,
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        key: {
+          type: 'string',
+          description: 'COS文件Key',
+          example: 'checkup-reports/temp/1234567890-abc123.pdf',
+        },
+      },
+      required: ['key'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: '文件删除成功',
+  })
+  async deleteCheckupAttachment(
+    @Body() dto: { key: string },
+  ): Promise<ApiResponseDto<any>> {
+    if (!dto.key) {
+      throw new BadRequestException('缺少文件Key');
+    }
+
+    console.log('[DogsController] Deleting checkup attachment:', dto.key);
+
+    try {
+      await this.cosService.deleteImage(dto.key);
+      return ApiResponseDto.success(null, '删除成功');
+    } catch (error) {
+      console.error('[DogsController] Failed to delete checkup attachment:', error);
+      throw new BadRequestException('删除失败，请重试');
+    }
+  }
 }

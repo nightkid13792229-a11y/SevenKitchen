@@ -418,7 +418,7 @@ export class DogsController {
       // Convert to DTO format
       medicalRecords = records.map((record: any) => ({
         chiefComplaint: record.chiefComplaint,
-        visitDate: record.visitDate ? record.visitDate.toISOString() : null,
+        visitDate: record.visitDate ? record.visitDate.toISOString().split('T')[0] : null, // Only YYYY-MM-DD
         diagnosis: record.diagnosis || null,
         notes: record.notes || null,
         attachments: record.attachments || null,

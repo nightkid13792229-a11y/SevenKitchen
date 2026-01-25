@@ -3,15 +3,15 @@
     <!-- 顶部标题 -->
     <view class="header">
       <text class="title">提交报销申请</text>
-      <text class="subtitle">选择已完成的采购清单并上传发票</text>
+      <text class="subtitle">选择采购清单（可选）并上传支付记录</text>
     </view>
 
     <!-- 已完成的采购清单 -->
     <view class="section">
-      <text class="section-title">选择采购清单（已完成）</text>
+      <text class="section-title">选择采购清单（可选）</text>
       <view v-if="completedPurchaseLists.length === 0" class="empty-state">
         <text class="empty-text">暂无已完成的采购清单</text>
-        <text class="empty-hint">请先完成采购后再提交报销</text>
+        <text class="empty-hint">您可以直接提交其它费用的报销申请</text>
       </view>
       <view v-else class="purchase-lists">
         <view
@@ -28,24 +28,98 @@
           <view class="list-info">
             <text class="list-date">{{ formatDate(list.targetDate) }}</text>
             <text class="list-count">{{ list.itemCount }} 种原料</text>
-            <text class="list-cost">预估: ¥{{ list.totalEstimatedCost.toFixed(2) }}</text>
+            <text class="list-cost">采购金额: ¥{{ (list.totalActualCost ?? list.totalEstimatedCost).toFixed(2) }}</text>
           </view>
         </view>
       </view>
     </view>
 
-    <!-- 发票照片上传 -->
+    <!-- 其它费用 -->
     <view class="section">
-      <text class="section-title">上传发票照片（最多3张）</text>
+      <text class="section-title">其它费用</text>
+      <view class="fees-row">
+        <view class="fee-item-half">
+          <text class="fee-label">平台运费</text>
+          <view class="fee-input-wrapper">
+            <text class="currency">¥</text>
+            <input
+              class="fee-input"
+              type="digit"
+              v-model="platformShippingFee"
+              placeholder="0.00"
+              @input="calculateTotal"
+            />
+          </view>
+        </view>
+        <view class="fee-item-half">
+          <text class="fee-label">平台打包费</text>
+          <view class="fee-input-wrapper">
+            <text class="currency">¥</text>
+            <input
+              class="fee-input"
+              type="digit"
+              v-model="platformPackagingFee"
+              placeholder="0.00"
+              @input="calculateTotal"
+            />
+          </view>
+        </view>
+      </view>
+      <view class="custom-fees">
+        <view class="custom-fee-header">
+          <text class="custom-fee-title">添加其它费用</text>
+          <view class="add-custom-fee-btn" @tap="addCustomFee">
+            <text>+ 添加</text>
+          </view>
+        </view>
+        <view v-if="customFees.length === 0" class="empty-custom-fees">
+          <text>暂无其它费用</text>
+        </view>
+        <view v-else class="custom-fee-list">
+          <view
+            v-for="(fee, index) in customFees"
+            :key="index"
+            class="custom-fee-item"
+          >
+            <view class="custom-fee-content">
+              <view class="custom-fee-inputs">
+                <input
+                  class="custom-fee-desc"
+                  v-model="fee.description"
+                  placeholder="费用说明"
+                />
+                <view class="custom-fee-amount-wrapper">
+                  <text class="currency">¥</text>
+                  <input
+                    class="custom-fee-amount"
+                    type="digit"
+                    v-model="fee.amount"
+                    placeholder="0.00"
+                    @input="calculateTotal"
+                  />
+                </view>
+              </view>
+              <view class="delete-custom-fee-btn" @tap.stop="deleteCustomFee(index)">
+                <text>删除</text>
+              </view>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
+    <!-- 支付记录照片上传 -->
+    <view class="section">
+      <text class="section-title">上传转账或支付记录照片</text>
       <view class="photo-upload">
-        <view v-for="(url, index) in receiptUrls" :key="index" class="photo-item">
-          <image :src="url" mode="aspectFill" @tap="previewPhoto(index)" />
+        <view v-for="(photo, index) in receiptUrls" :key="index" class="photo-item">
+          <image :src="photo.url" mode="aspectFill" @tap="previewPhoto(index)" @error="handleImageError(index, photo.url)" />
+          <text class="debug-url" v-if="true">{{ photo.url.slice(-30) }}</text>
           <view class="delete-btn" @tap.stop="deletePhoto(index)">
             <text>×</text>
           </view>
         </view>
         <view
-          v-if="receiptUrls.length < 3"
           class="upload-btn"
           @tap="uploadPhoto"
         >
@@ -55,41 +129,12 @@
       </view>
     </view>
 
-    <!-- 实际采购金额 -->
-    <view class="section">
-      <text class="section-title">实际采购金额</text>
-      <view class="cost-input-wrapper">
-        <text class="currency">¥</text>
-        <input
-          class="cost-input"
-          type="digit"
-          v-model="totalActualCost"
-          placeholder="请输入实际采购总额"
-        />
-      </view>
-      <view class="cost-info">
-        <text class="label">预估总额:</text>
-        <text class="estimated">¥{{ estimatedTotal }}</text>
-      </view>
-      <view v-if="costDifference !== 0" class="cost-diff" :class="{ positive: costDifference > 0, negative: costDifference < 0 }">
-        <text class="label">差异:</text>
-        <text class="diff">{{ costDifference > 0 ? '+' : '' }}¥{{ Math.abs(costDifference).toFixed(2) }}</text>
-      </view>
-    </view>
-
-    <!-- 已选择的清单汇总 -->
-    <view v-if="selectedListIds.length > 0" class="section summary">
-      <text class="section-title">已选择 {{ selectedListIds.length }} 个采购清单</text>
-      <view class="summary-items">
-        <view v-for="id in selectedListIds" :key="id" class="summary-item">
-          <text class="item-date">{{ formatDate(getListById(id).targetDate) }}</text>
-          <text class="item-cost">¥{{ getListById(id).totalEstimatedCost.toFixed(2) }}</text>
-        </view>
-      </view>
-    </view>
-
-    <!-- 提交按钮 -->
+    <!-- 提交按钮和总金额 -->
     <view class="bottom-actions">
+      <view class="total-display">
+        <text class="total-label">总报销金额:</text>
+        <text class="total-amount">¥{{ totalReimbursementAmount }}</text>
+      </view>
       <button
         class="submit-btn"
         @tap="submitReimbursement"
@@ -105,34 +150,34 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { getPurchaseLists, submitReimbursement } from '@/api/purchasing';
+import { getPurchaseLists, submitReimbursement as submitReimbursementApi, uploadReceiptPhoto, deleteReceiptPhoto } from '@/api/purchasing';
+
+// 自定义费用类型
+interface CustomFee {
+  description: string;
+  amount: string;
+}
+
+// 照片类型
+interface ReceiptPhoto {
+  url: string;
+  key: string;
+}
 
 // 状态管理
 const completedPurchaseLists = ref<any[]>([]);
 const selectedListIds = ref<string[]>([]);
-const receiptUrls = ref<string[]>([]);
-const totalActualCost = ref('');
+const receiptUrls = ref<ReceiptPhoto[]>([]);
+const platformShippingFee = ref('');
+const platformPackagingFee = ref('');
+const customFees = ref<CustomFee[]>([]);
 const submitting = ref(false);
+const totalReimbursementAmount = ref('0.00');
 
 // 计算属性
-const estimatedTotal = computed(() => {
-  return completedPurchaseLists.value
-    .filter(list => selectedListIds.value.includes(list.id))
-    .reduce((sum, list) => sum + list.totalEstimatedCost, 0)
-    .toFixed(2);
-});
-
-const costDifference = computed(() => {
-  const actual = parseFloat(totalActualCost.value) || 0;
-  return actual - parseFloat(estimatedTotal.value);
-});
-
 const canSubmit = computed(() => {
   return (
-    selectedListIds.value.length > 0 &&
     receiptUrls.value.length > 0 &&
-    totalActualCost.value &&
-    parseFloat(totalActualCost.value) > 0 &&
     !submitting.value
   );
 });
@@ -141,6 +186,29 @@ const canSubmit = computed(() => {
 onMounted(() => {
   loadCompletedPurchaseLists();
 });
+
+// 计算总报销金额
+const calculateTotal = () => {
+  // 1. 采购清单金额（优先使用实际采购金额）
+  const purchaseListsTotal = completedPurchaseLists.value
+    .filter(list => selectedListIds.value.includes(list.id))
+    .reduce((sum, list) => sum + (list.totalActualCost ?? list.totalEstimatedCost), 0);
+
+  // 2. 平台运费
+  const shippingFee = parseFloat(platformShippingFee.value) || 0;
+
+  // 3. 平台打包费
+  const packagingFee = parseFloat(platformPackagingFee.value) || 0;
+
+  // 4. 自定义费用
+  const customFeesTotal = customFees.value.reduce((sum, fee) => {
+    return sum + (parseFloat(fee.amount) || 0);
+  }, 0);
+
+  // 计算总额
+  const total = purchaseListsTotal + shippingFee + packagingFee + customFeesTotal;
+  totalReimbursementAmount.value = total.toFixed(2);
+};
 
 // 加载已完成的采购清单
 const loadCompletedPurchaseLists = async () => {
@@ -165,45 +233,66 @@ const togglePurchaseList = (id: string) => {
   } else {
     selectedListIds.value.push(id);
   }
-};
-
-// 根据ID获取采购清单
-const getListById = (id: string) => {
-  return completedPurchaseLists.value.find(list => list.id === id);
+  calculateTotal();
 };
 
 // 上传照片
 const uploadPhoto = () => {
   uni.chooseImage({
-    count: 3 - receiptUrls.value.length,
+    count: 9,
     sizeType: ['compressed'],
     sourceType: ['album', 'camera'],
-    success: (res) => {
-      // TODO: 实际上传到服务器
-      // 这里先使用临时路径
+    success: async (res) => {
       const tempFilePaths = res.tempFilePaths;
 
-      // 显示loading
       uni.showLoading({ title: '上传中...' });
 
-      // 模拟上传（实际应该调用上传API）
-      setTimeout(() => {
-        receiptUrls.value.push(...tempFilePaths);
+      try {
+        // 上传所有选中的照片
+        const uploadPromises = tempFilePaths.map(filePath => uploadReceiptPhoto(filePath));
+        const results = await Promise.all(uploadPromises);
+
+        console.log('[Upload] All results:', results);
+
+        // 提取URL和key（响应结构：{code: 0, message: "...", data: {url, key}}）
+        const photos = results.map((result: any) => ({
+          url: result.data.url,
+          key: result.data.key,
+        }));
+
+        console.log('[Upload] Parsed photos:', photos);
+
+        receiptUrls.value.push(...photos);
+
         uni.hideLoading();
         uni.showToast({ title: '上传成功', icon: 'success' });
-      }, 1000);
+      } catch (error: any) {
+        uni.hideLoading();
+        uni.showToast({ title: error.message || '上传失败', icon: 'none' });
+      }
     },
   });
 };
 
 // 删除照片
-const deletePhoto = (index: number) => {
+const deletePhoto = async (index: number) => {
   uni.showModal({
     title: '确认删除',
     content: '确定要删除这张照片吗？',
-    success: (res) => {
+    success: async (res) => {
       if (res.confirm) {
-        receiptUrls.value.splice(index, 1);
+        const photo = receiptUrls.value[index];
+
+        // 调用后端API删除COS中的文件
+        try {
+          await deleteReceiptPhoto(photo.key);
+          // 从前端数组中移除
+          receiptUrls.value.splice(index, 1);
+          uni.showToast({ title: '删除成功', icon: 'success' });
+        } catch (error: any) {
+          console.error('删除照片失败', error);
+          uni.showToast({ title: error.message || '删除失败', icon: 'none' });
+        }
       }
     },
   });
@@ -211,9 +300,39 @@ const deletePhoto = (index: number) => {
 
 // 预览照片
 const previewPhoto = (index: number) => {
+  const urls = receiptUrls.value.map(photo => photo.url);
   uni.previewImage({
-    urls: receiptUrls.value,
-    current: receiptUrls.value[index],
+    urls: urls,
+    current: urls[index],
+  });
+};
+
+// 处理图片加载错误
+const handleImageError = (index: number, url: string) => {
+  console.error(`[Image Error] Failed to load image at index ${index}:`, url);
+  console.error('[Image Error] Photo object:', receiptUrls.value[index]);
+  uni.showToast({
+    title: '图片加载失败',
+    icon: 'none',
+  });
+};
+
+// 添加自定义费用
+const addCustomFee = () => {
+  customFees.value.push({ description: '', amount: '' });
+};
+
+// 删除自定义费用
+const deleteCustomFee = (index: number) => {
+  uni.showModal({
+    title: '确认删除',
+    content: '确定要删除这项费用吗？',
+    success: (res) => {
+      if (res.confirm) {
+        customFees.value.splice(index, 1);
+        calculateTotal();
+      }
+    },
   });
 };
 
@@ -223,35 +342,41 @@ const submitReimbursement = async () => {
     return;
   }
 
-  if (selectedListIds.value.length === 0) {
-    uni.showToast({ title: '请选择采购清单', icon: 'none' });
-    return;
-  }
-
   if (receiptUrls.value.length === 0) {
-    uni.showToast({ title: '请上传发票照片', icon: 'none' });
-    return;
-  }
-
-  const actualCost = parseFloat(totalActualCost.value);
-  if (!actualCost || actualCost <= 0) {
-    uni.showToast({ title: '请输入有效的采购金额', icon: 'none' });
+    uni.showToast({ title: '请上传支付记录照片', icon: 'none' });
     return;
   }
 
   submitting.value = true;
 
   try {
-    const res: any = await submitReimbursement({
+    const totalAmount = parseFloat(totalReimbursementAmount.value);
+
+    // 将照片对象数组转换为URL数组
+    const urls = receiptUrls.value.map(photo => photo.url);
+
+    const res: any = await submitReimbursementApi({
       purchaseListIds: selectedListIds.value,
-      receiptUrls: receiptUrls.value,
-      totalActualCost: actualCost,
+      receiptUrls: urls,
+      totalActualCost: totalAmount,
+      // 新增字段
+      platformShippingFee: parseFloat(platformShippingFee.value) || 0,
+      platformPackagingFee: parseFloat(platformPackagingFee.value) || 0,
+      customFees: customFees.value
+        .filter(fee => fee.description && fee.amount)
+        .map(fee => ({
+          description: fee.description,
+          amount: parseFloat(fee.amount) || 0
+        })),
     });
 
     if (res.code === 0) {
       uni.showToast({ title: '提交成功', icon: 'success' });
       setTimeout(() => {
-        uni.navigateBack();
+        // 使用 redirectTo 重新加载列表页，确保显示最新数据
+        uni.redirectTo({
+          url: '/pages/staff-purchasing/reimbursement/list'
+        });
       }, 1500);
     } else {
       uni.showToast({ title: res.message || '提交失败', icon: 'none' });
@@ -277,7 +402,7 @@ const formatDate = (dateStr: string) => {
 .submit-reimbursement-page {
   min-height: 100vh;
   background-color: #f5f5f5;
-  padding-bottom: 140rpx;
+  padding-bottom: 180rpx;
 }
 
 .header {
@@ -392,6 +517,177 @@ const formatDate = (dateStr: string) => {
   }
 }
 
+.fee-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24rpx;
+
+  .fee-label {
+    font-size: 28rpx;
+    color: #333;
+    width: 180rpx;
+  }
+
+  .fee-input-wrapper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    background-color: #f5f5f5;
+    border-radius: 12rpx;
+    padding: 0 24rpx;
+    height: 80rpx;
+
+    .currency {
+      font-size: 28rpx;
+      color: #333;
+      margin-right: 8rpx;
+    }
+
+    .fee-input {
+      flex: 1;
+      font-size: 28rpx;
+      color: #333;
+    }
+  }
+}
+
+.fees-row {
+  display: flex;
+  gap: 24rpx;
+  margin-bottom: 32rpx;
+}
+
+.fee-item-half {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+
+  .fee-label {
+    font-size: 26rpx;
+    color: #666;
+  }
+
+  .fee-input-wrapper {
+    display: flex;
+    align-items: center;
+    background-color: #f5f5f5;
+    border-radius: 12rpx;
+    padding: 0 20rpx;
+    height: 80rpx;
+
+    .currency {
+      font-size: 28rpx;
+      color: #333;
+      margin-right: 8rpx;
+    }
+
+    .fee-input {
+      flex: 1;
+      font-size: 28rpx;
+      color: #333;
+    }
+  }
+}
+
+.custom-fees {
+  margin-top: 24rpx;
+  padding-top: 24rpx;
+  border-top: 1rpx solid #f0f0f0;
+
+  .custom-fee-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16rpx;
+
+    .custom-fee-title {
+      font-size: 28rpx;
+      font-weight: bold;
+      color: #333;
+    }
+
+    .add-custom-fee-btn {
+      padding: 8rpx 16rpx;
+      background-color: #51cf66;
+      color: #fff;
+      border-radius: 8rpx;
+      font-size: 24rpx;
+    }
+  }
+
+  .empty-custom-fees {
+    padding: 32rpx;
+    text-align: center;
+    color: #999;
+    font-size: 24rpx;
+    background-color: #f9f9f9;
+    border-radius: 12rpx;
+  }
+
+  .custom-fee-list {
+    display: flex;
+    flex-direction: column;
+    gap: 16rpx;
+  }
+
+  .custom-fee-item {
+    background-color: #f9f9f9;
+    border-radius: 12rpx;
+    padding: 16rpx;
+
+    .custom-fee-content {
+      display: flex;
+      align-items: center;
+      gap: 12rpx;
+
+      .custom-fee-inputs {
+        flex: 1;
+        display: flex;
+        gap: 12rpx;
+
+        .custom-fee-desc {
+          flex: 1;
+          padding: 12rpx 16rpx;
+          background-color: #fff;
+          border-radius: 8rpx;
+          font-size: 26rpx;
+        }
+
+        .custom-fee-amount-wrapper {
+          display: flex;
+          align-items: center;
+          background-color: #fff;
+          border-radius: 8rpx;
+          padding: 0 16rpx;
+          width: 180rpx;
+
+          .currency {
+            font-size: 24rpx;
+            color: #333;
+            margin-right: 4rpx;
+          }
+
+          .custom-fee-amount {
+            flex: 1;
+            font-size: 26rpx;
+          }
+        }
+      }
+
+      .delete-custom-fee-btn {
+        padding: 12rpx 16rpx;
+        background-color: #ff6b6b;
+        color: #fff;
+        border-radius: 8rpx;
+        font-size: 24rpx;
+        white-space: nowrap;
+      }
+    }
+  }
+}
+
 .photo-upload {
   display: flex;
   flex-wrap: wrap;
@@ -407,6 +703,21 @@ const formatDate = (dateStr: string) => {
     width: 100%;
     height: 100%;
     border-radius: 12rpx;
+    background-color: #f5f5f5;
+  }
+
+  .debug-url {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: rgba(0, 0, 0, 0.7);
+    color: #fff;
+    font-size: 18rpx;
+    padding: 8rpx;
+    border-radius: 0 0 12rpx 12rpx;
+    word-break: break-all;
+    text-align: center;
   }
 
   .delete-btn {
@@ -449,84 +760,6 @@ const formatDate = (dateStr: string) => {
   }
 }
 
-.cost-input-wrapper {
-  display: flex;
-  align-items: center;
-  background-color: #f5f5f5;
-  border-radius: 12rpx;
-  padding: 0 24rpx;
-  margin-bottom: 16rpx;
-
-  .currency {
-    font-size: 32rpx;
-    color: #333;
-    margin-right: 8rpx;
-  }
-
-  .cost-input {
-    flex: 1;
-    height: 88rpx;
-    font-size: 32rpx;
-    color: #333;
-  }
-}
-
-.cost-info, .cost-diff {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 16rpx 0;
-
-  .label {
-    font-size: 24rpx;
-    color: #999;
-  }
-
-  .estimated, .diff {
-    font-size: 28rpx;
-    font-weight: bold;
-    color: #333;
-  }
-}
-
-.cost-diff {
-  &.positive .diff {
-    color: #ff6b6b;
-  }
-
-  &.negative .diff {
-    color: #51cf66;
-  }
-}
-
-.summary {
-  .summary-items {
-    display: flex;
-    flex-direction: column;
-    gap: 12rpx;
-  }
-
-  .summary-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16rpx;
-    background-color: #f9f9f9;
-    border-radius: 8rpx;
-
-    .item-date {
-      font-size: 26rpx;
-      color: #666;
-    }
-
-    .item-cost {
-      font-size: 28rpx;
-      font-weight: bold;
-      color: #333;
-    }
-  }
-}
-
 .bottom-actions {
   position: fixed;
   bottom: 0;
@@ -536,6 +769,25 @@ const formatDate = (dateStr: string) => {
   padding: 24rpx 32rpx;
   box-shadow: 0 -4rpx 16rpx rgba(0, 0, 0, 0.05);
   z-index: 100;
+
+  .total-display {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16rpx 0;
+    margin-bottom: 16rpx;
+
+    .total-label {
+      font-size: 28rpx;
+      color: #666;
+    }
+
+    .total-amount {
+      font-size: 36rpx;
+      font-weight: bold;
+      color: #ff6b6b;
+    }
+  }
 
   .submit-btn {
     width: 100%;

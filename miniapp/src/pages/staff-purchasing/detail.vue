@@ -250,22 +250,38 @@
           <!-- 采购渠道 -->
           <view class="form-section">
             <text class="form-label">采购渠道 *</text>
+            <picker
+              v-if="!showCustomChannel"
+              mode="selector"
+              :range="channelOptions"
+              @change="onChannelChange"
+            >
+              <view class="picker-input">
+                <text :class="recordForm.purchaseChannel ? 'value' : 'placeholder'">
+                  {{ recordForm.purchaseChannel || '请选择采购渠道' }}
+                </text>
+                <text class="arrow">›</text>
+              </view>
+            </picker>
+
+            <!-- 自定义渠道输入 -->
             <input
-              v-model="recordForm.purchaseChannel"
+              v-if="showCustomChannel"
+              v-model="customChannel"
               class="form-input"
-              placeholder="如：京东、淘宝、本地市场"
+              placeholder="请输入采购渠道"
               placeholder-class="input-placeholder"
             />
           </view>
 
-          <!-- 实际采购重量 -->
+          <!-- 实际采购数量（动态单位） -->
           <view class="form-section">
-            <text class="form-label">实际采购重量（克） *</text>
+            <text class="form-label">实际采购数量（{{ getPurchaseUnit(selectedIngredient) }}） *</text>
             <input
               v-model.number="recordForm.actualQuantity"
               type="digit"
               class="form-input"
-              placeholder="请输入整数，如：5200"
+              :placeholder="`请输入${getPurchaseUnit(selectedIngredient)}数`"
               placeholder-class="input-placeholder"
             />
           </view>
@@ -282,7 +298,7 @@
             />
           </view>
 
-          <!-- 产品型号（选填） -->
+          <!-- 产品型号（选填，预填充） -->
           <view class="form-section">
             <text class="form-label">产品型号（选填）</text>
             <input
@@ -390,6 +406,55 @@ const recordForm = ref({
   notes: '',
 });
 
+// 自定义采购渠道输入
+const showCustomChannel = ref(false);
+const customChannel = ref('');
+
+// 采购渠道选项（从当前采购清单的原料中聚合）
+const channelOptions = computed(() => {
+  const channelMap = new Map<string, number>();
+
+  // 统计当前采购清单中使用的采购渠道
+  items.value.forEach(item => {
+    // 从采购清单项获取
+    if (item.purchaseChannel) {
+      channelMap.set(item.purchaseChannel, (channelMap.get(item.purchaseChannel) || 0) + 1);
+    }
+    // 从原料关联数据获取
+    if (item.ingredient?.purchaseChannel) {
+      channelMap.set(item.ingredient.purchaseChannel, (channelMap.get(item.ingredient.purchaseChannel) || 0) + 1);
+    }
+  });
+
+  // 按使用频率排序
+  const sortedChannels = Array.from(channelMap.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([channel]) => channel);
+
+  return sortedChannels;
+});
+
+// 获取采购单位（多级回退 + 默认值）
+const getPurchaseUnit = (item: any): string => {
+  // 优先级1: displayUnit（显示单位标签）
+  if (item.displayUnit) {
+    return item.displayUnit;
+  }
+
+  // 优先级2: quantityUnit（数量单位）
+  if (item.quantityUnit) {
+    return item.quantityUnit;
+  }
+
+  // 优先级3: ingredient.purchaseUnit（原料采购单位）
+  if (item.ingredient?.purchaseUnit) {
+    return item.ingredient.purchaseUnit;
+  }
+
+  // 默认值: 克
+  return 'g';
+};
+
 // 日期变更检测
 const dateChanges = ref<any>({
   hasChanges: false,
@@ -478,6 +543,19 @@ const loadPurchaseRecords = async () => {
 const handleContinueAdd = (item: any) => {
   selectedIngredient.value = item;
   resetRecordForm();
+
+  // 预填充产品型号（优先使用采购清单项的，其次使用原料的）
+  recordForm.value.productModel = item.productModel || item.ingredient?.productModel || '';
+
+  // 预填充采购渠道（如果只有一个渠道，自动填充）
+  if (item.purchaseChannel) {
+    recordForm.value.purchaseChannel = item.purchaseChannel;
+  } else if (item.ingredient?.purchaseChannel) {
+    recordForm.value.purchaseChannel = item.ingredient.purchaseChannel;
+  }
+
+  showCustomChannel.value = false;
+  customChannel.value = '';
   showRecordForm.value = true;
 };
 
@@ -485,6 +563,22 @@ const handleContinueAdd = (item: any) => {
 const closeRecordForm = () => {
   showRecordForm.value = false;
   selectedIngredient.value = null;
+  showCustomChannel.value = false;
+  customChannel.value = '';
+};
+
+// 采购渠道选择变更
+const onChannelChange = (e: any) => {
+  const index = e.detail.value;
+  const channel = channelOptions.value[index];
+
+  if (channel === '自定义') {
+    showCustomChannel.value = true;
+    recordForm.value.purchaseChannel = '';
+  } else {
+    showCustomChannel.value = false;
+    recordForm.value.purchaseChannel = channel;
+  }
 };
 
 // 重置表单
@@ -501,19 +595,20 @@ const resetRecordForm = () => {
 // 提交采购记录
 const submitRecord = async () => {
   // 表单验证
-  if (!recordForm.value.purchaseChannel || recordForm.value.purchaseChannel.trim().length === 0) {
-    uni.showToast({ title: '请输入采购渠道', icon: 'none' });
+  const channel = showCustomChannel.value ? customChannel.value.trim() : recordForm.value.purchaseChannel.trim();
+  if (!channel) {
+    uni.showToast({ title: '请选择或输入采购渠道', icon: 'none' });
     return;
   }
 
   if (!recordForm.value.actualQuantity || recordForm.value.actualQuantity.toString().trim().length === 0) {
-    uni.showToast({ title: '请输入实际采购重量', icon: 'none' });
+    uni.showToast({ title: `请输入实际采购${getPurchaseUnit(selectedIngredient.value)}`, icon: 'none' });
     return;
   }
 
   const quantity = Number(recordForm.value.actualQuantity);
-  if (!Number.isInteger(quantity) || quantity <= 0) {
-    uni.showToast({ title: '重量必须为正整数', icon: 'none' });
+  if (isNaN(quantity) || quantity <= 0) {
+    uni.showToast({ title: '数量必须大于0', icon: 'none' });
     return;
   }
 
@@ -539,8 +634,8 @@ const submitRecord = async () => {
 
   try {
     const data: any = {
-      purchaseChannel: recordForm.value.purchaseChannel.trim(),
-      actualQuantity: quantity,
+      purchaseChannel: channel,
+      actualQuantity: Math.round(quantity),  // 确保为整数
       actualCost: cost,
       productModel: recordForm.value.productModel?.trim() || undefined,
       notes: recordForm.value.notes?.trim() || undefined,
@@ -1404,6 +1499,30 @@ const confirmDeleteItem = (item: any) => {
       border-radius: 8rpx;
       display: flex;
       align-items: center;
+    }
+  }
+
+  .picker-input {
+    height: 80rpx;
+    padding: 0 24rpx;
+    font-size: 28rpx;
+    background-color: #f5f5f5;
+    border-radius: 8rpx;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+
+    .value {
+      color: #333;
+    }
+
+    .placeholder {
+      color: #999;
+    }
+
+    .arrow {
+      font-size: 32rpx;
+      color: #999;
     }
   }
 

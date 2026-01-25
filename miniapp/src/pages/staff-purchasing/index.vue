@@ -120,7 +120,6 @@ const statusOptions = [
   { label: '全部', value: '' },
   { label: '待采购', value: 'PENDING' },
   { label: '已完成', value: 'COMPLETED' },
-  { label: '已取消', value: 'CANCELLED' },
 ];
 const statusIndex = ref(0);
 
@@ -324,7 +323,6 @@ const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
     'PENDING': '待采购',
     'COMPLETED': '已完成',
-    'CANCELLED': '已取消',
   };
   return statusMap[status] || status;
 };
@@ -335,7 +333,6 @@ const getStatusClass = (status: string) => {
     'DRAFT': 'draft',
     'PENDING': 'pending',
     'COMPLETED': 'completed',
-    'CANCELLED': 'cancelled',
   };
   return classMap[status] || '';
 };
@@ -532,11 +529,6 @@ const confirmDeletePurchaseList = (id: string) => {
       &.completed {
         background-color: #f6ffed;
         color: #52c41a;
-      }
-
-      &.cancelled {
-        background-color: #ffebee;
-        color: #f44336;
       }
     }
   }

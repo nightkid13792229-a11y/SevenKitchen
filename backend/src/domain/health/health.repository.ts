@@ -86,6 +86,7 @@ export interface AllergyRecord {
   confirmedBy: 'VET' | 'OWNER'
   treatment: string | null
   notes: string | null
+  attachments: string[]
   createdAt: Date
   updatedAt: Date
 }

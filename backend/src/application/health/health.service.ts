@@ -323,7 +323,8 @@ export class HealthService {
       severity: dto.severity || 'MILD',
       confirmedBy: dto.confirmedBy || 'VET',
       treatment: dto.treatment ?? null,
-      notes: dto.notes ?? null
+      notes: dto.notes ?? null,
+      attachments: dto.attachments ?? []
     })
 
     return this.mapAllergyRecordToDto(record)
@@ -371,7 +372,8 @@ export class HealthService {
       severity: dto.severity ?? undefined,
       confirmedBy: dto.confirmedBy ?? undefined,
       treatment: dto.treatment ?? null,
-      notes: dto.notes ?? null
+      notes: dto.notes ?? null,
+      attachments: dto.attachments ?? undefined
     })
 
     return this.mapAllergyRecordToDto(updated)
@@ -463,6 +465,7 @@ export class HealthService {
       confirmedBy: record.confirmedBy,
       treatment: record.treatment,
       notes: record.notes,
+      attachments: record.attachments || [],
       createdAt: record.createdAt,
       updatedAt: record.updatedAt
     })

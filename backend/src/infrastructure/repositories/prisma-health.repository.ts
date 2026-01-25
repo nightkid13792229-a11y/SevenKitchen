@@ -302,7 +302,8 @@ export class PrismaAllergyRecordRepository implements AllergyRecordRepository {
         severity: data.severity,
         confirmedBy: data.confirmedBy,
         treatment: data.treatment,
-        notes: data.notes
+        notes: data.notes,
+        attachments: data.attachments
       }
     })
     return this.mapToDomain(record)
@@ -322,7 +323,8 @@ export class PrismaAllergyRecordRepository implements AllergyRecordRepository {
         severity: data.severity,
         confirmedBy: data.confirmedBy,
         treatment: data.treatment,
-        notes: data.notes
+        notes: data.notes,
+        attachments: data.attachments
       }
     })
     return this.mapToDomain(record)
@@ -346,6 +348,7 @@ export class PrismaAllergyRecordRepository implements AllergyRecordRepository {
       confirmedBy: record.confirmedBy as any,
       treatment: record.treatment,
       notes: record.notes,
+      attachments: record.attachments || [],
       createdAt: record.createdAt,
       updatedAt: record.updatedAt
     }

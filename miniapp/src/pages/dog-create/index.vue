@@ -899,6 +899,12 @@ interface Attachment {
 
 // 附件名称存储
 const attachmentNames = ref<Record<number, string>>({})
+// 附件COS key存储（用于删除COS文件）
+const attachmentKeys = ref<Record<number, string>>({})
+
+// 体检记录附件名称和key存储
+const checkupAttachmentNames = ref<Record<number, string>>({})
+const checkupAttachmentKeys = ref<Record<number, string>>({})
 
 interface FormData {
   name: string
@@ -2199,7 +2205,14 @@ function uploadFile(filePath: string, fileType: 'image' | 'pdf') {
             if (!currentMedicalRecord.value.attachments) {
               currentMedicalRecord.value.attachments = []
             }
+            const currentIndex = currentMedicalRecord.value.attachments.length
             currentMedicalRecord.value.attachments.push(data.data.url)
+
+            // 保存COS key用于后续删除
+            if (data.data.key) {
+              attachmentKeys.value[currentIndex] = data.data.key
+              console.log('[DogCreate] COS key saved:', data.data.key)
+            }
 
             console.log('[DogCreate] File URL added to attachments:', data.data.url)
             console.log('[DogCreate] Total attachments:', currentMedicalRecord.value.attachments.length)
@@ -2248,17 +2261,70 @@ function uploadFile(filePath: string, fileType: 'image' | 'pdf') {
 /**
  * 删除附件
  */
-function removeAttachment(index: number) {
+async function removeAttachment(index: number) {
   uni.showModal({
     title: '确认删除',
     content: '确定要删除这个文件吗？',
-    success: (res) => {
+    success: async (res) => {
       if (res.confirm && currentMedicalRecord.value.attachments) {
+        // 先调用后端API删除COS文件
+        const cosKey = attachmentKeys.value[index]
+        if (cosKey) {
+          try {
+            const baseUrl = getBaseUrl()
+            const token = getToken()
+
+            await new Promise((resolve, reject) => {
+              uni.request({
+                url: `${baseUrl}/dogs/medical-records/attachments`,
+                method: 'DELETE',
+                header: {
+                  'Authorization': `Bearer ${token}`,
+                  'X-Customer-Id': uni.getStorageSync('userId') || '',
+                  'Content-Type': 'application/json'
+                },
+                data: {
+                  key: cosKey
+                },
+                success: (res) => {
+                  if (res.statusCode === 200) {
+                    console.log('[Remove] COS file deleted successfully:', cosKey)
+                    resolve(res)
+                  } else {
+                    console.error('[Remove] Failed to delete COS file:', res)
+                    // 即使删除COS失败，也继续删除本地引用
+                    resolve(res)
+                  }
+                },
+                fail: (err) => {
+                  console.error('[Remove] Error deleting COS file:', err)
+                  // 即使删除COS失败，也继续删除本地引用
+                  resolve(err)
+                }
+              })
+            })
+          } catch (error) {
+            console.error('[Remove] Error deleting COS file:', error)
+          }
+        }
+
+        // 从数组中删除附件
         currentMedicalRecord.value.attachments.splice(index, 1)
+
+        // 清理对应的COS key，并调整其他key的索引
+        const newKeys: Record<number, string> = {}
+        let newIndex = 0
+        for (let i = 0; i < currentMedicalRecord.value.attachments.length; i++) {
+          if (attachmentKeys.value[i]) {
+            newKeys[newIndex] = attachmentKeys.value[i]
+            newIndex++
+          }
+        }
+        attachmentKeys.value = newKeys
 
         // 清理对应的自定义名称，并调整其他名称的索引
         const newNames: Record<number, string> = {}
-        let newIndex = 0
+        newIndex = 0
         for (let i = 0; i < currentMedicalRecord.value.attachments.length; i++) {
           if (attachmentNames.value[i]) {
             newNames[newIndex] = attachmentNames.value[i]
@@ -2268,7 +2334,9 @@ function removeAttachment(index: number) {
         attachmentNames.value = newNames
 
         console.log('[Remove] Attachment deleted at index:', index)
+        console.log('[Remove] COS key deleted:', cosKey)
         console.log('[Remove] Remaining attachments:', currentMedicalRecord.value.attachments.length)
+        console.log('[Remove] Updated attachment keys:', attachmentKeys.value)
         console.log('[Remove] Updated attachment names:', attachmentNames.value)
 
         uni.showToast({
@@ -2780,7 +2848,14 @@ function uploadCheckupFile(filePath: string, fileType: 'image' | 'pdf') {
             if (!currentCheckupRecord.value.attachments) {
               currentCheckupRecord.value.attachments = []
             }
+            const currentIndex = currentCheckupRecord.value.attachments.length
             currentCheckupRecord.value.attachments.push(data.data.url)
+
+            // 保存COS key用于后续删除
+            if (data.data.key) {
+              checkupAttachmentKeys.value[currentIndex] = data.data.key
+              console.log('[DogCreate] Checkup COS key saved:', data.data.key)
+            }
 
             uni.showToast({
               title: '上传成功',
@@ -2902,15 +2977,84 @@ function handlePreviewCheckupFile(event: any) {
 /**
  * 删除体检附件
  */
-function handleRemoveCheckupAttachment(event: any) {
+async function handleRemoveCheckupAttachment(event: any) {
   const index = event.currentTarget.dataset.index
 
   uni.showModal({
     title: '确认删除',
     content: '确定要删除这个附件吗？',
-    success: (res) => {
+    success: async (res) => {
       if (res.confirm && currentCheckupRecord.value.attachments) {
+        // 先调用后端API删除COS文件
+        const cosKey = checkupAttachmentKeys.value[index]
+        if (cosKey) {
+          try {
+            const baseUrl = getBaseUrl()
+            const token = getToken()
+
+            await new Promise((resolve, reject) => {
+              uni.request({
+                url: `${baseUrl}/dogs/checkup-records/attachments`,
+                method: 'DELETE',
+                header: {
+                  'Authorization': `Bearer ${token}`,
+                  'X-Customer-Id': uni.getStorageSync('userId') || '',
+                  'Content-Type': 'application/json'
+                },
+                data: {
+                  key: cosKey
+                },
+                success: (res) => {
+                  if (res.statusCode === 200) {
+                    console.log('[Remove Checkup] COS file deleted successfully:', cosKey)
+                    resolve(res)
+                  } else {
+                    console.error('[Remove Checkup] Failed to delete COS file:', res)
+                    // 即使删除COS失败，也继续删除本地引用
+                    resolve(res)
+                  }
+                },
+                fail: (err) => {
+                  console.error('[Remove Checkup] Error deleting COS file:', err)
+                  // 即使删除COS失败，也继续删除本地引用
+                  resolve(err)
+                }
+              })
+            })
+          } catch (error) {
+            console.error('[Remove Checkup] Error deleting COS file:', error)
+          }
+        }
+
+        // 从数组中删除附件
         currentCheckupRecord.value.attachments.splice(index, 1)
+
+        // 清理对应的COS key，并调整其他key的索引
+        const newKeys: Record<number, string> = {}
+        let newIndex = 0
+        for (let i = 0; i < currentCheckupRecord.value.attachments.length; i++) {
+          if (checkupAttachmentKeys.value[i]) {
+            newKeys[newIndex] = checkupAttachmentKeys.value[i]
+            newIndex++
+          }
+        }
+        checkupAttachmentKeys.value = newKeys
+
+        // 清理对应的自定义名称，并调整其他名称的索引
+        const newNames: Record<number, string> = {}
+        newIndex = 0
+        for (let i = 0; i < currentCheckupRecord.value.attachments.length; i++) {
+          if (checkupAttachmentNames.value[i]) {
+            newNames[newIndex] = checkupAttachmentNames.value[i]
+            newIndex++
+          }
+        }
+        checkupAttachmentNames.value = newNames
+
+        console.log('[Remove Checkup] Attachment deleted at index:', index)
+        console.log('[Remove Checkup] COS key deleted:', cosKey)
+        console.log('[Remove Checkup] Remaining attachments:', currentCheckupRecord.value.attachments.length)
+
         uni.showToast({
           title: '删除成功',
           icon: 'success',

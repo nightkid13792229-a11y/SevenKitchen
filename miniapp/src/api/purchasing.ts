@@ -4,6 +4,7 @@
  */
 
 import { request } from '../utils/api';
+import { getBaseUrl } from '../utils/config';
 
 // ==========================================
 // 采购清单管理
@@ -252,13 +253,86 @@ export function getPurchaseChannels() {
 // ==========================================
 
 /**
- * 提交报销申请
+ * 提交报销申请参数
  */
-export function submitReimbursement(data: {
+export interface SubmitReimbursementParams {
   purchaseListIds: string[];
   receiptUrls: string[];
   totalActualCost: number;
-}) {
+  platformShippingFee?: number;
+  platformPackagingFee?: number;
+  customFees?: Array<{ description: string; amount: number }>;
+}
+
+/**
+ * 上传报销转账/支付记录照片
+ */
+export function uploadReceiptPhoto(filePath: string) {
+  return new Promise((resolve, reject) => {
+    const baseUrl = getBaseUrl();
+    const token = uni.getStorageSync('token');
+
+    console.log('[Upload] Base URL:', baseUrl);
+    console.log('[Upload] Token exists:', !!token);
+    console.log('[Upload] File path:', filePath);
+
+    if (!token) {
+      console.error('[Upload] No token found');
+      reject(new Error('请先登录'));
+      return;
+    }
+
+    uni.uploadFile({
+      url: `${baseUrl}/staff/purchasing/upload-receipt-photo`,
+      filePath,
+      name: 'file',
+      header: {
+        'Authorization': `Bearer ${token}`,
+      },
+      success: (res) => {
+        console.log('[Upload] Upload success:', res);
+        console.log('[Upload] Response data:', res.data);
+        console.log('[Upload] Status code:', res.statusCode);
+
+        try {
+          const data = JSON.parse(res.data);
+          console.log('[Upload] Parsed data:', data);
+
+          if (data.code === 0 || data.code === 200) {
+            console.log('[Upload] Upload successful');
+            resolve(data);
+          } else {
+            console.error('[Upload] Upload failed with code:', data.code, 'message:', data.message);
+            reject(new Error(data.message || '上传失败'));
+          }
+        } catch (error) {
+          console.error('[Upload] Failed to parse response:', error);
+          reject(error);
+        }
+      },
+      fail: (error) => {
+        console.error('[Upload] Upload failed:', error);
+        reject(error);
+      },
+    });
+  });
+}
+
+/**
+ * 删除报销转账/支付记录照片
+ */
+export function deleteReceiptPhoto(key: string) {
+  return request({
+    url: '/staff/purchasing/reimbursement-receipts',
+    method: 'DELETE',
+    data: { key },
+  });
+}
+
+/**
+ * 提交报销申请
+ */
+export function submitReimbursement(data: SubmitReimbursementParams) {
   return request({
     url: '/staff/purchasing/reimbursements',
     method: 'POST',
@@ -298,11 +372,7 @@ export function getReimbursementDetail(id: string) {
  */
 export function resubmitReimbursement(
   id: string,
-  data: {
-    purchaseListIds: string[];
-    receiptUrls: string[];
-    totalActualCost: number;
-  }
+  data: SubmitReimbursementParams
 ) {
   return request({
     url: `/staff/purchasing/reimbursements/${id}/resubmit`,

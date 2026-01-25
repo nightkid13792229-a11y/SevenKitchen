@@ -10,6 +10,20 @@ import { request } from '../utils/api';
 // ==========================================
 
 /**
+ * 预览采购需求（不改变订单状态）
+ */
+export function previewPurchaseList(params: {
+  startDate: string;
+  endDate?: string;
+}) {
+  return request({
+    url: '/staff/purchasing/preview',
+    method: 'GET',
+    data: params,
+  });
+}
+
+/**
  * 生成采购清单
  */
 export function generatePurchaseList(params: {
@@ -20,6 +34,92 @@ export function generatePurchaseList(params: {
     url: '/staff/purchasing/lists',
     method: 'POST',
     data: params,
+  });
+}
+
+/**
+ * 追加订单到采购清单
+ */
+export function addOrdersToList(purchaseListId: string, data: {
+  orderIds: string[];
+}) {
+  return request({
+    url: `/staff/purchasing/lists/${purchaseListId}/orders`,
+    method: 'POST',
+    data,
+  });
+}
+
+/**
+ * 从采购清单剔除订单
+ */
+export function removeOrdersFromList(purchaseListId: string, data: {
+  orderIds: string[];
+}) {
+  return request({
+    url: `/staff/purchasing/lists/${purchaseListId}/orders`,
+    method: 'DELETE',
+    data,
+  });
+}
+
+/**
+ * 手动添加原料到采购清单
+ */
+export function addManualItemToList(purchaseListId: string, data: {
+  ingredientId: string;
+  ingredientName: string;
+  type: 'FOOD' | 'SUPPLEMENT' | 'PACKAGING';
+  quantityNeeded: number;
+  quantityUnit: string;
+  estimatedCost: number;
+  purchaseChannel?: string;
+  productModel?: string;
+}) {
+  return request({
+    url: `/staff/purchasing/lists/${purchaseListId}/items`,
+    method: 'POST',
+    data,
+  });
+}
+
+/**
+ * 删除采购清单中的原料
+ */
+export function removeItemFromList(purchaseListId: string, itemId: string) {
+  return request({
+    url: `/staff/purchasing/lists/${purchaseListId}/items/${itemId}`,
+    method: 'DELETE',
+  });
+}
+
+/**
+ * 删除采购清单
+ */
+export function deletePurchaseList(purchaseListId: string) {
+  return request({
+    url: `/staff/purchasing/lists/${purchaseListId}`,
+    method: 'DELETE',
+  });
+}
+
+/**
+ * 检查订单制作日期变更
+ */
+export function checkOrderDateChanges(purchaseListId: string) {
+  return request({
+    url: `/staff/purchasing/lists/${purchaseListId}/check-date-changes`,
+    method: 'GET',
+  });
+}
+
+/**
+ * 重新计算采购清单需求
+ */
+export function recalculatePurchaseList(purchaseListId: string) {
+  return request({
+    url: `/staff/purchasing/lists/${purchaseListId}/recalculate`,
+    method: 'POST',
   });
 }
 

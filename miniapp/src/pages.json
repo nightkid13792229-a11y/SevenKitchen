@@ -170,6 +170,12 @@
       }
     },
     {
+      "path": "pages/staff-purchasing/preview",
+      "style": {
+        "navigationBarTitleText": "预览采购需求"
+      }
+    },
+    {
       "path": "pages/staff-production/index",
       "style": {
         "navigationBarTitleText": "生产管理"
@@ -241,6 +247,12 @@
       "style": {
         "navigationBarTitleText": "我的定制订单",
         "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/common/webview",
+      "style": {
+        "navigationBarTitleText": "网页"
       }
     }
   ],

@@ -4381,6 +4381,7 @@ function submit() {
     treatLevel: formData.value.treatLevel,
     medicalRecords: formData.value.medicalRecords || [],
     checkupRecords: formData.value.checkupRecords || [],
+    allergyRecords: formData.value.allergyRecords || [],
     allergyFoods: formData.value.allergyFoods || null,
     pickyFoods: formData.value.pickyFoods || null
   }

@@ -957,7 +957,7 @@
             <text class="medical-label">确认方 *</text>
             <picker mode="selector" :range="confirmedByOptions" :value="confirmedByIndex" @change="onConfirmedByChange">
               <view class="medical-picker">
-                {{ currentAllergyRecord.confirmedBy === 'VET' ? '兽医' : '主人' || '请选择确认方' }}
+                {{ currentAllergyRecord.confirmedBy === 'VET' ? '兽医' : currentAllergyRecord.confirmedBy === 'OWNER' ? '主人' : '请选择确认方' }}
               </view>
             </picker>
           </view>

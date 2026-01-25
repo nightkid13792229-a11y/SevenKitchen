@@ -1690,6 +1690,8 @@ function populateFormData(profile: any) {
   console.log('[DogCreate] Loaded medicalRecords:', formData.value.medicalRecords)
   formData.value.checkupRecords = profile.checkupRecords || []
   console.log('[DogCreate] Loaded checkupRecords:', formData.value.checkupRecords)
+  formData.value.allergyRecords = profile.allergyRecords || []
+  console.log('[DogCreate] Loaded allergyRecords:', formData.value.allergyRecords)
   formData.value.allergyFoods = profile.allergyFoods || ''
   formData.value.pickyFoods = profile.pickyFoods || ''
 

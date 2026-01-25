@@ -37,6 +37,9 @@ export class AllergyRecordResponseDto {
   notes!: string | null
 
   @Expose()
+  attachments!: string[]
+
+  @Expose()
   createdAt!: string
 
   @Expose()

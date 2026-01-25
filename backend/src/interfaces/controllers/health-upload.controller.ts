@@ -6,6 +6,8 @@
 import {
   Controller,
   Post,
+  Delete,
+  Body,
   UseGuards,
   UseInterceptors,
   UploadedFile,
@@ -18,6 +20,7 @@ import {
   ApiResponse,
   ApiSecurity,
   ApiConsumes,
+  ApiBody,
 } from '@nestjs/swagger'
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service'
 import { ApiResponseDto } from '../dto/common/response.dto'
@@ -76,6 +79,42 @@ export class HealthUploadController {
     } catch (error) {
       console.error('[HealthUpload] Upload failed:', error)
       throw new BadRequestException('Failed to upload file')
+    }
+  }
+
+  @Delete('attachments')
+  @ApiOperation({ summary: '删除过敏记录附件' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        key: {
+          type: 'string',
+          description: 'COS文件Key',
+          example: 'health-records/1234567890-abc123.pdf',
+        },
+      },
+      required: ['key'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: '文件删除成功',
+  })
+  async deleteAllergyAttachment(@Body() dto: { key: string }): Promise<ApiResponseDto<any>> {
+    if (!dto.key) {
+      throw new BadRequestException('缺少文件Key')
+    }
+
+    console.log('[HealthUpload] Deleting allergy attachment:', dto.key)
+
+    try {
+      await this.cosService.deleteImage(dto.key)
+      return ApiResponseDto.success(null, '删除成功')
+    } catch (error) {
+      console.error('[HealthUpload] Failed to delete allergy attachment:', error)
+      throw new BadRequestException('删除失败，请重试')
     }
   }
 }

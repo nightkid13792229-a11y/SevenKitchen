@@ -4074,9 +4074,9 @@ async function removeAllergyAttachment(event: any) {
             uni.showLoading({ title: '删除中...' })
 
             await request({
-              url: '/dogs/allergy-records/attachments',
+              url: '/health/attachments',
               method: 'DELETE',
-              data: { cosKey }
+              data: { key: cosKey }
             })
 
             console.log('[DogCreate] COS file deleted successfully')

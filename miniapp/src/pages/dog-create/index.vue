@@ -3896,7 +3896,7 @@ function uploadAllergyFile(filePath: string, fileType: 'image' | 'pdf') {
   uni.showLoading({ title: '上传中...' })
 
   const baseUrl = getBaseUrl()
-  const uploadUrl = `${baseUrl}/dogs/allergy-records/upload-attachment`
+  const uploadUrl = `${baseUrl}/health/upload-image`
 
   const token = getToken()
 

@@ -814,6 +814,10 @@ model Reimbursement {
   reviewedById        String?              @map("reviewed_by_id")
   reviewedAt          DateTime?            @map("reviewed_at")
   reviewComment       String?              @map("review_comment") @db.Text
+  // 新增费用明细字段
+  platformShippingFee   Decimal? @map("platform_shipping_fee") @db.Decimal(10, 2)
+  platformPackagingFee  Decimal? @map("platform_packaging_fee") @db.Decimal(10, 2)
+  customFees            Json?    @map("custom_fees") @db.JsonB
   createdAt           DateTime             @default(now()) @map("created_at")
   updatedAt           DateTime             @updatedAt @map("updated_at")
   purchaseLists       PurchaseList[]

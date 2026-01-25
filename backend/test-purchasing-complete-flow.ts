@@ -126,9 +126,6 @@ async function main() {
     const existingList = await prisma.purchaseList.findFirst({
       where: {
         targetDate: new Date(today),
-        status: {
-          not: 'CANCELLED',
-        },
       },
     });
 

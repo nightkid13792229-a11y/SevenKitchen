@@ -23,6 +23,10 @@ export interface ReimbursementConstructor {
   createdAt?: Date;
   updatedAt?: Date;
   purchaseLists?: PurchaseList[];
+  // 新增字段
+  platformShippingFee?: number;
+  platformPackagingFee?: number;
+  customFees?: Array<{ description: string; amount: number }>;
 }
 
 export class Reimbursement {
@@ -41,6 +45,11 @@ export class Reimbursement {
   public updatedAt: Date;
   public purchaseLists: PurchaseList[];
 
+  // 新增属性
+  public readonly platformShippingFee?: number;
+  public readonly platformPackagingFee?: number;
+  public readonly customFees?: Array<{ description: string; amount: number }>;
+
   constructor(data: ReimbursementConstructor) {
     this.id = data.id || uuidv4();
     this.claimNumber = data.claimNumber;
@@ -56,6 +65,9 @@ export class Reimbursement {
     this.createdAt = data.createdAt || new Date();
     this.updatedAt = data.updatedAt || this.createdAt;
     this.purchaseLists = data.purchaseLists || [];
+    this.platformShippingFee = data.platformShippingFee;
+    this.platformPackagingFee = data.platformPackagingFee;
+    this.customFees = data.customFees || [];
 
     this.validateInvariants();
   }
@@ -72,16 +84,14 @@ export class Reimbursement {
       throw new Error('Total estimated cost cannot be negative');
     }
 
-    if (this.purchaseLists.length === 0) {
-      throw new Error('Reimbursement must have at least one purchase list');
-    }
-
-    // 验证所有采购清单都是COMPLETED状态
-    const allCompleted = this.purchaseLists.every(
-      list => list.status === PurchaseListStatus.COMPLETED
-    );
-    if (!allCompleted) {
-      throw new Error('All purchase lists must be completed before reimbursement');
+    // 如果有采购清单，验证它们都是COMPLETED状态
+    if (this.purchaseLists.length > 0) {
+      const allCompleted = this.purchaseLists.every(
+        list => list.status === PurchaseListStatus.COMPLETED
+      );
+      if (!allCompleted) {
+        throw new Error('All purchase lists must be completed before reimbursement');
+      }
     }
 
     // 验证发票照片数量（最多10张）
@@ -213,6 +223,9 @@ export class Reimbursement {
       reviewComment: this.reviewComment,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
+      platformShippingFee: this.platformShippingFee,
+      platformPackagingFee: this.platformPackagingFee,
+      customFees: this.customFees,
     };
   }
 
@@ -239,6 +252,9 @@ export class Reimbursement {
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
       purchaseLists,
+      platformShippingFee: data.platformShippingFee ? Number(data.platformShippingFee) : undefined,
+      platformPackagingFee: data.platformPackagingFee ? Number(data.platformPackagingFee) : undefined,
+      customFees: data.customFees || [],
     });
   }
 }

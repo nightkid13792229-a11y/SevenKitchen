@@ -237,6 +237,16 @@ export function deletePurchaseRecord(recordId: string) {
   });
 }
 
+/**
+ * 获取所有采购渠道列表
+ */
+export function getPurchaseChannels() {
+  return request({
+    url: '/staff/purchasing/purchase-channels',
+    method: 'GET',
+  });
+}
+
 // ==========================================
 // 报销单管理
 // ==========================================

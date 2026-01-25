@@ -250,28 +250,24 @@
           <!-- 采购渠道 -->
           <view class="form-section">
             <text class="form-label">采购渠道 *</text>
-            <picker
-              v-if="!showCustomChannel"
-              mode="selector"
-              :range="channelOptions"
-              @change="onChannelChange"
-            >
-              <view class="picker-input">
-                <text :class="recordForm.purchaseChannel ? 'value' : 'placeholder'">
-                  {{ recordForm.purchaseChannel || '请选择采购渠道' }}
-                </text>
-                <text class="arrow">›</text>
-              </view>
-            </picker>
-
-            <!-- 自定义渠道输入 -->
-            <input
-              v-if="showCustomChannel"
-              v-model="customChannel"
-              class="form-input"
-              placeholder="请输入采购渠道"
-              placeholder-class="input-placeholder"
-            />
+            <view class="channel-input-wrapper">
+              <input
+                v-model="recordForm.purchaseChannel"
+                class="form-input channel-input"
+                placeholder="请输入或选择采购渠道"
+                placeholder-class="input-placeholder"
+              />
+              <picker
+                v-if="channelOptions.length > 0"
+                mode="selector"
+                :range="channelOptions"
+                @change="onChannelChange"
+              >
+                <view class="quick-select-btn">
+                  <text>快速选择</text>
+                </view>
+              </picker>
+            </view>
           </view>
 
           <!-- 实际采购数量（动态单位） -->
@@ -290,7 +286,7 @@
           <view class="form-section">
             <text class="form-label">实际采购金额（元） *</text>
             <input
-              v-model.number="recordForm.actualCost"
+              v-model="recordForm.actualCost"
               type="digit"
               class="form-input"
               placeholder="请输入金额，如：156.50"
@@ -346,6 +342,7 @@ import {
   addPurchaseRecord,
   removeItemFromList,
   checkOrderDateChanges,
+  getPurchaseChannels,
 } from '@/api/purchasing';
 
 // 状态管理
@@ -354,6 +351,7 @@ const purchaseList = ref<any>(null);
 const items = ref<any[]>([]);
 const loading = ref(true);
 const completing = ref(false);
+const allPurchaseChannels = ref<string[]>([]); // 所有采购渠道列表
 
 // 按类型分组的原料（计算属性）
 const groupedItems = computed(() => {
@@ -406,32 +404,10 @@ const recordForm = ref({
   notes: '',
 });
 
-// 自定义采购渠道输入
-const showCustomChannel = ref(false);
-const customChannel = ref('');
-
-// 采购渠道选项（从当前采购清单的原料中聚合）
+// 采购渠道选项（从所有原料数据库中加载）
 const channelOptions = computed(() => {
-  const channelMap = new Map<string, number>();
-
-  // 统计当前采购清单中使用的采购渠道
-  items.value.forEach(item => {
-    // 从采购清单项获取
-    if (item.purchaseChannel) {
-      channelMap.set(item.purchaseChannel, (channelMap.get(item.purchaseChannel) || 0) + 1);
-    }
-    // 从原料关联数据获取
-    if (item.ingredient?.purchaseChannel) {
-      channelMap.set(item.ingredient.purchaseChannel, (channelMap.get(item.ingredient.purchaseChannel) || 0) + 1);
-    }
-  });
-
-  // 按使用频率排序
-  const sortedChannels = Array.from(channelMap.entries())
-    .sort((a, b) => b[1] - a[1])
-    .map(([channel]) => channel);
-
-  return sortedChannels;
+  // 返回从API加载的所有采购渠道
+  return allPurchaseChannels.value;
 });
 
 // 获取采购单位（多级回退 + 默认值）
@@ -472,6 +448,9 @@ const loadDetail = async () => {
   loading.value = true;
 
   try {
+    // 加载采购渠道列表
+    await loadPurchaseChannels();
+
     const res: any = await getPurchaseListDetail(purchaseListId.value);
 
     if (res.code === 0) {
@@ -512,6 +491,20 @@ const checkDateChanges = async () => {
   }
 };
 
+// 加载所有采购渠道
+const loadPurchaseChannels = async () => {
+  try {
+    const res: any = await getPurchaseChannels();
+    if (res.code === 0) {
+      allPurchaseChannels.value = res.data || [];
+    } else {
+      console.error('加载采购渠道失败:', res.message);
+    }
+  } catch (error) {
+    console.error('加载采购渠道失败', error);
+  }
+};
+
 // 加载采购记录并按原料分组
 const loadPurchaseRecords = async () => {
   try {
@@ -547,15 +540,13 @@ const handleContinueAdd = (item: any) => {
   // 预填充产品型号（优先使用采购清单项的，其次使用原料的）
   recordForm.value.productModel = item.productModel || item.ingredient?.productModel || '';
 
-  // 预填充采购渠道（如果只有一个渠道，自动填充）
+  // 预填充采购渠道
   if (item.purchaseChannel) {
     recordForm.value.purchaseChannel = item.purchaseChannel;
   } else if (item.ingredient?.purchaseChannel) {
     recordForm.value.purchaseChannel = item.ingredient.purchaseChannel;
   }
 
-  showCustomChannel.value = false;
-  customChannel.value = '';
   showRecordForm.value = true;
 };
 
@@ -563,22 +554,13 @@ const handleContinueAdd = (item: any) => {
 const closeRecordForm = () => {
   showRecordForm.value = false;
   selectedIngredient.value = null;
-  showCustomChannel.value = false;
-  customChannel.value = '';
 };
 
-// 采购渠道选择变更
+// 采购渠道快速选择
 const onChannelChange = (e: any) => {
   const index = e.detail.value;
   const channel = channelOptions.value[index];
-
-  if (channel === '自定义') {
-    showCustomChannel.value = true;
-    recordForm.value.purchaseChannel = '';
-  } else {
-    showCustomChannel.value = false;
-    recordForm.value.purchaseChannel = channel;
-  }
+  recordForm.value.purchaseChannel = channel;
 };
 
 // 重置表单
@@ -595,9 +577,8 @@ const resetRecordForm = () => {
 // 提交采购记录
 const submitRecord = async () => {
   // 表单验证
-  const channel = showCustomChannel.value ? customChannel.value.trim() : recordForm.value.purchaseChannel.trim();
-  if (!channel) {
-    uni.showToast({ title: '请选择或输入采购渠道', icon: 'none' });
+  if (!recordForm.value.purchaseChannel || recordForm.value.purchaseChannel.trim().length === 0) {
+    uni.showToast({ title: '请输入采购渠道', icon: 'none' });
     return;
   }
 
@@ -634,7 +615,7 @@ const submitRecord = async () => {
 
   try {
     const data: any = {
-      purchaseChannel: channel,
+      purchaseChannel: recordForm.value.purchaseChannel.trim(),
       actualQuantity: Math.round(quantity),  // 确保为整数
       actualCost: cost,
       productModel: recordForm.value.productModel?.trim() || undefined,
@@ -1210,55 +1191,63 @@ const confirmDeleteItem = (item: any) => {
       background-color: #f9f9f9;
       border-radius: 12rpx;
       border-left: 4rpx solid #1890ff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16rpx;
 
       .record-main {
-        display: flex;
-        align-items: center;
-        gap: 12rpx;
-        margin-bottom: 12rpx;
-        flex-wrap: wrap;
+        flex: 1;
+        min-width: 0;
 
-        .record-quantity {
-          font-size: 28rpx;
-          font-weight: bold;
-          color: #1890ff;
+        .record-info {
+          display: flex;
+          align-items: center;
+          gap: 12rpx;
+          margin-bottom: 8rpx;
+          flex-wrap: wrap;
+
+          .record-quantity {
+            font-size: 28rpx;
+            font-weight: bold;
+            color: #1890ff;
+          }
+
+          .record-cost {
+            font-size: 28rpx;
+            font-weight: bold;
+            color: #ff6b6b;
+          }
+
+          .record-channel {
+            font-size: 24rpx;
+            color: #666;
+          }
         }
 
-        .record-cost {
-          font-size: 28rpx;
-          font-weight: bold;
-          color: #ff6b6b;
-        }
+        .record-details {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 8rpx;
 
-        .record-channel {
-          font-size: 24rpx;
-          color: #666;
-        }
-      }
+          .detail {
+            font-size: 22rpx;
+            color: #999;
+            padding: 4rpx 8rpx;
+            background-color: #f0f0f0;
+            border-radius: 4rpx;
+          }
 
-      .record-details {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8rpx;
-        margin-bottom: 12rpx;
-
-        .detail {
-          font-size: 22rpx;
-          color: #999;
-          padding: 4rpx 8rpx;
-          background-color: #f0f0f0;
-          border-radius: 4rpx;
-        }
-
-        .detail-time {
-          font-size: 22rpx;
-          color: #999;
+          .detail-time {
+            font-size: 22rpx;
+            color: #999;
+          }
         }
       }
 
       .record-actions {
-        display: flex;
-        justify-content: flex-end;
+        flex-shrink: 0;
+        align-self: flex-start;
 
         .delete-btn {
           padding: 8rpx 24rpx;
@@ -1523,6 +1512,37 @@ const confirmDeleteItem = (item: any) => {
     .arrow {
       font-size: 32rpx;
       color: #999;
+    }
+  }
+
+  .channel-input-wrapper {
+    display: flex;
+    gap: 12rpx;
+    align-items: center;
+
+    .channel-input {
+      flex: 1;
+    }
+
+    .quick-select-btn {
+      flex-shrink: 0;
+      padding: 0 24rpx;
+      height: 80rpx;
+      background: linear-gradient(135deg, #1890ff 0%, #096dd9 100%);
+      border-radius: 8rpx;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+
+      text {
+        font-size: 26rpx;
+        color: #fff;
+        font-weight: 500;
+      }
+
+      &:active {
+        opacity: 0.8;
+      }
     }
   }
 

@@ -149,8 +149,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
-import { getPurchaseLists, submitReimbursement as submitReimbursementApi, uploadReceiptPhoto, deleteReceiptPhoto } from '@/api/purchasing';
+import { ref, computed } from 'vue';
+import { onLoad } from '@dcloudio/uni-app';
+import { getPurchaseLists, submitReimbursement as submitReimbursementApi, uploadReceiptPhoto, deleteReceiptPhoto, getReimbursementDetail } from '@/api/purchasing';
 
 // 自定义费用类型
 interface CustomFee {
@@ -183,8 +184,14 @@ const canSubmit = computed(() => {
 });
 
 // 页面加载
-onMounted(() => {
-  loadCompletedPurchaseLists();
+onLoad((options: any) => {
+  if (options.resubmitId) {
+    // 重新提交模式：加载已有报销单数据
+    loadExistingReimbursement(options.resubmitId);
+  } else {
+    // 新建模式：加载已完成的采购清单
+    loadCompletedPurchaseLists();
+  }
 });
 
 // 计算总报销金额
@@ -221,6 +228,49 @@ const loadCompletedPurchaseLists = async () => {
     }
   } catch (error: any) {
     console.error('加载采购清单失败', error);
+    uni.showToast({ title: '加载失败', icon: 'none' });
+  }
+};
+
+// 加载已有报销单数据（用于重新提交）
+const loadExistingReimbursement = async (id: string) => {
+  try {
+    uni.showLoading({ title: '加载中...' });
+
+    const res: any = await getReimbursementDetail(id);
+
+    if (res.code === 0) {
+      const data = res.data;
+
+      // 填充费用明细
+      platformShippingFee.value = data.platformShippingFee?.toString() || '';
+      platformPackagingFee.value = data.platformPackagingFee?.toString() || '';
+      customFees.value = data.customFees?.map((fee: any) => ({
+        description: fee.description,
+        amount: fee.amount.toString()
+      })) || [];
+
+      // 填充采购清单
+      completedPurchaseLists.value = data.purchaseLists || [];
+      selectedListIds.value = data.purchaseLists?.map((list: any) => list.id) || [];
+
+      // 填充照片
+      receiptUrls.value = data.receiptUrls?.map((url: string, index: number) => ({
+        url,
+        key: `existing_${index}`
+      })) || [];
+
+      // 重新计算总额
+      calculateTotal();
+
+      uni.hideLoading();
+    } else {
+      uni.hideLoading();
+      uni.showToast({ title: res.message || '加载失败', icon: 'none' });
+    }
+  } catch (error: any) {
+    uni.hideLoading();
+    console.error('加载报销单失败', error);
     uni.showToast({ title: '加载失败', icon: 'none' });
   }
 };

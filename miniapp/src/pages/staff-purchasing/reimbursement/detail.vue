@@ -141,7 +141,7 @@
                 class="item-row"
               >
                 <text class="item-name">{{ item.ingredientName }}</text>
-                <text class="item-quantity">{{ item.quantityNeeded }}{{ item.quantityUnit }}</text>
+                <text class="item-quantity">{{ Number(item.quantityNeeded).toFixed(2) }}{{ item.quantityUnit }}</text>
                 <text class="item-cost">¥{{ item.estimatedCost.toFixed(2) }}</text>
               </view>
             </view>
@@ -151,7 +151,7 @@
 
       <!-- 发票照片 -->
       <view v-if="reimbursement.receiptUrls && reimbursement.receiptUrls.length > 0" class="section">
-        <text class="section-title">发票照片</text>
+        <text class="section-title">支付凭证</text>
         <view class="photos-grid">
           <view
             v-for="(url, index) in reimbursement.receiptUrls"

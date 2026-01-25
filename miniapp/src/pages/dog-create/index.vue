@@ -917,62 +917,6 @@
           </view>
 
           <view class="medical-form-item">
-            <text class="medical-label">过敏原类型 *</text>
-            <picker mode="selector" :range="allergenTypeOptions" :value="allergenTypeIndex" @change="onAllergenTypeChange">
-              <view class="medical-picker">
-                {{ getAllergenTypeLabel(currentAllergyRecord.allergenType) || '请选择过敏原类型' }}
-              </view>
-            </picker>
-          </view>
-
-          <view class="medical-form-item">
-            <text class="medical-label">发现日期 *</text>
-            <picker mode="date" :value="currentAllergyRecord.discoveryDate" @change="onAllergyDateChange">
-              <view class="medical-picker">
-                {{ currentAllergyRecord.discoveryDate || '请选择发现日期' }}
-              </view>
-            </picker>
-          </view>
-
-          <view class="medical-form-item">
-            <text class="medical-label">症状 *</text>
-            <textarea
-              class="medical-textarea"
-              v-model="currentAllergyRecord.symptoms"
-              placeholder="请描述过敏症状，如：皮肤瘙痒、呕吐、腹泻等"
-              :maxlength="500"
-            />
-          </view>
-
-          <view class="medical-form-item">
-            <text class="medical-label">严重程度 *</text>
-            <picker mode="selector" :range="severityOptions" :value="severityIndex" @change="onSeverityChange">
-              <view class="medical-picker">
-                {{ getSeverityLabel(currentAllergyRecord.severity) || '请选择严重程度' }}
-              </view>
-            </picker>
-          </view>
-
-          <view class="medical-form-item">
-            <text class="medical-label">确认方 *</text>
-            <picker mode="selector" :range="confirmedByOptions" :value="confirmedByIndex" @change="onConfirmedByChange">
-              <view class="medical-picker">
-                {{ currentAllergyRecord.confirmedBy === 'VET' ? '兽医' : currentAllergyRecord.confirmedBy === 'OWNER' ? '主人' : '请选择确认方' }}
-              </view>
-            </picker>
-          </view>
-
-          <view class="medical-form-item">
-            <text class="medical-label">治疗方案</text>
-            <textarea
-              class="medical-textarea"
-              v-model="currentAllergyRecord.treatment"
-              placeholder="请输入治疗方案（选填）"
-              :maxlength="500"
-            />
-          </view>
-
-          <view class="medical-form-item">
             <text class="medical-label">备注</text>
             <textarea
               class="medical-textarea"
@@ -1058,14 +1002,8 @@ interface CheckupRecord {
 interface AllergyRecord {
   id?: string             // 过敏记录ID（用于编辑）
   allergen: string        // 过敏原（必填）
-  allergenType: string    // 过敏原类型（必填）: FOOD/ENVIRONMENTAL/MEDICATION
-  discoveryDate: string   // 发现日期（必填）
-  symptoms: string        // 症状（必填）
-  severity: string        // 严重程度（必填）: MILD/MODERATE/SEVERE
-  confirmedBy: string     // 确认方（必填）: VET/OWNER
-  treatment?: string      // 治疗方案（选填）
   notes?: string          // 备注（选填）
-  attachments: string[]   // 检测报告文件URL数组（必填，后端存储格式）
+  attachments: string[]   // 检测报告文件URL数组（选填）
 }
 
 // 前端使用的附件接口（包含自定义名称）
@@ -1350,25 +1288,12 @@ const isEditingAllergyRecord = ref(false) // 是否正在编辑过敏记录
 const currentAllergyRecordIndex = ref(-1) // 当前编辑的过敏记录索引
 const currentAllergyRecord = ref<AllergyRecord>({
   allergen: '',
-  allergenType: 'FOOD',
-  discoveryDate: '',
-  symptoms: '',
-  severity: 'MILD',
-  confirmedBy: 'VET',
-  treatment: '',
   notes: '',
   attachments: []
 })
 // 过敏记录附件存储
 const allergyAttachmentKeys = ref<Record<number, string>>({}) // COS key存储（用于删除COS文件）
 const allergyAttachmentNames = ref<Record<number, string>>({}) // 自定义文件名存储
-
-// 过敏原类型选项
-const allergenTypeOptions = ['FOOD', 'ENVIRONMENTAL', 'MEDICATION']
-// 严重程度选项
-const severityOptions = ['MILD', 'MODERATE', 'SEVERE']
-// 确认方选项
-const confirmedByOptions = ['VET', 'OWNER']
 
 // 体检类型选项
 const checkupTypeOptions = [
@@ -3621,30 +3546,6 @@ function getBcsText(bcsMultiplier: number): string {
 }
 
 /**
- * 获取过敏原类型标签
- */
-function getAllergenTypeLabel(type: string): string {
-  const labels: Record<string, string> = {
-    'FOOD': '食物',
-    'ENVIRONMENTAL': '环境',
-    'MEDICATION': '药物'
-  }
-  return labels[type] || type
-}
-
-/**
- * 获取严重程度标签
- */
-function getSeverityLabel(severity: string): string {
-  const labels: Record<string, string> = {
-    'MILD': '轻微',
-    'MODERATE': '中度',
-    'SEVERE': '严重'
-  }
-  return labels[severity] || severity
-}
-
-/**
  * 获取生命阶段基础系数说明
  */
 function getStageFactorBase(details: any): string {
@@ -3798,12 +3699,6 @@ function closeAllergyRecordModal() {
   showAllergyRecordModal.value = false
   currentAllergyRecord.value = {
     allergen: '',
-    allergenType: 'FOOD',
-    discoveryDate: '',
-    symptoms: '',
-    severity: 'MILD',
-    confirmedBy: 'VET',
-    treatment: '',
     notes: '',
     attachments: []
   }
@@ -3826,24 +3721,6 @@ async function saveAllergyRecord() {
     return
   }
 
-  if (!currentAllergyRecord.value.discoveryDate) {
-    uni.showToast({
-      title: '请选择发现日期',
-      icon: 'none',
-      duration: 2000
-    })
-    return
-  }
-
-  if (!currentAllergyRecord.value.symptoms || currentAllergyRecord.value.symptoms.trim() === '') {
-    uni.showToast({
-      title: '请输入症状',
-      icon: 'none',
-      duration: 2000
-    })
-    return
-  }
-
   // 编辑模式：调用 API 更新记录
   if (isEditingAllergyRecord.value && dogId.value && currentAllergyRecord.value.id) {
     try {
@@ -3852,12 +3729,6 @@ async function saveAllergyRecord() {
       const recordId = currentAllergyRecord.value.id
       const updateData = {
         allergen: currentAllergyRecord.value.allergen,
-        allergenType: currentAllergyRecord.value.allergenType,
-        discoveryDate: currentAllergyRecord.value.discoveryDate,
-        symptoms: currentAllergyRecord.value.symptoms,
-        severity: currentAllergyRecord.value.severity,
-        confirmedBy: currentAllergyRecord.value.confirmedBy,
-        treatment: currentAllergyRecord.value.treatment || null,
         notes: currentAllergyRecord.value.notes || null,
         attachments: currentAllergyRecord.value.attachments || []
       }
@@ -3899,12 +3770,6 @@ async function saveAllergyRecord() {
 
         const createData = {
           allergen: currentAllergyRecord.value.allergen,
-          allergenType: currentAllergyRecord.value.allergenType,
-          discoveryDate: currentAllergyRecord.value.discoveryDate,
-          symptoms: currentAllergyRecord.value.symptoms,
-          severity: currentAllergyRecord.value.severity,
-          confirmedBy: currentAllergyRecord.value.confirmedBy,
-          treatment: currentAllergyRecord.value.treatment || null,
           notes: currentAllergyRecord.value.notes || null,
           attachments: currentAllergyRecord.value.attachments || []
         }
@@ -3950,37 +3815,6 @@ async function saveAllergyRecord() {
       closeAllergyRecordModal()
     }
   }
-}
-
-/**
- * 过敏原类型选择变更
- */
-function onAllergenTypeChange(e: any) {
-  const index = e.detail.value
-  currentAllergyRecord.value.allergenType = allergenTypeOptions[index]
-}
-
-/**
- * 严重程度选择变更
- */
-function onSeverityChange(e: any) {
-  const index = e.detail.value
-  currentAllergyRecord.value.severity = severityOptions[index]
-}
-
-/**
- * 确认方选择变更
- */
-function onConfirmedByChange(e: any) {
-  const index = e.detail.value
-  currentAllergyRecord.value.confirmedBy = confirmedByOptions[index]
-}
-
-/**
- * 过敏日期选择变更
- */
-function onAllergyDateChange(e: any) {
-  currentAllergyRecord.value.discoveryDate = e.detail.value
 }
 
 /**

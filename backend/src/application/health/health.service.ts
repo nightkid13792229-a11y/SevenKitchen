@@ -317,12 +317,6 @@ export class HealthService {
     const record = await this.allergyRecordRepo.create({
       dogId: dto.dogId,
       allergen: dto.allergen,
-      allergenType: dto.allergenType,
-      discoveryDate: new Date(dto.discoveryDate),
-      symptoms: dto.symptoms,
-      severity: dto.severity || 'MILD',
-      confirmedBy: dto.confirmedBy || 'VET',
-      treatment: dto.treatment ?? null,
       notes: dto.notes ?? null,
       attachments: dto.attachments ?? []
     })
@@ -366,12 +360,6 @@ export class HealthService {
 
     const updated = await this.allergyRecordRepo.update(id, {
       allergen: dto.allergen ?? undefined,
-      allergenType: dto.allergenType ?? undefined,
-      discoveryDate: dto.discoveryDate ? new Date(dto.discoveryDate) : undefined,
-      symptoms: dto.symptoms ?? undefined,
-      severity: dto.severity ?? undefined,
-      confirmedBy: dto.confirmedBy ?? undefined,
-      treatment: dto.treatment ?? null,
       notes: dto.notes ?? null,
       attachments: dto.attachments ?? undefined
     })
@@ -458,12 +446,6 @@ export class HealthService {
       id: record.id,
       dogId: record.dogId,
       allergen: record.allergen,
-      allergenType: record.allergenType,
-      discoveryDate: record.discoveryDate,
-      symptoms: record.symptoms,
-      severity: record.severity,
-      confirmedBy: record.confirmedBy,
-      treatment: record.treatment,
       notes: record.notes,
       attachments: record.attachments || [],
       createdAt: record.createdAt,

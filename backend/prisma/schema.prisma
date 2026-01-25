@@ -477,23 +477,16 @@ model MedicalRecord {
 }
 
 model AllergyRecord {
-  id            String       @id @default(uuid()) @map("id")
-  dogId         String       @map("dog_id")
-  allergen      String       @map("allergen")
-  allergenType  AllergenType @map("allergen_type")
-  discoveryDate DateTime     @map("discovery_date") @db.Date
-  symptoms      String       @map("symptoms")
-  severity      Severity     @default(MILD) @map("severity")
-  confirmedBy   ConfirmedBy  @default(VET) @map("confirmed_by")
-  treatment     String?      @map("treatment")
-  notes         String?      @map("notes")
-  attachments   String[]     @default([]) @map("attachments")
-  createdAt     DateTime     @default(now()) @map("created_at")
-  updatedAt     DateTime     @updatedAt @map("updated_at")
-  dog           Dog          @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  id          String     @id @default(uuid()) @map("id")
+  dogId       String     @map("dog_id")
+  allergen    String     @map("allergen")
+  notes       String?    @map("notes")
+  attachments String[]   @default([]) @map("attachments")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  dog         Dog        @relation(fields: [dogId], references: [id], onDelete: Cascade)
 
   @@index([dogId])
-  @@index([dogId, allergenType])
   @@map("allergy_record")
 }
 
@@ -625,23 +618,6 @@ enum MedicalStatus {
   TREATING
   RECOVERED
   CHRONIC
-}
-
-enum AllergenType {
-  FOOD
-  ENVIRONMENTAL
-  MEDICATION
-}
-
-enum Severity {
-  MILD
-  MODERATE
-  SEVERE
-}
-
-enum ConfirmedBy {
-  VET
-  OWNER
 }
 
 model OrderPricingSnapshot {

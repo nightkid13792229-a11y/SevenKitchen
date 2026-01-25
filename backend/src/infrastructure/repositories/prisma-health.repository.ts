@@ -286,7 +286,7 @@ export class PrismaAllergyRecordRepository implements AllergyRecordRepository {
   async findByDogId(dogId: string): Promise<AllergyRecord[]> {
     const records = await this.prisma.allergyRecord.findMany({
       where: { dogId },
-      orderBy: { discoveryDate: 'desc' }
+      orderBy: { createdAt: 'desc' }
     })
     return records.map(r => this.mapToDomain(r))
   }
@@ -296,12 +296,6 @@ export class PrismaAllergyRecordRepository implements AllergyRecordRepository {
       data: {
         dogId: data.dogId,
         allergen: data.allergen,
-        allergenType: data.allergenType,
-        discoveryDate: data.discoveryDate,
-        symptoms: data.symptoms,
-        severity: data.severity,
-        confirmedBy: data.confirmedBy,
-        treatment: data.treatment,
         notes: data.notes,
         attachments: data.attachments
       }
@@ -317,12 +311,6 @@ export class PrismaAllergyRecordRepository implements AllergyRecordRepository {
       where: { id },
       data: {
         allergen: data.allergen,
-        allergenType: data.allergenType,
-        discoveryDate: data.discoveryDate,
-        symptoms: data.symptoms,
-        severity: data.severity,
-        confirmedBy: data.confirmedBy,
-        treatment: data.treatment,
         notes: data.notes,
         attachments: data.attachments
       }
@@ -341,12 +329,6 @@ export class PrismaAllergyRecordRepository implements AllergyRecordRepository {
       id: record.id,
       dogId: record.dogId,
       allergen: record.allergen,
-      allergenType: record.allergenType as any,
-      discoveryDate: record.discoveryDate,
-      symptoms: record.symptoms,
-      severity: record.severity as any,
-      confirmedBy: record.confirmedBy as any,
-      treatment: record.treatment,
       notes: record.notes,
       attachments: record.attachments || [],
       createdAt: record.createdAt,

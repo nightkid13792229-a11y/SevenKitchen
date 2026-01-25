@@ -79,12 +79,6 @@ export interface AllergyRecord {
   id: string
   dogId: string
   allergen: string
-  allergenType: 'FOOD' | 'ENVIRONMENTAL' | 'MEDICATION'
-  discoveryDate: Date
-  symptoms: string
-  severity: 'MILD' | 'MODERATE' | 'SEVERE'
-  confirmedBy: 'VET' | 'OWNER'
-  treatment: string | null
   notes: string | null
   attachments: string[]
   createdAt: Date

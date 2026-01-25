@@ -7,9 +7,8 @@
  * 采购清单状态
  */
 export enum PurchaseListStatus {
-  PENDING = 'PENDING',       // 待采购
-  COMPLETED = 'COMPLETED',   // 采购完成
-  CANCELLED = 'CANCELLED',   // 已取消
+  PENDING = 'PENDING',     // 待采购
+  COMPLETED = 'COMPLETED', // 采购完成
 }
 
 /**
@@ -26,9 +25,8 @@ export enum ReimbursementStatus {
  * 状态机转换规则
  */
 export const PURCHASE_LIST_STATUS_TRANSITIONS: Record<PurchaseListStatus, PurchaseListStatus[]> = {
-  [PurchaseListStatus.PENDING]: [PurchaseListStatus.COMPLETED, PurchaseListStatus.CANCELLED],
-  [PurchaseListStatus.COMPLETED]: [],             // 终态
-  [PurchaseListStatus.CANCELLED]: [],             // 终态
+  [PurchaseListStatus.PENDING]: [PurchaseListStatus.COMPLETED],
+  [PurchaseListStatus.COMPLETED]: [], // 终态
 };
 
 export const REIMBURSEMENT_STATUS_TRANSITIONS: Record<ReimbursementStatus, ReimbursementStatus[]> = {

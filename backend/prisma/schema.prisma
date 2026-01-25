@@ -741,6 +741,7 @@ model PurchaseList {
   itemCount          Int                 @map("item_count")
   createdById        String              @map("created_by_id")
   sourceOrderIds     String[]            @map("source_order_ids")
+  orderDateSnapshot  Json?               @map("order_date_snapshot")
   reimbursementId    String?             @map("reimbursement_id")
   createdAt          DateTime            @default(now()) @map("created_at")
   updatedAt          DateTime            @updatedAt @map("updated_at")
@@ -826,10 +827,8 @@ model Reimbursement {
 }
 
 enum PurchaseListStatus {
-  DRAFT       // 草稿
   PENDING     // 待采购
   COMPLETED   // 采购完成
-  CANCELLED   // 已取消
 }
 
 enum ReimbursementStatus {

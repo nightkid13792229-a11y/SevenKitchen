@@ -6,7 +6,7 @@
 
 import { Injectable, Inject, Logger, BadRequestException, ConflictException } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import { OrderStatus } from '../../domain';
+import { OrderStatus, Order } from '../../domain';
 import { ORDER_REPOSITORY } from '../order/order.service';
 import type { OrderRepository } from '../../domain/order/order.repository';
 import { INGREDIENT_REPOSITORY } from '../ingredient/ingredient.service';
@@ -219,6 +219,70 @@ export class PurchasingService {
   }
 
   /**
+   * 预览采购需求（不创建采购清单，不改变订单状态）
+   */
+  async previewPurchaseRequirements(
+    startDate: string,
+    endDate?: string
+  ): Promise<{
+    targetDateRange: { start: string; end: string };
+    itemCount: number;
+    items: Array<{
+      ingredientId: string;
+      ingredientName: string;
+      quantityNeeded: number;
+      quantityUnit: string;
+      purchaseChannel?: string;
+      productModel?: string;
+    }>;
+    affectedOrders: Array<{
+      orderId: string;
+      targetProductionDate: string;
+    }>;
+  }> {
+    const end = endDate || startDate;
+
+    this.logger.log(`Previewing purchase requirements for ${startDate} - ${end}`);
+
+    // 1. 计算采购需求（复用现有逻辑）
+    const requirements = await this.calculatePurchaseRequirements(startDate, end);
+
+    // 2. 查询影响的订单（用于预览）
+    const start_date = new Date(`${startDate}T00:00:00`);
+    const end_date = new Date(`${end}T23:59:59.999`);
+    const { list: orders } = await this.orderRepository.findByTargetProductionDateRange({
+      status: OrderStatus.PAID,
+      startDate: start_date,
+      endDate: end_date,
+    });
+
+    // 3. 组装订单信息
+    const affectedOrders = orders.map(order => ({
+      orderId: order.id,
+      targetProductionDate: order.targetProductionDate?.toISOString().split('T')[0] || '',
+    }));
+
+    // 4. 组装返回数据（只返回必要的信息）
+    const items = requirements.map(req => ({
+      ingredientId: req.ingredientId,
+      ingredientName: req.ingredientName,
+      quantityNeeded: req.quantityNeeded,
+      quantityUnit: req.quantityUnit,
+      type: req.type,
+      displayUnit: req.displayUnit,
+      purchaseChannel: req.purchaseChannel,
+      productModel: req.productModel,
+    }));
+
+    return {
+      targetDateRange: { start: startDate, end },
+      itemCount: requirements.length,
+      items,
+      affectedOrders,
+    };
+  }
+
+  /**
    * 生成采购清单
    */
   async generatePurchaseList(
@@ -305,6 +369,15 @@ export class PurchasingService {
       })
     );
 
+    // 保存订单日期快照
+    const orderDateSnapshot: Record<string, { originalDate: string; hasChanged: boolean }> = {};
+    for (const order of orders) {
+      orderDateSnapshot[order.id] = {
+        originalDate: order.targetProductionDate?.toISOString().split('T')[0] || '',
+        hasChanged: false,
+      };
+    }
+
     // 创建采购清单（使用中午12点的targetDate）
     const purchaseList = new PurchaseList({
       targetDate: targetDate,
@@ -313,6 +386,7 @@ export class PurchasingService {
       itemCount: items.length,
       createdById,
       sourceOrderIds,
+      orderDateSnapshot,
       items,
     });
 
@@ -322,6 +396,612 @@ export class PurchasingService {
     this.logger.log(`Purchase list ${saved.id} created successfully with ${items.length} items`);
 
     return saved;
+  }
+
+  /**
+   * 追加订单到采购清单
+   */
+  async addOrdersToPurchaseList(
+    purchaseListId: string,
+    orderIds: string[],
+    operatorId: string
+  ): Promise<{
+    addedCount: number;
+    newItems: PurchaseItem[];
+    updatedItems: PurchaseItem[];
+    purchaseList: PurchaseList;
+  }> {
+    this.logger.log(`Adding ${orderIds.length} orders to purchase list ${purchaseListId}`);
+
+    // 1. 验证采购清单状态
+    const purchaseList = await this.purchaseListRepository.findById(purchaseListId);
+    if (!purchaseList) {
+      throw new BadRequestException('采购清单不存在');
+    }
+
+    // 只有PENDING状态可以追加订单
+    if (purchaseList.status !== PurchaseListStatus.PENDING) {
+      throw new BadRequestException('只有待采购状态的清单可以追加订单');
+    }
+
+    // 2. 查询订单并验证状态
+    const orderPromises = orderIds.map(id => this.orderRepository.findById(id));
+    const orderResults = await Promise.all(orderPromises);
+    const orders = orderResults.filter(o => o !== null) as Order[];
+    const validOrders = orders.filter(o => o.status === OrderStatus.PAID);
+
+    if (validOrders.length === 0) {
+      throw new BadRequestException('没有可追加的PAID状态订单');
+    }
+
+    this.logger.log(`Found ${validOrders.length}/${orders.length} valid PAID orders to add`);
+
+    // 3. 计算新增订单的原料需求
+    const ingredientMap = new Map<string, any>();
+
+    for (const order of validOrders) {
+      if (!order.pricingBreakdownSnapshot) {
+        this.logger.warn(`Order ${order.id} has no pricing breakdown snapshot, skipping`);
+        continue;
+      }
+
+      const pricingBreakdown = order.pricingBreakdownSnapshot as any;
+      const ingredientDetails = pricingBreakdown.ingredientDetails || [];
+
+      for (const detail of ingredientDetails) {
+        const key = detail.ingredientId;
+        const purchaseQuantity = detail.purchaseAmount || detail.amount || 0;
+
+        if (purchaseQuantity <= 0) continue;
+
+        if (ingredientMap.has(key)) {
+          const existing = ingredientMap.get(key);
+          existing.quantityNeeded += purchaseQuantity;
+          existing.estimatedCost += detail.cost || 0;
+        } else {
+          ingredientMap.set(key, {
+            ingredientId: key,
+            ingredientName: detail.name,
+            type: detail.type || 'FOOD',
+            quantityNeeded: purchaseQuantity,
+            quantityUnit: detail.unit || 'G',
+            estimatedCost: detail.cost || 0,
+            purchaseChannel: detail.purchaseChannel,
+            productModel: detail.productModel,
+            displayUnit: detail.displayUnit,
+          });
+        }
+      }
+    }
+
+    // 4. 合并到现有采购清单
+    const existingItemMap = new Map(purchaseList.items.map(item => [item.ingredientId, item]));
+
+    const newItems: PurchaseItem[] = [];
+    const updatedItems: PurchaseItem[] = [];
+
+    for (const [ingredientId, requirement] of ingredientMap) {
+      if (existingItemMap.has(ingredientId)) {
+        // 更新现有项
+        const existing = existingItemMap.get(ingredientId)!;
+        existing.quantityNeeded += requirement.quantityNeeded;
+        existing.estimatedCost = Number(existing.estimatedCost) + requirement.estimatedCost;
+        updatedItems.push(existing);
+      } else {
+        // 新增项
+        const newItem = new PurchaseItem({
+          purchaseListId,
+          ingredientId: requirement.ingredientId,
+          ingredientName: requirement.ingredientName,
+          type: requirement.type,
+          quantityNeeded: requirement.quantityNeeded,
+          quantityUnit: requirement.quantityUnit,
+          estimatedCost: requirement.estimatedCost,
+          purchaseChannel: requirement.purchaseChannel,
+          productModel: requirement.productModel,
+          displayUnit: requirement.displayUnit,
+        });
+        purchaseList.items.push(newItem);
+        newItems.push(newItem);
+      }
+    }
+
+    // 5. 更新采购清单汇总
+    purchaseList.itemCount = purchaseList.items.length;
+    purchaseList.totalEstimatedCost = purchaseList.items.reduce(
+      (sum, item) => sum + Number(item.estimatedCost),
+      0
+    );
+    purchaseList.sourceOrderIds = [
+      ...new Set([...purchaseList.sourceOrderIds, ...validOrders.map(o => o.id)]),
+    ];
+
+    // 6. 转换订单状态
+    let transitionedCount = 0;
+    for (const order of validOrders) {
+      try {
+        order.transitionTo(OrderStatus.PURCHASING);
+        await this.orderRepository.save(order);
+        transitionedCount++;
+        this.logger.log(`Order ${order.id} transitioned from PAID to PURCHASING`);
+      } catch (error) {
+        this.logger.error(`Failed to transition order ${order.id} to PURCHASING: ${error}`);
+      }
+    }
+
+    // 7. 保存采购清单
+    const saved = await this.purchaseListRepository.save(purchaseList);
+
+    this.logger.log(`Added ${validOrders.length} orders to purchase list ${purchaseListId}`);
+
+    return {
+      addedCount: validOrders.length,
+      newItems,
+      updatedItems,
+      purchaseList: saved,
+    };
+  }
+
+  /**
+   * 从采购清单剔除订单
+   */
+  async removeOrdersFromPurchaseList(
+    purchaseListId: string,
+    orderIds: string[],
+    operatorId: string
+  ): Promise<{
+    removedCount: number;
+    affectedItems: Array<{
+      ingredientId: string;
+      ingredientName: string;
+      oldQuantity: number;
+      newQuantity: number;
+    }>;
+    purchaseList: PurchaseList;
+  }> {
+    this.logger.log(`Removing ${orderIds.length} orders from purchase list ${purchaseListId}`);
+
+    // 1. 验证采购清单
+    const purchaseList = await this.purchaseListRepository.findById(purchaseListId);
+    if (!purchaseList) {
+      throw new BadRequestException('采购清单不存在');
+    }
+
+    if (purchaseList.status !== PurchaseListStatus.PENDING) {
+      throw new BadRequestException('只有待采购状态的清单可以剔除订单');
+    }
+
+    // 2. 验证订单是否在清单中
+    const validOrderIds = orderIds.filter(id => purchaseList.sourceOrderIds.includes(id));
+
+    if (validOrderIds.length === 0) {
+      throw new BadRequestException('这些订单不在当前采购清单中');
+    }
+
+    // 3. 查询被剔除的订单
+    const orderPromises = validOrderIds.map(id => this.orderRepository.findById(id));
+    const orderResults = await Promise.all(orderPromises);
+    const orders = orderResults.filter(o => o !== null) as Order[];
+
+    // 4. 计算被剔除订单的原料需求（用于扣减）
+    const ingredientDeductionMap = new Map<string, number>();
+    const ingredientCostMap = new Map<string, number>();
+
+    for (const order of orders) {
+      if (!order.pricingBreakdownSnapshot) {
+        continue;
+      }
+
+      const pricingBreakdown = order.pricingBreakdownSnapshot as any;
+      const ingredientDetails = pricingBreakdown.ingredientDetails || [];
+
+      for (const detail of ingredientDetails) {
+        const key = detail.ingredientId;
+        const purchaseQuantity = detail.purchaseAmount || detail.amount || 0;
+        const cost = detail.cost || 0;
+
+        if (purchaseQuantity <= 0) continue;
+
+        ingredientDeductionMap.set(key, (ingredientDeductionMap.get(key) || 0) + purchaseQuantity);
+        ingredientCostMap.set(key, (ingredientCostMap.get(key) || 0) + cost);
+      }
+    }
+
+    // 5. 更新采购清单项
+    const affectedItems: Array<{
+      ingredientId: string;
+      ingredientName: string;
+      oldQuantity: number;
+      newQuantity: number;
+    }> = [];
+
+    const itemsToKeep: PurchaseItem[] = [];
+
+    for (const item of purchaseList.items) {
+      const deduction = ingredientDeductionMap.get(item.ingredientId) || 0;
+
+      if (deduction > 0) {
+        const oldQuantity = item.quantityNeeded;
+        item.quantityNeeded -= deduction;
+
+        // 如果数量为0或负数，删除该项
+        if (item.quantityNeeded <= 0.01) {
+          affectedItems.push({
+            ingredientId: item.ingredientId,
+            ingredientName: item.ingredientName,
+            oldQuantity,
+            newQuantity: 0,
+          });
+          // 不添加到 itemsToKeep，相当于删除
+        } else {
+          item.estimatedCost = Number(item.estimatedCost) - (ingredientCostMap.get(item.ingredientId) || 0);
+          affectedItems.push({
+            ingredientId: item.ingredientId,
+            ingredientName: item.ingredientName,
+            oldQuantity,
+            newQuantity: item.quantityNeeded,
+          });
+          itemsToKeep.push(item);
+        }
+      } else {
+        itemsToKeep.push(item);
+      }
+    }
+
+    purchaseList.items = itemsToKeep;
+
+    // 6. 更新采购清单汇总
+    purchaseList.itemCount = purchaseList.items.length;
+    purchaseList.totalEstimatedCost = purchaseList.items.reduce(
+      (sum, item) => sum + Number(item.estimatedCost),
+      0
+    );
+    purchaseList.sourceOrderIds = purchaseList.sourceOrderIds.filter(id => !validOrderIds.includes(id));
+
+    // 7. 回退订单状态
+    let restoredCount = 0;
+    for (const order of orders) {
+      if (order.status === OrderStatus.PURCHASING) {
+        try {
+          order.transitionTo(OrderStatus.PAID);
+          await this.orderRepository.save(order);
+          restoredCount++;
+          this.logger.log(`Order ${order.id} transitioned from PURCHASING to PAID`);
+        } catch (error) {
+          this.logger.error(`Failed to restore order ${order.id} to PAID: ${error}`);
+        }
+      }
+    }
+
+    // 8. 保存采购清单
+    const saved = await this.purchaseListRepository.save(purchaseList);
+
+    this.logger.log(`Removed ${orders.length} orders from purchase list ${purchaseListId}`);
+
+    return {
+      removedCount: orders.length,
+      affectedItems,
+      purchaseList: saved,
+    };
+  }
+
+  /**
+   * 添加原料到采购清单（人工添加）
+   */
+  async addManualItem(
+    purchaseListId: string,
+    dto: {
+      ingredientId: string;
+      ingredientName: string;
+      type: 'FOOD' | 'SUPPLEMENT' | 'PACKAGING';
+      quantityNeeded: number;
+      quantityUnit: string;
+      estimatedCost: number;
+      purchaseChannel?: string;
+      productModel?: string;
+    },
+    operatorId: string
+  ): Promise<PurchaseList> {
+    this.logger.log(`Adding manual item to purchase list ${purchaseListId}`);
+
+    const purchaseList = await this.purchaseListRepository.findById(purchaseListId);
+
+    if (!purchaseList) {
+      throw new BadRequestException('采购清单不存在');
+    }
+
+    if (purchaseList.status !== PurchaseListStatus.PENDING) {
+      throw new BadRequestException('只有待采购状态的清单可以添加原料');
+    }
+
+    // 检查原料是否已存在
+    const existingItem = purchaseList.items.find(item => item.ingredientId === dto.ingredientId);
+
+    if (existingItem) {
+      throw new BadRequestException('该原料已在清单中，请使用追加订单功能');
+    }
+
+    // 创建新原料项
+    const newItem = new PurchaseItem({
+      purchaseListId,
+      ingredientId: dto.ingredientId,
+      ingredientName: dto.ingredientName,
+      type: dto.type,
+      quantityNeeded: dto.quantityNeeded,
+      quantityUnit: dto.quantityUnit,
+      estimatedCost: dto.estimatedCost,
+      purchaseChannel: dto.purchaseChannel,
+      productModel: dto.productModel,
+    });
+
+    purchaseList.items.push(newItem);
+    purchaseList.itemCount = purchaseList.items.length;
+    purchaseList.totalEstimatedCost = Number(purchaseList.totalEstimatedCost) + dto.estimatedCost;
+
+    const saved = await this.purchaseListRepository.save(purchaseList);
+
+    this.logger.log(`Added manual item ${dto.ingredientName} to purchase list ${purchaseListId}`);
+
+    return saved;
+  }
+
+  /**
+   * 从采购清单删除原料
+   */
+  async removeItem(
+    purchaseListId: string,
+    itemId: string,
+    operatorId: string
+  ): Promise<PurchaseList> {
+    this.logger.log(`Removing item ${itemId} from purchase list ${purchaseListId}`);
+
+    const purchaseList = await this.purchaseListRepository.findById(purchaseListId);
+
+    if (!purchaseList) {
+      throw new BadRequestException('采购清单不存在');
+    }
+
+    if (purchaseList.status !== PurchaseListStatus.PENDING) {
+      throw new BadRequestException('只有待采购状态的清单可以删除原料');
+    }
+
+    const itemIndex = purchaseList.items.findIndex(item => item.id === itemId);
+
+    if (itemIndex === -1) {
+      throw new BadRequestException('原料项不存在');
+    }
+
+    const item = purchaseList.items[itemIndex];
+
+    // 从items数组中移除
+    const updatedItems = [...purchaseList.items];
+    updatedItems.splice(itemIndex, 1);
+
+    // 创建更新后的PurchaseList对象
+    const updatedList = new PurchaseList({
+      ...purchaseList,
+      items: updatedItems,
+      itemCount: updatedItems.length,
+      totalEstimatedCost: Number(purchaseList.totalEstimatedCost) - Number(item.estimatedCost),
+    });
+
+    // 使用repository的原始Prisma访问直接删除原料项并更新清单
+    const saved = await (this.purchaseListRepository as any).deleteItemAndUpdate(purchaseListId, itemId, updatedList);
+
+    return saved;
+  }
+
+  /**
+   * 重新计算采购清单需求（恢复被删除的原料）
+   */
+  async recalculatePurchaseList(
+    purchaseListId: string,
+    operatorId: string
+  ): Promise<PurchaseList> {
+    this.logger.log(`Recalculating purchase list ${purchaseListId}`);
+
+    const purchaseList = await this.purchaseListRepository.findById(purchaseListId);
+
+    if (!purchaseList) {
+      throw new BadRequestException('采购清单不存在');
+    }
+
+    if (purchaseList.status !== PurchaseListStatus.PENDING) {
+      throw new BadRequestException('只有待采购状态的清单可以重新计算需求');
+    }
+
+    // 获取采购清单的targetDate
+    const targetDate = new Date(purchaseList.targetDate);
+    const startDate = targetDate.toISOString().split('T')[0];
+    const endDate = startDate;
+
+    // 计算原始原料需求（基于订单）
+    const calculatedRequirements = await this.calculatePurchaseRequirements(startDate, endDate);
+
+    if (calculatedRequirements.length === 0) {
+      throw new BadRequestException('没有找到可以纳入的订单');
+    }
+
+    // 分离手动添加的原料和自动生成的原料
+    const manualItems = purchaseList.items.filter(item =>
+      item.ingredientId && item.ingredientId.startsWith('manual-')
+    );
+
+    // 合并手动添加的原料和重新计算的原料
+    const mergedItemsMap = new Map<string, any>();
+
+    // 先添加重新计算的原料
+    for (const req of calculatedRequirements) {
+      mergedItemsMap.set(req.ingredientId, {
+        ingredientId: req.ingredientId,
+        ingredientName: req.ingredientName,
+        type: req.type,
+        quantityNeeded: req.quantityNeeded,
+        quantityUnit: req.quantityUnit,
+        estimatedCost: req.estimatedCost,
+        purchaseChannel: req.purchaseChannel,
+        productModel: req.productModel,
+      });
+    }
+
+    // 再添加手动添加的原料（避免覆盖，但需要合并数量）
+    for (const manualItem of manualItems) {
+      const existing = mergedItemsMap.get(manualItem.ingredientId);
+      if (existing) {
+        // 如果该原料既在订单中又手动添加了，累加数量
+        mergedItemsMap.set(manualItem.ingredientId, {
+          ...existing,
+          quantityNeeded: existing.quantityNeeded + manualItem.quantityNeeded,
+          estimatedCost: existing.estimatedCost + manualItem.estimatedCost,
+        });
+      } else {
+        // 仅手动添加的原料
+        mergedItemsMap.set(manualItem.ingredientId, manualItem);
+      }
+    }
+
+    // 转换为数组并计算总成本
+    const mergedItems = Array.from(mergedItemsMap.values());
+    const totalCost = mergedItems.reduce((sum, item) => sum + Number(item.estimatedCost || 0), 0);
+
+    // 创建更新后的采购清单
+    const updatedList = new PurchaseList({
+      ...purchaseList,
+      items: mergedItems.map(item => new PurchaseItem({
+        id: `recalc-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // 生成新ID
+        purchaseListId: purchaseList.id,
+        ...item,
+      })),
+      itemCount: mergedItems.length,
+      totalEstimatedCost: totalCost,
+    });
+
+    // 保存到数据库
+    const saved = await (this.purchaseListRepository as any).recalculateItems(purchaseListId, updatedList);
+
+    this.logger.log(`Recalculated purchase list ${purchaseListId}: ${mergedItems.length} items`);
+
+    return saved;
+  }
+
+  /**
+   * 删除采购清单
+   */
+  async deletePurchaseList(
+    purchaseListId: string,
+    operatorId: string
+  ): Promise<{
+    deletedId: string;
+    restoredOrdersCount: number;
+  }> {
+    this.logger.log(`Deleting purchase list ${purchaseListId}`);
+
+    const purchaseList = await this.purchaseListRepository.findById(purchaseListId);
+
+    if (!purchaseList) {
+      throw new BadRequestException('采购清单不存在');
+    }
+
+    // 检查是否已关联报销单
+    if (purchaseList.reimbursementId) {
+      throw new BadRequestException('已关联报销单的采购清单不能删除');
+    }
+
+    // 检查状态
+    if (purchaseList.status === PurchaseListStatus.COMPLETED) {
+      throw new BadRequestException('已完成的采购清单不能删除');
+    }
+
+    // 回退订单状态（PURCHASING → PAID）
+    const orderPromises = purchaseList.sourceOrderIds.map(id => this.orderRepository.findById(id));
+    const orderResults = await Promise.all(orderPromises);
+    const orders = orderResults.filter(o => o !== null) as Order[];
+    let restoredCount = 0;
+
+    for (const order of orders) {
+      if (order.status === OrderStatus.PURCHASING) {
+        try {
+          order.transitionTo(OrderStatus.PAID);
+          await this.orderRepository.save(order);
+          restoredCount++;
+          this.logger.log(`Order ${order.id} restored to PAID`);
+        } catch (error) {
+          this.logger.error(`Failed to restore order ${order.id}: ${error}`);
+        }
+      }
+    }
+
+    // 删除采购清单
+    await this.purchaseListRepository.delete(purchaseListId);
+
+    this.logger.log(`Deleted purchase list ${purchaseListId}, restored ${restoredCount} orders`);
+
+    return {
+      deletedId: purchaseListId,
+      restoredOrdersCount: restoredCount,
+    };
+  }
+
+  /**
+   * 检查采购清单中订单的制作日期是否发生变更
+   */
+  async checkOrderDateChanges(
+    purchaseListId: string
+  ): Promise<{
+    hasChanges: boolean;
+    changedOrders: Array<{
+      orderId: string;
+      originalDate: string;
+      currentDate: string;
+    }>;
+  }> {
+    this.logger.log(`Checking order date changes for purchase list ${purchaseListId}`);
+
+    const purchaseList = await this.purchaseListRepository.findById(purchaseListId);
+
+    if (!purchaseList) {
+      throw new BadRequestException('采购清单不存在');
+    }
+
+    // 从快照中获取原始日期（如果已保存）
+    const dateSnapshot = purchaseList.orderDateSnapshot as any || {};
+
+    // 查询当前订单
+    const orderPromises = purchaseList.sourceOrderIds.map(id => this.orderRepository.findById(id));
+    const orderResults = await Promise.all(orderPromises);
+    const orders = orderResults.filter(o => o !== null) as Order[];
+
+    const changedOrders: Array<{
+      orderId: string;
+      originalDate: string;
+      currentDate: string;
+    }> = [];
+
+    for (const order of orders) {
+      const originalDate = dateSnapshot[order.id]?.originalDate;
+      const currentDate = order.targetProductionDate?.toISOString().split('T')[0] || '';
+
+      // 如果没有快照记录，首次检测
+      if (!originalDate) {
+        continue;
+      }
+
+      // 比较日期
+      if (originalDate !== currentDate) {
+        changedOrders.push({
+          orderId: order.id,
+          originalDate,
+          currentDate,
+        });
+      }
+    }
+
+    this.logger.log(`Found ${changedOrders.length} orders with date changes`);
+
+    return {
+      hasChanges: changedOrders.length > 0,
+      changedOrders,
+    };
   }
 
   /**
@@ -395,28 +1075,6 @@ export class PurchasingService {
     const saved = await this.purchaseListRepository.save(purchaseList);
 
     this.logger.log(`Purchase list ${id} marked as completed`);
-
-    return saved;
-  }
-
-  /**
-   * 取消采购清单
-   * 状态转换: DRAFT/PENDING → CANCELLED
-   */
-  async cancelPurchaseList(id: string): Promise<PurchaseList> {
-    const purchaseList = await this.purchaseListRepository.findById(id);
-
-    if (!purchaseList) {
-      throw new BadRequestException(`未找到采购清单：${id}`);
-    }
-
-    // 取消采购清单
-    purchaseList.cancel();
-
-    // 保存到数据库
-    const saved = await this.purchaseListRepository.save(purchaseList);
-
-    this.logger.log(`Purchase list ${id} cancelled`);
 
     return saved;
   }

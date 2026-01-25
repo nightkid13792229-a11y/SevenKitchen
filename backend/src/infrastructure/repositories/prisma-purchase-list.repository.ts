@@ -63,7 +63,11 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
     const found = await this.prisma.purchaseList.findUnique({
       where: { id },
       include: {
-        items: true,
+        items: {
+          include: {
+            ingredient: true, // Include ingredient details for purchase form optimization
+          },
+        },
         records: true, // Include purchase records for calculating aggregates
         createdBy: {
           select: {
@@ -249,12 +253,105 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
           gte: startDate,
           lte: endDate,
         },
-        status: {
-          not: PurchaseListStatus.CANCELLED,
-        },
       },
     });
 
     return count > 0;
+  }
+
+  /**
+   * 删除原料项并更新采购清单
+   */
+  async deleteItemAndUpdate(
+    purchaseListId: string,
+    itemId: string,
+    updatedList: PurchaseList
+  ): Promise<PurchaseList> {
+    // 使用事务删除原料项并更新采购清单
+    const result = await this.prisma.$transaction(async (tx) => {
+      // 1. 删除原料项
+      await tx.purchaseItem.delete({
+        where: { id: itemId },
+      });
+
+      // 2. 更新采购清单的统计数据
+      const updated = await tx.purchaseList.update({
+        where: { id: purchaseListId },
+        data: {
+          itemCount: updatedList.itemCount,
+          totalEstimatedCost: updatedList.totalEstimatedCost,
+          updatedAt: new Date(),
+        },
+        include: {
+          items: {
+            orderBy: { createdAt: 'asc' },
+          },
+          records: true,
+          createdBy: {
+            select: {
+              id: true,
+              nickname: true,
+              phone: true,
+            },
+          },
+        },
+      });
+
+      return updated;
+    });
+
+    return PurchaseList.fromPrisma(result);
+  }
+
+  /**
+   * 重新计算采购清单原料（恢复被删除的原料）
+   */
+  async recalculateItems(
+    purchaseListId: string,
+    updatedList: PurchaseList
+  ): Promise<PurchaseList> {
+    // 使用事务删除所有原料项并重新创建
+    const result = await this.prisma.$transaction(async (tx) => {
+      // 1. 删除所有现有的原料项
+      await tx.purchaseItem.deleteMany({
+        where: { purchaseListId },
+      });
+
+      // 2. 批量创建新的原料项
+      const itemsData = updatedList.items.map(item => ({
+        ...item.toPrisma(),
+        purchaseListId,
+      }));
+      await tx.purchaseItem.createMany({
+        data: itemsData,
+      });
+
+      // 3. 更新采购清单的统计数据
+      const updated = await tx.purchaseList.update({
+        where: { id: purchaseListId },
+        data: {
+          itemCount: updatedList.itemCount,
+          totalEstimatedCost: updatedList.totalEstimatedCost,
+          updatedAt: new Date(),
+        },
+        include: {
+          items: {
+            orderBy: { createdAt: 'asc' },
+          },
+          records: true,
+          createdBy: {
+            select: {
+              id: true,
+              nickname: true,
+              phone: true,
+            },
+          },
+        },
+      });
+
+      return updated;
+    });
+
+    return PurchaseList.fromPrisma(result);
   }
 }

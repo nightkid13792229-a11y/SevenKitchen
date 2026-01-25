@@ -17,6 +17,7 @@ export interface PurchaseListConstructor {
   createdById: string;
   createdBy?: any; // User object with id, nickname, phone
   sourceOrderIds: string[];
+  orderDateSnapshot?: Record<string, { originalDate: string; hasChanged: boolean }>;
   reimbursementId?: string;
   createdAt?: Date;
   updatedAt?: Date;
@@ -32,11 +33,12 @@ export class PurchaseList {
   public readonly id: string;
   public readonly targetDate: Date;
   public status: PurchaseListStatus;
-  public readonly totalEstimatedCost: number;
-  public readonly itemCount: number;
+  public totalEstimatedCost: number;  // 可写，用于动态更新
+  public itemCount: number;  // 可写，用于动态更新
   public readonly createdById: string;
   public readonly createdBy?: any; // User object with id, nickname, phone
-  public readonly sourceOrderIds: string[];
+  public sourceOrderIds: string[];  // 可写，用于动态更新
+  public orderDateSnapshot?: Record<string, { originalDate: string; hasChanged: boolean }>;
   public reimbursementId?: string;
   public readonly createdAt: Date;
   public updatedAt: Date;
@@ -55,6 +57,7 @@ export class PurchaseList {
     this.createdById = data.createdById;
     this.createdBy = data.createdBy;
     this.sourceOrderIds = data.sourceOrderIds;
+    this.orderDateSnapshot = data.orderDateSnapshot;
     this.reimbursementId = data.reimbursementId;
     this.createdAt = data.createdAt || new Date();
     this.updatedAt = data.updatedAt || this.createdAt;
@@ -107,22 +110,6 @@ export class PurchaseList {
 
     this.status = PurchaseListStatus.COMPLETED;
     this.completedAt = new Date();
-    this.updatedAt = new Date();
-  }
-
-  /**
-   * 取消采购清单
-   * 状态转换: DRAFT/PENDING → CANCELLED
-   */
-  cancel(): void {
-    const allowedTransitions = PURCHASE_LIST_STATUS_TRANSITIONS[this.status];
-    if (!allowedTransitions.includes(PurchaseListStatus.CANCELLED)) {
-      throw new InvalidStateTransitionError(
-        `Cannot cancel purchase list in ${this.status} status`
-      );
-    }
-
-    this.status = PurchaseListStatus.CANCELLED;
     this.updatedAt = new Date();
   }
 
@@ -181,6 +168,7 @@ export class PurchaseList {
       itemCount: this.itemCount,
       createdById: this.createdById,
       sourceOrderIds: this.sourceOrderIds,
+      orderDateSnapshot: this.orderDateSnapshot,
       reimbursementId: this.reimbursementId,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
@@ -216,6 +204,7 @@ export class PurchaseList {
       createdById: data.createdById,
       createdBy: data.createdBy, // ✅ 包含User对象 {id, nickname, phone}
       sourceOrderIds: data.sourceOrderIds,
+      orderDateSnapshot: data.orderDateSnapshot,
       reimbursementId: data.reimbursementId,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,

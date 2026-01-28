@@ -146,6 +146,17 @@
         <view class="photos-hint">
           <text>支持从相册选择或拍照，自动压缩到200KB以内</text>
         </view>
+
+        <!-- 确认完成区域 -->
+        <view class="complete-section">
+          <button
+            class="complete-btn"
+            :disabled="totalPhotoCount < 2"
+            @tap="completeTask"
+          >
+            {{ totalPhotoCount < 2 ? '请至少上传2张照片' : '完成制作任务' }}
+          </button>
+        </view>
       </view>
 
       <!-- 底部按钮区域 -->

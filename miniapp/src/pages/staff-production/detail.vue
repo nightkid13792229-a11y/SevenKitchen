@@ -150,14 +150,7 @@
 
       <!-- 底部按钮区域 -->
       <view v-if="taskDetail.status === 'IN_PROGRESS'" class="bottom-actions">
-        <!-- 制作中状态：显示上传和完成按钮（固定悬浮） -->
-        <button
-          class="action-btn upload"
-          :disabled="uploadedPhotos.length < 2"
-          @tap="uploadPhotos"
-        >
-          确认上传（{{ uploadedPhotos.length }}/3）
-        </button>
+        <!-- 制作中状态：显示完成按钮（固定悬浮） -->
         <button
           class="action-btn complete"
           @tap="completeTask"

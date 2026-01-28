@@ -171,7 +171,6 @@
 import { ref, computed, onMounted } from 'vue';
 import {
   getPackagingUnits,
-  uploadProductionPhotos,
   completeProductionTask,
 } from '../../api/production';
 
@@ -436,24 +435,143 @@ const goBack = () => {
   uni.navigateBack();
 };
 
-// 选择照片
-const choosePhoto = () => {
-  const maxCount = 3 - uploadedPhotos.value.length;
-  uni.chooseImage({
-    count: maxCount,
-    sizeType: ['compressed'],
-    sourceType: ['album', 'camera'],
-    success: (res) => {
-      const tempFiles = res.tempFilePaths.map((filePath, index) => ({
-        filePath,
-        name: `photo_${Date.now()}_${index}.jpg`,
-      }));
-      pendingPhotoFiles.value.push(...tempFiles);
+// 选择照片（立即上传模式）
+const choosePhoto = async () => {
+  // 检查是否有正在上传的照片
+  if (isUploading.value) {
+    uni.showToast({
+      title: '照片上传中，请稍候',
+      icon: 'none',
+    });
+    return;
+  }
 
-      // 预览
-      uploadedPhotos.value.push(...res.tempFilePaths);
-    },
-  });
+  // 检查是否已达到3张照片上限
+  if (totalPhotoCount.value >= 3) {
+    uni.showToast({
+      title: '最多上传3张照片',
+      icon: 'none',
+    });
+    return;
+  }
+
+  try {
+    // 计算还可以选择多少张照片
+    const maxCount = 3 - totalPhotoCount.value;
+
+    // 选择照片
+    const res = await uni.chooseMedia({
+      count: maxCount,
+      mediaType: ['image'],
+      sizeType: ['compressed'], // 自动压缩
+      sourceType: ['album', 'camera'], // 相册和相机
+    });
+
+    // 处理用户取消选择的情况
+    if (!res.tempFiles || res.tempFiles.length === 0) {
+      return;
+    }
+
+    // 逐个处理照片：压缩并立即上传
+    for (let i = 0; i < res.tempFiles.length; i++) {
+      const tempFile = res.tempFiles[i];
+
+      try {
+        // 压缩照片
+        const compressRes = await uni.compressImage({
+          src: tempFile.tempFilePath,
+          quality: 80, // 压缩质量
+          compressedWidth: 1280, // 最大宽度
+        });
+
+        // 创建上传任务对象
+        const taskId = Date.now() + i;
+        const uploadTask: UploadTask = {
+          id: taskId,
+          file: compressRes.tempFilePath,
+          status: 'uploading',
+          progress: 0,
+        };
+
+        // 添加到上传中列表
+        uploadingPhotos.value.push(uploadTask);
+
+        // 立即开始上传
+        await uploadSinglePhoto(uploadTask);
+      } catch (error: any) {
+        console.error('[ChoosePhoto] Process photo failed:', error);
+        uni.showToast({
+          title: error.message || '处理照片失败',
+          icon: 'none',
+        });
+      }
+    }
+  } catch (error: any) {
+    // 处理用户取消选择和其他错误
+    if (error.errMsg && !error.errMsg.includes('cancel')) {
+      console.error('[ChoosePhoto] Choose photo failed:', error);
+      uni.showToast({
+        title: error.message || '选择照片失败',
+        icon: 'none',
+      });
+    }
+  }
+};
+
+// 上传单张照片
+const uploadSinglePhoto = async (task: UploadTask) => {
+  try {
+    const token = uni.getStorageSync('token');
+    const baseUrl = uni.getStorageSync('baseUrl') || 'http://localhost:3000/api/v1';
+
+    const uploadRes = await uni.uploadFile({
+      url: `${baseUrl}/staff/production/packaging-units/${taskId.value}/photos`,
+      filePath: task.file,
+      name: 'photo',
+      header: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    // 解析响应
+    if (uploadRes.statusCode === 200) {
+      const response = JSON.parse(uploadRes.data);
+      if (response.code === 0) {
+        // 上传成功，从上传中列表移除
+        const taskIndex = uploadingPhotos.value.findIndex(t => t.id === task.id);
+        if (taskIndex !== -1) {
+          uploadingPhotos.value.splice(taskIndex, 1);
+        }
+
+        // 添加到已上传列表
+        uploadedPhotos.value.push(response.data.photoUrl);
+
+        uni.showToast({
+          title: '上传成功',
+          icon: 'success',
+          duration: 1500,
+        });
+      } else {
+        throw new Error(response.message || '上传失败');
+      }
+    } else {
+      throw new Error(`上传失败: ${uploadRes.statusCode}`);
+    }
+  } catch (error: any) {
+    console.error('[UploadSinglePhoto] Upload failed:', error);
+
+    // 更新任务状态为错误
+    const taskIndex = uploadingPhotos.value.findIndex(t => t.id === task.id);
+    if (taskIndex !== -1) {
+      uploadingPhotos.value[taskIndex].status = 'error';
+      uploadingPhotos.value[taskIndex].error = error.message || '上传失败';
+    }
+
+    uni.showToast({
+      title: error.message || '上传失败',
+      icon: 'none',
+    });
+  }
 };
 
 // 预览照片
@@ -471,43 +589,9 @@ const deletePhoto = (index: number) => {
     success: (res) => {
       if (res.confirm) {
         uploadedPhotos.value.splice(index, 1);
-        pendingPhotoFiles.value.splice(index, 1);
       }
     },
   });
-};
-
-// 上传照片
-const uploadPhotos = async () => {
-  if (pendingPhotoFiles.value.length < 2) {
-    uni.showToast({
-      title: '至少上传2张照片',
-      icon: 'none',
-    });
-    return;
-  }
-
-  uni.showLoading({ title: '上传中...' });
-
-  try {
-    await uploadProductionPhotos(taskId.value, pendingPhotoFiles.value);
-    uni.hideLoading();
-
-    uni.showToast({
-      title: '上传成功',
-      icon: 'success',
-    });
-
-    // 清空待上传文件
-    pendingPhotoFiles.value = [];
-  } catch (error: any) {
-    uni.hideLoading();
-    console.error('Upload photos failed:', error);
-    uni.showToast({
-      title: error.message || '上传失败',
-      icon: 'none',
-    });
-  }
 };
 
 // 完成制作

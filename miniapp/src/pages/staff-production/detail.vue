@@ -997,6 +997,69 @@ const printLabel = () => {
   width: 100%;
   height: 100%;
   border-radius: 8rpx;
+
+  &.uploading-placeholder {
+    opacity: 0.6;
+  }
+
+  &.error-placeholder {
+    opacity: 0.5;
+    filter: grayscale(100%);
+  }
+}
+
+.photo-uploading {
+  .uploading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 8rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .uploading-text {
+      color: #fff;
+      font-size: 24rpx;
+    }
+  }
+}
+
+.error-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(244, 67, 54, 0.9);
+  border-radius: 8rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+
+  .error-text {
+    color: #fff;
+    font-size: 22rpx;
+    text-align: center;
+    padding: 0 8rpx;
+  }
+
+  .retry-btn {
+    padding: 8rpx 24rpx;
+    background-color: #fff;
+    border-radius: 8rpx;
+
+    text {
+      color: #f44336;
+      font-size: 22rpx;
+      font-weight: bold;
+    }
+  }
 }
 
 .photo-delete {
@@ -1043,6 +1106,30 @@ const printLabel = () => {
   color: #999;
   text-align: center;
   margin-top: 8rpx;
+}
+
+.complete-section {
+  margin-top: 24rpx;
+  padding-top: 24rpx;
+  border-top: 1rpx solid #f0f0f0;
+}
+
+.complete-btn {
+  width: 100%;
+  height: 88rpx;
+  line-height: 88rpx;
+  background-color: #56ab91;
+  color: #fff;
+  border: none;
+  border-radius: 8rpx;
+  font-size: 32rpx;
+  font-weight: bold;
+  text-align: center;
+
+  &[disabled] {
+    background-color: #ccc;
+    color: #999;
+  }
 }
 
 .bottom-actions {

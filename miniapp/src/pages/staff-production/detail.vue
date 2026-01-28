@@ -181,6 +181,15 @@ function formatDecimal(value: number | null | undefined, decimals: number = 2): 
   return value.toFixed(decimals);
 }
 
+// 上传任务接口
+interface UploadTask {
+  id: string;
+  file: any;
+  status: 'pending' | 'uploading' | 'success' | 'error';
+  progress: number;
+  error?: string;
+}
+
 // 任务ID
 const taskId = ref('');
 
@@ -195,6 +204,12 @@ const uploadedPhotos = ref<string[]>([]);
 
 // 待上传的照片文件
 const pendingPhotoFiles = ref<any[]>([]);
+
+// 正在上传的照片任务
+const uploadingPhotos = ref<UploadTask[]>([]);
+
+// 完成操作进行中状态
+const isCompleting = ref(false);
 
 // 计算属性：状态文本
 const statusText = computed(() => {
@@ -324,6 +339,22 @@ const totalFoodIngredientWeight = computed(() => {
     }, 0);
 
   return formatDecimal(total);
+});
+
+// 计算属性：是否有正在上传的照片
+const isUploading = computed(() => {
+  return uploadingPhotos.value.some(task => task.status === 'uploading');
+});
+
+// 计算属性：是否可以上传更多照片
+const canUploadMore = computed(() => {
+  const totalPhotos = uploadedPhotos.value.length + uploadingPhotos.value.length;
+  return totalPhotos < 3;
+});
+
+// 计算属性：总照片数（包括正在上传的）
+const totalPhotoCount = computed(() => {
+  return uploadedPhotos.value.length + uploadingPhotos.value.length;
 });
 
 // 获取类型对应的CSS类名

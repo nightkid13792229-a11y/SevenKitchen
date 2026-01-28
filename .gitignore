@@ -1,6 +1,9 @@
 # System
 .DS_Store
 
+# Git worktrees
+.worktrees/
+
 # Cursor
 .cursor/
 

@@ -104,7 +104,7 @@
       <view v-if="taskDetail.status === 'IN_PROGRESS'" class="section">
         <view class="section-title">
           备料照片（必填，2-3张）
-          <text class="photo-count">当前：{{ uploadedPhotos.length }}/3</text>
+          <text class="photo-count">当前：{{ totalPhotoCount }}/3</text>
         </view>
 
         <!-- 照片预览区 -->

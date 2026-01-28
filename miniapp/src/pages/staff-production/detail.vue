@@ -183,9 +183,9 @@ function formatDecimal(value: number | null | undefined, decimals: number = 2): 
 
 // 上传任务接口
 interface UploadTask {
-  id: string;
-  file: any;
-  status: 'pending' | 'uploading' | 'success' | 'error';
+  id: number;
+  file: string;
+  status: 'uploading' | 'error';
   progress: number;
   error?: string;
 }
@@ -201,9 +201,6 @@ const taskDetail = ref<any>(null);
 
 // 已上传的照片
 const uploadedPhotos = ref<string[]>([]);
-
-// 待上传的照片文件
-const pendingPhotoFiles = ref<any[]>([]);
 
 // 正在上传的照片任务
 const uploadingPhotos = ref<UploadTask[]>([]);

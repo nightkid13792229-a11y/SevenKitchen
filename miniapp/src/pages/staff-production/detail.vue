@@ -110,15 +110,34 @@
         <!-- 照片预览区 -->
         <view class="photos-preview">
           <!-- 已上传的照片 -->
-          <view v-for="(photo, index) in uploadedPhotos" :key="index" class="photo-item">
+          <view v-for="(photo, index) in uploadedPhotos" :key="'uploaded-'+index" class="photo-item">
             <image :src="photo" mode="aspectFill" class="photo-image" @tap="previewPhoto(photo)" />
             <view class="photo-delete" @tap="deletePhoto(index)">
               <text>×</text>
             </view>
           </view>
 
+          <!-- 正在上传的照片 -->
+          <view v-for="(task, index) in uploadingPhotos" :key="'uploading-'+task.id" class="photo-item photo-uploading">
+            <image :src="task.file" mode="aspectFill" class="photo-image uploading-placeholder" />
+            <view class="uploading-overlay">
+              <text class="uploading-text">上传中...</text>
+            </view>
+          </view>
+
+          <!-- 上传失败的照片 -->
+          <view v-for="(task, index) in uploadingPhotos.filter(t => t.status === 'error')" :key="'error-'+task.id" class="photo-item">
+            <image :src="task.file" mode="aspectFill" class="photo-image error-placeholder" />
+            <view class="error-overlay">
+              <text class="error-text">{{ task.error || '上传失败' }}</text>
+              <view class="retry-btn" @tap="retryUpload(task)">
+                <text>重试</text>
+              </view>
+            </view>
+          </view>
+
           <!-- 上传按钮（未满3张时显示） -->
-          <view v-if="uploadedPhotos.length < 3" class="photo-upload" @tap="choosePhoto">
+          <view v-if="canUploadMore" class="photo-upload" @tap="choosePhoto">
             <text class="upload-icon">+</text>
             <text class="upload-text">上传照片</text>
           </view>
@@ -592,6 +611,19 @@ const deletePhoto = (index: number) => {
       }
     },
   });
+};
+
+// 重试上传失败的照片
+const retryUpload = async (task: UploadTask) => {
+  // 重置任务状态为上传中
+  const taskIndex = uploadingPhotos.value.findIndex(t => t.id === task.id);
+  if (taskIndex !== -1) {
+    uploadingPhotos.value[taskIndex].status = 'uploading';
+    uploadingPhotos.value[taskIndex].error = undefined;
+  }
+
+  // 重新上传
+  await uploadSinglePhoto(task);
 };
 
 // 完成制作

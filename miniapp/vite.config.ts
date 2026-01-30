@@ -8,6 +8,11 @@ import uni from '@dcloudio/vite-plugin-uni'
 export default defineConfig({
   plugins: [uni()],
   assetsInclude: ['**/*.png'],
+  // 明确指定输出目录配置，确保编译输出稳定
+  build: {
+    outDir: 'dist/build/mp-weixin',
+    emptyOutDir: false, // 保留 project.config.json 等配置文件
+  },
 })
 
 

@@ -10,8 +10,9 @@ const PROD_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1' // 生产环境
 const STORAGE_KEY = 'api_base_url'
 
 // Detect if running in production build (dist/build)
-// @ts-ignore - NODE_ENV is injected by build process
-const IS_PRODUCTION_BUILD = typeof process !== 'undefined' && process.env.NODE_ENV === 'production'
+// __PROD__ is defined in vite.config.ts for production builds
+// @ts-ignore
+const IS_PRODUCTION_BUILD = typeof __PROD__ !== 'undefined' && __PROD__ === 'true'
 
 /**
  * Detect if running on real device (Android/iOS)

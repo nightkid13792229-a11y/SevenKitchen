@@ -13,6 +13,12 @@ export default defineConfig({
     outDir: 'dist/build/mp-weixin',
     emptyOutDir: false, // 保留 project.config.json 等配置文件
   },
+  // 定义环境变量，供代码中使用
+  define: {
+    // 强制设置为生产环境（uni build 命令运行时）
+    'process.env.NODE_ENV': JSON.stringify('production'),
+    '__PROD__': 'true',
+  },
 })
 
 

@@ -3,16 +3,33 @@
 // Can be overridden at runtime via Network Settings page (stored in uni storage)
 // Automatically uses IP address in WeChat DevTools for stable development
 
+// 使用条件编译来区分开发和生产环境
+// #ifdef APP-PLUS||MP-WEIXIN-DEV
 const DEFAULT_BASE_URL = 'http://localhost:3001/api/v1' // 默认开发环境
 const DEV_BASE_URL = 'http://localhost:3001/api/v1' // 本地开发服务器（开发者工具可用localhost，真机调试需改为局域网IP）
 const LAN_BASE_URL = 'http://192.168.31.43:3001/api/v1' // 局域网开发服务器（真机调试使用）
+const PROD_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1' // 生产环境（仅作为后备）
+// #endif
+
+// #ifdef MP-WEIXIN
+// 生产构建：强制使用生产域名
+const DEFAULT_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1' // 生产环境
+const DEV_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1' // 生产环境
+const LAN_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1' // 生产环境
 const PROD_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1' // 生产环境
+// #endif
+
 const STORAGE_KEY = 'api_base_url'
 
-// Detect if running in production build (dist/build)
-// __PROD__ is defined in vite.config.ts for production builds
-// @ts-ignore
-const IS_PRODUCTION_BUILD = typeof __PROD__ !== 'undefined' && __PROD__ === 'true'
+// 检测是否为生产构建
+// 在生产构建中，所有 URL 都指向 api.sevenkitchen.cloud
+// #ifdef MP-WEIXIN
+const IS_PRODUCTION_BUILD = true
+// #endif
+
+// #ifndef MP-WEIXIN
+const IS_PRODUCTION_BUILD = false
+// #endif
 
 /**
  * Detect if running on real device (Android/iOS)

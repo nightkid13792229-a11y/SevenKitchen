@@ -6,7 +6,8 @@
 
 <script setup lang="ts">
 import { onLaunch, onShow, onHide } from '@dcloudio/uni-app'
-import { getToken, performLogin, markTokenReady } from './utils/api'
+import { getToken, markTokenReady } from './utils/api'
+import { getBaseUrl, getDefaultBaseUrl } from './utils/config'
 
 onLaunch(() => {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
@@ -15,12 +16,11 @@ onLaunch(() => {
 
   // Log configuration state
   try {
-    // Debug: Check platform using new API
-    // @ts-ignore - getAppBaseInfo may not exist in all platforms
-    const appBaseInfo = uni.getAppBaseInfo?.() || uni.getSystemInfoSync?.()
-    const platform = (appBaseInfo?.platform || '').toLowerCase()
-    console.log('[App Debug] Platform:', appBaseInfo?.platform)
-    console.log('[App Debug] Platform lowercased:', platform)
+    // Debug: Check platform using getDeviceInfo (替代已废弃的 getSystemInfoSync)
+    const deviceInfo = uni.getDeviceInfo()
+    const platform = deviceInfo?.platform || 'unknown'
+    console.log('[App Debug] Platform:', platform)
+    console.log('[App Debug] Platform lowercased:', platform.toLowerCase())
 
     // Auto-fix: Clear old port 3000 configuration from storage
     const storedBaseUrl = uni.getStorageSync('api_base_url')
@@ -32,8 +32,6 @@ onLaunch(() => {
       }
     }
 
-    const { getBaseUrl, getDefaultBaseUrl } = require('./utils/config')
-    const { getToken } = require('./utils/api')
     const currentBaseUrl = getBaseUrl()
     const defaultBaseUrl = getDefaultBaseUrl()
     const token = getToken()
@@ -45,9 +43,12 @@ onLaunch(() => {
     console.log('🔑 Token:', token ? 'Present ✓' : 'Not found (guest mode)')
 
     // Detect build mode (dev vs build)
+    // Check if running in devtools
+    const isDevtools = platform.toLowerCase() === 'devtools'
     // @ts-ignore - uni compilation mode
-    const isDev = typeof __UNI_PLATFORM__ !== 'undefined' && process.env.NODE_ENV === 'development'
+    const isDev = isDevtools || (typeof process !== 'undefined' && process.env.NODE_ENV === 'development')
     console.log('🔧 Build Mode:', isDev ? 'Development (watch)' : 'Production')
+    console.log('🔧 Platform:', platform)
   } catch (err) {
     console.warn('Failed to log startup config:', err)
   }

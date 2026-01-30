@@ -9,16 +9,20 @@ const LAN_BASE_URL = 'http://192.168.31.43:3001/api/v1' // 局域网开发服务
 const PROD_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1' // 生产环境
 const STORAGE_KEY = 'api_base_url'
 
+// Detect if running in production build (dist/build)
+// @ts-ignore - NODE_ENV is injected by build process
+const IS_PRODUCTION_BUILD = typeof process !== 'undefined' && process.env.NODE_ENV === 'production'
+
 /**
  * Detect if running on real device (Android/iOS)
  * Returns true if platform is 'android' or 'ios', false otherwise
  */
 function isRealDevice(): boolean {
   try {
-    // @ts-ignore - getAppBaseInfo may not exist in all platforms
-    const appBaseInfo = uni.getAppBaseInfo?.() || uni.getSystemInfoSync?.()
-    const platform = appBaseInfo?.platform?.toLowerCase() || ''
-    console.log('[Config Debug] Platform:', appBaseInfo?.platform, 'Lowercased:', platform)
+    // 使用 getDeviceInfo 获取设备信息（替代已废弃的 getSystemInfoSync）
+    const deviceInfo = uni.getDeviceInfo()
+    const platform = deviceInfo?.platform?.toLowerCase() || ''
+    console.log('[Config Debug] Platform:', deviceInfo?.platform, 'Lowercased:', platform)
 
     // 检测是否为真机：android 或 ios
     const result = platform === 'android' || platform === 'ios'
@@ -50,13 +54,15 @@ function isRealDevice(): boolean {
  */
 function isDevTools(): boolean {
   try {
-    // @ts-ignore - getAppBaseInfo may not exist in all platforms
-    const appBaseInfo = uni.getAppBaseInfo?.() || uni.getSystemInfoSync?.()
-    const platform = appBaseInfo?.platform?.toLowerCase() || ''
+    // 使用 getDeviceInfo 获取设备信息（替代已废弃的 getSystemInfoSync）
+    const deviceInfo = uni.getDeviceInfo()
+    const platform = deviceInfo?.platform?.toLowerCase() || ''
     const result = platform === 'devtools'
+    console.log('[Config Debug] isDevTools result:', result, 'platform:', platform)
     return result
   } catch (err) {
-    // If getSystemInfo fails, assume not in devtools
+    // If getDeviceInfo fails, assume not in devtools
+    console.log('[Config Debug] isDevTools check failed, assuming not devtools')
     return false
   }
 }
@@ -64,13 +70,20 @@ function isDevTools(): boolean {
 /**
  * Get the API base URL with automatic dev/prod switching
  * Priority order:
- * 1. Storage override (manual config from Network Settings page)
- * 2. DevTools detection → use IP address
- * 3. Production → use domain
- * 
- * Storage takes precedence to allow runtime configuration
+ * 1. Production build → use production domain (api.sevenkitchen.cloud)
+ * 2. Storage override (manual config from Network Settings page)
+ * 3. Real device → use LAN IP
+ * 4. DevTools → use localhost
+ *
+ * Production build always uses PROD_BASE_URL to ensure domain whitelist compliance
  */
 export function getBaseUrl(): string {
+  // 优先级0：生产构建 → 强制使用生产域名（确保通过域名校验）
+  if (IS_PRODUCTION_BUILD) {
+    console.debug('[Config] Production build detected, using PROD_BASE_URL:', PROD_BASE_URL)
+    return PROD_BASE_URL
+  }
+
   // 优先级1：真机调试 → 强制使用局域网IP（忽略Storage）
   if (isRealDevice()) {
     console.debug('[Config] Detected real device, using LAN BASE_URL:', LAN_BASE_URL)

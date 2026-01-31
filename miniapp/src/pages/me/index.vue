@@ -17,6 +17,16 @@
 
     <!-- 已登录状态 -->
     <view v-else class="logged-in">
+      <!-- 用户头像区域 -->
+      <view class="user-profile-section">
+        <image
+          class="user-avatar"
+          :src="userInfo.avatarUrl || '/static/default-avatar.png'"
+          mode="aspectFill"
+        ></image>
+        <text class="user-nickname">{{ userInfo.nickname || '微信用户' }}</text>
+      </view>
+
       <!-- 基本信息板块 -->
       <view class="info-section">
         <view class="section-header">基本信息</view>
@@ -403,6 +413,28 @@ onShow(() => {
 }
 
 /* 已登录状态 */
+.user-profile-section {
+  background: #fff;
+  padding: 40rpx 32rpx 32rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.user-avatar {
+  width: 160rpx;
+  height: 160rpx;
+  border-radius: 80rpx;
+  margin-bottom: 24rpx;
+  background-color: #f5f5f5;
+}
+
+.user-nickname {
+  font-size: 32rpx;
+  font-weight: 500;
+  color: #333;
+}
+
 .info-section {
   background: #fff;
   margin-top: 20rpx;

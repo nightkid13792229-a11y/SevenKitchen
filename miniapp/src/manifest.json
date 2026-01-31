@@ -20,7 +20,8 @@
     "usingComponents": true,
     "optimization": {
       "subPackages": true
-    }
+    },
+    "lazyCodeLoading": "requiredComponents"
   },
   "h5": {
     "router": {

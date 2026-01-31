@@ -2,6 +2,7 @@ Component({
   data: {
     selected: 0,
     isStaff: false,
+    lastUserLoginTrigger: 0,
     list: [
       {
         pagePath: "/pages/home/index",
@@ -76,6 +77,18 @@ Component({
 
       this.data.pageMonitorTimer = setInterval(() => {
         try {
+          // 1. 检查用户登录状态变化
+          const userLoginTrigger = wx.getStorageSync('userLoginTrigger') || 0;
+          if (userLoginTrigger !== this.data.lastUserLoginTrigger) {
+            console.log('[TabBar] User login trigger changed:', this.data.lastUserLoginTrigger, '->', userLoginTrigger);
+            this.setData({
+              lastUserLoginTrigger: userLoginTrigger
+            });
+            // 重新检查用户角色
+            this.checkUserRole();
+          }
+
+          // 2. 检查页面路由变化
           const pages = getCurrentPages();
           if (pages.length === 0) return;
 
@@ -162,7 +175,10 @@ Component({
     checkUserRole() {
       try {
         const user = wx.getStorageSync('user');
+        console.log('[TabBar] User from storage:', user);
+        console.log('[TabBar] User role:', user?.role);
         const isStaff = user && (user.role === 'STAFF' || user.role === 'ADMIN');
+        console.log('[TabBar] isStaff calculated:', isStaff);
 
         // 只在isStaff变化时才更新
         if (this.data.isStaff !== isStaff) {
@@ -205,6 +221,16 @@ Component({
           console.error('[TabBar] Failed to switch page:', err);
         }
       });
+    },
+
+    /**
+     * 刷新TabBar状态（供外部调用）
+     * 重新检查用户角色和当前页面选中状态
+     */
+    refresh() {
+      console.log('[TabBar] refresh() called');
+      this.checkUserRole();
+      this.updateSelectedByCurrentPage();
     }
   }
 });

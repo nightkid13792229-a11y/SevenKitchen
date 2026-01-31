@@ -12,6 +12,7 @@ import { ORDER_REPOSITORY } from '../order/order.service';
 import type { OrderRepository } from '../../domain/order/order.repository';
 import { ORDER_STATUS_HISTORY_REPOSITORY } from '../order/order.service';
 import type { OrderStatusHistoryRepository } from '../../domain/order/order-status-history.repository';
+import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import {
   Reimbursement,
   ReimbursementStatus,
@@ -48,6 +49,7 @@ export class ReimbursementService {
     private readonly orderRepository: OrderRepository,
     @Inject(ORDER_STATUS_HISTORY_REPOSITORY)
     private readonly statusHistoryRepository: OrderStatusHistoryRepository,
+    private readonly cosService: TencentCosService,
   ) {}
 
   /**
@@ -392,12 +394,437 @@ export class ReimbursementService {
       throw new BadRequestException(error.message);
     }
 
-    // 4. 清空采购清单关联
+    // 4. 删除COS中的报销凭证文件
+    if (reimbursement.paymentProofKeys && reimbursement.paymentProofKeys.length > 0) {
+      this.logger.log(`Deleting ${reimbursement.paymentProofKeys.length} payment proof files from COS`);
+      for (const key of reimbursement.paymentProofKeys) {
+        try {
+          await this.cosService.deleteImage(key);
+          this.logger.log(`Deleted COS file: ${key}`);
+        } catch (error) {
+          this.logger.error(`Failed to delete COS file ${key}:`, error);
+          // 继续删除其他文件，不中断流程
+        }
+      }
+    }
+
+    // 5. 清空采购清单关联
     await this.purchaseListRepository.clearReimbursementId(id);
 
-    // 5. 删除报销单
+    // 6. 删除报销单
     await this.reimbursementRepository.delete(id);
 
     this.logger.log(`Reimbursement ${id} deleted by user ${requesterId}`);
+  }
+
+  /**
+   * 上传报销凭证
+   */
+  async uploadPaymentProof(
+    id: string,
+    paymentProofUrls: string[]
+  ): Promise<Reimbursement> {
+    // 1. 查询报销单
+    const reimbursement = await this.reimbursementRepository.findById(id);
+
+    if (!reimbursement) {
+      throw new BadRequestException('报销单不存在');
+    }
+
+    // 2. 状态验证
+    if (reimbursement.status !== ReimbursementStatus.PENDING_REVIEW) {
+      throw new BadRequestException('只有待审核状态可以上传报销凭证');
+    }
+
+    // 3. 验证凭证数量
+    if (!paymentProofUrls || paymentProofUrls.length === 0) {
+      throw new BadRequestException('请至少上传一张报销凭证');
+    }
+
+    // 4. 创建新的报销单实体（因为属性是readonly的）
+    const updated = new Reimbursement({
+      id: reimbursement.id,
+      claimNumber: reimbursement.claimNumber,
+      status: ReimbursementStatus.REIMBURSED,
+      totalActualCost: reimbursement.totalActualCost,
+      totalEstimatedCost: reimbursement.totalEstimatedCost,
+      receiptUrls: reimbursement.receiptUrls,
+      submittedById: reimbursement.submittedById,
+      submittedAt: reimbursement.submittedAt,
+      reviewedById: reimbursement.reviewedById,
+      reviewedAt: new Date(),
+      reviewComment: reimbursement.reviewComment,
+      createdAt: reimbursement.createdAt,
+      updatedAt: new Date(),
+      purchaseLists: reimbursement.purchaseLists,
+      platformShippingFee: reimbursement.platformShippingFee,
+      platformPackagingFee: reimbursement.platformPackagingFee,
+      customFees: reimbursement.customFees,
+      paymentProofUrls: paymentProofUrls,
+      submittedBy: reimbursement.submittedBy,
+      reviewedBy: reimbursement.reviewedBy,
+    });
+
+    const saved = await this.reimbursementRepository.save(updated);
+
+    this.logger.log(`Payment proof uploaded for reimbursement ${id}, status changed to REIMBURSED`);
+
+    return saved;
+  }
+
+  /**
+   * 上传报销凭证文件（支持多文件上传到COS）
+   */
+  async uploadPaymentProofFiles(
+    id: string,
+    files: Express.Multer.File[]
+  ): Promise<Reimbursement> {
+    // 1. 查询报销单
+    const reimbursement = await this.reimbursementRepository.findById(id);
+
+    if (!reimbursement) {
+      throw new BadRequestException('报销单不存在');
+    }
+
+    // 2. 验证凭证数量
+    if (!files || files.length === 0) {
+      throw new BadRequestException('请至少上传一张报销凭证');
+    }
+
+    if (files.length > 10) {
+      throw new BadRequestException('最多只能上传10张凭证');
+    }
+
+    // 3. 上传文件到COS
+    const uploadPromises = files.map(file =>
+      this.cosService.uploadImage(file, file.originalname, 'reimbursement-payment-proofs')
+    );
+
+    this.logger.log(`Uploading ${files.length} payment proof files to COS for reimbursement ${id}`);
+
+    let uploadResults;
+    try {
+      uploadResults = await Promise.all(uploadPromises);
+    } catch (error) {
+      this.logger.error('Failed to upload files to COS:', error);
+      throw new BadRequestException('文件上传失败');
+    }
+
+    const paymentProofUrls = uploadResults.map(r => r.url);
+    const paymentProofKeys = uploadResults.map(r => r.key);
+
+    this.logger.log(`Successfully uploaded ${uploadResults.length} files to COS`);
+
+    // 4. 如果已有凭证，合并新旧凭证
+    let finalUrls = paymentProofUrls;
+    let finalKeys = paymentProofKeys;
+
+    if (reimbursement.paymentProofKeys && reimbursement.paymentProofKeys.length > 0) {
+      this.logger.log(`Merging with existing ${reimbursement.paymentProofKeys.length} payment proof files`);
+      // 合并新旧凭证（避免重复）
+      finalUrls = [...reimbursement.paymentProofUrls, ...paymentProofUrls];
+      finalKeys = [...reimbursement.paymentProofKeys, ...paymentProofKeys];
+
+      // 验证总数不超过10个
+      if (finalUrls.length > 10) {
+        throw new BadRequestException('报销凭证总数不能超过10张');
+      }
+    }
+
+    // 5. 创建新的报销单实体（因为属性是readonly的）
+    // 只有待审核状态上传凭证后，才自动改为已报销状态
+    const finalStatus = reimbursement.status === ReimbursementStatus.PENDING_REVIEW
+      ? ReimbursementStatus.REIMBURSED
+      : reimbursement.status;
+
+    const updated = new Reimbursement({
+      id: reimbursement.id,
+      claimNumber: reimbursement.claimNumber,
+      status: finalStatus,
+      totalActualCost: reimbursement.totalActualCost,
+      totalEstimatedCost: reimbursement.totalEstimatedCost,
+      receiptUrls: reimbursement.receiptUrls,
+      receiptKeys: reimbursement.receiptKeys,
+      submittedById: reimbursement.submittedById,
+      submittedAt: reimbursement.submittedAt,
+      reviewedById: reimbursement.reviewedById,
+      reviewedAt: finalStatus === ReimbursementStatus.REIMBURSED ? new Date() : reimbursement.reviewedAt,
+      reviewComment: reimbursement.reviewComment,
+      createdAt: reimbursement.createdAt,
+      updatedAt: new Date(),
+      purchaseLists: reimbursement.purchaseLists,
+      platformShippingFee: reimbursement.platformShippingFee,
+      platformPackagingFee: reimbursement.platformPackagingFee,
+      customFees: reimbursement.customFees,
+      paymentProofUrls: finalUrls,
+      paymentProofKeys: finalKeys,
+      submittedBy: reimbursement.submittedBy,
+      reviewedBy: reimbursement.reviewedBy,
+    });
+
+    const saved = await this.reimbursementRepository.save(updated);
+
+    this.logger.log(`Payment proof files uploaded for reimbursement ${id}, status: ${finalStatus}`);
+
+    return saved;
+  }
+
+  /**
+   * 清空报销凭证
+   */
+  async clearPaymentProof(id: string): Promise<Reimbursement> {
+    // 1. 查询报销单
+    const reimbursement = await this.reimbursementRepository.findById(id);
+
+    if (!reimbursement) {
+      throw new BadRequestException('报销单不存在');
+    }
+
+    this.logger.log(`Clearing payment proof for reimbursement ${id}`);
+
+    // 2. 如果有COS文件，先删除
+    if (reimbursement.paymentProofKeys && reimbursement.paymentProofKeys.length > 0) {
+      this.logger.log(`Deleting ${reimbursement.paymentProofKeys.length} files from COS`);
+      try {
+        const deletePromises = reimbursement.paymentProofKeys.map(key =>
+          this.cosService.deleteImage(key)
+        );
+        await Promise.all(deletePromises);
+        this.logger.log(`Successfully deleted ${reimbursement.paymentProofKeys.length} files from COS`);
+      } catch (error) {
+        this.logger.error('Failed to delete files from COS:', error);
+        // 即使删除失败，也继续清空数据库中的记录
+      }
+    }
+
+    // 3. 创建新的报销单实体（清空凭证）
+    const updated = new Reimbursement({
+      id: reimbursement.id,
+      claimNumber: reimbursement.claimNumber,
+      status: reimbursement.status,
+      totalActualCost: reimbursement.totalActualCost,
+      totalEstimatedCost: reimbursement.totalEstimatedCost,
+      receiptUrls: reimbursement.receiptUrls,
+      receiptKeys: reimbursement.receiptKeys,
+      submittedById: reimbursement.submittedById,
+      submittedAt: reimbursement.submittedAt,
+      reviewedById: reimbursement.reviewedById,
+      reviewedAt: reimbursement.reviewedAt,
+      reviewComment: reimbursement.reviewComment,
+      createdAt: reimbursement.createdAt,
+      updatedAt: new Date(),
+      purchaseLists: reimbursement.purchaseLists,
+      platformShippingFee: reimbursement.platformShippingFee,
+      platformPackagingFee: reimbursement.platformPackagingFee,
+      customFees: reimbursement.customFees,
+      paymentProofUrls: [],
+      paymentProofKeys: [],
+      submittedBy: reimbursement.submittedBy,
+      reviewedBy: reimbursement.reviewedBy,
+    });
+
+    const saved = await this.reimbursementRepository.save(updated);
+
+    this.logger.log(`Payment proof cleared for reimbursement ${id}`);
+
+    return saved;
+  }
+
+  /**
+   * 追加支付凭证（发票照片）
+   */
+  async appendReceiptUrls(
+    id: string,
+    files: Express.Multer.File[],
+    requesterId: string,
+    isAdmin: boolean
+  ): Promise<Reimbursement> {
+    // 1. 查询报销单
+    const reimbursement = await this.reimbursementRepository.findById(id);
+
+    if (!reimbursement) {
+      throw new BadRequestException('报销单不存在');
+    }
+
+    // 2. 权限验证：只有提交者或管理员可以修改
+    if (!isAdmin && reimbursement.submittedById !== requesterId) {
+      throw new ForbiddenException('您没有权限修改该报销单');
+    }
+
+    // 3. 状态验证：只有待审核、被驳回、需重新提交状态可以修改
+    const editableStatuses = [
+      ReimbursementStatus.PENDING_REVIEW,
+      ReimbursementStatus.REJECTED,
+      ReimbursementStatus.REQUIRES_RESUBMIT,
+    ];
+
+    if (!editableStatuses.includes(reimbursement.status)) {
+      throw new BadRequestException('当前状态不允许修改支付凭证');
+    }
+
+    // 4. 验证文件数量
+    if (!files || files.length === 0) {
+      throw new BadRequestException('请至少上传一张图片');
+    }
+
+    const currentCount = reimbursement.receiptUrls?.length || 0;
+    const newCount = files.length;
+
+    if (currentCount + newCount > 10) {
+      throw new BadRequestException(`最多只能上传10张图片，当前已有${currentCount}张`);
+    }
+
+    // 5. 上传文件到COS
+    const uploadPromises = files.map(file =>
+      this.cosService.uploadImage(file, file.originalname, 'reimbursement-receipts')
+    );
+
+    this.logger.log(`Uploading ${files.length} receipt files to COS for reimbursement ${id}`);
+
+    let uploadResults;
+    try {
+      uploadResults = await Promise.all(uploadPromises);
+    } catch (error) {
+      this.logger.error('Failed to upload files to COS:', error);
+      throw new BadRequestException('文件上传失败');
+    }
+
+    const newReceiptUrls = uploadResults.map(r => r.url);
+    const newReceiptKeys = uploadResults.map(r => r.key);
+
+    // 6. 合并新旧凭证URL
+    const updatedUrls = [...(reimbursement.receiptUrls || []), ...newReceiptUrls];
+    const updatedKeys = [...(reimbursement.receiptKeys || []), ...newReceiptKeys];
+
+    this.logger.log(`Successfully uploaded ${uploadResults.length} files to COS`);
+
+    // 7. 创建新的报销单实体（因为属性是readonly的）
+    const updated = new Reimbursement({
+      id: reimbursement.id,
+      claimNumber: reimbursement.claimNumber,
+      status: reimbursement.status,
+      totalActualCost: reimbursement.totalActualCost,
+      totalEstimatedCost: reimbursement.totalEstimatedCost,
+      receiptUrls: updatedUrls,
+      receiptKeys: updatedKeys,
+      submittedById: reimbursement.submittedById,
+      submittedAt: reimbursement.submittedAt,
+      reviewedById: reimbursement.reviewedById,
+      reviewedAt: reimbursement.reviewedAt,
+      reviewComment: reimbursement.reviewComment,
+      createdAt: reimbursement.createdAt,
+      updatedAt: new Date(),
+      purchaseLists: reimbursement.purchaseLists,
+      platformShippingFee: reimbursement.platformShippingFee,
+      platformPackagingFee: reimbursement.platformPackagingFee,
+      customFees: reimbursement.customFees,
+      paymentProofUrls: reimbursement.paymentProofUrls,
+      paymentProofKeys: reimbursement.paymentProofKeys,
+      submittedBy: reimbursement.submittedBy,
+      reviewedBy: reimbursement.reviewedBy,
+    });
+
+    const saved = await this.reimbursementRepository.save(updated);
+
+    this.logger.log(`Receipt URLs appended for reimbursement ${id}`);
+
+    return saved;
+  }
+
+  /**
+   * 删除支付凭证（发票照片）
+   */
+  async removeReceiptUrl(
+    id: string,
+    urlIndex: number,
+    requesterId: string,
+    isAdmin: boolean
+  ): Promise<Reimbursement> {
+    // 1. 查询报销单
+    const reimbursement = await this.reimbursementRepository.findById(id);
+
+    if (!reimbursement) {
+      throw new BadRequestException('报销单不存在');
+    }
+
+    // 2. 权限验证：只有提交者或管理员可以修改
+    if (!isAdmin && reimbursement.submittedById !== requesterId) {
+      throw new ForbiddenException('您没有权限修改该报销单');
+    }
+
+    // 3. 状态验证：只有待审核、被驳回、需重新提交状态可以修改
+    const editableStatuses = [
+      ReimbursementStatus.PENDING_REVIEW,
+      ReimbursementStatus.REJECTED,
+      ReimbursementStatus.REQUIRES_RESUBMIT,
+    ];
+
+    if (!editableStatuses.includes(reimbursement.status)) {
+      throw new BadRequestException('当前状态不允许修改支付凭证');
+    }
+
+    // 4. 验证索引
+    if (!reimbursement.receiptUrls || reimbursement.receiptUrls.length === 0) {
+      throw new BadRequestException('没有可删除的支付凭证');
+    }
+
+    if (urlIndex < 0 || urlIndex >= reimbursement.receiptUrls.length) {
+      throw new BadRequestException('无效的图片索引');
+    }
+
+    // 5. 如果有对应的COS key，删除COS中的文件
+    const keyToDelete = reimbursement.receiptKeys?.[urlIndex];
+    if (keyToDelete) {
+      try {
+        await this.cosService.deleteImage(keyToDelete);
+        this.logger.log(`Deleted COS file: ${keyToDelete}`);
+      } catch (error) {
+        this.logger.error(`Failed to delete COS file ${keyToDelete}:`, error);
+        // 继续执行，不中断流程
+      }
+    }
+
+    // 7. 从数组中删除指定索引的元素
+    const updatedUrls = [...reimbursement.receiptUrls];
+    const updatedKeys = reimbursement.receiptKeys ? [...reimbursement.receiptKeys] : [];
+
+    updatedUrls.splice(urlIndex, 1);
+    if (updatedKeys.length > 0) {
+      updatedKeys.splice(urlIndex, 1);
+    }
+
+    this.logger.log(`Removed receipt at index ${urlIndex} from reimbursement ${id}`);
+
+    // 8. 创建新的报销单实体（因为属性是readonly的）
+    const updated = new Reimbursement({
+      id: reimbursement.id,
+      claimNumber: reimbursement.claimNumber,
+      status: reimbursement.status,
+      totalActualCost: reimbursement.totalActualCost,
+      totalEstimatedCost: reimbursement.totalEstimatedCost,
+      receiptUrls: updatedUrls,
+      receiptKeys: updatedKeys,
+      submittedById: reimbursement.submittedById,
+      submittedAt: reimbursement.submittedAt,
+      reviewedById: reimbursement.reviewedById,
+      reviewedAt: reimbursement.reviewedAt,
+      reviewComment: reimbursement.reviewComment,
+      createdAt: reimbursement.createdAt,
+      updatedAt: new Date(),
+      purchaseLists: reimbursement.purchaseLists,
+      platformShippingFee: reimbursement.platformShippingFee,
+      platformPackagingFee: reimbursement.platformPackagingFee,
+      customFees: reimbursement.customFees,
+      paymentProofUrls: reimbursement.paymentProofUrls,
+      paymentProofKeys: reimbursement.paymentProofKeys,
+      submittedBy: reimbursement.submittedBy,
+      reviewedBy: reimbursement.reviewedBy,
+    });
+
+    const saved = await this.reimbursementRepository.save(updated);
+
+    this.logger.log(`Receipt URL removed for reimbursement ${id}`);
+
+    return saved;
   }
 }

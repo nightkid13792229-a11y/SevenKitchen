@@ -130,5 +130,77 @@ export class PackagingUnit {
     this.photosPortioned = photosPortioned;
     this.updatedAt = new Date();
   }
+
+  /**
+   * Upload raw material photos (原料照片上传)
+   * 支持累加模式：每次调用追加新照片到现有列表
+   * Triggers status transition from PENDING to COMPLETED when reaching 2-3 photos
+   * @param photoUrls Array of photo URLs (1-3 photos per upload)
+   * @returns boolean indicating if order should transition to FREEZING
+   */
+  uploadPhotos(photoUrls: string[]): boolean {
+    // Validate input
+    if (!Array.isArray(photoUrls) || photoUrls.length === 0) {
+      throw new ValidationError('Photo URLs cannot be empty');
+    }
+
+    // Append new photos to existing list (累加模式)
+    const existingPhotos = this.photosRaw || [];
+    const updatedPhotos = [...existingPhotos, ...photoUrls];
+
+    // Validate total count
+    if (updatedPhotos.length > 3) {
+      throw new ValidationError(
+        `Total photos cannot exceed 3. Currently have ${existingPhotos.length}, trying to add ${photoUrls.length}`
+      );
+    }
+
+    // Save updated photos array
+    this.photosRaw = updatedPhotos;
+
+    // Transition to COMPLETED when reaching 2-3 photos (PENDING -> COMPLETED)
+    const shouldTriggerOrderFreezing = this.status === PackagingUnitStatus.PENDING && updatedPhotos.length >= 2;
+    if (shouldTriggerOrderFreezing) {
+      this.status = PackagingUnitStatus.COMPLETED;
+    }
+
+    this.updatedAt = new Date();
+
+    return shouldTriggerOrderFreezing;
+  }
+
+  /**
+   * Replace raw material photos (原料照片替换)
+   * Used in FREEZING state to update photos without triggering order status change
+   * @param photoUrls Array of photo URLs (2-3 photos required)
+   */
+  replacePhotos(photoUrls: string[]): void {
+    if (!Array.isArray(photoUrls) || photoUrls.length < 2 || photoUrls.length > 3) {
+      throw new ValidationError('Must upload 2-3 photos');
+    }
+
+    this.photosRaw = photoUrls;
+    this.updatedAt = new Date();
+  }
+
+  /**
+   * Remove a single raw material photo (删除单张原料照片)
+   * Used to delete a specific photo from the array
+   * @param photoUrl The photo URL to remove
+   */
+  removePhoto(photoUrl: string): void {
+    if (!this.photosRaw || this.photosRaw.length === 0) {
+      throw new ValidationError('No photos to remove');
+    }
+
+    const photoIndex = this.photosRaw.indexOf(photoUrl);
+    if (photoIndex === -1) {
+      throw new ValidationError('Photo not found in array');
+    }
+
+    // Remove the photo from the array
+    this.photosRaw.splice(photoIndex, 1);
+    this.updatedAt = new Date();
+  }
 }
 

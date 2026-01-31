@@ -148,6 +148,56 @@ export class TencentCosService {
   }
 
   /**
+   * Check if a file exists in COS by URL
+   * @param url Full URL of the file
+   * @returns true if file exists, false otherwise
+   */
+  async checkFileExists(url: string): Promise<boolean> {
+    if (!this.secretId || !this.secretKey || !this.bucket) {
+      console.warn('[TencentCosService] COS credentials not configured, assuming file does not exist');
+      return false;
+    }
+
+    try {
+      // Extract key from URL
+      const urlObj = new URL(url);
+      const key = urlObj.pathname.slice(1); // Remove leading '/'
+
+      console.log(`[TencentCosService] Checking if file exists: ${key}`);
+
+      const cos = require('cos-nodejs-sdk-v5');
+
+      const cosClient = new cos({
+        SecretId: this.secretId,
+        SecretKey: this.secretKey,
+      });
+
+      // Use headObject to check if file exists
+      await new Promise<void>((resolve, reject) => {
+        cosClient.headObject({
+          Bucket: this.bucket,
+          Region: this.region,
+          Key: key,
+        }, (err: any, data: any) => {
+          if (err) {
+            // File doesn't exist or access denied
+            console.log(`[TencentCosService] File does not exist: ${key}`);
+            reject(err);
+          } else {
+            console.log(`[TencentCosService] File exists: ${key}`);
+            resolve(data);
+          }
+        });
+      });
+
+      return true;
+    } catch (error: any) {
+      console.log(`[TencentCosService] File check failed for ${url}:`, error?.message || error);
+      return false;
+    }
+  }
+
+  /**
    * Get file extension from filename
    */
   private getFileExtension(filename: string): string {

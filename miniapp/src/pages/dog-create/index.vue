@@ -536,9 +536,6 @@
                 <view class="medical-item-main" @tap="editAllergyRecord(index)">
                   <view class="medical-item-title">{{ record.allergen || '未命名' }}</view>
                   <view class="medical-item-info">
-                    <text v-if="record.discoveryDate" class="info-tag">日期: {{ formatDate(record.discoveryDate) }}</text>
-                    <text class="info-tag">类型: {{ getAllergenTypeLabel(record.allergenType) }}</text>
-                    <text class="info-tag">程度: {{ getSeverityLabel(record.severity) }}</text>
                     <text v-if="record.attachments && record.attachments.length > 0" class="info-tag">附件: {{ record.attachments.length }}个</text>
                   </view>
                 </view>
@@ -928,7 +925,7 @@
 
           <!-- 过敏检测报告上传 -->
           <view class="medical-form-item">
-            <text class="medical-label">检测报告（图片或PDF）</text>
+            <text class="medical-label">过敏检测报告（图片或PDF）</text>
 
             <!-- 已上传文件列表 -->
             <view v-if="currentAllergyRecord.attachments && currentAllergyRecord.attachments.length > 0" class="uploaded-files">
@@ -2125,21 +2122,62 @@ function editMedicalRecord(index: number) {
 /**
  * 删除病史记录
  */
-function deleteMedicalRecord(index: number) {
-  uni.showModal({
-    title: '确认删除',
-    content: '确定要删除这条病史记录吗？',
-    success: (res) => {
-      if (res.confirm) {
-        formData.value.medicalRecords.splice(index, 1)
-        uni.showToast({
-          title: '删除成功',
-          icon: 'success',
-          duration: 1500
-        })
+async function deleteMedicalRecord(index: number) {
+  const record = formData.value.medicalRecords[index]
+  
+  // 如果是已有记录（有id），调用API删除
+  if (record.id && dogId.value) {
+    uni.showModal({
+      title: '确认删除',
+      content: '确定要删除这条病史记录吗？',
+      success: async (res) => {
+        if (res.confirm) {
+          try {
+            uni.showLoading({ title: '删除中...' })
+            
+            await request({
+              url: `/dogs/${dogId.value}/medical-records/${record.id}`,
+              method: 'DELETE'
+            })
+            
+            // 从本地数组移除
+            formData.value.medicalRecords.splice(index, 1)
+            
+            uni.hideLoading()
+            uni.showToast({
+              title: '删除成功',
+              icon: 'success',
+              duration: 1500
+            })
+          } catch (error: any) {
+            uni.hideLoading()
+            console.error('[DogCreate] Delete medical record failed:', error)
+            uni.showToast({
+              title: error.message || '删除失败',
+              icon: 'none',
+              duration: 2000
+            })
+          }
+        }
       }
-    }
-  })
+    })
+  } else {
+    // 本地新建记录，直接删除
+    uni.showModal({
+      title: '确认删除',
+      content: '确定要删除这条病史记录吗？',
+      success: (res) => {
+        if (res.confirm) {
+          formData.value.medicalRecords.splice(index, 1)
+          uni.showToast({
+            title: '删除成功',
+            icon: 'success',
+            duration: 1500
+          })
+        }
+      }
+    })
+  }
 }
 
 /**
@@ -2214,15 +2252,59 @@ async function saveMedicalRecord() {
       })
     }
   } else {
-    // 新增模式：添加到本地列表（稍后保存档案时提交）
-    formData.value.medicalRecords.push({ ...currentMedicalRecord.value })
-    uni.showToast({
-      title: '添加成功（请记得保存档案）',
-      icon: 'success',
-      duration: 2000
-    })
+    // 新增模式：如果有dogId，调用 API 创建记录
+    if (dogId.value) {
+      try {
+        uni.showLoading({ title: '保存中...' })
 
-    closeMedicalRecordModal()
+        const createData = {
+          chiefComplaint: currentMedicalRecord.value.chiefComplaint,
+          visitDate: currentMedicalRecord.value.visitDate || null,
+          diagnosis: currentMedicalRecord.value.diagnosis || null,
+          notes: currentMedicalRecord.value.notes || null,
+          attachments: currentMedicalRecord.value.attachments || []
+        }
+
+        const response = await request({
+          url: `/dogs/${dogId.value}/medical-records`,
+          method: 'POST',
+          data: createData
+        })
+
+        // 添加到本地列表
+        formData.value.medicalRecords.push({
+          id: response.data.id,
+          ...createData
+        })
+
+        uni.hideLoading()
+        uni.showToast({
+          title: '添加成功',
+          icon: 'success',
+          duration: 1500
+        })
+
+        closeMedicalRecordModal()
+      } catch (error: any) {
+        uni.hideLoading()
+        console.error('[DogCreate] Create medical record failed:', error)
+        uni.showToast({
+          title: error.message || '添加失败',
+          icon: 'none',
+          duration: 2000
+        })
+      }
+    } else {
+      // 还没有dogId，添加到本地列表（稍后保存档案时提交）
+      formData.value.medicalRecords.push({ ...currentMedicalRecord.value })
+      uni.showToast({
+        title: '添加成功（请记得保存档案）',
+        icon: 'success',
+        duration: 2000
+      })
+
+      closeMedicalRecordModal()
+    }
   }
 }
 
@@ -2263,16 +2345,70 @@ function formatDate(dateStr: string): string {
 }
 
 /**
+ * 格式化文件大小显示
+ * @param sizeInBytes 文件大小（字节）
+ * @returns 格式化后的文件大小字符串
+ */
+function formatFileSize(sizeInBytes: number): string {
+  if (sizeInBytes < 1024) {
+    return `${sizeInBytes}B`
+  } else if (sizeInBytes < 1024 * 1024) {
+    return `${(sizeInBytes / 1024).toFixed(2)}KB`
+  } else {
+    return `${(sizeInBytes / (1024 * 1024)).toFixed(2)}MB`
+  }
+}
+
+/**
  * 选择图片
  */
-function chooseImage() {
+async function chooseImage() {
   uni.chooseImage({
     count: 9, // 最多选择9张
     sizeType: ['compressed'], // 压缩图
     sourceType: ['album', 'camera'],
-    success: (res) => {
-      // 上传所有选中的图片
-      res.tempFilePaths.forEach((filePath: string) => {
+    success: async (res) => {
+      const maxSize = 10 * 1024 * 1024 // 10MB
+      const oversizedFiles: string[] = []
+      const validFiles: string[] = []
+
+      // 检查每个图片文件的大小
+      for (const filePath of res.tempFilePaths) {
+        try {
+          const fileInfo = await uni.getFileInfo({
+            filePath: filePath
+          })
+          
+          if (fileInfo.size > maxSize) {
+            oversizedFiles.push(filePath)
+          } else {
+            validFiles.push(filePath)
+          }
+        } catch (error) {
+          console.error('[DogCreate] Get file info failed:', error)
+          // 如果获取文件信息失败，默认允许上传
+          validFiles.push(filePath)
+        }
+      }
+
+      // 优先显示文件超限提示
+      if (oversizedFiles.length > 0) {
+        uni.showToast({
+          title: `${oversizedFiles.length}张图片超过10MB限制`,
+          icon: 'none',
+          duration: 3000
+        })
+        // 仍然上传有效的图片
+        if (validFiles.length > 0) {
+          validFiles.forEach((filePath: string) => {
+            uploadFile(filePath, 'image')
+          })
+        }
+        return
+      }
+
+      // 上传所有有效的图片
+      validFiles.forEach((filePath: string) => {
         uploadFile(filePath, 'image')
       })
     },
@@ -2297,14 +2433,57 @@ function choosePdf() {
     extension: ['pdf'], // 只显示PDF文件
     success: (res) => {
       console.log('[DogCreate] Choose message file success:', res)
+      console.log('[DogCreate] tempFiles:', res.tempFiles)
 
-      // 检查文件类型
-      const validFiles = res.tempFiles.filter((file: any) => {
-        const fileName = file.name.toLowerCase()
-        return fileName.endsWith('.pdf')
-      })
+      // 检查文件类型和大小
+      const maxSize = 10 * 1024 * 1024 // 10MB
+      const oversizedFiles: any[] = []
+      const validFiles: any[] = []
 
+      // 先检查所有文件
+      for (const file of res.tempFiles) {
+        console.log('[DogCreate] Processing file:', file)
+        console.log('[DogCreate] File name:', file.name)
+        console.log('[DogCreate] File size:', file.size)
+        
+        const fileName = file.name ? file.name.toLowerCase() : ''
+        
+        // 检查是否为PDF
+        if (!fileName || !fileName.endsWith('.pdf')) {
+          console.log('[DogCreate] Not a PDF file, skipping')
+          continue
+        }
+        
+        // 检查文件大小
+        if (file.size > maxSize) {
+          console.log('[DogCreate] File oversized, adding to oversizedFiles')
+          oversizedFiles.push(file)
+        } else {
+          console.log('[DogCreate] File valid, adding to validFiles')
+          validFiles.push(file)
+        }
+      }
+
+      console.log('[DogCreate] oversizedFiles count:', oversizedFiles.length)
+      console.log('[DogCreate] validFiles count:', validFiles.length)
+
+      // 优先显示文件超限提示
+      if (oversizedFiles.length > 0) {
+        const file = oversizedFiles[0]
+        const fileSizeStr = formatFileSize(file.size)
+        const maxSizeStr = formatFileSize(maxSize)
+        console.log('[DogCreate] Showing oversized file toast:', file.name)
+        uni.showToast({
+          title: `"${file.name}"\n文件大小: ${fileSizeStr}\n超过限制: ${maxSizeStr}`,
+          icon: 'none',
+          duration: 3000
+        })
+        return
+      }
+
+      // 如果没有有效文件
       if (validFiles.length === 0) {
+        console.log('[DogCreate] No valid files, showing error toast')
         uni.showToast({
           title: '请选择PDF文件',
           icon: 'none',
@@ -2313,7 +2492,8 @@ function choosePdf() {
         return
       }
 
-      // 上传所有选中的PDF文件
+      // 上传所有有效的PDF文件
+      console.log('[DogCreate] Uploading', validFiles.length, 'valid files')
       validFiles.forEach((file: any) => {
         uploadFile(file.path, 'pdf')
       })
@@ -2813,21 +2993,62 @@ function editCheckupRecord(index: number) {
 /**
  * 删除体检记录
  */
-function deleteCheckupRecord(index: number) {
-  uni.showModal({
-    title: '确认删除',
-    content: '确定要删除这条体检记录吗？',
-    success: (res) => {
-      if (res.confirm) {
-        formData.value.checkupRecords.splice(index, 1)
-        uni.showToast({
-          title: '删除成功',
-          icon: 'success',
-          duration: 1500
-        })
+async function deleteCheckupRecord(index: number) {
+  const record = formData.value.checkupRecords[index]
+  
+  // 如果是已有记录（有id），调用API删除
+  if (record.id && dogId.value) {
+    uni.showModal({
+      title: '确认删除',
+      content: '确定要删除这条体检记录吗？',
+      success: async (res) => {
+        if (res.confirm) {
+          try {
+            uni.showLoading({ title: '删除中...' })
+            
+            await request({
+              url: `/dogs/${dogId.value}/checkup-records/${record.id}`,
+              method: 'DELETE'
+            })
+            
+            // 从本地数组移除
+            formData.value.checkupRecords.splice(index, 1)
+            
+            uni.hideLoading()
+            uni.showToast({
+              title: '删除成功',
+              icon: 'success',
+              duration: 1500
+            })
+          } catch (error: any) {
+            uni.hideLoading()
+            console.error('[DogCreate] Delete checkup record failed:', error)
+            uni.showToast({
+              title: error.message || '删除失败',
+              icon: 'none',
+              duration: 2000
+            })
+          }
+        }
       }
-    }
-  })
+    })
+  } else {
+    // 本地新建记录，直接删除
+    uni.showModal({
+      title: '确认删除',
+      content: '确定要删除这条体检记录吗？',
+      success: (res) => {
+        if (res.confirm) {
+          formData.value.checkupRecords.splice(index, 1)
+          uni.showToast({
+            title: '删除成功',
+            icon: 'success',
+            duration: 1500
+          })
+        }
+      }
+    })
+  }
 }
 
 /**
@@ -2914,15 +3135,58 @@ async function saveCheckupRecord() {
       })
     }
   } else {
-    // 新增模式：添加到本地列表（稍后保存档案时提交）
-    formData.value.checkupRecords.push({ ...currentCheckupRecord.value })
-    uni.showToast({
-      title: '添加成功（请记得保存档案）',
-      icon: 'success',
-      duration: 2000
-    })
+    // 新增模式：如果有dogId，调用 API 创建记录
+    if (dogId.value) {
+      try {
+        uni.showLoading({ title: '保存中...' })
 
-    closeCheckupRecordModal()
+        const createData = {
+          checkupDate: currentCheckupRecord.value.checkupDate,
+          checkupType: currentCheckupRecord.value.checkupType,
+          notes: currentCheckupRecord.value.notes || null,
+          attachments: currentCheckupRecord.value.attachments || []
+        }
+
+        const response = await request({
+          url: `/dogs/${dogId.value}/checkup-records`,
+          method: 'POST',
+          data: createData
+        })
+
+        // 添加到本地列表
+        formData.value.checkupRecords.push({
+          id: response.data.id,
+          ...createData
+        })
+
+        uni.hideLoading()
+        uni.showToast({
+          title: '添加成功',
+          icon: 'success',
+          duration: 1500
+        })
+
+        closeCheckupRecordModal()
+      } catch (error: any) {
+        uni.hideLoading()
+        console.error('[DogCreate] Create checkup record failed:', error)
+        uni.showToast({
+          title: error.message || '添加失败',
+          icon: 'none',
+          duration: 2000
+        })
+      }
+    } else {
+      // 还没有dogId，添加到本地列表（稍后保存档案时提交）
+      formData.value.checkupRecords.push({ ...currentCheckupRecord.value })
+      uni.showToast({
+        title: '添加成功（请记得保存档案）',
+        icon: 'success',
+        duration: 2000
+      })
+
+      closeCheckupRecordModal()
+    }
   }
 }
 
@@ -2944,13 +3208,53 @@ function onCheckupDateChange(e: any) {
 /**
  * 选择体检图片
  */
-function chooseCheckupImage() {
+async function chooseCheckupImage() {
   uni.chooseImage({
     count: 9,
     sizeType: ['compressed'],
     sourceType: ['album', 'camera'],
-    success: (res) => {
-      res.tempFilePaths.forEach((filePath: string) => {
+    success: async (res) => {
+      const maxSize = 10 * 1024 * 1024 // 10MB
+      const oversizedFiles: string[] = []
+      const validFiles: string[] = []
+
+      // 检查每个图片文件的大小
+      for (const filePath of res.tempFilePaths) {
+        try {
+          const fileInfo = await uni.getFileInfo({
+            filePath: filePath
+          })
+          
+          if (fileInfo.size > maxSize) {
+            oversizedFiles.push(filePath)
+          } else {
+            validFiles.push(filePath)
+          }
+        } catch (error) {
+          console.error('[DogCreate] Get file info failed:', error)
+          // 如果获取文件信息失败，默认允许上传
+          validFiles.push(filePath)
+        }
+      }
+
+      // 优先显示文件超限提示
+      if (oversizedFiles.length > 0) {
+        uni.showToast({
+          title: `${oversizedFiles.length}张图片超过10MB限制`,
+          icon: 'none',
+          duration: 3000
+        })
+        // 仍然上传有效的图片
+        if (validFiles.length > 0) {
+          validFiles.forEach((filePath: string) => {
+            uploadCheckupFile(filePath, 'image')
+          })
+        }
+        return
+      }
+
+      // 上传所有有效的图片
+      validFiles.forEach((filePath: string) => {
         uploadCheckupFile(filePath, 'image')
       })
     },
@@ -2974,8 +3278,35 @@ function chooseCheckupPdf() {
     type: 'file',
     extension: ['pdf'],
     success: (res) => {
+      // 检查文件类型和大小
+      const maxSize = 10 * 1024 * 1024 // 10MB
       const validFiles = res.tempFiles.filter((file: any) => {
         const fileName = file.name.toLowerCase()
+        
+        // 检查文件大小
+        if (file.size > maxSize) {
+          const fileSizeStr = formatFileSize(file.size)
+          const maxSizeStr = formatFileSize(maxSize)
+          uni.showToast({
+            title: `"${file.name}"\n文件大小: ${fileSizeStr}\n超过限制: ${maxSizeStr}`,
+            icon: 'none',
+            duration: 3000
+          })
+          return false
+        }
+        if (file.size > maxSize) {
+          const fileSizeStr = formatFileSize(file.size)
+          const maxSizeStr = formatFileSize(maxSize)
+          uni.showToast({
+            title: `"${file.name}"
+文件大小: ${fileSizeStr}
+超过限制: ${maxSizeStr}`,
+            icon: 'none',
+            duration: 3000
+          })
+          return false
+        }
+        
         return fileName.endsWith('.pdf')
       })
 
@@ -3820,13 +4151,53 @@ async function saveAllergyRecord() {
 /**
  * 选择过敏检测图片
  */
-function chooseAllergyImage() {
+async function chooseAllergyImage() {
   uni.chooseImage({
     count: 9,
     sizeType: ['compressed'],
     sourceType: ['album', 'camera'],
-    success: (res) => {
-      res.tempFilePaths.forEach((filePath: string) => {
+    success: async (res) => {
+      const maxSize = 10 * 1024 * 1024 // 10MB
+      const oversizedFiles: string[] = []
+      const validFiles: string[] = []
+
+      // 检查每个图片文件的大小
+      for (const filePath of res.tempFilePaths) {
+        try {
+          const fileInfo = await uni.getFileInfo({
+            filePath: filePath
+          })
+          
+          if (fileInfo.size > maxSize) {
+            oversizedFiles.push(filePath)
+          } else {
+            validFiles.push(filePath)
+          }
+        } catch (error) {
+          console.error('[DogCreate] Get file info failed:', error)
+          // 如果获取文件信息失败，默认允许上传
+          validFiles.push(filePath)
+        }
+      }
+
+      // 优先显示文件超限提示
+      if (oversizedFiles.length > 0) {
+        uni.showToast({
+          title: `${oversizedFiles.length}张图片超过10MB限制`,
+          icon: 'none',
+          duration: 3000
+        })
+        // 仍然上传有效的图片
+        if (validFiles.length > 0) {
+          validFiles.forEach((filePath: string) => {
+            uploadAllergyFile(filePath, 'image')
+          })
+        }
+        return
+      }
+
+      // 上传所有有效的图片
+      validFiles.forEach((filePath: string) => {
         uploadAllergyFile(filePath, 'image')
       })
     },
@@ -3850,8 +4221,25 @@ function chooseAllergyPdf() {
     type: 'file',
     extension: ['pdf'],
     success: (res) => {
+      // 检查文件类型和大小
+      const maxSize = 10 * 1024 * 1024 // 10MB
       const validFiles = res.tempFiles.filter((file: any) => {
         const fileName = file.name.toLowerCase()
+        
+        // 检查文件大小
+        if (file.size > maxSize) {
+          const fileSizeStr = formatFileSize(file.size)
+          const maxSizeStr = formatFileSize(maxSize)
+          uni.showToast({
+            title: `"${file.name}"
+文件大小: ${fileSizeStr}
+超过限制: ${maxSizeStr}`,
+            icon: 'none',
+            duration: 3000
+          })
+          return false
+        }
+        
         return fileName.endsWith('.pdf')
       })
 
@@ -4295,7 +4683,8 @@ function submit() {
         duration: 2000
       })
     }
-  }).catch((err: any) => {
+  })
+  .catch((err: any) => {
     const errMsg = err?.message || String(err) || '网络错误'
     console.error('[DogCreate]', isEditModeValue ? 'Update' : 'Create', 'dog error:', err)
 
@@ -4311,7 +4700,8 @@ function submit() {
       icon: 'none',
       duration: 2000
     })
-  }).finally(() => {
+  })
+  .finally(() => {
     uni.hideLoading()
   })
 }

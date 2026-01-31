@@ -8,6 +8,7 @@ import { ProductionBatchRepository } from '../../domain/production/production.re
 import { ProductionBatch } from '../../domain/production/production-batch.entity';
 import { PackagingUnit } from '../../domain/production/packaging-unit.entity';
 import { ProductionBatchStatus } from '../../domain/production/enums';
+import { OrderItem } from '../../domain/order/order-item.entity';
 import type { RecipeSnapshot } from '../../domain/recipe/types';
 import { PrismaService } from '../prisma.service';
 
@@ -287,6 +288,48 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
     }
   }
 
+  /**
+   * Deallocate order items from a production batch
+   * Sets productionBatchId to null for the specified order items
+   */
+  async deallocateOrderItems(orderItemIds: string[]): Promise<void> {
+    if (orderItemIds.length === 0) {
+      return;
+    }
+
+    await this.prisma.orderItem.updateMany({
+      where: {
+        id: { in: orderItemIds },
+      },
+      data: {
+        productionBatchId: null,
+        allocatedAt: null,
+      },
+    });
+
+    this.logger.log(`Deallocated ${orderItemIds.length} order items from production batch`);
+  }
+
+  /**
+   * Delete a production batch
+   * Cascades to delete all associated packaging units
+   */
+  async delete(batchId: string): Promise<void> {
+    await this.prisma.$transaction(async (tx) => {
+      // 1. Delete all packaging units (cascade)
+      await tx.packagingUnit.deleteMany({
+        where: { productionBatchId: batchId },
+      });
+
+      // 2. Delete the production batch
+      await tx.productionBatch.delete({
+        where: { id: batchId },
+      });
+    });
+
+    this.logger.log(`Deleted production batch ${batchId}`);
+  }
+
   private mapPackagingUnitToDomain(pu: any): PackagingUnit {
     // Ensure sourceOrderItemIds is always an array
     let sourceOrderItemIds: string[] = [];
@@ -401,6 +444,71 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
       packagingUnits,
       record.createdAt,
     );
+  }
+
+  /**
+   * Find order items by IDs
+   */
+  async findOrderItemsByIds(orderItemIds: string[]): Promise<OrderItem[]> {
+    const items = await this.prisma.orderItem.findMany({
+      where: {
+        id: { in: orderItemIds },
+      },
+    });
+
+    // Map to OrderItem domain entities
+    return items.map(item => new OrderItem(
+      item.id,
+      item.orderId,
+      item.dogId,
+      item.recipeSnapshot as unknown as RecipeSnapshot,
+      item.quantityG,
+      item.packageCount,
+      item.packageSpecG,
+      item.customRequirements,
+      item.dailyIntakeG ?? 0, // Provide default value if null
+      item.vacuumBagSpec,
+      item.productionBatchId,
+      item.allocatedAt,
+    ));
+  }
+
+  /**
+   * Find first completed packaging unit for an order
+   * Used to display production photos in order detail
+   */
+  async findFirstCompletedByOrderId(orderId: string): Promise<PackagingUnit | null> {
+    // First, find order items for this order
+    const orderItems = await this.prisma.orderItem.findMany({
+      where: { orderId },
+      select: { id: true },
+    });
+
+    if (orderItems.length === 0) {
+      return null;
+    }
+
+    const orderItemIds = orderItems.map(item => item.id);
+
+    // Find packaging units that have these order items in their sourceOrderItemIds
+    const packagingUnits = await (this.prisma as any).packagingUnit.findMany({
+      where: {
+        status: 'COMPLETED',
+        sourceOrderItemIds: {
+          hasSome: orderItemIds,
+        },
+      },
+      orderBy: {
+        updatedAt: 'asc',
+      },
+      take: 1,
+    });
+
+    if (packagingUnits.length === 0) {
+      return null;
+    }
+
+    return this.mapPackagingUnitToDomain(packagingUnits[0]);
   }
 }
 

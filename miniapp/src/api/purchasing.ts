@@ -1,6 +1,7 @@
 /**
  * Purchasing API
  * 采购管理相关API调用
+ * 更新时间: 2026-01-26 20:47 - 新增清空报销凭证API
  */
 
 import { request } from '../utils/api';
@@ -390,3 +391,162 @@ export function deleteReimbursement(id: string) {
     method: 'DELETE',
   });
 }
+
+/**
+ * 追加支付凭证（发票照片）
+ * 由于微信小程序限制，需要逐个上传文件
+ */
+export function appendReceiptUrls(reimbursementId: string, files: string[]) {
+  // 逐个上传文件（因为uni.uploadFile每次只能上传一个文件）
+  const uploadFile = (filePath: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      const token = uni.getStorageSync('token');
+
+      if (!token) {
+        reject(new Error('请先登录'));
+        return;
+      }
+
+      uni.uploadFile({
+        url: `${getBaseUrl()}/staff/purchasing/reimbursements/${reimbursementId}/receipts`,
+        filePath,
+        name: 'files',
+        header: {
+          'Authorization': `Bearer ${token}`,
+        },
+        success: (res) => {
+          if (res.statusCode === 200 || res.statusCode === 201) {
+            try {
+              const data = JSON.parse(res.data);
+              if (data.code === 0) {
+                resolve();
+              } else {
+                reject(new Error(data.message || '上传失败'));
+              }
+            } catch (e) {
+              reject(new Error('解析响应失败'));
+            }
+          } else {
+            reject(new Error(`上传失败，状态码: ${res.statusCode}`));
+          }
+        },
+        fail: (err) => {
+          reject(new Error(err.errMsg || '网络请求失败'));
+        },
+      });
+    });
+  };
+
+  // 使用顺序上传，确保文件按顺序上传
+  const uploadPromises = files.map((file, index) => {
+    return uploadFile(file).catch(err => {
+      console.error(`文件 ${index + 1} 上传失败:`, err);
+      throw err;
+    });
+  });
+
+  return Promise.all(uploadPromises);
+}
+
+/**
+ * 删除支付凭证（发票照片）
+ */
+export function removeReceiptUrl(reimbursementId: string, urlIndex: number) {
+  return request({
+    url: `/staff/purchasing/reimbursements/${reimbursementId}/receipts`,
+    method: 'DELETE',
+    data: { urlIndex },
+  });
+}
+
+/**
+ * 清空报销凭证（管理员专用）
+ */
+export function clearPaymentProof(reimbursementId: string) {
+  const token = uni.getStorageSync('token');
+
+  if (!token) {
+    return Promise.reject(new Error('请先登录'));
+  }
+
+  return new Promise<void>((resolve, reject) => {
+    uni.request({
+      url: `${getBaseUrl()}/admin/purchasing/reimbursements/${reimbursementId}/payment-proof`,
+      method: 'DELETE',
+      header: {
+        'Authorization': `Bearer ${token}`,
+      },
+      success: (res) => {
+        if (res.statusCode === 200 || res.statusCode === 201) {
+          const data = res.data as any;
+          if (data.code === 0) {
+            resolve();
+          } else {
+            reject(new Error(data.message || '清空失败'));
+          }
+        } else {
+          reject(new Error(`清空失败，状态码: ${res.statusCode}`));
+        }
+      },
+      fail: (err) => {
+        reject(new Error(err.errMsg || '网络请求失败'));
+      },
+    });
+  });
+}
+
+/**
+ * 上传报销凭证文件（管理员专用）
+ * 由于微信小程序限制，需要逐个上传文件
+ */
+export function uploadPaymentProofFiles(reimbursementId: string, files: string[]) {
+  const token = uni.getStorageSync('token');
+
+  if (!token) {
+    return Promise.reject(new Error('请先登录'));
+  }
+
+  // 逐个上传文件（因为uni.uploadFile每次只能上传一个文件）
+  const uploadFile = (filePath: string): Promise<void> => {
+    return new Promise((resolve, reject) => {
+      uni.uploadFile({
+        url: `${getBaseUrl()}/admin/purchasing/reimbursements/${reimbursementId}/payment-proof`,
+        filePath,
+        name: 'files',
+        header: {
+          'Authorization': `Bearer ${token}`,
+        },
+        success: (res) => {
+          if (res.statusCode === 200 || res.statusCode === 201) {
+            try {
+              const data = JSON.parse(res.data);
+              if (data.code === 0) {
+                resolve();
+              } else {
+                reject(new Error(data.message || '上传失败'));
+              }
+            } catch (e) {
+              reject(new Error('解析响应失败'));
+            }
+          } else {
+            reject(new Error(`上传失败，状态码: ${res.statusCode}`));
+          }
+        },
+        fail: (err) => {
+          reject(new Error(err.errMsg || '网络请求失败'));
+        },
+      });
+    });
+  };
+
+  // 使用顺序上传，确保文件按顺序上传
+  const uploadPromises = files.map((file, index) => {
+    return uploadFile(file).catch(err => {
+      console.error(`文件 ${index + 1} 上传失败:`, err);
+      throw err;
+    });
+  });
+
+  return Promise.all(uploadPromises);
+}
+

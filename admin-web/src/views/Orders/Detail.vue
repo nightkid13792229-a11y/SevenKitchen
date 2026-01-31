@@ -105,9 +105,6 @@
           <el-descriptions-item label="交易单号" :span="2">
             {{ order.transactionId || '-' }}
           </el-descriptions-item>
-          <el-descriptions-item label="支付时间" :span="2">
-            {{ order.paidAt ? formatTime(order.paidAt) : '-' }}
-          </el-descriptions-item>
         </el-descriptions>
       </el-card>
 

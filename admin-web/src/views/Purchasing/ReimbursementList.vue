@@ -188,11 +188,11 @@
         </el-form-item>
 
         <el-form-item label="预估金额">
-          <el-input v-model="`¥${currentReimbursement.totalEstimatedCost}`" disabled />
+          <el-input :value="`¥${currentReimbursement.totalEstimatedCost}`" disabled />
         </el-form-item>
 
         <el-form-item label="实际金额">
-          <el-input v-model="`¥${currentReimbursement.totalActualCost}`" disabled />
+          <el-input :value="`¥${currentReimbursement.totalActualCost}`" disabled />
         </el-form-item>
 
         <el-form-item label="成本差异">

@@ -24,6 +24,7 @@ import {
   TodayStatisticsDto,
 } from '../../interfaces/dto/production/kitchen.dto';
 import { DateUtil } from '../../utils/date.util';
+import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 
 @Injectable()
 export class StaffProductionService {
@@ -38,6 +39,7 @@ export class StaffProductionService {
     private readonly purchaseListRepository: PurchaseListRepository,
     @Inject(ORDER_REPOSITORY)
     private readonly orderRepository: OrderRepository,
+    private readonly cosService: TencentCosService,
   ) {}
 
   /**
@@ -174,6 +176,7 @@ export class StaffProductionService {
 
         return {
           id: unit.id,
+          productionBatchId: unit.productionBatchId, // 添加批次ID用于删除操作
           recipeName: recipeSnapshot.name,
           recipeVersion: recipeSnapshot.version,
           totalProductionG: unit.totalProductionG,
@@ -203,10 +206,25 @@ export class StaffProductionService {
       return [];
     }
 
-    // Get all orders and find the order items (now includes dog and address)
-    const orders = await this.orderRepository.findByStatus(OrderStatus.PAID);
-    const inProductionOrders = await this.orderRepository.findByStatus(OrderStatus.IN_PRODUCTION);
-    orders.push(...inProductionOrders);
+    // Get all orders that could be associated with production tasks (all except CANCELLED and INIT)
+    // Orders can transition through: PAID -> PURCHASING -> IN_PRODUCTION -> FREEZING -> SHIPPED -> COMPLETED/AFTERSALE
+    const orderStatuses = [
+      OrderStatus.PAID,
+      OrderStatus.PURCHASING,
+      OrderStatus.IN_PRODUCTION,
+      OrderStatus.FREEZING,
+      OrderStatus.SHIPPED,
+      OrderStatus.COMPLETED,
+      OrderStatus.AFTERSALE,
+    ];
+
+    // Fetch all orders in these statuses
+    const allOrders = await Promise.all(
+      orderStatuses.map(status => this.orderRepository.findByStatus(status))
+    );
+
+    // Flatten the array of arrays
+    const orders = allOrders.flat();
 
     const orderPackagingInfo: OrderPackagingInfoDto[] = [];
 
@@ -256,6 +274,7 @@ export class StaffProductionService {
 
   /**
    * Upload production photos (preparation photos only)
+   * 支持累加模式：每次调用追加新照片到现有列表
    */
   async uploadProductionPhotos(
     unitId: string,
@@ -273,18 +292,93 @@ export class StaffProductionService {
       );
     }
 
-    // Validate photo count (2-3 photos)
-    if (photoUrls.length < 2 || photoUrls.length > 3) {
+    // Validate photo count per upload (支持1-3张照片的累加上传)
+    if (photoUrls.length === 0 || photoUrls.length > 3) {
       throw new BadRequestException(
-        `Must upload 2-3 preparation photos. Got ${photoUrls.length}`,
+        `Each upload must contain 1-3 photos. Got ${photoUrls.length}`,
       );
     }
 
-    // Update photosRaw field (preparation photos)
-    unit.photosRaw = photoUrls;
+    // Auto-cleanup: Check if existing photos in database are valid
+    const existingPhotos = unit.photosRaw || [];
+    if (existingPhotos.length > 0) {
+      this.logger.log(`[KitchenService] Checking ${existingPhotos.length} existing photos for validity...`);
+
+      const validPhotos: string[] = [];
+      const invalidPhotos: string[] = [];
+
+      for (const photoUrl of existingPhotos) {
+        const exists = await this.cosService.checkFileExists(photoUrl);
+        if (exists) {
+          validPhotos.push(photoUrl);
+        } else {
+          invalidPhotos.push(photoUrl);
+        }
+      }
+
+      if (invalidPhotos.length > 0) {
+        this.logger.log(`[KitchenService] Found ${invalidPhotos.length} invalid photos, removing from database...`);
+        this.logger.log(`[KitchenService] Invalid photos: ${invalidPhotos.join(', ')}`);
+
+        // Update unit with only valid photos
+        unit.photosRaw = validPhotos;
+        await this.productionRepository.updatePackagingUnit(unit);
+
+        this.logger.log(`[KitchenService] Cleaned database. Valid photos: ${validPhotos.length}, Removed: ${invalidPhotos.length}`);
+      } else {
+        this.logger.log(`[KitchenService] All existing photos are valid`);
+      }
+    }
+
+    // Update photosRaw field using domain method (累加模式，触发状态转换)
+    const shouldTrigger = unit.uploadPhotos(photoUrls);
     const updated = await this.productionRepository.updatePackagingUnit(unit);
 
-    this.logger.log(`[KitchenService] Uploaded ${photoUrls.length} photos for task ${unitId}`);
+    // Trigger order status transitions on first upload
+    if (shouldTrigger && unit.sourceOrderItemIds.length > 0) {
+      // Get all affected orders from sourceOrderItemIds
+      const orderItems = await this.productionRepository.findOrderItemsByIds(unit.sourceOrderItemIds);
+      const uniqueOrderIds = [...new Set(orderItems.map(item => item.orderId))];
+
+      this.logger.log(`[KitchenService] Processing ${uniqueOrderIds.length} affected orders for unit ${unitId}`);
+
+      let transitionedCount = 0;
+      let skippedCount = 0;
+
+      for (const orderId of uniqueOrderIds) {
+        try {
+          const order = await this.orderRepository.findById(orderId);
+
+          if (!order) {
+            this.logger.warn(`[KitchenService] Order not found: ${orderId}`);
+            skippedCount++;
+            continue;
+          }
+
+          // Only transition IN_PRODUCTION orders to FREEZING
+          if (order.status === OrderStatus.IN_PRODUCTION) {
+            order.markAsFreezing();
+            await this.orderRepository.save(order);
+            transitionedCount++;
+            this.logger.log(`[KitchenService] Order ${orderId} transitioned to FREEZING`);
+          } else {
+            skippedCount++;
+            this.logger.log(`[KitchenService] Order ${orderId} skipped (status: ${order.status})`);
+          }
+        } catch (error) {
+          this.logger.error(`[KitchenService] Error processing order ${orderId}:`, error);
+          skippedCount++;
+        }
+      }
+
+      this.logger.log(
+        `[KitchenService] Uploaded ${photoUrls.length} photos for task ${unitId}: ` +
+        `${transitionedCount} orders → FREEZING, ${skippedCount} orders skipped`
+      );
+    } else {
+      this.logger.log(`[KitchenService] Uploaded ${photoUrls.length} photos for task ${unitId} (no order transition needed)`);
+    }
+
     return updated;
   }
 
@@ -311,6 +405,48 @@ export class StaffProductionService {
     const updated = await this.productionRepository.updatePackagingUnit(unit);
 
     this.logger.log(`[KitchenService] Completed production task ${unitId}`);
+
+    // Update order status: IN_PRODUCTION → FREEZING (制作中 → 急冻中待发货)
+    if (unit.sourceOrderItemIds.length > 0) {
+      const orderItems = await this.productionRepository.findOrderItemsByIds(unit.sourceOrderItemIds);
+      const uniqueOrderIds = [...new Set(orderItems.map(item => item.orderId))];
+
+      this.logger.log(`[KitchenService] Processing ${uniqueOrderIds.length} affected orders for unit ${unitId}`);
+
+      let transitionedCount = 0;
+      let skippedCount = 0;
+
+      for (const orderId of uniqueOrderIds) {
+        try {
+          const order = await this.orderRepository.findById(orderId);
+
+          if (!order) {
+            this.logger.warn(`[KitchenService] Order not found: ${orderId}`);
+            skippedCount++;
+            continue;
+          }
+
+          // Transition IN_PRODUCTION orders to FREEZING
+          if (order.status === OrderStatus.IN_PRODUCTION) {
+            order.markAsFreezing();
+            await this.orderRepository.save(order);
+            transitionedCount++;
+            this.logger.log(`[KitchenService] Order ${orderId} transitioned to FREEZING`);
+          } else {
+            skippedCount++;
+            this.logger.log(`[KitchenService] Order ${orderId} skipped (status: ${order.status})`);
+          }
+        } catch (error) {
+          this.logger.error(`[KitchenService] Error processing order ${orderId}:`, error);
+          skippedCount++;
+        }
+      }
+
+      this.logger.log(
+        `[KitchenService] Completed task ${unitId}: ` +
+        `${transitionedCount} orders → FREEZING, ${skippedCount} orders skipped`
+      );
+    }
 
     // Check if all units in the batch are completed
     const batch = await this.productionRepository.findById(unit.productionBatchId);
@@ -363,5 +499,113 @@ export class StaffProductionService {
     const minutes = String(date.getMinutes()).padStart(2, '0');
 
     return `${year}-${month}-${day} ${hours}:${minutes}`;
+  }
+
+  /**
+   * Replace production photos (原料照片替换)
+   * Deletes old photos from COS and uploads new ones
+   */
+  /**
+   * Delete a single production photo
+   * Removes photo from array and deletes from COS storage
+   */
+  async deleteProductionPhoto(
+    unitId: string,
+    photoUrl: string,
+  ): Promise<PackagingUnit> {
+    const unit = await this.productionRepository.findPackagingUnitById(unitId);
+
+    if (!unit) {
+      throw new NotFoundException(`Production task not found: ${unitId}`);
+    }
+
+    if (!unit.photosRaw || unit.photosRaw.length === 0) {
+      throw new BadRequestException('No photos to delete');
+    }
+
+    // Check if the photo URL exists in the unit
+    const photoIndex = unit.photosRaw.indexOf(photoUrl);
+    if (photoIndex === -1) {
+      throw new BadRequestException('Photo not found in this unit');
+    }
+
+    // Remove photo from array using domain method
+    unit.removePhoto(photoUrl);
+    const updated = await this.productionRepository.updatePackagingUnit(unit);
+
+    // Delete from COS storage
+    try {
+      const key = this.extractKeyFromCosUrl(photoUrl);
+      if (key) {
+        await this.cosService.deleteImage(key);
+        this.logger.log(`[KitchenService] Deleted photo from COS: ${key}`);
+      }
+    } catch (error) {
+      // COS deletion failure should not block the main flow
+      this.logger.warn(`[KitchenService] Failed to delete photo from COS: ${photoUrl}`, error);
+    }
+
+    this.logger.log(
+      `[KitchenService] Deleted photo for unit ${unitId}. Remaining: ${updated.photosRaw?.length || 0}`
+    );
+
+    return updated;
+  }
+
+  async replaceProductionPhotos(
+    unitId: string,
+    photoUrls: string[],
+  ): Promise<PackagingUnit> {
+    const unit = await this.productionRepository.findPackagingUnitById(unitId);
+
+    if (!unit) {
+      throw new NotFoundException(`Production task not found: ${unitId}`);
+    }
+
+    // Save old photo URLs for deletion
+    const oldPhotoUrls = unit.photosRaw || [];
+
+    // Update photos using domain method
+    unit.replacePhotos(photoUrls);
+    const updated = await this.productionRepository.updatePackagingUnit(unit);
+
+    // Delete old photos from COS
+    let deletedCount = 0;
+    for (const oldUrl of oldPhotoUrls) {
+      try {
+        const key = this.extractKeyFromCosUrl(oldUrl);
+        if (key) {
+          await this.cosService.deleteImage(key);
+          deletedCount++;
+          this.logger.log(`[KitchenService] Deleted old photo: ${key}`);
+        }
+      } catch (error) {
+        // Deletion failure should not block the main flow
+        this.logger.warn(`[KitchenService] Failed to delete old photo: ${oldUrl}`, error);
+      }
+    }
+
+    this.logger.log(
+      `[KitchenService] Replaced photos for unit ${unitId}: ` +
+      `${photoUrls.length} new photos, ${deletedCount}/${oldPhotoUrls.length} old photos deleted`
+    );
+
+    return updated;
+  }
+
+  /**
+   * Extract COS key from URL
+   * URL format: https://bucket.cos.region.myqcloud.com/production/unitId/timestamp-random.ext
+   * or: https://cdn.domain.com/production/unitId/timestamp-random.ext
+   */
+  private extractKeyFromCosUrl(url: string): string | null {
+    try {
+      const urlObj = new URL(url);
+      // Extract path without leading /
+      const key = urlObj.pathname.substring(1);
+      return key;
+    } catch {
+      return null;
+    }
   }
 }

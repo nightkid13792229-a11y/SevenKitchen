@@ -78,10 +78,6 @@
             <text class="time-label">创建时间:</text>
             <text class="time-value">{{ formatFullDateTime(order.createdAt) }}</text>
           </view>
-          <view class="time-item" v-if="order.paidAt">
-            <text class="time-label">支付时间:</text>
-            <text class="time-value">{{ formatFullDateTime(order.paidAt) }}</text>
-          </view>
           <view class="time-item" v-if="order.targetProductionDate">
             <text class="time-label">目标制作:</text>
             <text class="time-value">{{ formatDate(order.targetProductionDate) }}</text>

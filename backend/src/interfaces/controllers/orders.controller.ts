@@ -31,8 +31,10 @@ import { PrismaService } from '../../infrastructure/prisma.service';
 import { Inject } from '@nestjs/common';
 import { ORDER_REPOSITORY } from '../../application/order/order.service.tokens';
 import { DOG_REPOSITORY } from '../../application/dog/dog.service';
+import { PRODUCTION_BATCH_REPOSITORY } from '../../application/production/production.service';
 import type { OrderRepository } from '../../domain/order/order.repository';
 import type { DogRepository } from '../../domain/dog/dog.repository';
+import type { ProductionBatchRepository } from '../../domain/production/production.repository';
 import { Order, OrderItem } from '../../domain/order';
 import { OrderStatus } from '../../domain';
 import { InvalidStateTransitionError } from '../../domain/common/errors';
@@ -67,6 +69,8 @@ export class OrdersController {
     private readonly orderRepository: OrderRepository,
     @Inject(DOG_REPOSITORY)
     private readonly dogRepository: DogRepository,
+    @Inject(PRODUCTION_BATCH_REPOSITORY)
+    private readonly productionRepository: ProductionBatchRepository,
   ) {}
 
   @Post()
@@ -721,15 +725,42 @@ export class OrdersController {
       console.log('[Order Detail] Estimated shipping date:', estimatedShippingDate);
     }
 
+    // Query production photos (原料照片)
+    let productionPhotos = null;
+    try {
+      const photosUnit = await this.productionRepository.findFirstCompletedByOrderId(order.id);
+      if (photosUnit) {
+        productionPhotos = {
+          unitId: photosUnit.id,
+          photos: photosUnit.photosRaw || [],
+          uploadedAt: photosUnit.updatedAt ? photosUnit.updatedAt.toISOString() : null,
+        };
+      }
+    } catch (error) {
+      console.error('[Order Detail] Failed to query production photos:', error);
+      // Non-fatal, continue without photos
+    }
+
     return {
       id: order.id,
       customerId: order.customerId,
       dogId: order.dogId,
       addressId: order.addressId,
+      address: order.address ? {
+        id: order.address.id,
+        recipientName: order.address.recipientName,
+        phone: order.address.phone,
+        region: order.address.region,
+        regionText: `${order.address.region.province} ${order.address.region.city}${order.address.region.district ? ' ' + order.address.region.district : ''}`,
+        detailAddress: order.address.detail,
+      } : null,
       status: order.status,
       type: order.type,
       targetProductionDate: order.targetProductionDate
         ? order.targetProductionDate.toISOString()
+        : null,
+      originalTargetProductionDate: (order as any).originalTargetProductionDate
+        ? (order as any).originalTargetProductionDate.toISOString()
         : null,
       estimatedShippingDate, // 新增：预计发货日期
       totalAmount: order.totalAmount ?? order.amountTotal,
@@ -739,6 +770,7 @@ export class OrdersController {
       items,
       pricingBreakdown,
       pricingBreakdownSnapshot: order.pricingBreakdownSnapshot, // 新增：完整的定价快照
+      productionPhotos, // 新增：原料照片
       // Phase 8.14: Shipping tracking fields
       trackingNumber: order.trackingNumber ?? null,
       carrierCode: order.carrierCode ?? null,
@@ -968,6 +1000,124 @@ export class OrdersController {
   async getPendingAftersales(@CurrentUser() user: RequestUser) {
     const orders = await this.orderService.getPendingAftersales();
     return Promise.all(orders.map((order) => this.mapOrderToDto(order)));
+  }
+
+  /**
+   * Update order address
+   * Only order owner or admin can modify (NOT STAFF)
+   */
+  @Put(':id/address')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Update order address' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        addressId: { type: 'string', description: 'New address ID' }
+      },
+      required: ['addressId']
+    }
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Order address updated successfully',
+    type: OrderDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request or order status' })
+  @ApiResponse({ status: 404, description: 'Order or address not found' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - X-Customer-Id header required',
+  })
+  async updateOrderAddress(
+    @Param('id') id: string,
+    @Body() body: { addressId: string },
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<OrderDto> | ApiResponseDto<null>> {
+    try {
+      const updatedOrder = await this.orderService.updateOrderAddress(
+        id,
+        body.addressId,
+        user.userId,
+        user.role
+      );
+      const response = await this.mapOrderToDto(updatedOrder);
+      return ApiResponseDto.success(response);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      if (error instanceof InvalidStateTransitionError) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Update order target production date
+   * Only order owner or admin can modify (NOT STAFF)
+   */
+  @Put(':id/production-date')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Update order target production date' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        targetProductionDate: {
+          type: 'string',
+          format: 'date',
+          description: 'New target production date (YYYY-MM-DD)'
+        }
+      },
+      required: ['targetProductionDate']
+    }
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Order target production date updated successfully',
+    type: OrderDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request or order status' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - X-Customer-Id header required',
+  })
+  async updateOrderTargetDate(
+    @Param('id') id: string,
+    @Body() body: { targetProductionDate: string },
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<OrderDto> | ApiResponseDto<null>> {
+    try {
+      const updatedOrder = await this.orderService.updateOrderTargetDate(
+        id,
+        new Date(body.targetProductionDate),
+        user.userId,
+        user.role
+      );
+      const response = await this.mapOrderToDto(updatedOrder);
+      return ApiResponseDto.success(response);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      if (error instanceof InvalidStateTransitionError) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
   }
 
   private async findSnapshotByItemId(

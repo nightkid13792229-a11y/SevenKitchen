@@ -6,9 +6,38 @@ export class WechatUserInfo {
   @IsString()
   nickname?: string;
 
+  @ApiProperty({ description: 'WeChat nickName (camelCase)', required: false })
+  @IsString()
+  @IsOptional()
+  nickName?: string; // WeChat API returns nickName in camelCase
+
   @ApiProperty({ description: 'User avatar URL', required: false })
   @IsString()
   avatarUrl?: string;
+
+  @ApiProperty({ description: 'User gender', required: false })
+  @IsOptional()
+  gender?: number;
+
+  @ApiProperty({ description: 'User city', required: false })
+  @IsString()
+  @IsOptional()
+  city?: string;
+
+  @ApiProperty({ description: 'User province', required: false })
+  @IsString()
+  @IsOptional()
+  province?: string;
+
+  @ApiProperty({ description: 'User country', required: false })
+  @IsString()
+  @IsOptional()
+  country?: string;
+
+  @ApiProperty({ description: 'User language', required: false })
+  @IsString()
+  @IsOptional()
+  language?: string;
 }
 
 export class WechatLoginRequestDto {

@@ -159,12 +159,15 @@ const loadData = async () => {
       productionApi.getBatches()
     ])
 
-    recentOrders.value = ordersData.slice(0, 5)
-    stats.value.totalOrders = ordersData.length
-    stats.value.pendingOrders = ordersData.filter(
+    // orderApi.list() 返回 {list: [...], total: number}
+    const ordersList = Array.isArray(ordersData) ? ordersData : ordersData.list || []
+
+    recentOrders.value = ordersList.slice(0, 5)
+    stats.value.totalOrders = ordersList.length
+    stats.value.pendingOrders = ordersList.filter(
       (o: any) => o.status === 'PENDING_PAYMENT'
     ).length
-    stats.value.totalRevenue = ordersData
+    stats.value.totalRevenue = ordersList
       .reduce((sum: number, o: any) => sum + (o.amountTotal || 0), 0)
       .toFixed(2)
 

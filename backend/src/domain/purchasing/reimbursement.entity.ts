@@ -15,6 +15,7 @@ export interface ReimbursementConstructor {
   totalActualCost: number;
   totalEstimatedCost: number;
   receiptUrls: string[];
+  receiptKeys?: string[]; // COS对象键（用于删除支付凭证）
   submittedById: string;
   submittedAt: Date;
   reviewedById?: string;
@@ -27,6 +28,8 @@ export interface ReimbursementConstructor {
   platformShippingFee?: number;
   platformPackagingFee?: number;
   customFees?: Array<{ description: string; amount: number }>;
+  paymentProofUrls?: string[]; // 报销凭证（管理员上传）
+  paymentProofKeys?: string[]; // COS对象键（用于删除）
   // 关联用户对象（非持久化）
   submittedBy?: { id: string; nickname: string; phone: string };
   reviewedBy?: { id: string; nickname: string; phone: string };
@@ -39,6 +42,7 @@ export class Reimbursement {
   public readonly totalActualCost: number;
   public readonly totalEstimatedCost: number;
   public readonly receiptUrls: string[];
+  public readonly receiptKeys: string[]; // COS对象键（用于删除支付凭证）
   public readonly submittedById: string;
   public readonly submittedAt: Date;
   public reviewedById?: string;
@@ -52,6 +56,8 @@ export class Reimbursement {
   public readonly platformShippingFee?: number;
   public readonly platformPackagingFee?: number;
   public readonly customFees?: Array<{ description: string; amount: number }>;
+  public readonly paymentProofUrls: string[]; // 报销凭证（管理员上传）
+  public readonly paymentProofKeys: string[]; // COS对象键（用于删除）
 
   // 关联用户对象（非持久化）
   public submittedBy?: { id: string; nickname: string; phone: string };
@@ -64,6 +70,7 @@ export class Reimbursement {
     this.totalActualCost = data.totalActualCost;
     this.totalEstimatedCost = data.totalEstimatedCost;
     this.receiptUrls = data.receiptUrls;
+    this.receiptKeys = data.receiptKeys || [];
     this.submittedById = data.submittedById;
     this.submittedAt = data.submittedAt;
     this.reviewedById = data.reviewedById;
@@ -75,6 +82,8 @@ export class Reimbursement {
     this.platformShippingFee = data.platformShippingFee;
     this.platformPackagingFee = data.platformPackagingFee;
     this.customFees = data.customFees || [];
+    this.paymentProofUrls = data.paymentProofUrls || [];
+    this.paymentProofKeys = data.paymentProofKeys || [];
     this.submittedBy = data.submittedBy;
     this.reviewedBy = data.reviewedBy;
 
@@ -151,7 +160,7 @@ export class Reimbursement {
 
     switch (decision) {
       case 'APPROVE':
-        newStatus = ReimbursementStatus.APPROVED;
+        newStatus = ReimbursementStatus.REIMBURSED;
         break;
       case 'REJECT':
         newStatus = ReimbursementStatus.REJECTED;
@@ -204,7 +213,7 @@ export class Reimbursement {
    * 检查是否已批准
    */
   isApproved(): boolean {
-    return this.status === ReimbursementStatus.APPROVED;
+    return this.status === ReimbursementStatus.REIMBURSED;
   }
 
   /**
@@ -226,8 +235,8 @@ export class Reimbursement {
    * 只有待审核、已驳回、需重新提交状态可以删除
    */
   canBeDeleted(): void {
-    if (this.status === ReimbursementStatus.APPROVED) {
-      throw new Error('已批准的报销单不能删除');
+    if (this.status === ReimbursementStatus.REIMBURSED) {
+      throw new Error('已报销的报销单不能删除');
     }
   }
 
@@ -272,6 +281,7 @@ export class Reimbursement {
       totalActualCost: this.totalActualCost,
       totalEstimatedCost: this.totalEstimatedCost,
       receiptUrls: this.receiptUrls,
+      receiptKeys: this.receiptKeys,
       submittedById: this.submittedById,
       submittedAt: this.submittedAt,
       reviewedById: this.reviewedById,
@@ -282,6 +292,8 @@ export class Reimbursement {
       platformShippingFee: this.platformShippingFee,
       platformPackagingFee: this.platformPackagingFee,
       customFees: this.customFees,
+      paymentProofUrls: this.paymentProofUrls,
+      paymentProofKeys: this.paymentProofKeys,
     };
   }
 
@@ -300,6 +312,7 @@ export class Reimbursement {
       totalActualCost: Number(data.totalActualCost),
       totalEstimatedCost: Number(data.totalEstimatedCost),
       receiptUrls: data.receiptUrls,
+      receiptKeys: data.receiptKeys || [],
       submittedById: data.submittedById,
       submittedAt: data.submittedAt,
       reviewedById: data.reviewedById,
@@ -311,6 +324,8 @@ export class Reimbursement {
       platformShippingFee: data.platformShippingFee ? Number(data.platformShippingFee) : undefined,
       platformPackagingFee: data.platformPackagingFee ? Number(data.platformPackagingFee) : undefined,
       customFees: data.customFees || [],
+      paymentProofUrls: data.paymentProofUrls || [],
+      paymentProofKeys: data.paymentProofKeys || [],
       // 包含关联的用户对象
       submittedBy: data.submittedBy,
       reviewedBy: data.reviewedBy,

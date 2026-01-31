@@ -31,14 +31,6 @@
       <text class="schedule-warning">⚠️ 点击前会检查今天的采购清单是否已完成</text>
     </view>
 
-    <!-- 批量打印制作单按钮（有批次时显示） -->
-    <view v-if="hasTodayBatch" class="batch-print-section">
-      <button class="batch-print-btn" @tap="printBatchProductionGuide">
-        <text>🖨️ 批量打印制作单</text>
-      </button>
-      <text class="batch-print-hint">一次性打印今天所有批次的制作单</text>
-    </view>
-
     <!-- Tab切换 -->
     <view class="tabs">
       <view
@@ -62,13 +54,13 @@
 
       <!-- 任务卡片 -->
       <view v-else>
-        <view v-for="task in filteredTasks" :key="task.id" class="task-card" @tap="viewDetails(task)">
-          <view class="task-header">
+        <view v-for="task in filteredTasks" :key="task.id" class="task-card">
+          <view class="task-header" @tap="viewDetails(task)">
             <text class="recipe-name">{{ task.recipeName }} v{{ task.recipeVersion }}</text>
             <text class="pot-info">({{ task.currentPotNumber }}/{{ task.totalPots }})</text>
           </view>
 
-          <view class="task-body">
+          <view class="task-body" @tap="viewDetails(task)">
             <view class="info-row">
               <text class="label">制作数量：</text>
               <text class="value">{{ formatDecimal(task.totalProductionG) }}g</text>
@@ -80,6 +72,25 @@
             <view class="info-row">
               <text class="label">创建时间：</text>
               <text class="value">{{ task.createdAt }}</text>
+            </view>
+          </view>
+
+          <!-- 操作按钮区 -->
+          <view class="action-buttons">
+            <!-- PENDING状态：显示开始制作按钮 -->
+            <button
+              v-if="task.status === 'PENDING'"
+              class="start-btn"
+              @tap.stop="handleStartTask(task)"
+            >
+              <text class="btn-icon">▶️</text>
+              <text class="btn-text">开始制作</text>
+            </button>
+
+            <!-- 删除按钮 -->
+            <view class="delete-btn" @tap.stop="handleDelete(task)">
+              <text class="delete-icon">🗑️</text>
+              <text class="delete-text">删除</text>
             </view>
           </view>
         </view>
@@ -114,12 +125,14 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
+import { onShow } from '@dcloudio/uni-app';
 import {
   getTodayStatistics,
   autoSchedule,
   getPackagingUnits,
   completeProductionTask,
-  getBatchProductionGuide,
+  startProductionTask,
+  deleteProductionBatch,
 } from '../../api/production';
 import { formatDecimal } from '../../utils/format';
 
@@ -161,6 +174,12 @@ const filteredTasks = computed(() => {
 
 // 页面加载
 onMounted(() => {
+  loadTodayStatistics();
+  loadPackagingUnits();
+});
+
+// 页面显示时刷新数据（从详情页返回时）
+onShow(() => {
   loadTodayStatistics();
   loadPackagingUnits();
 });
@@ -241,8 +260,8 @@ const loadPackagingUnits = async () => {
     const hasToday = units.some(unit => unit.createdAt.substring(0, 10) === today);
     hasTodayBatch.value = hasToday;
 
-    // 按状态分组：未完成的任务在列表中，已完成的任务在历史记录中
-    allTasks.value = units.filter(unit => unit.status !== 'COMPLETED');
+    // 按状态分组：所有任务都在列表中（包括已完成）
+    allTasks.value = units;
 
     // 按日期分组历史记录（只包含已完成的任务）
     const historyMap = new Map<string, any[]>();
@@ -283,6 +302,48 @@ const viewDetails = (task: any) => {
   });
 };
 
+// 开始制作
+const handleStartTask = async (task: any) => {
+  try {
+    uni.showModal({
+      title: '开始制作',
+      content: `确认开始制作 ${task.recipeName}？`,
+      success: async (res) => {
+        if (!res.confirm) return;
+
+        uni.showLoading({ title: '开始中...' });
+
+        const result = await startProductionTask(task.id);
+
+        uni.hideLoading();
+
+        if (result.code === 0) {
+          uni.showToast({
+            title: '已开始制作',
+            icon: 'success',
+          });
+
+          // 刷新任务列表
+          loadPackagingUnits();
+          loadTodayStatistics();
+        } else {
+          uni.showToast({
+            title: result.message || '操作失败',
+            icon: 'none',
+          });
+        }
+      },
+    });
+  } catch (error: any) {
+    uni.hideLoading();
+    console.error('Start task failed:', error);
+    uni.showToast({
+      title: error.message || '开始制作失败',
+      icon: 'none',
+    });
+  }
+};
+
 // 完成制作
 const completeTask = async (unitId: string) => {
   try {
@@ -311,68 +372,61 @@ const completeTask = async (unitId: string) => {
   }
 };
 
+// 删除生产批次
+const handleDelete = async (task: any) => {
+  // 需要从包装单元获取批次ID
+  // 因为删除是按批次ID进行的，而不是按包装单元ID
+  const batchId = task.productionBatchId;
+  if (!batchId) {
+    uni.showToast({
+      title: '无法获取批次信息',
+      icon: 'none',
+    });
+    return;
+  }
+
+  const result = await uni.showModal({
+    title: '确认删除',
+    content: '删除后将无法恢复，相关订单将重新进入采购状态。是否继续？',
+    confirmText: '确认删除',
+    confirmColor: '#ff4d4f',
+    cancelText: '取消',
+  });
+
+  if (!result.confirm) return;
+
+  try {
+    uni.showLoading({ title: '删除中...' });
+
+    await deleteProductionBatch(batchId);
+
+    uni.hideLoading();
+
+    uni.showToast({
+      title: '删除成功',
+      icon: 'success',
+    });
+
+    // 刷新列表和统计
+    await loadPackagingUnits();
+    await loadTodayStatistics();
+  } catch (error: any) {
+    uni.hideLoading();
+
+    uni.showModal({
+      title: '删除失败',
+      content: error.message || '未知错误',
+      showCancel: false,
+    });
+  }
+};
+
 // 展开/折叠历史记录
 const toggleHistory = (batchId: string) => {
   if (expandedHistoryId.value === batchId) {
     expandedHistoryId.value = null;
   } else {
     expandedHistoryId.value = batchId;
-  }
-};
-
-// 批量打印制作单
-const printBatchProductionGuide = async () => {
-  try {
-    // 获取今天的日期
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const today = `${year}-${month}-${day}`;
-
-    uni.showLoading({ title: '加载制作单...' });
-
-    const response = await getBatchProductionGuide({
-      targetDate: today,
-    });
-
-    uni.hideLoading();
-
-    if (response.code !== 0) {
-      uni.showToast({
-        title: response.message || '加载失败',
-        icon: 'none',
-      });
-      return;
-    }
-
-    const { productionDate, totalBatches, recipes } = response.data;
-
-    if (totalBatches === 0) {
-      uni.showToast({
-        title: '今天没有批次',
-        icon: 'none',
-      });
-      return;
-    }
-
-    // 获取后端地址
-    const baseUrl = 'http://1.14.3.2:3001'; // TODO: 从配置文件读取
-
-    // 构建打印页面URL
-    const printUrl = `${baseUrl}/batch-print.html?data=${encodeURIComponent(JSON.stringify(response.data))}`;
-
-    // 跳转到H5打印页面
-    uni.navigateTo({
-      url: `/pages/common/webview?url=${encodeURIComponent(printUrl)}`,
-    });
-  } catch (error: any) {
-    uni.hideLoading();
-    console.error('Failed to load batch production guide:', error);
-    uni.showToast({
-      title: error.message || '加载失败',
-      icon: 'none',
-    });
   }
 };
 </script>
@@ -597,8 +651,69 @@ const printBatchProductionGuide = async () => {
       .value {
         font-size: 26rpx;
         color: #333;
-        flex: 1;
       }
+    }
+  }
+
+  .action-buttons {
+    display: flex;
+    gap: 12rpx;
+    margin-top: 16rpx;
+  }
+
+  .start-btn {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8rpx;
+    padding: 12rpx 24rpx;
+    background-color: #56ab91;
+    border-radius: 8rpx;
+    border: none;
+    transition: all 0.2s;
+
+    &:active {
+      background-color: #459678;
+      transform: scale(0.98);
+    }
+
+    .btn-icon {
+      font-size: 24rpx;
+    }
+
+    .btn-text {
+      font-size: 26rpx;
+      color: #fff;
+      font-weight: 500;
+    }
+  }
+
+  .delete-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8rpx;
+    margin-top: 16rpx;
+    padding: 12rpx 24rpx;
+    background-color: rgba(255, 77, 79, 0.1);
+    border-radius: 8rpx;
+    border: 1rpx solid rgba(255, 77, 79, 0.3);
+    transition: all 0.2s;
+
+    &:active {
+      background-color: rgba(255, 77, 79, 0.2);
+      transform: scale(0.98);
+    }
+
+    .delete-icon {
+      font-size: 28rpx;
+    }
+
+    .delete-text {
+      font-size: 26rpx;
+      color: #ff4d4f;
+      font-weight: 500;
     }
   }
 }

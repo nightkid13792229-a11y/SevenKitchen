@@ -104,21 +104,40 @@
       <view v-if="taskDetail.status === 'IN_PROGRESS'" class="section">
         <view class="section-title">
           备料照片（必填，2-3张）
-          <text class="photo-count">当前：{{ uploadedPhotos.length }}/3</text>
+          <text class="photo-count">当前：{{ totalPhotoCount }}/3</text>
         </view>
 
         <!-- 照片预览区 -->
         <view class="photos-preview">
           <!-- 已上传的照片 -->
-          <view v-for="(photo, index) in uploadedPhotos" :key="index" class="photo-item">
+          <view v-for="(photo, index) in uploadedPhotos" :key="'uploaded-'+index" class="photo-item">
             <image :src="photo" mode="aspectFill" class="photo-image" @tap="previewPhoto(photo)" />
             <view class="photo-delete" @tap="deletePhoto(index)">
               <text>×</text>
             </view>
           </view>
 
+          <!-- 正在上传的照片 -->
+          <view v-for="(task, index) in uploadingPhotos" :key="'uploading-'+task.id" class="photo-item photo-uploading">
+            <image :src="task.file" mode="aspectFill" class="photo-image uploading-placeholder" />
+            <view class="uploading-overlay">
+              <text class="uploading-text">上传中...</text>
+            </view>
+          </view>
+
+          <!-- 上传失败的照片 -->
+          <view v-for="(task, index) in uploadingPhotos.filter(t => t.status === 'error')" :key="'error-'+task.id" class="photo-item">
+            <image :src="task.file" mode="aspectFill" class="photo-image error-placeholder" />
+            <view class="error-overlay">
+              <text class="error-text">{{ task.error || '上传失败' }}</text>
+              <view class="retry-btn" @tap="retryUpload(task)">
+                <text>重试</text>
+              </view>
+            </view>
+          </view>
+
           <!-- 上传按钮（未满3张时显示） -->
-          <view v-if="uploadedPhotos.length < 3" class="photo-upload" @tap="choosePhoto">
+          <view v-if="canUploadMore" class="photo-upload" @tap="choosePhoto">
             <text class="upload-icon">+</text>
             <text class="upload-text">上传照片</text>
           </view>
@@ -127,24 +146,17 @@
         <view class="photos-hint">
           <text>支持从相册选择或拍照，自动压缩到200KB以内</text>
         </view>
-      </view>
 
-      <!-- 底部按钮区域 -->
-      <view v-if="taskDetail.status === 'IN_PROGRESS'" class="bottom-actions">
-        <!-- 制作中状态：显示上传和完成按钮（固定悬浮） -->
-        <button
-          class="action-btn upload"
-          :disabled="uploadedPhotos.length < 2"
-          @tap="uploadPhotos"
-        >
-          确认上传（{{ uploadedPhotos.length }}/3）
-        </button>
-        <button
-          class="action-btn complete"
-          @tap="completeTask"
-        >
-          完成制作
-        </button>
+        <!-- 确认完成区域 -->
+        <view class="complete-section">
+          <button
+            class="complete-btn"
+            :disabled="totalPhotoCount < 2"
+            @tap="completeTask"
+          >
+            {{ totalPhotoCount < 2 ? '请至少上传2张照片' : '完成制作任务' }}
+          </button>
+        </view>
       </view>
 
       <!-- 打印按钮（非悬浮，在页面底部） -->
@@ -171,14 +183,24 @@
 import { ref, computed, onMounted } from 'vue';
 import {
   getPackagingUnits,
-  uploadProductionPhotos,
   completeProductionTask,
+  deleteProductionPhoto,
 } from '../../api/production';
+import { getBaseUrl } from '../../utils/config';
 
 // 格式化函数
 function formatDecimal(value: number | null | undefined, decimals: number = 2): string {
   if (value === null || value === undefined || isNaN(value)) return '-';
   return value.toFixed(decimals);
+}
+
+// 上传任务接口
+interface UploadTask {
+  id: number;
+  file: string;
+  status: 'uploading' | 'error';
+  progress: number;
+  error?: string;
 }
 
 // 任务ID
@@ -193,8 +215,11 @@ const taskDetail = ref<any>(null);
 // 已上传的照片
 const uploadedPhotos = ref<string[]>([]);
 
-// 待上传的照片文件
-const pendingPhotoFiles = ref<any[]>([]);
+// 正在上传的照片任务
+const uploadingPhotos = ref<UploadTask[]>([]);
+
+// 完成操作进行中状态
+const isCompleting = ref(false);
 
 // 计算属性：状态文本
 const statusText = computed(() => {
@@ -326,6 +351,22 @@ const totalFoodIngredientWeight = computed(() => {
   return formatDecimal(total);
 });
 
+// 计算属性：是否有正在上传的照片
+const isUploading = computed(() => {
+  return uploadingPhotos.value.some(task => task.status === 'uploading');
+});
+
+// 计算属性：是否可以上传更多照片
+const canUploadMore = computed(() => {
+  const totalPhotos = uploadedPhotos.value.length + uploadingPhotos.value.length;
+  return totalPhotos < 3;
+});
+
+// 计算属性：总照片数（包括正在上传的）
+const totalPhotoCount = computed(() => {
+  return uploadedPhotos.value.length + uploadingPhotos.value.length;
+});
+
 // 获取类型对应的CSS类名
 const getTypeClass = (type: string) => {
   const typeMap: Record<string, string> = {
@@ -408,24 +449,145 @@ const goBack = () => {
   uni.navigateBack();
 };
 
-// 选择照片
-const choosePhoto = () => {
-  const maxCount = 3 - uploadedPhotos.value.length;
-  uni.chooseImage({
-    count: maxCount,
-    sizeType: ['compressed'],
-    sourceType: ['album', 'camera'],
-    success: (res) => {
-      const tempFiles = res.tempFilePaths.map((filePath, index) => ({
-        filePath,
-        name: `photo_${Date.now()}_${index}.jpg`,
-      }));
-      pendingPhotoFiles.value.push(...tempFiles);
+// 选择照片（立即上传模式）
+const choosePhoto = async () => {
+  // 检查是否有正在上传的照片
+  if (isUploading.value) {
+    uni.showToast({
+      title: '照片上传中，请稍候',
+      icon: 'none',
+    });
+    return;
+  }
 
-      // 预览
-      uploadedPhotos.value.push(...res.tempFilePaths);
-    },
-  });
+  // 检查是否已达到3张照片上限
+  if (totalPhotoCount.value >= 3) {
+    uni.showToast({
+      title: '最多上传3张照片',
+      icon: 'none',
+    });
+    return;
+  }
+
+  try {
+    // 计算还可以选择多少张照片
+    const maxCount = 3 - totalPhotoCount.value;
+
+    // 选择照片
+    const res = await uni.chooseMedia({
+      count: maxCount,
+      mediaType: ['image'],
+      sizeType: ['compressed'], // 自动压缩
+      sourceType: ['album', 'camera'], // 相册和相机
+    });
+
+    // 处理用户取消选择的情况
+    if (!res.tempFiles || res.tempFiles.length === 0) {
+      return;
+    }
+
+    // 逐个处理照片：压缩并立即上传
+    for (let i = 0; i < res.tempFiles.length; i++) {
+      const tempFile = res.tempFiles[i];
+
+      try {
+        // 压缩照片
+        const compressRes = await uni.compressImage({
+          src: tempFile.tempFilePath,
+          quality: 80, // 压缩质量
+          compressedWidth: 1280, // 最大宽度
+        });
+
+        // 创建上传任务对象
+        const taskId = Date.now() + i;
+        const uploadTask: UploadTask = {
+          id: taskId,
+          file: compressRes.tempFilePath,
+          status: 'uploading',
+          progress: 0,
+        };
+
+        // 添加到上传中列表
+        uploadingPhotos.value.push(uploadTask);
+
+        // 立即开始上传
+        await uploadSinglePhoto(uploadTask);
+      } catch (error: any) {
+        console.error('[ChoosePhoto] Process photo failed:', error);
+        uni.showToast({
+          title: error.message || '处理照片失败',
+          icon: 'none',
+        });
+      }
+    }
+  } catch (error: any) {
+    // 处理用户取消选择和其他错误
+    if (error.errMsg && !error.errMsg.includes('cancel')) {
+      console.error('[ChoosePhoto] Choose photo failed:', error);
+      uni.showToast({
+        title: error.message || '选择照片失败',
+        icon: 'none',
+      });
+    }
+  }
+};
+
+// 上传单张照片
+const uploadSinglePhoto = async (task: UploadTask) => {
+  try {
+    const token = uni.getStorageSync('token');
+    const baseUrl = uni.getStorageSync('baseUrl') || 'http://localhost:3001/api/v1';
+
+    const uploadRes = await uni.uploadFile({
+      url: `${baseUrl}/staff/production/packaging-units/${taskId.value}/photos`,
+      filePath: task.file,
+      name: 'files',
+      header: {
+        'Authorization': `Bearer ${token}`,
+      },
+    });
+
+    // 解析响应
+    if (uploadRes.statusCode === 200 || uploadRes.statusCode === 201) {
+      const response = JSON.parse(uploadRes.data);
+      if (response.code === 0) {
+        // 上传成功，从上传中列表移除
+        const taskIndex = uploadingPhotos.value.findIndex(t => t.id === task.id);
+        if (taskIndex !== -1) {
+          uploadingPhotos.value.splice(taskIndex, 1);
+        }
+
+        // 更新已上传列表（使用后端返回的完整照片列表）
+        uploadedPhotos.value = response.data.photosRaw || [];
+
+        console.log('[UploadSinglePhoto] Updated photos:', uploadedPhotos.value);
+
+        uni.showToast({
+          title: '上传成功',
+          icon: 'success',
+          duration: 1500,
+        });
+      } else {
+        throw new Error(response.message || '上传失败');
+      }
+    } else {
+      throw new Error(`上传失败: ${uploadRes.statusCode}`);
+    }
+  } catch (error: any) {
+    console.error('[UploadSinglePhoto] Upload failed:', error);
+
+    // 更新任务状态为错误
+    const taskIndex = uploadingPhotos.value.findIndex(t => t.id === task.id);
+    if (taskIndex !== -1) {
+      uploadingPhotos.value[taskIndex].status = 'error';
+      uploadingPhotos.value[taskIndex].error = error.message || '上传失败';
+    }
+
+    uni.showToast({
+      title: error.message || '上传失败',
+      icon: 'none',
+    });
+  }
 };
 
 // 预览照片
@@ -436,50 +598,48 @@ const previewPhoto = (url: string) => {
 };
 
 // 删除照片
-const deletePhoto = (index: number) => {
+const deletePhoto = async (index: number) => {
   uni.showModal({
     title: '确认删除',
     content: '确认删除这张照片？',
-    success: (res) => {
+    success: async (res) => {
       if (res.confirm) {
-        uploadedPhotos.value.splice(index, 1);
-        pendingPhotoFiles.value.splice(index, 1);
+        try {
+          const photoUrl = uploadedPhotos.value[index];
+
+          // 调用后端API删除照片（同时删除数据库和COS存储桶中的文件）
+          await deleteProductionPhoto(taskId.value, photoUrl);
+
+          // 从本地状态中移除
+          uploadedPhotos.value.splice(index, 1);
+
+          uni.showToast({
+            title: '删除成功',
+            icon: 'success',
+          });
+        } catch (error: any) {
+          console.error('[DeletePhoto] Delete failed:', error);
+          uni.showToast({
+            title: error.message || '删除失败',
+            icon: 'none',
+          });
+        }
       }
     },
   });
 };
 
-// 上传照片
-const uploadPhotos = async () => {
-  if (pendingPhotoFiles.value.length < 2) {
-    uni.showToast({
-      title: '至少上传2张照片',
-      icon: 'none',
-    });
-    return;
+// 重试上传失败的照片
+const retryUpload = async (task: UploadTask) => {
+  // 重置任务状态为上传中
+  const taskIndex = uploadingPhotos.value.findIndex(t => t.id === task.id);
+  if (taskIndex !== -1) {
+    uploadingPhotos.value[taskIndex].status = 'uploading';
+    uploadingPhotos.value[taskIndex].error = undefined;
   }
 
-  uni.showLoading({ title: '上传中...' });
-
-  try {
-    await uploadProductionPhotos(taskId.value, pendingPhotoFiles.value);
-    uni.hideLoading();
-
-    uni.showToast({
-      title: '上传成功',
-      icon: 'success',
-    });
-
-    // 清空待上传文件
-    pendingPhotoFiles.value = [];
-  } catch (error: any) {
-    uni.hideLoading();
-    console.error('Upload photos failed:', error);
-    uni.showToast({
-      title: error.message || '上传失败',
-      icon: 'none',
-    });
-  }
+  // 重新上传
+  await uploadSinglePhoto(task);
 };
 
 // 完成制作
@@ -542,8 +702,9 @@ const printTask = () => {
     createdBy: taskDetail.value.createdBy || '厨房管理员', // 添加创建人字段
   };
 
-  // 获取后端地址
-  const baseUrl = 'http://1.14.3.2:3001'; // TODO: 从配置文件读取
+  // 获取后端地址（去除 /api/v1 后缀，因为打印页面是静态文件）
+  const apiBaseUrl = getBaseUrl();
+  const baseUrl = apiBaseUrl.replace(/\/api\/v\d+$/, '');
 
   // 构建打印页面URL
   const printUrl = `${baseUrl}/task-print.html?data=${encodeURIComponent(JSON.stringify(printData))}`;
@@ -586,7 +747,7 @@ const printLabel = () => {
 .detail-page {
   min-height: 100vh;
   background-color: #f5f5f5;
-  padding-bottom: 140rpx;
+  padding-bottom: 120rpx; // 为打印按钮留出空间
 }
 
 .nav-bar {
@@ -610,7 +771,7 @@ const printLabel = () => {
 }
 
 .detail-content {
-  padding-bottom: 120rpx;
+  padding-bottom: 100rpx; // 为打印按钮留出空间
 }
 
 .loading-state,
@@ -849,6 +1010,69 @@ const printLabel = () => {
   width: 100%;
   height: 100%;
   border-radius: 8rpx;
+
+  &.uploading-placeholder {
+    opacity: 0.6;
+  }
+
+  &.error-placeholder {
+    opacity: 0.5;
+    filter: grayscale(100%);
+  }
+}
+
+.photo-uploading {
+  .uploading-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    border-radius: 8rpx;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .uploading-text {
+      color: #fff;
+      font-size: 24rpx;
+    }
+  }
+}
+
+.error-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(244, 67, 54, 0.9);
+  border-radius: 8rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12rpx;
+
+  .error-text {
+    color: #fff;
+    font-size: 22rpx;
+    text-align: center;
+    padding: 0 8rpx;
+  }
+
+  .retry-btn {
+    padding: 8rpx 24rpx;
+    background-color: #fff;
+    border-radius: 8rpx;
+
+    text {
+      color: #f44336;
+      font-size: 22rpx;
+      font-weight: bold;
+    }
+  }
 }
 
 .photo-delete {
@@ -897,41 +1121,27 @@ const printLabel = () => {
   margin-top: 8rpx;
 }
 
-.bottom-actions {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  display: flex;
-  gap: 16rpx;
-  padding: 24rpx 32rpx;
-  padding-bottom: calc(24rpx + env(safe-area-inset-bottom));
-  background-color: #fff;
+.complete-section {
+  margin-top: 24rpx;
+  padding-top: 24rpx;
   border-top: 1rpx solid #f0f0f0;
-  box-shadow: 0 -2rpx 8rpx rgba(0, 0, 0, 0.04);
+}
 
-  .action-btn {
-    flex: 1;
-    padding: 24rpx;
-    border-radius: 8rpx;
-    font-size: 28rpx;
-    font-weight: bold;
-    border: none;
+.complete-btn {
+  width: 100%;
+  height: 88rpx;
+  line-height: 88rpx;
+  background-color: #56ab91;
+  color: #fff;
+  border: none;
+  border-radius: 8rpx;
+  font-size: 32rpx;
+  font-weight: bold;
+  text-align: center;
 
-    &.upload {
-      background-color: #56ab91;
-      color: #fff;
-
-      &[disabled] {
-        background-color: #ccc;
-        color: #999;
-      }
-    }
-
-    &.complete {
-      background-color: #4caf50;
-      color: #fff;
-    }
+  &[disabled] {
+    background-color: #ccc;
+    color: #999;
   }
 }
 

@@ -4,6 +4,7 @@
  */
 
 import { request } from '../utils/api';
+import { getBaseUrl } from '../utils/config';
 
 // ==========================================
 // 生产统计
@@ -43,6 +44,18 @@ export function autoSchedule(params: {
     url: '/staff/production/auto-schedule',
     method: 'POST',
     data: params,
+  });
+}
+
+/**
+ * 删除生产批次
+ * 只能删除 IN_PRODUCTION 状态的批次
+ * 相关订单将回退到 PURCHASING 状态
+ */
+export function deleteProductionBatch(batchId: string) {
+  return request<void>({
+    url: `/staff/production/batches/${batchId}`,
+    method: 'DELETE',
   });
 }
 
@@ -127,42 +140,87 @@ export function startProductionTask(unitId: string) {
 /**
  * 上传备料照片（2-3张）
  * 注意：只上传备料照片，不包含烹制和分装照片
+ *
+ * 技术说明：
+ * - 微信小程序不支持 uni.uploadFile 的 files 参数
+ * - 使用单文件上传 + Promise.all 实现多文件并发上传
  */
 export function uploadProductionPhotos(
   unitId: string,
-  files: Array<{ filePath: string; name: string }>
+  files: Array<{ uri: string; name: string }>
 ) {
-  return new Promise((resolve, reject) => {
+  return new Promise(async (resolve, reject) => {
     const token = uni.getStorageSync('token');
-    const baseUrl = uni.getStorageSync('baseUrl') || 'http://localhost:3000/api/v1';
+    const baseUrl = getBaseUrl();
 
-    uni.uploadFile({
-      url: `${baseUrl}/staff/production/packaging-units/${unitId}/photos`,
-      files: files,
-      header: {
-        'Authorization': `Bearer ${token}`,
-      },
-      success: (uploadRes: any) => {
-        if (uploadRes.statusCode === 200) {
-          try {
-            const response = JSON.parse(uploadRes.data);
-            if (response.code === 0) {
-              resolve(response.data);
-            } else {
-              reject(new Error(response.message || '上传失败'));
-            }
-          } catch (err) {
-            reject(new Error('解析响应失败'));
-          }
-        } else {
-          reject(new Error(`上传失败: ${uploadRes.statusCode}`));
-        }
-      },
-      fail: (err) => {
-        console.error('[Upload] Upload failed:', err);
-        reject(err);
-      },
+    console.log('[uploadProductionPhotos] Starting batch upload:', {
+      unitId,
+      fileCount: files.length,
+      url: `${baseUrl}/staff/production/packaging-units/${unitId}/photos`
     });
+
+    // 顺序上传每个文件，避免竞态条件
+    const uploadFileSequentially = (file: any, index: number): Promise<any> => {
+      return new Promise((uploadResolve, uploadReject) => {
+        console.log(`[uploadProductionPhotos] Uploading file ${index + 1}/${files.length} (sequential)`);
+
+        uni.uploadFile({
+          url: `${baseUrl}/staff/production/packaging-units/${unitId}/photos`,
+          filePath: file.uri, // 使用 filePath 而不是 uri
+          name: 'files', // 表单字段名
+          header: {
+            'Authorization': `Bearer ${token}`,
+          },
+          success: (uploadRes: any) => {
+            console.log(`[uploadProductionPhotos] File ${index + 1} response:`, {
+              statusCode: uploadRes.statusCode,
+              data: uploadRes.data
+            });
+
+            // 接受 200 OK 和 201 Created 状态码
+            if (uploadRes.statusCode === 200 || uploadRes.statusCode === 201) {
+              try {
+                const response = JSON.parse(uploadRes.data);
+                if (response.code === 0) {
+                  console.log(`[uploadProductionPhotos] File ${index + 1} success`);
+                  uploadResolve(response.data);
+                } else {
+                  uploadReject(new Error(response.message || `文件${index + 1}上传失败`));
+                }
+              } catch (err) {
+                uploadReject(new Error(`文件${index + 1}响应解析失败`));
+              }
+            } else {
+              uploadReject(new Error(`文件${index + 1}上传失败: ${uploadRes.statusCode}`));
+            }
+          },
+          fail: (err) => {
+            console.error(`[uploadProductionPhotos] File ${index + 1} failed:`, err);
+            uploadReject(err);
+          },
+        });
+      });
+    };
+
+    // 顺序执行上传任务，避免竞态条件
+    const results: any[] = [];
+    for (let i = 0; i < files.length; i++) {
+      try {
+        const result = await uploadFileSequentially(files[i], i);
+        results.push(result);
+        console.log(`[uploadProductionPhotos] Uploaded ${i + 1}/${files.length}`);
+      } catch (error) {
+        console.error(`[uploadProductionPhotos] Failed at file ${i + 1}/${files.length}:`, error);
+        // 如果中间某个文件上传失败，抛出错误
+        reject(error);
+        return;
+      }
+    }
+
+    console.log('[uploadProductionPhotos] All files uploaded successfully:', results);
+    // 从最后一个结果中获取最新的照片列表（后端返回的是累加后的完整列表）
+    const finalResult = results[results.length - 1];
+    resolve({ photosRaw: finalResult.photosRaw || [] });
   });
 }
 
@@ -176,6 +234,21 @@ export function completeProductionTask(unitId: string) {
   }>({
     url: `/staff/production/packaging-units/${unitId}/complete`,
     method: 'POST',
+  });
+}
+
+/**
+ * 删除单张备料照片
+ * 会同时从数据库和腾讯云 COS 存储桶中删除
+ */
+export function deleteProductionPhoto(unitId: string, photoUrl: string) {
+  return request<{
+    id: string;
+    photosRaw: string[];
+  }>({
+    url: `/staff/production/packaging-units/${unitId}/photos`,
+    method: 'DELETE',
+    data: { photoUrl },
   });
 }
 
@@ -216,41 +289,78 @@ export function getRecipeBatchesWithOrders(params: {
 }
 
 /**
- * 获取批量制作单（指定日期的所有批次）
- * 用于一次性打印所有批次的制作单
+ * 替换原料照片（FREEZING状态下使用）
+ * 删除COS中的旧照片并上传新照片
  */
-export function getBatchProductionGuide(params: {
-  targetDate: string; // YYYY-MM-DD格式
-}) {
-  return request<{
-    productionDate: string;
-    totalBatches: number;
-    recipes: Array<{
-      recipeId: string;
-      recipeName: string;
-      recipeVersion: number;
-      totalProductionG: number;
-      totalPots: number;
-      packagingUnits: Array<{
-        unitId: string;
-        potNumber: number;
-        totalPots: number;
-        totalProductionG: number;
-        orderItems: Array<{
-          orderItemId: string;
-          orderId: string;
-          dogName: string;
-          packageSpecG: number;
-          packageCount: number;
-        }>;
-        ingredientsUsage: any;
-      }>;
-    }>;
-  }>({
-    url: '/staff/production/batch-production-guide',
-    method: 'GET',
-    data: {
-      targetDate: params.targetDate,
-    },
+export function replaceProductionPhotos(
+  unitId: string,
+  files: Array<{ uri: string; name: string }>
+) {
+  return new Promise((resolve, reject) => {
+    const token = uni.getStorageSync('token');
+    const baseUrl = getBaseUrl();
+
+    console.log('[replaceProductionPhotos] Starting batch replace:', {
+      unitId,
+      fileCount: files.length,
+    });
+
+    // 为每个文件创建单独的上传任务
+    const uploadTasks = files.map((file, index) => {
+      return new Promise((uploadResolve, uploadReject) => {
+        console.log(`[replaceProductionPhotos] Replacing file ${index + 1}/${files.length}`);
+
+        uni.uploadFile({
+          url: `${baseUrl}/staff/production/packaging-units/${unitId}/photos`,
+          filePath: file.uri,
+          name: 'files',
+          header: {
+            'Authorization': `Bearer ${token}`,
+          },
+          method: 'PUT',
+          success: (uploadRes: any) => {
+            console.log(`[replaceProductionPhotos] File ${index + 1} response:`, {
+              statusCode: uploadRes.statusCode,
+              data: uploadRes.data,
+            });
+
+            // 接受 200 OK 和 201 Created 状态码
+            if (uploadRes.statusCode === 200 || uploadRes.statusCode === 201) {
+              try {
+                const response = JSON.parse(uploadRes.data);
+                if (response.code === 0) {
+                  console.log(`[replaceProductionPhotos] File ${index + 1} success`);
+                  uploadResolve(response.data);
+                } else {
+                  uploadReject(new Error(response.message || `文件${index + 1}替换失败`));
+                }
+              } catch (err) {
+                uploadReject(new Error(`文件${index + 1}响应解析失败`));
+              }
+            } else {
+              uploadReject(new Error(`文件${index + 1}替换失败: ${uploadRes.statusCode}`));
+            }
+          },
+          fail: (err) => {
+            console.error(`[replaceProductionPhotos] File ${index + 1} failed:`, err);
+            uploadReject(err);
+          },
+        });
+      });
+    });
+
+    // 并发执行所有替换任务
+    Promise.all(uploadTasks)
+      .then((results) => {
+        console.log('[replaceProductionPhotos] All files replaced successfully');
+        // 合并所有照片URL
+        const allPhotos = results.flatMap((result: any) => result.photosRaw || []);
+        resolve({ photosRaw: allPhotos });
+      })
+      .catch((error) => {
+        console.error('[replaceProductionPhotos] Batch replace failed:', error);
+        reject(error);
+      });
   });
 }
+

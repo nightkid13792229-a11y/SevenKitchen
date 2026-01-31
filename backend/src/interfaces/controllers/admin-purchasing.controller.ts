@@ -15,7 +15,12 @@ import {
   UsePipes,
   ValidationPipe,
   Logger,
+  UseInterceptors,
+  UploadedFiles,
+  BadRequestException,
+  UseGuards,
 } from '@nestjs/common';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiOperation,
@@ -23,6 +28,7 @@ import {
   ApiParam,
   ApiQuery,
   ApiBody,
+  ApiConsumes,
 } from '@nestjs/swagger';
 import { ReimbursementService } from '../../application/purchasing/reimbursement.service';
 import type { ReviewReimbursementDto } from '../../application/purchasing/reimbursement.service';
@@ -30,9 +36,12 @@ import { PurchasingService } from '../../application/purchasing/purchasing.servi
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { ReimbursementStatus, PurchaseListStatus } from '../../domain/purchasing';
 import { UserId } from '../auth/user.decorator';
+import { AuthGuard } from '../auth';
+// import { AdminGuard } from './auth/admin.guard';
 
 @ApiTags('Admin Purchasing')
 @Controller('api/v1/admin/purchasing')
+@UseGuards(AuthGuard)
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
 export class AdminPurchasingController {
   private readonly logger = new Logger(AdminPurchasingController.name);
@@ -391,7 +400,7 @@ export class AdminPurchasingController {
       r => r.status === ReimbursementStatus.PENDING_REVIEW
     ).length;
     const approvedReimbursements = reimbursements.filter(
-      r => r.status === ReimbursementStatus.APPROVED
+      r => r.status === ReimbursementStatus.REIMBURSED
     ).length;
 
     const totalEstimatedCost = reimbursements.reduce(
@@ -419,5 +428,95 @@ export class AdminPurchasingController {
     };
 
     return ApiResponseDto.success(statistics, 'Purchase statistics retrieved successfully');
+  }
+
+  @Post('reimbursements/:id/payment-proof')
+  @ApiOperation({ summary: '上传报销凭证' })
+  @ApiParam({ name: 'id', description: '报销单ID' })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({
+    status: 200,
+    description: '上传成功',
+    schema: {
+      type: 'object',
+      properties: {
+        code: { type: 'number', example: 0 },
+        message: { type: 'string', example: 'success' },
+        data: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            claimNumber: { type: 'string' },
+            status: { type: 'string' },
+            paymentProofUrls: { type: 'array', items: { type: 'string' } },
+          },
+        },
+      },
+    },
+  })
+  @UseInterceptors(FilesInterceptor('files', 10))
+  async uploadPaymentProof(
+    @Param('id') id: string,
+    @UploadedFiles() files: Express.Multer.File[],
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<any>> {
+    this.logger.log(`Uploading payment proof for reimbursement: ${id}, files count: ${files?.length || 0}`);
+
+    // Validate file size (10MB max per file)
+    const maxSize = 10 * 1024 * 1024;
+    for (const file of files) {
+      if (file.size > maxSize) {
+        throw new BadRequestException('文件大小不能超过10MB');
+      }
+    }
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+    for (const file of files) {
+      if (!allowedTypes.includes(file.mimetype)) {
+        throw new BadRequestException('只支持JPG、PNG、GIF、WEBP和PDF格式的文件');
+      }
+    }
+
+    const reimbursement = await this.reimbursementService.uploadPaymentProofFiles(
+      id,
+      files
+    );
+
+    return ApiResponseDto.success(reimbursement, '报销凭证上传成功');
+  }
+
+  @Delete('reimbursements/:id/payment-proof')
+  @ApiOperation({ summary: '清空报销凭证' })
+  @ApiParam({ name: 'id', description: '报销单ID' })
+  @ApiResponse({
+    status: 200,
+    description: '清空成功',
+    schema: {
+      type: 'object',
+      properties: {
+        code: { type: 'number', example: 0 },
+        message: { type: 'string', example: 'success' },
+        data: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            claimNumber: { type: 'string' },
+            status: { type: 'string' },
+            paymentProofUrls: { type: 'array', items: { type: 'string' } },
+          },
+        },
+      },
+    },
+  })
+  async clearPaymentProof(
+    @Param('id') id: string,
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<any>> {
+    this.logger.log(`Clearing payment proof for reimbursement: ${id}`);
+
+    const reimbursement = await this.reimbursementService.clearPaymentProof(id);
+
+    return ApiResponseDto.success(reimbursement, '报销凭证已清空');
   }
 }

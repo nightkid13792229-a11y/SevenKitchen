@@ -73,7 +73,7 @@ export class HealthUploadController {
     }
 
     try {
-      const result = await this.cosService.uploadImage(file, file.originalname, 'health-records')
+      const result = await this.cosService.uploadImage(file, file.originalname, 'allergy-records')
 
       return ApiResponseDto.success(result)
     } catch (error) {
@@ -92,7 +92,7 @@ export class HealthUploadController {
         key: {
           type: 'string',
           description: 'COS文件Key',
-          example: 'health-records/1234567890-abc123.pdf',
+          example: 'allergy-records/1234567890-abc123.pdf',
         },
       },
       required: ['key'],

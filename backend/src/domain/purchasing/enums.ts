@@ -16,7 +16,7 @@ export enum PurchaseListStatus {
  */
 export enum ReimbursementStatus {
   PENDING_REVIEW = 'PENDING_REVIEW',      // 待审核
-  APPROVED = 'APPROVED',                  // 已批准
+  REIMBURSED = 'REIMBURSED',              // 已报销
   REJECTED = 'REJECTED',                  // 已驳回
   REQUIRES_RESUBMIT = 'REQUIRES_RESUBMIT', // 需重新提交
 }
@@ -31,11 +31,11 @@ export const PURCHASE_LIST_STATUS_TRANSITIONS: Record<PurchaseListStatus, Purcha
 
 export const REIMBURSEMENT_STATUS_TRANSITIONS: Record<ReimbursementStatus, ReimbursementStatus[]> = {
   [ReimbursementStatus.PENDING_REVIEW]: [
-    ReimbursementStatus.APPROVED,
+    ReimbursementStatus.REIMBURSED,
     ReimbursementStatus.REJECTED,
     ReimbursementStatus.REQUIRES_RESUBMIT
   ],
-  [ReimbursementStatus.APPROVED]: [],                           // 终态
+  [ReimbursementStatus.REIMBURSED]: [],                       // 终态
   [ReimbursementStatus.REJECTED]: [],                           // 终态
   [ReimbursementStatus.REQUIRES_RESUBMIT]: [ReimbursementStatus.PENDING_REVIEW], // 可重新提交
 };

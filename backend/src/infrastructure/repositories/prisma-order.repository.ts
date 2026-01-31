@@ -80,6 +80,7 @@ export class PrismaOrderRepository implements OrderRepository {
             status: order.status as any,
             type: order.type as any,
             targetProductionDate: order.targetProductionDate,
+            originalTargetProductionDate: (order as any).originalTargetProductionDate ?? null,
             amountProduct,
             amountShipping,
             amountTotal,
@@ -102,8 +103,14 @@ export class PrismaOrderRepository implements OrderRepository {
             transactionId: order.transactionId ?? null,
             paidAt: order.paidAt ?? null,
             paymentStatus: order.paymentStatus ?? null,
+            // Phase 9.1: Freezing and Aftersale fields
+            aftersaleType: order.aftersaleType ?? null,
+            freezingSince: order.freezingSince ?? null,
+            aftersaleSince: order.aftersaleSince ?? null,
+            aftersaleReason: order.aftersaleReason ?? null,
+            aftersalePhotos: order.aftersalePhotos ?? [],
           },
-        });
+        } as any);
 
         // Step 2: Create OrderItems separately using createMany with explicit foreign keys
         if (order.items && order.items.length > 0) {
@@ -141,6 +148,7 @@ export class PrismaOrderRepository implements OrderRepository {
           status: order.status as any,
           type: order.type as any,
           targetProductionDate: order.targetProductionDate,
+          originalTargetProductionDate: (order as any).originalTargetProductionDate ?? null,
           amountProduct,
           amountShipping,
           amountTotal,
@@ -161,8 +169,14 @@ export class PrismaOrderRepository implements OrderRepository {
           transactionId: order.transactionId ?? null,
           paidAt: order.paidAt ?? null,
           paymentStatus: order.paymentStatus ?? null,
+          // Phase 9.1: Freezing and Aftersale fields
+          freezingSince: order.freezingSince ?? null,
+          aftersaleType: order.aftersaleType ?? null,
+          aftersaleSince: order.aftersaleSince ?? null,
+          aftersaleReason: order.aftersaleReason ?? null,
+          aftersalePhotos: order.aftersalePhotos ?? [],
         },
-      });
+      } as any);
     }
 
     // Return fresh copy with items included
@@ -229,6 +243,7 @@ export class PrismaOrderRepository implements OrderRepository {
       record.type as OrderType,
       record.createdAt,
       record.targetProductionDate,
+      (record as any).originalTargetProductionDate,
       Number(record.amountProduct),
       Number(record.amountShipping),
       Number(record.amountTotal),
@@ -264,6 +279,14 @@ export class PrismaOrderRepository implements OrderRepository {
       (record as any).transactionId ?? undefined,
       (record as any).paidAt ? new Date((record as any).paidAt) : undefined,
       (record as any).paymentStatus ?? undefined,
+      // Phase 9.1: Freezing and Aftersale fields
+      (record as any).aftersaleType ?? undefined,
+      (record as any).freezingSince ? new Date((record as any).freezingSince) : undefined,
+      (record as any).aftersaleSince ? new Date((record as any).aftersaleSince) : undefined,
+      (record as any).aftersaleReason ?? undefined,
+      (record as any).aftersalePhotos ?? undefined,
+      // Skip validation for orders loaded from database (allows admin-adjusted amounts)
+      true, // skipValidation
     );
   }
 

@@ -76,6 +76,23 @@ export class OrderDto {
   @ApiPropertyOptional({ example: 'uuid', nullable: true })
   addressId?: string | null;
 
+  @ApiPropertyOptional({
+    description: 'Address details',
+    nullable: true,
+  })
+  address?: {
+    id: string;
+    recipientName: string;
+    phone: string;
+    region: {
+      province: string;
+      city: string;
+      district?: string;
+    };
+    regionText: string;
+    detailAddress: string;
+  } | null;
+
   @ApiProperty({ enum: OrderStatus })
   status!: OrderStatus;
 
@@ -84,6 +101,13 @@ export class OrderDto {
 
   @ApiPropertyOptional({ nullable: true })
   targetProductionDate?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Original target production date before any modifications',
+    example: '2025-01-16T00:00:00.000Z',
+    nullable: true,
+  })
+  originalTargetProductionDate?: string | null;
 
   @ApiPropertyOptional({
     description: 'Estimated shipping date (production date + 1 day)',
@@ -220,6 +244,16 @@ export class OrderDto {
     nullable: true,
   })
   paymentStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | null;
+
+  @ApiPropertyOptional({
+    description: 'Production photos (原料照片)',
+    nullable: true,
+  })
+  productionPhotos?: {
+    unitId: string;
+    photos: string[];
+    uploadedAt: string | null;
+  } | null;
 }
 
 export class OrderSummaryDto {

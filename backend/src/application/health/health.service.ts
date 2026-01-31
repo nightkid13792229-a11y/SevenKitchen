@@ -32,6 +32,7 @@ import { CreateAllergyDto } from '../../interfaces/dto/health/create-allergy.dto
 import { UpdateAllergyDto } from '../../interfaces/dto/health/update-allergy.dto'
 import { PrismaDogRepository } from '../../infrastructure/repositories/prisma-dog.repository'
 import { DOG_REPOSITORY } from '../dog/dog.service'
+import { TencentCosService } from '../../infrastructure/services/tencent-cos.service'
 
 // Repository tokens
 export const VACCINE_RECORD_REPOSITORY = 'VACCINE_RECORD_REPOSITORY'
@@ -51,7 +52,8 @@ export class HealthService {
     @Inject(ALLERGY_RECORD_REPOSITORY)
     private readonly allergyRecordRepo: PrismaAllergyRecordRepository,
     @Inject(DOG_REPOSITORY)
-    private readonly dogRepo: PrismaDogRepository
+    private readonly dogRepo: PrismaDogRepository,
+    private readonly cosService: TencentCosService
   ) {}
 
   // ==================== Vaccine Records ====================
@@ -216,6 +218,23 @@ export class HealthService {
 
     await this.verifyDogOwnership(record.dogId, customerId)
 
+    // Delete COS files if any
+    if (record.attachments && Array.isArray(record.attachments)) {
+      for (const fileUrl of record.attachments) {
+        try {
+          // Extract key from URL (format: https://domain/folder/key or https://domain/key)
+          const urlParts = fileUrl.split('/')
+          const key = urlParts.slice(-2).join('/') // Get folder/key or just key
+
+          await this.cosService.deleteImage(key)
+          console.log(`[HealthService] Deleted COS file: ${key}`)
+        } catch (error) {
+          console.error(`[HealthService] Failed to delete COS file ${fileUrl}:`, error)
+          // Continue deleting other files even if one fails
+        }
+      }
+    }
+
     await this.checkupRecordRepo.delete(id)
   }
 
@@ -303,6 +322,23 @@ export class HealthService {
 
     await this.verifyDogOwnership(record.dogId, customerId)
 
+    // Delete COS files if any
+    if (record.attachments && Array.isArray(record.attachments)) {
+      for (const fileUrl of record.attachments) {
+        try {
+          // Extract key from URL (format: https://domain/folder/key or https://domain/key)
+          const urlParts = fileUrl.split('/')
+          const key = urlParts.slice(-2).join('/') // Get folder/key or just key
+
+          await this.cosService.deleteImage(key)
+          console.log(`[HealthService] Deleted COS file: ${key}`)
+        } catch (error) {
+          console.error(`[HealthService] Failed to delete COS file ${fileUrl}:`, error)
+          // Continue deleting other files even if one fails
+        }
+      }
+    }
+
     await this.medicalRecordRepo.delete(id)
   }
 
@@ -374,6 +410,23 @@ export class HealthService {
     }
 
     await this.verifyDogOwnership(record.dogId, customerId)
+
+    // Delete COS files if any
+    if (record.attachments && Array.isArray(record.attachments)) {
+      for (const fileUrl of record.attachments) {
+        try {
+          // Extract key from URL (format: https://domain/folder/key or https://domain/key)
+          const urlParts = fileUrl.split('/')
+          const key = urlParts.slice(-2).join('/') // Get folder/key or just key
+
+          await this.cosService.deleteImage(key)
+          console.log(`[HealthService] Deleted COS file: ${key}`)
+        } catch (error) {
+          console.error(`[HealthService] Failed to delete COS file ${fileUrl}:`, error)
+          // Continue deleting other files even if one fails
+        }
+      }
+    }
 
     await this.allergyRecordRepo.delete(id)
   }

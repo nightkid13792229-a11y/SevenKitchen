@@ -19,7 +19,7 @@ export const PRODUCTION_BATCH_REPOSITORY = Symbol('ProductionBatchRepository');
 
 export interface CreateProductionBatchDto {
   productionDate: string; // YYYY-MM-DD format
-  orderIds?: string[]; // Optional: specific orders to include; if not provided, includes all PAID unassigned orders
+  orderIds?: string[]; // Optional: specific orders to include; if not provided, includes all PURCHASING unassigned orders for the production date
 }
 
 export interface ProductionBatchSummaryDto {
@@ -52,7 +52,7 @@ export class ProductionService {
   ) {}
 
   /**
-   * Create production batch from PAID orders
+   * Create production batch from PURCHASING orders
    * Groups OrderItems by recipeSnapshotId and aggregates dailyIntakeG
    */
   async createProductionBatch(
@@ -76,21 +76,31 @@ export class ProductionService {
       // Filter out nulls
       orders = orders.filter((o): o is NonNullable<typeof o> => o !== null);
     } else {
-      // Load all PAID orders (unassigned - not yet in a production batch)
-      orders = await this.orderRepository.findByStatus(OrderStatus.PAID);
+      // Load orders for the specific production date with PURCHASING status
+      // 使用午夜00:00:00创建查询范围（与订单存储格式保持一致）
+      const queryStartDate = new Date(`${dto.productionDate}T00:00:00`);
+      const queryEndDate = new Date(`${dto.productionDate}T23:59:59.999`);
+
+      const { list: purchasingOrders } = await this.orderRepository.findByTargetProductionDateRange({
+        status: OrderStatus.PURCHASING,
+        startDate: queryStartDate,
+        endDate: queryEndDate,
+      });
+
+      orders = purchasingOrders;
     }
 
     if (orders.length === 0) {
       throw new BadRequestException(
-        'No PAID orders found to include in production batch',
+        `No PURCHASING orders found for production date ${dto.productionDate}`,
       );
     }
 
-    // Validate all orders are PAID
-    const nonPaidOrders = orders.filter((o) => o.status !== OrderStatus.PAID);
-    if (nonPaidOrders.length > 0) {
+    // Validate all orders are PURCHASING
+    const invalidOrders = orders.filter((o) => o.status !== OrderStatus.PURCHASING);
+    if (invalidOrders.length > 0) {
       throw new BadRequestException(
-        `Cannot include non-PAID orders in production batch. Found: ${nonPaidOrders.map((o) => o.id).join(', ')}`,
+        `Cannot include non-PURCHASING orders in production batch. Found: ${invalidOrders.map((o) => `${o.id}:${o.status}`).join(', ')}`,
       );
     }
 
@@ -317,8 +327,61 @@ export class ProductionService {
       );
     }
 
+    // ============================================================
+    // Phase 2.5: 最小重量优化
+    // ============================================================
+
+    const minThresholdG = globalConfig.minPotWeightG || 2000;
+
+    for (const [recipeSnapshotId, group] of productionGroups.entries()) {
+      // 获取该食谱的所有锅次
+      const recipeUnits = packagingUnits.filter(
+        (unit) => (unit.recipeSnapshot as any).id === recipeSnapshotId,
+      );
+
+      if (recipeUnits.length > 1) {
+        // 获取损耗率（与分锅时使用的损耗率保持一致）
+        const lossRate = group.recipeSnapshot.production_loss_rate || 1.07;
+
+        this.logger.log(
+          `[createProductionBatch] 优化食谱 ${recipeSnapshotId} 的锅次重量，最小阈值=${minThresholdG}g`,
+        );
+        this.optimizePotWeights(recipeUnits, minThresholdG, lossRate);
+      }
+    }
+
     this.logger.log(
       `[createProductionBatch] Total packaging units created: ${packagingUnits.length}`,
+    );
+
+    // ============================================================
+    // Phase 2.6: 数据完整性验证
+    // ============================================================
+
+    for (const unit of packagingUnits) {
+      const allocations = (unit as any).rawMaterialAllocations;
+      const totalRawWeight = (Object.values(allocations) as number[]).reduce(
+        (sum: number, weight: number) => sum + weight,
+        0,
+      );
+      // 获取损耗率进行验证
+      const lossRate = unit.recipeSnapshot.production_loss_rate || 1.07;
+      const expectedRawWeight = unit.totalProductionG * lossRate;
+
+      if (Math.abs(totalRawWeight - expectedRawWeight) > 1) {
+        this.logger.error(
+          `[createProductionBatch] 数据完整性错误！锅 ${unit.id}: ` +
+            `分配总和=${totalRawWeight.toFixed(2)}g, 预期=${expectedRawWeight.toFixed(2)}g`,
+        );
+        throw new Error(
+          `Data integrity violation in packaging unit ${unit.id}: ` +
+            `allocation sum mismatch`,
+        );
+      }
+    }
+
+    this.logger.log(
+      `[createProductionBatch] 数据完整性验证通过，所有锅次分配正确`,
     );
 
     // Create ProductionBatch
@@ -367,9 +430,9 @@ export class ProductionService {
         }
 
         try {
-          // Phase 9: Direct transition PAID/PURCHASING → IN_PRODUCTION
+          // Phase 9: Direct transition PURCHASING → IN_PRODUCTION
           // Phase 8.18: Log status transitions to history
-          if (order.status === OrderStatus.PAID) {
+          if (order.status === OrderStatus.PURCHASING) {
             const fromStatus = order.status;
             order.transitionTo(OrderStatus.IN_PRODUCTION);
             const savedOrder = await this.orderRepository.save(order);
@@ -394,7 +457,7 @@ export class ProductionService {
               throw error;
             }
             this.logger.log(
-              `Order ${orderId} transitioned from PAID to IN_PRODUCTION after batch ${batchId} creation`,
+              `Order ${orderId} transitioned from ${fromStatus} to IN_PRODUCTION after batch ${batchId} creation`,
             );
           }
         } catch (error: any) {
@@ -933,6 +996,264 @@ export class ProductionService {
     );
 
     return true;
+  }
+
+  /**
+   * Delete production batch
+   * Only allows deletion of IN_PRODUCTION status batches
+   * Reverts order status to PURCHASING
+   */
+  async deleteProductionBatch(batchId: string): Promise<void> {
+    // 1. Query batch
+    const batch = await this.productionRepository.findById(batchId);
+    if (!batch) {
+      throw new BadRequestException('Production batch not found');
+    }
+
+    // 2. Validate status
+    if (batch.status !== ProductionBatchStatus.IN_PRODUCTION) {
+      throw new BadRequestException(
+        `Cannot delete batch with status ${batch.status}. Only IN_PRODUCTION batches can be deleted.`,
+      );
+    }
+
+    // 3. Get associated order item IDs from all packaging units
+    const orderItemIds = batch.packagingUnits.flatMap((unit) => unit.sourceOrderItemIds);
+
+    if (orderItemIds.length === 0) {
+      this.logger.warn(`Batch ${batchId} has no associated order items`);
+    }
+
+    // 4. Query associated orders from order items
+    const uniqueOrderIds = new Set<string>();
+    for (const orderItemId of orderItemIds) {
+      // Query order item to get orderId
+      const orderItem = await this.orderRepository.findOrderItemById(orderItemId);
+      if (orderItem) {
+        uniqueOrderIds.add(orderItem.orderId);
+      }
+    }
+
+    const orderIdsArray = Array.from(uniqueOrderIds);
+
+    // 5. Revert order status IN_PRODUCTION → PURCHASING
+    let revertedCount = 0;
+    for (const orderId of orderIdsArray) {
+      const order = await this.orderRepository.findById(orderId);
+      if (order && order.status === OrderStatus.IN_PRODUCTION) {
+        const fromStatus = order.status;
+        order.transitionTo(OrderStatus.PURCHASING);
+        await this.orderRepository.save(order);
+        revertedCount++;
+
+        // Log status transition
+        try {
+          await this.statusHistoryRepository.append(
+            order.id,
+            fromStatus,
+            OrderStatus.PURCHASING,
+            'staff',
+            null,
+            { batchId, triggeredBy: 'batch_deletion' },
+          );
+        } catch (error) {
+          this.logger.error(
+            `[History] ERROR: Failed to log status transition for order ${orderId}:`,
+            error,
+          );
+          throw error;
+        }
+      }
+    }
+
+    // 6. Deallocate order items
+    if (orderItemIds.length > 0) {
+      await this.productionRepository.deallocateOrderItems(orderItemIds);
+    }
+
+    // 7. Delete batch and packaging units
+    await this.productionRepository.delete(batchId);
+
+    this.logger.log(
+      `Deleted production batch ${batchId}, reverted ${revertedCount} orders to PURCHASING`,
+    );
+  }
+
+  /**
+   * 优化锅次重量，确保满足最小阈值
+   * Phase 8.12.1: 最小锅重强制执行
+   * @private
+   */
+  private optimizePotWeights(
+    units: PackagingUnit[],
+    minThresholdG: number,
+    lossRate: number,
+  ): void {
+    // 1. 检查：是否需要优化？
+    if (units.length < 2) {
+      this.logger.warn(
+        `[optimizePotWeights] 只有1锅，无法重新分配`,
+      );
+      return;
+    }
+
+    const lastPot = units[units.length - 1];
+    const currentWeight = lastPot.totalProductionG;
+
+    if (currentWeight >= minThresholdG) {
+      this.logger.debug(
+        `[optimizePotWeights] 最后一锅已满足阈值 (${currentWeight}g >= ${minThresholdG}g)`,
+      );
+      return;
+    }
+
+    // 2. 计算：需要多少重量？
+    const deficit = minThresholdG - currentWeight;
+
+    this.logger.log(
+      `[optimizePotWeights] 最后一锅缺口 ${deficit}g，开始从前序锅次匀出重量`,
+    );
+
+    // 3. 重新分配：从后向前遍历前序锅次
+    let remainingDeficit = deficit;
+
+    for (let i = units.length - 2; i >= 0; i--) {
+      if (remainingDeficit <= 0) break;
+
+      const sourcePot = units[i];
+      const sourceWeight = sourcePot.totalProductionG;
+
+      // 计算最大可转移量：不能让源锅低于最小阈值
+      const maxTransferable = sourceWeight - minThresholdG;
+
+      if (maxTransferable <= 0) {
+        this.logger.debug(
+          `[optimizePotWeights] 锅 ${i + 1} 已达到最小阈值，无法贡献重量`,
+        );
+        continue;
+      }
+
+      // 确定实际转移量
+      const transferAmount = Math.min(maxTransferable, remainingDeficit);
+
+      // 执行转移
+      this.transferWeightBetweenPots(
+        sourcePot,
+        lastPot,
+        transferAmount,
+        lossRate,
+      );
+
+      remainingDeficit -= transferAmount;
+
+      this.logger.debug(
+        `[optimizePotWeights] 从锅 ${i + 1} 转移 ${transferAmount}g 到最后一锅，剩余缺口 ${remainingDeficit}g`,
+      );
+    }
+
+    // 4. 验证：是否成功达到阈值？
+    if (remainingDeficit > 0) {
+      this.logger.warn(
+        `[optimizePotWeights] 无法完全满足阈值。最后一锅仍缺 ${remainingDeficit}g。` +
+          `建议增加批次大小或调整阈值。`,
+      );
+    } else {
+      this.logger.log(
+        `[optimizePotWeights] 优化完成。最后一锅重量: ${lastPot.totalProductionG}g (阈值: ${minThresholdG}g)`,
+      );
+    }
+  }
+
+  /**
+   * 在两锅之间转移重量，保持 FIFO 分配完整性
+   * @private
+   */
+  private transferWeightBetweenPots(
+    sourcePot: PackagingUnit,
+    targetPot: PackagingUnit,
+    transferNetWeightG: number,
+    lossRate: number,
+  ): void {
+    // 1. 更新净重
+    const sourceOriginalWeight = sourcePot.totalProductionG;
+    const targetOriginalWeight = targetPot.totalProductionG;
+
+    // 注意：totalProductionG 在构造函数中是 readonly
+    // 但 TypeScript 运行时允许修改对象属性
+    (sourcePot as any).totalProductionG =
+      sourceOriginalWeight - transferNetWeightG;
+    (targetPot as any).totalProductionG =
+      targetOriginalWeight + transferNetWeightG;
+
+    // 2. 更新生肉重量分配
+    const sourceAllocations = (sourcePot as any).rawMaterialAllocations;
+    const targetAllocations = (targetPot as any).rawMaterialAllocations;
+
+    // 计算需要转移的生肉重量（净重 × 损耗率）
+    const transferRawWeightG = transferNetWeightG * lossRate;
+
+    // 从源锅转移订单分配到目标锅
+    // 策略：从源锅分配的末尾开始转移（保持 FIFO 顺序）
+    let transferredRawWeight = 0;
+    const orderItemsToTransfer: string[] = [];
+
+    // 从后向前遍历源锅的订单项
+    for (let i = sourcePot.sourceOrderItemIds.length - 1; i >= 0; i--) {
+      if (transferredRawWeight >= transferRawWeightG) break;
+
+      const orderItemId = sourcePot.sourceOrderItemIds[i];
+      const rawWeight = sourceAllocations[orderItemId];
+
+      if (rawWeight <= transferRawWeightG - transferredRawWeight) {
+        // 完全转移：整个订单项
+        orderItemsToTransfer.unshift(orderItemId);
+        transferredRawWeight += rawWeight;
+
+        // 更新分配
+        targetAllocations[orderItemId] = rawWeight;
+        delete sourceAllocations[orderItemId];
+      } else {
+        // 部分转移：拆分订单项
+        const partialRawWeight = transferRawWeightG - transferredRawWeight;
+
+        // 减少源锅分配
+        sourceAllocations[orderItemId] = rawWeight - partialRawWeight;
+
+        // 增加目标锅分配
+        // 如果目标锅已有该订单的部分分配，则累加
+        if (targetAllocations[orderItemId]) {
+          targetAllocations[orderItemId] += partialRawWeight;
+        } else {
+          targetAllocations[orderItemId] = partialRawWeight;
+        }
+
+        // 确保订单项在目标锅的 sourceOrderItemIds 中
+        if (!targetPot.sourceOrderItemIds.includes(orderItemId)) {
+          targetPot.sourceOrderItemIds.push(orderItemId);
+        }
+
+        transferredRawWeight += partialRawWeight;
+      }
+    }
+
+    // 3. 更新 sourceOrderItemIds 数组
+    // 从源锅移除完全转移的订单项
+    (sourcePot as any).sourceOrderItemIds = sourcePot.sourceOrderItemIds.filter(
+      (id) => !orderItemsToTransfer.includes(id),
+    );
+
+    // 将完全转移的订单项添加到目标锅（保持顺序）
+    (targetPot as any).sourceOrderItemIds = [
+      ...targetPot.sourceOrderItemIds,
+      ...orderItemsToTransfer,
+    ];
+
+    // 4. 日志记录
+    this.logger.debug(
+      `[transferWeightBetweenPots] ` +
+        `转移 ${transferNetWeightG}g 净重 (${transferRawWeightG.toFixed(2)}g 生肉) ` +
+        `从锅（原 ${sourceOriginalWeight}g）到锅（原 ${targetOriginalWeight}g）`,
+    );
   }
 }
 

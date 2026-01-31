@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>制作单打印</title>
   <style>
     * {
@@ -14,19 +14,19 @@
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
         'Microsoft YaHei', 'Helvetica Neue', Helvetica, Arial, sans-serif;
-      font-size: 12px;
-      line-height: 1.6;
+      font-size: 11px; /* 从12px降到11px */
+      line-height: 1.3; /* 从1.6降到1.3，更紧凑 */
       color: #333;
       background: #f5f5f5;
     }
 
-    /* A4纸张尺寸 */
+    /* A4纸张尺寸 - 减小边距以增加可用空间 */
     @page {
       size: A4;
-      margin: 10mm;
+      margin: 8mm;
     }
 
-    /* 打印样式 */
+    /* 打印样式 - 优化为一页 */
     @media print {
       body {
         background: white;
@@ -39,137 +39,343 @@
       .page {
         page-break-after: always;
         page-break-inside: avoid;
+        min-height: auto !important; /* 打印时不需要最小高度 */
       }
 
       .page:last-child {
         page-break-after: auto;
       }
+
+      /* 打印时强制一页显示 */
+      @page {
+        size: A4;
+        margin: 6mm; /* 进一步减小边距 */
+      }
     }
 
-    /* 不打印时的屏幕显示 */
+    /* 不打印时的屏幕显示 - 优化布局 */
     @media screen {
       .container {
         max-width: 210mm;
-        margin: 20px auto;
-        padding: 20px;
+        margin: 10px auto;
+        padding: 10px;
         background: white;
         box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        /* 在小屏幕上自动缩放以适应窗口 */
+        overflow-x: auto;
+      }
+
+      /* 页面预览缩放 - 适配小屏幕 */
+      .page {
+        transform-origin: top center;
+        transition: transform 0.3s ease;
+      }
+
+      /* 自动缩放预览内容 - 小于A4宽度时 */
+      @media (max-width: 850px) {
+        .container {
+          padding: 5px;
+          margin: 5px auto;
+        }
+
+        /* 使用zoom属性进行缩放(兼容性更好) */
+        .page {
+          zoom: calc(100vw / 800px);
+          /* 备用方案：transform */
+          transform: scale(calc(100vw / 800px));
+          transform-origin: top center;
+          margin-bottom: calc(-1 * (1 - 100vw / 800px) * 100%);
+        }
+      }
+
+      /* 在非常小的屏幕上进一步优化 */
+      @media (max-width: 480px) {
+        .container {
+          margin: 2px;
+          padding: 2px;
+        }
+
+        .print-bar {
+          flex-wrap: wrap;
+          padding: 8px;
+        }
+
+        .page {
+          zoom: calc(98vw / 800px);
+          transform: scale(calc(98vw / 800px));
+        }
       }
 
       .print-bar {
         position: sticky;
         top: 0;
-        background: #56ab91;
+        background: linear-gradient(135deg, #56ab91 0%, #4a9680 100%);
         color: white;
-        padding: 15px 20px;
-        text-align: center;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        padding: 12px 16px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
         z-index: 1000;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
       }
 
+      /* 主要操作组 */
+      .action-group {
+        display: flex;
+        gap: 10px;
+      }
+
+      /* 缩放控制组 */
+      .scale-group {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: rgba(255, 255, 255, 0.15);
+        padding: 6px 12px;
+        border-radius: 8px;
+      }
+
+      .scale-info {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        min-width: 60px;
+      }
+
+      .scale-label {
+        font-size: 10px;
+        opacity: 0.8;
+        line-height: 1;
+      }
+
+      .scale-display {
+        font-size: 14px;
+        font-weight: bold;
+        line-height: 1.2;
+      }
+
+      /* 按钮基础样式 */
       .print-btn {
         background: white;
         color: #56ab91;
         border: none;
-        padding: 10px 30px;
+        padding: 8px 16px;
         border-radius: 6px;
         font-size: 14px;
         font-weight: bold;
         cursor: pointer;
-        margin: 0 10px;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 6px;
       }
 
       .print-btn:hover {
         background: #f0f0f0;
+        transform: translateY(-1px);
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
       }
 
       .print-btn:active {
-        transform: scale(0.98);
+        transform: translateY(0) scale(0.98);
+      }
+
+      /* 主要按钮样式 */
+      .print-btn.primary {
+        background: #fff;
+        color: #56ab91;
+        border: 2px solid #fff;
+      }
+
+      .print-btn.close {
+        background: rgba(255, 77, 79, 0.9);
+        color: white;
+      }
+
+      .print-btn.close:hover {
+        background: rgba(255, 77, 79, 1);
+      }
+
+      /* 缩放按钮样式 */
+      .print-btn.scale {
+        background: rgba(255, 255, 255, 0.9);
+        color: #56ab91;
+        padding: 8px 12px;
+        min-width: 40px;
+        justify-content: center;
+      }
+
+      .print-btn.reset {
+        background: rgba(255, 255, 255, 0.7);
+        color: #56ab91;
+        padding: 8px 12px;
+        min-width: 40px;
+        justify-content: center;
+      }
+
+      .btn-icon {
+        font-size: 16px;
+        line-height: 1;
+      }
+
+      .btn-text {
+        font-size: 14px;
+      }
+
+      /* 隐藏按钮文字(仅显示图标) */
+      .print-btn.scale .btn-text,
+      .print-btn.reset .btn-text {
+        display: none;
+      }
+
+      /* 响应式设计 - 手机屏幕 */
+      @media (max-width: 768px) {
+        .print-bar {
+          flex-direction: column;
+          gap: 10px;
+          padding: 10px;
+        }
+
+        .action-group {
+          width: 100%;
+          justify-content: space-between;
+        }
+
+        .scale-group {
+          width: 100%;
+          justify-content: space-between;
+          padding: 8px;
+        }
+
+        .print-btn {
+          flex: 1;
+          padding: 10px 12px;
+          font-size: 13px;
+        }
+
+        .btn-text {
+          font-size: 13px;
+        }
+
+        /* 在手机上主要按钮也显示为紧凑模式 */
+        .print-btn.primary,
+        .print-btn.close {
+          padding: 10px 16px;
+        }
+      }
+
+      /* 响应式设计 - 小手机屏幕 */
+      @media (max-width: 480px) {
+        .print-bar {
+          padding: 8px;
+        }
+
+        .scale-label {
+          font-size: 9px;
+        }
+
+        .scale-display {
+          font-size: 12px;
+        }
+
+        .print-btn {
+          padding: 8px 10px;
+          font-size: 12px;
+        }
+
+        .btn-text {
+          font-size: 12px;
+        }
+
+        .btn-icon {
+          font-size: 14px;
+        }
       }
     }
 
     .page {
       width: 210mm;
       min-height: 297mm;
-      padding: 10mm;
+      padding: 8mm; /* 从10mm降到8mm */
       margin: 0 auto 20px;
       background: white;
       box-shadow: 0 2px 8px rgba(0,0,0,0.05);
       position: relative;
     }
 
-    /* 标题区域 */
+    /* 标题区域 - 压缩空间 */
     .header {
       text-align: center;
       border-bottom: 2px solid #56ab91;
-      padding-bottom: 20px;
-      margin-bottom: 30px;
+      padding-bottom: 10px; /* 从20px降到10px */
+      margin-bottom: 12px; /* 从30px降到12px */
     }
 
     .title {
-      font-size: 36px;
+      font-size: 24px; /* 从36px降到24px */
       font-weight: bold;
       color: #333;
-      margin-bottom: 15px;
+      margin-bottom: 6px; /* 从15px降到6px */
     }
 
     .subtitle {
-      font-size: 24px;
+      font-size: 16px; /* 从24px降到16px */
       font-weight: bold;
       color: #666;
     }
 
     .meta-info {
-      font-size: 16px;
+      font-size: 11px; /* 从16px降到11px */
       color: #999;
-      margin-top: 10px;
+      margin-top: 6px; /* 从10px降到6px */
     }
 
-    /* 分区 */
+    /* 分区 - 压缩间距 */
     .section {
-      margin-bottom: 30px;
+      margin-bottom: 12px; /* 从30px降到12px */
     }
 
     .section-title {
-      font-size: 20px;
+      font-size: 14px; /* 从20px降到14px */
       font-weight: bold;
       color: #56ab91;
-      margin-bottom: 15px;
-      border-left: 4px solid #56ab91;
-      padding-left: 10px;
+      margin-bottom: 8px; /* 从15px降到8px */
+      border-left: 3px solid #56ab91; /* 从4px降到3px */
+      padding-left: 8px; /* 从10px降到8px */
     }
 
-    /* 分装订单网格 */
+    /* 分装订单网格 - 压缩间距 */
     .order-grid {
       display: grid;
       grid-template-columns: repeat(4, 1fr);
-      gap: 15px;
-      margin-bottom: 20px;
+      gap: 8px; /* 从15px降到8px */
+      margin-bottom: 12px; /* 从20px降到12px */
     }
 
     .order-card {
-      border: 2px solid #333;
-      border-radius: 8px;
-      padding: 12px;
+      border: 1.5px solid #333; /* 从2px降到1.5px */
+      border-radius: 6px; /* 从8px降到6px */
+      padding: 6px; /* 从12px降到6px */
     }
 
     .order-card-title {
       text-align: center;
       font-weight: bold;
       color: #56ab91;
-      margin-bottom: 10px;
-      font-size: 14px;
+      margin-bottom: 6px; /* 从10px降到6px */
+      font-size: 11px; /* 从14px降到11px */
     }
 
     .order-card-field {
       display: flex;
-      margin: 6px 0;
-      font-size: 12px;
+      margin: 3px 0; /* 从6px降到3px */
+      font-size: 10px; /* 从12px降到10px */
     }
 
     .order-card-label {
       color: #666;
-      min-width: 60px;
+      min-width: 50px; /* 从60px降到50px */
     }
 
     .order-card-value {
@@ -177,11 +383,11 @@
       flex: 1;
     }
 
-    /* 原料表格 */
+    /* 原料表格 - 压缩padding */
     .ingredient-table {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 15px;
+      margin-top: 8px; /* 从15px降到8px */
     }
 
     .ingredient-table thead {
@@ -189,31 +395,45 @@
     }
 
     .ingredient-table th {
-      padding: 10px;
+      padding: 5px 6px; /* 从10px降到5px 6px */
       text-align: center;
       font-weight: bold;
       color: #56ab91;
       border: 1px solid #333;
-      font-size: 13px;
+      font-size: 11px; /* 从13px降到11px */
     }
 
     .ingredient-table td {
-      padding: 8px 10px;
+      padding: 4px 6px; /* 从8px 10px降到4px 6px */
       text-align: center;
       border: 1px solid #333;
-      font-size: 12px;
+      font-size: 10px; /* 从12px降到10px */
     }
 
     .ingredient-table tbody tr:nth-child(even) {
       background: #fafafa;
     }
 
-    /* 类型标签 */
+    /* 总重行样式 - 修复边框问题 */
+    .total-weight-row td {
+      border-top: 2px solid #56ab91; /* 顶部加粗边框突出显示 */
+    }
+
+    /* 移除总重行第一个单元格的右边框和第二个单元格的左边框，避免双边框 */
+    .total-weight-row td:first-child {
+      border-right: none;
+    }
+
+    .total-weight-row td:nth-child(2) {
+      border-left: none;
+    }
+
+    /* 类型标签 - 压缩padding */
     .type-tag {
       display: inline-block;
-      padding: 2px 8px;
-      border-radius: 4px;
-      font-size: 11px;
+      padding: 1px 4px; /* 从2px 8px降到1px 4px */
+      border-radius: 3px; /* 从4px降到3px */
+      font-size: 9px; /* 从11px降到9px */
       font-weight: bold;
     }
 
@@ -238,14 +458,14 @@
       font-weight: bold;
     }
 
-    /* 页脚 */
+    /* 页脚 - 压缩空间 */
     .page-footer {
       position: absolute;
-      bottom: 10mm;
+      bottom: 6mm; /* 从10mm降到6mm */
       left: 0;
       right: 0;
       text-align: center;
-      font-size: 10px;
+      font-size: 9px; /* 从10px降到9px */
       color: #999;
     }
   </style>
@@ -253,8 +473,34 @@
 <body>
   <!-- 打印操作栏 -->
   <div class="print-bar no-print">
-    <button class="print-btn" onclick="window.print()">🖨️ 打印</button>
-    <button class="print-btn" onclick="window.close()">✖️ 关闭</button>
+    <!-- 主要操作组 -->
+    <div class="action-group">
+      <button class="print-btn primary" onclick="window.print()">
+        <span class="btn-icon">🖨️</span>
+        <span class="btn-text">打印</span>
+      </button>
+      <button class="print-btn close" onclick="window.close()">
+        <span class="btn-icon">✖️</span>
+        <span class="btn-text">关闭</span>
+      </button>
+    </div>
+
+    <!-- 缩放控制组 -->
+    <div class="scale-group">
+      <button class="print-btn scale" onclick="adjustScale(-0.05)" title="缩小">
+        <span class="btn-icon">−</span>
+      </button>
+      <div class="scale-info">
+        <span class="scale-label">缩放</span>
+        <span class="scale-display" id="scaleDisplay">100%</span>
+      </div>
+      <button class="print-btn scale" onclick="adjustScale(0.05)" title="放大">
+        <span class="btn-icon">+</span>
+      </button>
+      <button class="print-btn reset" onclick="resetScale()" title="重置缩放">
+        <span class="btn-icon">↺</span>
+      </button>
+    </div>
   </div>
 
   <!-- 打印内容容器 -->
@@ -263,6 +509,10 @@
   </div>
 
   <script>
+    // 全局缩放比例
+    let currentScale = 1;
+    let autoScale = 1;
+
     // 从URL参数获取数据
     function getTaskData() {
       const urlParams = new URLSearchParams(window.location.search);
@@ -421,7 +671,6 @@
             <tr class="total-weight-row">
               <td colspan="2">${ing.name}</td>
               <td>${ing.amount}${ing.unit}</td>
-              <td></td>
             </tr>
           `;
         }
@@ -464,8 +713,8 @@
             <table class="ingredient-table">
               <thead>
                 <tr>
-                  <th style="width: 40%">原料名称</th>
-                  <th style="width: 25%">用量</th>
+                  <th style="width: 45%">原料名称</th>
+                  <th style="width: 20%">用量</th>
                   <th style="width: 35%">制备方法</th>
                 </tr>
               </thead>
@@ -480,14 +729,180 @@
       `;
     }
 
-    // 页面加载完成后生成内容
+    // 页面加载完成后生成内容并自适应缩放
     window.onload = function() {
       const data = getTaskData();
       if (!data) return;
 
       const content = generatePrintContent(data);
-      document.getElementById('print-content').innerHTML = content;
+      const printContent = document.getElementById('print-content');
+      printContent.innerHTML = content;
+
+      // 等待DOM渲染完成后计算缩放
+      setTimeout(() => {
+        applyAutoScale();
+      }, 100);
     };
+
+    // 自适应缩放函数
+    function applyAutoScale() {
+      const page = document.querySelector('.page');
+      if (!page) return;
+
+      // A4纸张尺寸 (mm)
+      const A4_WIDTH_MM = 210;
+      const A4_HEIGHT_MM = 297;
+
+      // 页面边距 (mm) - 与CSS中的@page margin一致
+      const PAGE_MARGIN_MM = 6;
+
+      // 可用尺寸 (mm)
+      const availableWidthMM = A4_WIDTH_MM - (PAGE_MARGIN_MM * 2);
+      const availableHeightMM = A4_HEIGHT_MM - (PAGE_MARGIN_MM * 2);
+
+      // 转换为像素 (1mm ≈ 3.7795px at 96dpi)
+      const mmToPx = 3.7795;
+      const availableHeightPx = availableHeightMM * mmToPx;
+      const availableWidthPx = availableWidthMM * mmToPx;
+
+      // 获取内容实际尺寸
+      const contentHeight = page.scrollHeight;
+      const contentWidth = page.scrollWidth;
+
+      console.log('=== 自适应缩放计算 ===');
+      console.log('内容高度:', contentHeight, 'px');
+      console.log('内容宽度:', contentWidth, 'px');
+      console.log('可用高度:', availableHeightPx.toFixed(2), 'px');
+      console.log('可用宽度:', availableWidthPx.toFixed(2), 'px');
+
+      // 计算缩放比例
+      let scale = 1;
+
+      // 如果内容超出可用高度，缩小
+      if (contentHeight > availableHeightPx) {
+        scale = Math.min(scale, availableHeightPx / contentHeight);
+        console.log('内容超高度，缩小比例:', scale.toFixed(3));
+      }
+
+      // 如果内容超出可用宽度，缩小
+      if (contentWidth > availableWidthPx) {
+        scale = Math.min(scale, availableWidthPx / contentWidth);
+        console.log('内容超宽度，缩小比例:', scale.toFixed(3));
+      }
+
+      // 如果内容太少，适当放大（最大放大到1.1倍）
+      const minContentHeight = availableHeightPx * 0.7; // 如果内容少于70%
+      if (contentHeight < minContentHeight && scale === 1) {
+        const maxScale = 1.1;
+        const suggestedScale = Math.min(maxScale, availableHeightPx / contentHeight);
+        scale = suggestedScale;
+        console.log('内容较少，放大比例:', scale.toFixed(3));
+      }
+
+      // 应用缩放（如果比例不是1）
+      if (Math.abs(scale - 1) > 0.01) {
+        autoScale = scale;
+        currentScale = scale;
+        applyScaleTransform(scale, contentWidth, contentHeight);
+      } else {
+        autoScale = 1;
+        currentScale = 1;
+        updateScaleDisplay();
+        console.log('✅ 内容尺寸合适，无需缩放');
+      }
+    }
+
+    // 应用缩放变换
+    function applyScaleTransform(scale, originalWidth, originalHeight) {
+      const page = document.querySelector('.page');
+      if (!page) return;
+
+      const scaledWidth = originalWidth * scale;
+      const scaledHeight = originalHeight * scale;
+
+      // 设置transform-origin为左上角
+      page.style.transformOrigin = 'top left';
+      page.style.transform = `scale(${scale.toFixed(3)})`;
+
+      // 设置page的宽高为缩放后的尺寸
+      page.style.width = `${scaledWidth}px`;
+      page.style.height = `${scaledHeight}px`;
+
+      // 对于打印，我们需要在@media print中也应用相同的缩放
+      updatePrintStyle(scale, scaledWidth, scaledHeight);
+
+      // 更新显示
+      updateScaleDisplay();
+
+      console.log('✅ 已应用缩放:', scale.toFixed(3));
+      console.log('缩放后尺寸:', scaledWidth.toFixed(2), 'x', scaledHeight.toFixed(2), 'px');
+    }
+
+    // 更新打印样式
+    function updatePrintStyle(scale, width, height) {
+      const style = document.createElement('style');
+      style.id = 'dynamic-print-scale';
+      style.textContent = `
+        @media print {
+          .page {
+            transform: scale(${scale.toFixed(3)}) !important;
+            transform-origin: top left !important;
+            width: ${width}px !important;
+            height: ${height}px !important;
+          }
+        }
+      `;
+
+      // 移除之前的动态样式
+      const oldStyle = document.getElementById('dynamic-print-scale');
+      if (oldStyle) {
+        oldStyle.remove();
+      }
+
+      document.head.appendChild(style);
+    }
+
+    // 更新缩放显示
+    function updateScaleDisplay() {
+      const display = document.getElementById('scaleDisplay');
+      if (display) {
+        display.textContent = `${Math.round(currentScale * 100)}%`;
+      }
+    }
+
+    // 手动调整缩放
+    function adjustScale(delta) {
+      const page = document.querySelector('.page');
+      if (!page) return;
+
+      // 移除之前的transform以获取原始尺寸
+      page.style.transform = 'none';
+      const originalWidth = page.scrollWidth;
+      const originalHeight = page.scrollHeight;
+
+      // 调整缩放比例
+      currentScale = Math.max(0.5, Math.min(1.5, currentScale + delta));
+      applyScaleTransform(currentScale, originalWidth, originalHeight);
+    }
+
+    // 重置缩放
+    function resetScale() {
+      const page = document.querySelector('.page');
+      if (!page) return;
+
+      // 移除transform以获取原始尺寸
+      page.style.transform = 'none';
+      page.style.width = '210mm';
+      page.style.height = 'auto';
+
+      // 重新计算原始尺寸
+      const originalWidth = page.scrollWidth;
+      const originalHeight = page.scrollHeight;
+
+      // 恢复到自动计算的缩放比例
+      currentScale = autoScale;
+      applyScaleTransform(currentScale, originalWidth, originalHeight);
+    }
   </script>
 </body>
 </html>

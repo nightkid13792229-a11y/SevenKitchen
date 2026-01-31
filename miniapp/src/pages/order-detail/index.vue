@@ -27,6 +27,35 @@
           <text class="label">下单时间:</text>
           <text class="value">{{ formatDateTime(order.createdAt) }}</text>
         </view>
+        <view class="info-row" v-if="order.targetProductionDate">
+          <text class="label">目标制作日期:</text>
+          <text class="value">{{ formatDate(order.targetProductionDate) }}</text>
+          <picker
+            v-if="canEditDate"
+            mode="date"
+            :value="selectedDate"
+            :start="minDateStr"
+            @change="onDateSelected"
+          >
+            <view class="btn-edit">修改</view>
+          </picker>
+        </view>
+        <view class="info-row" v-if="order.address">
+          <text class="label">收货地址:</text>
+          <view class="value-with-action">
+            <text class="value address-value">
+              {{ order.address.recipientName }} {{ order.address.phone }}
+              {{ order.address.regionText }} {{ order.address.detailAddress }}
+            </text>
+            <button
+              v-if="canEditAddress"
+              class="btn-edit"
+              @tap="changeAddress"
+            >
+              更换
+            </button>
+          </view>
+        </view>
         <view class="info-row">
           <text class="label">订单金额:</text>
           <text class="value amount">¥{{ formatAmount(order.amountTotal || order.totalAmount) }}</text>
@@ -41,24 +70,6 @@
             <text class="recipient">{{ order.address.recipientName }} {{ order.address.phone }}</text>
             <text class="detail">{{ order.address.regionText }} {{ order.address.detailAddress }}</text>
           </view>
-        </view>
-      </view>
-
-      <!-- 支付信息 -->
-      <view class="section payment-section" v-if="order.paidAt">
-        <view class="section-title">支付信息</view>
-        <view class="info-row">
-          <text class="label">支付方式:</text>
-          <text class="value">{{ getPaymentMethodText(order.paymentMethod) }}</text>
-        </view>
-        <view class="info-row" v-if="order.transactionId">
-          <text class="label">交易单号:</text>
-          <text class="value transaction-id">{{ order.transactionId }}</text>
-          <button class="btn-copy" @tap="copyTransactionId">复制</button>
-        </view>
-        <view class="info-row">
-          <text class="label">支付时间:</text>
-          <text class="value">{{ formatDateTime(order.paidAt) }}</text>
         </view>
       </view>
 
@@ -220,8 +231,36 @@
         </view>
       </view>
 
+      <!-- 原料照片（所有状态下都显示，如果有照片的话） -->
+      <view
+        class="section production-photos-section"
+        v-if="order.productionPhotos && order.productionPhotos.photos.length > 0"
+      >
+        <view class="section-title">
+          原料照片
+          <text class="photos-time">{{ formatDateTime(order.productionPhotos.uploadedAt) }}</text>
+        </view>
+
+        <view class="production-photos">
+          <view class="photos-grid">
+            <image
+              v-for="(photo, idx) in order.productionPhotos.photos"
+              :key="idx"
+              :src="photo"
+              mode="aspectFill"
+              class="production-photo-item"
+              @tap="previewProductionPhotos(idx)"
+            />
+          </view>
+          <view class="photos-hint">
+            <text>员工在制作完成后上传的原料照片，供您验收</text>
+          </view>
+        </view>
+      </view>
+
       <!-- 售后服务（FREEZING、SHIPPED或COMPLETED状态可申请） -->
-      <view class="section aftersale-section" v-if="canApplyAftersale(order.status)">
+      <!-- 已关闭售后入口 -->
+      <!-- <view class="section aftersale-section" v-if="canApplyAftersale(order.status)">
         <view class="section-title">售后服务</view>
         <view class="aftersale-buttons">
           <button class="btn-aftersale" @tap="applyAftersaleType('REFUND')">
@@ -234,10 +273,11 @@
             <text class="btn-text">投诉建议</text>
           </button>
         </view>
-      </view>
+      </view> -->
 
       <!-- 售后信息（AFTERSALE状态显示） -->
-      <view class="section aftersale-info-section" v-if="order.status === 'AFTERSALE'">
+      <!-- 已关闭售后信息展示 -->
+      <!-- <view class="section aftersale-info-section" v-if="order.status === 'AFTERSALE'">
         <view class="section-title">售后信息</view>
         <view class="aftersale-info">
           <view class="info-row">
@@ -266,7 +306,7 @@
             </view>
           </view>
         </view>
-      </view>
+      </view> -->
 
       <!-- 评价及建议（仅在COMPLETED状态显示） -->
       <view class="section review-section" v-if="order.status === 'COMPLETED'">
@@ -349,12 +389,12 @@
     <view class="bottom-actions" v-if="order">
       <!-- 生产中状态 (合并PAID和IN_PRODUCTION) -->
       <view v-if="order.status === 'PAID' || order.status === 'IN_PRODUCTION'" class="action-buttons">
-        <button class="btn-action btn-secondary" @tap="contactService">联系客服</button>
+        <!-- 移除联系客服按钮 -->
       </view>
 
       <!-- 急冻中状态 -->
       <view v-else-if="order.status === 'FREEZING'" class="action-buttons">
-        <button class="btn-action btn-secondary" @tap="contactService">联系客服</button>
+        <!-- 移除联系客服按钮 -->
       </view>
 
       <!-- 已发货状态 -->
@@ -365,7 +405,7 @@
 
       <!-- 售后中状态 -->
       <view v-else-if="order.status === 'AFTERSALE'" class="action-buttons">
-        <button class="btn-action btn-secondary" @tap="contactService">联系客服</button>
+        <!-- 移除联系客服按钮 -->
       </view>
 
       <!-- 已完成状态 -->
@@ -379,11 +419,13 @@
         <button class="btn-action btn-secondary" @tap="buyAgain">再次购买</button>
       </view>
     </view>
+
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 import OrderProgressBar from '../../components/OrderProgressBar.vue'
 import { formatDateTime } from '../../utils/date'
@@ -429,9 +471,11 @@ interface OrderItem {
 
 interface Order {
   id: string
+  customerId?: string // 添加customerId字段用于权限验证
   type: string
   status: string
   createdAt: string
+  targetProductionDate?: string | null
   amountTotal?: number
   totalAmount?: number
   amountProduct?: number
@@ -454,6 +498,12 @@ interface Order {
   aftersaleSince?: string
   aftersaleReason?: string
   aftersalePhotos?: string[]
+  // 原料照片
+  productionPhotos?: {
+    unitId: string
+    photos: string[]
+    uploadedAt: string
+  }
   // 定价快照（驼峰式，与后端保持一致）
   pricingBreakdownSnapshot?: {
     ingredientDetails?: Array<{
@@ -468,6 +518,12 @@ interface Order {
 
 const order = ref<Order | null>(null)
 const orderId = ref('')
+
+// 获取当前用户信息
+const userInfo = ref({
+  id: '',
+  role: ''
+})
 
 // 评价相关
 const reviewRating = ref(0)
@@ -507,6 +563,72 @@ const groupedItems = computed(() => {
   })
 
   return Array.from(groups.values())
+})
+
+// 判断是否有编辑权限（订单所有者或管理员，不包括员工）
+const canEditOrder = computed(() => {
+  if (!order.value || !userInfo.value.id) {
+    console.log('[Order Detail] canEditOrder: false - missing data', {
+      hasOrder: !!order.value,
+      hasUserId: !!userInfo.value.id
+    })
+    return false
+  }
+
+  // 员工（STAFF）不能编辑
+  if (userInfo.value.role === 'STAFF') {
+    console.log('[Order Detail] canEditOrder: false - user is STAFF')
+    return false
+  }
+
+  // 管理员可以编辑任何订单
+  const isAdmin = userInfo.value.role === 'ADMIN'
+  if (isAdmin) {
+    console.log('[Order Detail] canEditOrder: true - user is ADMIN')
+    return true
+  }
+
+  // 普通用户：检查是否是订单所有者
+  const orderData = order.value as any
+  const isOwner = orderData.customerId === userInfo.value.id
+
+  console.log('[Order Detail] canEditOrder:', {
+    isOwner,
+    isAdmin,
+    orderCustomerId: orderData.customerId,
+    userId: userInfo.value.id
+  })
+
+  return isOwner
+})
+
+// 判断是否可以修改地址（状态 < SHIPPED）
+const canEditAddress = computed(() => {
+  if (!order.value || !canEditOrder.value) return false
+  const editableStatuses = ['INIT', 'PENDING_PAYMENT', 'PAID', 'PURCHASING', 'IN_PRODUCTION', 'FREEZING']
+  return editableStatuses.includes(order.value.status)
+})
+
+// 判断是否可以修改日期（状态 < PURCHASING）
+const canEditDate = computed(() => {
+  if (!order.value || !canEditOrder.value) return false
+  const editableStatuses = ['INIT', 'PENDING_PAYMENT', 'PAID']
+  return editableStatuses.includes(order.value.status)
+})
+
+// 日期选择器状态
+const selectedDate = ref('')
+const minDateStr = ref('')
+
+// 监控计算属性的变化
+watch([canEditOrder, canEditAddress, canEditDate], ([canEdit, canAddr, canDate]) => {
+  console.log('[Order Detail] Edit permissions:', {
+    canEditOrder: canEdit,
+    canEditAddress: canAddr,
+    canEditDate: canDate,
+    orderStatus: order.value?.status,
+    userInfo: userInfo.value
+  })
 })
 
 // 切换原料清单展开/收起
@@ -623,10 +745,75 @@ onMounted(() => {
   const currentPage = pages[pages.length - 1] as any
   orderId.value = currentPage.options?.id || currentPage.options?.orderId || ''
 
+  // 获取用户信息 - 使用正确的存储key 'user'（与TabBar一致）
+  try {
+    // 尝试从 'user' key 读取（TabBar使用的key）
+    let user = uni.getStorageSync('user') || '{}'
+    console.log('[Order Detail] Raw user from storage:', user)
+
+    // 如果 'user' key 为空，尝试 'userInfo' key
+    if (user === '{}' || user === '' || !user) {
+      user = uni.getStorageSync('userInfo') || '{}'
+      console.log('[Order Detail] Trying userInfo key:', user)
+    }
+
+    // 处理存储的数据：可能是对象或JSON字符串
+    let userData
+    if (typeof user === 'string') {
+      userData = JSON.parse(user)
+    } else {
+      userData = user
+    }
+    console.log('[Order Detail] Parsed userData:', userData)
+
+    // 尝试多个可能的字段名
+    const userId = userData.id || userData.userId || userData.customerId || userData.user?.id || ''
+    const userRole = userData.role || userData.user?.role || 'CUSTOMER'
+
+    userInfo.value = {
+      id: userId,
+      role: userRole
+    }
+    console.log('[Order Detail] User info loaded:', userInfo.value)
+
+    // 如果还是没有用户ID，尝试从 API 获取
+    if (!userId) {
+      console.log('[Order Detail] No user ID in storage, fetching from API')
+      loadUserInfoFromApi()
+    }
+  } catch (err) {
+    console.error('Failed to load userInfo:', err)
+    // 如果解析失败，尝试从 API 获取
+    loadUserInfoFromApi()
+  }
+
   if (orderId.value) {
     loadOrderDetail()
   }
 })
+
+async function loadUserInfoFromApi() {
+  try {
+    const res = await request({
+      url: '/users/me',
+      method: 'GET'
+    })
+
+    if (res.code === 0 && res.data) {
+      userInfo.value = {
+        id: res.data.id || res.data.userId || res.data.customerId || '',
+        role: res.data.role || 'CUSTOMER'
+      }
+      console.log('[Order Detail] User info loaded from API:', userInfo.value)
+
+      // 保存到两个key，确保兼容性
+      uni.setStorageSync('user', JSON.stringify(res.data))
+      uni.setStorageSync('userInfo', JSON.stringify(res.data))
+    }
+  } catch (error) {
+    console.error('[Order Detail] Failed to load user info from API:', error)
+  }
+}
 
 async function loadOrderDetail() {
   try {
@@ -639,15 +826,14 @@ async function loadOrderDetail() {
 
     if (res.code === 0 && res.data) {
       order.value = res.data
-      // Debug logging
-      console.log('[Order Detail] API Response:', res.data)
-      console.log('[Order Detail] Order amountProduct:', res.data.amountProduct)
-      console.log('[Order Detail] Order amountTotal:', res.data.amountTotal)
-      console.log('[Order Detail] Order items:', res.data.items)
-      if (res.data.items && res.data.items.length > 0) {
-        console.log('[Order Detail] First item totalPrice:', res.data.items[0].totalPrice)
-        console.log('[Order Detail] First item packageCount:', res.data.items[0].packageCount)
-      }
+      console.log('[Order Detail] Order loaded:', {
+        id: order.value.id,
+        status: order.value.status,
+        customerId: order.value.customerId,
+        targetProductionDate: order.value.targetProductionDate
+      })
+      console.log('[Order Detail] Can edit address:', canEditAddress.value)
+      console.log('[Order Detail] Can edit date:', canEditDate.value)
     }
   } catch (error) {
     console.error('Load order detail error:', error)
@@ -656,8 +842,132 @@ async function loadOrderDetail() {
   }
 }
 
+// 更换收货地址
+function changeAddress() {
+  uni.navigateTo({
+    url: `/pages/address-list/index?mode=select&orderId=${orderId.value}&from=order-detail`
+  })
+}
+
+// 处理地址选择（从地址列表返回）
+async function handleAddressSelected(data: string | { addressId: string; from?: string }) {
+  // Handle both string and object formats for compatibility
+  const addressId = typeof data === 'string' ? data : data?.addressId
+
+  if (!addressId) return
+
+  await updateOrderAddress(addressId)
+}
+
+async function updateOrderAddress(addressId: string) {
+  try {
+    uni.showLoading({ title: '更新中...' })
+
+    const res = await request({
+      url: `/orders/${orderId.value}/address`,
+      method: 'PUT',
+      data: { addressId }
+    })
+
+    if (res.code === 0) {
+      uni.showToast({
+        title: '地址已更新',
+        icon: 'success'
+      })
+      // 重新加载订单详情
+      await loadOrderDetail()
+    } else {
+      throw new Error(res.message || '更新失败')
+    }
+  } catch (error) {
+    console.error('Update address error:', error)
+    uni.showToast({
+      title: error?.message || '更新失败',
+      icon: 'none'
+    })
+  } finally {
+    uni.hideLoading()
+  }
+}
+
+// 初始化日期选择器的值
+watch(() => order.value?.targetProductionDate, (newDate) => {
+  // 使用原始目标制作日期作为最小可选日期，而不是当前日期
+  // 这样允许用户修正误操作（例如从1月29日改回1月28日）
+  const baseDate = order.value?.originalTargetProductionDate || newDate
+  if (baseDate) {
+    const date = new Date(baseDate)
+    date.setHours(0, 0, 0, 0)
+    minDateStr.value = formatDateToYYYYMMDD(date)
+    selectedDate.value = formatDateToYYYYMMDD(newDate ? new Date(newDate) : date)
+  }
+}, { immediate: true })
+
+function formatDateToYYYYMMDD(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
+// 日期选择确认
+function onDateSelected(e: any) {
+  const newDateStr = e.detail.value
+
+  // 调用API更新日期
+  updateOrderDate(newDateStr)
+}
+
+async function updateOrderDate(newDateStr: string) {
+  try {
+    uni.showLoading({ title: '更新中...' })
+
+    const res = await request({
+      url: `/orders/${orderId.value}/production-date`,
+      method: 'PUT',
+      data: {
+        targetProductionDate: newDateStr
+      }
+    })
+
+    if (res.code === 0) {
+      uni.showToast({
+        title: '修改成功',
+        icon: 'success'
+      })
+      // 重新加载订单详情
+      await loadOrderDetail()
+    } else {
+      throw new Error(res.message || '修改失败')
+    }
+  } catch (error) {
+    console.error('Update production date error:', error)
+    uni.showToast({
+      title: error?.message || '修改失败',
+      icon: 'none'
+    })
+  } finally {
+    uni.hideLoading()
+  }
+}
+
+// 监听地址选择事件（从地址列表返回）
+onShow(() => {
+  // 监听地址选择事件
+  uni.$on('address-selected', handleAddressSelected)
+})
+
 function formatOrderId(id: string): string {
   return id.substring(0, 8) + '...'
+}
+
+function formatDate(dateStr?: string | null): string {
+  if (!dateStr) return '-'
+  const date = new Date(dateStr)
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 function formatAmount(amount?: number): string {
@@ -712,14 +1022,6 @@ function getStatusColor(status: string): string {
   return colorMap[status] || '#999'
 }
 
-function getPaymentMethodText(method?: string): string {
-  const methodMap: Record<string, string> = {
-    WECHAT: '微信支付',
-    ALIPAY: '支付宝'
-  }
-  return methodMap[method || ''] || method || '-'
-}
-
 function getCarrierName(code?: string): string {
   const carrierMap: Record<string, string> = {
     SF: '顺丰速运',
@@ -745,15 +1047,6 @@ function copyOrderId() {
     data: order.value?.id || '',
     success: () => {
       uni.showToast({ title: '订单号已复制', icon: 'success' })
-    }
-  })
-}
-
-function copyTransactionId() {
-  uni.setClipboardData({
-    data: order.value?.transactionId || '',
-    success: () => {
-      uni.showToast({ title: '交易单号已复制', icon: 'success' })
     }
   })
 }
@@ -1031,6 +1324,18 @@ function previewAftersaleImage(index: number) {
   })
 }
 
+// 预览原料照片
+function previewProductionPhotos(index: number) {
+  if (!order.value?.productionPhotos || !order.value.productionPhotos.photos || order.value.productionPhotos.photos.length === 0) {
+    return
+  }
+
+  uni.previewImage({
+    current: index,
+    urls: order.value.productionPhotos.photos
+  })
+}
+
 // 申请售后（旧函数，保留向后兼容）
 function applyAftersale() {
   uni.navigateTo({
@@ -1258,6 +1563,37 @@ async function submitReview() {
 .value {
   color: #333;
   flex: 1;
+  word-break: break-all;
+}
+
+.address-value {
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+  line-height: 1.5;
+  flex: 1;
+}
+
+.value-with-action {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 12rpx;
+}
+
+.btn-edit {
+  padding: 6rpx 16rpx;
+  background-color: #1890ff;
+  color: #fff;
+  border-radius: 6rpx;
+  font-size: 24rpx;
+  border: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.btn-edit::after {
+  border: none;
 }
 
 .order-id {
@@ -1868,5 +2204,43 @@ async function submitReview() {
   font-size: 24rpx;
   color: #ff9800;
   line-height: 1.5;
+}
+
+/* 原料照片样式 */
+.production-photos-section {
+  margin-bottom: 20rpx;
+}
+
+.production-photos {
+  padding: 16rpx;
+  background-color: #f9f9f9;
+  border-radius: 12rpx;
+}
+
+.photos-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-bottom: 12rpx;
+}
+
+.production-photo-item {
+  width: 220rpx;
+  height: 220rpx;
+  border-radius: 8rpx;
+}
+
+.photos-hint {
+  font-size: 24rpx;
+  color: #999;
+  text-align: center;
+  padding-top: 8rpx;
+}
+
+.photos-time {
+  font-size: 24rpx;
+  color: #999;
+  font-weight: normal;
+  margin-left: auto;
 }
 </style>

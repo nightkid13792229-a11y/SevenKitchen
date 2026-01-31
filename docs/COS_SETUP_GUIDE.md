@@ -84,14 +84,14 @@ X-Admin-Token: 你的管理员token
 # 上传一个图片文件
 ```
 
-### 测试2：体检报告上传
+### 测试2：过敏记录上传
 
 ```bash
 POST http://localhost:3000/api/v1/health/upload-image
 Content-Type: multipart/form-data
 X-Customer-Id: 你的用户ID
 
-# 上传PDF或图片
+# 上传过敏记录PDF或图片
 ```
 
 ### 测试3：狗狗头像上传
@@ -114,7 +114,7 @@ X-Customer-Id: 你的用户ID
 your-bucket/
 ├── recipes/           # 食谱图片
 │   └── xxxxxx.jpg
-├── health-records/    # 体检报告
+├── allergy-records/   # 过敏记录
 │   └── xxxxxx.pdf
 └── dogs/
     └── avatars/       # 狗狗头像

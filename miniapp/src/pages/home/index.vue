@@ -21,10 +21,6 @@
 
     <!-- 快捷功能入口 -->
     <view class="quick-actions">
-      <view class="action-item" @tap="goToRecipeDIY">
-        <view class="action-icon">📝</view>
-        <text class="action-text">食谱定制</text>
-      </view>
       <view class="action-item" @tap="goToWeightManagement">
         <view class="action-icon">⚖️</view>
         <text class="action-text">体重管理</text>

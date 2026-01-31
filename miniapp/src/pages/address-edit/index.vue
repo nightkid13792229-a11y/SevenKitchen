@@ -68,6 +68,11 @@ const formData = ref<FormData>({
 
 const addressId = ref<string | null>(null)
 
+// 页面参数（从订单详情页新增地址时传递）
+let pageMode = '' // 'select' | 'edit' | ''
+let pageFrom = '' // 'order-detail' | ''
+let pageOrderId = '' // 订单ID
+
 // 省市区选择器相关
 const regionValue = ref<string[]>([]) // picker的值数组 [省, 市, 区]
 const regionText = ref('') // 显示文本 "省 市 区"
@@ -106,7 +111,12 @@ onMounted(() => {
   const pages = getCurrentPages()
   const currentPage = pages[pages.length - 1] as any
   addressId.value = currentPage.options?.id || null
-  
+
+  // 获取页面参数（从订单详情页新增地址时）
+  pageMode = currentPage.options?.mode || ''
+  pageFrom = currentPage.options?.from || ''
+  pageOrderId = currentPage.options?.orderId || ''
+
   if (addressId.value) {
     loadAddress()
   }
@@ -187,18 +197,52 @@ function save() {
 
   promise.then((res: any) => {
     if (res.code === 0) {
-      uni.showToast({
-        title: '保存成功',
-        icon: 'success'
-      })
-      setTimeout(() => {
-        uni.navigateBack()
-      }, 1500)
+      const savedAddressId = res.data.id
+
+      // 如果是从订单详情页的新增地址入口进入
+      if (pageMode === 'select' && pageFrom === 'order-detail' && pageOrderId && !addressId.value) {
+        // 1. 先调用API更新订单地址
+        request({
+          url: `/orders/${pageOrderId}/address`,
+          method: 'PUT',
+          data: { addressId: savedAddressId }
+        }).then(() => {
+          // 2. 返回订单详情页
+          uni.navigateBack()
+
+          // 3. 通知订单详情页刷新
+          setTimeout(() => {
+            uni.$emit('address-selected', savedAddressId)
+          }, 100)
+        }).catch((err: any) => {
+          console.error('Update order address error:', err)
+          uni.showToast({
+            title: '地址保存成功，但更新订单失败',
+            icon: 'none'
+          })
+          // 即使更新订单失败，也返回上一页
+          setTimeout(() => {
+            uni.navigateBack()
+          }, 1500)
+        }).finally(() => {
+          uni.hideLoading()
+        })
+      } else {
+        // 普通新增地址或编辑地址，返回上一页
+        uni.showToast({
+          title: '保存成功',
+          icon: 'success'
+        })
+        setTimeout(() => {
+          uni.navigateBack()
+        }, 1500)
+        uni.hideLoading()
+      }
     }
   }).catch((err: any) => {
     console.error('Save address error:', err)
   }).finally(() => {
-    uni.hideLoading()
+    // Note: hideLoading is called in each branch above
   })
 }
 </script>

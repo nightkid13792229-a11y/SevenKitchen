@@ -419,6 +419,7 @@ export class OrderService {
       dto.type,
       new Date(),
       productionDate, // ✅ 使用处理后的制作日期
+      productionDate, // ✅ 原始制作日期（首次创建时与当前日期相同）
       pricingResult.amountProduct,  // ✅ 使用快照价格
       pricingResult.amountShipping,  // ✅ 使用快照运费
       pricingResult.amountTotal,     // ✅ 使用快照总价
@@ -887,6 +888,7 @@ export class OrderService {
       dto.type,
       new Date(),
       dto.targetProductionDate ?? null,
+      dto.targetProductionDate ?? null, // 原始制作日期
       amountProduct,
       amountShipping,
       amountTotal,
@@ -1780,26 +1782,40 @@ export class OrderService {
    * Admin/staff can manually adjust the order amount
    */
   async updateOrderAmount(orderId: string, newAmount: number): Promise<Order> {
-    const order = await this.orderRepository.findById(orderId);
-    if (!order) {
+    // Check if order exists (using Prisma directly to avoid entity validation)
+    const existingOrder = await this.prisma.order.findUnique({
+      where: { id: orderId },
+    });
+
+    if (!existingOrder) {
       throw new NotFoundException(`Order not found: ${orderId}`);
     }
 
-    // Update totalAmount using Prisma directly
+    // Update both totalAmount and amountTotal for consistency
+    // Use Prisma directly to bypass Order entity validation (which requires amountTotal = amountProduct + amountShipping)
+    // Admin should be able to manually adjust order amount for discounts, etc.
     await this.prisma.order.update({
       where: { id: orderId },
       data: {
         totalAmount: newAmount,
+        amountTotal: newAmount,
       },
     });
 
-    // Fetch and return the updated order
-    const updatedOrder = await this.orderRepository.findById(orderId);
-    if (!updatedOrder) {
+    console.log(`Order ${orderId} amount updated to ${newAmount} (both totalAmount and amountTotal)`);
+
+    // Fetch the updated order data
+    const updatedOrderData = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: { items: true },
+    });
+
+    if (!updatedOrderData) {
       throw new NotFoundException(`Order not found after update: ${orderId}`);
     }
 
-    console.log(`Order ${orderId} amount updated to ${newAmount}`);
+    // Use static factory method to create Order without validation
+    const updatedOrder = Order.fromPrismaData(updatedOrderData, []);
 
     return updatedOrder;
   }
@@ -1810,6 +1826,97 @@ export class OrderService {
    */
   async getPendingAftersales(): Promise<Order[]> {
     return this.orderRepository.findByStatus(OrderStatus.AFTERSALE);
+  }
+
+  /**
+   * Update order address
+   * @param orderId Order ID
+   * @param addressId New address ID
+   * @param userId User ID (for permission check)
+   * @param userRole User role (for permission check)
+   */
+  async updateOrderAddress(
+    orderId: string,
+    addressId: string,
+    userId: string,
+    userRole: string
+  ): Promise<Order> {
+    // 1. Get order
+    const order = await this.orderRepository.findById(orderId);
+    if (!order) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+
+    // 2. Permission check: must be order owner or admin (NOT STAFF)
+    const isOwner = order.customerId === userId;
+    const isAdmin = userRole === 'ADMIN';
+
+    if (!isOwner && !isAdmin) {
+      throw new BadRequestException(
+        'You do not have permission to modify this order'
+      );
+    }
+
+    // 3. Get address details
+    const address = await this.addressRepository.findById(addressId);
+    if (!address) {
+      throw new NotFoundException(`Address ${addressId} not found`);
+    }
+
+    // 4. Verify address belongs to the customer
+    if (address.userId !== order.customerId) {
+      throw new BadRequestException(
+        'Address does not belong to the order customer'
+      );
+    }
+
+    // 5. Update order address (domain logic will validate state)
+    order.updateAddress(addressId, {
+      id: address.id,
+      recipientName: address.recipientName,
+      phone: address.phone,
+      region: address.region,
+      detail: address.detail,
+    });
+
+    // 6. Save and return
+    return this.orderRepository.save(order);
+  }
+
+  /**
+   * Update order target production date
+   * @param orderId Order ID
+   * @param targetDate New target production date
+   * @param userId User ID (for permission check)
+   * @param userRole User role (for permission check)
+   */
+  async updateOrderTargetDate(
+    orderId: string,
+    targetDate: Date,
+    userId: string,
+    userRole: string
+  ): Promise<Order> {
+    // 1. Get order
+    const order = await this.orderRepository.findById(orderId);
+    if (!order) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+
+    // 2. Permission check: must be order owner or admin (NOT STAFF)
+    const isOwner = order.customerId === userId;
+    const isAdmin = userRole === 'ADMIN';
+
+    if (!isOwner && !isAdmin) {
+      throw new BadRequestException(
+        'You do not have permission to modify this order'
+      );
+    }
+
+    // 3. Update target date (domain logic will validate state and date)
+    order.updateTargetProductionDate(targetDate);
+
+    // 4. Save and return
+    return this.orderRepository.save(order);
   }
 }
 

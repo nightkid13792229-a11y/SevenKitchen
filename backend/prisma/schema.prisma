@@ -14,6 +14,7 @@ model Order {
   type                     OrderType
   createdAt                DateTime             @default(now()) @map("created_at")
   targetProductionDate     DateTime?            @map("target_production_date")
+  originalTargetProductionDate DateTime?        @map("original_target_production_date")
   amountProduct            Decimal              @map("amount_product")
   amountShipping           Decimal              @map("amount_shipping")
   amountTotal              Decimal              @map("amount_total")
@@ -639,6 +640,7 @@ model GlobalConfig {
   laborHourlyRate             Decimal  @default(30) @map("labor_hourly_rate")
   minOrderWeightG             Int      @default(1000) @map("min_order_weight_g")
   defaultBatchCapacityG       Decimal  @default(5000) @map("default_batch_capacity_g")
+  minPotWeightG               Int      @default(2000) @map("min_pot_weight_g")
   targetMargin                Decimal  @default(0.4) @map("target_margin")
   overheadCostPerKg           Decimal  @default(2) @map("overhead_cost_per_kg")
   targetBatchUtilization      Decimal  @default(0.8) @map("target_batch_utilization")

@@ -9,6 +9,8 @@ import { InvalidStateTransitionError, ValidationError } from '../common/errors';
 import { PricingBreakdownSnapshot } from './pricing-breakdown-snapshot';
 
 export class Order {
+  private skipValidation?: boolean;
+
   constructor(
     public readonly id: string,
     public readonly customerId: string,
@@ -16,6 +18,7 @@ export class Order {
     public readonly type: OrderType,
     public readonly createdAt: Date,
     public targetProductionDate: Date | null,
+    public originalTargetProductionDate: Date | null,
     public amountProduct: number,
     public amountShipping: number,
     public amountTotal: number,
@@ -64,12 +67,59 @@ export class Order {
     public aftersaleSince?: Date | null,
     public aftersaleReason?: string | null,
     public aftersalePhotos?: string[],
+    skipValidation?: boolean, // Internal: skip validation for admin updates
   ) {
     // Compute totalAmount from amountTotal if not provided
     if (this.totalAmount === undefined) {
       this.totalAmount = this.amountTotal;
     }
-    this.validateInvariants();
+    this.skipValidation = skipValidation;
+    if (!skipValidation) {
+      this.validateInvariants();
+    }
+  }
+
+  /**
+   * Create Order entity from database data without validation
+   * Used when loading orders that may have been manually adjusted (e.g., admin amount changes)
+   */
+  static fromPrismaData(data: any, items: OrderItem[] = []): Order {
+    return new Order(
+      data.id,
+      data.customerId,
+      data.status,
+      data.type,
+      data.createdAt,
+      data.targetProductionDate,
+      data.originalTargetProductionDate,
+      Number(data.amountProduct),
+      Number(data.amountShipping),
+      Number(data.amountTotal),
+      items,
+      Number(data.totalAmount ?? data.amountTotal),
+      data.pricingBreakdownSnapshot,
+      data.dogId || undefined,
+      data.addressId || undefined,
+      undefined, // dog
+      undefined, // address
+      data.trackingNumber,
+      data.carrierCode,
+      data.shippedAt,
+      data.completedAt,
+      data.cancelledAt,
+      data.cancellationReason,
+      data.cancelledBy,
+      data.paymentMethod,
+      data.transactionId,
+      data.paidAt,
+      data.paymentStatus,
+      data.aftersaleType,
+      data.freezingSince,
+      data.aftersaleSince,
+      data.aftersaleReason,
+      data.aftersalePhotos,
+      true, // skip validation
+    );
   }
 
   /**
@@ -161,7 +211,8 @@ export class Order {
       [OrderStatus.PENDING_PAYMENT]: [OrderStatus.PAID, OrderStatus.CANCELLED],
       [OrderStatus.PAID]: [OrderStatus.PURCHASING, OrderStatus.CANCELLED],
       [OrderStatus.PURCHASING]: [OrderStatus.PAID, OrderStatus.IN_PRODUCTION, OrderStatus.CANCELLED],
-      [OrderStatus.IN_PRODUCTION]: [OrderStatus.FREEZING, OrderStatus.CANCELLED],
+      // Allow IN_PRODUCTION → PURCHASING for batch deletion (undo production)
+      [OrderStatus.IN_PRODUCTION]: [OrderStatus.PURCHASING, OrderStatus.FREEZING, OrderStatus.CANCELLED],
       [OrderStatus.FREEZING]: [OrderStatus.SHIPPED, OrderStatus.AFTERSALE],
       [OrderStatus.SHIPPED]: [OrderStatus.COMPLETED, OrderStatus.AFTERSALE],
       [OrderStatus.COMPLETED]: [OrderStatus.AFTERSALE],
@@ -442,6 +493,91 @@ export class Order {
         this.transitionTo(OrderStatus.COMPLETED);
         break;
     }
+  }
+
+  /**
+   * Update order address
+   * Allowed when order.status < SHIPPED
+   * @param addressId New address ID
+   * @param address Full address object (for validation)
+   * @throws InvalidStateTransitionError if order is already shipped
+   */
+  updateAddress(addressId: string, address: {
+    id: string;
+    recipientName: string;
+    phone: string;
+    region: { province: string; city: string; district?: string };
+    detail: string;
+  }): void {
+    // Cannot change address after shipping
+    if (
+      this.status === OrderStatus.SHIPPED ||
+      this.status === OrderStatus.COMPLETED ||
+      this.status === OrderStatus.CANCELLED
+    ) {
+      throw new InvalidStateTransitionError(
+        `Cannot update address for order in status: ${this.status}`
+      );
+    }
+
+    // Validate address data
+    if (!address.recipientName || !address.phone || !address.region || !address.detail) {
+      throw new ValidationError('Address information is incomplete');
+    }
+
+    // Update address reference
+    (this as any).addressId = addressId;
+    (this as any).address = address;
+  }
+
+  /**
+   * Update target production date
+   * Allowed when order.status < PURCHASING
+   * Date must be >= current target date (only forward or keep same)
+   * @param newDate New target production date
+   * @throws InvalidStateTransitionError if order is already in purchasing
+   * @throws ValidationError if date is invalid or earlier than current date
+   */
+  updateTargetProductionDate(newDate: Date): void {
+    // Cannot change date after purchasing started
+    if (
+      this.status === OrderStatus.PURCHASING ||
+      this.status === OrderStatus.IN_PRODUCTION ||
+      this.status === OrderStatus.FREEZING ||
+      this.status === OrderStatus.SHIPPED ||
+      this.status === OrderStatus.COMPLETED ||
+      this.status === OrderStatus.CANCELLED
+    ) {
+      throw new InvalidStateTransitionError(
+        `Cannot update target production date for order in status: ${this.status}`
+      );
+    }
+
+    // IMPORTANT: Save original target date BEFORE first update
+    // This must happen before validation, so we can use the original date as the baseline
+    if (!this.originalTargetProductionDate && this.targetProductionDate) {
+      (this as any).originalTargetProductionDate = new Date(this.targetProductionDate);
+    }
+
+    // Validate date is not in the past (compared to ORIGINAL target date)
+    // This allows users to correct mistakes (e.g., changing from Jan 29 back to Jan 28)
+    // as long as it's not earlier than the original date (e.g., Jan 27)
+    const baseDate = this.originalTargetProductionDate;
+    if (baseDate) {
+      const baseDateOnly = new Date(baseDate);
+      baseDateOnly.setHours(0, 0, 0, 0);
+
+      const newDateOnly = new Date(newDate);
+      newDateOnly.setHours(0, 0, 0, 0);
+
+      if (newDateOnly < baseDateOnly) {
+        throw new ValidationError(
+          'Target production date cannot be earlier than the original target date'
+        );
+      }
+    }
+
+    this.targetProductionDate = newDate;
   }
 }
 

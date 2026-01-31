@@ -7,12 +7,15 @@ import {
   Controller,
   Get,
   Post,
+  Put,
+  Delete,
   Body,
   Param,
   Query,
   UseGuards,
   UseInterceptors,
   UploadedFiles,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -194,33 +197,57 @@ export class StaffProductionController {
     @Param('id') id: string,
     @UploadedFiles() files: Express.Multer.File[],
   ): Promise<ApiResponseDto<UploadPhotosResponseDto>> {
-    // Validate file count
-    if (!files || files.length < 2 || files.length > 3) {
+    try {
+      console.log('[uploadProductionPhotos] Starting upload for unit:', id);
+      console.log('[uploadProductionPhotos] Files received:', files?.length);
+
+      // Validate file count (允许单文件上传以支持微信小程序的分次上传)
+      if (!files || files.length === 0) {
+        console.log('[uploadProductionPhotos] No files provided');
+        return {
+          code: 400,
+          message: '请选择要上传的照片',
+          data: null,
+        };
+      }
+
+      if (files.length > 3) {
+        console.log('[uploadProductionPhotos] Too many files:', files.length);
+        return {
+          code: 400,
+          message: '最多只能上传3张照片',
+          data: null,
+        };
+      }
+
+      console.log('[uploadProductionPhotos] Uploading to COS...');
+      // Upload to Tencent COS
+      const uploadPromises = files.map(async (file) => {
+        console.log('[uploadProductionPhotos] Uploading file:', file.originalname);
+        const result = await this.cosService.uploadImage(file, file.originalname, `production/${id}`);
+        console.log('[uploadProductionPhotos] Upload result:', result.url);
+        return result.url;
+      });
+
+      const photoUrls = await Promise.all(uploadPromises);
+      console.log('[uploadProductionPhotos] All photos uploaded:', photoUrls);
+
+      console.log('[uploadProductionPhotos] Saving to database...');
+      // Save to packaging unit (累加模式)
+      const unit = await this.staffProductionService.uploadProductionPhotos(id, photoUrls);
+      console.log('[uploadProductionPhotos] Database updated. Photos:', unit.photosRaw);
+
       return {
-        code: 400,
-        message: '必须上传2-3张备料照片',
-        data: null,
+        code: 0,
+        message: '照片上传成功',
+        data: {
+          photosRaw: unit.photosRaw || [],
+        },
       };
+    } catch (error) {
+      console.error('[uploadProductionPhotos] Error:', error);
+      throw error;
     }
-
-    // Upload to Tencent COS
-    const uploadPromises = files.map(async (file) => {
-      const result = await this.cosService.uploadImage(file, file.originalname, `production/${id}`);
-      return result.url;
-    });
-
-    const photoUrls = await Promise.all(uploadPromises);
-
-    // Save to packaging unit
-    const unit = await this.staffProductionService.uploadProductionPhotos(id, photoUrls);
-
-    return {
-      code: 0,
-      message: '照片上传成功',
-      data: {
-        photosRaw: unit.photosRaw || [],
-      },
-    };
   }
 
   @Post('packaging-units/:id/complete')
@@ -259,6 +286,132 @@ export class StaffProductionController {
       data: {
         id: unit.id,
         status: unit.status,
+      },
+    };
+  }
+
+  @Delete('packaging-units/:id/photos')
+  @ApiOperation({ summary: 'Delete a single production photo from COS' })
+  @ApiParam({
+    name: 'id',
+    description: 'Packaging unit ID',
+    example: 'uuid',
+  })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        photoUrl: {
+          type: 'string',
+          description: 'Photo URL to delete',
+          example: 'https://xxx.cos.ap-guangzhou.myqcloud.com/production/uuid/xxx.jpg',
+        },
+      },
+      required: ['photoUrl'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Photo deleted successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        code: { type: 'number', example: 0 },
+        message: { type: 'string', example: '照片删除成功' },
+        data: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            photosRaw: { type: 'array', items: { type: 'string' } },
+          },
+        },
+      },
+    },
+  })
+  async deleteProductionPhoto(
+    @Param('id') id: string,
+    @Body() body: { photoUrl: string },
+  ): Promise<ApiResponseDto<any>> {
+    if (!body.photoUrl) {
+      return {
+        code: 400,
+        message: 'photoUrl is required',
+        data: null,
+      };
+    }
+
+    const unit = await this.staffProductionService.deleteProductionPhoto(id, body.photoUrl);
+
+    return {
+      code: 0,
+      message: '照片删除成功',
+      data: {
+        id: unit.id,
+        photosRaw: unit.photosRaw || [],
+      },
+    };
+  }
+
+  @Put('packaging-units/:id/photos')
+  @ApiOperation({ summary: 'Replace production photos' })
+  @ApiParam({
+    name: 'id',
+    description: 'Packaging unit ID',
+    example: 'uuid',
+  })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({
+    status: 200,
+    description: 'Photos replaced successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        code: { type: 'number', example: 0 },
+        message: { type: 'string', example: '照片替换成功' },
+        data: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            photosRaw: { type: 'array', items: { type: 'string' } },
+          },
+        },
+      },
+    },
+  })
+  async replaceProductionPhotos(
+    @Param('id') id: string,
+    @UploadedFiles() files: Express.Multer.File[],
+  ): Promise<ApiResponseDto<any>> {
+    // Validate file count
+    if (!files || files.length < 2 || files.length > 3) {
+      return {
+        code: 400,
+        message: '必须上传2-3张照片',
+        data: null,
+      };
+    }
+
+    // Upload to Tencent COS
+    const uploadPromises = files.map(async (file) => {
+      const result = await this.cosService.uploadImage(
+        file,
+        file.originalname,
+        `production/${id}`
+      );
+      return result.url;
+    });
+
+    const photoUrls = await Promise.all(uploadPromises);
+
+    // Replace photos (deletes old photos from COS)
+    const unit = await this.staffProductionService.replaceProductionPhotos(id, photoUrls);
+
+    return {
+      code: 0,
+      message: '照片替换成功',
+      data: {
+        id: unit.id,
+        photosRaw: unit.photosRaw || [],
       },
     };
   }
@@ -375,6 +528,57 @@ export class StaffProductionController {
       code: 0,
       message: 'Success',
       data: result,
+    };
+  }
+
+  @Delete('batches/:batchId')
+  @ApiOperation({ summary: 'Delete production batch' })
+  @ApiParam({
+    name: 'batchId',
+    description: 'Production batch ID',
+    example: 'uuid',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Batch deleted successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        code: { type: 'number', example: 0 },
+        message: { type: 'string', example: '删除成功' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Cannot delete batch in current status',
+    schema: {
+      type: 'object',
+      properties: {
+        code: { type: 'number', example: 400 },
+        message: { type: 'string', example: 'Cannot delete batch with status COMPLETED' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Batch not found',
+    schema: {
+      type: 'object',
+      properties: {
+        code: { type: 'number', example: 404 },
+        message: { type: 'string', example: 'Production batch not found' },
+      },
+    },
+  })
+  async deleteBatch(
+    @Param('batchId') batchId: string,
+  ): Promise<ApiResponseDto<void>> {
+    await this.productionService.deleteProductionBatch(batchId);
+    return {
+      code: 0,
+      message: '删除成功',
+      data: null,
     };
   }
 }

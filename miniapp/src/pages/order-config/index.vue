@@ -166,7 +166,10 @@ onMounted(() => {
   loadDefaultAddress()
   
   // Listen for address selection
-  uni.$on('address-selected', (selectedAddressId: string) => {
+  uni.$on('address-selected', (data: string | { addressId: string; from?: string }) => {
+    // Handle both string and object formats for compatibility
+    const selectedAddressId = typeof data === 'string' ? data : data?.addressId
+
     addressId.value = selectedAddressId
     // Reload pricing preview when address changes (debounced)
     if (previewDebounceTimer) {

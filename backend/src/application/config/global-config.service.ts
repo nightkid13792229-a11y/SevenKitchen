@@ -32,6 +32,7 @@ export class GlobalConfigService {
       laborHourlyRate: parseFloat(config.laborHourlyRate.toString()),
       minOrderWeightG: config.minOrderWeightG,
       defaultBatchCapacityG: parseFloat(config.defaultBatchCapacityG.toString()),
+      minPotWeightG: config.minPotWeightG,
       targetMargin: parseFloat(config.targetMargin.toString()),
       overheadCostPerKg: parseFloat(config.overheadCostPerKg.toString()),
       targetBatchUtilization: parseFloat(config.targetBatchUtilization.toString()),
@@ -55,6 +56,7 @@ export class GlobalConfigService {
       laborHourlyRate: number;
       minOrderWeightG: number;
       defaultBatchCapacityG: number;
+      minPotWeightG: number;
       targetMargin: number;
       overheadCostPerKg: number;
       targetBatchUtilization: number;
@@ -75,6 +77,7 @@ export class GlobalConfigService {
     if (dto.laborHourlyRate !== undefined) updateData.laborHourlyRate = dto.laborHourlyRate;
     if (dto.minOrderWeightG !== undefined) updateData.minOrderWeightG = dto.minOrderWeightG;
     if (dto.defaultBatchCapacityG !== undefined) updateData.defaultBatchCapacityG = dto.defaultBatchCapacityG;
+    if (dto.minPotWeightG !== undefined) updateData.minPotWeightG = dto.minPotWeightG;
     if (dto.targetMargin !== undefined) updateData.targetMargin = dto.targetMargin;
     if (dto.overheadCostPerKg !== undefined) updateData.overheadCostPerKg = dto.overheadCostPerKg;
     if (dto.targetBatchUtilization !== undefined) updateData.targetBatchUtilization = dto.targetBatchUtilization;
@@ -102,6 +105,7 @@ export class GlobalConfigService {
       laborHourlyRate: parseFloat(config.laborHourlyRate.toString()),
       minOrderWeightG: config.minOrderWeightG,
       defaultBatchCapacityG: parseFloat(config.defaultBatchCapacityG.toString()),
+      minPotWeightG: config.minPotWeightG,
       targetMargin: parseFloat(config.targetMargin.toString()),
       overheadCostPerKg: parseFloat(config.overheadCostPerKg.toString()),
       targetBatchUtilization: parseFloat(config.targetBatchUtilization.toString()),
@@ -124,6 +128,7 @@ export class GlobalConfigService {
       laborHourlyRate: 30.0,
       minOrderWeightG: 1000,
       defaultBatchCapacityG: 5000,
+      minPotWeightG: 2000,
       targetMargin: 0.4,
       overheadCostPerKg: 2.0,
       targetBatchUtilization: 0.8,

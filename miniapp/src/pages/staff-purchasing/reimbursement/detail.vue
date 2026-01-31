@@ -150,37 +150,90 @@
       </view>
 
       <!-- 发票照片 -->
-      <view v-if="reimbursement.receiptUrls && reimbursement.receiptUrls.length > 0" class="section">
-        <text class="section-title">支付凭证</text>
-        <view class="photos-grid">
+      <view class="section">
+        <view class="section-header">
+          <text class="section-title">支付凭证</text>
+          <!-- 上传按钮（可编辑状态下显示） -->
+          <view
+            v-if="canEditReceipts"
+            class="upload-btn-mini"
+            @tap="appendReceiptPhotos"
+          >
+            <text>+</text>
+            <text>添加</text>
+          </view>
+        </view>
+
+        <!-- 有图片时显示 -->
+        <view v-if="reimbursement.receiptUrls && reimbursement.receiptUrls.length > 0" class="photos-grid">
           <view
             v-for="(url, index) in reimbursement.receiptUrls"
             :key="index"
+            class="photo-item-wrapper"
+          >
+            <view
+              class="photo-item"
+              @tap="previewPhoto(url)"
+            >
+              <image :src="url" mode="aspectFill" />
+            </view>
+            <!-- 删除按钮（可编辑状态下显示） -->
+            <view
+              v-if="canEditReceipts"
+              class="delete-btn"
+              @tap.stop="removeReceiptPhoto(index)"
+            >
+              <text>×</text>
+            </view>
+          </view>
+        </view>
+
+        <!-- 无图片时显示提示 -->
+        <view v-else class="empty-photos">
+          <text>暂无支付凭证</text>
+          <text v-if="canEditReceipts" class="upload-hint" @tap="appendReceiptPhotos">点击上传</text>
+        </view>
+      </view>
+
+      <!-- 报销凭证（所有用户可见） -->
+      <view v-if="reimbursement.paymentProofUrls && reimbursement.paymentProofUrls.length > 0" class="section">
+        <view class="section-header">
+          <text class="section-title">报销凭证</text>
+          <!-- 管理员操作按钮 -->
+          <view v-if="isAdmin" class="action-buttons">
+            <view class="action-btn-mini replace" @tap="uploadPaymentProof">
+              <text>替换</text>
+            </view>
+            <view class="action-btn-mini delete" @tap="clearPaymentProof">
+              <text>清空</text>
+            </view>
+          </view>
+        </view>
+        <view class="photos-grid">
+          <view
+            v-for="(url, index) in reimbursement.paymentProofUrls"
+            :key="index"
             class="photo-item"
-            @tap="previewPhoto(url)"
+            @tap="previewPaymentProof(url)"
           >
             <image :src="url" mode="aspectFill" />
           </view>
         </view>
       </view>
 
-      <!-- 审核信息 -->
-      <view v-if="reimbursement.status !== 'PENDING_REVIEW'" class="section review-section">
-        <text class="section-title">审核信息</text>
-        <view class="review-info">
-          <view class="info-row">
-            <text class="label">审核人:</text>
-            <text class="value">{{ reimbursement.reviewedBy?.nickname || '-' }}</text>
-          </view>
-          <view class="info-row">
-            <text class="label">审核时间:</text>
-            <text class="value">{{ formatFullDateTime(reimbursement.reviewedAt) }}</text>
-          </view>
-          <view v-if="reimbursement.reviewComment" class="info-row comment">
-            <text class="label">审核意见:</text>
-            <text class="value">{{ reimbursement.reviewComment }}</text>
-          </view>
-        </view>
+      <!-- 管理员上传报销凭证按钮（当没有报销凭证时显示） -->
+      <view
+        v-if="isAdmin && (!reimbursement.paymentProofUrls || reimbursement.paymentProofUrls.length === 0)"
+        class="bottom-actions"
+      >
+        <button
+          class="action-btn upload"
+          @tap="uploadPaymentProof"
+          :loading="uploading"
+        >
+          <text v-if="!uploading">上传报销凭证</text>
+          <text v-else>上传中...</text>
+        </button>
       </view>
 
       <!-- 重新提交按钮 -->
@@ -208,16 +261,51 @@
 </template>
 
 <script setup lang="ts">
+// 强制重新编译标记 2026-01-26 20:47 - 清空报销凭证功能修复
 import { ref, computed, onMounted } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
-import { getReimbursementDetail, resubmitReimbursement } from '@/api/purchasing';
+import {
+  getReimbursementDetail,
+  resubmitReimbursement,
+  uploadPaymentProofFiles,
+  clearPaymentProof as clearPaymentProofApi,
+  appendReceiptUrls,
+  removeReceiptUrl
+} from '@/api/purchasing';
 
 // 状态管理
 const reimbursementId = ref('');
 const reimbursement = ref<any>(null);
 const loading = ref(true);
 const resubmitting = ref(false);
+const uploading = ref(false);
+const uploadingReceipts = ref(false);
 const expandedItems = ref<Record<number, boolean>>({});
+
+// 判断是否为管理员
+const isAdmin = computed(() => {
+  const user = uni.getStorageSync('user');
+  return user && user.role === 'ADMIN';
+});
+
+// 立即输出管理员状态测试
+console.log('🔴 立即执行测试 - isAdmin:', isAdmin.value);
+
+// 判断是否可以编辑支付凭证
+const canEditReceipts = computed(() => {
+  const user = uni.getStorageSync('user');
+  if (!user || !reimbursement.value) return false;
+
+  // 管理员或提交者可以编辑
+  const isOwner = user.id === reimbursement.value.submittedById;
+  const canEdit = isAdmin.value || isOwner;
+
+  // 只有待审核、被驳回、需重新提交状态可以编辑
+  const editableStatuses = ['PENDING_REVIEW', 'REJECTED', 'REQUIRES_RESUBMIT'];
+  const statusEditable = editableStatuses.includes(reimbursement.value.status);
+
+  return canEdit && statusEditable;
+});
 
 // 计算属性
 const costDiff = computed(() => {
@@ -309,6 +397,17 @@ const loadDetail = async () => {
 
     if (res.code === 0) {
       reimbursement.value = res.data;
+
+      // 调试日志 - 强制触发重新编译
+      console.log('='.repeat(50));
+      console.log('=== 报销单详情调试信息 ===');
+      console.log('1. 完整数据:', res.data);
+      console.log('2. paymentProofUrls:', res.data.paymentProofUrls);
+      console.log('3. paymentProofUrls长度:', res.data.paymentProofUrls?.length || 0);
+      console.log('4. 用户信息:', uni.getStorageSync('user'));
+      console.log('5. isAdmin:', isAdmin.value);
+      console.log('6. 是否显示上传按钮:', isAdmin.value && (!res.data.paymentProofUrls || res.data.paymentProofUrls.length === 0));
+      console.log('='.repeat(50));
     } else {
       uni.showToast({ title: res.message || '加载失败', icon: 'none' });
     }
@@ -335,6 +434,16 @@ const previewPhoto = (currentUrl: string) => {
   }
 };
 
+// 预览报销凭证
+const previewPaymentProof = (currentUrl: string) => {
+  if (reimbursement.value && reimbursement.value.paymentProofUrls) {
+    uni.previewImage({
+      urls: reimbursement.value.paymentProofUrls,
+      current: currentUrl,
+    });
+  }
+};
+
 // 重新提交
 const resubmit = () => {
   uni.showModal({
@@ -352,11 +461,163 @@ const resubmit = () => {
   });
 };
 
+// 上传报销凭证
+const uploadPaymentProof = async () => {
+  // 选择图片
+  const res = await uni.chooseImage({
+    count: 9,
+    sizeType: ['compressed'],
+  });
+
+  if (!res.tempFilePaths || res.tempFilePaths.length === 0) {
+    return;
+  }
+
+  uploading.value = true;
+
+  try {
+    // 调用后端API上传文件（会自动处理COS上传）
+    await uploadPaymentProofFiles(reimbursementId.value, res.tempFilePaths);
+
+    uni.showToast({
+      title: '上传成功',
+      icon: 'success',
+    });
+
+    // 刷新详情
+    await loadDetail();
+  } catch (error: any) {
+    console.error('上传报销凭证失败', error);
+    uni.showToast({
+      title: error.message || '上传失败',
+      icon: 'none',
+    });
+  } finally {
+    uploading.value = false;
+  }
+};
+
+// 清空报销凭证
+const clearPaymentProof = async () => {
+  uni.showModal({
+    title: '确认清空',
+    content: '确定要清空所有报销凭证吗？此操作不可恢复。',
+    confirmText: '清空',
+    confirmColor: '#ff4444',
+    success: async (res) => {
+      if (res.confirm) {
+        uploading.value = true;
+
+        try {
+          // 调用后端API清空报销凭证（DELETE请求）
+          await clearPaymentProofApi(reimbursementId.value);
+
+          uni.showToast({
+            title: '清空成功',
+            icon: 'success',
+          });
+
+          // 刷新详情
+          await loadDetail();
+        } catch (error: any) {
+          console.error('清空报销凭证失败', error);
+          uni.showToast({
+            title: error.message || '清空失败',
+            icon: 'none',
+          });
+        } finally {
+          uploading.value = false;
+        }
+      }
+    },
+  });
+};
+
+// 追加支付凭证
+const appendReceiptPhotos = async () => {
+  // 检查当前图片数量
+  const currentCount = reimbursement.value?.receiptUrls?.length || 0;
+  const maxCount = 10;
+  const canUpload = maxCount - currentCount;
+
+  if (canUpload <= 0) {
+    uni.showToast({
+      title: '最多只能上传10张图片',
+      icon: 'none',
+    });
+    return;
+  }
+
+  // 选择图片
+  const res = await uni.chooseImage({
+    count: canUpload,
+    sizeType: ['compressed'],
+  });
+
+  if (!res.tempFilePaths || res.tempFilePaths.length === 0) {
+    return;
+  }
+
+  uploadingReceipts.value = true;
+
+  try {
+    // 调用后端API上传文件
+    await appendReceiptUrls(reimbursementId.value, res.tempFilePaths);
+
+    uni.showToast({
+      title: '上传成功',
+      icon: 'success',
+    });
+
+    // 刷新详情
+    await loadDetail();
+  } catch (error: any) {
+    console.error('上传支付凭证失败', error);
+    uni.showToast({
+      title: error.message || '上传失败',
+      icon: 'none',
+    });
+  } finally {
+    uploadingReceipts.value = false;
+  }
+};
+
+// 删除支付凭证
+const removeReceiptPhoto = async (index: number) => {
+  uni.showModal({
+    title: '确认删除',
+    content: '确定要删除这张支付凭证吗？',
+    confirmText: '删除',
+    confirmColor: '#ff4444',
+    success: async (res) => {
+      if (res.confirm) {
+        try {
+          await removeReceiptUrl(reimbursementId.value, index);
+
+          uni.showToast({
+            title: '删除成功',
+            icon: 'success',
+          });
+
+          // 刷新详情
+          await loadDetail();
+        } catch (error: any) {
+          console.error('删除支付凭证失败', error);
+          uni.showToast({
+            title: error.message || '删除失败',
+            icon: 'none',
+          });
+        }
+      }
+    },
+  });
+};
+
 // 获取状态文本
 const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
     'PENDING_REVIEW': '待审核',
-    'APPROVED': '已批准',
+    'REIMBURSED': '已报销',
     'REJECTED': '已驳回',
     'REQUIRES_RESUBMIT': '需重新提交',
   };
@@ -367,7 +628,7 @@ const getStatusText = (status: string) => {
 const getStatusClass = (status: string) => {
   const classMap: Record<string, string> = {
     'PENDING_REVIEW': 'pending',
-    'APPROVED': 'approved',
+    'REIMBURSED': 'reimbursed',
     'REJECTED': 'rejected',
     'REQUIRES_RESUBMIT': 'resubmit',
   };
@@ -483,7 +744,7 @@ const formatDate = (dateStr: string) => {
         color: #fa8c16;
       }
 
-      &.approved {
+      &.reimbursed {
         background-color: #e8f5e9;
         color: #37b24d;
       }
@@ -707,6 +968,12 @@ const formatDate = (dateStr: string) => {
   gap: 16rpx;
 }
 
+.photo-item-wrapper {
+  position: relative;
+  width: 200rpx;
+  height: 200rpx;
+}
+
 .photo-item {
   width: 200rpx;
   height: 200rpx;
@@ -715,6 +982,117 @@ const formatDate = (dateStr: string) => {
     width: 100%;
     height: 100%;
     border-radius: 12rpx;
+  }
+}
+
+.delete-btn {
+  position: absolute;
+  top: -10rpx;
+  right: -10rpx;
+  width: 44rpx;
+  height: 44rpx;
+  background-color: #ff4444;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.2);
+  z-index: 10;
+
+  text {
+    color: #fff;
+    font-size: 32rpx;
+    font-weight: bold;
+    line-height: 1;
+  }
+}
+
+.section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 24rpx;
+
+  .section-title {
+    font-size: 30rpx;
+    font-weight: bold;
+    color: #333;
+  }
+
+  .action-buttons {
+    display: flex;
+    gap: 12rpx;
+  }
+}
+
+.action-btn-mini {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8rpx 20rpx;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+  font-weight: bold;
+
+  &.replace {
+    background: linear-gradient(135deg, #4dabf7 0%, #339af0 100%);
+    color: #fff;
+    box-shadow: 0 2rpx 8rpx rgba(51, 154, 240, 0.2);
+  }
+
+  &.delete {
+    background: linear-gradient(135deg, #ff8787 0%, #ff6b6b 100%);
+    color: #fff;
+    box-shadow: 0 2rpx 8rpx rgba(255, 107, 107, 0.2);
+  }
+
+  text {
+    color: inherit;
+  }
+}
+
+.upload-btn-mini {
+  display: flex;
+  align-items: center;
+  gap: 4rpx;
+  padding: 8rpx 16rpx;
+  background: linear-gradient(135deg, #4dabf7 0%, #339af0 100%);
+  border-radius: 8rpx;
+  box-shadow: 0 4rpx 12rpx rgba(51, 154, 240, 0.2);
+
+  text {
+    color: #fff;
+    font-size: 24rpx;
+    font-weight: bold;
+
+    &:first-child {
+      font-size: 32rpx;
+      line-height: 1;
+    }
+  }
+}
+
+.empty-photos {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 60rpx 32rpx;
+  background-color: #f9f9f9;
+  border-radius: 12rpx;
+
+  text {
+    font-size: 26rpx;
+    color: #999;
+
+    &:not(.upload-hint) {
+      margin-bottom: 16rpx;
+    }
+  }
+
+  .upload-hint {
+    color: #1890ff;
+    text-decoration: underline;
   }
 }
 
@@ -775,6 +1153,16 @@ const formatDate = (dateStr: string) => {
       background: linear-gradient(135deg, #ff6b6b 0%, #ee5a6f 100%);
       color: #fff;
       box-shadow: 0 8rpx 16rpx rgba(255, 107, 107, 0.3);
+
+      &:active {
+        opacity: 0.8;
+      }
+    }
+
+    &.upload {
+      background: linear-gradient(135deg, #4dabf7 0%, #339af0 100%);
+      color: #fff;
+      box-shadow: 0 8rpx 16rpx rgba(51, 154, 240, 0.3);
 
       &:active {
         opacity: 0.8;

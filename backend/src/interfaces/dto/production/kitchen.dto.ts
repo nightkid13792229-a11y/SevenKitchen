@@ -44,6 +44,9 @@ export class OrderPackagingInfoDto {
 export class PackagingUnitDetailDto {
   id!: string;
 
+  @IsOptional()
+  productionBatchId?: string; // 生产批次ID，用于删除操作
+
   recipeName!: string;
   recipeVersion!: number;
 

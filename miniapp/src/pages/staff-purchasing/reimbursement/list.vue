@@ -66,20 +66,6 @@
             </view>
           </view>
 
-          <!-- 采购清单信息 -->
-          <view class="item-purchases">
-            <text class="purchases-title">包含 {{ item.purchaseLists?.length || 0 }} 个采购清单</text>
-            <view class="purchases-list">
-              <text
-                v-for="(list, index) in item.purchaseLists"
-                :key="index"
-                class="purchase-tag"
-              >
-                {{ formatDate(list.targetDate) }}
-              </text>
-            </view>
-          </view>
-
           <!-- 审核信息 -->
           <view v-if="item.status !== 'PENDING_REVIEW'" class="item-review">
             <text class="review-info">
@@ -115,7 +101,7 @@ import { getMyReimbursements, deleteReimbursement } from '@/api/purchasing';
 const statusTabs = [
   { label: '全部', value: '' },
   { label: '待审核', value: 'PENDING_REVIEW' },
-  { label: '已批准', value: 'APPROVED' },
+  { label: '已报销', value: 'REIMBURSED' },
   { label: '已驳回', value: 'REJECTED' },
   { label: '需重提', value: 'REQUIRES_RESUBMIT' },
 ];
@@ -206,7 +192,7 @@ const goToSubmit = () => {
 const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
     'PENDING_REVIEW': '待审核',
-    'APPROVED': '已批准',
+    'REIMBURSED': '已报销',
     'REJECTED': '已驳回',
     'REQUIRES_RESUBMIT': '需重新提交',
   };
@@ -217,7 +203,7 @@ const getStatusText = (status: string) => {
 const getStatusClass = (status: string) => {
   const classMap: Record<string, string> = {
     'PENDING_REVIEW': 'pending',
-    'APPROVED': 'approved',
+    'REIMBURSED': 'reimbursed',
     'REJECTED': 'rejected',
     'REQUIRES_RESUBMIT': 'resubmit',
   };
@@ -441,7 +427,7 @@ const confirmDelete = (item: any) => {
         color: #fa8c16;
       }
 
-      &.approved {
+      &.reimbursed {
         background-color: #e8f5e9;
         color: #37b24d;
       }

@@ -15,6 +15,7 @@ export interface GlobalConfig {
   laborHourlyRate: number;
   minOrderWeightG: number;
   defaultBatchCapacityG: number;
+  minPotWeightG: number;
   targetMargin: number;
   overheadCostPerKg: number;
   targetBatchUtilization: number;

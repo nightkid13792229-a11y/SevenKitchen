@@ -20,6 +20,7 @@ interface OrderData {
   type: string;
   createdAt?: string; // ISO timestamp string
   targetProductionDate: string | null;
+  originalTargetProductionDate: string | null;
   amountProduct: number;
   amountShipping: number;
   amountTotal: number;
@@ -162,6 +163,7 @@ export class FileBackedOrderRepository
       data.type as any,
       data.createdAt ? new Date(data.createdAt) : new Date(),
       data.targetProductionDate ? new Date(data.targetProductionDate) : null,
+      data.originalTargetProductionDate ? new Date(data.originalTargetProductionDate) : null,
       data.amountProduct,
       data.amountShipping,
       data.amountTotal,
@@ -213,6 +215,9 @@ export class FileBackedOrderRepository
       type: order.type,
       targetProductionDate: order.targetProductionDate
         ? order.targetProductionDate.toISOString()
+        : null,
+      originalTargetProductionDate: (order as any).originalTargetProductionDate
+        ? (order as any).originalTargetProductionDate.toISOString()
         : null,
       amountProduct: order.amountProduct,
       amountShipping: order.amountShipping,

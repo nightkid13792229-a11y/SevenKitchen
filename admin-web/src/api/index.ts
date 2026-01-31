@@ -75,13 +75,17 @@ api.interceptors.response.use(
     }
   },
   (error) => {
+    // Don't show error message for 401 (already handled by auth interceptor)
+    if (error.response?.status !== 401) {
+      ElMessage.error(error.response?.data?.message || error.message || '网络错误')
+    }
+
     if (error.response?.status === 401) {
       ElMessage.error('登录已过期，请重新登录')
       localStorage.removeItem('admin_token')
       window.location.href = '/login'
-    } else {
-      ElMessage.error(error.message || '网络错误')
     }
+
     return Promise.reject(error)
   }
 )

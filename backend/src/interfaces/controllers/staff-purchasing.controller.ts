@@ -19,6 +19,7 @@ import {
   BadRequestException,
   Req,
   UploadedFile,
+  UploadedFiles,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -30,7 +31,7 @@ import {
   ApiSecurity,
   ApiConsumes,
 } from '@nestjs/swagger';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { PurchasingService } from '../../application/purchasing/purchasing.service';
 import type {
   GeneratePurchaseListDto,
@@ -984,6 +985,106 @@ export class StaffPurchasingController {
     const reimbursement = await this.reimbursementService.resubmitReimbursement(id, dto);
 
     return ApiResponseDto.success(reimbursement, '报销单重新提交成功');
+  }
+
+  @Post('reimbursements/:id/receipts')
+  @ApiOperation({ summary: '追加支付凭证（发票照片）' })
+  @ApiParam({ name: 'id', description: '报销单ID' })
+  @ApiConsumes('multipart/form-data')
+  @ApiResponse({
+    status: 200,
+    description: '上传成功',
+    schema: {
+      type: 'object',
+      properties: {
+        code: { type: 'number', example: 0 },
+        message: { type: 'string', example: 'success' },
+        data: {
+          type: 'object',
+          properties: {
+            id: { type: 'string' },
+            receiptUrls: { type: 'array', items: { type: 'string' } },
+          },
+        },
+      },
+    },
+  })
+  @UseInterceptors(FilesInterceptor('files', 10))
+  async appendReceiptUrls(
+    @Param('id') id: string,
+    @UploadedFiles() files: Express.Multer.File[],
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<any>> {
+    this.logger.log(`Appending receipt URLs for reimbursement: ${id} by user ${userId}`);
+
+    if (!files || files.length === 0) {
+      throw new BadRequestException('请至少上传一张图片');
+    }
+
+    // Validate file size (10MB max per file)
+    const maxSize = 10 * 1024 * 1024;
+    for (const file of files) {
+      if (file.size > maxSize) {
+        throw new BadRequestException('文件大小不能超过10MB');
+      }
+    }
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    for (const file of files) {
+      if (!allowedTypes.includes(file.mimetype)) {
+        throw new BadRequestException('只支持JPG、PNG、GIF、WEBP格式的文件');
+      }
+    }
+
+    const reimbursement = await this.reimbursementService.appendReceiptUrls(
+      id,
+      files,
+      userId,
+      false
+    );
+
+    return ApiResponseDto.success(reimbursement, '支付凭证上传成功');
+  }
+
+  @Delete('reimbursements/:id/receipts')
+  @ApiOperation({ summary: '删除支付凭证（发票照片）' })
+  @ApiParam({ name: 'id', description: '报销单ID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        urlIndex: {
+          type: 'number',
+          description: '要删除的图片索引（从0开始）',
+        },
+      },
+      required: ['urlIndex'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: '删除成功',
+  })
+  async removeReceiptUrl(
+    @Param('id') id: string,
+    @Body() body: { urlIndex: number },
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<any>> {
+    this.logger.log(`Removing receipt at index ${body.urlIndex} from reimbursement: ${id} by user ${userId}`);
+
+    if (body.urlIndex === undefined || body.urlIndex === null) {
+      throw new BadRequestException('请提供要删除的图片索引');
+    }
+
+    const reimbursement = await this.reimbursementService.removeReceiptUrl(
+      id,
+      body.urlIndex,
+      userId,
+      false
+    );
+
+    return ApiResponseDto.success(reimbursement, '支付凭证删除成功');
   }
 
   /**

@@ -95,6 +95,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
+import { request } from '../../utils/api';
 
 const user = ref<any>(null);
 const isStaff = ref(false);
@@ -134,11 +135,40 @@ onShow(() => {
 const checkPermission = () => {
   console.log('[StaffWorkbench] checkPermission called');
 
-  const storedUser = uni.getStorageSync('user');
+  // 先尝试从storage读取，使用正确的key 'user'
+  let storedUser = uni.getStorageSync('user');
+
+  // 如果user为空，尝试userInfo key
+  if (!storedUser || storedUser === '{}' || storedUser === '') {
+    console.log('[StaffWorkbench] user key empty, trying userInfo key');
+    storedUser = uni.getStorageSync('userInfo');
+  }
+
   console.log('[StaffWorkbench] Stored user:', storedUser);
 
-  if (!storedUser || (storedUser.role !== 'STAFF' && storedUser.role !== 'ADMIN')) {
-    console.log('[StaffWorkbench] Permission denied - user:', storedUser);
+  // 解析用户数据（storage可能返回字符串）
+  let userData = storedUser;
+  if (typeof storedUser === 'string') {
+    try {
+      userData = JSON.parse(storedUser);
+    } catch (e) {
+      console.error('[StaffWorkbench] Failed to parse user data:', e);
+      userData = null;
+    }
+  }
+
+  // 验证用户角色
+  if (!userData || !userData.role || (userData.role !== 'STAFF' && userData.role !== 'ADMIN')) {
+    console.log('[StaffWorkbench] Permission denied - user:', userData);
+
+    // 如果有token但用户信息无效，尝试从API重新加载
+    const token = uni.getStorageSync('token');
+    if (token && (!userData || !userData.role)) {
+      console.log('[StaffWorkbench] Has token but no user data, fetching from API');
+      loadUserInfoFromApi();
+      return;
+    }
+
     isStaff.value = false;
     uni.showToast({
       title: '权限不足',
@@ -150,9 +180,38 @@ const checkPermission = () => {
     return;
   }
 
-  console.log('[StaffWorkbench] Permission granted - user:', storedUser);
-  user.value = storedUser;
+  console.log('[StaffWorkbench] Permission granted - user:', userData);
+  user.value = userData;
   isStaff.value = true;
+};
+
+const loadUserInfoFromApi = async () => {
+  try {
+    const res = await request({
+      url: '/users/me',
+      method: 'GET'
+    });
+
+    if (res.code === 0 && res.data) {
+      console.log('[StaffWorkbench] User info loaded from API:', res.data);
+      // 更新storage
+      uni.setStorageSync('user', res.data);
+
+      // 重新检查权限
+      checkPermission();
+    } else {
+      throw new Error('Failed to load user info');
+    }
+  } catch (error) {
+    console.error('[StaffWorkbench] Failed to load user info from API:', error);
+    uni.showToast({
+      title: '加载用户信息失败',
+      icon: 'none'
+    });
+    setTimeout(() => {
+      uni.switchTab({ url: '/pages/home/index' });
+    }, 1500);
+  }
 };
 
 const loadStats = async () => {

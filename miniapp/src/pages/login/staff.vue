@@ -132,6 +132,10 @@ const handleLogin = async () => {
       uni.setStorageSync('token', token);
       uni.setStorageSync('user', user);
 
+      // 触发登录状态变化通知（让TabBar知道用户已登录）
+      const currentTrigger = uni.getStorageSync('userLoginTrigger') || 0;
+      uni.setStorageSync('userLoginTrigger', currentTrigger + 1);
+
       uni.showToast({
         title: '登录成功',
         icon: 'success',

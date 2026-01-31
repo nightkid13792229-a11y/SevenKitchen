@@ -181,12 +181,16 @@ export class AuthController {
       if (!user) {
         console.log('[WeChat Login] Creating new user...');
         // Create new user
+        // Handle both nickName (WeChat format) and nickname (standard format)
+        const userNickname = dto.userInfo?.nickName || dto.userInfo?.nickname || '微信用户';
+        const userAvatar = dto.userInfo?.avatarUrl;
+
         user = await this.prisma.user.create({
           data: {
             wechatOpenid: wechatUser.openid,
             wechatUnionid: wechatUser.unionid,
-            nickname: dto.userInfo?.nickname,
-            avatarUrl: dto.userInfo?.avatarUrl,
+            nickname: userNickname,
+            avatarUrl: userAvatar,
             role: 'CUSTOMER',
             status: 'ACTIVE',
             lastLoginAt: new Date(),
@@ -198,15 +202,20 @@ export class AuthController {
       } else {
         console.log('[WeChat Login] Updating existing user...');
         // Update user info
+        const userNickname = dto.userInfo?.nickName || dto.userInfo?.nickname;
+        const userAvatar = dto.userInfo?.avatarUrl;
+
         user = await this.prisma.user.update({
           where: { id: user.id },
           data: {
-            nickname: dto.userInfo?.nickname || user.nickname,
-            avatarUrl: dto.userInfo?.avatarUrl || user.avatarUrl,
+            nickname: userNickname || user.nickname,
+            avatarUrl: userAvatar || user.avatarUrl,
             lastLoginAt: new Date(),
           },
         });
         console.log('[WeChat Login] Updated user ID:', user.id);
+        console.log('[WeChat Login] Updated user nickname:', user.nickname);
+        console.log('[WeChat Login] Updated user avatarUrl:', user.avatarUrl);
       }
 
       // Verify user is actually in database
@@ -226,6 +235,7 @@ export class AuthController {
 
       console.log('[WeChat Login] Generated token for user:', user.id);
       console.log('[WeChat Login] Returning - userId:', user.id, 'role:', user.role, 'isNewUser:', isNewUser);
+      console.log('[WeChat Login] User object - nickname:', user.nickname, 'avatarUrl:', user.avatarUrl);
       console.log('=== [WeChat Login] END ===\n');
 
       return ApiResponseDto.success({
@@ -235,7 +245,7 @@ export class AuthController {
         isNewUser,
         user: {
           id: user.id,
-          nickname: user.nickname,
+          nickname: user.nickname || '微信用户',
           avatarUrl: user.avatarUrl,
           role: user.role,
         },

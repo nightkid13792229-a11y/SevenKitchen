@@ -333,7 +333,25 @@ function loadRecipeDetail() {
     method: 'GET'
   }).then((res: any) => {
     if (res.code === 0 && res.data) {
+      // Debug: Log API response to diagnose preparationMethod issue
+      console.log('[RecipeDetail] API Response:', {
+        recipeId: res.data.id,
+        recipeName: res.data.name,
+        totalItems: res.data.items?.length,
+        firstItem: res.data.items?.[0] ? {
+          name: res.data.items[0].name,
+          preparationMethod: res.data.items[0].preparationMethod,
+          prepMethodType: typeof res.data.items[0].preparationMethod
+        } : null
+      })
+
       recipe.value = res.data
+
+      // Debug: Log recipe value after assignment
+      console.log('[RecipeDetail] recipe.value.items[0]:', {
+        name: recipe.value.items[0]?.name,
+        preparationMethod: recipe.value.items[0]?.preparationMethod
+      })
     }
   }).catch((err: any) => {
     console.error('Load recipe error:', err)

@@ -215,6 +215,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { request, addFavorite, removeFavorite, checkFavorite } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
+import { useShare } from '@/mixins/shareMixin'
 
 interface RecipeItem {
   ingredientId: string
@@ -277,6 +278,27 @@ const dogId = ref<string | null>(null)
 
 // 健康标签UUID到名称的映射（动态加载）
 const healthTagUuidLabelMap = ref<Record<string, string>>({})
+
+// 配置动态分享功能
+const { onShareAppMessage, onShareTimeline } = useShare({
+  title: computed(() =>
+    recipe.value?.name
+      ? `${recipe.value.name} | Seven的厨房`
+      : '精选食谱 | Seven的厨房'
+  ),
+  imageUrl: computed(() => recipe.value?.coverImageUrl || '/static/share-recipe.png'),
+  path: computed(() =>
+    recipe.value?.id
+      ? `/pages/recipe-detail/index?recipeId=${recipe.value.id}`
+      : '/pages/home/index'
+  )
+})
+
+// 注册分享钩子
+defineExpose({
+  onShareAppMessage,
+  onShareTimeline
+})
 
 // 原料排序（按sortOrder升序）
 const sortedItems = computed(() => {

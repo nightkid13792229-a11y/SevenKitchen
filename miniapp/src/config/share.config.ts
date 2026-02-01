@@ -1,29 +1,29 @@
 /**
  * 微信分享配置
- * 图片存储在腾讯云COS
+ * 图片存储在腾讯云COS，通过CDN加速访问
  */
 
 export const SHARE_CONFIG = {
   /**
    * 全局默认分享图
    * 用途：当其他图片不可用时使用
-   * COS存储桶: sevenkitchen-mvp-123-1392823718 (成都)
+   * CDN域名: img.sevenkitchen.cloud
    */
-  defaultImageUrl: 'https://sevenkitchen-mvp-123-1392823718.cos.ap-chengdu.myqcloud.com/share/share-default.png',
+  defaultImageUrl: 'https://img.sevenkitchen.cloud/share/share-default.png',
 
   /**
    * 首页专属分享图
    * 用途：首页分享
-   * COS存储桶: sevenkitchen-mvp-123-1392823718 (成都)
+   * CDN域名: img.sevenkitchen.cloud
    */
-  homeImageUrl: 'https://sevenkitchen-mvp-123-1392823718.cos.ap-chengdu.myqcloud.com/share/share-home.png',
+  homeImageUrl: 'https://img.sevenkitchen.cloud/share/share-home.png',
 
   /**
    * 食谱类默认分享图
    * 用途：食谱详情页的后备图（当食谱没有封面图时使用）
-   * COS存储桶: sevenkitchen-mvp-123-1392823718 (成都)
+   * CDN域名: img.sevenkitchen.cloud
    */
-  recipeImageUrl: 'https://sevenkitchen-mvp-123-1392823718.cos.ap-chengdu.myqcloud.com/share/share-recipe.png'
+  recipeImageUrl: 'https://img.sevenkitchen.cloud/share/share-recipe.png'
 }
 
 /**

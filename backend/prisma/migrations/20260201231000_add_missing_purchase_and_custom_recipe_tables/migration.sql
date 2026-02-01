@@ -28,6 +28,11 @@ DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'CustomAttachmentType') THEN
         CREATE TYPE "CustomAttachmentType" AS ENUM ('MEDICAL_REPORT', 'LAB_RESULT', 'IMAGE', 'OTHER');
     END IF;
+
+    -- Create ReimbursementStatus if not exists (it may already exist)
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ReimbursementStatus') THEN
+        CREATE TYPE "ReimbursementStatus" AS ENUM ('PENDING_REVIEW', 'REIMBURSED', 'REJECTED', 'REQUIRES_RESUBMIT');
+    END IF;
 END $$;
 
 -- =====================================================

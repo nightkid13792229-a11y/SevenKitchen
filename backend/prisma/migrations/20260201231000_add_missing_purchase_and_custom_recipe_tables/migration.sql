@@ -7,17 +7,28 @@
 -- Step 1: Create Enums
 -- =====================================================
 
-CREATE TYPE IF NOT EXISTS "PurchaseListStatus" AS ENUM ('PENDING', 'COMPLETED');
+-- Check if types exist before creating (DO block to handle errors)
+DO $$ BEGIN
+    -- Create PurchaseListStatus if not exists
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'PurchaseListStatus') THEN
+        CREATE TYPE "PurchaseListStatus" AS ENUM ('PENDING', 'COMPLETED');
+    END IF;
 
-CREATE TYPE IF NOT EXISTS "AftersaleType" AS ENUM ('REFUND', 'REMAKE', 'COMPLAINT', 'RESOLVED');
+    -- Create TargetGoal if not exists
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'TargetGoal') THEN
+        CREATE TYPE "TargetGoal" AS ENUM ('MAINTAIN', 'GAIN_WEIGHT', 'LOSE_WEIGHT', 'HEALTH_SUPPORT');
+    END IF;
 
-CREATE TYPE IF NOT EXISTS "TargetGoal" AS ENUM ('MAINTAIN', 'GAIN_WEIGHT', 'LOSE_WEIGHT', 'HEALTH_SUPPORT');
+    -- Create CustomRecipeStatus if not exists
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'CustomRecipeStatus') THEN
+        CREATE TYPE "CustomRecipeStatus" AS ENUM ('PENDING_PAYMENT', 'PAID', 'IN_PROGRESS', 'DELIVERED');
+    END IF;
 
-CREATE TYPE IF NOT EXISTS "CustomRecipeStatus" AS ENUM ('PENDING_PAYMENT', 'PAID', 'IN_PROGRESS', 'DELIVERED');
-
-CREATE TYPE IF NOT EXISTS "CustomAttachmentType" AS ENUM ('MEDICAL_REPORT', 'LAB_RESULT', 'IMAGE', 'OTHER');
-
-CREATE TYPE IF NOT EXISTS "ReimbursementStatus" AS ENUM ('PENDING_REVIEW', 'REIMBURSED', 'REJECTED', 'REQUIRES_RESUBMIT');
+    -- Create CustomAttachmentType if not exists
+    IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'CustomAttachmentType') THEN
+        CREATE TYPE "CustomAttachmentType" AS ENUM ('MEDICAL_REPORT', 'LAB_RESULT', 'IMAGE', 'OTHER');
+    END IF;
+END $$;
 
 -- =====================================================
 -- Step 2: Create Tables

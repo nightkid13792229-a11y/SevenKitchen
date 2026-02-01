@@ -215,7 +215,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { request, addFavorite, removeFavorite, checkFavorite } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
-import { useShare } from '@/mixins/shareMixin'
 import { CURRENT_SHARE_CONFIG } from '@/config/share.config'
 
 interface RecipeItem {
@@ -281,24 +280,53 @@ const dogId = ref<string | null>(null)
 const healthTagUuidLabelMap = ref<Record<string, string>>({})
 
 // 配置动态分享功能
-const { onShareAppMessage, onShareTimeline } = useShare({
-  title: computed(() =>
-    recipe.value?.name
+defineOptions({
+  onShareAppMessage() {
+    console.log('[Recipe Share] ========== 转发给朋友分享函数被调用 ==========')
+    console.log('[Recipe Share] 当前食谱数据:', recipe.value)
+
+    // 动态生成标题
+    const title = recipe.value?.name
       ? `${recipe.value.name} | Seven的厨房`
       : '精选食谱 | Seven的厨房'
-  ),
-  imageUrl: computed(() => recipe.value?.coverImageUrl || CURRENT_SHARE_CONFIG.recipeImageUrl),
-  path: computed(() =>
-    recipe.value?.id
+
+    // 动态选择图片：优先使用食谱封面图，否则使用默认食谱图
+    const imageUrl = recipe.value?.coverImageUrl || CURRENT_SHARE_CONFIG.recipeImageUrl
+
+    // 动态生成路径
+    const path = recipe.value?.id
       ? `/pages/recipe-detail/index?recipeId=${recipe.value.id}`
       : '/pages/home/index'
-  )
-})
 
-// 注册分享钩子
-defineExpose({
-  onShareAppMessage,
-  onShareTimeline
+    const config = { title, imageUrl, path }
+
+    console.log('[Recipe Share] 分享配置:', JSON.stringify(config, null, 2))
+    console.log('[Recipe Share] 标题:', title)
+    console.log('[Recipe Share] 图片URL:', imageUrl)
+    console.log('[Recipe Share] 路径:', path)
+
+    return config
+  },
+  onShareTimeline() {
+    console.log('[Recipe Share] ========== 分享到朋友圈函数被调用 ==========')
+    console.log('[Recipe Share] 当前食谱数据:', recipe.value)
+
+    // 动态生成标题
+    const title = recipe.value?.name
+      ? `${recipe.value.name} | Seven的厨房`
+      : '精选食谱 | Seven的厨房'
+
+    // 动态选择图片：优先使用食谱封面图，否则使用默认食谱图
+    const imageUrl = recipe.value?.coverImageUrl || CURRENT_SHARE_CONFIG.recipeImageUrl
+
+    const config = { title, imageUrl }
+
+    console.log('[Recipe Share] 朋友圈配置:', JSON.stringify(config, null, 2))
+    console.log('[Recipe Share] 标题:', title)
+    console.log('[Recipe Share] 图片URL:', imageUrl)
+
+    return config
+  }
 })
 
 // 原料排序（按sortOrder升序）

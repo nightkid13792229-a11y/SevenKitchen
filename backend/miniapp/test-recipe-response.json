@@ -1,0 +1,16 @@
+{
+  "code": 0,
+  "data": {
+    "id": "13f28dfe-42f3-4b73-a906-621096b84dfc",
+    "items": [
+      {
+        "ingredientId": "e210a4ed-224d-4806-9f07-90ff34d0b271",
+        "name": "牛霖",
+        "preparationMethod": "生重、打碎、去油、充分搅拌",
+        "sortOrder": 0,
+        "ingredientType": "FOOD",
+        "ratio": 27.08978328173375
+      }
+    ]
+  }
+}

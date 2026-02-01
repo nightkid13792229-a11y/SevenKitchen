@@ -67,7 +67,6 @@ import { ref, onMounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getFavorites, removeFavorite as apiRemoveFavorite } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
-import { useShare } from '@/mixins/shareMixin'
 import { CURRENT_SHARE_CONFIG } from '@/config/share.config'
 
 interface FavoriteItem {
@@ -167,16 +166,28 @@ onShow(() => {
 })
 
 // 配置分享功能
-const { onShareAppMessage, onShareTimeline } = useShare({
-  title: '我收藏的狗狗食谱 - Seven的厨房',
-  imageUrl: CURRENT_SHARE_CONFIG.defaultImageUrl,
-  path: '/pages/favorite-recipes/index'
-})
-
-// 注册分享钩子
-defineExpose({
-  onShareAppMessage,
-  onShareTimeline
+defineOptions({
+  onShareAppMessage() {
+    console.log('[Favorites Share] ========== 转发给朋友分享函数被调用 ==========')
+    const config = {
+      title: '我收藏的狗狗食谱 - Seven的厨房',
+      imageUrl: CURRENT_SHARE_CONFIG.defaultImageUrl,
+      path: '/pages/favorite-recipes/index'
+    }
+    console.log('[Favorites Share] 分享配置:', JSON.stringify(config, null, 2))
+    console.log('[Favorites Share] 图片URL:', config.imageUrl)
+    return config
+  },
+  onShareTimeline() {
+    console.log('[Favorites Share] ========== 分享到朋友圈函数被调用 ==========')
+    const config = {
+      title: '我收藏的狗狗食谱 - Seven的厨房',
+      imageUrl: CURRENT_SHARE_CONFIG.defaultImageUrl
+    }
+    console.log('[Favorites Share] 朋友圈配置:', JSON.stringify(config, null, 2))
+    console.log('[Favorites Share] 图片URL:', config.imageUrl)
+    return config
+  }
 })
 </script>
 

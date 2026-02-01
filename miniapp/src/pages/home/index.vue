@@ -295,7 +295,6 @@ import { ref, onMounted, computed } from 'vue'
 import { onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
-import { useShare } from '@/mixins/shareMixin'
 import { CURRENT_SHARE_CONFIG } from '@/config/share.config'
 
 interface RecipeItem {
@@ -928,16 +927,28 @@ const checkLoginAndNavigate = (url: string) => {
 }
 
 // 配置分享功能
-const { onShareAppMessage, onShareTimeline } = useShare({
-  title: 'Seven的厨房 - 为您的爱犬定制健康食谱',
-  imageUrl: CURRENT_SHARE_CONFIG.homeImageUrl,
-  path: '/pages/home/index'
-})
-
-// 注册分享钩子
-defineExpose({
-  onShareAppMessage,
-  onShareTimeline
+defineOptions({
+  onShareAppMessage() {
+    console.log('[Home Share] ========== 转发给朋友分享函数被调用 ==========')
+    const config = {
+      title: 'Seven的厨房 - 为您的爱犬定制健康食谱',
+      imageUrl: CURRENT_SHARE_CONFIG.homeImageUrl,
+      path: '/pages/home/index'
+    }
+    console.log('[Home Share] 分享配置:', JSON.stringify(config, null, 2))
+    console.log('[Home Share] 图片URL:', config.imageUrl)
+    return config
+  },
+  onShareTimeline() {
+    console.log('[Home Share] ========== 分享到朋友圈函数被调用 ==========')
+    const config = {
+      title: 'Seven的厨房 - 为您的爱犬定制健康食谱',
+      imageUrl: CURRENT_SHARE_CONFIG.homeImageUrl
+    }
+    console.log('[Home Share] 朋友圈配置:', JSON.stringify(config, null, 2))
+    console.log('[Home Share] 图片URL:', config.imageUrl)
+    return config
+  }
 })
 </script>
 

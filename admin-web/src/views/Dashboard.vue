@@ -168,7 +168,7 @@ const loadData = async () => {
       (o: any) => o.status === 'PENDING_PAYMENT'
     ).length
     stats.value.totalRevenue = ordersList
-      .reduce((sum: number, o: any) => sum + (o.amountTotal || 0), 0)
+      .reduce((sum: number, o: any) => sum + Number(o.amountTotal || 0), 0)
       .toFixed(2)
 
     recentBatches.value = batchesData.slice(0, 5)

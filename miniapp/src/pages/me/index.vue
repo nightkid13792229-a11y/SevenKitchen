@@ -365,6 +365,7 @@ onShow(() => {
 .me-container {
   min-height: 100vh;
   background: #f5f5f5;
+  padding-bottom: 120rpx; /* 避开底部导航栏 */
 }
 
 /* 未登录状态 */

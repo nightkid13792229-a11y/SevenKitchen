@@ -119,11 +119,36 @@ async function handleSubmit() {
   try {
     uni.showLoading({ title: '保存中...' })
 
-    // 上传头像到服务器
+    // 上传头像到服务器（如果是本地文件）
     let uploadedAvatarUrl = avatarUrl.value
+    let avatarUploadFailed = false
+
     if (avatarUrl.value.startsWith('wxfile://') || avatarUrl.value.startsWith('http://tmp/')) {
-      // 这是本地临时文件，需要上传到服务器
-      uploadedAvatarUrl = await uploadAvatar(avatarUrl.value)
+      try {
+        uploadedAvatarUrl = await uploadAvatar(avatarUrl.value)
+      } catch (uploadError: any) {
+        console.error('头像上传失败:', uploadError)
+        avatarUploadFailed = true
+
+        // 如果是 COS 未配置错误，提供友好提示
+        if (uploadError.message && uploadError.message.includes('COS credentials not configured')) {
+          uni.hideLoading()
+          uni.showModal({
+            title: '提示',
+            content: '头像上传功能暂未配置，是否只保存昵称？您可以稍后在"我的"页面重新设置头像。',
+            success: (modalRes) => {
+              if (modalRes.confirm) {
+                // 只保存昵称，跳过头像
+                saveUserInfo(trimmedNickname, null)
+              }
+            }
+          })
+          return
+        }
+
+        // 其他上传错误，继续保存但不更新头像
+        uploadedAvatarUrl = ''
+      }
     }
 
     // 更新用户信息
@@ -132,7 +157,7 @@ async function handleSubmit() {
       method: 'PUT',
       data: {
         nickname: trimmedNickname,
-        avatarUrl: uploadedAvatarUrl
+        avatarUrl: avatarUploadFailed ? undefined : uploadedAvatarUrl
       }
     })
 
@@ -140,15 +165,72 @@ async function handleSubmit() {
 
     if (res.code === 0) {
       uni.showToast({
-        title: '设置成功',
-        icon: 'success'
+        title: avatarUploadFailed ? '昵称保存成功，头像上传失败' : '设置成功',
+        icon: avatarUploadFailed ? 'none' : 'success',
+        duration: avatarUploadFailed ? 3000 : 1500
       })
 
       // 更新本地存储的用户信息
       const user = uni.getStorageSync('user')
       if (user) {
         user.nickname = trimmedNickname
-        user.avatarUrl = uploadedAvatarUrl
+        if (!avatarUploadFailed) {
+          user.avatarUrl = uploadedAvatarUrl
+        }
+        uni.setStorageSync('user', user)
+      }
+
+      // 延迟跳转到"我的"页面
+      setTimeout(() => {
+        uni.switchTab({
+          url: '/pages/me/index'
+        })
+      }, 1500)
+    } else {
+      uni.showToast({
+        title: res.message || '保存失败',
+        icon: 'none'
+      })
+    }
+  } catch (error: any) {
+    uni.hideLoading()
+    console.error('保存失败:', error)
+    uni.showToast({
+      title: error.message || '保存失败，请重试',
+      icon: 'none'
+    })
+  }
+}
+
+// 保存用户信息的辅助函数
+async function saveUserInfo(nickname: string, avatarUrl: string | null) {
+  try {
+    uni.showLoading({ title: '保存中...' })
+
+    const res = await request({
+      url: '/users/me',
+      method: 'PUT',
+      data: {
+        nickname,
+        ...(avatarUrl && { avatarUrl })
+      }
+    })
+
+    uni.hideLoading()
+
+    if (res.code === 0) {
+      uni.showToast({
+        title: '保存成功',
+        icon: 'success'
+      })
+
+      // 更新本地存储的用户信息
+      const user = uni.getStorageSync('user')
+      if (user) {
+        user.nickname = nickname
+        if (avatarUrl) {
+          user.avatarUrl = avatarUrl
+        }
         uni.setStorageSync('user', user)
       }
 

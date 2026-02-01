@@ -4,3 +4,4 @@ node_modules
 
 /generated/prisma
 *.backup
+backup_*.sql

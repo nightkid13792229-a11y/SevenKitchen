@@ -11,8 +11,7 @@
     <view class="login-section">
       <button
         class="wechat-login-btn"
-        open-type="getUserInfo"
-        @getuserinfo="handleWechatLogin"
+        @tap="handleWechatLogin"
         :disabled="loading"
         @agreeprivacyauthorization="handlePrivacyAgree"
       >
@@ -44,15 +43,7 @@ const handlePrivacyAgree = () => {
 };
 
 // 微信授权登录
-const handleWechatLogin = async (e: any) => {
-  if (e.detail.errMsg !== 'getUserInfo:ok' && e.detail.errMsg !== 'getUserInfo:ok') {
-    uni.showToast({
-      title: '需要授权才能登录',
-      icon: 'none',
-    });
-    return;
-  }
-
+const handleWechatLogin = async () => {
   loading.value = true;
 
   try {
@@ -72,13 +63,13 @@ const handleWechatLogin = async (e: any) => {
 
     const code = res.code;
 
-    // 2. 调用后端微信登录接口
+    // 2. 调用后端微信登录接口（不再发送userInfo）
     const response = await request({
       url: '/auth/wechat-login',
       method: 'POST',
       data: {
         code,
-        userInfo: e.detail.userInfo
+        userInfo: {} // 空对象，不再尝试获取用户信息
       }
     });
 
@@ -124,25 +115,40 @@ const handleWechatLogin = async (e: any) => {
         }
       }, 200);
 
-      // 4. 新用户提示
-      if (isNewUser) {
-        uni.showToast({
-          title: '欢迎加入Seven的厨房！',
-          icon: 'success',
-          duration: 2000
-        });
-      } else if (role === 'STAFF' || role === 'ADMIN') {
-        uni.showToast({
-          title: '欢迎回来，' + (role === 'ADMIN' ? '管理员' : '员工'),
-          icon: 'success',
-          duration: 2000
-        });
-      }
+      // 4. 检查是否需要设置头像昵称
+      const needsProfileSetup = !user.avatarUrl || user.avatarUrl === '' ||
+                                !user.nickname || user.nickname === '' ||
+                                user.nickname === '微信用户';
 
-      // 5. 跳转到首页
-      setTimeout(() => {
-        uni.switchTab({ url: '/pages/home/index' });
-      }, 500);
+      console.log('[Login] Needs profile setup:', needsProfileSetup);
+
+      if (needsProfileSetup) {
+        // 新用户或未设置头像昵称，跳转到完善资料页面
+        setTimeout(() => {
+          uni.redirectTo({
+            url: '/pages/profile-setup/index'
+          });
+        }, 500);
+      } else {
+        // 已设置过头像昵称，直接进入首页
+        if (isNewUser) {
+          uni.showToast({
+            title: '欢迎加入Seven的厨房！',
+            icon: 'success',
+            duration: 2000
+          });
+        } else if (role === 'STAFF' || role === 'ADMIN') {
+          uni.showToast({
+            title: '欢迎回来，' + (role === 'ADMIN' ? '管理员' : '员工'),
+            icon: 'success',
+            duration: 2000
+          });
+        }
+
+        setTimeout(() => {
+          uni.switchTab({ url: '/pages/home/index' });
+        }, 500);
+      }
     } else {
       throw new Error(response.message || '登录失败');
     }

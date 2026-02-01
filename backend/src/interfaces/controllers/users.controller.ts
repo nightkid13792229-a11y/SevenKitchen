@@ -7,10 +7,13 @@ import {
   Controller,
   Get,
   Put,
+  Post,
   Body,
   UsePipes,
   ValidationPipe,
   UseGuards,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -19,10 +22,12 @@ import {
   ApiSecurity,
 } from '@nestjs/swagger';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { UserResponseDto, UpdateUserDto } from '../dto/users/user-response.dto';
 import { AuthGuard, CurrentUser } from '../auth';
 import type { RequestUser } from '../auth';
+import { FileInterceptor } from '@nestjs/platform-express';
 
 @ApiTags('Users')
 @Controller('api/v1/users')
@@ -30,7 +35,10 @@ import type { RequestUser } from '../auth';
 @UseGuards(AuthGuard)
 @ApiSecurity('wechat-auth')
 export class UsersController {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cosService: TencentCosService,
+  ) {}
 
   @Get('me')
   @ApiOperation({ summary: '获取当前用户信息' })
@@ -63,6 +71,7 @@ export class UsersController {
       id: userData.id,
       phone: userData.phone ?? undefined,
       nickname: userData.nickname ?? undefined,
+      avatarUrl: userData.avatarUrl ?? undefined,
       role: userData.role,
       createdAt: userData.createdAt,
       updatedAt: userData.updatedAt,
@@ -108,6 +117,7 @@ export class UsersController {
       data: {
         ...(updateUserDto.phone !== undefined && { phone: updateUserDto.phone }),
         ...(updateUserDto.nickname !== undefined && { nickname: updateUserDto.nickname }),
+        ...(updateUserDto.avatarUrl !== undefined && { avatarUrl: updateUserDto.avatarUrl || null }),
       },
       include: {
         _count: {
@@ -126,6 +136,7 @@ export class UsersController {
       id: updatedUser.id,
       phone: updatedUser.phone ?? undefined,
       nickname: updatedUser.nickname ?? undefined,
+      avatarUrl: updatedUser.avatarUrl ?? undefined,
       role: updatedUser.role,
       createdAt: updatedUser.createdAt,
       updatedAt: updatedUser.updatedAt,
@@ -137,5 +148,42 @@ export class UsersController {
     };
 
     return new ApiResponseDto(0, '更新成功', response);
+  }
+
+  @Post('me/avatar')
+  @ApiOperation({ summary: '上传用户头像' })
+  @ApiResponse({
+    status: 200,
+    description: '成功上传头像',
+    type: ApiResponseDto,
+  })
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadAvatar(
+    @CurrentUser() requestUser: RequestUser,
+    @UploadedFile() file: Express.Multer.File,
+  ) {
+    if (!file) {
+      return new ApiResponseDto(400, '请选择头像文件', null);
+    }
+
+    try {
+      // 上传到腾讯云 COS
+      const uploadResult = await this.cosService.uploadImage(
+        file.buffer,
+        file.originalname,
+        `avatars/${requestUser.customerId}`,
+      );
+
+      // 更新用户头像
+      const updatedUser = await this.prisma.user.update({
+        where: { id: requestUser.customerId },
+        data: { avatarUrl: uploadResult.url },
+      });
+
+      return new ApiResponseDto(0, '上传成功', { url: uploadResult.url });
+    } catch (error: any) {
+      console.error('上传头像失败:', error);
+      return new ApiResponseDto(500, error.message || '上传失败', null);
+    }
   }
 }

@@ -18,13 +18,14 @@
     <!-- 已登录状态 -->
     <view v-else class="logged-in">
       <!-- 用户头像区域 -->
-      <view class="user-profile-section">
+      <view class="user-profile-section" @tap="editProfile">
         <image
           class="user-avatar"
           :src="userInfo.avatarUrl || '/static/default-avatar.png'"
           mode="aspectFill"
         ></image>
         <text class="user-nickname">{{ userInfo.nickname || '微信用户' }}</text>
+        <text class="edit-hint">点击编辑资料</text>
       </view>
 
       <!-- 基本信息板块 -->
@@ -144,8 +145,14 @@ async function loadUserInfo() {
       method: 'GET'
     })
 
+    console.log('[Me Page] API Response:', res)
+    console.log('[Me Page] res.data:', res.data)
+
     if (res.code === 0 && res.data) {
       userInfo.value = res.data
+      console.log('[Me Page] userInfo.value after update:', userInfo.value)
+      console.log('[Me Page] nickname:', userInfo.value.nickname)
+      console.log('[Me Page] avatarUrl:', userInfo.value.avatarUrl)
       isLoggedIn.value = true
     } else {
       // 未登录或加载失败
@@ -198,6 +205,13 @@ function goToDiySheetList() {
 function goToFavoriteRecipes() {
   uni.navigateTo({
     url: '/pages/favorite-recipes/index'
+  })
+}
+
+// 编辑资料（头像和昵称）
+function editProfile() {
+  uni.navigateTo({
+    url: '/pages/profile-setup/index'
   })
 }
 
@@ -433,6 +447,12 @@ onShow(() => {
   font-size: 32rpx;
   font-weight: 500;
   color: #333;
+  margin-bottom: 8rpx;
+}
+
+.edit-hint {
+  font-size: 24rpx;
+  color: #999;
 }
 
 .info-section {

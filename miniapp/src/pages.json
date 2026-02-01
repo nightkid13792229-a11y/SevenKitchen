@@ -92,6 +92,12 @@
       }
     },
     {
+      "path": "pages/profile-setup/index",
+      "style": {
+        "navigationBarTitleText": "完善个人资料"
+      }
+    },
+    {
       "path": "pages/recipe-order/index",
       "style": {
         "navigationBarTitleText": "订购成品"

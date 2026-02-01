@@ -295,6 +295,7 @@ import { ref, onMounted, computed } from 'vue'
 import { onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
+import { useShare } from '@/mixins/shareMixin'
 
 interface RecipeItem {
   ingredientId: string
@@ -924,6 +925,19 @@ const checkLoginAndNavigate = (url: string) => {
   }
   uni.navigateTo({ url })
 }
+
+// 配置分享功能
+const { onShareAppMessage, onShareTimeline } = useShare({
+  title: 'Seven的厨房 - 为您的爱犬定制健康食谱',
+  imageUrl: '/static/share-home.png',
+  path: '/pages/home/index'
+})
+
+// 注册分享钩子
+defineExpose({
+  onShareAppMessage,
+  onShareTimeline
+})
 </script>
 
 <style scoped>

@@ -68,6 +68,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { getFavorites, removeFavorite as apiRemoveFavorite } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
 import { useShare } from '@/mixins/shareMixin'
+import { CURRENT_SHARE_CONFIG } from '@/config/share.config'
 
 interface FavoriteItem {
   id: string
@@ -168,7 +169,7 @@ onShow(() => {
 // 配置分享功能
 const { onShareAppMessage, onShareTimeline } = useShare({
   title: '我收藏的狗狗食谱 - Seven的厨房',
-  imageUrl: '/static/share-default.png',
+  imageUrl: CURRENT_SHARE_CONFIG.defaultImageUrl,
   path: '/pages/favorite-recipes/index'
 })
 

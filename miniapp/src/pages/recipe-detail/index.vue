@@ -216,6 +216,7 @@ import { ref, computed, onMounted } from 'vue'
 import { request, addFavorite, removeFavorite, checkFavorite } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
 import { useShare } from '@/mixins/shareMixin'
+import { CURRENT_SHARE_CONFIG } from '@/config/share.config'
 
 interface RecipeItem {
   ingredientId: string
@@ -286,7 +287,7 @@ const { onShareAppMessage, onShareTimeline } = useShare({
       ? `${recipe.value.name} | Seven的厨房`
       : '精选食谱 | Seven的厨房'
   ),
-  imageUrl: computed(() => recipe.value?.coverImageUrl || '/static/share-recipe.png'),
+  imageUrl: computed(() => recipe.value?.coverImageUrl || CURRENT_SHARE_CONFIG.recipeImageUrl),
   path: computed(() =>
     recipe.value?.id
       ? `/pages/recipe-detail/index?recipeId=${recipe.value.id}`

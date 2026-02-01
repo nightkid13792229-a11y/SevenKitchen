@@ -296,6 +296,7 @@ import { onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
 import { useShare } from '@/mixins/shareMixin'
+import { CURRENT_SHARE_CONFIG } from '@/config/share.config'
 
 interface RecipeItem {
   ingredientId: string
@@ -929,7 +930,7 @@ const checkLoginAndNavigate = (url: string) => {
 // 配置分享功能
 const { onShareAppMessage, onShareTimeline } = useShare({
   title: 'Seven的厨房 - 为您的爱犬定制健康食谱',
-  imageUrl: '/static/share-home.png',
+  imageUrl: CURRENT_SHARE_CONFIG.homeImageUrl,
   path: '/pages/home/index'
 })
 

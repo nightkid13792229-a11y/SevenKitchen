@@ -1,4 +1,5 @@
 import { ref, type Ref } from 'vue'
+import { CURRENT_SHARE_CONFIG } from '@/config/share.config'
 
 export interface ShareConfig {
   title?: string | Ref<string>
@@ -15,7 +16,7 @@ export interface ShareResult {
 // 默认配置
 const DEFAULT_CONFIG = {
   title: 'Seven的厨房 - 为您的爱犬定制健康食谱',
-  imageUrl: '/static/share-default.png',
+  imageUrl: CURRENT_SHARE_CONFIG.defaultImageUrl,
   path: '/pages/home/index'
 }
 

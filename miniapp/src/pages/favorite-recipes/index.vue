@@ -67,6 +67,7 @@ import { ref, onMounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getFavorites, removeFavorite as apiRemoveFavorite } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
+import { useShare } from '@/mixins/shareMixin'
 
 interface FavoriteItem {
   id: string
@@ -162,6 +163,19 @@ onMounted(() => {
 // 页面显示时重新加载（从其他页面返回时）
 onShow(() => {
   loadFavorites()
+})
+
+// 配置分享功能
+const { onShareAppMessage, onShareTimeline } = useShare({
+  title: '我收藏的狗狗食谱 - Seven的厨房',
+  imageUrl: '/static/share-default.png',
+  path: '/pages/favorite-recipes/index'
+})
+
+// 注册分享钩子
+defineExpose({
+  onShareAppMessage,
+  onShareTimeline
 })
 </script>
 

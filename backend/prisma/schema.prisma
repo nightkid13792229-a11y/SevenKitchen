@@ -8,41 +8,41 @@ datasource db {
 }
 
 model Order {
-  id                       String               @id @default(uuid()) @map("id")
-  customerId               String               @map("customer_id")
-  status                   OrderStatus
-  type                     OrderType
-  createdAt                DateTime             @default(now()) @map("created_at")
-  targetProductionDate     DateTime?            @map("target_production_date")
-  originalTargetProductionDate DateTime?        @map("original_target_production_date")
-  amountProduct            Decimal              @map("amount_product")
-  amountShipping           Decimal              @map("amount_shipping")
-  amountTotal              Decimal              @map("amount_total")
-  totalAmount              Decimal?             @map("total_amount")
-  pricingBreakdownSnapshot Json?                @map("pricing_breakdown_snapshot")
-  addressId                String?              @map("address_id")
-  dogId                    String?              @map("dog_id")
-  cancelledAt              DateTime?            @map("cancelled_at")
-  cancellationReason       String?              @map("cancellation_reason")
-  cancelledBy              String?              @map("cancelled_by")
-  paymentMethod            String?              @map("payment_method")
-  transactionId            String?              @map("transaction_id")
-  paidAt                   DateTime?            @map("paid_at")
-  paymentStatus            String?              @map("payment_status")
-  trackingNumber           String?              @map("tracking_number")
-  carrierCode              String?              @map("carrier_code")
-  shippedAt                DateTime?            @map("shipped_at")
-  completedAt              DateTime?            @map("completed_at")
-  aftersaleType            AftersaleType?       @map("aftersale_type")
-  freezingSince            DateTime?            @map("freezing_since")
-  aftersaleSince           DateTime?            @map("aftersale_since")
-  aftersaleReason          String?              @map("aftersale_reason")
-  aftersalePhotos          String[]             @default([]) @map("aftersale_photos")
-  customer                 User                 @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  dog                      Dog?                 @relation(fields: [dogId], references: [id], onDelete: SetNull)  // 🔧 添加：狗狗关联
-  address                  Address?             @relation(fields: [addressId], references: [id], onDelete: SetNull)  // 🔧 添加：地址关联
-  items                    OrderItem[]
-  statusHistory            OrderStatusHistory[]
+  id                           String               @id @default(uuid()) @map("id")
+  customerId                   String               @map("customer_id")
+  status                       OrderStatus
+  type                         OrderType
+  targetProductionDate         DateTime?            @map("target_production_date")
+  amountProduct                Decimal              @map("amount_product")
+  amountShipping               Decimal              @map("amount_shipping")
+  amountTotal                  Decimal              @map("amount_total")
+  totalAmount                  Decimal?             @map("total_amount")
+  pricingBreakdownSnapshot     Json?                @map("pricing_breakdown_snapshot")
+  addressId                    String?              @map("address_id")
+  dogId                        String?              @map("dog_id")
+  cancelledAt                  DateTime?            @map("cancelled_at")
+  cancellationReason           String?              @map("cancellation_reason")
+  cancelledBy                  String?              @map("cancelled_by")
+  paymentMethod                String?              @map("payment_method")
+  transactionId                String?              @map("transaction_id")
+  paidAt                       DateTime?            @map("paid_at")
+  paymentStatus                String?              @map("payment_status")
+  trackingNumber               String?              @map("tracking_number")
+  carrierCode                  String?              @map("carrier_code")
+  shippedAt                    DateTime?            @map("shipped_at")
+  completedAt                  DateTime?            @map("completed_at")
+  createdAt                    DateTime             @default(now()) @map("created_at")
+  aftersaleType                AftersaleType?       @map("aftersale_type")
+  freezingSince                DateTime?            @map("freezing_since")
+  aftersaleSince               DateTime?            @map("aftersale_since")
+  aftersaleReason              String?              @map("aftersale_reason")
+  aftersalePhotos              String[]             @default([]) @map("aftersale_photos")
+  originalTargetProductionDate DateTime?            @map("original_target_production_date") @db.Timestamp(6)
+  address                      Address?             @relation(fields: [addressId], references: [id])
+  customer                     User                 @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  dog                          Dog?                 @relation(fields: [dogId], references: [id])
+  items                        OrderItem[]
+  statusHistory                OrderStatusHistory[]
 
   @@index([customerId])
   @@index([status])
@@ -53,12 +53,12 @@ model Order {
 model OrderStatusHistory {
   id         String      @id @default(uuid()) @map("id")
   orderId    String      @map("order_id")
-  fromStatus OrderStatus @map("from_status")
-  toStatus   OrderStatus @map("to_status")
   timestamp  DateTime    @default(now()) @map("timestamp")
   actor      String      @map("actor")
   actorId    String?     @map("actor_id")
   metadata   Json?       @map("metadata")
+  fromStatus OrderStatus @map("from_status")
+  toStatus   OrderStatus @map("to_status")
   order      Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
@@ -69,18 +69,18 @@ model OrderStatusHistory {
 model OrderItem {
   id                 String    @id @default(uuid()) @map("id")
   orderId            String    @map("order_id")
-  dogId              String?   @map("dog_id")
   recipeSnapshot     Json      @map("recipe_snapshot")
   quantityG          Float     @map("quantity_g")
   packageCount       Int       @map("package_count")
   packageSpecG       Int       @map("package_spec_g")
   customRequirements String?   @map("custom_requirements")
   dailyIntakeG       Float?    @map("daily_intake_g")
-  vacuumBagSpec      String?   @map("vacuum_bag_spec") @db.VarChar(20)
-  preparationMethod  String?   @map("preparation_method") @db.VarChar(20)
-  cookingMethod      String?   @map("cooking_method") @db.VarChar(20)
   allocatedAt        DateTime? @map("allocated_at")
   productionBatchId  String?   @map("production_batch_id")
+  cookingMethod      String?   @map("cooking_method") @db.VarChar(20)
+  preparationMethod  String?   @map("preparation_method") @db.VarChar(20)
+  dogId              String?   @map("dog_id")
+  vacuumBagSpec      String?   @map("vacuum_bag_spec") @db.VarChar(20)
   order              Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@index([orderId])
@@ -89,29 +89,28 @@ model OrderItem {
   @@map("order_item")
 }
 
-
 model User {
-  id              String          @id @default(uuid()) @map("id")
-  phone           String?         @unique @map("phone") @db.VarChar(20)
-  wechatOpenid    String?         @unique @map("wechat_openid") @db.VarChar(100)
-  nickname        String?         @map("nickname") @db.VarChar(100)
-  role            UserRole        @default(CUSTOMER) @map("role")
-  createdAt       DateTime        @default(now()) @map("created_at")
-  updatedAt       DateTime        @updatedAt @map("updated_at")
-  avatarUrl       String?         @map("avatar_url")
-  lastLoginAt     DateTime?       @map("last_login_at")
-  status          UserStatus      @default(ACTIVE) @map("status")
-  wechatUnionid   String?         @unique @map("wechat_unionid") @db.VarChar(100)
-  password        String?         @map("password") @db.VarChar(255)
-  addresses       Address[]
-  dogs            Dog[]
-  orders          Order[]
-  diySheets       DIYSheet[]
-  favoriteRecipes FavoriteRecipe[]
-  createdPurchaseLists  PurchaseList[]      @relation("PurchaseListCreator")
-  submittedReimbursements Reimbursement[]   @relation("ReimbursementSubmitter")
-  reviewedReimbursements  Reimbursement[]  @relation("ReimbursementReviewer")
-  customRecipeOrders CustomRecipeOrder[]    @relation("CustomRecipeOrderCustomer")
+  id                      String              @id @default(uuid()) @map("id")
+  phone                   String?             @unique @map("phone") @db.VarChar(20)
+  wechatOpenid            String?             @unique @map("wechat_openid") @db.VarChar(100)
+  nickname                String?             @map("nickname") @db.VarChar(100)
+  role                    UserRole            @default(CUSTOMER) @map("role")
+  createdAt               DateTime            @default(now()) @map("created_at")
+  updatedAt               DateTime            @updatedAt @map("updated_at")
+  avatarUrl               String?             @map("avatar_url")
+  lastLoginAt             DateTime?           @map("last_login_at")
+  status                  UserStatus          @default(ACTIVE) @map("status")
+  wechatUnionid           String?             @unique @map("wechat_unionid") @db.VarChar(100)
+  password                String?             @map("password") @db.VarChar(255)
+  addresses               Address[]
+  customRecipeOrders      CustomRecipeOrder[] @relation("CustomRecipeOrderCustomer")
+  diySheets               DIYSheet[]
+  dogs                    Dog[]
+  favoriteRecipes         FavoriteRecipe[]
+  orders                  Order[]
+  createdPurchaseLists    PurchaseList[]      @relation("PurchaseListCreator")
+  reviewedReimbursements  Reimbursement[]     @relation("ReimbursementReviewer")
+  submittedReimbursements Reimbursement[]     @relation("ReimbursementSubmitter")
 
   @@index([wechatOpenid])
   @@index([phone])
@@ -127,7 +126,7 @@ model Address {
   detail        String  @map("detail")
   isDefault     Boolean @map("is_default")
   user          User    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  orders        Order[]  // 🔧 添加：一个地址可以有多个订单
+  orders        Order[]
 
   @@index([userId])
   @@map("address")
@@ -149,36 +148,36 @@ model DogBreed {
 }
 
 model Dog {
-  id                   String            @id @default(uuid()) @map("id")
-  ownerId              String            @map("owner_id")
-  name                 String            @map("name")
-  breedId              String            @map("breed_id")
-  birthday             DateTime          @map("birthday")
-  gender               DogGender         @map("gender")
-  isNeutered           Boolean           @map("is_neutered")
-  currentWeightKg      Float             @map("current_weight_kg")
-  bcsScore             Int               @map("bcs_score")
-  activityLevel        ActivityLevel     @map("activity_level")
-  lifeStageOverride    LifeStageOverride @map("life_stage_override")
-  sizeClassOverride    DogSizeCategory?  @map("size_class_override")
-  mealsPerDay          Int               @default(2) @map("meals_per_day")
-  treatInputMode       TreatInputMode    @default(ESTIMATE_LEVEL) @map("treat_input_mode")
-  treatLevel           TreatLevel        @default(LOW) @map("treat_level")
-  manualTreatKcal      Int?              @map("manual_treat_kcal")
-  medicalHistory       String?           @map("medical_history")
-  cachedTargetFoodKcal Int               @default(0) @map("cached_target_food_kcal")
-  createdAt            DateTime          @default(now()) @map("created_at")
-  customBreedName      String?           @map("custom_breed_name")
-  allergyFoods         String?           @map("allergy_foods")
-  pickyFoods           String?           @map("picky_foods")
+  id                   String              @id @default(uuid()) @map("id")
+  ownerId              String              @map("owner_id")
+  name                 String              @map("name")
+  breedId              String              @map("breed_id")
+  birthday             DateTime            @map("birthday")
+  gender               DogGender           @map("gender")
+  isNeutered           Boolean             @map("is_neutered")
+  currentWeightKg      Float               @map("current_weight_kg")
+  bcsScore             Int                 @map("bcs_score")
+  activityLevel        ActivityLevel       @map("activity_level")
+  lifeStageOverride    LifeStageOverride   @map("life_stage_override")
+  sizeClassOverride    DogSizeCategory?    @map("size_class_override")
+  mealsPerDay          Int                 @default(2) @map("meals_per_day")
+  treatInputMode       TreatInputMode      @default(ESTIMATE_LEVEL) @map("treat_input_mode")
+  treatLevel           TreatLevel          @default(LOW) @map("treat_level")
+  manualTreatKcal      Int?                @map("manual_treat_kcal")
+  medicalHistory       String?             @map("medical_history")
+  cachedTargetFoodKcal Int                 @default(0) @map("cached_target_food_kcal")
+  createdAt            DateTime            @default(now()) @map("created_at")
+  customBreedName      String?             @map("custom_breed_name")
+  allergyFoods         String?             @map("allergy_foods")
+  pickyFoods           String?             @map("picky_foods")
   allergyRecords       AllergyRecord[]
   checkupRecords       CheckupRecord[]
-  owner                User              @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  customRecipeOrders   CustomRecipeOrder[] @relation("CustomRecipeOrderDog")
+  owner                User                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   medicalRecords       MedicalRecord[]
+  orders               Order[]
   vaccineRecords       VaccineRecord[]
   weightRecords        WeightRecord[]
-  orders               Order[]           // 🔧 添加：一个狗狗可以有多个订单
-  customRecipeOrders   CustomRecipeOrder[] @relation("CustomRecipeOrderDog")
 
   @@index([ownerId])
   @@index([ownerId, createdAt])
@@ -210,33 +209,34 @@ model Recipe {
   targetHealthTags       Json                        @default("[]") @map("target_health_tags")
   videoUrl               String?                     @map("video_url")
   designSource           String?                     @map("design_source")
-  isCustomRecipe         Boolean                     @default(false) @map("is_custom_recipe")
   customOrderId          String?                     @map("custom_order_id")
+  isCustomRecipe         Boolean                     @default(false) @map("is_custom_recipe")
   nutritionReportUrl     String?                     @map("nutrition_report_url")
+  customOrder            CustomRecipeOrder?          @relation("CustomRecipeOrders")
   healthTagAssignments   RecipeHealthTagAssignment[]
   items                  RecipeItem[]
-  customOrder            CustomRecipeOrder?          @relation("CustomRecipeOrders")
 
   @@unique([recipeId, version])
   @@index([recipeId])
   @@index([status])
   @@index([createdAt])
+  @@index([isCustomRecipe])
   @@map("recipe")
 }
 
 model RecipeItem {
-  id                  String  @id @default(uuid()) @map("id")
-  recipeId            String  @map("recipe_id")
-  recipeVersion       Int     @map("recipe_version")
-  ingredientId        String  @map("ingredient_id")
-  preparationMethod   String? @map("preparation_method")
-  ratioPercent        Float?  @map("ratio_percent")
-  exampleWeight       Float?  @map("example_weight")
-  nutrientTargetKey   String? @map("nutrient_target_key")
-  nutrientTargetValue Float?  @map("nutrient_target_value")
-  sortOrder           Int     @default(0) @map("sort_order")
-  recipe              Recipe  @relation(fields: [recipeId, recipeVersion], references: [recipeId, version], onDelete: Cascade)
-  ingredient          Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Restrict)
+  id                  String     @id @default(uuid()) @map("id")
+  recipeId            String     @map("recipe_id")
+  recipeVersion       Int        @map("recipe_version")
+  ingredientId        String     @map("ingredient_id")
+  preparationMethod   String?    @map("preparation_method")
+  ratioPercent        Float?     @map("ratio_percent")
+  nutrientTargetKey   String?    @map("nutrient_target_key")
+  nutrientTargetValue Float?     @map("nutrient_target_value")
+  sortOrder           Int        @default(0) @map("sort_order")
+  exampleWeight       Float?     @map("example_weight")
+  ingredient          Ingredient @relation(fields: [ingredientId], references: [id])
+  recipe              Recipe     @relation(fields: [recipeId, recipeVersion], references: [recipeId, version], onDelete: Cascade)
 
   @@index([recipeId, recipeVersion])
   @@map("recipe_item")
@@ -348,8 +348,8 @@ model Ingredient {
   createdAt                   DateTime                  @default(now()) @map("created_at")
   updatedAt                   DateTime                  @updatedAt @map("updated_at")
   tags                        IngredientTagAssignment[]
-  recipeItems                 RecipeItem[]
   purchaseItems               PurchaseItem[]
+  recipeItems                 RecipeItem[]
 
   @@unique([name, brand, productModel])
   @@index([type])
@@ -466,9 +466,9 @@ model MedicalRecord {
   followUpDate   DateTime?     @map("follow_up_date") @db.Date
   veterinarian   String?       @map("veterinarian")
   notes          String?       @map("notes")
-  attachments    String[]      @default([]) @map("attachments")
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
+  attachments    String[]      @default([]) @map("attachments")
   dog            Dog           @relation(fields: [dogId], references: [id], onDelete: Cascade)
 
   @@index([dogId])
@@ -478,17 +478,266 @@ model MedicalRecord {
 }
 
 model AllergyRecord {
-  id          String     @id @default(uuid()) @map("id")
-  dogId       String     @map("dog_id")
-  allergen    String     @map("allergen")
-  notes       String?    @map("notes")
-  attachments String[]   @default([]) @map("attachments")
-  createdAt   DateTime   @default(now()) @map("created_at")
-  updatedAt   DateTime   @updatedAt @map("updated_at")
-  dog         Dog        @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  id          String   @id @default(uuid()) @map("id")
+  dogId       String   @map("dog_id")
+  allergen    String   @map("allergen")
+  notes       String?  @map("notes")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  attachments String[] @default([]) @map("attachments")
+  dog         Dog      @relation(fields: [dogId], references: [id], onDelete: Cascade)
 
   @@index([dogId])
   @@map("allergy_record")
+}
+
+model OrderPricingSnapshot {
+  id            String   @id @default(uuid()) @map("id")
+  customerId    String   @map("customer_id")
+  requestParams Json     @map("request_params")
+  pricingResult Json     @map("pricing_result")
+  expiresAt     DateTime @map("expires_at")
+  used          Boolean  @default(false) @map("used")
+  createdAt     DateTime @default(now()) @map("created_at")
+
+  @@index([customerId, expiresAt])
+  @@index([expiresAt])
+  @@map("order_pricing_snapshot")
+}
+
+model GlobalConfig {
+  id                        String   @id @default("singleton") @map("id")
+  laborHourlyRate           Decimal  @default(30) @map("labor_hourly_rate")
+  minOrderWeightG           Int      @default(1000) @map("min_order_weight_g")
+  defaultBatchCapacityG     Decimal  @default(5000) @map("default_batch_capacity_g")
+  targetMargin              Decimal  @default(0.4) @map("target_margin")
+  overheadCostPerKg         Decimal  @default(2) @map("overhead_cost_per_kg")
+  targetBatchUtilization    Decimal  @default(0.8) @map("target_batch_utilization")
+  supplementLossRate        Decimal  @default(1.05) @map("supplement_loss_rate")
+  defaultProductLabelId     String?  @map("default_product_label_id")
+  defaultIcePackId          String?  @map("default_ice_pack_id")
+  createdAt                 DateTime @default(now()) @map("created_at")
+  updatedAt                 DateTime @updatedAt @map("updated_at")
+  defaultShippingTemplateId String?  @map("default_shipping_template_id")
+  packageExampleImageUrl    String?  @map("package_example_image_url")
+  shippingCompanyLogoUrl    String?  @map("shipping_company_logo_url")
+  paymentTimeoutMinutes     Int      @default(30) @map("payment_timeout_minutes")
+  equipmentRecommendations  Json?    @map("equipment_recommendations")
+  minPotWeightG             Int      @default(2000) @map("min_pot_weight_g")
+
+  @@map("global_config")
+}
+
+model DIYSheet {
+  id              String   @id @default(uuid()) @map("id")
+  userId          String   @map("user_id")
+  recipeId        String   @map("recipe_id")
+  recipeName      String   @map("recipe_name") @db.VarChar(200)
+  dogId           String   @map("dog_id")
+  dogName         String   @map("dog_name") @db.VarChar(100)
+  cycleDays       Int      @map("cycle_days")
+  perMealG        Float    @map("per_meal_g")
+  dailyIntakeG    Float    @map("daily_intake_g")
+  purchaseList    Json     @map("purchase_list")
+  productionSteps String?  @map("production_steps")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([userId, createdAt])
+  @@map("diy_sheet")
+}
+
+model FavoriteRecipe {
+  id        String   @id @default(uuid()) @map("id")
+  userId    String   @map("user_id")
+  recipeId  String   @map("recipe_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, recipeId])
+  @@index([userId])
+  @@index([recipeId])
+  @@index([createdAt])
+  @@map("favorite_recipe")
+}
+
+model ShippingTemplate {
+  id             String   @id @default(uuid()) @map("id")
+  name           String   @map("name")
+  baseWeightKg   Decimal  @map("base_weight_kg")
+  baseFee        Decimal  @map("base_fee")
+  stepWeightKg   Decimal  @map("step_weight_kg")
+  stepFee        Decimal  @map("step_fee")
+  vasFeePerOrder Decimal  @map("vas_fee_per_order")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("shipping_template")
+}
+
+model PurchaseList {
+  id                 String             @id @default(uuid()) @map("id")
+  targetDate         DateTime           @map("target_date")
+  status             PurchaseListStatus @map("status")
+  totalEstimatedCost Decimal            @map("total_estimated_cost") @db.Decimal(10, 2)
+  itemCount          Int                @map("item_count")
+  createdById        String             @map("created_by_id")
+  sourceOrderIds     String[]           @map("source_order_ids")
+  reimbursementId    String?            @map("reimbursement_id")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+  completedAt        DateTime?          @map("completed_at")
+  startedAt          DateTime?          @map("started_at")
+  orderDateSnapshot  Json?              @map("order_date_snapshot")
+  items              PurchaseItem[]
+  createdBy          User               @relation("PurchaseListCreator", fields: [createdById], references: [id])
+  reimbursement      Reimbursement?     @relation(fields: [reimbursementId], references: [id])
+  records            PurchaseRecord[]   @relation("PurchaseListRecords")
+
+  @@index([targetDate])
+  @@index([status])
+  @@index([createdById])
+  @@map("purchase_list")
+}
+
+model PurchaseItem {
+  id              String       @id @default(uuid()) @map("id")
+  purchaseListId  String       @map("purchase_list_id")
+  ingredientId    String       @map("ingredient_id")
+  quantityNeeded  Float        @map("quantity_needed")
+  quantityUnit    String       @map("quantity_unit")
+  estimatedCost   Decimal      @map("estimated_cost") @db.Decimal(10, 2)
+  purchaseChannel String?      @map("purchase_channel") @db.VarChar(200)
+  productModel    String?      @map("product_model") @db.VarChar(100)
+  notes           String?      @map("notes")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  ingredientName  String       @default("") @map("ingredient_name") @db.VarChar(200)
+  displayUnit     String?      @map("display_unit") @db.VarChar(20)
+  type            String?      @map("type") @db.VarChar(20)
+  ingredient      Ingredient   @relation(fields: [ingredientId], references: [id])
+  purchaseList    PurchaseList @relation(fields: [purchaseListId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseListId])
+  @@index([ingredientId])
+  @@map("purchase_item")
+}
+
+model PurchaseRecord {
+  id              String       @id @default(uuid()) @map("id")
+  purchaseListId  String       @map("purchase_list_id")
+  purchaseItemId  String       @map("purchase_item_id")
+  ingredientId    String       @map("ingredient_id")
+  ingredientName  String       @map("ingredient_name") @db.VarChar(200)
+  purchaseChannel String       @map("purchase_channel") @db.VarChar(200)
+  actualQuantity  Int          @map("actual_quantity")
+  actualCost      Decimal      @map("actual_cost") @db.Decimal(10, 2)
+  productModel    String?      @map("product_model") @db.VarChar(100)
+  notes           String?      @map("notes")
+  purchasedAt     DateTime     @default(now()) @map("purchased_at")
+  createdAt       DateTime     @default(now()) @map("created_at")
+  updatedAt       DateTime     @updatedAt @map("updated_at")
+  purchaseList    PurchaseList @relation("PurchaseListRecords", fields: [purchaseListId], references: [id], onDelete: Cascade)
+
+  @@index([purchaseListId])
+  @@index([purchaseItemId])
+  @@index([ingredientId])
+  @@map("purchase_record")
+}
+
+model Reimbursement {
+  id                   String              @id @default(uuid()) @map("id")
+  claimNumber          String              @unique @map("claim_number") @db.VarChar(20)
+  status               ReimbursementStatus @map("status")
+  totalActualCost      Decimal             @map("total_actual_cost") @db.Decimal(10, 2)
+  totalEstimatedCost   Decimal             @map("total_estimated_cost") @db.Decimal(10, 2)
+  receiptUrls          String[]            @map("receipt_urls")
+  submittedById        String              @map("submitted_by_id")
+  submittedAt          DateTime            @map("submitted_at")
+  reviewedById         String?             @map("reviewed_by_id")
+  reviewedAt           DateTime?           @map("reviewed_at")
+  reviewComment        String?             @map("review_comment")
+  createdAt            DateTime            @default(now()) @map("created_at")
+  updatedAt            DateTime            @updatedAt @map("updated_at")
+  platformShippingFee  Decimal?            @map("platform_shipping_fee") @db.Decimal(10, 2)
+  platformPackagingFee Decimal?            @map("platform_packaging_fee") @db.Decimal(10, 2)
+  customFees           Json?               @map("custom_fees")
+  paymentProofUrls     String[]            @default([]) @map("payment_proof_urls")
+  paymentProofKeys     String[]            @default([]) @map("payment_proof_keys")
+  purchaseLists        PurchaseList[]
+  reviewedBy           User?               @relation("ReimbursementReviewer", fields: [reviewedById], references: [id])
+  submittedBy          User                @relation("ReimbursementSubmitter", fields: [submittedById], references: [id])
+
+  @@index([status])
+  @@index([submittedById])
+  @@index([claimNumber])
+  @@map("reimbursement")
+}
+
+model CustomRecipeOrder {
+  id                    String                   @id @default(uuid()) @map("id")
+  orderId               String                   @unique @map("order_id")
+  customerId            String                   @map("customer_id")
+  dogId                 String                   @map("dog_id")
+  targetGoal            TargetGoal               @map("target_goal")
+  allergies             String[]                 @default([]) @map("allergies")
+  medicalConditions     String[]                 @default([]) @map("medical_conditions")
+  additionalNotes       String?                  @map("additional_notes")
+  preferredIngredients  String[]                 @default([]) @map("preferred_ingredients")
+  dislikedIngredients   String[]                 @default([]) @map("disliked_ingredients")
+  attachments           Json?                    @map("attachments")
+  scheduledDate         DateTime                 @map("scheduled_date") @db.Date
+  estimatedDeliveryDate DateTime?                @map("estimated_delivery_date") @db.Date
+  amount                Decimal                  @default(299) @db.Decimal(10, 2)
+  status                CustomRecipeStatus       @default(PENDING_PAYMENT) @map("status")
+  paymentConfirmedAt    DateTime?                @map("payment_confirmed_at")
+  inProgressAt          DateTime?                @map("in_progress_at")
+  deliveredAt           DateTime?                @map("delivered_at")
+  recipeId              String?                  @unique @map("recipe_id")
+  healthInfoSyncedAt    DateTime?                @map("health_info_synced_at")
+  createdAt             DateTime                 @default(now()) @map("created_at")
+  updatedAt             DateTime                 @updatedAt @map("updated_at")
+  attachmentsRecords    CustomRecipeAttachment[]
+  customer              User                     @relation("CustomRecipeOrderCustomer", fields: [customerId], references: [id], onDelete: Cascade)
+  dog                   Dog                      @relation("CustomRecipeOrderDog", fields: [dogId], references: [id], onDelete: Cascade)
+  recipe                Recipe?                  @relation("CustomRecipeOrders", fields: [recipeId], references: [id])
+
+  @@index([customerId])
+  @@index([dogId])
+  @@index([status])
+  @@index([scheduledDate])
+  @@map("custom_recipe_order")
+}
+
+model CustomRecipeSchedule {
+  id              String   @id @default(uuid()) @map("id")
+  date            DateTime @unique @map("date") @db.Date
+  capacity        Int      @default(4) @map("capacity")
+  bookedCount     Int      @default(0) @map("booked_count")
+  isAvailable     Boolean  @default(true) @map("is_available")
+  isPublicHoliday Boolean  @default(false) @map("is_public_holiday")
+  notes           String?  @map("notes")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@index([date])
+  @@map("custom_recipe_schedule")
+}
+
+model CustomRecipeAttachment {
+  id         String               @id @default(uuid()) @map("id")
+  orderId    String               @map("order_id")
+  fileName   String               @map("file_name")
+  fileUrl    String               @map("file_url")
+  fileSize   Int                  @map("file_size")
+  fileType   CustomAttachmentType @map("file_type")
+  uploadedAt DateTime             @default(now()) @map("uploaded_at")
+  order      CustomRecipeOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([orderId])
+  @@map("custom_recipe_attachment")
 }
 
 enum OrderStatus {
@@ -621,295 +870,35 @@ enum MedicalStatus {
   CHRONIC
 }
 
-model OrderPricingSnapshot {
-  id             String   @id @default(uuid()) @map("id")
-  customerId     String   @map("customer_id")
-  requestParams  Json     @map("request_params")
-  pricingResult  Json     @map("pricing_result")
-  expiresAt      DateTime @map("expires_at")
-  used           Boolean  @default(false) @map("used")
-  createdAt      DateTime @default(now()) @map("created_at")
-
-  @@index([customerId, expiresAt])
-  @@index([expiresAt])
-  @@map("order_pricing_snapshot")
-}
-
-model GlobalConfig {
-  id                          String   @id @default("singleton") @map("id")
-  laborHourlyRate             Decimal  @default(30) @map("labor_hourly_rate")
-  minOrderWeightG             Int      @default(1000) @map("min_order_weight_g")
-  defaultBatchCapacityG       Decimal  @default(5000) @map("default_batch_capacity_g")
-  minPotWeightG               Int      @default(2000) @map("min_pot_weight_g")
-  targetMargin                Decimal  @default(0.4) @map("target_margin")
-  overheadCostPerKg           Decimal  @default(2) @map("overhead_cost_per_kg")
-  targetBatchUtilization      Decimal  @default(0.8) @map("target_batch_utilization")
-  supplementLossRate          Decimal  @default(1.05) @map("supplement_loss_rate")
-  defaultProductLabelId       String?  @map("default_product_label_id")
-  defaultIcePackId            String?  @map("default_ice_pack_id")
-  defaultShippingTemplateId   String?  @map("default_shipping_template_id")
-  packageExampleImageUrl      String?  @map("package_example_image_url")
-  shippingCompanyLogoUrl      String?  @map("shipping_company_logo_url")
-  paymentTimeoutMinutes       Int      @default(30) @map("payment_timeout_minutes")
-  equipmentRecommendations    Json?    @map("equipment_recommendations")
-  createdAt                   DateTime @default(now()) @map("created_at")
-  updatedAt                   DateTime @updatedAt @map("updated_at")
-
-  @@map("global_config")
-}
-
-model DIYSheet {
-  id              String    @id @default(uuid()) @map("id")
-  userId          String    @map("user_id")
-  recipeId        String    @map("recipe_id")
-  recipeName      String    @map("recipe_name") @db.VarChar(200)
-  dogId           String    @map("dog_id")
-  dogName         String    @map("dog_name") @db.VarChar(100)
-  cycleDays       Int       @map("cycle_days")
-  perMealG        Float     @map("per_meal_g")
-  dailyIntakeG    Float     @map("daily_intake_g")
-  purchaseList    Json      @map("purchase_list")
-  productionSteps String?   @map("production_steps") @db.Text
-  createdAt       DateTime  @default(now()) @map("created_at")
-  updatedAt       DateTime  @updatedAt @map("updated_at")
-  user            User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@index([userId])
-  @@index([userId, createdAt])
-  @@map("diy_sheet")
-}
-
-model FavoriteRecipe {
-  id        String   @id @default(uuid()) @map("id")
-  userId    String   @map("user_id")
-  recipeId  String   @map("recipe_id")
-  createdAt DateTime @default(now()) @map("created_at")
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-
-  @@unique([userId, recipeId])
-  @@index([userId])
-  @@index([recipeId])
-  @@index([createdAt])
-  @@map("favorite_recipe")
-}
-
-model ShippingTemplate {
-  id             String   @id @default(uuid()) @map("id")
-  name           String   @map("name")
-  baseWeightKg   Decimal  @map("base_weight_kg")
-  baseFee        Decimal  @map("base_fee")
-  stepWeightKg   Decimal  @map("step_weight_kg")
-  stepFee        Decimal  @map("step_fee")
-  vasFeePerOrder Decimal  @map("vas_fee_per_order")
-  isActive       Boolean  @default(true) @map("is_active")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
-
-  @@map("shipping_template")
-}
-
-// ==========================================
-// Purchasing Management
-// ==========================================
-
-model PurchaseList {
-  id                 String              @id @default(uuid()) @map("id")
-  targetDate         DateTime            @map("target_date")
-  status             PurchaseListStatus  @map("status")
-  totalEstimatedCost Decimal             @map("total_estimated_cost") @db.Decimal(10, 2)
-  itemCount          Int                 @map("item_count")
-  createdById        String              @map("created_by_id")
-  sourceOrderIds     String[]            @map("source_order_ids")
-  orderDateSnapshot  Json?               @map("order_date_snapshot")
-  reimbursementId    String?             @map("reimbursement_id")
-  createdAt          DateTime            @default(now()) @map("created_at")
-  updatedAt          DateTime            @updatedAt @map("updated_at")
-  startedAt          DateTime?           @map("started_at")
-  completedAt        DateTime?           @map("completed_at")
-  items              PurchaseItem[]
-  records            PurchaseRecord[]    @relation("PurchaseListRecords")
-  reimbursement      Reimbursement?      @relation(fields: [reimbursementId], references: [id])
-  createdBy          User                @relation("PurchaseListCreator", fields: [createdById], references: [id])
-
-  @@index([targetDate])
-  @@index([status])
-  @@index([createdById])
-  @@map("purchase_list")
-}
-
-model PurchaseItem {
-  id               String       @id @default(uuid()) @map("id")
-  purchaseListId   String       @map("purchase_list_id")
-  ingredientId     String       @map("ingredient_id")
-  ingredientName   String       @default("") @map("ingredient_name") @db.VarChar(200)
-  type             String?      @map("type") @db.VarChar(20)
-  quantityNeeded   Float        @map("quantity_needed")
-  quantityUnit     String       @map("quantity_unit")
-  estimatedCost    Decimal      @map("estimated_cost") @db.Decimal(10, 2)
-  purchaseChannel  String?      @map("purchase_channel") @db.VarChar(200)
-  productModel     String?      @map("product_model") @db.VarChar(100)
-  displayUnit      String?      @map("display_unit") @db.VarChar(20)
-  notes            String?      @map("notes")
-  createdAt        DateTime     @default(now()) @map("created_at")
-  purchaseList     PurchaseList @relation(fields: [purchaseListId], references: [id], onDelete: Cascade)
-  ingredient       Ingredient   @relation(fields: [ingredientId], references: [id])
-
-  @@index([purchaseListId])
-  @@index([ingredientId])
-  @@map("purchase_item")
-}
-
-model PurchaseRecord {
-  id                String    @id @default(uuid()) @map("id")
-  purchaseListId    String    @map("purchase_list_id")
-  purchaseItemId    String    @map("purchase_item_id")
-  ingredientId      String    @map("ingredient_id")
-  ingredientName    String    @map("ingredient_name") @db.VarChar(200)
-  purchaseChannel   String    @map("purchase_channel") @db.VarChar(200)
-  actualQuantity    Int       @map("actual_quantity")
-  actualCost        Decimal   @map("actual_cost") @db.Decimal(10, 2)
-  productModel      String?   @map("product_model") @db.VarChar(100)
-  notes             String?   @map("notes")
-  purchasedAt       DateTime  @default(now()) @map("purchased_at")
-  createdAt         DateTime  @default(now()) @map("created_at")
-  updatedAt         DateTime  @updatedAt @map("updated_at")
-  purchaseList      PurchaseList @relation("PurchaseListRecords", fields: [purchaseListId], references: [id], onDelete: Cascade)
-
-  @@index([purchaseListId])
-  @@index([purchaseItemId])
-  @@index([ingredientId])
-  @@map("purchase_record")
-}
-
-model Reimbursement {
-  id                  String               @id @default(uuid()) @map("id")
-  claimNumber         String               @unique @map("claim_number") @db.VarChar(20)
-  status              ReimbursementStatus  @map("status")
-  totalActualCost     Decimal              @map("total_actual_cost") @db.Decimal(10, 2)
-  totalEstimatedCost  Decimal              @map("total_estimated_cost") @db.Decimal(10, 2)
-  receiptUrls         String[]             @map("receipt_urls")
-  submittedById       String               @map("submitted_by_id")
-  submittedAt         DateTime             @map("submitted_at")
-  reviewedById        String?              @map("reviewed_by_id")
-  reviewedAt          DateTime?            @map("reviewed_at")
-  reviewComment       String?              @map("review_comment") @db.Text
-  // 新增费用明细字段
-  platformShippingFee   Decimal? @map("platform_shipping_fee") @db.Decimal(10, 2)
-  platformPackagingFee  Decimal? @map("platform_packaging_fee") @db.Decimal(10, 2)
-  customFees            Json?    @map("custom_fees") @db.JsonB
-  // 报销凭证（管理员上传的转账凭证）
-  paymentProofUrls     String[] @default([]) @map("payment_proof_urls")
-  paymentProofKeys     String[] @default([]) @map("payment_proof_keys")
-  createdAt           DateTime             @default(now()) @map("created_at")
-  updatedAt           DateTime             @updatedAt @map("updated_at")
-  purchaseLists       PurchaseList[]
-  submittedBy         User                 @relation("ReimbursementSubmitter", fields: [submittedById], references: [id])
-  reviewedBy          User?                @relation("ReimbursementReviewer", fields: [reviewedById], references: [id])
-
-  @@index([status])
-  @@index([submittedById])
-  @@index([claimNumber])
-  @@map("reimbursement")
-}
-
 enum PurchaseListStatus {
-  PENDING     // 待采购
-  COMPLETED   // 采购完成
+  PENDING
+  COMPLETED
 }
 
 enum ReimbursementStatus {
-  PENDING_REVIEW      // 待审核
-  REIMBURSED          // 已报销
-  REJECTED            // 已驳回
-  REQUIRES_RESUBMIT   // 需重新提交
-}
-
-// ==========================================
-// Custom Recipe Management
-// ==========================================
-
-model CustomRecipeOrder {
-  id                    String                    @id @default(uuid()) @map("id")
-  orderId               String                    @unique @map("order_id")
-  customerId            String                    @map("customer_id")
-  dogId                 String                    @map("dog_id")
-  targetGoal            TargetGoal                @map("target_goal")
-  allergies             String[]                  @default([]) @map("allergies")
-  medicalConditions     String[]                  @default([]) @map("medical_conditions")
-  additionalNotes       String?                   @map("additional_notes") @db.Text
-  preferredIngredients  String[]                  @default([]) @map("preferred_ingredients")
-  dislikedIngredients   String[]                  @default([]) @map("disliked_ingredients")
-  attachments           Json?                     @map("attachments")
-  scheduledDate         DateTime                  @map("scheduled_date") @db.Date
-  estimatedDeliveryDate DateTime?                 @map("estimated_delivery_date") @db.Date
-  amount                Decimal                   @default(299) @db.Decimal(10, 2)
-  status                CustomRecipeStatus        @default(PENDING_PAYMENT) @map("status")
-  paymentConfirmedAt    DateTime?                 @map("payment_confirmed_at")
-  inProgressAt          DateTime?                 @map("in_progress_at")
-  deliveredAt           DateTime?                 @map("delivered_at")
-  recipeId              String?                   @unique @map("recipe_id")
-  healthInfoSyncedAt    DateTime?                 @map("health_info_synced_at")
-  createdAt             DateTime                  @default(now()) @map("created_at")
-  updatedAt             DateTime                  @updatedAt @map("updated_at")
-  customer              User                      @relation("CustomRecipeOrderCustomer", fields: [customerId], references: [id], onDelete: Cascade)
-  dog                   Dog                       @relation("CustomRecipeOrderDog", fields: [dogId], references: [id], onDelete: Cascade)
-  recipe                Recipe?                   @relation("CustomRecipeOrders", fields: [recipeId], references: [id])
-  attachmentsRecords    CustomRecipeAttachment[]
-
-  @@index([customerId])
-  @@index([dogId])
-  @@index([status])
-  @@index([scheduledDate])
-  @@map("custom_recipe_order")
-}
-
-model CustomRecipeSchedule {
-  id               String   @id @default(uuid()) @map("id")
-  date             DateTime @map("date") @db.Date
-  capacity         Int      @default(4) @map("capacity")
-  bookedCount      Int      @default(0) @map("booked_count")
-  isAvailable      Boolean  @default(true) @map("is_available")
-  isPublicHoliday  Boolean  @default(false) @map("is_public_holiday")
-  notes            String?  @map("notes")
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
-
-  @@unique([date])
-  @@index([date])
-  @@map("custom_recipe_schedule")
-}
-
-model CustomRecipeAttachment {
-  id         String              @id @default(uuid()) @map("id")
-  orderId    String              @map("order_id")
-  fileName   String              @map("file_name")
-  fileUrl    String              @map("file_url")
-  fileSize   Int                 @map("file_size")
-  fileType   CustomAttachmentType @map("file_type")
-  uploadedAt DateTime            @default(now()) @map("uploaded_at")
-  order      CustomRecipeOrder    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
-  @@index([orderId])
-  @@map("custom_recipe_attachment")
+  PENDING_REVIEW
+  REIMBURSED
+  REJECTED
+  REQUIRES_RESUBMIT
 }
 
 enum TargetGoal {
-  MAINTAIN          // 维持体重
-  GAIN_WEIGHT       // 增重
-  LOSE_WEIGHT       // 减重
-  HEALTH_SUPPORT    // 健康管理
+  MAINTAIN
+  GAIN_WEIGHT
+  LOSE_WEIGHT
+  HEALTH_SUPPORT
 }
 
 enum CustomRecipeStatus {
-  PENDING_PAYMENT   // 待付款
-  PAID              // 已付款
-  IN_PROGRESS       // 制作中
-  DELIVERED         // 已交付
+  PENDING_PAYMENT
+  PAID
+  IN_PROGRESS
+  DELIVERED
 }
 
 enum CustomAttachmentType {
-  MEDICAL_REPORT    // 体检报告
-  LAB_RESULT        // 化验结果
-  IMAGE             // 图片
-  OTHER             // 其他
+  MEDICAL_REPORT
+  LAB_RESULT
+  IMAGE
+  OTHER
 }

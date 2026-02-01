@@ -73,6 +73,7 @@ export class GlobalConfigService {
     }>,
   ): Promise<GlobalConfig> {
     // Build update data object with only provided fields
+    // Convert empty strings to null for URL fields
     const updateData: any = {};
     if (dto.laborHourlyRate !== undefined) updateData.laborHourlyRate = dto.laborHourlyRate;
     if (dto.minOrderWeightG !== undefined) updateData.minOrderWeightG = dto.minOrderWeightG;
@@ -85,8 +86,15 @@ export class GlobalConfigService {
     if (dto.defaultProductLabelId !== undefined) updateData.defaultProductLabelId = dto.defaultProductLabelId;
     if (dto.defaultIcePackId !== undefined) updateData.defaultIcePackId = dto.defaultIcePackId;
     if (dto.defaultShippingTemplateId !== undefined) updateData.defaultShippingTemplateId = dto.defaultShippingTemplateId;
-    if (dto.packageExampleImageUrl !== undefined) updateData.packageExampleImageUrl = dto.packageExampleImageUrl;
-    if (dto.shippingCompanyLogoUrl !== undefined) updateData.shippingCompanyLogoUrl = dto.shippingCompanyLogoUrl;
+
+    // Convert empty strings to null for URL fields
+    if (dto.packageExampleImageUrl !== undefined) {
+      updateData.packageExampleImageUrl = dto.packageExampleImageUrl || null;
+    }
+    if (dto.shippingCompanyLogoUrl !== undefined) {
+      updateData.shippingCompanyLogoUrl = dto.shippingCompanyLogoUrl || null;
+    }
+
     if (dto.paymentTimeoutMinutes !== undefined) updateData.paymentTimeoutMinutes = dto.paymentTimeoutMinutes;
     if (dto.equipmentRecommendations !== undefined) updateData.equipmentRecommendations = dto.equipmentRecommendations;
 

@@ -208,9 +208,9 @@ export class PdfGeneratorService {
     // Table header - adjusted columns
     const colX = {
       type: 40,
-      name: 80,
-      amount: 200,
-      method: 300
+      name: 70,
+      amount: 160,
+      method: 260
     };
     const rowHeight = Math.floor(16 * scaleFactor);
 

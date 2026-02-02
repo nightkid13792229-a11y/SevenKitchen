@@ -559,11 +559,11 @@ const handlePrint = async () => {
   flex-shrink: 0;
 
   &.type {
-    width: 80rpx;
+    width: 70rpx;
   }
 
   &.name {
-    flex: 0 0 150rpx;
+    flex: 0 0 140rpx;
     text-align: left;
     word-break: break-all;
   }
@@ -576,7 +576,7 @@ const handlePrint = async () => {
   }
 
   &.amount {
-    flex: 0 0 170rpx;
+    flex: 0 0 130rpx;
     text-align: left;
     word-break: keep-all;
   }

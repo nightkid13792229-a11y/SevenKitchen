@@ -38,6 +38,7 @@ import {
   TodayStatisticsDto,
   UploadPhotosResponseDto,
 } from '../../interfaces/dto/production/kitchen.dto';
+import { PrintTaskDto } from '../../interfaces/dto/production/print-task.dto';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard } from '../auth/auth.guard';
 import { StaffGuard } from '../guards/role.guard';
@@ -579,6 +580,75 @@ export class StaffProductionController {
       code: 0,
       message: '删除成功',
       data: null,
+    };
+  }
+
+  @Post('print-task')
+  @ApiOperation({ summary: 'Generate PDF for production task' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        recipeName: { type: 'string', example: '鸡肉蔬菜套餐' },
+        recipeVersion: { type: 'string', example: '1.2' },
+        currentPotNumber: { type: 'number', example: 1 },
+        totalPots: { type: 'number', example: 2 },
+        status: { type: 'string', example: 'IN_PROGRESS' },
+        totalProductionG: { type: 'number', example: 500 },
+        createdAt: { type: 'string', example: '2026-02-02T14:30:00Z' },
+        orderItems: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              packageSpecG: { type: 'number' },
+              packageCount: { type: 'number' },
+              dogName: { type: 'string' },
+            },
+          },
+        },
+        parsedIngredients: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              name: { type: 'string' },
+              amount: { type: 'string' },
+              unit: { type: 'string' },
+              typeLabel: { type: 'string' },
+              method: { type: 'string' },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'PDF generated successfully',
+    schema: {
+      type: 'object',
+      properties: {
+        code: { type: 'number', example: 0 },
+        message: { type: 'string', example: 'PDF生成成功' },
+        data: {
+          type: 'object',
+          properties: {
+            pdfUrl: { type: 'string', example: 'https://cdn.../print-tasks/task-xxx.pdf' },
+          },
+        },
+      },
+    },
+  })
+  async printProductionTask(
+    @Body() dto: PrintTaskDto,
+  ): Promise<ApiResponseDto<{ pdfUrl: string }>> {
+    const result = await this.staffProductionService.printProductionTask(dto);
+
+    return {
+      code: 0,
+      message: 'PDF生成成功',
+      data: result,
     };
   }
 }

@@ -334,7 +334,7 @@ const handlePrint = async () => {
 
     uni.hideLoading();
 
-    if (res.statusCode === 200 && res.data.code === 0) {
+    if (res.statusCode === 200 && (res.data.code === 0 || res.data.code === '0')) {
       const pdfUrl = res.data.data.pdfUrl;
 
       // 下载PDF文件

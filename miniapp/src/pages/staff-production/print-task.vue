@@ -302,6 +302,7 @@ const handlePrint = async () => {
     console.log('[PrintTask] Token present:', !!token);
     console.log('[PrintTask] BaseURL from getBaseUrl():', baseUrl);
     console.log('[PrintTask] Full URL will be:', `${baseUrl}/staff/production/print-task`);
+    console.log('[PrintTask] Original recipeVersion:', printData.value.recipeVersion, 'Type:', typeof printData.value.recipeVersion);
 
     // 准备发送的数据，包括parsedIngredients
     const requestData = {

@@ -209,8 +209,8 @@ export class PdfGeneratorService {
     const colX = {
       type: 40,
       name: 80,
-      method: 200,
-      amount: 430
+      amount: 200,
+      method: 300
     };
     const rowHeight = Math.floor(16 * scaleFactor);
 
@@ -218,8 +218,8 @@ export class PdfGeneratorService {
     doc.fontSize(Math.floor(8 * scaleFactor)).fillColor('#000000').font('Helvetica-Bold');
     doc.text('类型', colX.type, y + 4);
     doc.text('名称', colX.name, y + 4);
-    doc.text('制备方法', colX.method, y + 4);
     doc.text('用量', colX.amount, y + 4);
+    doc.text('制备方法', colX.method, y + 4);
     y += rowHeight;
 
     // Table rows
@@ -234,10 +234,10 @@ export class PdfGeneratorService {
       doc.fontSize(Math.floor(8 * scaleFactor)).fillColor('#333333').font('Helvetica');
       doc.text(ing.typeLabel || '-', colX.type, y + 4);
       doc.text(ing.name, colX.name, y + 4);
-      doc.text(ing.method || '-', colX.method, y + 4);
       // Combine amount and unit
       const amountText = `${ing.amount}${ing.unit}`;
       doc.text(amountText, colX.amount, y + 4);
+      doc.text(ing.method || '-', colX.method, y + 4);
       y += rowHeight;
 
       // No pagination - must fit on one page

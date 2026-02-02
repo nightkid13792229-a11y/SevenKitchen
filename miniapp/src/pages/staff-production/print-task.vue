@@ -66,8 +66,8 @@
             <view class="table-header">
               <view class="table-cell type">类型</view>
               <view class="table-cell name">名称</view>
-              <view class="table-cell method">制备方法</view>
               <view class="table-cell amount">用量</view>
+              <view class="table-cell method">制备方法</view>
             </view>
             <view
               v-for="(ingredient, index) in parsedIngredients"
@@ -82,8 +82,8 @@
                 <text v-else>-</text>
               </view>
               <view class="table-cell name">{{ ingredient.name }}</view>
-              <view class="table-cell method">{{ ingredient.method || '-' }}</view>
               <view class="table-cell amount">{{ ingredient.amount }}{{ ingredient.unit }}</view>
+              <view class="table-cell method">{{ ingredient.method || '-' }}</view>
             </view>
           </view>
           <view class="ingredients-note">
@@ -577,7 +577,7 @@ const handlePrint = async () => {
 
   &.amount {
     flex: 0 0 170rpx;
-    text-align: right;
+    text-align: left;
     word-break: keep-all;
   }
 }

@@ -55,9 +55,32 @@ export class PdfGeneratorService {
         });
 
         // Register Chinese fonts
-        const fontsPath = path.join(__dirname, '../../assets/fonts');
-        doc.registerFont('SourceHanSansSC', path.join(fontsPath, 'SourceHanSansSC-Regular.otf'));
-        doc.registerFont('SourceHanSansSC-Bold', path.join(fontsPath, 'SourceHanSansSC-Bold.otf'));
+        // Path from dist/src/infrastructure/services/ to src/assets/fonts/
+        const fontsPath = path.join(__dirname, '../../../assets/fonts');
+        const regularFontPath = path.join(fontsPath, 'SourceHanSansSC-Regular.otf');
+        const boldFontPath = path.join(fontsPath, 'SourceHanSansSC-Bold.otf');
+
+        console.log('[PDF Generator] __dirname:', __dirname);
+        console.log('[PDF Generator] fontsPath:', fontsPath);
+        console.log('[PDF Generator] regularFontPath:', regularFontPath);
+        console.log('[PDF Generator] boldFontPath:', boldFontPath);
+
+        // Check if font files exist
+        const fs = require('fs');
+        if (!fs.existsSync(regularFontPath)) {
+          console.error('[PDF Generator] Regular font file NOT found:', regularFontPath);
+        } else {
+          console.log('[PDF Generator] Regular font file found, size:', fs.statSync(regularFontPath).size, 'bytes');
+        }
+
+        if (!fs.existsSync(boldFontPath)) {
+          console.error('[PDF Generator] Bold font file NOT found:', boldFontPath);
+        } else {
+          console.log('[PDF Generator] Bold font file found, size:', fs.statSync(boldFontPath).size, 'bytes');
+        }
+
+        doc.registerFont('SourceHanSansSC', regularFontPath);
+        doc.registerFont('SourceHanSansSC-Bold', boldFontPath);
 
         // Collect buffers
         const chunks: Buffer[] = [];

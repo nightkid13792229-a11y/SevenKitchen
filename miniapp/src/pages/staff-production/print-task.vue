@@ -6,13 +6,10 @@
         <text>← 返回</text>
       </button>
       <view class="action-title">制作单打印预览</view>
-      <button class="action-btn primary" @tap="handlePrint">
-        <text>📄 生成PDF打印</text>
-      </button>
     </view>
 
     <!-- 打印内容区域 -->
-    <scroll-view scroll-y class="print-container" enable-flex :style="{ paddingTop: navBarHeight + 20 + 'px', paddingBottom: '100rpx' }">
+    <scroll-view scroll-y class="print-container" enable-flex :style="{ paddingTop: navBarHeight + 20 + 'px', paddingBottom: '120rpx' }">
       <view class="print-content">
         <!-- 标题区域 -->
         <view class="header-section">
@@ -39,7 +36,7 @@
               <view class="order-body">
                 <view class="order-row">
                   <text class="label">总净重:</text>
-                  <text class="value">{{ formatDecimal(printData.totalProductionG) }}g</text>
+                  <text class="value">{{ formatDecimal(order.packageSpecG * order.packageCount) }}g</text>
                 </view>
                 <view class="order-row">
                   <text class="label">规格:</text>
@@ -69,9 +66,8 @@
             <view class="table-header">
               <view class="table-cell type">类型</view>
               <view class="table-cell name">名称</view>
-              <view class="table-cell amount">用量</view>
-              <view class="table-cell unit">单位</view>
               <view class="table-cell method">制备方法</view>
+              <view class="table-cell amount">用量</view>
             </view>
             <view
               v-for="(ingredient, index) in parsedIngredients"
@@ -86,9 +82,8 @@
                 <text v-else>-</text>
               </view>
               <view class="table-cell name">{{ ingredient.name }}</view>
-              <view class="table-cell amount">{{ ingredient.amount }}</view>
-              <view class="table-cell unit">{{ ingredient.unit }}</view>
               <view class="table-cell method">{{ ingredient.method || '-' }}</view>
+              <view class="table-cell amount">{{ ingredient.amount }}{{ ingredient.unit }}</view>
             </view>
           </view>
           <view class="ingredients-note">
@@ -107,6 +102,13 @@
     <!-- 打印提示 -->
     <view class="screenshot-hint">
       <text>💡 提示：PDF打开后，点击页面右上角"..."或"分享"图标，选择"打印"功能</text>
+    </view>
+
+    <!-- 底部打印按钮 -->
+    <view class="bottom-action-bar">
+      <button class="bottom-print-btn" @tap="handlePrint">
+        <text>生成PDF打印</text>
+      </button>
     </view>
   </view>
 </template>
@@ -406,12 +408,6 @@ const handlePrint = async () => {
     background-color: rgba(255, 255, 255, 0.2);
     color: #fff;
   }
-
-  &.primary {
-    background-color: #fff;
-    color: #56ab91;
-    font-weight: bold;
-  }
 }
 
 .action-title {
@@ -567,23 +563,21 @@ const handlePrint = async () => {
   }
 
   &.name {
-    flex: 1;
+    flex: 0 0 200rpx;
     text-align: left;
     word-break: break-all;
-  }
-
-  &.amount {
-    width: 120rpx;
-  }
-
-  &.unit {
-    width: 70rpx;
   }
 
   &.method {
     flex: 1;
     text-align: left;
     word-break: break-all;
+    min-width: 150rpx;
+  }
+
+  &.amount {
+    flex: 0 0 140rpx;
+    text-align: right;
   }
 }
 
@@ -631,7 +625,7 @@ const handlePrint = async () => {
 
 .screenshot-hint {
   position: fixed;
-  bottom: 0;
+  bottom: 120rpx;
   left: 0;
   right: 0;
   background-color: rgba(255, 243, 224, 0.95);
@@ -642,5 +636,33 @@ const handlePrint = async () => {
   border-top: 1rpx solid #ffe0b2;
   box-shadow: 0 -2rpx 8rpx rgba(0, 0, 0, 0.05);
   z-index: 99;
+}
+
+.bottom-action-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background-color: #fff;
+  padding: 20rpx 32rpx;
+  box-shadow: 0 -2rpx 8rpx rgba(0, 0, 0, 0.1);
+  z-index: 100;
+}
+
+.bottom-print-btn {
+  width: 100%;
+  height: 88rpx;
+  line-height: 88rpx;
+  background-color: #56ab91;
+  color: #fff;
+  border: none;
+  border-radius: 12rpx;
+  font-size: 32rpx;
+  font-weight: bold;
+  text-align: center;
+
+  &:active {
+    background-color: #4a9680;
+  }
 }
 </style>

@@ -198,12 +198,87 @@ export class TencentCosService {
   }
 
   /**
+   * Upload any file to Tencent COS
+   * @param file Buffer or file stream
+   * @param filename Original filename
+   * @param folder Folder path in bucket
+   */
+  async uploadFile(
+    file: Buffer | Express.Multer.File,
+    filename?: string,
+    folder: string = 'general',
+  ): Promise<UploadResult> {
+    if (!this.secretId || !this.secretKey || !this.bucket) {
+      throw new BadRequestException('COS credentials not configured');
+    }
+
+    // Get file buffer and original name
+    let fileBuffer: Buffer;
+    let originalName: string;
+
+    if (Buffer.isBuffer(file)) {
+      fileBuffer = file;
+      originalName = filename || `file-${Date.now()}`;
+    } else if ((file as any).buffer) {
+      fileBuffer = (file as any).buffer;
+      originalName = (file as any).originalname || filename || `file-${Date.now()}`;
+    } else {
+      throw new BadRequestException('Invalid file format');
+    }
+
+    // Generate unique file key
+    const ext = this.getFileExtension(originalName);
+    const timestamp = Date.now();
+    const random = crypto.randomBytes(4).toString('hex');
+    const key = `${folder}/${timestamp}-${random}.${ext}`;
+
+    try {
+      // Using cos-nodejs-sdk-v5
+      const cos = require('cos-nodejs-sdk-v5');
+
+      const cosClient = new cos({
+        SecretId: this.secretId,
+        SecretKey: this.secretKey,
+      });
+
+      // Upload to COS
+      await new Promise((resolve, reject) => {
+        cosClient.putObject({
+          Bucket: this.bucket,
+          Region: this.region,
+          Key: key,
+          Body: fileBuffer,
+        }, (err: any, data: any) => {
+          if (err) {
+            console.error('[TencentCosService] Upload error:', err);
+            reject(new BadRequestException(`Failed to upload file: ${err.message}`));
+          } else {
+            resolve(data);
+          }
+        });
+      });
+
+      // Generate URL
+      const url = this.cdnDomain
+        ? `https://${this.cdnDomain}/${key}`
+        : `https://${this.bucket}.cos.${this.region}.myqcloud.com/${key}`;
+
+      console.log(`[TencentCosService] Uploaded ${key} to ${url}`);
+
+      return { url, key };
+    } catch (error) {
+      console.error('[TencentCosService] Upload failed:', error);
+      throw new BadRequestException('Failed to upload file to COS');
+    }
+  }
+
+  /**
    * Get file extension from filename
    */
   private getFileExtension(filename: string): string {
     const ext = filename.split('.').pop()?.toLowerCase();
     if (!ext || !['jpg', 'jpeg', 'png', 'gif', 'webp', 'pdf'].includes(ext)) {
-      return 'jpg';
+      return 'bin';
     }
     return ext;
   }

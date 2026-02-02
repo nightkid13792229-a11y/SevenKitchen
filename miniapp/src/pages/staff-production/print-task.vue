@@ -306,7 +306,7 @@ const handlePrint = async () => {
     // 准备发送的数据，包括parsedIngredients
     const requestData = {
       recipeName: printData.value.recipeName,
-      recipeVersion: printData.value.recipeVersion,
+      recipeVersion: String(printData.value.recipeVersion), // 确保是字符串
       currentPotNumber: printData.value.currentPotNumber,
       totalPots: printData.value.totalPots,
       status: printData.value.status,
@@ -317,6 +317,8 @@ const handlePrint = async () => {
       parsedIngredients: parsedIngredients.value,
       createdBy: printData.value.createdBy || '厨房管理员',
     };
+
+    console.log('[PrintTask] Request data:', JSON.stringify(requestData, null, 2));
 
     // 调用后端API生成PDF
     const res = await uni.request({
@@ -364,11 +366,15 @@ const handlePrint = async () => {
         throw new Error('下载PDF失败');
       }
     } else {
-      throw new Error(res.data?.message || '生成PDF失败');
+      const errorMsg = res.data?.message || '生成PDF失败';
+      console.error('[PrintTask] API Error:', errorMsg);
+      console.error('[PrintTask] Response data:', res.data);
+      throw new Error(errorMsg);
     }
   } catch (error: any) {
     uni.hideLoading();
     console.error('[PrintTask] Print failed:', error);
+    console.error('[PrintTask] Error stack:', error.stack);
     uni.showToast({
       title: error.message || '生成PDF失败',
       icon: 'none',

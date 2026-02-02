@@ -102,19 +102,7 @@ export function getBaseUrl(): string {
     return PROD_BASE_URL
   }
 
-  // 优先级1：真机调试 → 强制使用局域网IP（忽略Storage）
-  if (isRealDevice()) {
-    console.debug('[Config] Detected real device, using LAN BASE_URL:', LAN_BASE_URL)
-    return LAN_BASE_URL
-  }
-
-  // 优先级2：开发者工具 → 使用localhost
-  if (isDevTools()) {
-    console.debug('[Config] Detected DevTools, using dev BASE_URL:', DEV_BASE_URL)
-    return DEV_BASE_URL
-  }
-
-  // 优先级3：手动配置的地址（Storage）
+  // 优先级1：手动配置的地址（Storage）- 支持真机调试时使用生产环境
   try {
     const stored = uni.getStorageSync(STORAGE_KEY)
     if (stored && typeof stored === 'string' && stored.trim()) {
@@ -123,6 +111,18 @@ export function getBaseUrl(): string {
     }
   } catch (err) {
     console.warn('Failed to read BASE_URL from storage:', err)
+  }
+
+  // 优先级2：真机调试 → 强制使用局域网IP（无Storage配置时）
+  if (isRealDevice()) {
+    console.debug('[Config] Detected real device, using LAN BASE_URL:', LAN_BASE_URL)
+    return LAN_BASE_URL
+  }
+
+  // 优先级3：开发者工具 → 使用localhost
+  if (isDevTools()) {
+    console.debug('[Config] Detected DevTools, using dev BASE_URL:', DEV_BASE_URL)
+    return DEV_BASE_URL
   }
 
   // 默认开发环境地址

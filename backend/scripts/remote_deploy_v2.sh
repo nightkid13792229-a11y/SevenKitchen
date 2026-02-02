@@ -96,7 +96,7 @@ echo ""
 
 # Step 2.1: Change to project directory
 info "Step 2.1: Changing to project directory..."
-cd "${SERVER_PROJECT_PATH:?SERVER_PROJECT_PATH not set}"
+cd "/opt/sevenkitchen/SevenKitchen/backend"
 ok "Current directory: $(pwd)"
 echo ""
 

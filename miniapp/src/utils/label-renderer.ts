@@ -106,6 +106,68 @@ export function getCookingAdvice(cookingMethod: {
 }
 
 /**
+ * 测量标签绘制后的总高度（不实际输出）
+ * @param ctx Canvas上下文
+ * @param labelData 标签数据
+ * @returns 最终的Y坐标（像素）
+ */
+function measureLabelHeight(ctx: any, labelData: LabelData): number {
+  const centerX = CANVAS_WIDTH / 2;
+  const margin = mmToPx(LABEL_LAYOUT.margin.left);
+  let y = mmToPx(LABEL_ELEMENTS.recipeName.yOffset);
+
+  // 模拟绘制所有内容，只计算Y坐标，不实际输出
+  // 1. 食谱名称
+  y += mmToPx(LABEL_ELEMENTS.recipeName.lineHeight);
+
+  // 2. 制作信息
+  y += mmToPx(LABEL_ELEMENTS.productionInfo.lineHeight) * 2;
+  y += mmToPx(LABEL_LAYOUT.lineHeight.loose);
+  y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
+
+  // 3. 原料表
+  y += mmToPx(LABEL_ELEMENTS.ingredientsTitle.lineHeight);
+  const allIngredients = [labelData.foodIngredients, labelData.supplementIngredients].filter(Boolean).join('、');
+  const ingredientLines = splitTextByChars(allIngredients, LABEL_ELEMENTS.ingredientsContent.maxCharsPerLine);
+  y += ingredientLines.length * mmToPx(LABEL_ELEMENTS.ingredientsContent.lineHeight);
+  y += mmToPx(LABEL_LAYOUT.spacing.blockInternal);
+  y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
+
+  // 4. 营养成分分析
+  if (labelData.nutritionAnalysis) {
+    y += mmToPx(LABEL_ELEMENTS.nutrition.lineHeight);
+    const na = labelData.nutritionAnalysis;
+    const nutritionItems = [
+      na.proteinPercent !== undefined ? `蛋白质${na.proteinPercent.toFixed(1)}%` : null,
+      na.fatPercent !== undefined ? `脂肪${na.fatPercent.toFixed(1)}%` : null,
+      na.ashPercent !== undefined ? `灰分${na.ashPercent.toFixed(1)}%` : null,
+      na.moisturePercent !== undefined ? `含水量${na.moisturePercent.toFixed(1)}%` : null,
+      na.crudeFiberPercent !== undefined ? `纤维${na.crudeFiberPercent.toFixed(1)}%` : null,
+      na.carbohydratePercent !== undefined ? `碳水${na.carbohydratePercent.toFixed(1)}%` : null,
+      na.energyDensityKcalPerKg ? `能量${na.energyDensityKcalPerKg}kcal/kg` : null,
+      na.calciumPhosphorusRatio ? `钙磷比${na.calciumPhosphorusRatio}:1` : null,
+    ].filter(Boolean);
+    const itemsPerLine = LABEL_ELEMENTS.nutrition.itemsPerLine || 4;
+    const nutritionLineCount = Math.ceil(nutritionItems.length / itemsPerLine);
+    y += nutritionLineCount * mmToPx(LABEL_ELEMENTS.nutrition.lineHeight);
+    y += mmToPx(LABEL_LAYOUT.spacing.blockInternal);
+    y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
+  }
+
+  // 5. 保质期
+  y += mmToPx(LABEL_ELEMENTS.shelfLife.lineHeight) * 2;
+  y += mmToPx(LABEL_LAYOUT.spacing.blockInternal);
+  y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
+
+  // 6. 烹饪建议
+  y += mmToPx(LABEL_ELEMENTS.cooking.lineHeight);
+  const cookingAdvice = getCookingAdvice(labelData.cookingMethod);
+  y += cookingAdvice.length * mmToPx(LABEL_ELEMENTS.cooking.lineHeight);
+
+  return y;
+}
+
+/**
  * 绘制产品标签（用于预览，与精臣SDK打印保持一致）
  * @param canvasId Canvas组件ID
  * @param ctx Canvas上下文
@@ -132,11 +194,37 @@ export async function drawProductionLabel(
       ctx.setFillStyle('#FFFFFF');
       ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
+      // 2. 测量内容高度，计算缩放比例
+      const measuredHeight = measureLabelHeight(ctx, labelData);
+      const availableHeight = mmToPx(92); // 可用内容高度 92mm
+      const bottomReserve = mmToPx(6); // 底部品牌预留空间
+
+      console.log('[LabelRenderer] 测量高度:', Math.round(measuredHeight), 'px, 可用:', availableHeight, 'px');
+
+      let scale = 1.0;
+      if (measuredHeight + bottomReserve > availableHeight) {
+        // 内容溢出，需要缩放
+        scale = (availableHeight - bottomReserve) / measuredHeight;
+        // 限制最小缩放比例 0.85，避免字体过小
+        scale = Math.max(scale, 0.85);
+        console.log('[LabelRenderer] ⚠️ 内容溢出，启用缩放模式，缩放比例:', scale.toFixed(2));
+      } else {
+        console.log('[LabelRenderer] ✓ 内容高度正常，无需缩放');
+      }
+
+      // 3. 应用缩放变换
+      ctx.save();
+      if (scale !== 1.0) {
+        ctx.scale(scale, scale);
+      }
+
+      // 4. 计算缩放后的起始Y坐标（保持垂直居中）
+      const centerY = (availableHeight - (availableHeight - bottomReserve) * scale) / 2;
+      let y = centerY + (mmToPx(LABEL_ELEMENTS.recipeName.yOffset) - centerY) * scale;
+
       // 使用统一配置：将mm转换为px
       const centerX = CANVAS_WIDTH / 2;
       const margin = mmToPx(LABEL_LAYOUT.margin.left);
-
-      let y = mmToPx(LABEL_ELEMENTS.recipeName.yOffset);
 
       // ============= 0. 顶部品牌名称已移除 =============
       // 品牌名称已移至底部
@@ -164,8 +252,8 @@ export async function drawProductionLabel(
       // 粗分隔线已移除
       y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
 
-      // ============= 3. 原料表 =============
-      // 标题（纯文本，不使用装饰字符）
+      // ============= 3. 原料表（表格化） =============
+      // 标题
       ctx.setFontSize(mmToPx(LABEL_ELEMENTS.ingredientsTitle.fontSize));
       ctx.setFillStyle('#000000');
       ctx.setTextAlign('center');
@@ -173,7 +261,7 @@ export async function drawProductionLabel(
       ctx.fillText(ingredientsTitleText, centerX, y);
       y += mmToPx(LABEL_ELEMENTS.ingredientsTitle.lineHeight);
 
-      // 5. 组合食材和补剂
+      // 组合食材和补剂
       let allIngredients = '';
       if (labelData.foodIngredients) {
         allIngredients += labelData.foodIngredients;
@@ -187,24 +275,44 @@ export async function drawProductionLabel(
       }
 
       const ingredientLines = splitTextByChars(allIngredients, LABEL_ELEMENTS.ingredientsContent.maxCharsPerLine);
+      const tableLeft = margin;
+      const tableRight = CANVAS_WIDTH - margin;
+
+      // 绘制表格顶部线
+      ctx.setStrokeStyle('#000000');
+      ctx.setLineWidth(mmToPx(0.3));
+      ctx.beginPath();
+      ctx.moveTo(tableLeft, y);
+      ctx.lineTo(tableRight, y);
+      ctx.stroke();
+      y += mmToPx(LABEL_ELEMENTS.ingredientsContent.lineHeight);
+
+      // 绘制每行内容 + 底部分隔线
       ctx.setFontSize(mmToPx(LABEL_ELEMENTS.ingredientsContent.fontSize));
       ctx.setFillStyle('#333333');
-      ctx.setTextAlign('center');  // 居中对齐，保证左右边距一致
-      ingredientLines.forEach((line) => {
+      ctx.setTextAlign('center');
+
+      ingredientLines.forEach((line, index) => {
         ctx.fillText(line, centerX, y);
         y += mmToPx(LABEL_ELEMENTS.ingredientsContent.lineHeight);
+
+        // 绘制底部分隔线（最后一行也画，形成完整表格）
+        ctx.setStrokeStyle('#000000');
+        ctx.setLineWidth(mmToPx(0.3));
+        ctx.beginPath();
+        ctx.moveTo(tableLeft, y);
+        ctx.lineTo(tableRight, y);
+        ctx.stroke();
       });
 
       y += mmToPx(LABEL_LAYOUT.spacing.blockInternal);
-
-      // 分隔线已移除
       y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
 
-      // ============= 4. 营养成分分析（如果有数据） =============
+      // ============= 4. 营养成分分析（表格化） =============
       if (labelData.nutritionAnalysis) {
         const na = labelData.nutritionAnalysis;
 
-        // 标题（纯文本，不使用装饰字符）
+        // 标题
         ctx.setFontSize(mmToPx(LABEL_ELEMENTS.nutrition.titleFontSize));
         ctx.setFillStyle('#000000');
         ctx.setTextAlign('center');
@@ -212,34 +320,65 @@ export async function drawProductionLabel(
         ctx.fillText(nutritionTitleText, centerX, y);
         y += mmToPx(LABEL_ELEMENTS.nutrition.lineHeight);
 
-        ctx.setFontSize(mmToPx(LABEL_ELEMENTS.nutrition.contentFontSize));
-        ctx.setFillStyle('#000000');
-        ctx.setTextAlign('center');  // 居中对齐，保证左右边距一致
-
-        // 营养成分列表（每行最多4项，防止超出边框）
+        // 准备营养成分数据（每项一个对象）
         const nutritionItems = [
-          na.proteinPercent !== undefined ? `蛋白质${na.proteinPercent.toFixed(1)}%` : null,
-          na.fatPercent !== undefined ? `脂肪${na.fatPercent.toFixed(1)}%` : null,
-          na.ashPercent !== undefined ? `灰分${na.ashPercent.toFixed(1)}%` : null,
-          na.moisturePercent !== undefined ? `含水量${na.moisturePercent.toFixed(1)}%` : null,
-          na.crudeFiberPercent !== undefined ? `纤维${na.crudeFiberPercent.toFixed(1)}%` : null,
-          na.carbohydratePercent !== undefined ? `碳水${na.carbohydratePercent.toFixed(1)}%` : null,
-          na.energyDensityKcalPerKg ? `能量${na.energyDensityKcalPerKg}kcal/kg` : null,
-          na.calciumPhosphorusRatio ? `钙磷比${na.calciumPhosphorusRatio}:1` : null,
+          na.proteinPercent !== undefined ? { name: '蛋白质', value: `${na.proteinPercent.toFixed(1)}%` } : null,
+          na.fatPercent !== undefined ? { name: '脂肪', value: `${na.fatPercent.toFixed(1)}%` } : null,
+          na.ashPercent !== undefined ? { name: '灰分', value: `${na.ashPercent.toFixed(1)}%` } : null,
+          na.moisturePercent !== undefined ? { name: '含水量', value: `${na.moisturePercent.toFixed(1)}%` } : null,
+          na.crudeFiberPercent !== undefined ? { name: '纤维', value: `${na.crudeFiberPercent.toFixed(1)}%` } : null,
+          na.carbohydratePercent !== undefined ? { name: '碳水', value: `${na.carbohydratePercent.toFixed(1)}%` } : null,
+          na.energyDensityKcalPerKg ? { name: '能量', value: `${na.energyDensityKcalPerKg}kcal/kg` } : null,
+          na.calciumPhosphorusRatio ? { name: '钙磷比', value: `${na.calciumPhosphorusRatio}:1` } : null,
         ].filter(Boolean);
 
-        // 分成多行显示（每行4项，用顿号分隔）
-        const itemsPerLine = LABEL_ELEMENTS.nutrition.itemsPerLine || 4;
-        for (let i = 0; i < nutritionItems.length; i += itemsPerLine) {
-          const lineItems = nutritionItems.slice(i, i + itemsPerLine);
-          const line = lineItems.join('、');
-          ctx.fillText(line, centerX, y);
+        // 表格布局参数
+        const tableLeft = margin;
+        const tableRight = CANVAS_WIDTH - margin;
+        const tableWidth = tableRight - tableLeft;
+        const colWidth = tableWidth / 2;  // 两列：名称列 | 数值列
+        const middleX = tableLeft + colWidth;
+
+        // 绘制表格顶部线
+        ctx.setStrokeStyle('#000000');
+        ctx.setLineWidth(mmToPx(0.3));
+        ctx.beginPath();
+        ctx.moveTo(tableLeft, y);
+        ctx.lineTo(tableRight, y);
+        ctx.stroke();
+        y += mmToPx(LABEL_ELEMENTS.nutrition.lineHeight);
+
+        // 绘制表格内容
+        ctx.setFontSize(mmToPx(LABEL_ELEMENTS.nutrition.contentFontSize));
+        ctx.setFillStyle('#000000');
+
+        nutritionItems.forEach((item: any, index: number) => {
+          // 绘制竖线（中间分隔线）
+          ctx.setStrokeStyle('#000000');
+          ctx.setLineWidth(mmToPx(0.3));
+          ctx.beginPath();
+          ctx.moveTo(middleX, y - mmToPx(LABEL_ELEMENTS.nutrition.lineHeight));
+          ctx.lineTo(middleX, y);
+          ctx.stroke();
+
+          // 左列：营养名称（右对齐到中间线）
+          ctx.setTextAlign('right');
+          ctx.fillText(item.name, middleX - mmToPx(2), y);
+
+          // 右列：数值（左对齐到中间线）
+          ctx.setTextAlign('left');
+          ctx.fillText(item.value, middleX + mmToPx(2), y);
+
+          // 绘制底部分隔线
+          ctx.beginPath();
+          ctx.moveTo(tableLeft, y);
+          ctx.lineTo(tableRight, y);
+          ctx.stroke();
+
           y += mmToPx(LABEL_ELEMENTS.nutrition.lineHeight);
-        }
+        });
 
         y += mmToPx(LABEL_LAYOUT.spacing.blockInternal);
-
-        // 分隔线已移除
         y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
       }
 
@@ -295,6 +434,9 @@ export async function drawProductionLabel(
       ctx.setFillStyle('#000000');
       ctx.setTextAlign('center');
       ctx.fillText(labelData.brandName, centerX, brandBottomY);
+
+      // 恢复Canvas状态（恢复缩放前的坐标系）
+      ctx.restore();
 
       // 绘制完成后导出图片(使用Promise确保稳定性)
       ctx.draw(false, () => {
@@ -446,6 +588,82 @@ export function formatCookingMethod(cookingTime: {
  * @param printCallback 打印回调函数（在endDrawLabel中调用）
  * @returns Promise<void>
  */
+/**
+ * 测量标签绘制后的总高度（精臣SDK版本）
+ * @param labelData 标签数据
+ * @returns 最终的Y坐标（毫米）
+ */
+function measureLabelHeightForJCSDK(labelData: LabelData): number {
+  let y = LABEL_ELEMENTS.recipeName.yOffset;
+
+  // 1. 食谱名称
+  y += LABEL_ELEMENTS.recipeName.lineHeight;
+
+  // 2. 制作信息
+  y += LABEL_ELEMENTS.productionInfo.lineHeight * 2;
+  y += LABEL_LAYOUT.lineHeight.loose;
+  y += LABEL_LAYOUT.spacing.sectionGap;
+
+  // 3. 原料表
+  y += LABEL_ELEMENTS.ingredientsTitle.lineHeight;
+  const allIngredients = [labelData.foodIngredients, labelData.supplementIngredients].filter(Boolean).join('、');
+  const ingredientLines = splitTextByChars(allIngredients, LABEL_ELEMENTS.ingredientsContent.maxCharsPerLine);
+  y += ingredientLines.length * LABEL_ELEMENTS.ingredientsContent.lineHeight;
+  y += LABEL_LAYOUT.spacing.blockInternal;
+  y += LABEL_LAYOUT.spacing.sectionGap;
+
+  // 4. 营养成分分析
+  if (labelData.nutritionAnalysis) {
+    y += LABEL_ELEMENTS.nutrition.lineHeight;
+    const na = labelData.nutritionAnalysis;
+    const nutritionItems = [
+      na.proteinPercent !== undefined ? `蛋白质${na.proteinPercent.toFixed(1)}%` : null,
+      na.fatPercent !== undefined ? `脂肪${na.fatPercent.toFixed(1)}%` : null,
+      na.ashPercent !== undefined ? `灰分${na.ashPercent.toFixed(1)}%` : null,
+      na.moisturePercent !== undefined ? `含水量${na.moisturePercent.toFixed(1)}%` : null,
+      na.crudeFiberPercent !== undefined ? `纤维${na.crudeFiberPercent.toFixed(1)}%` : null,
+      na.carbohydratePercent !== undefined ? `碳水${na.carbohydratePercent.toFixed(1)}%` : null,
+      na.energyDensityKcalPerKg ? `能量${na.energyDensityKcalPerKg}kcal/kg` : null,
+      na.calciumPhosphorusRatio ? `钙磷比${na.calciumPhosphorusRatio}:1` : null,
+    ].filter(Boolean);
+    const itemsPerLine = LABEL_ELEMENTS.nutrition.itemsPerLine || 4;
+    const nutritionLineCount = Math.ceil(nutritionItems.length / itemsPerLine);
+    y += nutritionLineCount * LABEL_ELEMENTS.nutrition.lineHeight;
+    y += LABEL_LAYOUT.spacing.blockInternal;
+    y += LABEL_LAYOUT.spacing.sectionGap;
+  }
+
+  // 5. 保质期
+  y += LABEL_ELEMENTS.shelfLife.lineHeight * 2;
+  y += LABEL_LAYOUT.spacing.blockInternal;
+  y += LABEL_LAYOUT.spacing.sectionGap;
+
+  // 6. 烹饪建议
+  y += LABEL_ELEMENTS.cooking.lineHeight;
+  const cookingAdvice = getCookingAdvice(labelData.cookingMethod);
+  y += cookingAdvice.length * LABEL_ELEMENTS.cooking.lineHeight;
+
+  return y;
+}
+
+/**
+ * 计算缩放比例（精臣SDK版本）
+ * @param measuredHeight 测量到的总高度
+ * @returns 缩放比例（0.85-1.0）
+ */
+function calculateScale(measuredHeight: number): number {
+  const availableHeight = 92; // mm (可用内容高度)
+  const bottomReserve = 6;   // mm (底部品牌预留空间)
+
+  if (measuredHeight + bottomReserve > availableHeight) {
+    // 内容溢出，需要缩放
+    const scale = (availableHeight - bottomReserve) / measuredHeight;
+    // 限制最小缩放比例 0.85，避免字体过小
+    return Math.max(scale, 0.85);
+  }
+  return 1.0;
+}
+
 export async function drawProductionLabelWithJCSDK(
   canvasId: string,
   component: any,
@@ -456,47 +674,62 @@ export async function drawProductionLabelWithJCSDK(
 
   return new Promise((resolve, reject) => {
     try {
-      // 1. 开始绘制标签（75mm × 100mm，旋转0度）
+      // 1. 测量内容高度，计算缩放比例
+      const measuredHeight = measureLabelHeightForJCSDK(labelData);
+      const scale = calculateScale(measuredHeight);
+
+      console.log('[LabelRenderer] 测量高度:', measuredHeight.toFixed(1), 'mm');
+      if (scale < 1.0) {
+        console.log('[LabelRenderer] ⚠️ 内容溢出，启用缩放模式，缩放比例:', scale.toFixed(2));
+      } else {
+        console.log('[LabelRenderer] ✓ 内容高度正常，无需缩放');
+      }
+
+      // 2. 开始绘制标签（75mm × 100mm，旋转0度）
       JCAPI.startDrawLabel(canvasId, component, LABEL_LAYOUT.canvas.width, LABEL_LAYOUT.canvas.height, 0);
+
+      // 3. 计算缩放后的起始Y坐标（保持垂直居中）
+      const availableHeight = 92; // mm
+      const bottomReserve = 6; // mm
+      const centerY = (availableHeight - (availableHeight - bottomReserve) * scale) / 2;
+      let y = centerY + (LABEL_ELEMENTS.recipeName.yOffset - centerY) * scale;
 
       // 使用统一配置（mm单位）
       const margin = LABEL_LAYOUT.margin.left;
       const centerX = LABEL_LAYOUT.canvas.width / 2;
 
-      let y = LABEL_ELEMENTS.recipeName.yOffset;
-
       // ============= 0. 顶部品牌名称已移除 =============
       // 品牌名称已移至底部
 
       // ============= 1. 食谱名称 =============
-      JCAPI.drawText(labelData.recipeName, centerX, y, LABEL_ELEMENTS.recipeName.fontSize, 0, {
+      JCAPI.drawText(labelData.recipeName, centerX, y, LABEL_ELEMENTS.recipeName.fontSize * scale, 0, {
         align: 'center'
       });
-      y += LABEL_ELEMENTS.recipeName.lineHeight;
+      y += LABEL_ELEMENTS.recipeName.lineHeight * scale;
 
       // ============= 2. 制作信息 =============
-      JCAPI.drawText(`为"${labelData.dogName}"制作于${labelData.productionTime}`, centerX, y, LABEL_ELEMENTS.productionInfo.fontSize, 0, {
+      JCAPI.drawText(`为"${labelData.dogName}"制作于${labelData.productionTime}`, centerX, y, LABEL_ELEMENTS.productionInfo.fontSize * scale, 0, {
         align: 'center'
       });
-      y += LABEL_ELEMENTS.productionInfo.lineHeight;
+      y += LABEL_ELEMENTS.productionInfo.lineHeight * scale;
 
       // 订购信息（第二行）
       const orderInfo = `${labelData.weightPerPack}g × ${labelData.packageCount}袋  总净重${labelData.totalWeight}g`;
-      JCAPI.drawText(orderInfo, centerX, y, LABEL_ELEMENTS.productionInfo.fontSize, 0, {
+      JCAPI.drawText(orderInfo, centerX, y, LABEL_ELEMENTS.productionInfo.fontSize * scale, 0, {
         align: 'center'
       });
-      y += LABEL_LAYOUT.lineHeight.loose;
+      y += LABEL_LAYOUT.lineHeight.loose * scale;
 
       // 粗分隔线已移除
-      y += LABEL_LAYOUT.spacing.sectionGap;
+      y += LABEL_LAYOUT.spacing.sectionGap * scale;
 
-      // ============= 3. 原料表 =============
-      // 标题（纯文本，不使用装饰字符）
+      // ============= 3. 原料表（表格化） =============
+      // 标题
       const ingredientsTitleText = '原料表';
-      JCAPI.drawText(ingredientsTitleText, centerX, y, LABEL_ELEMENTS.ingredientsTitle.fontSize, 0, {
+      JCAPI.drawText(ingredientsTitleText, centerX, y, LABEL_ELEMENTS.ingredientsTitle.fontSize * scale, 0, {
         align: 'center'
       });
-      y += LABEL_ELEMENTS.ingredientsTitle.lineHeight;
+      y += LABEL_ELEMENTS.ingredientsTitle.lineHeight * scale;
 
       // 原料内容
       let allIngredients = '';
@@ -512,85 +745,112 @@ export async function drawProductionLabelWithJCSDK(
       }
 
       const ingredientLines = splitTextByChars(allIngredients, LABEL_ELEMENTS.ingredientsContent.maxCharsPerLine);
+      const tableLeft = margin;
+      const tableRight = LABEL_LAYOUT.canvas.width - margin;
+
+      // 绘制表格顶部线
+      JCAPI.drawLine(tableLeft, y, tableRight, y, 0.3 * scale);
+      y += LABEL_ELEMENTS.ingredientsContent.lineHeight * scale;
+
+      // 绘制每行内容 + 底部分隔线
       ingredientLines.forEach((line) => {
-        JCAPI.drawText(line, centerX, y, LABEL_ELEMENTS.ingredientsContent.fontSize, 0, {
-          align: 'center'  // 居中对齐，保证左右边距一致
+        JCAPI.drawText(line, centerX, y, LABEL_ELEMENTS.ingredientsContent.fontSize * scale, 0, {
+          align: 'center'
         });
-        y += LABEL_ELEMENTS.ingredientsContent.lineHeight;
+        y += LABEL_ELEMENTS.ingredientsContent.lineHeight * scale;
+
+        // 绘制底部分隔线
+        JCAPI.drawLine(tableLeft, y, tableRight, y, 0.3 * scale);
       });
 
-      y += LABEL_LAYOUT.spacing.blockInternal;
+      y += LABEL_LAYOUT.spacing.blockInternal * scale;
+      y += LABEL_LAYOUT.spacing.sectionGap * scale;
 
-      // 分隔线已移除
-      y += LABEL_LAYOUT.spacing.sectionGap;
-
-      // ============= 4. 营养成分分析（如果有数据） =============
+      // ============= 4. 营养成分分析（表格化） =============
       if (labelData.nutritionAnalysis) {
         const na = labelData.nutritionAnalysis;
 
-        // 标题（纯文本，不使用装饰字符）
+        // 标题
         const nutritionTitleText = '营养成分分析';
-        JCAPI.drawText(nutritionTitleText, centerX, y, LABEL_ELEMENTS.nutrition.titleFontSize, 0, {
+        JCAPI.drawText(nutritionTitleText, centerX, y, LABEL_ELEMENTS.nutrition.titleFontSize * scale, 0, {
           align: 'center'
         });
-        y += LABEL_ELEMENTS.nutrition.lineHeight;
+        y += LABEL_ELEMENTS.nutrition.lineHeight * scale;
 
-        // 营养成分列表（每行最多4项，防止超出边框）
+        // 准备营养成分数据（每项一个对象）
         const nutritionItems = [
-          na.proteinPercent !== undefined ? `蛋白质${na.proteinPercent.toFixed(1)}%` : null,
-          na.fatPercent !== undefined ? `脂肪${na.fatPercent.toFixed(1)}%` : null,
-          na.ashPercent !== undefined ? `灰分${na.ashPercent.toFixed(1)}%` : null,
-          na.moisturePercent !== undefined ? `含水量${na.moisturePercent.toFixed(1)}%` : null,
-          na.crudeFiberPercent !== undefined ? `纤维${na.crudeFiberPercent.toFixed(1)}%` : null,
-          na.carbohydratePercent !== undefined ? `碳水${na.carbohydratePercent.toFixed(1)}%` : null,
-          na.energyDensityKcalPerKg ? `能量${na.energyDensityKcalPerKg}kcal/kg` : null,
-          na.calciumPhosphorusRatio ? `钙磷比${na.calciumPhosphorusRatio}:1` : null,
+          na.proteinPercent !== undefined ? { name: '蛋白质', value: `${na.proteinPercent.toFixed(1)}%` } : null,
+          na.fatPercent !== undefined ? { name: '脂肪', value: `${na.fatPercent.toFixed(1)}%` } : null,
+          na.ashPercent !== undefined ? { name: '灰分', value: `${na.ashPercent.toFixed(1)}%` } : null,
+          na.moisturePercent !== undefined ? { name: '含水量', value: `${na.moisturePercent.toFixed(1)}%` } : null,
+          na.crudeFiberPercent !== undefined ? { name: '纤维', value: `${na.crudeFiberPercent.toFixed(1)}%` } : null,
+          na.carbohydratePercent !== undefined ? { name: '碳水', value: `${na.carbohydratePercent.toFixed(1)}%` } : null,
+          na.energyDensityKcalPerKg ? { name: '能量', value: `${na.energyDensityKcalPerKg}kcal/kg` } : null,
+          na.calciumPhosphorusRatio ? { name: '钙磷比', value: `${na.calciumPhosphorusRatio}:1` } : null,
         ].filter(Boolean);
 
-        // 分成多行显示（每行4项，用顿号分隔）
-        const itemsPerLine = LABEL_ELEMENTS.nutrition.itemsPerLine || 4;
-        for (let i = 0; i < nutritionItems.length; i += itemsPerLine) {
-          const lineItems = nutritionItems.slice(i, i + itemsPerLine);
-          const line = lineItems.join('、');
-          JCAPI.drawText(line, centerX, y, LABEL_ELEMENTS.nutrition.contentFontSize, 0, {
-            align: 'center'  // 居中对齐，保证左右边距一致
+        // 表格布局参数
+        const tableLeft = margin;
+        const tableRight = LABEL_LAYOUT.canvas.width - margin;
+        const tableWidth = tableRight - tableLeft;
+        const middleX = tableLeft + tableWidth / 2;
+
+        // 绘制表格顶部线
+        JCAPI.drawLine(tableLeft, y, tableRight, y, 0.3 * scale);
+        y += LABEL_ELEMENTS.nutrition.lineHeight * scale;
+
+        // 绘制表格内容
+        nutritionItems.forEach((item: any) => {
+          // 绘制竖线（中间分隔线）
+          JCAPI.drawLine(middleX, y - LABEL_ELEMENTS.nutrition.lineHeight * scale, middleX, y, 0.3 * scale);
+
+          // 左列：营养名称（右对齐到中间线）
+          JCAPI.drawText(item.name, middleX - 2, y, LABEL_ELEMENTS.nutrition.contentFontSize * scale, 0, {
+            align: 'right'
           });
-          y += LABEL_ELEMENTS.nutrition.lineHeight;
-        }
 
-        y += LABEL_LAYOUT.spacing.blockInternal;
+          // 右列：数值（左对齐到中间线）
+          JCAPI.drawText(item.value, middleX + 2, y, LABEL_ELEMENTS.nutrition.contentFontSize * scale, 0, {
+            align: 'left'
+          });
 
-        // 分隔线已移除
-        y += LABEL_LAYOUT.spacing.sectionGap;
+          // 绘制底部分隔线
+          JCAPI.drawLine(tableLeft, y, tableRight, y, 0.3 * scale);
+
+          y += LABEL_ELEMENTS.nutrition.lineHeight * scale;
+        });
+
+        y += LABEL_LAYOUT.spacing.blockInternal * scale;
+        y += LABEL_LAYOUT.spacing.sectionGap * scale;
       }
 
       // ============= 5. 保质期 =============
       // 标题（纯文本，不使用装饰字符）
       const shelfLifeTitleText = '保质期';
-      JCAPI.drawText(shelfLifeTitleText, centerX, y, LABEL_ELEMENTS.shelfLife.titleFontSize, 0, {
+      JCAPI.drawText(shelfLifeTitleText, centerX, y, LABEL_ELEMENTS.shelfLife.titleFontSize * scale, 0, {
         align: 'center'
       });
-      y += LABEL_ELEMENTS.shelfLife.lineHeight;
+      y += LABEL_ELEMENTS.shelfLife.lineHeight * scale;
 
       // 保质期信息（移除特殊符号）
-      JCAPI.drawText(`冷冻保存6个月  冷藏保存3天`, centerX, y, LABEL_ELEMENTS.shelfLife.contentFontSize, 0, {
+      JCAPI.drawText(`冷冻保存6个月  冷藏保存3天`, centerX, y, LABEL_ELEMENTS.shelfLife.contentFontSize * scale, 0, {
         align: 'center'
       });
-      y += LABEL_ELEMENTS.shelfLife.lineHeight;
+      y += LABEL_ELEMENTS.shelfLife.lineHeight * scale;
 
       // 移除"开封后3小时内食用完"提示
-      y += LABEL_LAYOUT.spacing.blockInternal;
+      y += LABEL_LAYOUT.spacing.blockInternal * scale;
 
       // 分隔线已移除
-      y += LABEL_LAYOUT.spacing.sectionGap;
+      y += LABEL_LAYOUT.spacing.sectionGap * scale;
 
       // ============= 6. 烹饪建议 =============
       // 标题（纯文本，不使用装饰字符）
       const cookingTitleText = '烹饪建议';
-      JCAPI.drawText(cookingTitleText, centerX, y, LABEL_ELEMENTS.cooking.titleFontSize, 0, {
+      JCAPI.drawText(cookingTitleText, centerX, y, LABEL_ELEMENTS.cooking.titleFontSize * scale, 0, {
         align: 'center'
       });
-      y += LABEL_ELEMENTS.cooking.lineHeight;
+      y += LABEL_ELEMENTS.cooking.lineHeight * scale;
 
       // 绘制烹饪建议（同行展示）
       const cookingAdvice = getCookingAdvice(labelData.cookingMethod);
@@ -599,16 +859,16 @@ export async function drawProductionLabelWithJCSDK(
       cookingAdvice.forEach((row) => {
         // 同行展示：方法+时间+说明
         const lineText = `${row.method} ${row.time}：${row.description}`;
-        JCAPI.drawText(lineText, margin + indent, y, LABEL_ELEMENTS.cooking.descriptionFontSize, 0, {
+        JCAPI.drawText(lineText, margin + indent, y, LABEL_ELEMENTS.cooking.descriptionFontSize * scale, 0, {
           align: 'left'
         });
-        y += LABEL_ELEMENTS.cooking.lineHeight;
+        y += LABEL_ELEMENTS.cooking.lineHeight * scale;
       });
 
       // ============= 7. 底部品牌名称 =============
-      y += LABEL_LAYOUT.spacing.blockInternal;
+      y += LABEL_LAYOUT.spacing.blockInternal * scale;
       const brandBottomY = LABEL_LAYOUT.canvas.height - LABEL_ELEMENTS.brandBottom.yOffsetFromBottom;
-      JCAPI.drawText(labelData.brandName, centerX, brandBottomY, LABEL_ELEMENTS.brandBottom.fontSize, 0, {
+      JCAPI.drawText(labelData.brandName, centerX, brandBottomY, LABEL_ELEMENTS.brandBottom.fontSize * scale, 0, {
         align: 'center'
       });
 

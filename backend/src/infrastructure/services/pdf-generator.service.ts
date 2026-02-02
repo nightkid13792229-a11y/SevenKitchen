@@ -4,7 +4,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
-import * as PDFDocument from 'pdfkit';
+const PDFDocument = require('pdfkit');
 
 interface IngredientItem {
   name: string;
@@ -55,7 +55,7 @@ export class PdfGeneratorService {
 
         // Collect buffers
         const chunks: Buffer[] = [];
-        doc.on('data', (chunk) => chunks.push(chunk));
+        doc.on('data', (chunk: Buffer) => chunks.push(chunk));
         doc.on('end', () => resolve(Buffer.concat(chunks)));
         doc.on('error', reject);
 
@@ -120,7 +120,7 @@ export class PdfGeneratorService {
   /**
    * Draw header section with scaling
    */
-  private drawHeader(doc: PDFDocument.PDFDocument, data: PrintTaskData, scaleFactor: number): number {
+  private drawHeader(doc: any, data: PrintTaskData, scaleFactor: number): number {
     const top = 40;
     let y = top;
 
@@ -153,7 +153,7 @@ export class PdfGeneratorService {
   /**
    * Draw packaging orders section with scaling
    */
-  private drawPackagingOrders(doc: PDFDocument.PDFDocument, data: PrintTaskData, startY: number, scaleFactor: number): number {
+  private drawPackagingOrders(doc: any, data: PrintTaskData, startY: number, scaleFactor: number): number {
     let y = startY + Math.floor(20 * scaleFactor);
 
     // Section title
@@ -198,7 +198,7 @@ export class PdfGeneratorService {
   /**
    * Draw ingredients section with scaling
    */
-  private drawIngredients(doc: PDFDocument.PDFDocument, data: PrintTaskData, startY: number, scaleFactor: number): number {
+  private drawIngredients(doc: any, data: PrintTaskData, startY: number, scaleFactor: number): number {
     let y = startY + Math.floor(20 * scaleFactor);
 
     // Section title
@@ -253,7 +253,7 @@ export class PdfGeneratorService {
   /**
    * Draw footer section with scaling
    */
-  private drawFooter(doc: PDFDocument.PDFDocument, data: PrintTaskData, currentY: number, scaleFactor: number): void {
+  private drawFooter(doc: any, data: PrintTaskData, currentY: number, scaleFactor: number): void {
     // Add padding before footer
     const footerY = currentY + Math.floor(30 * scaleFactor);
 

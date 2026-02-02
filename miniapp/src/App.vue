@@ -7,7 +7,7 @@
 <script setup lang="ts">
 import { onLaunch, onShow, onHide } from '@dcloudio/uni-app'
 import { getToken, markTokenReady } from './utils/api'
-import { getBaseUrl, getDefaultBaseUrl } from './utils/config'
+import { getBaseUrl, getDefaultBaseUrl, setBaseUrl } from './utils/config'
 
 onLaunch(() => {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
@@ -19,8 +19,9 @@ onLaunch(() => {
     // Debug: Check platform using getDeviceInfo (替代已废弃的 getSystemInfoSync)
     const deviceInfo = uni.getDeviceInfo()
     const platform = deviceInfo?.platform || 'unknown'
+    const platformLower = platform.toLowerCase()
     console.log('[App Debug] Platform:', platform)
-    console.log('[App Debug] Platform lowercased:', platform.toLowerCase())
+    console.log('[App Debug] Platform lowercased:', platformLower)
 
     // Auto-fix: Clear old port 3000 configuration from storage
     const storedBaseUrl = uni.getStorageSync('api_base_url')
@@ -30,6 +31,15 @@ onLaunch(() => {
         uni.removeStorageSync('api_base_url')
         console.log('✓ Old configuration cleared. Using new port 3001')
       }
+    }
+
+    // Auto-configure for real device debugging: use production URL
+    // 如果是真机调试模式，且Storage中没有配置baseUrl，自动设置生产环境URL
+    const isRealDevice = platformLower === 'android' || platformLower === 'ios'
+    if (isRealDevice && !storedBaseUrl) {
+      const prodUrl = 'https://api.sevenkitchen.cloud/api/v1'
+      console.log('🔧 Real device detected, auto-setting production URL:', prodUrl)
+      setBaseUrl(prodUrl)
     }
 
     const currentBaseUrl = getBaseUrl()
@@ -44,7 +54,7 @@ onLaunch(() => {
 
     // Detect build mode (dev vs build)
     // Check if running in devtools
-    const isDevtools = platform.toLowerCase() === 'devtools'
+    const isDevtools = platformLower === 'devtools'
     // @ts-ignore - uni compilation mode
     const isDev = isDevtools || (typeof process !== 'undefined' && process.env.NODE_ENV === 'development')
     console.log('🔧 Build Mode:', isDev ? 'Development (watch)' : 'Production')

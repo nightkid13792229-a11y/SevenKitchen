@@ -536,7 +536,7 @@ const choosePhoto = async () => {
 const uploadSinglePhoto = async (task: UploadTask) => {
   try {
     const token = uni.getStorageSync('token');
-    const baseUrl = uni.getStorageSync('baseUrl') || 'http://localhost:3001/api/v1';
+    const baseUrl = getBaseUrl();
 
     const uploadRes = await uni.uploadFile({
       url: `${baseUrl}/staff/production/packaging-units/${taskId.value}/photos`,
@@ -699,19 +699,15 @@ const printTask = () => {
     completedAt: taskDetail.value.completedAt,
     orderItems: taskDetail.value.orderItems || [],
     recipeSnapshot: taskDetail.value.recipeSnapshot,
-    createdBy: taskDetail.value.createdBy || '厨房管理员', // 添加创建人字段
+    createdBy: taskDetail.value.createdBy || '厨房管理员',
   };
 
-  // 获取后端地址（去除 /api/v1 后缀，因为打印页面是静态文件）
-  const apiBaseUrl = getBaseUrl();
-  const baseUrl = apiBaseUrl.replace(/\/api\/v\d+$/, '');
+  // 将数据编码后传递到打印页面
+  const encodedData = encodeURIComponent(JSON.stringify(printData));
 
-  // 构建打印页面URL
-  const printUrl = `${baseUrl}/task-print.html?data=${encodeURIComponent(JSON.stringify(printData))}`;
-
-  // 跳转到H5打印页面
+  // 跳转到原生打印页面
   uni.navigateTo({
-    url: `/pages/common/webview?url=${encodeURIComponent(printUrl)}`,
+    url: `/pages/staff-production/print-task?taskData=${encodedData}`,
   });
 };
 

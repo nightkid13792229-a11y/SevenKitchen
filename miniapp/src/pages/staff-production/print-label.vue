@@ -63,7 +63,10 @@
           <view v-for="(order, orderIndex) in batch.orderItems" :key="order.orderItemId" class="order-card">
             <view class="order-header">
               <text class="order-index">订单 {{ orderIndex + 1 }}</text>
-              <button class="preview-btn" @tap="previewLabel(order)">预览标签</button>
+              <view class="header-buttons">
+                <button class="preview-btn" @tap="previewLabel(order)">预览</button>
+                <button class="print-btn" @tap="printSingleOrder(order)">打印</button>
+              </view>
             </view>
 
             <view class="order-content">
@@ -130,7 +133,10 @@
         <view v-for="(order, index) in orders" :key="order.orderItemId" class="order-card">
           <view class="order-header">
             <text class="order-index">订单 {{ index + 1 }}</text>
-            <button class="preview-btn" @tap="previewLabel(order)">预览标签</button>
+            <view class="header-buttons">
+              <button class="preview-btn" @tap="previewLabel(order)">预览</button>
+              <button class="print-btn" @tap="printSingleOrder(order)">打印</button>
+            </view>
           </view>
 
           <view class="order-content">
@@ -190,11 +196,6 @@
           </view>
         </view>
       </view>
-    </view>
-
-    <!-- 底部操作按钮 -->
-    <view class="action-buttons">
-      <button class="action-btn primary" @tap="confirmPrint">立即打印</button>
     </view>
 
     <!-- 隐藏的Canvas用于绘制 -->
@@ -475,7 +476,7 @@ async function connectPrinter() {
       showPrinterListFunc();
     }
   } catch (error) {
-    console.error('[PrintLabel] 连接打印机失败:', error);
+    console.error('[PrintLabel] ✗ 连接打印机失败:', error);
 
     // 检查是否是蓝牙权限问题
     const errorMessage = (error as any)?.errMsg || String(error);
@@ -653,8 +654,8 @@ function formatDateTime(dateStr: string): string {
   return `${year}-${month}-${day}`;
 }
 
-// 确认打印
-async function confirmPrint() {
+// 打印单个订单
+async function printSingleOrder(order: OrderPrintConfig) {
   // 检查打印机连接
   if (!jcPrinter.isConnectedPrinter()) {
     uni.showToast({
@@ -664,10 +665,7 @@ async function confirmPrint() {
     return;
   }
 
-  // 计算总打印任务数（用于进度显示）
-  const totalPrints = orders.value.reduce((sum, order) => sum + order.printCount, 0);
-
-  if (totalPrints === 0) {
+  if (order.printCount <= 0) {
     uni.showToast({
       title: '请至少打印1张标签',
       icon: 'none'
@@ -675,54 +673,70 @@ async function confirmPrint() {
     return;
   }
 
-  // 开始打印
-  uni.showLoading({
-    title: `打印中 0/${totalPrints}`,
-    mask: true
-  });
+  // 显示确认弹窗
+  uni.showModal({
+    title: '确认打印',
+    content: `即将打印 ${order.dogName} 的标签，共 ${order.printCount} 张。\n\n请确认打印机已连接并准备好打印纸。`,
+    confirmText: '确认打印',
+    cancelText: '取消',
+    success: async (res) => {
+      if (!res.confirm) {
+        return;  // 用户取消
+      }
 
-  try {
-    let printedCount = 0;
+      console.log('[PrintLabel] ========================================');
+      console.log('[PrintLabel] 开始打印单个订单');
+      console.log('[PrintLabel] 订单信息:', {
+        dogName: order.dogName,
+        recipeName: order.recipeName,
+        printCount: order.printCount
+      });
 
-    for (const order of orders.value) {
-      // 准备标签数据
-      const labelData = prepareLabelData(order);
-
-      // 打印指定份数（将printCount传入printLabel方法）
-      await jcPrinter.printLabel(labelData, null, order.printCount);
-
-      printedCount += order.printCount;
-
-      // 更新进度
       uni.showLoading({
-        title: `打印中 ${printedCount}/${totalPrints}`,
+        title: `打印中 0/${order.printCount}`,
         mask: true
       });
 
-      // 打印间隔：等待500毫秒，让SDK有时间准备下一次打印
-      if (printedCount < totalPrints) {
-        await new Promise(resolve => setTimeout(resolve, 500));
+      try {
+        // 准备标签数据
+        const labelData = prepareLabelData(order);
+
+        console.log(`[PrintLabel] 调用 printLabel，份数: ${order.printCount}`);
+
+        // 打印指定份数
+        await jcPrinter.printLabel(labelData, null, order.printCount);
+
+        uni.hideLoading();
+        uni.showToast({
+          title: `已打印 ${order.printCount} 张`,
+          icon: 'success'
+        });
+
+        console.log('[PrintLabel] ========================================');
+        console.log('[PrintLabel] 单个订单打印完成');
+      } catch (error) {
+        uni.hideLoading();
+        console.error('[PrintLabel] 打印失败:', error);
+
+        // 判断错误类型
+        const errorMessage = error instanceof Error ? error.message : String(error);
+
+        if (errorMessage.includes('SDK忙') || errorMessage.includes('startJob回调未触发')) {
+          uni.showModal({
+            title: '打印机忙碌',
+            content: '打印机正在处理任务，请稍等几秒后重试。',
+            showCancel: false,
+            confirmText: '知道了'
+          });
+        } else {
+          uni.showToast({
+            title: '打印失败',
+            icon: 'none'
+          });
+        }
       }
     }
-
-    uni.hideLoading();
-    uni.showToast({
-      title: '打印完成',
-      icon: 'success'
-    });
-
-    // 返回上一页
-    setTimeout(() => {
-      goBack();
-    }, 1500);
-  } catch (error) {
-    uni.hideLoading();
-    console.error('[PrintLabel] 打印失败:', error);
-    uni.showToast({
-      title: '打印失败',
-      icon: 'none'
-    });
-  }
+  });
 }
 
 // 字段编辑事件处理
@@ -746,7 +760,7 @@ function goBack() {
 .print-label-page {
   min-height: 100vh;
   background-color: #f5f5f5;
-  padding-bottom: 120rpx;
+  padding-bottom: 32rpx;
 }
 
 .status-bar {
@@ -868,10 +882,9 @@ function goBack() {
 
 .order-header {
   display: flex;
-  justify-content: flex-start;
+  justify-content: space-between;
   align-items: center;
   margin-bottom: 16rpx;
-  padding-right: 140rpx;  // 为预览按钮留出空间
 
   .order-index {
     font-size: 28rpx;
@@ -879,13 +892,25 @@ function goBack() {
     color: #333;
   }
 
+  .header-buttons {
+    display: flex;
+    gap: 12rpx;
+  }
+
   .preview-btn {
-    position: absolute;
-    top: 24rpx;
-    right: 24rpx;
     padding: 8rpx 16rpx;
     font-size: 24rpx;
     background-color: #56ab91;
+    color: #fff;
+    border: none;
+    border-radius: 8rpx;
+    white-space: nowrap;
+  }
+
+  .print-btn {
+    padding: 8rpx 16rpx;
+    font-size: 24rpx;
+    background-color: #1890ff;
     color: #fff;
     border: none;
     border-radius: 8rpx;
@@ -1094,30 +1119,6 @@ function goBack() {
         font-size: 32rpx;
         color: #56ab91;
       }
-    }
-  }
-}
-
-.action-buttons {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 24rpx 32rpx;
-  background-color: #fff;
-  border-top: 1rpx solid #eee;
-  z-index: 1000;
-
-  .action-btn {
-    width: 100%;
-    padding: 17rpx;
-    border-radius: 12rpx;
-    font-size: 28rpx;
-    border: none;
-
-    &.primary {
-      background-color: #56ab91;
-      color: #fff;
     }
   }
 }

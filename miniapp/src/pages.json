@@ -207,6 +207,13 @@
       }
     },
     {
+      "path": "pages/staff-production/print-task",
+      "style": {
+        "navigationBarTitleText": "制作单打印",
+        "navigationStyle": "custom"
+      }
+    },
+    {
       "path": "pages/staff-shipping/index",
       "style": {
         "navigationBarTitleText": "发货管理"

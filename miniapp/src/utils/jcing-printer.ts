@@ -52,28 +52,97 @@ export class JCPrinter {
   }
 
   /**
-   * 搜索打印机
+   * 检查蓝牙适配器状态（仅供诊断使用）
+   *
+   * ⚠️ 注意：此方法不推荐在生产代码中使用，因为：
+   * 1. 精臣SDK会自动处理蓝牙初始化
+   * 2. 在SDK初始化前调用此方法会报错 "fail:not init"
+   * 3. 此方法仅用于调试和诊断目的
+   *
+   * @returns 蓝牙状态信息
+   */
+  async checkBluetoothState(): Promise<{available: boolean, discovering: boolean, error?: string}> {
+    return new Promise((resolve) => {
+      uni.getBluetoothAdapterState({
+        success: (res) => {
+          console.log('[JCPrinter] ✓ 蓝牙适配器状态检查成功:', {
+            available: res.available,
+            discovering: res.discovering
+          });
+          resolve({
+            available: res.available,
+            discovering: res.discovering
+          });
+        },
+        fail: (err) => {
+          console.error('[JCPrinter] ✗ 获取蓝牙状态失败:', err);
+          resolve({
+            available: false,
+            discovering: false,
+            error: err.errMsg || '蓝牙适配器不可用'
+          });
+        }
+      });
+    });
+  }
+
+  /**
+   * 搜索打印机（增强版：包含详细的错误诊断）
    * @returns 打印机列表
    */
   scanPrinter(): Promise<any[]> {
     return new Promise((resolve) => {
       uni.showLoading({ title: '搜索中...', mask: true });
 
+      console.log('[JCPrinter] ========================================');
       console.log('[JCPrinter] 开始搜索打印机');
+      console.log('[JCPrinter] 当前时间:', new Date().toLocaleTimeString());
 
       JCAPI.scanedPrinters((printers: any[]) => {
         uni.hideLoading();
 
-        // 记录所有搜索到的设备
-        console.log('[JCPrinter] 原始搜索到', printers.length, '台设备');
-        printers.forEach((p, index) => {
-          console.log(`[JCPrinter] 设备${index + 1}:`, p.name || '未命名', p);
+        console.log('[JCPrinter] 搜索完成，原始设备数量:', printers.length);
+
+        // 如果搜索结果为空，输出详细的诊断信息
+        if (printers.length === 0) {
+          console.warn('[JCPrinter] ⚠️ 未搜索到任何蓝牙设备');
+          console.warn('[JCPrinter] 可能的原因：');
+          console.warn('[JCPrinter] 1. 手机蓝牙未开启');
+          console.warn('[JCPrinter] 2. 未授权小程序蓝牙权限');
+          console.warn('[JCPrinter] 3. 打印机未开启或距离过远（建议2米以内）');
+          console.warn('[JCPrinter] 4. 打印机已被其他设备连接');
+          console.warn('[JCPrinter] 5. SDK初始化失败或平台识别错误');
+          console.warn('[JCPrinter] ========================================');
+        } else {
+          console.log('[JCPrinter] ✓ 搜索到设备，详细列表：');
+
+          // 详细记录每个设备的信息
+          printers.forEach((p, index) => {
+            console.log(`[JCPrinter]   设备${index + 1}:`, {
+              name: p.name || '未命名',
+              deviceId: p.deviceId || '无',
+              RSSI: p.RSSI ? `${p.RSSI} dBm` : '未知',
+              advertisData: p.advertisData ? '有' : '无'
+            });
+          });
+        }
+
+        // 改进的过滤逻辑：过滤掉空名称和包含"未知"的设备（参考官方示例）
+        const filtered = printers.filter(p => {
+          const hasName = p.name && p.name.trim() !== '';
+          const notUnknown = !p.name || p.name.indexOf('未知') < 0;
+          return hasName && notUnknown;
         });
 
-        // 过滤掉没有名称的设备，但保留包含"未知"的设备
-        const filtered = printers.filter(p => p.name);
+        console.log('[JCPrinter] 过滤后返回', filtered.length, '台可用打印机');
 
-        console.log('[JCPrinter] 过滤后返回', filtered.length, '台打印机');
+        if (filtered.length > 0) {
+          console.log('[JCPrinter] 可用打印机列表:', filtered.map(p => p.name).join(', '));
+        } else if (printers.length > 0) {
+          console.warn('[JCPrinter] ⚠️ 搜索到了设备，但都被过滤掉了（可能是名称包含"未知"）');
+        }
+
+        console.log('[JCPrinter] ========================================');
         resolve(filtered);
       });
     });
@@ -102,14 +171,14 @@ export class JCPrinter {
           this.savePrinter(this.currentPrinter);
           uni.hideLoading();
           uni.showToast({ title: '连接成功', icon: 'success' });
-          console.log('[JCPrinter] 连接成功:', printerName);
+          console.log('[JCPrinter] ✓ 连接成功:', printerName);
           resolve(true);
         },
         (error?: any) => {
           this.isConnected = false;
           this.currentPrinter = null;
           uni.hideLoading();
-          console.error('[JCPrinter] 连接失败:', printerName, error);
+          console.error('[JCPrinter] ✗ 连接失败:', printerName, error);
 
           // 不在这里显示错误提示，让调用方处理
           resolve(false);
@@ -138,19 +207,26 @@ export class JCPrinter {
 
     return new Promise((resolve, reject) => {
       let completed = false;
+      let jobStarted = false;  // 新增：标记startJob回调是否被触发
 
-      // 超时保护：3秒后自动完成（实际打印只需1-2秒，SDK回调可能不触发）
+      // 超时保护：5秒后自动完成（增加超时时间以适应多次打印场景）
       const timeoutId = setTimeout(() => {
         if (!completed) {
           completed = true;
-          console.warn('[JCPrinter] 打印回调超时，但任务可能已完成（打印机已出纸）');
-          resolve();
+          if (jobStarted) {
+            console.warn('[JCPrinter] 打印回调超时，但任务可能已完成（打印机已出纸）');
+            resolve();
+          } else {
+            console.error('[JCPrinter] 打印任务启动失败（startJob回调未触发），SDK可能处于忙状态');
+            reject(new Error('SDK忙：打印任务启动失败，请稍后重试'));
+          }
         }
-      }, 3000);
+      }, 5000);
 
       // 1. 开始打印任务
       // gapType: 1=间隙纸, darkness: 3=浓度
       JCAPI.startJob(1, 3, count, () => {
+        jobStarted = true;  // 标记startJob回调已触发
         console.log('[JCPrinter] 打印任务已启动，开始绘制标签');
 
         // 2. 调用绘制函数（内部会调用 startDrawLabel、绘制元素、endDrawLabel）

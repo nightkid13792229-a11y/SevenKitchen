@@ -116,6 +116,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
+import { getBaseUrl } from '../../utils/config';
 
 // 打印数据
 interface PrintData {
@@ -291,11 +292,16 @@ const goBack = () => {
 
 // 打印/生成PDF
 const handlePrint = async () => {
+  console.log('[PrintTask] ========== Print Debug Start ==========');
   uni.showLoading({ title: '生成PDF中...' });
 
   try {
     const token = uni.getStorageSync('token');
-    const baseUrl = uni.getStorageSync('baseUrl') || 'http://localhost:3001/api/v1';
+    const baseUrl = getBaseUrl();
+
+    console.log('[PrintTask] Token present:', !!token);
+    console.log('[PrintTask] BaseURL from getBaseUrl():', baseUrl);
+    console.log('[PrintTask] Full URL will be:', `${baseUrl}/staff/production/print-task`);
 
     // 准备发送的数据，包括parsedIngredients
     const requestData = {

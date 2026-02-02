@@ -90,6 +90,7 @@ import { DOG_BREED_REPOSITORY } from './application/dog/dog.service';
 import { IngredientTagService, INGREDIENT_TAG_REPOSITORY } from './application/ingredient-tag/ingredient-tag.service';
 import { PrismaIngredientTagRepository } from './infrastructure/repositories/prisma-ingredient-tag.repository';
 import { TencentCosService } from './infrastructure/services/tencent-cos.service';
+import { PdfGeneratorService } from './infrastructure/services/pdf-generator.service';
 import { WechatModule } from './infrastructure/wechat/wechat.module';
 import { SmsModule } from './infrastructure/sms/sms.module';
 import { WeightRecordService } from './application/weight-record/weight-record.service';
@@ -282,6 +283,7 @@ validatePrismaConfig();
       useClass: PrismaIngredientTagRepository,
     },
     TencentCosService,
+    PdfGeneratorService,
     GlobalConfigService,
     PricingService,
     PackagingService,

@@ -6,13 +6,13 @@ import { IsString, IsNumber, IsArray, IsOptional, IsObject } from 'class-validat
 
 export class PrintTaskOrderItemDto {
   @IsNumber()
-  packageSpecG: number;
+  packageSpecG!: number;
 
   @IsNumber()
-  packageCount: number;
+  packageCount!: number;
 
   @IsString()
-  dogName: string;
+  dogName!: string;
 
   @IsString()
   @IsOptional()
@@ -25,19 +25,19 @@ export class PrintTaskOrderItemDto {
 
 export class PrintTaskIngredientDto {
   @IsString()
-  name: string;
+  name!: string;
 
   @IsString()
-  amount: string;
+  amount!: string;
 
   @IsString()
-  unit: string;
+  unit!: string;
 
   @IsString()
-  typeLabel: string;
+  typeLabel!: string;
 
   @IsString()
-  typeClass: string;
+  typeClass!: string;
 
   @IsString()
   @IsOptional()
@@ -49,35 +49,35 @@ export class PrintTaskIngredientDto {
 
 export class PrintTaskDto {
   @IsString()
-  recipeName: string;
+  recipeName!: string;
 
   @IsString()
-  recipeVersion: string;
+  recipeVersion!: string;
 
   @IsNumber()
-  currentPotNumber: number;
+  currentPotNumber!: number;
 
   @IsNumber()
-  totalPots: number;
+  totalPots!: number;
 
   @IsString()
-  status: string;
+  status!: string;
 
   @IsNumber()
-  totalProductionG: number;
+  totalProductionG!: number;
 
   @IsString()
-  createdAt: string;
+  createdAt!: string;
 
   @IsString()
   @IsOptional()
   completedAt?: string;
 
   @IsArray()
-  orderItems: PrintTaskOrderItemDto[];
+  orderItems!: PrintTaskOrderItemDto[];
 
   @IsArray()
-  parsedIngredients: PrintTaskIngredientDto[];
+  parsedIngredients!: PrintTaskIngredientDto[];
 
   @IsString()
   @IsOptional()
@@ -85,8 +85,8 @@ export class PrintTaskDto {
 }
 
 export class PrintTaskResponseDto {
-  success: boolean;
-  message: string;
+  success!: boolean;
+  message!: string;
   data?: {
     pdfUrl: string;
     estimatedTime: string;

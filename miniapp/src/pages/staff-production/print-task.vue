@@ -359,29 +359,34 @@ const handlePrint = async () => {
 
 <style scoped lang="scss">
 .print-page {
-  min-height: 100vh;
-  background-color: #f5f5f5;
+  height: 100vh;
   display: flex;
   flex-direction: column;
+  background-color: #f5f5f5;
+  overflow: hidden;
 }
 
 .action-bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 24rpx 32rpx;
+  padding: 20rpx 24rpx;
   background: linear-gradient(135deg, #56ab91 0%, #4a9680 100%);
   box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
-  position: sticky;
+  position: fixed;
   top: 0;
+  left: 0;
+  right: 0;
   z-index: 100;
+  flex-shrink: 0;
 }
 
 .action-btn {
-  padding: 16rpx 24rpx;
+  padding: 12rpx 20rpx;
   border-radius: 8rpx;
-  font-size: 26rpx;
+  font-size: 24rpx;
   border: none;
+  line-height: 1.4;
 
   &.back {
     background-color: rgba(255, 255, 255, 0.2);
@@ -396,7 +401,7 @@ const handlePrint = async () => {
 }
 
 .action-title {
-  font-size: 32rpx;
+  font-size: 30rpx;
   font-weight: bold;
   color: #fff;
   flex: 1;
@@ -405,62 +410,65 @@ const handlePrint = async () => {
 
 .print-container {
   flex: 1;
-  padding: 32rpx;
+  padding: 140rpx 32rpx 120rpx 32rpx;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .print-content {
   background-color: #fff;
   border-radius: 16rpx;
-  padding: 48rpx;
+  padding: 32rpx;
   box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
 }
 
 .header-section {
   text-align: center;
-  padding-bottom: 40rpx;
+  padding-bottom: 32rpx;
   border-bottom: 2rpx solid #56ab91;
-  margin-bottom: 40rpx;
+  margin-bottom: 32rpx;
 }
 
 .recipe-title {
-  font-size: 48rpx;
+  font-size: 40rpx;
   font-weight: bold;
   color: #333;
-  margin-bottom: 16rpx;
+  margin-bottom: 12rpx;
 }
 
 .pot-info {
-  font-size: 32rpx;
+  font-size: 28rpx;
   color: #56ab91;
   font-weight: bold;
-  margin-bottom: 24rpx;
+  margin-bottom: 20rpx;
 }
 
 .meta-info {
   display: flex;
   justify-content: center;
-  gap: 32rpx;
-  font-size: 24rpx;
+  gap: 24rpx;
+  font-size: 22rpx;
   color: #666;
+  flex-wrap: wrap;
 }
 
 .section {
-  margin-bottom: 48rpx;
+  margin-bottom: 36rpx;
 }
 
 .section-title {
-  font-size: 32rpx;
+  font-size: 28rpx;
   font-weight: bold;
   color: #333;
-  margin-bottom: 24rpx;
-  padding-left: 16rpx;
+  margin-bottom: 20rpx;
+  padding-left: 12rpx;
   border-left: 6rpx solid #56ab91;
 }
 
 .order-cards {
   display: flex;
   flex-direction: column;
-  gap: 24rpx;
+  gap: 20rpx;
 }
 
 .order-card {
@@ -473,19 +481,19 @@ const handlePrint = async () => {
 .order-header {
   background-color: #56ab91;
   color: #fff;
-  padding: 16rpx 24rpx;
-  font-size: 26rpx;
+  padding: 12rpx 20rpx;
+  font-size: 24rpx;
   font-weight: bold;
 }
 
 .order-body {
-  padding: 24rpx;
+  padding: 20rpx;
 }
 
 .order-row {
   display: flex;
-  margin-bottom: 16rpx;
-  font-size: 26rpx;
+  margin-bottom: 12rpx;
+  font-size: 24rpx;
 
   &:last-child {
     margin-bottom: 0;
@@ -493,13 +501,14 @@ const handlePrint = async () => {
 
   .label {
     color: #666;
-    min-width: 180rpx;
+    min-width: 150rpx;
   }
 
   .value {
     color: #333;
     flex: 1;
     font-weight: 500;
+    word-break: break-all;
   }
 }
 
@@ -507,7 +516,7 @@ const handlePrint = async () => {
   border: 1rpx solid #333;
   border-radius: 8rpx;
   overflow: hidden;
-  font-size: 22rpx;
+  font-size: 20rpx;
 }
 
 .table-header,
@@ -534,38 +543,40 @@ const handlePrint = async () => {
 }
 
 .table-cell {
-  padding: 12rpx 16rpx;
+  padding: 10rpx 12rpx;
   text-align: center;
   flex-shrink: 0;
 
   &.type {
-    width: 120rpx;
+    width: 100rpx;
   }
 
   &.name {
     flex: 1;
     text-align: left;
+    word-break: break-all;
   }
 
   &.amount {
-    width: 140rpx;
+    width: 120rpx;
   }
 
   &.unit {
-    width: 80rpx;
+    width: 70rpx;
   }
 
   &.method {
     flex: 1;
     text-align: left;
+    word-break: break-all;
   }
 }
 
 .type-tag {
   display: inline-block;
-  padding: 4rpx 12rpx;
+  padding: 2rpx 10rpx;
   border-radius: 4rpx;
-  font-size: 20rpx;
+  font-size: 18rpx;
   font-weight: bold;
 
   &.type-food {
@@ -585,22 +596,22 @@ const handlePrint = async () => {
 }
 
 .ingredients-note {
-  margin-top: 16rpx;
-  font-size: 22rpx;
+  margin-top: 12rpx;
+  font-size: 20rpx;
   color: #999;
   text-align: center;
 }
 
 .footer {
-  margin-top: 48rpx;
-  padding-top: 32rpx;
+  margin-top: 36rpx;
+  padding-top: 24rpx;
   border-top: 1rpx solid #e0e0e0;
   text-align: center;
-  font-size: 22rpx;
+  font-size: 20rpx;
   color: #999;
   display: flex;
   flex-direction: column;
-  gap: 8rpx;
+  gap: 6rpx;
 }
 
 .screenshot-hint {
@@ -609,11 +620,12 @@ const handlePrint = async () => {
   left: 0;
   right: 0;
   background-color: rgba(255, 243, 224, 0.95);
-  padding: 24rpx 32rpx;
-  font-size: 22rpx;
+  padding: 20rpx 24rpx;
+  font-size: 20rpx;
   color: #ff9800;
   text-align: center;
   border-top: 1rpx solid #ffe0b2;
   box-shadow: 0 -2rpx 8rpx rgba(0, 0, 0, 0.05);
+  z-index: 99;
 }
 </style>

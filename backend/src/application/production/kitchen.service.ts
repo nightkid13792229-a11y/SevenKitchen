@@ -25,6 +25,7 @@ import {
 } from '../../interfaces/dto/production/kitchen.dto';
 import { DateUtil } from '../../utils/date.util';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
+import { PdfGeneratorService } from '../../infrastructure/services/pdf-generator.service';
 
 @Injectable()
 export class StaffProductionService {
@@ -40,6 +41,7 @@ export class StaffProductionService {
     @Inject(ORDER_REPOSITORY)
     private readonly orderRepository: OrderRepository,
     private readonly cosService: TencentCosService,
+    private readonly pdfGenerator: PdfGeneratorService,
   ) {}
 
   /**
@@ -606,6 +608,34 @@ export class StaffProductionService {
       return key;
     } catch {
       return null;
+    }
+  }
+
+  /**
+   * Generate PDF for production task and upload to COS
+   */
+  async printProductionTask(taskData: any): Promise<{ pdfUrl: string }> {
+    this.logger.log(`[PrintProductionTask] Generating PDF for task`);
+
+    try {
+      // Generate PDF
+      const pdfBuffer = await this.pdfGenerator.generateProductionTaskPDF(taskData);
+
+      // Upload to COS
+      const uploadResult = await this.cosService.uploadFile(
+        pdfBuffer,
+        `task-${taskData.taskId || Date.now()}.pdf`,
+        'print-tasks'
+      );
+
+      this.logger.log(`[PrintProductionTask] PDF uploaded to ${uploadResult.url}`);
+
+      return {
+        pdfUrl: uploadResult.url,
+      };
+    } catch (error) {
+      this.logger.error(`[PrintProductionTask] Failed to generate/print PDF`, error);
+      throw new BadRequestException('生成PDF失败，请重试');
     }
   }
 }

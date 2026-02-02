@@ -1,7 +1,7 @@
 <template>
   <view class="print-page">
     <!-- 顶部操作栏 -->
-    <view class="action-bar">
+    <view class="action-bar" :style="{ paddingTop: statusBarHeight + 'px' }">
       <button class="action-btn back" @tap="goBack">
         <text>← 返回</text>
       </button>
@@ -12,7 +12,7 @@
     </view>
 
     <!-- 打印内容区域 -->
-    <scroll-view scroll-y class="print-container" enable-flex>
+    <scroll-view scroll-y class="print-container" enable-flex :style="{ paddingTop: navBarHeight + 20 + 'px', paddingBottom: '100rpx' }">
       <view class="print-content">
         <!-- 标题区域 -->
         <view class="header-section">
@@ -143,6 +143,11 @@ const printData = ref<PrintData>({
   createdBy: '厨房管理员',
 });
 
+// 状态栏高度
+const statusBarHeight = ref(0);
+// 自定义导航栏高度（状态栏 + 标题栏）
+const navBarHeight = ref(44);
+
 // 解析原料列表
 const parsedIngredients = computed(() => {
   if (!printData.value.recipeSnapshot?.items) return [];
@@ -252,6 +257,13 @@ function formatDateTime(dateStr: string): string {
 
 // 页面加载
 onLoad((options: any) => {
+  // 获取系统信息，计算状态栏高度
+  const systemInfo = uni.getSystemInfoSync();
+  statusBarHeight.value = systemInfo.statusBarHeight || 0;
+
+  // 计算导航栏总高度 = 状态栏高度 + 导航栏内容高度
+  navBarHeight.value = statusBarHeight.value + 44;
+
   if (options.taskData) {
     try {
       printData.value = JSON.parse(decodeURIComponent(options.taskData));
@@ -368,9 +380,11 @@ const handlePrint = async () => {
 
 .action-bar {
   display: flex;
-  align-items: center;
+  align-items: flex-end;
   justify-content: space-between;
-  padding: 20rpx 24rpx;
+  padding-left: 24rpx;
+  padding-right: 24rpx;
+  padding-bottom: 20rpx;
   background: linear-gradient(135deg, #56ab91 0%, #4a9680 100%);
   box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
   position: fixed;
@@ -410,9 +424,10 @@ const handlePrint = async () => {
 
 .print-container {
   flex: 1;
-  padding: 140rpx 32rpx 120rpx 32rpx;
+  padding: 0 32rpx;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
 }
 
 .print-content {

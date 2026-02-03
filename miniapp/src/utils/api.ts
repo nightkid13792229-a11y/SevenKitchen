@@ -210,10 +210,13 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
     }
     
     // Build query string for GET requests (for debugging)
+    // Note: WeChat miniprogram doesn't support URLSearchParams, so build manually
     let fullUrl = url;
     if (options.method === 'GET' || !options.method) {
       if (options.data && Object.keys(options.data).length > 0) {
-        const queryString = new URLSearchParams(options.data).toString();
+        const queryString = Object.keys(options.data)
+          .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(options.data[key])}`)
+          .join('&');
         fullUrl = `${url}?${queryString}`;
       }
     }

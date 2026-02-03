@@ -1247,19 +1247,23 @@ async function buyAgain() {
       const perMealG = packageSpecG
 
       // 构建URL参数
-      const params = new URLSearchParams({
-        recipeId,
-        ...(dogId && { dogId }),
-        autoConfig: 'true',
-        packageCount: String(packageCount),
-        packageSpecG: String(packageSpecG),
-        perMealG: String(Math.round(perMealG))
-      })
+      // Note: WeChat miniprogram doesn't support URLSearchParams
+      const queryPairs = [
+        `recipeId=${encodeURIComponent(recipeId)}`,
+        `autoConfig=true`,
+        `packageCount=${packageCount}`,
+        `packageSpecG=${packageSpecG}`,
+        `perMealG=${Math.round(perMealG)}`
+      ]
+      if (dogId) {
+        queryPairs.push(`dogId=${encodeURIComponent(dogId)}`)
+      }
+      const queryString = queryPairs.join('&')
 
       // 跳转到订购成品页
       uni.hideLoading()
       uni.navigateTo({
-        url: `/pages/recipe-order/index?${params.toString()}`
+        url: `/pages/recipe-order/index?${queryString}`
       })
     } else {
       throw new Error('获取食谱信息失败')

@@ -2071,11 +2071,18 @@ function selectActivityLevel(value: string) {
 // BCS弹窗相关函数
 function onBcsImageLoad() {
   console.log('[BCS Guide] Image loaded successfully')
+  console.log('[BCS Guide] Image URL:', bcsGuideImageUrl.value)
   bcsImageError.value = false
+  showBcsFallback.value = false
 }
 
 function onBcsImageError() {
-  console.error('[BCS Guide] Failed to load BCS guide image, showing fallback content')
+  console.error('[BCS Guide] Failed to load BCS guide image')
+  console.error('[BCS Guide] Image URL:', bcsGuideImageUrl.value)
+  console.error('[BCS Guide] Possible causes:')
+  console.error('  1. Domain not in WeChat miniprogram whitelist')
+  console.error('  2. Network connectivity issue')
+  console.error('  3. Image file does not exist or is corrupted')
   bcsImageError.value = true
   showBcsFallback.value = true // 显示降级内容
 }

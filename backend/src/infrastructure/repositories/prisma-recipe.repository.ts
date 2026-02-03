@@ -81,13 +81,6 @@ export class PrismaRecipeRepository implements RecipeRepository {
     // Build where clause
     const where: Prisma.RecipeWhereInput = { status: 'PUBLIC' };
 
-    // Filter by life stage
-    if (options?.lifeStage) {
-      where.applicableLifeStages = {
-        array_contains: options.lifeStage
-      };
-    }
-
     // Filter by health tags (any match) - using relationship table
     if (options?.healthTags && options.healthTags.length > 0) {
       where.healthTagAssignments = {
@@ -121,10 +114,19 @@ export class PrismaRecipeRepository implements RecipeRepository {
       orderBy: [{ recipeId: 'asc' }, { version: 'desc' }],
     });
 
-    // Filter out recipes that contain excluded ingredient tags
+    // Filter by life stages (any match) - in-memory filtering for JSON field
     let filteredRecipes = allRecipes;
-    if (options?.excludeTags && options.excludeTags.length > 0) {
+    if (options?.lifeStages && options.lifeStages.length > 0) {
       filteredRecipes = allRecipes.filter(recipe => {
+        const stages = recipe.applicableLifeStages as string[] || [];
+        // Check if recipe has ANY of the selected life stages
+        return options.lifeStages!.some(selectedStage => stages.includes(selectedStage));
+      });
+    }
+
+    // Filter out recipes that contain excluded ingredient tags
+    if (options?.excludeTags && options.excludeTags.length > 0) {
+      filteredRecipes = filteredRecipes.filter(recipe => {
         // Get all ingredient tag IDs for this recipe
         const recipeTagIds = new Set<string>();
         recipe.items?.forEach(item => {
@@ -156,13 +158,6 @@ export class PrismaRecipeRepository implements RecipeRepository {
     // Build where clause
     const where: Prisma.RecipeWhereInput = { status: 'PUBLIC' };
 
-    // Filter by life stage
-    if (options?.lifeStage) {
-      where.applicableLifeStages = {
-        array_contains: options.lifeStage
-      };
-    }
-
     // Filter by health tags (any match) - using relationship table
     if (options?.healthTags && options.healthTags.length > 0) {
       where.healthTagAssignments = {
@@ -196,10 +191,19 @@ export class PrismaRecipeRepository implements RecipeRepository {
       orderBy: [{ recipeId: 'asc' }, { version: 'desc' }],
     });
 
-    // Filter out recipes that contain excluded ingredient tags
+    // Filter by life stages (any match) - in-memory filtering for JSON field
     let filteredRecipes = allRecipes;
-    if (options?.excludeTags && options.excludeTags.length > 0) {
+    if (options?.lifeStages && options.lifeStages.length > 0) {
       filteredRecipes = allRecipes.filter(recipe => {
+        const stages = recipe.applicableLifeStages as string[] || [];
+        // Check if recipe has ANY of the selected life stages
+        return options.lifeStages!.some(selectedStage => stages.includes(selectedStage));
+      });
+    }
+
+    // Filter out recipes that contain excluded ingredient tags
+    if (options?.excludeTags && options.excludeTags.length > 0) {
+      filteredRecipes = filteredRecipes.filter(recipe => {
         // Get all ingredient tag IDs for this recipe
         const recipeTagIds = new Set<string>();
         recipe.items?.forEach(item => {

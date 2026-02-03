@@ -635,7 +635,8 @@ function closeAllDrawers() {
   // 选择后自动应用筛选
   recipes.value = []
   hasMore.value = true
-  loadRecipes()
+  currentPage.value = 1  // 添加缺失的页码重置
+  loadRecipes(true)  // 传递 isRefresh = true
 }
 
 // 获取生命阶段按钮文字
@@ -670,7 +671,8 @@ function removeLifeStages() {
   filterState.value.selectedLifeStages = []
   recipes.value = []
   hasMore.value = true
-  loadRecipes()
+  currentPage.value = 1
+  loadRecipes(true)  // 传递 isRefresh = true
 }
 
 // 快速删除健康标签
@@ -678,7 +680,8 @@ function removeHealthTags() {
   filterState.value.selectedHealthTags = []
   recipes.value = []
   hasMore.value = true
-  loadRecipes()
+  currentPage.value = 1
+  loadRecipes(true)  // 传递 isRefresh = true
 }
 
 // 快速删除排除标签
@@ -686,7 +689,8 @@ function removeExcludedTags() {
   filterState.value.excludedIngredientTags = []
   recipes.value = []
   hasMore.value = true
-  loadRecipes()
+  currentPage.value = 1
+  loadRecipes(true)  // 传递 isRefresh = true
 }
 
 // 切换生命阶段
@@ -704,7 +708,8 @@ function applyLifeStagesFilter() {
   showLifeStageDrawer.value = false
   recipes.value = []
   hasMore.value = true
-  loadRecipes()
+  currentPage.value = 1
+  loadRecipes(true)  // 传递 isRefresh = true，确保使用替换逻辑而不是追加逻辑
 }
 
 // 切换健康标签
@@ -722,7 +727,8 @@ function applyHealthTagsFilter() {
   showHealthTagsDrawer.value = false
   recipes.value = []
   hasMore.value = true
-  loadRecipes()
+  currentPage.value = 1
+  loadRecipes(true)  // 传递 isRefresh = true
 }
 
 // 切换排除食材标签
@@ -740,7 +746,8 @@ function applyExcludedTagsFilter() {
   showExcludedTagsDrawer.value = false
   recipes.value = []
   hasMore.value = true
-  loadRecipes()
+  currentPage.value = 1
+  loadRecipes(true)  // 传递 isRefresh = true
 }
 
 // 移除已选排除标签
@@ -766,6 +773,7 @@ function clearAllFilters() {
   }
   recipes.value = []
   hasMore.value = true
+  currentPage.value = 1
   loadRecipes()
 }
 

@@ -209,7 +209,18 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
       header['Authorization'] = `Bearer ${token}`
     }
     
-    console.log('[API Request]', options.method || 'GET', url)
+    // Build query string for GET requests (for debugging)
+    let fullUrl = url;
+    if (options.method === 'GET' || !options.method) {
+      if (options.data && Object.keys(options.data).length > 0) {
+        const queryString = new URLSearchParams(options.data).toString();
+        fullUrl = `${url}?${queryString}`;
+      }
+    }
+    console.log('[API Request]', options.method || 'GET', fullUrl);
+    if (options.data) {
+      console.log('[API Request Data]', options.data);
+    }
 
     uni.request({
       url,

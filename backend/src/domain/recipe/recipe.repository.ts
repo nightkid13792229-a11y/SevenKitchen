@@ -41,7 +41,7 @@ export interface Recipe {
 }
 
 export interface FindRecipesOptions {
-  lifeStage?: string;
+  lifeStages?: string[];
   healthTags?: string[];
   excludeTags?: string[];
   page?: number;

@@ -266,6 +266,53 @@
         </view>
       </view>
     </view>
+
+    <!-- 发货模态框 -->
+    <view v-if="showShippingModal" class="shipping-modal-overlay" @tap="closeShippingModal">
+      <view class="shipping-modal-content" @tap.stop>
+        <view class="modal-header">
+          <text class="modal-title">填写发货信息</text>
+          <text class="modal-close" @tap="closeShippingModal">×</text>
+        </view>
+
+        <view class="modal-body">
+          <!-- 物流公司选择 -->
+          <view class="form-item">
+            <text class="form-label">物流公司</text>
+            <picker
+              mode="selector"
+              :range="carriers"
+              range-key="name"
+              :value="selectedCarrierIndex"
+              @change="onCarrierChange"
+            >
+              <view class="picker-display">
+                <text>{{ carriers[selectedCarrierIndex].name }}</text>
+                <text class="arrow">›</text>
+              </view>
+            </picker>
+          </view>
+
+          <!-- 物流单号输入 -->
+          <view class="form-item">
+            <text class="form-label">物流单号</text>
+            <input
+              v-model="trackingNumber"
+              class="form-input"
+              placeholder="请输入物流单号"
+              :maxlength="50"
+            />
+          </view>
+        </view>
+
+        <view class="modal-footer">
+          <button class="modal-btn cancel" @tap="closeShippingModal">取消</button>
+          <button class="modal-btn confirm" @tap="confirmShipping" :disabled="isShipping">
+            {{ isShipping ? '发货中...' : '确认发货' }}
+          </button>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
@@ -355,6 +402,17 @@ const statusFilterVisible = ref(false)
 const dateFilterVisible = ref(false)
 const orderIdFilterVisible = ref(false)
 const searchVisible = ref(false)
+
+// 发货模态框状态
+const showShippingModal = ref(false)
+const currentShippingOrder = ref<Order | null>(null)
+const carriers = [
+  { name: '顺丰速运', code: 'SF' },
+  { name: '京东物流', code: 'JD' }
+]
+const selectedCarrierIndex = ref(0)
+const trackingNumber = ref('')
+const isShipping = ref(false)
 
 // 金额编辑状态
 const editingOrderId = ref<string | null>(null)
@@ -939,11 +997,67 @@ async function submitAmountChange(orderId: string, newAmount: number) {
   }
 }
 
-async function shipOrder(order: Order) {
-  uni.showToast({
-    title: '请在电脑端操作发货',
-    icon: 'none'
-  })
+function shipOrder(order: Order) {
+  openShippingModal(order)
+}
+
+// 发货相关函数
+function openShippingModal(order: Order) {
+  currentShippingOrder.value = order
+  selectedCarrierIndex.value = 0
+  trackingNumber.value = ''
+  showShippingModal.value = true
+}
+
+function closeShippingModal() {
+  showShippingModal.value = false
+  currentShippingOrder.value = null
+  trackingNumber.value = ''
+  selectedCarrierIndex.value = 0
+}
+
+function onCarrierChange(e: any) {
+  selectedCarrierIndex.value = e.detail.value
+}
+
+async function confirmShipping() {
+  if (!trackingNumber.value || trackingNumber.value.trim().length < 5) {
+    uni.showToast({
+      title: '请输入有效的物流单号',
+      icon: 'none'
+    })
+    return
+  }
+
+  if (!currentShippingOrder.value) return
+
+  isShipping.value = true
+  try {
+    await request({
+      url: `/admin/orders/${currentShippingOrder.value.id}/ship`,
+      method: 'POST',
+      data: {
+        carrierCode: carriers[selectedCarrierIndex.value].code,
+        trackingNumber: trackingNumber.value.trim()
+      }
+    })
+
+    uni.showToast({
+      title: '发货成功',
+      icon: 'success'
+    })
+
+    closeShippingModal()
+    loadOrders()
+    loadStats()
+  } catch (error: any) {
+    uni.showToast({
+      title: error.message || '发货失败',
+      icon: 'none'
+    })
+  } finally {
+    isShipping.value = false
+  }
 }
 
 async function completeOrder(order: Order) {
@@ -1617,6 +1731,145 @@ async function completeOrder(order: Order) {
 
   &::after {
     border: none;
+  }
+}
+
+// 发货模态框样式
+.shipping-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.shipping-modal-content {
+  width: 640rpx;
+  background-color: #fff;
+  border-radius: 24rpx;
+  overflow: hidden;
+  animation: modalSlideUp 0.3s ease-out;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 32rpx;
+  border-bottom: 1rpx solid #f0f0f0;
+
+  .modal-title {
+    font-size: 36rpx;
+    font-weight: bold;
+    color: #333;
+  }
+
+  .modal-close {
+    font-size: 48rpx;
+    color: #999;
+    line-height: 1;
+    padding: 0 16rpx;
+  }
+}
+
+.modal-body {
+  padding: 32rpx;
+}
+
+.form-item {
+  margin-bottom: 32rpx;
+
+  &:last-child {
+    margin-bottom: 0;
+  }
+
+  .form-label {
+    display: block;
+    font-size: 28rpx;
+    color: #333;
+    margin-bottom: 16rpx;
+    font-weight: 500;
+  }
+}
+
+.picker-display {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 24rpx;
+  background-color: #f5f5f5;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  color: #333;
+
+  .arrow {
+    font-size: 32rpx;
+    color: #999;
+  }
+}
+
+.form-input {
+  width: 100%;
+  height: 88rpx;
+  padding: 24rpx;
+  background-color: #f5f5f5;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  color: #333;
+  box-sizing: border-box;
+
+  &:focus {
+    background-color: #fff;
+    border: 2rpx solid #667eea;
+  }
+}
+
+.modal-footer {
+  display: flex;
+  border-top: 1rpx solid #f0f0f0;
+}
+
+.modal-btn {
+  flex: 1;
+  height: 100rpx;
+  line-height: 100rpx;
+  text-align: center;
+  font-size: 32rpx;
+  border: none;
+  background: none;
+
+  &.cancel {
+    color: #666;
+    border-right: 1rpx solid #f0f0f0;
+  }
+
+  &.confirm {
+    color: #667eea;
+    font-weight: 500;
+
+    &:disabled {
+      color: #ccc;
+    }
+  }
+
+  &::after {
+    border: none;
+  }
+}
+
+@keyframes modalSlideUp {
+  from {
+    transform: translateY(100rpx);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
   }
 }
 </style>

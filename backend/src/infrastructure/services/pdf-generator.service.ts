@@ -130,11 +130,12 @@ export class PdfGeneratorService {
     // Header: ~100pt
     estimatedHeight += 100;
 
-    // Orders: 70pt per order
-    estimatedHeight += data.orderItems.length * 70;
+    // Orders: 现在每行两个订单，每行高度约75pt
+    const orderRows = Math.ceil(data.orderItems.length / 2);
+    estimatedHeight += orderRows * 75;
 
-    // Ingredients table: 18pt per row + title + note
-    estimatedHeight += 30 + (data.parsedIngredients.length * 18) + 20;
+    // Ingredients table: 18pt per row + title + spacing + note
+    estimatedHeight += 30 + 8 + (data.parsedIngredients.length * 18) + 20;
 
     // Footer: ~60pt
     estimatedHeight += 60;
@@ -187,45 +188,65 @@ export class PdfGeneratorService {
 
   /**
    * Draw packaging orders section with scaling
+   * Two orders per row layout
    */
   private drawPackagingOrders(doc: any, data: PrintTaskData, startY: number, scaleFactor: number): number {
     let y = startY + Math.floor(20 * scaleFactor);
 
     // Section title
     doc.fontSize(Math.floor(12 * scaleFactor)).fillColor('#000000').font('Chinese-Bold').text('分装订单', 40, y);
-    y += Math.floor(16 * scaleFactor);
+    y += Math.floor(30 * scaleFactor); // 增加标题与表格的间距（从16改为30）
 
-    // Orders
+    // Two columns layout
+    const cardWidth = Math.floor(252 * scaleFactor); // 每个订单卡片宽度 (512/2 - gap)
+    const gap = Math.floor(8 * scaleFactor); // 两列之间的间距
+    const cardHeight = Math.floor(65 * scaleFactor);
+
     data.orderItems.forEach((order, index) => {
-      // Card background - compressed height
-      const cardHeight = Math.floor(65 * scaleFactor);
-      doc.rect(40, y, 512, cardHeight).fillAndStroke('#F9F9F9', '#E0E0E0');
-      y += Math.floor(8 * scaleFactor);
+      const isLeftColumn = index % 2 === 0;
+      const cardX = isLeftColumn ? 40 : 40 + cardWidth + gap; // 左列或右列的X坐标
+
+      // 如果是右列，需要回到同一行的Y坐标
+      if (!isLeftColumn) {
+        y -= cardHeight;
+      }
+
+      // Card background
+      doc.rect(cardX, y, cardWidth, cardHeight).fillAndStroke('#F9F9F9', '#E0E0E0');
+      const cardInnerY = y + Math.floor(8 * scaleFactor);
 
       // Order title bar
       const titleBarHeight = Math.floor(18 * scaleFactor);
       doc.fontSize(Math.floor(10 * scaleFactor)).fillColor('#FFFFFF').font('Chinese-Bold')
-        .rect(40, y - 2, 512, titleBarHeight).fill('#56AB91')
+        .rect(cardX, cardInnerY - 2, cardWidth, titleBarHeight).fill('#56AB91')
         .fillColor('#FFFFFF')
-        .text(`订单 ${index + 1}`, 48, y);
+        .text(`订单 ${index + 1}`, cardX + Math.floor(8 * scaleFactor), cardInnerY);
 
       // Order details
       doc.fontSize(Math.floor(9 * scaleFactor)).fillColor('#333333').font('Chinese');
-      const detailsY = y + Math.floor(12 * scaleFactor);
+      const detailsY = cardInnerY + Math.floor(12 * scaleFactor);
       const orderTotalWeight = order.packageSpecG * order.packageCount;
 
       const rowHeight = Math.floor(14 * scaleFactor);
-      doc.text(`总净重: ${orderTotalWeight}g`, 48, detailsY);
-      doc.text(`规格: ${order.packageSpecG}g/袋`, 160, detailsY);
-      doc.text(`袋数: ${order.packageCount}袋`, 260, detailsY);
-      doc.text(`狗狗: ${order.dogName}`, 48, detailsY + rowHeight);
+      const textX = cardX + Math.floor(8 * scaleFactor);
+      doc.text(`总净重: ${orderTotalWeight}g`, textX, detailsY);
+      doc.text(`规格: ${order.packageSpecG}g/袋`, textX, detailsY + rowHeight);
+      doc.text(`袋数: ${order.packageCount}袋`, textX + Math.floor(80 * scaleFactor), detailsY);
+      doc.text(`狗狗: ${order.dogName}`, textX + Math.floor(80 * scaleFactor), detailsY + rowHeight);
 
       if (order.recipientName) {
-        doc.text(`收货人: ${order.recipientName}（${order.recipientCity}）`, 160, detailsY + rowHeight);
+        // 如果有收货人信息，紧凑显示
+        doc.fontSize(Math.floor(8 * scaleFactor)).fillColor('#666666').font('Chinese');
+        doc.text(`${order.recipientName}（${order.recipientCity}）`, textX, detailsY + rowHeight * 2);
       }
 
       y += cardHeight;
     });
+
+    // 如果最后一个订单在左列，需要调整y位置
+    if (data.orderItems.length % 2 !== 0) {
+      y += cardHeight;
+    }
 
     return y;
   }
@@ -238,7 +259,7 @@ export class PdfGeneratorService {
 
     // Section title
     doc.fontSize(Math.floor(12 * scaleFactor)).fillColor('#000000').font('Chinese-Bold').text(`原料清单（${data.parsedIngredients.length}项）`, 40, y);
-    y += Math.floor(16 * scaleFactor);
+    y += Math.floor(30 * scaleFactor); // 增加标题与表头的间距（从16改为30）
 
     // Table header - adjusted columns
     const colX = {
@@ -256,6 +277,7 @@ export class PdfGeneratorService {
     doc.text('用量', colX.amount, y + 4);
     doc.text('制备方法', colX.method, y + 4);
     y += rowHeight;
+    y += Math.floor(8 * scaleFactor); // 增加表头与内容行的间距（新增8pt）
 
     // Table rows
     data.parsedIngredients.forEach((ing) => {

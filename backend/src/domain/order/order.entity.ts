@@ -280,10 +280,10 @@ export class Order {
    * @param carrierCode Shipping carrier code (e.g., "SF", "YTO", "ZTO")
    */
   markAsShipped(trackingNumber: string, carrierCode: string): void {
-    // Phase 9: Changed from READY_FOR_SHIPMENT to IN_PRODUCTION
-    if (this.status !== OrderStatus.IN_PRODUCTION) {
+    // Allow shipping from either IN_PRODUCTION or FREEZING status
+    if (this.status !== OrderStatus.IN_PRODUCTION && this.status !== OrderStatus.FREEZING) {
       throw new InvalidStateTransitionError(
-        `Cannot mark order as shipped from status: ${this.status}. Order must be in IN_PRODUCTION status.`,
+        `Cannot mark order as shipped from status: ${this.status}. Order must be in IN_PRODUCTION or FREEZING status.`,
       );
     }
 

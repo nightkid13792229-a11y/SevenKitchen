@@ -188,7 +188,7 @@ function formatDate(dateString: string): string {
 
 function goToRecipeList() {
   uni.switchTab({
-    url: '/pages/recipes/index'
+    url: '/pages/home/index'
   })
 }
 </script>

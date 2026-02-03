@@ -73,7 +73,7 @@ export class RecipesController {
     description: 'Paginated list of recipes',
   })
   async listRecipes(
-    @Query('lifeStage') lifeStage?: string,
+    @Query('lifeStages') lifeStages?: string,
     @Query('healthTags') healthTags?: string,
     @Query('excludeTags') excludeTags?: string,
     @Query('page') page?: string,
@@ -84,12 +84,13 @@ export class RecipesController {
     const parsedPageSize = pageSize ? parseInt(pageSize, 10) : 10;
 
     // Parse filter parameters
+    const lifeStageArray = lifeStages ? lifeStages.split(',') : [];
     const healthTagArray = healthTags ? healthTags.split(',') : [];
     const excludeTagArray = excludeTags ? excludeTags.split(',') : [];
 
     // Get paginated recipes
     const paginatedResult = await this.recipeRepository.findPublicRecipesPaginated({
-      lifeStage,
+      lifeStages: lifeStageArray,
       healthTags: healthTagArray,
       excludeTags: excludeTagArray,
       page: parsedPage,
@@ -99,7 +100,7 @@ export class RecipesController {
     // DEBUG: Log recipe count (development only)
     if (process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true') {
       console.log(
-        `[RecipesController] GET /recipes: page ${parsedPage}, pageSize ${parsedPageSize}, found ${paginatedResult.data.length} PUBLIC recipe(s) (total: ${paginatedResult.total})`,
+        `[RecipesController] GET /recipes: page ${parsedPage}, pageSize ${parsedPageSize}, lifeStages: [${lifeStageArray.join(',') || 'all'}], healthTags: [${healthTagArray.join(',') || 'all'}], excludeTags: [${excludeTagArray.join(',') || 'none'}], found ${paginatedResult.data.length} PUBLIC recipe(s) (total: ${paginatedResult.total})`,
       );
       if (paginatedResult.data.length === 0) {
         console.warn(

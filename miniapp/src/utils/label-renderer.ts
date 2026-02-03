@@ -125,7 +125,7 @@ function measureLabelHeight(ctx: any, labelData: LabelData): number {
   y += mmToPx(LABEL_LAYOUT.lineHeight.loose);
   y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
 
-  // 3. 原料表
+  // 3. 原料表（左对齐，外框线）
   y += mmToPx(LABEL_ELEMENTS.ingredientsTitle.lineHeight);
   const allIngredients = [labelData.foodIngredients, labelData.supplementIngredients].filter(Boolean).join('、');
   const ingredientLines = splitTextByChars(allIngredients, LABEL_ELEMENTS.ingredientsContent.maxCharsPerLine);
@@ -133,23 +133,17 @@ function measureLabelHeight(ctx: any, labelData: LabelData): number {
   y += mmToPx(LABEL_LAYOUT.spacing.blockInternal);
   y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
 
-  // 4. 营养成分分析
+  // 4. 营养成分分析（分组展示）
   if (labelData.nutritionAnalysis) {
     y += mmToPx(LABEL_ELEMENTS.nutrition.lineHeight);
+    // 6项基础营养成分（2行）
+    y += 2 * mmToPx(LABEL_ELEMENTS.nutrition.lineHeight);
+    y += mmToPx(LABEL_LAYOUT.spacing.blockInternal);
+    // 能量和钙磷比（1行）
     const na = labelData.nutritionAnalysis;
-    const nutritionItems = [
-      na.proteinPercent !== undefined ? `蛋白质${na.proteinPercent.toFixed(1)}%` : null,
-      na.fatPercent !== undefined ? `脂肪${na.fatPercent.toFixed(1)}%` : null,
-      na.ashPercent !== undefined ? `灰分${na.ashPercent.toFixed(1)}%` : null,
-      na.moisturePercent !== undefined ? `含水量${na.moisturePercent.toFixed(1)}%` : null,
-      na.crudeFiberPercent !== undefined ? `纤维${na.crudeFiberPercent.toFixed(1)}%` : null,
-      na.carbohydratePercent !== undefined ? `碳水${na.carbohydratePercent.toFixed(1)}%` : null,
-      na.energyDensityKcalPerKg ? `能量${na.energyDensityKcalPerKg}kcal/kg` : null,
-      na.calciumPhosphorusRatio ? `钙磷比${na.calciumPhosphorusRatio}:1` : null,
-    ].filter(Boolean);
-    const itemsPerLine = LABEL_ELEMENTS.nutrition.itemsPerLine || 4;
-    const nutritionLineCount = Math.ceil(nutritionItems.length / itemsPerLine);
-    y += nutritionLineCount * mmToPx(LABEL_ELEMENTS.nutrition.lineHeight);
+    if (na.energyDensityKcalPerKg || na.calciumPhosphorusRatio) {
+      y += mmToPx(LABEL_ELEMENTS.nutrition.lineHeight);
+    }
     y += mmToPx(LABEL_LAYOUT.spacing.blockInternal);
     y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
   }
@@ -252,7 +246,7 @@ export async function drawProductionLabel(
       // 粗分隔线已移除
       y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
 
-      // ============= 3. 原料表（表格化） =============
+      // ============= 3. 原料表（居中展示，无框线） =============
       // 标题
       ctx.setFontSize(mmToPx(LABEL_ELEMENTS.ingredientsTitle.fontSize));
       ctx.setFillStyle('#000000');
@@ -274,41 +268,23 @@ export async function drawProductionLabel(
         }
       }
 
-      const ingredientLines = splitTextByChars(allIngredients, LABEL_ELEMENTS.ingredientsContent.maxCharsPerLine);
-      const tableLeft = margin;
-      const tableRight = CANVAS_WIDTH - margin;
+      // 使用智能换行（按顿号分割，避免单词截断）
+      const ingredientLines = splitTextBySeparators(allIngredients, LABEL_ELEMENTS.ingredientsContent.maxCharsPerLine);
 
-      // 绘制表格顶部线
-      ctx.setStrokeStyle('#000000');
-      ctx.setLineWidth(mmToPx(0.3));
-      ctx.beginPath();
-      ctx.moveTo(tableLeft, y);
-      ctx.lineTo(tableRight, y);
-      ctx.stroke();
-      y += mmToPx(LABEL_ELEMENTS.ingredientsContent.lineHeight);
-
-      // 绘制每行内容 + 底部分隔线
+      // 绘制每行内容（居中对齐）
       ctx.setFontSize(mmToPx(LABEL_ELEMENTS.ingredientsContent.fontSize));
       ctx.setFillStyle('#333333');
       ctx.setTextAlign('center');
 
-      ingredientLines.forEach((line, index) => {
+      ingredientLines.forEach((line) => {
         ctx.fillText(line, centerX, y);
         y += mmToPx(LABEL_ELEMENTS.ingredientsContent.lineHeight);
-
-        // 绘制底部分隔线（最后一行也画，形成完整表格）
-        ctx.setStrokeStyle('#000000');
-        ctx.setLineWidth(mmToPx(0.3));
-        ctx.beginPath();
-        ctx.moveTo(tableLeft, y);
-        ctx.lineTo(tableRight, y);
-        ctx.stroke();
       });
 
       y += mmToPx(LABEL_LAYOUT.spacing.blockInternal);
       y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
 
-      // ============= 4. 营养成分分析（表格化） =============
+      // ============= 4. 营养成分分析（无框线，显示占比） =============
       if (labelData.nutritionAnalysis) {
         const na = labelData.nutritionAnalysis;
 
@@ -320,63 +296,57 @@ export async function drawProductionLabel(
         ctx.fillText(nutritionTitleText, centerX, y);
         y += mmToPx(LABEL_ELEMENTS.nutrition.lineHeight);
 
-        // 准备营养成分数据（每项一个对象）
-        const nutritionItems = [
-          na.proteinPercent !== undefined ? { name: '蛋白质', value: `${na.proteinPercent.toFixed(1)}%` } : null,
-          na.fatPercent !== undefined ? { name: '脂肪', value: `${na.fatPercent.toFixed(1)}%` } : null,
-          na.ashPercent !== undefined ? { name: '灰分', value: `${na.ashPercent.toFixed(1)}%` } : null,
-          na.moisturePercent !== undefined ? { name: '含水量', value: `${na.moisturePercent.toFixed(1)}%` } : null,
-          na.crudeFiberPercent !== undefined ? { name: '纤维', value: `${na.crudeFiberPercent.toFixed(1)}%` } : null,
-          na.carbohydratePercent !== undefined ? { name: '碳水', value: `${na.carbohydratePercent.toFixed(1)}%` } : null,
-          na.energyDensityKcalPerKg ? { name: '能量', value: `${na.energyDensityKcalPerKg}kcal/kg` } : null,
-          na.calciumPhosphorusRatio ? { name: '钙磷比', value: `${na.calciumPhosphorusRatio}:1` } : null,
+        // 前6项基础营养成分（包含名称和占比）
+        const basicNutrition = [
+          na.proteinPercent !== undefined ? `蛋白质 ${na.proteinPercent.toFixed(1)}%` : null,
+          na.fatPercent !== undefined ? `脂肪 ${na.fatPercent.toFixed(1)}%` : null,
+          na.ashPercent !== undefined ? `灰分 ${na.ashPercent.toFixed(1)}%` : null,
+          na.moisturePercent !== undefined ? `含水量 ${na.moisturePercent.toFixed(1)}%` : null,
+          na.crudeFiberPercent !== undefined ? `纤维 ${na.crudeFiberPercent.toFixed(1)}%` : null,
+          na.carbohydratePercent !== undefined ? `碳水 ${na.carbohydratePercent.toFixed(1)}%` : null,
         ].filter(Boolean);
 
-        // 表格布局参数
+        // 能量和钙磷比
+        const energyText = na.energyDensityKcalPerKg ? `能量 ${na.energyDensityKcalPerKg}kcal/kg` : null;
+        const caPRatioText = na.calciumPhosphorusRatio ? `钙磷比 ${na.calciumPhosphorusRatio}:1` : null;
+
+        // 绘制6项基础营养成分（每行3个，共2行）
+        ctx.setFontSize(mmToPx(LABEL_ELEMENTS.nutrition.contentFontSize));
+        ctx.setFillStyle('#000000');
+        ctx.setTextAlign('center');
+
         const tableLeft = margin;
         const tableRight = CANVAS_WIDTH - margin;
         const tableWidth = tableRight - tableLeft;
-        const colWidth = tableWidth / 2;  // 两列：名称列 | 数值列
-        const middleX = tableLeft + colWidth;
+        const colWidth = tableWidth / 3;  // 三列布局
 
-        // 绘制表格顶部线
-        ctx.setStrokeStyle('#000000');
-        ctx.setLineWidth(mmToPx(0.3));
-        ctx.beginPath();
-        ctx.moveTo(tableLeft, y);
-        ctx.lineTo(tableRight, y);
-        ctx.stroke();
-        y += mmToPx(LABEL_ELEMENTS.nutrition.lineHeight);
-
-        // 绘制表格内容
-        ctx.setFontSize(mmToPx(LABEL_ELEMENTS.nutrition.contentFontSize));
-        ctx.setFillStyle('#000000');
-
-        nutritionItems.forEach((item: any, index: number) => {
-          // 绘制竖线（中间分隔线）
-          ctx.setStrokeStyle('#000000');
-          ctx.setLineWidth(mmToPx(0.3));
-          ctx.beginPath();
-          ctx.moveTo(middleX, y - mmToPx(LABEL_ELEMENTS.nutrition.lineHeight));
-          ctx.lineTo(middleX, y);
-          ctx.stroke();
-
-          // 左列：营养名称（右对齐到中间线）
-          ctx.setTextAlign('right');
-          ctx.fillText(item.name, middleX - mmToPx(2), y);
-
-          // 右列：数值（左对齐到中间线）
-          ctx.setTextAlign('left');
-          ctx.fillText(item.value, middleX + mmToPx(2), y);
-
-          // 绘制底部分隔线
-          ctx.beginPath();
-          ctx.moveTo(tableLeft, y);
-          ctx.lineTo(tableRight, y);
-          ctx.stroke();
-
+        for (let row = 0; row < 2; row++) {
+          for (let col = 0; col < 3; col++) {
+            const index = row * 3 + col;
+            if (index < basicNutrition.length) {
+              const text = basicNutrition[index];
+              const x = tableLeft + col * colWidth + colWidth / 2;
+              ctx.fillText(text, x, y);
+            }
+          }
           y += mmToPx(LABEL_ELEMENTS.nutrition.lineHeight);
-        });
+        }
+
+        // 额外间距
+        y += mmToPx(LABEL_LAYOUT.spacing.blockInternal);
+
+        // 能量和钙磷比（能量左对齐，钙磷比右对齐）
+        if (energyText || caPRatioText) {
+          if (energyText) {
+            ctx.setTextAlign('left');
+            ctx.fillText(energyText, tableLeft, y);
+          }
+          if (caPRatioText) {
+            ctx.setTextAlign('right');
+            ctx.fillText(caPRatioText, tableRight, y);
+          }
+          y += mmToPx(LABEL_ELEMENTS.nutrition.lineHeight);
+        }
 
         y += mmToPx(LABEL_LAYOUT.spacing.blockInternal);
         y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
@@ -427,16 +397,15 @@ export async function drawProductionLabel(
         y += mmToPx(LABEL_ELEMENTS.cooking.lineHeight);
       });
 
-      // ============= 7. 底部品牌名称 =============
-      y += mmToPx(LABEL_LAYOUT.spacing.blockInternal);
+      // 恢复Canvas状态（恢复缩放前的坐标系）
+      ctx.restore();
+
+      // ============= 7. 底部品牌名称（在缩放恢复后绘制，确保位置固定） =============
       const brandBottomY = CANVAS_HEIGHT - mmToPx(LABEL_ELEMENTS.brandBottom.yOffsetFromBottom);
       ctx.setFontSize(mmToPx(LABEL_ELEMENTS.brandBottom.fontSize));
       ctx.setFillStyle('#000000');
       ctx.setTextAlign('center');
       ctx.fillText(labelData.brandName, centerX, brandBottomY);
-
-      // 恢复Canvas状态（恢复缩放前的坐标系）
-      ctx.restore();
 
       // 绘制完成后导出图片(使用Promise确保稳定性)
       ctx.draw(false, () => {
@@ -604,7 +573,7 @@ function measureLabelHeightForJCSDK(labelData: LabelData): number {
   y += LABEL_LAYOUT.lineHeight.loose;
   y += LABEL_LAYOUT.spacing.sectionGap;
 
-  // 3. 原料表
+  // 3. 原料表（左对齐，外框线）
   y += LABEL_ELEMENTS.ingredientsTitle.lineHeight;
   const allIngredients = [labelData.foodIngredients, labelData.supplementIngredients].filter(Boolean).join('、');
   const ingredientLines = splitTextByChars(allIngredients, LABEL_ELEMENTS.ingredientsContent.maxCharsPerLine);
@@ -612,23 +581,17 @@ function measureLabelHeightForJCSDK(labelData: LabelData): number {
   y += LABEL_LAYOUT.spacing.blockInternal;
   y += LABEL_LAYOUT.spacing.sectionGap;
 
-  // 4. 营养成分分析
+  // 4. 营养成分分析（分组展示）
   if (labelData.nutritionAnalysis) {
     y += LABEL_ELEMENTS.nutrition.lineHeight;
+    // 6项基础营养成分（2行）
+    y += 2 * LABEL_ELEMENTS.nutrition.lineHeight;
+    y += LABEL_LAYOUT.spacing.blockInternal;
+    // 能量和钙磷比（1行）
     const na = labelData.nutritionAnalysis;
-    const nutritionItems = [
-      na.proteinPercent !== undefined ? `蛋白质${na.proteinPercent.toFixed(1)}%` : null,
-      na.fatPercent !== undefined ? `脂肪${na.fatPercent.toFixed(1)}%` : null,
-      na.ashPercent !== undefined ? `灰分${na.ashPercent.toFixed(1)}%` : null,
-      na.moisturePercent !== undefined ? `含水量${na.moisturePercent.toFixed(1)}%` : null,
-      na.crudeFiberPercent !== undefined ? `纤维${na.crudeFiberPercent.toFixed(1)}%` : null,
-      na.carbohydratePercent !== undefined ? `碳水${na.carbohydratePercent.toFixed(1)}%` : null,
-      na.energyDensityKcalPerKg ? `能量${na.energyDensityKcalPerKg}kcal/kg` : null,
-      na.calciumPhosphorusRatio ? `钙磷比${na.calciumPhosphorusRatio}:1` : null,
-    ].filter(Boolean);
-    const itemsPerLine = LABEL_ELEMENTS.nutrition.itemsPerLine || 4;
-    const nutritionLineCount = Math.ceil(nutritionItems.length / itemsPerLine);
-    y += nutritionLineCount * LABEL_ELEMENTS.nutrition.lineHeight;
+    if (na.energyDensityKcalPerKg || na.calciumPhosphorusRatio) {
+      y += LABEL_ELEMENTS.nutrition.lineHeight;
+    }
     y += LABEL_LAYOUT.spacing.blockInternal;
     y += LABEL_LAYOUT.spacing.sectionGap;
   }
@@ -723,7 +686,7 @@ export async function drawProductionLabelWithJCSDK(
       // 粗分隔线已移除
       y += LABEL_LAYOUT.spacing.sectionGap * scale;
 
-      // ============= 3. 原料表（表格化） =============
+      // ============= 3. 原料表（居中展示，无框线） =============
       // 标题
       const ingredientsTitleText = '原料表';
       JCAPI.drawText(ingredientsTitleText, centerX, y, LABEL_ELEMENTS.ingredientsTitle.fontSize * scale, 0, {
@@ -744,29 +707,21 @@ export async function drawProductionLabelWithJCSDK(
         }
       }
 
-      const ingredientLines = splitTextByChars(allIngredients, LABEL_ELEMENTS.ingredientsContent.maxCharsPerLine);
-      const tableLeft = margin;
-      const tableRight = LABEL_LAYOUT.canvas.width - margin;
+      // 使用智能换行（按顿号分割，避免单词截断）
+      const ingredientLines = splitTextBySeparators(allIngredients, LABEL_ELEMENTS.ingredientsContent.maxCharsPerLine);
 
-      // 绘制表格顶部线
-      JCAPI.drawLine(tableLeft, y, tableRight, y, 0.3 * scale);
-      y += LABEL_ELEMENTS.ingredientsContent.lineHeight * scale;
-
-      // 绘制每行内容 + 底部分隔线
+      // 绘制每行内容（居中对齐）
       ingredientLines.forEach((line) => {
         JCAPI.drawText(line, centerX, y, LABEL_ELEMENTS.ingredientsContent.fontSize * scale, 0, {
           align: 'center'
         });
         y += LABEL_ELEMENTS.ingredientsContent.lineHeight * scale;
-
-        // 绘制底部分隔线
-        JCAPI.drawLine(tableLeft, y, tableRight, y, 0.3 * scale);
       });
 
       y += LABEL_LAYOUT.spacing.blockInternal * scale;
       y += LABEL_LAYOUT.spacing.sectionGap * scale;
 
-      // ============= 4. 营养成分分析（表格化） =============
+      // ============= 4. 营养成分分析（无框线，显示占比） =============
       if (labelData.nutritionAnalysis) {
         const na = labelData.nutritionAnalysis;
 
@@ -777,48 +732,57 @@ export async function drawProductionLabelWithJCSDK(
         });
         y += LABEL_ELEMENTS.nutrition.lineHeight * scale;
 
-        // 准备营养成分数据（每项一个对象）
-        const nutritionItems = [
-          na.proteinPercent !== undefined ? { name: '蛋白质', value: `${na.proteinPercent.toFixed(1)}%` } : null,
-          na.fatPercent !== undefined ? { name: '脂肪', value: `${na.fatPercent.toFixed(1)}%` } : null,
-          na.ashPercent !== undefined ? { name: '灰分', value: `${na.ashPercent.toFixed(1)}%` } : null,
-          na.moisturePercent !== undefined ? { name: '含水量', value: `${na.moisturePercent.toFixed(1)}%` } : null,
-          na.crudeFiberPercent !== undefined ? { name: '纤维', value: `${na.crudeFiberPercent.toFixed(1)}%` } : null,
-          na.carbohydratePercent !== undefined ? { name: '碳水', value: `${na.carbohydratePercent.toFixed(1)}%` } : null,
-          na.energyDensityKcalPerKg ? { name: '能量', value: `${na.energyDensityKcalPerKg}kcal/kg` } : null,
-          na.calciumPhosphorusRatio ? { name: '钙磷比', value: `${na.calciumPhosphorusRatio}:1` } : null,
+        // 前6项基础营养成分（包含名称和占比）
+        const basicNutrition = [
+          na.proteinPercent !== undefined ? `蛋白质 ${na.proteinPercent.toFixed(1)}%` : null,
+          na.fatPercent !== undefined ? `脂肪 ${na.fatPercent.toFixed(1)}%` : null,
+          na.ashPercent !== undefined ? `灰分 ${na.ashPercent.toFixed(1)}%` : null,
+          na.moisturePercent !== undefined ? `含水量 ${na.moisturePercent.toFixed(1)}%` : null,
+          na.crudeFiberPercent !== undefined ? `纤维 ${na.crudeFiberPercent.toFixed(1)}%` : null,
+          na.carbohydratePercent !== undefined ? `碳水 ${na.carbohydratePercent.toFixed(1)}%` : null,
         ].filter(Boolean);
 
-        // 表格布局参数
+        // 能量和钙磷比
+        const energyText = na.energyDensityKcalPerKg ? `能量 ${na.energyDensityKcalPerKg}kcal/kg` : null;
+        const caPRatioText = na.calciumPhosphorusRatio ? `钙磷比 ${na.calciumPhosphorusRatio}:1` : null;
+
+        // 绘制6项基础营养成分（每行3个，共2行）
         const tableLeft = margin;
         const tableRight = LABEL_LAYOUT.canvas.width - margin;
         const tableWidth = tableRight - tableLeft;
-        const middleX = tableLeft + tableWidth / 2;
+        const colWidth = tableWidth / 3;  // 三列布局
 
-        // 绘制表格顶部线
-        JCAPI.drawLine(tableLeft, y, tableRight, y, 0.3 * scale);
-        y += LABEL_ELEMENTS.nutrition.lineHeight * scale;
-
-        // 绘制表格内容
-        nutritionItems.forEach((item: any) => {
-          // 绘制竖线（中间分隔线）
-          JCAPI.drawLine(middleX, y - LABEL_ELEMENTS.nutrition.lineHeight * scale, middleX, y, 0.3 * scale);
-
-          // 左列：营养名称（右对齐到中间线）
-          JCAPI.drawText(item.name, middleX - 2, y, LABEL_ELEMENTS.nutrition.contentFontSize * scale, 0, {
-            align: 'right'
-          });
-
-          // 右列：数值（左对齐到中间线）
-          JCAPI.drawText(item.value, middleX + 2, y, LABEL_ELEMENTS.nutrition.contentFontSize * scale, 0, {
-            align: 'left'
-          });
-
-          // 绘制底部分隔线
-          JCAPI.drawLine(tableLeft, y, tableRight, y, 0.3 * scale);
-
+        for (let row = 0; row < 2; row++) {
+          for (let col = 0; col < 3; col++) {
+            const index = row * 3 + col;
+            if (index < basicNutrition.length) {
+              const text = basicNutrition[index];
+              const x = tableLeft + col * colWidth + colWidth / 2;
+              JCAPI.drawText(text, x, y, LABEL_ELEMENTS.nutrition.contentFontSize * scale, 0, {
+                align: 'center'
+              });
+            }
+          }
           y += LABEL_ELEMENTS.nutrition.lineHeight * scale;
-        });
+        }
+
+        // 额外间距
+        y += LABEL_LAYOUT.spacing.blockInternal * scale;
+
+        // 能量和钙磷比（能量左对齐，钙磷比右对齐）
+        if (energyText || caPRatioText) {
+          if (energyText) {
+            JCAPI.drawText(energyText, tableLeft, y, LABEL_ELEMENTS.nutrition.contentFontSize * scale, 0, {
+              align: 'left'
+            });
+          }
+          if (caPRatioText) {
+            JCAPI.drawText(caPRatioText, tableRight, y, LABEL_ELEMENTS.nutrition.contentFontSize * scale, 0, {
+              align: 'right'
+            });
+          }
+          y += LABEL_ELEMENTS.nutrition.lineHeight * scale;
+        }
 
         y += LABEL_LAYOUT.spacing.blockInternal * scale;
         y += LABEL_LAYOUT.spacing.sectionGap * scale;
@@ -885,6 +849,49 @@ export async function drawProductionLabelWithJCSDK(
       reject(error);
     }
   });
+}
+
+/**
+ * 按字符数和分隔符智能分割文本（用于精臣SDK）
+ * @param text 文本内容
+ * @param maxChars 每行最大字符数
+ * @returns 分割后的文本数组
+ */
+function splitTextBySeparators(text: string, maxChars: number): string[] {
+  // 按顿号分割成各个项
+  const items = text.split('、');
+  const lines: string[] = [];
+  let currentLine = '';
+  let currentLength = 0;
+
+  items.forEach((item) => {
+    const itemLength = item.length;
+    const separatorLength = currentLine.length > 0 ? 1 : 0; // 顿号占1个字符
+
+    // 测试添加当前项后的字符数
+    if (currentLength + itemLength + separatorLength > maxChars && currentLine.length > 0) {
+      // 超出最大字符数，保存当前行，开始新行
+      lines.push(currentLine);
+      currentLine = item;
+      currentLength = itemLength;
+    } else {
+      // 未超出，继续累加
+      if (currentLine.length > 0) {
+        currentLine += '、' + item;
+        currentLength += separatorLength + itemLength;
+      } else {
+        currentLine = item;
+        currentLength = itemLength;
+      }
+    }
+  });
+
+  // 添加最后一行
+  if (currentLine) {
+    lines.push(currentLine);
+  }
+
+  return lines;
 }
 
 /**

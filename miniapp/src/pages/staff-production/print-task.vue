@@ -334,7 +334,14 @@ const handlePrint = async () => {
 
     uni.hideLoading();
 
-    if (res.statusCode === 200 && (res.data.code === 0 || res.data.code === '0')) {
+    console.log('[PrintTask] Response statusCode:', res.statusCode, 'Type:', typeof res.statusCode);
+    console.log('[PrintTask] Response code:', res.data.code, 'Type:', typeof res.data.code);
+
+    // 接受 200 和 201 状态码（201 = Created，RESTful API创建资源的标准响应）
+    const isSuccess = (res.statusCode === 200 || res.statusCode === 201) && (res.data.code == 0);
+    console.log('[PrintTask] Success check:', isSuccess, 'statusCode check:', res.statusCode === 200 || res.statusCode === 201, 'code check:', res.data.code == 0);
+
+    if (isSuccess) {
       const pdfUrl = res.data.data.pdfUrl;
 
       // 下载PDF文件

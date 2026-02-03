@@ -10,7 +10,7 @@ export default defineConfig({
   assetsInclude: ['**/*.png'],
   // 明确指定输出目录配置，确保编译输出稳定
   build: {
-    outDir: 'dist/build/mp-weixin',
+    outDir: 'dist/build',
     emptyOutDir: false, // 保留 project.config.json 等配置文件
   },
 })

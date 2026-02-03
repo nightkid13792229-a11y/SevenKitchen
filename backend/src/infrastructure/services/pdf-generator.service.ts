@@ -54,7 +54,7 @@ export class PdfGeneratorService {
           margins: { top: 40, bottom: 40, left: 40, right: 40 },
         });
 
-        // Register Chinese fonts
+        // Register Chinese fonts BEFORE any operations
         // Path from dist/src/infrastructure/services/ to src/assets/fonts/
         const fontsPath = path.join(__dirname, '../../../assets/fonts');
         const regularFontPath = path.join(fontsPath, 'SourceHanSansSC-Regular.otf');
@@ -69,18 +69,24 @@ export class PdfGeneratorService {
         const fs = require('fs');
         if (!fs.existsSync(regularFontPath)) {
           console.error('[PDF Generator] Regular font file NOT found:', regularFontPath);
+          throw new Error(`Font file not found: ${regularFontPath}`);
         } else {
           console.log('[PDF Generator] Regular font file found, size:', fs.statSync(regularFontPath).size, 'bytes');
         }
 
         if (!fs.existsSync(boldFontPath)) {
           console.error('[PDF Generator] Bold font file NOT found:', boldFontPath);
+          throw new Error(`Font file not found: ${boldFontPath}`);
         } else {
           console.log('[PDF Generator] Bold font file found, size:', fs.statSync(boldFontPath).size, 'bytes');
         }
 
-        doc.registerFont('SourceHanSansSC', regularFontPath);
-        doc.registerFont('SourceHanSansSC-Bold', boldFontPath);
+        // Register fonts - IMPORTANT: must register before using and use the font name in .font() calls
+        doc.registerFont('Chinese', regularFontPath);
+        doc.registerFont('Chinese-Bold', boldFontPath);
+
+        // Set default font to Chinese immediately after registration
+        doc.font('Chinese');
 
         // Collect buffers
         const chunks: Buffer[] = [];
@@ -155,11 +161,11 @@ export class PdfGeneratorService {
 
     // Title
     const fontSize = Math.floor(20 * scaleFactor);
-    doc.fontSize(fontSize).font('SourceHanSansSC-Bold').text('SevenKitchen 生产任务单', { align: 'center' });
+    doc.fontSize(fontSize).font('Chinese-Bold').text('SevenKitchen 生产任务单', { align: 'center' });
     y += Math.floor(30 * scaleFactor);
 
     // Recipe name and version
-    doc.fontSize(Math.floor(16 * scaleFactor)).font('SourceHanSansSC-Bold').text(`${data.recipeName} v${data.recipeVersion}`, { align: 'center' });
+    doc.fontSize(Math.floor(16 * scaleFactor)).font('Chinese-Bold').text(`${data.recipeName} v${data.recipeVersion}`, { align: 'center' });
     y += Math.floor(20 * scaleFactor);
 
     // Pot number
@@ -186,7 +192,7 @@ export class PdfGeneratorService {
     let y = startY + Math.floor(20 * scaleFactor);
 
     // Section title
-    doc.fontSize(Math.floor(12 * scaleFactor)).fillColor('#000000').font('SourceHanSansSC-Bold').text('分装订单', 40, y);
+    doc.fontSize(Math.floor(12 * scaleFactor)).fillColor('#000000').font('Chinese-Bold').text('分装订单', 40, y);
     y += Math.floor(16 * scaleFactor);
 
     // Orders
@@ -198,13 +204,13 @@ export class PdfGeneratorService {
 
       // Order title bar
       const titleBarHeight = Math.floor(18 * scaleFactor);
-      doc.fontSize(Math.floor(10 * scaleFactor)).fillColor('#FFFFFF').font('SourceHanSansSC-Bold')
+      doc.fontSize(Math.floor(10 * scaleFactor)).fillColor('#FFFFFF').font('Chinese-Bold')
         .rect(40, y - 2, 512, titleBarHeight).fill('#56AB91')
         .fillColor('#FFFFFF')
         .text(`订单 ${index + 1}`, 48, y);
 
       // Order details
-      doc.fontSize(Math.floor(9 * scaleFactor)).fillColor('#333333').font('SourceHanSansSC');
+      doc.fontSize(Math.floor(9 * scaleFactor)).fillColor('#333333').font('Chinese');
       const detailsY = y + Math.floor(12 * scaleFactor);
       const orderTotalWeight = order.packageSpecG * order.packageCount;
 
@@ -231,7 +237,7 @@ export class PdfGeneratorService {
     let y = startY + Math.floor(20 * scaleFactor);
 
     // Section title
-    doc.fontSize(Math.floor(12 * scaleFactor)).fillColor('#000000').font('SourceHanSansSC-Bold').text(`原料清单（${data.parsedIngredients.length}项）`, 40, y);
+    doc.fontSize(Math.floor(12 * scaleFactor)).fillColor('#000000').font('Chinese-Bold').text(`原料清单（${data.parsedIngredients.length}项）`, 40, y);
     y += Math.floor(16 * scaleFactor);
 
     // Table header - adjusted columns
@@ -244,7 +250,7 @@ export class PdfGeneratorService {
     const rowHeight = Math.floor(16 * scaleFactor);
 
     doc.rect(40, y, 512, rowHeight).fill('#F5F5F5');
-    doc.fontSize(Math.floor(8 * scaleFactor)).fillColor('#000000').font('SourceHanSansSC-Bold');
+    doc.fontSize(Math.floor(8 * scaleFactor)).fillColor('#000000').font('Chinese-Bold');
     doc.text('类型', colX.type, y + 4);
     doc.text('名称', colX.name, y + 4);
     doc.text('用量', colX.amount, y + 4);
@@ -260,7 +266,7 @@ export class PdfGeneratorService {
         doc.rect(40, y, 512, rowHeight).fill('#FAFAFA');
       }
 
-      doc.fontSize(Math.floor(8 * scaleFactor)).fillColor('#333333').font('SourceHanSansSC');
+      doc.fontSize(Math.floor(8 * scaleFactor)).fillColor('#333333').font('Chinese');
       doc.text(ing.typeLabel || '-', colX.type, y + 4);
       doc.text(ing.name, colX.name, y + 4);
       // Combine amount and unit
@@ -274,7 +280,7 @@ export class PdfGeneratorService {
 
     // Note
     y += Math.floor(12 * scaleFactor);
-    doc.fontSize(Math.floor(7 * scaleFactor)).fillColor('#999999').font('SourceHanSansSC').text('注：用量已包含生产损耗', 40, y, { align: 'center' });
+    doc.fontSize(Math.floor(7 * scaleFactor)).fillColor('#999999').font('Chinese').text('注：用量已包含生产损耗', 40, y, { align: 'center' });
 
     return y;
   }
@@ -297,8 +303,8 @@ export class PdfGeneratorService {
 
     // Footer text
     const footerTextY = Math.max(actualY + 15, maxY - 35);
-    doc.fontSize(Math.floor(8 * scaleFactor)).fillColor('#999999').font('SourceHanSansSC').text('SevenKitchen 专业鲜食套餐定制', 40, footerTextY, { align: 'center' });
-    doc.fontSize(Math.floor(8 * scaleFactor)).fillColor('#999999').font('SourceHanSansSC').text(`制作人: ${data.createdBy || '厨房管理员'}`, 40, footerTextY + Math.floor(12 * scaleFactor), { align: 'center' });
+    doc.fontSize(Math.floor(8 * scaleFactor)).fillColor('#999999').font('Chinese').text('SevenKitchen 专业鲜食套餐定制', 40, footerTextY, { align: 'center' });
+    doc.fontSize(Math.floor(8 * scaleFactor)).fillColor('#999999').font('Chinese').text(`制作人: ${data.createdBy || '厨房管理员'}`, 40, footerTextY + Math.floor(12 * scaleFactor), { align: 'center' });
   }
 
   /**

@@ -1247,8 +1247,8 @@ const showCustomBreedInput = ref(false)
 const customBreedName = ref('')
 const showBcsGuide = ref(false)
 
-// BCS评分图URL - 使用本地图片资源（注意：文件名必须匹配实际文件名，区分大小写）
-const bcsGuideImageUrl = ref('/static/images/BCS-chart.png')
+// BCS评分图URL - 使用腾讯云COS CDN加速域名
+const bcsGuideImageUrl = ref('https://img.sevenkitchen.cloud/bcs-standards/BCS-chart.jpg')
 const bcsImageError = ref(false)
 const bcsGuideShown = ref(false) // 记录是否已显示过BCS图
 const showBcsFallback = ref(false) // 是否显示降级内容（图片加载失败时）

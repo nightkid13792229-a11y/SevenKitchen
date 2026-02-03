@@ -169,13 +169,6 @@
           >
             发货
           </button>
-          <button
-            v-if="canComplete(order)"
-            class="action-btn green"
-            @tap.stop="completeOrder(order)"
-          >
-            完成订单
-          </button>
         </view>
       </view>
 
@@ -847,10 +840,6 @@ function canShip(order: Order): boolean {
   return order.status === 'FREEZING'
 }
 
-function canComplete(order: Order): boolean {
-  return order.status === 'SHIPPED'
-}
-
 // 操作函数
 async function confirmPayment(order: Order) {
   uni.showModal({
@@ -1058,31 +1047,6 @@ async function confirmShipping() {
   } finally {
     isShipping.value = false
   }
-}
-
-async function completeOrder(order: Order) {
-  uni.showModal({
-    title: '完成订单',
-    content: '确认完成此订单？',
-    success: async (res) => {
-      if (res.confirm) {
-        try {
-          await request({
-            url: `/admin/orders/${order.id}/complete`,
-            method: 'POST'
-          })
-          uni.showToast({
-            title: '订单已完成',
-            icon: 'success'
-          })
-          loadOrders()
-          loadStats()
-        } catch (error) {
-          console.error('[StaffOrders] Complete order error:', error)
-        }
-      }
-    }
-  })
 }
 </script>
 

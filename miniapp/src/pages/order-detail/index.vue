@@ -308,62 +308,6 @@
         </view>
       </view> -->
 
-      <!-- 评价及建议（仅在COMPLETED状态显示） -->
-      <view class="section review-section" v-if="order.status === 'COMPLETED'">
-        <view class="section-title">评价及建议</view>
-
-        <view class="review-rating">
-          <text class="rating-label">评分：</text>
-          <view class="star-rating">
-            <text
-              v-for="star in 5"
-              :key="star"
-              class="star"
-              :class="{ active: star <= reviewRating }"
-              @tap="setRating(star)"
-            >
-              {{ star <= reviewRating ? '●' : '○' }}
-            </text>
-          </view>
-        </view>
-
-        <view class="review-content">
-          <text class="content-label">评价内容：</text>
-          <textarea
-            class="review-textarea"
-            v-model="reviewText"
-            placeholder="请输入您的评价和建议..."
-            maxlength="500"
-          />
-          <view class="char-count">{{ reviewText.length }}/500</view>
-        </view>
-
-        <view class="review-images">
-          <text class="images-label">添加图片：</text>
-          <view class="image-upload">
-            <view
-              v-for="(img, index) in reviewImages"
-              :key="index"
-              class="image-item"
-            >
-              <image :src="img" mode="aspectFill" class="uploaded-image" />
-              <view class="btn-remove-image" @tap="removeImage(index)">×</view>
-            </view>
-            <view
-              v-if="reviewImages.length < 9"
-              class="btn-add-image"
-              @tap="chooseImage"
-            >
-              <text class="add-icon">+</text>
-              <text class="add-text">添加图片</text>
-            </view>
-          </view>
-          <text class="image-hint">最多可上传9张图片</text>
-        </view>
-
-        <button class="btn-submit-review" @tap="submitReview">提交评价</button>
-      </view>
-
       <!-- 物流信息（仅在SHIPPED状态显示）-->
       <view class="section shipping-section" v-if="order.status === 'SHIPPED' && order.trackingNumber">
         <view class="section-title">物流信息</view>
@@ -411,7 +355,6 @@
       <!-- 已完成状态 -->
       <view v-else-if="order.status === 'COMPLETED'" class="action-buttons">
         <button class="btn-action btn-secondary" @tap="buyAgain">再次购买</button>
-        <button class="btn-action btn-primary" @tap="writeReview">评价</button>
       </view>
 
       <!-- 已取消状态 -->
@@ -524,11 +467,6 @@ const userInfo = ref({
   id: '',
   role: ''
 })
-
-// 评价相关
-const reviewRating = ref(0)
-const reviewText = ref('')
-const reviewImages = ref<string[]>([])
 
 // 原料清单展开状态
 const expandedIngredients = ref<Record<string, boolean>>({})
@@ -1374,85 +1312,6 @@ function contactSevenDad() {
   })
 }
 
-// 设置评分
-function setRating(star: number) {
-  reviewRating.value = star
-}
-
-// 选择图片
-function chooseImage() {
-  const remainingCount = 9 - reviewImages.value.length
-  uni.chooseImage({
-    count: remainingCount,
-    sizeType: ['compressed'],
-    sourceType: ['album', 'camera'],
-    success: (res) => {
-      reviewImages.value.push(...res.tempFilePaths)
-    }
-  })
-}
-
-// 删除图片
-function removeImage(index: number) {
-  reviewImages.value.splice(index, 1)
-}
-
-// 提交评价
-async function submitReview() {
-  if (reviewRating.value === 0) {
-    uni.showToast({
-      title: '请先评分',
-      icon: 'none'
-    })
-    return
-  }
-
-  if (!reviewText.value.trim()) {
-    uni.showToast({
-      title: '请输入评价内容',
-      icon: 'none'
-    })
-    return
-  }
-
-  try {
-    uni.showLoading({ title: '提交中...' })
-
-    // TODO: 实现图片上传到服务器
-    // const uploadedImages = await uploadImages(reviewImages.value)
-
-    const result = await request({
-      url: `/orders/${orderId.value}/review`,
-      method: 'POST',
-      data: {
-        rating: reviewRating.value,
-        content: reviewText.value,
-        images: reviewImages.value // 暂时使用本地路径，实际应该上传后的URL
-      }
-    })
-
-    if (result.code === 0) {
-      uni.showToast({
-        title: '评价提交成功',
-        icon: 'success'
-      })
-      // 清空评价表单
-      reviewRating.value = 0
-      reviewText.value = ''
-      reviewImages.value = []
-    } else {
-      throw new Error(result.message || '提交失败')
-    }
-  } catch (error) {
-    console.error('Submit review error:', error)
-    uni.showToast({
-      title: '提交失败',
-      icon: 'none'
-    })
-  } finally {
-    uni.hideLoading()
-  }
-}
 </script>
 
 <style scoped>

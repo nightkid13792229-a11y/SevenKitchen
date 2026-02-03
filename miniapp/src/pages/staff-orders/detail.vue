@@ -156,13 +156,6 @@
         >
           发货
         </button>
-        <button
-          v-if="canComplete"
-          class="action-btn green"
-          @tap="completeOrder"
-        >
-          完成订单
-        </button>
       </view>
     </view>
 
@@ -259,10 +252,6 @@ const canStartProduction = computed(() => {
 
 const canShip = computed(() => {
   return order.value && order.value.status === 'FREEZING'
-})
-
-const canComplete = computed(() => {
-  return order.value && order.value.status === 'SHIPPED'
 })
 
 // 加载订单详情
@@ -417,32 +406,6 @@ async function shipOrder() {
   uni.showToast({
     title: '请在电脑端操作发货',
     icon: 'none'
-  })
-}
-
-async function completeOrder() {
-  if (!order.value) return
-
-  uni.showModal({
-    title: '完成订单',
-    content: '确认完成此订单？',
-    success: async (res) => {
-      if (res.confirm) {
-        try {
-          await request({
-            url: `/admin/orders/${order.value.id}/complete`,
-            method: 'POST'
-          })
-          uni.showToast({
-            title: '订单已完成',
-            icon: 'success'
-          })
-          loadOrderDetail()
-        } catch (error) {
-          console.error('[OrderDetail] Complete order error:', error)
-        }
-      }
-    }
   })
 }
 </script>

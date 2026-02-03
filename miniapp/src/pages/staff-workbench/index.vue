@@ -38,16 +38,6 @@
           <text class="module-arrow">›</text>
         </view>
 
-        <!-- 发货管理 -->
-        <view class="module" @tap="goToShipping">
-          <view class="module-icon shipping">🚚</view>
-          <view class="module-content">
-            <text class="module-title">发货管理</text>
-            <text class="module-desc">查看待发货订单与物流</text>
-          </view>
-          <text class="module-arrow">›</text>
-        </view>
-
         <!-- 报销管理 -->
         <view class="module" @tap="goToReimbursement">
           <view class="module-icon reimbursement">💰</view>
@@ -232,10 +222,6 @@ const goToPurchasing = () => {
 
 const goToProduction = () => {
   uni.navigateTo({ url: '/pages/staff-production/index' });
-};
-
-const goToShipping = () => {
-  uni.navigateTo({ url: '/pages/staff-shipping/index' });
 };
 
 const viewTodayOrders = () => {

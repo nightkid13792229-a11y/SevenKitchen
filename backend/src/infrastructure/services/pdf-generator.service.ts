@@ -162,33 +162,33 @@ export class PdfGeneratorService {
 
     // Title
     const fontSize = Math.floor(20 * scaleFactor);
-    doc.fontSize(fontSize).font('Chinese-Bold').text('SevenKitchen 生产任务单', { align: 'center' });
+    doc.fontSize(fontSize).font('Chinese-Bold').fillColor('#000000').text('SevenKitchen 生产任务单', { align: 'center' });
     y += Math.floor(30 * scaleFactor);
 
     // Recipe name and version
-    doc.fontSize(Math.floor(16 * scaleFactor)).font('Chinese-Bold').text(`${data.recipeName} v${data.recipeVersion}`, { align: 'center' });
+    doc.fontSize(Math.floor(16 * scaleFactor)).font('Chinese-Bold').fillColor('#000000').text(`${data.recipeName} v${data.recipeVersion}`, { align: 'center' });
     y += Math.floor(20 * scaleFactor);
 
     // Pot number
-    doc.fontSize(Math.floor(12 * scaleFactor)).fillColor('#56AB91').text(`第 ${data.currentPotNumber}/${data.totalPots} 锅`, { align: 'center' });
+    doc.fontSize(Math.floor(12 * scaleFactor)).fillColor('#000000').text(`第 ${data.currentPotNumber}/${data.totalPots} 锅`, { align: 'center' });
     y += Math.floor(16 * scaleFactor);
 
     // Meta info
-    doc.fontSize(Math.floor(9 * scaleFactor)).fillColor('#666666').text(
+    doc.fontSize(Math.floor(9 * scaleFactor)).fillColor('#000000').text(
       `创建时间: ${this.formatDateTime(data.createdAt)}`,
       { align: 'center' }
     );
     y += Math.floor(30 * scaleFactor);
 
-    // Separator line
-    doc.moveTo(40, y).lineTo(552, y).strokeColor('#56AB91').lineWidth(2).stroke();
+    // Separator line - 黑色分隔线
+    doc.moveTo(40, y).lineTo(552, y).strokeColor('#000000').lineWidth(2).stroke();
 
     return y;
   }
 
   /**
    * Draw packaging orders section with scaling
-   * Two orders per row layout
+   * Two orders per row layout, black and white design
    */
   private drawPackagingOrders(doc: any, data: PrintTaskData, startY: number, scaleFactor: number): number {
     let y = startY + Math.floor(20 * scaleFactor);
@@ -211,19 +211,22 @@ export class PdfGeneratorService {
         y -= cardHeight;
       }
 
-      // Card background
-      doc.rect(cardX, y, cardWidth, cardHeight).fillAndStroke('#F9F9F9', '#E0E0E0');
+      // Card border only - no background fill
+      doc.rect(cardX, y, cardWidth, cardHeight).strokeColor('#000000').lineWidth(1).stroke();
       const cardInnerY = y + Math.floor(8 * scaleFactor);
 
-      // Order title bar
+      // Order title bar - just text, no background
       const titleBarHeight = Math.floor(18 * scaleFactor);
-      doc.fontSize(Math.floor(10 * scaleFactor)).fillColor('#FFFFFF').font('Chinese-Bold')
-        .rect(cardX, cardInnerY - 2, cardWidth, titleBarHeight).fill('#56AB91')
-        .fillColor('#FFFFFF')
+      doc.fontSize(Math.floor(10 * scaleFactor)).fillColor('#000000').font('Chinese-Bold')
         .text(`订单 ${index + 1}`, cardX + Math.floor(8 * scaleFactor), cardInnerY);
 
+      // Add a line below title
+      doc.moveTo(cardX, cardInnerY + titleBarHeight - 2)
+         .lineTo(cardX + cardWidth, cardInnerY + titleBarHeight - 2)
+         .strokeColor('#000000').lineWidth(0.5).stroke();
+
       // Order details
-      doc.fontSize(Math.floor(9 * scaleFactor)).fillColor('#333333').font('Chinese');
+      doc.fontSize(Math.floor(9 * scaleFactor)).fillColor('#000000').font('Chinese');
       const detailsY = cardInnerY + Math.floor(12 * scaleFactor);
       const orderTotalWeight = order.packageSpecG * order.packageCount;
 
@@ -236,7 +239,7 @@ export class PdfGeneratorService {
 
       if (order.recipientName) {
         // 如果有收货人信息，紧凑显示
-        doc.fontSize(Math.floor(8 * scaleFactor)).fillColor('#666666').font('Chinese');
+        doc.fontSize(Math.floor(8 * scaleFactor)).fillColor('#000000').font('Chinese');
         doc.text(`${order.recipientName}（${order.recipientCity}）`, textX, detailsY + rowHeight * 2);
       }
 
@@ -253,6 +256,7 @@ export class PdfGeneratorService {
 
   /**
    * Draw ingredients section with scaling
+   * Black and white design with table borders
    */
   private drawIngredients(doc: any, data: PrintTaskData, startY: number, scaleFactor: number): number {
     let y = startY + Math.floor(20 * scaleFactor);
@@ -269,8 +273,10 @@ export class PdfGeneratorService {
       method: 260
     };
     const rowHeight = Math.floor(16 * scaleFactor);
+    const tableWidth = 512;
 
-    doc.rect(40, y, 512, rowHeight).fill('#F5F5F5');
+    // Draw table header with border
+    doc.rect(40, y, tableWidth, rowHeight).strokeColor('#000000').lineWidth(1).stroke();
     doc.fontSize(Math.floor(8 * scaleFactor)).fillColor('#000000').font('Chinese-Bold');
     doc.text('类型', colX.type, y + 4);
     doc.text('名称', colX.name, y + 4);
@@ -281,14 +287,10 @@ export class PdfGeneratorService {
 
     // Table rows
     data.parsedIngredients.forEach((ing) => {
-      // Alternate row color
-      if (ing.isTotalWeight) {
-        doc.rect(40, y, 512, rowHeight).fill('#E8F5E9');
-      } else if (y % (rowHeight * 2) === 0) {
-        doc.rect(40, y, 512, rowHeight).fill('#FAFAFA');
-      }
+      // Draw row border - no background fill
+      doc.rect(40, y, tableWidth, rowHeight).strokeColor('#000000').lineWidth(1).stroke();
 
-      doc.fontSize(Math.floor(8 * scaleFactor)).fillColor('#333333').font('Chinese');
+      doc.fontSize(Math.floor(8 * scaleFactor)).fillColor('#000000').font('Chinese');
       doc.text(ing.typeLabel || '-', colX.type, y + 4);
       doc.text(ing.name, colX.name, y + 4);
       // Combine amount and unit
@@ -300,15 +302,19 @@ export class PdfGeneratorService {
       // No pagination - must fit on one page
     });
 
+    // Draw bottom border of the table
+    doc.rect(40, y - rowHeight, tableWidth, rowHeight).strokeColor('#000000').lineWidth(1).stroke();
+
     // Note
     y += Math.floor(12 * scaleFactor);
-    doc.fontSize(Math.floor(7 * scaleFactor)).fillColor('#999999').font('Chinese').text('注：用量已包含生产损耗', 40, y, { align: 'center' });
+    doc.fontSize(Math.floor(7 * scaleFactor)).fillColor('#000000').font('Chinese').text('注：用量已包含生产损耗', 40, y, { align: 'center' });
 
     return y;
   }
 
   /**
    * Draw footer section with scaling
+   * Black and white design
    */
   private drawFooter(doc: any, data: PrintTaskData, currentY: number, scaleFactor: number): void {
     // Add padding before footer
@@ -318,15 +324,15 @@ export class PdfGeneratorService {
     const maxY = 752; // page.height - margins - footer padding
     const actualY = Math.min(footerY, maxY);
 
-    // Separator
+    // Separator - 黑色分隔线
     if (actualY < maxY - 40) {
-      doc.moveTo(40, actualY).lineTo(552, actualY).strokeColor('#E0E0E0').lineWidth(1).stroke();
+      doc.moveTo(40, actualY).lineTo(552, actualY).strokeColor('#000000').lineWidth(1).stroke();
     }
 
-    // Footer text
+    // Footer text - 黑色
     const footerTextY = Math.max(actualY + 15, maxY - 35);
-    doc.fontSize(Math.floor(8 * scaleFactor)).fillColor('#999999').font('Chinese').text('SevenKitchen 专业鲜食套餐定制', 40, footerTextY, { align: 'center' });
-    doc.fontSize(Math.floor(8 * scaleFactor)).fillColor('#999999').font('Chinese').text(`制作人: ${data.createdBy || '厨房管理员'}`, 40, footerTextY + Math.floor(12 * scaleFactor), { align: 'center' });
+    doc.fontSize(Math.floor(8 * scaleFactor)).fillColor('#000000').font('Chinese').text('SevenKitchen 专业鲜食套餐定制', 40, footerTextY, { align: 'center' });
+    doc.fontSize(Math.floor(8 * scaleFactor)).fillColor('#000000').font('Chinese').text(`制作人: ${data.createdBy || '厨房管理员'}`, 40, footerTextY + Math.floor(12 * scaleFactor), { align: 'center' });
   }
 
   /**

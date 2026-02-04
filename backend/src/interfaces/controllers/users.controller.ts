@@ -167,7 +167,24 @@ export class UsersController {
     }
 
     try {
-      // 上传到腾讯云 COS
+      // 获取当前用户信息，查看是否有旧头像
+      const currentUser = await this.prisma.user.findUnique({
+        where: { id: requestUser.customerId },
+        select: { avatarUrl: true },
+      });
+
+      // 如果存在旧头像，先删除
+      if (currentUser?.avatarUrl) {
+        console.log(`[UsersController] Deleting old avatar: ${currentUser.avatarUrl}`);
+        try {
+          await this.cosService.deleteImageByUrl(currentUser.avatarUrl);
+        } catch (deleteError) {
+          console.error('[UsersController] Failed to delete old avatar:', deleteError);
+          // 继续上传新头像，不阻断流程
+        }
+      }
+
+      // 上传新头像到腾讯云 COS
       const uploadResult = await this.cosService.uploadImage(
         file.buffer,
         file.originalname,

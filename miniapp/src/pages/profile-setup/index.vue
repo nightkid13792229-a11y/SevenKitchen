@@ -60,6 +60,7 @@ import { request } from '../../utils/api'
 
 const avatarUrl = ref('')
 const nickname = ref('')
+const isNewAvatar = ref(false) // 标记是否是新选择的头像（需要上传）
 
 // 是否可以提交
 const canSubmit = computed(() => {
@@ -82,6 +83,7 @@ async function loadUserInfo() {
     if (res.code === 0 && res.data) {
       avatarUrl.value = res.data.avatarUrl || ''
       nickname.value = res.data.nickname || ''
+      isNewAvatar.value = false // 从服务器加载的头像不需要上传
     }
   } catch (error) {
     console.error('加载用户信息失败:', error)
@@ -92,6 +94,7 @@ async function loadUserInfo() {
 function onChooseAvatar(e: any) {
   const { avatarUrl: tempAvatarUrl } = e.detail
   avatarUrl.value = tempAvatarUrl
+  isNewAvatar.value = true // 标记为新选择的头像，需要上传
   console.log('[Profile Setup] Avatar selected:', tempAvatarUrl)
 }
 
@@ -119,12 +122,13 @@ async function handleSubmit() {
   try {
     uni.showLoading({ title: '保存中...' })
 
-    // 上传头像到服务器（如果是本地文件）
+    // 上传头像到服务器（如果是新选择的头像）
     let uploadedAvatarUrl = avatarUrl.value
     let avatarUploadFailed = false
 
-    if (avatarUrl.value.startsWith('wxfile://') || avatarUrl.value.startsWith('http://tmp/')) {
+    if (isNewAvatar.value) {
       try {
+        console.log('[Profile Setup] Uploading new avatar:', avatarUrl.value)
         uploadedAvatarUrl = await uploadAvatar(avatarUrl.value)
       } catch (uploadError: any) {
         console.error('头像上传失败:', uploadError)

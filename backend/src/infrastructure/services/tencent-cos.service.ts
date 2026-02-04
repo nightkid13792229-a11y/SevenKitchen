@@ -148,6 +148,29 @@ export class TencentCosService {
   }
 
   /**
+   * Delete image from COS by URL
+   * @param url Full URL of the file (e.g., https://cdn.sevenkitchen.cloud/avatars/123/xxx.jpg)
+   */
+  async deleteImageByUrl(url: string): Promise<void> {
+    if (!url) {
+      console.log('[TencentCosService] No URL provided, skipping deletion');
+      return;
+    }
+
+    try {
+      // Extract key from URL
+      const urlObj = new URL(url);
+      const key = urlObj.pathname.slice(1); // Remove leading '/'
+
+      console.log(`[TencentCosService] Deleting image by URL: ${url}`);
+      await this.deleteImage(key);
+    } catch (error) {
+      console.error('[TencentCosService] Failed to delete image by URL:', error);
+      // Don't throw error - allow upload to proceed even if deletion fails
+    }
+  }
+
+  /**
    * Check if a file exists in COS by URL
    * @param url Full URL of the file
    * @returns true if file exists, false otherwise

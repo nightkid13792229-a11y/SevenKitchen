@@ -1220,7 +1220,9 @@ const breeds = ref<Breed[]>([])
 // 常见品种从API返回的数据中筛选（isCommon为true的品种）
 const commonBreeds = computed(() => {
   return breeds.value.filter(b => b.isCommon).map(b => b.name)
-})const selectedBreed = ref<Breed | null>(null)
+})
+
+const selectedBreed = ref<Breed | null>(null)
 const calcResult = ref<CalcResult | null>(null)
 const showCalcProcess = ref(false)
 const loadingBreeds = ref(false)

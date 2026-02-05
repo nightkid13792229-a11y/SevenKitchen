@@ -1903,7 +1903,7 @@ export class AdminController {
       growthCurveType: breed.growthCurveType,
       adultAgeMonths: breed.adultAgeMonths,
       seniorAgeYears: breed.seniorAgeYears,
-      averageAdultWeightKg: breed.averageAdultWeightKg ?? undefined,
+      averageAdultWeightKg: breed.averageAdultWeightKg ?? undefined,\n      isCommon: breed.isCommon || false,
       createdAt: new Date(), // TODO: Get from actual record
       updatedAt: new Date(), // TODO: Get from actual record
     };

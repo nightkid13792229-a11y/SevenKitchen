@@ -1044,13 +1044,6 @@ interface FormData {
 
 // Constants
 const MIXED_BREED_VIRTUAL_ID = '00000000-0000-0000-0000-000000000000'
-const commonBreeds = [
-  '拉布拉多', '泰迪', '贵宾犬(小型)', '贵宾犬(标准)', '金毛',
-  '比熊', '哈士奇', '德牧', '边牧', '柯基',
-  '萨摩耶', '法国斗牛犬', '吉娃娃', '博美', '雪纳瑞(小型)',
-  '约克夏', '马尔济斯', '腊肠犬', '阿拉斯加', '杜宾'
-]
-
 const formData = ref<FormData>({
   name: '',
   breedId: '',
@@ -1197,6 +1190,7 @@ interface Breed {
   adultAgeMonths: number
   seniorAgeYears: number
   averageAdultWeightKg?: number
+  isCommon?: boolean
 }
 
 interface CalcResult {
@@ -1222,7 +1216,11 @@ interface CalcResult {
 }
 
 const breeds = ref<Breed[]>([])
-const selectedBreed = ref<Breed | null>(null)
+
+// 常见品种从API返回的数据中筛选（isCommon为true的品种）
+const commonBreeds = computed(() => {
+  return breeds.value.filter(b => b.isCommon).map(b => b.name)
+})const selectedBreed = ref<Breed | null>(null)
 const calcResult = ref<CalcResult | null>(null)
 const showCalcProcess = ref(false)
 const loadingBreeds = ref(false)

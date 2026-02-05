@@ -13,6 +13,7 @@ import {
   MaxLength,
   IsOptional,
   IsNumber,
+  IsBoolean,
 } from 'class-validator';
 import { DogSizeCategory, GrowthCurveType } from '../../../domain';
 
@@ -63,4 +64,12 @@ export class CreateBreedDto {
   @Min(0.5, { message: 'Average weight must be at least 0.5 kg' })
   @Max(100, { message: 'Average weight must not exceed 100 kg' })
   averageAdultWeightKg?: number;
+
+  @ApiPropertyOptional({
+    description: 'Whether this is a common breed',
+    example: false
+  })
+  @IsOptional()
+  @IsBoolean({ message: 'isCommon must be a boolean' })
+  isCommon?: boolean;
 }

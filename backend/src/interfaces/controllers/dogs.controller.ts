@@ -338,6 +338,7 @@ export class DogsController {
       adultAgeMonths: breed.adultAgeMonths,
       seniorAgeYears: breed.seniorAgeYears,
       averageAdultWeightKg: breed.averageAdultWeightKg,
+      isCommon: breed.isCommon,
     }));
     return ApiResponseDto.success(breedDtos);
   }

@@ -140,10 +140,12 @@ model DogBreed {
   adultAgeMonths       Int             @map("adult_age_months")
   seniorAgeYears       Int             @map("senior_age_years")
   averageAdultWeightKg Float?          @map("average_adult_weight_kg")
+  isCommon             Boolean         @default(false) @map("is_common")
   createdAt            DateTime        @default(now()) @map("created_at")
   updatedAt            DateTime        @updatedAt @map("updated_at")
 
   @@index([sizeCategory])
+  @@index([isCommon])
   @@map("dog_breed")
 }
 

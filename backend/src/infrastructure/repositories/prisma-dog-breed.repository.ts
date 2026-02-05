@@ -128,6 +128,7 @@ export class PrismaDogBreedRepository implements DogBreedRepository {
       record.adultAgeMonths,
       record.seniorAgeYears,
       record.averageAdultWeightKg,
+      record.isCommon || false,
     );
   }
 }

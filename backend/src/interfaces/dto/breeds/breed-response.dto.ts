@@ -27,6 +27,9 @@ export class BreedResponseDto {
   @ApiProperty({ description: 'Average adult weight in kg', example: 28.5, required: false })
   averageAdultWeightKg?: number;
 
+  @ApiProperty({ description: 'Whether this is a common breed', example: true })
+  isCommon!: boolean;
+
   @ApiProperty({ description: 'Creation timestamp' })
   createdAt!: Date;
 

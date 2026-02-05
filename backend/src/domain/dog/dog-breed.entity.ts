@@ -20,6 +20,7 @@ export class DogBreed {
     public readonly adultAgeMonths: number,
     public readonly seniorAgeYears: number,
     public readonly averageAdultWeightKg: number | null,
+    public readonly isCommon: boolean = false,
   ) {
     this.validateInvariants();
   }

@@ -4,33 +4,23 @@
     <div class="section">
       <div class="section-header">
         <h3>当前常见品种列表 ({{ commonBreeds.length }})</h3>
-        <el-tag type="info" size="small">按住拖拽可调整顺序</el-tag>
+        <el-tag type="info" size="small">从数据库加载 isCommon=true 的品种</el-tag>
       </div>
-      <div v-if="commonBreeds.length === 0" class="empty-state">
-        <el-empty description="暂无常见品种，请从下方添加" />
+      <div v-if="loading" v-loading="true" style="min-height: 100px" />
+      <div v-else-if="commonBreeds.length === 0" class="empty-state">
+        <el-empty description="暂无常见品种，请在下方品种列表中点击「加入常见」" />
       </div>
       <div v-else class="common-breeds-list">
         <div
-          v-for="(breed, index) in commonBreeds"
-          :key="breed"
+          v-for="breed in commonBreeds"
+          :key="breed.id"
           class="breed-item"
-          draggable="true"
-          @dragstart="handleDragStart(index)"
-          @dragover.prevent
-          @drop="handleDrop(index)"
-          @dragend="handleDragEnd"
         >
-          <el-icon class="drag-handle"><Rank /></el-icon>
-          <span class="breed-name">{{ breed }}</span>
-          <el-button
-            type="danger"
-            size="small"
-            link
-            @click="handleRemoveCommonBreed(index)"
-          >
-            <el-icon><Close /></el-icon>
-            移除
-          </el-button>
+          <el-icon class="breed-icon"><StarFilled /></el-icon>
+          <span class="breed-name">{{ breed.name }}</span>
+          <el-tag size="small" :type="getSizeTagType(breed.sizeCategory)">
+            {{ getSizeLabel(breed.sizeCategory) }}
+          </el-tag>
         </div>
       </div>
     </div>
@@ -38,98 +28,44 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { ElMessage } from 'element-plus'
-import { Rank, Close } from '@element-plus/icons-vue'
-
-// Default common breeds (fallback if localStorage is empty)
-const DEFAULT_COMMON_BREEDS = [
-  '拉布拉多', '泰迪', '贵宾犬(小型)', '贵宾犬(标准)', '金毛',
-  '比熊', '哈士奇', '德牧', '边牧', '柯基',
-  '萨摩耶', '法国斗牛犬', '吉娃娃', '博美', '雪纳瑞(小型)',
-  '约克夏', '马尔济斯', '腊肠犬', '阿拉斯加', '杜宾'
-]
+import { computed } from 'vue'
+import { StarFilled } from '@element-plus/icons-vue'
+import type { DogBreed } from '@/types/breed'
+import { DogSizeCategory } from '@/types/breed'
 
 interface Props {
-  allBreeds: any[] // Not used anymore, kept for compatibility
+  allBreeds: DogBreed[]
   loading: boolean
 }
 
-interface Emits {
-  (e: 'refresh'): void
-}
-
 const props = defineProps<Props>()
-const emit = defineEmits<Emits>()
 
-// Local storage key
-const STORAGE_KEY = 'sevenkitchen_common_breeds'
-
-// Data
-const commonBreeds = ref<string[]>([])
-
-// Load common breeds from localStorage
-const loadCommonBreeds = () => {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) {
-      commonBreeds.value = JSON.parse(stored)
-    } else {
-      commonBreeds.value = [...DEFAULT_COMMON_BREEDS]
-    }
-  } catch (error) {
-    console.error('Failed to load common breeds:', error)
-    commonBreeds.value = [...DEFAULT_COMMON_BREEDS]
-  }
-}
-
-// Save common breeds to localStorage
-const saveCommonBreeds = () => {
-  try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(commonBreeds.value))
-    emit('refresh')
-  } catch (error) {
-    console.error('Failed to save common breeds:', error)
-    ElMessage.error('保存失败，请检查浏览器存储权限')
-  }
-}
-
-// Expose loadCommonBreeds for parent component to call
-defineExpose({
-  loadCommonBreeds
+// Filter breeds where isCommon is true
+const commonBreeds = computed(() => {
+  return props.allBreeds.filter(breed => breed.isCommon === true)
 })
 
-// Remove breed from common list
-const handleRemoveCommonBreed = (index: number) => {
-  const breed = commonBreeds.value[index]
-  commonBreeds.value.splice(index, 1)
-  saveCommonBreeds()
-  ElMessage.success(`已移除"${breed}"`)
+// Get size tag type
+const getSizeTagType = (sizeCategory: string) => {
+  const typeMap: Record<string, string> = {
+    'SMALL': 'success',
+    'MEDIUM': 'warning',
+    'LARGE': 'danger',
+    'GIANT': 'info'
+  }
+  return typeMap[sizeCategory] || 'info'
 }
 
-// Drag and drop handlers
-let draggedIndex: number | null = null
-
-const handleDragStart = (index: number) => {
-  draggedIndex = index
+// Get size label
+const getSizeLabel = (sizeCategory: string) => {
+  const labelMap: Record<string, string> = {
+    'SMALL': '小型',
+    'MEDIUM': '中型',
+    'LARGE': '大型',
+    'GIANT': '巨型'
+  }
+  return labelMap[sizeCategory] || sizeCategory
 }
-
-const handleDrop = (dropIndex: number) => {
-  if (draggedIndex === null || draggedIndex === dropIndex) return
-
-  const item = commonBreeds.value.splice(draggedIndex, 1)[0]
-  commonBreeds.value.splice(dropIndex, 0, item)
-
-  draggedIndex = null
-  saveCommonBreeds()
-}
-
-const handleDragEnd = () => {
-  draggedIndex = null
-}
-
-// Load on mount
-loadCommonBreeds()
 </script>
 
 <style scoped>
@@ -159,7 +95,7 @@ loadCommonBreeds()
 
 .common-breeds-list {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 12px;
 }
 
@@ -179,13 +115,9 @@ loadCommonBreeds()
   border-color: #409eff;
 }
 
-.drag-handle {
-  cursor: grab;
-  color: #909399;
-}
-
-.drag-handle:active {
-  cursor: grabbing;
+.breed-icon {
+  color: #f59e0b;
+  font-size: 18px;
 }
 
 .breed-name {

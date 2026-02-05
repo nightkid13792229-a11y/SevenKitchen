@@ -96,10 +96,6 @@ const loadCustomBreeds = async () => {
 const handleBreedTableRefresh = () => {
   // Reload system breeds
   loadSystemBreeds()
-  // Reload common breeds list
-  if (commonBreedsManagerRef.value) {
-    commonBreedsManagerRef.value.loadCommonBreeds()
-  }
 }
 
 onMounted(() => {

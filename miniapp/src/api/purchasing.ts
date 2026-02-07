@@ -313,7 +313,26 @@ export function uploadReceiptPhoto(filePath: string) {
       },
       fail: (error) => {
         console.error('[Upload] Upload failed:', error);
-        reject(error);
+        console.error('[Upload] Error details:', JSON.stringify({
+          errMsg: error.errMsg,
+          statusCode: error.statusCode,
+        }, null, 2));
+
+        // 提供更详细的错误信息
+        let errorMessage = '上传失败';
+        if (error.errMsg) {
+          if (error.errMsg.includes('network')) {
+            errorMessage = '网络连接失败，请检查网络';
+          } else if (error.errMsg.includes('timeout')) {
+            errorMessage = '上传超时，请重试';
+          } else if (error.errMsg.includes('permission')) {
+            errorMessage = '没有文件访问权限';
+          } else {
+            errorMessage = error.errMsg;
+          }
+        }
+
+        reject(new Error(errorMessage));
       },
     });
   });

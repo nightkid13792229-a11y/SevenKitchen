@@ -576,16 +576,29 @@ const uploadSinglePhoto = async (task: UploadTask) => {
   } catch (error: any) {
     console.error('[UploadSinglePhoto] Upload failed:', error);
 
+    // 详细错误信息（用于调试）
+    const detailedError = {
+      message: error.message || '未知错误',
+      errMsg: error.errMsg,
+      statusCode: error.statusCode,
+      data: error.data,
+    };
+    console.error('[UploadSinglePhoto] Detailed error:', JSON.stringify(detailedError, null, 2));
+
     // 更新任务状态为错误
     const taskIndex = uploadingPhotos.value.findIndex(t => t.id === task.id);
     if (taskIndex !== -1) {
       uploadingPhotos.value[taskIndex].status = 'error';
-      uploadingPhotos.value[taskIndex].error = error.message || '上传失败';
+      // 显示更详细的错误信息
+      const errorMsg = error.message || error.errMsg || '上传失败';
+      uploadingPhotos.value[taskIndex].error = errorMsg;
     }
 
+    // 显示详细错误提示（至少显示3秒）
     uni.showToast({
-      title: error.message || '上传失败',
+      title: error.message || error.errMsg || '上传失败，请重试',
       icon: 'none',
+      duration: 3000,
     });
   }
 };

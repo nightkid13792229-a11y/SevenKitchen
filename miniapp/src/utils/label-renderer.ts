@@ -666,20 +666,23 @@ export async function drawProductionLabelWithJCSDK(
 
       // ============= 1. 食谱名称 =============
       JCAPI.drawText(labelData.recipeName, centerX, y, LABEL_ELEMENTS.recipeName.fontSize * scale, 0, {
-        align: 'center'
+        align: 'center',
+        family: 'SimSun'  // 使用宋体,避免手机系统字体干扰
       });
       y += LABEL_ELEMENTS.recipeName.lineHeight * scale;
 
       // ============= 2. 制作信息 =============
       JCAPI.drawText(`为"${labelData.dogName}"制作于${labelData.productionTime}`, centerX, y, LABEL_ELEMENTS.productionInfo.fontSize * scale, 0, {
-        align: 'center'
+        align: 'center',
+        family: 'SimSun'
       });
       y += LABEL_ELEMENTS.productionInfo.lineHeight * scale;
 
       // 订购信息（第二行）
       const orderInfo = `${labelData.weightPerPack}g × ${labelData.packageCount}袋  总净重${labelData.totalWeight}g`;
       JCAPI.drawText(orderInfo, centerX, y, LABEL_ELEMENTS.productionInfo.fontSize * scale, 0, {
-        align: 'center'
+        align: 'center',
+        family: 'SimSun'
       });
       y += LABEL_LAYOUT.lineHeight.loose * scale;
 
@@ -690,7 +693,8 @@ export async function drawProductionLabelWithJCSDK(
       // 标题
       const ingredientsTitleText = '原料表';
       JCAPI.drawText(ingredientsTitleText, centerX, y, LABEL_ELEMENTS.ingredientsTitle.fontSize * scale, 0, {
-        align: 'center'
+        align: 'center',
+        family: 'SimSun'
       });
       y += LABEL_ELEMENTS.ingredientsTitle.lineHeight * scale;
 
@@ -713,7 +717,8 @@ export async function drawProductionLabelWithJCSDK(
       // 绘制每行内容（居中对齐）
       ingredientLines.forEach((line) => {
         JCAPI.drawText(line, centerX, y, LABEL_ELEMENTS.ingredientsContent.fontSize * scale, 0, {
-          align: 'center'
+          align: 'center',
+          family: 'SimSun'
         });
         y += LABEL_ELEMENTS.ingredientsContent.lineHeight * scale;
       });
@@ -728,7 +733,8 @@ export async function drawProductionLabelWithJCSDK(
         // 标题
         const nutritionTitleText = '营养成分分析';
         JCAPI.drawText(nutritionTitleText, centerX, y, LABEL_ELEMENTS.nutrition.titleFontSize * scale, 0, {
-          align: 'center'
+          align: 'center',
+          family: 'SimSun'
         });
         y += LABEL_ELEMENTS.nutrition.lineHeight * scale;
 
@@ -759,7 +765,8 @@ export async function drawProductionLabelWithJCSDK(
               const text = basicNutrition[index];
               const x = tableLeft + col * colWidth + colWidth / 2;
               JCAPI.drawText(text, x, y, LABEL_ELEMENTS.nutrition.contentFontSize * scale, 0, {
-                align: 'center'
+                align: 'center',
+                family: 'SimSun'
               });
             }
           }
@@ -773,12 +780,14 @@ export async function drawProductionLabelWithJCSDK(
         if (energyText || caPRatioText) {
           if (energyText) {
             JCAPI.drawText(energyText, tableLeft, y, LABEL_ELEMENTS.nutrition.contentFontSize * scale, 0, {
-              align: 'left'
+              align: 'left',
+              family: 'SimSun'
             });
           }
           if (caPRatioText) {
             JCAPI.drawText(caPRatioText, tableRight, y, LABEL_ELEMENTS.nutrition.contentFontSize * scale, 0, {
-              align: 'right'
+              align: 'right',
+              family: 'SimSun'
             });
           }
           y += LABEL_ELEMENTS.nutrition.lineHeight * scale;
@@ -792,13 +801,15 @@ export async function drawProductionLabelWithJCSDK(
       // 标题（纯文本，不使用装饰字符）
       const shelfLifeTitleText = '保质期';
       JCAPI.drawText(shelfLifeTitleText, centerX, y, LABEL_ELEMENTS.shelfLife.titleFontSize * scale, 0, {
-        align: 'center'
+        align: 'center',
+        family: 'SimSun'
       });
       y += LABEL_ELEMENTS.shelfLife.lineHeight * scale;
 
       // 保质期信息（移除特殊符号）
       JCAPI.drawText(`冷冻保存6个月  冷藏保存3天`, centerX, y, LABEL_ELEMENTS.shelfLife.contentFontSize * scale, 0, {
-        align: 'center'
+        align: 'center',
+        family: 'SimSun'
       });
       y += LABEL_ELEMENTS.shelfLife.lineHeight * scale;
 
@@ -812,7 +823,8 @@ export async function drawProductionLabelWithJCSDK(
       // 标题（纯文本，不使用装饰字符）
       const cookingTitleText = '烹饪建议';
       JCAPI.drawText(cookingTitleText, centerX, y, LABEL_ELEMENTS.cooking.titleFontSize * scale, 0, {
-        align: 'center'
+        align: 'center',
+        family: 'SimSun'
       });
       y += LABEL_ELEMENTS.cooking.lineHeight * scale;
 
@@ -824,7 +836,8 @@ export async function drawProductionLabelWithJCSDK(
         // 同行展示：方法+时间+说明
         const lineText = `${row.method} ${row.time}：${row.description}`;
         JCAPI.drawText(lineText, margin + indent, y, LABEL_ELEMENTS.cooking.descriptionFontSize * scale, 0, {
-          align: 'left'
+          align: 'left',
+          family: 'SimSun'
         });
         y += LABEL_ELEMENTS.cooking.lineHeight * scale;
       });
@@ -833,7 +846,8 @@ export async function drawProductionLabelWithJCSDK(
       y += LABEL_LAYOUT.spacing.blockInternal * scale;
       const brandBottomY = LABEL_LAYOUT.canvas.height - LABEL_ELEMENTS.brandBottom.yOffsetFromBottom;
       JCAPI.drawText(labelData.brandName, centerX, brandBottomY, LABEL_ELEMENTS.brandBottom.fontSize * scale, 0, {
-        align: 'center'
+        align: 'center',
+        family: 'SimSun'
       });
 
       // 结束绘制（在回调中调用打印函数）

@@ -873,12 +873,16 @@ export class StaffPurchasingController {
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
     @UserId() userId?: string,
+    @UserRole() role?: string,
   ): Promise<ApiResponseDto<any>> {
-    this.logger.log(`Fetching reimbursements for user ${userId} with status=${status}`);
+    this.logger.log(`Fetching reimbursements for user ${userId} (role=${role}) with status=${status}`);
+
+    // 管理员可以看到所有报销单，员工只能看到自己的
+    const submittedById = role === 'ADMIN' ? undefined : userId;
 
     const result = await this.reimbursementService.getReimbursements({
       status,
-      submittedById: userId,
+      submittedById,
       startDate,
       endDate,
       page: page ? parseInt(page) : 1,

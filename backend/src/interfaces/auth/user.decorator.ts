@@ -59,3 +59,27 @@ export const UserId = createParamDecorator(
     return user.userId;
   },
 );
+
+/**
+ * 获取当前用户角色的快捷装饰器
+ * @usage
+ * @Get()
+ * async getData(@UserRole() role: string) {
+ *   console.log(role);
+ * }
+ */
+export const UserRole = createParamDecorator(
+  (data: unknown, ctx: ExecutionContext): string => {
+    const request = ctx.switchToHttp().getRequest<{
+      user?: RequestUser;
+    }>();
+
+    const user = request.user;
+
+    if (!user) {
+      throw new Error('User not found in request. Make sure AuthGuard is applied.');
+    }
+
+    return user.role;
+  },
+);

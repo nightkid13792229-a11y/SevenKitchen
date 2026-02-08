@@ -44,7 +44,7 @@ import type { SubmitReimbursementDto } from '../../application/purchasing/reimbu
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { PurchaseListStatus, ReimbursementStatus } from '../../domain/purchasing';
 import { AuthGuard } from '../auth';
-import { UserId } from '../auth/user.decorator';
+import { UserId, UserRole } from '../auth/user.decorator';
 import { Put, Delete } from '@nestjs/common';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 
@@ -223,12 +223,16 @@ export class StaffPurchasingController {
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
     @UserId() userId?: string,
+    @UserRole() userRole?: string,
   ): Promise<ApiResponseDto<any>> {
-    this.logger.log(`Fetching purchase lists with filters: status=${status}, userId=${userId}`);
+    this.logger.log(`Fetching purchase lists with filters: status=${status}, userId=${userId}, role=${userRole}`);
+
+    // 管理员可以看到所有采购清单，员工只能看到自己创建的
+    const createdById = userRole === 'ADMIN' ? undefined : userId;
 
     const result = await this.purchasingService.getPurchaseLists({
       status,
-      createdById: userId,
+      createdById,
       startDate,
       endDate,
       page: page ? parseInt(page) : 1,

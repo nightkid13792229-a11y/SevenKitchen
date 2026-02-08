@@ -16,7 +16,7 @@
         <view class="role-badge">{{ roleText }}</view>
       </view>
 
-      <!-- 功能模块（仅展示采购、生产、发货） -->
+      <!-- 功能模块（采购、生产、订单、报销） -->
       <view class="modules">
         <!-- 采购管理 -->
         <view class="module" @tap="goToPurchasing">
@@ -34,6 +34,16 @@
           <view class="module-content">
             <text class="module-title">生产管理</text>
             <text class="module-desc">查看生产任务与分锅清单</text>
+          </view>
+          <text class="module-arrow">›</text>
+        </view>
+
+        <!-- 订单管理 -->
+        <view class="module" @tap="viewTodayOrders">
+          <view class="module-icon shipping">📋</view>
+          <view class="module-content">
+            <text class="module-title">订单管理</text>
+            <text class="module-desc">查看后台订单与订单状态</text>
           </view>
           <text class="module-arrow">›</text>
         </view>
@@ -66,17 +76,6 @@
             <text class="stat-label">待发货</text>
           </view>
         </view>
-      </view>
-
-      <!-- 快捷操作 -->
-      <view class="quick-actions">
-        <button
-          v-if="isAdmin"
-          class="action-btn primary"
-          @tap="viewTodayOrders"
-        >
-          查看订单
-        </button>
       </view>
     </view>
   </view>

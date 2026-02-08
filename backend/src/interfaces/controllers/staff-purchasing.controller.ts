@@ -880,6 +880,8 @@ export class StaffPurchasingController {
     // 管理员可以看到所有报销单，员工只能看到自己的
     const submittedById = role === 'ADMIN' ? undefined : userId;
 
+    this.logger.log(`[DEBUG] submittedById value: ${submittedById}, type: ${typeof submittedById}, is ADMIN: ${role === 'ADMIN'}`);
+
     const result = await this.reimbursementService.getReimbursements({
       status,
       submittedById,
@@ -888,6 +890,8 @@ export class StaffPurchasingController {
       page: page ? parseInt(page) : 1,
       pageSize: pageSize ? parseInt(pageSize) : 20,
     });
+
+    this.logger.log(`[DEBUG] Query result: found ${result.list.length} reimbursements, total: ${result.total}`);
 
     return ApiResponseDto.success(result, '获取报销申请列表成功');
   }

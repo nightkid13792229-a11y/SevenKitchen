@@ -252,8 +252,9 @@ export class OrdersController {
       return ApiResponseDto.error(404, 'Order not found');
     }
 
-    // Customer isolation: ensure customer can only access their own orders
-    if (order.customerId !== user.customerId) {
+    // Permission check: STAFF and ADMIN can view all orders, CUSTOMER can only view their own
+    const isStaffOrAdmin = user.role === 'STAFF' || user.role === 'ADMIN';
+    if (!isStaffOrAdmin && order.customerId !== user.customerId) {
       return ApiResponseDto.error(404, 'Order not found');
     }
 
@@ -309,8 +310,9 @@ export class OrdersController {
       return ApiResponseDto.error(404, 'Order not found') as ApiResponseDto<null>;
     }
 
-    // Customer isolation: ensure customer can only access their own orders
-    if (order.customerId !== user.customerId) {
+    // Permission check: STAFF and ADMIN can view all orders, CUSTOMER can only view their own
+    const isStaffOrAdmin = user.role === 'STAFF' || user.role === 'ADMIN';
+    if (!isStaffOrAdmin && order.customerId !== user.customerId) {
       return ApiResponseDto.error(404, 'Order not found') as ApiResponseDto<null>;
     }
 
@@ -386,8 +388,9 @@ export class OrdersController {
       return ApiResponseDto.error(404, 'Order not found');
     }
 
-    // Customer isolation: ensure customer can only access their own orders
-    if (order.customerId !== user.customerId) {
+    // Permission check: STAFF and ADMIN can view all orders, CUSTOMER can only view their own
+    const isStaffOrAdmin = user.role === 'STAFF' || user.role === 'ADMIN';
+    if (!isStaffOrAdmin && order.customerId !== user.customerId) {
       return ApiResponseDto.error(404, 'Order not found');
     }
 
@@ -435,8 +438,9 @@ export class OrdersController {
       return ApiResponseDto.error(404, 'Order not found');
     }
 
-    // Customer isolation: ensure customer can only access their own orders
-    if (order.customerId !== user.customerId) {
+    // Permission check: STAFF and ADMIN can view all orders, CUSTOMER can only view their own
+    const isStaffOrAdmin = user.role === 'STAFF' || user.role === 'ADMIN';
+    if (!isStaffOrAdmin && order.customerId !== user.customerId) {
       return ApiResponseDto.error(404, 'Order not found');
     }
 
@@ -446,7 +450,7 @@ export class OrdersController {
     }
 
     const snapshot = order.pricingBreakdownSnapshot;
-    
+
     // Map to pricing breakdown response (Phase 7.1)
     const response: PricingBreakdownResponseDto = {
       costIngredients: snapshot.costIngredients,

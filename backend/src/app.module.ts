@@ -31,6 +31,7 @@ import { AdminPurchasingController } from './interfaces/controllers/admin-purcha
 import { StaffProductionController } from './interfaces/controllers/staff-production.controller';
 import { CustomRecipeController } from './interfaces/controllers/custom-recipe/custom-recipe.controller';
 import { AdminCustomRecipeController } from './interfaces/controllers/custom-recipe/admin-custom-recipe.controller';
+import { SharedPhotosController } from './interfaces/controllers/shared-photos.controller';
 import { CustomRecipeService } from './application/custom-recipe/custom-recipe.service';
 import { OrderSchedulerService } from './application/scheduler/order-scheduler.service';
 import {
@@ -190,6 +191,7 @@ validatePrismaConfig();
     StaffProductionController,
     CustomRecipeController,
     AdminCustomRecipeController,
+    SharedPhotosController,
   ],
   providers: [
     DogService,

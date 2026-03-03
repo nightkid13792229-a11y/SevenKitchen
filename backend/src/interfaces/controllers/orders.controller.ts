@@ -53,6 +53,7 @@ import {
   PricingPreviewResponseDto,
   PricingBreakdownResponseDto,
 } from '../dto/orders/pricing-preview.dto';
+import { SharePhotosResponseDto } from '../dto/orders/share-photos.dto';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import type { RecipeSnapshot } from '../../domain/recipe/types';
 import { AuthGuard, CurrentUser } from '../auth';
@@ -1118,6 +1119,120 @@ export class OrdersController {
         return ApiResponseDto.error(400, error.message);
       }
       if (error instanceof InvalidStateTransitionError) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * Generate share token for order photos
+   * Only order owner or admin can share
+   */
+  @Post(':id/share-photos')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Generate share token for order photos' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Share token generated successfully',
+    type: SharePhotosResponseDto,
+  })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  @ApiResponse({ status: 400, description: 'Order has no production photos' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - X-Customer-Id header required',
+  })
+  async sharePhotos(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<SharePhotosResponseDto> | ApiResponseDto<null>> {
+    try {
+      // Check if order exists and user has permission
+      const order = await this.orderRepository.findById(id);
+      if (!order) {
+        return ApiResponseDto.error(404, 'Order not found');
+      }
+
+      // Check permission: only order owner or admin can share
+      if (order.customerId !== user.customerId && user.role !== 'admin') {
+        return ApiResponseDto.error(403, 'You do not have permission to share this order\'s photos');
+      }
+
+      // Check if order has production photos (stored in PackagingUnit)
+      // Get order items first
+      const orderItems = await this.prisma.orderItem.findMany({
+        where: { orderId: id },
+        select: { id: true },
+      });
+
+      if (!orderItems || orderItems.length === 0) {
+        return ApiResponseDto.error(400, 'This order has no items');
+      }
+
+      const orderItemIds = orderItems.map(item => item.id);
+
+      // Find packaging units that contain these order items
+      const packagingUnits = await this.prisma.packagingUnit.findMany({
+        where: {
+          sourceOrderItemIds: {
+            hasSome: orderItemIds,
+          },
+        },
+        select: {
+          photosCooked: true,
+          photosPortioned: true,
+          photosRaw: true,
+        },
+      });
+
+      // Check if any photos exist
+      let hasPhotos = false;
+      for (const unit of packagingUnits) {
+        if ((unit.photosRaw && unit.photosRaw.length > 0) ||
+            (unit.photosCooked && unit.photosCooked.length > 0) ||
+            (unit.photosPortioned && unit.photosPortioned.length > 0)) {
+          hasPhotos = true;
+          break;
+        }
+      }
+
+      if (!hasPhotos) {
+        return ApiResponseDto.error(400, 'This order has no production photos to share');
+      }
+
+      // Generate random token (32 characters)
+      const crypto = require('crypto');
+      const token = crypto.randomBytes(16).toString('hex');
+
+      // Set expiration time (7 days from now)
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 7);
+
+      // Save token to database
+      await this.prisma.photoShareToken.create({
+        data: {
+          orderId: id,
+          token: token,
+          expiresAt: expiresAt,
+          createdBy: user.userId,
+        },
+      });
+
+      const response: SharePhotosResponseDto = {
+        token: token,
+        expiresAt: expiresAt,
+      };
+
+      return ApiResponseDto.success(response);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
         return ApiResponseDto.error(400, error.message);
       }
       throw error;

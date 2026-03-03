@@ -40,20 +40,28 @@
             <view class="btn-edit">修改</view>
           </picker>
         </view>
-        <view class="info-row" v-if="order.address">
+        <view class="info-row address-row" v-if="order.address">
           <text class="label">收货地址:</text>
-          <view class="value-with-action">
+          <view class="address-content">
             <text class="value address-value">
               {{ order.address.recipientName }} {{ order.address.phone }}
               {{ order.address.regionText }} {{ order.address.detailAddress }}
             </text>
-            <button
-              v-if="canEditAddress"
-              class="btn-edit"
-              @tap="changeAddress"
-            >
-              更换
-            </button>
+            <view class="address-actions">
+              <button
+                class="btn-copy-address"
+                @tap="copyAddress"
+              >
+                复制
+              </button>
+              <button
+                v-if="canEditAddress"
+                class="btn-edit"
+                @tap="changeAddress"
+              >
+                更换
+              </button>
+            </view>
           </view>
         </view>
         <view class="info-row">
@@ -236,9 +244,18 @@
         class="section production-photos-section"
         v-if="order.productionPhotos && order.productionPhotos.photos.length > 0"
       >
-        <view class="section-title">
-          原料照片
-          <text class="photos-time">{{ formatDateTime(order.productionPhotos.uploadedAt) }}</text>
+        <view class="section-title-row">
+          <view class="section-title-left">
+            <text class="section-title-text">原料照片</text>
+            <text class="photos-time">{{ formatDateTime(order.productionPhotos.uploadedAt) }}</text>
+          </view>
+          <button
+            class="btn-share-photos"
+            open-type="share"
+            @tap="handleSharePhotos"
+          >
+            分享照片
+          </button>
         </view>
 
         <view class="production-photos">
@@ -368,7 +385,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onShow, onShareAppMessage } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 import OrderProgressBar from '../../components/OrderProgressBar.vue'
 import { formatDateTime } from '../../utils/date'
@@ -895,6 +912,67 @@ onShow(() => {
   uni.$on('address-selected', handleAddressSelected)
 })
 
+// 分享照片相关
+const shareToken = ref<string>('')
+const shareTokenExpiresAt = ref<Date | null>(null)
+
+// 处理分享照片按钮点击
+async function handleSharePhotos() {
+  if (!order.value) return
+
+  try {
+    uni.showLoading({ title: '生成分享链接...' })
+
+    const response = await request({
+      url: `/orders/${order.value.id}/share-photos`,
+      method: 'POST',
+    })
+
+    if (response.code === 0 && response.data) {
+      shareToken.value = response.data.token
+      shareTokenExpiresAt.value = new Date(response.data.expiresAt)
+      // 分享链接已生成，等待用户通过微信分享按钮分享
+      uni.hideLoading()
+      uni.showToast({
+        title: '请点击右上角分享',
+        icon: 'none',
+        duration: 2000
+      })
+    } else {
+      uni.hideLoading()
+      uni.showToast({
+        title: response.message || '生成分享链接失败',
+        icon: 'none',
+        duration: 2000
+      })
+    }
+  } catch (error: any) {
+    uni.hideLoading()
+    uni.showToast({
+      title: error.message || '生成分享链接失败',
+      icon: 'none',
+      duration: 2000
+    })
+  }
+}
+
+// 定义分享内容
+onShareAppMessage(() => {
+  if (!shareToken.value) {
+    return {
+      title: 'SevenKitchen原料照片',
+      path: '/pages/index/index',
+      imageUrl: order.value?.productionPhotos?.photos?.[0] || ''
+    }
+  }
+
+  return {
+    title: 'SevenKitchen原料照片',
+    path: `/pages/shared-photos/index?token=${shareToken.value}`,
+    imageUrl: order.value?.productionPhotos?.photos?.[0] || ''
+  }
+})
+
 function formatOrderId(id: string): string {
   return id.substring(0, 8) + '...'
 }
@@ -994,6 +1072,20 @@ function copyTrackingNumber() {
     data: order.value?.trackingNumber || '',
     success: () => {
       uni.showToast({ title: '运单号已复制', icon: 'success' })
+    }
+  })
+}
+
+function copyAddress() {
+  if (!order.value?.address) return
+
+  const address = order.value.address
+  const fullAddress = `${address.recipientName} ${address.phone} ${address.regionText} ${address.detailAddress}`
+
+  uni.setClipboardData({
+    data: fullAddress,
+    success: () => {
+      uni.showToast({ title: '地址已复制', icon: 'success' })
     }
   })
 }
@@ -1437,6 +1529,25 @@ function contactSevenDad() {
   flex: 1;
 }
 
+.address-row {
+  align-items: flex-start;
+}
+
+.address-content {
+  flex: 1;
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 12rpx;
+}
+
+.address-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  flex-shrink: 0;
+}
+
 .value-with-action {
   flex: 1;
   display: flex;
@@ -1481,6 +1592,16 @@ function contactSevenDad() {
   border-radius: 6rpx;
   font-size: 24rpx;
   border: none;
+}
+
+.btn-copy-address {
+  padding: 8rpx 20rpx;
+  background-color: #f0f0f0;
+  color: #333;
+  border-radius: 6rpx;
+  font-size: 24rpx;
+  border: none;
+  flex-shrink: 0;
 }
 
 /* 收货信息 */
@@ -2105,5 +2226,39 @@ function contactSevenDad() {
   color: #999;
   font-weight: normal;
   margin-left: auto;
+}
+
+/* 分享按钮样式 */
+.section-title-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20rpx;
+}
+
+.section-title-left {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+}
+
+.section-title-text {
+  font-size: 32rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.btn-share-photos {
+  padding: 12rpx 24rpx;
+  background-color: #007aff;
+  color: #fff;
+  font-size: 26rpx;
+  border-radius: 8rpx;
+  border: none;
+  line-height: 1.4;
+}
+
+.btn-share-photos::after {
+  border: none;
 }
 </style>

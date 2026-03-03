@@ -44,6 +44,8 @@ model Order {
   items                        OrderItem[]
   statusHistory                OrderStatusHistory[]
 
+  photoShareTokens PhotoShareToken[]
+
   @@index([customerId])
   @@index([status])
   @@index([aftersaleType])
@@ -64,6 +66,21 @@ model OrderStatusHistory {
   @@index([orderId])
   @@index([orderId, timestamp])
   @@map("order_status_history")
+}
+
+model PhotoShareToken {
+  id        String   @id @default(uuid()) @map("id")
+  orderId   String   @map("order_id")
+  token     String   @unique @map("token") @db.VarChar(32)
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+  createdBy String   @map("created_by")
+  order     Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([orderId])
+  @@index([expiresAt])
+  @@map("photo_share_token")
 }
 
 model OrderItem {

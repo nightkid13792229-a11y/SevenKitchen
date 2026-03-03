@@ -233,6 +233,12 @@
       }
     },
     {
+      "path": "pages/shared-photos/index",
+      "style": {
+        "navigationBarTitleText": "原料照片"
+      }
+    },
+    {
       "path": "pages/common/webview",
       "style": {
         "navigationBarTitleText": "网页"

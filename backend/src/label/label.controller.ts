@@ -2,6 +2,7 @@ import { Controller, Post, Body } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { LabelService } from './label.service';
 import { LabelDataDto } from './dto/label-data.dto';
+import { ApiResponseDto } from '../interfaces/dto/common/response.dto';
 
 @ApiTags('标签打印')
 @Controller('api/v1/labels')
@@ -16,17 +17,24 @@ export class LabelController {
     schema: {
       type: 'object',
       properties: {
-        imageBase64: {
-          type: 'string',
-          description: 'PNG图片的base64编码（不含data:image/png;base64,前缀）',
-          example: 'iVBORw0KGgoAAAANSUhEUgAA...',
+        code: { type: 'number', example: 0 },
+        message: { type: 'string', example: 'Success' },
+        data: {
+          type: 'object',
+          properties: {
+            imageBase64: {
+              type: 'string',
+              description: 'PNG图片的base64编码（不含data:image/png;base64,前缀）',
+              example: 'iVBORw0KGgoAAAANSUhEUgAA...',
+            },
+          },
         },
       },
     },
   })
   @ApiResponse({ status: 400, description: '请求参数无效' })
-  generateImage(@Body() labelData: LabelDataDto): { imageBase64: string } {
+  generateImage(@Body() labelData: LabelDataDto): ApiResponseDto<{ imageBase64: string }> {
     const imageBase64 = this.labelService.generateLabelImage(labelData);
-    return { imageBase64 };
+    return ApiResponseDto.success({ imageBase64 });
   }
 }

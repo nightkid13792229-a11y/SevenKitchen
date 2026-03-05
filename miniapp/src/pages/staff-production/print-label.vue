@@ -230,6 +230,7 @@ import {
   getHealthTagLabel
 } from '../../utils/label-mapping';
 import { getRecipeBatchesWithOrders } from '../../api/production';
+import { generateLabelImage, type LabelData as ApiLabelData } from '../../api/label';
 
 const CANVAS_WIDTH = 600;
 const CANVAS_HEIGHT = 800;
@@ -701,10 +702,23 @@ async function printSingleOrder(order: OrderPrintConfig) {
         // 准备标签数据
         const labelData = prepareLabelData(order);
 
-        console.log(`[PrintLabel] 调用 printLabel，份数: ${order.printCount}`);
+        // 调用后端API生成标签图片
+        console.log(`[PrintLabel] 调用后端API生成标签图片`);
+        uni.showLoading({
+          title: '生成标签中...',
+          mask: true
+        });
 
-        // 打印指定份数
-        await jcPrinter.printLabel(labelData, null, order.printCount);
+        const imageBase64 = await generateLabelImage(labelData as ApiLabelData);
+
+        console.log(`[PrintLabel] 标签图片生成成功，开始打印 ${order.printCount} 份`);
+        uni.showLoading({
+          title: `打印中...`,
+          mask: true
+        });
+
+        // 使用后端生成的图片打印
+        await jcPrinter.printLabelFromImage(imageBase64, order.printCount);
 
         uni.hideLoading();
         uni.showToast({

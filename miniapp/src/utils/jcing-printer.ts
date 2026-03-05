@@ -263,6 +263,66 @@ export class JCPrinter {
   }
 
   /**
+   * 使用后端生成的图片打印标签
+   * @param imageBase64 图片的base64编码（不含前缀）
+   * @param count 打印份数
+   * @returns Promise<void>
+   */
+  async printLabelFromImage(imageBase64: string, count: number = 1): Promise<void> {
+    if (!this.isConnected) {
+      throw new Error('打印机未连接');
+    }
+
+    console.log('[JCPrinter] 使用图片打印，份数:', count);
+
+    return new Promise((resolve, reject) => {
+      let completed = false;
+
+      // 超时保护：10秒后自动完成
+      const timeoutId = setTimeout(() => {
+        if (!completed) {
+          completed = true;
+          console.warn('[JCPrinter] 图片打印超时，但任务可能已完成');
+          resolve();
+        }
+      }, 10000);
+
+      // 使用精臣SDK的printImage方法
+      JCAPI.printImage({
+        data: imageBase64,
+        count: count,
+        width: 75,   // 标签宽度 75mm
+        height: 100, // 标签高度 100mm
+        orientation: 0,
+        success: () => {
+          if (!completed) {
+            completed = true;
+            clearTimeout(timeoutId);
+            console.log('[JCPrinter] 图片打印完成');
+            resolve();
+          }
+        },
+        fail: (error: any) => {
+          if (!completed) {
+            completed = true;
+            clearTimeout(timeoutId);
+            console.error('[JCPrinter] 图片打印失败:', error);
+            reject(new Error(error?.errMsg || '打印失败'));
+          }
+        },
+        complete: () => {
+          // 确保清理
+          if (!completed) {
+            completed = true;
+            clearTimeout(timeoutId);
+            resolve();
+          }
+        }
+      } as any);
+    });
+  }
+
+  /**
    * 断开打印机连接
    */
   disconnect(): void {

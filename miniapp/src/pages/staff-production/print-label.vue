@@ -565,14 +565,21 @@ async function previewLabel(order: OrderPrintConfig) {
     // 准备标签数据
     const labelData = prepareLabelData(order);
 
-    // 获取Canvas上下文(传入组件实例以确保稳定性)
-    const ctx = uni.createCanvasContext('labelCanvas', currentInstance);
+    // 调用后端API生成标签图片(确保预览和打印完全一致)
+    console.log(`[PrintLabel] 调用后端API生成预览图片`);
+    const imageBase64 = await generateLabelImage(labelData as ApiLabelData);
 
-    // 绘制标签(传入组件实例)
-    const imagePath = await drawProductionLabel('labelCanvas', ctx, labelData, currentInstance);
+    // 将base64转换为临时文件路径供预览使用
+    const fs = uni.getFileSystemManager();
+    const tempFilePath = `${wx.env.USER_DATA_PATH}/label_preview_${Date.now()}.png`;
+
+    // 写入临时文件
+    fs.writeFileSync(tempFilePath, imageBase64, 'base64');
 
     uni.hideLoading();
-    previewImage.value = imagePath;
+    previewImage.value = tempFilePath;
+
+    console.log('[PrintLabel] 预览图片生成成功,使用后端统一字体');
 
     // 显示预览弹窗
     if (previewPopup.value) {

@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
-import { createCanvas, Canvas, CanvasRenderingContext2D } from 'canvas';
+import { createCanvas, Canvas, CanvasRenderingContext2D, registerFont } from 'canvas';
 import { LabelDataDto } from './dto/label-data.dto';
+import * as path from 'path';
 
 /**
  * 标签布局配置（毫米单位）
@@ -82,6 +83,47 @@ const NUTRITION_STANDARD_LABELS: Record<string, string> = {
 
 @Injectable()
 export class LabelService {
+  private regularFontPath: string;
+  private boldFontPath: string;
+
+  constructor() {
+    // 注册中文字体
+    const fontsPath = path.join(__dirname, '../../assets/fonts');
+    this.regularFontPath = path.join(fontsPath, 'SourceHanSansSC-Regular.otf');
+    this.boldFontPath = path.join(fontsPath, 'SourceHanSansSC-Bold.otf');
+
+    console.log('[LabelService] __dirname:', __dirname);
+    console.log('[LabelService] fontsPath:', fontsPath);
+    console.log('[LabelService] regularFontPath:', this.regularFontPath);
+    console.log('[LabelService] boldFontPath:', this.boldFontPath);
+
+    // 检查字体文件是否存在
+    const fs = require('fs');
+    if (!fs.existsSync(this.regularFontPath)) {
+      console.error('[LabelService] Regular font file NOT found:', this.regularFontPath);
+      throw new Error(`Font file not found: ${this.regularFontPath}`);
+    } else {
+      console.log('[LabelService] Regular font file found, size:', fs.statSync(this.regularFontPath).size, 'bytes');
+    }
+
+    if (!fs.existsSync(this.boldFontPath)) {
+      console.error('[LabelService] Bold font file NOT found:', this.boldFontPath);
+      throw new Error(`Font file not found: ${this.boldFontPath}`);
+    } else {
+      console.log('[LabelService] Bold font file found, size:', fs.statSync(this.boldFontPath).size, 'bytes');
+    }
+
+    // 注册字体到canvas库
+    try {
+      registerFont(this.regularFontPath, { family: 'Chinese' });
+      registerFont(this.boldFontPath, { family: 'Chinese-Bold' });
+      console.log('[LabelService] 字体注册成功');
+    } catch (error) {
+      console.error('[LabelService] 字体注册失败:', error);
+      throw error;
+    }
+  }
+
   /**
    * 生成标签图片（返回base64）
    */
@@ -99,15 +141,15 @@ export class LabelService {
     // 黑色文字
     ctx.fillStyle = '#000000';
 
-    // 设置中文字体
-    ctx.font = `${mmToPx(LABEL_LAYOUT.fontSize.body)}px "Noto Sans CJK SC", "Source Han Sans SC", "SimHei", sans-serif`;
+    // 设置中文字体（使用已注册的字体）
+    ctx.font = `${mmToPx(LABEL_LAYOUT.fontSize.body)}px "Chinese"`;
 
     let y = mmToPx(LABEL_LAYOUT.margin.top + 3);
     const centerX = width / 2;
     const maxWidth = width - mmToPx(LABEL_LAYOUT.margin.left + LABEL_LAYOUT.margin.right);
 
     // 1. 品牌名称（顶部）
-    ctx.font = `bold ${mmToPx(LABEL_LAYOUT.fontSize.brand)}px "Noto Sans CJK SC", "Source Han Sans SC", "SimHei", sans-serif`;
+    ctx.font = `bold ${mmToPx(LABEL_LAYOUT.fontSize.brand)}px "Chinese-Bold"`;
     ctx.textAlign = 'center';
     ctx.fillText(labelData.brandName, centerX, y);
     y += mmToPx(LABEL_LAYOUT.lineHeight.normal);

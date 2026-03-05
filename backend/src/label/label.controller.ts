@@ -4,7 +4,7 @@ import { LabelService } from './label.service';
 import { LabelDataDto } from './dto/label-data.dto';
 
 @ApiTags('标签打印')
-@Controller('labels')
+@Controller('api/v1/labels')
 export class LabelController {
   constructor(private readonly labelService: LabelService) {}
 

@@ -34,6 +34,7 @@ import { AdminCustomRecipeController } from './interfaces/controllers/custom-rec
 import { SharedPhotosController } from './interfaces/controllers/shared-photos.controller';
 import { CustomRecipeService } from './application/custom-recipe/custom-recipe.service';
 import { OrderSchedulerService } from './application/scheduler/order-scheduler.service';
+import { LabelModule } from './label/label.module';
 import {
   DogService,
   DOG_REPOSITORY,
@@ -163,6 +164,7 @@ validatePrismaConfig();
     ScheduleModule.forRoot(),
     WechatModule,
     SmsModule,
+    LabelModule,
   ],
   controllers: [
     DogsController,

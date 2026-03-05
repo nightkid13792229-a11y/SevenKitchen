@@ -88,7 +88,27 @@ export class LabelService {
 
   constructor() {
     // 注册中文字体
-    const fontsPath = path.join(__dirname, '../../assets/fonts');
+    // 开发模式: __dirname = dist/src/label, 字体在 src/assets/fonts
+    // 生产模式: __dirname = dist/src/label, 字体在 dist/assets/fonts (通过copy-fonts.js复制)
+    let fontsPath: string;
+
+    // 检查dist/assets/fonts是否存在(生产模式)
+    const distFontsPath = path.join(__dirname, '../../assets/fonts');
+    const srcFontsPath = path.join(__dirname, '../../src/assets/fonts');
+
+    const fs = require('fs');
+    if (fs.existsSync(distFontsPath)) {
+      fontsPath = distFontsPath;
+      console.log('[LabelService] Using dist fonts path:', fontsPath);
+    } else if (fs.existsSync(srcFontsPath)) {
+      fontsPath = srcFontsPath;
+      console.log('[LabelService] Using src fonts path:', fontsPath);
+    } else {
+      // 如果都不存在,尝试创建dist/assets/fonts目录并复制字体
+      fontsPath = distFontsPath;
+      console.log('[LabelService] Neither dist nor src fonts found, will use:', fontsPath);
+    }
+
     this.regularFontPath = path.join(fontsPath, 'SourceHanSansSC-Regular.otf');
     this.boldFontPath = path.join(fontsPath, 'SourceHanSansSC-Bold.otf');
 
@@ -98,7 +118,6 @@ export class LabelService {
     console.log('[LabelService] boldFontPath:', this.boldFontPath);
 
     // 检查字体文件是否存在
-    const fs = require('fs');
     if (!fs.existsSync(this.regularFontPath)) {
       console.error('[LabelService] Regular font file NOT found:', this.regularFontPath);
       throw new Error(`Font file not found: ${this.regularFontPath}`);

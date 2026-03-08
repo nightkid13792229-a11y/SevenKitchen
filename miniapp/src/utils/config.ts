@@ -105,18 +105,26 @@ function isDevTools(): boolean {
  * Get the API base URL with automatic dev/prod switching
  * Priority order:
  * 1. Production build → use production domain (api.sevenkitchen.cloud)
- * 2. Storage override (manual config from Network Settings page)
- * 3. Real device → use LAN IP
+ * 2. Real device (dev build) → use LAN IP (higher priority than storage)
+ * 3. Storage override (manual config from Network Settings page)
  * 4. DevTools → use localhost
+ * 5. Default
  */
 export function getBaseUrl(): string {
-  // 优先级0: 生产构建 → 强制使用生产域名（确保通过域名校验）
+  // 优先级1: 生产构建 → 强制使用生产域名（确保通过域名校验）
   if (IS_PRODUCTION_BUILD) {
     console.debug('[Config] Production build detected, using PROD_BASE_URL:', PROD_BASE_URL)
     return PROD_BASE_URL
   }
 
-  // 优先级1: 手动配置的地址（Storage）
+  // 优先级2: 真机调试（开发构建）→ 强制使用局域网IP
+  // 注意：真机检测优先级高于 Storage，确保真机调试时自动连接本地开发服务器
+  if (isRealDevice()) {
+    console.debug('[Config] Detected real device, using LAN BASE_URL:', LAN_BASE_URL)
+    return LAN_BASE_URL
+  }
+
+  // 优先级3: 手动配置的地址（Storage）
   try {
     const stored = uni.getStorageSync(STORAGE_KEY)
     if (stored && typeof stored === 'string' && stored.trim()) {
@@ -127,19 +135,13 @@ export function getBaseUrl(): string {
     console.warn('Failed to read BASE_URL from storage:', err)
   }
 
-  // 优先级2: 真机调试 → 强制使用局域网IP
-  if (isRealDevice()) {
-    console.debug('[Config] Detected real device, using LAN BASE_URL:', LAN_BASE_URL)
-    return LAN_BASE_URL
-  }
-
-  // 优先级3: 开发者工具 → 使用localhost
+  // 优先级4: 开发者工具 → 使用localhost
   if (isDevTools()) {
     console.debug('[Config] Detected DevTools, using dev BASE_URL:', DEV_BASE_URL)
     return DEV_BASE_URL
   }
 
-  // 默认开发环境地址
+  // 优先级5: 默认开发环境地址
   console.debug('[Config] Using default dev BASE_URL:', DEFAULT_BASE_URL)
   return DEFAULT_BASE_URL
 }

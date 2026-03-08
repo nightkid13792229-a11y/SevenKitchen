@@ -227,7 +227,8 @@ export async function drawProductionLabel(
       ctx.fillText(labelData.brandName, centerX, mmToPx(LABEL_ELEMENTS.brandTop.yOffset));
       y = mmToPx(LABEL_ELEMENTS.brandTop.yOffset) + mmToPx(LABEL_ELEMENTS.brandTop.lineHeight);
 
-      // 分隔线已移除
+      // 分隔线已移除，增加间距避免内容太靠上
+      y += mmToPx(7);  // 增加 7mm 间距，确保不遮挡品牌名称
 
       // ============= 1. 食谱名称（主标题，加粗） =============
       ctx.setFontSize(mmToPx(LABEL_ELEMENTS.recipeName.fontSize));
@@ -663,13 +664,15 @@ export async function drawProductionLabelWithJCSDK(
       const margin = LABEL_LAYOUT.margin.left;
       const centerX = LABEL_LAYOUT.canvas.width / 2;
 
-      // ============= 0. 顶部品牌名称（紧贴标签纸最上方） =============
-      JCAPI.drawText(labelData.brandName, centerX, LABEL_ELEMENTS.brandTop.yOffset * scale, LABEL_ELEMENTS.brandTop.fontSize * scale, 0, {
+      // ============= 0. 顶部品牌名称（下移3mm） =============
+      const brandYOffset = LABEL_ELEMENTS.brandTop.yOffset + 3;  // 下移3mm
+      JCAPI.drawText(labelData.brandName, centerX, brandYOffset * scale, LABEL_ELEMENTS.brandTop.fontSize * scale, 0, {
         align: 'center'
       });
-      y = LABEL_ELEMENTS.brandTop.yOffset * scale + LABEL_ELEMENTS.brandTop.lineHeight * scale;
+      y = brandYOffset * scale + LABEL_ELEMENTS.brandTop.lineHeight * scale;
 
-      // 分隔线已移除
+      // 分隔线已移除，增加间距避免内容太靠上
+      y += 7 * scale;  // 增加 7mm 间距，确保不遮挡品牌名称
 
       // ============= 1. 食谱名称 =============
       JCAPI.drawText(labelData.recipeName, centerX, y, LABEL_ELEMENTS.recipeName.fontSize * scale, 0, {

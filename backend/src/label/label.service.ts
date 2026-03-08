@@ -163,8 +163,8 @@ export class LabelService {
     // 设置中文字体（使用已注册的字体）
     ctx.font = `${mmToPx(LABEL_LAYOUT.fontSize.body)}px "Chinese"`;
 
-    // 品牌名称紧贴顶部：y坐标 = 字体大小（像素），让文字基线在字体高度位置
-    let y = mmToPx(LABEL_LAYOUT.fontSize.brand);
+    // 品牌名称位置：字体大小 + 3mm 下移
+    let y = mmToPx(LABEL_LAYOUT.fontSize.brand) + mmToPx(3);
     const centerX = width / 2;
     const maxWidth = width - mmToPx(LABEL_LAYOUT.margin.left + LABEL_LAYOUT.margin.right);
 
@@ -172,9 +172,10 @@ export class LabelService {
     ctx.font = `bold ${mmToPx(LABEL_LAYOUT.fontSize.brand)}px "Chinese-Bold"`;
     ctx.textAlign = 'center';
     ctx.fillText(labelData.brandName, centerX, y);
-    y += mmToPx(LABEL_LAYOUT.lineHeight.compact);  // 减少行高，让后续内容更紧凑上移
+    y += mmToPx(LABEL_LAYOUT.lineHeight.compact);
 
-    // 分隔线已移除
+    // 分隔线已移除，增加间距避免食谱标题遮挡品牌名称
+    y += mmToPx(7);  // 增加 7mm 间距
 
     // 2. 食谱名称
     ctx.font = `bold ${mmToPx(LABEL_LAYOUT.fontSize.title)}px "Noto Sans CJK SC", "Source Han Sans SC", "SimHei", sans-serif`;

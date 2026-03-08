@@ -9,10 +9,26 @@
 
     <!-- 微信授权登录 -->
     <view class="login-section">
+      <!-- 隐私协议勾选 -->
+      <view class="agreement-section">
+        <view class="checkbox-wrapper" @tap="toggleAgreement">
+          <view :class="['checkbox', { checked: isAgreed }]">
+            <text v-if="isAgreed" class="check-icon">✓</text>
+          </view>
+        </view>
+        <text class="agreement-text">
+          我已阅读并同意
+          <text class="link" @tap.stop="navigateToPrivacy">《隐私政策》</text>
+          和
+          <text class="link" @tap.stop="navigateToTerms">《用户协议》</text>
+        </text>
+      </view>
+
       <button
         class="wechat-login-btn"
+        :class="{ 'btn-disabled': !isAgreed }"
         @tap="handleWechatLogin"
-        :disabled="loading"
+        :disabled="loading || !isAgreed"
         @agreeprivacyauthorization="handlePrivacyAgree"
       >
         <text v-if="!loading">微信一键登录</text>
@@ -28,6 +44,7 @@ import { onLoad } from '@dcloudio/uni-app';
 import { request, setToken, markTokenReady } from '../../utils/api';
 
 const loading = ref(false);
+const isAgreed = ref(false);
 
 onLoad(() => {
   // 检查是否已登录
@@ -36,6 +53,21 @@ onLoad(() => {
     uni.switchTab({ url: '/pages/home/index' });
   }
 });
+
+// 切换协议同意状态
+const toggleAgreement = () => {
+  isAgreed.value = !isAgreed.value;
+};
+
+// 跳转到隐私政策页面
+const navigateToPrivacy = () => {
+  uni.navigateTo({ url: '/pages/privacy/index' });
+};
+
+// 跳转到用户协议页面
+const navigateToTerms = () => {
+  uni.navigateTo({ url: '/pages/terms/index' });
+};
 
 // 处理隐私协议同意回调（空实现，用于触发微信隐私协议弹窗）
 const handlePrivacyAgree = () => {
@@ -208,6 +240,52 @@ const handleWechatLogin = async () => {
   margin-bottom: 80rpx;
 }
 
+.agreement-section {
+  display: flex;
+  align-items: flex-start;
+  margin-bottom: 30rpx;
+  padding: 0 20rpx;
+}
+
+.checkbox-wrapper {
+  margin-right: 12rpx;
+  padding-top: 4rpx;
+}
+
+.checkbox {
+  width: 36rpx;
+  height: 36rpx;
+  border: 2rpx solid #ccc;
+  border-radius: 6rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #fff;
+}
+
+.checkbox.checked {
+  background-color: #07c160;
+  border-color: #07c160;
+}
+
+.check-icon {
+  color: #fff;
+  font-size: 24rpx;
+  font-weight: bold;
+}
+
+.agreement-text {
+  flex: 1;
+  font-size: 26rpx;
+  color: rgba(255, 255, 255, 0.8);
+  line-height: 1.5;
+}
+
+.link {
+  color: #fff;
+  text-decoration: underline;
+}
+
 .wechat-login-btn {
   width: 100%;
   height: 96rpx;
@@ -224,5 +302,10 @@ const handleWechatLogin = async () => {
 
 .wechat-login-btn:disabled {
   opacity: 0.7;
+}
+
+.btn-disabled {
+  opacity: 0.5;
+  background-color: #ccc !important;
 }
 </style>

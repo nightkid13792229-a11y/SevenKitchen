@@ -62,7 +62,8 @@
     {
       "path": "pages/order-detail/index",
       "style": {
-        "navigationBarTitleText": "订单详情"
+        "navigationBarTitleText": "订单详情",
+        "enableShareAppMessage": true
       }
     },
     {
@@ -242,6 +243,18 @@
       "path": "pages/common/webview",
       "style": {
         "navigationBarTitleText": "网页"
+      }
+    },
+    {
+      "path": "pages/privacy/index",
+      "style": {
+        "navigationBarTitleText": "隐私政策"
+      }
+    },
+    {
+      "path": "pages/terms/index",
+      "style": {
+        "navigationBarTitleText": "用户协议"
       }
     }
   ],

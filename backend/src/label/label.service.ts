@@ -174,9 +174,7 @@ export class LabelService {
     ctx.fillText(labelData.brandName, centerX, y);
     y += mmToPx(LABEL_LAYOUT.lineHeight.compact);  // 减少行高，让后续内容更紧凑上移
 
-    // 分隔线
-    this.drawSeparatorLine(ctx, y, width);
-    y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
+    // 分隔线已移除
 
     // 2. 食谱名称
     ctx.font = `bold ${mmToPx(LABEL_LAYOUT.fontSize.title)}px "Noto Sans CJK SC", "Source Han Sans SC", "SimHei", sans-serif`;

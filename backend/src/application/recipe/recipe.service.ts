@@ -534,6 +534,7 @@ export class RecipeService {
         productionLossRate: recipe.productionLossRate,
         batchLaborHours: recipe.batchLaborHours,
         coverImageUrl: recipe.coverImageUrl,
+        coverTitle: recipe.coverTitle,
         detailImages: recipe.detailImages as Prisma.InputJsonValue,
         videoUrl: recipe.videoUrl,
         description: recipe.description,

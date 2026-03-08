@@ -12,6 +12,10 @@
       <view v-else class="cover-placeholder">
         <text class="placeholder-text">{{ recipe.name.charAt(0) }}</text>
       </view>
+      <!-- 封面标题 - 显示在左上角 -->
+      <view v-if="recipe.coverTitle" class="cover-title-overlay">
+        <text class="cover-title-text">{{ recipe.coverTitle }}</text>
+      </view>
     </view>
 
     <!-- 基础信息区 -->
@@ -316,6 +320,7 @@ interface RecipeDetail {
   name: string
   status: string
   coverImageUrl?: string
+  coverTitle?: string
   description?: string
   nutritionStandard: string
   designSource?: string
@@ -332,6 +337,7 @@ const recipe = ref<RecipeDetail>({
   name: '',
   status: '',
   coverImageUrl: undefined,
+  coverTitle: undefined,
   description: undefined,
   nutritionStandard: 'FEDIAF_2021',
   designSource: undefined,
@@ -694,11 +700,33 @@ function formatCalciumPhosphorusRatio(ratio: string | number | undefined | null)
   width: 100%;
   height: 360rpx;
   background-color: #f0f0f0;
+  position: relative;
 }
 
 .cover-image {
   width: 100%;
   height: 100%;
+}
+
+/* 封面标题覆盖层 */
+.cover-title-overlay {
+  position: absolute;
+  top: 24rpx;
+  left: 24rpx;
+  background: rgba(0, 0, 0, 0.6);
+  padding: 8rpx 16rpx;
+  border-radius: 8rpx;
+  max-width: 60%;
+}
+
+.cover-title-text {
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  display: block;
 }
 
 .cover-placeholder {

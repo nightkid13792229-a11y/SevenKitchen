@@ -370,6 +370,7 @@ model Ingredient {
   tags                        IngredientTagAssignment[]
   purchaseItems               PurchaseItem[]
   recipeItems                 RecipeItem[]
+  nutritionFoodMappings       NutritionFoodMapping[]
 
   @@unique([name, brand, productModel])
   @@index([type])
@@ -921,4 +922,175 @@ enum CustomAttachmentType {
   LAB_RESULT
   IMAGE
   OTHER
+}
+
+// ============================================
+// Recipe Designer - 食谱设计功能
+// ============================================
+
+enum NutritionFoodCategory {
+  MEAT        // 肉类
+  ORGAN       // 内脏
+  SEAFOOD     // 海鲜
+  VEGETABLE   // 蔬菜
+  FRUIT       // 水果
+  GRAIN       // 谷物
+  DAIRY       // 乳制品
+  EGG         // 蛋类
+  OIL         // 油脂
+  SUPPLEMENT  // 补剂
+  OTHER       // 其他
+}
+
+enum NutritionFoodStatus {
+  PENDING     // 待验证
+  VERIFIED    // 已验证
+  DEPRECATED  // 已废弃
+}
+
+enum DesignRecipeStatus {
+  DRAFT       // 草稿
+  COMPLIANT   // 已达标
+  PUBLISHED   // 已发布
+  ARCHIVED    // 已归档
+}
+
+/// 营养原料库 - 独立于采购库的完整营养数据
+model NutritionFood {
+  id            String                @id @default(uuid()) @map("id")
+  name          String                @map("name") @db.VarChar(200)
+  nameEn        String?               @map("name_en") @db.VarChar(200)
+  category      NutritionFoodCategory @map("category")
+  dataSource    String                @map("data_source") @db.VarChar(100)
+  externalId    String?               @map("external_id") @db.VarChar(100)
+  version       Int                   @default(1) @map("version")
+  status        NutritionFoodStatus   @default(PENDING) @map("status")
+  nutritionData Json                  @map("nutrition_data")
+  notes         String?               @map("notes")
+  createdBy     String?               @map("created_by")
+  verifiedBy    String?               @map("verified_by")
+  verifiedAt    DateTime?             @map("verified_at")
+  createdAt     DateTime              @default(now()) @map("created_at")
+  updatedAt     DateTime              @updatedAt @map("updated_at")
+  mappings      NutritionFoodMapping[]
+  designRecipeItems DesignRecipeItem[]
+
+  @@unique([name, dataSource, version])
+  @@index([category])
+  @@index([status])
+  @@index([dataSource])
+  @@map("nutrition_food")
+}
+
+/// 营养原料与采购原料的映射关系
+model NutritionFoodMapping {
+  id              String        @id @default(uuid()) @map("id")
+  nutritionFoodId String        @map("nutrition_food_id")
+  ingredientId    String        @map("ingredient_id")
+  yieldRate       Float         @default(1.0) @map("yield_rate")
+  isPrimary       Boolean       @default(false) @map("is_primary")
+  notes           String?       @map("notes")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  nutritionFood   NutritionFood @relation(fields: [nutritionFoodId], references: [id], onDelete: Cascade)
+  ingredient      Ingredient    @relation(fields: [ingredientId], references: [id])
+
+  @@unique([nutritionFoodId, ingredientId])
+  @@index([nutritionFoodId])
+  @@index([ingredientId])
+  @@map("nutrition_food_mapping")
+}
+
+/// 设计配方 - 配方设计工作台
+model DesignRecipe {
+  id                      String              @id @default(uuid()) @map("id")
+  name                    String              @map("name") @db.VarChar(200)
+  version                 Int                 @default(1) @map("version")
+  status                  DesignRecipeStatus  @default(DRAFT) @map("status")
+  energyDensityKcalPerKg  Float               @map("energy_density_kcal_per_kg")
+  nutritionStandard       String              @default("FEDIAF_2024") @map("nutrition_standard")
+  calculatedNutrition     Json                @map("calculated_nutrition")
+  complianceStatus        Json                @map("compliance_status")
+  complianceScore         Float               @default(0) @map("compliance_score")
+  isCompliant             Boolean             @default(false) @map("is_compliant")
+  targetHealthTags        String[]            @default([]) @map("target_health_tags")
+  applicableLifeStages    String[]            @default([]) @map("applicable_life_stages")
+  notes                   String?             @map("notes")
+  createdBy               String              @map("created_by")
+  publishedAt             DateTime?           @map("published_at")
+  publishedRecipeId       String?             @map("published_recipe_id")
+  createdAt               DateTime            @default(now()) @map("created_at")
+  updatedAt               DateTime            @updatedAt @map("updated_at")
+  items                   DesignRecipeItem[]
+  aiGenerationLog         DesignRecipeAIGenerationLog?
+
+  @@unique([name, version])
+  @@index([status])
+  @@index([createdBy])
+  @@index([isCompliant])
+  @@map("design_recipe")
+}
+
+/// 设计配方明细
+model DesignRecipeItem {
+  id                  String        @id @default(uuid()) @map("id")
+  designRecipeId      String        @map("design_recipe_id")
+  nutritionFoodId     String        @map("nutrition_food_id")
+  ratioPercent        Float         @map("ratio_percent")
+  weightPerKgG        Float         @map("weight_per_kg_g")
+  preparationMethod   String?       @map("preparation_method") @db.VarChar(100)
+  nutrientTargetKey   String?       @map("nutrient_target_key")
+  nutrientTargetValue Float?        @map("nutrient_target_value")
+  sortOrder           Int           @default(0) @map("sort_order")
+  createdAt           DateTime      @default(now()) @map("created_at")
+  updatedAt           DateTime      @updatedAt @map("updated_at")
+  designRecipe        DesignRecipe  @relation(fields: [designRecipeId], references: [id], onDelete: Cascade)
+  nutritionFood       NutritionFood @relation(fields: [nutritionFoodId], references: [id])
+
+  @@index([designRecipeId])
+  @@index([nutritionFoodId])
+  @@map("design_recipe_item")
+}
+
+/// AI配方生成日志
+model DesignRecipeAIGenerationLog {
+  id                  String       @id @default(uuid()) @map("id")
+  designRecipeId      String       @unique @map("design_recipe_id")
+  inputParams         Json         @map("input_params")
+  generationModel     String       @map("generation_model") @db.VarChar(100)
+  attemptCount        Int          @default(0) @map("attempt_count")
+  maxAttempts         Int          @default(10) @map("max_attempts")
+  finalAttemptResult  String       @map("final_attempt_result") @db.VarChar(50)
+  adjustmentLog       Json         @map("adjustment_log")
+  gapReport           Json?        @map("gap_report")
+  generatedAt         DateTime     @default(now()) @map("generated_at")
+  designRecipe        DesignRecipe @relation(fields: [designRecipeId], references: [id], onDelete: Cascade)
+
+  @@index([generationModel])
+  @@index([finalAttemptResult])
+  @@map("design_recipe_ai_generation_log")
+}
+
+/// FEDIAF营养标准数据
+model NutritionStandardFediaf {
+  id             String    @id @default(uuid()) @map("id")
+  nutrientKey    String    @unique @map("nutrient_key") @db.VarChar(50)
+  nutrientName   String    @map("nutrient_name") @db.VarChar(100)
+  nutrientNameEn String    @map("nutrient_name_en") @db.VarChar(100)
+  unit           String    @map("unit") @db.VarChar(20)
+  category       String    @map("category") @db.VarChar(50)
+  minValueAdult  Float?    @map("min_value_adult")
+  maxValueAdult  Float?    @map("max_value_adult")
+  minValuePuppy  Float?    @map("min_value_puppy")
+  maxValuePuppy  Float?    @map("max_value_puppy")
+  basis          String    @map("basis") @db.VarChar(20)
+  notes          String?   @map("notes")
+  sortOrder      Int       @default(0) @map("sort_order")
+  isActive       Boolean   @default(true) @map("is_active")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([category])
+  @@index([isActive])
+  @@map("nutrition_standard_fediaf")
 }

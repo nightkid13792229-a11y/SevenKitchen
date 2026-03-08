@@ -664,15 +664,15 @@ export async function drawProductionLabelWithJCSDK(
       const margin = LABEL_LAYOUT.margin.left;
       const centerX = LABEL_LAYOUT.canvas.width / 2;
 
-      // ============= 0. 顶部品牌名称（下移3mm） =============
-      const brandYOffset = LABEL_ELEMENTS.brandTop.yOffset + 3;  // 下移3mm
+      // ============= 0. 顶部品牌名称（下移1mm） =============
+      const brandYOffset = LABEL_ELEMENTS.brandTop.yOffset + 1;  // 下移1mm
       JCAPI.drawText(labelData.brandName, centerX, brandYOffset * scale, LABEL_ELEMENTS.brandTop.fontSize * scale, 0, {
         align: 'center'
       });
       y = brandYOffset * scale + LABEL_ELEMENTS.brandTop.lineHeight * scale;
 
-      // 分隔线已移除，增加间距避免内容太靠上
-      y += 7 * scale;  // 增加 7mm 间距，确保不遮挡品牌名称
+      // 分隔线已移除，品牌名称与食谱标题之间保留3mm间距
+      y += 3 * scale;  // 3mm 间距
 
       // ============= 1. 食谱名称 =============
       JCAPI.drawText(labelData.recipeName, centerX, y, LABEL_ELEMENTS.recipeName.fontSize * scale, 0, {

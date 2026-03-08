@@ -1,6 +1,6 @@
 // utils/config.ts
 // 环境配置 - 根据构建类型自动选择 API 地址
-// 可通过 Network Settings 页面手动覆盖（存储在 uni storage）
+// 可通过 Network Settings 页面手动覆盖（存储在 uni storage)
 
 // ========================================
 // 环境说明
@@ -12,34 +12,48 @@
 // 生产环境（npm run build:mp-weixin）:
 //   - 始终使用 api.sevenkitchen.cloud
 
-// 使用条件编译来区分开发和生产环境
-// #ifdef APP-PLUS||MP-WEIXIN-DEV
-// 开发环境：默认使用本地开发服务器
-const DEFAULT_BASE_URL = 'http://localhost:3001/api/v1'
-const DEV_BASE_URL = 'http://localhost:3001/api/v1'     // DevTools 使用
-const LAN_BASE_URL = 'http://192.168.31.43:3001/api/v1' // 真机调试使用（可修改为你的局域网IP）
-const PROD_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1'
-// #endif
-
-// #ifdef MP-WEIXIN
-// 生产环境：强制使用生产域名
-const DEFAULT_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1'
-const DEV_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1'
-const LAN_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1'
-const PROD_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1'
-// #endif
-
-const STORAGE_KEY = 'api_base_url'
-
+// ========================================
 // 检测是否为生产构建
-// 在生产构建中，所有 URL 都指向 api.sevenkitchen.cloud
-// #ifdef MP-WEIXIN
-const IS_PRODUCTION_BUILD = true
-// #endif
+// ========================================
+// 通过 Vite 环境变量来区分
+// VITE_ENV 由 vite.config.ts 中的 define 配置注入
+// - 'development': 开发环境
+// - 'production': 生产环境
 
-// #ifndef MP-WEIXIN
-const IS_PRODUCTION_BUILD = false
-// #endif
+declare const VITE_ENV: string;
+const IS_PRODUCTION_BUILD = VITE_ENV === 'production';
+
+// ========================================
+// API 地址配置
+// ========================================
+// 开发环境配置
+const DEV_DEFAULT_BASE_URL = 'http://localhost:3001/api/v1';
+const DEV_DEV_BASE_URL = 'http://localhost:3001/api/v1';
+const DEV_LAN_BASE_URL = 'http://192.168.31.43:3001/api/v1';
+const DEV_PROD_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1';
+
+// 生产环境配置
+const PROD_DEFAULT_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1';
+const PROD_DEV_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1';
+const PROD_LAN_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1';
+const PROD_PROD_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1';
+
+// 根据环境选择配置
+const DEFAULT_BASE_URL = IS_PRODUCTION_BUILD ? PROD_DEFAULT_BASE_URL : DEV_DEFAULT_BASE_URL;
+const DEV_BASE_URL = IS_PRODUCTION_BUILD ? PROD_DEV_BASE_URL : DEV_DEV_BASE_URL;
+const LAN_BASE_URL = IS_PRODUCTION_BUILD ? PROD_LAN_BASE_URL : DEV_LAN_BASE_URL;
+const PROD_BASE_URL = IS_PRODUCTION_BUILD ? PROD_PROD_BASE_URL : DEV_PROD_BASE_URL;
+
+const STORAGE_KEY = 'api_base_url';
+
+// ========================================
+// 获取 API 地址逻辑
+// ========================================
+// 优先级：
+// 1. 生产构建 → 强制使用生产域名
+// 2. Storage 覆盖（手动配置）
+// 3. 真机 → 局域网 IP
+// 4. DevTools → localhost
 
 /**
  * Detect if running on real device (Android/iOS)
@@ -47,30 +61,24 @@ const IS_PRODUCTION_BUILD = false
  */
 function isRealDevice(): boolean {
   try {
-    // 使用 getDeviceInfo 获取设备信息（替代已废弃的 getSystemInfoSync）
     const deviceInfo = uni.getDeviceInfo()
     const platform = deviceInfo?.platform?.toLowerCase() || ''
     console.log('[Config Debug] Platform:', deviceInfo?.platform, 'Lowercased:', platform)
 
-    // 检测是否为真机：android 或 ios
     const result = platform === 'android' || platform === 'ios'
     console.log('[Config Debug] isRealDevice result:', result)
 
-    // 保守策略：如果无法明确识别为开发者工具，假设是真机
     if (platform === '' || platform === 'devtools') {
       if (platform === 'devtools') {
         console.log('[Config Debug] Detected DevTools')
         return false
       }
-      // platform 为空，无法确定，保守策略：假设是真机
       console.log('[Config Debug] Platform empty, assuming real device')
       return true
     }
-
     return result
   } catch (err) {
     console.log('[Config Debug] getSystemInfo error:', err)
-    // 如果检测失败，保守策略：假设是真机（使用局域网地址更安全）
     console.log('[Config Debug] Platform detection failed, assuming real device')
     return true
   }
@@ -82,14 +90,12 @@ function isRealDevice(): boolean {
  */
 function isDevTools(): boolean {
   try {
-    // 使用 getDeviceInfo 获取设备信息（替代已废弃的 getSystemInfoSync）
     const deviceInfo = uni.getDeviceInfo()
     const platform = deviceInfo?.platform?.toLowerCase() || ''
     const result = platform === 'devtools'
     console.log('[Config Debug] isDevTools result:', result, 'platform:', platform)
     return result
   } catch (err) {
-    // If getDeviceInfo fails, assume not in devtools
     console.log('[Config Debug] isDevTools check failed, assuming not devtools')
     return false
   }
@@ -102,17 +108,15 @@ function isDevTools(): boolean {
  * 2. Storage override (manual config from Network Settings page)
  * 3. Real device → use LAN IP
  * 4. DevTools → use localhost
- *
- * Production build always uses PROD_BASE_URL to ensure domain whitelist compliance
  */
 export function getBaseUrl(): string {
-  // 优先级0：生产构建 → 强制使用生产域名（确保通过域名校验）
+  // 优先级0: 生产构建 → 强制使用生产域名（确保通过域名校验）
   if (IS_PRODUCTION_BUILD) {
     console.debug('[Config] Production build detected, using PROD_BASE_URL:', PROD_BASE_URL)
     return PROD_BASE_URL
   }
 
-  // 优先级1：手动配置的地址（Storage）- 支持真机调试时使用生产环境
+  // 优先级1: 手动配置的地址（Storage）
   try {
     const stored = uni.getStorageSync(STORAGE_KEY)
     if (stored && typeof stored === 'string' && stored.trim()) {
@@ -123,13 +127,13 @@ export function getBaseUrl(): string {
     console.warn('Failed to read BASE_URL from storage:', err)
   }
 
-  // 优先级2：真机调试 → 强制使用局域网IP（无Storage配置时）
+  // 优先级2: 真机调试 → 强制使用局域网IP
   if (isRealDevice()) {
     console.debug('[Config] Detected real device, using LAN BASE_URL:', LAN_BASE_URL)
     return LAN_BASE_URL
   }
 
-  // 优先级3：开发者工具 → 使用localhost
+  // 优先级3: 开发者工具 → 使用localhost
   if (isDevTools()) {
     console.debug('[Config] Detected DevTools, using dev BASE_URL:', DEV_BASE_URL)
     return DEV_BASE_URL
@@ -138,6 +142,13 @@ export function getBaseUrl(): string {
   // 默认开发环境地址
   console.debug('[Config] Using default dev BASE_URL:', DEFAULT_BASE_URL)
   return DEFAULT_BASE_URL
+}
+
+/**
+ * Check if current build is production
+ */
+export function isProductionBuild(): boolean {
+  return IS_PRODUCTION_BUILD
 }
 
 /**
@@ -178,13 +189,6 @@ export function getDefaultBaseUrl(): string {
 /**
  * Normalize image URL to work in real device debugging mode
  * Replaces HTTP CDN URL with HTTPS CDN URL (for historical data)
- *
- * @param imageUrl - Original image URL from backend
- * @returns Normalized URL with correct protocol and host
- *
- * @example
- * normalizeImageUrl('http://img.sevenkitchen.cloud/recipes/cover.jpg')
- * // Returns: 'https://img.sevenkitchen.cloud/recipes/cover.jpg'
  */
 export function normalizeImageUrl(imageUrl: string | undefined | null): string {
   if (!imageUrl) {
@@ -201,7 +205,7 @@ export function normalizeImageUrl(imageUrl: string | undefined | null): string {
     return normalized
   }
 
-  // If URL is not from localhost, return as-is (already HTTPS or external)
+  // If URL is not from localhost, return as-is
   if (!imageUrl.includes('localhost') && !imageUrl.includes('127.0.0.1')) {
     console.log('[Config] ✅ URL already HTTPS/external, using as-is:', imageUrl)
     return imageUrl
@@ -211,15 +215,11 @@ export function normalizeImageUrl(imageUrl: string | undefined | null): string {
   const currentBaseUrl = getBaseUrl().replace(/\/api\/v\d+$/, '')
 
   try {
-    // Parse the URL to extract path
     const url = new URL(imageUrl)
-
-    // Replace host with current API server
     const normalized = `${currentBaseUrl}${url.pathname}`
     console.log('[Config] ✅ Normalized localhost URL:', imageUrl, '→', normalized)
     return normalized
   } catch (err) {
-    // If URL parsing fails, try simple string replacement
     console.warn('[Config] ⚠️ Failed to parse image URL, using fallback:', err)
     const path = imageUrl.replace(/^https?:\/\/[^\/]+/, '')
     return `${currentBaseUrl}${path}`
@@ -228,19 +228,15 @@ export function normalizeImageUrl(imageUrl: string | undefined | null): string {
 
 /**
  * Test image loading with detailed diagnostic information
- * @param imageUrl - Image URL to test
  */
 export function testImageLoad(imageUrl: string): void {
   console.log('========== Image Load Diagnostic ==========')
   console.log('Original URL:', imageUrl)
-
   const normalized = normalizeImageUrl(imageUrl)
   console.log('Normalized URL:', normalized)
-
   console.log('Current BASE_URL:', getBaseUrl())
   console.log('==========================================')
 }
 
-// Export default for backward compatibility (but prefer getBaseUrl())
+// Export default for backward compatibility
 export const BASE_URL = DEFAULT_BASE_URL
-

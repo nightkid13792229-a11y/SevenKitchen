@@ -13,6 +13,9 @@ export default defineConfig({
     outDir: 'dist/build',
     emptyOutDir: false, // 保留 project.config.json 等配置文件
   },
+  define: {
+    VITE_ENV: JSON.stringify(process.env.NODE_ENV || 'development'),
+  },
 })
 
 

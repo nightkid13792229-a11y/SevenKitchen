@@ -1,7 +1,8 @@
 packages:
-  - "."
+  - .
 
 ignoredBuiltDependencies:
+  - canvas
   - unrs-resolver
 
 onlyBuiltDependencies:

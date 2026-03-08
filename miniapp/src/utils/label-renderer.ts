@@ -227,14 +227,7 @@ export async function drawProductionLabel(
       ctx.fillText(labelData.brandName, centerX, mmToPx(LABEL_ELEMENTS.brandTop.yOffset));
       y = mmToPx(LABEL_ELEMENTS.brandTop.yOffset) + mmToPx(LABEL_ELEMENTS.brandTop.lineHeight);
 
-      // 分隔线
-      ctx.setStrokeStyle('#000000');
-      ctx.setLineWidth(1);
-      ctx.beginPath();
-      ctx.moveTo(margin, y);
-      ctx.lineTo(CANVAS_WIDTH - margin, y);
-      ctx.stroke();
-      y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
+      // 分隔线已移除
 
       // ============= 1. 食谱名称（主标题，加粗） =============
       ctx.setFontSize(mmToPx(LABEL_ELEMENTS.recipeName.fontSize));
@@ -676,10 +669,7 @@ export async function drawProductionLabelWithJCSDK(
       });
       y = LABEL_ELEMENTS.brandTop.yOffset * scale + LABEL_ELEMENTS.brandTop.lineHeight * scale;
 
-      // 分隔线
-      JCAPI.drawLine(margin, y, LABEL_LAYOUT.canvas.width - margin, y, 0.3);
-
-      y += LABEL_LAYOUT.spacing.sectionGap * scale;
+      // 分隔线已移除
 
       // ============= 1. 食谱名称 =============
       JCAPI.drawText(labelData.recipeName, centerX, y, LABEL_ELEMENTS.recipeName.fontSize * scale, 0, {

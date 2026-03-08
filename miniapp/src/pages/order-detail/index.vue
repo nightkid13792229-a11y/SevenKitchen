@@ -252,7 +252,7 @@
           <button
             class="btn-share-photos"
             open-type="share"
-            @tap="handleSharePhotos"
+            data-share-type="photos"
           >
             分享照片
           </button>
@@ -912,64 +912,68 @@ onShow(() => {
   uni.$on('address-selected', handleAddressSelected)
 })
 
-// 分享照片相关
-const shareToken = ref<string>('')
-const shareTokenExpiresAt = ref<Date | null>(null)
+// 分享照片相关 - 缓存已获取的 token
+const cachedShareToken = ref<string>('')
 
-// 处理分享照片按钮点击
-async function handleSharePhotos() {
-  if (!order.value) return
-
-  try {
-    uni.showLoading({ title: '生成分享链接...' })
-
-    const response = await request({
-      url: `/orders/${order.value.id}/share-photos`,
-      method: 'POST',
-    })
-
-    if (response.code === 0 && response.data) {
-      shareToken.value = response.data.token
-      shareTokenExpiresAt.value = new Date(response.data.expiresAt)
-      // 分享链接已生成，等待用户通过微信分享按钮分享
-      uni.hideLoading()
-      uni.showToast({
-        title: '请点击右上角分享',
-        icon: 'none',
-        duration: 2000
-      })
-    } else {
-      uni.hideLoading()
-      uni.showToast({
-        title: response.message || '生成分享链接失败',
-        icon: 'none',
-        duration: 2000
-      })
-    }
-  } catch (error: any) {
-    uni.hideLoading()
-    uni.showToast({
-      title: error.message || '生成分享链接失败',
-      icon: 'none',
-      duration: 2000
-    })
+// 获取分享 token（带缓存）
+async function getShareToken(): Promise<string> {
+  // 如果已有缓存的 token，直接返回
+  if (cachedShareToken.value) {
+    return cachedShareToken.value
   }
+
+  if (!order.value) {
+    throw new Error('订单不存在')
+  }
+
+  const response = await request({
+    url: `/orders/${order.value.id}/share-photos`,
+    method: 'POST',
+  })
+
+  if (response.code === 0 && response.data) {
+    cachedShareToken.value = response.data.token
+    return response.data.token
+  }
+
+  throw new Error(response.message || '获取分享链接失败')
 }
 
-// 定义分享内容
-onShareAppMessage(() => {
-  if (!shareToken.value) {
-    return {
-      title: 'SevenKitchen原料照片',
-      path: '/pages/index/index',
-      imageUrl: order.value?.productionPhotos?.photos?.[0] || ''
-    }
+// 定义分享内容 - 支持异步
+onShareAppMessage((e: any) => {
+  // 判断是否是分享照片按钮触发的
+  const isSharePhotos = e?.target?.dataset?.shareType === 'photos'
+
+  if (isSharePhotos) {
+    // 返回 Promise 异步获取 token
+    return new Promise(async (resolve) => {
+      try {
+        const token = await getShareToken()
+        resolve({
+          title: 'SevenKitchen原料照片',
+          path: `/pages/shared-photos/index?token=${token}`,
+          imageUrl: order.value?.productionPhotos?.photos?.[0] || ''
+        })
+      } catch (error) {
+        // 获取失败时，分享订单详情页
+        uni.showToast({
+          title: '分享照片失败',
+          icon: 'none'
+        })
+        resolve({
+          title: 'SevenKitchen订单详情',
+          path: `/pages/order-detail/index?id=${order.value?.id || ''}`,
+          imageUrl: ''
+        })
+      }
+    })
   }
 
+  // 默认分享订单详情页
   return {
-    title: 'SevenKitchen原料照片',
-    path: `/pages/shared-photos/index?token=${shareToken.value}`,
-    imageUrl: order.value?.productionPhotos?.photos?.[0] || ''
+    title: 'SevenKitchen订单详情',
+    path: `/pages/order-detail/index?id=${order.value?.id || ''}`,
+    imageUrl: ''
   }
 })
 

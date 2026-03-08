@@ -1,22 +1,32 @@
 // utils/config.ts
-// Base URL configuration - defaults to DEV environment
-// Can be overridden at runtime via Network Settings page (stored in uni storage)
-// Automatically uses IP address in WeChat DevTools for stable development
+// 环境配置 - 根据构建类型自动选择 API 地址
+// 可通过 Network Settings 页面手动覆盖（存储在 uni storage）
+
+// ========================================
+// 环境说明
+// ========================================
+// 开发环境（npm run dev:mp-weixin）:
+//   - DevTools: localhost:3001（本地后端）
+//   - 真机调试: 局域网IP（如 192.168.31.43:3001）
+//
+// 生产环境（npm run build:mp-weixin）:
+//   - 始终使用 api.sevenkitchen.cloud
 
 // 使用条件编译来区分开发和生产环境
 // #ifdef APP-PLUS||MP-WEIXIN-DEV
-const DEFAULT_BASE_URL = 'http://localhost:3001/api/v1' // 默认开发环境
-const DEV_BASE_URL = 'http://localhost:3001/api/v1' // 本地开发服务器（开发者工具可用localhost，真机调试需改为局域网IP）
-const LAN_BASE_URL = 'http://192.168.31.43:3001/api/v1' // 局域网开发服务器（真机调试使用）
-const PROD_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1' // 生产环境（仅作为后备）
+// 开发环境：默认使用本地开发服务器
+const DEFAULT_BASE_URL = 'http://localhost:3001/api/v1'
+const DEV_BASE_URL = 'http://localhost:3001/api/v1'     // DevTools 使用
+const LAN_BASE_URL = 'http://192.168.31.43:3001/api/v1' // 真机调试使用（可修改为你的局域网IP）
+const PROD_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1'
 // #endif
 
 // #ifdef MP-WEIXIN
-// 生产构建：强制使用生产域名
-const DEFAULT_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1' // 生产环境
-const DEV_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1' // 生产环境
-const LAN_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1' // 生产环境
-const PROD_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1' // 生产环境
+// 生产环境：强制使用生产域名
+const DEFAULT_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1'
+const DEV_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1'
+const LAN_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1'
+const PROD_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1'
 // #endif
 
 const STORAGE_KEY = 'api_base_url'

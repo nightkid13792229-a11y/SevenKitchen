@@ -8,9 +8,40 @@ import { BadRequestExceptionFilter } from './interfaces/common/bad-request-excep
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
 import * as dotenv from 'dotenv';
+import * as path from 'path';
+import { existsSync } from 'fs';
 
-// 加载.env文件
-dotenv.config();
+// 根据 NODE_ENV 加载对应的环境配置文件
+// 优先级: .env.{NODE_ENV}.local > .env.{NODE_ENV} > .env.local > .env
+function loadEnvConfig() {
+  const env = process.env.NODE_ENV || 'development';
+  const envDir = path.resolve(process.cwd());
+
+  // 按优先级尝试加载环境文件
+  const envFiles = [
+    `.env.${env}.local`,
+    `.env.${env}`,
+    '.env.local',
+    '.env',
+  ];
+
+  for (const file of envFiles) {
+    const filePath = path.join(envDir, file);
+    if (existsSync(filePath)) {
+      const result = dotenv.config({ path: filePath });
+      if (result.error) {
+        console.warn(`[ENV] Failed to load ${file}: ${result.error.message}`);
+      } else {
+        console.log(`[ENV] Loaded environment from: ${file}`);
+        break; // 只加载第一个找到的文件
+      }
+    }
+  }
+
+  console.log(`[ENV] Environment: ${env}`);
+}
+
+loadEnvConfig();
 
 // Phase 8.18: Boot logging to prove Prisma mode
 function logBootSummary() {

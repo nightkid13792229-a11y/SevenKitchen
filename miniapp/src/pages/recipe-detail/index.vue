@@ -360,15 +360,16 @@ const sortedItems = computed(() => {
   return [...recipe.value.items].sort((a, b) => a.sortOrder - b.sortOrder)
 })
 
-onMounted(() => {
+onMounted(async () => {
   const pages = getCurrentPages()
   const currentPage = pages[pages.length - 1] as any
   recipeId.value = currentPage.options?.recipeId || ''
 
   dogId.value = uni.getStorageSync('dogId') || null
 
-  // 加载健康标签映射
-  loadHealthTagMapping()
+  // 【修复】先加载健康标签映射，再加载食谱详情
+  // 这样可以确保在渲染标签时，映射表已经准备好了
+  await loadHealthTagMapping()
 
   if (recipeId.value) {
     loadRecipeDetail()
@@ -426,8 +427,8 @@ function loadRecipeDetail() {
   })
 }
 
-function loadHealthTagMapping() {
-  request({
+function loadHealthTagMapping(): Promise<void> {
+  return request({
     url: '/recipes/filter-options',
     method: 'GET'
   }).then((res: any) => {
@@ -442,6 +443,7 @@ function loadHealthTagMapping() {
         })
       }
       healthTagUuidLabelMap.value = uuidMap
+      console.log('[RecipeDetail] 健康标签映射表加载完成，共', Object.keys(uuidMap).length, '个标签')
     }
   }).catch((err: any) => {
     console.error('Load health tag mapping error:', err)
@@ -587,7 +589,11 @@ function getLifeStageLabel(stage: string): string {
     'PREGNANCY': '妊娠期',
     'LACTATION': '哺乳期',
   }
-  return map[stage] || stage
+  const result = map[stage]
+  if (!result) {
+    console.warn('[RecipeDetail] 未知的生命阶段标签:', stage)
+  }
+  return result || stage
 }
 
 function getHealthTagLabel(tagOrUuid: string): string {
@@ -610,6 +616,8 @@ function getHealthTagLabel(tagOrUuid: string): string {
     return enumMap[tagOrUuid]
   }
 
+  // 如果都找不到，记录警告并返回原始值
+  console.warn('[RecipeDetail] 未找到健康标签映射:', tagOrUuid, '当前映射表大小:', Object.keys(healthTagUuidLabelMap.value).length)
   return tagOrUuid
 }
 

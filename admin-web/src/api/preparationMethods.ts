@@ -54,4 +54,10 @@ export const preparationMethodApi = {
    */
   delete: (id: string): Promise<void> =>
     api.delete(`/admin/preparation-methods/${id}`),
+
+  /**
+   * 批量更新排序
+   */
+  updateSort: (items: { id: string; sort: number }[]): Promise<void> =>
+    api.put('/admin/preparation-methods/sort', { items }),
 }

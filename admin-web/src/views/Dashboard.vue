@@ -121,15 +121,15 @@ const stats = ref({
 const recentOrders = ref<any[]>([])
 const recentBatches = ref<any[]>([])
 
-const getStatusType = (status: string) => {
-  const typeMap: Record<string, any> = {
+const getStatusType = (status: string): '' | 'success' | 'warning' | 'info' | 'danger' | 'primary' | undefined => {
+  const typeMap: Record<string, 'success' | 'warning' | 'info' | 'danger' | 'primary'> = {
     PAID: 'success',
     PENDING_PAYMENT: 'warning',
     IN_PRODUCTION: 'primary',
     SHIPPED: 'info',
     COMPLETED: 'success'
   }
-  return typeMap[status] || ''
+  return typeMap[status]
 }
 
 const getStatusText = (status: string) => {
@@ -143,13 +143,13 @@ const getStatusText = (status: string) => {
   return textMap[status] || status
 }
 
-const getBatchStatusType = (status: string) => {
-  const typeMap: Record<string, any> = {
+const getBatchStatusType = (status: string): '' | 'success' | 'warning' | 'info' | 'danger' | 'primary' | undefined => {
+  const typeMap: Record<string, 'success' | 'warning' | 'info' | 'danger' | 'primary'> = {
     PLANNED: 'info',
     IN_PRODUCTION: 'warning',
     COMPLETED: 'success'
   }
-  return typeMap[status] || ''
+  return typeMap[status]
 }
 
 const loadData = async () => {

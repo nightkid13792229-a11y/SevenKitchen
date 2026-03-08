@@ -167,10 +167,16 @@ export class RecipesController {
     // Query preparation method names
     const methods = await this.prisma.preparationMethod.findMany({
       where: { id: { in: uuids } },
-      select: { name: true },
+      select: { id: true, name: true },
     });
 
-    return methods.map((m) => m.name);
+    // Create id -> name map
+    const methodMap = new Map(methods.map(m => [m.id, m.name]));
+
+    // Return names in original UUID order (critical for maintaining user-defined order)
+    return uuids
+      .map(uuid => methodMap.get(uuid))
+      .filter((name): name is string => !!name);
   }
 
   /**

@@ -65,7 +65,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
-import { getFavorites, removeFavorite as apiRemoveFavorite } from '../../utils/api'
+import { getFavorites, removeFavorite as apiRemoveFavorite, request } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
 import { CURRENT_SHARE_CONFIG } from '@/config/share.config'
 
@@ -91,6 +91,33 @@ const currentPage = ref(1)
 const pageSize = 20
 const total = ref(0)
 
+// 健康标签UUID到名称的映射（动态加载）
+const healthTagUuidLabelMap = ref<Record<string, string>>({})
+
+// 加载健康标签映射表
+async function loadHealthTagMapping(): Promise<void> {
+  try {
+    const res: any = await request({
+      url: '/recipes/filter-options',
+      method: 'GET'
+    })
+    if (res.code === 0 && res.data) {
+      const uuidMap: Record<string, string> = {}
+      if (res.data.healthTags && Array.isArray(res.data.healthTags)) {
+        res.data.healthTags.forEach((tag: any) => {
+          if (tag.value && tag.label) {
+            uuidMap[tag.value] = tag.label
+          }
+        })
+      }
+      healthTagUuidLabelMap.value = uuidMap
+      console.log('[FavoriteRecipes] 健康标签映射表加载完成，共', Object.keys(uuidMap).length, '个标签')
+    }
+  } catch (err) {
+    console.error('[FavoriteRecipes] 加载健康标签映射表失败:', err)
+  }
+}
+
 // 加载收藏列表
 async function loadFavorites() {
   isLoading.value = true
@@ -109,10 +136,36 @@ async function loadFavorites() {
   }
 }
 
+// 获取健康标签中文名称
+function getHealthTagLabel(tagOrUuid: string): string {
+  // 优先使用动态映射（UUID -> label）
+  if (healthTagUuidLabelMap.value[tagOrUuid]) {
+    return healthTagUuidLabelMap.value[tagOrUuid]
+  }
+
+  // 兼容旧的枚举值（用于向后兼容）
+  const enumMap: Record<string, string> = {
+    'HEALTHY': '健康',
+    'PICKY_EATER': '挑食',
+    'SENSITIVE_STOMACH': '敏感胃',
+    'PANCREATITIS_SUPPORT': '胰腺炎友好',
+    'LOW_FAT': '低脂',
+    'SKIN_COAT_CARE': '护肤',
+  }
+
+  if (enumMap[tagOrUuid]) {
+    return enumMap[tagOrUuid]
+  }
+
+  // 如果都找不到，返回原始值
+  return tagOrUuid
+}
+
 // 解析健康标签
 function parseHealthTags(tags: string[] | undefined): string[] {
   if (!tags || !Array.isArray(tags)) return []
-  return tags.slice(0, 3) // 最多显示3个标签
+  // 映射标签为中文名称
+  return tags.slice(0, 3).map(tag => getHealthTagLabel(tag))
 }
 
 // 取消收藏
@@ -156,7 +209,9 @@ function goToRecipeList() {
   })
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // 【修复】先加载健康标签映射，再加载收藏列表
+  await loadHealthTagMapping()
   loadFavorites()
 })
 

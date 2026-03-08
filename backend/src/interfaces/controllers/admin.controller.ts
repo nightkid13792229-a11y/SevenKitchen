@@ -2776,6 +2776,48 @@ export class AdminController {
     }
   }
 
+  @Put('preparation-methods/sort')
+  @ApiOperation({ summary: 'Batch update preparation methods sort order' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              id: { type: 'string' },
+              sort: { type: 'number' },
+            },
+          },
+        },
+      },
+    },
+  })
+  @ApiResponse({ status: 200, description: 'Sort order updated' })
+  @ApiResponse({ status: 400, description: 'Invalid input' })
+  async updatePreparationMethodsSort(@Body() dto: { items: { id: string; sort: number }[] }): Promise<ApiResponseDto<any>> {
+    try {
+      if (!dto.items || !Array.isArray(dto.items)) {
+        return ApiResponseDto.error(400, 'Invalid input: items array required');
+      }
+
+      // Update sort order for each item
+      const updatePromises = dto.items.map(item =>
+        this.prisma.preparationMethod.update({
+          where: { id: item.id },
+          data: { sort: item.sort },
+        }),
+      );
+
+      await Promise.all(updatePromises);
+      return ApiResponseDto.success({ message: 'Sort order updated successfully' });
+    } catch (error: any) {
+      return ApiResponseDto.error(400, error.message || 'Failed to update sort order');
+    }
+  }
+
   @Get('recipes/:id')
   // @UseGuards(AuthGuard, AdminGuard) // 暂时移除认证以便测试
   @ApiOperation({ summary: 'Get recipe by ID (admin)' })

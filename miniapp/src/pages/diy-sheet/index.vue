@@ -444,9 +444,8 @@ const currentEquipmentDetail = ref<any>(null)
 const showImagePreview = ref(false)
 const previewImageUrl = ref('')
 
-// 损耗率常量
-const FOOD_LOSS_RATE = 0.07  // 7%
-const SUPPLEMENT_LOSS_RATE = 0.05  // 5%
+// 全局配置中的补剂损耗率（默认5%）
+const globalSupplementLossRate = ref(0.05)
 
 // 计算采购清单数据
 const purchaseListData = computed(() => {
@@ -454,9 +453,13 @@ const purchaseListData = computed(() => {
     return []
   }
 
+  // 从后端获取食谱的损耗率（后端存储1.05表示5%损耗，需要减1）
+  const recipeLossRate = recipe.value?.productionLossRate ? recipe.value.productionLossRate - 1 : 0.07
+
   return pricePreview.value.pricingBreakdown.ingredientDetails.map((item: any) => {
     const isFood = item.type === 'FOOD'
-    const lossRate = isFood ? FOOD_LOSS_RATE : SUPPLEMENT_LOSS_RATE
+    // 食材使用食谱设置的损耗率，补剂使用全局配置的损耗率
+    const lossRate = isFood ? recipeLossRate : globalSupplementLossRate.value
 
     // 理论用量（克）
     const theoreticalAmount = (item.netAmount ?? item.amount) * 1000
@@ -800,18 +803,27 @@ async function loadEquipmentRecommendations() {
       method: 'GET'
     })
 
-    if (res.code === 0 && res.data?.equipmentRecommendations) {
-      equipmentRecommendations.value = res.data.equipmentRecommendations
-      console.log('[DIYSheet] 设备推荐加载成功:', equipmentRecommendations.value)
-    } else {
-      // 如果没有配置设备推荐，使用默认列表
-      equipmentRecommendations.value = [
-        { id: 'meat-grinder', name: '绞肉机', brand: '', specification: '', reason: '', imageUrl: null, purchaseLink: '' },
-        { id: 'blender', name: '搅拌机', brand: '', specification: '', reason: '', imageUrl: null, purchaseLink: '' },
-        { id: 'grinder', name: '研磨机', brand: '', specification: '', reason: '', imageUrl: null, purchaseLink: '' },
-        { id: 'vacuum-sealer', name: '真空机', brand: '', specification: '', reason: '', imageUrl: null, purchaseLink: '' },
-        { id: 'vacuum-bag', name: '真空袋', brand: '', specification: '', reason: '', imageUrl: null, purchaseLink: '' },
-      ]
+    if (res.code === 0 && res.data) {
+      // 获取设备推荐
+      if (res.data.equipmentRecommendations) {
+        equipmentRecommendations.value = res.data.equipmentRecommendations
+        console.log('[DIYSheet] 设备推荐加载成功:', equipmentRecommendations.value)
+      } else {
+        // 如果没有配置设备推荐，使用默认列表
+        equipmentRecommendations.value = [
+          { id: 'meat-grinder', name: '绞肉机', brand: '', specification: '', reason: '', imageUrl: null, purchaseLink: '' },
+          { id: 'blender', name: '搅拌机', brand: '', specification: '', reason: '', imageUrl: null, purchaseLink: '' },
+          { id: 'grinder', name: '研磨机', brand: '', specification: '', reason: '', imageUrl: null, purchaseLink: '' },
+          { id: 'vacuum-sealer', name: '真空机', brand: '', specification: '', reason: '', imageUrl: null, purchaseLink: '' },
+          { id: 'vacuum-bag', name: '真空袋', brand: '', specification: '', reason: '', imageUrl: null, purchaseLink: '' },
+        ]
+      }
+
+      // 获取补剂损耗率（后端存储1.05表示5%损耗，需要减1）
+      if (res.data.supplementLossRate) {
+        globalSupplementLossRate.value = res.data.supplementLossRate - 1
+        console.log('[DIYSheet] 补剂损耗率加载成功:', globalSupplementLossRate.value)
+      }
     }
   } catch (error) {
     console.error('[DIYSheet] Load equipment recommendations error:', error)

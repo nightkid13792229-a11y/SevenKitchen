@@ -378,7 +378,7 @@ const showShelfLife = ref(false)
 // 计算说明展开状态
 const showCalculationDetails = ref(false)
 
-onMounted(() => {
+onMounted(async () => {
   console.log('========== [RecipeDiy] onMounted ==========')
 
   const pages = getCurrentPages()
@@ -392,7 +392,8 @@ onMounted(() => {
 
   if (recipeId.value) {
     loadBreeds()
-    loadHealthTagMapping()
+    // 【修复】先加载健康标签映射，再加载食谱和狗狗数据
+    await loadHealthTagMapping()
     loadRecipe()
     loadDogs()
   }
@@ -464,6 +465,7 @@ async function loadHealthTagMapping() {
         })
       }
       healthTagUuidLabelMap.value = uuidMap
+      console.log('[RecipeDiy] 健康标签映射表加载完成，共', Object.keys(uuidMap).length, '个标签')
     }
   } catch (error) {
     console.error('Load health tag mapping error:', error)

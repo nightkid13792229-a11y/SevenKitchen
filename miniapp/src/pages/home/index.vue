@@ -385,7 +385,7 @@ const checkLoginStatus = () => {
 }
 
 // 页面加载
-onMounted(() => {
+onMounted(async () => {
   console.log('[Home] onMounted')
   checkLoginStatus()
 
@@ -409,8 +409,9 @@ onMounted(() => {
     }
   }
 
-  // 加载筛选项和食谱
-  loadFilterOptions()
+  // 【修复】先加载筛选项（包含健康标签映射），再加载食谱
+  // 这样可以确保在渲染食谱标签时，映射表已经准备好了
+  await loadFilterOptions()
   loadRecipes()
 })
 
@@ -475,9 +476,9 @@ const calculateAgeText = (birthday: string) => {
 
 // ==================== 食谱相关方法 ====================
 
-// 加载筛选项
-function loadFilterOptions() {
-  request({
+// 加载筛选项（返回 Promise 以支持 await）
+function loadFilterOptions(): Promise<void> {
+  return request({
     url: '/recipes/filter-options',
     method: 'GET'
   }).then((res: any) => {
@@ -492,6 +493,7 @@ function loadFilterOptions() {
         })
       }
       healthTagUuidLabelMap.value = uuidMap
+      console.log('[Home] 健康标签映射表加载完成，共', Object.keys(uuidMap).length, '个标签')
 
       // 添加"全部"选项
       filterOptions.value = {
@@ -798,7 +800,11 @@ function getLifeStageLabel(stage: string): string {
     'PREGNANCY': '妊娠期',
     'LACTATION': '哺乳期',
   }
-  return map[stage] || stage
+  const result = map[stage]
+  if (!result) {
+    console.warn('[Home] 未知的生命阶段标签:', stage)
+  }
+  return result || stage
 }
 
 // 获取健康标签
@@ -822,7 +828,8 @@ function getHealthTagLabel(tagOrUuid: string): string {
     return enumMap[tagOrUuid]
   }
 
-  // 如果都找不到，返回原始值
+  // 如果都找不到，记录警告并返回原始值
+  console.warn('[Home] 未找到健康标签映射:', tagOrUuid, '当前映射表大小:', Object.keys(healthTagUuidLabelMap.value).length)
   return tagOrUuid
 }
 

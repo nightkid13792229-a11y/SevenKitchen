@@ -524,17 +524,50 @@
         <el-form-item label="制备方法">
           <div style="display: flex; gap: 8px; margin-bottom: 8px">
             <div class="tag-selector-wrapper" style="flex: 1">
-              <div v-if="preparationMethods.length > 0" class="tag-list">
-                <el-tag
-                  v-for="method in preparationMethods"
-                  :key="method.id"
-                  class="tag-item"
-                  :type="ingredientForm.preparationMethods.includes(method.id) ? 'primary' : 'info'"
-                  @click="togglePreparationMethod(method.id)"
-                  style="cursor: pointer"
-                >
-                  {{ method.name }}
-                </el-tag>
+              <div v-if="preparationMethods.length > 0">
+                <!-- Selected methods (draggable) -->
+                <div v-if="selectedPrepMethodsLocal.length > 0" class="selected-methods-section">
+                  <div class="section-label">已选择（可拖拽排序）：</div>
+                  <VueDraggable
+                    v-model="selectedPrepMethodsLocal"
+                    item-key="id"
+                    class="tag-list draggable-tag-list"
+                    handle=".tag-drag-handle"
+                    ghost-class="ghost"
+                    :animation="150"
+                    @end="onPrepMethodsDragEnd"
+                  >
+                    <template #item="{ element: method }">
+                      <div class="draggable-tag-wrapper">
+                        <el-icon class="tag-drag-handle"><Rank /></el-icon>
+                        <el-tag
+                          class="tag-item selected-tag"
+                          type="primary"
+                          closable
+                          @close="togglePreparationMethod(method.id)"
+                        >
+                          {{ method.name }}
+                        </el-tag>
+                      </div>
+                    </template>
+                  </VueDraggable>
+                </div>
+                <!-- Unselected methods -->
+                <div v-if="unselectedPreparationMethods.length > 0" class="unselected-methods-section">
+                  <div class="section-label">点击添加：</div>
+                  <div class="tag-list">
+                    <el-tag
+                      v-for="method in unselectedPreparationMethods"
+                      :key="method.id"
+                      class="tag-item"
+                      type="info"
+                      @click="togglePreparationMethod(method.id)"
+                      style="cursor: pointer"
+                    >
+                      {{ method.name }}
+                    </el-tag>
+                  </div>
+                </div>
               </div>
               <div v-else class="empty-tags-state">
                 <el-empty description="暂无制备方法" :image-size="60" />
@@ -543,7 +576,7 @@
             <el-button @click="showPreparationMethodDialog">管理</el-button>
           </div>
           <div style="color: #909399; font-size: 12px">
-            💡 提示：点击标签选择制备方法，可多选
+            💡 提示：点击标签选择制备方法，可多选；拖拽 <el-icon style="vertical-align: middle;"><Rank /></el-icon> 图标可调整顺序
           </div>
         </el-form-item>
 
@@ -715,15 +748,28 @@
         <el-button type="primary" @click="addPreparationMethod">添加</el-button>
       </div>
 
-      <el-table :data="preparationMethods" style="width: 100%" border>
-        <el-table-column prop="name" label="名称" />
-        <el-table-column label="操作" width="150" align="center">
-          <template #default="{ row }">
-            <el-button size="small" @click="editPreparationMethod(row)">编辑</el-button>
-            <el-button size="small" type="danger" @click="deletePreparationMethod(row.id)">删除</el-button>
-          </template>
-        </el-table-column>
-      </el-table>
+      <div style="color: #909399; font-size: 12px; margin-bottom: 8px">
+        💡 拖拽列表项可调整顺序
+      </div>
+
+      <VueDraggable
+        v-model="preparationMethods"
+        item-key="id"
+        handle=".drag-handle"
+        ghost-class="ghost"
+        @end="onPreparationMethodDragEnd"
+      >
+        <template #item="{ element }">
+          <div class="draggable-item">
+            <el-icon class="drag-handle"><Rank /></el-icon>
+            <span class="item-name">{{ element.name }}</span>
+            <div class="item-actions">
+              <el-button size="small" @click="editPreparationMethod(element)">编辑</el-button>
+              <el-button size="small" type="danger" @click="deletePreparationMethod(element.id)">删除</el-button>
+            </div>
+          </div>
+        </template>
+      </VueDraggable>
 
       <template #footer>
         <el-button @click="preparationMethodDialogVisible = false">关闭</el-button>
@@ -737,7 +783,7 @@ import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance, FormRules, UploadProps } from 'element-plus';
-import { Plus, Delete, InfoFilled } from '@element-plus/icons-vue';
+import { Plus, Delete, InfoFilled, Rank } from '@element-plus/icons-vue';
 import VueDraggable from 'vuedraggable';
 import { recipeApi } from '@/api/recipes';
 import { recipeHealthTagApi } from '@/api/recipeHealthTags';
@@ -964,6 +1010,64 @@ const preparationMethods = ref<Array<{ id: string; name: string }>>([]);
 const preparationMethodDialogVisible = ref(false);
 const newPreparationMethodName = ref('');
 
+// Selected preparation methods for draggable (local ref to avoid computed issues)
+const selectedPrepMethodsLocal = ref<Array<{ id: string; name: string }>>([]);
+let isSyncingFromLocal = false;
+
+const unselectedPreparationMethods = computed(() => {
+  const selectedIds = selectedPrepMethodsLocal.value.map(m => m.id);
+  return preparationMethods.value.filter(m => !selectedIds.includes(m.id));
+});
+
+const getPreparationMethodName = (methodId: string) => {
+  return preparationMethods.value.find(m => m.id === methodId)?.name || methodId;
+};
+
+// Sync selectedPrepMethodsLocal from ingredientForm.preparationMethods (initial load and edit)
+watch(
+  () => ingredientForm.preparationMethods,
+  (newIds) => {
+    if (isSyncingFromLocal) return; // Skip if we're syncing from local to avoid loop
+
+    // Build the local array in the same order as the IDs
+    const methodMap = new Map(preparationMethods.value.map(m => [m.id, m]));
+    selectedPrepMethodsLocal.value = newIds
+      .map(id => methodMap.get(id))
+      .filter((m): m is { id: string; name: string } => !!m);
+  },
+  { immediate: true, deep: true }
+);
+
+// Sync back to ingredientForm.preparationMethods when local array changes (e.g., after drag)
+watch(
+  selectedPrepMethodsLocal,
+  (newMethods) => {
+    isSyncingFromLocal = true;
+    ingredientForm.preparationMethods = newMethods.map(m => m.id);
+    // Reset flag in next tick
+    nextTick(() => {
+      isSyncingFromLocal = false;
+    });
+  },
+  { deep: true }
+);
+
+// Handle drag end for preparation methods in ingredient form
+const onPrepMethodsDragEnd = () => {
+  // Wait for Vue to update the array after drag, then sync
+  nextTick(() => {
+    isSyncingFromLocal = true;
+    ingredientForm.preparationMethods = selectedPrepMethodsLocal.value.map(m => m.id);
+    console.log('[RecipeForm] Prep methods order after drag:', {
+      localOrder: selectedPrepMethodsLocal.value.map(m => m.name),
+      formOrder: ingredientForm.preparationMethods
+    });
+    nextTick(() => {
+      isSyncingFromLocal = false;
+    });
+  });
+};
+
 // Form rules
 const rules: FormRules = {
   name: [{ required: true, message: '请输入食谱名称', trigger: 'blur' }],
@@ -1163,6 +1267,12 @@ const handleSubmit = async () => {
         ...form,
         nutritionDetailedData: { ...nutritionData },
       };
+
+      // Debug: Log items with preparation methods before submit
+      console.log('[RecipeForm] handleSubmit - Items with prep methods:');
+      submitData.items?.forEach((item: any, index: number) => {
+        console.log(`  Item ${index}: ${item.ingredientName}, prepMethod: ${item.preparationMethod}`);
+      });
 
       if (isEdit.value) {
         await recipeApi.update(recipeId.value!, submitData);
@@ -1479,13 +1589,37 @@ const deletePreparationMethod = async (id: string) => {
   }
 };
 
-const togglePreparationMethod = (methodId: string) => {
-  const index = ingredientForm.preparationMethods.indexOf(methodId);
-  if (index > -1) {
-    ingredientForm.preparationMethods.splice(index, 1);
-  } else {
-    ingredientForm.preparationMethods.push(methodId);
+// Handle drag end for preparation methods sorting
+const onPreparationMethodDragEnd = async () => {
+  try {
+    const items = preparationMethods.value.map((method, index) => ({
+      id: method.id,
+      sort: index,
+    }));
+    await preparationMethodApi.updateSort(items);
+    ElMessage.success('排序已保存');
+  } catch (error: any) {
+    ElMessage.error(error.message || '排序保存失败');
+    // Reload to restore original order
+    const response = await preparationMethodApi.list();
+    preparationMethods.value = response || [];
   }
+};
+
+const togglePreparationMethod = (methodId: string) => {
+  const index = selectedPrepMethodsLocal.value.findIndex(m => m.id === methodId);
+  if (index > -1) {
+    // Remove from selected
+    selectedPrepMethodsLocal.value.splice(index, 1);
+  } else {
+    // Add to selected - find the method object and add it
+    const method = preparationMethods.value.find(m => m.id === methodId);
+    if (method) {
+      selectedPrepMethodsLocal.value.push(method);
+    }
+  }
+  // Note: Don't manually sync here - the watch will handle it
+  // Manual sync without isSyncingFromLocal flag would trigger the other watch and reset order
 };
 
 const showAddIngredientDialog = () => {
@@ -1504,6 +1638,10 @@ const resetIngredientForm = () => {
 };
 
 const saveIngredient = () => {
+  // Debug: Log current state before saving
+  console.log('[RecipeForm] saveIngredient - selectedPrepMethodsLocal:', selectedPrepMethodsLocal.value.map(m => m.name));
+  console.log('[RecipeForm] saveIngredient - ingredientForm.preparationMethods:', ingredientForm.preparationMethods);
+
   // Validate
   if (!ingredientForm.ingredientId) {
     ElMessage.warning('请选择原料');
@@ -2103,5 +2241,90 @@ onMounted(async () => {
   margin-left: 12px;
   font-size: 12px;
   color: #909399;
+}
+
+/* Draggable item for preparation methods dialog */
+.draggable-item {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  margin-bottom: 8px;
+  background-color: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.draggable-item:hover {
+  border-color: #c0c4cc;
+}
+
+.draggable-item .drag-handle {
+  margin-right: 12px;
+}
+
+.draggable-item .item-name {
+  flex: 1;
+  font-size: 14px;
+  color: #606266;
+}
+
+.draggable-item .item-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* Ghost class for VueDraggable */
+.ghost {
+  opacity: 0.5;
+  background-color: #f0f9ff !important;
+  border: 1px dashed #409eff !important;
+}
+
+/* Preparation methods selection sections */
+.selected-methods-section,
+.unselected-methods-section {
+  margin-bottom: 12px;
+}
+
+.section-label {
+  font-size: 12px;
+  color: #909399;
+  margin-bottom: 8px;
+}
+
+.selected-tag {
+  cursor: default;
+}
+
+/* Draggable tag list */
+.draggable-tag-list {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.draggable-tag-wrapper {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.tag-drag-handle {
+  cursor: grab;
+  color: #909399;
+  font-size: 14px;
+  padding: 2px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.tag-drag-handle:hover {
+  color: #409eff;
+  background-color: #ecf5ff;
+}
+
+.tag-drag-handle:active {
+  cursor: grabbing;
 }
 </style>

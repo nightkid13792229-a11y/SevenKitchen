@@ -50,6 +50,7 @@ import { FileBackedOrderRepository } from './infrastructure/repositories/file-ba
 import { PrismaOrderRepository } from './infrastructure/repositories/prisma-order.repository';
 import { PrismaService } from './infrastructure/prisma.service';
 import { RecipeService } from './application/recipe/recipe.service';
+import { CoverImageService } from './application/recipe/cover-image.service';
 import { InMemoryAddressRepository } from './infrastructure/repositories/in-memory-address.repository';
 import { PrismaAddressRepository } from './infrastructure/repositories/prisma-address.repository';
 import { RECIPE_REPOSITORY_TOKEN } from './interfaces/controllers/recipes.controller';
@@ -255,6 +256,7 @@ validatePrismaConfig();
       : []),
     OrderService,
     RecipeService,
+    CoverImageService,
     AddressService,
     {
       provide: ADDRESS_REPOSITORY,

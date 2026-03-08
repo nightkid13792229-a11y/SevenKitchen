@@ -54,6 +54,7 @@ import { CreateStaffDto, UpdateStaffDto, StaffResponseDto } from '../dto/admin/s
 import { AdminGuard } from '../guards/role.guard';
 import { AuthGuard } from '../auth/auth.guard';
 import { RecipeService } from '../../application/recipe/recipe.service';
+import { CoverImageService } from '../../application/recipe/cover-image.service';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import { NutritionStandard, RecipeStatus, RecipeHealthTag, LifeStage } from '../../domain/recipe/enums';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -73,6 +74,7 @@ export class AdminController {
     @Inject(DOG_BREED_REPOSITORY)
     private readonly dogBreedRepository: DogBreedRepository,
     private readonly recipeService: RecipeService,
+    private readonly coverImageService: CoverImageService,
     private readonly cosService: TencentCosService,
   ) {}
 
@@ -2831,13 +2833,27 @@ export class AdminController {
       }
 
       // Transform strings to enums
-      const transformedDto = {
+      const transformedDto: Record<string, any> = {
         ...dto,
         nutritionStandard: dto.nutritionStandard as any,
         status: dto.status as any,
         targetHealthTags: dto.targetHealthTags || [], // Keep as UUID array
         applicableLifeStages: dto.applicableLifeStages as any,
       };
+
+      // Render cover title on image if both coverTitle and coverImageUrl are provided
+      if (dto.coverTitle && dto.coverImageUrl) {
+        try {
+          const renderedUrl = await this.coverImageService.renderTitleOnCover(
+            dto.coverImageUrl,
+            dto.coverTitle,
+          );
+          transformedDto.coverImageUrl = renderedUrl;
+        } catch (error: any) {
+          console.error('[AdminController] Failed to render cover title:', error.message);
+          // Continue without rendering - keep original image
+        }
+      }
 
       const recipe = await this.recipeService.createRecipe(transformedDto);
       return ApiResponseDto.success(recipe);
@@ -2878,13 +2894,27 @@ export class AdminController {
       }
 
       // Transform strings to enums
-      const transformedDto = {
+      const transformedDto: any = {
         ...dto,
         nutritionStandard: dto.nutritionStandard as any,
         status: dto.status as any,
         targetHealthTags: dto.targetHealthTags || [], // Keep as UUID array
         applicableLifeStages: dto.applicableLifeStages as any,
       };
+
+      // Render cover title on image if both coverTitle and coverImageUrl are provided
+      if (dto.coverTitle && dto.coverImageUrl) {
+        try {
+          const renderedUrl = await this.coverImageService.renderTitleOnCover(
+            dto.coverImageUrl,
+            dto.coverTitle,
+          );
+          transformedDto.coverImageUrl = renderedUrl;
+        } catch (error: any) {
+          console.error('[AdminController] Failed to render cover title:', error.message);
+          // Continue without rendering - keep original image
+        }
+      }
 
       const recipe = await this.recipeService.updateRecipe(id, transformedDto);
       return ApiResponseDto.success(recipe);

@@ -216,6 +216,7 @@ model Recipe {
   updatedAt              DateTime                    @updatedAt @map("updated_at")
   applicableLifeStages   Json                        @default("[]") @map("applicable_life_stages")
   coverImageUrl          String?                     @map("cover_image_url")
+  coverTitle             String?                     @map("cover_title") @db.VarChar(20)
   description            String?                     @map("description")
   detailImages           Json?                       @map("detail_images")
   diyGenCount            Int                         @default(0) @map("diy_gen_count")

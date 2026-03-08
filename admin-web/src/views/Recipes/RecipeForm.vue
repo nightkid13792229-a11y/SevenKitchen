@@ -54,6 +54,18 @@
             </div>
           </el-form-item>
 
+          <el-form-item label="封面标题">
+            <el-input
+              v-model="form.coverTitle"
+              placeholder="显示在封面左上角，最多20个字符"
+              maxlength="20"
+              show-word-limit
+            />
+            <div style="margin-top: 8px; color: #909399; font-size: 12px">
+              💡 提示：标题会显示在食谱封面图片的左上角，小程序用户可见
+            </div>
+          </el-form-item>
+
           <el-form-item label="详情图集">
             <div class="detail-images-upload">
               <div class="image-list">
@@ -761,6 +773,7 @@ const submitting = ref(false);
 const form = reactive<RecipeForm>({
   name: '',
   coverImageUrl: undefined,
+  coverTitle: undefined,
   detailImages: [],
   videoUrl: undefined,
   description: undefined,
@@ -970,6 +983,7 @@ const loadRecipeDetail = async () => {
     Object.assign(form, {
       name: detail.name,
       coverImageUrl: detail.coverImageUrl,
+      coverTitle: detail.coverTitle,
       detailImages: detail.detailImages || [],
       videoUrl: detail.videoUrl,
       description: detail.description,

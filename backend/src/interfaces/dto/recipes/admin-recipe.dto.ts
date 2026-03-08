@@ -3,7 +3,7 @@
  * DTOs for recipe management operations in admin panel
  */
 
-import { IsString, IsNumber, IsEnum, IsOptional, IsArray, ValidateNested, Min } from 'class-validator';
+import { IsString, IsNumber, IsEnum, IsOptional, IsArray, ValidateNested, Min, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { RecipeStatus, RecipeHealthTag, LifeStage, NutritionStandard } from '../../../domain/recipe/enums';
 import type { NutritionDetailedData } from '../../../domain/recipe/types';
@@ -49,6 +49,11 @@ export class CreateRecipeDto {
   @IsOptional()
   @IsString()
   coverImageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  coverTitle?: string;
 
   @IsOptional()
   @IsArray()
@@ -122,6 +127,11 @@ export class UpdateRecipeDto {
   @IsOptional()
   @IsString()
   coverImageUrl?: string;
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(20)
+  coverTitle?: string;
 
   @IsOptional()
   @IsArray()
@@ -228,6 +238,7 @@ export interface RecipeSummaryResponseDto {
   version: number;
   status: RecipeStatus;
   coverImageUrl?: string;
+  coverTitle?: string;
   energyDensityKcalPerKg: number;
   applicableLifeStages: LifeStage[];
   targetHealthTags: RecipeHealthTag[];

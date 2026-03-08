@@ -113,6 +113,8 @@ import { PrismaPurchaseListRepository } from './infrastructure/repositories/pris
 import { PrismaReimbursementRepository } from './infrastructure/repositories/prisma-reimbursement.repository';
 import { PrismaPurchaseRecordRepository } from './infrastructure/repositories/prisma-purchase-record.repository';
 import { StaffProductionService } from './application/production/kitchen.service';
+import { NutritionFoodController } from './interfaces/controllers/nutrition-food.controller';
+import { NutritionFoodService } from './application/nutrition-food/nutrition-food.service';
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -195,6 +197,7 @@ validatePrismaConfig();
     CustomRecipeController,
     AdminCustomRecipeController,
     SharedPhotosController,
+    NutritionFoodController,
   ],
   providers: [
     DogService,
@@ -533,6 +536,8 @@ validatePrismaConfig();
     },
     // Custom Recipe Service
     CustomRecipeService,
+    // Nutrition Food Service (Recipe Designer)
+    NutritionFoodService,
   ],
 })
 export class AppModule implements OnModuleInit {

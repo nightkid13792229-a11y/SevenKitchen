@@ -38,7 +38,7 @@ export const LABEL_LAYOUT = {
   },
 
   margin: {
-    top: 4,      // 减少顶部留白，腾出更多空间
+    top: 0,      // 品牌名称紧贴标签纸最上方
     bottom: 4,   // 减少底部留白
     left: 7,     // 左边距
     right: 7,    // 右边距
@@ -84,15 +84,15 @@ export const LABEL_ELEMENTS = {
   brandTop: {
     fontSize: LABEL_LAYOUT.fontSize.brand,
     align: 'center' as const,
-    yOffset: 4,  // 距离顶部4mm（减少）
-    lineHeight: LABEL_LAYOUT.lineHeight.normal,
+    yOffset: 2.5,  // 距离顶部2.5mm（等于字体大小，紧贴顶部）
+    lineHeight: LABEL_LAYOUT.lineHeight.compact,  // 减少行高，让后续内容上移
   },
 
   // 1. 食谱名称
   recipeName: {
     fontSize: LABEL_LAYOUT.fontSize.title,
     align: 'center' as const,
-    yOffset: 7,  // 距离顶部7mm，确保不超出预览区域
+    yOffset: 5.5,  // 距离顶部5.5mm，紧随品牌名称
     lineHeight: LABEL_LAYOUT.lineHeight.normal,
     bold: true,
   },

@@ -12,7 +12,7 @@ const LABEL_LAYOUT = {
     height: 100, // mm
   },
   margin: {
-    top: 4,
+    top: 0,      // 品牌名称紧贴标签纸最上方
     bottom: 4,
     left: 7,
     right: 7,
@@ -163,15 +163,16 @@ export class LabelService {
     // 设置中文字体（使用已注册的字体）
     ctx.font = `${mmToPx(LABEL_LAYOUT.fontSize.body)}px "Chinese"`;
 
-    let y = mmToPx(LABEL_LAYOUT.margin.top + 3);
+    // 品牌名称紧贴顶部：y坐标 = 字体大小（像素），让文字基线在字体高度位置
+    let y = mmToPx(LABEL_LAYOUT.fontSize.brand);
     const centerX = width / 2;
     const maxWidth = width - mmToPx(LABEL_LAYOUT.margin.left + LABEL_LAYOUT.margin.right);
 
-    // 1. 品牌名称（顶部）
+    // 1. 品牌名称（顶部，紧贴标签纸边缘）
     ctx.font = `bold ${mmToPx(LABEL_LAYOUT.fontSize.brand)}px "Chinese-Bold"`;
     ctx.textAlign = 'center';
     ctx.fillText(labelData.brandName, centerX, y);
-    y += mmToPx(LABEL_LAYOUT.lineHeight.normal);
+    y += mmToPx(LABEL_LAYOUT.lineHeight.compact);  // 减少行高，让后续内容更紧凑上移
 
     // 分隔线
     this.drawSeparatorLine(ctx, y, width);
@@ -222,12 +223,6 @@ export class LabelService {
       y = this.drawCookingSection(ctx, labelData.cookingMethod, y, centerX, maxWidth, width);
       y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
     }
-
-    // 8. 底部品牌名称
-    const bottomY = height - mmToPx(LABEL_LAYOUT.margin.bottom + 2);
-    ctx.font = `${mmToPx(LABEL_LAYOUT.fontSize.brandBottom)}px "Noto Sans CJK SC", "Source Han Sans SC", "SimHei", sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.fillText(labelData.brandName, centerX, bottomY);
 
     // 转换为base64
     const buffer = canvas.toBuffer('image/png');
@@ -350,12 +345,14 @@ export class LabelService {
     // 标题
     ctx.font = `bold ${mmToPx(LABEL_LAYOUT.fontSize.sectionTitle)}px "Noto Sans CJK SC", "Source Han Sans SC", "SimHei", sans-serif`;
     ctx.textAlign = 'center';
-    ctx.fillText('— 储存方式 —', centerX, y);
+    ctx.fillText('— 储存&保质期 —', centerX, y);
     y += mmToPx(LABEL_LAYOUT.lineHeight.compact);
 
-    // 内容
+    // 内容 - 两行显示
     ctx.font = `${mmToPx(LABEL_LAYOUT.fontSize.body)}px "Noto Sans CJK SC", "Source Han Sans SC", "SimHei", sans-serif`;
-    ctx.fillText('● ' + shelfLife, centerX, y);
+    ctx.fillText('● 冷冻保存，保质期6个月', centerX, y);
+    y += mmToPx(LABEL_LAYOUT.lineHeight.compact);
+    ctx.fillText('● 0-5℃冷藏保存，保质期3天', centerX, y);
     y += mmToPx(LABEL_LAYOUT.lineHeight.compact);
 
     return y;

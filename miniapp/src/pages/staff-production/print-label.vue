@@ -238,8 +238,16 @@ const CANVAS_HEIGHT = 800;
 // 状态栏高度
 const statusBarHeight = ref(0);
 
-// 获取当前组件实例(在setup阶段)
-const currentInstance = getCurrentInstance();
+// 获取当前组件实例的proxy(在setup阶段立即保存，避免在异步回调中失效)
+// 注意：getCurrentInstance() 只能在 setup 同步阶段使用，必须立即提取 proxy 保存
+const componentProxy = ref<any>(null);
+const instance = getCurrentInstance();
+console.log('[PrintLabel] setup阶段 - getCurrentInstance结果:', instance ? '有效' : 'null');
+console.log('[PrintLabel] setup阶段 - instance.proxy:', instance?.proxy);
+if (instance) {
+  componentProxy.value = instance.proxy;
+  console.log('[PrintLabel] setup阶段 - componentProxy.value已设置:', componentProxy.value ? '成功' : '失败');
+}
 
 // 获取状态栏高度
 onMounted(() => {
@@ -724,8 +732,14 @@ async function printSingleOrder(order: OrderPrintConfig) {
           mask: true
         });
 
+        // 调试日志：确认组件代理是否存在
+        console.log('[PrintLabel] componentProxy.value:', componentProxy.value);
+        console.log('[PrintLabel] componentProxy.value 类型:', typeof componentProxy.value);
+
         // 使用后端生成的图片打印
-        await jcPrinter.printLabelFromImage(imageBase64, order.printCount);
+        // 关键修复: count 参数始终为1 (只缓存一张图片), 打印份数由 print() 控制
+        // 使用 componentProxy.value (在setup阶段保存的组件代理)
+        await jcPrinter.printLabelFromImage(imageBase64, 1, 'labelCanvas', componentProxy.value);
 
         uni.hideLoading();
         uni.showToast({

@@ -220,8 +220,21 @@ export async function drawProductionLabel(
       const centerX = CANVAS_WIDTH / 2;
       const margin = mmToPx(LABEL_LAYOUT.margin.left);
 
-      // ============= 0. 顶部品牌名称已移除 =============
-      // 品牌名称已移至底部
+      // ============= 0. 顶部品牌名称（紧贴标签纸最上方） =============
+      ctx.setFontSize(mmToPx(LABEL_ELEMENTS.brandTop.fontSize));
+      ctx.setFillStyle('#000000');
+      ctx.setTextAlign('center');
+      ctx.fillText(labelData.brandName, centerX, mmToPx(LABEL_ELEMENTS.brandTop.yOffset));
+      y = mmToPx(LABEL_ELEMENTS.brandTop.yOffset) + mmToPx(LABEL_ELEMENTS.brandTop.lineHeight);
+
+      // 分隔线
+      ctx.setStrokeStyle('#000000');
+      ctx.setLineWidth(1);
+      ctx.beginPath();
+      ctx.moveTo(margin, y);
+      ctx.lineTo(CANVAS_WIDTH - margin, y);
+      ctx.stroke();
+      y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
 
       // ============= 1. 食谱名称（主标题，加粗） =============
       ctx.setFontSize(mmToPx(LABEL_ELEMENTS.recipeName.fontSize));
@@ -352,20 +365,21 @@ export async function drawProductionLabel(
         y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
       }
 
-      // ============= 5. 保质期 =============
-      // 标题（纯文本，不使用装饰字符）
+      // ============= 5. 储存&保质期 =============
+      // 标题
       ctx.setFontSize(mmToPx(LABEL_ELEMENTS.shelfLife.titleFontSize));
       ctx.setFillStyle('#000000');
       ctx.setTextAlign('center');
-      const shelfLifeTitleText = '保质期';
-      ctx.fillText(shelfLifeTitleText, centerX, y);
+      ctx.fillText('储存&保质期', centerX, y);
       y += mmToPx(LABEL_ELEMENTS.shelfLife.lineHeight);
 
-      // 保质期信息（移除特殊符号）
+      // 保质期信息（两行显示）
       ctx.setFontSize(mmToPx(LABEL_ELEMENTS.shelfLife.contentFontSize));
       ctx.setFillStyle('#000000');
       ctx.setTextAlign('center');
-      ctx.fillText(`冷冻保存6个月  冷藏保存3天`, centerX, y);
+      ctx.fillText('● 冷冻保存，保质期6个月', centerX, y);
+      y += mmToPx(LABEL_ELEMENTS.shelfLife.lineHeight);
+      ctx.fillText('● 0-5℃冷藏保存，保质期3天', centerX, y);
       y += mmToPx(LABEL_ELEMENTS.shelfLife.lineHeight);
 
       // 移除"开封后3小时内食用完"提示
@@ -400,12 +414,7 @@ export async function drawProductionLabel(
       // 恢复Canvas状态（恢复缩放前的坐标系）
       ctx.restore();
 
-      // ============= 7. 底部品牌名称（在缩放恢复后绘制，确保位置固定） =============
-      const brandBottomY = CANVAS_HEIGHT - mmToPx(LABEL_ELEMENTS.brandBottom.yOffsetFromBottom);
-      ctx.setFontSize(mmToPx(LABEL_ELEMENTS.brandBottom.fontSize));
-      ctx.setFillStyle('#000000');
-      ctx.setTextAlign('center');
-      ctx.fillText(labelData.brandName, centerX, brandBottomY);
+      // 底部品牌名称已移除（用户要求）
 
       // 绘制完成后导出图片(使用Promise确保稳定性)
       ctx.draw(false, () => {
@@ -661,8 +670,16 @@ export async function drawProductionLabelWithJCSDK(
       const margin = LABEL_LAYOUT.margin.left;
       const centerX = LABEL_LAYOUT.canvas.width / 2;
 
-      // ============= 0. 顶部品牌名称已移除 =============
-      // 品牌名称已移至底部
+      // ============= 0. 顶部品牌名称（紧贴标签纸最上方） =============
+      JCAPI.drawText(labelData.brandName, centerX, LABEL_ELEMENTS.brandTop.yOffset * scale, LABEL_ELEMENTS.brandTop.fontSize * scale, 0, {
+        align: 'center'
+      });
+      y = LABEL_ELEMENTS.brandTop.yOffset * scale + LABEL_ELEMENTS.brandTop.lineHeight * scale;
+
+      // 分隔线
+      JCAPI.drawLine(margin, y, LABEL_LAYOUT.canvas.width - margin, y, 0.3);
+
+      y += LABEL_LAYOUT.spacing.sectionGap * scale;
 
       // ============= 1. 食谱名称 =============
       JCAPI.drawText(labelData.recipeName, centerX, y, LABEL_ELEMENTS.recipeName.fontSize * scale, 0, {
@@ -791,21 +808,23 @@ export async function drawProductionLabelWithJCSDK(
         y += LABEL_LAYOUT.spacing.sectionGap * scale;
       }
 
-      // ============= 5. 保质期 =============
-      // 标题（纯文本，不使用装饰字符）
-      const shelfLifeTitleText = '保质期';
-      JCAPI.drawText(shelfLifeTitleText, centerX, y, LABEL_ELEMENTS.shelfLife.titleFontSize * scale, 0, {
+      // ============= 5. 储存&保质期 =============
+      // 标题
+      JCAPI.drawText('储存&保质期', centerX, y, LABEL_ELEMENTS.shelfLife.titleFontSize * scale, 0, {
         align: 'center'
       });
       y += LABEL_ELEMENTS.shelfLife.lineHeight * scale;
 
-      // 保质期信息（移除特殊符号）
-      JCAPI.drawText(`冷冻保存6个月  冷藏保存3天`, centerX, y, LABEL_ELEMENTS.shelfLife.contentFontSize * scale, 0, {
+      // 保质期信息（两行显示）
+      JCAPI.drawText('● 冷冻保存，保质期6个月', centerX, y, LABEL_ELEMENTS.shelfLife.contentFontSize * scale, 0, {
+        align: 'center'
+      });
+      y += LABEL_ELEMENTS.shelfLife.lineHeight * scale;
+      JCAPI.drawText('● 0-5℃冷藏保存，保质期3天', centerX, y, LABEL_ELEMENTS.shelfLife.contentFontSize * scale, 0, {
         align: 'center'
       });
       y += LABEL_ELEMENTS.shelfLife.lineHeight * scale;
 
-      // 移除"开封后3小时内食用完"提示
       y += LABEL_LAYOUT.spacing.blockInternal * scale;
 
       // 分隔线已移除
@@ -832,12 +851,7 @@ export async function drawProductionLabelWithJCSDK(
         y += LABEL_ELEMENTS.cooking.lineHeight * scale;
       });
 
-      // ============= 7. 底部品牌名称 =============
-      y += LABEL_LAYOUT.spacing.blockInternal * scale;
-      const brandBottomY = LABEL_LAYOUT.canvas.height - LABEL_ELEMENTS.brandBottom.yOffsetFromBottom;
-      JCAPI.drawText(labelData.brandName, centerX, brandBottomY, LABEL_ELEMENTS.brandBottom.fontSize * scale, 0, {
-        align: 'center'
-      });
+      // 底部品牌名称已移除（用户要求）
 
       // 结束绘制（在回调中调用打印函数）
       JCAPI.endDrawLabel(() => {

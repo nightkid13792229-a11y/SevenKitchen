@@ -737,9 +737,8 @@ async function printSingleOrder(order: OrderPrintConfig) {
         console.log('[PrintLabel] componentProxy.value 类型:', typeof componentProxy.value);
 
         // 使用后端生成的图片打印
-        // 关键修复: count 参数始终为1 (只缓存一张图片), 打印份数由 print() 控制
-        // 使用 componentProxy.value (在setup阶段保存的组件代理)
-        await jcPrinter.printLabelFromImage(imageBase64, 1, 'labelCanvas', componentProxy.value);
+        // count 参数传递用户设置的打印份数
+        await jcPrinter.printLabelFromImage(imageBase64, order.printCount, 'labelCanvas', componentProxy.value);
 
         uni.hideLoading();
         uni.showToast({

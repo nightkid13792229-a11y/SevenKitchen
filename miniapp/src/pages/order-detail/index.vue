@@ -250,6 +250,7 @@
             <text class="photos-time">{{ formatDateTime(order.productionPhotos.uploadedAt) }}</text>
           </view>
           <button
+            v-if="shareToken"
             class="btn-share-photos"
             open-type="share"
             data-share-type="photos"
@@ -789,6 +790,9 @@ async function loadOrderDetail() {
       })
       console.log('[Order Detail] Can edit address:', canEditAddress.value)
       console.log('[Order Detail] Can edit date:', canEditDate.value)
+
+      // 预获取分享照片的 token
+      prefetchShareToken()
     }
   } catch (error) {
     console.error('Load order detail error:', error)
@@ -912,61 +916,55 @@ onShow(() => {
   uni.$on('address-selected', handleAddressSelected)
 })
 
-// 分享照片相关 - 缓存已获取的 token
-const cachedShareToken = ref<string>('')
+// 分享照片相关 - 预获取的分享 token（只有获取成功时才会有值）
+const shareToken = ref<string>('')
 
-// 获取分享 token（带缓存）
-async function getShareToken(): Promise<string> {
-  // 如果已有缓存的 token，直接返回
-  if (cachedShareToken.value) {
-    return cachedShareToken.value
+// 预获取分享 token
+async function prefetchShareToken() {
+  // 如果已有 token，不再重复获取
+  if (shareToken.value) {
+    return
   }
 
   if (!order.value) {
-    throw new Error('订单不存在')
+    return
   }
 
-  const response = await request({
-    url: `/orders/${order.value.id}/share-photos`,
-    method: 'POST',
-  })
-
-  if (response.code === 0 && response.data) {
-    cachedShareToken.value = response.data.token
-    return response.data.token
+  // 检查是否有照片
+  if (!order.value.productionPhotos?.photos?.length) {
+    return
   }
 
-  throw new Error(response.message || '获取分享链接失败')
+  try {
+    const response = await request({
+      url: `/orders/${order.value.id}/share-photos`,
+      method: 'POST',
+    })
+
+    if (response.code === 0 && response.data?.token) {
+      shareToken.value = response.data.token
+      console.log('[Order Detail] Share token prefetched successfully')
+    } else {
+      console.log('[Order Detail] Failed to prefetch share token:', response.message)
+    }
+  } catch (error) {
+    console.error('[Order Detail] Error prefetching share token:', error)
+  }
 }
 
-// 定义分享内容 - 支持异步
+// 定义分享内容 - 使用预获取的 token（同步返回）
 onShareAppMessage((e: any) => {
   // 判断是否是分享照片按钮触发的
   const isSharePhotos = e?.target?.dataset?.shareType === 'photos'
 
   if (isSharePhotos) {
-    // 返回 Promise 异步获取 token
-    return new Promise(async (resolve) => {
-      try {
-        const token = await getShareToken()
-        resolve({
-          title: 'SevenKitchen原料照片',
-          path: `/pages/shared-photos/index?token=${token}`,
-          imageUrl: order.value?.productionPhotos?.photos?.[0] || ''
-        })
-      } catch (error) {
-        // 获取失败时，分享订单详情页
-        uni.showToast({
-          title: '分享照片失败',
-          icon: 'none'
-        })
-        resolve({
-          title: 'SevenKitchen订单详情',
-          path: `/pages/order-detail/index?id=${order.value?.id || ''}`,
-          imageUrl: ''
-        })
-      }
-    })
+    // 使用预获取的 token，直接返回同步结果
+    // 如果 token 不存在，按钮不会显示，所以这里 token 一定存在
+    return {
+      title: 'SevenKitchen原料照片',
+      path: `/pages/shared-photos/index?token=${shareToken.value}`,
+      imageUrl: order.value?.productionPhotos?.photos?.[0] || ''
+    }
   }
 
   // 默认分享订单详情页

@@ -4,9 +4,7 @@
       "path": "pages/home/index",
       "style": {
         "navigationBarTitleText": "Seven的厨房",
-        "enablePullDownRefresh": true,
-        "enableShareAppMessage": true,
-        "enableShareTimeline": true
+        "enablePullDownRefresh": true
       }
     },
     {
@@ -30,9 +28,7 @@
     {
       "path": "pages/recipe-detail/index",
       "style": {
-        "navigationBarTitleText": "食谱详情",
-        "enableShareAppMessage": true,
-        "enableShareTimeline": true
+        "navigationBarTitleText": "食谱详情"
       }
     },
     {
@@ -62,8 +58,7 @@
     {
       "path": "pages/order-detail/index",
       "style": {
-        "navigationBarTitleText": "订单详情",
-        "enableShareAppMessage": true
+        "navigationBarTitleText": "订单详情"
       }
     },
     {
@@ -87,9 +82,7 @@
     {
       "path": "pages/favorite-recipes/index",
       "style": {
-        "navigationBarTitleText": "收藏的食谱",
-        "enableShareAppMessage": true,
-        "enableShareTimeline": true
+        "navigationBarTitleText": "收藏的食谱"
       }
     },
     {

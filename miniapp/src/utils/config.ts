@@ -15,13 +15,11 @@
 // ========================================
 // 检测是否为生产构建
 // ========================================
-// 通过 Vite 环境变量来区分
-// VITE_ENV 由 vite.config.ts 中的 define 配置注入
-// - 'development': 开发环境
-// - 'production': 生产环境
+// 使用 import.meta.env 来区分环境
+// - import.meta.env.DEV: 开发环境
+// - import.meta.env.PROD: 生产环境
 
-declare const VITE_ENV: string;
-const IS_PRODUCTION_BUILD = VITE_ENV === 'production';
+const IS_PRODUCTION_BUILD = import.meta.env.PROD;
 
 // ========================================
 // API 地址配置

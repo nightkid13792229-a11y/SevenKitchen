@@ -1158,7 +1158,8 @@ export class OrdersController {
       }
 
       // Check permission: only order owner or admin can share
-      if (order.customerId !== user.customerId && user.role !== 'admin') {
+      // Note: role comparison is case-insensitive to handle both 'admin' and 'ADMIN'
+      if (order.customerId !== user.customerId && user.role?.toLowerCase() !== 'admin') {
         return ApiResponseDto.error(403, 'You do not have permission to share this order\'s photos');
       }
 

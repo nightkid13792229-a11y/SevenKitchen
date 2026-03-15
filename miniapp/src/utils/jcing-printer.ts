@@ -249,10 +249,19 @@ export class JCPrinter {
 
   /**
    * 使用后端生成的图片打印标签
+   *
+   * 重要：这个方法使用精臣SDK的canvas绘制流程打印图片
+   * 1. 将base64保存为临时文件
+   * 2. startJob - 开始打印任务
+   * 3. startDrawLabel - 开始绘制
+   * 4. drawImage - 绘制图片到画布
+   * 5. endDrawLabel - 结束绘制
+   * 6. print - 执行打印
+   *
    * @param imageBase64 图片的base64编码（不含前缀）
    * @param count 打印份数
-   * @param canvasId 画布组件ID（精臣SDK必需参数）
-   * @param component 画布组件实例（精臣SDK必需参数）
+   * @param canvasId 画布组件ID
+   * @param component 画布组件实例
    * @returns Promise<void>
    */
   async printLabelFromImage(
@@ -265,132 +274,102 @@ export class JCPrinter {
       throw new Error('打印机未连接');
     }
 
-    // 验证必需参数
-    if (!canvasId || !component) {
-      throw new Error('打印图片需要提供 canvasId 和 component 参数')
-    }
+    console.log('[JCPrinter] 开始图片打印任务（Canvas流程）, 份数:', count);
+    console.log('[JCPrinter] 图片数据长度:', imageBase64?.length);
+    console.log('[JCPrinter] Canvas参数 - canvasId:', canvasId, 'component:', component ? '有效' : '无效');
 
-    console.log('[JCPrinter] 开始图片打印任务, 份数:', count);
+    // 检查canvas参数
+    if (!canvasId || !component) {
+      console.error('[JCPrinter] Canvas参数缺失，无法使用canvas绘制流程');
+      throw new Error('Canvas参数缺失，请刷新页面后重试');
+    }
 
     return new Promise((resolve, reject) => {
       let completed = false;
-      let jobStarted = false;
-      let imageCached = false;
 
-      // 注册打印错误监听器（用于诊断）
-      JCAPI.didReadPrintErrorInfo((errorInfo: any) => {
-        console.error('[JCPrinter] 打印机返回错误:', errorInfo);
-        if (!completed) {
-          completed = true;
-          clearTimeout(timeoutId);
-          reject(new Error(`打印机错误: ${JSON.stringify(errorInfo)}`));
-        }
-      });
-
-      // 注册打印进度监听器（用于诊断）
-      JCAPI.didReadPrintCountInfo((countInfo: any) => {
-        console.log('[JCPrinter] 打印进度:', countInfo);
-      });
-
-      // 超时保护：15秒后自动完成（增加超时时间)
+      // 超时保护：20秒后自动完成
       const timeoutId = setTimeout(() => {
         if (!completed) {
           completed = true;
-          if (imageCached) {
-            console.warn('[JCPrinter] 打印超时,但图片已缓存,打印可能正在进行');
-            resolve();
-          } else if (jobStarted) {
-            console.warn('[JCPrinter] 打印任务已启动但超时');
-            resolve();
-          } else {
-            console.error('[JCPrinter] 打印任务启动失败（startJob回调未触发）');
-            reject(new Error('打印任务启动超时'));
-          }
+          console.warn('[JCPrinter] 打印任务超时');
+          resolve(); // 超时也resolve，避免用户卡住
         }
-      }, 15000);
+      }, 20000);
 
-      console.log('[JCPrinter] 步骤1: 调用 startJob, totalCount=' + count);
-      // 1. 开始打印任务
-      // gapType: 1=间隙纸, darkness: 3=浓度, totalCount: 总打印份数
+      // 步骤1: 将base64保存为临时文件
+      console.log('[JCPrinter] 步骤1: 保存base64图片到临时文件...');
+      const fs = uni.getFileSystemManager();
+      const tempFilePath = `${wx.env.USER_DATA_PATH}/label_${Date.now()}.png`;
+
+      try {
+        // 将base64写入临时文件
+        const buffer = uni.base64ToArrayBuffer(imageBase64);
+        fs.writeFileSync(tempFilePath, buffer, 'binary');
+        console.log('[JCPrinter] 临时文件保存成功:', tempFilePath);
+      } catch (err) {
+        console.error('[JCPrinter] 保存临时文件失败:', err);
+        clearTimeout(timeoutId);
+        reject(new Error('保存图片文件失败'));
+        return;
+      }
+
+      // 步骤2: 开始打印任务
+      console.log('[JCPrinter] 步骤2: 调用 startJob, totalCount=' + count);
       JCAPI.startJob(1, 3, count, () => {
-        jobStarted = true;
-        console.log('[JCPrinter] 步骤2: startJob 回调触发,开始缓存图片');
-        // 2. 使用printImage缓存图片数据
-        // 重要: printImage 的 count 参数应该始终为 1（只缓存一张图片）
-        // 打印份数由 print() 方法控制
-        // 关键修复: 当使用 base64 数据时,不需要 canvasId 和 compent 参数
-        // 重要: sWidth 和 sHeight 必须设置，否则打印区域为0，导致空白打印
-        const printImageParams: any = {
-          data: imageBase64,
-          count: 1,        // 关键修复: 始终为1,只缓存一张图片
-          width: 75,       // 标签宽度 75mm
-          height: 100,     // 标签高度 100mm
-          sWidth: 75,      // 打印区域宽度 75mm - 必需！
-          sHeight: 100,    // 打印区域高度 100mm - 必需！
-          orientation: 0,
-          success: () => {
-            imageCached = true;
-            console.log('[JCPrinter] 步骤3: 图片缓存成功');
+        console.log('[JCPrinter] 步骤3: startJob 回调触发');
 
-            // 关键修复: 在调用 print 之前增加 300ms 延迟
-            // 让打印机有时间处理缓存的数据
-            console.log('[JCPrinter] 步骤4: 等待 300ms 后调用 print...');
-            setTimeout(() => {
-              console.log('[JCPrinter] 步骤5: 调用 print, onePageCount=' + count);
+        // 步骤3: 开始绘制标签
+        console.log('[JCPrinter] 步骤4: 调用 startDrawLabel');
+        // 参数: canvasId, component, width(mm), height(mm), rotation, canvas对象(uniapp需要传null)
+        JCAPI.startDrawLabel(canvasId, component, 75, 100, 0, null);
 
-              // 3. 启动打印
-              // print 的参数 onePageCount 表示打印当前页的份数
-              JCAPI.print(count, () => {
-                // 注意：根据精臣SDK文档,仅打印一页一份时此回调不会触发
-                console.log('[JCPrinter] 步骤6: print 回调触发(多份打印或特殊情况)');
-                if (!completed) {
-                  completed = true;
-                  clearTimeout(timeoutId);
-                  console.log('[JCPrinter] ✓ 打印完成(通过print回调)');
-                  resolve();
-                }
-              });
+        // 步骤4: 绘制图片
+        console.log('[JCPrinter] 步骤5: 调用 drawImage, path=' + tempFilePath);
+        // 参数: path, x(mm), y(mm), width(mm), height(mm), rotation
+        JCAPI.drawImage(tempFilePath, 0, 0, 75, 100, 0);
 
-              // 由于打印1份时 print 回调不会触发,需要通过延时来完成
-              // 增加到5秒,给打印机足够时间
-              setTimeout(() => {
-                if (!completed) {
-                  completed = true;
-                  clearTimeout(timeoutId);
-                  console.log('[JCPrinter] ✓ 打印指令已发送,等待打印机出纸');
-                  resolve();
-                }
-              }, 5000);
-            }, 300);  // 关键: 300ms 延迟
-          },
-          fail: (error: any) => {
-            console.error('[JCPrinter] 图片缓存失败:', error);
+        // 步骤5: 结束绘制
+        console.log('[JCPrinter] 步骤6: 调用 endDrawLabel');
+        JCAPI.endDrawLabel(() => {
+          console.log('[JCPrinter] 步骤7: endDrawLabel 回调触发, 开始打印');
+
+          // 步骤6: 启动打印
+          console.log('[JCPrinter] 步骤8: 调用 print, onePageCount=' + count);
+          JCAPI.print(count, () => {
+            console.log('[JCPrinter] 步骤9: print 回调触发');
             if (!completed) {
               completed = true;
               clearTimeout(timeoutId);
-              const errMsg = error?.errMsg || error?.message || JSON.stringify(error);
-              reject(new Error(`图片缓存失败: ${errMsg}`));
+
+              // 清理临时文件
+              try {
+                fs.unlinkSync(tempFilePath);
+                console.log('[JCPrinter] 临时文件已清理');
+              } catch (e) {
+                console.warn('[JCPrinter] 清理临时文件失败:', e);
+              }
+
+              console.log('[JCPrinter] ✓ 打印完成');
+              resolve();
             }
-          }
-        };
+          });
 
-        // 如果提供了 canvasId 和 component，则添加到参数中
-        if (canvasId && component) {
-          printImageParams.canvasId = canvasId;
-          printImageParams.compent = component;
-        }
+          // 备用完成机制：5秒后如果未完成则视为成功
+          setTimeout(() => {
+            if (!completed) {
+              completed = true;
+              clearTimeout(timeoutId);
 
-        console.log('[JCPrinter] printImage 参数:', JSON.stringify({
-          hasData: !!imageBase64,
-          dataLength: imageBase64?.length,
-          canvasId: canvasId,
-          hasComponent: !!component,
-          count: 1,
-          width: 75,
-          height: 100
-        }));
+              // 清理临时文件
+              try {
+                fs.unlinkSync(tempFilePath);
+              } catch (e) {}
 
-        JCAPI.printImage(printImageParams);
+              console.log('[JCPrinter] ✓ 打印指令已发送（备用完成）');
+              resolve();
+            }
+          }, 5000);
+        });
       });
     });
   }

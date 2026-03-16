@@ -111,7 +111,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
           }
         }
       },
-      orderBy: [{ recipeId: 'asc' }, { version: 'desc' }],
+      orderBy: [{ createdAt: 'desc' }],
     });
 
     // Filter by life stages (any match) - in-memory filtering for JSON field
@@ -188,7 +188,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
           }
         }
       },
-      orderBy: [{ recipeId: 'asc' }, { version: 'desc' }],
+      orderBy: [{ createdAt: 'desc' }],
     });
 
     // Filter by life stages (any match) - in-memory filtering for JSON field

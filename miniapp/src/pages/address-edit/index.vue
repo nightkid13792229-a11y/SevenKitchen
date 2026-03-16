@@ -36,7 +36,22 @@
         <switch :checked="formData.isDefault" @change="onDefaultChange" />
       </view>
 
-      <button class="btn" @tap="save">保存</button>
+      <!-- 隐私协议勾选 -->
+      <view class="privacy-agreement">
+        <view class="checkbox-wrapper" @tap="togglePrivacyAgreement">
+          <view :class="['checkbox', { checked: isPrivacyAgreed }]">
+            <text v-if="isPrivacyAgreed" class="check-icon">✓</text>
+          </view>
+        </view>
+        <text class="agreement-text">
+          我同意
+          <text class="link" @tap.stop="goToPrivacy">《隐私政策》</text>
+          中关于收货信息收集和使用的约定
+        </text>
+      </view>
+      <view class="privacy-hint">（收货信息仅用于商品配送）</view>
+
+      <button class="btn" :class="{ 'btn-disabled': !isPrivacyAgreed }" :disabled="!isPrivacyAgreed" @tap="save">保存</button>
     </view>
   </view>
 </template>
@@ -67,6 +82,7 @@ const formData = ref<FormData>({
 })
 
 const addressId = ref<string | null>(null)
+const isPrivacyAgreed = ref(false)
 
 // 页面参数（从订单详情页新增地址时传递）
 let pageMode = '' // 'select' | 'edit' | ''
@@ -156,6 +172,16 @@ function loadAddress() {
 
 function onDefaultChange(e: any) {
   formData.value.isDefault = e.detail.value
+}
+
+// 切换隐私协议同意状态
+function togglePrivacyAgreement() {
+  isPrivacyAgreed.value = !isPrivacyAgreed.value
+}
+
+// 跳转到隐私政策页面
+function goToPrivacy() {
+  uni.navigateTo({ url: '/pages/privacy/index' })
 }
 
 function save() {
@@ -331,6 +357,69 @@ function save() {
   border-radius: 8rpx;
   font-size: 32rpx;
   margin-top: 20rpx;
+}
+
+.btn-disabled {
+  background-color: #ccc !important;
+  color: #999 !important;
+}
+
+/* 隐私协议勾选样式 */
+.privacy-agreement {
+  display: flex;
+  align-items: flex-start;
+  margin-top: 40rpx;
+  padding: 24rpx;
+  background-color: #f9f9f9;
+  border-radius: 12rpx;
+  border: 1rpx solid #eee;
+}
+
+.checkbox-wrapper {
+  margin-right: 16rpx;
+  padding-top: 4rpx;
+}
+
+.checkbox {
+  width: 40rpx;
+  height: 40rpx;
+  border: 2rpx solid #ddd;
+  border-radius: 6rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #fff;
+}
+
+.checkbox.checked {
+  background-color: #07c160;
+  border-color: #07c160;
+}
+
+.check-icon {
+  color: #fff;
+  font-size: 24rpx;
+  font-weight: bold;
+}
+
+.agreement-text {
+  flex: 1;
+  font-size: 26rpx;
+  color: #333;
+  line-height: 1.6;
+}
+
+.link {
+  color: #1890ff;
+  text-decoration: underline;
+}
+
+.privacy-hint {
+  font-size: 24rpx;
+  color: #999;
+  text-align: center;
+  margin-top: 16rpx;
+  margin-bottom: 20rpx;
 }
 </style>
 

@@ -34,6 +34,11 @@
         <text v-if="!loading">微信一键登录</text>
         <text v-else>登录中...</text>
       </button>
+
+      <!-- 游客模式入口 -->
+      <view class="guest-entry" @tap="skipLogin">
+        <text class="guest-text">暂不登录，先逛逛</text>
+      </view>
     </view>
   </view>
 </template>
@@ -67,6 +72,11 @@ const navigateToPrivacy = () => {
 // 跳转到用户协议页面
 const navigateToTerms = () => {
   uni.navigateTo({ url: '/pages/terms/index' });
+};
+
+// 跳过登录，以游客模式进入首页
+const skipLogin = () => {
+  uni.switchTab({ url: '/pages/home/index' });
 };
 
 // 处理隐私协议同意回调（空实现，用于触发微信隐私协议弹窗）
@@ -307,5 +317,18 @@ const handleWechatLogin = async () => {
 .btn-disabled {
   opacity: 0.5;
   background-color: #ccc !important;
+}
+
+/* 游客模式入口 */
+.guest-entry {
+  margin-top: 32rpx;
+  text-align: center;
+  padding: 24rpx 0;
+}
+
+.guest-text {
+  font-size: 28rpx;
+  color: rgba(255, 255, 255, 0.8);
+  text-decoration: underline;
 }
 </style>

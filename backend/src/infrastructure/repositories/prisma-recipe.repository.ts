@@ -149,9 +149,14 @@ export class PrismaRecipeRepository implements RecipeRepository {
       }
     }
 
-    return Array.from(latestByRecipeId.values()).map((r) =>
-      this.mapToDomain(r),
-    );
+    // Sort by createdAt descending AFTER grouping
+    return Array.from(latestByRecipeId.values())
+      .sort((a, b) => {
+        const aTime = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
+        const bTime = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
+        return bTime - aTime;
+      })
+      .map((r) => this.mapToDomain(r));
   }
 
   async findPublicRecipesPaginated(options?: FindRecipesOptions): Promise<{ data: Recipe[], total: number, page: number, pageSize: number, hasMore: boolean }> {
@@ -226,7 +231,12 @@ export class PrismaRecipeRepository implements RecipeRepository {
       }
     }
 
-    const uniqueRecipes = Array.from(latestByRecipeId.values());
+    // Sort by createdAt descending AFTER grouping to ensure correct order
+    const uniqueRecipes = Array.from(latestByRecipeId.values()).sort((a, b) => {
+      const aTime = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
+      const bTime = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
+      return bTime - aTime;
+    });
     const total = uniqueRecipes.length;
 
     // Apply pagination

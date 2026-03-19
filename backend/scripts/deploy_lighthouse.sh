@@ -119,25 +119,39 @@ else
 fi
 echo ""
 
-# Step 7: Check if systemd service is installed
-echo "Step 7: Checking service status..."
-if systemctl list-unit-files | grep -q sevenkitchen-backend.service; then
-  info "Systemd service is installed"
-  
-  # Check if service is running
+# Step 7: Restart systemd service (ALWAYS restart to ensure latest code is loaded)
+echo "Step 7: Restarting service..."
+SERVICE_INSTALLED=false
+
+# Check if systemd service exists (multiple detection methods)
+if systemctl list-unit-files sevenkitchen-backend.service >/dev/null 2>&1; then
+  SERVICE_INSTALLED=true
+elif [ -f /etc/systemd/system/sevenkitchen-backend.service ]; then
+  SERVICE_INSTALLED=true
+fi
+
+if [ "$SERVICE_INSTALLED" = true ]; then
+  info "Systemd service found, restarting..."
+
+  # Always restart to ensure latest code is loaded
+  sudo systemctl restart sevenkitchen-backend
+
+  # Wait for service to be ready
+  info "Waiting for service to start..."
+  sleep 3
+
+  # Verify service is running
   if systemctl is-active --quiet sevenkitchen-backend; then
-    info "Service is already running, restarting..."
-    sudo systemctl restart sevenkitchen-backend
-    ok "Service restarted"
+    ok "Service restarted and running"
   else
-    info "Starting service..."
-    sudo systemctl start sevenkitchen-backend
-    ok "Service started"
+    fail "Service failed to start"
+    sudo systemctl status sevenkitchen-backend --no-pager
+    exit 1
   fi
-  
+
   # Show service status
   echo ""
-  sudo systemctl status sevenkitchen-backend --no-pager -l || true
+  sudo systemctl status sevenkitchen-backend --no-pager | head -15
 else
   warn "Systemd service is not installed"
   warn "To install systemd service, run: sudo bash scripts/install_systemd_service.sh"
@@ -150,8 +164,31 @@ else
 fi
 echo ""
 
-# Step 8: Final verification
-echo "Step 8: Running post-deployment verification..."
+# Step 8: Health check (verify service is responding)
+echo "Step 8: Health check..."
+HEALTH_PORT="${PORT:-3000}"
+MAX_RETRIES=5
+RETRY_COUNT=0
+
+while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
+  if curl -sf "http://127.0.0.1:$HEALTH_PORT/api/v1/health" >/dev/null 2>&1; then
+    ok "Health check passed - service is responding"
+    break
+  else
+    RETRY_COUNT=$((RETRY_COUNT + 1))
+    if [ $RETRY_COUNT -lt $MAX_RETRIES ]; then
+      info "Health check failed (attempt $RETRY_COUNT/$MAX_RETRIES), retrying in 2 seconds..."
+      sleep 2
+    else
+      warn "Health check failed after $MAX_RETRIES attempts - service may not be ready"
+      warn "Check logs: sudo journalctl -u sevenkitchen-backend -n 50"
+    fi
+  fi
+done
+echo ""
+
+# Step 9: Final verification
+echo "Step 9: Running post-deployment verification..."
 if [ -f scripts/post_deploy_verify.sh ]; then
   if bash scripts/post_deploy_verify.sh; then
     ok "Post-deployment verification passed"

@@ -3115,7 +3115,7 @@ export class AdminController {
         })
       : await this.prisma.$queryRaw`
         SELECT DISTINCT ON ("recipeId") *
-        FROM "Recipe"
+        FROM "recipe"
         WHERE "coverImageUrl" NOT LIKE '%/recipes/covers/%'
            OR "coverImageUrl" LIKE '%.webp'
         ORDER BY "recipeId", "version" DESC

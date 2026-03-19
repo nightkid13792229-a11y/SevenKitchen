@@ -3114,19 +3114,24 @@ export class AdminController {
           distinct: ['recipeId'],
         })
       : await this.prisma.$queryRaw`
-        SELECT DISTINCT ON ("recipeId") *
+        SELECT DISTINCT ON ("recipe_id") *
         FROM "recipe"
-        WHERE "coverImageUrl" NOT LIKE '%/recipes/covers/%'
-           OR "coverImageUrl" LIKE '%.webp'
-        ORDER BY "recipeId", "version" DESC
+        WHERE "cover_image_url" NOT LIKE '%/recipes/covers/%'
+           OR "cover_image_url" LIKE '%.webp'
+        ORDER BY "recipe_id", "version" DESC
       `;
 
     for (const recipe of recipes as any[]) {
       try {
+        // Raw query returns snake_case column names
+        const coverTitle = recipe.cover_title;
+        const coverImageUrl = recipe.cover_image_url;
+        const recipeId = recipe.recipe_id;
+
         // Skip if no cover title or cover image
-        if (!recipe.coverTitle || !recipe.coverImageUrl) {
+        if (!coverTitle || !coverImageUrl) {
           results.push({
-            recipeId: recipe.recipeId,
+            recipeId: recipeId,
             name: recipe.name,
             status: 'skipped',
             message: 'Missing coverTitle or coverImageUrl',
@@ -3135,9 +3140,9 @@ export class AdminController {
         }
 
         // Check if already has rendered title (in /recipes/covers/ path)
-        if (recipe.coverImageUrl.includes('/recipes/covers/') && !recipe.coverImageUrl.endsWith('.webp')) {
+        if (coverImageUrl.includes('/recipes/covers/') && !coverImageUrl.endsWith('.webp')) {
           results.push({
-            recipeId: recipe.recipeId,
+            recipeId: recipeId,
             name: recipe.name,
             status: 'skipped',
             message: 'Already has rendered cover',
@@ -3147,15 +3152,15 @@ export class AdminController {
 
         // Render title on cover
         const renderedUrl = await this.coverImageService.renderTitleOnCover(
-          recipe.coverImageUrl,
-          recipe.coverTitle,
+          coverImageUrl,
+          coverTitle,
         );
 
         // Update recipe with new cover URL
         await this.prisma.recipe.update({
           where: {
             recipeId_version: {
-              recipeId: recipe.recipeId,
+              recipeId: recipeId,
               version: recipe.version,
             },
           },
@@ -3165,14 +3170,14 @@ export class AdminController {
         });
 
         results.push({
-          recipeId: recipe.recipeId,
+          recipeId: recipeId,
           name: recipe.name,
           status: 'success',
           message: `Cover regenerated: ${renderedUrl}`,
         });
       } catch (error: any) {
         results.push({
-          recipeId: recipe.recipeId,
+          recipeId: recipe.recipe_id,
           name: recipe.name,
           status: 'error',
           message: error.message,

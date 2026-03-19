@@ -7,6 +7,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { createCanvas, loadImage, registerFont } from 'canvas';
 import * as path from 'path';
 import * as fs from 'fs';
+import sharp from 'sharp';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 
 /**
@@ -55,7 +56,9 @@ export class CoverImageService {
       }
 
       if (!fontsPath) {
-        this.logger.warn('Fonts directory not found, using system default font');
+        this.logger.warn(
+          'Fonts directory not found, using system default font',
+        );
         this.fontsRegistered = true;
         return;
       }
@@ -75,7 +78,9 @@ export class CoverImageService {
 
       this.fontsRegistered = true;
     } catch (error: any) {
-      this.logger.warn(`Failed to register fonts: ${error.message}, using system default`);
+      this.logger.warn(
+        `Failed to register fonts: ${error.message}, using system default`,
+      );
       this.fontsRegistered = true;
     }
   }
@@ -86,12 +91,21 @@ export class CoverImageService {
    * @param title Title text to render
    * @returns New image URL with title rendered
    */
-  async renderTitleOnCover(coverImageUrl: string, title: string): Promise<string> {
+  async renderTitleOnCover(
+    coverImageUrl: string,
+    title: string,
+  ): Promise<string> {
     this.logger.log(`Rendering title "${title}" on cover image`);
 
     try {
       // Download original image
-      const imageBuffer = await this.downloadImage(coverImageUrl);
+      let imageBuffer = await this.downloadImage(coverImageUrl);
+
+      // Convert WebP to PNG if needed (canvas doesn't support WebP directly)
+      if (coverImageUrl.toLowerCase().endsWith('.webp')) {
+        this.logger.log('Converting WebP to PNG for canvas compatibility');
+        imageBuffer = await sharp(imageBuffer).png().toBuffer();
+      }
 
       // Load image and get dimensions
       const image = await loadImage(imageBuffer);

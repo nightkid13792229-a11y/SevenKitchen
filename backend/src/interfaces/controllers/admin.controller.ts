@@ -30,13 +30,28 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { IngredientService } from '../../application/ingredient/ingredient.service';
-import type { CreateIngredientDto, UpdateIngredientDto, UpdateIngredientPriceDto } from '../../application/ingredient/ingredient.service';
+import type {
+  CreateIngredientDto,
+  UpdateIngredientDto,
+  UpdateIngredientPriceDto,
+} from '../../application/ingredient/ingredient.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
-import { ProductionService, type CreateProductionBatchDto, type ProductionBatchSummaryDto } from '../../application/production/production.service';
+import {
+  ProductionService,
+  type CreateProductionBatchDto,
+  type ProductionBatchSummaryDto,
+} from '../../application/production/production.service';
 import { InventoryService } from '../../application/inventory/inventory.service';
 import { OrderService } from '../../application/order/order.service';
-import { DogService, DOG_BREED_REPOSITORY } from '../../application/dog/dog.service';
-import { IngredientTagService, type CreateTagDto, type UpdateTagDto } from '../../application/ingredient-tag/ingredient-tag.service';
+import {
+  DogService,
+  DOG_BREED_REPOSITORY,
+} from '../../application/dog/dog.service';
+import {
+  IngredientTagService,
+  type CreateTagDto,
+  type UpdateTagDto,
+} from '../../application/ingredient-tag/ingredient-tag.service';
 import type { DogBreedRepository } from '../../domain/dog/dog-breed.repository';
 import { OrderStatus } from '../../domain';
 import { CancelOrderDto } from '../dto/orders/cancel-order.dto';
@@ -50,13 +65,22 @@ import {
   BreedUsageCheckDto,
 } from '../dto/breeds';
 import { PrismaService } from '../../infrastructure/prisma.service';
-import { CreateStaffDto, UpdateStaffDto, StaffResponseDto } from '../dto/admin/staff.dto';
+import {
+  CreateStaffDto,
+  UpdateStaffDto,
+  StaffResponseDto,
+} from '../dto/admin/staff.dto';
 import { AdminGuard } from '../guards/role.guard';
 import { AuthGuard } from '../auth/auth.guard';
 import { RecipeService } from '../../application/recipe/recipe.service';
 import { CoverImageService } from '../../application/recipe/cover-image.service';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
-import { NutritionStandard, RecipeStatus, RecipeHealthTag, LifeStage } from '../../domain/recipe/enums';
+import {
+  NutritionStandard,
+  RecipeStatus,
+  RecipeHealthTag,
+  LifeStage,
+} from '../../domain/recipe/enums';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UseInterceptors } from '@nestjs/common';
 
@@ -152,7 +176,7 @@ export class AdminController {
     const ingredients = await this.ingredientService.getAllIngredients();
 
     // Get createdAt and tags from Prisma directly
-    const ingredientIds = ingredients.map(ing => ing.id);
+    const ingredientIds = ingredients.map((ing) => ing.id);
     const prismaIngredients = await this.prisma.ingredient.findMany({
       where: { id: { in: ingredientIds } },
       select: {
@@ -165,24 +189,26 @@ export class AdminController {
               select: {
                 id: true,
                 name: true,
-                color: true
-              }
-            }
-          }
-        }
-      }
+                color: true,
+              },
+            },
+          },
+        },
+      },
     });
 
-    const createdAtMap = new Map(prismaIngredients.map(p => [p.id, p.createdAt.toISOString()]));
-    const updatedAtMap = new Map(prismaIngredients.map(p => [p.id, p.updatedAt.toISOString()]));
-    const tagsMap = new Map(prismaIngredients.map(p => [
-      p.id,
-      p.tags.map(t => t.tag)
-    ]));
-    const tagIdsMap = new Map(prismaIngredients.map(p => [
-      p.id,
-      p.tags.map(t => t.tag.id)
-    ]));
+    const createdAtMap = new Map(
+      prismaIngredients.map((p) => [p.id, p.createdAt.toISOString()]),
+    );
+    const updatedAtMap = new Map(
+      prismaIngredients.map((p) => [p.id, p.updatedAt.toISOString()]),
+    );
+    const tagsMap = new Map(
+      prismaIngredients.map((p) => [p.id, p.tags.map((t) => t.tag)]),
+    );
+    const tagIdsMap = new Map(
+      prismaIngredients.map((p) => [p.id, p.tags.map((t) => t.tag.id)]),
+    );
 
     // Map to ingredient response format
     const ingredientList = ingredients.map((ing) => ({
@@ -218,7 +244,9 @@ export class AdminController {
     status: 200,
     description: 'Ingredient details',
   })
-  async getIngredientById(@Param('id') id: string): Promise<ApiResponseDto<any>> {
+  async getIngredientById(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<any>> {
     const ingredient = await this.ingredientService.getIngredientById(id);
 
     // Get tags from Prisma
@@ -233,18 +261,20 @@ export class AdminController {
               select: {
                 id: true,
                 name: true,
-                color: true
-              }
-            }
-          }
-        }
-      }
+                color: true,
+              },
+            },
+          },
+        },
+      },
     });
 
-    const tagIds = prismaIngredient?.tags.map(t => t.tag.id) || [];
-    const tags = prismaIngredient?.tags.map(t => t.tag) || [];
-    const createdAt = prismaIngredient?.createdAt.toISOString() || new Date().toISOString();
-    const updatedAt = prismaIngredient?.updatedAt.toISOString() || new Date().toISOString();
+    const tagIds = prismaIngredient?.tags.map((t) => t.tag.id) || [];
+    const tags = prismaIngredient?.tags.map((t) => t.tag) || [];
+    const createdAt =
+      prismaIngredient?.createdAt.toISOString() || new Date().toISOString();
+    const updatedAt =
+      prismaIngredient?.updatedAt.toISOString() || new Date().toISOString();
 
     // Map to ingredient response format
     const ingredientData = {
@@ -259,7 +289,9 @@ export class AdminController {
       unitDisplayLabel: ingredient.unitDisplayLabel,
       purchaseUnit: ingredient.purchaseUnit,
       purchaseToBaseRatio: ingredient.purchaseToBaseRatio,
-      currentPricePerPurchaseUnit: Number(ingredient.currentPricePerPurchaseUnit),
+      currentPricePerPurchaseUnit: Number(
+        ingredient.currentPricePerPurchaseUnit,
+      ),
       unitCost: ingredient.getUnitCost(),
       weightG: ingredient.weightG,
       maxCapacityG: ingredient.maxCapacityG,
@@ -288,7 +320,9 @@ export class AdminController {
       id: ingredient.id,
       name: ingredient.name,
       type: ingredient.type,
-      currentPricePerPurchaseUnit: Number(ingredient.currentPricePerPurchaseUnit),
+      currentPricePerPurchaseUnit: Number(
+        ingredient.currentPricePerPurchaseUnit,
+      ),
     });
   }
 
@@ -312,7 +346,9 @@ export class AdminController {
         id: ingredient.id,
         name: ingredient.name,
         type: ingredient.type,
-        currentPricePerPurchaseUnit: Number(ingredient.currentPricePerPurchaseUnit),
+        currentPricePerPurchaseUnit: Number(
+          ingredient.currentPricePerPurchaseUnit,
+        ),
         unitCost: ingredient.getUnitCost(),
       });
     } catch (error) {
@@ -327,7 +363,13 @@ export class AdminController {
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Update ingredient price' })
   @ApiParam({ name: 'id', description: 'Ingredient ID' })
-  @ApiBody({ schema: { type: 'object', properties: { currentPricePerPurchaseUnit: { type: 'number' } }, required: ['currentPricePerPurchaseUnit'] } })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: { currentPricePerPurchaseUnit: { type: 'number' } },
+      required: ['currentPricePerPurchaseUnit'],
+    },
+  })
   @ApiResponse({
     status: 200,
     description: 'Ingredient price updated',
@@ -383,7 +425,9 @@ export class AdminController {
     description: 'List of recipes using this ingredient',
   })
   @ApiResponse({ status: 404, description: 'Ingredient not found' })
-  async getIngredientUsage(@Param('id') id: string): Promise<ApiResponseDto<any[]>> {
+  async getIngredientUsage(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<any[]>> {
     try {
       // Check if ingredient exists
       await this.ingredientService.getIngredientById(id);
@@ -396,9 +440,9 @@ export class AdminController {
             select: {
               recipeId: true,
               name: true,
-            }
-          }
-        }
+            },
+          },
+        },
       });
 
       const usage = recipeItems.map((item: any) => ({
@@ -433,7 +477,10 @@ export class AdminController {
         properties: {
           id: { type: 'string' },
           productionDate: { type: 'string', format: 'date' },
-          status: { type: 'string', enum: ['PLANNED', 'IN_PRODUCTION', 'COMPLETED'] },
+          status: {
+            type: 'string',
+            enum: ['PLANNED', 'IN_PRODUCTION', 'COMPLETED'],
+          },
           totalProductionG: { type: 'number' },
           uniqueRecipeCount: { type: 'number' },
           orderItemCount: { type: 'number' },
@@ -441,7 +488,9 @@ export class AdminController {
       },
     },
   })
-  async getAllProductionBatches(): Promise<ApiResponseDto<ProductionBatchSummaryDto[]>> {
+  async getAllProductionBatches(): Promise<
+    ApiResponseDto<ProductionBatchSummaryDto[]>
+  > {
     const batches = await this.productionService.getAllProductionBatches();
 
     // Map to summary DTOs
@@ -462,7 +511,10 @@ export class AdminController {
         packagingUnits,
         totalProductionG: batch.getTotalProductionG(),
         uniqueRecipeCount: batch.getUniqueRecipeCount(),
-        orderItemCount: packagingUnits.reduce((sum, unit) => sum + unit.orderItemCount, 0),
+        orderItemCount: packagingUnits.reduce(
+          (sum, unit) => sum + unit.orderItemCount,
+          0,
+        ),
       };
     });
 
@@ -485,7 +537,8 @@ export class AdminController {
         orderIds: {
           type: 'array',
           items: { type: 'string' },
-          description: 'Optional: specific order IDs to include. If not provided, includes all PAID unassigned orders.',
+          description:
+            'Optional: specific order IDs to include. If not provided, includes all PAID unassigned orders.',
         },
       },
       required: ['productionDate'],
@@ -499,7 +552,10 @@ export class AdminController {
       properties: {
         id: { type: 'string' },
         productionDate: { type: 'string', format: 'date' },
-        status: { type: 'string', enum: ['PLANNED', 'IN_PRODUCTION', 'COMPLETED'] },
+        status: {
+          type: 'string',
+          enum: ['PLANNED', 'IN_PRODUCTION', 'COMPLETED'],
+        },
         packagingUnits: {
           type: 'array',
           items: {
@@ -518,11 +574,17 @@ export class AdminController {
         },
         totalProductionG: { type: 'number' },
         uniqueRecipeCount: { type: 'number' },
-        orderItemCount: { type: 'number', description: 'Total count across all packagingUnits' },
+        orderItemCount: {
+          type: 'number',
+          description: 'Total count across all packagingUnits',
+        },
       },
     },
   })
-  @ApiResponse({ status: 400, description: 'Invalid input or no PAID orders found' })
+  @ApiResponse({
+    status: 400,
+    description: 'Invalid input or no PAID orders found',
+  })
   async createProductionBatch(
     @Body() dto: CreateProductionBatchDto,
   ): Promise<ApiResponseDto<ProductionBatchSummaryDto> | ApiResponseDto<null>> {
@@ -538,7 +600,7 @@ export class AdminController {
           ? unit.sourceOrderItemIds
           : [],
       }));
-      
+
       const summary: ProductionBatchSummaryDto = {
         id: batch.id,
         productionDate: batch.productionDate.toISOString().split('T')[0], // YYYY-MM-DD
@@ -546,7 +608,10 @@ export class AdminController {
         packagingUnits,
         totalProductionG: batch.getTotalProductionG(),
         uniqueRecipeCount: batch.getUniqueRecipeCount(),
-        orderItemCount: packagingUnits.reduce((sum, unit) => sum + unit.orderItemCount, 0),
+        orderItemCount: packagingUnits.reduce(
+          (sum, unit) => sum + unit.orderItemCount,
+          0,
+        ),
       };
 
       return ApiResponseDto.success(summary);
@@ -593,7 +658,10 @@ export class AdminController {
         },
         totalProductionG: { type: 'number' },
         uniqueRecipeCount: { type: 'number' },
-        orderItemCount: { type: 'number', description: 'Total count across all packagingUnits' },
+        orderItemCount: {
+          type: 'number',
+          description: 'Total count across all packagingUnits',
+        },
       },
     },
   })
@@ -614,7 +682,7 @@ export class AdminController {
         ? unit.sourceOrderItemIds
         : [],
     }));
-    
+
     const summary: ProductionBatchSummaryDto = {
       id: batch.id,
       productionDate: batch.productionDate.toISOString().split('T')[0],
@@ -622,7 +690,10 @@ export class AdminController {
       packagingUnits,
       totalProductionG: batch.getTotalProductionG(),
       uniqueRecipeCount: batch.getUniqueRecipeCount(),
-      orderItemCount: packagingUnits.reduce((sum, unit) => sum + unit.orderItemCount, 0),
+      orderItemCount: packagingUnits.reduce(
+        (sum, unit) => sum + unit.orderItemCount,
+        0,
+      ),
     };
 
     return ApiResponseDto.success(summary);
@@ -755,9 +826,14 @@ export class AdminController {
   })
   @ApiResponse({ status: 400, description: 'Invalid request or order status' })
   @ApiResponse({ status: 404, description: 'Order not found' })
-  async completeOrder(
-    @Param('orderId') orderId: string,
-  ): Promise<ApiResponseDto<{ id: string; status: OrderStatus; completedAt: string | null }> | ApiResponseDto<null>> {
+  async completeOrder(@Param('orderId') orderId: string): Promise<
+    | ApiResponseDto<{
+        id: string;
+        status: OrderStatus;
+        completedAt: string | null;
+      }>
+    | ApiResponseDto<null>
+  > {
     try {
       const order = await this.orderService.completeOrder(
         orderId,
@@ -896,7 +972,9 @@ export class AdminController {
     },
   })
   @ApiResponse({ status: 400, description: 'Invalid query parameters' })
-  async listOrders(@Query() query: any): Promise<ApiResponseDto<any> | ApiResponseDto<null>> {
+  async listOrders(
+    @Query() query: any,
+  ): Promise<ApiResponseDto<any> | ApiResponseDto<null>> {
     try {
       // Parse query parameters
       const params = {
@@ -924,7 +1002,7 @@ export class AdminController {
       if (params.orderId) {
         where.id = {
           contains: params.orderId,
-          mode: 'insensitive'
+          mode: 'insensitive',
         };
       }
 
@@ -965,7 +1043,7 @@ export class AdminController {
           try {
             const user = await this.prisma.user.findUnique({
               where: { id: order.customerId },
-              select: { nickname: true, phone: true }
+              select: { nickname: true, phone: true },
             });
             if (user) {
               customerName = user.nickname || '未知客户';
@@ -985,7 +1063,7 @@ export class AdminController {
             if (item.dogId) {
               try {
                 const dog = await this.prisma.dog.findUnique({
-                  where: { id: item.dogId }
+                  where: { id: item.dogId },
                 });
                 if (dog) {
                   dogInfo = {
@@ -1007,19 +1085,22 @@ export class AdminController {
               try {
                 let recipe = await this.prisma.recipe.findUnique({
                   where: { id: item.recipeSnapshot.id },
-                  select: { coverImageUrl: true }
+                  select: { coverImageUrl: true },
                 });
 
                 // If not found by ID, try to find by recipe name (data consistency workaround)
                 if (!recipe && item.recipeSnapshot.name) {
                   recipe = await this.prisma.recipe.findFirst({
                     where: { name: item.recipeSnapshot.name },
-                    select: { coverImageUrl: true }
+                    select: { coverImageUrl: true },
                   });
                 }
 
                 if (recipe) {
-                  coverImageUrl = recipe.coverImageUrl?.replace('http://', 'https://');
+                  coverImageUrl = recipe.coverImageUrl?.replace(
+                    'http://',
+                    'https://',
+                  );
                 }
               } catch (error: any) {
                 // Recipe might be deleted, ignore error
@@ -1028,11 +1109,13 @@ export class AdminController {
 
             firstItem = {
               dog: dogInfo,
-              recipeSnapshot: item.recipeSnapshot ? {
-                id: item.recipeSnapshot.id,
-                name: item.recipeSnapshot.name,
-                coverImageUrl,
-              } : undefined,
+              recipeSnapshot: item.recipeSnapshot
+                ? {
+                    id: item.recipeSnapshot.id,
+                    name: item.recipeSnapshot.name,
+                    coverImageUrl,
+                  }
+                : undefined,
               packageCount: item.packageCount,
               packageSpecG: item.packageSpecG,
               dailyIntakeG: item.dailyIntakeG,
@@ -1044,18 +1127,20 @@ export class AdminController {
           if (order.addressId) {
             try {
               const addressData = await this.prisma.address.findUnique({
-                where: { id: order.addressId }
+                where: { id: order.addressId },
               });
               if (addressData) {
                 // Extract region text from JSON region field
                 const regionObj = addressData.region as any;
-                const regionText = regionObj ? `${regionObj.province || ''} ${regionObj.city || ''} ${regionObj.district || ''}`.trim() : '';
+                const regionText = regionObj
+                  ? `${regionObj.province || ''} ${regionObj.city || ''} ${regionObj.district || ''}`.trim()
+                  : '';
 
                 address = {
                   recipientName: addressData.recipientName || '',
                   recipientPhone: addressData.phone || '',
                   regionText: regionText || '',
-                  detailAddress: addressData.detail || ''
+                  detailAddress: addressData.detail || '',
                 };
               }
             } catch (error) {
@@ -1069,18 +1154,23 @@ export class AdminController {
             type: order.type,
             totalAmount: order.totalAmount ?? order.amountTotal,
             amountTotal: order.totalAmount ?? order.amountTotal,
-            amountProduct: order.amountProduct ? parseFloat(order.amountProduct.toString()) : 0,
-            amountShipping: order.amountShipping ? parseFloat(order.amountShipping.toString()) : 0,
+            amountProduct: order.amountProduct
+              ? parseFloat(order.amountProduct.toString())
+              : 0,
+            amountShipping: order.amountShipping
+              ? parseFloat(order.amountShipping.toString())
+              : 0,
             itemCount: order.items.length,
             createdAt: order.createdAt.toISOString(),
             paidAt: order.paidAt?.toISOString() || null,
-            targetProductionDate: order.targetProductionDate?.toISOString() || null,
+            targetProductionDate:
+              order.targetProductionDate?.toISOString() || null,
             customerName,
             customerPhone,
             firstItem,
             address,
           };
-        })
+        }),
       );
 
       return ApiResponseDto.success({
@@ -1094,7 +1184,6 @@ export class AdminController {
       throw error;
     }
   }
-
 
   /**
    * GET /admin/orders/stats - Get order statistics
@@ -1214,7 +1303,7 @@ export class AdminController {
     schema: {
       type: 'object',
       properties: {
-        amount: { type: 'number', example: 299.00 },
+        amount: { type: 'number', example: 299.0 },
       },
       required: ['amount'],
     },
@@ -1403,7 +1492,9 @@ export class AdminController {
    */
   @Post('orders/:orderId/confirm-offline-payment')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Confirm offline WeChat payment (管理员确认线下收款)' })
+  @ApiOperation({
+    summary: 'Confirm offline WeChat payment (管理员确认线下收款)',
+  })
   @ApiParam({ name: 'orderId', description: 'Order ID' })
   @ApiBody({
     schema: {
@@ -1411,7 +1502,8 @@ export class AdminController {
       properties: {
         actualAmount: {
           type: 'number',
-          description: 'Actual payment amount received (optional, for recording discrepancies)',
+          description:
+            'Actual payment amount received (optional, for recording discrepancies)',
           example: 100.5,
         },
       },
@@ -1609,7 +1701,9 @@ export class AdminController {
   // ==========================================
 
   @Get('dogs')
-  @ApiOperation({ summary: 'Get all dog profiles (admin only - cross-customer)' })
+  @ApiOperation({
+    summary: 'Get all dog profiles (admin only - cross-customer)',
+  })
   @ApiResponse({
     status: 200,
     description: 'List of all dog profiles with pagination',
@@ -1617,12 +1711,14 @@ export class AdminController {
   async getAllDogs(
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
-  ): Promise<ApiResponseDto<{
-    data: any[];
-    total: number;
-    page: number;
-    pageSize: number;
-  }>> {
+  ): Promise<
+    ApiResponseDto<{
+      data: any[];
+      total: number;
+      page: number;
+      pageSize: number;
+    }>
+  > {
     const pageNum = page ? parseInt(page, 10) : 1;
     const pageSizeNum = pageSize ? parseInt(pageSize, 10) : 20;
 
@@ -1636,7 +1732,7 @@ export class AdminController {
 
     // Get breeds for name mapping
     const breeds = await this.dogBreedRepository.findAll();
-    const breedMap = new Map(breeds.map(b => [b.id, b.name]));
+    const breedMap = new Map(breeds.map((b) => [b.id, b.name]));
 
     // Map to response format
     const dogs = allDogs.map((dog: any) => ({
@@ -1725,7 +1821,9 @@ export class AdminController {
       manualTreatKcal: dogRecord.manualTreatKcal,
       medicalHistory: dogRecord.medicalHistory,
       cachedTargetFoodKcal: dogRecord.cachedTargetFoodKcal,
-      createdAt: dogRecord.createdAt ? dogRecord.createdAt.toISOString() : undefined,
+      createdAt: dogRecord.createdAt
+        ? dogRecord.createdAt.toISOString()
+        : undefined,
     };
 
     return ApiResponseDto.success({
@@ -1740,10 +1838,11 @@ export class AdminController {
   @ApiParam({ name: 'id', description: 'Dog ID' })
   @ApiResponse({ status: 204, description: 'Dog profile deleted successfully' })
   @ApiResponse({ status: 404, description: 'Dog not found' })
-  @ApiResponse({ status: 400, description: 'Cannot delete dog with active orders' })
-  async deleteDog(
-    @Param('id') id: string,
-  ): Promise<void> {
+  @ApiResponse({
+    status: 400,
+    description: 'Cannot delete dog with active orders',
+  })
+  async deleteDog(@Param('id') id: string): Promise<void> {
     // Check if dog exists
     const dog = await this.prisma.dog.findUnique({
       where: { id },
@@ -1766,7 +1865,7 @@ export class AdminController {
     if (activeOrders.length > 0) {
       throw new BadRequestException(
         `Cannot delete dog profile: ${activeOrders.length} active order(s) found. ` +
-        `Please cancel or complete the orders first.`
+          `Please cancel or complete the orders first.`,
       );
     }
 
@@ -1790,7 +1889,7 @@ export class AdminController {
   })
   async getBreeds(): Promise<ApiResponseDto<BreedResponseDto[]>> {
     const breeds = await this.dogBreedRepository.findAll();
-    const data = breeds.map(b => this.mapToBreedResponseDto(b));
+    const data = breeds.map((b) => this.mapToBreedResponseDto(b));
 
     return ApiResponseDto.success(data);
   }
@@ -1818,7 +1917,9 @@ export class AdminController {
     description: 'Breed usage statistics',
     schema: { $ref: '#/components/schemas/BreedUsageCheckDto' },
   })
-  async checkBreedUsage(@Param('id') id: string): Promise<ApiResponseDto<BreedUsageCheckDto>> {
+  async checkBreedUsage(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<BreedUsageCheckDto>> {
     const breed = await this.dogBreedRepository.findById(id);
     if (!breed) {
       throw new NotFoundException(`Breed not found: ${id}`);
@@ -1836,7 +1937,9 @@ export class AdminController {
     description: 'Breed details',
     schema: { $ref: '#/components/schemas/BreedResponseDto' },
   })
-  async getBreedById(@Param('id') id: string): Promise<ApiResponseDto<BreedResponseDto>> {
+  async getBreedById(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<BreedResponseDto>> {
     const breed = await this.dogBreedRepository.findById(id);
     if (!breed) {
       throw new NotFoundException(`Breed not found: ${id}`);
@@ -1852,7 +1955,9 @@ export class AdminController {
     description: 'Breed created successfully',
     schema: { $ref: '#/components/schemas/BreedResponseDto' },
   })
-  async createBreed(@Body() dto: CreateBreedDto): Promise<ApiResponseDto<BreedResponseDto>> {
+  async createBreed(
+    @Body() dto: CreateBreedDto,
+  ): Promise<ApiResponseDto<BreedResponseDto>> {
     try {
       const breed = await this.dogService.createBreed(dto as any);
 
@@ -1922,7 +2027,7 @@ export class AdminController {
   })
   async getAllIngredientTags(): Promise<ApiResponseDto<any[]>> {
     const tags = await this.ingredientTagService.getAllTags();
-    const data = tags.map(tag => ({
+    const data = tags.map((tag) => ({
       id: tag.id,
       name: tag.name,
       description: tag.description,
@@ -1941,7 +2046,7 @@ export class AdminController {
   })
   async getIngredientTagHierarchy(): Promise<ApiResponseDto<any[]>> {
     const tags = await this.ingredientTagService.getTagHierarchy();
-    const data = tags.map(tag => ({
+    const data = tags.map((tag) => ({
       id: tag.id,
       name: tag.name,
       description: tag.description,
@@ -1960,7 +2065,7 @@ export class AdminController {
   })
   async getRootIngredientTags(): Promise<ApiResponseDto<any[]>> {
     const tags = await this.ingredientTagService.getRootTags();
-    const data = tags.map(tag => ({
+    const data = tags.map((tag) => ({
       id: tag.id,
       name: tag.name,
       description: tag.description,
@@ -1974,7 +2079,9 @@ export class AdminController {
   @ApiOperation({ summary: 'Get tag by ID' })
   @ApiResponse({ status: 200, description: 'Tag details' })
   @ApiResponse({ status: 404, description: 'Tag not found' })
-  async getIngredientTagById(@Param('id') id: string): Promise<ApiResponseDto<any>> {
+  async getIngredientTagById(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<any>> {
     const tag = await this.ingredientTagService.getTagById(id);
     return ApiResponseDto.success({
       id: tag.id,
@@ -1989,9 +2096,11 @@ export class AdminController {
   @Get('ingredient-tags/:id/children')
   @ApiOperation({ summary: 'Get tag children' })
   @ApiResponse({ status: 200, description: 'List of child tags' })
-  async getIngredientTagChildren(@Param('id') id: string): Promise<ApiResponseDto<any[]>> {
+  async getIngredientTagChildren(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<any[]>> {
     const children = await this.ingredientTagService.getChildren(id);
-    const data = children.map(tag => ({
+    const data = children.map((tag) => ({
       id: tag.id,
       name: tag.name,
       description: tag.description,
@@ -2005,7 +2114,9 @@ export class AdminController {
   @ApiOperation({ summary: 'Create new tag' })
   @ApiResponse({ status: 201, description: 'Tag created' })
   @ApiResponse({ status: 400, description: 'Invalid input' })
-  async createIngredientTag(@Body() dto: CreateTagDto): Promise<ApiResponseDto<any>> {
+  async createIngredientTag(
+    @Body() dto: CreateTagDto,
+  ): Promise<ApiResponseDto<any>> {
     const tag = await this.ingredientTagService.createTag(dto);
     return ApiResponseDto.success({
       id: tag.id,
@@ -2023,7 +2134,7 @@ export class AdminController {
   @ApiResponse({ status: 404, description: 'Tag not found' })
   async updateIngredientTag(
     @Param('id') id: string,
-    @Body() dto: UpdateTagDto
+    @Body() dto: UpdateTagDto,
   ): Promise<ApiResponseDto<any>> {
     const tag = await this.ingredientTagService.updateTag(id, dto);
     return ApiResponseDto.success({
@@ -2041,7 +2152,9 @@ export class AdminController {
   @ApiOperation({ summary: 'Delete tag' })
   @ApiResponse({ status: 200, description: 'Tag deleted' })
   @ApiResponse({ status: 400, description: 'Tag has children or is in use' })
-  async deleteIngredientTag(@Param('id') id: string): Promise<ApiResponseDto<void>> {
+  async deleteIngredientTag(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<void>> {
     await this.ingredientTagService.deleteTag(id);
     return ApiResponseDto.success(null);
   }
@@ -2049,9 +2162,11 @@ export class AdminController {
   @Get('ingredients/:id/tags')
   @ApiOperation({ summary: 'Get tags for an ingredient' })
   @ApiResponse({ status: 200, description: 'List of tags' })
-  async getIngredientTags(@Param('id') id: string): Promise<ApiResponseDto<any[]>> {
+  async getIngredientTags(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<any[]>> {
     const tags = await this.ingredientTagService.getTagsByIngredient(id);
-    const data = tags.map(tag => ({
+    const data = tags.map((tag) => ({
       id: tag.id,
       name: tag.name,
       description: tag.description,
@@ -2285,7 +2400,11 @@ export class AdminController {
     @UploadedFile() file: Express.Multer.File,
   ): Promise<ApiResponseDto<any>> {
     try {
-      const result = await this.cosService.uploadImage(file, file.originalname, 'recipes');
+      const result = await this.cosService.uploadImage(
+        file,
+        file.originalname,
+        'recipes',
+      );
       return ApiResponseDto.success(result);
     } catch (error) {
       if (error instanceof BadRequestException) {
@@ -2306,7 +2425,11 @@ export class AdminController {
   ): Promise<ApiResponseDto<any>> {
     try {
       // 上传到独立的 package-images 目录
-      const result = await this.cosService.uploadImage(file, file.originalname, 'package-images');
+      const result = await this.cosService.uploadImage(
+        file,
+        file.originalname,
+        'package-images',
+      );
       return ApiResponseDto.success(result);
     } catch (error) {
       if (error instanceof BadRequestException) {
@@ -2327,7 +2450,11 @@ export class AdminController {
   ): Promise<ApiResponseDto<any>> {
     try {
       // 上传到独立的 shipping-logos 目录
-      const result = await this.cosService.uploadImage(file, file.originalname, 'shipping-logos');
+      const result = await this.cosService.uploadImage(
+        file,
+        file.originalname,
+        'shipping-logos',
+      );
       return ApiResponseDto.success(result);
     } catch (error) {
       if (error instanceof BadRequestException) {
@@ -2365,9 +2492,7 @@ export class AdminController {
     status: 200,
     description: 'Paginated list of recipes',
   })
-  async getAllRecipes(
-    @Query() query: any,
-  ): Promise<ApiResponseDto<any>> {
+  async getAllRecipes(@Query() query: any): Promise<ApiResponseDto<any>> {
     // Parse pagination parameters manually since transform is disabled
     const parsedQuery = {
       ...query,
@@ -2444,9 +2569,7 @@ export class AdminController {
   @ApiOperation({ summary: 'Create new design source' })
   @ApiResponse({ status: 201, description: 'Design source created' })
   @ApiResponse({ status: 400, description: 'Invalid input' })
-  async createDesignSource(
-    @Body() dto: any,
-  ): Promise<ApiResponseDto<any>> {
+  async createDesignSource(@Body() dto: any): Promise<ApiResponseDto<any>> {
     try {
       const designSource = await this.prisma.designSource.create({
         data: {
@@ -2463,7 +2586,10 @@ export class AdminController {
         updatedAt: designSource.updatedAt,
       });
     } catch (error: any) {
-      return ApiResponseDto.error(400, error.message || 'Failed to create design source');
+      return ApiResponseDto.error(
+        400,
+        error.message || 'Failed to create design source',
+      );
     }
   }
 
@@ -2496,7 +2622,10 @@ export class AdminController {
       if (error.code === 'P2025') {
         return ApiResponseDto.error(404, 'Design source not found');
       }
-      return ApiResponseDto.error(400, error.message || 'Failed to update design source');
+      return ApiResponseDto.error(
+        400,
+        error.message || 'Failed to update design source',
+      );
     }
   }
 
@@ -2514,12 +2643,17 @@ export class AdminController {
         data: { isActive: false },
       });
 
-      return ApiResponseDto.success({ message: 'Design source deleted successfully' });
+      return ApiResponseDto.success({
+        message: 'Design source deleted successfully',
+      });
     } catch (error: any) {
       if (error.code === 'P2025') {
         return ApiResponseDto.error(404, 'Design source not found');
       }
-      return ApiResponseDto.error(400, error.message || 'Failed to delete design source');
+      return ApiResponseDto.error(
+        400,
+        error.message || 'Failed to delete design source',
+      );
     }
   }
 
@@ -2549,11 +2683,11 @@ export class AdminController {
     const tagMap = new Map();
     const rootTags: any[] = [];
 
-    allTags.forEach(tag => {
+    allTags.forEach((tag) => {
       tagMap.set(tag.id, { ...tag, children: [] });
     });
 
-    allTags.forEach(tag => {
+    allTags.forEach((tag) => {
       const tagWithChildren = tagMap.get(tag.id);
       if (tag.parentId && tagMap.has(tag.parentId)) {
         tagMap.get(tag.parentId).children.push(tagWithChildren);
@@ -2591,7 +2725,10 @@ export class AdminController {
       }
       return ApiResponseDto.success(tag);
     } catch (error: any) {
-      return ApiResponseDto.error(400, error.message || 'Failed to get health tag');
+      return ApiResponseDto.error(
+        400,
+        error.message || 'Failed to get health tag',
+      );
     }
   }
 
@@ -2599,7 +2736,9 @@ export class AdminController {
   @ApiOperation({ summary: 'Get children of a health tag' })
   @ApiParam({ name: 'id', description: 'Parent health tag ID' })
   @ApiResponse({ status: 200, description: 'Children health tags' })
-  async getHealthTagChildren(@Param('id') id: string): Promise<ApiResponseDto<any>> {
+  async getHealthTagChildren(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<any>> {
     try {
       const children = await this.prisma.recipeHealthTag.findMany({
         where: { parentId: id },
@@ -2607,7 +2746,10 @@ export class AdminController {
       });
       return ApiResponseDto.success(children);
     } catch (error: any) {
-      return ApiResponseDto.error(400, error.message || 'Failed to get children');
+      return ApiResponseDto.error(
+        400,
+        error.message || 'Failed to get children',
+      );
     }
   }
 
@@ -2628,7 +2770,10 @@ export class AdminController {
       });
       return ApiResponseDto.success(healthTag);
     } catch (error: any) {
-      return ApiResponseDto.error(400, error.message || 'Failed to create health tag');
+      return ApiResponseDto.error(
+        400,
+        error.message || 'Failed to create health tag',
+      );
     }
   }
 
@@ -2646,7 +2791,9 @@ export class AdminController {
         where: { id },
         data: {
           ...(dto.name !== undefined && { name: dto.name }),
-          ...(dto.description !== undefined && { description: dto.description }),
+          ...(dto.description !== undefined && {
+            description: dto.description,
+          }),
           ...(dto.parentId !== undefined && { parentId: dto.parentId }),
           ...(dto.sort !== undefined && { sort: dto.sort }),
           ...(dto.color !== undefined && { color: dto.color }),
@@ -2657,7 +2804,10 @@ export class AdminController {
       if (error.code === 'P2025') {
         return ApiResponseDto.error(404, 'Health tag not found');
       }
-      return ApiResponseDto.error(400, error.message || 'Failed to update health tag');
+      return ApiResponseDto.error(
+        400,
+        error.message || 'Failed to update health tag',
+      );
     }
   }
 
@@ -2671,12 +2821,17 @@ export class AdminController {
       await this.prisma.recipeHealthTag.delete({
         where: { id },
       });
-      return ApiResponseDto.success({ message: 'Health tag deleted successfully' });
+      return ApiResponseDto.success({
+        message: 'Health tag deleted successfully',
+      });
     } catch (error: any) {
       if (error.code === 'P2025') {
         return ApiResponseDto.error(404, 'Health tag not found');
       }
-      return ApiResponseDto.error(400, error.message || 'Failed to delete health tag');
+      return ApiResponseDto.error(
+        400,
+        error.message || 'Failed to delete health tag',
+      );
     }
   }
 
@@ -2699,7 +2854,9 @@ export class AdminController {
   @ApiParam({ name: 'id', description: 'Preparation method ID' })
   @ApiResponse({ status: 200, description: 'Preparation method detail' })
   @ApiResponse({ status: 404, description: 'Preparation method not found' })
-  async getPreparationMethod(@Param('id') id: string): Promise<ApiResponseDto<any>> {
+  async getPreparationMethod(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<any>> {
     try {
       const method = await this.prisma.preparationMethod.findUnique({
         where: { id },
@@ -2709,7 +2866,10 @@ export class AdminController {
       }
       return ApiResponseDto.success(method);
     } catch (error: any) {
-      return ApiResponseDto.error(400, error.message || 'Failed to get preparation method');
+      return ApiResponseDto.error(
+        400,
+        error.message || 'Failed to get preparation method',
+      );
     }
   }
 
@@ -2717,7 +2877,9 @@ export class AdminController {
   @ApiOperation({ summary: 'Create new preparation method' })
   @ApiResponse({ status: 201, description: 'Preparation method created' })
   @ApiResponse({ status: 400, description: 'Invalid input' })
-  async createPreparationMethod(@Body() dto: any): Promise<ApiResponseDto<any>> {
+  async createPreparationMethod(
+    @Body() dto: any,
+  ): Promise<ApiResponseDto<any>> {
     try {
       const method = await this.prisma.preparationMethod.create({
         data: {
@@ -2728,7 +2890,10 @@ export class AdminController {
       });
       return ApiResponseDto.success(method);
     } catch (error: any) {
-      return ApiResponseDto.error(400, error.message || 'Failed to create preparation method');
+      return ApiResponseDto.error(
+        400,
+        error.message || 'Failed to create preparation method',
+      );
     }
   }
 
@@ -2738,13 +2903,18 @@ export class AdminController {
   @ApiResponse({ status: 200, description: 'Preparation method updated' })
   @ApiResponse({ status: 404, description: 'Preparation method not found' })
   @ApiResponse({ status: 400, description: 'Invalid input' })
-  async updatePreparationMethod(@Param('id') id: string, @Body() dto: any): Promise<ApiResponseDto<any>> {
+  async updatePreparationMethod(
+    @Param('id') id: string,
+    @Body() dto: any,
+  ): Promise<ApiResponseDto<any>> {
     try {
       const method = await this.prisma.preparationMethod.update({
         where: { id },
         data: {
           ...(dto.name !== undefined && { name: dto.name }),
-          ...(dto.description !== undefined && { description: dto.description }),
+          ...(dto.description !== undefined && {
+            description: dto.description,
+          }),
           ...(dto.sort !== undefined && { sort: dto.sort }),
         },
       });
@@ -2753,7 +2923,10 @@ export class AdminController {
       if (error.code === 'P2025') {
         return ApiResponseDto.error(404, 'Preparation method not found');
       }
-      return ApiResponseDto.error(400, error.message || 'Failed to update preparation method');
+      return ApiResponseDto.error(
+        400,
+        error.message || 'Failed to update preparation method',
+      );
     }
   }
 
@@ -2762,17 +2935,24 @@ export class AdminController {
   @ApiParam({ name: 'id', description: 'Preparation method ID' })
   @ApiResponse({ status: 200, description: 'Preparation method deleted' })
   @ApiResponse({ status: 404, description: 'Preparation method not found' })
-  async deletePreparationMethod(@Param('id') id: string): Promise<ApiResponseDto<any>> {
+  async deletePreparationMethod(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<any>> {
     try {
       await this.prisma.preparationMethod.delete({
         where: { id },
       });
-      return ApiResponseDto.success({ message: 'Preparation method deleted successfully' });
+      return ApiResponseDto.success({
+        message: 'Preparation method deleted successfully',
+      });
     } catch (error: any) {
       if (error.code === 'P2025') {
         return ApiResponseDto.error(404, 'Preparation method not found');
       }
-      return ApiResponseDto.error(400, error.message || 'Failed to delete preparation method');
+      return ApiResponseDto.error(
+        400,
+        error.message || 'Failed to delete preparation method',
+      );
     }
   }
 
@@ -2797,14 +2977,16 @@ export class AdminController {
   })
   @ApiResponse({ status: 200, description: 'Sort order updated' })
   @ApiResponse({ status: 400, description: 'Invalid input' })
-  async updatePreparationMethodsSort(@Body() dto: { items: { id: string; sort: number }[] }): Promise<ApiResponseDto<any>> {
+  async updatePreparationMethodsSort(
+    @Body() dto: { items: { id: string; sort: number }[] },
+  ): Promise<ApiResponseDto<any>> {
     try {
       if (!dto.items || !Array.isArray(dto.items)) {
         return ApiResponseDto.error(400, 'Invalid input: items array required');
       }
 
       // Update sort order for each item
-      const updatePromises = dto.items.map(item =>
+      const updatePromises = dto.items.map((item) =>
         this.prisma.preparationMethod.update({
           where: { id: item.id },
           data: { sort: item.sort },
@@ -2812,9 +2994,14 @@ export class AdminController {
       );
 
       await Promise.all(updatePromises);
-      return ApiResponseDto.success({ message: 'Sort order updated successfully' });
+      return ApiResponseDto.success({
+        message: 'Sort order updated successfully',
+      });
     } catch (error: any) {
-      return ApiResponseDto.error(400, error.message || 'Failed to update sort order');
+      return ApiResponseDto.error(
+        400,
+        error.message || 'Failed to update sort order',
+      );
     }
   }
 
@@ -2849,12 +3036,16 @@ export class AdminController {
     try {
       // Debug: Check what we actually received
       if (!dto || typeof dto !== 'object') {
-        throw new BadRequestException(`Invalid DTO: expected object, got ${typeof dto}`);
+        throw new BadRequestException(
+          `Invalid DTO: expected object, got ${typeof dto}`,
+        );
       }
 
       // Check if name exists
       if (!dto.name) {
-        throw new BadRequestException(`DTO name is missing. DTO keys: ${JSON.stringify(Object.keys(dto))}`);
+        throw new BadRequestException(
+          `DTO name is missing. DTO keys: ${JSON.stringify(Object.keys(dto))}`,
+        );
       }
 
       // Validate and transform enum values
@@ -2862,14 +3053,16 @@ export class AdminController {
         throw new BadRequestException('nutritionStandard is required');
       }
 
-      if (dto.status && !Object.values(RecipeStatus).includes(dto.status as any)) {
+      if (dto.status && !Object.values(RecipeStatus).includes(dto.status)) {
         throw new BadRequestException(`Invalid status: ${dto.status}`);
       }
 
       if (dto.applicableLifeStages) {
         for (const stage of dto.applicableLifeStages) {
-          if (!Object.values(LifeStage).includes(stage as any)) {
-            throw new BadRequestException(`Invalid applicableLifeStage: ${stage}`);
+          if (!Object.values(LifeStage).includes(stage)) {
+            throw new BadRequestException(
+              `Invalid applicableLifeStage: ${stage}`,
+            );
           }
         }
       }
@@ -2877,10 +3070,10 @@ export class AdminController {
       // Transform strings to enums
       const transformedDto: Record<string, any> = {
         ...dto,
-        nutritionStandard: dto.nutritionStandard as any,
-        status: dto.status as any,
+        nutritionStandard: dto.nutritionStandard,
+        status: dto.status,
         targetHealthTags: dto.targetHealthTags || [], // Keep as UUID array
-        applicableLifeStages: dto.applicableLifeStages as any,
+        applicableLifeStages: dto.applicableLifeStages,
       };
 
       // Render cover title on image if both coverTitle and coverImageUrl are provided
@@ -2892,7 +3085,10 @@ export class AdminController {
           );
           transformedDto.coverImageUrl = renderedUrl;
         } catch (error: any) {
-          console.error('[AdminController] Failed to render cover title:', error.message);
+          console.error(
+            '[AdminController] Failed to render cover title:',
+            error.message,
+          );
           // Continue without rendering - keep original image
         }
       }
@@ -2919,18 +3115,25 @@ export class AdminController {
   ): Promise<ApiResponseDto<any> | ApiResponseDto<null>> {
     try {
       // Validate and transform enum values
-      if (dto.nutritionStandard && !Object.values(NutritionStandard).includes(dto.nutritionStandard as any)) {
-        throw new BadRequestException(`Invalid nutritionStandard: ${dto.nutritionStandard}`);
+      if (
+        dto.nutritionStandard &&
+        !Object.values(NutritionStandard).includes(dto.nutritionStandard)
+      ) {
+        throw new BadRequestException(
+          `Invalid nutritionStandard: ${dto.nutritionStandard}`,
+        );
       }
 
-      if (dto.status && !Object.values(RecipeStatus).includes(dto.status as any)) {
+      if (dto.status && !Object.values(RecipeStatus).includes(dto.status)) {
         throw new BadRequestException(`Invalid status: ${dto.status}`);
       }
 
       if (dto.applicableLifeStages) {
         for (const stage of dto.applicableLifeStages) {
-          if (!Object.values(LifeStage).includes(stage as any)) {
-            throw new BadRequestException(`Invalid applicableLifeStage: ${stage}`);
+          if (!Object.values(LifeStage).includes(stage)) {
+            throw new BadRequestException(
+              `Invalid applicableLifeStage: ${stage}`,
+            );
           }
         }
       }
@@ -2938,10 +3141,10 @@ export class AdminController {
       // Transform strings to enums
       const transformedDto: any = {
         ...dto,
-        nutritionStandard: dto.nutritionStandard as any,
-        status: dto.status as any,
+        nutritionStandard: dto.nutritionStandard,
+        status: dto.status,
         targetHealthTags: dto.targetHealthTags || [], // Keep as UUID array
-        applicableLifeStages: dto.applicableLifeStages as any,
+        applicableLifeStages: dto.applicableLifeStages,
       };
 
       // Render cover title on image if both coverTitle and coverImageUrl are provided
@@ -2953,7 +3156,10 @@ export class AdminController {
           );
           transformedDto.coverImageUrl = renderedUrl;
         } catch (error: any) {
-          console.error('[AdminController] Failed to render cover title:', error.message);
+          console.error(
+            '[AdminController] Failed to render cover title:',
+            error.message,
+          );
           // Continue without rendering - keep original image
         }
       }
@@ -3085,7 +3291,9 @@ export class AdminController {
 
   @Post('recipes/regenerate-covers')
   // @UseGuards(AuthGuard, AdminGuard) // 暂时移除认证以便测试
-  @ApiOperation({ summary: 'Regenerate cover images with titles for recipes missing them' })
+  @ApiOperation({
+    summary: 'Regenerate cover images with titles for recipes missing them',
+  })
   @ApiBody({
     schema: {
       type: 'object',
@@ -3102,7 +3310,12 @@ export class AdminController {
   async regenerateCovers(
     @Body() body: { recipeIds?: string[] },
   ): Promise<ApiResponseDto<any>> {
-    const results: { recipeId: string; name: string; status: string; message: string }[] = [];
+    const results: {
+      recipeId: string;
+      name: string;
+      status: string;
+      message: string;
+    }[] = [];
 
     // Get recipes that need cover regeneration
     const recipes = body.recipeIds
@@ -3140,7 +3353,10 @@ export class AdminController {
         }
 
         // Check if already has rendered title (in /recipes/covers/ path)
-        if (coverImageUrl.includes('/recipes/covers/') && !coverImageUrl.endsWith('.webp')) {
+        if (
+          coverImageUrl.includes('/recipes/covers/') &&
+          !coverImageUrl.endsWith('.webp')
+        ) {
           results.push({
             recipeId: recipeId,
             name: recipe.name,
@@ -3187,9 +3403,8 @@ export class AdminController {
 
     return ApiResponseDto.success({
       total: (recipes as any[]).length,
-      processed: results.filter(r => r.status !== 'skipped').length,
+      processed: results.filter((r) => r.status !== 'skipped').length,
       results,
     });
   }
 }
-

@@ -66,7 +66,8 @@ export class ShippingController {
   })
   @ApiQuery({
     name: 'shippingTemplateId',
-    description: 'Optional shipping template ID (uses active template if not provided)',
+    description:
+      'Optional shipping template ID (uses active template if not provided)',
     required: false,
     type: String,
   })
@@ -75,7 +76,10 @@ export class ShippingController {
     description: 'Shipping fee preview',
     type: ShippingFeePreviewDto,
   })
-  @ApiResponse({ status: 404, description: 'Address or shipping template not found' })
+  @ApiResponse({
+    status: 404,
+    description: 'Address or shipping template not found',
+  })
   @ApiResponse({
     status: 401,
     description: 'Unauthorized - X-Customer-Id header required',
@@ -114,4 +118,3 @@ export class ShippingController {
     }
   }
 }
-

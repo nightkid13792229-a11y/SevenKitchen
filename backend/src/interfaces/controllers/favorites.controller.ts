@@ -46,10 +46,7 @@ export class FavoritesController {
       // 检查食谱是否存在（支持内部UUID或业务recipeId）
       const recipe = await this.prisma.recipe.findFirst({
         where: {
-          OR: [
-            { id: recipeId },
-            { recipeId: recipeId },
-          ],
+          OR: [{ id: recipeId }, { recipeId: recipeId }],
         },
       });
 
@@ -114,10 +111,7 @@ export class FavoritesController {
       // 查找食谱（支持内部UUID或业务recipeId）
       const recipe = await this.prisma.recipe.findFirst({
         where: {
-          OR: [
-            { id: recipeId },
-            { recipeId: recipeId },
-          ],
+          OR: [{ id: recipeId }, { recipeId: recipeId }],
         },
       });
 
@@ -184,10 +178,7 @@ export class FavoritesController {
       // 查找食谱（支持内部UUID或业务recipeId）
       const recipe = await this.prisma.recipe.findFirst({
         where: {
-          OR: [
-            { id: recipeId },
-            { recipeId: recipeId },
-          ],
+          OR: [{ id: recipeId }, { recipeId: recipeId }],
         },
       });
 

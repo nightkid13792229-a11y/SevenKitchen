@@ -130,7 +130,8 @@ export class FileBackedOrderRepository
           itemData.packageCount,
           itemData.packageSpecG,
           itemData.customRequirements,
-          itemData.dailyIntakeG ?? itemData.quantityG / (itemData.packageCount || 1), // Fallback for backward compatibility
+          itemData.dailyIntakeG ??
+            itemData.quantityG / (itemData.packageCount || 1), // Fallback for backward compatibility
           // Phase 8.11: Allocation fields
           itemData.productionBatchId ?? null,
           (itemData.allocatedAt ? new Date(itemData.allocatedAt) : null) as any,
@@ -163,7 +164,9 @@ export class FileBackedOrderRepository
       data.type as any,
       data.createdAt ? new Date(data.createdAt) : new Date(),
       data.targetProductionDate ? new Date(data.targetProductionDate) : null,
-      data.originalTargetProductionDate ? new Date(data.originalTargetProductionDate) : null,
+      data.originalTargetProductionDate
+        ? new Date(data.originalTargetProductionDate)
+        : null,
       data.amountProduct,
       data.amountShipping,
       data.amountTotal,
@@ -191,7 +194,11 @@ export class FileBackedOrderRepository
 
         // Write atomically: write to temp file, then rename
         const tempFile = `${this.dataFile}.tmp`;
-        await fs.writeFile(tempFile, JSON.stringify(ordersArray, null, 2), 'utf-8');
+        await fs.writeFile(
+          tempFile,
+          JSON.stringify(ordersArray, null, 2),
+          'utf-8',
+        );
         await fs.rename(tempFile, this.dataFile);
       } catch (error: any) {
         console.error(
@@ -242,8 +249,7 @@ export class FileBackedOrderRepository
             costPackaging: order.pricingBreakdownSnapshot.costPackaging,
             costLabor: order.pricingBreakdownSnapshot.costLabor,
             costOverhead: order.pricingBreakdownSnapshot.costOverhead,
-            totalProductCost:
-              order.pricingBreakdownSnapshot.totalProductCost,
+            totalProductCost: order.pricingBreakdownSnapshot.totalProductCost,
             productPrice: order.pricingBreakdownSnapshot.productPrice,
             shippingFee: order.pricingBreakdownSnapshot.shippingFee,
             totalPrice: order.pricingBreakdownSnapshot.totalPrice,
@@ -251,11 +257,9 @@ export class FileBackedOrderRepository
               order.pricingBreakdownSnapshot.shippingTemplateId,
             marginStrategyName:
               order.pricingBreakdownSnapshot.marginStrategyName,
-            createdAt:
-              order.pricingBreakdownSnapshot.createdAt.toISOString(),
+            createdAt: order.pricingBreakdownSnapshot.createdAt.toISOString(),
             ingredientPriceVersionHash:
-              order.pricingBreakdownSnapshot.ingredientPriceVersionHash ??
-              null,
+              order.pricingBreakdownSnapshot.ingredientPriceVersionHash ?? null,
           }
         : undefined,
     };
@@ -315,9 +319,10 @@ export class FileBackedOrderRepository
     }
     if (params?.keyword) {
       const keyword = params.keyword.toLowerCase();
-      filtered = filtered.filter((o) =>
-        o.id.toLowerCase().includes(keyword) ||
-        o.customerId.toLowerCase().includes(keyword),
+      filtered = filtered.filter(
+        (o) =>
+          o.id.toLowerCase().includes(keyword) ||
+          o.customerId.toLowerCase().includes(keyword),
       );
     }
     if (params?.startDate) {
@@ -367,8 +372,12 @@ export class FileBackedOrderRepository
 
     // Sort by target production date ascending
     filtered.sort((a, b) => {
-      const aDate = a.targetProductionDate ? a.targetProductionDate.getTime() : 0;
-      const bDate = b.targetProductionDate ? b.targetProductionDate.getTime() : 0;
+      const aDate = a.targetProductionDate
+        ? a.targetProductionDate.getTime()
+        : 0;
+      const bDate = b.targetProductionDate
+        ? b.targetProductionDate.getTime()
+        : 0;
       return aDate - bDate;
     });
 
@@ -406,7 +415,7 @@ export class FileBackedOrderRepository
 
   async findOrderItemById(orderItemId: string): Promise<any | null> {
     for (const order of this.orders.values()) {
-      const item = order.items.find(i => i.id === orderItemId);
+      const item = order.items.find((i) => i.id === orderItemId);
       if (item) {
         return {
           id: item.id,
@@ -437,5 +446,3 @@ export class FileBackedOrderRepository
     return Promise.resolve(null);
   }
 }
-
-

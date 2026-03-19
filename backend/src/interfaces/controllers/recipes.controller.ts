@@ -89,16 +89,20 @@ export class RecipesController {
     const excludeTagArray = excludeTags ? excludeTags.split(',') : [];
 
     // Get paginated recipes
-    const paginatedResult = await this.recipeRepository.findPublicRecipesPaginated({
-      lifeStages: lifeStageArray,
-      healthTags: healthTagArray,
-      excludeTags: excludeTagArray,
-      page: parsedPage,
-      pageSize: parsedPageSize,
-    });
+    const paginatedResult =
+      await this.recipeRepository.findPublicRecipesPaginated({
+        lifeStages: lifeStageArray,
+        healthTags: healthTagArray,
+        excludeTags: excludeTagArray,
+        page: parsedPage,
+        pageSize: parsedPageSize,
+      });
 
     // DEBUG: Log recipe count (development only)
-    if (process.env.NODE_ENV === 'development' || process.env.DEBUG === 'true') {
+    if (
+      process.env.NODE_ENV === 'development' ||
+      process.env.DEBUG === 'true'
+    ) {
       console.log(
         `[RecipesController] GET /recipes: page ${parsedPage}, pageSize ${parsedPageSize}, lifeStages: [${lifeStageArray.join(',') || 'all'}], healthTags: [${healthTagArray.join(',') || 'all'}], excludeTags: [${excludeTagArray.join(',') || 'none'}], found ${paginatedResult.data.length} PUBLIC recipe(s) (total: ${paginatedResult.total})`,
       );
@@ -109,35 +113,42 @@ export class RecipesController {
       }
     }
 
-    const summaries: RecipeSummaryDto[] = paginatedResult.data.map((recipe: any) => {
-      // Parse JSON fields
-      const applicableLifeStages = recipe.applicableLifeStages || [];
-      const targetHealthTags = recipe.targetHealthTags || [];
+    const summaries: RecipeSummaryDto[] = paginatedResult.data.map(
+      (recipe: any) => {
+        // Parse JSON fields
+        const applicableLifeStages = recipe.applicableLifeStages || [];
+        const targetHealthTags = recipe.targetHealthTags || [];
 
-      // Get top 6 ingredients by ratio (only FOOD type)
-      const topIngredients = (recipe.items || [])
-        .filter((item: any) => item.ingredient?.type === 'FOOD' && item.ratioPercent != null)
-        .sort((a: any, b: any) => (b.ratioPercent || 0) - (a.ratioPercent || 0))
-        .slice(0, 6)
-        .map((item: any) => ({
-          ingredientId: item.ingredientId,
-          name: item.ingredient?.name || item.ingredient?.nameEn || 'Unknown',
-          nameEn: item.ingredient?.nameEn,
-          ratio: item.ratioPercent || 0,
-        }));
+        // Get top 6 ingredients by ratio (only FOOD type)
+        const topIngredients = (recipe.items || [])
+          .filter(
+            (item: any) =>
+              item.ingredient?.type === 'FOOD' && item.ratioPercent != null,
+          )
+          .sort(
+            (a: any, b: any) => (b.ratioPercent || 0) - (a.ratioPercent || 0),
+          )
+          .slice(0, 6)
+          .map((item: any) => ({
+            ingredientId: item.ingredientId,
+            name: item.ingredient?.name || item.ingredient?.nameEn || 'Unknown',
+            nameEn: item.ingredient?.nameEn,
+            ratio: item.ratioPercent || 0,
+          }));
 
-      return {
-        id: recipe.id,
-        version: recipe.version,
-        name: recipe.name,
-        status: recipe.status as RecipeStatus,
-        energyDensityKcalPerKg: recipe.energyDensityKcalPerKg,
-        coverImageUrl: recipe.coverImageUrl?.replace('http://', 'https://'),
-        targetHealthTags: targetHealthTags,
-        applicableLifeStages: applicableLifeStages,
-        items: topIngredients,
-      };
-    });
+        return {
+          id: recipe.id,
+          version: recipe.version,
+          name: recipe.name,
+          status: recipe.status as RecipeStatus,
+          energyDensityKcalPerKg: recipe.energyDensityKcalPerKg,
+          coverImageUrl: recipe.coverImageUrl?.replace('http://', 'https://'),
+          targetHealthTags: targetHealthTags,
+          applicableLifeStages: applicableLifeStages,
+          items: topIngredients,
+        };
+      },
+    );
 
     // Return paginated result
     return ApiResponseDto.success({
@@ -160,7 +171,10 @@ export class RecipesController {
     if (!methodUuids) return undefined;
 
     // Parse UUID string to array
-    const uuids = methodUuids.split(',').map((u) => u.trim()).filter(Boolean);
+    const uuids = methodUuids
+      .split(',')
+      .map((u) => u.trim())
+      .filter(Boolean);
 
     if (uuids.length === 0) return undefined;
 
@@ -171,11 +185,11 @@ export class RecipesController {
     });
 
     // Create id -> name map
-    const methodMap = new Map(methods.map(m => [m.id, m.name]));
+    const methodMap = new Map(methods.map((m) => [m.id, m.name]));
 
     // Return names in original UUID order (critical for maintaining user-defined order)
     return uuids
-      .map(uuid => methodMap.get(uuid))
+      .map((uuid) => methodMap.get(uuid))
       .filter((name): name is string => !!name);
   }
 
@@ -237,16 +251,20 @@ export class RecipesController {
             preparationMethod: preparationMethods?.join('、') || undefined,
             sortOrder: item.sortOrder || 0,
             ingredientType: ingredientType || undefined,
-            exampleWeight: item.exampleWeight != null ? item.exampleWeight : undefined,
-            ratioPercent: item.ratioPercent != null ? item.ratioPercent : undefined,
+            exampleWeight:
+              item.exampleWeight != null ? item.exampleWeight : undefined,
+            ratioPercent:
+              item.ratioPercent != null ? item.ratioPercent : undefined,
             nutrientTargetKey: item.nutrientTargetKey || undefined,
             nutrientTargetValue: item.nutrientTargetValue || undefined,
-            ingredient: item.ingredient ? {
-              id: item.ingredient.id,
-              name: item.ingredient.name,
-              type: item.ingredient.type,
-              properties: (item.ingredient as any)?.properties || undefined,
-            } : undefined,
+            ingredient: item.ingredient
+              ? {
+                  id: item.ingredient.id,
+                  name: item.ingredient.name,
+                  type: item.ingredient.type,
+                  properties: item.ingredient?.properties || undefined,
+                }
+              : undefined,
           };
 
           // FOOD type: include ratio (for backward compatibility)
@@ -269,9 +287,13 @@ export class RecipesController {
       name: recipe.name,
       status: recipe.status as RecipeStatus,
       energyDensityKcalPerKg: recipe.energyDensityKcalPerKg,
-      coverImageUrl: (recipe as any).coverImageUrl?.replace('http://', 'https://'),
+      coverImageUrl: (recipe as any).coverImageUrl?.replace(
+        'http://',
+        'https://',
+      ),
       productionLossRate: recipe.productionLossRate,
-      nutritionStandard: (recipe.nutritionStandard || NutritionStandard.FEDIAF_2021) as NutritionStandard,
+      nutritionStandard: (recipe.nutritionStandard ||
+        NutritionStandard.FEDIAF_2021) as NutritionStandard,
       designSource: (recipe as any).designSource || undefined,
       targetHealthTags: (recipe as any).targetHealthTags || [],
       applicableLifeStages: (recipe as any).applicableLifeStages || [],
@@ -321,4 +343,3 @@ export class RecipesController {
     }
   }
 }
-

@@ -17,7 +17,10 @@ export interface PurchaseListConstructor {
   createdById: string;
   createdBy?: any; // User object with id, nickname, phone
   sourceOrderIds: string[];
-  orderDateSnapshot?: Record<string, { originalDate: string; hasChanged: boolean }>;
+  orderDateSnapshot?: Record<
+    string,
+    { originalDate: string; hasChanged: boolean }
+  >;
   reimbursementId?: string;
   createdAt?: Date;
   updatedAt?: Date;
@@ -33,12 +36,15 @@ export class PurchaseList {
   public readonly id: string;
   public readonly targetDate: Date;
   public status: PurchaseListStatus;
-  public totalEstimatedCost: number;  // 可写，用于动态更新
-  public itemCount: number;  // 可写，用于动态更新
+  public totalEstimatedCost: number; // 可写，用于动态更新
+  public itemCount: number; // 可写，用于动态更新
   public readonly createdById: string;
   public readonly createdBy?: any; // User object with id, nickname, phone
-  public sourceOrderIds: string[];  // 可写，用于动态更新
-  public orderDateSnapshot?: Record<string, { originalDate: string; hasChanged: boolean }>;
+  public sourceOrderIds: string[]; // 可写，用于动态更新
+  public orderDateSnapshot?: Record<
+    string,
+    { originalDate: string; hasChanged: boolean }
+  >;
   public reimbursementId?: string;
   public readonly createdAt: Date;
   public updatedAt: Date;
@@ -75,7 +81,9 @@ export class PurchaseList {
    */
   private validateInvariants(): void {
     if (this.items.length !== this.itemCount) {
-      throw new Error(`Item count mismatch: expected ${this.itemCount}, got ${this.items.length}`);
+      throw new Error(
+        `Item count mismatch: expected ${this.itemCount}, got ${this.items.length}`,
+      );
     }
 
     if (this.totalEstimatedCost < 0) {
@@ -92,7 +100,9 @@ export class PurchaseList {
 
     // 如果已关联报销单，状态必须是COMPLETED
     if (this.reimbursementId && this.status !== PurchaseListStatus.COMPLETED) {
-      throw new Error('Purchase list with reimbursement must be in COMPLETED status');
+      throw new Error(
+        'Purchase list with reimbursement must be in COMPLETED status',
+      );
     }
   }
 
@@ -104,7 +114,7 @@ export class PurchaseList {
     const allowedTransitions = PURCHASE_LIST_STATUS_TRANSITIONS[this.status];
     if (!allowedTransitions.includes(PurchaseListStatus.COMPLETED)) {
       throw new InvalidStateTransitionError(
-        `Cannot complete purchase list in ${this.status} status`
+        `Cannot complete purchase list in ${this.status} status`,
       );
     }
 
@@ -120,7 +130,7 @@ export class PurchaseList {
   start(): void {
     if (this.status !== PurchaseListStatus.PENDING) {
       throw new InvalidStateTransitionError(
-        `Cannot start purchase list in ${this.status} status. Only PENDING status can be started.`
+        `Cannot start purchase list in ${this.status} status. Only PENDING status can be started.`,
       );
     }
 
@@ -136,7 +146,7 @@ export class PurchaseList {
     const allowedTransitions = PURCHASE_LIST_STATUS_TRANSITIONS[this.status];
     if (!allowedTransitions.includes(PurchaseListStatus.PENDING)) {
       throw new InvalidStateTransitionError(
-        `Cannot confirm purchase list in ${this.status} status`
+        `Cannot confirm purchase list in ${this.status} status`,
       );
     }
 
@@ -149,7 +159,9 @@ export class PurchaseList {
    */
   associateReimbursement(reimbursementId: string): void {
     if (this.status !== PurchaseListStatus.COMPLETED) {
-      throw new Error('Only completed purchase lists can be associated with reimbursement');
+      throw new Error(
+        'Only completed purchase lists can be associated with reimbursement',
+      );
     }
 
     this.reimbursementId = reimbursementId;
@@ -174,7 +186,7 @@ export class PurchaseList {
       updatedAt: this.updatedAt,
       startedAt: this.startedAt,
       completedAt: this.completedAt,
-      items: this.items.map(item => item.toPrisma()),
+      items: this.items.map((item) => item.toPrisma()),
     };
   }
 
@@ -182,7 +194,8 @@ export class PurchaseList {
    * 从Prisma格式创建实体
    */
   static fromPrisma(data: any): PurchaseList {
-    const items = data.items?.map((item: any) => PurchaseItem.fromPrisma(item)) || [];
+    const items =
+      data.items?.map((item: any) => PurchaseItem.fromPrisma(item)) || [];
 
     // Calculate purchase record aggregates if records are included
     let recordsCount: number | undefined;

@@ -68,7 +68,10 @@ export class RecipeDetailDto extends RecipeSummaryDto {
     calciumPhosphorusRatio?: string;
   };
 
-  @ApiProperty({ type: [Object], description: 'All ingredients with preparation' })
+  @ApiProperty({
+    type: [Object],
+    description: 'All ingredients with preparation',
+  })
   declare items: Array<{
     ingredientId: string;
     name: string;
@@ -80,4 +83,3 @@ export class RecipeDetailDto extends RecipeSummaryDto {
     ingredientType?: string;
   }>;
 }
-

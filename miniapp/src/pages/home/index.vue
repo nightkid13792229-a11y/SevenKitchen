@@ -130,20 +130,23 @@
         class="recipe-card"
         @tap="viewRecipe(recipe.id)"
       >
-        <!-- 封面图 -->
-        <image
-          v-if="recipe.coverImageUrl"
-          class="recipe-cover"
-          :src="normalizeImageUrl(recipe.coverImageUrl)"
-          mode="aspectFill"
-        />
-        <view v-else class="recipe-cover placeholder">
-          <text class="placeholder-text">{{ recipe.name.charAt(0) }}</text>
+        <!-- 封面图容器 - 使用固定高度容器避免布局问题 -->
+        <view class="recipe-cover-wrapper">
+          <image
+            v-if="recipe.coverImageUrl"
+            class="recipe-cover"
+            :src="normalizeImageUrl(recipe.coverImageUrl)"
+            mode="aspectFill"
+            lazy-load
+          />
+          <view v-else class="recipe-cover placeholder">
+            <text class="placeholder-text">{{ (recipe.name && recipe.name.charAt(0)) || '?' }}</text>
+          </view>
         </view>
 
-        <!-- 食谱信息 -->
-        <view class="recipe-info">
-          <view class="recipe-name">{{ recipe.name }}</view>
+        <!-- 食谱信息 - 使用强制渲染 -->
+        <view class="recipe-info" :id="'info-' + recipe.id">
+          <view class="recipe-name">{{ recipe.name || '未命名食谱' }}</view>
 
           <!-- 生命阶段和健康标签合并 -->
           <view
@@ -573,6 +576,13 @@ function loadRecipes(isRefresh = false) {
       } else {
         recipes.value = [...recipes.value, ...newRecipes]
       }
+
+      // 调试：检查每个食谱的name字段
+      newRecipes.forEach((recipe: Recipe, index: number) => {
+        if (!recipe.name || recipe.name.trim() === '') {
+          console.warn('[Home] 食谱缺少name字段:', { index, id: recipe.id, recipe })
+        }
+      })
 
       // 更新分页状态
       totalCount.value = res.data.total || 0
@@ -1284,13 +1294,25 @@ defineOptions({
   overflow: hidden;
   margin-bottom: 24rpx;
   box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.08);
+  /* 隔离每个卡片的渲染，避免相互影响 */
+  contain: layout style;
+}
+
+/* 封面图容器 - 固定高度避免布局问题 */
+.recipe-cover-wrapper {
+  width: 100%;
+  height: 360rpx;
+  position: relative;
+  overflow: hidden;
+  /* 隔离图片渲染，避免影响后续元素 */
+  contain: layout;
 }
 
 /* 封面图 */
 .recipe-cover {
   width: 100%;
-  height: 360rpx;
-  background-color: #f0f0f0;
+  height: 100%;
+  display: block;
 }
 
 .recipe-cover.placeholder {
@@ -1309,6 +1331,12 @@ defineOptions({
 /* 食谱信息 */
 .recipe-info {
   padding: 24rpx;
+  position: relative;
+  z-index: 1;
+  background-color: #fff;
+  /* 强制 GPU 加速，避免渲染阻塞 */
+  transform: translateZ(0);
+  will-change: transform;
 }
 
 .recipe-name {
@@ -1317,6 +1345,9 @@ defineOptions({
   color: #333;
   margin-bottom: 16rpx;
   line-height: 1.4;
+  word-break: break-all;
+  overflow-wrap: break-word;
+  min-height: 45rpx;
 }
 
 .tags-row {

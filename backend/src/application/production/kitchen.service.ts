@@ -4,14 +4,23 @@
  * Different from admin KitchenService - focuses on simplified staff workflow
  */
 
-import { Injectable, Inject, BadRequestException, Logger, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  BadRequestException,
+  Logger,
+  NotFoundException,
+} from '@nestjs/common';
 import { ProductionService } from './production.service';
 import { PurchasingService } from '../purchasing/purchasing.service';
 import type { ProductionBatchRepository } from '../../domain/production/production.repository';
 import type { PurchaseListRepository } from '../../domain/purchasing/purchase-list.repository';
 import type { OrderRepository } from '../../domain/order/order.repository';
 import { ProductionBatch, PackagingUnit } from '../../domain/production';
-import { PackagingUnitStatus, ProductionBatchStatus } from '../../domain/production/enums';
+import {
+  PackagingUnitStatus,
+  ProductionBatchStatus,
+} from '../../domain/production/enums';
 import { OrderStatus } from '../../domain';
 import { PRODUCTION_BATCH_REPOSITORY } from './production.service';
 import { PURCHASE_LIST_REPOSITORY } from '../purchasing/purchasing.service.tokens';
@@ -49,13 +58,19 @@ export class StaffProductionService {
    * Follows the 07 document batch/pot algorithm (lines 823-926)
    */
   async autoScheduleToday(dto: AutoScheduleDto): Promise<ProductionBatch> {
-    this.logger.log(`[AutoSchedule] Starting auto-schedule for ${dto.startDate}`);
+    this.logger.log(
+      `[AutoSchedule] Starting auto-schedule for ${dto.startDate}`,
+    );
 
     // Step 1: Check if today's purchase list is completed
     // 使用统一的日期工具创建查询范围（中午12点避免时区问题）
-    const { start: today, end: tomorrow } = DateUtil.createDateRange(dto.startDate);
+    const { start: today, end: tomorrow } = DateUtil.createDateRange(
+      dto.startDate,
+    );
 
-    this.logger.log(`[AutoSchedule] Query range: ${today.toISOString()} to ${tomorrow.toISOString()}`);
+    this.logger.log(
+      `[AutoSchedule] Query range: ${today.toISOString()} to ${tomorrow.toISOString()}`,
+    );
 
     const { list: purchaseLists } = await this.purchaseListRepository.findMany({
       startDate: today,
@@ -76,7 +91,9 @@ export class StaffProductionService {
       );
     }
 
-    this.logger.log(`[AutoSchedule] Purchase list check passed for ${dto.startDate}`);
+    this.logger.log(
+      `[AutoSchedule] Purchase list check passed for ${dto.startDate}`,
+    );
 
     // Step 2: Use ProductionService.createProductionBatch() which already implements the algorithm
     // The algorithm follows 07 document lines 823-926:
@@ -91,7 +108,9 @@ export class StaffProductionService {
       orderIds: undefined, // Include all eligible PAID orders
     });
 
-    this.logger.log(`[AutoSchedule] Created batch ${batch.id} with ${batch.packagingUnits.length} packaging units`);
+    this.logger.log(
+      `[AutoSchedule] Created batch ${batch.id} with ${batch.packagingUnits.length} packaging units`,
+    );
 
     return batch;
   }
@@ -108,7 +127,7 @@ export class StaffProductionService {
     // Get all packaging units from all batches
     const batches = await this.productionRepository.findAll();
     let units: PackagingUnit[] = [];
-    batches.forEach(batch => {
+    batches.forEach((batch) => {
       units = units.concat(batch.packagingUnits || []);
     });
 
@@ -120,17 +139,25 @@ export class StaffProductionService {
     // Filter by target date (via production batch)
     if (targetDate) {
       // 使用统一的日期工具创建查询范围（中午12点避免时区问题）
-      const { start: targetDateTime, end: targetEndDateTime } = DateUtil.createDateRange(targetDate);
+      const { start: targetDateTime, end: targetEndDateTime } =
+        DateUtil.createDateRange(targetDate);
 
       // Get batches for target date
-      const targetDateBatches = await this.productionRepository.findByProductionDate(targetDateTime);
-      const targetDateBatchIds = new Set(targetDateBatches.map(b => b.id));
+      const targetDateBatches =
+        await this.productionRepository.findByProductionDate(targetDateTime);
+      const targetDateBatchIds = new Set(targetDateBatches.map((b) => b.id));
 
-      units = units.filter((u: PackagingUnit) => u.productionBatchId && targetDateBatchIds.has(u.productionBatchId));
+      units = units.filter(
+        (u: PackagingUnit) =>
+          u.productionBatchId && targetDateBatchIds.has(u.productionBatchId),
+      );
     }
 
     // Sort by creation time (newest first)
-    units.sort((a: PackagingUnit, b: PackagingUnit) => b.createdAt.getTime() - a.createdAt.getTime());
+    units.sort(
+      (a: PackagingUnit, b: PackagingUnit) =>
+        b.createdAt.getTime() - a.createdAt.getTime(),
+    );
 
     // Calculate pot numbers for each recipe group
     // Group by (productionBatchId, recipeSnapshot.id)
@@ -142,13 +169,17 @@ export class StaffProductionService {
       const key = `${unit.productionBatchId}-${recipeId}`;
 
       if (!totalPotsMap.has(key)) {
-        const sameRecipeUnits = units.filter((u: PackagingUnit) =>
-          u.productionBatchId === unit.productionBatchId &&
-          (u.recipeSnapshot as any).id === recipeId
+        const sameRecipeUnits = units.filter(
+          (u: PackagingUnit) =>
+            u.productionBatchId === unit.productionBatchId &&
+            (u.recipeSnapshot as any).id === recipeId,
         );
         totalPotsMap.set(key, sameRecipeUnits.length);
         sameRecipeUnits
-          .sort((a: PackagingUnit, b: PackagingUnit) => a.createdAt.getTime() - b.createdAt.getTime())
+          .sort(
+            (a: PackagingUnit, b: PackagingUnit) =>
+              a.createdAt.getTime() - b.createdAt.getTime(),
+          )
           .forEach((u: PackagingUnit, idx: number) => {
             potNumberMap.set(u.id, idx + 1);
           });
@@ -173,8 +204,10 @@ export class StaffProductionService {
 
         // Convert times to local time
         const createdAt = this.toLocalTime(unit.createdAt);
-        const completedAt = unit.updatedAt !== unit.createdAt ?
-          this.toLocalTime(unit.updatedAt) : undefined;
+        const completedAt =
+          unit.updatedAt !== unit.createdAt
+            ? this.toLocalTime(unit.updatedAt)
+            : undefined;
 
         return {
           id: unit.id,
@@ -182,7 +215,7 @@ export class StaffProductionService {
           recipeName: recipeSnapshot.name,
           recipeVersion: recipeSnapshot.version,
           totalProductionG: unit.totalProductionG,
-          status: unit.status as PackagingUnitStatus,
+          status: unit.status,
           orderItems,
           currentPotNumber: potNumberMap.get(unit.id) || 1,
           totalPots: totalPotsMap.get(key) || 1,
@@ -192,7 +225,7 @@ export class StaffProductionService {
           ingredientsUsageSnapshot: unit.ingredientsUsageSnapshot,
           recipeSnapshot: unit.recipeSnapshot, // 添加完整的食谱快照（包含原料列表）
         } as PackagingUnitDetailDto;
-      })
+      }),
     );
 
     return { list, total };
@@ -201,7 +234,9 @@ export class StaffProductionService {
   /**
    * Get order packaging information for a packaging unit
    */
-  private async getOrderPackagingInfo(unit: PackagingUnit): Promise<OrderPackagingInfoDto[]> {
+  private async getOrderPackagingInfo(
+    unit: PackagingUnit,
+  ): Promise<OrderPackagingInfoDto[]> {
     const orderItemIds = unit.sourceOrderItemIds || [];
 
     if (orderItemIds.length === 0) {
@@ -222,7 +257,7 @@ export class StaffProductionService {
 
     // Fetch all orders in these statuses
     const allOrders = await Promise.all(
-      orderStatuses.map(status => this.orderRepository.findByStatus(status))
+      orderStatuses.map((status) => this.orderRepository.findByStatus(status)),
     );
 
     // Flatten the array of arrays
@@ -237,12 +272,14 @@ export class StaffProductionService {
           orderPackagingInfo.push({
             orderId: order.id,
             orderItemId: item.id,
-            dogName: order.dog?.name || '未知狗狗',  // ✅ 使用真实狗狗名称
+            dogName: order.dog?.name || '未知狗狗', // ✅ 使用真实狗狗名称
             packageSpecG: item.packageSpecG,
             packageCount: item.packageCount,
-            recipientName: order.address?.recipientName,  // ✅ 收货人姓名
-            recipientCity: order.address?.region?.city,   // ✅ 收货城市
-            completedAt: order.completedAt ? this.toLocalTime(order.completedAt) : undefined,
+            recipientName: order.address?.recipientName, // ✅ 收货人姓名
+            recipientCity: order.address?.region?.city, // ✅ 收货城市
+            completedAt: order.completedAt
+              ? this.toLocalTime(order.completedAt)
+              : undefined,
           });
         }
       }
@@ -304,7 +341,9 @@ export class StaffProductionService {
     // Auto-cleanup: Check if existing photos in database are valid
     const existingPhotos = unit.photosRaw || [];
     if (existingPhotos.length > 0) {
-      this.logger.log(`[KitchenService] Checking ${existingPhotos.length} existing photos for validity...`);
+      this.logger.log(
+        `[KitchenService] Checking ${existingPhotos.length} existing photos for validity...`,
+      );
 
       const validPhotos: string[] = [];
       const invalidPhotos: string[] = [];
@@ -319,14 +358,20 @@ export class StaffProductionService {
       }
 
       if (invalidPhotos.length > 0) {
-        this.logger.log(`[KitchenService] Found ${invalidPhotos.length} invalid photos, removing from database...`);
-        this.logger.log(`[KitchenService] Invalid photos: ${invalidPhotos.join(', ')}`);
+        this.logger.log(
+          `[KitchenService] Found ${invalidPhotos.length} invalid photos, removing from database...`,
+        );
+        this.logger.log(
+          `[KitchenService] Invalid photos: ${invalidPhotos.join(', ')}`,
+        );
 
         // Update unit with only valid photos
         unit.photosRaw = validPhotos;
         await this.productionRepository.updatePackagingUnit(unit);
 
-        this.logger.log(`[KitchenService] Cleaned database. Valid photos: ${validPhotos.length}, Removed: ${invalidPhotos.length}`);
+        this.logger.log(
+          `[KitchenService] Cleaned database. Valid photos: ${validPhotos.length}, Removed: ${invalidPhotos.length}`,
+        );
       } else {
         this.logger.log(`[KitchenService] All existing photos are valid`);
       }
@@ -339,10 +384,16 @@ export class StaffProductionService {
     // Trigger order status transitions on first upload
     if (shouldTrigger && unit.sourceOrderItemIds.length > 0) {
       // Get all affected orders from sourceOrderItemIds
-      const orderItems = await this.productionRepository.findOrderItemsByIds(unit.sourceOrderItemIds);
-      const uniqueOrderIds = [...new Set(orderItems.map(item => item.orderId))];
+      const orderItems = await this.productionRepository.findOrderItemsByIds(
+        unit.sourceOrderItemIds,
+      );
+      const uniqueOrderIds = [
+        ...new Set(orderItems.map((item) => item.orderId)),
+      ];
 
-      this.logger.log(`[KitchenService] Processing ${uniqueOrderIds.length} affected orders for unit ${unitId}`);
+      this.logger.log(
+        `[KitchenService] Processing ${uniqueOrderIds.length} affected orders for unit ${unitId}`,
+      );
 
       let transitionedCount = 0;
       let skippedCount = 0;
@@ -362,23 +413,32 @@ export class StaffProductionService {
             order.markAsFreezing();
             await this.orderRepository.save(order);
             transitionedCount++;
-            this.logger.log(`[KitchenService] Order ${orderId} transitioned to FREEZING`);
+            this.logger.log(
+              `[KitchenService] Order ${orderId} transitioned to FREEZING`,
+            );
           } else {
             skippedCount++;
-            this.logger.log(`[KitchenService] Order ${orderId} skipped (status: ${order.status})`);
+            this.logger.log(
+              `[KitchenService] Order ${orderId} skipped (status: ${order.status})`,
+            );
           }
         } catch (error) {
-          this.logger.error(`[KitchenService] Error processing order ${orderId}:`, error);
+          this.logger.error(
+            `[KitchenService] Error processing order ${orderId}:`,
+            error,
+          );
           skippedCount++;
         }
       }
 
       this.logger.log(
         `[KitchenService] Uploaded ${photoUrls.length} photos for task ${unitId}: ` +
-        `${transitionedCount} orders → FREEZING, ${skippedCount} orders skipped`
+          `${transitionedCount} orders → FREEZING, ${skippedCount} orders skipped`,
       );
     } else {
-      this.logger.log(`[KitchenService] Uploaded ${photoUrls.length} photos for task ${unitId} (no order transition needed)`);
+      this.logger.log(
+        `[KitchenService] Uploaded ${photoUrls.length} photos for task ${unitId} (no order transition needed)`,
+      );
     }
 
     return updated;
@@ -410,10 +470,16 @@ export class StaffProductionService {
 
     // Update order status: IN_PRODUCTION → FREEZING (制作中 → 急冻中待发货)
     if (unit.sourceOrderItemIds.length > 0) {
-      const orderItems = await this.productionRepository.findOrderItemsByIds(unit.sourceOrderItemIds);
-      const uniqueOrderIds = [...new Set(orderItems.map(item => item.orderId))];
+      const orderItems = await this.productionRepository.findOrderItemsByIds(
+        unit.sourceOrderItemIds,
+      );
+      const uniqueOrderIds = [
+        ...new Set(orderItems.map((item) => item.orderId)),
+      ];
 
-      this.logger.log(`[KitchenService] Processing ${uniqueOrderIds.length} affected orders for unit ${unitId}`);
+      this.logger.log(
+        `[KitchenService] Processing ${uniqueOrderIds.length} affected orders for unit ${unitId}`,
+      );
 
       let transitionedCount = 0;
       let skippedCount = 0;
@@ -433,27 +499,38 @@ export class StaffProductionService {
             order.markAsFreezing();
             await this.orderRepository.save(order);
             transitionedCount++;
-            this.logger.log(`[KitchenService] Order ${orderId} transitioned to FREEZING`);
+            this.logger.log(
+              `[KitchenService] Order ${orderId} transitioned to FREEZING`,
+            );
           } else {
             skippedCount++;
-            this.logger.log(`[KitchenService] Order ${orderId} skipped (status: ${order.status})`);
+            this.logger.log(
+              `[KitchenService] Order ${orderId} skipped (status: ${order.status})`,
+            );
           }
         } catch (error) {
-          this.logger.error(`[KitchenService] Error processing order ${orderId}:`, error);
+          this.logger.error(
+            `[KitchenService] Error processing order ${orderId}:`,
+            error,
+          );
           skippedCount++;
         }
       }
 
       this.logger.log(
         `[KitchenService] Completed task ${unitId}: ` +
-        `${transitionedCount} orders → FREEZING, ${skippedCount} orders skipped`
+          `${transitionedCount} orders → FREEZING, ${skippedCount} orders skipped`,
       );
     }
 
     // Check if all units in the batch are completed
-    const batch = await this.productionRepository.findById(unit.productionBatchId);
+    const batch = await this.productionRepository.findById(
+      unit.productionBatchId,
+    );
     if (batch && batch.status === ProductionBatchStatus.IN_PRODUCTION) {
-      await this.productionService.checkAndCompleteBatch(unit.productionBatchId);
+      await this.productionService.checkAndCompleteBatch(
+        unit.productionBatchId,
+      );
     }
 
     return updated;
@@ -470,16 +547,16 @@ export class StaffProductionService {
     const batches = await this.productionRepository.findByProductionDate(today);
 
     // Count all packaging units
-    const allUnits = batches.flatMap(b => b.packagingUnits);
+    const allUnits = batches.flatMap((b) => b.packagingUnits);
 
     const todayTasks = allUnits.length; // 统计制作单数量（每一锅为一个制作单）
 
     const inProgress = allUnits.filter(
-      u => u.status === PackagingUnitStatus.IN_PROGRESS
+      (u) => u.status === PackagingUnitStatus.IN_PROGRESS,
     ).length;
 
     const completed = allUnits.filter(
-      u => u.status === PackagingUnitStatus.COMPLETED
+      (u) => u.status === PackagingUnitStatus.COMPLETED,
     ).length;
 
     return {
@@ -544,11 +621,14 @@ export class StaffProductionService {
       }
     } catch (error) {
       // COS deletion failure should not block the main flow
-      this.logger.warn(`[KitchenService] Failed to delete photo from COS: ${photoUrl}`, error);
+      this.logger.warn(
+        `[KitchenService] Failed to delete photo from COS: ${photoUrl}`,
+        error,
+      );
     }
 
     this.logger.log(
-      `[KitchenService] Deleted photo for unit ${unitId}. Remaining: ${updated.photosRaw?.length || 0}`
+      `[KitchenService] Deleted photo for unit ${unitId}. Remaining: ${updated.photosRaw?.length || 0}`,
     );
 
     return updated;
@@ -583,13 +663,16 @@ export class StaffProductionService {
         }
       } catch (error) {
         // Deletion failure should not block the main flow
-        this.logger.warn(`[KitchenService] Failed to delete old photo: ${oldUrl}`, error);
+        this.logger.warn(
+          `[KitchenService] Failed to delete old photo: ${oldUrl}`,
+          error,
+        );
       }
     }
 
     this.logger.log(
       `[KitchenService] Replaced photos for unit ${unitId}: ` +
-      `${photoUrls.length} new photos, ${deletedCount}/${oldPhotoUrls.length} old photos deleted`
+        `${photoUrls.length} new photos, ${deletedCount}/${oldPhotoUrls.length} old photos deleted`,
     );
 
     return updated;
@@ -619,22 +702,28 @@ export class StaffProductionService {
 
     try {
       // Generate PDF
-      const pdfBuffer = await this.pdfGenerator.generateProductionTaskPDF(taskData);
+      const pdfBuffer =
+        await this.pdfGenerator.generateProductionTaskPDF(taskData);
 
       // Upload to COS
       const uploadResult = await this.cosService.uploadFile(
         pdfBuffer,
         `task-${taskData.taskId || Date.now()}.pdf`,
-        'print-tasks'
+        'print-tasks',
       );
 
-      this.logger.log(`[PrintProductionTask] PDF uploaded to ${uploadResult.url}`);
+      this.logger.log(
+        `[PrintProductionTask] PDF uploaded to ${uploadResult.url}`,
+      );
 
       return {
         pdfUrl: uploadResult.url,
       };
     } catch (error) {
-      this.logger.error(`[PrintProductionTask] Failed to generate/print PDF`, error);
+      this.logger.error(
+        `[PrintProductionTask] Failed to generate/print PDF`,
+        error,
+      );
       throw new BadRequestException('生成PDF失败，请重试');
     }
   }

@@ -4,7 +4,17 @@
  */
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { IsString, IsOptional, IsEnum, IsNumber, IsObject, IsBoolean, Min, Max, IsArray } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsEnum,
+  IsNumber,
+  IsObject,
+  IsBoolean,
+  Min,
+  Max,
+  IsArray,
+} from 'class-validator';
 import { NutritionFoodCategory, NutritionFoodStatus } from '@prisma/client';
 
 // === 创建请求 ===

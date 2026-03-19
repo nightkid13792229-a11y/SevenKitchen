@@ -3,7 +3,14 @@
  * Phase 8.12: Kitchen Task Data Capture MVP
  */
 
-import { IsOptional, IsArray, IsString, IsNumber, IsEnum, ValidateNested } from 'class-validator';
+import {
+  IsOptional,
+  IsArray,
+  IsString,
+  IsNumber,
+  IsEnum,
+  ValidateNested,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { PackagingUnitStatus } from '../../../domain/production';
 
@@ -45,4 +52,3 @@ export class UpdateTaskDto {
   @IsEnum(PackagingUnitStatus)
   status?: PackagingUnitStatus;
 }
-

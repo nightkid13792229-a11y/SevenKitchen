@@ -39,7 +39,7 @@ export class CreateDogDto {
   @ApiPropertyOptional({
     description: 'Custom breed name (for mixed breed dogs)',
     example: '田园犬',
-    nullable: true
+    nullable: true,
   })
   @IsOptional()
   @IsString()
@@ -129,8 +129,16 @@ export class CreateDogDto {
       type: 'object',
       properties: {
         chiefComplaint: { type: 'string', description: '症状或疾病' },
-        visitDate: { type: 'string', description: '发病日期 (ISO 8601)', nullable: true },
-        diagnosis: { type: 'string', description: '医生诊断结果', nullable: true },
+        visitDate: {
+          type: 'string',
+          description: '发病日期 (ISO 8601)',
+          nullable: true,
+        },
+        diagnosis: {
+          type: 'string',
+          description: '医生诊断结果',
+          nullable: true,
+        },
         notes: { type: 'string', description: '详细描述', nullable: true },
         attachments: {
           type: 'array',
@@ -188,5 +196,3 @@ export class CreateDogDto {
     attachments?: string[] | null;
   }> | null;
 }
-
-

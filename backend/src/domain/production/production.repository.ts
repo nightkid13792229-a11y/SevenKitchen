@@ -14,7 +14,10 @@ export interface ProductionBatchRepository {
   findByStatus(status: string): Promise<ProductionBatch[]>;
   save(batch: ProductionBatch): Promise<ProductionBatch>;
   // Phase 8.11: Allocation lock
-  allocateOrderItems(orderItemIds: string[], productionBatchId: string): Promise<number>;
+  allocateOrderItems(
+    orderItemIds: string[],
+    productionBatchId: string,
+  ): Promise<number>;
   // Phase 8.12: Kitchen task operations
   findPackagingUnitById(id: string): Promise<PackagingUnit | null>;
   updatePackagingUnit(unit: PackagingUnit): Promise<PackagingUnit>;
@@ -29,4 +32,3 @@ export interface ProductionBatchRepository {
   // Find first completed packaging unit for an order
   findFirstCompletedByOrderId(orderId: string): Promise<PackagingUnit | null>;
 }
-

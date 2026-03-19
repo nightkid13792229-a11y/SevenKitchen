@@ -2,7 +2,13 @@
  * DTOs for production task printing
  */
 
-import { IsString, IsNumber, IsArray, IsOptional, IsObject } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsArray,
+  IsOptional,
+  IsObject,
+} from 'class-validator';
 
 export class PrintTaskOrderItemDto {
   @IsNumber()

@@ -4,8 +4,17 @@
  * Phase 1: Purchasing Management Feature
  */
 
-import { Injectable, Inject, Logger, BadRequestException, ForbiddenException } from '@nestjs/common';
-import { REIMBURSEMENT_REPOSITORY, PURCHASE_LIST_REPOSITORY } from './purchasing.service.tokens';
+import {
+  Injectable,
+  Inject,
+  Logger,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
+import {
+  REIMBURSEMENT_REPOSITORY,
+  PURCHASE_LIST_REPOSITORY,
+} from './purchasing.service.tokens';
 import type { ReimbursementRepository } from '../../domain/purchasing/reimbursement.repository';
 import type { PurchaseListRepository } from '../../domain/purchasing/purchase-list.repository';
 import { ORDER_REPOSITORY } from '../order/order.service';
@@ -77,7 +86,7 @@ export class ReimbursementService {
    */
   async submitReimbursement(
     dto: SubmitReimbursementDto,
-    submittedById: string
+    submittedById: string,
   ): Promise<Reimbursement> {
     // 验证发票照片
     if (dto.receiptUrls.length === 0) {
@@ -93,7 +102,7 @@ export class ReimbursementService {
     }
 
     this.logger.log(
-      `Submitting reimbursement for ${dto.purchaseListIds.length} purchase lists by user ${submittedById}`
+      `Submitting reimbursement for ${dto.purchaseListIds.length} purchase lists by user ${submittedById}`,
     );
 
     // 查询所有采购清单（如果有）
@@ -109,14 +118,14 @@ export class ReimbursementService {
       // 验证采购清单状态
       if (list.status !== PurchaseListStatus.COMPLETED) {
         throw new BadRequestException(
-          `采购清单 ${listId} 未完成，当前状态：${list.status}`
+          `采购清单 ${listId} 未完成，当前状态：${list.status}`,
         );
       }
 
       // 验证采购清单未被其他报销单关联
       if (list.reimbursementId) {
         throw new BadRequestException(
-          `采购清单 ${listId} 已关联到报销单 ${list.reimbursementId}`
+          `采购清单 ${listId} 已关联到报销单 ${list.reimbursementId}`,
         );
       }
 
@@ -131,40 +140,42 @@ export class ReimbursementService {
     }, 0);
 
     // 计算自定义费用总额
-    const customFeesTotal = dto.customFees?.reduce((sum, fee) => sum + (fee.amount || 0), 0) || 0;
+    const customFeesTotal =
+      dto.customFees?.reduce((sum, fee) => sum + (fee.amount || 0), 0) || 0;
 
     // 验证自定义费用数组中的每一项
     if (dto.customFees && dto.customFees.length > 0) {
       dto.customFees.forEach((fee, index) => {
         if (!fee.description || fee.description.trim() === '') {
           throw new BadRequestException(
-            `Custom fee at index ${index} must have a description`
+            `Custom fee at index ${index} must have a description`,
           );
         }
         if (fee.amount < 0) {
           throw new BadRequestException(
-            `Custom fee at index ${index} has negative amount`
+            `Custom fee at index ${index} has negative amount`,
           );
         }
       });
     }
 
     // 验证总金额
-    const calculatedTotal = purchaseListsTotal +
+    const calculatedTotal =
+      purchaseListsTotal +
       (dto.platformShippingFee || 0) +
       (dto.platformPackagingFee || 0) +
       customFeesTotal;
 
     if (Math.abs(dto.totalActualCost - calculatedTotal) > 0.01) {
       throw new BadRequestException(
-        `报销总金额与费用明细不匹配。期望: ¥${calculatedTotal.toFixed(2)}, 实际: ¥${dto.totalActualCost.toFixed(2)}`
+        `报销总金额与费用明细不匹配。期望: ¥${calculatedTotal.toFixed(2)}, 实际: ¥${dto.totalActualCost.toFixed(2)}`,
       );
     }
 
     this.logger.log(
       `Validated reimbursement cost details: purchaseLists=¥${purchaseListsTotal}, ` +
-      `shipping=¥${dto.platformShippingFee || 0}, packaging=¥${dto.platformPackagingFee || 0}, ` +
-      `custom=¥${customFeesTotal}, total=¥${dto.totalActualCost}`
+        `shipping=¥${dto.platformShippingFee || 0}, packaging=¥${dto.platformPackagingFee || 0}, ` +
+        `custom=¥${customFeesTotal}, total=¥${dto.totalActualCost}`,
     );
 
     // 生成报销单号
@@ -189,7 +200,9 @@ export class ReimbursementService {
     // 保存报销单
     const saved = await this.reimbursementRepository.save(reimbursement);
 
-    this.logger.log(`Reimbursement ${saved.id} (${claimNumber}) submitted successfully`);
+    this.logger.log(
+      `Reimbursement ${saved.id} (${claimNumber}) submitted successfully`,
+    );
 
     return saved;
   }
@@ -200,7 +213,7 @@ export class ReimbursementService {
   async reviewReimbursement(
     id: string,
     reviewerId: string,
-    dto: ReviewReimbursementDto
+    dto: ReviewReimbursementDto,
   ): Promise<Reimbursement> {
     const reimbursement = await this.reimbursementRepository.findById(id);
 
@@ -211,12 +224,12 @@ export class ReimbursementService {
     // 验证状态
     if (reimbursement.status !== ReimbursementStatus.PENDING_REVIEW) {
       throw new BadRequestException(
-        `只有待审核状态的报销单可以审核。当前状态：${reimbursement.status}`
+        `只有待审核状态的报销单可以审核。当前状态：${reimbursement.status}`,
       );
     }
 
     this.logger.log(
-      `Reviewer ${reviewerId} reviewing reimbursement ${id} with decision: ${dto.decision}`
+      `Reviewer ${reviewerId} reviewing reimbursement ${id} with decision: ${dto.decision}`,
     );
 
     // 审核报销单
@@ -230,7 +243,9 @@ export class ReimbursementService {
       await this.unlockProductionForReimbursement(saved);
     }
 
-    this.logger.log(`Reimbursement ${id} reviewed successfully: ${dto.decision}`);
+    this.logger.log(
+      `Reimbursement ${id} reviewed successfully: ${dto.decision}`,
+    );
 
     return saved;
   }
@@ -244,18 +259,18 @@ export class ReimbursementService {
    * 3. 将订单状态从 PAID → PURCHASING
    */
   private async unlockProductionForReimbursement(
-    reimbursement: Reimbursement
+    reimbursement: Reimbursement,
   ): Promise<void> {
     const purchaseLists = reimbursement.purchaseLists;
     const orderIds = new Set<string>();
 
     // 收集所有关联订单ID
     for (const list of purchaseLists) {
-      list.sourceOrderIds.forEach(id => orderIds.add(id));
+      list.sourceOrderIds.forEach((id) => orderIds.add(id));
     }
 
     this.logger.log(
-      `Unlocking production for ${orderIds.size} orders after reimbursement ${reimbursement.id} approval`
+      `Unlocking production for ${orderIds.size} orders after reimbursement ${reimbursement.id} approval`,
     );
 
     // 批量更新订单状态
@@ -284,7 +299,7 @@ export class ReimbursementService {
             reimbursementId: reimbursement.id,
             claimNumber: reimbursement.claimNumber,
             triggeredBy: 'reimbursement_approved',
-          }
+          },
         );
 
         unlockedCount++;
@@ -292,7 +307,7 @@ export class ReimbursementService {
     }
 
     this.logger.log(
-      `Reimbursement ${reimbursement.id} approved: unlocked ${unlockedCount} orders for production`
+      `Reimbursement ${reimbursement.id} approved: unlocked ${unlockedCount} orders for production`,
     );
   }
 
@@ -301,7 +316,7 @@ export class ReimbursementService {
    */
   async resubmitReimbursement(
     id: string,
-    dto: SubmitReimbursementDto
+    dto: SubmitReimbursementDto,
   ): Promise<Reimbursement> {
     const reimbursement = await this.reimbursementRepository.findById(id);
 
@@ -315,7 +330,7 @@ export class ReimbursementService {
       reimbursement.status !== ReimbursementStatus.REQUIRES_RESUBMIT
     ) {
       throw new BadRequestException(
-        `只有被驳回或需要重新提交的报销单才能重新提交。当前状态：${reimbursement.status}`
+        `只有被驳回或需要重新提交的报销单才能重新提交。当前状态：${reimbursement.status}`,
       );
     }
 
@@ -343,7 +358,14 @@ export class ReimbursementService {
     page?: number;
     pageSize?: number;
   }): Promise<{ list: Reimbursement[]; total: number }> {
-    const { status, submittedById, startDate, endDate, page = 1, pageSize = 20 } = params;
+    const {
+      status,
+      submittedById,
+      startDate,
+      endDate,
+      page = 1,
+      pageSize = 20,
+    } = params;
 
     const query: any = { page, pageSize };
     if (status) query.status = status;
@@ -373,7 +395,7 @@ export class ReimbursementService {
   async deleteReimbursement(
     id: string,
     requesterId: string,
-    isAdmin: boolean
+    isAdmin: boolean,
   ): Promise<void> {
     // 1. 查询报销单
     const reimbursement = await this.reimbursementRepository.findById(id);
@@ -395,8 +417,13 @@ export class ReimbursementService {
     }
 
     // 4. 删除COS中的报销凭证文件
-    if (reimbursement.paymentProofKeys && reimbursement.paymentProofKeys.length > 0) {
-      this.logger.log(`Deleting ${reimbursement.paymentProofKeys.length} payment proof files from COS`);
+    if (
+      reimbursement.paymentProofKeys &&
+      reimbursement.paymentProofKeys.length > 0
+    ) {
+      this.logger.log(
+        `Deleting ${reimbursement.paymentProofKeys.length} payment proof files from COS`,
+      );
       for (const key of reimbursement.paymentProofKeys) {
         try {
           await this.cosService.deleteImage(key);
@@ -422,7 +449,7 @@ export class ReimbursementService {
    */
   async uploadPaymentProof(
     id: string,
-    paymentProofUrls: string[]
+    paymentProofUrls: string[],
   ): Promise<Reimbursement> {
     // 1. 查询报销单
     const reimbursement = await this.reimbursementRepository.findById(id);
@@ -467,7 +494,9 @@ export class ReimbursementService {
 
     const saved = await this.reimbursementRepository.save(updated);
 
-    this.logger.log(`Payment proof uploaded for reimbursement ${id}, status changed to REIMBURSED`);
+    this.logger.log(
+      `Payment proof uploaded for reimbursement ${id}, status changed to REIMBURSED`,
+    );
 
     return saved;
   }
@@ -477,7 +506,7 @@ export class ReimbursementService {
    */
   async uploadPaymentProofFiles(
     id: string,
-    files: Express.Multer.File[]
+    files: Express.Multer.File[],
   ): Promise<Reimbursement> {
     // 1. 查询报销单
     const reimbursement = await this.reimbursementRepository.findById(id);
@@ -496,11 +525,17 @@ export class ReimbursementService {
     }
 
     // 3. 上传文件到COS
-    const uploadPromises = files.map(file =>
-      this.cosService.uploadImage(file, file.originalname, 'reimbursement-payment-proofs')
+    const uploadPromises = files.map((file) =>
+      this.cosService.uploadImage(
+        file,
+        file.originalname,
+        'reimbursement-payment-proofs',
+      ),
     );
 
-    this.logger.log(`Uploading ${files.length} payment proof files to COS for reimbursement ${id}`);
+    this.logger.log(
+      `Uploading ${files.length} payment proof files to COS for reimbursement ${id}`,
+    );
 
     let uploadResults;
     try {
@@ -510,17 +545,24 @@ export class ReimbursementService {
       throw new BadRequestException('文件上传失败');
     }
 
-    const paymentProofUrls = uploadResults.map(r => r.url);
-    const paymentProofKeys = uploadResults.map(r => r.key);
+    const paymentProofUrls = uploadResults.map((r) => r.url);
+    const paymentProofKeys = uploadResults.map((r) => r.key);
 
-    this.logger.log(`Successfully uploaded ${uploadResults.length} files to COS`);
+    this.logger.log(
+      `Successfully uploaded ${uploadResults.length} files to COS`,
+    );
 
     // 4. 如果已有凭证，合并新旧凭证
     let finalUrls = paymentProofUrls;
     let finalKeys = paymentProofKeys;
 
-    if (reimbursement.paymentProofKeys && reimbursement.paymentProofKeys.length > 0) {
-      this.logger.log(`Merging with existing ${reimbursement.paymentProofKeys.length} payment proof files`);
+    if (
+      reimbursement.paymentProofKeys &&
+      reimbursement.paymentProofKeys.length > 0
+    ) {
+      this.logger.log(
+        `Merging with existing ${reimbursement.paymentProofKeys.length} payment proof files`,
+      );
       // 合并新旧凭证（避免重复）
       finalUrls = [...reimbursement.paymentProofUrls, ...paymentProofUrls];
       finalKeys = [...reimbursement.paymentProofKeys, ...paymentProofKeys];
@@ -533,9 +575,10 @@ export class ReimbursementService {
 
     // 5. 创建新的报销单实体（因为属性是readonly的）
     // 只有待审核状态上传凭证后，才自动改为已报销状态
-    const finalStatus = reimbursement.status === ReimbursementStatus.PENDING_REVIEW
-      ? ReimbursementStatus.REIMBURSED
-      : reimbursement.status;
+    const finalStatus =
+      reimbursement.status === ReimbursementStatus.PENDING_REVIEW
+        ? ReimbursementStatus.REIMBURSED
+        : reimbursement.status;
 
     const updated = new Reimbursement({
       id: reimbursement.id,
@@ -548,7 +591,10 @@ export class ReimbursementService {
       submittedById: reimbursement.submittedById,
       submittedAt: reimbursement.submittedAt,
       reviewedById: reimbursement.reviewedById,
-      reviewedAt: finalStatus === ReimbursementStatus.REIMBURSED ? new Date() : reimbursement.reviewedAt,
+      reviewedAt:
+        finalStatus === ReimbursementStatus.REIMBURSED
+          ? new Date()
+          : reimbursement.reviewedAt,
       reviewComment: reimbursement.reviewComment,
       createdAt: reimbursement.createdAt,
       updatedAt: new Date(),
@@ -564,7 +610,9 @@ export class ReimbursementService {
 
     const saved = await this.reimbursementRepository.save(updated);
 
-    this.logger.log(`Payment proof files uploaded for reimbursement ${id}, status: ${finalStatus}`);
+    this.logger.log(
+      `Payment proof files uploaded for reimbursement ${id}, status: ${finalStatus}`,
+    );
 
     return saved;
   }
@@ -583,14 +631,21 @@ export class ReimbursementService {
     this.logger.log(`Clearing payment proof for reimbursement ${id}`);
 
     // 2. 如果有COS文件，先删除
-    if (reimbursement.paymentProofKeys && reimbursement.paymentProofKeys.length > 0) {
-      this.logger.log(`Deleting ${reimbursement.paymentProofKeys.length} files from COS`);
+    if (
+      reimbursement.paymentProofKeys &&
+      reimbursement.paymentProofKeys.length > 0
+    ) {
+      this.logger.log(
+        `Deleting ${reimbursement.paymentProofKeys.length} files from COS`,
+      );
       try {
-        const deletePromises = reimbursement.paymentProofKeys.map(key =>
-          this.cosService.deleteImage(key)
+        const deletePromises = reimbursement.paymentProofKeys.map((key) =>
+          this.cosService.deleteImage(key),
         );
         await Promise.all(deletePromises);
-        this.logger.log(`Successfully deleted ${reimbursement.paymentProofKeys.length} files from COS`);
+        this.logger.log(
+          `Successfully deleted ${reimbursement.paymentProofKeys.length} files from COS`,
+        );
       } catch (error) {
         this.logger.error('Failed to delete files from COS:', error);
         // 即使删除失败，也继续清空数据库中的记录
@@ -637,7 +692,7 @@ export class ReimbursementService {
     id: string,
     files: Express.Multer.File[],
     requesterId: string,
-    isAdmin: boolean
+    isAdmin: boolean,
   ): Promise<Reimbursement> {
     // 1. 查询报销单
     const reimbursement = await this.reimbursementRepository.findById(id);
@@ -671,15 +726,23 @@ export class ReimbursementService {
     const newCount = files.length;
 
     if (currentCount + newCount > 10) {
-      throw new BadRequestException(`最多只能上传10张图片，当前已有${currentCount}张`);
+      throw new BadRequestException(
+        `最多只能上传10张图片，当前已有${currentCount}张`,
+      );
     }
 
     // 5. 上传文件到COS
-    const uploadPromises = files.map(file =>
-      this.cosService.uploadImage(file, file.originalname, 'reimbursement-receipts')
+    const uploadPromises = files.map((file) =>
+      this.cosService.uploadImage(
+        file,
+        file.originalname,
+        'reimbursement-receipts',
+      ),
     );
 
-    this.logger.log(`Uploading ${files.length} receipt files to COS for reimbursement ${id}`);
+    this.logger.log(
+      `Uploading ${files.length} receipt files to COS for reimbursement ${id}`,
+    );
 
     let uploadResults;
     try {
@@ -689,14 +752,22 @@ export class ReimbursementService {
       throw new BadRequestException('文件上传失败');
     }
 
-    const newReceiptUrls = uploadResults.map(r => r.url);
-    const newReceiptKeys = uploadResults.map(r => r.key);
+    const newReceiptUrls = uploadResults.map((r) => r.url);
+    const newReceiptKeys = uploadResults.map((r) => r.key);
 
     // 6. 合并新旧凭证URL
-    const updatedUrls = [...(reimbursement.receiptUrls || []), ...newReceiptUrls];
-    const updatedKeys = [...(reimbursement.receiptKeys || []), ...newReceiptKeys];
+    const updatedUrls = [
+      ...(reimbursement.receiptUrls || []),
+      ...newReceiptUrls,
+    ];
+    const updatedKeys = [
+      ...(reimbursement.receiptKeys || []),
+      ...newReceiptKeys,
+    ];
 
-    this.logger.log(`Successfully uploaded ${uploadResults.length} files to COS`);
+    this.logger.log(
+      `Successfully uploaded ${uploadResults.length} files to COS`,
+    );
 
     // 7. 创建新的报销单实体（因为属性是readonly的）
     const updated = new Reimbursement({
@@ -738,7 +809,7 @@ export class ReimbursementService {
     id: string,
     urlIndex: number,
     requesterId: string,
-    isAdmin: boolean
+    isAdmin: boolean,
   ): Promise<Reimbursement> {
     // 1. 查询报销单
     const reimbursement = await this.reimbursementRepository.findById(id);
@@ -786,14 +857,18 @@ export class ReimbursementService {
 
     // 7. 从数组中删除指定索引的元素
     const updatedUrls = [...reimbursement.receiptUrls];
-    const updatedKeys = reimbursement.receiptKeys ? [...reimbursement.receiptKeys] : [];
+    const updatedKeys = reimbursement.receiptKeys
+      ? [...reimbursement.receiptKeys]
+      : [];
 
     updatedUrls.splice(urlIndex, 1);
     if (updatedKeys.length > 0) {
       updatedKeys.splice(urlIndex, 1);
     }
 
-    this.logger.log(`Removed receipt at index ${urlIndex} from reimbursement ${id}`);
+    this.logger.log(
+      `Removed receipt at index ${urlIndex} from reimbursement ${id}`,
+    );
 
     // 8. 创建新的报销单实体（因为属性是readonly的）
     const updated = new Reimbursement({

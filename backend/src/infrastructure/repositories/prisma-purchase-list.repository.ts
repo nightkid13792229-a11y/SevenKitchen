@@ -82,7 +82,10 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
     return found ? PurchaseList.fromPrisma(found) : null;
   }
 
-  async findByDateRange(startDate: Date, endDate: Date): Promise<PurchaseList[]> {
+  async findByDateRange(
+    startDate: Date,
+    endDate: Date,
+  ): Promise<PurchaseList[]> {
     const lists = await this.prisma.purchaseList.findMany({
       where: {
         targetDate: {
@@ -106,7 +109,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
       },
     });
 
-    return lists.map(list => PurchaseList.fromPrisma(list));
+    return lists.map((list) => PurchaseList.fromPrisma(list));
   }
 
   async findByStatus(status: PurchaseListStatus): Promise<PurchaseList[]> {
@@ -128,7 +131,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
       },
     });
 
-    return lists.map(list => PurchaseList.fromPrisma(list));
+    return lists.map((list) => PurchaseList.fromPrisma(list));
   }
 
   async findByCreatedBy(createdById: string): Promise<PurchaseList[]> {
@@ -150,7 +153,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
       },
     });
 
-    return lists.map(list => PurchaseList.fromPrisma(list));
+    return lists.map((list) => PurchaseList.fromPrisma(list));
   }
 
   async findMany(params: {
@@ -161,7 +164,14 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
     page?: number;
     pageSize?: number;
   }): Promise<{ list: PurchaseList[]; total: number }> {
-    const { status, createdById, startDate, endDate, page = 1, pageSize = 20 } = params;
+    const {
+      status,
+      createdById,
+      startDate,
+      endDate,
+      page = 1,
+      pageSize = 20,
+    } = params;
 
     const where: any = {};
     if (status) where.status = status;
@@ -196,7 +206,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
     ]);
 
     return {
-      list: list.map(item => PurchaseList.fromPrisma(item)),
+      list: list.map((item) => PurchaseList.fromPrisma(item)),
       total,
     };
   }
@@ -224,7 +234,9 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
     });
   }
 
-  async findByReimbursementId(reimbursementId: string): Promise<PurchaseList[]> {
+  async findByReimbursementId(
+    reimbursementId: string,
+  ): Promise<PurchaseList[]> {
     const lists = await this.prisma.purchaseList.findMany({
       where: { reimbursementId },
       include: {
@@ -243,7 +255,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
       },
     });
 
-    return lists.map(list => PurchaseList.fromPrisma(list));
+    return lists.map((list) => PurchaseList.fromPrisma(list));
   }
 
   async existsByDateRange(startDate: Date, endDate: Date): Promise<boolean> {
@@ -265,7 +277,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
   async deleteItemAndUpdate(
     purchaseListId: string,
     itemId: string,
-    updatedList: PurchaseList
+    updatedList: PurchaseList,
   ): Promise<PurchaseList> {
     // 使用事务删除原料项并更新采购清单
     const result = await this.prisma.$transaction(async (tx) => {
@@ -308,7 +320,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
    */
   async recalculateItems(
     purchaseListId: string,
-    updatedList: PurchaseList
+    updatedList: PurchaseList,
   ): Promise<PurchaseList> {
     // 使用事务删除所有原料项并重新创建
     const result = await this.prisma.$transaction(async (tx) => {
@@ -318,7 +330,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
       });
 
       // 2. 批量创建新的原料项
-      const itemsData = updatedList.items.map(item => ({
+      const itemsData = updatedList.items.map((item) => ({
         ...item.toPrisma(),
         purchaseListId,
       }));

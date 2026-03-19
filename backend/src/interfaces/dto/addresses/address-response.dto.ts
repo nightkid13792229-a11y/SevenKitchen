@@ -30,4 +30,3 @@ export class AddressDto {
   @ApiProperty({ description: 'Is default address', example: false })
   isDefault!: boolean;
 }
-

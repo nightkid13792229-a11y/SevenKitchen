@@ -28,4 +28,3 @@ export enum SupplementCategoryType {
   FUNCTIONAL = 'FUNCTIONAL',
   OTHER = 'OTHER',
 }
-

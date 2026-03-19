@@ -6,4 +6,3 @@
 export * from './enums';
 export * from './inventory-ledger-entry.entity';
 export * from './inventory.repository';
-

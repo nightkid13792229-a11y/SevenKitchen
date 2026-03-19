@@ -84,7 +84,18 @@ export class PurchaseRecord {
   /**
    * 更新采购记录
    */
-  update(data: Partial<Pick<PurchaseRecordConstructor, 'purchaseChannel' | 'actualQuantity' | 'actualCost' | 'productModel' | 'notes'>>): void {
+  update(
+    data: Partial<
+      Pick<
+        PurchaseRecordConstructor,
+        | 'purchaseChannel'
+        | 'actualQuantity'
+        | 'actualCost'
+        | 'productModel'
+        | 'notes'
+      >
+    >,
+  ): void {
     if (data.purchaseChannel !== undefined) {
       this.purchaseChannel = data.purchaseChannel;
     }

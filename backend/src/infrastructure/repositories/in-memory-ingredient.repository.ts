@@ -41,10 +41,7 @@ export class InMemoryIngredientRepository implements IngredientRepository {
     return ingredient;
   }
 
-  async update(
-    id: string,
-    data: Partial<any>,
-  ): Promise<Ingredient> {
+  async update(id: string, data: Partial<any>): Promise<Ingredient> {
     const existing = this.ingredients.get(id);
     if (!existing) {
       throw new Error(`Ingredient not found: ${id}`);
@@ -117,4 +114,3 @@ export class InMemoryIngredientRepository implements IngredientRepository {
     return [];
   }
 }
-

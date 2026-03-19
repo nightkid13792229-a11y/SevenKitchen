@@ -3,9 +3,17 @@
  * Phase 8.13: Inventory Deduction
  */
 
-import { Injectable, Inject, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import type { InventoryRepository } from '../../domain/inventory/inventory.repository';
-import { InventoryLedgerEntry, InventorySourceType } from '../../domain/inventory';
+import {
+  InventoryLedgerEntry,
+  InventorySourceType,
+} from '../../domain/inventory';
 import type { ProductionBatchRepository } from '../../domain/production/production.repository';
 import { PackagingUnitStatus } from '../../domain/production/enums';
 import { PRODUCTION_BATCH_REPOSITORY } from '../production/production.service';
@@ -27,14 +35,13 @@ export class InventoryService {
   /**
    * Deduct inventory from a completed kitchen task
    * Phase 8.13: Uses actual_g from ingredientsUsageSnapshot
-   * 
+   *
    * CRITICAL: Must be idempotent - same PackagingUnit cannot deduct twice
    */
   async deductFromKitchenTask(packagingUnitId: string): Promise<void> {
     // Step 1: Load PackagingUnit
-    const unit = await this.productionRepository.findPackagingUnitById(
-      packagingUnitId,
-    );
+    const unit =
+      await this.productionRepository.findPackagingUnitById(packagingUnitId);
     if (!unit) {
       throw new BadRequestException(
         `PackagingUnit not found: ${packagingUnitId}`,
@@ -117,7 +124,10 @@ export class InventoryService {
       );
     } catch (error: any) {
       // Handle unique constraint violation (should not happen due to idempotency check, but be safe)
-      if (error.code === 'P2002' || error.message?.includes('Unique constraint')) {
+      if (
+        error.code === 'P2002' ||
+        error.message?.includes('Unique constraint')
+      ) {
         this.logger.warn(
           `Unique constraint violation for PackagingUnit ${packagingUnitId}. Deduction may already exist.`,
         );
@@ -148,4 +158,3 @@ export class InventoryService {
     );
   }
 }
-

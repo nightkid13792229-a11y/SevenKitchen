@@ -58,7 +58,13 @@ export class OrderReadyForShipmentResponseDto {
 
 @ApiTags('Staff Shipping')
 @Controller('api/v1/staff/shipping')
-@UsePipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
+@UsePipes(
+  new ValidationPipe({
+    transform: true,
+    whitelist: true,
+    forbidNonWhitelisted: true,
+  }),
+)
 export class StaffShippingController {
   constructor(
     private readonly shippingFulfillmentService: ShippingFulfillmentService,
@@ -74,7 +80,8 @@ export class StaffShippingController {
   async listOrdersReadyForShipment(): Promise<
     ApiResponseDto<OrderReadyForShipmentResponseDto[]>
   > {
-    const orders = await this.shippingFulfillmentService.listOrdersReadyForShipment();
+    const orders =
+      await this.shippingFulfillmentService.listOrdersReadyForShipment();
     return ApiResponseDto.success(orders);
   }
 
@@ -92,7 +99,15 @@ export class StaffShippingController {
   async markOrderAsShipped(
     @Param('orderId') orderId: string,
     @Body() dto: MarkOrderAsShippedRequestDto,
-  ): Promise<ApiResponseDto<{ id: string; status: OrderStatus; trackingNumber: string; carrierCode: string; shippedAt: string }>> {
+  ): Promise<
+    ApiResponseDto<{
+      id: string;
+      status: OrderStatus;
+      trackingNumber: string;
+      carrierCode: string;
+      shippedAt: string;
+    }>
+  > {
     try {
       const order = await this.shippingFulfillmentService.markOrderAsShipped(
         orderId,
@@ -116,5 +131,3 @@ export class StaffShippingController {
     }
   }
 }
-
-

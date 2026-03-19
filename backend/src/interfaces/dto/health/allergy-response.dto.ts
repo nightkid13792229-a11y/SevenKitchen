@@ -1,32 +1,32 @@
-import { Expose } from 'class-transformer'
+import { Expose } from 'class-transformer';
 
 export class AllergyRecordResponseDto {
   @Expose()
-  id!: string
+  id!: string;
 
   @Expose()
-  dogId!: string
+  dogId!: string;
 
   @Expose()
-  allergen!: string
+  allergen!: string;
 
   @Expose()
-  notes!: string | null
+  notes!: string | null;
 
   @Expose()
-  attachments!: string[]
+  attachments!: string[];
 
   @Expose()
-  createdAt!: string
+  createdAt!: string;
 
   @Expose()
-  updatedAt!: string
+  updatedAt!: string;
 }
 
 export class AllergyRecordListResponseDto {
   @Expose()
-  total!: number
+  total!: number;
 
   @Expose()
-  records!: AllergyRecordResponseDto[]
+  records!: AllergyRecordResponseDto[];
 }

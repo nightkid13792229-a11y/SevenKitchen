@@ -12,7 +12,7 @@ import {
   UseGuards,
   ValidationPipe,
   UsePipes,
-} from '@nestjs/common'
+} from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -21,11 +21,11 @@ import {
   ApiBody,
   ApiSecurity,
   ApiHeader,
-} from '@nestjs/swagger'
-import { HealthService } from '../../application/health/health.service'
-import { ApiResponseDto } from '../dto/common/response.dto'
-import { AuthGuard, CurrentUser } from '../auth'
-import type { RequestUser } from '../auth'
+} from '@nestjs/swagger';
+import { HealthService } from '../../application/health/health.service';
+import { ApiResponseDto } from '../dto/common/response.dto';
+import { AuthGuard, CurrentUser } from '../auth';
+import type { RequestUser } from '../auth';
 
 @ApiTags('Health Notifications')
 @Controller('api/v1/dogs')
@@ -91,12 +91,14 @@ export class HealthNotificationController {
 
     return ApiResponseDto.success({
       subscribedCount: vaccineIds?.length || 0,
-    })
+    });
   }
 
   @Get(':dogId/vaccines/upcoming/notify')
   @UseGuards(AuthGuard)
-  @ApiOperation({ summary: 'Get upcoming vaccines and send subscription message' })
+  @ApiOperation({
+    summary: 'Get upcoming vaccines and send subscription message',
+  })
   @ApiSecurity('X-Customer-Id')
   @ApiHeader({
     name: 'X-Customer-Id',
@@ -117,7 +119,11 @@ export class HealthNotificationController {
     // 2. Send subscription message to user
     // 3. Return count of notifications sent
 
-    const records = await this.healthService.getUpcomingVaccines(dogId, user.customerId, 30)
+    const records = await this.healthService.getUpcomingVaccines(
+      dogId,
+      user.customerId,
+      30,
+    );
 
     // TODO: Send WeChat subscription messages
     // const notificationPromises = records.data.records.map(vaccine =>
@@ -135,7 +141,7 @@ export class HealthNotificationController {
 
     return ApiResponseDto.success({
       notifiedCount: records.total,
-    })
+    });
   }
 
   @Get(':dogId/health/export')
@@ -157,12 +163,13 @@ export class HealthNotificationController {
     @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<any>> {
     // Fetch all health records
-    const [vaccinesRes, checkupsRes, medicalRecordsRes, allergiesRes] = await Promise.all([
-      this.healthService.getVaccineRecords(dogId, user.customerId),
-      this.healthService.getCheckupRecords(dogId, user.customerId),
-      this.healthService.getMedicalRecords(dogId, user.customerId),
-      this.healthService.getAllergyRecords(dogId, user.customerId),
-    ])
+    const [vaccinesRes, checkupsRes, medicalRecordsRes, allergiesRes] =
+      await Promise.all([
+        this.healthService.getVaccineRecords(dogId, user.customerId),
+        this.healthService.getCheckupRecords(dogId, user.customerId),
+        this.healthService.getMedicalRecords(dogId, user.customerId),
+        this.healthService.getAllergyRecords(dogId, user.customerId),
+      ]);
 
     // Return comprehensive health data
     return ApiResponseDto.success({
@@ -171,6 +178,6 @@ export class HealthNotificationController {
       medicalRecords: medicalRecordsRes.records,
       allergies: allergiesRes.records,
       exportDate: new Date().toISOString(),
-    })
+    });
   }
 }

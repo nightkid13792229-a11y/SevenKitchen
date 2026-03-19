@@ -75,12 +75,12 @@ export class PrismaReimbursementRepository implements ReimbursementRepository {
     if (!reimbursement.id || reimbursement.id === data.id) {
       // 为每个采购清单关联报销单ID
       await Promise.all(
-        reimbursement.purchaseLists.map(list =>
+        reimbursement.purchaseLists.map((list) =>
           this.prisma.purchaseList.update({
             where: { id: list.id },
             data: { reimbursementId: saved.id },
-          })
-        )
+          }),
+        ),
       );
     }
 
@@ -200,7 +200,7 @@ export class PrismaReimbursementRepository implements ReimbursementRepository {
       },
     });
 
-    return reimbursements.map(r => Reimbursement.fromPrisma(r));
+    return reimbursements.map((r) => Reimbursement.fromPrisma(r));
   }
 
   async findBySubmittedBy(submittedById: string): Promise<Reimbursement[]> {
@@ -232,7 +232,7 @@ export class PrismaReimbursementRepository implements ReimbursementRepository {
       },
     });
 
-    return reimbursements.map(r => Reimbursement.fromPrisma(r));
+    return reimbursements.map((r) => Reimbursement.fromPrisma(r));
   }
 
   async findMany(params: {
@@ -243,7 +243,14 @@ export class PrismaReimbursementRepository implements ReimbursementRepository {
     page?: number;
     pageSize?: number;
   }): Promise<{ list: Reimbursement[]; total: number }> {
-    const { status, submittedById, startDate, endDate, page = 1, pageSize = 20 } = params;
+    const {
+      status,
+      submittedById,
+      startDate,
+      endDate,
+      page = 1,
+      pageSize = 20,
+    } = params;
 
     const where: any = {};
     if (status) where.status = status;
@@ -288,7 +295,7 @@ export class PrismaReimbursementRepository implements ReimbursementRepository {
     ]);
 
     return {
-      list: list.map(item => Reimbursement.fromPrisma(item)),
+      list: list.map((item) => Reimbursement.fromPrisma(item)),
       total,
     };
   }
@@ -339,7 +346,7 @@ export class PrismaReimbursementRepository implements ReimbursementRepository {
       },
     });
 
-    return reimbursements.map(r => Reimbursement.fromPrisma(r));
+    return reimbursements.map((r) => Reimbursement.fromPrisma(r));
   }
 
   async delete(id: string): Promise<void> {

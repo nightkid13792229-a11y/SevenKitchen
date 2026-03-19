@@ -4,7 +4,11 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { ReimbursementStatus, REIMBURSEMENT_STATUS_TRANSITIONS, PurchaseListStatus } from './enums';
+import {
+  ReimbursementStatus,
+  REIMBURSEMENT_STATUS_TRANSITIONS,
+  PurchaseListStatus,
+} from './enums';
 import { PurchaseList } from './purchase-list.entity';
 import { InvalidStateTransitionError } from '../common/errors';
 
@@ -105,10 +109,12 @@ export class Reimbursement {
     // 如果有采购清单，验证它们都是COMPLETED状态
     if (this.purchaseLists.length > 0) {
       const allCompleted = this.purchaseLists.every(
-        list => list.status === PurchaseListStatus.COMPLETED
+        (list) => list.status === PurchaseListStatus.COMPLETED,
       );
       if (!allCompleted) {
-        throw new Error('All purchase lists must be completed before reimbursement');
+        throw new Error(
+          'All purchase lists must be completed before reimbursement',
+        );
       }
     }
 
@@ -118,12 +124,18 @@ export class Reimbursement {
     }
 
     // 验证平台运费
-    if (this.platformShippingFee !== undefined && this.platformShippingFee < 0) {
+    if (
+      this.platformShippingFee !== undefined &&
+      this.platformShippingFee < 0
+    ) {
       throw new Error('Platform shipping fee cannot be negative');
     }
 
     // 验证平台打包费
-    if (this.platformPackagingFee !== undefined && this.platformPackagingFee < 0) {
+    if (
+      this.platformPackagingFee !== undefined &&
+      this.platformPackagingFee < 0
+    ) {
       throw new Error('Platform packaging fee cannot be negative');
     }
 
@@ -131,7 +143,9 @@ export class Reimbursement {
     if (this.customFees && this.customFees.length > 0) {
       this.customFees.forEach((fee, index) => {
         if (!fee.description || fee.description.trim() === '') {
-          throw new Error(`Custom fee at index ${index} must have a description`);
+          throw new Error(
+            `Custom fee at index ${index} must have a description`,
+          );
         }
         if (fee.amount < 0) {
           throw new Error(`Custom fee at index ${index} has negative amount`);
@@ -147,11 +161,11 @@ export class Reimbursement {
   review(
     reviewerId: string,
     decision: 'APPROVE' | 'REJECT' | 'REQUIRES_RESUBMIT',
-    comment?: string
+    comment?: string,
   ): void {
     if (this.status !== ReimbursementStatus.PENDING_REVIEW) {
       throw new InvalidStateTransitionError(
-        `Only PENDING_REVIEW reimbursements can be reviewed`
+        `Only PENDING_REVIEW reimbursements can be reviewed`,
       );
     }
 
@@ -174,7 +188,7 @@ export class Reimbursement {
 
     if (!allowedTransitions.includes(newStatus)) {
       throw new InvalidStateTransitionError(
-        `Invalid state transition from ${this.status} to ${newStatus}`
+        `Invalid state transition from ${this.status} to ${newStatus}`,
       );
     }
 
@@ -193,7 +207,7 @@ export class Reimbursement {
     const allowedTransitions = REIMBURSEMENT_STATUS_TRANSITIONS[this.status];
     if (!allowedTransitions.includes(ReimbursementStatus.PENDING_REVIEW)) {
       throw new InvalidStateTransitionError(
-        `Only REJECTED or REQUIRES_RESUBMIT reimbursements can be resubmitted`
+        `Only REJECTED or REQUIRES_RESUBMIT reimbursements can be resubmitted`,
       );
     }
 
@@ -205,7 +219,7 @@ export class Reimbursement {
 
     // 如果提供了新的发票照片，更新它们
     if (newReceiptUrls) {
-      (this.receiptUrls as string[]) = newReceiptUrls;
+      this.receiptUrls = newReceiptUrls;
     }
   }
 
@@ -301,9 +315,9 @@ export class Reimbursement {
    * 从Prisma格式创建实体
    */
   static fromPrisma(data: any): Reimbursement {
-    const purchaseLists = data.purchaseLists?.map(
-      (list: any) => PurchaseList.fromPrisma(list)
-    ) || [];
+    const purchaseLists =
+      data.purchaseLists?.map((list: any) => PurchaseList.fromPrisma(list)) ||
+      [];
 
     return new Reimbursement({
       id: data.id,
@@ -321,8 +335,12 @@ export class Reimbursement {
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
       purchaseLists,
-      platformShippingFee: data.platformShippingFee ? Number(data.platformShippingFee) : undefined,
-      platformPackagingFee: data.platformPackagingFee ? Number(data.platformPackagingFee) : undefined,
+      platformShippingFee: data.platformShippingFee
+        ? Number(data.platformShippingFee)
+        : undefined,
+      platformPackagingFee: data.platformPackagingFee
+        ? Number(data.platformPackagingFee)
+        : undefined,
       customFees: data.customFees || [],
       paymentProofUrls: data.paymentProofUrls || [],
       paymentProofKeys: data.paymentProofKeys || [],

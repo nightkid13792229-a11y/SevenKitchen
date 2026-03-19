@@ -7,7 +7,7 @@
  * 采购清单状态
  */
 export enum PurchaseListStatus {
-  PENDING = 'PENDING',     // 待采购
+  PENDING = 'PENDING', // 待采购
   COMPLETED = 'COMPLETED', // 采购完成
 }
 
@@ -15,27 +15,33 @@ export enum PurchaseListStatus {
  * 报销单状态
  */
 export enum ReimbursementStatus {
-  PENDING_REVIEW = 'PENDING_REVIEW',      // 待审核
-  REIMBURSED = 'REIMBURSED',              // 已报销
-  REJECTED = 'REJECTED',                  // 已驳回
+  PENDING_REVIEW = 'PENDING_REVIEW', // 待审核
+  REIMBURSED = 'REIMBURSED', // 已报销
+  REJECTED = 'REJECTED', // 已驳回
   REQUIRES_RESUBMIT = 'REQUIRES_RESUBMIT', // 需重新提交
 }
 
 /**
  * 状态机转换规则
  */
-export const PURCHASE_LIST_STATUS_TRANSITIONS: Record<PurchaseListStatus, PurchaseListStatus[]> = {
+export const PURCHASE_LIST_STATUS_TRANSITIONS: Record<
+  PurchaseListStatus,
+  PurchaseListStatus[]
+> = {
   [PurchaseListStatus.PENDING]: [PurchaseListStatus.COMPLETED],
   [PurchaseListStatus.COMPLETED]: [], // 终态
 };
 
-export const REIMBURSEMENT_STATUS_TRANSITIONS: Record<ReimbursementStatus, ReimbursementStatus[]> = {
+export const REIMBURSEMENT_STATUS_TRANSITIONS: Record<
+  ReimbursementStatus,
+  ReimbursementStatus[]
+> = {
   [ReimbursementStatus.PENDING_REVIEW]: [
     ReimbursementStatus.REIMBURSED,
     ReimbursementStatus.REJECTED,
-    ReimbursementStatus.REQUIRES_RESUBMIT
+    ReimbursementStatus.REQUIRES_RESUBMIT,
   ],
-  [ReimbursementStatus.REIMBURSED]: [],                       // 终态
-  [ReimbursementStatus.REJECTED]: [],                           // 终态
+  [ReimbursementStatus.REIMBURSED]: [], // 终态
+  [ReimbursementStatus.REJECTED]: [], // 终态
   [ReimbursementStatus.REQUIRES_RESUBMIT]: [ReimbursementStatus.PENDING_REVIEW], // 可重新提交
 };

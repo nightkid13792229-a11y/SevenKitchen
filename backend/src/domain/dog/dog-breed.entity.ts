@@ -51,10 +51,7 @@ export class DogBreed {
     }
 
     // Average adult weight must be positive if provided
-    if (
-      this.averageAdultWeightKg !== null &&
-      this.averageAdultWeightKg <= 0
-    ) {
+    if (this.averageAdultWeightKg !== null && this.averageAdultWeightKg <= 0) {
       throw new ValidationError(
         `Average adult weight must be positive if provided, got: ${this.averageAdultWeightKg}`,
       );
@@ -90,4 +87,3 @@ export class DogBreed {
     return ageYears >= this.seniorAgeYears;
   }
 }
-

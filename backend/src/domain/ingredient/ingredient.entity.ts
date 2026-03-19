@@ -13,7 +13,8 @@ import {
 import { ValidationError } from '../common/errors';
 
 export interface IngredientProperties
-  extends Partial<FoodProperties>,
+  extends
+    Partial<FoodProperties>,
     Partial<SupplementProperties>,
     Partial<PackagingProperties> {}
 
@@ -58,7 +59,10 @@ export class Ingredient {
     if (this.type === IngredientType.FOOD) {
       const foodProps = this.properties as FoodProperties;
       if (foodProps.edible_yield_rate !== undefined) {
-        if (foodProps.edible_yield_rate <= 0 || foodProps.edible_yield_rate > 1) {
+        if (
+          foodProps.edible_yield_rate <= 0 ||
+          foodProps.edible_yield_rate > 1
+        ) {
           throw new ValidationError(
             `edible_yield_rate must be between 0 and 1, got: ${foodProps.edible_yield_rate}`,
           );
@@ -129,4 +133,3 @@ export class Ingredient {
     return packagingProps.is_consumable ?? false;
   }
 }
-

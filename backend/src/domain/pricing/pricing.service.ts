@@ -58,7 +58,7 @@ export interface PurchaseLink {
 export interface RecipeItem {
   ingredientId: string;
   ingredient: Ingredient;
-  preparationMethod?: string | null;  // 添加时机/制备方法
+  preparationMethod?: string | null; // 添加时机/制备方法
   ratioPercent?: number | null;
   exampleWeight?: number | null;
   nutrientTargetKey?: string | null;
@@ -105,19 +105,19 @@ export interface PricingBreakdown {
 export interface IngredientCostItem {
   name: string;
   type: string;
-  amount: number;              // 成本计算用量（含出肉率和生产损耗率）
+  amount: number; // 成本计算用量（含出肉率和生产损耗率）
   unit: string;
   unitCost: number;
   cost: number;
   calculation: string;
-  purchaseChannel?: string;  // 采购渠道
-  brand?: string;             // 品牌
-  displayUnit?: string;       // 显示单位（前端用于显示）
-  netAmount?: number;         // 净需求（不含生产损耗和出肉率，用于前端显示和补剂用量计算）
-  purchaseAmount?: number;    // 采购用量（仅含生产损耗率，不含出肉率）
-  productModel?: string;      // 规格
-  ingredientId?: string;      // 原料ID
-  properties?: any;           // 完整的properties对象（包含purchase_link等）
+  purchaseChannel?: string; // 采购渠道
+  brand?: string; // 品牌
+  displayUnit?: string; // 显示单位（前端用于显示）
+  netAmount?: number; // 净需求（不含生产损耗和出肉率，用于前端显示和补剂用量计算）
+  purchaseAmount?: number; // 采购用量（仅含生产损耗率，不含出肉率）
+  productModel?: string; // 规格
+  ingredientId?: string; // 原料ID
+  properties?: any; // 完整的properties对象（包含purchase_link等）
   preparationMethod?: string; // 添加时机/制备方法
   nutrientTargetKey?: string; // 营养素名称（补剂用）
   nutrientTargetValue?: number; // 营养目标值（补剂用）
@@ -125,25 +125,25 @@ export interface IngredientCostItem {
 
 export interface PackagingPerPackConsumables {
   vacuumBagName: string;
-  vacuumBagSpec: string;  // 真空袋规格
+  vacuumBagSpec: string; // 真空袋规格
   labelName: string;
-  labelSpec: string;      // 标签规格
-  vacuumBagCostPerPack: number;  // 真空袋每袋成本
-  labelCostPerPack: number;     // 标签每袋成本
-  vacuumBagTotalCost: number;   // 真空袋总成本
-  labelTotalCost: number;       // 标签总成本
-  totalCost: number;            // 小计（总成本）
+  labelSpec: string; // 标签规格
+  vacuumBagCostPerPack: number; // 真空袋每袋成本
+  labelCostPerPack: number; // 标签每袋成本
+  vacuumBagTotalCost: number; // 真空袋总成本
+  labelTotalCost: number; // 标签总成本
+  totalCost: number; // 小计（总成本）
   weightPerPack: number;
   calculation: string;
-  vacuumBagsCount: number;  // 真空袋总数量
-  labelsCount: number;      // 标签总数量
+  vacuumBagsCount: number; // 真空袋总数量
+  labelsCount: number; // 标签总数量
 }
 
 export interface PackagingShippingContainer {
   boxName: string;
-  boxSpec: string;         // 泡沫箱规格
+  boxSpec: string; // 泡沫箱规格
   thermalBagName: string;
-  thermalBagSpec: string;  // 保温袋规格
+  thermalBagSpec: string; // 保温袋规格
   icePacks: number;
   boxCost: number;
   thermalBagCost: number;
@@ -151,7 +151,7 @@ export interface PackagingShippingContainer {
   totalCost: number;
   weight: number;
   calculation: string;
-  boxesCount: number;       // 泡沫箱数量（每个容器1个）
+  boxesCount: number; // 泡沫箱数量（每个容器1个）
   thermalBagsCount: number; // 保温袋数量（每个容器1个）
 }
 
@@ -214,7 +214,7 @@ export class PricingService {
     // ==========================================
     const mealsPerDay = dog.mealsPerDay;
     // Use provided singlePackSpecG if available, otherwise calculate from dailyG
-    const singlePackSpecG = input.singlePackSpecG || (dailyG / mealsPerDay);
+    const singlePackSpecG = input.singlePackSpecG || dailyG / mealsPerDay;
     const totalPacks = mealsPerDay * days;
 
     // 生产投料毛重 (含烹饪损耗) (Gross input weight with production loss)
@@ -227,14 +227,14 @@ export class PricingService {
       dailyG,
       days,
       mealsPerDay,
-      productionLossRate: recipe.productionLossRate
+      productionLossRate: recipe.productionLossRate,
     });
     console.log('[计算结果]', {
       totalNetFoodWeightG,
       totalNetWeightKg: totalNetFoodWeightG / 1000.0,
       singlePackSpecG,
       totalPacks,
-      rawInputWeightKg
+      rawInputWeightKg,
     });
     console.log('==========================================');
 
@@ -279,7 +279,8 @@ export class PricingService {
 
         // 出肉率校准（用于成本计算）
         const yieldRate = ingredient.getEdibleYieldRate();
-        const itemGrossPurchaseKg = (itemNetNeededKg / yieldRate) * recipe.productionLossRate;
+        const itemGrossPurchaseKg =
+          (itemNetNeededKg / yieldRate) * recipe.productionLossRate;
 
         // 采购用量（仅含生产损耗率，不含出肉率）
         const itemPurchaseKg = itemNetNeededKg * recipe.productionLossRate;
@@ -302,9 +303,9 @@ export class PricingService {
         ingredientDetails.push({
           name: ingredient.name,
           type: 'FOOD',
-          amount: itemGrossPurchaseKg,        // 成本计算用量（含出肉率和生产损耗率）
-          netAmount: itemNetNeededKg,         // 净需求（不含生产损耗和出肉率）
-          purchaseAmount: itemPurchaseKg,     // 采购用量（仅含生产损耗率，不含出肉率）
+          amount: itemGrossPurchaseKg, // 成本计算用量（含出肉率和生产损耗率）
+          netAmount: itemNetNeededKg, // 净需求（不含生产损耗和出肉率）
+          purchaseAmount: itemPurchaseKg, // 采购用量（仅含生产损耗率，不含出肉率）
           unit: 'kg',
           unitCost: unitCost,
           cost: itemCost,
@@ -314,8 +315,8 @@ export class PricingService {
           productModel: ingredient.productModel || undefined,
           preparationMethod: item.preparationMethod || undefined,
           ingredientId: ingredient.id,
-          displayUnit: 'g',  // 前端显示时转换为克
-          properties: ingredient.properties,  // 添加完整properties
+          displayUnit: 'g', // 前端显示时转换为克
+          properties: ingredient.properties, // 添加完整properties
         });
 
         // Convert kg to g, then multiply by unit cost (per g)
@@ -366,8 +367,7 @@ export class PricingService {
 
         // Read ingredient-specific loss rate (default to global)
         const customLoss =
-          ingredient.getProductionLossRate() ??
-          globalConfig.supplementLossRate;
+          ingredient.getProductionLossRate() ?? globalConfig.supplementLossRate;
         const unitsNeeded = unitsTheoretical * customLoss;
 
         const unitCost = ingredient.getUnitCost();
@@ -376,8 +376,8 @@ export class PricingService {
         console.log('[PricingService] SUPPLEMENT cost:', {
           name: ingredient.name,
           targetVal,
-          totalFoodNetWeightKg: totalNetFoodWeightG / 1000.0,  // 食材总净重
-          rawInputWeightKg,      // 所有原料毛重（对比用）
+          totalFoodNetWeightKg: totalNetFoodWeightG / 1000.0, // 食材总净重
+          rawInputWeightKg, // 所有原料毛重（对比用）
           totalNutrientNeeded,
           unitsTheoretical,
           customLoss,
@@ -390,11 +390,13 @@ export class PricingService {
         // Convert enum values to Chinese display names (must match admin-web labels)
         const addTimingEnum = (ingredient.properties as any)?.add_timing;
         const addTimingMap: Record<string, string> = {
-          'BEFORE_MIXING': '制作中（须拌匀）',
-          'BEFORE_MEAL': '饭前（冷却后）',
+          BEFORE_MIXING: '制作中（须拌匀）',
+          BEFORE_MEAL: '饭前（冷却后）',
         };
 
-        const finalPrepMethod = addTimingEnum ? addTimingMap[addTimingEnum] || addTimingEnum : undefined;
+        const finalPrepMethod = addTimingEnum
+          ? addTimingMap[addTimingEnum] || addTimingEnum
+          : undefined;
 
         console.log('[PricingService] SUPPLEMENT 添加时机:', {
           name: ingredient.name,
@@ -406,9 +408,9 @@ export class PricingService {
         ingredientDetails.push({
           name: ingredient.name,
           type: 'SUPPLEMENT',
-          amount: unitsNeeded,              // 补剂的用量已含损耗率
-          netAmount: unitsTheoretical,      // 补剂净需求 = 理论用量（不含损耗）
-          purchaseAmount: unitsNeeded,      // 补剂采购用量 = 实际用量（含损耗）
+          amount: unitsNeeded, // 补剂的用量已含损耗率
+          netAmount: unitsTheoretical, // 补剂净需求 = 理论用量（不含损耗）
+          purchaseAmount: unitsNeeded, // 补剂采购用量 = 实际用量（含损耗）
           unit: 'g',
           unitCost: unitCost,
           cost: itemCost,
@@ -418,10 +420,10 @@ export class PricingService {
           productModel: ingredient.productModel || undefined,
           preparationMethod: finalPrepMethod,
           ingredientId: ingredient.id,
-          displayUnit: ingredient.unitDisplayLabel || 'g',  // 使用显示单位标签
-          properties: ingredient.properties,  // 添加完整properties（包含purchase_link）
-          nutrientTargetKey: item.nutrientTargetKey,        // 营养素名称
-          nutrientTargetValue: item.nutrientTargetValue,    // 营养目标值
+          displayUnit: ingredient.unitDisplayLabel || 'g', // 使用显示单位标签
+          properties: ingredient.properties, // 添加完整properties（包含purchase_link）
+          nutrientTargetKey: item.nutrientTargetKey, // 营养素名称
+          nutrientTargetValue: item.nutrientTargetValue, // 营养目标值
         });
 
         costIngredients += itemCost;
@@ -446,19 +448,18 @@ export class PricingService {
       standardLaborCostPerKg,
       rawInputWeightKg,
       totalCost: costLabor,
-      calculation: `标准批次产量${standardBatchOutputKg.toFixed(3)}kg，人工成本${(globalConfig.laborHourlyRate * recipe.batchLaborHours).toFixed(2)}元 ÷ ${standardBatchOutputKg.toFixed(3)}kg = ${standardLaborCostPerKg.toFixed(4)}元/kg × ${rawInputWeightKg.toFixed(3)}kg = ${costLabor.toFixed(2)}元`
+      calculation: `标准批次产量${standardBatchOutputKg.toFixed(3)}kg，人工成本${(globalConfig.laborHourlyRate * recipe.batchLaborHours).toFixed(2)}元 ÷ ${standardBatchOutputKg.toFixed(3)}kg = ${standardLaborCostPerKg.toFixed(4)}元/kg × ${rawInputWeightKg.toFixed(3)}kg = ${costLabor.toFixed(2)}元`,
     };
 
     // Manufacturing Overhead
-    const costOverhead =
-      rawInputWeightKg * globalConfig.overheadCostPerKg;
+    const costOverhead = rawInputWeightKg * globalConfig.overheadCostPerKg;
 
     // Collect overhead cost details
     const overheadDetails = {
       overheadCostPerKg: globalConfig.overheadCostPerKg,
       rawInputWeightKg,
       totalCost: costOverhead,
-      calculation: `间接成本${globalConfig.overheadCostPerKg.toFixed(4)}元/kg × ${rawInputWeightKg.toFixed(3)}kg = ${costOverhead.toFixed(2)}元`
+      calculation: `间接成本${globalConfig.overheadCostPerKg.toFixed(4)}元/kg × ${rawInputWeightKg.toFixed(3)}kg = ${costOverhead.toFixed(2)}元`,
     };
 
     console.log('========== PricingService 步骤3: 人工与制造费用 ==========');
@@ -470,12 +471,12 @@ export class PricingService {
       laborHourlyRate: globalConfig.laborHourlyRate,
       standardLaborCostPerKg,
       rawInputWeightKg,
-      costLabor
+      costLabor,
     });
     console.log('[间接成本]', {
       overheadCostPerKg: globalConfig.overheadCostPerKg,
       rawInputWeightKg,
-      costOverhead
+      costOverhead,
     });
     console.log('==========================================');
 
@@ -492,45 +493,62 @@ export class PricingService {
 
     // Collect packaging cost details from breakdown
     console.log('[PricingService] PackagingResult breakdown:', {
-      shippingContainersCount: packagingResult.breakdown.shippingContainers.length,
-      shippingContainers: packagingResult.breakdown.shippingContainers.map(c => ({
-        boxName: c.boxName,
-        boxSpec: c.boxSpec,
-        cost: c.cost
-      }))
+      shippingContainersCount:
+        packagingResult.breakdown.shippingContainers.length,
+      shippingContainers: packagingResult.breakdown.shippingContainers.map(
+        (c) => ({
+          boxName: c.boxName,
+          boxSpec: c.boxSpec,
+          cost: c.cost,
+        }),
+      ),
     });
 
     const packagingDetails = {
       perPackConsumables: {
-        vacuumBagName: packagingResult.breakdown.perPackConsumables.vacuumBagName,
-        vacuumBagSpec: packagingResult.breakdown.perPackConsumables.vacuumBagSpec,
+        vacuumBagName:
+          packagingResult.breakdown.perPackConsumables.vacuumBagName,
+        vacuumBagSpec:
+          packagingResult.breakdown.perPackConsumables.vacuumBagSpec,
         labelName: packagingResult.breakdown.perPackConsumables.labelName,
         labelSpec: packagingResult.breakdown.perPackConsumables.labelSpec,
-        vacuumBagCostPerPack: packagingResult.breakdown.perPackConsumables.vacuumBagCostPerPack,
-        labelCostPerPack: packagingResult.breakdown.perPackConsumables.labelCostPerPack,
-        vacuumBagTotalCost: packagingResult.breakdown.perPackConsumables.vacuumBagCostPerPack * totalPacks,
-        labelTotalCost: packagingResult.breakdown.perPackConsumables.labelCostPerPack * totalPacks,
-        totalCost: (packagingResult.breakdown.perPackConsumables.vacuumBagCostPerPack + packagingResult.breakdown.perPackConsumables.labelCostPerPack) * totalPacks,
-        weightPerPack: packagingResult.breakdown.perPackConsumables.weightPerPack,
-        vacuumBagsCount: totalPacks,  // 真空袋总数量 = 总袋数
-        labelsCount: totalPacks,      // 标签总数量 = 总袋数
-        calculation: `每袋¥${packagingResult.breakdown.perPackConsumables.vacuumBagCostPerPack.toFixed(4)} + ¥${packagingResult.breakdown.perPackConsumables.labelCostPerPack.toFixed(4)}，共${totalPacks}袋 = ¥${((packagingResult.breakdown.perPackConsumables.vacuumBagCostPerPack + packagingResult.breakdown.perPackConsumables.labelCostPerPack) * totalPacks).toFixed(2)}`
+        vacuumBagCostPerPack:
+          packagingResult.breakdown.perPackConsumables.vacuumBagCostPerPack,
+        labelCostPerPack:
+          packagingResult.breakdown.perPackConsumables.labelCostPerPack,
+        vacuumBagTotalCost:
+          packagingResult.breakdown.perPackConsumables.vacuumBagCostPerPack *
+          totalPacks,
+        labelTotalCost:
+          packagingResult.breakdown.perPackConsumables.labelCostPerPack *
+          totalPacks,
+        totalCost:
+          (packagingResult.breakdown.perPackConsumables.vacuumBagCostPerPack +
+            packagingResult.breakdown.perPackConsumables.labelCostPerPack) *
+          totalPacks,
+        weightPerPack:
+          packagingResult.breakdown.perPackConsumables.weightPerPack,
+        vacuumBagsCount: totalPacks, // 真空袋总数量 = 总袋数
+        labelsCount: totalPacks, // 标签总数量 = 总袋数
+        calculation: `每袋¥${packagingResult.breakdown.perPackConsumables.vacuumBagCostPerPack.toFixed(4)} + ¥${packagingResult.breakdown.perPackConsumables.labelCostPerPack.toFixed(4)}，共${totalPacks}袋 = ¥${((packagingResult.breakdown.perPackConsumables.vacuumBagCostPerPack + packagingResult.breakdown.perPackConsumables.labelCostPerPack) * totalPacks).toFixed(2)}`,
       },
-      shippingContainers: packagingResult.breakdown.shippingContainers.map(container => ({
-        boxName: container.boxName,
-        boxSpec: container.boxSpec,
-        thermalBagName: container.thermalBagName,
-        thermalBagSpec: container.thermalBagSpec,
-        icePacks: container.icePacks,
-        boxCost: container.cost,
-        thermalBagCost: 0, // Included in total cost
-        icePackCost: 0, // Included in total cost
-        totalCost: container.cost,
-        weight: container.weight,
-        boxesCount: 1,           // 每个容器1个泡沫箱
-        thermalBagsCount: 1,     // 每个容器1个保温袋
-        calculation: `快递包装：${container.boxName} + ${container.thermalBagName} + 冰袋${container.icePacks}个 = ¥${container.cost.toFixed(2)}`
-      }))
+      shippingContainers: packagingResult.breakdown.shippingContainers.map(
+        (container) => ({
+          boxName: container.boxName,
+          boxSpec: container.boxSpec,
+          thermalBagName: container.thermalBagName,
+          thermalBagSpec: container.thermalBagSpec,
+          icePacks: container.icePacks,
+          boxCost: container.cost,
+          thermalBagCost: 0, // Included in total cost
+          icePackCost: 0, // Included in total cost
+          totalCost: container.cost,
+          weight: container.weight,
+          boxesCount: 1, // 每个容器1个泡沫箱
+          thermalBagsCount: 1, // 每个容器1个保温袋
+          calculation: `快递包装：${container.boxName} + ${container.thermalBagName} + 冰袋${container.icePacks}个 = ¥${container.cost.toFixed(2)}`,
+        }),
+      ),
     };
 
     console.log('========== PricingService 步骤4: 包材成本 ==========');
@@ -540,7 +558,7 @@ export class PricingService {
       totalNetFoodWeightG,
       costPackaging,
       weightPackagingG,
-      breakdown: packagingResult.breakdown
+      breakdown: packagingResult.breakdown,
     });
     console.log('==========================================');
 
@@ -553,7 +571,7 @@ export class PricingService {
       costLabor,
       costOverhead,
       costPackaging,
-      totalProductCost
+      totalProductCost,
     });
     console.log('==========================================');
 
@@ -561,14 +579,13 @@ export class PricingService {
     // 3. 产品定价 (Product Pricing)
     // ==========================================
     // Apply margin only to product cost, not shipping
-    const baseProductPrice =
-      totalProductCost / (1 - globalConfig.targetMargin);
+    const baseProductPrice = totalProductCost / (1 - globalConfig.targetMargin);
 
     console.log('========== PricingService 步骤6: 毛利应用 ==========');
     console.log('[价格计算]', {
       totalProductCost,
       targetMargin: globalConfig.targetMargin,
-      baseProductPrice
+      baseProductPrice,
     });
     console.log('==========================================');
 
@@ -591,7 +608,7 @@ export class PricingService {
       discountRate,
       shippingFee,
       finalTotal,
-      productPrice: baseProductPrice * discountRate
+      productPrice: baseProductPrice * discountRate,
     });
     console.log('==========================================');
 
@@ -612,4 +629,3 @@ export class PricingService {
     };
   }
 }
-

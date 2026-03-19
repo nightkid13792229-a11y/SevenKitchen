@@ -79,8 +79,9 @@ export interface RecipeRepository {
   findById(id: string): Promise<Recipe | null>;
   findByIdAndVersion(id: string, version: number): Promise<Recipe | null>;
   findPublicRecipes(options?: FindRecipesOptions): Promise<Recipe[]>;
-  findPublicRecipesPaginated(options?: FindRecipesOptions): Promise<PaginatedRecipes>;
+  findPublicRecipesPaginated(
+    options?: FindRecipesOptions,
+  ): Promise<PaginatedRecipes>;
   getFilterOptions(): Promise<FilterOptions>;
   save(recipe: Recipe): Promise<Recipe>;
 }
-

@@ -190,7 +190,10 @@ export class DateUtil {
    * @param dateStr 日期字符串，格式：YYYY-MM-DD
    * @returns ISO 8601格式的开始和结束时间字符串
    */
-  static createDateRangeForDB(dateStr: string): { startDate: string; endDate: string } {
+  static createDateRangeForDB(dateStr: string): {
+    startDate: string;
+    endDate: string;
+  } {
     const { start, end } = this.createDateRange(dateStr);
     return {
       startDate: start.toISOString(),
@@ -290,7 +293,8 @@ export class DateUtil {
 
     // 验证2月29日只存在于闰年
     if (month === 2 && day === 29) {
-      const isLeapYear = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+      const isLeapYear =
+        (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
       if (!isLeapYear) {
         return false;
       }

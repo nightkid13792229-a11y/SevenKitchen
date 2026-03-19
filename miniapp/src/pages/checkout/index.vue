@@ -150,17 +150,17 @@
         </view>
       </view>
 
-      <!-- 制作要求 -->
+      <!-- 制作说明 -->
       <view class="info-card requirement-card">
-        <text class="info-card-title">制作要求</text>
+        <text class="info-card-title">制作说明</text>
         <view class="config-grid">
           <view class="config-item">
             <text class="config-label">加工方式</text>
             <text class="config-value">{{ orderConfig.preparationMethod === 'CHOPPED' ? '打碎' : '切丁' }}</text>
           </view>
           <view class="config-item">
-            <text class="config-label">鲜食状态</text>
-            <text class="config-value">{{ orderConfig.cookingMethod === 'RAW' ? '生' : '预加热' }}</text>
+            <text class="config-label">烹饪要求</text>
+            <text class="config-value">{{ orderConfig.cookingMethod === 'RAW' ? '蒸/炖/低温慢煮' : '预加热' }}</text>
           </view>
         </view>
       </view>

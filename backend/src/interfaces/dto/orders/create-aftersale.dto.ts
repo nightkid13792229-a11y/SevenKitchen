@@ -1,4 +1,10 @@
-import { IsEnum, IsString, IsNotEmpty, IsArray, IsOptional } from 'class-validator';
+import {
+  IsEnum,
+  IsString,
+  IsNotEmpty,
+  IsArray,
+  IsOptional,
+} from 'class-validator';
 import { AftersaleType } from '../../../domain/order';
 
 /**

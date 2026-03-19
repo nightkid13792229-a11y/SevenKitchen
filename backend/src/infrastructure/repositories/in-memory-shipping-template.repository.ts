@@ -8,9 +8,7 @@ import type { ShippingTemplateRepository } from '../../domain/shipping/shipping-
 import type { ShippingTemplate } from '../../domain/shipping/shipping-fee.service';
 
 @Injectable()
-export class InMemoryShippingTemplateRepository
-  implements ShippingTemplateRepository
-{
+export class InMemoryShippingTemplateRepository implements ShippingTemplateRepository {
   private templates: Map<string, ShippingTemplate> = new Map();
 
   async findById(id: string): Promise<ShippingTemplate | null> {
@@ -34,4 +32,3 @@ export class InMemoryShippingTemplateRepository
     return Promise.resolve(template);
   }
 }
-

@@ -25,14 +25,23 @@ import {
   ApiQuery,
   ApiBody,
 } from '@nestjs/swagger';
-import { KitchenService, type UpdateTaskDto } from '../../application/kitchen/kitchen.service';
+import {
+  KitchenService,
+  type UpdateTaskDto,
+} from '../../application/kitchen/kitchen.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { PackagingUnitStatus } from '../../domain/production';
 import { BadRequestException } from '@nestjs/common';
 
 @ApiTags('Staff Kitchen')
 @Controller('api/v1/staff/kitchen')
-@UsePipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
+@UsePipes(
+  new ValidationPipe({
+    transform: true,
+    whitelist: true,
+    forbidNonWhitelisted: true,
+  }),
+)
 export class StaffKitchenController {
   private readonly logger = new Logger(StaffKitchenController.name);
 
@@ -44,7 +53,8 @@ export class StaffKitchenController {
     name: 'status',
     required: false,
     enum: PackagingUnitStatus,
-    description: 'Filter by packaging unit status (PENDING, IN_PROGRESS, COMPLETED)',
+    description:
+      'Filter by packaging unit status (PENDING, IN_PROGRESS, COMPLETED)',
   })
   @ApiResponse({
     status: 200,
@@ -85,7 +95,11 @@ export class StaffKitchenController {
       let statusEnum: PackagingUnitStatus | undefined = undefined;
       if (status) {
         const upperStatus = status.toUpperCase();
-        if (!Object.values(PackagingUnitStatus).includes(upperStatus as PackagingUnitStatus)) {
+        if (
+          !Object.values(PackagingUnitStatus).includes(
+            upperStatus as PackagingUnitStatus,
+          )
+        ) {
           throw new BadRequestException(
             `Invalid status: ${status}. Must be one of: ${Object.values(PackagingUnitStatus).join(', ')}`,
           );
@@ -159,7 +173,9 @@ export class StaffKitchenController {
 
   @Post('tasks/:taskId')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Update production task with actual usage and photos' })
+  @ApiOperation({
+    summary: 'Update production task with actual usage and photos',
+  })
   @ApiParam({ name: 'taskId', description: 'Task ID (PackagingUnit ID)' })
   @ApiBody({
     schema: {
@@ -167,7 +183,8 @@ export class StaffKitchenController {
       properties: {
         actualWeightG: {
           type: 'number',
-          description: 'Single actual weight (alternative to ingredientsActual)',
+          description:
+            'Single actual weight (alternative to ingredientsActual)',
         },
         ingredientsActual: {
           type: 'array',
@@ -258,7 +275,7 @@ export class StaffKitchenController {
       if (error instanceof BadRequestException) {
         return ApiResponseDto.error(400, error.message);
       }
-      
+
       // Log unexpected errors with full context
       this.logger.error('Error in updateTask:', {
         message: error?.message,
@@ -266,10 +283,9 @@ export class StaffKitchenController {
         taskId: taskId,
         dto: dto,
       });
-      
+
       // Return 500 only for truly unexpected errors
       throw error;
     }
   }
 }
-

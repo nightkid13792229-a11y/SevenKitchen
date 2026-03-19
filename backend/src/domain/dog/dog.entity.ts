@@ -142,5 +142,3 @@ export class Dog {
     this.validateInvariants();
   }
 }
-
-

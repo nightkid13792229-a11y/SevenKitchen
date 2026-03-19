@@ -35,7 +35,8 @@ export class OrderItemDto {
 
   @ApiProperty({
     example: 310.34,
-    description: 'Daily intake in grams, calculated from DogCalc.finalFoodKcal ÷ Recipe.energyDensityKcalPerKg (immutable after order creation)',
+    description:
+      'Daily intake in grams, calculated from DogCalc.finalFoodKcal ÷ Recipe.energyDensityKcalPerKg (immutable after order creation)',
   })
   dailyIntakeG!: number;
 
@@ -57,7 +58,8 @@ export class OrderItemDto {
   };
 
   @ApiPropertyOptional({
-    description: 'Total price for this item (calculated from order pricing breakdown)',
+    description:
+      'Total price for this item (calculated from order pricing breakdown)',
     example: 111.67,
   })
   totalPrice?: number;
@@ -162,7 +164,8 @@ export class OrderDto {
   };
 
   @ApiPropertyOptional({
-    description: 'Pricing breakdown snapshot (full details including ingredient amounts)',
+    description:
+      'Pricing breakdown snapshot (full details including ingredient amounts)',
   })
   pricingBreakdownSnapshot?: any;
 
@@ -302,5 +305,3 @@ export class OrderSummaryDto {
     detailAddress: string;
   };
 }
-
-

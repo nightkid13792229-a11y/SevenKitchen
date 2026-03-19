@@ -9,7 +9,7 @@ import { IsUUID, IsNotEmpty } from 'class-validator';
 export class CalcDogForRecipeDto {
   @ApiProperty({
     description: 'Recipe ID',
-    example: '13f28dfe-42f3-4b73-a906-621096b84dfc'
+    example: '13f28dfe-42f3-4b73-a906-621096b84dfc',
   })
   @IsUUID()
   @IsNotEmpty()

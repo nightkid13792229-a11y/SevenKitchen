@@ -3,7 +3,12 @@
  * Application layer service for IngredientTag domain operations
  */
 
-import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import type { IngredientTagRepository } from '../../domain/ingredient-tag/ingredient-tag.repository';
 import { IngredientTag } from '../../domain/ingredient-tag/ingredient-tag.entity';
 
@@ -96,7 +101,8 @@ export class IngredientTagService {
 
     // Convert empty string to null for optional fields
     const color = dto.color && dto.color.trim() ? dto.color : null;
-    const description = dto.description && dto.description.trim() ? dto.description : null;
+    const description =
+      dto.description && dto.description.trim() ? dto.description : null;
 
     const tag = new IngredientTag(
       crypto.randomUUID(),
@@ -104,7 +110,7 @@ export class IngredientTagService {
       description,
       dto.parentId ?? null,
       dto.sort ?? 0,
-      color
+      color,
     );
 
     return this.tagRepository.save(tag);
@@ -133,12 +139,18 @@ export class IngredientTagService {
     }
 
     // Convert empty string to null for optional fields
-    const color = dto.color !== undefined
-      ? (dto.color && dto.color.trim() ? dto.color : null)
-      : existing.color;
-    const description = dto.description !== undefined
-      ? (dto.description && dto.description.trim() ? dto.description : null)
-      : existing.description;
+    const color =
+      dto.color !== undefined
+        ? dto.color && dto.color.trim()
+          ? dto.color
+          : null
+        : existing.color;
+    const description =
+      dto.description !== undefined
+        ? dto.description && dto.description.trim()
+          ? dto.description
+          : null
+        : existing.description;
 
     const updated = new IngredientTag(
       id,
@@ -146,7 +158,7 @@ export class IngredientTagService {
       description,
       dto.parentId !== undefined ? dto.parentId : existing.parentId,
       dto.sort !== undefined ? dto.sort : existing.sort,
-      color
+      color,
     );
 
     return this.tagRepository.save(updated);
@@ -165,7 +177,9 @@ export class IngredientTagService {
 
     const hasChildren = await this.tagRepository.hasChildren(id);
     if (hasChildren) {
-      throw new BadRequestException('Cannot delete tag with children. Delete or reassign children first.');
+      throw new BadRequestException(
+        'Cannot delete tag with children. Delete or reassign children first.',
+      );
     }
 
     await this.tagRepository.delete(id);

@@ -32,11 +32,20 @@ import {
   ApiQuery,
   ApiConsumes,
 } from '@nestjs/swagger';
-import { DogService, DOG_REPOSITORY, DOG_BREED_REPOSITORY, RECIPE_REPOSITORY } from '../../application/dog/dog.service';
+import {
+  DogService,
+  DOG_REPOSITORY,
+  DOG_BREED_REPOSITORY,
+  RECIPE_REPOSITORY,
+} from '../../application/dog/dog.service';
 import type { DogRepository } from '../../domain/dog/dog.repository';
 import type { DogBreedRepository } from '../../domain/dog/dog-breed.repository';
 import type { RecipeRepository } from '../../domain/recipe/recipe.repository';
-import { MEDICAL_RECORD_REPOSITORY, CHECKUP_RECORD_REPOSITORY, ALLERGY_RECORD_REPOSITORY } from '../../application/health/health.service';
+import {
+  MEDICAL_RECORD_REPOSITORY,
+  CHECKUP_RECORD_REPOSITORY,
+  ALLERGY_RECORD_REPOSITORY,
+} from '../../application/health/health.service';
 import type { MedicalRecordRepository } from '../../domain/health/health.repository';
 import type { CheckupRecordRepository } from '../../domain/health/health.repository';
 import type { AllergyRecordRepository } from '../../domain/health/health.repository';
@@ -61,7 +70,10 @@ import type { RequestUser } from '../auth';
 import { MIXED_BREED_VIRTUAL_ID } from '../../domain/dog/constants';
 import { WeightRecordService } from '../../application/weight-record/weight-record.service';
 import { CreateWeightRecordDto } from '../dto/weight-record/create-weight-record.dto';
-import { WeightRecordResponseDto, WeightRecordListResponseDto } from '../dto/weight-record/weight-record-response.dto';
+import {
+  WeightRecordResponseDto,
+  WeightRecordListResponseDto,
+} from '../dto/weight-record/weight-record-response.dto';
 import { parseYYYYMMDD } from '../../utils/date-helpers';
 
 @ApiTags('Dogs')
@@ -158,9 +170,14 @@ export class DogsController {
             attachments: record.attachments || [],
           });
         }
-        console.log(`[DogsController] Created ${createDogDto.medicalRecords.length} medical records for dog ${dog.id}`);
+        console.log(
+          `[DogsController] Created ${createDogDto.medicalRecords.length} medical records for dog ${dog.id}`,
+        );
       } catch (error: any) {
-        console.error(`[DogsController] Failed to save medical records for dog ${dog.id}:`, error);
+        console.error(
+          `[DogsController] Failed to save medical records for dog ${dog.id}:`,
+          error,
+        );
         // Don't fail the entire operation if medical records save fails
       }
     }
@@ -184,9 +201,14 @@ export class DogsController {
             attachments: record.attachments || [],
           });
         }
-        console.log(`[DogsController] Created ${createDogDto.checkupRecords.length} checkup records for dog ${dog.id}`);
+        console.log(
+          `[DogsController] Created ${createDogDto.checkupRecords.length} checkup records for dog ${dog.id}`,
+        );
       } catch (error: any) {
-        console.error(`[DogsController] Failed to save checkup records for dog ${dog.id}:`, error);
+        console.error(
+          `[DogsController] Failed to save checkup records for dog ${dog.id}:`,
+          error,
+        );
         // Don't fail the entire operation if checkup records save fails
       }
     }
@@ -233,13 +255,17 @@ export class DogsController {
     if ('medicalRecords' in updateDogDto) {
       try {
         // Delete existing medical records for this dog
-        const existingRecords = await this.medicalRecordRepository.findByDogId(id);
+        const existingRecords =
+          await this.medicalRecordRepository.findByDogId(id);
         for (const record of existingRecords) {
           await this.medicalRecordRepository.delete(record.id);
         }
 
         // Create new medical records
-        if (updateDogDto.medicalRecords && updateDogDto.medicalRecords.length > 0) {
+        if (
+          updateDogDto.medicalRecords &&
+          updateDogDto.medicalRecords.length > 0
+        ) {
           for (const record of updateDogDto.medicalRecords) {
             // 使用parseYYYYMMDD正确解析日期（处理上海时区）
             const visitDate = record.visitDate
@@ -260,12 +286,19 @@ export class DogsController {
               attachments: record.attachments || [],
             });
           }
-          console.log(`[DogsController] Updated ${updateDogDto.medicalRecords.length} medical records for dog ${id}`);
+          console.log(
+            `[DogsController] Updated ${updateDogDto.medicalRecords.length} medical records for dog ${id}`,
+          );
         } else {
-          console.log(`[DogsController] Cleared all medical records for dog ${id}`);
+          console.log(
+            `[DogsController] Cleared all medical records for dog ${id}`,
+          );
         }
       } catch (error: any) {
-        console.error(`[DogsController] Failed to update medical records for dog ${id}:`, error);
+        console.error(
+          `[DogsController] Failed to update medical records for dog ${id}:`,
+          error,
+        );
         // Don't fail the entire operation if medical records update fails
       }
     }
@@ -274,13 +307,17 @@ export class DogsController {
     if ('checkupRecords' in updateDogDto) {
       try {
         // Delete existing checkup records for this dog
-        const existingCheckups = await this.checkupRecordRepository.findByDogId(id);
+        const existingCheckups =
+          await this.checkupRecordRepository.findByDogId(id);
         for (const checkup of existingCheckups) {
           await this.checkupRecordRepository.delete(checkup.id);
         }
 
         // Create new checkup records
-        if (updateDogDto.checkupRecords && updateDogDto.checkupRecords.length > 0) {
+        if (
+          updateDogDto.checkupRecords &&
+          updateDogDto.checkupRecords.length > 0
+        ) {
           for (const record of updateDogDto.checkupRecords) {
             // 使用parseYYYYMMDD正确解析日期（处理上海时区）
             const dateOnly = record.checkupDate.split('T')[0];
@@ -296,12 +333,19 @@ export class DogsController {
               attachments: record.attachments || [],
             });
           }
-          console.log(`[DogsController] Updated ${updateDogDto.checkupRecords.length} checkup records for dog ${id}`);
+          console.log(
+            `[DogsController] Updated ${updateDogDto.checkupRecords.length} checkup records for dog ${id}`,
+          );
         } else {
-          console.log(`[DogsController] Cleared all checkup records for dog ${id}`);
+          console.log(
+            `[DogsController] Cleared all checkup records for dog ${id}`,
+          );
         }
       } catch (error: any) {
-        console.error(`[DogsController] Failed to update checkup records for dog ${id}:`, error);
+        console.error(
+          `[DogsController] Failed to update checkup records for dog ${id}:`,
+          error,
+        );
         // Don't fail the entire operation if checkup records update fails
       }
     }
@@ -312,7 +356,10 @@ export class DogsController {
       calcResult = await this.dogService.calcPreview(dog.id);
     } catch (error: any) {
       // Log the error but continue - allow updating dog profile even if calculation fails
-      console.warn(`[DogsController] Failed to calculate preview for updated dog ${id}:`, error.message);
+      console.warn(
+        `[DogsController] Failed to calculate preview for updated dog ${id}:`,
+        error.message,
+      );
     }
 
     const response: DogDetailResponseDto = {
@@ -372,7 +419,7 @@ export class DogsController {
     // Load all breeds to create breed name map
     const breeds = await this.dogBreedRepository.findAll();
     const breedMap = new Map<string, string>();
-    breeds.forEach(breed => {
+    breeds.forEach((breed) => {
       breedMap.set(breed.id, breed.name);
     });
 
@@ -423,14 +470,21 @@ export class DogsController {
       medicalRecords = records.map((record: any) => ({
         id: record.id,
         chiefComplaint: record.chiefComplaint,
-        visitDate: record.visitDate ? record.visitDate.toISOString().split('T')[0] : null, // Only YYYY-MM-DD
+        visitDate: record.visitDate
+          ? record.visitDate.toISOString().split('T')[0]
+          : null, // Only YYYY-MM-DD
         diagnosis: record.diagnosis || null,
         notes: record.notes || null,
         attachments: record.attachments || null,
       }));
-      console.log(`[DogsController] Loaded ${medicalRecords?.length || 0} medical records for dog ${id}`);
+      console.log(
+        `[DogsController] Loaded ${medicalRecords?.length || 0} medical records for dog ${id}`,
+      );
     } catch (error: any) {
-      console.warn(`[DogsController] Failed to load medical records for dog ${id}:`, error.message);
+      console.warn(
+        `[DogsController] Failed to load medical records for dog ${id}:`,
+        error.message,
+      );
     }
 
     // Load checkup records
@@ -445,9 +499,14 @@ export class DogsController {
         notes: record.findings || null, // findings maps to notes
         attachments: record.attachments || null,
       }));
-      console.log(`[DogsController] Loaded ${checkupRecords?.length || 0} checkup records for dog ${id}`);
+      console.log(
+        `[DogsController] Loaded ${checkupRecords?.length || 0} checkup records for dog ${id}`,
+      );
     } catch (error: any) {
-      console.warn(`[DogsController] Failed to load checkup records for dog ${id}:`, error.message);
+      console.warn(
+        `[DogsController] Failed to load checkup records for dog ${id}:`,
+        error.message,
+      );
     }
 
     // Load allergy records
@@ -467,9 +526,14 @@ export class DogsController {
         notes: record.notes || null,
         attachments: record.attachments || [],
       }));
-      console.log(`[DogsController] Loaded ${allergyRecords?.length || 0} allergy records for dog ${id}`);
+      console.log(
+        `[DogsController] Loaded ${allergyRecords?.length || 0} allergy records for dog ${id}`,
+      );
     } catch (error: any) {
-      console.warn(`[DogsController] Failed to load allergy records for dog ${id}:`, error.message);
+      console.warn(
+        `[DogsController] Failed to load allergy records for dog ${id}:`,
+        error.message,
+      );
     }
 
     // Try to calculate preview, but don't fail if calculation fails
@@ -478,11 +542,20 @@ export class DogsController {
       calcResult = await this.dogService.calcPreview(dog.id);
     } catch (error: any) {
       // Log the error but continue - allow loading dog profile even if calculation fails
-      console.warn(`[DogsController] Failed to calculate preview for dog ${id}:`, error.message);
+      console.warn(
+        `[DogsController] Failed to calculate preview for dog ${id}:`,
+        error.message,
+      );
     }
 
     const response: DogDetailResponseDto = {
-      profile: this.mapDogToProfileDto(dog, breedMap, medicalRecords, checkupRecords, allergyRecords),
+      profile: this.mapDogToProfileDto(
+        dog,
+        breedMap,
+        medicalRecords,
+        checkupRecords,
+        allergyRecords,
+      ),
       calcResult,
     };
 
@@ -506,9 +579,7 @@ export class DogsController {
     // For mixed breed dogs, use virtual ID and breed will be null
     let breed = null;
     if (calcPreviewDto.breedId !== MIXED_BREED_VIRTUAL_ID) {
-      breed = await this.dogBreedRepository.findById(
-        calcPreviewDto.breedId,
-      );
+      breed = await this.dogBreedRepository.findById(calcPreviewDto.breedId);
       if (!breed) {
         return ApiResponseDto.error(400, 'Breed not found');
       }
@@ -605,7 +676,7 @@ export class DogsController {
       user!.customerId,
       dogId,
       limit ? parseInt(limit.toString()) : undefined,
-      offset ? parseInt(offset.toString()) : undefined
+      offset ? parseInt(offset.toString()) : undefined,
     );
 
     return ApiResponseDto.success({
@@ -620,7 +691,10 @@ export class DogsController {
   @ApiOperation({ summary: 'Delete a weight record' })
   @ApiSecurity('X-Customer-Id')
   @ApiParam({ name: 'recordId', description: 'Weight record ID' })
-  @ApiResponse({ status: 200, description: 'Weight record deleted successfully' })
+  @ApiResponse({
+    status: 200,
+    description: 'Weight record deleted successfully',
+  })
   async deleteWeightRecord(
     @Param('recordId') recordId: string,
     @CurrentUser() user: RequestUser,
@@ -634,7 +708,9 @@ export class DogsController {
   @ApiOperation({ summary: 'Update syncedToProfile flag' })
   @ApiSecurity('X-Customer-Id')
   @ApiParam({ name: 'recordId', description: 'Weight record ID' })
-  @ApiBody({ schema: { type: 'object', properties: { synced: { type: 'boolean' } } } })
+  @ApiBody({
+    schema: { type: 'object', properties: { synced: { type: 'boolean' } } },
+  })
   @ApiResponse({
     status: 200,
     description: 'Sync flag updated successfully',
@@ -648,7 +724,7 @@ export class DogsController {
     const record = await this.weightRecordService.updateSyncedToProfile(
       user.customerId,
       recordId,
-      synced
+      synced,
     );
 
     return ApiResponseDto.success(this.mapWeightRecordToDto(record));
@@ -718,7 +794,8 @@ export class DogsController {
   @UseGuards(AuthGuard)
   @ApiOperation({
     summary: 'Calculate daily food intake for a specific recipe',
-    description: 'Returns both kcal needs and gram amounts based on recipe energy density. Used for recipe order page.'
+    description:
+      'Returns both kcal needs and gram amounts based on recipe energy density. Used for recipe order page.',
   })
   @ApiSecurity('X-Customer-Id')
   @ApiHeader({
@@ -739,19 +816,54 @@ export class DogsController {
         data: {
           type: 'object',
           properties: {
-            rer: { type: 'number', description: 'Resting Energy Requirement (kcal/day)', example: 417.2 },
-            totalDer: { type: 'number', description: 'Total Daily Energy Requirement (kcal/day)', example: 667.5 },
-            finalFoodKcal: { type: 'number', description: 'Final food kcal needed (after treat deduction)', example: 647.5 },
-            treatDeduction: { type: 'number', description: 'Treat calories deducted (kcal/day)', example: 20.0 },
-            isTreatCapped: { type: 'boolean', description: 'Whether treat deduction hit 10% safety cap', example: false },
-            dailyIntakeG: { type: 'number', description: 'Daily food intake in grams', example: 447 },
-            perMealIntakeG: { type: 'number', description: 'Per-meal food intake in grams', example: 224 },
-            mealsPerDay: { type: 'number', description: 'Number of meals per day', example: 2 },
-            calcDetails: { type: 'object', description: 'Detailed calculation breakdown for display' }
-          }
-        }
-      }
-    }
+            rer: {
+              type: 'number',
+              description: 'Resting Energy Requirement (kcal/day)',
+              example: 417.2,
+            },
+            totalDer: {
+              type: 'number',
+              description: 'Total Daily Energy Requirement (kcal/day)',
+              example: 667.5,
+            },
+            finalFoodKcal: {
+              type: 'number',
+              description: 'Final food kcal needed (after treat deduction)',
+              example: 647.5,
+            },
+            treatDeduction: {
+              type: 'number',
+              description: 'Treat calories deducted (kcal/day)',
+              example: 20.0,
+            },
+            isTreatCapped: {
+              type: 'boolean',
+              description: 'Whether treat deduction hit 10% safety cap',
+              example: false,
+            },
+            dailyIntakeG: {
+              type: 'number',
+              description: 'Daily food intake in grams',
+              example: 447,
+            },
+            perMealIntakeG: {
+              type: 'number',
+              description: 'Per-meal food intake in grams',
+              example: 224,
+            },
+            mealsPerDay: {
+              type: 'number',
+              description: 'Number of meals per day',
+              example: 2,
+            },
+            calcDetails: {
+              type: 'object',
+              description: 'Detailed calculation breakdown for display',
+            },
+          },
+        },
+      },
+    },
   })
   @ApiResponse({ status: 400, description: 'Invalid input' })
   @ApiResponse({ status: 404, description: 'Dog or recipe not found' })
@@ -782,9 +894,9 @@ export class DogsController {
     // 4. Calculate energy needs WITH recipe energy density
     const calcResult = calculateDogEnergy(
       dog,
-      recipe.energyDensityKcalPerKg,  // ✅ Key: pass energy density for gram calculation
+      recipe.energyDensityKcalPerKg, // ✅ Key: pass energy density for gram calculation
       breed,
-      true  // includeDetails
+      true, // includeDetails
     );
 
     // 5. Build response
@@ -799,7 +911,7 @@ export class DogsController {
         ? Math.round(calcResult.dailyIntakeG / dog.mealsPerDay)
         : 0,
       mealsPerDay: dog.mealsPerDay,
-      calcDetails: calcResult.calcDetails || {}
+      calcDetails: calcResult.calcDetails || {},
     };
 
     return ApiResponseDto.success(response);
@@ -818,7 +930,8 @@ export class DogsController {
   @UseGuards(AuthGuard)
   @ApiOperation({
     summary: 'Calculate dog daily energy requirement',
-    description: 'Returns DER (Daily Energy Requirement) calculation details. Used for portion calculation page.'
+    description:
+      'Returns DER (Daily Energy Requirement) calculation details. Used for portion calculation page.',
   })
   @ApiSecurity('X-Customer-Id')
   @ApiHeader({
@@ -838,16 +951,39 @@ export class DogsController {
         data: {
           type: 'object',
           properties: {
-            rer: { type: 'number', description: 'Resting Energy Requirement (kcal/day)', example: 417.2 },
-            der: { type: 'number', description: 'Daily Energy Requirement (kcal/day)', example: 667.5 },
-            finalFoodKcal: { type: 'number', description: 'Final food kcal needed (after treat deduction)', example: 647.5 },
-            treatDeduction: { type: 'number', description: 'Treat calories deducted (kcal/day)', example: 20.0 },
-            isTreatCapped: { type: 'boolean', description: 'Whether treat deduction hit 10% safety cap', example: false },
-            calcDetails: { type: 'object', description: 'Detailed calculation breakdown for display' }
-          }
-        }
-      }
-    }
+            rer: {
+              type: 'number',
+              description: 'Resting Energy Requirement (kcal/day)',
+              example: 417.2,
+            },
+            der: {
+              type: 'number',
+              description: 'Daily Energy Requirement (kcal/day)',
+              example: 667.5,
+            },
+            finalFoodKcal: {
+              type: 'number',
+              description: 'Final food kcal needed (after treat deduction)',
+              example: 647.5,
+            },
+            treatDeduction: {
+              type: 'number',
+              description: 'Treat calories deducted (kcal/day)',
+              example: 20.0,
+            },
+            isTreatCapped: {
+              type: 'boolean',
+              description: 'Whether treat deduction hit 10% safety cap',
+              example: false,
+            },
+            calcDetails: {
+              type: 'object',
+              description: 'Detailed calculation breakdown for display',
+            },
+          },
+        },
+      },
+    },
   })
   @ApiResponse({ status: 404, description: 'Dog not found' })
   @ApiResponse({
@@ -870,9 +1006,9 @@ export class DogsController {
     // 3. Calculate energy needs WITHOUT recipe energy density
     const calcResult = calculateDogEnergy(
       dog,
-      undefined,  // No energy density needed for pure DER calculation
+      undefined, // No energy density needed for pure DER calculation
       breed,
-      true  // includeDetails
+      true, // includeDetails
     );
 
     // 4. Build response
@@ -882,7 +1018,7 @@ export class DogsController {
       finalFoodKcal: calcResult.finalFoodKcal,
       treatDeduction: calcResult.treatDeduction,
       isTreatCapped: calcResult.isTreatCapped,
-      calcDetails: calcResult.calcDetails || {}
+      calcDetails: calcResult.calcDetails || {},
     };
 
     return ApiResponseDto.success(response);
@@ -933,7 +1069,9 @@ export class DogsController {
     // Validate file type
     const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowedTypes.includes(file.mimetype)) {
-      throw new BadRequestException('Invalid file type. Only JPG, PNG, GIF, and WEBP are allowed');
+      throw new BadRequestException(
+        'Invalid file type. Only JPG, PNG, GIF, and WEBP are allowed',
+      );
     }
 
     // Verify dog ownership
@@ -946,7 +1084,11 @@ export class DogsController {
     }
 
     try {
-      const result = await this.cosService.uploadImage(file, file.originalname, 'dogs/avatars');
+      const result = await this.cosService.uploadImage(
+        file,
+        file.originalname,
+        'dogs/avatars',
+      );
 
       return ApiResponseDto.success(result);
     } catch (error) {
@@ -1004,7 +1146,13 @@ export class DogsController {
     }
 
     // Validate file type (images + PDF)
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+    const allowedTypes = [
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'application/pdf',
+    ];
     if (!allowedTypes.includes(file.mimetype)) {
       throw new BadRequestException(
         'Invalid file type. Only JPG, PNG, GIF, WEBP, and PDF are allowed',
@@ -1014,11 +1162,18 @@ export class DogsController {
     try {
       // Upload to temporary directory
       // When medical record is created, backend will move these to proper directory
-      const result = await this.cosService.uploadImage(file, file.originalname, 'medical-reports/temp');
+      const result = await this.cosService.uploadImage(
+        file,
+        file.originalname,
+        'medical-reports/temp',
+      );
 
       return ApiResponseDto.success(result);
     } catch (error) {
-      console.error('[DogsController] Medical attachment upload failed:', error);
+      console.error(
+        '[DogsController] Medical attachment upload failed:',
+        error,
+      );
       throw new BadRequestException('Failed to upload attachment');
     }
   }
@@ -1067,7 +1222,13 @@ export class DogsController {
     }
 
     // Validate file type (images + PDF)
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+    const allowedTypes = [
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'application/pdf',
+    ];
     if (!allowedTypes.includes(file.mimetype)) {
       throw new BadRequestException(
         'Invalid file type. Only JPG, PNG, GIF, WEBP, and PDF are allowed',
@@ -1076,11 +1237,18 @@ export class DogsController {
 
     try {
       // Upload to temporary directory
-      const result = await this.cosService.uploadImage(file, file.originalname, 'checkup-reports/temp');
+      const result = await this.cosService.uploadImage(
+        file,
+        file.originalname,
+        'checkup-reports/temp',
+      );
 
       return ApiResponseDto.success(result);
     } catch (error) {
-      console.error('[DogsController] Checkup attachment upload failed:', error);
+      console.error(
+        '[DogsController] Checkup attachment upload failed:',
+        error,
+      );
       throw new BadRequestException('Failed to upload attachment');
     }
   }
@@ -1124,7 +1292,10 @@ export class DogsController {
       await this.cosService.deleteImage(dto.key);
       return ApiResponseDto.success(null, '删除成功');
     } catch (error) {
-      console.error('[DogsController] Failed to delete medical attachment:', error);
+      console.error(
+        '[DogsController] Failed to delete medical attachment:',
+        error,
+      );
       throw new BadRequestException('删除失败，请重试');
     }
   }
@@ -1168,7 +1339,10 @@ export class DogsController {
       await this.cosService.deleteImage(dto.key);
       return ApiResponseDto.success(null, '删除成功');
     } catch (error) {
-      console.error('[DogsController] Failed to delete checkup attachment:', error);
+      console.error(
+        '[DogsController] Failed to delete checkup attachment:',
+        error,
+      );
       throw new BadRequestException('删除失败，请重试');
     }
   }

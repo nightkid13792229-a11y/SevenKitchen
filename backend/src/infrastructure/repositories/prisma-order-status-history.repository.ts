@@ -11,9 +11,7 @@ import { OrderStatus } from '../../domain';
 import { randomUUID } from 'crypto';
 
 @Injectable()
-export class PrismaOrderStatusHistoryRepository
-  implements OrderStatusHistoryRepository
-{
+export class PrismaOrderStatusHistoryRepository implements OrderStatusHistoryRepository {
   constructor(private readonly prisma: PrismaService) {}
 
   async append(
@@ -69,4 +67,3 @@ export class PrismaOrderStatusHistoryRepository
     );
   }
 }
-

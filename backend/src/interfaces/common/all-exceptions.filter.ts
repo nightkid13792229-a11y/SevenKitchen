@@ -29,9 +29,7 @@ export class AllExceptionsFilter implements ExceptionFilter {
         : HttpStatus.INTERNAL_SERVER_ERROR;
 
     const message =
-      exception instanceof Error
-        ? exception.message
-        : 'Internal server error';
+      exception instanceof Error ? exception.message : 'Internal server error';
 
     // Log the full error details
     this.logger.error(
@@ -54,4 +52,3 @@ export class AllExceptionsFilter implements ExceptionFilter {
     response.status(status).json(apiResponse);
   }
 }
-

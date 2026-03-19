@@ -3,7 +3,14 @@
  * Data Transfer Objects for custom recipe API
  */
 
-import { IsString, IsArray, IsOptional, IsDateString, IsBoolean, IsEnum } from 'class-validator';
+import {
+  IsString,
+  IsArray,
+  IsOptional,
+  IsDateString,
+  IsBoolean,
+  IsEnum,
+} from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { TargetGoal, CustomAttachmentType } from '@prisma/client';
 

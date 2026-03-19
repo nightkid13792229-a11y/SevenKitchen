@@ -57,13 +57,12 @@ export class ProductionBatch {
    * Check if transition is allowed
    */
   private canTransitionTo(newStatus: ProductionBatchStatus): boolean {
-    const validTransitions: Record<ProductionBatchStatus, ProductionBatchStatus[]> = {
-      [ProductionBatchStatus.PLANNED]: [
-        ProductionBatchStatus.IN_PRODUCTION,
-      ],
-      [ProductionBatchStatus.IN_PRODUCTION]: [
-        ProductionBatchStatus.COMPLETED,
-      ],
+    const validTransitions: Record<
+      ProductionBatchStatus,
+      ProductionBatchStatus[]
+    > = {
+      [ProductionBatchStatus.PLANNED]: [ProductionBatchStatus.IN_PRODUCTION],
+      [ProductionBatchStatus.IN_PRODUCTION]: [ProductionBatchStatus.COMPLETED],
       [ProductionBatchStatus.COMPLETED]: [], // Terminal state
     };
 
@@ -101,4 +100,3 @@ export class ProductionBatch {
     );
   }
 }
-

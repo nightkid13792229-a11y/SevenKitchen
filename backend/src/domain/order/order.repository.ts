@@ -86,4 +86,3 @@ export interface OrderRepository {
    */
   findDogById(dogId: string): Promise<DogDto | null>;
 }
-

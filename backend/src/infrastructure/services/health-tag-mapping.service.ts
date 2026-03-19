@@ -10,12 +10,12 @@ import { RecipeHealthTag } from '@prisma/client';
 export class HealthTagMappingService {
   // Mapping from legacy enum values to new UUIDs
   private readonly enumToUuidMap: Record<string, string> = {
-    'HEALTHY': '00000000-0000-0000-0000-000000000001',
-    'PICKY_EATER': '00000000-0000-0000-0000-000000000002',
-    'SENSITIVE_STOMACH': '00000000-0000-0000-0000-000000000003',
-    'PANCREATITIS_SUPPORT': '00000000-0000-0000-0000-000000000004',
-    'LOW_FAT': '00000000-0000-0000-0000-000000000005',
-    'SKIN_COAT_CARE': '00000000-0000-0000-0000-000000000006',
+    HEALTHY: '00000000-0000-0000-0000-000000000001',
+    PICKY_EATER: '00000000-0000-0000-0000-000000000002',
+    SENSITIVE_STOMACH: '00000000-0000-0000-0000-000000000003',
+    PANCREATITIS_SUPPORT: '00000000-0000-0000-0000-000000000004',
+    LOW_FAT: '00000000-0000-0000-0000-000000000005',
+    SKIN_COAT_CARE: '00000000-0000-0000-0000-000000000006',
   };
 
   // Reverse mapping from UUID to enum
@@ -61,7 +61,7 @@ export class HealthTagMappingService {
    */
   enumsToUuids(enumValues: string[]): string[] {
     return enumValues
-      .map(enumVal => this.enumToUuid(enumVal))
+      .map((enumVal) => this.enumToUuid(enumVal))
       .filter((uuid): uuid is string => uuid !== null);
   }
 
@@ -70,7 +70,7 @@ export class HealthTagMappingService {
    */
   uuidsToEnums(uuids: string[]): string[] {
     return uuids
-      .map(uuid => this.uuidToEnum(uuid))
+      .map((uuid) => this.uuidToEnum(uuid))
       .filter((enumVal): enumVal is string => enumVal !== null);
   }
 }

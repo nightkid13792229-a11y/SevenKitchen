@@ -70,6 +70,3 @@ export class PrismaAddressRepository implements AddressRepository {
     );
   }
 }
-
-
-

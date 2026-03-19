@@ -20,8 +20,8 @@ export class PrismaOrderPricingSnapshotRepository implements IOrderPricingSnapsh
     const record = await this.prisma.orderPricingSnapshot.create({
       data: {
         customerId: data.customerId,
-        requestParams: data.requestParams as any,
-        pricingResult: data.pricingResult as any,
+        requestParams: data.requestParams,
+        pricingResult: data.pricingResult,
         expiresAt: data.expiresAt,
       },
     });

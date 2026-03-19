@@ -15,7 +15,10 @@ import { RequestUser } from './request-user.interface';
  * }
  */
 export const User = createParamDecorator(
-  (data: keyof RequestUser | undefined, ctx: ExecutionContext): RequestUser | any => {
+  (
+    data: keyof RequestUser | undefined,
+    ctx: ExecutionContext,
+  ): RequestUser | any => {
     const request = ctx.switchToHttp().getRequest<{
       user?: RequestUser;
     }>();
@@ -23,7 +26,9 @@ export const User = createParamDecorator(
     const user = request.user;
 
     if (!user) {
-      throw new Error('User not found in request. Make sure AuthGuard is applied.');
+      throw new Error(
+        'User not found in request. Make sure AuthGuard is applied.',
+      );
     }
 
     // 如果指定了字段名，返回具体字段值
@@ -53,7 +58,9 @@ export const UserId = createParamDecorator(
     const user = request.user;
 
     if (!user) {
-      throw new Error('User not found in request. Make sure AuthGuard is applied.');
+      throw new Error(
+        'User not found in request. Make sure AuthGuard is applied.',
+      );
     }
 
     return user.userId;
@@ -77,7 +84,9 @@ export const UserRole = createParamDecorator(
     const user = request.user;
 
     if (!user) {
-      throw new Error('User not found in request. Make sure AuthGuard is applied.');
+      throw new Error(
+        'User not found in request. Make sure AuthGuard is applied.',
+      );
     }
 
     return user.role;

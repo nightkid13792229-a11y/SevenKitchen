@@ -13,7 +13,9 @@ import { TimezoneUtil } from '../../utils/timezone.util';
  * @param currentTime 当前时间（默认为当前时间）
  * @returns 是否在允许的时间范围内（6:00-14:00 上海时间）
  */
-export function isWithinPurchasingHours(currentTime: Date = new Date()): boolean {
+export function isWithinPurchasingHours(
+  currentTime: Date = new Date(),
+): boolean {
   // 使用上海时区的小时数进行判断
   const shanghaiHour = TimezoneUtil.getShanghaiHour();
   return shanghaiHour >= 6 && shanghaiHour < 14;
@@ -25,10 +27,21 @@ export function isWithinPurchasingHours(currentTime: Date = new Date()): boolean
  * @param currentDate 当前日期（默认为今天）
  * @returns 是否可以操作（目标日期必须>=今天）
  */
-export function canOperateOnPurchaseList(targetDate: Date, currentDate: Date = new Date()): boolean {
+export function canOperateOnPurchaseList(
+  targetDate: Date,
+  currentDate: Date = new Date(),
+): boolean {
   // 将两个日期都设置为本地时间0点
-  const targetLocal = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
-  const currentLocal = new Date(currentDate.getFullYear(), currentDate.getMonth(), currentDate.getDate());
+  const targetLocal = new Date(
+    targetDate.getFullYear(),
+    targetDate.getMonth(),
+    targetDate.getDate(),
+  );
+  const currentLocal = new Date(
+    currentDate.getFullYear(),
+    currentDate.getMonth(),
+    currentDate.getDate(),
+  );
 
   return targetLocal >= currentLocal;
 }
@@ -39,19 +52,18 @@ export function canOperateOnPurchaseList(targetDate: Date, currentDate: Date = n
  * @param operation 操作名称（用于错误提示）
  * @returns 如果不允许，抛出异常
  */
-export function validatePurchasingOperation(targetDate: Date, operation: string): void {
+export function validatePurchasingOperation(
+  targetDate: Date,
+  operation: string,
+): void {
   // 检查时间是否在允许范围内（6:00-14:00）
   if (!isWithinPurchasingHours()) {
-    throw new Error(
-      `${operation}的时间为每天早上6点至下午2点`
-    );
+    throw new Error(`${operation}的时间为每天早上6点至下午2点`);
   }
 
   // 检查目标日期是否有效（目标日期必须>=今天）
   if (!canOperateOnPurchaseList(targetDate)) {
-    throw new Error(
-      `${operation}只能操作当天或未来日期的采购清单`
-    );
+    throw new Error(`${operation}只能操作当天或未来日期的采购清单`);
   }
 }
 
@@ -61,6 +73,9 @@ export function validatePurchasingOperation(targetDate: Date, operation: string)
  * @param currentDate 当前日期（默认为今天）
  * @returns 是否为历史清单（目标日期<今天）
  */
-export function isHistoricalPurchaseList(targetDate: Date, currentDate: Date = new Date()): boolean {
+export function isHistoricalPurchaseList(
+  targetDate: Date,
+  currentDate: Date = new Date(),
+): boolean {
   return !canOperateOnPurchaseList(targetDate, currentDate);
 }

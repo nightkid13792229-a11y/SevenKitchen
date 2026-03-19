@@ -3,7 +3,20 @@
  * Handles custom recipe orders for customers
  */
 
-import { Controller, Post, Get, Body, Param, Query, UseGuards, Req, ParseIntPipe, BadRequestException, UseInterceptors, UploadedFile } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  Req,
+  ParseIntPipe,
+  BadRequestException,
+  UseInterceptors,
+  UploadedFile,
+} from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { CustomRecipeService } from '../../../application/custom-recipe/custom-recipe.service';
@@ -69,7 +82,7 @@ export class CustomRecipeController {
     });
 
     return {
-      orders: orders.map(order => ({
+      orders: orders.map((order) => ({
         orderId: order.orderId,
         dogName: order.dog.name,
         targetGoal: order.targetGoal,
@@ -134,16 +147,30 @@ export class CustomRecipeController {
   @ApiOperation({ summary: 'Get available schedule' })
   async getSchedule(@Query('month') month: string) {
     const [year, monthNum] = month.split('-').map(Number);
-    const { start, end } = require('../../../utils/date-helpers').getMonthRange(year, monthNum);
+    const { start, end } = require('../../../utils/date-helpers').getMonthRange(
+      year,
+      monthNum,
+    );
 
-    const schedules = await this.customRecipeService.getScheduleRange(start, end);
+    const schedules = await this.customRecipeService.getScheduleRange(
+      start,
+      end,
+    );
 
     return {
-      dates: schedules.map(schedule => ({
-        date: require('../../../utils/date-helpers').formatDateToYYYYMMDD(schedule.date),
-        isAvailable: schedule.isAvailable && !schedule.isPublicHoliday && schedule.bookedCount < schedule.capacity,
+      dates: schedules.map((schedule) => ({
+        date: require('../../../utils/date-helpers').formatDateToYYYYMMDD(
+          schedule.date,
+        ),
+        isAvailable:
+          schedule.isAvailable &&
+          !schedule.isPublicHoliday &&
+          schedule.bookedCount < schedule.capacity,
         isPublicHoliday: schedule.isPublicHoliday,
-        remainingCapacity: Math.max(0, schedule.capacity - schedule.bookedCount),
+        remainingCapacity: Math.max(
+          0,
+          schedule.capacity - schedule.bookedCount,
+        ),
         bookedCount: schedule.bookedCount,
       })),
     };
@@ -155,7 +182,11 @@ export class CustomRecipeController {
   @Post('upload-attachment')
   @ApiOperation({ summary: 'Upload attachment' })
   @UseInterceptors(FileInterceptor('file'))
-  async uploadAttachment(@Req() req: any, @UploadedFile() file: Express.Multer.File, @Body('orderId') orderId?: string) {
+  async uploadAttachment(
+    @Req() req: any,
+    @UploadedFile() file: Express.Multer.File,
+    @Body('orderId') orderId?: string,
+  ) {
     if (!file) {
       throw new BadRequestException('请选择文件');
     }
@@ -169,7 +200,10 @@ export class CustomRecipeController {
       throw new BadRequestException('缺少订单ID');
     }
 
-    const attachment = await this.customRecipeService.uploadAttachment(file, orderId);
+    const attachment = await this.customRecipeService.uploadAttachment(
+      file,
+      orderId,
+    );
 
     return {
       fileUrl: attachment.fileUrl,
@@ -219,7 +253,8 @@ export class CustomRecipeController {
       throw new BadRequestException('狗狗不存在或无权访问');
     }
 
-    const preferences = await this.customRecipeService.analyzeDogPreferences(dogId);
+    const preferences =
+      await this.customRecipeService.analyzeDogPreferences(dogId);
 
     return preferences;
   }

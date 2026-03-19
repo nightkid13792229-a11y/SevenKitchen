@@ -92,17 +92,15 @@ export class PackagingUnit {
    * Check if transition is allowed
    */
   private canTransitionTo(newStatus: PackagingUnitStatus): boolean {
-    const validTransitions: Record<
-      PackagingUnitStatus,
-      PackagingUnitStatus[]
-    > = {
-      [PackagingUnitStatus.PENDING]: [PackagingUnitStatus.IN_PROGRESS],
-      [PackagingUnitStatus.IN_PROGRESS]: [
-        PackagingUnitStatus.COMPLETED,
-        PackagingUnitStatus.PENDING, // Allow going back if needed
-      ],
-      [PackagingUnitStatus.COMPLETED]: [], // Terminal state
-    };
+    const validTransitions: Record<PackagingUnitStatus, PackagingUnitStatus[]> =
+      {
+        [PackagingUnitStatus.PENDING]: [PackagingUnitStatus.IN_PROGRESS],
+        [PackagingUnitStatus.IN_PROGRESS]: [
+          PackagingUnitStatus.COMPLETED,
+          PackagingUnitStatus.PENDING, // Allow going back if needed
+        ],
+        [PackagingUnitStatus.COMPLETED]: [], // Terminal state
+      };
 
     const allowedNextStates = validTransitions[this.status] || [];
     return allowedNextStates.includes(newStatus);
@@ -119,7 +117,11 @@ export class PackagingUnit {
     photosPortioned: string[],
   ): void {
     // Validate photos arrays
-    if (!Array.isArray(photosRaw) || !Array.isArray(photosCooked) || !Array.isArray(photosPortioned)) {
+    if (
+      !Array.isArray(photosRaw) ||
+      !Array.isArray(photosCooked) ||
+      !Array.isArray(photosPortioned)
+    ) {
       throw new ValidationError('Photos must be arrays');
     }
 
@@ -151,7 +153,7 @@ export class PackagingUnit {
     // Validate total count
     if (updatedPhotos.length > 3) {
       throw new ValidationError(
-        `Total photos cannot exceed 3. Currently have ${existingPhotos.length}, trying to add ${photoUrls.length}`
+        `Total photos cannot exceed 3. Currently have ${existingPhotos.length}, trying to add ${photoUrls.length}`,
       );
     }
 
@@ -159,7 +161,8 @@ export class PackagingUnit {
     this.photosRaw = updatedPhotos;
 
     // Transition to COMPLETED when reaching 2-3 photos (PENDING -> COMPLETED)
-    const shouldTriggerOrderFreezing = this.status === PackagingUnitStatus.PENDING && updatedPhotos.length >= 2;
+    const shouldTriggerOrderFreezing =
+      this.status === PackagingUnitStatus.PENDING && updatedPhotos.length >= 2;
     if (shouldTriggerOrderFreezing) {
       this.status = PackagingUnitStatus.COMPLETED;
     }
@@ -175,7 +178,11 @@ export class PackagingUnit {
    * @param photoUrls Array of photo URLs (2-3 photos required)
    */
   replacePhotos(photoUrls: string[]): void {
-    if (!Array.isArray(photoUrls) || photoUrls.length < 2 || photoUrls.length > 3) {
+    if (
+      !Array.isArray(photoUrls) ||
+      photoUrls.length < 2 ||
+      photoUrls.length > 3
+    ) {
       throw new ValidationError('Must upload 2-3 photos');
     }
 
@@ -203,4 +210,3 @@ export class PackagingUnit {
     this.updatedAt = new Date();
   }
 }
-

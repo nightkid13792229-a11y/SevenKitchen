@@ -1,5 +1,10 @@
 import { Injectable } from '@nestjs/common';
-import { createCanvas, Canvas, CanvasRenderingContext2D, registerFont } from 'canvas';
+import {
+  createCanvas,
+  Canvas,
+  CanvasRenderingContext2D,
+  registerFont,
+} from 'canvas';
 import { LabelDataDto } from './dto/label-data.dto';
 import * as path from 'path';
 
@@ -8,11 +13,11 @@ import * as path from 'path';
  */
 const LABEL_LAYOUT = {
   canvas: {
-    width: 75,   // mm
+    width: 75, // mm
     height: 100, // mm
   },
   margin: {
-    top: 0,      // 品牌名称紧贴标签纸最上方
+    top: 0, // 品牌名称紧贴标签纸最上方
     bottom: 4,
     left: 7,
     right: 7,
@@ -106,7 +111,10 @@ export class LabelService {
     } else {
       // 如果都不存在,尝试创建dist/assets/fonts目录并复制字体
       fontsPath = distFontsPath;
-      console.log('[LabelService] Neither dist nor src fonts found, will use:', fontsPath);
+      console.log(
+        '[LabelService] Neither dist nor src fonts found, will use:',
+        fontsPath,
+      );
     }
 
     this.regularFontPath = path.join(fontsPath, 'SourceHanSansSC-Regular.otf');
@@ -119,17 +127,31 @@ export class LabelService {
 
     // 检查字体文件是否存在
     if (!fs.existsSync(this.regularFontPath)) {
-      console.error('[LabelService] Regular font file NOT found:', this.regularFontPath);
+      console.error(
+        '[LabelService] Regular font file NOT found:',
+        this.regularFontPath,
+      );
       throw new Error(`Font file not found: ${this.regularFontPath}`);
     } else {
-      console.log('[LabelService] Regular font file found, size:', fs.statSync(this.regularFontPath).size, 'bytes');
+      console.log(
+        '[LabelService] Regular font file found, size:',
+        fs.statSync(this.regularFontPath).size,
+        'bytes',
+      );
     }
 
     if (!fs.existsSync(this.boldFontPath)) {
-      console.error('[LabelService] Bold font file NOT found:', this.boldFontPath);
+      console.error(
+        '[LabelService] Bold font file NOT found:',
+        this.boldFontPath,
+      );
       throw new Error(`Font file not found: ${this.boldFontPath}`);
     } else {
-      console.log('[LabelService] Bold font file found, size:', fs.statSync(this.boldFontPath).size, 'bytes');
+      console.log(
+        '[LabelService] Bold font file found, size:',
+        fs.statSync(this.boldFontPath).size,
+        'bytes',
+      );
     }
 
     // 注册字体到canvas库
@@ -166,7 +188,8 @@ export class LabelService {
     // 品牌名称位置：字体大小 + 1mm 下移
     let y = mmToPx(LABEL_LAYOUT.fontSize.brand) + mmToPx(1);
     const centerX = width / 2;
-    const maxWidth = width - mmToPx(LABEL_LAYOUT.margin.left + LABEL_LAYOUT.margin.right);
+    const maxWidth =
+      width - mmToPx(LABEL_LAYOUT.margin.left + LABEL_LAYOUT.margin.right);
 
     // 1. 品牌名称（顶部，紧贴标签纸边缘）
     ctx.font = `bold ${mmToPx(LABEL_LAYOUT.fontSize.brand)}px "Chinese-Bold"`;
@@ -175,7 +198,7 @@ export class LabelService {
     y += mmToPx(LABEL_LAYOUT.lineHeight.compact);
 
     // 分隔线已移除，品牌名称与食谱标题之间保留3mm间距
-    y += mmToPx(3);  // 3mm 间距
+    y += mmToPx(3); // 3mm 间距
 
     // 2. 食谱名称
     ctx.font = `bold ${mmToPx(LABEL_LAYOUT.fontSize.title)}px "Noto Sans CJK SC", "Source Han Sans SC", "SimHei", sans-serif`;
@@ -203,13 +226,20 @@ export class LabelService {
       y,
       centerX,
       maxWidth,
-      width
+      width,
     );
     y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
 
     // 5. 营养成分分析
     if (labelData.nutritionAnalysis) {
-      y = this.drawNutritionSection(ctx, labelData.nutritionAnalysis, y, centerX, maxWidth, width);
+      y = this.drawNutritionSection(
+        ctx,
+        labelData.nutritionAnalysis,
+        y,
+        centerX,
+        maxWidth,
+        width,
+      );
       y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
     }
 
@@ -218,8 +248,18 @@ export class LabelService {
     y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
 
     // 7. 烹饪建议（如果有）
-    if (labelData.cookingMethod && typeof labelData.cookingMethod !== 'string') {
-      y = this.drawCookingSection(ctx, labelData.cookingMethod, y, centerX, maxWidth, width);
+    if (
+      labelData.cookingMethod &&
+      typeof labelData.cookingMethod !== 'string'
+    ) {
+      y = this.drawCookingSection(
+        ctx,
+        labelData.cookingMethod,
+        y,
+        centerX,
+        maxWidth,
+        width,
+      );
       y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
     }
 
@@ -231,7 +271,11 @@ export class LabelService {
   /**
    * 绘制分隔线
    */
-  private drawSeparatorLine(ctx: CanvasRenderingContext2D, y: number, canvasWidth: number): void {
+  private drawSeparatorLine(
+    ctx: CanvasRenderingContext2D,
+    y: number,
+    canvasWidth: number,
+  ): void {
     const margin = mmToPx(LABEL_LAYOUT.margin.left);
     ctx.strokeStyle = '#000000';
     ctx.lineWidth = 1;
@@ -269,7 +313,9 @@ export class LabelService {
     ctx.font = `${mmToPx(LABEL_LAYOUT.fontSize.body)}px "Noto Sans CJK SC", "Source Han Sans SC", "SimHei", sans-serif`;
     ctx.textAlign = 'center';
 
-    const allIngredients = [foodIngredients, supplementIngredients].filter(Boolean).join('、');
+    const allIngredients = [foodIngredients, supplementIngredients]
+      .filter(Boolean)
+      .join('、');
     const lines = this.wrapText(allIngredients, maxWidth - 4, ctx);
 
     for (const line of lines) {
@@ -303,12 +349,18 @@ export class LabelService {
     ctx.font = `${mmToPx(LABEL_LAYOUT.fontSize.body)}px "Noto Sans CJK SC", "Source Han Sans SC", "SimHei", sans-serif`;
 
     const items: string[] = [];
-    if (nutrition.proteinPercent !== undefined) items.push(`蛋白质 ${nutrition.proteinPercent}%`);
-    if (nutrition.fatPercent !== undefined) items.push(`脂肪 ${nutrition.fatPercent}%`);
-    if (nutrition.ashPercent !== undefined) items.push(`灰分 ${nutrition.ashPercent}%`);
-    if (nutrition.moisturePercent !== undefined) items.push(`水分 ${nutrition.moisturePercent}%`);
-    if (nutrition.crudeFiberPercent !== undefined) items.push(`纤维 ${nutrition.crudeFiberPercent}%`);
-    if (nutrition.carbohydratePercent !== undefined) items.push(`碳水 ${nutrition.carbohydratePercent}%`);
+    if (nutrition.proteinPercent !== undefined)
+      items.push(`蛋白质 ${nutrition.proteinPercent}%`);
+    if (nutrition.fatPercent !== undefined)
+      items.push(`脂肪 ${nutrition.fatPercent}%`);
+    if (nutrition.ashPercent !== undefined)
+      items.push(`灰分 ${nutrition.ashPercent}%`);
+    if (nutrition.moisturePercent !== undefined)
+      items.push(`水分 ${nutrition.moisturePercent}%`);
+    if (nutrition.crudeFiberPercent !== undefined)
+      items.push(`纤维 ${nutrition.crudeFiberPercent}%`);
+    if (nutrition.carbohydratePercent !== undefined)
+      items.push(`碳水 ${nutrition.carbohydratePercent}%`);
 
     // 每行4项
     for (let i = 0; i < items.length; i += 4) {
@@ -320,8 +372,10 @@ export class LabelService {
     // 能量和钙磷比
     if (nutrition.energyDensityKcalPerKg || nutrition.calciumPhosphorusRatio) {
       const extraItems: string[] = [];
-      if (nutrition.energyDensityKcalPerKg) extraItems.push(`能量 ${nutrition.energyDensityKcalPerKg}kcal/kg`);
-      if (nutrition.calciumPhosphorusRatio) extraItems.push(`钙磷比 ${nutrition.calciumPhosphorusRatio}`);
+      if (nutrition.energyDensityKcalPerKg)
+        extraItems.push(`能量 ${nutrition.energyDensityKcalPerKg}kcal/kg`);
+      if (nutrition.calciumPhosphorusRatio)
+        extraItems.push(`钙磷比 ${nutrition.calciumPhosphorusRatio}`);
       ctx.fillText(extraItems.join('  '), centerX, y);
       y += mmToPx(LABEL_LAYOUT.lineHeight.compact);
     }
@@ -380,13 +434,29 @@ export class LabelService {
     ctx.font = `${mmToPx(LABEL_LAYOUT.fontSize.body)}px "Noto Sans CJK SC", "Source Han Sans SC", "SimHei", sans-serif`;
 
     const methods = [
-      { name: '蒸', time: cookingMethod.steam || '10-12分钟', desc: '无需提前解冻' },
-      { name: '炖', time: cookingMethod.stew || '10-12分钟', desc: '需解冻加水' },
-      { name: '低温慢煮', time: cookingMethod.sousvide || '45分钟', desc: '65℃' },
+      {
+        name: '蒸',
+        time: cookingMethod.steam || '10-12分钟',
+        desc: '无需提前解冻',
+      },
+      {
+        name: '炖',
+        time: cookingMethod.stew || '10-12分钟',
+        desc: '需解冻加水',
+      },
+      {
+        name: '低温慢煮',
+        time: cookingMethod.sousvide || '45分钟',
+        desc: '65℃',
+      },
     ];
 
     for (const method of methods) {
-      ctx.fillText(`${method.name}: ${method.time} (${method.desc})`, centerX, y);
+      ctx.fillText(
+        `${method.name}: ${method.time} (${method.desc})`,
+        centerX,
+        y,
+      );
       y += mmToPx(LABEL_LAYOUT.lineHeight.compact);
     }
 
@@ -396,7 +466,11 @@ export class LabelService {
   /**
    * 文本换行
    */
-  private wrapText(text: string, maxWidth: number, ctx: CanvasRenderingContext2D): string[] {
+  private wrapText(
+    text: string,
+    maxWidth: number,
+    ctx: CanvasRenderingContext2D,
+  ): string[] {
     const lines: string[] = [];
 
     // 按顿号分割

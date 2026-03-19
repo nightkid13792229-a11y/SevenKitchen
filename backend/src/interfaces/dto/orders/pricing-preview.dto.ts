@@ -125,7 +125,8 @@ export class PriceExplanationDto {
   costOverhead!: number;
 
   @ApiProperty({
-    description: 'Platform service margin amount (CNY) - computed as productPrice - totalProductCost',
+    description:
+      'Platform service margin amount (CNY) - computed as productPrice - totalProductCost',
     example: 44.67,
   })
   marginAmount!: number;
@@ -186,7 +187,9 @@ export class IngredientCostItemDto {
   @ApiPropertyOptional({ description: 'Nutrient target key (for supplements)' })
   nutrientTargetKey?: string;
 
-  @ApiPropertyOptional({ description: 'Nutrient target value (for supplements)' })
+  @ApiPropertyOptional({
+    description: 'Nutrient target value (for supplements)',
+  })
   nutrientTargetValue?: number;
 }
 
@@ -276,7 +279,10 @@ export class PackagingCostDetailDto {
   @ApiProperty({ description: 'Per-pack consumables breakdown' })
   perPackConsumables!: PackagingPerPackConsumablesDto;
 
-  @ApiProperty({ description: 'Shipping containers breakdown', type: [PackagingShippingContainerDto] })
+  @ApiProperty({
+    description: 'Shipping containers breakdown',
+    type: [PackagingShippingContainerDto],
+  })
   shippingContainers!: PackagingShippingContainerDto[];
 }
 
@@ -427,5 +433,3 @@ export class PricingPreviewResponseDto {
   })
   pricingBreakdown?: PricingBreakdownDto | null;
 }
-
-

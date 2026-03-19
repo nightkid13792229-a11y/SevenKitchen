@@ -17,7 +17,7 @@ export class PrismaIngredientRepository implements IngredientRepository {
 
   async findById(id: string): Promise<Ingredient | null> {
     const record = await this.prisma.ingredient.findUnique({
-      where: { id }
+      where: { id },
     });
     if (!record) return null;
     return this.mapToDomain(record);
@@ -25,32 +25,34 @@ export class PrismaIngredientRepository implements IngredientRepository {
 
   async findByIds(ids: string[]): Promise<Ingredient[]> {
     const records = await this.prisma.ingredient.findMany({
-      where: { id: { in: ids } }
+      where: { id: { in: ids } },
     });
 
     // 创建映射表用于快速查找
-    const recordMap = new Map(records.map(r => [r.id, r]));
+    const recordMap = new Map(records.map((r) => [r.id, r]));
 
     // 按输入 ids 的顺序返回结果
     return ids
-      .map(id => recordMap.get(id))
-      .filter((record): record is typeof records[number] => record !== undefined)
-      .map(r => this.mapToDomain(r));
+      .map((id) => recordMap.get(id))
+      .filter(
+        (record): record is (typeof records)[number] => record !== undefined,
+      )
+      .map((r) => this.mapToDomain(r));
   }
 
   async findAll(): Promise<Ingredient[]> {
     const records = await this.prisma.ingredient.findMany({
-      orderBy: { updatedAt: 'desc' }
+      orderBy: { updatedAt: 'desc' },
     });
-    return records.map(r => this.mapToDomain(r));
+    return records.map((r) => this.mapToDomain(r));
   }
 
   async findByType(type: IngredientType): Promise<Ingredient[]> {
     const records = await this.prisma.ingredient.findMany({
       where: { type: type as any },
-      orderBy: { name: 'asc' }
+      orderBy: { name: 'asc' },
     });
-    return records.map(r => this.mapToDomain(r));
+    return records.map((r) => this.mapToDomain(r));
   }
 
   async save(ingredient: Ingredient, tagIds?: string[]): Promise<Ingredient> {
@@ -68,7 +70,7 @@ export class PrismaIngredientRepository implements IngredientRepository {
       currentPricePerPurchaseUnit: ingredient.currentPricePerPurchaseUnit,
       weightG: ingredient.weightG,
       maxCapacityG: ingredient.maxCapacityG,
-      properties: ingredient.properties as any
+      properties: ingredient.properties as any,
     };
 
     this.logger.debug(`Saving ingredient ${ingredient.id}: ${ingredient.name}`);
@@ -76,7 +78,7 @@ export class PrismaIngredientRepository implements IngredientRepository {
     const saved = await this.prisma.ingredient.upsert({
       where: { id: ingredient.id },
       update: data,
-      create: { id: ingredient.id, ...data }
+      create: { id: ingredient.id, ...data },
     });
 
     // Save tag associations if provided
@@ -92,11 +94,13 @@ export class PrismaIngredientRepository implements IngredientRepository {
     id: string,
     pricePerPurchaseUnit: number,
   ): Promise<Ingredient | null> {
-    this.logger.debug(`Updating price for ingredient ${id} to ${pricePerPurchaseUnit}`);
+    this.logger.debug(
+      `Updating price for ingredient ${id} to ${pricePerPurchaseUnit}`,
+    );
 
     const updated = await this.prisma.ingredient.update({
       where: { id },
-      data: { currentPricePerPurchaseUnit: pricePerPurchaseUnit }
+      data: { currentPricePerPurchaseUnit: pricePerPurchaseUnit },
     });
 
     return this.mapToDomain(updated);
@@ -106,21 +110,18 @@ export class PrismaIngredientRepository implements IngredientRepository {
     this.logger.debug(`Deleting ingredient ${id}`);
 
     await this.prisma.ingredient.delete({
-      where: { id }
+      where: { id },
     });
 
     this.logger.debug(`Ingredient ${id} deleted successfully`);
   }
 
-  async update(
-    id: string,
-    data: Partial<any>,
-  ): Promise<Ingredient> {
+  async update(id: string, data: Partial<any>): Promise<Ingredient> {
     this.logger.debug(`Updating ingredient ${id}`);
 
     const updated = await this.prisma.ingredient.update({
       where: { id },
-      data
+      data,
     });
 
     this.logger.debug(`Ingredient ${id} updated successfully`);
@@ -128,21 +129,23 @@ export class PrismaIngredientRepository implements IngredientRepository {
   }
 
   async setTags(ingredientId: string, tagIds: string[]): Promise<void> {
-    this.logger.debug(`Setting tags for ingredient ${ingredientId}: ${tagIds.length} tags`);
+    this.logger.debug(
+      `Setting tags for ingredient ${ingredientId}: ${tagIds.length} tags`,
+    );
 
     // Delete existing associations
     await this.prisma.ingredientTagAssignment.deleteMany({
-      where: { ingredientId }
+      where: { ingredientId },
     });
 
     // Create new associations
     if (tagIds.length > 0) {
-      const assignments = tagIds.map(tagId => ({
+      const assignments = tagIds.map((tagId) => ({
         ingredientId,
-        tagId
+        tagId,
       }));
       await this.prisma.ingredientTagAssignment.createMany({
-        data: assignments
+        data: assignments,
       });
     }
 
@@ -153,11 +156,11 @@ export class PrismaIngredientRepository implements IngredientRepository {
     const assignments = await this.prisma.ingredientTagAssignment.findMany({
       where: { ingredientId },
       include: {
-        tag: true
-      }
+        tag: true,
+      },
     });
 
-    return assignments.map(a => a.tag);
+    return assignments.map((a) => a.tag);
   }
 
   /**
@@ -179,7 +182,7 @@ export class PrismaIngredientRepository implements IngredientRepository {
       parseFloat(record.currentPricePerPurchaseUnit.toString()),
       record.weightG,
       record.maxCapacityG,
-      record.properties
+      record.properties,
     );
   }
 }

@@ -1,20 +1,20 @@
-import { IsArray, IsOptional, IsString, IsUUID } from 'class-validator'
+import { IsArray, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class UpdateAllergyDto {
   @IsOptional()
   @IsUUID()
-  dogId?: string
+  dogId?: string;
 
   @IsOptional()
   @IsString()
-  allergen?: string
+  allergen?: string;
 
   @IsOptional()
   @IsString()
-  notes?: string
+  notes?: string;
 
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  attachments?: string[]
+  attachments?: string[];
 }

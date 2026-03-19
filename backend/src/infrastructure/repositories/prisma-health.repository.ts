@@ -1,5 +1,5 @@
-import { Injectable } from '@nestjs/common'
-import { Prisma } from '@prisma/client'
+import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import type {
   VaccineRecordRepository,
   VaccineRecord,
@@ -8,9 +8,9 @@ import type {
   MedicalRecordRepository,
   MedicalRecord,
   AllergyRecordRepository,
-  AllergyRecord
-} from '../../domain/health/health.repository'
-import { PrismaService } from '../prisma.service'
+  AllergyRecord,
+} from '../../domain/health/health.repository';
+import { PrismaService } from '../prisma.service';
 
 @Injectable()
 export class PrismaVaccineRecordRepository implements VaccineRecordRepository {
@@ -18,20 +18,22 @@ export class PrismaVaccineRecordRepository implements VaccineRecordRepository {
 
   async findById(id: string): Promise<VaccineRecord | null> {
     const record = await this.prisma.vaccineRecord.findUnique({
-      where: { id }
-    })
-    return record ? this.mapToDomain(record) : null
+      where: { id },
+    });
+    return record ? this.mapToDomain(record) : null;
   }
 
   async findByDogId(dogId: string): Promise<VaccineRecord[]> {
     const records = await this.prisma.vaccineRecord.findMany({
       where: { dogId },
-      orderBy: { vaccinationDate: 'desc' }
-    })
-    return records.map(r => this.mapToDomain(r))
+      orderBy: { vaccinationDate: 'desc' },
+    });
+    return records.map((r) => this.mapToDomain(r));
   }
 
-  async create(data: Omit<VaccineRecord, 'id' | 'createdAt' | 'updatedAt'>): Promise<VaccineRecord> {
+  async create(
+    data: Omit<VaccineRecord, 'id' | 'createdAt' | 'updatedAt'>,
+  ): Promise<VaccineRecord> {
     const record = await this.prisma.vaccineRecord.create({
       data: {
         dogId: data.dogId,
@@ -39,15 +41,17 @@ export class PrismaVaccineRecordRepository implements VaccineRecordRepository {
         vaccinationDate: data.vaccinationDate,
         nextDueDate: data.nextDueDate,
         notes: data.notes,
-        status: data.status as any
-      }
-    })
-    return this.mapToDomain(record)
+        status: data.status as any,
+      },
+    });
+    return this.mapToDomain(record);
   }
 
   async update(
     id: string,
-    data: Partial<Omit<VaccineRecord, 'id' | 'dogId' | 'createdAt' | 'updatedAt'>>
+    data: Partial<
+      Omit<VaccineRecord, 'id' | 'dogId' | 'createdAt' | 'updatedAt'>
+    >,
   ): Promise<VaccineRecord> {
     const record = await this.prisma.vaccineRecord.update({
       where: { id },
@@ -56,37 +60,39 @@ export class PrismaVaccineRecordRepository implements VaccineRecordRepository {
         vaccinationDate: data.vaccinationDate,
         nextDueDate: data.nextDueDate,
         notes: data.notes,
-        status: data.status as any
-      }
-    })
-    return this.mapToDomain(record)
+        status: data.status as any,
+      },
+    });
+    return this.mapToDomain(record);
   }
 
   async delete(id: string): Promise<void> {
     await this.prisma.vaccineRecord.delete({
-      where: { id }
-    })
+      where: { id },
+    });
   }
 
   async findUpcoming(dogId: string, days: number): Promise<VaccineRecord[]> {
-    const today = new Date()
-    const futureDate = new Date()
-    futureDate.setDate(futureDate.getDate() + days)
+    const today = new Date();
+    const futureDate = new Date();
+    futureDate.setDate(futureDate.getDate() + days);
 
     const records = await this.prisma.vaccineRecord.findMany({
       where: {
         dogId,
         nextDueDate: {
           gte: today,
-          lte: futureDate
-        }
+          lte: futureDate,
+        },
       },
-      orderBy: { nextDueDate: 'asc' }
-    })
-    return records.map(r => this.mapToDomain(r))
+      orderBy: { nextDueDate: 'asc' },
+    });
+    return records.map((r) => this.mapToDomain(r));
   }
 
-  private mapToDomain(record: Prisma.VaccineRecordGetPayload<{}>): VaccineRecord {
+  private mapToDomain(
+    record: Prisma.VaccineRecordGetPayload<{}>,
+  ): VaccineRecord {
     return {
       id: record.id,
       dogId: record.dogId,
@@ -96,8 +102,8 @@ export class PrismaVaccineRecordRepository implements VaccineRecordRepository {
       notes: record.notes,
       status: record.status as any,
       createdAt: record.createdAt,
-      updatedAt: record.updatedAt
-    }
+      updatedAt: record.updatedAt,
+    };
   }
 }
 
@@ -107,20 +113,22 @@ export class PrismaCheckupRecordRepository implements CheckupRecordRepository {
 
   async findById(id: string): Promise<CheckupRecord | null> {
     const record = await this.prisma.checkupRecord.findUnique({
-      where: { id }
-    })
-    return record ? this.mapToDomain(record) : null
+      where: { id },
+    });
+    return record ? this.mapToDomain(record) : null;
   }
 
   async findByDogId(dogId: string): Promise<CheckupRecord[]> {
     const records = await this.prisma.checkupRecord.findMany({
       where: { dogId },
-      orderBy: { checkupDate: 'desc' }
-    })
-    return records.map(r => this.mapToDomain(r))
+      orderBy: { checkupDate: 'desc' },
+    });
+    return records.map((r) => this.mapToDomain(r));
   }
 
-  async create(data: Omit<CheckupRecord, 'id' | 'createdAt' | 'updatedAt'>): Promise<CheckupRecord> {
+  async create(
+    data: Omit<CheckupRecord, 'id' | 'createdAt' | 'updatedAt'>,
+  ): Promise<CheckupRecord> {
     const record = await this.prisma.checkupRecord.create({
       data: {
         dogId: data.dogId,
@@ -129,15 +137,17 @@ export class PrismaCheckupRecordRepository implements CheckupRecordRepository {
         findings: data.findings,
         recommendations: data.recommendations,
         veterinarian: data.veterinarian,
-        attachments: data.attachments
-      }
-    })
-    return this.mapToDomain(record)
+        attachments: data.attachments,
+      },
+    });
+    return this.mapToDomain(record);
   }
 
   async update(
     id: string,
-    data: Partial<Omit<CheckupRecord, 'id' | 'dogId' | 'createdAt' | 'updatedAt'>>
+    data: Partial<
+      Omit<CheckupRecord, 'id' | 'dogId' | 'createdAt' | 'updatedAt'>
+    >,
   ): Promise<CheckupRecord> {
     const record = await this.prisma.checkupRecord.update({
       where: { id },
@@ -147,19 +157,21 @@ export class PrismaCheckupRecordRepository implements CheckupRecordRepository {
         findings: data.findings,
         recommendations: data.recommendations,
         veterinarian: data.veterinarian,
-        attachments: data.attachments
-      }
-    })
-    return this.mapToDomain(record)
+        attachments: data.attachments,
+      },
+    });
+    return this.mapToDomain(record);
   }
 
   async delete(id: string): Promise<void> {
     await this.prisma.checkupRecord.delete({
-      where: { id }
-    })
+      where: { id },
+    });
   }
 
-  private mapToDomain(record: Prisma.CheckupRecordGetPayload<{}>): CheckupRecord {
+  private mapToDomain(
+    record: Prisma.CheckupRecordGetPayload<{}>,
+  ): CheckupRecord {
     return {
       id: record.id,
       dogId: record.dogId,
@@ -170,8 +182,8 @@ export class PrismaCheckupRecordRepository implements CheckupRecordRepository {
       veterinarian: record.veterinarian,
       attachments: record.attachments,
       createdAt: record.createdAt,
-      updatedAt: record.updatedAt
-    }
+      updatedAt: record.updatedAt,
+    };
   }
 }
 
@@ -181,31 +193,33 @@ export class PrismaMedicalRecordRepository implements MedicalRecordRepository {
 
   async findById(id: string): Promise<MedicalRecord | null> {
     const record = await this.prisma.medicalRecord.findUnique({
-      where: { id }
-    })
-    return record ? this.mapToDomain(record) : null
+      where: { id },
+    });
+    return record ? this.mapToDomain(record) : null;
   }
 
   async findByDogId(dogId: string): Promise<MedicalRecord[]> {
     const records = await this.prisma.medicalRecord.findMany({
       where: { dogId },
-      orderBy: { visitDate: 'desc' }
-    })
-    return records.map(r => this.mapToDomain(r))
+      orderBy: { visitDate: 'desc' },
+    });
+    return records.map((r) => this.mapToDomain(r));
   }
 
   async findByStatus(dogId: string, status: string): Promise<MedicalRecord[]> {
     const records = await this.prisma.medicalRecord.findMany({
       where: {
         dogId,
-        status: status as any
+        status: status as any,
       },
-      orderBy: { visitDate: 'desc' }
-    })
-    return records.map(r => this.mapToDomain(r))
+      orderBy: { visitDate: 'desc' },
+    });
+    return records.map((r) => this.mapToDomain(r));
   }
 
-  async create(data: Omit<MedicalRecord, 'id' | 'createdAt' | 'updatedAt'>): Promise<MedicalRecord> {
+  async create(
+    data: Omit<MedicalRecord, 'id' | 'createdAt' | 'updatedAt'>,
+  ): Promise<MedicalRecord> {
     const record = await this.prisma.medicalRecord.create({
       data: {
         dogId: data.dogId,
@@ -218,15 +232,17 @@ export class PrismaMedicalRecordRepository implements MedicalRecordRepository {
         followUpDate: data.followUpDate,
         veterinarian: data.veterinarian,
         notes: data.notes,
-        attachments: data.attachments || []
-      }
-    })
-    return this.mapToDomain(record)
+        attachments: data.attachments || [],
+      },
+    });
+    return this.mapToDomain(record);
   }
 
   async update(
     id: string,
-    data: Partial<Omit<MedicalRecord, 'id' | 'dogId' | 'createdAt' | 'updatedAt'>>
+    data: Partial<
+      Omit<MedicalRecord, 'id' | 'dogId' | 'createdAt' | 'updatedAt'>
+    >,
   ): Promise<MedicalRecord> {
     const record = await this.prisma.medicalRecord.update({
       where: { id },
@@ -240,19 +256,21 @@ export class PrismaMedicalRecordRepository implements MedicalRecordRepository {
         followUpDate: data.followUpDate,
         veterinarian: data.veterinarian,
         notes: data.notes,
-        attachments: data.attachments
-      }
-    })
-    return this.mapToDomain(record)
+        attachments: data.attachments,
+      },
+    });
+    return this.mapToDomain(record);
   }
 
   async delete(id: string): Promise<void> {
     await this.prisma.medicalRecord.delete({
-      where: { id }
-    })
+      where: { id },
+    });
   }
 
-  private mapToDomain(record: Prisma.MedicalRecordGetPayload<{}>): MedicalRecord {
+  private mapToDomain(
+    record: Prisma.MedicalRecordGetPayload<{}>,
+  ): MedicalRecord {
     return {
       id: record.id,
       dogId: record.dogId,
@@ -267,8 +285,8 @@ export class PrismaMedicalRecordRepository implements MedicalRecordRepository {
       notes: record.notes,
       attachments: record.attachments || [],
       createdAt: record.createdAt,
-      updatedAt: record.updatedAt
-    }
+      updatedAt: record.updatedAt,
+    };
   }
 }
 
@@ -278,53 +296,59 @@ export class PrismaAllergyRecordRepository implements AllergyRecordRepository {
 
   async findById(id: string): Promise<AllergyRecord | null> {
     const record = await this.prisma.allergyRecord.findUnique({
-      where: { id }
-    })
-    return record ? this.mapToDomain(record) : null
+      where: { id },
+    });
+    return record ? this.mapToDomain(record) : null;
   }
 
   async findByDogId(dogId: string): Promise<AllergyRecord[]> {
     const records = await this.prisma.allergyRecord.findMany({
       where: { dogId },
-      orderBy: { createdAt: 'desc' }
-    })
-    return records.map(r => this.mapToDomain(r))
+      orderBy: { createdAt: 'desc' },
+    });
+    return records.map((r) => this.mapToDomain(r));
   }
 
-  async create(data: Omit<AllergyRecord, 'id' | 'createdAt' | 'updatedAt'>): Promise<AllergyRecord> {
+  async create(
+    data: Omit<AllergyRecord, 'id' | 'createdAt' | 'updatedAt'>,
+  ): Promise<AllergyRecord> {
     const record = await this.prisma.allergyRecord.create({
       data: {
         dogId: data.dogId,
         allergen: data.allergen,
         notes: data.notes,
-        attachments: data.attachments
-      }
-    })
-    return this.mapToDomain(record)
+        attachments: data.attachments,
+      },
+    });
+    return this.mapToDomain(record);
   }
 
   async update(
     id: string,
-    data: Partial<Omit<AllergyRecord, 'id' | 'dogId' | 'createdAt' | 'updatedAt'>>
+    data: Partial<
+      Omit<AllergyRecord, 'id' | 'dogId' | 'createdAt' | 'updatedAt'>
+    >,
   ): Promise<AllergyRecord> {
     const record = await this.prisma.allergyRecord.update({
       where: { id },
       data: {
         allergen: data.allergen,
         notes: data.notes,
-        attachments: data.attachments
-      }
-    })
-    return this.mapToDomain(record)
+        attachments: data.attachments,
+      },
+    });
+    return this.mapToDomain(record);
   }
 
   async delete(id: string): Promise<void> {
     await this.prisma.allergyRecord.delete({
-      where: { id }
-    })
+      where: { id },
+    });
   }
 
-  private mapToDomain(record: Prisma.AllergyRecordGetPayload<{}>): AllergyRecord {
+  private mapToDomain(
+    record: Prisma.AllergyRecordGetPayload<{}>,
+  ): AllergyRecord {
     return {
       id: record.id,
       dogId: record.dogId,
@@ -332,7 +356,7 @@ export class PrismaAllergyRecordRepository implements AllergyRecordRepository {
       notes: record.notes,
       attachments: record.attachments || [],
       createdAt: record.createdAt,
-      updatedAt: record.updatedAt
-    }
+      updatedAt: record.updatedAt,
+    };
   }
 }

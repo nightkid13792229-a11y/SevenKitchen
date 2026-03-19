@@ -53,5 +53,8 @@ export interface DogBreedRepository {
   /**
    * Find dogs that use this breed
    */
-  findUsage(breedId: string, limit?: number): Promise<Array<{ id: string; name: string; ownerId: string }>>;
+  findUsage(
+    breedId: string,
+    limit?: number,
+  ): Promise<Array<{ id: string; name: string; ownerId: string }>>;
 }

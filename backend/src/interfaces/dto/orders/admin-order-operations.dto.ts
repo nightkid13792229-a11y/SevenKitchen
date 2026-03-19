@@ -6,7 +6,8 @@ import { ApiProperty } from '@nestjs/swagger';
  */
 export class ShipOrderDto {
   @ApiProperty({
-    description: 'Shipping carrier code (SF, YTO, STO, ZTO, YD, EMS, JD, POSTB)',
+    description:
+      'Shipping carrier code (SF, YTO, STO, ZTO, YD, EMS, JD, POSTB)',
     example: 'SF',
   })
   @IsNotEmpty()

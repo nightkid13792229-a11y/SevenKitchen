@@ -3,7 +3,13 @@
  * Data transfer objects for shipping template operations
  */
 
-import { IsString, IsNumber, IsBoolean, IsOptional, Min } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsBoolean,
+  IsOptional,
+  Min,
+} from 'class-validator';
 
 export class CreateShippingTemplateDto {
   @IsString()

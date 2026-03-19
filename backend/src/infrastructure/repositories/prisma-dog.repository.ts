@@ -107,6 +107,3 @@ export class PrismaDogRepository implements DogRepository {
     );
   }
 }
-
-
-

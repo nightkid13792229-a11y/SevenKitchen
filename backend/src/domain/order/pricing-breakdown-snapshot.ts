@@ -27,9 +27,9 @@ export class PricingBreakdownSnapshot {
       ingredientId: string;
       name: string;
       type: 'FOOD' | 'SUPPLEMENT' | 'PACKAGING';
-      amount: number;              // 成本计算用量（含出肉率和生产损耗率）
-      netAmount?: number;          // 净需求（不含损耗率）
-      purchaseAmount?: number;     // 采购用量（仅含生产损耗率，不含出肉率）
+      amount: number; // 成本计算用量（含出肉率和生产损耗率）
+      netAmount?: number; // 净需求（不含损耗率）
+      purchaseAmount?: number; // 采购用量（仅含生产损耗率，不含出肉率）
       unit: string;
       cost: number;
       purchaseChannel?: string;
@@ -63,5 +63,3 @@ export class PricingBreakdownSnapshot {
     }
   }
 }
-
-

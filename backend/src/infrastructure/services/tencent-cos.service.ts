@@ -24,12 +24,17 @@ export class TencentCosService {
     this.secretId = this.configService.get<string>('COS_SECRET_ID') || '';
     this.secretKey = this.configService.get<string>('COS_SECRET_KEY') || '';
     this.bucket = this.configService.get<string>('COS_BUCKET') || '';
-    this.region = this.configService.get<string>('COS_REGION') || 'ap-guangzhou';
+    this.region =
+      this.configService.get<string>('COS_REGION') || 'ap-guangzhou';
     this.cdnDomain = this.configService.get<string>('COS_CDN_DOMAIN');
 
     if (!this.secretId || !this.secretKey || !this.bucket) {
-      console.error('[TencentCosService] Missing COS credentials. Image upload will not work.');
-      console.error('[TencentCosService] Required: COS_SECRET_ID, COS_SECRET_KEY, COS_BUCKET');
+      console.error(
+        '[TencentCosService] Missing COS credentials. Image upload will not work.',
+      );
+      console.error(
+        '[TencentCosService] Required: COS_SECRET_ID, COS_SECRET_KEY, COS_BUCKET',
+      );
     }
   }
 
@@ -57,7 +62,8 @@ export class TencentCosService {
       originalName = filename || `image-${Date.now()}`;
     } else if ((file as any).buffer) {
       fileBuffer = (file as any).buffer;
-      originalName = (file as any).originalname || filename || `image-${Date.now()}`;
+      originalName =
+        (file as any).originalname || filename || `image-${Date.now()}`;
     } else {
       throw new BadRequestException('Invalid file format');
     }
@@ -79,19 +85,26 @@ export class TencentCosService {
 
       // Upload to COS
       await new Promise((resolve, reject) => {
-        cosClient.putObject({
-          Bucket: this.bucket,
-          Region: this.region,
-          Key: key,
-          Body: fileBuffer,
-        }, (err: any, data: any) => {
-          if (err) {
-            console.error('[TencentCosService] Upload error:', err);
-            reject(new BadRequestException(`Failed to upload image: ${err.message}`));
-          } else {
-            resolve(data);
-          }
-        });
+        cosClient.putObject(
+          {
+            Bucket: this.bucket,
+            Region: this.region,
+            Key: key,
+            Body: fileBuffer,
+          },
+          (err: any, data: any) => {
+            if (err) {
+              console.error('[TencentCosService] Upload error:', err);
+              reject(
+                new BadRequestException(
+                  `Failed to upload image: ${err.message}`,
+                ),
+              );
+            } else {
+              resolve(data);
+            }
+          },
+        );
       });
 
       // Generate URL
@@ -126,18 +139,21 @@ export class TencentCosService {
       });
 
       await new Promise((resolve, reject) => {
-        cosClient.deleteObject({
-          Bucket: this.bucket,
-          Region: this.region,
-          Key: key,
-        }, (err: any, data: any) => {
-          if (err) {
-            console.error('[TencentCosService] Delete error:', err);
-            reject(err);
-          } else {
-            resolve(data);
-          }
-        });
+        cosClient.deleteObject(
+          {
+            Bucket: this.bucket,
+            Region: this.region,
+            Key: key,
+          },
+          (err: any, data: any) => {
+            if (err) {
+              console.error('[TencentCosService] Delete error:', err);
+              reject(err);
+            } else {
+              resolve(data);
+            }
+          },
+        );
       });
 
       console.log(`[TencentCosService] Deleted ${key}`);
@@ -165,7 +181,10 @@ export class TencentCosService {
       console.log(`[TencentCosService] Deleting image by URL: ${url}`);
       await this.deleteImage(key);
     } catch (error) {
-      console.error('[TencentCosService] Failed to delete image by URL:', error);
+      console.error(
+        '[TencentCosService] Failed to delete image by URL:',
+        error,
+      );
       // Don't throw error - allow upload to proceed even if deletion fails
     }
   }
@@ -177,7 +196,9 @@ export class TencentCosService {
    */
   async checkFileExists(url: string): Promise<boolean> {
     if (!this.secretId || !this.secretKey || !this.bucket) {
-      console.warn('[TencentCosService] COS credentials not configured, assuming file does not exist');
+      console.warn(
+        '[TencentCosService] COS credentials not configured, assuming file does not exist',
+      );
       return false;
     }
 
@@ -197,25 +218,31 @@ export class TencentCosService {
 
       // Use headObject to check if file exists
       await new Promise<void>((resolve, reject) => {
-        cosClient.headObject({
-          Bucket: this.bucket,
-          Region: this.region,
-          Key: key,
-        }, (err: any, data: any) => {
-          if (err) {
-            // File doesn't exist or access denied
-            console.log(`[TencentCosService] File does not exist: ${key}`);
-            reject(err);
-          } else {
-            console.log(`[TencentCosService] File exists: ${key}`);
-            resolve(data);
-          }
-        });
+        cosClient.headObject(
+          {
+            Bucket: this.bucket,
+            Region: this.region,
+            Key: key,
+          },
+          (err: any, data: any) => {
+            if (err) {
+              // File doesn't exist or access denied
+              console.log(`[TencentCosService] File does not exist: ${key}`);
+              reject(err);
+            } else {
+              console.log(`[TencentCosService] File exists: ${key}`);
+              resolve(data);
+            }
+          },
+        );
       });
 
       return true;
     } catch (error: any) {
-      console.log(`[TencentCosService] File check failed for ${url}:`, error?.message || error);
+      console.log(
+        `[TencentCosService] File check failed for ${url}:`,
+        error?.message || error,
+      );
       return false;
     }
   }
@@ -244,7 +271,8 @@ export class TencentCosService {
       originalName = filename || `file-${Date.now()}`;
     } else if ((file as any).buffer) {
       fileBuffer = (file as any).buffer;
-      originalName = (file as any).originalname || filename || `file-${Date.now()}`;
+      originalName =
+        (file as any).originalname || filename || `file-${Date.now()}`;
     } else {
       throw new BadRequestException('Invalid file format');
     }
@@ -266,19 +294,26 @@ export class TencentCosService {
 
       // Upload to COS
       await new Promise((resolve, reject) => {
-        cosClient.putObject({
-          Bucket: this.bucket,
-          Region: this.region,
-          Key: key,
-          Body: fileBuffer,
-        }, (err: any, data: any) => {
-          if (err) {
-            console.error('[TencentCosService] Upload error:', err);
-            reject(new BadRequestException(`Failed to upload file: ${err.message}`));
-          } else {
-            resolve(data);
-          }
-        });
+        cosClient.putObject(
+          {
+            Bucket: this.bucket,
+            Region: this.region,
+            Key: key,
+            Body: fileBuffer,
+          },
+          (err: any, data: any) => {
+            if (err) {
+              console.error('[TencentCosService] Upload error:', err);
+              reject(
+                new BadRequestException(
+                  `Failed to upload file: ${err.message}`,
+                ),
+              );
+            } else {
+              resolve(data);
+            }
+          },
+        );
       });
 
       // Generate URL

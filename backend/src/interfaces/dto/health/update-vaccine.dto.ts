@@ -1,28 +1,34 @@
-import { IsDateString, IsEnum, IsOptional, IsString, IsUUID } from 'class-validator'
-import { VaccineStatus } from './create-vaccine.dto'
+import {
+  IsDateString,
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
+import { VaccineStatus } from './create-vaccine.dto';
 
 export class UpdateVaccineDto {
   @IsOptional()
   @IsUUID()
-  dogId?: string
+  dogId?: string;
 
   @IsOptional()
   @IsString()
-  vaccineName?: string
+  vaccineName?: string;
 
   @IsOptional()
   @IsDateString()
-  vaccinationDate?: string
+  vaccinationDate?: string;
 
   @IsOptional()
   @IsDateString()
-  nextDueDate?: string
+  nextDueDate?: string;
 
   @IsOptional()
   @IsString()
-  notes?: string
+  notes?: string;
 
   @IsOptional()
   @IsEnum(VaccineStatus)
-  status?: VaccineStatus
+  status?: VaccineStatus;
 }

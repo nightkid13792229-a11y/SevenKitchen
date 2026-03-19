@@ -94,7 +94,11 @@ export class StaffProductionPhotosController {
     try {
       // Upload all photos to COS
       const uploadPromises = files.map((file) =>
-        this.cosService.uploadImage(file, file.originalname, `production-photos/${orderId}`)
+        this.cosService.uploadImage(
+          file,
+          file.originalname,
+          `production-photos/${orderId}`,
+        ),
       );
 
       const results = await Promise.all(uploadPromises);

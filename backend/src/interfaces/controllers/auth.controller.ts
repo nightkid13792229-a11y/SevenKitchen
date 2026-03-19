@@ -17,9 +17,7 @@ import { ApiResponseDto } from '../dto/common/response.dto';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { WechatService } from '../../infrastructure/wechat/wechat.service';
 import { SmsService } from '../../infrastructure/sms/sms.service';
-import {
-  WechatLoginRequestDto,
-} from '../dto/auth/wechat-login.dto';
+import { WechatLoginRequestDto } from '../dto/auth/wechat-login.dto';
 import {
   PhoneLoginRequestDto,
   SendSmsRequestDto,
@@ -69,7 +67,10 @@ export class AuthController {
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Login and receive JWT token (deprecated, use wechat-login or phone-login)' })
+  @ApiOperation({
+    summary:
+      'Login and receive JWT token (deprecated, use wechat-login or phone-login)',
+  })
   @ApiBody({
     schema: {
       type: 'object',
@@ -108,9 +109,7 @@ export class AuthController {
     status: 400,
     description: 'Invalid input - customerId is required',
   })
-  async login(
-    @Body() loginRequest: LoginRequestDto,
-  ): Promise<any> {
+  async login(@Body() loginRequest: LoginRequestDto): Promise<any> {
     // Validate customerId
     if (
       !loginRequest.customerId ||
@@ -152,12 +151,13 @@ export class AuthController {
     status: 200,
     description: 'Login successful',
   })
-  async wechatLogin(
-    @Body() dto: WechatLoginRequestDto,
-  ): Promise<any> {
+  async wechatLogin(@Body() dto: WechatLoginRequestDto): Promise<any> {
     try {
       console.log('=== [WeChat Login] START ===');
-      console.log('[WeChat Login] Received code:', dto.code?.substring(0, 10) + '...');
+      console.log(
+        '[WeChat Login] Received code:',
+        dto.code?.substring(0, 10) + '...',
+      );
       console.log('[WeChat Login] Received userInfo:', dto.userInfo);
 
       // Get WeChat user info
@@ -182,7 +182,8 @@ export class AuthController {
         console.log('[WeChat Login] Creating new user...');
         // Create new user
         // Handle both nickName (WeChat format) and nickname (standard format)
-        const userNickname = dto.userInfo?.nickName || dto.userInfo?.nickname || '微信用户';
+        const userNickname =
+          dto.userInfo?.nickName || dto.userInfo?.nickname || '微信用户';
         const userAvatar = dto.userInfo?.avatarUrl;
 
         user = await this.prisma.user.create({
@@ -222,7 +223,10 @@ export class AuthController {
       const verifyUser = await this.prisma.user.findUnique({
         where: { id: user.id },
       });
-      console.log('[WeChat Login] Verification - User exists in DB:', !!verifyUser);
+      console.log(
+        '[WeChat Login] Verification - User exists in DB:',
+        !!verifyUser,
+      );
 
       // Check user status
       if (user.status !== 'ACTIVE') {
@@ -231,11 +235,26 @@ export class AuthController {
       }
 
       // Generate JWT token
-      const token = this.jwtAuthService.generateTokenForUser(user.id, user.role);
+      const token = this.jwtAuthService.generateTokenForUser(
+        user.id,
+        user.role,
+      );
 
       console.log('[WeChat Login] Generated token for user:', user.id);
-      console.log('[WeChat Login] Returning - userId:', user.id, 'role:', user.role, 'isNewUser:', isNewUser);
-      console.log('[WeChat Login] User object - nickname:', user.nickname, 'avatarUrl:', user.avatarUrl);
+      console.log(
+        '[WeChat Login] Returning - userId:',
+        user.id,
+        'role:',
+        user.role,
+        'isNewUser:',
+        isNewUser,
+      );
+      console.log(
+        '[WeChat Login] User object - nickname:',
+        user.nickname,
+        'avatarUrl:',
+        user.avatarUrl,
+      );
       console.log('=== [WeChat Login] END ===\n');
 
       return ApiResponseDto.success({
@@ -292,9 +311,7 @@ export class AuthController {
     status: 200,
     description: 'Login successful',
   })
-  async phoneLogin(
-    @Body() dto: PhoneLoginRequestDto,
-  ): Promise<any> {
+  async phoneLogin(@Body() dto: PhoneLoginRequestDto): Promise<any> {
     try {
       // 验证手机号格式
       if (!/^1[3-9]\d{9}$/.test(dto.phone)) {
@@ -310,7 +327,10 @@ export class AuthController {
       });
 
       if (!user) {
-        return ApiResponseDto.error(404, '该手机号未注册，请联系管理员创建账号');
+        return ApiResponseDto.error(
+          404,
+          '该手机号未注册，请联系管理员创建账号',
+        );
       }
 
       // 检查用户角色（只有STAFF和ADMIN可以通过手机号登录）
@@ -330,7 +350,10 @@ export class AuthController {
       });
 
       // 生成JWT token
-      const token = this.jwtAuthService.generateTokenForUser(user.id, user.role);
+      const token = this.jwtAuthService.generateTokenForUser(
+        user.id,
+        user.role,
+      );
 
       return ApiResponseDto.success({
         token,
@@ -371,9 +394,7 @@ export class AuthController {
       },
     },
   })
-  async adminLogin(
-    @Body() dto: AdminLoginRequestDto,
-  ): Promise<any> {
+  async adminLogin(@Body() dto: AdminLoginRequestDto): Promise<any> {
     try {
       // Validate input
       if (!dto.username || !dto.password) {
@@ -415,7 +436,10 @@ export class AuthController {
       });
 
       // Generate JWT token
-      const token = this.jwtAuthService.generateTokenForUser(user.id, user.role);
+      const token = this.jwtAuthService.generateTokenForUser(
+        user.id,
+        user.role,
+      );
 
       return ApiResponseDto.success({
         token,
@@ -428,4 +452,3 @@ export class AuthController {
     }
   }
 }
-

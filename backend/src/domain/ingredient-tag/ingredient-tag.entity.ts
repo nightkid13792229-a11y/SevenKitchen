@@ -33,8 +33,14 @@ export class IngredientTag {
 
     // Validate color format if provided (hex color)
     // Allow null, empty string, or valid hex color
-    if (this.color && this.color.trim() && !this.color.match(/^#[0-9A-Fa-f]{6}$/)) {
-      throw new Error('IngredientTag color must be a valid hex color code (e.g., #FFFFFF)');
+    if (
+      this.color &&
+      this.color.trim() &&
+      !this.color.match(/^#[0-9A-Fa-f]{6}$/)
+    ) {
+      throw new Error(
+        'IngredientTag color must be a valid hex color code (e.g., #FFFFFF)',
+      );
     }
 
     // Prevent circular reference (parent cannot be self)

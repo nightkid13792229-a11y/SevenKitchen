@@ -47,4 +47,3 @@ export interface NutritionDetailedData {
   ca_p_ratio: number; // 钙磷比 (Decimal, 2 places)
   energy_density_kcal_per_kg: number; // 热量密度 (As Fed, matching column)
 }
-

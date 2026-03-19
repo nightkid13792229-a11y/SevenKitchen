@@ -3,18 +3,31 @@
  * Application layer service for Order domain operations
  */
 
-import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import type { OrderRepository } from '../../domain/order/order.repository';
 import type { RecipeRepository } from '../../domain/recipe/recipe.repository';
 import type { IngredientRepository } from '../../domain/ingredient/ingredient.repository';
 import { Order, OrderItem, PricingBreakdownSnapshot } from '../../domain/order';
 import type { PriceExplanationDto } from '../../interfaces/dto/orders/pricing-preview.dto';
-import { OrderType, OrderStatus, calculateDogEnergy, calculateDailyIntakeG } from '../../domain';
+import {
+  OrderType,
+  OrderStatus,
+  calculateDogEnergy,
+  calculateDailyIntakeG,
+} from '../../domain';
 import type { RecipeSnapshot } from '../../domain/recipe/types';
 import { ORDER_REPOSITORY } from './order.service.tokens';
 import { INGREDIENT_REPOSITORY } from '../ingredient/ingredient.service';
-import { PricingService, type RecipeItem as PricingRecipeItem } from '../../domain/pricing/pricing.service';
+import {
+  PricingService,
+  type RecipeItem as PricingRecipeItem,
+} from '../../domain/pricing/pricing.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import type { DogRepository } from '../../domain/dog/dog.repository';
 import { DOG_REPOSITORY } from '../dog/dog.service';
@@ -40,7 +53,7 @@ export interface CreateOrderDraftDto {
   targetProductionDate?: Date | null;
   items?: CreateOrderItemDto[];
   cartItemIds?: string[];
-  snapshotId?: string;  // ✅ 新增：快照ID（立即购买）
+  snapshotId?: string; // ✅ 新增：快照ID（立即购买）
   addressId?: string;
 }
 
@@ -197,7 +210,7 @@ export class OrderService {
   private async createOrderFromSnapshot(
     dto: CreateOrderDraftDto,
     snapshotId: string,
-    orderId: string
+    orderId: string,
   ): Promise<Order> {
     console.log('[CreateOrderFromSnapshot] Loading snapshot:', snapshotId);
 
@@ -209,7 +222,9 @@ export class OrderService {
     }
 
     if (!snapshot.belongsToCustomer(dto.customerId)) {
-      throw new BadRequestException('Pricing snapshot does not belong to this customer');
+      throw new BadRequestException(
+        'Pricing snapshot does not belong to this customer',
+      );
     }
 
     if (!snapshot.canBeUsed()) {
@@ -227,7 +242,10 @@ export class OrderService {
     // 默认值：如果未提供制作日期，根据上海时区判断（0-6点当日，6-24点次日）
     if (!productionDate) {
       productionDate = TimezoneUtil.calculateProductionDate();
-      console.log('[CreateOrderFromSnapshot] No production date provided, calculated from Shanghai timezone:', productionDate.toISOString());
+      console.log(
+        '[CreateOrderFromSnapshot] No production date provided, calculated from Shanghai timezone:',
+        productionDate.toISOString(),
+      );
     } else {
       // 如果提供了日期，将时间部分清零（使用UTC时间）
       const year = productionDate.getUTCFullYear();
@@ -237,11 +255,13 @@ export class OrderService {
     }
 
     // 验证：制作日期不能早于今天（使用UTC日期）
-    const today = new Date(Date.UTC(
-      new Date().getUTCFullYear(),
-      new Date().getUTCMonth(),
-      new Date().getUTCDate()
-    ));
+    const today = new Date(
+      Date.UTC(
+        new Date().getUTCFullYear(),
+        new Date().getUTCMonth(),
+        new Date().getUTCDate(),
+      ),
+    );
     if (productionDate < today) {
       throw new BadRequestException('制作日期不能早于今天');
     }
@@ -254,7 +274,10 @@ export class OrderService {
       throw new BadRequestException('制作日期不能超过90天后');
     }
 
-    console.log('[CreateOrderFromSnapshot] Production date validated:', productionDate.toISOString());
+    console.log(
+      '[CreateOrderFromSnapshot] Production date validated:',
+      productionDate.toISOString(),
+    );
 
     // 3. 从快照获取数据
     const { requestParams, pricingResult } = snapshot;
@@ -263,7 +286,10 @@ export class OrderService {
     // ✅ 修复：从快照的requestParams中获取addressId（如果快照中有）
     const addressId = requestParams.addressId || dto.addressId;
 
-    console.log('[CreateOrderFromSnapshot] Request params:', JSON.stringify(requestParams, null, 2));
+    console.log(
+      '[CreateOrderFromSnapshot] Request params:',
+      JSON.stringify(requestParams, null, 2),
+    );
     console.log('[CreateOrderFromSnapshot] Using pricing from snapshot:', {
       amountProduct: pricingResult.amountProduct,
       amountShipping: pricingResult.amountShipping,
@@ -276,8 +302,11 @@ export class OrderService {
       throw new NotFoundException(`Recipe not found: ${itemParams.recipeId}`);
     }
 
-    console.log('[CreateOrderFromSnapshot] Loading dog with ID:', requestParams.dogId);
-    const dog = await this.dogRepository.findById(requestParams.dogId!);
+    console.log(
+      '[CreateOrderFromSnapshot] Loading dog with ID:',
+      requestParams.dogId,
+    );
+    const dog = await this.dogRepository.findById(requestParams.dogId);
     if (!dog) {
       throw new NotFoundException(`Dog not found: ${requestParams.dogId}`);
     }
@@ -296,24 +325,34 @@ export class OrderService {
       }
       // 验证地址所有权
       if (address.userId !== dto.customerId) {
-        throw new BadRequestException('Address does not belong to this customer');
+        throw new BadRequestException(
+          'Address does not belong to this customer',
+        );
       }
-      console.log('[CreateOrderFromSnapshot] Address validated:', address.recipientName);
+      console.log(
+        '[CreateOrderFromSnapshot] Address validated:',
+        address.recipientName,
+      );
     }
 
     // 7. 创建 RecipeSnapshot
     const recipeItems = recipe.items || [];
     const ingredientIds = recipeItems.map((ri) => ri.ingredientId);
-    const ingredients = await this.ingredientRepository.findByIds(ingredientIds);
+    const ingredients =
+      await this.ingredientRepository.findByIds(ingredientIds);
     const ingredientMap = new Map(ingredients.map((ing) => [ing.id, ing]));
 
     // 收集所有制备方法ID
     const preparationMethodIds = new Set<string>();
     recipeItems.forEach((ri) => {
       if (ri.preparationMethod) {
-        const ids = typeof ri.preparationMethod === 'string'
-          ? ri.preparationMethod.split(',').map((id: string) => id.trim()).filter((id: string) => id)
-          : ri.preparationMethod;
+        const ids =
+          typeof ri.preparationMethod === 'string'
+            ? ri.preparationMethod
+                .split(',')
+                .map((id: string) => id.trim())
+                .filter((id: string) => id)
+            : ri.preparationMethod;
         if (Array.isArray(ids)) {
           ids.forEach((id: string) => preparationMethodIds.add(id));
         }
@@ -323,9 +362,11 @@ export class OrderService {
     // 查询所有制备方法
     const preparationMethods = await this.prisma.preparationMethod.findMany({
       where: { id: { in: Array.from(preparationMethodIds) } },
-      select: { id: true, name: true }
+      select: { id: true, name: true },
     });
-    const preparationMethodMap = new Map(preparationMethods.map(pm => [pm.id, pm.name]));
+    const preparationMethodMap = new Map(
+      preparationMethods.map((pm) => [pm.id, pm.name]),
+    );
 
     const recipeSnapshot: RecipeSnapshot = {
       id: recipe.id,
@@ -342,9 +383,13 @@ export class OrderService {
         // preparationMethod存储格式：逗号分隔的UUID字符串
         let preparationMethodNames: string[] = [];
         if (ri.preparationMethod) {
-          const methodIds = typeof ri.preparationMethod === 'string'
-            ? ri.preparationMethod.split(',').map((id: string) => id.trim()).filter((id: string) => id)
-            : ri.preparationMethod;
+          const methodIds =
+            typeof ri.preparationMethod === 'string'
+              ? ri.preparationMethod
+                  .split(',')
+                  .map((id: string) => id.trim())
+                  .filter((id: string) => id)
+              : ri.preparationMethod;
 
           if (Array.isArray(methodIds)) {
             preparationMethodNames = methodIds
@@ -361,29 +406,40 @@ export class OrderService {
           nutrient_target_key: ri.nutrientTargetKey ?? undefined,
           nutrient_target_value: ri.nutrientTargetValue ?? undefined,
           properties: ingredient?.properties,
-          preparation_methods: preparationMethodNames.length > 0 ? preparationMethodNames : undefined,
+          preparation_methods:
+            preparationMethodNames.length > 0
+              ? preparationMethodNames
+              : undefined,
           unit_display_label: ingredient?.unitDisplayLabel ?? undefined,
         };
       }),
     };
 
     // 8. 计算 dailyIntakeG
-    const dogCalcResult = calculateDogEnergy(dog, recipe.energyDensityKcalPerKg);
+    const dogCalcResult = calculateDogEnergy(
+      dog,
+      recipe.energyDensityKcalPerKg,
+    );
     const dailyIntakeG = calculateDailyIntakeG(
       dogCalcResult.finalFoodKcal,
       recipe.energyDensityKcalPerKg,
     );
 
     // 9. 创建 OrderItem
-    console.log('[CreateOrderFromSnapshot] Creating OrderItem with dogId:', requestParams.dogId);
+    console.log(
+      '[CreateOrderFromSnapshot] Creating OrderItem with dogId:',
+      requestParams.dogId,
+    );
 
     // Extract vacuum bag spec from pricing result
-    const vacuumBagSpec = pricingResult.pricingBreakdown?.packagingDetails?.perPackConsumables?.vacuumBagSpec || null;
+    const vacuumBagSpec =
+      pricingResult.pricingBreakdown?.packagingDetails?.perPackConsumables
+        ?.vacuumBagSpec || null;
 
     const orderItem = new OrderItem(
       randomUUID(),
       orderId,
-      requestParams.dogId!,
+      requestParams.dogId,
       recipeSnapshot,
       itemParams.quantityG,
       itemParams.packageCount,
@@ -392,7 +448,10 @@ export class OrderService {
       dailyIntakeG,
       vacuumBagSpec, // vacuum bag specification
     );
-    console.log('[CreateOrderFromSnapshot] OrderItem created, dogId:', orderItem.dogId);
+    console.log(
+      '[CreateOrderFromSnapshot] OrderItem created, dogId:',
+      orderItem.dogId,
+    );
 
     // 10. 创建 PricingBreakdownSnapshot
     const pricingBreakdownSnapshot = new PricingBreakdownSnapshot(
@@ -420,14 +479,14 @@ export class OrderService {
       new Date(),
       productionDate, // ✅ 使用处理后的制作日期
       productionDate, // ✅ 原始制作日期（首次创建时与当前日期相同）
-      pricingResult.amountProduct,  // ✅ 使用快照价格
-      pricingResult.amountShipping,  // ✅ 使用快照运费
-      pricingResult.amountTotal,     // ✅ 使用快照总价
+      pricingResult.amountProduct, // ✅ 使用快照价格
+      pricingResult.amountShipping, // ✅ 使用快照运费
+      pricingResult.amountTotal, // ✅ 使用快照总价
       [orderItem],
       undefined, // totalAmount (computed by constructor)
       pricingBreakdownSnapshot,
-      requestParams.dogId,  // ✅ 修复：dogId 和 addressId 位置交换
-      addressId,            // ✅ 修复：使用从快照中获取的addressId
+      requestParams.dogId, // ✅ 修复：dogId 和 addressId 位置交换
+      addressId, // ✅ 修复：使用从快照中获取的addressId
     );
 
     // 12. 保存订单
@@ -435,7 +494,10 @@ export class OrderService {
 
     // 13. 标记快照已使用
     await this.pricingSnapshotRepository.markAsUsed(snapshotId);
-    console.log('[CreateOrderFromSnapshot] Snapshot marked as used:', snapshotId);
+    console.log(
+      '[CreateOrderFromSnapshot] Snapshot marked as used:',
+      snapshotId,
+    );
 
     // 14. 记录状态转换
     await this.logStatusTransition(
@@ -453,7 +515,10 @@ export class OrderService {
   /**
    * Create order from cart items
    */
-  private async createOrderFromCart(dto: CreateOrderDraftDto, orderId: string): Promise<Order> {
+  private async createOrderFromCart(
+    dto: CreateOrderDraftDto,
+    orderId: string,
+  ): Promise<Order> {
     if (!dto.cartItemIds || dto.cartItemIds.length === 0) {
       throw new BadRequestException('cartItemIds is required');
     }
@@ -465,7 +530,7 @@ export class OrderService {
     //   throw new NotFoundException('Some cart items not found');
     // }
 
-    const cartItems: any[] = [];  // Cart功能已移除，临时占位
+    const cartItems: any[] = []; // Cart功能已移除，临时占位
     throw new BadRequestException('Cart functionality has been removed');
 
     /* ========== 以下代码已废弃（Cart功能移除）==========
@@ -573,7 +638,10 @@ export class OrderService {
   /**
    * Create order from provided items (original flow)
    */
-  private async createOrderFromItems(dto: CreateOrderDraftDto, orderId: string): Promise<Order> {
+  private async createOrderFromItems(
+    dto: CreateOrderDraftDto,
+    orderId: string,
+  ): Promise<Order> {
     if (!dto.dogId) {
       throw new BadRequestException('dogId is required when not using cart');
     }
@@ -609,9 +677,8 @@ export class OrderService {
       // Load ingredients for recipe items
       const recipeItems = recipe.items || [];
       const ingredientIds = recipeItems.map((ri) => ri.ingredientId);
-      const ingredients = await this.ingredientRepository.findByIds(
-        ingredientIds,
-      );
+      const ingredients =
+        await this.ingredientRepository.findByIds(ingredientIds);
 
       // Load preparation methods for recipe items
       // preparationMethod can be: single UUID, comma-separated UUIDs, or null
@@ -619,7 +686,10 @@ export class OrderService {
       recipeItems.forEach((ri) => {
         if (ri.preparationMethod) {
           // Split by comma and trim whitespace
-          const ids = ri.preparationMethod.split(',').map(id => id.trim()).filter(id => id);
+          const ids = ri.preparationMethod
+            .split(',')
+            .map((id) => id.trim())
+            .filter((id) => id);
           allPrepMethodIds.push(...ids);
         }
       });
@@ -627,7 +697,7 @@ export class OrderService {
       console.log('[OrderService] PreparationMethod IDs:', {
         totalItems: recipeItems.length,
         allIds: allPrepMethodIds,
-        uniqueCount: new Set(allPrepMethodIds).size
+        uniqueCount: new Set(allPrepMethodIds).size,
       });
 
       const uniquePrepMethodIds = Array.from(new Set(allPrepMethodIds));
@@ -639,7 +709,7 @@ export class OrderService {
       console.log('[OrderService] PreparationMethods from DB:', {
         searchIds: uniquePrepMethodIds,
         found: preparationMethods.length,
-        methods: preparationMethods
+        methods: preparationMethods,
       });
 
       const prepMethodMap = new Map(
@@ -647,19 +717,22 @@ export class OrderService {
       );
 
       // Create map for quick lookup
-      const ingredientMap = new Map(
-        ingredients.map((ing) => [ing.id, ing]),
-      );
+      const ingredientMap = new Map(ingredients.map((ing) => [ing.id, ing]));
 
       // Helper function to convert preparationMethod IDs to names
-      const convertPrepMethodIdsToNames = (prepMethodIds: string | null | undefined): string | null => {
+      const convertPrepMethodIdsToNames = (
+        prepMethodIds: string | null | undefined,
+      ): string | null => {
         if (!prepMethodIds) return null;
 
         // Split by comma and trim
-        const ids = prepMethodIds.split(',').map(id => id.trim()).filter(id => id);
+        const ids = prepMethodIds
+          .split(',')
+          .map((id) => id.trim())
+          .filter((id) => id);
 
         // Map each ID to its name, fallback to original ID if not found
-        const names = ids.map(id => prepMethodMap.get(id) || id);
+        const names = ids.map((id) => prepMethodMap.get(id) || id);
 
         // Join with comma
         return names.join(', ');
@@ -675,12 +748,14 @@ export class OrderService {
         }
 
         // Convert preparationMethod ID(s) to name(s)
-        const prepMethodName = convertPrepMethodIdsToNames(ri.preparationMethod);
+        const prepMethodName = convertPrepMethodIdsToNames(
+          ri.preparationMethod,
+        );
 
         console.log('[OrderService] RecipeItem preparationMethod:', {
           ingredientName: ingredient.name,
           originalIds: ri.preparationMethod,
-          mappedNames: prepMethodName
+          mappedNames: prepMethodName,
         });
 
         return {
@@ -708,7 +783,7 @@ export class OrderService {
 
       // Use frontend-provided cycleDays and dailyIntakeG if available
       const days = itemDto.cycleDays ?? normalizedPackageCount;
-      const dailyG = itemDto.dailyIntakeG ?? (itemDto.quantityG / days);
+      const dailyG = itemDto.dailyIntakeG ?? itemDto.quantityG / days;
 
       pricing = await this.pricingService.calculateOrderPrice({
         dog: {
@@ -750,11 +825,13 @@ export class OrderService {
         }
       }
 
-
       // Phase 8.9: Calculate dailyIntakeG from DogCalc + Recipe energy density
       // Get DogCalc result (finalFoodKcal)
-      const dogCalcResult = calculateDogEnergy(dog, recipe.energyDensityKcalPerKg);
-      
+      const dogCalcResult = calculateDogEnergy(
+        dog,
+        recipe.energyDensityKcalPerKg,
+      );
+
       // Calculate dailyIntakeG = finalFoodKcal / (energyDensityKcalPerKg / 1000)
       // Formula: dailyIntakeG = (finalFoodKcal / energyDensityKcalPerKg) * 1000
       const dailyIntakeG = calculateDailyIntakeG(
@@ -780,9 +857,13 @@ export class OrderService {
           // 例如："a6409a79-402b-41d1-bfe1-031a67da0876, dd27baa4-36cb-4405-9092-0eb37e6160fa"
           let preparationMethodNames: string[] = [];
           if (ri.preparationMethod) {
-            const methodIds = typeof ri.preparationMethod === 'string'
-              ? ri.preparationMethod.split(',').map((id: string) => id.trim()).filter((id: string) => id)
-              : ri.preparationMethod;
+            const methodIds =
+              typeof ri.preparationMethod === 'string'
+                ? ri.preparationMethod
+                    .split(',')
+                    .map((id: string) => id.trim())
+                    .filter((id: string) => id)
+                : ri.preparationMethod;
 
             if (Array.isArray(methodIds)) {
               preparationMethodNames = methodIds
@@ -793,7 +874,9 @@ export class OrderService {
 
           // Debug: log supplement ingredient unit display label
           if (ingredient?.type === 'SUPPLEMENT') {
-            console.log(`[DEBUG] Supplement: ${ingredient.name}, unitDisplayLabel: ${ingredient.unitDisplayLabel}`);
+            console.log(
+              `[DEBUG] Supplement: ${ingredient.name}, unitDisplayLabel: ${ingredient.unitDisplayLabel}`,
+            );
           }
 
           return {
@@ -804,7 +887,10 @@ export class OrderService {
             nutrient_target_key: ri.nutrientTargetKey ?? undefined,
             nutrient_target_value: ri.nutrientTargetValue ?? undefined,
             properties: ingredient?.properties,
-            preparation_methods: preparationMethodNames.length > 0 ? preparationMethodNames : undefined,
+            preparation_methods:
+              preparationMethodNames.length > 0
+                ? preparationMethodNames
+                : undefined,
             sort_order: ri.sortOrder ?? undefined,
             unit_display_label: ingredient?.unitDisplayLabel ?? undefined,
           };
@@ -816,7 +902,9 @@ export class OrderService {
       // Phase 8.9: Include calculated dailyIntakeG (immutable after order creation)
 
       // Extract vacuum bag spec from pricing result
-      const vacuumBagSpec = pricing.pricingBreakdown?.packagingDetails?.perPackConsumables?.vacuumBagSpec || null;
+      const vacuumBagSpec =
+        pricing.pricingBreakdown?.packagingDetails?.perPackConsumables
+          ?.vacuumBagSpec || null;
 
       const orderItem = new OrderItem(
         itemId,
@@ -828,9 +916,10 @@ export class OrderService {
         itemDto.packageSpecG,
         typeof itemDto.customRequirements === 'string'
           ? itemDto.customRequirements
-          : itemDto.customRequirements !== null && itemDto.customRequirements !== undefined
-          ? JSON.stringify(itemDto.customRequirements)
-          : null,
+          : itemDto.customRequirements !== null &&
+              itemDto.customRequirements !== undefined
+            ? JSON.stringify(itemDto.customRequirements)
+            : null,
         dailyIntakeG, // Calculated from DogCalc.finalFoodKcal ÷ Recipe.energyDensityKcalPerKg
         vacuumBagSpec, // vacuum bag specification
       );
@@ -1028,13 +1117,11 @@ export class OrderService {
    * Phase 6: Pricing Preview API
    * Returns pricing breakdown including product amount, shipping amount, and total
    */
-  async previewPricing(
-    dto: CreateOrderDraftDto,
-  ): Promise<{
+  async previewPricing(dto: CreateOrderDraftDto): Promise<{
     amountProduct: number;
     amountShipping: number;
     amountTotal: number;
-    snapshotId: string;  // ✅ 新增：快照ID
+    snapshotId: string; // ✅ 新增：快照ID
     pricingBreakdown?: {
       costIngredients: number;
       costPackaging: number;
@@ -1122,18 +1209,17 @@ export class OrderService {
       recipeId: recipe.id,
       recipeName: recipe.name,
       itemsCount: recipeItems.length,
-      items: recipeItems.map(ri => ({
+      items: recipeItems.map((ri) => ({
         ingredientId: ri.ingredientId,
         ratioPercent: ri.ratioPercent,
         nutrientTargetKey: ri.nutrientTargetKey,
         nutrientTargetValue: ri.nutrientTargetValue,
-      }))
+      })),
     });
 
     const ingredientIds = recipeItems.map((ri) => ri.ingredientId);
-    const ingredients = await this.ingredientRepository.findByIds(
-      ingredientIds,
-    );
+    const ingredients =
+      await this.ingredientRepository.findByIds(ingredientIds);
 
     // Load preparation methods for recipe items
     // preparationMethod can be: single UUID, comma-separated UUIDs, or null
@@ -1141,7 +1227,10 @@ export class OrderService {
     recipeItems.forEach((ri) => {
       if (ri.preparationMethod) {
         // Split by comma and trim whitespace
-        const ids = ri.preparationMethod.split(',').map(id => id.trim()).filter(id => id);
+        const ids = ri.preparationMethod
+          .split(',')
+          .map((id) => id.trim())
+          .filter((id) => id);
         allPrepMethodIds.push(...ids);
       }
     });
@@ -1155,7 +1244,7 @@ export class OrderService {
     console.log('[PricingPreview] PreparationMethods loaded:', {
       searchIds: uniquePrepMethodIds,
       found: preparationMethods.length,
-      methods: preparationMethods
+      methods: preparationMethods,
     });
 
     const prepMethodMap = new Map(
@@ -1165,23 +1254,26 @@ export class OrderService {
     console.log('[PricingPreview] Ingredients loaded:', {
       requestedIds: ingredientIds.length,
       found: ingredients.length,
-      ingredientIds: ingredients.map(ing => ing.id),
+      ingredientIds: ingredients.map((ing) => ing.id),
     });
 
     // Create map for quick lookup
-    const ingredientMap = new Map(
-      ingredients.map((ing) => [ing.id, ing]),
-    );
+    const ingredientMap = new Map(ingredients.map((ing) => [ing.id, ing]));
 
     // Helper function to convert preparationMethod IDs to names
-    const convertPrepMethodIdsToNames = (prepMethodIds: string | null | undefined): string | null => {
+    const convertPrepMethodIdsToNames = (
+      prepMethodIds: string | null | undefined,
+    ): string | null => {
       if (!prepMethodIds) return null;
 
       // Split by comma and trim
-      const ids = prepMethodIds.split(',').map(id => id.trim()).filter(id => id);
+      const ids = prepMethodIds
+        .split(',')
+        .map((id) => id.trim())
+        .filter((id) => id);
 
       // Map each ID to its name, fallback to original ID if not found
-      const names = ids.map(id => prepMethodMap.get(id) || id);
+      const names = ids.map((id) => prepMethodMap.get(id) || id);
 
       // Join with comma
       return names.join(', ');
@@ -1191,9 +1283,7 @@ export class OrderService {
     const pricingRecipeItems: PricingRecipeItem[] = recipeItems.map((ri) => {
       const ingredient = ingredientMap.get(ri.ingredientId);
       if (!ingredient) {
-        throw new NotFoundException(
-          `Ingredient not found: ${ri.ingredientId}`,
-        );
+        throw new NotFoundException(`Ingredient not found: ${ri.ingredientId}`);
       }
 
       // Convert preparationMethod ID(s) to name(s)
@@ -1221,7 +1311,7 @@ export class OrderService {
 
     // Use frontend-provided cycleDays and dailyIntakeG if available
     const days = itemDto.cycleDays ?? normalizedPackageCount;
-    const dailyG = itemDto.dailyIntakeG ?? (itemDto.quantityG / days);
+    const dailyG = itemDto.dailyIntakeG ?? itemDto.quantityG / days;
 
     const pricing = await this.pricingService.calculateOrderPrice({
       dog: {
@@ -1294,15 +1384,17 @@ export class OrderService {
       customerId: dto.customerId,
       requestParams: {
         dogId: dto.dogId,
-        addressId: dto.addressId,  // ✅ 修复：保存addressId到快照
-        items: [{
-          recipeId: itemDto.recipeId,
-          quantityG: itemDto.quantityG,
-          packageCount: itemDto.packageCount,
-          packageSpecG: itemDto.packageSpecG,
-          cycleDays: itemDto.cycleDays,
-          dailyIntakeG: itemDto.dailyIntakeG,
-        }]
+        addressId: dto.addressId, // ✅ 修复：保存addressId到快照
+        items: [
+          {
+            recipeId: itemDto.recipeId,
+            quantityG: itemDto.quantityG,
+            packageCount: itemDto.packageCount,
+            packageSpecG: itemDto.packageSpecG,
+            cycleDays: itemDto.cycleDays,
+            dailyIntakeG: itemDto.dailyIntakeG,
+          },
+        ],
       },
       pricingResult,
       expiresAt: new Date(Date.now() + 15 * 60 * 1000), // 15分钟过期
@@ -1312,7 +1404,7 @@ export class OrderService {
 
     return {
       ...pricingResult,
-      snapshotId: snapshot.id,  // 返回快照ID
+      snapshotId: snapshot.id, // 返回快照ID
     };
   }
 
@@ -1707,7 +1799,9 @@ export class OrderService {
 
     // Verify ownership
     if (order.customerId !== customerId) {
-      throw new BadRequestException('You can only apply for aftersale on your own orders');
+      throw new BadRequestException(
+        'You can only apply for aftersale on your own orders',
+      );
     }
 
     const fromStatus = order.status;
@@ -1802,7 +1896,9 @@ export class OrderService {
       },
     });
 
-    console.log(`Order ${orderId} amount updated to ${newAmount} (both totalAmount and amountTotal)`);
+    console.log(
+      `Order ${orderId} amount updated to ${newAmount} (both totalAmount and amountTotal)`,
+    );
 
     // Fetch the updated order data
     const updatedOrderData = await this.prisma.order.findUnique({
@@ -1839,7 +1935,7 @@ export class OrderService {
     orderId: string,
     addressId: string,
     userId: string,
-    userRole: string
+    userRole: string,
   ): Promise<Order> {
     // 1. Get order
     const order = await this.orderRepository.findById(orderId);
@@ -1853,7 +1949,7 @@ export class OrderService {
 
     if (!isOwner && !isAdmin) {
       throw new BadRequestException(
-        'You do not have permission to modify this order'
+        'You do not have permission to modify this order',
       );
     }
 
@@ -1866,7 +1962,7 @@ export class OrderService {
     // 4. Verify address belongs to the customer
     if (address.userId !== order.customerId) {
       throw new BadRequestException(
-        'Address does not belong to the order customer'
+        'Address does not belong to the order customer',
       );
     }
 
@@ -1894,7 +1990,7 @@ export class OrderService {
     orderId: string,
     targetDate: Date,
     userId: string,
-    userRole: string
+    userRole: string,
   ): Promise<Order> {
     // 1. Get order
     const order = await this.orderRepository.findById(orderId);
@@ -1908,7 +2004,7 @@ export class OrderService {
 
     if (!isOwner && !isAdmin) {
       throw new BadRequestException(
-        'You do not have permission to modify this order'
+        'You do not have permission to modify this order',
       );
     }
 
@@ -1919,4 +2015,3 @@ export class OrderService {
     return this.orderRepository.save(order);
   }
 }
-

@@ -228,7 +228,10 @@ export class DogService {
    * This version includes the recipe's energy density to calculate daily intake in grams
    * Used in cart and checkout flows
    */
-  async calcForRecipe(dogId: string, recipeId: string): Promise<CalcForRecipeResult> {
+  async calcForRecipe(
+    dogId: string,
+    recipeId: string,
+  ): Promise<CalcForRecipeResult> {
     const dog = await this.dogRepository.findById(dogId);
     if (!dog) {
       throw new Error(`Dog not found: ${dogId}`);
@@ -248,7 +251,7 @@ export class DogService {
       dog,
       recipe.energyDensityKcalPerKg,
       breed,
-      true
+      true,
     );
 
     // ========== 详细计算日志 ==========
@@ -268,23 +271,28 @@ export class DogService {
       treatInputMode: dog.treatInputMode,
       treatLevel: dog.treatLevel,
       manualTreatKcal: dog.manualTreatKcal,
-      breedId: dog.breedId
+      breedId: dog.breedId,
     });
     console.log('[食谱数据]', {
       id: recipe.id,
       name: recipe.name,
       energyDensityKcalPerKg: recipe.energyDensityKcalPerKg,
-      productionLossRate: recipe.productionLossRate
+      productionLossRate: recipe.productionLossRate,
     });
-    console.log('[品种数据]', breed ? {
-      id: breed.id,
-      name: breed.name,
-      sizeCategory: breed.sizeCategory,
-      growthCurveType: breed.growthCurveType,
-      adultAgeMonths: breed.adultAgeMonths,
-      seniorAgeYears: breed.seniorAgeYears,
-      averageAdultWeightKg: breed.averageAdultWeightKg
-    } : 'breed is null');
+    console.log(
+      '[品种数据]',
+      breed
+        ? {
+            id: breed.id,
+            name: breed.name,
+            sizeCategory: breed.sizeCategory,
+            growthCurveType: breed.growthCurveType,
+            adultAgeMonths: breed.adultAgeMonths,
+            seniorAgeYears: breed.seniorAgeYears,
+            averageAdultWeightKg: breed.averageAdultWeightKg,
+          }
+        : 'breed is null',
+    );
     console.log('[能量计算结果]', {
       rer: calcResult.rer,
       der: calcResult.der,
@@ -292,9 +300,11 @@ export class DogService {
       treatDeduction: calcResult.treatDeduction,
       isTreatCapped: calcResult.isTreatCapped,
       dailyIntakeG: calcResult.dailyIntakeG,
-      calcDetails: calcResult.calcDetails
+      calcDetails: calcResult.calcDetails,
     });
-    const perMealG = calcResult.dailyIntakeG ? Math.round(calcResult.dailyIntakeG / dog.mealsPerDay) : 0;
+    const perMealG = calcResult.dailyIntakeG
+      ? Math.round(calcResult.dailyIntakeG / dog.mealsPerDay)
+      : 0;
     console.log('[最终返回值]', {
       rer: calcResult.rer,
       totalDer: calcResult.der,
@@ -303,7 +313,7 @@ export class DogService {
       isTreatCapped: calcResult.isTreatCapped,
       dailyIntakeG: calcResult.dailyIntakeG || 0,
       perMealIntakeG: perMealG,
-      mealsPerDay: dog.mealsPerDay
+      mealsPerDay: dog.mealsPerDay,
     });
     console.log('===========================================');
 
@@ -366,7 +376,9 @@ export class DogService {
       dto.growthCurveType ?? existing.growthCurveType,
       dto.adultAgeMonths ?? existing.adultAgeMonths,
       dto.seniorAgeYears ?? existing.seniorAgeYears,
-      dto.averageAdultWeightKg !== undefined ? dto.averageAdultWeightKg : existing.averageAdultWeightKg,
+      dto.averageAdultWeightKg !== undefined
+        ? dto.averageAdultWeightKg
+        : existing.averageAdultWeightKg,
     );
 
     const result = await this.dogBreedRepository.update(id, updated);
@@ -391,9 +403,10 @@ export class DogService {
   /**
    * Check breed usage
    */
-  async checkBreedUsage(
-    id: string,
-  ): Promise<{ count: number; dogs: Array<{ id: string; name: string; ownerId: string }> }> {
+  async checkBreedUsage(id: string): Promise<{
+    count: number;
+    dogs: Array<{ id: string; name: string; ownerId: string }>;
+  }> {
     const count = await this.dogBreedRepository.countUsage(id);
     const dogs = await this.dogBreedRepository.findUsage(id, 10);
     return { count, dogs };
@@ -402,13 +415,15 @@ export class DogService {
   /**
    * Get custom breed statistics
    */
-  async getCustomBreedStats(): Promise<Array<{
-    breedName: string;
-    usageCount: number;
-    firstUsedAt: Date;
-    avgWeight: number;
-    estimatedSizeCategory: DogSizeCategory;
-  }>> {
+  async getCustomBreedStats(): Promise<
+    Array<{
+      breedName: string;
+      usageCount: number;
+      firstUsedAt: Date;
+      avgWeight: number;
+      estimatedSizeCategory: DogSizeCategory;
+    }>
+  > {
     const stats = await this.prisma.$queryRaw<
       Array<{
         breed_name: string;

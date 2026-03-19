@@ -38,4 +38,3 @@ export interface InventoryRepository {
     sourceId: string,
   ): Promise<InventoryLedgerEntry[]>;
 }
-

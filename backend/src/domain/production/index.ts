@@ -9,4 +9,3 @@ export * from './production.repository';
 
 // Export types
 export type { IngredientsUsageSnapshot } from './packaging-unit.entity';
-

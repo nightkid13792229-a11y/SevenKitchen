@@ -3,12 +3,21 @@
  * Phase 8.14: Production Shipment / Fulfillment MVP
  */
 
-import { Injectable, Inject, NotFoundException, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import type { OrderRepository } from '../../domain/order/order.repository';
 import type { OrderStatusHistoryRepository } from '../../domain/order/order-status-history.repository';
 import { Order } from '../../domain/order';
 import { OrderStatus } from '../../domain';
-import { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY } from '../order/order.service';
+import {
+  ORDER_REPOSITORY,
+  ORDER_STATUS_HISTORY_REPOSITORY,
+} from '../order/order.service';
 
 export interface OrderReadyForShipmentDto {
   id: string;
@@ -147,5 +156,3 @@ export class ShippingFulfillmentService {
     return reloadedOrder;
   }
 }
-
-

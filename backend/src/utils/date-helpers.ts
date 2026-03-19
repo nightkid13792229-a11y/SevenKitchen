@@ -27,9 +27,7 @@ export function addWorkDays(startDate: Date, workDays: number): Date {
  */
 export async function isPublicHoliday(date: Date): Promise<boolean> {
   const holidays = await getPublicHolidaysForYear(date.getFullYear());
-  return holidays.some(holiday =>
-    holiday.date.getTime() === date.getTime()
-  );
+  return holidays.some((holiday) => holiday.date.getTime() === date.getTime());
 }
 
 /**
@@ -38,7 +36,9 @@ export async function isPublicHoliday(date: Date): Promise<boolean> {
  */
 const holidayCache = new Map<number, Array<{ date: Date; name: string }>>();
 
-export async function getPublicHolidaysForYear(year: number): Promise<Array<{ date: Date; name: string }>> {
+export async function getPublicHolidaysForYear(
+  year: number,
+): Promise<Array<{ date: Date; name: string }>> {
   // Check cache first
   if (holidayCache.has(year)) {
     return holidayCache.get(year)!;
@@ -125,7 +125,10 @@ export function getEndOfMonth(date: Date): Date {
 /**
  * Get month range
  */
-export function getMonthRange(year: number, month: number): { start: Date; end: Date } {
+export function getMonthRange(
+  year: number,
+  month: number,
+): { start: Date; end: Date } {
   const start = new Date(year, month - 1, 1);
   const end = new Date(year, month, 0, 23, 59, 59, 999);
   return { start, end };

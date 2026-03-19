@@ -54,7 +54,9 @@ export class SmsService {
     // await this.sendSmsViaProvider(phone, code);
 
     // 开发环境：打印验证码到日志
-    this.logger.log(`[SMS] Verification code for ${phone}: ${code} (valid for ${this.CODE_EXPIRY}s)`);
+    this.logger.log(
+      `[SMS] Verification code for ${phone}: ${code} (valid for ${this.CODE_EXPIRY}s)`,
+    );
 
     return this.CODE_EXPIRY;
   }
@@ -104,7 +106,8 @@ export class SmsService {
     }
 
     // 内存存储fallback
-    const memoryStore = global.smsMemoryStore || (global.smsMemoryStore = new Map());
+    const memoryStore =
+      global.smsMemoryStore || (global.smsMemoryStore = new Map());
     const item = memoryStore.get(key);
     if (item && item.expiry > Date.now()) {
       return item.value;
@@ -115,14 +118,19 @@ export class SmsService {
     return null;
   }
 
-  private async setToStorage(key: string, value: string, ttl: number): Promise<void> {
+  private async setToStorage(
+    key: string,
+    value: string,
+    ttl: number,
+  ): Promise<void> {
     if (this.redis) {
       await this.redis.setex(key, ttl, value);
       return;
     }
 
     // 内存存储fallback
-    const memoryStore = global.smsMemoryStore || (global.smsMemoryStore = new Map());
+    const memoryStore =
+      global.smsMemoryStore || (global.smsMemoryStore = new Map());
     memoryStore.set(key, {
       value,
       expiry: Date.now() + ttl * 1000,
@@ -161,5 +169,7 @@ export class SmsService {
 
 // 声明全局内存存储类型
 declare global {
-  var smsMemoryStore: Map<string, { value: string; expiry: number }> | undefined;
+  var smsMemoryStore:
+    | Map<string, { value: string; expiry: number }>
+    | undefined;
 }

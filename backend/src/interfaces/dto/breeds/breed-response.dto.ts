@@ -24,7 +24,11 @@ export class BreedResponseDto {
   @ApiProperty({ description: 'Senior age in years', example: 8 })
   seniorAgeYears!: number;
 
-  @ApiProperty({ description: 'Average adult weight in kg', example: 28.5, required: false })
+  @ApiProperty({
+    description: 'Average adult weight in kg',
+    example: 28.5,
+    required: false,
+  })
   averageAdultWeightKg?: number;
 
   @ApiProperty({ description: 'Whether this is a common breed', example: true })
@@ -44,13 +48,19 @@ export class CustomBreedStatsDto {
   @ApiProperty({ description: 'Number of dogs using this breed', example: 12 })
   usageCount!: number;
 
-  @ApiProperty({ description: 'First used date', example: '2024-12-01T00:00:00Z' })
+  @ApiProperty({
+    description: 'First used date',
+    example: '2024-12-01T00:00:00Z',
+  })
   firstUsedAt!: Date;
 
   @ApiProperty({ description: 'Average weight in kg', example: 18.5 })
   avgWeight!: number;
 
-  @ApiProperty({ description: 'Estimated size category', enum: DogSizeCategory })
+  @ApiProperty({
+    description: 'Estimated size category',
+    enum: DogSizeCategory,
+  })
   estimatedSizeCategory!: DogSizeCategory;
 }
 
@@ -61,9 +71,7 @@ export class BreedUsageCheckDto {
   @ApiProperty({
     description: 'List of dogs using this breed',
     type: [Object],
-    example: [
-      { id: 'uuid', name: '旺财', ownerId: 'uuid' }
-    ]
+    example: [{ id: 'uuid', name: '旺财', ownerId: 'uuid' }],
   })
   dogs!: Array<{
     id: string;

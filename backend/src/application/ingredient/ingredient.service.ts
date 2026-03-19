@@ -96,7 +96,7 @@ export class IngredientService {
     const ingredient = new Ingredient(
       crypto.randomUUID(),
       dto.name,
-      dto.type as IngredientType,
+      dto.type,
       dto.brand ?? null,
       dto.productModel ?? null,
       dto.purchaseChannel ?? null,
@@ -117,7 +117,10 @@ export class IngredientService {
   /**
    * Update ingredient
    */
-  async updateIngredient(id: string, dto: UpdateIngredientDto): Promise<Ingredient> {
+  async updateIngredient(
+    id: string,
+    dto: UpdateIngredientDto,
+  ): Promise<Ingredient> {
     const existing = await this.ingredientRepository.findById(id);
     if (!existing) {
       throw new NotFoundException(`Ingredient not found: ${id}`);
@@ -127,13 +130,17 @@ export class IngredientService {
     if (dto.name !== undefined) data.name = dto.name;
     if (dto.brand !== undefined) data.brand = dto.brand;
     if (dto.productModel !== undefined) data.productModel = dto.productModel;
-    if (dto.purchaseChannel !== undefined) data.purchaseChannel = dto.purchaseChannel;
+    if (dto.purchaseChannel !== undefined)
+      data.purchaseChannel = dto.purchaseChannel;
     if (dto.notes !== undefined) data.notes = dto.notes;
     if (dto.baseUnit !== undefined) data.baseUnit = dto.baseUnit;
-    if (dto.unitDisplayLabel !== undefined) data.unitDisplayLabel = dto.unitDisplayLabel;
+    if (dto.unitDisplayLabel !== undefined)
+      data.unitDisplayLabel = dto.unitDisplayLabel;
     if (dto.purchaseUnit !== undefined) data.purchaseUnit = dto.purchaseUnit;
-    if (dto.purchaseToBaseRatio !== undefined) data.purchaseToBaseRatio = dto.purchaseToBaseRatio;
-    if (dto.currentPricePerPurchaseUnit !== undefined) data.currentPricePerPurchaseUnit = dto.currentPricePerPurchaseUnit;
+    if (dto.purchaseToBaseRatio !== undefined)
+      data.purchaseToBaseRatio = dto.purchaseToBaseRatio;
+    if (dto.currentPricePerPurchaseUnit !== undefined)
+      data.currentPricePerPurchaseUnit = dto.currentPricePerPurchaseUnit;
     if (dto.weightG !== undefined) data.weightG = dto.weightG;
     if (dto.maxCapacityG !== undefined) data.maxCapacityG = dto.maxCapacityG;
     if (dto.properties !== undefined) data.properties = dto.properties;
@@ -190,4 +197,3 @@ export class IngredientService {
     await this.ingredientRepository.delete(id);
   }
 }
-

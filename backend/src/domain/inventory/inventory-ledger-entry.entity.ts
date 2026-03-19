@@ -1,7 +1,7 @@
 /**
  * InventoryLedgerEntry Entity
  * Phase 8.13: Inventory Deduction
- * 
+ *
  * Represents an immutable ledger entry for inventory changes.
  * Follows append-only accounting pattern.
  */
@@ -30,7 +30,10 @@ export class InventoryLedgerEntry {
     }
 
     // For KITCHEN_TASK, deltaG must be negative (deduction)
-    if (this.sourceType === InventorySourceType.KITCHEN_TASK && this.deltaG > 0) {
+    if (
+      this.sourceType === InventorySourceType.KITCHEN_TASK &&
+      this.deltaG > 0
+    ) {
       throw new ValidationError(
         `Kitchen task deductions must be negative, got: ${this.deltaG}`,
       );
@@ -45,4 +48,3 @@ export class InventoryLedgerEntry {
     }
   }
 }
-

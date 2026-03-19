@@ -63,9 +63,10 @@ export class InMemoryOrderRepository implements OrderRepository {
     }
     if (params?.keyword) {
       const keyword = params.keyword.toLowerCase();
-      filtered = filtered.filter((o) =>
-        o.id.toLowerCase().includes(keyword) ||
-        o.customerId.toLowerCase().includes(keyword),
+      filtered = filtered.filter(
+        (o) =>
+          o.id.toLowerCase().includes(keyword) ||
+          o.customerId.toLowerCase().includes(keyword),
       );
     }
     if (params?.startDate) {
@@ -115,8 +116,12 @@ export class InMemoryOrderRepository implements OrderRepository {
 
     // Sort by target production date ascending
     filtered.sort((a, b) => {
-      const aDate = a.targetProductionDate ? a.targetProductionDate.getTime() : 0;
-      const bDate = b.targetProductionDate ? b.targetProductionDate.getTime() : 0;
+      const aDate = a.targetProductionDate
+        ? a.targetProductionDate.getTime()
+        : 0;
+      const bDate = b.targetProductionDate
+        ? b.targetProductionDate.getTime()
+        : 0;
       return aDate - bDate;
     });
 
@@ -154,7 +159,7 @@ export class InMemoryOrderRepository implements OrderRepository {
 
   async findOrderItemById(orderItemId: string): Promise<any | null> {
     for (const order of this.orders.values()) {
-      const item = order.items.find(i => i.id === orderItemId);
+      const item = order.items.find((i) => i.id === orderItemId);
       if (item) {
         return {
           id: item.id,
@@ -185,4 +190,3 @@ export class InMemoryOrderRepository implements OrderRepository {
     return Promise.resolve(null);
   }
 }
-

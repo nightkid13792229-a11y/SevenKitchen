@@ -79,7 +79,10 @@ export class CreateOrderItemDto {
 }
 
 export class CreateOrderDto {
-  @ApiPropertyOptional({ description: 'Dog ID (required if not using cart)', example: 'uuid' })
+  @ApiPropertyOptional({
+    description: 'Dog ID (required if not using cart)',
+    example: 'uuid',
+  })
   @IsOptional()
   @IsUUID()
   dogId?: string;
@@ -88,21 +91,28 @@ export class CreateOrderDto {
   @IsEnum(OrderType)
   type!: OrderType;
 
-  @ApiPropertyOptional({ type: [CreateOrderItemDto], description: 'Order items (DEPRECATED - use snapshotId instead)' })
+  @ApiPropertyOptional({
+    type: [CreateOrderItemDto],
+    description: 'Order items (DEPRECATED - use snapshotId instead)',
+  })
   @IsOptional()
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => CreateOrderItemDto)
   items?: CreateOrderItemDto[];
 
-  @ApiPropertyOptional({ description: 'Cart item IDs (if creating from cart)', example: ['uuid1', 'uuid2'] })
+  @ApiPropertyOptional({
+    description: 'Cart item IDs (if creating from cart)',
+    example: ['uuid1', 'uuid2'],
+  })
   @IsOptional()
   @IsArray()
   @IsUUID('4', { each: true })
   cartItemIds?: string[];
 
   @ApiPropertyOptional({
-    description: 'Pricing snapshot ID (if creating from preview - IMMEDIATE BUY)',
+    description:
+      'Pricing snapshot ID (if creating from preview - IMMEDIATE BUY)',
     example: 'uuid',
   })
   @IsOptional()
@@ -123,4 +133,3 @@ export class CreateOrderDto {
   @IsDateString()
   targetProductionDate?: string | null;
 }
-

@@ -27,7 +27,7 @@ export class CreateBreedDto {
   @ApiProperty({
     description: 'Size category',
     enum: DogSizeCategory,
-    example: DogSizeCategory.LARGE
+    example: DogSizeCategory.LARGE,
   })
   @IsEnum(DogSizeCategory, { message: 'Invalid size category' })
   sizeCategory!: DogSizeCategory;
@@ -36,7 +36,7 @@ export class CreateBreedDto {
     description: 'Growth curve type',
     enum: GrowthCurveType,
     default: GrowthCurveType.STANDARD,
-    example: GrowthCurveType.STANDARD
+    example: GrowthCurveType.STANDARD,
   })
   @IsEnum(GrowthCurveType, { message: 'Invalid growth curve type' })
   growthCurveType: GrowthCurveType = GrowthCurveType.STANDARD;
@@ -57,7 +57,7 @@ export class CreateBreedDto {
     description: 'Average adult weight in kg',
     example: 28.5,
     minimum: 0.5,
-    maximum: 100
+    maximum: 100,
   })
   @IsOptional()
   @IsNumber({}, { message: 'Average weight must be a number' })
@@ -67,7 +67,7 @@ export class CreateBreedDto {
 
   @ApiPropertyOptional({
     description: 'Whether this is a common breed',
-    example: false
+    example: false,
   })
   @IsOptional()
   @IsBoolean({ message: 'isCommon must be a boolean' })

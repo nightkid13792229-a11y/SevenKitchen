@@ -11,4 +11,3 @@ export interface DogRepository {
   save(dog: Dog): Promise<Dog>;
   delete(id: string): Promise<void>;
 }
-

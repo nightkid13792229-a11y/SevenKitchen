@@ -16,7 +16,7 @@ export class PrismaIngredientTagRepository implements IngredientTagRepository {
 
   async findById(id: string): Promise<IngredientTag | null> {
     const record = await this.prisma.ingredientTag.findUnique({
-      where: { id }
+      where: { id },
     });
     if (!record) return null;
     return this.mapToDomain(record);
@@ -24,35 +24,35 @@ export class PrismaIngredientTagRepository implements IngredientTagRepository {
 
   async findAll(): Promise<IngredientTag[]> {
     const records = await this.prisma.ingredientTag.findMany({
-      orderBy: [{ sort: 'asc' }, { name: 'asc' }]
+      orderBy: [{ sort: 'asc' }, { name: 'asc' }],
     });
-    return records.map(r => this.mapToDomain(r));
+    return records.map((r) => this.mapToDomain(r));
   }
 
   async findRootTags(): Promise<IngredientTag[]> {
     const records = await this.prisma.ingredientTag.findMany({
       where: { parentId: null },
-      orderBy: [{ sort: 'asc' }, { name: 'asc' }]
+      orderBy: [{ sort: 'asc' }, { name: 'asc' }],
     });
-    return records.map(r => this.mapToDomain(r));
+    return records.map((r) => this.mapToDomain(r));
   }
 
   async findChildren(parentId: string): Promise<IngredientTag[]> {
     const records = await this.prisma.ingredientTag.findMany({
       where: { parentId },
-      orderBy: [{ sort: 'asc' }, { name: 'asc' }]
+      orderBy: [{ sort: 'asc' }, { name: 'asc' }],
     });
-    return records.map(r => this.mapToDomain(r));
+    return records.map((r) => this.mapToDomain(r));
   }
 
   async findByIngredient(ingredientId: string): Promise<IngredientTag[]> {
     const assignments = await this.prisma.ingredientTagAssignment.findMany({
       where: { ingredientId },
       include: {
-        tag: true
-      }
+        tag: true,
+      },
     });
-    return assignments.map(a => this.mapToDomain(a.tag));
+    return assignments.map((a) => this.mapToDomain(a.tag));
   }
 
   async save(tag: IngredientTag): Promise<IngredientTag> {
@@ -61,7 +61,7 @@ export class PrismaIngredientTagRepository implements IngredientTagRepository {
       description: tag.description,
       parentId: tag.parentId,
       sort: tag.sort,
-      color: tag.color
+      color: tag.color,
     };
 
     this.logger.debug(`Saving ingredient tag ${tag.id}: ${tag.name}`);
@@ -69,7 +69,7 @@ export class PrismaIngredientTagRepository implements IngredientTagRepository {
     const saved = await this.prisma.ingredientTag.upsert({
       where: { id: tag.id },
       update: data,
-      create: { id: tag.id, ...data }
+      create: { id: tag.id, ...data },
     });
 
     this.logger.debug(`Ingredient tag ${tag.id} saved successfully`);
@@ -81,24 +81,28 @@ export class PrismaIngredientTagRepository implements IngredientTagRepository {
 
     // Check if tag has children
     const childCount = await this.prisma.ingredientTag.count({
-      where: { parentId: id }
+      where: { parentId: id },
     });
 
     if (childCount > 0) {
-      throw new Error(`Cannot delete tag with ${childCount} children. Delete or reassign children first.`);
+      throw new Error(
+        `Cannot delete tag with ${childCount} children. Delete or reassign children first.`,
+      );
     }
 
     // Check if tag is used by any ingredients
     const assignmentCount = await this.prisma.ingredientTagAssignment.count({
-      where: { tagId: id }
+      where: { tagId: id },
     });
 
     if (assignmentCount > 0) {
-      throw new Error(`Cannot delete tag used by ${assignmentCount} ingredients. Remove tag from ingredients first.`);
+      throw new Error(
+        `Cannot delete tag used by ${assignmentCount} ingredients. Remove tag from ingredients first.`,
+      );
     }
 
     await this.prisma.ingredientTag.delete({
-      where: { id }
+      where: { id },
     });
 
     this.logger.debug(`Ingredient tag ${id} deleted successfully`);
@@ -106,7 +110,7 @@ export class PrismaIngredientTagRepository implements IngredientTagRepository {
 
   async hasChildren(id: string): Promise<boolean> {
     const count = await this.prisma.ingredientTag.count({
-      where: { parentId: id }
+      where: { parentId: id },
     });
     return count > 0;
   }
@@ -114,11 +118,11 @@ export class PrismaIngredientTagRepository implements IngredientTagRepository {
   async getHierarchy(): Promise<IngredientTag[]> {
     // Get all tags ordered by sort and name
     const allTags = await this.prisma.ingredientTag.findMany({
-      orderBy: [{ sort: 'asc' }, { name: 'asc' }]
+      orderBy: [{ sort: 'asc' }, { name: 'asc' }],
     });
 
     // Return all as domain entities (frontend will build tree)
-    return allTags.map(r => this.mapToDomain(r));
+    return allTags.map((r) => this.mapToDomain(r));
   }
 
   /**
@@ -131,7 +135,7 @@ export class PrismaIngredientTagRepository implements IngredientTagRepository {
       record.description,
       record.parentId,
       record.sort,
-      record.color
+      record.color,
     );
   }
 }

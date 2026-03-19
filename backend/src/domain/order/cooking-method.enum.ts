@@ -3,6 +3,6 @@
  * 烹饪工艺枚举
  */
 export enum CookingMethod {
-  RAW = 'RAW',              // 生
-  COOKED = 'COOKED'         // 煮熟
+  RAW = 'RAW', // 生
+  COOKED = 'COOKED', // 煮熟
 }

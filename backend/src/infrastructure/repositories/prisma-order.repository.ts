@@ -45,8 +45,8 @@ export class PrismaOrderRepository implements OrderRepository {
       where: { status },
       include: {
         items: true,
-        dog: true,      // 🔧 添加：包含dog关联数据
-        address: true,  // 🔧 添加：包含address关联数据
+        dog: true, // 🔧 添加：包含dog关联数据
+        address: true, // 🔧 添加：包含address关联数据
       },
       orderBy: { id: 'asc' },
     });
@@ -80,7 +80,8 @@ export class PrismaOrderRepository implements OrderRepository {
             status: order.status as any,
             type: order.type as any,
             targetProductionDate: order.targetProductionDate,
-            originalTargetProductionDate: (order as any).originalTargetProductionDate ?? null,
+            originalTargetProductionDate:
+              (order as any).originalTargetProductionDate ?? null,
             amountProduct,
             amountShipping,
             amountTotal,
@@ -148,7 +149,8 @@ export class PrismaOrderRepository implements OrderRepository {
           status: order.status as any,
           type: order.type as any,
           targetProductionDate: order.targetProductionDate,
-          originalTargetProductionDate: (order as any).originalTargetProductionDate ?? null,
+          originalTargetProductionDate:
+            (order as any).originalTargetProductionDate ?? null,
           amountProduct,
           amountShipping,
           amountTotal,
@@ -204,7 +206,11 @@ export class PrismaOrderRepository implements OrderRepository {
     return this.mapToDomain(saved);
   }
 
-  private mapToDomain(record: Prisma.OrderGetPayload<{ include: { items: true; dog: true; address: true } }>): Order {
+  private mapToDomain(
+    record: Prisma.OrderGetPayload<{
+      include: { items: true; dog: true; address: true };
+    }>,
+  ): Order {
     // Defensive check: ensure items array exists and is populated
     if (!record.items || !Array.isArray(record.items)) {
       this.logger.warn(
@@ -228,7 +234,9 @@ export class PrismaOrderRepository implements OrderRepository {
           (i as any).dailyIntakeG ?? i.quantityG / (i.packageCount || 1), // Fallback for backward compatibility
           // Phase 8.11: Allocation fields
           (i as any).productionBatchId ?? null,
-          ((i as any).allocatedAt ? new Date((i as any).allocatedAt) : null) as any,
+          ((i as any).allocatedAt
+            ? new Date((i as any).allocatedAt)
+            : null) as any,
         ),
     );
 
@@ -253,17 +261,21 @@ export class PrismaOrderRepository implements OrderRepository {
       record.dogId ?? undefined,
       record.addressId ?? undefined,
       // 🔧 添加：传入dog和address对象
-      record.dog ? {
-        id: record.dog.id,
-        name: record.dog.name,
-      } : undefined,
-      record.address ? {
-        id: record.address.id,
-        recipientName: record.address.recipientName,
-        phone: record.address.phone,
-        region: record.address.region as any,
-        detail: record.address.detail,
-      } : undefined,
+      record.dog
+        ? {
+            id: record.dog.id,
+            name: record.dog.name,
+          }
+        : undefined,
+      record.address
+        ? {
+            id: record.address.id,
+            recipientName: record.address.recipientName,
+            phone: record.address.phone,
+            region: record.address.region as any,
+            detail: record.address.detail,
+          }
+        : undefined,
       // Phase 8.14: Shipping tracking fields
       record.trackingNumber ?? undefined,
       record.carrierCode ?? undefined,
@@ -281,8 +293,12 @@ export class PrismaOrderRepository implements OrderRepository {
       (record as any).paymentStatus ?? undefined,
       // Phase 9.1: Freezing and Aftersale fields
       (record as any).aftersaleType ?? undefined,
-      (record as any).freezingSince ? new Date((record as any).freezingSince) : undefined,
-      (record as any).aftersaleSince ? new Date((record as any).aftersaleSince) : undefined,
+      (record as any).freezingSince
+        ? new Date((record as any).freezingSince)
+        : undefined,
+      (record as any).aftersaleSince
+        ? new Date((record as any).aftersaleSince)
+        : undefined,
       (record as any).aftersaleReason ?? undefined,
       (record as any).aftersalePhotos ?? undefined,
       // Skip validation for orders loaded from database (allows admin-adjusted amounts)
@@ -377,8 +393,16 @@ export class PrismaOrderRepository implements OrderRepository {
     if (params?.keyword) {
       where.OR = [
         { id: { contains: params.keyword, mode: 'insensitive' } },
-        { customer: { nickname: { contains: params.keyword, mode: 'insensitive' } } },
-        { customer: { phone: { contains: params.keyword, mode: 'insensitive' } } },
+        {
+          customer: {
+            nickname: { contains: params.keyword, mode: 'insensitive' },
+          },
+        },
+        {
+          customer: {
+            phone: { contains: params.keyword, mode: 'insensitive' },
+          },
+        },
       ];
     }
 
@@ -389,8 +413,8 @@ export class PrismaOrderRepository implements OrderRepository {
         where,
         include: {
           items: true,
-          dog: true,      // 🔧 添加：包含dog关联数据
-          address: true,  // 🔧 添加：包含address关联数据
+          dog: true, // 🔧 添加：包含dog关联数据
+          address: true, // 🔧 添加：包含address关联数据
           customer: {
             select: {
               id: true,
@@ -439,8 +463,8 @@ export class PrismaOrderRepository implements OrderRepository {
         where,
         include: {
           items: true,
-          dog: true,      // 🔧 添加：包含dog关联数据
-          address: true,  // 🔧 添加：包含address关联数据
+          dog: true, // 🔧 添加：包含dog关联数据
+          address: true, // 🔧 添加：包含address关联数据
           customer: {
             select: {
               id: true,
@@ -477,10 +501,13 @@ export class PrismaOrderRepository implements OrderRepository {
       },
     });
 
-    const countMap = stats.reduce((acc, item) => {
-      acc[item.status] = item._count.status;
-      return acc;
-    }, {} as Record<string, number>);
+    const countMap = stats.reduce(
+      (acc, item) => {
+        acc[item.status] = item._count.status;
+        return acc;
+      },
+      {} as Record<string, number>,
+    );
 
     return {
       total: await this.prisma.order.count(),
@@ -548,7 +575,3 @@ export class PrismaOrderRepository implements OrderRepository {
     };
   }
 }
-
-
-
-

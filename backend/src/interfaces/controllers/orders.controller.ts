@@ -103,8 +103,15 @@ export class OrdersController {
       const customerId = user.customerId;
 
       // Validate: at least one of snapshotId, cartItemIds, or (dogId + items) must be provided
-      if (!createOrderDto.snapshotId && !createOrderDto.cartItemIds && (!createOrderDto.dogId || !createOrderDto.items)) {
-        return ApiResponseDto.error(400, 'Either snapshotId, cartItemIds, or (dogId + items) must be provided');
+      if (
+        !createOrderDto.snapshotId &&
+        !createOrderDto.cartItemIds &&
+        (!createOrderDto.dogId || !createOrderDto.items)
+      ) {
+        return ApiResponseDto.error(
+          400,
+          'Either snapshotId, cartItemIds, or (dogId + items) must be provided',
+        );
       }
 
       const order = await this.orderService.createOrderDraft({
@@ -290,7 +297,10 @@ export class OrdersController {
           fromStatus: { type: 'string' },
           toStatus: { type: 'string' },
           timestamp: { type: 'string', format: 'date-time' },
-          actor: { type: 'string', enum: ['customer', 'staff', 'admin', 'system'] },
+          actor: {
+            type: 'string',
+            enum: ['customer', 'staff', 'admin', 'system'],
+          },
           actorId: { type: 'string', nullable: true },
           metadata: { type: 'object', nullable: true },
         },
@@ -308,13 +318,13 @@ export class OrdersController {
   ): Promise<ApiResponseDto<any[]> | ApiResponseDto<null>> {
     const order = await this.orderService.getOrderById(id);
     if (!order) {
-      return ApiResponseDto.error(404, 'Order not found') as ApiResponseDto<null>;
+      return ApiResponseDto.error(404, 'Order not found');
     }
 
     // Permission check: STAFF and ADMIN can view all orders, CUSTOMER can only view their own
     const isStaffOrAdmin = user.role === 'STAFF' || user.role === 'ADMIN';
     if (!isStaffOrAdmin && order.customerId !== user.customerId) {
-      return ApiResponseDto.error(404, 'Order not found') as ApiResponseDto<null>;
+      return ApiResponseDto.error(404, 'Order not found');
     }
 
     const history = await this.orderService.getOrderStatusHistory(id);
@@ -355,7 +365,7 @@ export class OrdersController {
 
     const orders = await this.orderService.listOrdersByCustomerId(customerId);
     const summaries = await Promise.all(
-      orders.map((order) => this.mapOrderToSummaryDto(order))
+      orders.map((order) => this.mapOrderToSummaryDto(order)),
     );
     return ApiResponseDto.success(summaries);
   }
@@ -402,7 +412,8 @@ export class OrdersController {
   @Get(':id/pricing-breakdown')
   @UseGuards(AuthGuard)
   @ApiOperation({
-    summary: 'Get order pricing breakdown (Phase 7.1) and price explanation (Phase 7.2)',
+    summary:
+      'Get order pricing breakdown (Phase 7.1) and price explanation (Phase 7.2)',
     description:
       'Returns the pricing breakdown snapshot captured at order creation time, plus customer-facing price explanation. Returns 200 with null data if breakdown is not available (e.g., legacy orders).',
   })
@@ -576,7 +587,10 @@ export class OrdersController {
     type: PricingPreviewResponseDto,
   })
   @ApiResponse({ status: 400, description: 'Invalid input' })
-  @ApiResponse({ status: 404, description: 'Dog, recipe, or address not found' })
+  @ApiResponse({
+    status: 404,
+    description: 'Dog, recipe, or address not found',
+  })
   @ApiResponse({
     status: 401,
     description: 'Unauthorized - X-Customer-Id header required',
@@ -585,9 +599,7 @@ export class OrdersController {
   async previewPricing(
     @Body() requestDto: PricingPreviewRequestDto,
     @CurrentUser() user: RequestUser,
-  ): Promise<
-    ApiResponseDto<PricingPreviewResponseDto> | ApiResponseDto<null>
-  > {
+  ): Promise<ApiResponseDto<PricingPreviewResponseDto> | ApiResponseDto<null>> {
     // Generate correlation ID for diagnostics
     const correlationId = `preview-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     const customerId = user.customerId;
@@ -620,7 +632,7 @@ export class OrdersController {
       return ApiResponseDto.success(preview);
     } catch (error) {
       // Determine if this is a validation error (expected user-input issue) vs system error
-      const isValidationError = 
+      const isValidationError =
         error instanceof BadRequestException ||
         (error &&
           typeof error === 'object' &&
@@ -634,11 +646,14 @@ export class OrdersController {
       // Log validation errors at WARN level (expected user-input state)
       // Log system errors at ERROR level (unexpected failures)
       if (isValidationError) {
-        console.warn(`[${correlationId}] Pricing preview validation failure (expected user-input state)`, {
-          customerId,
-          orderType: requestDto.type,
-          error: error instanceof Error ? error.message : String(error),
-        });
+        console.warn(
+          `[${correlationId}] Pricing preview validation failure (expected user-input state)`,
+          {
+            customerId,
+            orderType: requestDto.type,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        );
       } else {
         console.error(`[${correlationId}] Pricing preview error`, {
           customerId,
@@ -666,7 +681,10 @@ export class OrdersController {
         const validationMessage = Array.isArray(error.response.message)
           ? error.response.message.join(', ')
           : String(error.response.message);
-        return ApiResponseDto.error(422, `Validation error: ${validationMessage}`);
+        return ApiResponseDto.error(
+          422,
+          `Validation error: ${validationMessage}`,
+        );
       }
 
       // Handle domain validation errors
@@ -704,7 +722,8 @@ export class OrdersController {
 
     // Fetch dog information for each item
     // For single-item orders (direct buy mode), use order amountProduct as item totalPrice
-    const itemTotalPrice = order.items.length === 1 ? order.amountProduct : undefined;
+    const itemTotalPrice =
+      order.items.length === 1 ? order.amountProduct : undefined;
 
     console.log('[Order Detail] Order items count:', order.items.length);
     console.log('[Order Detail] itemTotalPrice:', itemTotalPrice);
@@ -727,18 +746,24 @@ export class OrdersController {
       const shippingDate = new Date(order.targetProductionDate);
       shippingDate.setDate(shippingDate.getDate() + 1);
       estimatedShippingDate = shippingDate.toISOString();
-      console.log('[Order Detail] Estimated shipping date:', estimatedShippingDate);
+      console.log(
+        '[Order Detail] Estimated shipping date:',
+        estimatedShippingDate,
+      );
     }
 
     // Query production photos (原料照片)
     let productionPhotos = null;
     try {
-      const photosUnit = await this.productionRepository.findFirstCompletedByOrderId(order.id);
+      const photosUnit =
+        await this.productionRepository.findFirstCompletedByOrderId(order.id);
       if (photosUnit) {
         productionPhotos = {
           unitId: photosUnit.id,
           photos: photosUnit.photosRaw || [],
-          uploadedAt: photosUnit.updatedAt ? photosUnit.updatedAt.toISOString() : null,
+          uploadedAt: photosUnit.updatedAt
+            ? photosUnit.updatedAt.toISOString()
+            : null,
         };
       }
     } catch (error) {
@@ -751,14 +776,16 @@ export class OrdersController {
       customerId: order.customerId,
       dogId: order.dogId,
       addressId: order.addressId,
-      address: order.address ? {
-        id: order.address.id,
-        recipientName: order.address.recipientName,
-        phone: order.address.phone,
-        region: order.address.region,
-        regionText: `${order.address.region.province} ${order.address.region.city}${order.address.region.district ? ' ' + order.address.region.district : ''}`,
-        detailAddress: order.address.detail,
-      } : null,
+      address: order.address
+        ? {
+            id: order.address.id,
+            recipientName: order.address.recipientName,
+            phone: order.address.phone,
+            region: order.address.region,
+            regionText: `${order.address.region.province} ${order.address.region.city}${order.address.region.district ? ' ' + order.address.region.district : ''}`,
+            detailAddress: order.address.detail,
+          }
+        : null,
       status: order.status,
       type: order.type,
       targetProductionDate: order.targetProductionDate
@@ -813,7 +840,16 @@ export class OrdersController {
       }
     }
 
-    console.log('[mapOrderItemToDto] Item ID:', item.id, 'dogId:', item.dogId, 'dogInfo:', dogInfo, 'totalPrice:', totalPrice);
+    console.log(
+      '[mapOrderItemToDto] Item ID:',
+      item.id,
+      'dogId:',
+      item.dogId,
+      'dogInfo:',
+      dogInfo,
+      'totalPrice:',
+      totalPrice,
+    );
 
     return {
       id: item.id,
@@ -857,19 +893,22 @@ export class OrdersController {
         try {
           let recipe = await this.prisma.recipe.findUnique({
             where: { id: item.recipeSnapshot.id },
-            select: { coverImageUrl: true }
+            select: { coverImageUrl: true },
           });
 
           // If not found by ID, try to find by recipe name (data consistency workaround)
           if (!recipe && item.recipeSnapshot.name) {
             recipe = await this.prisma.recipe.findFirst({
               where: { name: item.recipeSnapshot.name },
-              select: { coverImageUrl: true }
+              select: { coverImageUrl: true },
             });
           }
 
           if (recipe) {
-            coverImageUrl = recipe.coverImageUrl?.replace('http://', 'https://');
+            coverImageUrl = recipe.coverImageUrl?.replace(
+              'http://',
+              'https://',
+            );
           }
         } catch (error: any) {
           // Recipe might be deleted, ignore error
@@ -878,11 +917,13 @@ export class OrdersController {
 
       firstItem = {
         dog: dogInfo,
-        recipeSnapshot: item.recipeSnapshot ? {
-          id: item.recipeSnapshot.id,
-          name: item.recipeSnapshot.name,
-          coverImageUrl,
-        } : undefined,
+        recipeSnapshot: item.recipeSnapshot
+          ? {
+              id: item.recipeSnapshot.id,
+              name: item.recipeSnapshot.name,
+              coverImageUrl,
+            }
+          : undefined,
         packageCount: item.packageCount,
         packageSpecG: item.packageSpecG,
         dailyIntakeG: item.dailyIntakeG,
@@ -890,7 +931,7 @@ export class OrdersController {
     }
 
     // Get address info if addressId is present
-    let address = undefined;
+    const address = undefined;
     if (order.addressId) {
       // TODO: Fetch address from repository when address module is available
       // For now, we'll return undefined
@@ -1020,10 +1061,10 @@ export class OrdersController {
     schema: {
       type: 'object',
       properties: {
-        addressId: { type: 'string', description: 'New address ID' }
+        addressId: { type: 'string', description: 'New address ID' },
       },
-      required: ['addressId']
-    }
+      required: ['addressId'],
+    },
   })
   @ApiResponse({
     status: 200,
@@ -1046,7 +1087,7 @@ export class OrdersController {
         id,
         body.addressId,
         user.userId,
-        user.role
+        user.role,
       );
       const response = await this.mapOrderToDto(updatedOrder);
       return ApiResponseDto.success(response);
@@ -1080,11 +1121,11 @@ export class OrdersController {
         targetProductionDate: {
           type: 'string',
           format: 'date',
-          description: 'New target production date (YYYY-MM-DD)'
-        }
+          description: 'New target production date (YYYY-MM-DD)',
+        },
       },
-      required: ['targetProductionDate']
-    }
+      required: ['targetProductionDate'],
+    },
   })
   @ApiResponse({
     status: 200,
@@ -1107,7 +1148,7 @@ export class OrdersController {
         id,
         new Date(body.targetProductionDate),
         user.userId,
-        user.role
+        user.role,
       );
       const response = await this.mapOrderToDto(updatedOrder);
       return ApiResponseDto.success(response);
@@ -1159,8 +1200,14 @@ export class OrdersController {
 
       // Check permission: only order owner or admin can share
       // Note: role comparison is case-insensitive to handle both 'admin' and 'ADMIN'
-      if (order.customerId !== user.customerId && user.role?.toLowerCase() !== 'admin') {
-        return ApiResponseDto.error(403, 'You do not have permission to share this order\'s photos');
+      if (
+        order.customerId !== user.customerId &&
+        user.role?.toLowerCase() !== 'admin'
+      ) {
+        return ApiResponseDto.error(
+          403,
+          "You do not have permission to share this order's photos",
+        );
       }
 
       // Check if order has production photos (stored in PackagingUnit)
@@ -1174,7 +1221,7 @@ export class OrdersController {
         return ApiResponseDto.error(400, 'This order has no items');
       }
 
-      const orderItemIds = orderItems.map(item => item.id);
+      const orderItemIds = orderItems.map((item) => item.id);
 
       // Find packaging units that contain these order items
       const packagingUnits = await this.prisma.packagingUnit.findMany({
@@ -1193,16 +1240,21 @@ export class OrdersController {
       // Check if any photos exist
       let hasPhotos = false;
       for (const unit of packagingUnits) {
-        if ((unit.photosRaw && unit.photosRaw.length > 0) ||
-            (unit.photosCooked && unit.photosCooked.length > 0) ||
-            (unit.photosPortioned && unit.photosPortioned.length > 0)) {
+        if (
+          (unit.photosRaw && unit.photosRaw.length > 0) ||
+          (unit.photosCooked && unit.photosCooked.length > 0) ||
+          (unit.photosPortioned && unit.photosPortioned.length > 0)
+        ) {
           hasPhotos = true;
           break;
         }
       }
 
       if (!hasPhotos) {
-        return ApiResponseDto.error(400, 'This order has no production photos to share');
+        return ApiResponseDto.error(
+          400,
+          'This order has no production photos to share',
+        );
       }
 
       // Generate random token (32 characters)
@@ -1271,5 +1323,3 @@ export class OrdersController {
     return null;
   }
 }
-
-

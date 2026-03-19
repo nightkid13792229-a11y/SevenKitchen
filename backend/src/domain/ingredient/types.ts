@@ -22,18 +22,18 @@ export interface FoodProperties {
  * 有效成分含量值（包含数值和单位）
  */
 export interface ActiveNutrientValue {
-  value: number;  // 显示的数值（原始输入值）
-  unit: string;   // 单位 (mg, g, μg, IU, %)
+  value: number; // 显示的数值（原始输入值）
+  unit: string; // 单位 (mg, g, μg, IU, %)
 }
 
 /**
  * 购买链接配置
  */
 export interface PurchaseLinkConfig {
-  url: string;                     // 购买链接URL
-  platform: 'TAOBAO' | 'JD' | 'PINDUODUO' | 'OTHER' | 'WEBVIEW';  // 平台类型
-  mini_program_appid?: string;     // 小程序appid（跳转小程序时必需）
-  mini_program_path?: string;      // 小程序路径（跳转小程序时必需）
+  url: string; // 购买链接URL
+  platform: 'TAOBAO' | 'JD' | 'PINDUODUO' | 'OTHER' | 'WEBVIEW'; // 平台类型
+  mini_program_appid?: string; // 小程序appid（跳转小程序时必需）
+  mini_program_path?: string; // 小程序路径（跳转小程序时必需）
 }
 
 /**
@@ -68,4 +68,3 @@ export interface PackagingProperties {
   is_consumable: boolean; // true=消耗品(随单扣减), false=固定资产
   linked_item_id?: string; // 关联配件 (e.g. 4号箱绑定4号袋)
 }
-

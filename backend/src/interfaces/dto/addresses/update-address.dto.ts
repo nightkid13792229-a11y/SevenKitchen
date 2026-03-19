@@ -43,4 +43,3 @@ export class UpdateAddressDto {
   @MinLength(1)
   detail?: string;
 }
-

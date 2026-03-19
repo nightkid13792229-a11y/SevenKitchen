@@ -1,45 +1,52 @@
-import { IsArray, IsDateString, IsEnum, IsOptional, IsString, IsUUID } from 'class-validator'
-import { MedicalStatus } from './create-medical-record.dto'
+import {
+  IsArray,
+  IsDateString,
+  IsEnum,
+  IsOptional,
+  IsString,
+  IsUUID,
+} from 'class-validator';
+import { MedicalStatus } from './create-medical-record.dto';
 
 export class UpdateMedicalRecordDto {
   @IsOptional()
   @IsUUID()
-  dogId?: string
+  dogId?: string;
 
   @IsOptional()
   @IsDateString()
-  visitDate?: string
+  visitDate?: string;
 
   @IsOptional()
   @IsString()
-  chiefComplaint?: string
+  chiefComplaint?: string;
 
   @IsOptional()
   @IsString()
-  diagnosis?: string
+  diagnosis?: string;
 
   @IsOptional()
   @IsString()
-  treatment?: string
+  treatment?: string;
 
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  medications?: string[]
+  medications?: string[];
 
   @IsOptional()
   @IsEnum(MedicalStatus)
-  status?: MedicalStatus
+  status?: MedicalStatus;
 
   @IsOptional()
   @IsDateString()
-  followUpDate?: string
+  followUpDate?: string;
 
   @IsOptional()
   @IsString()
-  veterinarian?: string
+  veterinarian?: string;
 
   @IsOptional()
   @IsString()
-  notes?: string
+  notes?: string;
 }

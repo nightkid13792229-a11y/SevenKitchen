@@ -58,7 +58,10 @@ export class WechatLoginResponseDto {
   @ApiProperty({ description: 'User ID' })
   userId!: string;
 
-  @ApiProperty({ description: 'User role', enum: ['CUSTOMER', 'STAFF', 'ADMIN'] })
+  @ApiProperty({
+    description: 'User role',
+    enum: ['CUSTOMER', 'STAFF', 'ADMIN'],
+  })
   role!: string;
 
   @ApiProperty({ description: 'Is first time login' })

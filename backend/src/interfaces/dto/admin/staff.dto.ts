@@ -15,7 +15,7 @@ export class CreateStaffDto {
   @ApiProperty({
     description: '部门',
     enum: ['KITCHEN', 'PURCHASING', 'SHIPPING'],
-    example: 'KITCHEN'
+    example: 'KITCHEN',
   })
   @IsEnum(['KITCHEN', 'PURCHASING', 'SHIPPING'])
   department!: 'KITCHEN' | 'PURCHASING' | 'SHIPPING';
@@ -30,7 +30,7 @@ export class UpdateStaffDto {
   @ApiProperty({
     description: '状态',
     enum: ['ACTIVE', 'INACTIVE', 'BANNED'],
-    required: false
+    required: false,
   })
   @IsEnum(['ACTIVE', 'INACTIVE', 'BANNED'])
   @IsOptional()

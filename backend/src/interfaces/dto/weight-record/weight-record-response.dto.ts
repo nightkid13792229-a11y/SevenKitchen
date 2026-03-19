@@ -1,35 +1,35 @@
-import { Expose, Transform } from 'class-transformer'
+import { Expose, Transform } from 'class-transformer';
 
 export class WeightRecordResponseDto {
   @Expose()
-  id!: string
+  id!: string;
 
   @Expose()
-  dogId!: string
+  dogId!: string;
 
   @Expose()
   @Transform(({ value }) => {
-    return value.toISOString().split('T')[0]
+    return value.toISOString().split('T')[0];
   })
-  recordDate!: string
+  recordDate!: string;
 
   @Expose()
-  weightKg!: number
+  weightKg!: number;
 
   @Expose()
-  note!: string | null
+  note!: string | null;
 
   @Expose()
-  syncedToProfile!: boolean
+  syncedToProfile!: boolean;
 
   @Expose()
-  createdAt!: string
+  createdAt!: string;
 }
 
 export class WeightRecordListResponseDto {
   @Expose()
-  total!: number
+  total!: number;
 
   @Expose()
-  records!: WeightRecordResponseDto[]
+  records!: WeightRecordResponseDto[];
 }

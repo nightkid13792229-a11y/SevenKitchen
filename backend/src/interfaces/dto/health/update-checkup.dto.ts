@@ -1,30 +1,37 @@
-import { IsDateString, IsOptional, IsString, IsArray, IsUrl, IsIn } from 'class-validator'
-import { CHECKUP_TYPES } from './create-checkup.dto'
+import {
+  IsDateString,
+  IsOptional,
+  IsString,
+  IsArray,
+  IsUrl,
+  IsIn,
+} from 'class-validator';
+import { CHECKUP_TYPES } from './create-checkup.dto';
 
 export class UpdateCheckupDto {
   @IsOptional()
   @IsString()
   @IsIn(CHECKUP_TYPES)
-  checkupType?: string
+  checkupType?: string;
 
   @IsOptional()
   @IsDateString()
-  checkupDate?: string
+  checkupDate?: string;
 
   @IsOptional()
   @IsString()
-  findings?: string
+  findings?: string;
 
   @IsOptional()
   @IsString()
-  recommendations?: string
+  recommendations?: string;
 
   @IsOptional()
   @IsString()
-  veterinarian?: string
+  veterinarian?: string;
 
   @IsOptional()
   @IsArray()
   @IsUrl({}, { each: true })
-  attachments?: string[]
+  attachments?: string[];
 }

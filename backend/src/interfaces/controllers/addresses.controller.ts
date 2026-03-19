@@ -193,9 +193,7 @@ export class AddressesController {
     description: 'Address deleted successfully',
   })
   @ApiResponse({ status: 404, description: 'Address not found' })
-  async deleteAddress(
-    @Param('id') id: string,
-  ): Promise<void> {
+  async deleteAddress(@Param('id') id: string): Promise<void> {
     return this.addressService.deleteAddress(id);
   }
 
@@ -227,4 +225,3 @@ export class AddressesController {
     };
   }
 }
-

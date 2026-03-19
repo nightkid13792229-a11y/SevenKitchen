@@ -20,4 +20,3 @@ export enum UserInteractionAction {
   GENERATE_DIY = 'GENERATE_DIY',
   SHARE = 'SHARE',
 }
-

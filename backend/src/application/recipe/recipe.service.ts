@@ -3,13 +3,20 @@
  * Business logic for recipe management in admin panel
  */
 
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { Prisma } from '@prisma/client';
-import { RecipeStatus, RecipeHealthTag, LifeStage, NutritionStandard } from '../../domain/recipe/enums';
-import type {
-  RecipeQueryDto,
-} from '../../interfaces/dto/recipes/admin-recipe.dto';
+import {
+  RecipeStatus,
+  RecipeHealthTag,
+  LifeStage,
+  NutritionStandard,
+} from '../../domain/recipe/enums';
+import type { RecipeQueryDto } from '../../interfaces/dto/recipes/admin-recipe.dto';
 import type {
   RecipeSummaryResponseDto,
   RecipeDetailResponseDto,
@@ -38,7 +45,7 @@ export class RecipeService {
       ratioPercent: number | null;
       nutrientTargetKey: string | null;
       nutrientTargetValue: number | null;
-    }>
+    }>,
   ): boolean {
     // If item count differs, items have changed
     if (existingItems.length !== newItems.length) {
@@ -46,8 +53,12 @@ export class RecipeService {
     }
 
     // Sort both arrays by ingredientId for comparison
-    const sortedExisting = [...existingItems].sort((a, b) => a.ingredientId.localeCompare(b.ingredientId));
-    const sortedNew = [...newItems].sort((a, b) => a.ingredientId.localeCompare(b.ingredientId));
+    const sortedExisting = [...existingItems].sort((a, b) =>
+      a.ingredientId.localeCompare(b.ingredientId),
+    );
+    const sortedNew = [...newItems].sort((a, b) =>
+      a.ingredientId.localeCompare(b.ingredientId),
+    );
 
     // Compare each item
     for (let i = 0; i < sortedExisting.length; i++) {
@@ -187,14 +198,18 @@ export class RecipeService {
   /**
    * Create new recipe
    */
-  async createRecipe(dto: Record<string, any>): Promise<RecipeDetailResponseDto> {
+  async createRecipe(
+    dto: Record<string, any>,
+  ): Promise<RecipeDetailResponseDto> {
     // Check if recipe with same name exists
     const existing = await this.prisma.recipe.findFirst({
       where: { name: dto.name },
     });
 
     if (existing) {
-      throw new BadRequestException(`Recipe with name "${dto.name}" already exists`);
+      throw new BadRequestException(
+        `Recipe with name "${dto.name}" already exists`,
+      );
     }
 
     // Generate recipe ID and set initial version
@@ -208,7 +223,7 @@ export class RecipeService {
         recipeId,
         version,
         name: dto.name,
-        status: (dto.status || RecipeStatus.DRAFT) as any,
+        status: dto.status || RecipeStatus.DRAFT,
         energyDensityKcalPerKg: dto.energyDensityKcalPerKg,
         productionLossRate: dto.productionLossRate ?? 1.07,
         batchLaborHours: dto.batchLaborHours ?? 2.0,
@@ -218,22 +233,25 @@ export class RecipeService {
         videoUrl: dto.videoUrl,
         description: dto.description,
         designSource: dto.designSource,
-        nutritionStandard: dto.nutritionStandard as any,
-        nutritionDetailedData: ((dto.nutritionDetailedData || Prisma.JsonNull) as unknown) as Prisma.InputJsonValue,
+        nutritionStandard: dto.nutritionStandard,
+        nutritionDetailedData: (dto.nutritionDetailedData ||
+          Prisma.JsonNull) as unknown as Prisma.InputJsonValue,
         targetHealthTags: [] as any, // Keep empty for now, will be migrated
-        applicableLifeStages: (dto.applicableLifeStages || []) as any,
+        applicableLifeStages: dto.applicableLifeStages || [],
         productionSteps: dto.productionSteps,
-        items: dto.items ? {
-          create: dto.items.map((item: any, index: number) => ({
-            ingredientId: item.ingredientId,
-            preparationMethod: item.preparationMethod,
-            exampleWeight: item.exampleWeight,
-            ratioPercent: item.ratioPercent,
-            nutrientTargetKey: item.nutrientTargetKey,
-            nutrientTargetValue: item.nutrientTargetValue,
-            sortOrder: index,
-          })),
-        } : undefined,
+        items: dto.items
+          ? {
+              create: dto.items.map((item: any, index: number) => ({
+                ingredientId: item.ingredientId,
+                preparationMethod: item.preparationMethod,
+                exampleWeight: item.exampleWeight,
+                ratioPercent: item.ratioPercent,
+                nutrientTargetKey: item.nutrientTargetKey,
+                nutrientTargetValue: item.nutrientTargetValue,
+                sortOrder: index,
+              })),
+            }
+          : undefined,
       },
       include: {
         items: true,
@@ -302,7 +320,9 @@ export class RecipeService {
 
     // Only create new version if ingredients changed
     const shouldCreateNewVersion = itemsChanged;
-    const newVersion = shouldCreateNewVersion ? existing.version + 1 : existing.version;
+    const newVersion = shouldCreateNewVersion
+      ? existing.version + 1
+      : existing.version;
 
     // Always delete old items if new items are provided (to handle updates like reordering)
     if (dto.items) {
@@ -317,9 +337,11 @@ export class RecipeService {
       data: {
         version: newVersion,
         name: dto.name,
-        status: (dto.status ?? existing.status) as any,
-        energyDensityKcalPerKg: dto.energyDensityKcalPerKg ?? existing.energyDensityKcalPerKg,
-        productionLossRate: dto.productionLossRate ?? existing.productionLossRate,
+        status: dto.status ?? existing.status,
+        energyDensityKcalPerKg:
+          dto.energyDensityKcalPerKg ?? existing.energyDensityKcalPerKg,
+        productionLossRate:
+          dto.productionLossRate ?? existing.productionLossRate,
         batchLaborHours: dto.batchLaborHours ?? existing.batchLaborHours,
         coverImageUrl: dto.coverImageUrl,
         coverTitle: dto.coverTitle,
@@ -327,22 +349,25 @@ export class RecipeService {
         videoUrl: dto.videoUrl,
         description: dto.description,
         designSource: dto.designSource,
-        nutritionStandard: dto.nutritionStandard as any,
-        nutritionDetailedData: ((dto.nutritionDetailedData ?? Prisma.JsonNull) as unknown) as Prisma.InputJsonValue,
+        nutritionStandard: dto.nutritionStandard,
+        nutritionDetailedData: (dto.nutritionDetailedData ??
+          Prisma.JsonNull) as unknown as Prisma.InputJsonValue,
         targetHealthTags: [] as any, // Keep empty for now
-        applicableLifeStages: (dto.applicableLifeStages ?? undefined) as any,
+        applicableLifeStages: dto.applicableLifeStages ?? undefined,
         productionSteps: dto.productionSteps,
-        items: dto.items ? {
-          create: dto.items.map((item: any, index: number) => ({
-            ingredientId: item.ingredientId,
-            preparationMethod: item.preparationMethod,
-            exampleWeight: item.exampleWeight,
-            ratioPercent: item.ratioPercent,
-            nutrientTargetKey: item.nutrientTargetKey,
-            nutrientTargetValue: item.nutrientTargetValue,
-            sortOrder: index,
-          })),
-        } : undefined,
+        items: dto.items
+          ? {
+              create: dto.items.map((item: any, index: number) => ({
+                ingredientId: item.ingredientId,
+                preparationMethod: item.preparationMethod,
+                exampleWeight: item.exampleWeight,
+                ratioPercent: item.ratioPercent,
+                nutrientTargetKey: item.nutrientTargetKey,
+                nutrientTargetValue: item.nutrientTargetValue,
+                sortOrder: index,
+              })),
+            }
+          : undefined,
       },
       include: {
         items: true,
@@ -539,12 +564,14 @@ export class RecipeService {
         videoUrl: recipe.videoUrl,
         description: recipe.description,
         nutritionStandard: recipe.nutritionStandard,
-        nutritionDetailedData: recipe.nutritionDetailedData as Prisma.InputJsonValue,
+        nutritionDetailedData:
+          recipe.nutritionDetailedData as Prisma.InputJsonValue,
         targetHealthTags: [] as any, // Keep empty for now
-        applicableLifeStages: recipe.applicableLifeStages as Prisma.InputJsonValue,
+        applicableLifeStages:
+          recipe.applicableLifeStages as Prisma.InputJsonValue,
         productionSteps: recipe.productionSteps,
         items: {
-          create: recipe.items.map(item => ({
+          create: recipe.items.map((item) => ({
             ingredientId: item.ingredientId,
             preparationMethod: item.preparationMethod,
             ratioPercent: item.ratioPercent,
@@ -562,7 +589,7 @@ export class RecipeService {
     // Duplicate health tag assignments
     if (recipe.healthTagAssignments && recipe.healthTagAssignments.length > 0) {
       await this.prisma.recipeHealthTagAssignment.createMany({
-        data: recipe.healthTagAssignments.map(assignment => ({
+        data: recipe.healthTagAssignments.map((assignment) => ({
           recipeId: duplicated.id,
           healthTagId: assignment.healthTagId,
         })),
@@ -596,13 +623,15 @@ export class RecipeService {
   /**
    * Get recipe version history
    */
-  async getRecipeVersions(recipeId: string): Promise<RecipeSummaryResponseDto[]> {
+  async getRecipeVersions(
+    recipeId: string,
+  ): Promise<RecipeSummaryResponseDto[]> {
     const recipes = await this.prisma.recipe.findMany({
       where: { recipeId },
       orderBy: { version: 'desc' },
     });
 
-    return recipes.map(recipe => this.mapToSummaryDto(recipe));
+    return recipes.map((recipe) => this.mapToSummaryDto(recipe));
   }
 
   /**
@@ -643,7 +672,8 @@ export class RecipeService {
       coverTitle: recipe.coverTitle || undefined,
       energyDensityKcalPerKg: recipe.energyDensityKcalPerKg,
       applicableLifeStages: (recipe.applicableLifeStages as LifeStage[]) || [],
-      targetHealthTags: recipe.healthTagAssignments?.map((a: any) => a.healthTagId) || [],
+      targetHealthTags:
+        recipe.healthTagAssignments?.map((a: any) => a.healthTagId) || [],
       salesCount: recipe.salesCount,
       diyGenCount: recipe.diyGenCount,
       likeCount: recipe.likeCount,
@@ -668,23 +698,26 @@ export class RecipeService {
       productionSteps: recipe.productionSteps || undefined,
       productionLossRate: recipe.productionLossRate,
       batchLaborHours: recipe.batchLaborHours || undefined,
-      items: recipe.items?.map((item: any) => ({
-        id: item.id,
-        ingredientId: item.ingredientId,
-        ingredientName: item.ingredient?.name,
-        ingredientType: item.ingredient?.type,
-        ingredient: item.ingredient ? {
-          id: item.ingredient.id,
-          name: item.ingredient.name,
-          type: item.ingredient.type,
-          properties: item.ingredient.properties,
-        } : undefined,
-        preparationMethod: item.preparationMethod || undefined,
-        exampleWeight: item.exampleWeight || undefined,
-        ratioPercent: item.ratioPercent || undefined,
-        nutrientTargetKey: item.nutrientTargetKey || undefined,
-        nutrientTargetValue: item.nutrientTargetValue || undefined,
-      })) || [],
+      items:
+        recipe.items?.map((item: any) => ({
+          id: item.id,
+          ingredientId: item.ingredientId,
+          ingredientName: item.ingredient?.name,
+          ingredientType: item.ingredient?.type,
+          ingredient: item.ingredient
+            ? {
+                id: item.ingredient.id,
+                name: item.ingredient.name,
+                type: item.ingredient.type,
+                properties: item.ingredient.properties,
+              }
+            : undefined,
+          preparationMethod: item.preparationMethod || undefined,
+          exampleWeight: item.exampleWeight || undefined,
+          ratioPercent: item.ratioPercent || undefined,
+          nutrientTargetKey: item.nutrientTargetKey || undefined,
+          nutrientTargetValue: item.nutrientTargetValue || undefined,
+        })) || [],
     };
   }
 }

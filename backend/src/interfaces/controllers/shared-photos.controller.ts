@@ -10,12 +10,7 @@ import {
   NotFoundException,
   GoneException,
 } from '@nestjs/common';
-import {
-  ApiTags,
-  ApiOperation,
-  ApiResponse,
-  ApiParam,
-} from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiParam } from '@nestjs/swagger';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 
@@ -37,7 +32,10 @@ export class SharedPhotosController {
     description: 'Photos retrieved successfully',
     type: SharedPhotosResponseDto,
   })
-  @ApiResponse({ status: 404, description: 'Token not found or order not found' })
+  @ApiResponse({
+    status: 404,
+    description: 'Token not found or order not found',
+  })
   @ApiResponse({ status: 410, description: 'Token has expired' })
   async getSharedPhotos(
     @Param('token') token: string,
@@ -50,7 +48,10 @@ export class SharedPhotosController {
 
       // Token not found
       if (!shareToken) {
-        return ApiResponseDto.error(404, 'Share link not found or has been deleted');
+        return ApiResponseDto.error(
+          404,
+          'Share link not found or has been deleted',
+        );
       }
 
       // Check if token has expired
@@ -68,7 +69,7 @@ export class SharedPhotosController {
         return ApiResponseDto.error(404, 'No order items found');
       }
 
-      const orderItemIds = orderItems.map(item => item.id);
+      const orderItemIds = orderItems.map((item) => item.id);
 
       // Find packaging units that contain these order items
       // The sourceOrderItemIds is a String[] field

@@ -20,7 +20,10 @@ import { StaffShippingController } from './interfaces/controllers/staff-shipping
 import { HealthRecordsController } from './interfaces/controllers/health-records.controller';
 import { HealthNotificationController } from './interfaces/controllers/health-notification.controller';
 import { HealthUploadController } from './interfaces/controllers/health-upload.controller';
-import { GlobalConfigController, PublicGlobalConfigController } from './interfaces/controllers/global-config.controller';
+import {
+  GlobalConfigController,
+  PublicGlobalConfigController,
+} from './interfaces/controllers/global-config.controller';
 import { ShippingTemplateController } from './interfaces/controllers/shipping-template.controller';
 import { DIYSheetsController } from './interfaces/controllers/diy-sheets.controller';
 import { StaffProductionPhotosController } from './interfaces/controllers/staff-production-photos.controller';
@@ -54,7 +57,10 @@ import { CoverImageService } from './application/recipe/cover-image.service';
 import { InMemoryAddressRepository } from './infrastructure/repositories/in-memory-address.repository';
 import { PrismaAddressRepository } from './infrastructure/repositories/prisma-address.repository';
 import { RECIPE_REPOSITORY_TOKEN } from './interfaces/controllers/recipes.controller';
-import { OrderService, ORDER_REPOSITORY } from './application/order/order.service';
+import {
+  OrderService,
+  ORDER_REPOSITORY,
+} from './application/order/order.service';
 import {
   AddressService,
   ADDRESS_REPOSITORY,
@@ -81,16 +87,25 @@ import { InMemoryShippingTemplateRepository } from './infrastructure/repositorie
 import { PrismaShippingTemplateRepository } from './infrastructure/repositories/prisma-shipping-template.repository';
 import { SHIPPING_TEMPLATE_REPOSITORY } from './application/shipping/shipping.service.tokens';
 import type { ShippingTemplate } from './domain/shipping/shipping-fee.service';
-import { ProductionService, PRODUCTION_BATCH_REPOSITORY } from './application/production/production.service';
+import {
+  ProductionService,
+  PRODUCTION_BATCH_REPOSITORY,
+} from './application/production/production.service';
 import { PrismaProductionRepository } from './infrastructure/repositories/prisma-production.repository';
 import { KitchenService } from './application/kitchen/kitchen.service';
-import { InventoryService, INVENTORY_REPOSITORY } from './application/inventory/inventory.service';
+import {
+  InventoryService,
+  INVENTORY_REPOSITORY,
+} from './application/inventory/inventory.service';
 import { PrismaInventoryRepository } from './infrastructure/repositories/prisma-inventory.repository';
 import { PrismaOrderStatusHistoryRepository } from './infrastructure/repositories/prisma-order-status-history.repository';
 import { ORDER_STATUS_HISTORY_REPOSITORY } from './application/order/order.service.tokens';
 import { PrismaDogBreedRepository } from './infrastructure/repositories/prisma-dog-breed.repository';
 import { DOG_BREED_REPOSITORY } from './application/dog/dog.service';
-import { IngredientTagService, INGREDIENT_TAG_REPOSITORY } from './application/ingredient-tag/ingredient-tag.service';
+import {
+  IngredientTagService,
+  INGREDIENT_TAG_REPOSITORY,
+} from './application/ingredient-tag/ingredient-tag.service';
 import { PrismaIngredientTagRepository } from './infrastructure/repositories/prisma-ingredient-tag.repository';
 import { TencentCosService } from './infrastructure/services/tencent-cos.service';
 import { PdfGeneratorService } from './infrastructure/services/pdf-generator.service';
@@ -98,17 +113,29 @@ import { WechatModule } from './infrastructure/wechat/wechat.module';
 import { SmsModule } from './infrastructure/sms/sms.module';
 import { WeightRecordService } from './application/weight-record/weight-record.service';
 import { PrismaWeightRecordRepository } from './infrastructure/repositories/prisma-weight-record.repository';
-import { HealthService, VACCINE_RECORD_REPOSITORY, CHECKUP_RECORD_REPOSITORY, MEDICAL_RECORD_REPOSITORY, ALLERGY_RECORD_REPOSITORY } from './application/health/health.service';
+import {
+  HealthService,
+  VACCINE_RECORD_REPOSITORY,
+  CHECKUP_RECORD_REPOSITORY,
+  MEDICAL_RECORD_REPOSITORY,
+  ALLERGY_RECORD_REPOSITORY,
+} from './application/health/health.service';
 import {
   PrismaVaccineRecordRepository,
   PrismaCheckupRecordRepository,
   PrismaMedicalRecordRepository,
-  PrismaAllergyRecordRepository
+  PrismaAllergyRecordRepository,
 } from './infrastructure/repositories/prisma-health.repository';
 import { PackagingService } from './domain/packaging/packaging.service';
 import { PrismaOrderPricingSnapshotRepository } from './infrastructure/repositories/prisma-order-pricing-snapshot.repository';
 import type { IOrderPricingSnapshotRepository } from './domain/order-pricing-snapshot/order-pricing-snapshot.repository.interface';
-import { PurchasingService, ReimbursementService, PURCHASE_LIST_REPOSITORY, REIMBURSEMENT_REPOSITORY, PURCHASE_RECORD_REPOSITORY } from './application/purchasing';
+import {
+  PurchasingService,
+  ReimbursementService,
+  PURCHASE_LIST_REPOSITORY,
+  REIMBURSEMENT_REPOSITORY,
+  PURCHASE_RECORD_REPOSITORY,
+} from './application/purchasing';
 import { PrismaPurchaseListRepository } from './infrastructure/repositories/prisma-purchase-list.repository';
 import { PrismaReimbursementRepository } from './infrastructure/repositories/prisma-reimbursement.repository';
 import { PrismaPurchaseRecordRepository } from './infrastructure/repositories/prisma-purchase-record.repository';
@@ -243,7 +270,6 @@ validatePrismaConfig();
           {
             provide: PrismaService,
             useFactory: () => {
-              // eslint-disable-next-line no-console
               console.log({
                 prismaEnabled: true,
                 hasDatabaseUrl: !!process.env.DATABASE_URL,
@@ -422,7 +448,9 @@ validatePrismaConfig();
             'PrismaService is not available. Ensure Prisma is enabled via repo switches.',
           );
         }
-        const { PrismaDogRepository } = require('./infrastructure/repositories/prisma-dog.repository');
+        const {
+          PrismaDogRepository,
+        } = require('./infrastructure/repositories/prisma-dog.repository');
         return new PrismaDogRepository(prismaService);
       },
       inject: isPrismaEnabled() ? [PrismaService] : [],
@@ -569,10 +597,9 @@ export class AppModule implements OnModuleInit {
       '8fa85f64-5717-4562-b3fc-2c963f66afa6';
 
     // Check if template already exists (idempotent)
-    const existingTemplate =
-      await this.shippingTemplateRepository.findById(
-        CANONICAL_SHIPPING_TEMPLATE_ID,
-      );
+    const existingTemplate = await this.shippingTemplateRepository.findById(
+      CANONICAL_SHIPPING_TEMPLATE_ID,
+    );
     if (existingTemplate) {
       console.log('[Seed] Shipping template exists, skipping seed');
       return;

@@ -3,7 +3,14 @@
  * DTOs for staff production management operations
  */
 
-import { IsString, IsOptional, IsEnum, IsArray, IsNumber, Min } from 'class-validator';
+import {
+  IsString,
+  IsOptional,
+  IsEnum,
+  IsArray,
+  IsNumber,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { PackagingUnitStatus } from '../../../domain/production/enums';
 

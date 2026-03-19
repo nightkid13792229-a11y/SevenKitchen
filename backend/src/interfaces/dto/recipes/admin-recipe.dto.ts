@@ -3,9 +3,23 @@
  * DTOs for recipe management operations in admin panel
  */
 
-import { IsString, IsNumber, IsEnum, IsOptional, IsArray, ValidateNested, Min, MaxLength } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsEnum,
+  IsOptional,
+  IsArray,
+  ValidateNested,
+  Min,
+  MaxLength,
+} from 'class-validator';
 import { Type } from 'class-transformer';
-import { RecipeStatus, RecipeHealthTag, LifeStage, NutritionStandard } from '../../../domain/recipe/enums';
+import {
+  RecipeStatus,
+  RecipeHealthTag,
+  LifeStage,
+  NutritionStandard,
+} from '../../../domain/recipe/enums';
 import type { NutritionDetailedData } from '../../../domain/recipe/types';
 
 /**

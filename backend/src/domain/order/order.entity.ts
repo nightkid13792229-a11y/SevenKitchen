@@ -43,7 +43,7 @@ export class Order {
         province: string;
         city: string;
         district?: string;
-      },
+      };
       detail: string;
     },
     // Phase 8.14: Shipping tracking fields
@@ -210,13 +210,26 @@ export class Order {
       [OrderStatus.INIT]: [OrderStatus.PENDING_PAYMENT, OrderStatus.CANCELLED],
       [OrderStatus.PENDING_PAYMENT]: [OrderStatus.PAID, OrderStatus.CANCELLED],
       [OrderStatus.PAID]: [OrderStatus.PURCHASING, OrderStatus.CANCELLED],
-      [OrderStatus.PURCHASING]: [OrderStatus.PAID, OrderStatus.IN_PRODUCTION, OrderStatus.CANCELLED],
+      [OrderStatus.PURCHASING]: [
+        OrderStatus.PAID,
+        OrderStatus.IN_PRODUCTION,
+        OrderStatus.CANCELLED,
+      ],
       // Allow IN_PRODUCTION → PURCHASING for batch deletion (undo production)
-      [OrderStatus.IN_PRODUCTION]: [OrderStatus.PURCHASING, OrderStatus.FREEZING, OrderStatus.CANCELLED],
+      [OrderStatus.IN_PRODUCTION]: [
+        OrderStatus.PURCHASING,
+        OrderStatus.FREEZING,
+        OrderStatus.CANCELLED,
+      ],
       [OrderStatus.FREEZING]: [OrderStatus.SHIPPED, OrderStatus.AFTERSALE],
       [OrderStatus.SHIPPED]: [OrderStatus.COMPLETED, OrderStatus.AFTERSALE],
       [OrderStatus.COMPLETED]: [OrderStatus.AFTERSALE],
-      [OrderStatus.AFTERSALE]: [OrderStatus.SHIPPED, OrderStatus.COMPLETED, OrderStatus.IN_PRODUCTION, OrderStatus.CANCELLED],
+      [OrderStatus.AFTERSALE]: [
+        OrderStatus.SHIPPED,
+        OrderStatus.COMPLETED,
+        OrderStatus.IN_PRODUCTION,
+        OrderStatus.CANCELLED,
+      ],
       [OrderStatus.CANCELLED]: [],
     };
 
@@ -281,7 +294,10 @@ export class Order {
    */
   markAsShipped(trackingNumber: string, carrierCode: string): void {
     // Allow shipping from either IN_PRODUCTION or FREEZING status
-    if (this.status !== OrderStatus.IN_PRODUCTION && this.status !== OrderStatus.FREEZING) {
+    if (
+      this.status !== OrderStatus.IN_PRODUCTION &&
+      this.status !== OrderStatus.FREEZING
+    ) {
       throw new InvalidStateTransitionError(
         `Cannot mark order as shipped from status: ${this.status}. Order must be in IN_PRODUCTION or FREEZING status.`,
       );
@@ -325,7 +341,10 @@ export class Order {
    * @throws InvalidStateTransitionError if order cannot be cancelled from current status
    * @throws ValidationError if order is already cancelled
    */
-  cancelOrder(reason: string, cancelledBy: 'customer' | 'admin' | 'system'): void {
+  cancelOrder(
+    reason: string,
+    cancelledBy: 'customer' | 'admin' | 'system',
+  ): void {
     // Idempotency: if already cancelled, reject clearly
     if (this.status === OrderStatus.CANCELLED) {
       throw new ValidationError('Order is already cancelled');
@@ -376,10 +395,7 @@ export class Order {
    * @param transactionId Transaction ID (generated or from payment gateway)
    * @throws ValidationError if paymentStatus is not SUCCESS but paidAt/transactionId are set
    */
-  recordPayment(
-    paymentMethod: string,
-    transactionId: string,
-  ): void {
+  recordPayment(paymentMethod: string, transactionId: string): void {
     if (this.status !== OrderStatus.PENDING_PAYMENT) {
       throw new InvalidStateTransitionError(
         `Cannot record payment for order in status: ${this.status}. Order must be in PENDING_PAYMENT status.`,
@@ -437,7 +453,11 @@ export class Order {
    * @throws InvalidStateTransitionError if order is not in eligible status
    * @throws ValidationError if reason is not provided
    */
-  applyForAftersale(type: AftersaleType, reason: string, photos: string[] = []): void {
+  applyForAftersale(
+    type: AftersaleType,
+    reason: string,
+    photos: string[] = [],
+  ): void {
     const allowedStatuses = [
       OrderStatus.FREEZING,
       OrderStatus.SHIPPED,
@@ -502,13 +522,16 @@ export class Order {
    * @param address Full address object (for validation)
    * @throws InvalidStateTransitionError if order is already shipped
    */
-  updateAddress(addressId: string, address: {
-    id: string;
-    recipientName: string;
-    phone: string;
-    region: { province: string; city: string; district?: string };
-    detail: string;
-  }): void {
+  updateAddress(
+    addressId: string,
+    address: {
+      id: string;
+      recipientName: string;
+      phone: string;
+      region: { province: string; city: string; district?: string };
+      detail: string;
+    },
+  ): void {
     // Cannot change address after shipping
     if (
       this.status === OrderStatus.SHIPPED ||
@@ -516,12 +539,17 @@ export class Order {
       this.status === OrderStatus.CANCELLED
     ) {
       throw new InvalidStateTransitionError(
-        `Cannot update address for order in status: ${this.status}`
+        `Cannot update address for order in status: ${this.status}`,
       );
     }
 
     // Validate address data
-    if (!address.recipientName || !address.phone || !address.region || !address.detail) {
+    if (
+      !address.recipientName ||
+      !address.phone ||
+      !address.region ||
+      !address.detail
+    ) {
       throw new ValidationError('Address information is incomplete');
     }
 
@@ -549,14 +577,16 @@ export class Order {
       this.status === OrderStatus.CANCELLED
     ) {
       throw new InvalidStateTransitionError(
-        `Cannot update target production date for order in status: ${this.status}`
+        `Cannot update target production date for order in status: ${this.status}`,
       );
     }
 
     // IMPORTANT: Save original target date BEFORE first update
     // This must happen before validation, so we can use the original date as the baseline
     if (!this.originalTargetProductionDate && this.targetProductionDate) {
-      (this as any).originalTargetProductionDate = new Date(this.targetProductionDate);
+      (this as any).originalTargetProductionDate = new Date(
+        this.targetProductionDate,
+      );
     }
 
     // Validate date is not in the past (compared to ORIGINAL target date)
@@ -572,7 +602,7 @@ export class Order {
 
       if (newDateOnly < baseDateOnly) {
         throw new ValidationError(
-          'Target production date cannot be earlier than the original target date'
+          'Target production date cannot be earlier than the original target date',
         );
       }
     }
@@ -580,4 +610,3 @@ export class Order {
     this.targetProductionDate = newDate;
   }
 }
-

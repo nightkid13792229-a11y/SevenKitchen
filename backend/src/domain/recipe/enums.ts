@@ -32,4 +32,3 @@ export enum NutritionStandard {
   FEDIAF_2024 = 'FEDIAF_2024',
   AAFCO_2022 = 'AAFCO_2022',
 }
-

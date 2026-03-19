@@ -12,8 +12,8 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
-} from '@nestjs/common'
-import { FileInterceptor } from '@nestjs/platform-express'
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiOperation,
@@ -21,10 +21,10 @@ import {
   ApiSecurity,
   ApiConsumes,
   ApiBody,
-} from '@nestjs/swagger'
-import { TencentCosService } from '../../infrastructure/services/tencent-cos.service'
-import { ApiResponseDto } from '../dto/common/response.dto'
-import { AuthGuard } from '../auth'
+} from '@nestjs/swagger';
+import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
+import { ApiResponseDto } from '../dto/common/response.dto';
+import { AuthGuard } from '../auth';
 
 @ApiTags('Health Uploads')
 @Controller('api/v1/health')
@@ -57,28 +57,40 @@ export class HealthUploadController {
   @UseInterceptors(FileInterceptor('file'))
   async uploadHealthImage(@UploadedFile() file: Express.Multer.File) {
     if (!file) {
-      throw new BadRequestException('No file uploaded')
+      throw new BadRequestException('No file uploaded');
     }
 
     // Validate file size (10MB max)
-    const maxSize = 10 * 1024 * 1024
+    const maxSize = 10 * 1024 * 1024;
     if (file.size > maxSize) {
-      throw new BadRequestException('File size exceeds 10MB limit')
+      throw new BadRequestException('File size exceeds 10MB limit');
     }
 
     // Validate file type (images + PDF)
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf']
+    const allowedTypes = [
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'application/pdf',
+    ];
     if (!allowedTypes.includes(file.mimetype)) {
-      throw new BadRequestException('Invalid file type. Only JPG, PNG, GIF, WEBP, and PDF are allowed')
+      throw new BadRequestException(
+        'Invalid file type. Only JPG, PNG, GIF, WEBP, and PDF are allowed',
+      );
     }
 
     try {
-      const result = await this.cosService.uploadImage(file, file.originalname, 'allergy-records')
+      const result = await this.cosService.uploadImage(
+        file,
+        file.originalname,
+        'allergy-records',
+      );
 
-      return ApiResponseDto.success(result)
+      return ApiResponseDto.success(result);
     } catch (error) {
-      console.error('[HealthUpload] Upload failed:', error)
-      throw new BadRequestException('Failed to upload file')
+      console.error('[HealthUpload] Upload failed:', error);
+      throw new BadRequestException('Failed to upload file');
     }
   }
 
@@ -102,19 +114,24 @@ export class HealthUploadController {
     status: 200,
     description: '文件删除成功',
   })
-  async deleteAllergyAttachment(@Body() dto: { key: string }): Promise<ApiResponseDto<any>> {
+  async deleteAllergyAttachment(
+    @Body() dto: { key: string },
+  ): Promise<ApiResponseDto<any>> {
     if (!dto.key) {
-      throw new BadRequestException('缺少文件Key')
+      throw new BadRequestException('缺少文件Key');
     }
 
-    console.log('[HealthUpload] Deleting allergy attachment:', dto.key)
+    console.log('[HealthUpload] Deleting allergy attachment:', dto.key);
 
     try {
-      await this.cosService.deleteImage(dto.key)
-      return ApiResponseDto.success(null, '删除成功')
+      await this.cosService.deleteImage(dto.key);
+      return ApiResponseDto.success(null, '删除成功');
     } catch (error) {
-      console.error('[HealthUpload] Failed to delete allergy attachment:', error)
-      throw new BadRequestException('删除失败，请重试')
+      console.error(
+        '[HealthUpload] Failed to delete allergy attachment:',
+        error,
+      );
+      throw new BadRequestException('删除失败，请重试');
     }
   }
 }

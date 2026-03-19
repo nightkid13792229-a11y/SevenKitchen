@@ -106,9 +106,7 @@ export function validateMixedBreedDog(
   const isMixedBreed = dog.breedId === MIXED_BREED_VIRTUAL_ID;
 
   if (isMixedBreed && !dog.sizeClassOverride) {
-    throw new Error(
-      '混血犬必须选择体型分类。请在系统中选择体型分类。'
-    );
+    throw new Error('混血犬必须选择体型分类。请在系统中选择体型分类。');
   }
 }
 
@@ -307,7 +305,10 @@ function getBcsAdjustment(bcsScore: number): number {
   const clampedBcs = Math.max(1, Math.min(9, bcsScore));
 
   // Ideal body condition (BCS 4-5)
-  if (clampedBcs >= BCS_PARAMS.IDEAL_LOW && clampedBcs <= BCS_PARAMS.IDEAL_HIGH) {
+  if (
+    clampedBcs >= BCS_PARAMS.IDEAL_LOW &&
+    clampedBcs <= BCS_PARAMS.IDEAL_HIGH
+  ) {
     return 1.0;
   }
 
@@ -345,10 +346,7 @@ export function calculateRER(weightKg: number): number {
  * Calculate Total DER (Daily Energy Requirement)
  * Based on docs/07_Core_Architecture.md Section 3.1.5 Function A
  */
-export function calculateTotalDer(
-  dog: Dog,
-  breed?: DogBreed | null,
-): number {
+export function calculateTotalDer(dog: Dog, breed?: DogBreed | null): number {
   const ageMonths = calculateAgeMonths(dog.birthday);
   const sizeClass = determineSizeClass(dog, breed);
 
@@ -551,7 +549,10 @@ export function calculateDogEnergy(
     }
 
     // Get calculation details with adjusted factor
-    const { adjustedFactor, bcsCoeff } = calculateTotalDerWithDetails(dog, breed);
+    const { adjustedFactor, bcsCoeff } = calculateTotalDerWithDetails(
+      dog,
+      breed,
+    );
 
     // Get treat percentage
     let treatPercentage: number | undefined;
@@ -582,5 +583,3 @@ export function calculateDogEnergy(
 
   return result;
 }
-
-

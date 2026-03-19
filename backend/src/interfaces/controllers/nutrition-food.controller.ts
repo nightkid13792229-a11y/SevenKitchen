@@ -145,9 +145,7 @@ export class NutritionFoodController {
   @ApiParam({ name: 'id', description: '营养原料ID' })
   @ApiResponse({ status: 200, description: '删除成功' })
   @ApiResponse({ status: 404, description: '营养原料不存在' })
-  async remove(
-    @Param('id') id: string,
-  ): Promise<ApiResponseDto<null>> {
+  async remove(@Param('id') id: string): Promise<ApiResponseDto<null>> {
     try {
       await this.nutritionFoodService.remove(id);
       return new ApiResponseDto(0, '删除成功', null);
@@ -220,7 +218,8 @@ export class NutritionFoodController {
   @ApiResponse({ status: 201, description: '导入成功' })
   @ApiResponse({ status: 400, description: '参数错误' })
   async importFromUSDA(
-    @Body() body: { fdcId: string; name: string; category: NutritionFoodCategory },
+    @Body()
+    body: { fdcId: string; name: string; category: NutritionFoodCategory },
     @CurrentUser() user?: RequestUser,
   ): Promise<ApiResponseDto<NutritionFoodResponseDto | null>> {
     try {

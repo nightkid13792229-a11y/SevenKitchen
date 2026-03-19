@@ -11,10 +11,17 @@ export class AdminOrderStatsDto {
   @ApiProperty({ description: 'Orders pending payment', example: 10 })
   pendingPayment!: number;
 
-  @ApiProperty({ description: 'Paid orders waiting for production', example: 20 })
+  @ApiProperty({
+    description: 'Paid orders waiting for production',
+    example: 20,
+  })
   paid!: number;
 
-  @ApiProperty({ description: 'Orders in production (includes scheduling, cooking, packaging)', example: 15 })
+  @ApiProperty({
+    description:
+      'Orders in production (includes scheduling, cooking, packaging)',
+    example: 15,
+  })
   inProduction!: number;
 
   @ApiProperty({ description: 'Shipped orders', example: 30 })

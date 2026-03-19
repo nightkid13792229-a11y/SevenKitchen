@@ -22,4 +22,3 @@ export interface ShippingTemplateRepository {
    */
   save(template: ShippingTemplate): Promise<ShippingTemplate>;
 }
-

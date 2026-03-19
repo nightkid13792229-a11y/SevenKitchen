@@ -93,5 +93,3 @@ export const SIZE_CLASS_SENIOR_THRESHOLDS = {
   LARGE: 8,
   GIANT: 7,
 } as const;
-
-

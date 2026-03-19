@@ -3,7 +3,11 @@
  * DIY制作单存储服务（用于保存、查询制作单）
  */
 
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import {
   CreateDIYSheetDto,
@@ -72,10 +76,7 @@ export class DIYSheetStorageService {
   /**
    * 根据ID获取制作单
    */
-  async findOne(
-    id: string,
-    userId: string,
-  ): Promise<DIYSheetResponseDto> {
+  async findOne(id: string, userId: string): Promise<DIYSheetResponseDto> {
     const sheet = await this.prisma.dIYSheet.findFirst({
       where: { id, userId },
     });

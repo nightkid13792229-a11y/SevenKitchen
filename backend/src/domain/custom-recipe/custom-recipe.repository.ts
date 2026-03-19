@@ -57,16 +57,27 @@ export interface ICustomRecipeRepository {
   createOrder(data: CreateCustomRecipeOrderDTO): Promise<any>;
   getOrderById(id: string): Promise<any | null>;
   getOrderByOrderId(orderId: string): Promise<any | null>;
-  getOrders(query: CustomRecipeOrderQuery): Promise<{ orders: any[]; total: number }>;
+  getOrders(
+    query: CustomRecipeOrderQuery,
+  ): Promise<{ orders: any[]; total: number }>;
   updateOrder(id: string, data: UpdateCustomRecipeOrderDTO): Promise<any>;
   updateOrderStatus(id: string, status: CustomRecipeStatus): Promise<void>;
   getStatistics(filters?: any): Promise<CustomRecipeStatistics>;
 
   // Schedule operations
   getSchedule(date: Date): Promise<CustomRecipeScheduleInfo | null>;
-  getScheduleRange(dateFrom: Date, dateTo: Date): Promise<CustomRecipeScheduleInfo[]>;
-  createSchedule(date: Date, capacity: number): Promise<CustomRecipeScheduleInfo>;
-  updateSchedule(date: Date, data: Partial<CustomRecipeScheduleInfo>): Promise<void>;
+  getScheduleRange(
+    dateFrom: Date,
+    dateTo: Date,
+  ): Promise<CustomRecipeScheduleInfo[]>;
+  createSchedule(
+    date: Date,
+    capacity: number,
+  ): Promise<CustomRecipeScheduleInfo>;
+  updateSchedule(
+    date: Date,
+    data: Partial<CustomRecipeScheduleInfo>,
+  ): Promise<void>;
   checkAvailability(date: Date): Promise<boolean>;
   bookSlot(date: Date): Promise<void>;
   releaseSlot(date: Date): Promise<void>;
@@ -77,5 +88,9 @@ export interface ICustomRecipeRepository {
   deleteAttachment(id: string): Promise<void>;
 
   // Health sync operations
-  syncToHealthProfile(dogId: string, allergies: string[], medicalConditions: string[]): Promise<void>;
+  syncToHealthProfile(
+    dogId: string,
+    allergies: string[],
+    medicalConditions: string[],
+  ): Promise<void>;
 }

@@ -3,7 +3,12 @@
  * Ensures only users with ADMIN role can access the route
  */
 
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
 import { UserRole } from '@prisma/client';
 
 @Injectable()

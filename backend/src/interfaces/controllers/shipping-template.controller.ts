@@ -3,10 +3,22 @@
  * Admin-only endpoint for managing shipping templates
  */
 
-import { Controller, Get, Post, Put, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  UseGuards,
+} from '@nestjs/common';
 import { PrismaShippingTemplateRepository } from '../../infrastructure/repositories/prisma-shipping-template.repository';
 import { ShippingFeeService } from '../../domain/shipping/shipping-fee.service';
-import { CreateShippingTemplateDto, UpdateShippingTemplateDto } from '../dto/shipping-template.dto';
+import {
+  CreateShippingTemplateDto,
+  UpdateShippingTemplateDto,
+} from '../dto/shipping-template.dto';
 import { AuthGuard } from '../auth/auth.guard';
 import { ApiResponseDto } from '../dto/common/response.dto';
 
@@ -63,7 +75,10 @@ export class ShippingTemplateController {
    * PUT /api/v1/admin/shipping-templates/:id
    */
   @Put(':id')
-  async updateTemplate(@Param('id') id: string, @Body() dto: UpdateShippingTemplateDto) {
+  async updateTemplate(
+    @Param('id') id: string,
+    @Body() dto: UpdateShippingTemplateDto,
+  ) {
     const existing = await this.shippingTemplateRepo.findById(id);
     if (!existing) {
       return ApiResponseDto.error(404, 'Shipping template not found');

@@ -10,7 +10,10 @@ export class LabelController {
   constructor(private readonly labelService: LabelService) {}
 
   @Post('generate-image')
-  @ApiOperation({ summary: '生成标签图片', description: '根据标签数据生成PNG图片，返回base64编码' })
+  @ApiOperation({
+    summary: '生成标签图片',
+    description: '根据标签数据生成PNG图片，返回base64编码',
+  })
   @ApiResponse({
     status: 201,
     description: '成功生成标签图片',
@@ -24,7 +27,8 @@ export class LabelController {
           properties: {
             imageBase64: {
               type: 'string',
-              description: 'PNG图片的base64编码（不含data:image/png;base64,前缀）',
+              description:
+                'PNG图片的base64编码（不含data:image/png;base64,前缀）',
               example: 'iVBORw0KGgoAAAANSUhEUgAA...',
             },
           },
@@ -33,7 +37,9 @@ export class LabelController {
     },
   })
   @ApiResponse({ status: 400, description: '请求参数无效' })
-  generateImage(@Body() labelData: LabelDataDto): ApiResponseDto<{ imageBase64: string }> {
+  generateImage(
+    @Body() labelData: LabelDataDto,
+  ): ApiResponseDto<{ imageBase64: string }> {
     const imageBase64 = this.labelService.generateLabelImage(labelData);
     return ApiResponseDto.success({ imageBase64 });
   }

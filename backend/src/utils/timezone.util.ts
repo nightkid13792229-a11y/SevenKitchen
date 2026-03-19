@@ -41,18 +41,14 @@ export class TimezoneUtil {
 
     if (hour >= 0 && hour < 6) {
       // 0-6点：当日制作（返回UTC日期）
-      return new Date(Date.UTC(
-        now.getUTCFullYear(),
-        now.getUTCMonth(),
-        now.getUTCDate()
-      ));
+      return new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+      );
     } else {
       // 6-24点：次日制作（返回UTC日期）
-      return new Date(Date.UTC(
-        now.getUTCFullYear(),
-        now.getUTCMonth(),
-        now.getUTCDate() + 1
-      ));
+      return new Date(
+        Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1),
+      );
     }
   }
 

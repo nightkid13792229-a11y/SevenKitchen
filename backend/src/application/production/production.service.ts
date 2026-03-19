@@ -3,7 +3,12 @@
  * Phase 8.10: Production & Packaging MVP
  */
 
-import { Injectable, Inject, BadRequestException, Logger } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  BadRequestException,
+  Logger,
+} from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import type { ProductionBatchRepository } from '../../domain/production/production.repository';
 import type { OrderRepository } from '../../domain/order/order.repository';
@@ -11,7 +16,10 @@ import type { OrderStatusHistoryRepository } from '../../domain/order/order-stat
 import { ProductionBatch, PackagingUnit } from '../../domain/production';
 import { ProductionBatchStatus } from '../../domain/production/enums';
 import { OrderStatus } from '../../domain';
-import { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY } from '../order/order.service';
+import {
+  ORDER_REPOSITORY,
+  ORDER_STATUS_HISTORY_REPOSITORY,
+} from '../order/order.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import { DateUtil } from '../../utils/date.util';
 
@@ -81,11 +89,12 @@ export class ProductionService {
       const queryStartDate = new Date(`${dto.productionDate}T00:00:00`);
       const queryEndDate = new Date(`${dto.productionDate}T23:59:59.999`);
 
-      const { list: purchasingOrders } = await this.orderRepository.findByTargetProductionDateRange({
-        status: OrderStatus.PURCHASING,
-        startDate: queryStartDate,
-        endDate: queryEndDate,
-      });
+      const { list: purchasingOrders } =
+        await this.orderRepository.findByTargetProductionDateRange({
+          status: OrderStatus.PURCHASING,
+          startDate: queryStartDate,
+          endDate: queryEndDate,
+        });
 
       orders = purchasingOrders;
     }
@@ -97,7 +106,9 @@ export class ProductionService {
     }
 
     // Validate all orders are PURCHASING
-    const invalidOrders = orders.filter((o) => o.status !== OrderStatus.PURCHASING);
+    const invalidOrders = orders.filter(
+      (o) => o.status !== OrderStatus.PURCHASING,
+    );
     if (invalidOrders.length > 0) {
       throw new BadRequestException(
         `Cannot include non-PURCHASING orders in production batch. Found: ${invalidOrders.map((o) => `${o.id}:${o.status}`).join(', ')}`,
@@ -267,7 +278,8 @@ export class ProductionService {
             group.itemQueue.shift();
 
             // 记录完整分配
-            rawMaterialAllocations[nextItem.orderItemId] = nextItem.rawWeightNeededG;
+            rawMaterialAllocations[nextItem.orderItemId] =
+              nextItem.rawWeightNeededG;
             allocatedRawWeight += nextItem.rawWeightNeededG;
 
             this.logger.debug(
@@ -360,7 +372,7 @@ export class ProductionService {
 
     for (const unit of packagingUnits) {
       const allocations = (unit as any).rawMaterialAllocations;
-      const totalRawWeight = (Object.values(allocations) as number[]).reduce(
+      const totalRawWeight = Object.values(allocations).reduce(
         (sum: number, weight: number) => sum + weight,
         0,
       );
@@ -396,21 +408,30 @@ export class ProductionService {
     // Phase 8.11: Save batch and allocate OrderItems
     // The repository's save method will create the batch, then we allocate items
     try {
-      this.logger.debug(`[ProductionService] Saving batch ${batchId} with ${batch.packagingUnits.length} packaging units`);
+      this.logger.debug(
+        `[ProductionService] Saving batch ${batchId} with ${batch.packagingUnits.length} packaging units`,
+      );
       const savedBatch = await this.productionRepository.save(batch);
-      this.logger.debug(`[ProductionService] Batch ${batchId} saved successfully`);
+      this.logger.debug(
+        `[ProductionService] Batch ${batchId} saved successfully`,
+      );
 
       // Allocate OrderItems to this batch (atomic update)
-      this.logger.debug(`[ProductionService] Allocating ${allOrderItemIds.length} order items to batch ${batchId}`);
+      this.logger.debug(
+        `[ProductionService] Allocating ${allOrderItemIds.length} order items to batch ${batchId}`,
+      );
       const allocatedCount = await this.productionRepository.allocateOrderItems(
         allOrderItemIds,
         batchId,
       );
-      this.logger.debug(`[ProductionService] Allocated ${allocatedCount} order items to batch ${batchId}`);
+      this.logger.debug(
+        `[ProductionService] Allocated ${allocatedCount} order items to batch ${batchId}`,
+      );
 
       // Verify allocation succeeded (all items should be allocated)
       // Ensure allocatedCount is a number before comparison
-      const allocatedCountNum = typeof allocatedCount === 'number' ? allocatedCount : 0;
+      const allocatedCountNum =
+        typeof allocatedCount === 'number' ? allocatedCount : 0;
       if (allocatedCountNum !== allOrderItemIds.length) {
         this.logger.warn(
           `Only ${allocatedCountNum} of ${allOrderItemIds.length} OrderItems were allocated. Possible concurrent allocation conflict.`,
@@ -487,7 +508,10 @@ export class ProductionService {
 
       return savedBatch;
     } catch (error) {
-      this.logger.error(`[ProductionService] Error saving batch ${batchId}:`, error);
+      this.logger.error(
+        `[ProductionService] Error saving batch ${batchId}:`,
+        error,
+      );
       if (error instanceof Error) {
         this.logger.error(`[ProductionService] Error stack:`, error.stack);
       }
@@ -591,7 +615,10 @@ export class ProductionService {
         }
 
         // Match by version if specified
-        if (recipeVersion !== undefined && unitRecipeVersion !== recipeVersion) {
+        if (
+          recipeVersion !== undefined &&
+          unitRecipeVersion !== recipeVersion
+        ) {
           return false;
         }
 
@@ -608,7 +635,8 @@ export class ProductionService {
         const sourceOrderItemIds = unit.sourceOrderItemIds || [];
         for (const orderItemId of sourceOrderItemIds) {
           // Find the order item details
-          const orderItem = await this.orderRepository.findOrderItemById(orderItemId);
+          const orderItem =
+            await this.orderRepository.findOrderItemById(orderItemId);
           if (!orderItem) {
             this.logger.warn(`OrderItem ${orderItemId} not found`);
             continue;
@@ -617,7 +645,9 @@ export class ProductionService {
           // Get dog name
           let dogName = '未知';
           if (orderItem.dogId) {
-            const order = await this.orderRepository.findById(orderItem.orderId);
+            const order = await this.orderRepository.findById(
+              orderItem.orderId,
+            );
             if (order?.dogId) {
               const dog = await this.orderRepository.findDogById(order.dogId);
               if (dog) {
@@ -642,7 +672,10 @@ export class ProductionService {
       if (orderItems.length > 0) {
         matchingBatches.push({
           batchId: batch.id,
-          batchCode: this.generateBatchCode(matchingUnits[0], matchingBatches.length),
+          batchCode: this.generateBatchCode(
+            matchingUnits[0],
+            matchingBatches.length,
+          ),
           productionDate: batch.productionDate.toISOString().split('T')[0],
           isCurrentBatch: false, // Will be determined by caller
           orderItems,
@@ -709,7 +742,8 @@ export class ProductionService {
     }
 
     // Get all production batches for this date
-    const batches = await this.productionRepository.findByProductionDate(productionDate);
+    const batches =
+      await this.productionRepository.findByProductionDate(productionDate);
 
     if (batches.length === 0) {
       return {
@@ -745,16 +779,18 @@ export class ProductionService {
 
         // Calculate pot numbers
         const unitsForThisRecipe = batch.packagingUnits.filter(
-          (u) => (u.recipeSnapshot as any).id === recipeId
+          (u) => (u.recipeSnapshot as any).id === recipeId,
         );
-        const potNumber = unitsForThisRecipe.findIndex((u) => u.id === unit.id) + 1;
+        const potNumber =
+          unitsForThisRecipe.findIndex((u) => u.id === unit.id) + 1;
         const totalPots = unitsForThisRecipe.length;
 
         // Collect order items
         const orderItems = [];
         const sourceOrderItemIds = unit.sourceOrderItemIds || [];
         for (const orderItemId of sourceOrderItemIds) {
-          const orderItem = await this.orderRepository.findOrderItemById(orderItemId);
+          const orderItem =
+            await this.orderRepository.findOrderItemById(orderItemId);
           if (!orderItem) {
             continue;
           }
@@ -804,9 +840,7 @@ export class ProductionService {
   /**
    * List production batches by production date
    */
-  async listProductionBatchesByDate(
-    date: string,
-  ): Promise<ProductionBatch[]> {
+  async listProductionBatchesByDate(date: string): Promise<ProductionBatch[]> {
     // 使用中午12点避免时区转换导致日期变化
     const productionDate = new Date(`${date}T12:00:00`);
     if (isNaN(productionDate.getTime())) {
@@ -839,7 +873,8 @@ export class ProductionService {
     // Phase 8.14: Check completion using database query, not domain object hydration
     // This ensures we check the actual database state, not relying on whether
     // packagingUnits array was properly hydrated in the domain object
-    const allUnitsCompleted = await this.productionRepository.areAllUnitsCompleted(batchId);
+    const allUnitsCompleted =
+      await this.productionRepository.areAllUnitsCompleted(batchId);
     if (!allUnitsCompleted) {
       this.logger.debug(
         `Batch ${batchId} not ready for completion: not all units are COMPLETED (checked via database)`,
@@ -855,7 +890,9 @@ export class ProductionService {
     // This ensures we have the complete list even if the original batch object wasn't fully hydrated
     const reloadedBatch = await this.productionRepository.findById(batchId);
     if (!reloadedBatch) {
-      this.logger.error(`Failed to reload batch ${batchId} after completion transition`);
+      this.logger.error(
+        `Failed to reload batch ${batchId} after completion transition`,
+      );
       return false;
     }
 
@@ -886,17 +923,14 @@ export class ProductionService {
     // productionBatchId check is secondary validation but not required if item ID matches.
     const orderIds = new Set<string>();
     // Phase 9: Simplified status check - only check PAID and IN_PRODUCTION
-    const statusesToCheck = [
-      OrderStatus.IN_PRODUCTION,
-      OrderStatus.PAID,
-    ];
+    const statusesToCheck = [OrderStatus.IN_PRODUCTION, OrderStatus.PAID];
 
     for (const status of statusesToCheck) {
       const orders = await this.orderRepository.findByStatus(status);
       this.logger.debug(
         `Found ${orders.length} orders with status ${status} to check for batch ${batchId}`,
       );
-      
+
       for (const order of orders) {
         // Check if any of this order's items are in the batch
         // Primary match: item ID must be in sourceOrderItemIds
@@ -908,17 +942,20 @@ export class ProductionService {
           }
           // If productionBatchId is set, it must match batchId (safety check)
           // If productionBatchId is null, still match by item ID (allocation may not be persisted yet)
-          return item.productionBatchId === null || item.productionBatchId === batchId;
+          return (
+            item.productionBatchId === null ||
+            item.productionBatchId === batchId
+          );
         });
-        
+
         if (matchingItems.length > 0) {
           orderIds.add(order.id);
           this.logger.log(
-            `Found order ${order.id} (status: ${order.status}) linked to batch ${batchId} via ${matchingItems.length} item(s): ${matchingItems.map(i => i.id).join(', ')}`,
+            `Found order ${order.id} (status: ${order.status}) linked to batch ${batchId} via ${matchingItems.length} item(s): ${matchingItems.map((i) => i.id).join(', ')}`,
           );
         } else {
           // Debug: log why order was not matched
-          const orderItemIdsInOrder = order.items.map(i => i.id);
+          const orderItemIdsInOrder = order.items.map((i) => i.id);
           this.logger.debug(
             `Order ${order.id} not matched: order has items [${orderItemIdsInOrder.join(', ')}], batch expects [${orderItemIds.join(', ')}]`,
           );
@@ -1018,7 +1055,9 @@ export class ProductionService {
     }
 
     // 3. Get associated order item IDs from all packaging units
-    const orderItemIds = batch.packagingUnits.flatMap((unit) => unit.sourceOrderItemIds);
+    const orderItemIds = batch.packagingUnits.flatMap(
+      (unit) => unit.sourceOrderItemIds,
+    );
 
     if (orderItemIds.length === 0) {
       this.logger.warn(`Batch ${batchId} has no associated order items`);
@@ -1028,7 +1067,8 @@ export class ProductionService {
     const uniqueOrderIds = new Set<string>();
     for (const orderItemId of orderItemIds) {
       // Query order item to get orderId
-      const orderItem = await this.orderRepository.findOrderItemById(orderItemId);
+      const orderItem =
+        await this.orderRepository.findOrderItemById(orderItemId);
       if (orderItem) {
         uniqueOrderIds.add(orderItem.orderId);
       }
@@ -1091,9 +1131,7 @@ export class ProductionService {
   ): void {
     // 1. 检查：是否需要优化？
     if (units.length < 2) {
-      this.logger.warn(
-        `[optimizePotWeights] 只有1锅，无法重新分配`,
-      );
+      this.logger.warn(`[optimizePotWeights] 只有1锅，无法重新分配`);
       return;
     }
 
@@ -1256,5 +1294,3 @@ export class ProductionService {
     );
   }
 }
-
-

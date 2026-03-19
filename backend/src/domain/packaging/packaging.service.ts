@@ -21,19 +21,19 @@ export interface PackagingCost {
   breakdown: {
     perPackConsumables: {
       vacuumBagName: string;
-      vacuumBagSpec: string;  // 真空袋规格
+      vacuumBagSpec: string; // 真空袋规格
       labelName: string;
-      labelSpec: string;      // 标签规格
-      vacuumBagCostPerPack: number;  // 真空袋每袋成本
-      labelCostPerPack: number;     // 标签每袋成本
-      costPerPack: number;          // 每袋总成本
+      labelSpec: string; // 标签规格
+      vacuumBagCostPerPack: number; // 真空袋每袋成本
+      labelCostPerPack: number; // 标签每袋成本
+      costPerPack: number; // 每袋总成本
       weightPerPack: number;
     };
     shippingContainers: Array<{
       boxName: string;
-      boxSpec: string;         // 泡沫箱规格
+      boxSpec: string; // 泡沫箱规格
       thermalBagName: string;
-      thermalBagSpec: string;  // 保温袋规格
+      thermalBagSpec: string; // 保温袋规格
       icePacks: number;
       cost: number;
       weight: number;
@@ -49,7 +49,8 @@ interface GlobalConfig {
 @Injectable()
 export class PackagingService {
   constructor(
-    @Inject(INGREDIENT_REPOSITORY) private readonly ingredientRepo: IngredientRepository,
+    @Inject(INGREDIENT_REPOSITORY)
+    private readonly ingredientRepo: IngredientRepository,
   ) {}
 
   /**
@@ -62,9 +63,11 @@ export class PackagingService {
    */
   async selectVacuumBag(packSpecG: number): Promise<Ingredient> {
     // Query all packaging materials and filter for vacuum bags
-    const allPackaging = await this.ingredientRepo.findByType(IngredientType.PACKAGING);
+    const allPackaging = await this.ingredientRepo.findByType(
+      IngredientType.PACKAGING,
+    );
     const bags = allPackaging
-      .filter(item => item.name.includes('食品真空袋'))
+      .filter((item) => item.name.includes('食品真空袋'))
       .sort((a, b) => (a.weightG || 0) - (b.weightG || 0));
 
     if (bags.length < 4) {
@@ -88,9 +91,11 @@ export class PackagingService {
     foodWeightG: number,
   ): Promise<ShippingContainer[]> {
     // Query all packaging materials and filter for foam boxes
-    const allPackaging = await this.ingredientRepo.findByType(IngredientType.PACKAGING);
+    const allPackaging = await this.ingredientRepo.findByType(
+      IngredientType.PACKAGING,
+    );
     const boxes = allPackaging
-      .filter(item => item.name.includes('泡沫箱'))
+      .filter((item) => item.name.includes('泡沫箱'))
       .sort((a, b) => (a.maxCapacityG || 0) - (b.maxCapacityG || 0)); // Sort by capacity ascending (smallest first)
 
     if (boxes.length === 0) {
@@ -98,7 +103,9 @@ export class PackagingService {
     }
 
     // Query all thermal bags for later matching
-    const thermalBags = allPackaging.filter(item => item.name.includes('铝箔保温袋'));
+    const thermalBags = allPackaging.filter((item) =>
+      item.name.includes('铝箔保温袋'),
+    );
 
     const containers: ShippingContainer[] = [];
     let remainingWeight = foodWeightG;
@@ -106,29 +113,34 @@ export class PackagingService {
 
     console.log('[PackagingService] Starting bin packing algorithm:', {
       foodWeightG,
-      boxesAvailable: boxes.map(b => ({
+      boxesAvailable: boxes.map((b) => ({
         name: b.productModel,
-        capacityG: b.maxCapacityG
-      }))
+        capacityG: b.maxCapacityG,
+      })),
     });
 
     while (remainingWeight > 0) {
       iteration++;
-      console.log(`[PackagingService] Iteration ${iteration}: remainingWeight = ${remainingWeight}g`);
+      console.log(
+        `[PackagingService] Iteration ${iteration}: remainingWeight = ${remainingWeight}g`,
+      );
 
       // Greedy strategy: select smallest box that can fit remaining weight
       const selectedBox =
-        boxes.find((b) => b.maxCapacityG && b.maxCapacityG >= remainingWeight) ||
-        boxes[boxes.length - 1]; // Fallback: use largest box
+        boxes.find(
+          (b) => b.maxCapacityG && b.maxCapacityG >= remainingWeight,
+        ) || boxes[boxes.length - 1]; // Fallback: use largest box
 
-      console.log(`[PackagingService] Selected box: ${selectedBox.productModel} (capacity: ${selectedBox.maxCapacityG}g)`);
+      console.log(
+        `[PackagingService] Selected box: ${selectedBox.productModel} (capacity: ${selectedBox.maxCapacityG}g)`,
+      );
 
       // Find matching thermal bag (extract box number: "3号箱" -> "3")
       const boxNumMatch = selectedBox.productModel?.match(/(\d+)号/);
       const boxNum = boxNumMatch ? boxNumMatch[1] : '';
 
-      const bag = thermalBags.find(b =>
-        b.productModel?.includes(`适配${boxNum}号`)
+      const bag = thermalBags.find((b) =>
+        b.productModel?.includes(`适配${boxNum}号`),
       );
 
       if (!bag) {
@@ -160,8 +172,10 @@ export class PackagingService {
         icePacks: icePacks,
       });
 
-      remainingWeight -= (selectedBox.maxCapacityG || foodWeightG);
-      console.log(`[PackagingService] After packing: remainingWeight = ${remainingWeight}g`);
+      remainingWeight -= selectedBox.maxCapacityG || foodWeightG;
+      console.log(
+        `[PackagingService] After packing: remainingWeight = ${remainingWeight}g`,
+      );
     }
 
     return containers;
@@ -195,7 +209,8 @@ export class PackagingService {
     const vacuumBagCostPerPack = vacuumBag.getUnitCost();
     const labelCostPerPack = productLabel.getUnitCost();
     const perPackCost = vacuumBagCostPerPack + labelCostPerPack;
-    const perPackWeight = (vacuumBag.weightG || 0) + (productLabel.weightG || 0);
+    const perPackWeight =
+      (vacuumBag.weightG || 0) + (productLabel.weightG || 0);
 
     cost += totalPacks * perPackCost;
     weight += totalPacks * perPackWeight;
@@ -242,7 +257,9 @@ export class PackagingService {
 
       shippingContainersBreakdown.push({
         boxName: c.boxItem.name,
-        boxSpec: c.boxItem.maxCapacityG ? `容量${(c.boxItem.maxCapacityG / 1000).toFixed(1)}kg` : (c.boxItem.productModel || c.boxItem.name),
+        boxSpec: c.boxItem.maxCapacityG
+          ? `容量${(c.boxItem.maxCapacityG / 1000).toFixed(1)}kg`
+          : c.boxItem.productModel || c.boxItem.name,
         thermalBagName: c.thermalItem.name,
         thermalBagSpec: c.thermalItem.productModel || c.thermalItem.name,
         icePacks: c.icePacks,
@@ -258,7 +275,7 @@ export class PackagingService {
       totalFoodWeightG,
       containersCount: containers.length,
       totalIcePacks,
-      containersBreakdown: containers.map(c => ({
+      containersBreakdown: containers.map((c) => ({
         boxName: c.boxItem.name,
         boxSpec: c.boxItem.productModel,
         icePacks: c.icePacks,

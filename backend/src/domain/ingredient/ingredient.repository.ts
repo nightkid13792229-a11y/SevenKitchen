@@ -12,10 +12,7 @@ export interface IngredientRepository {
   findAll(): Promise<Ingredient[]>;
   findByType(type: IngredientType): Promise<Ingredient[]>;
   save(ingredient: Ingredient, tagIds?: string[]): Promise<Ingredient>;
-  update(
-    id: string,
-    data: Partial<any>,
-  ): Promise<Ingredient>;
+  update(id: string, data: Partial<any>): Promise<Ingredient>;
   updatePrice(
     id: string,
     pricePerPurchaseUnit: number,
@@ -24,4 +21,3 @@ export interface IngredientRepository {
   setTags(ingredientId: string, tagIds: string[]): Promise<void>;
   getTags(ingredientId: string): Promise<any[]>;
 }
-

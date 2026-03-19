@@ -97,4 +97,3 @@ export class CalcPreviewDto {
   @Min(0)
   manualTreatKcal?: number | null;
 }
-

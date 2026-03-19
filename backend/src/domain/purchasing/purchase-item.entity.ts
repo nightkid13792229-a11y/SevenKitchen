@@ -10,13 +10,13 @@ export interface PurchaseItemConstructor {
   purchaseListId: string;
   ingredientId: string;
   ingredientName: string;
-  type?: 'FOOD' | 'SUPPLEMENT' | 'PACKAGING';  // 原料类型
+  type?: 'FOOD' | 'SUPPLEMENT' | 'PACKAGING'; // 原料类型
   quantityNeeded: number;
   quantityUnit: string;
   estimatedCost: number;
   purchaseChannel?: string;
   productModel?: string;
-  displayUnit?: string;  // 显示单位标签
+  displayUnit?: string; // 显示单位标签
   notes?: string;
   createdAt?: Date;
 }
@@ -26,13 +26,13 @@ export class PurchaseItem {
   public readonly purchaseListId: string;
   public readonly ingredientId: string;
   public readonly ingredientName: string;
-  public readonly type?: 'FOOD' | 'SUPPLEMENT' | 'PACKAGING';  // 原料类型
-  public quantityNeeded: number;  // 可写，用于动态更新
+  public readonly type?: 'FOOD' | 'SUPPLEMENT' | 'PACKAGING'; // 原料类型
+  public quantityNeeded: number; // 可写，用于动态更新
   public readonly quantityUnit: string;
-  public estimatedCost: number;  // 可写，用于动态更新
+  public estimatedCost: number; // 可写，用于动态更新
   public readonly purchaseChannel?: string;
   public readonly productModel?: string;
-  public readonly displayUnit?: string;  // 显示单位标签
+  public readonly displayUnit?: string; // 显示单位标签
   public readonly notes?: string;
   public readonly createdAt: Date;
 

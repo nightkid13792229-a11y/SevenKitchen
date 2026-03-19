@@ -3,9 +3,18 @@
  * Business logic for nutrition food management
  */
 
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
-import { Prisma, NutritionFood, NutritionFoodCategory, NutritionFoodStatus } from '@prisma/client';
+import {
+  Prisma,
+  NutritionFood,
+  NutritionFoodCategory,
+  NutritionFoodStatus,
+} from '@prisma/client';
 import {
   CreateNutritionFoodDto,
   UpdateNutritionFoodDto,
@@ -110,7 +119,10 @@ export class NutritionFoodService {
   /**
    * 创建营养原料
    */
-  async create(dto: CreateNutritionFoodDto, userId?: string): Promise<NutritionFoodResponseDto> {
+  async create(
+    dto: CreateNutritionFoodDto,
+    userId?: string,
+  ): Promise<NutritionFoodResponseDto> {
     // 检查是否已存在同名原料
     const existing = await this.prisma.nutritionFood.findFirst({
       where: {
@@ -120,7 +132,9 @@ export class NutritionFoodService {
     });
 
     if (existing) {
-      throw new BadRequestException(`营养原料 "${dto.name}" 已存在于数据源 "${dto.dataSource}"`);
+      throw new BadRequestException(
+        `营养原料 "${dto.name}" 已存在于数据源 "${dto.dataSource}"`,
+      );
     }
 
     const item = await this.prisma.nutritionFood.create({
@@ -146,7 +160,10 @@ export class NutritionFoodService {
   /**
    * 更新营养原料
    */
-  async update(id: string, dto: UpdateNutritionFoodDto): Promise<NutritionFoodResponseDto> {
+  async update(
+    id: string,
+    dto: UpdateNutritionFoodDto,
+  ): Promise<NutritionFoodResponseDto> {
     const existing = await this.prisma.nutritionFood.findUnique({
       where: { id },
     });
@@ -160,7 +177,9 @@ export class NutritionFoodService {
       data: {
         ...(dto.nameEn !== undefined && { nameEn: dto.nameEn }),
         ...(dto.category !== undefined && { category: dto.category }),
-        ...(dto.nutritionData !== undefined && { nutritionData: dto.nutritionData as any }),
+        ...(dto.nutritionData !== undefined && {
+          nutritionData: dto.nutritionData as any,
+        }),
         ...(dto.notes !== undefined && { notes: dto.notes }),
       },
       include: {
@@ -332,7 +351,10 @@ export class NutritionFoodService {
   /**
    * 删除映射
    */
-  async removeMapping(nutritionFoodId: string, ingredientId: string): Promise<void> {
+  async removeMapping(
+    nutritionFoodId: string,
+    ingredientId: string,
+  ): Promise<void> {
     await this.prisma.nutritionFoodMapping.delete({
       where: {
         nutritionFoodId_ingredientId: {
@@ -358,7 +380,7 @@ export class NutritionFoodService {
         `https://api.nal.usda.gov/fdc/v1/foods/search?api_key=${apiKey}&query=${encodeURIComponent(query)}&pageSize=25&dataType=Foundation,SR Legacy`,
         {
           headers: {
-            'Accept': 'application/json',
+            Accept: 'application/json',
           },
         },
       );
@@ -369,17 +391,21 @@ export class NutritionFoodService {
 
       const data = await response.json();
 
-      return (data.foods || []).map((food: any): USDAFoodSearchResultDto => ({
-        fdcId: food.fdcId?.toString() || '',
-        description: food.description || '',
-        scientificName: food.scientificName || undefined,
-        dataType: food.dataType || '',
-        foodCategory: food.foodCategory || undefined,
-        brandOwner: food.brandOwner || undefined,
-      }));
+      return (data.foods || []).map(
+        (food: any): USDAFoodSearchResultDto => ({
+          fdcId: food.fdcId?.toString() || '',
+          description: food.description || '',
+          scientificName: food.scientificName || undefined,
+          dataType: food.dataType || '',
+          foodCategory: food.foodCategory || undefined,
+          brandOwner: food.brandOwner || undefined,
+        }),
+      );
     } catch (error) {
       console.error('USDA API error:', error);
-      throw new BadRequestException(`USDA搜索失败: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new BadRequestException(
+        `USDA搜索失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
     }
   }
 
@@ -404,7 +430,7 @@ export class NutritionFoodService {
         `https://api.nal.usda.gov/fdc/v1/food/${fdcId}?api_key=${apiKey}`,
         {
           headers: {
-            'Accept': 'application/json',
+            Accept: 'application/json',
           },
         },
       );
@@ -437,7 +463,9 @@ export class NutritionFoodService {
       return this.toResponseDto(item);
     } catch (error) {
       console.error('USDA import error:', error);
-      throw new BadRequestException(`USDA导入失败: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      throw new BadRequestException(
+        `USDA导入失败: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
     }
   }
 
@@ -449,33 +477,33 @@ export class NutritionFoodService {
 
     // USDA营养素ID映射
     const nutrientMap: Record<number, string> = {
-      1003: 'protein_g',        // Protein
-      1004: 'fat_g',            // Total lipid (fat)
-      1005: 'carbs_g',          // Carbohydrate, by difference
-      1079: 'fiber_g',          // Fiber, total dietary
-      1008: 'energy_kcal',      // Energy
-      1092: 'sodium_mg',        // Sodium, Na
-      1093: 'potassium_mg',     // Potassium, K
-      1087: 'calcium_mg',       // Calcium, Ca
-      1091: 'phosphorus_mg',    // Phosphorus, P
-      1090: 'magnesium_mg',     // Magnesium, Mg
-      1089: 'iron_mg',          // Iron, Fe
-      1095: 'zinc_mg',          // Zinc, Zn
-      1098: 'copper_mg',        // Copper, Cu
-      1102: 'manganese_mg',     // Manganese, Mn
-      1106: 'selenium_mcg',     // Selenium, Se
-      1103: 'iodine_mcg',       // Iodine, I
-      1104: 'vitamin_a_iu',     // Vitamin A, IU
-      1114: 'vitamin_d3_iu',    // Vitamin D (D2 + D3)
-      1109: 'vitamin_e_iu',     // Vitamin E (alpha-tocopherol)
-      1165: 'vitamin_b1_mg',    // Thiamin
-      1166: 'vitamin_b2_mg',    // Riboflavin
-      1167: 'vitamin_b3_mg',    // Niacin
-      1170: 'vitamin_b5_mg',    // Pantothenic acid
-      1175: 'vitamin_b6_mg',    // Vitamin B-6
-      1178: 'vitamin_b12_mcg',  // Vitamin B-12
-      1213: 'folate_mcg',       // Folate, total
-      1180: 'choline_mg',       // Choline, total
+      1003: 'protein_g', // Protein
+      1004: 'fat_g', // Total lipid (fat)
+      1005: 'carbs_g', // Carbohydrate, by difference
+      1079: 'fiber_g', // Fiber, total dietary
+      1008: 'energy_kcal', // Energy
+      1092: 'sodium_mg', // Sodium, Na
+      1093: 'potassium_mg', // Potassium, K
+      1087: 'calcium_mg', // Calcium, Ca
+      1091: 'phosphorus_mg', // Phosphorus, P
+      1090: 'magnesium_mg', // Magnesium, Mg
+      1089: 'iron_mg', // Iron, Fe
+      1095: 'zinc_mg', // Zinc, Zn
+      1098: 'copper_mg', // Copper, Cu
+      1102: 'manganese_mg', // Manganese, Mn
+      1106: 'selenium_mcg', // Selenium, Se
+      1103: 'iodine_mcg', // Iodine, I
+      1104: 'vitamin_a_iu', // Vitamin A, IU
+      1114: 'vitamin_d3_iu', // Vitamin D (D2 + D3)
+      1109: 'vitamin_e_iu', // Vitamin E (alpha-tocopherol)
+      1165: 'vitamin_b1_mg', // Thiamin
+      1166: 'vitamin_b2_mg', // Riboflavin
+      1167: 'vitamin_b3_mg', // Niacin
+      1170: 'vitamin_b5_mg', // Pantothenic acid
+      1175: 'vitamin_b6_mg', // Vitamin B-6
+      1178: 'vitamin_b12_mcg', // Vitamin B-12
+      1213: 'folate_mcg', // Folate, total
+      1180: 'choline_mg', // Choline, total
     };
 
     for (const nutrient of nutrients) {
@@ -510,15 +538,17 @@ export class NutritionFoodService {
       verifiedAt: item.verifiedAt ?? undefined,
       createdAt: item.createdAt,
       updatedAt: item.updatedAt,
-      mappings: item.mappings?.map((m: any): NutritionFoodMappingResponseDto => ({
-        id: m.id,
-        nutritionFoodId: m.nutritionFoodId,
-        ingredientId: m.ingredientId,
-        yieldRate: m.yieldRate,
-        isPrimary: m.isPrimary,
-        notes: m.notes ?? undefined,
-        ingredient: m.ingredient,
-      })),
+      mappings: item.mappings?.map(
+        (m: any): NutritionFoodMappingResponseDto => ({
+          id: m.id,
+          nutritionFoodId: m.nutritionFoodId,
+          ingredientId: m.ingredientId,
+          yieldRate: m.yieldRate,
+          isPrimary: m.isPrimary,
+          notes: m.notes ?? undefined,
+          ingredient: m.ingredient,
+        }),
+      ),
     };
   }
 }

@@ -54,7 +54,9 @@ export class PrismaPurchaseRecordRepository implements PurchaseRecordRepository 
     return found ? PurchaseRecord.fromPrisma(found) : null;
   }
 
-  async findByPurchaseListId(purchaseListId: string): Promise<PurchaseRecord[]> {
+  async findByPurchaseListId(
+    purchaseListId: string,
+  ): Promise<PurchaseRecord[]> {
     const records = await this.prisma.purchaseRecord.findMany({
       where: {
         purchaseListId,
@@ -64,10 +66,12 @@ export class PrismaPurchaseRecordRepository implements PurchaseRecordRepository 
       },
     });
 
-    return records.map(record => PurchaseRecord.fromPrisma(record));
+    return records.map((record) => PurchaseRecord.fromPrisma(record));
   }
 
-  async findByPurchaseItemId(purchaseItemId: string): Promise<PurchaseRecord[]> {
+  async findByPurchaseItemId(
+    purchaseItemId: string,
+  ): Promise<PurchaseRecord[]> {
     const records = await this.prisma.purchaseRecord.findMany({
       where: {
         purchaseItemId,
@@ -77,7 +81,7 @@ export class PrismaPurchaseRecordRepository implements PurchaseRecordRepository 
       },
     });
 
-    return records.map(record => PurchaseRecord.fromPrisma(record));
+    return records.map((record) => PurchaseRecord.fromPrisma(record));
   }
 
   async findByIngredientId(ingredientId: string): Promise<PurchaseRecord[]> {
@@ -90,7 +94,7 @@ export class PrismaPurchaseRecordRepository implements PurchaseRecordRepository 
       },
     });
 
-    return records.map(record => PurchaseRecord.fromPrisma(record));
+    return records.map((record) => PurchaseRecord.fromPrisma(record));
   }
 
   async calculateTotalActualCost(purchaseListId: string): Promise<number> {

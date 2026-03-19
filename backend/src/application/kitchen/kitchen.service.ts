@@ -3,11 +3,25 @@
  * Phase 8.12: Kitchen Task Data Capture MVP
  */
 
-import { Injectable, Inject, BadRequestException, NotFoundException, Logger, forwardRef } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  BadRequestException,
+  NotFoundException,
+  Logger,
+  forwardRef,
+} from '@nestjs/common';
 import type { ProductionBatchRepository } from '../../domain/production/production.repository';
-import { PackagingUnit, PackagingUnitStatus, type IngredientsUsageSnapshot } from '../../domain/production';
+import {
+  PackagingUnit,
+  PackagingUnitStatus,
+  type IngredientsUsageSnapshot,
+} from '../../domain/production';
 import { InvalidStateTransitionError } from '../../domain/common/errors';
-import { PRODUCTION_BATCH_REPOSITORY, ProductionService } from '../production/production.service';
+import {
+  PRODUCTION_BATCH_REPOSITORY,
+  ProductionService,
+} from '../production/production.service';
 import { InventoryService } from '../inventory/inventory.service';
 
 // UpdateTaskDto is now defined in interfaces/dto/kitchen/update-task.dto.ts
@@ -93,9 +107,10 @@ export class KitchenService {
     try {
       let batches;
       if (status) {
-        batches = await this.productionRepository.findBatchesByPackagingUnitStatus(
-          status,
-        );
+        batches =
+          await this.productionRepository.findBatchesByPackagingUnitStatus(
+            status,
+          );
       } else {
         // If no status filter, get all batches (including those with empty packaging units)
         // Use findByStatus to get batches
@@ -105,7 +120,7 @@ export class KitchenService {
       return batches.map((batch) => {
         // Defensive: ensure packagingUnits is always an array
         const units = batch.packagingUnits || [];
-        
+
         return {
           id: batch.id,
           productionDate: batch.productionDate.toISOString().split('T')[0],
@@ -113,13 +128,16 @@ export class KitchenService {
           taskCount: units.length,
           tasks: units.map((unit) => {
             // Defensive: ensure recipeSnapshot exists
-            const recipeSnapshot = unit.recipeSnapshot || { id: '', name: 'Unknown' };
-            
+            const recipeSnapshot = unit.recipeSnapshot || {
+              id: '',
+              name: 'Unknown',
+            };
+
             // Defensive: ensure photos arrays exist
             const photosRaw = unit.photosRaw || [];
             const photosCooked = unit.photosCooked || [];
             const photosPortioned = unit.photosPortioned || [];
-            
+
             return {
               id: unit.id,
               recipeSnapshotId: recipeSnapshot.id,
@@ -130,7 +148,9 @@ export class KitchenService {
                 photosRaw.length > 0 ||
                 photosCooked.length > 0 ||
                 photosPortioned.length > 0,
-              hasActualUsage: unit.ingredientsUsageSnapshot !== null && unit.ingredientsUsageSnapshot !== undefined,
+              hasActualUsage:
+                unit.ingredientsUsageSnapshot !== null &&
+                unit.ingredientsUsageSnapshot !== undefined,
             };
           }),
         };
@@ -174,10 +194,10 @@ export class KitchenService {
             nutrition_standard: '',
             items: [],
           };
-          
+
           // Defensive: ensure items array exists
           const items = recipeSnapshot.items || [];
-          
+
           // Defensive: ensure arrays exist
           const photosRaw = unit.photosRaw || [];
           const photosCooked = unit.photosCooked || [];
@@ -195,7 +215,8 @@ export class KitchenService {
               version: recipeSnapshot.version || 1,
               name: recipeSnapshot.name || 'Unknown',
               production_loss_rate: recipeSnapshot.production_loss_rate || 1.0,
-              energy_density_kcal_per_kg: recipeSnapshot.energy_density_kcal_per_kg || 0,
+              energy_density_kcal_per_kg:
+                recipeSnapshot.energy_density_kcal_per_kg || 0,
               nutrition_standard: recipeSnapshot.nutrition_standard || '',
               items: items.map((item: any) => ({
                 ingredient_id: item.ingredient_id || '',
@@ -227,13 +248,10 @@ export class KitchenService {
   /**
    * Update task (packaging unit) with actual usage and photos
    * Phase 8.12: Kitchen task update
-   * 
+   *
    * CRITICAL: Required weights must be calculated from recipeSnapshot, NOT from Recipe table
    */
-  async updateTask(
-    taskId: string,
-    dto: UpdateTaskDto,
-  ): Promise<PackagingUnit> {
+  async updateTask(taskId: string, dto: UpdateTaskDto): Promise<PackagingUnit> {
     const unit = await this.productionRepository.findPackagingUnitById(taskId);
     if (!unit) {
       throw new NotFoundException(`Task (PackagingUnit) not found: ${taskId}`);
@@ -243,7 +261,10 @@ export class KitchenService {
     // COMPLETED status requires actualWeightG or ingredientsActual
     // IN_PROGRESS status allows pure status transition without data
     if (dto.status === PackagingUnitStatus.COMPLETED) {
-      if (!dto.actualWeightG && (!dto.ingredientsActual || dto.ingredientsActual.length === 0)) {
+      if (
+        !dto.actualWeightG &&
+        (!dto.ingredientsActual || dto.ingredientsActual.length === 0)
+      ) {
         throw new BadRequestException(
           'Cannot transition to COMPLETED without actual usage data. Either actualWeightG or ingredientsActual must be provided.',
         );
@@ -257,38 +278,46 @@ export class KitchenService {
     if (dto.ingredientsActual && dto.ingredientsActual.length > 0) {
       // Build usage snapshot from provided actual weights
       ingredientsUsageSnapshot = {};
-      
+
       // Get required weights from recipeSnapshot.items
       const recipeItems = unit.recipeSnapshot?.items || [];
-      
+
       if (recipeItems.length === 0) {
         throw new BadRequestException(
           'Recipe snapshot has no items. Cannot calculate required weights.',
         );
       }
-      
+
       for (const actualEntry of dto.ingredientsActual) {
         // Validate ingredientId
-        if (!actualEntry.ingredientId || typeof actualEntry.ingredientId !== 'string') {
+        if (
+          !actualEntry.ingredientId ||
+          typeof actualEntry.ingredientId !== 'string'
+        ) {
           throw new BadRequestException(
             'Each ingredientActual item must have a valid ingredientId (string)',
           );
         }
-        
+
         // Validate actual_g
-        if (typeof actualEntry.actual_g !== 'number' || actualEntry.actual_g < 0) {
+        if (
+          typeof actualEntry.actual_g !== 'number' ||
+          actualEntry.actual_g < 0
+        ) {
           throw new BadRequestException(
             `actual_g must be a non-negative number for ingredient ${actualEntry.ingredientId}, got: ${actualEntry.actual_g}`,
           );
         }
-        
+
         // Find corresponding recipe item to get required weight
         // RecipeSnapshotItem uses ingredient_id (snake_case) and ratio (not ratioPercent)
         // Support both ingredient_id and ingredientId for flexibility
         const recipeItem = recipeItems.find(
-          (ri: any) => ri.ingredient_id === actualEntry.ingredientId || ri.ingredientId === actualEntry.ingredientId,
+          (ri: any) =>
+            ri.ingredient_id === actualEntry.ingredientId ||
+            ri.ingredientId === actualEntry.ingredientId,
         );
-        
+
         if (!recipeItem) {
           throw new BadRequestException(
             `Ingredient ${actualEntry.ingredientId} not found in recipe snapshot. Available ingredients: ${recipeItems.map((ri: any) => ri.ingredient_id || ri.ingredientId).join(', ')}`,
@@ -375,7 +404,9 @@ export class KitchenService {
       // This ensures batch transitions to COMPLETED and orders advance to READY_FOR_SHIPMENT
       if (savedUnit.productionBatchId) {
         try {
-          await this.productionService.checkAndCompleteBatch(savedUnit.productionBatchId);
+          await this.productionService.checkAndCompleteBatch(
+            savedUnit.productionBatchId,
+          );
           this.logger.debug(
             `Triggered batch completion check for batch ${savedUnit.productionBatchId} after task ${savedUnit.id} was completed`,
           );
@@ -398,4 +429,3 @@ export class KitchenService {
     return savedUnit;
   }
 }
-

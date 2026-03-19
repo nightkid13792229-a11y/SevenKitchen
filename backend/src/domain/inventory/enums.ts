@@ -7,4 +7,3 @@ export enum InventorySourceType {
   KITCHEN_TASK = 'KITCHEN_TASK',
   // Future: PURCHASE, ADJUSTMENT, etc.
 }
-

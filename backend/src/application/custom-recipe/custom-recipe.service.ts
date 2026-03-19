@@ -3,12 +3,30 @@
  * Business logic for custom recipe orders
  */
 
-import { Injectable, BadRequestException, NotFoundException, ConflictException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+  ConflictException,
+} from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
-import { CustomRecipeOrderQuery, ICustomRecipeRepository, CreateCustomRecipeOrderDTO, UpdateCustomRecipeOrderDTO } from '../../domain/custom-recipe/custom-recipe.repository';
-import { CustomRecipeStatus, TargetGoal, CustomAttachmentType } from '@prisma/client';
-import { addWorkDays, isPublicHoliday, getPublicHolidaysForYear } from '../../utils/date-helpers';
+import {
+  CustomRecipeOrderQuery,
+  ICustomRecipeRepository,
+  CreateCustomRecipeOrderDTO,
+  UpdateCustomRecipeOrderDTO,
+} from '../../domain/custom-recipe/custom-recipe.repository';
+import {
+  CustomRecipeStatus,
+  TargetGoal,
+  CustomAttachmentType,
+} from '@prisma/client';
+import {
+  addWorkDays,
+  isPublicHoliday,
+  getPublicHolidaysForYear,
+} from '../../utils/date-helpers';
 
 @Injectable()
 export class CustomRecipeService implements ICustomRecipeRepository {
@@ -29,7 +47,9 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     const year = now.getFullYear();
     const month = String(now.getMonth() + 1).padStart(2, '0');
     const day = String(now.getDate()).padStart(2, '0');
-    const random = Math.floor(Math.random() * 10000).toString().padStart(4, '0');
+    const random = Math.floor(Math.random() * 10000)
+      .toString()
+      .padStart(4, '0');
     return `CR${year}${month}${day}${random}`;
   }
 
@@ -52,7 +72,9 @@ export class CustomRecipeService implements ICustomRecipeRepository {
       }
 
       // 2. Calculate estimated delivery date
-      const estimatedDeliveryDate = this.calculateDeliveryDate(data.scheduledDate);
+      const estimatedDeliveryDate = this.calculateDeliveryDate(
+        data.scheduledDate,
+      );
 
       // 3. Create order
       const order = await tx.customRecipeOrder.create({
@@ -79,7 +101,12 @@ export class CustomRecipeService implements ICustomRecipeRepository {
 
       // 5. Sync to health profile if requested
       if (data.syncToHealthProfile) {
-        await this.syncToHealthProfileTx(tx, data.dogId, data.allergies || [], data.medicalConditions || []);
+        await this.syncToHealthProfileTx(
+          tx,
+          data.dogId,
+          data.allergies || [],
+          data.medicalConditions || [],
+        );
         await tx.customRecipeOrder.update({
           where: { id: order.id },
           data: { healthInfoSyncedAt: new Date() },
@@ -111,7 +138,9 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   /**
    * Get orders with filters
    */
-  async getOrders(query: CustomRecipeOrderQuery): Promise<{ orders: any[]; total: number }> {
+  async getOrders(
+    query: CustomRecipeOrderQuery,
+  ): Promise<{ orders: any[]; total: number }> {
     const where: any = {};
 
     if (query.customerId) {
@@ -135,7 +164,11 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     if (query.search) {
       where.OR = [
         { orderId: { contains: query.search, mode: 'insensitive' } },
-        { customer: { nickname: { contains: query.search, mode: 'insensitive' } } },
+        {
+          customer: {
+            nickname: { contains: query.search, mode: 'insensitive' },
+          },
+        },
         { dog: { name: { contains: query.search, mode: 'insensitive' } } },
       ];
     }
@@ -188,7 +221,10 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   /**
    * Update order
    */
-  async updateOrder(id: string, data: UpdateCustomRecipeOrderDTO): Promise<any> {
+  async updateOrder(
+    id: string,
+    data: UpdateCustomRecipeOrderDTO,
+  ): Promise<any> {
     return await this.prisma.customRecipeOrder.update({
       where: { id },
       data,
@@ -198,7 +234,10 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   /**
    * Update order status
    */
-  async updateOrderStatus(id: string, status: CustomRecipeStatus): Promise<void> {
+  async updateOrderStatus(
+    id: string,
+    status: CustomRecipeStatus,
+  ): Promise<void> {
     await this.prisma.customRecipeOrder.update({
       where: { id },
       data: { status },
@@ -218,16 +257,25 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     }
 
     const [pendingPayment, inProgress, delivered, orders] = await Promise.all([
-      this.prisma.customRecipeOrder.count({ where: { ...where, status: CustomRecipeStatus.PENDING_PAYMENT } }),
-      this.prisma.customRecipeOrder.count({ where: { ...where, status: CustomRecipeStatus.IN_PROGRESS } }),
-      this.prisma.customRecipeOrder.count({ where: { ...where, status: CustomRecipeStatus.DELIVERED } }),
+      this.prisma.customRecipeOrder.count({
+        where: { ...where, status: CustomRecipeStatus.PENDING_PAYMENT },
+      }),
+      this.prisma.customRecipeOrder.count({
+        where: { ...where, status: CustomRecipeStatus.IN_PROGRESS },
+      }),
+      this.prisma.customRecipeOrder.count({
+        where: { ...where, status: CustomRecipeStatus.DELIVERED },
+      }),
       this.prisma.customRecipeOrder.findMany({
         where: { ...where, status: CustomRecipeStatus.DELIVERED },
         select: { amount: true },
       }),
     ]);
 
-    const totalRevenue = orders.reduce((sum, order) => sum + Number(order.amount), 0);
+    const totalRevenue = orders.reduce(
+      (sum, order) => sum + Number(order.amount),
+      0,
+    );
 
     return {
       pendingPayment,
@@ -273,7 +321,9 @@ export class CustomRecipeService implements ICustomRecipeRepository {
     const endDate = new Date(dateTo);
 
     while (currentDate <= endDate) {
-      const existing = schedules.find(s => s.date.getTime() === currentDate.getTime());
+      const existing = schedules.find(
+        (s) => s.date.getTime() === currentDate.getTime(),
+      );
       if (existing) {
         result.push(existing);
       } else {
@@ -412,11 +462,25 @@ export class CustomRecipeService implements ICustomRecipeRepository {
   /**
    * Sync to health profile
    */
-  async syncToHealthProfile(dogId: string, allergies: string[], medicalConditions: string[]): Promise<void> {
-    await this.syncToHealthProfileTx(this.prisma, dogId, allergies, medicalConditions);
+  async syncToHealthProfile(
+    dogId: string,
+    allergies: string[],
+    medicalConditions: string[],
+  ): Promise<void> {
+    await this.syncToHealthProfileTx(
+      this.prisma,
+      dogId,
+      allergies,
+      medicalConditions,
+    );
   }
 
-  private async syncToHealthProfileTx(tx: any, dogId: string, allergies: string[], medicalConditions: string[]): Promise<void> {
+  private async syncToHealthProfileTx(
+    tx: any,
+    dogId: string,
+    allergies: string[],
+    medicalConditions: string[],
+  ): Promise<void> {
     // Sync allergies
     for (const allergen of allergies) {
       const existing = await tx.allergyRecord.findFirst({
@@ -461,7 +525,11 @@ export class CustomRecipeService implements ICustomRecipeRepository {
    * Upload attachment
    */
   async uploadAttachment(file: Express.Multer.File, orderId: string) {
-    const result = await this.cosService.uploadImage(file, file.originalname, 'custom-recipe-attachments');
+    const result = await this.cosService.uploadImage(
+      file,
+      file.originalname,
+      'custom-recipe-attachments',
+    );
 
     const attachment = await this.addAttachment(orderId, {
       fileName: file.originalname,
@@ -488,31 +556,32 @@ export class CustomRecipeService implements ICustomRecipeRepository {
    * Get dog health summary
    */
   async getDogHealthSummary(dogId: string) {
-    const [allergies, medicalRecords, checkups, weightRecords] = await Promise.all([
-      this.prisma.allergyRecord.findMany({
-        where: { dogId },
-        orderBy: { createdAt: 'desc' },
-      }),
-      this.prisma.medicalRecord.findMany({
-        where: { dogId },
-        orderBy: { visitDate: 'desc' },
-        take: 5,
-      }),
-      this.prisma.checkupRecord.findMany({
-        where: { dogId },
-        orderBy: { checkupDate: 'desc' },
-        take: 3,
-      }),
-      this.prisma.weightRecord.findMany({
-        where: { dogId },
-        orderBy: { recordDate: 'desc' },
-        take: 5,
-      }),
-    ]);
+    const [allergies, medicalRecords, checkups, weightRecords] =
+      await Promise.all([
+        this.prisma.allergyRecord.findMany({
+          where: { dogId },
+          orderBy: { createdAt: 'desc' },
+        }),
+        this.prisma.medicalRecord.findMany({
+          where: { dogId },
+          orderBy: { visitDate: 'desc' },
+          take: 5,
+        }),
+        this.prisma.checkupRecord.findMany({
+          where: { dogId },
+          orderBy: { checkupDate: 'desc' },
+          take: 3,
+        }),
+        this.prisma.weightRecord.findMany({
+          where: { dogId },
+          orderBy: { recordDate: 'desc' },
+          take: 5,
+        }),
+      ]);
 
     return {
-      allergies: allergies.map(a => a.allergen),
-      medicalConditions: medicalRecords.map(m => m.diagnosis),
+      allergies: allergies.map((a) => a.allergen),
+      medicalConditions: medicalRecords.map((m) => m.diagnosis),
       recentCheckups: checkups,
       weightTrend: weightRecords,
     };

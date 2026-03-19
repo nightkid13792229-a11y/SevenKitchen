@@ -49,4 +49,3 @@ export enum TreatLevel {
   MODERATE = 'MODERATE',
   HIGH = 'HIGH',
 }
-

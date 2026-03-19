@@ -34,7 +34,10 @@ import { ReimbursementService } from '../../application/purchasing/reimbursement
 import type { ReviewReimbursementDto } from '../../application/purchasing/reimbursement.service';
 import { PurchasingService } from '../../application/purchasing/purchasing.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
-import { ReimbursementStatus, PurchaseListStatus } from '../../domain/purchasing';
+import {
+  ReimbursementStatus,
+  PurchaseListStatus,
+} from '../../domain/purchasing';
 import { UserId } from '../auth/user.decorator';
 import { AuthGuard } from '../auth';
 // import { AdminGuard } from './auth/admin.guard';
@@ -42,7 +45,13 @@ import { AuthGuard } from '../auth';
 @ApiTags('Admin Purchasing')
 @Controller('api/v1/admin/purchasing')
 @UseGuards(AuthGuard)
-@UsePipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
+@UsePipes(
+  new ValidationPipe({
+    transform: true,
+    whitelist: true,
+    forbidNonWhitelisted: true,
+  }),
+)
 export class AdminPurchasingController {
   private readonly logger = new Logger(AdminPurchasingController.name);
 
@@ -59,11 +68,38 @@ export class AdminPurchasingController {
 
   @Get('reimbursements')
   @ApiOperation({ summary: '查询报销单列表' })
-  @ApiQuery({ name: 'status', required: false, enum: ['PENDING_REVIEW', 'APPROVED', 'REJECTED', 'REQUIRES_RESUBMIT'], description: '筛选状态' })
-  @ApiQuery({ name: 'startDate', required: false, type: String, description: '开始日期 YYYY-MM-DD' })
-  @ApiQuery({ name: 'endDate', required: false, type: String, description: '结束日期 YYYY-MM-DD' })
-  @ApiQuery({ name: 'page', required: false, type: Number, description: '页码', example: 1 })
-  @ApiQuery({ name: 'pageSize', required: false, type: Number, description: '每页数量', example: 20 })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['PENDING_REVIEW', 'APPROVED', 'REJECTED', 'REQUIRES_RESUBMIT'],
+    description: '筛选状态',
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    type: String,
+    description: '开始日期 YYYY-MM-DD',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    type: String,
+    description: '结束日期 YYYY-MM-DD',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: '页码',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'pageSize',
+    required: false,
+    type: Number,
+    description: '每页数量',
+    example: 20,
+  })
   @ApiResponse({
     status: 200,
     description: '报销单列表',
@@ -82,7 +118,15 @@ export class AdminPurchasingController {
                 properties: {
                   id: { type: 'string' },
                   claimNumber: { type: 'string', example: 'BX20260110001' },
-                  status: { type: 'string', enum: ['PENDING_REVIEW', 'APPROVED', 'REJECTED', 'REQUIRES_RESUBMIT'] },
+                  status: {
+                    type: 'string',
+                    enum: [
+                      'PENDING_REVIEW',
+                      'APPROVED',
+                      'REJECTED',
+                      'REQUIRES_RESUBMIT',
+                    ],
+                  },
                   totalActualCost: { type: 'number' },
                   totalEstimatedCost: { type: 'number' },
                   receiptUrls: { type: 'array', items: { type: 'string' } },
@@ -114,10 +158,16 @@ export class AdminPurchasingController {
                       properties: {
                         id: { type: 'string' },
                         targetDate: { type: 'string', format: 'date-time' },
-                        status: { type: 'string', enum: ['DRAFT', 'PENDING', 'COMPLETED', 'CANCELLED'] },
+                        status: {
+                          type: 'string',
+                          enum: ['DRAFT', 'PENDING', 'COMPLETED', 'CANCELLED'],
+                        },
                         totalEstimatedCost: { type: 'number' },
                         itemCount: { type: 'number' },
-                        sourceOrderIds: { type: 'array', items: { type: 'string' } },
+                        sourceOrderIds: {
+                          type: 'array',
+                          items: { type: 'string' },
+                        },
                       },
                     },
                   },
@@ -147,7 +197,10 @@ export class AdminPurchasingController {
       pageSize: pageSize ? parseInt(pageSize) : 20,
     });
 
-    return ApiResponseDto.success(result, 'Reimbursements retrieved successfully');
+    return ApiResponseDto.success(
+      result,
+      'Reimbursements retrieved successfully',
+    );
   }
 
   @Get('reimbursements/:id')
@@ -162,9 +215,13 @@ export class AdminPurchasingController {
   ): Promise<ApiResponseDto<any>> {
     this.logger.log(`Admin fetching reimbursement detail: ${id}`);
 
-    const reimbursement = await this.reimbursementService.getReimbursementDetail(id);
+    const reimbursement =
+      await this.reimbursementService.getReimbursementDetail(id);
 
-    return ApiResponseDto.success(reimbursement, 'Reimbursement detail retrieved successfully');
+    return ApiResponseDto.success(
+      reimbursement,
+      'Reimbursement detail retrieved successfully',
+    );
   }
 
   @Delete('reimbursements/:id')
@@ -225,7 +282,15 @@ export class AdminPurchasingController {
           properties: {
             id: { type: 'string' },
             claimNumber: { type: 'string' },
-            status: { type: 'string', enum: ['PENDING_REVIEW', 'APPROVED', 'REJECTED', 'REQUIRES_RESUBMIT'] },
+            status: {
+              type: 'string',
+              enum: [
+                'PENDING_REVIEW',
+                'APPROVED',
+                'REJECTED',
+                'REQUIRES_RESUBMIT',
+              ],
+            },
             reviewedById: { type: 'string' },
             reviewedAt: { type: 'string', format: 'date-time' },
             reviewComment: { type: 'string' },
@@ -239,15 +304,20 @@ export class AdminPurchasingController {
     @Body() dto: ReviewReimbursementDto,
     @Query('reviewerId') reviewerId: string,
   ): Promise<ApiResponseDto<any>> {
-    this.logger.log(`Admin ${reviewerId} reviewing reimbursement ${id} with decision: ${dto.decision}`);
+    this.logger.log(
+      `Admin ${reviewerId} reviewing reimbursement ${id} with decision: ${dto.decision}`,
+    );
 
     const reimbursement = await this.reimbursementService.reviewReimbursement(
       id,
       reviewerId,
-      dto
+      dto,
     );
 
-    return ApiResponseDto.success(reimbursement, 'Reimbursement reviewed successfully');
+    return ApiResponseDto.success(
+      reimbursement,
+      'Reimbursement reviewed successfully',
+    );
   }
 
   /**
@@ -258,11 +328,38 @@ export class AdminPurchasingController {
 
   @Get('history')
   @ApiOperation({ summary: '查询采购历史记录' })
-  @ApiQuery({ name: 'startDate', required: false, type: String, description: '开始日期 YYYY-MM-DD' })
-  @ApiQuery({ name: 'endDate', required: false, type: String, description: '结束日期 YYYY-MM-DD' })
-  @ApiQuery({ name: 'ingredientId', required: false, type: String, description: '原料ID筛选' })
-  @ApiQuery({ name: 'page', required: false, type: Number, description: '页码', example: 1 })
-  @ApiQuery({ name: 'pageSize', required: false, type: Number, description: '每页数量', example: 20 })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    type: String,
+    description: '开始日期 YYYY-MM-DD',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    type: String,
+    description: '结束日期 YYYY-MM-DD',
+  })
+  @ApiQuery({
+    name: 'ingredientId',
+    required: false,
+    type: String,
+    description: '原料ID筛选',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: '页码',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'pageSize',
+    required: false,
+    type: Number,
+    description: '每页数量',
+    example: 20,
+  })
   @ApiResponse({
     status: 200,
     description: '采购历史记录',
@@ -281,7 +378,10 @@ export class AdminPurchasingController {
                 properties: {
                   id: { type: 'string' },
                   targetDate: { type: 'string', format: 'date-time' },
-                  status: { type: 'string', enum: ['DRAFT', 'PENDING', 'COMPLETED', 'CANCELLED'] },
+                  status: {
+                    type: 'string',
+                    enum: ['DRAFT', 'PENDING', 'COMPLETED', 'CANCELLED'],
+                  },
                   totalEstimatedCost: { type: 'number' },
                   itemCount: { type: 'number' },
                   createdById: { type: 'string' },
@@ -326,7 +426,9 @@ export class AdminPurchasingController {
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ): Promise<ApiResponseDto<any>> {
-    this.logger.log(`Admin fetching purchase history from ${startDate} to ${endDate}`);
+    this.logger.log(
+      `Admin fetching purchase history from ${startDate} to ${endDate}`,
+    );
 
     const result = await this.purchasingService.getPurchaseLists({
       startDate,
@@ -335,13 +437,26 @@ export class AdminPurchasingController {
       pageSize: pageSize ? parseInt(pageSize) : 20,
     });
 
-    return ApiResponseDto.success(result, 'Purchase history retrieved successfully');
+    return ApiResponseDto.success(
+      result,
+      'Purchase history retrieved successfully',
+    );
   }
 
   @Get('statistics')
   @ApiOperation({ summary: '查询采购统计数据' })
-  @ApiQuery({ name: 'startDate', required: false, type: String, description: '开始日期 YYYY-MM-DD' })
-  @ApiQuery({ name: 'endDate', required: false, type: String, description: '结束日期 YYYY-MM-DD' })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    type: String,
+    description: '开始日期 YYYY-MM-DD',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    type: String,
+    description: '结束日期 YYYY-MM-DD',
+  })
   @ApiResponse({
     status: 200,
     description: '采购统计数据',
@@ -354,14 +469,26 @@ export class AdminPurchasingController {
           type: 'object',
           properties: {
             totalPurchaseLists: { type: 'number', description: '采购清单总数' },
-            completedPurchaseLists: { type: 'number', description: '已完成的采购清单数' },
+            completedPurchaseLists: {
+              type: 'number',
+              description: '已完成的采购清单数',
+            },
             totalReimbursements: { type: 'number', description: '报销单总数' },
-            pendingReimbursements: { type: 'number', description: '待审核报销单数' },
-            approvedReimbursements: { type: 'number', description: '已批准报销单数' },
+            pendingReimbursements: {
+              type: 'number',
+              description: '待审核报销单数',
+            },
+            approvedReimbursements: {
+              type: 'number',
+              description: '已批准报销单数',
+            },
             totalEstimatedCost: { type: 'number', description: '预估总成本' },
             totalActualCost: { type: 'number', description: '实际总成本' },
             costDifference: { type: 'number', description: '成本差异' },
-            costDifferencePercentage: { type: 'number', description: '成本差异百分比' },
+            costDifferencePercentage: {
+              type: 'number',
+              description: '成本差异百分比',
+            },
           },
         },
       },
@@ -371,45 +498,49 @@ export class AdminPurchasingController {
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
   ): Promise<ApiResponseDto<any>> {
-    this.logger.log(`Admin fetching purchase statistics from ${startDate} to ${endDate}`);
+    this.logger.log(
+      `Admin fetching purchase statistics from ${startDate} to ${endDate}`,
+    );
 
     // 获取采购清单列表（不限制数量）
-    const { list: purchaseLists } = await this.purchasingService.getPurchaseLists({
-      startDate,
-      endDate,
-      page: 1,
-      pageSize: 10000,
-    });
+    const { list: purchaseLists } =
+      await this.purchasingService.getPurchaseLists({
+        startDate,
+        endDate,
+        page: 1,
+        pageSize: 10000,
+      });
 
     // 获取报销单列表（不限制数量）
-    const { list: reimbursements } = await this.reimbursementService.getReimbursements({
-      startDate,
-      endDate,
-      page: 1,
-      pageSize: 10000,
-    });
+    const { list: reimbursements } =
+      await this.reimbursementService.getReimbursements({
+        startDate,
+        endDate,
+        page: 1,
+        pageSize: 10000,
+      });
 
     // 计算统计数据
     const totalPurchaseLists = purchaseLists.length;
     const completedPurchaseLists = purchaseLists.filter(
-      list => list.status === PurchaseListStatus.COMPLETED
+      (list) => list.status === PurchaseListStatus.COMPLETED,
     ).length;
 
     const totalReimbursements = reimbursements.length;
     const pendingReimbursements = reimbursements.filter(
-      r => r.status === ReimbursementStatus.PENDING_REVIEW
+      (r) => r.status === ReimbursementStatus.PENDING_REVIEW,
     ).length;
     const approvedReimbursements = reimbursements.filter(
-      r => r.status === ReimbursementStatus.REIMBURSED
+      (r) => r.status === ReimbursementStatus.REIMBURSED,
     ).length;
 
     const totalEstimatedCost = reimbursements.reduce(
       (sum, r) => sum + r.totalEstimatedCost,
-      0
+      0,
     );
     const totalActualCost = reimbursements.reduce(
       (sum, r) => sum + r.totalActualCost,
-      0
+      0,
     );
     const costDifference = totalActualCost - totalEstimatedCost;
     const costDifferencePercentage =
@@ -427,7 +558,10 @@ export class AdminPurchasingController {
       costDifferencePercentage,
     };
 
-    return ApiResponseDto.success(statistics, 'Purchase statistics retrieved successfully');
+    return ApiResponseDto.success(
+      statistics,
+      'Purchase statistics retrieved successfully',
+    );
   }
 
   @Post('reimbursements/:id/payment-proof')
@@ -460,7 +594,9 @@ export class AdminPurchasingController {
     @UploadedFiles() files: Express.Multer.File[],
     @UserId() userId: string,
   ): Promise<ApiResponseDto<any>> {
-    this.logger.log(`Uploading payment proof for reimbursement: ${id}, files count: ${files?.length || 0}`);
+    this.logger.log(
+      `Uploading payment proof for reimbursement: ${id}, files count: ${files?.length || 0}`,
+    );
 
     // Validate file size (10MB max per file)
     const maxSize = 10 * 1024 * 1024;
@@ -471,17 +607,23 @@ export class AdminPurchasingController {
     }
 
     // Validate file type
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
+    const allowedTypes = [
+      'image/jpeg',
+      'image/png',
+      'image/gif',
+      'image/webp',
+      'application/pdf',
+    ];
     for (const file of files) {
       if (!allowedTypes.includes(file.mimetype)) {
-        throw new BadRequestException('只支持JPG、PNG、GIF、WEBP和PDF格式的文件');
+        throw new BadRequestException(
+          '只支持JPG、PNG、GIF、WEBP和PDF格式的文件',
+        );
       }
     }
 
-    const reimbursement = await this.reimbursementService.uploadPaymentProofFiles(
-      id,
-      files
-    );
+    const reimbursement =
+      await this.reimbursementService.uploadPaymentProofFiles(id, files);
 
     return ApiResponseDto.success(reimbursement, '报销凭证上传成功');
   }

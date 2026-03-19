@@ -96,4 +96,3 @@ export class Address {
     this.isDefault = false;
   }
 }
-

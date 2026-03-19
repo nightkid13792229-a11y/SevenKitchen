@@ -94,7 +94,9 @@ export class StaffProductionController {
   })
   async getPackagingUnits(
     @Query() query: GetPackagingUnitsDto,
-  ): Promise<ApiResponseDto<{ list: PackagingUnitDetailDto[]; total: number }>> {
+  ): Promise<
+    ApiResponseDto<{ list: PackagingUnitDetailDto[]; total: number }>
+  > {
     const result = await this.staffProductionService.getPackagingUnits(query);
     return {
       code: 0,
@@ -181,7 +183,9 @@ export class StaffProductionController {
   }
 
   @Post('packaging-units/:id/photos')
-  @ApiOperation({ summary: 'Upload production preparation photos (2-3 photos)' })
+  @ApiOperation({
+    summary: 'Upload production preparation photos (2-3 photos)',
+  })
   @ApiParam({
     name: 'id',
     description: 'Packaging unit ID',
@@ -224,8 +228,15 @@ export class StaffProductionController {
       console.log('[uploadProductionPhotos] Uploading to COS...');
       // Upload to Tencent COS
       const uploadPromises = files.map(async (file) => {
-        console.log('[uploadProductionPhotos] Uploading file:', file.originalname);
-        const result = await this.cosService.uploadImage(file, file.originalname, `production/${id}`);
+        console.log(
+          '[uploadProductionPhotos] Uploading file:',
+          file.originalname,
+        );
+        const result = await this.cosService.uploadImage(
+          file,
+          file.originalname,
+          `production/${id}`,
+        );
         console.log('[uploadProductionPhotos] Upload result:', result.url);
         return result.url;
       });
@@ -235,8 +246,14 @@ export class StaffProductionController {
 
       console.log('[uploadProductionPhotos] Saving to database...');
       // Save to packaging unit (累加模式)
-      const unit = await this.staffProductionService.uploadProductionPhotos(id, photoUrls);
-      console.log('[uploadProductionPhotos] Database updated. Photos:', unit.photosRaw);
+      const unit = await this.staffProductionService.uploadProductionPhotos(
+        id,
+        photoUrls,
+      );
+      console.log(
+        '[uploadProductionPhotos] Database updated. Photos:',
+        unit.photosRaw,
+      );
 
       return {
         code: 0,
@@ -305,7 +322,8 @@ export class StaffProductionController {
         photoUrl: {
           type: 'string',
           description: 'Photo URL to delete',
-          example: 'https://xxx.cos.ap-guangzhou.myqcloud.com/production/uuid/xxx.jpg',
+          example:
+            'https://xxx.cos.ap-guangzhou.myqcloud.com/production/uuid/xxx.jpg',
         },
       },
       required: ['photoUrl'],
@@ -341,7 +359,10 @@ export class StaffProductionController {
       };
     }
 
-    const unit = await this.staffProductionService.deleteProductionPhoto(id, body.photoUrl);
+    const unit = await this.staffProductionService.deleteProductionPhoto(
+      id,
+      body.photoUrl,
+    );
 
     return {
       code: 0,
@@ -397,7 +418,7 @@ export class StaffProductionController {
       const result = await this.cosService.uploadImage(
         file,
         file.originalname,
-        `production/${id}`
+        `production/${id}`,
       );
       return result.url;
     });
@@ -405,7 +426,10 @@ export class StaffProductionController {
     const photoUrls = await Promise.all(uploadPromises);
 
     // Replace photos (deletes old photos from COS)
-    const unit = await this.staffProductionService.replaceProductionPhotos(id, photoUrls);
+    const unit = await this.staffProductionService.replaceProductionPhotos(
+      id,
+      photoUrls,
+    );
 
     return {
       code: 0,
@@ -418,7 +442,9 @@ export class StaffProductionController {
   }
 
   @Get('recipe-batches/:recipeId')
-  @ApiOperation({ summary: 'Get all batches for a specific recipe with order items' })
+  @ApiOperation({
+    summary: 'Get all batches for a specific recipe with order items',
+  })
   @ApiParam({
     name: 'recipeId',
     description: 'Recipe ID',
@@ -485,7 +511,9 @@ export class StaffProductionController {
   }
 
   @Get('batch-production-guide')
-  @ApiOperation({ summary: 'Get batch production guide for all batches on a specific date' })
+  @ApiOperation({
+    summary: 'Get batch production guide for all batches on a specific date',
+  })
   @ApiResponse({
     status: 200,
     description: 'Batch production guide',
@@ -557,7 +585,10 @@ export class StaffProductionController {
       type: 'object',
       properties: {
         code: { type: 'number', example: 400 },
-        message: { type: 'string', example: 'Cannot delete batch with status COMPLETED' },
+        message: {
+          type: 'string',
+          example: 'Cannot delete batch with status COMPLETED',
+        },
       },
     },
   })
@@ -634,7 +665,10 @@ export class StaffProductionController {
         data: {
           type: 'object',
           properties: {
-            pdfUrl: { type: 'string', example: 'https://cdn.../print-tasks/task-xxx.pdf' },
+            pdfUrl: {
+              type: 'string',
+              example: 'https://cdn.../print-tasks/task-xxx.pdf',
+            },
           },
         },
       },

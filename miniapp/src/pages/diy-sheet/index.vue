@@ -1202,7 +1202,14 @@ function handlePurchase(purchaseLink: any, productName: string) {
   if (platform === 'WEBVIEW') {
     // 使用web-view打开网页链接
     uni.navigateTo({
-      url: `/pages/webview/index?url=${encodeURIComponent(url)}`
+      url: `/pages/common/webview?url=${encodeURIComponent(url)}`,
+      fail: (err) => {
+        console.error('[DIYSheet] WebView跳转失败:', err)
+        uni.showToast({
+          title: '打开链接失败',
+          icon: 'none'
+        })
+      }
     })
   } else {
     // 跳转其他小程序
@@ -1304,7 +1311,14 @@ function handlePurchaseEquipment(equipment: any) {
   if (purchaseLink.startsWith('http')) {
     // 外部链接，使用web-view打开
     uni.navigateTo({
-      url: `/pages/webview/index?url=${encodeURIComponent(purchaseLink)}`
+      url: `/pages/common/webview?url=${encodeURIComponent(purchaseLink)}`,
+      fail: (err) => {
+        console.error('[DIYSheet] WebView跳转失败:', err)
+        uni.showToast({
+          title: '打开链接失败',
+          icon: 'none'
+        })
+      }
     })
   } else if (purchaseLink.startsWith('/')) {
     // 小程序路径，直接跳转

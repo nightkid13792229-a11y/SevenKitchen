@@ -16,13 +16,22 @@ export class FilterOptionDto {
 }
 
 export class FilterOptionsDto {
-  @ApiProperty({ type: [FilterOptionDto], description: 'Available life stages' })
+  @ApiProperty({
+    type: [FilterOptionDto],
+    description: 'Available life stages',
+  })
   lifeStages!: FilterOptionDto[];
 
-  @ApiProperty({ type: [FilterOptionDto], description: 'Available health tags' })
+  @ApiProperty({
+    type: [FilterOptionDto],
+    description: 'Available health tags',
+  })
   healthTags!: FilterOptionDto[];
 
-  @ApiProperty({ type: [FilterOptionDto], description: 'Available ingredient tags' })
+  @ApiProperty({
+    type: [FilterOptionDto],
+    description: 'Available ingredient tags',
+  })
   ingredientTags!: FilterOptionDto[];
 
   @ApiProperty({ example: 24, description: 'Total recipes count' })

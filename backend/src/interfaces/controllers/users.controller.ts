@@ -106,7 +106,10 @@ export class UsersController {
 
     // 验证昵称长度（如果提供）
     if (updateUserDto.nickname !== undefined) {
-      if (updateUserDto.nickname.length < 1 || updateUserDto.nickname.length > 20) {
+      if (
+        updateUserDto.nickname.length < 1 ||
+        updateUserDto.nickname.length > 20
+      ) {
         return new ApiResponseDto(400, '昵称长度必须在1-20个字符之间', null);
       }
     }
@@ -115,9 +118,15 @@ export class UsersController {
     const updatedUser = await this.prisma.user.update({
       where: { id: requestUser.customerId },
       data: {
-        ...(updateUserDto.phone !== undefined && { phone: updateUserDto.phone }),
-        ...(updateUserDto.nickname !== undefined && { nickname: updateUserDto.nickname }),
-        ...(updateUserDto.avatarUrl !== undefined && { avatarUrl: updateUserDto.avatarUrl || null }),
+        ...(updateUserDto.phone !== undefined && {
+          phone: updateUserDto.phone,
+        }),
+        ...(updateUserDto.nickname !== undefined && {
+          nickname: updateUserDto.nickname,
+        }),
+        ...(updateUserDto.avatarUrl !== undefined && {
+          avatarUrl: updateUserDto.avatarUrl || null,
+        }),
       },
       include: {
         _count: {
@@ -175,11 +184,16 @@ export class UsersController {
 
       // 如果存在旧头像，先删除
       if (currentUser?.avatarUrl) {
-        console.log(`[UsersController] Deleting old avatar: ${currentUser.avatarUrl}`);
+        console.log(
+          `[UsersController] Deleting old avatar: ${currentUser.avatarUrl}`,
+        );
         try {
           await this.cosService.deleteImageByUrl(currentUser.avatarUrl);
         } catch (deleteError) {
-          console.error('[UsersController] Failed to delete old avatar:', deleteError);
+          console.error(
+            '[UsersController] Failed to delete old avatar:',
+            deleteError,
+          );
           // 继续上传新头像，不阻断流程
         }
       }

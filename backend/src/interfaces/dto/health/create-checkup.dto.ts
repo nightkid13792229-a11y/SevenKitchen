@@ -1,4 +1,11 @@
-import { IsArray, IsDateString, IsOptional, IsString, IsUUID, IsIn } from 'class-validator'
+import {
+  IsArray,
+  IsDateString,
+  IsOptional,
+  IsString,
+  IsUUID,
+  IsIn,
+} from 'class-validator';
 
 export const CHECKUP_TYPES = [
   'ROUTINE',
@@ -6,37 +13,37 @@ export const CHECKUP_TYPES = [
   'SENIOR_WELLNESS',
   'PRE_ANESTHESIA',
   'EMERGENCY',
-  'FOLLOW_UP'
-] as const
+  'FOLLOW_UP',
+] as const;
 
-export type CheckupType = typeof CHECKUP_TYPES[number]
+export type CheckupType = (typeof CHECKUP_TYPES)[number];
 
 export class CreateCheckupDto {
   @IsOptional()
   @IsUUID()
-  dogId?: string  // Optional since it comes from URL parameter :dogId
+  dogId?: string; // Optional since it comes from URL parameter :dogId
 
   @IsString()
   @IsIn(CHECKUP_TYPES)
-  checkupType!: string
+  checkupType!: string;
 
   @IsDateString()
-  checkupDate!: string
+  checkupDate!: string;
 
   @IsOptional()
   @IsString()
-  findings?: string
+  findings?: string;
 
   @IsOptional()
   @IsString()
-  recommendations?: string
+  recommendations?: string;
 
   @IsOptional()
   @IsString()
-  veterinarian?: string
+  veterinarian?: string;
 
   @IsOptional()
   @IsArray()
   @IsString({ each: true })
-  attachments?: string[]
+  attachments?: string[];
 }

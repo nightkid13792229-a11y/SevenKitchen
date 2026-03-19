@@ -1,7 +1,10 @@
 import { Injectable, Logger, Inject } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { OrderService } from '../order/order.service';
-import { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY } from '../order/order.service';
+import {
+  ORDER_REPOSITORY,
+  ORDER_STATUS_HISTORY_REPOSITORY,
+} from '../order/order.service';
 import { GlobalConfigService } from '../config/global-config.service';
 
 /**
@@ -17,7 +20,8 @@ export class OrderSchedulerService {
 
   constructor(
     @Inject(ORDER_REPOSITORY) private readonly orderRepository: any,
-    @Inject(ORDER_STATUS_HISTORY_REPOSITORY) private readonly statusHistoryRepository: any,
+    @Inject(ORDER_STATUS_HISTORY_REPOSITORY)
+    private readonly statusHistoryRepository: any,
     private readonly orderService: OrderService,
     private readonly globalConfigService: GlobalConfigService,
   ) {}
@@ -30,7 +34,9 @@ export class OrderSchedulerService {
    */
   @Cron(CronExpression.EVERY_HOUR)
   async handleAutoCompleteOrders() {
-    this.logger.debug('[OrderScheduler] Checking for orders to auto-complete...');
+    this.logger.debug(
+      '[OrderScheduler] Checking for orders to auto-complete...',
+    );
 
     try {
       // Get all shipped orders
@@ -41,16 +47,20 @@ export class OrderSchedulerService {
         return;
       }
 
-      this.logger.log(`[OrderScheduler] Found ${shippedOrders.length} shipped orders`);
+      this.logger.log(
+        `[OrderScheduler] Found ${shippedOrders.length} shipped orders`,
+      );
 
       const now = new Date();
       let completedCount = 0;
 
       for (const order of shippedOrders) {
         // Get the shipping timestamp from order status history
-        const statusHistory = await this.statusHistoryRepository.findByOrderId(order.id);
+        const statusHistory = await this.statusHistoryRepository.findByOrderId(
+          order.id,
+        );
         const shippedEntry = statusHistory?.find(
-          (entry: any) => entry.toStatus === 'SHIPPED'
+          (entry: any) => entry.toStatus === 'SHIPPED',
         );
 
         if (!shippedEntry) {
@@ -71,15 +81,10 @@ export class OrderSchedulerService {
             `[OrderScheduler] Auto-completing order ${order.id} (shipped ${daysSinceShipped} days ago)`,
           );
 
-          await this.orderService.completeOrder(
-            order.id,
-            'system',
-            null,
-            {
-              autoCompleted: true,
-              daysSinceShipped,
-            },
-          );
+          await this.orderService.completeOrder(order.id, 'system', null, {
+            autoCompleted: true,
+            daysSinceShipped,
+          });
 
           completedCount++;
         }
@@ -114,7 +119,8 @@ export class OrderSchedulerService {
       const paymentTimeoutMinutes = globalConfig.paymentTimeoutMinutes ?? 30;
 
       // Get all pending payment orders
-      const pendingPaymentOrders = await this.orderRepository.findByStatus('PENDING_PAYMENT');
+      const pendingPaymentOrders =
+        await this.orderRepository.findByStatus('PENDING_PAYMENT');
 
       if (!pendingPaymentOrders || pendingPaymentOrders.length === 0) {
         this.logger.debug('[OrderScheduler] No pending payment orders found');

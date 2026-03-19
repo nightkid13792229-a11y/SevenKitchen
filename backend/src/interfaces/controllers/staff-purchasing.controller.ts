@@ -42,7 +42,10 @@ import type {
 import { ReimbursementService } from '../../application/purchasing/reimbursement.service';
 import type { SubmitReimbursementDto } from '../../application/purchasing/reimbursement.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
-import { PurchaseListStatus, ReimbursementStatus } from '../../domain/purchasing';
+import {
+  PurchaseListStatus,
+  ReimbursementStatus,
+} from '../../domain/purchasing';
 import { AuthGuard } from '../auth';
 import { UserId, UserRole } from '../auth/user.decorator';
 import { Put, Delete } from '@nestjs/common';
@@ -52,7 +55,13 @@ import { TencentCosService } from '../../infrastructure/services/tencent-cos.ser
 @Controller('api/v1/staff/purchasing')
 @UseGuards(AuthGuard)
 @ApiSecurity('bearer')
-@UsePipes(new ValidationPipe({ transform: true, whitelist: true, forbidNonWhitelisted: true }))
+@UsePipes(
+  new ValidationPipe({
+    transform: true,
+    whitelist: true,
+    forbidNonWhitelisted: true,
+  }),
+)
 export class StaffPurchasingController {
   private readonly logger = new Logger(StaffPurchasingController.name);
 
@@ -70,8 +79,20 @@ export class StaffPurchasingController {
 
   @Get('preview')
   @ApiOperation({ summary: '预览采购需求（不创建采购清单，不改变订单状态）' })
-  @ApiQuery({ name: 'startDate', required: true, type: String, description: '目标日期 YYYY-MM-DD', example: '2026-01-10' })
-  @ApiQuery({ name: 'endDate', required: false, type: String, description: '结束日期 YYYY-MM-DD（可选）', example: '2026-01-10' })
+  @ApiQuery({
+    name: 'startDate',
+    required: true,
+    type: String,
+    description: '目标日期 YYYY-MM-DD',
+    example: '2026-01-10',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    type: String,
+    description: '结束日期 YYYY-MM-DD（可选）',
+    example: '2026-01-10',
+  })
   @ApiResponse({
     status: 200,
     description: '预览成功',
@@ -124,9 +145,14 @@ export class StaffPurchasingController {
     @Query('startDate') startDate: string,
     @Query('endDate') endDate?: string,
   ) {
-    this.logger.log(`Previewing purchase list for ${startDate} - ${endDate || startDate}`);
+    this.logger.log(
+      `Previewing purchase list for ${startDate} - ${endDate || startDate}`,
+    );
 
-    const preview = await this.purchasingService.previewPurchaseRequirements(startDate, endDate);
+    const preview = await this.purchasingService.previewPurchaseRequirements(
+      startDate,
+      endDate,
+    );
 
     return ApiResponseDto.success(preview, '预览成功');
   }
@@ -137,8 +163,16 @@ export class StaffPurchasingController {
     schema: {
       type: 'object',
       properties: {
-        startDate: { type: 'string', description: '目标日期 YYYY-MM-DD', example: '2026-01-10' },
-        endDate: { type: 'string', description: '结束日期 YYYY-MM-DD（可选）', example: '2026-01-10' },
+        startDate: {
+          type: 'string',
+          description: '目标日期 YYYY-MM-DD',
+          example: '2026-01-10',
+        },
+        endDate: {
+          type: 'string',
+          description: '结束日期 YYYY-MM-DD（可选）',
+          example: '2026-01-10',
+        },
       },
       required: ['startDate'],
     },
@@ -184,20 +218,52 @@ export class StaffPurchasingController {
     @Body() dto: GeneratePurchaseListDto,
     @UserId() userId: string,
   ): Promise<ApiResponseDto<any>> {
-    this.logger.log(`Generating purchase list for ${dto.startDate} - ${dto.endDate || dto.startDate} by user ${userId}`);
+    this.logger.log(
+      `Generating purchase list for ${dto.startDate} - ${dto.endDate || dto.startDate} by user ${userId}`,
+    );
 
-    const purchaseList = await this.purchasingService.generatePurchaseList(dto, userId);
+    const purchaseList = await this.purchasingService.generatePurchaseList(
+      dto,
+      userId,
+    );
 
     return ApiResponseDto.success(purchaseList, '采购清单生成成功');
   }
 
   @Get('lists')
   @ApiOperation({ summary: '查看采购清单列表' })
-  @ApiQuery({ name: 'status', required: false, enum: ['PENDING', 'COMPLETED'], description: '筛选状态' })
-  @ApiQuery({ name: 'startDate', required: false, type: String, description: '开始日期 YYYY-MM-DD' })
-  @ApiQuery({ name: 'endDate', required: false, type: String, description: '结束日期 YYYY-MM-DD' })
-  @ApiQuery({ name: 'page', required: false, type: Number, description: '页码', example: 1 })
-  @ApiQuery({ name: 'pageSize', required: false, type: Number, description: '每页数量', example: 20 })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['PENDING', 'COMPLETED'],
+    description: '筛选状态',
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    type: String,
+    description: '开始日期 YYYY-MM-DD',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    type: String,
+    description: '结束日期 YYYY-MM-DD',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: '页码',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'pageSize',
+    required: false,
+    type: Number,
+    description: '每页数量',
+    example: 20,
+  })
   @ApiResponse({
     status: 200,
     description: '采购清单列表',
@@ -225,7 +291,9 @@ export class StaffPurchasingController {
     @UserId() userId?: string,
     @UserRole() userRole?: string,
   ): Promise<ApiResponseDto<any>> {
-    this.logger.log(`Fetching purchase lists with filters: status=${status}, userId=${userId}, role=${userRole}`);
+    this.logger.log(
+      `Fetching purchase lists with filters: status=${status}, userId=${userId}, role=${userRole}`,
+    );
 
     // 管理员可以看到所有采购清单，员工只能看到自己创建的
     const createdById = userRole === 'ADMIN' ? undefined : userId;
@@ -286,7 +354,11 @@ export class StaffPurchasingController {
   ): Promise<ApiResponseDto<any>> {
     this.logger.log(`Adding orders to purchase list ${id}`);
 
-    const result = await this.purchasingService.addOrdersToPurchaseList(id, dto.orderIds, userId);
+    const result = await this.purchasingService.addOrdersToPurchaseList(
+      id,
+      dto.orderIds,
+      userId,
+    );
 
     return ApiResponseDto.success(result, '追加订单成功');
   }
@@ -318,7 +390,11 @@ export class StaffPurchasingController {
   ): Promise<ApiResponseDto<any>> {
     this.logger.log(`Removing orders from purchase list ${id}`);
 
-    const result = await this.purchasingService.removeOrdersFromPurchaseList(id, dto.orderIds, userId);
+    const result = await this.purchasingService.removeOrdersFromPurchaseList(
+      id,
+      dto.orderIds,
+      userId,
+    );
 
     return ApiResponseDto.success(result, '剔除订单成功');
   }
@@ -332,14 +408,25 @@ export class StaffPurchasingController {
       properties: {
         ingredientId: { type: 'string', description: '原料ID' },
         ingredientName: { type: 'string', description: '原料名称' },
-        type: { type: 'string', enum: ['FOOD', 'SUPPLEMENT', 'PACKAGING'], description: '原料类型' },
+        type: {
+          type: 'string',
+          enum: ['FOOD', 'SUPPLEMENT', 'PACKAGING'],
+          description: '原料类型',
+        },
         quantityNeeded: { type: 'number', description: '需求数量' },
         quantityUnit: { type: 'string', description: '数量单位' },
         estimatedCost: { type: 'number', description: '预估成本' },
         purchaseChannel: { type: 'string', description: '采购渠道' },
         productModel: { type: 'string', description: '产品型号' },
       },
-      required: ['ingredientId', 'ingredientName', 'type', 'quantityNeeded', 'quantityUnit', 'estimatedCost'],
+      required: [
+        'ingredientId',
+        'ingredientName',
+        'type',
+        'quantityNeeded',
+        'quantityUnit',
+        'estimatedCost',
+      ],
     },
   })
   @ApiResponse({
@@ -348,7 +435,8 @@ export class StaffPurchasingController {
   })
   async addManualItem(
     @Param('id') id: string,
-    @Body() dto: {
+    @Body()
+    dto: {
       ingredientId: string;
       ingredientName: string;
       type: 'FOOD' | 'SUPPLEMENT' | 'PACKAGING';
@@ -362,7 +450,11 @@ export class StaffPurchasingController {
   ): Promise<ApiResponseDto<any>> {
     this.logger.log(`Adding manual item to purchase list ${id}`);
 
-    const purchaseList = await this.purchasingService.addManualItem(id, dto, userId);
+    const purchaseList = await this.purchasingService.addManualItem(
+      id,
+      dto,
+      userId,
+    );
 
     return ApiResponseDto.success(purchaseList, '添加原料成功');
   }
@@ -382,7 +474,11 @@ export class StaffPurchasingController {
   ): Promise<ApiResponseDto<any>> {
     this.logger.log(`Removing item ${itemId} from purchase list ${id}`);
 
-    const purchaseList = await this.purchasingService.removeItem(id, itemId, userId);
+    const purchaseList = await this.purchasingService.removeItem(
+      id,
+      itemId,
+      userId,
+    );
 
     return ApiResponseDto.success(purchaseList, '删除原料成功');
   }
@@ -400,7 +496,10 @@ export class StaffPurchasingController {
   ): Promise<ApiResponseDto<any>> {
     this.logger.log(`Recalculating purchase list ${id}`);
 
-    const purchaseList = await this.purchasingService.recalculatePurchaseList(id, userId);
+    const purchaseList = await this.purchasingService.recalculatePurchaseList(
+      id,
+      userId,
+    );
 
     return ApiResponseDto.success(purchaseList, '重新计算需求成功');
   }
@@ -527,9 +626,7 @@ export class StaffPurchasingController {
       },
     },
   })
-  async startPurchase(
-    @Param('id') id: string,
-  ): Promise<ApiResponseDto<any>> {
+  async startPurchase(@Param('id') id: string): Promise<ApiResponseDto<any>> {
     this.logger.log(`Starting purchase list: ${id}`);
 
     const purchaseList = await this.purchasingService.startPurchase(id);
@@ -663,7 +760,10 @@ export class StaffPurchasingController {
   ): Promise<ApiResponseDto<any>> {
     this.logger.log(`Updating purchase record: ${recordId}`);
 
-    const record = await this.purchasingService.updatePurchaseRecord(recordId, dto);
+    const record = await this.purchasingService.updatePurchaseRecord(
+      recordId,
+      dto,
+    );
 
     return ApiResponseDto.success(record, '采购记录更新成功');
   }
@@ -717,7 +817,11 @@ export class StaffPurchasingController {
         data: {
           type: 'object',
           properties: {
-            url: { type: 'string', example: 'https://img.sevenkitchen.cloud/reimbursement-receipts/xxx.jpg' },
+            url: {
+              type: 'string',
+              example:
+                'https://img.sevenkitchen.cloud/reimbursement-receipts/xxx.jpg',
+            },
             key: { type: 'string', example: 'reimbursement-receipts/xxx.jpg' },
           },
         },
@@ -733,10 +837,16 @@ export class StaffPurchasingController {
       throw new BadRequestException('请选择文件');
     }
 
-    this.logger.log(`Uploading reimbursement receipt photo: ${file.originalname}, size: ${file.size}`);
+    this.logger.log(
+      `Uploading reimbursement receipt photo: ${file.originalname}, size: ${file.size}`,
+    );
 
     try {
-      const result = await this.cosService.uploadImage(file, file.originalname, 'reimbursement-receipts');
+      const result = await this.cosService.uploadImage(
+        file,
+        file.originalname,
+        'reimbursement-receipts',
+      );
       return ApiResponseDto.success(result, '上传成功');
     } catch (error) {
       this.logger.error('Failed to upload reimbursement receipt photo:', error);
@@ -800,12 +910,12 @@ export class StaffPurchasingController {
         platformShippingFee: {
           type: 'number',
           description: '平台运费（可选）',
-          example: 10.00,
+          example: 10.0,
         },
         platformPackagingFee: {
           type: 'number',
           description: '平台打包费（可选）',
-          example: 5.00,
+          example: 5.0,
         },
         customFees: {
           type: 'array',
@@ -814,7 +924,7 @@ export class StaffPurchasingController {
             type: 'object',
             properties: {
               description: { type: 'string', example: '打车费' },
-              amount: { type: 'number', example: 30.00 },
+              amount: { type: 'number', example: 30.0 },
             },
           },
         },
@@ -835,7 +945,15 @@ export class StaffPurchasingController {
           properties: {
             id: { type: 'string' },
             claimNumber: { type: 'string', example: 'BX20260110001' },
-            status: { type: 'string', enum: ['PENDING_REVIEW', 'APPROVED', 'REJECTED', 'REQUIRES_RESUBMIT'] },
+            status: {
+              type: 'string',
+              enum: [
+                'PENDING_REVIEW',
+                'APPROVED',
+                'REJECTED',
+                'REQUIRES_RESUBMIT',
+              ],
+            },
             totalActualCost: { type: 'number' },
             totalEstimatedCost: { type: 'number' },
             submittedAt: { type: 'string', format: 'date-time' },
@@ -848,20 +966,52 @@ export class StaffPurchasingController {
     @Body() dto: SubmitReimbursementDto,
     @UserId() userId: string,
   ): Promise<ApiResponseDto<any>> {
-    this.logger.log(`Submitting reimbursement for ${dto.purchaseListIds.length} purchase lists by user ${userId}`);
+    this.logger.log(
+      `Submitting reimbursement for ${dto.purchaseListIds.length} purchase lists by user ${userId}`,
+    );
 
-    const reimbursement = await this.reimbursementService.submitReimbursement(dto, userId);
+    const reimbursement = await this.reimbursementService.submitReimbursement(
+      dto,
+      userId,
+    );
 
     return ApiResponseDto.success(reimbursement, '报销申请提交成功');
   }
 
   @Get('reimbursements')
   @ApiOperation({ summary: '查看我的报销申请列表' })
-  @ApiQuery({ name: 'status', required: false, enum: ['PENDING_REVIEW', 'APPROVED', 'REJECTED', 'REQUIRES_RESUBMIT'], description: '筛选状态' })
-  @ApiQuery({ name: 'startDate', required: false, type: String, description: '开始日期 YYYY-MM-DD' })
-  @ApiQuery({ name: 'endDate', required: false, type: String, description: '结束日期 YYYY-MM-DD' })
-  @ApiQuery({ name: 'page', required: false, type: Number, description: '页码', example: 1 })
-  @ApiQuery({ name: 'pageSize', required: false, type: Number, description: '每页数量', example: 20 })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: ['PENDING_REVIEW', 'APPROVED', 'REJECTED', 'REQUIRES_RESUBMIT'],
+    description: '筛选状态',
+  })
+  @ApiQuery({
+    name: 'startDate',
+    required: false,
+    type: String,
+    description: '开始日期 YYYY-MM-DD',
+  })
+  @ApiQuery({
+    name: 'endDate',
+    required: false,
+    type: String,
+    description: '结束日期 YYYY-MM-DD',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: '页码',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'pageSize',
+    required: false,
+    type: Number,
+    description: '每页数量',
+    example: 20,
+  })
   @ApiResponse({
     status: 200,
     description: '报销申请列表',
@@ -875,12 +1025,16 @@ export class StaffPurchasingController {
     @UserId() userId?: string,
     @UserRole() role?: string,
   ): Promise<ApiResponseDto<any>> {
-    this.logger.log(`Fetching reimbursements for user ${userId} (role=${role}) with status=${status}`);
+    this.logger.log(
+      `Fetching reimbursements for user ${userId} (role=${role}) with status=${status}`,
+    );
 
     // 管理员可以看到所有报销单，员工只能看到自己的
     const submittedById = role === 'ADMIN' ? undefined : userId;
 
-    this.logger.log(`[DEBUG] submittedById value: ${submittedById}, type: ${typeof submittedById}, is ADMIN: ${role === 'ADMIN'}`);
+    this.logger.log(
+      `[DEBUG] submittedById value: ${submittedById}, type: ${typeof submittedById}, is ADMIN: ${role === 'ADMIN'}`,
+    );
 
     const result = await this.reimbursementService.getReimbursements({
       status,
@@ -891,7 +1045,9 @@ export class StaffPurchasingController {
       pageSize: pageSize ? parseInt(pageSize) : 20,
     });
 
-    this.logger.log(`[DEBUG] Query result: found ${result.list.length} reimbursements, total: ${result.total}`);
+    this.logger.log(
+      `[DEBUG] Query result: found ${result.list.length} reimbursements, total: ${result.total}`,
+    );
 
     return ApiResponseDto.success(result, '获取报销申请列表成功');
   }
@@ -908,7 +1064,8 @@ export class StaffPurchasingController {
   ): Promise<ApiResponseDto<any>> {
     this.logger.log(`Fetching reimbursement detail: ${id}`);
 
-    const reimbursement = await this.reimbursementService.getReimbursementDetail(id);
+    const reimbursement =
+      await this.reimbursementService.getReimbursementDetail(id);
 
     return ApiResponseDto.success(reimbursement, '获取报销单详情成功');
   }
@@ -962,12 +1119,12 @@ export class StaffPurchasingController {
         platformShippingFee: {
           type: 'number',
           description: '平台运费（可选）',
-          example: 10.00,
+          example: 10.0,
         },
         platformPackagingFee: {
           type: 'number',
           description: '平台打包费（可选）',
-          example: 5.00,
+          example: 5.0,
         },
         customFees: {
           type: 'array',
@@ -976,7 +1133,7 @@ export class StaffPurchasingController {
             type: 'object',
             properties: {
               description: { type: 'string', example: '打车费' },
-              amount: { type: 'number', example: 30.00 },
+              amount: { type: 'number', example: 30.0 },
             },
           },
         },
@@ -994,7 +1151,10 @@ export class StaffPurchasingController {
   ): Promise<ApiResponseDto<any>> {
     this.logger.log(`Resubmitting reimbursement: ${id}`);
 
-    const reimbursement = await this.reimbursementService.resubmitReimbursement(id, dto);
+    const reimbursement = await this.reimbursementService.resubmitReimbursement(
+      id,
+      dto,
+    );
 
     return ApiResponseDto.success(reimbursement, '报销单重新提交成功');
   }
@@ -1027,7 +1187,9 @@ export class StaffPurchasingController {
     @UploadedFiles() files: Express.Multer.File[],
     @UserId() userId: string,
   ): Promise<ApiResponseDto<any>> {
-    this.logger.log(`Appending receipt URLs for reimbursement: ${id} by user ${userId}`);
+    this.logger.log(
+      `Appending receipt URLs for reimbursement: ${id} by user ${userId}`,
+    );
 
     if (!files || files.length === 0) {
       throw new BadRequestException('请至少上传一张图片');
@@ -1053,7 +1215,7 @@ export class StaffPurchasingController {
       id,
       files,
       userId,
-      false
+      false,
     );
 
     return ApiResponseDto.success(reimbursement, '支付凭证上传成功');
@@ -1083,7 +1245,9 @@ export class StaffPurchasingController {
     @Body() body: { urlIndex: number },
     @UserId() userId: string,
   ): Promise<ApiResponseDto<any>> {
-    this.logger.log(`Removing receipt at index ${body.urlIndex} from reimbursement: ${id} by user ${userId}`);
+    this.logger.log(
+      `Removing receipt at index ${body.urlIndex} from reimbursement: ${id} by user ${userId}`,
+    );
 
     if (body.urlIndex === undefined || body.urlIndex === null) {
       throw new BadRequestException('请提供要删除的图片索引');
@@ -1093,7 +1257,7 @@ export class StaffPurchasingController {
       id,
       body.urlIndex,
       userId,
-      false
+      false,
     );
 
     return ApiResponseDto.success(reimbursement, '支付凭证删除成功');

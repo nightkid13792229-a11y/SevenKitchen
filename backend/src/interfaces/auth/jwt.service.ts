@@ -21,7 +21,11 @@ export class JwtAuthService {
    * @deprecated Use generateTokenForUser instead
    */
   generateToken(customerId: string): string {
-    const payload: JwtPayload = { userId: customerId, customerId, role: 'CUSTOMER' };
+    const payload: JwtPayload = {
+      userId: customerId,
+      customerId,
+      role: 'CUSTOMER',
+    };
     const expiresIn = process.env.JWT_EXPIRES_IN || '7d';
     const secret = this.getSecret();
 
@@ -80,4 +84,3 @@ export class JwtAuthService {
     return process.env.JWT_SECRET || 'dev-secret-key-change-in-production';
   }
 }
-

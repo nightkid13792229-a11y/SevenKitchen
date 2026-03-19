@@ -1,6 +1,12 @@
 import { Injectable } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import type { RecipeRepository, Recipe, RecipeItem, FindRecipesOptions, FilterOptions } from '../../domain/recipe/recipe.repository';
+import type {
+  RecipeRepository,
+  Recipe,
+  RecipeItem,
+  FindRecipesOptions,
+  FilterOptions,
+} from '../../domain/recipe/recipe.repository';
 import { PrismaService } from '../prisma.service';
 
 // Type for Recipe with items included
@@ -8,17 +14,17 @@ type RecipeWithItems = Prisma.RecipeGetPayload<{
   include: {
     items: {
       include: {
-        ingredient: true
-      },
+        ingredient: true;
+      };
       orderBy: {
-        sortOrder: 'asc' // 按照 sortOrder 升序排列
-      }
-    }
+        sortOrder: 'asc'; // 按照 sortOrder 升序排列
+      };
+    };
     healthTagAssignments: {
       include: {
-        healthTag: true
-      }
-    }
+        healthTag: true;
+      };
+    };
   };
 }>;
 
@@ -34,17 +40,17 @@ export class PrismaRecipeRepository implements RecipeRepository {
       include: {
         items: {
           include: {
-            ingredient: true
+            ingredient: true,
           },
           orderBy: {
-            sortOrder: 'asc' // 按照 sortOrder 升序排列
-          }
+            sortOrder: 'asc', // 按照 sortOrder 升序排列
+          },
         },
         healthTagAssignments: {
           include: {
-            healthTag: true
-          }
-        }
+            healthTag: true,
+          },
+        },
       },
     });
     return record ? this.mapToDomain(record) : null;
@@ -64,14 +70,14 @@ export class PrismaRecipeRepository implements RecipeRepository {
       include: {
         items: {
           include: {
-            ingredient: true
-          }
+            ingredient: true,
+          },
         },
         healthTagAssignments: {
           include: {
-            healthTag: true
-          }
-        }
+            healthTag: true,
+          },
+        },
       },
     });
     return record ? this.mapToDomain(record) : null;
@@ -86,9 +92,9 @@ export class PrismaRecipeRepository implements RecipeRepository {
       where.healthTagAssignments = {
         some: {
           healthTagId: {
-            in: options.healthTags
-          }
-        }
+            in: options.healthTags,
+          },
+        },
       };
     }
 
@@ -100,16 +106,16 @@ export class PrismaRecipeRepository implements RecipeRepository {
           include: {
             ingredient: {
               include: {
-                tags: true
-              }
-            }
-          }
+                tags: true,
+              },
+            },
+          },
         },
         healthTagAssignments: {
           include: {
-            healthTag: true
-          }
-        }
+            healthTag: true,
+          },
+        },
       },
       orderBy: [{ createdAt: 'desc' }],
     });
@@ -117,26 +123,30 @@ export class PrismaRecipeRepository implements RecipeRepository {
     // Filter by life stages (any match) - in-memory filtering for JSON field
     let filteredRecipes = allRecipes;
     if (options?.lifeStages && options.lifeStages.length > 0) {
-      filteredRecipes = allRecipes.filter(recipe => {
-        const stages = recipe.applicableLifeStages as string[] || [];
+      filteredRecipes = allRecipes.filter((recipe) => {
+        const stages = (recipe.applicableLifeStages as string[]) || [];
         // Check if recipe has ANY of the selected life stages
-        return options.lifeStages!.some(selectedStage => stages.includes(selectedStage));
+        return options.lifeStages!.some((selectedStage) =>
+          stages.includes(selectedStage),
+        );
       });
     }
 
     // Filter out recipes that contain excluded ingredient tags
     if (options?.excludeTags && options.excludeTags.length > 0) {
-      filteredRecipes = filteredRecipes.filter(recipe => {
+      filteredRecipes = filteredRecipes.filter((recipe) => {
         // Get all ingredient tag IDs for this recipe
         const recipeTagIds = new Set<string>();
-        recipe.items?.forEach(item => {
-          item.ingredient?.tags?.forEach(tagAssignment => {
+        recipe.items?.forEach((item) => {
+          item.ingredient?.tags?.forEach((tagAssignment) => {
             recipeTagIds.add(tagAssignment.tagId);
           });
         });
 
         // Check if any excluded tag is present
-        return !options.excludeTags!.some(excludeTag => recipeTagIds.has(excludeTag));
+        return !options.excludeTags!.some((excludeTag) =>
+          recipeTagIds.has(excludeTag),
+        );
       });
     }
 
@@ -152,14 +162,26 @@ export class PrismaRecipeRepository implements RecipeRepository {
     // Sort by createdAt descending AFTER grouping
     return Array.from(latestByRecipeId.values())
       .sort((a, b) => {
-        const aTime = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
-        const bTime = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
+        const aTime =
+          a.createdAt instanceof Date
+            ? a.createdAt.getTime()
+            : new Date(a.createdAt).getTime();
+        const bTime =
+          b.createdAt instanceof Date
+            ? b.createdAt.getTime()
+            : new Date(b.createdAt).getTime();
         return bTime - aTime;
       })
       .map((r) => this.mapToDomain(r));
   }
 
-  async findPublicRecipesPaginated(options?: FindRecipesOptions): Promise<{ data: Recipe[], total: number, page: number, pageSize: number, hasMore: boolean }> {
+  async findPublicRecipesPaginated(options?: FindRecipesOptions): Promise<{
+    data: Recipe[];
+    total: number;
+    page: number;
+    pageSize: number;
+    hasMore: boolean;
+  }> {
     // Build where clause
     const where: Prisma.RecipeWhereInput = { status: 'PUBLIC' };
 
@@ -168,9 +190,9 @@ export class PrismaRecipeRepository implements RecipeRepository {
       where.healthTagAssignments = {
         some: {
           healthTagId: {
-            in: options.healthTags
-          }
-        }
+            in: options.healthTags,
+          },
+        },
       };
     }
 
@@ -182,16 +204,16 @@ export class PrismaRecipeRepository implements RecipeRepository {
           include: {
             ingredient: {
               include: {
-                tags: true
-              }
-            }
-          }
+                tags: true,
+              },
+            },
+          },
         },
         healthTagAssignments: {
           include: {
-            healthTag: true
-          }
-        }
+            healthTag: true,
+          },
+        },
       },
       orderBy: [{ createdAt: 'desc' }],
     });
@@ -199,26 +221,30 @@ export class PrismaRecipeRepository implements RecipeRepository {
     // Filter by life stages (any match) - in-memory filtering for JSON field
     let filteredRecipes = allRecipes;
     if (options?.lifeStages && options.lifeStages.length > 0) {
-      filteredRecipes = allRecipes.filter(recipe => {
-        const stages = recipe.applicableLifeStages as string[] || [];
+      filteredRecipes = allRecipes.filter((recipe) => {
+        const stages = (recipe.applicableLifeStages as string[]) || [];
         // Check if recipe has ANY of the selected life stages
-        return options.lifeStages!.some(selectedStage => stages.includes(selectedStage));
+        return options.lifeStages!.some((selectedStage) =>
+          stages.includes(selectedStage),
+        );
       });
     }
 
     // Filter out recipes that contain excluded ingredient tags
     if (options?.excludeTags && options.excludeTags.length > 0) {
-      filteredRecipes = filteredRecipes.filter(recipe => {
+      filteredRecipes = filteredRecipes.filter((recipe) => {
         // Get all ingredient tag IDs for this recipe
         const recipeTagIds = new Set<string>();
-        recipe.items?.forEach(item => {
-          item.ingredient?.tags?.forEach(tagAssignment => {
+        recipe.items?.forEach((item) => {
+          item.ingredient?.tags?.forEach((tagAssignment) => {
             recipeTagIds.add(tagAssignment.tagId);
           });
         });
 
         // Check if any excluded tag is present
-        return !options.excludeTags!.some(excludeTag => recipeTagIds.has(excludeTag));
+        return !options.excludeTags!.some((excludeTag) =>
+          recipeTagIds.has(excludeTag),
+        );
       });
     }
 
@@ -233,8 +259,14 @@ export class PrismaRecipeRepository implements RecipeRepository {
 
     // Sort by createdAt descending AFTER grouping to ensure correct order
     const uniqueRecipes = Array.from(latestByRecipeId.values()).sort((a, b) => {
-      const aTime = a.createdAt instanceof Date ? a.createdAt.getTime() : new Date(a.createdAt).getTime();
-      const bTime = b.createdAt instanceof Date ? b.createdAt.getTime() : new Date(b.createdAt).getTime();
+      const aTime =
+        a.createdAt instanceof Date
+          ? a.createdAt.getTime()
+          : new Date(a.createdAt).getTime();
+      const bTime =
+        b.createdAt instanceof Date
+          ? b.createdAt.getTime()
+          : new Date(b.createdAt).getTime();
       return bTime - aTime;
     });
     const total = uniqueRecipes.length;
@@ -292,38 +324,45 @@ export class PrismaRecipeRepository implements RecipeRepository {
 
     // Aggregate life stages
     const lifeStageMap = new Map<string, number>();
-    allRecipes.forEach(recipe => {
-      const stages = recipe.applicableLifeStages as string[] || [];
-      stages.forEach(stage => {
+    allRecipes.forEach((recipe) => {
+      const stages = (recipe.applicableLifeStages as string[]) || [];
+      stages.forEach((stage) => {
         lifeStageMap.set(stage, (lifeStageMap.get(stage) || 0) + 1);
       });
     });
 
-    const lifeStages = Array.from(lifeStageMap.entries()).map(([value, count]) => ({
-      value,
-      label: this.getLifeStageLabel(value),
-      count,
-    }));
+    const lifeStages = Array.from(lifeStageMap.entries()).map(
+      ([value, count]) => ({
+        value,
+        label: this.getLifeStageLabel(value),
+        count,
+      }),
+    );
 
     // Aggregate health tags from relationship table
     const healthTagMap = new Map<string, number>();
-    allRecipes.forEach(recipe => {
-      recipe.healthTagAssignments?.forEach(assignment => {
-        healthTagMap.set(assignment.healthTagId, (healthTagMap.get(assignment.healthTagId) || 0) + 1);
+    allRecipes.forEach((recipe) => {
+      recipe.healthTagAssignments?.forEach((assignment) => {
+        healthTagMap.set(
+          assignment.healthTagId,
+          (healthTagMap.get(assignment.healthTagId) || 0) + 1,
+        );
       });
     });
 
-    const healthTags = Array.from(healthTagMap.entries()).map(([value, count]) => {
-      const healthTag = allHealthTags.find(tag => tag.id === value);
-      return {
-        value,
-        label: healthTag?.name || value,
-        count,
-      };
-    });
+    const healthTags = Array.from(healthTagMap.entries()).map(
+      ([value, count]) => {
+        const healthTag = allHealthTags.find((tag) => tag.id === value);
+        return {
+          value,
+          label: healthTag?.name || value,
+          count,
+        };
+      },
+    );
 
     // Ingredient tags (direct from database)
-    const ingredientTags = allTags.map(tag => ({
+    const ingredientTags = allTags.map((tag) => ({
       value: tag.id,
       label: tag.name,
       count: 0, // TODO: Count recipes containing this tag
@@ -340,23 +379,23 @@ export class PrismaRecipeRepository implements RecipeRepository {
   // Helper methods for label translation
   private getLifeStageLabel(stage: string): string {
     const labels: Record<string, string> = {
-      'PUPPY': '幼犬',
-      'ADULT': '成犬',
-      'SENIOR': '老年犬',
-      'PREGNANCY': '妊娠期',
-      'LACTATION': '哺乳期',
+      PUPPY: '幼犬',
+      ADULT: '成犬',
+      SENIOR: '老年犬',
+      PREGNANCY: '妊娠期',
+      LACTATION: '哺乳期',
     };
     return labels[stage] || stage;
   }
 
   private getHealthTagLabel(tag: string): string {
     const labels: Record<string, string> = {
-      'HEALTHY': '健康',
-      'PICKY_EATER': '挑食',
-      'SENSITIVE_STOMACH': '敏感胃',
-      'PANCREATITIS_SUPPORT': '胰腺炎友好',
-      'LOW_FAT': '低脂',
-      'SKIN_COAT_CARE': '护肤',
+      HEALTHY: '健康',
+      PICKY_EATER: '挑食',
+      SENSITIVE_STOMACH: '敏感胃',
+      PANCREATITIS_SUPPORT: '胰腺炎友好',
+      LOW_FAT: '低脂',
+      SKIN_COAT_CARE: '护肤',
     };
     return labels[tag] || tag;
   }
@@ -447,14 +486,14 @@ export class PrismaRecipeRepository implements RecipeRepository {
       include: {
         items: {
           include: {
-            ingredient: true
-          }
+            ingredient: true,
+          },
         },
         healthTagAssignments: {
           include: {
-            healthTag: true
-          }
-        }
+            healthTag: true,
+          },
+        },
       },
     });
     return saved ? this.mapToDomain(saved) : recipe;
@@ -472,31 +511,35 @@ export class PrismaRecipeRepository implements RecipeRepository {
         ? Number(record.batchLaborHours)
         : undefined,
       coverImageUrl: record.coverImageUrl,
-      targetHealthTags: record.healthTagAssignments?.map(assign => assign.healthTagId) || [],
-      applicableLifeStages: record.applicableLifeStages as string[] || [],
+      targetHealthTags:
+        record.healthTagAssignments?.map((assign) => assign.healthTagId) || [],
+      applicableLifeStages: (record.applicableLifeStages as string[]) || [],
       designSource: record.designSource,
       nutritionStandard: record.nutritionStandard,
       nutritionDetailedData: record.nutritionDetailedData,
       description: record.description,
-      items: record.items.map((item): RecipeItem => ({
-        id: item.id,
-        ingredientId: item.ingredientId,
-        preparationMethod: item.preparationMethod,
-        exampleWeight: item.exampleWeight ? Number(item.exampleWeight) : null,
-        ratioPercent: item.ratioPercent ? Number(item.ratioPercent) : null,
-        sortOrder: item.sortOrder ? Number(item.sortOrder) : null,
-        nutrientTargetKey: item.nutrientTargetKey,
-        nutrientTargetValue: item.nutrientTargetValue
-          ? Number(item.nutrientTargetValue)
-          : null,
-        ingredient: item.ingredient ? {
-          id: item.ingredient.id,
-          name: item.ingredient.name,
-          type: item.ingredient.type,
-          properties: item.ingredient.properties,
-        } : undefined,
-      })),
+      items: record.items.map(
+        (item): RecipeItem => ({
+          id: item.id,
+          ingredientId: item.ingredientId,
+          preparationMethod: item.preparationMethod,
+          exampleWeight: item.exampleWeight ? Number(item.exampleWeight) : null,
+          ratioPercent: item.ratioPercent ? Number(item.ratioPercent) : null,
+          sortOrder: item.sortOrder ? Number(item.sortOrder) : null,
+          nutrientTargetKey: item.nutrientTargetKey,
+          nutrientTargetValue: item.nutrientTargetValue
+            ? Number(item.nutrientTargetValue)
+            : null,
+          ingredient: item.ingredient
+            ? {
+                id: item.ingredient.id,
+                name: item.ingredient.name,
+                type: item.ingredient.type,
+                properties: item.ingredient.properties,
+              }
+            : undefined,
+        }),
+      ),
     };
   }
 }
-

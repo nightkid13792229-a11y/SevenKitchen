@@ -35,4 +35,3 @@ export class PaymentDto {
   })
   paymentStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | null;
 }
-

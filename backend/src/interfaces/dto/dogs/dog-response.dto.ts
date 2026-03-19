@@ -29,14 +29,14 @@ export class DogProfileDto {
   @ApiPropertyOptional({
     description: 'Breed name (from breed table or custom breed name)',
     example: '金毛寻回犬',
-    nullable: true
+    nullable: true,
   })
   breedName?: string | null;
 
   @ApiPropertyOptional({
     description: 'Custom breed name (for mixed breed dogs)',
     example: '田园犬',
-    nullable: true
+    nullable: true,
   })
   customBreedName?: string | null;
 
@@ -86,8 +86,16 @@ export class DogProfileDto {
       type: 'object',
       properties: {
         chiefComplaint: { type: 'string', description: '症状或疾病' },
-        visitDate: { type: 'string', description: '发病日期 (ISO 8601)', nullable: true },
-        diagnosis: { type: 'string', description: '医生诊断结果', nullable: true },
+        visitDate: {
+          type: 'string',
+          description: '发病日期 (ISO 8601)',
+          nullable: true,
+        },
+        diagnosis: {
+          type: 'string',
+          description: '医生诊断结果',
+          nullable: true,
+        },
         notes: { type: 'string', description: '详细描述', nullable: true },
         attachments: {
           type: 'array',
@@ -149,10 +157,16 @@ export class DogProfileDto {
       properties: {
         id: { type: 'string', description: '过敏记录ID' },
         allergen: { type: 'string', description: '过敏原' },
-        allergenType: { type: 'string', description: '过敏原类型 (FOOD/ENVIRONMENTAL/MEDICATION)' },
+        allergenType: {
+          type: 'string',
+          description: '过敏原类型 (FOOD/ENVIRONMENTAL/MEDICATION)',
+        },
         discoveryDate: { type: 'string', description: '发现日期 (ISO 8601)' },
         symptoms: { type: 'string', description: '症状' },
-        severity: { type: 'string', description: '严重程度 (MILD/MODERATE/SEVERE)' },
+        severity: {
+          type: 'string',
+          description: '严重程度 (MILD/MODERATE/SEVERE)',
+        },
         confirmedBy: { type: 'string', description: '确认方 (VET/OWNER)' },
         treatment: { type: 'string', description: '治疗方案', nullable: true },
         notes: { type: 'string', description: '备注', nullable: true },
@@ -183,7 +197,10 @@ export class DogProfileDto {
 }
 
 export class DogCalcResultDto implements CalcPreviewResult {
-  @ApiProperty({ description: 'RER (Resting Energy Requirement)', example: 350 })
+  @ApiProperty({
+    description: 'RER (Resting Energy Requirement)',
+    example: 350,
+  })
   rer!: number;
 
   @ApiProperty({
@@ -211,7 +228,8 @@ export class DogCalcResultDto implements CalcPreviewResult {
   dailyIntakeG?: number;
 
   @ApiPropertyOptional({
-    description: 'Detailed calculation breakdown (includes intermediate values)',
+    description:
+      'Detailed calculation breakdown (includes intermediate values)',
     type: 'object',
     additionalProperties: true,
     example: {
@@ -238,5 +256,3 @@ export class DogDetailResponseDto {
   @ApiProperty({ type: DogCalcResultDto, required: false, nullable: true })
   calcResult?: DogCalcResultDto | null;
 }
-
-

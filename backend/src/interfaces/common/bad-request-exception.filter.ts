@@ -23,7 +23,7 @@ export class BadRequestExceptionFilter implements ExceptionFilter {
     // Extract validation error message if available
     const exceptionResponse = exception.getResponse();
     let errorMessage = message;
-    
+
     if (
       typeof exceptionResponse === 'object' &&
       exceptionResponse !== null &&
@@ -46,4 +46,3 @@ export class BadRequestExceptionFilter implements ExceptionFilter {
     response.status(HttpStatus.OK).json(apiResponse);
   }
 }
-

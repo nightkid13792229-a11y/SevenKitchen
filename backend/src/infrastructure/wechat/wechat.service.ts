@@ -46,7 +46,9 @@ export class WechatService {
     this.appSecret = process.env.WECHAT_APP_SECRET || '';
 
     if (!this.appId || !this.appSecret) {
-      this.logger.warn('WeChat credentials not configured - Using mock mode for development');
+      this.logger.warn(
+        'WeChat credentials not configured - Using mock mode for development',
+      );
     }
   }
 
@@ -55,8 +57,9 @@ export class WechatService {
    */
   private isMockMode(): boolean {
     // Check if credentials are missing or are placeholder values
-    const isPlaceholder = this.appId === 'your_wechat_app_id' ||
-                          this.appSecret === 'your_wechat_app_secret';
+    const isPlaceholder =
+      this.appId === 'your_wechat_app_id' ||
+      this.appSecret === 'your_wechat_app_secret';
     const isMissing = !this.appId || !this.appSecret;
     return isMissing || isPlaceholder;
   }
@@ -69,7 +72,9 @@ export class WechatService {
     // Mock mode for development (when WeChat credentials are not configured)
     if (this.isMockMode()) {
       console.log('[WechatService] ===== MOCK MODE =====');
-      console.log('[WechatService] Using mock WeChat authentication for development');
+      console.log(
+        '[WechatService] Using mock WeChat authentication for development',
+      );
       console.log('[WechatService] appId:', this.appId);
       console.log('[WechatService] appSecret configured:', !!this.appSecret);
 
@@ -120,7 +125,11 @@ export class WechatService {
    */
   async getAccessToken(): Promise<string> {
     // 检查缓存是否有效
-    if (this.accessToken && this.accessTokenExpiresAt && Date.now() < this.accessTokenExpiresAt) {
+    if (
+      this.accessToken &&
+      this.accessTokenExpiresAt &&
+      Date.now() < this.accessTokenExpiresAt
+    ) {
       return this.accessToken;
     }
 
@@ -132,11 +141,15 @@ export class WechatService {
     };
 
     try {
-      const response = await axios.get<WechatAccessTokenResponse>(url, { params });
+      const response = await axios.get<WechatAccessTokenResponse>(url, {
+        params,
+      });
       const data = response.data;
 
       if (data.errcode) {
-        throw new Error(`Failed to get access token: ${data.errcode} - ${data.errmsg}`);
+        throw new Error(
+          `Failed to get access token: ${data.errcode} - ${data.errmsg}`,
+        );
       }
 
       // 缓存access_token（提前5分钟过期）
@@ -176,17 +189,24 @@ export class WechatService {
       const accessToken = await this.getAccessToken();
       const url = `https://api.weixin.qq.com/cgi-bin/message/subscribe/send?access_token=${accessToken}`;
 
-      const response = await axios.post<SendSubscriptionMessageResponse>(url, params);
+      const response = await axios.post<SendSubscriptionMessageResponse>(
+        url,
+        params,
+      );
       const data = response.data;
 
       if (data.errcode === 0) {
-        this.logger.log(`Subscription message sent successfully to ${params.touser}, msgid: ${data.msgid}`);
+        this.logger.log(
+          `Subscription message sent successfully to ${params.touser}, msgid: ${data.msgid}`,
+        );
         return {
           success: true,
           msgid: data.msgid,
         };
       } else {
-        this.logger.error(`Failed to send subscription message: ${data.errcode} - ${data.errmsg}`);
+        this.logger.error(
+          `Failed to send subscription message: ${data.errcode} - ${data.errmsg}`,
+        );
         return {
           success: false,
           error: `${data.errcode} - ${data.errmsg}`,
@@ -217,7 +237,9 @@ export class WechatService {
     const templateId = process.env.WECHAT_TEMPLATE_CUSTOM_RECIPE_ORDER || '';
 
     if (!templateId) {
-      this.logger.warn('WeChat template ID for custom recipe order not configured');
+      this.logger.warn(
+        'WeChat template ID for custom recipe order not configured',
+      );
       return { success: false, error: 'Template ID not configured' };
     }
 
@@ -244,9 +266,10 @@ export class WechatService {
     return this.sendSubscriptionMessage({
       touser: openid,
       template_id: templateId,
-      page: status === 'DELIVERED' && recipeId
-        ? `pages/recipe-detail/index?id=${recipeId}`
-        : `pages/custom-recipe/orders`,
+      page:
+        status === 'DELIVERED' && recipeId
+          ? `pages/recipe-detail/index?id=${recipeId}`
+          : `pages/custom-recipe/orders`,
       data,
     });
   }

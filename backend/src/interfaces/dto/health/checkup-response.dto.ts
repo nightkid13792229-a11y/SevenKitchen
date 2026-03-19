@@ -1,46 +1,46 @@
-import { Expose, Transform } from 'class-transformer'
-import { TimezoneUtil } from '../../../utils/timezone.util'
+import { Expose, Transform } from 'class-transformer';
+import { TimezoneUtil } from '../../../utils/timezone.util';
 
 export class CheckupRecordResponseDto {
   @Expose()
-  id!: string
+  id!: string;
 
   @Expose()
-  dogId!: string
+  dogId!: string;
 
   @Expose()
-  checkupType!: string
+  checkupType!: string;
 
   @Expose()
   @Transform(({ value }) => {
     // 使用上海时区转换，避免UTC导致的日期偏移
-    return TimezoneUtil.toShanghaiDateString(value)
+    return TimezoneUtil.toShanghaiDateString(value);
   })
-  checkupDate!: string
+  checkupDate!: string;
 
   @Expose()
-  findings!: string | null
+  findings!: string | null;
 
   @Expose()
-  recommendations!: string | null
+  recommendations!: string | null;
 
   @Expose()
-  veterinarian!: string | null
+  veterinarian!: string | null;
 
   @Expose()
-  attachments!: string[]
+  attachments!: string[];
 
   @Expose()
-  createdAt!: string
+  createdAt!: string;
 
   @Expose()
-  updatedAt!: string
+  updatedAt!: string;
 }
 
 export class CheckupRecordListResponseDto {
   @Expose()
-  total!: number
+  total!: number;
 
   @Expose()
-  records!: CheckupRecordResponseDto[]
+  records!: CheckupRecordResponseDto[];
 }

@@ -1,4 +1,9 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { RequestUser } from '../auth/request-user.interface';
 
@@ -7,7 +12,11 @@ import type { RequestUser } from '../auth/request-user.interface';
  */
 export const ROLES_KEY = 'roles';
 export const Roles = (...roles: string[]) => {
-  return (_target: any, _propertyKey: string, descriptor: PropertyDescriptor) => {
+  return (
+    _target: any,
+    _propertyKey: string,
+    descriptor: PropertyDescriptor,
+  ) => {
     Reflect.defineMetadata(ROLES_KEY, roles, descriptor.value);
     return descriptor;
   };
@@ -23,10 +32,10 @@ export class StaffGuard implements CanActivate {
 
   canActivate(context: ExecutionContext): boolean {
     // 获取装饰器指定的角色（如果有）
-    const requiredRoles = this.reflector.getAllAndOverride<string[]>(ROLES_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+    const requiredRoles = this.reflector.getAllAndOverride<string[]>(
+      ROLES_KEY,
+      [context.getHandler(), context.getClass()],
+    );
 
     // 如果没有指定角色，默认检查是否为STAFF或ADMIN
     const allowedRoles = requiredRoles || ['STAFF', 'ADMIN'];

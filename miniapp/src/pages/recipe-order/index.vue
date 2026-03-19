@@ -318,8 +318,8 @@
       </view>
     </view>
 
-    <!-- 制作要求 -->
-    <view class="section requirements-section" v-if="selectedDog">
+    <!-- 制作要求 - 暂时隐藏 -->
+    <view class="section requirements-section" v-if="false">
       <view class="section-title">
         <text class="title-text">制作要求</text>
       </view>

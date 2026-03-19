@@ -10,9 +10,7 @@ import { PrismaService } from '../../infrastructure/prisma.service';
 
 @Injectable()
 export class GlobalConfigService {
-  constructor(
-    private readonly prisma: PrismaService,
-  ) {}
+  constructor(private readonly prisma: PrismaService) {}
 
   /**
    * Get global configuration from database
@@ -31,11 +29,15 @@ export class GlobalConfigService {
     return {
       laborHourlyRate: parseFloat(config.laborHourlyRate.toString()),
       minOrderWeightG: config.minOrderWeightG,
-      defaultBatchCapacityG: parseFloat(config.defaultBatchCapacityG.toString()),
+      defaultBatchCapacityG: parseFloat(
+        config.defaultBatchCapacityG.toString(),
+      ),
       minPotWeightG: config.minPotWeightG,
       targetMargin: parseFloat(config.targetMargin.toString()),
       overheadCostPerKg: parseFloat(config.overheadCostPerKg.toString()),
-      targetBatchUtilization: parseFloat(config.targetBatchUtilization.toString()),
+      targetBatchUtilization: parseFloat(
+        config.targetBatchUtilization.toString(),
+      ),
       supplementLossRate: parseFloat(config.supplementLossRate.toString()),
       defaultProductLabelId: config.defaultProductLabelId,
       defaultIcePackId: config.defaultIcePackId,
@@ -43,7 +45,8 @@ export class GlobalConfigService {
       packageExampleImageUrl: config.packageExampleImageUrl,
       shippingCompanyLogoUrl: config.shippingCompanyLogoUrl,
       paymentTimeoutMinutes: (config as any).paymentTimeoutMinutes ?? 30,
-      equipmentRecommendations: (config as any).equipmentRecommendations ?? null,
+      equipmentRecommendations:
+        (config as any).equipmentRecommendations ?? null,
     };
   }
 
@@ -75,17 +78,28 @@ export class GlobalConfigService {
     // Build update data object with only provided fields
     // Convert empty strings to null for URL fields
     const updateData: any = {};
-    if (dto.laborHourlyRate !== undefined) updateData.laborHourlyRate = dto.laborHourlyRate;
-    if (dto.minOrderWeightG !== undefined) updateData.minOrderWeightG = dto.minOrderWeightG;
-    if (dto.defaultBatchCapacityG !== undefined) updateData.defaultBatchCapacityG = dto.defaultBatchCapacityG;
-    if (dto.minPotWeightG !== undefined) updateData.minPotWeightG = dto.minPotWeightG;
-    if (dto.targetMargin !== undefined) updateData.targetMargin = dto.targetMargin;
-    if (dto.overheadCostPerKg !== undefined) updateData.overheadCostPerKg = dto.overheadCostPerKg;
-    if (dto.targetBatchUtilization !== undefined) updateData.targetBatchUtilization = dto.targetBatchUtilization;
-    if (dto.supplementLossRate !== undefined) updateData.supplementLossRate = dto.supplementLossRate;
-    if (dto.defaultProductLabelId !== undefined) updateData.defaultProductLabelId = dto.defaultProductLabelId;
-    if (dto.defaultIcePackId !== undefined) updateData.defaultIcePackId = dto.defaultIcePackId;
-    if (dto.defaultShippingTemplateId !== undefined) updateData.defaultShippingTemplateId = dto.defaultShippingTemplateId;
+    if (dto.laborHourlyRate !== undefined)
+      updateData.laborHourlyRate = dto.laborHourlyRate;
+    if (dto.minOrderWeightG !== undefined)
+      updateData.minOrderWeightG = dto.minOrderWeightG;
+    if (dto.defaultBatchCapacityG !== undefined)
+      updateData.defaultBatchCapacityG = dto.defaultBatchCapacityG;
+    if (dto.minPotWeightG !== undefined)
+      updateData.minPotWeightG = dto.minPotWeightG;
+    if (dto.targetMargin !== undefined)
+      updateData.targetMargin = dto.targetMargin;
+    if (dto.overheadCostPerKg !== undefined)
+      updateData.overheadCostPerKg = dto.overheadCostPerKg;
+    if (dto.targetBatchUtilization !== undefined)
+      updateData.targetBatchUtilization = dto.targetBatchUtilization;
+    if (dto.supplementLossRate !== undefined)
+      updateData.supplementLossRate = dto.supplementLossRate;
+    if (dto.defaultProductLabelId !== undefined)
+      updateData.defaultProductLabelId = dto.defaultProductLabelId;
+    if (dto.defaultIcePackId !== undefined)
+      updateData.defaultIcePackId = dto.defaultIcePackId;
+    if (dto.defaultShippingTemplateId !== undefined)
+      updateData.defaultShippingTemplateId = dto.defaultShippingTemplateId;
 
     // Convert empty strings to null for URL fields
     if (dto.packageExampleImageUrl !== undefined) {
@@ -95,8 +109,10 @@ export class GlobalConfigService {
       updateData.shippingCompanyLogoUrl = dto.shippingCompanyLogoUrl || null;
     }
 
-    if (dto.paymentTimeoutMinutes !== undefined) updateData.paymentTimeoutMinutes = dto.paymentTimeoutMinutes;
-    if (dto.equipmentRecommendations !== undefined) updateData.equipmentRecommendations = dto.equipmentRecommendations;
+    if (dto.paymentTimeoutMinutes !== undefined)
+      updateData.paymentTimeoutMinutes = dto.paymentTimeoutMinutes;
+    if (dto.equipmentRecommendations !== undefined)
+      updateData.equipmentRecommendations = dto.equipmentRecommendations;
 
     // Update or create the config record
     const config = await this.prisma.globalConfig.upsert({
@@ -112,11 +128,15 @@ export class GlobalConfigService {
     return {
       laborHourlyRate: parseFloat(config.laborHourlyRate.toString()),
       minOrderWeightG: config.minOrderWeightG,
-      defaultBatchCapacityG: parseFloat(config.defaultBatchCapacityG.toString()),
+      defaultBatchCapacityG: parseFloat(
+        config.defaultBatchCapacityG.toString(),
+      ),
       minPotWeightG: config.minPotWeightG,
       targetMargin: parseFloat(config.targetMargin.toString()),
       overheadCostPerKg: parseFloat(config.overheadCostPerKg.toString()),
-      targetBatchUtilization: parseFloat(config.targetBatchUtilization.toString()),
+      targetBatchUtilization: parseFloat(
+        config.targetBatchUtilization.toString(),
+      ),
       supplementLossRate: parseFloat(config.supplementLossRate.toString()),
       defaultProductLabelId: config.defaultProductLabelId,
       defaultIcePackId: config.defaultIcePackId,
@@ -124,7 +144,8 @@ export class GlobalConfigService {
       packageExampleImageUrl: config.packageExampleImageUrl,
       shippingCompanyLogoUrl: config.shippingCompanyLogoUrl,
       paymentTimeoutMinutes: (config as any).paymentTimeoutMinutes ?? 30,
-      equipmentRecommendations: (config as any).equipmentRecommendations ?? null,
+      equipmentRecommendations:
+        (config as any).equipmentRecommendations ?? null,
     };
   }
 
@@ -151,4 +172,3 @@ export class GlobalConfigService {
     };
   }
 }
-

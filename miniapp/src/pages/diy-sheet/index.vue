@@ -1170,7 +1170,6 @@ function handlePurchase(purchaseLink: any, productName: string) {
     hasPath: !!purchaseLink?.mini_program_path
   })
 
-  // 优化判断逻辑：根据平台类型检查必要字段
   if (!purchaseLink) {
     uni.showToast({
       title: '购买链接未配置',
@@ -1179,56 +1178,61 @@ function handlePurchase(purchaseLink: any, productName: string) {
     return
   }
 
-  const { url, platform, mini_program_appid, mini_program_path } = purchaseLink
+  const { url, mini_program_appid, mini_program_path } = purchaseLink
 
-  // WEBVIEW平台需要url
-  if (platform === 'WEBVIEW' && !url) {
-    uni.showToast({
-      title: '购买链接未配置',
-      icon: 'none'
-    })
-    return
-  }
-
-  // 小程序跳转平台需要appid和path
-  if (platform !== 'WEBVIEW' && (!mini_program_appid || !mini_program_path)) {
-    uni.showToast({
-      title: '购买链接配置不完整',
-      icon: 'none'
-    })
-    return
-  }
-
-  if (platform === 'WEBVIEW') {
-    // 使用web-view打开网页链接
-    uni.navigateTo({
-      url: `/pages/common/webview?url=${encodeURIComponent(url)}`,
-      fail: (err) => {
-        console.error('[DIYSheet] WebView跳转失败:', err)
-        uni.showToast({
-          title: '打开链接失败',
-          icon: 'none'
-        })
-      }
-    })
-  } else {
-    // 跳转其他小程序
+  // 优先级1：如果有完整的小程序配置，跳转到其他小程序
+  if (mini_program_appid && mini_program_path) {
+    console.log('[DIYSheet] 使用小程序跳转:', mini_program_appid, mini_program_path)
     uni.navigateToMiniProgram({
       appId: mini_program_appid,
       path: mini_program_path,
       success: () => {
-        console.log('[DIYSheet] 跳转成功:', productName)
+        console.log('[DIYSheet] 小程序跳转成功:', productName)
       },
       fail: (err) => {
-        console.error('[DIYSheet] 跳转失败:', err)
-        uni.showModal({
-          title: '跳转失败',
-          content: '无法打开商品页面，请检查链接配置',
-          showCancel: false
-        })
+        console.error('[DIYSheet] 小程序跳转失败:', err)
+        // 小程序跳转失败时，尝试使用 WebView 作为备选
+        if (url) {
+          console.log('[DIYSheet] 尝试使用 WebView 打开:', url)
+          openInWebView(url)
+        } else {
+          uni.showModal({
+            title: '跳转失败',
+            content: '无法打开商品页面，请稍后重试',
+            showCancel: false
+          })
+        }
       }
     })
+    return
   }
+
+  // 优先级2：如果有网页链接，使用 WebView 打开
+  if (url) {
+    console.log('[DIYSheet] 使用 WebView 打开:', url)
+    openInWebView(url)
+    return
+  }
+
+  // 都没有配置，提示错误
+  uni.showToast({
+    title: '购买链接配置不完整',
+    icon: 'none'
+  })
+}
+
+// 使用 WebView 打开网页链接
+function openInWebView(url: string) {
+  uni.navigateTo({
+    url: `/pages/common/webview?url=${encodeURIComponent(url)}`,
+    fail: (err) => {
+      console.error('[DIYSheet] WebView跳转失败:', err)
+      uni.showToast({
+        title: '打开链接失败',
+        icon: 'none'
+      })
+    }
+  })
 }
 
 // 辅助函数

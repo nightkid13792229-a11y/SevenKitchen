@@ -128,13 +128,22 @@ const handleWechatLogin = async () => {
 
       // 3. 保存token和用户信息（使用统一的token管理函数）
       setToken(token);
-      uni.setStorageSync('user', user);
+      try {
+        uni.setStorageSync('user', user);
+      } catch (storageErr) {
+        console.error('[Login] Failed to save user to storage:', storageErr);
+        // 继续执行，不阻塞登录流程
+      }
       markTokenReady(); // 标记token已就绪
       console.log('[Login] Token and user saved to storage, token marked as ready');
 
       // 3.5. 设置触发器，让TabBar的轮询监听能够检测到变化
-      uni.setStorageSync('userLoginTrigger', Date.now());
-      console.log('[Login] Set userLoginTrigger for TabBar polling');
+      try {
+        uni.setStorageSync('userLoginTrigger', Date.now());
+        console.log('[Login] Set userLoginTrigger for TabBar polling');
+      } catch (storageErr) {
+        console.error('[Login] Failed to set userLoginTrigger:', storageErr);
+      }
 
       // 3.6. 尝试直接刷新TabBar
       setTimeout(() => {

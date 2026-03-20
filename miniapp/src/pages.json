@@ -265,6 +265,9 @@
     "navigationBarBackgroundColor": "#ffffff",
     "backgroundColor": "#f5f5f5"
   },
+  "mp-weixin": {
+    "__usePrivacyCheck__": true
+  },
   "tabBar": {
     "custom": true,
     "color": "#7A7E83",

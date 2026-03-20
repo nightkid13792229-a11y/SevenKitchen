@@ -1159,15 +1159,40 @@ function closeNutritionInfoModal() {
   showNutritionInfo.value = false
 }
 
-// 处理购买链接跳转
+// 根据平台类型获取提示文案
+function getPurchaseTipByPlatform(platform: string): string {
+  const tipMap: Record<string, string> = {
+    'TAOBAO': '口令已复制，打开淘宝即可查看商品',
+    'JD': '口令已复制，打开京东即可查看商品',
+    'PINDUODUO': '口令已复制，打开拼多多即可查看商品',
+    'OTHER': '已复制，打开对应App即可查看',
+    'WEBVIEW': '已复制购买链接'
+  }
+  return tipMap[platform] || '已复制购买链接'
+}
+
+// 从链接判断平台类型
+function detectPlatformFromUrl(url: string): string {
+  if (url.includes('taobao') || url.includes('tmall') || url.includes('tb.cn') || url.includes('m.tb.cn')) {
+    return 'TAOBAO'
+  }
+  if (url.includes('jd.com') || url.includes('jd.hk')) {
+    return 'JD'
+  }
+  if (url.includes('pinduoduo') || url.includes('yangkeduo') || url.includes('pdd')) {
+    return 'PINDUODUO'
+  }
+  return 'OTHER'
+}
+
+// 处理购买链接 - 复制到剪贴板
 function handlePurchase(purchaseLink: any, productName: string) {
   // 调试日志：查看点击去购买时的数据
   console.log('[DIYSheet] 点击去购买:', {
     productName,
     purchaseLink,
     hasUrl: !!purchaseLink?.url,
-    hasAppId: !!purchaseLink?.mini_program_appid,
-    hasPath: !!purchaseLink?.mini_program_path
+    platform: purchaseLink?.platform
   })
 
   if (!purchaseLink) {
@@ -1178,57 +1203,33 @@ function handlePurchase(purchaseLink: any, productName: string) {
     return
   }
 
-  const { url, mini_program_appid, mini_program_path } = purchaseLink
+  const { url, platform } = purchaseLink
 
-  // 优先级1：如果有完整的小程序配置，跳转到其他小程序
-  if (mini_program_appid && mini_program_path) {
-    console.log('[DIYSheet] 使用小程序跳转:', mini_program_appid, mini_program_path)
-    uni.navigateToMiniProgram({
-      appId: mini_program_appid,
-      path: mini_program_path,
-      success: () => {
-        console.log('[DIYSheet] 小程序跳转成功:', productName)
-      },
-      fail: (err) => {
-        console.error('[DIYSheet] 小程序跳转失败:', err)
-        // 小程序跳转失败时，尝试使用 WebView 作为备选
-        if (url) {
-          console.log('[DIYSheet] 尝试使用 WebView 打开:', url)
-          openInWebView(url)
-        } else {
-          uni.showModal({
-            title: '跳转失败',
-            content: '无法打开商品页面，请稍后重试',
-            showCancel: false
-          })
-        }
-      }
+  if (!url) {
+    uni.showToast({
+      title: '购买链接未配置',
+      icon: 'none'
     })
     return
   }
 
-  // 优先级2：如果有网页链接，使用 WebView 打开
-  if (url) {
-    console.log('[DIYSheet] 使用 WebView 打开:', url)
-    openInWebView(url)
-    return
-  }
-
-  // 都没有配置，提示错误
-  uni.showToast({
-    title: '购买链接配置不完整',
-    icon: 'none'
-  })
-}
-
-// 使用 WebView 打开网页链接
-function openInWebView(url: string) {
-  uni.navigateTo({
-    url: `/pages/common/webview?url=${encodeURIComponent(url)}`,
+  // 复制链接到剪贴板
+  uni.setClipboardData({
+    data: url,
+    success: () => {
+      console.log('[DIYSheet] 复制成功:', url)
+      const tip = getPurchaseTipByPlatform(platform)
+      uni.showModal({
+        title: productName,
+        content: tip,
+        showCancel: false,
+        confirmText: '知道了'
+      })
+    },
     fail: (err) => {
-      console.error('[DIYSheet] WebView跳转失败:', err)
+      console.error('[DIYSheet] 复制失败:', err)
       uni.showToast({
-        title: '打开链接失败',
+        title: '复制失败，请重试',
         icon: 'none'
       })
     }
@@ -1311,40 +1312,30 @@ function handlePurchaseEquipment(equipment: any) {
     return
   }
 
-  // 根据链接类型处理跳转
-  if (purchaseLink.startsWith('http')) {
-    // 外部链接，使用web-view打开
-    uni.navigateTo({
-      url: `/pages/common/webview?url=${encodeURIComponent(purchaseLink)}`,
-      fail: (err) => {
-        console.error('[DIYSheet] WebView跳转失败:', err)
-        uni.showToast({
-          title: '打开链接失败',
-          icon: 'none'
-        })
-      }
-    })
-  } else if (purchaseLink.startsWith('/')) {
-    // 小程序路径，直接跳转
-    uni.navigateTo({
-      url: purchaseLink,
-      success: () => {
-        console.log('[DIYSheet] 跳转成功:', equipment.name)
-      },
-      fail: (err) => {
-        console.error('[DIYSheet] 跳转失败:', err)
-        uni.showToast({
-          title: '页面跳转失败',
-          icon: 'none'
-        })
-      }
-    })
-  } else {
-    uni.showToast({
-      title: '购买链接格式错误',
-      icon: 'none'
-    })
-  }
+  // 从链接判断平台类型
+  const platform = detectPlatformFromUrl(purchaseLink)
+
+  // 复制链接到剪贴板
+  uni.setClipboardData({
+    data: purchaseLink,
+    success: () => {
+      console.log('[DIYSheet] 设备购买链接复制成功:', purchaseLink)
+      const tip = getPurchaseTipByPlatform(platform)
+      uni.showModal({
+        title: equipment.name,
+        content: tip,
+        showCancel: false,
+        confirmText: '知道了'
+      })
+    },
+    fail: (err) => {
+      console.error('[DIYSheet] 复制失败:', err)
+      uni.showToast({
+        title: '复制失败，请重试',
+        icon: 'none'
+      })
+    }
+  })
 }
 
 // 微信小程序分享配置

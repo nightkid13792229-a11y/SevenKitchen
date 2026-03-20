@@ -1319,6 +1319,21 @@ watch(() => props.ingredient, (newIngredient, oldIngredient) => {
         return { name, value: valueInGrams, displayValue, unit }
       })
       nutrientList.value = nutrientArray.length > 0 ? nutrientArray : [{ name: '', value: 0, displayValue: 0, unit: 'mg' }]
+
+      // ✅ 修复：重置购买链接配置（防止切换补剂时数据污染）
+      const purchaseLink = (newIngredient.properties as SupplementProperties).purchase_link
+      if (purchaseLink) {
+        Object.assign(purchaseLinkConfig, purchaseLink)
+        hasPurchaseLink.value = true
+      } else {
+        Object.assign(purchaseLinkConfig, {
+          url: '',
+          platform: 'TAOBAO',
+          mini_program_appid: '',
+          mini_program_path: ''
+        })
+        hasPurchaseLink.value = false
+      }
     } else if (newIngredient.type === IngredientType.PACKAGING) {
       Object.assign(packagingProperties, newIngredient.properties as PackagingProperties)
     }

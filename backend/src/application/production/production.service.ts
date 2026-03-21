@@ -14,7 +14,10 @@ import type { ProductionBatchRepository } from '../../domain/production/producti
 import type { OrderRepository } from '../../domain/order/order.repository';
 import type { OrderStatusHistoryRepository } from '../../domain/order/order-status-history.repository';
 import { ProductionBatch, PackagingUnit } from '../../domain/production';
-import { ProductionBatchStatus } from '../../domain/production/enums';
+import {
+  ProductionBatchStatus,
+  PackagingUnitStatus,
+} from '../../domain/production/enums';
 import { OrderStatus } from '../../domain';
 import {
   ORDER_REPOSITORY,
@@ -1039,6 +1042,9 @@ export class ProductionService {
    * Delete production batch
    * Only allows deletion of IN_PRODUCTION status batches
    * Reverts order status to PURCHASING
+   *
+   * IMPORTANT: Cannot delete batch if any packaging unit is COMPLETED
+   * to prevent accidental loss of production photos and data
    */
   async deleteProductionBatch(batchId: string): Promise<void> {
     // 1. Query batch
@@ -1047,14 +1053,41 @@ export class ProductionService {
       throw new BadRequestException('Production batch not found');
     }
 
-    // 2. Validate status
+    // 2. Validate batch status
     if (batch.status !== ProductionBatchStatus.IN_PRODUCTION) {
       throw new BadRequestException(
         `Cannot delete batch with status ${batch.status}. Only IN_PRODUCTION batches can be deleted.`,
       );
     }
 
-    // 3. Get associated order item IDs from all packaging units
+    // 3. Check if any packaging unit is COMPLETED
+    // This prevents accidental deletion of production photos
+    const completedUnits = batch.packagingUnits.filter(
+      (unit) => unit.status === PackagingUnitStatus.COMPLETED,
+    );
+    if (completedUnits.length > 0) {
+      // Get the order IDs affected by completed units
+      const completedOrderItemIds = completedUnits.flatMap(
+        (unit) => unit.sourceOrderItemIds,
+      );
+      const affectedOrderIds = new Set<string>();
+      for (const orderItemId of completedOrderItemIds) {
+        const orderItem =
+          await this.orderRepository.findOrderItemById(orderItemId);
+        if (orderItem) {
+          affectedOrderIds.add(orderItem.orderId);
+        }
+      }
+
+      throw new BadRequestException(
+        `Cannot delete batch: ${completedUnits.length} packaging unit(s) have been completed. ` +
+        `Deleting would lose production photos and data. ` +
+        `Affected order(s): ${Array.from(affectedOrderIds).join(', ')}. ` +
+        `Please ship these orders first, or contact technical support.`,
+      );
+    }
+
+    // 4. Get associated order item IDs from all packaging units
     const orderItemIds = batch.packagingUnits.flatMap(
       (unit) => unit.sourceOrderItemIds,
     );
@@ -1063,7 +1096,7 @@ export class ProductionService {
       this.logger.warn(`Batch ${batchId} has no associated order items`);
     }
 
-    // 4. Query associated orders from order items
+    // 5. Query associated orders from order items
     const uniqueOrderIds = new Set<string>();
     for (const orderItemId of orderItemIds) {
       // Query order item to get orderId
@@ -1076,7 +1109,27 @@ export class ProductionService {
 
     const orderIdsArray = Array.from(uniqueOrderIds);
 
-    // 5. Revert order status IN_PRODUCTION → PURCHASING
+    // 6. Check all orders can be safely reverted
+    // Orders that are not IN_PRODUCTION cannot be reverted properly
+    const nonRevertibleOrders: string[] = [];
+    for (const orderId of orderIdsArray) {
+      const order = await this.orderRepository.findById(orderId);
+      if (order && order.status !== OrderStatus.IN_PRODUCTION) {
+        nonRevertibleOrders.push(
+          `${orderId.slice(-8)} (${order.status})`,
+        );
+      }
+    }
+
+    if (nonRevertibleOrders.length > 0) {
+      throw new BadRequestException(
+        `Cannot delete batch: Some orders are not in IN_PRODUCTION status. ` +
+        `Orders: ${nonRevertibleOrders.join(', ')}. ` +
+        `Only batches where all orders are IN_PRODUCTION can be deleted.`,
+      );
+    }
+
+    // 7. Revert order status IN_PRODUCTION → PURCHASING
     let revertedCount = 0;
     for (const orderId of orderIdsArray) {
       const order = await this.orderRepository.findById(orderId);
@@ -1106,16 +1159,16 @@ export class ProductionService {
       }
     }
 
-    // 6. Deallocate order items
+    // 8. Deallocate order items
     if (orderItemIds.length > 0) {
       await this.productionRepository.deallocateOrderItems(orderItemIds);
     }
 
-    // 7. Delete batch and packaging units
+    // 9. Delete batch and packaging units
     await this.productionRepository.delete(batchId);
 
     this.logger.log(
-      `Deleted production batch ${batchId}, reverted ${revertedCount} orders to PURCHASING`,
+      `Deleted production batch ${batchId}, reverted ${revertedCount} of ${orderIdsArray.length} orders to PURCHASING`,
     );
   }
 

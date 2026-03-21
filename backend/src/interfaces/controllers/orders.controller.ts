@@ -836,6 +836,7 @@ export class OrdersController {
           name: dog.name,
           breedName: dog.customBreedName ?? undefined,
           weightKg: dog.currentWeightKg,
+          gender: dog.gender,
         };
       }
     }
@@ -882,6 +883,7 @@ export class OrdersController {
             name: dog.name,
             breedName: dog.customBreedName ?? undefined,
             weightKg: dog.currentWeightKg,
+            gender: dog.gender,
             mealsPerDay: dog.mealsPerDay,
           };
         }

@@ -55,6 +55,7 @@ export class OrderItemDto {
     name: string;
     breedName?: string;
     weightKg?: number;
+    gender?: string;
   };
 
   @ApiPropertyOptional({
@@ -287,6 +288,7 @@ export class OrderSummaryDto {
       name: string;
       breedName?: string;
       weightKg?: number;
+      gender?: string;
       mealsPerDay?: number;
     };
     recipeSnapshot?: {

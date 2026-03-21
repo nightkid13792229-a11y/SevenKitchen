@@ -371,7 +371,7 @@ export class ProductionService {
     // ============================================================
 
     for (const unit of packagingUnits) {
-      const allocations = (unit as any).rawMaterialAllocations;
+      const allocations = (unit as any).rawMaterialAllocations as Record<string, number>;
       const totalRawWeight = Object.values(allocations).reduce(
         (sum: number, weight: number) => sum + weight,
         0,

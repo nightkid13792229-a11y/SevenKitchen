@@ -45,7 +45,7 @@ export class Reimbursement {
   public status: ReimbursementStatus;
   public readonly totalActualCost: number;
   public readonly totalEstimatedCost: number;
-  public readonly receiptUrls: string[];
+  public receiptUrls: string[];
   public readonly receiptKeys: string[]; // COS对象键（用于删除支付凭证）
   public readonly submittedById: string;
   public readonly submittedAt: Date;

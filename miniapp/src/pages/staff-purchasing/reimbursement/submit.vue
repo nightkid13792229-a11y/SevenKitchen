@@ -220,7 +220,7 @@ const calculateTotal = () => {
 // 加载已完成的采购清单
 const loadCompletedPurchaseLists = async () => {
   try {
-    const res: any = await getPurchaseLists({ status: 'COMPLETED', pageSize: 100 });
+    const res: any = await getPurchaseLists({ status: 'COMPLETED', excludeReimbursed: true, pageSize: 100 });
     if (res.code === 0) {
       completedPurchaseLists.value = res.data.list;
     } else {

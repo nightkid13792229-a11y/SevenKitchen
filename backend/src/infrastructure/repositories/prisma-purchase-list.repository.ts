@@ -163,6 +163,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
     endDate?: Date;
     page?: number;
     pageSize?: number;
+    excludeReimbursed?: boolean;
   }): Promise<{ list: PurchaseList[]; total: number }> {
     const {
       status,
@@ -171,6 +172,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
       endDate,
       page = 1,
       pageSize = 20,
+      excludeReimbursed,
     } = params;
 
     const where: any = {};
@@ -180,6 +182,9 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
       where.targetDate = {};
       if (startDate) where.targetDate.gte = startDate;
       if (endDate) where.targetDate.lte = endDate;
+    }
+    if (excludeReimbursed) {
+      where.reimbursementId = null;
     }
 
     const [list, total] = await Promise.all([

@@ -391,11 +391,12 @@ onMounted(async () => {
   console.log('[食谱ID]', recipeId.value)
 
   if (recipeId.value) {
-    loadBreeds()
-    // 【修复】先加载健康标签映射，再加载食谱和狗狗数据
+    // 【修复】先加载健康标签映射
     await loadHealthTagMapping()
-    loadRecipe()
-    loadDogs()
+    // 【修复】确保品种列表先加载完成，再加载食谱和狗狗数据
+    await loadBreeds()
+    await loadRecipe()
+    await loadDogs()
   }
 
   console.log('========== [RecipeDiy] onMounted 结束 ==========')
@@ -601,7 +602,14 @@ function checkLifeStageMatch() {
   }
 
   const dogLifeStage = getDogLifeStage(selectedDog.value)
-  const applicableStages = recipe.value.applicableLifeStages || []
+
+  // 【修复】对 applicableLifeStages 进行格式校验，处理可能的空格、大小写问题
+  const applicableStages = (recipe.value.applicableLifeStages || [])
+    .map((s: string) => {
+      if (typeof s !== 'string') return s
+      return s.trim().toUpperCase()
+    })
+    .filter((s: string) => s) // 过滤掉空字符串
 
   console.log('[RecipeDiy] 生命阶段校验:', {
     dogLifeStage,
@@ -614,8 +622,11 @@ function checkLifeStageMatch() {
     console.log('[RecipeDiy] 无法判断狗狗生命阶段（无品种信息），跳过警告')
     isLifeStageMatch.value = true  // 默认为匹配，不显示警告
   } else {
-    isLifeStageMatch.value = applicableStages.includes(dogLifeStage)
-    console.log('[RecipeDiy] 校验结果:', isLifeStageMatch.value ? '匹配' : '不匹配')
+    // 【修复】确保比较时使用统一的大写格式
+    const normalizedDogLifeStage = dogLifeStage.toUpperCase()
+    isLifeStageMatch.value = applicableStages.includes(normalizedDogLifeStage)
+    console.log('[RecipeDiy] 校验结果:', isLifeStageMatch.value ? '匹配' : '不匹配',
+      { normalizedDogLifeStage, applicableStages })
   }
 
   // 修复：切换狗狗时重置警告状态

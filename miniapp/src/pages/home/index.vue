@@ -22,11 +22,11 @@
     <!-- 快捷功能入口 -->
     <view class="quick-actions">
       <view class="action-item" @tap="goToWeightManagement">
-        <view class="action-icon">⚖️</view>
+        <image class="action-icon-img" src="/static/icons/weight-management.png" mode="aspectFit" />
         <text class="action-text">体重管理</text>
       </view>
       <view class="action-item" @tap="goToCalculatePortion">
-        <view class="action-icon">🍽️</view>
+        <image class="action-icon-img" src="/static/icons/portion-calculator.png" mode="aspectFit" />
         <text class="action-text">饭量计算</text>
       </view>
     </view>
@@ -1072,6 +1072,11 @@ defineOptions({
 
 .action-icon {
   font-size: 32px;
+}
+
+.action-icon-img {
+  width: 32px;
+  height: 32px;
 }
 
 .action-text {

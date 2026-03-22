@@ -20,7 +20,9 @@
       <view class="modules">
         <!-- 采购管理 -->
         <view class="module" @tap="goToPurchasing">
-          <view class="module-icon purchasing">🛒</view>
+          <view class="module-icon purchasing">
+            <image class="module-icon-img" src="/static/icons/purchasing.png" mode="aspectFit" />
+          </view>
           <view class="module-content">
             <text class="module-title">采购管理</text>
             <text class="module-desc">查看采购清单与原料需求</text>
@@ -30,7 +32,9 @@
 
         <!-- 生产管理 -->
         <view class="module" @tap="goToProduction">
-          <view class="module-icon production">👨‍🍳</view>
+          <view class="module-icon production">
+            <image class="module-icon-img" src="/static/icons/production.png" mode="aspectFit" />
+          </view>
           <view class="module-content">
             <text class="module-title">生产管理</text>
             <text class="module-desc">查看生产任务与分锅清单</text>
@@ -40,7 +44,9 @@
 
         <!-- 订单管理 -->
         <view class="module" @tap="viewTodayOrders">
-          <view class="module-icon shipping">📋</view>
+          <view class="module-icon shipping">
+            <image class="module-icon-img" src="/static/icons/orders.png" mode="aspectFit" />
+          </view>
           <view class="module-content">
             <text class="module-title">订单管理</text>
             <text class="module-desc">查看后台订单与订单状态</text>
@@ -50,7 +56,9 @@
 
         <!-- 报销管理 -->
         <view class="module" @tap="goToReimbursement">
-          <view class="module-icon reimbursement">💰</view>
+          <view class="module-icon reimbursement">
+            <image class="module-icon-img" src="/static/icons/reimbursement.png" mode="aspectFit" />
+          </view>
           <view class="module-content">
             <text class="module-title">报销管理</text>
             <text class="module-desc">申请报销与查看报销记录</text>
@@ -349,6 +357,11 @@ const goToReimbursement = () => {
   &.reimbursement {
     background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
   }
+}
+
+.module-icon-img {
+  width: 48rpx;
+  height: 48rpx;
 }
 
 .module-content {

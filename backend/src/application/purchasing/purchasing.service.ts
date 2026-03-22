@@ -1158,6 +1158,7 @@ export class PurchasingService {
     endDate?: string;
     page?: number;
     pageSize?: number;
+    excludeReimbursed?: boolean;
   }): Promise<{ list: PurchaseList[]; total: number }> {
     const {
       status,
@@ -1166,6 +1167,7 @@ export class PurchasingService {
       endDate,
       page = 1,
       pageSize = 20,
+      excludeReimbursed,
     } = params;
 
     const query: any = { page, pageSize };
@@ -1173,6 +1175,7 @@ export class PurchasingService {
     if (createdById) query.createdById = createdById;
     if (startDate) query.startDate = new Date(startDate);
     if (endDate) query.endDate = new Date(endDate);
+    if (excludeReimbursed) query.excludeReimbursed = excludeReimbursed;
 
     return this.purchaseListRepository.findMany(query);
   }

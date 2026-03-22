@@ -134,6 +134,7 @@ export function getPurchaseLists(params: {
   endDate?: string;
   page?: number;
   pageSize?: number;
+  excludeReimbursed?: boolean;
 }) {
   return request({
     url: '/staff/purchasing/lists',

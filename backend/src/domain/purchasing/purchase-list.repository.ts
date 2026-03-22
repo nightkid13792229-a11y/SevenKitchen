@@ -41,6 +41,7 @@ export interface PurchaseListRepository {
     endDate?: Date;
     page?: number;
     pageSize?: number;
+    excludeReimbursed?: boolean;
   }): Promise<{ list: PurchaseList[]; total: number }>;
 
   /**

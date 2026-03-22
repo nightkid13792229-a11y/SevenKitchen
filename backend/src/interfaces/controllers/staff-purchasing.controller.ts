@@ -264,6 +264,12 @@ export class StaffPurchasingController {
     description: '每页数量',
     example: 20,
   })
+  @ApiQuery({
+    name: 'excludeReimbursed',
+    required: false,
+    type: Boolean,
+    description: '排除已关联报销单的采购清单',
+  })
   @ApiResponse({
     status: 200,
     description: '采购清单列表',
@@ -288,6 +294,7 @@ export class StaffPurchasingController {
     @Query('endDate') endDate?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
+    @Query('excludeReimbursed') excludeReimbursed?: string,
     @UserId() userId?: string,
     @UserRole() userRole?: string,
   ): Promise<ApiResponseDto<any>> {
@@ -305,6 +312,7 @@ export class StaffPurchasingController {
       endDate,
       page: page ? parseInt(page) : 1,
       pageSize: pageSize ? parseInt(pageSize) : 20,
+      excludeReimbursed: excludeReimbursed === 'true',
     });
 
     return ApiResponseDto.success(result, '获取采购清单列表成功');

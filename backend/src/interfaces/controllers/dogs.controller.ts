@@ -213,6 +213,29 @@ export class DogsController {
       }
     }
 
+    // Save allergy records if provided
+    if (createDogDto.allergyRecords && createDogDto.allergyRecords.length > 0) {
+      try {
+        for (const record of createDogDto.allergyRecords) {
+          await this.allergyRecordRepository.create({
+            dogId: dog.id,
+            allergen: record.allergen,
+            notes: record.notes || null,
+            attachments: record.attachments || [],
+          });
+        }
+        console.log(
+          `[DogsController] Created ${createDogDto.allergyRecords.length} allergy records for dog ${dog.id}`,
+        );
+      } catch (error: any) {
+        console.error(
+          `[DogsController] Failed to save allergy records for dog ${dog.id}:`,
+          error,
+        );
+        // Don't fail the entire operation if allergy records save fails
+      }
+    }
+
     const calcResult = await this.dogService.calcPreview(dog.id);
 
     const response: DogDetailResponseDto = {
@@ -347,6 +370,46 @@ export class DogsController {
           error,
         );
         // Don't fail the entire operation if checkup records update fails
+      }
+    }
+
+    // Update allergy records if provided
+    if ('allergyRecords' in updateDogDto) {
+      try {
+        // Delete existing allergy records for this dog
+        const existingAllergies =
+          await this.allergyRecordRepository.findByDogId(id);
+        for (const allergy of existingAllergies) {
+          await this.allergyRecordRepository.delete(allergy.id);
+        }
+
+        // Create new allergy records
+        if (
+          updateDogDto.allergyRecords &&
+          updateDogDto.allergyRecords.length > 0
+        ) {
+          for (const record of updateDogDto.allergyRecords) {
+            await this.allergyRecordRepository.create({
+              dogId: id,
+              allergen: record.allergen,
+              notes: record.notes || null,
+              attachments: record.attachments || [],
+            });
+          }
+          console.log(
+            `[DogsController] Updated ${updateDogDto.allergyRecords.length} allergy records for dog ${id}`,
+          );
+        } else {
+          console.log(
+            `[DogsController] Cleared all allergy records for dog ${id}`,
+          );
+        }
+      } catch (error: any) {
+        console.error(
+          `[DogsController] Failed to update allergy records for dog ${id}:`,
+          error,
+        );
+        // Don't fail the entire operation if allergy records update fails
       }
     }
 

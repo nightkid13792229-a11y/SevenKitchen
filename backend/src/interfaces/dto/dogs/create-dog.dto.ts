@@ -195,4 +195,29 @@ export class CreateDogDto {
     notes?: string | null;
     attachments?: string[] | null;
   }> | null;
+
+  @ApiPropertyOptional({
+    description: 'Allergy records (过敏记录)',
+    type: 'array',
+    items: {
+      type: 'object',
+      properties: {
+        allergen: { type: 'string', description: '过敏原名称' },
+        notes: { type: 'string', description: '备注', nullable: true },
+        attachments: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '检查报告文件URL数组',
+          nullable: true,
+        },
+      },
+    },
+    nullable: true,
+  })
+  @IsOptional()
+  allergyRecords?: Array<{
+    allergen: string;
+    notes?: string | null;
+    attachments?: string[] | null;
+  }> | null;
 }

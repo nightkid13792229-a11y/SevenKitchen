@@ -15,7 +15,10 @@ import {
   UsePipes,
   ValidationPipe,
   NotFoundException,
+  ForbiddenException,
   Inject,
+  UseGuards,
+  Req,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -23,6 +26,8 @@ import {
   ApiResponse,
   ApiParam,
   ApiBody,
+  ApiSecurity,
+  ApiQuery,
 } from '@nestjs/swagger';
 import type { RecipeRepository } from '../../domain/recipe/recipe.repository';
 import {
@@ -38,10 +43,22 @@ import {
 } from '../dto/recipes/diy-sheet.dto';
 import { FilterOptionsDto } from '../dto/recipes/filter-options.dto';
 import { PrismaService } from '../../infrastructure/prisma.service';
-import { Prisma } from '@prisma/client';
+import { AuthGuard } from '../auth';
+import { StaffGuard } from '../guards/role.guard';
+import type { RequestUser } from '../auth/request-user.interface';
+import { JwtAuthService } from '../auth/jwt.service';
 
 // Create a symbol for recipe repository token
 export const RECIPE_REPOSITORY_TOKEN = Symbol('RecipeRepository');
+
+function generateToken(length: number = 32): string {
+  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+  let result = '';
+  for (let i = 0; i < length; i++) {
+    result += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return result;
+}
 
 @ApiTags('Recipes')
 @Controller('api/v1/recipes')
@@ -52,6 +69,7 @@ export class RecipesController {
     private readonly recipeRepository: RecipeRepository,
     private readonly diySheetService: DiySheetService,
     private readonly prisma: PrismaService,
+    private readonly jwtAuthService: JwtAuthService,
   ) {}
 
   @Get('filter-options')
@@ -66,6 +84,56 @@ export class RecipesController {
     return ApiResponseDto.success(options);
   }
 
+  @Get('staff/all')
+  @UseGuards(AuthGuard, StaffGuard)
+  @ApiSecurity('bearer')
+  @ApiOperation({ summary: 'List all recipes for staff (all statuses)' })
+  @ApiQuery({ name: 'status', required: false, description: 'Filter by status' })
+  async listStaffRecipes(
+    @Query('status') status?: string,
+  ): Promise<ApiResponseDto<any>> {
+    const where: any = {};
+    if (status) {
+      where.status = status;
+    }
+
+    // Get latest version of each recipe
+    const recipes = await this.prisma.recipe.findMany({
+      where,
+      orderBy: [{ recipeId: 'asc' }, { version: 'desc' }],
+      select: {
+        id: true,
+        recipeId: true,
+        name: true,
+        status: true,
+        coverImageUrl: true,
+        version: true,
+        createdAt: true,
+        applicableLifeStages: true,
+        targetHealthTags: true,
+      },
+    });
+
+    // Deduplicate: keep only the latest version per recipeId
+    const seen = new Set<string>();
+    const summaries = recipes.filter((r) => {
+      if (seen.has(r.recipeId)) return false;
+      seen.add(r.recipeId);
+      return true;
+    }).map((r) => ({
+      id: r.recipeId,
+      version: r.version,
+      name: r.name,
+      status: r.status,
+      coverImageUrl: r.coverImageUrl?.replace('http://', 'https://'),
+      applicableLifeStages: r.applicableLifeStages || [],
+      targetHealthTags: r.targetHealthTags || [],
+      createdAt: r.createdAt,
+    }));
+
+    return ApiResponseDto.success(summaries);
+  }
+
   @Get()
   @ApiOperation({ summary: 'List public recipes (paginated)' })
   @ApiResponse({
@@ -76,6 +144,7 @@ export class RecipesController {
     @Query('lifeStages') lifeStages?: string,
     @Query('healthTags') healthTags?: string,
     @Query('excludeTags') excludeTags?: string,
+    @Query('excludeIngredients') excludeIngredients?: string,
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
   ): Promise<ApiResponseDto<any>> {
@@ -87,6 +156,9 @@ export class RecipesController {
     const lifeStageArray = lifeStages ? lifeStages.split(',') : [];
     const healthTagArray = healthTags ? healthTags.split(',') : [];
     const excludeTagArray = excludeTags ? excludeTags.split(',') : [];
+    const excludeIngredientArray = excludeIngredients
+      ? excludeIngredients.split(',')
+      : [];
 
     // Get paginated recipes
     const paginatedResult =
@@ -94,6 +166,7 @@ export class RecipesController {
         lifeStages: lifeStageArray,
         healthTags: healthTagArray,
         excludeTags: excludeTagArray,
+        excludeIngredients: excludeIngredientArray,
         page: parsedPage,
         pageSize: parsedPageSize,
       });
@@ -104,7 +177,7 @@ export class RecipesController {
       process.env.DEBUG === 'true'
     ) {
       console.log(
-        `[RecipesController] GET /recipes: page ${parsedPage}, pageSize ${parsedPageSize}, lifeStages: [${lifeStageArray.join(',') || 'all'}], healthTags: [${healthTagArray.join(',') || 'all'}], excludeTags: [${excludeTagArray.join(',') || 'none'}], found ${paginatedResult.data.length} PUBLIC recipe(s) (total: ${paginatedResult.total})`,
+        `[RecipesController] GET /recipes: page ${parsedPage}, pageSize ${parsedPageSize}, lifeStages: [${lifeStageArray.join(',') || 'all'}], healthTags: [${healthTagArray.join(',') || 'all'}], excludeTags: [${excludeTagArray.join(',') || 'none'}], excludeIngredients: [${excludeIngredientArray.join(',') || 'none'}], found ${paginatedResult.data.length} PUBLIC recipe(s) (total: ${paginatedResult.total})`,
       );
       if (paginatedResult.data.length === 0) {
         console.warn(
@@ -146,6 +219,9 @@ export class RecipesController {
           targetHealthTags: targetHealthTags,
           applicableLifeStages: applicableLifeStages,
           items: topIngredients,
+          viewCount: recipe.viewCount ?? 0,
+          favoriteCount: recipe.favoriteCount ?? 0,
+          diyGenCount: recipe.diyGenCount ?? 0,
         };
       },
     );
@@ -216,6 +292,7 @@ export class RecipesController {
   @Get(':id')
   @ApiOperation({ summary: 'Get recipe detail' })
   @ApiParam({ name: 'id', description: 'Recipe ID' })
+  @ApiQuery({ name: 'shareToken', required: false, description: 'Share token for non-public recipes' })
   @ApiResponse({
     status: 200,
     description: 'Recipe detail',
@@ -224,10 +301,67 @@ export class RecipesController {
   @ApiResponse({ status: 404, description: 'Recipe not found' })
   async getRecipe(
     @Param('id') id: string,
+    @Query('shareToken') shareToken?: string,
+    @Req() req?: any,
   ): Promise<ApiResponseDto<RecipeDetailDto> | ApiResponseDto<null>> {
     const recipe = await this.recipeRepository.findById(id);
     if (!recipe) {
       return ApiResponseDto.error(404, 'Recipe not found');
+    }
+
+    // Access control for non-PUBLIC recipes
+    if (recipe.status !== 'PUBLIC') {
+      let accessGranted = false;
+
+      // Check 1: User has valid JWT with STAFF/ADMIN role
+      // Try to extract user from JWT manually (this endpoint has no AuthGuard)
+      try {
+        const authHeader = req?.headers?.authorization;
+        if (authHeader && typeof authHeader === 'string') {
+          const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
+          if (bearerMatch?.[1]) {
+            const payload = this.jwtAuthService.validateToken(bearerMatch[1]);
+            if (payload && (payload.role === 'STAFF' || payload.role === 'ADMIN')) {
+              accessGranted = true;
+            }
+          }
+        }
+      } catch {
+        // Token invalid or missing, continue to check shareToken
+      }
+
+      // Check 2: Valid shareToken provided
+      if (!accessGranted && shareToken) {
+        const tokenRecord = await this.prisma.recipeShareToken.findFirst({
+          where: {
+            recipe: { recipeId: id },
+            token: shareToken,
+            expiresAt: { gt: new Date() },
+          },
+        });
+        if (tokenRecord) {
+          accessGranted = true;
+        }
+      }
+
+      if (!accessGranted) {
+        return ApiResponseDto.error(404, 'Recipe not found');
+      }
+    }
+
+    // Increment view count for the latest version (fire-and-forget)
+    const latestRecipe = await this.prisma.recipe.findFirst({
+      where: { recipeId: id },
+      orderBy: { version: 'desc' },
+      select: { id: true },
+    });
+    if (latestRecipe) {
+      this.prisma.recipe
+        .update({
+          where: { id: latestRecipe.id },
+          data: { viewCount: { increment: 1 } },
+        })
+        .catch(() => {});
     }
 
     // Return all ingredients with preparation method, sorted by sort_order
@@ -305,6 +439,47 @@ export class RecipesController {
     return ApiResponseDto.success(detail);
   }
 
+  @Post(':id/share-token')
+  @UseGuards(AuthGuard, StaffGuard)
+  @ApiSecurity('bearer')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Generate share token for a recipe' })
+  @ApiParam({ name: 'id', description: 'Recipe ID' })
+  async createShareToken(
+    @Param('id') id: string,
+    @Req() req: any,
+  ): Promise<ApiResponseDto<{ token: string; expiresAt: string }>> {
+    const user: RequestUser = req.user;
+
+    // Verify recipe exists (any status)
+    const recipe = await this.prisma.recipe.findFirst({
+      where: { recipeId: id },
+      orderBy: { version: 'desc' },
+    });
+
+    if (!recipe) {
+      throw new NotFoundException('Recipe not found');
+    }
+
+    const token = generateToken(32);
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 30);
+
+    await this.prisma.recipeShareToken.create({
+      data: {
+        recipeId: recipe.id,
+        token,
+        createdBy: user.userId,
+        expiresAt,
+      },
+    });
+
+    return ApiResponseDto.success({
+      token,
+      expiresAt: expiresAt.toISOString(),
+    });
+  }
+
   @Post(':id/diy-sheet')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Generate DIY process sheet for recipe' })
@@ -327,6 +502,21 @@ export class RecipesController {
         dto.dogId,
       );
 
+      // Increment DIY generation count (fire-and-forget)
+      const latestRecipe = await this.prisma.recipe.findFirst({
+        where: { recipeId },
+        orderBy: { version: 'desc' },
+        select: { id: true },
+      });
+      if (latestRecipe) {
+        this.prisma.recipe
+          .update({
+            where: { id: latestRecipe.id },
+            data: { diyGenCount: { increment: 1 } },
+          })
+          .catch(() => {});
+      }
+
       const response: DiySheetResponseDto = {
         recipeId: sheetData.recipeId,
         recipeName: sheetData.recipeName,
@@ -341,5 +531,28 @@ export class RecipesController {
       }
       throw error;
     }
+  }
+
+  @Post(':id/track-diy')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Track DIY sheet generation count' })
+  @ApiParam({ name: 'id', description: 'Recipe ID' })
+  async trackDiyGeneration(
+    @Param('id') recipeId: string,
+  ): Promise<ApiResponseDto<null>> {
+    const latestRecipe = await this.prisma.recipe.findFirst({
+      where: { recipeId },
+      orderBy: { version: 'desc' },
+      select: { id: true },
+    });
+    if (latestRecipe) {
+      this.prisma.recipe
+        .update({
+          where: { id: latestRecipe.id },
+          data: { diyGenCount: { increment: 1 } },
+        })
+        .catch(() => {});
+    }
+    return ApiResponseDto.success(null);
   }
 }

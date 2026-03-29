@@ -1876,7 +1876,7 @@ function confirmCustomBreed() {
   isMixedBreed.value = true
   formData.value.breedId = MIXED_BREED_VIRTUAL_ID
   formData.value.customBreedName = name
-  formData.value.sizeClassOverride = null  // User must select
+  formData.value.sizeClassOverride = 'MEDIUM'  // 默认设置为中型犬，用户可手动调整
   showCustomBreedInput.value = false
   customBreedName.value = ''
   // 品种变化会影响生命阶段，清空后端数据
@@ -2037,7 +2037,7 @@ function getSizeClassDisplay(): string {
 
 function getSizeClassHint(): string {
   if (isMixedBreed.value) {
-    return '混血犬需要手动选择体型分类'
+    return '已默认设置为中型犬，可根据实际情况调整'
   }
   // 非混血犬不显示提示
   return ''

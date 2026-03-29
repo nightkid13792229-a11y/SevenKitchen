@@ -15,6 +15,22 @@ export class FilterOptionDto {
   count!: number;
 }
 
+export class IngredientItemDto {
+  @ApiProperty({ example: ['uuid-of-chicken', 'uuid-of-chicken-v2'], type: [String] })
+  ids!: string[];
+
+  @ApiProperty({ example: '鸡肉' })
+  name!: string;
+}
+
+export class IngredientGroupDto {
+  @ApiProperty({ example: '禽肉类及制品' })
+  category!: string;
+
+  @ApiProperty({ type: [IngredientItemDto] })
+  ingredients!: IngredientItemDto[];
+}
+
 export class FilterOptionsDto {
   @ApiProperty({
     type: [FilterOptionDto],
@@ -33,6 +49,12 @@ export class FilterOptionsDto {
     description: 'Available ingredient tags',
   })
   ingredientTags!: FilterOptionDto[];
+
+  @ApiProperty({
+    type: [IngredientGroupDto],
+    description: 'Ingredients grouped by CFCT classification',
+  })
+  ingredientGroups!: IngredientGroupDto[];
 
   @ApiProperty({ example: 24, description: 'Total recipes count' })
   total!: number;

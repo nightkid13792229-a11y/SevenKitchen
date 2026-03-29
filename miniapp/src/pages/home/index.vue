@@ -22,11 +22,11 @@
     <!-- 快捷功能入口 -->
     <view class="quick-actions">
       <view class="action-item" @tap="goToWeightManagement">
-        <image class="action-icon-img" src="/static/icons/weight-management.png" mode="aspectFit" />
+        <text class="action-icon">⚖️</text>
         <text class="action-text">体重管理</text>
       </view>
       <view class="action-item" @tap="goToCalculatePortion">
-        <image class="action-icon-img" src="/static/icons/portion-calculator.png" mode="aspectFit" />
+        <text class="action-icon">🥣</text>
         <text class="action-text">饭量计算</text>
       </view>
     </view>
@@ -108,13 +108,13 @@
 
         <!-- 不吃这些按钮 -->
         <view
-          :class="['filter-btn', { excluded: filterState.excludedIngredientTags.length > 0 }]"
+          :class="['filter-btn', { excluded: filterState.excludedIngredients.length > 0 }]"
           @tap="openExcludedTagsDrawer"
         >
           <text class="filter-btn-text">{{ getExcludedTagsButtonText() }}</text>
           <text class="dropdown-arrow">▼</text>
           <text
-            v-if="filterState.excludedIngredientTags.length > 0"
+            v-if="filterState.excludedIngredients.length > 0"
             class="remove-icon"
             @tap.stop="removeExcludedTags"
           >×</text>
@@ -146,7 +146,14 @@
 
         <!-- 食谱信息 - 使用强制渲染 -->
         <view class="recipe-info" :id="'info-' + recipe.id">
-          <view class="recipe-name">{{ recipe.name || '未命名食谱' }}</view>
+          <view class="recipe-name-row">
+            <text class="recipe-name">{{ recipe.name || '未命名食谱' }}</text>
+            <view class="recipe-stats">
+              <text class="stat-item">👁 {{ formatStatNum(recipe.viewCount) }}</text>
+              <text class="stat-item">⭐ {{ formatStatNum(recipe.favoriteCount) }}</text>
+              <text class="stat-item">🍳 {{ formatStatNum(recipe.diyGenCount) }}</text>
+            </view>
+          </view>
 
           <!-- 生命阶段和健康标签合并 -->
           <view
@@ -208,7 +215,7 @@
     <view v-if="showLifeStageDrawer" class="drawer-mask" @tap="applyLifeStagesFilter">
       <view class="drawer-content" @tap.stop>
         <view class="drawer-header">
-          <text class="drawer-title">适用生命阶段</text>
+          <text class="drawer-title">生命阶段</text>
           <text class="close-btn" @tap="applyLifeStagesFilter">×</text>
         </view>
         <view class="drawer-desc">可多选，筛选适用所选生命阶段的食谱</view>
@@ -232,7 +239,7 @@
     <view v-if="showHealthTagsDrawer" class="drawer-mask" @tap="applyHealthTagsFilter">
       <view class="drawer-content" @tap.stop>
         <view class="drawer-header">
-          <text class="drawer-title">健康类型</text>
+          <text class="drawer-title">疾病/功能</text>
           <text class="close-btn" @tap="applyHealthTagsFilter">×</text>
         </view>
         <view class="drawer-desc">可多选，筛选具有所选健康标签的食谱</view>
@@ -256,35 +263,48 @@
     <view v-if="showExcludedTagsDrawer" class="drawer-mask" @tap="applyExcludedTagsFilter">
       <view class="drawer-content" @tap.stop>
         <view class="drawer-header">
-          <text class="drawer-title">🚫 不吃这些</text>
+          <text class="drawer-title">挑食/过敏</text>
           <text class="close-btn" @tap="applyExcludedTagsFilter">×</text>
         </view>
         <scroll-view class="drawer-body" scroll-y>
-          <view class="drawer-desc">排除包含以下食材的食谱</view>
+          <view class="drawer-desc">选择要排除的食材，包含该食材的食谱将不会显示</view>
 
-          <!-- 已选排除 -->
-          <view v-if="filterState.excludedIngredientTags.length > 0" class="excluded-tags">
-            <text class="excluded-label">已选排除：</text>
+          <!-- 已选排除食材标签 -->
+          <view v-if="getExcludedIngredientNames().length > 0" class="excluded-tags">
+            <text class="excluded-label">已排除：</text>
             <view
-              v-for="tag in filterState.excludedIngredientTags"
-              :key="tag"
+              v-for="name in getExcludedIngredientNames()"
+              :key="name"
               class="excluded-tag"
-              @tap="removeExcludedTag(tag)"
+              @tap="removeExcludedIngredient(name)"
             >
-              {{ getIngredientTagLabel(tag) }} ×
+              {{ name }} x
             </view>
           </view>
 
-          <view class="section-subtitle">选择要排除的食材标签</view>
-          <view class="tag-grid">
-            <view
-              v-for="tag in filterOptions.ingredientTags"
-              :key="tag.value"
-              class="tag-item"
-              :class="{ excluded: filterState.excludedIngredientTags.includes(tag.value) }"
-              @tap="toggleExcludedTag(tag.value)"
-            >
-              {{ tag.label }}
+          <!-- 按 CFCT 分类展示食材 -->
+          <view
+            v-for="group in filterOptions.ingredientGroups"
+            :key="group.category"
+            class="ingredient-group"
+          >
+            <view class="group-header" @tap="toggleGroup(group.category)">
+              <text class="group-arrow">{{ expandedGroups.has(group.category) ? '▼' : '▶' }}</text>
+              <text class="group-name">{{ group.category }}</text>
+              <text class="group-count">({{ group.ingredients.length }})</text>
+            </view>
+            <view v-if="expandedGroups.has(group.category)" class="group-body">
+              <view class="tag-grid">
+                <view
+                  v-for="ing in group.ingredients"
+                  :key="ing.name"
+                  class="tag-item"
+                  :class="{ excluded: isIngredientExcluded(ing.name) }"
+                  @tap="toggleExcludedIngredient(ing.name)"
+                >
+                  {{ ing.name }}
+                </view>
+              </view>
             </view>
           </view>
         </scroll-view>
@@ -316,6 +336,9 @@ interface Recipe {
   targetHealthTags: string[]
   applicableLifeStages: string[]
   items: RecipeItem[]
+  viewCount?: number
+  favoriteCount?: number
+  diyGenCount?: number
 }
 
 // 筛选选项类型
@@ -325,10 +348,16 @@ interface FilterOption {
   count: number
 }
 
+interface IngredientGroup {
+  category: string
+  ingredients: Array<{ ids: string[]; name: string }>
+}
+
 interface FilterOptions {
   lifeStages: FilterOption[]
   healthTags: FilterOption[]
   ingredientTags: FilterOption[]
+  ingredientGroups: IngredientGroup[]
 }
 
 // 筛选状态
@@ -336,6 +365,7 @@ interface FilterState {
   selectedLifeStages: string[]
   selectedHealthTags: string[]
   excludedIngredientTags: string[]
+  excludedIngredients: string[]
 }
 
 // 登录状态
@@ -360,13 +390,23 @@ const showExcludedTagsDrawer = ref(false)
 const filterOptions = ref<FilterOptions>({
   lifeStages: [],
   healthTags: [],
-  ingredientTags: []
+  ingredientTags: [],
+  ingredientGroups: []
 })
 const filterState = ref<FilterState>({
   selectedLifeStages: [],
   selectedHealthTags: [],
-  excludedIngredientTags: []
+  excludedIngredientTags: [],
+  excludedIngredients: []
 })
+
+// 食材分类展开状态
+const expandedGroups = ref<Set<string>>(new Set())
+
+// 食材ID→名称映射（用于显示）
+const ingredientNameMap = ref<Record<string, string>>({})
+// 食材名称→所有IDs映射（用于排除）
+const ingredientNameToIds = ref<Record<string, string[]>>({})
 
 // 健康标签UUID到名称的映射（动态加载）
 const healthTagUuidLabelMap = ref<Record<string, string>>({})
@@ -376,7 +416,7 @@ const activeFiltersCount = computed(() => {
   let count = 0
   count += filterState.value.selectedLifeStages.length
   count += filterState.value.selectedHealthTags.length
-  count += filterState.value.excludedIngredientTags.length
+  count += getExcludedIngredientNames().length
   return count
 })
 
@@ -508,8 +548,29 @@ function loadFilterOptions(): Promise<void> {
           { value: '', label: '全部', count: res.data.total || 0 },
           ...res.data.healthTags || []
         ],
-        ingredientTags: res.data.ingredientTags || []
+        ingredientTags: res.data.ingredientTags || [],
+        ingredientGroups: res.data.ingredientGroups || []
       }
+
+      console.log('[Home] filterOptions loaded:', {
+        ingredientTags: filterOptions.value.ingredientTags.length,
+        ingredientGroups: filterOptions.value.ingredientGroups.length,
+        groupNames: filterOptions.value.ingredientGroups.map((g: any) => g.category)
+      })
+
+      // Build ingredient name maps
+      const nameMap: Record<string, string> = {}
+      const nameToIds: Record<string, string[]> = {}
+      for (const group of filterOptions.value.ingredientGroups) {
+        for (const ing of group.ingredients) {
+          nameToIds[ing.name] = ing.ids
+          for (const id of ing.ids) {
+            nameMap[id] = ing.name
+          }
+        }
+      }
+      ingredientNameMap.value = nameMap
+      ingredientNameToIds.value = nameToIds
     }
   }).catch((err: any) => {
     console.error('[Home] Load filter options error:', err)
@@ -550,8 +611,8 @@ function loadRecipes(isRefresh = false) {
   if (filterState.value.selectedHealthTags.length > 0) {
     params.healthTags = filterState.value.selectedHealthTags.join(',')
   }
-  if (filterState.value.excludedIngredientTags.length > 0) {
-    params.excludeTags = filterState.value.excludedIngredientTags.join(',')
+  if (filterState.value.excludedIngredients.length > 0) {
+    params.excludeIngredients = filterState.value.excludedIngredients.join(',')
   }
 
   console.log('[Home] Loading recipes with params:', params)
@@ -634,11 +695,6 @@ function openHealthTagsDrawer() {
   showHealthTagsDrawer.value = true
 }
 
-// 打开排除标签抽屉
-function openExcludedTagsDrawer() {
-  showExcludedTagsDrawer.value = true
-}
-
 // 关闭所有抽屉
 function closeAllDrawers() {
   showLifeStageDrawer.value = false
@@ -655,27 +711,27 @@ function closeAllDrawers() {
 function getLifeStageButtonText(): string {
   if (filterState.value.selectedLifeStages.length > 0) {
     const count = filterState.value.selectedLifeStages.length
-    return `适用生命阶段(${count})`
+    return `生命阶段(${count})`
   }
-  return '适用生命阶段'
+  return '生命阶段'
 }
 
 // 获取健康标签按钮文字
 function getHealthTagsButtonText(): string {
   if (filterState.value.selectedHealthTags.length > 0) {
     const count = filterState.value.selectedHealthTags.length
-    return `健康类型(${count})`
+    return `疾病/功能(${count})`
   }
-  return '健康类型'
+  return '疾病/功能'
 }
 
 // 获取排除标签按钮文字
 function getExcludedTagsButtonText(): string {
-  if (filterState.value.excludedIngredientTags.length > 0) {
-    const count = filterState.value.excludedIngredientTags.length
-    return `不吃这些(${count})`
+  const names = getExcludedIngredientNames()
+  if (names.length > 0) {
+    return `挑食/过敏(${names.length})`
   }
-  return '不吃这些'
+  return '挑食/过敏'
 }
 
 // 快速删除生命阶段
@@ -698,7 +754,7 @@ function removeHealthTags() {
 
 // 快速删除排除标签
 function removeExcludedTags() {
-  filterState.value.excludedIngredientTags = []
+  filterState.value.excludedIngredients = []
   recipes.value = []
   hasMore.value = true
   currentPage.value = 1
@@ -743,13 +799,45 @@ function applyHealthTagsFilter() {
   loadRecipes(true)  // 传递 isRefresh = true
 }
 
-// 切换排除食材标签
-function toggleExcludedTag(tag: string) {
-  const index = filterState.value.excludedIngredientTags.indexOf(tag)
-  if (index > -1) {
-    filterState.value.excludedIngredientTags.splice(index, 1)
+// 切换排除食材（按名称，一次性排除所有同名ID）
+function toggleExcludedIngredient(ingredientName: string) {
+  const allIds = ingredientNameToIds.value[ingredientName] || []
+  // Check if already excluded (check by any id)
+  const isExcluded = allIds.some(id => filterState.value.excludedIngredients.includes(id))
+  if (isExcluded) {
+    // Remove all ids for this name
+    for (const id of allIds) {
+      const idx = filterState.value.excludedIngredients.indexOf(id)
+      if (idx > -1) filterState.value.excludedIngredients.splice(idx, 1)
+    }
   } else {
-    filterState.value.excludedIngredientTags.push(tag)
+    // Add all ids for this name
+    filterState.value.excludedIngredients.push(...allIds)
+  }
+}
+
+// 判断食材是否被排除
+function isIngredientExcluded(ingredientName: string): boolean {
+  const allIds = ingredientNameToIds.value[ingredientName] || []
+  return allIds.some(id => filterState.value.excludedIngredients.includes(id))
+}
+
+// 获取已排除食材的去重名称列表
+function getExcludedIngredientNames(): string[] {
+  const names = new Set<string>()
+  for (const id of filterState.value.excludedIngredients) {
+    const name = ingredientNameMap.value[id]
+    if (name) names.add(name)
+  }
+  return Array.from(names)
+}
+
+// 切换分类展开/折叠
+function toggleGroup(category: string) {
+  if (expandedGroups.value.has(category)) {
+    expandedGroups.value.delete(category)
+  } else {
+    expandedGroups.value.add(category)
   }
 }
 
@@ -762,18 +850,29 @@ function applyExcludedTagsFilter() {
   loadRecipes(true)  // 传递 isRefresh = true
 }
 
-// 移除已选排除标签
-function removeExcludedTag(tag: string) {
-  const index = filterState.value.excludedIngredientTags.indexOf(tag)
-  if (index > -1) {
-    filterState.value.excludedIngredientTags.splice(index, 1)
+// 移除已选排除食材（按名称，移除所有同名ID）
+function removeExcludedIngredient(ingredientName: string) {
+  const allIds = ingredientNameToIds.value[ingredientName] || []
+  for (const id of allIds) {
+    const idx = filterState.value.excludedIngredients.indexOf(id)
+    if (idx > -1) {
+      filterState.value.excludedIngredients.splice(idx, 1)
+    }
   }
 }
 
-// 获取食材标签名称
-function getIngredientTagLabel(tagId: string): string {
-  const tag = filterOptions.value.ingredientTags.find(t => t.value === tagId)
-  return tag?.label || tagId
+// 获取食材名称
+function getIngredientName(ingredientId: string): string {
+  return ingredientNameMap.value[ingredientId] || ingredientId
+}
+
+// 打开排除标签抽屉（默认展开所有分组）
+function openExcludedTagsDrawer() {
+  showExcludedTagsDrawer.value = true
+  // 默认展开所有分组
+  expandedGroups.value = new Set(
+    filterOptions.value.ingredientGroups.map(g => g.category)
+  )
 }
 
 // 清除所有筛选
@@ -781,7 +880,8 @@ function clearAllFilters() {
   filterState.value = {
     selectedLifeStages: [],
     selectedHealthTags: [],
-    excludedIngredientTags: []
+    excludedIngredientTags: [],
+    excludedIngredients: []
   }
   recipes.value = []
   hasMore.value = true
@@ -802,6 +902,13 @@ function viewRecipe(recipeId: string) {
 }
 
 // 获取生命阶段标签
+function formatStatNum(num: number | undefined): string {
+  if (!num || num < 1) return '0'
+  if (num >= 10000) return (num / 10000).toFixed(1).replace(/\.0$/, '') + 'w'
+  if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'k'
+  return String(num)
+}
+
 function getLifeStageLabel(stage: string): string {
   const map: Record<string, string> = {
     'PUPPY': '幼犬',
@@ -1344,15 +1451,35 @@ defineOptions({
   will-change: transform;
 }
 
+.recipe-name-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 16rpx;
+}
+
 .recipe-name {
   font-size: 32rpx;
   font-weight: bold;
   color: #333;
-  margin-bottom: 16rpx;
   line-height: 1.4;
   word-break: break-all;
   overflow-wrap: break-word;
   min-height: 45rpx;
+  flex: 1;
+  margin-right: 12rpx;
+}
+
+.recipe-stats {
+  display: flex;
+  gap: 8rpx;
+  flex-shrink: 0;
+}
+
+.stat-item {
+  font-size: 20rpx;
+  color: #999;
+  white-space: nowrap;
 }
 
 .tags-row {
@@ -1748,5 +1875,46 @@ defineOptions({
   color: #666;
   margin-bottom: 16rpx;
   font-weight: bold;
+}
+
+/* 食材分组样式 */
+.ingredient-group {
+  margin-bottom: 16rpx;
+}
+
+.group-header {
+  display: flex;
+  align-items: center;
+  padding: 16rpx 20rpx;
+  background: #f8f8f8;
+  border-radius: 8rpx;
+  margin-bottom: 12rpx;
+}
+
+.group-arrow {
+  font-size: 22rpx;
+  color: #999;
+  margin-right: 12rpx;
+}
+
+.group-name {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #333;
+  flex: 1;
+}
+
+.group-count {
+  font-size: 24rpx;
+  color: #999;
+  margin-left: 8rpx;
+}
+
+.group-body {
+  padding: 0 8rpx;
+}
+
+.group-body .tag-grid {
+  margin-top: 0;
 }
 </style>

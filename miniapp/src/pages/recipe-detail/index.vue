@@ -223,13 +223,17 @@ import { CURRENT_SHARE_CONFIG } from '@/config/share.config'
 let currentRecipeName = ''
 let currentRecipeCoverImageUrl = ''
 let currentRecipeId = ''
+let currentRecipeStatus = ''
+let currentShareToken = ''
 
 // 导出函数供setup调用
-export function updateShareInfo(name: string, coverImageUrl: string, id: string) {
+export function updateShareInfo(name: string, coverImageUrl: string, id: string, status?: string, shareToken?: string) {
   currentRecipeName = name
   currentRecipeCoverImageUrl = coverImageUrl
   currentRecipeId = id
-  console.log('[Recipe Share] 分享信息已更新:', { name, coverImageUrl, id })
+  if (status) currentRecipeStatus = status
+  if (shareToken) currentShareToken = shareToken
+  console.log('[Recipe Share] 分享信息已更新:', { name, coverImageUrl, id, status, shareToken })
 }
 
 export default {
@@ -238,6 +242,8 @@ export default {
     console.log('[Recipe Share] 当前食谱名称:', currentRecipeName)
     console.log('[Recipe Share] 当前食谱ID:', currentRecipeId)
     console.log('[Recipe Share] 当前封面图:', currentRecipeCoverImageUrl)
+    console.log('[Recipe Share] 当前状态:', currentRecipeStatus)
+    console.log('[Recipe Share] 当前shareToken:', currentShareToken)
 
     // 动态生成标题
     const title = currentRecipeName
@@ -247,10 +253,15 @@ export default {
     // 动态选择图片：优先使用食谱封面图，否则使用默认食谱图
     const imageUrl = currentRecipeCoverImageUrl || CURRENT_SHARE_CONFIG.recipeImageUrl
 
-    // 动态生成路径
-    const path = currentRecipeId
+    // 动态生成路径：非公开食谱附带shareToken
+    let path = currentRecipeId
       ? `/pages/recipe-detail/index?recipeId=${currentRecipeId}`
       : '/pages/home/index'
+
+    // 非公开食谱分享时附带shareToken
+    if (currentRecipeId && currentRecipeStatus !== 'PUBLIC' && currentShareToken) {
+      path = `/pages/recipe-detail/index?recipeId=${currentRecipeId}&shareToken=${currentShareToken}`
+    }
 
     const config = { title, imageUrl, path }
 
@@ -288,7 +299,7 @@ export default {
 <!-- Setup script：业务逻辑 -->
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { request, addFavorite, removeFavorite, checkFavorite } from '../../utils/api'
+import { request, addFavorite, removeFavorite, checkFavorite, createRecipeShareToken } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
 
 interface RecipeItem {
@@ -350,6 +361,7 @@ const recipe = ref<RecipeDetail>({
 
 const isFavorite = ref(false)
 const recipeId = ref('')
+const shareToken = ref('')
 const dogId = ref<string | null>(null)
 
 // 健康标签UUID到名称的映射（动态加载）
@@ -364,6 +376,7 @@ onMounted(async () => {
   const pages = getCurrentPages()
   const currentPage = pages[pages.length - 1] as any
   recipeId.value = currentPage.options?.recipeId || ''
+  shareToken.value = currentPage.options?.shareToken || ''
 
   dogId.value = uni.getStorageSync('dogId') || null
 
@@ -384,9 +397,16 @@ onMounted(async () => {
 function loadRecipeDetail() {
   uni.showLoading({ title: '加载中...' })
 
+  // 构建请求参数：非公开食谱通过URL传入的shareToken传递给后端
+  const data: any = {}
+  if (shareToken.value) {
+    data.shareToken = shareToken.value
+  }
+
   request({
     url: `/recipes/${recipeId.value}`,
-    method: 'GET'
+    method: 'GET',
+    data,
   }).then((res: any) => {
     if (res.code === 0 && res.data) {
       // Debug: Log API response to diagnose preparationMethod issue
@@ -407,8 +427,14 @@ function loadRecipeDetail() {
       updateShareInfo(
         res.data.name || '',
         res.data.coverImageUrl || '',
-        res.data.id || ''
+        res.data.id || '',
+        res.data.status,
       )
+
+      // 非公开食谱：预生成分享令牌（仅登录员工可操作）
+      if (res.data.status !== 'PUBLIC') {
+        preGenerateShareToken()
+      }
 
       // Debug: Log recipe value after assignment
       console.log('[RecipeDetail] recipe.value.items[0]:', {
@@ -425,6 +451,27 @@ function loadRecipeDetail() {
   }).finally(() => {
     uni.hideLoading()
   })
+}
+
+async function preGenerateShareToken() {
+  try {
+    const result = await createRecipeShareToken(recipeId.value)
+    if (result?.token) {
+      shareToken.value = result.token
+      // 更新分享信息中的token
+      updateShareInfo(
+        recipe.value.name || '',
+        recipe.value.coverImageUrl || '',
+        recipe.value.id || '',
+        recipe.value.status,
+        result.token
+      )
+      console.log('[RecipeDetail] 预生成分享令牌成功:', result.token)
+    }
+  } catch (error) {
+    // 非员工用户可能无法生成令牌，静默失败
+    console.log('[RecipeDetail] 预生成分享令牌失败（可能是非员工用户）:', error)
+  }
 }
 
 function loadHealthTagMapping(): Promise<void> {

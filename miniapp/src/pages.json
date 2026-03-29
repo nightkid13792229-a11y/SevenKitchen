@@ -227,6 +227,12 @@
       }
     },
     {
+      "path": "pages/staff-recipes/index",
+      "style": {
+        "navigationBarTitleText": "食谱管理"
+      }
+    },
+    {
       "path": "pages/shared-photos/index",
       "style": {
         "navigationBarTitleText": "原料照片"

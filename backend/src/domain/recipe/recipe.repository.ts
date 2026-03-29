@@ -38,12 +38,21 @@ export interface Recipe {
   nutritionStandard?: string;
   nutritionDetailedData?: any;
   description?: string | null;
+  viewCount?: number;
+  favoriteCount?: number;
+  diyGenCount?: number;
+}
+
+export interface IngredientGroup {
+  category: string; // CFCT分类名，如"畜肉类及制品"
+  ingredients: Array<{ ids: string[]; name: string }>;
 }
 
 export interface FindRecipesOptions {
   lifeStages?: string[];
   healthTags?: string[];
   excludeTags?: string[];
+  excludeIngredients?: string[];
   page?: number;
   pageSize?: number;
 }
@@ -72,6 +81,7 @@ export interface FilterOptions {
     label: string;
     count: number;
   }>;
+  ingredientGroups: IngredientGroup[];
   total: number;
 }
 

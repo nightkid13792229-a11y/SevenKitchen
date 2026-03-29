@@ -90,6 +90,7 @@ export class InMemoryRecipeRepository implements RecipeRepository {
       lifeStages: [],
       healthTags: [],
       ingredientTags: [],
+      ingredientGroups: [],
       total: this.recipes.size,
     });
   }

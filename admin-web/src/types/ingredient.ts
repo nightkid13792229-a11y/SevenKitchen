@@ -161,3 +161,34 @@ export const CFCT_CLASS_OPTIONS = [
   '调味品类',
   '其他'
 ]
+
+// 推荐产品
+export interface RecommendedProduct {
+  id: string
+  ingredientId: string
+  name: string
+  brand: string | null
+  productModel: string | null
+  purchaseChannel: string | null
+  purchaseLink: PurchaseLinkConfig | null
+  imageUrl: string | null
+  activeNutrients: Record<string, ActiveNutrientValue> | null
+  displayUnit: string | null
+  isActive: boolean
+  sortOrder: number
+  createdAt: string
+  updatedAt: string
+}
+
+export interface RecommendedProductForm {
+  name: string
+  brand?: string
+  productModel?: string
+  purchaseChannel?: string
+  purchaseLink?: PurchaseLinkConfig
+  imageUrl?: string
+  activeNutrients?: Record<string, ActiveNutrientValue>
+  displayUnit?: string
+  isActive?: boolean
+  sortOrder?: number
+}

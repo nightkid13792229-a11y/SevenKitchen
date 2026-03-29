@@ -83,6 +83,21 @@ model PhotoShareToken {
   @@map("photo_share_token")
 }
 
+model RecipeShareToken {
+  id        String   @id @default(uuid()) @map("id")
+  recipeId  String   @map("recipe_id")
+  token     String   @unique @map("token") @db.VarChar(32)
+  createdAt DateTime @default(now()) @map("created_at")
+  expiresAt DateTime @map("expires_at")
+  createdBy String   @map("created_by")
+  recipe    Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@index([token])
+  @@index([recipeId])
+  @@index([expiresAt])
+  @@map("recipe_share_token")
+}
+
 model OrderItem {
   id                 String    @id @default(uuid()) @map("id")
   orderId            String    @map("order_id")
@@ -226,6 +241,7 @@ model Recipe {
   nutritionStandard      String                      @default("FEDIAF_2021") @map("nutrition_standard")
   productionSteps        String?                     @map("production_steps")
   salesCount             Int                         @default(0) @map("sales_count")
+  viewCount              Int                         @default(0) @map("view_count")
   targetHealthTags       Json                        @default("[]") @map("target_health_tags")
   videoUrl               String?                     @map("video_url")
   designSource           String?                     @map("design_source")
@@ -235,6 +251,7 @@ model Recipe {
   customOrder            CustomRecipeOrder?          @relation("CustomRecipeOrders")
   healthTagAssignments   RecipeHealthTagAssignment[]
   items                  RecipeItem[]
+  shareTokens            RecipeShareToken[]
 
   @@unique([recipeId, version])
   @@index([recipeId])
@@ -371,6 +388,7 @@ model Ingredient {
   purchaseItems               PurchaseItem[]
   recipeItems                 RecipeItem[]
   nutritionFoodMappings       NutritionFoodMapping[]
+  recommendedProducts         RecommendedProduct[]
 
   @@unique([name, brand, productModel])
   @@index([type])
@@ -408,6 +426,29 @@ model IngredientTagAssignment {
   @@index([ingredientId])
   @@index([tagId])
   @@map("ingredient_tag_assignment")
+}
+
+model RecommendedProduct {
+  id              String     @id @default(uuid())
+  ingredientId    String     @map("ingredient_id")
+  name            String
+  brand           String?    @db.VarChar(100)
+  productModel    String?    @map("product_model") @db.VarChar(100)
+  purchaseChannel String?    @map("purchase_channel") @db.VarChar(200)
+  purchaseLink    Json?      @map("purchase_link")
+  imageUrl        String?    @map("image_url")
+  activeNutrients Json?      @map("active_nutrients")
+  displayUnit     String?    @map("display_unit") @db.VarChar(50)
+  isActive        Boolean    @default(true) @map("is_active")
+  sortOrder       Int        @default(0) @map("sort_order")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+
+  ingredient      Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  @@index([ingredientId])
+  @@index([isActive])
+  @@map("recommended_product")
 }
 
 model InventoryLedgerEntry {

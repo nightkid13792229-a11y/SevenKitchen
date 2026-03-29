@@ -547,6 +547,45 @@
       </el-form-item>
     </template>
 
+    <!-- 推荐产品管理（所有类型原料都可用） -->
+    <template v-if="isEdit">
+      <el-divider content-position="left">推荐产品</el-divider>
+      <div class="recommended-products-section">
+        <div class="rp-header">
+          <el-button type="primary" size="small" :icon="Plus" @click="openRpDialog()">新增推荐产品</el-button>
+          <span class="hint-text" style="margin-left: 8px;">为用户推荐购买的零售产品信息，可与生产端原料不同</span>
+        </div>
+        <div v-if="recommendedProducts.length === 0" class="rp-empty">
+          暂无推荐产品，点击上方按钮添加
+        </div>
+        <div v-else class="rp-list">
+          <div v-for="rp in recommendedProducts" :key="rp.id" class="rp-card">
+            <div class="rp-card-main">
+              <div class="rp-card-info">
+                <span class="rp-name">{{ rp.name }}</span>
+                <el-tag v-if="rp.brand" size="small" type="info">{{ rp.brand }}</el-tag>
+                <el-tag v-if="rp.productModel" size="small" type="info">{{ rp.productModel }}</el-tag>
+                <el-tag :type="rp.isActive ? 'success' : 'info'" size="small">
+                  {{ rp.isActive ? '已启用' : '已停用' }}
+                </el-tag>
+              </div>
+              <div class="rp-card-actions">
+                <el-button size="small" link type="primary" @click="openRpDialog(rp)">编辑</el-button>
+                <el-button size="small" link type="warning" @click="toggleRpActive(rp)">
+                  {{ rp.isActive ? '停用' : '启用' }}
+                </el-button>
+                <el-popconfirm title="确认删除此推荐产品？" @confirm="deleteRp(rp.id)">
+                  <template #reference>
+                    <el-button size="small" link type="danger">删除</el-button>
+                  </template>
+                </el-popconfirm>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </template>
+
     <!-- Actions -->
     <el-form-item>
       <el-button type="primary" @click="handleSubmit" :loading="submitting">
@@ -555,6 +594,77 @@
       <el-button @click="handleCancel">取消</el-button>
     </el-form-item>
   </el-form>
+
+  <!-- 推荐产品编辑弹窗 -->
+  <el-dialog
+    v-model="rpDialogVisible"
+    :title="rpEditingId ? '编辑推荐产品' : '新增推荐产品'"
+    width="640px"
+    destroy-on-close
+  >
+    <el-form :model="rpForm" label-width="120px">
+      <el-form-item label="产品名称" required>
+        <el-input v-model="rpForm.name" placeholder="推荐用户购买的产品名称" maxlength="100" />
+      </el-form-item>
+      <el-form-item label="品牌">
+        <el-input v-model="rpForm.brand" placeholder="产品品牌" maxlength="100" style="width: 200px" />
+      </el-form-item>
+      <el-form-item label="产品规格">
+        <el-input v-model="rpForm.productModel" placeholder="如：200g装、60粒/瓶" maxlength="100" style="width: 200px" />
+      </el-form-item>
+      <el-form-item label="购买渠道">
+        <el-input v-model="rpForm.purchaseChannel" placeholder="如：淘宝、京东、线下宠物店" maxlength="200" style="width: 300px" />
+      </el-form-item>
+      <el-form-item label="购买链接">
+        <div style="width: 100%;">
+          <el-select v-model="rpForm.purchaseLinkPlatform" placeholder="平台类型" style="width: 160px; margin-bottom: 8px;">
+            <el-option label="淘宝/天猫" value="TAOBAO" />
+            <el-option label="京东" value="JD" />
+            <el-option label="拼多多" value="PINDUODUO" />
+            <el-option label="其他小程序" value="OTHER" />
+            <el-option label="网页链接" value="WEBVIEW" />
+          </el-select>
+          <el-input v-model="rpForm.purchaseLinkUrl" placeholder="商品购买链接" style="width: 100%;" />
+        </div>
+      </el-form-item>
+      <el-form-item label="产品图片">
+        <el-input v-model="rpForm.imageUrl" placeholder="产品图片URL" style="width: 400px" />
+      </el-form-item>
+      <el-form-item label="有效成分含量">
+        <div style="width: 100%;">
+          <div class="nutrient-list">
+            <div v-for="(nutrient, idx) in rpFormNutrients" :key="idx" class="nutrient-row-enhanced">
+              <el-autocomplete
+                v-model="nutrient.name"
+                :fetch-suggestions="querySearchNutrients"
+                placeholder="营养素名称"
+                style="width: 160px"
+              />
+              <el-input-number v-model="nutrient.value" :min="0" :precision="2" placeholder="含量" style="width: 140px" />
+              <el-select v-model="nutrient.unit" style="width: 110px">
+                <el-option v-for="u in NUTRIENT_UNITS" :key="u.value" :label="u.label" :value="u.value" />
+              </el-select>
+              <el-button :icon="Delete" size="small" circle @click="rpFormNutrients.splice(idx, 1)" />
+            </div>
+          </div>
+          <el-button size="small" :icon="Plus" @click="rpFormNutrients.push({ name: '', value: 0, unit: 'mg' })">添加成分</el-button>
+        </div>
+      </el-form-item>
+      <el-form-item label="显示单位">
+        <el-input v-model="rpForm.displayUnit" placeholder="如：g、mg、粒" maxlength="50" style="width: 120px" />
+      </el-form-item>
+      <el-form-item label="排序">
+        <el-input-number v-model="rpForm.sortOrder" :min="0" style="width: 140px" />
+      </el-form-item>
+      <el-form-item label="启用状态">
+        <el-switch v-model="rpForm.isActive" />
+      </el-form-item>
+    </el-form>
+    <template #footer>
+      <el-button @click="rpDialogVisible = false">取消</el-button>
+      <el-button type="primary" :loading="rpSaving" @click="saveRp">保存</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
@@ -577,7 +687,9 @@ import {
   type IngredientForm,
   type FoodProperties,
   type SupplementProperties,
-  type PackagingProperties
+  type PackagingProperties,
+  type RecommendedProduct,
+  type RecommendedProductForm
 } from '@/types/ingredient'
 
 interface Props {
@@ -1347,6 +1459,9 @@ watch(() => props.ingredient, (newIngredient, oldIngredient) => {
     nextTick(() => {
       formRef.value?.clearValidate()
     })
+
+    // 重新加载推荐产品（切换原料时）
+    loadRecommendedProducts()
   }
 
   // Reload ingredients data whenever form is opened (ingredient prop changes)
@@ -1354,10 +1469,159 @@ watch(() => props.ingredient, (newIngredient, oldIngredient) => {
   loadIngredients()
 })
 
+// ==================== 推荐产品管理 ====================
+const recommendedProducts = ref<RecommendedProduct[]>([])
+const rpDialogVisible = ref(false)
+const rpEditingId = ref<string | null>(null)
+const rpSaving = ref(false)
+
+interface RpNutrientItem {
+  name: string
+  value: number
+  unit: string
+}
+
+const rpFormNutrients = ref<RpNutrientItem[]>([])
+const rpForm = reactive({
+  name: '',
+  brand: '',
+  productModel: '',
+  purchaseChannel: '',
+  purchaseLinkUrl: '',
+  purchaseLinkPlatform: 'TAOBAO' as string,
+  imageUrl: '',
+  displayUnit: '',
+  isActive: true,
+  sortOrder: 0
+})
+
+const loadRecommendedProducts = async () => {
+  if (!props.ingredient?.id) return
+  try {
+    recommendedProducts.value = await ingredientApi.listRecommendedProducts(props.ingredient.id)
+  } catch (e: any) {
+    console.error('Failed to load recommended products:', e)
+  }
+}
+
+const openRpDialog = (rp?: RecommendedProduct) => {
+  if (rp) {
+    rpEditingId.value = rp.id
+    rpForm.name = rp.name
+    rpForm.brand = rp.brand || ''
+    rpForm.productModel = rp.productModel || ''
+    rpForm.purchaseChannel = rp.purchaseChannel || ''
+    rpForm.purchaseLinkUrl = rp.purchaseLink?.url || ''
+    rpForm.purchaseLinkPlatform = rp.purchaseLink?.platform || 'TAOBAO'
+    rpForm.imageUrl = rp.imageUrl || ''
+    rpForm.displayUnit = rp.displayUnit || ''
+    rpForm.isActive = rp.isActive
+    rpForm.sortOrder = rp.sortOrder
+    // Parse activeNutrients to nutrient list
+    rpFormNutrients.value = rp.activeNutrients
+      ? Object.entries(rp.activeNutrients).map(([name, v]) => ({
+          name,
+          value: (v as any).value || 0,
+          unit: (v as any).unit || 'mg'
+        }))
+      : []
+  } else {
+    rpEditingId.value = null
+    rpForm.name = ''
+    rpForm.brand = ''
+    rpForm.productModel = ''
+    rpForm.purchaseChannel = ''
+    rpForm.purchaseLinkUrl = ''
+    rpForm.purchaseLinkPlatform = 'TAOBAO'
+    rpForm.imageUrl = ''
+    rpForm.displayUnit = ''
+    rpForm.isActive = true
+    rpForm.sortOrder = 0
+    rpFormNutrients.value = []
+  }
+  rpDialogVisible.value = true
+}
+
+const buildNutrientsFromList = (list: RpNutrientItem[]): Record<string, { value: number; unit: string }> | undefined => {
+  if (list.length === 0) return undefined
+  const result: Record<string, { value: number; unit: string }> = {}
+  for (const n of list) {
+    if (n.name && n.value > 0) {
+      result[n.name] = { value: n.value, unit: n.unit }
+    }
+  }
+  return Object.keys(result).length > 0 ? result : undefined
+}
+
+const saveRp = async () => {
+  if (!rpForm.name) {
+    ElMessage.warning('请输入产品名称')
+    return
+  }
+  if (!props.ingredient?.id) return
+
+  const purchaseLink = rpForm.purchaseLinkUrl
+    ? { url: rpForm.purchaseLinkUrl, platform: rpForm.purchaseLinkPlatform }
+    : undefined
+
+  const data: RecommendedProductForm = {
+    name: rpForm.name,
+    brand: rpForm.brand || undefined,
+    productModel: rpForm.productModel || undefined,
+    purchaseChannel: rpForm.purchaseChannel || undefined,
+    purchaseLink: purchaseLink as any,
+    imageUrl: rpForm.imageUrl || undefined,
+    activeNutrients: buildNutrientsFromList(rpFormNutrients.value) as any,
+    displayUnit: rpForm.displayUnit || undefined,
+    isActive: rpForm.isActive,
+    sortOrder: rpForm.sortOrder
+  }
+
+  rpSaving.value = true
+  try {
+    if (rpEditingId.value) {
+      await ingredientApi.updateRecommendedProduct(props.ingredient.id, rpEditingId.value, data)
+      ElMessage.success('推荐产品已更新')
+    } else {
+      await ingredientApi.createRecommendedProduct(props.ingredient.id, data)
+      ElMessage.success('推荐产品已创建')
+    }
+    rpDialogVisible.value = false
+    await loadRecommendedProducts()
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || e?.message || '操作失败')
+  } finally {
+    rpSaving.value = false
+  }
+}
+
+const toggleRpActive = async (rp: RecommendedProduct) => {
+  if (!props.ingredient?.id) return
+  try {
+    await ingredientApi.updateRecommendedProduct(props.ingredient.id, rp.id, { isActive: !rp.isActive })
+    ElMessage.success(rp.isActive ? '已停用' : '已启用')
+    await loadRecommendedProducts()
+  } catch (e: any) {
+    ElMessage.error('操作失败')
+  }
+}
+
+const deleteRp = async (id: string) => {
+  if (!props.ingredient?.id) return
+  try {
+    await ingredientApi.deleteRecommendedProduct(props.ingredient.id, id)
+    ElMessage.success('已删除')
+    await loadRecommendedProducts()
+  } catch (e: any) {
+    ElMessage.error('删除失败')
+  }
+}
+
 // Lifecycle
 onMounted(() => {
   loadTags()
   loadIngredients()  // ✅ 确保组件加载时获取原料列表
+  loadRecommendedProducts()  // 加载推荐产品（编辑模式）
 })
 
 // 表单验证规则
@@ -1619,5 +1883,64 @@ const handleCancel = () => {
 .tag-description {
   color: #909399;
   font-size: 12px;
+}
+
+/* 推荐产品样式 */
+.recommended-products-section {
+  width: 100%;
+}
+
+.rp-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.rp-empty {
+  padding: 24px;
+  text-align: center;
+  color: #909399;
+  font-size: 14px;
+  background-color: #f5f7fa;
+  border-radius: 8px;
+}
+
+.rp-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rp-card {
+  padding: 12px 16px;
+  background-color: #f5f7fa;
+  border-radius: 8px;
+  border: 1px solid #e4e7ed;
+}
+
+.rp-card-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.rp-card-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.rp-name {
+  font-weight: 500;
+  font-size: 14px;
+  color: #303133;
+}
+
+.rp-card-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-shrink: 0;
 }
 </style>

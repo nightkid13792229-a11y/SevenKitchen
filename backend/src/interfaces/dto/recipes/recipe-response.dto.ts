@@ -41,6 +41,15 @@ export class RecipeSummaryDto {
     name: string;
     ratio: number;
   }>;
+
+  @ApiPropertyOptional({ example: 128 })
+  viewCount?: number;
+
+  @ApiPropertyOptional({ example: 56 })
+  favoriteCount?: number;
+
+  @ApiPropertyOptional({ example: 23 })
+  diyGenCount?: number;
 }
 
 export class RecipeDetailDto extends RecipeSummaryDto {

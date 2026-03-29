@@ -98,13 +98,13 @@
 
         <!-- 补剂类：需额外补充的营养 -->
         <view v-if="supplementItemsDetailed.length > 0" class="ingredient-group">
-          <view class="ingredient-category-title">需额外补充的营养</view>
+          <view class="ingredient-category-title">营养补充剂</view>
           <view class="ingredient-table">
             <view class="table-header supplement-table">
-              <text class="header-item product-col">推荐营养品</text>
-              <text class="header-item brand-col">推荐产品</text>
-              <text class="header-item timing-col">添加时机</text>
-              <text class="header-item dosage-col">添加量</text>
+              <text class="header-item product-col">补剂名称</text>
+              <text class="header-item brand-col">产品/品牌</text>
+              <text class="header-item timing-col">最佳添加时机</text>
+              <text class="header-item dosage-col">添加总量</text>
             </view>
             <view v-for="(item, idx) in supplementItemsDetailed" :key="'supp-' + idx" class="table-row supplement-table">
               <text class="row-item product-col">{{ item.name }}</text>
@@ -237,7 +237,45 @@
           <text class="spec-title">商品规格</text>
           <text class="btn-close" @tap="closeSpecModal">✕</text>
         </view>
-        <view class="spec-body">
+        <!-- 有多个推荐产品时：展示产品卡片列表 -->
+        <view v-if="currentSpec.allRecommendedProducts && currentSpec.allRecommendedProducts.length > 1" class="spec-body">
+          <view class="rp-cards-list">
+            <view
+              v-for="(rp, rpIdx) in currentSpec.allRecommendedProducts"
+              :key="rp.id"
+              class="rp-card"
+              :class="{ 'rp-card-active': rpIdx === (selectedRpIndexMap[currentSpec.ingredientId] ?? 0) }"
+              @tap="selectRecommendedProduct(currentSpec.ingredientId, rpIdx)"
+            >
+              <view class="rp-card-header">
+                <text class="rp-card-name">{{ rp.name }}</text>
+                <text v-if="rpIdx === (selectedRpIndexMap[currentSpec.ingredientId] ?? 0)" class="rp-card-badge">已选</text>
+              </view>
+              <view class="rp-card-body">
+                <view v-if="rp.brand" class="rp-card-row">
+                  <text class="rp-card-label">品牌</text>
+                  <text class="rp-card-value">{{ rp.brand }}</text>
+                </view>
+                <view v-if="rp.productModel" class="rp-card-row">
+                  <text class="rp-card-label">规格</text>
+                  <text class="rp-card-value">{{ rp.productModel }}</text>
+                </view>
+                <view v-if="rp.purchaseChannel" class="rp-card-row">
+                  <text class="rp-card-label">渠道</text>
+                  <text class="rp-card-value">{{ rp.purchaseChannel }}</text>
+                </view>
+              </view>
+              <view v-if="rp.purchaseLink" class="rp-card-footer">
+                <button
+                  class="btn-purchase btn-purchase-sm"
+                  @tap.stop="handlePurchase(rp.purchaseLink, rp.name)"
+                >去购买</button>
+              </view>
+            </view>
+          </view>
+        </view>
+        <!-- 只有1个或没有推荐产品时：原有展示 -->
+        <view v-else class="spec-body">
           <view class="spec-row">
             <text class="spec-label">商品名称：</text>
             <text class="spec-value">{{ currentSpec.name }}</text>
@@ -280,7 +318,7 @@
             <text class="spec-value">{{ currentAmountDetail.name }}</text>
           </view>
           <view v-if="currentAmountDetail.preparationMethod" class="spec-row">
-            <text class="spec-label">{{ currentAmountDetail.type === 'SUPPLEMENT' ? '添加时机：' : '制备方法：' }}</text>
+            <text class="spec-label">{{ currentAmountDetail.type === 'SUPPLEMENT' ? '最佳添加时机：' : '制备方法：' }}</text>
             <text class="spec-value">{{ currentAmountDetail.preparationMethod }}</text>
           </view>
           <view class="spec-divider"></view>
@@ -309,11 +347,11 @@
         </view>
         <view class="spec-body">
           <view class="spec-row">
-            <text class="spec-label">推荐营养品：</text>
+            <text class="spec-label">补剂名称：</text>
             <text class="spec-value">{{ currentNutritionInfo.name }}</text>
           </view>
           <view class="spec-row">
-            <text class="spec-label">添加量：</text>
+            <text class="spec-label">添加总量：</text>
             <text class="spec-value">{{ currentNutritionInfo.amountStr }}</text>
           </view>
           <view v-if="currentNutritionInfo.nutrientTargetKey" class="spec-divider"></view>
@@ -422,6 +460,9 @@ const recipe = ref<any>({
 
 const pricePreview = ref<any>(null)
 
+// 推荐产品映射 { ingredientId: RecommendedProduct[] }
+const recommendedProductsMap = ref<Record<string, any[]>>({})
+
 // UI状态
 // 规格弹窗状态
 const showSpec = ref(false)
@@ -440,12 +481,18 @@ const equipmentRecommendations = ref<any[]>([])
 const showEquipmentList = ref(false)
 const currentEquipmentDetail = ref<any>(null)
 
+// 每个原料当前选中的推荐产品索引 { ingredientId: index }
+const selectedRpIndexMap = ref<Record<string, number>>({})
+
 // 图片预览弹窗状态
 const showImagePreview = ref(false)
 const previewImageUrl = ref('')
 
 // 全局配置中的补剂损耗率（默认5%）
 const globalSupplementLossRate = ref(0.05)
+
+// 总食材净重（克），用于推荐产品用量重算
+const totalFoodNetWeightG = computed(() => dailyIntakeG.value * cycleDays.value)
 
 // 计算采购清单数据
 const purchaseListData = computed(() => {
@@ -558,28 +605,46 @@ const supplementItemsDetailed = computed(() => {
       allFields: Object.keys(item)
     }, null, 2))
 
-    // 使用displayUnit作为显示单位
-    const displayUnit = item.displayUnit || item.unit || 'g'
+    // 获取推荐产品
+    const rps = recommendedProductsMap.value[item.ingredientId]
+    const rpIdx = selectedRpIndexMap.value[item.ingredientId] ?? 0
+    const selectedRp = rps?.[rpIdx]
 
-    // 从properties中提取购买链接
-    const purchaseLink = item.properties?.purchase_link || undefined
+    // 使用displayUnit作为显示单位
+    const displayUnit = selectedRp?.displayUnit || item.displayUnit || item.unit || 'g'
+
+    // 从推荐产品或properties中提取购买链接
+    const purchaseLink = selectedRp?.purchaseLink || item.properties?.purchase_link || undefined
+
+    // 如果推荐产品有有效成分浓度，重新计算用量
+    let amount = item.amount
+    if (selectedRp?.activeNutrients && item.nutrientTargetKey) {
+      const rpConcentration = selectedRp.activeNutrients[item.nutrientTargetKey]?.value
+      if (rpConcentration && rpConcentration > 0 && item.nutrientTargetValue) {
+        const totalNutrientNeeded = item.nutrientTargetValue * (totalFoodNetWeightG.value / 1000)
+        const theoretical = totalNutrientNeeded / rpConcentration
+        amount = theoretical * (1 + globalSupplementLossRate.value)
+      }
+    }
 
     return {
-      name: item.name,                          // 推荐营养品
-      brand: item.brand || '-',                 // 推荐品牌
-      preparationMethod: item.preparationMethod || '',  // 添加时机
-      amount: item.amount,                      // 用量数值
-      unit: item.unit,                          // 原始单位（用于计算）
-      displayUnit: displayUnit,                 // 显示单位（用于展示）
-      amountStr: formatSupplementAmountWithDisplayUnit(item.amount, item.unit, displayUnit),  // 格式化用量
-      productModel: item.productModel,          // 规格（弹窗用）
-      purchaseChannel: item.purchaseChannel,    // 购买渠道（弹窗用）
-      purchaseLink: purchaseLink,               // 购买链接（从properties中提取）
-      ingredientId: item.ingredientId,          // 原料ID
-      nutrientTargetKey: item.nutrientTargetKey,      // 营养素名称
-      nutrientTargetValue: item.nutrientTargetValue,  // 营养目标值
-      type: item.type,                          // 类型标识
-      properties: item.properties               // 完整的properties（包含active_nutrients单位信息）
+      name: selectedRp?.name || item.name,                          // 推荐营养品
+      brand: selectedRp?.brand || item.brand || '-',                // 推荐品牌
+      preparationMethod: item.preparationMethod || '',              // 添加时机
+      amount: amount,                                               // 用量数值
+      unit: item.unit,                                              // 原始单位（用于计算）
+      displayUnit: displayUnit,                                     // 显示单位（用于展示）
+      amountStr: formatSupplementAmountWithDisplayUnit(amount, item.unit, displayUnit),  // 格式化用量
+      productModel: selectedRp?.productModel || item.productModel,  // 规格
+      purchaseChannel: selectedRp?.purchaseChannel || item.purchaseChannel,  // 购买渠道
+      purchaseLink: purchaseLink,                                   // 购买链接
+      ingredientId: item.ingredientId,                              // 原料ID
+      nutrientTargetKey: item.nutrientTargetKey,                    // 营养素名称
+      nutrientTargetValue: item.nutrientTargetValue,                // 营养目标值
+      type: item.type,                                              // 类型标识
+      properties: item.properties,                                  // 完整的properties
+      allRecommendedProducts: rps || [],                            // 所有推荐产品
+      selectedRPIndex: 0                                            // 当前选中的推荐产品索引
     }
   })
 })
@@ -685,6 +750,14 @@ async function loadData() {
     // 先加载健康标签映射
     await loadHealthTagMapping()
 
+    // Track DIY generation count (fire-and-forget)
+    if (recipeId.value) {
+      request({
+        url: `/recipes/${recipeId.value}/track-diy`,
+        method: 'POST',
+      }).catch(() => {})
+    }
+
     // 并行加载食谱详情、价格预览、狗狗信息和设备推荐
     await Promise.all([
       loadRecipe(),
@@ -692,6 +765,9 @@ async function loadData() {
       loadDog(),
       loadEquipmentRecommendations()
     ])
+
+    // 价格预览加载完成后，加载推荐产品（需要 ingredientIds）
+    await loadRecommendedProducts()
   } catch (error) {
     console.error('[DIYSheet] Load data error:', error)
   }
@@ -793,6 +869,29 @@ async function loadPricePreview() {
   } catch (error) {
     console.error('[DIYSheet] Load price preview error:', error)
     // 不显示错误提示，因为采购清单可以降级处理
+  }
+}
+
+async function loadRecommendedProducts() {
+  try {
+    // 从 pricePreview 的 ingredientDetails 中收集所有原料 ID
+    const ingredientIds = pricePreview.value?.pricingBreakdown?.ingredientDetails
+      ?.map((item: any) => item.ingredientId)
+      ?.filter(Boolean) || []
+
+    if (ingredientIds.length === 0) return
+
+    const res = await request({
+      url: `/recommended-products?ingredientIds=${ingredientIds.join(',')}`,
+      method: 'GET'
+    })
+
+    if (res.code === 0 && res.data) {
+      recommendedProductsMap.value = res.data
+    }
+  } catch (error) {
+    console.error('[DIYSheet] Load recommended products error:', error)
+    // 推荐产品加载失败不影响主流程
   }
 }
 
@@ -906,7 +1005,7 @@ async function handlePrint() {
 
     // 7. 绘制补剂清单表格
     if (supplementItemsDetailed.value.length > 0) {
-      builder.drawSectionTitle('需额外补充的营养')
+      builder.drawSectionTitle('营养补充剂')
 
       const supplementRows = supplementItemsDetailed.value.map(item => {
         // 计算营养素总量 = 营养目标值 * 食材总量 / 1000
@@ -930,7 +1029,7 @@ async function handlePrint() {
       })
 
       builder.drawTable(
-        ['推荐营养品', '推荐品牌', '规格', '添加时机', '添加量', '营养素', '营养素总量'],
+        ['补剂名称', '推荐品牌', '规格', '最佳添加时机', '添加总量', '营养素', '营养素总量'],
         supplementRows,
         {
           colWidths: [160, 120, 300, 120, 120, 150, 150],
@@ -1097,19 +1196,19 @@ const shareTitle = computed(() => {
 
 // 规格弹窗控制
 function showSpecModal(item: any) {
-  // 调试日志：查看打开规格弹窗时的数据
   console.log('[DIYSheet] 打开规格弹窗:', {
     name: item.name,
     purchaseLink: item.purchaseLink,
-    purchaseLinkUrl: item.purchaseLink?.url
+    purchaseLinkUrl: item.purchaseLink?.url,
+    allRecommendedProducts: item.allRecommendedProducts
   })
-
   currentSpec.value = item
   showSpec.value = true
 }
 
 function closeSpecModal() {
   showSpec.value = false
+  currentSpec.value = {}
 }
 
 // 显示用量详情弹窗
@@ -1157,6 +1256,13 @@ function showNutritionInfoModal(item: any) {
 
 function closeNutritionInfoModal() {
   showNutritionInfo.value = false
+}
+
+// 选择推荐产品（在弹窗中切换）
+function selectRecommendedProduct(ingredientId: string, rpIndex: number | string) {
+  selectedRpIndexMap.value[ingredientId] = Number(rpIndex)
+  // 选择后关闭弹窗，让用户看到更新后的结果
+  closeSpecModal()
 }
 
 // 根据平台类型获取提示文案
@@ -2113,6 +2219,99 @@ onShareTimeline(() => {
 }
 
 .btn-purchase-equipment:active {
+  opacity: 0.8;
+}
+
+/* 推荐产品卡片列表（弹窗内） */
+.rp-cards-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.rp-card {
+  padding: 20rpx;
+  background-color: #f9f9f9;
+  border-radius: 12rpx;
+  border: 2rpx solid #e8e8e8;
+  transition: all 0.2s;
+}
+
+.rp-card:active {
+  opacity: 0.8;
+}
+
+.rp-card-active {
+  background-color: #f0f7ff;
+  border-color: #1890ff;
+}
+
+.rp-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12rpx;
+}
+
+.rp-card-name {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.rp-card-active .rp-card-name {
+  color: #1890ff;
+}
+
+.rp-card-badge {
+  font-size: 22rpx;
+  color: #fff;
+  background-color: #1890ff;
+  padding: 4rpx 16rpx;
+  border-radius: 16rpx;
+}
+
+.rp-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.rp-card-row {
+  display: flex;
+  align-items: center;
+}
+
+.rp-card-label {
+  font-size: 24rpx;
+  color: #999;
+  min-width: 80rpx;
+  flex-shrink: 0;
+}
+
+.rp-card-value {
+  font-size: 24rpx;
+  color: #333;
+  flex: 1;
+}
+
+.rp-card-footer {
+  margin-top: 12rpx;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.btn-purchase-sm {
+  background-color: #1890ff;
+  color: #fff;
+  border: none;
+  border-radius: 8rpx;
+  padding: 8rpx 24rpx;
+  font-size: 24rpx;
+  font-weight: 500;
+}
+
+.btn-purchase-sm:active {
   opacity: 0.8;
 }
 </style>

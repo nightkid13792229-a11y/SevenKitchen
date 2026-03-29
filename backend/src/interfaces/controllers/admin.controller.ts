@@ -30,6 +30,11 @@ import {
   ApiBody,
 } from '@nestjs/swagger';
 import { IngredientService } from '../../application/ingredient/ingredient.service';
+import {
+  RecommendedProductService,
+  type CreateRecommendedProductDto,
+  type UpdateRecommendedProductDto,
+} from '../../application/ingredient/recommended-product.service';
 import type {
   CreateIngredientDto,
   UpdateIngredientDto,
@@ -94,6 +99,7 @@ export class AdminController {
     private readonly orderService: OrderService,
     private readonly dogService: DogService,
     private readonly ingredientTagService: IngredientTagService,
+    private readonly recommendedProductService: RecommendedProductService,
     private readonly prisma: PrismaService,
     @Inject(DOG_BREED_REPOSITORY)
     private readonly dogBreedRepository: DogBreedRepository,
@@ -3406,5 +3412,47 @@ export class AdminController {
       processed: results.filter((r) => r.status !== 'skipped').length,
       results,
     });
+  }
+
+  // ==================== Recommended Products ====================
+
+  @Get('ingredients/:ingredientId/recommended-products')
+  @ApiOperation({ summary: 'Get all recommended products for an ingredient' })
+  async getRecommendedProducts(
+    @Param('ingredientId') ingredientId: string,
+  ): Promise<ApiResponseDto<any[]>> {
+    const data =
+      await this.recommendedProductService.findByIngredientId(ingredientId);
+    return ApiResponseDto.success(data);
+  }
+
+  @Post('ingredients/:ingredientId/recommended-products')
+  @ApiOperation({ summary: 'Create a recommended product for an ingredient' })
+  async createRecommendedProduct(
+    @Param('ingredientId') ingredientId: string,
+    @Body() dto: CreateRecommendedProductDto,
+  ): Promise<ApiResponseDto<any>> {
+    const data =
+      await this.recommendedProductService.create(ingredientId, dto);
+    return ApiResponseDto.success(data);
+  }
+
+  @Put('ingredients/:ingredientId/recommended-products/:id')
+  @ApiOperation({ summary: 'Update a recommended product' })
+  async updateRecommendedProduct(
+    @Param('id') id: string,
+    @Body() dto: UpdateRecommendedProductDto,
+  ): Promise<ApiResponseDto<any>> {
+    const data = await this.recommendedProductService.update(id, dto);
+    return ApiResponseDto.success(data);
+  }
+
+  @Delete('ingredients/:ingredientId/recommended-products/:id')
+  @ApiOperation({ summary: 'Delete a recommended product' })
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async deleteRecommendedProduct(
+    @Param('id') id: string,
+  ): Promise<void> {
+    await this.recommendedProductService.delete(id);
   }
 }

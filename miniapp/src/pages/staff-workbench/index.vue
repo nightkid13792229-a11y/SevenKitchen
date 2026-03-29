@@ -65,6 +65,18 @@
           </view>
           <text class="module-arrow">›</text>
         </view>
+
+        <!-- 食谱管理 -->
+        <view class="module" @tap="goToStaffRecipes">
+          <view class="module-icon recipes">
+            <text style="font-size: 48rpx;">📋</text>
+          </view>
+          <view class="module-content">
+            <text class="module-title">食谱管理</text>
+            <text class="module-desc">查看所有食谱与分享</text>
+          </view>
+          <text class="module-arrow">›</text>
+        </view>
       </view>
 
       <!-- 快捷统计（UI框架，待对接API） -->
@@ -238,6 +250,10 @@ const viewTodayOrders = () => {
 const goToReimbursement = () => {
   uni.navigateTo({ url: '/pages/staff-purchasing/reimbursement/list' });
 };
+
+const goToStaffRecipes = () => {
+  uni.navigateTo({ url: '/pages/staff-recipes/index' });
+};
 </script>
 
 <style scoped lang="scss">
@@ -356,6 +372,10 @@ const goToReimbursement = () => {
 
   &.reimbursement {
     background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+  }
+
+  &.recipes {
+    background: linear-gradient(135deg, #c3cfe2 0%, #f5f7fa 100%);
   }
 }
 

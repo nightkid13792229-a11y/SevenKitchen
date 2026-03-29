@@ -6,6 +6,7 @@ import type {
   RecipeItem,
   FindRecipesOptions,
   FilterOptions,
+  IngredientGroup,
 } from '../../domain/recipe/recipe.repository';
 import { PrismaService } from '../prisma.service';
 
@@ -150,6 +151,16 @@ export class PrismaRecipeRepository implements RecipeRepository {
       });
     }
 
+    // Filter out recipes that contain excluded ingredients
+    if (options?.excludeIngredients && options.excludeIngredients.length > 0) {
+      const excludeSet = new Set(options.excludeIngredients);
+      filteredRecipes = filteredRecipes.filter((recipe) => {
+        return !recipe.items?.some(
+          (item) => item.ingredientId && excludeSet.has(item.ingredientId),
+        );
+      });
+    }
+
     // Group by recipeId and take latest version
     const latestByRecipeId = new Map<string, RecipeWithItems>();
     for (const recipe of filteredRecipes) {
@@ -246,6 +257,23 @@ export class PrismaRecipeRepository implements RecipeRepository {
           recipeTagIds.has(excludeTag),
         );
       });
+    }
+
+    // Filter out recipes that contain excluded ingredients
+    if (options?.excludeIngredients && options.excludeIngredients.length > 0) {
+      const excludeSet = new Set(options.excludeIngredients);
+      console.log(`[PrismaRecipeRepo] PAGINATED excludeIngredients:`, [...excludeSet]);
+      const beforeCount = filteredRecipes.length;
+      filteredRecipes = filteredRecipes.filter((recipe) => {
+        const hasExcluded = recipe.items?.some(
+          (item) => item.ingredientId && excludeSet.has(item.ingredientId),
+        );
+        if (hasExcluded) {
+          console.log(`[PrismaRecipeRepo] Excluding recipe "${recipe.name}" - items:`, recipe.items?.map(i => ({ ingId: i.ingredientId, name: i.ingredient?.name })));
+        }
+        return !hasExcluded;
+      });
+      console.log(`[PrismaRecipeRepo] After excludeIngredients filter: ${beforeCount} -> ${filteredRecipes.length}`);
     }
 
     // Group by recipeId and take latest version
@@ -350,16 +378,12 @@ export class PrismaRecipeRepository implements RecipeRepository {
       });
     });
 
-    const healthTags = Array.from(healthTagMap.entries()).map(
-      ([value, count]) => {
-        const healthTag = allHealthTags.find((tag) => tag.id === value);
-        return {
-          value,
-          label: healthTag?.name || value,
-          count,
-        };
-      },
-    );
+    // Include all health tags (even those not yet assigned to any recipe)
+    const healthTags = allHealthTags.map((tag) => ({
+      value: tag.id,
+      label: tag.name,
+      count: healthTagMap.get(tag.id) || 0,
+    }));
 
     // Ingredient tags (direct from database)
     const ingredientTags = allTags.map((tag) => ({
@@ -368,12 +392,94 @@ export class PrismaRecipeRepository implements RecipeRepository {
       count: 0, // TODO: Count recipes containing this tag
     }));
 
+    // Build ingredient groups by CFCT classification
+    const ingredientGroups = await this.buildIngredientGroups();
+
     return {
       lifeStages,
       healthTags,
       ingredientTags,
+      ingredientGroups,
       total: allRecipes.length,
     };
+  }
+
+  // CFCT分类排序顺序
+  private readonly CFCT_ORDER = [
+    '谷类及制品',
+    '薯类及制品',
+    '干豆类及制品',
+    '蔬菜类及制品',
+    '菌藻类',
+    '水果类及制品',
+    '坚果种子类',
+    '畜肉类及制品',
+    '禽肉类及制品',
+    '乳类及制品',
+    '蛋类及制品',
+    '水产类',
+    '油脂类',
+    '调味品类',
+    '其他',
+  ];
+
+  private async buildIngredientGroups(): Promise<IngredientGroup[]> {
+    // Query all FOOD type ingredients that appear in PUBLIC recipes
+    const ingredients = await this.prisma.ingredient.findMany({
+      where: {
+        type: 'FOOD',
+        recipeItems: {
+          some: {
+            recipe: {
+              status: 'PUBLIC',
+            },
+          },
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+        properties: true,
+      },
+    });
+
+    // Group by cfct_class from properties JSON, then deduplicate by name
+    const groupMap = new Map<string, Map<string, string[]>>();
+    for (const ing of ingredients) {
+      const props = ing.properties as any;
+      const cfctClass = props?.cfct_class || '其他';
+      if (!groupMap.has(cfctClass)) {
+        groupMap.set(cfctClass, new Map());
+      }
+      const nameMap = groupMap.get(cfctClass)!;
+      if (!nameMap.has(ing.name)) {
+        nameMap.set(ing.name, []);
+      }
+      nameMap.get(ing.name)!.push(ing.id);
+    }
+
+    // Convert to IngredientGroup[]
+    const result: IngredientGroup[] = [];
+    for (const [category, nameMap] of groupMap) {
+      result.push({
+        category,
+        ingredients: Array.from(nameMap.entries()).map(([name, ids]) => ({
+          ids,
+          name,
+        })),
+      });
+    }
+
+    // Sort groups by CFCT order, "其他" always last
+    result.sort((a, b) => {
+      const idxA = this.CFCT_ORDER.indexOf(a.category);
+      const idxB = this.CFCT_ORDER.indexOf(b.category);
+      const orderA = idxA === -1 ? this.CFCT_ORDER.length - 1 : idxA;
+      const orderB = idxB === -1 ? this.CFCT_ORDER.length - 1 : idxB;
+      return orderA - orderB;
+    });
+
+    return result;
   }
 
   // Helper methods for label translation
@@ -518,6 +624,9 @@ export class PrismaRecipeRepository implements RecipeRepository {
       nutritionStandard: record.nutritionStandard,
       nutritionDetailedData: record.nutritionDetailedData,
       description: record.description,
+      viewCount: record.viewCount ?? 0,
+      favoriteCount: record.favoriteCount ?? 0,
+      diyGenCount: record.diyGenCount ?? 0,
       items: record.items.map(
         (item): RecipeItem => ({
           id: item.id,

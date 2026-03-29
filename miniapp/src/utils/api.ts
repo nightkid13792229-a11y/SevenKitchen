@@ -1098,3 +1098,52 @@ export function getFavorites(page: number = 1, pageSize: number = 20): Promise<{
     return res.data
   })
 }
+
+// ==================== Staff Recipes API ====================
+
+/**
+ * 获取员工可见的所有食谱列表（含非公开状态）
+ * @param status 按状态筛选（可选）
+ */
+export function getStaffRecipes(status?: string): Promise<Array<{
+  id: string
+  version: number
+  name: string
+  status: string
+  coverImageUrl?: string
+  applicableLifeStages: string[]
+  targetHealthTags: string[]
+  createdAt: string
+}>> {
+  const data: any = {}
+  if (status) data.status = status
+  return request({
+    url: '/recipes/staff/all',
+    method: 'GET',
+    data,
+  }).then((res) => {
+    if (res.code !== 0) {
+      throw new Error(res.message || '获取食谱列表失败')
+    }
+    return res.data
+  })
+}
+
+/**
+ * 为食谱生成分享令牌
+ * @param recipeId 食谱ID
+ */
+export function createRecipeShareToken(recipeId: string): Promise<{
+  token: string
+  expiresAt: string
+}> {
+  return request({
+    url: `/recipes/${recipeId}/share-token`,
+    method: 'POST',
+  }).then((res) => {
+    if (res.code !== 0) {
+      throw new Error(res.message || '生成分享令牌失败')
+    }
+    return res.data
+  })
+}

@@ -2,7 +2,7 @@
  * 原料管理 API
  */
 import api from './index'
-import type { Ingredient, IngredientForm } from '@/types/ingredient'
+import type { Ingredient, IngredientForm, RecommendedProduct, RecommendedProductForm } from '@/types/ingredient'
 
 export const ingredientApi = {
   /**
@@ -45,5 +45,31 @@ export const ingredientApi = {
    * 获取原料使用情况
    */
   getUsage: (id: string): Promise<any[]> =>
-    api.get(`/admin/ingredients/${id}/usage`)
+    api.get(`/admin/ingredients/${id}/usage`),
+
+  // ==================== 推荐产品 ====================
+
+  /**
+   * 获取原料的推荐产品列表
+   */
+  listRecommendedProducts: (ingredientId: string): Promise<RecommendedProduct[]> =>
+    api.get(`/admin/ingredients/${ingredientId}/recommended-products`),
+
+  /**
+   * 新增推荐产品
+   */
+  createRecommendedProduct: (ingredientId: string, data: RecommendedProductForm): Promise<RecommendedProduct> =>
+    api.post(`/admin/ingredients/${ingredientId}/recommended-products`, data),
+
+  /**
+   * 更新推荐产品
+   */
+  updateRecommendedProduct: (ingredientId: string, id: string, data: Partial<RecommendedProductForm>): Promise<RecommendedProduct> =>
+    api.put(`/admin/ingredients/${ingredientId}/recommended-products/${id}`, data),
+
+  /**
+   * 删除推荐产品
+   */
+  deleteRecommendedProduct: (ingredientId: string, id: string): Promise<void> =>
+    api.delete(`/admin/ingredients/${ingredientId}/recommended-products/${id}`)
 }

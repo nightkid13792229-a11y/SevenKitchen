@@ -183,6 +183,22 @@
           </template>
         </el-table-column>
 
+        <el-table-column label="DIY推荐" width="120" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.hasActiveRecommendedProduct ? 'success' : 'info'" size="small">
+              {{ row.activeRecommendedProductCount ?? 0 }}/{{ row.recommendedProductCount ?? 0 }}
+            </el-tag>
+          </template>
+        </el-table-column>
+
+        <el-table-column label="采购SKU" width="120" align="center">
+          <template #default="{ row }">
+            <el-tag :type="row.hasActiveProcurementSku ? 'success' : 'info'" size="small">
+              {{ row.activeProcurementSkuCount ?? 0 }}/{{ row.procurementSkuCount ?? 0 }}
+            </el-tag>
+          </template>
+        </el-table-column>
+
         <el-table-column prop="notes" label="备注" width="150">
           <template #default="{ row }">
             {{ row.notes || '-' }}

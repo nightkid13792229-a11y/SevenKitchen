@@ -36,17 +36,34 @@
         />
       </view>
 
-      <!-- 实际采购重量 -->
+      <view v-if="selectedItemProcurementSkus.length > 0" class="form-section">
+        <text class="section-title">生产采购SKU</text>
+        <picker
+          mode="selector"
+          :range="selectedItemProcurementSkus"
+          range-key="name"
+          :value="selectedProcurementSkuIndex"
+          @change="onProcurementSkuChange"
+        >
+          <view class="picker">
+            <text class="picker-text">{{ selectedProcurementSkuLabel }}</text>
+            <text class="picker-arrow">›</text>
+          </view>
+        </picker>
+        <text class="section-hint">如已配置生产采购 SKU，建议在这里选定实际采购的商品版本</text>
+      </view>
+
+      <!-- 实际采购数量 -->
       <view class="form-section">
-        <text class="section-title">实际采购重量（克） *</text>
+        <text class="section-title">实际采购数量（{{ getPurchaseUnit(selectedItem) }}） *</text>
         <input
           v-model.number="formData.actualQuantity"
           type="digit"
           class="form-input"
-          placeholder="请输入整数，如：5200"
+          :placeholder="`请输入${getPurchaseUnit(selectedItem)}数量`"
           placeholder-class="input-placeholder"
         />
-        <text class="section-hint">请输入整数，单位：克</text>
+        <text class="section-hint">请输入正整数，单位：{{ getPurchaseUnit(selectedItem) }}</text>
       </view>
 
       <!-- 实际采购金额 -->
@@ -99,15 +116,21 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
-import { getPurchaseListDetail, addPurchaseRecord } from '@/api/purchasing';
+import {
+  getPurchaseListDetail,
+  addPurchaseRecord,
+  resolvePurchaseItemDisplay,
+  type ProcurementSkuOption,
+} from '@/api/purchasing';
 
 // 状态管理
 const purchaseListId = ref('');
 const items = ref<any[]>([]);
 const selectedItem = ref<any>(null);
 const selectedItemIndex = ref(0);
+const selectedProcurementSkuIndex = ref(0);
 const loading = ref(true);
 const submitting = ref(false);
 
@@ -116,11 +139,28 @@ const formData = ref({
   purchaseItemId: '',
   ingredientId: '',
   ingredientName: '',
+  procurementSkuId: '',
   purchaseChannel: '',
   actualQuantity: '',
   actualCost: '',
   productModel: '',
   notes: '',
+});
+
+const selectedItemProcurementSkus = computed<ProcurementSkuOption[]>(() => {
+  return selectedItem.value?.procurementSkuOptions || [];
+});
+
+const selectedProcurementSkuLabel = computed(() => {
+  if (selectedItemProcurementSkus.value.length === 0) {
+    return '未配置生产采购 SKU';
+  }
+
+  return (
+    selectedItemProcurementSkus.value[selectedProcurementSkuIndex.value]?.name ||
+    selectedItemProcurementSkus.value[0]?.name ||
+    '请选择生产采购 SKU'
+  );
 });
 
 // 页面加载
@@ -141,7 +181,9 @@ const loadPurchaseListDetail = async () => {
     console.log('[RecordForm] API response:', res);
 
     if (res.code === 0) {
-      items.value = res.data.items || [];
+      items.value = (res.data.items || []).map((item: any) =>
+        resolvePurchaseItemDisplay(item)
+      );
       console.log('[RecordForm] items loaded:', items.value.length);
     } else {
       uni.showToast({ title: res.message || '加载失败', icon: 'none' });
@@ -165,10 +207,85 @@ const onItemChange = (e: any) => {
   selectedItemIndex.value = e.detail.value;
   selectedItem.value = items.value[e.detail.value];
 
-  // 自动填充原料信息
-  formData.value.purchaseItemId = selectedItem.value.id;
-  formData.value.ingredientId = selectedItem.value.ingredientId;
-  formData.value.ingredientName = selectedItem.value.ingredientName;
+  applySelectedItemDefaults(selectedItem.value);
+};
+
+const getPurchaseUnit = (item: any): string => {
+  if (item?.resolvedDisplayUnit) {
+    return item.resolvedDisplayUnit;
+  }
+
+  if (item?.displayUnit) {
+    return item.displayUnit;
+  }
+
+  if (item?.quantityUnit) {
+    return item.quantityUnit;
+  }
+
+  if (item?.ingredient?.purchaseUnit) {
+    return item.ingredient.purchaseUnit;
+  }
+
+  return 'g';
+};
+
+const applyProcurementSkuSelection = (
+  sku?: ProcurementSkuOption,
+  overrideExistingValues = true
+) => {
+  if (!sku) {
+    formData.value.procurementSkuId = '';
+    return;
+  }
+
+  formData.value.procurementSkuId = sku.id || '';
+
+  if (overrideExistingValues || !formData.value.purchaseChannel) {
+    formData.value.purchaseChannel = sku.purchaseChannel || formData.value.purchaseChannel;
+  }
+
+  if (overrideExistingValues || !formData.value.productModel) {
+    formData.value.productModel = sku.productModel || formData.value.productModel;
+  }
+};
+
+const applySelectedItemDefaults = (item: any) => {
+  if (!item) {
+    return;
+  }
+
+  formData.value.purchaseItemId = item.id;
+  formData.value.ingredientId = item.ingredientId;
+  formData.value.ingredientName = item.ingredientName;
+  formData.value.purchaseChannel = item.resolvedPurchaseChannel || '';
+  formData.value.actualQuantity = '';
+  formData.value.actualCost = '';
+  formData.value.productModel = item.resolvedProductModel || '';
+  formData.value.notes = '';
+  formData.value.procurementSkuId = '';
+
+  const procurementSkus = item.procurementSkuOptions || [];
+  const matchedIndex = procurementSkus.findIndex((sku: ProcurementSkuOption) => {
+    if (item.resolvedProcurementSkuId && sku.id) {
+      return sku.id === item.resolvedProcurementSkuId;
+    }
+
+    return sku.name === item.resolvedProcurementSkuName;
+  });
+
+  if (matchedIndex >= 0) {
+    selectedProcurementSkuIndex.value = matchedIndex;
+    applyProcurementSkuSelection(procurementSkus[matchedIndex], false);
+  } else {
+    selectedProcurementSkuIndex.value = 0;
+    applyProcurementSkuSelection(procurementSkus[0], false);
+  }
+};
+
+const onProcurementSkuChange = (e: any) => {
+  selectedProcurementSkuIndex.value = Number(e.detail.value || 0);
+  applyProcurementSkuSelection(selectedItemProcurementSkus.value[selectedProcurementSkuIndex.value]);
 };
 
 // 表单验证
@@ -184,14 +301,14 @@ const validateForm = (): boolean => {
   }
 
   if (!formData.value.actualQuantity || formData.value.actualQuantity.toString().trim().length === 0) {
-    uni.showToast({ title: '请输入实际采购重量', icon: 'none' });
+    uni.showToast({ title: `请输入实际采购${getPurchaseUnit(selectedItem.value)}`, icon: 'none' });
     return false;
   }
 
   // 验证重量是否为整数
   const quantity = Number(formData.value.actualQuantity);
   if (!Number.isInteger(quantity) || quantity <= 0) {
-    uni.showToast({ title: '重量必须为正整数', icon: 'none' });
+    uni.showToast({ title: '数量必须为正整数', icon: 'none' });
     return false;
   }
 
@@ -230,6 +347,7 @@ const submit = async () => {
       purchaseItemId: formData.value.purchaseItemId,
       ingredientId: formData.value.ingredientId,
       ingredientName: formData.value.ingredientName,
+      procurementSkuId: formData.value.procurementSkuId || undefined,
       purchaseChannel: formData.value.purchaseChannel.trim(),
       actualQuantity: Number(formData.value.actualQuantity),
       actualCost: Number(formData.value.actualCost),

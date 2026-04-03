@@ -1,6 +1,6 @@
 /**
- * RecommendedProduct Controller (User-facing)
- * Batch query recommended products for DIY sheet display
+ * RecommendedProduct Controller (DIY user-facing)
+ * Batch query DIY recommended products for sheet display
  */
 
 import { Controller, Get, Query } from '@nestjs/common';
@@ -8,7 +8,7 @@ import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
 import { RecommendedProductService } from '../../application/ingredient/recommended-product.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 
-@ApiTags('Recommended Products')
+@ApiTags('DIY Recommended Products')
 @Controller('api/v1/recommended-products')
 export class RecommendedProductController {
   constructor(
@@ -16,7 +16,9 @@ export class RecommendedProductController {
   ) {}
 
   @Get()
-  @ApiOperation({ summary: 'Batch query active recommended products by ingredient IDs' })
+  @ApiOperation({
+    summary: 'Batch query active DIY recommended products by ingredient IDs',
+  })
   @ApiQuery({
     name: 'ingredientIds',
     description: 'Comma-separated ingredient IDs',

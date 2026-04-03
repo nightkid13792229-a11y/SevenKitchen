@@ -189,6 +189,18 @@ export class AdminController {
         id: true,
         createdAt: true,
         updatedAt: true,
+        recommendedProducts: {
+          select: {
+            id: true,
+            isActive: true,
+          },
+        },
+        procurementSkus: {
+          select: {
+            id: true,
+            isActive: true,
+          },
+        },
         tags: {
           select: {
             tag: {
@@ -208,6 +220,24 @@ export class AdminController {
     );
     const updatedAtMap = new Map(
       prismaIngredients.map((p) => [p.id, p.updatedAt.toISOString()]),
+    );
+    const recommendedProductCountMap = new Map(
+      prismaIngredients.map((p) => [p.id, p.recommendedProducts.length]),
+    );
+    const activeRecommendedProductCountMap = new Map(
+      prismaIngredients.map((p) => [
+        p.id,
+        p.recommendedProducts.filter((product) => product.isActive).length,
+      ]),
+    );
+    const procurementSkuCountMap = new Map(
+      prismaIngredients.map((p) => [p.id, p.procurementSkus.length]),
+    );
+    const activeProcurementSkuCountMap = new Map(
+      prismaIngredients.map((p) => [
+        p.id,
+        p.procurementSkus.filter((sku) => sku.isActive).length,
+      ]),
     );
     const tagsMap = new Map(
       prismaIngredients.map((p) => [p.id, p.tags.map((t) => t.tag)]),
@@ -231,6 +261,16 @@ export class AdminController {
       purchaseToBaseRatio: ing.purchaseToBaseRatio,
       currentPricePerPurchaseUnit: Number(ing.currentPricePerPurchaseUnit),
       unitCost: ing.getUnitCost(),
+      activeRecommendedProductCount:
+        activeRecommendedProductCountMap.get(ing.id) || 0,
+      recommendedProductCount: recommendedProductCountMap.get(ing.id) || 0,
+      activeProcurementSkuCount:
+        activeProcurementSkuCountMap.get(ing.id) || 0,
+      procurementSkuCount: procurementSkuCountMap.get(ing.id) || 0,
+      hasActiveRecommendedProduct:
+        (activeRecommendedProductCountMap.get(ing.id) || 0) > 0,
+      hasActiveProcurementSku:
+        (activeProcurementSkuCountMap.get(ing.id) || 0) > 0,
       weightG: ing.weightG,
       maxCapacityG: ing.maxCapacityG,
       properties: ing.properties,

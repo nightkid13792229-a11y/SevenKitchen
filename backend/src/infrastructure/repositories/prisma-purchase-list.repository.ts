@@ -11,6 +11,22 @@ import {
   PurchaseListRepository,
 } from '../../domain/purchasing';
 
+const purchaseItemDetailInclude = {
+  include: {
+    ingredient: {
+      include: {
+        procurementSkus: {
+          where: { isActive: true },
+          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+        },
+      },
+    },
+  },
+  orderBy: {
+    createdAt: 'asc' as const,
+  },
+};
+
 @Injectable()
 export class PrismaPurchaseListRepository implements PurchaseListRepository {
   constructor(private readonly prisma: PrismaService) {}
@@ -44,7 +60,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
         },
       },
       include: {
-        items: true,
+        items: purchaseItemDetailInclude,
         records: true, // Include purchase records for calculating aggregates
         createdBy: {
           select: {
@@ -63,11 +79,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
     const found = await this.prisma.purchaseList.findUnique({
       where: { id },
       include: {
-        items: {
-          include: {
-            ingredient: true, // Include ingredient details for purchase form optimization
-          },
-        },
+        items: purchaseItemDetailInclude,
         records: true, // Include purchase records for calculating aggregates
         createdBy: {
           select: {
@@ -94,7 +106,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
         },
       },
       include: {
-        items: true,
+        items: purchaseItemDetailInclude,
         records: true, // Include purchase records for calculating aggregates
         createdBy: {
           select: {
@@ -116,7 +128,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
     const lists = await this.prisma.purchaseList.findMany({
       where: { status },
       include: {
-        items: true,
+        items: purchaseItemDetailInclude,
         records: true, // Include purchase records for calculating aggregates
         createdBy: {
           select: {
@@ -138,7 +150,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
     const lists = await this.prisma.purchaseList.findMany({
       where: { createdById },
       include: {
-        items: true,
+        items: purchaseItemDetailInclude,
         records: true, // Include purchase records for calculating aggregates
         createdBy: {
           select: {
@@ -191,7 +203,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
       this.prisma.purchaseList.findMany({
         where,
         include: {
-          items: true,
+          items: purchaseItemDetailInclude,
           records: true, // Include purchase records for calculating aggregates
           createdBy: {
             select: {
@@ -245,7 +257,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
     const lists = await this.prisma.purchaseList.findMany({
       where: { reimbursementId },
       include: {
-        items: true,
+        items: purchaseItemDetailInclude,
         records: true, // Include purchase records for calculating aggregates
         createdBy: {
           select: {
@@ -300,9 +312,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
           updatedAt: new Date(),
         },
         include: {
-          items: {
-            orderBy: { createdAt: 'asc' },
-          },
+          items: purchaseItemDetailInclude,
           records: true,
           createdBy: {
             select: {
@@ -352,9 +362,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
           updatedAt: new Date(),
         },
         include: {
-          items: {
-            orderBy: { createdAt: 'asc' },
-          },
+          items: purchaseItemDetailInclude,
           records: true,
           createdBy: {
             select: {

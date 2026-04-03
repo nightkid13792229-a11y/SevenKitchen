@@ -18,6 +18,10 @@ import type { OrderRepository } from '../../domain/order/order.repository';
 import { INGREDIENT_REPOSITORY } from '../ingredient/ingredient.service';
 import type { IngredientRepository } from '../../domain/ingredient/ingredient.repository';
 import {
+  ProcurementSkuService,
+  type ProcurementSkuSummary,
+} from '../ingredient/procurement-sku.service';
+import {
   PURCHASE_LIST_REPOSITORY,
   PURCHASE_RECORD_REPOSITORY,
 } from './purchasing.service.tokens';
@@ -45,6 +49,7 @@ export interface AddPurchaseRecordDto {
   purchaseItemId: string;
   ingredientId: string;
   ingredientName: string;
+  procurementSkuId?: string;
   purchaseChannel: string;
   actualQuantity: number;
   actualCost: number;
@@ -70,6 +75,10 @@ export interface PurchaseRequirement {
   purchaseChannel?: string;
   productModel?: string;
   displayUnit?: string; // 显示单位（补剂类的单位显示标签）
+  procurementSkuId?: string;
+  procurementSkuName?: string;
+  suggestedProductId?: string;
+  suggestedProductName?: string;
   minSortOrder?: number; // 最小排序值（用于多食谱合并）
 }
 
@@ -82,11 +91,121 @@ export class PurchasingService {
     private readonly orderRepository: OrderRepository,
     @Inject(INGREDIENT_REPOSITORY)
     private readonly ingredientRepository: IngredientRepository,
+    private readonly procurementSkuService: ProcurementSkuService,
     @Inject(PURCHASE_LIST_REPOSITORY)
     private readonly purchaseListRepository: PurchaseListRepository,
     @Inject(PURCHASE_RECORD_REPOSITORY)
     private readonly purchaseRecordRepository: PurchaseRecordRepository,
   ) {}
+
+  private normalizeComparableText(
+    value?: string | null,
+  ): string | undefined {
+    if (!value) {
+      return undefined;
+    }
+
+    const normalized = value.trim().toLowerCase();
+    return normalized.length > 0 ? normalized : undefined;
+  }
+
+  private async buildIngredientLookup(
+    ingredientIds: string[],
+  ): Promise<Map<string, any>> {
+    const uniqueIngredientIds = Array.from(new Set(ingredientIds));
+    const ingredients =
+      await this.ingredientRepository.findByIds(uniqueIngredientIds);
+
+    return new Map(ingredients.map((ingredient) => [ingredient.id, ingredient]));
+  }
+
+  private selectSuggestedProcurementSku(
+    skus: ProcurementSkuSummary[],
+    preferredChannel?: string,
+    preferredModel?: string,
+  ): ProcurementSkuSummary | undefined {
+    if (!skus.length) {
+      return undefined;
+    }
+
+    const normalizedChannel = this.normalizeComparableText(preferredChannel);
+    const normalizedModel = this.normalizeComparableText(preferredModel);
+
+    const ranked = skus
+      .map((sku, index) => {
+        let score = 0;
+        if (
+          normalizedChannel &&
+          this.normalizeComparableText(sku.purchaseChannel) ===
+            normalizedChannel
+        ) {
+          score += 2;
+        }
+        if (
+          normalizedModel &&
+          this.normalizeComparableText(sku.productModel) === normalizedModel
+        ) {
+          score += 1;
+        }
+
+        return { sku, index, score };
+      })
+      .sort((left, right) => {
+        if (right.score !== left.score) {
+          return right.score - left.score;
+        }
+
+        return left.index - right.index;
+      });
+
+    return ranked[0]?.sku;
+  }
+
+  private async enrichRequirementsWithProcurementSkus(
+    requirements: PurchaseRequirement[],
+    ingredientLookup: Map<string, any>,
+  ): Promise<PurchaseRequirement[]> {
+    if (requirements.length === 0) {
+      return [];
+    }
+
+    const procurementSkuMap = await this.procurementSkuService.batchFindActive(
+      requirements.map((requirement) => requirement.ingredientId),
+    );
+
+    return requirements.map((requirement) => {
+      const ingredient = ingredientLookup.get(requirement.ingredientId);
+      const selectedSku = this.selectSuggestedProcurementSku(
+        procurementSkuMap[requirement.ingredientId] || [],
+        requirement.purchaseChannel || ingredient?.purchaseChannel,
+        requirement.productModel || ingredient?.productModel,
+      );
+
+      return {
+        ...requirement,
+        purchaseChannel:
+          selectedSku?.purchaseChannel ||
+          requirement.purchaseChannel ||
+          ingredient?.purchaseChannel ||
+          undefined,
+        productModel:
+          selectedSku?.productModel ||
+          requirement.productModel ||
+          ingredient?.productModel ||
+          undefined,
+        displayUnit:
+          selectedSku?.displayUnit ||
+          requirement.displayUnit ||
+          ingredient?.unitDisplayLabel ||
+          ingredient?.purchaseUnit ||
+          undefined,
+        procurementSkuId: selectedSku?.id,
+        procurementSkuName: selectedSku?.name,
+        suggestedProductId: selectedSku?.id,
+        suggestedProductName: selectedSku?.name,
+      };
+    });
+  }
 
   /**
    * 计算指定日期范围的采购需求
@@ -265,6 +384,10 @@ export class PurchasingService {
       quantityUnit: string;
       purchaseChannel?: string;
       productModel?: string;
+      procurementSkuId?: string;
+      procurementSkuName?: string;
+      suggestedProductId?: string;
+      suggestedProductName?: string;
     }>;
     affectedOrders: Array<{
       orderId: string;
@@ -282,6 +405,15 @@ export class PurchasingService {
       startDate,
       end,
     );
+
+    const ingredientLookup = await this.buildIngredientLookup(
+      requirements.map((requirement) => requirement.ingredientId),
+    );
+    const enrichedRequirements =
+      await this.enrichRequirementsWithProcurementSkus(
+        requirements,
+        ingredientLookup,
+      );
 
     // 2. 查询影响的订单（用于预览）
     const start_date = new Date(`${startDate}T00:00:00`);
@@ -301,7 +433,7 @@ export class PurchasingService {
     }));
 
     // 4. 组装返回数据（只返回必要的信息）
-    const items = requirements.map((req) => ({
+    const items = enrichedRequirements.map((req) => ({
       ingredientId: req.ingredientId,
       ingredientName: req.ingredientName,
       quantityNeeded: req.quantityNeeded,
@@ -310,11 +442,15 @@ export class PurchasingService {
       displayUnit: req.displayUnit,
       purchaseChannel: req.purchaseChannel,
       productModel: req.productModel,
+      procurementSkuId: req.procurementSkuId,
+      procurementSkuName: req.procurementSkuName,
+      suggestedProductId: req.suggestedProductId,
+      suggestedProductName: req.suggestedProductName,
     }));
 
     return {
       targetDateRange: { start: startDate, end },
-      itemCount: requirements.length,
+      itemCount: enrichedRequirements.length,
       items,
       affectedOrders,
     };
@@ -378,6 +514,15 @@ export class PurchasingService {
       );
     }
 
+    const ingredientLookup = await this.buildIngredientLookup(
+      requirements.map((requirement) => requirement.ingredientId),
+    );
+    const enrichedRequirements =
+      await this.enrichRequirementsWithProcurementSkus(
+        requirements,
+        ingredientLookup,
+      );
+
     // 查询订单ID列表（使用制作日期查询）
     const { list: orders } =
       await this.orderRepository.findByTargetProductionDateRange({
@@ -408,15 +553,19 @@ export class PurchasingService {
     );
 
     // 创建采购明细
-    const totalEstimatedCost = requirements.reduce(
+    const totalEstimatedCost = enrichedRequirements.reduce(
       (sum, r) => sum + r.estimatedCost,
       0,
     );
-    const items = requirements.map(
+    const items = enrichedRequirements.map(
       (req) =>
         new PurchaseItem({
           purchaseListId: '', // 会在创建PurchaseList时更新
           ingredientId: req.ingredientId,
+          procurementSkuId: req.procurementSkuId,
+          procurementSkuName: req.procurementSkuName,
+          suggestedProductId: req.suggestedProductId,
+          suggestedProductName: req.suggestedProductName,
           ingredientName: req.ingredientName, // ✅ 传入原料名称
           type: req.type, // ✅ 传入原料类型
           quantityNeeded: req.quantityNeeded,
@@ -548,6 +697,12 @@ export class PurchasingService {
       }
     }
 
+    const enrichedRequirements =
+      await this.enrichRequirementsWithProcurementSkus(
+        Array.from(ingredientMap.values()),
+        await this.buildIngredientLookup(Array.from(ingredientMap.keys())),
+      );
+
     // 4. 合并到现有采购清单
     const existingItemMap = new Map(
       purchaseList.items.map((item) => [item.ingredientId, item]),
@@ -556,7 +711,8 @@ export class PurchasingService {
     const newItems: PurchaseItem[] = [];
     const updatedItems: PurchaseItem[] = [];
 
-    for (const [ingredientId, requirement] of ingredientMap) {
+    for (const requirement of enrichedRequirements) {
+      const ingredientId = requirement.ingredientId;
       if (existingItemMap.has(ingredientId)) {
         // 更新现有项
         const existing = existingItemMap.get(ingredientId)!;
@@ -569,6 +725,10 @@ export class PurchasingService {
         const newItem = new PurchaseItem({
           purchaseListId,
           ingredientId: requirement.ingredientId,
+          procurementSkuId: requirement.procurementSkuId,
+          procurementSkuName: requirement.procurementSkuName,
+          suggestedProductId: requirement.suggestedProductId,
+          suggestedProductName: requirement.suggestedProductName,
           ingredientName: requirement.ingredientName,
           type: requirement.type,
           quantityNeeded: requirement.quantityNeeded,
@@ -946,6 +1106,16 @@ export class PurchasingService {
       throw new BadRequestException('没有找到可以纳入的订单');
     }
 
+    const enrichedRequirements =
+      await this.enrichRequirementsWithProcurementSkus(
+        calculatedRequirements,
+        await this.buildIngredientLookup(
+          calculatedRequirements.map(
+            (requirement) => requirement.ingredientId,
+          ),
+        ),
+      );
+
     // 分离手动添加的原料和自动生成的原料
     const manualItems = purchaseList.items.filter(
       (item) => item.ingredientId && item.ingredientId.startsWith('manual-'),
@@ -955,9 +1125,13 @@ export class PurchasingService {
     const mergedItemsMap = new Map<string, any>();
 
     // 先添加重新计算的原料
-    for (const req of calculatedRequirements) {
+    for (const req of enrichedRequirements) {
       mergedItemsMap.set(req.ingredientId, {
         ingredientId: req.ingredientId,
+        procurementSkuId: req.procurementSkuId,
+        procurementSkuName: req.procurementSkuName,
+        suggestedProductId: req.suggestedProductId,
+        suggestedProductName: req.suggestedProductName,
         ingredientName: req.ingredientName,
         type: req.type,
         quantityNeeded: req.quantityNeeded,
@@ -1280,12 +1454,36 @@ export class PurchasingService {
     // TODO: 测试期间临时注释时间限制
     // validatePurchasingOperation(purchaseList.targetDate, '添加采购记录');
 
+    const purchaseItem = purchaseList.items.find(
+      (item) => item.id === dto.purchaseItemId,
+    );
+    if (!purchaseItem) {
+      throw new BadRequestException(
+        `未找到关联的采购明细：${dto.purchaseItemId}`,
+      );
+    }
+
+    const selectedProcurementSku = dto.procurementSkuId
+      ? await this.procurementSkuService.findById(dto.procurementSkuId)
+      : undefined;
+
+    if (
+      selectedProcurementSku &&
+      selectedProcurementSku.ingredientId !== purchaseItem.ingredientId
+    ) {
+      throw new BadRequestException('所选生产采购 SKU 与采购明细原料不匹配');
+    }
+
     // 创建采购记录
     const purchaseRecord = new PurchaseRecord({
       purchaseListId,
       purchaseItemId: dto.purchaseItemId,
-      ingredientId: dto.ingredientId,
-      ingredientName: dto.ingredientName,
+      ingredientId: purchaseItem.ingredientId,
+      procurementSkuId:
+        selectedProcurementSku?.id || purchaseItem.procurementSkuId,
+      procurementSkuName:
+        selectedProcurementSku?.name || purchaseItem.procurementSkuName,
+      ingredientName: purchaseItem.ingredientName,
       purchaseChannel: dto.purchaseChannel,
       actualQuantity: dto.actualQuantity,
       actualCost: dto.actualCost,
@@ -1402,7 +1600,10 @@ export class PurchasingService {
    * 从原料数据库中提取所有不同的采购渠道
    */
   async getPurchaseChannels(): Promise<string[]> {
-    const ingredients = await this.ingredientRepository.findAll();
+    const [ingredients, procurementChannels] = await Promise.all([
+      this.ingredientRepository.findAll(),
+      this.procurementSkuService.listActivePurchaseChannels(),
+    ]);
 
     // 提取所有不同的采购渠道并过滤掉空值
     const channels = new Set<string>();
@@ -1411,6 +1612,7 @@ export class PurchasingService {
         channels.add(ingredient.purchaseChannel);
       }
     });
+    procurementChannels.forEach((channel) => channels.add(channel));
 
     // 转换为数组并按字母顺序排序
     return Array.from(channels).sort();

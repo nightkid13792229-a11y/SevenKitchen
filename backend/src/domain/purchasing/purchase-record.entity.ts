@@ -12,6 +12,8 @@ export interface PurchaseRecordConstructor {
   purchaseListId: string;
   purchaseItemId: string;
   ingredientId: string;
+  procurementSkuId?: string;
+  procurementSkuName?: string;
   ingredientName: string;
   purchaseChannel: string;
   actualQuantity: number; // 实际采购重量（克）
@@ -28,6 +30,8 @@ export class PurchaseRecord {
   public readonly purchaseListId: string;
   public readonly purchaseItemId: string;
   public readonly ingredientId: string;
+  public readonly procurementSkuId?: string;
+  public readonly procurementSkuName?: string;
   public readonly ingredientName: string;
   public purchaseChannel: string;
   public actualQuantity: number; // 实际采购重量（克），整数
@@ -43,6 +47,8 @@ export class PurchaseRecord {
     this.purchaseListId = data.purchaseListId;
     this.purchaseItemId = data.purchaseItemId;
     this.ingredientId = data.ingredientId;
+    this.procurementSkuId = data.procurementSkuId;
+    this.procurementSkuName = data.procurementSkuName;
     this.ingredientName = data.ingredientName;
     this.purchaseChannel = data.purchaseChannel;
     this.actualQuantity = data.actualQuantity;
@@ -126,6 +132,8 @@ export class PurchaseRecord {
       purchaseListId: this.purchaseListId,
       purchaseItemId: this.purchaseItemId,
       ingredientId: this.ingredientId,
+      procurementSkuId: this.procurementSkuId || null,
+      procurementSkuName: this.procurementSkuName || null,
       ingredientName: this.ingredientName,
       purchaseChannel: this.purchaseChannel,
       actualQuantity: this.actualQuantity,
@@ -147,6 +155,8 @@ export class PurchaseRecord {
       purchaseListId: data.purchaseListId,
       purchaseItemId: data.purchaseItemId,
       ingredientId: data.ingredientId,
+      procurementSkuId: data.procurementSkuId || undefined,
+      procurementSkuName: data.procurementSkuName || undefined,
       ingredientName: data.ingredientName,
       purchaseChannel: data.purchaseChannel,
       actualQuantity: Number(data.actualQuantity),

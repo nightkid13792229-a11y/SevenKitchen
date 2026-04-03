@@ -144,6 +144,7 @@ import { NutritionFoodController } from './interfaces/controllers/nutrition-food
 import { NutritionFoodService } from './application/nutrition-food/nutrition-food.service';
 import { RecommendedProductController } from './interfaces/controllers/recommended-product.controller';
 import { RecommendedProductService } from './application/ingredient/recommended-product.service';
+import { ProcurementSkuService } from './application/ingredient/procurement-sku.service';
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -571,6 +572,7 @@ validatePrismaConfig();
     NutritionFoodService,
     // Recommended Product Service
     RecommendedProductService,
+    ProcurementSkuService,
   ],
 })
 export class AppModule implements OnModuleInit {

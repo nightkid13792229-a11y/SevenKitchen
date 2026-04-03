@@ -389,6 +389,7 @@ model Ingredient {
   recipeItems                 RecipeItem[]
   nutritionFoodMappings       NutritionFoodMapping[]
   recommendedProducts         RecommendedProduct[]
+  procurementSkus             ProcurementSku[]
 
   @@unique([name, brand, productModel])
   @@index([type])
@@ -449,6 +450,28 @@ model RecommendedProduct {
   @@index([ingredientId])
   @@index([isActive])
   @@map("recommended_product")
+}
+
+model ProcurementSku {
+  id                        String     @id @default(uuid())
+  ingredientId              String     @map("ingredient_id")
+  name                      String
+  brand                     String?    @db.VarChar(100)
+  productModel              String?    @map("product_model") @db.VarChar(100)
+  purchaseChannel           String?    @map("purchase_channel") @db.VarChar(200)
+  referencePricePerPurchaseUnit Decimal? @map("reference_price_per_purchase_unit") @db.Decimal(10, 2)
+  displayUnit               String?    @map("display_unit") @db.VarChar(50)
+  notes                     String?
+  isActive                  Boolean    @default(true) @map("is_active")
+  sortOrder                 Int        @default(0) @map("sort_order")
+  createdAt                 DateTime   @default(now()) @map("created_at")
+  updatedAt                 DateTime   @updatedAt @map("updated_at")
+
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  @@index([ingredientId])
+  @@index([isActive])
+  @@map("procurement_sku")
 }
 
 model InventoryLedgerEntry {

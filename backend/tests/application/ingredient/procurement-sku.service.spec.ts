@@ -117,4 +117,45 @@ describe('ProcurementSkuService', () => {
       }),
     ).rejects.toThrow(NotFoundException);
   });
+
+  it('create normalizes null and blank optional fields to null', async () => {
+    mockPrismaService.ingredient.findUnique.mockResolvedValue({
+      id: 'ingredient-1',
+    });
+    mockPrismaService.procurementSku.create.mockImplementation(
+      async ({ data }: { data: Record<string, unknown> }) => ({
+        id: 'sku-3',
+        ingredientId: data.ingredientId,
+        name: data.name,
+        brand: data.brand,
+        productModel: data.productModel,
+        purchaseChannel: data.purchaseChannel,
+        referencePricePerPurchaseUnit: data.referencePricePerPurchaseUnit,
+        displayUnit: data.displayUnit,
+        notes: data.notes,
+        isActive: data.isActive,
+        sortOrder: data.sortOrder,
+        createdAt: new Date('2026-04-03T00:00:03.000Z'),
+      }),
+    );
+
+    await expect(
+      service.create('ingredient-1', {
+        name: '测试采购 SKU',
+        brand: null,
+        productModel: '   ',
+        purchaseChannel: '',
+        displayUnit: ' ',
+        notes: null,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        brand: null,
+        productModel: null,
+        purchaseChannel: null,
+        displayUnit: null,
+        notes: null,
+      }),
+    );
+  });
 });

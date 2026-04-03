@@ -56,6 +56,10 @@ const normalizeOptionalText = (
     return undefined;
   }
 
+  if (value === null) {
+    return null;
+  }
+
   return value.trim().length === 0 ? null : value;
 };
 

@@ -20,18 +20,10 @@ export function getCreateStepAvailability(form: Record<string, any>) {
 }
 
 export function buildDogCreatePayload(form: Record<string, any>) {
-  const payload: Record<string, any> = {
+  return {
     ...form,
     birthday: new Date(form.birthday).toISOString(),
     currentWeightKg: parseFloat(form.currentWeightKg),
     mealsPerDay: parseInt(form.mealsPerDay, 10) || 2,
   }
-
-  if (form.treatInputMode === 'EXACT_KCAL' && form.manualTreatKcal !== '' && form.manualTreatKcal != null) {
-    payload.manualTreatKcal = parseFloat(form.manualTreatKcal)
-  } else {
-    delete payload.manualTreatKcal
-  }
-
-  return payload
 }

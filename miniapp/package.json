@@ -8,7 +8,8 @@
     "build:mp-weixin": "uni build -p mp-weixin && node scripts/fix-components-injection.js",
     "predev:mp-weixin": "node scripts/check-env.js",
     "preview": "bash scripts/mp-weixin-dev.sh",
-    "rebuild": "bash scripts/ensure-compile.sh"
+    "rebuild": "bash scripts/ensure-compile.sh",
+    "test": "vitest run"
   },
   "dependencies": {
     "vue": "^3.0.0"
@@ -22,6 +23,7 @@
     "cross-env": "^7.0.3",
     "sass": "^1.97.2",
     "typescript": "^5.0.0",
-    "vite": "^5.4.21"
+    "vite": "^5.4.21",
+    "vitest": "^3.2.4"
   }
 }

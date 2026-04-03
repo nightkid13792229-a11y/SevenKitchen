@@ -114,11 +114,3 @@ export function clearDogsCache(): void {
     console.error('Failed to clear dogs cache:', err)
   }
 }
-
-export function getCachedDogById(dogId: string): DogDto | null {
-  if (!dogId) {
-    return null
-  }
-
-  return getCachedDogs().find(dog => dog.id === dogId) || null
-}

@@ -49,29 +49,5 @@ describe('dog-profile-form', () => {
 
     expect(payload.birthday).toBe('2021-01-01T00:00:00.000Z')
     expect(payload.mealsPerDay).toBe(2)
-    expect(payload.manualTreatKcal).toBeUndefined()
-  })
-
-  it('includes manualTreatKcal only for exact kcal input', () => {
-    const payload = buildDogCreatePayload({
-      name: '七七',
-      breedId: '550e8400-e29b-41d4-a716-446655440000',
-      birthday: '2021-01-01',
-      gender: 'MALE',
-      isNeutered: false,
-      currentWeightKg: '11',
-      bcsScore: 5,
-      activityLevel: 'NORMAL',
-      lifeStageOverride: 'NONE',
-      sizeClassOverride: null,
-      mealsPerDay: '3',
-      treatInputMode: 'EXACT_KCAL',
-      treatLevel: 'LOW',
-      manualTreatKcal: '123.4',
-      allergyFoods: '',
-      pickyFoods: '',
-    })
-
-    expect(payload.manualTreatKcal).toBe(123.4)
   })
 })

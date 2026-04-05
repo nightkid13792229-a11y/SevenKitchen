@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildDogCreatePayload,
   buildOverviewTaskCards,
+  canAdvanceCreateStep,
   getCreateStepAvailability,
   getNextCreateStep,
   getRecommendationDirtyFields,
@@ -111,6 +112,24 @@ describe('dog-profile-form', () => {
     expect(getNextCreateStep('feeding')).toBe('recommendation')
   })
 
+  it('allows recommendation to advance to health when create prerequisites are complete even without preview state', () => {
+    expect(
+      canAdvanceCreateStep(
+        'recommendation',
+        getCreateStepAvailability({
+          name: '七七',
+          breedId: '550e8400-e29b-41d4-a716-446655440000',
+          birthday: '2021-01-01',
+          currentWeightKg: '11.0',
+          activityLevel: 'NORMAL',
+          mealsPerDay: '2',
+          treatInputMode: 'ESTIMATE_LEVEL',
+          treatLevel: 'LOW',
+        }),
+      ),
+    ).toBe(true)
+  })
+
   it('auto previews when calculation-related fields change', () => {
     expect(shouldAutoPreviewRecommendation(['currentWeightKg'])).toBe(true)
   })
@@ -142,6 +161,20 @@ describe('dog-profile-form', () => {
         activityLevel: 'NORMAL',
         treatInputMode: 'EXACT_KCAL',
         manualTreatKcal: '',
+      }).recommendation,
+    ).toBe(false)
+  })
+
+  it('keeps recommendation locked for exact kcal mode with non-numeric manual treat kcal', () => {
+    expect(
+      getCreateStepAvailability({
+        name: '七七',
+        breedId: '550e8400-e29b-41d4-a716-446655440000',
+        birthday: '2021-01-01',
+        currentWeightKg: '11.0',
+        activityLevel: 'NORMAL',
+        treatInputMode: 'EXACT_KCAL',
+        manualTreatKcal: 'abc',
       }).recommendation,
     ).toBe(false)
   })
@@ -199,5 +232,29 @@ describe('dog-profile-form', () => {
 
     expect(payload.treatInputMode).toBe('EXACT_KCAL')
     expect(payload.manualTreatKcal).toBe(123.4)
+  })
+
+  it('omits manual treat kcal in exact mode when the value is not numeric', () => {
+    const payload = buildDogCreatePayload({
+      name: '七七',
+      breedId: '550e8400-e29b-41d4-a716-446655440000',
+      birthday: '2021-01-01',
+      gender: 'MALE',
+      isNeutered: false,
+      currentWeightKg: '11',
+      bcsScore: 5,
+      activityLevel: 'NORMAL',
+      lifeStageOverride: 'NONE',
+      sizeClassOverride: null,
+      mealsPerDay: '3',
+      treatInputMode: 'EXACT_KCAL',
+      treatLevel: 'LOW',
+      manualTreatKcal: 'abc',
+      allergyFoods: '',
+      pickyFoods: '',
+    })
+
+    expect(payload.treatInputMode).toBe('EXACT_KCAL')
+    expect(payload.manualTreatKcal).toBeUndefined()
   })
 })

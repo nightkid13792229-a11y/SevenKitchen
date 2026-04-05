@@ -1029,6 +1029,7 @@ import {
 } from '../../utils/dog-profile-draft'
 import {
   buildDogCreatePayload,
+  canAdvanceCreateStep,
   getCreateStepAvailability,
   getNextCreateStep,
   getRecommendationDirtyFields,
@@ -1635,6 +1636,24 @@ const displayLifeStageDetail = computed(() => {
 
 // ========== 生命阶段计算逻辑结束 ==========
 
+const parsedManualTreatKcal = computed(() => {
+  if (typeof formData.value.manualTreatKcal !== 'string') {
+    return null
+  }
+
+  const trimmed = formData.value.manualTreatKcal.trim()
+  if (!trimmed) {
+    return null
+  }
+
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
+})
+
+const hasValidManualTreatKcal = computed(() => (
+  formData.value.treatInputMode !== 'EXACT_KCAL' || parsedManualTreatKcal.value !== null
+))
+
 const canSubmit = computed(() => {
   return Boolean(
     formData.value.name &&
@@ -1643,6 +1662,7 @@ const canSubmit = computed(() => {
     formData.value.currentWeightKg &&
     formData.value.activityLevel &&
     !calculating.value &&
+    hasValidManualTreatKcal.value &&
     (isMixedBreed.value ? formData.value.sizeClassOverride !== null : true)
   )
 })
@@ -1653,6 +1673,7 @@ const canPreview = computed(() => {
     formData.value.birthday &&
     formData.value.currentWeightKg &&
     !calculating.value &&
+    hasValidManualTreatKcal.value &&
     (isMixedBreed.value ? formData.value.sizeClassOverride !== null : true)
   )
 })
@@ -1668,9 +1689,12 @@ const showBasicSection = computed(() => isEditMode.value || currentCreateStep.va
 const showFeedingSection = computed(() => isEditMode.value || currentCreateStep.value === 'feeding')
 const showRecommendationSection = computed(() => isEditMode.value || currentCreateStep.value === 'recommendation')
 const showHealthSection = computed(() => isEditMode.value || currentCreateStep.value === 'health')
+const canAdvanceFromBasic = computed(() => canAdvanceCreateStep('basic', createStepAvailability.value))
+const canAdvanceFromFeeding = computed(() => canAdvanceCreateStep('feeding', createStepAvailability.value))
+const canAdvanceFromRecommendation = computed(() => canAdvanceCreateStep('recommendation', createStepAvailability.value))
 const createPreviewReady = computed(() => Boolean(
   isCreateMode.value &&
-  createStepAvailability.value.recommendation &&
+  canAdvanceFromFeeding.value &&
   canPreview.value &&
   !calculating.value
 ))
@@ -1694,15 +1718,15 @@ const createSecondaryText = computed(() => (
 ))
 const createPrimaryDisabled = computed(() => {
   if (currentCreateStep.value === 'basic') {
-    return !createStepAvailability.value.feeding
+    return !canAdvanceFromBasic.value
   }
 
   if (currentCreateStep.value === 'feeding') {
-    return !createPreviewReady.value
+    return !canAdvanceFromFeeding.value
   }
 
   if (currentCreateStep.value === 'recommendation') {
-    return !calcResult.value
+    return !canAdvanceFromRecommendation.value
   }
 
   return !canSubmit.value || !createStepAvailability.value.recommendation || calculating.value
@@ -4024,6 +4048,9 @@ async function previewCalculation(options?: { silent?: boolean }) {
   // Only calculate if we have minimum required fields
   // Silently return if not ready - don't show error to user
   if (!canPreview.value) {
+    if (!options?.silent && !hasValidManualTreatKcal.value) {
+      showInvalidManualTreatKcalToast()
+    }
     return false
   }
 
@@ -4044,8 +4071,8 @@ async function previewCalculation(options?: { silent?: boolean }) {
       treatLevel: formData.value.treatLevel
     }
 
-    if (formData.value.treatInputMode === 'EXACT_KCAL' && formData.value.manualTreatKcal) {
-      payload.manualTreatKcal = parseFloat(formData.value.manualTreatKcal)
+    if (formData.value.treatInputMode === 'EXACT_KCAL' && parsedManualTreatKcal.value !== null) {
+      payload.manualTreatKcal = parsedManualTreatKcal.value
     }
 
     console.log('[DogCreate] Preview calculation payload:', payload)
@@ -4159,9 +4186,17 @@ function showCreateStepBlockedToast(step: DogProfileCreateStep) {
   })
 }
 
+function showInvalidManualTreatKcalToast() {
+  uni.showToast({
+    title: '精确模式需填写有效零食能量',
+    icon: 'none',
+    duration: 2000,
+  })
+}
+
 async function handleCreatePrimaryAction() {
   if (currentCreateStep.value === 'basic') {
-    if (!createStepAvailability.value.feeding) {
+    if (!canAdvanceFromBasic.value) {
       showCreateStepBlockedToast('basic')
       return
     }
@@ -4171,20 +4206,18 @@ async function handleCreatePrimaryAction() {
   }
 
   if (currentCreateStep.value === 'feeding') {
-    if (!createPreviewReady.value) {
+    if (!canAdvanceFromFeeding.value) {
       showCreateStepBlockedToast('recommendation')
       return
     }
 
-    const previewed = await previewCalculation()
-    if (previewed || calcResult.value) {
-      setCreateStep(getNextCreateStep('feeding'))
-    }
+    await previewCalculation()
+    setCreateStep(getNextCreateStep('feeding'))
     return
   }
 
   if (currentCreateStep.value === 'recommendation') {
-    if (!calcResult.value) {
+    if (!canAdvanceFromRecommendation.value) {
       showCreateStepBlockedToast('health')
       return
     }
@@ -4965,11 +4998,8 @@ async function submit() {
     return false
   }
 
-  if (formData.value.treatInputMode === 'EXACT_KCAL' && !formData.value.manualTreatKcal) {
-    uni.showToast({
-      title: '精确模式需填写零食能量',
-      icon: 'none'
-    })
+  if (!hasValidManualTreatKcal.value) {
+    showInvalidManualTreatKcalToast()
     return false
   }
 

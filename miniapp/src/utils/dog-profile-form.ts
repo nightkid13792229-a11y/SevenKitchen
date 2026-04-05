@@ -25,6 +25,13 @@ export interface DogProfileOverviewTaskCard {
   actionLabel: string
 }
 
+export interface DogProfileCreateStepAvailability {
+  basic: true
+  feeding: boolean
+  recommendation: boolean
+  health: boolean
+}
+
 function hasValue(value: unknown) {
   if (value == null) {
     return false
@@ -44,6 +51,24 @@ function normalizeOptionalText(value: unknown) {
 
   const trimmed = value.trim()
   return trimmed ? trimmed : null
+}
+
+function parseNonNegativeNumber(value: unknown) {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value >= 0 ? value : null
+  }
+
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return null
+  }
+
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
 }
 
 function hasAnyDirtyField(dirtyFields: string[] | undefined, fields: readonly string[]) {
@@ -98,6 +123,25 @@ export function shouldAutoPreviewRecommendation(dirtyFields: string[] | undefine
   return hasAnyDirtyField(dirtyFields, DOG_PROFILE_RECOMMENDATION_FIELDS)
 }
 
+export function canAdvanceCreateStep(
+  step: DogProfileCreateStep,
+  availability: DogProfileCreateStepAvailability,
+) {
+  if (step === 'basic') {
+    return availability.feeding
+  }
+
+  if (step === 'feeding') {
+    return availability.recommendation
+  }
+
+  if (step === 'recommendation') {
+    return availability.health
+  }
+
+  return availability.health
+}
+
 export function resolveDogProfileEntryRoute(dogId?: string) {
   if (!dogId) {
     return DOG_PROFILE_CREATE_ROUTE
@@ -123,13 +167,14 @@ export function buildOverviewTaskCards({
   const createStepAvailability = getCreateStepAvailability(profile)
   const needsSizeClassOverride = profile?.breedId === MIXED_BREED_VIRTUAL_ID
   const needsManualTreatKcal = profile?.treatInputMode === 'EXACT_KCAL'
+  const hasValidManualTreatKcal = parseNonNegativeNumber(profile?.manualTreatKcal) !== null
   const feedingReady = Boolean(
     createStepAvailability.feeding &&
     hasValue(profile?.currentWeightKg) &&
     hasValue(profile?.activityLevel) &&
     hasValue(profile?.mealsPerDay) &&
     (!needsSizeClassOverride || hasValue(profile?.sizeClassOverride)) &&
-    (!needsManualTreatKcal || hasValue(profile?.manualTreatKcal)),
+    (!needsManualTreatKcal || hasValidManualTreatKcal),
   )
   const recommendationReady = createStepAvailability.recommendation
   const feedingStale = hasAnyDirtyField(dirtyFields, DOG_PROFILE_FEEDING_FIELDS)
@@ -178,7 +223,7 @@ export function buildOverviewTaskCards({
   ]
 }
 
-export function getCreateStepAvailability(form: Record<string, any>) {
+export function getCreateStepAvailability(form: Record<string, any>): DogProfileCreateStepAvailability {
   const basic = Boolean(
     hasValue(form.name) &&
     hasValue(form.breedId) &&
@@ -187,12 +232,13 @@ export function getCreateStepAvailability(form: Record<string, any>) {
   const feeding = basic
   const needsSizeClassOverride = form.breedId === MIXED_BREED_VIRTUAL_ID
   const needsManualTreatKcal = form.treatInputMode === 'EXACT_KCAL'
+  const hasValidManualTreatKcal = parseNonNegativeNumber(form.manualTreatKcal) !== null
   const recommendation = Boolean(
     basic &&
     hasValue(form.currentWeightKg) &&
     hasValue(form.activityLevel) &&
     (!needsSizeClassOverride || hasValue(form.sizeClassOverride)) &&
-    (!needsManualTreatKcal || hasValue(form.manualTreatKcal)),
+    (!needsManualTreatKcal || hasValidManualTreatKcal),
   )
 
   return { basic: true, feeding, recommendation, health: recommendation }
@@ -211,8 +257,10 @@ export function buildDogCreatePayload(form: Record<string, any>) {
     pickyFoods: normalizeOptionalText(form.pickyFoods),
   }
 
-  if (treatInputMode === 'EXACT_KCAL' && hasValue(form.manualTreatKcal)) {
-    payload.manualTreatKcal = parseFloat(form.manualTreatKcal)
+  const manualTreatKcal = parseNonNegativeNumber(form.manualTreatKcal)
+
+  if (treatInputMode === 'EXACT_KCAL' && manualTreatKcal !== null) {
+    payload.manualTreatKcal = manualTreatKcal
   } else {
     delete payload.manualTreatKcal
   }

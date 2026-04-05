@@ -58,6 +58,7 @@ describe('dog-profile-form', () => {
       profile: {
         name: '七七',
         breedId: MIXED_BREED_VIRTUAL_ID,
+        birthday: '2021-01-01',
         currentWeightKg: 11,
         activityLevel: 'NORMAL',
         mealsPerDay: 2,
@@ -77,6 +78,7 @@ describe('dog-profile-form', () => {
       profile: {
         name: '七七',
         breedId: '550e8400-e29b-41d4-a716-446655440000',
+        birthday: '2021-01-01',
         currentWeightKg: 11,
         activityLevel: 'NORMAL',
         mealsPerDay: 2,

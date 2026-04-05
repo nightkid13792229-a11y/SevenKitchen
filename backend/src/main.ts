@@ -10,6 +10,7 @@ import { join } from 'path';
 import * as dotenv from 'dotenv';
 import * as path from 'path';
 import { existsSync } from 'fs';
+import { isAllowedCorsOrigin } from './utils/cors.util';
 
 // 根据 NODE_ENV 加载对应的环境配置文件
 // 优先级: .env.{NODE_ENV}.local > .env.{NODE_ENV} > .env.local > .env
@@ -93,14 +94,9 @@ async function bootstrap() {
 
   // Enable CORS for cross-origin requests
   app.enableCors({
-    origin: [
-      'http://localhost:5173', // Local admin web development
-      'http://localhost:5174', // Local admin web development (fallback port)
-      'http://localhost:3000', // Local backend
-      'http://1.14.3.2:5173', // Cloud server admin web (if needed)
-      // Add your domain here when you get one
-      // 'https://yourdomain.com',
-    ],
+    origin: (origin, callback) => {
+      callback(null, isAllowedCorsOrigin(origin));
+    },
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
     allowedHeaders: 'Content-Type, Accept, Authorization, X-Customer-Id',

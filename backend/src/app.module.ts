@@ -13,6 +13,7 @@ import { OrdersController } from './interfaces/controllers/orders.controller';
 import { AddressesController } from './interfaces/controllers/addresses.controller';
 import { AuthController } from './interfaces/controllers/auth.controller';
 import { AdminController } from './interfaces/controllers/admin.controller';
+import { AdminFinanceController } from './interfaces/controllers/admin-finance.controller';
 import { ShippingController } from './interfaces/controllers/shipping.controller';
 import { UsersController } from './interfaces/controllers/users.controller';
 import { StaffKitchenController } from './interfaces/controllers/staff-kitchen.controller';
@@ -36,6 +37,11 @@ import { CustomRecipeController } from './interfaces/controllers/custom-recipe/c
 import { AdminCustomRecipeController } from './interfaces/controllers/custom-recipe/admin-custom-recipe.controller';
 import { SharedPhotosController } from './interfaces/controllers/shared-photos.controller';
 import { CustomRecipeService } from './application/custom-recipe/custom-recipe.service';
+import { FinanceAlertService } from './application/finance/finance-alert.service';
+import { ExpenseBillService } from './application/finance/expense-bill.service';
+import { FinanceReportService } from './application/finance/finance-report.service';
+import { ExpenseTemplateService } from './application/finance/expense-template.service';
+import { FinanceSchedulerService } from './application/scheduler/finance-scheduler.service';
 import { OrderSchedulerService } from './application/scheduler/order-scheduler.service';
 import { LabelModule } from './label/label.module';
 import {
@@ -206,6 +212,7 @@ validatePrismaConfig();
     AddressesController,
     AuthController,
     AdminController,
+    AdminFinanceController,
     ShippingController,
     StaffKitchenController,
     StaffShippingController,
@@ -526,6 +533,11 @@ validatePrismaConfig();
     // Phase 1: Purchasing Management Services
     PurchasingService,
     ReimbursementService,
+    ExpenseBillService,
+    ExpenseTemplateService,
+    FinanceReportService,
+    FinanceAlertService,
+    FinanceSchedulerService,
     // Phase 2: Staff Production Management Service
     StaffProductionService,
     ProductionService,

@@ -232,16 +232,17 @@ export class ReimbursementService {
       `Reviewer ${reviewerId} reviewing reimbursement ${id} with decision: ${dto.decision}`,
     );
 
+    if (dto.decision === 'APPROVE') {
+      throw new BadRequestException(
+        '请通过上传报销凭证完成“已报销”确认，审核接口不再直接支持 APPROVE。',
+      );
+    }
+
     // 审核报销单
     reimbursement.review(reviewerId, dto.decision, dto.comment);
 
     // 保存报销单
     const saved = await this.reimbursementRepository.save(reimbursement);
-
-    // 如果批准，解锁相关订单的生产排单功能
-    if (dto.decision === 'APPROVE') {
-      await this.unlockProductionForReimbursement(saved);
-    }
 
     this.logger.log(
       `Reimbursement ${id} reviewed successfully: ${dto.decision}`,
@@ -270,7 +271,7 @@ export class ReimbursementService {
     }
 
     this.logger.log(
-      `Unlocking production for ${orderIds.size} orders after reimbursement ${reimbursement.id} approval`,
+      `Unlocking production for ${orderIds.size} orders after reimbursement ${reimbursement.id} payment confirmation`,
     );
 
     // 批量更新订单状态
@@ -298,7 +299,7 @@ export class ReimbursementService {
           {
             reimbursementId: reimbursement.id,
             claimNumber: reimbursement.claimNumber,
-            triggeredBy: 'reimbursement_approved',
+            triggeredBy: 'reimbursement_paid',
           },
         );
 
@@ -307,7 +308,7 @@ export class ReimbursementService {
     }
 
     this.logger.log(
-      `Reimbursement ${reimbursement.id} approved: unlocked ${unlockedCount} orders for production`,
+      `Reimbursement ${reimbursement.id} paid: unlocked ${unlockedCount} orders for production`,
     );
   }
 
@@ -449,6 +450,7 @@ export class ReimbursementService {
    */
   async uploadPaymentProof(
     id: string,
+    paidById: string,
     paymentProofUrls: string[],
   ): Promise<Reimbursement> {
     // 1. 查询报销单
@@ -468,31 +470,10 @@ export class ReimbursementService {
       throw new BadRequestException('请至少上传一张报销凭证');
     }
 
-    // 4. 创建新的报销单实体（因为属性是readonly的）
-    const updated = new Reimbursement({
-      id: reimbursement.id,
-      claimNumber: reimbursement.claimNumber,
-      status: ReimbursementStatus.REIMBURSED,
-      totalActualCost: reimbursement.totalActualCost,
-      totalEstimatedCost: reimbursement.totalEstimatedCost,
-      receiptUrls: reimbursement.receiptUrls,
-      submittedById: reimbursement.submittedById,
-      submittedAt: reimbursement.submittedAt,
-      reviewedById: reimbursement.reviewedById,
-      reviewedAt: new Date(),
-      reviewComment: reimbursement.reviewComment,
-      createdAt: reimbursement.createdAt,
-      updatedAt: new Date(),
-      purchaseLists: reimbursement.purchaseLists,
-      platformShippingFee: reimbursement.platformShippingFee,
-      platformPackagingFee: reimbursement.platformPackagingFee,
-      customFees: reimbursement.customFees,
-      paymentProofUrls: paymentProofUrls,
-      submittedBy: reimbursement.submittedBy,
-      reviewedBy: reimbursement.reviewedBy,
-    });
+    reimbursement.markAsReimbursed(paidById, paymentProofUrls, []);
 
-    const saved = await this.reimbursementRepository.save(updated);
+    const saved = await this.reimbursementRepository.save(reimbursement);
+    await this.unlockProductionForReimbursement(saved);
 
     this.logger.log(
       `Payment proof uploaded for reimbursement ${id}, status changed to REIMBURSED`,
@@ -506,6 +487,7 @@ export class ReimbursementService {
    */
   async uploadPaymentProofFiles(
     id: string,
+    paidById: string,
     files: Express.Multer.File[],
   ): Promise<Reimbursement> {
     // 1. 查询报销单
@@ -573,45 +555,13 @@ export class ReimbursementService {
       }
     }
 
-    // 5. 创建新的报销单实体（因为属性是readonly的）
-    // 只有待审核状态上传凭证后，才自动改为已报销状态
-    const finalStatus =
-      reimbursement.status === ReimbursementStatus.PENDING_REVIEW
-        ? ReimbursementStatus.REIMBURSED
-        : reimbursement.status;
+    reimbursement.markAsReimbursed(paidById, finalUrls, finalKeys);
 
-    const updated = new Reimbursement({
-      id: reimbursement.id,
-      claimNumber: reimbursement.claimNumber,
-      status: finalStatus,
-      totalActualCost: reimbursement.totalActualCost,
-      totalEstimatedCost: reimbursement.totalEstimatedCost,
-      receiptUrls: reimbursement.receiptUrls,
-      receiptKeys: reimbursement.receiptKeys,
-      submittedById: reimbursement.submittedById,
-      submittedAt: reimbursement.submittedAt,
-      reviewedById: reimbursement.reviewedById,
-      reviewedAt:
-        finalStatus === ReimbursementStatus.REIMBURSED
-          ? new Date()
-          : reimbursement.reviewedAt,
-      reviewComment: reimbursement.reviewComment,
-      createdAt: reimbursement.createdAt,
-      updatedAt: new Date(),
-      purchaseLists: reimbursement.purchaseLists,
-      platformShippingFee: reimbursement.platformShippingFee,
-      platformPackagingFee: reimbursement.platformPackagingFee,
-      customFees: reimbursement.customFees,
-      paymentProofUrls: finalUrls,
-      paymentProofKeys: finalKeys,
-      submittedBy: reimbursement.submittedBy,
-      reviewedBy: reimbursement.reviewedBy,
-    });
-
-    const saved = await this.reimbursementRepository.save(updated);
+    const saved = await this.reimbursementRepository.save(reimbursement);
+    await this.unlockProductionForReimbursement(saved);
 
     this.logger.log(
-      `Payment proof files uploaded for reimbursement ${id}, status: ${finalStatus}`,
+      `Payment proof files uploaded for reimbursement ${id}, status: ${saved.status}`,
     );
 
     return saved;

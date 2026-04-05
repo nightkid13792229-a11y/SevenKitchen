@@ -36,11 +36,22 @@ export const purchasingApi = {
   reviewReimbursement: (
     id: string,
     data: {
-      decision: 'APPROVE' | 'REJECT'
+      decision: 'REJECT' | 'REQUIRES_RESUBMIT'
       comment?: string
     }
   ): Promise<any> => {
     return api.post(`/admin/purchasing/reimbursements/${id}/review`, data)
+  },
+
+  /**
+   * 上传付款凭证并确认已报销
+   */
+  confirmReimbursed: (id: string, formData: FormData): Promise<any> => {
+    return api.post(`/admin/purchasing/reimbursements/${id}/payment-proof`, formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
   },
 
   /**

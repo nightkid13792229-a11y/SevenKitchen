@@ -71,7 +71,7 @@ export class AdminPurchasingController {
   @ApiQuery({
     name: 'status',
     required: false,
-    enum: ['PENDING_REVIEW', 'APPROVED', 'REJECTED', 'REQUIRES_RESUBMIT'],
+    enum: ['PENDING_REVIEW', 'REIMBURSED', 'REJECTED', 'REQUIRES_RESUBMIT'],
     description: '筛选状态',
   })
   @ApiQuery({
@@ -122,7 +122,7 @@ export class AdminPurchasingController {
                     type: 'string',
                     enum: [
                       'PENDING_REVIEW',
-                      'APPROVED',
+                      'REIMBURSED',
                       'REJECTED',
                       'REQUIRES_RESUBMIT',
                     ],
@@ -286,7 +286,7 @@ export class AdminPurchasingController {
               type: 'string',
               enum: [
                 'PENDING_REVIEW',
-                'APPROVED',
+                'REIMBURSED',
                 'REJECTED',
                 'REQUIRES_RESUBMIT',
               ],
@@ -302,7 +302,7 @@ export class AdminPurchasingController {
   async reviewReimbursement(
     @Param('id') id: string,
     @Body() dto: ReviewReimbursementDto,
-    @Query('reviewerId') reviewerId: string,
+    @UserId() reviewerId: string,
   ): Promise<ApiResponseDto<any>> {
     this.logger.log(
       `Admin ${reviewerId} reviewing reimbursement ${id} with decision: ${dto.decision}`,
@@ -623,7 +623,11 @@ export class AdminPurchasingController {
     }
 
     const reimbursement =
-      await this.reimbursementService.uploadPaymentProofFiles(id, files);
+      await this.reimbursementService.uploadPaymentProofFiles(
+        id,
+        userId,
+        files,
+      );
 
     return ApiResponseDto.success(reimbursement, '报销凭证上传成功');
   }

@@ -141,6 +141,7 @@ model User {
   favoriteRecipes         FavoriteRecipe[]
   orders                  Order[]
   createdPurchaseLists    PurchaseList[]      @relation("PurchaseListCreator")
+  paidReimbursements      Reimbursement[]     @relation("ReimbursementPayer")
   reviewedReimbursements  Reimbursement[]     @relation("ReimbursementReviewer")
   submittedReimbursements Reimbursement[]     @relation("ReimbursementSubmitter")
 
@@ -721,6 +722,8 @@ model Reimbursement {
   reviewedById         String?             @map("reviewed_by_id")
   reviewedAt           DateTime?           @map("reviewed_at")
   reviewComment        String?             @map("review_comment")
+  paidById             String?             @map("paid_by_id")
+  paidAt               DateTime?           @map("paid_at")
   createdAt            DateTime            @default(now()) @map("created_at")
   updatedAt            DateTime            @updatedAt @map("updated_at")
   platformShippingFee  Decimal?            @map("platform_shipping_fee") @db.Decimal(10, 2)
@@ -729,13 +732,78 @@ model Reimbursement {
   paymentProofUrls     String[]            @default([]) @map("payment_proof_urls")
   paymentProofKeys     String[]            @default([]) @map("payment_proof_keys")
   purchaseLists        PurchaseList[]
+  paidBy               User?               @relation("ReimbursementPayer", fields: [paidById], references: [id], onDelete: SetNull)
   reviewedBy           User?               @relation("ReimbursementReviewer", fields: [reviewedById], references: [id])
   submittedBy          User                @relation("ReimbursementSubmitter", fields: [submittedById], references: [id])
 
   @@index([status])
   @@index([submittedById])
   @@index([claimNumber])
+  @@index([paidAt])
   @@map("reimbursement")
+}
+
+model ExpenseBill {
+  id               String                 @id @default(uuid()) @map("id")
+  billNumber       String                 @unique @map("bill_number") @db.VarChar(24)
+  title            String                 @map("title") @db.VarChar(200)
+  category         FinanceExpenseCategory @map("category")
+  status           ExpenseBillStatus      @default(PENDING_PAYMENT) @map("status")
+  payeeName        String                 @map("payee_name") @db.VarChar(120)
+  amount           Decimal                @map("amount") @db.Decimal(10, 2)
+  recognitionStart DateTime               @map("recognition_start") @db.Date
+  recognitionEnd   DateTime               @map("recognition_end") @db.Date
+  dueAt            DateTime               @map("due_at")
+  note             String?                @map("note")
+  templateId       String?                @map("template_id")
+  createdById      String                 @map("created_by_id")
+  createdAt        DateTime               @default(now()) @map("created_at")
+  updatedAt        DateTime               @updatedAt @map("updated_at")
+  payments         ExpenseBillPayment[]
+  template         ExpenseTemplate?       @relation(fields: [templateId], references: [id])
+
+  @@index([status, dueAt])
+  @@index([category, recognitionStart, recognitionEnd])
+  @@map("expense_bill")
+}
+
+model ExpenseBillPayment {
+  id               String      @id @default(uuid()) @map("id")
+  billId           String      @map("bill_id")
+  paidAmount       Decimal     @map("paid_amount") @db.Decimal(10, 2)
+  paidAt           DateTime    @map("paid_at")
+  paidById         String      @map("paid_by_id")
+  paymentMethod    String      @map("payment_method") @db.VarChar(50)
+  paymentProofUrls String[]    @default([]) @map("payment_proof_urls")
+  note             String?     @map("note")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  bill             ExpenseBill @relation(fields: [billId], references: [id], onDelete: Cascade)
+
+  @@index([billId, paidAt])
+  @@index([paidAt])
+  @@map("expense_bill_payment")
+}
+
+model ExpenseTemplate {
+  id                  String                  @id @default(uuid()) @map("id")
+  name                String                  @map("name") @db.VarChar(100)
+  titleTemplate       String                  @map("title_template") @db.VarChar(200)
+  category            FinanceExpenseCategory  @map("category")
+  payeeName           String                  @map("payee_name") @db.VarChar(120)
+  defaultAmount       Decimal                 @map("default_amount") @db.Decimal(10, 2)
+  interval            ExpenseTemplateInterval @map("interval")
+  dayOfMonth          Int?                    @map("day_of_month")
+  monthOfYear         Int?                    @map("month_of_year")
+  servicePeriodMonths Int                     @default(1) @map("service_period_months")
+  isActive            Boolean                 @default(true) @map("is_active")
+  note                String?                 @map("note")
+  createdById         String                  @map("created_by_id")
+  createdAt           DateTime                @default(now()) @map("created_at")
+  updatedAt           DateTime                @updatedAt @map("updated_at")
+  bills               ExpenseBill[]
+
+  @@index([isActive, interval])
+  @@map("expense_template")
 }
 
 model CustomRecipeOrder {
@@ -942,6 +1010,33 @@ enum ReimbursementStatus {
   REIMBURSED
   REJECTED
   REQUIRES_RESUBMIT
+}
+
+enum FinanceExpenseCategory {
+  RAW_MATERIAL
+  PACKAGING_SUPPLIES
+  PAYROLL
+  RENT
+  UTILITIES
+  NETWORK_COMMUNICATION
+  TECHNICAL_SERVICES
+  LOGISTICS_DELIVERY
+  ADMINISTRATIVE
+  AFTERSALE_LOSS
+  OTHER
+}
+
+enum ExpenseBillStatus {
+  DRAFT
+  PENDING_PAYMENT
+  PARTIALLY_PAID
+  PAID
+  CANCELLED
+}
+
+enum ExpenseTemplateInterval {
+  MONTHLY
+  YEARLY
 }
 
 enum TargetGoal {

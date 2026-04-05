@@ -57,6 +57,10 @@
           <el-icon><Setting /></el-icon>
           <span>全局配置</span>
         </el-menu-item>
+        <el-menu-item index="/finance/overview">
+          <el-icon><Money /></el-icon>
+          <span>财务中心</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
 
@@ -105,7 +109,8 @@ import {
   Goods,
   Star,
   Setting,
-  EditPen
+  EditPen,
+  Money
 } from '@element-plus/icons-vue'
 
 const route = useRoute()

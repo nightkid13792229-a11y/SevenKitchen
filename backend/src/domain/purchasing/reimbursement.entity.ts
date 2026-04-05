@@ -25,6 +25,8 @@ export interface ReimbursementConstructor {
   reviewedById?: string;
   reviewedAt?: Date;
   reviewComment?: string;
+  paidById?: string;
+  paidAt?: Date;
   createdAt?: Date;
   updatedAt?: Date;
   purchaseLists?: PurchaseList[];
@@ -52,6 +54,8 @@ export class Reimbursement {
   public reviewedById?: string;
   public reviewedAt?: Date;
   public reviewComment?: string;
+  public paidById?: string;
+  public paidAt?: Date;
   public readonly createdAt: Date;
   public updatedAt: Date;
   public purchaseLists: PurchaseList[];
@@ -60,8 +64,8 @@ export class Reimbursement {
   public readonly platformShippingFee?: number;
   public readonly platformPackagingFee?: number;
   public readonly customFees?: Array<{ description: string; amount: number }>;
-  public readonly paymentProofUrls: string[]; // 报销凭证（管理员上传）
-  public readonly paymentProofKeys: string[]; // COS对象键（用于删除）
+  public paymentProofUrls: string[]; // 报销凭证（管理员上传）
+  public paymentProofKeys: string[]; // COS对象键（用于删除）
 
   // 关联用户对象（非持久化）
   public submittedBy?: { id: string; nickname: string; phone: string };
@@ -80,6 +84,8 @@ export class Reimbursement {
     this.reviewedById = data.reviewedById;
     this.reviewedAt = data.reviewedAt;
     this.reviewComment = data.reviewComment;
+    this.paidById = data.paidById;
+    this.paidAt = data.paidAt;
     this.createdAt = data.createdAt || new Date();
     this.updatedAt = data.updatedAt || this.createdAt;
     this.purchaseLists = data.purchaseLists || [];
@@ -156,7 +162,7 @@ export class Reimbursement {
 
   /**
    * 审核报销单
-   * 状态转换: PENDING_REVIEW → APPROVED/REJECTED/REQUIRES_RESUBMIT
+   * 状态转换: PENDING_REVIEW → REJECTED/REQUIRES_RESUBMIT
    */
   review(
     reviewerId: string,
@@ -174,8 +180,9 @@ export class Reimbursement {
 
     switch (decision) {
       case 'APPROVE':
-        newStatus = ReimbursementStatus.REIMBURSED;
-        break;
+        throw new Error(
+          'APPROVE is no longer supported in review flow; upload payment proof instead',
+        );
       case 'REJECT':
         newStatus = ReimbursementStatus.REJECTED;
         break;
@@ -197,6 +204,37 @@ export class Reimbursement {
     this.reviewedAt = new Date();
     this.reviewComment = comment;
     this.updatedAt = new Date();
+  }
+
+  /**
+   * 标记为已报销
+   * 状态转换: PENDING_REVIEW → REIMBURSED
+   */
+  markAsReimbursed(
+    paidById: string,
+    paymentProofUrls: string[],
+    paymentProofKeys: string[],
+  ): void {
+    if (this.status !== ReimbursementStatus.PENDING_REVIEW) {
+      throw new InvalidStateTransitionError(
+        `Only PENDING_REVIEW reimbursements can be marked reimbursed`,
+      );
+    }
+
+    if (!paymentProofUrls.length) {
+      throw new Error('At least one payment proof is required');
+    }
+
+    const now = new Date();
+    this.status = ReimbursementStatus.REIMBURSED;
+    this.reviewedById = paidById;
+    this.reviewedAt = now;
+    this.reviewComment = 'payment proof uploaded';
+    this.paidById = paidById;
+    this.paidAt = now;
+    this.paymentProofUrls = paymentProofUrls;
+    this.paymentProofKeys = paymentProofKeys;
+    this.updatedAt = now;
   }
 
   /**
@@ -301,6 +339,8 @@ export class Reimbursement {
       reviewedById: this.reviewedById,
       reviewedAt: this.reviewedAt,
       reviewComment: this.reviewComment,
+      paidById: this.paidById,
+      paidAt: this.paidAt,
       createdAt: this.createdAt,
       updatedAt: this.updatedAt,
       platformShippingFee: this.platformShippingFee,
@@ -332,6 +372,8 @@ export class Reimbursement {
       reviewedById: data.reviewedById,
       reviewedAt: data.reviewedAt,
       reviewComment: data.reviewComment,
+      paidById: data.paidById,
+      paidAt: data.paidAt,
       createdAt: data.createdAt,
       updatedAt: data.updatedAt,
       purchaseLists,

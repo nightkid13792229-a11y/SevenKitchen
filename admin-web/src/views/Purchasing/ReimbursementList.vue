@@ -43,7 +43,7 @@
             @change="handleFilter"
           >
             <el-option label="待审核" value="PENDING_REVIEW" />
-            <el-option label="已批准" value="APPROVED" />
+            <el-option label="已报销" value="REIMBURSED" />
             <el-option label="已驳回" value="REJECTED" />
             <el-option label="需重新提交" value="REQUIRES_RESUBMIT" />
           </el-select>
@@ -152,11 +152,11 @@
             </el-button>
             <el-button
               v-if="row.status === 'PENDING_REVIEW'"
-              type="success"
+              type="primary"
               size="small"
-              @click="handleReview(row)"
+              @click="handleViewDetail(row.id)"
             >
-              审核
+              确认已报销
             </el-button>
           </template>
         </el-table-column>
@@ -179,7 +179,7 @@
     <!-- 审核对话框 -->
     <el-dialog
       v-model="reviewDialogVisible"
-      title="审核报销单"
+      title="处理报销单"
       width="600px"
     >
       <el-form :model="reviewForm" label-width="100px">
@@ -204,13 +204,10 @@
 
         <el-form-item label="审核决定" required>
           <el-radio-group v-model="reviewForm.decision">
-            <el-radio label="APPROVE">
-              <el-text type="success">批准</el-text>
-            </el-radio>
             <el-radio label="REJECT">
               <el-text type="danger">驳回</el-text>
             </el-radio>
-            <el-radio label="RESUBMIT">
+            <el-radio label="REQUIRES_RESUBMIT">
               <el-text type="warning">要求重新提交</el-text>
             </el-radio>
           </el-radio-group>
@@ -229,7 +226,7 @@
       <template #footer>
         <el-button @click="reviewDialogVisible = false">取消</el-button>
         <el-button type="primary" @click="submitReview" :loading="submitting">
-          提交审核
+          提交处理意见
         </el-button>
       </template>
     </el-dialog>
@@ -237,10 +234,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { purchasingApi } from '@/api/purchasing'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 
 const router = useRouter()
 
@@ -275,7 +272,7 @@ const pagination = reactive({
 
 // 审核表单
 const reviewForm = reactive({
-  decision: 'APPROVE' as 'APPROVE' | 'REJECT' | 'RESUBMIT',
+  decision: 'REJECT' as 'REJECT' | 'REQUIRES_RESUBMIT',
   comment: ''
 })
 
@@ -283,7 +280,7 @@ const reviewForm = reactive({
 const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
     'PENDING_REVIEW': '待审核',
-    'APPROVED': '已批准',
+    'REIMBURSED': '已报销',
     'REJECTED': '已驳回',
     'REQUIRES_RESUBMIT': '需重新提交'
   }
@@ -293,7 +290,7 @@ const getStatusText = (status: string) => {
 const getStatusType = (status: string) => {
   const typeMap: Record<string, any> = {
     'PENDING_REVIEW': 'warning',
-    'APPROVED': 'success',
+    'REIMBURSED': 'success',
     'REJECTED': 'danger',
     'REQUIRES_RESUBMIT': 'info'
   }
@@ -403,17 +400,9 @@ const handleViewDetail = (id: string) => {
   })
 }
 
-// 审核
-const handleReview = (row: any) => {
-  currentReimbursement.value = row
-  reviewForm.decision = 'APPROVE'
-  reviewForm.comment = ''
-  reviewDialogVisible.value = true
-}
-
 // 提交审核
 const submitReview = async () => {
-  if (reviewForm.decision !== 'APPROVE' && !reviewForm.comment) {
+  if (!reviewForm.comment) {
     ElMessage.warning('请填写审核意见')
     return
   }

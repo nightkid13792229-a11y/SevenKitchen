@@ -163,6 +163,30 @@
         </div>
       </el-card>
 
+      <el-card
+        shadow="never"
+        class="section-card"
+        v-if="reimbursement.paymentProofUrls && reimbursement.paymentProofUrls.length > 0"
+      >
+        <template #header>
+          <div class="card-header">
+            <span class="title">付款凭证</span>
+          </div>
+        </template>
+
+        <div class="photos-grid">
+          <el-image
+            v-for="(url, index) in reimbursement.paymentProofUrls"
+            :key="`payment-${index}`"
+            :src="url"
+            :preview-src-list="reimbursement.paymentProofUrls"
+            :initial-index="index"
+            fit="cover"
+            class="photo-item"
+          />
+        </div>
+      </el-card>
+
       <!-- 审核信息 -->
       <el-card shadow="never" class="section-card" v-if="reimbursement.status !== 'PENDING_REVIEW'">
         <template #header>
@@ -191,16 +215,21 @@
 
       <!-- 审核操作 -->
       <el-card shadow="never" class="action-card" v-if="reimbursement.status === 'PENDING_REVIEW'">
+        <el-alert
+          title="待审核报销只有两条路径：驳回/要求重提，或上传付款凭证后确认已报销。"
+          type="warning"
+          :closable="false"
+          show-icon
+          class="action-alert"
+        />
+
         <el-form :model="reviewForm" label-width="100px">
           <el-form-item label="审核决定">
             <el-radio-group v-model="reviewForm.decision">
-              <el-radio label="APPROVE">
-                <el-text type="success">批准</el-text>
-              </el-radio>
               <el-radio label="REJECT">
                 <el-text type="danger">驳回</el-text>
               </el-radio>
-              <el-radio label="RESUBMIT">
+              <el-radio label="REQUIRES_RESUBMIT">
                 <el-text type="warning">要求重新提交</el-text>
               </el-radio>
             </el-radio-group>
@@ -216,12 +245,31 @@
           </el-form-item>
 
           <el-form-item>
-            <el-button type="primary" @click="submitReview" :loading="submitting">
-              提交审核
+            <el-button type="danger" @click="submitReview" :loading="submitting">
+              提交处理意见
             </el-button>
             <el-button @click="$router.back()">返回</el-button>
           </el-form-item>
         </el-form>
+
+        <el-divider />
+
+        <div class="payment-proof-block">
+          <div class="payment-proof-title">上传付款凭证并确认已报销</div>
+          <el-upload
+            v-model:file-list="paymentProofFiles"
+            action=""
+            :auto-upload="false"
+            :limit="10"
+            list-type="picture-card"
+          >
+            <el-icon><Plus /></el-icon>
+          </el-upload>
+
+          <el-button type="primary" :loading="paymentSubmitting" @click="submitPaymentProof">
+            确认已报销
+          </el-button>
+        </div>
       </el-card>
 
       <!-- 返回按钮（非待审核状态） -->
@@ -240,7 +288,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { purchasingApi } from '@/api/purchasing'
 import { ElMessage } from 'element-plus'
-import { Loading } from '@element-plus/icons-vue'
+import { Loading, Plus } from '@element-plus/icons-vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -248,12 +296,14 @@ const route = useRoute()
 // 状态管理
 const loading = ref(true)
 const submitting = ref(false)
+const paymentSubmitting = ref(false)
 const reimbursement = ref<any>(null)
 const activeLists = ref<number[]>([])
+const paymentProofFiles = ref<any[]>([])
 
 // 审核表单
 const reviewForm = ref({
-  decision: 'APPROVE' as 'APPROVE' | 'REJECT' | 'RESUBMIT',
+  decision: 'REJECT' as 'REJECT' | 'REQUIRES_RESUBMIT',
   comment: ''
 })
 
@@ -280,7 +330,7 @@ const getCostDiffClass = computed(() => {
 const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
     'PENDING_REVIEW': '待审核',
-    'APPROVED': '已批准',
+    'REIMBURSED': '已报销',
     'REJECTED': '已驳回',
     'REQUIRES_RESUBMIT': '需重新提交'
   }
@@ -290,7 +340,7 @@ const getStatusText = (status: string) => {
 const getStatusType = (status: string) => {
   const typeMap: Record<string, any> = {
     'PENDING_REVIEW': 'warning',
-    'APPROVED': 'success',
+    'REIMBURSED': 'success',
     'REJECTED': 'danger',
     'REQUIRES_RESUBMIT': 'info'
   }
@@ -357,7 +407,7 @@ const loadDetail = async () => {
 
 // 提交审核
 const submitReview = async () => {
-  if (reviewForm.value.decision !== 'APPROVE' && !reviewForm.value.comment) {
+  if (!reviewForm.value.comment) {
     ElMessage.warning('请填写审核意见')
     return
   }
@@ -377,6 +427,33 @@ const submitReview = async () => {
     console.error('审核失败', error)
   } finally {
     submitting.value = false
+  }
+}
+
+const submitPaymentProof = async () => {
+  if (!reimbursement.value?.id) return
+  if (!paymentProofFiles.value.length) {
+    ElMessage.warning('请先上传至少一张付款凭证')
+    return
+  }
+
+  const formData = new FormData()
+  paymentProofFiles.value.forEach((file) => {
+    if (file.raw) {
+      formData.append('files', file.raw)
+    }
+  })
+
+  paymentSubmitting.value = true
+  try {
+    await purchasingApi.confirmReimbursed(reimbursement.value.id, formData)
+    ElMessage.success('已确认报销付款')
+    paymentProofFiles.value = []
+    await loadDetail()
+  } catch (error) {
+    console.error('确认已报销失败', error)
+  } finally {
+    paymentSubmitting.value = false
   }
 }
 
@@ -475,6 +552,22 @@ onMounted(() => {
       color: #303133;
     }
   }
+}
+
+.action-alert {
+  margin-bottom: 20px;
+}
+
+.payment-proof-block {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.payment-proof-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #303133;
 }
 
 .purchase-lists {

@@ -84,6 +84,7 @@
   },
   "jest": {
     "moduleFileExtensions": [
+      "ts",
       "js",
       "json",
       "d.ts"

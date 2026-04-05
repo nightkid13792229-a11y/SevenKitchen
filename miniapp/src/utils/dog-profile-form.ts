@@ -104,16 +104,18 @@ export function buildOverviewTaskCards({
     hasValue(profile?.breedId) &&
     hasValue(profile?.birthday),
   )
+  const createStepAvailability = getCreateStepAvailability(profile)
+  const needsSizeClassOverride = profile?.breedId === MIXED_BREED_VIRTUAL_ID
+  const needsManualTreatKcal = profile?.treatInputMode === 'EXACT_KCAL'
   const feedingReady = Boolean(
+    createStepAvailability.feeding &&
     hasValue(profile?.currentWeightKg) &&
     hasValue(profile?.activityLevel) &&
-    hasValue(profile?.mealsPerDay),
+    hasValue(profile?.mealsPerDay) &&
+    (!needsSizeClassOverride || hasValue(profile?.sizeClassOverride)) &&
+    (!needsManualTreatKcal || hasValue(profile?.manualTreatKcal)),
   )
-  const recommendationReady = Boolean(
-    hasValue(profile?.currentWeightKg) &&
-    hasValue(profile?.activityLevel) &&
-    hasValue(profile?.bcsScore),
-  )
+  const recommendationReady = createStepAvailability.recommendation
   const feedingStale = hasAnyDirtyField(dirtyFields, DOG_PROFILE_FEEDING_FIELDS)
   const recommendationStale = hasAnyDirtyField(dirtyFields, DOG_PROFILE_RECOMMENDATION_FIELDS)
   const weightText = formatWeight(profile?.currentWeightKg)

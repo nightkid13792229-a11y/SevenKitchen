@@ -76,11 +76,11 @@
 
     <StickyActionBar
       primary-text="编辑档案"
-      secondary-text="去订购"
+      secondary-text="去首页看看"
       :primary-disabled="!profile"
       :secondary-disabled="!profile"
       @primary="goToEdit"
-      @secondary="goToOrder"
+      @secondary="goToHome"
     />
   </view>
 </template>
@@ -273,13 +273,13 @@ function goToEdit() {
   })
 }
 
-function goToOrder() {
+function goToHome() {
   if (!dogId.value) {
     return
   }
 
-  uni.navigateTo({
-    url: `/pages/recipe-order/index?dogId=${encodeURIComponent(dogId.value)}`,
+  uni.switchTab({
+    url: '/pages/home/index',
   })
 }
 

@@ -53,6 +53,44 @@ describe('dog-profile-form', () => {
     expect(cards.find(card => card.key === 'feeding')?.status).toBe('stale')
   })
 
+  it('keeps overview feeding and recommendation incomplete for mixed breed without size class override', () => {
+    const cards = buildOverviewTaskCards({
+      profile: {
+        name: '七七',
+        breedId: MIXED_BREED_VIRTUAL_ID,
+        currentWeightKg: 11,
+        activityLevel: 'NORMAL',
+        mealsPerDay: 2,
+        bcsScore: 5,
+        treatInputMode: 'ESTIMATE_LEVEL',
+      },
+      dirtyFields: [],
+      healthCount: 0,
+    })
+
+    expect(cards.find(card => card.key === 'feeding')?.status).not.toBe('complete')
+    expect(cards.find(card => card.key === 'recommendation')?.status).not.toBe('complete')
+  })
+
+  it('keeps overview feeding and recommendation incomplete for exact kcal without manual kcal', () => {
+    const cards = buildOverviewTaskCards({
+      profile: {
+        name: '七七',
+        breedId: '550e8400-e29b-41d4-a716-446655440000',
+        currentWeightKg: 11,
+        activityLevel: 'NORMAL',
+        mealsPerDay: 2,
+        bcsScore: 5,
+        treatInputMode: 'EXACT_KCAL',
+      },
+      dirtyFields: [],
+      healthCount: 0,
+    })
+
+    expect(cards.find(card => card.key === 'feeding')?.status).not.toBe('complete')
+    expect(cards.find(card => card.key === 'recommendation')?.status).not.toBe('complete')
+  })
+
   it('unlocks recommendation after feeding fields are complete', () => {
     expect(
       getCreateStepAvailability({

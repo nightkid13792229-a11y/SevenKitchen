@@ -82,6 +82,7 @@ import { onLoad } from '@dcloudio/uni-app'
 import StickyActionBar from '../../components/dog-profile/StickyActionBar.vue'
 import { dogApi } from '../../api/dogs'
 import { buildDogEditPayload } from '../../utils/dog-profile-form'
+import { trackDogProfileEvent } from '../../utils/dog-profile-analytics'
 
 const dogId = ref('')
 const isLoading = ref(false)
@@ -122,6 +123,11 @@ onLoad((options: any) => {
   }
 
   dogId.value = value
+  void trackDogProfileEvent('dog_profile_step_viewed', {
+    mode: 'edit',
+    dogId: dogId.value,
+    moduleName: 'basic_info',
+  })
   void loadDogProfile()
 })
 
@@ -191,17 +197,35 @@ async function saveProfile() {
   isSaving.value = true
 
   try {
+    void trackDogProfileEvent('dog_profile_submit_requested', {
+      mode: 'edit',
+      dogId: dogId.value,
+      moduleName: 'basic_info',
+      submitStatus: 'requested',
+    })
     uni.showLoading({ title: '保存中...' })
-    const res: any = await dogApi.update(dogId.value, buildDogEditPayload(form))
+    const res: any = await dogApi.update(dogId.value, buildDogEditPayload(form, 'basic'))
     if (res.code !== 0) {
       throw new Error(res.message || '保存失败')
     }
 
+    void trackDogProfileEvent('dog_profile_submit_succeeded', {
+      mode: 'edit',
+      dogId: dogId.value,
+      moduleName: 'basic_info',
+      submitStatus: 'success',
+    })
     uni.showToast({ title: '已保存', icon: 'success' })
     setTimeout(() => {
       goBack()
     }, 300)
   } catch (error: any) {
+    void trackDogProfileEvent('dog_profile_submit_failed', {
+      mode: 'edit',
+      dogId: dogId.value,
+      moduleName: 'basic_info',
+      submitStatus: 'failed',
+    })
     uni.showToast({ title: error?.message || '保存失败', icon: 'none' })
   } finally {
     isSaving.value = false

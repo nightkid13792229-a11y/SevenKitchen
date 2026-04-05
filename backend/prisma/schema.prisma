@@ -149,6 +149,27 @@ model User {
   @@map("user")
 }
 
+model DogProfileEvent {
+  id           String   @id @default(uuid())
+  customerId   String   @map("customer_id")
+  dogId        String?  @map("dog_id")
+  eventName    String   @map("event_name")
+  mode         String
+  entrySource  String?  @map("entry_source")
+  stepName     String?  @map("step_name")
+  moduleName   String?  @map("module_name")
+  hasDraft     Boolean? @map("has_draft")
+  calcStatus   String?  @map("calc_status")
+  submitStatus String?  @map("submit_status")
+  properties   Json?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([eventName, createdAt])
+  @@index([customerId, createdAt])
+  @@index([dogId, createdAt])
+  @@map("dog_profile_event")
+}
+
 model Address {
   id            String  @id @default(uuid()) @map("id")
   userId        String  @map("user_id")

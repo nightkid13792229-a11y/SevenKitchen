@@ -96,6 +96,7 @@ import {
   buildOverviewTaskCards,
   type DogProfileOverviewTaskCard,
 } from '../../utils/dog-profile-form'
+import { trackDogProfileEvent } from '../../utils/dog-profile-analytics'
 
 interface DogProfileDetail {
   id: string
@@ -224,6 +225,14 @@ onLoad((options: any) => {
 })
 
 onShow(() => {
+  if (dogId.value) {
+    void trackDogProfileEvent('dog_profile_step_viewed', {
+      mode: 'edit',
+      dogId: dogId.value,
+      stepName: 'overview',
+    })
+  }
+
   if (hasLoadedOnce.value && dogId.value) {
     void loadDogProfile()
   }
@@ -265,6 +274,7 @@ function handleTaskTap(key: DogProfileOverviewTaskCard['key']) {
     return
   }
 
+  trackEditModuleOpened(key)
   uni.navigateTo({ url })
 }
 
@@ -274,7 +284,27 @@ function goToFeedingEdit() {
     return
   }
 
+  trackEditModuleOpened('feeding')
   uni.navigateTo({ url })
+}
+
+function trackEditModuleOpened(key: DogProfileOverviewTaskCard['key']) {
+  if (!dogId.value) {
+    return
+  }
+
+  const moduleMap: Record<DogProfileOverviewTaskCard['key'], string> = {
+    basic: 'basic_info',
+    feeding: 'feeding_info',
+    recommendation: 'feeding_info',
+    health: 'health',
+  }
+
+  void trackDogProfileEvent('dog_profile_edit_module_opened', {
+    mode: 'edit',
+    dogId: dogId.value,
+    moduleName: moduleMap[key],
+  })
 }
 
 function getTaskRoute(key: DogProfileOverviewTaskCard['key']) {

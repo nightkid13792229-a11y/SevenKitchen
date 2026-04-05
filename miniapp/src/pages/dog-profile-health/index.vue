@@ -89,12 +89,20 @@ import { onLoad } from '@dcloudio/uni-app'
 import HealthRecordsSection from '../../components/dog-profile/HealthRecordsSection.vue'
 import StickyActionBar from '../../components/dog-profile/StickyActionBar.vue'
 import { dogApi } from '../../api/dogs'
-import { buildDogEditPayload } from '../../utils/dog-profile-form'
+import { buildDogEditPayload, getDogHealthValidationError } from '../../utils/dog-profile-form'
+import { trackDogProfileEvent } from '../../utils/dog-profile-analytics'
 
 const dogId = ref('')
 const isLoading = ref(false)
 const isSaving = ref(false)
 const loadError = ref('')
+const loadedFields = reactive({
+  medicalRecords: true,
+  checkupRecords: true,
+  allergyRecords: true,
+  allergyFoods: true,
+  pickyFoods: true,
+})
 
 const form = reactive<Record<string, any>>({
   id: '',
@@ -129,6 +137,11 @@ onLoad((options: any) => {
   }
 
   dogId.value = value
+  void trackDogProfileEvent('dog_profile_step_viewed', {
+    mode: 'edit',
+    dogId: dogId.value,
+    moduleName: 'health',
+  })
   void loadDogProfile()
 })
 
@@ -157,6 +170,11 @@ async function loadDogProfile() {
 }
 
 function populateForm(profile: Record<string, any>) {
+  loadedFields.medicalRecords = Object.prototype.hasOwnProperty.call(profile, 'medicalRecords')
+  loadedFields.checkupRecords = Object.prototype.hasOwnProperty.call(profile, 'checkupRecords')
+  loadedFields.allergyRecords = Object.prototype.hasOwnProperty.call(profile, 'allergyRecords')
+  loadedFields.allergyFoods = Object.prototype.hasOwnProperty.call(profile, 'allergyFoods')
+  loadedFields.pickyFoods = Object.prototype.hasOwnProperty.call(profile, 'pickyFoods')
   form.id = profile.id || ''
   form.name = profile.name || ''
   form.breedId = profile.breedId || ''
@@ -186,20 +204,66 @@ async function saveProfile() {
     return
   }
 
+  const validationError = getDogHealthValidationError(form)
+  if (validationError) {
+    uni.showToast({ title: validationError, icon: 'none' })
+    return
+  }
+
   isSaving.value = true
 
   try {
+    void trackDogProfileEvent('dog_profile_submit_requested', {
+      mode: 'edit',
+      dogId: dogId.value,
+      moduleName: 'health',
+      submitStatus: 'requested',
+    })
     uni.showLoading({ title: '保存中...' })
-    const res: any = await dogApi.update(dogId.value, buildDogEditPayload(form))
+    const payload = buildDogEditPayload(form, 'health')
+
+    if (!loadedFields.medicalRecords && payload.medicalRecords.length === 0) {
+      delete payload.medicalRecords
+    }
+
+    if (!loadedFields.checkupRecords && payload.checkupRecords.length === 0) {
+      delete payload.checkupRecords
+    }
+
+    if (!loadedFields.allergyRecords && payload.allergyRecords.length === 0) {
+      delete payload.allergyRecords
+    }
+
+    if (!loadedFields.allergyFoods && !form.allergyFoods.trim()) {
+      delete payload.allergyFoods
+    }
+
+    if (!loadedFields.pickyFoods && !form.pickyFoods.trim()) {
+      delete payload.pickyFoods
+    }
+
+    const res: any = await dogApi.update(dogId.value, payload)
     if (res.code !== 0) {
       throw new Error(res.message || '保存失败')
     }
 
+    void trackDogProfileEvent('dog_profile_submit_succeeded', {
+      mode: 'edit',
+      dogId: dogId.value,
+      moduleName: 'health',
+      submitStatus: 'success',
+    })
     uni.showToast({ title: '已保存', icon: 'success' })
     setTimeout(() => {
       goBack()
     }, 300)
   } catch (error: any) {
+    void trackDogProfileEvent('dog_profile_submit_failed', {
+      mode: 'edit',
+      dogId: dogId.value,
+      moduleName: 'health',
+      submitStatus: 'failed',
+    })
     uni.showToast({ title: error?.message || '保存失败', icon: 'none' })
   } finally {
     isSaving.value = false

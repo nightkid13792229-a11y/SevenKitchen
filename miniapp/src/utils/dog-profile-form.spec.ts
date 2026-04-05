@@ -4,6 +4,7 @@ import {
   buildDogEditPayload,
   buildOverviewTaskCards,
   canAdvanceCreateStep,
+  getDogHealthValidationError,
   getCreateStepAvailability,
   getNextCreateStep,
   getRecommendationDirtyFields,
@@ -271,70 +272,142 @@ describe('dog-profile-form', () => {
     expect(payload.manualTreatKcal).toBeUndefined()
   })
 
-  it('builds edit payload with normalized feeding values and existing health arrays', () => {
+  it('builds a basic edit payload without unrelated feeding or health fields', () => {
     const payload = buildDogEditPayload({
       name: '七七',
       birthday: '2021-01-01',
       gender: 'FEMALE',
       currentWeightKg: '12.4',
-      bcsScore: '6',
-      activityLevel: 'HIGH',
-      mealsPerDay: '3',
-      treatInputMode: 'EXACT_KCAL',
-      treatLevel: 'LOW',
-      manualTreatKcal: '80.5',
-      allergyFoods: ' 牛肉 ',
-      pickyFoods: '   ',
-      medicalRecords: [{ title: '胃炎', diagnosedAt: '2024-05-01', attachments: ['a'] }],
-      checkupRecords: [{ title: '年度体检', checkedAt: '2025-01-01' }],
-      allergyRecords: [{ allergen: '鸡肉', notedAt: '2024-02-03', attachmentKeys: ['k1'] }],
-    })
+      medicalRecords: [{ chiefComplaint: '胃炎' }],
+    }, 'basic')
 
-    expect(payload).toMatchObject({
+    expect(payload).toEqual({
       name: '七七',
       birthday: '2021-01-01T00:00:00.000Z',
       gender: 'FEMALE',
-      currentWeightKg: 12.4,
-      bcsScore: 6,
-      activityLevel: 'HIGH',
-      mealsPerDay: 3,
-      treatInputMode: 'EXACT_KCAL',
-      treatLevel: 'LOW',
-      manualTreatKcal: 80.5,
-      allergyFoods: '牛肉',
-      pickyFoods: null,
-      medicalRecords: [{ title: '胃炎', diagnosedAt: '2024-05-01', attachments: ['a'] }],
-      checkupRecords: [{ title: '年度体检', checkedAt: '2025-01-01' }],
-      allergyRecords: [{ allergen: '鸡肉', notedAt: '2024-02-03', attachmentKeys: ['k1'] }],
     })
   })
 
-  it('omits invalid exact kcal from edit payload and preserves blank text fields as null', () => {
+  it('builds a feeding edit payload with normalized values and cleared manual treat kcal outside exact mode', () => {
     const payload = buildDogEditPayload({
-      birthday: '2021-01-01',
       currentWeightKg: '11',
       bcsScore: 5,
       activityLevel: 'NORMAL',
       mealsPerDay: '',
+      sizeClassOverride: 'MEDIUM',
       treatInputMode: '',
       treatLevel: 'LOW',
-      manualTreatKcal: 'abc',
-      allergyFoods: '',
-      pickyFoods: '   ',
-      medicalRecords: null,
-      checkupRecords: undefined,
-      allergyRecords: 'unexpected',
-    })
+      manualTreatKcal: '88.5',
+      allergyFoods: '鸡肉',
+    }, 'feeding')
 
-    expect(payload.birthday).toBe('2021-01-01T00:00:00.000Z')
-    expect(payload.currentWeightKg).toBe(11)
-    expect(payload.mealsPerDay).toBe(2)
-    expect(payload.treatInputMode).toBe('ESTIMATE_LEVEL')
-    expect(payload.manualTreatKcal).toBeUndefined()
-    expect(payload.allergyFoods).toBeNull()
-    expect(payload.pickyFoods).toBeNull()
-    expect(payload.medicalRecords).toEqual([])
-    expect(payload.checkupRecords).toEqual([])
-    expect(payload.allergyRecords).toEqual([])
+    expect(payload).toEqual({
+      currentWeightKg: 11,
+      bcsScore: 5,
+      activityLevel: 'NORMAL',
+      mealsPerDay: 2,
+      sizeClassOverride: 'MEDIUM',
+      treatInputMode: 'ESTIMATE_LEVEL',
+      treatLevel: 'LOW',
+      manualTreatKcal: null,
+    })
+  })
+
+  it('builds a health edit payload with the real page contract and drops blank draft rows', () => {
+    const payload = buildDogEditPayload({
+      medicalRecords: [
+        {
+          chiefComplaint: ' 胃炎 ',
+          visitDate: '2024-05-01',
+          diagnosis: ' 肠胃炎 ',
+          notes: ' 复诊 ',
+          attachments: ['a'],
+        },
+        {
+          chiefComplaint: '',
+          visitDate: '',
+          diagnosis: '',
+          notes: '',
+          attachments: [],
+        },
+      ],
+      checkupRecords: [
+        {
+          checkupType: '年度体检',
+          checkupDate: '2025-01-01',
+          notes: ' 正常 ',
+          attachments: ['b'],
+        },
+        {
+          checkupType: '',
+          checkupDate: '',
+          notes: '',
+          attachments: [],
+        },
+      ],
+      allergyRecords: [
+        {
+          allergen: ' 鸡肉 ',
+          notes: ' 确认过敏 ',
+          attachments: ['c'],
+        },
+        {
+          allergen: '',
+          notes: '',
+          attachments: [],
+        },
+      ],
+      allergyFoods: ' 牛肉 ',
+      pickyFoods: '   ',
+    }, 'health')
+
+    expect(payload).toEqual({
+      medicalRecords: [
+        {
+          chiefComplaint: '胃炎',
+          visitDate: '2024-05-01',
+          diagnosis: '肠胃炎',
+          notes: '复诊',
+          attachments: ['a'],
+        },
+      ],
+      checkupRecords: [
+        {
+          checkupType: '年度体检',
+          checkupDate: '2025-01-01',
+          notes: '正常',
+          attachments: ['b'],
+        },
+      ],
+      allergyRecords: [
+        {
+          allergen: '鸡肉',
+          notes: '确认过敏',
+          attachments: ['c'],
+        },
+      ],
+      allergyFoods: '牛肉',
+      pickyFoods: null,
+    })
+  })
+
+  it('reports validation errors for partially completed health rows', () => {
+    expect(
+      getDogHealthValidationError({
+        medicalRecords: [{ chiefComplaint: '', visitDate: '2024-05-01', notes: '', attachments: [] }],
+      }),
+    ).toBe('请补充第 1 条病史记录的症状或疾病')
+
+    expect(
+      getDogHealthValidationError({
+        checkupRecords: [{ checkupType: '年度体检', checkupDate: '', notes: '', attachments: [] }],
+      }),
+    ).toBe('请补充第 1 条体检记录的体检日期')
+
+    expect(
+      getDogHealthValidationError({
+        allergyRecords: [{ allergen: '', notes: '疑似对鸡肉不耐受', attachments: [] }],
+      }),
+    ).toBe('请补充第 1 条过敏记录的过敏原')
   })
 })

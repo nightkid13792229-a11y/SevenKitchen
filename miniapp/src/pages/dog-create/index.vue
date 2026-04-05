@@ -1035,6 +1035,7 @@ import {
   getRecommendationDirtyFields,
   shouldAutoPreviewRecommendation,
 } from '../../utils/dog-profile-form'
+import { trackDogProfileEvent } from '../../utils/dog-profile-analytics'
 
 // 病史记录接口
 interface MedicalRecord {
@@ -1818,11 +1819,19 @@ onMounted(async () => {
     previousCreateFormSnapshot = cloneFormSnapshot()
   } else {
     console.log('[DogCreate] onMounted: create mode, no dogId')
-    restoreCreateDraft()
+    const restoredDraft = restoreCreateDraft()
 
     if ((currentCreateStep.value === 'recommendation' || currentCreateStep.value === 'health') && createPreviewReady.value) {
       scheduleCreateAutoPreview()
     }
+
+    void trackDogProfileEvent('dog_profile_create_started', {
+      mode: 'create',
+      entrySource: 'dog_list',
+      stepName: getCreateAnalyticsStepName(currentCreateStep.value),
+      hasDraft: restoredDraft,
+    })
+    trackCreateStepViewed(currentCreateStep.value)
 
     // Auto-show BCS guide on first load (delay 1.5s)
     setTimeout(() => {
@@ -1874,11 +1883,45 @@ watch(currentCreateStep, (step) => {
   }
 
   saveCreateDraft()
+  trackCreateStepViewed(step)
 
   if ((step === 'recommendation' || step === 'health') && !calcResult.value) {
     scheduleCreateAutoPreview()
   }
 })
+
+function getCreateAnalyticsStepName(step: DogProfileCreateStep) {
+  const stepMap: Record<DogProfileCreateStep, string> = {
+    basic: 'basic_info',
+    feeding: 'feeding_info',
+    recommendation: 'recommendation',
+    health: 'health',
+  }
+
+  return stepMap[step]
+}
+
+function trackCreateStepViewed(step: DogProfileCreateStep) {
+  if (!isCreateMode.value) {
+    return
+  }
+
+  void trackDogProfileEvent('dog_profile_step_viewed', {
+    mode: 'create',
+    stepName: getCreateAnalyticsStepName(step),
+  })
+}
+
+function trackCreateStepCompleted(step: DogProfileCreateStep) {
+  if (!isCreateMode.value) {
+    return
+  }
+
+  void trackDogProfileEvent('dog_profile_step_completed', {
+    mode: 'create',
+    stepName: getCreateAnalyticsStepName(step),
+  })
+}
 
 async function loadBreeds() {
   loadingBreeds.value = true
@@ -2147,19 +2190,25 @@ function saveCreateDraft() {
     step: currentCreateStep.value,
     form: cloneFormSnapshot(),
   })
+
+  void trackDogProfileEvent('dog_profile_draft_saved', {
+    mode: 'create',
+    hasDraft: true,
+    stepName: getCreateAnalyticsStepName(currentCreateStep.value),
+  })
 }
 
 function restoreCreateDraft() {
   const customerId = getCustomerId()
   if (!customerId) {
     previousCreateFormSnapshot = cloneFormSnapshot()
-    return
+    return false
   }
 
   const draft = loadDogProfileDraft(customerId, 'create')
   if (!draft) {
     previousCreateFormSnapshot = cloneFormSnapshot()
-    return
+    return false
   }
 
   restoringCreateDraft.value = true
@@ -2170,6 +2219,12 @@ function restoreCreateDraft() {
     showHealthRecord.value = currentCreateStep.value === 'health'
     previousCreateFormSnapshot = cloneFormSnapshot()
     calcResult.value = null
+    void trackDogProfileEvent('dog_profile_draft_restored', {
+      mode: 'create',
+      hasDraft: true,
+      stepName: getCreateAnalyticsStepName(currentCreateStep.value),
+    })
+    return true
   } finally {
     restoringCreateDraft.value = false
   }
@@ -4075,6 +4130,16 @@ async function previewCalculation(options?: { silent?: boolean }) {
 
   calculating.value = true
   try {
+    if (isCreateMode.value) {
+      void trackDogProfileEvent('dog_profile_calc_requested', {
+        mode: 'create',
+        stepName: currentCreateStep.value === 'feeding'
+          ? 'feeding_info'
+          : getCreateAnalyticsStepName(currentCreateStep.value),
+        calcStatus: 'requested',
+      })
+    }
+
     const payload: any = {
       breedId: formData.value.breedId,
       birthday: new Date(formData.value.birthday).toISOString(),
@@ -4170,12 +4235,27 @@ async function previewCalculation(options?: { silent?: boolean }) {
         })
       }
 
+      if (isCreateMode.value) {
+        void trackDogProfileEvent('dog_profile_calc_succeeded', {
+          mode: 'create',
+          stepName: 'recommendation',
+          calcStatus: 'success',
+        })
+      }
+
       return true
     } else {
       throw new Error(res.message || 'Calculation failed')
     }
   } catch (err: any) {
     console.error('[DogCreate] Preview calculation error:', err)
+    if (isCreateMode.value) {
+      void trackDogProfileEvent('dog_profile_calc_failed', {
+        mode: 'create',
+        stepName: getCreateAnalyticsStepName(currentCreateStep.value),
+        calcStatus: 'failed',
+      })
+    }
     if (!options?.silent) {
       uni.showToast({
         title: err?.message || '计算失败，请检查输入',
@@ -4228,6 +4308,7 @@ async function handleCreatePrimaryAction() {
       return
     }
 
+    trackCreateStepCompleted('basic')
     setCreateStep(getNextCreateStep('basic'))
     return
   }
@@ -4239,6 +4320,7 @@ async function handleCreatePrimaryAction() {
     }
 
     await previewCalculation()
+    trackCreateStepCompleted('feeding')
     setCreateStep(getNextCreateStep('feeding'))
     return
   }
@@ -4249,6 +4331,7 @@ async function handleCreatePrimaryAction() {
       return
     }
 
+    trackCreateStepCompleted('recommendation')
     setCreateStep(getNextCreateStep('recommendation'))
     return
   }
@@ -4261,6 +4344,10 @@ async function handleCreateSecondaryAction() {
     return
   }
 
+  void trackDogProfileEvent('dog_profile_health_skipped', {
+    mode: 'create',
+    stepName: 'health',
+  })
   await submit()
 }
 
@@ -5031,6 +5118,13 @@ async function submit() {
 
   uni.showLoading({ title: isEditModeValue ? '保存中...' : '创建中...' })
 
+  if (!isEditModeValue) {
+    void trackDogProfileEvent('dog_profile_submit_requested', {
+      mode: 'create',
+      submitStatus: 'requested',
+    })
+  }
+
   const payload: any = {
     ...buildDogCreatePayload(formData.value),
     medicalRecords: formData.value.medicalRecords || [],
@@ -5072,6 +5166,14 @@ async function submit() {
 
       console.info(`[DogCreate] Dog ${isEditModeValue ? 'updated' : 'created'} successfully: id=${resultDogId}, name=${updatedDog.name}`)
 
+      if (!isEditModeValue) {
+        void trackDogProfileEvent('dog_profile_submit_succeeded', {
+          mode: 'create',
+          dogId: resultDogId,
+          submitStatus: 'success',
+        })
+      }
+
       // Update cache
       if (isEditModeValue) {
         addDogToCache(updatedDog)
@@ -5106,6 +5208,12 @@ async function submit() {
     } else {
       const errorMsg = res.message || (isEditModeValue ? '保存失败' : '创建失败')
       console.error('[DogCreate] API error:', res.code, errorMsg)
+      if (!isEditModeValue) {
+        void trackDogProfileEvent('dog_profile_submit_failed', {
+          mode: 'create',
+          submitStatus: 'failed',
+        })
+      }
       uni.showToast({
         title: errorMsg,
         icon: 'none',
@@ -5116,6 +5224,12 @@ async function submit() {
   } catch (err: any) {
     const errMsg = err?.message || String(err) || '网络错误'
     console.error('[DogCreate]', isEditModeValue ? 'Update' : 'Create', 'dog error:', err)
+    if (!isEditModeValue) {
+      void trackDogProfileEvent('dog_profile_submit_failed', {
+        mode: 'create',
+        submitStatus: 'failed',
+      })
+    }
 
     let userMsg = isEditModeValue ? '保存失败，请稍后重试' : '创建失败，请稍后重试'
     if (errMsg.includes('400') || errMsg.includes('Bad Request')) {

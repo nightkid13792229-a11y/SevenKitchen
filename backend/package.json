@@ -86,6 +86,7 @@
     "moduleFileExtensions": [
       "js",
       "json",
+      "ts",
       "d.ts"
     ],
     "rootDir": ".",

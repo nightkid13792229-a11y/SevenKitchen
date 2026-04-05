@@ -144,6 +144,9 @@ import { NutritionFoodController } from './interfaces/controllers/nutrition-food
 import { NutritionFoodService } from './application/nutrition-food/nutrition-food.service';
 import { RecommendedProductController } from './interfaces/controllers/recommended-product.controller';
 import { RecommendedProductService } from './application/ingredient/recommended-product.service';
+import { DogProfileAnalyticsService } from './application/analytics/dog-profile-analytics.service';
+import { DogProfileAnalyticsController } from './interfaces/controllers/dog-profile-analytics.controller';
+import { AdminDogProfileAnalyticsController } from './interfaces/controllers/admin-dog-profile-analytics.controller';
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -228,6 +231,9 @@ validatePrismaConfig();
     SharedPhotosController,
     NutritionFoodController,
     RecommendedProductController,
+    ...(isPrismaEnabled()
+      ? [DogProfileAnalyticsController, AdminDogProfileAnalyticsController]
+      : []),
   ],
   providers: [
     DogService,
@@ -284,6 +290,7 @@ validatePrismaConfig();
             provide: PRISMA_SERVICE,
             useExisting: PrismaService,
           },
+          DogProfileAnalyticsService,
         ]
       : []),
     OrderService,

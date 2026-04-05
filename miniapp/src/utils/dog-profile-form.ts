@@ -16,6 +16,7 @@ const DOG_PROFILE_FEEDING_FIELDS = [
 ] as const
 
 export type DogProfileOverviewTaskStatus = 'complete' | 'stale' | 'pending'
+export type DogProfileEditSection = 'basic' | 'feeding' | 'health'
 
 export interface DogProfileOverviewTaskCard {
   key: 'basic' | 'feeding' | 'recommendation' | 'health'
@@ -104,6 +105,84 @@ function normalizeDate(value: unknown) {
 
 function normalizeArray(value: unknown) {
   return Array.isArray(value) ? value : []
+}
+
+function normalizeRequiredText(value: unknown) {
+  if (typeof value !== 'string') {
+    return ''
+  }
+
+  return value.trim()
+}
+
+function normalizeAttachmentArray(value: unknown) {
+  if (!Array.isArray(value)) {
+    return []
+  }
+
+  return value
+    .filter(item => typeof item === 'string')
+    .map(item => item.trim())
+    .filter(Boolean)
+}
+
+function compactPayload(payload: Record<string, any>) {
+  return Object.fromEntries(
+    Object.entries(payload).filter(([, value]) => value !== undefined),
+  )
+}
+
+function isBlankHealthField(value: unknown) {
+  if (Array.isArray(value)) {
+    return value.length === 0
+  }
+
+  return !hasValue(value)
+}
+
+function isBlankHealthRecord(record: Record<string, any>, keys: string[]) {
+  return keys.every(key => isBlankHealthField(record[key]))
+}
+
+function normalizeMedicalRecord(record: Record<string, any>) {
+  return {
+    chiefComplaint: normalizeRequiredText(record?.chiefComplaint),
+    visitDate: normalizeOptionalText(record?.visitDate),
+    diagnosis: normalizeOptionalText(record?.diagnosis),
+    notes: normalizeOptionalText(record?.notes),
+    attachments: normalizeAttachmentArray(record?.attachments),
+  }
+}
+
+function normalizeCheckupRecord(record: Record<string, any>) {
+  return {
+    checkupType: normalizeRequiredText(record?.checkupType),
+    checkupDate: normalizeRequiredText(record?.checkupDate),
+    notes: normalizeOptionalText(record?.notes),
+    attachments: normalizeAttachmentArray(record?.attachments),
+  }
+}
+
+function normalizeAllergyRecord(record: Record<string, any>) {
+  return {
+    allergen: normalizeRequiredText(record?.allergen),
+    notes: normalizeOptionalText(record?.notes),
+    attachments: normalizeAttachmentArray(record?.attachments),
+  }
+}
+
+function normalizeHealthRecords(form: Record<string, any>) {
+  const medicalRecords = normalizeArray(form.medicalRecords)
+    .map(normalizeMedicalRecord)
+    .filter(record => !isBlankHealthRecord(record, ['chiefComplaint', 'visitDate', 'diagnosis', 'notes', 'attachments']))
+  const checkupRecords = normalizeArray(form.checkupRecords)
+    .map(normalizeCheckupRecord)
+    .filter(record => !isBlankHealthRecord(record, ['checkupType', 'checkupDate', 'notes', 'attachments']))
+  const allergyRecords = normalizeArray(form.allergyRecords)
+    .map(normalizeAllergyRecord)
+    .filter(record => !isBlankHealthRecord(record, ['allergen', 'notes', 'attachments']))
+
+  return { medicalRecords, checkupRecords, allergyRecords }
 }
 
 function hasAnyDirtyField(dirtyFields: string[] | undefined, fields: readonly string[]) {
@@ -305,30 +384,87 @@ export function buildDogCreatePayload(form: Record<string, any>) {
   return payload
 }
 
-export function buildDogEditPayload(form: Record<string, any>) {
-  const treatInputMode = form.treatInputMode || 'ESTIMATE_LEVEL'
-  const payload: Record<string, any> = {
-    ...form,
-    birthday: normalizeDate(form.birthday),
-    currentWeightKg: parseValidWeight(form.currentWeightKg) ?? parseFloat(form.currentWeightKg),
-    bcsScore: parseNonNegativeNumber(form.bcsScore) ?? form.bcsScore,
-    mealsPerDay: parseInt(form.mealsPerDay, 10) || 2,
-    treatInputMode,
-    customBreedName: normalizeOptionalText(form.customBreedName),
+export function getDogHealthValidationError(form: Record<string, any>) {
+  const medicalRecords = normalizeArray(form.medicalRecords).map(normalizeMedicalRecord)
+  for (let index = 0; index < medicalRecords.length; index += 1) {
+    const record = medicalRecords[index]
+    if (isBlankHealthRecord(record, ['chiefComplaint', 'visitDate', 'diagnosis', 'notes', 'attachments'])) {
+      continue
+    }
+
+    if (!record.chiefComplaint) {
+      return `请补充第 ${index + 1} 条病史记录的症状或疾病`
+    }
+  }
+
+  const checkupRecords = normalizeArray(form.checkupRecords).map(normalizeCheckupRecord)
+  for (let index = 0; index < checkupRecords.length; index += 1) {
+    const record = checkupRecords[index]
+    if (isBlankHealthRecord(record, ['checkupType', 'checkupDate', 'notes', 'attachments'])) {
+      continue
+    }
+
+    if (!record.checkupType) {
+      return `请补充第 ${index + 1} 条体检记录的体检类型`
+    }
+
+    if (!record.checkupDate) {
+      return `请补充第 ${index + 1} 条体检记录的体检日期`
+    }
+  }
+
+  const allergyRecords = normalizeArray(form.allergyRecords).map(normalizeAllergyRecord)
+  for (let index = 0; index < allergyRecords.length; index += 1) {
+    const record = allergyRecords[index]
+    if (isBlankHealthRecord(record, ['allergen', 'notes', 'attachments'])) {
+      continue
+    }
+
+    if (!record.allergen) {
+      return `请补充第 ${index + 1} 条过敏记录的过敏原`
+    }
+  }
+
+  return null
+}
+
+export function buildDogEditPayload(
+  form: Record<string, any>,
+  section: DogProfileEditSection,
+) {
+  if (section === 'basic') {
+    return compactPayload({
+      name: normalizeRequiredText(form.name),
+      birthday: normalizeDate(form.birthday),
+      gender: form.gender,
+    })
+  }
+
+  if (section === 'feeding') {
+    const treatInputMode = form.treatInputMode || 'ESTIMATE_LEVEL'
+    const weight = parseValidWeight(form.currentWeightKg)
+    const bcsScore = parseNonNegativeNumber(form.bcsScore)
+    const manualTreatKcal = parseNonNegativeNumber(form.manualTreatKcal)
+
+    return compactPayload({
+      currentWeightKg: weight ?? undefined,
+      bcsScore: bcsScore ?? undefined,
+      activityLevel: hasValue(form.activityLevel) ? form.activityLevel : undefined,
+      sizeClassOverride: form.sizeClassOverride ?? null,
+      mealsPerDay: parseInt(form.mealsPerDay, 10) || 2,
+      treatInputMode,
+      treatLevel: hasValue(form.treatLevel) ? form.treatLevel : undefined,
+      manualTreatKcal: treatInputMode === 'EXACT_KCAL'
+        ? (manualTreatKcal ?? undefined)
+        : null,
+    })
+  }
+
+  const healthRecords = normalizeHealthRecords(form)
+
+  return {
+    ...healthRecords,
     allergyFoods: normalizeOptionalText(form.allergyFoods),
     pickyFoods: normalizeOptionalText(form.pickyFoods),
-    medicalRecords: normalizeArray(form.medicalRecords),
-    checkupRecords: normalizeArray(form.checkupRecords),
-    allergyRecords: normalizeArray(form.allergyRecords),
   }
-
-  const manualTreatKcal = parseNonNegativeNumber(form.manualTreatKcal)
-
-  if (treatInputMode === 'EXACT_KCAL' && manualTreatKcal !== null) {
-    payload.manualTreatKcal = manualTreatKcal
-  } else {
-    delete payload.manualTreatKcal
-  }
-
-  return payload
 }

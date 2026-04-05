@@ -165,6 +165,7 @@ import {
   getRecommendationDirtyFields,
   shouldAutoPreviewRecommendation,
 } from '../../utils/dog-profile-form'
+import { trackDogProfileEvent } from '../../utils/dog-profile-analytics'
 
 const MIXED_BREED_VIRTUAL_ID = '00000000-0000-0000-0000-000000000000'
 const mealsOptions = ['1', '2', '3', '4', '5']
@@ -195,6 +196,7 @@ const isHydrating = ref(false)
 
 let previousRecommendationSnapshot: Record<string, any> = {}
 let autoPreviewTimer: ReturnType<typeof setTimeout> | null = null
+let previewRequestId = 0
 
 const form = reactive<Record<string, any>>({
   id: '',
@@ -331,6 +333,11 @@ onLoad((options: any) => {
   }
 
   dogId.value = value
+  void trackDogProfileEvent('dog_profile_step_viewed', {
+    mode: 'edit',
+    dogId: dogId.value,
+    moduleName: 'feeding_info',
+  })
   void loadDogProfile()
 })
 
@@ -339,6 +346,8 @@ onUnload(() => {
     clearTimeout(autoPreviewTimer)
     autoPreviewTimer = null
   }
+
+  previewRequestId += 1
 })
 
 watch(
@@ -481,9 +490,16 @@ async function previewRecommendation(options: { silent: boolean }) {
     return false
   }
 
+  const requestId = ++previewRequestId
   isPreviewLoading.value = true
 
   try {
+    void trackDogProfileEvent('dog_profile_calc_requested', {
+      mode: 'edit',
+      dogId: dogId.value,
+      moduleName: 'feeding_info',
+      calcStatus: 'requested',
+    })
     const res: any = await dogApi.preview({
       breedId: form.breedId,
       birthday: new Date(form.birthday).toISOString(),
@@ -504,15 +520,36 @@ async function previewRecommendation(options: { silent: boolean }) {
       throw new Error(res.message || '刷新建议失败')
     }
 
+    if (requestId !== previewRequestId) {
+      return false
+    }
+
+    void trackDogProfileEvent('dog_profile_calc_succeeded', {
+      mode: 'edit',
+      dogId: dogId.value,
+      moduleName: 'feeding_info',
+      calcStatus: 'success',
+    })
     calcResult.value = res.data
     return true
   } catch (error: any) {
-    if (!options.silent) {
+    if (requestId === previewRequestId) {
+      void trackDogProfileEvent('dog_profile_calc_failed', {
+        mode: 'edit',
+        dogId: dogId.value,
+        moduleName: 'feeding_info',
+        calcStatus: 'failed',
+      })
+    }
+
+    if (requestId === previewRequestId && !options.silent) {
       uni.showToast({ title: error?.message || '刷新建议失败', icon: 'none' })
     }
     return false
   } finally {
-    isPreviewLoading.value = false
+    if (requestId === previewRequestId) {
+      isPreviewLoading.value = false
+    }
   }
 }
 
@@ -534,17 +571,35 @@ async function saveProfile() {
   isSaving.value = true
 
   try {
+    void trackDogProfileEvent('dog_profile_submit_requested', {
+      mode: 'edit',
+      dogId: dogId.value,
+      moduleName: 'feeding_info',
+      submitStatus: 'requested',
+    })
     uni.showLoading({ title: '保存中...' })
-    const res: any = await dogApi.update(dogId.value, buildDogEditPayload(form))
+    const res: any = await dogApi.update(dogId.value, buildDogEditPayload(form, 'feeding'))
     if (res.code !== 0) {
       throw new Error(res.message || '保存失败')
     }
 
+    void trackDogProfileEvent('dog_profile_submit_succeeded', {
+      mode: 'edit',
+      dogId: dogId.value,
+      moduleName: 'feeding_info',
+      submitStatus: 'success',
+    })
     uni.showToast({ title: '已保存', icon: 'success' })
     setTimeout(() => {
       goBack()
     }, 300)
   } catch (error: any) {
+    void trackDogProfileEvent('dog_profile_submit_failed', {
+      mode: 'edit',
+      dogId: dogId.value,
+      moduleName: 'feeding_info',
+      submitStatus: 'failed',
+    })
     uni.showToast({ title: error?.message || '保存失败', icon: 'none' })
   } finally {
     isSaving.value = false

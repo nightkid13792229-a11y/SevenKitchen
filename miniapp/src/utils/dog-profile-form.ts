@@ -1,5 +1,7 @@
 import {
+  DOG_PROFILE_CREATE_STEPS,
   DOG_PROFILE_RECOMMENDATION_FIELDS,
+  type DogProfileCreateStep,
 } from '../constants/dog-profile'
 
 const MIXED_BREED_VIRTUAL_ID = '00000000-0000-0000-0000-000000000000'
@@ -80,6 +82,20 @@ export function getRecommendationDirtyFields(
   return DOG_PROFILE_RECOMMENDATION_FIELDS.filter(
     field => previousForm[field] !== nextForm[field],
   )
+}
+
+export function getNextCreateStep(step: DogProfileCreateStep) {
+  const currentIndex = DOG_PROFILE_CREATE_STEPS.indexOf(step)
+
+  if (currentIndex === -1 || currentIndex === DOG_PROFILE_CREATE_STEPS.length - 1) {
+    return step
+  }
+
+  return DOG_PROFILE_CREATE_STEPS[currentIndex + 1]
+}
+
+export function shouldAutoPreviewRecommendation(dirtyFields: string[] | undefined) {
+  return hasAnyDirtyField(dirtyFields, DOG_PROFILE_RECOMMENDATION_FIELDS)
 }
 
 export function resolveDogProfileEntryRoute(dogId?: string) {

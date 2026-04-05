@@ -6,6 +6,13 @@
         <text>正在加载品种列表...</text>
       </view>
 
+      <StepProgressHeader
+        v-if="isCreateMode"
+        class="wizard-step-header"
+        :active-step="currentCreateStep"
+      />
+
+      <view v-if="showBasicSection">
       <view class="form-item">
         <text class="label">姓名 *</text>
         <input
@@ -248,12 +255,14 @@
         </view>
 
         <!-- 未填写生日时的提示 -->
-        <view v-else class="life-stage-prompt">
+      <view v-else class="life-stage-prompt">
           <text class="prompt-text">请先选择品种和生日，系统将自动判断</text>
         </view>
       </view>
+      </view>
 
       <!-- 身体状态区 -->
+      <view v-if="showFeedingSection">
       <view class="form-item">
         <text class="label">体重(kg) *</text>
         <input class="input" type="text" placeholder="请输入体重" v-model="formData.currentWeightKg" />
@@ -444,8 +453,10 @@
           />
         </view>
       </view>
+      </view>
 
       <!-- 健康记录区（折叠面板） -->
+      <view v-if="showHealthSection">
       <view class="health-record-section">
         <view class="health-record-header" @tap="toggleHealthRecord">
           <text class="health-record-title">📋 健康记录（选填）</text>
@@ -562,7 +573,29 @@
           </view>
         </view>
       </view>
+      <view v-if="isCreateMode" class="wizard-skip-note">
+        健康记录可以稍后再补充，不会影响本次创建档案。
+      </view>
+      </view>
 
+      <view v-if="showRecommendationSection && isCreateMode" class="wizard-recommendation-section">
+        <RecommendationSummaryCard
+          :badges="recommendationSummaryBadges"
+          :metrics="recommendationSummaryMetrics"
+          empty-title="先生成喂食建议"
+          empty-description="回到上一步补齐喂食条件后，我们会自动更新建议结果。"
+        />
+        <view class="wizard-recommendation-actions">
+          <button class="btn btn-secondary wizard-inline-button" @tap="previewCalculation" :disabled="createPreviewReady === false">
+            更新推荐结果
+          </button>
+          <button class="btn btn-link wizard-inline-button" @tap="setCreateStep('feeding')">
+            返回喂食信息
+          </button>
+        </view>
+      </view>
+
+      <view v-if="showRecommendationSection && !isCreateMode">
       <!-- Preview Calculation Button (只在没有计算结果时显示) -->
       <button v-if="!calcResult" class="btn btn-secondary" @tap="previewCalculation" :disabled="canPreview === false">
         每日能量计算
@@ -703,14 +736,24 @@
           </view>
         </view>
       </view>
+      </view>
     </view>
 
     <!-- 固定在底部的保存按钮 -->
-    <view class="fixed-bottom-bar">
+    <view v-if="isEditMode" class="fixed-bottom-bar">
       <button class="btn btn-save-fixed" @tap="submit" :disabled="canSubmit === false">
         {{ isEditMode ? '保存档案' : '创建档案' }}
       </button>
     </view>
+    <StickyActionBar
+      v-else
+      :primary-text="createPrimaryText"
+      :secondary-text="createSecondaryText"
+      :primary-disabled="createPrimaryDisabled"
+      :secondary-disabled="createSecondaryDisabled"
+      @primary="handleCreatePrimaryAction"
+      @secondary="handleCreateSecondaryAction"
+    />
 
     <!-- Custom Breed Name Input Modal -->
     <view v-if="showCustomBreedInput" class="custom-breed-modal" @tap.self="cancelCustomBreed">
@@ -970,11 +1013,27 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
+import RecommendationSummaryCard from '../../components/dog-profile/RecommendationSummaryCard.vue'
+import StepProgressHeader from '../../components/dog-profile/StepProgressHeader.vue'
+import StickyActionBar from '../../components/dog-profile/StickyActionBar.vue'
+import { type DogProfileCreateStep } from '../../constants/dog-profile'
 import { addDogToCache } from '../../utils/dog-cache'
 import { getBaseUrl } from '../../utils/config'
+import {
+  clearDogProfileDraft,
+  loadDogProfileDraft,
+  saveDogProfileDraft,
+} from '../../utils/dog-profile-draft'
+import {
+  buildDogCreatePayload,
+  getCreateStepAvailability,
+  getNextCreateStep,
+  getRecommendationDirtyFields,
+  shouldAutoPreviewRecommendation,
+} from '../../utils/dog-profile-form'
 
 // 病史记录接口
 interface MedicalRecord {
@@ -1237,6 +1296,10 @@ const backendLifeStageInfo = ref<{
 
 // Store dogId for edit mode
 const dogId = ref<string | null>(null)
+const currentCreateStep = ref<DogProfileCreateStep>('basic')
+const restoringCreateDraft = ref(false)
+let previousCreateFormSnapshot = JSON.parse(JSON.stringify(formData.value))
+let createAutoPreviewTimer: ReturnType<typeof setTimeout> | null = null
 
 // New state variables
 const searchKeyword = ref('')
@@ -1599,6 +1662,96 @@ const isEditMode = computed(() => {
   return !!dogId.value
 })
 
+const isCreateMode = computed(() => !isEditMode.value)
+const createStepAvailability = computed(() => getCreateStepAvailability(formData.value))
+const showBasicSection = computed(() => isEditMode.value || currentCreateStep.value === 'basic')
+const showFeedingSection = computed(() => isEditMode.value || currentCreateStep.value === 'feeding')
+const showRecommendationSection = computed(() => isEditMode.value || currentCreateStep.value === 'recommendation')
+const showHealthSection = computed(() => isEditMode.value || currentCreateStep.value === 'health')
+const createPreviewReady = computed(() => Boolean(
+  isCreateMode.value &&
+  createStepAvailability.value.recommendation &&
+  canPreview.value &&
+  !calculating.value
+))
+const createPrimaryText = computed(() => {
+  if (currentCreateStep.value === 'feeding') {
+    return '生成喂食建议'
+  }
+
+  if (currentCreateStep.value === 'recommendation') {
+    return '继续填写健康记录'
+  }
+
+  if (currentCreateStep.value === 'health') {
+    return '创建档案'
+  }
+
+  return '下一步'
+})
+const createSecondaryText = computed(() => (
+  currentCreateStep.value === 'health' ? '跳过并创建' : ''
+))
+const createPrimaryDisabled = computed(() => {
+  if (currentCreateStep.value === 'basic') {
+    return !createStepAvailability.value.feeding
+  }
+
+  if (currentCreateStep.value === 'feeding') {
+    return !createPreviewReady.value
+  }
+
+  if (currentCreateStep.value === 'recommendation') {
+    return !calcResult.value
+  }
+
+  return !canSubmit.value || !createStepAvailability.value.recommendation || calculating.value
+})
+const createSecondaryDisabled = computed(() => (
+  currentCreateStep.value === 'health'
+    ? createPrimaryDisabled.value
+    : true
+))
+const recommendationSummaryBadges = computed(() => {
+  if (!calcResult.value?.calcDetails) {
+    return []
+  }
+
+  return [
+    displayLifeStageText.value,
+    getActivityLevelText(calcResult.value.calcDetails.activityLevel),
+    `${calcResult.value.calcDetails.weightKg}kg`,
+  ].filter(Boolean)
+})
+const recommendationSummaryMetrics = computed(() => {
+  if (!calcResult.value) {
+    return []
+  }
+
+  return [
+    {
+      label: '每日主食热量',
+      value: `${calcResult.value.finalFoodKcal?.toFixed(1) || 'N/A'} kcal`,
+      hint: '建议作为每日主食目标',
+    },
+    {
+      label: '总能量需求',
+      value: `${calcResult.value.totalDer?.toFixed(1) || 'N/A'} kcal`,
+      hint: '含零食前的每日需求',
+    },
+    {
+      label: '零食能量',
+      value: `${calcResult.value.treatDeduction?.toFixed(1) || '0.0'} kcal`,
+      hint: calcResult.value.isTreatCapped ? '已按安全上限调整' : '按当前零食设置估算',
+    },
+    {
+      label: '建议日喂食量',
+      value: calcResult.value.dailyIntakeG ? `${calcResult.value.dailyIntakeG.toFixed(0)} g` : '待补充',
+      hint: '以后续商品热量密度为准',
+    },
+  ]
+})
+
 // onLoad lifecycle hook - receives page parameters
 onLoad((options: any) => {
   console.log('[DogCreate] onLoad called with options:', options)
@@ -1622,8 +1775,14 @@ onMounted(async () => {
     console.log('[DogCreate] onMounted: loading dog profile for edit mode')
     // Directly load after breeds are loaded (no need for setTimeout since we awaited loadBreeds)
     await loadDogProfile(dogId.value!)
+    previousCreateFormSnapshot = cloneFormSnapshot()
   } else {
     console.log('[DogCreate] onMounted: create mode, no dogId')
+    restoreCreateDraft()
+
+    if ((currentCreateStep.value === 'recommendation' || currentCreateStep.value === 'health') && createPreviewReady.value) {
+      scheduleCreateAutoPreview()
+    }
 
     // Auto-show BCS guide on first load (delay 1.5s)
     setTimeout(() => {
@@ -1633,6 +1792,51 @@ onMounted(async () => {
         console.log('[DogCreate] Auto-showing BCS guide')
       }
     }, 1500)
+  }
+})
+
+onUnmounted(() => {
+  clearCreateAutoPreviewTimer()
+})
+
+watch(formData, () => {
+  if (!isCreateMode.value || restoringCreateDraft.value) {
+    previousCreateFormSnapshot = cloneFormSnapshot()
+    return
+  }
+
+  const nextFormSnapshot = cloneFormSnapshot()
+  const dirtyFields = getRecommendationDirtyFields(previousCreateFormSnapshot, nextFormSnapshot)
+
+  previousCreateFormSnapshot = nextFormSnapshot
+
+  if (dirtyFields.length > 0 && shouldAutoPreviewRecommendation(dirtyFields)) {
+    calcResult.value = null
+    backendLifeStageInfo.value = null
+
+    if (createPreviewReady.value) {
+      scheduleCreateAutoPreview(dirtyFields)
+    } else {
+      clearCreateAutoPreviewTimer()
+    }
+  }
+
+  saveCreateDraft()
+}, { deep: true })
+
+watch(currentCreateStep, (step) => {
+  if (!isCreateMode.value || restoringCreateDraft.value) {
+    return
+  }
+
+  if (step === 'health') {
+    showHealthRecord.value = true
+  }
+
+  saveCreateDraft()
+
+  if ((step === 'recommendation' || step === 'health') && !calcResult.value) {
+    scheduleCreateAutoPreview()
   }
 })
 
@@ -1843,6 +2047,120 @@ function populateFormData(profile: any) {
   if (profile.cachedTargetFoodKcal) {
     console.log('[DogCreate] Cached target food kcal:', profile.cachedTargetFoodKcal)
   }
+}
+
+function cloneFormSnapshot() {
+  return JSON.parse(JSON.stringify(formData.value))
+}
+
+function getCustomerId() {
+  const rawCustomerId = uni.getStorageSync('userId')
+  return typeof rawCustomerId === 'string' && rawCustomerId.trim()
+    ? rawCustomerId.trim()
+    : ''
+}
+
+function clearCreateAutoPreviewTimer() {
+  if (createAutoPreviewTimer) {
+    clearTimeout(createAutoPreviewTimer)
+    createAutoPreviewTimer = null
+  }
+}
+
+function setCreateStep(step: DogProfileCreateStep) {
+  currentCreateStep.value = step
+
+  if (step === 'health') {
+    showHealthRecord.value = true
+  }
+}
+
+function resolveCreateStepFromDraft(step: DogProfileCreateStep, form: Record<string, any>) {
+  const availability = getCreateStepAvailability(form)
+
+  if (step === 'health' && availability.health) {
+    return 'health'
+  }
+
+  if (step === 'recommendation' && availability.recommendation) {
+    return 'recommendation'
+  }
+
+  if (step === 'feeding' && availability.feeding) {
+    return 'feeding'
+  }
+
+  return 'basic'
+}
+
+function saveCreateDraft() {
+  if (!isCreateMode.value || restoringCreateDraft.value) {
+    return
+  }
+
+  const customerId = getCustomerId()
+  if (!customerId) {
+    return
+  }
+
+  saveDogProfileDraft(customerId, 'create', {
+    step: currentCreateStep.value,
+    form: cloneFormSnapshot(),
+  })
+}
+
+function restoreCreateDraft() {
+  const customerId = getCustomerId()
+  if (!customerId) {
+    previousCreateFormSnapshot = cloneFormSnapshot()
+    return
+  }
+
+  const draft = loadDogProfileDraft(customerId, 'create')
+  if (!draft) {
+    previousCreateFormSnapshot = cloneFormSnapshot()
+    return
+  }
+
+  restoringCreateDraft.value = true
+
+  try {
+    populateFormData(draft.form)
+    setCreateStep(resolveCreateStepFromDraft(draft.step, draft.form))
+    showHealthRecord.value = currentCreateStep.value === 'health'
+    previousCreateFormSnapshot = cloneFormSnapshot()
+    calcResult.value = null
+  } finally {
+    restoringCreateDraft.value = false
+  }
+}
+
+function clearCreateDraft() {
+  const customerId = getCustomerId()
+  if (!customerId) {
+    return
+  }
+
+  clearDogProfileDraft(customerId, 'create')
+}
+
+function scheduleCreateAutoPreview(dirtyFields?: string[]) {
+  if (!isCreateMode.value) {
+    return
+  }
+
+  if (dirtyFields && !shouldAutoPreviewRecommendation(dirtyFields)) {
+    return
+  }
+
+  if (!createPreviewReady.value) {
+    return
+  }
+
+  clearCreateAutoPreviewTimer()
+  createAutoPreviewTimer = setTimeout(() => {
+    previewCalculation({ silent: true })
+  }, 250)
 }
 
 function onSearchInput(e: any) {
@@ -3702,11 +4020,11 @@ function selectTreatLevel(level: string) {
 
 // ========== 零食选择函数结束 ==========
 
-async function previewCalculation() {
+async function previewCalculation(options?: { silent?: boolean }) {
   // Only calculate if we have minimum required fields
   // Silently return if not ready - don't show error to user
   if (!canPreview.value) {
-    return
+    return false
   }
 
   calculating.value = true
@@ -3798,25 +4116,92 @@ async function previewCalculation() {
         console.log('[DogCreate] Backend life stage info:', backendLifeStageInfo.value)
       }
 
-      uni.showToast({
-        title: '计算完成',
-        icon: 'success',
-        duration: 1500
-      })
+      if (!options?.silent) {
+        uni.showToast({
+          title: '计算完成',
+          icon: 'success',
+          duration: 1500
+        })
+      }
+
+      return true
     } else {
       throw new Error(res.message || 'Calculation failed')
     }
   } catch (err: any) {
     console.error('[DogCreate] Preview calculation error:', err)
-    uni.showToast({
-      title: err?.message || '计算失败，请检查输入',
-      icon: 'none',
-      duration: 2000
-    })
+    if (!options?.silent) {
+      uni.showToast({
+        title: err?.message || '计算失败，请检查输入',
+        icon: 'none',
+        duration: 2000
+      })
+    }
     calcResult.value = null
+    return false
   } finally {
     calculating.value = false
   }
+}
+
+function showCreateStepBlockedToast(step: DogProfileCreateStep) {
+  const messageMap: Record<DogProfileCreateStep, string> = {
+    basic: '请先补齐姓名、品种和生日',
+    feeding: '请先补齐基础信息',
+    recommendation: '请先完善喂食信息并生成建议',
+    health: '请先生成喂食建议',
+  }
+
+  uni.showToast({
+    title: messageMap[step],
+    icon: 'none',
+    duration: 2000,
+  })
+}
+
+async function handleCreatePrimaryAction() {
+  if (currentCreateStep.value === 'basic') {
+    if (!createStepAvailability.value.feeding) {
+      showCreateStepBlockedToast('basic')
+      return
+    }
+
+    setCreateStep(getNextCreateStep('basic'))
+    return
+  }
+
+  if (currentCreateStep.value === 'feeding') {
+    if (!createPreviewReady.value) {
+      showCreateStepBlockedToast('recommendation')
+      return
+    }
+
+    const previewed = await previewCalculation()
+    if (previewed || calcResult.value) {
+      setCreateStep(getNextCreateStep('feeding'))
+    }
+    return
+  }
+
+  if (currentCreateStep.value === 'recommendation') {
+    if (!calcResult.value) {
+      showCreateStepBlockedToast('health')
+      return
+    }
+
+    setCreateStep(getNextCreateStep('recommendation'))
+    return
+  }
+
+  await submit()
+}
+
+async function handleCreateSecondaryAction() {
+  if (currentCreateStep.value !== 'health') {
+    return
+  }
+
+  await submit()
 }
 
 // ========== 计算过程辅助函数 ==========
@@ -4549,7 +4934,7 @@ function renameAllergyAttachment(event: any) {
 
 // ========== 过敏记录函数结束 ==========
 
-function submit() {
+async function submit() {
   const { name, breedId, birthday, currentWeightKg, activityLevel } = formData.value
 
   // Validation
@@ -4558,7 +4943,7 @@ function submit() {
       title: '请填写必填项',
       icon: 'none'
     })
-    return
+    return false
   }
 
   // Validate weight is a valid number
@@ -4568,7 +4953,7 @@ function submit() {
       title: '请输入有效的体重(0.1-200kg)',
       icon: 'none'
     })
-    return
+    return false
   }
 
   // For mixed breed, require size class override
@@ -4577,7 +4962,7 @@ function submit() {
       title: '混血犬请选择体型分类',
       icon: 'none'
     })
-    return
+    return false
   }
 
   if (formData.value.treatInputMode === 'EXACT_KCAL' && !formData.value.manualTreatKcal) {
@@ -4585,7 +4970,7 @@ function submit() {
       title: '精确模式需填写零食能量',
       icon: 'none'
     })
-    return
+    return false
   }
 
   // Check if we're in edit mode (use dogId ref)
@@ -4594,29 +4979,10 @@ function submit() {
   uni.showLoading({ title: isEditModeValue ? '保存中...' : '创建中...' })
 
   const payload: any = {
-    name,
-    breedId,
-    customBreedName: formData.value.customBreedName || null,
-    birthday: new Date(birthday).toISOString(),
-    gender: formData.value.gender,
-    isNeutered: formData.value.isNeutered,
-    currentWeightKg: parseFloat(currentWeightKg),
-    bcsScore: formData.value.bcsScore,
-    activityLevel: formData.value.activityLevel,
-    lifeStageOverride: formData.value.lifeStageOverride,
-    sizeClassOverride: formData.value.sizeClassOverride,
-    mealsPerDay: parseInt(formData.value.mealsPerDay) || 2,
-    treatInputMode: formData.value.treatInputMode || 'ESTIMATE_LEVEL',
-    treatLevel: formData.value.treatLevel,
+    ...buildDogCreatePayload(formData.value),
     medicalRecords: formData.value.medicalRecords || [],
     checkupRecords: formData.value.checkupRecords || [],
     allergyRecords: formData.value.allergyRecords || [],
-    allergyFoods: formData.value.allergyFoods || null,
-    pickyFoods: formData.value.pickyFoods || null
-  }
-
-  if (formData.value.treatInputMode === 'EXACT_KCAL') {
-    payload.manualTreatKcal = parseFloat(formData.value.manualTreatKcal)
   }
 
   // Debug log: Show submit payload
@@ -4632,7 +4998,8 @@ function submit() {
     data: payload
   }
 
-  request(requestConfig).then((res: any) => {
+  try {
+    const res: any = await request(requestConfig)
     console.log('[DogCreate] Submit response:', res)
     if (res.code === 0 && res.data) {
       const updatedDog = res.data.profile || res.data
@@ -4647,7 +5014,7 @@ function submit() {
           icon: 'none',
           duration: 2000
         })
-        return
+        return false
       }
 
       console.info(`[DogCreate] Dog ${isEditModeValue ? 'updated' : 'created'} successfully: id=${resultDogId}, name=${updatedDog.name}`)
@@ -4658,6 +5025,7 @@ function submit() {
       } else {
         uni.setStorageSync('dogId', resultDogId)
         addDogToCache(updatedDog)
+        clearCreateDraft()
       }
 
       uni.showToast({
@@ -4681,6 +5049,7 @@ function submit() {
           })
         }
       }, 1500)
+      return true
     } else {
       const errorMsg = res.message || (isEditModeValue ? '保存失败' : '创建失败')
       console.error('[DogCreate] API error:', res.code, errorMsg)
@@ -4689,9 +5058,9 @@ function submit() {
         icon: 'none',
         duration: 2000
       })
+      return false
     }
-  })
-  .catch((err: any) => {
+  } catch (err: any) {
     const errMsg = err?.message || String(err) || '网络错误'
     console.error('[DogCreate]', isEditModeValue ? 'Update' : 'Create', 'dog error:', err)
 
@@ -4707,10 +5076,10 @@ function submit() {
       icon: 'none',
       duration: 2000
     })
-  })
-  .finally(() => {
+    return false
+  } finally {
     uni.hideLoading()
-  })
+  }
 }
 </script>
 
@@ -4724,6 +5093,40 @@ function submit() {
   background-color: #fff;
   padding: 30rpx;
   border-radius: 8rpx;
+}
+
+.wizard-step-header {
+  margin-bottom: 8rpx;
+}
+
+.wizard-recommendation-section {
+  display: flex;
+  flex-direction: column;
+  gap: 24rpx;
+}
+
+.wizard-recommendation-actions {
+  display: flex;
+  gap: 18rpx;
+}
+
+.wizard-inline-button {
+  flex: 1;
+}
+
+.btn-link {
+  color: #0f6b43;
+  background: rgba(15, 107, 67, 0.08);
+}
+
+.wizard-skip-note {
+  margin-top: 20rpx;
+  padding: 22rpx 24rpx;
+  border-radius: 20rpx;
+  background: #f7fafb;
+  font-size: 24rpx;
+  line-height: 1.6;
+  color: #6d7b86;
 }
 
 .loading-notice {

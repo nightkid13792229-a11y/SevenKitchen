@@ -3,8 +3,10 @@ import {
   buildDogCreatePayload,
   buildOverviewTaskCards,
   getCreateStepAvailability,
+  getNextCreateStep,
   getRecommendationDirtyFields,
   resolveDogProfileEntryRoute,
+  shouldAutoPreviewRecommendation,
 } from './dog-profile-form'
 
 const MIXED_BREED_VIRTUAL_ID = '00000000-0000-0000-0000-000000000000'
@@ -103,6 +105,18 @@ describe('dog-profile-form', () => {
         activityLevel: 'NORMAL',
       }).recommendation,
     ).toBe(true)
+  })
+
+  it('advances feeding to the recommendation step in create mode', () => {
+    expect(getNextCreateStep('feeding')).toBe('recommendation')
+  })
+
+  it('auto previews when calculation-related fields change', () => {
+    expect(shouldAutoPreviewRecommendation(['currentWeightKg'])).toBe(true)
+  })
+
+  it('does not auto preview for non-calculation dirty fields', () => {
+    expect(shouldAutoPreviewRecommendation(['allergyFoods'])).toBe(false)
   })
 
   it('keeps recommendation locked for mixed breed without size class override', () => {

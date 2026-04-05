@@ -20,6 +20,12 @@
       }
     },
     {
+      "path": "pages/dog-profile-overview/index",
+      "style": {
+        "navigationBarTitleText": "爱犬概览"
+      }
+    },
+    {
       "path": "pages/dog-create/index",
       "style": {
         "navigationBarTitleText": "创建狗狗档案"

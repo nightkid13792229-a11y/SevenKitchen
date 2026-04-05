@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildDogCreatePayload,
+  buildOverviewTaskCards,
   getCreateStepAvailability,
   getRecommendationDirtyFields,
+  resolveDogProfileEntryRoute,
 } from './dog-profile-form'
 
 const MIXED_BREED_VIRTUAL_ID = '00000000-0000-0000-0000-000000000000'
@@ -24,6 +26,31 @@ describe('dog-profile-form', () => {
         { lifeStageOverride: 'ADULT', sizeClassOverride: 'MEDIUM' },
       ),
     ).toEqual(['lifeStageOverride', 'sizeClassOverride'])
+  })
+
+  it('routes existing dogs through the overview page', () => {
+    expect(resolveDogProfileEntryRoute('dog-1')).toBe(
+      '/pages/dog-profile-overview/index?dogId=dog-1',
+    )
+  })
+
+  it('routes create entry to the dog create page', () => {
+    expect(resolveDogProfileEntryRoute()).toBe('/pages/dog-create/index')
+  })
+
+  it('marks feeding as stale when the current weight changes', () => {
+    const cards = buildOverviewTaskCards({
+      profile: {
+        currentWeightKg: 11,
+        activityLevel: 'NORMAL',
+        mealsPerDay: 2,
+        treatInputMode: 'ESTIMATE_LEVEL',
+      },
+      dirtyFields: ['currentWeightKg'],
+      healthCount: 0,
+    })
+
+    expect(cards.find(card => card.key === 'feeding')?.status).toBe('stale')
   })
 
   it('unlocks recommendation after feeding fields are complete', () => {

@@ -9,6 +9,8 @@ export const DOG_PROFILE_RECOMMENDATION_FIELDS = [
   'bcsScore',
   'activityLevel',
   'isNeutered',
+  'lifeStageOverride',
+  'sizeClassOverride',
   'mealsPerDay',
   'treatInputMode',
   'treatLevel',

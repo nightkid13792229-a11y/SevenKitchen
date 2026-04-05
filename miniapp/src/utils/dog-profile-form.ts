@@ -71,6 +71,24 @@ function parseNonNegativeNumber(value: unknown) {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : null
 }
 
+function parseValidWeight(value: unknown) {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value > 0 && value <= 200 ? value : null
+  }
+
+  if (typeof value !== 'string') {
+    return null
+  }
+
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return null
+  }
+
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) && parsed > 0 && parsed <= 200 ? parsed : null
+}
+
 function hasAnyDirtyField(dirtyFields: string[] | undefined, fields: readonly string[]) {
   if (!Array.isArray(dirtyFields) || dirtyFields.length === 0) {
     return false
@@ -167,10 +185,11 @@ export function buildOverviewTaskCards({
   const createStepAvailability = getCreateStepAvailability(profile)
   const needsSizeClassOverride = profile?.breedId === MIXED_BREED_VIRTUAL_ID
   const needsManualTreatKcal = profile?.treatInputMode === 'EXACT_KCAL'
+  const hasValidWeight = parseValidWeight(profile?.currentWeightKg) !== null
   const hasValidManualTreatKcal = parseNonNegativeNumber(profile?.manualTreatKcal) !== null
   const feedingReady = Boolean(
     createStepAvailability.feeding &&
-    hasValue(profile?.currentWeightKg) &&
+    hasValidWeight &&
     hasValue(profile?.activityLevel) &&
     hasValue(profile?.mealsPerDay) &&
     (!needsSizeClassOverride || hasValue(profile?.sizeClassOverride)) &&
@@ -232,10 +251,11 @@ export function getCreateStepAvailability(form: Record<string, any>): DogProfile
   const feeding = basic
   const needsSizeClassOverride = form.breedId === MIXED_BREED_VIRTUAL_ID
   const needsManualTreatKcal = form.treatInputMode === 'EXACT_KCAL'
+  const hasValidWeight = parseValidWeight(form.currentWeightKg) !== null
   const hasValidManualTreatKcal = parseNonNegativeNumber(form.manualTreatKcal) !== null
   const recommendation = Boolean(
     basic &&
-    hasValue(form.currentWeightKg) &&
+    hasValidWeight &&
     hasValue(form.activityLevel) &&
     (!needsSizeClassOverride || hasValue(form.sizeClassOverride)) &&
     (!needsManualTreatKcal || hasValidManualTreatKcal),
@@ -249,7 +269,7 @@ export function buildDogCreatePayload(form: Record<string, any>) {
   const payload: Record<string, any> = {
     ...form,
     birthday: new Date(form.birthday).toISOString(),
-    currentWeightKg: parseFloat(form.currentWeightKg),
+    currentWeightKg: parseValidWeight(form.currentWeightKg) ?? parseFloat(form.currentWeightKg),
     mealsPerDay: parseInt(form.mealsPerDay, 10) || 2,
     treatInputMode,
     customBreedName: normalizeOptionalText(form.customBreedName),

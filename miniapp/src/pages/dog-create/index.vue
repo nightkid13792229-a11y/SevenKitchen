@@ -1654,12 +1654,28 @@ const hasValidManualTreatKcal = computed(() => (
   formData.value.treatInputMode !== 'EXACT_KCAL' || parsedManualTreatKcal.value !== null
 ))
 
+const parsedCurrentWeightKg = computed(() => {
+  if (typeof formData.value.currentWeightKg !== 'string') {
+    return null
+  }
+
+  const trimmed = formData.value.currentWeightKg.trim()
+  if (!trimmed) {
+    return null
+  }
+
+  const parsed = Number(trimmed)
+  return Number.isFinite(parsed) && parsed > 0 && parsed <= 200 ? parsed : null
+})
+
+const hasValidCurrentWeightKg = computed(() => parsedCurrentWeightKg.value !== null)
+
 const canSubmit = computed(() => {
   return Boolean(
     formData.value.name &&
     formData.value.breedId &&
     formData.value.birthday &&
-    formData.value.currentWeightKg &&
+    hasValidCurrentWeightKg.value &&
     formData.value.activityLevel &&
     !calculating.value &&
     hasValidManualTreatKcal.value &&
@@ -1671,7 +1687,7 @@ const canPreview = computed(() => {
   return Boolean(
     formData.value.breedId &&
     formData.value.birthday &&
-    formData.value.currentWeightKg &&
+    hasValidCurrentWeightKg.value &&
     !calculating.value &&
     hasValidManualTreatKcal.value &&
     (isMixedBreed.value ? formData.value.sizeClassOverride !== null : true)
@@ -4048,6 +4064,9 @@ async function previewCalculation(options?: { silent?: boolean }) {
   // Only calculate if we have minimum required fields
   // Silently return if not ready - don't show error to user
   if (!canPreview.value) {
+    if (!options?.silent && !hasValidCurrentWeightKg.value) {
+      showInvalidWeightToast()
+    }
     if (!options?.silent && !hasValidManualTreatKcal.value) {
       showInvalidManualTreatKcalToast()
     }
@@ -4061,7 +4080,7 @@ async function previewCalculation(options?: { silent?: boolean }) {
       birthday: new Date(formData.value.birthday).toISOString(),
       gender: formData.value.gender,
       isNeutered: formData.value.isNeutered,
-      currentWeightKg: parseFloat(formData.value.currentWeightKg),
+      currentWeightKg: parsedCurrentWeightKg.value,
       bcsScore: formData.value.bcsScore,
       activityLevel: formData.value.activityLevel,
       lifeStageOverride: formData.value.lifeStageOverride,
@@ -4189,6 +4208,14 @@ function showCreateStepBlockedToast(step: DogProfileCreateStep) {
 function showInvalidManualTreatKcalToast() {
   uni.showToast({
     title: '精确模式需填写有效零食能量',
+    icon: 'none',
+    duration: 2000,
+  })
+}
+
+function showInvalidWeightToast() {
+  uni.showToast({
+    title: '请输入有效的体重(0.1-200kg)',
     icon: 'none',
     duration: 2000,
   })
@@ -4980,12 +5007,8 @@ async function submit() {
   }
 
   // Validate weight is a valid number
-  const weight = parseFloat(currentWeightKg)
-  if (isNaN(weight) || weight <= 0 || weight > 200) {
-    uni.showToast({
-      title: '请输入有效的体重(0.1-200kg)',
-      icon: 'none'
-    })
+  if (!hasValidCurrentWeightKg.value) {
+    showInvalidWeightToast()
     return false
   }
 

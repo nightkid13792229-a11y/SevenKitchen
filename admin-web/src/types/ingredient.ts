@@ -2,38 +2,43 @@
  * 原料相关类型定义
  */
 
-// 原料类型枚举
-export enum IngredientType {
-  FOOD = 'FOOD',           // 食材
-  SUPPLEMENT = 'SUPPLEMENT', // 补剂
-  PACKAGING = 'PACKAGING'   // 包装材料
-}
+export const IngredientType = {
+  FOOD: 'FOOD',
+  SUPPLEMENT: 'SUPPLEMENT',
+  PACKAGING: 'PACKAGING'
+} as const
 
-// 基准单位枚举
-export enum BaseUnit {
-  G = 'G',     // 克
-  ML = 'ML',   // 毫升
-  PCS = 'PCS'  // 个/件
-}
+export type IngredientType = (typeof IngredientType)[keyof typeof IngredientType]
 
-// 补剂分类枚举
-export enum SupplementCategoryType {
-  MINERAL = 'MINERAL',           // 矿物质
-  VITAMIN = 'VITAMIN',           // 维生素
-  AMINO_ACID = 'AMINO_ACID',     // 氨基酸
-  FATTY_ACID = 'FATTY_ACID',     // 脂肪酸
-  PROBIOTIC = 'PROBIOTIC',       // 益生菌
-  FUNCTIONAL = 'FUNCTIONAL',     // 功能性成分
-  OTHER = 'OTHER'                // 其他
-}
+export const BaseUnit = {
+  G: 'G',
+  ML: 'ML',
+  PCS: 'PCS'
+} as const
 
-// 补剂添加时机枚举
-export enum SupplementAddTiming {
-  BEFORE_MIXING = 'BEFORE_MIXING',     // 制作中（须拌匀）
-  BEFORE_MEAL = 'BEFORE_MEAL'          // 饭前（冷却后）
-}
+export type BaseUnit = (typeof BaseUnit)[keyof typeof BaseUnit]
 
-// 类型标签映射
+export const SupplementCategoryType = {
+  MINERAL: 'MINERAL',
+  VITAMIN: 'VITAMIN',
+  AMINO_ACID: 'AMINO_ACID',
+  FATTY_ACID: 'FATTY_ACID',
+  PROBIOTIC: 'PROBIOTIC',
+  FUNCTIONAL: 'FUNCTIONAL',
+  OTHER: 'OTHER'
+} as const
+
+export type SupplementCategoryType =
+  (typeof SupplementCategoryType)[keyof typeof SupplementCategoryType]
+
+export const SupplementAddTiming = {
+  BEFORE_MIXING: 'BEFORE_MIXING',
+  BEFORE_MEAL: 'BEFORE_MEAL'
+} as const
+
+export type SupplementAddTiming =
+  (typeof SupplementAddTiming)[keyof typeof SupplementAddTiming]
+
 export const IngredientTypeLabels: Record<IngredientType, string> = {
   [IngredientType.FOOD]: '食材',
   [IngredientType.SUPPLEMENT]: '补剂',
@@ -61,44 +66,38 @@ export const SupplementAddTimingLabels: Record<SupplementAddTiming, string> = {
   [SupplementAddTiming.BEFORE_MEAL]: '饭前（冷却后）'
 }
 
-// 食材属性
 export interface FoodProperties {
-  cfct_class: string              // CFCT分类 (e.g. "畜肉类", "蔬菜类")
-  edible_yield_rate: number       // 可食部/出肉率 (0.1-1.0)
-  main_nutrients_desc: string     // 主要营养价值
-  density_g_per_ml?: number       // 密度- 仅当 base_unit == 'ML' 时必需
+  cfct_class: string
+  edible_yield_rate: number
+  main_nutrients_desc: string
+  density_g_per_ml?: number
 }
 
-// 有效成分含量值（包含数值和单位）
 export interface ActiveNutrientValue {
-  value: number  // 显示的数值（原始输入值）
-  unit: string   // 单位 (mg, g, μg, IU, %)
+  value: number
+  unit: string
 }
 
-// 购买链接配置
 export interface PurchaseLinkConfig {
-  url: string                  // 购买链接URL
-  platform: 'TAOBAO' | 'JD' | 'PINDUODUO' | 'OTHER' | 'WEBVIEW'  // 平台类型
-  mini_program_appid?: string  // 小程序appid（跳转小程序时必需）
-  mini_program_path?: string   // 小程序路径（跳转小程序时必需）
+  url: string
+  platform: 'TAOBAO' | 'JD' | 'PINDUODUO' | 'OTHER' | 'WEBVIEW'
+  mini_program_appid?: string
+  mini_program_path?: string
 }
 
-// 补剂属性
 export interface SupplementProperties {
-  category_type: string                                    // 营养分类
-  add_timing?: string                                      // 添加时机
-  active_nutrients: Record<string, ActiveNutrientValue>   // 有效成分浓度表（保存原始值和单位）
-  production_loss_rate?: number                            // 个性化损耗率
-  purchase_link?: PurchaseLinkConfig                       // 购买链接配置
+  category_type: string
+  add_timing?: string
+  active_nutrients: Record<string, ActiveNutrientValue>
+  production_loss_rate?: number
+  purchase_link?: PurchaseLinkConfig
 }
 
-// 包材属性
 export interface PackagingProperties {
-  is_consumable: boolean      // true=消耗品(随单扣减), false=固定资产
-  linked_item_id?: string     // 关联配件
+  is_consumable: boolean
+  linked_item_id?: string
 }
 
-// 原料实体
 export interface Ingredient {
   id: string
   name: string
@@ -112,38 +111,36 @@ export interface Ingredient {
   purchaseUnit: string
   purchaseToBaseRatio: number
   currentPricePerPurchaseUnit: number
-  unitCost: number  // 计算字段: price / ratio
+  unitCost: number
   weightG: number | null
   maxCapacityG: number | null
   properties: FoodProperties | SupplementProperties | PackagingProperties
-  tagIds: string[]  // 标签ID数组
-  stock?: number  // 库存占位符（MVP阶段）
+  tagIds: string[]
+  stock?: number
   createdAt: string
   updatedAt: string
 }
 
-// 表单数据类型
 export interface IngredientForm {
   id?: string
   name: string
   type: IngredientType
-  brand?: string
-  productModel?: string
-  purchaseChannel?: string
-  notes?: string
+  brand?: string | null
+  productModel?: string | null
+  purchaseChannel?: string | null
+  notes?: string | null
   baseUnit: BaseUnit
-  unitDisplayLabel?: string
+  unitDisplayLabel?: string | null
   purchaseUnit: string
   purchaseToBaseRatio: number
   currentPricePerPurchaseUnit: number
-  weightG?: number
-  maxCapacityG?: number
+  weightG?: number | null
+  maxCapacityG?: number | null
   properties: FoodProperties | SupplementProperties | PackagingProperties
-  tagIds?: string[]  // 标签ID数组
-  tags?: any[]  // 标签完整信息（用于显示）
+  tagIds?: string[]
+  tags?: any[]
 }
 
-// CFCT分类选项（基于 WS/T 464-2015《食物成分数据表达规范》）
 export const CFCT_CLASS_OPTIONS = [
   '谷类及制品',
   '薯类及制品',
@@ -162,7 +159,6 @@ export const CFCT_CLASS_OPTIONS = [
   '其他'
 ]
 
-// 推荐产品
 export interface RecommendedProduct {
   id: string
   ingredientId: string

@@ -347,15 +347,56 @@ import {
   DogSizeCategory,
   TreatInputMode,
   TreatLevel,
-  ActivityLevelLabels,
   LifeStageLabels,
   DogSizeLabels,
   MIXED_BREED_VIRTUAL_ID,
-  type DogProfile,
   type DogBreed,
-  type DogDetailResponse,
   type DogCalcResult
 } from '@/types/dog'
+
+interface DogFormData {
+  ownerId: string
+  name: string
+  breedId: string
+  customBreedName: string
+  birthday: string
+  gender: DogGender
+  isNeutered: boolean
+  currentWeightKg: number
+  bcsScore: number
+  activityLevel: ActivityLevel
+  lifeStageOverride: LifeStageOverride
+  sizeClassOverride: DogSizeCategory | null
+  mealsPerDay: number
+  treatInputMode: TreatInputMode
+  treatLevel: TreatLevel
+  manualTreatKcal: number | null
+  medicalHistory: string
+  allergyFoods: string
+  pickyFoods: string
+}
+
+const createDefaultFormData = (): DogFormData => ({
+  ownerId: '',
+  name: '',
+  breedId: '',
+  customBreedName: '',
+  birthday: '',
+  gender: DogGender.MALE,
+  isNeutered: false,
+  currentWeightKg: 10.0,
+  bcsScore: 5,
+  activityLevel: ActivityLevel.NORMAL,
+  lifeStageOverride: LifeStageOverride.NONE,
+  sizeClassOverride: null,
+  mealsPerDay: 2,
+  treatInputMode: TreatInputMode.ESTIMATE_LEVEL,
+  treatLevel: TreatLevel.LOW,
+  manualTreatKcal: null,
+  medicalHistory: '',
+  allergyFoods: '',
+  pickyFoods: ''
+})
 
 // Common breeds for quick selection
 const DEFAULT_COMMON_BREEDS = [
@@ -442,27 +483,7 @@ const formRef = ref<FormInstance>()
 const breeds = ref<DogBreed[]>([])
 const calcResult = ref<DogCalcResult | null>(null)
 
-const formData = ref({
-  ownerId: '',
-  name: '',
-  breedId: '',
-  customBreedName: '',
-  birthday: '',
-  gender: DogGender.MALE,
-  isNeutered: false,
-  currentWeightKg: 10.0,
-  bcsScore: 5,
-  activityLevel: ActivityLevel.NORMAL,
-  lifeStageOverride: LifeStageOverride.NONE,
-  sizeClassOverride: null as DogSizeCategory | null,
-  mealsPerDay: 2,
-  treatInputMode: TreatInputMode.ESTIMATE_LEVEL,
-  treatLevel: TreatLevel.LOW,
-  manualTreatKcal: null as number | null,
-  medicalHistory: '',
-  allergyFoods: '',
-  pickyFoods: ''
-})
+const formData = ref<DogFormData>(createDefaultFormData())
 
 const formRules: FormRules = {
   name: [{ required: true, message: '请输入姓名', trigger: 'blur' }],

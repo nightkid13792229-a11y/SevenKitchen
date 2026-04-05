@@ -1,7 +1,6 @@
 import api from './index'
 import type {
   Order,
-  OrderListItem,
   OrderListParams,
   OrderListResponse,
   OrderStats,

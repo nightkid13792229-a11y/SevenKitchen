@@ -31,7 +31,6 @@
 import { computed } from 'vue'
 import { StarFilled } from '@element-plus/icons-vue'
 import type { DogBreed } from '@/types/breed'
-import { DogSizeCategory } from '@/types/breed'
 
 interface Props {
   allBreeds: DogBreed[]

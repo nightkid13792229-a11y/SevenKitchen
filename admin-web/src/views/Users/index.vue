@@ -47,17 +47,17 @@
         <el-table-column prop="nickname" label="昵称" width="150" />
         <el-table-column prop="role" label="角色" width="100">
           <template #default="{ row }">
-            <el-tag :type="UserRoleTagTypes[row.role]">
-              {{ UserRoleLabels[row.role] }}
+            <el-tag :type="getRoleTagType(row.role)">
+              {{ getRoleLabel(row.role) }}
             </el-tag>
           </template>
         </el-table-column>
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
             <el-tag
-              :type="row.status === UserStatus.ACTIVE ? 'success' : 'danger'"
+              :type="row.status === UserStatusEnum.ACTIVE ? 'success' : 'danger'"
             >
-              {{ UserStatusLabels[row.status] }}
+              {{ getUserStatusLabel(row.status) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -83,11 +83,11 @@
             </el-button>
             <el-button
               link
-              :type="row.status === UserStatus.ACTIVE ? 'warning' : 'success'"
+              :type="row.status === UserStatusEnum.ACTIVE ? 'warning' : 'success'"
               size="small"
               @click="handleToggleStatus(row)"
             >
-              {{ row.status === UserStatus.ACTIVE ? '禁用' : '启用' }}
+              {{ row.status === UserStatusEnum.ACTIVE ? '禁用' : '启用' }}
             </el-button>
             <el-button
               link
@@ -115,24 +115,28 @@
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Search } from '@element-plus/icons-vue'
-import type { User } from '@/types/user'
-import { UserRole, UserStatus, UserRoleLabels, UserStatusLabels, UserRoleTagTypes } from '@/types/user'
+import type { User, UserListParams, UserRole, UserStatus } from '@/types/user'
+import { UserStatus as UserStatusEnum, UserRoleLabels, UserStatusLabels, UserRoleTagTypes } from '@/types/user'
 import { userApi } from '@/api'
 import UserForm from './UserForm.vue'
 import { formatDateTime } from '@/utils/date'
 
-const activeRole = ref<string>('')
+const activeRole = ref<UserRole | ''>('')
 const searchKeyword = ref('')
 const users = ref<User[]>([])
 const loading = ref(false)
 const formVisible = ref(false)
 const currentUser = ref<User | undefined>(undefined)
 
+const getRoleTagType = (role: UserRole) => UserRoleTagTypes[role]
+const getRoleLabel = (role: UserRole) => UserRoleLabels[role]
+const getUserStatusLabel = (status: UserStatus) => UserStatusLabels[status]
+
 // Load users list
 const loadUsers = async () => {
   loading.value = true
   try {
-    const params: any = {}
+    const params: UserListParams = {}
     if (activeRole.value) {
       params.role = activeRole.value
     }
@@ -166,7 +170,7 @@ const handleEdit = (user: User) => {
 
 // Handle toggle user status
 const handleToggleStatus = async (user: User) => {
-  const action = user.status === UserStatus.ACTIVE ? '禁用' : '启用'
+  const action = user.status === UserStatusEnum.ACTIVE ? '禁用' : '启用'
   try {
     await ElMessageBox.confirm(
       `确认要${action}用户 "${user.nickname}" 吗？`,
@@ -178,7 +182,8 @@ const handleToggleStatus = async (user: User) => {
       }
     )
 
-    const newStatus = user.status === UserStatus.ACTIVE ? UserStatus.BANNED : UserStatus.ACTIVE
+    const newStatus =
+      user.status === UserStatusEnum.ACTIVE ? UserStatusEnum.BANNED : UserStatusEnum.ACTIVE
     await userApi.update(user.id, { status: newStatus })
     ElMessage.success(`${action}成功`)
     loadUsers()

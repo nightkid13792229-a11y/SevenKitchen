@@ -39,12 +39,14 @@ interface Props {
 const props = defineProps<Props>()
 
 const timelineItems = computed(() => {
-  return props.history.sort((a, b) => {
+  return [...props.history].sort((a, b) => {
     return new Date(b.operatedAt).getTime() - new Date(a.operatedAt).getTime()
   })
 })
 
-const formatTime = (time: Date) => {
+const formatTime = (time: string | null | undefined) => {
+  if (!time) return '-'
+
   return new Date(time).toLocaleString('zh-CN', {
     year: 'numeric',
     month: '2-digit',
@@ -61,13 +63,13 @@ const getStatusText = (status: OrderStatus) => {
     INIT: '订单创建',
     PENDING_PAYMENT: '待付款',
     PAID: '已付款',
-    PURCHASING: '生产中（内部）',
-    IN_PRODUCTION: '生产中（内部）',
-    READY_FOR_PACKAGING: '包装中（内部）',
-    READY_FOR_SHIPMENT: '急冻中待发货',
+    PURCHASING: '待采购',
+    IN_PRODUCTION: '制作中',
+    FREEZING: '急冻中待发货',
     SHIPPED: '已发货',
     COMPLETED: '已完成',
-    CANCELLED: '已取消'
+    CANCELLED: '已取消',
+    AFTERSALE: '售后中'
   }
   return statusMap[status] || status
 }
@@ -79,11 +81,11 @@ const getTimelineType = (status: OrderStatus): 'primary' | 'success' | 'warning'
     PAID: 'success',
     PURCHASING: 'primary',
     IN_PRODUCTION: 'primary',
-    READY_FOR_PACKAGING: 'primary',
-    READY_FOR_SHIPMENT: 'primary',
+    FREEZING: 'warning',
     SHIPPED: 'info',
     COMPLETED: 'success',
-    CANCELLED: 'danger'
+    CANCELLED: 'danger',
+    AFTERSALE: 'danger'
   }
   return typeMap[status] || 'info'
 }

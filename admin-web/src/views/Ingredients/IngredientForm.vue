@@ -420,7 +420,7 @@
               <el-select
                 v-model="nutrient.unit"
                 style="width: 120px"
-                @change="(val: string) => calculateConcentration(nutrient, nutrient.displayValue)"
+                @change="() => calculateConcentration(nutrient, nutrient.displayValue)"
               >
                 <el-option
                   v-for="unit in NUTRIENT_UNITS"
@@ -671,7 +671,7 @@
 import { ref, reactive, watch, computed, onMounted, nextTick } from 'vue'
 import type { FormInstance, FormRules } from 'element-plus'
 import { ElMessage } from 'element-plus'
-import { Plus, CircleCheck, Delete } from '@element-plus/icons-vue'
+import { Plus, Delete } from '@element-plus/icons-vue'
 import { ingredientTagApi, type IngredientTag, type CreateTagDto } from '@/api/ingredientTags'
 import { ingredientApi } from '@/api/ingredients'
 import type { Ingredient } from '@/types/ingredient'
@@ -680,14 +680,13 @@ import {
   BaseUnit,
   SupplementCategoryType,
   SupplementAddTiming,
-  IngredientTypeLabels,
   BaseUnitLabels,
-  SupplementAddTimingLabels,
   CFCT_CLASS_OPTIONS,
   type IngredientForm,
   type FoodProperties,
   type SupplementProperties,
   type PackagingProperties,
+  type PurchaseLinkConfig,
   type RecommendedProduct,
   type RecommendedProductForm
 } from '@/types/ingredient'
@@ -794,15 +793,21 @@ const formData = reactive<IngredientForm>({
 
 // 类型特定属性
 const foodProperties = reactive<FoodProperties>(
-  (formData.type === IngredientType.FOOD ? formData.properties : getDefaultFoodProperties())
+  (formData.type === IngredientType.FOOD
+    ? formData.properties
+    : getDefaultFoodProperties()) as FoodProperties
 )
 
 const supplementProperties = reactive<SupplementProperties>(
-  (formData.type === IngredientType.SUPPLEMENT ? formData.properties : getDefaultSupplementProperties())
+  (formData.type === IngredientType.SUPPLEMENT
+    ? formData.properties
+    : getDefaultSupplementProperties()) as SupplementProperties
 )
 
 const packagingProperties = reactive<PackagingProperties>(
-  (formData.type === IngredientType.PACKAGING ? formData.properties : getDefaultPackagingProperties())
+  (formData.type === IngredientType.PACKAGING
+    ? formData.properties
+    : getDefaultPackagingProperties()) as PackagingProperties
 )
 
 // 购买链接配置
@@ -1131,27 +1136,30 @@ const calculateSimilarity = (str1: string, str2: string): number => {
   if (len1 === 0) return len2 === 0 ? 1 : 0
   if (len2 === 0) return 0
 
-  const matrix: number[][] = []
+  const matrix = Array.from({ length: len1 + 1 }, () =>
+    Array<number>(len2 + 1).fill(0)
+  )
+
   for (let i = 0; i <= len1; i++) {
-    matrix[i] = [i]
+    matrix[i]![0] = i
   }
   for (let j = 0; j <= len2; j++) {
-    matrix[0][j] = j
+    matrix[0]![j] = j
   }
 
   for (let i = 1; i <= len1; i++) {
     for (let j = 1; j <= len2; j++) {
       const cost = str1[i - 1] === str2[j - 1] ? 0 : 1
-      matrix[i][j] = Math.min(
-        matrix[i - 1][j] + 1,
-        matrix[i][j - 1] + 1,
-        matrix[i - 1][j - 1] + cost
+      matrix[i]![j] = Math.min(
+        matrix[i - 1]![j]! + 1,
+        matrix[i]![j - 1]! + 1,
+        matrix[i - 1]![j - 1]! + cost
       )
     }
   }
 
   const maxLen = Math.max(len1, len2)
-  return 1 - matrix[len1][len2] / maxLen
+  return 1 - matrix[len1]![len2]! / maxLen
 }
 
 // 查询原料（支持拼音首字母搜索）
@@ -1226,7 +1234,7 @@ const handleIngredientInput = (value: string) => {
 }
 
 // 处理原料选择
-const handleIngredientSelect = (item: any) => {
+const handleIngredientSelect = (_item: any) => {
   similarIngredients.value = []
 }
 
@@ -1299,7 +1307,7 @@ const handleUnitInput = (value: string) => {
 }
 
 // 处理单位选择
-const handleUnitSelect = (item: any) => {
+const handleUnitSelect = (_item: any) => {
   similarUnits.value = []
 }
 
@@ -1653,7 +1661,7 @@ const formRules: FormRules = {
       min: 0.1,
       message: '单个重量必须大于0',
       trigger: 'blur',
-      validator: (rule, value, callback) => {
+      validator: (_rule, value, callback) => {
         // ✅ 方案A: 只有包材类型的PCS才强制要求weightG
         if (formData.type === IngredientType.PACKAGING &&
             formData.baseUnit === BaseUnit.PCS &&

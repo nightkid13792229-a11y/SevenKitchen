@@ -235,8 +235,15 @@ const handleSubmit = async (data: CreateTagDto | UpdateTagDto) => {
       await ingredientTagApi.update(currentTag.value.id, data)
       ElMessage.success('更新成功')
     } else {
+      if (!data.name) {
+        ElMessage.warning('请输入标签名称')
+        return
+      }
       const tagData: CreateTagDto = {
-        ...data,
+        name: data.name,
+        description: data.description,
+        sort: data.sort,
+        color: data.color,
         parentId: parentTagId.value ?? data.parentId
       }
       await ingredientTagApi.create(tagData)

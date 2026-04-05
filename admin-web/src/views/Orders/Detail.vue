@@ -258,13 +258,12 @@
             />
           </template>
 
-          <!-- 内部生产状态（PURCHASING, IN_PRODUCTION, READY_FOR_PACKAGING） -->
+          <!-- 内部生产状态（PURCHASING, IN_PRODUCTION, FREEZING） -->
           <!-- 生产批次系统自动流转，管理员无需操作 -->
           <template
             v-else-if="
               order.status === OrderStatusEnum.PURCHASING ||
-              order.status === OrderStatusEnum.IN_PRODUCTION ||
-              order.status === OrderStatusEnum.READY_FOR_PACKAGING
+              order.status === OrderStatusEnum.IN_PRODUCTION
             "
           >
             <el-button type="danger" @click="handleCancelOrder">取消订单</el-button>
@@ -276,8 +275,8 @@
             />
           </template>
 
-          <!-- READY_FOR_SHIPMENT状态：可以发货 -->
-          <template v-else-if="order.status === OrderStatusEnum.READY_FOR_SHIPMENT">
+          <!-- FREEZING状态：可以发货 -->
+          <template v-else-if="order.status === OrderStatusEnum.FREEZING">
             <el-button type="primary" @click="handleShip">发货</el-button>
             <el-button type="danger" @click="handleCancelOrder">取消订单</el-button>
           </template>
@@ -414,12 +413,9 @@ const getStepActive = () => {
   if (status === OrderStatusEnum.COMPLETED) return 4
   if (status === OrderStatusEnum.SHIPPED) return 3
   if (
-    [
-      OrderStatusEnum.READY_FOR_SHIPMENT,
-      OrderStatusEnum.READY_FOR_PACKAGING,
-      OrderStatusEnum.IN_PRODUCTION,
-      OrderStatusEnum.PURCHASING
-    ].includes(status)
+    status === OrderStatusEnum.FREEZING ||
+    status === OrderStatusEnum.IN_PRODUCTION ||
+    status === OrderStatusEnum.PURCHASING
   ) {
     return 1
   }
@@ -436,9 +432,9 @@ const getProductionDescription = () => {
 
   const status = order.value.status
 
-  if (status === OrderStatusEnum.PURCHASING) return '待生产'
+  if (status === OrderStatusEnum.PURCHASING) return '待采购'
   if (status === OrderStatusEnum.IN_PRODUCTION) return '生产中'
-  if (status === OrderStatusEnum.READY_FOR_PACKAGING) return '包装中'
+  if (status === OrderStatusEnum.FREEZING) return '急冻中待发货'
 
   return ''
 }
@@ -449,7 +445,8 @@ const goBack = () => {
 }
 
 // 格式化时间
-const formatTime = (time: Date) => {
+const formatTime = (time: string | null | undefined) => {
+  if (!time) return '-'
   return new Date(time).toLocaleString('zh-CN', {
     year: 'numeric',
     month: '2-digit',
@@ -461,7 +458,8 @@ const formatTime = (time: Date) => {
   })
 }
 
-const formatDate = (date: Date) => {
+const formatDate = (date: string | null | undefined) => {
+  if (!date) return '-'
   return new Date(date).toLocaleDateString('zh-CN')
 }
 
@@ -473,11 +471,11 @@ const getStatusType = (status: OrderStatus) => {
     PAID: 'success',
     PURCHASING: 'primary',
     IN_PRODUCTION: 'primary',
-    READY_FOR_PACKAGING: 'primary',
-    READY_FOR_SHIPMENT: 'primary',
+    FREEZING: 'warning',
     SHIPPED: 'info',
     COMPLETED: 'success',
-    CANCELLED: 'danger'
+    CANCELLED: 'danger',
+    AFTERSALE: 'danger'
   }
   return typeMap[status] || ''
 }
@@ -488,13 +486,13 @@ const getStatusText = (status: OrderStatus) => {
     INIT: '订单创建',
     PENDING_PAYMENT: '待付款',
     PAID: '已付款',
-    PURCHASING: '待生产',
+    PURCHASING: '待采购',
     IN_PRODUCTION: '生产中',
-    READY_FOR_PACKAGING: '包装中',
-    READY_FOR_SHIPMENT: '急冻中待发货',
+    FREEZING: '急冻中待发货',
     SHIPPED: '已发货',
     COMPLETED: '已完成',
-    CANCELLED: '已取消'
+    CANCELLED: '已取消',
+    AFTERSALE: '售后中'
   }
   return textMap[status] || status
 }

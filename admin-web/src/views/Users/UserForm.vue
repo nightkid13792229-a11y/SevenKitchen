@@ -124,6 +124,14 @@ const emit = defineEmits<Emits>()
 const formRef = ref<FormInstance>()
 const submitting = ref(false)
 
+interface UserFormState {
+  phone: string
+  nickname: string
+  department: 'KITCHEN' | 'PURCHASING' | 'SHIPPING'
+  status: UserStatus
+  role: UserRole
+}
+
 // 是否为编辑模式
 const isEditMode = computed(() => !!props.user)
 
@@ -134,13 +142,15 @@ const canChangeRole = computed(() => {
 })
 
 // 表单数据
-const formData = ref<CreateUserForm | UpdateUserForm>({
+const createDefaultFormData = (): UserFormState => ({
   phone: '',
   nickname: '',
   department: 'KITCHEN',
   status: UserStatus.ACTIVE,
   role: UserRole.STAFF,
 })
+
+const formData = ref<UserFormState>(createDefaultFormData())
 
 // 表单验证规则
 const formRules: FormRules = {
@@ -174,19 +184,15 @@ watch(
     if (user) {
       // 编辑模式：填充用户数据
       formData.value = {
+        phone: user.phone,
         nickname: user.nickname,
+        department: 'KITCHEN',
         status: user.status,
         role: user.role,
       }
     } else {
       // 创建模式：重置表单
-      formData.value = {
-        phone: '',
-        nickname: '',
-        department: 'KITCHEN',
-        status: UserStatus.ACTIVE,
-        role: UserRole.STAFF,
-      }
+      formData.value = createDefaultFormData()
     }
     formRef.value?.clearValidate()
   },
@@ -213,11 +219,21 @@ const handleSubmit = async () => {
 
     if (isEditMode.value) {
       // 编辑用户
-      await userApi.update(props.user!.id, formData.value as UpdateUserForm)
+      const updateData: UpdateUserForm = {
+        nickname: formData.value.nickname,
+        status: formData.value.status,
+        role: formData.value.role,
+      }
+      await userApi.update(props.user!.id, updateData)
       ElMessage.success('更新成功')
     } else {
       // 创建员工
-      await userApi.create(formData.value as CreateUserForm)
+      const createData: CreateUserForm = {
+        phone: formData.value.phone,
+        nickname: formData.value.nickname,
+        department: formData.value.department,
+      }
+      await userApi.create(createData)
       ElMessage.success('创建成功')
     }
 

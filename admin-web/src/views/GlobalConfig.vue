@@ -437,7 +437,15 @@ import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { Picture } from '@element-plus/icons-vue'
 import { globalConfigApi, type GlobalConfig, type EquipmentRecommendation } from '@/api/globalConfig'
-import { shippingTemplateApi, type ShippingTemplate, type CreateShippingTemplateDto, type ShippingFeeResult } from '@/api/shippingTemplates'
+import {
+  shippingTemplateApi,
+  type ShippingTemplate,
+  type CreateShippingTemplateDto,
+  type UpdateShippingTemplateDto,
+  type ShippingFeeResult
+} from '@/api/shippingTemplates'
+
+type EditableShippingTemplate = CreateShippingTemplateDto & { id?: string }
 
 const formRef = ref<FormInstance>()
 const loading = ref(false)
@@ -447,7 +455,7 @@ const saving = ref(false)
 const shippingTemplates = ref<ShippingTemplate[]>([])
 const templatesLoading = ref(false)
 const shippingTemplateDialogVisible = ref(false)
-const editingTemplate = ref<CreateShippingTemplateDto | null>(null)
+const editingTemplate = ref<EditableShippingTemplate | null>(null)
 const savingTemplate = ref(false)
 const previewDialogVisible = ref(false)
 const previewWeight = ref(1000)
@@ -576,7 +584,6 @@ const handleUploadPackageImage = () => {
   const input = document.createElement('input')
   input.type = 'file'
   input.accept = 'image/jpeg,image/png'
-  input.max = 2 * 1024 * 1024 // 2MB
 
   input.onchange = async (e: Event) => {
     const target = e.target as HTMLInputElement
@@ -634,7 +641,6 @@ const handleUploadShippingLogo = () => {
   const input = document.createElement('input')
   input.type = 'file'
   input.accept = 'image/jpeg,image/png'
-  input.max = 2 * 1024 * 1024 // 2MB
 
   input.onchange = async (e: Event) => {
     const target = e.target as HTMLInputElement
@@ -724,6 +730,7 @@ const handleCreateTemplate = () => {
 
 const handleEditTemplate = (template: ShippingTemplate) => {
   editingTemplate.value = {
+    id: template.id,
     name: template.name,
     baseWeightKg: template.baseWeightKg,
     baseFee: template.baseFee,
@@ -740,7 +747,16 @@ const handleSaveTemplate = async () => {
   savingTemplate.value = true
   try {
     if (editingTemplate.value.id) {
-      await shippingTemplateApi.update(editingTemplate.value.id, editingTemplate.value)
+      const updateData: UpdateShippingTemplateDto = {
+        name: editingTemplate.value.name,
+        baseWeightKg: editingTemplate.value.baseWeightKg,
+        baseFee: editingTemplate.value.baseFee,
+        stepWeightKg: editingTemplate.value.stepWeightKg,
+        stepFee: editingTemplate.value.stepFee,
+        vasFeePerOrder: editingTemplate.value.vasFeePerOrder,
+        isActive: editingTemplate.value.isActive,
+      }
+      await shippingTemplateApi.update(editingTemplate.value.id, updateData)
     } else {
       await shippingTemplateApi.create(editingTemplate.value as CreateShippingTemplateDto)
     }

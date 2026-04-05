@@ -199,7 +199,7 @@
                     <div class="row-cell ingredient-name">{{ item.ingredientName }}</div>
                     <div class="row-cell ingredient-type">
                       <el-tag :type="getTypeTagType(item.ingredientType)" size="small">
-                        {{ IngredientTypeLabels[item.ingredientType] || item.ingredientType }}
+                        {{ getIngredientTypeLabel(item.ingredientType) }}
                       </el-tag>
                     </div>
                     <div class="row-cell preparation-method">
@@ -513,7 +513,7 @@
                     💰 ¥{{ ingredient.currentPricePerPurchaseUnit }}/{{ ingredient.purchaseUnit }}
                   </span>
                   <span style="color: #909399">
-                    {{ IngredientTypeLabels[ingredient.type] || ingredient.type }}
+                    {{ getIngredientTypeLabel(ingredient.type) }}
                   </span>
                 </div>
               </div>
@@ -789,7 +789,7 @@ import { recipeApi } from '@/api/recipes';
 import { recipeHealthTagApi } from '@/api/recipeHealthTags';
 import { preparationMethodApi } from '@/api/preparationMethods';
 import { inventoryApi } from '@/api';
-import { IngredientTypeLabels } from '@/types/ingredient';
+import { IngredientType, IngredientTypeLabels } from '@/types/ingredient';
 import {
   RecipeStatus,
   NutritionStandard,
@@ -1014,14 +1014,15 @@ const newPreparationMethodName = ref('');
 const selectedPrepMethodsLocal = ref<Array<{ id: string; name: string }>>([]);
 let isSyncingFromLocal = false;
 
+const getIngredientTypeLabel = (type: string | undefined) => {
+  if (!type) return '-';
+  return IngredientTypeLabels[type as IngredientType] || type;
+};
+
 const unselectedPreparationMethods = computed(() => {
   const selectedIds = selectedPrepMethodsLocal.value.map(m => m.id);
   return preparationMethods.value.filter(m => !selectedIds.includes(m.id));
 });
-
-const getPreparationMethodName = (methodId: string) => {
-  return preparationMethods.value.find(m => m.id === methodId)?.name || methodId;
-};
 
 // Sync selectedPrepMethodsLocal from ingredientForm.preparationMethods (initial load and edit)
 watch(
@@ -1216,6 +1217,10 @@ const handleDetailImageUpload: UploadProps['beforeUpload'] = async (file) => {
 
 const removeDetailImage = async (index: number) => {
   const imageUrl = form.detailImages![index];
+  if (!imageUrl) {
+    form.detailImages?.splice(index, 1);
+    return;
+  }
 
   // 从URL中提取key (格式: https://bucket.cos.region.myqcloud.com/recipes/timestamp-random.ext)
   const match = imageUrl.match(/\/recipes\/(.+)$/);
@@ -1734,14 +1739,15 @@ const saveIngredient = () => {
 
 // 重新计算所有FOOD类型食材的占比
 const recalculateAllRatios = () => {
-  const foodItems = form.items.filter(
+  const items = form.items ?? [];
+  const foodItems = items.filter(
     (item: any) => item.ingredientType === 'FOOD' && item.exampleWeight !== undefined && item.exampleWeight !== null
   );
 
   const totalWeight = foodItems.reduce((sum: number, item: any) => sum + (item.exampleWeight || 0), 0);
 
   if (totalWeight > 0) {
-    form.items.forEach((item: any) => {
+    items.forEach((item: any) => {
       if (item.ingredientType === 'FOOD' && item.exampleWeight) {
         item.ratioPercent = (item.exampleWeight / totalWeight) * 100;
       }

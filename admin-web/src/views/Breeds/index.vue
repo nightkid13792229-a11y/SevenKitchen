@@ -67,7 +67,6 @@ const systemBreeds = ref<DogBreed[]>([])
 const systemBreedsLoading = ref(false)
 const customBreeds = ref<CustomBreedStats[]>([])
 const customBreedsLoading = ref(false)
-const commonBreedsManagerRef = ref<InstanceType<typeof CommonBreedsManager> | null>(null)
 
 const loadSystemBreeds = async () => {
   systemBreedsLoading.value = true

@@ -131,7 +131,7 @@
         <el-table-column prop="type" label="类型" width="100">
           <template #default="{ row }">
             <el-tag :type="getTypeTagType(row.type)">
-              {{ IngredientTypeLabels[row.type] }}
+              {{ getIngredientTypeLabel(row.type) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -262,8 +262,8 @@
       <div v-loading="loadingUsage">
         <div class="usage-header">
           <h3>{{ currentIngredientForUsage?.name }}</h3>
-          <el-tag :type="getTypeTagType(currentIngredientForUsage?.type || '')">
-            {{ IngredientTypeLabels[currentIngredientForUsage?.type || ''] }}
+          <el-tag :type="getTypeTagType(currentIngredientForUsage?.type)">
+            {{ getIngredientTypeLabel(currentIngredientForUsage?.type) }}
           </el-tag>
         </div>
 
@@ -330,9 +330,7 @@ import { Plus, Search, Refresh } from '@element-plus/icons-vue'
 import { ingredientApi } from '@/api/ingredients'
 import {
   IngredientType,
-  BaseUnit,
   IngredientTypeLabels,
-  BaseUnitLabels,
   type Ingredient,
   type IngredientForm
 } from '@/types/ingredient'
@@ -354,6 +352,11 @@ const usageDialogVisible = ref(false)
 const loadingUsage = ref(false)
 const currentIngredientForUsage = ref<Ingredient | null>(null)
 const usageRecipes = ref<any[]>([])
+
+const getIngredientTypeLabel = (type: IngredientType | '' | undefined) => {
+  if (!type) return '-'
+  return IngredientTypeLabels[type]
+}
 
 // Pagination
 const currentPage = ref(1)
@@ -649,7 +652,9 @@ const formatPrice = (price: number) => {
   return price.toFixed(2)
 }
 
-const getTypeTagType = (type: IngredientType) => {
+const getTypeTagType = (type: IngredientType | '' | undefined) => {
+  if (!type) return ''
+
   const typeMap: Record<IngredientType, any> = {
     [IngredientType.FOOD]: 'success',
     [IngredientType.SUPPLEMENT]: 'warning',

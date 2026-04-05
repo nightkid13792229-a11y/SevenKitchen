@@ -1,46 +1,39 @@
 /**
- * 订单状态枚举
- * Phase 9: E-commerce Standard Order Status
- * Aligned with backend OrderStatus enum
+ * 订单相关类型定义
  */
-export enum OrderStatus {
-  INIT = 'INIT',
-  PENDING_PAYMENT = 'PENDING_PAYMENT',
-  PAID = 'PAID',
-  PURCHASING = 'PURCHASING',
-  IN_PRODUCTION = 'IN_PRODUCTION',
-  FREEZING = 'FREEZING',
-  SHIPPED = 'SHIPPED',
-  COMPLETED = 'COMPLETED',
-  CANCELLED = 'CANCELLED',
-  AFTERSALE = 'AFTERSALE'
-}
 
-/**
- * 订单类型枚举
- */
-export enum OrderType {
-  FRESH_FOOD = 'FRESH_FOOD',
-  CUSTOM_SERVICE = 'CUSTOM_SERVICE'
-}
+export const OrderStatus = {
+  INIT: 'INIT',
+  PENDING_PAYMENT: 'PENDING_PAYMENT',
+  PAID: 'PAID',
+  PURCHASING: 'PURCHASING',
+  IN_PRODUCTION: 'IN_PRODUCTION',
+  FREEZING: 'FREEZING',
+  SHIPPED: 'SHIPPED',
+  COMPLETED: 'COMPLETED',
+  CANCELLED: 'CANCELLED',
+  AFTERSALE: 'AFTERSALE'
+} as const
 
-/**
- * 支付状态枚举
- */
-export enum PaymentStatus {
-  PENDING = 'PENDING',
-  SUCCESS = 'SUCCESS',
-  FAILED = 'FAILED'
-}
+export type OrderStatus = (typeof OrderStatus)[keyof typeof OrderStatus]
 
-/**
- * 取消操作者类型
- */
+export const OrderType = {
+  FRESH_FOOD: 'FRESH_FOOD',
+  CUSTOM_SERVICE: 'CUSTOM_SERVICE'
+} as const
+
+export type OrderType = (typeof OrderType)[keyof typeof OrderType]
+
+export const PaymentStatus = {
+  PENDING: 'PENDING',
+  SUCCESS: 'SUCCESS',
+  FAILED: 'FAILED'
+} as const
+
+export type PaymentStatus = (typeof PaymentStatus)[keyof typeof PaymentStatus]
+
 export type CancelledBy = 'customer' | 'admin' | 'system'
 
-/**
- * 食谱快照
- */
 export interface RecipeSnapshot {
   id: string
   version: number
@@ -56,9 +49,6 @@ export interface RecipeSnapshot {
   preparationMethod?: string
 }
 
-/**
- * 订单项
- */
 export interface OrderItem {
   id: string
   orderId: string
@@ -73,9 +63,6 @@ export interface OrderItem {
   allocatedAt?: string
 }
 
-/**
- * 价格分解快照
- */
 export interface PricingBreakdown {
   costIngredients: number
   costPackaging: number
@@ -87,9 +74,6 @@ export interface PricingBreakdown {
   totalPrice: number
 }
 
-/**
- * 订单基础信息
- */
 export interface Order {
   id: string
   customerId: string
@@ -117,9 +101,6 @@ export interface Order {
   paymentStatus?: PaymentStatus
 }
 
-/**
- * 订单列表项（用于列表展示，包含关联信息）
- */
 export interface OrderListItem extends Order {
   customerName?: string
   customerPhone?: string
@@ -132,10 +113,6 @@ export interface OrderListItem extends Order {
   addressPhone?: string
 }
 
-/**
- * 订单统计信息
- * Phase 9: Simplified statistics aligned with e-commerce standards
- */
 export interface OrderStats {
   total: number
   pendingPayment: number
@@ -149,9 +126,6 @@ export interface OrderStats {
   aftersale: number
 }
 
-/**
- * 订单历史记录
- */
 export interface OrderHistory {
   id: string
   orderId: string
@@ -162,9 +136,6 @@ export interface OrderHistory {
   remark?: string
 }
 
-/**
- * 订单列表查询参数
- */
 export interface OrderListParams {
   status?: OrderStatus[]
   type?: OrderType
@@ -178,9 +149,6 @@ export interface OrderListParams {
   pageSize?: number
 }
 
-/**
- * 订单列表响应
- */
 export interface OrderListResponse {
   list: OrderListItem[]
   total: number
@@ -188,33 +156,21 @@ export interface OrderListResponse {
   pageSize: number
 }
 
-/**
- * 状态配置
- */
 export interface StatusConfig {
   text: string
   type: 'success' | 'warning' | 'danger' | 'info' | 'primary'
 }
 
-/**
- * 快递公司配置
- */
 export interface CarrierConfig {
   code: string
   name: string
 }
 
-/**
- * 发货请求数据
- */
 export interface ShipRequest {
   carrierCode: string
   trackingNumber: string
 }
 
-/**
- * 取消订单请求数据
- */
 export interface CancelRequest {
   reason: string
 }

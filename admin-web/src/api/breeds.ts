@@ -4,7 +4,6 @@
  */
 import api from './index'
 import type { DogBreed, BreedForm, CustomBreedStats, BreedUsageCheck } from '@/types/breed'
-import type { DogProfile } from '@/types/dog'
 
 export const breedApi = {
   /**

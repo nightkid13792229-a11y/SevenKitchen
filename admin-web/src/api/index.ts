@@ -1,5 +1,9 @@
 import axios from 'axios'
-import type { InternalAxiosRequestConfig, AxiosResponse } from 'axios'
+import type {
+  AxiosRequestConfig,
+  AxiosResponse,
+  InternalAxiosRequestConfig
+} from 'axios'
 import { ElMessage } from 'element-plus'
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
@@ -8,6 +12,17 @@ interface ApiResponse<T = any> {
   code: number
   message: string
   data: T
+}
+
+type ApiClient = Omit<
+  ReturnType<typeof axios.create>,
+  'get' | 'post' | 'put' | 'patch' | 'delete'
+> & {
+  get<T = any>(url: string, config?: AxiosRequestConfig): Promise<T>
+  post<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T>
+  put<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T>
+  patch<T = any>(url: string, data?: unknown, config?: AxiosRequestConfig): Promise<T>
+  delete<T = any>(url: string, config?: AxiosRequestConfig): Promise<T>
 }
 
 // Create axios instance
@@ -34,7 +49,7 @@ const api = axios.create({
       return parts.join('&')
     }
   }
-})
+}) as ApiClient
 
 // Request interceptor
 api.interceptors.request.use(

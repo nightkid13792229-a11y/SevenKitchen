@@ -5,6 +5,8 @@
 
 import { DogSizeCategory } from './dog'
 
+export type { DogSizeCategory } from './dog'
+
 /**
  * 系统预定义品种
  * 对应数据库 DogBreed 表
@@ -17,6 +19,7 @@ export interface DogBreed {
   adultAgeMonths: number
   seniorAgeYears: number
   averageAdultWeightKg: number | null
+  isCommon?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -31,6 +34,7 @@ export interface BreedForm {
   adultAgeMonths: number
   seniorAgeYears: number
   averageAdultWeightKg: number
+  isCommon?: boolean
 }
 
 /**

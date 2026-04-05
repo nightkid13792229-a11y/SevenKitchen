@@ -351,10 +351,6 @@ const handleView = (row: RecipeSummary) => {
   });
 };
 
-const handleEdit = (row: RecipeSummary) => {
-  router.push(`/recipes/${row.id}/edit`);
-};
-
 const handlePublish = async (row: RecipeSummary) => {
   try {
     await ElMessageBox.confirm('确认发布该食谱？', '提示', {

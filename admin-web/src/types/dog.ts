@@ -1,50 +1,63 @@
 /**
- * Dog Domain Enums
- * Aligned with backend/src/domain/dog/enums.ts
+ * Dog domain types aligned with backend dog enums.
  */
 
-export enum DogGender {
-  MALE = 'MALE',
-  FEMALE = 'FEMALE'
-}
+export const DogGender = {
+  MALE: 'MALE',
+  FEMALE: 'FEMALE'
+} as const
 
-export enum ActivityLevel {
-  RESTING = 'RESTING',
-  LOW = 'LOW',
-  NORMAL = 'NORMAL',
-  HIGH = 'HIGH',
-  WORKING = 'WORKING'
-}
+export type DogGender = (typeof DogGender)[keyof typeof DogGender]
 
-export enum LifeStageOverride {
-  NONE = 'NONE',
-  PUPPY = 'PUPPY',
-  ADULT = 'ADULT',
-  SENIOR = 'SENIOR',
-  PREGNANCY = 'PREGNANCY',
-  LACTATION = 'LACTATION'
-}
+export const ActivityLevel = {
+  RESTING: 'RESTING',
+  LOW: 'LOW',
+  NORMAL: 'NORMAL',
+  HIGH: 'HIGH',
+  WORKING: 'WORKING'
+} as const
 
-export enum DogSizeCategory {
-  SMALL = 'SMALL',
-  MEDIUM = 'MEDIUM',
-  LARGE = 'LARGE',
-  GIANT = 'GIANT'
-}
+export type ActivityLevel = (typeof ActivityLevel)[keyof typeof ActivityLevel]
 
-export enum TreatInputMode {
-  ESTIMATE_LEVEL = 'ESTIMATE_LEVEL',
-  EXACT_KCAL = 'EXACT_KCAL'
-}
+export const LifeStageOverride = {
+  NONE: 'NONE',
+  PUPPY: 'PUPPY',
+  ADULT: 'ADULT',
+  SENIOR: 'SENIOR',
+  PREGNANCY: 'PREGNANCY',
+  LACTATION: 'LACTATION'
+} as const
 
-export enum TreatLevel {
-  NONE = 'NONE',
-  LOW = 'LOW',
-  MODERATE = 'MODERATE',
-  HIGH = 'HIGH'
-}
+export type LifeStageOverride =
+  (typeof LifeStageOverride)[keyof typeof LifeStageOverride]
 
-// UI display labels for enums
+export const DogSizeCategory = {
+  SMALL: 'SMALL',
+  MEDIUM: 'MEDIUM',
+  LARGE: 'LARGE',
+  GIANT: 'GIANT'
+} as const
+
+export type DogSizeCategory =
+  (typeof DogSizeCategory)[keyof typeof DogSizeCategory]
+
+export const TreatInputMode = {
+  ESTIMATE_LEVEL: 'ESTIMATE_LEVEL',
+  EXACT_KCAL: 'EXACT_KCAL'
+} as const
+
+export type TreatInputMode =
+  (typeof TreatInputMode)[keyof typeof TreatInputMode]
+
+export const TreatLevel = {
+  NONE: 'NONE',
+  LOW: 'LOW',
+  MODERATE: 'MODERATE',
+  HIGH: 'HIGH'
+} as const
+
+export type TreatLevel = (typeof TreatLevel)[keyof typeof TreatLevel]
+
 export const DogGenderLabels: Record<DogGender, string> = {
   [DogGender.MALE]: '公',
   [DogGender.FEMALE]: '母'
@@ -86,18 +99,14 @@ export const TreatInputModeLabels: Record<TreatInputMode, string> = {
   [TreatInputMode.EXACT_KCAL]: '精确模式'
 }
 
-/**
- * Dog Profile Interface
- * Aligned with backend DogProfileDto
- */
 export interface DogProfile {
   id: string
   ownerId: string
   name: string
   breedId: string
   customBreedName: string | null
-  breedName?: string // Extended from breed lookup
-  birthday: string // ISO 8601 date string
+  breedName?: string
+  birthday: string
   gender: DogGender
   isNeutered: boolean
   currentWeightKg: number
@@ -116,10 +125,6 @@ export interface DogProfile {
   createdAt?: string
 }
 
-/**
- * Dog Calculation Result
- * Aligned with backend DogCalcResultDto
- */
 export interface DogCalcResult {
   rer: number
   totalDer: number
@@ -142,17 +147,11 @@ export interface DogCalcResult {
   }
 }
 
-/**
- * Dog Detail Response
- */
 export interface DogDetailResponse {
   profile: DogProfile
   calcResult: DogCalcResult
 }
 
-/**
- * Dog Breed
- */
 export interface DogBreed {
   id: string
   name: string
@@ -162,9 +161,6 @@ export interface DogBreed {
   averageAdultWeightKg: number
 }
 
-/**
- * Pagination Response
- */
 export interface PaginatedResponse<T> {
   data: T[]
   total: number
@@ -172,14 +168,8 @@ export interface PaginatedResponse<T> {
   pageSize: number
 }
 
-/**
- * Mixed Breed Virtual ID
- */
 export const MIXED_BREED_VIRTUAL_ID = '00000000-0000-0000-0000-000000000000'
 
-/**
- * Calculate age from birthday
- */
 export function calculateAge(birthday: string): string {
   const birth = new Date(birthday)
   const now = new Date()

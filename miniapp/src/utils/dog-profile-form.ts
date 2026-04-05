@@ -89,6 +89,23 @@ function parseValidWeight(value: unknown) {
   return Number.isFinite(parsed) && parsed > 0 && parsed <= 200 ? parsed : null
 }
 
+function normalizeDate(value: unknown) {
+  if (typeof value !== 'string') {
+    return value
+  }
+
+  const trimmed = value.trim()
+  if (!trimmed) {
+    return value
+  }
+
+  return new Date(trimmed).toISOString()
+}
+
+function normalizeArray(value: unknown) {
+  return Array.isArray(value) ? value : []
+}
+
 function hasAnyDirtyField(dirtyFields: string[] | undefined, fields: readonly string[]) {
   if (!Array.isArray(dirtyFields) || dirtyFields.length === 0) {
     return false
@@ -268,13 +285,41 @@ export function buildDogCreatePayload(form: Record<string, any>) {
   const treatInputMode = form.treatInputMode || 'ESTIMATE_LEVEL'
   const payload: Record<string, any> = {
     ...form,
-    birthday: new Date(form.birthday).toISOString(),
+    birthday: normalizeDate(form.birthday),
     currentWeightKg: parseValidWeight(form.currentWeightKg) ?? parseFloat(form.currentWeightKg),
     mealsPerDay: parseInt(form.mealsPerDay, 10) || 2,
     treatInputMode,
     customBreedName: normalizeOptionalText(form.customBreedName),
     allergyFoods: normalizeOptionalText(form.allergyFoods),
     pickyFoods: normalizeOptionalText(form.pickyFoods),
+  }
+
+  const manualTreatKcal = parseNonNegativeNumber(form.manualTreatKcal)
+
+  if (treatInputMode === 'EXACT_KCAL' && manualTreatKcal !== null) {
+    payload.manualTreatKcal = manualTreatKcal
+  } else {
+    delete payload.manualTreatKcal
+  }
+
+  return payload
+}
+
+export function buildDogEditPayload(form: Record<string, any>) {
+  const treatInputMode = form.treatInputMode || 'ESTIMATE_LEVEL'
+  const payload: Record<string, any> = {
+    ...form,
+    birthday: normalizeDate(form.birthday),
+    currentWeightKg: parseValidWeight(form.currentWeightKg) ?? parseFloat(form.currentWeightKg),
+    bcsScore: parseNonNegativeNumber(form.bcsScore) ?? form.bcsScore,
+    mealsPerDay: parseInt(form.mealsPerDay, 10) || 2,
+    treatInputMode,
+    customBreedName: normalizeOptionalText(form.customBreedName),
+    allergyFoods: normalizeOptionalText(form.allergyFoods),
+    pickyFoods: normalizeOptionalText(form.pickyFoods),
+    medicalRecords: normalizeArray(form.medicalRecords),
+    checkupRecords: normalizeArray(form.checkupRecords),
+    allergyRecords: normalizeArray(form.allergyRecords),
   }
 
   const manualTreatKcal = parseNonNegativeNumber(form.manualTreatKcal)

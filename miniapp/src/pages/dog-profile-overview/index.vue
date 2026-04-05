@@ -75,11 +75,11 @@
     </view>
 
     <StickyActionBar
-      primary-text="编辑档案"
+      primary-text="更新喂食信息"
       secondary-text="去首页看看"
       :primary-disabled="!profile"
       :secondary-disabled="!profile"
-      @primary="goToEdit"
+      @primary="goToFeedingEdit"
       @secondary="goToHome"
     />
   </view>
@@ -259,18 +259,38 @@ async function loadDogProfile() {
   }
 }
 
-function handleTaskTap(_key: DogProfileOverviewTaskCard['key']) {
-  goToEdit()
-}
-
-function goToEdit() {
-  if (!dogId.value) {
+function handleTaskTap(key: DogProfileOverviewTaskCard['key']) {
+  const url = getTaskRoute(key)
+  if (!url) {
     return
   }
 
-  uni.navigateTo({
-    url: `/pages/dog-create/index?dogId=${encodeURIComponent(dogId.value)}`,
-  })
+  uni.navigateTo({ url })
+}
+
+function goToFeedingEdit() {
+  const url = getTaskRoute('feeding')
+  if (!url) {
+    return
+  }
+
+  uni.navigateTo({ url })
+}
+
+function getTaskRoute(key: DogProfileOverviewTaskCard['key']) {
+  if (!dogId.value) {
+    return ''
+  }
+
+  const encodedDogId = encodeURIComponent(dogId.value)
+  const routeMap: Record<DogProfileOverviewTaskCard['key'], string> = {
+    basic: `/pages/dog-profile-basic/index?dogId=${encodedDogId}`,
+    feeding: `/pages/dog-profile-feeding/index?dogId=${encodedDogId}`,
+    recommendation: `/pages/dog-profile-feeding/index?dogId=${encodedDogId}`,
+    health: `/pages/dog-profile-health/index?dogId=${encodedDogId}`,
+  }
+
+  return routeMap[key]
 }
 
 function goToHome() {

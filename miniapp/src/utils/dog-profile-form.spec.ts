@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildDogCreatePayload,
+  buildDogEditPayload,
   buildOverviewTaskCards,
   canAdvanceCreateStep,
   getCreateStepAvailability,
@@ -268,5 +269,72 @@ describe('dog-profile-form', () => {
 
     expect(payload.treatInputMode).toBe('EXACT_KCAL')
     expect(payload.manualTreatKcal).toBeUndefined()
+  })
+
+  it('builds edit payload with normalized feeding values and existing health arrays', () => {
+    const payload = buildDogEditPayload({
+      name: '七七',
+      birthday: '2021-01-01',
+      gender: 'FEMALE',
+      currentWeightKg: '12.4',
+      bcsScore: '6',
+      activityLevel: 'HIGH',
+      mealsPerDay: '3',
+      treatInputMode: 'EXACT_KCAL',
+      treatLevel: 'LOW',
+      manualTreatKcal: '80.5',
+      allergyFoods: ' 牛肉 ',
+      pickyFoods: '   ',
+      medicalRecords: [{ title: '胃炎', diagnosedAt: '2024-05-01', attachments: ['a'] }],
+      checkupRecords: [{ title: '年度体检', checkedAt: '2025-01-01' }],
+      allergyRecords: [{ allergen: '鸡肉', notedAt: '2024-02-03', attachmentKeys: ['k1'] }],
+    })
+
+    expect(payload).toMatchObject({
+      name: '七七',
+      birthday: '2021-01-01T00:00:00.000Z',
+      gender: 'FEMALE',
+      currentWeightKg: 12.4,
+      bcsScore: 6,
+      activityLevel: 'HIGH',
+      mealsPerDay: 3,
+      treatInputMode: 'EXACT_KCAL',
+      treatLevel: 'LOW',
+      manualTreatKcal: 80.5,
+      allergyFoods: '牛肉',
+      pickyFoods: null,
+      medicalRecords: [{ title: '胃炎', diagnosedAt: '2024-05-01', attachments: ['a'] }],
+      checkupRecords: [{ title: '年度体检', checkedAt: '2025-01-01' }],
+      allergyRecords: [{ allergen: '鸡肉', notedAt: '2024-02-03', attachmentKeys: ['k1'] }],
+    })
+  })
+
+  it('omits invalid exact kcal from edit payload and preserves blank text fields as null', () => {
+    const payload = buildDogEditPayload({
+      birthday: '2021-01-01',
+      currentWeightKg: '11',
+      bcsScore: 5,
+      activityLevel: 'NORMAL',
+      mealsPerDay: '',
+      treatInputMode: '',
+      treatLevel: 'LOW',
+      manualTreatKcal: 'abc',
+      allergyFoods: '',
+      pickyFoods: '   ',
+      medicalRecords: null,
+      checkupRecords: undefined,
+      allergyRecords: 'unexpected',
+    })
+
+    expect(payload.birthday).toBe('2021-01-01T00:00:00.000Z')
+    expect(payload.currentWeightKg).toBe(11)
+    expect(payload.mealsPerDay).toBe(2)
+    expect(payload.treatInputMode).toBe('ESTIMATE_LEVEL')
+    expect(payload.manualTreatKcal).toBeUndefined()
+    expect(payload.allergyFoods).toBeNull()
+    expect(payload.pickyFoods).toBeNull()
+    expect(payload.medicalRecords).toEqual([])
+    expect(payload.checkupRecords).toEqual([])
+    expect(payload.allergyRecords).toEqual([])
   })
 })

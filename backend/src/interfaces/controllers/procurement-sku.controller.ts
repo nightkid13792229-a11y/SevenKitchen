@@ -11,8 +11,10 @@ import {
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
-  CreateProcurementSkuDto,
   ProcurementSkuService,
+} from '../../application/ingredient/procurement-sku.service';
+import type {
+  CreateProcurementSkuDto,
   UpdateProcurementSkuDto,
 } from '../../application/ingredient/procurement-sku.service';
 import { ApiResponseDto } from '../dto/common/response.dto';

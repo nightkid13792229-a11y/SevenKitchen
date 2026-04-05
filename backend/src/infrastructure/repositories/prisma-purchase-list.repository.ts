@@ -4,6 +4,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import {
   PurchaseList,
@@ -17,7 +18,10 @@ const purchaseItemDetailInclude = {
       include: {
         procurementSkus: {
           where: { isActive: true },
-          orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }],
+          orderBy: [
+            { sortOrder: 'asc' as const },
+            { createdAt: 'asc' as const },
+          ],
         },
       },
     },
@@ -25,7 +29,7 @@ const purchaseItemDetailInclude = {
   orderBy: {
     createdAt: 'asc' as const,
   },
-};
+} satisfies Prisma.PurchaseList$itemsArgs;
 
 @Injectable()
 export class PrismaPurchaseListRepository implements PurchaseListRepository {

@@ -1347,8 +1347,12 @@ export class PurchasingService {
     const query: any = { page, pageSize };
     if (status) query.status = status;
     if (createdById) query.createdById = createdById;
-    if (startDate) query.startDate = new Date(startDate);
-    if (endDate) query.endDate = new Date(endDate);
+    if (startDate) {
+      query.startDate = DateUtil.createDateRange(startDate).start;
+    }
+    if (endDate) {
+      query.endDate = DateUtil.createDateRange(endDate).end;
+    }
     if (excludeReimbursed) query.excludeReimbursed = excludeReimbursed;
 
     return this.purchaseListRepository.findMany(query);

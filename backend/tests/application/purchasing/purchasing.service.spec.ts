@@ -8,6 +8,7 @@ import {
   PURCHASE_LIST_REPOSITORY,
   PURCHASE_RECORD_REPOSITORY,
 } from 'src/application/purchasing/purchasing.service.tokens';
+import { DateUtil } from 'src/utils/date.util';
 
 jest.mock('uuid', () => ({
   v4: () => 'test-uuid',
@@ -101,5 +102,52 @@ describe('PurchasingService procurement sku separation', () => {
       }),
     );
     expect(recommendedProductService.batchFindActive).not.toHaveBeenCalled();
+  });
+
+  it('normalizes purchase list date filters to noon-based ranges', async () => {
+    const purchaseListRepository = {
+      findMany: jest.fn().mockResolvedValue({ list: [], total: 0 }),
+    } as any;
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        PurchasingService,
+        {
+          provide: ORDER_REPOSITORY,
+          useValue: { findByTargetProductionDateRange: jest.fn() },
+        },
+        {
+          provide: INGREDIENT_REPOSITORY,
+          useValue: { findByIds: jest.fn(), findAll: jest.fn() },
+        },
+        {
+          provide: ProcurementSkuService,
+          useValue: { batchFindActive: jest.fn(), listActivePurchaseChannels: jest.fn() },
+        },
+        {
+          provide: RecommendedProductService,
+          useValue: { batchFindActive: jest.fn() },
+        },
+        { provide: PURCHASE_LIST_REPOSITORY, useValue: purchaseListRepository },
+        { provide: PURCHASE_RECORD_REPOSITORY, useValue: {} },
+      ],
+    }).compile();
+
+    const service = moduleRef.get(PurchasingService);
+    const { start, end } = DateUtil.createDateRange('2026-04-05');
+
+    await service.getPurchaseLists({
+      startDate: '2026-04-05',
+      endDate: '2026-04-05',
+      page: 2,
+      pageSize: 10,
+    });
+
+    expect(purchaseListRepository.findMany).toHaveBeenCalledWith({
+      page: 2,
+      pageSize: 10,
+      startDate: start,
+      endDate: end,
+    });
   });
 });

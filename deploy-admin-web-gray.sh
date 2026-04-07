@@ -17,7 +17,7 @@ fail() { echo -e "${RED}✗ ${1}${NC}"; }
 
 SERVER_HOST="${SERVER_HOST:-1.14.3.2}"
 SERVER_USER="${SERVER_USER:-root}"
-GRAY_ADMIN_PATH="${GRAY_ADMIN_PATH:-/opt/sevenkitchen/SevenKitchen-gray/admin-web}"
+GRAY_ADMIN_PATH="${GRAY_ADMIN_PATH:-/opt/sevenkitchen/SevenKitchen-gray/admin-web-dist}"
 SSH_KEY_PATH="${SSH_KEY_PATH:-$HOME/.ssh/claude_deploy}"
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"

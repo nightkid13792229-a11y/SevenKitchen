@@ -3,6 +3,10 @@ import {
   DOG_PROFILE_RECOMMENDATION_FIELDS,
   type DogProfileCreateStep,
 } from '../constants/dog-profile'
+import {
+  isCreateBasicStepReady,
+  isCreateFeedingStepReady,
+} from './dog-profile-create-view'
 
 const MIXED_BREED_VIRTUAL_ID = '00000000-0000-0000-0000-000000000000'
 const DOG_PROFILE_ENTRY_ROUTE = '/pages/dog-profile-overview/index'
@@ -27,7 +31,7 @@ export interface DogProfileOverviewTaskCard {
 }
 
 export interface DogProfileCreateStepAvailability {
-  basic: true
+  basic: boolean
   feeding: boolean
   recommendation: boolean
   health: boolean
@@ -343,29 +347,18 @@ export function buildOverviewTaskCards({
 }
 
 export function getCreateStepAvailability(form: Record<string, any>): DogProfileCreateStepAvailability {
-  const hasBasicInfo = Boolean(
-    hasValue(form.name) &&
-    hasValue(form.breedId) &&
-    hasValue(form.birthday),
-  )
-  const hasValidWeight = parseValidWeight(form.currentWeightKg) !== null
-  const needsSizeClassOverride = form.breedId === MIXED_BREED_VIRTUAL_ID
-  const feeding = Boolean(
-    hasBasicInfo &&
-    hasValidWeight &&
-    (!needsSizeClassOverride || hasValue(form.sizeClassOverride)),
-  )
+  const basic = isCreateBasicStepReady(form)
+  const feeding = basic
+  const feedingParametersReady = isCreateFeedingStepReady(form)
   const needsManualTreatKcal = form.treatInputMode === 'EXACT_KCAL'
   const hasValidManualTreatKcal = parseNonNegativeNumber(form.manualTreatKcal) !== null
   const recommendation = Boolean(
-    hasBasicInfo &&
-    hasValidWeight &&
-    hasValue(form.activityLevel) &&
-    (!needsSizeClassOverride || hasValue(form.sizeClassOverride)) &&
+    basic &&
+    feedingParametersReady &&
     (!needsManualTreatKcal || hasValidManualTreatKcal),
   )
 
-  return { basic: hasBasicInfo, feeding, recommendation, health: recommendation }
+  return { basic, feeding, recommendation, health: recommendation }
 }
 
 export function buildDogCreatePayload(form: Record<string, any>) {

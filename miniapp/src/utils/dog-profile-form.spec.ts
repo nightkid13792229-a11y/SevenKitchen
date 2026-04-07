@@ -110,30 +110,37 @@ describe('dog-profile-form', () => {
   })
 
   it('unlocks recommendation after feeding fields are complete', () => {
-    expect(
-      getCreateStepAvailability({
-        name: '七七',
-        breedId: '550e8400-e29b-41d4-a716-446655440000',
-        birthday: '2021-01-01',
-        currentWeightKg: '11.0',
-        activityLevel: 'NORMAL',
-      }).recommendation,
-    ).toBe(true)
+    const availability = getCreateStepAvailability({
+      name: '七七',
+      breedId: '550e8400-e29b-41d4-a716-446655440000',
+      birthday: '2021-01-01',
+      currentWeightKg: '11.0',
+      bcsScore: 5,
+      activityLevel: 'NORMAL',
+      mealsPerDay: '2',
+      treatLevel: 'LOW',
+      isNeutered: false,
+    })
+
+    expect(availability.basic).toBe(true)
+    expect(availability.recommendation).toBe(true)
   })
 
   it('keeps the basic step locked when weight input is not a valid number', () => {
-    expect(
-      canAdvanceCreateStep(
-        'basic',
-        getCreateStepAvailability({
-          name: '七七',
-          breedId: '550e8400-e29b-41d4-a716-446655440000',
-          birthday: '2021-01-01',
-          currentWeightKg: 'abc',
-          activityLevel: 'NORMAL',
-        }),
-      ),
-    ).toBe(false)
+    const availability = getCreateStepAvailability({
+      name: '七七',
+      breedId: '550e8400-e29b-41d4-a716-446655440000',
+      birthday: '2021-01-01',
+      currentWeightKg: 'abc',
+      bcsScore: 5,
+      activityLevel: 'NORMAL',
+      mealsPerDay: '2',
+      treatLevel: 'LOW',
+      isNeutered: false,
+    })
+
+    expect(availability.basic).toBe(false)
+    expect(canAdvanceCreateStep('basic', availability)).toBe(false)
   })
 
   it('advances feeding to the recommendation step in create mode', () => {
@@ -149,10 +156,12 @@ describe('dog-profile-form', () => {
           breedId: '550e8400-e29b-41d4-a716-446655440000',
           birthday: '2021-01-01',
           currentWeightKg: '11.0',
+          bcsScore: 5,
           activityLevel: 'NORMAL',
           mealsPerDay: '2',
           treatInputMode: 'ESTIMATE_LEVEL',
           treatLevel: 'LOW',
+          isNeutered: false,
         }),
       ),
     ).toBe(true)

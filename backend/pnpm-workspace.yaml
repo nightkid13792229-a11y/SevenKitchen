@@ -7,4 +7,7 @@ ignoredBuiltDependencies:
 onlyBuiltDependencies:
   - '@nestjs/core'
   - '@prisma/engines'
+  - bcrypt
+  - canvas
   - prisma
+  - sharp

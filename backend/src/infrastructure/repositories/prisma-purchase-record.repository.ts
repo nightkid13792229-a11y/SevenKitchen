@@ -19,6 +19,8 @@ export class PrismaPurchaseRecordRepository implements PurchaseRecordRepository 
     const saved = await this.prisma.purchaseRecord.upsert({
       where: { id: purchaseRecord.id },
       update: {
+        procurementSkuId: data.procurementSkuId,
+        procurementSkuName: data.procurementSkuName,
         purchaseChannel: data.purchaseChannel,
         actualQuantity: data.actualQuantity,
         actualCost: data.actualCost,
@@ -31,6 +33,8 @@ export class PrismaPurchaseRecordRepository implements PurchaseRecordRepository 
         purchaseListId: data.purchaseListId,
         purchaseItemId: data.purchaseItemId,
         ingredientId: data.ingredientId,
+        procurementSkuId: data.procurementSkuId,
+        procurementSkuName: data.procurementSkuName,
         ingredientName: data.ingredientName,
         purchaseChannel: data.purchaseChannel,
         actualQuantity: data.actualQuantity,

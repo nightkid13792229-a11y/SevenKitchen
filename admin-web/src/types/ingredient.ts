@@ -118,6 +118,12 @@ export interface Ingredient {
   properties: FoodProperties | SupplementProperties | PackagingProperties
   tagIds: string[]  // 标签ID数组
   stock?: number  // 库存占位符（MVP阶段）
+  activeRecommendedProductCount?: number
+  recommendedProductCount?: number
+  activeProcurementSkuCount?: number
+  procurementSkuCount?: number
+  hasActiveRecommendedProduct?: boolean
+  hasActiveProcurementSku?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -162,7 +168,7 @@ export const CFCT_CLASS_OPTIONS = [
   '其他'
 ]
 
-// 推荐产品
+// 家庭 DIY 推荐商品
 export interface RecommendedProduct {
   id: string
   ingredientId: string
@@ -189,6 +195,35 @@ export interface RecommendedProductForm {
   imageUrl?: string
   activeNutrients?: Record<string, ActiveNutrientValue>
   displayUnit?: string
+  isActive?: boolean
+  sortOrder?: number
+}
+
+// 生产采购 SKU
+export interface ProcurementSku {
+  id: string
+  ingredientId: string
+  name: string
+  brand: string | null
+  productModel: string | null
+  purchaseChannel: string | null
+  referencePricePerPurchaseUnit: number | null
+  displayUnit: string | null
+  notes: string | null
+  isActive: boolean
+  sortOrder: number
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface ProcurementSkuForm {
+  name: string
+  brand?: string
+  productModel?: string
+  purchaseChannel?: string
+  referencePricePerPurchaseUnit?: number | null
+  displayUnit?: string
+  notes?: string
   isActive?: boolean
   sortOrder?: number
 }

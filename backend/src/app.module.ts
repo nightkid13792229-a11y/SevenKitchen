@@ -143,7 +143,9 @@ import { StaffProductionService } from './application/production/kitchen.service
 import { NutritionFoodController } from './interfaces/controllers/nutrition-food.controller';
 import { NutritionFoodService } from './application/nutrition-food/nutrition-food.service';
 import { RecommendedProductController } from './interfaces/controllers/recommended-product.controller';
+import { ProcurementSkuController } from './interfaces/controllers/procurement-sku.controller';
 import { RecommendedProductService } from './application/ingredient/recommended-product.service';
+import { ProcurementSkuService } from './application/ingredient/procurement-sku.service';
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -228,6 +230,7 @@ validatePrismaConfig();
     SharedPhotosController,
     NutritionFoodController,
     RecommendedProductController,
+    ProcurementSkuController,
   ],
   providers: [
     DogService,
@@ -571,6 +574,7 @@ validatePrismaConfig();
     NutritionFoodService,
     // Recommended Product Service
     RecommendedProductService,
+    ProcurementSkuService,
   ],
 })
 export class AppModule implements OnModuleInit {

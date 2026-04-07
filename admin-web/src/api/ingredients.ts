@@ -2,7 +2,14 @@
  * 原料管理 API
  */
 import api from './index'
-import type { Ingredient, IngredientForm, RecommendedProduct, RecommendedProductForm } from '@/types/ingredient'
+import type {
+  Ingredient,
+  IngredientForm,
+  ProcurementSku,
+  ProcurementSkuForm,
+  RecommendedProduct,
+  RecommendedProductForm
+} from '@/types/ingredient'
 
 export const ingredientApi = {
   /**
@@ -47,29 +54,55 @@ export const ingredientApi = {
   getUsage: (id: string): Promise<any[]> =>
     api.get(`/admin/ingredients/${id}/usage`),
 
-  // ==================== 推荐产品 ====================
+  // ==================== 家庭 DIY 推荐商品 ====================
 
   /**
-   * 获取原料的推荐产品列表
+   * 获取原料的家庭 DIY 推荐商品列表
    */
   listRecommendedProducts: (ingredientId: string): Promise<RecommendedProduct[]> =>
     api.get(`/admin/ingredients/${ingredientId}/recommended-products`),
 
   /**
-   * 新增推荐产品
+   * 新增家庭 DIY 推荐商品
    */
   createRecommendedProduct: (ingredientId: string, data: RecommendedProductForm): Promise<RecommendedProduct> =>
     api.post(`/admin/ingredients/${ingredientId}/recommended-products`, data),
 
   /**
-   * 更新推荐产品
+   * 更新家庭 DIY 推荐商品
    */
   updateRecommendedProduct: (ingredientId: string, id: string, data: Partial<RecommendedProductForm>): Promise<RecommendedProduct> =>
     api.put(`/admin/ingredients/${ingredientId}/recommended-products/${id}`, data),
 
   /**
-   * 删除推荐产品
+   * 删除家庭 DIY 推荐商品
    */
   deleteRecommendedProduct: (ingredientId: string, id: string): Promise<void> =>
-    api.delete(`/admin/ingredients/${ingredientId}/recommended-products/${id}`)
+    api.delete(`/admin/ingredients/${ingredientId}/recommended-products/${id}`),
+
+  // ==================== 生产采购 SKU ====================
+
+  /**
+   * 获取原料的生产采购 SKU 列表
+   */
+  listProcurementSkus: (ingredientId: string): Promise<ProcurementSku[]> =>
+    api.get(`/admin/ingredients/${ingredientId}/procurement-skus`),
+
+  /**
+   * 新增生产采购 SKU
+   */
+  createProcurementSku: (ingredientId: string, data: ProcurementSkuForm): Promise<ProcurementSku> =>
+    api.post(`/admin/ingredients/${ingredientId}/procurement-skus`, data),
+
+  /**
+   * 更新生产采购 SKU
+   */
+  updateProcurementSku: (ingredientId: string, id: string, data: Partial<ProcurementSkuForm>): Promise<ProcurementSku> =>
+    api.put(`/admin/ingredients/${ingredientId}/procurement-skus/${id}`, data),
+
+  /**
+   * 删除生产采购 SKU
+   */
+  deleteProcurementSku: (ingredientId: string, id: string): Promise<void> =>
+    api.delete(`/admin/ingredients/${ingredientId}/procurement-skus/${id}`)
 }

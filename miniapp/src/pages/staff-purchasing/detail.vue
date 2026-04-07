@@ -85,9 +85,20 @@
                 <view class="item-basic">
                   <view class="item-info">
                     <text class="item-name">{{ item.ingredientName || '未知原料' }}</text>
-                    <view v-if="item.purchaseChannel || item.productModel" class="item-specs">
-                      <text v-if="item.purchaseChannel" class="spec">{{ item.purchaseChannel }}</text>
-                      <text v-if="item.productModel" class="spec">{{ item.productModel }}</text>
+                    <view v-if="item.resolvedProcurementSkuName || item.resolvedSuggestedProductName" class="item-sku-lines">
+                      <text v-if="item.resolvedProcurementSkuName" class="item-sku primary">
+                        采购SKU：{{ item.resolvedProcurementSkuName }}
+                      </text>
+                      <text
+                        v-if="item.resolvedSuggestedProductName && item.resolvedSuggestedProductName !== item.resolvedProcurementSkuName"
+                        class="item-sku secondary"
+                      >
+                        推荐参考：{{ item.resolvedSuggestedProductName }}
+                      </text>
+                    </view>
+                    <view v-if="item.resolvedPurchaseChannel || item.resolvedProductModel" class="item-specs">
+                      <text v-if="item.resolvedPurchaseChannel" class="spec">{{ item.resolvedPurchaseChannel }}</text>
+                      <text v-if="item.resolvedProductModel" class="spec">{{ item.resolvedProductModel }}</text>
                     </view>
                     <view class="item-quantity">
                       <text class="quantity-label">需求: </text>
@@ -129,13 +140,16 @@
                       class="record-item"
                     >
                       <view class="record-main">
+                        <text v-if="record.resolvedProcurementSkuName" class="record-sku">
+                          采购SKU：{{ record.resolvedProcurementSkuName }}
+                        </text>
                         <view class="record-info">
-                          <text class="record-quantity">{{ record.actualQuantity }}g</text>
+                          <text class="record-quantity">{{ record.actualQuantity }}{{ getPurchaseUnit(item) }}</text>
                           <text class="record-cost">¥{{ record.actualCost.toFixed(2) }}</text>
-                          <text class="record-channel">{{ record.purchaseChannel }}</text>
+                          <text v-if="record.resolvedPurchaseChannel" class="record-channel">{{ record.resolvedPurchaseChannel }}</text>
                         </view>
                         <view class="record-details">
-                          <text v-if="record.productModel" class="detail">{{ record.productModel }}</text>
+                          <text v-if="record.resolvedProductModel" class="detail">{{ record.resolvedProductModel }}</text>
                           <text class="detail-time">{{ formatFullDateTime(record.createdAt) }}</text>
                         </view>
                       </view>
@@ -234,6 +248,24 @@
             </view>
           </view>
 
+          <!-- 生产采购 SKU（选填） -->
+          <view v-if="selectedIngredientProcurementSkus.length > 0" class="form-section">
+            <text class="form-label">生产采购SKU</text>
+            <picker
+              mode="selector"
+              :range="selectedIngredientProcurementSkus"
+              range-key="name"
+              :value="selectedProcurementSkuIndex"
+              @change="onProcurementSkuChange"
+            >
+              <view class="picker-input">
+                <text class="value">{{ selectedProcurementSkuLabel }}</text>
+                <text class="arrow">›</text>
+              </view>
+            </picker>
+            <text class="form-hint">会随采购记录一起保存，便于后续统计同一标准原料下的不同采购商品</text>
+          </view>
+
           <!-- 采购渠道 -->
           <view class="form-section">
             <text class="form-label">采购渠道 *</text>
@@ -330,6 +362,9 @@ import {
   removeItemFromList,
   checkOrderDateChanges,
   getPurchaseChannels,
+  resolvePurchaseItemDisplay,
+  resolvePurchaseRecordDisplay,
+  type ProcurementSkuOption,
 } from '@/api/purchasing';
 
 // 状态管理
@@ -382,8 +417,10 @@ const getTypeLabel = (type: string) => {
 const showRecordForm = ref(false);
 const selectedIngredient = ref<any>(null);
 const submitting = ref(false);
+const selectedProcurementSkuIndex = ref(0);
 
 const recordForm = ref({
+  procurementSkuId: '',
   purchaseChannel: '',
   actualQuantity: '',
   actualCost: '',
@@ -397,8 +434,28 @@ const channelOptions = computed(() => {
   return allPurchaseChannels.value;
 });
 
+const selectedIngredientProcurementSkus = computed<ProcurementSkuOption[]>(() => {
+  return selectedIngredient.value?.procurementSkuOptions || [];
+});
+
+const selectedProcurementSkuLabel = computed(() => {
+  if (selectedIngredientProcurementSkus.value.length === 0) {
+    return '未配置生产采购 SKU';
+  }
+
+  return (
+    selectedIngredientProcurementSkus.value[selectedProcurementSkuIndex.value]?.name ||
+    selectedIngredientProcurementSkus.value[0]?.name ||
+    '请选择生产采购 SKU'
+  );
+});
+
 // 获取采购单位（多级回退 + 默认值）
 const getPurchaseUnit = (item: any): string => {
+  if (item?.resolvedDisplayUnit) {
+    return item.resolvedDisplayUnit;
+  }
+
   // 优先级1: displayUnit（显示单位标签）
   if (item.displayUnit) {
     return item.displayUnit;
@@ -443,7 +500,7 @@ const loadDetail = async () => {
     if (res.code === 0) {
       purchaseList.value = res.data;
       items.value = (res.data.items || []).map((item: any) => ({
-        ...item,
+        ...resolvePurchaseItemDisplay(item),
         records: [],
         expanded: false,
       }));
@@ -497,7 +554,9 @@ const loadPurchaseRecords = async () => {
   try {
     const res: any = await getPurchaseRecords(purchaseListId.value);
     if (res.code === 0) {
-      const allRecords = res.data || [];
+      const allRecords = (res.data || []).map((record: any) =>
+        resolvePurchaseRecordDisplay(record)
+      );
 
       // 按原料ID分组
       const grouped = new Map<string, any[]>();
@@ -524,14 +583,25 @@ const handleContinueAdd = (item: any) => {
   selectedIngredient.value = item;
   resetRecordForm();
 
-  // 预填充产品型号（优先使用采购清单项的，其次使用原料的）
-  recordForm.value.productModel = item.productModel || item.ingredient?.productModel || '';
+  // 预填充采购渠道与规格，优先使用生产采购 SKU
+  recordForm.value.purchaseChannel = item.resolvedPurchaseChannel || '';
+  recordForm.value.productModel = item.resolvedProductModel || '';
 
-  // 预填充采购渠道
-  if (item.purchaseChannel) {
-    recordForm.value.purchaseChannel = item.purchaseChannel;
-  } else if (item.ingredient?.purchaseChannel) {
-    recordForm.value.purchaseChannel = item.ingredient.purchaseChannel;
+  const procurementSkus = item.procurementSkuOptions || [];
+  const matchedIndex = procurementSkus.findIndex((sku: ProcurementSkuOption) => {
+    if (item.resolvedProcurementSkuId && sku.id) {
+      return sku.id === item.resolvedProcurementSkuId;
+    }
+
+    return sku.name === item.resolvedProcurementSkuName;
+  });
+
+  if (matchedIndex >= 0) {
+    selectedProcurementSkuIndex.value = matchedIndex;
+    applyProcurementSku(procurementSkus[matchedIndex], false);
+  } else {
+    selectedProcurementSkuIndex.value = 0;
+    applyProcurementSku(procurementSkus[0], false);
   }
 
   showRecordForm.value = true;
@@ -541,6 +611,7 @@ const handleContinueAdd = (item: any) => {
 const closeRecordForm = () => {
   showRecordForm.value = false;
   selectedIngredient.value = null;
+  selectedProcurementSkuIndex.value = 0;
 };
 
 // 采购渠道快速选择
@@ -550,9 +621,35 @@ const onChannelChange = (e: any) => {
   recordForm.value.purchaseChannel = channel;
 };
 
+const applyProcurementSku = (
+  sku?: ProcurementSkuOption,
+  overrideExistingValues = true
+) => {
+  if (!sku) {
+    recordForm.value.procurementSkuId = '';
+    return;
+  }
+
+  recordForm.value.procurementSkuId = sku.id || '';
+
+  if (overrideExistingValues || !recordForm.value.purchaseChannel) {
+    recordForm.value.purchaseChannel = sku.purchaseChannel || recordForm.value.purchaseChannel;
+  }
+
+  if (overrideExistingValues || !recordForm.value.productModel) {
+    recordForm.value.productModel = sku.productModel || recordForm.value.productModel;
+  }
+};
+
+const onProcurementSkuChange = (e: any) => {
+  selectedProcurementSkuIndex.value = Number(e.detail.value || 0);
+  applyProcurementSku(selectedIngredientProcurementSkus.value[selectedProcurementSkuIndex.value]);
+};
+
 // 重置表单
 const resetRecordForm = () => {
   recordForm.value = {
+    procurementSkuId: '',
     purchaseChannel: '',
     actualQuantity: '',
     actualCost: '',
@@ -605,6 +702,7 @@ const submitRecord = async () => {
       purchaseChannel: recordForm.value.purchaseChannel.trim(),
       actualQuantity: Math.round(quantity),  // 确保为整数
       actualCost: cost,
+      procurementSkuId: recordForm.value.procurementSkuId || undefined,
       productModel: recordForm.value.productModel?.trim() || undefined,
       notes: recordForm.value.notes?.trim() || undefined,
       purchaseItemId: selectedIngredient.value.id,
@@ -814,6 +912,10 @@ const getDisplayUnit = (item: any) => {
   // 食材类型：kg转换为g
   if (item.type === 'FOOD' && item.quantityUnit === 'kg') {
     return 'g';
+  }
+
+  if (item.resolvedDisplayUnit) {
+    return item.resolvedDisplayUnit;
   }
 
   // 补剂类型：优先使用displayUnit，回退到quantityUnit
@@ -1090,6 +1192,26 @@ const confirmDeleteItem = (item: any) => {
         display: block;
       }
 
+      .item-sku-lines {
+        display: flex;
+        flex-direction: column;
+        gap: 6rpx;
+        margin-bottom: 12rpx;
+
+        .item-sku {
+          font-size: 24rpx;
+
+          &.primary {
+            color: #1890ff;
+            font-weight: 500;
+          }
+
+          &.secondary {
+            color: #8c8c8c;
+          }
+        }
+      }
+
       .item-specs {
         display: flex;
         flex-wrap: wrap;
@@ -1172,6 +1294,14 @@ const confirmDeleteItem = (item: any) => {
       .record-main {
         flex: 1;
         min-width: 0;
+
+        .record-sku {
+          display: block;
+          margin-bottom: 8rpx;
+          font-size: 24rpx;
+          color: #1890ff;
+          font-weight: 500;
+        }
 
         .record-info {
           display: flex;
@@ -1462,6 +1592,14 @@ const confirmDeleteItem = (item: any) => {
       display: flex;
       align-items: center;
     }
+  }
+
+  .form-hint {
+    display: block;
+    margin-top: 10rpx;
+    font-size: 22rpx;
+    line-height: 1.5;
+    color: #8c8c8c;
   }
 
   .picker-input {

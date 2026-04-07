@@ -109,9 +109,20 @@
               >
                 <view class="ingredient-info">
                   <text class="ingredient-name">{{ item.ingredientName }}</text>
+                  <view v-if="item.resolvedProcurementSkuName || item.resolvedSuggestedProductName" class="ingredient-sku-lines">
+                    <text v-if="item.resolvedProcurementSkuName" class="procurement-sku">
+                      采购SKU：{{ item.resolvedProcurementSkuName }}
+                    </text>
+                    <text
+                      v-if="item.resolvedSuggestedProductName && item.resolvedSuggestedProductName !== item.resolvedProcurementSkuName"
+                      class="suggested-sku"
+                    >
+                      推荐参考：{{ item.resolvedSuggestedProductName }}
+                    </text>
+                  </view>
                   <view class="ingredient-meta">
-                    <text v-if="item.purchaseChannel" class="channel">{{ item.purchaseChannel }}</text>
-                    <text v-if="item.productModel" class="model">{{ item.productModel }}</text>
+                    <text v-if="item.resolvedPurchaseChannel" class="channel">{{ item.resolvedPurchaseChannel }}</text>
+                    <text v-if="item.resolvedProductModel" class="model">{{ item.resolvedProductModel }}</text>
                   </view>
                 </view>
                 <view class="ingredient-quantity">
@@ -161,7 +172,7 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { previewPurchaseList } from '@/api/purchasing';
+import { previewPurchaseList, resolvePurchaseItemDisplay } from '@/api/purchasing';
 
 // 表单数据
 const formData = ref({
@@ -287,7 +298,12 @@ const handlePreview = async () => {
     const res: any = await previewPurchaseList(params);
 
     if (res.code === 0) {
-      previewResult.value = res.data;
+      previewResult.value = {
+        ...res.data,
+        items: (res.data?.items || []).map((item: any) =>
+          resolvePurchaseItemDisplay(item)
+        ),
+      };
       uni.showToast({ title: '预览成功', icon: 'success' });
     } else {
       uni.showToast({ title: res.message || '预览失败', icon: 'none' });
@@ -335,6 +351,10 @@ const getDisplayUnit = (item: any) => {
   // 食材类型：kg转换为g
   if (item.type === 'FOOD' && item.quantityUnit === 'kg') {
     return 'g';
+  }
+
+  if (item.resolvedDisplayUnit) {
+    return item.resolvedDisplayUnit;
   }
 
   // 补剂类型：优先使用displayUnit，回退到quantityUnit
@@ -607,6 +627,24 @@ const getDisplayUnit = (item: any) => {
       color: #333;
       margin-bottom: 8rpx;
       display: block;
+    }
+
+    .ingredient-sku-lines {
+      display: flex;
+      flex-direction: column;
+      gap: 4rpx;
+      margin-bottom: 8rpx;
+
+      .procurement-sku {
+        font-size: 22rpx;
+        color: #1890ff;
+        font-weight: 500;
+      }
+
+      .suggested-sku {
+        font-size: 22rpx;
+        color: #8c8c8c;
+      }
     }
 
     .ingredient-meta {

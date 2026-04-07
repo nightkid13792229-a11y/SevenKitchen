@@ -264,6 +264,10 @@ export function resolveDogProfileEntryRoute(dogId?: string) {
   return `${DOG_PROFILE_ENTRY_ROUTE}?dogId=${encodeURIComponent(dogId)}`
 }
 
+export function getDogCreateLegacyRedirectRoute(dogId?: string) {
+  return dogId ? resolveDogProfileEntryRoute(dogId) : ''
+}
+
 export function buildOverviewTaskCards({
   profile,
   dirtyFields,
@@ -362,26 +366,33 @@ export function getCreateStepAvailability(form: Record<string, any>): DogProfile
 
 export function buildDogCreatePayload(form: Record<string, any>) {
   const treatInputMode = form.treatInputMode || 'ESTIMATE_LEVEL'
-  const payload: Record<string, any> = {
-    ...form,
-    birthday: normalizeDate(form.birthday),
-    currentWeightKg: parseValidWeight(form.currentWeightKg) ?? parseFloat(form.currentWeightKg),
-    mealsPerDay: parseInt(form.mealsPerDay, 10) || 2,
-    treatInputMode,
-    customBreedName: normalizeOptionalText(form.customBreedName),
-    allergyFoods: normalizeOptionalText(form.allergyFoods),
-    pickyFoods: normalizeOptionalText(form.pickyFoods),
-  }
-
   const manualTreatKcal = parseNonNegativeNumber(form.manualTreatKcal)
 
-  if (treatInputMode === 'EXACT_KCAL' && manualTreatKcal !== null) {
-    payload.manualTreatKcal = manualTreatKcal
-  } else {
-    delete payload.manualTreatKcal
-  }
-
-  return payload
+  return compactPayload({
+    name: normalizeRequiredText(form.name),
+    breedId: hasValue(form.breedId) ? form.breedId : undefined,
+    customBreedName: normalizeOptionalText(form.customBreedName),
+    birthday: normalizeDate(form.birthday),
+    currentWeightKg: parseValidWeight(form.currentWeightKg) ?? parseFloat(form.currentWeightKg),
+    gender: form.gender,
+    isNeutered: Boolean(form.isNeutered),
+    lifeStageOverride: hasValue(form.lifeStageOverride) ? form.lifeStageOverride : 'NONE',
+    sizeClassOverride: form.sizeClassOverride ?? null,
+    bcsScore: parseNonNegativeNumber(form.bcsScore) ?? undefined,
+    activityLevel: hasValue(form.activityLevel) ? form.activityLevel : undefined,
+    mealsPerDay: parseInt(form.mealsPerDay, 10) || 2,
+    treatInputMode,
+    treatLevel: hasValue(form.treatLevel) ? form.treatLevel : undefined,
+    manualTreatKcal:
+      treatInputMode === 'EXACT_KCAL'
+        ? (manualTreatKcal ?? undefined)
+        : undefined,
+    medicalRecords: normalizeArray(form.medicalRecords),
+    checkupRecords: normalizeArray(form.checkupRecords),
+    allergyRecords: normalizeArray(form.allergyRecords),
+    allergyFoods: normalizeOptionalText(form.allergyFoods),
+    pickyFoods: normalizeOptionalText(form.pickyFoods),
+  })
 }
 
 export function getDogHealthValidationError(form: Record<string, any>) {
@@ -433,21 +444,26 @@ export function buildDogEditPayload(
   section: DogProfileEditSection,
 ) {
   if (section === 'basic') {
+    const weight = parseValidWeight(form.currentWeightKg)
+
     return compactPayload({
       name: normalizeRequiredText(form.name),
+      breedId: hasValue(form.breedId) ? form.breedId : undefined,
+      customBreedName: normalizeOptionalText(form.customBreedName),
       birthday: normalizeDate(form.birthday),
+      currentWeightKg: weight ?? undefined,
       gender: form.gender,
+      isNeutered: typeof form.isNeutered === 'boolean' ? form.isNeutered : undefined,
+      sizeClassOverride: form.sizeClassOverride ?? null,
     })
   }
 
   if (section === 'feeding') {
     const treatInputMode = form.treatInputMode || 'ESTIMATE_LEVEL'
-    const weight = parseValidWeight(form.currentWeightKg)
     const bcsScore = parseNonNegativeNumber(form.bcsScore)
     const manualTreatKcal = parseNonNegativeNumber(form.manualTreatKcal)
 
     return compactPayload({
-      currentWeightKg: weight ?? undefined,
       bcsScore: bcsScore ?? undefined,
       activityLevel: hasValue(form.activityLevel) ? form.activityLevel : undefined,
       sizeClassOverride: form.sizeClassOverride ?? null,

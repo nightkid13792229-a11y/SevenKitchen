@@ -6,6 +6,7 @@ import {
   canAdvanceCreateStep,
   getDogHealthValidationError,
   getCreateStepAvailability,
+  getDogCreateLegacyRedirectRoute,
   getNextCreateStep,
   getRecommendationDirtyFields,
   resolveDogProfileEntryRoute,
@@ -41,6 +42,16 @@ describe('dog-profile-form', () => {
 
   it('routes create entry to the dog create page', () => {
     expect(resolveDogProfileEntryRoute()).toBe('/pages/dog-create/index')
+  })
+
+  it('redirects legacy dog-create edit links to the overview page', () => {
+    expect(getDogCreateLegacyRedirectRoute('dog-1')).toBe(
+      '/pages/dog-profile-overview/index?dogId=dog-1',
+    )
+  })
+
+  it('does not redirect normal dog-create links', () => {
+    expect(getDogCreateLegacyRedirectRoute()).toBe('')
   })
 
   it('marks feeding as stale when the current weight changes', () => {
@@ -216,6 +227,7 @@ describe('dog-profile-form', () => {
 
     expect(payload.birthday).toBe('2021-01-01T00:00:00.000Z')
     expect(payload.currentWeightKg).toBe(11)
+    expect(payload.isNeutered).toBe(false)
     expect(payload.mealsPerDay).toBe(2)
     expect(payload.treatInputMode).toBe('ESTIMATE_LEVEL')
     expect(payload.customBreedName).toBeNull()
@@ -272,19 +284,28 @@ describe('dog-profile-form', () => {
     expect(payload.manualTreatKcal).toBeUndefined()
   })
 
-  it('builds a basic edit payload without unrelated feeding or health fields', () => {
+  it('builds a basic edit payload with inline-overview editable fields and without unrelated health fields', () => {
     const payload = buildDogEditPayload({
       name: '七七',
+      breedId: 'breed-1',
+      customBreedName: '',
       birthday: '2021-01-01',
       gender: 'FEMALE',
+      isNeutered: true,
+      sizeClassOverride: 'MEDIUM',
       currentWeightKg: '12.4',
       medicalRecords: [{ chiefComplaint: '胃炎' }],
     }, 'basic')
 
     expect(payload).toEqual({
       name: '七七',
+      breedId: 'breed-1',
+      customBreedName: null,
       birthday: '2021-01-01T00:00:00.000Z',
+      currentWeightKg: 12.4,
       gender: 'FEMALE',
+      isNeutered: true,
+      sizeClassOverride: 'MEDIUM',
     })
   })
 
@@ -302,7 +323,6 @@ describe('dog-profile-form', () => {
     }, 'feeding')
 
     expect(payload).toEqual({
-      currentWeightKg: 11,
       bcsScore: 5,
       activityLevel: 'NORMAL',
       mealsPerDay: 2,
@@ -409,5 +429,36 @@ describe('dog-profile-form', () => {
         allergyRecords: [{ allergen: '', notes: '疑似对鸡肉不耐受', attachments: [] }],
       }),
     ).toBe('请补充第 1 条过敏记录的过敏原')
+  })
+
+  it('includes current weight in the basic edit payload', () => {
+    const payload = buildDogEditPayload({
+      name: 'Seven',
+      breedId: 'breed-1',
+      customBreedName: '',
+      birthday: '2023-04-06',
+      gender: 'MALE',
+      isNeutered: true,
+      currentWeightKg: '6.7',
+      sizeClassOverride: null,
+    }, 'basic')
+
+    expect(payload.currentWeightKg).toBe(6.7)
+  })
+
+  it('does not send current weight from the feeding edit payload anymore', () => {
+    const payload = buildDogEditPayload({
+      currentWeightKg: '6.7',
+      bcsScore: 5,
+      activityLevel: 'NORMAL',
+      sizeClassOverride: null,
+      mealsPerDay: '2',
+      treatInputMode: 'ESTIMATE_LEVEL',
+      treatLevel: 'LOW',
+      manualTreatKcal: '',
+    }, 'feeding')
+
+    expect(payload).not.toHaveProperty('currentWeightKg')
+    expect(payload.bcsScore).toBe(5)
   })
 })

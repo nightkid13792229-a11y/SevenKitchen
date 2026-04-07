@@ -78,6 +78,9 @@
 - [ ] 目标环境已备份数据库
 - [ ] 执行 `npx prisma generate`
 - [ ] 执行 `npx prisma migrate deploy`
+- [ ] 确认本次财务相关迁移已包含：
+  - `20260403183000_add_reimbursement_paid_fields`
+  - `20260403190000_add_finance_expense_foundation`
 - [ ] 确认以下结构存在：
   - `reimbursement.paid_at`
   - `reimbursement.paid_by_id`
@@ -85,12 +88,37 @@
   - `expense_bill`
   - `expense_bill_payment`
 
+建议命令：
+
+```bash
+cd backend
+npx prisma generate
+npx prisma migrate deploy
+```
+
 ### B2. 后端构建与启动
 
 - [ ] 在部署环境执行后端正式构建
 - [ ] 启动后端服务
 - [ ] 验证健康检查：
   - `/api/v1/health`
+
+建议命令：
+
+```bash
+cd backend
+npm install
+npm run build
+npm run start:prod
+```
+
+如果部署环境也遇到 `EMFILE`，先单独执行：
+
+```bash
+cd backend
+npx tsc -p tsconfig.build.json --pretty false
+node copy-fonts.js
+```
 
 ### B3. 财务接口检查
 
@@ -105,6 +133,27 @@
 - [ ] 生产环境已配置真实 COS 凭据
 - [ ] 确认生产环境不会走本地 mock 上传逻辑
 - [ ] 随机上传 1 张图片，确认可预览、可回显
+
+### B5. 前端与小程序构建准备
+
+- [ ] 管理后台构建通过
+- [ ] 小程序生产构建通过
+- [ ] 小程序构建产物路径确认无误
+
+建议命令：
+
+```bash
+cd admin-web
+npm install
+npm run build
+```
+
+```bash
+cd miniapp
+npm install
+bash scripts/mp-weixin-build.sh
+bash scripts/mp-weixin-verify.sh
+```
 
 ## 阶段 C：灰度发布执行
 
@@ -197,6 +246,30 @@
 7. [ ] 验证管理员登录与财务中心主页面
 8. [ ] 构建并上传小程序版本
 9. [ ] 完成上线后 smoke test
+
+建议命令：
+
+```bash
+cd backend
+npx prisma generate
+npx prisma migrate deploy
+npm run build
+npm run start:prod
+```
+
+```bash
+cd admin-web
+npm run build
+```
+
+```bash
+./deploy-admin-web.sh
+```
+
+```bash
+cd miniapp
+bash scripts/mp-weixin-build.sh
+```
 
 ## 阶段 G：回滚预案
 

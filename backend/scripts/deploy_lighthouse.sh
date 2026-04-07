@@ -81,6 +81,16 @@ else
 fi
 echo ""
 
+# Step 3.5: Rebuild native dependencies explicitly for pnpm 10+
+echo "Step 3.5: Rebuilding native dependencies..."
+if pnpm rebuild canvas sharp bcrypt; then
+  ok "Native dependencies rebuilt"
+else
+  fail "Failed to rebuild native dependencies (canvas/sharp/bcrypt)"
+  exit 1
+fi
+echo ""
+
 # Step 4: Generate Prisma Client
 echo "Step 4: Generating Prisma Client..."
 if [ -z "${DATABASE_URL:-}" ]; then

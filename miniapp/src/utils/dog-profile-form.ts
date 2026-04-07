@@ -343,25 +343,29 @@ export function buildOverviewTaskCards({
 }
 
 export function getCreateStepAvailability(form: Record<string, any>): DogProfileCreateStepAvailability {
-  const basic = Boolean(
+  const hasBasicInfo = Boolean(
     hasValue(form.name) &&
     hasValue(form.breedId) &&
     hasValue(form.birthday),
   )
-  const feeding = basic
-  const needsSizeClassOverride = form.breedId === MIXED_BREED_VIRTUAL_ID
-  const needsManualTreatKcal = form.treatInputMode === 'EXACT_KCAL'
   const hasValidWeight = parseValidWeight(form.currentWeightKg) !== null
+  const needsSizeClassOverride = form.breedId === MIXED_BREED_VIRTUAL_ID
+  const feeding = Boolean(
+    hasBasicInfo &&
+    hasValidWeight &&
+    (!needsSizeClassOverride || hasValue(form.sizeClassOverride)),
+  )
+  const needsManualTreatKcal = form.treatInputMode === 'EXACT_KCAL'
   const hasValidManualTreatKcal = parseNonNegativeNumber(form.manualTreatKcal) !== null
   const recommendation = Boolean(
-    basic &&
+    hasBasicInfo &&
     hasValidWeight &&
     hasValue(form.activityLevel) &&
     (!needsSizeClassOverride || hasValue(form.sizeClassOverride)) &&
     (!needsManualTreatKcal || hasValidManualTreatKcal),
   )
 
-  return { basic: true, feeding, recommendation, health: recommendation }
+  return { basic: hasBasicInfo, feeding, recommendation, health: recommendation }
 }
 
 export function buildDogCreatePayload(form: Record<string, any>) {

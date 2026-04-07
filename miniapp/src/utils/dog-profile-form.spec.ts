@@ -121,15 +121,18 @@ describe('dog-profile-form', () => {
     ).toBe(true)
   })
 
-  it('keeps recommendation locked when weight input is not a valid number', () => {
+  it('keeps the basic step locked when weight input is not a valid number', () => {
     expect(
-      getCreateStepAvailability({
-        name: '七七',
-        breedId: '550e8400-e29b-41d4-a716-446655440000',
-        birthday: '2021-01-01',
-        currentWeightKg: 'abc',
-        activityLevel: 'NORMAL',
-      }).recommendation,
+      canAdvanceCreateStep(
+        'basic',
+        getCreateStepAvailability({
+          name: '七七',
+          breedId: '550e8400-e29b-41d4-a716-446655440000',
+          birthday: '2021-01-01',
+          currentWeightKg: 'abc',
+          activityLevel: 'NORMAL',
+        }),
+      ),
     ).toBe(false)
   })
 

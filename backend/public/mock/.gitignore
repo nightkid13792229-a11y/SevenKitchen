@@ -1,0 +1,8 @@
+*
+!.gitignore
+!reimbursement-payment-proofs/
+!reimbursement-receipts/
+reimbursement-payment-proofs/*
+!reimbursement-payment-proofs/test-proof.png
+reimbursement-receipts/*
+!reimbursement-receipts/test-receipt.png

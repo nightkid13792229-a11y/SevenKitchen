@@ -40,7 +40,7 @@
         <el-date-picker
           v-model="form.dueAt"
           type="datetime"
-          value-format="YYYY-MM-DDTHH:mm:ss.SSS[Z]"
+          format="YYYY-MM-DD HH:mm:ss"
           style="width: 100%"
         />
       </el-form-item>
@@ -85,18 +85,22 @@ const categoryOptions = [
   { label: '其他杂项', value: 'OTHER' }
 ]
 
-const createEmptyForm = (): CreateExpenseBillPayload => ({
+type ExpenseBillFormModel = Omit<CreateExpenseBillPayload, 'dueAt'> & {
+  dueAt: Date | null
+}
+
+const createEmptyForm = (): ExpenseBillFormModel => ({
   title: '',
   category: 'RENT',
   amount: 0,
   payeeName: '',
   recognitionStart: '',
   recognitionEnd: '',
-  dueAt: '',
+  dueAt: null,
   note: ''
 })
 
-const form = reactive<CreateExpenseBillPayload>(createEmptyForm())
+const form = reactive<ExpenseBillFormModel>(createEmptyForm())
 const state = reactive({ submitting: false })
 
 const dialogVisible = computed({
@@ -125,7 +129,10 @@ const submit = async () => {
 
   state.submitting = true
   try {
-    await financeApi.createExpenseBill(form)
+    await financeApi.createExpenseBill({
+      ...form,
+      dueAt: form.dueAt.toISOString()
+    })
     ElMessage.success('费用单已创建')
     emit('saved')
     dialogVisible.value = false

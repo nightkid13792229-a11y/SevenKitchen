@@ -6,6 +6,8 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import { dirname, join } from 'path';
 
 export interface UploadResult {
   url: string;
@@ -19,6 +21,10 @@ export class TencentCosService {
   private readonly bucket: string;
   private readonly region: string;
   private readonly cdnDomain: string | undefined;
+  private readonly nodeEnv: string;
+  private readonly hasCredentials: boolean;
+  private readonly mockUploadEnabled: boolean;
+  private readonly mockBaseUrl: string;
 
   constructor(private readonly configService: ConfigService) {
     this.secretId = this.configService.get<string>('COS_SECRET_ID') || '';
@@ -27,14 +33,32 @@ export class TencentCosService {
     this.region =
       this.configService.get<string>('COS_REGION') || 'ap-guangzhou';
     this.cdnDomain = this.configService.get<string>('COS_CDN_DOMAIN');
+    this.nodeEnv =
+      this.configService.get<string>('NODE_ENV') ||
+      process.env.NODE_ENV ||
+      'development';
+    this.hasCredentials = !!(
+      this.secretId &&
+      this.secretKey &&
+      this.bucket
+    );
+    this.mockUploadEnabled = !this.hasCredentials && this.nodeEnv !== 'production';
+    this.mockBaseUrl =
+      this.configService.get<string>('APP_BASE_URL') ||
+      `http://localhost:${process.env.PORT || '3000'}`;
 
-    if (!this.secretId || !this.secretKey || !this.bucket) {
+    if (!this.hasCredentials) {
       console.error(
         '[TencentCosService] Missing COS credentials. Image upload will not work.',
       );
       console.error(
         '[TencentCosService] Required: COS_SECRET_ID, COS_SECRET_KEY, COS_BUCKET',
       );
+      if (this.mockUploadEnabled) {
+        console.warn(
+          '[TencentCosService] Falling back to mock upload mode outside production.',
+        );
+      }
     }
   }
 
@@ -49,30 +73,19 @@ export class TencentCosService {
     filename?: string,
     folder: string = 'recipes',
   ): Promise<UploadResult> {
-    if (!this.secretId || !this.secretKey || !this.bucket) {
+    const { fileBuffer, originalName } = this.resolveFilePayload(
+      file,
+      filename,
+      'image',
+    );
+    const key = this.buildObjectKey(folder, originalName);
+
+    if (!this.hasCredentials) {
+      if (this.mockUploadEnabled) {
+        return this.buildMockUploadResult(key, fileBuffer);
+      }
       throw new BadRequestException('COS credentials not configured');
     }
-
-    // Get file buffer and original name
-    let fileBuffer: Buffer;
-    let originalName: string;
-
-    if (Buffer.isBuffer(file)) {
-      fileBuffer = file;
-      originalName = filename || `image-${Date.now()}`;
-    } else if ((file as any).buffer) {
-      fileBuffer = (file as any).buffer;
-      originalName =
-        (file as any).originalname || filename || `image-${Date.now()}`;
-    } else {
-      throw new BadRequestException('Invalid file format');
-    }
-
-    // Generate unique file key
-    const ext = this.getFileExtension(originalName);
-    const timestamp = Date.now();
-    const random = crypto.randomBytes(4).toString('hex');
-    const key = `${folder}/${timestamp}-${random}.${ext}`;
 
     try {
       // Using cos-nodejs-sdk-v5
@@ -107,11 +120,7 @@ export class TencentCosService {
         );
       });
 
-      // Generate URL
-      // Use HTTPS for CDN domain (SSL certificate configured)
-      const url = this.cdnDomain
-        ? `https://${this.cdnDomain}/${key}`
-        : `https://${this.bucket}.cos.${this.region}.myqcloud.com/${key}`;
+      const url = this.buildCosUrl(key);
 
       console.log(`[TencentCosService] Uploaded ${key} to ${url}`);
 
@@ -126,7 +135,15 @@ export class TencentCosService {
    * Delete image from COS
    */
   async deleteImage(key: string): Promise<void> {
-    if (!this.secretId || !this.secretKey || !this.bucket) {
+    if (!this.hasCredentials) {
+      if (this.isMockKey(key)) {
+        const localPath = this.resolveMockFilePath(key);
+        if (existsSync(localPath)) {
+          rmSync(localPath, { force: true });
+        }
+        console.log(`[TencentCosService] Mock upload mode: deleted ${key}`);
+        return;
+      }
       throw new BadRequestException('COS credentials not configured');
     }
 
@@ -195,7 +212,10 @@ export class TencentCosService {
    * @returns true if file exists, false otherwise
    */
   async checkFileExists(url: string): Promise<boolean> {
-    if (!this.secretId || !this.secretKey || !this.bucket) {
+    if (!this.hasCredentials) {
+      if (url.startsWith('mock://')) {
+        return true;
+      }
       console.warn(
         '[TencentCosService] COS credentials not configured, assuming file does not exist',
       );
@@ -258,30 +278,19 @@ export class TencentCosService {
     filename?: string,
     folder: string = 'general',
   ): Promise<UploadResult> {
-    if (!this.secretId || !this.secretKey || !this.bucket) {
+    const { fileBuffer, originalName } = this.resolveFilePayload(
+      file,
+      filename,
+      'file',
+    );
+    const key = this.buildObjectKey(folder, originalName);
+
+    if (!this.hasCredentials) {
+      if (this.mockUploadEnabled) {
+        return this.buildMockUploadResult(key, fileBuffer);
+      }
       throw new BadRequestException('COS credentials not configured');
     }
-
-    // Get file buffer and original name
-    let fileBuffer: Buffer;
-    let originalName: string;
-
-    if (Buffer.isBuffer(file)) {
-      fileBuffer = file;
-      originalName = filename || `file-${Date.now()}`;
-    } else if ((file as any).buffer) {
-      fileBuffer = (file as any).buffer;
-      originalName =
-        (file as any).originalname || filename || `file-${Date.now()}`;
-    } else {
-      throw new BadRequestException('Invalid file format');
-    }
-
-    // Generate unique file key
-    const ext = this.getFileExtension(originalName);
-    const timestamp = Date.now();
-    const random = crypto.randomBytes(4).toString('hex');
-    const key = `${folder}/${timestamp}-${random}.${ext}`;
 
     try {
       // Using cos-nodejs-sdk-v5
@@ -316,10 +325,7 @@ export class TencentCosService {
         );
       });
 
-      // Generate URL
-      const url = this.cdnDomain
-        ? `https://${this.cdnDomain}/${key}`
-        : `https://${this.bucket}.cos.${this.region}.myqcloud.com/${key}`;
+      const url = this.buildCosUrl(key);
 
       console.log(`[TencentCosService] Uploaded ${key} to ${url}`);
 
@@ -339,5 +345,61 @@ export class TencentCosService {
       return 'bin';
     }
     return ext;
+  }
+
+  private resolveFilePayload(
+    file: Buffer | Express.Multer.File,
+    filename: string | undefined,
+    prefix: 'image' | 'file',
+  ): { fileBuffer: Buffer; originalName: string } {
+    if (Buffer.isBuffer(file)) {
+      return {
+        fileBuffer: file,
+        originalName: filename || `${prefix}-${Date.now()}`,
+      };
+    }
+
+    if ((file as any).buffer) {
+      return {
+        fileBuffer: (file as any).buffer,
+        originalName:
+          (file as any).originalname || filename || `${prefix}-${Date.now()}`,
+      };
+    }
+
+    throw new BadRequestException('Invalid file format');
+  }
+
+  private buildObjectKey(folder: string, originalName: string): string {
+    const ext = this.getFileExtension(originalName);
+    const timestamp = Date.now();
+    const random = crypto.randomBytes(4).toString('hex');
+    return `${folder}/${timestamp}-${random}.${ext}`;
+  }
+
+  private buildCosUrl(key: string): string {
+    return this.cdnDomain
+      ? `https://${this.cdnDomain}/${key}`
+      : `https://${this.bucket}.cos.${this.region}.myqcloud.com/${key}`;
+  }
+
+  private buildMockUploadResult(key: string, fileBuffer: Buffer): UploadResult {
+    const mockKey = `mock/${key}`;
+    const localPath = this.resolveMockFilePath(mockKey);
+    mkdirSync(dirname(localPath), { recursive: true });
+    writeFileSync(localPath, fileBuffer);
+    const url = `${this.mockBaseUrl}/${mockKey}`;
+    console.warn(
+      `[TencentCosService] Mock upload mode: returning placeholder URL ${url}`,
+    );
+    return { url, key: mockKey };
+  }
+
+  private isMockKey(key: string): boolean {
+    return key.startsWith('mock/');
+  }
+
+  private resolveMockFilePath(key: string): string {
+    return join(process.cwd(), 'public', key);
   }
 }

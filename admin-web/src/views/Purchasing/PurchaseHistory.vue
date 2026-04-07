@@ -21,12 +21,12 @@
       </el-col>
       <el-col :span="6">
         <el-card shadow="hover" class="stat-card warning">
-          <el-statistic title="采购总成本" :value="`¥${stats.totalCost.toFixed(2)}`" />
+          <el-statistic title="采购总成本" :value="stats.totalCost" :precision="2" prefix="¥" />
         </el-card>
       </el-col>
       <el-col :span="6">
         <el-card shadow="hover" class="stat-card info">
-          <el-statistic title="平均清单成本" :value="`¥${stats.averageCostPerList.toFixed(2)}`" />
+          <el-statistic title="平均清单成本" :value="stats.averageCostPerList" :precision="2" prefix="¥" />
         </el-card>
       </el-col>
     </el-row>
@@ -248,8 +248,8 @@ const loadStatistics = async () => {
     const res = await purchasingApi.getPurchaseStatistics(params)
     stats.totalLists = res.totalLists
     stats.totalItems = res.totalItems
-    stats.totalCost = res.totalCost
-    stats.averageCostPerList = res.averageCostPerList
+    stats.totalCost = Number(res.totalCost ?? 0)
+    stats.averageCostPerList = Number(res.averageCostPerList ?? 0)
   } catch (error) {
     console.error('加载统计数据失败', error)
   }

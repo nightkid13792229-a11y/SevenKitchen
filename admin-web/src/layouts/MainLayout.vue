@@ -57,10 +57,24 @@
           <el-icon><Setting /></el-icon>
           <span>全局配置</span>
         </el-menu-item>
-        <el-menu-item index="/finance/overview">
-          <el-icon><Money /></el-icon>
-          <span>财务中心</span>
-        </el-menu-item>
+        <el-sub-menu index="purchasing">
+          <template #title>
+            <el-icon><List /></el-icon>
+            <span>采购管理</span>
+          </template>
+          <el-menu-item index="/purchasing/reimbursements">报销审核</el-menu-item>
+          <el-menu-item index="/purchasing/history">采购历史</el-menu-item>
+        </el-sub-menu>
+        <el-sub-menu index="finance">
+          <template #title>
+            <el-icon><Money /></el-icon>
+            <span>财务中心</span>
+          </template>
+          <el-menu-item index="/finance/overview">财务总览</el-menu-item>
+          <el-menu-item index="/finance/expense-bills">费用与待支付</el-menu-item>
+          <el-menu-item index="/finance/expense-analysis">费用分析</el-menu-item>
+          <el-menu-item index="/finance/contribution-analysis">经营贡献分析</el-menu-item>
+        </el-sub-menu>
       </el-menu>
     </el-aside>
 

@@ -226,10 +226,10 @@
         <el-form :model="reviewForm" label-width="100px">
           <el-form-item label="审核决定">
             <el-radio-group v-model="reviewForm.decision">
-              <el-radio label="REJECT">
+              <el-radio value="REJECT">
                 <el-text type="danger">驳回</el-text>
               </el-radio>
-              <el-radio label="REQUIRES_RESUBMIT">
+              <el-radio value="REQUIRES_RESUBMIT">
                 <el-text type="warning">要求重新提交</el-text>
               </el-radio>
             </el-radio-group>

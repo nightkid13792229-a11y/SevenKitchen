@@ -98,6 +98,12 @@
       }
     },
     {
+      "path": "pages/login/staff",
+      "style": {
+        "navigationBarTitleText": "员工登录"
+      }
+    },
+    {
       "path": "pages/recipe-order/index",
       "style": {
         "navigationBarTitleText": "订购成品"
@@ -291,5 +297,4 @@
     ]
   }
 }
-
 

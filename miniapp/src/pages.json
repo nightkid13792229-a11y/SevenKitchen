@@ -86,9 +86,21 @@
       }
     },
     {
+      "path": "pages/network-settings/index",
+      "style": {
+        "navigationBarTitleText": "网络设置"
+      }
+    },
+    {
       "path": "pages/login/index",
       "style": {
         "navigationBarTitleText": "微信登录"
+      }
+    },
+    {
+      "path": "pages/login/staff",
+      "style": {
+        "navigationBarTitleText": "员工登录"
       }
     },
     {

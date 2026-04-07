@@ -12,7 +12,13 @@ describe('FinanceReportService', () => {
 
   beforeEach(() => {
     jest.clearAllMocks();
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-04-07T12:00:00.000Z'));
     service = new FinanceReportService(prisma);
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
   });
 
   it('computes overview from paid orders, shipped orders, paid reimbursements, and expense bills', async () => {
@@ -63,8 +69,39 @@ describe('FinanceReportService', () => {
     ).resolves.toMatchObject({
       cashIn: 399,
       operatingRevenue: 399,
-      cashOut: 1220,
+      cashOut: 220,
       pendingPayables: expect.any(Number),
+    });
+  });
+
+  it('excludes previously paid bills from pending payables without counting them in today cash out', async () => {
+    prisma.order.findMany.mockResolvedValueOnce([]).mockResolvedValueOnce([]);
+    prisma.reimbursement.findMany.mockResolvedValue([]);
+    prisma.expenseBill.findMany.mockResolvedValue([
+      {
+        id: 'bill-paid-earlier',
+        category: 'RENT',
+        amount: 3000,
+        recognitionStart: new Date('2026-04-01'),
+        recognitionEnd: new Date('2026-04-30'),
+        dueAt: new Date('2026-04-05'),
+        status: 'PAID',
+      },
+    ]);
+    prisma.expenseBillPayment.findMany.mockResolvedValue([
+      {
+        billId: 'bill-paid-earlier',
+        paidAmount: 3000,
+        paidAt: new Date('2026-04-05T10:00:00.000Z'),
+      },
+    ]);
+
+    await expect(
+      service.getOverview({ preset: 'TODAY', timezone: 'Asia/Shanghai' }),
+    ).resolves.toMatchObject({
+      cashOut: 0,
+      pendingPayables: 0,
+      actualExpense: 100,
     });
   });
 });

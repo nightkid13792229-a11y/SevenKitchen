@@ -69,7 +69,7 @@
           <el-date-picker
             v-model="paymentForm.paidAt"
             type="datetime"
-            value-format="YYYY-MM-DDTHH:mm:ss.SSS[Z]"
+            format="YYYY-MM-DD HH:mm:ss"
             style="width: 100%"
           />
         </el-form-item>
@@ -113,7 +113,7 @@ const submittingPayment = ref(false)
 const selectedBillId = ref<string | null>(null)
 const paymentForm = reactive({
   paidAmount: 0,
-  paidAt: '',
+  paidAt: null as Date | null,
   paymentMethod: 'BANK_TRANSFER',
   note: ''
 })
@@ -162,7 +162,7 @@ const loadBills = async () => {
 const openPaymentDialog = (row: ExpenseBillItem) => {
   selectedBillId.value = row.id
   paymentForm.paidAmount = Number(row.amount ?? 0)
-  paymentForm.paidAt = new Date().toISOString()
+  paymentForm.paidAt = new Date()
   paymentForm.paymentMethod = 'BANK_TRANSFER'
   paymentForm.note = ''
   paymentDialogVisible.value = true
@@ -178,7 +178,7 @@ const submitPayment = async () => {
   try {
     await financeApi.recordExpensePayment(selectedBillId.value, {
       paidAmount: paymentForm.paidAmount,
-      paidAt: paymentForm.paidAt,
+      paidAt: paymentForm.paidAt.toISOString(),
       paymentMethod: paymentForm.paymentMethod,
       paymentProofUrls: [],
       note: paymentForm.note

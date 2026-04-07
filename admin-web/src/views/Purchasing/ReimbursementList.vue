@@ -21,7 +21,7 @@
       </el-col>
       <el-col :span="6">
         <el-card shadow="hover" class="stat-card success">
-          <el-statistic title="报销总额" :value="`¥${stats.totalReimbursementAmount.toFixed(2)}`" />
+          <el-statistic title="报销总额" :value="stats.totalReimbursementAmount" :precision="2" prefix="¥" />
         </el-card>
       </el-col>
       <el-col :span="6">
@@ -204,10 +204,10 @@
 
         <el-form-item label="审核决定" required>
           <el-radio-group v-model="reviewForm.decision">
-            <el-radio label="REJECT">
+            <el-radio value="REJECT">
               <el-text type="danger">驳回</el-text>
             </el-radio>
-            <el-radio label="REQUIRES_RESUBMIT">
+            <el-radio value="REQUIRES_RESUBMIT">
               <el-text type="warning">要求重新提交</el-text>
             </el-radio>
           </el-radio-group>
@@ -354,7 +354,7 @@ const loadStatistics = async () => {
     const res = await purchasingApi.getPurchaseStatistics()
     stats.totalReimbursements = res.totalReimbursements
     stats.pendingReimbursements = res.pendingReimbursements
-    stats.totalReimbursementAmount = res.totalReimbursementAmount
+    stats.totalReimbursementAmount = Number(res.totalReimbursementAmount ?? 0)
     stats.thisMonthCount = res.totalReimbursements // 临时使用总数，后续可添加本月统计
   } catch (error) {
     console.error('加载统计数据失败', error)

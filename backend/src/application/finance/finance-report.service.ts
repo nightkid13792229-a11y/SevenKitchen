@@ -3,6 +3,11 @@ import { PrismaService } from '../../infrastructure/prisma.service';
 import { FinanceRangeDto } from '../../interfaces/dto/finance/finance-range.dto';
 import { FINANCE_EXPENSE_CATEGORY_LABELS } from './finance-categories';
 
+type ReimbursementCustomFee = {
+  amount?: number | string | null;
+  category?: string | null;
+};
+
 const startOfDay = (input: Date) => {
   const result = new Date(input);
   result.setHours(0, 0, 0, 0);
@@ -62,9 +67,12 @@ export class FinanceReportService {
 
   private expandReimbursementExpenses(reimbursements: Array<any>) {
     return reimbursements.flatMap((item) => {
-      const customFees = Array.isArray(item.customFees) ? item.customFees : [];
+      const customFees: ReimbursementCustomFee[] = Array.isArray(item.customFees)
+        ? item.customFees
+        : [];
       const customFeeTotal = customFees.reduce(
-        (sum, fee) => sum + Number(fee.amount ?? 0),
+        (sum: number, fee: ReimbursementCustomFee) =>
+          sum + Number(fee.amount ?? 0),
         0,
       );
       const rawMaterialAmount =
@@ -179,7 +187,7 @@ export class FinanceReportService {
           },
         }),
         this.prisma.expenseBillPayment.findMany({
-          where: { paidAt: { gte: start, lte: end } },
+          where: { paidAt: { lte: end } },
         }),
       ]);
 
@@ -195,10 +203,12 @@ export class FinanceReportService {
       (sum, item) => sum + Number(item.totalActualCost),
       0,
     );
-    const billCashOut = billPayments.reduce(
-      (sum, item) => sum + Number(item.paidAmount),
-      0,
-    );
+    const billCashOut = billPayments.reduce((sum, item) => {
+      const paidAt = new Date(item.paidAt);
+      return paidAt >= start && paidAt <= end
+        ? sum + Number(item.paidAmount)
+        : sum;
+    }, 0);
     const recognizedExpense = [
       ...this.expandReimbursementExpenses(reimbursements),
       ...this.allocateExpenseBills(bills, start, end),
@@ -278,11 +288,24 @@ export class FinanceReportService {
       groupKey:
         groupBy === 'ORDER'
           ? order.id
-          : String(order.items[0]?.recipeSnapshot?.name ?? '未命名食谱'),
+          : this.extractRecipeName(order.items[0]?.recipeSnapshot),
       revenue: Number(order.amountTotal),
       contributionCost: this.extractSnapshotCost(order.pricingBreakdownSnapshot),
       isEstimatedCost: true,
       label: '经营贡献分析，非正式财务利润',
     }));
+  }
+
+  private extractRecipeName(snapshot: unknown): string {
+    if (
+      snapshot &&
+      typeof snapshot === 'object' &&
+      'name' in snapshot &&
+      typeof (snapshot as { name?: unknown }).name === 'string'
+    ) {
+      return (snapshot as { name: string }).name;
+    }
+
+    return '未命名食谱';
   }
 }

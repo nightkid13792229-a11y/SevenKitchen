@@ -20,9 +20,9 @@ const handleChange = (value: string | number | boolean) => {
 <template>
   <div class="range-switcher">
     <el-radio-group :model-value="modelValue" @change="handleChange">
-      <el-radio-button label="TODAY">今天</el-radio-button>
-      <el-radio-button label="THIS_WEEK">本周</el-radio-button>
-      <el-radio-button label="THIS_MONTH">本月</el-radio-button>
+      <el-radio-button value="TODAY">今天</el-radio-button>
+      <el-radio-button value="THIS_WEEK">本周</el-radio-button>
+      <el-radio-button value="THIS_MONTH">本月</el-radio-button>
     </el-radio-group>
   </div>
 </template>

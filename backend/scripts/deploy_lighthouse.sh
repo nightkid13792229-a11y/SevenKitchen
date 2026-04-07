@@ -20,6 +20,8 @@ fail() { echo -e "${RED}✗ ${1}${NC}"; }
 # Resolve script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+SERVICE_NAME="${SERVICE_NAME:-sevenkitchen-backend}"
+ENV_FILE="${ENV_FILE:-$BACKEND_DIR/.env}"
 
 echo "=========================================="
 echo "SevenKitchen Backend Deployment"
@@ -33,7 +35,7 @@ cd "$BACKEND_DIR"
 
 # Step 1: Verify environment variables
 echo "Step 1: Verifying environment variables..."
-if ! bash scripts/verify_env.sh; then
+if ! ENV_FILE="$ENV_FILE" bash scripts/verify_env.sh; then
   fail "Environment variable verification failed"
   echo "Please fix the issues and run this script again."
   exit 1
@@ -41,11 +43,11 @@ fi
 echo ""
 
 # Load .env file if it exists
-if [ -f .env ]; then
+if [ -f "$ENV_FILE" ]; then
   set -a
-  source .env
+  source "$ENV_FILE"
   set +a
-  info "Loaded environment variables from .env"
+  info "Loaded environment variables from $ENV_FILE"
 fi
 
 # Step 2: Ensure corepack/pnpm is available
@@ -124,9 +126,9 @@ echo "Step 7: Restarting service..."
 SERVICE_INSTALLED=false
 
 # Check if systemd service exists (multiple detection methods)
-if systemctl list-unit-files sevenkitchen-backend.service >/dev/null 2>&1; then
+if systemctl list-unit-files "${SERVICE_NAME}.service" >/dev/null 2>&1; then
   SERVICE_INSTALLED=true
-elif [ -f /etc/systemd/system/sevenkitchen-backend.service ]; then
+elif [ -f "/etc/systemd/system/${SERVICE_NAME}.service" ]; then
   SERVICE_INSTALLED=true
 fi
 
@@ -134,24 +136,24 @@ if [ "$SERVICE_INSTALLED" = true ]; then
   info "Systemd service found, restarting..."
 
   # Always restart to ensure latest code is loaded
-  sudo systemctl restart sevenkitchen-backend
+  sudo systemctl restart "$SERVICE_NAME"
 
   # Wait for service to be ready
   info "Waiting for service to start..."
   sleep 3
 
   # Verify service is running
-  if systemctl is-active --quiet sevenkitchen-backend; then
+  if systemctl is-active --quiet "$SERVICE_NAME"; then
     ok "Service restarted and running"
   else
     fail "Service failed to start"
-    sudo systemctl status sevenkitchen-backend --no-pager
+    sudo systemctl status "$SERVICE_NAME" --no-pager
     exit 1
   fi
 
   # Show service status
   echo ""
-  sudo systemctl status sevenkitchen-backend --no-pager | head -15
+  sudo systemctl status "$SERVICE_NAME" --no-pager | head -15
 else
   warn "Systemd service is not installed"
   warn "To install systemd service, run: sudo bash scripts/install_systemd_service.sh"
@@ -181,7 +183,7 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
       sleep 2
     else
       warn "Health check failed after $MAX_RETRIES attempts - service may not be ready"
-      warn "Check logs: sudo journalctl -u sevenkitchen-backend -n 50"
+      warn "Check logs: sudo journalctl -u ${SERVICE_NAME} -n 50"
     fi
   fi
 done
@@ -205,9 +207,8 @@ ok "Deployment completed!"
 echo "=========================================="
 echo ""
 info "Next steps:"
-echo "  1. Verify the service is running: sudo systemctl status sevenkitchen-backend"
-echo "  2. Check service logs: sudo journalctl -u sevenkitchen-backend -f"
+echo "  1. Verify the service is running: sudo systemctl status ${SERVICE_NAME}"
+echo "  2. Check service logs: sudo journalctl -u ${SERVICE_NAME} -f"
 echo "  3. Test health endpoint: curl http://127.0.0.1:${PORT:-3000}/api/v1/health"
 echo "  4. Test public access: curl http://<your-public-ip>:${PORT:-3000}/api/v1/health"
 echo ""
-

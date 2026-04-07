@@ -19,7 +19,12 @@ fail() { echo -e "${RED}✗ ${1}${NC}"; }
 
 # Resolve script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-BACKEND_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+BACKEND_DIR="${BACKEND_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+SERVICE_NAME="${SERVICE_NAME:-sevenkitchen-backend}"
+SERVICE_DESCRIPTION="${SERVICE_DESCRIPTION:-SevenKitchen Backend API Service}"
+SERVICE_IDENTIFIER="${SERVICE_IDENTIFIER:-$SERVICE_NAME}"
+ENV_FILE="${ENV_FILE:-$BACKEND_DIR/.env}"
+APP_ENTRY="${APP_ENTRY:-$BACKEND_DIR/dist/src/main.js}"
 
 # Check if running as root (for systemctl operations)
 if [ "$EUID" -ne 0 ]; then
@@ -66,23 +71,23 @@ info "Node.js path: $NODE_PATH"
 # Get pnpm path (if available)
 PNPM_PATH=$(which pnpm 2>/dev/null || echo "")
 
-# Determine PORT from .env or use default
-PORT=3000
-if [ -f "$BACKEND_DIR/.env" ]; then
-  if grep -q "^PORT=" "$BACKEND_DIR/.env"; then
-    PORT=$(grep "^PORT=" "$BACKEND_DIR/.env" | cut -d '=' -f2 | tr -d '"' | tr -d "'" | xargs)
+# Determine PORT from env file or use default
+PORT="${PORT:-3000}"
+if [ -f "$ENV_FILE" ]; then
+  if grep -q "^PORT=" "$ENV_FILE"; then
+    PORT=$(grep "^PORT=" "$ENV_FILE" | cut -d '=' -f2 | tr -d '"' | tr -d "'" | xargs)
   fi
 fi
 info "Service will listen on port: $PORT"
 
 # Create systemd service file
-SERVICE_FILE="/etc/systemd/system/sevenkitchen-backend.service"
+SERVICE_FILE="/etc/systemd/system/${SERVICE_NAME}.service"
 
 info "Creating systemd service file: $SERVICE_FILE"
 
 cat > "$SERVICE_FILE" << EOF
 [Unit]
-Description=SevenKitchen Backend API Service
+Description=${SERVICE_DESCRIPTION}
 After=network.target postgresql.service
 Wants=network.target
 
@@ -91,13 +96,14 @@ Type=simple
 User=$SERVICE_USER
 WorkingDirectory=$BACKEND_DIR
 Environment="NODE_ENV=production"
-EnvironmentFile=$BACKEND_DIR/.env
-ExecStart=$NODE_PATH $BACKEND_DIR/dist/main.js
+Environment="PORT=$PORT"
+EnvironmentFile=$ENV_FILE
+ExecStart=$NODE_PATH $APP_ENTRY
 Restart=always
 RestartSec=10
 StandardOutput=journal
 StandardError=journal
-SyslogIdentifier=sevenkitchen-backend
+SyslogIdentifier=$SERVICE_IDENTIFIER
 
 # Security settings
 NoNewPrivileges=true
@@ -121,17 +127,17 @@ echo ""
 
 # Enable service (start on boot)
 info "Enabling service (start on boot)..."
-systemctl enable sevenkitchen-backend.service
+systemctl enable "${SERVICE_NAME}.service"
 ok "Service enabled"
 echo ""
 
 # Check if service is already running
-if systemctl is-active --quiet sevenkitchen-backend.service; then
+if systemctl is-active --quiet "${SERVICE_NAME}.service"; then
   info "Service is already running, restarting..."
-  systemctl restart sevenkitchen-backend.service
+  systemctl restart "${SERVICE_NAME}.service"
 else
   info "Starting service..."
-  systemctl start sevenkitchen-backend.service
+  systemctl start "${SERVICE_NAME}.service"
 fi
 
 # Wait a moment for service to start
@@ -140,7 +146,7 @@ sleep 2
 # Check service status
 echo ""
 info "Service status:"
-systemctl status sevenkitchen-backend.service --no-pager -l || true
+systemctl status "${SERVICE_NAME}.service" --no-pager -l || true
 echo ""
 
 # Show useful commands
@@ -149,16 +155,16 @@ ok "Systemd service installed successfully!"
 echo "=========================================="
 echo ""
 info "Useful commands:"
-echo "  Start service:   sudo systemctl start sevenkitchen-backend"
-echo "  Stop service:    sudo systemctl stop sevenkitchen-backend"
-echo "  Restart service: sudo systemctl restart sevenkitchen-backend"
-echo "  View status:     sudo systemctl status sevenkitchen-backend"
-echo "  View logs:       sudo journalctl -u sevenkitchen-backend -f"
-echo "  View recent:     sudo journalctl -u sevenkitchen-backend -n 50"
+echo "  Start service:   sudo systemctl start ${SERVICE_NAME}"
+echo "  Stop service:    sudo systemctl stop ${SERVICE_NAME}"
+echo "  Restart service: sudo systemctl restart ${SERVICE_NAME}"
+echo "  View status:     sudo systemctl status ${SERVICE_NAME}"
+echo "  View logs:       sudo journalctl -u ${SERVICE_NAME} -f"
+echo "  View recent:     sudo journalctl -u ${SERVICE_NAME} -n 50"
 echo ""
 
 # Verify service is running
-if systemctl is-active --quiet sevenkitchen-backend.service; then
+if systemctl is-active --quiet "${SERVICE_NAME}.service"; then
   ok "Service is running"
   
   # Test health endpoint
@@ -168,15 +174,14 @@ if systemctl is-active --quiet sevenkitchen-backend.service; then
     ok "Health endpoint is responding"
   else
     warn "Health endpoint is not responding yet (service may still be starting)"
-    warn "Check logs: sudo journalctl -u sevenkitchen-backend -f"
+    warn "Check logs: sudo journalctl -u ${SERVICE_NAME} -f"
   fi
 else
   fail "Service failed to start"
   echo ""
   info "Check logs for errors:"
-  echo "  sudo journalctl -u sevenkitchen-backend -n 50"
+  echo "  sudo journalctl -u ${SERVICE_NAME} -n 50"
   exit 1
 fi
 
 echo ""
-

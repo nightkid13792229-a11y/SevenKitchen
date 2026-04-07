@@ -124,7 +124,7 @@ import { ref, onMounted, reactive } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import axios from 'axios'
 
-const API_BASE = 'http://localhost:3000/api/v1'
+const API_BASE = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
 interface AftersaleOrder {
   id: string

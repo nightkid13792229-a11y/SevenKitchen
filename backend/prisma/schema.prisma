@@ -489,8 +489,8 @@ model IngredientTagAssignment {
 }
 
 model RecommendedProduct {
-  id              String     @id @default(uuid())
-  ingredientId    String     @map("ingredient_id")
+  id              String     @id @default(uuid()) @db.VarChar(36)
+  ingredientId    String     @map("ingredient_id") @db.VarChar(36)
   name            String
   brand           String?    @db.VarChar(100)
   productModel    String?    @map("product_model") @db.VarChar(100)
@@ -502,7 +502,7 @@ model RecommendedProduct {
   isActive        Boolean    @default(true) @map("is_active")
   sortOrder       Int        @default(0) @map("sort_order")
   createdAt       DateTime   @default(now()) @map("created_at")
-  updatedAt       DateTime   @updatedAt @map("updated_at")
+  updatedAt       DateTime   @default(now()) @updatedAt @map("updated_at")
 
   ingredient      Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
 
@@ -512,8 +512,8 @@ model RecommendedProduct {
 }
 
 model ProcurementSku {
-  id                        String     @id @default(uuid())
-  ingredientId              String     @map("ingredient_id")
+  id                        String     @id @default(uuid()) @db.VarChar(36)
+  ingredientId              String     @map("ingredient_id") @db.VarChar(36)
   name                      String
   brand                     String?    @db.VarChar(100)
   productModel              String?    @map("product_model") @db.VarChar(100)
@@ -524,7 +524,7 @@ model ProcurementSku {
   isActive                  Boolean    @default(true) @map("is_active")
   sortOrder                 Int        @default(0) @map("sort_order")
   createdAt                 DateTime   @default(now()) @map("created_at")
-  updatedAt                 DateTime   @updatedAt @map("updated_at")
+  updatedAt                 DateTime   @default(now()) @updatedAt @map("updated_at")
 
   ingredient Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
 
@@ -712,7 +712,7 @@ model GlobalConfig {
   paymentTimeoutMinutes     Int      @default(30) @map("payment_timeout_minutes")
   equipmentRecommendations  Json?    @map("equipment_recommendations")
   minPotWeightG             Int      @default(2000) @map("min_pot_weight_g")
-  ingredientPriceAutoApproveThreshold Decimal @default(0.08) @map("ingredient_price_auto_approve_threshold") @db.Decimal(5, 4)
+  ingredientPriceAutoApproveThreshold Decimal? @default(0.08) @map("ingredient_price_auto_approve_threshold") @db.Decimal(5, 4)
   homeHeaderBgImageUrl              String?  @map("home_header_bg_image_url")
 
   @@map("global_config")
@@ -862,7 +862,7 @@ model Reimbursement {
   reviewedById         String?             @map("reviewed_by_id")
   reviewedAt           DateTime?           @map("reviewed_at")
   reviewComment        String?             @map("review_comment")
-  paidById             String?             @map("paid_by_id")
+  paidById             String?             @map("paid_by_id") @db.VarChar(36)
   paidAt               DateTime?           @map("paid_at")
   createdAt            DateTime            @default(now()) @map("created_at")
   updatedAt            DateTime            @updatedAt @map("updated_at")
@@ -885,7 +885,7 @@ model Reimbursement {
 }
 
 model ExpenseBill {
-  id               String                 @id @default(uuid()) @map("id")
+  id               String                 @id @default(uuid()) @map("id") @db.VarChar(36)
   billNumber       String                 @unique @map("bill_number") @db.VarChar(24)
   title            String                 @map("title") @db.VarChar(200)
   category         FinanceExpenseCategory @map("category")
@@ -896,10 +896,10 @@ model ExpenseBill {
   recognitionEnd   DateTime               @map("recognition_end") @db.Date
   dueAt            DateTime               @map("due_at")
   note             String?                @map("note")
-  templateId       String?                @map("template_id")
-  createdById      String                 @map("created_by_id")
+  templateId       String?                @map("template_id") @db.VarChar(36)
+  createdById      String                 @map("created_by_id") @db.VarChar(36)
   createdAt        DateTime               @default(now()) @map("created_at")
-  updatedAt        DateTime               @updatedAt @map("updated_at")
+  updatedAt        DateTime               @default(now()) @updatedAt @map("updated_at")
   payments         ExpenseBillPayment[]
   template         ExpenseTemplate?       @relation(fields: [templateId], references: [id])
 
@@ -909,11 +909,11 @@ model ExpenseBill {
 }
 
 model ExpenseBillPayment {
-  id               String      @id @default(uuid()) @map("id")
-  billId           String      @map("bill_id")
+  id               String      @id @default(uuid()) @map("id") @db.VarChar(36)
+  billId           String      @map("bill_id") @db.VarChar(36)
   paidAmount       Decimal     @map("paid_amount") @db.Decimal(10, 2)
   paidAt           DateTime    @map("paid_at")
-  paidById         String      @map("paid_by_id")
+  paidById         String      @map("paid_by_id") @db.VarChar(36)
   paymentMethod    String      @map("payment_method") @db.VarChar(50)
   paymentProofUrls String[]    @default([]) @map("payment_proof_urls")
   note             String?     @map("note")
@@ -926,7 +926,7 @@ model ExpenseBillPayment {
 }
 
 model ExpenseTemplate {
-  id                  String                  @id @default(uuid()) @map("id")
+  id                  String                  @id @default(uuid()) @map("id") @db.VarChar(36)
   name                String                  @map("name") @db.VarChar(100)
   titleTemplate       String                  @map("title_template") @db.VarChar(200)
   category            FinanceExpenseCategory  @map("category")
@@ -938,9 +938,9 @@ model ExpenseTemplate {
   servicePeriodMonths Int                     @default(1) @map("service_period_months")
   isActive            Boolean                 @default(true) @map("is_active")
   note                String?                 @map("note")
-  createdById         String                  @map("created_by_id")
+  createdById         String                  @map("created_by_id") @db.VarChar(36)
   createdAt           DateTime                @default(now()) @map("created_at")
-  updatedAt           DateTime                @updatedAt @map("updated_at")
+  updatedAt           DateTime                @default(now()) @updatedAt @map("updated_at")
   bills               ExpenseBill[]
 
   @@index([isActive, interval])

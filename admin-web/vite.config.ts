@@ -10,21 +10,8 @@ const getVendorChunkName = (id: string) => {
     return 'vendor-element-plus'
   }
 
-  if (
-    id.includes('/vue/') ||
-    id.includes('/@vue/') ||
-    id.includes('vue-router') ||
-    id.includes('pinia')
-  ) {
-    return 'vendor-vue'
-  }
-
   if (id.includes('axios')) {
     return 'vendor-network'
-  }
-
-  if (id.includes('sortablejs') || id.includes('vuedraggable')) {
-    return 'vendor-drag'
   }
 
   if (id.includes('cos-nodejs-sdk-v5')) {

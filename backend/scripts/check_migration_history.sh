@@ -43,7 +43,7 @@ if [ -z "${DATABASE_URL:-}" ]; then
   exit 1
 fi
 
-PSQL_URL=$(printf '%s' "$DATABASE_URL" | perl -0pe 's/([?&])timezone=[^&]*//g; s/[?&]$//; s/\?&/?/g')
+PSQL_URL=$(printf '%s' "$DATABASE_URL" | perl -0pe 's/([?&])timezone=[^&]*//g; s/([?&])schema=[^&]*//g; s/[?&]$//; s/\?&/?/g')
 
 DB_ROWS_FILE=$(mktemp)
 DB_NAMES_FILE=$(mktemp)

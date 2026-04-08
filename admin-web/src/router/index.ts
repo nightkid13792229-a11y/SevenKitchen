@@ -149,6 +149,38 @@ const routes: RouteRecordRaw[] = [
         ]
       },
       {
+        path: 'finance',
+        name: 'Finance',
+        redirect: '/finance/overview',
+        meta: { title: '财务中心' },
+        children: [
+          {
+            path: 'overview',
+            name: 'FinanceOverview',
+            component: () => import('@/views/Finance/Overview.vue'),
+            meta: { title: '财务总览' }
+          },
+          {
+            path: 'expense-bills',
+            name: 'FinanceExpenseBills',
+            component: () => import('@/views/Finance/ExpenseBills.vue'),
+            meta: { title: '费用与待支付' }
+          },
+          {
+            path: 'expense-analysis',
+            name: 'FinanceExpenseAnalysis',
+            component: () => import('@/views/Finance/ExpenseAnalysis.vue'),
+            meta: { title: '费用分析' }
+          },
+          {
+            path: 'contribution-analysis',
+            name: 'FinanceContributionAnalysis',
+            component: () => import('@/views/Finance/ContributionAnalysis.vue'),
+            meta: { title: '经营贡献分析' }
+          }
+        ]
+      },
+      {
         path: 'custom-recipes',
         name: 'CustomRecipes',
         component: () => import('@/views/CustomRecipes/OrderList.vue'),

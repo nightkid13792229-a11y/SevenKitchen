@@ -8,6 +8,10 @@ describe('CORS util', () => {
     expect(isAllowedCorsOrigin('http://1.14.3.2:5173')).toBe(true);
   });
 
+  it('allows the production admin-web origin', () => {
+    expect(isAllowedCorsOrigin('https://sevenkitchen.cloud')).toBe(true);
+  });
+
   it('allows requests without an Origin header', () => {
     expect(isAllowedCorsOrigin(undefined)).toBe(true);
   });

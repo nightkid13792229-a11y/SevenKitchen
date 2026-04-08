@@ -15,23 +15,64 @@ import { DiySheetService } from 'src/application/recipe/diy-sheet.service';
 import {
   DogService,
   DOG_REPOSITORY,
+  DOG_BREED_REPOSITORY,
+  PRISMA_SERVICE,
   RECIPE_REPOSITORY,
 } from 'src/application/dog/dog.service';
 import { InMemoryDogRepository } from 'src/infrastructure/repositories/in-memory-dog.repository';
 import type { Recipe } from 'src/domain/recipe/recipe.repository';
 import { Dog } from 'src/domain/dog/dog.entity';
+import { DogBreed } from 'src/domain/dog/dog-breed.entity';
 import {
   DogGender,
   ActivityLevel,
   LifeStageOverride,
   TreatInputMode,
   TreatLevel,
+  DogSizeCategory,
 } from 'src/domain';
+import { GrowthCurveType } from 'src/domain/dog/enums';
+import { PrismaService } from 'src/infrastructure/prisma.service';
+import { JwtAuthService } from 'src/auth/jwt.service';
 
 describe('RecipesController (e2e)', () => {
   let app: INestApplication;
   let recipeRepository: InMemoryRecipeRepository;
   let dogRepository: InMemoryDogRepository;
+  const mockBreed = new DogBreed(
+    '3fa85f64-5717-4562-b3fc-2c963f66afa6',
+    'Test Breed',
+    [],
+    DogSizeCategory.MEDIUM,
+    GrowthCurveType.STANDARD,
+    12,
+    8,
+    12,
+    true,
+  );
+  const mockDogBreedRepository = {
+    findById: jest.fn().mockResolvedValue(mockBreed),
+    findAll: jest.fn().mockResolvedValue([mockBreed]),
+    findBySizeCategory: jest.fn(),
+    save: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+    existsByName: jest.fn(),
+    countUsage: jest.fn(),
+    findUsage: jest.fn(),
+  };
+  const mockPrismaService = {
+    recipe: {
+      findMany: jest.fn().mockResolvedValue([]),
+      findFirst: jest.fn(),
+      update: jest.fn(),
+    },
+  };
+  const mockJwtAuthService = {
+    validateToken: jest.fn(),
+    generateToken: jest.fn(),
+    generateTokenForUser: jest.fn(),
+  };
 
   beforeEach(async () => {
     // Create shared repository instances
@@ -55,6 +96,22 @@ describe('RecipesController (e2e)', () => {
           provide: DOG_REPOSITORY,
           useValue: sharedDogRepo,
         },
+        {
+          provide: DOG_BREED_REPOSITORY,
+          useValue: mockDogBreedRepository,
+        },
+        {
+          provide: PRISMA_SERVICE,
+          useValue: {},
+        },
+        {
+          provide: PrismaService,
+          useValue: mockPrismaService,
+        },
+        {
+          provide: JwtAuthService,
+          useValue: mockJwtAuthService,
+        },
       ],
     }).compile();
 
@@ -69,12 +126,24 @@ describe('RecipesController (e2e)', () => {
 
     recipeRepository = moduleFixture.get(RECIPE_REPOSITORY_TOKEN);
     dogRepository = moduleFixture.get(DOG_REPOSITORY);
+    jest.clearAllMocks();
+    mockDogBreedRepository.findById.mockResolvedValue(mockBreed);
+    mockDogBreedRepository.findAll.mockResolvedValue([mockBreed]);
+    mockPrismaService.recipe.findFirst.mockImplementation(
+      async (args?: { where?: { recipeId?: string } }) => {
+        const recipeId = args?.where?.recipeId;
+        return recipeId ? { id: recipeId } : null;
+      },
+    );
+    mockPrismaService.recipe.update.mockResolvedValue({});
 
     await app.init();
   });
 
   afterEach(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
   });
 
   describe('GET /api/v1/recipes', () => {
@@ -96,12 +165,12 @@ describe('RecipesController (e2e)', () => {
 
       expect(response.body).toHaveProperty('code', 0);
       expect(response.body.data).toBeDefined();
-      expect(Array.isArray(response.body.data)).toBe(true);
-      expect(response.body.data.length).toBeGreaterThan(0);
+      expect(Array.isArray(response.body.data.data)).toBe(true);
+      expect(response.body.data.data.length).toBeGreaterThan(0);
 
       // Verify seeded recipe is in the list
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-member-access
-      const seededRecipe = response.body.data.find(
+      const seededRecipe = response.body.data.data.find(
         // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access, @typescript-eslint/no-unsafe-argument
         (r: { id: string }) => r.id === '3fa85f64-5717-4562-b3fc-2c963f66afa6',
       );
@@ -123,7 +192,9 @@ describe('RecipesController (e2e)', () => {
 
       expect(response.body).toHaveProperty('code', 0);
       expect(response.body.data).toBeDefined();
-      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(Array.isArray(response.body.data.data)).toBe(true);
+      expect(response.body.data.data).toHaveLength(0);
+      expect(response.body.data.total).toBe(0);
     });
   });
 
@@ -209,6 +280,7 @@ describe('RecipesController (e2e)', () => {
         'owner-id-1',
         'Test Dog',
         '3fa85f64-5717-4562-b3fc-2c963f66afa6', // Use valid UUID format
+        null,
         new Date('2020-01-01'),
         DogGender.MALE,
         false,
@@ -220,6 +292,8 @@ describe('RecipesController (e2e)', () => {
         2,
         TreatInputMode.ESTIMATE_LEVEL,
         TreatLevel.LOW,
+        null,
+        null,
         null,
         null,
         0,

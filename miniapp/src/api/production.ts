@@ -88,6 +88,7 @@ export function getPackagingUnits(params: {
         packageCount: number; // 总袋数
         recipientName?: string;
         recipientCity?: string;
+        adminRemark?: string;
         completedAt?: string; // 本地时间格式
       }>;
       currentPotNumber: number; // 当前是第几锅
@@ -363,4 +364,3 @@ export function replaceProductionPhotos(
       });
   });
 }
-

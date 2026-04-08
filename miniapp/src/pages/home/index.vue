@@ -15,12 +15,19 @@
     </view>
 
     <!-- 顶部欢迎区 -->
-    <view class="header-section">
+    <view
+      class="header-section"
+      :style="homeHeaderBgImageUrl ? { backgroundImage: `url(${homeHeaderBgImageUrl})` } : {}"
+    >
       <view class="welcome-text">Hi~欢迎来到Seven的厨房</view>
     </view>
 
     <!-- 快捷功能入口 -->
     <view class="quick-actions">
+      <view class="action-item" @tap="goToFeedback">
+        <text class="action-icon">💬</text>
+        <text class="action-text">建议反馈</text>
+      </view>
       <view class="action-item" @tap="goToWeightManagement">
         <text class="action-icon">⚖️</text>
         <text class="action-text">体重管理</text>
@@ -315,10 +322,15 @@
 
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
+import {
+  onShow,
+  onPullDownRefresh,
+  onReachBottom,
+  onShareAppMessage,
+  onShareTimeline
+} from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
-import { normalizeImageUrl } from '../../utils/config'
-import { CURRENT_SHARE_CONFIG } from '@/config/share.config'
+import { normalizeImageUrl, CURRENT_SHARE_CONFIG } from '../../utils/config'
 
 interface RecipeItem {
   ingredientId: string
@@ -375,6 +387,9 @@ const showLoginBanner = ref(true)
 // 狗狗列表
 const dogs = ref<any[]>([])
 
+// 首页头部背景图
+const homeHeaderBgImageUrl = ref('')
+
 // 食谱数据
 const recipes = ref<Recipe[]>([])
 const loading = ref(false)
@@ -410,6 +425,11 @@ const ingredientNameToIds = ref<Record<string, string[]>>({})
 
 // 健康标签UUID到名称的映射（动态加载）
 const healthTagUuidLabelMap = ref<Record<string, string>>({})
+const homeDataInitialized = ref(false)
+let homeDataLoadPromise: Promise<void> | null = null
+let initialRecipeLoadPromise: Promise<void> | null = null
+const initialRecipeLoadStarted = ref(false)
+const HOME_RECIPE_STATS_DIRTY_KEY = 'home_recipe_stats_dirty'
 
 // 计算已选筛选数量
 const activeFiltersCount = computed(() => {
@@ -427,10 +447,132 @@ const checkLoginStatus = () => {
   console.log('[Home] 登录状态检查:', isLoggedIn.value)
 }
 
+// 加载首页头部背景图配置
+const loadHomeHeaderBg = async () => {
+  try {
+    const res = await request({
+      url: '/global-config',
+      method: 'GET'
+    })
+    if (res.code === 0 && res.data?.homeHeaderBgImageUrl) {
+      homeHeaderBgImageUrl.value = normalizeImageUrl(res.data.homeHeaderBgImageUrl)
+    }
+  } catch (e) {
+    console.warn('[Home] Failed to load home header bg config', e)
+  }
+}
+
+const hasLoadedFilterOptions = () => {
+  return filterOptions.value.lifeStages.length > 0
+    || filterOptions.value.healthTags.length > 0
+    || filterOptions.value.ingredientTags.length > 0
+    || filterOptions.value.ingredientGroups.length > 0
+}
+
+const shouldBootstrapHomeData = () => {
+  return !hasLoadedFilterOptions() || (!initialRecipeLoadStarted.value && recipes.value.length === 0)
+}
+
+const ensureInitialRecipesLoaded = async () => {
+  if (initialRecipeLoadPromise) {
+    return initialRecipeLoadPromise
+  }
+
+  if (initialRecipeLoadStarted.value) {
+    return
+  }
+
+  initialRecipeLoadStarted.value = true
+  recipes.value = []
+  hasMore.value = true
+  currentPage.value = 1
+
+  const task = loadRecipes().then((success) => {
+    if (!success && recipes.value.length === 0) {
+      initialRecipeLoadStarted.value = false
+    }
+  })
+  initialRecipeLoadPromise = task
+
+  try {
+    await task
+  } finally {
+    if (initialRecipeLoadPromise === task) {
+      initialRecipeLoadPromise = null
+    }
+  }
+}
+
+const ensureHomeDataLoaded = async (reason: 'mounted' | 'show') => {
+  if (homeDataLoadPromise) {
+    return homeDataLoadPromise
+  }
+
+  if (!shouldBootstrapHomeData()) {
+    return
+  }
+
+  const task = (async () => {
+    console.log('[Home] ensureHomeDataLoaded:', reason, {
+      recipesCount: recipes.value.length,
+      hasFilterOptions: hasLoadedFilterOptions(),
+      initialized: homeDataInitialized.value,
+      initialRecipeLoadStarted: initialRecipeLoadStarted.value
+    })
+
+    if (!hasLoadedFilterOptions()) {
+      await loadFilterOptions()
+    }
+
+    if (!initialRecipeLoadStarted.value && recipes.value.length === 0) {
+      await ensureInitialRecipesLoaded()
+    }
+
+    homeDataInitialized.value = true
+  })()
+
+  homeDataLoadPromise = task
+
+  try {
+    await task
+  } finally {
+    if (homeDataLoadPromise === task) {
+      homeDataLoadPromise = null
+    }
+  }
+}
+
+const shouldRefreshRecipesFromDirtyFlag = () => {
+  try {
+    return uni.getStorageSync(HOME_RECIPE_STATS_DIRTY_KEY) === '1'
+  } catch (error) {
+    console.warn('[Home] Failed to read recipe stats dirty flag', error)
+    return false
+  }
+}
+
+const clearRecipeStatsDirtyFlag = () => {
+  try {
+    uni.removeStorageSync(HOME_RECIPE_STATS_DIRTY_KEY)
+  } catch (error) {
+    console.warn('[Home] Failed to clear recipe stats dirty flag', error)
+  }
+}
+
+const refreshRecipesIfNeeded = () => {
+  if (loading.value || !shouldRefreshRecipesFromDirtyFlag()) {
+    return
+  }
+
+  clearRecipeStatsDirtyFlag()
+  void loadRecipes(true)
+}
+
 // 页面加载
 onMounted(async () => {
   console.log('[Home] onMounted')
   checkLoginStatus()
+  loadHomeHeaderBg()
 
   // 检查是否已关闭过Banner（当天有效）
   const bannerClosed = uni.getStorageSync('loginBannerClosed')
@@ -452,10 +594,8 @@ onMounted(async () => {
     }
   }
 
-  // 【修复】先加载筛选项（包含健康标签映射），再加载食谱
-  // 这样可以确保在渲染食谱标签时，映射表已经准备好了
-  await loadFilterOptions()
-  loadRecipes()
+  // 兜底初始化首页食谱数据，避免开发者工具热重载时 onMounted/onShow 只触发一半
+  await ensureHomeDataLoaded('mounted')
 })
 
 // 页面显示时重新检查登录状态（解决switchTab后不更新的问题）
@@ -485,6 +625,12 @@ onShow(() => {
       console.log('[Home] No dog data to clear')
     }
   }
+
+  if (shouldBootstrapHomeData()) {
+    void ensureHomeDataLoaded('show')
+  }
+
+  refreshRecipesIfNeeded()
 })
 
 // 加载狗狗列表
@@ -578,13 +724,13 @@ function loadFilterOptions(): Promise<void> {
 }
 
 // 加载食谱
-function loadRecipes(isRefresh = false) {
-  if (loading.value) return
+function loadRecipes(isRefresh = false): Promise<boolean> {
+  if (loading.value) return Promise.resolve(false)
 
   // 如果没有更多数据且不是刷新，直接返回
   if (!hasMore.value && !isRefresh) {
     console.log('[Home] No more recipes to load')
-    return
+    return Promise.resolve(false)
   }
 
   loading.value = true
@@ -617,7 +763,7 @@ function loadRecipes(isRefresh = false) {
 
   console.log('[Home] Loading recipes with params:', params)
 
-  request({
+  return request({
     url: '/recipes',
     method: 'GET',
     data: params
@@ -660,9 +806,11 @@ function loadRecipes(isRefresh = false) {
         totalCount: totalCount.value,
         recipesCount: recipes.value.length
       })
+      return true
     } else {
       console.warn('[Home] Unexpected response:', res)
       hasMore.value = false
+      return false
     }
   }).catch((err: any) => {
     console.error('[Home] Load recipes error:', err)
@@ -671,11 +819,11 @@ function loadRecipes(isRefresh = false) {
       title: '加载失败',
       icon: 'none'
     })
+    return false
   }).finally(() => {
     loading.value = false
-    // 只在之前显示了loading时才隐藏
     if (shouldShowLoading) {
-      uni.hideLoading()
+      try { uni.hideLoading() } catch (_) { /* ignore */ }
     }
     if (isRefresh) {
       uni.stopPullDownRefresh()
@@ -988,6 +1136,15 @@ const goToOrderList = () => {
   uni.navigateTo({ url: '/pages/orders-list/index' })
 }
 
+// 跳转到建议反馈
+const goToFeedback = () => {
+  if (!isLoggedIn.value) {
+    checkLoginAndNavigate('/pages/feedback-list/index')
+    return
+  }
+  uni.navigateTo({ url: '/pages/feedback-list/index' })
+}
+
 // 跳转到体重管理
 const goToWeightManagement = () => {
   if (!isLoggedIn.value) {
@@ -1059,28 +1216,27 @@ const checkLoginAndNavigate = (url: string) => {
 }
 
 // 配置分享功能
-defineOptions({
-  onShareAppMessage() {
-    console.log('[Home Share] ========== 转发给朋友分享函数被调用 ==========')
-    const config = {
-      title: 'Seven的厨房 - 为您的爱犬定制健康食谱',
-      imageUrl: CURRENT_SHARE_CONFIG.homeImageUrl,
-      path: '/pages/home/index'
-    }
-    console.log('[Home Share] 分享配置:', JSON.stringify(config, null, 2))
-    console.log('[Home Share] 图片URL:', config.imageUrl)
-    return config
-  },
-  onShareTimeline() {
-    console.log('[Home Share] ========== 分享到朋友圈函数被调用 ==========')
-    const config = {
-      title: 'Seven的厨房 - 为您的爱犬定制健康食谱',
-      imageUrl: CURRENT_SHARE_CONFIG.homeImageUrl
-    }
-    console.log('[Home Share] 朋友圈配置:', JSON.stringify(config, null, 2))
-    console.log('[Home Share] 图片URL:', config.imageUrl)
-    return config
+onShareAppMessage(() => {
+  console.log('[Home Share] ========== 转发给朋友分享函数被调用 ==========')
+  const config = {
+    title: 'Seven的厨房 - 为您的爱犬定制健康食谱',
+    imageUrl: CURRENT_SHARE_CONFIG.homeImageUrl,
+    path: '/pages/home/index'
   }
+  console.log('[Home Share] 分享配置:', JSON.stringify(config, null, 2))
+  console.log('[Home Share] 图片URL:', config.imageUrl)
+  return config
+})
+
+onShareTimeline(() => {
+  console.log('[Home Share] ========== 分享到朋友圈函数被调用 ==========')
+  const config = {
+    title: 'Seven的厨房 - 为您的爱犬定制健康食谱',
+    imageUrl: CURRENT_SHARE_CONFIG.homeImageUrl
+  }
+  console.log('[Home Share] 朋友圈配置:', JSON.stringify(config, null, 2))
+  console.log('[Home Share] 图片URL:', config.imageUrl)
+  return config
 })
 </script>
 
@@ -1144,6 +1300,9 @@ defineOptions({
 /* 顶部欢迎区 */
 .header-section {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
   padding: 40px 20px 30px;
   color: white;
 }

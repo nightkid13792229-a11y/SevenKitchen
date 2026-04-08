@@ -1,39 +1,124 @@
 <template>
   <view class="purchasing-page">
-    <!-- 顶部标题 -->
     <view class="header">
       <text class="title">采购管理</text>
       <text class="subtitle">查看采购清单与原料需求</text>
     </view>
 
-    <!-- 筛选器 -->
-    <view class="filters">
-      <view class="filter-item">
-        <text class="filter-label">状态筛选</text>
-        <picker mode="selector" :range="statusOptions" range-key="label" :value="statusIndex" @change="onStatusChange">
-          <view class="picker-value">
-            {{ statusOptions[statusIndex].label }}
-            <text class="arrow">›</text>
+    <view class="planning-card">
+      <view class="section-heading">
+        <text class="section-title">待采购日期</text>
+        <text class="section-subtitle">先选生产日期，再决定是生成新清单还是查看已有清单</text>
+      </view>
+
+      <view class="date-chip-group">
+        <view
+          v-for="option in quickDateOptions"
+          :key="option.date"
+          class="date-chip"
+          :class="{
+            active: selectedTargetDate === option.date,
+            muted: getDateOverview(option.date).state === 'EMPTY',
+          }"
+          @tap="selectTargetDate(option.date)"
+        >
+          <text class="chip-label">{{ option.label }}</text>
+          <text class="chip-date">{{ option.shortDate }}</text>
+          <text class="chip-meta">{{ getDateOverview(option.date).chipText }}</text>
+        </view>
+
+        <picker mode="date" :start="todayString" :value="selectedTargetDate" @change="onTargetDateChange">
+          <view class="date-chip more-date-chip" :class="{ active: isCustomDateSelected }">
+            <text class="chip-label">更多日期</text>
+            <text class="chip-date">{{ customDateDisplay }}</text>
+            <text class="chip-meta">{{ customDateMetaText }}</text>
           </view>
         </picker>
       </view>
+
+      <view class="date-summary-card">
+        <view class="summary-header">
+          <view class="summary-date-block">
+            <text class="summary-date">{{ formatSummaryDate(selectedTargetDate) }}</text>
+            <text class="summary-status" :class="getSummaryStatusClass(selectedDateOverview.state)">
+              {{ selectedDateOverview.statusText }}
+            </text>
+          </view>
+          <text v-if="selectedTargetDate && selectedTargetDate !== todayString" class="summary-tag">
+            非当天需确认
+          </text>
+        </view>
+
+        <view v-if="selectedOverviewLoading" class="summary-loading">
+          <text>正在加载该日期的采购信息...</text>
+        </view>
+
+        <view v-else class="summary-body">
+          <text class="summary-line">{{ selectedDateOverview.summaryLine }}</text>
+          <text class="summary-hint">{{ selectedDateOverview.hintText }}</text>
+        </view>
+
+        <view class="summary-actions" :class="{ 'single-action': !shouldShowPreviewButton }">
+          <button
+            v-if="shouldShowPreviewButton"
+            class="summary-btn secondary"
+            @tap="previewSelectedDate"
+          >
+            {{ previewActionText }}
+          </button>
+          <button
+            class="summary-btn primary"
+            :disabled="selectedOverviewLoading || selectedDateOverview.actionType === 'none'"
+            :loading="generating && selectedDateOverview.actionType === 'generate'"
+            @tap="handlePrimaryAction"
+          >
+            {{ primaryActionText }}
+          </button>
+        </view>
+      </view>
     </view>
 
-    <!-- 采购清单列表 -->
+    <view class="quick-entry-card" @tap="goToStockCreate">
+      <view class="quick-entry-copy">
+        <text class="quick-entry-title">创建补货采购单</text>
+        <text class="quick-entry-subtitle">海产、冻品、补剂、包材等可提前备货原料走这里</text>
+      </view>
+      <text class="quick-entry-arrow">›</text>
+    </view>
+
+    <view class="filters">
+      <view class="filter-item filter-item-stack">
+        <text class="filter-label">清单状态</text>
+        <view class="status-filter-group">
+          <view
+            v-for="option in statusOptions"
+            :key="option.value || 'ALL'"
+            class="status-filter-chip"
+            :class="{ active: selectedStatus === option.value }"
+            @tap="selectStatus(option.value)"
+          >
+            <text>{{ option.label }}</text>
+          </view>
+        </view>
+      </view>
+    </view>
+
     <view class="purchase-lists">
-      <!-- 加载状态 -->
+      <view class="section-heading list-heading">
+        <text class="section-title">采购清单列表</text>
+        <text class="section-subtitle">这里展示已经生成的采购清单，状态筛选只作用于下方列表</text>
+      </view>
+
       <view v-if="loading" class="loading-state">
         <text>加载中...</text>
       </view>
 
-      <!-- 空状态 -->
       <view v-else-if="purchaseLists.length === 0" class="empty-state">
         <text class="empty-icon">📋</text>
         <text class="empty-text">暂无采购清单</text>
-        <text class="empty-hint">点击下方按钮生成今日采购清单</text>
+        <text class="empty-hint">可以先在上方选择日期，生成第一张采购清单</text>
       </view>
 
-      <!-- 采购清单列表 -->
       <view v-else class="list-items">
         <view
           v-for="list in purchaseLists"
@@ -41,10 +126,14 @@
           class="list-item"
           @tap="goToDetail(list.id)"
         >
-          <!-- 清单头部 -->
           <view class="item-header">
             <view class="header-left">
-              <text class="target-date">{{ formatDate(list.targetDate) }}（制作日期）</text>
+              <view class="target-line">
+                <text class="target-date">{{ formatDate(list.targetDate) }}（制作日期）</text>
+                <text class="kind-badge" :class="getListKindClass(list.kind)">
+                  {{ getListKindText(list.kind) }}
+                </text>
+              </view>
               <text class="create-time">创建于 {{ formatDateTime(list.createdAt) }}</text>
             </view>
             <view class="status-badge" :class="getStatusClass(list.status)">
@@ -52,7 +141,6 @@
             </view>
           </view>
 
-          <!-- 清单信息 -->
           <view class="item-body">
             <view class="info-row">
               <text class="label">原料种类:</text>
@@ -64,11 +152,19 @@
             </view>
             <view class="info-row" v-if="list.totalActualCost !== undefined && list.totalActualCost > 0">
               <text class="label">采购金额:</text>
-              <text class="value cost">¥{{ list.totalActualCost.toFixed(2) }}</text>
+              <text class="value cost">¥{{ Number(list.totalActualCost).toFixed(2) }}</text>
+            </view>
+            <view class="info-row" v-else-if="list.totalEstimatedCost !== undefined && list.totalEstimatedCost > 0">
+              <text class="label">预估金额:</text>
+              <text class="value cost">¥{{ Number(list.totalEstimatedCost).toFixed(2) }}</text>
             </view>
             <view class="info-row" v-if="list.sourceOrderIds && list.sourceOrderIds.length > 0">
               <text class="label">关联订单:</text>
               <text class="value">{{ list.sourceOrderIds.length }} 个</text>
+            </view>
+            <view class="info-row" v-else-if="list.kind === 'STOCK_REPLENISHMENT'">
+              <text class="label">来源:</text>
+              <text class="value">库存补货</text>
             </view>
             <view class="info-row" v-if="list.completedAt">
               <text class="label">完成时间:</text>
@@ -76,7 +172,6 @@
             </view>
           </view>
 
-          <!-- 删除清单按钮 (仅PENDING状态且未关联报销单时显示) -->
           <view v-if="list.status === 'PENDING' && !list.reimbursementId" class="item-footer">
             <view class="delete-list-btn" @tap.stop="confirmDeletePurchaseList(list.id)">
               删除清单
@@ -85,45 +180,56 @@
         </view>
       </view>
 
-      <!-- 加载更多 -->
       <view v-if="hasMore && !loading && purchaseLists.length > 0" class="load-more" @tap="loadMore">
         <text>加载更多</text>
       </view>
-    </view>
-
-    <!-- 底部操作栏 -->
-    <view class="bottom-actions">
-      <button class="action-btn secondary" @tap="previewList">
-        <text>预览采购需求</text>
-      </button>
-      <button class="action-btn primary" @tap="generateList" :loading="generating">
-        <text v-if="!generating">生成今日采购清单</text>
-        <text v-else>生成中...</text>
-      </button>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { computed, onMounted, ref } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import {
-  getPurchaseLists,
-  generatePurchaseList,
-  completePurchase as completePurchaseApi,
-  startPurchase as startPurchaseApi,
   deletePurchaseList,
+  generatePurchaseList,
+  getPurchaseLists,
+  previewPurchaseList,
 } from '@/api/purchasing';
 
-// 状态筛选选项
+interface DateOption {
+  label: string;
+  date: string;
+  shortDate: string;
+}
+
+interface DateOverview {
+  date: string;
+  state: 'GENERATE' | 'SUPPLEMENT' | 'EXISTING' | 'EMPTY' | 'PAST';
+  actionType: 'generate' | 'view' | 'none';
+  generateMode: 'initial' | 'supplement' | 'none';
+  statusText: string;
+  chipText: string;
+  summaryLine: string;
+  hintText: string;
+  orderCount: number;
+  itemCount: number;
+  estimatedCost: number;
+  pendingAppendOrderCount: number;
+  pendingAppendEstimatedCost: number;
+  listCount: number;
+  completedListCount: number;
+  pendingListCount: number;
+  existingList: any | null;
+}
+
 const statusOptions = [
   { label: '全部', value: '' },
   { label: '待采购', value: 'PENDING' },
   { label: '已完成', value: 'COMPLETED' },
 ];
-const statusIndex = ref(0);
 
-// 状态管理
+const selectedStatus = ref('');
 const purchaseLists = ref<any[]>([]);
 const loading = ref(false);
 const generating = ref(false);
@@ -133,28 +239,489 @@ const total = ref(0);
 const hasMore = computed(() => purchaseLists.value.length < total.value);
 const isMounted = ref(false);
 
-// 预览采购需求 - 跳转到预览页面
-const previewList = () => {
-  uni.navigateTo({
-    url: '/pages/staff-purchasing/preview',
-  });
+const todayString = ref('');
+const selectedTargetDate = ref('');
+const dateOverviewMap = ref<Record<string, DateOverview>>({});
+const overviewLoadingMap = ref<Record<string, boolean>>({});
+const hasInitializedDateSelection = ref(false);
+
+const getLocalDateString = (date = new Date()) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 };
 
-// 页面加载
-onMounted(() => {
-  loadPurchaseLists();
-  isMounted.value = true;
+const createDateByOffset = (offset: number) => {
+  const date = new Date();
+  date.setDate(date.getDate() + offset);
+  return date;
+};
+
+const compareDateStrings = (left: string, right: string) => left.localeCompare(right);
+
+const formatShortMonthDay = (dateStr: string) => {
+  if (!dateStr) {
+    return '--';
+  }
+  const date = new Date(dateStr);
+  return `${date.getMonth() + 1}/${date.getDate()}`;
+};
+
+const formatWeekday = (dateStr: string) => {
+  if (!dateStr) {
+    return '';
+  }
+  const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'];
+  return weekdays[new Date(dateStr).getDay()];
+};
+
+const formatSummaryDate = (dateStr: string) => {
+  if (!dateStr) {
+    return '请选择生产日期';
+  }
+  return `${dateStr} ${formatWeekday(dateStr)}`;
+};
+
+const formatCurrency = (amount: number) => `¥${amount.toFixed(2)}`;
+
+const normalizeAmount = (value: unknown) => {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount : 0;
+};
+
+const sortPurchaseListsByCreatedAtDesc = (lists: any[]) =>
+  [...lists].sort(
+    (left, right) =>
+      new Date(right.createdAt || 0).getTime() - new Date(left.createdAt || 0).getTime(),
+  );
+
+const quickDateOptions = computed<DateOption[]>(() => {
+  const labels = ['今天', '明天', '后天'];
+  return labels.map((label, index) => {
+    const date = createDateByOffset(index);
+    const dateStr = getLocalDateString(date);
+    return {
+      label,
+      date: dateStr,
+      shortDate: `${formatShortMonthDay(dateStr)} ${formatWeekday(dateStr)}`,
+    };
+  });
 });
 
-// 页面显示时刷新数据（从详情页返回时）
-onShow(() => {
-  // 只有在页面已经mounted后才刷新，避免首次加载时重复调用
-  if (isMounted.value) {
-    loadPurchaseLists(true);
+const isCustomDateSelected = computed(
+  () =>
+    !!selectedTargetDate.value &&
+    !quickDateOptions.value.some((option) => option.date === selectedTargetDate.value),
+);
+
+const customDateDisplay = computed(() => {
+  if (!selectedTargetDate.value) {
+    return '选择';
+  }
+
+  return isCustomDateSelected.value
+    ? `${formatShortMonthDay(selectedTargetDate.value)} ${formatWeekday(selectedTargetDate.value)}`
+    : '选择';
+});
+
+const createFallbackOverview = (date: string): DateOverview => {
+  const isPast = !!date && compareDateStrings(date, todayString.value) < 0;
+
+  if (isPast) {
+    return {
+      date,
+      state: 'PAST',
+      actionType: 'none',
+      generateMode: 'none',
+      statusText: '过去日期不可生成',
+      chipText: '不可生成',
+      summaryLine: '过去日期不支持生成采购清单',
+      hintText: '请选择今天或未来日期进行采购安排',
+      orderCount: 0,
+      itemCount: 0,
+      estimatedCost: 0,
+      pendingAppendOrderCount: 0,
+      pendingAppendEstimatedCost: 0,
+      listCount: 0,
+      completedListCount: 0,
+      pendingListCount: 0,
+      existingList: null,
+    };
+  }
+
+  return {
+    date,
+    state: 'EMPTY',
+    actionType: 'none',
+    generateMode: 'none',
+    statusText: '暂无待采购订单',
+    chipText: '无订单',
+    summaryLine: '暂无待采购订单',
+    hintText: '可以切换其他日期，或先确认该日期是否已有付款订单',
+    orderCount: 0,
+    itemCount: 0,
+    estimatedCost: 0,
+    pendingAppendOrderCount: 0,
+    pendingAppendEstimatedCost: 0,
+    listCount: 0,
+    completedListCount: 0,
+    pendingListCount: 0,
+    existingList: null,
+  };
+};
+
+const buildSummaryLine = (orderCount: number, itemCount: number, estimatedCost: number) => {
+  const parts = [`${orderCount}个待采购订单`, `${itemCount}种原料`];
+  if (estimatedCost > 0) {
+    parts.push(`预估 ${formatCurrency(estimatedCost)}`);
+  }
+  return parts.join(' · ');
+};
+
+const buildExistingSummaryLine = (
+  orderCount: number,
+  itemCount: number,
+  amount: number,
+  amountLabel: string,
+) => {
+  const parts = [`${orderCount}个关联订单`, `${itemCount}种原料`];
+  if (amount > 0) {
+    parts.push(`${amountLabel} ${formatCurrency(amount)}`);
+  }
+  return parts.join(' · ');
+};
+
+const buildExistingSummaryWithPendingAppend = (
+  orderCount: number,
+  itemCount: number,
+  amount: number,
+  amountLabel: string,
+  pendingAppendOrderCount: number,
+  pendingAppendEstimatedCost: number,
+) => {
+  const parts = [buildExistingSummaryLine(orderCount, itemCount, amount, amountLabel)];
+  if (pendingAppendOrderCount > 0) {
+    parts.push(`新增${pendingAppendOrderCount}单待合并`);
+  }
+  if (pendingAppendEstimatedCost > 0) {
+    parts.push(`新增预估 ${formatCurrency(pendingAppendEstimatedCost)}`);
+  }
+  return parts.join(' · ');
+};
+
+const buildCompletedSummaryLine = (
+  completedListCount: number,
+  orderCount: number,
+  amount: number,
+  amountLabel: string,
+) => {
+  const parts = [
+    completedListCount > 1 ? `${completedListCount}张已完成清单` : '已完成采购清单',
+    `${orderCount}个关联订单`,
+  ];
+  if (amount > 0) {
+    parts.push(`${amountLabel} ${formatCurrency(amount)}`);
+  }
+  return parts.join(' · ');
+};
+
+const buildSupplementSummaryLine = (
+  completedListCount: number,
+  pendingOrderCount: number,
+  itemCount: number,
+  estimatedCost: number,
+) => {
+  const parts = [
+    completedListCount > 1 ? `已有${completedListCount}张已完成清单` : '已有已完成清单',
+    `新增${pendingOrderCount}个订单`,
+    `${itemCount}种原料`,
+  ];
+  if (estimatedCost > 0) {
+    parts.push(`预估 ${formatCurrency(estimatedCost)}`);
+  }
+  return parts.join(' · ');
+};
+
+const buildDateOverview = (date: string, existingLists: any[], preview: any | null): DateOverview => {
+  if (compareDateStrings(date, todayString.value) < 0) {
+    return createFallbackOverview(date);
+  }
+
+  const sortedLists = sortPurchaseListsByCreatedAtDesc(existingLists || []);
+  const pendingList = sortedLists.find((list) => list.status === 'PENDING') || null;
+  const completedLists = sortedLists.filter((list) => list.status === 'COMPLETED');
+  const latestCompletedList = completedLists[0] || null;
+  const listCount = sortedLists.length;
+  const completedListCount = completedLists.length;
+  const pendingListCount = pendingList ? 1 : 0;
+
+  if (pendingList) {
+    const orderCount = Array.isArray(pendingList.sourceOrderIds)
+      ? pendingList.sourceOrderIds.length
+      : 0;
+    const itemCount = Number(pendingList.itemCount || 0);
+    const estimatedAmount = normalizeAmount(pendingList.totalEstimatedCost);
+    const actualAmount = normalizeAmount(pendingList.totalActualCost);
+    const displayAmount = estimatedAmount || actualAmount;
+    const displayAmountLabel = estimatedAmount > 0 ? '预估' : '采购';
+    const pendingAppendOrderCount = Array.isArray(preview?.affectedOrders)
+      ? preview.affectedOrders.length
+      : 0;
+    const pendingAppendEstimatedCost = normalizeAmount(preview?.totalEstimatedCost);
+    const hasPendingAppendOrders = pendingAppendOrderCount > 0;
+
+    return {
+      date,
+      state: 'EXISTING',
+      actionType: 'view',
+      generateMode: 'none',
+      statusText: hasPendingAppendOrders ? '有新增订单待合并' : '已有采购清单',
+      chipText: hasPendingAppendOrders ? `${pendingAppendOrderCount}单待合并` : '已有清单',
+      summaryLine: hasPendingAppendOrders
+        ? buildExistingSummaryWithPendingAppend(
+            orderCount,
+            itemCount,
+            displayAmount,
+            displayAmountLabel,
+            pendingAppendOrderCount,
+            pendingAppendEstimatedCost,
+          )
+        : buildExistingSummaryLine(orderCount, itemCount, displayAmount, displayAmountLabel),
+      hintText: hasPendingAppendOrders
+        ? '该日期已有待采购清单，但新增了已付款订单。进入详情后可一键合并，无需新建第二张清单。'
+        : '该日期已有待采购清单，可直接进入详情继续采购。',
+      orderCount,
+      itemCount,
+      estimatedCost: displayAmount,
+      pendingAppendOrderCount,
+      pendingAppendEstimatedCost,
+      listCount,
+      completedListCount,
+      pendingListCount,
+      existingList: pendingList,
+    };
+  }
+
+  const orderCount = Array.isArray(preview?.affectedOrders) ? preview.affectedOrders.length : 0;
+  const itemCount = Number(preview?.itemCount || 0);
+  const estimatedCost = normalizeAmount(preview?.totalEstimatedCost);
+
+  if (completedListCount > 0) {
+    const totalCompletedOrders = completedLists.reduce((sum, list) => {
+      return sum + (Array.isArray(list.sourceOrderIds) ? list.sourceOrderIds.length : 0);
+    }, 0);
+    const totalCompletedAmount = completedLists.reduce((sum, list) => {
+      const actualAmount = normalizeAmount(list.totalActualCost);
+      const estimatedAmount = normalizeAmount(list.totalEstimatedCost);
+      return sum + (actualAmount || estimatedAmount);
+    }, 0);
+    const hasActualCompletedAmount = completedLists.some(
+      (list) => normalizeAmount(list.totalActualCost) > 0,
+    );
+
+    if (orderCount > 0) {
+      return {
+        date,
+        state: 'SUPPLEMENT',
+        actionType: 'generate',
+        generateMode: 'supplement',
+        statusText: '可生成增量清单',
+        chipText: `${orderCount}单待补采`,
+        summaryLine: buildSupplementSummaryLine(
+          completedListCount,
+          orderCount,
+          itemCount,
+          estimatedCost,
+        ),
+        hintText:
+          '该日期已有已完成采购清单。本次会新建一张独立的增量采购清单，只处理新增订单，不影响原已完成清单。',
+        orderCount,
+        itemCount,
+        estimatedCost,
+        pendingAppendOrderCount: 0,
+        pendingAppendEstimatedCost: 0,
+        listCount,
+        completedListCount,
+        pendingListCount,
+        existingList: latestCompletedList,
+      };
+    }
+
+    return {
+      date,
+      state: 'EXISTING',
+      actionType: 'view',
+      generateMode: 'none',
+      statusText: completedListCount > 1 ? `已有${completedListCount}张采购清单` : '已有采购清单',
+      chipText: completedListCount > 1 ? `${completedListCount}张已完成` : '已完成',
+      summaryLine: buildCompletedSummaryLine(
+        completedListCount,
+        totalCompletedOrders,
+        totalCompletedAmount,
+        hasActualCompletedAmount ? '累计采购' : '累计预估',
+      ),
+      hintText:
+        completedListCount > 1
+          ? '该日期采购已完成，下方列表可查看当天全部采购清单。'
+          : '该日期采购已完成，可进入清单查看记录或继续报销流程。',
+      orderCount: totalCompletedOrders,
+      itemCount: completedLists.reduce((sum, list) => sum + Number(list.itemCount || 0), 0),
+      estimatedCost: totalCompletedAmount,
+      pendingAppendOrderCount: 0,
+      pendingAppendEstimatedCost: 0,
+      listCount,
+      completedListCount,
+      pendingListCount,
+      existingList: latestCompletedList,
+    };
+  }
+
+  if (orderCount > 0) {
+    return {
+      date,
+      state: 'GENERATE',
+      actionType: 'generate',
+      generateMode: 'initial',
+      statusText: '可生成采购清单',
+      chipText: `${orderCount}单待采购`,
+      summaryLine: buildSummaryLine(orderCount, itemCount, estimatedCost),
+      hintText:
+        date === todayString.value
+          ? '当天清单可直接生成，便于员工马上开始采购'
+          : '这不是当天生产清单，生成前会再次确认，避免误选日期',
+      orderCount,
+      itemCount,
+      estimatedCost,
+      pendingAppendOrderCount: 0,
+      pendingAppendEstimatedCost: 0,
+      listCount,
+      completedListCount,
+      pendingListCount,
+      existingList: null,
+    };
+  }
+
+  return createFallbackOverview(date);
+};
+
+const getDateOverview = (date: string) => {
+  if (!date) {
+    return createFallbackOverview(todayString.value);
+  }
+  return dateOverviewMap.value[date] || createFallbackOverview(date);
+};
+
+const selectedDateOverview = computed(() => getDateOverview(selectedTargetDate.value));
+const selectedOverviewLoading = computed(() => !!overviewLoadingMap.value[selectedTargetDate.value]);
+
+const customDateMetaText = computed(() => {
+  if (!selectedTargetDate.value || !isCustomDateSelected.value) {
+    return '手动选择';
+  }
+  return getDateOverview(selectedTargetDate.value).chipText;
+});
+
+const shouldShowPreviewButton = computed(() => selectedDateOverview.value.actionType === 'generate');
+
+const previewActionText = computed(() =>
+  selectedDateOverview.value.generateMode === 'supplement' ? '预览新增需求' : '预览该日期需求',
+);
+
+const primaryActionText = computed(() => {
+  if (selectedOverviewLoading.value) {
+    return '加载中...';
+  }
+
+  switch (selectedDateOverview.value.actionType) {
+    case 'view':
+      if (
+        selectedDateOverview.value.pendingAppendOrderCount === 0 &&
+        selectedDateOverview.value.completedListCount > 1 &&
+        selectedDateOverview.value.pendingListCount === 0
+      ) {
+        return '查看最新采购清单';
+      }
+      return selectedDateOverview.value.pendingAppendOrderCount > 0
+        ? '查看并合并订单'
+        : '查看采购清单';
+    case 'generate':
+      return selectedDateOverview.value.generateMode === 'supplement'
+        ? '生成增量采购清单'
+        : '生成采购清单';
+    default:
+      return '暂无待采购订单';
   }
 });
 
-// 加载采购清单列表
+const fetchDateOverview = async (date: string) => {
+  if (!date) {
+    return;
+  }
+
+  overviewLoadingMap.value = {
+    ...overviewLoadingMap.value,
+    [date]: true,
+  };
+
+  try {
+    const [listRes, previewRes]: any = await Promise.all([
+      getPurchaseLists({
+        startDate: date,
+        endDate: date,
+        page: 1,
+        pageSize: 20,
+      }),
+      previewPurchaseList({
+        startDate: date,
+      }),
+    ]);
+
+    const existingLists =
+      listRes?.code === 0 && Array.isArray(listRes.data?.list) ? listRes.data.list : [];
+    const preview = previewRes?.code === 0 ? previewRes.data : null;
+
+    dateOverviewMap.value = {
+      ...dateOverviewMap.value,
+      [date]: buildDateOverview(date, existingLists, preview),
+    };
+  } catch (error) {
+    console.error('加载日期采购概览失败', date, error);
+    dateOverviewMap.value = {
+      ...dateOverviewMap.value,
+      [date]: createFallbackOverview(date),
+    };
+  } finally {
+    overviewLoadingMap.value = {
+      ...overviewLoadingMap.value,
+      [date]: false,
+    };
+  }
+};
+
+const refreshDateOverviews = async (autoPick = false) => {
+  const dates = new Set<string>(quickDateOptions.value.map((option) => option.date));
+  if (selectedTargetDate.value) {
+    dates.add(selectedTargetDate.value);
+  }
+
+  await Promise.all(Array.from(dates).map((date) => fetchDateOverview(date)));
+
+  if (autoPick && !hasInitializedDateSelection.value) {
+    const preferredDate =
+      quickDateOptions.value.find((option) => getDateOverview(option.date).actionType === 'generate')?.date ||
+      quickDateOptions.value.find((option) => getDateOverview(option.date).actionType === 'view')?.date ||
+      todayString.value;
+
+    selectedTargetDate.value = preferredDate;
+    hasInitializedDateSelection.value = true;
+  }
+
+  if (selectedTargetDate.value && !dateOverviewMap.value[selectedTargetDate.value]) {
+    await fetchDateOverview(selectedTargetDate.value);
+  }
+};
+
 const loadPurchaseLists = async (refresh = false) => {
   if (refresh) {
     currentPage.value = 1;
@@ -164,15 +731,13 @@ const loadPurchaseLists = async (refresh = false) => {
   loading.value = true;
 
   try {
-    const statusValue = statusOptions[statusIndex.value].value;
     const params: any = {
       page: currentPage.value,
       pageSize,
     };
 
-    // 只有当status不为空时才添加status参数
-    if (statusValue) {
-      params.status = statusValue;
+    if (selectedStatus.value) {
+      params.status = selectedStatus.value;
     }
 
     const res: any = await getPurchaseLists(params);
@@ -187,7 +752,7 @@ const loadPurchaseLists = async (refresh = false) => {
     } else {
       uni.showToast({ title: res.message || '加载失败', icon: 'none' });
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error('加载采购清单失败', error);
     uni.showToast({ title: '加载失败', icon: 'none' });
   } finally {
@@ -195,7 +760,6 @@ const loadPurchaseLists = async (refresh = false) => {
   }
 };
 
-// 加载更多
 const loadMore = () => {
   if (!loading.value && hasMore.value) {
     currentPage.value++;
@@ -203,141 +767,185 @@ const loadMore = () => {
   }
 };
 
-// 状态变更
-const onStatusChange = (e: any) => {
-  statusIndex.value = e.detail.value;
+const selectStatus = (status: string) => {
+  if (selectedStatus.value === status) {
+    return;
+  }
+
+  selectedStatus.value = status;
   loadPurchaseLists(true);
 };
 
-// 生成今日采购清单
-const generateList = () => {
-  uni.showModal({
-    title: '生成今日采购清单',
-    content: '将根据今日制作日期的已付款订单生成采购清单，确认继续？',
-    success: async (res) => {
-      if (res.confirm) {
-        generating.value = true;
+const selectTargetDate = async (date: string) => {
+  if (selectedTargetDate.value === date) {
+    return;
+  }
 
-        try {
-          // 获取本地日期（避免UTC时区问题）
-          const now = new Date();
-          const year = now.getFullYear();
-          const month = String(now.getMonth() + 1).padStart(2, '0');
-          const day = String(now.getDate()).padStart(2, '0');
-          const today = `${year}-${month}-${day}`;
-
-          const response: any = await generatePurchaseList({
-            startDate: today,
-          });
-
-          if (response.code === 0) {
-            uni.showToast({ title: '生成成功', icon: 'success' });
-            // 刷新列表
-            loadPurchaseLists(true);
-          } else {
-            // 后端返回中文错误信息，直接显示
-            uni.showToast({ title: response.message || '生成失败', icon: 'none' });
-          }
-        } catch (error: any) {
-          console.error('生成采购清单失败', error);
-          // 显示后端返回的错误信息
-          uni.showToast({ title: error.message || '生成失败', icon: 'none' });
-        } finally {
-          generating.value = false;
-        }
-      }
-    },
-  });
+  selectedTargetDate.value = date;
+  if (!dateOverviewMap.value[date]) {
+    await fetchDateOverview(date);
+  }
 };
 
-// 确认采购完成
-const completePurchase = (id: string) => {
-  uni.showModal({
-    title: '确认采购完成',
-    content: '确认该采购清单的所有原料已采购完成？',
-    success: async (res) => {
-      if (res.confirm) {
-        try {
-          const response: any = await completePurchaseApi(id);
+const onTargetDateChange = async (e: any) => {
+  const nextDate = e.detail.value;
+  if (!nextDate) {
+    return;
+  }
 
-          if (response.code === 0) {
-            uni.showToast({ title: '操作成功', icon: 'success' });
-            // 刷新列表
-            loadPurchaseLists(true);
-          } else {
-            // 显示后端返回的错误信息
-            uni.showToast({ title: response.message || '操作失败', icon: 'none' });
-          }
-        } catch (error: any) {
-          console.error('确认采购完成失败', error);
-          // 显示后端返回的错误信息
-          uni.showToast({ title: error.message || '操作失败', icon: 'none' });
-        }
-      }
-    },
-  });
+  selectedTargetDate.value = nextDate;
+  await fetchDateOverview(nextDate);
 };
 
-// 开始采购
-const startPurchase = (id: string) => {
-  uni.showModal({
-    title: '开始采购',
-    content: '开始采购后可以录入采购记录，确认继续？',
-    success: async (res) => {
-      if (res.confirm) {
-        try {
-          const response: any = await startPurchaseApi(id);
+const previewSelectedDate = () => {
+  if (!selectedTargetDate.value) {
+    uni.showToast({ title: '请先选择制作日期', icon: 'none' });
+    return;
+  }
 
-          if (response.code === 0) {
-            uni.showToast({ title: '操作成功', icon: 'success' });
-            // 刷新列表
-            loadPurchaseLists(true);
-          } else {
-            uni.showToast({ title: response.message || '操作失败', icon: 'none' });
-          }
-        } catch (error: any) {
-          console.error('开始采购失败', error);
-          uni.showToast({ title: error.message || '操作失败', icon: 'none' });
-        }
-      }
-    },
-  });
-};
-
-// 跳转报销申请
-const goToReimbursement = (purchaseListId: string) => {
   uni.navigateTo({
-    url: `/pages/staff-purchasing/reimbursement/apply?purchaseListId=${purchaseListId}`,
+    url: `/pages/staff-purchasing/preview?startDate=${selectedTargetDate.value}`,
   });
 };
 
-// 跳转详情
+const generateList = async () => {
+  if (!selectedTargetDate.value) {
+    uni.showToast({ title: '请选择制作日期', icon: 'none' });
+    return;
+  }
+
+  const today = todayString.value;
+  const isSupplemental = selectedDateOverview.value.generateMode === 'supplement';
+
+  if (compareDateStrings(selectedTargetDate.value, today) < 0) {
+    uni.showToast({ title: '不能生成过去日期的采购清单', icon: 'none' });
+    return;
+  }
+
+  const submitGenerateRequest = async () => {
+    generating.value = true;
+
+    try {
+      const response: any = await generatePurchaseList({
+        startDate: selectedTargetDate.value,
+      });
+
+      if (response.code === 0) {
+        uni.showToast({
+          title: isSupplemental ? '增量清单已生成' : '生成成功',
+          icon: 'success',
+        });
+        await Promise.all([
+          loadPurchaseLists(true),
+          refreshDateOverviews(false),
+        ]);
+      } else {
+        uni.showToast({ title: response.message || '生成失败', icon: 'none' });
+      }
+    } catch (error: any) {
+      console.error('生成采购清单失败', error);
+      uni.showToast({ title: error.message || '生成失败', icon: 'none' });
+    } finally {
+      generating.value = false;
+    }
+  };
+
+  const showFinalConfirm = (title: string, content: string) => {
+    uni.showModal({
+      title,
+      content,
+      confirmText: '确认生成',
+      success: async (res) => {
+        if (res.confirm) {
+          await submitGenerateRequest();
+        }
+      },
+    });
+  };
+
+  if (selectedTargetDate.value !== today) {
+    showFinalConfirm(
+      '非当天采购提醒',
+      isSupplemental
+        ? `当前日期是 ${today}，你选择为 ${selectedTargetDate.value} 生成增量采购清单。系统只会处理这一天新增的已付款订单，不会影响已完成清单，请确认是否继续。`
+        : `当前日期是 ${today}，你选择生成的是 ${selectedTargetDate.value} 的采购清单。这不是当天生产清单，请确认是否继续。`,
+    );
+    return;
+  }
+
+  showFinalConfirm(
+    isSupplemental ? '生成增量采购清单' : '生成采购清单',
+    isSupplemental
+      ? `该日期已有已完成采购清单。本次只会把 ${selectedTargetDate.value} 新增的已付款订单生成一张独立的增量采购清单，不会影响原已完成清单，确认继续？`
+      : `将根据 ${selectedTargetDate.value} 制作日期的已付款订单生成采购清单，确认继续？`,
+  );
+};
+
+const handlePrimaryAction = () => {
+  const overview = selectedDateOverview.value;
+
+  if (overview.actionType === 'view' && overview.existingList?.id) {
+    goToDetail(overview.existingList.id);
+    return;
+  }
+
+  if (overview.actionType === 'generate') {
+    generateList();
+  }
+};
+
 const goToDetail = (id: string) => {
   uni.navigateTo({
     url: `/pages/staff-purchasing/detail?id=${id}`,
   });
 };
 
-// 获取状态文本
+const goToStockCreate = () => {
+  uni.navigateTo({
+    url: '/pages/staff-purchasing/stock-create',
+  });
+};
+
+const getListKindText = (kind?: string) => {
+  const kindMap: Record<string, string> = {
+    ORDER_DEMAND: '订单采购',
+    STOCK_REPLENISHMENT: '库存补货',
+  };
+  return kindMap[kind || 'ORDER_DEMAND'] || '订单采购';
+};
+
+const getListKindClass = (kind?: string) => {
+  return kind === 'STOCK_REPLENISHMENT' ? 'stock' : 'order';
+};
+
 const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
-    'PENDING': '待采购',
-    'COMPLETED': '已完成',
+    PENDING: '待采购',
+    COMPLETED: '已完成',
   };
   return statusMap[status] || status;
 };
 
-// 获取状态样式类
 const getStatusClass = (status: string) => {
   const classMap: Record<string, string> = {
-    'DRAFT': 'draft',
-    'PENDING': 'pending',
-    'COMPLETED': 'completed',
+    DRAFT: 'draft',
+    PENDING: 'pending',
+    COMPLETED: 'completed',
   };
   return classMap[status] || '';
 };
 
-// 格式化日期
+const getSummaryStatusClass = (state: DateOverview['state']) => {
+  const classMap: Record<DateOverview['state'], string> = {
+    GENERATE: 'generate',
+    SUPPLEMENT: 'supplement',
+    EXISTING: 'existing',
+    EMPTY: 'empty',
+    PAST: 'past',
+  };
+  return classMap[state];
+};
+
 const formatDate = (dateStr: string) => {
   const date = new Date(dateStr);
   const month = date.getMonth() + 1;
@@ -345,7 +953,6 @@ const formatDate = (dateStr: string) => {
   return `${month}月${day}日`;
 };
 
-// 格式化日期时间
 const formatDateTime = (dateStr: string) => {
   const date = new Date(dateStr);
   const month = date.getMonth() + 1;
@@ -355,7 +962,6 @@ const formatDateTime = (dateStr: string) => {
   return `${month}/${day} ${hours}:${minutes}`;
 };
 
-// 确认删除采购清单
 const confirmDeletePurchaseList = (id: string) => {
   uni.showModal({
     title: '删除采购清单',
@@ -368,8 +974,10 @@ const confirmDeletePurchaseList = (id: string) => {
 
           if (response.code === 0) {
             uni.showToast({ title: '删除成功', icon: 'success' });
-            // 刷新列表
-            loadPurchaseLists(true);
+            await Promise.all([
+              loadPurchaseLists(true),
+              refreshDateOverviews(false),
+            ]);
           } else {
             uni.showToast({ title: response.message || '删除失败', icon: 'none' });
           }
@@ -381,13 +989,29 @@ const confirmDeletePurchaseList = (id: string) => {
     },
   });
 };
+
+onMounted(() => {
+  todayString.value = getLocalDateString();
+  selectedTargetDate.value = todayString.value;
+  loadPurchaseLists();
+  refreshDateOverviews(true);
+  isMounted.value = true;
+});
+
+onShow(() => {
+  if (isMounted.value) {
+    todayString.value = getLocalDateString();
+    loadPurchaseLists(true);
+    refreshDateOverviews(false);
+  }
+});
 </script>
 
 <style scoped lang="scss">
 .purchasing-page {
   min-height: 100vh;
   background-color: #f5f5f5;
-  padding-bottom: 140rpx;
+  padding-bottom: 48rpx;
 }
 
 .header {
@@ -410,46 +1034,327 @@ const confirmDeletePurchaseList = (id: string) => {
   }
 }
 
+.planning-card,
+.filters,
+.purchase-lists {
+  margin: 0 32rpx 24rpx;
+}
+
+.quick-entry-card {
+  margin: 0 32rpx 24rpx;
+  padding: 28rpx;
+  border-radius: 24rpx;
+  background: linear-gradient(135deg, #dff6d2 0%, #eefad8 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24rpx;
+  box-shadow: 0 8rpx 24rpx rgba(73, 160, 120, 0.12);
+}
+
+.quick-entry-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.quick-entry-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #1f3b2d;
+}
+
+.quick-entry-subtitle {
+  font-size: 24rpx;
+  color: rgba(31, 59, 45, 0.74);
+  line-height: 1.5;
+}
+
+.quick-entry-arrow {
+  font-size: 40rpx;
+  color: rgba(31, 59, 45, 0.42);
+}
+
+.planning-card,
 .filters {
   background-color: #fff;
-  padding: 24rpx 32rpx;
+  border-radius: 24rpx;
+  padding: 28rpx;
+  box-shadow: 0 8rpx 24rpx rgba(0, 0, 0, 0.04);
+}
+
+.section-heading {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
   margin-bottom: 24rpx;
+}
+
+.section-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #333;
+}
+
+.section-subtitle {
+  font-size: 24rpx;
+  color: #999;
+  line-height: 1.5;
+}
+
+.date-chip-group {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16rpx;
+}
+
+.date-chip {
+  min-height: 152rpx;
+  border-radius: 20rpx;
+  padding: 24rpx 22rpx;
+  background: #faf7ef;
+  border: 2rpx solid transparent;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 10rpx;
+  box-sizing: border-box;
+
+  &.active {
+    border-color: #f6b93b;
+    background: linear-gradient(135deg, #fff8df 0%, #ffe3a3 100%);
+    box-shadow: 0 10rpx 24rpx rgba(246, 185, 59, 0.18);
+  }
+
+  &.muted {
+    background: #f7f7f7;
+  }
+}
+
+.more-date-chip {
+  background: linear-gradient(135deg, #f6f7fb 0%, #eef1f7 100%);
+}
+
+.chip-label {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.chip-date {
+  font-size: 24rpx;
+  color: #666;
+}
+
+.chip-meta {
+  font-size: 22rpx;
+  color: #999;
+}
+
+.date-summary-card {
+  margin-top: 24rpx;
+  border-radius: 24rpx;
+  background: linear-gradient(180deg, #fffdfa 0%, #fff6df 100%);
+  padding: 24rpx;
+}
+
+.summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16rpx;
+  margin-bottom: 20rpx;
+}
+
+.summary-date-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+}
+
+.summary-date {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #333;
+}
+
+.summary-status {
+  align-self: flex-start;
+  padding: 8rpx 18rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  font-weight: 600;
+
+  &.generate {
+    background: rgba(250, 173, 20, 0.14);
+    color: #ad6800;
+  }
+
+  &.supplement {
+    background: rgba(250, 140, 22, 0.14);
+    color: #ad4e00;
+  }
+
+  &.existing {
+    background: rgba(24, 144, 255, 0.12);
+    color: #0958d9;
+  }
+
+  &.empty {
+    background: rgba(0, 0, 0, 0.06);
+    color: #666;
+  }
+
+  &.past {
+    background: rgba(255, 77, 79, 0.12);
+    color: #cf1322;
+  }
+}
+
+.summary-tag {
+  font-size: 22rpx;
+  color: #a16b00;
+  background: rgba(255, 193, 7, 0.16);
+  padding: 8rpx 16rpx;
+  border-radius: 999rpx;
+}
+
+.summary-loading {
+  padding: 24rpx 0;
+
+  text {
+    font-size: 26rpx;
+    color: #999;
+  }
+}
+
+.summary-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.summary-line {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 600;
+  line-height: 1.5;
+}
+
+.summary-hint {
+  font-size: 24rpx;
+  color: #8c6d1f;
+  line-height: 1.6;
+}
+
+.summary-actions {
+  display: flex;
+  gap: 16rpx;
+  margin-top: 24rpx;
+
+  &.single-action {
+    .summary-btn {
+      width: 100%;
+    }
+  }
+}
+
+.summary-btn {
+  flex: 1;
+  height: 88rpx;
+  line-height: 88rpx;
+  border-radius: 44rpx;
+  border: none;
+  font-size: 28rpx;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  &.secondary {
+    background: #fff;
+    color: #7a5d00;
+    border: 1rpx solid rgba(242, 184, 41, 0.35);
+  }
+
+  &.primary {
+    background: linear-gradient(135deg, #ffd54f 0%, #ffca28 100%);
+    color: #333;
+    box-shadow: 0 10rpx 24rpx rgba(255, 202, 40, 0.24);
+  }
+
+  &[disabled] {
+    background: #f0f0f0;
+    color: #999;
+    box-shadow: none;
+  }
 }
 
 .filter-item {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 24rpx;
+}
+
+.filter-item-stack {
+  flex-direction: column;
+  align-items: flex-start;
 }
 
 .filter-label {
   font-size: 28rpx;
   color: #333;
-  font-weight: 500;
+  font-weight: 600;
 }
 
-.picker-value {
+.status-filter-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16rpx;
+  width: 100%;
+}
+
+.status-filter-chip {
+  min-width: 132rpx;
+  height: 64rpx;
+  padding: 0 24rpx;
+  border-radius: 999rpx;
+  background-color: #f5f5f5;
+  color: #666;
   display: flex;
   align-items: center;
-  gap: 8rpx;
-  font-size: 28rpx;
-  color: #666;
+  justify-content: center;
+  box-sizing: border-box;
 
-  .arrow {
-    font-size: 32rpx;
-    color: #999;
+  text {
+    font-size: 26rpx;
+    font-weight: 500;
+  }
+
+  &.active {
+    background: linear-gradient(135deg, #ffd54f 0%, #ffca28 100%);
+    color: #333;
+    box-shadow: 0 8rpx 18rpx rgba(255, 202, 40, 0.25);
   }
 }
 
 .purchase-lists {
-  padding: 0 32rpx;
+  padding: 0;
 }
 
-.loading-state, .empty-state {
+.list-heading {
+  margin: 0 0 20rpx;
+}
+
+.loading-state,
+.empty-state {
   display: flex;
   flex-direction: column;
   align-items: center;
   padding: 80rpx 32rpx;
+  background: #fff;
+  border-radius: 24rpx;
 
   text {
     font-size: 28rpx;
@@ -470,6 +1375,8 @@ const confirmDeletePurchaseList = (id: string) => {
   .empty-hint {
     font-size: 24rpx;
     color: #999;
+    text-align: center;
+    line-height: 1.6;
   }
 }
 
@@ -481,9 +1388,9 @@ const confirmDeletePurchaseList = (id: string) => {
 
 .list-item {
   background-color: #fff;
-  border-radius: 16rpx;
+  border-radius: 20rpx;
   padding: 24rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
+  box-shadow: 0 6rpx 18rpx rgba(0, 0, 0, 0.04);
 
   .item-header {
     display: flex;
@@ -498,10 +1405,34 @@ const confirmDeletePurchaseList = (id: string) => {
       flex-direction: column;
       gap: 8rpx;
 
+      .target-line {
+        display: flex;
+        align-items: center;
+        gap: 12rpx;
+        flex-wrap: wrap;
+      }
+
       .target-date {
         font-size: 30rpx;
         font-weight: bold;
         color: #333;
+      }
+
+      .kind-badge {
+        padding: 6rpx 14rpx;
+        border-radius: 999rpx;
+        font-size: 22rpx;
+        font-weight: 600;
+
+        &.order {
+          background: rgba(255, 202, 40, 0.18);
+          color: #8a5a00;
+        }
+
+        &.stock {
+          background: rgba(34, 197, 94, 0.14);
+          color: #15803d;
+        }
       }
 
       .create-time {
@@ -584,41 +1515,6 @@ const confirmDeletePurchaseList = (id: string) => {
       }
     }
   }
-
-  .item-actions {
-    padding-top: 16rpx;
-    border-top: 1rpx solid #f5f5f5;
-    display: flex;
-    gap: 12rpx;
-
-    .action-btn {
-      flex: 1;
-      height: 72rpx;
-      line-height: 72rpx;
-      border-radius: 8rpx;
-      font-size: 26rpx;
-      border: none;
-
-      &.start {
-        background-color: #52c41a;
-        color: #fff;
-      }
-
-      &.complete {
-        background-color: #1890ff;
-        color: #fff;
-      }
-
-      &.reimbursement {
-        background-color: #fa8c16;
-        color: #fff;
-      }
-
-      &:active {
-        opacity: 0.8;
-      }
-    }
-  }
 }
 
 .load-more {
@@ -628,45 +1524,6 @@ const confirmDeletePurchaseList = (id: string) => {
   text {
     font-size: 26rpx;
     color: #1890ff;
-  }
-}
-
-.bottom-actions {
-  position: fixed;
-  bottom: 0;
-  left: 0;
-  right: 0;
-  padding: 24rpx 32rpx;
-  background-color: #fff;
-  border-top: 1rpx solid #e5e5e5;
-  padding-bottom: calc(24rpx + env(safe-area-inset-bottom));
-  display: flex;
-  gap: 16rpx;
-}
-
-.action-btn {
-  flex: 1;
-  height: 96rpx;
-  border-radius: 48rpx;
-  font-size: 32rpx;
-  font-weight: 500;
-  border: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-  &.secondary {
-    background: linear-gradient(135deg, #e6f7ff 0%, #bae7ff 100%);
-    color: #096dd9;
-  }
-
-  &.primary {
-    background: linear-gradient(135deg, #ffeaa7 0%, #fdcb6e 100%);
-    color: #333;
-  }
-
-  &:active {
-    opacity: 0.8;
   }
 }
 </style>

@@ -17,6 +17,7 @@ import { PricingService } from 'src/domain/pricing/pricing.service';
 import { GlobalConfigService } from 'src/config/global-config.service';
 import { ShippingService } from 'src/shipping/shipping.service';
 import { Dog } from 'src/domain/dog/dog.entity';
+import { PrismaService } from 'src/infrastructure/prisma.service';
 import {
   DogGender,
   ActivityLevel,
@@ -92,6 +93,22 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
     calculateShippingFeePreview: jest.fn(),
   };
 
+  const mockPricingSnapshotRepository = {
+    findById: jest.fn(),
+    create: jest.fn(),
+    markAsUsed: jest.fn(),
+  };
+
+  const mockPrismaService = {
+    preparationMethod: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    order: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
+  };
+
   const mockStatusHistoryRepository: jest.Mocked<OrderStatusHistoryRepository> = {
     append: jest.fn(),
     findByOrderId: jest.fn(),
@@ -137,6 +154,14 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
           provide: ShippingService,
           useValue: mockShippingService,
         },
+        {
+          provide: 'IOrderPricingSnapshotRepository',
+          useValue: mockPricingSnapshotRepository,
+        },
+        {
+          provide: PrismaService,
+          useValue: mockPrismaService,
+        },
       ],
     }).compile();
 
@@ -154,6 +179,7 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       'owner-id-1',
       'Test Dog',
       'breed-id-1',
+      null,
       new Date('2020-01-01'), // 4+ years old
       DogGender.MALE,
       true, // neutered
@@ -165,6 +191,8 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       2,
       TreatInputMode.ESTIMATE_LEVEL,
       TreatLevel.LOW,
+      null,
+      null,
       null,
       null,
       0,
@@ -334,6 +362,15 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
 describe('OrderService - Phase 8.16: Order Cancellation', () => {
   let service: OrderService;
   let orderRepository: jest.Mocked<OrderRepository>;
+  const createMockRecipeSnapshot = () => ({
+    id: 'recipe-1',
+    version: 1,
+    name: 'Test Recipe',
+    production_loss_rate: 1.07,
+    energy_density_kcal_per_kg: 1450,
+    nutrition_standard: 'FEDIAF_2021',
+    items: [],
+  });
 
   const mockOrderRepository: jest.Mocked<OrderRepository> = {
     findById: jest.fn(),
@@ -387,6 +424,21 @@ describe('OrderService - Phase 8.16: Order Cancellation', () => {
           provide: ShippingService,
           useValue: {},
         },
+        {
+          provide: 'IOrderPricingSnapshotRepository',
+          useValue: {
+            findById: jest.fn(),
+            create: jest.fn(),
+            markAsUsed: jest.fn(),
+          },
+        },
+        {
+          provide: PrismaService,
+          useValue: {
+            preparationMethod: { findMany: jest.fn().mockResolvedValue([]) },
+            order: { findUnique: jest.fn(), update: jest.fn() },
+          },
+        },
       ],
     }).compile();
 
@@ -400,35 +452,30 @@ describe('OrderService - Phase 8.16: Order Cancellation', () => {
 
   describe('cancelOrder', () => {
     const createMockOrder = (status: OrderStatus) => {
+      const item = new OrderItem(
+        'item-1',
+        'order-1',
+        'dog-1',
+        createMockRecipeSnapshot(),
+        1000,
+        10,
+        100,
+        null,
+        310.34,
+      );
+
       return new Order(
         'order-1',
         'customer-1',
         status,
         OrderType.FRESH_FOOD,
+        new Date('2025-01-01T00:00:00Z'),
+        null,
         null,
         100,
         10,
         110,
-        [
-          new OrderItem(
-            'item-1',
-            'order-1',
-            {
-              id: 'recipe-1',
-              version: 1,
-              name: 'Test Recipe',
-              production_loss_rate: 0.1,
-              energy_density_kcal_per_kg: 1450,
-              nutrition_standard: 'FEDIAF_2021',
-              items: [],
-            },
-            1000,
-            10,
-            100,
-            null,
-            310.34,
-          ),
-        ],
+        [item],
       );
     };
 
@@ -565,6 +612,15 @@ describe('OrderService - Phase 8.16: Order Cancellation', () => {
 describe('OrderService - Phase 8.17: Payment Transaction Tracking', () => {
   let service: OrderService;
   let orderRepository: jest.Mocked<OrderRepository>;
+  const createMockRecipeSnapshot = () => ({
+    id: 'recipe-1',
+    version: 1,
+    name: 'Test Recipe',
+    production_loss_rate: 1.07,
+    energy_density_kcal_per_kg: 1450,
+    nutrition_standard: 'FEDIAF_2021',
+    items: [],
+  });
 
   const mockOrderRepository: jest.Mocked<OrderRepository> = {
     findById: jest.fn(),
@@ -618,6 +674,21 @@ describe('OrderService - Phase 8.17: Payment Transaction Tracking', () => {
           provide: ShippingService,
           useValue: {},
         },
+        {
+          provide: 'IOrderPricingSnapshotRepository',
+          useValue: {
+            findById: jest.fn(),
+            create: jest.fn(),
+            markAsUsed: jest.fn(),
+          },
+        },
+        {
+          provide: PrismaService,
+          useValue: {
+            preparationMethod: { findMany: jest.fn().mockResolvedValue([]) },
+            order: { findUnique: jest.fn(), update: jest.fn() },
+          },
+        },
       ],
     }).compile();
 
@@ -628,18 +699,36 @@ describe('OrderService - Phase 8.17: Payment Transaction Tracking', () => {
   });
 
   describe('processPayment', () => {
-    it('should record payment and transition to PAID', async () => {
-      const order = new Order(
+    const createMockOrder = (status: OrderStatus) => {
+      const item = new OrderItem(
+        'item-1',
+        'order-1',
+        'dog-1',
+        createMockRecipeSnapshot(),
+        1000,
+        10,
+        100,
+        null,
+        310.34,
+      );
+
+      return new Order(
         'order-1',
         'customer-1',
-        OrderStatus.PENDING_PAYMENT,
+        status,
         OrderType.FRESH_FOOD,
+        new Date('2025-01-01T00:00:00Z'),
+        null,
         null,
         100,
         10,
         110,
-        [new OrderItem('item-1', 'order-1', {} as any, 1000, 10, 100)],
+        [item],
       );
+    };
+
+    it('should record payment and transition to PAID', async () => {
+      const order = createMockOrder(OrderStatus.PENDING_PAYMENT);
 
       mockOrderRepository.findById.mockResolvedValue(order);
       mockOrderRepository.save.mockImplementation(async (o) => o);
@@ -655,17 +744,7 @@ describe('OrderService - Phase 8.17: Payment Transaction Tracking', () => {
     });
 
     it('should use default payment method WECHAT when not provided', async () => {
-      const order = new Order(
-        'order-1',
-        'customer-1',
-        OrderStatus.PENDING_PAYMENT,
-        OrderType.FRESH_FOOD,
-        null,
-        100,
-        10,
-        110,
-        [new OrderItem('item-1', 'order-1', {} as any, 1000, 10, 100)],
-      );
+      const order = createMockOrder(OrderStatus.PENDING_PAYMENT);
 
       mockOrderRepository.findById.mockResolvedValue(order);
       mockOrderRepository.save.mockImplementation(async (o) => o);
@@ -676,32 +755,11 @@ describe('OrderService - Phase 8.17: Payment Transaction Tracking', () => {
     });
 
     it('should be idempotent for already PAID orders', async () => {
-      const order = new Order(
-        'order-1',
-        'customer-1',
-        OrderStatus.PAID,
-        OrderType.FRESH_FOOD,
-        null,
-        100,
-        10,
-        110,
-        [new OrderItem('item-1', 'order-1', {} as any, 1000, 10, 100)],
-        undefined, // totalAmount
-        undefined, // pricingBreakdownSnapshot
-        undefined, // dogId
-        undefined, // addressId
-        undefined, // trackingNumber
-        undefined, // carrierCode
-        undefined, // shippedAt
-        undefined, // completedAt
-        undefined, // cancelledAt
-        undefined, // cancellationReason
-        undefined, // cancelledBy
-        'WECHAT', // paymentMethod
-        'MOCK_1234567890_abc123', // transactionId
-        new Date('2025-01-01'), // paidAt
-        'SUCCESS', // paymentStatus
-      );
+      const order = createMockOrder(OrderStatus.PAID);
+      order.paymentMethod = 'WECHAT';
+      order.transactionId = 'MOCK_1234567890_abc123';
+      order.paidAt = new Date('2025-01-01');
+      order.paymentStatus = 'SUCCESS';
 
       // Verify order has payment fields set
       expect(order.paymentMethod).toBe('WECHAT');
@@ -733,17 +791,7 @@ describe('OrderService - Phase 8.17: Payment Transaction Tracking', () => {
     });
 
     it('should throw InvalidStateTransitionError if order is not in PENDING_PAYMENT', async () => {
-      const order = new Order(
-        'order-1',
-        'customer-1',
-        OrderStatus.INIT,
-        OrderType.FRESH_FOOD,
-        null,
-        100,
-        10,
-        110,
-        [new OrderItem('item-1', 'order-1', {} as any, 1000, 10, 100)],
-      );
+      const order = createMockOrder(OrderStatus.INIT);
 
       mockOrderRepository.findById.mockResolvedValue(order);
 

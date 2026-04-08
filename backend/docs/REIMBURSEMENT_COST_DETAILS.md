@@ -6,7 +6,7 @@
 - 采购清单金额
 - 平台运费
 - 平台打包费
-- 自定义费用(如打车费、搬运费等)
+- 行政杂费/自定义费用(如房租、水电、工具、杂物、工资、打车费、搬运费等)
 
 ## API 变更
 
@@ -24,8 +24,8 @@
   "platformShippingFee": 10.00,
   "platformPackagingFee": 5.00,
   "customFees": [
-    {"description": "打车费", "amount": 30.00},
-    {"description": "搬运费", "amount": 20.00}
+    {"category": "RENT", "description": "2026年4月房租", "amount": 30.00},
+    {"category": "OTHER", "description": "搬运费", "amount": 20.00}
   ]
 }
 ```

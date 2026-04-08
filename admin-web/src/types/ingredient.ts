@@ -9,6 +9,12 @@ export enum IngredientType {
   PACKAGING = 'PACKAGING'   // 包装材料
 }
 
+export enum IngredientProcurementStrategy {
+  DAILY_PURCHASE = 'DAILY_PURCHASE',
+  STOCK_REPLENISHMENT = 'STOCK_REPLENISHMENT',
+  HYBRID = 'HYBRID'
+}
+
 // 基准单位枚举
 export enum BaseUnit {
   G = 'G',     // 克
@@ -34,19 +40,72 @@ export enum SupplementAddTiming {
 }
 
 // 类型标签映射
-export const IngredientTypeLabels: Record<IngredientType, string> = {
+export const IngredientTypeLabels: Record<string, string> = {
   [IngredientType.FOOD]: '食材',
   [IngredientType.SUPPLEMENT]: '补剂',
   [IngredientType.PACKAGING]: '包材'
 }
 
-export const BaseUnitLabels: Record<BaseUnit, string> = {
+export const IngredientProcurementStrategyLabels: Record<string, string> = {
+  [IngredientProcurementStrategy.DAILY_PURCHASE]: '日采',
+  [IngredientProcurementStrategy.STOCK_REPLENISHMENT]: '库存补货',
+  [IngredientProcurementStrategy.HYBRID]: '混合'
+}
+
+export type StockLevelStatus =
+  | 'NO_POLICY'
+  | 'SUFFICIENT'
+  | 'LOW_STOCK'
+  | 'NEEDS_REPLENISHMENT'
+
+export enum InventorySourceType {
+  KITCHEN_TASK = 'KITCHEN_TASK',
+  PURCHASE_RECORD = 'PURCHASE_RECORD',
+  MANUAL_ADJUSTMENT = 'MANUAL_ADJUSTMENT',
+  STOCKTAKE = 'STOCKTAKE'
+}
+
+export enum InventoryAdjustmentMode {
+  DELTA = 'DELTA',
+  SET = 'SET'
+}
+
+export enum InventoryStocktakeStatus {
+  DRAFT = 'DRAFT',
+  APPLIED = 'APPLIED'
+}
+
+export const StockLevelStatusLabels: Record<StockLevelStatus, string> = {
+  NO_POLICY: '未设置阈值',
+  SUFFICIENT: '库存充足',
+  LOW_STOCK: '低于安全库存',
+  NEEDS_REPLENISHMENT: '需要补货'
+}
+
+export const InventorySourceTypeLabels: Record<string, string> = {
+  [InventorySourceType.KITCHEN_TASK]: '厨房领用',
+  [InventorySourceType.PURCHASE_RECORD]: '采购入库',
+  [InventorySourceType.MANUAL_ADJUSTMENT]: '手工调整',
+  [InventorySourceType.STOCKTAKE]: '盘点差异'
+}
+
+export const InventoryAdjustmentModeLabels: Record<string, string> = {
+  [InventoryAdjustmentMode.DELTA]: '按差异调整',
+  [InventoryAdjustmentMode.SET]: '设置为盘点值'
+}
+
+export const InventoryStocktakeStatusLabels: Record<string, string> = {
+  [InventoryStocktakeStatus.DRAFT]: '草稿',
+  [InventoryStocktakeStatus.APPLIED]: '已入账'
+}
+
+export const BaseUnitLabels: Record<string, string> = {
   [BaseUnit.G]: '克',
   [BaseUnit.ML]: '毫升',
   [BaseUnit.PCS]: '个/件'
 }
 
-export const SupplementCategoryLabels: Record<SupplementCategoryType, string> = {
+export const SupplementCategoryLabels: Record<string, string> = {
   [SupplementCategoryType.MINERAL]: '矿物质',
   [SupplementCategoryType.VITAMIN]: '维生素',
   [SupplementCategoryType.AMINO_ACID]: '氨基酸',
@@ -56,7 +115,7 @@ export const SupplementCategoryLabels: Record<SupplementCategoryType, string> = 
   [SupplementCategoryType.OTHER]: '其他'
 }
 
-export const SupplementAddTimingLabels: Record<SupplementAddTiming, string> = {
+export const SupplementAddTimingLabels: Record<string, string> = {
   [SupplementAddTiming.BEFORE_MIXING]: '制作中（须拌匀）',
   [SupplementAddTiming.BEFORE_MEAL]: '饭前（冷却后）'
 }
@@ -103,6 +162,7 @@ export interface Ingredient {
   id: string
   name: string
   type: IngredientType
+  procurementStrategy: IngredientProcurementStrategy
   brand: string | null
   productModel: string | null
   purchaseChannel: string | null
@@ -112,11 +172,23 @@ export interface Ingredient {
   purchaseUnit: string
   purchaseToBaseRatio: number
   currentPricePerPurchaseUnit: number
+  effectivePricePerPurchaseUnit: number
   unitCost: number  // 计算字段: price / ratio
   weightG: number | null
   maxCapacityG: number | null
+  safetyStock: number | null
+  reorderPoint: number | null
+  targetStock: number | null
   properties: FoodProperties | SupplementProperties | PackagingProperties
   tagIds: string[]  // 标签ID数组
+  tags?: Array<{
+    id: string
+    name: string
+    color?: string | null
+  }>
+  activeRecommendedProductCount?: number
+  recommendedProductCount?: number
+  hasActiveRecommendedProduct?: boolean
   stock?: number  // 库存占位符（MVP阶段）
   createdAt: string
   updatedAt: string
@@ -127,6 +199,7 @@ export interface IngredientForm {
   id?: string
   name: string
   type: IngredientType
+  procurementStrategy: IngredientProcurementStrategy
   brand?: string
   productModel?: string
   purchaseChannel?: string
@@ -136,11 +209,66 @@ export interface IngredientForm {
   purchaseUnit: string
   purchaseToBaseRatio: number
   currentPricePerPurchaseUnit: number
+  effectivePricePerPurchaseUnit?: number
   weightG?: number
   maxCapacityG?: number
+  safetyStock?: number
+  reorderPoint?: number
+  targetStock?: number
   properties: FoodProperties | SupplementProperties | PackagingProperties
   tagIds?: string[]  // 标签ID数组
   tags?: any[]  // 标签完整信息（用于显示）
+}
+
+export interface InventoryOverviewItem extends Ingredient {
+  stock: number
+  currentStock: number
+  stockUnitLabel: string
+  stockStatus: StockLevelStatus
+  suggestedBaseQuantity: number
+  suggestedPurchaseQuantity: number
+  suggestedEstimatedCost: number
+  suggestedProductId?: string
+  suggestedProductName?: string
+}
+
+export interface InventoryLedgerItem {
+  id: string
+  ingredientId: string
+  ingredientName: string
+  deltaG: number
+  stockUnitLabel: string
+  sourceType: InventorySourceType
+  sourceId: string
+  sourceLabel: string
+  sourceDescription: string | null
+  quantityBeforeG: number | null
+  quantityAfterG: number | null
+  expectedQuantityG: number | null
+  countedQuantityG: number | null
+  createdAt: string
+}
+
+export interface InventoryStocktakeLineItem {
+  id: string
+  ingredientId: string
+  ingredientName: string
+  stockUnitLabel: string
+  expectedQuantityG: number
+  countedQuantityG: number
+  deltaG: number
+}
+
+export interface InventoryStocktakeItem {
+  id: string
+  status: InventoryStocktakeStatus
+  note: string | null
+  createdAt: string
+  appliedAt: string | null
+  lineCount: number
+  varianceCount: number
+  totalAbsDeltaG: number
+  lines: InventoryStocktakeLineItem[]
 }
 
 // CFCT分类选项（基于 WS/T 464-2015《食物成分数据表达规范》）

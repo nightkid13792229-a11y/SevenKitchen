@@ -74,6 +74,10 @@
               <text class="label">收货人：</text>
               <text class="value">{{ order.recipientName }}（{{ order.recipientCity }}）</text>
             </view>
+            <view v-if="order.adminRemark" class="info-row">
+              <text class="label">备注：</text>
+              <text class="value remark-text">{{ order.adminRemark }}</text>
+            </view>
           </view>
         </view>
       </view>
@@ -894,6 +898,10 @@ const printLabel = () => {
     font-size: 26rpx;
     color: #333;
     flex: 1;
+  }
+
+  .remark-text {
+    word-break: break-all;
   }
 }
 

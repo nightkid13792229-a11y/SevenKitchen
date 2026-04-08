@@ -104,6 +104,7 @@ export class PrismaOrderRepository implements OrderRepository {
             transactionId: order.transactionId ?? null,
             paidAt: order.paidAt ?? null,
             paymentStatus: order.paymentStatus ?? null,
+            adminRemark: order.adminRemark ?? null,
             // Phase 9.1: Freezing and Aftersale fields
             aftersaleType: order.aftersaleType ?? null,
             freezingSince: order.freezingSince ?? null,
@@ -171,6 +172,7 @@ export class PrismaOrderRepository implements OrderRepository {
           transactionId: order.transactionId ?? null,
           paidAt: order.paidAt ?? null,
           paymentStatus: order.paymentStatus ?? null,
+          adminRemark: order.adminRemark ?? null,
           // Phase 9.1: Freezing and Aftersale fields
           freezingSince: order.freezingSince ?? null,
           aftersaleType: order.aftersaleType ?? null,
@@ -303,6 +305,7 @@ export class PrismaOrderRepository implements OrderRepository {
       (record as any).aftersalePhotos ?? undefined,
       // Skip validation for orders loaded from database (allows admin-adjusted amounts)
       true, // skipValidation
+      (record as any).adminRemark ?? null,
     );
   }
 
@@ -489,10 +492,13 @@ export class PrismaOrderRepository implements OrderRepository {
     total: number;
     pendingPayment: number;
     paid: number;
+    purchasing: number;
     inProduction: number;
+    freezing: number;
     shipped: number;
     completed: number;
     cancelled: number;
+    aftersale: number;
   }> {
     const stats = await this.prisma.order.groupBy({
       by: ['status'],
@@ -513,10 +519,13 @@ export class PrismaOrderRepository implements OrderRepository {
       total: await this.prisma.order.count(),
       pendingPayment: countMap[OrderStatus.PENDING_PAYMENT] ?? 0,
       paid: countMap[OrderStatus.PAID] ?? 0,
+      purchasing: countMap[OrderStatus.PURCHASING] ?? 0,
       inProduction: countMap[OrderStatus.IN_PRODUCTION] ?? 0,
+      freezing: countMap[OrderStatus.FREEZING] ?? 0,
       shipped: countMap[OrderStatus.SHIPPED] ?? 0,
       completed: countMap[OrderStatus.COMPLETED] ?? 0,
       cancelled: countMap[OrderStatus.CANCELLED] ?? 0,
+      aftersale: countMap[OrderStatus.AFTERSALE] ?? 0,
     };
   }
 

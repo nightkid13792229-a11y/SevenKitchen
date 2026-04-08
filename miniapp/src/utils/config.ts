@@ -238,5 +238,16 @@ export function testImageLoad(imageUrl: string): void {
   console.log('==========================================')
 }
 
+// ========================================
+// 微信分享配置
+// ========================================
+// 图片存储在腾讯云COS，通过CDN加速访问
+
+export const CURRENT_SHARE_CONFIG = {
+  defaultImageUrl: 'https://img.sevenkitchen.cloud/share/share-default.png',
+  homeImageUrl: 'https://img.sevenkitchen.cloud/share/share-home.png',
+  recipeImageUrl: 'https://img.sevenkitchen.cloud/share/share-recipe.png'
+}
+
 // Export default for backward compatibility
 export const BASE_URL = DEFAULT_BASE_URL

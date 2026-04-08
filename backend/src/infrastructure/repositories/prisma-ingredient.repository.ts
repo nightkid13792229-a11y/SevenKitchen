@@ -6,7 +6,11 @@
 import { Injectable, Logger } from '@nestjs/common';
 import type { IngredientRepository } from '../../domain/ingredient/ingredient.repository';
 import { Ingredient } from '../../domain/ingredient/ingredient.entity';
-import { IngredientType, BaseUnit } from '../../domain/ingredient/enums';
+import {
+  IngredientType,
+  BaseUnit,
+  IngredientProcurementStrategy,
+} from '../../domain/ingredient/enums';
 import { PrismaService } from '../prisma.service';
 
 @Injectable()
@@ -59,6 +63,7 @@ export class PrismaIngredientRepository implements IngredientRepository {
     const data = {
       name: ingredient.name,
       type: ingredient.type as any,
+      procurementStrategy: ingredient.procurementStrategy as any,
       brand: ingredient.brand,
       productModel: ingredient.productModel,
       purchaseChannel: ingredient.purchaseChannel,
@@ -68,8 +73,12 @@ export class PrismaIngredientRepository implements IngredientRepository {
       purchaseUnit: ingredient.purchaseUnit,
       purchaseToBaseRatio: ingredient.purchaseToBaseRatio,
       currentPricePerPurchaseUnit: ingredient.currentPricePerPurchaseUnit,
+      effectivePricePerPurchaseUnit: ingredient.effectivePricePerPurchaseUnit,
       weightG: ingredient.weightG,
       maxCapacityG: ingredient.maxCapacityG,
+      safetyStock: ingredient.safetyStock,
+      reorderPoint: ingredient.reorderPoint,
+      targetStock: ingredient.targetStock,
       properties: ingredient.properties as any,
     };
 
@@ -82,7 +91,7 @@ export class PrismaIngredientRepository implements IngredientRepository {
     });
 
     // Save tag associations if provided
-    if (tagIds) {
+    if (tagIds !== undefined) {
       await this.setTags(ingredient.id, tagIds);
     }
 
@@ -101,6 +110,18 @@ export class PrismaIngredientRepository implements IngredientRepository {
     const updated = await this.prisma.ingredient.update({
       where: { id },
       data: { currentPricePerPurchaseUnit: pricePerPurchaseUnit },
+    });
+
+    return this.mapToDomain(updated);
+  }
+
+  async updateEffectivePrice(
+    id: string,
+    effectivePricePerPurchaseUnit: number,
+  ): Promise<Ingredient | null> {
+    const updated = await this.prisma.ingredient.update({
+      where: { id },
+      data: { effectivePricePerPurchaseUnit },
     });
 
     return this.mapToDomain(updated);
@@ -171,6 +192,7 @@ export class PrismaIngredientRepository implements IngredientRepository {
       record.id,
       record.name,
       record.type as IngredientType,
+      record.procurementStrategy as IngredientProcurementStrategy,
       record.brand,
       record.productModel,
       record.purchaseChannel,
@@ -180,8 +202,14 @@ export class PrismaIngredientRepository implements IngredientRepository {
       record.purchaseUnit,
       record.purchaseToBaseRatio,
       parseFloat(record.currentPricePerPurchaseUnit.toString()),
+      record.effectivePricePerPurchaseUnit
+        ? parseFloat(record.effectivePricePerPurchaseUnit.toString())
+        : null,
       record.weightG,
       record.maxCapacityG,
+      record.safetyStock,
+      record.reorderPoint,
+      record.targetStock,
       record.properties,
     );
   }

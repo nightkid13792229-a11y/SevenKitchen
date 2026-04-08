@@ -133,8 +133,16 @@ const canChangeRole = computed(() => {
   return props.user.role !== UserRole.ADMIN
 })
 
+interface UserFormModel {
+  phone: string
+  nickname: string
+  department: 'KITCHEN' | 'PURCHASING' | 'SHIPPING'
+  status: UserStatus
+  role: UserRole
+}
+
 // 表单数据
-const formData = ref<CreateUserForm | UpdateUserForm>({
+const formData = ref<UserFormModel>({
   phone: '',
   nickname: '',
   department: 'KITCHEN',
@@ -174,7 +182,9 @@ watch(
     if (user) {
       // 编辑模式：填充用户数据
       formData.value = {
+        phone: user.phone,
         nickname: user.nickname,
+        department: 'KITCHEN',
         status: user.status,
         role: user.role,
       }
@@ -213,11 +223,21 @@ const handleSubmit = async () => {
 
     if (isEditMode.value) {
       // 编辑用户
-      await userApi.update(props.user!.id, formData.value as UpdateUserForm)
+      const updatePayload: UpdateUserForm = {
+        nickname: formData.value.nickname,
+        status: formData.value.status,
+        role: formData.value.role,
+      }
+      await userApi.update(props.user!.id, updatePayload)
       ElMessage.success('更新成功')
     } else {
       // 创建员工
-      await userApi.create(formData.value as CreateUserForm)
+      const createPayload: CreateUserForm = {
+        phone: formData.value.phone,
+        nickname: formData.value.nickname,
+        department: formData.value.department,
+      }
+      await userApi.create(createPayload)
       ElMessage.success('创建成功')
     }
 

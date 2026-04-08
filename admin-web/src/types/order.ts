@@ -115,6 +115,7 @@ export interface Order {
   transactionId?: string
   paidAt?: string | null
   paymentStatus?: PaymentStatus
+  adminRemark?: string | null
 }
 
 /**

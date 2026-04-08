@@ -15,6 +15,7 @@ export class DogBreed {
   constructor(
     public readonly id: string,
     public readonly name: string,
+    public readonly aliases: string[],
     public readonly sizeCategory: DogSizeCategory,
     public readonly growthCurveType: GrowthCurveType,
     public readonly adultAgeMonths: number,
@@ -60,6 +61,13 @@ export class DogBreed {
     // Name must be non-empty
     if (!this.name || this.name.trim().length === 0) {
       throw new ValidationError('Breed name must be non-empty');
+    }
+
+    const invalidAlias = this.aliases.find(
+      (alias) => !alias || alias.trim().length === 0,
+    );
+    if (invalidAlias !== undefined) {
+      throw new ValidationError('Breed aliases must be non-empty');
     }
   }
 

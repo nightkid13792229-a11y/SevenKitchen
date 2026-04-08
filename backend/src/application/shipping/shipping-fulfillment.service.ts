@@ -53,11 +53,12 @@ export class ShippingFulfillmentService {
 
   /**
    * List orders ready for shipment
-   * Phase 9: Returns orders with IN_PRODUCTION status (simplified from READY_FOR_SHIPMENT)
+   * Orders are ready for shipment once production is completed and they enter
+   * the FREEZING ("急冻中待发货") state.
    */
   async listOrdersReadyForShipment(): Promise<OrderReadyForShipmentDto[]> {
     const orders = await this.orderRepository.findByStatus(
-      OrderStatus.IN_PRODUCTION,
+      OrderStatus.FREEZING,
     );
 
     return orders.map((order) => ({
@@ -79,7 +80,7 @@ export class ShippingFulfillmentService {
 
   /**
    * Mark order as shipped with tracking information
-   * Phase 9: Transitions order from IN_PRODUCTION to SHIPPED (simplified from READY_FOR_SHIPMENT)
+   * Shipping happens after the order has moved into FREEZING.
    * Phase 8.18: Logs status transition to history
    */
   async markOrderAsShipped(
@@ -93,10 +94,9 @@ export class ShippingFulfillmentService {
       throw new NotFoundException(`Order not found: ${orderId}`);
     }
 
-    // Phase 9: Validate order is in IN_PRODUCTION status (changed from READY_FOR_SHIPMENT)
-    if (order.status !== OrderStatus.IN_PRODUCTION) {
+    if (order.status !== OrderStatus.FREEZING) {
       throw new BadRequestException(
-        `Cannot mark order as shipped from status: ${order.status}. Order must be in IN_PRODUCTION status.`,
+        `Cannot mark order as shipped from status: ${order.status}. Order must be in FREEZING status.`,
       );
     }
 

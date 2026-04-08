@@ -43,7 +43,7 @@
             @change="handleFilter"
           >
             <el-option label="待审核" value="PENDING_REVIEW" />
-            <el-option label="已批准" value="APPROVED" />
+            <el-option label="已报销" value="REIMBURSED" />
             <el-option label="已驳回" value="REJECTED" />
             <el-option label="需重新提交" value="REQUIRES_RESUBMIT" />
           </el-select>
@@ -120,6 +120,14 @@
         <el-table-column label="采购清单数" width="100" align="center">
           <template #default="{ row }">
             {{ row.purchaseLists?.length || 0 }}
+          </template>
+        </el-table-column>
+
+        <el-table-column label="费用构成" min-width="220">
+          <template #default="{ row }">
+            <span class="expense-summary">
+              {{ getExpenseSummary(row) || '-' }}
+            </span>
           </template>
         </el-table-column>
 
@@ -210,7 +218,7 @@
             <el-radio label="REJECT">
               <el-text type="danger">驳回</el-text>
             </el-radio>
-            <el-radio label="RESUBMIT">
+            <el-radio label="REQUIRES_RESUBMIT">
               <el-text type="warning">要求重新提交</el-text>
             </el-radio>
           </el-radio-group>
@@ -237,10 +245,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted, computed } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { purchasingApi } from '@/api/purchasing'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
+import { summarizeReimbursementCustomFees } from '@/constants/reimbursement'
 
 const router = useRouter()
 
@@ -275,7 +284,7 @@ const pagination = reactive({
 
 // 审核表单
 const reviewForm = reactive({
-  decision: 'APPROVE' as 'APPROVE' | 'REJECT' | 'RESUBMIT',
+  decision: 'APPROVE' as 'APPROVE' | 'REJECT' | 'REQUIRES_RESUBMIT',
   comment: ''
 })
 
@@ -283,7 +292,7 @@ const reviewForm = reactive({
 const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
     'PENDING_REVIEW': '待审核',
-    'APPROVED': '已批准',
+    'REIMBURSED': '已报销',
     'REJECTED': '已驳回',
     'REQUIRES_RESUBMIT': '需重新提交'
   }
@@ -293,7 +302,7 @@ const getStatusText = (status: string) => {
 const getStatusType = (status: string) => {
   const typeMap: Record<string, any> = {
     'PENDING_REVIEW': 'warning',
-    'APPROVED': 'success',
+    'REIMBURSED': 'success',
     'REJECTED': 'danger',
     'REQUIRES_RESUBMIT': 'info'
   }
@@ -321,6 +330,29 @@ const formatDateTime = (dateStr: string) => {
   const hours = String(date.getHours()).padStart(2, '0')
   const minutes = String(date.getMinutes()).padStart(2, '0')
   return `${year}-${month}-${day} ${hours}:${minutes}`
+}
+
+const getExpenseSummary = (row: any) => {
+  const parts: string[] = []
+  const customFeeSummary = summarizeReimbursementCustomFees(row.customFees)
+
+  if (row.purchaseLists?.length) {
+    parts.push(`${row.purchaseLists.length}张采购清单`)
+  }
+
+  if (customFeeSummary) {
+    parts.push(customFeeSummary)
+  }
+
+  if (row.platformShippingFee > 0) {
+    parts.push('平台运费')
+  }
+
+  if (row.platformPackagingFee > 0) {
+    parts.push('平台打包费')
+  }
+
+  return parts.join('、')
 }
 
 // 加载报销单列表
@@ -514,6 +546,10 @@ onMounted(() => {
 
   .text-muted {
     color: #909399;
+  }
+
+  .expense-summary {
+    color: #8c6d1f;
   }
 }
 

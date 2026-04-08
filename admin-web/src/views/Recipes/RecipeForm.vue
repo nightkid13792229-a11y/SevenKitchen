@@ -510,7 +510,7 @@
                     📍 {{ ingredient.purchaseChannel }}
                   </span>
                   <span>
-                    💰 ¥{{ ingredient.currentPricePerPurchaseUnit }}/{{ ingredient.purchaseUnit }}
+                    💰 ¥{{ ingredient.effectivePricePerPurchaseUnit ?? ingredient.currentPricePerPurchaseUnit }}/{{ ingredient.purchaseUnit }}
                   </span>
                   <span style="color: #909399">
                     {{ IngredientTypeLabels[ingredient.type] || ingredient.type }}
@@ -1215,7 +1215,10 @@ const handleDetailImageUpload: UploadProps['beforeUpload'] = async (file) => {
 };
 
 const removeDetailImage = async (index: number) => {
-  const imageUrl = form.detailImages![index];
+  const imageUrl = form.detailImages?.[index];
+  if (!imageUrl) {
+    return;
+  }
 
   // 从URL中提取key (格式: https://bucket.cos.region.myqcloud.com/recipes/timestamp-random.ext)
   const match = imageUrl.match(/\/recipes\/(.+)$/);
@@ -1734,14 +1737,15 @@ const saveIngredient = () => {
 
 // 重新计算所有FOOD类型食材的占比
 const recalculateAllRatios = () => {
-  const foodItems = form.items.filter(
+  const items = form.items || [];
+  const foodItems = items.filter(
     (item: any) => item.ingredientType === 'FOOD' && item.exampleWeight !== undefined && item.exampleWeight !== null
   );
 
   const totalWeight = foodItems.reduce((sum: number, item: any) => sum + (item.exampleWeight || 0), 0);
 
   if (totalWeight > 0) {
-    form.items.forEach((item: any) => {
+    items.forEach((item: any) => {
       if (item.ingredientType === 'FOOD' && item.exampleWeight) {
         item.ratioPercent = (item.exampleWeight / totalWeight) * 100;
       }

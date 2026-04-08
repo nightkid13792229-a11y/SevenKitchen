@@ -6,21 +6,88 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { INestApplication, ValidationPipe } from '@nestjs/common';
 import request from 'supertest';
 import { JwtModule } from '@nestjs/jwt';
-import { DogsController } from 'src/controllers/dogs.controller';
+import { DogsController } from 'src/dogs.controller';
 import { UnauthorizedExceptionFilter } from 'src/common/unauthorized-exception.filter';
 import {
   DogService,
   DOG_REPOSITORY,
+  DOG_BREED_REPOSITORY,
+  PRISMA_SERVICE,
   RECIPE_REPOSITORY,
 } from 'src/application/dog/dog.service';
 import { InMemoryDogRepository } from 'src/infrastructure/repositories/in-memory-dog.repository';
 import { InMemoryRecipeRepository } from 'src/infrastructure/repositories/in-memory-recipe.repository';
-import { JwtAuthService } from 'src/jwt.service';
-import { AuthGuard } from 'src/auth.guard';
+import { JwtAuthService } from 'src/auth/jwt.service';
+import { AuthGuard } from 'src/auth/auth.guard';
+import { DogBreed } from 'src/domain/dog/dog-breed.entity';
+import { DogSizeCategory } from 'src/domain';
+import { GrowthCurveType } from 'src/domain/dog/enums';
+import {
+  MEDICAL_RECORD_REPOSITORY,
+  CHECKUP_RECORD_REPOSITORY,
+  ALLERGY_RECORD_REPOSITORY,
+} from 'src/application/health/health.service';
+import { WeightRecordService } from 'src/application/weight-record/weight-record.service';
+import { PrismaService } from 'src/infrastructure/prisma.service';
+import { TencentCosService } from 'src/infrastructure/services/tencent-cos.service';
 
 describe('AuthGuard (e2e)', () => {
   let app: INestApplication;
   let jwtAuthService: JwtAuthService;
+  const mockBreed = new DogBreed(
+    '550e8400-e29b-41d4-a716-446655440000',
+    'Test Breed',
+    [],
+    DogSizeCategory.SMALL,
+    GrowthCurveType.STANDARD,
+    12,
+    8,
+    6,
+    true,
+  );
+  const mockDogBreedRepository = {
+    findById: jest.fn().mockResolvedValue(mockBreed),
+    findAll: jest.fn().mockResolvedValue([mockBreed]),
+    findBySizeCategory: jest.fn(),
+    save: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+    existsByName: jest.fn(),
+    countUsage: jest.fn(),
+    findUsage: jest.fn(),
+  };
+  const mockMedicalRecordRepository = {
+    findById: jest.fn(),
+    findByDogId: jest.fn().mockResolvedValue([]),
+    findByStatus: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+  };
+  const mockCheckupRecordRepository = {
+    findById: jest.fn(),
+    findByDogId: jest.fn().mockResolvedValue([]),
+    create: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+  };
+  const mockAllergyRecordRepository = {
+    findById: jest.fn(),
+    findByDogId: jest.fn().mockResolvedValue([]),
+    create: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+  };
+  const mockWeightRecordService = {
+    create: jest.fn(),
+    findByDogId: jest.fn(),
+    delete: jest.fn(),
+    updateSyncedToProfile: jest.fn(),
+  };
+  const mockCosService = {
+    uploadImage: jest.fn(),
+    deleteImage: jest.fn(),
+  };
 
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -38,8 +105,40 @@ describe('AuthGuard (e2e)', () => {
           useClass: InMemoryDogRepository,
         },
         {
+          provide: DOG_BREED_REPOSITORY,
+          useValue: mockDogBreedRepository,
+        },
+        {
           provide: RECIPE_REPOSITORY,
           useClass: InMemoryRecipeRepository,
+        },
+        {
+          provide: PRISMA_SERVICE,
+          useValue: {},
+        },
+        {
+          provide: MEDICAL_RECORD_REPOSITORY,
+          useValue: mockMedicalRecordRepository,
+        },
+        {
+          provide: CHECKUP_RECORD_REPOSITORY,
+          useValue: mockCheckupRecordRepository,
+        },
+        {
+          provide: ALLERGY_RECORD_REPOSITORY,
+          useValue: mockAllergyRecordRepository,
+        },
+        {
+          provide: WeightRecordService,
+          useValue: mockWeightRecordService,
+        },
+        {
+          provide: PrismaService,
+          useValue: {},
+        },
+        {
+          provide: TencentCosService,
+          useValue: mockCosService,
         },
         JwtAuthService,
         AuthGuard,
@@ -57,12 +156,17 @@ describe('AuthGuard (e2e)', () => {
     app.useGlobalFilters(new UnauthorizedExceptionFilter());
 
     jwtAuthService = moduleFixture.get<JwtAuthService>(JwtAuthService);
+    jest.clearAllMocks();
+    mockDogBreedRepository.findById.mockResolvedValue(mockBreed);
+    mockDogBreedRepository.findAll.mockResolvedValue([mockBreed]);
 
     await app.init();
   });
 
   afterEach(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
   });
 
   describe('Bearer token authentication', () => {

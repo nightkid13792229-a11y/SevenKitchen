@@ -64,10 +64,20 @@ export class UpdateGlobalConfigDto {
   shippingCompanyLogoUrl?: string | null;
 
   @IsOptional()
+  @IsString()
+  homeHeaderBgImageUrl?: string | null;
+
+  @IsOptional()
   @IsNumber()
   @Min(5)
   @Max(180)
   paymentTimeoutMinutes?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(1)
+  ingredientPriceAutoApproveThreshold?: number;
 
   @IsOptional()
   equipmentRecommendations?: any;

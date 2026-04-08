@@ -68,6 +68,40 @@
         </el-descriptions>
       </el-card>
 
+      <el-card class="info-card" shadow="never">
+        <template #header>
+          <div class="card-header-with-action">
+            <span class="card-title">管理员备注</span>
+            <div class="remark-actions">
+              <el-button
+                :disabled="savingRemark || !remarkDraft.trim()"
+                @click="handleClearRemark"
+              >
+                清空
+              </el-button>
+              <el-button
+                type="primary"
+                :loading="savingRemark"
+                :disabled="!isRemarkDirty"
+                @click="handleSaveRemark"
+              >
+                保存备注
+              </el-button>
+            </div>
+          </div>
+        </template>
+        <el-input
+          v-model="remarkDraft"
+          type="textarea"
+          :rows="4"
+          maxlength="200"
+          show-word-limit
+          resize="vertical"
+          placeholder="填写给生产制作单的内部备注，例如分装要求、制作顺序、特殊提醒"
+        />
+        <div class="remark-hint">该备注仅供内部使用，会同步到生产制作单和打印版。</div>
+      </el-card>
+
       <!-- 客户和狗狗信息 -->
       <el-card class="info-card" shadow="never">
         <template #header>
@@ -258,13 +292,12 @@
             />
           </template>
 
-          <!-- 内部生产状态（PURCHASING, IN_PRODUCTION, READY_FOR_PACKAGING） -->
+          <!-- 内部生产状态（PURCHASING, IN_PRODUCTION, FREEZING） -->
           <!-- 生产批次系统自动流转，管理员无需操作 -->
           <template
             v-else-if="
               order.status === OrderStatusEnum.PURCHASING ||
-              order.status === OrderStatusEnum.IN_PRODUCTION ||
-              order.status === OrderStatusEnum.READY_FOR_PACKAGING
+              order.status === OrderStatusEnum.IN_PRODUCTION
             "
           >
             <el-button type="danger" @click="handleCancelOrder">取消订单</el-button>
@@ -276,8 +309,8 @@
             />
           </template>
 
-          <!-- READY_FOR_SHIPMENT状态：可以发货 -->
-          <template v-else-if="order.status === OrderStatusEnum.READY_FOR_SHIPMENT">
+          <!-- FREEZING状态：可以发货 -->
+          <template v-else-if="order.status === OrderStatusEnum.FREEZING">
             <el-button type="primary" @click="handleShip">发货</el-button>
             <el-button type="danger" @click="handleCancelOrder">取消订单</el-button>
           </template>
@@ -342,6 +375,7 @@ import {
   OrderType,
   PaymentStatus
 } from '@/types/order'
+import { formatDateTime, formatDate } from '@/utils/date'
 import type {
   Order,
   CancelledBy,
@@ -362,6 +396,8 @@ const orderId = computed(() => route.params.id as string)
 const loading = ref(false)
 const order = ref<Order | null>(null)
 const orderHistory = ref<OrderHistory[]>([])
+const remarkDraft = ref('')
+const savingRemark = ref(false)
 
 // 对话框
 const cancelDialogVisible = ref(false)
@@ -369,6 +405,11 @@ const shippingDialogVisible = ref(false)
 const confirmPaymentDialogVisible = ref(false)
 const snapshotDialogVisible = ref(false)
 const currentSnapshot = ref<RecipeSnapshot | undefined>(undefined)
+const normalizedRemarkDraft = computed(() => remarkDraft.value.trim())
+const isRemarkDirty = computed(() => {
+  const currentRemark = (order.value?.adminRemark ?? '').trim()
+  return normalizedRemarkDraft.value !== currentRemark
+})
 
 // 快递公司配置
 const carriers: Record<string, string> = {
@@ -388,6 +429,7 @@ const loadOrder = async () => {
   try {
     const data = await orderApi.getDetail(orderId.value)
     order.value = data
+    remarkDraft.value = data.adminRemark || ''
   } catch (error) {
     ElMessage.error('加载订单详情失败')
   } finally {
@@ -413,10 +455,9 @@ const getStepActive = () => {
 
   if (status === OrderStatusEnum.COMPLETED) return 4
   if (status === OrderStatusEnum.SHIPPED) return 3
+  if (status === OrderStatusEnum.FREEZING) return 2
   if (
     [
-      OrderStatusEnum.READY_FOR_SHIPMENT,
-      OrderStatusEnum.READY_FOR_PACKAGING,
       OrderStatusEnum.IN_PRODUCTION,
       OrderStatusEnum.PURCHASING
     ].includes(status)
@@ -436,9 +477,9 @@ const getProductionDescription = () => {
 
   const status = order.value.status
 
-  if (status === OrderStatusEnum.PURCHASING) return '待生产'
+  if (status === OrderStatusEnum.PURCHASING) return '采购中'
   if (status === OrderStatusEnum.IN_PRODUCTION) return '生产中'
-  if (status === OrderStatusEnum.READY_FOR_PACKAGING) return '包装中'
+  if (status === OrderStatusEnum.FREEZING) return '急冻中'
 
   return ''
 }
@@ -449,52 +490,38 @@ const goBack = () => {
 }
 
 // 格式化时间
-const formatTime = (time: Date) => {
-  return new Date(time).toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  })
-}
-
-const formatDate = (date: Date) => {
-  return new Date(date).toLocaleDateString('zh-CN')
-}
+const formatTime = (time: string | Date) => formatDateTime(time)
 
 // 获取状态类型
 const getStatusType = (status: OrderStatus) => {
-  const typeMap: Record<OrderStatus, any> = {
+  const typeMap: Record<string, any> = {
     INIT: 'info',
     PENDING_PAYMENT: 'warning',
     PAID: 'success',
     PURCHASING: 'primary',
     IN_PRODUCTION: 'primary',
-    READY_FOR_PACKAGING: 'primary',
-    READY_FOR_SHIPMENT: 'primary',
+    FREEZING: 'primary',
     SHIPPED: 'info',
     COMPLETED: 'success',
-    CANCELLED: 'danger'
+    CANCELLED: 'danger',
+    AFTERSALE: 'warning'
   }
   return typeMap[status] || ''
 }
 
 // 获取状态文本
 const getStatusText = (status: OrderStatus) => {
-  const textMap: Record<OrderStatus, string> = {
+  const textMap: Record<string, string> = {
     INIT: '订单创建',
     PENDING_PAYMENT: '待付款',
     PAID: '已付款',
-    PURCHASING: '待生产',
+    PURCHASING: '采购中',
     IN_PRODUCTION: '生产中',
-    READY_FOR_PACKAGING: '包装中',
-    READY_FOR_SHIPMENT: '急冻中待发货',
+    FREEZING: '急冻中待发货',
     SHIPPED: '已发货',
     COMPLETED: '已完成',
-    CANCELLED: '已取消'
+    CANCELLED: '已取消',
+    AFTERSALE: '售后中'
   }
   return textMap[status] || status
 }
@@ -606,6 +633,40 @@ const handleConfirmPaymentSubmit = async (data: { actualAmount?: number }) => {
   }
 }
 
+const handleSaveRemark = async () => {
+  if (!isRemarkDirty.value) return
+
+  savingRemark.value = true
+  try {
+    const updatedOrder = await orderApi.updateRemark(orderId.value, {
+      adminRemark: normalizedRemarkDraft.value || null
+    })
+    order.value = updatedOrder
+    remarkDraft.value = updatedOrder.adminRemark || ''
+    ElMessage.success('备注已保存')
+  } catch (error: any) {
+    ElMessage.error(error.message || '保存备注失败')
+  } finally {
+    savingRemark.value = false
+  }
+}
+
+const handleClearRemark = async () => {
+  if (!remarkDraft.value.trim()) return
+
+  try {
+    await ElMessageBox.confirm('确认清空管理员备注？', '提示', {
+      type: 'warning'
+    })
+    remarkDraft.value = ''
+    await handleSaveRemark()
+  } catch (error: any) {
+    if (error !== 'cancel') {
+      ElMessage.error(error.message || '清空备注失败')
+    }
+  }
+}
+
 // 查看食谱快照
 const handleViewSnapshot = (snapshot: RecipeSnapshot) => {
   currentSnapshot.value = snapshot
@@ -655,6 +716,17 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.remark-actions {
+  display: flex;
+  gap: 12px;
+}
+
+.remark-hint {
+  margin-top: 10px;
+  font-size: 13px;
+  color: #909399;
 }
 
 .total-price {

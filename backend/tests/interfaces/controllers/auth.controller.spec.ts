@@ -10,10 +10,31 @@ import { AuthController } from 'src/auth.controller';
 import { JwtAuthService } from 'src/auth/jwt.service';
 import { UnauthorizedExceptionFilter } from 'src/common/unauthorized-exception.filter';
 import { BadRequestExceptionFilter } from 'src/common/bad-request-exception.filter';
+import { PrismaService } from 'src/infrastructure/prisma.service';
+import { WechatService } from 'src/infrastructure/wechat/wechat.service';
+import { SmsService } from 'src/infrastructure/sms/sms.service';
 
 describe('AuthController (e2e)', () => {
   let app: INestApplication;
   let jwtAuthService: JwtAuthService;
+
+  const mockPrismaService = {
+    $queryRaw: jest.fn().mockResolvedValue([{ role: 'CUSTOMER' }]),
+    user: {
+      findUnique: jest.fn(),
+      create: jest.fn(),
+      update: jest.fn(),
+    },
+  };
+
+  const mockWechatService = {
+    code2Session: jest.fn(),
+  };
+
+  const mockSmsService = {
+    sendCode: jest.fn(),
+    verifyCode: jest.fn(),
+  };
 
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -24,7 +45,21 @@ describe('AuthController (e2e)', () => {
         }),
       ],
       controllers: [AuthController],
-      providers: [JwtAuthService],
+      providers: [
+        JwtAuthService,
+        {
+          provide: PrismaService,
+          useValue: mockPrismaService,
+        },
+        {
+          provide: WechatService,
+          useValue: mockWechatService,
+        },
+        {
+          provide: SmsService,
+          useValue: mockSmsService,
+        },
+      ],
     }).compile();
 
     app = moduleFixture.createNestApplication();
@@ -41,12 +76,16 @@ describe('AuthController (e2e)', () => {
     );
 
     jwtAuthService = moduleFixture.get<JwtAuthService>(JwtAuthService);
+    jest.clearAllMocks();
+    mockPrismaService.$queryRaw.mockResolvedValue([{ role: 'CUSTOMER' }]);
 
     await app.init();
   });
 
   afterEach(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
   });
 
   describe('POST /api/v1/auth/login', () => {

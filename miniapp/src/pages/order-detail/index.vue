@@ -70,6 +70,37 @@
         </view>
       </view>
 
+      <view v-if="isStaffOrAdmin" class="section remark-section">
+        <view class="section-title">管理员备注</view>
+        <textarea
+          v-model="remarkDraft"
+          class="remark-textarea"
+          maxlength="200"
+          auto-height
+          placeholder="填写分装要求、制作顺序、特殊提醒"
+        />
+        <view class="remark-meta">
+          <text class="remark-hint">仅员工/管理员可见，会同步到生产制作单和打印版</text>
+          <text class="remark-count">{{ remarkDraft.length }}/200</text>
+        </view>
+        <view class="remark-actions">
+          <button
+            class="remark-btn secondary"
+            :disabled="savingAdminRemark || !canClearAdminRemark"
+            @tap="clearAdminRemark"
+          >
+            清空
+          </button>
+          <button
+            class="remark-btn primary"
+            :disabled="savingAdminRemark || !isAdminRemarkDirty"
+            @tap="saveAdminRemark"
+          >
+            {{ savingAdminRemark ? '保存中...' : '保存备注' }}
+          </button>
+        </view>
+      </view>
+
       <!-- 收货信息 -->
       <view class="section address-section" v-if="order.address">
         <view class="section-title">收货信息</view>
@@ -388,6 +419,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { onShow, onShareAppMessage } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
+import { getAdminOrderDetail, updateAdminOrderRemark } from '../../api/orders'
 import OrderProgressBar from '../../components/OrderProgressBar.vue'
 import { formatDateTime } from '../../utils/date'
 
@@ -441,6 +473,7 @@ interface Order {
   totalAmount?: number
   amountProduct?: number
   amountShipping?: number
+  adminRemark?: string | null
   items?: OrderItem[]
   address?: {
     recipientName: string
@@ -479,11 +512,26 @@ interface Order {
 
 const order = ref<Order | null>(null)
 const orderId = ref('')
+const remarkDraft = ref('')
+const savingAdminRemark = ref(false)
 
 // 获取当前用户信息
 const userInfo = ref({
   id: '',
   role: ''
+})
+
+const isStaffOrAdmin = computed(() => {
+  return userInfo.value.role === 'STAFF' || userInfo.value.role === 'ADMIN'
+})
+
+const normalizedRemarkDraft = computed(() => remarkDraft.value.trim())
+const currentAdminRemark = computed(() => (order.value?.adminRemark ?? '').trim())
+const isAdminRemarkDirty = computed(() => {
+  return normalizedRemarkDraft.value !== currentAdminRemark.value
+})
+const canClearAdminRemark = computed(() => {
+  return Boolean(normalizedRemarkDraft.value || currentAdminRemark.value)
 })
 
 // 原料清单展开状态
@@ -765,28 +813,50 @@ async function loadUserInfoFromApi() {
       // 保存到两个key，确保兼容性
       uni.setStorageSync('user', JSON.stringify(res.data))
       uni.setStorageSync('userInfo', JSON.stringify(res.data))
+
+      if (orderId.value) {
+        await loadOrderDetail()
+      }
     }
   } catch (error) {
     console.error('[Order Detail] Failed to load user info from API:', error)
   }
 }
 
+async function fetchOrderDetailResponse() {
+  if (isStaffOrAdmin.value) {
+    try {
+      const adminRes = await getAdminOrderDetail(orderId.value)
+      if (adminRes.code === 0 && adminRes.data) {
+        return adminRes
+      }
+      console.warn('[Order Detail] Admin detail unavailable, falling back:', adminRes)
+    } catch (error) {
+      console.warn('[Order Detail] Admin detail request failed, fallback to customer detail:', error)
+    }
+  }
+
+  return request({
+    url: `/orders/${orderId.value}`,
+    method: 'GET'
+  })
+}
+
 async function loadOrderDetail() {
   try {
     uni.showLoading({ title: '加载中...' })
 
-    const res = await request({
-      url: `/orders/${orderId.value}`,
-      method: 'GET'
-    })
+    const res = await fetchOrderDetailResponse()
 
     if (res.code === 0 && res.data) {
       order.value = res.data
+      remarkDraft.value = res.data.adminRemark || ''
       console.log('[Order Detail] Order loaded:', {
         id: order.value.id,
         status: order.value.status,
         customerId: order.value.customerId,
-        targetProductionDate: order.value.targetProductionDate
+        targetProductionDate: order.value.targetProductionDate,
+        adminRemark: order.value.adminRemark
       })
       console.log('[Order Detail] Can edit address:', canEditAddress.value)
       console.log('[Order Detail] Can edit date:', canEditDate.value)
@@ -799,6 +869,66 @@ async function loadOrderDetail() {
   } finally {
     uni.hideLoading()
   }
+}
+
+async function saveAdminRemark() {
+  if (!order.value || !isStaffOrAdmin.value || savingAdminRemark.value || !isAdminRemarkDirty.value) {
+    return
+  }
+
+  try {
+    savingAdminRemark.value = true
+    uni.showLoading({ title: '保存中...' })
+
+    const res = await updateAdminOrderRemark(
+      order.value.id,
+      normalizedRemarkDraft.value || null,
+    )
+
+    if (res.code !== 0 || !res.data) {
+      throw new Error(res.message || '保存失败')
+    }
+
+    order.value = {
+      ...order.value,
+      ...res.data,
+      adminRemark: res.data.adminRemark ?? null,
+    }
+    remarkDraft.value = res.data.adminRemark || ''
+
+    uni.showToast({
+      title: '备注已保存',
+      icon: 'success',
+    })
+  } catch (error: any) {
+    console.error('[Order Detail] Update admin remark error:', error)
+    uni.showToast({
+      title: error?.message || '保存失败',
+      icon: 'none',
+    })
+  } finally {
+    savingAdminRemark.value = false
+    uni.hideLoading()
+  }
+}
+
+function clearAdminRemark() {
+  if (!canClearAdminRemark.value || savingAdminRemark.value) {
+    return
+  }
+
+  uni.showModal({
+    title: '清空备注',
+    content: '确定要清空管理员备注吗？',
+    success: async (res) => {
+      if (!res.confirm) {
+        return
+      }
+
+      remarkDraft.value = ''
+      await saveAdminRemark()
+    }
+  })
 }
 
 // 更换收货地址
@@ -851,15 +981,17 @@ async function updateOrderAddress(addressId: string) {
 
 // 初始化日期选择器的值
 watch(() => order.value?.targetProductionDate, (newDate) => {
-  // 使用原始目标制作日期作为最小可选日期，而不是当前日期
-  // 这样允许用户修正误操作（例如从1月29日改回1月28日）
-  const baseDate = order.value?.originalTargetProductionDate || newDate
-  if (baseDate) {
-    const date = new Date(baseDate)
-    date.setHours(0, 0, 0, 0)
-    minDateStr.value = formatDateToYYYYMMDD(date)
-    selectedDate.value = formatDateToYYYYMMDD(newDate ? new Date(newDate) : date)
-  }
+  const today = new Date()
+  today.setHours(0, 0, 0, 0)
+
+  minDateStr.value = formatDateToYYYYMMDD(today)
+
+  const currentDate = newDate ? new Date(newDate) : new Date(today)
+  currentDate.setHours(0, 0, 0, 0)
+
+  selectedDate.value = formatDateToYYYYMMDD(
+    currentDate < today ? today : currentDate
+  )
 }, { immediate: true })
 
 function formatDateToYYYYMMDD(date: Date): string {
@@ -1494,6 +1626,73 @@ function contactSevenDad() {
   font-weight: bold;
   color: #333;
   margin-bottom: 20rpx;
+}
+
+.remark-section {
+  display: flex;
+  flex-direction: column;
+  gap: 20rpx;
+}
+
+.remark-textarea {
+  width: 100%;
+  min-height: 180rpx;
+  padding: 24rpx;
+  box-sizing: border-box;
+  border-radius: 12rpx;
+  background-color: #f8fafc;
+  font-size: 28rpx;
+  line-height: 1.6;
+  color: #333;
+}
+
+.remark-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24rpx;
+}
+
+.remark-hint {
+  flex: 1;
+  font-size: 24rpx;
+  color: #8c8c8c;
+  line-height: 1.5;
+}
+
+.remark-count {
+  font-size: 24rpx;
+  color: #999;
+  white-space: nowrap;
+}
+
+.remark-actions {
+  display: flex;
+  gap: 16rpx;
+}
+
+.remark-btn {
+  flex: 1;
+  height: 80rpx;
+  line-height: 80rpx;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  border: none;
+}
+
+.remark-btn.primary {
+  background-color: #1890ff;
+  color: #fff;
+}
+
+.remark-btn.secondary {
+  background-color: #fff;
+  color: #1890ff;
+  border: 1rpx solid #1890ff;
+}
+
+.remark-btn[disabled] {
+  opacity: 0.5;
 }
 
 .info-section {

@@ -53,6 +53,19 @@
           <span class="form-tip">包括设备折旧、水电等间接成本</span>
         </el-form-item>
 
+        <el-form-item label="原料价格自动审核阈值" prop="ingredientPriceAutoApproveThreshold">
+          <el-input-number
+            v-model="form.ingredientPriceAutoApproveThreshold"
+            :min="0"
+            :max="1"
+            :step="0.01"
+            :precision="2"
+            :controls="true"
+            style="width: 300px"
+          />
+          <span class="form-tip">0.08 表示价格波动 8% 以内自动生效，超出则保留给老板审核</span>
+        </el-form-item>
+
         <el-divider content-position="left">生产配置</el-divider>
 
         <el-form-item label="默认批次产能（克）" prop="defaultBatchCapacityG">
@@ -217,6 +230,32 @@
             </div>
           </div>
           <div class="form-tip">建议尺寸：200×200px，支持jpg、png格式，大小不超过2MB</div>
+        </el-form-item>
+
+        <el-divider content-position="left">首页背景图配置</el-divider>
+
+        <el-form-item label="首页头部背景图" prop="homeHeaderBgImageUrl">
+          <div class="image-upload-container">
+            <div v-if="form.homeHeaderBgImageUrl" class="uploaded-image">
+              <el-image
+                :src="form.homeHeaderBgImageUrl"
+                fit="cover"
+                style="width: 375px; height: 200px; border-radius: 4px; border: 1px solid #dcdfe6;"
+                :preview-src-list="[form.homeHeaderBgImageUrl]"
+              />
+              <el-button type="danger" size="small" @click="handleRemoveHomeHeaderBg" style="margin-top: 8px">
+                删除图片
+              </el-button>
+            </div>
+            <div v-else class="upload-placeholder">
+              <el-icon :size="40" color="#dcdfe6"><Picture /></el-icon>
+              <div class="upload-text">点击上传背景图</div>
+              <el-button type="primary" size="small" @click="handleUploadHomeHeaderBg">
+                选择图片
+              </el-button>
+            </div>
+          </div>
+          <div class="form-tip">建议尺寸：750×400px（宽高比约2:1），支持jpg、png格式，大小不超过2MB。未配置时显示默认紫色渐变。</div>
         </el-form-item>
 
         <el-divider content-position="left">制作设备推荐配置</el-divider>
@@ -447,7 +486,8 @@ const saving = ref(false)
 const shippingTemplates = ref<ShippingTemplate[]>([])
 const templatesLoading = ref(false)
 const shippingTemplateDialogVisible = ref(false)
-const editingTemplate = ref<CreateShippingTemplateDto | null>(null)
+type EditableShippingTemplate = CreateShippingTemplateDto & { id?: string }
+const editingTemplate = ref<EditableShippingTemplate | null>(null)
 const savingTemplate = ref(false)
 const previewDialogVisible = ref(false)
 const previewWeight = ref(1000)
@@ -482,15 +522,18 @@ const form = ref<GlobalConfig>({
   laborHourlyRate: 30.0,
   minOrderWeightG: 1000,
   defaultBatchCapacityG: 5000,
+  minPotWeightG: 2000,
   targetMargin: 0.4,
   overheadCostPerKg: 2.0,
   targetBatchUtilization: 0.8,
   supplementLossRate: 1.05,
+  ingredientPriceAutoApproveThreshold: 0.08,
   defaultProductLabelId: null,
   defaultIcePackId: null,
   defaultShippingTemplateId: null,
   packageExampleImageUrl: null,
   shippingCompanyLogoUrl: null,
+  homeHeaderBgImageUrl: null,
   paymentTimeoutMinutes: 30,
   equipmentRecommendations: null,
 })
@@ -507,6 +550,10 @@ const rules: FormRules = {
   overheadCostPerKg: [
     { required: true, message: '请输入间接成本', trigger: 'blur' },
     { type: 'number', min: 0, message: '不能小于0', trigger: 'blur' },
+  ],
+  ingredientPriceAutoApproveThreshold: [
+    { required: true, message: '请输入自动审核阈值', trigger: 'blur' },
+    { type: 'number', min: 0, max: 1, message: '范围0-1之间', trigger: 'blur' },
   ],
   defaultBatchCapacityG: [
     { required: true, message: '请输入默认批次产能', trigger: 'blur' },
@@ -576,7 +623,6 @@ const handleUploadPackageImage = () => {
   const input = document.createElement('input')
   input.type = 'file'
   input.accept = 'image/jpeg,image/png'
-  input.max = 2 * 1024 * 1024 // 2MB
 
   input.onchange = async (e: Event) => {
     const target = e.target as HTMLInputElement
@@ -634,7 +680,6 @@ const handleUploadShippingLogo = () => {
   const input = document.createElement('input')
   input.type = 'file'
   input.accept = 'image/jpeg,image/png'
-  input.max = 2 * 1024 * 1024 // 2MB
 
   input.onchange = async (e: Event) => {
     const target = e.target as HTMLInputElement
@@ -687,6 +732,57 @@ const handleRemoveShippingLogo = () => {
   })
 }
 
+// 上传首页头部背景图
+const handleUploadHomeHeaderBg = () => {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = 'image/jpeg,image/png'
+
+  input.onchange = async (e: Event) => {
+    const target = e.target as HTMLInputElement
+    const file = target.files?.[0]
+    if (!file) return
+
+    // 验证文件大小
+    if (file.size > 2 * 1024 * 1024) {
+      ElMessage.error('图片大小不能超过2MB')
+      return
+    }
+
+    // 验证文件类型
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      ElMessage.error('只支持JPG和PNG格式')
+      return
+    }
+
+    try {
+      const result = await globalConfigApi.uploadHomeHeaderBg(file)
+      form.value.homeHeaderBgImageUrl = result.url
+      await globalConfigApi.update({ homeHeaderBgImageUrl: result.url })
+      ElMessage.success('背景图上传并保存成功')
+    } catch (error: any) {
+      console.error('Upload error:', error)
+      ElMessage.error(error.message || '上传失败')
+    }
+  }
+
+  input.click()
+}
+
+// 删除首页头部背景图
+const handleRemoveHomeHeaderBg = () => {
+  ElMessageBox.confirm('确定要删除背景图吗？删除后将恢复默认紫色渐变。', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning',
+  }).then(() => {
+    form.value.homeHeaderBgImageUrl = null
+    ElMessage.success('已删除')
+  }).catch(() => {
+    // 用户取消
+  })
+}
+
 // 运费模板管理相关函数
 const loadShippingTemplates = async () => {
   templatesLoading.value = true
@@ -724,6 +820,7 @@ const handleCreateTemplate = () => {
 
 const handleEditTemplate = (template: ShippingTemplate) => {
   editingTemplate.value = {
+    id: template.id,
     name: template.name,
     baseWeightKg: template.baseWeightKg,
     baseFee: template.baseFee,

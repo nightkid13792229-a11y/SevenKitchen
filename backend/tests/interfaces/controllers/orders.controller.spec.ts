@@ -21,6 +21,7 @@ import {
   ORDER_REPOSITORY,
   ORDER_STATUS_HISTORY_REPOSITORY,
 } from 'src/application/order/order.service';
+import { PRODUCTION_BATCH_REPOSITORY } from 'src/application/production/production.service';
 import type { OrderStatusHistoryRepository } from 'src/domain/order/order-status-history.repository';
 import { RECIPE_REPOSITORY, DOG_REPOSITORY } from 'src/application/dog/dog.service';
 import { INGREDIENT_REPOSITORY } from 'src/application/ingredient/ingredient.service';
@@ -34,6 +35,7 @@ import { PricingService } from 'src/domain/pricing/pricing.service';
 import { GlobalConfigService } from 'src/application/config/global-config.service';
 import { ShippingService } from 'src/application/shipping/shipping.service';
 import { ShippingFeeService } from 'src/domain/shipping/shipping-fee.service';
+import { PackagingService } from 'src/domain/packaging/packaging.service';
 import { SHIPPING_TEMPLATE_REPOSITORY } from 'src/application/shipping/shipping.service.tokens';
 import { InMemoryShippingTemplateRepository } from 'src/infrastructure/repositories/in-memory-shipping-template.repository';
 import type { Recipe } from 'src/domain/recipe/recipe.repository';
@@ -43,8 +45,15 @@ import type { RecipeSnapshot } from 'src/domain/recipe/types';
 import { JwtAuthService } from 'src/auth/jwt.service';
 import { AuthGuard } from 'src/auth/auth.guard';
 import { Dog } from 'src/domain/dog/dog.entity';
-import { Ingredient, IngredientType, BaseUnit } from 'src/domain/ingredient';
+import {
+  Ingredient,
+  IngredientType,
+  BaseUnit,
+  IngredientProcurementStrategy,
+} from 'src/domain/ingredient';
 import { OrderStatusHistory } from 'src/domain/order/order-status-history.entity';
+import { PrismaService } from 'src/infrastructure/prisma.service';
+import { RecipeService } from 'src/application/recipe/recipe.service';
 
 describe('OrdersController (e2e)', () => {
   let app: INestApplication;
@@ -55,6 +64,110 @@ describe('OrdersController (e2e)', () => {
   let dogRepository: InMemoryDogRepository;
   let ingredientRepository: InMemoryIngredientRepository;
   let statusHistoryRepository: jest.Mocked<OrderStatusHistoryRepository>;
+  const mockPricingSnapshotRepository = {
+    findById: jest.fn(),
+    create: jest.fn().mockResolvedValue({ id: 'pricing-snapshot-test-id' }),
+    markAsUsed: jest.fn(),
+  };
+  const mockProductionBatchRepository = {
+    findFirstCompletedByOrderId: jest.fn().mockResolvedValue(null),
+  };
+  const mockGlobalConfigService = {
+    getGlobalConfig: jest.fn().mockResolvedValue({
+      laborHourlyRate: 80,
+      minOrderWeightG: 100,
+      defaultBatchCapacityG: 10000,
+      minPotWeightG: 500,
+      targetMargin: 0.4,
+      overheadCostPerKg: 5,
+      targetBatchUtilization: 0.8,
+      supplementLossRate: 1.05,
+      defaultProductLabelId: null,
+      defaultIcePackId: null,
+      defaultShippingTemplateId: null,
+      packageExampleImageUrl: null,
+      shippingCompanyLogoUrl: null,
+      paymentTimeoutMinutes: 30,
+      homeHeaderBgImageUrl: null,
+      ingredientPriceAutoApproveThreshold: 0,
+      equipmentRecommendations: null,
+    }),
+  };
+  const mockPricingService = {
+    calculateOrderPrice: jest.fn().mockResolvedValue({
+      costIngredients: 50,
+      costPackaging: 2,
+      costLabor: 10,
+      costOverhead: 5,
+      totalProductCost: 67,
+      productPrice: 111.67,
+      shippingFee: 0,
+      totalPrice: 111.67,
+      weightPackagingG: 100,
+      ingredientDetails: [],
+      packagingDetails: {
+        perPackConsumables: {
+          vacuumBagName: '食品真空袋',
+          vacuumBagSpec: '12*17cm',
+          labelName: '产品标签',
+          labelSpec: '默认',
+          vacuumBagCostPerPack: 0.1,
+          labelCostPerPack: 0.05,
+          vacuumBagTotalCost: 1.4,
+          labelTotalCost: 0.7,
+          totalCost: 2.1,
+          weightPerPack: 1,
+          calculation: 'mock',
+          vacuumBagsCount: 14,
+          labelsCount: 14,
+        },
+        shippingContainers: [],
+      },
+      laborDetails: {
+        standardBatchOutputKg: 10,
+        standardLaborCostPerKg: 1,
+        rawInputWeightKg: 1.4,
+        totalCost: 10,
+        calculation: 'mock',
+      },
+      overheadDetails: {
+        overheadCostPerKg: 5,
+        rawInputWeightKg: 1.4,
+        totalCost: 5,
+        calculation: 'mock',
+      },
+    }),
+  };
+  const mockShippingService = {
+    calculateShippingFeePreview: jest
+      .fn()
+      .mockResolvedValue({ amountShipping: 12, templateId: 'template-1' }),
+  };
+  const mockPrismaService = {
+    preparationMethod: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    recipe: {
+      findUnique: jest.fn().mockResolvedValue(null),
+      findFirst: jest.fn().mockResolvedValue(null),
+    },
+    globalConfig: {
+      findUnique: jest.fn().mockResolvedValue(null),
+    },
+    order: {
+      findUnique: jest.fn(),
+      update: jest.fn(),
+    },
+    orderItem: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    packagingUnit: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
+    photoShareToken: {
+      create: jest.fn().mockResolvedValue({}),
+    },
+  };
 
   beforeEach(async () => {
     // Suppress console logs during tests (but allow error logging for debugging)
@@ -93,6 +206,10 @@ describe('OrdersController (e2e)', () => {
           useClass: InMemoryAddressRepository,
         },
         {
+          provide: PRODUCTION_BATCH_REPOSITORY,
+          useValue: mockProductionBatchRepository,
+        },
+        {
           provide: ORDER_STATUS_HISTORY_REPOSITORY,
           useValue: (() => {
             const historyRecords: OrderStatusHistory[] = [];
@@ -124,10 +241,32 @@ describe('OrdersController (e2e)', () => {
             } as jest.Mocked<OrderStatusHistoryRepository>;
           })(),
         },
-        PricingService,
-        GlobalConfigService,
+        PackagingService,
+        {
+          provide: PricingService,
+          useValue: mockPricingService,
+        },
+        {
+          provide: GlobalConfigService,
+          useValue: mockGlobalConfigService,
+        },
         ShippingFeeService,
-        ShippingService,
+        {
+          provide: ShippingService,
+          useValue: mockShippingService,
+        },
+        {
+          provide: RecipeService,
+          useValue: {},
+        },
+        {
+          provide: 'IOrderPricingSnapshotRepository',
+          useValue: mockPricingSnapshotRepository,
+        },
+        {
+          provide: PrismaService,
+          useValue: mockPrismaService,
+        },
         {
           provide: SHIPPING_TEMPLATE_REPOSITORY,
           useClass: InMemoryShippingTemplateRepository,
@@ -218,7 +357,9 @@ describe('OrdersController (e2e)', () => {
   });
 
   afterEach(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
     // Restore console methods
     jest.restoreAllMocks();
   });
@@ -230,6 +371,7 @@ describe('OrdersController (e2e)', () => {
       ownerId,
       'Test Dog',
       '550e8400-e29b-41d4-a716-446655440000', // breedId
+      null,
       new Date('2020-01-01'),
       DogGender.MALE,
       false,
@@ -243,6 +385,8 @@ describe('OrdersController (e2e)', () => {
       TreatLevel.LOW,
       null, // manualTreatKcal
       null, // medicalHistory
+      null, // allergyFoods
+      null, // pickyFoods
       500, // cachedTargetFoodKcal
     );
     await dogRepository.save(dog);
@@ -254,6 +398,7 @@ describe('OrdersController (e2e)', () => {
       ingredientId,
       'Test Ingredient',
       IngredientType.FOOD,
+      IngredientProcurementStrategy.DAILY_PURCHASE,
       null, // brand
       null, // productModel
       null, // purchaseChannel
@@ -263,11 +408,113 @@ describe('OrdersController (e2e)', () => {
       'kg',
       1.0, // purchaseToBaseRatio
       50.0, // currentPricePerPurchaseUnit (50 CNY per kg)
+      50.0, // effectivePricePerPurchaseUnit
       null, // weightG
       null, // maxCapacityG
+      null, // safetyStock
+      null, // reorderPoint
+      null, // targetStock
       { edible_yield_rate: 0.8 }, // properties
     );
     await ingredientRepository.save(ingredient);
+  }
+
+  function createTestRecipeSnapshot(
+    overrides: Partial<RecipeSnapshot> = {},
+  ): RecipeSnapshot {
+    return {
+      id: 'recipe-id',
+      version: 1,
+      name: 'Test Recipe',
+      production_loss_rate: 1.07,
+      energy_density_kcal_per_kg: 1450,
+      nutrition_standard: 'FEDIAF_2021',
+      items: [],
+      ...overrides,
+    };
+  }
+
+  function createTestOrderItem(params: {
+    id: string;
+    orderId: string;
+    dogId?: string | null;
+    recipeSnapshot?: RecipeSnapshot;
+    quantityG?: number;
+    packageCount?: number;
+    packageSpecG?: number;
+    customRequirements?: string | null;
+    dailyIntakeG?: number;
+  }): OrderItem {
+    return new OrderItem(
+      params.id,
+      params.orderId,
+      params.dogId ?? null,
+      params.recipeSnapshot ?? createTestRecipeSnapshot(),
+      params.quantityG ?? 1400,
+      params.packageCount ?? 14,
+      params.packageSpecG ?? 100,
+      params.customRequirements ?? null,
+      params.dailyIntakeG ?? 310.34,
+    );
+  }
+
+  function createTestOrder(params: {
+    id: string;
+    customerId: string;
+    status: OrderStatus;
+    type?: OrderType;
+    items?: OrderItem[];
+    amountProduct?: number;
+    amountShipping?: number;
+    amountTotal?: number;
+    pricingBreakdown?: PricingBreakdownSnapshot;
+    dogId?: string;
+    addressId?: string;
+    paymentMethod?: string | null;
+    transactionId?: string | null;
+    paidAt?: Date | null;
+    paymentStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | null;
+  }): Order {
+    const amountProduct = params.amountProduct ?? 250;
+    const amountShipping = params.amountShipping ?? 0;
+
+    return new Order(
+      params.id,
+      params.customerId,
+      params.status,
+      params.type ?? OrderType.FRESH_FOOD,
+      new Date('2025-01-01T00:00:00Z'),
+      null,
+      null,
+      amountProduct,
+      amountShipping,
+      params.amountTotal ?? amountProduct + amountShipping,
+      params.items ??
+        [
+          createTestOrderItem({
+            id: `item-${params.id}`,
+            orderId: params.id,
+            dogId: params.dogId ?? null,
+          }),
+        ],
+      undefined,
+      params.pricingBreakdown,
+      params.dogId,
+      params.addressId,
+      undefined,
+      undefined,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      params.paymentMethod ?? null,
+      params.transactionId ?? null,
+      params.paidAt ?? null,
+      params.paymentStatus ?? null,
+    );
   }
 
   // Helper function to create test recipe with items
@@ -330,7 +577,6 @@ describe('OrdersController (e2e)', () => {
             quantityG: 1400,
             packageCount: 14,
             packageSpecG: 100,
-            customRequirements: {},
           },
         ],
         addressId,
@@ -471,27 +717,20 @@ describe('OrdersController (e2e)', () => {
         nutrition_standard: 'FEDIAF_2021',
         items: [],
       };
-      const orderItem = new OrderItem(
-        'item-id-1',
-        'test-order-id',
+      const orderItem = createTestOrderItem({
+        id: 'item-id-1',
+        orderId: 'test-order-id',
         recipeSnapshot,
-        1400,
-        14,
-        100,
-        null,
-        310.34, // dailyIntakeG
-      );
-      const order = new Order(
-        'test-order-id',
-        'test-customer-id',
-        OrderStatus.INIT,
-        OrderType.FRESH_FOOD,
-        null,
-        250.0, // amountProduct
-        0.0, // amountShipping
-        250.0, // amountTotal
-        [orderItem],
-      );
+      });
+      const order = createTestOrder({
+        id: 'test-order-id',
+        customerId: 'test-customer-id',
+        status: OrderStatus.INIT,
+        items: [orderItem],
+        amountProduct: 250.0,
+        amountShipping: 0.0,
+        amountTotal: 250.0,
+      });
       await orderRepository.save(order);
 
       // Get auth token for the test customer
@@ -531,27 +770,20 @@ describe('OrdersController (e2e)', () => {
         nutrition_standard: 'FEDIAF_2021',
         items: [],
       };
-      const orderItem = new OrderItem(
-        'item-id-2',
-        'test-order-id-2',
+      const orderItem = createTestOrderItem({
+        id: 'item-id-2',
+        orderId: 'test-order-id-2',
         recipeSnapshot,
-        1400,
-        14,
-        100,
-        null,
-        310.34, // dailyIntakeG
-      );
-      const order = new Order(
-        'test-order-id-2',
-        'test-customer-id',
-        OrderStatus.INIT,
-        OrderType.FRESH_FOOD,
-        null,
-        250.0, // amountProduct
-        0.0, // amountShipping
-        250.0, // amountTotal
-        [orderItem],
-      );
+      });
+      const order = createTestOrder({
+        id: 'test-order-id-2',
+        customerId: 'test-customer-id',
+        status: OrderStatus.INIT,
+        items: [orderItem],
+        amountProduct: 250.0,
+        amountShipping: 0.0,
+        amountTotal: 250.0,
+      });
       await orderRepository.save(order);
 
       // Get auth token
@@ -583,26 +815,23 @@ describe('OrdersController (e2e)', () => {
         items: [],
       };
 
-      const order = new Order(
-        'order-payment-test',
+      const order = createTestOrder({
+        id: 'order-payment-test',
         customerId,
-        OrderStatus.INIT,
-        OrderType.FRESH_FOOD,
-        null,
-        100,
-        10,
-        110,
-        [
-          new OrderItem(
-            'item-1',
-            'order-payment-test',
+        status: OrderStatus.INIT,
+        items: [
+          createTestOrderItem({
+            id: 'item-1',
+            orderId: 'order-payment-test',
             recipeSnapshot,
-            1000,
-            10,
-            100,
-          ),
+            quantityG: 1000,
+            packageCount: 10,
+          }),
         ],
-      );
+        amountProduct: 100,
+        amountShipping: 10,
+        amountTotal: 110,
+      });
       await orderRepository.save(order);
 
       // Get auth token
@@ -646,26 +875,23 @@ describe('OrdersController (e2e)', () => {
         items: [],
       };
 
-      const order = new Order(
-        'order-payment-details',
+      const order = createTestOrder({
+        id: 'order-payment-details',
         customerId,
-        OrderStatus.PENDING_PAYMENT,
-        OrderType.FRESH_FOOD,
-        null,
-        100,
-        10,
-        110,
-        [
-          new OrderItem(
-            'item-1',
-            'order-payment-details',
+        status: OrderStatus.PENDING_PAYMENT,
+        items: [
+          createTestOrderItem({
+            id: 'item-1',
+            orderId: 'order-payment-details',
             recipeSnapshot,
-            1000,
-            10,
-            100,
-          ),
+            quantityG: 1000,
+            packageCount: 10,
+          }),
         ],
-      );
+        amountProduct: 100,
+        amountShipping: 10,
+        amountTotal: 110,
+      });
       await orderRepository.save(order);
 
       // Pay order to set payment fields
@@ -695,19 +921,23 @@ describe('OrdersController (e2e)', () => {
         items: [],
       };
 
-      const order = new Order(
-        'order-unpaid',
+      const order = createTestOrder({
+        id: 'order-unpaid',
         customerId,
-        OrderStatus.INIT,
-        OrderType.FRESH_FOOD,
-        null,
-        100,
-        10,
-        110,
-        [
-          new OrderItem('item-1', 'order-unpaid', recipeSnapshot, 1000, 10, 100),
+        status: OrderStatus.INIT,
+        items: [
+          createTestOrderItem({
+            id: 'item-1',
+            orderId: 'order-unpaid',
+            recipeSnapshot,
+            quantityG: 1000,
+            packageCount: 10,
+          }),
         ],
-      );
+        amountProduct: 100,
+        amountShipping: 10,
+        amountTotal: 110,
+      });
       await orderRepository.save(order);
 
       const response = await request(app.getHttpServer())
@@ -744,26 +974,23 @@ describe('OrdersController (e2e)', () => {
         items: [],
       };
 
-      const order = new Order(
-        'order-other-customer',
-        'other-customer-id',
-        OrderStatus.INIT,
-        OrderType.FRESH_FOOD,
-        null,
-        100,
-        10,
-        110,
-        [
-          new OrderItem(
-            'item-1',
-            'order-other-customer',
+      const order = createTestOrder({
+        id: 'order-other-customer',
+        customerId: 'other-customer-id',
+        status: OrderStatus.INIT,
+        items: [
+          createTestOrderItem({
+            id: 'item-1',
+            orderId: 'order-other-customer',
             recipeSnapshot,
-            1000,
-            10,
-            100,
-          ),
+            quantityG: 1000,
+            packageCount: 10,
+          }),
         ],
-      );
+        amountProduct: 100,
+        amountShipping: 10,
+        amountTotal: 110,
+      });
       await orderRepository.save(order);
 
       const response = await request(app.getHttpServer())
@@ -811,50 +1038,38 @@ describe('OrdersController (e2e)', () => {
       };
 
       // Create two orders for the customer
-      const order1 = new Order(
-        'order-id-1',
+      const order1 = createTestOrder({
+        id: 'order-id-1',
         customerId,
-        OrderStatus.INIT,
-        OrderType.FRESH_FOOD,
-        null,
-        250.0, // amountProduct
-        0.0, // amountShipping
-        250.0, // amountTotal
-        [
-          new OrderItem(
-            'item-id-1',
-            'order-id-1',
+        status: OrderStatus.INIT,
+        items: [
+          createTestOrderItem({
+            id: 'item-id-1',
+            orderId: 'order-id-1',
             recipeSnapshot,
-            1400,
-            14,
-            100,
-            null,
-            310.34, // dailyIntakeG
-          ),
+          }),
         ],
-      );
-      const order2 = new Order(
-        'order-id-2',
+        amountProduct: 250.0,
+        amountShipping: 0.0,
+        amountTotal: 250.0,
+      });
+      const order2 = createTestOrder({
+        id: 'order-id-2',
         customerId,
-        OrderStatus.PENDING_PAYMENT,
-        OrderType.FRESH_FOOD,
-        null,
-        350.0, // amountProduct
-        0.0, // amountShipping
-        350.0, // amountTotal
-        [
-          new OrderItem(
-            'item-id-2',
-            'order-id-2',
+        status: OrderStatus.PENDING_PAYMENT,
+        items: [
+          createTestOrderItem({
+            id: 'item-id-2',
+            orderId: 'order-id-2',
             recipeSnapshot,
-            2000,
-            20,
-            100,
-            null,
-            310.34, // dailyIntakeG
-          ),
+            quantityG: 2000,
+            packageCount: 20,
+          }),
         ],
-      );
+        amountProduct: 350.0,
+        amountShipping: 0.0,
+        amountTotal: 350.0,
+      });
 
       await orderRepository.save(order1);
       await orderRepository.save(order2);
@@ -900,52 +1115,40 @@ describe('OrdersController (e2e)', () => {
       };
 
       // Create order for customer 1
-      const order1 = new Order(
-        'order-customer-1',
-        customerId1,
-        OrderStatus.INIT,
-        OrderType.FRESH_FOOD,
-        null,
-        250.0, // amountProduct
-        0.0, // amountShipping
-        250.0, // amountTotal
-        [
-          new OrderItem(
-            'item-customer-1',
-            'order-customer-1',
+      const order1 = createTestOrder({
+        id: 'order-customer-1',
+        customerId: customerId1,
+        status: OrderStatus.INIT,
+        items: [
+          createTestOrderItem({
+            id: 'item-customer-1',
+            orderId: 'order-customer-1',
             recipeSnapshot,
-            1400,
-            14,
-            100,
-            null,
-            310.34, // dailyIntakeG
-          ),
+          }),
         ],
-      );
+        amountProduct: 250.0,
+        amountShipping: 0.0,
+        amountTotal: 250.0,
+      });
 
       // Create order for customer 2
-      const order2 = new Order(
-        'order-customer-2',
-        customerId2,
-        OrderStatus.INIT,
-        OrderType.FRESH_FOOD,
-        null,
-        150.0, // amountProduct
-        0.0, // amountShipping
-        150.0, // amountTotal
-        [
-          new OrderItem(
-            'item-customer-2',
-            'order-customer-2',
+      const order2 = createTestOrder({
+        id: 'order-customer-2',
+        customerId: customerId2,
+        status: OrderStatus.INIT,
+        items: [
+          createTestOrderItem({
+            id: 'item-customer-2',
+            orderId: 'order-customer-2',
             recipeSnapshot,
-            1000,
-            10,
-            100,
-            null,
-            310.34, // dailyIntakeG
-          ),
+            quantityG: 1000,
+            packageCount: 10,
+          }),
         ],
-      );
+        amountProduct: 150.0,
+        amountShipping: 0.0,
+        amountTotal: 150.0,
+      });
 
       await orderRepository.save(order1);
       await orderRepository.save(order2);
@@ -1056,27 +1259,20 @@ describe('OrdersController (e2e)', () => {
         nutrition_standard: 'FEDIAF_2021',
         items: [],
       };
-      const orderItem = new OrderItem(
-        'item-id-3',
-        'test-order-id-3',
+      const orderItem = createTestOrderItem({
+        id: 'item-id-3',
+        orderId: 'test-order-id-3',
         recipeSnapshot,
-        1400,
-        14,
-        100,
-        null,
-        310.34, // dailyIntakeG
-      );
-      const order = new Order(
-        'test-order-id-3',
+      });
+      const order = createTestOrder({
+        id: 'test-order-id-3',
         customerId,
-        OrderStatus.INIT,
-        OrderType.FRESH_FOOD,
-        null,
-        250.0, // amountProduct
-        0.0, // amountShipping
-        250.0, // amountTotal
-        [orderItem],
-      );
+        status: OrderStatus.INIT,
+        items: [orderItem],
+        amountProduct: 250.0,
+        amountShipping: 0.0,
+        amountTotal: 250.0,
+      });
       await orderRepository.save(order);
 
       const response = await request(app.getHttpServer())
@@ -1103,28 +1299,21 @@ describe('OrdersController (e2e)', () => {
         items: [],
       };
 
-      const orderItem = new OrderItem(
-        'test-item-id',
-        'test-order-id-4',
+      const orderItem = createTestOrderItem({
+        id: 'test-item-id',
+        orderId: 'test-order-id-4',
         recipeSnapshot,
-        1400,
-        14,
-        100,
-        null,
-        310.34, // dailyIntakeG
-      );
+      });
 
-      const order = new Order(
-        'test-order-id-4',
-        'test-customer-id',
-        OrderStatus.PAID,
-        OrderType.FRESH_FOOD,
-        null,
-        250.0, // amountProduct
-        0.0, // amountShipping
-        250.0, // amountTotal
-        [orderItem],
-      );
+      const order = createTestOrder({
+        id: 'test-order-id-4',
+        customerId: 'test-customer-id',
+        status: OrderStatus.PAID,
+        items: [orderItem],
+        amountProduct: 250.0,
+        amountShipping: 0.0,
+        amountTotal: 250.0,
+      });
       await orderRepository.save(order);
 
       // Note: This test requires finding by itemId, which currently searches by customerId
@@ -1152,28 +1341,21 @@ describe('OrdersController (e2e)', () => {
         items: [],
       };
 
-      const orderItem = new OrderItem(
-        'test-item-id-immutable',
-        'test-order-id-immutable',
-        originalRecipeSnapshot,
-        1400,
-        14,
-        100,
-        null,
-        310.34, // dailyIntakeG
-      );
+      const orderItem = createTestOrderItem({
+        id: 'test-item-id-immutable',
+        orderId: 'test-order-id-immutable',
+        recipeSnapshot: originalRecipeSnapshot,
+      });
 
-      const order = new Order(
-        'test-order-id-immutable',
-        'test-customer-id',
-        OrderStatus.INIT,
-        OrderType.FRESH_FOOD,
-        null,
-        250.0, // amountProduct
-        0.0, // amountShipping
-        250.0, // amountTotal
-        [orderItem],
-      );
+      const order = createTestOrder({
+        id: 'test-order-id-immutable',
+        customerId: 'test-customer-id',
+        status: OrderStatus.INIT,
+        items: [orderItem],
+        amountProduct: 250.0,
+        amountShipping: 0.0,
+        amountTotal: 250.0,
+      });
       await orderRepository.save(order);
 
       // Confirm and pay order (making snapshots immutable)
@@ -1211,16 +1393,11 @@ describe('OrdersController (e2e)', () => {
         nutrition_standard: 'FEDIAF_2021',
         items: [],
       };
-      const orderItem = new OrderItem(
-        'item-breakdown-1',
-        'order-breakdown-1',
+      const orderItem = createTestOrderItem({
+        id: 'item-breakdown-1',
+        orderId: 'order-breakdown-1',
         recipeSnapshot,
-        1400,
-        14,
-        100,
-        null,
-        310.34, // dailyIntakeG
-      );
+      });
 
       // Create order with pricing breakdown snapshot
       const pricingBreakdown = new PricingBreakdownSnapshot(
@@ -1238,19 +1415,16 @@ describe('OrdersController (e2e)', () => {
         null, // ingredientPriceVersionHash
       );
 
-      const order = new Order(
-        'order-breakdown-1',
+      const order = createTestOrder({
+        id: 'order-breakdown-1',
         customerId,
-        OrderStatus.INIT,
-        OrderType.FRESH_FOOD,
-        null,
-        111.67, // amountProduct
-        12.0, // amountShipping
-        123.67, // amountTotal
-        [orderItem],
-        undefined, // totalAmount
+        status: OrderStatus.INIT,
+        items: [orderItem],
+        amountProduct: 111.67,
+        amountShipping: 12.0,
+        amountTotal: 123.67,
         pricingBreakdown,
-      );
+      });
       await orderRepository.save(order);
 
       const response = await request(app.getHttpServer())
@@ -1284,16 +1458,11 @@ describe('OrdersController (e2e)', () => {
         nutrition_standard: 'FEDIAF_2021',
         items: [],
       };
-      const orderItem = new OrderItem(
-        'item-isolation',
-        'order-isolation',
+      const orderItem = createTestOrderItem({
+        id: 'item-isolation',
+        orderId: 'order-isolation',
         recipeSnapshot,
-        1400,
-        14,
-        100,
-        null,
-        310.34, // dailyIntakeG
-      );
+      });
 
       const pricingBreakdown = new PricingBreakdownSnapshot(
         50.0,
@@ -1310,19 +1479,16 @@ describe('OrdersController (e2e)', () => {
         null,
       );
 
-      const order = new Order(
-        'order-isolation',
-        customerA,
-        OrderStatus.INIT,
-        OrderType.FRESH_FOOD,
-        null,
-        111.67,
-        12.0,
-        123.67,
-        [orderItem],
-        undefined,
+      const order = createTestOrder({
+        id: 'order-isolation',
+        customerId: customerA,
+        status: OrderStatus.INIT,
+        items: [orderItem],
+        amountProduct: 111.67,
+        amountShipping: 12.0,
+        amountTotal: 123.67,
         pricingBreakdown,
-      );
+      });
       await orderRepository.save(order);
 
       // Customer B tries to access Customer A's order breakdown
@@ -1346,29 +1512,22 @@ describe('OrdersController (e2e)', () => {
         nutrition_standard: 'FEDIAF_2021',
         items: [],
       };
-      const orderItem = new OrderItem(
-        'item-legacy',
-        'order-legacy',
+      const orderItem = createTestOrderItem({
+        id: 'item-legacy',
+        orderId: 'order-legacy',
         recipeSnapshot,
-        1400,
-        14,
-        100,
-        null,
-        310.34, // dailyIntakeG
-      );
+      });
 
       // Create order without pricing breakdown snapshot (legacy order)
-      const order = new Order(
-        'order-legacy',
+      const order = createTestOrder({
+        id: 'order-legacy',
         customerId,
-        OrderStatus.INIT,
-        OrderType.FRESH_FOOD,
-        null,
-        111.67,
-        12.0,
-        123.67,
-        [orderItem],
-      );
+        status: OrderStatus.INIT,
+        items: [orderItem],
+        amountProduct: 111.67,
+        amountShipping: 12.0,
+        amountTotal: 123.67,
+      });
       await orderRepository.save(order);
 
       const response = await request(app.getHttpServer())
@@ -1458,6 +1617,8 @@ describe('OrdersController (e2e)', () => {
             quantityG: 1400,
             // packageCount missing - should be computed
             packageSpecG: 100,
+            cycleDays: 14,
+            dailyIntakeG: 100,
           },
         ],
       };
@@ -1513,6 +1674,8 @@ describe('OrdersController (e2e)', () => {
             quantityG: 1400,
             packageCount: 14,
             packageSpecG: 100,
+            cycleDays: 14,
+            dailyIntakeG: 100,
           },
         ],
       };
@@ -1583,6 +1746,8 @@ describe('OrdersController (e2e)', () => {
             quantityG: 1400,
             packageCount: 20, // Provided explicitly
             packageSpecG: 100,
+            cycleDays: 14,
+            dailyIntakeG: 100,
           },
         ],
       };
@@ -1684,16 +1849,11 @@ describe('OrdersController (e2e)', () => {
         nutrition_standard: 'FEDIAF_2021',
         items: [],
       };
-      const orderItem = new OrderItem(
-        'item-explanation-1',
-        'order-explanation-1',
+      const orderItem = createTestOrderItem({
+        id: 'item-explanation-1',
+        orderId: 'order-explanation-1',
         recipeSnapshot,
-        1400,
-        14,
-        100,
-        null,
-        310.34, // dailyIntakeG
-      );
+      });
 
       const pricingBreakdown = new PricingBreakdownSnapshot(
         50.0, // costIngredients
@@ -1710,19 +1870,16 @@ describe('OrdersController (e2e)', () => {
         null, // ingredientPriceVersionHash
       );
 
-      const order = new Order(
-        'order-explanation-1',
+      const order = createTestOrder({
+        id: 'order-explanation-1',
         customerId,
-        OrderStatus.INIT,
-        OrderType.FRESH_FOOD,
-        null,
-        111.67, // amountProduct
-        12.0, // amountShipping
-        123.67, // amountTotal
-        [orderItem],
-        undefined, // totalAmount
+        status: OrderStatus.INIT,
+        items: [orderItem],
+        amountProduct: 111.67,
+        amountShipping: 12.0,
+        amountTotal: 123.67,
         pricingBreakdown,
-      );
+      });
       await orderRepository.save(order);
 
       const response = await request(app.getHttpServer())
@@ -1762,29 +1919,22 @@ describe('OrdersController (e2e)', () => {
         nutrition_standard: 'FEDIAF_2021',
         items: [],
       };
-      const orderItem = new OrderItem(
-        'item-legacy-explanation',
-        'order-legacy-explanation',
+      const orderItem = createTestOrderItem({
+        id: 'item-legacy-explanation',
+        orderId: 'order-legacy-explanation',
         recipeSnapshot,
-        1400,
-        14,
-        100,
-        null,
-        310.34, // dailyIntakeG
-      );
+      });
 
       // Create order without pricing breakdown snapshot (legacy order)
-      const order = new Order(
-        'order-legacy-explanation',
+      const order = createTestOrder({
+        id: 'order-legacy-explanation',
         customerId,
-        OrderStatus.INIT,
-        OrderType.FRESH_FOOD,
-        null,
-        111.67,
-        12.0,
-        123.67,
-        [orderItem],
-      );
+        status: OrderStatus.INIT,
+        items: [orderItem],
+        amountProduct: 111.67,
+        amountShipping: 12.0,
+        amountTotal: 123.67,
+      });
       await orderRepository.save(order);
 
       const response = await request(app.getHttpServer())
@@ -1807,16 +1957,11 @@ describe('OrdersController (e2e)', () => {
         nutrition_standard: 'FEDIAF_2021',
         items: [],
       };
-      const orderItem = new OrderItem(
-        'item-margin',
-        'order-margin',
+      const orderItem = createTestOrderItem({
+        id: 'item-margin',
+        orderId: 'order-margin',
         recipeSnapshot,
-        1400,
-        14,
-        100,
-        null,
-        310.34, // dailyIntakeG
-      );
+      });
 
       // Test with specific values: productPrice=100, totalProductCost=60, marginAmount should be 40
       const pricingBreakdown = new PricingBreakdownSnapshot(
@@ -1834,19 +1979,16 @@ describe('OrdersController (e2e)', () => {
         null,
       );
 
-      const order = new Order(
-        'order-margin',
+      const order = createTestOrder({
+        id: 'order-margin',
         customerId,
-        OrderStatus.INIT,
-        OrderType.FRESH_FOOD,
-        null,
-        100.0,
-        15.0,
-        115.0,
-        [orderItem],
-        undefined,
+        status: OrderStatus.INIT,
+        items: [orderItem],
+        amountProduct: 100.0,
+        amountShipping: 15.0,
+        amountTotal: 115.0,
         pricingBreakdown,
-      );
+      });
       await orderRepository.save(order);
 
       const response = await request(app.getHttpServer())
@@ -1874,19 +2016,23 @@ describe('OrdersController (e2e)', () => {
         items: [],
       };
 
-      const order = new Order(
-        'order-history-test',
+      const order = createTestOrder({
+        id: 'order-history-test',
         customerId,
-        OrderStatus.INIT,
-        OrderType.FRESH_FOOD,
-        null,
-        100,
-        10,
-        110,
-        [
-          new OrderItem('item-1', 'order-history-test', recipeSnapshot, 1000, 10, 100),
+        status: OrderStatus.INIT,
+        items: [
+          createTestOrderItem({
+            id: 'item-1',
+            orderId: 'order-history-test',
+            recipeSnapshot,
+            quantityG: 1000,
+            packageCount: 10,
+          }),
         ],
-      );
+        amountProduct: 100,
+        amountShipping: 10,
+        amountTotal: 110,
+      });
       await orderRepository.save(order);
 
       // Simulate history by calling service methods that create history
@@ -1933,26 +2079,23 @@ describe('OrdersController (e2e)', () => {
         items: [],
       };
 
-      const order = new Order(
-        'order-other-customer-history',
-        'other-customer-id',
-        OrderStatus.INIT,
-        OrderType.FRESH_FOOD,
-        null,
-        100,
-        10,
-        110,
-        [
-          new OrderItem(
-            'item-1',
-            'order-other-customer-history',
+      const order = createTestOrder({
+        id: 'order-other-customer-history',
+        customerId: 'other-customer-id',
+        status: OrderStatus.INIT,
+        items: [
+          createTestOrderItem({
+            id: 'item-1',
+            orderId: 'order-other-customer-history',
             recipeSnapshot,
-            1000,
-            10,
-            100,
-          ),
+            quantityG: 1000,
+            packageCount: 10,
+          }),
         ],
-      );
+        amountProduct: 100,
+        amountShipping: 10,
+        amountTotal: 110,
+      });
       await orderRepository.save(order);
 
       const response = await request(app.getHttpServer())

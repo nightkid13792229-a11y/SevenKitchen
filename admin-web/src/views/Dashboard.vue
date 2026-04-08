@@ -109,7 +109,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { List, Money, Clock, User } from '@element-plus/icons-vue'
-import { orderApi, productionApi } from '@/api'
+import { productionApi } from '@/api'
+import { orderApi } from '@/api/orders'
 
 const stats = ref({
   totalOrders: 0,

@@ -343,11 +343,13 @@ export class DogService {
     const breed = new DogBreed(
       randomUUID(),
       dto.name,
+      this.normalizeBreedAliases(dto.name, dto.aliases),
       dto.sizeCategory,
       dto.growthCurveType,
       dto.adultAgeMonths,
       dto.seniorAgeYears,
       dto.averageAdultWeightKg ?? null,
+      dto.isCommon ?? false,
     );
 
     return this.dogBreedRepository.save(breed);
@@ -372,6 +374,10 @@ export class DogService {
     const updated = new DogBreed(
       id,
       dto.name ?? existing.name,
+      this.normalizeBreedAliases(
+        dto.name ?? existing.name,
+        dto.aliases ?? existing.aliases,
+      ),
       dto.sizeCategory ?? existing.sizeCategory,
       dto.growthCurveType ?? existing.growthCurveType,
       dto.adultAgeMonths ?? existing.adultAgeMonths,
@@ -379,6 +385,7 @@ export class DogService {
       dto.averageAdultWeightKg !== undefined
         ? dto.averageAdultWeightKg
         : existing.averageAdultWeightKg,
+      dto.isCommon ?? existing.isCommon,
     );
 
     const result = await this.dogBreedRepository.update(id, updated);
@@ -461,23 +468,51 @@ export class DogService {
     if (weightKg < 45) return DogSizeCategory.LARGE;
     return DogSizeCategory.GIANT;
   }
+
+  private normalizeBreedAliases(
+    breedName: string,
+    aliases: string[] | undefined,
+  ): string[] {
+    if (!aliases || aliases.length === 0) {
+      return [];
+    }
+
+    const normalizedBreedName = breedName.trim();
+    const seen = new Set<string>();
+
+    return aliases
+      .map((alias) => alias.trim())
+      .filter((alias) => alias.length > 0 && alias !== normalizedBreedName)
+      .filter((alias) => {
+        const dedupeKey = alias.toLocaleLowerCase();
+        if (seen.has(dedupeKey)) {
+          return false;
+        }
+        seen.add(dedupeKey);
+        return true;
+      });
+  }
 }
 
 // DTOs for breed management
 export interface CreateBreedDto {
   name: string;
+  aliases?: string[];
   sizeCategory: DogSizeCategory;
   growthCurveType: GrowthCurveType;
   adultAgeMonths: number;
   seniorAgeYears: number;
   averageAdultWeightKg?: number;
+  isCommon?: boolean;
 }
 
 export interface UpdateBreedDto {
   name?: string;
+  aliases?: string[];
   sizeCategory?: DogSizeCategory;
   growthCurveType?: GrowthCurveType;
   adultAgeMonths?: number;
   seniorAgeYears?: number;
   averageAdultWeightKg?: number;
+  isCommon?: boolean;
 }

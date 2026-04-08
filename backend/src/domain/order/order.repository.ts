@@ -70,10 +70,13 @@ export interface OrderRepository {
     total: number;
     pendingPayment: number;
     paid: number;
+    purchasing: number;
     inProduction: number;
+    freezing: number;
     shipped: number;
     completed: number;
     cancelled: number;
+    aftersale: number;
   }>;
 
   /**

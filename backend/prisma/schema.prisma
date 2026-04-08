@@ -27,6 +27,7 @@ model Order {
   transactionId                String?              @map("transaction_id")
   paidAt                       DateTime?            @map("paid_at")
   paymentStatus                String?              @map("payment_status")
+  adminRemark                  String?              @map("admin_remark")
   trackingNumber               String?              @map("tracking_number")
   carrierCode                  String?              @map("carrier_code")
   shippedAt                    DateTime?            @map("shipped_at")
@@ -140,9 +141,12 @@ model User {
   dogs                    Dog[]
   favoriteRecipes         FavoriteRecipe[]
   orders                  Order[]
+  recipeReviews           RecipeReview[]
   createdPurchaseLists    PurchaseList[]      @relation("PurchaseListCreator")
   reviewedReimbursements  Reimbursement[]     @relation("ReimbursementReviewer")
   submittedReimbursements Reimbursement[]     @relation("ReimbursementSubmitter")
+  feedbacks               Feedback[]
+  feedbackReplies         FeedbackReply[]
 
   @@index([wechatOpenid])
   @@index([phone])
@@ -167,6 +171,7 @@ model Address {
 model DogBreed {
   id                   String          @id @default(uuid()) @map("id")
   name                 String          @map("name")
+  aliases              String[]        @default([]) @map("aliases")
   sizeCategory         DogSizeCategory @map("size_category")
   growthCurveType      GrowthCurveType @map("growth_curve_type")
   adultAgeMonths       Int             @map("adult_age_months")
@@ -218,6 +223,27 @@ model Dog {
   @@map("dog")
 }
 
+model DogProfileEvent {
+  id           String   @id @default(uuid())
+  customerId   String   @map("customer_id")
+  dogId        String?  @map("dog_id")
+  eventName    String   @map("event_name")
+  mode         String
+  entrySource  String?  @map("entry_source")
+  stepName     String?  @map("step_name")
+  moduleName   String?  @map("module_name")
+  hasDraft     Boolean? @map("has_draft")
+  calcStatus   String?  @map("calc_status")
+  submitStatus String?  @map("submit_status")
+  properties   Json?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([eventName, createdAt])
+  @@index([customerId, createdAt])
+  @@index([dogId, createdAt])
+  @@map("dog_profile_event")
+}
+
 model Recipe {
   id                     String                      @id @default(uuid()) @map("id")
   recipeId               String                      @map("recipe_id")
@@ -251,6 +277,7 @@ model Recipe {
   customOrder            CustomRecipeOrder?          @relation("CustomRecipeOrders")
   healthTagAssignments   RecipeHealthTagAssignment[]
   items                  RecipeItem[]
+  reviews                RecipeReview[]
   shareTokens            RecipeShareToken[]
 
   @@unique([recipeId, version])
@@ -322,6 +349,28 @@ model RecipeHealthTagAssignment {
   @@map("recipe_health_tag_assignment")
 }
 
+model RecipeReview {
+  id          String   @id @default(uuid()) @map("id")
+  userId      String   @map("user_id")
+  recipeId    String   @map("recipe_id")
+  ratingEase  Int      @map("rating_ease")
+  ratingValue Int      @map("rating_value")
+  ratingTaste Int      @map("rating_taste")
+  content     String   @map("content")
+  photos      Json     @default("[]") @map("photos")
+  source      String   @default("PURCHASED") @map("source")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  recipe      Recipe   @relation(fields: [recipeId], references: [id], onDelete: Cascade)
+
+  @@index([recipeId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("recipe_review")
+}
+
 model PreparationMethod {
   id          String   @id @default(uuid()) @map("id")
   name        String   @unique @db.VarChar(50)
@@ -370,6 +419,7 @@ model Ingredient {
   id                          String                    @id @default(uuid())
   name                        String
   type                        IngredientType
+  procurementStrategy         IngredientProcurementStrategy @default(DAILY_PURCHASE) @map("procurement_strategy")
   brand                       String?                   @db.VarChar(100)
   productModel                String?                   @map("product_model") @db.VarChar(100)
   purchaseChannel             String?                   @map("purchase_channel") @db.VarChar(200)
@@ -379,19 +429,27 @@ model Ingredient {
   purchaseUnit                String                    @map("purchase_unit") @db.VarChar(50)
   purchaseToBaseRatio         Float                     @map("purchase_to_base_ratio")
   currentPricePerPurchaseUnit Decimal                   @map("current_price_per_purchase_unit") @db.Decimal(10, 2)
+  effectivePricePerPurchaseUnit Decimal?                @map("effective_price_per_purchase_unit") @db.Decimal(10, 2)
   weightG                     Float?                    @map("weight_g")
   maxCapacityG                Float?                    @map("max_capacity_g")
+  safetyStock                 Float?                    @map("safety_stock")
+  reorderPoint                Float?                    @map("reorder_point")
+  targetStock                 Float?                    @map("target_stock")
   properties                  Json
   createdAt                   DateTime                  @default(now()) @map("created_at")
   updatedAt                   DateTime                  @updatedAt @map("updated_at")
+  priceChanges                IngredientPriceChange[]
   tags                        IngredientTagAssignment[]
   purchaseItems               PurchaseItem[]
   recipeItems                 RecipeItem[]
   nutritionFoodMappings       NutritionFoodMapping[]
   recommendedProducts         RecommendedProduct[]
+  inventoryAdjustments        InventoryAdjustment[]
+  inventoryStocktakeLines     InventoryStocktakeLine[]
 
   @@unique([name, brand, productModel])
   @@index([type])
+  @@index([procurementStrategy])
   @@index([name])
   @@map("ingredient")
 }
@@ -464,6 +522,50 @@ model InventoryLedgerEntry {
   @@index([sourceType, sourceId])
   @@index([createdAt])
   @@map("inventory_ledger_entry")
+}
+
+model InventoryAdjustment {
+  id              String                  @id @default(uuid()) @map("id")
+  ingredientId    String                  @map("ingredient_id")
+  adjustmentMode  InventoryAdjustmentMode @map("adjustment_mode")
+  quantityBeforeG Float                   @map("quantity_before_g")
+  quantityAfterG  Float                   @map("quantity_after_g")
+  deltaG          Float                   @map("delta_g")
+  reason          String                  @db.VarChar(200)
+  note            String?
+  createdAt       DateTime                @default(now()) @map("created_at")
+  ingredient      Ingredient              @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  @@index([ingredientId])
+  @@index([createdAt])
+  @@map("inventory_adjustment")
+}
+
+model InventoryStocktake {
+  id        String                  @id @default(uuid()) @map("id")
+  status    InventoryStocktakeStatus @default(DRAFT) @map("status")
+  note      String?
+  createdAt DateTime                @default(now()) @map("created_at")
+  appliedAt DateTime?               @map("applied_at")
+  lines     InventoryStocktakeLine[]
+
+  @@index([status, createdAt])
+  @@map("inventory_stocktake")
+}
+
+model InventoryStocktakeLine {
+  id                String             @id @default(uuid()) @map("id")
+  stocktakeId       String             @map("stocktake_id")
+  ingredientId      String             @map("ingredient_id")
+  expectedQuantityG Float              @map("expected_quantity_g")
+  countedQuantityG  Float              @map("counted_quantity_g")
+  deltaG            Float              @map("delta_g")
+  stocktake         InventoryStocktake @relation(fields: [stocktakeId], references: [id], onDelete: Cascade)
+  ingredient        Ingredient         @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  @@unique([stocktakeId, ingredientId])
+  @@index([ingredientId])
+  @@map("inventory_stocktake_line")
 }
 
 model WeightRecord {
@@ -586,6 +688,8 @@ model GlobalConfig {
   paymentTimeoutMinutes     Int      @default(30) @map("payment_timeout_minutes")
   equipmentRecommendations  Json?    @map("equipment_recommendations")
   minPotWeightG             Int      @default(2000) @map("min_pot_weight_g")
+  ingredientPriceAutoApproveThreshold Decimal @default(0.08) @map("ingredient_price_auto_approve_threshold") @db.Decimal(5, 4)
+  homeHeaderBgImageUrl              String?  @map("home_header_bg_image_url")
 
   @@map("global_config")
 }
@@ -643,6 +747,7 @@ model ShippingTemplate {
 model PurchaseList {
   id                 String             @id @default(uuid()) @map("id")
   targetDate         DateTime           @map("target_date")
+  kind               PurchaseListKind   @default(ORDER_DEMAND) @map("kind")
   status             PurchaseListStatus @map("status")
   totalEstimatedCost Decimal            @map("total_estimated_cost") @db.Decimal(10, 2)
   itemCount          Int                @map("item_count")
@@ -660,6 +765,7 @@ model PurchaseList {
   records            PurchaseRecord[]   @relation("PurchaseListRecords")
 
   @@index([targetDate])
+  @@index([kind])
   @@index([status])
   @@index([createdById])
   @@map("purchase_list")
@@ -674,6 +780,8 @@ model PurchaseItem {
   estimatedCost   Decimal      @map("estimated_cost") @db.Decimal(10, 2)
   purchaseChannel String?      @map("purchase_channel") @db.VarChar(200)
   productModel    String?      @map("product_model") @db.VarChar(100)
+  suggestedProductId   String? @map("suggested_product_id") @db.VarChar(36)
+  suggestedProductName String? @map("suggested_product_name") @db.VarChar(200)
   notes           String?      @map("notes")
   createdAt       DateTime     @default(now()) @map("created_at")
   ingredientName  String       @default("") @map("ingredient_name") @db.VarChar(200)
@@ -694,7 +802,12 @@ model PurchaseRecord {
   ingredientId    String       @map("ingredient_id")
   ingredientName  String       @map("ingredient_name") @db.VarChar(200)
   purchaseChannel String       @map("purchase_channel") @db.VarChar(200)
-  actualQuantity  Int          @map("actual_quantity")
+  actualQuantity  Decimal      @map("actual_quantity") @db.Decimal(18, 6)
+  actualPackageCount Decimal?  @map("actual_package_count") @db.Decimal(18, 3)
+  actualPackageSize  Decimal?  @map("actual_package_size") @db.Decimal(18, 3)
+  actualPackageUnit  String?   @map("actual_package_unit") @db.VarChar(20)
+  actualBaseQuantity Decimal?  @map("actual_base_quantity") @db.Decimal(18, 6)
+  actualBaseUnit     String?   @map("actual_base_unit") @db.VarChar(20)
   actualCost      Decimal      @map("actual_cost") @db.Decimal(10, 2)
   productModel    String?      @map("product_model") @db.VarChar(100)
   notes           String?      @map("notes")
@@ -728,6 +841,7 @@ model Reimbursement {
   customFees           Json?               @map("custom_fees")
   paymentProofUrls     String[]            @default([]) @map("payment_proof_urls")
   paymentProofKeys     String[]            @default([]) @map("payment_proof_keys")
+  priceChanges         IngredientPriceChange[]
   purchaseLists        PurchaseList[]
   reviewedBy           User?               @relation("ReimbursementReviewer", fields: [reviewedById], references: [id])
   submittedBy          User                @relation("ReimbursementSubmitter", fields: [submittedById], references: [id])
@@ -736,6 +850,35 @@ model Reimbursement {
   @@index([submittedById])
   @@index([claimNumber])
   @@map("reimbursement")
+}
+
+model IngredientPriceChange {
+  id                         String                      @id @default(uuid()) @map("id")
+  ingredientId               String                      @map("ingredient_id")
+  reimbursementId            String                      @map("reimbursement_id")
+  purchaseRecordId           String                      @unique @map("purchase_record_id")
+  ingredientName             String                      @map("ingredient_name") @db.VarChar(200)
+  sourceQuantity             Int                         @map("source_quantity")
+  sourcePricePerPurchaseUnit Decimal                     @map("source_price_per_purchase_unit") @db.Decimal(10, 2)
+  previousCurrentPricePerPurchaseUnit Decimal            @map("previous_current_price_per_purchase_unit") @db.Decimal(10, 2)
+  previousEffectivePrice     Decimal                     @map("previous_effective_price") @db.Decimal(10, 2)
+  proposedEffectivePrice     Decimal                     @map("proposed_effective_price") @db.Decimal(10, 2)
+  appliedCurrentPricePerPurchaseUnit Decimal?            @map("applied_current_price_per_purchase_unit") @db.Decimal(10, 2)
+  appliedEffectivePricePerPurchaseUnit Decimal?          @map("applied_effective_price_per_purchase_unit") @db.Decimal(10, 2)
+  deltaRate                  Decimal?                    @map("delta_rate") @db.Decimal(10, 4)
+  status                     IngredientPriceChangeStatus @default(PENDING) @map("status")
+  reviewComment              String?                     @map("review_comment")
+  reviewedById               String?                     @map("reviewed_by_id")
+  reviewedAt                 DateTime?                   @map("reviewed_at")
+  createdAt                  DateTime                    @default(now()) @map("created_at")
+  updatedAt                  DateTime                    @updatedAt @map("updated_at")
+  ingredient                 Ingredient                  @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  reimbursement              Reimbursement               @relation(fields: [reimbursementId], references: [id], onDelete: Cascade)
+
+  @@index([ingredientId])
+  @@index([reimbursementId])
+  @@index([status])
+  @@map("ingredient_price_change")
 }
 
 model CustomRecipeOrder {
@@ -900,12 +1043,31 @@ enum PackagingUnitStatus {
 
 enum InventorySourceType {
   KITCHEN_TASK
+  PURCHASE_RECORD
+  MANUAL_ADJUSTMENT
+  STOCKTAKE
+}
+
+enum InventoryAdjustmentMode {
+  DELTA
+  SET
+}
+
+enum InventoryStocktakeStatus {
+  DRAFT
+  APPLIED
 }
 
 enum IngredientType {
   FOOD
   SUPPLEMENT
   PACKAGING
+}
+
+enum IngredientProcurementStrategy {
+  DAILY_PURCHASE
+  STOCK_REPLENISHMENT
+  HYBRID
 }
 
 enum BaseUnit {
@@ -937,11 +1099,22 @@ enum PurchaseListStatus {
   COMPLETED
 }
 
+enum PurchaseListKind {
+  ORDER_DEMAND
+  STOCK_REPLENISHMENT
+}
+
 enum ReimbursementStatus {
   PENDING_REVIEW
   REIMBURSED
   REJECTED
   REQUIRES_RESUBMIT
+}
+
+enum IngredientPriceChangeStatus {
+  PENDING
+  APPROVED
+  REJECTED
 }
 
 enum TargetGoal {
@@ -994,6 +1167,18 @@ enum DesignRecipeStatus {
   COMPLIANT   // 已达标
   PUBLISHED   // 已发布
   ARCHIVED    // 已归档
+}
+
+enum FeedbackType {
+  BUG
+  SUGGESTION
+  OTHER
+}
+
+enum FeedbackStatus {
+  PENDING
+  REPLIED
+  CLOSED
 }
 
 /// 营养原料库 - 独立于采购库的完整营养数据
@@ -1134,4 +1319,45 @@ model NutritionStandardFediaf {
   @@index([category])
   @@index([isActive])
   @@map("nutrition_standard_fediaf")
+}
+
+model Feedback {
+  id          String         @id @default(uuid()) @map("id")
+  userId      String         @map("user_id")
+  type        FeedbackType   @map("type")
+  status      FeedbackStatus @default(PENDING) @map("status")
+  content     String         @map("content") @db.VarChar(500)
+  imageUrls   String[]       @default([]) @map("image_urls")
+  imageKeys   String[]       @default([]) @map("image_keys")
+  createdAt   DateTime       @default(now()) @map("created_at")
+  updatedAt   DateTime       @updatedAt @map("updated_at")
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replies     FeedbackReply[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+  @@map("feedback")
+}
+
+model FeedbackReply {
+  id            String         @id @default(uuid()) @map("id")
+  feedbackId    String         @map("feedback_id")
+  userId        String         @map("user_id")
+  content       String         @map("content") @db.VarChar(500)
+  imageUrls     String[]       @default([]) @map("image_urls")
+  imageKeys     String[]       @default([]) @map("image_keys")
+  replyToId     String?        @map("reply_to_id")
+  replyToUserId String?        @map("reply_to_user_id")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  feedback      Feedback       @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  replyTo       FeedbackReply? @relation("ReplyThread", fields: [replyToId], references: [id], onDelete: SetNull)
+  replies       FeedbackReply[] @relation("ReplyThread")
+
+  @@index([feedbackId])
+  @@index([userId])
+  @@index([createdAt])
+  @@map("feedback_reply")
 }

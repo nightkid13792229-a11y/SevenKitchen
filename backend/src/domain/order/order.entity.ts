@@ -7,6 +7,7 @@ import { OrderStatus, OrderType, AftersaleType } from '../index';
 import { OrderItem } from './order-item.entity';
 import { InvalidStateTransitionError, ValidationError } from '../common/errors';
 import { PricingBreakdownSnapshot } from './pricing-breakdown-snapshot';
+import { TimezoneUtil } from '../../utils/timezone.util';
 
 export class Order {
   private skipValidation?: boolean;
@@ -68,6 +69,7 @@ export class Order {
     public aftersaleReason?: string | null,
     public aftersalePhotos?: string[],
     skipValidation?: boolean, // Internal: skip validation for admin updates
+    public adminRemark: string | null = null,
   ) {
     // Compute totalAmount from amountTotal if not provided
     if (this.totalAmount === undefined) {
@@ -119,6 +121,7 @@ export class Order {
       data.aftersaleReason,
       data.aftersalePhotos,
       true, // skip validation
+      data.adminRemark ?? null,
     );
   }
 
@@ -288,18 +291,15 @@ export class Order {
 
   /**
    * Mark order as shipped with tracking information
-   * Phase 9: Shipping fulfillment (simplified from READY_FOR_SHIPMENT to IN_PRODUCTION)
+   * Shipping fulfillment happens after production has completed and the order
+   * has entered FREEZING.
    * @param trackingNumber Shipping tracking number
    * @param carrierCode Shipping carrier code (e.g., "SF", "YTO", "ZTO")
    */
   markAsShipped(trackingNumber: string, carrierCode: string): void {
-    // Allow shipping from either IN_PRODUCTION or FREEZING status
-    if (
-      this.status !== OrderStatus.IN_PRODUCTION &&
-      this.status !== OrderStatus.FREEZING
-    ) {
+    if (this.status !== OrderStatus.FREEZING) {
       throw new InvalidStateTransitionError(
-        `Cannot mark order as shipped from status: ${this.status}. Order must be in IN_PRODUCTION or FREEZING status.`,
+        `Cannot mark order as shipped from status: ${this.status}. Order must be in FREEZING status.`,
       );
     }
 
@@ -561,10 +561,10 @@ export class Order {
   /**
    * Update target production date
    * Allowed when order.status < PURCHASING
-   * Date must be >= current target date (only forward or keep same)
+   * Date must be >= today in Shanghai time
    * @param newDate New target production date
    * @throws InvalidStateTransitionError if order is already in purchasing
-   * @throws ValidationError if date is invalid or earlier than current date
+   * @throws ValidationError if date is invalid or earlier than today
    */
   updateTargetProductionDate(newDate: Date): void {
     // Cannot change date after purchasing started
@@ -581,32 +581,46 @@ export class Order {
       );
     }
 
-    // IMPORTANT: Save original target date BEFORE first update
-    // This must happen before validation, so we can use the original date as the baseline
+    // Preserve the first scheduled date for audit/history on the first edit.
     if (!this.originalTargetProductionDate && this.targetProductionDate) {
       (this as any).originalTargetProductionDate = new Date(
         this.targetProductionDate,
       );
     }
 
-    // Validate date is not in the past (compared to ORIGINAL target date)
-    // This allows users to correct mistakes (e.g., changing from Jan 29 back to Jan 28)
-    // as long as it's not earlier than the original date (e.g., Jan 27)
-    const baseDate = this.originalTargetProductionDate;
-    if (baseDate) {
-      const baseDateOnly = new Date(baseDate);
-      baseDateOnly.setHours(0, 0, 0, 0);
+    // Allow moving a future order back to today, but never into the past.
+    const todayDateStr = TimezoneUtil.toShanghaiDateString(new Date());
+    const newDateStr = TimezoneUtil.toShanghaiDateString(newDate);
 
-      const newDateOnly = new Date(newDate);
-      newDateOnly.setHours(0, 0, 0, 0);
-
-      if (newDateOnly < baseDateOnly) {
-        throw new ValidationError(
-          'Target production date cannot be earlier than the original target date',
-        );
-      }
+    if (newDateStr < todayDateStr) {
+      throw new ValidationError(
+        'Target production date cannot be earlier than today',
+      );
     }
 
     this.targetProductionDate = newDate;
+  }
+
+  /**
+   * Update admin remark
+   * Internal-only note for production staff.
+   */
+  updateAdminRemark(remark: string | null | undefined): void {
+    if (remark === null || remark === undefined) {
+      this.adminRemark = null;
+      return;
+    }
+
+    const normalized = remark.trim();
+    if (!normalized) {
+      this.adminRemark = null;
+      return;
+    }
+
+    if (normalized.length > 200) {
+      throw new ValidationError('Admin remark must be 200 characters or less');
+    }
+
+    this.adminRemark = normalized;
   }
 }

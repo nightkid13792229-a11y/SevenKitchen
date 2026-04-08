@@ -30,6 +30,7 @@ import { StaffProductionPhotosController } from './interfaces/controllers/staff-
 import { AftersalePhotosController } from './interfaces/controllers/aftersale-photos.controller';
 import { FavoritesController } from './interfaces/controllers/favorites.controller';
 import { StaffPurchasingController } from './interfaces/controllers/staff-purchasing.controller';
+import { StaffInventoryController } from './interfaces/controllers/staff-inventory.controller';
 import { AdminPurchasingController } from './interfaces/controllers/admin-purchasing.controller';
 import { StaffProductionController } from './interfaces/controllers/staff-production.controller';
 import { CustomRecipeController } from './interfaces/controllers/custom-recipe/custom-recipe.controller';
@@ -73,6 +74,7 @@ import {
   IngredientService,
   INGREDIENT_REPOSITORY,
 } from './application/ingredient/ingredient.service';
+import { IngredientPricingService } from './application/ingredient/ingredient-pricing.service';
 import { PrismaIngredientRepository } from './infrastructure/repositories/prisma-ingredient.repository';
 // import { InMemoryIngredientRepository } from './infrastructure/repositories/in-memory-ingredient.repository'; // NOTE: Currently unused
 // import { Ingredient } from './domain/ingredient'; // NOTE: Currently unused (seed disabled)
@@ -144,6 +146,9 @@ import { NutritionFoodController } from './interfaces/controllers/nutrition-food
 import { NutritionFoodService } from './application/nutrition-food/nutrition-food.service';
 import { RecommendedProductController } from './interfaces/controllers/recommended-product.controller';
 import { RecommendedProductService } from './application/ingredient/recommended-product.service';
+import { ReviewsController } from './interfaces/controllers/reviews.controller';
+import { FeedbackController } from './interfaces/controllers/feedback.controller';
+import { DogProfileAnalyticsService } from './application/analytics/dog-profile-analytics.service';
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -210,6 +215,7 @@ validatePrismaConfig();
     StaffKitchenController,
     StaffShippingController,
     StaffPurchasingController,
+    StaffInventoryController,
     AdminPurchasingController,
     UsersController,
     HealthRecordsController,
@@ -228,6 +234,8 @@ validatePrismaConfig();
     SharedPhotosController,
     NutritionFoodController,
     RecommendedProductController,
+    ReviewsController,
+    FeedbackController,
   ],
   providers: [
     DogService,
@@ -311,6 +319,7 @@ validatePrismaConfig();
     JwtAuthService,
     AuthGuard,
     IngredientService,
+    IngredientPricingService,
     {
       provide: INGREDIENT_REPOSITORY,
       useClass: PrismaIngredientRepository,
@@ -571,6 +580,7 @@ validatePrismaConfig();
     NutritionFoodService,
     // Recommended Product Service
     RecommendedProductService,
+    DogProfileAnalyticsService,
   ],
 })
 export class AppModule implements OnModuleInit {

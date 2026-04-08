@@ -34,6 +34,13 @@ export class BreedResponseDto {
   @ApiProperty({ description: 'Whether this is a common breed', example: true })
   isCommon!: boolean;
 
+  @ApiProperty({
+    description: 'Breed aliases used for search',
+    type: [String],
+    example: ['泰迪', '泰迪犬'],
+  })
+  aliases!: string[];
+
   @ApiProperty({ description: 'Creation timestamp' })
   createdAt!: Date;
 

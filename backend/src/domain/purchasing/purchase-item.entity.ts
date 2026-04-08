@@ -16,8 +16,19 @@ export interface PurchaseItemConstructor {
   estimatedCost: number;
   purchaseChannel?: string;
   productModel?: string;
+  suggestedProductId?: string;
+  suggestedProductName?: string;
   displayUnit?: string; // 显示单位标签
   notes?: string;
+  ingredient?: {
+    productModel?: string | null;
+    purchaseChannel?: string | null;
+    purchaseUnit?: string | null;
+    baseUnit?: string | null;
+    unitDisplayLabel?: string | null;
+    purchaseToBaseRatio?: number | null;
+    properties?: any;
+  };
   createdAt?: Date;
 }
 
@@ -32,8 +43,19 @@ export class PurchaseItem {
   public estimatedCost: number; // 可写，用于动态更新
   public readonly purchaseChannel?: string;
   public readonly productModel?: string;
+  public readonly suggestedProductId?: string;
+  public readonly suggestedProductName?: string;
   public readonly displayUnit?: string; // 显示单位标签
   public readonly notes?: string;
+  public readonly ingredient?: {
+    productModel?: string | null;
+    purchaseChannel?: string | null;
+    purchaseUnit?: string | null;
+    baseUnit?: string | null;
+    unitDisplayLabel?: string | null;
+    purchaseToBaseRatio?: number | null;
+    properties?: any;
+  };
   public readonly createdAt: Date;
 
   constructor(data: PurchaseItemConstructor) {
@@ -47,8 +69,11 @@ export class PurchaseItem {
     this.estimatedCost = data.estimatedCost;
     this.purchaseChannel = data.purchaseChannel;
     this.productModel = data.productModel;
+    this.suggestedProductId = data.suggestedProductId;
+    this.suggestedProductName = data.suggestedProductName;
     this.displayUnit = data.displayUnit;
     this.notes = data.notes;
+    this.ingredient = data.ingredient;
     this.createdAt = data.createdAt || new Date();
 
     this.validateInvariants();
@@ -82,6 +107,8 @@ export class PurchaseItem {
       estimatedCost: this.estimatedCost,
       purchaseChannel: this.purchaseChannel,
       productModel: this.productModel,
+      suggestedProductId: this.suggestedProductId,
+      suggestedProductName: this.suggestedProductName,
       displayUnit: this.displayUnit,
       notes: this.notes,
       createdAt: this.createdAt,
@@ -103,8 +130,25 @@ export class PurchaseItem {
       estimatedCost: Number(data.estimatedCost),
       purchaseChannel: data.purchaseChannel,
       productModel: data.productModel,
+      suggestedProductId: data.suggestedProductId,
+      suggestedProductName: data.suggestedProductName,
       displayUnit: data.displayUnit,
       notes: data.notes,
+      ingredient: data.ingredient
+        ? {
+            productModel: data.ingredient.productModel ?? null,
+            purchaseChannel: data.ingredient.purchaseChannel ?? null,
+            purchaseUnit: data.ingredient.purchaseUnit ?? null,
+            baseUnit: data.ingredient.baseUnit ?? null,
+            unitDisplayLabel: data.ingredient.unitDisplayLabel ?? null,
+            purchaseToBaseRatio:
+              data.ingredient.purchaseToBaseRatio !== undefined &&
+              data.ingredient.purchaseToBaseRatio !== null
+                ? Number(data.ingredient.purchaseToBaseRatio)
+                : null,
+            properties: data.ingredient.properties ?? undefined,
+          }
+        : undefined,
       createdAt: data.createdAt,
     });
   }

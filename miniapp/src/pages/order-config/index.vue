@@ -102,7 +102,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { request, normalizeToUuid } from '../../utils/api'
 
 const recipeId = ref('')
@@ -121,10 +121,44 @@ const pricingPreview = ref<{
   amountShipping: number
   amountTotal: number
 } | null>(null)
+const pricingSnapshotId = ref<string | null>(null)
 const pricingError = ref<string | null>(null)
 const pricingHint = ref<string | null>(null)
 const isValidationError = ref(false)
 let previewDebounceTimer: ReturnType<typeof setTimeout> | null = null
+let previewRequestSeq = 0
+
+const handleAddressSelected = (data: string | { addressId: string; from?: string }) => {
+  // Handle both string and object formats for compatibility
+  const selectedAddressId = typeof data === 'string' ? data : data?.addressId
+  addressId.value = selectedAddressId
+}
+
+function resetPricingState() {
+  pricingError.value = null
+  pricingHint.value = null
+  isValidationError.value = false
+  pricingPreview.value = null
+  pricingSnapshotId.value = null
+}
+
+function invalidatePricingPreview() {
+  previewRequestSeq += 1
+  resetPricingState()
+}
+
+function schedulePricingPreview() {
+  invalidatePricingPreview()
+
+  if (previewDebounceTimer) {
+    clearTimeout(previewDebounceTimer)
+    previewDebounceTimer = null
+  }
+
+  previewDebounceTimer = setTimeout(() => {
+    loadPricingPreview(previewRequestSeq)
+  }, 500)
+}
 
 // Computed total grams (UI display only, backend will recalculate)
 const totalGrams = computed(() => {
@@ -166,36 +200,23 @@ onMounted(() => {
   loadDefaultAddress()
   
   // Listen for address selection
-  uni.$on('address-selected', (data: string | { addressId: string; from?: string }) => {
-    // Handle both string and object formats for compatibility
-    const selectedAddressId = typeof data === 'string' ? data : data?.addressId
-
-    addressId.value = selectedAddressId
-    // Reload pricing preview when address changes (debounced)
-    if (previewDebounceTimer) {
-      clearTimeout(previewDebounceTimer)
-      previewDebounceTimer = null
-    }
-    previewDebounceTimer = setTimeout(() => {
-      loadPricingPreview()
-    }, 500)
-  })
+  uni.$on('address-selected', handleAddressSelected)
   
   // Initial pricing preview load will be triggered by watch
 })
 
-// Watch for changes to trigger pricing preview reload (debounced)
-watch([dailyGrams, cycleDays, dogId, addressId, recipeId], () => {
-  // Clear existing debounce timer
+onUnmounted(() => {
   if (previewDebounceTimer) {
     clearTimeout(previewDebounceTimer)
     previewDebounceTimer = null
   }
-  
-  // Debounce preview calls (500ms delay)
-  previewDebounceTimer = setTimeout(() => {
-    loadPricingPreview()
-  }, 500)
+
+  uni.$off('address-selected', handleAddressSelected)
+})
+
+// Watch for changes to trigger pricing preview reload (debounced)
+watch([dailyGrams, cycleDays, dogId, addressId, recipeId], () => {
+  schedulePricingPreview()
 })
 
 function loadDefaultAddress() {
@@ -236,12 +257,8 @@ function formatPrice(price: number): string {
   return price.toFixed(2)
 }
 
-function loadPricingPreview() {
-  // Clear previous state
-  pricingError.value = null
-  pricingHint.value = null
-  isValidationError.value = false
-  pricingPreview.value = null
+function loadPricingPreview(requestSeq = previewRequestSeq) {
+  resetPricingState()
 
   // Pre-flight guard: Check required fields
   if (!dogId.value || !recipeId.value || !dailyGrams.value || !cycleDays.value) {
@@ -290,26 +307,37 @@ function loadPricingPreview() {
     method: 'POST',
     data: payload
   }).then((res: any) => {
+    if (requestSeq !== previewRequestSeq) {
+      return
+    }
+
     if (res.code === 0 && res.data) {
       pricingPreview.value = {
         amountProduct: res.data.amountProduct || 0,
         amountShipping: res.data.amountShipping || 0,
         amountTotal: res.data.amountTotal || 0
       }
+      pricingSnapshotId.value = res.data.snapshotId || null
     } else {
       // Non-zero code indicates validation or business logic error
       // Treat as expected user-input state, not system error
       isValidationError.value = true
       pricingPreview.value = null
+      pricingSnapshotId.value = null
       // Don't show error message for validation failures - just hide preview
     }
   }).catch((err: any) => {
+    if (requestSeq !== previewRequestSeq) {
+      return
+    }
+
     // Handle HTTP 400 (validation errors) gracefully
     const statusCode = err?.statusCode || err?.status || err?.response?.status
     if (statusCode === 400) {
       // Validation error - treat as expected user-input state
       isValidationError.value = true
       pricingPreview.value = null
+      pricingSnapshotId.value = null
       // No console.error for validation errors - they're expected
     } else {
       // Only log unexpected errors (5xx, network errors, etc.)
@@ -319,6 +347,7 @@ function loadPricingPreview() {
       })
       pricingError.value = '获取价格失败，请稍后重试'
       pricingPreview.value = null
+      pricingSnapshotId.value = null
     }
   })
 }
@@ -377,32 +406,16 @@ function createOrder() {
     return
   }
 
+  if (!pricingSnapshotId.value || !pricingPreview.value) {
+    uni.showToast({
+      title: '请先等待价格试算完成',
+      icon: 'none'
+    })
+    return
+  }
+
   // Normalize and validate UUID fields before sending
-  let normalizedRecipeId: string
-  let normalizedDogId: string
   let normalizedAddressId: string | undefined
-
-  try {
-    normalizedRecipeId = normalizeToUuid(recipeId.value, 'recipeId')
-  } catch (err: any) {
-    uni.showModal({
-      title: '错误',
-      content: 'Invalid recipeId. Please re-enter the flow from Recipe Detail.',
-      showCancel: false
-    })
-    return
-  }
-
-  try {
-    normalizedDogId = normalizeToUuid(dogId.value, 'dogId')
-  } catch (err: any) {
-    uni.showModal({
-      title: '错误',
-      content: 'Invalid dogId. Please create a dog profile first.',
-      showCancel: false
-    })
-    return
-  }
 
   if (addressId.value) {
     try {
@@ -413,23 +426,11 @@ function createOrder() {
     }
   }
 
-  // Calculate package count and spec (simplified for MVP)
-  // In production, this would come from backend or user selection
-  const totalGramsValue = totalGrams.value
-  const packageSpecG = 100 // Default package spec
-  const packageCount = Math.ceil(totalGramsValue / packageSpecG)
-
   uni.showLoading({ title: '创建订单中...' })
 
   const payload = {
-    dogId: normalizedDogId,
     type: 'FRESH_FOOD',
-    items: [{
-      recipeId: normalizedRecipeId,
-      quantityG: totalGramsValue,
-      packageCount: packageCount,
-      packageSpecG: packageSpecG
-    }],
+    snapshotId: pricingSnapshotId.value,
     ...(normalizedAddressId && { addressId: normalizedAddressId })
   } as any
 
@@ -753,5 +754,3 @@ function backToRecipes() {
   color: #333;
 }
 </style>
-
-

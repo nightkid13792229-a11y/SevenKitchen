@@ -40,6 +40,7 @@ export class OrderPackagingInfoDto {
 
   recipientName?: string;
   recipientCity?: string;
+  adminRemark?: string;
 
   @IsOptional()
   completedAt?: string; // 本地时间格式

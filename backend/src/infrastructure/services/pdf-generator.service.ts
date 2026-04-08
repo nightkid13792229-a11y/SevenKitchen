@@ -23,6 +23,7 @@ interface OrderItem {
   dogName: string;
   recipientName?: string;
   recipientCity?: string;
+  adminRemark?: string;
 }
 
 interface PrintTaskData {
@@ -122,6 +123,7 @@ export class PdfGeneratorService {
         // Draw all sections with compact layout
         let currentY = this.drawHeader(doc, data, scaleFactor);
         currentY = this.drawPackagingOrders(doc, data, currentY, scaleFactor);
+        currentY = this.drawOrderRemarks(doc, data, currentY, scaleFactor);
         currentY = this.drawIngredients(doc, data, currentY, scaleFactor);
         this.drawFooter(doc, data, currentY, scaleFactor);
 
@@ -150,6 +152,18 @@ export class PdfGeneratorService {
     // Orders: 现在每行两个订单，每行高度约75pt
     const orderRows = Math.ceil(data.orderItems.length / 2);
     estimatedHeight += orderRows * 75;
+
+    const orderRemarks = data.orderItems.filter((item) =>
+      item.adminRemark?.trim(),
+    );
+    if (orderRemarks.length > 0) {
+      estimatedHeight += 24;
+      for (const item of orderRemarks) {
+        const remarkText = `备注：${item.adminRemark}`;
+        const estimatedLines = Math.max(1, Math.ceil(remarkText.length / 34));
+        estimatedHeight += estimatedLines * 14 + 12;
+      }
+    }
 
     // Ingredients table: 18pt per row + title + spacing + note
     estimatedHeight += 30 + 8 + data.parsedIngredients.length * 18 + 20;
@@ -223,6 +237,62 @@ export class PdfGeneratorService {
       .strokeColor('#000000')
       .lineWidth(2)
       .stroke();
+
+    return y;
+  }
+
+  /**
+   * Draw admin remarks section when present.
+   */
+  private drawOrderRemarks(
+    doc: any,
+    data: PrintTaskData,
+    startY: number,
+    scaleFactor: number,
+  ): number {
+    const remarks = data.orderItems
+      .map((order, index) => ({
+        order,
+        index,
+        remark: order.adminRemark?.trim() || '',
+      }))
+      .filter((item) => item.remark);
+
+    if (remarks.length === 0) {
+      return startY;
+    }
+
+    let y = startY + Math.floor(20 * scaleFactor);
+
+    doc
+      .fontSize(Math.floor(12 * scaleFactor))
+      .fillColor('#000000')
+      .font('Chinese-Bold')
+      .text('管理员备注', 40, y);
+    y += Math.floor(24 * scaleFactor);
+
+    for (const item of remarks) {
+      const text = `订单 ${item.index + 1}（${item.order.dogName}）：${item.remark}`;
+      doc.fontSize(Math.floor(8 * scaleFactor)).fillColor('#000000').font('Chinese');
+
+      const textHeight = doc.heightOfString(text, {
+        width: 500,
+        align: 'left',
+      });
+
+      doc
+        .rect(40, y, 512, textHeight + Math.floor(8 * scaleFactor))
+        .strokeColor('#000000')
+        .lineWidth(1)
+        .stroke();
+
+      doc.text(text, 46, y + Math.floor(4 * scaleFactor), {
+        width: 500,
+        align: 'left',
+      });
+
+      y += textHeight + Math.floor(14 * scaleFactor);
+    }
 
     return y;
   }

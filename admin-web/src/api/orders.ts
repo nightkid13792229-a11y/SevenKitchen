@@ -29,6 +29,13 @@ export const orderApi = {
   },
 
   /**
+   * 更新管理员备注
+   */
+  updateRemark: (id: string, data: { adminRemark?: string | null }): Promise<Order> => {
+    return api.put(`/admin/orders/${id}/admin-remark`, data)
+  },
+
+  /**
    * 取消订单
    */
   cancel: (id: string, data: CancelRequest): Promise<void> => {

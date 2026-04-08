@@ -194,6 +194,23 @@
       </view>
     </view>
 
+    <!-- 用户评价板块 -->
+    <ReviewList ref="reviewListRef" :recipe-id="recipeId" />
+
+    <!-- 写评价按钮 -->
+    <view class="write-review-section">
+      <button class="btn-write-review" @tap="openReviewForm">
+        写评价
+      </button>
+    </view>
+
+    <!-- 评论表单弹窗 -->
+    <ReviewForm
+      v-model:visible="showReviewForm"
+      :recipe-id="recipeId"
+      @submitted="onReviewSubmitted"
+    />
+
     <!-- 底部操作按钮 -->
     <view class="bottom-actions">
       <button
@@ -217,7 +234,7 @@
 
 <!-- 普通script：定义分享函数 -->
 <script lang="ts">
-import { CURRENT_SHARE_CONFIG } from '@/config/share.config'
+import { CURRENT_SHARE_CONFIG } from '@/utils/config'
 
 // 模块级变量，存储当前食谱信息
 let currentRecipeName = ''
@@ -299,8 +316,10 @@ export default {
 <!-- Setup script：业务逻辑 -->
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { request, addFavorite, removeFavorite, checkFavorite, createRecipeShareToken } from '../../utils/api'
+import { request, addFavorite, removeFavorite, checkFavorite, createRecipeShareToken, reviewApi } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
+import ReviewList from '../../components/ReviewList.vue'
+import ReviewForm from '../../components/ReviewForm.vue'
 
 interface RecipeItem {
   ingredientId: string
@@ -363,6 +382,8 @@ const isFavorite = ref(false)
 const recipeId = ref('')
 const shareToken = ref('')
 const dogId = ref<string | null>(null)
+const showReviewForm = ref(false)
+const reviewListRef = ref<InstanceType<typeof ReviewList> | null>(null)
 
 // 健康标签UUID到名称的映射（动态加载）
 const healthTagUuidLabelMap = ref<Record<string, string>>({})
@@ -423,10 +444,10 @@ function loadRecipeDetail() {
 
       recipe.value = res.data
 
-      // 更新分享信息
+      // 更新分享信息（封面图URL需要经过normalizeImageUrl处理，确保分享卡片能正常加载）
       updateShareInfo(
         res.data.name || '',
-        res.data.coverImageUrl || '',
+        normalizeImageUrl(res.data.coverImageUrl) || '',
         res.data.id || '',
         res.data.status,
       )
@@ -458,10 +479,10 @@ async function preGenerateShareToken() {
     const result = await createRecipeShareToken(recipeId.value)
     if (result?.token) {
       shareToken.value = result.token
-      // 更新分享信息中的token
+      // 更新分享信息中的token（封面图URL需要经过normalizeImageUrl处理）
       updateShareInfo(
         recipe.value.name || '',
-        recipe.value.coverImageUrl || '',
+        normalizeImageUrl(recipe.value.coverImageUrl) || '',
         recipe.value.id || '',
         recipe.value.status,
         result.token
@@ -740,6 +761,33 @@ function formatCalciumPhosphorusRatio(ratio: string | number | undefined | null)
 
   // Otherwise, convert "1.24" to "1.24：1"
   return `${ratioStr}：1`
+}
+
+async function openReviewForm() {
+  const token = uni.getStorageSync('token')
+  if (!token) {
+    uni.showToast({ title: '请先登录', icon: 'none' })
+    setTimeout(() => {
+      uni.navigateTo({ url: '/pages/login/index' })
+    }, 1500)
+    return
+  }
+
+  try {
+    const result = await reviewApi.checkEligibility(recipeId.value)
+    if (!result.eligible) {
+      uni.showToast({ title: '您需要购买或制作过该食谱才能评价', icon: 'none', duration: 2500 })
+      return
+    }
+    showReviewForm.value = true
+  } catch (error: any) {
+    // checkEligibility 自身会 showToast，这里静默处理
+    console.error('[RecipeDetail] Check eligibility failed:', error)
+  }
+}
+
+function onReviewSubmitted() {
+  reviewListRef.value?.refresh()
 }
 </script>
 
@@ -1088,6 +1136,29 @@ function formatCalciumPhosphorusRatio(ratio: string | number | undefined | null)
 /* 钙磷比特殊样式 */
 .highlight-ratio .nutrition-value {
   color: #4dabf7;
+}
+
+/* 写评价按钮区域 */
+.write-review-section {
+  padding: 0 20rpx 20rpx;
+}
+
+.btn-write-review {
+  width: 100%;
+  height: 88rpx;
+  line-height: 88rpx;
+  background-color: #fff;
+  color: #07c160;
+  font-size: 30rpx;
+  font-weight: 500;
+  border-radius: 44rpx;
+  border: 2rpx solid #07c160;
+  padding: 0;
+  margin: 0;
+}
+
+.btn-write-review::after {
+  border: none;
 }
 
 /* 底部操作按钮 */

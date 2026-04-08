@@ -156,6 +156,7 @@ export interface DogDetailResponse {
 export interface DogBreed {
   id: string
   name: string
+  aliases?: string[]
   sizeCategory: string
   adultAgeMonths: number
   seniorAgeYears: number

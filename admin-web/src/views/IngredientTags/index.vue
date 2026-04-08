@@ -236,6 +236,7 @@ const handleSubmit = async (data: CreateTagDto | UpdateTagDto) => {
       ElMessage.success('更新成功')
     } else {
       const tagData: CreateTagDto = {
+        name: data.name || '',
         ...data,
         parentId: parentTagId.value ?? data.parentId
       }

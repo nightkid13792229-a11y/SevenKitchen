@@ -26,6 +26,8 @@ export interface GlobalConfig {
   packageExampleImageUrl: string | null;
   shippingCompanyLogoUrl: string | null;
   paymentTimeoutMinutes: number;
+  homeHeaderBgImageUrl: string | null;
+  ingredientPriceAutoApproveThreshold?: number;
   equipmentRecommendations?: EquipmentRecommendations | null;
 }
 
@@ -286,15 +288,27 @@ export class PricingService {
         const itemPurchaseKg = itemNetNeededKg * recipe.productionLossRate;
 
         const unitCost = ingredient.getUnitCost();
-        const itemCost = itemGrossPurchaseKg * 1000 * unitCost;
+        const grossPurchaseBaseAmount = this.convertFoodMassKgToBaseAmount(
+          ingredient,
+          itemGrossPurchaseKg,
+        );
+        const itemCost = grossPurchaseBaseAmount * unitCost;
+        const unitCostLabel =
+          ingredient.baseUnit === 'ML' ? '元/ml' : '元/g';
+        const foodCalculation =
+          ingredient.baseUnit === 'ML'
+            ? `净需求${itemNetNeededKg.toFixed(3)}kg ÷ 出成率${yieldRate} × 损耗率${recipe.productionLossRate} = 毛需求${itemGrossPurchaseKg.toFixed(3)}kg ≈ ${grossPurchaseBaseAmount.toFixed(1)}ml（按密度${this.getFoodDensityGPerMl(ingredient).toFixed(3)}g/ml换算） × ${unitCost.toFixed(4)}${unitCostLabel} = ${itemCost.toFixed(2)}元`
+            : `净需求${itemNetNeededKg.toFixed(3)}kg ÷ 出成率${yieldRate} × 损耗率${recipe.productionLossRate} = 毛需求${itemGrossPurchaseKg.toFixed(3)}kg × ${unitCost.toFixed(4)}${unitCostLabel} = ${itemCost.toFixed(2)}元`;
 
         console.log('[PricingService] Food ingredient cost:', {
           name: ingredient.name,
           type: ingredient.type,
+          baseUnit: ingredient.baseUnit,
           ratioPercent: item.ratioPercent,
           itemNetNeededKg,
           yieldRate,
           itemGrossPurchaseKg,
+          grossPurchaseBaseAmount,
           unitCost,
           itemCost,
         });
@@ -309,7 +323,7 @@ export class PricingService {
           unit: 'kg',
           unitCost: unitCost,
           cost: itemCost,
-          calculation: `净需求${itemNetNeededKg.toFixed(3)}kg ÷ 出成率${yieldRate} × 损耗率${recipe.productionLossRate} = 毛需求${itemGrossPurchaseKg.toFixed(3)}kg × ${unitCost.toFixed(4)}元/g = ${itemCost.toFixed(2)}元`,
+          calculation: foodCalculation,
           purchaseChannel: ingredient.purchaseChannel || undefined,
           brand: ingredient.brand || undefined,
           productModel: ingredient.productModel || undefined,
@@ -627,5 +641,30 @@ export class PricingService {
       laborDetails,
       overheadDetails,
     };
+  }
+
+  private getFoodDensityGPerMl(ingredient: Ingredient): number {
+    const density = Number((ingredient.properties as any)?.density_g_per_ml);
+    if (!Number.isFinite(density) || density <= 0) {
+      throw new ValidationError(
+        `density_g_per_ml is required for ML-based FOOD ingredient: ${ingredient.name}`,
+      );
+    }
+
+    return density;
+  }
+
+  private convertFoodMassKgToBaseAmount(
+    ingredient: Ingredient,
+    quantityKg: number,
+  ): number {
+    const quantityG = quantityKg * 1000;
+
+    if (ingredient.baseUnit === 'ML') {
+      const density = this.getFoodDensityGPerMl(ingredient);
+      return quantityG / density;
+    }
+
+    return quantityG;
   }
 }

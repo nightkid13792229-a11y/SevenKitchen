@@ -277,6 +277,7 @@ export class StaffProductionService {
             packageCount: item.packageCount,
             recipientName: order.address?.recipientName, // ✅ 收货人姓名
             recipientCity: order.address?.region?.city, // ✅ 收货城市
+            adminRemark: order.adminRemark ?? undefined,
             completedAt: order.completedAt
               ? this.toLocalTime(order.completedAt)
               : undefined,

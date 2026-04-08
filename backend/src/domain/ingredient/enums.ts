@@ -9,6 +9,12 @@ export enum IngredientType {
   PACKAGING = 'PACKAGING',
 }
 
+export enum IngredientProcurementStrategy {
+  DAILY_PURCHASE = 'DAILY_PURCHASE',
+  STOCK_REPLENISHMENT = 'STOCK_REPLENISHMENT',
+  HYBRID = 'HYBRID',
+}
+
 export enum BaseUnit {
   G = 'G',
   ML = 'ML',

@@ -4,7 +4,7 @@
     <div class="page-header">
       <h2>原料管理</h2>
       <el-button type="primary" @click="handleCreate" :icon="Plus">
-        新增原料
+        新增标准原料
       </el-button>
     </div>
 
@@ -25,9 +25,24 @@
         <el-option label="包材" :value="IngredientType.PACKAGING" />
       </el-select>
 
+      <el-select
+        v-model="filterStrategies"
+        placeholder="筛选采购策略"
+        clearable
+        multiple
+        collapse-tags
+        collapse-tags-tooltip
+        style="width: 220px"
+        @change="handleFilter"
+      >
+        <el-option label="日采" :value="IngredientProcurementStrategy.DAILY_PURCHASE" />
+        <el-option label="库存补货" :value="IngredientProcurementStrategy.STOCK_REPLENISHMENT" />
+        <el-option label="混合" :value="IngredientProcurementStrategy.HYBRID" />
+      </el-select>
+
       <el-input
         v-model="searchText"
-        placeholder="搜索原料名称或品牌"
+        placeholder="搜索标准原料名称"
         clearable
         style="width: 250px"
         @input="handleSearch"
@@ -95,6 +110,11 @@
         <span class="stat-label">包材:</span>
         <span class="stat-value stat-packaging">{{ typeStats.PACKAGING }} 条</span>
       </div>
+      <el-divider direction="vertical" />
+      <div class="stat-item">
+        <span class="stat-label">缺少有效 SKU:</span>
+        <span class="stat-value stat-warning">{{ missingSkuCount }} 条</span>
+      </div>
       <el-divider direction="vertical" v-if="hasActiveFilters" />
       <div class="stat-item" v-if="hasActiveFilters">
         <span class="stat-label">筛选结果:</span>
@@ -131,29 +151,24 @@
         <el-table-column prop="type" label="类型" width="100">
           <template #default="{ row }">
             <el-tag :type="getTypeTagType(row.type)">
-              {{ IngredientTypeLabels[row.type] }}
+              {{ getIngredientTypeLabel(row.type) }}
             </el-tag>
           </template>
         </el-table-column>
 
-        <el-table-column prop="brand" label="品牌" width="120">
+        <el-table-column label="采购策略" width="120">
           <template #default="{ row }">
-            {{ row.brand || '-' }}
+            <el-tag :type="getProcurementStrategyTagType(row.procurementStrategy)">
+              {{ getProcurementStrategyLabel(row.procurementStrategy) }}
+            </el-tag>
           </template>
         </el-table-column>
 
-        <el-table-column prop="cfct_class" label="CFCT分类" width="140">
+        <el-table-column label="SKU状态" width="160">
           <template #default="{ row }">
-            <span v-if="row.type === 'FOOD' && row.properties?.cfct_class">
-              {{ row.properties.cfct_class }}
-            </span>
-            <span v-else style="color: #909399;">-</span>
-          </template>
-        </el-table-column>
-
-        <el-table-column prop="productModel" label="产品型号规格" width="140">
-          <template #default="{ row }">
-            {{ row.productModel || '-' }}
+            <el-tag :type="row.hasActiveRecommendedProduct ? 'success' : 'danger'">
+              {{ getSkuStatusText(row) }}
+            </el-tag>
           </template>
         </el-table-column>
 
@@ -177,9 +192,27 @@
           </template>
         </el-table-column>
 
-        <el-table-column prop="purchaseChannel" label="采购渠道" width="120">
+        <el-table-column prop="effectivePricePerPurchaseUnit" label="生效价" width="120" align="right">
           <template #default="{ row }">
-            {{ row.purchaseChannel || '-' }}
+            ¥{{ formatPrice(row.effectivePricePerPurchaseUnit ?? row.currentPricePerPurchaseUnit) }} / {{ row.purchaseUnit }}
+          </template>
+        </el-table-column>
+
+        <el-table-column label="库存策略" width="220">
+          <template #default="{ row }">
+            <span v-if="formatStockPolicy(row)">
+              {{ formatStockPolicy(row) }}
+            </span>
+            <span v-else style="color: #909399;">-</span>
+          </template>
+        </el-table-column>
+
+        <el-table-column prop="cfct_class" label="CFCT分类" width="140">
+          <template #default="{ row }">
+            <span v-if="row.type === 'FOOD' && row.properties?.cfct_class">
+              {{ row.properties.cfct_class }}
+            </span>
+            <span v-else style="color: #909399;">-</span>
           </template>
         </el-table-column>
 
@@ -191,6 +224,14 @@
 
         <el-table-column label="操作" width="240" fixed="right">
           <template #default="{ row }">
+            <el-button
+              type="success"
+              size="small"
+              link
+              @click="handleDuplicate(row)"
+            >
+              复制新增
+            </el-button>
             <el-button
               type="primary"
               size="small"
@@ -248,6 +289,7 @@
     >
       <IngredientFormComponent
         :ingredient="currentIngredient"
+        :copy-source-name="copySourceName || undefined"
         @submit="handleSubmit"
         @cancel="handleDialogClose"
       />
@@ -262,8 +304,8 @@
       <div v-loading="loadingUsage">
         <div class="usage-header">
           <h3>{{ currentIngredientForUsage?.name }}</h3>
-          <el-tag :type="getTypeTagType(currentIngredientForUsage?.type || '')">
-            {{ IngredientTypeLabels[currentIngredientForUsage?.type || ''] }}
+          <el-tag :type="getTypeTagType(currentIngredientForUsage?.type)">
+            {{ getIngredientTypeLabel(currentIngredientForUsage?.type) }}
           </el-tag>
         </div>
 
@@ -330,8 +372,9 @@ import { Plus, Search, Refresh } from '@element-plus/icons-vue'
 import { ingredientApi } from '@/api/ingredients'
 import {
   IngredientType,
-  BaseUnit,
+  IngredientProcurementStrategy,
   IngredientTypeLabels,
+  IngredientProcurementStrategyLabels,
   BaseUnitLabels,
   type Ingredient,
   type IngredientForm
@@ -343,11 +386,13 @@ const loading = ref(false)
 const ingredients = ref<Ingredient[]>([])
 const searchText = ref('')
 const filterTypes = ref<string[]>([])
+const filterStrategies = ref<string[]>([])
 const minPrice = ref<number | null>(null)
 const maxPrice = ref<number | null>(null)
 const dateRange = ref<[Date, Date] | null>(null)
 const dialogVisible = ref(false)
-const currentIngredient = ref<IngredientForm | undefined>(undefined)
+const currentIngredient = ref<Ingredient | IngredientForm | undefined>(undefined)
+const copySourceName = ref('')
 const tableRef = ref<InstanceType<typeof ElTable>>()
 const selectedIngredients = ref<Ingredient[]>([])
 const usageDialogVisible = ref(false)
@@ -362,7 +407,10 @@ const pageSizes = [20, 50, 100]
 
 // Computed
 const dialogTitle = computed(() => {
-  return currentIngredient.value?.id ? '编辑原料' : '新增原料'
+  if (copySourceName.value) {
+    return '复制新增标准原料'
+  }
+  return currentIngredient.value?.id ? '编辑标准原料' : '新增标准原料'
 })
 
 // 总数统计
@@ -375,6 +423,10 @@ const typeStats = computed(() => ({
   PACKAGING: ingredients.value.filter(item => item.type === IngredientType.PACKAGING).length
 }))
 
+const missingSkuCount = computed(() => (
+  ingredients.value.filter(item => !item.hasActiveRecommendedProduct).length
+))
+
 // 筛选结果数量
 const filteredCount = computed(() => filteredData.value.length)
 
@@ -383,6 +435,7 @@ const hasActiveFilters = computed(() => {
   return !!(
     searchText.value ||
     (filterTypes.value && filterTypes.value.length > 0) ||
+    (filterStrategies.value && filterStrategies.value.length > 0) ||
     minPrice.value !== null ||
     maxPrice.value !== null ||
     dateRange.value
@@ -399,18 +452,19 @@ const paginatedData = computed(() => {
 const filteredData = computed(() => {
   let result = ingredients.value
 
-  // 文本搜索（名称或品牌）
+  // 文本搜索（标准原料名称）
   if (searchText.value) {
     const search = searchText.value.toLowerCase()
-    result = result.filter(item =>
-      item.name.toLowerCase().includes(search) ||
-      (item.brand && item.brand.toLowerCase().includes(search))
-    )
+    result = result.filter(item => item.name.toLowerCase().includes(search))
   }
 
   // 类型筛选（多选）
   if (filterTypes.value && filterTypes.value.length > 0) {
     result = result.filter(item => filterTypes.value.includes(item.type))
+  }
+
+  if (filterStrategies.value && filterStrategies.value.length > 0) {
+    result = result.filter(item => filterStrategies.value.includes(item.procurementStrategy))
   }
 
   // 价格范围筛选
@@ -471,6 +525,7 @@ const handleSizeChange = (size: number) => {
 
 const resetFilters = () => {
   filterTypes.value = []
+  filterStrategies.value = []
   searchText.value = ''
   minPrice.value = null
   maxPrice.value = null
@@ -479,12 +534,14 @@ const resetFilters = () => {
 }
 
 const handleCreate = () => {
+  copySourceName.value = ''
   currentIngredient.value = undefined
   dialogVisible.value = true
 }
 
 const handleDialogClose = () => {
   dialogVisible.value = false
+  copySourceName.value = ''
   currentIngredient.value = undefined  // 重置状态，避免污染
 }
 
@@ -492,6 +549,7 @@ const handleEdit = async (ingredient: Ingredient) => {
   // Fetch full ingredient details including properties
   try {
     loading.value = true
+    copySourceName.value = ''
     const fullIngredient = await ingredientApi.getDetail(ingredient.id)
 
     // Open dialog first
@@ -502,6 +560,80 @@ const handleEdit = async (ingredient: Ingredient) => {
     currentIngredient.value = fullIngredient
   } catch (error: any) {
     ElMessage.error(error.message || '获取原料详情失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+const buildDuplicateName = (sourceName: string) => {
+  const suffix = '（副本）'
+  const maxLength = 50
+  const existingNames = new Set(ingredients.value.map(item => item.name))
+
+  const trimBaseName = (name: string, currentSuffix: string) => {
+    const allowedLength = Math.max(maxLength - currentSuffix.length, 1)
+    return name.slice(0, allowedLength)
+  }
+
+  let candidate = `${trimBaseName(sourceName, suffix)}${suffix}`
+  if (!existingNames.has(candidate)) {
+    return candidate
+  }
+
+  let index = 2
+  while (index < 1000) {
+    const indexedSuffix = `（副本${index}）`
+    candidate = `${trimBaseName(sourceName, indexedSuffix)}${indexedSuffix}`
+    if (!existingNames.has(candidate)) {
+      return candidate
+    }
+    index += 1
+  }
+
+  return `${trimBaseName(sourceName, '（复制）')}（复制）`
+}
+
+const cloneIngredientValue = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+
+const buildDuplicateDraft = (ingredient: Ingredient): IngredientForm => ({
+  name: buildDuplicateName(ingredient.name),
+  type: ingredient.type,
+  procurementStrategy: ingredient.procurementStrategy,
+  brand: '',
+  productModel: '',
+  purchaseChannel: '',
+  notes: ingredient.notes || '',
+  baseUnit: ingredient.baseUnit,
+  unitDisplayLabel: ingredient.unitDisplayLabel || '',
+  purchaseUnit: ingredient.purchaseUnit,
+  purchaseToBaseRatio: ingredient.purchaseToBaseRatio,
+  currentPricePerPurchaseUnit: ingredient.currentPricePerPurchaseUnit,
+  effectivePricePerPurchaseUnit: ingredient.currentPricePerPurchaseUnit,
+  weightG: ingredient.weightG ?? undefined,
+  maxCapacityG: ingredient.maxCapacityG ?? undefined,
+  safetyStock: ingredient.safetyStock ?? undefined,
+  reorderPoint: ingredient.reorderPoint ?? undefined,
+  targetStock: ingredient.targetStock ?? undefined,
+  properties: cloneIngredientValue(ingredient.properties),
+  tagIds: ingredient.tagIds ? [...ingredient.tagIds] : [],
+  tags: ingredient.tags ? cloneIngredientValue(ingredient.tags) : []
+})
+
+const handleDuplicate = async (ingredient: Ingredient) => {
+  try {
+    loading.value = true
+    copySourceName.value = ''
+
+    const fullIngredient = await ingredientApi.getDetail(ingredient.id)
+    const duplicateDraft = buildDuplicateDraft(fullIngredient)
+
+    dialogVisible.value = true
+    copySourceName.value = fullIngredient.name
+
+    await nextTick()
+    currentIngredient.value = duplicateDraft
+  } catch (error: any) {
+    ElMessage.error(error.message || '复制原料失败')
   } finally {
     loading.value = false
   }
@@ -596,15 +728,19 @@ const handleExport = () => {
   }
 
   // 简单CSV导出
-  const headers = ['ID', '名称', '类型', '品牌', '采购单位', '采购单价', '单位成本']
+  const headers = ['ID', '名称', '类型', '采购策略', '有效SKU数', '采购单位', '采购单价', '单位成本', '安全库存', '补货点', '目标库存']
   const rows = selectedIngredients.value.map(ing => [
     ing.id,
     ing.name,
     IngredientTypeLabels[ing.type],
-    ing.brand || '',
+    getProcurementStrategyLabel(ing.procurementStrategy),
+    String(ing.activeRecommendedProductCount || 0),
     ing.purchaseUnit,
     ing.currentPricePerPurchaseUnit.toFixed(2),
-    ing.unitCost.toFixed(4)
+    ing.unitCost.toFixed(4),
+    ing.safetyStock ?? '',
+    ing.reorderPoint ?? '',
+    ing.targetStock ?? ''
   ])
 
   const csvContent = [
@@ -628,15 +764,20 @@ const handleExport = () => {
 const handleSubmit = async (data: IngredientForm) => {
   try {
     loading.value = true
+    const isCopyCreate = !data.id && !!copySourceName.value
     if (data.id) {
       await ingredientApi.update(data.id, data)
       ElMessage.success('更新成功')
+      dialogVisible.value = false
+      copySourceName.value = ''
+      currentIngredient.value = undefined  // 重置状态，避免污染
     } else {
-      await ingredientApi.create(data)
-      ElMessage.success('创建成功')
+      const createdIngredient = await ingredientApi.create(data)
+      currentIngredient.value = createdIngredient
+      copySourceName.value = ''
+      await nextTick()
+      ElMessage.success(isCopyCreate ? '复制新增成功，可继续补充采购 SKU' : '标准原料已创建，可继续补充采购 SKU')
     }
-    dialogVisible.value = false
-    currentIngredient.value = undefined  // 重置状态，避免污染
     await loadData()
   } catch (error: any) {
     ElMessage.error(error.message || '操作失败')
@@ -649,13 +790,61 @@ const formatPrice = (price: number) => {
   return price.toFixed(2)
 }
 
-const getTypeTagType = (type: IngredientType) => {
-  const typeMap: Record<IngredientType, any> = {
+const getSkuStatusText = (ingredient: Ingredient) => {
+  const activeCount = ingredient.activeRecommendedProductCount || 0
+  if (activeCount > 0) {
+    return `已配置 ${activeCount} 个`
+  }
+  return '缺少有效 SKU'
+}
+
+const getIngredientTypeLabel = (type?: string) => {
+  return (type && IngredientTypeLabels[type]) || '未知类型'
+}
+
+const getProcurementStrategyLabel = (strategy?: string) => {
+  return (strategy && IngredientProcurementStrategyLabels[strategy]) || '未设置'
+}
+
+const getTypeTagType = (type?: string) => {
+  const typeMap: Record<string, any> = {
     [IngredientType.FOOD]: 'success',
     [IngredientType.SUPPLEMENT]: 'warning',
     [IngredientType.PACKAGING]: 'info'
   }
-  return typeMap[type] || ''
+  return (type && typeMap[type]) || ''
+}
+
+const getProcurementStrategyTagType = (strategy?: string) => {
+  const typeMap: Record<string, any> = {
+    [IngredientProcurementStrategy.DAILY_PURCHASE]: 'info',
+    [IngredientProcurementStrategy.STOCK_REPLENISHMENT]: 'success',
+    [IngredientProcurementStrategy.HYBRID]: 'warning'
+  }
+  return (strategy && typeMap[strategy]) || 'info'
+}
+
+const getStockUnitText = (ingredient: Ingredient) => {
+  return ingredient.unitDisplayLabel || BaseUnitLabels[ingredient.baseUnit] || ingredient.baseUnit
+}
+
+const formatStockPolicy = (ingredient: Ingredient) => {
+  if (
+    ingredient.safetyStock === null &&
+    ingredient.reorderPoint === null &&
+    ingredient.targetStock === null
+  ) {
+    return ''
+  }
+
+  const unit = getStockUnitText(ingredient)
+  const segments = [
+    ingredient.safetyStock !== null ? `安全 ${ingredient.safetyStock}${unit}` : '',
+    ingredient.reorderPoint !== null ? `补货 ${ingredient.reorderPoint}${unit}` : '',
+    ingredient.targetStock !== null ? `目标 ${ingredient.targetStock}${unit}` : ''
+  ].filter(Boolean)
+
+  return segments.join(' / ')
 }
 
 // Lifecycle

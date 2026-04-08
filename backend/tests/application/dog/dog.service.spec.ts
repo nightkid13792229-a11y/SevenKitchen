@@ -4,7 +4,13 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { DogService, DOG_REPOSITORY, RECIPE_REPOSITORY } from 'src/application/dog/dog.service';
+import {
+  DogService,
+  DOG_BREED_REPOSITORY,
+  DOG_REPOSITORY,
+  PRISMA_SERVICE,
+  RECIPE_REPOSITORY,
+} from 'src/application/dog/dog.service';
 import type { DogRepository } from 'src/domain/dog/dog.repository';
 import type { RecipeRepository } from 'src/domain/recipe/recipe.repository';
 import { Dog } from 'src/domain/dog/dog.entity';
@@ -33,6 +39,12 @@ describe('DogService', () => {
     findPublicRecipes: jest.fn(),
   };
 
+  const mockDogBreedRepository = {
+    findById: jest.fn(),
+  };
+
+  const mockPrismaService = {};
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -44,6 +56,14 @@ describe('DogService', () => {
         {
           provide: RECIPE_REPOSITORY,
           useValue: mockRecipeRepository,
+        },
+        {
+          provide: DOG_BREED_REPOSITORY,
+          useValue: mockDogBreedRepository,
+        },
+        {
+          provide: PRISMA_SERVICE,
+          useValue: mockPrismaService,
         },
       ],
     }).compile();
@@ -68,6 +88,7 @@ describe('DogService', () => {
         'owner-id-1',
         'Test Dog',
         'breed-id-1',
+        null,
         new Date('2020-01-01'),
         DogGender.MALE,
         false,
@@ -80,6 +101,8 @@ describe('DogService', () => {
         overrides?.treatInputMode ?? TreatInputMode.ESTIMATE_LEVEL,
         TreatLevel.LOW,
         overrides?.manualTreatKcal ?? null,
+        null,
+        null,
         null,
         0,
       );

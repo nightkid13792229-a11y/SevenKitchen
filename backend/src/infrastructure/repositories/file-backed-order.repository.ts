@@ -25,6 +25,7 @@ interface OrderData {
   amountShipping: number;
   amountTotal: number;
   totalAmount?: number;
+  adminRemark?: string | null;
   items: Array<{
     id: string;
     orderId: string;
@@ -157,7 +158,7 @@ export class FileBackedOrderRepository
       );
     }
 
-    return new Order(
+    const order = new Order(
       data.id,
       data.customerId,
       data.status as OrderStatus,
@@ -174,6 +175,9 @@ export class FileBackedOrderRepository
       data.totalAmount,
       pricingBreakdown,
     );
+
+    order.updateAdminRemark(data.adminRemark ?? null);
+    return order;
   }
 
   /**
@@ -230,6 +234,7 @@ export class FileBackedOrderRepository
       amountShipping: order.amountShipping,
       amountTotal: order.amountTotal,
       totalAmount: order.totalAmount,
+      adminRemark: order.adminRemark ?? null,
       items: order.items.map((item) => ({
         id: item.id,
         orderId: item.orderId,
@@ -391,10 +396,13 @@ export class FileBackedOrderRepository
     total: number;
     pendingPayment: number;
     paid: number;
+    purchasing: number;
     inProduction: number;
+    freezing: number;
     shipped: number;
     completed: number;
     cancelled: number;
+    aftersale: number;
   }> {
     const orders = Array.from(this.orders.values());
 
@@ -406,10 +414,13 @@ export class FileBackedOrderRepository
       total: orders.length,
       pendingPayment: countByStatus(OrderStatus.PENDING_PAYMENT),
       paid: countByStatus(OrderStatus.PAID),
+      purchasing: countByStatus(OrderStatus.PURCHASING),
       inProduction: countByStatus(OrderStatus.IN_PRODUCTION),
+      freezing: countByStatus(OrderStatus.FREEZING),
       shipped: countByStatus(OrderStatus.SHIPPED),
       completed: countByStatus(OrderStatus.COMPLETED),
       cancelled: countByStatus(OrderStatus.CANCELLED),
+      aftersale: countByStatus(OrderStatus.AFTERSALE),
     });
   }
 

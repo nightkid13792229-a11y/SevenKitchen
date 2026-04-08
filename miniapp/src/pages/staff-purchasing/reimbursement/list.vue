@@ -3,7 +3,7 @@
     <!-- 顶部标题 -->
     <view class="header">
       <text class="title">我的报销申请</text>
-      <text class="subtitle">查看报销申请记录和审核状态</text>
+      <text class="subtitle">查看采购报销、行政杂费与工资登记状态</text>
     </view>
 
     <!-- 状态筛选 -->
@@ -66,6 +66,10 @@
             </view>
           </view>
 
+          <view v-if="getExpenseSummary(item)" class="item-summary">
+            <text class="summary-text">费用构成: {{ getExpenseSummary(item) }}</text>
+          </view>
+
           <!-- 审核信息 -->
           <view v-if="item.status !== 'PENDING_REVIEW'" class="item-review">
             <text class="review-info">
@@ -95,7 +99,9 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import { onShow } from '@dcloudio/uni-app';
 import { getMyReimbursements, deleteReimbursement } from '@/api/purchasing';
+import { summarizeReimbursementCustomFees } from '@/constants/reimbursement';
 
 // 状态筛选标签
 const statusTabs = [
@@ -113,11 +119,19 @@ const loading = ref(false);
 const currentPage = ref(1);
 const pageSize = 20;
 const total = ref(0);
+const isMounted = ref(false);
 const hasMore = computed(() => reimbursements.value.length < total.value);
 
 // 页面加载
 onMounted(() => {
   loadReimbursements();
+  isMounted.value = true;
+});
+
+onShow(() => {
+  if (isMounted.value) {
+    loadReimbursements(true);
+  }
 });
 
 // 加载报销单列表
@@ -224,6 +238,29 @@ const formatDateTime = (dateStr: string) => {
 const formatDate = (dateStr: string) => {
   const date = new Date(dateStr);
   return `${date.getMonth() + 1}/${date.getDate()}`;
+};
+
+const getExpenseSummary = (item: any) => {
+  const parts: string[] = [];
+  const customFeeSummary = summarizeReimbursementCustomFees(item.customFees);
+
+  if (item.purchaseLists?.length) {
+    parts.push(`${item.purchaseLists.length}张采购清单`);
+  }
+
+  if (customFeeSummary) {
+    parts.push(customFeeSummary);
+  }
+
+  if (item.platformShippingFee > 0) {
+    parts.push('平台运费');
+  }
+
+  if (item.platformPackagingFee > 0) {
+    parts.push('平台打包费');
+  }
+
+  return parts.join('、');
 };
 
 // 判断是否可以删除（只有待审核、已驳回、需重新提交状态可以删除）
@@ -490,6 +527,19 @@ const confirmDelete = (item: any) => {
         font-weight: bold;
         color: #ff6b6b;
       }
+    }
+  }
+
+  .item-summary {
+    margin-bottom: 16rpx;
+    padding: 14rpx 18rpx;
+    background-color: #fff7e6;
+    border-radius: 12rpx;
+
+    .summary-text {
+      font-size: 24rpx;
+      color: #ad6800;
+      line-height: 1.5;
     }
   }
 

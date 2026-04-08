@@ -35,6 +35,7 @@ import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { PurchasingService } from '../../application/purchasing/purchasing.service';
 import type {
   GeneratePurchaseListDto,
+  CreateStockPurchaseListDto,
   CompletePurchaseDto,
   AddPurchaseRecordDto,
   UpdatePurchaseRecordDto,
@@ -43,6 +44,7 @@ import { ReimbursementService } from '../../application/purchasing/reimbursement
 import type { SubmitReimbursementDto } from '../../application/purchasing/reimbursement.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import {
+  PurchaseListKind,
   PurchaseListStatus,
   ReimbursementStatus,
 } from '../../domain/purchasing';
@@ -112,6 +114,7 @@ export class StaffPurchasingController {
               },
             },
             itemCount: { type: 'number', example: 15 },
+            totalEstimatedCost: { type: 'number', example: 286.4 },
             items: {
               type: 'array',
               items: {
@@ -121,6 +124,18 @@ export class StaffPurchasingController {
                   ingredientName: { type: 'string' },
                   quantityNeeded: { type: 'number' },
                   quantityUnit: { type: 'string' },
+                  estimatedCost: { type: 'number' },
+                  type: {
+                    type: 'string',
+                    enum: ['FOOD', 'SUPPLEMENT', 'PACKAGING'],
+                  },
+                  suggestedProductId: { type: 'string' },
+                  suggestedProductName: { type: 'string' },
+                  displayUnit: { type: 'string' },
+                  preparationMethods: {
+                    type: 'array',
+                    items: { type: 'string' },
+                  },
                   purchaseChannel: { type: 'string' },
                   productModel: { type: 'string' },
                 },
@@ -206,6 +221,8 @@ export class StaffPurchasingController {
                   estimatedCost: { type: 'number' },
                   purchaseChannel: { type: 'string' },
                   productModel: { type: 'string' },
+                  suggestedProductId: { type: 'string' },
+                  suggestedProductName: { type: 'string' },
                 },
               },
             },
@@ -228,6 +245,98 @@ export class StaffPurchasingController {
     );
 
     return ApiResponseDto.success(purchaseList, '采购清单生成成功');
+  }
+
+  @Get('stock-ingredients')
+  @ApiOperation({ summary: '查询可补货原料列表' })
+  @ApiQuery({
+    name: 'keyword',
+    required: false,
+    type: String,
+    description: '按原料名/采购渠道/型号搜索',
+  })
+  @ApiQuery({
+    name: 'type',
+    required: false,
+    enum: ['FOOD', 'SUPPLEMENT', 'PACKAGING'],
+    description: '原料类型筛选',
+  })
+  @ApiQuery({
+    name: 'onlyNeedsReplenishment',
+    required: false,
+    type: Boolean,
+    description: '是否只返回需要补货的原料',
+  })
+  @ApiResponse({
+    status: 200,
+    description: '可补货原料列表',
+  })
+  async getStockReplenishmentIngredients(
+    @Query('keyword') keyword?: string,
+    @Query('type') type?: 'FOOD' | 'SUPPLEMENT' | 'PACKAGING',
+    @Query('onlyNeedsReplenishment') onlyNeedsReplenishment?: string,
+  ): Promise<ApiResponseDto<any>> {
+    const ingredients =
+      await this.purchasingService.getStockReplenishmentIngredients({
+        keyword,
+        type,
+        onlyNeedsReplenishment: onlyNeedsReplenishment === 'true',
+        includeDaily: true,
+      });
+
+    return ApiResponseDto.success(ingredients, '获取补货原料成功');
+  }
+
+  @Post('lists/stock')
+  @ApiOperation({ summary: '创建库存补货采购单' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        targetDate: {
+          type: 'string',
+          description: '计划采购日期 YYYY-MM-DD',
+          example: '2026-04-02',
+        },
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              ingredientId: { type: 'string' },
+              plannedQuantity: {
+                type: 'number',
+                description: '计划采购数量，按原料采购单位填写',
+              },
+              purchaseChannel: { type: 'string' },
+              productModel: { type: 'string' },
+              notes: { type: 'string' },
+            },
+            required: ['ingredientId', 'plannedQuantity'],
+          },
+        },
+      },
+      required: ['targetDate', 'items'],
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: '库存补货采购单创建成功',
+  })
+  async createStockPurchaseList(
+    @Body() dto: CreateStockPurchaseListDto,
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<any>> {
+    this.logger.log(
+      `Creating stock replenishment purchase list for ${dto.targetDate} by user ${userId}`,
+    );
+
+    const purchaseList = await this.purchasingService.createStockPurchaseList(
+      dto,
+      userId,
+    );
+
+    return ApiResponseDto.success(purchaseList, '库存补货采购单创建成功');
   }
 
   @Get('lists')
@@ -270,6 +379,12 @@ export class StaffPurchasingController {
     type: Boolean,
     description: '排除已关联报销单的采购清单',
   })
+  @ApiQuery({
+    name: 'kind',
+    required: false,
+    enum: ['ORDER_DEMAND', 'STOCK_REPLENISHMENT'],
+    description: '采购单类型筛选',
+  })
   @ApiResponse({
     status: 200,
     description: '采购清单列表',
@@ -290,6 +405,7 @@ export class StaffPurchasingController {
   })
   async getPurchaseLists(
     @Query('status') status?: PurchaseListStatus,
+    @Query('kind') kind?: PurchaseListKind,
     @Query('startDate') startDate?: string,
     @Query('endDate') endDate?: string,
     @Query('page') page?: string,
@@ -307,6 +423,7 @@ export class StaffPurchasingController {
 
     const result = await this.purchasingService.getPurchaseLists({
       status,
+      kind,
       createdById,
       startDate,
       endDate,
@@ -650,20 +767,30 @@ export class StaffPurchasingController {
       type: 'object',
       properties: {
         purchaseItemId: { type: 'string', description: '采购项目ID' },
-        ingredientId: { type: 'string', description: '原料ID' },
-        ingredientName: { type: 'string', description: '原料名称' },
         purchaseChannel: { type: 'string', description: '采购渠道' },
-        actualQuantity: { type: 'number', description: '实际采购重量（克）' },
+        actualQuantity: {
+          type: 'number',
+          description: '兼容旧流程：按采购单位录入的实际采购数量（支持小数）',
+        },
+        actualPackageCount: {
+          type: 'number',
+          description: '推荐新流程：本次实际买了几件',
+        },
+        actualPackageSize: {
+          type: 'number',
+          description: '推荐新流程：单件规格数值，如 1000',
+        },
+        actualPackageUnit: {
+          type: 'string',
+          description: '推荐新流程：单件规格单位，如 g / kg / ml / L / 个',
+        },
         actualCost: { type: 'number', description: '实际采购金额（元）' },
         productModel: { type: 'string', description: '产品型号（选填）' },
         notes: { type: 'string', description: '备注信息（选填）' },
       },
       required: [
         'purchaseItemId',
-        'ingredientId',
-        'ingredientName',
         'purchaseChannel',
-        'actualQuantity',
         'actualCost',
       ],
     },
@@ -684,6 +811,11 @@ export class StaffPurchasingController {
             ingredientName: { type: 'string' },
             purchaseChannel: { type: 'string' },
             actualQuantity: { type: 'number' },
+            actualPackageCount: { type: 'number' },
+            actualPackageSize: { type: 'number' },
+            actualPackageUnit: { type: 'string' },
+            actualBaseQuantity: { type: 'number' },
+            actualBaseUnit: { type: 'string' },
             actualCost: { type: 'number' },
           },
         },
@@ -722,6 +854,11 @@ export class StaffPurchasingController {
               ingredientName: { type: 'string' },
               purchaseChannel: { type: 'string' },
               actualQuantity: { type: 'number' },
+              actualPackageCount: { type: 'number' },
+              actualPackageSize: { type: 'number' },
+              actualPackageUnit: { type: 'string' },
+              actualBaseQuantity: { type: 'number' },
+              actualBaseUnit: { type: 'string' },
               actualCost: { type: 'number' },
               productModel: { type: 'string' },
               notes: { type: 'string' },
@@ -751,7 +888,16 @@ export class StaffPurchasingController {
       type: 'object',
       properties: {
         purchaseChannel: { type: 'string', description: '采购渠道' },
-        actualQuantity: { type: 'number', description: '实际采购重量（克）' },
+        actualQuantity: {
+          type: 'number',
+          description: '兼容旧流程：按采购单位录入的实际采购数量（支持小数）',
+        },
+        actualPackageCount: { type: 'number', description: '本次实际买了几件' },
+        actualPackageSize: { type: 'number', description: '单件规格数值' },
+        actualPackageUnit: {
+          type: 'string',
+          description: '单件规格单位，如 g / kg / ml / L / 个',
+        },
         actualCost: { type: 'number', description: '实际采购金额（元）' },
         productModel: { type: 'string', description: '产品型号' },
         notes: { type: 'string', description: '备注信息' },
@@ -927,11 +1073,16 @@ export class StaffPurchasingController {
         },
         customFees: {
           type: 'array',
-          description: '自定义费用明细（可选）',
+          description: '行政杂费/其它费用明细（可选）',
           items: {
             type: 'object',
             properties: {
-              description: { type: 'string', example: '打车费' },
+              category: {
+                type: 'string',
+                enum: ['RENT', 'UTILITIES', 'TOOLS', 'SUNDRIES', 'PAYROLL', 'OTHER'],
+                example: 'RENT',
+              },
+              description: { type: 'string', example: '2026年4月房租' },
               amount: { type: 'number', example: 30.0 },
             },
           },
@@ -957,7 +1108,7 @@ export class StaffPurchasingController {
               type: 'string',
               enum: [
                 'PENDING_REVIEW',
-                'APPROVED',
+                'REIMBURSED',
                 'REJECTED',
                 'REQUIRES_RESUBMIT',
               ],
@@ -975,7 +1126,7 @@ export class StaffPurchasingController {
     @UserId() userId: string,
   ): Promise<ApiResponseDto<any>> {
     this.logger.log(
-      `Submitting reimbursement for ${dto.purchaseListIds.length} purchase lists by user ${userId}`,
+      `Submitting reimbursement for ${(dto.purchaseListIds || []).length} purchase lists by user ${userId}`,
     );
 
     const reimbursement = await this.reimbursementService.submitReimbursement(
@@ -991,7 +1142,7 @@ export class StaffPurchasingController {
   @ApiQuery({
     name: 'status',
     required: false,
-    enum: ['PENDING_REVIEW', 'APPROVED', 'REJECTED', 'REQUIRES_RESUBMIT'],
+    enum: ['PENDING_REVIEW', 'REIMBURSED', 'REJECTED', 'REQUIRES_RESUBMIT'],
     description: '筛选状态',
   })
   @ApiQuery({
@@ -1136,17 +1287,22 @@ export class StaffPurchasingController {
         },
         customFees: {
           type: 'array',
-          description: '自定义费用明细（可选）',
+          description: '行政杂费/其它费用明细（可选）',
           items: {
             type: 'object',
             properties: {
-              description: { type: 'string', example: '打车费' },
+              category: {
+                type: 'string',
+                enum: ['RENT', 'UTILITIES', 'TOOLS', 'SUNDRIES', 'PAYROLL', 'OTHER'],
+                example: 'UTILITIES',
+              },
+              description: { type: 'string', example: '3月水电费' },
               amount: { type: 'number', example: 30.0 },
             },
           },
         },
       },
-      required: ['purchaseListIds', 'receiptUrls', 'totalActualCost'],
+      required: ['receiptUrls', 'totalActualCost'],
     },
   })
   @ApiResponse({

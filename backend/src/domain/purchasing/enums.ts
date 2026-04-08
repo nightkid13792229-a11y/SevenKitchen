@@ -12,6 +12,14 @@ export enum PurchaseListStatus {
 }
 
 /**
+ * 采购清单类型
+ */
+export enum PurchaseListKind {
+  ORDER_DEMAND = 'ORDER_DEMAND', // 订单缺口采购
+  STOCK_REPLENISHMENT = 'STOCK_REPLENISHMENT', // 库存补货采购
+}
+
+/**
  * 报销单状态
  */
 export enum ReimbursementStatus {

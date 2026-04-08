@@ -63,6 +63,50 @@
         </el-row>
       </el-card>
 
+      <el-card shadow="never" class="section-card">
+        <template #header>
+          <div class="card-header">
+            <span class="title">费用明细</span>
+          </div>
+        </template>
+
+        <el-descriptions :column="2" border>
+          <el-descriptions-item label="采购记录金额">
+            ¥{{ purchaseListsActualTotal.toFixed(2) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="平台运费">
+            ¥{{ Number(reimbursement.platformShippingFee || 0).toFixed(2) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="平台打包费">
+            ¥{{ Number(reimbursement.platformPackagingFee || 0).toFixed(2) }}
+          </el-descriptions-item>
+          <el-descriptions-item label="费用构成">
+            {{ getExpenseSummary(reimbursement) || '-' }}
+          </el-descriptions-item>
+        </el-descriptions>
+
+        <div
+          v-if="reimbursement.customFees && reimbursement.customFees.length > 0"
+          class="custom-fee-list"
+        >
+          <div
+            v-for="(fee, index) in reimbursement.customFees"
+            :key="index"
+            class="custom-fee-item"
+          >
+            <div class="custom-fee-copy">
+              <el-tag size="small" effect="plain">
+                {{ getCustomFeeCategoryLabel(fee.category) }}
+              </el-tag>
+              <span class="custom-fee-title">
+                {{ getCustomFeeDescription(fee) || formatCustomFeeTitle(fee) }}
+              </span>
+            </div>
+            <span class="custom-fee-amount">¥{{ Number(fee.amount || 0).toFixed(2) }}</span>
+          </div>
+        </div>
+      </el-card>
+
       <!-- 采购清单 -->
       <el-card shadow="never" class="section-card">
         <template #header>
@@ -142,6 +186,61 @@
         </div>
       </el-card>
 
+      <el-card
+        shadow="never"
+        class="section-card"
+        v-if="reimbursement.priceChanges && reimbursement.priceChanges.length > 0"
+      >
+        <template #header>
+          <div class="card-header">
+            <span class="title">原料价格变更 ({{ reimbursement.priceChanges.length }})</span>
+          </div>
+        </template>
+
+        <el-table :data="reimbursement.priceChanges" size="small" style="width: 100%">
+          <el-table-column prop="ingredientName" label="原料" min-width="180" />
+          <el-table-column label="旧生效价" width="120" align="right">
+            <template #default="{ row }">
+              ¥{{ Number(row.previousEffectivePrice || 0).toFixed(2) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="采购录入价" width="130" align="right">
+            <template #default="{ row }">
+              ¥{{ Number(row.sourcePricePerPurchaseUnit || 0).toFixed(2) }}/{{ row.purchaseUnit || '-' }}
+            </template>
+          </el-table-column>
+          <el-table-column label="拟生效价" width="120" align="right">
+            <template #default="{ row }">
+              ¥{{ Number(row.proposedEffectivePrice || 0).toFixed(2) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="涨跌幅" width="110" align="right">
+            <template #default="{ row }">
+              {{ formatDeltaRate(row.deltaRate) }}
+            </template>
+          </el-table-column>
+          <el-table-column label="状态" width="110">
+            <template #default="{ row }">
+              <el-tag :type="getPriceChangeStatusType(row.status)" size="small">
+                {{ getPriceChangeStatusText(row.status) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="审核方式" width="110">
+            <template #default="{ row }">
+              <el-tag :type="getApprovalModeType(row.approvalMode)" size="small">
+                {{ getApprovalModeText(row.approvalMode) }}
+              </el-tag>
+            </template>
+          </el-table-column>
+          <el-table-column label="拦截原因/说明" min-width="220" show-overflow-tooltip>
+            <template #default="{ row }">
+              {{ formatReviewReasons(row.reviewReasons, row.reviewComment) }}
+            </template>
+          </el-table-column>
+        </el-table>
+      </el-card>
+
       <!-- 发票照片 -->
       <el-card shadow="never" class="section-card" v-if="reimbursement.receiptUrls && reimbursement.receiptUrls.length > 0">
         <template #header>
@@ -200,7 +299,7 @@
               <el-radio label="REJECT">
                 <el-text type="danger">驳回</el-text>
               </el-radio>
-              <el-radio label="RESUBMIT">
+              <el-radio label="REQUIRES_RESUBMIT">
                 <el-text type="warning">要求重新提交</el-text>
               </el-radio>
             </el-radio-group>
@@ -241,6 +340,11 @@ import { useRouter, useRoute } from 'vue-router'
 import { purchasingApi } from '@/api/purchasing'
 import { ElMessage } from 'element-plus'
 import { Loading } from '@element-plus/icons-vue'
+import {
+  formatReimbursementCustomFeeTitle,
+  getReimbursementCustomFeeCategoryLabel,
+  summarizeReimbursementCustomFees,
+} from '@/constants/reimbursement'
 
 const router = useRouter()
 const route = useRoute()
@@ -253,7 +357,7 @@ const activeLists = ref<number[]>([])
 
 // 审核表单
 const reviewForm = ref({
-  decision: 'APPROVE' as 'APPROVE' | 'REJECT' | 'RESUBMIT',
+  decision: 'APPROVE' as 'APPROVE' | 'REJECT' | 'REQUIRES_RESUBMIT',
   comment: ''
 })
 
@@ -270,17 +374,65 @@ const costDiffPercentage = computed(() => {
   return estimated > 0 ? (diff / estimated) * 100 : 0
 })
 
+const purchaseListsActualTotal = computed(() => {
+  if (!reimbursement.value?.purchaseLists) return 0
+
+  return reimbursement.value.purchaseLists.reduce((sum: number, list: any) => {
+    return sum + Number(list.totalActualCost ?? list.totalEstimatedCost ?? 0)
+  }, 0)
+})
+
 const getCostDiffClass = computed(() => {
   if (costDiff.value > 0) return 'cost-positive'
   if (costDiff.value < 0) return 'cost-negative'
   return ''
 })
 
+const formatCustomFeeTitle = (fee: any) => {
+  return formatReimbursementCustomFeeTitle(fee)
+}
+
+const getCustomFeeCategoryLabel = (category?: string | null) => {
+  return getReimbursementCustomFeeCategoryLabel(category)
+}
+
+const getCustomFeeDescription = (fee: any) => {
+  if (!fee?.category || !fee?.description) return ''
+
+  const categoryLabel = getReimbursementCustomFeeCategoryLabel(fee.category)
+  return fee.description.trim() === categoryLabel ? '' : fee.description.trim()
+}
+
+const getExpenseSummary = (target: any) => {
+  if (!target) return ''
+
+  const parts: string[] = []
+  const customFeeSummary = summarizeReimbursementCustomFees(target.customFees)
+
+  if (target.purchaseLists?.length) {
+    parts.push(`${target.purchaseLists.length}张采购清单`)
+  }
+
+  if (customFeeSummary) {
+    parts.push(customFeeSummary)
+  }
+
+  if (target.platformShippingFee > 0) {
+    parts.push('平台运费')
+  }
+
+  if (target.platformPackagingFee > 0) {
+    parts.push('平台打包费')
+  }
+
+  return parts.join('、')
+}
+
 // 获取状态文本
 const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
     'PENDING_REVIEW': '待审核',
-    'APPROVED': '已批准',
+    'REIMBURSED': '已报销',
     'REJECTED': '已驳回',
     'REQUIRES_RESUBMIT': '需重新提交'
   }
@@ -290,11 +442,47 @@ const getStatusText = (status: string) => {
 const getStatusType = (status: string) => {
   const typeMap: Record<string, any> = {
     'PENDING_REVIEW': 'warning',
-    'APPROVED': 'success',
+    'REIMBURSED': 'success',
     'REJECTED': 'danger',
     'REQUIRES_RESUBMIT': 'info'
   }
   return typeMap[status] || ''
+}
+
+const getPriceChangeStatusText = (status: string) => {
+  const statusMap: Record<string, string> = {
+    'PENDING': '待生效',
+    'APPROVED': '已生效',
+    'REJECTED': '已拒绝'
+  }
+  return statusMap[status] || status
+}
+
+const getPriceChangeStatusType = (status: string) => {
+  const typeMap: Record<string, any> = {
+    'PENDING': 'warning',
+    'APPROVED': 'success',
+    'REJECTED': 'danger'
+  }
+  return typeMap[status] || ''
+}
+
+const getApprovalModeText = (approvalMode?: string | null) => {
+  const modeMap: Record<string, string> = {
+    'AUTO': '自动生效',
+    'MANUAL': '人工审核',
+    'MANUAL_REQUIRED': '待老板审核'
+  }
+  return approvalMode ? modeMap[approvalMode] || approvalMode : '-'
+}
+
+const getApprovalModeType = (approvalMode?: string | null) => {
+  const typeMap: Record<string, any> = {
+    'AUTO': 'success',
+    'MANUAL': 'info',
+    'MANUAL_REQUIRED': 'warning'
+  }
+  return approvalMode ? typeMap[approvalMode] || 'info' : 'info'
 }
 
 const getListStatusText = (status: string) => {
@@ -332,6 +520,27 @@ const formatDateTime = (dateStr?: string) => {
 const formatDate = (dateStr: string) => {
   const date = new Date(dateStr)
   return `${date.getMonth() + 1}月${date.getDate()}日`
+}
+
+const formatDeltaRate = (deltaRate?: number | null) => {
+  if (deltaRate === undefined || deltaRate === null) {
+    return '-'
+  }
+
+  const percentage = deltaRate * 100
+  const prefix = percentage > 0 ? '+' : ''
+  return `${prefix}${percentage.toFixed(1)}%`
+}
+
+const formatReviewReasons = (
+  reviewReasons?: string[] | null,
+  reviewComment?: string | null
+) => {
+  if (Array.isArray(reviewReasons) && reviewReasons.length > 0) {
+    return reviewReasons.join('；')
+  }
+
+  return reviewComment || '-'
 }
 
 // 加载详情
@@ -474,6 +683,38 @@ onMounted(() => {
       font-weight: bold;
       color: #303133;
     }
+  }
+}
+
+.custom-fee-list {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  .custom-fee-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px 16px;
+    border-radius: 8px;
+    background: #faf6eb;
+  }
+
+  .custom-fee-copy {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: #606266;
+  }
+
+  .custom-fee-title {
+    line-height: 1.4;
+  }
+
+  .custom-fee-amount {
+    color: #d46b08;
+    font-weight: 600;
   }
 }
 

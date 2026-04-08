@@ -16,12 +16,12 @@
         <view class="role-badge">{{ roleText }}</view>
       </view>
 
-      <!-- 功能模块（采购、生产、订单、报销） -->
+      <!-- 功能模块（采购、生产、订单、报销、库存、食谱） -->
       <view class="modules">
         <!-- 采购管理 -->
         <view class="module" @tap="goToPurchasing">
           <view class="module-icon purchasing">
-            <image class="module-icon-img" src="/static/icons/purchasing.png" mode="aspectFit" />
+            <text class="module-icon-symbol">🛒</text>
           </view>
           <view class="module-content">
             <text class="module-title">采购管理</text>
@@ -33,7 +33,7 @@
         <!-- 生产管理 -->
         <view class="module" @tap="goToProduction">
           <view class="module-icon production">
-            <image class="module-icon-img" src="/static/icons/production.png" mode="aspectFit" />
+            <text class="module-icon-symbol">🏭</text>
           </view>
           <view class="module-content">
             <text class="module-title">生产管理</text>
@@ -45,7 +45,7 @@
         <!-- 订单管理 -->
         <view class="module" @tap="viewTodayOrders">
           <view class="module-icon shipping">
-            <image class="module-icon-img" src="/static/icons/orders.png" mode="aspectFit" />
+            <text class="module-icon-symbol">📦</text>
           </view>
           <view class="module-content">
             <text class="module-title">订单管理</text>
@@ -57,11 +57,23 @@
         <!-- 报销管理 -->
         <view class="module" @tap="goToReimbursement">
           <view class="module-icon reimbursement">
-            <image class="module-icon-img" src="/static/icons/reimbursement.png" mode="aspectFit" />
+            <text class="module-icon-symbol">🧾</text>
           </view>
           <view class="module-content">
             <text class="module-title">报销管理</text>
-            <text class="module-desc">申请报销与查看报销记录</text>
+            <text class="module-desc">采购报销、行政杂费与工资登记</text>
+          </view>
+          <text class="module-arrow">›</text>
+        </view>
+
+        <!-- 库存管理 -->
+        <view class="module" @tap="goToInventory">
+          <view class="module-icon inventory">
+            <text class="module-icon-symbol">📚</text>
+          </view>
+          <view class="module-content">
+            <text class="module-title">库存管理</text>
+            <text class="module-desc">查看库存预警、补货建议和盘点记录</text>
           </view>
           <text class="module-arrow">›</text>
         </view>
@@ -251,6 +263,10 @@ const goToReimbursement = () => {
   uni.navigateTo({ url: '/pages/staff-purchasing/reimbursement/list' });
 };
 
+const goToInventory = () => {
+  uni.navigateTo({ url: '/pages/staff-inventory/index' });
+};
+
 const goToStaffRecipes = () => {
   uni.navigateTo({ url: '/pages/staff-recipes/index' });
 };
@@ -374,14 +390,18 @@ const goToStaffRecipes = () => {
     background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
   }
 
+  &.inventory {
+    background: linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%);
+  }
+
   &.recipes {
     background: linear-gradient(135deg, #c3cfe2 0%, #f5f7fa 100%);
   }
 }
 
-.module-icon-img {
-  width: 48rpx;
-  height: 48rpx;
+.module-icon-symbol {
+  font-size: 44rpx;
+  line-height: 1;
 }
 
 .module-content {

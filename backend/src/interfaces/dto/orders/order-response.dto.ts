@@ -260,6 +260,15 @@ export class OrderDto {
   } | null;
 }
 
+export class AdminOrderDto extends OrderDto {
+  @ApiPropertyOptional({
+    description: 'Internal admin remark for production staff',
+    example: '客户要求本批次拆分打包，并优先安排上午制作',
+    nullable: true,
+  })
+  adminRemark?: string | null;
+}
+
 export class OrderSummaryDto {
   @ApiProperty({ example: 'uuid' })
   id!: string;

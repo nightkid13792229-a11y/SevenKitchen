@@ -20,6 +20,7 @@ import {
   UseInterceptors,
   UploadedFile,
   BadRequestException,
+  NotFoundException,
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -32,6 +33,7 @@ import {
   ApiQuery,
   ApiConsumes,
 } from '@nestjs/swagger';
+import { Prisma } from '@prisma/client';
 import {
   DogService,
   DOG_REPOSITORY,
@@ -51,6 +53,7 @@ import type { CheckupRecordRepository } from '../../domain/health/health.reposit
 import type { AllergyRecordRepository } from '../../domain/health/health.repository';
 import { Inject } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
+import { PrismaService } from '../../infrastructure/prisma.service';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import { CreateDogDto } from '../dto/dogs/create-dog.dto';
 import { UpdateDogDto } from '../dto/dogs/update-dog.dto';
@@ -61,9 +64,13 @@ import {
   DogProfileDto,
   DogCalcResultDto,
 } from '../dto/dogs/dog-response.dto';
-import { calculateDogEnergy } from '../../domain';
+import {
+  calculateDogEnergy,
+  OrderStatus,
+  TreatInputMode,
+  TreatLevel,
+} from '../../domain';
 import { ApiResponseDto } from '../dto/common/response.dto';
-import { TreatInputMode, TreatLevel } from '../../domain';
 import { Dog } from '../../domain/dog/dog.entity';
 import { AuthGuard, CurrentUser } from '../auth';
 import type { RequestUser } from '../auth';
@@ -95,6 +102,7 @@ export class DogsController {
     private readonly allergyRecordRepository: AllergyRecordRepository,
     private readonly dogService: DogService,
     private readonly weightRecordService: WeightRecordService,
+    private readonly prisma: PrismaService,
     private readonly cosService: TencentCosService,
   ) {}
 
@@ -433,6 +441,80 @@ export class DogsController {
     return ApiResponseDto.success(response);
   }
 
+  @Delete(':id')
+  @UseGuards(AuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete dog profile for current customer' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiHeader({
+    name: 'X-Customer-Id',
+    description: 'Customer ID for authentication',
+    required: true,
+  })
+  @ApiParam({ name: 'id', description: 'Dog ID' })
+  @ApiResponse({ status: 204, description: 'Dog profile deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Dog not found' })
+  @ApiResponse({
+    status: 400,
+    description: 'Dog has related orders and cannot be deleted',
+  })
+  async deleteDog(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<void> {
+    const dog = await this.dogRepository.findById(id);
+    if (!dog || dog.ownerId !== user.customerId) {
+      throw new NotFoundException('Dog not found');
+    }
+
+    const activeOrdersCount = await this.prisma.order.count({
+      where: {
+        dogId: id,
+        customerId: user.customerId,
+        status: {
+          notIn: [OrderStatus.COMPLETED, OrderStatus.CANCELLED],
+        },
+      },
+    });
+
+    if (activeOrdersCount > 0) {
+      throw new BadRequestException(
+        '当前宠物仍有关联中的订单，请先取消或完成订单后再删除档案',
+      );
+    }
+
+    const customRecipeOrderCount = await this.prisma.customRecipeOrder.count({
+      where: {
+        dogId: id,
+        customerId: user.customerId,
+      },
+    });
+
+    if (customRecipeOrderCount > 0) {
+      throw new BadRequestException(
+        '当前宠物存在关联的定制食谱订单，暂不支持删除档案',
+      );
+    }
+
+    try {
+      await this.dogRepository.delete(id);
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : '';
+      if (
+        (error instanceof Prisma.PrismaClientKnownRequestError &&
+          error.code === 'P2003') ||
+        errorMessage.includes('foreign key') ||
+        errorMessage.includes('Foreign key')
+      ) {
+        throw new BadRequestException(
+          '当前宠物存在关联历史订单，暂不支持删除档案',
+        );
+      }
+
+      throw error;
+    }
+  }
+
   @Get('breeds')
   @ApiOperation({ summary: 'List all dog breeds' })
   @ApiResponse({
@@ -444,6 +526,7 @@ export class DogsController {
     const breedDtos = breeds.map((breed) => ({
       id: breed.id,
       name: breed.name,
+      aliases: breed.aliases || [],
       sizeCategory: breed.sizeCategory,
       adultAgeMonths: breed.adultAgeMonths,
       seniorAgeYears: breed.seniorAgeYears,

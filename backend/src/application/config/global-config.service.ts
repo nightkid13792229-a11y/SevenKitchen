@@ -45,8 +45,13 @@ export class GlobalConfigService {
       packageExampleImageUrl: config.packageExampleImageUrl,
       shippingCompanyLogoUrl: config.shippingCompanyLogoUrl,
       paymentTimeoutMinutes: (config as any).paymentTimeoutMinutes ?? 30,
+      ingredientPriceAutoApproveThreshold: parseFloat(
+        (config as any).ingredientPriceAutoApproveThreshold?.toString() ??
+          this.defaultAutoApproveThreshold().toString(),
+      ),
       equipmentRecommendations:
         (config as any).equipmentRecommendations ?? null,
+      homeHeaderBgImageUrl: (config as any).homeHeaderBgImageUrl ?? null,
     };
   }
 
@@ -71,7 +76,9 @@ export class GlobalConfigService {
       defaultShippingTemplateId: string | null;
       packageExampleImageUrl: string | null;
       shippingCompanyLogoUrl: string | null;
+      homeHeaderBgImageUrl: string | null;
       paymentTimeoutMinutes: number;
+      ingredientPriceAutoApproveThreshold: number;
       equipmentRecommendations: any;
     }>,
   ): Promise<GlobalConfig> {
@@ -109,8 +116,16 @@ export class GlobalConfigService {
       updateData.shippingCompanyLogoUrl = dto.shippingCompanyLogoUrl || null;
     }
 
+    if (dto.homeHeaderBgImageUrl !== undefined) {
+      updateData.homeHeaderBgImageUrl = dto.homeHeaderBgImageUrl || null;
+    }
+
     if (dto.paymentTimeoutMinutes !== undefined)
       updateData.paymentTimeoutMinutes = dto.paymentTimeoutMinutes;
+    if (dto.ingredientPriceAutoApproveThreshold !== undefined) {
+      updateData.ingredientPriceAutoApproveThreshold =
+        dto.ingredientPriceAutoApproveThreshold;
+    }
     if (dto.equipmentRecommendations !== undefined)
       updateData.equipmentRecommendations = dto.equipmentRecommendations;
 
@@ -144,8 +159,13 @@ export class GlobalConfigService {
       packageExampleImageUrl: config.packageExampleImageUrl,
       shippingCompanyLogoUrl: config.shippingCompanyLogoUrl,
       paymentTimeoutMinutes: (config as any).paymentTimeoutMinutes ?? 30,
+      ingredientPriceAutoApproveThreshold: parseFloat(
+        (config as any).ingredientPriceAutoApproveThreshold?.toString() ??
+          this.defaultAutoApproveThreshold().toString(),
+      ),
       equipmentRecommendations:
         (config as any).equipmentRecommendations ?? null,
+      homeHeaderBgImageUrl: (config as any).homeHeaderBgImageUrl ?? null,
     };
   }
 
@@ -168,7 +188,13 @@ export class GlobalConfigService {
       packageExampleImageUrl: null,
       shippingCompanyLogoUrl: null,
       paymentTimeoutMinutes: 30,
+      homeHeaderBgImageUrl: null,
+      ingredientPriceAutoApproveThreshold: this.defaultAutoApproveThreshold(),
       equipmentRecommendations: null,
     };
+  }
+
+  private defaultAutoApproveThreshold(): number {
+    return 0.08;
   }
 }

@@ -1,0 +1,4 @@
+ALTER TABLE "ingredient"
+ADD COLUMN "safety_stock" DOUBLE PRECISION,
+ADD COLUMN "reorder_point" DOUBLE PRECISION,
+ADD COLUMN "target_stock" DOUBLE PRECISION;

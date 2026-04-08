@@ -30,6 +30,13 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
   };
 
   beforeEach(async () => {
+    mockOrderRepository.findById.mockReset();
+    mockOrderRepository.findByCustomerId.mockReset();
+    mockOrderRepository.findByStatus.mockReset();
+    mockOrderRepository.save.mockReset();
+    mockStatusHistoryRepository.append.mockReset();
+    mockStatusHistoryRepository.findByOrderId.mockReset();
+
     // Suppress console logs during tests
     jest.spyOn(console, 'log').mockImplementation(() => {});
     jest.spyOn(console, 'warn').mockImplementation(() => {});
@@ -54,7 +61,6 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
     );
     orderRepository = module.get(ORDER_REPOSITORY);
 
-    jest.clearAllMocks();
   });
 
   afterEach(() => {
@@ -84,6 +90,7 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
     const orderItem = new OrderItem(
       'item-1',
       id,
+      'dog-1',
       recipeSnapshot,
       1400,
       14,
@@ -91,31 +98,30 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
       null,
       310.34,
     );
-    return new Order(
+    const order = new Order(
       id,
       'customer-1',
       status,
       OrderType.FRESH_FOOD,
+      new Date('2025-01-01T00:00:00Z'),
+      null,
       null,
       250.0,
       0.0,
       250.0,
       [orderItem],
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      trackingNumber,
-      carrierCode,
-      shippedAt,
     );
+    order.trackingNumber = trackingNumber ?? null;
+    order.carrierCode = carrierCode ?? null;
+    order.shippedAt = shippedAt ?? null;
+    return order;
   };
 
   describe('listOrdersReadyForShipment', () => {
-    it('should return only orders with READY_FOR_SHIPMENT status', async () => {
+    it('should return only orders with FREEZING status', async () => {
       // Arrange
-      const readyOrder1 = createMockOrder('order-1', OrderStatus.READY_FOR_SHIPMENT);
-      const readyOrder2 = createMockOrder('order-2', OrderStatus.READY_FOR_SHIPMENT);
+      const readyOrder1 = createMockOrder('order-1', OrderStatus.FREEZING);
+      const readyOrder2 = createMockOrder('order-2', OrderStatus.FREEZING);
       orderRepository.findByStatus.mockResolvedValue([readyOrder1, readyOrder2]);
 
       // Act
@@ -123,13 +129,13 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
 
       // Assert
       expect(orderRepository.findByStatus).toHaveBeenCalledWith(
-        OrderStatus.READY_FOR_SHIPMENT,
+        OrderStatus.FREEZING,
       );
       expect(result).toHaveLength(2);
       expect(result[0].id).toBe('order-1');
-      expect(result[0].status).toBe(OrderStatus.READY_FOR_SHIPMENT);
+      expect(result[0].status).toBe(OrderStatus.FREEZING);
       expect(result[1].id).toBe('order-2');
-      expect(result[1].status).toBe(OrderStatus.READY_FOR_SHIPMENT);
+      expect(result[1].status).toBe(OrderStatus.FREEZING);
     });
 
     it('should return empty array when no orders are ready', async () => {
@@ -147,7 +153,7 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
       // Arrange
       const shippedOrder = createMockOrder(
         'order-1',
-        OrderStatus.READY_FOR_SHIPMENT,
+        OrderStatus.FREEZING,
         'SF1234567890',
         'SF',
         new Date('2025-12-17T10:00:00Z'),
@@ -165,7 +171,7 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
 
     it('should map order items correctly', async () => {
       // Arrange
-      const order = createMockOrder('order-1', OrderStatus.READY_FOR_SHIPMENT);
+      const order = createMockOrder('order-1', OrderStatus.FREEZING);
       orderRepository.findByStatus.mockResolvedValue([order]);
 
       // Act
@@ -182,7 +188,7 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
   describe('markOrderAsShipped', () => {
     it('should successfully mark order as shipped with tracking info', async () => {
       // Arrange
-      const order = createMockOrder('order-1', OrderStatus.READY_FOR_SHIPMENT);
+      const order = createMockOrder('order-1', OrderStatus.FREEZING);
       const shippedOrder = createMockOrder(
         'order-1',
         OrderStatus.SHIPPED,
@@ -224,9 +230,9 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
       expect(orderRepository.save).not.toHaveBeenCalled();
     });
 
-    it('should throw BadRequestException when order is not READY_FOR_SHIPMENT', async () => {
+    it('should throw BadRequestException when order is not FREEZING', async () => {
       // Arrange
-      const order = createMockOrder('order-1', OrderStatus.IN_PRODUCTION);
+      const order = createMockOrder('order-1', OrderStatus.PAID);
       orderRepository.findById.mockResolvedValue(order);
 
       // Act & Assert
@@ -241,7 +247,7 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
 
     it('should throw BadRequestException when trackingNumber is missing', async () => {
       // Arrange
-      const order = createMockOrder('order-1', OrderStatus.READY_FOR_SHIPMENT);
+      const order = createMockOrder('order-1', OrderStatus.FREEZING);
       orderRepository.findById.mockResolvedValue(order);
 
       // Act & Assert
@@ -255,7 +261,7 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
 
     it('should throw BadRequestException when carrierCode is missing', async () => {
       // Arrange
-      const order = createMockOrder('order-1', OrderStatus.READY_FOR_SHIPMENT);
+      const order = createMockOrder('order-1', OrderStatus.FREEZING);
       orderRepository.findById.mockResolvedValue(order);
 
       // Act & Assert
@@ -269,7 +275,7 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
 
     it('should trim trackingNumber and carrierCode', async () => {
       // Arrange
-      const order = createMockOrder('order-1', OrderStatus.READY_FOR_SHIPMENT);
+      const order = createMockOrder('order-1', OrderStatus.FREEZING);
       orderRepository.findById.mockResolvedValue(order);
       orderRepository.save.mockResolvedValue(order);
 
@@ -308,7 +314,7 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
     it('should set shippedAt timestamp when marking as shipped', async () => {
       // Arrange
       const beforeTime = new Date();
-      const order = createMockOrder('order-1', OrderStatus.READY_FOR_SHIPMENT);
+      const order = createMockOrder('order-1', OrderStatus.FREEZING);
       const shippedOrder = createMockOrder(
         'order-1',
         OrderStatus.SHIPPED,
@@ -338,7 +344,7 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
 
     it('should persist and reload shipping fields correctly', async () => {
       // Arrange
-      const order = createMockOrder('order-1', OrderStatus.READY_FOR_SHIPMENT);
+      const order = createMockOrder('order-1', OrderStatus.FREEZING);
       const shippedOrder = createMockOrder(
         'order-1',
         OrderStatus.SHIPPED,
@@ -371,4 +377,3 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
     });
   });
 });
-

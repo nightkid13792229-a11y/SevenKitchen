@@ -21,6 +21,29 @@
         />
       </el-form-item>
 
+      <el-form-item label="搜索别名" prop="aliases">
+        <el-select
+          v-model="formData.aliases"
+          multiple
+          filterable
+          allow-create
+          default-first-option
+          :reserve-keyword="false"
+          placeholder="输入别名后回车，如：泰迪、泰迪犬"
+          style="width: 100%"
+        >
+          <el-option
+            v-for="alias in formData.aliases"
+            :key="alias"
+            :label="alias"
+            :value="alias"
+          />
+        </el-select>
+        <div class="form-tip">
+          用户搜索这些词时，也会命中当前品种
+        </div>
+      </el-form-item>
+
       <el-form-item label="体型分类" prop="sizeCategory">
         <el-radio-group v-model="formData.sizeCategory">
           <el-radio :value="DogSizeCategory.SMALL">小型</el-radio>
@@ -108,6 +131,7 @@ const submitting = ref(false)
 
 const formData = reactive<BreedForm>({
   name: '',
+  aliases: [],
   sizeCategory: DogSizeCategory.MEDIUM,
   adultAgeMonths: 12,
   seniorAgeYears: 8,
@@ -138,6 +162,7 @@ const isEditMode = computed(() => !!props.breed?.id)
 const resetForm = () => {
   formData.id = undefined
   formData.name = ''
+  formData.aliases = []
   formData.sizeCategory = DogSizeCategory.MEDIUM
   formData.adultAgeMonths = 12
   formData.seniorAgeYears = 8
@@ -152,6 +177,7 @@ watch(
     if (breed) {
       formData.id = breed.id
       formData.name = breed.name
+      formData.aliases = [...(breed.aliases || [])]
       formData.sizeCategory = breed.sizeCategory as DogSizeCategory
       formData.adultAgeMonths = breed.adultAgeMonths
       formData.seniorAgeYears = breed.seniorAgeYears

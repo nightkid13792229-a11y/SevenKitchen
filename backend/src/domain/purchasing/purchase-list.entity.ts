@@ -4,13 +4,18 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { PurchaseListStatus, PURCHASE_LIST_STATUS_TRANSITIONS } from './enums';
+import {
+  PurchaseListStatus,
+  PurchaseListKind,
+  PURCHASE_LIST_STATUS_TRANSITIONS,
+} from './enums';
 import { PurchaseItem } from './purchase-item.entity';
 import { InvalidStateTransitionError } from '../common/errors';
 
 export interface PurchaseListConstructor {
   id?: string;
   targetDate: Date;
+  kind?: PurchaseListKind;
   status?: PurchaseListStatus;
   totalEstimatedCost: number;
   itemCount: number;
@@ -35,6 +40,7 @@ export interface PurchaseListConstructor {
 export class PurchaseList {
   public readonly id: string;
   public readonly targetDate: Date;
+  public readonly kind: PurchaseListKind;
   public status: PurchaseListStatus;
   public totalEstimatedCost: number; // 可写，用于动态更新
   public itemCount: number; // 可写，用于动态更新
@@ -57,6 +63,7 @@ export class PurchaseList {
   constructor(data: PurchaseListConstructor) {
     this.id = data.id || uuidv4();
     this.targetDate = data.targetDate;
+    this.kind = data.kind || PurchaseListKind.ORDER_DEMAND;
     this.status = data.status || PurchaseListStatus.PENDING;
     this.totalEstimatedCost = data.totalEstimatedCost;
     this.itemCount = data.itemCount;
@@ -94,7 +101,10 @@ export class PurchaseList {
       throw new Error('Item count must be positive');
     }
 
-    if (this.sourceOrderIds.length === 0) {
+    if (
+      this.kind === PurchaseListKind.ORDER_DEMAND &&
+      this.sourceOrderIds.length === 0
+    ) {
       throw new Error('Purchase list must have at least one source order');
     }
 
@@ -175,6 +185,7 @@ export class PurchaseList {
     return {
       id: this.id,
       targetDate: this.targetDate,
+      kind: this.kind,
       status: this.status,
       totalEstimatedCost: this.totalEstimatedCost,
       itemCount: this.itemCount,
@@ -211,6 +222,7 @@ export class PurchaseList {
     return new PurchaseList({
       id: data.id,
       targetDate: data.targetDate,
+      kind: data.kind,
       status: data.status,
       totalEstimatedCost: Number(data.totalEstimatedCost),
       itemCount: data.itemCount,

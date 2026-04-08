@@ -14,6 +14,9 @@ import {
   IsOptional,
   IsNumber,
   IsBoolean,
+  IsArray,
+  ArrayMaxSize,
+  ArrayUnique,
 } from 'class-validator';
 import { DogSizeCategory, GrowthCurveType } from '../../../domain';
 
@@ -72,4 +75,24 @@ export class CreateBreedDto {
   @IsOptional()
   @IsBoolean({ message: 'isCommon must be a boolean' })
   isCommon?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Breed aliases used for search',
+    type: [String],
+    example: ['泰迪', '泰迪犬'],
+  })
+  @IsOptional()
+  @IsArray({ message: 'aliases must be an array' })
+  @ArrayMaxSize(20, { message: 'aliases must not exceed 20 items' })
+  @ArrayUnique({ message: 'aliases must be unique' })
+  @IsString({ each: true, message: 'each alias must be a string' })
+  @MinLength(1, {
+    each: true,
+    message: 'each alias must be at least 1 character',
+  })
+  @MaxLength(20, {
+    each: true,
+    message: 'each alias must not exceed 20 characters',
+  })
+  aliases?: string[];
 }

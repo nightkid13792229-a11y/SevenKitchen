@@ -12,6 +12,24 @@ import {
 import { PurchaseList } from './purchase-list.entity';
 import { InvalidStateTransitionError } from '../common/errors';
 
+export const REIMBURSEMENT_CUSTOM_FEE_CATEGORIES = [
+  'RENT',
+  'UTILITIES',
+  'TOOLS',
+  'SUNDRIES',
+  'PAYROLL',
+  'OTHER',
+] as const;
+
+export type ReimbursementCustomFeeCategory =
+  (typeof REIMBURSEMENT_CUSTOM_FEE_CATEGORIES)[number];
+
+export interface ReimbursementCustomFee {
+  category?: ReimbursementCustomFeeCategory;
+  description?: string;
+  amount: number;
+}
+
 export interface ReimbursementConstructor {
   id?: string;
   claimNumber: string;
@@ -31,7 +49,7 @@ export interface ReimbursementConstructor {
   // 新增字段
   platformShippingFee?: number;
   platformPackagingFee?: number;
-  customFees?: Array<{ description: string; amount: number }>;
+  customFees?: ReimbursementCustomFee[];
   paymentProofUrls?: string[]; // 报销凭证（管理员上传）
   paymentProofKeys?: string[]; // COS对象键（用于删除）
   // 关联用户对象（非持久化）
@@ -59,7 +77,7 @@ export class Reimbursement {
   // 新增属性
   public readonly platformShippingFee?: number;
   public readonly platformPackagingFee?: number;
-  public readonly customFees?: Array<{ description: string; amount: number }>;
+  public readonly customFees: ReimbursementCustomFee[];
   public readonly paymentProofUrls: string[]; // 报销凭证（管理员上传）
   public readonly paymentProofKeys: string[]; // COS对象键（用于删除）
 
@@ -85,7 +103,11 @@ export class Reimbursement {
     this.purchaseLists = data.purchaseLists || [];
     this.platformShippingFee = data.platformShippingFee;
     this.platformPackagingFee = data.platformPackagingFee;
-    this.customFees = data.customFees || [];
+    this.customFees = (data.customFees || []).map((fee) => ({
+      category: fee.category,
+      description: fee.description?.trim() || undefined,
+      amount: fee.amount,
+    }));
     this.paymentProofUrls = data.paymentProofUrls || [];
     this.paymentProofKeys = data.paymentProofKeys || [];
     this.submittedBy = data.submittedBy;
@@ -140,11 +162,18 @@ export class Reimbursement {
     }
 
     // 验证自定义费用
-    if (this.customFees && this.customFees.length > 0) {
+    if (this.customFees.length > 0) {
       this.customFees.forEach((fee, index) => {
-        if (!fee.description || fee.description.trim() === '') {
+        if (
+          fee.category &&
+          !REIMBURSEMENT_CUSTOM_FEE_CATEGORIES.includes(fee.category)
+        ) {
+          throw new Error(`Custom fee at index ${index} has invalid category`);
+        }
+
+        if (!fee.description && !fee.category) {
           throw new Error(
-            `Custom fee at index ${index} must have a description`,
+            `Custom fee at index ${index} must have a category or description`,
           );
         }
         if (fee.amount < 0) {

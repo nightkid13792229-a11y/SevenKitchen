@@ -27,6 +27,10 @@ export class PrintTaskOrderItemDto {
   @IsString()
   @IsOptional()
   recipientCity?: string;
+
+  @IsString()
+  @IsOptional()
+  adminRemark?: string;
 }
 
 export class PrintTaskIngredientDto {

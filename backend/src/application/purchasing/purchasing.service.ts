@@ -25,16 +25,37 @@ import type { PurchaseListRepository } from '../../domain/purchasing/purchase-li
 import type { PurchaseRecordRepository } from '../../domain/purchasing/purchase-record.repository';
 import {
   PurchaseList,
+  PurchaseListKind,
   PurchaseItem,
   PurchaseListStatus,
   PurchaseRecord,
 } from '../../domain/purchasing';
 import { validatePurchasingOperation } from './purchasing-time.utils';
 import { DateUtil } from '../../utils/date.util';
+import {
+  BaseUnit,
+  IngredientProcurementStrategy,
+} from '../../domain/ingredient/enums';
+import {
+  RecommendedProductService,
+  type RecommendedProductSummary,
+} from '../ingredient/recommended-product.service';
+import { InventoryService } from '../inventory/inventory.service';
 
 export interface GeneratePurchaseListDto {
   startDate: string; // YYYY-MM-DD format
   endDate?: string; // YYYY-MM-DD format, optional (defaults to startDate)
+}
+
+export interface CreateStockPurchaseListDto {
+  targetDate: string; // YYYY-MM-DD format
+  items: Array<{
+    ingredientId: string;
+    plannedQuantity: number; // 按采购单位填写
+    purchaseChannel?: string;
+    productModel?: string;
+    notes?: string;
+  }>;
 }
 
 export interface CompletePurchaseDto {
@@ -43,10 +64,11 @@ export interface CompletePurchaseDto {
 
 export interface AddPurchaseRecordDto {
   purchaseItemId: string;
-  ingredientId: string;
-  ingredientName: string;
   purchaseChannel: string;
-  actualQuantity: number;
+  actualQuantity?: number;
+  actualPackageCount?: number;
+  actualPackageSize?: number;
+  actualPackageUnit?: string;
   actualCost: number;
   productModel?: string;
   notes?: string;
@@ -55,6 +77,9 @@ export interface AddPurchaseRecordDto {
 export interface UpdatePurchaseRecordDto {
   purchaseChannel?: string;
   actualQuantity?: number;
+  actualPackageCount?: number;
+  actualPackageSize?: number;
+  actualPackageUnit?: string;
   actualCost?: number;
   productModel?: string;
   notes?: string;
@@ -67,10 +92,56 @@ export interface PurchaseRequirement {
   quantityNeeded: number; // 基于baseUnit
   quantityUnit: string; // G / ML / PCS
   estimatedCost: number; // 基于currentPricePerPurchaseUnit
+  preparationMethods?: string[];
   purchaseChannel?: string;
   productModel?: string;
   displayUnit?: string; // 显示单位（补剂类的单位显示标签）
+  ingredientBaseUnit?: string;
+  foodDensityGPerMl?: number | null;
   minSortOrder?: number; // 最小排序值（用于多食谱合并）
+  suggestedProductId?: string;
+  suggestedProductName?: string;
+}
+
+export type StockLevelStatus =
+  | 'NO_POLICY'
+  | 'SUFFICIENT'
+  | 'LOW_STOCK'
+  | 'NEEDS_REPLENISHMENT';
+
+export interface StockReplenishmentInsight {
+  id: string;
+  name: string;
+  type: 'FOOD' | 'SUPPLEMENT' | 'PACKAGING';
+  procurementStrategy: IngredientProcurementStrategy;
+  baseUnit: BaseUnit;
+  stockUnitLabel: string;
+  purchaseUnit: string;
+  purchaseToBaseRatio: number;
+  unitDisplayLabel?: string | null;
+  purchaseChannel?: string | null;
+  productModel?: string | null;
+  currentPricePerPurchaseUnit: number;
+  effectivePricePerPurchaseUnit?: number | null;
+  currentStock: number;
+  safetyStock?: number | null;
+  reorderPoint?: number | null;
+  targetStock?: number | null;
+  stockStatus: StockLevelStatus;
+  suggestedBaseQuantity: number;
+  suggestedPurchaseQuantity: number;
+  suggestedEstimatedCost: number;
+  suggestedProductId?: string;
+  suggestedProductName?: string;
+}
+
+interface NormalizedPurchaseRecordData {
+  actualQuantity: number;
+  actualPackageCount?: number;
+  actualPackageSize?: number;
+  actualPackageUnit?: string;
+  actualBaseQuantity: number;
+  actualBaseUnit: string;
 }
 
 @Injectable()
@@ -82,11 +153,782 @@ export class PurchasingService {
     private readonly orderRepository: OrderRepository,
     @Inject(INGREDIENT_REPOSITORY)
     private readonly ingredientRepository: IngredientRepository,
+    private readonly recommendedProductService: RecommendedProductService,
+    private readonly inventoryService: InventoryService,
     @Inject(PURCHASE_LIST_REPOSITORY)
     private readonly purchaseListRepository: PurchaseListRepository,
     @Inject(PURCHASE_RECORD_REPOSITORY)
     private readonly purchaseRecordRepository: PurchaseRecordRepository,
   ) {}
+
+  private isUuidLike(value: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      value,
+    );
+  }
+
+  private normalizePreparationMethods(
+    preparationMethod?: string | null,
+  ): string[] {
+    if (!preparationMethod) {
+      return [];
+    }
+
+    return preparationMethod
+      .split(/[、,，]/)
+      .map((method) => method.trim())
+      .filter(
+        (method, index, list) =>
+          !!method &&
+          !this.isUuidLike(method) &&
+          list.indexOf(method) === index,
+      );
+  }
+
+  private mergePreparationMethods(
+    current: string[] | undefined,
+    next: string[] | undefined,
+  ): string[] | undefined {
+    const merged = [...(current || []), ...(next || [])].filter(Boolean);
+    const unique = merged.filter(
+      (method, index) => merged.indexOf(method) === index,
+    );
+    return unique.length > 0 ? unique : undefined;
+  }
+
+  private normalizeComparableText(value?: string | null): string {
+    return (value || '').trim().toLowerCase();
+  }
+
+  private selectSuggestedRecommendedProduct(
+    products: RecommendedProductSummary[],
+    preferredChannel?: string,
+    preferredModel?: string,
+  ): RecommendedProductSummary | undefined {
+    if (!products.length) {
+      return undefined;
+    }
+
+    const normalizedChannel = this.normalizeComparableText(preferredChannel);
+    const normalizedModel = this.normalizeComparableText(preferredModel);
+
+    const ranked = products
+      .map((product, index) => {
+        let score = 0;
+        if (
+          normalizedChannel &&
+          this.normalizeComparableText(product.purchaseChannel) === normalizedChannel
+        ) {
+          score += 1;
+        }
+        if (
+          normalizedModel &&
+          this.normalizeComparableText(product.productModel) === normalizedModel
+        ) {
+          score += 2;
+        }
+        return { product, index, score };
+      })
+      .sort((left, right) => {
+        if (right.score !== left.score) {
+          return right.score - left.score;
+        }
+        return left.index - right.index;
+      });
+
+    return ranked[0]?.product;
+  }
+
+  private async enrichRequirementsWithRecommendedProducts(
+    requirements: PurchaseRequirement[],
+    ingredientLookup: Map<string, any>,
+  ): Promise<PurchaseRequirement[]> {
+    if (requirements.length === 0) {
+      return requirements;
+    }
+
+    const recommendedProductsMap =
+      await this.recommendedProductService.batchFindActive(
+        requirements.map((requirement) => requirement.ingredientId),
+      );
+
+    return requirements.map((requirement) => {
+      const ingredient = ingredientLookup.get(requirement.ingredientId);
+      const preferredChannel =
+        requirement.purchaseChannel || ingredient?.purchaseChannel;
+      const preferredModel =
+        requirement.productModel || ingredient?.productModel;
+      const suggestedProduct = this.selectSuggestedRecommendedProduct(
+        recommendedProductsMap[requirement.ingredientId] || [],
+        preferredChannel,
+        preferredModel,
+      );
+
+      return {
+        ...requirement,
+        purchaseChannel:
+          suggestedProduct?.purchaseChannel ||
+          requirement.purchaseChannel ||
+          ingredient?.purchaseChannel ||
+          undefined,
+        productModel:
+          suggestedProduct?.productModel ||
+          requirement.productModel ||
+          ingredient?.productModel ||
+          undefined,
+        suggestedProductId: suggestedProduct?.id,
+        suggestedProductName: suggestedProduct?.name,
+      };
+    });
+  }
+
+  private roundNumber(value: number, decimals: number): number {
+    return Number(value.toFixed(decimals));
+  }
+
+  private roundUpNumber(value: number, decimals: number): number {
+    const factor = Math.pow(10, decimals);
+    return Math.ceil((value - Number.EPSILON) * factor) / factor;
+  }
+
+  private getStockLevelStatus(params: {
+    currentStock: number;
+    safetyStock?: number | null;
+    reorderPoint?: number | null;
+    targetStock?: number | null;
+  }): StockLevelStatus {
+    const { currentStock, safetyStock, reorderPoint, targetStock } = params;
+
+    if (reorderPoint !== null && reorderPoint !== undefined && currentStock < reorderPoint) {
+      return 'NEEDS_REPLENISHMENT';
+    }
+
+    if (safetyStock !== null && safetyStock !== undefined && currentStock < safetyStock) {
+      return 'LOW_STOCK';
+    }
+
+    if (
+      safetyStock !== null &&
+      safetyStock !== undefined ||
+      reorderPoint !== null &&
+      reorderPoint !== undefined ||
+      targetStock !== null &&
+      targetStock !== undefined
+    ) {
+      return 'SUFFICIENT';
+    }
+
+    return 'NO_POLICY';
+  }
+
+  private normalizeMeasurementUnit(unit?: string | null): string {
+    const normalized = (unit || '').trim();
+    const upper = normalized.toUpperCase();
+
+    if (['G', 'GRAM', 'GRAMS', '克'].includes(upper) || normalized === '克') {
+      return 'G';
+    }
+    if (
+      ['KG', 'KGS', '公斤', '千克'].includes(upper) ||
+      normalized === '公斤' ||
+      normalized === '千克'
+    ) {
+      return 'KG';
+    }
+    if (normalized === '斤') {
+      return 'JIN';
+    }
+    if (
+      ['ML', 'MILLILITER', 'MILLILITERS', '毫升'].includes(upper) ||
+      normalized === '毫升'
+    ) {
+      return 'ML';
+    }
+    if (['L', 'LITER', 'LITERS', '升'].includes(upper) || normalized === '升') {
+      return 'L';
+    }
+    if (
+      [
+        'PCS',
+        'PIECE',
+        'PIECES',
+        '个',
+        '件',
+        '袋',
+        '包',
+        '盒',
+        '瓶',
+        '罐',
+        '张',
+        '片',
+        '支',
+        '桶',
+        '箱',
+      ].includes(upper) ||
+      ['个', '件', '袋', '包', '盒', '瓶', '罐', '张', '片', '支', '桶', '箱'].includes(
+        normalized,
+      )
+    ) {
+      return 'PCS';
+    }
+
+    return upper || normalized;
+  }
+
+  private resolveBaseUnit(purchaseItem: PurchaseItem): BaseUnit {
+    const rawUnit = purchaseItem.ingredient?.baseUnit || purchaseItem.quantityUnit;
+    const normalized = (rawUnit || '').toUpperCase();
+
+    if (
+      normalized === BaseUnit.G ||
+      normalized === BaseUnit.ML ||
+      normalized === BaseUnit.PCS
+    ) {
+      return normalized as BaseUnit;
+    }
+
+    throw new BadRequestException(
+      `采购明细 ${purchaseItem.id} 缺少可识别的基础单位，无法折算实际采购量`,
+    );
+  }
+
+  private resolvePurchaseToBaseRatio(purchaseItem: PurchaseItem): number {
+    const ratio = Number(purchaseItem.ingredient?.purchaseToBaseRatio ?? 0);
+    if (!Number.isFinite(ratio) || ratio <= 0) {
+      throw new BadRequestException(
+        `原料 ${purchaseItem.ingredientName} 缺少有效的采购换算系数，无法折算实际采购量`,
+      );
+    }
+    return ratio;
+  }
+
+  private resolveDensity(purchaseItem: PurchaseItem): number | null {
+    const density = Number(
+      purchaseItem.ingredient?.properties?.density_g_per_ml ?? 0,
+    );
+    return Number.isFinite(density) && density > 0 ? density : null;
+  }
+
+  private convertAmountToBaseQuantity(params: {
+    baseUnit: BaseUnit;
+    inputUnit: string;
+    amount: number;
+    density: number | null;
+    ingredientName: string;
+  }): number {
+    const { baseUnit, amount, density, ingredientName } = params;
+    const inputUnit = this.normalizeMeasurementUnit(params.inputUnit);
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      throw new BadRequestException('实际采购规格必须大于 0');
+    }
+
+    if (baseUnit === BaseUnit.G) {
+      switch (inputUnit) {
+        case 'G':
+          return amount;
+        case 'KG':
+          return amount * 1000;
+        case 'JIN':
+          return amount * 500;
+        case 'ML':
+          if (!density) {
+            throw new BadRequestException(
+              `${ingredientName} 缺少密度信息，无法把毫升换算为克`,
+            );
+          }
+          return amount * density;
+        case 'L':
+          if (!density) {
+            throw new BadRequestException(
+              `${ingredientName} 缺少密度信息，无法把升换算为克`,
+            );
+          }
+          return amount * 1000 * density;
+        default:
+          throw new BadRequestException(
+            `${ingredientName} 当前按重量管理，不支持规格单位 ${params.inputUnit}`,
+          );
+      }
+    }
+
+    if (baseUnit === BaseUnit.ML) {
+      switch (inputUnit) {
+        case 'ML':
+          return amount;
+        case 'L':
+          return amount * 1000;
+        case 'G':
+          if (!density) {
+            throw new BadRequestException(
+              `${ingredientName} 缺少密度信息，无法把克换算为毫升`,
+            );
+          }
+          return amount / density;
+        case 'KG':
+          if (!density) {
+            throw new BadRequestException(
+              `${ingredientName} 缺少密度信息，无法把千克换算为毫升`,
+            );
+          }
+          return (amount * 1000) / density;
+        case 'JIN':
+          if (!density) {
+            throw new BadRequestException(
+              `${ingredientName} 缺少密度信息，无法把斤换算为毫升`,
+            );
+          }
+          return (amount * 500) / density;
+        default:
+          throw new BadRequestException(
+            `${ingredientName} 当前按体积管理，不支持规格单位 ${params.inputUnit}`,
+          );
+      }
+    }
+
+    if (baseUnit === BaseUnit.PCS) {
+      if (inputUnit !== 'PCS') {
+        throw new BadRequestException(
+          `${ingredientName} 当前按件数管理，不支持规格单位 ${params.inputUnit}`,
+        );
+      }
+      return amount;
+    }
+
+    throw new BadRequestException(
+      `${ingredientName} 的基础单位 ${baseUnit} 暂不支持自动换算`,
+    );
+  }
+
+  private buildNormalizedPurchaseRecordData(
+    purchaseItem: PurchaseItem,
+    dto: AddPurchaseRecordDto | UpdatePurchaseRecordDto,
+    existingRecord?: PurchaseRecord,
+  ): NormalizedPurchaseRecordData {
+    const purchaseToBaseRatio = this.resolvePurchaseToBaseRatio(purchaseItem);
+    const baseUnit = this.resolveBaseUnit(purchaseItem);
+    const density = this.resolveDensity(purchaseItem);
+    const rawFactsProvided =
+      dto.actualPackageCount !== undefined ||
+      dto.actualPackageSize !== undefined ||
+      dto.actualPackageUnit !== undefined;
+
+    if (rawFactsProvided) {
+      const packageCount =
+        dto.actualPackageCount ?? existingRecord?.actualPackageCount;
+      const packageSize =
+        dto.actualPackageSize ?? existingRecord?.actualPackageSize;
+      const packageUnit =
+        dto.actualPackageUnit ?? existingRecord?.actualPackageUnit;
+
+      if (
+        !Number.isFinite(packageCount) ||
+        (packageCount || 0) <= 0 ||
+        !Number.isFinite(packageSize) ||
+        (packageSize || 0) <= 0 ||
+        !packageUnit ||
+        packageUnit.trim().length === 0
+      ) {
+        throw new BadRequestException(
+          '请填写完整的实际采购事实：件数、单件规格和规格单位',
+        );
+      }
+
+      const baseQuantity = this.convertAmountToBaseQuantity({
+        baseUnit,
+        inputUnit: packageUnit,
+        amount: packageCount! * packageSize!,
+        density,
+        ingredientName: purchaseItem.ingredientName,
+      });
+
+      return {
+        actualQuantity: this.roundNumber(baseQuantity / purchaseToBaseRatio, 6),
+        actualPackageCount: this.roundNumber(packageCount!, 3),
+        actualPackageSize: this.roundNumber(packageSize!, 3),
+        actualPackageUnit: packageUnit.trim(),
+        actualBaseQuantity: this.roundNumber(baseQuantity, 6),
+        actualBaseUnit: baseUnit,
+      };
+    }
+
+    if (dto.actualQuantity !== undefined) {
+      if (!Number.isFinite(dto.actualQuantity) || dto.actualQuantity <= 0) {
+        throw new BadRequestException('实际采购数量必须大于 0');
+      }
+
+      return {
+        actualQuantity: this.roundNumber(dto.actualQuantity, 6),
+        actualBaseQuantity: this.roundNumber(
+          dto.actualQuantity * purchaseToBaseRatio,
+          6,
+        ),
+        actualBaseUnit: baseUnit,
+      };
+    }
+
+    if (existingRecord) {
+      return {
+        actualQuantity: existingRecord.actualQuantity,
+        actualPackageCount: existingRecord.actualPackageCount,
+        actualPackageSize: existingRecord.actualPackageSize,
+        actualPackageUnit: existingRecord.actualPackageUnit,
+        actualBaseQuantity:
+          existingRecord.actualBaseQuantity ??
+          this.roundNumber(existingRecord.actualQuantity * purchaseToBaseRatio, 6),
+        actualBaseUnit: existingRecord.actualBaseUnit || baseUnit,
+      };
+    }
+
+    throw new BadRequestException(
+      '请填写实际采购数量，或填写件数、单件规格和规格单位',
+    );
+  }
+
+  private async buildIngredientLookupFromOrders(
+    orders: Order[],
+  ): Promise<Map<string, any>> {
+    const ingredientIds = Array.from(
+      new Set(
+        orders.flatMap((order) => {
+          const ingredientDetails =
+            (order.pricingBreakdownSnapshot as any)?.ingredientDetails || [];
+          return ingredientDetails
+            .map((detail: any) => detail?.ingredientId)
+            .filter(Boolean);
+        }),
+      ),
+    );
+
+    if (ingredientIds.length === 0) {
+      return new Map();
+    }
+
+    const ingredients = await this.ingredientRepository.findByIds(ingredientIds);
+    return new Map(ingredients.map((ingredient) => [ingredient.id, ingredient]));
+  }
+
+  async getStockReplenishmentIngredients(params?: {
+    keyword?: string;
+    type?: 'FOOD' | 'SUPPLEMENT' | 'PACKAGING';
+    onlyNeedsReplenishment?: boolean;
+    includeDaily?: boolean;
+  }): Promise<StockReplenishmentInsight[]> {
+    const keyword = (params?.keyword || '').trim().toLowerCase();
+    const ingredients = await this.ingredientRepository.findAll();
+    const filteredIngredients = ingredients
+      .filter(
+        (ingredient) =>
+          params?.includeDaily !== false ||
+          ingredient.procurementStrategy !==
+            IngredientProcurementStrategy.DAILY_PURCHASE,
+      )
+      .filter((ingredient) => !params?.type || ingredient.type === params.type)
+      .filter((ingredient) => {
+        if (!keyword) {
+          return true;
+        }
+
+        return [ingredient.name, ingredient.purchaseChannel, ingredient.productModel]
+          .filter(Boolean)
+          .some((value) => value!.toLowerCase().includes(keyword));
+      });
+
+    const currentStocks = await Promise.all(
+      filteredIngredients.map(async (ingredient) => {
+        const balance = await this.inventoryService.getBalanceByIngredient(
+          ingredient.id,
+        );
+        return [ingredient.id, balance] as const;
+      }),
+    );
+    const currentStockMap = new Map(currentStocks);
+    const ingredientLookup = new Map(
+      filteredIngredients.map((ingredient) => [ingredient.id, ingredient]),
+    );
+
+    let insights = filteredIngredients.map((ingredient): StockReplenishmentInsight => {
+      const currentStock = this.roundNumber(
+        currentStockMap.get(ingredient.id) ?? 0,
+        3,
+      );
+      const stockStatus = this.getStockLevelStatus({
+        currentStock,
+        safetyStock: ingredient.safetyStock,
+        reorderPoint: ingredient.reorderPoint,
+        targetStock: ingredient.targetStock,
+      });
+      const targetBaseQuantity =
+        ingredient.targetStock ??
+        ingredient.reorderPoint ??
+        ingredient.safetyStock ??
+        null;
+      const suggestedBaseQuantity =
+        stockStatus === 'NEEDS_REPLENISHMENT' && targetBaseQuantity !== null
+          ? this.roundNumber(Math.max(targetBaseQuantity - currentStock, 0), 3)
+          : 0;
+      const suggestedPurchaseQuantity =
+        suggestedBaseQuantity > 0
+          ? this.roundUpNumber(
+              suggestedBaseQuantity / ingredient.purchaseToBaseRatio,
+              3,
+            )
+          : 0;
+      const effectiveUnitPrice =
+        ingredient.effectivePricePerPurchaseUnit ??
+        ingredient.currentPricePerPurchaseUnit;
+
+      return {
+        id: ingredient.id,
+        name: ingredient.name,
+        type: ingredient.type,
+        procurementStrategy: ingredient.procurementStrategy,
+        baseUnit: ingredient.baseUnit,
+        stockUnitLabel: ingredient.unitDisplayLabel || ingredient.baseUnit,
+        purchaseUnit: ingredient.purchaseUnit,
+        purchaseToBaseRatio: ingredient.purchaseToBaseRatio,
+        unitDisplayLabel: ingredient.unitDisplayLabel,
+        purchaseChannel: ingredient.purchaseChannel,
+        productModel: ingredient.productModel,
+        currentPricePerPurchaseUnit: ingredient.currentPricePerPurchaseUnit,
+        effectivePricePerPurchaseUnit: ingredient.effectivePricePerPurchaseUnit,
+        currentStock,
+        safetyStock: ingredient.safetyStock,
+        reorderPoint: ingredient.reorderPoint,
+        targetStock: ingredient.targetStock,
+        stockStatus,
+        suggestedBaseQuantity,
+        suggestedPurchaseQuantity,
+        suggestedEstimatedCost: this.roundNumber(
+          suggestedPurchaseQuantity * effectiveUnitPrice,
+          2,
+        ),
+      };
+    });
+
+    const replenishmentRequirements = insights
+      .filter((item) => item.suggestedPurchaseQuantity > 0)
+      .map((item): PurchaseRequirement => ({
+        ingredientId: item.id,
+        ingredientName: item.name,
+        type: item.type,
+        quantityNeeded: item.suggestedPurchaseQuantity,
+        quantityUnit: item.purchaseUnit,
+        estimatedCost: item.suggestedEstimatedCost,
+        purchaseChannel: item.purchaseChannel || undefined,
+        productModel: item.productModel || undefined,
+        displayUnit: item.unitDisplayLabel || item.purchaseUnit,
+      }));
+
+    const enrichedRequirements =
+      await this.enrichRequirementsWithRecommendedProducts(
+        replenishmentRequirements,
+        ingredientLookup,
+      );
+    const enrichedRequirementMap = new Map(
+      enrichedRequirements.map((requirement) => [requirement.ingredientId, requirement]),
+    );
+
+    insights = insights
+      .map((item) => {
+        const enriched = enrichedRequirementMap.get(item.id);
+        if (!enriched) {
+          return item;
+        }
+        return {
+          ...item,
+          purchaseChannel: enriched.purchaseChannel || item.purchaseChannel,
+          productModel: enriched.productModel || item.productModel,
+          suggestedProductId: enriched.suggestedProductId,
+          suggestedProductName: enriched.suggestedProductName,
+        };
+      })
+      .filter(
+        (item) =>
+          !params?.onlyNeedsReplenishment ||
+          item.stockStatus === 'NEEDS_REPLENISHMENT',
+      )
+      .sort((left, right) => {
+        const statusOrder: Record<StockLevelStatus, number> = {
+          NEEDS_REPLENISHMENT: 1,
+          LOW_STOCK: 2,
+          SUFFICIENT: 3,
+          NO_POLICY: 4,
+        };
+        const strategyOrder = {
+          [IngredientProcurementStrategy.STOCK_REPLENISHMENT]: 1,
+          [IngredientProcurementStrategy.HYBRID]: 2,
+          [IngredientProcurementStrategy.DAILY_PURCHASE]: 3,
+        };
+        if (statusOrder[left.stockStatus] !== statusOrder[right.stockStatus]) {
+          return statusOrder[left.stockStatus] - statusOrder[right.stockStatus];
+        }
+        if (left.procurementStrategy !== right.procurementStrategy) {
+          return (
+            strategyOrder[left.procurementStrategy] -
+            strategyOrder[right.procurementStrategy]
+          );
+        }
+        if (left.type !== right.type) {
+          const typeOrder = { FOOD: 1, SUPPLEMENT: 2, PACKAGING: 3 };
+          return typeOrder[left.type] - typeOrder[right.type];
+        }
+        return left.name.localeCompare(right.name, 'zh-CN');
+      });
+
+    return insights;
+  }
+
+  async createStockPurchaseList(
+    dto: CreateStockPurchaseListDto,
+    createdById: string,
+  ): Promise<PurchaseList> {
+    if (!dto.items || dto.items.length === 0) {
+      throw new BadRequestException('请至少选择一项补货原料');
+    }
+
+    const targetDate = new Date(`${dto.targetDate}T12:00:00`);
+    if (isNaN(targetDate.getTime())) {
+      throw new BadRequestException(
+        `日期格式无效。期望格式：YYYY-MM-DD，实际值：${dto.targetDate}`,
+      );
+    }
+
+    const { start: checkStart, end: checkEnd } = DateUtil.createDateRange(
+      dto.targetDate,
+    );
+    const existingLists = await this.purchaseListRepository.findByDateRange(
+      checkStart,
+      checkEnd,
+    );
+    const pendingStockList = existingLists.find(
+      (list) =>
+        list.kind === PurchaseListKind.STOCK_REPLENISHMENT &&
+        list.status === PurchaseListStatus.PENDING,
+    );
+
+    if (pendingStockList) {
+      throw new ConflictException(
+        `日期 ${dto.targetDate} 已存在待处理的补货采购单，请继续编辑该清单`,
+      );
+    }
+
+    const mergedItems = new Map<
+      string,
+      {
+        ingredientId: string;
+        plannedQuantity: number;
+        purchaseChannel?: string;
+        productModel?: string;
+        notes?: string;
+      }
+    >();
+
+    for (const item of dto.items) {
+      if (!item.ingredientId) {
+        throw new BadRequestException('补货原料缺少 ingredientId');
+      }
+      if (!Number.isFinite(item.plannedQuantity) || item.plannedQuantity <= 0) {
+        throw new BadRequestException('计划采购数量必须大于 0');
+      }
+
+      const existing = mergedItems.get(item.ingredientId);
+      if (existing) {
+        existing.plannedQuantity += item.plannedQuantity;
+        existing.purchaseChannel = item.purchaseChannel || existing.purchaseChannel;
+        existing.productModel = item.productModel || existing.productModel;
+        existing.notes = item.notes || existing.notes;
+      } else {
+        mergedItems.set(item.ingredientId, {
+          ingredientId: item.ingredientId,
+          plannedQuantity: item.plannedQuantity,
+          purchaseChannel: item.purchaseChannel,
+          productModel: item.productModel,
+          notes: item.notes,
+        });
+      }
+    }
+
+    const ingredientIds = Array.from(mergedItems.keys());
+    const ingredients = await this.ingredientRepository.findByIds(ingredientIds);
+    if (ingredients.length !== ingredientIds.length) {
+      const foundIds = new Set(ingredients.map((ingredient) => ingredient.id));
+      const missingIds = ingredientIds.filter((id) => !foundIds.has(id));
+      throw new BadRequestException(
+        `以下原料不存在，无法创建补货采购单：${missingIds.join(', ')}`,
+      );
+    }
+
+    const ingredientLookup = new Map(
+      ingredients.map((ingredient) => [ingredient.id, ingredient]),
+    );
+
+    const requirements = await this.enrichRequirementsWithRecommendedProducts(
+      ingredientIds.map((ingredientId): PurchaseRequirement => {
+        const ingredient = ingredientLookup.get(ingredientId)!;
+        const input = mergedItems.get(ingredientId)!;
+        const unitPrice =
+          ingredient.effectivePricePerPurchaseUnit ??
+          ingredient.currentPricePerPurchaseUnit;
+        return {
+          ingredientId,
+          ingredientName: ingredient.name,
+          type: ingredient.type,
+          quantityNeeded: this.roundNumber(input.plannedQuantity, 3),
+          quantityUnit: ingredient.purchaseUnit,
+          estimatedCost: this.roundNumber(input.plannedQuantity * unitPrice, 2),
+          purchaseChannel:
+            input.purchaseChannel || ingredient.purchaseChannel || undefined,
+          productModel: input.productModel || ingredient.productModel || undefined,
+          displayUnit: ingredient.unitDisplayLabel || ingredient.purchaseUnit,
+        };
+      }),
+      ingredientLookup,
+    );
+
+    const items = requirements.map((req) => {
+      const input = mergedItems.get(req.ingredientId)!;
+      return new PurchaseItem({
+        purchaseListId: '',
+        ingredientId: req.ingredientId,
+        ingredientName: req.ingredientName,
+        type: req.type,
+        quantityNeeded: req.quantityNeeded,
+        quantityUnit: req.quantityUnit,
+        estimatedCost: req.estimatedCost,
+        purchaseChannel: req.purchaseChannel,
+        productModel: req.productModel,
+        suggestedProductId: req.suggestedProductId,
+        suggestedProductName: req.suggestedProductName,
+        displayUnit: req.displayUnit,
+        notes: input.notes,
+      });
+    });
+
+    const totalEstimatedCost = items.reduce(
+      (sum, item) => sum + Number(item.estimatedCost),
+      0,
+    );
+
+    const purchaseList = new PurchaseList({
+      targetDate,
+      kind: PurchaseListKind.STOCK_REPLENISHMENT,
+      status: PurchaseListStatus.PENDING,
+      totalEstimatedCost: this.roundNumber(totalEstimatedCost, 2),
+      itemCount: items.length,
+      createdById,
+      sourceOrderIds: [],
+      items,
+    });
+
+    const saved = await this.purchaseListRepository.save(purchaseList);
+
+    this.logger.log(
+      `Stock replenishment purchase list ${saved.id} created successfully with ${items.length} items`,
+    );
+
+    return saved;
+  }
 
   /**
    * 计算指定日期范围的采购需求
@@ -133,6 +975,8 @@ export class PurchasingService {
     this.logger.log(
       `Found ${orders.length} PAID orders for purchase calculation`,
     );
+
+    const ingredientLookup = await this.buildIngredientLookupFromOrders(orders);
 
     // 汇总所有订单的原料需求
     const ingredientMap = new Map<string, PurchaseRequirement>();
@@ -200,12 +1044,19 @@ export class PurchasingService {
 
         // 使用订单的总成本
         const totalCost = detail.cost || 0;
+        const preparationMethods = this.normalizePreparationMethods(
+          (detail as any).preparationMethod,
+        );
 
         if (ingredientMap.has(key)) {
           // 累加数量和成本
           const existing = ingredientMap.get(key)!;
           existing.quantityNeeded += purchaseQuantity;
           existing.estimatedCost += totalCost;
+          existing.preparationMethods = this.mergePreparationMethods(
+            existing.preparationMethods,
+            preparationMethods,
+          );
           // 更新最小sortOrder
           if (recipeItem.sort_order !== undefined) {
             existing.minSortOrder = Math.min(
@@ -214,6 +1065,7 @@ export class PurchasingService {
             );
           }
         } else {
+          const ingredient = ingredientLookup.get(key);
           // 新增原料
           ingredientMap.set(key, {
             ingredientId: key,
@@ -222,9 +1074,18 @@ export class PurchasingService {
             quantityNeeded: purchaseQuantity,
             quantityUnit: detail.unit || 'G',
             estimatedCost: totalCost,
+            preparationMethods:
+              preparationMethods.length > 0 ? preparationMethods : undefined,
             purchaseChannel: detail.purchaseChannel,
             productModel: detail.productModel,
             displayUnit: detail.displayUnit,
+            ingredientBaseUnit: ingredient?.baseUnit,
+            foodDensityGPerMl:
+              ingredient?.baseUnit === 'ML'
+                ? Number(
+                    (ingredient.properties as any)?.density_g_per_ml ?? 0,
+                  ) || null
+                : null,
             minSortOrder: recipeItem.sort_order,
           });
         }
@@ -246,7 +1107,10 @@ export class PurchasingService {
       `Calculated ${requirements.length} unique ingredient requirements`,
     );
 
-    return requirements;
+    return this.enrichRequirementsWithRecommendedProducts(
+      requirements,
+      ingredientLookup,
+    );
   }
 
   /**
@@ -258,13 +1122,22 @@ export class PurchasingService {
   ): Promise<{
     targetDateRange: { start: string; end: string };
     itemCount: number;
+    totalEstimatedCost: number;
     items: Array<{
       ingredientId: string;
       ingredientName: string;
       quantityNeeded: number;
       quantityUnit: string;
+      estimatedCost: number;
+      type: 'FOOD' | 'SUPPLEMENT' | 'PACKAGING';
+      displayUnit?: string;
+      ingredientBaseUnit?: string;
+      foodDensityGPerMl?: number | null;
+      preparationMethods?: string[];
       purchaseChannel?: string;
       productModel?: string;
+      suggestedProductId?: string;
+      suggestedProductName?: string;
     }>;
     affectedOrders: Array<{
       orderId: string;
@@ -306,15 +1179,27 @@ export class PurchasingService {
       ingredientName: req.ingredientName,
       quantityNeeded: req.quantityNeeded,
       quantityUnit: req.quantityUnit,
+      estimatedCost: req.estimatedCost,
       type: req.type,
       displayUnit: req.displayUnit,
+      ingredientBaseUnit: req.ingredientBaseUnit,
+      foodDensityGPerMl: req.foodDensityGPerMl,
+      preparationMethods: req.preparationMethods,
       purchaseChannel: req.purchaseChannel,
       productModel: req.productModel,
+      suggestedProductId: req.suggestedProductId,
+      suggestedProductName: req.suggestedProductName,
     }));
+
+    const totalEstimatedCost = requirements.reduce(
+      (sum, req) => sum + req.estimatedCost,
+      0,
+    );
 
     return {
       targetDateRange: { start: startDate, end },
       itemCount: requirements.length,
+      totalEstimatedCost,
       items,
       affectedOrders,
     };
@@ -348,22 +1233,31 @@ export class PurchasingService {
       throw new BadRequestException('结束日期不能早于开始日期');
     }
 
-    // 检查是否已存在该日期范围的采购清单（使用中午12点的时间）
+    // 检查同日采购清单：
+    // - 若存在待采购清单，则必须继续使用该清单，避免重复采购
+    // - 若仅存在已完成清单，则允许新建一张独立的增量采购清单
     const { start: checkStart, end: checkEnd } = DateUtil.createDateRange(
       dto.startDate,
     );
-    const exists = await this.purchaseListRepository.existsByDateRange(
+    const existingLists = await this.purchaseListRepository.findByDateRange(
       checkStart,
       checkEnd,
     );
-    if (exists) {
+    const pendingList = existingLists.find(
+      (list) => list.status === PurchaseListStatus.PENDING,
+    );
+    const hasCompletedLists = existingLists.some(
+      (list) => list.status === PurchaseListStatus.COMPLETED,
+    );
+
+    if (pendingList) {
       throw new ConflictException(
-        `日期范围 ${dto.startDate} - ${end} 的采购清单已存在`,
+        `日期 ${dto.startDate} 已存在待采购清单，请进入现有清单继续采购或合并新增订单`,
       );
     }
 
     this.logger.log(
-      `Generating purchase list for ${dto.startDate} - ${end} by user ${createdById}`,
+      `${hasCompletedLists ? 'Generating supplemental purchase list' : 'Generating purchase list'} for ${dto.startDate} - ${end} by user ${createdById}`,
     );
 
     // 计算采购需求
@@ -374,7 +1268,9 @@ export class PurchasingService {
 
     if (requirements.length === 0) {
       throw new BadRequestException(
-        `日期范围 ${dto.startDate} - ${end} 内没有找到采购需求，请确认有待生产的订单`,
+        hasCompletedLists
+          ? `日期 ${dto.startDate} 当前没有新的待采购订单，无需生成增量采购清单`
+          : `日期范围 ${dto.startDate} - ${end} 内没有找到采购需求，请确认有待生产的订单`,
       );
     }
 
@@ -424,6 +1320,8 @@ export class PurchasingService {
           estimatedCost: req.estimatedCost,
           purchaseChannel: req.purchaseChannel,
           productModel: req.productModel,
+          suggestedProductId: req.suggestedProductId,
+          suggestedProductName: req.suggestedProductName,
           displayUnit: req.displayUnit, // ✅ 传入显示单位
         }),
     );
@@ -444,6 +1342,7 @@ export class PurchasingService {
     // 创建采购清单（使用中午12点的targetDate）
     const purchaseList = new PurchaseList({
       targetDate: targetDate,
+      kind: PurchaseListKind.ORDER_DEMAND,
       status: PurchaseListStatus.PENDING,
       totalEstimatedCost,
       itemCount: items.length,
@@ -508,6 +1407,10 @@ export class PurchasingService {
       `Found ${validOrders.length}/${orders.length} valid PAID orders to add`,
     );
 
+    const ingredientLookup = await this.buildIngredientLookupFromOrders(
+      validOrders,
+    );
+
     // 3. 计算新增订单的原料需求
     const ingredientMap = new Map<string, any>();
 
@@ -548,6 +1451,12 @@ export class PurchasingService {
       }
     }
 
+    const enrichedRequirements =
+      await this.enrichRequirementsWithRecommendedProducts(
+        Array.from(ingredientMap.values()),
+        ingredientLookup,
+      );
+
     // 4. 合并到现有采购清单
     const existingItemMap = new Map(
       purchaseList.items.map((item) => [item.ingredientId, item]),
@@ -556,7 +1465,8 @@ export class PurchasingService {
     const newItems: PurchaseItem[] = [];
     const updatedItems: PurchaseItem[] = [];
 
-    for (const [ingredientId, requirement] of ingredientMap) {
+    for (const requirement of enrichedRequirements) {
+      const ingredientId = requirement.ingredientId;
       if (existingItemMap.has(ingredientId)) {
         // 更新现有项
         const existing = existingItemMap.get(ingredientId)!;
@@ -576,6 +1486,8 @@ export class PurchasingService {
           estimatedCost: requirement.estimatedCost,
           purchaseChannel: requirement.purchaseChannel,
           productModel: requirement.productModel,
+          suggestedProductId: requirement.suggestedProductId,
+          suggestedProductName: requirement.suggestedProductName,
           displayUnit: requirement.displayUnit,
         });
         purchaseList.items.push(newItem);
@@ -595,6 +1507,20 @@ export class PurchasingService {
         ...validOrders.map((o) => o.id),
       ]),
     ];
+    purchaseList.orderDateSnapshot = {
+      ...(purchaseList.orderDateSnapshot || {}),
+      ...Object.fromEntries(
+        validOrders.map((order) => [
+          order.id,
+          {
+            originalDate:
+              order.targetProductionDate?.toISOString().split('T')[0] || '',
+            hasChanged: false,
+          },
+        ]),
+      ),
+    };
+    purchaseList.updatedAt = new Date();
 
     // 6. 转换订单状态
     let transitionedCount = 0;
@@ -757,6 +1683,7 @@ export class PurchasingService {
     purchaseList.sourceOrderIds = purchaseList.sourceOrderIds.filter(
       (id) => !validOrderIds.includes(id),
     );
+    purchaseList.updatedAt = new Date();
 
     // 7. 回退订单状态
     let restoredCount = 0;
@@ -847,6 +1774,7 @@ export class PurchasingService {
     purchaseList.itemCount = purchaseList.items.length;
     purchaseList.totalEstimatedCost =
       Number(purchaseList.totalEstimatedCost) + dto.estimatedCost;
+    purchaseList.updatedAt = new Date();
 
     const saved = await this.purchaseListRepository.save(purchaseList);
 
@@ -965,6 +1893,8 @@ export class PurchasingService {
         estimatedCost: req.estimatedCost,
         purchaseChannel: req.purchaseChannel,
         productModel: req.productModel,
+        suggestedProductId: req.suggestedProductId,
+        suggestedProductName: req.suggestedProductName,
       });
     }
 
@@ -1152,6 +2082,7 @@ export class PurchasingService {
    * 查询采购清单列表
    */
   async getPurchaseLists(params: {
+    kind?: PurchaseListKind;
     status?: PurchaseListStatus;
     createdById?: string;
     startDate?: string;
@@ -1161,6 +2092,7 @@ export class PurchasingService {
     excludeReimbursed?: boolean;
   }): Promise<{ list: PurchaseList[]; total: number }> {
     const {
+      kind,
       status,
       createdById,
       startDate,
@@ -1171,10 +2103,11 @@ export class PurchasingService {
     } = params;
 
     const query: any = { page, pageSize };
+    if (kind) query.kind = kind;
     if (status) query.status = status;
     if (createdById) query.createdById = createdById;
-    if (startDate) query.startDate = new Date(startDate);
-    if (endDate) query.endDate = new Date(endDate);
+    if (startDate) query.startDate = DateUtil.getStartOfDay(startDate);
+    if (endDate) query.endDate = DateUtil.getEndOfDay(endDate);
     if (excludeReimbursed) query.excludeReimbursed = excludeReimbursed;
 
     return this.purchaseListRepository.findMany(query);
@@ -1223,6 +2156,20 @@ export class PurchasingService {
           );
         }
       }
+    }
+
+    const purchaseRecords =
+      await this.purchaseRecordRepository.findByPurchaseListId(id);
+    if (purchaseRecords.length > 0) {
+      const inboundResult =
+        await this.inventoryService.inboundFromPurchaseRecords(purchaseRecords);
+      this.logger.log(
+        `Purchase list ${id} inbounded ${inboundResult.createdCount} purchase records into inventory (${inboundResult.skippedCount} skipped)`,
+      );
+    } else {
+      this.logger.warn(
+        `Purchase list ${id} completed without purchase records, skipping inventory inbound`,
+      );
     }
 
     // 确认采购完成
@@ -1280,14 +2227,35 @@ export class PurchasingService {
     // TODO: 测试期间临时注释时间限制
     // validatePurchasingOperation(purchaseList.targetDate, '添加采购记录');
 
+    const purchaseItem = purchaseList.items.find(
+      (item) => item.id === dto.purchaseItemId,
+    );
+    if (!purchaseItem) {
+      throw new BadRequestException(`未找到采购明细：${dto.purchaseItemId}`);
+    }
+
+    if (purchaseList.reimbursementId) {
+      throw new BadRequestException('已关联报销单的采购记录不能新增');
+    }
+
+    const normalizedRecordData = this.buildNormalizedPurchaseRecordData(
+      purchaseItem,
+      dto,
+    );
+
     // 创建采购记录
     const purchaseRecord = new PurchaseRecord({
       purchaseListId,
       purchaseItemId: dto.purchaseItemId,
-      ingredientId: dto.ingredientId,
-      ingredientName: dto.ingredientName,
+      ingredientId: purchaseItem.ingredientId,
+      ingredientName: purchaseItem.ingredientName,
       purchaseChannel: dto.purchaseChannel,
-      actualQuantity: dto.actualQuantity,
+      actualQuantity: normalizedRecordData.actualQuantity,
+      actualPackageCount: normalizedRecordData.actualPackageCount,
+      actualPackageSize: normalizedRecordData.actualPackageSize,
+      actualPackageUnit: normalizedRecordData.actualPackageUnit,
+      actualBaseQuantity: normalizedRecordData.actualBaseQuantity,
+      actualBaseUnit: normalizedRecordData.actualBaseUnit,
       actualCost: dto.actualCost,
       productModel: dto.productModel,
       notes: dto.notes,
@@ -1336,8 +2304,31 @@ export class PurchasingService {
       throw new BadRequestException('已关联报销单的采购记录不能修改');
     }
 
+    const purchaseItem = purchaseList.items.find(
+      (item) => item.id === purchaseRecord.purchaseItemId,
+    );
+    if (!purchaseItem) {
+      throw new BadRequestException(
+        `未找到关联的采购明细：${purchaseRecord.purchaseItemId}`,
+      );
+    }
+
+    const normalizedRecordData = this.buildNormalizedPurchaseRecordData(
+      purchaseItem,
+      dto,
+      purchaseRecord,
+    );
+
     // 更新采购记录
-    purchaseRecord.update(dto);
+    purchaseRecord.update({
+      ...dto,
+      actualQuantity: normalizedRecordData.actualQuantity,
+      actualPackageCount: normalizedRecordData.actualPackageCount,
+      actualPackageSize: normalizedRecordData.actualPackageSize,
+      actualPackageUnit: normalizedRecordData.actualPackageUnit,
+      actualBaseQuantity: normalizedRecordData.actualBaseQuantity,
+      actualBaseUnit: normalizedRecordData.actualBaseUnit,
+    });
 
     // 保存到数据库
     const saved = await this.purchaseRecordRepository.save(purchaseRecord);
@@ -1402,7 +2393,10 @@ export class PurchasingService {
    * 从原料数据库中提取所有不同的采购渠道
    */
   async getPurchaseChannels(): Promise<string[]> {
-    const ingredients = await this.ingredientRepository.findAll();
+    const [ingredients, recommendedChannels] = await Promise.all([
+      this.ingredientRepository.findAll(),
+      this.recommendedProductService.listActivePurchaseChannels(),
+    ]);
 
     // 提取所有不同的采购渠道并过滤掉空值
     const channels = new Set<string>();
@@ -1411,6 +2405,7 @@ export class PurchasingService {
         channels.add(ingredient.purchaseChannel);
       }
     });
+    recommendedChannels.forEach((channel) => channels.add(channel));
 
     // 转换为数组并按字母顺序排序
     return Array.from(channels).sort();

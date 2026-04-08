@@ -7,6 +7,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import {
   PurchaseList,
+  PurchaseListKind,
   PurchaseListStatus,
   PurchaseListRepository,
 } from '../../domain/purchasing';
@@ -18,42 +19,91 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
   async save(purchaseList: PurchaseList): Promise<PurchaseList> {
     const data = purchaseList.toPrisma();
 
-    const saved = await this.prisma.purchaseList.upsert({
-      where: { id: purchaseList.id },
-      update: {
-        status: data.status,
-        reimbursementId: data.reimbursementId,
-        startedAt: data.startedAt,
-        completedAt: data.completedAt,
-        updatedAt: data.updatedAt,
-      },
-      create: {
-        id: data.id,
-        targetDate: data.targetDate,
-        status: data.status,
-        totalEstimatedCost: data.totalEstimatedCost,
-        itemCount: data.itemCount,
-        createdById: data.createdById,
-        sourceOrderIds: data.sourceOrderIds,
-        createdAt: data.createdAt,
-        updatedAt: data.updatedAt,
-        startedAt: data.startedAt,
-        completedAt: data.completedAt,
-        items: {
-          create: data.items,
-        },
-      },
-      include: {
-        items: true,
-        records: true, // Include purchase records for calculating aggregates
-        createdBy: {
-          select: {
-            id: true,
-            nickname: true,
-            phone: true,
+    const saved = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.purchaseList.findUnique({
+        where: { id: purchaseList.id },
+        select: { id: true },
+      });
+
+      if (existing) {
+        await tx.purchaseList.update({
+          where: { id: purchaseList.id },
+          data: {
+            targetDate: data.targetDate,
+            kind: data.kind,
+            status: data.status,
+            totalEstimatedCost: data.totalEstimatedCost,
+            itemCount: data.itemCount,
+            sourceOrderIds: data.sourceOrderIds,
+            orderDateSnapshot: data.orderDateSnapshot,
+            reimbursementId: data.reimbursementId,
+            startedAt: data.startedAt,
+            completedAt: data.completedAt,
+            updatedAt: data.updatedAt,
+          },
+        });
+
+        for (const item of data.items) {
+          await tx.purchaseItem.upsert({
+            where: { id: item.id },
+            update: {
+              ingredientId: item.ingredientId,
+              ingredientName: item.ingredientName,
+              type: item.type,
+              quantityNeeded: item.quantityNeeded,
+              quantityUnit: item.quantityUnit,
+              estimatedCost: item.estimatedCost,
+              purchaseChannel: item.purchaseChannel,
+              productModel: item.productModel,
+              suggestedProductId: item.suggestedProductId,
+              suggestedProductName: item.suggestedProductName,
+              displayUnit: item.displayUnit,
+              notes: item.notes,
+            },
+            create: {
+              ...item,
+              purchaseListId: data.id,
+            },
+          });
+        }
+      } else {
+        await tx.purchaseList.create({
+          data: {
+            id: data.id,
+            targetDate: data.targetDate,
+            kind: data.kind,
+            status: data.status,
+            totalEstimatedCost: data.totalEstimatedCost,
+            itemCount: data.itemCount,
+            createdById: data.createdById,
+            sourceOrderIds: data.sourceOrderIds,
+            orderDateSnapshot: data.orderDateSnapshot,
+            reimbursementId: data.reimbursementId,
+            createdAt: data.createdAt,
+            updatedAt: data.updatedAt,
+            startedAt: data.startedAt,
+            completedAt: data.completedAt,
+            items: {
+              create: data.items,
+            },
+          },
+        });
+      }
+
+      return tx.purchaseList.findUniqueOrThrow({
+        where: { id: purchaseList.id },
+        include: {
+          items: true,
+          records: true, // Include purchase records for calculating aggregates
+          createdBy: {
+            select: {
+              id: true,
+              nickname: true,
+              phone: true,
+            },
           },
         },
-      },
+      });
     });
 
     return PurchaseList.fromPrisma(saved);
@@ -90,7 +140,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
       where: {
         targetDate: {
           gte: startDate,
-          lte: endDate,
+          lt: endDate,
         },
       },
       include: {
@@ -157,6 +207,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
   }
 
   async findMany(params: {
+    kind?: PurchaseListKind;
     status?: PurchaseListStatus;
     createdById?: string;
     startDate?: Date;
@@ -166,6 +217,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
     excludeReimbursed?: boolean;
   }): Promise<{ list: PurchaseList[]; total: number }> {
     const {
+      kind,
       status,
       createdById,
       startDate,
@@ -176,12 +228,13 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
     } = params;
 
     const where: any = {};
+    if (kind) where.kind = kind;
     if (status) where.status = status;
     if (createdById) where.createdById = createdById;
     if (startDate || endDate) {
       where.targetDate = {};
       if (startDate) where.targetDate.gte = startDate;
-      if (endDate) where.targetDate.lte = endDate;
+      if (endDate) where.targetDate.lt = endDate;
     }
     if (excludeReimbursed) {
       where.reimbursementId = null;
@@ -268,7 +321,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
       where: {
         targetDate: {
           gte: startDate,
-          lte: endDate,
+          lt: endDate,
         },
       },
     });

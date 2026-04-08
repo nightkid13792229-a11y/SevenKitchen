@@ -29,13 +29,21 @@ export class InventoryLedgerEntry {
       throw new ValidationError('deltaG cannot be zero');
     }
 
-    // For KITCHEN_TASK, deltaG must be negative (deduction)
     if (
       this.sourceType === InventorySourceType.KITCHEN_TASK &&
       this.deltaG > 0
     ) {
       throw new ValidationError(
         `Kitchen task deductions must be negative, got: ${this.deltaG}`,
+      );
+    }
+
+    if (
+      this.sourceType === InventorySourceType.PURCHASE_RECORD &&
+      this.deltaG < 0
+    ) {
+      throw new ValidationError(
+        `Purchase record inbound entries must be positive, got: ${this.deltaG}`,
       );
     }
 

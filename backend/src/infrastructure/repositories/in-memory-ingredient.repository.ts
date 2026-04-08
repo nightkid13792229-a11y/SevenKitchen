@@ -35,7 +35,7 @@ export class InMemoryIngredientRepository implements IngredientRepository {
 
   async save(ingredient: Ingredient, tagIds?: string[]): Promise<Ingredient> {
     this.ingredients.set(ingredient.id, ingredient);
-    if (tagIds) {
+    if (tagIds !== undefined) {
       this.ingredientTags.set(ingredient.id, tagIds);
     }
     return ingredient;
@@ -51,6 +51,7 @@ export class InMemoryIngredientRepository implements IngredientRepository {
       existing.id,
       data.name ?? existing.name,
       existing.type,
+      data.procurementStrategy ?? existing.procurementStrategy,
       data.brand ?? existing.brand,
       data.productModel ?? existing.productModel,
       data.purchaseChannel ?? existing.purchaseChannel,
@@ -60,8 +61,13 @@ export class InMemoryIngredientRepository implements IngredientRepository {
       data.purchaseUnit ?? existing.purchaseUnit,
       data.purchaseToBaseRatio ?? existing.purchaseToBaseRatio,
       data.currentPricePerPurchaseUnit ?? existing.currentPricePerPurchaseUnit,
+      data.effectivePricePerPurchaseUnit ??
+        existing.effectivePricePerPurchaseUnit,
       data.weightG ?? existing.weightG,
       data.maxCapacityG ?? existing.maxCapacityG,
+      data.safetyStock ?? existing.safetyStock,
+      data.reorderPoint ?? existing.reorderPoint,
+      data.targetStock ?? existing.targetStock,
       data.properties ?? existing.properties,
     );
 
@@ -82,6 +88,7 @@ export class InMemoryIngredientRepository implements IngredientRepository {
       existing.id,
       existing.name,
       existing.type,
+      existing.procurementStrategy,
       existing.brand,
       existing.productModel,
       existing.purchaseChannel,
@@ -91,8 +98,48 @@ export class InMemoryIngredientRepository implements IngredientRepository {
       existing.purchaseUnit,
       existing.purchaseToBaseRatio,
       pricePerPurchaseUnit,
+      existing.effectivePricePerPurchaseUnit,
       existing.weightG,
       existing.maxCapacityG,
+      existing.safetyStock,
+      existing.reorderPoint,
+      existing.targetStock,
+      existing.properties,
+    );
+
+    this.ingredients.set(id, updated);
+    return updated;
+  }
+
+  async updateEffectivePrice(
+    id: string,
+    effectivePricePerPurchaseUnit: number,
+  ): Promise<Ingredient | null> {
+    const existing = this.ingredients.get(id);
+    if (!existing) {
+      return null;
+    }
+
+    const updated = new Ingredient(
+      existing.id,
+      existing.name,
+      existing.type,
+      existing.procurementStrategy,
+      existing.brand,
+      existing.productModel,
+      existing.purchaseChannel,
+      existing.notes,
+      existing.baseUnit,
+      existing.unitDisplayLabel,
+      existing.purchaseUnit,
+      existing.purchaseToBaseRatio,
+      existing.currentPricePerPurchaseUnit,
+      effectivePricePerPurchaseUnit,
+      existing.weightG,
+      existing.maxCapacityG,
+      existing.safetyStock,
+      existing.reorderPoint,
+      existing.targetStock,
       existing.properties,
     );
 

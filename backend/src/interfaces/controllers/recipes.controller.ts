@@ -502,19 +502,17 @@ export class RecipesController {
         dto.dogId,
       );
 
-      // Increment DIY generation count (fire-and-forget)
+      // Count the generation only after the DIY sheet is successfully produced
       const latestRecipe = await this.prisma.recipe.findFirst({
         where: { recipeId },
         orderBy: { version: 'desc' },
         select: { id: true },
       });
       if (latestRecipe) {
-        this.prisma.recipe
-          .update({
-            where: { id: latestRecipe.id },
-            data: { diyGenCount: { increment: 1 } },
-          })
-          .catch(() => {});
+        await this.prisma.recipe.update({
+          where: { id: latestRecipe.id },
+          data: { diyGenCount: { increment: 1 } },
+        });
       }
 
       const response: DiySheetResponseDto = {
@@ -533,26 +531,4 @@ export class RecipesController {
     }
   }
 
-  @Post(':id/track-diy')
-  @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Track DIY sheet generation count' })
-  @ApiParam({ name: 'id', description: 'Recipe ID' })
-  async trackDiyGeneration(
-    @Param('id') recipeId: string,
-  ): Promise<ApiResponseDto<null>> {
-    const latestRecipe = await this.prisma.recipe.findFirst({
-      where: { recipeId },
-      orderBy: { version: 'desc' },
-      select: { id: true },
-    });
-    if (latestRecipe) {
-      this.prisma.recipe
-        .update({
-          where: { id: latestRecipe.id },
-          data: { diyGenCount: { increment: 1 } },
-        })
-        .catch(() => {});
-    }
-    return ApiResponseDto.success(null);
-  }
 }

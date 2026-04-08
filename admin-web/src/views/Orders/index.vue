@@ -295,11 +295,12 @@ import CancelDialog from './components/CancelDialog.vue'
 import ShippingDialog from './components/ShippingDialog.vue'
 import ConfirmPaymentDialog from './components/ConfirmPaymentDialog.vue'
 import { orderApi } from '@/api/orders'
-import { OrderType } from '@/types/order'
-import type { OrderStatus, OrderListItem, OrderStats } from '@/types/order'
+import { OrderStatus, OrderType } from '@/types/order'
+import type { OrderListItem, OrderStats } from '@/types/order'
 import { formatDateTime, formatDate } from '@/utils/date'
 
 // 使枚举在模板中可用
+const OrderStatusEnum = OrderStatus
 const OrderTypeEnum = OrderType
 
 const router = useRouter()
@@ -315,10 +316,13 @@ const stats = ref<OrderStats>({
   total: 0,
   pendingPayment: 0,
   paid: 0,
+  purchasing: 0,
   inProduction: 0,
+  freezing: 0,
   shipped: 0,
   completed: 0,
-  cancelled: 0
+  cancelled: 0,
+  aftersale: 0
 })
 
 // 筛选表单
@@ -348,21 +352,27 @@ const currentOrder = ref<OrderListItem | null>(null)
 // 状态选项（仅显示管理员需要关注的状态）
 // Phase 9: Simplified status options aligned with e-commerce standards
 const statusOptions = [
-  { label: '已付款', value: 'PAID' },
-  { label: '生产中', value: 'IN_PRODUCTION' },
-  { label: '已发货', value: 'SHIPPED' },
-  { label: '已完成', value: 'COMPLETED' },
-  { label: '已取消', value: 'CANCELLED' }
+  { label: '已付款', value: OrderStatusEnum.PAID },
+  { label: '采购中', value: OrderStatusEnum.PURCHASING },
+  { label: '生产中', value: OrderStatusEnum.IN_PRODUCTION },
+  { label: '急冻中', value: OrderStatusEnum.FREEZING },
+  { label: '已发货', value: OrderStatusEnum.SHIPPED },
+  { label: '已完成', value: OrderStatusEnum.COMPLETED },
+  { label: '已取消', value: OrderStatusEnum.CANCELLED }
 ]
 
 // 状态卡片点击筛选映射
 // Phase 9: Simplified status mapping aligned with e-commerce standards
 const statCardStatusMap: Record<string, OrderStatus[]> = {
   '全部订单': [],
-  '已付款': ['PAID'],
-  '生产中': ['IN_PRODUCTION'],
-  '已发货': ['SHIPPED'],
-  '已完成': ['COMPLETED']
+  '已付款': [OrderStatusEnum.PAID],
+  '生产中': [
+    OrderStatusEnum.PURCHASING,
+    OrderStatusEnum.IN_PRODUCTION,
+    OrderStatusEnum.FREEZING
+  ],
+  '已发货': [OrderStatusEnum.SHIPPED],
+  '已完成': [OrderStatusEnum.COMPLETED]
 }
 
 // 加载订单列表
@@ -458,19 +468,18 @@ const handleViewDetail = (id: string) => {
 // 判断是否可以取消订单
 const canCancelOrder = (status: OrderStatus) => {
   return [
-    'INIT',
-    'PENDING_PAYMENT',
-    'PAID',
-    'PURCHASING',
-    'IN_PRODUCTION',
-    'READY_FOR_PACKAGING',
-    'READY_FOR_SHIPMENT'
+    OrderStatusEnum.INIT,
+    OrderStatusEnum.PENDING_PAYMENT,
+    OrderStatusEnum.PAID,
+    OrderStatusEnum.PURCHASING,
+    OrderStatusEnum.IN_PRODUCTION,
+    OrderStatusEnum.FREEZING
   ].includes(status)
 }
 
 // 判断是否可以发货
 const canShipOrder = (status: OrderStatus) => {
-  return status === 'READY_FOR_SHIPMENT'
+  return status === OrderStatusEnum.FREEZING
 }
 
 // 取消订单
@@ -566,14 +575,17 @@ const handleExport = async () => {
 // 获取状态类型
 // Phase 9: Simplified status types aligned with e-commerce standards
 const getStatusType = (status: OrderStatus) => {
-  const typeMap: Record<OrderStatus, any> = {
+  const typeMap: Record<string, any> = {
     INIT: 'info',
     PENDING_PAYMENT: 'warning',
     PAID: 'success',
+    PURCHASING: 'primary',
     IN_PRODUCTION: 'primary',
+    FREEZING: 'primary',
     SHIPPED: 'info',
     COMPLETED: 'success',
-    CANCELLED: 'danger'
+    CANCELLED: 'danger',
+    AFTERSALE: 'warning'
   }
   return typeMap[status] || ''
 }
@@ -581,14 +593,17 @@ const getStatusType = (status: OrderStatus) => {
 // 获取状态文本（仅显示管理员需要的状态）
 // Phase 9: Simplified status text aligned with e-commerce standards
 const getStatusText = (status: OrderStatus) => {
-  const textMap: Record<OrderStatus, string> = {
+  const textMap: Record<string, string> = {
     INIT: '订单创建',
     PENDING_PAYMENT: '待付款',
     PAID: '已付款',
+    PURCHASING: '采购中',
     IN_PRODUCTION: '制作中',
+    FREEZING: '急冻中',
     SHIPPED: '已发货',
     COMPLETED: '已完成',
-    CANCELLED: '已取消'
+    CANCELLED: '已取消',
+    AFTERSALE: '售后中'
   }
   return textMap[status] || status
 }

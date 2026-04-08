@@ -129,6 +129,7 @@ export function recalculatePurchaseList(purchaseListId: string) {
  * 查看采购清单列表
  */
 export function getPurchaseLists(params: {
+  kind?: string;
   status?: string;
   startDate?: string;
   endDate?: string;
@@ -140,6 +141,210 @@ export function getPurchaseLists(params: {
     url: '/staff/purchasing/lists',
     method: 'GET',
     data: params,
+  });
+}
+
+export interface StockPurchaseIngredient {
+  id: string;
+  name: string;
+  type: 'FOOD' | 'SUPPLEMENT' | 'PACKAGING';
+  procurementStrategy: 'DAILY_PURCHASE' | 'STOCK_REPLENISHMENT' | 'HYBRID';
+  baseUnit: 'G' | 'ML' | 'PCS';
+  stockUnitLabel: string;
+  purchaseUnit: string;
+  purchaseToBaseRatio: number;
+  unitDisplayLabel?: string | null;
+  purchaseChannel?: string | null;
+  productModel?: string | null;
+  currentPricePerPurchaseUnit: number;
+  effectivePricePerPurchaseUnit?: number | null;
+  currentStock: number;
+  safetyStock?: number | null;
+  reorderPoint?: number | null;
+  targetStock?: number | null;
+  stockStatus: 'NO_POLICY' | 'SUFFICIENT' | 'LOW_STOCK' | 'NEEDS_REPLENISHMENT';
+  suggestedBaseQuantity: number;
+  suggestedPurchaseQuantity: number;
+  suggestedEstimatedCost: number;
+  suggestedProductId?: string;
+  suggestedProductName?: string;
+}
+
+export interface ProcurementSkuOption {
+  id: string;
+  name: string;
+  purchaseChannel?: string | null;
+  productModel?: string | null;
+}
+
+export interface ProcurementSkuProfile {
+  procurementSkuId?: string;
+  procurementSkuName?: string;
+  procurementSkuChoices: ProcurementSkuOption[];
+  suggestedProductId?: string;
+  suggestedProductName?: string;
+  purchaseChannel?: string;
+  productModel?: string;
+}
+
+const normalizeText = (value?: string | null) => {
+  return (value || '').trim();
+};
+
+const normalizeProcurementSkuOption = (sku: any): ProcurementSkuOption | null => {
+  if (!sku) {
+    return null;
+  }
+
+  if (typeof sku === 'string') {
+    const text = normalizeText(sku);
+    if (!text) {
+      return null;
+    }
+    return {
+      id: text,
+      name: text,
+    };
+  }
+
+  const id = normalizeText(
+    sku.id ||
+      sku.procurementSkuId ||
+      sku.skuId ||
+      sku.value ||
+      sku.code ||
+      sku.key ||
+      sku.name,
+  );
+  const name = normalizeText(
+    sku.name ||
+      sku.procurementSkuName ||
+      sku.skuName ||
+      sku.label ||
+      sku.title ||
+      id,
+  );
+
+  if (!id && !name) {
+    return null;
+  }
+
+  return {
+    id: id || name,
+    name: name || id,
+    purchaseChannel: normalizeText(sku.purchaseChannel) || undefined,
+    productModel: normalizeText(sku.productModel) || undefined,
+  };
+};
+
+const collectProcurementSkuOptions = (item: any): ProcurementSkuOption[] => {
+  const seen = new Set<string>();
+  const options: ProcurementSkuOption[] = [];
+
+  const append = (sku: any) => {
+    const option = normalizeProcurementSkuOption(sku);
+    if (!option) {
+      return;
+    }
+
+    const dedupeKey = option.id || option.name;
+    if (!dedupeKey || seen.has(dedupeKey)) {
+      return;
+    }
+
+    seen.add(dedupeKey);
+    options.push(option);
+  };
+
+  const ingredientProcurementSkus = item?.ingredient?.procurementSkus;
+  if (Array.isArray(ingredientProcurementSkus)) {
+    ingredientProcurementSkus.forEach(append);
+  }
+
+  if (Array.isArray(item?.procurementSkus)) {
+    item.procurementSkus.forEach(append);
+  }
+
+  return options;
+};
+
+export const resolveProcurementSkuProfile = (
+  item: any,
+  preferredSkuId?: string | null,
+): ProcurementSkuProfile => {
+  const procurementSkuChoices = collectProcurementSkuOptions(item);
+  const normalizedPreferredSkuId = normalizeText(preferredSkuId);
+  const itemProcurementSkuId = normalizeText(item?.procurementSkuId);
+  const itemProcurementSkuName = normalizeText(item?.procurementSkuName);
+
+  const selectedById = procurementSkuChoices.find((option) => {
+    if (!normalizedPreferredSkuId) {
+      return false;
+    }
+    return option.id === normalizedPreferredSkuId || option.name === normalizedPreferredSkuId;
+  });
+
+  const selectedByItem = procurementSkuChoices.find((option) => {
+    if (itemProcurementSkuId && (option.id === itemProcurementSkuId || option.name === itemProcurementSkuId)) {
+      return true;
+    }
+
+    if (itemProcurementSkuName && option.name === itemProcurementSkuName) {
+      return true;
+    }
+
+    return false;
+  });
+
+  const selectedBySingleChoice = procurementSkuChoices.length === 1 ? procurementSkuChoices[0] : null;
+  const selectedSku = selectedById || selectedByItem || selectedBySingleChoice || null;
+
+  const suggestedProductId = normalizeText(item?.suggestedProductId);
+  const suggestedProductName = normalizeText(item?.suggestedProductName);
+  const purchaseChannel = normalizeText(
+    selectedSku?.purchaseChannel || item?.purchaseChannel || item?.ingredient?.purchaseChannel,
+  );
+  const productModel = normalizeText(
+    selectedSku?.productModel || item?.productModel || item?.ingredient?.productModel,
+  );
+
+  return {
+    procurementSkuId: selectedSku?.id || itemProcurementSkuId || '',
+    procurementSkuName: selectedSku?.name || itemProcurementSkuName || '',
+    procurementSkuChoices,
+    suggestedProductId,
+    suggestedProductName,
+    purchaseChannel,
+    productModel,
+  };
+};
+
+export function getStockPurchaseIngredients(params?: {
+  keyword?: string;
+  type?: 'FOOD' | 'SUPPLEMENT' | 'PACKAGING';
+  onlyNeedsReplenishment?: boolean;
+}) {
+  return request({
+    url: '/staff/purchasing/stock-ingredients',
+    method: 'GET',
+    data: params,
+  });
+}
+
+export function createStockPurchaseList(data: {
+  targetDate: string;
+  items: Array<{
+    ingredientId: string;
+    plannedQuantity: number;
+    purchaseChannel?: string;
+    productModel?: string;
+    notes?: string;
+  }>;
+}) {
+  return request({
+    url: '/staff/purchasing/lists/stock',
+    method: 'POST',
+    data,
   });
 }
 
@@ -188,10 +393,15 @@ export function startPurchase(id: string) {
  */
 export function addPurchaseRecord(purchaseListId: string, data: {
   purchaseItemId: string;
-  ingredientId: string;
-  ingredientName: string;
   purchaseChannel: string;
-  actualQuantity: number;
+  procurementSkuId?: string;
+  procurementSkuName?: string;
+  suggestedProductId?: string;
+  suggestedProductName?: string;
+  actualQuantity?: number;
+  actualPackageCount?: number;
+  actualPackageSize?: number;
+  actualPackageUnit?: string;
   actualCost: number;
   productModel?: string;
   notes?: string;
@@ -216,15 +426,22 @@ export function getPurchaseRecords(purchaseListId: string) {
 /**
  * 更新采购记录
  */
-export function updatePurchaseRecord(recordId: string, data: {
+export function updatePurchaseRecord(purchaseListId: string, recordId: string, data: {
   purchaseChannel?: string;
+  procurementSkuId?: string;
+  procurementSkuName?: string;
+  suggestedProductId?: string;
+  suggestedProductName?: string;
   actualQuantity?: number;
+  actualPackageCount?: number;
+  actualPackageSize?: number;
+  actualPackageUnit?: string;
   actualCost?: number;
   productModel?: string;
   notes?: string;
 }) {
   return request({
-    url: `/staff/purchasing/lists/${recordId}/records/${recordId}`,
+    url: `/staff/purchasing/lists/${purchaseListId}/records/${recordId}`,
     method: 'PUT',
     data,
   });
@@ -233,9 +450,9 @@ export function updatePurchaseRecord(recordId: string, data: {
 /**
  * 删除采购记录
  */
-export function deletePurchaseRecord(recordId: string) {
+export function deletePurchaseRecord(purchaseListId: string, recordId: string) {
   return request({
-    url: `/staff/purchasing/lists/${recordId}/records/${recordId}`,
+    url: `/staff/purchasing/lists/${purchaseListId}/records/${recordId}`,
     method: 'DELETE',
   });
 }
@@ -258,12 +475,16 @@ export function getPurchaseChannels() {
  * 提交报销申请参数
  */
 export interface SubmitReimbursementParams {
-  purchaseListIds: string[];
+  purchaseListIds?: string[];
   receiptUrls: string[];
   totalActualCost: number;
   platformShippingFee?: number;
   platformPackagingFee?: number;
-  customFees?: Array<{ description: string; amount: number }>;
+  customFees?: Array<{
+    category?: string;
+    description?: string;
+    amount: number;
+  }>;
 }
 
 /**
@@ -569,4 +790,3 @@ export function uploadPaymentProofFiles(reimbursementId: string, files: string[]
 
   return Promise.all(uploadPromises);
 }
-

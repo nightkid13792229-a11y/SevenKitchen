@@ -7,7 +7,7 @@
 /**
  * 格式化为本地日期时间
  */
-export function formatDateTime(isoString: string | null | undefined): string {
+export function formatDateTime(isoString: string | Date | null | undefined): string {
   if (!isoString) return '-';
 
   try {
@@ -31,7 +31,7 @@ export function formatDateTime(isoString: string | null | undefined): string {
 /**
  * 格式化为本地日期
  */
-export function formatDate(isoString: string | null | undefined): string {
+export function formatDate(isoString: string | Date | null | undefined): string {
   if (!isoString) return '-';
 
   try {

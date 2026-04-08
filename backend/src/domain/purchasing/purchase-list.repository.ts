@@ -3,7 +3,7 @@
  * 采购清单仓储接口
  */
 
-import { PurchaseList, PurchaseListStatus } from './index';
+import { PurchaseList, PurchaseListKind, PurchaseListStatus } from './index';
 
 export interface PurchaseListRepository {
   /**
@@ -35,6 +35,7 @@ export interface PurchaseListRepository {
    * 查询采购清单列表（带分页和筛选）
    */
   findMany(params: {
+    kind?: PurchaseListKind;
     status?: PurchaseListStatus;
     createdById?: string;
     startDate?: Date;

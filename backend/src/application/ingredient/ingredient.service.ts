@@ -6,13 +6,18 @@
 import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import type { IngredientRepository } from '../../domain/ingredient/ingredient.repository';
 import { Ingredient } from '../../domain/ingredient';
-import { IngredientType, BaseUnit } from '../../domain/ingredient/enums';
+import {
+  IngredientType,
+  BaseUnit,
+  IngredientProcurementStrategy,
+} from '../../domain/ingredient/enums';
 
 export const INGREDIENT_REPOSITORY = Symbol('INGREDIENT_REPOSITORY');
 
 export interface CreateIngredientDto {
   name: string;
   type: IngredientType;
+  procurementStrategy?: IngredientProcurementStrategy;
   brand?: string | null;
   productModel?: string | null;
   purchaseChannel?: string | null;
@@ -22,14 +27,19 @@ export interface CreateIngredientDto {
   purchaseUnit: string;
   purchaseToBaseRatio: number;
   currentPricePerPurchaseUnit: number;
+  effectivePricePerPurchaseUnit?: number | null;
   weightG?: number | null;
   maxCapacityG?: number | null;
+  safetyStock?: number | null;
+  reorderPoint?: number | null;
+  targetStock?: number | null;
   properties: Record<string, any>;
   tagIds?: string[];
 }
 
 export interface UpdateIngredientDto {
   name?: string;
+  procurementStrategy?: IngredientProcurementStrategy;
   brand?: string | null;
   productModel?: string | null;
   purchaseChannel?: string | null;
@@ -39,8 +49,12 @@ export interface UpdateIngredientDto {
   purchaseUnit?: string;
   purchaseToBaseRatio?: number;
   currentPricePerPurchaseUnit?: number;
+  effectivePricePerPurchaseUnit?: number | null;
   weightG?: number | null;
   maxCapacityG?: number | null;
+  safetyStock?: number | null;
+  reorderPoint?: number | null;
+  targetStock?: number | null;
   properties?: Record<string, any>;
   tagIds?: string[];
   type?: IngredientType;
@@ -97,6 +111,7 @@ export class IngredientService {
       crypto.randomUUID(),
       dto.name,
       dto.type,
+      dto.procurementStrategy ?? IngredientProcurementStrategy.DAILY_PURCHASE,
       dto.brand ?? null,
       dto.productModel ?? null,
       dto.purchaseChannel ?? null,
@@ -106,8 +121,12 @@ export class IngredientService {
       dto.purchaseUnit,
       dto.purchaseToBaseRatio,
       dto.currentPricePerPurchaseUnit,
+      dto.effectivePricePerPurchaseUnit ?? dto.currentPricePerPurchaseUnit,
       dto.weightG ?? null,
       dto.maxCapacityG ?? null,
+      dto.safetyStock ?? null,
+      dto.reorderPoint ?? null,
+      dto.targetStock ?? null,
       dto.properties,
     );
 
@@ -126,34 +145,50 @@ export class IngredientService {
       throw new NotFoundException(`Ingredient not found: ${id}`);
     }
 
-    const data: any = {};
-    if (dto.name !== undefined) data.name = dto.name;
-    if (dto.brand !== undefined) data.brand = dto.brand;
-    if (dto.productModel !== undefined) data.productModel = dto.productModel;
-    if (dto.purchaseChannel !== undefined)
-      data.purchaseChannel = dto.purchaseChannel;
-    if (dto.notes !== undefined) data.notes = dto.notes;
-    if (dto.baseUnit !== undefined) data.baseUnit = dto.baseUnit;
-    if (dto.unitDisplayLabel !== undefined)
-      data.unitDisplayLabel = dto.unitDisplayLabel;
-    if (dto.purchaseUnit !== undefined) data.purchaseUnit = dto.purchaseUnit;
-    if (dto.purchaseToBaseRatio !== undefined)
-      data.purchaseToBaseRatio = dto.purchaseToBaseRatio;
-    if (dto.currentPricePerPurchaseUnit !== undefined)
-      data.currentPricePerPurchaseUnit = dto.currentPricePerPurchaseUnit;
-    if (dto.weightG !== undefined) data.weightG = dto.weightG;
-    if (dto.maxCapacityG !== undefined) data.maxCapacityG = dto.maxCapacityG;
-    if (dto.properties !== undefined) data.properties = dto.properties;
-    if (dto.type !== undefined) data.type = dto.type;
-
-    const updated = await this.ingredientRepository.update(id, data);
+    const updated = new Ingredient(
+      existing.id,
+      dto.name !== undefined ? dto.name : existing.name,
+      dto.type !== undefined ? dto.type : existing.type,
+      dto.procurementStrategy !== undefined
+        ? dto.procurementStrategy
+        : existing.procurementStrategy,
+      dto.brand !== undefined ? dto.brand : existing.brand,
+      dto.productModel !== undefined
+        ? dto.productModel
+        : existing.productModel,
+      dto.purchaseChannel !== undefined
+        ? dto.purchaseChannel
+        : existing.purchaseChannel,
+      dto.notes !== undefined ? dto.notes : existing.notes,
+      dto.baseUnit !== undefined ? dto.baseUnit : existing.baseUnit,
+      dto.unitDisplayLabel !== undefined
+        ? dto.unitDisplayLabel
+        : existing.unitDisplayLabel,
+      dto.purchaseUnit !== undefined ? dto.purchaseUnit : existing.purchaseUnit,
+      dto.purchaseToBaseRatio !== undefined
+        ? dto.purchaseToBaseRatio
+        : existing.purchaseToBaseRatio,
+      dto.currentPricePerPurchaseUnit !== undefined
+        ? dto.currentPricePerPurchaseUnit
+        : existing.currentPricePerPurchaseUnit,
+      dto.effectivePricePerPurchaseUnit !== undefined
+        ? dto.effectivePricePerPurchaseUnit
+        : existing.effectivePricePerPurchaseUnit,
+      dto.weightG !== undefined ? dto.weightG : existing.weightG,
+      dto.maxCapacityG !== undefined ? dto.maxCapacityG : existing.maxCapacityG,
+      dto.safetyStock !== undefined ? dto.safetyStock : existing.safetyStock,
+      dto.reorderPoint !== undefined
+        ? dto.reorderPoint
+        : existing.reorderPoint,
+      dto.targetStock !== undefined ? dto.targetStock : existing.targetStock,
+      dto.properties !== undefined ? dto.properties : existing.properties,
+    );
 
     // Update tag associations if provided
-    if (dto.tagIds !== undefined) {
-      await this.ingredientRepository.setTags(id, dto.tagIds);
-    }
-
-    return updated;
+    return this.ingredientRepository.save(
+      updated,
+      dto.tagIds !== undefined ? dto.tagIds : undefined,
+    );
   }
 
   /**
@@ -174,6 +209,11 @@ export class IngredientService {
     id: string,
     dto: UpdateIngredientPriceDto,
   ): Promise<Ingredient> {
+    const existing = await this.ingredientRepository.findById(id);
+    if (!existing) {
+      throw new NotFoundException(`Ingredient not found: ${id}`);
+    }
+
     const ingredient = await this.ingredientRepository.updatePrice(
       id,
       dto.currentPricePerPurchaseUnit,
@@ -181,7 +221,15 @@ export class IngredientService {
     if (!ingredient) {
       throw new NotFoundException(`Ingredient not found: ${id}`);
     }
-    return ingredient;
+
+    const updatedEffective = await this.ingredientRepository.updateEffectivePrice(
+      id,
+      dto.currentPricePerPurchaseUnit,
+    );
+    if (!updatedEffective) {
+      throw new NotFoundException(`Ingredient not found: ${id}`);
+    }
+    return updatedEffective;
   }
 
   /**

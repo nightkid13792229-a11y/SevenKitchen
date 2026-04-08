@@ -40,6 +40,7 @@ describe('DogCalcService', () => {
       'owner-id-1',
       'Test Dog',
       'breed-id-1',
+      null,
       overrides?.birthday ?? new Date('2020-01-01'),
       DogGender.MALE,
       overrides?.isNeutered ?? false,
@@ -52,6 +53,8 @@ describe('DogCalcService', () => {
       overrides?.treatInputMode ?? TreatInputMode.ESTIMATE_LEVEL,
       overrides?.treatLevel ?? TreatLevel.LOW,
       overrides?.manualTreatKcal ?? null,
+      null,
+      null,
       null,
       0,
     );

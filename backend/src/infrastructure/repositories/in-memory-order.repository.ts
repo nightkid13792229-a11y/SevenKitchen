@@ -135,10 +135,13 @@ export class InMemoryOrderRepository implements OrderRepository {
     total: number;
     pendingPayment: number;
     paid: number;
+    purchasing: number;
     inProduction: number;
+    freezing: number;
     shipped: number;
     completed: number;
     cancelled: number;
+    aftersale: number;
   }> {
     const orders = Array.from(this.orders.values());
 
@@ -150,10 +153,13 @@ export class InMemoryOrderRepository implements OrderRepository {
       total: orders.length,
       pendingPayment: countByStatus(OrderStatus.PENDING_PAYMENT),
       paid: countByStatus(OrderStatus.PAID),
+      purchasing: countByStatus(OrderStatus.PURCHASING),
       inProduction: countByStatus(OrderStatus.IN_PRODUCTION),
+      freezing: countByStatus(OrderStatus.FREEZING),
       shipped: countByStatus(OrderStatus.SHIPPED),
       completed: countByStatus(OrderStatus.COMPLETED),
       cancelled: countByStatus(OrderStatus.CANCELLED),
+      aftersale: countByStatus(OrderStatus.AFTERSALE),
     });
   }
 

@@ -47,6 +47,8 @@ export class PrismaDogBreedRepository implements DogBreedRepository {
       data: {
         id: breed.id,
         name: breed.name,
+        aliases: breed.aliases,
+        isCommon: breed.isCommon,
         sizeCategory: breed.sizeCategory,
         growthCurveType: breed.growthCurveType,
         adultAgeMonths: breed.adultAgeMonths,
@@ -64,6 +66,8 @@ export class PrismaDogBreedRepository implements DogBreedRepository {
         where: { id },
         data: {
           name: breed.name,
+          aliases: breed.aliases,
+          isCommon: breed.isCommon,
           sizeCategory: breed.sizeCategory,
           growthCurveType: breed.growthCurveType,
           adultAgeMonths: breed.adultAgeMonths,
@@ -123,6 +127,7 @@ export class PrismaDogBreedRepository implements DogBreedRepository {
     return new DogBreed(
       record.id,
       record.name,
+      record.aliases || [],
       record.sizeCategory as DogSizeCategory,
       record.growthCurveType as GrowthCurveType,
       record.adultAgeMonths,

@@ -19,6 +19,8 @@ import { BadRequestExceptionFilter } from 'src/common/bad-request-exception.filt
 import {
   DogService,
   DOG_REPOSITORY,
+  DOG_BREED_REPOSITORY,
+  PRISMA_SERVICE,
   RECIPE_REPOSITORY,
 } from 'src/application/dog/dog.service';
 import { InMemoryDogRepository } from 'src/infrastructure/repositories/in-memory-dog.repository';
@@ -29,14 +31,85 @@ import {
   LifeStageOverride,
   TreatInputMode,
   TreatLevel,
+  DogSizeCategory,
 } from 'src/domain';
 import { Dog } from 'src/domain/dog/dog.entity';
+import { DogBreed } from 'src/domain/dog/dog-breed.entity';
+import { GrowthCurveType } from 'src/domain/dog/enums';
 import { JwtAuthService } from 'src/auth/jwt.service';
 import { AuthGuard } from 'src/auth/auth.guard';
+import {
+  MEDICAL_RECORD_REPOSITORY,
+  CHECKUP_RECORD_REPOSITORY,
+  ALLERGY_RECORD_REPOSITORY,
+} from 'src/application/health/health.service';
+import { WeightRecordService } from 'src/application/weight-record/weight-record.service';
+import { PrismaService } from 'src/infrastructure/prisma.service';
+import { TencentCosService } from 'src/infrastructure/services/tencent-cos.service';
 
 describe('DogsController (e2e)', () => {
   let app: INestApplication;
   let dogRepository: InMemoryDogRepository;
+  const mockBreed = new DogBreed(
+    '550e8400-e29b-41d4-a716-446655440000',
+    'Test Breed',
+    [],
+    DogSizeCategory.SMALL,
+    GrowthCurveType.STANDARD,
+    12,
+    8,
+    6,
+    true,
+  );
+
+  const mockDogBreedRepository = {
+    findById: jest.fn().mockResolvedValue(mockBreed),
+    findAll: jest.fn().mockResolvedValue([mockBreed]),
+    findBySizeCategory: jest.fn(),
+    save: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+    existsByName: jest.fn(),
+    countUsage: jest.fn(),
+    findUsage: jest.fn(),
+  };
+
+  const mockMedicalRecordRepository = {
+    findById: jest.fn(),
+    findByDogId: jest.fn().mockResolvedValue([]),
+    findByStatus: jest.fn(),
+    create: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+  };
+
+  const mockCheckupRecordRepository = {
+    findById: jest.fn(),
+    findByDogId: jest.fn().mockResolvedValue([]),
+    create: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+  };
+
+  const mockAllergyRecordRepository = {
+    findById: jest.fn(),
+    findByDogId: jest.fn().mockResolvedValue([]),
+    create: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+  };
+
+  const mockWeightRecordService = {
+    create: jest.fn(),
+    findByDogId: jest.fn(),
+    delete: jest.fn(),
+    updateSyncedToProfile: jest.fn(),
+  };
+
+  const mockCosService = {
+    uploadImage: jest.fn(),
+    deleteImage: jest.fn(),
+  };
 
   beforeEach(async () => {
     const moduleFixture: TestingModule = await Test.createTestingModule({
@@ -54,8 +127,40 @@ describe('DogsController (e2e)', () => {
           useClass: InMemoryDogRepository,
         },
         {
+          provide: DOG_BREED_REPOSITORY,
+          useValue: mockDogBreedRepository,
+        },
+        {
           provide: RECIPE_REPOSITORY,
           useClass: InMemoryRecipeRepository,
+        },
+        {
+          provide: PRISMA_SERVICE,
+          useValue: {},
+        },
+        {
+          provide: MEDICAL_RECORD_REPOSITORY,
+          useValue: mockMedicalRecordRepository,
+        },
+        {
+          provide: CHECKUP_RECORD_REPOSITORY,
+          useValue: mockCheckupRecordRepository,
+        },
+        {
+          provide: ALLERGY_RECORD_REPOSITORY,
+          useValue: mockAllergyRecordRepository,
+        },
+        {
+          provide: WeightRecordService,
+          useValue: mockWeightRecordService,
+        },
+        {
+          provide: PrismaService,
+          useValue: {},
+        },
+        {
+          provide: TencentCosService,
+          useValue: mockCosService,
         },
         JwtAuthService,
         AuthGuard,
@@ -100,19 +205,27 @@ describe('DogsController (e2e)', () => {
     );
 
     dogRepository = moduleFixture.get(DOG_REPOSITORY);
+    jest.clearAllMocks();
+    mockDogBreedRepository.findById.mockResolvedValue(mockBreed);
+    mockDogBreedRepository.findAll.mockResolvedValue([mockBreed]);
+    mockMedicalRecordRepository.findByDogId.mockResolvedValue([]);
+    mockCheckupRecordRepository.findByDogId.mockResolvedValue([]);
+    mockAllergyRecordRepository.findByDogId.mockResolvedValue([]);
 
     await app.init();
   });
 
   afterEach(async () => {
-    await app.close();
+    if (app) {
+      await app.close();
+    }
   });
 
   describe('GET /api/v1/dogs', () => {
     it('should return empty array when customer has no dogs', async () => {
       const customerId = 'customer-with-no-dogs';
 
-      const response = await request(app.getHttpServer())
+      const response = await request(app.getHttpAdapter().getInstance())
         .get('/api/v1/dogs')
         .set('X-Customer-Id', customerId)
         .expect(200);
@@ -133,6 +246,7 @@ describe('DogsController (e2e)', () => {
         customerA,
         'Dog 1',
         '550e8400-e29b-41d4-a716-446655440000',
+        null,
         new Date('2020-01-01'),
         DogGender.MALE,
         false,
@@ -146,6 +260,8 @@ describe('DogsController (e2e)', () => {
         TreatLevel.LOW,
         null,
         null,
+        null,
+        null,
         0,
       );
 
@@ -154,6 +270,7 @@ describe('DogsController (e2e)', () => {
         customerA,
         'Dog 2',
         '550e8400-e29b-41d4-a716-446655440000',
+        null,
         new Date('2021-01-01'),
         DogGender.FEMALE,
         true,
@@ -167,6 +284,8 @@ describe('DogsController (e2e)', () => {
         TreatLevel.LOW,
         null,
         null,
+        null,
+        null,
         0,
       );
 
@@ -176,6 +295,7 @@ describe('DogsController (e2e)', () => {
         customerB,
         'Dog 3',
         '550e8400-e29b-41d4-a716-446655440000',
+        null,
         new Date('2022-01-01'),
         DogGender.MALE,
         false,
@@ -189,6 +309,8 @@ describe('DogsController (e2e)', () => {
         TreatLevel.LOW,
         null,
         null,
+        null,
+        null,
         0,
       );
 
@@ -197,7 +319,7 @@ describe('DogsController (e2e)', () => {
       await dogRepository.save(dog3);
 
       // List dogs for customer A
-      const responseA = await request(app.getHttpServer())
+      const responseA = await request(app.getHttpAdapter().getInstance())
         .get('/api/v1/dogs')
         .set('X-Customer-Id', customerA)
         .expect(200);
@@ -226,7 +348,7 @@ describe('DogsController (e2e)', () => {
       );
 
       // List dogs for customer B
-      const responseB = await request(app.getHttpServer())
+      const responseB = await request(app.getHttpAdapter().getInstance())
         .get('/api/v1/dogs')
         .set('X-Customer-Id', customerB)
         .expect(200);
@@ -244,7 +366,7 @@ describe('DogsController (e2e)', () => {
 
     it('should return 401 when X-Customer-Id header is missing', async () => {
       // UnauthorizedExceptionFilter converts UnauthorizedException to HTTP 200 with code 401 in body
-      const response = await request(app.getHttpServer())
+      const response = await request(app.getHttpAdapter().getInstance())
         .get('/api/v1/dogs')
         .expect(200);
 
@@ -268,7 +390,7 @@ describe('DogsController (e2e)', () => {
         lifeStageOverride: LifeStageOverride.NONE,
       };
 
-      const response = await request(app.getHttpServer())
+      const response = await request(app.getHttpAdapter().getInstance())
         .post('/api/v1/dogs/calc-preview')
         .send(validPayload)
         .expect(200);
@@ -296,7 +418,7 @@ describe('DogsController (e2e)', () => {
         lifeStageOverride: LifeStageOverride.NONE,
       };
 
-      const response = await request(app.getHttpServer())
+      const response = await request(app.getHttpAdapter().getInstance())
         .post('/api/v1/dogs/calc-preview')
         .send(invalidPayload)
         .expect(200); // BadRequestExceptionFilter returns HTTP 200 with code 400 in body
@@ -311,7 +433,7 @@ describe('DogsController (e2e)', () => {
         // Missing other required fields
       };
 
-      const response = await request(app.getHttpServer())
+      const response = await request(app.getHttpAdapter().getInstance())
         .post('/api/v1/dogs/calc-preview')
         .send(incompletePayload)
         .expect(200); // BadRequestExceptionFilter returns HTTP 200 with code 400 in body
@@ -335,7 +457,7 @@ describe('DogsController (e2e)', () => {
         lifeStageOverride: LifeStageOverride.NONE,
       };
 
-      const response = await request(app.getHttpServer())
+      const response = await request(app.getHttpAdapter().getInstance())
         .post('/api/v1/dogs')
         .set('X-Customer-Id', 'test-owner-id')
         .send(validPayload)
@@ -361,7 +483,7 @@ describe('DogsController (e2e)', () => {
         // Missing required fields: birthday, isNeutered, bcsScore, activityLevel, lifeStageOverride
       };
 
-      const response = await request(app.getHttpServer())
+      const response = await request(app.getHttpAdapter().getInstance())
         .post('/api/v1/dogs')
         .set('X-Customer-Id', 'test-owner-id')
         .send(invalidPayload)
@@ -388,7 +510,7 @@ describe('DogsController (e2e)', () => {
         // Missing all other required fields
       };
 
-      const response = await request(app.getHttpServer())
+      const response = await request(app.getHttpAdapter().getInstance())
         .post('/api/v1/dogs')
         .set('X-Customer-Id', 'test-owner-id')
         .send(incompletePayload)
@@ -415,7 +537,7 @@ describe('DogsController (e2e)', () => {
         lifeStageOverride: LifeStageOverride.NONE,
       };
 
-      const response = await request(app.getHttpServer())
+      const response = await request(app.getHttpAdapter().getInstance())
         .post('/api/v1/dogs')
         .set('X-Customer-Id', 'test-owner-id')
         .send(invalidEnumPayload)
@@ -443,7 +565,7 @@ describe('DogsController (e2e)', () => {
         lifeStageOverride: LifeStageOverride.NONE,
       };
 
-      const response = await request(app.getHttpServer())
+      const response = await request(app.getHttpAdapter().getInstance())
         .post('/api/v1/dogs')
         .set('X-Customer-Id', 'test-owner-id')
         .send(invalidNumericPayload)
@@ -463,7 +585,7 @@ describe('DogsController (e2e)', () => {
     it('should return 404 for missing dog', async () => {
       const nonExistentId = '550e8400-e29b-41d4-a716-446655440000';
 
-      const response = await request(app.getHttpServer())
+      const response = await request(app.getHttpAdapter().getInstance())
         .get(`/api/v1/dogs/${nonExistentId}`)
         .set('X-Customer-Id', 'test-owner-id')
         .expect(200); // Controller returns 200 with error code in body
@@ -480,6 +602,7 @@ describe('DogsController (e2e)', () => {
         'test-owner-id',
         'Test Dog',
         '550e8400-e29b-41d4-a716-446655440000',
+        null,
         new Date('2020-01-01'),
         DogGender.MALE,
         false,
@@ -493,12 +616,14 @@ describe('DogsController (e2e)', () => {
         TreatLevel.LOW,
         null,
         null,
+        null,
+        null,
         0,
       );
 
       await dogRepository.save(dog);
 
-      const response = await request(app.getHttpServer())
+      const response = await request(app.getHttpAdapter().getInstance())
         .get(`/api/v1/dogs/${dog.id}`)
         .set('X-Customer-Id', 'test-owner-id')
         .expect(200);

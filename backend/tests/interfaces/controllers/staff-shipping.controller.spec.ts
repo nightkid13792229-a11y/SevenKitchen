@@ -133,6 +133,8 @@ describe('StaffShippingController - Phase 8.14', () => {
           trackingNumber: 'SF1234567890',
           carrierCode: 'SF',
         },
+        'staff',
+        null,
       );
     });
 

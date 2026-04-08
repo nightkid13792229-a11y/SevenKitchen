@@ -1,5 +1,5 @@
 import { ref, type Ref } from 'vue'
-import { CURRENT_SHARE_CONFIG } from '@/config/share.config'
+import { CURRENT_SHARE_CONFIG } from '@/utils/config'
 
 export interface ShareConfig {
   title?: string | Ref<string>

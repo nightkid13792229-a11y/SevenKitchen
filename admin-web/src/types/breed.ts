@@ -4,6 +4,7 @@
  */
 
 import { DogSizeCategory } from './dog'
+export { DogSizeCategory } from './dog'
 
 /**
  * 系统预定义品种
@@ -12,11 +13,13 @@ import { DogSizeCategory } from './dog'
 export interface DogBreed {
   id: string
   name: string
+  aliases: string[]
   sizeCategory: DogSizeCategory
   growthCurveType: string
   adultAgeMonths: number
   seniorAgeYears: number
   averageAdultWeightKg: number | null
+  isCommon?: boolean
   createdAt: string
   updatedAt: string
 }
@@ -27,10 +30,12 @@ export interface DogBreed {
 export interface BreedForm {
   id?: string
   name: string
+  aliases: string[]
   sizeCategory: DogSizeCategory
   adultAgeMonths: number
   seniorAgeYears: number
   averageAdultWeightKg: number
+  isCommon?: boolean
 }
 
 /**

@@ -22,22 +22,25 @@ import type { OrderRepository } from '../../domain/order/order.repository';
 import { ORDER_STATUS_HISTORY_REPOSITORY } from '../order/order.service';
 import type { OrderStatusHistoryRepository } from '../../domain/order/order-status-history.repository';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
+import { IngredientPricingService } from '../ingredient/ingredient-pricing.service';
 import {
   Reimbursement,
   ReimbursementStatus,
   PurchaseList,
   PurchaseListStatus,
+  REIMBURSEMENT_CUSTOM_FEE_CATEGORIES,
+  type ReimbursementCustomFee,
 } from '../../domain/purchasing';
 import { OrderStatus } from '../../domain';
 
 export interface SubmitReimbursementDto {
-  purchaseListIds: string[];
+  purchaseListIds?: string[];
   receiptUrls: string[];
   totalActualCost: number;
   // 新增字段
   platformShippingFee?: number;
   platformPackagingFee?: number;
-  customFees?: Array<{ description: string; amount: number }>;
+  customFees?: ReimbursementCustomFee[];
 }
 
 export interface ReviewReimbursementDto {
@@ -59,6 +62,7 @@ export class ReimbursementService {
     @Inject(ORDER_STATUS_HISTORY_REPOSITORY)
     private readonly statusHistoryRepository: OrderStatusHistoryRepository,
     private readonly cosService: TencentCosService,
+    private readonly ingredientPricingService: IngredientPricingService,
   ) {}
 
   /**
@@ -88,6 +92,8 @@ export class ReimbursementService {
     dto: SubmitReimbursementDto,
     submittedById: string,
   ): Promise<Reimbursement> {
+    const purchaseListIds = dto.purchaseListIds || [];
+
     // 验证发票照片
     if (dto.receiptUrls.length === 0) {
       throw new BadRequestException('至少需要一张发票照片');
@@ -102,14 +108,14 @@ export class ReimbursementService {
     }
 
     this.logger.log(
-      `Submitting reimbursement for ${dto.purchaseListIds.length} purchase lists by user ${submittedById}`,
+      `Submitting reimbursement for ${purchaseListIds.length} purchase lists by user ${submittedById}`,
     );
 
     // 查询所有采购清单（如果有）
     const purchaseLists: PurchaseList[] = [];
     let totalEstimatedCost = 0;
 
-    for (const listId of dto.purchaseListIds) {
+    for (const listId of purchaseListIds) {
       const list = await this.purchaseListRepository.findById(listId);
       if (!list) {
         throw new BadRequestException(`未找到采购清单：${listId}`);
@@ -139,16 +145,33 @@ export class ReimbursementService {
       return sum + Number(actualCost);
     }, 0);
 
+    const normalizedCustomFees =
+      dto.customFees?.map((fee) => ({
+        category: fee.category,
+        description: fee.description?.trim() || undefined,
+        amount: fee.amount || 0,
+      })) || [];
+
     // 计算自定义费用总额
-    const customFeesTotal =
-      dto.customFees?.reduce((sum, fee) => sum + (fee.amount || 0), 0) || 0;
+    const customFeesTotal = normalizedCustomFees.reduce(
+      (sum, fee) => sum + (fee.amount || 0),
+      0,
+    );
 
     // 验证自定义费用数组中的每一项
-    if (dto.customFees && dto.customFees.length > 0) {
-      dto.customFees.forEach((fee, index) => {
-        if (!fee.description || fee.description.trim() === '') {
+    if (normalizedCustomFees.length > 0) {
+      normalizedCustomFees.forEach((fee, index) => {
+        if (
+          fee.category &&
+          !REIMBURSEMENT_CUSTOM_FEE_CATEGORIES.includes(fee.category)
+        ) {
           throw new BadRequestException(
-            `Custom fee at index ${index} must have a description`,
+            `Custom fee at index ${index} has invalid category`,
+          );
+        }
+        if (!fee.description && !fee.category) {
+          throw new BadRequestException(
+            `Custom fee at index ${index} must have a category or description`,
           );
         }
         if (fee.amount < 0) {
@@ -194,11 +217,19 @@ export class ReimbursementService {
       // 新增字段
       platformShippingFee: dto.platformShippingFee,
       platformPackagingFee: dto.platformPackagingFee,
-      customFees: dto.customFees || [],
+      customFees: normalizedCustomFees,
     });
 
     // 保存报销单
     const saved = await this.reimbursementRepository.save(reimbursement);
+
+    await this.ingredientPricingService.syncPendingChangesForReimbursement(
+      saved.id,
+      purchaseListIds,
+    );
+    await this.ingredientPricingService.autoApproveEligibleChangesForReimbursement(
+      saved.id,
+    );
 
     this.logger.log(
       `Reimbursement ${saved.id} (${claimNumber}) submitted successfully`,
@@ -238,9 +269,21 @@ export class ReimbursementService {
     // 保存报销单
     const saved = await this.reimbursementRepository.save(reimbursement);
 
-    // 如果批准，解锁相关订单的生产排单功能
     if (dto.decision === 'APPROVE') {
+      await this.ingredientPricingService.applyApprovedChangesForReimbursement(
+        saved.id,
+        reviewerId,
+        dto.comment,
+      );
+
+      // 如果批准，解锁相关订单的生产排单功能
       await this.unlockProductionForReimbursement(saved);
+    } else {
+      await this.ingredientPricingService.rejectChangesForReimbursement(
+        saved.id,
+        reviewerId,
+        dto.comment,
+      );
     }
 
     this.logger.log(
@@ -342,6 +385,14 @@ export class ReimbursementService {
     // 保存报销单
     const saved = await this.reimbursementRepository.save(reimbursement);
 
+    await this.ingredientPricingService.syncPendingChangesForReimbursement(
+      saved.id,
+      reimbursement.purchaseLists.map((purchaseList) => purchaseList.id),
+    );
+    await this.ingredientPricingService.autoApproveEligibleChangesForReimbursement(
+      saved.id,
+    );
+
     this.logger.log(`Reimbursement ${id} resubmitted successfully`);
 
     return saved;
@@ -379,14 +430,20 @@ export class ReimbursementService {
   /**
    * 查询报销单详情
    */
-  async getReimbursementDetail(id: string): Promise<Reimbursement> {
+  async getReimbursementDetail(id: string): Promise<any> {
     const reimbursement = await this.reimbursementRepository.findById(id);
 
     if (!reimbursement) {
       throw new BadRequestException(`未找到报销单：${id}`);
     }
 
-    return reimbursement;
+    const priceChanges =
+      await this.ingredientPricingService.getPriceChangesForReimbursement(id);
+
+    return {
+      ...reimbursement,
+      priceChanges,
+    };
   }
 
   /**
@@ -463,6 +520,8 @@ export class ReimbursementService {
       throw new BadRequestException('只有待审核状态可以上传报销凭证');
     }
 
+    const previousStatus = reimbursement.status;
+
     // 3. 验证凭证数量
     if (!paymentProofUrls || paymentProofUrls.length === 0) {
       throw new BadRequestException('请至少上传一张报销凭证');
@@ -494,6 +553,8 @@ export class ReimbursementService {
 
     const saved = await this.reimbursementRepository.save(updated);
 
+    await this.applyPostReimbursedSideEffects(previousStatus, saved);
+
     this.logger.log(
       `Payment proof uploaded for reimbursement ${id}, status changed to REIMBURSED`,
     );
@@ -519,6 +580,8 @@ export class ReimbursementService {
     if (!files || files.length === 0) {
       throw new BadRequestException('请至少上传一张报销凭证');
     }
+
+    const previousStatus = reimbursement.status;
 
     if (files.length > 10) {
       throw new BadRequestException('最多只能上传10张凭证');
@@ -610,6 +673,8 @@ export class ReimbursementService {
 
     const saved = await this.reimbursementRepository.save(updated);
 
+    await this.applyPostReimbursedSideEffects(previousStatus, saved);
+
     this.logger.log(
       `Payment proof files uploaded for reimbursement ${id}, status: ${finalStatus}`,
     );
@@ -683,6 +748,26 @@ export class ReimbursementService {
     this.logger.log(`Payment proof cleared for reimbursement ${id}`);
 
     return saved;
+  }
+
+  private async applyPostReimbursedSideEffects(
+    previousStatus: ReimbursementStatus,
+    reimbursement: Reimbursement,
+  ): Promise<void> {
+    if (
+      previousStatus !== ReimbursementStatus.PENDING_REVIEW ||
+      reimbursement.status !== ReimbursementStatus.REIMBURSED
+    ) {
+      return;
+    }
+
+    await this.ingredientPricingService.applyApprovedChangesForReimbursement(
+      reimbursement.id,
+      reimbursement.reviewedById ?? null,
+      reimbursement.reviewComment ??
+        '系统在上传报销凭证后自动标记已报销并应用价格变更',
+    );
+    await this.unlockProductionForReimbursement(reimbursement);
   }
 
   /**

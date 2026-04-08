@@ -14,6 +14,7 @@
     "start:prod": "NODE_ENV=production node dist/src/main",
     "start:once": "ts-node -r tsconfig-paths/register scripts/start-once.ts",
     "start:check": "ts-node -r tsconfig-paths/register scripts/start-check.ts",
+    "smoke:pricing-purchase": "node scripts/smoke_pricing_purchase_flow.js",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
@@ -84,6 +85,7 @@
   },
   "jest": {
     "moduleFileExtensions": [
+      "ts",
       "js",
       "json",
       "d.ts"
@@ -97,6 +99,29 @@
       "**/*.{t,j}?(x|j|<rootDir>/src/$1)"
     ],
     "moduleNameMapper": {
+      "^src/auth\\.controller$": "<rootDir>/src/interfaces/controllers/auth.controller",
+      "^src/addresses\\.controller$": "<rootDir>/src/interfaces/controllers/addresses.controller",
+      "^src/dogs\\.controller$": "<rootDir>/src/interfaces/controllers/dogs.controller",
+      "^src/orders\\.controller$": "<rootDir>/src/interfaces/controllers/orders.controller",
+      "^src/recipes\\.controller$": "<rootDir>/src/interfaces/controllers/recipes.controller",
+      "^src/staff-kitchen\\.controller$": "<rootDir>/src/interfaces/controllers/staff-kitchen.controller",
+      "^src/staff-shipping\\.controller$": "<rootDir>/src/interfaces/controllers/staff-shipping.controller",
+      "^src/controllers/(.*)$": "<rootDir>/src/interfaces/controllers/$1",
+      "^src/shipping-fulfillment\\.service$": "<rootDir>/src/application/shipping/shipping-fulfillment.service",
+      "^src/inventory\\.service$": "<rootDir>/src/application/inventory/inventory.service",
+      "^src/order\\.service$": "<rootDir>/src/application/order/order.service",
+      "^src/production\\.service$": "<rootDir>/src/application/production/production.service",
+      "^src/kitchen\\.service$": "<rootDir>/src/application/kitchen/kitchen.service",
+      "^src/address/(.*)$": "<rootDir>/src/application/address/$1",
+      "^src/auth/(.*)$": "<rootDir>/src/interfaces/auth/$1",
+      "^src/common/(.*)$": "<rootDir>/src/interfaces/common/$1",
+      "^src/config/(.*)$": "<rootDir>/src/application/config/$1",
+      "^src/dog/(.*)$": "<rootDir>/src/application/dog/$1",
+      "^src/ingredient/(.*)$": "<rootDir>/src/application/ingredient/$1",
+      "^src/inventory/(.*)$": "<rootDir>/src/application/inventory/$1",
+      "^src/order/(.*)$": "<rootDir>/src/application/order/$1",
+      "^src/production/(.*)$": "<rootDir>/src/application/production/$1",
+      "^src/shipping/(.*)$": "<rootDir>/src/application/shipping/$1",
       "^src/(.*)$": "<rootDir>/src/$1"
     },
     "coverageDirectory": "coverage",

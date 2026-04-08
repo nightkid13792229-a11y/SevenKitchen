@@ -36,10 +36,71 @@
       <view class="section cost-summary-card">
         <text class="section-title">费用明细</text>
 
-        <!-- 采购清单金额 -->
-        <view class="cost-row">
-          <text class="label">采购清单金额</text>
-          <text class="value">¥{{ purchaseListsTotal }}</text>
+        <view class="record-summary">
+          <view class="record-summary-copy">
+            <text class="record-summary-title">采购记录明细 ({{ auditPurchaseRecords.length }})</text>
+            <text class="record-summary-hint">按实际采购记录审核</text>
+          </view>
+          <text class="record-summary-total">¥{{ purchaseRecordsTotal }}</text>
+        </view>
+
+        <view v-if="auditPurchaseRecords.length > 0" class="record-audit-list">
+          <view
+            v-for="record in auditPurchaseRecords"
+            :key="record.id"
+            class="record-audit-card"
+          >
+            <view class="record-audit-top">
+              <view class="record-audit-main">
+                <view class="record-audit-heading">
+                  <text class="record-audit-name">{{ record.ingredientName }}</text>
+                  <text class="record-audit-cost">¥{{ formatMoney(record.actualCost) }}</text>
+                </view>
+                <view class="record-audit-meta">
+                  <text class="meta-chip">{{ record.listDateText }}</text>
+                  <text class="meta-chip">{{ record.purchaseChannel || '未填写渠道' }}</text>
+                  <text v-if="record.productModel" class="meta-chip">{{ record.productModel }}</text>
+                  <text v-if="record.purchasedAtText" class="meta-chip">{{ record.purchasedAtText }}</text>
+                </view>
+              </view>
+            </view>
+
+            <view class="record-audit-metrics">
+              <view class="metric-pill">
+                <text class="metric-label">需要采购</text>
+                <text class="metric-value">{{ record.neededQuantityText }}</text>
+              </view>
+              <view class="metric-pill">
+                <text class="metric-label">实际采购</text>
+                <text class="metric-value">{{ record.purchasedQuantityText }}</text>
+              </view>
+              <view class="metric-pill">
+                <text class="metric-label">采购单价</text>
+                <text class="metric-value">{{ record.unitPriceText }}</text>
+              </view>
+              <view class="metric-pill">
+                <text class="metric-label">上次采购单价</text>
+                <text class="metric-value">{{ record.previousUnitPriceText }}</text>
+              </view>
+              <view class="metric-pill full-width">
+                <text class="metric-label">增减幅度</text>
+                <text class="metric-value" :class="record.deltaRateClass">
+                  {{ record.deltaRateText }}
+                </text>
+              </view>
+            </view>
+
+            <view v-if="record.normalizedQuantityText || record.notes" class="record-audit-extra">
+              <text v-if="record.normalizedQuantityText" class="extra-text">
+                {{ record.normalizedQuantityText }}
+              </text>
+              <text v-if="record.notes" class="extra-text">备注：{{ record.notes }}</text>
+            </view>
+          </view>
+        </view>
+
+        <view v-else class="record-empty-state">
+          <text>暂无采购记录，当前仅展示其它费用与报销总额</text>
         </view>
 
         <!-- 平台运费 -->
@@ -62,7 +123,15 @@
             :key="index"
             class="custom-fee-row"
           >
-            <text class="fee-desc">{{ fee.description }}</text>
+            <view class="fee-copy">
+              <text class="fee-desc">{{ getCustomFeeHeading(fee) }}</text>
+              <text
+                v-if="getCustomFeeNote(fee)"
+                class="fee-note"
+              >
+                {{ getCustomFeeNote(fee) }}
+              </text>
+            </view>
             <text class="fee-amount">¥{{ fee.amount.toFixed(2) }}</text>
           </view>
         </view>
@@ -262,16 +331,20 @@
 
 <script setup lang="ts">
 // 强制重新编译标记 2026-01-26 20:47 - 清空报销凭证功能修复
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import {
   getReimbursementDetail,
-  resubmitReimbursement,
+  getPurchaseRecords,
   uploadPaymentProofFiles,
   clearPaymentProof as clearPaymentProofApi,
   appendReceiptUrls,
   removeReceiptUrl
 } from '@/api/purchasing';
+import {
+  formatReimbursementCustomFeeTitle,
+  getReimbursementCustomFeeCategoryLabel,
+} from '@/constants/reimbursement';
 
 // 状态管理
 const reimbursementId = ref('');
@@ -281,6 +354,7 @@ const resubmitting = ref(false);
 const uploading = ref(false);
 const uploadingReceipts = ref(false);
 const expandedItems = ref<Record<number, boolean>>({});
+const purchaseRecordsByListId = ref<Record<string, any[]>>({});
 
 // 判断是否为管理员
 const isAdmin = computed(() => {
@@ -320,16 +394,6 @@ const costDiffPercentage = computed(() => {
   return estimated > 0 ? (diff / estimated) * 100 : 0;
 });
 
-// 采购清单总金额
-const purchaseListsTotal = computed(() => {
-  if (!reimbursement.value) return '0.00';
-  const total = reimbursement.value.purchaseLists?.reduce(
-    (sum: number, list: any) => sum + (list.totalActualCost || list.totalEstimatedCost || 0),
-    0
-  ) || 0;
-  return total.toFixed(2);
-});
-
 // 是否有自定义费用
 const hasCustomFees = computed(() => {
   if (!reimbursement.value?.customFees) return false;
@@ -361,8 +425,8 @@ const costFormula = computed(() => {
 
   const parts: string[] = [];
 
-  // 采购清单金额
-  parts.push(`采购清单(¥${purchaseListsTotal.value})`);
+  // 采购记录金额
+  parts.push(`采购记录(¥${purchaseRecordsTotal.value})`);
 
   // 平台运费
   if (reimbursement.value.platformShippingFee > 0) {
@@ -382,6 +446,252 @@ const costFormula = computed(() => {
   return parts.join(' + ') + ` = ¥${reimbursement.value.totalActualCost.toFixed(2)}`;
 });
 
+const formatMeasurementUnit = (unit?: string | null) => {
+  if (!unit) return '';
+
+  const normalized = `${unit}`.trim().toUpperCase();
+  const labelMap: Record<string, string> = {
+    G: 'g',
+    KG: 'kg',
+    JIN: '斤',
+    ML: 'ml',
+    L: 'L',
+    PCS: '个',
+  };
+
+  return labelMap[normalized] || `${unit}`.trim();
+};
+
+const formatDecimal = (value: number, maxDecimalPlaces = 3) => {
+  if (!Number.isFinite(value)) return '0';
+  const fixed = value.toFixed(maxDecimalPlaces);
+  return fixed.replace(/\.?0+$/, '');
+};
+
+const formatMoney = (value?: number | null) => {
+  return Number(value || 0).toFixed(2);
+};
+
+const formatCustomFeeTitle = (fee: any) => {
+  return formatReimbursementCustomFeeTitle(fee);
+};
+
+const getCustomFeeHeading = (fee: any) => {
+  if (fee?.category) {
+    return getReimbursementCustomFeeCategoryLabel(fee.category);
+  }
+
+  return formatCustomFeeTitle(fee);
+};
+
+const getCustomFeeNote = (fee: any) => {
+  if (!fee?.category || !fee?.description) return '';
+
+  const categoryLabel = getReimbursementCustomFeeCategoryLabel(fee.category);
+  return fee.description.trim() === categoryLabel ? '' : fee.description.trim();
+};
+
+const getPurchaseRecordUnit = (item?: any, priceChange?: any) => {
+  const unit =
+    priceChange?.purchaseUnit ||
+    item?.ingredient?.purchaseUnit ||
+    item?.quantityUnit ||
+    item?.ingredient?.baseUnit;
+
+  return formatMeasurementUnit(unit) || '个';
+};
+
+const formatNeededQuantity = (item?: any) => {
+  if (!item) return '-';
+
+  const quantity = Number(item.quantityNeeded || 0);
+  const unit = formatMeasurementUnit(item.quantityUnit || item?.ingredient?.purchaseUnit);
+
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    return unit || '-';
+  }
+
+  return `${formatDecimal(quantity)}${unit}`;
+};
+
+const formatRecordRawSummary = (record: any) => {
+  const packageCount = Number(record?.actualPackageCount || 0);
+  const packageSize = Number(record?.actualPackageSize || 0);
+  const packageUnit = record?.actualPackageUnit;
+
+  if (
+    Number.isFinite(packageCount) &&
+    packageCount > 0 &&
+    Number.isFinite(packageSize) &&
+    packageSize > 0 &&
+    packageUnit
+  ) {
+    return `${formatDecimal(packageCount)}件 x ${formatDecimal(packageSize)}${packageUnit}`;
+  }
+
+  return '';
+};
+
+const formatRecordQuantity = (record: any, item?: any, priceChange?: any) => {
+  const rawSummary = formatRecordRawSummary(record);
+  if (rawSummary) {
+    return rawSummary;
+  }
+
+  const quantity = Number(record?.actualQuantity || 0);
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    return '-';
+  }
+
+  return `${formatDecimal(quantity)}${getPurchaseRecordUnit(item, priceChange)}`;
+};
+
+const formatRecordNormalizedSummary = (record: any, item?: any, priceChange?: any) => {
+  const quantity = Number(record?.actualQuantity || 0);
+  const baseQuantity = Number(record?.actualBaseQuantity || 0);
+  const parts: string[] = [];
+
+  if (Number.isFinite(baseQuantity) && baseQuantity > 0 && record?.actualBaseUnit) {
+    parts.push(`${formatDecimal(baseQuantity, 3)}${formatMeasurementUnit(record.actualBaseUnit)}`);
+  }
+
+  if (Number.isFinite(quantity) && quantity > 0) {
+    parts.push(`${formatDecimal(quantity, 3)}${getPurchaseRecordUnit(item, priceChange)}`);
+  }
+
+  if (parts.length <= 1) {
+    return '';
+  }
+
+  return `折算 ${parts.join(' ≈ ')}`;
+};
+
+const formatPurchaseUnitPrice = (record: any, item?: any, priceChange?: any) => {
+  const unit = getPurchaseRecordUnit(item, priceChange);
+  const sourcePrice = priceChange?.sourcePricePerPurchaseUnit;
+
+  if (sourcePrice !== undefined && sourcePrice !== null && Number.isFinite(Number(sourcePrice))) {
+    return `¥${Number(sourcePrice).toFixed(2)}/${unit}`;
+  }
+
+  const quantity = Number(record?.actualQuantity || 0);
+  if (!Number.isFinite(quantity) || quantity <= 0) {
+    return '-';
+  }
+
+  return `¥${(Number(record?.actualCost || 0) / quantity).toFixed(2)}/${unit}`;
+};
+
+const formatPreviousPurchaseUnitPrice = (item?: any, priceChange?: any) => {
+  const unit = getPurchaseRecordUnit(item, priceChange);
+  const previousPrice = priceChange?.previousEffectivePrice;
+
+  if (
+    previousPrice === undefined ||
+    previousPrice === null ||
+    !Number.isFinite(Number(previousPrice)) ||
+    Number(previousPrice) <= 0
+  ) {
+    return '暂无';
+  }
+
+  return `¥${Number(previousPrice).toFixed(2)}/${unit}`;
+};
+
+const formatDeltaRate = (deltaRate?: number | null) => {
+  if (deltaRate === undefined || deltaRate === null || !Number.isFinite(Number(deltaRate))) {
+    return '暂无';
+  }
+
+  const percentage = Number(deltaRate) * 100;
+  const prefix = percentage > 0 ? '+' : '';
+  return `${prefix}${percentage.toFixed(1)}%`;
+};
+
+const getDeltaRateClass = (deltaRate?: number | null) => {
+  if (deltaRate === undefined || deltaRate === null || !Number.isFinite(Number(deltaRate))) {
+    return 'neutral';
+  }
+
+  if (Number(deltaRate) > 0) {
+    return 'up';
+  }
+
+  if (Number(deltaRate) < 0) {
+    return 'down';
+  }
+
+  return 'flat';
+};
+
+const priceChangeMap = computed(() => {
+  const changes = reimbursement.value?.priceChanges || [];
+  return new Map(
+    changes
+      .filter((change: any) => change?.purchaseRecordId)
+      .map((change: any) => [change.purchaseRecordId, change]),
+  );
+});
+
+const purchaseItemMap = computed(() => {
+  const map = new Map<string, any>();
+  const lists = reimbursement.value?.purchaseLists || [];
+
+  lists.forEach((list: any) => {
+    (list.items || []).forEach((item: any) => {
+      map.set(item.id, item);
+    });
+  });
+
+  return map;
+});
+
+const auditPurchaseRecords = computed(() => {
+  const lists = reimbursement.value?.purchaseLists || [];
+
+  return lists
+    .flatMap((list: any) => {
+      const listRecords = purchaseRecordsByListId.value[list.id] || [];
+
+      return listRecords.map((record: any) => {
+        const purchaseItem =
+          purchaseItemMap.value.get(record.purchaseItemId) ||
+          (list.items || []).find((item: any) => item.ingredientId === record.ingredientId);
+        const priceChange = priceChangeMap.value.get(record.id);
+
+        return {
+          ...record,
+          listDateText: list.targetDate ? formatDate(list.targetDate) : '-',
+          neededQuantityText: formatNeededQuantity(purchaseItem),
+          purchasedQuantityText: formatRecordQuantity(record, purchaseItem, priceChange),
+          normalizedQuantityText: formatRecordNormalizedSummary(record, purchaseItem, priceChange),
+          unitPriceText: formatPurchaseUnitPrice(record, purchaseItem, priceChange),
+          previousUnitPriceText: formatPreviousPurchaseUnitPrice(purchaseItem, priceChange),
+          deltaRateText: formatDeltaRate(priceChange?.deltaRate),
+          deltaRateClass: getDeltaRateClass(priceChange?.deltaRate),
+          purchasedAtText: record?.purchasedAt
+            ? formatCompactDateTime(record.purchasedAt)
+            : record?.createdAt
+              ? formatCompactDateTime(record.createdAt)
+              : '',
+        };
+      });
+    })
+    .sort((left: any, right: any) => {
+      const rightTime = new Date(right.purchasedAt || right.createdAt || 0).getTime();
+      const leftTime = new Date(left.purchasedAt || left.createdAt || 0).getTime();
+      return rightTime - leftTime;
+    });
+});
+
+const purchaseRecordsTotal = computed(() => {
+  const total = auditPurchaseRecords.value.reduce((sum: number, record: any) => {
+    return sum + Number(record.actualCost || 0);
+  }, 0);
+
+  return total.toFixed(2);
+});
+
 // 页面加载
 onLoad((options: any) => {
   reimbursementId.value = options.id;
@@ -397,6 +707,7 @@ const loadDetail = async () => {
 
     if (res.code === 0) {
       reimbursement.value = res.data;
+      await loadPurchaseRecordsForReimbursement();
 
       // 调试日志 - 强制触发重新编译
       console.log('='.repeat(50));
@@ -416,6 +727,62 @@ const loadDetail = async () => {
     uni.showToast({ title: '加载失败', icon: 'none' });
   } finally {
     loading.value = false;
+  }
+};
+
+const loadPurchaseRecordsForReimbursement = async () => {
+  purchaseRecordsByListId.value = {};
+
+  const purchaseLists = reimbursement.value?.purchaseLists || [];
+  if (purchaseLists.length === 0) {
+    return;
+  }
+
+  const results = await Promise.all(
+    purchaseLists.map(async (list: any) => {
+      try {
+        const res: any = await getPurchaseRecords(list.id);
+
+        if (res.code !== 0) {
+          throw new Error(res.message || '加载采购记录失败');
+        }
+
+        return {
+          listId: list.id,
+          records: Array.isArray(res.data) ? res.data : [],
+          success: true,
+        };
+      } catch (error) {
+        return {
+          listId: list.id,
+          records: [],
+          success: false,
+          error,
+        };
+      }
+    }),
+  );
+
+  const nextMap: Record<string, any[]> = {};
+  let failedCount = 0;
+
+  results.forEach((result) => {
+    if (result.success) {
+      nextMap[result.listId] = result.records;
+      return;
+    }
+
+    failedCount += 1;
+    console.error('加载报销单关联采购记录失败', result.error);
+  });
+
+  purchaseRecordsByListId.value = nextMap;
+
+  if (failedCount > 0) {
+    uni.showToast({
+      title: `有${failedCount}个采购清单的记录加载失败`,
+      icon: 'none',
+    });
   }
 };
 
@@ -662,6 +1029,16 @@ const formatFullDateTime = (dateStr?: string) => {
 const formatDate = (dateStr: string) => {
   const date = new Date(dateStr);
   return `${date.getMonth() + 1}月${date.getDate()}日`;
+};
+
+const formatCompactDateTime = (dateStr?: string) => {
+  if (!dateStr) return '-';
+  const date = new Date(dateStr);
+  const month = (date.getMonth() + 1).toString();
+  const day = date.getDate().toString();
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  return `${month}-${day} ${hours}:${minutes}`;
 };
 </script>
 
@@ -1181,6 +1558,188 @@ const formatDate = (dateStr: string) => {
     padding-bottom: 16rpx;
   }
 
+  .record-summary {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16rpx;
+    margin-bottom: 16rpx;
+    padding: 16rpx 20rpx;
+    background: rgba(255, 255, 255, 0.72);
+    border: 1rpx solid rgba(212, 136, 6, 0.12);
+    border-radius: 14rpx;
+
+    .record-summary-copy {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 4rpx;
+    }
+
+    .record-summary-title {
+      font-size: 28rpx;
+      font-weight: bold;
+      color: #8c5a00;
+      line-height: 1.3;
+    }
+
+    .record-summary-hint {
+      font-size: 22rpx;
+      color: #9c7b39;
+      line-height: 1.3;
+    }
+
+    .record-summary-total {
+      flex-shrink: 0;
+      font-size: 32rpx;
+      font-weight: bold;
+      color: #ff6b6b;
+      line-height: 1;
+    }
+  }
+
+  .record-audit-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14rpx;
+    margin-bottom: 20rpx;
+  }
+
+  .record-audit-card {
+    padding: 18rpx 20rpx;
+    background: rgba(255, 255, 255, 0.85);
+    border-radius: 14rpx;
+    box-shadow: inset 0 0 0 1rpx rgba(255, 214, 102, 0.45);
+  }
+
+  .record-audit-top {
+    margin-bottom: 12rpx;
+  }
+
+  .record-audit-main {
+    display: flex;
+    flex-direction: column;
+    gap: 8rpx;
+  }
+
+  .record-audit-heading {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 16rpx;
+  }
+
+  .record-audit-name {
+    flex: 1;
+    font-size: 28rpx;
+    font-weight: bold;
+    color: #333;
+    line-height: 1.4;
+  }
+
+  .record-audit-cost {
+    flex-shrink: 0;
+    font-size: 28rpx;
+    font-weight: bold;
+    color: #ff6b6b;
+  }
+
+  .record-audit-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6rpx;
+  }
+
+  .meta-chip {
+    padding: 2rpx 10rpx;
+    border-radius: 999rpx;
+    background: rgba(212, 136, 6, 0.08);
+    font-size: 22rpx;
+    color: #8c7a5d;
+    line-height: 1.35;
+  }
+
+  .record-audit-metrics {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8rpx;
+  }
+
+  .metric-pill {
+    display: flex;
+    align-items: center;
+    gap: 8rpx;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
+    padding: 10rpx 12rpx;
+    background: rgba(255, 249, 230, 0.92);
+    border-radius: 10rpx;
+
+    .metric-label {
+      font-size: 22rpx;
+      color: #999;
+      white-space: nowrap;
+    }
+
+    .metric-value {
+      flex: 1;
+      min-width: 0;
+      font-size: 24rpx;
+      font-weight: 600;
+      color: #333;
+      line-height: 1.4;
+      word-break: break-word;
+      text-align: right;
+
+      &.up {
+        color: #f03e3e;
+      }
+
+      &.down {
+        color: #2f9e44;
+      }
+
+      &.flat,
+      &.neutral {
+        color: #666;
+      }
+    }
+
+    &.full-width {
+      grid-column: 1 / -1;
+    }
+  }
+
+  .record-audit-extra {
+    display: flex;
+    flex-direction: column;
+    gap: 6rpx;
+    margin-top: 10rpx;
+    padding-top: 10rpx;
+    border-top: 1rpx dashed rgba(212, 136, 6, 0.2);
+
+    .extra-text {
+      font-size: 22rpx;
+      color: #8c7a5d;
+      line-height: 1.4;
+    }
+  }
+
+  .record-empty-state {
+    margin-bottom: 24rpx;
+    padding: 32rpx 24rpx;
+    border-radius: 16rpx;
+    background: rgba(255, 255, 255, 0.72);
+    text-align: center;
+
+    text {
+      font-size: 24rpx;
+      color: #999;
+      line-height: 1.6;
+    }
+  }
+
   .cost-row {
     display: flex;
     justify-content: space-between;
@@ -1221,12 +1780,25 @@ const formatDate = (dateStr: string) => {
     .custom-fee-row {
       display: flex;
       justify-content: space-between;
-      align-items: center;
+      align-items: flex-start;
       padding: 8rpx 0;
 
-      .fee-desc {
-        font-size: 26rpx;
-        color: #666;
+      .fee-copy {
+        flex: 1;
+        padding-right: 16rpx;
+
+        .fee-desc {
+          display: block;
+          font-size: 26rpx;
+          color: #666;
+        }
+
+        .fee-note {
+          display: block;
+          margin-top: 6rpx;
+          font-size: 22rpx;
+          color: #999;
+        }
       }
 
       .fee-amount {

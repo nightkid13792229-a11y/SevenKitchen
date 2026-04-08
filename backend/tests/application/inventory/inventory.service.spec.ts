@@ -12,6 +12,7 @@ import { InventoryLedgerEntry, InventorySourceType } from 'src/domain/inventory'
 import { INVENTORY_REPOSITORY } from 'src/inventory.service';
 import { PRODUCTION_BATCH_REPOSITORY } from 'src/production/production.service';
 import type { RecipeSnapshot } from 'src/domain/recipe/types';
+import { PrismaService } from 'src/infrastructure/prisma.service';
 
 describe('InventoryService - Phase 8.13', () => {
   let service: InventoryService;
@@ -47,6 +48,10 @@ describe('InventoryService - Phase 8.13', () => {
         {
           provide: PRODUCTION_BATCH_REPOSITORY,
           useValue: mockProductionRepository,
+        },
+        {
+          provide: PrismaService,
+          useValue: {},
         },
       ],
     }).compile();

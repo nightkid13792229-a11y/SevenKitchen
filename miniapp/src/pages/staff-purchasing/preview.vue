@@ -76,6 +76,11 @@
           <text class="stat-value">{{ previewResult.affectedOrders.length }}</text>
           <text class="stat-label">关联订单</text>
         </view>
+        <view class="divider"></view>
+        <view class="stat-item">
+          <text class="stat-value">{{ formatAmount(previewResult.totalEstimatedCost || 0) }}</text>
+          <text class="stat-label">预估金额</text>
+        </view>
       </view>
 
       <!-- 日期范围 -->
@@ -91,6 +96,9 @@
       <!-- 原料汇总 -->
       <view class="ingredients-section">
         <text class="section-title">📊 原料汇总</text>
+        <text v-if="hasPreparationHints" class="section-hint">
+          带有制备方法的原料可据此安排提前预处理，避免正式生产时临时备料。
+        </text>
 
         <!-- 按类型分组显示 -->
         <view v-if="previewResult.items.length > 0" class="grouped-ingredients">
@@ -107,16 +115,40 @@
                 :key="index"
                 class="ingredient-item"
               >
+                <view class="ingredient-main">
                 <view class="ingredient-info">
                   <text class="ingredient-name">{{ item.ingredientName }}</text>
-                  <view class="ingredient-meta">
-                    <text v-if="item.purchaseChannel" class="channel">{{ item.purchaseChannel }}</text>
-                    <text v-if="item.productModel" class="model">{{ item.productModel }}</text>
+                    <text v-if="getItemProcurementSkuLabel(item)" class="suggested-product">
+                      采购 SKU：{{ getItemProcurementSkuLabel(item) }}
+                    </text>
+                    <text v-if="getItemSuggestedProductLabel(item)" class="suggested-product reference">
+                      推荐参考：{{ getItemSuggestedProductLabel(item) }}
+                    </text>
+                    <view class="ingredient-meta">
+                      <text v-if="getItemPurchaseChannel(item)" class="channel">{{ getItemPurchaseChannel(item) }}</text>
+                      <text v-if="getItemProductModel(item)" class="model">{{ getItemProductModel(item) }}</text>
+                    </view>
+                  </view>
+                  <view class="ingredient-quantity">
+                    <text class="quantity">{{ formatQuantity(item) }}</text>
+                    <text class="unit">{{ getDisplayUnit(item) }}</text>
                   </view>
                 </view>
-                <view class="ingredient-quantity">
-                  <text class="quantity">{{ formatQuantity(item) }}</text>
-                  <text class="unit">{{ getDisplayUnit(item) }}</text>
+
+                <view
+                  v-if="item.preparationMethods && item.preparationMethods.length > 0"
+                  class="preparation-section"
+                >
+                  <text class="preparation-label">{{ getPreparationLabel(item) }}</text>
+                  <view class="preparation-tags">
+                    <text
+                      v-for="method in item.preparationMethods"
+                      :key="`${item.ingredientId}-${method}`"
+                      class="preparation-tag"
+                    >
+                      {{ method }}
+                    </text>
+                  </view>
                 </view>
               </view>
             </view>
@@ -161,7 +193,8 @@
 
 <script setup lang="ts">
 import { ref, computed } from 'vue';
-import { previewPurchaseList } from '@/api/purchasing';
+import { onLoad } from '@dcloudio/uni-app';
+import { previewPurchaseList, resolveProcurementSkuProfile } from '@/api/purchasing';
 
 // 表单数据
 const formData = ref({
@@ -201,6 +234,17 @@ const groupedIngredients = computed(() => {
     }));
 });
 
+const hasPreparationHints = computed(() => {
+  if (!previewResult.value?.items?.length) {
+    return false;
+  }
+
+  return previewResult.value.items.some(
+    (item: any) =>
+      Array.isArray(item.preparationMethods) && item.preparationMethods.length > 0,
+  );
+});
+
 // 获取类型标签
 const getTypeLabel = (type: string) => {
   const labels: Record<string, string> = {
@@ -209,6 +253,33 @@ const getTypeLabel = (type: string) => {
     'PACKAGING': '📦 包装材料',
   };
   return labels[type] || type;
+};
+
+const formatCompactLabel = (parts: Array<string | null | undefined>) => {
+  return parts.map((part) => (part || '').trim()).filter(Boolean).join(' · ');
+};
+
+const getItemProcurementSkuLabel = (item: any) => {
+  const profile = resolveProcurementSkuProfile(item);
+  return (
+    profile.procurementSkuName ||
+    formatCompactLabel([profile.purchaseChannel, profile.productModel]) ||
+    item?.purchaseChannel ||
+    item?.productModel ||
+    ''
+  );
+};
+
+const getItemSuggestedProductLabel = (item: any) => {
+  return resolveProcurementSkuProfile(item).suggestedProductName;
+};
+
+const getItemPurchaseChannel = (item: any) => {
+  return resolveProcurementSkuProfile(item).purchaseChannel || item?.purchaseChannel || '';
+};
+
+const getItemProductModel = (item: any) => {
+  return resolveProcurementSkuProfile(item).productModel || item?.productModel || '';
 };
 
 // 开始日期变更
@@ -300,6 +371,16 @@ const handlePreview = async () => {
   }
 };
 
+onLoad((options: Record<string, string>) => {
+  if (!options?.startDate) {
+    return;
+  }
+
+  formData.value.startDate = options.startDate;
+  formData.value.endDate = options.endDate || '';
+  handlePreview();
+});
+
 // 格式化订单ID（简化显示）
 const formatOrderId = (orderId: string) => {
   if (orderId.length > 12) {
@@ -317,24 +398,70 @@ const formatDate = (dateStr: string) => {
   return `${year}-${month.toString().padStart(2, '0')}-${day.toString().padStart(2, '0')}`;
 };
 
-// 格式化原料数量
-const formatQuantity = (item: any) => {
-  const quantity = Number(item.quantityNeeded);
+const formatAmount = (amount: number) => {
+  const value = Number(amount);
+  return Number.isFinite(value) ? `¥${value.toFixed(2)}` : '¥0.00';
+};
 
-  // 食材类型：kg转换为g，显示为整数
-  if (item.type === 'FOOD' && item.quantityUnit === 'kg') {
-    return Math.round(quantity * 1000);
+// 格式化原料数量
+const formatDisplayValue = (value: number, unit: string) => {
+  if (unit === 'g') {
+    return Math.round(value);
+  }
+
+  if (unit === 'ml') {
+    const rounded = Number(value.toFixed(1));
+    return Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1);
+  }
+
+  return value.toFixed(2);
+};
+
+const resolveFoodDisplayMeta = (item: any) => {
+  const quantity = Number(item.quantityNeeded || 0);
+  const quantityUnit = String(item.quantityUnit || '').toLowerCase();
+  const ingredientBaseUnit = String(item.ingredientBaseUnit || '').toUpperCase();
+  const density = Number(item.foodDensityGPerMl || 0);
+
+  if (ingredientBaseUnit === 'ML') {
+    if (quantityUnit === 'kg' && density > 0) {
+      return { value: (quantity * 1000) / density, unit: 'ml' };
+    }
+
+    if (quantityUnit === 'g' && density > 0) {
+      return { value: quantity / density, unit: 'ml' };
+    }
+
+    if (quantityUnit === 'ml') {
+      return { value: quantity, unit: 'ml' };
+    }
+  }
+
+  if (quantityUnit === 'kg') {
+    return { value: quantity * 1000, unit: 'g' };
+  }
+
+  if (quantityUnit === 'g') {
+    return { value: quantity, unit: 'g' };
+  }
+
+  return { value: quantity, unit: item.displayUnit || item.quantityUnit || '' };
+};
+
+const formatQuantity = (item: any) => {
+  if (item.type === 'FOOD') {
+    const meta = resolveFoodDisplayMeta(item);
+    return formatDisplayValue(meta.value, meta.unit);
   }
 
   // 补剂类型和其他：保留两位小数
-  return quantity.toFixed(2);
+  return Number(item.quantityNeeded).toFixed(2);
 };
 
 // 获取显示单位
 const getDisplayUnit = (item: any) => {
-  // 食材类型：kg转换为g
-  if (item.type === 'FOOD' && item.quantityUnit === 'kg') {
-    return 'g';
+  if (item.type === 'FOOD') {
+    return resolveFoodDisplayMeta(item).unit;
   }
 
   // 补剂类型：优先使用displayUnit，回退到quantityUnit
@@ -344,6 +471,10 @@ const getDisplayUnit = (item: any) => {
 
   // 其他类型：使用quantityUnit
   return item.quantityUnit || '';
+};
+
+const getPreparationLabel = (item: any) => {
+  return item.type === 'SUPPLEMENT' ? '添加时机' : '制备方法';
 };
 </script>
 
@@ -532,6 +663,14 @@ const getDisplayUnit = (item: any) => {
     color: #333;
     margin-bottom: 24rpx;
   }
+
+  .section-hint {
+    display: block;
+    margin: -8rpx 0 24rpx;
+    font-size: 24rpx;
+    color: #8c6d1f;
+    line-height: 1.6;
+  }
 }
 
 // 原料分组
@@ -590,12 +729,19 @@ const getDisplayUnit = (item: any) => {
 
 .ingredient-item {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
+  gap: 16rpx;
   padding: 20rpx 16rpx;
   background-color: #fff;
   border-radius: 8rpx;
   border: 1rpx solid #f0f0f0;
+
+  .ingredient-main {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 16rpx;
+  }
 
   .ingredient-info {
     flex: 1;
@@ -607,6 +753,13 @@ const getDisplayUnit = (item: any) => {
       color: #333;
       margin-bottom: 8rpx;
       display: block;
+    }
+
+    .suggested-product {
+      display: block;
+      font-size: 22rpx;
+      color: #8a6d3b;
+      margin-bottom: 8rpx;
     }
 
     .ingredient-meta {
@@ -640,6 +793,35 @@ const getDisplayUnit = (item: any) => {
     .unit {
       font-size: 22rpx;
       color: #999;
+    }
+  }
+
+  .preparation-section {
+    display: flex;
+    flex-direction: column;
+    gap: 12rpx;
+    padding-top: 16rpx;
+    border-top: 1rpx dashed #f0d58a;
+
+    .preparation-label {
+      font-size: 22rpx;
+      color: #8c6d1f;
+      font-weight: 600;
+    }
+
+    .preparation-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12rpx;
+    }
+
+    .preparation-tag {
+      padding: 8rpx 16rpx;
+      border-radius: 999rpx;
+      background: linear-gradient(135deg, #fff4cc 0%, #ffe39a 100%);
+      color: #7a5200;
+      font-size: 22rpx;
+      line-height: 1.4;
     }
   }
 }

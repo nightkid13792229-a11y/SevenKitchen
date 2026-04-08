@@ -86,9 +86,21 @@
       }
     },
     {
+      "path": "pages/network-settings/index",
+      "style": {
+        "navigationBarTitleText": "网络设置"
+      }
+    },
+    {
       "path": "pages/login/index",
       "style": {
         "navigationBarTitleText": "微信登录"
+      }
+    },
+    {
+      "path": "pages/login/staff",
+      "style": {
+        "navigationBarTitleText": "员工登录"
       }
     },
     {
@@ -134,9 +146,27 @@
       }
     },
     {
+      "path": "pages/staff-inventory/index",
+      "style": {
+        "navigationBarTitleText": "库存管理"
+      }
+    },
+    {
+      "path": "pages/staff-inventory/stocktake-create",
+      "style": {
+        "navigationBarTitleText": "移动端盘点录入"
+      }
+    },
+    {
       "path": "pages/staff-purchasing/index",
       "style": {
         "navigationBarTitleText": "采购管理"
+      }
+    },
+    {
+      "path": "pages/staff-purchasing/stock-create",
+      "style": {
+        "navigationBarTitleText": "创建补货采购单"
       }
     },
     {
@@ -254,6 +284,19 @@
       "path": "pages/terms/index",
       "style": {
         "navigationBarTitleText": "用户协议"
+      }
+    },
+    {
+      "path": "pages/feedback-list/index",
+      "style": {
+        "navigationBarTitleText": "建议反馈",
+        "enablePullDownRefresh": true
+      }
+    },
+    {
+      "path": "pages/feedback-form/index",
+      "style": {
+        "navigationBarTitleText": "提交反馈"
       }
     }
   ],

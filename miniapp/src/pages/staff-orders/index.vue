@@ -47,13 +47,30 @@
         <text class="filter-text">{{ dateFilterText }}</text>
         <text class="filter-arrow">▼</text>
       </view>
-      <view class="filter-item" @tap="showOrderIdFilter">
-        <text class="filter-text">{{ orderIdFilterText }}</text>
-        <text class="filter-arrow">▼</text>
-      </view>
       <view class="filter-reset" @tap="resetFilters" v-if="hasActiveFilters">
         <text class="reset-text">重置</text>
       </view>
+    </view>
+
+    <view class="quick-search-bar">
+      <view class="quick-search-input-wrap">
+        <text class="quick-search-icon">#</text>
+        <input
+          class="quick-search-input"
+          v-model="orderIdKeyword"
+          placeholder="按订单号快速搜索，支持模糊匹配"
+          confirm-type="search"
+          @confirm="performOrderIdFilter"
+        />
+        <text
+          v-if="orderIdKeyword"
+          class="quick-search-clear"
+          @tap.stop="clearOrderIdKeyword"
+        >
+          ×
+        </text>
+      </view>
+      <button class="quick-search-btn" @tap="performOrderIdFilter">搜索</button>
     </view>
 
     <!-- 订单列表 -->
@@ -106,6 +123,26 @@
               <text class="meal-text">共{{ getTotalMeals(order) }}餐</text>
               <text class="meal-separator">·</text>
               <text class="meal-text">每餐{{ getMealWeight(order) }}g</text>
+            </view>
+          </view>
+
+          <view
+            v-if="hasDogProfile(order) || hasRecipeDetail(order)"
+            class="quick-entry-row"
+          >
+            <view
+              v-if="hasDogProfile(order)"
+              class="quick-entry-chip pet"
+              @tap.stop="openDogProfile(order)"
+            >
+              宠物档案
+            </view>
+            <view
+              v-if="hasRecipeDetail(order)"
+              class="quick-entry-chip recipe"
+              @tap.stop="openRecipeDetail(order)"
+            >
+              食谱详情
             </view>
           </view>
         </template>
@@ -172,6 +209,21 @@
         </view>
       </view>
 
+      <view v-if="orders.length > 0" class="pagination-section">
+        <text class="pagination-text">已显示 {{ orders.length }} / {{ totalOrders }} 条订单</text>
+        <view
+          v-if="hasMore"
+          class="load-more"
+          :class="{ disabled: loadingMore }"
+          @tap="loadMoreOrders"
+        >
+          <text class="load-more-text">{{ loadingMore ? '加载中...' : '加载更多' }}</text>
+        </view>
+        <view v-else class="no-more">
+          <text class="no-more-text">已显示全部订单</text>
+        </view>
+      </view>
+
       <!-- 空状态 -->
       <view v-if="orders.length === 0 && !loading" class="empty-state">
         <text class="empty-icon">📦</text>
@@ -222,25 +274,6 @@
       </view>
     </view>
 
-    <!-- 订单编号筛选弹窗 -->
-    <view class="popup" v-if="orderIdFilterVisible" @tap="hideOrderIdFilter">
-      <view class="popup-content" @tap.stop>
-        <view class="popup-title">筛选订单编号</view>
-        <view class="search-input-wrapper">
-          <input
-            class="search-input"
-            v-model="orderIdKeyword"
-            placeholder="输入完整或部分订单编号"
-            @confirm="performOrderIdFilter"
-          />
-        </view>
-        <view class="popup-actions">
-          <button class="popup-btn cancel" @tap="hideOrderIdFilter">取消</button>
-          <button class="popup-btn confirm" @tap="performOrderIdFilter">筛选</button>
-        </view>
-      </view>
-    </view>
-
     <!-- 搜索弹窗 -->
     <view class="popup" v-if="searchVisible" @tap="hideSearchModal">
       <view class="popup-content" @tap.stop>
@@ -249,7 +282,7 @@
           <input
             class="search-input"
             v-model="searchKeyword"
-            placeholder="输入订单号/客户姓名/手机号"
+            placeholder="输入订单号/客户姓名/手机号/宠物名"
             @confirm="performSearch"
           />
         </view>
@@ -310,17 +343,40 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { onShow, onLoad } from '@dcloudio/uni-app'
+import { ref, computed } from 'vue'
+import { onShow, onLoad, onReachBottom } from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
 import { confirmOfflinePayment } from '../../api/orders'
-import { formatShortDateTime } from '../../utils/date'
 
 // DEBUG flag
 const DEBUG = true
 
 // 状态栏高度
 const statusBarHeight = ref(0)
+
+function getOrderListFromResponse(data: any): any[] {
+  return Array.isArray(data) ? data : (data?.list || [])
+}
+
+function getOrderAmountNumber(order?: Partial<Order> | null): number {
+  if (!order) return 0
+  const rawAmount = order.totalAmount ?? order.amountTotal ?? 0
+  const amount = typeof rawAmount === 'string' ? parseFloat(rawAmount) : Number(rawAmount)
+  return Number.isFinite(amount) ? amount : 0
+}
+
+function isTodayOrder(dateStr?: string): boolean {
+  if (!dateStr) return false
+  const date = new Date(dateStr)
+  if (isNaN(date.getTime())) return false
+
+  const now = new Date()
+  const start = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+  const end = new Date(start)
+  end.setDate(end.getDate() + 1)
+
+  return date >= start && date < end
+}
 
 interface Order {
   id: string
@@ -337,6 +393,7 @@ interface Order {
   customerPhone?: string
   firstItem?: {
     dog?: {
+      id?: string
       name?: string
       breedName?: string
       weightKg?: number
@@ -383,17 +440,20 @@ const dateOptions = ref([
 const allOrders = ref<Order[]>([])
 const orders = ref<Order[]>([])
 const loading = ref(false)
+const loadingMore = ref(false)
+const currentPage = ref(1)
+const totalOrders = ref(0)
+const pageSize = 20
 
 // 筛选状态
 const selectedStatus = ref<string>('ALL')
 const selectedDate = ref<string>('all')
 const searchKeyword = ref('')
-const orderIdKeyword = ref('')  // 订单编号筛选
+const orderIdKeyword = ref('')  // 订单编号快速搜索
 
 // 弹窗显示状态
 const statusFilterVisible = ref(false)
 const dateFilterVisible = ref(false)
-const orderIdFilterVisible = ref(false)
 const searchVisible = ref(false)
 
 // 发货模态框状态
@@ -415,7 +475,7 @@ const editingAmount = ref<string>('')
 const stats = ref({
   todayOrders: 0,
   pendingOrders: 0,
-  todayRevenue: '0'
+  todayRevenue: '0.00'
 })
 
 // 计算属性
@@ -429,15 +489,15 @@ const dateFilterText = computed(() => {
   return option ? option.label : '日期'
 })
 
-const orderIdFilterText = computed(() => {
-  return orderIdKeyword.value ? '订单号' : '订单号'
-})
-
 const hasActiveFilters = computed(() => {
   return selectedStatus.value !== 'ALL' ||
          selectedDate.value !== 'all' ||
-         searchKeyword.value !== '' ||
-         orderIdKeyword.value !== ''
+         searchKeyword.value.trim() !== '' ||
+         orderIdKeyword.value.trim() !== ''
+})
+
+const hasMore = computed(() => {
+  return orders.value.length < totalOrders.value
 })
 
 // 生命周期
@@ -447,13 +507,14 @@ onLoad(() => {
   statusBarHeight.value = systemInfo.statusBarHeight || 0
 })
 
-onMounted(() => {
-  loadOrders()
+onShow(() => {
+  loadOrders(true)
   loadStats()
+  loadStatusCounts()
 })
 
-onShow(() => {
-  loadOrders()
+onReachBottom(() => {
+  loadMoreOrders()
 })
 
 // 返回上一页
@@ -461,25 +522,76 @@ function goBack() {
   uni.navigateBack()
 }
 
+async function fetchAllAdminOrders(params: Record<string, any>): Promise<any[]> {
+  const pageSize = 100
+  let page = 1
+  let total = 0
+  const collected: any[] = []
+
+  while (page === 1 || collected.length < total) {
+    const response = await request({
+      url: '/admin/orders',
+      method: 'GET',
+      data: {
+        ...params,
+        page,
+        pageSize
+      }
+    })
+
+    if (response.code !== 0) {
+      throw new Error(response.message || '统计数据加载失败')
+    }
+
+    const list = getOrderListFromResponse(response.data)
+    total = Array.isArray(response.data)
+      ? list.length
+      : Number(response.data?.total || 0)
+
+    collected.push(...list)
+
+    if (list.length === 0 || list.length < pageSize || collected.length >= total) {
+      break
+    }
+
+    page += 1
+  }
+
+  return collected
+}
+
 // 加载订单列表
-async function loadOrders() {
+async function loadOrders(reset = true) {
+  const keyword = searchKeyword.value.trim()
+  const orderId = orderIdKeyword.value.trim()
+  const targetPage = reset ? 1 : currentPage.value + 1
+
+  if (!reset && (!hasMore.value || loading.value || loadingMore.value)) {
+    return
+  }
+
   if (DEBUG) {
     const token = getToken()
     console.log('[StaffOrders] Loading orders', {
       token: token ? token.substring(0, 20) + '...' : 'none',
       status: selectedStatus.value,
       date: selectedDate.value,
-      keyword: searchKeyword.value,
-      orderId: orderIdKeyword.value
+      keyword,
+      orderId,
+      page: targetPage,
+      pageSize
     })
   }
 
-  loading.value = true
-  uni.showLoading({ title: '加载中...' })
+  if (reset) {
+    loading.value = true
+    uni.showLoading({ title: '加载中...' })
+  } else {
+    loadingMore.value = true
+  }
 
   try {
-    // 构建查询参数
-    const params: any = {}
+    const params: Record<string, any> = {}
 
     if (selectedStatus.value !== 'ALL') {
       params.status = selectedStatus.value
@@ -499,19 +611,21 @@ async function loadOrders() {
       }
     }
 
-    if (searchKeyword.value) {
-      params.keyword = searchKeyword.value
+    if (keyword) {
+      params.keyword = keyword
     }
 
-    if (orderIdKeyword.value) {
-      params.orderId = orderIdKeyword.value
+    if (orderId) {
+      params.orderId = orderId
     }
+
+    params.page = targetPage
+    params.pageSize = pageSize
 
     if (DEBUG) {
       console.log('[StaffOrders] Request params:', params)
     }
 
-    // 调用管理员API
     const response = await request({
       url: '/admin/orders',
       method: 'GET',
@@ -524,38 +638,50 @@ async function loadOrders() {
       console.log('[StaffOrders] Response data:', response.data)
     }
 
-    if (response.code === 0 && response.data) {
-      const orderList = Array.isArray(response.data) ? response.data : (response.data.list || [])
-      if (DEBUG) {
-        console.log('[StaffOrders] Parsed order list:', orderList)
-        console.log('[StaffOrders] Order count:', orderList.length)
-        if (orderList.length > 0) {
-          console.log('[StaffOrders] First order:', orderList[0])
-        }
+    if (response.code !== 0 || !response.data) {
+      throw new Error(response.message || '加载失败')
+    }
+
+    const orderList = getOrderListFromResponse(response.data)
+    totalOrders.value = Array.isArray(response.data)
+      ? orderList.length
+      : Number(response.data.total || 0)
+
+    if (DEBUG) {
+      console.log('[StaffOrders] Parsed order list:', orderList)
+      console.log('[StaffOrders] Order count:', orderList.length)
+      if (orderList.length > 0) {
+        console.log('[StaffOrders] First order:', orderList[0])
       }
+    }
 
-      // 转换数据类型
-      const processedOrders = orderList.map((order: any) => ({
-        ...order,
-        totalAmount: parseFloat(order.totalAmount || order.amountTotal || 0),
-        amountTotal: parseFloat(order.amountTotal || order.totalAmount || 0),
-        amountProduct: parseFloat(order.amountProduct || 0),
-        amountShipping: parseFloat(order.amountShipping || 0)
-      }))
-
-      allOrders.value = processedOrders
-      updateStatusCounts()
-      filterOrders()
-
-      if (DEBUG) {
-        console.log('[StaffOrders] Successfully loaded', processedOrders.length, 'orders')
-      }
-    } else {
-      console.error('[StaffOrders] Invalid response:', response)
-      uni.showToast({
-        title: response.message || '加载失败',
-        icon: 'none'
+    const processedOrders = orderList.map((order: any) => ({
+      ...order,
+      totalAmount: getOrderAmountNumber({
+        totalAmount: order.totalAmount,
+        amountTotal: order.amountTotal
+      }),
+      amountTotal: getOrderAmountNumber({
+        totalAmount: order.amountTotal,
+        amountTotal: order.totalAmount
+      }),
+      amountProduct: getOrderAmountNumber({
+        totalAmount: order.amountProduct
+      }),
+      amountShipping: getOrderAmountNumber({
+        totalAmount: order.amountShipping
       })
+    }))
+
+    allOrders.value = reset
+      ? processedOrders
+      : [...allOrders.value, ...processedOrders]
+    currentPage.value = targetPage
+    filterOrders()
+
+    if (DEBUG) {
+      console.log('[StaffOrders] Successfully loaded', processedOrders.length, 'orders')
+      console.log('[StaffOrders] Current visible / total:', orders.value.length, totalOrders.value)
     }
   } catch (error: any) {
     console.error('[StaffOrders] Load orders error:', error)
@@ -568,9 +694,42 @@ async function loadOrders() {
       icon: 'none'
     })
   } finally {
-    loading.value = false
-    uni.hideLoading()
+    if (reset) {
+      loading.value = false
+      uni.hideLoading()
+    } else {
+      loadingMore.value = false
+    }
   }
+}
+
+async function loadStatusCounts() {
+  try {
+    const response = await request({
+      url: '/admin/orders/stats',
+      method: 'GET'
+    })
+
+    if (response.code !== 0 || !response.data) return
+
+    const data = response.data as Record<string, number>
+    statusOptions.value[0].count = data.total || 0
+    statusOptions.value[1].count = data.pendingPayment || 0
+    statusOptions.value[2].count = data.paid || 0
+    statusOptions.value[3].count = data.purchasing || 0
+    statusOptions.value[4].count = data.inProduction || 0
+    statusOptions.value[5].count = data.freezing || 0
+    statusOptions.value[6].count = data.shipped || 0
+    statusOptions.value[7].count = data.completed || 0
+    statusOptions.value[8].count = data.aftersale || 0
+  } catch (error) {
+    console.error('[StaffOrders] Load status counts error:', error)
+  }
+}
+
+function shouldCountTodayRevenue(order?: Order | null): boolean {
+  if (!order) return false
+  return order.status === 'PAID' && isTodayOrder(order.createdAt)
 }
 
 // 加载统计数据
@@ -580,57 +739,32 @@ async function loadStats() {
     const todayStart = new Date(now.setHours(0, 0, 0, 0)).toISOString()
     const todayEnd = new Date(now.setHours(23, 59, 59, 999)).toISOString()
 
-    const response = await request({
-      url: '/admin/orders',
-      method: 'GET',
-      data: {
-        startDate: todayStart,
-        endDate: todayEnd
-      }
+    const orderList = await fetchAllAdminOrders({
+      startDate: todayStart,
+      endDate: todayEnd
     })
 
     if (DEBUG) {
-      console.log('[StaffOrders] Stats response:', response)
+      console.log('[StaffOrders] Stats order count:', orderList.length)
     }
 
-    if (response.code === 0 && response.data) {
-      const orderList = Array.isArray(response.data) ? response.data : (response.data.list || [])
+    stats.value.todayOrders = orderList.length
+    stats.value.pendingOrders = orderList.filter((o: any) =>
+      o.status === 'PENDING_PAYMENT' || o.status === 'PAID'
+    ).length
 
-      stats.value.todayOrders = orderList.length
-      stats.value.pendingOrders = orderList.filter((o: any) =>
-        o.status === 'PENDING_PAYMENT' || o.status === 'PAID'
-      ).length
+    const revenue = orderList
+      .filter((o: any) => o.status === 'PAID')
+      .reduce((sum: number, o: any) => sum + getOrderAmountNumber(o), 0)
 
-      const revenue = orderList
-        .filter((o: any) => o.status !== 'PENDING_PAYMENT')
-        .reduce((sum: number, o: any) => sum + parseFloat(o.totalAmount || o.amountTotal || 0), 0)
-      stats.value.todayRevenue = revenue.toFixed(0)
-    }
+    stats.value.todayRevenue = revenue.toFixed(2)
   } catch (error) {
     console.error('[StaffOrders] Load stats error:', error)
   }
 }
 
-// 更新状态数量
-function updateStatusCounts() {
-  statusOptions.value[0].count = allOrders.value.length
-  statusOptions.value[1].count = allOrders.value.filter(o => o.status === 'PENDING_PAYMENT').length
-  statusOptions.value[2].count = allOrders.value.filter(o => o.status === 'PAID').length
-  statusOptions.value[3].count = allOrders.value.filter(o => o.status === 'PURCHASING').length
-  statusOptions.value[4].count = allOrders.value.filter(o => o.status === 'IN_PRODUCTION').length
-  statusOptions.value[5].count = allOrders.value.filter(o => o.status === 'FREEZING').length
-  statusOptions.value[6].count = allOrders.value.filter(o => o.status === 'SHIPPED').length
-  statusOptions.value[7].count = allOrders.value.filter(o => o.status === 'COMPLETED').length
-  statusOptions.value[8].count = allOrders.value.filter(o => o.status === 'AFTERSALE').length
-}
-
-// 筛选订单
 function filterOrders() {
-  if (selectedStatus.value === 'ALL') {
-    orders.value = allOrders.value
-  } else {
-    orders.value = allOrders.value.filter(o => o.status === selectedStatus.value)
-  }
+  orders.value = [...allOrders.value]
 }
 
 // 筛选弹窗操作
@@ -645,8 +779,7 @@ function hideStatusFilter() {
 function selectStatus(status: string) {
   selectedStatus.value = status
   hideStatusFilter()
-  filterOrders()
-  loadOrders()
+  loadOrders(true)
 }
 
 function showDateFilter() {
@@ -660,20 +793,17 @@ function hideDateFilter() {
 function selectDate(date: string) {
   selectedDate.value = date
   hideDateFilter()
-  loadOrders()
-}
-
-function showOrderIdFilter() {
-  orderIdFilterVisible.value = true
-}
-
-function hideOrderIdFilter() {
-  orderIdFilterVisible.value = false
+  loadOrders(true)
 }
 
 function performOrderIdFilter() {
-  hideOrderIdFilter()
-  loadOrders()
+  orderIdKeyword.value = orderIdKeyword.value.trim()
+  loadOrders(true)
+}
+
+function clearOrderIdKeyword() {
+  orderIdKeyword.value = ''
+  loadOrders(true)
 }
 
 function resetFilters() {
@@ -681,7 +811,7 @@ function resetFilters() {
   selectedDate.value = 'all'
   searchKeyword.value = ''
   orderIdKeyword.value = ''
-  loadOrders()
+  loadOrders(true)
 }
 
 // 搜索操作
@@ -694,8 +824,9 @@ function hideSearchModal() {
 }
 
 function performSearch() {
+  searchKeyword.value = searchKeyword.value.trim()
   hideSearchModal()
-  loadOrders()
+  loadOrders(true)
 }
 
 // 快捷筛选
@@ -705,7 +836,11 @@ function filterByType(type: string) {
   } else if (type === 'pending') {
     selectedStatus.value = 'PENDING_PAYMENT'
   }
-  loadOrders()
+  loadOrders(true)
+}
+
+function loadMoreOrders() {
+  loadOrders(false)
 }
 
 // 查看订单详情
@@ -717,10 +852,7 @@ function viewOrderDetail(orderId: string) {
 
 // 格式化函数
 function formatAmount(amount?: number | string): string {
-  if (!amount) return '0.00'
-  const num = typeof amount === 'string' ? parseFloat(amount) : amount
-  if (isNaN(num)) return '0.00'
-  return num.toFixed(2)
+  return getOrderAmountNumber({ totalAmount: amount }).toFixed(2)
 }
 
 function formatPhone(phone?: string): string {
@@ -793,6 +925,44 @@ function getMealWeight(order: Order): number {
   return order.firstItem.packageSpecG || 0
 }
 
+function hasDogProfile(order: Order): boolean {
+  return Boolean(order.firstItem?.dog?.id)
+}
+
+function hasRecipeDetail(order: Order): boolean {
+  return Boolean(order.firstItem?.recipeSnapshot?.id)
+}
+
+function openDogProfile(order: Order) {
+  const dogId = order.firstItem?.dog?.id
+  if (!dogId) {
+    uni.showToast({
+      title: '宠物档案不存在',
+      icon: 'none'
+    })
+    return
+  }
+
+  uni.navigateTo({
+    url: `/pages/dog-create/index?dogId=${dogId}`
+  })
+}
+
+function openRecipeDetail(order: Order) {
+  const recipeId = order.firstItem?.recipeSnapshot?.id
+  if (!recipeId) {
+    uni.showToast({
+      title: '食谱信息不完整',
+      icon: 'none'
+    })
+    return
+  }
+
+  uni.navigateTo({
+    url: `/pages/recipe-detail/index?recipeId=${recipeId}`
+  })
+}
+
 function formatAddress(address?: { regionText?: string }): string {
   if (!address || !address.regionText) return ''
   const regions = address.regionText.split(/\s+/)
@@ -853,8 +1023,9 @@ async function confirmPayment(order: Order) {
             title: '收款成功',
             icon: 'success'
           })
-          loadOrders()
+          loadOrders(true)
           loadStats()
+          loadStatusCounts()
         } catch (error) {
           console.error('[StaffOrders] Confirm payment error:', error)
         }
@@ -893,8 +1064,9 @@ async function confirmOrderPayment(order: Order) {
 
           // 刷新订单列表
           setTimeout(() => {
-            loadOrders()
+            loadOrders(true)
             loadStats()
+            loadStatusCounts()
           }, 500)
         } catch (error: any) {
           uni.hideLoading()
@@ -919,15 +1091,15 @@ function cancelEditingAmount() {
 async function confirmAmountChange(order: Order) {
   const newAmount = parseFloat(editingAmount.value)
 
-  if (isNaN(newAmount) || newAmount <= 0) {
+  if (isNaN(newAmount) || newAmount < 0) {
     uni.showToast({
-      title: '请输入有效金额',
+      title: '金额不能小于0',
       icon: 'none'
     })
     return
   }
 
-  const originalAmount = parseFloat(order.totalAmount || order.amountTotal || 0)
+  const originalAmount = getOrderAmountNumber(order)
 
   // 如果金额有变化，显示确认提示
   if (Math.abs(newAmount - originalAmount) > 0.01) {
@@ -971,11 +1143,31 @@ async function submitAmountChange(orderId: string, newAmount: number) {
     // 关闭编辑状态
     cancelEditingAmount()
 
-    // 刷新订单列表和统计数据
-    setTimeout(() => {
-      loadOrders()
-      loadStats()
-    }, 500)
+    const targetOrder =
+      allOrders.value.find(order => order.id === orderId) ||
+      orders.value.find(order => order.id === orderId) ||
+      null
+
+    const previousAmount = getOrderAmountNumber(targetOrder)
+
+    allOrders.value = allOrders.value.map(order =>
+      order.id === orderId
+        ? { ...order, totalAmount: newAmount, amountTotal: newAmount }
+        : order
+    )
+    orders.value = orders.value.map(order =>
+      order.id === orderId
+        ? { ...order, totalAmount: newAmount, amountTotal: newAmount }
+        : order
+    )
+
+    if (shouldCountTodayRevenue(targetOrder)) {
+      const currentRevenue = parseFloat(stats.value.todayRevenue || '0')
+      const nextRevenue = currentRevenue - previousAmount + newAmount
+      stats.value.todayRevenue = Math.max(nextRevenue, 0).toFixed(2)
+    }
+
+    await loadStats()
   } catch (error: any) {
     uni.hideLoading()
     console.error('[StaffOrders] Update amount error:', error)
@@ -1037,8 +1229,9 @@ async function confirmShipping() {
     })
 
     closeShippingModal()
-    loadOrders()
+    loadOrders(true)
     loadStats()
+    loadStatusCounts()
   } catch (error: any) {
     uni.showToast({
       title: error.message || '发货失败',
@@ -1180,7 +1373,61 @@ async function confirmShipping() {
   display: flex;
   align-items: center;
   gap: 16rpx;
+  padding: 0 32rpx 16rpx;
+}
+
+.quick-search-bar {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
   padding: 0 32rpx 24rpx;
+}
+
+.quick-search-input-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  min-height: 80rpx;
+  padding: 0 24rpx;
+  background-color: #fff;
+  border-radius: 16rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+}
+
+.quick-search-icon {
+  font-size: 28rpx;
+  color: #667eea;
+  margin-right: 12rpx;
+}
+
+.quick-search-input {
+  flex: 1;
+  height: 80rpx;
+  font-size: 28rpx;
+  color: #333;
+}
+
+.quick-search-clear {
+  padding: 8rpx;
+  font-size: 36rpx;
+  line-height: 1;
+  color: #bbb;
+}
+
+.quick-search-btn {
+  width: 152rpx;
+  height: 80rpx;
+  line-height: 80rpx;
+  padding: 0;
+  border-radius: 16rpx;
+  background: linear-gradient(135deg, #667eea 0%, #7b5cff 100%);
+  color: #fff;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.quick-search-btn::after {
+  border: none;
 }
 
 .filter-item {
@@ -1225,6 +1472,51 @@ async function confirmShipping() {
   padding: 24rpx;
   margin-bottom: 24rpx;
   box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
+}
+
+.pagination-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16rpx;
+  padding: 8rpx 0 32rpx;
+}
+
+.pagination-text {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.load-more,
+.no-more {
+  min-width: 220rpx;
+  padding: 18rpx 32rpx;
+  border-radius: 999rpx;
+  text-align: center;
+}
+
+.load-more {
+  background-color: #fff;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.06);
+}
+
+.load-more.disabled {
+  opacity: 0.7;
+}
+
+.load-more-text {
+  font-size: 26rpx;
+  color: #667eea;
+  font-weight: 500;
+}
+
+.no-more {
+  background-color: #f3f4f6;
+}
+
+.no-more-text {
+  font-size: 24rpx;
+  color: #999;
 }
 
 .order-header {
@@ -1394,6 +1686,30 @@ async function confirmShipping() {
 .meal-separator {
   font-size: 26rpx;
   color: #ccc;
+}
+
+.quick-entry-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+  margin-bottom: 16rpx;
+}
+
+.quick-entry-chip {
+  padding: 10rpx 20rpx;
+  border-radius: 999rpx;
+  font-size: 24rpx;
+  font-weight: 500;
+}
+
+.quick-entry-chip.pet {
+  background-color: #eef6ff;
+  color: #1677ff;
+}
+
+.quick-entry-chip.recipe {
+  background-color: #fff4e8;
+  color: #d46b08;
 }
 
 // 收货地址

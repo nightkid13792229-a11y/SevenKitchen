@@ -4,5 +4,7 @@
  */
 
 export * from './enums';
+export * from './inventory-adjustment.entity';
 export * from './inventory-ledger-entry.entity';
+export * from './inventory-stocktake.entity';
 export * from './inventory.repository';

@@ -3,7 +3,7 @@
     <!-- 顶部标题 -->
     <view class="header">
       <text class="title">提交报销申请</text>
-      <text class="subtitle">选择采购清单（可选）并上传支付记录</text>
+      <text class="subtitle">采购清单可选，行政杂费可直接登记并上传支付记录</text>
     </view>
 
     <!-- 已完成的采购清单 -->
@@ -36,7 +36,7 @@
 
     <!-- 其它费用 -->
     <view class="section">
-      <text class="section-title">其它费用</text>
+      <text class="section-title">行政杂费 / 其它费用</text>
       <view class="fees-row">
         <view class="fee-item-half">
           <text class="fee-label">平台运费</text>
@@ -67,13 +67,13 @@
       </view>
       <view class="custom-fees">
         <view class="custom-fee-header">
-          <text class="custom-fee-title">添加其它费用</text>
+          <text class="custom-fee-title">添加行政费用分类</text>
           <view class="add-custom-fee-btn" @tap="addCustomFee">
             <text>+ 添加</text>
           </view>
         </view>
         <view v-if="customFees.length === 0" class="empty-custom-fees">
-          <text>暂无其它费用</text>
+          <text>暂无行政杂费</text>
         </view>
         <view v-else class="custom-fee-list">
           <view
@@ -83,10 +83,21 @@
           >
             <view class="custom-fee-content">
               <view class="custom-fee-inputs">
+                <view class="custom-fee-category-group">
+                  <view
+                    v-for="option in customFeeCategoryOptions"
+                    :key="option.value"
+                    class="category-chip"
+                    :class="{ active: fee.category === option.value }"
+                    @tap.stop="selectCustomFeeCategory(index, option.value)"
+                  >
+                    <text>{{ option.label }}</text>
+                  </view>
+                </view>
                 <input
                   class="custom-fee-desc"
                   v-model="fee.description"
-                  placeholder="费用说明"
+                  placeholder="补充说明（如 2026年4月房租）"
                 />
                 <view class="custom-fee-amount-wrapper">
                   <text class="currency">¥</text>
@@ -152,9 +163,16 @@
 import { ref, computed } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { getPurchaseLists, submitReimbursement as submitReimbursementApi, uploadReceiptPhoto, deleteReceiptPhoto, getReimbursementDetail } from '@/api/purchasing';
+import {
+  reimbursementCustomFeeCategoryOptions,
+  type ReimbursementCustomFeeCategory,
+  inferReimbursementCustomFeeCategory,
+  getReimbursementCustomFeeCategoryLabel,
+} from '@/constants/reimbursement';
 
 // 自定义费用类型
 interface CustomFee {
+  category?: ReimbursementCustomFeeCategory;
   description: string;
   amount: string;
 }
@@ -174,6 +192,7 @@ const platformPackagingFee = ref('');
 const customFees = ref<CustomFee[]>([]);
 const submitting = ref(false);
 const totalReimbursementAmount = ref('0.00');
+const customFeeCategoryOptions = reimbursementCustomFeeCategoryOptions;
 
 // 计算属性
 const canSubmit = computed(() => {
@@ -246,6 +265,10 @@ const loadExistingReimbursement = async (id: string) => {
       platformShippingFee.value = data.platformShippingFee?.toString() || '';
       platformPackagingFee.value = data.platformPackagingFee?.toString() || '';
       customFees.value = data.customFees?.map((fee: any) => ({
+        category:
+          fee.category ||
+          inferReimbursementCustomFeeCategory(fee.description) ||
+          'OTHER',
         description: fee.description,
         amount: fee.amount.toString()
       })) || [];
@@ -369,7 +392,17 @@ const handleImageError = (index: number, url: string) => {
 
 // 添加自定义费用
 const addCustomFee = () => {
-  customFees.value.push({ description: '', amount: '' });
+  customFees.value.push({ category: 'OTHER', description: '', amount: '' });
+};
+
+const selectCustomFeeCategory = (
+  index: number,
+  category: ReimbursementCustomFeeCategory,
+) => {
+  const fee = customFees.value[index];
+  if (!fee) return;
+
+  fee.category = category;
 };
 
 // 删除自定义费用
@@ -397,6 +430,35 @@ const submitReimbursement = async () => {
     return;
   }
 
+  const normalizedCustomFees = [];
+  for (const fee of customFees.value) {
+    const description = fee.description.trim();
+    const amount = parseFloat(fee.amount);
+    const isEmptyRow = !description && !fee.amount;
+
+    if (isEmptyRow) {
+      continue;
+    }
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      uni.showToast({ title: '行政费用金额需大于0', icon: 'none' });
+      return;
+    }
+
+    if (fee.category === 'OTHER' && !description) {
+      uni.showToast({ title: '其它费用请补充说明', icon: 'none' });
+      return;
+    }
+
+    normalizedCustomFees.push({
+      category: fee.category || 'OTHER',
+      description:
+        description ||
+        getReimbursementCustomFeeCategoryLabel(fee.category || 'OTHER'),
+      amount,
+    });
+  }
+
   submitting.value = true;
 
   try {
@@ -412,12 +474,7 @@ const submitReimbursement = async () => {
       // 新增字段
       platformShippingFee: parseFloat(platformShippingFee.value) || 0,
       platformPackagingFee: parseFloat(platformPackagingFee.value) || 0,
-      customFees: customFees.value
-        .filter(fee => fee.description && fee.amount)
-        .map(fee => ({
-          description: fee.description,
-          amount: parseFloat(fee.amount) || 0
-        })),
+      customFees: normalizedCustomFees,
     });
 
     if (res.code === 0) {
@@ -689,16 +746,38 @@ const formatDate = (dateStr: string) => {
 
     .custom-fee-content {
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 12rpx;
 
       .custom-fee-inputs {
         flex: 1;
         display: flex;
+        flex-direction: column;
         gap: 12rpx;
 
+        .custom-fee-category-group {
+          display: flex;
+          flex-wrap: wrap;
+          gap: 12rpx;
+
+          .category-chip {
+            padding: 10rpx 18rpx;
+            border-radius: 999rpx;
+            background-color: #fff;
+            color: #666;
+            font-size: 24rpx;
+            border: 1rpx solid #e5e7eb;
+
+            &.active {
+              background-color: #fff3bf;
+              color: #8f5b00;
+              border-color: #ffd43b;
+              font-weight: 600;
+            }
+          }
+        }
+
         .custom-fee-desc {
-          flex: 1;
           padding: 12rpx 16rpx;
           background-color: #fff;
           border-radius: 8rpx;
@@ -711,7 +790,7 @@ const formatDate = (dateStr: string) => {
           background-color: #fff;
           border-radius: 8rpx;
           padding: 0 16rpx;
-          width: 180rpx;
+          width: 220rpx;
 
           .currency {
             font-size: 24rpx;

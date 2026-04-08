@@ -54,6 +54,10 @@
                   <text class="label">收货人:</text>
                   <text class="value">{{ order.recipientName }}（{{ order.recipientCity }}）</text>
                 </view>
+                <view v-if="order.adminRemark" class="order-row order-remark-row">
+                  <text class="label">备注:</text>
+                  <text class="value">{{ order.adminRemark }}</text>
+                </view>
               </view>
             </view>
           </view>
@@ -128,7 +132,14 @@ interface PrintData {
   totalProductionG: number;
   createdAt: string;
   completedAt?: string;
-  orderItems: any[];
+  orderItems: Array<{
+    packageSpecG: number;
+    packageCount: number;
+    dogName: string;
+    recipientName?: string;
+    recipientCity?: string;
+    adminRemark?: string;
+  }>;
   recipeSnapshot: any;
   createdBy?: string;
 }
@@ -541,6 +552,10 @@ const handlePrint = async () => {
     font-weight: 500;
     word-break: break-all;
   }
+}
+
+.order-remark-row {
+  align-items: flex-start;
 }
 
 .ingredients-table {

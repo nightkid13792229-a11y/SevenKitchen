@@ -8,15 +8,18 @@ export interface GlobalConfig {
   laborHourlyRate: number;
   minOrderWeightG: number;
   defaultBatchCapacityG: number;
+  minPotWeightG: number;
   targetMargin: number;
   overheadCostPerKg: number;
   targetBatchUtilization: number;
   supplementLossRate: number;
+  ingredientPriceAutoApproveThreshold: number;
   defaultProductLabelId: string | null;
   defaultIcePackId: string | null;
   defaultShippingTemplateId: string | null;
   packageExampleImageUrl: string | null;
   shippingCompanyLogoUrl: string | null;
+  homeHeaderBgImageUrl: string | null;
   paymentTimeoutMinutes: number;
   equipmentRecommendations: EquipmentRecommendation[] | null;
 }
@@ -78,6 +81,24 @@ export const globalConfigApi = {
       url: string;
       key: string;
     }>('/admin/upload-shipping-logo', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+
+  /**
+   * 上传首页头部背景图
+   * @param file 图片文件
+   */
+  uploadHomeHeaderBg: async (file: File): Promise<{ url: string; key: string }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return api.post<{
+      url: string;
+      key: string;
+    }>('/admin/upload-home-header-bg', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },

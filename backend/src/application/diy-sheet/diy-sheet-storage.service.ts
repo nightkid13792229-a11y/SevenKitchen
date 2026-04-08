@@ -19,7 +19,7 @@ export class DIYSheetStorageService {
   constructor(private readonly prisma: PrismaService) {}
 
   /**
-   * 创建DIY制作单
+   * 创建DIY制作单（幂等：同一用户+食谱+狗狗组合已存在时更新）
    */
   async create(
     userId: string,
@@ -41,6 +41,32 @@ export class DIYSheetStorageService {
     }
 
     const dogName = dog.dogs[0].name;
+
+    // 检查是否已存在同一用户+食谱+狗狗的制作单
+    const existing = await this.prisma.dIYSheet.findFirst({
+      where: {
+        userId,
+        recipeId: dto.recipeId,
+        dogId: dto.dogId,
+      },
+    });
+
+    if (existing) {
+      // 更新已有记录
+      const updated = await this.prisma.dIYSheet.update({
+        where: { id: existing.id },
+        data: {
+          recipeName: dto.recipeName,
+          dogName,
+          cycleDays: dto.cycleDays,
+          perMealG: dto.perMealG,
+          dailyIntakeG: dto.dailyIntakeG,
+          purchaseList: dto.purchaseList as any,
+          productionSteps: dto.productionSteps,
+        },
+      });
+      return this.toResponseDto(updated);
+    }
 
     // 创建制作单
     const sheet = await this.prisma.dIYSheet.create({

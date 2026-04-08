@@ -1,5 +1,9 @@
 import axios from 'axios'
-import type { InternalAxiosRequestConfig, AxiosResponse } from 'axios'
+import type {
+  InternalAxiosRequestConfig,
+  AxiosRequestConfig,
+  AxiosResponse
+} from 'axios'
 import { ElMessage } from 'element-plus'
 
 const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
@@ -11,7 +15,7 @@ interface ApiResponse<T = any> {
 }
 
 // Create axios instance
-const api = axios.create({
+const http = axios.create({
   baseURL,
   timeout: 30000,
   headers: {
@@ -37,7 +41,7 @@ const api = axios.create({
 })
 
 // Request interceptor
-api.interceptors.request.use(
+http.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     // Priority 1: Use Bearer token if available
     const token = localStorage.getItem('admin_token')
@@ -58,7 +62,7 @@ api.interceptors.request.use(
 )
 
 // Response interceptor - extract data directly
-api.interceptors.response.use(
+http.interceptors.response.use(
   (response: AxiosResponse<ApiResponse>) => {
     // Handle 204 No Content (successful DELETE, etc.)
     if (response.status === 204) {
@@ -90,6 +94,29 @@ api.interceptors.response.use(
   }
 )
 
+type RequestConfig = AxiosRequestConfig
+
+const api = {
+  request<T = any>(config: RequestConfig): Promise<T> {
+    return http.request<any, T>(config)
+  },
+  get<T = any>(url: string, config?: RequestConfig): Promise<T> {
+    return http.get<any, T>(url, config)
+  },
+  post<T = any>(url: string, data?: any, config?: RequestConfig): Promise<T> {
+    return http.post<any, T>(url, data, config)
+  },
+  put<T = any>(url: string, data?: any, config?: RequestConfig): Promise<T> {
+    return http.put<any, T>(url, data, config)
+  },
+  patch<T = any>(url: string, data?: any, config?: RequestConfig): Promise<T> {
+    return http.patch<any, T>(url, data, config)
+  },
+  delete<T = any>(url: string, config?: RequestConfig): Promise<T> {
+    return http.delete<any, T>(url, config)
+  }
+}
+
 // Export API methods with proper typing
 // Note: Response interceptor already extracts data, so we don't need .then(res => res.data)
 export const authApi = {
@@ -115,6 +142,18 @@ export { orderApi } from './orders'
 export const inventoryApi = {
   list: (): Promise<any[]> =>
     api.get('/admin/ingredients'),
+  overview: (): Promise<any[]> =>
+    api.get('/admin/inventory'),
+  ledger: (params?: { ingredientId?: string; limit?: number }): Promise<any[]> =>
+    api.get('/admin/inventory/ledger', { params }),
+  createAdjustment: (data: any): Promise<any> =>
+    api.post('/admin/inventory/adjustments', data),
+  stocktakes: (params?: { limit?: number }): Promise<any[]> =>
+    api.get('/admin/inventory/stocktakes', { params }),
+  createStocktake: (data: any): Promise<any> =>
+    api.post('/admin/inventory/stocktakes', data),
+  applyStocktake: (id: string): Promise<any> =>
+    api.post(`/admin/inventory/stocktakes/${id}/apply`),
   updatePrice: (id: string, price: number): Promise<any> =>
     api.put(`/admin/ingredients/${id}/price`, { currentPricePerPurchaseUnit: price })
 }

@@ -4,6 +4,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import {
   Reimbursement,
@@ -14,6 +15,10 @@ import {
 @Injectable()
 export class PrismaReimbursementRepository implements ReimbursementRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  private toCustomFeesJson(customFees: Reimbursement['customFees']) {
+    return customFees as unknown as Prisma.InputJsonValue;
+  }
 
   async save(reimbursement: Reimbursement): Promise<Reimbursement> {
     const data = reimbursement.toPrisma();
@@ -28,7 +33,7 @@ export class PrismaReimbursementRepository implements ReimbursementRepository {
         receiptUrls: data.receiptUrls,
         platformShippingFee: data.platformShippingFee,
         platformPackagingFee: data.platformPackagingFee,
-        customFees: data.customFees,
+        customFees: this.toCustomFeesJson(data.customFees),
         paymentProofUrls: data.paymentProofUrls,
         paymentProofKeys: data.paymentProofKeys,
         reviewedById: data.reviewedById,
@@ -47,7 +52,7 @@ export class PrismaReimbursementRepository implements ReimbursementRepository {
         submittedAt: data.submittedAt,
         platformShippingFee: data.platformShippingFee,
         platformPackagingFee: data.platformPackagingFee,
-        customFees: data.customFees,
+        customFees: this.toCustomFeesJson(data.customFees),
         paymentProofUrls: data.paymentProofUrls,
         paymentProofKeys: data.paymentProofKeys,
         createdAt: data.createdAt,

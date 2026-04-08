@@ -64,10 +64,9 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
+import { onShow, onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { getFavorites, removeFavorite as apiRemoveFavorite, request } from '../../utils/api'
-import { normalizeImageUrl } from '../../utils/config'
-import { CURRENT_SHARE_CONFIG } from '@/config/share.config'
+import { normalizeImageUrl, CURRENT_SHARE_CONFIG } from '../../utils/config'
 
 interface FavoriteItem {
   id: string
@@ -221,28 +220,27 @@ onShow(() => {
 })
 
 // 配置分享功能
-defineOptions({
-  onShareAppMessage() {
-    console.log('[Favorites Share] ========== 转发给朋友分享函数被调用 ==========')
-    const config = {
-      title: '我收藏的狗狗食谱 - Seven的厨房',
-      imageUrl: CURRENT_SHARE_CONFIG.defaultImageUrl,
-      path: '/pages/favorite-recipes/index'
-    }
-    console.log('[Favorites Share] 分享配置:', JSON.stringify(config, null, 2))
-    console.log('[Favorites Share] 图片URL:', config.imageUrl)
-    return config
-  },
-  onShareTimeline() {
-    console.log('[Favorites Share] ========== 分享到朋友圈函数被调用 ==========')
-    const config = {
-      title: '我收藏的狗狗食谱 - Seven的厨房',
-      imageUrl: CURRENT_SHARE_CONFIG.defaultImageUrl
-    }
-    console.log('[Favorites Share] 朋友圈配置:', JSON.stringify(config, null, 2))
-    console.log('[Favorites Share] 图片URL:', config.imageUrl)
-    return config
+onShareAppMessage(() => {
+  console.log('[Favorites Share] ========== 转发给朋友分享函数被调用 ==========')
+  const config = {
+    title: '我收藏的狗狗食谱 - Seven的厨房',
+    imageUrl: CURRENT_SHARE_CONFIG.defaultImageUrl,
+    path: '/pages/favorite-recipes/index'
   }
+  console.log('[Favorites Share] 分享配置:', JSON.stringify(config, null, 2))
+  console.log('[Favorites Share] 图片URL:', config.imageUrl)
+  return config
+})
+
+onShareTimeline(() => {
+  console.log('[Favorites Share] ========== 分享到朋友圈函数被调用 ==========')
+  const config = {
+    title: '我收藏的狗狗食谱 - Seven的厨房',
+    imageUrl: CURRENT_SHARE_CONFIG.defaultImageUrl
+  }
+  console.log('[Favorites Share] 朋友圈配置:', JSON.stringify(config, null, 2))
+  console.log('[Favorites Share] 图片URL:', config.imageUrl)
+  return config
 })
 </script>
 

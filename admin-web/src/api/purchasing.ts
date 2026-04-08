@@ -36,7 +36,7 @@ export const purchasingApi = {
   reviewReimbursement: (
     id: string,
     data: {
-      decision: 'APPROVE' | 'REJECT'
+      decision: 'APPROVE' | 'REJECT' | 'REQUIRES_RESUBMIT'
       comment?: string
     }
   ): Promise<any> => {

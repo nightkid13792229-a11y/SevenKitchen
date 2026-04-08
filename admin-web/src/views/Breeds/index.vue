@@ -48,6 +48,8 @@
       <CustomBreedTable
         :data="customBreeds"
         :loading="customBreedsLoading"
+        :system-breeds="systemBreeds"
+        @refresh="handleCustomBreedTableRefresh"
       />
     </el-card>
   </div>
@@ -96,6 +98,11 @@ const loadCustomBreeds = async () => {
 const handleBreedTableRefresh = () => {
   // Reload system breeds
   loadSystemBreeds()
+}
+
+const handleCustomBreedTableRefresh = () => {
+  loadSystemBreeds()
+  loadCustomBreeds()
 }
 
 onMounted(() => {

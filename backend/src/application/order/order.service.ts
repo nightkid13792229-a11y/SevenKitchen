@@ -37,6 +37,7 @@ import { ADDRESS_REPOSITORY } from '../address/address.service';
 import type { OrderStatusHistoryRepository } from '../../domain/order/order-status-history.repository';
 import { OrderStatusHistory } from '../../domain/order/order-status-history.entity';
 import { ORDER_STATUS_HISTORY_REPOSITORY } from './order.service.tokens';
+import { ValidationError } from '../../domain/common/errors';
 // import type { CartRepository } from '../../domain/cart';  // Cart功能已移除
 import type { IOrderPricingSnapshotRepository } from '../../domain/order-pricing-snapshot/order-pricing-snapshot.repository.interface';
 import { PrismaService } from '../../infrastructure/prisma.service';
@@ -91,6 +92,50 @@ export class OrderService {
     private readonly pricingSnapshotRepository: IOrderPricingSnapshotRepository,
     private readonly prisma: PrismaService,
   ) {}
+
+  private isUuidLike(value: string): boolean {
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+      value,
+    );
+  }
+
+  private resolvePreparationMethodNames(
+    preparationMethodValue: string | null | undefined,
+    methodMap: Map<string, string>,
+  ): string[] {
+    if (!preparationMethodValue) {
+      return [];
+    }
+
+    const resolved = preparationMethodValue
+      .split(',')
+      .map((value) => value.trim())
+      .filter((value) => value)
+      .map((value) => {
+        const mappedName = methodMap.get(value);
+        if (mappedName) {
+          return mappedName;
+        }
+
+        return this.isUuidLike(value) ? null : value;
+      })
+      .filter((value): value is string => !!value);
+
+    return resolved.filter(
+      (value, index) => resolved.indexOf(value) === index,
+    );
+  }
+
+  private resolvePreparationMethodText(
+    preparationMethodValue: string | null | undefined,
+    methodMap: Map<string, string>,
+  ): string | null {
+    const names = this.resolvePreparationMethodNames(
+      preparationMethodValue,
+      methodMap,
+    );
+    return names.length > 0 ? names.join(', ') : null;
+  }
 
   /**
    * Log order status transition to history
@@ -381,22 +426,10 @@ export class OrderService {
 
         // 解析制备方法ID数组并转换为名称数组
         // preparationMethod存储格式：逗号分隔的UUID字符串
-        let preparationMethodNames: string[] = [];
-        if (ri.preparationMethod) {
-          const methodIds =
-            typeof ri.preparationMethod === 'string'
-              ? ri.preparationMethod
-                  .split(',')
-                  .map((id: string) => id.trim())
-                  .filter((id: string) => id)
-              : ri.preparationMethod;
-
-          if (Array.isArray(methodIds)) {
-            preparationMethodNames = methodIds
-              .map((id: string) => preparationMethodMap.get(id))
-              .filter((name): name is string => !!name);
-          }
-        }
+        const preparationMethodNames = this.resolvePreparationMethodNames(
+          typeof ri.preparationMethod === 'string' ? ri.preparationMethod : null,
+          preparationMethodMap,
+        );
 
         return {
           ingredient_id: ri.ingredientId,
@@ -720,24 +753,6 @@ export class OrderService {
       const ingredientMap = new Map(ingredients.map((ing) => [ing.id, ing]));
 
       // Helper function to convert preparationMethod IDs to names
-      const convertPrepMethodIdsToNames = (
-        prepMethodIds: string | null | undefined,
-      ): string | null => {
-        if (!prepMethodIds) return null;
-
-        // Split by comma and trim
-        const ids = prepMethodIds
-          .split(',')
-          .map((id) => id.trim())
-          .filter((id) => id);
-
-        // Map each ID to its name, fallback to original ID if not found
-        const names = ids.map((id) => prepMethodMap.get(id) || id);
-
-        // Join with comma
-        return names.join(', ');
-      };
-
       // Build enriched recipe items with ingredient objects for pricing
       const pricingRecipeItems: PricingRecipeItem[] = recipeItems.map((ri) => {
         const ingredient = ingredientMap.get(ri.ingredientId);
@@ -748,8 +763,9 @@ export class OrderService {
         }
 
         // Convert preparationMethod ID(s) to name(s)
-        const prepMethodName = convertPrepMethodIdsToNames(
+        const prepMethodName = this.resolvePreparationMethodText(
           ri.preparationMethod,
+          prepMethodMap,
         );
 
         console.log('[OrderService] RecipeItem preparationMethod:', {
@@ -855,22 +871,12 @@ export class OrderService {
           // 解析制备方法ID数组并转换为名称数组
           // preparationMethod存储格式：逗号分隔的UUID字符串
           // 例如："a6409a79-402b-41d1-bfe1-031a67da0876, dd27baa4-36cb-4405-9092-0eb37e6160fa"
-          let preparationMethodNames: string[] = [];
-          if (ri.preparationMethod) {
-            const methodIds =
+            const preparationMethodNames = this.resolvePreparationMethodNames(
               typeof ri.preparationMethod === 'string'
                 ? ri.preparationMethod
-                    .split(',')
-                    .map((id: string) => id.trim())
-                    .filter((id: string) => id)
-                : ri.preparationMethod;
-
-            if (Array.isArray(methodIds)) {
-              preparationMethodNames = methodIds
-                .map((id: string) => prepMethodMap.get(id))
-                .filter((name): name is string => !!name);
-            }
-          }
+                : null,
+              prepMethodMap,
+            );
 
           // Debug: log supplement ingredient unit display label
           if (ingredient?.type === 'SUPPLEMENT') {
@@ -1261,24 +1267,6 @@ export class OrderService {
     const ingredientMap = new Map(ingredients.map((ing) => [ing.id, ing]));
 
     // Helper function to convert preparationMethod IDs to names
-    const convertPrepMethodIdsToNames = (
-      prepMethodIds: string | null | undefined,
-    ): string | null => {
-      if (!prepMethodIds) return null;
-
-      // Split by comma and trim
-      const ids = prepMethodIds
-        .split(',')
-        .map((id) => id.trim())
-        .filter((id) => id);
-
-      // Map each ID to its name, fallback to original ID if not found
-      const names = ids.map((id) => prepMethodMap.get(id) || id);
-
-      // Join with comma
-      return names.join(', ');
-    };
-
     // Build enriched recipe items with ingredient objects for pricing
     const pricingRecipeItems: PricingRecipeItem[] = recipeItems.map((ri) => {
       const ingredient = ingredientMap.get(ri.ingredientId);
@@ -1287,7 +1275,10 @@ export class OrderService {
       }
 
       // Convert preparationMethod ID(s) to name(s)
-      const prepMethodName = convertPrepMethodIdsToNames(ri.preparationMethod);
+      const prepMethodName = this.resolvePreparationMethodText(
+        ri.preparationMethod,
+        prepMethodMap,
+      );
 
       return {
         ingredientId: ri.ingredientId,
@@ -1736,10 +1727,13 @@ export class OrderService {
     total: number;
     pendingPayment: number;
     paid: number;
+    purchasing: number;
     inProduction: number;
+    freezing: number;
     shipped: number;
     completed: number;
     cancelled: number;
+    aftersale: number;
   }> {
     return this.orderRepository.getStats();
   }
@@ -1914,6 +1908,30 @@ export class OrderService {
     const updatedOrder = Order.fromPrismaData(updatedOrderData, []);
 
     return updatedOrder;
+  }
+
+  /**
+   * Update internal admin remark for production staff.
+   */
+  async updateAdminRemark(
+    orderId: string,
+    adminRemark: string | null | undefined,
+  ): Promise<Order> {
+    const order = await this.orderRepository.findById(orderId);
+    if (!order) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+
+    try {
+      order.updateAdminRemark(adminRemark);
+    } catch (error) {
+      if (error instanceof ValidationError) {
+        throw new BadRequestException(error.message);
+      }
+      throw error;
+    }
+
+    return this.orderRepository.save(order);
   }
 
   /**

@@ -31,6 +31,18 @@ echo ""
 # Change to backend directory
 cd "$BACKEND_DIR"
 
+# Step 0: Check Prisma schema drift (before any deployment actions)
+echo "Step 0: Checking Prisma schema vs migrations..."
+if bash scripts/check_migration_history.sh; then
+  ok "Schema and migrations are in sync"
+else
+  fail "MIGRATION HISTORY CHECK FAILED!"
+  echo ""
+  fail "Deployment aborted. Resolve missing or modified applied migrations and retry."
+  exit 1
+fi
+echo ""
+
 # Step 1: Verify environment variables
 echo "Step 1: Verifying environment variables..."
 if ! bash scripts/verify_env.sh; then
@@ -210,4 +222,3 @@ echo "  2. Check service logs: sudo journalctl -u sevenkitchen-backend -f"
 echo "  3. Test health endpoint: curl http://127.0.0.1:${PORT:-3000}/api/v1/health"
 echo "  4. Test public access: curl http://<your-public-ip>:${PORT:-3000}/api/v1/health"
 echo ""
-

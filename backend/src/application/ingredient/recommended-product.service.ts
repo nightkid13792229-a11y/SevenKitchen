@@ -6,6 +6,19 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
 
+export interface RecommendedProductSummary {
+  id: string;
+  ingredientId: string;
+  name: string;
+  brand?: string | null;
+  productModel?: string | null;
+  purchaseChannel?: string | null;
+  purchaseLink?: any;
+  imageUrl?: string | null;
+  activeNutrients?: any;
+  displayUnit?: string | null;
+}
+
 export interface CreateRecommendedProductDto {
   name: string;
   brand?: string;
@@ -41,7 +54,7 @@ export class RecommendedProductService {
    */
   async batchFindActive(
     ingredientIds: string[],
-  ): Promise<Record<string, any[]>> {
+  ): Promise<Record<string, RecommendedProductSummary[]>> {
     if (ingredientIds.length === 0) return {};
 
     const products = await this.prisma.recommendedProduct.findMany({
@@ -52,7 +65,7 @@ export class RecommendedProductService {
       orderBy: { sortOrder: 'asc' },
     });
 
-    const result: Record<string, any[]> = {};
+    const result: Record<string, RecommendedProductSummary[]> = {};
     for (const p of products) {
       if (!result[p.ingredientId]) {
         result[p.ingredientId] = [];
@@ -71,6 +84,28 @@ export class RecommendedProductService {
       });
     }
     return result;
+  }
+
+  async listActivePurchaseChannels(): Promise<string[]> {
+    const products = await this.prisma.recommendedProduct.findMany({
+      where: {
+        isActive: true,
+        purchaseChannel: {
+          not: null,
+        },
+      },
+      select: {
+        purchaseChannel: true,
+      },
+    });
+
+    return Array.from(
+      new Set(
+        products
+          .map((product) => product.purchaseChannel?.trim())
+          .filter((channel): channel is string => Boolean(channel)),
+      ),
+    ).sort();
   }
 
   /**

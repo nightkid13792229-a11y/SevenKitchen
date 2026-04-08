@@ -273,7 +273,7 @@
     <view class="bottom-bar">
       <button
         class="btn-generate"
-        :disabled="!selectedDogId"
+        :disabled="!selectedDogId || isGeneratingSheet"
         @tap="generateSheet"
       >
         生成制作单
@@ -330,6 +330,8 @@ const dogs = ref<Dog[]>([])
 const breeds = ref<Breed[]>([])
 const selectedDogId = ref<string | null>(null)
 const selectedDog = ref<Dog | null>(null)
+const isGeneratingSheet = ref(false)
+const HOME_RECIPE_STATS_DIRTY_KEY = 'home_recipe_stats_dirty'
 
 // 健康标签UUID到名称的映射（动态加载）
 const healthTagUuidLabelMap = ref<Record<string, string>>({})
@@ -829,6 +831,10 @@ function toggleShelfLife() {
 }
 
 function generateSheet() {
+  if (isGeneratingSheet.value) {
+    return
+  }
+
   if (!selectedDogId.value) {
     uni.showToast({
       title: '请先选择狗狗档案',
@@ -843,14 +849,41 @@ function generateSheet() {
       content: '狗狗生命阶段与食谱不匹配，确定要继续吗？',
       success: (res) => {
         if (res.confirm) {
-          navigateToSheet()
+          void generateAndNavigateToSheet()
         }
       }
     })
     return
   }
 
-  navigateToSheet()
+  void generateAndNavigateToSheet()
+}
+
+async function generateAndNavigateToSheet() {
+  if (!selectedDogId.value || isGeneratingSheet.value) {
+    return
+  }
+
+  isGeneratingSheet.value = true
+  uni.showLoading({ title: '生成中...' })
+
+  try {
+    await request({
+      url: `/recipes/${recipeId.value}/diy-sheet`,
+      method: 'POST',
+      data: {
+        dogId: selectedDogId.value
+      }
+    })
+
+    uni.setStorageSync(HOME_RECIPE_STATS_DIRTY_KEY, '1')
+    navigateToSheet()
+  } catch (error) {
+    console.error('[RecipeDiy] Generate sheet error:', error)
+  } finally {
+    uni.hideLoading()
+    isGeneratingSheet.value = false
+  }
 }
 
 function navigateToSheet() {

@@ -5,5 +5,17 @@
 
 export enum InventorySourceType {
   KITCHEN_TASK = 'KITCHEN_TASK',
-  // Future: PURCHASE, ADJUSTMENT, etc.
+  PURCHASE_RECORD = 'PURCHASE_RECORD',
+  MANUAL_ADJUSTMENT = 'MANUAL_ADJUSTMENT',
+  STOCKTAKE = 'STOCKTAKE',
+}
+
+export enum InventoryAdjustmentMode {
+  DELTA = 'DELTA',
+  SET = 'SET',
+}
+
+export enum InventoryStocktakeStatus {
+  DRAFT = 'DRAFT',
+  APPLIED = 'APPLIED',
 }

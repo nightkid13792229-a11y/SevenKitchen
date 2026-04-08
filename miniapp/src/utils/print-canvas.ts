@@ -319,14 +319,15 @@ export class PrintCanvasBuilder {
       this.ctx.setFontSize(this.FONT_SIZES.TEXT)
       this.ctx.setTextAlign('center')
 
+      const valueColumnIndex = colWidths.length - 1
       let currentX = this.pagePadding
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < colWidths.length; i++) {
         if (i === 0) {
           this.ctx.fillText(options.totalText, currentX + colWidths[i] / 2, this.currentY + baseRowHeight / 2 + 6)
-        } else if (i === 1) {
-          this.ctx.fillText('-', currentX + colWidths[i] / 2, this.currentY + baseRowHeight / 2 + 6)
-        } else {
+        } else if (i === valueColumnIndex) {
           this.ctx.fillText(options.totalValue, currentX + colWidths[i] / 2, this.currentY + baseRowHeight / 2 + 6)
+        } else {
+          this.ctx.fillText('-', currentX + colWidths[i] / 2, this.currentY + baseRowHeight / 2 + 6)
         }
         currentX += colWidths[i]
       }

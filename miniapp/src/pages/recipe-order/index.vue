@@ -911,6 +911,8 @@ const isLifeStageMatch = ref(true)
 const showWarning = ref(true)
 const pricePreview = ref<PricePreview | null>(null)
 const pricingSnapshotId = ref<string | null>(null)  // ✅ 新增：快照ID
+let pricingPreviewRequestSeq = 0
+let dogCalcRequestSeq = 0
 const perMealG = ref(0)
 const globalConfig = ref<GlobalConfig>({})
 
@@ -1002,8 +1004,13 @@ const pricePerMeal = computed(() => {
 
 // 是否可以立即购买
 const canBuyNow = computed(() => {
-  return selectedDogId.value && selectedCycleDays.value && pricePreview.value !== null && perMealG.value > 0
+  return selectedDogId.value && selectedCycleDays.value && pricePreview.value !== null && pricingSnapshotId.value !== null && perMealG.value > 0
 })
+
+function resetPricePreviewState() {
+  pricePreview.value = null
+  pricingSnapshotId.value = null
+}
 
 // 原料分组计算属性
 const foodIngredients = computed(() => {
@@ -1319,11 +1326,13 @@ async function loadGlobalConfig() {
 
 function selectDog(dogId: string) {
   selectedDogId.value = dogId
+  resetPricePreviewState()
   loadDogCalcResult(dogId)
   checkLifeStageMatch()  // 校验生命阶段
 }
 
 async function loadDogCalcResult(dogId: string) {
+  const requestSeq = ++dogCalcRequestSeq
   console.log('========== [RecipeOrder] loadDogCalcResult 开始 ==========')
   console.log('[调用参数]', {
     dogId,
@@ -1347,6 +1356,10 @@ async function loadDogCalcResult(dogId: string) {
     })
 
     if (res.code === 0 && res.data) {
+      if (requestSeq !== dogCalcRequestSeq) {
+        return
+      }
+
       const result = res.data
 
       console.log('[API返回]', {
@@ -1390,6 +1403,10 @@ async function loadDogCalcResult(dogId: string) {
       loadPricePreview()
     }
   } catch (error) {
+    if (requestSeq !== dogCalcRequestSeq) {
+      return
+    }
+
     console.error('Load dog calc error:', error)
 
     // 显示错误提示
@@ -1519,11 +1536,13 @@ function onTempPerMealChange() {
 // 选择制作工艺
 function selectPreparationMethod(method: PreparationMethod) {
   preparationMethod.value = method
+  loadPricePreview()
 }
 
 // 选择烹饪工艺
 function selectCookingMethod(method: CookingMethod) {
   cookingMethod.value = method
+  loadPricePreview()
 }
 
 // 切换价格明细显示
@@ -1607,6 +1626,9 @@ function confirmCustomDays() {
 }
 
 async function loadPricePreview() {
+  const requestSeq = ++pricingPreviewRequestSeq
+  resetPricePreviewState()
+
   if (!selectedDogId.value || !selectedCycleDays.value || !perMealG.value) return
 
   const totalG = totalGrams.value
@@ -1633,6 +1655,10 @@ async function loadPricePreview() {
       }
     })
     if (res.code === 0 && res.data) {
+      if (requestSeq !== pricingPreviewRequestSeq) {
+        return
+      }
+
       pricePreview.value = {
         amountProduct: res.data.amountProduct || 0,
         amountShipping: res.data.amountShipping || 0,
@@ -1644,6 +1670,10 @@ async function loadPricePreview() {
       console.log('[Price Preview] Snapshot ID:', pricingSnapshotId.value)
     }
   } catch (error: any) {
+    if (requestSeq !== pricingPreviewRequestSeq) {
+      return
+    }
+
     // 如果是订单净重不足的错误，不打印到控制台（避免大量红色日志）
     // 这是预期的业务逻辑验证，界面上已有警告提示
     if (!error?.message?.includes('订单净重不足')) {
@@ -1651,7 +1681,7 @@ async function loadPricePreview() {
     }
 
     // 订单净重不足时，清空价格预览
-    pricePreview.value = null
+    resetPricePreviewState()
   }
 }
 

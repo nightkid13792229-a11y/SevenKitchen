@@ -17,6 +17,10 @@ export interface IngredientRepository {
     id: string,
     pricePerPurchaseUnit: number,
   ): Promise<Ingredient | null>;
+  updateEffectivePrice(
+    id: string,
+    effectivePricePerPurchaseUnit: number,
+  ): Promise<Ingredient | null>;
   delete(id: string): Promise<void>;
   setTags(ingredientId: string, tagIds: string[]): Promise<void>;
   getTags(ingredientId: string): Promise<any[]>;

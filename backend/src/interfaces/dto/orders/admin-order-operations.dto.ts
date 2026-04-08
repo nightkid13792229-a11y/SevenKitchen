@@ -1,5 +1,11 @@
-import { IsNotEmpty, IsString, MinLength } from 'class-validator';
-import { ApiProperty } from '@nestjs/swagger';
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  MaxLength,
+  MinLength,
+} from 'class-validator';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 /**
  * Ship order request DTO
@@ -22,4 +28,20 @@ export class ShipOrderDto {
   @IsString()
   @MinLength(5, { message: 'Tracking number must be at least 5 characters' })
   trackingNumber!: string;
+}
+
+/**
+ * Update admin remark request DTO
+ */
+export class UpdateOrderAdminRemarkDto {
+  @ApiPropertyOptional({
+    description: 'Internal admin remark for production notes',
+    example: '客户要求本批次拆分打包，并优先安排上午制作',
+    nullable: true,
+    maxLength: 200,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  adminRemark?: string | null;
 }

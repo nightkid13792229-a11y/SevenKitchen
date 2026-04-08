@@ -46,7 +46,12 @@ import {
   type CreateProductionBatchDto,
   type ProductionBatchSummaryDto,
 } from '../../application/production/production.service';
+import { PurchasingService } from '../../application/purchasing/purchasing.service';
 import { InventoryService } from '../../application/inventory/inventory.service';
+import type {
+  CreateInventoryAdjustmentDto,
+  CreateInventoryStocktakeDto,
+} from '../../application/inventory/inventory.service';
 import { OrderService } from '../../application/order/order.service';
 import {
   DogService,
@@ -60,8 +65,9 @@ import {
 import type { DogBreedRepository } from '../../domain/dog/dog-breed.repository';
 import { OrderStatus } from '../../domain';
 import { CancelOrderDto } from '../dto/orders/cancel-order.dto';
-import { OrderDto } from '../dto/orders/order-response.dto';
+import { AdminOrderDto, OrderDto } from '../dto/orders/order-response.dto';
 import { InvalidStateTransitionError } from '../../domain/common/errors';
+import { UpdateOrderAdminRemarkDto } from '../dto/orders/admin-order-operations.dto';
 import {
   CreateBreedDto,
   UpdateBreedDto,
@@ -95,6 +101,7 @@ export class AdminController {
   constructor(
     private readonly ingredientService: IngredientService,
     private readonly productionService: ProductionService,
+    private readonly purchasingService: PurchasingService,
     private readonly inventoryService: InventoryService,
     private readonly orderService: OrderService,
     private readonly dogService: DogService,
@@ -129,29 +136,69 @@ export class AdminController {
     },
   })
   async getInventory(): Promise<ApiResponseDto<any[]>> {
-    const ingredients = await this.ingredientService.getAllIngredients();
+    const inventory =
+      await this.purchasingService.getStockReplenishmentIngredients({
+        includeDaily: true,
+      });
 
-    // Map to inventory response format
-    const inventory = ingredients.map((ing) => ({
-      id: ing.id,
-      name: ing.name,
-      type: ing.type,
-      brand: ing.brand,
-      productModel: ing.productModel,
-      purchaseChannel: ing.purchaseChannel,
-      baseUnit: ing.baseUnit,
-      unitDisplayLabel: ing.unitDisplayLabel,
-      purchaseUnit: ing.purchaseUnit,
-      purchaseToBaseRatio: ing.purchaseToBaseRatio,
-      currentPricePerPurchaseUnit: Number(ing.currentPricePerPurchaseUnit),
-      unitCost: ing.getUnitCost(),
-      weightG: ing.weightG,
-      maxCapacityG: ing.maxCapacityG,
-      properties: ing.properties,
-      stock: null, // Placeholder for MVP - stock management comes later
-    }));
+    return ApiResponseDto.success(
+      inventory.map((item) => ({
+        ...item,
+        stock: item.currentStock,
+      })),
+    );
+  }
 
-    return ApiResponseDto.success(inventory);
+  @Get('inventory/ledger')
+  @ApiOperation({ summary: 'Get recent inventory ledger entries' })
+  async getInventoryLedger(
+    @Query('ingredientId') ingredientId?: string,
+    @Query('limit') limit?: string,
+  ): Promise<ApiResponseDto<any[]>> {
+    const ledger = await this.inventoryService.listLedgerEntries({
+      ingredientId,
+      limit: limit ? Number(limit) : undefined,
+    });
+
+    return ApiResponseDto.success(ledger);
+  }
+
+  @Post('inventory/adjustments')
+  @ApiOperation({ summary: 'Create and apply a manual inventory adjustment' })
+  async createInventoryAdjustment(
+    @Body() dto: CreateInventoryAdjustmentDto,
+  ): Promise<ApiResponseDto<any>> {
+    const adjustment = await this.inventoryService.createManualAdjustment(dto);
+    return ApiResponseDto.success(adjustment, '库存调整成功');
+  }
+
+  @Get('inventory/stocktakes')
+  @ApiOperation({ summary: 'Get recent stocktakes' })
+  async getInventoryStocktakes(
+    @Query('limit') limit?: string,
+  ): Promise<ApiResponseDto<any[]>> {
+    const stocktakes = await this.inventoryService.listStocktakes(
+      limit ? Number(limit) : undefined,
+    );
+    return ApiResponseDto.success(stocktakes);
+  }
+
+  @Post('inventory/stocktakes')
+  @ApiOperation({ summary: 'Create a stocktake' })
+  async createInventoryStocktake(
+    @Body() dto: CreateInventoryStocktakeDto,
+  ): Promise<ApiResponseDto<any>> {
+    const stocktake = await this.inventoryService.createStocktake(dto);
+    return ApiResponseDto.success(stocktake, '盘点单创建成功');
+  }
+
+  @Post('inventory/stocktakes/:id/apply')
+  @ApiOperation({ summary: 'Apply a draft stocktake to inventory ledger' })
+  async applyInventoryStocktake(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<any>> {
+    const stocktake = await this.inventoryService.applyStocktake(id);
+    return ApiResponseDto.success(stocktake, '盘点差异已入账');
   }
 
   @Get('ingredients')
@@ -169,6 +216,10 @@ export class AdminController {
           type: { type: 'string', enum: ['FOOD', 'SUPPLEMENT', 'PACKAGING'] },
           brand: { type: 'string' },
           productModel: { type: 'string' },
+          purchaseChannel: { type: 'string' },
+          activeRecommendedProductCount: { type: 'number' },
+          recommendedProductCount: { type: 'number' },
+          hasActiveRecommendedProduct: { type: 'boolean' },
           baseUnit: { type: 'string', enum: ['G', 'ML', 'PCS'] },
           purchaseUnit: { type: 'string' },
           currentPricePerPurchaseUnit: { type: 'number' },
@@ -200,6 +251,11 @@ export class AdminController {
             },
           },
         },
+        recommendedProducts: {
+          select: {
+            isActive: true,
+          },
+        },
       },
     });
 
@@ -215,6 +271,15 @@ export class AdminController {
     const tagIdsMap = new Map(
       prismaIngredients.map((p) => [p.id, p.tags.map((t) => t.tag.id)]),
     );
+    const activeRecommendedProductCountMap = new Map(
+      prismaIngredients.map((p) => [
+        p.id,
+        p.recommendedProducts.filter((rp) => rp.isActive).length,
+      ]),
+    );
+    const recommendedProductCountMap = new Map(
+      prismaIngredients.map((p) => [p.id, p.recommendedProducts.length]),
+    );
 
     // Map to ingredient response format
     const ingredientList = ingredients.map((ing) => ({
@@ -227,15 +292,27 @@ export class AdminController {
       notes: ing.notes,
       baseUnit: ing.baseUnit,
       unitDisplayLabel: ing.unitDisplayLabel,
+      procurementStrategy: ing.procurementStrategy,
       purchaseUnit: ing.purchaseUnit,
       purchaseToBaseRatio: ing.purchaseToBaseRatio,
       currentPricePerPurchaseUnit: Number(ing.currentPricePerPurchaseUnit),
+      effectivePricePerPurchaseUnit: Number(
+        ing.getEffectivePricePerPurchaseUnit(),
+      ),
       unitCost: ing.getUnitCost(),
       weightG: ing.weightG,
       maxCapacityG: ing.maxCapacityG,
+      safetyStock: ing.safetyStock,
+      reorderPoint: ing.reorderPoint,
+      targetStock: ing.targetStock,
       properties: ing.properties,
       tagIds: tagIdsMap.get(ing.id) || [],
       tags: tagsMap.get(ing.id) || [],
+      activeRecommendedProductCount:
+        activeRecommendedProductCountMap.get(ing.id) || 0,
+      recommendedProductCount: recommendedProductCountMap.get(ing.id) || 0,
+      hasActiveRecommendedProduct:
+        (activeRecommendedProductCountMap.get(ing.id) || 0) > 0,
       createdAt: createdAtMap.get(ing.id) || new Date().toISOString(),
       updatedAt: updatedAtMap.get(ing.id) || new Date().toISOString(),
     }));
@@ -272,6 +349,11 @@ export class AdminController {
             },
           },
         },
+        recommendedProducts: {
+          select: {
+            isActive: true,
+          },
+        },
       },
     });
 
@@ -281,6 +363,11 @@ export class AdminController {
       prismaIngredient?.createdAt.toISOString() || new Date().toISOString();
     const updatedAt =
       prismaIngredient?.updatedAt.toISOString() || new Date().toISOString();
+    const activeRecommendedProductCount =
+      prismaIngredient?.recommendedProducts.filter((rp) => rp.isActive).length ||
+      0;
+    const recommendedProductCount =
+      prismaIngredient?.recommendedProducts.length || 0;
 
     // Map to ingredient response format
     const ingredientData = {
@@ -293,17 +380,27 @@ export class AdminController {
       notes: ingredient.notes,
       baseUnit: ingredient.baseUnit,
       unitDisplayLabel: ingredient.unitDisplayLabel,
+      procurementStrategy: ingredient.procurementStrategy,
       purchaseUnit: ingredient.purchaseUnit,
       purchaseToBaseRatio: ingredient.purchaseToBaseRatio,
       currentPricePerPurchaseUnit: Number(
         ingredient.currentPricePerPurchaseUnit,
       ),
+      effectivePricePerPurchaseUnit: Number(
+        ingredient.getEffectivePricePerPurchaseUnit(),
+      ),
       unitCost: ingredient.getUnitCost(),
       weightG: ingredient.weightG,
       maxCapacityG: ingredient.maxCapacityG,
+      safetyStock: ingredient.safetyStock,
+      reorderPoint: ingredient.reorderPoint,
+      targetStock: ingredient.targetStock,
       properties: ingredient.properties,
       tagIds,
       tags,
+      activeRecommendedProductCount,
+      recommendedProductCount,
+      hasActiveRecommendedProduct: activeRecommendedProductCount > 0,
       createdAt,
       updatedAt,
     };
@@ -326,9 +423,16 @@ export class AdminController {
       id: ingredient.id,
       name: ingredient.name,
       type: ingredient.type,
+      procurementStrategy: ingredient.procurementStrategy,
       currentPricePerPurchaseUnit: Number(
         ingredient.currentPricePerPurchaseUnit,
       ),
+      effectivePricePerPurchaseUnit: Number(
+        ingredient.getEffectivePricePerPurchaseUnit(),
+      ),
+      safetyStock: ingredient.safetyStock,
+      reorderPoint: ingredient.reorderPoint,
+      targetStock: ingredient.targetStock,
     });
   }
 
@@ -352,10 +456,17 @@ export class AdminController {
         id: ingredient.id,
         name: ingredient.name,
         type: ingredient.type,
+        procurementStrategy: ingredient.procurementStrategy,
         currentPricePerPurchaseUnit: Number(
           ingredient.currentPricePerPurchaseUnit,
         ),
+        effectivePricePerPurchaseUnit: Number(
+          ingredient.getEffectivePricePerPurchaseUnit(),
+        ),
         unitCost: ingredient.getUnitCost(),
+        safetyStock: ingredient.safetyStock,
+        reorderPoint: ingredient.reorderPoint,
+        targetStock: ingredient.targetStock,
       });
     } catch (error) {
       if (error instanceof NotFoundException) {
@@ -395,6 +506,9 @@ export class AdminController {
         name: ingredient.name,
         currentPricePerPurchaseUnit: Number(
           ingredient.currentPricePerPurchaseUnit,
+        ),
+        effectivePricePerPurchaseUnit: Number(
+          ingredient.getEffectivePricePerPurchaseUnit(),
         ),
         unitCost: ingredient.getUnitCost(),
       });
@@ -982,10 +1096,15 @@ export class AdminController {
     @Query() query: any,
   ): Promise<ApiResponseDto<any> | ApiResponseDto<null>> {
     try {
+      const keyword =
+        typeof query.keyword === 'string' ? query.keyword.trim() : undefined;
+      const orderId =
+        typeof query.orderId === 'string' ? query.orderId.trim() : undefined;
+
       // Parse query parameters
       const params = {
-        keyword: query.keyword,
-        orderId: query.orderId,
+        keyword,
+        orderId,
         status: query.status,
         type: query.type,
         startDate: query.startDate ? new Date(query.startDate) : undefined,
@@ -1012,6 +1131,41 @@ export class AdminController {
         };
       }
 
+      if (params.keyword) {
+        where.OR = [
+          {
+            id: {
+              contains: params.keyword,
+              mode: 'insensitive',
+            },
+          },
+          {
+            customer: {
+              nickname: {
+                contains: params.keyword,
+                mode: 'insensitive',
+              },
+            },
+          },
+          {
+            customer: {
+              phone: {
+                contains: params.keyword,
+                mode: 'insensitive',
+              },
+            },
+          },
+          {
+            dog: {
+              name: {
+                contains: params.keyword,
+                mode: 'insensitive',
+              },
+            },
+          },
+        ];
+      }
+
       if (params.startDate || params.endDate) {
         where.createdAt = {};
         if (params.startDate) {
@@ -1031,6 +1185,14 @@ export class AdminController {
         where,
         include: {
           items: true,
+          customer: {
+            select: {
+              nickname: true,
+              phone: true,
+            },
+          },
+          address: true,
+          dog: true,
         },
         orderBy: {
           createdAt: 'desc',
@@ -1042,22 +1204,8 @@ export class AdminController {
       // Map orders to summary DTOs with full details
       const list = await Promise.all(
         orders.map(async (order: any) => {
-          // Fetch user information (customer)
-          let customerName = '未知客户';
-          let customerPhone = '';
-
-          try {
-            const user = await this.prisma.user.findUnique({
-              where: { id: order.customerId },
-              select: { nickname: true, phone: true },
-            });
-            if (user) {
-              customerName = user.nickname || '未知客户';
-              customerPhone = user.phone || '';
-            }
-          } catch (error) {
-            // User might be deleted, use default values
-          }
+          const customerName = order.customer?.nickname || '未知客户';
+          const customerPhone = order.customer?.phone || '';
 
           // Get first item with dog info if available
           let firstItem = undefined;
@@ -1066,11 +1214,15 @@ export class AdminController {
 
             // Fetch dog information if dogId is present
             let dogInfo = undefined;
-            if (item.dogId) {
+            const primaryDogId = item.dogId || order.dog?.id;
+            if (primaryDogId) {
               try {
-                const dog = await this.prisma.dog.findUnique({
-                  where: { id: item.dogId },
-                });
+                const dog =
+                  order.dog && order.dog.id === primaryDogId
+                    ? order.dog
+                    : await this.prisma.dog.findUnique({
+                        where: { id: primaryDogId },
+                      });
                 if (dog) {
                   dogInfo = {
                     id: dog.id,
@@ -1130,25 +1282,19 @@ export class AdminController {
 
           // Get address info if addressId is present
           let address = undefined;
-          if (order.addressId) {
+          if (order.address) {
             try {
-              const addressData = await this.prisma.address.findUnique({
-                where: { id: order.addressId },
-              });
-              if (addressData) {
-                // Extract region text from JSON region field
-                const regionObj = addressData.region as any;
-                const regionText = regionObj
-                  ? `${regionObj.province || ''} ${regionObj.city || ''} ${regionObj.district || ''}`.trim()
-                  : '';
+              const regionObj = order.address.region as any;
+              const regionText = regionObj
+                ? `${regionObj.province || ''} ${regionObj.city || ''} ${regionObj.district || ''}`.trim()
+                : '';
 
-                address = {
-                  recipientName: addressData.recipientName || '',
-                  recipientPhone: addressData.phone || '',
-                  regionText: regionText || '',
-                  detailAddress: addressData.detail || '',
-                };
-              }
+              address = {
+                recipientName: order.address.recipientName || '',
+                recipientPhone: order.address.phone || '',
+                regionText: regionText || '',
+                detailAddress: order.address.detail || '',
+              };
             } catch (error) {
               // Address might be deleted, ignore error
             }
@@ -1206,11 +1352,14 @@ export class AdminController {
         total: { type: 'number' },
         pendingPayment: { type: 'number' },
         paid: { type: 'number' },
+        purchasing: { type: 'number' },
         inProduction: { type: 'number' },
+        freezing: { type: 'number' },
         readyForShipment: { type: 'number' },
         shipped: { type: 'number' },
         completed: { type: 'number' },
         cancelled: { type: 'number' },
+        aftersale: { type: 'number' },
       },
     },
   })
@@ -1233,67 +1382,55 @@ export class AdminController {
   @ApiResponse({
     status: 200,
     description: 'Order details',
-    type: OrderDto,
+    type: AdminOrderDto,
   })
   @ApiResponse({ status: 404, description: 'Order not found' })
   async getOrderDetail(
     @Param('orderId') orderId: string,
-  ): Promise<ApiResponseDto<OrderDto> | ApiResponseDto<null>> {
+  ): Promise<ApiResponseDto<AdminOrderDto> | ApiResponseDto<null>> {
     try {
       const order = await this.orderService.getOrderById(orderId);
       if (!order) {
         return ApiResponseDto.error(404, 'Order not found');
       }
-
-      // Map to DTO (simplified - would use proper mapper in production)
-      const orderDto: OrderDto = {
-        id: order.id,
-        customerId: order.customerId,
-        dogId: order.dogId,
-        addressId: order.addressId,
-        status: order.status,
-        type: order.type,
-        targetProductionDate: order.targetProductionDate
-          ? order.targetProductionDate.toISOString()
-          : null,
-        totalAmount: order.totalAmount ?? order.amountTotal,
-        amountProduct: order.amountProduct,
-        amountShipping: order.amountShipping,
-        amountTotal: order.amountTotal,
-        items: order.items.map((item) => ({
-          id: item.id,
-          orderId: item.orderId,
-          recipeSnapshot: item.recipeSnapshot,
-          quantityG: item.quantityG,
-          packageCount: item.packageCount,
-          packageSpecG: item.packageSpecG,
-          customRequirements: item.customRequirements,
-          dailyIntakeG: item.dailyIntakeG,
-        })),
-        pricingBreakdown: order.pricingBreakdownSnapshot
-          ? {
-              costIngredients: order.pricingBreakdownSnapshot.costIngredients,
-              costPackaging: order.pricingBreakdownSnapshot.costPackaging,
-              costLabor: order.pricingBreakdownSnapshot.costLabor,
-              costOverhead: order.pricingBreakdownSnapshot.costOverhead,
-              totalProductCost: order.pricingBreakdownSnapshot.totalProductCost,
-              productPrice: order.pricingBreakdownSnapshot.productPrice,
-              shippingFee: order.pricingBreakdownSnapshot.shippingFee,
-              totalPrice: order.pricingBreakdownSnapshot.totalPrice,
-            }
-          : undefined,
-        trackingNumber: order.trackingNumber ?? null,
-        carrierCode: order.carrierCode ?? null,
-        shippedAt: order.shippedAt ? order.shippedAt.toISOString() : null,
-        completedAt: order.completedAt ? order.completedAt.toISOString() : null,
-        cancelledAt: order.cancelledAt ? order.cancelledAt.toISOString() : null,
-        cancellationReason: order.cancellationReason ?? null,
-        cancelledBy: order.cancelledBy ?? null,
-        createdAt: order.createdAt.toISOString(),
-      };
-
-      return ApiResponseDto.success(orderDto);
+      return ApiResponseDto.success(this.mapOrderToAdminDto(order));
     } catch (error: any) {
+      throw error;
+    }
+  }
+
+  /**
+   * PUT /admin/orders/:orderId/admin-remark - Update admin remark
+   */
+  @Put('orders/:orderId/admin-remark')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update order admin remark' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  @ApiBody({ type: UpdateOrderAdminRemarkDto })
+  @ApiResponse({
+    status: 200,
+    description: 'Order admin remark updated successfully',
+    type: AdminOrderDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid request' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async updateOrderAdminRemark(
+    @Param('orderId') orderId: string,
+    @Body() body: UpdateOrderAdminRemarkDto,
+  ): Promise<ApiResponseDto<AdminOrderDto> | ApiResponseDto<null>> {
+    try {
+      const order = await this.orderService.updateAdminRemark(
+        orderId,
+        body.adminRemark ?? null,
+      );
+      return ApiResponseDto.success(this.mapOrderToAdminDto(order));
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
       throw error;
     }
   }
@@ -1326,7 +1463,7 @@ export class AdminController {
   ): Promise<ApiResponseDto<any>> {
     try {
       const amount = parseFloat(body.amount as any);
-      if (isNaN(amount) || amount <= 0) {
+      if (isNaN(amount) || amount < 0) {
         return ApiResponseDto.error(400, 'Invalid amount');
       }
 
@@ -1702,6 +1839,59 @@ export class AdminController {
     }
   }
 
+  private mapOrderToAdminDto(order: any): AdminOrderDto {
+    return {
+      id: order.id,
+      customerId: order.customerId,
+      dogId: order.dogId,
+      addressId: order.addressId,
+      status: order.status,
+      type: order.type,
+      targetProductionDate: order.targetProductionDate
+        ? order.targetProductionDate.toISOString()
+        : null,
+      totalAmount: order.totalAmount ?? order.amountTotal,
+      amountProduct: order.amountProduct,
+      amountShipping: order.amountShipping,
+      amountTotal: order.amountTotal,
+      items: order.items.map((item: any) => ({
+        id: item.id,
+        orderId: item.orderId,
+        recipeSnapshot: item.recipeSnapshot,
+        quantityG: item.quantityG,
+        packageCount: item.packageCount,
+        packageSpecG: item.packageSpecG,
+        customRequirements: item.customRequirements,
+        dailyIntakeG: item.dailyIntakeG,
+      })),
+      pricingBreakdown: order.pricingBreakdownSnapshot
+        ? {
+            costIngredients: order.pricingBreakdownSnapshot.costIngredients,
+            costPackaging: order.pricingBreakdownSnapshot.costPackaging,
+            costLabor: order.pricingBreakdownSnapshot.costLabor,
+            costOverhead: order.pricingBreakdownSnapshot.costOverhead,
+            totalProductCost: order.pricingBreakdownSnapshot.totalProductCost,
+            productPrice: order.pricingBreakdownSnapshot.productPrice,
+            shippingFee: order.pricingBreakdownSnapshot.shippingFee,
+            totalPrice: order.pricingBreakdownSnapshot.totalPrice,
+          }
+        : undefined,
+      trackingNumber: order.trackingNumber ?? null,
+      carrierCode: order.carrierCode ?? null,
+      shippedAt: order.shippedAt ? order.shippedAt.toISOString() : null,
+      completedAt: order.completedAt ? order.completedAt.toISOString() : null,
+      cancelledAt: order.cancelledAt ? order.cancelledAt.toISOString() : null,
+      cancellationReason: order.cancellationReason ?? null,
+      cancelledBy: order.cancelledBy ?? null,
+      paymentMethod: order.paymentMethod ?? null,
+      transactionId: order.transactionId ?? null,
+      paidAt: order.paidAt ? order.paidAt.toISOString() : null,
+      paymentStatus: order.paymentStatus ?? null,
+      createdAt: order.createdAt.toISOString(),
+      adminRemark: order.adminRemark ?? null,
+    };
+  }
+
   // ==========================================
   // Dog Profile Management (Admin)
   // ==========================================
@@ -2012,6 +2202,7 @@ export class AdminController {
     return {
       id: breed.id,
       name: breed.name,
+      aliases: breed.aliases || [],
       sizeCategory: breed.sizeCategory,
       growthCurveType: breed.growthCurveType,
       adultAgeMonths: breed.adultAgeMonths,
@@ -2460,6 +2651,30 @@ export class AdminController {
         file,
         file.originalname,
         'shipping-logos',
+      );
+      return ApiResponseDto.success(result);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  @Post('upload-home-header-bg')
+  @UseGuards(AuthGuard, AdminGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Upload home header background image to Tencent COS' })
+  @ApiResponse({ status: 201, description: 'Image uploaded successfully' })
+  @ApiResponse({ status: 400, description: 'Upload failed' })
+  async uploadHomeHeaderBg(
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<ApiResponseDto<any>> {
+    try {
+      const result = await this.cosService.uploadImage(
+        file,
+        file.originalname,
+        'home-header-bg',
       );
       return ApiResponseDto.success(result);
     } catch (error) {

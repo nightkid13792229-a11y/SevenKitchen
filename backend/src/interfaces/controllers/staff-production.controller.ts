@@ -635,6 +635,7 @@ export class StaffProductionController {
               packageSpecG: { type: 'number' },
               packageCount: { type: 'number' },
               dogName: { type: 'string' },
+              adminRemark: { type: 'string', nullable: true },
             },
           },
         },

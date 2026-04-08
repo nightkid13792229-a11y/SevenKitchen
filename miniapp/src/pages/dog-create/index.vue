@@ -51,7 +51,7 @@
               : selectedBreed?.name
             }}
           </text>
-          <text class="change-btn" @tap="clearBreed">重新选择</text>
+          <text class="change-btn" @tap="clearBreed">更换品种</text>
         </view>
 
         <!-- Breed Selection UI (shown when no breed selected) -->
@@ -67,20 +67,41 @@
           </view>
 
           <!-- Search Results -->
-          <view v-if="searchKeyword" class="search-results">
-            <text class="section-title">搜索结果 ({{ filteredBreeds.length }}个品种)</text>
-            <view class="breed-list">
+          <view v-if="hasSearchKeyword" class="search-results">
+            <view class="search-results-header">
+              <text class="section-title">搜索结果 ({{ filteredBreeds.length }}个品种)</text>
+              <text class="search-results-hint">点击卡片即可选中品种</text>
+            </view>
+            <view class="breed-list breed-search-list">
               <view
                 v-for="breed in filteredBreeds"
                 :key="breed.id"
-                class="breed-item"
+                class="breed-search-item"
                 @tap="selectBreed(breed)"
               >
-                {{ breed.name }}
+                <view class="breed-search-main">
+                  <text class="breed-search-name">{{ breed.name }}</text>
+                  <view class="breed-search-meta">
+                    <text class="breed-search-chip">{{ getSizeClassLabel(breed.sizeCategory) }}</text>
+                    <text v-if="breed.isCommon" class="breed-search-chip common">常见品种</text>
+                  </view>
+                </view>
+                <view class="breed-search-action">
+                  <text class="breed-search-action-text">选择</text>
+                  <text class="breed-search-action-icon">›</text>
+                </view>
               </view>
             </view>
-            <view v-if="filteredBreeds.length === 0" class="no-results">
-              未找到匹配的品种
+            <view v-if="filteredBreeds.length === 0" class="search-empty-state">
+              <text class="no-results">未找到匹配的品种</text>
+              <text class="search-empty-hint">如果是混血犬、串串或未收录品种，可手动填写</text>
+              <view class="search-mixed-entry primary" @tap="selectMixedBreed">
+                填写混血/其他
+              </view>
+            </view>
+            <view v-else class="search-fallback-wrap">
+              <text class="search-fallback-text">都不是想要的品种？</text>
+              <text class="search-fallback-link" @tap="selectMixedBreed">填写混血/其他</text>
             </view>
           </view>
 
@@ -168,13 +189,6 @@
                 </scroll-view>
               </view>
             </view>
-
-            <!-- Mixed Breed Option -->
-            <view class="section">
-              <view class="mixed-breed-btn" @tap="selectMixedBreed">
-                混血/其他
-              </view>
-            </view>
           </view>
         </view>
       </view>
@@ -195,6 +209,13 @@
         </picker>
         <text class="hint" :class="{ 'hint-warning': isMixedBreed && !formData.sizeClassOverride }">
           {{ getSizeClassHint() }}
+        </text>
+        <text
+          v-if="!isMixedBreed && formData.sizeClassOverride"
+          class="restore-auto-link"
+          @tap="restoreBreedSizeAutoMatch"
+        >
+          恢复按品种自动匹配
         </text>
       </view>
 
@@ -563,6 +584,10 @@
         </view>
       </view>
 
+      <view v-if="calcStaleNotice" class="calc-stale-notice">
+        <text class="calc-stale-text">信息已更新，请重新计算喂食建议</text>
+      </view>
+
       <!-- Preview Calculation Button (只在没有计算结果时显示) -->
       <button v-if="!calcResult" class="btn btn-secondary" @tap="previewCalculation" :disabled="canPreview === false">
         每日能量计算
@@ -713,18 +738,40 @@
     </view>
 
     <!-- Custom Breed Name Input Modal -->
-    <view v-if="showCustomBreedInput" class="custom-breed-modal" @tap.self="cancelCustomBreed">
-      <view class="custom-breed-content">
-        <text class="custom-breed-title">请输入品种名称</text>
+    <view v-if="showCustomBreedInput" class="custom-breed-modal" @tap="cancelCustomBreed">
+      <view class="custom-breed-content" @tap.stop>
+        <text class="custom-breed-title">填写混血/其他信息</text>
+        <text class="custom-breed-subtitle">名称选填，体型必选</text>
         <input
           class="custom-breed-input"
           v-model="customBreedName"
-          placeholder="如：泰迪串串、田园犬等"
+          placeholder="如：泰迪串串、田园犬等，不填则显示为混血/其他"
           focus
         />
+        <picker
+          mode="selector"
+          :range="sizeClassOptionsForPicker"
+          :value="customBreedSizeIndex"
+          @change="onCustomBreedSizeChange"
+        >
+          <view
+            class="custom-breed-size-picker"
+            :class="{ 'custom-breed-size-picker-required': !customBreedSizeClass }"
+          >
+            {{ customBreedSizeClass ? getSizeClassLabel(customBreedSizeClass) : '请选择成年后体型 *' }}
+          </view>
+        </picker>
+        <text class="custom-breed-hint">体型会影响生命阶段判断和热量计算</text>
         <view class="custom-breed-actions">
           <button class="custom-breed-btn-cancel" @tap="cancelCustomBreed">取消</button>
-          <button class="custom-breed-btn-confirm" @tap="confirmCustomBreed">确定</button>
+          <button
+            class="custom-breed-btn-confirm"
+            :class="{ disabled: !customBreedSizeClass }"
+            :disabled="!customBreedSizeClass"
+            @tap="confirmCustomBreed"
+          >
+            确定
+          </button>
         </view>
       </view>
     </view>
@@ -970,7 +1017,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
 import { addDogToCache } from '../../utils/dog-cache'
@@ -1186,6 +1233,7 @@ const treatLevelOptions: TreatLevelOption[] = [
 interface Breed {
   id: string
   name: string
+  aliases?: string[]
   sizeCategory: string
   adultAgeMonths: number
   seniorAgeYears: number
@@ -1224,6 +1272,7 @@ const commonBreeds = computed(() => {
 
 const selectedBreed = ref<Breed | null>(null)
 const calcResult = ref<CalcResult | null>(null)
+const calcStaleNotice = ref(false)
 const showCalcProcess = ref(false)
 const loadingBreeds = ref(false)
 const calculating = ref(false)
@@ -1240,11 +1289,13 @@ const dogId = ref<string | null>(null)
 
 // New state variables
 const searchKeyword = ref('')
-const showCommonBreeds = ref(false)
+const showCommonBreeds = ref(true)
+const hasSearchKeyword = computed(() => searchKeyword.value.trim().length > 0)
 const showAllBreeds = ref(false)
 const isMixedBreed = ref(false)
 const showCustomBreedInput = ref(false)
 const customBreedName = ref('')
+const customBreedSizeClass = ref<string | null>(null)
 const showBcsGuide = ref(false)
 
 // BCS评分图URL - 使用腾讯云COS CDN加速域名
@@ -1302,17 +1353,34 @@ const checkupTypeOptions = [
 ]
 
 // 侧边导航状态变量
-const activeCategory = ref<string>('')
+const activeCategory = ref<string>('SMALL')
 const scrollToViewId = ref<string>('')
 const categoryPositions = ref<Record<string, number>>({})
 const scrollViewHeight = ref(600) // scroll-view 的高度（单位：px）
 
+function normalizeBreedSearchText(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '')
+}
+
+function getBreedSearchTokens(breed: Breed): string[] {
+  const tokens = new Set<string>([normalizeBreedSearchText(breed.name)])
+  ;(breed.aliases || []).forEach((alias) => {
+    tokens.add(normalizeBreedSearchText(alias))
+  })
+  return Array.from(tokens)
+}
+
 const filteredBreeds = computed(() => {
-  if (!searchKeyword.value) {
+  if (!hasSearchKeyword.value) {
     return []
   }
-  const keyword = searchKeyword.value.trim()
-  return breeds.value.filter(b => b.name.includes(keyword))
+  const keyword = normalizeBreedSearchText(searchKeyword.value)
+  return breeds.value.filter((breed) =>
+    getBreedSearchTokens(breed).some((token) => token.includes(keyword))
+  )
 })
 
 const breedsBySizeCategory = computed(() => {
@@ -1352,11 +1420,32 @@ const lifeStageIndex = computed(() => {
   const idx = lifeStageOptions.indexOf(formData.value.lifeStageOverride)
   return Math.max(0, idx) // 确保返回非负整数
 })
+
+function resolveSizeClassByPickerValue(value: unknown): string | null {
+  const index = Number(value)
+  if (!Number.isInteger(index) || index < 0 || index >= sizeClassOptions.length) {
+    return null
+  }
+  return sizeClassOptions[index]
+}
+
+function resolveSizeClassIndex(sizeClass?: string | null): number {
+  if (!sizeClass) {
+    return 0
+  }
+  const idx = sizeClassOptions.indexOf(sizeClass)
+  return Math.max(0, idx)
+}
+
 const sizeClassIndex = computed(() => {
-  const override = formData.value.sizeClassOverride
-  if (!override) return 0
-  const idx = sizeClassOptions.indexOf(override)
-  return Math.max(0, idx) // 确保返回非负整数
+  const effectiveSizeClass =
+    formData.value.sizeClassOverride ||
+    selectedBreed.value?.sizeCategory ||
+    null
+  return resolveSizeClassIndex(effectiveSizeClass)
+})
+const customBreedSizeIndex = computed(() => {
+  return resolveSizeClassIndex(customBreedSizeClass.value)
 })
 
 // BCS身材状态文字
@@ -1636,6 +1725,29 @@ onMounted(async () => {
   }
 })
 
+function invalidateBreedDerivedState() {
+  const hadCalcResult = Boolean(calcResult.value)
+  backendLifeStageInfo.value = null
+  calcResult.value = null
+  showCalcProcess.value = false
+
+  if (hadCalcResult) {
+    calcStaleNotice.value = true
+  }
+}
+
+watch(() => formData.value.currentWeightKg, (newValue, oldValue) => {
+  if (oldValue !== undefined && newValue !== oldValue) {
+    invalidateBreedDerivedState()
+  }
+})
+
+watch(() => formData.value.manualTreatKcal, (newValue, oldValue) => {
+  if (oldValue !== undefined && newValue !== oldValue) {
+    invalidateBreedDerivedState()
+  }
+})
+
 async function loadBreeds() {
   loadingBreeds.value = true
   try {
@@ -1853,10 +1965,10 @@ function selectBreed(breed: Breed) {
   selectedBreed.value = breed
   isMixedBreed.value = false
   formData.value.breedId = breed.id
+  formData.value.customBreedName = ''
   formData.value.sizeClassOverride = null  // Reset override
   searchKeyword.value = ''
-  // 品种变化会影响生命阶段，清空后端数据
-  backendLifeStageInfo.value = null
+  invalidateBreedDerivedState()
 }
 
 function selectBreedByName(name: string) {
@@ -1867,36 +1979,48 @@ function selectBreedByName(name: string) {
 }
 
 function selectMixedBreed() {
+  customBreedName.value = ''
+  customBreedSizeClass.value = null
   showCustomBreedInput.value = true
 }
 
 function confirmCustomBreed() {
+  if (!customBreedSizeClass.value) {
+    uni.showToast({
+      title: '请选择体型分类',
+      icon: 'none'
+    })
+    return
+  }
+
   const name = customBreedName.value.trim() || '混血/其他'
+  const selectedSizeClass = customBreedSizeClass.value
   selectedBreed.value = null
   isMixedBreed.value = true
   formData.value.breedId = MIXED_BREED_VIRTUAL_ID
   formData.value.customBreedName = name
-  formData.value.sizeClassOverride = 'MEDIUM'  // 默认设置为中型犬，用户可手动调整
+  formData.value.sizeClassOverride = selectedSizeClass
   showCustomBreedInput.value = false
   customBreedName.value = ''
-  // 品种变化会影响生命阶段，清空后端数据
-  backendLifeStageInfo.value = null
+  customBreedSizeClass.value = null
+  searchKeyword.value = ''
+  invalidateBreedDerivedState()
 }
 
 function cancelCustomBreed() {
   showCustomBreedInput.value = false
   customBreedName.value = ''
+  customBreedSizeClass.value = null
 }
 
 function clearBreed() {
   selectedBreed.value = null
   isMixedBreed.value = false
-  // 品种变化会影响生命阶段，清空后端数据
-  backendLifeStageInfo.value = null
   formData.value.breedId = ''
   formData.value.customBreedName = ''
   formData.value.sizeClassOverride = null
   searchKeyword.value = ''
+  invalidateBreedDerivedState()
 }
 
 function toggleCommonBreeds() {
@@ -1908,6 +2032,8 @@ function toggleAllBreeds() {
 
   // 展开时计算各分类的位置
   if (showAllBreeds.value) {
+    activeCategory.value = 'SMALL'
+    scrollToViewId.value = 'category-SMALL'
     // 延迟执行，确保 DOM 已完全渲染
     // 增加延迟时间到 500ms，确保布局稳定
     setTimeout(() => {
@@ -2005,10 +2131,12 @@ function onScroll(e: any) {
 }
 
 function onSizeClassChange(e: any) {
-  const index = e.detail.value
-  formData.value.sizeClassOverride = sizeClassOptions[index]
-  // 体型分类变化会影响生命阶段，清空后端数据
-  backendLifeStageInfo.value = null
+  const selectedSizeClass = resolveSizeClassByPickerValue(e?.detail?.value)
+  if (!selectedSizeClass) {
+    return
+  }
+  formData.value.sizeClassOverride = selectedSizeClass
+  invalidateBreedDerivedState()
 }
 
 function getSizeClassDisplay(): string {
@@ -2037,16 +2165,31 @@ function getSizeClassDisplay(): string {
 
 function getSizeClassHint(): string {
   if (isMixedBreed.value) {
-    return '已默认设置为中型犬，可根据实际情况调整'
+    return formData.value.sizeClassOverride
+      ? '已按您选择的体型计算，可根据实际情况调整'
+      : '请按成年后体型选择，后续会据此计算生命阶段和热量'
   }
-  // 非混血犬不显示提示
+  if (formData.value.sizeClassOverride) {
+    return '当前为手动调整，已覆盖品种默认体型'
+  }
+  if (selectedBreed.value) {
+    return '系统已根据所选品种自动匹配体型'
+  }
   return ''
 }
 
 function onBirthdayChange(e: any) {
   formData.value.birthday = e.detail.value
-  // 生日变化会影响生命阶段，清空后端数据
-  backendLifeStageInfo.value = null
+  invalidateBreedDerivedState()
+}
+
+function restoreBreedSizeAutoMatch() {
+  formData.value.sizeClassOverride = null
+  invalidateBreedDerivedState()
+}
+
+function onCustomBreedSizeChange(e: any) {
+  customBreedSizeClass.value = resolveSizeClassByPickerValue(e?.detail?.value)
 }
 
 // 选择性别
@@ -2057,15 +2200,18 @@ function selectGender(gender: 'MALE' | 'FEMALE') {
 // 选择是否绝育
 function selectNeutered(value: boolean) {
   formData.value.isNeutered = value
+  invalidateBreedDerivedState()
 }
 
 function onBcsChange(e: any) {
   formData.value.bcsScore = e.detail.value
+  invalidateBreedDerivedState()
 }
 
 // 选择活动水平
 function selectActivityLevel(value: string) {
   formData.value.activityLevel = value
+  invalidateBreedDerivedState()
 }
 
 // BCS弹窗相关函数
@@ -3657,6 +3803,7 @@ function selectLifeStageOverride(stage: string) {
   console.log('[LifeStage] selectLifeStageOverride called with:', stage)
   formData.value.lifeStageOverride = stage
   showLifeStageOverride.value = false // 自动收起面板
+  invalidateBreedDerivedState()
   console.log('[LifeStage] Panel closed, lifeStageOverride set to:', formData.value.lifeStageOverride)
 }
 
@@ -3667,6 +3814,7 @@ function restoreAutoMatch() {
   console.log('[LifeStage] restoreAutoMatch called')
   formData.value.lifeStageOverride = 'NONE'
   showLifeStageOverride.value = false
+  invalidateBreedDerivedState()
   console.log('[LifeStage] Restored to auto match')
 }
 
@@ -3674,6 +3822,7 @@ function restoreAutoMatch() {
 
 function onLifeStageChange(e: any) {
   formData.value.lifeStageOverride = lifeStageOptions[e.detail.value]
+  invalidateBreedDerivedState()
 }
 
 // ========== 零食选择函数 ==========
@@ -3683,6 +3832,7 @@ function onLifeStageChange(e: any) {
  */
 function selectTreatInputMode(mode: string) {
   formData.value.treatInputMode = mode
+  invalidateBreedDerivedState()
   // 切换模式时设置默认值
   if (mode === 'ESTIMATE_LEVEL') {
     // 估算模式：使用默认LOW级别
@@ -3698,6 +3848,7 @@ function selectTreatInputMode(mode: string) {
  */
 function selectTreatLevel(level: string) {
   formData.value.treatLevel = level
+  invalidateBreedDerivedState()
 }
 
 // ========== 零食选择函数结束 ==========
@@ -3751,6 +3902,7 @@ async function previewCalculation() {
         calcDetails: res.data.calcDetails
       }
       console.log('[DogCreate] Preview calculation result:', calcResult.value)
+      calcStaleNotice.value = false
 
       // 从后端返回的 calcDetails 中提取生命阶段信息
       if (res.data.calcDetails) {
@@ -4775,6 +4927,17 @@ function submit() {
   box-sizing: border-box;
 }
 
+.search-results-header {
+  padding: 20rpx 20rpx 8rpx;
+}
+
+.search-results-hint {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  color: #999;
+}
+
 .section {
   padding: 20rpx;
   border-bottom: 1px solid #e9ecef;
@@ -4826,6 +4989,85 @@ function submit() {
   overflow-y: auto;
 }
 
+.breed-search-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  max-height: 520rpx;
+  padding: 12rpx 20rpx 8rpx;
+  box-sizing: border-box;
+}
+
+.breed-search-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  padding: 22rpx 24rpx;
+  background-color: #fff;
+  border: 1px solid #d9e2f2;
+  border-radius: 16rpx;
+  box-shadow: 0 6rpx 18rpx rgba(24, 144, 255, 0.08);
+}
+
+.breed-search-item:active {
+  background-color: #f0f7ff;
+  border-color: #91d5ff;
+  transform: scale(0.98);
+}
+
+.breed-search-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.breed-search-name {
+  display: block;
+  font-size: 30rpx;
+  color: #333;
+  font-weight: bold;
+}
+
+.breed-search-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+  margin-top: 10rpx;
+}
+
+.breed-search-chip {
+  padding: 6rpx 14rpx;
+  border-radius: 999rpx;
+  background-color: #f0f5ff;
+  color: #2f54eb;
+  font-size: 22rpx;
+  line-height: 1.2;
+}
+
+.breed-search-chip.common {
+  background-color: #fff7e6;
+  color: #d46b08;
+}
+
+.breed-search-action {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  flex-shrink: 0;
+}
+
+.breed-search-action-text {
+  font-size: 24rpx;
+  color: #1890ff;
+  font-weight: bold;
+}
+
+.breed-search-action-icon {
+  font-size: 28rpx;
+  color: #1890ff;
+  font-weight: bold;
+}
+
 .all-breeds-list {
   max-height: 600rpx;
 }
@@ -4841,23 +5083,57 @@ function submit() {
   border-bottom: none;
 }
 
-.no-results {
-  padding: 40rpx;
+.search-empty-state {
+  padding: 32rpx 20rpx 12rpx;
   text-align: center;
+}
+
+.no-results {
+  display: block;
   color: #999;
   font-size: 26rpx;
 }
 
-/* Mixed Breed Button */
-.mixed-breed-btn {
-  background-color: #fff7e6;
-  color: #fa8c16;
-  padding: 25rpx;
+.search-empty-hint {
+  display: block;
+  margin-top: 12rpx;
+  color: #999;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.search-mixed-entry {
+  margin-top: 20rpx;
+  padding: 22rpx 24rpx;
   border-radius: 8rpx;
   text-align: center;
   font-size: 28rpx;
   font-weight: bold;
+}
+
+.search-mixed-entry.primary {
+  background-color: #fff7e6;
+  color: #fa8c16;
   border: 1px solid #ffd591;
+}
+
+.search-fallback-wrap {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12rpx;
+  padding: 24rpx 20rpx 8rpx;
+}
+
+.search-fallback-text {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.search-fallback-link {
+  font-size: 24rpx;
+  color: #fa8c16;
+  font-weight: bold;
 }
 
 /* Selected Breed Display */
@@ -4957,6 +5233,13 @@ function submit() {
   margin-top: 5rpx;
 }
 
+.restore-auto-link {
+  display: inline-block;
+  margin-top: 12rpx;
+  font-size: 24rpx;
+  color: #1890ff;
+}
+
 .size-required {
   border-color: #ff4d4f !important;
   background-color: #fff1f0 !important;
@@ -4987,6 +5270,20 @@ function submit() {
 .btn-secondary {
   background-color: #1890ff;
   margin-top: 20rpx;
+}
+
+.calc-stale-notice {
+  margin-top: 20rpx;
+  padding: 18rpx 20rpx;
+  background-color: #fff7e6;
+  border: 1px solid #ffd591;
+  border-radius: 8rpx;
+}
+
+.calc-stale-text {
+  font-size: 24rpx;
+  color: #d46b08;
+  line-height: 1.5;
 }
 
 .recommendation-card {
@@ -5226,8 +5523,16 @@ function submit() {
   font-size: 32rpx;
   color: #333;
   font-weight: bold;
-  margin-bottom: 30rpx;
+  margin-bottom: 12rpx;
   display: block;
+  text-align: center;
+}
+
+.custom-breed-subtitle {
+  display: block;
+  margin-bottom: 24rpx;
+  font-size: 24rpx;
+  color: #666;
   text-align: center;
 }
 
@@ -5240,6 +5545,30 @@ function submit() {
   font-size: 28rpx;
   box-sizing: border-box;
   margin-bottom: 30rpx;
+}
+
+.custom-breed-size-picker {
+  height: 80rpx;
+  line-height: 80rpx;
+  border: 1px solid #ddd;
+  border-radius: 8rpx;
+  padding: 0 20rpx;
+  font-size: 28rpx;
+  color: #333;
+  margin-bottom: 16rpx;
+}
+
+.custom-breed-size-picker-required {
+  border-color: #ff4d4f;
+  background-color: #fff1f0;
+  color: #999;
+}
+
+.custom-breed-hint {
+  display: block;
+  margin-bottom: 30rpx;
+  font-size: 24rpx;
+  color: #999;
 }
 
 .custom-breed-actions {
@@ -5267,6 +5596,11 @@ function submit() {
 .custom-breed-btn-confirm {
   background-color: #07c160;
   color: #fff;
+}
+
+.custom-breed-btn-confirm.disabled {
+  background-color: #ccc;
+  color: #999;
 }
 
 /* Gender Selector */

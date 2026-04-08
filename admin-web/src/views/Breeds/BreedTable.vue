@@ -19,7 +19,7 @@
 
       <el-input
         v-model="searchText"
-        placeholder="搜索品种名称/体重"
+        placeholder="搜索品种名称/别名/体重"
         clearable
         style="width: 250px"
         @input="handleSearch"
@@ -34,6 +34,22 @@
     <el-card v-loading="loading" shadow="never">
       <el-table :data="displayData" stripe style="width: 100%">
         <el-table-column prop="name" label="品种名称" width="150" fixed="left" />
+
+        <el-table-column prop="aliases" label="搜索别名" min-width="220">
+          <template #default="{ row }">
+            <div v-if="row.aliases?.length" class="alias-tags">
+              <el-tag
+                v-for="alias in row.aliases"
+                :key="alias"
+                size="small"
+                effect="plain"
+              >
+                {{ alias }}
+              </el-tag>
+            </div>
+            <span v-else class="empty-alias">-</span>
+          </template>
+        </el-table-column>
 
         <el-table-column prop="sizeCategory" label="体型" width="100" align="center">
           <template #default="{ row }">
@@ -197,8 +213,11 @@ const filteredData = computed(() => {
     const search = searchText.value.toLowerCase()
     result = result.filter(item => {
       const nameMatch = item.name.toLowerCase().includes(search)
+      const aliasMatch = (item.aliases || []).some(alias =>
+        alias.toLowerCase().includes(search)
+      )
       const weightMatch = item.averageAdultWeightKg?.toString().includes(search)
-      return nameMatch || weightMatch
+      return nameMatch || aliasMatch || weightMatch
     })
   }
 
@@ -356,6 +375,16 @@ const handleDelete = async (breed: DogBreed) => {
   gap: 16px;
   margin-bottom: 20px;
   align-items: center;
+}
+
+.alias-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.empty-alias {
+  color: #909399;
 }
 
 .pagination-container {

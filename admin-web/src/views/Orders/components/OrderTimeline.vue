@@ -31,6 +31,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { OrderHistory, OrderStatus } from '@/types/order'
+import { formatDateTime } from '@/utils/date'
 
 interface Props {
   history: OrderHistory[]
@@ -44,46 +45,36 @@ const timelineItems = computed(() => {
   })
 })
 
-const formatTime = (time: Date) => {
-  return new Date(time).toLocaleString('zh-CN', {
-    year: 'numeric',
-    month: '2-digit',
-    day: '2-digit',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false
-  })
-}
+const formatTime = (time: string | Date) => formatDateTime(time)
 
 const getStatusText = (status: OrderStatus) => {
-  const statusMap: Record<OrderStatus, string> = {
+  const statusMap: Record<string, string> = {
     INIT: '订单创建',
     PENDING_PAYMENT: '待付款',
     PAID: '已付款',
-    PURCHASING: '生产中（内部）',
-    IN_PRODUCTION: '生产中（内部）',
-    READY_FOR_PACKAGING: '包装中（内部）',
-    READY_FOR_SHIPMENT: '急冻中待发货',
+    PURCHASING: '采购中',
+    IN_PRODUCTION: '生产中',
+    FREEZING: '急冻中待发货',
     SHIPPED: '已发货',
     COMPLETED: '已完成',
-    CANCELLED: '已取消'
+    CANCELLED: '已取消',
+    AFTERSALE: '售后中'
   }
   return statusMap[status] || status
 }
 
 const getTimelineType = (status: OrderStatus): 'primary' | 'success' | 'warning' | 'danger' | 'info' => {
-  const typeMap: Record<OrderStatus, 'primary' | 'success' | 'warning' | 'danger' | 'info'> = {
+  const typeMap: Record<string, 'primary' | 'success' | 'warning' | 'danger' | 'info'> = {
     INIT: 'info',
     PENDING_PAYMENT: 'warning',
     PAID: 'success',
     PURCHASING: 'primary',
     IN_PRODUCTION: 'primary',
-    READY_FOR_PACKAGING: 'primary',
-    READY_FOR_SHIPMENT: 'primary',
+    FREEZING: 'primary',
     SHIPPED: 'info',
     COMPLETED: 'success',
-    CANCELLED: 'danger'
+    CANCELLED: 'danger',
+    AFTERSALE: 'warning'
   }
   return typeMap[status] || 'info'
 }

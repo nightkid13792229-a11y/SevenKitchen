@@ -1147,3 +1147,266 @@ export function createRecipeShareToken(recipeId: string): Promise<{
     return res.data
   })
 }
+
+// ==================== Reviews API ====================
+
+export const reviewApi = {
+  /**
+   * 检查评价权限
+   */
+  checkEligibility: (recipeId: string) => {
+    return request<{
+      eligible: boolean
+      source: 'PURCHASED' | 'DIY' | null
+    }>({
+      url: `/recipes/${recipeId}/reviews/eligibility`,
+      method: 'GET',
+    }).then((res) => {
+      if (res.code !== 0) {
+        throw new Error(res.message || '检查评价权限失败')
+      }
+      return res.data
+    })
+  },
+
+  /**
+   * 获取食谱评论列表
+   */
+  getReviews: (recipeId: string, page: number = 1, pageSize: number = 10) => {
+    return request<{
+      avgRating: { ease: number; value: number; taste: number }
+      totalCount: number
+      list: Array<{
+        id: string
+        userId: string
+        recipeId: string
+        ratingEase: number
+        ratingValue: number
+        ratingTaste: number
+        content: string
+        photos: string[]
+        createdAt: string
+        updatedAt: string
+        user: {
+          id: string
+          nickname: string | null
+          avatarUrl: string | null
+        }
+      }>
+      page: number
+      pageSize: number
+      totalPages: number
+    }>({
+      url: `/recipes/${recipeId}/reviews`,
+      method: 'GET',
+      data: { page, pageSize },
+    }).then((res) => {
+      if (res.code !== 0) {
+        throw new Error(res.message || '获取评论失败')
+      }
+      return res.data
+    })
+  },
+
+  /**
+   * 发表评论
+   */
+  createReview: (recipeId: string, data: {
+    ratingEase: number
+    ratingValue: number
+    ratingTaste: number
+    content: string
+    photos?: string[]
+  }) => {
+    return request({
+      url: `/recipes/${recipeId}/reviews`,
+      method: 'POST',
+      data,
+    }).then((res) => {
+      if (res.code !== 0) {
+        throw new Error(res.message || '发表评论失败')
+      }
+      return res.data
+    })
+  },
+
+  /**
+   * 删除评论
+   */
+  deleteReview: (reviewId: string) => {
+    return request({
+      url: `/reviews/${reviewId}`,
+      method: 'DELETE',
+    }).then((res) => {
+      if (res.code !== 0) {
+        throw new Error(res.message || '删除评论失败')
+      }
+    })
+  },
+
+  /**
+   * 上传评论图片
+   */
+  uploadReviewPhoto: (filePath: string): Promise<{ url: string; key: string }> => {
+    return new Promise((resolve, reject) => {
+      const token = getToken()
+      uni.uploadFile({
+        url: `${getBaseUrl()}/reviews/upload-photos`,
+        filePath,
+        name: 'files',
+        header: {
+          'Authorization': `Bearer ${token}`,
+        },
+        success: (uploadRes: any) => {
+          if (uploadRes.statusCode === 200 || uploadRes.statusCode === 201) {
+            try {
+              const response = JSON.parse(uploadRes.data)
+              if (response.code === 0 && response.data?.photos?.length > 0) {
+                resolve(response.data.photos[0])
+              } else {
+                reject(new Error(response.message || '上传失败'))
+              }
+            } catch (e) {
+              reject(new Error('解析响应失败'))
+            }
+          } else {
+            reject(new Error(`上传失败: ${uploadRes.statusCode}`))
+          }
+        },
+        fail: (err) => {
+          console.error('[ReviewUpload] Upload failed:', err)
+          reject(err)
+        },
+      })
+    })
+  },
+}
+
+// ==================== Feedback ====================
+
+/**
+ * 上传反馈图片
+ */
+export function uploadFeedbackImage(filePath: string): Promise<{ url: string; key: string }> {
+  return new Promise((resolve, reject) => {
+    uni.uploadFile({
+      url: `${getBaseUrl()}/feedback/upload-image`,
+      filePath,
+      name: 'file',
+      header: {
+        'Authorization': `Bearer ${getToken()}`,
+      },
+      success: (uploadRes: any) => {
+        if (uploadRes.statusCode === 200 || uploadRes.statusCode === 201) {
+          try {
+            const response = JSON.parse(uploadRes.data)
+            if (response.code === 0 && response.data) {
+              resolve(response.data)
+            } else {
+              reject(new Error(response.message || '上传失败'))
+            }
+          } catch (err) {
+            reject(new Error('解析响应失败'))
+          }
+        } else {
+          reject(new Error(`上传失败: ${uploadRes.statusCode}`))
+        }
+      },
+      fail: (err) => {
+        console.error('[FeedbackUpload] Upload failed:', err)
+        reject(err)
+      },
+    })
+  })
+}
+
+/**
+ * 删除反馈图片（提交前移除）
+ */
+export function deleteFeedbackImage(key: string): Promise<void> {
+  return request({
+    url: '/feedback/upload-image',
+    method: 'DELETE',
+    data: { key },
+  }).then(() => {})
+}
+
+/**
+ * 提交反馈
+ */
+export function createFeedback(data: {
+  type: string
+  content: string
+  imageUrls?: string[]
+  imageKeys?: string[]
+}): Promise<any> {
+  return request({
+    url: '/feedback',
+    method: 'POST',
+    data,
+  }).then(res => res.data)
+}
+
+/**
+ * 获取反馈列表
+ */
+export function getFeedbackList(params: { page?: number; pageSize?: number } = {}): Promise<{
+  items: any[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}> {
+  return request({
+    url: '/feedback',
+    method: 'GET',
+    data: params,
+  }).then(res => res.data)
+}
+
+/**
+ * 删除反馈
+ */
+export function deleteFeedback(id: string): Promise<void> {
+  return request({
+    url: `/feedback/${id}`,
+    method: 'DELETE',
+  }).then(() => {})
+}
+
+/**
+ * 创建反馈回复
+ */
+export function createFeedbackReply(
+  feedbackId: string,
+  data: { content: string; replyToId?: string; imageUrls?: string[]; imageKeys?: string[] },
+): Promise<any> {
+  return request({
+    url: `/feedback/${feedbackId}/replies`,
+    method: 'POST',
+    data,
+  }).then((res) => res.data)
+}
+
+/**
+ * 获取反馈回复列表
+ */
+export function getFeedbackReplies(feedbackId: string): Promise<any[]> {
+  return request({
+    url: `/feedback/${feedbackId}/replies`,
+    method: 'GET',
+  }).then((res) => res.data)
+}
+
+/**
+ * 删除反馈回复
+ */
+export function deleteFeedbackReply(
+  feedbackId: string,
+  replyId: string,
+): Promise<void> {
+  return request({
+    url: `/feedback/${feedbackId}/replies/${replyId}`,
+    method: 'DELETE',
+  }).then(() => {})
+}

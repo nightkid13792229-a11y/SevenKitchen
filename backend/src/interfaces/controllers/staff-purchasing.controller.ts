@@ -129,6 +129,8 @@ export class StaffPurchasingController {
                     type: 'string',
                     enum: ['FOOD', 'SUPPLEMENT', 'PACKAGING'],
                   },
+                  procurementSkuId: { type: 'string' },
+                  procurementSkuName: { type: 'string' },
                   suggestedProductId: { type: 'string' },
                   suggestedProductName: { type: 'string' },
                   displayUnit: { type: 'string' },
@@ -215,14 +217,16 @@ export class StaffPurchasingController {
                 properties: {
                   id: { type: 'string' },
                   ingredientId: { type: 'string' },
+                  procurementSkuId: { type: 'string' },
+                  procurementSkuName: { type: 'string' },
+                  suggestedProductId: { type: 'string' },
+                  suggestedProductName: { type: 'string' },
                   ingredientName: { type: 'string' },
                   quantityNeeded: { type: 'number' },
                   quantityUnit: { type: 'string' },
                   estimatedCost: { type: 'number' },
                   purchaseChannel: { type: 'string' },
                   productModel: { type: 'string' },
-                  suggestedProductId: { type: 'string' },
-                  suggestedProductName: { type: 'string' },
                 },
               },
             },
@@ -767,6 +771,12 @@ export class StaffPurchasingController {
       type: 'object',
       properties: {
         purchaseItemId: { type: 'string', description: '采购项目ID' },
+        ingredientId: { type: 'string', description: '原料ID' },
+        ingredientName: { type: 'string', description: '原料名称' },
+        procurementSkuId: {
+          type: 'string',
+          description: '生产采购 SKU ID（选填）',
+        },
         purchaseChannel: { type: 'string', description: '采购渠道' },
         actualQuantity: {
           type: 'number',
@@ -808,6 +818,8 @@ export class StaffPurchasingController {
           properties: {
             id: { type: 'string' },
             purchaseListId: { type: 'string' },
+            procurementSkuId: { type: 'string' },
+            procurementSkuName: { type: 'string' },
             ingredientName: { type: 'string' },
             purchaseChannel: { type: 'string' },
             actualQuantity: { type: 'number' },
@@ -851,6 +863,8 @@ export class StaffPurchasingController {
             properties: {
               id: { type: 'string' },
               purchaseListId: { type: 'string' },
+              procurementSkuId: { type: 'string' },
+              procurementSkuName: { type: 'string' },
               ingredientName: { type: 'string' },
               purchaseChannel: { type: 'string' },
               actualQuantity: { type: 'number' },

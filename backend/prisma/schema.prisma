@@ -446,6 +446,7 @@ model Ingredient {
   recommendedProducts         RecommendedProduct[]
   inventoryAdjustments        InventoryAdjustment[]
   inventoryStocktakeLines     InventoryStocktakeLine[]
+  procurementSkus             ProcurementSku[]
 
   @@unique([name, brand, productModel])
   @@index([type])
@@ -507,6 +508,28 @@ model RecommendedProduct {
   @@index([ingredientId])
   @@index([isActive])
   @@map("recommended_product")
+}
+
+model ProcurementSku {
+  id                        String     @id @default(uuid())
+  ingredientId              String     @map("ingredient_id")
+  name                      String
+  brand                     String?    @db.VarChar(100)
+  productModel              String?    @map("product_model") @db.VarChar(100)
+  purchaseChannel           String?    @map("purchase_channel") @db.VarChar(200)
+  referencePricePerPurchaseUnit Decimal? @map("reference_price_per_purchase_unit") @db.Decimal(10, 2)
+  displayUnit               String?    @map("display_unit") @db.VarChar(50)
+  notes                     String?
+  isActive                  Boolean    @default(true) @map("is_active")
+  sortOrder                 Int        @default(0) @map("sort_order")
+  createdAt                 DateTime   @default(now()) @map("created_at")
+  updatedAt                 DateTime   @updatedAt @map("updated_at")
+
+  ingredient Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  @@index([ingredientId])
+  @@index([isActive])
+  @@map("procurement_sku")
 }
 
 model InventoryLedgerEntry {
@@ -772,23 +795,25 @@ model PurchaseList {
 }
 
 model PurchaseItem {
-  id              String       @id @default(uuid()) @map("id")
-  purchaseListId  String       @map("purchase_list_id")
-  ingredientId    String       @map("ingredient_id")
-  quantityNeeded  Float        @map("quantity_needed")
-  quantityUnit    String       @map("quantity_unit")
-  estimatedCost   Decimal      @map("estimated_cost") @db.Decimal(10, 2)
-  purchaseChannel String?      @map("purchase_channel") @db.VarChar(200)
-  productModel    String?      @map("product_model") @db.VarChar(100)
-  suggestedProductId   String? @map("suggested_product_id") @db.VarChar(36)
-  suggestedProductName String? @map("suggested_product_name") @db.VarChar(200)
-  notes           String?      @map("notes")
-  createdAt       DateTime     @default(now()) @map("created_at")
-  ingredientName  String       @default("") @map("ingredient_name") @db.VarChar(200)
-  displayUnit     String?      @map("display_unit") @db.VarChar(20)
-  type            String?      @map("type") @db.VarChar(20)
-  ingredient      Ingredient   @relation(fields: [ingredientId], references: [id])
-  purchaseList    PurchaseList @relation(fields: [purchaseListId], references: [id], onDelete: Cascade)
+  id                   String       @id @default(uuid()) @map("id")
+  purchaseListId       String       @map("purchase_list_id")
+  ingredientId         String       @map("ingredient_id")
+  procurementSkuId     String?      @map("procurement_sku_id") @db.VarChar(36)
+  procurementSkuName   String?      @map("procurement_sku_name") @db.VarChar(200)
+  suggestedProductId   String?      @map("suggested_product_id") @db.VarChar(36)
+  suggestedProductName String?      @map("suggested_product_name") @db.VarChar(200)
+  quantityNeeded       Float        @map("quantity_needed")
+  quantityUnit         String       @map("quantity_unit")
+  estimatedCost        Decimal      @map("estimated_cost") @db.Decimal(10, 2)
+  purchaseChannel      String?      @map("purchase_channel") @db.VarChar(200)
+  productModel         String?      @map("product_model") @db.VarChar(100)
+  notes                String?      @map("notes")
+  createdAt            DateTime     @default(now()) @map("created_at")
+  ingredientName       String       @default("") @map("ingredient_name") @db.VarChar(200)
+  displayUnit          String?      @map("display_unit") @db.VarChar(20)
+  type                 String?      @map("type") @db.VarChar(20)
+  ingredient           Ingredient   @relation(fields: [ingredientId], references: [id])
+  purchaseList         PurchaseList @relation(fields: [purchaseListId], references: [id], onDelete: Cascade)
 
   @@index([purchaseListId])
   @@index([ingredientId])
@@ -796,25 +821,27 @@ model PurchaseItem {
 }
 
 model PurchaseRecord {
-  id              String       @id @default(uuid()) @map("id")
-  purchaseListId  String       @map("purchase_list_id")
-  purchaseItemId  String       @map("purchase_item_id")
-  ingredientId    String       @map("ingredient_id")
-  ingredientName  String       @map("ingredient_name") @db.VarChar(200)
-  purchaseChannel String       @map("purchase_channel") @db.VarChar(200)
-  actualQuantity  Decimal      @map("actual_quantity") @db.Decimal(18, 6)
-  actualPackageCount Decimal?  @map("actual_package_count") @db.Decimal(18, 3)
-  actualPackageSize  Decimal?  @map("actual_package_size") @db.Decimal(18, 3)
-  actualPackageUnit  String?   @map("actual_package_unit") @db.VarChar(20)
-  actualBaseQuantity Decimal?  @map("actual_base_quantity") @db.Decimal(18, 6)
-  actualBaseUnit     String?   @map("actual_base_unit") @db.VarChar(20)
-  actualCost      Decimal      @map("actual_cost") @db.Decimal(10, 2)
-  productModel    String?      @map("product_model") @db.VarChar(100)
-  notes           String?      @map("notes")
-  purchasedAt     DateTime     @default(now()) @map("purchased_at")
-  createdAt       DateTime     @default(now()) @map("created_at")
-  updatedAt       DateTime     @updatedAt @map("updated_at")
-  purchaseList    PurchaseList @relation("PurchaseListRecords", fields: [purchaseListId], references: [id], onDelete: Cascade)
+  id                 String       @id @default(uuid()) @map("id")
+  purchaseListId     String       @map("purchase_list_id")
+  purchaseItemId     String       @map("purchase_item_id")
+  ingredientId       String       @map("ingredient_id")
+  procurementSkuId   String?      @map("procurement_sku_id") @db.VarChar(36)
+  procurementSkuName String?      @map("procurement_sku_name") @db.VarChar(200)
+  ingredientName     String       @map("ingredient_name") @db.VarChar(200)
+  purchaseChannel    String       @map("purchase_channel") @db.VarChar(200)
+  actualQuantity     Decimal      @map("actual_quantity") @db.Decimal(18, 6)
+  actualPackageCount Decimal?     @map("actual_package_count") @db.Decimal(18, 3)
+  actualPackageSize  Decimal?     @map("actual_package_size") @db.Decimal(18, 3)
+  actualPackageUnit  String?      @map("actual_package_unit") @db.VarChar(20)
+  actualBaseQuantity Decimal?     @map("actual_base_quantity") @db.Decimal(18, 6)
+  actualBaseUnit     String?      @map("actual_base_unit") @db.VarChar(20)
+  actualCost         Decimal      @map("actual_cost") @db.Decimal(10, 2)
+  productModel       String?      @map("product_model") @db.VarChar(100)
+  notes              String?      @map("notes")
+  purchasedAt        DateTime     @default(now()) @map("purchased_at")
+  createdAt          DateTime     @default(now()) @map("created_at")
+  updatedAt          DateTime     @updatedAt @map("updated_at")
+  purchaseList       PurchaseList @relation("PurchaseListRecords", fields: [purchaseListId], references: [id], onDelete: Cascade)
 
   @@index([purchaseListId])
   @@index([purchaseItemId])

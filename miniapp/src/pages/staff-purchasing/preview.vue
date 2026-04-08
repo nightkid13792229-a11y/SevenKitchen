@@ -116,18 +116,23 @@
                 class="ingredient-item"
               >
                 <view class="ingredient-main">
-                <view class="ingredient-info">
-                  <text class="ingredient-name">{{ item.ingredientName }}</text>
-                    <text v-if="getItemProcurementSkuLabel(item)" class="suggested-product">
-                      采购 SKU：{{ getItemProcurementSkuLabel(item) }}
+                  <view class="ingredient-info">
+                    <text class="ingredient-name">{{ item.ingredientName }}</text>
+                  <view v-if="item.resolvedProcurementSkuName || item.resolvedSuggestedProductName" class="ingredient-sku-lines">
+                    <text v-if="item.resolvedProcurementSkuName" class="procurement-sku">
+                      采购SKU：{{ item.resolvedProcurementSkuName }}
                     </text>
-                    <text v-if="getItemSuggestedProductLabel(item)" class="suggested-product reference">
-                      推荐参考：{{ getItemSuggestedProductLabel(item) }}
+                    <text
+                      v-if="item.resolvedSuggestedProductName && item.resolvedSuggestedProductName !== item.resolvedProcurementSkuName"
+                      class="suggested-sku"
+                    >
+                      推荐参考：{{ item.resolvedSuggestedProductName }}
                     </text>
-                    <view class="ingredient-meta">
-                      <text v-if="getItemPurchaseChannel(item)" class="channel">{{ getItemPurchaseChannel(item) }}</text>
-                      <text v-if="getItemProductModel(item)" class="model">{{ getItemProductModel(item) }}</text>
-                    </view>
+                  </view>
+                  <view class="ingredient-meta">
+                    <text v-if="item.resolvedPurchaseChannel" class="channel">{{ item.resolvedPurchaseChannel }}</text>
+                    <text v-if="item.resolvedProductModel" class="model">{{ item.resolvedProductModel }}</text>
+                  </view>
                   </view>
                   <view class="ingredient-quantity">
                     <text class="quantity">{{ formatQuantity(item) }}</text>
@@ -194,7 +199,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
-import { previewPurchaseList, resolveProcurementSkuProfile } from '@/api/purchasing';
+import { previewPurchaseList, resolvePurchaseItemDisplay } from '@/api/purchasing';
 
 // 表单数据
 const formData = ref({
@@ -253,33 +258,6 @@ const getTypeLabel = (type: string) => {
     'PACKAGING': '📦 包装材料',
   };
   return labels[type] || type;
-};
-
-const formatCompactLabel = (parts: Array<string | null | undefined>) => {
-  return parts.map((part) => (part || '').trim()).filter(Boolean).join(' · ');
-};
-
-const getItemProcurementSkuLabel = (item: any) => {
-  const profile = resolveProcurementSkuProfile(item);
-  return (
-    profile.procurementSkuName ||
-    formatCompactLabel([profile.purchaseChannel, profile.productModel]) ||
-    item?.purchaseChannel ||
-    item?.productModel ||
-    ''
-  );
-};
-
-const getItemSuggestedProductLabel = (item: any) => {
-  return resolveProcurementSkuProfile(item).suggestedProductName;
-};
-
-const getItemPurchaseChannel = (item: any) => {
-  return resolveProcurementSkuProfile(item).purchaseChannel || item?.purchaseChannel || '';
-};
-
-const getItemProductModel = (item: any) => {
-  return resolveProcurementSkuProfile(item).productModel || item?.productModel || '';
 };
 
 // 开始日期变更
@@ -358,7 +336,12 @@ const handlePreview = async () => {
     const res: any = await previewPurchaseList(params);
 
     if (res.code === 0) {
-      previewResult.value = res.data;
+      previewResult.value = {
+        ...res.data,
+        items: (res.data?.items || []).map((item: any) =>
+          resolvePurchaseItemDisplay(item)
+        ),
+      };
       uni.showToast({ title: '预览成功', icon: 'success' });
     } else {
       uni.showToast({ title: res.message || '预览失败', icon: 'none' });
@@ -462,6 +445,10 @@ const formatQuantity = (item: any) => {
 const getDisplayUnit = (item: any) => {
   if (item.type === 'FOOD') {
     return resolveFoodDisplayMeta(item).unit;
+  }
+
+  if (item.resolvedDisplayUnit) {
+    return item.resolvedDisplayUnit;
   }
 
   // 补剂类型：优先使用displayUnit，回退到quantityUnit
@@ -755,11 +742,22 @@ const getPreparationLabel = (item: any) => {
       display: block;
     }
 
-    .suggested-product {
-      display: block;
-      font-size: 22rpx;
-      color: #8a6d3b;
+    .ingredient-sku-lines {
+      display: flex;
+      flex-direction: column;
+      gap: 4rpx;
       margin-bottom: 8rpx;
+
+      .procurement-sku {
+        font-size: 22rpx;
+        color: #1890ff;
+        font-weight: 500;
+      }
+
+      .suggested-sku {
+        font-size: 22rpx;
+        color: #8c8c8c;
+      }
     }
 
     .ingredient-meta {

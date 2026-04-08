@@ -141,15 +141,20 @@
                 <view class="item-basic">
                   <view class="item-info">
                     <text class="item-name">{{ item.ingredientName || '未知原料' }}</text>
-                    <text v-if="getItemProcurementSkuLabel(item)" class="item-suggested-product">
-                      采购 SKU：{{ getItemProcurementSkuLabel(item) }}
-                    </text>
-                    <text v-if="getItemSuggestedProductLabel(item)" class="item-suggested-product suggested-reference">
-                      推荐参考：{{ getItemSuggestedProductLabel(item) }}
-                    </text>
-                    <view v-if="getItemPurchaseChannel(item) || getItemProductModel(item)" class="item-specs">
-                      <text v-if="getItemPurchaseChannel(item)" class="spec">{{ getItemPurchaseChannel(item) }}</text>
-                      <text v-if="getItemProductModel(item)" class="spec">{{ getItemProductModel(item) }}</text>
+                    <view v-if="item.resolvedProcurementSkuName || item.resolvedSuggestedProductName" class="item-sku-lines">
+                      <text v-if="item.resolvedProcurementSkuName" class="item-sku primary">
+                        采购SKU：{{ item.resolvedProcurementSkuName }}
+                      </text>
+                      <text
+                        v-if="item.resolvedSuggestedProductName && item.resolvedSuggestedProductName !== item.resolvedProcurementSkuName"
+                        class="item-sku secondary"
+                      >
+                        推荐参考：{{ item.resolvedSuggestedProductName }}
+                      </text>
+                    </view>
+                    <view v-if="item.resolvedPurchaseChannel || item.resolvedProductModel" class="item-specs">
+                      <text v-if="item.resolvedPurchaseChannel" class="spec">{{ item.resolvedPurchaseChannel }}</text>
+                      <text v-if="item.resolvedProductModel" class="spec">{{ item.resolvedProductModel }}</text>
                     </view>
                     <view class="item-quantity">
                       <text class="quantity-label">需求: </text>
@@ -191,14 +196,18 @@
                       class="record-item"
                     >
                       <view class="record-main">
+                        <text v-if="record.resolvedProcurementSkuName" class="record-sku">
+                          采购SKU：{{ record.resolvedProcurementSkuName }}
+                        </text>
                         <view class="record-info">
                           <text class="record-quantity">{{ formatRecordQuantity(record, item) }}</text>
                           <text class="record-cost">¥{{ record.actualCost.toFixed(2) }}</text>
-                          <text class="record-channel">{{ getRecordSkuLabel(record, item) }}</text>
+                          <text class="record-channel">{{ record.resolvedPurchaseChannel || getRecordSkuLabel(record, item) }}</text>
                         </view>
                         <view class="record-details">
-                          <text v-if="record.purchaseChannel" class="detail">{{ record.purchaseChannel }}</text>
-                          <text v-if="record.productModel" class="detail">{{ record.productModel }}</text>
+                          <text v-if="record.resolvedProductModel || record.productModel" class="detail">
+                            {{ record.resolvedProductModel || record.productModel }}
+                          </text>
                           <text v-if="formatRecordNormalizedSummary(record, item)" class="detail">
                             {{ formatRecordNormalizedSummary(record, item) }}
                           </text>
@@ -486,6 +495,8 @@ import {
   previewPurchaseList,
   addOrdersToList,
   resolveProcurementSkuProfile,
+  resolvePurchaseItemDisplay,
+  resolvePurchaseRecordDisplay,
 } from '@/api/purchasing';
 
 // 状态管理
@@ -910,7 +921,7 @@ const loadDetail = async () => {
     if (res.code === 0) {
       purchaseList.value = res.data;
       items.value = (res.data.items || []).map((item: any) => ({
-        ...item,
+        ...resolvePurchaseItemDisplay(item),
         records: [],
         expanded: false,
       }));
@@ -1062,7 +1073,9 @@ const loadPurchaseRecords = async () => {
   try {
     const res: any = await getPurchaseRecords(purchaseListId.value);
     if (res.code === 0) {
-      const allRecords = res.data || [];
+      const allRecords = (res.data || []).map((record: any) =>
+        resolvePurchaseRecordDisplay(record)
+      );
 
       // 按原料ID分组
       const grouped = new Map<string, any[]>();
@@ -1597,6 +1610,10 @@ const getDisplayUnit = (item: any) => {
     return resolveFoodDisplayMeta(item).unit;
   }
 
+  if (item.resolvedDisplayUnit) {
+    return item.resolvedDisplayUnit;
+  }
+
   // 补剂类型：优先使用displayUnit，回退到quantityUnit
   if (item.type === 'SUPPLEMENT') {
     return item.displayUnit || item.quantityUnit || 'g';
@@ -1978,11 +1995,24 @@ const confirmDeleteItem = (item: any) => {
         display: block;
       }
 
-      .item-suggested-product {
-        display: block;
-        font-size: 22rpx;
-        color: #8c6d1f;
+      .item-sku-lines {
+        display: flex;
+        flex-direction: column;
+        gap: 6rpx;
         margin-bottom: 12rpx;
+
+        .item-sku {
+          font-size: 24rpx;
+
+          &.primary {
+            color: #1890ff;
+            font-weight: 500;
+          }
+
+          &.secondary {
+            color: #8c8c8c;
+          }
+        }
       }
 
       .item-specs {
@@ -2067,6 +2097,14 @@ const confirmDeleteItem = (item: any) => {
       .record-main {
         flex: 1;
         min-width: 0;
+
+        .record-sku {
+          display: block;
+          margin-bottom: 8rpx;
+          font-size: 24rpx;
+          color: #1890ff;
+          font-weight: 500;
+        }
 
         .record-info {
           display: flex;
@@ -2412,6 +2450,14 @@ const confirmDeleteItem = (item: any) => {
       display: flex;
       align-items: center;
     }
+  }
+
+  .form-hint {
+    display: block;
+    margin-top: 10rpx;
+    font-size: 22rpx;
+    line-height: 1.5;
+    color: #8c8c8c;
   }
 
   .picker-input {

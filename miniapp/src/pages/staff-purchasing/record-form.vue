@@ -161,6 +161,7 @@ import { onLoad } from '@dcloudio/uni-app';
 import {
   getPurchaseListDetail,
   addPurchaseRecord,
+  resolvePurchaseItemDisplay,
   resolveProcurementSkuProfile,
 } from '@/api/purchasing';
 
@@ -304,7 +305,6 @@ const applySelectedItemDefaults = (item: any) => {
   formData.value.actualPackageSize = getSuggestedPackageSize(item);
   formData.value.actualPackageUnit = getSuggestedPackageUnit(item);
 };
-
 // 页面加载
 onLoad((options: any) => {
   console.log('[RecordForm] onLoad options:', options);
@@ -323,7 +323,9 @@ const loadPurchaseListDetail = async () => {
     console.log('[RecordForm] API response:', res);
 
     if (res.code === 0) {
-      items.value = res.data.items || [];
+      items.value = (res.data.items || []).map((item: any) =>
+        resolvePurchaseItemDisplay(item)
+      );
       console.log('[RecordForm] items loaded:', items.value.length);
 
       if (items.value.length > 0) {

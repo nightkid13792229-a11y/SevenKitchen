@@ -250,7 +250,7 @@
     <view v-if="showSpec" class="spec-modal" @tap="closeSpecModal">
       <view class="spec-content" @tap.stop>
         <view class="spec-header">
-          <text class="spec-title">商品规格</text>
+          <text class="spec-title">DIY 推荐SKU</text>
           <text class="btn-close" @tap="closeSpecModal">✕</text>
         </view>
         <!-- 有多个推荐产品时：展示产品卡片列表 -->
@@ -1056,7 +1056,7 @@ async function handlePrint() {
       })
 
       builder.drawTable(
-        ['补剂名称', '推荐品牌', '规格', '最佳添加时机', '添加总量', '营养素', '营养素总量'],
+        ['补剂名称', 'DIY推荐品牌', '规格', '最佳添加时机', '添加总量', '营养素', '营养素总量'],
         supplementRows,
         {
           colWidths: [160, 120, 300, 120, 120, 150, 150],

@@ -240,6 +240,18 @@ export class AdminController {
         id: true,
         createdAt: true,
         updatedAt: true,
+        recommendedProducts: {
+          select: {
+            id: true,
+            isActive: true,
+          },
+        },
+        procurementSkus: {
+          select: {
+            id: true,
+            isActive: true,
+          },
+        },
         tags: {
           select: {
             tag: {
@@ -251,11 +263,6 @@ export class AdminController {
             },
           },
         },
-        recommendedProducts: {
-          select: {
-            isActive: true,
-          },
-        },
       },
     });
 
@@ -265,20 +272,29 @@ export class AdminController {
     const updatedAtMap = new Map(
       prismaIngredients.map((p) => [p.id, p.updatedAt.toISOString()]),
     );
+    const recommendedProductCountMap = new Map(
+      prismaIngredients.map((p) => [p.id, p.recommendedProducts.length]),
+    );
+    const activeRecommendedProductCountMap = new Map(
+      prismaIngredients.map((p) => [
+        p.id,
+        p.recommendedProducts.filter((product) => product.isActive).length,
+      ]),
+    );
+    const procurementSkuCountMap = new Map(
+      prismaIngredients.map((p) => [p.id, p.procurementSkus.length]),
+    );
+    const activeProcurementSkuCountMap = new Map(
+      prismaIngredients.map((p) => [
+        p.id,
+        p.procurementSkus.filter((sku) => sku.isActive).length,
+      ]),
+    );
     const tagsMap = new Map(
       prismaIngredients.map((p) => [p.id, p.tags.map((t) => t.tag)]),
     );
     const tagIdsMap = new Map(
       prismaIngredients.map((p) => [p.id, p.tags.map((t) => t.tag.id)]),
-    );
-    const activeRecommendedProductCountMap = new Map(
-      prismaIngredients.map((p) => [
-        p.id,
-        p.recommendedProducts.filter((rp) => rp.isActive).length,
-      ]),
-    );
-    const recommendedProductCountMap = new Map(
-      prismaIngredients.map((p) => [p.id, p.recommendedProducts.length]),
     );
 
     // Map to ingredient response format
@@ -300,6 +316,16 @@ export class AdminController {
         ing.getEffectivePricePerPurchaseUnit(),
       ),
       unitCost: ing.getUnitCost(),
+      activeRecommendedProductCount:
+        activeRecommendedProductCountMap.get(ing.id) || 0,
+      recommendedProductCount: recommendedProductCountMap.get(ing.id) || 0,
+      activeProcurementSkuCount:
+        activeProcurementSkuCountMap.get(ing.id) || 0,
+      procurementSkuCount: procurementSkuCountMap.get(ing.id) || 0,
+      hasActiveRecommendedProduct:
+        (activeRecommendedProductCountMap.get(ing.id) || 0) > 0,
+      hasActiveProcurementSku:
+        (activeProcurementSkuCountMap.get(ing.id) || 0) > 0,
       weightG: ing.weightG,
       maxCapacityG: ing.maxCapacityG,
       safetyStock: ing.safetyStock,
@@ -308,11 +334,6 @@ export class AdminController {
       properties: ing.properties,
       tagIds: tagIdsMap.get(ing.id) || [],
       tags: tagsMap.get(ing.id) || [],
-      activeRecommendedProductCount:
-        activeRecommendedProductCountMap.get(ing.id) || 0,
-      recommendedProductCount: recommendedProductCountMap.get(ing.id) || 0,
-      hasActiveRecommendedProduct:
-        (activeRecommendedProductCountMap.get(ing.id) || 0) > 0,
       createdAt: createdAtMap.get(ing.id) || new Date().toISOString(),
       updatedAt: updatedAtMap.get(ing.id) || new Date().toISOString(),
     }));

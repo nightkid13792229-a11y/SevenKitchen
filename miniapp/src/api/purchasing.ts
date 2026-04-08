@@ -7,6 +7,178 @@
 import { request } from '../utils/api';
 import { getBaseUrl } from '../utils/config';
 
+export interface ProcurementSkuOption {
+  id?: string;
+  name: string;
+  brand?: string | null;
+  productModel?: string | null;
+  purchaseChannel?: string | null;
+  displayUnit?: string | null;
+  referencePricePerPurchaseUnit?: number | null;
+  notes?: string | null;
+  isActive?: boolean;
+}
+
+const normalizeText = (value: unknown): string => {
+  return typeof value === 'string' ? value.trim() : '';
+};
+
+const toOptionalNumber = (value: unknown): number | null => {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string' && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  return null;
+};
+
+export function normalizeProcurementSkuOption(raw: any): ProcurementSkuOption | null {
+  if (typeof raw === 'string') {
+    const name = normalizeText(raw);
+    return name ? { name } : null;
+  }
+
+  if (!raw || typeof raw !== 'object') {
+    return null;
+  }
+
+  const name =
+    normalizeText(raw.name) ||
+    normalizeText(raw.procurementSkuName) ||
+    normalizeText(raw.label) ||
+    normalizeText(raw.title);
+
+  if (!name) {
+    return null;
+  }
+
+  return {
+    id: normalizeText(raw.id) || normalizeText(raw.procurementSkuId) || undefined,
+    name,
+    brand: normalizeText(raw.brand) || null,
+    productModel: normalizeText(raw.productModel) || normalizeText(raw.model) || null,
+    purchaseChannel: normalizeText(raw.purchaseChannel) || normalizeText(raw.channel) || null,
+    displayUnit: normalizeText(raw.displayUnit) || normalizeText(raw.purchaseUnit) || null,
+    referencePricePerPurchaseUnit:
+      toOptionalNumber(raw.referencePricePerPurchaseUnit ?? raw.referencePrice ?? raw.price),
+    notes: normalizeText(raw.notes) || null,
+    isActive: typeof raw.isActive === 'boolean' ? raw.isActive : true,
+  };
+}
+
+export function extractProcurementSkuOptions(item: any): ProcurementSkuOption[] {
+  const collected: ProcurementSkuOption[] = [];
+  const sources = [
+    item?.procurementSku,
+    item?.procurementSkus,
+    item?.ingredient?.procurementSku,
+    item?.ingredient?.procurementSkus,
+  ];
+
+  sources.forEach((source) => {
+    if (!source) {
+      return;
+    }
+
+    const entries = Array.isArray(source) ? source : [source];
+
+    entries.forEach((entry) => {
+      const normalized = normalizeProcurementSkuOption(entry);
+      if (normalized && normalized.isActive !== false) {
+        collected.push(normalized);
+      }
+    });
+  });
+
+  return collected.filter((option, index, array) => {
+    return array.findIndex((candidate) => {
+      if (option.id && candidate.id) {
+        return candidate.id === option.id;
+      }
+
+      return candidate.name === option.name;
+    }) === index;
+  });
+}
+
+function buildProcurementContext(item: any) {
+  const procurementSkuId = normalizeText(item?.procurementSkuId);
+  const procurementSkuName = normalizeText(item?.procurementSkuName);
+  const suggestedProductId = normalizeText(item?.suggestedProductId);
+  const suggestedProductName = normalizeText(item?.suggestedProductName);
+  const options = extractProcurementSkuOptions(item);
+
+  const matchedOption =
+    options.find((option) => procurementSkuId && option.id === procurementSkuId) ||
+    options.find((option) => procurementSkuName && option.name === procurementSkuName) ||
+    options.find((option) => suggestedProductId && option.id === suggestedProductId) ||
+    options.find((option) => suggestedProductName && option.name === suggestedProductName) ||
+    null;
+
+  const snapshotOption =
+    procurementSkuName
+      ? {
+          id: procurementSkuId || undefined,
+          name: procurementSkuName,
+        }
+      : null;
+
+  const suggestedOption =
+    suggestedProductName
+      ? {
+          id: suggestedProductId || undefined,
+          name: suggestedProductName,
+        }
+      : null;
+
+  return {
+    options,
+    procurementSkuId,
+    procurementSkuName,
+    suggestedProductName,
+    preferredSku: matchedOption || snapshotOption || suggestedOption || options[0] || null,
+  };
+}
+
+export function resolvePurchaseItemDisplay(item: any) {
+  const context = buildProcurementContext(item);
+
+  return {
+    ...item,
+    procurementSkuOptions: context.options,
+    resolvedProcurementSkuId: context.procurementSkuId || context.preferredSku?.id || '',
+    resolvedProcurementSkuName:
+      context.procurementSkuName || context.preferredSku?.name || '',
+    resolvedSuggestedProductName: context.suggestedProductName || '',
+    resolvedPurchaseChannel:
+      normalizeText(context.preferredSku?.purchaseChannel) ||
+      normalizeText(item?.purchaseChannel) ||
+      normalizeText(item?.ingredient?.purchaseChannel),
+    resolvedProductModel:
+      normalizeText(context.preferredSku?.productModel) ||
+      normalizeText(item?.productModel) ||
+      normalizeText(item?.ingredient?.productModel),
+    resolvedDisplayUnit:
+      normalizeText(context.preferredSku?.displayUnit) ||
+      normalizeText(item?.displayUnit) ||
+      normalizeText(item?.quantityUnit) ||
+      normalizeText(item?.ingredient?.purchaseUnit),
+  };
+}
+
+export function resolvePurchaseRecordDisplay(record: any) {
+  return {
+    ...record,
+    resolvedProcurementSkuName: normalizeText(record?.procurementSkuName),
+    resolvedPurchaseChannel: normalizeText(record?.purchaseChannel),
+    resolvedProductModel: normalizeText(record?.productModel),
+  };
+}
+
 // ==========================================
 // 采购清单管理
 // ==========================================
@@ -170,13 +342,6 @@ export interface StockPurchaseIngredient {
   suggestedProductName?: string;
 }
 
-export interface ProcurementSkuOption {
-  id: string;
-  name: string;
-  purchaseChannel?: string | null;
-  productModel?: string | null;
-}
-
 export interface ProcurementSkuProfile {
   procurementSkuId?: string;
   procurementSkuName?: string;
@@ -187,133 +352,41 @@ export interface ProcurementSkuProfile {
   productModel?: string;
 }
 
-const normalizeText = (value?: string | null) => {
-  return (value || '').trim();
-};
-
-const normalizeProcurementSkuOption = (sku: any): ProcurementSkuOption | null => {
-  if (!sku) {
-    return null;
-  }
-
-  if (typeof sku === 'string') {
-    const text = normalizeText(sku);
-    if (!text) {
-      return null;
-    }
-    return {
-      id: text,
-      name: text,
-    };
-  }
-
-  const id = normalizeText(
-    sku.id ||
-      sku.procurementSkuId ||
-      sku.skuId ||
-      sku.value ||
-      sku.code ||
-      sku.key ||
-      sku.name,
-  );
-  const name = normalizeText(
-    sku.name ||
-      sku.procurementSkuName ||
-      sku.skuName ||
-      sku.label ||
-      sku.title ||
-      id,
-  );
-
-  if (!id && !name) {
-    return null;
-  }
-
-  return {
-    id: id || name,
-    name: name || id,
-    purchaseChannel: normalizeText(sku.purchaseChannel) || undefined,
-    productModel: normalizeText(sku.productModel) || undefined,
-  };
-};
-
-const collectProcurementSkuOptions = (item: any): ProcurementSkuOption[] => {
-  const seen = new Set<string>();
-  const options: ProcurementSkuOption[] = [];
-
-  const append = (sku: any) => {
-    const option = normalizeProcurementSkuOption(sku);
-    if (!option) {
-      return;
-    }
-
-    const dedupeKey = option.id || option.name;
-    if (!dedupeKey || seen.has(dedupeKey)) {
-      return;
-    }
-
-    seen.add(dedupeKey);
-    options.push(option);
-  };
-
-  const ingredientProcurementSkus = item?.ingredient?.procurementSkus;
-  if (Array.isArray(ingredientProcurementSkus)) {
-    ingredientProcurementSkus.forEach(append);
-  }
-
-  if (Array.isArray(item?.procurementSkus)) {
-    item.procurementSkus.forEach(append);
-  }
-
-  return options;
-};
-
 export const resolveProcurementSkuProfile = (
   item: any,
   preferredSkuId?: string | null,
 ): ProcurementSkuProfile => {
-  const procurementSkuChoices = collectProcurementSkuOptions(item);
+  const context = buildProcurementContext(item);
   const normalizedPreferredSkuId = normalizeText(preferredSkuId);
-  const itemProcurementSkuId = normalizeText(item?.procurementSkuId);
-  const itemProcurementSkuName = normalizeText(item?.procurementSkuName);
 
-  const selectedById = procurementSkuChoices.find((option) => {
+  const selectedById = context.options.find((option) => {
     if (!normalizedPreferredSkuId) {
       return false;
     }
-    return option.id === normalizedPreferredSkuId || option.name === normalizedPreferredSkuId;
+    return (
+      option.id === normalizedPreferredSkuId ||
+      option.name === normalizedPreferredSkuId
+    );
   });
 
-  const selectedByItem = procurementSkuChoices.find((option) => {
-    if (itemProcurementSkuId && (option.id === itemProcurementSkuId || option.name === itemProcurementSkuId)) {
-      return true;
-    }
-
-    if (itemProcurementSkuName && option.name === itemProcurementSkuName) {
-      return true;
-    }
-
-    return false;
-  });
-
-  const selectedBySingleChoice = procurementSkuChoices.length === 1 ? procurementSkuChoices[0] : null;
-  const selectedSku = selectedById || selectedByItem || selectedBySingleChoice || null;
-
-  const suggestedProductId = normalizeText(item?.suggestedProductId);
-  const suggestedProductName = normalizeText(item?.suggestedProductName);
+  const selectedSku = selectedById || context.preferredSku || null;
   const purchaseChannel = normalizeText(
-    selectedSku?.purchaseChannel || item?.purchaseChannel || item?.ingredient?.purchaseChannel,
+    selectedSku?.purchaseChannel ||
+      item?.purchaseChannel ||
+      item?.ingredient?.purchaseChannel,
   );
   const productModel = normalizeText(
-    selectedSku?.productModel || item?.productModel || item?.ingredient?.productModel,
+    selectedSku?.productModel ||
+      item?.productModel ||
+      item?.ingredient?.productModel,
   );
 
   return {
-    procurementSkuId: selectedSku?.id || itemProcurementSkuId || '',
-    procurementSkuName: selectedSku?.name || itemProcurementSkuName || '',
-    procurementSkuChoices,
-    suggestedProductId,
-    suggestedProductName,
+    procurementSkuId: selectedSku?.id || context.procurementSkuId || '',
+    procurementSkuName: selectedSku?.name || context.procurementSkuName || '',
+    procurementSkuChoices: context.options,
+    suggestedProductId: normalizeText(item?.suggestedProductId) || undefined,
+    suggestedProductName: context.suggestedProductName || undefined,
     purchaseChannel,
     productModel,
   };
@@ -403,6 +476,7 @@ export function addPurchaseRecord(purchaseListId: string, data: {
   actualPackageSize?: number;
   actualPackageUnit?: string;
   actualCost: number;
+  procurementSkuId?: string;
   productModel?: string;
   notes?: string;
 }) {
@@ -437,6 +511,7 @@ export function updatePurchaseRecord(purchaseListId: string, recordId: string, d
   actualPackageSize?: number;
   actualPackageUnit?: string;
   actualCost?: number;
+  procurementSkuId?: string;
   productModel?: string;
   notes?: string;
 }) {

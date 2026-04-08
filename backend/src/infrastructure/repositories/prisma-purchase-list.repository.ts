@@ -4,6 +4,7 @@
  */
 
 import { Injectable } from '@nestjs/common';
+import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma.service';
 import {
   PurchaseList,
@@ -12,9 +13,130 @@ import {
   PurchaseListRepository,
 } from '../../domain/purchasing';
 
+const purchaseItemDetailInclude = {
+  include: {
+    ingredient: {
+      include: {
+        procurementSkus: {
+          where: { isActive: true },
+          orderBy: [
+            { sortOrder: 'asc' as const },
+            { createdAt: 'asc' as const },
+          ],
+        },
+      },
+    },
+  },
+  orderBy: {
+    createdAt: 'asc' as const,
+  },
+} satisfies Prisma.PurchaseList$itemsArgs;
+
+const purchaseListDetailInclude = {
+  items: purchaseItemDetailInclude,
+  records: true,
+  createdBy: {
+    select: {
+      id: true,
+      nickname: true,
+      phone: true,
+    },
+  },
+} satisfies Prisma.PurchaseListInclude;
+
+const purchaseListFallbackInclude = {
+  items: {
+    orderBy: {
+      createdAt: 'asc' as const,
+    },
+  },
+  records: true,
+  createdBy: {
+    select: {
+      id: true,
+      nickname: true,
+      phone: true,
+    },
+  },
+} satisfies Prisma.PurchaseListInclude;
+
+const ingredientProcurementSkuInclude = {
+  procurementSkus: {
+    where: { isActive: true },
+    orderBy: [{ sortOrder: 'asc' as const }, { createdAt: 'asc' as const }],
+  },
+} satisfies Prisma.IngredientInclude;
+
+const INCONSISTENT_INGREDIENT_RELATION_ERROR =
+  'Inconsistent query result: Field ingredient is required to return data';
+
 @Injectable()
 export class PrismaPurchaseListRepository implements PurchaseListRepository {
   constructor(private readonly prisma: PrismaService) {}
+
+  private isInconsistentIngredientRelationError(error: unknown): boolean {
+    return (
+      error instanceof Error &&
+      error.message.includes(INCONSISTENT_INGREDIENT_RELATION_ERROR)
+    );
+  }
+
+  private async hydrateIngredientsForLists(lists: any[]): Promise<any[]> {
+    const ingredientIds = Array.from(
+      new Set(
+        lists.flatMap((list) =>
+          (list.items || []).map((item: any) => item.ingredientId),
+        ),
+      ),
+    );
+
+    if (ingredientIds.length === 0) {
+      return lists;
+    }
+
+    const ingredients = await this.prisma.ingredient.findMany({
+      where: {
+        id: {
+          in: ingredientIds,
+        },
+      },
+      include: ingredientProcurementSkuInclude,
+    });
+
+    const ingredientMap = new Map(
+      ingredients.map((ingredient) => [ingredient.id, ingredient]),
+    );
+
+    return lists.map((list) => ({
+      ...list,
+      items: (list.items || []).map((item: any) => ({
+        ...item,
+        ingredient: ingredientMap.get(item.ingredientId),
+      })),
+    }));
+  }
+
+  private async findManyWithFallback(
+    args: Omit<Prisma.PurchaseListFindManyArgs, 'include'>,
+  ): Promise<any[]> {
+    try {
+      return await this.prisma.purchaseList.findMany({
+        ...args,
+        include: purchaseListDetailInclude,
+      });
+    } catch (error) {
+      if (!this.isInconsistentIngredientRelationError(error)) {
+        throw error;
+      }
+
+      const lists = await this.prisma.purchaseList.findMany({
+        ...args,
+        include: purchaseListFallbackInclude,
+      });
+
+      return this.hydrateIngredientsForLists(lists);
+    }
+  }
 
   async save(purchaseList: PurchaseList): Promise<PurchaseList> {
     const data = purchaseList.toPrisma();
@@ -48,6 +170,8 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
             where: { id: item.id },
             update: {
               ingredientId: item.ingredientId,
+              procurementSkuId: item.procurementSkuId,
+              procurementSkuName: item.procurementSkuName,
               ingredientName: item.ingredientName,
               type: item.type,
               quantityNeeded: item.quantityNeeded,
@@ -92,17 +216,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
 
       return tx.purchaseList.findUniqueOrThrow({
         where: { id: purchaseList.id },
-        include: {
-          items: true,
-          records: true, // Include purchase records for calculating aggregates
-          createdBy: {
-            select: {
-              id: true,
-              nickname: true,
-              phone: true,
-            },
-          },
-        },
+        include: purchaseListDetailInclude,
       });
     });
 
@@ -112,21 +226,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
   async findById(id: string): Promise<PurchaseList | null> {
     const found = await this.prisma.purchaseList.findUnique({
       where: { id },
-      include: {
-        items: {
-          include: {
-            ingredient: true, // Include ingredient details for purchase form optimization
-          },
-        },
-        records: true, // Include purchase records for calculating aggregates
-        createdBy: {
-          select: {
-            id: true,
-            nickname: true,
-            phone: true,
-          },
-        },
-      },
+      include: purchaseListDetailInclude,
     });
 
     return found ? PurchaseList.fromPrisma(found) : null;
@@ -143,17 +243,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
           lt: endDate,
         },
       },
-      include: {
-        items: true,
-        records: true, // Include purchase records for calculating aggregates
-        createdBy: {
-          select: {
-            id: true,
-            nickname: true,
-            phone: true,
-          },
-        },
-      },
+      include: purchaseListDetailInclude,
       orderBy: {
         targetDate: 'desc',
       },
@@ -165,17 +255,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
   async findByStatus(status: PurchaseListStatus): Promise<PurchaseList[]> {
     const lists = await this.prisma.purchaseList.findMany({
       where: { status },
-      include: {
-        items: true,
-        records: true, // Include purchase records for calculating aggregates
-        createdBy: {
-          select: {
-            id: true,
-            nickname: true,
-            phone: true,
-          },
-        },
-      },
+      include: purchaseListDetailInclude,
       orderBy: {
         createdAt: 'desc',
       },
@@ -187,17 +267,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
   async findByCreatedBy(createdById: string): Promise<PurchaseList[]> {
     const lists = await this.prisma.purchaseList.findMany({
       where: { createdById },
-      include: {
-        items: true,
-        records: true, // Include purchase records for calculating aggregates
-        createdBy: {
-          select: {
-            id: true,
-            nickname: true,
-            phone: true,
-          },
-        },
-      },
+      include: purchaseListDetailInclude,
       orderBy: {
         createdAt: 'desc',
       },
@@ -241,19 +311,8 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
     }
 
     const [list, total] = await Promise.all([
-      this.prisma.purchaseList.findMany({
+      this.findManyWithFallback({
         where,
-        include: {
-          items: true,
-          records: true, // Include purchase records for calculating aggregates
-          createdBy: {
-            select: {
-              id: true,
-              nickname: true,
-              phone: true,
-            },
-          },
-        },
         orderBy: {
           createdAt: 'desc',
         },
@@ -297,17 +356,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
   ): Promise<PurchaseList[]> {
     const lists = await this.prisma.purchaseList.findMany({
       where: { reimbursementId },
-      include: {
-        items: true,
-        records: true, // Include purchase records for calculating aggregates
-        createdBy: {
-          select: {
-            id: true,
-            nickname: true,
-            phone: true,
-          },
-        },
-      },
+      include: purchaseListDetailInclude,
       orderBy: {
         createdAt: 'desc',
       },
@@ -352,19 +401,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
           totalEstimatedCost: updatedList.totalEstimatedCost,
           updatedAt: new Date(),
         },
-        include: {
-          items: {
-            orderBy: { createdAt: 'asc' },
-          },
-          records: true,
-          createdBy: {
-            select: {
-              id: true,
-              nickname: true,
-              phone: true,
-            },
-          },
-        },
+        include: purchaseListDetailInclude,
       });
 
       return updated;
@@ -404,19 +441,7 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
           totalEstimatedCost: updatedList.totalEstimatedCost,
           updatedAt: new Date(),
         },
-        include: {
-          items: {
-            orderBy: { createdAt: 'asc' },
-          },
-          records: true,
-          createdBy: {
-            select: {
-              id: true,
-              nickname: true,
-              phone: true,
-            },
-          },
-        },
+        include: purchaseListDetailInclude,
       });
 
       return updated;

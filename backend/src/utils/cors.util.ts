@@ -2,6 +2,8 @@ const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1']);
 const EXPLICIT_ALLOWED_ORIGINS = new Set([
   'http://1.14.3.2:5173',
   'http://localhost:3000',
+  'https://sevenkitchen.cloud',
+  'https://www.sevenkitchen.cloud',
 ]);
 
 export function isAllowedCorsOrigin(origin?: string): boolean {

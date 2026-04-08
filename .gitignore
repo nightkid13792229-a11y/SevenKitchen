@@ -13,6 +13,7 @@ dist/
 .env
 .env.*
 !.env.example
+!admin-web/.env.production
 
 # Logs
 *.log

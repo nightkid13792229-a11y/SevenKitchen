@@ -1,4 +1,7 @@
-import { isAllowedCorsOrigin } from '../../src/utils/cors.util';
+import {
+  isAllowedCorsOrigin,
+  resolveCorsOrigin,
+} from '../../src/utils/cors.util';
 
 describe('CORS util', () => {
   it('allows localhost-based admin origins used in local development', () => {
@@ -18,5 +21,22 @@ describe('CORS util', () => {
 
   it('rejects unrelated origins', () => {
     expect(isAllowedCorsOrigin('https://evil.example.com')).toBe(false);
+  });
+
+  it('echoes allowed browser origins for credentialed CORS responses', () => {
+    expect(resolveCorsOrigin('https://sevenkitchen.cloud')).toBe(
+      'https://sevenkitchen.cloud',
+    );
+    expect(resolveCorsOrigin('http://localhost:5173')).toBe(
+      'http://localhost:5173',
+    );
+  });
+
+  it('returns false for disallowed browser origins', () => {
+    expect(resolveCorsOrigin('https://evil.example.com')).toBe(false);
+  });
+
+  it('keeps non-browser requests allowed without forcing an origin header', () => {
+    expect(resolveCorsOrigin(undefined)).toBe(true);
   });
 });

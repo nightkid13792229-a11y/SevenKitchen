@@ -26,3 +26,11 @@ export function isAllowedCorsOrigin(origin?: string): boolean {
     return false;
   }
 }
+
+export function resolveCorsOrigin(origin?: string): string | boolean {
+  if (!origin) {
+    return true;
+  }
+
+  return isAllowedCorsOrigin(origin) ? origin : false;
+}

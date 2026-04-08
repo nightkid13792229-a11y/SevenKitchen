@@ -158,4 +158,49 @@ describe('ProcurementSkuService', () => {
       }),
     );
   });
+
+  it('listBrands returns distinct trimmed historical brands', async () => {
+    mockPrismaService.procurementSku.findMany.mockResolvedValue([
+      { brand: ' iHerb ' },
+      { brand: 'iHerb' },
+      { brand: null },
+      { brand: '  ' },
+      { brand: 'NOW Foods' },
+    ]);
+
+    await expect(service.listBrands()).resolves.toEqual(['iHerb', 'NOW Foods']);
+
+    expect(mockPrismaService.procurementSku.findMany).toHaveBeenCalledWith({
+      where: {
+        brand: { not: null },
+      },
+      select: {
+        brand: true,
+      },
+    });
+  });
+
+  it('listPurchaseChannels returns distinct trimmed historical channels', async () => {
+    mockPrismaService.procurementSku.findMany.mockResolvedValue([
+      { purchaseChannel: ' 山姆 ' },
+      { purchaseChannel: '盒马' },
+      { purchaseChannel: '山姆' },
+      { purchaseChannel: '' },
+      { purchaseChannel: null },
+    ]);
+
+    await expect(service.listPurchaseChannels()).resolves.toEqual([
+      '山姆',
+      '盒马',
+    ]);
+
+    expect(mockPrismaService.procurementSku.findMany).toHaveBeenCalledWith({
+      where: {
+        purchaseChannel: { not: null },
+      },
+      select: {
+        purchaseChannel: true,
+      },
+    });
+  });
 });

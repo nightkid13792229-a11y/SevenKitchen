@@ -102,6 +102,16 @@ const sortProcurementSkus = <T extends ProcurementSkuRecord>(skus: T[]): T[] =>
 export class ProcurementSkuService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private normalizeDistinctValues(values: Array<string | null | undefined>): string[] {
+    return Array.from(
+      new Set(
+        values
+          .map((value) => value?.trim())
+          .filter((value): value is string => Boolean(value)),
+      ),
+    ).sort((left, right) => left.localeCompare(right));
+  }
+
   async batchFindActive(
     ingredientIds: string[],
   ): Promise<Record<string, ProcurementSkuSummary[]>> {
@@ -263,10 +273,22 @@ export class ProcurementSkuService {
     });
   }
 
-  async listActivePurchaseChannels(): Promise<string[]> {
+  async listBrands(): Promise<string[]> {
     const rows = await this.prisma.procurementSku.findMany({
       where: {
-        isActive: true,
+        brand: { not: null },
+      },
+      select: {
+        brand: true,
+      },
+    });
+
+    return this.normalizeDistinctValues(rows.map((row) => row.brand));
+  }
+
+  async listPurchaseChannels(): Promise<string[]> {
+    const rows = await this.prisma.procurementSku.findMany({
+      where: {
         purchaseChannel: { not: null },
       },
       select: {
@@ -274,12 +296,10 @@ export class ProcurementSkuService {
       },
     });
 
-    return Array.from(
-      new Set(
-        rows
-          .map((row) => row.purchaseChannel?.trim() ?? '')
-          .filter((channel) => channel.length > 0),
-      ),
-    ).sort((left, right) => left.localeCompare(right));
+    return this.normalizeDistinctValues(rows.map((row) => row.purchaseChannel));
+  }
+
+  async listActivePurchaseChannels(): Promise<string[]> {
+    return this.listPurchaseChannels();
   }
 }

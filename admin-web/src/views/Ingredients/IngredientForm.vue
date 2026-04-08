@@ -770,13 +770,25 @@
         <el-input v-model="rpForm.name" placeholder="如：沃尔玛糙米 600g/罐" maxlength="100" />
       </el-form-item>
       <el-form-item label="品牌">
-        <el-input v-model="rpForm.brand" placeholder="产品品牌" maxlength="100" style="width: 200px" />
+        <el-autocomplete
+          v-model="rpForm.brand"
+          :fetch-suggestions="querySearchSkuBrands"
+          placeholder="产品品牌"
+          maxlength="100"
+          style="width: 200px"
+        />
       </el-form-item>
       <el-form-item label="零售规格">
         <el-input v-model="rpForm.productModel" placeholder="如：200g装、60粒/瓶、1kg/袋" maxlength="100" style="width: 240px" />
       </el-form-item>
       <el-form-item label="采购渠道">
-        <el-input v-model="rpForm.purchaseChannel" placeholder="如：淘宝、京东、线下宠物店" maxlength="200" style="width: 300px" />
+        <el-autocomplete
+          v-model="rpForm.purchaseChannel"
+          :fetch-suggestions="querySearchSkuChannels"
+          placeholder="如：淘宝、京东、线下宠物店"
+          maxlength="200"
+          style="width: 300px"
+        />
       </el-form-item>
       <el-form-item label="购买链接">
         <div style="width: 100%;">
@@ -842,13 +854,25 @@
         <el-input v-model="procurementForm.name" placeholder="采购时使用的商品名称" maxlength="100" />
       </el-form-item>
       <el-form-item label="品牌">
-        <el-input v-model="procurementForm.brand" placeholder="商品品牌" maxlength="100" style="width: 220px" />
+        <el-autocomplete
+          v-model="procurementForm.brand"
+          :fetch-suggestions="querySearchSkuBrands"
+          placeholder="商品品牌"
+          maxlength="100"
+          style="width: 220px"
+        />
       </el-form-item>
       <el-form-item label="产品规格">
         <el-input v-model="procurementForm.productModel" placeholder="如：500g/袋、60粒/瓶" maxlength="100" style="width: 220px" />
       </el-form-item>
       <el-form-item label="采购渠道">
-        <el-input v-model="procurementForm.purchaseChannel" placeholder="如：盒马、淘宝、线下批发市场" maxlength="200" style="width: 320px" />
+        <el-autocomplete
+          v-model="procurementForm.purchaseChannel"
+          :fetch-suggestions="querySearchSkuChannels"
+          placeholder="如：盒马、淘宝、线下批发市场"
+          maxlength="200"
+          style="width: 320px"
+        />
       </el-form-item>
       <el-form-item label="参考单价">
         <el-input-number
@@ -1724,6 +1748,8 @@ const procurementSkus = ref<ProcurementSku[]>([])
 const procurementDialogVisible = ref(false)
 const procurementEditingId = ref<string | null>(null)
 const procurementSaving = ref(false)
+const skuBrandSuggestions = ref<string[]>([])
+const skuChannelSuggestions = ref<string[]>([])
 
 interface RpNutrientItem {
   name: string
@@ -1760,6 +1786,63 @@ const procurementForm = reactive({
 const clearIngredientSkuLists = () => {
   recommendedProducts.value = []
   procurementSkus.value = []
+}
+
+const normalizeSuggestionText = (value: string) => value.trim()
+
+const sortSuggestionMatches = (queryString: string, values: string[]) => {
+  const normalizedQuery = normalizeSuggestionText(queryString).toLowerCase()
+  const normalizedValues = Array.from(
+    new Set(
+      values
+        .map(normalizeSuggestionText)
+        .filter(value => value.length > 0)
+    )
+  )
+
+  if (!normalizedQuery) {
+    return normalizedValues
+      .slice()
+      .sort((left, right) => left.localeCompare(right))
+      .slice(0, 10)
+  }
+
+  const prefixMatches = normalizedValues.filter(value => value.toLowerCase().startsWith(normalizedQuery))
+  const includeMatches = normalizedValues.filter(
+    value => !value.toLowerCase().startsWith(normalizedQuery) && value.toLowerCase().includes(normalizedQuery)
+  )
+
+  return [...prefixMatches, ...includeMatches]
+    .sort((left, right) => {
+      const leftStartsWith = left.toLowerCase().startsWith(normalizedQuery)
+      const rightStartsWith = right.toLowerCase().startsWith(normalizedQuery)
+      if (leftStartsWith !== rightStartsWith) {
+        return leftStartsWith ? -1 : 1
+      }
+      return left.localeCompare(right)
+    })
+    .slice(0, 10)
+}
+
+const querySearchSkuBrands = (queryString: string, cb: (results: Array<{ value: string }>) => void) => {
+  cb(sortSuggestionMatches(queryString, skuBrandSuggestions.value).map(value => ({ value })))
+}
+
+const querySearchSkuChannels = (queryString: string, cb: (results: Array<{ value: string }>) => void) => {
+  cb(sortSuggestionMatches(queryString, skuChannelSuggestions.value).map(value => ({ value })))
+}
+
+const loadSkuSuggestions = async () => {
+  try {
+    const [brands, channels] = await Promise.all([
+      ingredientApi.listBrandSuggestions(),
+      ingredientApi.listPurchaseChannelSuggestions()
+    ])
+    skuBrandSuggestions.value = brands
+    skuChannelSuggestions.value = channels
+  } catch (e) {
+    console.error('Failed to load sku suggestions:', e)
+  }
 }
 
 const loadRecommendedProducts = async () => {
@@ -1903,7 +1986,7 @@ const saveRp = async () => {
       ElMessage.success('家庭 DIY 推荐商品已创建')
     }
     rpDialogVisible.value = false
-    await loadRecommendedProducts()
+    await Promise.all([loadRecommendedProducts(), loadSkuSuggestions()])
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || e?.message || '操作失败')
   } finally {
@@ -1940,7 +2023,7 @@ const saveProcurementSku = async () => {
       ElMessage.success('生产采购 SKU 已创建')
     }
     procurementDialogVisible.value = false
-    await loadProcurementSkus()
+    await Promise.all([loadProcurementSkus(), loadSkuSuggestions()])
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || e?.message || '操作失败')
   } finally {
@@ -1996,6 +2079,7 @@ const deleteProcurementSku = async (id: string) => {
 onMounted(() => {
   loadTags()
   loadIngredients()  // ✅ 确保组件加载时获取原料列表
+  loadSkuSuggestions()
   loadIngredientSkuLists()  // 加载 DIY 推荐商品和生产采购 SKU（编辑模式）
 })
 

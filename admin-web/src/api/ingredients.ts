@@ -80,6 +80,18 @@ export const ingredientApi = {
   deleteRecommendedProduct: (ingredientId: string, id: string): Promise<void> =>
     api.delete(`/admin/ingredients/${ingredientId}/recommended-products/${id}`),
 
+  /**
+   * 获取全局历史品牌候选
+   */
+  listBrandSuggestions: (): Promise<string[]> =>
+    api.get('/admin/ingredients/brand-suggestions'),
+
+  /**
+   * 获取全局历史采购渠道候选
+   */
+  listPurchaseChannelSuggestions: (): Promise<string[]> =>
+    api.get('/admin/ingredients/purchase-channel-suggestions'),
+
   // ==================== 生产采购 SKU ====================
 
   /**

@@ -157,6 +157,7 @@ import { ReviewsController } from './interfaces/controllers/reviews.controller';
 import { FeedbackController } from './interfaces/controllers/feedback.controller';
 import { DogProfileAnalyticsService } from './application/analytics/dog-profile-analytics.service';
 import { ProcurementSkuService } from './application/ingredient/procurement-sku.service';
+import { IngredientSuggestionsController } from './interfaces/controllers/ingredient-suggestions.controller';
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -246,6 +247,7 @@ validatePrismaConfig();
     ReviewsController,
     FeedbackController,
     ProcurementSkuController,
+    IngredientSuggestionsController,
   ],
   providers: [
     DogService,

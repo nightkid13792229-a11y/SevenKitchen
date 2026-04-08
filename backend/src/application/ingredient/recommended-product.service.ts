@@ -49,6 +49,16 @@ export interface UpdateRecommendedProductDto {
 export class RecommendedProductService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private normalizeDistinctValues(values: Array<string | null | undefined>): string[] {
+    return Array.from(
+      new Set(
+        values
+          .map((value) => value?.trim())
+          .filter((value): value is string => Boolean(value)),
+      ),
+    ).sort((left, right) => left.localeCompare(right));
+  }
+
   /**
    * Batch find active recommended products by ingredient IDs (user-facing)
    */
@@ -86,10 +96,24 @@ export class RecommendedProductService {
     return result;
   }
 
-  async listActivePurchaseChannels(): Promise<string[]> {
+  async listBrands(): Promise<string[]> {
     const products = await this.prisma.recommendedProduct.findMany({
       where: {
-        isActive: true,
+        brand: {
+          not: null,
+        },
+      },
+      select: {
+        brand: true,
+      },
+    });
+
+    return this.normalizeDistinctValues(products.map((product) => product.brand));
+  }
+
+  async listPurchaseChannels(): Promise<string[]> {
+    const products = await this.prisma.recommendedProduct.findMany({
+      where: {
         purchaseChannel: {
           not: null,
         },
@@ -99,13 +123,13 @@ export class RecommendedProductService {
       },
     });
 
-    return Array.from(
-      new Set(
-        products
-          .map((product) => product.purchaseChannel?.trim())
-          .filter((channel): channel is string => Boolean(channel)),
-      ),
-    ).sort();
+    return this.normalizeDistinctValues(
+      products.map((product) => product.purchaseChannel),
+    );
+  }
+
+  async listActivePurchaseChannels(): Promise<string[]> {
+    return this.listPurchaseChannels();
   }
 
   /**

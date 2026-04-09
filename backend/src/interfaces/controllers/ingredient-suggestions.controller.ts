@@ -17,7 +17,7 @@ const normalizeDistinctValues = (
   ).sort((left, right) => left.localeCompare(right));
 
 @ApiTags('Admin Ingredient Suggestions')
-@Controller('api/v1/admin/ingredients')
+@Controller('api/v1/admin/ingredient-suggestions')
 export class IngredientSuggestionsController {
   constructor(
     private readonly ingredientService: IngredientService,
@@ -25,7 +25,7 @@ export class IngredientSuggestionsController {
     private readonly procurementSkuService: ProcurementSkuService,
   ) {}
 
-  @Get('brand-suggestions')
+  @Get('brands')
   @ApiOperation({ summary: 'Get global historical ingredient/SKU brand suggestions' })
   async getBrandSuggestions(): Promise<ApiResponseDto<string[]>> {
     const [ingredients, recommendedBrands, procurementBrands] = await Promise.all([
@@ -43,7 +43,7 @@ export class IngredientSuggestionsController {
     );
   }
 
-  @Get('purchase-channel-suggestions')
+  @Get('purchase-channels')
   @ApiOperation({ summary: 'Get global historical ingredient/SKU purchase channel suggestions' })
   async getPurchaseChannelSuggestions(): Promise<ApiResponseDto<string[]>> {
     const [ingredients, recommendedChannels, procurementChannels] = await Promise.all([

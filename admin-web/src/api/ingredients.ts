@@ -84,13 +84,13 @@ export const ingredientApi = {
    * 获取全局历史品牌候选
    */
   listBrandSuggestions: (): Promise<string[]> =>
-    api.get('/admin/ingredients/brand-suggestions'),
+    api.get('/admin/ingredient-suggestions/brands'),
 
   /**
    * 获取全局历史采购渠道候选
    */
   listPurchaseChannelSuggestions: (): Promise<string[]> =>
-    api.get('/admin/ingredients/purchase-channel-suggestions'),
+    api.get('/admin/ingredient-suggestions/purchase-channels'),
 
   // ==================== 生产采购 SKU ====================
 

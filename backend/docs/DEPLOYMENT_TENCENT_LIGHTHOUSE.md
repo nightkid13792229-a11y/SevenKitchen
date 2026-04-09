@@ -332,6 +332,14 @@ sudo nginx -t
 sudo systemctl reload nginx
 ```
 
+如果需要支持小程序附件上传，请确认 Nginx 配置里包含以下一行，否则超过约 1MB 的 multipart 请求会被 Nginx 直接拦截为 `413 Request Entity Too Large`：
+
+```nginx
+client_max_body_size 12m;
+```
+
+推荐放在 `server {}` 内，保证 `/api/v1/dogs/medical-records/upload-attachment`、`/api/v1/dogs/checkup-records/upload-attachment` 等上传接口可以实际达到应用层声明的 10MB 限制。
+
 ### 3. 配置防火墙（如启用）
 
 ```bash
@@ -596,4 +604,3 @@ bash scripts/deploy_lighthouse.sh
 ---
 
 **最后更新**：2024-12-20
-

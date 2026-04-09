@@ -288,6 +288,11 @@ export class DogsController {
         // Delete existing medical records for this dog
         const existingRecords =
           await this.medicalRecordRepository.findByDogId(id);
+        const removedMedicalAttachmentKeys =
+          this.collectRemovedAttachmentKeys(
+            existingRecords,
+            updateDogDto.medicalRecords,
+          );
         for (const record of existingRecords) {
           await this.medicalRecordRepository.delete(record.id);
         }
@@ -325,6 +330,10 @@ export class DogsController {
             `[DogsController] Cleared all medical records for dog ${id}`,
           );
         }
+        await this.cleanupRemovedAttachments(
+          'medical',
+          removedMedicalAttachmentKeys,
+        );
       } catch (error: any) {
         console.error(
           `[DogsController] Failed to update medical records for dog ${id}:`,
@@ -340,6 +349,11 @@ export class DogsController {
         // Delete existing checkup records for this dog
         const existingCheckups =
           await this.checkupRecordRepository.findByDogId(id);
+        const removedCheckupAttachmentKeys =
+          this.collectRemovedAttachmentKeys(
+            existingCheckups,
+            updateDogDto.checkupRecords,
+          );
         for (const checkup of existingCheckups) {
           await this.checkupRecordRepository.delete(checkup.id);
         }
@@ -372,6 +386,10 @@ export class DogsController {
             `[DogsController] Cleared all checkup records for dog ${id}`,
           );
         }
+        await this.cleanupRemovedAttachments(
+          'checkup',
+          removedCheckupAttachmentKeys,
+        );
       } catch (error: any) {
         console.error(
           `[DogsController] Failed to update checkup records for dog ${id}:`,
@@ -387,6 +405,11 @@ export class DogsController {
         // Delete existing allergy records for this dog
         const existingAllergies =
           await this.allergyRecordRepository.findByDogId(id);
+        const removedAllergyAttachmentKeys =
+          this.collectRemovedAttachmentKeys(
+            existingAllergies,
+            updateDogDto.allergyRecords,
+          );
         for (const allergy of existingAllergies) {
           await this.allergyRecordRepository.delete(allergy.id);
         }
@@ -412,6 +435,10 @@ export class DogsController {
             `[DogsController] Cleared all allergy records for dog ${id}`,
           );
         }
+        await this.cleanupRemovedAttachments(
+          'allergy',
+          removedAllergyAttachmentKeys,
+        );
       } catch (error: any) {
         console.error(
           `[DogsController] Failed to update allergy records for dog ${id}:`,
@@ -439,6 +466,72 @@ export class DogsController {
     };
 
     return ApiResponseDto.success(response);
+  }
+
+  private collectRemovedAttachmentKeys(
+    existingRecords: Array<{ attachments?: unknown }> | null | undefined,
+    nextRecords: Array<{ attachments?: unknown }> | null | undefined,
+  ): string[] {
+    const currentKeys = this.extractAttachmentKeys(existingRecords);
+    const nextKeys = new Set(this.extractAttachmentKeys(nextRecords));
+
+    return currentKeys.filter((key) => !nextKeys.has(key));
+  }
+
+  private extractAttachmentKeys(
+    records: Array<{ attachments?: unknown }> | null | undefined,
+  ): string[] {
+    if (!Array.isArray(records)) {
+      return [];
+    }
+
+    const keys = new Set<string>();
+
+    for (const record of records) {
+      if (!Array.isArray(record?.attachments)) {
+        continue;
+      }
+
+      for (const attachment of record.attachments) {
+        if (typeof attachment !== 'string' || !attachment.trim()) {
+          continue;
+        }
+
+        try {
+          const key = new URL(attachment).pathname.replace(/^\/+/, '');
+          if (key) {
+            keys.add(key);
+          }
+        } catch {
+          // Ignore malformed attachment URLs so they do not block record updates.
+        }
+      }
+    }
+
+    return Array.from(keys);
+  }
+
+  private async cleanupRemovedAttachments(
+    recordType: 'medical' | 'checkup' | 'allergy',
+    keys: string[],
+  ): Promise<void> {
+    if (!keys.length) {
+      return;
+    }
+
+    const results = await Promise.allSettled(
+      keys.map((key) => this.cosService.deleteImage(key)),
+    );
+
+    results.forEach((result, index) => {
+      if (result.status === 'rejected') {
+        console.error(
+          `[DogsController] Failed to delete ${recordType} attachment from COS:`,
+          keys[index],
+          result.reason,
+        );
+      }
+    });
   }
 
   @Delete(':id')

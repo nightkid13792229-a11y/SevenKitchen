@@ -64,6 +64,7 @@
 - HTTP 反向代理配置
 - 健康检查端点配置
 - API 端点代理配置
+- 上传请求体大小配置（`client_max_body_size 12m`）
 - Swagger 文档代理配置
 - HTTPS 配置模板（注释状态，供后续使用）
 - 安全头配置示例
@@ -305,4 +306,3 @@ bash scripts/verify_env.sh
 **交付完成时间**: 2024-12-20  
 **交付工程师**: DevOps + Backend Release  
 **验收状态**: 待验收
-

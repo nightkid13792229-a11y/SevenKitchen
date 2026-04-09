@@ -122,13 +122,18 @@ export class CoverImageService {
       // Render title text
       this.renderTitle(ctx, title, width, height);
 
-      // Convert to buffer
-      const outputBuffer = canvas.toBuffer('image/png');
+      // Canvas only exports raw PNG efficiently here, so we re-encode to JPEG
+      // before upload to avoid multi-megabyte rendered covers.
+      const renderedPngBuffer = canvas.toBuffer('image/png');
+      const outputBuffer = await sharp(renderedPngBuffer)
+        .flatten({ background: '#ffffff' })
+        .jpeg({ quality: 82, mozjpeg: true })
+        .toBuffer();
 
       // Upload to COS
       const result = await this.cosService.uploadImage(
         outputBuffer,
-        `cover-with-title-${Date.now()}.png`,
+        `cover-with-title-${Date.now()}.jpg`,
         'recipes/covers',
       );
 

@@ -563,6 +563,7 @@ export class RecipeService {
         detailImages: recipe.detailImages as Prisma.InputJsonValue,
         videoUrl: recipe.videoUrl,
         description: recipe.description,
+        designSource: recipe.designSource,
         nutritionStandard: recipe.nutritionStandard,
         nutritionDetailedData:
           recipe.nutritionDetailedData as Prisma.InputJsonValue,
@@ -574,6 +575,7 @@ export class RecipeService {
           create: recipe.items.map((item) => ({
             ingredientId: item.ingredientId,
             preparationMethod: item.preparationMethod,
+            exampleWeight: item.exampleWeight,
             ratioPercent: item.ratioPercent,
             nutrientTargetKey: item.nutrientTargetKey,
             nutrientTargetValue: item.nutrientTargetValue,

@@ -14,8 +14,22 @@
       <view v-if="showBasicSection" class="wizard-step wizard-step--basic">
         <view class="profile-card">
           <view class="profile-card__identity">
-            <view class="profile-card__avatar-placeholder">
-              <text class="profile-card__avatar-text">{{ createAvatarPlaceholder }}</text>
+            <view class="profile-card__avatar-picker" @tap="handleCreateAvatarTap">
+              <image
+                v-if="hasCreateAvatarPreview"
+                class="profile-card__avatar-image"
+                :src="createAvatarSrc"
+                mode="aspectFill"
+                @error="onCreateAvatarPreviewError"
+              />
+              <view v-else class="profile-card__avatar-placeholder">
+                <text class="profile-card__avatar-text">{{ createAvatarPlaceholder }}</text>
+              </view>
+              <view class="profile-card__avatar-badge">
+                <text class="profile-card__avatar-badge-text">
+                  {{ hasCreateAvatarPreview ? '更换头像' : '上传头像' }}
+                </text>
+              </view>
             </view>
 
             <view class="profile-card__identity-fields">
@@ -593,7 +607,7 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, onUnmounted, watch, reactive } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { request, getToken } from '../../utils/api'
+import { request } from '../../utils/api'
 import HealthRecordsSection from '../../components/dog-profile/HealthRecordsSection.vue'
 import RecommendationSummaryCard from '../../components/dog-profile/RecommendationSummaryCard.vue'
 import StepProgressHeader from '../../components/dog-profile/StepProgressHeader.vue'
@@ -649,11 +663,16 @@ import {
   mergeDogHealthStateSnapshot,
   writeDogHealthStateSnapshotCache,
 } from '../../utils/health-records'
+import {
+  resolveDogAvatarSrc,
+  resolveDogAvatarUploadErrorMessage,
+} from '../../utils/dog-avatar'
 
 interface FormData {
   name: string
   breedId: string
   customBreedName?: string
+  avatarTempFilePath: string
   birthday: string
   gender: string
   isNeutered: boolean
@@ -680,6 +699,7 @@ const formData = ref<FormData>({
   name: '',
   breedId: '',
   customBreedName: '',
+  avatarTempFilePath: '',
   birthday: '',
   gender: 'MALE',
   isNeutered: false,
@@ -723,6 +743,8 @@ const createAvatarPlaceholder = getCreateAvatarPlaceholder()
 const createGenderChoices = getCreateGenderChoices()
 const createNeuterHint = getCreateNeuterHint()
 const createManualBreedLabels = getCreateManualBreedLabels()
+const hasCreateAvatarPreview = computed(() => Boolean(String(formData.value.avatarTempFilePath || '').trim()))
+const createAvatarSrc = computed(() => resolveDogAvatarSrc('', formData.value.avatarTempFilePath))
 const showMixedBreedSizeSummary = computed(() =>
   shouldShowCreateMixedBreedSizeSummary(isMixedBreed.value, Boolean(formData.value.sizeClassOverride)),
 )
@@ -1309,6 +1331,7 @@ function populateFormData(profile: any) {
 
     // 基本信息
     formData.value.name = profile.name || ''
+    formData.value.avatarTempFilePath = profile.avatarTempFilePath || ''
     formData.value.birthday = profile.birthday ?
       new Date(profile.birthday).toISOString().split('T')[0] : ''
     formData.value.gender = profile.gender || 'MALE'
@@ -1389,6 +1412,36 @@ function populateFormData(profile: any) {
 
 function cloneFormSnapshot() {
   return JSON.parse(JSON.stringify(formData.value))
+}
+
+async function handleCreateAvatarTap() {
+  try {
+    const res = await uni.chooseImage({
+      count: 1,
+      sizeType: ['compressed'],
+      sourceType: ['album', 'camera'],
+    })
+
+    const filePath = res.tempFilePaths?.[0]
+    if (!filePath) {
+      return
+    }
+
+    formData.value.avatarTempFilePath = filePath
+  } catch (error: any) {
+    if (String(error?.errMsg || '').includes('cancel')) {
+      return
+    }
+
+    uni.showToast({
+      title: error?.message || '选择头像失败',
+      icon: 'none',
+    })
+  }
+}
+
+function onCreateAvatarPreviewError() {
+  formData.value.avatarTempFilePath = ''
 }
 
 function getCustomerId() {
@@ -2190,6 +2243,7 @@ async function submit() {
     console.log('[DogCreate] Submit response:', res)
     if (res.code === 0 && res.data) {
       const updatedDog = res.data.profile || res.data
+      const selectedAvatarTempPath = String(formData.value.avatarTempFilePath || '').trim()
       console.log('[DogCreate] Updated dog data:', updatedDog)
       console.log('[DogCreate] Updated dog breedId:', updatedDog.breedId)
       const resultDogId = updatedDog.id
@@ -2228,6 +2282,19 @@ async function submit() {
         }
       }
 
+      let avatarUploadFailed = false
+      if (selectedAvatarTempPath) {
+        try {
+          updatedDog.avatarUrl = await dogApi.uploadAvatar(resultDogId, selectedAvatarTempPath)
+        } catch (avatarError: any) {
+          avatarUploadFailed = true
+          console.error(
+            '[DogCreate] Failed to upload dog avatar after create:',
+            resolveDogAvatarUploadErrorMessage(avatarError),
+          )
+        }
+      }
+
       void trackDogProfileEvent('dog_profile_submit_succeeded', {
         mode: 'create',
         dogId: resultDogId,
@@ -2236,19 +2303,20 @@ async function submit() {
 
       uni.setStorageSync('dogId', resultDogId)
       addDogToCache(updatedDog)
+      formData.value.avatarTempFilePath = ''
       clearCreateDraft()
 
       uni.showToast({
-        title: '创建成功',
-        icon: 'success',
-        duration: 1500
+        title: avatarUploadFailed ? '档案已创建，头像上传失败' : '创建成功',
+        icon: avatarUploadFailed ? 'none' : 'success',
+        duration: avatarUploadFailed ? 2200 : 1500,
       })
 
       setTimeout(() => {
         uni.redirectTo({
           url: '/pages/dog-profile-list/index'
         })
-      }, 1500)
+      }, avatarUploadFailed ? 2200 : 1500)
       return true
     } else {
       const errorMsg = res.message || '创建失败'
@@ -2663,11 +2731,18 @@ async function submit() {
   gap: 24rpx;
 }
 
-.profile-card__avatar-placeholder {
+.profile-card__avatar-picker {
   width: 144rpx;
   height: 144rpx;
+  position: relative;
   flex-shrink: 0;
   border-radius: 36rpx;
+  overflow: hidden;
+}
+
+.profile-card__avatar-placeholder {
+  width: 100%;
+  height: 100%;
   background: linear-gradient(145deg, #edf8f1 0%, #dff3e7 100%);
   display: flex;
   flex-direction: column;
@@ -2676,10 +2751,34 @@ async function submit() {
   box-shadow: inset 0 0 0 2rpx rgba(15, 123, 73, 0.08);
 }
 
+.profile-card__avatar-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 36rpx;
+}
+
 .profile-card__avatar-text {
   font-size: 72rpx;
   line-height: 1;
   color: #0f6b43;
+}
+
+.profile-card__avatar-badge {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 10rpx 0;
+  display: flex;
+  justify-content: center;
+  background: rgba(17, 49, 63, 0.4);
+}
+
+.profile-card__avatar-badge-text {
+  font-size: 20rpx;
+  line-height: 1.2;
+  font-weight: 600;
+  color: #ffffff;
 }
 
 .profile-card__identity-fields {

@@ -542,8 +542,8 @@ import { computed, reactive, ref, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import HealthRecordsSection from '../../components/dog-profile/HealthRecordsSection.vue'
 import { dogApi } from '../../api/dogs'
+import { addDogToCache } from '../../utils/dog-cache'
 import { trackDogProfileEvent } from '../../utils/dog-profile-analytics'
-import { getBaseUrl } from '../../utils/config'
 import {
   buildDogEditPayload,
   getRecommendationDirtyFields,
@@ -565,8 +565,6 @@ import {
 import { filterBreedsByKeyword, normalizeBreedSearchText } from '../../utils/dog-breed-search'
 import { getBreedSearchUiState } from '../../utils/dog-breed-ui'
 import {
-  buildDogAvatarUploadUrl,
-  parseDogAvatarUploadResponse,
   resolveDogAvatarUploadErrorMessage,
   resolveDogAvatarSrc,
 } from '../../utils/dog-avatar'
@@ -1191,30 +1189,15 @@ async function uploadDogAvatar(filePath: string) {
 
   try {
     uni.showLoading({ title: '上传中...' })
-    const avatarUrl = await new Promise<string>((resolve, reject) => {
-      uni.uploadFile({
-        url: buildDogAvatarUploadUrl(getBaseUrl(), dogId.value),
-        filePath,
-        name: 'file',
-        header: {
-          Authorization: `Bearer ${uni.getStorageSync('token')}`,
-        },
-        success: (uploadRes: any) => {
-          try {
-            resolve(parseDogAvatarUploadResponse(uploadRes))
-          } catch (err) {
-            reject(err instanceof Error ? err : new Error('解析响应失败'))
-          }
-        },
-        fail: (err) => {
-          reject(err)
-        },
-      })
-    })
+    const avatarUrl = await dogApi.uploadAvatar(dogId.value, filePath)
 
     form.avatarUrl = avatarUrl
     if (profile.value) {
       profile.value.avatarUrl = avatarUrl
+      addDogToCache({
+        ...profile.value,
+        avatarUrl,
+      })
     }
 
     uni.hideLoading()

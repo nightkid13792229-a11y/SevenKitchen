@@ -1,6 +1,14 @@
 export const DEFAULT_DOG_AVATAR_SRC = '/static/logo.png'
 
-export function resolveDogAvatarSrc(avatarUrl?: string | null): string {
+export function resolveDogAvatarSrc(
+  avatarUrl?: string | null,
+  localPreviewPath?: string | null,
+): string {
+  const preview = typeof localPreviewPath === 'string' ? localPreviewPath.trim() : ''
+  if (preview) {
+    return preview
+  }
+
   const normalized = typeof avatarUrl === 'string' ? avatarUrl.trim() : ''
   return normalized || DEFAULT_DOG_AVATAR_SRC
 }

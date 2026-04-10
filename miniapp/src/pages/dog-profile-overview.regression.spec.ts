@@ -12,4 +12,14 @@ describe('dog-profile-overview runtime regressions', () => {
     expect(source).toContain('applyServerState(')
     expect(source).not.toContain('applyProfile(')
   })
+
+  it('routes avatar replacement through the shared dogApi helper and refreshes local cache', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-overview/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('await dogApi.uploadAvatar(')
+    expect(source).toContain('addDogToCache({')
+  })
 })

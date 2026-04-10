@@ -1328,6 +1328,21 @@ export class DogsController {
         file.originalname,
         'dogs/avatars',
       );
+      const previousAvatarUrl = dog.avatarUrl;
+
+      dog.avatarUrl = result.url;
+      await this.dogRepository.save(dog);
+
+      if (previousAvatarUrl && previousAvatarUrl !== result.url) {
+        try {
+          await this.cosService.deleteImageByUrl(previousAvatarUrl);
+        } catch (deleteError) {
+          console.error(
+            '[DogsController] Failed to delete old avatar:',
+            deleteError,
+          );
+        }
+      }
 
       return ApiResponseDto.success(result);
     } catch (error) {

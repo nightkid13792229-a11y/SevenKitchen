@@ -28,6 +28,15 @@ describe('dog-avatar utils', () => {
     )
   })
 
+  it('prefers a freshly selected local preview over the saved remote avatar', () => {
+    expect(
+      (resolveDogAvatarSrc as any)(
+        'https://cdn.example.com/dogs/seven.png',
+        '/tmp/wechat-avatar-preview.png',
+      ),
+    ).toBe('/tmp/wechat-avatar-preview.png')
+  })
+
   it('extracts dog avatar URLs from successful upload responses', () => {
     expect(
       parseDogAvatarUploadResponse({

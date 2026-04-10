@@ -1,8 +1,49 @@
 import { DogsController } from '../../src/interfaces/controllers/dogs.controller';
+import { Dog } from '../../src/domain/dog/dog.entity';
+import {
+  ActivityLevel,
+  DogGender,
+  LifeStageOverride,
+  TreatInputMode,
+  TreatLevel,
+} from '../../src/domain';
 
 describe('DogsController attachment cleanup', () => {
+  function createDog(overrides: Partial<Dog> = {}) {
+    return Object.assign(
+      new Dog(
+        'dog-1',
+        'owner-1',
+        'Seven',
+        'breed-1',
+        null,
+        new Date('2025-04-09T00:00:00.000Z'),
+        DogGender.MALE,
+        true,
+        12,
+        5,
+        ActivityLevel.NORMAL,
+        LifeStageOverride.NONE,
+        null,
+        2,
+        TreatInputMode.ESTIMATE_LEVEL,
+        TreatLevel.LOW,
+        null,
+        null,
+        null,
+        null,
+        0,
+        null,
+      ),
+      overrides,
+    );
+  }
+
   function createController() {
-    const dogRepository = {};
+    const dogRepository = {
+      findById: jest.fn(),
+      save: jest.fn(),
+    };
     const dogBreedRepository = {};
     const recipeRepository = {};
     const medicalRecordRepository = {
@@ -27,7 +68,9 @@ describe('DogsController attachment cleanup', () => {
     const weightRecordService = {};
     const prisma = {};
     const cosService = {
+      uploadImage: jest.fn(),
       deleteImage: jest.fn(),
+      deleteImageByUrl: jest.fn(),
     };
 
     const controller = new DogsController(
@@ -45,6 +88,7 @@ describe('DogsController attachment cleanup', () => {
 
     return {
       controller,
+      dogRepository,
       medicalRecordRepository,
       checkupRecordRepository,
       allergyRecordRepository,
@@ -116,6 +160,73 @@ describe('DogsController attachment cleanup', () => {
     );
     expect(cosService.deleteImage).not.toHaveBeenCalledWith(
       'medical-records/keep.jpg',
+    );
+  });
+
+  it('persists the uploaded dog avatar url back onto the dog profile', async () => {
+    const {
+      controller,
+      dogRepository,
+      cosService,
+    } = createController();
+
+    const dog = createDog();
+    dogRepository.findById.mockResolvedValue(dog);
+    dogRepository.save.mockImplementation(async (nextDog) => nextDog);
+    cosService.uploadImage.mockResolvedValue({
+      url: 'https://img.sevenkitchen.cloud/dogs/avatars/new-avatar.png',
+      key: 'dogs/avatars/new-avatar.png',
+    });
+
+    const result: any = await controller.uploadDogAvatar(
+      dog.id,
+      {
+        size: 1024,
+        mimetype: 'image/png',
+        originalname: 'avatar.png',
+        buffer: Buffer.from('avatar'),
+      } as any,
+      { customerId: dog.ownerId } as any,
+    );
+
+    expect(dogRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      id: dog.id,
+      avatarUrl: 'https://img.sevenkitchen.cloud/dogs/avatars/new-avatar.png',
+    }));
+    expect(result.data.url).toBe('https://img.sevenkitchen.cloud/dogs/avatars/new-avatar.png');
+  });
+
+  it('deletes the previous dog avatar from COS after the new avatar is saved', async () => {
+    const {
+      controller,
+      dogRepository,
+      cosService,
+    } = createController();
+
+    const dog = createDog({
+      avatarUrl: 'https://img.sevenkitchen.cloud/dogs/avatars/old-avatar.png',
+    });
+    dogRepository.findById.mockResolvedValue(dog);
+    dogRepository.save.mockImplementation(async (nextDog) => nextDog);
+    cosService.uploadImage.mockResolvedValue({
+      url: 'https://img.sevenkitchen.cloud/dogs/avatars/new-avatar.png',
+      key: 'dogs/avatars/new-avatar.png',
+    });
+    cosService.deleteImageByUrl.mockResolvedValue(undefined);
+
+    await controller.uploadDogAvatar(
+      dog.id,
+      {
+        size: 1024,
+        mimetype: 'image/png',
+        originalname: 'avatar.png',
+        buffer: Buffer.from('avatar'),
+      } as any,
+      { customerId: dog.ownerId } as any,
+    );
+
+    expect(cosService.deleteImageByUrl).toHaveBeenCalledWith(
+      'https://img.sevenkitchen.cloud/dogs/avatars/old-avatar.png',
     );
   });
 });

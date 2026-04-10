@@ -7,18 +7,31 @@
         class="dog-card"
         @tap="viewDog(dog.id)"
       >
-        <view class="dog-main-info">
-          <view class="name-row">
-            <text class="dog-name">{{ dog.name }}</text>
-            <text class="gender-icon" :class="dog.gender === 'MALE' ? 'male' : 'female'">
-              {{ dog.gender === 'MALE' ? '♂' : '♀' }}
-            </text>
+        <view class="dog-card-content">
+          <view class="dog-main-info">
+            <view class="name-row">
+              <text class="dog-name">{{ dog.name }}</text>
+              <text class="gender-icon" :class="dog.gender === 'MALE' ? 'male' : 'female'">
+                {{ dog.gender === 'MALE' ? '♂' : '♀' }}
+              </text>
+            </view>
+            <text class="dog-breed">{{ dog.breedName || '未知品种' }}</text>
           </view>
-          <text class="dog-breed">{{ dog.breedName || '未知品种' }}</text>
+          <view class="dog-stats">
+            <text class="stat-text">{{ dog.currentWeightKg }}kg · {{ calculateAgeText(dog.birthday) }}</text>
+            <text class="arrow">›</text>
+          </view>
         </view>
-        <view class="dog-stats">
-          <text class="stat-text">{{ dog.currentWeightKg }}kg · {{ calculateAgeText(dog.birthday) }}</text>
-          <text class="arrow">›</text>
+        <view class="dog-card-footer">
+          <text class="card-tip">点击卡片可编辑档案</text>
+          <button
+            class="btn-delete"
+            :disabled="deletingDogId === dog.id"
+            :loading="deletingDogId === dog.id"
+            @tap.stop="confirmDeleteDog(dog)"
+          >
+            {{ deletingDogId === dog.id ? '删除中' : '删除' }}
+          </button>
         </view>
       </view>
       
@@ -45,7 +58,7 @@
 import { ref, onMounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { request, waitForToken } from '../../utils/api'
-import { getCachedDogs, setCachedDogs, type DogDto } from '../../utils/dog-cache'
+import { getCachedDogs, removeDogFromCache, setCachedDogs } from '../../utils/dog-cache'
 import { resolveDogProfileEntryRoute } from '../../utils/dog-profile-form'
 
 interface DogProfile {
@@ -60,6 +73,7 @@ interface DogProfile {
 const dogs = ref<DogProfile[]>([])
 const isLoading = ref(false)
 const loadError = ref(false)
+const deletingDogId = ref('')
 
 onMounted(() => {
   loadDogs()
@@ -129,6 +143,58 @@ function createDog() {
   })
 }
 
+function confirmDeleteDog(dog: DogProfile) {
+  if (deletingDogId.value) {
+    return
+  }
+
+  uni.showModal({
+    title: '删除爱犬档案',
+    content: `确定要删除“${dog.name}”的档案吗？删除后不可恢复。`,
+    confirmText: '删除',
+    confirmColor: '#fa5151',
+    success: (res) => {
+      if (res.confirm) {
+        void deleteDogProfile(dog)
+      }
+    }
+  })
+}
+
+async function deleteDogProfile(dog: DogProfile) {
+  if (deletingDogId.value === dog.id) {
+    return
+  }
+
+  deletingDogId.value = dog.id
+  uni.showLoading({ title: '删除中...' })
+
+  try {
+    await request({
+      url: `/dogs/${dog.id}`,
+      method: 'DELETE'
+    })
+
+    dogs.value = dogs.value.filter(item => item.id !== dog.id)
+    removeDogFromCache(dog.id)
+    loadError.value = false
+
+    uni.showToast({
+      title: '删除成功',
+      icon: 'success'
+    })
+  } catch (err: any) {
+    console.error('[DogList] Failed to delete dog:', err)
+    uni.showToast({
+      title: err?.message || '删除失败',
+      icon: 'none'
+    })
+  } finally {
+    deletingDogId.value = ''
+    uni.hideLoading()
+  }
+}
+
 // 计算年龄文本
 function calculateAgeText(birthday: string) {
   const birth = new Date(birthday)
@@ -160,14 +226,20 @@ function calculateAgeText(birthday: string) {
   border-radius: 12rpx;
   box-shadow: 0 2rpx 12rpx rgba(0, 0, 0, 0.06);
   display: flex;
-  justify-content: space-between;
-  align-items: center;
+  flex-direction: column;
   transition: all 0.3s ease;
 }
 
 .dog-card:active {
   transform: scale(0.98);
   box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
+}
+
+.dog-card-content {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .dog-main-info {
@@ -223,6 +295,43 @@ function calculateAgeText(birthday: string) {
   font-size: 32rpx;
   color: #ccc;
   font-weight: bold;
+}
+
+.dog-card-footer {
+  width: 100%;
+  margin-top: 24rpx;
+  padding-top: 20rpx;
+  border-top: 1px solid #f5f5f5;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.card-tip {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.btn-delete {
+  min-width: 140rpx;
+  height: 64rpx;
+  line-height: 64rpx;
+  margin: 0;
+  padding: 0 24rpx;
+  border-radius: 999rpx;
+  border: 1px solid #ffd6d2;
+  background-color: #fff1f0;
+  color: #fa5151;
+  font-size: 26rpx;
+}
+
+.btn-delete::after {
+  border: none;
+}
+
+.btn-delete[disabled] {
+  opacity: 0.7;
 }
 
 /* 空状态样式 */
@@ -299,4 +408,3 @@ function calculateAgeText(birthday: string) {
   border: none;
 }
 </style>
-

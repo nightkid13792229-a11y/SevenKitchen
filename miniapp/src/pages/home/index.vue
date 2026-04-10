@@ -318,6 +318,7 @@ import { ref, onMounted, computed } from 'vue'
 import { onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
+import { resolveDogProfileEntryRoute } from '../../utils/dog-profile-form'
 import { CURRENT_SHARE_CONFIG } from '@/config/share.config'
 
 interface RecipeItem {
@@ -975,12 +976,12 @@ const goToDogList = () => {
 
 // 跳转到创建狗狗
 const goToDogCreate = () => {
-  uni.navigateTo({ url: '/pages/dog-create/index' })
+  uni.navigateTo({ url: resolveDogProfileEntryRoute() })
 }
 
 // 跳转到狗狗详情
 const goToDogDetail = (dogId: string) => {
-  uni.navigateTo({ url: `/pages/dog-create/index?dogId=${dogId}` })
+  uni.navigateTo({ url: resolveDogProfileEntryRoute(dogId) })
 }
 
 // 跳转到订单列表

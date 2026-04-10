@@ -17,7 +17,10 @@
         <text class="section-card__title">推荐计算字段</text>
 
         <view class="field-group">
-          <text class="field-label">当前体重（kg）</text>
+          <view class="field-label-row">
+            <text class="field-label">当前体重（kg）</text>
+            <text class="field-link" @tap="goToWeightManagement">体重管理</text>
+          </view>
           <input
             class="field-input"
             type="digit"
@@ -156,7 +159,7 @@
 
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
-import { onLoad, onUnload } from '@dcloudio/uni-app'
+import { onLoad, onShow, onUnload } from '@dcloudio/uni-app'
 import RecommendationSummaryCard from '../../components/dog-profile/RecommendationSummaryCard.vue'
 import StickyActionBar from '../../components/dog-profile/StickyActionBar.vue'
 import { dogApi } from '../../api/dogs'
@@ -166,6 +169,7 @@ import {
   shouldAutoPreviewRecommendation,
 } from '../../utils/dog-profile-form'
 import { trackDogProfileEvent } from '../../utils/dog-profile-analytics'
+import { getWeightSyncSignalKey } from '../../utils/weight-management'
 
 const MIXED_BREED_VIRTUAL_ID = '00000000-0000-0000-0000-000000000000'
 const mealsOptions = ['1', '2', '3', '4', '5']
@@ -197,6 +201,7 @@ const isHydrating = ref(false)
 let previousRecommendationSnapshot: Record<string, any> = {}
 let autoPreviewTimer: ReturnType<typeof setTimeout> | null = null
 let previewRequestId = 0
+let lastSeenWeightSyncSignal: string | number | null = null
 
 const form = reactive<Record<string, any>>({
   id: '',
@@ -333,12 +338,25 @@ onLoad((options: any) => {
   }
 
   dogId.value = value
+  lastSeenWeightSyncSignal = uni.getStorageSync(getWeightSyncSignalKey(dogId.value)) || null
   void trackDogProfileEvent('dog_profile_step_viewed', {
     mode: 'edit',
     dogId: dogId.value,
     moduleName: 'feeding_info',
   })
   void loadDogProfile()
+})
+
+onShow(() => {
+  if (!dogId.value) {
+    return
+  }
+
+  const latestSignal = uni.getStorageSync(getWeightSyncSignalKey(dogId.value)) || null
+  if (latestSignal && latestSignal !== lastSeenWeightSyncSignal) {
+    lastSeenWeightSyncSignal = latestSignal
+    void loadDogProfile()
+  }
 })
 
 onUnload(() => {
@@ -618,6 +636,16 @@ function goBack() {
   })
 }
 
+function goToWeightManagement() {
+  if (!dogId.value) {
+    return
+  }
+
+  uni.navigateTo({
+    url: `/pages/weight-management/index?dogId=${encodeURIComponent(dogId.value)}`,
+  })
+}
+
 function formatKcal(value: number | undefined) {
   if (value === undefined || value === null || Number.isNaN(Number(value))) {
     return '--'
@@ -723,11 +751,28 @@ function formatGrams(value: number | undefined) {
   margin-top: 26rpx;
 }
 
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
 .field-label {
   display: block;
   font-size: 24rpx;
   font-weight: 600;
   color: #415b65;
+}
+
+.field-link {
+  flex-shrink: 0;
+  padding: 8rpx 16rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #0f6b43;
+  background: rgba(7, 193, 96, 0.1);
 }
 
 .field-input,

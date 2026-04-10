@@ -364,6 +364,7 @@ export function getCreateStepAvailability(form: Record<string, any>): DogProfile
 export function buildDogCreatePayload(form: Record<string, any>) {
   const treatInputMode = form.treatInputMode || 'ESTIMATE_LEVEL'
   const manualTreatKcal = parseNonNegativeNumber(form.manualTreatKcal)
+  const healthRecords = normalizeHealthRecords(form)
 
   return compactPayload({
     name: normalizeRequiredText(form.name),
@@ -384,9 +385,7 @@ export function buildDogCreatePayload(form: Record<string, any>) {
       treatInputMode === 'EXACT_KCAL'
         ? (manualTreatKcal ?? undefined)
         : undefined,
-    medicalRecords: normalizeArray(form.medicalRecords),
-    checkupRecords: normalizeArray(form.checkupRecords),
-    allergyRecords: normalizeArray(form.allergyRecords),
+    ...healthRecords,
     allergyFoods: normalizeOptionalText(form.allergyFoods),
     pickyFoods: normalizeOptionalText(form.pickyFoods),
   })

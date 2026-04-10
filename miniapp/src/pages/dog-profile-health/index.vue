@@ -3,7 +3,7 @@
     <view class="hero-card">
       <text class="hero-card__eyebrow">健康记录</text>
       <text class="hero-card__title">{{ form.name || '健康档案' }}</text>
-      <text class="hero-card__subtitle">集中维护病史、体检和过敏记录，并补充饮食禁忌备注。</text>
+      <text class="hero-card__subtitle">集中维护病史、体检和过敏记录，并补充挑食提醒。</text>
     </view>
 
     <view v-if="loadError" class="state-card">
@@ -15,6 +15,9 @@
     <view v-else class="content">
       <HealthRecordsSection
         v-model="form.medicalRecords"
+        :dog-id="dogId"
+        :preferred-expanded-record-identity="healthRecordFocusIdentity.medical"
+        record-type="medical"
         title="病史记录"
         description="记录症状、发病日期和诊断结果。"
         empty-title="还没有病史记录"
@@ -25,10 +28,14 @@
         secondary-field-key="diagnosis"
         secondary-label="诊断结果"
         notes-label="补充说明"
+        @record-saved="rememberHealthRecordFocus('medical', $event)"
       />
 
       <HealthRecordsSection
         v-model="form.checkupRecords"
+        :dog-id="dogId"
+        :preferred-expanded-record-identity="healthRecordFocusIdentity.checkup"
+        record-type="checkup"
         title="体检记录"
         description="更新最近的体检时间和发现。"
         empty-title="还没有体检记录"
@@ -37,32 +44,29 @@
         date-field-key="checkupDate"
         date-label="体检日期"
         notes-label="体检说明"
+        @record-saved="rememberHealthRecordFocus('checkup', $event)"
       />
 
       <HealthRecordsSection
         v-model="form.allergyRecords"
+        :dog-id="dogId"
+        :preferred-expanded-record-identity="healthRecordFocusIdentity.allergy"
+        record-type="allergy"
         title="过敏记录"
         description="记录明确的过敏原和相关备注。"
         empty-title="还没有过敏记录"
         primary-field-key="allergen"
         primary-label="过敏原"
         notes-label="备注"
+        @record-saved="rememberHealthRecordFocus('allergy', $event)"
       />
 
       <view class="section-card">
         <text class="section-card__title">饮食提醒</text>
 
         <view class="field-group">
-          <text class="field-label">过敏食物</text>
-          <textarea
-            class="field-textarea"
-            placeholder="例如：鸡肉、牛肉、乳制品"
-            v-model="form.allergyFoods"
-          />
-        </view>
-
-        <view class="field-group">
           <text class="field-label">挑食 / 不爱吃的食物</text>
+          <text v-if="dietReminderStatusText" class="field-help">{{ dietReminderStatusText }}</text>
           <textarea
             class="field-textarea"
             placeholder="记录口味偏好，方便后续推荐"
@@ -73,36 +77,43 @@
     </view>
 
     <StickyActionBar
-      primary-text="保存健康信息"
+      primary-text="保存饮食提醒"
       secondary-text="返回概览"
       :primary-disabled="isLoading || isSaving"
       :secondary-disabled="isLoading || isSaving"
-      @primary="saveProfile"
+      @primary="saveDietReminders"
       @secondary="goBack"
     />
   </view>
 </template>
 
 <script setup lang="ts">
-import { reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import HealthRecordsSection from '../../components/dog-profile/HealthRecordsSection.vue'
 import StickyActionBar from '../../components/dog-profile/StickyActionBar.vue'
 import { dogApi } from '../../api/dogs'
-import { buildDogEditPayload, getDogHealthValidationError } from '../../utils/dog-profile-form'
 import { trackDogProfileEvent } from '../../utils/dog-profile-analytics'
+import {
+  buildDogHealthStateSnapshot,
+  mergeDogHealthStateSnapshot,
+  readDogHealthStateSnapshotCache,
+  writeDogHealthStateSnapshotCache,
+} from '../../utils/health-records'
 
 const dogId = ref('')
 const isLoading = ref(false)
 const isSaving = ref(false)
 const loadError = ref('')
 const loadedFields = reactive({
-  medicalRecords: true,
-  checkupRecords: true,
-  allergyRecords: true,
-  allergyFoods: true,
   pickyFoods: true,
 })
+const healthRecordFocusIdentity = reactive({
+  medical: '',
+  checkup: '',
+  allergy: '',
+})
+const savedPickyFoods = ref('')
 
 const form = reactive<Record<string, any>>({
   id: '',
@@ -125,8 +136,22 @@ const form = reactive<Record<string, any>>({
   medicalRecords: [],
   checkupRecords: [],
   allergyRecords: [],
-  allergyFoods: '',
   pickyFoods: '',
+})
+
+const dietReminderStatusText = computed(() => {
+  const current = String(form.pickyFoods || '').trim()
+  const saved = String(savedPickyFoods.value || '').trim()
+
+  if (current !== saved) {
+    return '已修改，待保存'
+  }
+
+  if (saved) {
+    return '已保存'
+  }
+
+  return ''
 })
 
 onLoad((options: any) => {
@@ -144,6 +169,29 @@ onLoad((options: any) => {
   })
   void loadDogProfile()
 })
+
+watch(
+  () => [
+    JSON.stringify(form.medicalRecords),
+    JSON.stringify(form.checkupRecords),
+    JSON.stringify(form.allergyRecords),
+  ],
+  () => {
+    if (!dogId.value) {
+      return
+    }
+
+    writeDogHealthStateSnapshotCache(
+      dogId.value,
+      buildDogHealthStateSnapshot({
+        medicalRecords: form.medicalRecords,
+        checkupRecords: form.checkupRecords,
+        allergyRecords: form.allergyRecords,
+        pickyFoods: form.pickyFoods,
+      }),
+    )
+  },
+)
 
 async function loadDogProfile() {
   if (!dogId.value) {
@@ -170,11 +218,12 @@ async function loadDogProfile() {
 }
 
 function populateForm(profile: Record<string, any>) {
-  loadedFields.medicalRecords = Object.prototype.hasOwnProperty.call(profile, 'medicalRecords')
-  loadedFields.checkupRecords = Object.prototype.hasOwnProperty.call(profile, 'checkupRecords')
-  loadedFields.allergyRecords = Object.prototype.hasOwnProperty.call(profile, 'allergyRecords')
-  loadedFields.allergyFoods = Object.prototype.hasOwnProperty.call(profile, 'allergyFoods')
   loadedFields.pickyFoods = Object.prototype.hasOwnProperty.call(profile, 'pickyFoods')
+  const cachedHealthState = readDogHealthStateSnapshotCache(dogId.value || profile.id || '')
+  const mergedHealthState = mergeDogHealthStateSnapshot(
+    cachedHealthState || buildDogHealthStateSnapshot(form),
+    profile,
+  )
   form.id = profile.id || ''
   form.name = profile.name || ''
   form.breedId = profile.breedId || ''
@@ -192,21 +241,24 @@ function populateForm(profile: Record<string, any>) {
   form.treatInputMode = profile.treatInputMode || 'ESTIMATE_LEVEL'
   form.treatLevel = profile.treatLevel || 'LOW'
   form.manualTreatKcal = profile.manualTreatKcal?.toString() || ''
-  form.medicalRecords = Array.isArray(profile.medicalRecords) ? profile.medicalRecords : []
-  form.checkupRecords = Array.isArray(profile.checkupRecords) ? profile.checkupRecords : []
-  form.allergyRecords = Array.isArray(profile.allergyRecords) ? profile.allergyRecords : []
-  form.allergyFoods = profile.allergyFoods || ''
-  form.pickyFoods = profile.pickyFoods || ''
+  form.medicalRecords = mergedHealthState.medicalRecords
+  form.checkupRecords = mergedHealthState.checkupRecords
+  form.allergyRecords = mergedHealthState.allergyRecords
+  form.pickyFoods = mergedHealthState.pickyFoods
+  savedPickyFoods.value = mergedHealthState.pickyFoods
+
+  writeDogHealthStateSnapshotCache(
+    dogId.value || profile.id || '',
+    mergedHealthState,
+  )
 }
 
-async function saveProfile() {
-  if (!dogId.value) {
-    return
-  }
+function rememberHealthRecordFocus(type: 'medical' | 'checkup' | 'allergy', identity: string) {
+  healthRecordFocusIdentity[type] = identity
+}
 
-  const validationError = getDogHealthValidationError(form)
-  if (validationError) {
-    uni.showToast({ title: validationError, icon: 'none' })
+async function saveDietReminders() {
+  if (!dogId.value) {
     return
   }
 
@@ -220,31 +272,15 @@ async function saveProfile() {
       submitStatus: 'requested',
     })
     uni.showLoading({ title: '保存中...' })
-    const payload = buildDogEditPayload(form, 'health')
-
-    if (!loadedFields.medicalRecords && payload.medicalRecords.length === 0) {
-      delete payload.medicalRecords
-    }
-
-    if (!loadedFields.checkupRecords && payload.checkupRecords.length === 0) {
-      delete payload.checkupRecords
-    }
-
-    if (!loadedFields.allergyRecords && payload.allergyRecords.length === 0) {
-      delete payload.allergyRecords
-    }
-
-    if (!loadedFields.allergyFoods && !form.allergyFoods.trim()) {
-      delete payload.allergyFoods
-    }
-
-    if (!loadedFields.pickyFoods && !form.pickyFoods.trim()) {
-      delete payload.pickyFoods
-    }
-
-    const res: any = await dogApi.update(dogId.value, payload)
+    const res: any = await dogApi.updateDietReminders(dogId.value, {
+      pickyFoods: form.pickyFoods,
+    })
     if (res.code !== 0) {
       throw new Error(res.message || '保存失败')
+    }
+
+    if (res.data?.profile) {
+      populateForm(res.data.profile)
     }
 
     void trackDogProfileEvent('dog_profile_submit_succeeded', {
@@ -253,6 +289,7 @@ async function saveProfile() {
       moduleName: 'health',
       submitStatus: 'success',
     })
+    uni.hideLoading()
     uni.showToast({ title: '已保存', icon: 'success' })
     setTimeout(() => {
       goBack()
@@ -264,10 +301,10 @@ async function saveProfile() {
       moduleName: 'health',
       submitStatus: 'failed',
     })
+    uni.hideLoading()
     uni.showToast({ title: error?.message || '保存失败', icon: 'none' })
   } finally {
     isSaving.value = false
-    uni.hideLoading()
   }
 }
 
@@ -382,6 +419,14 @@ function goBack() {
   font-size: 24rpx;
   font-weight: 600;
   color: #415b65;
+}
+
+.field-help {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 22rpx;
+  line-height: 1.6;
+  color: #6c7d86;
 }
 
 .field-textarea {

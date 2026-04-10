@@ -1,9 +1,9 @@
 <template>
-  <view class="summary-card">
+  <view :class="['summary-card', { 'summary-card--compact': compact }]">
     <view class="summary-card__header">
       <view class="summary-card__copy">
         <text class="summary-card__title">{{ title }}</text>
-        <text class="summary-card__subtitle">{{ subtitle }}</text>
+        <text v-if="subtitle" class="summary-card__subtitle">{{ subtitle }}</text>
       </view>
       <view v-if="badgeTexts.length > 0" class="summary-card__badges">
         <text
@@ -16,11 +16,24 @@
       </view>
     </view>
 
+    <view v-if="summaryMeta.length > 0" class="summary-card__meta">
+      <text
+        v-for="item in summaryMeta"
+        :key="item"
+        class="summary-card__meta-item"
+      >
+        {{ item }}
+      </text>
+    </view>
+
     <view v-if="metricItems.length > 0" class="summary-card__grid">
       <view
         v-for="metric in metricItems"
         :key="metric.label"
-        class="summary-card__metric"
+        :class="[
+          'summary-card__metric',
+          { 'summary-card__metric--strong': metric.emphasis === 'strong' },
+        ]"
       >
         <text class="summary-card__metric-label">{{ metric.label }}</text>
         <text class="summary-card__metric-value">{{ metric.value }}</text>
@@ -42,12 +55,15 @@ interface MetricItem {
   label: string
   value: string
   hint?: string
+  emphasis?: 'default' | 'strong'
 }
 
 const props = withDefaults(defineProps<{
   title?: string
   subtitle?: string
   badges?: string[]
+  summaryMeta?: string[]
+  compact?: boolean
   metrics?: MetricItem[]
   emptyTitle?: string
   emptyDescription?: string
@@ -55,13 +71,19 @@ const props = withDefaults(defineProps<{
   title: '喂食建议',
   subtitle: '根据当前档案生成的推荐结果',
   badges: () => [],
+  summaryMeta: () => [],
+  compact: false,
   metrics: () => [],
   emptyTitle: '还没有可用的喂食建议',
   emptyDescription: '先完善喂食信息，再返回这里查看推荐结果。',
 })
 
 const badgeTexts = computed(() => props.badges || [])
-const metricItems = computed(() => props.metrics || [])
+const summaryMeta = computed(() => props.summaryMeta || [])
+const metricItems = computed(() => {
+  const metrics = props.metrics || []
+  return metrics.length === 3 ? metrics : []
+})
 </script>
 
 <style scoped>
@@ -71,6 +93,10 @@ const metricItems = computed(() => props.metrics || [])
   border-radius: 32rpx;
   padding: 30rpx;
   box-shadow: 0 12rpx 34rpx rgba(24, 40, 60, 0.08);
+}
+
+.summary-card--compact {
+  padding: 28rpx;
 }
 
 .summary-card__header {
@@ -116,6 +142,23 @@ const metricItems = computed(() => props.metrics || [])
   background: rgba(7, 193, 96, 0.12);
 }
 
+.summary-card__meta {
+  margin-top: 22rpx;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12rpx;
+}
+
+.summary-card__meta-item {
+  padding: 10rpx 14rpx;
+  border-radius: 999rpx;
+  font-size: 21rpx;
+  line-height: 1;
+  font-weight: 600;
+  color: #4f6570;
+  background: rgba(17, 24, 39, 0.04);
+}
+
 .summary-card__grid {
   margin-top: 26rpx;
   display: flex;
@@ -131,6 +174,12 @@ const metricItems = computed(() => props.metrics || [])
   border: 1rpx solid rgba(26, 26, 26, 0.06);
 }
 
+.summary-card__metric--strong {
+  width: 100%;
+  background: linear-gradient(135deg, #eefaf3 0%, #ffffff 88%);
+  border-color: rgba(7, 193, 96, 0.28);
+}
+
 .summary-card__metric-label {
   display: block;
   font-size: 22rpx;
@@ -144,6 +193,11 @@ const metricItems = computed(() => props.metrics || [])
   line-height: 1.2;
   font-weight: 700;
   color: #19333f;
+}
+
+.summary-card__metric--strong .summary-card__metric-value {
+  font-size: 36rpx;
+  color: #0f6b43;
 }
 
 .summary-card__metric-hint {

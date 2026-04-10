@@ -272,6 +272,83 @@ describe('dog-profile-form', () => {
     expect(payload.manualTreatKcal).toBe(123.4)
   })
 
+  it('normalizes and filters create-flow health records before submit', () => {
+    const payload = buildDogCreatePayload({
+      name: '七七',
+      breedId: '550e8400-e29b-41d4-a716-446655440000',
+      birthday: '2021-01-01',
+      gender: 'MALE',
+      isNeutered: false,
+      currentWeightKg: '11',
+      bcsScore: 5,
+      activityLevel: 'NORMAL',
+      lifeStageOverride: 'NONE',
+      sizeClassOverride: null,
+      mealsPerDay: '2',
+      treatInputMode: 'ESTIMATE_LEVEL',
+      treatLevel: 'LOW',
+      manualTreatKcal: '',
+      medicalRecords: [
+        {
+          chiefComplaint: ' 胃炎 ',
+          visitDate: '2026-04-07',
+          diagnosis: ' 轻度胃炎 ',
+          notes: ' 需要复查 ',
+          attachments: [' https://cdn.test/medical/a.png '],
+        },
+        {
+          chiefComplaint: '',
+          visitDate: '',
+          diagnosis: '',
+          notes: '',
+          attachments: [],
+        },
+      ],
+      checkupRecords: [
+        {
+          checkupType: ' 年度体检 ',
+          checkupDate: '2026-04-08',
+          notes: ' 状态稳定 ',
+          attachments: ['https://cdn.test/checkup/a.pdf'],
+        },
+      ],
+      allergyRecords: [
+        {
+          allergen: ' 鸡肉 ',
+          notes: ' 软便 ',
+          attachments: ['https://cdn.test/allergy/a.pdf'],
+        },
+      ],
+      pickyFoods: ' 西兰花 ',
+    })
+
+    expect(payload.medicalRecords).toEqual([
+      {
+        chiefComplaint: '胃炎',
+        visitDate: '2026-04-07',
+        diagnosis: '轻度胃炎',
+        notes: '需要复查',
+        attachments: ['https://cdn.test/medical/a.png'],
+      },
+    ])
+    expect(payload.checkupRecords).toEqual([
+      {
+        checkupType: '年度体检',
+        checkupDate: '2026-04-08',
+        notes: '状态稳定',
+        attachments: ['https://cdn.test/checkup/a.pdf'],
+      },
+    ])
+    expect(payload.allergyRecords).toEqual([
+      {
+        allergen: '鸡肉',
+        notes: '软便',
+        attachments: ['https://cdn.test/allergy/a.pdf'],
+      },
+    ])
+    expect(payload.pickyFoods).toBe('西兰花')
+  })
+
   it('omits manual treat kcal in exact mode when the value is not numeric', () => {
     const payload = buildDogCreatePayload({
       name: '七七',

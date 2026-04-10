@@ -86,6 +86,24 @@ export function setCachedDogs(dogs: DogDto[]): void {
 }
 
 /**
+ * Remove a dog from cache by id
+ */
+export function removeDogFromCache(dogId: string): void {
+  if (!dogId) {
+    return
+  }
+
+  try {
+    const cached = getCachedDogs()
+    const updated = cached.filter(dog => dog.id !== dogId)
+    uni.setStorageSync(STORAGE_KEY, updated)
+    console.info(`[DogCache] Removed dog ${dogId} from cache. Cache size: ${updated.length}`)
+  } catch (err) {
+    console.error('Failed to remove dog from cache:', err)
+  }
+}
+
+/**
  * Clear the dogs cache
  */
 export function clearDogsCache(): void {

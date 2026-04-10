@@ -6,5 +6,7 @@ export const analyticsApi = {
       url: '/analytics/dog-profile/events',
       method: 'POST',
       data,
+      quiet: true,
+      suppressErrorToast: true,
     }),
 }

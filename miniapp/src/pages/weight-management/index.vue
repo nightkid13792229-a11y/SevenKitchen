@@ -70,10 +70,30 @@
               placeholder="如：饭后测量、运动后等"
             />
           </view>
+
+          <view class="sync-option">
+            <view class="sync-option__copy">
+              <text class="sync-option__title">同时更新档案当前体重</text>
+              <text class="sync-option__desc">{{ syncOptionDescription }}</text>
+            </view>
+            <switch
+              class="sync-option__switch"
+              color="#667eea"
+              :checked="syncToProfile"
+              @change="onSyncToggle"
+            />
+          </view>
         </view>
       </view>
 
-      <button class="save-btn" @tap="saveRecord">保存记录</button>
+      <button
+        class="save-btn"
+        :loading="isSavingRecord"
+        :disabled="isSavingRecord"
+        @tap="saveRecord"
+      >
+        {{ isSavingRecord ? '保存中...' : '保存记录' }}
+      </button>
     </view>
 
     <!-- 步骤3：体重趋势图 -->
@@ -124,8 +144,18 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, nextTick, computed } from 'vue'
+import { ref, onMounted, nextTick, computed, watch } from 'vue'
+import { onLoad } from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
+import {
+  formatWeightChangeText,
+  formatWeightRecordDateTick,
+  findPreferredDogIndex,
+  getWeightChartDateTickIndexes,
+  getWeightSyncSignalKey,
+  getWeightSyncValueKey,
+  shouldDefaultSyncCurrentWeightRecord,
+} from '../../utils/weight-management'
 
 interface DogProfile {
   id: string
@@ -164,11 +194,20 @@ const dogs = ref<DogProfile[]>([])
 const selectedDog = ref<DogProfile | null>(null)
 const selectedDogIndex = ref<number>(-1)
 const records = ref<WeightRecord[]>([])
+const preferredDogId = ref('')
+const isSavingRecord = ref(false)
+const syncToProfile = ref(false)
+const syncToProfileTouched = ref(false)
 
 const formData = ref<FormData>({
   recordDate: new Date().toISOString().split('T')[0],
   weightKg: '',
   note: ''
+})
+
+onLoad((options: any) => {
+  const value = Array.isArray(options?.dogId) ? options.dogId[0] : options?.dogId
+  preferredDogId.value = value || ''
 })
 
 // 页面加载
@@ -192,6 +231,20 @@ onMounted(async () => {
   await loadDogs()
 })
 
+watch(
+  [
+    () => formData.value.recordDate,
+    () => formData.value.weightKg,
+    () => records.value[0]?.recordDate || '',
+    () => selectedDog.value?.currentWeightKg ?? null,
+  ],
+  () => {
+    if (!syncToProfileTouched.value) {
+      syncToProfile.value = resolveDefaultSyncToProfile()
+    }
+  },
+)
+
 // 加载狗狗列表
 async function loadDogs() {
   try {
@@ -203,6 +256,11 @@ async function loadDogs() {
     if (res.code === 0 && res.data) {
       dogs.value = Array.isArray(res.data) ? res.data : []
       console.info('[WeightManagement] Loaded dogs:', dogs.value.length)
+
+      const preferredIndex = findPreferredDogIndex(dogs.value, preferredDogId.value)
+      if (preferredIndex >= 0) {
+        await selectDog(preferredIndex)
+      }
     }
   } catch (err) {
     console.error('[WeightManagement] Failed to load dogs:', err)
@@ -246,6 +304,8 @@ async function selectDog(index: number) {
   selectedDog.value = dogs.value[index]
   records.value = []
   formData.value.weightKg = ''
+  syncToProfileTouched.value = false
+  syncToProfile.value = resolveDefaultSyncToProfile()
 
   console.log('[WeightManagement] Selected dog:', selectedDog.value?.name)
 
@@ -266,6 +326,9 @@ async function loadRecords() {
     if (res.code === 0 && res.data) {
       records.value = res.data.records || []
       console.info('[WeightManagement] Loaded records:', records.value.length)
+      if (!syncToProfileTouched.value) {
+        syncToProfile.value = resolveDefaultSyncToProfile()
+      }
 
       // 绘制图表
       if (records.value.length > 0) {
@@ -282,6 +345,33 @@ async function loadRecords() {
 function onDateChange(e: any) {
   formData.value.recordDate = e.detail.value
 }
+
+function onSyncToggle(e: any) {
+  syncToProfileTouched.value = true
+  syncToProfile.value = !!e.detail.value
+}
+
+function resolveDefaultSyncToProfile() {
+  const currentWeight = selectedDog.value?.currentWeightKg ?? null
+  const newWeight = parseFloat(formData.value.weightKg || '')
+  const latestRecordDate = records.value[0]?.recordDate || null
+
+  return shouldDefaultSyncCurrentWeightRecord({
+    currentWeightKg: currentWeight,
+    newWeightKg: newWeight,
+    recordDate: formData.value.recordDate,
+    latestRecordDate,
+  })
+}
+
+const syncOptionDescription = computed(() => {
+  const latestRecordDate = records.value[0]?.recordDate || ''
+  if (latestRecordDate && formData.value.recordDate < latestRecordDate) {
+    return '补录较早日期时，建议先只保存历史记录。'
+  }
+
+  return '开启后会把这次记录同步为档案里的当前体重。'
+})
 
 // 保存记录
 async function saveRecord() {
@@ -303,7 +393,7 @@ async function saveRecord() {
   }
 
   const newWeight = parseFloat(formData.value.weightKg)
-
+  isSavingRecord.value = true
   try {
     // 创建体重记录
     const res = await request({
@@ -318,51 +408,28 @@ async function saveRecord() {
 
     if (res.code === 0) {
       console.info('[WeightManagement] Record created:', res.data)
-
-      // 检查是否需要更新档案体重
-      const currentWeight = selectedDog.value.currentWeightKg || 0
-
-      // 检查记录日期是否是最新的（在历史记录中）
-      const isNewestDate = records.value.length === 0 ||
-        formData.value.recordDate >= records.value[0].recordDate
-
-      if (newWeight !== currentWeight && isNewestDate) {
-        // 只有体重不同且日期是最新的，才弹窗询问是否更新
-        uni.showModal({
-          title: '💡 提示',
-          content: `已成功记录体重数据\n\n是否同时更新"爱犬信息"中的当前体重？\n\n当前体重：${currentWeight} kg\n本次记录：${newWeight} kg`,
-          confirmText: '确定更新',
-          cancelText: '取消',
-          success: async (modalRes) => {
-            if (modalRes.confirm) {
-              await updateDogWeight(newWeight)
-              await markRecordAsSynced(res.data.id)
-            }
-
-            // 重新加载记录
-            await loadRecords()
-            formData.value.weightKg = ''
-            formData.value.note = ''
-            formData.value.recordDate = new Date().toISOString().split('T')[0]
-
-            uni.showToast({
-              title: '保存成功',
-              icon: 'success'
-            })
-          }
-        })
-      } else {
-        // 体重相同或日期不是最新的，直接保存
-        await loadRecords()
-        formData.value.weightKg = ''
-        formData.value.note = ''
-        formData.value.recordDate = new Date().toISOString().split('T')[0]
-
-        uni.showToast({
-          title: '保存成功',
-          icon: 'success'
-        })
+      const syncRequested = syncToProfile.value
+      let syncedToProfile = false
+      if (syncRequested) {
+        syncedToProfile = await updateDogWeight(newWeight)
+        if (syncedToProfile) {
+          await markRecordAsSynced(res.data.id)
+        }
       }
+
+      await loadRecords()
+      formData.value.weightKg = ''
+      formData.value.note = ''
+      formData.value.recordDate = new Date().toISOString().split('T')[0]
+      syncToProfileTouched.value = false
+      syncToProfile.value = resolveDefaultSyncToProfile()
+
+      uni.showToast({
+        title: syncRequested
+          ? (syncedToProfile ? '已保存并同步到档案' : '已保存记录，同步失败')
+          : '已保存记录',
+        icon: 'success'
+      })
     }
   } catch (err) {
     console.error('[WeightManagement] Failed to save record:', err)
@@ -370,12 +437,14 @@ async function saveRecord() {
       title: '保存失败',
       icon: 'none'
     })
+  } finally {
+    isSavingRecord.value = false
   }
 }
 
 // 更新狗狗档案体重
 async function updateDogWeight(weightKg: number) {
-  if (!selectedDog.value) return
+  if (!selectedDog.value) return false
 
   try {
     await request({
@@ -390,8 +459,12 @@ async function updateDogWeight(weightKg: number) {
 
     // 更新本地数据
     selectedDog.value.currentWeightKg = weightKg
+    uni.setStorageSync(getWeightSyncSignalKey(selectedDog.value.id), Date.now())
+    uni.setStorageSync(getWeightSyncValueKey(selectedDog.value.id), weightKg)
+    return true
   } catch (err) {
     console.error('[WeightManagement] Failed to update dog weight:', err)
+    return false
   }
 }
 
@@ -450,15 +523,7 @@ function getChangeText(record: WeightRecord, index: number): string {
   }
 
   const prevRecord = records.value[index + 1]
-  const diff = record.weightKg - prevRecord.weightKg
-
-  if (diff > 0) {
-    return `↑${diff.toFixed(1)}`
-  } else if (diff < 0) {
-    return `↓${Math.abs(diff).toFixed(1)}`
-  } else {
-    return '→'
-  }
+  return formatWeightChangeText(record.weightKg, prevRecord.weightKg)
 }
 
 // 获取变化样式类
@@ -555,7 +620,7 @@ function drawChart() {
   const points = chartData.map((record, index) => {
     const x = padding.left + (index / (chartData.length - 1 || 1)) * chartWidth
     const y = canvasHeight - padding.bottom - ((record.weightKg - minWeight) / weightRange) * chartHeight
-    return { x, y, weight: record.weightKg }
+    return { x, y, weight: record.weightKg, recordDate: record.recordDate }
   })
 
   // 绘制连线
@@ -591,6 +656,26 @@ function drawChart() {
     }
 
     ctx.fillText(text, textX, point.y - 10)
+  })
+
+  ctx.setFillStyle('#8b97a8')
+  ctx.setFontSize(10)
+  const tickIndexes = new Set(getWeightChartDateTickIndexes(points.length))
+  points.forEach((point, index) => {
+    if (!tickIndexes.has(index)) {
+      return
+    }
+
+    const text = formatWeightRecordDateTick(point.recordDate)
+    const textWidth = text.length * 5
+    let textX = point.x - textWidth / 2
+    if (textX < padding.left) {
+      textX = padding.left
+    }
+    if (textX + textWidth > canvasWidth - padding.right) {
+      textX = canvasWidth - padding.right - textWidth
+    }
+    ctx.fillText(text, textX, canvasHeight - 2)
   })
 
   ctx.draw()
@@ -733,6 +818,39 @@ function drawChart() {
 
 .input-item:last-child {
   margin-bottom: 0;
+}
+
+.sync-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  padding-top: 20rpx;
+  border-top: 1px solid #ebeef5;
+}
+
+.sync-option__copy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.sync-option__title {
+  font-size: 28rpx;
+  color: #333;
+  font-weight: 600;
+}
+
+.sync-option__desc {
+  font-size: 24rpx;
+  color: #7a8699;
+  line-height: 1.5;
+}
+
+.sync-option__switch {
+  transform: scale(0.9);
+  transform-origin: right center;
 }
 
 .input-label {

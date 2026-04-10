@@ -84,13 +84,13 @@
       <view class="filter-buttons">
         <!-- 适用生命阶段按钮 -->
         <view
-          :class="['filter-btn', { active: filterState.selectedLifeStages.length > 0 }]"
+          :class="['filter-btn', { active: filterState.selectedLifeStages.filter(Boolean).length > 0 }]"
           @tap="openLifeStageDrawer"
         >
           <text class="filter-btn-text">{{ getLifeStageButtonText() }}</text>
           <text class="dropdown-arrow">▼</text>
           <text
-            v-if="filterState.selectedLifeStages.length > 0"
+            v-if="filterState.selectedLifeStages.filter(Boolean).length > 0"
             class="remove-icon"
             @tap.stop="removeLifeStages"
           >×</text>
@@ -98,13 +98,13 @@
 
         <!-- 健康类型按钮 -->
         <view
-          :class="['filter-btn', { active: filterState.selectedHealthTags.length > 0 }]"
+          :class="['filter-btn', { active: filterState.selectedHealthTags.filter(Boolean).length > 0 }]"
           @tap="openHealthTagsDrawer"
         >
           <text class="filter-btn-text">{{ getHealthTagsButtonText() }}</text>
           <text class="dropdown-arrow">▼</text>
           <text
-            v-if="filterState.selectedHealthTags.length > 0"
+            v-if="filterState.selectedHealthTags.filter(Boolean).length > 0"
             class="remove-icon"
             @tap.stop="removeHealthTags"
           >×</text>
@@ -216,11 +216,11 @@
     </view>
 
     <!-- 适用生命阶段筛选抽屉 -->
-    <view v-if="showLifeStageDrawer" class="drawer-mask" @tap="applyLifeStagesFilter">
+    <view v-if="showLifeStageDrawer" class="drawer-mask" @tap="cancelLifeStageDrawer">
       <view class="drawer-content" @tap.stop>
         <view class="drawer-header">
           <text class="drawer-title">生命阶段</text>
-          <text class="close-btn" @tap="applyLifeStagesFilter">×</text>
+          <text class="close-btn" @tap="cancelLifeStageDrawer">×</text>
         </view>
         <view class="drawer-desc">可多选，筛选适用所选生命阶段的食谱</view>
         <scroll-view class="drawer-body" scroll-y>
@@ -229,22 +229,26 @@
               v-for="stage in filterOptions.lifeStages"
               :key="stage.value"
               class="tag-item"
-              :class="{ active: filterState.selectedLifeStages.includes(stage.value) }"
+              :class="{ active: stage.value ? draftFilterState.selectedLifeStages.includes(stage.value) : draftFilterState.selectedLifeStages.length === 0 }"
               @tap="toggleLifeStage(stage.value)"
             >
               {{ stage.label }}
             </view>
           </view>
         </scroll-view>
+        <view class="drawer-actions">
+          <view class="drawer-action drawer-action-secondary" @tap="resetLifeStageDraft">重置</view>
+          <view class="drawer-action drawer-action-primary" @tap="applyLifeStagesFilter">查看结果</view>
+        </view>
       </view>
     </view>
 
     <!-- 健康类型筛选抽屉 -->
-    <view v-if="showHealthTagsDrawer" class="drawer-mask" @tap="applyHealthTagsFilter">
+    <view v-if="showHealthTagsDrawer" class="drawer-mask" @tap="cancelHealthTagsDrawer">
       <view class="drawer-content" @tap.stop>
         <view class="drawer-header">
           <text class="drawer-title">疾病/功能</text>
-          <text class="close-btn" @tap="applyHealthTagsFilter">×</text>
+          <text class="close-btn" @tap="cancelHealthTagsDrawer">×</text>
         </view>
         <view class="drawer-desc">可多选，筛选具有所选健康标签的食谱</view>
         <scroll-view class="drawer-body" scroll-y>
@@ -253,34 +257,38 @@
               v-for="tag in filterOptions.healthTags"
               :key="tag.value"
               class="tag-item"
-              :class="{ active: filterState.selectedHealthTags.includes(tag.value) }"
+              :class="{ active: tag.value ? draftFilterState.selectedHealthTags.includes(tag.value) : draftFilterState.selectedHealthTags.length === 0 }"
               @tap="toggleHealthTag(tag.value)"
             >
               {{ tag.label }}
             </view>
           </view>
         </scroll-view>
+        <view class="drawer-actions">
+          <view class="drawer-action drawer-action-secondary" @tap="resetHealthTagsDraft">重置</view>
+          <view class="drawer-action drawer-action-primary" @tap="applyHealthTagsFilter">查看结果</view>
+        </view>
       </view>
     </view>
 
     <!-- 不吃这些筛选抽屉 -->
-    <view v-if="showExcludedTagsDrawer" class="drawer-mask" @tap="applyExcludedTagsFilter">
+    <view v-if="showExcludedTagsDrawer" class="drawer-mask" @tap="cancelExcludedTagsDrawer">
       <view class="drawer-content" @tap.stop>
         <view class="drawer-header">
           <text class="drawer-title">挑食/过敏</text>
-          <text class="close-btn" @tap="applyExcludedTagsFilter">×</text>
+          <text class="close-btn" @tap="cancelExcludedTagsDrawer">×</text>
         </view>
         <scroll-view class="drawer-body" scroll-y>
           <view class="drawer-desc">选择要排除的食材，包含该食材的食谱将不会显示</view>
 
           <!-- 已选排除食材标签 -->
-          <view v-if="getExcludedIngredientNames().length > 0" class="excluded-tags">
+          <view v-if="getDraftExcludedIngredientNames().length > 0" class="excluded-tags">
             <text class="excluded-label">已排除：</text>
             <view
-              v-for="name in getExcludedIngredientNames()"
+              v-for="name in getDraftExcludedIngredientNames()"
               :key="name"
               class="excluded-tag"
-              @tap="removeExcludedIngredient(name)"
+              @tap="removeDraftExcludedIngredient(name)"
             >
               {{ name }} x
             </view>
@@ -303,7 +311,7 @@
                   v-for="ing in group.ingredients"
                   :key="ing.name"
                   class="tag-item"
-                  :class="{ excluded: isIngredientExcluded(ing.name) }"
+                  :class="{ excluded: isDraftIngredientExcluded(ing.name) }"
                   @tap="toggleExcludedIngredient(ing.name)"
                 >
                   {{ ing.name }}
@@ -312,6 +320,10 @@
             </view>
           </view>
         </scroll-view>
+        <view class="drawer-actions">
+          <view class="drawer-action drawer-action-secondary" @tap="resetExcludedTagsDraft">重置</view>
+          <view class="drawer-action drawer-action-primary" @tap="applyExcludedTagsFilter">查看结果</view>
+        </view>
       </view>
     </view>
   </view>
@@ -405,6 +417,12 @@ const filterState = ref<FilterState>({
   excludedIngredientTags: [],
   excludedIngredients: []
 })
+const draftFilterState = ref<FilterState>({
+  selectedLifeStages: [],
+  selectedHealthTags: [],
+  excludedIngredientTags: [],
+  excludedIngredients: []
+})
 
 // 食材分类展开状态
 const expandedGroups = ref<Set<string>>(new Set())
@@ -420,8 +438,8 @@ const healthTagUuidLabelMap = ref<Record<string, string>>({})
 // 计算已选筛选数量
 const activeFiltersCount = computed(() => {
   let count = 0
-  count += filterState.value.selectedLifeStages.length
-  count += filterState.value.selectedHealthTags.length
+  count += filterState.value.selectedLifeStages.filter(Boolean).length
+  count += filterState.value.selectedHealthTags.filter(Boolean).length
   count += getExcludedIngredientNames().length
   return count
 })
@@ -618,11 +636,14 @@ function loadRecipes(isRefresh = false) {
     page: currentPage.value,
     pageSize: pageSize
   }
-  if (filterState.value.selectedLifeStages.length > 0) {
-    params.lifeStages = filterState.value.selectedLifeStages.join(',')
+  const selectedLifeStages = filterState.value.selectedLifeStages.filter(Boolean)
+  const selectedHealthTags = filterState.value.selectedHealthTags.filter(Boolean)
+
+  if (selectedLifeStages.length > 0) {
+    params.lifeStages = selectedLifeStages.join(',')
   }
-  if (filterState.value.selectedHealthTags.length > 0) {
-    params.healthTags = filterState.value.selectedHealthTags.join(',')
+  if (selectedHealthTags.length > 0) {
+    params.healthTags = selectedHealthTags.join(',')
   }
   if (filterState.value.excludedIngredients.length > 0) {
     params.excludeIngredients = filterState.value.excludedIngredients.join(',')
@@ -700,12 +721,50 @@ function loadRecipes(isRefresh = false) {
 
 // 打开生命阶段抽屉
 function openLifeStageDrawer() {
+  syncDraftFilterState()
   showLifeStageDrawer.value = true
 }
 
 // 打开健康标签抽屉
 function openHealthTagsDrawer() {
+  syncDraftFilterState()
   showHealthTagsDrawer.value = true
+}
+
+function refreshRecipesWithFilters() {
+  recipes.value = []
+  hasMore.value = true
+  currentPage.value = 1
+  loadRecipes(true)
+}
+
+function syncDraftFilterState() {
+  draftFilterState.value = {
+    selectedLifeStages: [...filterState.value.selectedLifeStages],
+    selectedHealthTags: [...filterState.value.selectedHealthTags],
+    excludedIngredientTags: [...filterState.value.excludedIngredientTags],
+    excludedIngredients: [...filterState.value.excludedIngredients]
+  }
+}
+
+function toggleSelectableDraftValue(selectedValues: string[], value: string) {
+  if (!value) {
+    selectedValues.splice(0, selectedValues.length)
+    return
+  }
+
+  const blankIndex = selectedValues.indexOf('')
+  if (blankIndex > -1) {
+    selectedValues.splice(blankIndex, 1)
+  }
+
+  const index = selectedValues.indexOf(value)
+  if (index > -1) {
+    selectedValues.splice(index, 1)
+    return
+  }
+
+  selectedValues.push(value)
 }
 
 // 关闭所有抽屉
@@ -722,8 +781,8 @@ function closeAllDrawers() {
 
 // 获取生命阶段按钮文字
 function getLifeStageButtonText(): string {
-  if (filterState.value.selectedLifeStages.length > 0) {
-    const count = filterState.value.selectedLifeStages.length
+  const count = filterState.value.selectedLifeStages.filter(Boolean).length
+  if (count > 0) {
     return `生命阶段(${count})`
   }
   return '生命阶段'
@@ -731,8 +790,8 @@ function getLifeStageButtonText(): string {
 
 // 获取健康标签按钮文字
 function getHealthTagsButtonText(): string {
-  if (filterState.value.selectedHealthTags.length > 0) {
-    const count = filterState.value.selectedHealthTags.length
+  const count = filterState.value.selectedHealthTags.filter(Boolean).length
+  if (count > 0) {
     return `疾病/功能(${count})`
   }
   return '疾病/功能'
@@ -750,82 +809,77 @@ function getExcludedTagsButtonText(): string {
 // 快速删除生命阶段
 function removeLifeStages() {
   filterState.value.selectedLifeStages = []
-  recipes.value = []
-  hasMore.value = true
-  currentPage.value = 1
-  loadRecipes(true)  // 传递 isRefresh = true
+  refreshRecipesWithFilters()
 }
 
 // 快速删除健康标签
 function removeHealthTags() {
   filterState.value.selectedHealthTags = []
-  recipes.value = []
-  hasMore.value = true
-  currentPage.value = 1
-  loadRecipes(true)  // 传递 isRefresh = true
+  refreshRecipesWithFilters()
 }
 
 // 快速删除排除标签
 function removeExcludedTags() {
   filterState.value.excludedIngredients = []
-  recipes.value = []
-  hasMore.value = true
-  currentPage.value = 1
-  loadRecipes(true)  // 传递 isRefresh = true
+  refreshRecipesWithFilters()
 }
 
 // 切换生命阶段
 function toggleLifeStage(stage: string) {
-  const index = filterState.value.selectedLifeStages.indexOf(stage)
-  if (index > -1) {
-    filterState.value.selectedLifeStages.splice(index, 1)
-  } else {
-    filterState.value.selectedLifeStages.push(stage)
-  }
+  toggleSelectableDraftValue(draftFilterState.value.selectedLifeStages, stage)
+}
+
+function cancelLifeStageDrawer() {
+  showLifeStageDrawer.value = false
+  draftFilterState.value.selectedLifeStages = [...filterState.value.selectedLifeStages]
+}
+
+function resetLifeStageDraft() {
+  draftFilterState.value.selectedLifeStages = []
 }
 
 // 应用生命阶段筛选
 function applyLifeStagesFilter() {
+  filterState.value.selectedLifeStages = [...draftFilterState.value.selectedLifeStages]
   showLifeStageDrawer.value = false
-  recipes.value = []
-  hasMore.value = true
-  currentPage.value = 1
-  loadRecipes(true)  // 传递 isRefresh = true，确保使用替换逻辑而不是追加逻辑
+  refreshRecipesWithFilters()
 }
 
 // 切换健康标签
 function toggleHealthTag(tag: string) {
-  const index = filterState.value.selectedHealthTags.indexOf(tag)
-  if (index > -1) {
-    filterState.value.selectedHealthTags.splice(index, 1)
-  } else {
-    filterState.value.selectedHealthTags.push(tag)
-  }
+  toggleSelectableDraftValue(draftFilterState.value.selectedHealthTags, tag)
+}
+
+function cancelHealthTagsDrawer() {
+  showHealthTagsDrawer.value = false
+  draftFilterState.value.selectedHealthTags = [...filterState.value.selectedHealthTags]
+}
+
+function resetHealthTagsDraft() {
+  draftFilterState.value.selectedHealthTags = []
 }
 
 // 应用健康标签筛选
 function applyHealthTagsFilter() {
+  filterState.value.selectedHealthTags = [...draftFilterState.value.selectedHealthTags]
   showHealthTagsDrawer.value = false
-  recipes.value = []
-  hasMore.value = true
-  currentPage.value = 1
-  loadRecipes(true)  // 传递 isRefresh = true
+  refreshRecipesWithFilters()
 }
 
 // 切换排除食材（按名称，一次性排除所有同名ID）
 function toggleExcludedIngredient(ingredientName: string) {
   const allIds = ingredientNameToIds.value[ingredientName] || []
   // Check if already excluded (check by any id)
-  const isExcluded = allIds.some(id => filterState.value.excludedIngredients.includes(id))
+  const isExcluded = allIds.some(id => draftFilterState.value.excludedIngredients.includes(id))
   if (isExcluded) {
     // Remove all ids for this name
     for (const id of allIds) {
-      const idx = filterState.value.excludedIngredients.indexOf(id)
-      if (idx > -1) filterState.value.excludedIngredients.splice(idx, 1)
+      const idx = draftFilterState.value.excludedIngredients.indexOf(id)
+      if (idx > -1) draftFilterState.value.excludedIngredients.splice(idx, 1)
     }
   } else {
     // Add all ids for this name
-    filterState.value.excludedIngredients.push(...allIds)
+    draftFilterState.value.excludedIngredients.push(...allIds)
   }
 }
 
@@ -835,10 +889,24 @@ function isIngredientExcluded(ingredientName: string): boolean {
   return allIds.some(id => filterState.value.excludedIngredients.includes(id))
 }
 
+function isDraftIngredientExcluded(ingredientName: string): boolean {
+  const allIds = ingredientNameToIds.value[ingredientName] || []
+  return allIds.some(id => draftFilterState.value.excludedIngredients.includes(id))
+}
+
 // 获取已排除食材的去重名称列表
 function getExcludedIngredientNames(): string[] {
   const names = new Set<string>()
   for (const id of filterState.value.excludedIngredients) {
+    const name = ingredientNameMap.value[id]
+    if (name) names.add(name)
+  }
+  return Array.from(names)
+}
+
+function getDraftExcludedIngredientNames(): string[] {
+  const names = new Set<string>()
+  for (const id of draftFilterState.value.excludedIngredients) {
     const name = ingredientNameMap.value[id]
     if (name) names.add(name)
   }
@@ -856,11 +924,9 @@ function toggleGroup(category: string) {
 
 // 应用排除标签筛选
 function applyExcludedTagsFilter() {
+  filterState.value.excludedIngredients = [...draftFilterState.value.excludedIngredients]
   showExcludedTagsDrawer.value = false
-  recipes.value = []
-  hasMore.value = true
-  currentPage.value = 1
-  loadRecipes(true)  // 传递 isRefresh = true
+  refreshRecipesWithFilters()
 }
 
 // 移除已选排除食材（按名称，移除所有同名ID）
@@ -874,6 +940,25 @@ function removeExcludedIngredient(ingredientName: string) {
   }
 }
 
+function removeDraftExcludedIngredient(ingredientName: string) {
+  const allIds = ingredientNameToIds.value[ingredientName] || []
+  for (const id of allIds) {
+    const idx = draftFilterState.value.excludedIngredients.indexOf(id)
+    if (idx > -1) {
+      draftFilterState.value.excludedIngredients.splice(idx, 1)
+    }
+  }
+}
+
+function cancelExcludedTagsDrawer() {
+  showExcludedTagsDrawer.value = false
+  draftFilterState.value.excludedIngredients = [...filterState.value.excludedIngredients]
+}
+
+function resetExcludedTagsDraft() {
+  draftFilterState.value.excludedIngredients = []
+}
+
 // 获取食材名称
 function getIngredientName(ingredientId: string): string {
   return ingredientNameMap.value[ingredientId] || ingredientId
@@ -881,6 +966,7 @@ function getIngredientName(ingredientId: string): string {
 
 // 打开排除标签抽屉（默认展开所有分组）
 function openExcludedTagsDrawer() {
+  syncDraftFilterState()
   showExcludedTagsDrawer.value = true
   // 默认展开所有分组
   expandedGroups.value = new Set(
@@ -896,10 +982,8 @@ function clearAllFilters() {
     excludedIngredientTags: [],
     excludedIngredients: []
   }
-  recipes.value = []
-  hasMore.value = true
-  currentPage.value = 1
-  loadRecipes()
+  syncDraftFilterState()
+  refreshRecipesWithFilters()
 }
 
 // 重置筛选
@@ -1890,6 +1974,36 @@ defineOptions({
   word-wrap: break-word;
   overflow-wrap: break-word;
   max-width: 100%;
+}
+
+.drawer-actions {
+  display: flex;
+  gap: 16rpx;
+  padding: 24rpx 32rpx calc(24rpx + env(safe-area-inset-bottom));
+  border-top: 1rpx solid #f0f0f0;
+  background: #fff;
+  flex-shrink: 0;
+}
+
+.drawer-action {
+  flex: 1;
+  height: 80rpx;
+  border-radius: 999rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.drawer-action-secondary {
+  background: #f5f5f5;
+  color: #666;
+}
+
+.drawer-action-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
 }
 
 .section-subtitle {

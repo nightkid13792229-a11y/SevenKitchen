@@ -9,6 +9,10 @@ import {
   buildHealthRecordSectionPayload,
   parseHealthAttachmentUploadResponse,
 } from '../utils/health-records'
+import {
+  buildDogAvatarUploadUrl,
+  parseDogAvatarUploadResponse,
+} from '../utils/dog-avatar'
 
 export interface DogProfileFormValue {
   name: string
@@ -43,6 +47,50 @@ export const dogApi = {
   create: (data: Record<string, any>) => request({ url: '/dogs', method: 'POST', data }),
   update: (dogId: string, data: Record<string, any>) =>
     request({ url: `/dogs/${dogId}`, method: 'PUT', data }),
+  uploadAvatar: (dogId: string, filePath: string): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const token = getToken()
+      const uploadUrl = buildDogAvatarUploadUrl(getBaseUrl(), dogId)
+
+      uni.uploadFile({
+        url: uploadUrl,
+        filePath,
+        name: 'file',
+        header: {
+          Authorization: token ? `Bearer ${token}` : '',
+          'X-Customer-Id': uni.getStorageSync('userId') || '',
+        },
+        success: (res) => {
+          try {
+            resolve(parseDogAvatarUploadResponse(res))
+          } catch (error) {
+            const responsePreview =
+              typeof res.data === 'string'
+                ? res.data.trim().slice(0, 120)
+                : JSON.stringify(res.data).slice(0, 120)
+
+            console.error('[DogAvatarUpload] Failed to parse upload response', {
+              uploadUrl,
+              dogId,
+              filePath,
+              statusCode: res.statusCode,
+              responsePreview,
+              errorMessage: error instanceof Error ? error.message : String(error),
+            })
+            reject(error)
+          }
+        },
+        fail: (error) => {
+          console.error('[DogAvatarUpload] Upload request failed', {
+            uploadUrl,
+            dogId,
+            filePath,
+            error,
+          })
+          reject(error)
+        },
+      })
+    }),
   updateHealthRecords: (
     dogId: string,
     type: HealthRecordType,

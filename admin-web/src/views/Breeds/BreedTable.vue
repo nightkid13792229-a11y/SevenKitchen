@@ -95,6 +95,15 @@
               type="primary"
               size="small"
               link
+              @click="handleManageAliases(row)"
+            >
+              维护别名
+            </el-button>
+            <el-divider direction="vertical" />
+            <el-button
+              type="info"
+              size="small"
+              link
               @click="handleEdit(row)"
             >
               编辑
@@ -259,6 +268,11 @@ const handleCreate = () => {
 }
 
 const handleEdit = (breed: DogBreed) => {
+  currentBreed.value = breed
+  dialogVisible.value = true
+}
+
+const handleManageAliases = (breed: DogBreed) => {
   currentBreed.value = breed
   dialogVisible.value = true
 }

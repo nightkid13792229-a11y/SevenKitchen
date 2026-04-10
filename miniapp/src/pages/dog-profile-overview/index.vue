@@ -668,6 +668,7 @@ const profile = ref<DogProfileDetail | null>(null)
 const calcResult = ref<DogCalcResult | null>(null)
 const persistedCalcResult = ref<DogCalcResult | null>(null)
 const breeds = ref<DogBreedItem[]>([])
+const hotBreeds = ref<DogBreedItem[]>([])
 const isLoading = ref(false)
 const loadError = ref('')
 const hasLoadedOnce = ref(false)
@@ -776,7 +777,6 @@ const canPreview = computed(() => Boolean(
   effectiveSizeClass.value,
 ))
 const mealsIndex = computed(() => Math.max(0, mealsOptions.indexOf(form.mealsPerDay || '2')))
-const commonBreeds = computed(() => breeds.value.filter(breed => breed.isCommon).slice(0, 8))
 const filteredBreeds = computed(() => filterBreedsByKeyword(breeds.value, breedSearchKeyword.value).slice(0, 12))
 const hasBreedKeyword = computed(() => normalizeBreedSearchText(breedSearchKeyword.value).length > 0)
 const displayedBreeds = computed(() => {
@@ -784,7 +784,7 @@ const displayedBreeds = computed(() => {
     return []
   }
 
-  return hasBreedKeyword.value ? filteredBreeds.value : commonBreeds.value
+  return hasBreedKeyword.value ? filteredBreeds.value : hotBreeds.value
 })
 const selectedStandardBreedName = computed(() => {
   if (!form.breedId || form.breedId === MIXED_BREED_VIRTUAL_ID) {
@@ -869,6 +869,7 @@ onLoad((options: any) => {
     lastSeenWeightSyncSignal = uni.getStorageSync(getWeightSyncSignalKey(dogId.value)) || null
     void loadDogProfile()
     void loadBreeds()
+    void loadHotBreeds()
     return
   }
 
@@ -981,6 +982,20 @@ async function loadBreeds() {
     }
   } catch {
     // Breed metadata only improves the editing experience; overview still works without it.
+  }
+}
+
+async function loadHotBreeds() {
+  try {
+    const res: any = await dogApi.hotBreeds()
+    if (res.code === 0 && Array.isArray(res.data)) {
+      hotBreeds.value = res.data
+      return
+    }
+
+    throw new Error(res.message || 'Failed to load hot breeds')
+  } catch {
+    hotBreeds.value = []
   }
 }
 

@@ -48,6 +48,7 @@ describe('AuthGuard (e2e)', () => {
   const mockDogBreedRepository = {
     findById: jest.fn().mockResolvedValue(mockBreed),
     findAll: jest.fn().mockResolvedValue([mockBreed]),
+    findHotBreeds: jest.fn().mockResolvedValue([mockBreed]),
     findBySizeCategory: jest.fn(),
     save: jest.fn(),
     update: jest.fn(),

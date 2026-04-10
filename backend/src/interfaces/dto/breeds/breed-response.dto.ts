@@ -41,6 +41,12 @@ export class BreedResponseDto {
   })
   aliases!: string[];
 
+  @ApiProperty({
+    description: 'Number of dog profiles using this standard breed',
+    example: 24,
+  })
+  profileCount!: number;
+
   @ApiProperty({ description: 'Creation timestamp' })
   createdAt!: Date;
 

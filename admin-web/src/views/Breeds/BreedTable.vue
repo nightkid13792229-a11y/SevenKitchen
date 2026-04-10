@@ -35,6 +35,12 @@
       <el-table :data="displayData" stripe style="width: 100%">
         <el-table-column prop="name" label="品种名称" width="150" fixed="left" />
 
+        <el-table-column prop="profileCount" label="建档数" width="120" align="center">
+          <template #default="{ row }">
+            <el-tag type="info" size="small">{{ row.profileCount }} 个档案</el-tag>
+          </template>
+        </el-table-column>
+
         <el-table-column prop="aliases" label="搜索别名" min-width="220">
           <template #default="{ row }">
             <div v-if="row.aliases?.length" class="alias-tags">
@@ -85,16 +91,6 @@
 
         <el-table-column label="操作" width="250" fixed="right" align="center">
           <template #default="{ row }">
-            <el-button
-              type="success"
-              size="small"
-              link
-              @click="handleToggleCommonBreed(row)"
-            >
-              <el-icon><StarFilled v-if="isCommonBreed(row.name)" /><Star v-else /></el-icon>
-              {{ isCommonBreed(row.name) ? '已在常见' : '加入常见' }}
-            </el-button>
-            <el-divider direction="vertical" />
             <el-button
               type="primary"
               size="small"
@@ -156,7 +152,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Search, Star, StarFilled } from '@element-plus/icons-vue'
+import { Plus, Search } from '@element-plus/icons-vue'
 import { DogSizeCategory, DogSizeLabels } from '@/types/dog'
 import type { DogBreed, BreedForm } from '@/types/breed'
 import { breedApi } from '@/api'
@@ -181,36 +177,15 @@ const currentBreed = ref<DogBreed | null>(null)
 const currentPage = ref(1)
 const pageSize = ref(10)
 
-// Check if breed is common by checking isCommon field
-const isCommonBreed = (breedName: string) => {
-  const breed = props.data.find(b => b.name === breedName)
-  return breed?.isCommon === true
-}
-
-// Toggle breed common status
-const handleToggleCommonBreed = async (breed: DogBreed) => {
-  const newIsCommon = !breed.isCommon
-
-  try {
-    await breedApi.update(breed.id, { isCommon: newIsCommon })
-
-    if (newIsCommon) {
-      ElMessage.success(`已将"${breed.name}"加入常见品种`)
-    } else {
-      ElMessage.success(`已从常见品种移除"${breed.name}"`)
-    }
-
-    // Notify parent to refresh
-    emit('refresh')
-  } catch (error: any) {
-    console.error('Failed to update breed:', error)
-    ElMessage.error(error.message || '操作失败，请重试')
-  }
-}
-
 // 计算筛选后的数据
 const filteredData = computed(() => {
-  let result = props.data
+  let result = [...props.data].sort((left, right) => {
+    if (right.profileCount !== left.profileCount) {
+      return right.profileCount - left.profileCount
+    }
+
+    return left.name.localeCompare(right.name, 'zh-Hans-CN')
+  })
 
   // 按体型筛选
   if (sizeFilter.value) {

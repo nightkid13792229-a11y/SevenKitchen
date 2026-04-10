@@ -77,6 +77,7 @@ describe('DogService', () => {
   const mockDogBreedRepository: jest.Mocked<DogBreedRepository> = {
     findById: jest.fn(),
     findAll: jest.fn(),
+    findHotBreeds: jest.fn(),
     findBySizeCategory: jest.fn(),
     save: jest.fn(),
     update: jest.fn(),

@@ -174,7 +174,7 @@
                     <text class="breed-search-name">{{ breed.name }}</text>
                     <view class="breed-search-meta">
                       <text class="breed-search-chip">{{ getSizeClassLabel(breed.sizeCategory) }}</text>
-                      <text v-if="breed.isCommon" class="breed-search-chip common">常见品种</text>
+                      <text v-if="isHotBreed(breed.id)" class="breed-search-chip common">热门品种</text>
                     </view>
                   </view>
                   <view class="breed-search-action">
@@ -199,28 +199,28 @@
 
             <view v-else>
               <view class="section">
-                <view class="section-header" @tap="toggleCommonBreeds">
-                  <text class="section-title">常见品种</text>
-                  <text class="toggle-icon">{{ showCommonBreeds ? '▲' : '▼' }}</text>
+                <view class="section-header" @tap="toggleHotBreeds">
+                  <text class="section-title">热门品种</text>
+                  <text class="toggle-icon">{{ showHotBreeds ? '▲' : '▼' }}</text>
                 </view>
-                <view v-if="showCommonBreeds" class="common-breeds">
+                <view v-if="showHotBreeds" class="common-breeds">
                   <view
-                    v-for="breedName in commonBreeds"
-                    :key="breedName"
+                    v-for="breed in hotBreeds"
+                    :key="breed.id"
                     class="breed-tag"
-                    @tap="selectBreedByName(breedName)"
+                    @tap="selectBreed(breed)"
                   >
-                    {{ breedName }}
+                    {{ breed.name }}
                   </view>
                 </view>
                 <view v-else class="common-breeds collapsed">
                   <view
-                    v-for="breedName in commonBreeds.slice(0, 5)"
-                    :key="breedName"
+                    v-for="breed in hotBreeds.slice(0, 5)"
+                    :key="breed.id"
                     class="breed-tag"
-                    @tap="selectBreedByName(breedName)"
+                    @tap="selectBreed(breed)"
                   >
-                    {{ breedName }}
+                    {{ breed.name }}
                   </view>
                 </view>
               </view>
@@ -806,11 +806,7 @@ interface CalcResult {
 }
 
 const breeds = ref<Breed[]>([])
-
-// 常见品种从API返回的数据中筛选（isCommon为true的品种）
-const commonBreeds = computed(() => {
-  return breeds.value.filter(b => b.isCommon).map(b => b.name)
-})
+const hotBreeds = ref<Breed[]>([])
 
 const selectedBreed = ref<Breed | null>(null)
 const calcResult = ref<CalcResult | null>(null)
@@ -836,7 +832,7 @@ let createAutoPreviewTimer: ReturnType<typeof setTimeout> | null = null
 
 // New state variables
 const searchKeyword = ref('')
-const showCommonBreeds = ref(true)
+const showHotBreeds = ref(true)
 const isMixedBreed = ref(false)
 const showCustomBreedInput = ref(false)
 const showBreedSizeOverridePicker = ref(false)
@@ -856,6 +852,7 @@ const showLifeStageOverride = ref(false) // 生命阶段手动选择面板展开
 const filteredBreeds = computed(() => {
   return filterBreedsByKeyword(breeds.value, searchKeyword.value)
 })
+const hotBreedIds = computed(() => new Set(hotBreeds.value.map(breed => breed.id)))
 
 const hasSearchKeyword = computed(() => normalizeBreedSearchText(searchKeyword.value).length > 0)
 
@@ -1208,8 +1205,7 @@ onMounted(async () => {
     return
   }
 
-  // Load breeds first (required for breed selection)
-  await loadBreeds()
+  await Promise.all([loadBreeds(), loadHotBreeds()])
   console.log('[DogCreate] onMounted: create mode')
   const restoredDraft = restoreCreateDraft()
 
@@ -1303,10 +1299,7 @@ function trackCreateStepCompleted(step: DogProfileCreateStep) {
 async function loadBreeds() {
   loadingBreeds.value = true
   try {
-    const res: any = await request({
-      url: '/dogs/breeds',
-      method: 'GET'
-    })
+    const res: any = await dogApi.breeds()
     if (res.code === 0 && res.data) {
       breeds.value = res.data
       console.log('[DogCreate] Loaded breeds:', breeds.value.length)
@@ -1329,6 +1322,21 @@ async function loadBreeds() {
     })
   } finally {
     loadingBreeds.value = false
+  }
+}
+
+async function loadHotBreeds() {
+  try {
+    const res: any = await dogApi.hotBreeds()
+    if (res.code === 0 && Array.isArray(res.data)) {
+      hotBreeds.value = res.data
+      return
+    }
+
+    throw new Error(res.message || 'Failed to load hot breeds')
+  } catch (err) {
+    hotBreeds.value = []
+    console.warn('[DogCreate] Load hot breeds error:', err)
   }
 }
 
@@ -1620,11 +1628,8 @@ function selectBreed(breed: Breed) {
   invalidateBreedDerivedState()
 }
 
-function selectBreedByName(name: string) {
-  const breed = breeds.value.find(b => b.name === name)
-  if (breed) {
-    selectBreed(breed)
-  }
+function isHotBreed(breedId: string) {
+  return hotBreedIds.value.has(breedId)
 }
 
 function selectMixedBreed() {
@@ -1677,8 +1682,8 @@ function clearBreed() {
   invalidateBreedDerivedState()
 }
 
-function toggleCommonBreeds() {
-  showCommonBreeds.value = !showCommonBreeds.value
+function toggleHotBreeds() {
+  showHotBreeds.value = !showHotBreeds.value
 }
 
 function onSizeClassChange(e: any) {

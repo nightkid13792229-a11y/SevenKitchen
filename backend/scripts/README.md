@@ -27,6 +27,75 @@ yum install jq
 
 ## Scripts
 
+### `audit-recipe-stats.ts`
+
+Read-only recipe counter audit for production or staging databases.
+
+This script focuses on the three counters shown in the miniapp recipe showcase:
+- `favoriteCount`: fully reconcilable against `favorite_recipe`
+- `viewCount`: not fully auditable historically because there is no event detail table
+- `diyGenCount`: not fully auditable historically because there is no event detail table
+
+What the script can detect:
+- `favoriteCount` mismatches against real favorite records
+- version drift where homepage displays latest `PUBLIC` version but counters are written to latest version
+- favorite records attached to a non-displayed recipe version
+
+**Usage:**
+```bash
+# Scan production using .env.production
+cd backend
+ENV_FILE=.env.production pnpm audit:recipe-stats
+
+# Show a single recipe in detail
+ENV_FILE=.env.production pnpm audit:recipe-stats -- --recipe <business-recipe-id>
+
+# Include recipes without flags and change output size
+ENV_FILE=.env.production pnpm audit:recipe-stats -- --include-ok --limit 50
+```
+
+**Environment Variables:**
+- `ENV_FILE` - dotenv file path to load before connecting (default: `.env`)
+- `DATABASE_URL` - optional explicit override; if set it wins over `ENV_FILE`
+
+**Expected Output:**
+```
+Recipe Stats Audit
+Read-only Prisma audit for recipe showcase counters.
+favoriteCount 可直接对账 favorite_recipe；viewCount 和 diyGenCount 只能做风险扫描，因为没有事件明细表。
+
+Summary
+- HIGH recipe-123 | 鸡肉南瓜碗 | public=v1 overall=v2
+  [HIGH] favorite_records_on_non_displayed_version: 有 2 条收藏记录挂在非首页展示版本上。
+```
+
+### `repair-favorite-counts.ts`
+
+Dry-run or apply a repair plan for `favorite_recipe` and `recipe.favorite_count`.
+
+What it does:
+- moves legacy favorites onto the homepage-displayed version (latest `PUBLIC`, otherwise latest overall)
+- deduplicates multiple favorite rows from the same user within one recipe family
+- recalculates `favoriteCount` for every version in the family
+
+**Usage:**
+```bash
+# Dry-run against production
+cd backend
+ENV_FILE=.env.production pnpm repair:favorite-counts
+
+# Dry-run for a single recipe
+ENV_FILE=.env.production pnpm repair:favorite-counts -- --recipe <business-recipe-id>
+
+# Apply the repair
+ENV_FILE=.env.production pnpm repair:favorite-counts -- --apply
+```
+
+**Important:**
+- Default mode is dry-run
+- `--apply` will write to the database
+- Run `pnpm audit:recipe-stats` again after apply to confirm the repair
+
 ### `assert_public_recipe.sh`
 
 Asserts that at least one PUBLIC recipe exists via HTTP API. Used in CI to verify application seeding is working correctly.
@@ -126,4 +195,3 @@ chmod +x phase_orders_closed_loop_verify.sh
 - All API calls use `Authorization: Bearer <token>` authentication
 - Scripts validate response envelope format: `{"code": 0, "message": "...", "data": ...}`
 - Scripts exit with non-zero status on any failure
-

@@ -29,7 +29,10 @@ import {
   ApiSecurity,
   ApiQuery,
 } from '@nestjs/swagger';
-import type { RecipeRepository } from '../../domain/recipe/recipe.repository';
+import type {
+  Recipe,
+  RecipeRepository,
+} from '../../domain/recipe/recipe.repository';
 import {
   RecipeSummaryDto,
   RecipeDetailDto,
@@ -71,6 +74,73 @@ export class RecipesController {
     private readonly prisma: PrismaService,
     private readonly jwtAuthService: JwtAuthService,
   ) {}
+
+  private async getAccessibleRecipe(
+    id: string,
+    shareToken?: string,
+    req?: any,
+  ): Promise<Recipe | null> {
+    const recipe = await this.recipeRepository.findById(id);
+    if (!recipe) {
+      return null;
+    }
+
+    if (recipe.status === 'PUBLIC') {
+      return recipe;
+    }
+
+    let accessGranted = false;
+
+    try {
+      const authHeader = req?.headers?.authorization;
+      if (authHeader && typeof authHeader === 'string') {
+        const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
+        if (bearerMatch?.[1]) {
+          const payload = this.jwtAuthService.validateToken(bearerMatch[1]);
+          if (
+            payload &&
+            (payload.role === 'STAFF' || payload.role === 'ADMIN')
+          ) {
+            accessGranted = true;
+          }
+        }
+      }
+    } catch {
+      // Token invalid or missing, continue to check shareToken
+    }
+
+    if (!accessGranted && shareToken) {
+      const tokenRecord = await this.prisma.recipeShareToken.findFirst({
+        where: {
+          recipe: { recipeId: id },
+          token: shareToken,
+          expiresAt: { gt: new Date() },
+        },
+      });
+      if (tokenRecord) {
+        accessGranted = true;
+      }
+    }
+
+    return accessGranted ? recipe : null;
+  }
+
+  private async incrementRecipeViewCount(id: string): Promise<void> {
+    const latestRecipe = await this.prisma.recipe.findFirst({
+      where: { recipeId: id },
+      orderBy: { version: 'desc' },
+      select: { id: true },
+    });
+
+    if (!latestRecipe) {
+      return;
+    }
+
+    await this.prisma.recipe.update({
+      where: { id: latestRecipe.id },
+      data: { viewCount: { increment: 1 } },
+    });
+  }
 
   @Get('filter-options')
   @ApiOperation({ summary: 'Get available filter options' })
@@ -304,64 +374,9 @@ export class RecipesController {
     @Query('shareToken') shareToken?: string,
     @Req() req?: any,
   ): Promise<ApiResponseDto<RecipeDetailDto> | ApiResponseDto<null>> {
-    const recipe = await this.recipeRepository.findById(id);
+    const recipe = await this.getAccessibleRecipe(id, shareToken, req);
     if (!recipe) {
       return ApiResponseDto.error(404, 'Recipe not found');
-    }
-
-    // Access control for non-PUBLIC recipes
-    if (recipe.status !== 'PUBLIC') {
-      let accessGranted = false;
-
-      // Check 1: User has valid JWT with STAFF/ADMIN role
-      // Try to extract user from JWT manually (this endpoint has no AuthGuard)
-      try {
-        const authHeader = req?.headers?.authorization;
-        if (authHeader && typeof authHeader === 'string') {
-          const bearerMatch = authHeader.match(/^Bearer\s+(.+)$/i);
-          if (bearerMatch?.[1]) {
-            const payload = this.jwtAuthService.validateToken(bearerMatch[1]);
-            if (payload && (payload.role === 'STAFF' || payload.role === 'ADMIN')) {
-              accessGranted = true;
-            }
-          }
-        }
-      } catch {
-        // Token invalid or missing, continue to check shareToken
-      }
-
-      // Check 2: Valid shareToken provided
-      if (!accessGranted && shareToken) {
-        const tokenRecord = await this.prisma.recipeShareToken.findFirst({
-          where: {
-            recipe: { recipeId: id },
-            token: shareToken,
-            expiresAt: { gt: new Date() },
-          },
-        });
-        if (tokenRecord) {
-          accessGranted = true;
-        }
-      }
-
-      if (!accessGranted) {
-        return ApiResponseDto.error(404, 'Recipe not found');
-      }
-    }
-
-    // Increment view count for the latest version (fire-and-forget)
-    const latestRecipe = await this.prisma.recipe.findFirst({
-      where: { recipeId: id },
-      orderBy: { version: 'desc' },
-      select: { id: true },
-    });
-    if (latestRecipe) {
-      this.prisma.recipe
-        .update({
-          where: { id: latestRecipe.id },
-          data: { viewCount: { increment: 1 } },
-        })
-        .catch(() => {});
     }
 
     // Return all ingredients with preparation method, sorted by sort_order
@@ -437,6 +452,24 @@ export class RecipesController {
     };
 
     return ApiResponseDto.success(detail);
+  }
+
+  @Post(':id/view')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Track recipe detail view' })
+  @ApiParam({ name: 'id', description: 'Recipe ID' })
+  async trackRecipeView(
+    @Param('id') id: string,
+    @Body('shareToken') shareToken?: string,
+    @Req() req?: any,
+  ): Promise<ApiResponseDto<null>> {
+    const recipe = await this.getAccessibleRecipe(id, shareToken, req);
+    if (!recipe) {
+      return ApiResponseDto.error(404, 'Recipe not found');
+    }
+
+    await this.incrementRecipeViewCount(id);
+    return ApiResponseDto.success(null);
   }
 
   @Post(':id/share-token')

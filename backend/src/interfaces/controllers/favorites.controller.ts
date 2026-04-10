@@ -24,12 +24,101 @@ import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard, CurrentUser } from '../auth';
 import type { RequestUser } from '../auth';
 
+type FavoriteRecipeRecord = {
+  id: string;
+  recipeId: string;
+  version: number;
+  status: string;
+};
+
+type FavoritePrismaClient = Pick<PrismaService, 'recipe' | 'favoriteRecipe'>;
+
 @ApiTags('Favorites')
 @Controller('api/v1/favorites')
 @UseGuards(AuthGuard)
 @ApiSecurity('wechat-auth')
 export class FavoritesController {
   constructor(private readonly prisma: PrismaService) {}
+
+  private async resolveRecipeFamily(
+    prisma: FavoritePrismaClient,
+    recipeId: string,
+  ): Promise<{
+    businessRecipeId: string;
+    versions: FavoriteRecipeRecord[];
+    target: FavoriteRecipeRecord;
+  } | null> {
+    const exactRecipe = await prisma.recipe.findUnique({
+      where: { id: recipeId },
+      select: {
+        id: true,
+        recipeId: true,
+        version: true,
+        status: true,
+      },
+    });
+
+    const businessRecipeId = exactRecipe?.recipeId ?? recipeId;
+    const versions = await prisma.recipe.findMany({
+      where: { recipeId: businessRecipeId },
+      select: {
+        id: true,
+        recipeId: true,
+        version: true,
+        status: true,
+      },
+      orderBy: [{ version: 'desc' }],
+    });
+
+    if (versions.length === 0) {
+      return null;
+    }
+
+    return {
+      businessRecipeId,
+      versions,
+      target: versions.find((version) => version.status === 'PUBLIC') ?? versions[0],
+    };
+  }
+
+  private async syncFavoriteCounts(
+    prisma: FavoritePrismaClient,
+    versions: FavoriteRecipeRecord[],
+  ): Promise<void> {
+    const versionIds = versions.map((version) => version.id);
+
+    await prisma.recipe.updateMany({
+      where: {
+        id: {
+          in: versionIds,
+        },
+      },
+      data: {
+        favoriteCount: 0,
+      },
+    });
+
+    const counts = await prisma.favoriteRecipe.groupBy({
+      by: ['recipeId'],
+      where: {
+        recipeId: {
+          in: versionIds,
+        },
+      },
+      _count: {
+        recipeId: true,
+      },
+    });
+
+    for (const row of counts) {
+      await prisma.recipe.update({
+        where: { id: row.recipeId },
+        data: {
+          favoriteCount: row._count.recipeId,
+        },
+      });
+    }
+  }
 
   @Post(':recipeId')
   @ApiOperation({ summary: '收藏食谱' })
@@ -43,53 +132,36 @@ export class FavoritesController {
     @Param('recipeId') recipeId: string,
   ) {
     try {
-      // 检查食谱是否存在（支持内部UUID或业务recipeId）
-      const recipe = await this.prisma.recipe.findFirst({
-        where: {
-          OR: [{ id: recipeId }, { recipeId: recipeId }],
-        },
-      });
+      return await this.prisma.$transaction(async (tx) => {
+        const family = await this.resolveRecipeFamily(tx, recipeId);
+        if (!family) {
+          return new ApiResponseDto(404, '食谱不存在', null);
+        }
 
-      if (!recipe) {
-        return new ApiResponseDto(404, '食谱不存在', null);
-      }
-
-      // 使用内部UUID作为recipeId
-      const internalRecipeId = recipe.id;
-
-      // 检查是否已收藏
-      const existing = await this.prisma.favoriteRecipe.findUnique({
-        where: {
-          userId_recipeId: {
+        const existingFavorites = await tx.favoriteRecipe.findMany({
+          where: {
             userId: user.customerId,
-            recipeId: internalRecipeId,
+            recipeId: {
+              in: family.versions.map((version) => version.id),
+            },
           },
-        },
-      });
+        });
 
-      if (existing) {
-        return new ApiResponseDto(400, '已收藏该食谱', null);
-      }
+        if (existingFavorites.length > 0) {
+          return new ApiResponseDto(400, '已收藏该食谱', null);
+        }
 
-      // 创建收藏记录
-      await this.prisma.favoriteRecipe.create({
-        data: {
-          userId: user.customerId,
-          recipeId: internalRecipeId,
-        },
-      });
-
-      // 更新食谱的收藏计数
-      await this.prisma.recipe.update({
-        where: { id: internalRecipeId },
-        data: {
-          favoriteCount: {
-            increment: 1,
+        await tx.favoriteRecipe.create({
+          data: {
+            userId: user.customerId,
+            recipeId: family.target.id,
           },
-        },
-      });
+        });
 
-      return new ApiResponseDto(0, '收藏成功', null);
+        await this.syncFavoriteCounts(tx, family.versions);
+
+        return new ApiResponseDto(0, '收藏成功', null);
+      });
     } catch (error) {
       console.error('收藏食谱失败:', error);
       return new ApiResponseDto(500, '收藏失败', null);
@@ -108,55 +180,38 @@ export class FavoritesController {
     @Param('recipeId') recipeId: string,
   ) {
     try {
-      // 查找食谱（支持内部UUID或业务recipeId）
-      const recipe = await this.prisma.recipe.findFirst({
-        where: {
-          OR: [{ id: recipeId }, { recipeId: recipeId }],
-        },
-      });
+      return await this.prisma.$transaction(async (tx) => {
+        const family = await this.resolveRecipeFamily(tx, recipeId);
+        if (!family) {
+          return new ApiResponseDto(404, '食谱不存在', null);
+        }
 
-      if (!recipe) {
-        return new ApiResponseDto(404, '食谱不存在', null);
-      }
-
-      // 使用内部UUID
-      const internalRecipeId = recipe.id;
-
-      // 检查收藏记录是否存在
-      const favorite = await this.prisma.favoriteRecipe.findUnique({
-        where: {
-          userId_recipeId: {
+        const existingFavorites = await tx.favoriteRecipe.findMany({
+          where: {
             userId: user.customerId,
-            recipeId: internalRecipeId,
+            recipeId: {
+              in: family.versions.map((version) => version.id),
+            },
           },
-        },
-      });
+        });
 
-      if (!favorite) {
-        return new ApiResponseDto(404, '未收藏该食谱', null);
-      }
+        if (existingFavorites.length === 0) {
+          return new ApiResponseDto(404, '未收藏该食谱', null);
+        }
 
-      // 删除收藏记录
-      await this.prisma.favoriteRecipe.delete({
-        where: {
-          userId_recipeId: {
+        await tx.favoriteRecipe.deleteMany({
+          where: {
             userId: user.customerId,
-            recipeId: internalRecipeId,
+            recipeId: {
+              in: family.versions.map((version) => version.id),
+            },
           },
-        },
-      });
+        });
 
-      // 更新食谱的收藏计数
-      await this.prisma.recipe.update({
-        where: { id: internalRecipeId },
-        data: {
-          favoriteCount: {
-            decrement: 1,
-          },
-        },
-      });
+        await this.syncFavoriteCounts(tx, family.versions);
 
-      return new ApiResponseDto(0, '取消收藏成功', null);
+        return new ApiResponseDto(0, '取消收藏成功', null);
+      });
     } catch (error) {
       console.error('取消收藏失败:', error);
       return new ApiResponseDto(500, '取消收藏失败', null);
@@ -175,31 +230,24 @@ export class FavoritesController {
     @Param('recipeId') recipeId: string,
   ) {
     try {
-      // 查找食谱（支持内部UUID或业务recipeId）
-      const recipe = await this.prisma.recipe.findFirst({
-        where: {
-          OR: [{ id: recipeId }, { recipeId: recipeId }],
-        },
-      });
-
-      if (!recipe) {
+      const family = await this.resolveRecipeFamily(this.prisma, recipeId);
+      if (!family) {
         return new ApiResponseDto(0, '成功', {
           isFavorite: false,
         });
       }
 
-      // 使用内部UUID检查收藏状态
-      const favorite = await this.prisma.favoriteRecipe.findUnique({
+      const favorites = await this.prisma.favoriteRecipe.findMany({
         where: {
-          userId_recipeId: {
-            userId: user.customerId,
-            recipeId: recipe.id,
+          userId: user.customerId,
+          recipeId: {
+            in: family.versions.map((version) => version.id),
           },
         },
       });
 
       return new ApiResponseDto(0, '成功', {
-        isFavorite: !!favorite,
+        isFavorite: favorites.length > 0,
       });
     } catch (error) {
       console.error('检查收藏状态失败:', error);

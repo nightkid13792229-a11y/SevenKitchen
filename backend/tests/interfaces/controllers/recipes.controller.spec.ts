@@ -198,6 +198,51 @@ describe('RecipesController (e2e)', () => {
     });
   });
 
+  describe('GET /api/v1/recipes/:id', () => {
+    it('does not increment view count when loading recipe detail', async () => {
+      const recipe: Recipe = {
+        id: '550e8400-e29b-41d4-a716-446655440010',
+        version: 1,
+        name: 'Detail Only Recipe',
+        status: 'PUBLIC',
+        energyDensityKcalPerKg: 1450,
+        productionLossRate: 1.07,
+        items: [],
+      };
+      await recipeRepository.save(recipe);
+
+      await request(app.getHttpServer())
+        .get(`/api/v1/recipes/${recipe.id}`)
+        .expect(200);
+
+      expect(mockPrismaService.recipe.update).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('POST /api/v1/recipes/:id/view', () => {
+    it('increments view count via the explicit tracking endpoint', async () => {
+      const recipe: Recipe = {
+        id: '550e8400-e29b-41d4-a716-446655440011',
+        version: 1,
+        name: 'Tracked View Recipe',
+        status: 'PUBLIC',
+        energyDensityKcalPerKg: 1450,
+        productionLossRate: 1.07,
+        items: [],
+      };
+      await recipeRepository.save(recipe);
+
+      await request(app.getHttpServer())
+        .post(`/api/v1/recipes/${recipe.id}/view`)
+        .expect(200);
+
+      expect(mockPrismaService.recipe.update).toHaveBeenCalledWith({
+        where: { id: recipe.id },
+        data: { viewCount: { increment: 1 } },
+      });
+    });
+  });
+
   describe('POST /api/v1/recipes/:id/diy-sheet', () => {
     it('should generate DIY sheet successfully for valid recipe', async () => {
       // Setup: Add recipe to repository

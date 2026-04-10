@@ -316,7 +316,7 @@ export default {
 <!-- Setup script：业务逻辑 -->
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { request, addFavorite, removeFavorite, checkFavorite, createRecipeShareToken, reviewApi } from '../../utils/api'
+import { request, addFavorite, removeFavorite, checkFavorite, createRecipeShareToken, reviewApi, trackRecipeView } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
 import ReviewList from '../../components/ReviewList.vue'
 import ReviewForm from '../../components/ReviewForm.vue'
@@ -384,6 +384,7 @@ const shareToken = ref('')
 const dogId = ref<string | null>(null)
 const showReviewForm = ref(false)
 const reviewListRef = ref<InstanceType<typeof ReviewList> | null>(null)
+const HOME_RECIPE_STATS_DIRTY_KEY = 'home_recipe_stats_dirty'
 
 // 健康标签UUID到名称的映射（动态加载）
 const healthTagUuidLabelMap = ref<Record<string, string>>({})
@@ -443,6 +444,10 @@ function loadRecipeDetail() {
       })
 
       recipe.value = res.data
+      uni.setStorageSync(HOME_RECIPE_STATS_DIRTY_KEY, '1')
+      void trackRecipeView(recipeId.value, shareToken.value).catch((error: any) => {
+        console.warn('[RecipeDetail] Failed to track recipe view:', error)
+      })
 
       // 更新分享信息（封面图URL需要经过normalizeImageUrl处理，确保分享卡片能正常加载）
       updateShareInfo(
@@ -555,6 +560,7 @@ async function toggleFavorite() {
     if (isFavorite.value) {
       // 取消收藏
       await removeFavorite(recipeId.value)
+      uni.setStorageSync(HOME_RECIPE_STATS_DIRTY_KEY, '1')
       isFavorite.value = false
       uni.showToast({
         title: '已取消收藏',
@@ -563,6 +569,7 @@ async function toggleFavorite() {
     } else {
       // 添加收藏
       await addFavorite(recipeId.value)
+      uni.setStorageSync(HOME_RECIPE_STATS_DIRTY_KEY, '1')
       isFavorite.value = true
       uni.showToast({
         title: '已收藏',

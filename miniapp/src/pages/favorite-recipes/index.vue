@@ -89,6 +89,7 @@ const isLoading = ref(true)
 const currentPage = ref(1)
 const pageSize = 20
 const total = ref(0)
+const HOME_RECIPE_STATS_DIRTY_KEY = 'home_recipe_stats_dirty'
 
 // 健康标签UUID到名称的映射（动态加载）
 const healthTagUuidLabelMap = ref<Record<string, string>>({})
@@ -176,6 +177,7 @@ async function removeFavorite(recipeId: string, recipeName?: string) {
       if (res.confirm) {
         try {
           await apiRemoveFavorite(recipeId)
+          uni.setStorageSync(HOME_RECIPE_STATS_DIRTY_KEY, '1')
           uni.showToast({
             title: '已取消收藏',
             icon: 'success'

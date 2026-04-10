@@ -376,6 +376,7 @@ interface FilterState {
 // 登录状态
 const isLoggedIn = ref(false)
 const showLoginBanner = ref(true)
+const HOME_RECIPE_STATS_DIRTY_KEY = 'home_recipe_stats_dirty'
 
 // 狗狗列表
 const dogs = ref<any[]>([])
@@ -489,6 +490,13 @@ onShow(() => {
     } else {
       console.log('[Home] No dog data to clear')
     }
+  }
+
+  const recipeStatsDirty = uni.getStorageSync(HOME_RECIPE_STATS_DIRTY_KEY)
+  if (recipeStatsDirty) {
+    console.log('[Home] Recipe stats dirty, refreshing recipe list')
+    uni.removeStorageSync(HOME_RECIPE_STATS_DIRTY_KEY)
+    loadRecipes(true)
   }
 })
 

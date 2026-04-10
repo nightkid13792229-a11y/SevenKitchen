@@ -1099,6 +1099,23 @@ export function checkFavorite(recipeId: string): Promise<{ isFavorite: boolean }
 }
 
 /**
+ * 上报食谱浏览量
+ * @param recipeId 食谱ID
+ * @param shareToken 非公开食谱分享令牌
+ */
+export function trackRecipeView(recipeId: string, shareToken?: string): Promise<void> {
+  return request({
+    url: `/recipes/${recipeId}/view`,
+    method: 'POST',
+    data: shareToken ? { shareToken } : undefined,
+  }).then((res) => {
+    if (res.code !== 0) {
+      throw new Error(res.message || '浏览上报失败')
+    }
+  })
+}
+
+/**
  * 获取收藏列表
  * @param page 页码
  * @param pageSize 每页数量

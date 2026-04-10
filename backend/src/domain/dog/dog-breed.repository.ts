@@ -21,6 +21,11 @@ export interface DogBreedRepository {
   findAll(): Promise<DogBreed[]>;
 
   /**
+   * Find hot standard breeds ranked by dog profile usage
+   */
+  findHotBreeds(limit?: number): Promise<DogBreed[]>;
+
+  /**
    * Find breeds by size category
    */
   findBySizeCategory(sizeCategory: string): Promise<DogBreed[]>;

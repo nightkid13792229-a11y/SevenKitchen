@@ -76,6 +76,7 @@ import {
   BreedUsageCheckDto,
 } from '../dto/breeds';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import { MIXED_BREED_VIRTUAL_ID } from '../../domain/dog/constants';
 import {
   CreateStaffDto,
   UpdateStaffDto,
@@ -2106,7 +2107,41 @@ export class AdminController {
   })
   async getBreeds(): Promise<ApiResponseDto<BreedResponseDto[]>> {
     const breeds = await this.dogBreedRepository.findAll();
-    const data = breeds.map((b) => this.mapToBreedResponseDto(b));
+    const usageRankings = await this.prisma.dog.groupBy({
+      by: ['breedId'],
+      where: {
+        breedId: {
+          not: MIXED_BREED_VIRTUAL_ID,
+        },
+      },
+      _count: {
+        breedId: true,
+      },
+      orderBy: {
+        _count: {
+          breedId: 'desc',
+        },
+      },
+    });
+
+    const profileCountMap = new Map(
+      usageRankings.map((item) => [item.breedId, item._count.breedId]),
+    );
+
+    const data = breeds
+      .map((breed) =>
+        this.mapToBreedResponseDto(
+          breed,
+          profileCountMap.get(breed.id) ?? 0,
+        ),
+      )
+      .sort((left, right) => {
+        if (right.profileCount !== left.profileCount) {
+          return right.profileCount - left.profileCount;
+        }
+
+        return left.name.localeCompare(right.name, 'zh-Hans-CN');
+      });
 
     return ApiResponseDto.success(data);
   }
@@ -2219,19 +2254,23 @@ export class AdminController {
   /**
    * Map DogBreed entity to response DTO
    */
-  private mapToBreedResponseDto(breed: any): BreedResponseDto {
+  private mapToBreedResponseDto(
+    breed: any,
+    profileCount: number = 0,
+  ): BreedResponseDto {
     return {
       id: breed.id,
       name: breed.name,
       aliases: breed.aliases || [],
+      profileCount,
       sizeCategory: breed.sizeCategory,
       growthCurveType: breed.growthCurveType,
       adultAgeMonths: breed.adultAgeMonths,
       seniorAgeYears: breed.seniorAgeYears,
       averageAdultWeightKg: breed.averageAdultWeightKg ?? undefined,
       isCommon: breed.isCommon || false,
-      createdAt: new Date(), // TODO: Get from actual record
-      updatedAt: new Date(), // TODO: Get from actual record
+      createdAt: breed.createdAt ?? new Date(),
+      updatedAt: breed.updatedAt ?? new Date(),
     };
   }
 

@@ -7,6 +7,7 @@ import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma.service';
 import type { DogBreedRepository } from '../../domain/dog/dog-breed.repository';
 import { DogBreed } from '../../domain/dog/dog-breed.entity';
+import { MIXED_BREED_VIRTUAL_ID } from '../../domain/dog/constants';
 import { DogSizeCategory, GrowthCurveType } from '../../domain/dog/enums';
 
 @Injectable()
@@ -31,6 +32,46 @@ export class PrismaDogBreedRepository implements DogBreedRepository {
     });
 
     return records.map((r) => this.mapToDomain(r));
+  }
+
+  async findHotBreeds(limit: number = 10): Promise<DogBreed[]> {
+    const rankings = await this.prisma.dog.groupBy({
+      by: ['breedId'],
+      where: {
+        breedId: {
+          not: MIXED_BREED_VIRTUAL_ID,
+        },
+      },
+      _count: {
+        breedId: true,
+      },
+      orderBy: {
+        _count: {
+          breedId: 'desc',
+        },
+      },
+      take: limit,
+    });
+
+    const breedIds = rankings.map((ranking) => ranking.breedId);
+    if (breedIds.length === 0) {
+      return [];
+    }
+
+    const records = await this.prisma.dogBreed.findMany({
+      where: {
+        id: {
+          in: breedIds,
+        },
+      },
+    });
+
+    const recordMap = new Map(records.map((record) => [record.id, record]));
+
+    return breedIds
+      .map((breedId) => recordMap.get(breedId))
+      .filter((record): record is NonNullable<typeof record> => Boolean(record))
+      .map((record) => this.mapToDomain(record));
   }
 
   async findBySizeCategory(sizeCategory: string): Promise<DogBreed[]> {

@@ -14,6 +14,7 @@ export interface DogBreed {
   id: string
   name: string
   aliases: string[]
+  profileCount: number
   sizeCategory: DogSizeCategory
   growthCurveType: string
   adultAgeMonths: number

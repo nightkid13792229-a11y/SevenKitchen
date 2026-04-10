@@ -6,7 +6,7 @@ import type {
 } from 'axios'
 import { ElMessage } from 'element-plus'
 
-const baseURL = import.meta.env.VITE_API_BASE_URL || '/api'
+const baseURL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
 interface ApiResponse<T = any> {
   code: number

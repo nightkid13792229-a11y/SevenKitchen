@@ -12,4 +12,15 @@ describe('dog-profile-overview runtime regressions', () => {
     expect(source).toContain('applyServerState(')
     expect(source).not.toContain('applyProfile(')
   })
+
+  it('uses hot breeds for the default breed shortcuts instead of isCommon metadata', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-overview/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain("const hotBreeds = ref<DogBreedItem[]>([])")
+    expect(source).toContain('dogApi.hotBreeds()')
+    expect(source).not.toContain('breeds.value.filter(breed => breed.isCommon).slice(0, 8)')
+  })
 })

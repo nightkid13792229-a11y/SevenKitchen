@@ -616,16 +616,19 @@ export class DogsController {
   })
   async listBreeds(): Promise<ApiResponseDto<any[]>> {
     const breeds = await this.dogBreedRepository.findAll();
-    const breedDtos = breeds.map((breed) => ({
-      id: breed.id,
-      name: breed.name,
-      aliases: breed.aliases || [],
-      sizeCategory: breed.sizeCategory,
-      adultAgeMonths: breed.adultAgeMonths,
-      seniorAgeYears: breed.seniorAgeYears,
-      averageAdultWeightKg: breed.averageAdultWeightKg,
-      isCommon: breed.isCommon,
-    }));
+    const breedDtos = breeds.map((breed) => this.mapBreedToDto(breed));
+    return ApiResponseDto.success(breedDtos);
+  }
+
+  @Get('breeds/hot')
+  @ApiOperation({ summary: 'List hot standard dog breeds' })
+  @ApiResponse({
+    status: 200,
+    description: 'Hot standard breeds ranked by dog profile usage',
+  })
+  async listHotBreeds(): Promise<ApiResponseDto<any[]>> {
+    const breeds = await this.dogBreedRepository.findHotBreeds(10);
+    const breedDtos = breeds.map((breed) => this.mapBreedToDto(breed));
     return ApiResponseDto.success(breedDtos);
   }
 
@@ -1017,6 +1020,19 @@ export class DogsController {
       allergyFoods: dog.allergyFoods,
       pickyFoods: dog.pickyFoods,
       cachedTargetFoodKcal: dog.cachedTargetFoodKcal,
+    };
+  }
+
+  private mapBreedToDto(breed: any) {
+    return {
+      id: breed.id,
+      name: breed.name,
+      aliases: breed.aliases || [],
+      sizeCategory: breed.sizeCategory,
+      adultAgeMonths: breed.adultAgeMonths,
+      seniorAgeYears: breed.seniorAgeYears,
+      averageAdultWeightKg: breed.averageAdultWeightKg,
+      isCommon: breed.isCommon,
     };
   }
 

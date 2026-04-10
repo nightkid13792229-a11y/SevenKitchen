@@ -2,23 +2,11 @@
   <div class="breeds-page">
     <!-- Page Header -->
     <div class="page-header">
-      <h2>品种管理</h2>
+      <div>
+        <h2>品种管理</h2>
+        <p class="page-description">新增档案页的快捷品种区已改为按真实建档数据自动显示热门标准品种，无需手动维护；下方标准品种列表默认按建档数降序展示。</p>
+      </div>
     </div>
-
-    <!-- Common Breeds Management Section -->
-    <el-card class="section-card" style="margin-bottom: 24px">
-      <template #header>
-        <div class="card-header">
-          <span class="card-title">常见品种管理</span>
-          <span class="card-subtitle">这些品种将显示在新增档案页面的快捷选择区域</span>
-        </div>
-      </template>
-      <CommonBreedsManager
-        ref="commonBreedsManagerRef"
-        :all-breeds="systemBreeds"
-        :loading="systemBreedsLoading"
-      />
-    </el-card>
 
     <!-- System Breeds Section -->
     <el-card class="section-card" style="margin-bottom: 24px">
@@ -63,13 +51,11 @@ import type { DogBreed, CustomBreedStats } from '@/types/breed'
 import { breedApi } from '@/api'
 import BreedTable from './BreedTable.vue'
 import CustomBreedTable from './CustomBreedTable.vue'
-import CommonBreedsManager from './CommonBreedsManager.vue'
 
 const systemBreeds = ref<DogBreed[]>([])
 const systemBreedsLoading = ref(false)
 const customBreeds = ref<CustomBreedStats[]>([])
 const customBreedsLoading = ref(false)
-const commonBreedsManagerRef = ref<InstanceType<typeof CommonBreedsManager> | null>(null)
 
 const loadSystemBreeds = async () => {
   systemBreedsLoading.value = true
@@ -127,6 +113,13 @@ onMounted(() => {
   margin: 0;
   font-size: 24px;
   color: #303133;
+}
+
+.page-description {
+  margin: 8px 0 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #606266;
 }
 
 .section-card {

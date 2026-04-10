@@ -61,10 +61,35 @@ describe('DogsController (e2e)', () => {
     6,
     true,
   );
+  const mockHotBreeds = [
+    new DogBreed(
+      'breed-hot-1',
+      '拉布拉多',
+      [],
+      DogSizeCategory.LARGE,
+      GrowthCurveType.STANDARD,
+      18,
+      8,
+      30,
+      false,
+    ),
+    new DogBreed(
+      'breed-hot-2',
+      '金毛',
+      [],
+      DogSizeCategory.LARGE,
+      GrowthCurveType.STANDARD,
+      18,
+      8,
+      32,
+      false,
+    ),
+  ];
 
   const mockDogBreedRepository = {
     findById: jest.fn().mockResolvedValue(mockBreed),
     findAll: jest.fn().mockResolvedValue([mockBreed]),
+    findHotBreeds: jest.fn().mockResolvedValue(mockHotBreeds),
     findBySizeCategory: jest.fn(),
     save: jest.fn(),
     update: jest.fn(),
@@ -208,6 +233,7 @@ describe('DogsController (e2e)', () => {
     jest.clearAllMocks();
     mockDogBreedRepository.findById.mockResolvedValue(mockBreed);
     mockDogBreedRepository.findAll.mockResolvedValue([mockBreed]);
+    mockDogBreedRepository.findHotBreeds.mockResolvedValue(mockHotBreeds);
     mockMedicalRecordRepository.findByDogId.mockResolvedValue([]);
     mockCheckupRecordRepository.findByDogId.mockResolvedValue([]);
     mockAllergyRecordRepository.findByDogId.mockResolvedValue([]);
@@ -374,6 +400,29 @@ describe('DogsController (e2e)', () => {
       expect(response.body).toHaveProperty('code', 401);
       expect(response.body).toHaveProperty('message');
       expect(response.body.data).toBeNull();
+    });
+  });
+
+  describe('GET /api/v1/dogs/breeds/hot', () => {
+    it('should return hot standard breeds in usage order', async () => {
+      const response = await request(app.getHttpAdapter().getInstance())
+        .get('/api/v1/dogs/breeds/hot')
+        .expect(200);
+
+      expect(response.body).toHaveProperty('code', 0);
+      expect(Array.isArray(response.body.data)).toBe(true);
+      expect(response.body.data).toHaveLength(2);
+      expect(response.body.data[0]).toMatchObject({
+        id: 'breed-hot-1',
+        name: '拉布拉多',
+        sizeCategory: DogSizeCategory.LARGE,
+      });
+      expect(response.body.data[1]).toMatchObject({
+        id: 'breed-hot-2',
+        name: '金毛',
+        sizeCategory: DogSizeCategory.LARGE,
+      });
+      expect(mockDogBreedRepository.findHotBreeds).toHaveBeenCalledWith(10);
     });
   });
 

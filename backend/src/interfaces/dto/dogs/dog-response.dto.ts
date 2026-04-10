@@ -40,6 +40,13 @@ export class DogProfileDto {
   })
   customBreedName?: string | null;
 
+  @ApiPropertyOptional({
+    description: 'Dog avatar URL',
+    example: 'https://img.sevenkitchen.cloud/dogs/avatars/123.png',
+    nullable: true,
+  })
+  avatarUrl?: string | null;
+
   @ApiProperty({ example: '2020-01-01T00:00:00Z' })
   birthday!: string;
 

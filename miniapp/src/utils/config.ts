@@ -6,8 +6,8 @@
 // 环境说明
 // ========================================
 // 开发环境（npm run dev:mp-weixin）:
-//   - DevTools: localhost:3001（本地后端）
-//   - 真机调试: 局域网IP（如 192.168.31.43:3001）
+//   - DevTools: 127.0.0.1:3011（本地后端）
+//   - 真机调试: 局域网IP（如 192.168.31.43:3011）
 //
 // 生产环境（npm run build:mp-weixin）:
 //   - 始终使用 api.sevenkitchen.cloud
@@ -19,15 +19,17 @@
 // - import.meta.env.DEV: 开发环境
 // - import.meta.env.PROD: 生产环境
 
+import { DEVTOOLS_BASE_URL, LAN_DEBUG_BASE_URL, migrateLegacyDevBaseUrl } from './runtime-base-url'
+
 const IS_PRODUCTION_BUILD = import.meta.env.PROD;
 
 // ========================================
 // API 地址配置
 // ========================================
 // 开发环境配置
-const DEV_DEFAULT_BASE_URL = 'http://localhost:3001/api/v1';
-const DEV_DEV_BASE_URL = 'http://localhost:3001/api/v1';
-const DEV_LAN_BASE_URL = 'http://192.168.31.43:3001/api/v1';
+const DEV_DEFAULT_BASE_URL = DEVTOOLS_BASE_URL;
+const DEV_DEV_BASE_URL = DEVTOOLS_BASE_URL;
+const DEV_LAN_BASE_URL = LAN_DEBUG_BASE_URL;
 const DEV_PROD_BASE_URL = 'https://api.sevenkitchen.cloud/api/v1';
 
 // 生产环境配置
@@ -125,9 +127,15 @@ export function getBaseUrl(): string {
   // 优先级3: 手动配置的地址（Storage）
   try {
     const stored = uni.getStorageSync(STORAGE_KEY)
-    if (stored && typeof stored === 'string' && stored.trim()) {
-      console.debug('[Config] Using BASE_URL from storage:', stored.trim())
-      return stored.trim()
+    const migratedStored = migrateLegacyDevBaseUrl(stored)
+    if (migratedStored) {
+      if (migratedStored !== stored) {
+        uni.setStorageSync(STORAGE_KEY, migratedStored)
+        console.info('[Config] Migrated legacy dev BASE_URL override to:', migratedStored)
+      } else {
+        console.debug('[Config] Using BASE_URL from storage:', migratedStored)
+      }
+      return migratedStored
     }
   } catch (err) {
     console.warn('Failed to read BASE_URL from storage:', err)
@@ -157,9 +165,10 @@ export function isProductionBuild(): boolean {
 export function setBaseUrl(url: string): void {
   try {
     const trimmed = url.trim()
-    if (trimmed) {
-      uni.setStorageSync(STORAGE_KEY, trimmed)
-      console.log('BASE_URL updated to:', trimmed)
+    const normalized = migrateLegacyDevBaseUrl(trimmed)
+    if (normalized) {
+      uni.setStorageSync(STORAGE_KEY, normalized)
+      console.log('BASE_URL updated to:', normalized)
     }
   } catch (err) {
     console.error('Failed to save BASE_URL to storage:', err)

@@ -156,6 +156,8 @@ import { RecommendedProductService } from './application/ingredient/recommended-
 import { ReviewsController } from './interfaces/controllers/reviews.controller';
 import { FeedbackController } from './interfaces/controllers/feedback.controller';
 import { DogProfileAnalyticsService } from './application/analytics/dog-profile-analytics.service';
+import { DogProfileAnalyticsController } from './interfaces/controllers/dog-profile-analytics.controller';
+import { AdminDogProfileAnalyticsController } from './interfaces/controllers/admin-dog-profile-analytics.controller';
 import { ProcurementSkuService } from './application/ingredient/procurement-sku.service';
 import { IngredientSuggestionsController } from './interfaces/controllers/ingredient-suggestions.controller';
 
@@ -248,13 +250,16 @@ validatePrismaConfig();
     FeedbackController,
     ProcurementSkuController,
     IngredientSuggestionsController,
+    ...(isPrismaEnabled()
+      ? [DogProfileAnalyticsController, AdminDogProfileAnalyticsController]
+      : []),
   ],
   providers: [
     DogService,
     {
       provide: DOG_REPOSITORY,
       useFactory: (prismaService?: PrismaService) => {
-        const mode = process.env.DOG_REPO ?? 'memory';
+        const mode = process.env.DOG_REPO ?? (isPrismaEnabled() ? 'prisma' : 'memory');
         if (mode === 'prisma') {
           if (!prismaService) {
             throw new Error(

@@ -58,6 +58,8 @@ interface RequestOptions {
   data?: any
   header?: Record<string, string>
   retryOn401?: boolean // Internal flag to prevent infinite retry loops
+  quiet?: boolean
+  suppressErrorToast?: boolean
 }
 
 // Token storage helpers - single source of truth
@@ -220,9 +222,13 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
         fullUrl = `${url}?${queryString}`;
       }
     }
-    console.log('[API Request]', options.method || 'GET', fullUrl);
+    if (!options.quiet) {
+      console.log('[API Request]', options.method || 'GET', fullUrl)
+    }
     if (options.data) {
-      console.log('[API Request Data]', options.data);
+      if (!options.quiet) {
+        console.log('[API Request Data]', options.data)
+      }
     }
 
     uni.request({
@@ -231,11 +237,15 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
       data: options.data,
       header,
       success: (res: any) => {
-        console.log('[API Response]', 'statusCode:', res.statusCode, 'data:', res.data)
+        if (!options.quiet) {
+          console.log('[API Response]', 'statusCode:', res.statusCode, 'data:', res.data)
+        }
 
         // Handle 204 No Content (DELETE responses)
         if (res.statusCode === 204) {
-          console.log('[API] 204 No Content - treating as success')
+          if (!options.quiet) {
+            console.log('[API] 204 No Content - treating as success')
+          }
           resolve({ code: 0, message: 'Success', data: null } as ApiResponse<T>)
           return
         }
@@ -243,31 +253,41 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
         // Check if response data exists
         if (!res.data) {
           const errorMsg = `服务器响应格式错误`
-          console.error('[API] No response data - res.keys:', Object.keys(res), 'statusCode:', res.statusCode)
-          uni.showToast({
-            title: normalizeMsg(errorMsg),
-            icon: 'none',
-            duration: 2000
-          })
+          if (!options.quiet) {
+            console.error('[API] No response data - res.keys:', Object.keys(res), 'statusCode:', res.statusCode)
+          }
+          if (!options.suppressErrorToast) {
+            uni.showToast({
+              title: normalizeMsg(errorMsg),
+              icon: 'none',
+              duration: 2000,
+            })
+          }
           reject(new Error(errorMsg))
           return
         }
 
         const response = res.data as ApiResponse<T>
-        console.log('[API Parsed Response]', response)
+        if (!options.quiet) {
+          console.log('[API Parsed Response]', response)
+        }
 
         // Handle 401 Unauthorized - don't auto-login with test account
         if (res.statusCode === 401) {
-          console.warn('401 Unauthorized - User needs to login')
+          if (!options.quiet) {
+            console.warn('401 Unauthorized - User needs to login')
+          }
           clearToken()
           resetTokenReady()
 
           // Show toast提示用户登录
-          uni.showToast({
-            title: '请先登录',
-            icon: 'none',
-            duration: 2000
-          })
+          if (!options.suppressErrorToast) {
+            uni.showToast({
+              title: '请先登录',
+              icon: 'none',
+              duration: 2000,
+            })
+          }
 
           // Reject with auth error - caller can handle (e.g., redirect to login)
           reject(new Error('Authentication required'))
@@ -278,13 +298,17 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
         if (response.code !== 0) {
           // Show error toast (non-blocking)
           const errorMsg = normalizeMsg(response.message || '请求失败')
-          console.warn('API error:', response.code, errorMsg)
+          if (!options.quiet) {
+            console.warn('API error:', response.code, errorMsg)
+          }
 
-          uni.showToast({
-            title: errorMsg,
-            icon: 'none',
-            duration: 2000
-          })
+          if (!options.suppressErrorToast) {
+            uni.showToast({
+              title: errorMsg,
+              icon: 'none',
+              duration: 2000,
+            })
+          }
 
           // Reject but don't crash - caller can handle gracefully
           reject(new Error(errorMsg))
@@ -294,7 +318,9 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
         resolve(response)
       },
       fail: (err: any) => {
-        console.error('Request failed:', err)
+        if (!options.quiet) {
+          console.error('Request failed:', err)
+        }
         
         // Determine error type for better user feedback
         const errMsg = err?.errMsg || String(err) || ''
@@ -309,11 +335,13 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
         }
         
         // Show non-blocking toast - app continues to function
-        uni.showToast({
-          title: normalizeMsg(errorTitle),
-          icon: 'none',
-          duration: 2000
-        })
+        if (!options.suppressErrorToast) {
+          uni.showToast({
+            title: normalizeMsg(errorTitle),
+            icon: 'none',
+            duration: 2000,
+          })
+        }
         
         // Reject with error but don't crash - caller handles gracefully
         reject(err)

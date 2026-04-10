@@ -20,6 +20,30 @@
       }
     },
     {
+      "path": "pages/dog-profile-overview/index",
+      "style": {
+        "navigationBarTitleText": "爱犬概览"
+      }
+    },
+    {
+      "path": "pages/dog-profile-basic/index",
+      "style": {
+        "navigationBarTitleText": "基础信息"
+      }
+    },
+    {
+      "path": "pages/dog-profile-feeding/index",
+      "style": {
+        "navigationBarTitleText": "喂食信息"
+      }
+    },
+    {
+      "path": "pages/dog-profile-health/index",
+      "style": {
+        "navigationBarTitleText": "健康记录"
+      }
+    },
+    {
       "path": "pages/dog-create/index",
       "style": {
         "navigationBarTitleText": "创建狗狗档案"

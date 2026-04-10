@@ -3,7 +3,13 @@
  * Application layer service for Dog domain operations
  */
 
-import { Injectable, Inject } from '@nestjs/common';
+import {
+  Injectable,
+  Inject,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import type { DogRepository } from '../../domain/dog/dog.repository';
 import type { DogBreedRepository } from '../../domain/dog/dog-breed.repository';
@@ -167,6 +173,7 @@ export class DogService {
     // Fields that require recalculation
     const fieldsRequiringRecalc = [
       'breedId',
+      'birthday',
       'currentWeightKg',
       'bcsScore',
       'activityLevel',
@@ -194,6 +201,32 @@ export class DogService {
     }
 
     return this.dogRepository.save(dog);
+  }
+
+  async deleteDogProfile(customerId: string, dogId: string): Promise<void> {
+    const dog = await this.dogRepository.findById(dogId);
+
+    if (!dog) {
+      throw new NotFoundException('Dog not found');
+    }
+
+    if (dog.ownerId !== customerId) {
+      throw new ForbiddenException('Access denied');
+    }
+
+    const orderCount = await this.prisma.order.count({
+      where: {
+        dogId,
+      },
+    });
+
+    if (orderCount > 0) {
+      throw new BadRequestException(
+        `Cannot delete dog profile: ${orderCount} related order(s) found. Please keep this profile for order history.`,
+      );
+    }
+
+    await this.dogRepository.delete(dogId);
   }
 
   /**

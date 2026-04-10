@@ -21,7 +21,7 @@
       <view class="user-profile-section" @tap="editProfile">
         <image
           class="user-avatar"
-          :src="userInfo.avatarUrl || '/static/default-avatar.png'"
+          :src="resolveUserAvatarSrc(userInfo.avatarUrl)"
           mode="aspectFill"
         ></image>
         <text class="user-nickname">{{ userInfo.nickname || '微信用户' }}</text>
@@ -101,6 +101,7 @@
 import { ref, computed } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { getToken, clearToken, request } from '../../utils/api'
+import { resolveUserAvatarSrc } from '../../utils/user-profile'
 
 interface UserInfo {
   id: string

@@ -58,7 +58,8 @@
 import { ref, onMounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { request, waitForToken } from '../../utils/api'
-import { getCachedDogs, setCachedDogs, removeDogFromCache } from '../../utils/dog-cache'
+import { getCachedDogs, removeDogFromCache, setCachedDogs } from '../../utils/dog-cache'
+import { resolveDogProfileEntryRoute } from '../../utils/dog-profile-form'
 
 interface DogProfile {
   id: string
@@ -131,16 +132,14 @@ function loadDogs() {
 }
 
 function viewDog(dogId: string) {
-  // For MVP, just navigate to create page with edit mode
-  // In production, would have a detail/edit page
   uni.navigateTo({
-    url: `/pages/dog-create/index?dogId=${dogId}`
+    url: resolveDogProfileEntryRoute(dogId)
   })
 }
 
 function createDog() {
   uni.navigateTo({
-    url: '/pages/dog-create/index'
+    url: resolveDogProfileEntryRoute()
   })
 }
 
@@ -409,4 +408,3 @@ function calculateAgeText(birthday: string) {
   border: none;
 }
 </style>
-

@@ -8,6 +8,7 @@
 import { onLaunch, onShow, onHide } from '@dcloudio/uni-app'
 import { getToken, markTokenReady } from './utils/api'
 import { getBaseUrl, getDefaultBaseUrl, setBaseUrl } from './utils/config'
+import { migrateLegacyDevBaseUrl } from './utils/runtime-base-url'
 
 onLaunch(() => {
   console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
@@ -23,20 +24,21 @@ onLaunch(() => {
     console.log('[App Debug] Platform:', platform)
     console.log('[App Debug] Platform lowercased:', platformLower)
 
-    // Auto-fix: Clear old port 3000 configuration from storage
+    // Auto-fix: Migrate legacy local dev ports in storage
     const storedBaseUrl = uni.getStorageSync('api_base_url')
     if (storedBaseUrl) {
-      if (storedBaseUrl.includes(':3000') || storedBaseUrl.includes(':3000/')) {
-        console.warn('⚠️  Detected old port 3000 in storage, clearing...')
-        uni.removeStorageSync('api_base_url')
-        console.log('✓ Old configuration cleared. Using new port 3001')
+      const migratedBaseUrl = migrateLegacyDevBaseUrl(storedBaseUrl)
+      if (migratedBaseUrl && migratedBaseUrl !== storedBaseUrl) {
+        console.warn('⚠️  Detected legacy dev BASE_URL in storage, migrating...')
+        setBaseUrl(migratedBaseUrl)
+        console.log('✓ Legacy configuration migrated to:', migratedBaseUrl)
       }
     }
 
     // Auto-configure for real device debugging: use production URL
     // 如果是真机调试模式，且Storage中没有配置baseUrl，自动设置生产环境URL
     const isRealDevice = platformLower === 'android' || platformLower === 'ios'
-    if (isRealDevice && !storedBaseUrl) {
+    if (isRealDevice && !uni.getStorageSync('api_base_url')) {
       const prodUrl = 'https://api.sevenkitchen.cloud/api/v1'
       console.log('🔧 Real device detected, auto-setting production URL:', prodUrl)
       setBaseUrl(prodUrl)
@@ -94,5 +96,4 @@ page {
   font-size: 14px;
 }
 </style>
-
 

@@ -154,6 +154,27 @@ model User {
   @@map("user")
 }
 
+model DogProfileEvent {
+  id           String   @id @default(uuid())
+  customerId   String   @map("customer_id")
+  dogId        String?  @map("dog_id")
+  eventName    String   @map("event_name")
+  mode         String
+  entrySource  String?  @map("entry_source")
+  stepName     String?  @map("step_name")
+  moduleName   String?  @map("module_name")
+  hasDraft     Boolean? @map("has_draft")
+  calcStatus   String?  @map("calc_status")
+  submitStatus String?  @map("submit_status")
+  properties   Json?
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  @@index([eventName, createdAt])
+  @@index([customerId, createdAt])
+  @@index([dogId, createdAt])
+  @@map("dog_profile_event")
+}
+
 model Address {
   id            String  @id @default(uuid()) @map("id")
   userId        String  @map("user_id")
@@ -208,6 +229,7 @@ model Dog {
   cachedTargetFoodKcal Int                 @default(0) @map("cached_target_food_kcal")
   createdAt            DateTime            @default(now()) @map("created_at")
   customBreedName      String?             @map("custom_breed_name")
+  avatarUrl            String?             @map("avatar_url")
   allergyFoods         String?             @map("allergy_foods")
   pickyFoods           String?             @map("picky_foods")
   allergyRecords       AllergyRecord[]
@@ -222,27 +244,6 @@ model Dog {
   @@index([ownerId])
   @@index([ownerId, createdAt])
   @@map("dog")
-}
-
-model DogProfileEvent {
-  id           String   @id @default(uuid())
-  customerId   String   @map("customer_id")
-  dogId        String?  @map("dog_id")
-  eventName    String   @map("event_name")
-  mode         String
-  entrySource  String?  @map("entry_source")
-  stepName     String?  @map("step_name")
-  moduleName   String?  @map("module_name")
-  hasDraft     Boolean? @map("has_draft")
-  calcStatus   String?  @map("calc_status")
-  submitStatus String?  @map("submit_status")
-  properties   Json?
-  createdAt    DateTime @default(now()) @map("created_at")
-
-  @@index([eventName, createdAt])
-  @@index([customerId, createdAt])
-  @@index([dogId, createdAt])
-  @@map("dog_profile_event")
 }
 
 model Recipe {

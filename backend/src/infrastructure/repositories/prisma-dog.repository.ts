@@ -57,6 +57,7 @@ export class PrismaDogRepository implements DogRepository {
       treatLevel: dog.treatLevel as any,
       manualTreatKcal: dog.manualTreatKcal,
       medicalHistory: dog.medicalHistory,
+      avatarUrl: dog.avatarUrl,
       allergyFoods: dog.allergyFoods,
       pickyFoods: dog.pickyFoods,
       cachedTargetFoodKcal: dog.cachedTargetFoodKcal,
@@ -104,6 +105,7 @@ export class PrismaDogRepository implements DogRepository {
       record.allergyFoods,
       record.pickyFoods,
       record.cachedTargetFoodKcal,
+      record.avatarUrl,
     );
   }
 }

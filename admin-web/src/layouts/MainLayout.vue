@@ -45,6 +45,10 @@
           <el-icon><EditPen /></el-icon>
           <span>定制食谱订单</span>
         </el-menu-item>
+        <el-menu-item index="/analytics/dog-profile">
+          <el-icon><DataBoard /></el-icon>
+          <span>狗档案转化分析</span>
+        </el-menu-item>
         <el-menu-item index="/inventory">
           <el-icon><Box /></el-icon>
           <span>库存管理</span>

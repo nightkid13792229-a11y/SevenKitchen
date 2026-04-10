@@ -25,6 +25,40 @@ import {
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard } from '../auth';
+import { resolveHealthUploadErrorMessage } from './health-upload-error';
+
+const ALLOWED_HEALTH_UPLOAD_MIME_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+  'application/pdf',
+];
+
+const ALLOWED_HEALTH_UPLOAD_EXTENSIONS = [
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.gif',
+  '.webp',
+  '.heic',
+  '.heif',
+  '.pdf',
+];
+
+function hasAllowedHealthUploadType(file: Express.Multer.File) {
+  if (ALLOWED_HEALTH_UPLOAD_MIME_TYPES.includes(file.mimetype)) {
+    return true;
+  }
+
+  const normalizedName = file.originalname?.toLowerCase() || '';
+  return ALLOWED_HEALTH_UPLOAD_EXTENSIONS.some((extension) =>
+    normalizedName.endsWith(extension),
+  );
+}
 
 @ApiTags('Health Uploads')
 @Controller('api/v1/health')
@@ -67,16 +101,9 @@ export class HealthUploadController {
     }
 
     // Validate file type (images + PDF)
-    const allowedTypes = [
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'image/webp',
-      'application/pdf',
-    ];
-    if (!allowedTypes.includes(file.mimetype)) {
+    if (!hasAllowedHealthUploadType(file)) {
       throw new BadRequestException(
-        'Invalid file type. Only JPG, PNG, GIF, WEBP, and PDF are allowed',
+        'Invalid file type. Only JPG, PNG, GIF, WEBP, HEIC, HEIF, and PDF are allowed',
       );
     }
 
@@ -90,7 +117,9 @@ export class HealthUploadController {
       return ApiResponseDto.success(result);
     } catch (error) {
       console.error('[HealthUpload] Upload failed:', error);
-      throw new BadRequestException('Failed to upload file');
+      throw new BadRequestException(
+        resolveHealthUploadErrorMessage(error, 'Failed to upload file'),
+      );
     }
   }
 

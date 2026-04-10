@@ -185,6 +185,12 @@ const routes: RouteRecordRaw[] = [
         name: 'CustomRecipes',
         component: () => import('@/views/CustomRecipes/OrderList.vue'),
         meta: { title: '定制食谱订单' }
+      },
+      {
+        path: 'analytics/dog-profile',
+        name: 'DogProfileAnalytics',
+        component: () => import('@/views/Analytics/DogProfileAnalytics.vue'),
+        meta: { title: '狗档案转化分析' }
       }
     ]
   }

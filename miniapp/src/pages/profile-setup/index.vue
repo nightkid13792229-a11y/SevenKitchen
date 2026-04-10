@@ -16,7 +16,7 @@
         >
           <image
             class="avatar-image"
-            :src="avatarUrl || '/static/default-avatar.png'"
+            :src="resolveUserAvatarSrc(avatarUrl)"
             mode="aspectFill"
           />
           <view class="avatar-overlay">
@@ -57,6 +57,12 @@
 import { ref, computed } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
+import { getBaseUrl } from '../../utils/config'
+import {
+  buildUserAvatarUploadUrl,
+  parseAvatarUploadResponse,
+  resolveUserAvatarSrc,
+} from '../../utils/user-profile'
 
 const avatarUrl = ref('')
 const nickname = ref('')
@@ -264,26 +270,17 @@ async function saveUserInfo(nickname: string, avatarUrl: string | null) {
 async function uploadAvatar(filePath: string): Promise<string> {
   return new Promise((resolve, reject) => {
     uni.uploadFile({
-      url: `${getBaseUrl()}/users/me/avatar`,
+      url: buildUserAvatarUploadUrl(getBaseUrl()),
       filePath,
       name: 'file',
       header: {
         'Authorization': `Bearer ${uni.getStorageSync('token')}`
       },
       success: (uploadRes: any) => {
-        if (uploadRes.statusCode === 200 || uploadRes.statusCode === 201) {
-          try {
-            const response = JSON.parse(uploadRes.data)
-            if (response.code === 0 && response.data) {
-              resolve(response.data.url)
-            } else {
-              reject(new Error(response.message || '上传失败'))
-            }
-          } catch (err) {
-            reject(new Error('解析响应失败'))
-          }
-        } else {
-          reject(new Error(`上传失败: ${uploadRes.statusCode}`))
+        try {
+          resolve(parseAvatarUploadResponse(uploadRes))
+        } catch (err) {
+          reject(err instanceof Error ? err : new Error('解析响应失败'))
         }
       },
       fail: (err) => {
@@ -294,15 +291,6 @@ async function uploadAvatar(filePath: string): Promise<string> {
   })
 }
 
-// 获取API基础URL
-function getBaseUrl(): string {
-  // #ifdef MP-WEIXIN
-  return 'https://api.sevenkitchen.cloud/api/v1'
-  // #endif
-  // #ifndef MP-WEIXIN
-  return 'http://localhost:3001/api/v1'
-  // #endif
-}
 </script>
 
 <style scoped>

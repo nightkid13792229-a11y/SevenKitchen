@@ -68,6 +68,21 @@ describe('DogProfileAnalyticsService', () => {
     });
   });
 
+  it('fails open when analytics table is missing during track', async () => {
+    prisma.dogProfileEvent.create.mockRejectedValue({
+      code: 'P2021',
+      meta: { table: 'public.dog_profile_event' },
+    });
+
+    await expect(
+      service.track({
+        customerId: 'customer-a',
+        eventName: 'dog_profile_step_viewed',
+        mode: 'create',
+      }),
+    ).resolves.toBeNull();
+  });
+
   it('builds funnel counts from a time window', async () => {
     prisma.dogProfileEvent.findMany.mockResolvedValue([
       {
@@ -117,6 +132,38 @@ describe('DogProfileAnalyticsService', () => {
         },
       },
       orderBy: { createdAt: 'asc' },
+    });
+  });
+
+  it('returns an empty summary when analytics table is missing', async () => {
+    prisma.dogProfileEvent.findMany.mockRejectedValue({
+      code: 'P2021',
+      meta: { table: 'public.dog_profile_event' },
+    });
+
+    await expect(
+      service.getSummary({
+        from: '2026-04-01T00:00:00.000Z',
+        to: '2026-04-04T00:00:00.000Z',
+      }),
+    ).resolves.toEqual({
+      createFunnel: {
+        started: 0,
+        basicCompleted: 0,
+        recommendationSucceeded: 0,
+        submitted: 0,
+      },
+      editFunnel: {
+        moduleOpened: 0,
+        calcSucceeded: 0,
+        saved: 0,
+      },
+      riskSignals: {
+        draftRestored: 0,
+        calcFailed: 0,
+        submitFailed: 0,
+        healthSkipped: 0,
+      },
     });
   });
 });

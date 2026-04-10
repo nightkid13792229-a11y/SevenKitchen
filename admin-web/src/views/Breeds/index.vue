@@ -31,6 +31,14 @@
           </el-button>
         </div>
       </template>
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        style="margin-bottom: 16px"
+      >
+        可在列表操作列点击“维护别名”，手动编辑每个品种的搜索别名；下方“自定义品种统计”也支持将用户输入一键收录为别名。
+      </el-alert>
       <BreedTable
         :data="systemBreeds"
         :loading="systemBreedsLoading"

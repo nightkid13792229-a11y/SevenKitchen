@@ -14,6 +14,8 @@
     "start:prod": "NODE_ENV=production node dist/src/main",
     "start:once": "ts-node -r tsconfig-paths/register scripts/start-once.ts",
     "start:check": "ts-node -r tsconfig-paths/register scripts/start-check.ts",
+    "backfill:breed-aliases": "ts-node -r tsconfig-paths/register prisma/backfill-breed-aliases.ts",
+    "backfill:breed-aliases:apply": "ts-node -r tsconfig-paths/register prisma/backfill-breed-aliases.ts --apply",
     "audit:recipe-stats": "ts-node scripts/audit-recipe-stats.ts",
     "repair:favorite-counts": "ts-node scripts/repair-favorite-counts.ts",
     "smoke:pricing-purchase": "node scripts/smoke_pricing_purchase_flow.js",

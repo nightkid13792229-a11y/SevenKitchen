@@ -5,16 +5,28 @@
  */
 
 import { PrismaClient } from '@prisma/client';
+import { mergeBreedAliases } from './breed-alias-catalog';
 
 const prisma = new PrismaClient();
+
+type SeedBreed = {
+  name: string
+  aliases?: string[]
+  sizeCategory: 'SMALL' | 'MEDIUM' | 'LARGE' | 'GIANT'
+  growthCurveType: 'STANDARD' | 'SLOW'
+  adultAgeMonths: number
+  seniorAgeYears: number
+  averageAdultWeightKg: number
+}
 
 /**
  * Common dog breeds with realistic data
  * Size categories and age thresholds based on breed characteristics
  */
-const dogBreeds = [
+const dogBreeds: SeedBreed[] = [
   {
     name: '拉布拉多',
+    aliases: ['拉拉', '拉布拉多犬'],
     sizeCategory: 'LARGE',
     growthCurveType: 'STANDARD',
     adultAgeMonths: 18,
@@ -23,6 +35,7 @@ const dogBreeds = [
   },
   {
     name: '泰迪',
+    aliases: ['泰迪犬', '玩具贵宾犬', '贵宾犬'],
     sizeCategory: 'SMALL',
     growthCurveType: 'STANDARD',
     adultAgeMonths: 10,
@@ -31,6 +44,7 @@ const dogBreeds = [
   },
   {
     name: '金毛',
+    aliases: ['金毛犬', '金毛巡回猎犬'],
     sizeCategory: 'LARGE',
     growthCurveType: 'STANDARD',
     adultAgeMonths: 18,
@@ -39,6 +53,7 @@ const dogBreeds = [
   },
   {
     name: '比熊',
+    aliases: ['比熊犬', '比熊弗里兹犬'],
     sizeCategory: 'SMALL',
     growthCurveType: 'STANDARD',
     adultAgeMonths: 10,
@@ -47,6 +62,7 @@ const dogBreeds = [
   },
   {
     name: '哈士奇',
+    aliases: ['西伯利亚哈士奇'],
     sizeCategory: 'MEDIUM',
     growthCurveType: 'STANDARD',
     adultAgeMonths: 12,
@@ -55,6 +71,7 @@ const dogBreeds = [
   },
   {
     name: '德牧',
+    aliases: ['德国牧羊犬', '德国黑背'],
     sizeCategory: 'LARGE',
     growthCurveType: 'STANDARD',
     adultAgeMonths: 18,
@@ -63,6 +80,7 @@ const dogBreeds = [
   },
   {
     name: '边牧',
+    aliases: ['边境牧羊犬', '边境牧羊'],
     sizeCategory: 'MEDIUM',
     growthCurveType: 'STANDARD',
     adultAgeMonths: 12,
@@ -71,6 +89,7 @@ const dogBreeds = [
   },
   {
     name: '柯基',
+    aliases: ['威尔士柯基', '柯基犬'],
     sizeCategory: 'SMALL',
     growthCurveType: 'STANDARD',
     adultAgeMonths: 10,
@@ -79,6 +98,7 @@ const dogBreeds = [
   },
   {
     name: '萨摩耶',
+    aliases: ['萨摩耶犬'],
     sizeCategory: 'MEDIUM',
     growthCurveType: 'STANDARD',
     adultAgeMonths: 12,
@@ -112,6 +132,7 @@ async function main() {
     const created = await prisma.dogBreed.create({
       data: {
         name: breed.name,
+        aliases: mergeBreedAliases(breed.name, breed.aliases ?? []),
         sizeCategory: breed.sizeCategory as any,
         growthCurveType: breed.growthCurveType as any,
         adultAgeMonths: breed.adultAgeMonths,
@@ -134,4 +155,3 @@ main()
   .finally(async () => {
     await prisma.$disconnect();
   });
-

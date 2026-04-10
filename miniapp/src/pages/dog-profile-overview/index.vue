@@ -30,6 +30,7 @@
               class="profile-hero__avatar-image"
               :src="dogAvatarSrc"
               mode="aspectFill"
+              @error="onDogAvatarImageError"
             />
             <view class="profile-hero__avatar-badge">{{ avatarText }}</view>
             <view v-if="activeEditSection === 'basic'" class="profile-hero__avatar-overlay">
@@ -534,6 +535,16 @@
         </view>
       </view>
     </view>
+
+    <DogAvatarCropper
+      :visible="showAvatarCropper"
+      :source-path="avatarCropSourcePath"
+      title="裁切狗狗头像"
+      confirm-text="使用头像"
+      @close="closeOverviewAvatarCropper"
+      @confirm="handleOverviewAvatarCropConfirm"
+      @error="showOverviewAvatarCropError"
+    />
   </view>
 </template>
 
@@ -541,6 +552,7 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
 import HealthRecordsSection from '../../components/dog-profile/HealthRecordsSection.vue'
+import DogAvatarCropper from '../../components/dog-profile/DogAvatarCropper.vue'
 import { dogApi } from '../../api/dogs'
 import { addDogToCache } from '../../utils/dog-cache'
 import { trackDogProfileEvent } from '../../utils/dog-profile-analytics'
@@ -664,6 +676,9 @@ const savingSection = ref<EditableSection>('')
 const isHydrating = ref(false)
 const isPreviewLoading = ref(false)
 const isUploadingAvatar = ref(false)
+const showAvatarCropper = ref(false)
+const avatarCropSourcePath = ref('')
+const avatarLocalPreviewPath = ref('')
 const bcsGuideLoadFailed = ref(false)
 const activeFeedingImpactInfo = ref<'bcs' | 'activity' | 'treat' | ''>('')
 const breedSearchKeyword = ref('')
@@ -712,7 +727,7 @@ const avatarText = computed(() => {
   const name = String(form.name || '').trim()
   return name ? name.slice(0, 1) : '汪'
 })
-const dogAvatarSrc = computed(() => resolveDogAvatarSrc(form.avatarUrl))
+const dogAvatarSrc = computed(() => resolveDogAvatarSrc(form.avatarUrl, avatarLocalPreviewPath.value))
 
 const breedLabel = computed(() => resolveDogBreedLabel(form, breeds.value))
 const derivedBreedSizeCategory = computed(() => breeds.value.find(breed => breed.id === form.breedId)?.sizeCategory || '')
@@ -1150,6 +1165,29 @@ function restoreAutoSizeMatch() {
   showSizeOverrideEditor.value = false
 }
 
+function openOverviewAvatarCropper(filePath: string) {
+  avatarCropSourcePath.value = filePath
+  showAvatarCropper.value = true
+}
+
+function closeOverviewAvatarCropper() {
+  showAvatarCropper.value = false
+  avatarCropSourcePath.value = ''
+}
+
+function showOverviewAvatarCropError(message: string) {
+  uni.showToast({
+    title: message || '裁切失败，请重试',
+    icon: 'none',
+  })
+}
+
+function onDogAvatarImageError() {
+  if (avatarLocalPreviewPath.value) {
+    avatarLocalPreviewPath.value = ''
+  }
+}
+
 async function handleDogAvatarTap() {
   if (activeEditSection.value !== 'basic' || !dogId.value || isUploadingAvatar.value) {
     return
@@ -1167,7 +1205,7 @@ async function handleDogAvatarTap() {
       return
     }
 
-    await uploadDogAvatar(filePath)
+    openOverviewAvatarCropper(filePath)
   } catch (error: any) {
     if (String(error?.errMsg || '').includes('cancel')) {
       return
@@ -1178,6 +1216,12 @@ async function handleDogAvatarTap() {
       icon: 'none',
     })
   }
+}
+
+async function handleOverviewAvatarCropConfirm(croppedFilePath: string) {
+  avatarLocalPreviewPath.value = croppedFilePath
+  closeOverviewAvatarCropper()
+  await uploadDogAvatar(croppedFilePath)
 }
 
 async function uploadDogAvatar(filePath: string) {
@@ -1191,6 +1235,7 @@ async function uploadDogAvatar(filePath: string) {
     uni.showLoading({ title: '上传中...' })
     const avatarUrl = await dogApi.uploadAvatar(dogId.value, filePath)
 
+    avatarLocalPreviewPath.value = ''
     form.avatarUrl = avatarUrl
     if (profile.value) {
       profile.value.avatarUrl = avatarUrl
@@ -1206,6 +1251,7 @@ async function uploadDogAvatar(filePath: string) {
       icon: 'success',
     })
   } catch (error: any) {
+    avatarLocalPreviewPath.value = ''
     uni.hideLoading()
     uni.showToast({
       title: resolveDogAvatarUploadErrorMessage(error),

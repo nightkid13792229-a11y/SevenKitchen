@@ -580,6 +580,16 @@
       @tertiary="handleCreateTertiaryAction"
     />
 
+    <DogAvatarCropper
+      :visible="showAvatarCropper"
+      :source-path="avatarCropSourcePath"
+      title="裁切狗狗头像"
+      confirm-text="使用头像"
+      @close="closeCreateAvatarCropper"
+      @confirm="handleCreateAvatarCropConfirm"
+      @error="showCreateAvatarCropError"
+    />
+
     <view v-if="showLifeStageOverride" class="life-stage-sheet" @tap="closeLifeStageOverride">
       <view class="life-stage-sheet-mask"></view>
       <view class="life-stage-sheet-content" @tap.stop>
@@ -612,6 +622,7 @@ import HealthRecordsSection from '../../components/dog-profile/HealthRecordsSect
 import RecommendationSummaryCard from '../../components/dog-profile/RecommendationSummaryCard.vue'
 import StepProgressHeader from '../../components/dog-profile/StepProgressHeader.vue'
 import StickyActionBar from '../../components/dog-profile/StickyActionBar.vue'
+import DogAvatarCropper from '../../components/dog-profile/DogAvatarCropper.vue'
 import { type DogProfileCreateStep } from '../../constants/dog-profile'
 import { dogApi } from '../../api/dogs'
 import { addDogToCache } from '../../utils/dog-cache'
@@ -743,6 +754,8 @@ const createAvatarPlaceholder = getCreateAvatarPlaceholder()
 const createGenderChoices = getCreateGenderChoices()
 const createNeuterHint = getCreateNeuterHint()
 const createManualBreedLabels = getCreateManualBreedLabels()
+const showAvatarCropper = ref(false)
+const avatarCropSourcePath = ref('')
 const hasCreateAvatarPreview = computed(() => Boolean(String(formData.value.avatarTempFilePath || '').trim()))
 const createAvatarSrc = computed(() => resolveDogAvatarSrc('', formData.value.avatarTempFilePath))
 const showMixedBreedSizeSummary = computed(() =>
@@ -1414,6 +1427,28 @@ function cloneFormSnapshot() {
   return JSON.parse(JSON.stringify(formData.value))
 }
 
+function openCreateAvatarCropper(filePath: string) {
+  avatarCropSourcePath.value = filePath
+  showAvatarCropper.value = true
+}
+
+function closeCreateAvatarCropper() {
+  showAvatarCropper.value = false
+  avatarCropSourcePath.value = ''
+}
+
+function handleCreateAvatarCropConfirm(croppedFilePath: string) {
+  formData.value.avatarTempFilePath = croppedFilePath
+  closeCreateAvatarCropper()
+}
+
+function showCreateAvatarCropError(message: string) {
+  uni.showToast({
+    title: message || '裁切失败，请重试',
+    icon: 'none',
+  })
+}
+
 async function handleCreateAvatarTap() {
   try {
     const res = await uni.chooseImage({
@@ -1427,7 +1462,7 @@ async function handleCreateAvatarTap() {
       return
     }
 
-    formData.value.avatarTempFilePath = filePath
+    openCreateAvatarCropper(filePath)
   } catch (error: any) {
     if (String(error?.errMsg || '').includes('cancel')) {
       return

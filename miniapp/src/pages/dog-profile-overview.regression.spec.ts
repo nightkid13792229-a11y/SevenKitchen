@@ -19,6 +19,10 @@ describe('dog-profile-overview runtime regressions', () => {
       'utf-8',
     )
 
+    expect(source).toContain('<DogAvatarCropper')
+    expect(source).toContain('avatarCropSourcePath')
+    expect(source).toContain('avatarLocalPreviewPath')
+    expect(source).toContain('handleOverviewAvatarCropConfirm')
     expect(source).toContain('await dogApi.uploadAvatar(')
     expect(source).toContain('addDogToCache({')
   })

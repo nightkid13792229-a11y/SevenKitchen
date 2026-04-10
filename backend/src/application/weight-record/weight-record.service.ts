@@ -11,6 +11,8 @@ import {
 import { PrismaDogRepository } from '../../infrastructure/repositories/prisma-dog.repository';
 import { CreateWeightRecordDto } from '../../interfaces/dto/weight-record/create-weight-record.dto';
 import { DOG_REPOSITORY } from '../dog/dog.service';
+import type { DogRepository } from '../../domain/dog/dog.repository';
+import type { Dog } from '../../domain/dog/dog.entity';
 
 @Injectable()
 export class WeightRecordService {
@@ -18,7 +20,9 @@ export class WeightRecordService {
     @Inject('PrismaWeightRecordRepository')
     private readonly weightRecordRepo: PrismaWeightRecordRepository,
     @Inject(DOG_REPOSITORY)
-    private readonly dogRepo: PrismaDogRepository,
+    private readonly dogRepo: DogRepository,
+    @Inject('PrismaDogRepository')
+    private readonly prismaDogRepo: PrismaDogRepository,
   ) {}
 
   async create(
@@ -33,6 +37,8 @@ export class WeightRecordService {
     if (dog.ownerId !== customerId) {
       throw new ForbiddenException('Access denied');
     }
+
+    await this.ensureDogPersistedInPrisma(dog);
 
     // Create weight record
     return this.weightRecordRepo.create({
@@ -94,5 +100,12 @@ export class WeightRecordService {
     }
 
     return this.weightRecordRepo.updateSyncedToProfile(recordId, synced);
+  }
+
+  private async ensureDogPersistedInPrisma(dog: Dog): Promise<void> {
+    const prismaDog = await this.prismaDogRepo.findById(dog.id);
+    if (!prismaDog) {
+      await this.prismaDogRepo.save(dog);
+    }
   }
 }

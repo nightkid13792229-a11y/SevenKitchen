@@ -18,9 +18,9 @@ export class Dog {
     public readonly id: string,
     public readonly ownerId: string,
     public name: string,
-    public readonly breedId: string,
+    public breedId: string,
     public customBreedName: string | null,
-    public readonly birthday: Date,
+    public birthday: Date,
     public gender: DogGender,
     public isNeutered: boolean,
     public currentWeightKg: number,
@@ -36,6 +36,7 @@ export class Dog {
     public allergyFoods: string | null,
     public pickyFoods: string | null,
     public cachedTargetFoodKcal: number, // System calculated, can be updated
+    public avatarUrl: string | null = null,
   ) {
     this.validateInvariants();
   }
@@ -91,7 +92,19 @@ export class Dog {
       this.name = updates.name;
     }
 
-    // Update mutable fields if provided (skip readonly: id, ownerId, breedId, birthday)
+    // Update mutable fields if provided (skip readonly: id, ownerId)
+    if (updates.breedId !== undefined) {
+      if (!updates.breedId || updates.breedId.trim().length === 0) {
+        throw new ValidationError('breedId must be non-empty');
+      }
+      this.breedId = updates.breedId;
+    }
+    if (updates.birthday !== undefined) {
+      if (!(updates.birthday instanceof Date) || Number.isNaN(updates.birthday.getTime())) {
+        throw new ValidationError('birthday must be a valid date');
+      }
+      this.birthday = updates.birthday;
+    }
     if (updates.gender !== undefined) {
       this.gender = updates.gender;
     }
@@ -130,6 +143,9 @@ export class Dog {
     }
     if (updates.medicalHistory !== undefined) {
       this.medicalHistory = updates.medicalHistory;
+    }
+    if (updates.avatarUrl !== undefined) {
+      this.avatarUrl = updates.avatarUrl;
     }
     if (updates.allergyFoods !== undefined) {
       this.allergyFoods = updates.allergyFoods;

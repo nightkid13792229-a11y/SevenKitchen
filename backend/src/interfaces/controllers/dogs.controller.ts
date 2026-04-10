@@ -75,6 +75,41 @@ import {
   WeightRecordListResponseDto,
 } from '../dto/weight-record/weight-record-response.dto';
 import { parseYYYYMMDD } from '../../utils/date-helpers';
+import { resolveDogAvatarUploadErrorMessage } from './dog-avatar-error';
+import { resolveHealthUploadErrorMessage } from './health-upload-error';
+
+const ALLOWED_HEALTH_ATTACHMENT_MIME_TYPES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/gif',
+  'image/webp',
+  'image/heic',
+  'image/heif',
+  'application/pdf',
+];
+
+const ALLOWED_HEALTH_ATTACHMENT_EXTENSIONS = [
+  '.jpg',
+  '.jpeg',
+  '.png',
+  '.gif',
+  '.webp',
+  '.heic',
+  '.heif',
+  '.pdf',
+];
+
+function hasAllowedHealthAttachmentType(file: Express.Multer.File) {
+  if (ALLOWED_HEALTH_ATTACHMENT_MIME_TYPES.includes(file.mimetype)) {
+    return true;
+  }
+
+  const normalizedName = file.originalname?.toLowerCase() || '';
+  return ALLOWED_HEALTH_ATTACHMENT_EXTENSIONS.some((extension) =>
+    normalizedName.endsWith(extension),
+  );
+}
 
 @ApiTags('Dogs')
 @Controller('api/v1/dogs')
@@ -237,12 +272,7 @@ export class DogsController {
     }
 
     const calcResult = await this.dogService.calcPreview(dog.id);
-
-    const response: DogDetailResponseDto = {
-      profile: this.mapDogToProfileDto(dog),
-      calcResult,
-    };
-
+    const response = await this.buildDogDetailResponse(dog, calcResult);
     return ApiResponseDto.success(response);
   }
 
@@ -425,12 +455,33 @@ export class DogsController {
       );
     }
 
-    const response: DogDetailResponseDto = {
-      profile: this.mapDogToProfileDto(dog),
-      calcResult,
-    };
-
+    const response = await this.buildDogDetailResponse(dog, calcResult);
     return ApiResponseDto.success(response);
+  }
+
+  @Delete(':id')
+  @UseGuards(AuthGuard)
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiOperation({ summary: 'Delete dog profile for current customer' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiHeader({
+    name: 'X-Customer-Id',
+    description: 'Customer ID for authentication',
+    required: true,
+  })
+  @ApiParam({ name: 'id', description: 'Dog ID' })
+  @ApiResponse({ status: 204, description: 'Dog profile deleted successfully' })
+  @ApiResponse({ status: 404, description: 'Dog not found' })
+  @ApiResponse({ status: 403, description: 'Access denied' })
+  @ApiResponse({
+    status: 400,
+    description: 'Cannot delete dog profile with related orders',
+  })
+  async deleteDog(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<void> {
+    await this.dogService.deleteDogProfile(user.customerId, id);
   }
 
   @Get('breeds')
@@ -521,84 +572,6 @@ export class DogsController {
       return ApiResponseDto.error(404, 'Dog not found');
     }
 
-    // Load breed to get breed name
-    const breed = await this.dogBreedRepository.findById(dog.breedId);
-    const breedMap = breed ? new Map([[dog.breedId, breed.name]]) : new Map();
-
-    // Load medical records
-    let medicalRecords: any[] | null = null;
-    try {
-      const records = await this.medicalRecordRepository.findByDogId(id);
-      // Convert to DTO format
-      medicalRecords = records.map((record: any) => ({
-        id: record.id,
-        chiefComplaint: record.chiefComplaint,
-        visitDate: record.visitDate
-          ? record.visitDate.toISOString().split('T')[0]
-          : null, // Only YYYY-MM-DD
-        diagnosis: record.diagnosis || null,
-        notes: record.notes || null,
-        attachments: record.attachments || null,
-      }));
-      console.log(
-        `[DogsController] Loaded ${medicalRecords?.length || 0} medical records for dog ${id}`,
-      );
-    } catch (error: any) {
-      console.warn(
-        `[DogsController] Failed to load medical records for dog ${id}:`,
-        error.message,
-      );
-    }
-
-    // Load checkup records
-    let checkupRecords: any[] | null = null;
-    try {
-      const records = await this.checkupRecordRepository.findByDogId(id);
-      // Convert to DTO format
-      checkupRecords = records.map((record: any) => ({
-        id: record.id,
-        checkupDate: record.checkupDate.toISOString().split('T')[0], // Only YYYY-MM-DD
-        checkupType: record.checkupType,
-        notes: record.findings || null, // findings maps to notes
-        attachments: record.attachments || null,
-      }));
-      console.log(
-        `[DogsController] Loaded ${checkupRecords?.length || 0} checkup records for dog ${id}`,
-      );
-    } catch (error: any) {
-      console.warn(
-        `[DogsController] Failed to load checkup records for dog ${id}:`,
-        error.message,
-      );
-    }
-
-    // Load allergy records
-    let allergyRecords: any[] | null = null;
-    try {
-      const records = await this.allergyRecordRepository.findByDogId(id);
-      // Convert to DTO format
-      allergyRecords = records.map((record: any) => ({
-        id: record.id,
-        allergen: record.allergen,
-        allergenType: record.allergenType,
-        discoveryDate: record.discoveryDate.toISOString().split('T')[0], // Only YYYY-MM-DD
-        symptoms: record.symptoms,
-        severity: record.severity,
-        confirmedBy: record.confirmedBy,
-        treatment: record.treatment || null,
-        notes: record.notes || null,
-        attachments: record.attachments || [],
-      }));
-      console.log(
-        `[DogsController] Loaded ${allergyRecords?.length || 0} allergy records for dog ${id}`,
-      );
-    } catch (error: any) {
-      console.warn(
-        `[DogsController] Failed to load allergy records for dog ${id}:`,
-        error.message,
-      );
-    }
-
     // Try to calculate preview, but don't fail if calculation fails
     let calcResult = null;
     try {
@@ -610,18 +583,7 @@ export class DogsController {
         error.message,
       );
     }
-
-    const response: DogDetailResponseDto = {
-      profile: this.mapDogToProfileDto(
-        dog,
-        breedMap,
-        medicalRecords,
-        checkupRecords,
-        allergyRecords,
-      ),
-      calcResult,
-    };
-
+    const response = await this.buildDogDetailResponse(dog, calcResult);
     return ApiResponseDto.success(response);
   }
 
@@ -805,6 +767,120 @@ export class DogsController {
     };
   }
 
+  private async buildBreedMapForDog(dog: Dog): Promise<Map<string, string>> {
+    if (!dog?.breedId || dog.customBreedName) {
+      return new Map();
+    }
+
+    const breed = await this.dogBreedRepository.findById(dog.breedId);
+    return breed ? new Map([[dog.breedId, breed.name]]) : new Map();
+  }
+
+  private async buildDogDetailResponse(
+    dog: Dog,
+    calcResult: DogCalcResultDto | null,
+  ): Promise<DogDetailResponseDto> {
+    const breedMap = await this.buildBreedMapForDog(dog);
+    const [medicalRecords, checkupRecords, allergyRecords] =
+      await Promise.all([
+        this.loadMedicalRecordsForDog(dog.id),
+        this.loadCheckupRecordsForDog(dog.id),
+        this.loadAllergyRecordsForDog(dog.id),
+      ]);
+
+    return {
+      profile: this.mapDogToProfileDto(
+        dog,
+        breedMap,
+        medicalRecords,
+        checkupRecords,
+        allergyRecords,
+      ),
+      calcResult,
+    };
+  }
+
+  private async loadMedicalRecordsForDog(dogId: string): Promise<any[] | null> {
+    try {
+      const records = await this.medicalRecordRepository.findByDogId(dogId);
+      const medicalRecords = records.map((record: any) => ({
+        id: record.id,
+        chiefComplaint: record.chiefComplaint,
+        visitDate: record.visitDate
+          ? record.visitDate.toISOString().split('T')[0]
+          : null,
+        diagnosis: record.diagnosis || null,
+        notes: record.notes || null,
+        attachments: record.attachments || null,
+      }));
+      console.log(
+        `[DogsController] Loaded ${medicalRecords.length} medical records for dog ${dogId}`,
+      );
+      return medicalRecords;
+    } catch (error: any) {
+      console.warn(
+        `[DogsController] Failed to load medical records for dog ${dogId}:`,
+        error.message,
+      );
+      return null;
+    }
+  }
+
+  private async loadCheckupRecordsForDog(dogId: string): Promise<any[] | null> {
+    try {
+      const records = await this.checkupRecordRepository.findByDogId(dogId);
+      const checkupRecords = records.map((record: any) => ({
+        id: record.id,
+        checkupDate: record.checkupDate
+          ? record.checkupDate.toISOString().split('T')[0]
+          : null,
+        checkupType: record.checkupType,
+        notes: record.findings || null,
+        attachments: record.attachments || null,
+      }));
+      console.log(
+        `[DogsController] Loaded ${checkupRecords.length} checkup records for dog ${dogId}`,
+      );
+      return checkupRecords;
+    } catch (error: any) {
+      console.warn(
+        `[DogsController] Failed to load checkup records for dog ${dogId}:`,
+        error.message,
+      );
+      return null;
+    }
+  }
+
+  private async loadAllergyRecordsForDog(dogId: string): Promise<any[] | null> {
+    try {
+      const records = await this.allergyRecordRepository.findByDogId(dogId);
+      const allergyRecords = records.map((record: any) => ({
+        id: record.id,
+        allergen: record.allergen,
+        allergenType: record.allergenType,
+        discoveryDate: record.discoveryDate
+          ? record.discoveryDate.toISOString().split('T')[0]
+          : null,
+        symptoms: record.symptoms,
+        severity: record.severity,
+        confirmedBy: record.confirmedBy,
+        treatment: record.treatment || null,
+        notes: record.notes || null,
+        attachments: record.attachments || [],
+      }));
+      console.log(
+        `[DogsController] Loaded ${allergyRecords.length} allergy records for dog ${dogId}`,
+      );
+      return allergyRecords;
+    } catch (error: any) {
+      console.warn(
+        `[DogsController] Failed to load allergy records for dog ${dogId}:`,
+        error.message,
+      );
+      return null;
+    }
+  }
+
   private mapDogToProfileDto(
     dog: Dog,
     breedMap?: Map<string, string>,
@@ -822,6 +898,7 @@ export class DogsController {
       breedId: dog.breedId,
       breedName,
       customBreedName: dog.customBreedName,
+      avatarUrl: dog.avatarUrl,
       birthday: dog.birthday.toISOString(),
       gender: dog.gender,
       isNeutered: dog.isNeutered,
@@ -1147,16 +1224,33 @@ export class DogsController {
     }
 
     try {
+      const previousAvatarUrl = dog.avatarUrl;
       const result = await this.cosService.uploadImage(
         file,
         file.originalname,
         'dogs/avatars',
       );
 
+      dog.updateProfile({ avatarUrl: result.url });
+      await this.dogRepository.save(dog);
+
+      if (previousAvatarUrl && previousAvatarUrl !== result.url) {
+        try {
+          await this.cosService.deleteImageByUrl(previousAvatarUrl);
+        } catch (deleteError) {
+          console.error(
+            '[DogsController] Failed to delete old dog avatar:',
+            deleteError,
+          );
+        }
+      }
+
       return ApiResponseDto.success(result);
     } catch (error) {
       console.error('[DogsController] Avatar upload failed:', error);
-      throw new BadRequestException('Failed to upload avatar');
+      throw new BadRequestException(
+        resolveDogAvatarUploadErrorMessage(error),
+      );
     }
   }
 
@@ -1209,16 +1303,9 @@ export class DogsController {
     }
 
     // Validate file type (images + PDF)
-    const allowedTypes = [
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'image/webp',
-      'application/pdf',
-    ];
-    if (!allowedTypes.includes(file.mimetype)) {
+    if (!hasAllowedHealthAttachmentType(file)) {
       throw new BadRequestException(
-        'Invalid file type. Only JPG, PNG, GIF, WEBP, and PDF are allowed',
+        'Invalid file type. Only JPG, PNG, GIF, WEBP, HEIC, HEIF, and PDF are allowed',
       );
     }
 
@@ -1237,7 +1324,9 @@ export class DogsController {
         '[DogsController] Medical attachment upload failed:',
         error,
       );
-      throw new BadRequestException('Failed to upload attachment');
+      throw new BadRequestException(
+        resolveHealthUploadErrorMessage(error, 'Failed to upload attachment'),
+      );
     }
   }
 
@@ -1285,16 +1374,9 @@ export class DogsController {
     }
 
     // Validate file type (images + PDF)
-    const allowedTypes = [
-      'image/jpeg',
-      'image/png',
-      'image/gif',
-      'image/webp',
-      'application/pdf',
-    ];
-    if (!allowedTypes.includes(file.mimetype)) {
+    if (!hasAllowedHealthAttachmentType(file)) {
       throw new BadRequestException(
-        'Invalid file type. Only JPG, PNG, GIF, WEBP, and PDF are allowed',
+        'Invalid file type. Only JPG, PNG, GIF, WEBP, HEIC, HEIF, and PDF are allowed',
       );
     }
 
@@ -1312,7 +1394,9 @@ export class DogsController {
         '[DogsController] Checkup attachment upload failed:',
         error,
       );
-      throw new BadRequestException('Failed to upload attachment');
+      throw new BadRequestException(
+        resolveHealthUploadErrorMessage(error, 'Failed to upload attachment'),
+      );
     }
   }
 

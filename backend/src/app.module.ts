@@ -1,6 +1,6 @@
-import * as dotenv from 'dotenv';
+import { loadEnvConfig } from './utils/env-config';
 // 加载.env文件（必须在所有其他导入之前）
-dotenv.config();
+loadEnvConfig();
 
 import { Module, OnModuleInit, Inject } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
@@ -240,7 +240,7 @@ validatePrismaConfig();
     {
       provide: DOG_REPOSITORY,
       useFactory: (prismaService?: PrismaService) => {
-        const mode = process.env.DOG_REPO ?? 'memory';
+        const mode = process.env.DOG_REPO ?? (isPrismaEnabled() ? 'prisma' : 'memory');
         if (mode === 'prisma') {
           if (!prismaService) {
             throw new Error(

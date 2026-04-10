@@ -223,6 +223,7 @@ model Dog {
   cachedTargetFoodKcal Int                 @default(0) @map("cached_target_food_kcal")
   createdAt            DateTime            @default(now()) @map("created_at")
   customBreedName      String?             @map("custom_breed_name")
+  avatarUrl            String?             @map("avatar_url")
   allergyFoods         String?             @map("allergy_foods")
   pickyFoods           String?             @map("picky_foods")
   allergyRecords       AllergyRecord[]

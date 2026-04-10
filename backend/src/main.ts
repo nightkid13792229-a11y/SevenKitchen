@@ -7,34 +7,7 @@ import { AllExceptionsFilter } from './interfaces/common/all-exceptions.filter';
 import { BadRequestExceptionFilter } from './interfaces/common/bad-request-exception.filter';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
-import * as dotenv from 'dotenv';
-import * as path from 'path';
-import { existsSync } from 'fs';
-
-// 根据 NODE_ENV 加载对应的环境配置文件
-// 优先级: .env.{NODE_ENV}.local > .env.{NODE_ENV} > .env.local > .env
-function loadEnvConfig() {
-  const env = process.env.NODE_ENV || 'development';
-  const envDir = path.resolve(process.cwd());
-
-  // 按优先级尝试加载环境文件
-  const envFiles = [`.env.${env}.local`, `.env.${env}`, '.env.local', '.env'];
-
-  for (const file of envFiles) {
-    const filePath = path.join(envDir, file);
-    if (existsSync(filePath)) {
-      const result = dotenv.config({ path: filePath });
-      if (result.error) {
-        console.warn(`[ENV] Failed to load ${file}: ${result.error.message}`);
-      } else {
-        console.log(`[ENV] Loaded environment from: ${file}`);
-        break; // 只加载第一个找到的文件
-      }
-    }
-  }
-
-  console.log(`[ENV] Environment: ${env}`);
-}
+import { loadEnvConfig } from './utils/env-config';
 
 loadEnvConfig();
 
@@ -61,7 +34,7 @@ function logBootSummary() {
   const repos = {
     ORDER_REPO: process.env.ORDER_REPO ?? 'memory',
     ADDRESS_REPO: process.env.ADDRESS_REPO ?? 'memory',
-    DOG_REPO: process.env.DOG_REPO ?? 'memory',
+    DOG_REPO: process.env.DOG_REPO ?? (prismaEnabled ? 'prisma' : 'memory'),
     RECIPE_REPO: process.env.RECIPE_REPO ?? 'memory',
     SHIPPING_REPO: process.env.SHIPPING_REPO ?? 'memory',
     PRODUCTION_REPO: process.env.PRODUCTION_REPO ?? 'prisma',

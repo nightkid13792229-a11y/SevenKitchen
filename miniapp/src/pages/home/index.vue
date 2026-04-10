@@ -21,6 +21,10 @@
 
     <!-- 快捷功能入口 -->
     <view class="quick-actions">
+      <view class="action-item" @tap="goToFeedback">
+        <text class="action-icon">💬</text>
+        <text class="action-text">建议反馈</text>
+      </view>
       <view class="action-item" @tap="goToWeightManagement">
         <text class="action-icon">⚖️</text>
         <text class="action-text">体重管理</text>
@@ -987,6 +991,15 @@ const goToDogDetail = (dogId: string) => {
 // 跳转到订单列表
 const goToOrderList = () => {
   uni.navigateTo({ url: '/pages/orders-list/index' })
+}
+
+// 跳转到建议反馈
+const goToFeedback = () => {
+  if (!isLoggedIn.value) {
+    checkLoginAndNavigate('/pages/feedback-list/index')
+    return
+  }
+  uni.navigateTo({ url: '/pages/feedback-list/index' })
 }
 
 // 跳转到体重管理

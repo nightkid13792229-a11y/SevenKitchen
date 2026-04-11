@@ -129,7 +129,7 @@
     <!-- 食谱列表信息流 -->
     <view class="recipe-list">
       <view
-        v-for="recipe in recipes"
+        v-for="recipe in renderedRecipes"
         :key="recipe.id"
         class="recipe-card"
         @tap="viewRecipe(recipe.id)"
@@ -137,11 +137,12 @@
         <!-- 封面图容器 - 使用固定高度容器避免布局问题 -->
         <view class="recipe-cover-wrapper">
           <image
-            v-if="recipe.coverImageUrl"
+            v-if="recipe.displayCoverUrl"
             class="recipe-cover"
-            :src="normalizeImageUrl(recipe.coverImageUrl)"
+            :src="recipe.displayCoverUrl"
             mode="aspectFill"
             lazy-load
+            @error="handleRecipeCoverError(recipe)"
           />
           <view v-else class="recipe-cover placeholder">
             <text class="placeholder-text">{{ (recipe.name && recipe.name.charAt(0)) || '?' }}</text>
@@ -330,10 +331,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, onUnmounted, computed } from 'vue'
 import { onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
-import { normalizeImageUrl } from '../../utils/config'
+import { getRecipeCoverImageUrl, isKnownStaleRecipeCoverUrl, normalizeImageUrl } from '../../utils/config'
 import { resolveDogProfileEntryRoute } from '../../utils/dog-profile-form'
 import { CURRENT_SHARE_CONFIG } from '@/config/share.config'
 
@@ -350,6 +351,7 @@ interface Recipe {
   status: string
   energyDensityKcalPerKg: number
   coverImageUrl?: string
+  displayCoverUrl?: string
   targetHealthTags: string[]
   applicableLifeStages: string[]
   items: RecipeItem[]
@@ -389,6 +391,7 @@ interface FilterState {
 const isLoggedIn = ref(false)
 const showLoginBanner = ref(true)
 const HOME_RECIPE_STATS_DIRTY_KEY = 'home_recipe_stats_dirty'
+const RECIPE_COVER_ORIGINAL_ONLY_STORAGE_KEY = 'home_recipe_cover_original_only_urls_v2'
 
 // 狗狗列表
 const dogs = ref<any[]>([])
@@ -400,6 +403,14 @@ const hasMore = ref(true)
 const totalCount = ref(0)
 const currentPage = ref(1)
 const pageSize = 10
+const INITIAL_RECIPE_RENDER_COUNT = 3
+const INITIAL_RECIPE_RENDER_DELAY_MS = 300
+const STALE_RECIPE_COVER_REVEAL_DELAY_MS = 1500
+const recipeCoverOriginalOnlyMap = ref<Record<string, boolean>>({})
+const hasMountedHome = ref(false)
+const visibleRecipesCount = ref(pageSize)
+let recipeRenderRevealTimer: ReturnType<typeof setTimeout> | null = null
+let staleRecipeCoverRevealTimer: ReturnType<typeof setTimeout> | null = null
 
 // 筛选相关
 const showLifeStageDrawer = ref(false)
@@ -434,6 +445,8 @@ const ingredientNameToIds = ref<Record<string, string[]>>({})
 
 // 健康标签UUID到名称的映射（动态加载）
 const healthTagUuidLabelMap = ref<Record<string, string>>({})
+const healthTagMappingLoaded = ref(false)
+let healthTagMappingPromise: Promise<void> | null = null
 
 // 计算已选筛选数量
 const activeFiltersCount = computed(() => {
@@ -444,17 +457,21 @@ const activeFiltersCount = computed(() => {
   return count
 })
 
+const renderedRecipes = computed(() => {
+  return recipes.value.slice(0, visibleRecipesCount.value)
+})
+
 // 检查登录状态
 const checkLoginStatus = () => {
   const token = getToken()
   isLoggedIn.value = !!token
-  console.log('[Home] 登录状态检查:', isLoggedIn.value)
 }
 
 // 页面加载
-onMounted(async () => {
-  console.log('[Home] onMounted')
+onMounted(() => {
+  hasMountedHome.value = true
   checkLoginStatus()
+  loadRecipeCoverOriginalOnlyMap()
 
   // 检查是否已关闭过Banner（当天有效）
   const bannerClosed = uni.getStorageSync('loginBannerClosed')
@@ -471,23 +488,36 @@ onMounted(async () => {
   } else {
     // 未登录时确保清空狗狗数据
     if (dogs.value.length > 0) {
-      console.log('[Home] Not logged in, clearing dog data')
       dogs.value = []
     }
   }
 
   // 【修复】先加载筛选项（包含健康标签映射），再加载食谱
   // 这样可以确保在渲染食谱标签时，映射表已经准备好了
-  await loadFilterOptions()
-  loadRecipes()
+  ensureHealthTagMappingLoaded().finally(() => {
+    loadRecipes()
+  })
+})
+
+onUnmounted(() => {
+  if (recipeRenderRevealTimer) {
+    clearTimeout(recipeRenderRevealTimer)
+    recipeRenderRevealTimer = null
+  }
+
+  if (staleRecipeCoverRevealTimer) {
+    clearTimeout(staleRecipeCoverRevealTimer)
+    staleRecipeCoverRevealTimer = null
+  }
 })
 
 // 页面显示时重新检查登录状态（解决switchTab后不更新的问题）
 onShow(() => {
-  console.log('[Home] onShow - 重新检查登录状态')
-  console.log('[Home] Current dogs count:', dogs.value.length)
-
   checkLoginStatus()
+
+  if (!hasMountedHome.value) {
+    return
+  }
 
   // 更新自定义 TabBar 状态
   // 注意：自定义TabBar会在页面切换时自动检测当前页面路径并更新selected状态
@@ -496,25 +526,20 @@ onShow(() => {
   // 根据登录状态处理狗狗数据
   if (isLoggedIn.value) {
     // 已登录：每次都重新加载狗狗数据（确保显示最新数据）
-    console.log('[Home] Logged in, reloading dog list')
     loadDogList()
   } else {
     // 未登录：清空狗狗数据（避免显示前一个用户的数据）
-    console.log('[Home] Not logged in, current dogs count:', dogs.value.length)
     if (dogs.value.length > 0) {
-      console.log('[Home] User logged out, clearing dog data')
       dogs.value = []
-      console.log('[Home] Dog data cleared, new count:', dogs.value.length)
-    } else {
-      console.log('[Home] No dog data to clear')
     }
   }
 
   const recipeStatsDirty = uni.getStorageSync(HOME_RECIPE_STATS_DIRTY_KEY)
   if (recipeStatsDirty) {
-    console.log('[Home] Recipe stats dirty, refreshing recipe list')
     uni.removeStorageSync(HOME_RECIPE_STATS_DIRTY_KEY)
-    loadRecipes(true)
+    ensureHealthTagMappingLoaded().finally(() => {
+      loadRecipes(true)
+    })
   }
 })
 
@@ -523,7 +548,8 @@ const loadDogList = async () => {
   try {
     const res = await request({
       url: '/dogs',
-      method: 'GET'
+      method: 'GET',
+      quiet: true
     })
     if (res.code === 0 && res.data) {
       dogs.value = res.data.map((dog: any) => ({
@@ -550,11 +576,139 @@ const calculateAgeText = (birthday: string) => {
 
 // ==================== 食谱相关方法 ====================
 
+function getRecipeCoverStorageKey(imageUrl: string | undefined | null): string {
+  return normalizeImageUrl(imageUrl)
+}
+
+function scheduleInitialRecipeRender(requestPage: number) {
+  if (recipeRenderRevealTimer) {
+    clearTimeout(recipeRenderRevealTimer)
+    recipeRenderRevealTimer = null
+  }
+
+  if (requestPage !== 1) {
+    visibleRecipesCount.value = recipes.value.length
+    return
+  }
+
+  const initialVisibleCount = Math.min(INITIAL_RECIPE_RENDER_COUNT, recipes.value.length)
+  visibleRecipesCount.value = initialVisibleCount
+
+  if (recipes.value.length <= initialVisibleCount) {
+    return
+  }
+
+  recipeRenderRevealTimer = setTimeout(() => {
+    visibleRecipesCount.value = recipes.value.length
+    recipeRenderRevealTimer = null
+  }, INITIAL_RECIPE_RENDER_DELAY_MS)
+}
+
+function scheduleStaleRecipeCoverReveal() {
+  if (staleRecipeCoverRevealTimer) {
+    clearTimeout(staleRecipeCoverRevealTimer)
+    staleRecipeCoverRevealTimer = null
+  }
+
+  const hasStaleRecipeCover = recipes.value.some((recipe) => {
+    return !recipe.displayCoverUrl && isKnownStaleRecipeCoverUrl(recipe.coverImageUrl)
+  })
+
+  if (!hasStaleRecipeCover) {
+    return
+  }
+
+  staleRecipeCoverRevealTimer = setTimeout(() => {
+    recipes.value = recipes.value.map((recipe) => {
+      if (recipe.displayCoverUrl || !isKnownStaleRecipeCoverUrl(recipe.coverImageUrl)) {
+        return recipe
+      }
+
+      return {
+        ...recipe,
+        displayCoverUrl: normalizeImageUrl(recipe.coverImageUrl)
+      }
+    })
+    staleRecipeCoverRevealTimer = null
+  }, STALE_RECIPE_COVER_REVEAL_DELAY_MS)
+}
+
+function loadRecipeCoverOriginalOnlyMap() {
+  try {
+    const stored = uni.getStorageSync(RECIPE_COVER_ORIGINAL_ONLY_STORAGE_KEY)
+    if (stored && typeof stored === 'object') {
+      recipeCoverOriginalOnlyMap.value = stored as Record<string, boolean>
+    }
+  } catch (err) {
+    console.warn('[Home] Failed to load recipe cover fallback cache:', err)
+  }
+}
+
+function persistRecipeCoverOriginalOnlyMap() {
+  try {
+    uni.setStorageSync(
+      RECIPE_COVER_ORIGINAL_ONLY_STORAGE_KEY,
+      recipeCoverOriginalOnlyMap.value,
+    )
+  } catch (err) {
+    console.warn('[Home] Failed to persist recipe cover fallback cache:', err)
+  }
+}
+
+function shouldUseOriginalRecipeCover(imageUrl: string | undefined | null): boolean {
+  const storageKey = getRecipeCoverStorageKey(imageUrl)
+  return !!(storageKey && recipeCoverOriginalOnlyMap.value[storageKey])
+}
+
+function handleRecipeCoverError(recipe: Recipe) {
+  const storageKey = getRecipeCoverStorageKey(recipe.coverImageUrl)
+  if (!storageKey) {
+    return
+  }
+
+  if (!recipeCoverOriginalOnlyMap.value[storageKey]) {
+    recipeCoverOriginalOnlyMap.value = {
+      ...recipeCoverOriginalOnlyMap.value,
+      [storageKey]: true
+    }
+    persistRecipeCoverOriginalOnlyMap()
+    recipes.value = recipes.value.map((currentRecipe) => {
+      if (currentRecipe.id !== recipe.id) {
+        return currentRecipe
+      }
+
+      return {
+        ...currentRecipe,
+        displayCoverUrl: normalizeImageUrl(recipe.coverImageUrl)
+      }
+    })
+    console.warn('[Home] Recipe cover thumbnail failed, falling back to original image:', storageKey)
+    return
+  }
+
+  console.error('[Home] Recipe cover failed even after fallback:', storageKey)
+}
+
+function ensureHealthTagMappingLoaded(): Promise<void> {
+  if (healthTagMappingLoaded.value) {
+    return Promise.resolve()
+  }
+
+  if (!healthTagMappingPromise) {
+    healthTagMappingPromise = loadFilterOptions().finally(() => {
+      healthTagMappingPromise = null
+    })
+  }
+
+  return healthTagMappingPromise
+}
+
 // 加载筛选项（返回 Promise 以支持 await）
 function loadFilterOptions(): Promise<void> {
   return request({
     url: '/recipes/filter-options',
-    method: 'GET'
+    method: 'GET',
+    quiet: true
   }).then((res: any) => {
     if (res.code === 0 && res.data) {
       // 建立健康标签UUID到label的映射
@@ -567,7 +721,7 @@ function loadFilterOptions(): Promise<void> {
         })
       }
       healthTagUuidLabelMap.value = uuidMap
-      console.log('[Home] 健康标签映射表加载完成，共', Object.keys(uuidMap).length, '个标签')
+      healthTagMappingLoaded.value = true
 
       // 添加"全部"选项
       filterOptions.value = {
@@ -582,12 +736,6 @@ function loadFilterOptions(): Promise<void> {
         ingredientTags: res.data.ingredientTags || [],
         ingredientGroups: res.data.ingredientGroups || []
       }
-
-      console.log('[Home] filterOptions loaded:', {
-        ingredientTags: filterOptions.value.ingredientTags.length,
-        ingredientGroups: filterOptions.value.ingredientGroups.length,
-        groupNames: filterOptions.value.ingredientGroups.map((g: any) => g.category)
-      })
 
       // Build ingredient name maps
       const nameMap: Record<string, string> = {}
@@ -604,6 +752,7 @@ function loadFilterOptions(): Promise<void> {
       ingredientNameToIds.value = nameToIds
     }
   }).catch((err: any) => {
+    healthTagMappingLoaded.value = false
     console.error('[Home] Load filter options error:', err)
   })
 }
@@ -614,17 +763,10 @@ function loadRecipes(isRefresh = false) {
 
   // 如果没有更多数据且不是刷新，直接返回
   if (!hasMore.value && !isRefresh) {
-    console.log('[Home] No more recipes to load')
     return
   }
 
   loading.value = true
-
-  // 只在非刷新模式时显示loading
-  const shouldShowLoading = !isRefresh
-  if (shouldShowLoading) {
-    uni.showLoading({ title: '加载中...' })
-  }
 
   // 如果是刷新，重置页码
   if (isRefresh) {
@@ -636,6 +778,7 @@ function loadRecipes(isRefresh = false) {
     page: currentPage.value,
     pageSize: pageSize
   }
+  const requestPage = currentPage.value
   const selectedLifeStages = filterState.value.selectedLifeStages.filter(Boolean)
   const selectedHealthTags = filterState.value.selectedHealthTags.filter(Boolean)
 
@@ -649,28 +792,31 @@ function loadRecipes(isRefresh = false) {
     params.excludeIngredients = filterState.value.excludedIngredients.join(',')
   }
 
-  console.log('[Home] Loading recipes with params:', params)
-
   request({
     url: '/recipes',
     method: 'GET',
-    data: params
+    data: params,
+    quiet: true
   }).then((res: any) => {
-    console.log('[Home] Recipes Response:', {
-      code: res.code,
-      dataLength: res.data?.data?.length || 0,
-      data: res.data
-    })
-
     if (res.code === 0 && res.data) {
       // 后端现在返回分页数据格式：{ data: [], total, page, pageSize, hasMore }
-      const newRecipes = res.data.data || []
+      const newRecipes = (res.data.data || []).map((recipe: Recipe) => ({
+        ...recipe,
+        displayCoverUrl: isKnownStaleRecipeCoverUrl(recipe.coverImageUrl)
+          ? ''
+          : getRecipeCoverImageUrl(recipe.coverImageUrl, {
+            skipOptimization: shouldUseOriginalRecipeCover(recipe.coverImageUrl)
+          })
+      }))
 
       if (isRefresh) {
         recipes.value = newRecipes
       } else {
         recipes.value = [...recipes.value, ...newRecipes]
       }
+
+      scheduleInitialRecipeRender(requestPage)
+      scheduleStaleRecipeCoverReveal()
 
       // 调试：检查每个食谱的name字段
       newRecipes.forEach((recipe: Recipe, index: number) => {
@@ -687,13 +833,6 @@ function loadRecipes(isRefresh = false) {
       if (hasMore.value) {
         currentPage.value++
       }
-
-      console.log('[Home] Load recipes complete:', {
-        currentPage: currentPage.value,
-        hasMore: hasMore.value,
-        totalCount: totalCount.value,
-        recipesCount: recipes.value.length
-      })
     } else {
       console.warn('[Home] Unexpected response:', res)
       hasMore.value = false
@@ -707,10 +846,6 @@ function loadRecipes(isRefresh = false) {
     })
   }).finally(() => {
     loading.value = false
-    // 只在之前显示了loading时才隐藏
-    if (shouldShowLoading) {
-      uni.hideLoading()
-    }
     if (isRefresh) {
       uni.stopPullDownRefresh()
     }
@@ -733,6 +868,7 @@ function openHealthTagsDrawer() {
 
 function refreshRecipesWithFilters() {
   recipes.value = []
+  visibleRecipesCount.value = 0
   hasMore.value = true
   currentPage.value = 1
   loadRecipes(true)
@@ -1042,6 +1178,10 @@ function getHealthTagLabel(tagOrUuid: string): string {
     return enumMap[tagOrUuid]
   }
 
+  if (!healthTagMappingLoaded.value) {
+    return tagOrUuid
+  }
+
   // 如果都找不到，记录警告并返回原始值
   console.warn('[Home] 未找到健康标签映射:', tagOrUuid, '当前映射表大小:', Object.keys(healthTagUuidLabelMap.value).length)
   return tagOrUuid
@@ -1049,7 +1189,6 @@ function getHealthTagLabel(tagOrUuid: string): string {
 
 // 下拉刷新
 onPullDownRefresh(() => {
-  console.log('[Home] Pull down refresh')
   recipes.value = []
   hasMore.value = true
   currentPage.value = 1

@@ -45,6 +45,21 @@ const LAN_BASE_URL = IS_PRODUCTION_BUILD ? PROD_LAN_BASE_URL : DEV_LAN_BASE_URL;
 const PROD_BASE_URL = IS_PRODUCTION_BUILD ? PROD_PROD_BASE_URL : DEV_PROD_BASE_URL;
 
 const STORAGE_KEY = 'api_base_url';
+let cachedDevicePlatform: string | null = null
+
+function getCachedDevicePlatform(): string {
+  if (cachedDevicePlatform !== null) {
+    return cachedDevicePlatform
+  }
+
+  try {
+    cachedDevicePlatform = uni.getDeviceInfo()?.platform?.toLowerCase() || ''
+  } catch (err) {
+    cachedDevicePlatform = ''
+  }
+
+  return cachedDevicePlatform
+}
 
 // ========================================
 // 获取 API 地址逻辑
@@ -61,25 +76,15 @@ const STORAGE_KEY = 'api_base_url';
  */
 function isRealDevice(): boolean {
   try {
-    const deviceInfo = uni.getDeviceInfo()
-    const platform = deviceInfo?.platform?.toLowerCase() || ''
-    console.log('[Config Debug] Platform:', deviceInfo?.platform, 'Lowercased:', platform)
-
-    const result = platform === 'android' || platform === 'ios'
-    console.log('[Config Debug] isRealDevice result:', result)
-
-    if (platform === '' || platform === 'devtools') {
-      if (platform === 'devtools') {
-        console.log('[Config Debug] Detected DevTools')
-        return false
-      }
-      console.log('[Config Debug] Platform empty, assuming real device')
+    const platform = getCachedDevicePlatform()
+    if (platform === 'devtools') {
+      return false
+    }
+    if (platform === '') {
       return true
     }
-    return result
+    return platform === 'android' || platform === 'ios'
   } catch (err) {
-    console.log('[Config Debug] getSystemInfo error:', err)
-    console.log('[Config Debug] Platform detection failed, assuming real device')
     return true
   }
 }
@@ -90,13 +95,8 @@ function isRealDevice(): boolean {
  */
 function isDevTools(): boolean {
   try {
-    const deviceInfo = uni.getDeviceInfo()
-    const platform = deviceInfo?.platform?.toLowerCase() || ''
-    const result = platform === 'devtools'
-    console.log('[Config Debug] isDevTools result:', result, 'platform:', platform)
-    return result
+    return getCachedDevicePlatform() === 'devtools'
   } catch (err) {
-    console.log('[Config Debug] isDevTools check failed, assuming not devtools')
     return false
   }
 }
@@ -113,14 +113,12 @@ function isDevTools(): boolean {
 export function getBaseUrl(): string {
   // 优先级1: 生产构建 → 强制使用生产域名（确保通过域名校验）
   if (IS_PRODUCTION_BUILD) {
-    console.debug('[Config] Production build detected, using PROD_BASE_URL:', PROD_BASE_URL)
     return PROD_BASE_URL
   }
 
   // 优先级2: 真机调试（开发构建）→ 强制使用局域网IP
   // 注意：真机检测优先级高于 Storage，确保真机调试时自动连接本地开发服务器
   if (isRealDevice()) {
-    console.debug('[Config] Detected real device, using LAN BASE_URL:', LAN_BASE_URL)
     return LAN_BASE_URL
   }
 
@@ -131,9 +129,6 @@ export function getBaseUrl(): string {
     if (migratedStored) {
       if (migratedStored !== stored) {
         uni.setStorageSync(STORAGE_KEY, migratedStored)
-        console.info('[Config] Migrated legacy dev BASE_URL override to:', migratedStored)
-      } else {
-        console.debug('[Config] Using BASE_URL from storage:', migratedStored)
       }
       return migratedStored
     }
@@ -143,12 +138,10 @@ export function getBaseUrl(): string {
 
   // 优先级4: 开发者工具 → 使用localhost
   if (isDevTools()) {
-    console.debug('[Config] Detected DevTools, using dev BASE_URL:', DEV_BASE_URL)
     return DEV_BASE_URL
   }
 
   // 优先级5: 默认开发环境地址
-  console.debug('[Config] Using default dev BASE_URL:', DEFAULT_BASE_URL)
   return DEFAULT_BASE_URL
 }
 
@@ -168,7 +161,6 @@ export function setBaseUrl(url: string): void {
     const normalized = migrateLegacyDevBaseUrl(trimmed)
     if (normalized) {
       uni.setStorageSync(STORAGE_KEY, normalized)
-      console.log('BASE_URL updated to:', normalized)
     }
   } catch (err) {
     console.error('Failed to save BASE_URL to storage:', err)
@@ -182,7 +174,6 @@ export function setBaseUrl(url: string): void {
 export function resetBaseUrl(): void {
   try {
     uni.removeStorageSync(STORAGE_KEY)
-    console.log('BASE_URL reset to default:', DEFAULT_BASE_URL)
   } catch (err) {
     console.error('Failed to reset BASE_URL:', err)
   }
@@ -201,22 +192,16 @@ export function getDefaultBaseUrl(): string {
  */
 export function normalizeImageUrl(imageUrl: string | undefined | null): string {
   if (!imageUrl) {
-    console.warn('[Config] normalizeImageUrl: empty URL')
     return ''
   }
 
-  console.log('[Config] 🔍 normalizeImageUrl called:', imageUrl)
-
   // Fix historical data: replace HTTP CDN URL with HTTPS
   if (imageUrl.includes('http://img.sevenkitchen.cloud')) {
-    const normalized = imageUrl.replace('http://img.sevenkitchen.cloud', 'https://img.sevenkitchen.cloud')
-    console.log('[Config] ✅ Normalized HTTP CDN URL to HTTPS:', imageUrl, '→', normalized)
-    return normalized
+    return imageUrl.replace('http://img.sevenkitchen.cloud', 'https://img.sevenkitchen.cloud')
   }
 
   // If URL is not from localhost, return as-is
   if (!imageUrl.includes('localhost') && !imageUrl.includes('127.0.0.1')) {
-    console.log('[Config] ✅ URL already HTTPS/external, using as-is:', imageUrl)
     return imageUrl
   }
 
@@ -225,14 +210,59 @@ export function normalizeImageUrl(imageUrl: string | undefined | null): string {
 
   try {
     const url = new URL(imageUrl)
-    const normalized = `${currentBaseUrl}${url.pathname}`
-    console.log('[Config] ✅ Normalized localhost URL:', imageUrl, '→', normalized)
-    return normalized
+    return `${currentBaseUrl}${url.pathname}`
   } catch (err) {
     console.warn('[Config] ⚠️ Failed to parse image URL, using fallback:', err)
     const path = imageUrl.replace(/^https?:\/\/[^\/]+/, '')
     return `${currentBaseUrl}${path}`
   }
+}
+
+const RECIPE_COVER_THUMBNAIL_TRANSFORM = 'imageMogr2/thumbnail/750x/format/jpg'
+const KNOWN_STALE_RECIPE_COVER_URLS = new Set([
+  'https://img.sevenkitchen.cloud/recipes/covers/1774240957971-2792c7e2.png',
+])
+
+export function isKnownStaleRecipeCoverUrl(imageUrl: string | undefined | null): boolean {
+  const normalized = normalizeImageUrl(imageUrl)
+  return !!(normalized && KNOWN_STALE_RECIPE_COVER_URLS.has(normalized))
+}
+
+export function appendRecipeCoverThumbnailParams(imageUrl: string): string {
+  if (!imageUrl) {
+    return imageUrl
+  }
+
+  if (!imageUrl.includes('img.sevenkitchen.cloud/recipes/covers/')) {
+    return imageUrl
+  }
+
+  if (imageUrl.includes('imageMogr2/')) {
+    return imageUrl
+  }
+
+  const separator = imageUrl.includes('?') ? '&' : '?'
+  return `${imageUrl}${separator}${RECIPE_COVER_THUMBNAIL_TRANSFORM}`
+}
+
+export function getOptimizedRecipeCoverUrl(imageUrl: string | undefined | null): string {
+  return getRecipeCoverImageUrl(imageUrl)
+}
+
+export function getRecipeCoverImageUrl(
+  imageUrl: string | undefined | null,
+  options: { skipOptimization?: boolean } = {},
+): string {
+  const normalized = normalizeImageUrl(imageUrl)
+  if (!normalized) {
+    return normalized
+  }
+
+  if (options.skipOptimization || KNOWN_STALE_RECIPE_COVER_URLS.has(normalized)) {
+    return normalized
+  }
+
+  return appendRecipeCoverThumbnailParams(normalized)
 }
 
 /**

@@ -211,41 +211,14 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
       header['Authorization'] = `Bearer ${token}`
     }
     
-    // Build query string for GET requests (for debugging)
-    // Note: WeChat miniprogram doesn't support URLSearchParams, so build manually
-    let fullUrl = url;
-    if (options.method === 'GET' || !options.method) {
-      if (options.data && Object.keys(options.data).length > 0) {
-        const queryString = Object.keys(options.data)
-          .map(key => `${encodeURIComponent(key)}=${encodeURIComponent(options.data[key])}`)
-          .join('&');
-        fullUrl = `${url}?${queryString}`;
-      }
-    }
-    if (!options.quiet) {
-      console.log('[API Request]', options.method || 'GET', fullUrl)
-    }
-    if (options.data) {
-      if (!options.quiet) {
-        console.log('[API Request Data]', options.data)
-      }
-    }
-
     uni.request({
       url,
       method: options.method || 'GET',
       data: options.data,
       header,
       success: (res: any) => {
-        if (!options.quiet) {
-          console.log('[API Response]', 'statusCode:', res.statusCode, 'data:', res.data)
-        }
-
         // Handle 204 No Content (DELETE responses)
         if (res.statusCode === 204) {
-          if (!options.quiet) {
-            console.log('[API] 204 No Content - treating as success')
-          }
           resolve({ code: 0, message: 'Success', data: null } as ApiResponse<T>)
           return
         }
@@ -266,11 +239,7 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
           reject(new Error(errorMsg))
           return
         }
-
         const response = res.data as ApiResponse<T>
-        if (!options.quiet) {
-          console.log('[API Parsed Response]', response)
-        }
 
         // Handle 401 Unauthorized - don't auto-login with test account
         if (res.statusCode === 401) {

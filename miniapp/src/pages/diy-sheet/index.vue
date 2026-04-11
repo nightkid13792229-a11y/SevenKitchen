@@ -450,6 +450,7 @@ import { PrintCanvasBuilder } from '../../utils/print-canvas'
 import ShareButton from '../../components/ShareButton.vue'
 import ImagePreviewModal from '../../components/ImagePreviewModal.vue'
 import { normalizeImageUrl } from '../../utils/config'
+import { formatSupplementAmountWithDisplayUnit } from '../../utils/diy-sheet-format'
 
 // 页面参数
 const recipeId = ref('')
@@ -660,48 +661,6 @@ function formatAmount(amount: number, isFood: boolean): string {
   } else {
     // 补剂类：保留1位小数
     return `${amount.toFixed(1)}g`
-  }
-}
-
-// 格式化补剂用量显示（使用displayUnit字段）
-function formatSupplementAmountWithDisplayUnit(
-  amount: number,
-  originalUnit: string | undefined,
-  displayUnit: string
-): string {
-  // 将原始单位转换为克数
-  let amountInG = amount
-  if (originalUnit === 'kg') {
-    amountInG = amount * 1000
-  } else if (originalUnit === 'mg') {
-    amountInG = amount / 1000
-  }
-
-  // 根据displayUnit格式化显示
-  if (displayUnit === '粒' || displayUnit === '片' || displayUnit === '颗') {
-    // 计数单位，显示整数
-    return `${Math.round(amountInG)}${displayUnit}`
-  } else if (displayUnit === 'ml') {
-    // 液体单位
-    if (amountInG >= 1000) {
-      return `${(amountInG / 1000).toFixed(2)}L`
-    }
-    return `${amountInG.toFixed(1)}${displayUnit}`
-  } else if (displayUnit === 'g') {
-    // 克
-    if (originalUnit === 'kg') {
-      return `${amountInG.toFixed(1)}${displayUnit}`
-    }
-    return `${amountInG.toFixed(1)}${displayUnit}`
-  } else if (displayUnit === 'mg') {
-    // 毫克
-    if (originalUnit === 'g') {
-      return `${(amount * 1000).toFixed(1)}${displayUnit}`
-    }
-    return `${amount.toFixed(1)}${displayUnit}`
-  } else {
-    // 其他单位，直接使用displayUnit
-    return `${amountInG.toFixed(1)}${displayUnit}`
   }
 }
 

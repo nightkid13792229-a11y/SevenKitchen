@@ -2809,7 +2809,6 @@ export class AdminController {
   @ApiOperation({ summary: 'Get life stage enum options' })
   @ApiResponse({ status: 200, description: 'Life stage options' })
   async getLifeStages(): Promise<ApiResponseDto<any>> {
-    const { LifeStage } = await import('../../domain/recipe/enums.js');
     const data = [
       { value: LifeStage.PUPPY, label: '幼犬' },
       { value: LifeStage.ADULT, label: '成犬' },

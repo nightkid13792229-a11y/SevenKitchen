@@ -731,6 +731,7 @@ import { IngredientTypeLabels } from '@/types/ingredient';
 import {
   appendPreparationMethodText,
 } from '@/utils/preparationMethodText';
+import { validateElementForm } from '@/utils/elementFormValidation';
 import {
   RecipeStatus,
   NutritionStandard,
@@ -1180,71 +1181,57 @@ const removeCoverImage = async () => {
 };
 
 const handleSubmit = async () => {
-  if (!formRef.value) return;
+  if (!(await validateElementForm(formRef.value))) return;
 
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return;
+  submitting.value = true;
+  try {
+    // Combine nutrition data into form
+    const submitData: RecipeForm = {
+      ...form,
+      nutritionDetailedData: { ...nutritionData },
+    };
 
-    submitting.value = true;
-    try {
-      // Combine nutrition data into form
-      const submitData: RecipeForm = {
-        ...form,
-        nutritionDetailedData: { ...nutritionData },
-      };
-
-      // Debug: Log items with preparation methods before submit
-      console.log('[RecipeForm] handleSubmit - Items with prep methods:');
-      submitData.items?.forEach((item: any, index: number) => {
-        console.log(`  Item ${index}: ${item.ingredientName}, prepMethod: ${item.preparationMethod}`);
-      });
-
-      if (isEdit.value) {
-        await recipeApi.update(recipeId.value!, submitData);
-        ElMessage.success('更新成功');
-      } else {
-        await recipeApi.create(submitData);
-        ElMessage.success('创建成功');
-      }
-
-      router.push('/recipes');
-    } catch (error: any) {
-      ElMessage.error(error.message || '操作失败');
-    } finally {
-      submitting.value = false;
+    if (isEdit.value) {
+      await recipeApi.update(recipeId.value!, submitData);
+      ElMessage.success('更新成功');
+    } else {
+      await recipeApi.create(submitData);
+      ElMessage.success('创建成功');
     }
-  });
+
+    router.push('/recipes');
+  } catch (error: any) {
+    ElMessage.error(error.message || '操作失败');
+  } finally {
+    submitting.value = false;
+  }
 };
 
 const handleSaveDraft = async () => {
-  if (!formRef.value) return;
+  if (!(await validateElementForm(formRef.value))) return;
 
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return;
+  submitting.value = true;
+  try {
+    const submitData: RecipeForm = {
+      ...form,
+      nutritionDetailedData: { ...nutritionData },
+      status: RecipeStatus.DRAFT,
+    };
 
-    submitting.value = true;
-    try {
-      const submitData: RecipeForm = {
-        ...form,
-        nutritionDetailedData: { ...nutritionData },
-        status: RecipeStatus.DRAFT,
-      };
-
-      if (isEdit.value) {
-        await recipeApi.update(recipeId.value!, submitData);
-        ElMessage.success('草稿保存成功');
-      } else {
-        await recipeApi.create(submitData);
-        ElMessage.success('草稿创建成功');
-      }
-
-      router.push('/recipes');
-    } catch (error: any) {
-      ElMessage.error(error.message || '保存失败');
-    } finally {
-      submitting.value = false;
+    if (isEdit.value) {
+      await recipeApi.update(recipeId.value!, submitData);
+      ElMessage.success('草稿保存成功');
+    } else {
+      await recipeApi.create(submitData);
+      ElMessage.success('草稿创建成功');
     }
-  });
+
+    router.push('/recipes');
+  } catch (error: any) {
+    ElMessage.error(error.message || '保存失败');
+  } finally {
+    submitting.value = false;
+  }
 };
 
 const handleBack = () => {

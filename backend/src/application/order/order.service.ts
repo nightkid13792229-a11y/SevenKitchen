@@ -42,6 +42,11 @@ import { ValidationError } from '../../domain/common/errors';
 import type { IOrderPricingSnapshotRepository } from '../../domain/order-pricing-snapshot/order-pricing-snapshot.repository.interface';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { TimezoneUtil } from '../../utils/timezone.util';
+import {
+  extractLegacyPreparationMethodIds,
+  resolvePreparationMethodText,
+  resolvePreparationMethodTokens,
+} from '../recipe/preparation-method-text.util';
 
 // Re-export for convenience
 export { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY };
@@ -93,48 +98,25 @@ export class OrderService {
     private readonly prisma: PrismaService,
   ) {}
 
-  private isUuidLike(value: string): boolean {
-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-      value,
-    );
-  }
-
-  private resolvePreparationMethodNames(
-    preparationMethodValue: string | null | undefined,
-    methodMap: Map<string, string>,
-  ): string[] {
-    if (!preparationMethodValue) {
-      return [];
+  private async loadPreparationMethodNameMap(
+    values: Array<string | null | undefined>,
+  ): Promise<Map<string, string>> {
+    const ids = extractLegacyPreparationMethodIds(values);
+    if (ids.length === 0) {
+      return new Map();
     }
 
-    const resolved = preparationMethodValue
-      .split(',')
-      .map((value) => value.trim())
-      .filter((value) => value)
-      .map((value) => {
-        const mappedName = methodMap.get(value);
-        if (mappedName) {
-          return mappedName;
-        }
+    const methods = await this.prisma.preparationMethod.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true },
+    });
 
-        return this.isUuidLike(value) ? null : value;
-      })
-      .filter((value): value is string => !!value);
-
-    return resolved.filter(
-      (value, index) => resolved.indexOf(value) === index,
+    return new Map(
+      methods.map((method: { id: string; name: string }) => [
+        method.id,
+        method.name,
+      ]),
     );
-  }
-
-  private resolvePreparationMethodText(
-    preparationMethodValue: string | null | undefined,
-    methodMap: Map<string, string>,
-  ): string | null {
-    const names = this.resolvePreparationMethodNames(
-      preparationMethodValue,
-      methodMap,
-    );
-    return names.length > 0 ? names.join(', ') : null;
   }
 
   /**
@@ -387,30 +369,8 @@ export class OrderService {
       await this.ingredientRepository.findByIds(ingredientIds);
     const ingredientMap = new Map(ingredients.map((ing) => [ing.id, ing]));
 
-    // 收集所有制备方法ID
-    const preparationMethodIds = new Set<string>();
-    recipeItems.forEach((ri) => {
-      if (ri.preparationMethod) {
-        const ids =
-          typeof ri.preparationMethod === 'string'
-            ? ri.preparationMethod
-                .split(',')
-                .map((id: string) => id.trim())
-                .filter((id: string) => id)
-            : ri.preparationMethod;
-        if (Array.isArray(ids)) {
-          ids.forEach((id: string) => preparationMethodIds.add(id));
-        }
-      }
-    });
-
-    // 查询所有制备方法
-    const preparationMethods = await this.prisma.preparationMethod.findMany({
-      where: { id: { in: Array.from(preparationMethodIds) } },
-      select: { id: true, name: true },
-    });
-    const preparationMethodMap = new Map(
-      preparationMethods.map((pm) => [pm.id, pm.name]),
+    const prepMethodMap = await this.loadPreparationMethodNameMap(
+      recipeItems.map((item) => item.preparationMethod),
     );
 
     const recipeSnapshot: RecipeSnapshot = {
@@ -426,9 +386,9 @@ export class OrderService {
 
         // 解析制备方法ID数组并转换为名称数组
         // preparationMethod存储格式：逗号分隔的UUID字符串
-        const preparationMethodNames = this.resolvePreparationMethodNames(
-          typeof ri.preparationMethod === 'string' ? ri.preparationMethod : null,
-          preparationMethodMap,
+        const preparationMethodNames = resolvePreparationMethodTokens(
+          ri.preparationMethod,
+          prepMethodMap,
         );
 
         return {
@@ -713,41 +673,15 @@ export class OrderService {
       const ingredients =
         await this.ingredientRepository.findByIds(ingredientIds);
 
-      // Load preparation methods for recipe items
-      // preparationMethod can be: single UUID, comma-separated UUIDs, or null
-      const allPrepMethodIds: string[] = [];
-      recipeItems.forEach((ri) => {
-        if (ri.preparationMethod) {
-          // Split by comma and trim whitespace
-          const ids = ri.preparationMethod
-            .split(',')
-            .map((id) => id.trim())
-            .filter((id) => id);
-          allPrepMethodIds.push(...ids);
-        }
-      });
+      const prepMethodMap = await this.loadPreparationMethodNameMap(
+        recipeItems.map((item) => item.preparationMethod),
+      );
 
       console.log('[OrderService] PreparationMethod IDs:', {
         totalItems: recipeItems.length,
-        allIds: allPrepMethodIds,
-        uniqueCount: new Set(allPrepMethodIds).size,
+        resolvedCount: prepMethodMap.size,
+        resolvedIds: Array.from(prepMethodMap.keys()),
       });
-
-      const uniquePrepMethodIds = Array.from(new Set(allPrepMethodIds));
-      const preparationMethods = await this.prisma.preparationMethod.findMany({
-        where: { id: { in: uniquePrepMethodIds } },
-        select: { id: true, name: true },
-      });
-
-      console.log('[OrderService] PreparationMethods from DB:', {
-        searchIds: uniquePrepMethodIds,
-        found: preparationMethods.length,
-        methods: preparationMethods,
-      });
-
-      const prepMethodMap = new Map(
-        preparationMethods.map((pm) => [pm.id, pm.name]),
-      );
 
       // Create map for quick lookup
       const ingredientMap = new Map(ingredients.map((ing) => [ing.id, ing]));
@@ -763,21 +697,20 @@ export class OrderService {
         }
 
         // Convert preparationMethod ID(s) to name(s)
-        const prepMethodName = this.resolvePreparationMethodText(
-          ri.preparationMethod,
-          prepMethodMap,
-        );
+        const prepMethodText =
+          resolvePreparationMethodText(ri.preparationMethod, prepMethodMap) ??
+          null;
 
         console.log('[OrderService] RecipeItem preparationMethod:', {
           ingredientName: ingredient.name,
           originalIds: ri.preparationMethod,
-          mappedNames: prepMethodName,
+          mappedNames: prepMethodText,
         });
 
         return {
           ingredientId: ri.ingredientId,
           ingredient,
-          preparationMethod: prepMethodName,
+          preparationMethod: prepMethodText,
           ratioPercent: ri.ratioPercent ?? null,
           nutrientTargetKey: ri.nutrientTargetKey ?? null,
           nutrientTargetValue: ri.nutrientTargetValue ?? null,
@@ -871,12 +804,10 @@ export class OrderService {
           // 解析制备方法ID数组并转换为名称数组
           // preparationMethod存储格式：逗号分隔的UUID字符串
           // 例如："a6409a79-402b-41d1-bfe1-031a67da0876, dd27baa4-36cb-4405-9092-0eb37e6160fa"
-            const preparationMethodNames = this.resolvePreparationMethodNames(
-              typeof ri.preparationMethod === 'string'
-                ? ri.preparationMethod
-                : null,
-              prepMethodMap,
-            );
+          const preparationMethodNames = resolvePreparationMethodTokens(
+            ri.preparationMethod,
+            prepMethodMap,
+          );
 
           // Debug: log supplement ingredient unit display label
           if (ingredient?.type === 'SUPPLEMENT') {
@@ -1227,35 +1158,14 @@ export class OrderService {
     const ingredients =
       await this.ingredientRepository.findByIds(ingredientIds);
 
-    // Load preparation methods for recipe items
-    // preparationMethod can be: single UUID, comma-separated UUIDs, or null
-    const allPrepMethodIds: string[] = [];
-    recipeItems.forEach((ri) => {
-      if (ri.preparationMethod) {
-        // Split by comma and trim whitespace
-        const ids = ri.preparationMethod
-          .split(',')
-          .map((id) => id.trim())
-          .filter((id) => id);
-        allPrepMethodIds.push(...ids);
-      }
-    });
-
-    const uniquePrepMethodIds = Array.from(new Set(allPrepMethodIds));
-    const preparationMethods = await this.prisma.preparationMethod.findMany({
-      where: { id: { in: uniquePrepMethodIds } },
-      select: { id: true, name: true },
-    });
+    const prepMethodMap = await this.loadPreparationMethodNameMap(
+      recipeItems.map((item) => item.preparationMethod),
+    );
 
     console.log('[PricingPreview] PreparationMethods loaded:', {
-      searchIds: uniquePrepMethodIds,
-      found: preparationMethods.length,
-      methods: preparationMethods,
+      found: prepMethodMap.size,
+      methodIds: Array.from(prepMethodMap.keys()),
     });
-
-    const prepMethodMap = new Map(
-      preparationMethods.map((pm) => [pm.id, pm.name]),
-    );
 
     console.log('[PricingPreview] Ingredients loaded:', {
       requestedIds: ingredientIds.length,
@@ -1275,15 +1185,14 @@ export class OrderService {
       }
 
       // Convert preparationMethod ID(s) to name(s)
-      const prepMethodName = this.resolvePreparationMethodText(
-        ri.preparationMethod,
-        prepMethodMap,
-      );
+      const prepMethodText =
+        resolvePreparationMethodText(ri.preparationMethod, prepMethodMap) ??
+        null;
 
       return {
         ingredientId: ri.ingredientId,
         ingredient,
-        preparationMethod: prepMethodName,
+        preparationMethod: prepMethodText,
         ratioPercent: ri.ratioPercent ?? null,
         nutrientTargetKey: ri.nutrientTargetKey ?? null,
         nutrientTargetValue: ri.nutrientTargetValue ?? null,

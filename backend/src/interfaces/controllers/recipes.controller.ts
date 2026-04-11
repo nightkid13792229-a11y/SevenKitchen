@@ -50,6 +50,10 @@ import { AuthGuard } from '../auth';
 import { StaffGuard } from '../guards/role.guard';
 import type { RequestUser } from '../auth/request-user.interface';
 import { JwtAuthService } from '../auth/jwt.service';
+import {
+  extractLegacyPreparationMethodIds,
+  resolvePreparationMethodText,
+} from '../../application/recipe/preparation-method-text.util';
 
 // Create a symbol for recipe repository token
 export const RECIPE_REPOSITORY_TOKEN = Symbol('RecipeRepository');
@@ -306,37 +310,25 @@ export class RecipesController {
     });
   }
 
-  /**
-   * Convert preparation method UUID string to readable names
-   * Input: "uuid1, uuid2, uuid3" or null
-   * Output: ["方法1", "方法2", "方法3"] or undefined
-   */
-  private async convertPreparationMethods(
-    methodUuids: string | null | undefined,
-  ): Promise<string[] | undefined> {
-    if (!methodUuids) return undefined;
+  private async loadPreparationMethodNameMap(
+    values: Array<string | null | undefined>,
+  ): Promise<Map<string, string>> {
+    const ids = extractLegacyPreparationMethodIds(values);
+    if (ids.length === 0) {
+      return new Map();
+    }
 
-    // Parse UUID string to array
-    const uuids = methodUuids
-      .split(',')
-      .map((u) => u.trim())
-      .filter(Boolean);
-
-    if (uuids.length === 0) return undefined;
-
-    // Query preparation method names
     const methods = await this.prisma.preparationMethod.findMany({
-      where: { id: { in: uuids } },
+      where: { id: { in: ids } },
       select: { id: true, name: true },
     });
 
-    // Create id -> name map
-    const methodMap = new Map(methods.map((m) => [m.id, m.name]));
-
-    // Return names in original UUID order (critical for maintaining user-defined order)
-    return uuids
-      .map((uuid) => methodMap.get(uuid))
-      .filter((name): name is string => !!name);
+    return new Map(
+      methods.map((method: { id: string; name: string }) => [
+        method.id,
+        method.name,
+      ]),
+    );
   }
 
   /**
@@ -379,16 +371,15 @@ export class RecipesController {
       return ApiResponseDto.error(404, 'Recipe not found');
     }
 
+    const methodMap = await this.loadPreparationMethodNameMap(
+      (recipe.items || []).map((item: any) => item.preparationMethod),
+    );
+
     // Return all ingredients with preparation method, sorted by sort_order
     const allIngredients = await Promise.all(
       (recipe.items || [])
         .sort((a: any, b: any) => (a.sortOrder || 0) - (b.sortOrder || 0))
         .map(async (item: any) => {
-          // Convert preparation method UUIDs to readable names
-          const preparationMethods = await this.convertPreparationMethods(
-            item.preparationMethod as string,
-          );
-
           const ingredientType = item.ingredient?.type;
 
           // Only FOOD type has ratio, SUPPLEMENT has nutrient target
@@ -397,7 +388,11 @@ export class RecipesController {
             ingredientId: item.ingredientId,
             ingredientName: item.ingredient?.name || 'Unknown',
             name: item.ingredient?.name || 'Unknown',
-            preparationMethod: preparationMethods?.join('、') || undefined,
+            preparationMethod:
+              resolvePreparationMethodText(
+                item.preparationMethod,
+                methodMap,
+              ) || undefined,
             sortOrder: item.sortOrder || 0,
             ingredientType: ingredientType || undefined,
             exampleWeight:

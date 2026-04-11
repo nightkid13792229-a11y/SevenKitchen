@@ -45,6 +45,7 @@ import {
   type RecommendedProductSummary,
 } from '../ingredient/recommended-product.service';
 import { InventoryService } from '../inventory/inventory.service';
+import { resolvePreparationMethodTokens } from '../recipe/preparation-method-text.util';
 
 export interface GeneratePurchaseListDto {
   startDate: string; // YYYY-MM-DD format
@@ -170,30 +171,6 @@ export class PurchasingService {
     @Inject(PURCHASE_RECORD_REPOSITORY)
     private readonly purchaseRecordRepository: PurchaseRecordRepository,
   ) {}
-
-  private isUuidLike(value: string): boolean {
-    return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
-      value,
-    );
-  }
-
-  private normalizePreparationMethods(
-    preparationMethod?: string | null,
-  ): string[] {
-    if (!preparationMethod) {
-      return [];
-    }
-
-    return preparationMethod
-      .split(/[、,，]/)
-      .map((method) => method.trim())
-      .filter(
-        (method, index, list) =>
-          !!method &&
-          !this.isUuidLike(method) &&
-          list.indexOf(method) === index,
-      );
-  }
 
   private mergePreparationMethods(
     current: string[] | undefined,
@@ -1185,7 +1162,7 @@ export class PurchasingService {
 
         // 使用订单的总成本
         const totalCost = detail.cost || 0;
-        const preparationMethods = this.normalizePreparationMethods(
+        const preparationMethods = resolvePreparationMethodTokens(
           (detail as any).preparationMethod,
         );
 

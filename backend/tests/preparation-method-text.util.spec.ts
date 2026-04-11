@@ -44,13 +44,13 @@ describe('preparation-method-text util', () => {
     );
   });
 
-  it('drops unresolved uuids from partially resolvable legacy lists', () => {
+  it('preserves the stored value when a uuid-only list is only partially resolvable', () => {
     expect(
       resolvePreparationMethodText(
         `${steamId}, ${peelId}`,
         new Map([[peelId, '去皮']]),
       ),
-    ).toBe('去皮');
+    ).toBe(`${steamId}, ${peelId}`);
   });
 
   it('falls back to the stored value when a legacy-only input cannot be resolved', () => {

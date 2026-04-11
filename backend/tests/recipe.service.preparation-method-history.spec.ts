@@ -104,6 +104,49 @@ describe('RecipeService preparation method behavior', () => {
     expect(result.items[0].preparationMethod).toBe(missingId);
   });
 
+  it('preserves partially unresolved uuid-only preparation methods in admin recipe detail', async () => {
+    prisma.recipe.findUnique.mockResolvedValue({
+      id: 'recipe-row-3',
+      recipeId: 'recipe-3',
+      version: 1,
+      name: '部分旧值',
+      status: RecipeStatus.DRAFT,
+      energyDensityKcalPerKg: 1500,
+      productionLossRate: 1.07,
+      batchLaborHours: 2,
+      nutritionStandard: NutritionStandard.FEDIAF_2021,
+      detailImages: [],
+      applicableLifeStages: [],
+      healthTagAssignments: [],
+      createdAt: new Date('2026-04-01T00:00:00.000Z'),
+      updatedAt: new Date('2026-04-02T00:00:00.000Z'),
+      items: [
+        {
+          id: 'item-3',
+          ingredientId: 'ingredient-3',
+          preparationMethod: `${steamId}, ${peelId}`,
+          exampleWeight: 80,
+          ratioPercent: 8,
+          nutrientTargetKey: null,
+          nutrientTargetValue: null,
+          ingredient: {
+            id: 'ingredient-3',
+            name: '土豆',
+            type: 'FOOD',
+            properties: {},
+          },
+        },
+      ],
+    });
+    prisma.preparationMethod.findMany.mockResolvedValue([
+      { id: peelId, name: '去皮' },
+    ]);
+
+    const result = await service.getRecipeById('recipe-row-3');
+
+    expect(result.items[0].preparationMethod).toBe(`${steamId}, ${peelId}`);
+  });
+
   it('aggregates normalized ingredient history from standard recipes only', async () => {
     prisma.recipeItem.findMany.mockResolvedValue([
       {
@@ -172,6 +215,29 @@ describe('RecipeService preparation method behavior', () => {
         text: missingId,
         usageCount: 1,
         lastUsedAt: '2026-04-11T00:00:00.000Z',
+      },
+    ]);
+  });
+
+  it('preserves partially unresolved uuid-only preparation methods in ingredient history', async () => {
+    prisma.recipeItem.findMany.mockResolvedValue([
+      {
+        preparationMethod: `${steamId}, ${peelId}`,
+        recipe: { updatedAt: new Date('2026-04-12T00:00:00.000Z') },
+      },
+    ]);
+    prisma.preparationMethod.findMany.mockResolvedValue([
+      { id: peelId, name: '去皮' },
+    ]);
+
+    const result =
+      await service.getIngredientPreparationMethodHistory('ingredient-4');
+
+    expect(result).toEqual([
+      {
+        text: `${steamId}、${peelId}`,
+        usageCount: 1,
+        lastUsedAt: '2026-04-12T00:00:00.000Z',
       },
     ]);
   });

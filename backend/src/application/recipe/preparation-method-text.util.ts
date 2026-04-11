@@ -35,6 +35,14 @@ export const resolvePreparationMethodText = (
   }
 
   const segments = splitPreparationMethodSegments(trimmedValue);
+  const isUuidOnlyValue = segments.every((segment) => isUuidLike(segment));
+  if (isUuidOnlyValue) {
+    const resolvedUuidSegments = segments.map((segment) => methodMap.get(segment));
+    return resolvedUuidSegments.every(Boolean)
+      ? unique(resolvedUuidSegments as string[]).join('、')
+      : trimmedValue;
+  }
+
   const resolvedSegments = unique(
     segments.flatMap((segment) => {
       if (isUuidLike(segment)) {
@@ -50,9 +58,7 @@ export const resolvePreparationMethodText = (
     return resolvedSegments.join('、');
   }
 
-  return segments.every((segment) => isUuidLike(segment))
-    ? trimmedValue
-    : undefined;
+  return undefined;
 };
 
 export const resolvePreparationMethodTokens = (

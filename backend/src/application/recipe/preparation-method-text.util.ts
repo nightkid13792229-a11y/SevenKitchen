@@ -4,9 +4,9 @@ const UUID_RE =
 const unique = (values: string[]): string[] =>
   values.filter((value, index) => values.indexOf(value) === index);
 
-const splitCommaSegments = (value: string): string[] =>
+const splitPreparationMethodSegments = (value: string): string[] =>
   value
-    .split(',')
+    .split(/[、,，]/)
     .map((segment) => segment.trim())
     .filter(Boolean);
 
@@ -18,7 +18,9 @@ export const extractLegacyPreparationMethodIds = (
   unique(
     values.flatMap((value) =>
       value
-        ? splitCommaSegments(value).filter((segment) => isUuidLike(segment))
+        ? splitPreparationMethodSegments(value).filter((segment) =>
+            isUuidLike(segment),
+          )
         : [],
     ),
   );
@@ -31,23 +33,18 @@ export const resolvePreparationMethodText = (
     return undefined;
   }
 
-  const commaSegments = splitCommaSegments(value);
-  const looksLegacy =
-    commaSegments.length > 0 &&
-    commaSegments.every(
-      (segment) => isUuidLike(segment) || methodMap.has(segment),
-    );
+  const resolvedSegments = unique(
+    splitPreparationMethodSegments(value).flatMap((segment) => {
+      if (isUuidLike(segment)) {
+        const resolved = methodMap.get(segment);
+        return resolved ? [resolved] : [];
+      }
 
-  if (looksLegacy) {
-    const names = unique(
-      commaSegments
-        .map((segment) => methodMap.get(segment))
-        .filter((segment): segment is string => Boolean(segment)),
-    );
-    return names.length > 0 ? names.join('、') : undefined;
-  }
+      return [segment];
+    }),
+  );
 
-  return value.trim();
+  return resolvedSegments.length > 0 ? resolvedSegments.join('、') : undefined;
 };
 
 export const resolvePreparationMethodTokens = (

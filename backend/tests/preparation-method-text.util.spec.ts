@@ -24,10 +24,38 @@ describe('preparation-method-text util', () => {
     ).toEqual([peelId, steamId]);
   });
 
+  it('extracts legacy ids across comma variants', () => {
+    expect(extractLegacyPreparationMethodIds([`${peelId}， ${steamId}`])).toEqual([
+      peelId,
+      steamId,
+    ]);
+  });
+
   it('resolves legacy uuid strings into readable text in original order', () => {
     expect(
       resolvePreparationMethodText(`${steamId}, ${peelId}`, methodMap),
     ).toBe('蒸熟、去皮');
+  });
+
+  it('resolves mixed uuid and free-text input without leaking raw uuids', () => {
+    expect(resolvePreparationMethodText(`${peelId}, 切丁`, methodMap)).toBe(
+      '去皮、切丁',
+    );
+  });
+
+  it('drops unresolved uuids from partially resolvable legacy lists', () => {
+    expect(
+      resolvePreparationMethodText(
+        `${steamId}, ${peelId}`,
+        new Map([[peelId, '去皮']]),
+      ),
+    ).toBe('去皮');
+  });
+
+  it('handles delimiter and whitespace variants in legacy text', () => {
+    expect(
+      resolvePreparationMethodText(` ${peelId}，\n${steamId} 、 切丁 `, methodMap),
+    ).toBe('去皮、蒸熟、切丁');
   });
 
   it('passes through free text and tokenizes readable values', () => {

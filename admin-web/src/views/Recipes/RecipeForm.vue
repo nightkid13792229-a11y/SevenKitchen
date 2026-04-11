@@ -550,7 +550,15 @@
                 {{ history.text }}
               </el-tag>
             </div>
-            <el-empty v-else description="暂无历史制备方法" :image-size="40" />
+            <el-empty
+              v-else
+              :description="
+                ingredientForm.ingredientId
+                  ? '暂无历史制备方法'
+                  : '请选择原料后查看历史制备方法'
+              "
+              :image-size="40"
+            />
           </div>
         </el-form-item>
 
@@ -794,6 +802,17 @@ const ingredientPreparationMethodHistory = ref<
 >([]);
 const ingredientPreparationMethodHistoryLoading = ref(false);
 
+const splitPreparationMethodSegments = (value: string) => {
+  return value
+    .split(/[、,，]/)
+    .map((segment) => segment.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+};
+
+const normalizePreparationMethodText = (value: string) => {
+  return splitPreparationMethodSegments(value).join('、');
+};
+
 // Computed properties for nutrient target fields
 const selectedIngredient = computed(() => {
   return availableIngredients.value.find(
@@ -840,30 +859,50 @@ const nutrientUnit = computed(() => {
 });
 
 const appendPreparationMethodText = (historyText: string) => {
-  const next = historyText.trim();
-  if (!next) return;
+  const historySegments = splitPreparationMethodSegments(historyText);
+  if (!historySegments.length) return;
 
-  const current = ingredientForm.preparationMethodText.trim();
-  if (!current) {
-    ingredientForm.preparationMethodText = next;
+  const currentSegments = splitPreparationMethodSegments(
+    ingredientForm.preparationMethodText,
+  );
+  if (!currentSegments.length) {
+    ingredientForm.preparationMethodText = historySegments.join('、');
     return;
   }
 
-  const currentSegments = current
-    .split(/[、,，]/)
-    .map((segment) => segment.trim())
-    .filter(Boolean);
+  const normalizedCurrentSegments = new Set(
+    currentSegments.map((segment) => normalizePreparationMethodText(segment)),
+  );
+  const normalizedCurrentText = normalizePreparationMethodText(
+    ingredientForm.preparationMethodText,
+  );
+  const newSegments = historySegments.filter((segment) => {
+    const normalizedSegment = normalizePreparationMethodText(segment);
+    return (
+      normalizedSegment &&
+      !normalizedCurrentSegments.has(normalizedSegment) &&
+      !normalizedCurrentText.includes(normalizedSegment)
+    );
+  });
 
-  if (currentSegments.some((segment) => segment === next) || current === next) {
+  if (!newSegments.length) {
     return;
   }
 
-  ingredientForm.preparationMethodText = `${current.replace(/[、,，\s]*$/, '')}、${next}`;
+  ingredientForm.preparationMethodText = [
+    ...currentSegments,
+    ...newSegments,
+  ].join('、');
 };
 
 watch(
   () => ingredientForm.ingredientId,
-  async (ingredientId) => {
+  async (ingredientId, _previousIngredientId, onCleanup) => {
+    let isCurrentRequest = true;
+    onCleanup(() => {
+      isCurrentRequest = false;
+    });
+
     const ingredient = availableIngredients.value.find(
       (item) => item.id === ingredientId,
     );
@@ -875,6 +914,7 @@ watch(
 
     ingredientPreparationMethodHistory.value = [];
     if (!ingredientId) {
+      ingredientPreparationMethodHistoryLoading.value = false;
       return;
     }
 
@@ -883,13 +923,19 @@ watch(
       const history =
         (await recipeApi.getIngredientPreparationMethodHistory(ingredientId)) ||
         [];
-      if (ingredientForm.ingredientId === ingredientId) {
-        ingredientPreparationMethodHistory.value = history;
+      if (!isCurrentRequest) {
+        return;
       }
+      ingredientPreparationMethodHistory.value = history;
     } catch (error: any) {
+      if (!isCurrentRequest) {
+        return;
+      }
       ElMessage.error(error.message || '加载历史制备方法失败');
     } finally {
-      ingredientPreparationMethodHistoryLoading.value = false;
+      if (isCurrentRequest) {
+        ingredientPreparationMethodHistoryLoading.value = false;
+      }
     }
   },
 );

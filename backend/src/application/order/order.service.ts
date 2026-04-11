@@ -389,6 +389,7 @@ export class OrderService {
         const preparationMethodNames = resolvePreparationMethodTokens(
           ri.preparationMethod,
           prepMethodMap,
+          { preserveUnresolvedLegacy: false },
         );
 
         return {
@@ -698,8 +699,9 @@ export class OrderService {
 
         // Convert preparationMethod ID(s) to name(s)
         const prepMethodText =
-          resolvePreparationMethodText(ri.preparationMethod, prepMethodMap) ??
-          null;
+          resolvePreparationMethodText(ri.preparationMethod, prepMethodMap, {
+            preserveUnresolvedLegacy: false,
+          }) ?? null;
 
         console.log('[OrderService] RecipeItem preparationMethod:', {
           ingredientName: ingredient.name,
@@ -807,6 +809,7 @@ export class OrderService {
           const preparationMethodNames = resolvePreparationMethodTokens(
             ri.preparationMethod,
             prepMethodMap,
+            { preserveUnresolvedLegacy: false },
           );
 
           // Debug: log supplement ingredient unit display label
@@ -1186,8 +1189,9 @@ export class OrderService {
 
       // Convert preparationMethod ID(s) to name(s)
       const prepMethodText =
-        resolvePreparationMethodText(ri.preparationMethod, prepMethodMap) ??
-        null;
+        resolvePreparationMethodText(ri.preparationMethod, prepMethodMap, {
+          preserveUnresolvedLegacy: false,
+        }) ?? null;
 
       return {
         ingredientId: ri.ingredientId,

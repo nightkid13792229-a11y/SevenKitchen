@@ -46,7 +46,12 @@ export class RecipeService {
       select: { id: true, name: true },
     });
 
-    return new Map(methods.map((method) => [method.id, method.name]));
+    return new Map(
+      methods.map((method: { id: string; name: string }) => [
+        method.id,
+        method.name,
+      ]),
+    );
   }
 
   /**
@@ -175,7 +180,7 @@ export class RecipeService {
       this.prisma.recipe.count({ where }),
     ]);
 
-    const data: RecipeSummaryResponseDto[] = recipes.map((recipe) =>
+    const data: RecipeSummaryResponseDto[] = recipes.map((recipe: any) =>
       this.mapToSummaryDto(recipe),
     );
 
@@ -594,7 +599,7 @@ export class RecipeService {
           recipe.applicableLifeStages as Prisma.InputJsonValue,
         productionSteps: recipe.productionSteps,
         items: {
-          create: recipe.items.map((item) => ({
+          create: recipe.items.map((item: any) => ({
             ingredientId: item.ingredientId,
             preparationMethod: item.preparationMethod,
             exampleWeight: item.exampleWeight,
@@ -613,7 +618,7 @@ export class RecipeService {
     // Duplicate health tag assignments
     if (recipe.healthTagAssignments && recipe.healthTagAssignments.length > 0) {
       await this.prisma.recipeHealthTagAssignment.createMany({
-        data: recipe.healthTagAssignments.map((assignment) => ({
+        data: recipe.healthTagAssignments.map((assignment: any) => ({
           recipeId: duplicated.id,
           healthTagId: assignment.healthTagId,
         })),
@@ -659,7 +664,7 @@ export class RecipeService {
     });
 
     const methodMap = await this.loadPreparationMethodNameMap(
-      rows.map((row) => row.preparationMethod),
+      rows.map((row: { preparationMethod: string | null }) => row.preparationMethod),
     );
 
     const aggregated = new Map<
@@ -671,6 +676,7 @@ export class RecipeService {
       const readable = resolvePreparationMethodText(
         row.preparationMethod,
         methodMap,
+        { preserveUnresolvedLegacy: true },
       );
       const normalized = normalizePreparationMethodHistoryText(readable);
       if (!normalized) {
@@ -725,7 +731,7 @@ export class RecipeService {
       orderBy: { version: 'desc' },
     });
 
-    return recipes.map((recipe) => this.mapToSummaryDto(recipe));
+    return recipes.map((recipe: any) => this.mapToSummaryDto(recipe));
   }
 
   /**
@@ -811,8 +817,9 @@ export class RecipeService {
               }
             : undefined,
           preparationMethod:
-            resolvePreparationMethodText(item.preparationMethod, methodMap) ||
-            undefined,
+            resolvePreparationMethodText(item.preparationMethod, methodMap, {
+              preserveUnresolvedLegacy: true,
+            }) || undefined,
           exampleWeight: item.exampleWeight || undefined,
           ratioPercent: item.ratioPercent || undefined,
           nutrientTargetKey: item.nutrientTargetKey || undefined,

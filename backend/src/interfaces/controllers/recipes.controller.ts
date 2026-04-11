@@ -190,11 +190,11 @@ export class RecipesController {
 
     // Deduplicate: keep only the latest version per recipeId
     const seen = new Set<string>();
-    const summaries = recipes.filter((r) => {
+    const summaries = recipes.filter((r: any) => {
       if (seen.has(r.recipeId)) return false;
       seen.add(r.recipeId);
       return true;
-    }).map((r) => ({
+    }).map((r: any) => ({
       id: r.recipeId,
       version: r.version,
       name: r.name,
@@ -392,6 +392,7 @@ export class RecipesController {
               resolvePreparationMethodText(
                 item.preparationMethod,
                 methodMap,
+                { preserveUnresolvedLegacy: false },
               ) || undefined,
             sortOrder: item.sortOrder || 0,
             ingredientType: ingredientType || undefined,

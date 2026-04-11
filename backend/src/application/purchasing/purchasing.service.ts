@@ -1164,6 +1164,8 @@ export class PurchasingService {
         const totalCost = detail.cost || 0;
         const preparationMethods = resolvePreparationMethodTokens(
           (detail as any).preparationMethod,
+          new Map(),
+          { preserveUnresolvedLegacy: false },
         );
 
         if (ingredientMap.has(key)) {

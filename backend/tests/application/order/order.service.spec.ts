@@ -356,6 +356,134 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       );
       expect(orderItem.dailyIntakeG).toBe(capturedDailyIntakeG); // Still original, immutable
     });
+
+    it('does not leak unresolved legacy preparation method uuids into pricing input or order snapshots', async () => {
+      const missingId = '33333333-3333-3333-3333-333333333333';
+      const dog = createMockDog();
+      const recipe = {
+        ...createMockRecipe(),
+        items: [
+          {
+            id: 'item-1',
+            ingredientId: 'ingredient-1',
+            ratioPercent: 100,
+            isPrimarySource: true,
+            preparationMethod: missingId,
+          },
+        ],
+      };
+      const ingredient = createMockIngredient();
+
+      dogRepository.findById.mockResolvedValue(dog);
+      recipeRepository.findById.mockResolvedValue(recipe);
+      mockIngredientRepository.findByIds.mockResolvedValue([ingredient]);
+      mockPrismaService.preparationMethod.findMany.mockResolvedValue([]);
+      mockPricingService.calculateOrderPrice.mockReturnValue({
+        costIngredients: 50,
+        costPackaging: 10,
+        costLabor: 20,
+        costOverhead: 5,
+        totalProductCost: 85,
+        productPrice: 141.67,
+      });
+      orderRepository.save.mockImplementation(async (order: Order) => order);
+
+      await service.createOrderDraft({
+        customerId: 'customer-id-1',
+        dogId: 'dog-id-1',
+        type: OrderType.FRESH_FOOD,
+        items: [
+          {
+            recipeId: 'recipe-id-1',
+            quantityG: 1000,
+            packageSpecG: 200,
+            packageCount: 5,
+          },
+        ],
+      });
+
+      expect(mockPricingService.calculateOrderPrice).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recipe: expect.objectContaining({
+            items: [
+              expect.objectContaining({
+                preparationMethod: null,
+              }),
+            ],
+          }),
+        }),
+      );
+
+      const savedOrder = orderRepository.save.mock.calls[0][0] as Order;
+      expect(
+        savedOrder.items[0].recipeSnapshot.items[0].preparation_methods,
+      ).toBeUndefined();
+    });
+
+    it('does not leak unresolved legacy preparation method uuids into preview pricing input', async () => {
+      const missingId = '33333333-3333-3333-3333-333333333333';
+      const dog = createMockDog();
+      const recipe = {
+        ...createMockRecipe(),
+        items: [
+          {
+            id: 'item-1',
+            ingredientId: 'ingredient-1',
+            ratioPercent: 100,
+            isPrimarySource: true,
+            preparationMethod: missingId,
+          },
+        ],
+      };
+      const ingredient = createMockIngredient();
+
+      dogRepository.findById.mockResolvedValue(dog);
+      recipeRepository.findById.mockResolvedValue(recipe);
+      mockIngredientRepository.findByIds.mockResolvedValue([ingredient]);
+      mockPrismaService.preparationMethod.findMany.mockResolvedValue([]);
+      mockPricingService.calculateOrderPrice.mockReturnValue({
+        costIngredients: 50,
+        costPackaging: 10,
+        costLabor: 20,
+        costOverhead: 5,
+        totalProductCost: 85,
+        productPrice: 141.67,
+        weightPackagingG: 0,
+      });
+      mockPricingSnapshotRepository.create.mockResolvedValue({
+        id: 'snapshot-1',
+      });
+      mockShippingService.calculateShippingFeePreview.mockResolvedValue({
+        amountShipping: 0,
+        templateId: null,
+      });
+
+      await service.previewPricing({
+        customerId: 'customer-id-1',
+        dogId: 'dog-id-1',
+        type: OrderType.FRESH_FOOD,
+        items: [
+          {
+            recipeId: 'recipe-id-1',
+            quantityG: 1000,
+            packageSpecG: 200,
+            packageCount: 5,
+          },
+        ],
+      });
+
+      expect(mockPricingService.calculateOrderPrice).toHaveBeenCalledWith(
+        expect.objectContaining({
+          recipe: expect.objectContaining({
+            items: [
+              expect.objectContaining({
+                preparationMethod: null,
+              }),
+            ],
+          }),
+        }),
+      );
+    });
   });
 });
 

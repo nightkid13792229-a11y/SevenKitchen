@@ -25,9 +25,14 @@ export const extractLegacyPreparationMethodIds = (
     ),
   );
 
+export interface ResolvePreparationMethodTextOptions {
+  preserveUnresolvedLegacy?: boolean;
+}
+
 export const resolvePreparationMethodText = (
   value: string | null | undefined,
   methodMap: Map<string, string> = new Map(),
+  options: ResolvePreparationMethodTextOptions = {},
 ): string | undefined => {
   const trimmedValue = value?.trim();
   if (!trimmedValue) {
@@ -38,9 +43,20 @@ export const resolvePreparationMethodText = (
   const isUuidOnlyValue = segments.every((segment) => isUuidLike(segment));
   if (isUuidOnlyValue) {
     const resolvedUuidSegments = segments.map((segment) => methodMap.get(segment));
-    return resolvedUuidSegments.every(Boolean)
-      ? unique(resolvedUuidSegments as string[]).join('、')
-      : trimmedValue;
+    if (resolvedUuidSegments.every(Boolean)) {
+      return unique(resolvedUuidSegments as string[]).join('、');
+    }
+
+    if (options.preserveUnresolvedLegacy) {
+      return trimmedValue;
+    }
+
+    const readableFallback = unique(
+      resolvedUuidSegments.filter((segment): segment is string => !!segment),
+    );
+    return readableFallback.length > 0
+      ? readableFallback.join('、')
+      : undefined;
   }
 
   const resolvedSegments = unique(
@@ -64,8 +80,9 @@ export const resolvePreparationMethodText = (
 export const resolvePreparationMethodTokens = (
   value: string | null | undefined,
   methodMap: Map<string, string> = new Map(),
+  options: ResolvePreparationMethodTextOptions = {},
 ): string[] => {
-  const readable = resolvePreparationMethodText(value, methodMap);
+  const readable = resolvePreparationMethodText(value, methodMap, options);
   if (!readable) {
     return [];
   }

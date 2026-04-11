@@ -44,20 +44,40 @@ describe('preparation-method-text util', () => {
     );
   });
 
-  it('preserves the stored value when a uuid-only list is only partially resolvable', () => {
+  it('shows only resolved pieces when a uuid-only list is only partially resolvable in display mode', () => {
     expect(
       resolvePreparationMethodText(
         `${steamId}, ${peelId}`,
         new Map([[peelId, '去皮']]),
       ),
-    ).toBe(`${steamId}, ${peelId}`);
+    ).toBe('去皮');
   });
 
-  it('falls back to the stored value when a legacy-only input cannot be resolved', () => {
-    expect(resolvePreparationMethodText(missingId, methodMap)).toBe(missingId);
-    expect(resolvePreparationMethodText(`${missingId}, ${steamId}`, new Map())).toBe(
-      `${missingId}, ${steamId}`,
+  it('drops unresolved uuid-only input in display mode', () => {
+    expect(resolvePreparationMethodText(missingId, methodMap)).toBeUndefined();
+    expect(
+      resolvePreparationMethodText(`${missingId}, ${steamId}`, new Map()),
+    ).toBeUndefined();
+    expect(resolvePreparationMethodTokens(`${missingId}, ${steamId}`, new Map())).toEqual(
+      [],
     );
+  });
+
+  it('preserves unresolved uuid-only input when preserveUnresolvedLegacy is enabled', () => {
+    expect(
+      resolvePreparationMethodText(missingId, methodMap, {
+        preserveUnresolvedLegacy: true,
+      }),
+    ).toBe(missingId);
+    expect(
+      resolvePreparationMethodText(
+        `${steamId}, ${peelId}`,
+        new Map([[peelId, '去皮']]),
+        {
+          preserveUnresolvedLegacy: true,
+        },
+      ),
+    ).toBe(`${steamId}, ${peelId}`);
   });
 
   it('handles delimiter and whitespace variants in legacy text', () => {

@@ -250,18 +250,10 @@ export function updateShareInfo(name: string, coverImageUrl: string, id: string,
   currentRecipeId = id
   if (status) currentRecipeStatus = status
   if (shareToken) currentShareToken = shareToken
-  console.log('[Recipe Share] 分享信息已更新:', { name, coverImageUrl, id, status, shareToken })
 }
 
 export default {
   onShareAppMessage() {
-    console.log('[Recipe Share] ========== 转发给朋友分享函数被调用 ==========')
-    console.log('[Recipe Share] 当前食谱名称:', currentRecipeName)
-    console.log('[Recipe Share] 当前食谱ID:', currentRecipeId)
-    console.log('[Recipe Share] 当前封面图:', currentRecipeCoverImageUrl)
-    console.log('[Recipe Share] 当前状态:', currentRecipeStatus)
-    console.log('[Recipe Share] 当前shareToken:', currentShareToken)
-
     // 动态生成标题
     const title = currentRecipeName
       ? `${currentRecipeName} | Seven的厨房`
@@ -282,18 +274,9 @@ export default {
 
     const config = { title, imageUrl, path }
 
-    console.log('[Recipe Share] 分享配置:', JSON.stringify(config, null, 2))
-    console.log('[Recipe Share] 标题:', title)
-    console.log('[Recipe Share] 图片URL:', imageUrl)
-    console.log('[Recipe Share] 路径:', path)
-
     return config
   },
   onShareTimeline() {
-    console.log('[Recipe Share] ========== 分享到朋友圈函数被调用 ==========')
-    console.log('[Recipe Share] 当前食谱名称:', currentRecipeName)
-    console.log('[Recipe Share] 当前封面图:', currentRecipeCoverImageUrl)
-
     // 动态生成标题
     const title = currentRecipeName
       ? `${currentRecipeName} | Seven的厨房`
@@ -303,10 +286,6 @@ export default {
     const imageUrl = currentRecipeCoverImageUrl || CURRENT_SHARE_CONFIG.recipeImageUrl
 
     const config = { title, imageUrl }
-
-    console.log('[Recipe Share] 朋友圈配置:', JSON.stringify(config, null, 2))
-    console.log('[Recipe Share] 标题:', title)
-    console.log('[Recipe Share] 图片URL:', imageUrl)
 
     return config
   }
@@ -431,18 +410,6 @@ function loadRecipeDetail() {
     data,
   }).then((res: any) => {
     if (res.code === 0 && res.data) {
-      // Debug: Log API response to diagnose preparationMethod issue
-      console.log('[RecipeDetail] API Response:', {
-        recipeId: res.data.id,
-        recipeName: res.data.name,
-        totalItems: res.data.items?.length,
-        firstItem: res.data.items?.[0] ? {
-          name: res.data.items[0].name,
-          preparationMethod: res.data.items[0].preparationMethod,
-          prepMethodType: typeof res.data.items[0].preparationMethod
-        } : null
-      })
-
       recipe.value = res.data
       uni.setStorageSync(HOME_RECIPE_STATS_DIRTY_KEY, '1')
       void trackRecipeView(recipeId.value, shareToken.value).catch((error: any) => {
@@ -461,12 +428,6 @@ function loadRecipeDetail() {
       if (res.data.status !== 'PUBLIC') {
         preGenerateShareToken()
       }
-
-      // Debug: Log recipe value after assignment
-      console.log('[RecipeDetail] recipe.value.items[0]:', {
-        name: recipe.value.items[0]?.name,
-        preparationMethod: recipe.value.items[0]?.preparationMethod
-      })
     }
   }).catch((err: any) => {
     console.error('Load recipe error:', err)
@@ -492,11 +453,9 @@ async function preGenerateShareToken() {
         recipe.value.status,
         result.token
       )
-      console.log('[RecipeDetail] 预生成分享令牌成功:', result.token)
     }
   } catch (error) {
     // 非员工用户可能无法生成令牌，静默失败
-    console.log('[RecipeDetail] 预生成分享令牌失败（可能是非员工用户）:', error)
   }
 }
 
@@ -516,7 +475,6 @@ function loadHealthTagMapping(): Promise<void> {
         })
       }
       healthTagUuidLabelMap.value = uuidMap
-      console.log('[RecipeDetail] 健康标签映射表加载完成，共', Object.keys(uuidMap).length, '个标签')
     }
   }).catch((err: any) => {
     console.error('Load health tag mapping error:', err)
@@ -524,14 +482,9 @@ function loadHealthTagMapping(): Promise<void> {
 }
 
 async function checkFavoriteStatus() {
-  // Debug: Log recipeId
-  console.log('[RecipeDetail] Checking favorite for recipeId:', recipeId.value)
-
   try {
     const result = await checkFavorite(recipeId.value)
-    console.log('[RecipeDetail] Favorite status from API:', result)
     isFavorite.value = result.isFavorite
-    console.log('[RecipeDetail] isFavorite set to:', isFavorite.value)
   } catch (error: any) {
     console.error('[RecipeDetail] Failed to check favorite status:', error)
     // 未登录或其他错误时，保持false状态，不显示错误提示

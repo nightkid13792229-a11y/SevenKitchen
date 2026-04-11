@@ -10,6 +10,7 @@ import type {
   RecipeForm,
   RecipeQuery,
   RecipeListResponse,
+  IngredientPreparationMethodHistoryItem,
 } from '../types/recipe';
 
 /**
@@ -89,6 +90,15 @@ export const recipeApi = {
       likeCount: number;
       favoriteCount: number;
     }>(`/admin/recipes/${id}/sales-stats`);
+  },
+
+  /**
+   * Get ingredient preparation method history
+   */
+  getIngredientPreparationMethodHistory: (ingredientId: string) => {
+    return request.get<IngredientPreparationMethodHistoryItem[]>(
+      `/admin/ingredients/${ingredientId}/preparation-method-history`,
+    );
   },
 
   /**

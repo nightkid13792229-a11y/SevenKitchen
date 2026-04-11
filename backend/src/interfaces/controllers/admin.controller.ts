@@ -95,6 +95,7 @@ import {
 } from '../../domain/recipe/enums';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UseInterceptors } from '@nestjs/common';
+import type { IngredientPreparationMethodHistoryDto } from '../dto/recipes/admin-recipe.dto';
 
 @ApiTags('Admin')
 @Controller('api/v1/admin')
@@ -601,6 +602,19 @@ export class AdminController {
       }
       throw error;
     }
+  }
+
+  @Get('ingredients/:id/preparation-method-history')
+  @ApiOperation({
+    summary: 'Get historical preparation methods for an ingredient',
+  })
+  @ApiParam({ name: 'id', description: 'Ingredient ID' })
+  async getIngredientPreparationMethodHistory(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<IngredientPreparationMethodHistoryDto[]>> {
+    const history =
+      await this.recipeService.getIngredientPreparationMethodHistory(id);
+    return ApiResponseDto.success(history);
   }
 
   // ==========================================

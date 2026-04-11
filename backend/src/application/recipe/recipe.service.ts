@@ -16,8 +16,14 @@ import {
   LifeStage,
   NutritionStandard,
 } from '../../domain/recipe/enums';
+import {
+  extractLegacyPreparationMethodIds,
+  normalizePreparationMethodHistoryText,
+  resolvePreparationMethodText,
+} from './preparation-method-text.util';
 import type { RecipeQueryDto } from '../../interfaces/dto/recipes/admin-recipe.dto';
 import type {
+  IngredientPreparationMethodHistoryDto,
   RecipeSummaryResponseDto,
   RecipeDetailResponseDto,
   RecipeListResponseDto,
@@ -26,6 +32,22 @@ import type {
 @Injectable()
 export class RecipeService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private async loadPreparationMethodNameMap(
+    values: Array<string | null | undefined>,
+  ): Promise<Map<string, string>> {
+    const ids = extractLegacyPreparationMethodIds(values);
+    if (ids.length === 0) {
+      return new Map();
+    }
+
+    const methods = await this.prisma.preparationMethod.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true },
+    });
+
+    return new Map(methods.map((method) => [method.id, method.name]));
+  }
 
   /**
    * Helper: Check if recipe items have changed (ingredient name, ratio, or usage amount)
@@ -192,7 +214,7 @@ export class RecipeService {
       throw new NotFoundException(`Recipe not found: ${id}`);
     }
 
-    return this.mapToDetailDto(recipe);
+    return await this.mapToDetailDto(recipe);
   }
 
   /**
@@ -289,7 +311,7 @@ export class RecipeService {
       },
     });
 
-    return this.mapToDetailDto(recipeWithTags!);
+    return await this.mapToDetailDto(recipeWithTags!);
   }
 
   /**
@@ -413,7 +435,7 @@ export class RecipeService {
       },
     });
 
-    return this.mapToDetailDto(recipeWithTags!);
+    return await this.mapToDetailDto(recipeWithTags!);
   }
 
   /**
@@ -480,7 +502,7 @@ export class RecipeService {
       },
     });
 
-    return this.mapToDetailDto(updated);
+    return await this.mapToDetailDto(updated);
   }
 
   /**
@@ -522,7 +544,7 @@ export class RecipeService {
       },
     });
 
-    return this.mapToDetailDto(updated);
+    return await this.mapToDetailDto(updated);
   }
 
   /**
@@ -619,7 +641,77 @@ export class RecipeService {
       },
     });
 
-    return this.mapToDetailDto(duplicatedWithTags!);
+    return await this.mapToDetailDto(duplicatedWithTags!);
+  }
+
+  async getIngredientPreparationMethodHistory(
+    ingredientId: string,
+  ): Promise<IngredientPreparationMethodHistoryDto[]> {
+    const rows = await this.prisma.recipeItem.findMany({
+      where: {
+        ingredientId,
+        recipe: { isCustomRecipe: false },
+      },
+      select: {
+        preparationMethod: true,
+        recipe: { select: { updatedAt: true } },
+      },
+    });
+
+    const methodMap = await this.loadPreparationMethodNameMap(
+      rows.map((row) => row.preparationMethod),
+    );
+
+    const aggregated = new Map<
+      string,
+      { text: string; usageCount: number; lastUsedAt: Date }
+    >();
+
+    for (const row of rows) {
+      const readable = resolvePreparationMethodText(
+        row.preparationMethod,
+        methodMap,
+      );
+      const normalized = normalizePreparationMethodHistoryText(readable);
+      if (!normalized) {
+        continue;
+      }
+
+      const existing = aggregated.get(normalized);
+      if (existing) {
+        existing.usageCount += 1;
+        if (row.recipe.updatedAt > existing.lastUsedAt) {
+          existing.lastUsedAt = row.recipe.updatedAt;
+        }
+        continue;
+      }
+
+      aggregated.set(normalized, {
+        text: normalized,
+        usageCount: 1,
+        lastUsedAt: row.recipe.updatedAt,
+      });
+    }
+
+    return [...aggregated.values()]
+      .sort((left, right) => {
+        const byLastUsed =
+          right.lastUsedAt.getTime() - left.lastUsedAt.getTime();
+        if (byLastUsed !== 0) {
+          return byLastUsed;
+        }
+
+        const byUsage = right.usageCount - left.usageCount;
+        if (byUsage !== 0) {
+          return byUsage;
+        }
+
+        return left.text.localeCompare(right.text);
+      })
+      .map((item) => ({
+        ...item,
+        lastUsedAt: item.lastUsedAt.toISOString(),
+      }));
   }
 
   /**
@@ -688,7 +780,11 @@ export class RecipeService {
   /**
    * Map Recipe entity to Detail DTO
    */
-  private mapToDetailDto(recipe: any): RecipeDetailResponseDto {
+  private async mapToDetailDto(recipe: any): Promise<RecipeDetailResponseDto> {
+    const methodMap = await this.loadPreparationMethodNameMap(
+      (recipe.items || []).map((item: any) => item.preparationMethod),
+    );
+
     return {
       ...this.mapToSummaryDto(recipe),
       detailImages: (recipe.detailImages as string[]) || undefined,
@@ -714,7 +810,9 @@ export class RecipeService {
                 properties: item.ingredient.properties,
               }
             : undefined,
-          preparationMethod: item.preparationMethod || undefined,
+          preparationMethod:
+            resolvePreparationMethodText(item.preparationMethod, methodMap) ||
+            undefined,
           exampleWeight: item.exampleWeight || undefined,
           ratioPercent: item.ratioPercent || undefined,
           nutrientTargetKey: item.nutrientTargetKey || undefined,

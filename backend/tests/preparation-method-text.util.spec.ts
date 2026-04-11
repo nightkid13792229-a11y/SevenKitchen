@@ -8,6 +8,7 @@ import {
 describe('preparation-method-text util', () => {
   const peelId = '11111111-1111-1111-1111-111111111111';
   const steamId = '22222222-2222-2222-2222-222222222222';
+  const missingId = '33333333-3333-3333-3333-333333333333';
   const methodMap = new Map([
     [peelId, '去皮'],
     [steamId, '蒸熟'],
@@ -52,6 +53,13 @@ describe('preparation-method-text util', () => {
     ).toBe('去皮');
   });
 
+  it('falls back to the stored value when a legacy-only input cannot be resolved', () => {
+    expect(resolvePreparationMethodText(missingId, methodMap)).toBe(missingId);
+    expect(resolvePreparationMethodText(`${missingId}, ${steamId}`, new Map())).toBe(
+      `${missingId}, ${steamId}`,
+    );
+  });
+
   it('handles delimiter and whitespace variants in legacy text', () => {
     expect(
       resolvePreparationMethodText(` ${peelId}，\n${steamId} 、 切丁 `, methodMap),
@@ -65,6 +73,15 @@ describe('preparation-method-text util', () => {
     expect(resolvePreparationMethodTokens('去皮、蒸熟后压泥', methodMap)).toEqual(
       ['去皮', '蒸熟后压泥'],
     );
+  });
+
+  it('keeps readable pieces and free text when mixed input is only partially resolvable', () => {
+    expect(resolvePreparationMethodText(`${missingId}, 切丁`, methodMap)).toBe(
+      '切丁',
+    );
+    expect(
+      resolvePreparationMethodText(`${peelId}, ${missingId}, 切丁`, methodMap),
+    ).toBe('去皮、切丁');
   });
 
   it('normalizes history text punctuation for dedupe', () => {

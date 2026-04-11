@@ -29,12 +29,14 @@ export const resolvePreparationMethodText = (
   value: string | null | undefined,
   methodMap: Map<string, string> = new Map(),
 ): string | undefined => {
-  if (!value?.trim()) {
+  const trimmedValue = value?.trim();
+  if (!trimmedValue) {
     return undefined;
   }
 
+  const segments = splitPreparationMethodSegments(trimmedValue);
   const resolvedSegments = unique(
-    splitPreparationMethodSegments(value).flatMap((segment) => {
+    segments.flatMap((segment) => {
       if (isUuidLike(segment)) {
         const resolved = methodMap.get(segment);
         return resolved ? [resolved] : [];
@@ -44,7 +46,13 @@ export const resolvePreparationMethodText = (
     }),
   );
 
-  return resolvedSegments.length > 0 ? resolvedSegments.join('、') : undefined;
+  if (resolvedSegments.length > 0) {
+    return resolvedSegments.join('、');
+  }
+
+  return segments.every((segment) => isUuidLike(segment))
+    ? trimmedValue
+    : undefined;
 };
 
 export const resolvePreparationMethodTokens = (

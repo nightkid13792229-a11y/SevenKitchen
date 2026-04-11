@@ -74,7 +74,7 @@
           <view class="ingredient-table">
             <view class="table-header food-table">
               <text class="header-item name-col">原料名称</text>
-              <text class="header-item recommend-col">DIY 推荐 SKU</text>
+              <text class="header-item recommend-col">{{ DIY_SHEET_FOOD_RECOMMENDATION_LABEL }}</text>
               <text class="header-item method-col">制备方法</text>
               <text class="header-item actual-col">采购量</text>
             </view>
@@ -112,7 +112,7 @@
           <view class="ingredient-table">
             <view class="table-header supplement-table">
               <text class="header-item product-col">补剂名称</text>
-              <text class="header-item brand-col">产品/品牌</text>
+              <text class="header-item brand-col">{{ DIY_SHEET_SUPPLEMENT_RECOMMENDATION_LABEL }}</text>
               <text class="header-item timing-col">最佳添加时机</text>
               <text class="header-item dosage-col">添加总量</text>
             </view>
@@ -250,7 +250,7 @@
     <view v-if="showSpec" class="spec-modal" @tap="closeSpecModal">
       <view class="spec-content" @tap.stop>
         <view class="spec-header">
-          <text class="spec-title">DIY 推荐SKU</text>
+          <text class="spec-title">{{ DIY_SHEET_SPEC_MODAL_TITLE }}</text>
           <text class="btn-close" @tap="closeSpecModal">✕</text>
         </view>
         <!-- 有多个推荐产品时：展示产品卡片列表 -->
@@ -305,7 +305,7 @@
             <text class="spec-value">{{ currentSpec.productModel }}</text>
           </view>
           <view v-if="currentSpec.purchaseLink" class="spec-row">
-            <text class="spec-label">DIY 推荐：</text>
+            <text class="spec-label">{{ DIY_SHEET_PURCHASE_LABEL }}：</text>
             <button
               class="btn-purchase"
               @tap="handlePurchase(currentSpec.purchaseLink, currentSpec.name)"
@@ -314,7 +314,7 @@
             </button>
           </view>
           <view v-else-if="currentSpec.purchaseChannel" class="spec-row">
-            <text class="spec-label">DIY 推荐：</text>
+            <text class="spec-label">{{ DIY_SHEET_PURCHASE_LABEL }}：</text>
             <text class="spec-value">{{ currentSpec.purchaseChannel }}</text>
           </view>
         </view>
@@ -451,6 +451,12 @@ import ShareButton from '../../components/ShareButton.vue'
 import ImagePreviewModal from '../../components/ImagePreviewModal.vue'
 import { normalizeImageUrl } from '../../utils/config'
 import { formatSupplementAmountWithDisplayUnit } from '../../utils/diy-sheet-format'
+import {
+  DIY_SHEET_FOOD_RECOMMENDATION_LABEL,
+  DIY_SHEET_SUPPLEMENT_RECOMMENDATION_LABEL,
+  DIY_SHEET_SPEC_MODAL_TITLE,
+  DIY_SHEET_PURCHASE_LABEL
+} from './copy'
 
 // 页面参数
 const recipeId = ref('')
@@ -977,7 +983,7 @@ async function handlePrint() {
       ])
 
       builder.drawTable(
-        ['原料名称', 'DIY 推荐 SKU', '制备方法', '采购量'],
+        ['原料名称', DIY_SHEET_FOOD_RECOMMENDATION_LABEL, '制备方法', '采购量'],
         foodRows,
         {
           showTotal: true,
@@ -1015,7 +1021,7 @@ async function handlePrint() {
       })
 
       builder.drawTable(
-        ['补剂名称', 'DIY推荐品牌', '规格', '最佳添加时机', '添加总量', '营养素', '营养素总量'],
+        ['补剂名称', DIY_SHEET_SUPPLEMENT_RECOMMENDATION_LABEL, '规格', '最佳添加时机', '添加总量', '营养素', '营养素总量'],
         supplementRows,
         {
           colWidths: [160, 120, 300, 120, 120, 150, 150],

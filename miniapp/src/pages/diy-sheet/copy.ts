@@ -1,0 +1,4 @@
+export const DIY_SHEET_FOOD_RECOMMENDATION_LABEL = '推荐商品'
+export const DIY_SHEET_SUPPLEMENT_RECOMMENDATION_LABEL = '推荐商品'
+export const DIY_SHEET_SPEC_MODAL_TITLE = '推荐商品'
+export const DIY_SHEET_PURCHASE_LABEL = '推荐商品'

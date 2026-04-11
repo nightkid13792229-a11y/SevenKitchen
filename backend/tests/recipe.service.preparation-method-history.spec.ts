@@ -89,6 +89,16 @@ describe('RecipeService preparation method behavior', () => {
     const result =
       await service.getIngredientPreparationMethodHistory('ingredient-1');
 
+    expect(prisma.recipeItem.findMany).toHaveBeenCalledWith({
+      where: {
+        ingredientId: 'ingredient-1',
+        recipe: { isCustomRecipe: false },
+      },
+      select: {
+        preparationMethod: true,
+        recipe: { select: { updatedAt: true } },
+      },
+    });
     expect(result).toEqual([
       {
         text: '去皮、蒸熟',

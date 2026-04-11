@@ -676,7 +676,7 @@ export class RecipeService {
       const readable = resolvePreparationMethodText(
         row.preparationMethod,
         methodMap,
-        { preserveUnresolvedLegacy: true },
+        { preserveUnresolvedLegacy: false },
       );
       const normalized = normalizePreparationMethodHistoryText(readable);
       if (!normalized) {

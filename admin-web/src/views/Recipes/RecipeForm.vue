@@ -545,7 +545,7 @@
                 :key="history.text"
                 class="tag-item"
                 type="info"
-                @click="appendPreparationMethodText(history.text)"
+                @click="applyPreparationMethodHistory(history.text)"
               >
                 {{ history.text }}
               </el-tag>
@@ -729,6 +729,9 @@ import { recipeHealthTagApi } from '@/api/recipeHealthTags';
 import { inventoryApi } from '@/api';
 import { IngredientTypeLabels } from '@/types/ingredient';
 import {
+  appendPreparationMethodText,
+} from '@/utils/preparationMethodText';
+import {
   RecipeStatus,
   NutritionStandard,
   type RecipeForm,
@@ -802,17 +805,6 @@ const ingredientPreparationMethodHistory = ref<
 >([]);
 const ingredientPreparationMethodHistoryLoading = ref(false);
 
-const splitPreparationMethodSegments = (value: string) => {
-  return value
-    .split(/[、,，]/)
-    .map((segment) => segment.replace(/\s+/g, ' ').trim())
-    .filter(Boolean);
-};
-
-const normalizePreparationMethodText = (value: string) => {
-  return splitPreparationMethodSegments(value).join('、');
-};
-
 // Computed properties for nutrient target fields
 const selectedIngredient = computed(() => {
   return availableIngredients.value.find(
@@ -858,41 +850,11 @@ const nutrientUnit = computed(() => {
   return '';
 });
 
-const appendPreparationMethodText = (historyText: string) => {
-  const historySegments = splitPreparationMethodSegments(historyText);
-  if (!historySegments.length) return;
-
-  const currentSegments = splitPreparationMethodSegments(
+const applyPreparationMethodHistory = (historyText: string) => {
+  ingredientForm.preparationMethodText = appendPreparationMethodText(
     ingredientForm.preparationMethodText,
+    historyText,
   );
-  if (!currentSegments.length) {
-    ingredientForm.preparationMethodText = historySegments.join('、');
-    return;
-  }
-
-  const normalizedCurrentSegments = new Set(
-    currentSegments.map((segment) => normalizePreparationMethodText(segment)),
-  );
-  const normalizedCurrentText = normalizePreparationMethodText(
-    ingredientForm.preparationMethodText,
-  );
-  const newSegments = historySegments.filter((segment) => {
-    const normalizedSegment = normalizePreparationMethodText(segment);
-    return (
-      normalizedSegment &&
-      !normalizedCurrentSegments.has(normalizedSegment) &&
-      !normalizedCurrentText.includes(normalizedSegment)
-    );
-  });
-
-  if (!newSegments.length) {
-    return;
-  }
-
-  ingredientForm.preparationMethodText = [
-    ...currentSegments,
-    ...newSegments,
-  ].join('、');
 };
 
 watch(

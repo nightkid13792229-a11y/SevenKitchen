@@ -11,6 +11,8 @@ import {
   BaseUnit,
   IngredientProcurementStrategy,
 } from '../../domain/ingredient/enums';
+import { normalizeNutritionProfile } from '../../domain/ingredient/nutrition-profile.utils';
+import type { NutritionProfile } from '../../domain/ingredient/types';
 
 export const INGREDIENT_REPOSITORY = Symbol('INGREDIENT_REPOSITORY');
 
@@ -22,11 +24,12 @@ export interface CreateIngredientDto {
   productModel?: string | null;
   purchaseChannel?: string | null;
   notes?: string | null;
-  baseUnit: string;
+  baseUnit: BaseUnit;
+  baseUnitDisplayName?: string | null;
   unitDisplayLabel?: string | null;
-  purchaseUnit: string;
-  purchaseToBaseRatio: number;
-  currentPricePerPurchaseUnit: number;
+  purchaseUnit?: string;
+  purchaseToBaseRatio?: number;
+  currentPricePerPurchaseUnit?: number;
   effectivePricePerPurchaseUnit?: number | null;
   weightG?: number | null;
   maxCapacityG?: number | null;
@@ -34,6 +37,7 @@ export interface CreateIngredientDto {
   reorderPoint?: number | null;
   targetStock?: number | null;
   properties: Record<string, any>;
+  nutritionProfile?: NutritionProfile | null;
   tagIds?: string[];
 }
 
@@ -45,6 +49,7 @@ export interface UpdateIngredientDto {
   purchaseChannel?: string | null;
   notes?: string | null;
   baseUnit?: BaseUnit;
+  baseUnitDisplayName?: string | null;
   unitDisplayLabel?: string | null;
   purchaseUnit?: string;
   purchaseToBaseRatio?: number;
@@ -56,6 +61,7 @@ export interface UpdateIngredientDto {
   reorderPoint?: number | null;
   targetStock?: number | null;
   properties?: Record<string, any>;
+  nutritionProfile?: NutritionProfile | null;
   tagIds?: string[];
   type?: IngredientType;
 }
@@ -70,6 +76,34 @@ export class IngredientService {
     @Inject(INGREDIENT_REPOSITORY)
     private readonly ingredientRepository: IngredientRepository,
   ) {}
+
+  private resolveLegacyPurchaseUnit(baseUnit: BaseUnit): string {
+    switch (baseUnit) {
+      case BaseUnit.G:
+        return 'g';
+      case BaseUnit.ML:
+        return 'ml';
+      case BaseUnit.PCS:
+        return 'pcs';
+      default:
+        return 'unit';
+    }
+  }
+
+  private resolveBaseUnitDisplayName(
+    dto: Pick<UpdateIngredientDto, 'baseUnitDisplayName' | 'unitDisplayLabel'>,
+    fallback: string | null = null,
+  ): string | null {
+    if (dto.baseUnitDisplayName !== undefined) {
+      return dto.baseUnitDisplayName;
+    }
+
+    if (dto.unitDisplayLabel !== undefined) {
+      return dto.unitDisplayLabel;
+    }
+
+    return fallback;
+  }
 
   /**
    * Get ingredient by ID
@@ -107,6 +141,10 @@ export class IngredientService {
    * Create ingredient
    */
   async createIngredient(dto: CreateIngredientDto): Promise<Ingredient> {
+    const normalizedProfile = normalizeNutritionProfile(
+      dto.nutritionProfile ?? null,
+    );
+
     const ingredient = new Ingredient(
       crypto.randomUUID(),
       dto.name,
@@ -117,17 +155,18 @@ export class IngredientService {
       dto.purchaseChannel ?? null,
       dto.notes ?? null,
       dto.baseUnit as any,
-      dto.unitDisplayLabel ?? null,
-      dto.purchaseUnit,
-      dto.purchaseToBaseRatio,
-      dto.currentPricePerPurchaseUnit,
-      dto.effectivePricePerPurchaseUnit ?? dto.currentPricePerPurchaseUnit,
+      this.resolveBaseUnitDisplayName(dto),
+      dto.purchaseUnit ?? this.resolveLegacyPurchaseUnit(dto.baseUnit),
+      dto.purchaseToBaseRatio ?? 1,
+      dto.currentPricePerPurchaseUnit ?? 0,
+      dto.effectivePricePerPurchaseUnit ?? dto.currentPricePerPurchaseUnit ?? 0,
       dto.weightG ?? null,
       dto.maxCapacityG ?? null,
       dto.safetyStock ?? null,
       dto.reorderPoint ?? null,
       dto.targetStock ?? null,
       dto.properties,
+      normalizedProfile,
     );
 
     return this.ingredientRepository.save(ingredient, dto.tagIds);
@@ -161,9 +200,7 @@ export class IngredientService {
         : existing.purchaseChannel,
       dto.notes !== undefined ? dto.notes : existing.notes,
       dto.baseUnit !== undefined ? dto.baseUnit : existing.baseUnit,
-      dto.unitDisplayLabel !== undefined
-        ? dto.unitDisplayLabel
-        : existing.unitDisplayLabel,
+      this.resolveBaseUnitDisplayName(dto, existing.unitDisplayLabel),
       dto.purchaseUnit !== undefined ? dto.purchaseUnit : existing.purchaseUnit,
       dto.purchaseToBaseRatio !== undefined
         ? dto.purchaseToBaseRatio
@@ -182,6 +219,9 @@ export class IngredientService {
         : existing.reorderPoint,
       dto.targetStock !== undefined ? dto.targetStock : existing.targetStock,
       dto.properties !== undefined ? dto.properties : existing.properties,
+      dto.nutritionProfile !== undefined
+        ? normalizeNutritionProfile(dto.nutritionProfile)
+        : existing.nutritionProfile,
     );
 
     // Update tag associations if provided

@@ -522,61 +522,43 @@
         </el-form-item>
 
         <el-form-item label="制备方法">
-          <div style="display: flex; gap: 8px; margin-bottom: 8px">
-            <div class="tag-selector-wrapper" style="flex: 1">
-              <div v-if="preparationMethods.length > 0">
-                <!-- Selected methods (draggable) -->
-                <div v-if="selectedPrepMethodsLocal.length > 0" class="selected-methods-section">
-                  <div class="section-label">已选择（可拖拽排序）：</div>
-                  <VueDraggable
-                    v-model="selectedPrepMethodsLocal"
-                    item-key="id"
-                    class="tag-list draggable-tag-list"
-                    handle=".tag-drag-handle"
-                    ghost-class="ghost"
-                    :animation="150"
-                    @end="onPrepMethodsDragEnd"
-                  >
-                    <template #item="{ element: method }">
-                      <div class="draggable-tag-wrapper">
-                        <el-icon class="tag-drag-handle"><Rank /></el-icon>
-                        <el-tag
-                          class="tag-item selected-tag"
-                          type="primary"
-                          closable
-                          @close="togglePreparationMethod(method.id)"
-                        >
-                          {{ method.name }}
-                        </el-tag>
-                      </div>
-                    </template>
-                  </VueDraggable>
-                </div>
-                <!-- Unselected methods -->
-                <div v-if="unselectedPreparationMethods.length > 0" class="unselected-methods-section">
-                  <div class="section-label">点击添加：</div>
-                  <div class="tag-list">
-                    <el-tag
-                      v-for="method in unselectedPreparationMethods"
-                      :key="method.id"
-                      class="tag-item"
-                      type="info"
-                      @click="togglePreparationMethod(method.id)"
-                      style="cursor: pointer"
-                    >
-                      {{ method.name }}
-                    </el-tag>
-                  </div>
-                </div>
-              </div>
-              <div v-else class="empty-tags-state">
-                <el-empty description="暂无制备方法" :image-size="60" />
-              </div>
+          <el-input
+            v-model="ingredientForm.preparationMethodText"
+            type="textarea"
+            :rows="3"
+            placeholder="直接输入制备方法文案，如：去皮、蒸熟后压泥"
+          />
+
+          <div style="margin-top: 8px">
+            <div style="font-size: 12px; color: #909399; margin-bottom: 6px">历史制备方法</div>
+            <el-skeleton
+              v-if="ingredientPreparationMethodHistoryLoading"
+              :rows="1"
+              animated
+            />
+            <div
+              v-else-if="ingredientPreparationMethodHistory.length > 0"
+              class="tag-list"
+            >
+              <el-tag
+                v-for="history in ingredientPreparationMethodHistory"
+                :key="history.text"
+                class="tag-item"
+                type="info"
+                @click="applyPreparationMethodHistory(history.text)"
+              >
+                {{ history.text }}
+              </el-tag>
             </div>
-            <el-button @click="showPreparationMethodDialog">管理</el-button>
-          </div>
-          <div style="color: #909399; font-size: 12px">
-            💡 提示：点击标签选择制备方法，可多选；拖拽 <el-icon style="vertical-align: middle;"><Rank /></el-icon> 图标可调整顺序
+            <el-empty
+              v-else
+              :description="
+                ingredientForm.ingredientId
+                  ? '暂无历史制备方法'
+                  : '请选择原料后查看历史制备方法'
+              "
+              :image-size="40"
+            />
           </div>
         </el-form-item>
 
@@ -732,70 +714,31 @@
       </template>
     </el-dialog>
 
-    <!-- Preparation Method Management Dialog -->
-    <el-dialog
-      v-model="preparationMethodDialogVisible"
-      title="管理制备方法"
-      width="600px"
-    >
-      <div style="margin-bottom: 16px">
-        <el-input
-          v-model="newPreparationMethodName"
-          placeholder="输入新的制备方法名称（如：煮熟、切碎、蒸熟等）"
-          style="width: calc(100% - 80px); margin-right: 8px"
-          @keyup.enter="addPreparationMethod"
-        />
-        <el-button type="primary" @click="addPreparationMethod">添加</el-button>
-      </div>
-
-      <div style="color: #909399; font-size: 12px; margin-bottom: 8px">
-        💡 拖拽列表项可调整顺序
-      </div>
-
-      <VueDraggable
-        v-model="preparationMethods"
-        item-key="id"
-        handle=".drag-handle"
-        ghost-class="ghost"
-        @end="onPreparationMethodDragEnd"
-      >
-        <template #item="{ element }">
-          <div class="draggable-item">
-            <el-icon class="drag-handle"><Rank /></el-icon>
-            <span class="item-name">{{ element.name }}</span>
-            <div class="item-actions">
-              <el-button size="small" @click="editPreparationMethod(element)">编辑</el-button>
-              <el-button size="small" type="danger" @click="deletePreparationMethod(element.id)">删除</el-button>
-            </div>
-          </div>
-        </template>
-      </VueDraggable>
-
-      <template #footer>
-        <el-button @click="preparationMethodDialogVisible = false">关闭</el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, watch, onMounted, nextTick } from 'vue';
+import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance, FormRules, UploadProps } from 'element-plus';
-import { Plus, Delete, InfoFilled, Rank } from '@element-plus/icons-vue';
+import { Plus, Delete, InfoFilled } from '@element-plus/icons-vue';
 import VueDraggable from 'vuedraggable';
 import { recipeApi } from '@/api/recipes';
 import { recipeHealthTagApi } from '@/api/recipeHealthTags';
-import { preparationMethodApi } from '@/api/preparationMethods';
 import { inventoryApi } from '@/api';
 import { IngredientTypeLabels } from '@/types/ingredient';
+import {
+  appendPreparationMethodText,
+} from '@/utils/preparationMethodText';
+import { validateElementForm } from '@/utils/elementFormValidation';
 import {
   RecipeStatus,
   NutritionStandard,
   type RecipeForm,
   type RecipeItem,
   type NutritionDetailedData,
+  type IngredientPreparationMethodHistoryItem,
 } from '@/types/recipe';
 
 // Enum option type
@@ -852,12 +795,16 @@ const ingredientDialogVisible = ref(false);
 const editingIngredientIndex = ref(-1);
 const ingredientForm = reactive({
   ingredientId: '',
-  preparationMethods: [] as string[],
+  preparationMethodText: '',
   exampleWeight: undefined as number | undefined,
   ratioPercent: undefined as number | undefined,
   nutrientTargetKey: '',
   nutrientTargetValue: undefined as number | undefined,
 });
+const ingredientPreparationMethodHistory = ref<
+  IngredientPreparationMethodHistoryItem[]
+>([]);
+const ingredientPreparationMethodHistoryLoading = ref(false);
 
 // Computed properties for nutrient target fields
 const selectedIngredient = computed(() => {
@@ -904,18 +851,57 @@ const nutrientUnit = computed(() => {
   return '';
 });
 
-// Watch for ingredient type changes to clear nutrient targets if not supplement
-watch(() => ingredientForm.ingredientId, () => {
-  const ingredient = availableIngredients.value.find(
-    (ing) => ing.id === ingredientForm.ingredientId
+const applyPreparationMethodHistory = (historyText: string) => {
+  ingredientForm.preparationMethodText = appendPreparationMethodText(
+    ingredientForm.preparationMethodText,
+    historyText,
   );
+};
 
-  // Clear nutrient target fields if not a supplement
-  if (ingredient && ingredient.type !== 'SUPPLEMENT') {
-    ingredientForm.nutrientTargetKey = '';
-    ingredientForm.nutrientTargetValue = undefined;
-  }
-});
+watch(
+  () => ingredientForm.ingredientId,
+  async (ingredientId, _previousIngredientId, onCleanup) => {
+    let isCurrentRequest = true;
+    onCleanup(() => {
+      isCurrentRequest = false;
+    });
+
+    const ingredient = availableIngredients.value.find(
+      (item) => item.id === ingredientId,
+    );
+
+    if (ingredient && ingredient.type !== 'SUPPLEMENT') {
+      ingredientForm.nutrientTargetKey = '';
+      ingredientForm.nutrientTargetValue = undefined;
+    }
+
+    ingredientPreparationMethodHistory.value = [];
+    if (!ingredientId) {
+      ingredientPreparationMethodHistoryLoading.value = false;
+      return;
+    }
+
+    ingredientPreparationMethodHistoryLoading.value = true;
+    try {
+      const history =
+        (await recipeApi.getIngredientPreparationMethodHistory(ingredientId)) ||
+        [];
+      if (!isCurrentRequest) {
+        return;
+      }
+      ingredientPreparationMethodHistory.value = history;
+    } catch (error: any) {
+      if (!isCurrentRequest) {
+        return;
+      }
+      ElMessage.error(error.message || '加载历史制备方法失败');
+    } finally {
+      if (isCurrentRequest) {
+        ingredientPreparationMethodHistoryLoading.value = false;
+      }
+    }
+  },
+);
 
 // 计算当前编辑食材的占比
 const calculatedRatioPercent = computed(() => {
@@ -1003,69 +989,6 @@ const updateHealthTagOptions = (healthTagsData: any[]) => {
       label: tag.name,
     }));
   healthTags.value = healthTagsData || [];
-};
-
-// Preparation method management
-const preparationMethods = ref<Array<{ id: string; name: string }>>([]);
-const preparationMethodDialogVisible = ref(false);
-const newPreparationMethodName = ref('');
-
-// Selected preparation methods for draggable (local ref to avoid computed issues)
-const selectedPrepMethodsLocal = ref<Array<{ id: string; name: string }>>([]);
-let isSyncingFromLocal = false;
-
-const unselectedPreparationMethods = computed(() => {
-  const selectedIds = selectedPrepMethodsLocal.value.map(m => m.id);
-  return preparationMethods.value.filter(m => !selectedIds.includes(m.id));
-});
-
-const getPreparationMethodName = (methodId: string) => {
-  return preparationMethods.value.find(m => m.id === methodId)?.name || methodId;
-};
-
-// Sync selectedPrepMethodsLocal from ingredientForm.preparationMethods (initial load and edit)
-watch(
-  () => ingredientForm.preparationMethods,
-  (newIds) => {
-    if (isSyncingFromLocal) return; // Skip if we're syncing from local to avoid loop
-
-    // Build the local array in the same order as the IDs
-    const methodMap = new Map(preparationMethods.value.map(m => [m.id, m]));
-    selectedPrepMethodsLocal.value = newIds
-      .map(id => methodMap.get(id))
-      .filter((m): m is { id: string; name: string } => !!m);
-  },
-  { immediate: true, deep: true }
-);
-
-// Sync back to ingredientForm.preparationMethods when local array changes (e.g., after drag)
-watch(
-  selectedPrepMethodsLocal,
-  (newMethods) => {
-    isSyncingFromLocal = true;
-    ingredientForm.preparationMethods = newMethods.map(m => m.id);
-    // Reset flag in next tick
-    nextTick(() => {
-      isSyncingFromLocal = false;
-    });
-  },
-  { deep: true }
-);
-
-// Handle drag end for preparation methods in ingredient form
-const onPrepMethodsDragEnd = () => {
-  // Wait for Vue to update the array after drag, then sync
-  nextTick(() => {
-    isSyncingFromLocal = true;
-    ingredientForm.preparationMethods = selectedPrepMethodsLocal.value.map(m => m.id);
-    console.log('[RecipeForm] Prep methods order after drag:', {
-      localOrder: selectedPrepMethodsLocal.value.map(m => m.name),
-      formOrder: ingredientForm.preparationMethods
-    });
-    nextTick(() => {
-      isSyncingFromLocal = false;
-    });
-  });
 };
 
 // Form rules
@@ -1258,71 +1181,57 @@ const removeCoverImage = async () => {
 };
 
 const handleSubmit = async () => {
-  if (!formRef.value) return;
+  if (!(await validateElementForm(formRef.value))) return;
 
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return;
+  submitting.value = true;
+  try {
+    // Combine nutrition data into form
+    const submitData: RecipeForm = {
+      ...form,
+      nutritionDetailedData: { ...nutritionData },
+    };
 
-    submitting.value = true;
-    try {
-      // Combine nutrition data into form
-      const submitData: RecipeForm = {
-        ...form,
-        nutritionDetailedData: { ...nutritionData },
-      };
-
-      // Debug: Log items with preparation methods before submit
-      console.log('[RecipeForm] handleSubmit - Items with prep methods:');
-      submitData.items?.forEach((item: any, index: number) => {
-        console.log(`  Item ${index}: ${item.ingredientName}, prepMethod: ${item.preparationMethod}`);
-      });
-
-      if (isEdit.value) {
-        await recipeApi.update(recipeId.value!, submitData);
-        ElMessage.success('更新成功');
-      } else {
-        await recipeApi.create(submitData);
-        ElMessage.success('创建成功');
-      }
-
-      router.push('/recipes');
-    } catch (error: any) {
-      ElMessage.error(error.message || '操作失败');
-    } finally {
-      submitting.value = false;
+    if (isEdit.value) {
+      await recipeApi.update(recipeId.value!, submitData);
+      ElMessage.success('更新成功');
+    } else {
+      await recipeApi.create(submitData);
+      ElMessage.success('创建成功');
     }
-  });
+
+    router.push('/recipes');
+  } catch (error: any) {
+    ElMessage.error(error.message || '操作失败');
+  } finally {
+    submitting.value = false;
+  }
 };
 
 const handleSaveDraft = async () => {
-  if (!formRef.value) return;
+  if (!(await validateElementForm(formRef.value))) return;
 
-  await formRef.value.validate(async (valid) => {
-    if (!valid) return;
+  submitting.value = true;
+  try {
+    const submitData: RecipeForm = {
+      ...form,
+      nutritionDetailedData: { ...nutritionData },
+      status: RecipeStatus.DRAFT,
+    };
 
-    submitting.value = true;
-    try {
-      const submitData: RecipeForm = {
-        ...form,
-        nutritionDetailedData: { ...nutritionData },
-        status: RecipeStatus.DRAFT,
-      };
-
-      if (isEdit.value) {
-        await recipeApi.update(recipeId.value!, submitData);
-        ElMessage.success('草稿保存成功');
-      } else {
-        await recipeApi.create(submitData);
-        ElMessage.success('草稿创建成功');
-      }
-
-      router.push('/recipes');
-    } catch (error: any) {
-      ElMessage.error(error.message || '保存失败');
-    } finally {
-      submitting.value = false;
+    if (isEdit.value) {
+      await recipeApi.update(recipeId.value!, submitData);
+      ElMessage.success('草稿保存成功');
+    } else {
+      await recipeApi.create(submitData);
+      ElMessage.success('草稿创建成功');
     }
-  });
+
+    router.push('/recipes');
+  } catch (error: any) {
+    ElMessage.error(error.message || '保存失败');
+  } finally {
+    submitting.value = false;
+  }
 };
 
 const handleBack = () => {
@@ -1350,16 +1259,14 @@ const loadAvailableIngredients = async () => {
 // Metadata loading
 const loadMetadata = async () => {
   try {
-    const [lifeStages, healthTagsData, designSourcesData, preparationMethodsData] = await Promise.all([
+    const [lifeStages, healthTagsData, designSourcesData] = await Promise.all([
       recipeApi.getLifeStages(),
       recipeHealthTagApi.list(),
       recipeApi.getDesignSources(),
-      preparationMethodApi.list(),
     ]);
     lifeStageOptions.value = lifeStages || [];
     updateHealthTagOptions(healthTagsData || []);
     designSources.value = designSourcesData || [];
-    preparationMethods.value = preparationMethodsData || [];
   } catch (error: any) {
     ElMessage.error(error.message || '加载元数据失败');
   }
@@ -1516,115 +1423,6 @@ const deleteHealthTag = async (id: string) => {
   }
 };
 
-// Preparation method management
-const showPreparationMethodDialog = async () => {
-  preparationMethodDialogVisible.value = true;
-  // Reload preparation methods to get latest data
-  try {
-    const response = await preparationMethodApi.list();
-    preparationMethods.value = response || [];
-  } catch (error: any) {
-    ElMessage.error(error.message || '加载制备方法列表失败');
-  }
-};
-
-const addPreparationMethod = async () => {
-  if (!newPreparationMethodName.value.trim()) {
-    ElMessage.warning('请输入制备方法名称');
-    return;
-  }
-
-  try {
-    await preparationMethodApi.create({ name: newPreparationMethodName.value.trim() });
-    ElMessage.success('添加成功');
-    newPreparationMethodName.value = '';
-
-    // Reload preparation methods
-    const response = await preparationMethodApi.list();
-    preparationMethods.value = response || [];
-  } catch (error: any) {
-    ElMessage.error(error.message || '添加失败');
-  }
-};
-
-const editPreparationMethod = async (row: { id: string; name: string }) => {
-  try {
-    const { value } = await ElMessageBox.prompt('请输入新的名称', '编辑制备方法', {
-      inputValue: row.name,
-      inputPattern: /.+/,
-      inputErrorMessage: '名称不能为空',
-    });
-
-    if (value) {
-      await preparationMethodApi.update(row.id, { name: value.trim() });
-      ElMessage.success('更新成功');
-
-      // Reload preparation methods
-      const response = await preparationMethodApi.list();
-      preparationMethods.value = response || [];
-    }
-  } catch (error: any) {
-    // User cancelled the prompt
-    if (error !== 'cancel') {
-      ElMessage.error(error.message || '更新失败');
-    }
-  }
-};
-
-const deletePreparationMethod = async (id: string) => {
-  try {
-    await ElMessageBox.confirm('确认删除该制备方法？', '提示', {
-      type: 'warning',
-      confirmButtonText: '确认',
-      cancelButtonText: '取消',
-    });
-
-    await preparationMethodApi.delete(id);
-    ElMessage.success('删除成功');
-
-    // Reload preparation methods
-    const response = await preparationMethodApi.list();
-    preparationMethods.value = response || [];
-  } catch (error: any) {
-    if (error !== 'cancel') {
-      ElMessage.error(error.message || '删除失败');
-    }
-  }
-};
-
-// Handle drag end for preparation methods sorting
-const onPreparationMethodDragEnd = async () => {
-  try {
-    const items = preparationMethods.value.map((method, index) => ({
-      id: method.id,
-      sort: index,
-    }));
-    await preparationMethodApi.updateSort(items);
-    ElMessage.success('排序已保存');
-  } catch (error: any) {
-    ElMessage.error(error.message || '排序保存失败');
-    // Reload to restore original order
-    const response = await preparationMethodApi.list();
-    preparationMethods.value = response || [];
-  }
-};
-
-const togglePreparationMethod = (methodId: string) => {
-  const index = selectedPrepMethodsLocal.value.findIndex(m => m.id === methodId);
-  if (index > -1) {
-    // Remove from selected
-    selectedPrepMethodsLocal.value.splice(index, 1);
-  } else {
-    // Add to selected - find the method object and add it
-    const method = preparationMethods.value.find(m => m.id === methodId);
-    if (method) {
-      selectedPrepMethodsLocal.value.push(method);
-    }
-  }
-  // Note: Don't manually sync here - the watch will handle it
-  // Manual sync without isSyncingFromLocal flag would trigger the other watch and reset order
-};
-
 const showAddIngredientDialog = () => {
   editingIngredientIndex.value = -1;
   resetIngredientForm();
@@ -1633,18 +1431,16 @@ const showAddIngredientDialog = () => {
 
 const resetIngredientForm = () => {
   ingredientForm.ingredientId = '';
-  ingredientForm.preparationMethods = [];
+  ingredientForm.preparationMethodText = '';
   ingredientForm.exampleWeight = undefined;
   ingredientForm.ratioPercent = undefined;
   ingredientForm.nutrientTargetKey = '';
   ingredientForm.nutrientTargetValue = undefined;
+  ingredientPreparationMethodHistory.value = [];
+  ingredientPreparationMethodHistoryLoading.value = false;
 };
 
 const saveIngredient = () => {
-  // Debug: Log current state before saving
-  console.log('[RecipeForm] saveIngredient - selectedPrepMethodsLocal:', selectedPrepMethodsLocal.value.map(m => m.name));
-  console.log('[RecipeForm] saveIngredient - ingredientForm.preparationMethods:', ingredientForm.preparationMethods);
-
   // Validate
   if (!ingredientForm.ingredientId) {
     ElMessage.warning('请选择原料');
@@ -1682,9 +1478,8 @@ const saveIngredient = () => {
     ingredientId: ingredientForm.ingredientId,
     ingredientName: ingredient.name,
     ingredientType: ingredient.type,
-    preparationMethod: ingredientForm.preparationMethods.length > 0
-      ? ingredientForm.preparationMethods.join(', ')
-      : undefined,
+    preparationMethod:
+      ingredientForm.preparationMethodText.trim() || undefined,
     // 食材类型：保存示例重量和占比
     ...(ingredient.type === 'FOOD' && {
       exampleWeight: ingredientForm.exampleWeight,
@@ -1756,9 +1551,7 @@ const recalculateAllRatios = () => {
 const editIngredient = (row: RecipeItem, index: number) => {
   editingIngredientIndex.value = index;
   ingredientForm.ingredientId = row.ingredientId;
-  ingredientForm.preparationMethods = row.preparationMethod
-    ? row.preparationMethod.split(', ').filter(id => id.trim())
-    : [];
+  ingredientForm.preparationMethodText = row.preparationMethod || '';
   ingredientForm.exampleWeight = row.exampleWeight;
   ingredientForm.ratioPercent = row.ratioPercent;
   ingredientForm.nutrientTargetKey = row.nutrientTargetKey || '';
@@ -1808,15 +1601,8 @@ const formatNutrientTarget = (row: any) => {
 };
 
 // Format preparation methods for display
-const formatPreparationMethods = (preparationMethodIds: string | undefined) => {
-  if (!preparationMethodIds) return '-';
-
-  const ids = preparationMethodIds.split(', ');
-  const names = ids
-    .map(id => preparationMethods.value.find(m => m.id === id)?.name)
-    .filter(Boolean);
-
-  return names.length > 0 ? names.join('、') : '-';
+const formatPreparationMethods = (preparationMethod: string | undefined) => {
+  return preparationMethod?.trim() || '-';
 };
 
 // Get tag type for ingredient type

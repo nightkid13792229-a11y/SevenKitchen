@@ -165,4 +165,87 @@ describe('PurchasingService procurement sku separation', () => {
       endDate: end,
     });
   });
+
+  it('does not expose raw unresolved legacy preparation method uuids in purchase requirements', async () => {
+    const missingId = '33333333-3333-3333-3333-333333333333';
+    const orderRepository = {
+      findByTargetProductionDateRange: jest.fn().mockResolvedValue({
+        list: [
+          {
+            id: 'order-1',
+            pricingBreakdownSnapshot: {
+              ingredientDetails: [
+                {
+                  ingredientId: 'ingredient-1',
+                  name: '鸡胸肉',
+                  purchaseAmount: 1200,
+                  unit: 'G',
+                  cost: 48,
+                  preparationMethod: missingId,
+                },
+              ],
+            },
+            items: [
+              {
+                recipeSnapshot: {
+                  items: [
+                    {
+                      ingredient_id: 'ingredient-1',
+                      ingredient_type: 'FOOD',
+                      sort_order: 1,
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    } as any;
+    const ingredientRepository = {
+      findByIds: jest.fn().mockResolvedValue([
+        {
+          id: 'ingredient-1',
+          name: '鸡胸肉',
+          type: 'FOOD',
+          baseUnit: 'G',
+          purchaseUnit: 'kg',
+          purchaseToBaseRatio: 1000,
+          currentPricePerPurchaseUnit: 40,
+        },
+      ]),
+      findAll: jest.fn().mockResolvedValue([]),
+    } as any;
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        PurchasingService,
+        { provide: ORDER_REPOSITORY, useValue: orderRepository },
+        { provide: INGREDIENT_REPOSITORY, useValue: ingredientRepository },
+        {
+          provide: InventoryService,
+          useValue: {
+            getBalanceByIngredient: jest.fn(),
+            inboundFromPurchaseRecords: jest.fn(),
+          },
+        },
+        {
+          provide: ProcurementSkuService,
+          useValue: { batchFindActive: jest.fn().mockResolvedValue({}) },
+        },
+        {
+          provide: RecommendedProductService,
+          useValue: { batchFindActive: jest.fn().mockResolvedValue({}) },
+        },
+        { provide: PURCHASE_LIST_REPOSITORY, useValue: {} },
+        { provide: PURCHASE_RECORD_REPOSITORY, useValue: {} },
+      ],
+    }).compile();
+
+    const service = moduleRef.get(PurchasingService);
+    const result = await service.calculatePurchaseRequirements('2026-04-05');
+
+    expect(result).toHaveLength(1);
+    expect(result[0].preparationMethods).toBeUndefined();
+  });
 });

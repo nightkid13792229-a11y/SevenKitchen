@@ -16,8 +16,14 @@ import {
   LifeStage,
   NutritionStandard,
 } from '../../domain/recipe/enums';
+import {
+  extractLegacyPreparationMethodIds,
+  normalizePreparationMethodHistoryText,
+  resolvePreparationMethodText,
+} from './preparation-method-text.util';
 import type { RecipeQueryDto } from '../../interfaces/dto/recipes/admin-recipe.dto';
 import type {
+  IngredientPreparationMethodHistoryDto,
   RecipeSummaryResponseDto,
   RecipeDetailResponseDto,
   RecipeListResponseDto,
@@ -26,6 +32,27 @@ import type {
 @Injectable()
 export class RecipeService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private async loadPreparationMethodNameMap(
+    values: Array<string | null | undefined>,
+  ): Promise<Map<string, string>> {
+    const ids = extractLegacyPreparationMethodIds(values);
+    if (ids.length === 0) {
+      return new Map();
+    }
+
+    const methods = await this.prisma.preparationMethod.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, name: true },
+    });
+
+    return new Map(
+      methods.map((method: { id: string; name: string }) => [
+        method.id,
+        method.name,
+      ]),
+    );
+  }
 
   /**
    * Helper: Check if recipe items have changed (ingredient name, ratio, or usage amount)
@@ -153,7 +180,7 @@ export class RecipeService {
       this.prisma.recipe.count({ where }),
     ]);
 
-    const data: RecipeSummaryResponseDto[] = recipes.map((recipe) =>
+    const data: RecipeSummaryResponseDto[] = recipes.map((recipe: any) =>
       this.mapToSummaryDto(recipe),
     );
 
@@ -192,7 +219,7 @@ export class RecipeService {
       throw new NotFoundException(`Recipe not found: ${id}`);
     }
 
-    return this.mapToDetailDto(recipe);
+    return await this.mapToDetailDto(recipe);
   }
 
   /**
@@ -289,7 +316,7 @@ export class RecipeService {
       },
     });
 
-    return this.mapToDetailDto(recipeWithTags!);
+    return await this.mapToDetailDto(recipeWithTags!);
   }
 
   /**
@@ -413,7 +440,7 @@ export class RecipeService {
       },
     });
 
-    return this.mapToDetailDto(recipeWithTags!);
+    return await this.mapToDetailDto(recipeWithTags!);
   }
 
   /**
@@ -480,7 +507,7 @@ export class RecipeService {
       },
     });
 
-    return this.mapToDetailDto(updated);
+    return await this.mapToDetailDto(updated);
   }
 
   /**
@@ -522,7 +549,7 @@ export class RecipeService {
       },
     });
 
-    return this.mapToDetailDto(updated);
+    return await this.mapToDetailDto(updated);
   }
 
   /**
@@ -572,7 +599,7 @@ export class RecipeService {
           recipe.applicableLifeStages as Prisma.InputJsonValue,
         productionSteps: recipe.productionSteps,
         items: {
-          create: recipe.items.map((item) => ({
+          create: recipe.items.map((item: any) => ({
             ingredientId: item.ingredientId,
             preparationMethod: item.preparationMethod,
             exampleWeight: item.exampleWeight,
@@ -591,7 +618,7 @@ export class RecipeService {
     // Duplicate health tag assignments
     if (recipe.healthTagAssignments && recipe.healthTagAssignments.length > 0) {
       await this.prisma.recipeHealthTagAssignment.createMany({
-        data: recipe.healthTagAssignments.map((assignment) => ({
+        data: recipe.healthTagAssignments.map((assignment: any) => ({
           recipeId: duplicated.id,
           healthTagId: assignment.healthTagId,
         })),
@@ -619,7 +646,78 @@ export class RecipeService {
       },
     });
 
-    return this.mapToDetailDto(duplicatedWithTags!);
+    return await this.mapToDetailDto(duplicatedWithTags!);
+  }
+
+  async getIngredientPreparationMethodHistory(
+    ingredientId: string,
+  ): Promise<IngredientPreparationMethodHistoryDto[]> {
+    const rows = await this.prisma.recipeItem.findMany({
+      where: {
+        ingredientId,
+        recipe: { isCustomRecipe: false },
+      },
+      select: {
+        preparationMethod: true,
+        recipe: { select: { updatedAt: true } },
+      },
+    });
+
+    const methodMap = await this.loadPreparationMethodNameMap(
+      rows.map((row: { preparationMethod: string | null }) => row.preparationMethod),
+    );
+
+    const aggregated = new Map<
+      string,
+      { text: string; usageCount: number; lastUsedAt: Date }
+    >();
+
+    for (const row of rows) {
+      const readable = resolvePreparationMethodText(
+        row.preparationMethod,
+        methodMap,
+        { preserveUnresolvedLegacy: false },
+      );
+      const normalized = normalizePreparationMethodHistoryText(readable);
+      if (!normalized) {
+        continue;
+      }
+
+      const existing = aggregated.get(normalized);
+      if (existing) {
+        existing.usageCount += 1;
+        if (row.recipe.updatedAt > existing.lastUsedAt) {
+          existing.lastUsedAt = row.recipe.updatedAt;
+        }
+        continue;
+      }
+
+      aggregated.set(normalized, {
+        text: normalized,
+        usageCount: 1,
+        lastUsedAt: row.recipe.updatedAt,
+      });
+    }
+
+    return [...aggregated.values()]
+      .sort((left, right) => {
+        const byLastUsed =
+          right.lastUsedAt.getTime() - left.lastUsedAt.getTime();
+        if (byLastUsed !== 0) {
+          return byLastUsed;
+        }
+
+        const byUsage = right.usageCount - left.usageCount;
+        if (byUsage !== 0) {
+          return byUsage;
+        }
+
+        return left.text.localeCompare(right.text);
+      })
+      .map((item) => ({
+        ...item,
+        lastUsedAt: item.lastUsedAt.toISOString(),
+      }));
   }
 
   /**
@@ -633,7 +731,7 @@ export class RecipeService {
       orderBy: { version: 'desc' },
     });
 
-    return recipes.map((recipe) => this.mapToSummaryDto(recipe));
+    return recipes.map((recipe: any) => this.mapToSummaryDto(recipe));
   }
 
   /**
@@ -688,7 +786,11 @@ export class RecipeService {
   /**
    * Map Recipe entity to Detail DTO
    */
-  private mapToDetailDto(recipe: any): RecipeDetailResponseDto {
+  private async mapToDetailDto(recipe: any): Promise<RecipeDetailResponseDto> {
+    const methodMap = await this.loadPreparationMethodNameMap(
+      (recipe.items || []).map((item: any) => item.preparationMethod),
+    );
+
     return {
       ...this.mapToSummaryDto(recipe),
       detailImages: (recipe.detailImages as string[]) || undefined,
@@ -714,7 +816,10 @@ export class RecipeService {
                 properties: item.ingredient.properties,
               }
             : undefined,
-          preparationMethod: item.preparationMethod || undefined,
+          preparationMethod:
+            resolvePreparationMethodText(item.preparationMethod, methodMap, {
+              preserveUnresolvedLegacy: true,
+            }) || undefined,
           exampleWeight: item.exampleWeight || undefined,
           ratioPercent: item.ratioPercent || undefined,
           nutrientTargetKey: item.nutrientTargetKey || undefined,

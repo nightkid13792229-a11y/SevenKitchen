@@ -62,6 +62,12 @@ export interface RecipeItem {
   };
 }
 
+export interface IngredientPreparationMethodHistoryItem {
+  text: string;
+  usageCount: number;
+  lastUsedAt: string;
+}
+
 export interface RecipeSummary {
   id: string;
   name: string;

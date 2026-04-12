@@ -307,6 +307,12 @@ export interface RecipeItemResponseDto {
   nutrientTargetValue?: number;
 }
 
+export interface IngredientPreparationMethodHistoryDto {
+  text: string;
+  usageCount: number;
+  lastUsedAt: string;
+}
+
 /**
  * Paginated Recipe List Response
  */

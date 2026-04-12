@@ -68,6 +68,9 @@ describe('RecipesController (e2e)', () => {
       findFirst: jest.fn(),
       update: jest.fn(),
     },
+    preparationMethod: {
+      findMany: jest.fn().mockResolvedValue([]),
+    },
   };
   const mockJwtAuthService = {
     validateToken: jest.fn(),
@@ -130,6 +133,7 @@ describe('RecipesController (e2e)', () => {
     jest.clearAllMocks();
     mockDogBreedRepository.findById.mockResolvedValue(mockBreed);
     mockDogBreedRepository.findAll.mockResolvedValue([mockBreed]);
+    mockPrismaService.preparationMethod.findMany.mockResolvedValue([]);
     mockPrismaService.recipe.findFirst.mockImplementation(
       async (args?: { where?: { recipeId?: string } }) => {
         const recipeId = args?.where?.recipeId;
@@ -217,6 +221,46 @@ describe('RecipesController (e2e)', () => {
         .expect(200);
 
       expect(mockPrismaService.recipe.update).not.toHaveBeenCalled();
+    });
+
+    it('does not expose raw unresolved legacy preparation method uuids in public recipe detail', async () => {
+      const missingId = '33333333-3333-3333-3333-333333333333';
+      const recipe: Recipe = {
+        id: '550e8400-e29b-41d4-a716-446655440012',
+        version: 1,
+        name: 'Legacy Detail Recipe',
+        status: 'PUBLIC',
+        energyDensityKcalPerKg: 1450,
+        productionLossRate: 1.07,
+        items: [
+          {
+            id: 'item-1',
+            ingredientId: 'ingredient-1',
+            preparationMethod: missingId,
+            ingredient: {
+              id: 'ingredient-1',
+              name: '南瓜',
+              type: 'FOOD',
+              properties: {},
+            },
+            ratioPercent: 100,
+            sortOrder: 0,
+          } as any,
+        ],
+      };
+      await recipeRepository.save(recipe);
+      mockPrismaService.preparationMethod.findMany.mockResolvedValue([]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/${recipe.id}`)
+        .expect(200);
+
+      expect(response.body.code).toBe(0);
+      expect(response.body.data.items[0].preparationMethod).toBeUndefined();
+      expect(response.body.data.items[0]).not.toHaveProperty(
+        'preparationMethod',
+        missingId,
+      );
     });
   });
 

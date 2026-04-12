@@ -25,6 +25,7 @@ export interface CreateIngredientDto {
   purchaseChannel?: string | null;
   notes?: string | null;
   baseUnit: string;
+  baseUnitDisplayName?: string | null;
   unitDisplayLabel?: string | null;
   purchaseUnit: string;
   purchaseToBaseRatio: number;
@@ -48,6 +49,7 @@ export interface UpdateIngredientDto {
   purchaseChannel?: string | null;
   notes?: string | null;
   baseUnit?: BaseUnit;
+  baseUnitDisplayName?: string | null;
   unitDisplayLabel?: string | null;
   purchaseUnit?: string;
   purchaseToBaseRatio?: number;
@@ -74,6 +76,21 @@ export class IngredientService {
     @Inject(INGREDIENT_REPOSITORY)
     private readonly ingredientRepository: IngredientRepository,
   ) {}
+
+  private resolveBaseUnitDisplayName(
+    dto: Pick<UpdateIngredientDto, 'baseUnitDisplayName' | 'unitDisplayLabel'>,
+    fallback: string | null = null,
+  ): string | null {
+    if (dto.baseUnitDisplayName !== undefined) {
+      return dto.baseUnitDisplayName;
+    }
+
+    if (dto.unitDisplayLabel !== undefined) {
+      return dto.unitDisplayLabel;
+    }
+
+    return fallback;
+  }
 
   /**
    * Get ingredient by ID
@@ -125,7 +142,7 @@ export class IngredientService {
       dto.purchaseChannel ?? null,
       dto.notes ?? null,
       dto.baseUnit as any,
-      dto.unitDisplayLabel ?? null,
+      this.resolveBaseUnitDisplayName(dto),
       dto.purchaseUnit,
       dto.purchaseToBaseRatio,
       dto.currentPricePerPurchaseUnit,
@@ -170,9 +187,7 @@ export class IngredientService {
         : existing.purchaseChannel,
       dto.notes !== undefined ? dto.notes : existing.notes,
       dto.baseUnit !== undefined ? dto.baseUnit : existing.baseUnit,
-      dto.unitDisplayLabel !== undefined
-        ? dto.unitDisplayLabel
-        : existing.unitDisplayLabel,
+      this.resolveBaseUnitDisplayName(dto, existing.unitDisplayLabel),
       dto.purchaseUnit !== undefined ? dto.purchaseUnit : existing.purchaseUnit,
       dto.purchaseToBaseRatio !== undefined
         ? dto.purchaseToBaseRatio

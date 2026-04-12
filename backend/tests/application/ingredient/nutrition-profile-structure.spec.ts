@@ -21,12 +21,20 @@ describe('nutrition profile structure', () => {
           unit: 'mg',
           basisType: 'PER_100_G',
         },
+        {
+          nutrientCode: 'p',
+          nutrientName: '磷',
+          value: 120,
+          unit: 'mg',
+          basisType: 'PER_100_G',
+        },
       ],
     } as any);
 
     expect(normalized?.meta.rawBasisType).toBe('PER_100_G');
     expect(normalized?.macros.crudeProtein).toBe(18);
     expect(normalized?.minerals.calcium).toBe(240);
+    expect(normalized?.minerals.phosphorus).toBe(120);
   });
 
   it('keeps structured profile unchanged when already v2', () => {
@@ -121,5 +129,30 @@ describe('nutrition profile structure', () => {
 
     expect(payload?.meta.rawBasisType).toBe('PER_100_G');
     expect(payload?.macros.crudeProtein).toBe(18);
+  });
+
+  it('serializes legacy profile through normalization before persistence', () => {
+    const payload = denormalizeNutritionProfileForPersistence({
+      items: [
+        {
+          nutrientCode: 'protein',
+          nutrientName: '粗蛋白',
+          value: 18,
+          unit: 'g',
+          basisType: 'PER_100_G',
+        },
+        {
+          nutrientCode: 'p',
+          nutrientName: '磷',
+          value: 120,
+          unit: 'mg',
+          basisType: 'PER_100_G',
+        },
+      ],
+    } as any);
+
+    expect(payload?.meta.rawBasisType).toBe('PER_100_G');
+    expect(payload?.macros.crudeProtein).toBe(18);
+    expect(payload?.minerals.phosphorus).toBe(120);
   });
 });

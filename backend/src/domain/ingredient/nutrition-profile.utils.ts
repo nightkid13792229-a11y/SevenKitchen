@@ -19,15 +19,35 @@ import type {
 } from './types';
 
 const MACRO_ALIASES: Record<string, keyof NutritionProfileV2['macros']> = {
+  energykcal: 'energyKcal',
+  moisture: 'moisture',
   protein: 'crudeProtein',
   crudeprotein: 'crudeProtein',
   '粗蛋白': 'crudeProtein',
+  crudefat: 'crudeFat',
+  ash: 'ash',
+  carbohydrate: 'carbohydrate',
+  fiber: 'fiber',
+  solublefiber: 'solubleFiber',
+  insolublefiber: 'insolubleFiber',
 };
 
 const MINERAL_ALIASES: Record<string, keyof NutritionProfileV2['minerals']> = {
   calcium: 'calcium',
   ca: 'calcium',
   '钙': 'calcium',
+  phosphorus: 'phosphorus',
+  p: 'phosphorus',
+  '磷': 'phosphorus',
+  potassium: 'potassium',
+  sodium: 'sodium',
+  magnesium: 'magnesium',
+  chloride: 'chloride',
+  iron: 'iron',
+  zinc: 'zinc',
+  copper: 'copper',
+  manganese: 'manganese',
+  selenium: 'selenium',
   iodine: 'iodine',
   i: 'iodine',
   '碘': 'iodine',
@@ -165,11 +185,13 @@ export function normalizeNutritionProfile(
 }
 
 export function denormalizeNutritionProfileForPersistence(
-  input: NutritionProfileV2 | null | undefined,
+  input: NutritionProfile | null | undefined,
 ): NutritionProfileV2 | null {
-  if (!input) {
+  const normalized = normalizeNutritionProfile(input);
+
+  if (!normalized) {
     return null;
   }
 
-  return ensureProfileDefaults(input);
+  return ensureProfileDefaults(normalized);
 }

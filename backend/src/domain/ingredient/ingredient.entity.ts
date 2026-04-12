@@ -11,6 +11,7 @@ import {
 } from './enums';
 import {
   FoodProperties,
+  NutritionProfile,
   SupplementProperties,
   PackagingProperties,
 } from './types';
@@ -44,6 +45,7 @@ export class Ingredient {
     public readonly reorderPoint: number | null,
     public readonly targetStock: number | null,
     public readonly properties: IngredientProperties,
+    public readonly nutritionProfile: NutritionProfile | null = null,
   ) {
     this.validateInvariants();
   }
@@ -153,6 +155,13 @@ export class Ingredient {
     return (
       this.effectivePricePerPurchaseUnit ?? this.currentPricePerPurchaseUnit
     );
+  }
+
+  /**
+   * Compatibility alias for the refactored standard unit display name.
+   */
+  get baseUnitDisplayName(): string | null {
+    return this.unitDisplayLabel;
   }
 
   /**

@@ -24,12 +24,11 @@ export interface CreateIngredientDto {
   productModel?: string | null;
   purchaseChannel?: string | null;
   notes?: string | null;
-  baseUnit: BaseUnit;
-  baseUnitDisplayName?: string | null;
+  baseUnit: string;
   unitDisplayLabel?: string | null;
-  purchaseUnit?: string;
-  purchaseToBaseRatio?: number;
-  currentPricePerPurchaseUnit?: number;
+  purchaseUnit: string;
+  purchaseToBaseRatio: number;
+  currentPricePerPurchaseUnit: number;
   effectivePricePerPurchaseUnit?: number | null;
   weightG?: number | null;
   maxCapacityG?: number | null;
@@ -49,7 +48,6 @@ export interface UpdateIngredientDto {
   purchaseChannel?: string | null;
   notes?: string | null;
   baseUnit?: BaseUnit;
-  baseUnitDisplayName?: string | null;
   unitDisplayLabel?: string | null;
   purchaseUnit?: string;
   purchaseToBaseRatio?: number;
@@ -76,34 +74,6 @@ export class IngredientService {
     @Inject(INGREDIENT_REPOSITORY)
     private readonly ingredientRepository: IngredientRepository,
   ) {}
-
-  private resolveLegacyPurchaseUnit(baseUnit: BaseUnit): string {
-    switch (baseUnit) {
-      case BaseUnit.G:
-        return 'g';
-      case BaseUnit.ML:
-        return 'ml';
-      case BaseUnit.PCS:
-        return 'pcs';
-      default:
-        return 'unit';
-    }
-  }
-
-  private resolveBaseUnitDisplayName(
-    dto: Pick<UpdateIngredientDto, 'baseUnitDisplayName' | 'unitDisplayLabel'>,
-    fallback: string | null = null,
-  ): string | null {
-    if (dto.baseUnitDisplayName !== undefined) {
-      return dto.baseUnitDisplayName;
-    }
-
-    if (dto.unitDisplayLabel !== undefined) {
-      return dto.unitDisplayLabel;
-    }
-
-    return fallback;
-  }
 
   /**
    * Get ingredient by ID
@@ -155,10 +125,10 @@ export class IngredientService {
       dto.purchaseChannel ?? null,
       dto.notes ?? null,
       dto.baseUnit as any,
-      this.resolveBaseUnitDisplayName(dto),
-      dto.purchaseUnit ?? this.resolveLegacyPurchaseUnit(dto.baseUnit),
-      dto.purchaseToBaseRatio ?? 1,
-      dto.currentPricePerPurchaseUnit ?? 0,
+      dto.unitDisplayLabel ?? null,
+      dto.purchaseUnit,
+      dto.purchaseToBaseRatio,
+      dto.currentPricePerPurchaseUnit,
       dto.effectivePricePerPurchaseUnit ?? dto.currentPricePerPurchaseUnit ?? 0,
       dto.weightG ?? null,
       dto.maxCapacityG ?? null,
@@ -200,7 +170,9 @@ export class IngredientService {
         : existing.purchaseChannel,
       dto.notes !== undefined ? dto.notes : existing.notes,
       dto.baseUnit !== undefined ? dto.baseUnit : existing.baseUnit,
-      this.resolveBaseUnitDisplayName(dto, existing.unitDisplayLabel),
+      dto.unitDisplayLabel !== undefined
+        ? dto.unitDisplayLabel
+        : existing.unitDisplayLabel,
       dto.purchaseUnit !== undefined ? dto.purchaseUnit : existing.purchaseUnit,
       dto.purchaseToBaseRatio !== undefined
         ? dto.purchaseToBaseRatio

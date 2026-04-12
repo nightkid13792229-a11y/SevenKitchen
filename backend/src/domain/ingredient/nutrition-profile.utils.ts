@@ -6,11 +6,16 @@ import {
   VITAMIN_NUTRIENT_KEYS,
 } from './nutrition-profile.constants';
 import type {
+  AminoAcidNutritionProfileTab,
+  FattyAcidNutritionProfileTab,
   LegacyNutritionProfile,
+  MacroNutritionProfileTab,
+  MineralNutritionProfileTab,
   NutritionItem,
   NutritionProfile,
   NutritionProfileV2,
   NutritionRawBasisType,
+  VitaminNutritionProfileTab,
 } from './types';
 
 const MACRO_ALIASES: Record<string, keyof NutritionProfileV2['macros']> = {
@@ -28,10 +33,12 @@ const MINERAL_ALIASES: Record<string, keyof NutritionProfileV2['minerals']> = {
   '碘': 'iodine',
 };
 
-function createRecord(
-  keys: readonly string[],
-): Record<string, number | null> {
-  return Object.fromEntries(keys.map((key) => [key, null]));
+function createRecord<TKey extends readonly string[]>(
+  keys: TKey,
+): { [K in TKey[number]]: number | null } {
+  return Object.fromEntries(
+    keys.map((key) => [key, null]),
+  ) as { [K in TKey[number]]: number | null };
 }
 
 export function createEmptyNutritionProfile(): NutritionProfileV2 {
@@ -117,11 +124,26 @@ export function ensureProfileDefaults(
         ? input.meta.rawBasisType
         : 'PER_100_G',
     },
-    macros: { ...empty.macros, ...(input.macros ?? {}) },
-    minerals: { ...empty.minerals, ...(input.minerals ?? {}) },
-    vitamins: { ...empty.vitamins, ...(input.vitamins ?? {}) },
-    fattyAcids: { ...empty.fattyAcids, ...(input.fattyAcids ?? {}) },
-    aminoAcids: { ...empty.aminoAcids, ...(input.aminoAcids ?? {}) },
+    macros: {
+      ...empty.macros,
+      ...(input.macros ?? {}),
+    } as MacroNutritionProfileTab,
+    minerals: {
+      ...empty.minerals,
+      ...(input.minerals ?? {}),
+    } as MineralNutritionProfileTab,
+    vitamins: {
+      ...empty.vitamins,
+      ...(input.vitamins ?? {}),
+    } as VitaminNutritionProfileTab,
+    fattyAcids: {
+      ...empty.fattyAcids,
+      ...(input.fattyAcids ?? {}),
+    } as FattyAcidNutritionProfileTab,
+    aminoAcids: {
+      ...empty.aminoAcids,
+      ...(input.aminoAcids ?? {}),
+    } as AminoAcidNutritionProfileTab,
     customItems: Array.isArray(input.customItems) ? input.customItems : [],
   };
 }
@@ -130,7 +152,7 @@ export function normalizeNutritionProfile(
   input: NutritionProfile | null | undefined,
 ): NutritionProfileV2 | null {
   if (!input) return null;
-  if (!isLegacyNutritionProfile(input)) return input;
+  if (!isLegacyNutritionProfile(input)) return ensureProfileDefaults(input);
 
   const profile = createEmptyNutritionProfile();
   profile.meta.rawBasisType = mapLegacyBasisType(input.items[0]?.basisType);
@@ -149,5 +171,5 @@ export function denormalizeNutritionProfileForPersistence(
     return null;
   }
 
-  return input;
+  return ensureProfileDefaults(input);
 }

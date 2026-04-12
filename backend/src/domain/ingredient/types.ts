@@ -4,6 +4,14 @@
  * Based on 07_Core_Architecture.md Section 2.3
  */
 
+import type {
+  AMINO_ACID_NUTRIENT_KEYS,
+  FATTY_ACID_NUTRIENT_KEYS,
+  MACRO_NUTRIENT_KEYS,
+  MINERAL_NUTRIENT_KEYS,
+  VITAMIN_NUTRIENT_KEYS,
+} from './nutrition-profile.constants';
+
 export type NutritionBasisType =
   | 'PER_100_G'
   | 'PER_100_ML'
@@ -60,13 +68,39 @@ export interface NutritionMeta {
   versionNote?: string | null;
 }
 
+type NutritionTabValue = number | null;
+
+type NutritionTabRecord<TKey extends readonly string[]> = {
+  [K in TKey[number]]: NutritionTabValue;
+};
+
+export type MacroNutritionProfileTab = NutritionTabRecord<
+  typeof MACRO_NUTRIENT_KEYS
+>;
+
+export type MineralNutritionProfileTab = NutritionTabRecord<
+  typeof MINERAL_NUTRIENT_KEYS
+>;
+
+export type VitaminNutritionProfileTab = NutritionTabRecord<
+  typeof VITAMIN_NUTRIENT_KEYS
+>;
+
+export type FattyAcidNutritionProfileTab = NutritionTabRecord<
+  typeof FATTY_ACID_NUTRIENT_KEYS
+>;
+
+export type AminoAcidNutritionProfileTab = NutritionTabRecord<
+  typeof AMINO_ACID_NUTRIENT_KEYS
+>;
+
 export interface NutritionProfileV2 {
   meta: NutritionMeta;
-  macros: Record<string, number | null>;
-  minerals: Record<string, number | null>;
-  vitamins: Record<string, number | null>;
-  fattyAcids: Record<string, number | null>;
-  aminoAcids: Record<string, number | null>;
+  macros: MacroNutritionProfileTab;
+  minerals: MineralNutritionProfileTab;
+  vitamins: VitaminNutritionProfileTab;
+  fattyAcids: FattyAcidNutritionProfileTab;
+  aminoAcids: AminoAcidNutritionProfileTab;
   customItems: Array<{
     name: string;
     value: number;

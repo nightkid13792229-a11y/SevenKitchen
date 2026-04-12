@@ -105,6 +105,173 @@ export const BaseUnitLabels: Record<string, string> = {
   [BaseUnit.PCS]: '个/件'
 }
 
+export type NutritionBasisType =
+  | 'PER_100_G'
+  | 'PER_100_ML'
+  | 'PER_1_G'
+  | 'PER_1_ML'
+  | 'PER_1_PCS'
+
+export type NutritionRawBasisType =
+  | 'PER_100_G'
+  | 'PER_100_ML'
+  | 'PER_1_G'
+  | 'PER_1_ML'
+  | 'PER_SERVING'
+
+export type NutritionSourceType =
+  | 'MANUAL'
+  | 'CFCT'
+  | 'LABEL'
+  | 'THIRD_PARTY'
+  | 'OTHER'
+
+export type NutritionConfidenceLevel = 'HIGH' | 'MEDIUM' | 'LOW'
+
+export type NutritionProfileSourceType =
+  | 'LAB_REPORT'
+  | 'LABEL'
+  | 'LITERATURE'
+  | 'SUPPLIER'
+  | 'MANUAL_ESTIMATE'
+
+export type NutritionSampleState =
+  | 'RAW'
+  | 'COOKED'
+  | 'FREEZE_DRIED'
+  | 'AIR_DRIED'
+  | 'POWDER'
+  | 'OIL'
+  | 'CONCENTRATE'
+
+export interface NutritionItem {
+  nutrientCode?: string | null
+  nutrientName: string
+  value: number
+  unit: string
+  basisType: NutritionBasisType
+  basisQuantity?: number
+  sourceType?: NutritionSourceType | string | null
+  sourceName?: string | null
+  confidenceLevel?: NutritionConfidenceLevel | string | null
+  isKeyNutrient?: boolean
+  notes?: string | null
+}
+
+export interface NutritionMeta {
+  rawBasisType: NutritionRawBasisType
+  sampleState?: NutritionSampleState
+  isEdiblePortionBasis?: boolean
+  ediblePortionRate?: number | null
+  densityGPerMl?: number | null
+  servingWeightG?: number | null
+  sourceType?: NutritionProfileSourceType | null
+  sourceTitle?: string | null
+  sourceProvider?: string | null
+  attachments?: string[]
+  confidenceLevel?: NutritionConfidenceLevel | null
+  versionNote?: string | null
+}
+
+type NutritionTabValue = number | null
+
+export type NutritionTabRecord<TKey extends string = string> = Record<TKey, NutritionTabValue>
+
+export interface MacroNutritionProfileTab extends NutritionTabRecord<
+  | 'energyKcal'
+  | 'moisture'
+  | 'crudeProtein'
+  | 'crudeFat'
+  | 'ash'
+  | 'carbohydrate'
+  | 'fiber'
+  | 'solubleFiber'
+  | 'insolubleFiber'
+> {}
+
+export interface MineralNutritionProfileTab extends NutritionTabRecord<
+  | 'calcium'
+  | 'phosphorus'
+  | 'potassium'
+  | 'sodium'
+  | 'magnesium'
+  | 'chloride'
+  | 'iron'
+  | 'zinc'
+  | 'copper'
+  | 'manganese'
+  | 'selenium'
+  | 'iodine'
+> {}
+
+export interface VitaminNutritionProfileTab extends NutritionTabRecord<
+  | 'vitaminA'
+  | 'vitaminD'
+  | 'vitaminE'
+  | 'vitaminK'
+  | 'vitaminB1'
+  | 'vitaminB2'
+  | 'vitaminB3'
+  | 'vitaminB5'
+  | 'vitaminB6'
+  | 'vitaminB7'
+  | 'vitaminB9'
+  | 'vitaminB12'
+  | 'choline'
+  | 'vitaminC'
+> {}
+
+export interface FattyAcidNutritionProfileTab extends NutritionTabRecord<
+  | 'saturatedFattyAcids'
+  | 'monounsaturatedFattyAcids'
+  | 'polyunsaturatedFattyAcids'
+  | 'linoleicAcid'
+  | 'alphaLinolenicAcid'
+  | 'arachidonicAcid'
+  | 'epa'
+  | 'dpa'
+  | 'dha'
+> {}
+
+export interface AminoAcidNutritionProfileTab extends NutritionTabRecord<
+  | 'arginine'
+  | 'lysine'
+  | 'methionine'
+  | 'cystine'
+  | 'taurine'
+  | 'tryptophan'
+  | 'threonine'
+  | 'leucine'
+  | 'isoleucine'
+  | 'valine'
+  | 'phenylalanine'
+  | 'tyrosine'
+  | 'histidine'
+  | 'glutamicAcid'
+  | 'glycine'
+  | 'proline'
+> {}
+
+export interface NutritionCustomItem {
+  name: string
+  value: number
+  unit: string
+  rawBasisType?: NutritionRawBasisType
+  note?: string | null
+}
+
+export interface NutritionProfileV2 {
+  meta: NutritionMeta
+  macros: MacroNutritionProfileTab
+  minerals: MineralNutritionProfileTab
+  vitamins: VitaminNutritionProfileTab
+  fattyAcids: FattyAcidNutritionProfileTab
+  aminoAcids: AminoAcidNutritionProfileTab
+  customItems: NutritionCustomItem[]
+}
+
+export type NutritionProfile = NutritionProfileV2
+
 export const SupplementCategoryLabels: Record<string, string> = {
   [SupplementCategoryType.MINERAL]: '矿物质',
   [SupplementCategoryType.VITAMIN]: '维生素',
@@ -146,9 +313,8 @@ export interface PurchaseLinkConfig {
 export interface SupplementProperties {
   category_type: string                                    // 营养分类
   add_timing?: string                                      // 添加时机
-  active_nutrients: Record<string, ActiveNutrientValue>   // 有效成分浓度表（保存原始值和单位）
+  active_nutrients?: Record<string, ActiveNutrientValue>  // 兼容旧数据
   production_loss_rate?: number                            // 个性化损耗率
-  purchase_link?: PurchaseLinkConfig                       // 购买链接配置
 }
 
 // 包材属性
@@ -163,22 +329,13 @@ export interface Ingredient {
   name: string
   type: IngredientType
   procurementStrategy: IngredientProcurementStrategy
-  brand: string | null
-  productModel: string | null
-  purchaseChannel: string | null
   notes: string | null
   baseUnit: BaseUnit
-  unitDisplayLabel: string | null
-  purchaseUnit: string
-  purchaseToBaseRatio: number
-  currentPricePerPurchaseUnit: number
-  effectivePricePerPurchaseUnit: number
-  unitCost: number  // 计算字段: price / ratio
+  baseUnitDisplayName: string | null
+  unitDisplayLabel?: string | null
+  nutritionProfile: NutritionProfile | null
   weightG: number | null
   maxCapacityG: number | null
-  safetyStock: number | null
-  reorderPoint: number | null
-  targetStock: number | null
   properties: FoodProperties | SupplementProperties | PackagingProperties
   tagIds: string[]  // 标签ID数组
   tags?: Array<{
@@ -193,6 +350,14 @@ export interface Ingredient {
   activeProcurementSkuCount?: number
   procurementSkuCount?: number
   hasActiveProcurementSku?: boolean
+  purchaseUnit?: string | null
+  purchaseToBaseRatio?: number | null
+  currentPricePerPurchaseUnit?: number
+  effectivePricePerPurchaseUnit?: number | null
+  unitCost?: number
+  safetyStock?: number | null
+  reorderPoint?: number | null
+  targetStock?: number | null
   createdAt: string
   updatedAt: string
 }
@@ -203,29 +368,31 @@ export interface IngredientForm {
   name: string
   type: IngredientType
   procurementStrategy: IngredientProcurementStrategy
-  brand?: string
-  productModel?: string
-  purchaseChannel?: string
   notes?: string
   baseUnit: BaseUnit
+  baseUnitDisplayName?: string
   unitDisplayLabel?: string
-  purchaseUnit: string
-  purchaseToBaseRatio: number
-  currentPricePerPurchaseUnit: number
-  effectivePricePerPurchaseUnit?: number
   weightG?: number
   maxCapacityG?: number
+  properties: FoodProperties | SupplementProperties | PackagingProperties
+  nutritionProfile?: NutritionProfile | null
+  tagIds?: string[]  // 标签ID数组
+  tags?: any[]  // 标签完整信息（用于显示）
+  purchaseUnit?: string
+  purchaseToBaseRatio?: number
+  currentPricePerPurchaseUnit?: number
+  effectivePricePerPurchaseUnit?: number
   safetyStock?: number
   reorderPoint?: number
   targetStock?: number
-  properties: FoodProperties | SupplementProperties | PackagingProperties
-  tagIds?: string[]  // 标签ID数组
-  tags?: any[]  // 标签完整信息（用于显示）
 }
 
 export interface InventoryOverviewItem extends Ingredient {
   stock: number
   currentStock: number
+  currentPricePerPurchaseUnit: number
+  unitCost: number
+  purchaseUnit: string
   stockUnitLabel: string
   stockStatus: StockLevelStatus
   suggestedBaseQuantity: number
@@ -303,7 +470,8 @@ export interface RecommendedProduct {
   purchaseChannel: string | null
   purchaseLink: PurchaseLinkConfig | null
   imageUrl: string | null
-  activeNutrients: Record<string, ActiveNutrientValue> | null
+  activeNutrients?: Record<string, ActiveNutrientValue> | null
+  marketingNutritionHighlights: Record<string, ActiveNutrientValue> | null
   displayUnit: string | null
   isActive: boolean
   sortOrder: number
@@ -319,6 +487,7 @@ export interface RecommendedProductForm {
   purchaseLink?: PurchaseLinkConfig
   imageUrl?: string
   activeNutrients?: Record<string, ActiveNutrientValue>
+  marketingNutritionHighlights?: Record<string, ActiveNutrientValue>
   displayUnit?: string
   isActive?: boolean
   sortOrder?: number
@@ -332,11 +501,20 @@ export interface ProcurementSku {
   brand: string | null
   productModel: string | null
   purchaseChannel: string | null
+  supplierName: string | null
+  purchaseUnit: string | null
+  purchaseToBaseRatio: number | null
+  currentPurchasePrice: number | null
+  referencePurchasePrice: number | null
   referencePricePerPurchaseUnit: number | null
   displayUnit: string | null
   notes: string | null
+  isDefault: boolean
   isActive: boolean
   sortOrder: number
+  safetyStock: number | null
+  reorderPoint: number | null
+  targetStock: number | null
   createdAt?: string
   updatedAt?: string
 }
@@ -346,9 +524,18 @@ export interface ProcurementSkuForm {
   brand?: string
   productModel?: string
   purchaseChannel?: string
+  supplierName?: string
+  purchaseUnit?: string
+  purchaseToBaseRatio?: number | null
+  currentPurchasePrice?: number | null
+  referencePurchasePrice?: number | null
   referencePricePerPurchaseUnit?: number | null
   displayUnit?: string
   notes?: string
+  isDefault?: boolean
   isActive?: boolean
   sortOrder?: number
+  safetyStock?: number | null
+  reorderPoint?: number | null
+  targetStock?: number | null
 }

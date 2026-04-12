@@ -428,6 +428,7 @@ model Ingredient {
   notes                       String?
   baseUnit                    BaseUnit                  @map("base_unit")
   unitDisplayLabel            String?                   @map("unit_display_label") @db.VarChar(50)
+  nutritionProfile            Json?                     @map("nutrition_profile")
   purchaseUnit                String                    @map("purchase_unit") @db.VarChar(50)
   purchaseToBaseRatio         Float                     @map("purchase_to_base_ratio")
   currentPricePerPurchaseUnit Decimal                   @map("current_price_per_purchase_unit") @db.Decimal(10, 2)
@@ -519,11 +520,20 @@ model ProcurementSku {
   brand                     String?    @db.VarChar(100)
   productModel              String?    @map("product_model") @db.VarChar(100)
   purchaseChannel           String?    @map("purchase_channel") @db.VarChar(200)
+  supplierName              String?    @map("supplier_name") @db.VarChar(200)
+  purchaseUnit              String?    @map("purchase_unit") @db.VarChar(50)
+  purchaseToBaseRatio       Float?     @map("purchase_to_base_ratio")
+  currentPurchasePrice      Decimal?   @map("current_purchase_price") @db.Decimal(10, 2)
+  referencePurchasePrice    Decimal?   @map("reference_purchase_price") @db.Decimal(10, 2)
   referencePricePerPurchaseUnit Decimal? @map("reference_price_per_purchase_unit") @db.Decimal(10, 2)
   displayUnit               String?    @map("display_unit") @db.VarChar(50)
   notes                     String?
+  isDefault                 Boolean    @default(false) @map("is_default")
   isActive                  Boolean    @default(true) @map("is_active")
   sortOrder                 Int        @default(0) @map("sort_order")
+  safetyStock               Float?     @map("safety_stock")
+  reorderPoint              Float?     @map("reorder_point")
+  targetStock               Float?     @map("target_stock")
   createdAt                 DateTime   @default(now()) @map("created_at")
   updatedAt                 DateTime   @default(now()) @updatedAt @map("updated_at")
 
@@ -538,12 +548,14 @@ model InventoryLedgerEntry {
   id           String              @id @default(uuid()) @map("id")
   ingredientId String              @map("ingredient_id")
   deltaG       Float               @map("delta_g")
+  procurementSkuId String?         @map("procurement_sku_id") @db.VarChar(36)
   sourceType   InventorySourceType @map("source_type")
   sourceId     String              @map("source_id")
   createdAt    DateTime            @default(now()) @map("created_at")
 
   @@unique([sourceType, sourceId, ingredientId])
   @@index([ingredientId])
+  @@index([procurementSkuId])
   @@index([sourceType, sourceId])
   @@index([createdAt])
   @@map("inventory_ledger_entry")
@@ -552,6 +564,7 @@ model InventoryLedgerEntry {
 model InventoryAdjustment {
   id              String                  @id @default(uuid()) @map("id")
   ingredientId    String                  @map("ingredient_id")
+  procurementSkuId String?                @map("procurement_sku_id") @db.VarChar(36)
   adjustmentMode  InventoryAdjustmentMode @map("adjustment_mode")
   quantityBeforeG Float                   @map("quantity_before_g")
   quantityAfterG  Float                   @map("quantity_after_g")
@@ -562,6 +575,7 @@ model InventoryAdjustment {
   ingredient      Ingredient              @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
 
   @@index([ingredientId])
+  @@index([procurementSkuId])
   @@index([createdAt])
   @@map("inventory_adjustment")
 }
@@ -582,6 +596,7 @@ model InventoryStocktakeLine {
   id                String             @id @default(uuid()) @map("id")
   stocktakeId       String             @map("stocktake_id")
   ingredientId      String             @map("ingredient_id")
+  procurementSkuId  String?            @map("procurement_sku_id") @db.VarChar(36)
   expectedQuantityG Float              @map("expected_quantity_g")
   countedQuantityG  Float              @map("counted_quantity_g")
   deltaG            Float              @map("delta_g")
@@ -590,6 +605,7 @@ model InventoryStocktakeLine {
 
   @@unique([stocktakeId, ingredientId])
   @@index([ingredientId])
+  @@index([procurementSkuId])
   @@map("inventory_stocktake_line")
 }
 

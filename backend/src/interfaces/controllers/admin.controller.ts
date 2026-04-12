@@ -308,6 +308,7 @@ export class AdminController {
       purchaseChannel: ing.purchaseChannel,
       notes: ing.notes,
       baseUnit: ing.baseUnit,
+      baseUnitDisplayName: ing.baseUnitDisplayName,
       unitDisplayLabel: ing.unitDisplayLabel,
       procurementStrategy: ing.procurementStrategy,
       purchaseUnit: ing.purchaseUnit,
@@ -333,6 +334,7 @@ export class AdminController {
       reorderPoint: ing.reorderPoint,
       targetStock: ing.targetStock,
       properties: ing.properties,
+      nutritionProfile: ing.nutritionProfile,
       tagIds: tagIdsMap.get(ing.id) || [],
       tags: tagsMap.get(ing.id) || [],
       createdAt: createdAtMap.get(ing.id) || new Date().toISOString(),
@@ -401,6 +403,7 @@ export class AdminController {
       purchaseChannel: ingredient.purchaseChannel,
       notes: ingredient.notes,
       baseUnit: ingredient.baseUnit,
+      baseUnitDisplayName: ingredient.baseUnitDisplayName,
       unitDisplayLabel: ingredient.unitDisplayLabel,
       procurementStrategy: ingredient.procurementStrategy,
       purchaseUnit: ingredient.purchaseUnit,
@@ -418,6 +421,7 @@ export class AdminController {
       reorderPoint: ingredient.reorderPoint,
       targetStock: ingredient.targetStock,
       properties: ingredient.properties,
+      nutritionProfile: ingredient.nutritionProfile,
       tagIds,
       tags,
       activeRecommendedProductCount,
@@ -446,6 +450,13 @@ export class AdminController {
       name: ingredient.name,
       type: ingredient.type,
       procurementStrategy: ingredient.procurementStrategy,
+      baseUnit: ingredient.baseUnit,
+      baseUnitDisplayName: ingredient.baseUnitDisplayName,
+      notes: ingredient.notes,
+      properties: ingredient.properties,
+      nutritionProfile: ingredient.nutritionProfile,
+      weightG: ingredient.weightG,
+      maxCapacityG: ingredient.maxCapacityG,
       currentPricePerPurchaseUnit: Number(
         ingredient.currentPricePerPurchaseUnit,
       ),
@@ -479,6 +490,13 @@ export class AdminController {
         name: ingredient.name,
         type: ingredient.type,
         procurementStrategy: ingredient.procurementStrategy,
+        baseUnit: ingredient.baseUnit,
+        baseUnitDisplayName: ingredient.baseUnitDisplayName,
+        notes: ingredient.notes,
+        properties: ingredient.properties,
+        nutritionProfile: ingredient.nutritionProfile,
+        weightG: ingredient.weightG,
+        maxCapacityG: ingredient.maxCapacityG,
         currentPricePerPurchaseUnit: Number(
           ingredient.currentPricePerPurchaseUnit,
         ),
@@ -1862,11 +1880,23 @@ export class AdminController {
   }
 
   private mapOrderToAdminDto(order: any): AdminOrderDto {
+    const address = order.address
+      ? {
+          id: order.address.id,
+          recipientName: order.address.recipientName,
+          phone: order.address.phone,
+          region: order.address.region,
+          regionText: `${order.address.region.province} ${order.address.region.city}${order.address.region.district ? ` ${order.address.region.district}` : ''}`,
+          detailAddress: order.address.detail,
+        }
+      : null;
+
     return {
       id: order.id,
       customerId: order.customerId,
       dogId: order.dogId,
       addressId: order.addressId,
+      address,
       status: order.status,
       type: order.type,
       targetProductionDate: order.targetProductionDate

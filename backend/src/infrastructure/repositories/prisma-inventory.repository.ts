@@ -27,6 +27,7 @@ export class PrismaInventoryRepository implements InventoryRepository {
           id: entry.id,
           ingredientId: entry.ingredientId,
           deltaG: entry.deltaG,
+          procurementSkuId: entry.procurementSkuId ?? null,
           sourceType: entry.sourceType as any,
           sourceId: entry.sourceId,
           createdAt: entry.createdAt,
@@ -92,6 +93,7 @@ export class PrismaInventoryRepository implements InventoryRepository {
       record.sourceType as InventorySourceType,
       record.sourceId,
       record.createdAt,
+      record.procurementSkuId ?? undefined,
     );
   }
 }

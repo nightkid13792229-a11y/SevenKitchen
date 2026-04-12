@@ -52,28 +52,6 @@
         </template>
       </el-input>
 
-      <el-input
-        v-model="minPrice"
-        placeholder="最低单价"
-        clearable
-        style="width: 130px"
-        type="number"
-        @input="handleFilter"
-      >
-        <template #prefix>¥</template>
-      </el-input>
-
-      <el-input
-        v-model="maxPrice"
-        placeholder="最高单价"
-        clearable
-        style="width: 130px"
-        type="number"
-        @input="handleFilter"
-      >
-        <template #prefix>¥</template>
-      </el-input>
-
       <el-date-picker
         v-model="dateRange"
         type="daterange"
@@ -112,8 +90,13 @@
       </div>
       <el-divider direction="vertical" />
       <div class="stat-item">
-        <span class="stat-label">缺少有效 SKU:</span>
-        <span class="stat-value stat-warning">{{ missingSkuCount }} 条</span>
+        <span class="stat-label">缺少 DIY SKU:</span>
+        <span class="stat-value stat-warning">{{ missingRecommendedSkuCount }} 条</span>
+      </div>
+      <el-divider direction="vertical" />
+      <div class="stat-item">
+        <span class="stat-label">缺少采购 SKU:</span>
+        <span class="stat-value stat-warning">{{ missingProcurementSkuCount }} 条</span>
       </div>
       <el-divider direction="vertical" v-if="hasActiveFilters" />
       <div class="stat-item" v-if="hasActiveFilters">
@@ -166,9 +149,14 @@
 
         <el-table-column label="SKU状态" width="160">
           <template #default="{ row }">
-            <el-tag :type="row.hasActiveRecommendedProduct ? 'success' : 'danger'">
-              {{ getSkuStatusText(row) }}
-            </el-tag>
+            <div class="sku-status-cell">
+              <el-tag :type="row.hasActiveRecommendedProduct ? 'success' : 'warning'" size="small">
+                DIY {{ row.hasActiveRecommendedProduct ? '已配' : '缺失' }}
+              </el-tag>
+              <el-tag :type="row.hasActiveProcurementSku ? 'success' : 'danger'" size="small">
+                采购 {{ row.hasActiveProcurementSku ? '已配' : '缺失' }}
+              </el-tag>
+            </div>
           </template>
         </el-table-column>
 
@@ -183,27 +171,6 @@
               {{ tag.name }}
             </el-tag>
             <span v-if="!row.tags || row.tags.length === 0" style="color: #909399;">-</span>
-          </template>
-        </el-table-column>
-
-        <el-table-column prop="currentPricePerPurchaseUnit" label="采购单价" width="120" align="right">
-          <template #default="{ row }">
-            ¥{{ formatPrice(row.currentPricePerPurchaseUnit) }} / {{ row.purchaseUnit }}
-          </template>
-        </el-table-column>
-
-        <el-table-column prop="effectivePricePerPurchaseUnit" label="生效价" width="120" align="right">
-          <template #default="{ row }">
-            ¥{{ formatPrice(row.effectivePricePerPurchaseUnit ?? row.currentPricePerPurchaseUnit) }} / {{ row.purchaseUnit }}
-          </template>
-        </el-table-column>
-
-        <el-table-column label="库存策略" width="220">
-          <template #default="{ row }">
-            <span v-if="formatStockPolicy(row)">
-              {{ formatStockPolicy(row) }}
-            </span>
-            <span v-else style="color: #909399;">-</span>
           </template>
         </el-table-column>
 
@@ -403,8 +370,6 @@ const ingredients = ref<Ingredient[]>([])
 const searchText = ref('')
 const filterTypes = ref<string[]>([])
 const filterStrategies = ref<string[]>([])
-const minPrice = ref<number | null>(null)
-const maxPrice = ref<number | null>(null)
 const dateRange = ref<[Date, Date] | null>(null)
 const dialogVisible = ref(false)
 const currentIngredient = ref<Ingredient | IngredientForm | undefined>(undefined)
@@ -439,8 +404,11 @@ const typeStats = computed(() => ({
   PACKAGING: ingredients.value.filter(item => item.type === IngredientType.PACKAGING).length
 }))
 
-const missingSkuCount = computed(() => (
+const missingRecommendedSkuCount = computed(() => (
   ingredients.value.filter(item => !item.hasActiveRecommendedProduct).length
+))
+const missingProcurementSkuCount = computed(() => (
+  ingredients.value.filter(item => !item.hasActiveProcurementSku).length
 ))
 
 // 筛选结果数量
@@ -452,8 +420,6 @@ const hasActiveFilters = computed(() => {
     searchText.value ||
     (filterTypes.value && filterTypes.value.length > 0) ||
     (filterStrategies.value && filterStrategies.value.length > 0) ||
-    minPrice.value !== null ||
-    maxPrice.value !== null ||
     dateRange.value
   )
 })
@@ -481,15 +447,6 @@ const filteredData = computed(() => {
 
   if (filterStrategies.value && filterStrategies.value.length > 0) {
     result = result.filter(item => filterStrategies.value.includes(item.procurementStrategy))
-  }
-
-  // 价格范围筛选
-  if (minPrice.value !== null && minPrice.value !== undefined) {
-    result = result.filter(item => item.currentPricePerPurchaseUnit >= minPrice.value!)
-  }
-
-  if (maxPrice.value !== null && maxPrice.value !== undefined) {
-    result = result.filter(item => item.currentPricePerPurchaseUnit <= maxPrice.value!)
   }
 
   // 日期范围筛选
@@ -543,8 +500,6 @@ const resetFilters = () => {
   filterTypes.value = []
   filterStrategies.value = []
   searchText.value = ''
-  minPrice.value = null
-  maxPrice.value = null
   dateRange.value = null
   currentPage.value = 1
 }
@@ -615,22 +570,13 @@ const buildDuplicateDraft = (ingredient: Ingredient): IngredientForm => ({
   name: buildDuplicateName(ingredient.name),
   type: ingredient.type,
   procurementStrategy: ingredient.procurementStrategy,
-  brand: '',
-  productModel: '',
-  purchaseChannel: '',
   notes: ingredient.notes || '',
   baseUnit: ingredient.baseUnit,
-  unitDisplayLabel: ingredient.unitDisplayLabel || '',
-  purchaseUnit: ingredient.purchaseUnit,
-  purchaseToBaseRatio: ingredient.purchaseToBaseRatio,
-  currentPricePerPurchaseUnit: ingredient.currentPricePerPurchaseUnit,
-  effectivePricePerPurchaseUnit: ingredient.currentPricePerPurchaseUnit,
+  baseUnitDisplayName: ingredient.baseUnitDisplayName || ingredient.unitDisplayLabel || '',
   weightG: ingredient.weightG ?? undefined,
   maxCapacityG: ingredient.maxCapacityG ?? undefined,
-  safetyStock: ingredient.safetyStock ?? undefined,
-  reorderPoint: ingredient.reorderPoint ?? undefined,
-  targetStock: ingredient.targetStock ?? undefined,
   properties: cloneIngredientValue(ingredient.properties),
+  nutritionProfile: cloneIngredientValue(ingredient.nutritionProfile),
   tagIds: ingredient.tagIds ? [...ingredient.tagIds] : [],
   tags: ingredient.tags ? cloneIngredientValue(ingredient.tags) : []
 })
@@ -744,19 +690,16 @@ const handleExport = () => {
   }
 
   // 简单CSV导出
-  const headers = ['ID', '名称', '类型', '采购策略', '有效SKU数', '采购单位', '采购单价', '单位成本', '安全库存', '补货点', '目标库存']
+  const headers = ['ID', '名称', '类型', '采购策略', 'DIY SKU', '采购 SKU', '标准单位', '标准单位展示名']
   const rows = selectedIngredients.value.map(ing => [
     ing.id,
     ing.name,
     IngredientTypeLabels[ing.type],
     getProcurementStrategyLabel(ing.procurementStrategy),
     String(ing.activeRecommendedProductCount || 0),
-    ing.purchaseUnit,
-    ing.currentPricePerPurchaseUnit.toFixed(2),
-    ing.unitCost.toFixed(4),
-    ing.safetyStock ?? '',
-    ing.reorderPoint ?? '',
-    ing.targetStock ?? ''
+    String(ing.activeProcurementSkuCount || 0),
+    BaseUnitLabels[ing.baseUnit],
+    ing.baseUnitDisplayName || ''
   ])
 
   const csvContent = [
@@ -802,18 +745,6 @@ const handleSubmit = async (data: IngredientForm) => {
   }
 }
 
-const formatPrice = (price: number) => {
-  return price.toFixed(2)
-}
-
-const getSkuStatusText = (ingredient: Ingredient) => {
-  const activeCount = ingredient.activeRecommendedProductCount || 0
-  if (activeCount > 0) {
-    return `已配置 ${activeCount} 个`
-  }
-  return '缺少有效 SKU'
-}
-
 const getIngredientTypeLabel = (type?: string) => {
   return (type && IngredientTypeLabels[type]) || '未知类型'
 }
@@ -838,29 +769,6 @@ const getProcurementStrategyTagType = (strategy?: string) => {
     [IngredientProcurementStrategy.HYBRID]: 'warning'
   }
   return (strategy && typeMap[strategy]) || 'info'
-}
-
-const getStockUnitText = (ingredient: Ingredient) => {
-  return ingredient.unitDisplayLabel || BaseUnitLabels[ingredient.baseUnit] || ingredient.baseUnit
-}
-
-const formatStockPolicy = (ingredient: Ingredient) => {
-  if (
-    ingredient.safetyStock === null &&
-    ingredient.reorderPoint === null &&
-    ingredient.targetStock === null
-  ) {
-    return ''
-  }
-
-  const unit = getStockUnitText(ingredient)
-  const segments = [
-    ingredient.safetyStock !== null ? `安全 ${ingredient.safetyStock}${unit}` : '',
-    ingredient.reorderPoint !== null ? `补货 ${ingredient.reorderPoint}${unit}` : '',
-    ingredient.targetStock !== null ? `目标 ${ingredient.targetStock}${unit}` : ''
-  ].filter(Boolean)
-
-  return segments.join(' / ')
 }
 
 // Lifecycle
@@ -937,6 +845,12 @@ onMounted(() => {
 
 .stat-filtered {
   color: #409eff;
+}
+
+.sku-status-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .pagination-container {

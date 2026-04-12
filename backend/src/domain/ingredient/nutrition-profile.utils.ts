@@ -168,6 +168,10 @@ export function ensureProfileDefaults(
   };
 }
 
+/**
+ * Explicit migration helper that upgrades legacy items[] into grouped v2 data.
+ * Do not use on default runtime read/write paths while legacy admin compatibility is required.
+ */
 export function normalizeNutritionProfile(
   input: NutritionProfile | null | undefined,
 ): NutritionProfileV2 | null {
@@ -184,14 +188,40 @@ export function normalizeNutritionProfile(
   return profile;
 }
 
+export const upgradeNutritionProfileToV2 = normalizeNutritionProfile;
+
+/**
+ * Safe runtime read helper while the legacy admin editor still expects items[].
+ * Legacy payloads stay legacy; structured v2 payloads get defaults filled in.
+ */
+export function normalizeNutritionProfileForRead(
+  input: NutritionProfile | null | undefined,
+): NutritionProfile | null {
+  if (!input) return null;
+  if (isLegacyNutritionProfile(input)) return input;
+
+  return ensureProfileDefaults(input);
+}
+
+/**
+ * Safe runtime write helper while default admin writes still submit legacy items[].
+ * Use this on create/update paths that must not silently upgrade legacy payloads.
+ */
+export function normalizeNutritionProfileForWrite(
+  input: NutritionProfile | null | undefined,
+): NutritionProfile | null {
+  if (!input) return null;
+  if (isLegacyNutritionProfile(input)) return input;
+
+  return ensureProfileDefaults(input);
+}
+
+/**
+ * Persistence helper for current runtime write paths.
+ * Legacy payloads stay legacy; structured v2 payloads stay v2 with defaults filled in.
+ */
 export function denormalizeNutritionProfileForPersistence(
   input: NutritionProfile | null | undefined,
-): NutritionProfileV2 | null {
-  const normalized = normalizeNutritionProfile(input);
-
-  if (!normalized) {
-    return null;
-  }
-
-  return ensureProfileDefaults(normalized);
+): NutritionProfile | null {
+  return normalizeNutritionProfileForWrite(input);
 }

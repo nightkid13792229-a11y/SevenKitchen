@@ -11,7 +11,7 @@ import {
   BaseUnit,
   IngredientProcurementStrategy,
 } from '../../domain/ingredient/enums';
-import { normalizeNutritionProfile } from '../../domain/ingredient/nutrition-profile.utils';
+import { normalizeNutritionProfileForWrite } from '../../domain/ingredient/nutrition-profile.utils';
 import type { NutritionProfile } from '../../domain/ingredient/types';
 
 export const INGREDIENT_REPOSITORY = Symbol('INGREDIENT_REPOSITORY');
@@ -128,7 +128,7 @@ export class IngredientService {
    * Create ingredient
    */
   async createIngredient(dto: CreateIngredientDto): Promise<Ingredient> {
-    const normalizedProfile = normalizeNutritionProfile(
+    const normalizedProfile = normalizeNutritionProfileForWrite(
       dto.nutritionProfile ?? null,
     );
 
@@ -207,7 +207,7 @@ export class IngredientService {
       dto.targetStock !== undefined ? dto.targetStock : existing.targetStock,
       dto.properties !== undefined ? dto.properties : existing.properties,
       dto.nutritionProfile !== undefined
-        ? normalizeNutritionProfile(dto.nutritionProfile)
+        ? normalizeNutritionProfileForWrite(dto.nutritionProfile)
         : existing.nutritionProfile,
     );
 

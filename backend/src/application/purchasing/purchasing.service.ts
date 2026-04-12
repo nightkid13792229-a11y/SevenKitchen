@@ -130,6 +130,8 @@ export interface StockReplenishmentInsight {
   unitDisplayLabel?: string | null;
   purchaseChannel?: string | null;
   productModel?: string | null;
+  procurementSkuId?: string;
+  procurementSkuName?: string;
   currentPricePerPurchaseUnit: number;
   effectivePricePerPurchaseUnit?: number | null;
   currentStock: number;
@@ -151,6 +153,20 @@ interface NormalizedPurchaseRecordData {
   actualPackageUnit?: string;
   actualBaseQuantity: number;
   actualBaseUnit: string;
+}
+
+interface ProcurementExecutionProfile {
+  procurementSku?: ProcurementSkuSummary;
+  purchaseUnit: string;
+  purchaseToBaseRatio: number;
+  displayUnit?: string | null;
+  purchaseChannel?: string | null;
+  productModel?: string | null;
+  currentPricePerPurchaseUnit: number;
+  effectivePricePerPurchaseUnit: number;
+  safetyStock?: number | null;
+  reorderPoint?: number | null;
+  targetStock?: number | null;
 }
 
 @Injectable()
@@ -279,10 +295,14 @@ export class PurchasingService {
 
     const normalizedChannel = this.normalizeComparableText(preferredChannel);
     const normalizedModel = this.normalizeComparableText(preferredModel);
+    const hasExplicitPreference = Boolean(normalizedChannel || normalizedModel);
 
     const ranked = skus
       .map((sku, index) => {
         let score = 0;
+        if (!hasExplicitPreference && sku.isDefault) {
+          score += 100;
+        }
         if (
           normalizedChannel &&
           this.normalizeComparableText(sku.purchaseChannel) ===
@@ -296,6 +316,9 @@ export class PurchasingService {
         ) {
           score += 1;
         }
+        if (sku.isDefault) {
+          score += 0.5;
+        }
 
         return { sku, index, score };
       })
@@ -308,6 +331,68 @@ export class PurchasingService {
       });
 
     return ranked[0]?.sku;
+  }
+
+  private resolveProcurementExecutionProfile(params: {
+    ingredient: any;
+    procurementSkus?: ProcurementSkuSummary[];
+    preferredChannel?: string;
+    preferredModel?: string;
+  }): ProcurementExecutionProfile {
+    const { ingredient } = params;
+    const procurementSku = this.selectSuggestedProcurementSku(
+      params.procurementSkus || [],
+      params.preferredChannel || ingredient?.purchaseChannel,
+      params.preferredModel || ingredient?.productModel,
+    );
+    const currentPricePerPurchaseUnit =
+      procurementSku?.currentPurchasePrice ??
+      procurementSku?.referencePurchasePrice ??
+      procurementSku?.referencePricePerPurchaseUnit ??
+      ingredient?.currentPricePerPurchaseUnit ??
+      ingredient?.effectivePricePerPurchaseUnit ??
+      0;
+    const effectivePricePerPurchaseUnit =
+      procurementSku?.currentPurchasePrice ??
+      procurementSku?.referencePurchasePrice ??
+      procurementSku?.referencePricePerPurchaseUnit ??
+      ingredient?.effectivePricePerPurchaseUnit ??
+      ingredient?.currentPricePerPurchaseUnit ??
+      0;
+
+    return {
+      procurementSku,
+      purchaseUnit:
+        procurementSku?.purchaseUnit ||
+        ingredient?.purchaseUnit ||
+        ingredient?.baseUnit,
+      purchaseToBaseRatio:
+        procurementSku?.purchaseToBaseRatio ??
+        ingredient?.purchaseToBaseRatio ??
+        1,
+      displayUnit:
+        procurementSku?.displayUnit ||
+        procurementSku?.purchaseUnit ||
+        ingredient?.unitDisplayLabel ||
+        ingredient?.purchaseUnit ||
+        ingredient?.baseUnit,
+      purchaseChannel:
+        procurementSku?.purchaseChannel ||
+        params.preferredChannel ||
+        ingredient?.purchaseChannel ||
+        null,
+      productModel:
+        procurementSku?.productModel ||
+        params.preferredModel ||
+        ingredient?.productModel ||
+        null,
+      currentPricePerPurchaseUnit,
+      effectivePricePerPurchaseUnit,
+      safetyStock: procurementSku?.safetyStock ?? ingredient?.safetyStock ?? null,
+      reorderPoint:
+        procurementSku?.reorderPoint ?? ingredient?.reorderPoint ?? null,
+      targetStock: procurementSku?.targetStock ?? ingredient?.targetStock ?? null,
+    };
   }
 
   private async enrichRequirementsWithRecommendedProducts(
@@ -756,6 +841,9 @@ export class PurchasingService {
   }): Promise<StockReplenishmentInsight[]> {
     const keyword = (params?.keyword || '').trim().toLowerCase();
     const ingredients = await this.ingredientRepository.findAll();
+    const procurementSkuMap = await this.procurementSkuService.batchFindActive(
+      ingredients.map((ingredient) => ingredient.id),
+    );
     const filteredIngredients = ingredients
       .filter(
         (ingredient) =>
@@ -770,6 +858,13 @@ export class PurchasingService {
         }
 
         return [ingredient.name, ingredient.purchaseChannel, ingredient.productModel]
+          .concat(
+            (procurementSkuMap[ingredient.id] || []).flatMap((sku) => [
+              sku.name,
+              sku.purchaseChannel,
+              sku.productModel,
+            ]),
+          )
           .filter(Boolean)
           .some((value) => value!.toLowerCase().includes(keyword));
       });
@@ -788,20 +883,24 @@ export class PurchasingService {
     );
 
     let insights = filteredIngredients.map((ingredient): StockReplenishmentInsight => {
+      const profile = this.resolveProcurementExecutionProfile({
+        ingredient,
+        procurementSkus: procurementSkuMap[ingredient.id] || [],
+      });
       const currentStock = this.roundNumber(
         currentStockMap.get(ingredient.id) ?? 0,
         3,
       );
       const stockStatus = this.getStockLevelStatus({
         currentStock,
-        safetyStock: ingredient.safetyStock,
-        reorderPoint: ingredient.reorderPoint,
-        targetStock: ingredient.targetStock,
+        safetyStock: profile.safetyStock,
+        reorderPoint: profile.reorderPoint,
+        targetStock: profile.targetStock,
       });
       const targetBaseQuantity =
-        ingredient.targetStock ??
-        ingredient.reorderPoint ??
-        ingredient.safetyStock ??
+        profile.targetStock ??
+        profile.reorderPoint ??
+        profile.safetyStock ??
         null;
       const suggestedBaseQuantity =
         stockStatus === 'NEEDS_REPLENISHMENT' && targetBaseQuantity !== null
@@ -810,13 +909,10 @@ export class PurchasingService {
       const suggestedPurchaseQuantity =
         suggestedBaseQuantity > 0
           ? this.roundUpNumber(
-              suggestedBaseQuantity / ingredient.purchaseToBaseRatio,
+              suggestedBaseQuantity / profile.purchaseToBaseRatio,
               3,
             )
           : 0;
-      const effectiveUnitPrice =
-        ingredient.effectivePricePerPurchaseUnit ??
-        ingredient.currentPricePerPurchaseUnit;
 
       return {
         id: ingredient.id,
@@ -825,22 +921,24 @@ export class PurchasingService {
         procurementStrategy: ingredient.procurementStrategy,
         baseUnit: ingredient.baseUnit,
         stockUnitLabel: ingredient.unitDisplayLabel || ingredient.baseUnit,
-        purchaseUnit: ingredient.purchaseUnit,
-        purchaseToBaseRatio: ingredient.purchaseToBaseRatio,
-        unitDisplayLabel: ingredient.unitDisplayLabel,
-        purchaseChannel: ingredient.purchaseChannel,
-        productModel: ingredient.productModel,
-        currentPricePerPurchaseUnit: ingredient.currentPricePerPurchaseUnit,
-        effectivePricePerPurchaseUnit: ingredient.effectivePricePerPurchaseUnit,
+        purchaseUnit: profile.purchaseUnit,
+        purchaseToBaseRatio: profile.purchaseToBaseRatio,
+        unitDisplayLabel: profile.displayUnit || ingredient.unitDisplayLabel,
+        purchaseChannel: profile.purchaseChannel,
+        productModel: profile.productModel,
+        procurementSkuId: profile.procurementSku?.id,
+        procurementSkuName: profile.procurementSku?.name,
+        currentPricePerPurchaseUnit: profile.currentPricePerPurchaseUnit,
+        effectivePricePerPurchaseUnit: profile.effectivePricePerPurchaseUnit,
         currentStock,
-        safetyStock: ingredient.safetyStock,
-        reorderPoint: ingredient.reorderPoint,
-        targetStock: ingredient.targetStock,
+        safetyStock: profile.safetyStock,
+        reorderPoint: profile.reorderPoint,
+        targetStock: profile.targetStock,
         stockStatus,
         suggestedBaseQuantity,
         suggestedPurchaseQuantity,
         suggestedEstimatedCost: this.roundNumber(
-          suggestedPurchaseQuantity * effectiveUnitPrice,
+          suggestedPurchaseQuantity * profile.effectivePricePerPurchaseUnit,
           2,
         ),
       };
@@ -858,6 +956,8 @@ export class PurchasingService {
         purchaseChannel: item.purchaseChannel || undefined,
         productModel: item.productModel || undefined,
         displayUnit: item.unitDisplayLabel || item.purchaseUnit,
+        procurementSkuId: item.procurementSkuId,
+        procurementSkuName: item.procurementSkuName,
       }));
 
     const enrichedRequirements =
@@ -1002,25 +1102,35 @@ export class PurchasingService {
     const ingredientLookup = new Map(
       ingredients.map((ingredient) => [ingredient.id, ingredient]),
     );
+    const procurementSkuMap = await this.procurementSkuService.batchFindActive(
+      ingredientIds,
+    );
 
     const requirements = await this.enrichRequirementsWithCatalogData(
       ingredientIds.map((ingredientId): PurchaseRequirement => {
         const ingredient = ingredientLookup.get(ingredientId)!;
         const input = mergedItems.get(ingredientId)!;
-        const unitPrice =
-          ingredient.effectivePricePerPurchaseUnit ??
-          ingredient.currentPricePerPurchaseUnit;
+        const profile = this.resolveProcurementExecutionProfile({
+          ingredient,
+          procurementSkus: procurementSkuMap[ingredientId] || [],
+          preferredChannel: input.purchaseChannel,
+          preferredModel: input.productModel,
+        });
         return {
           ingredientId,
           ingredientName: ingredient.name,
           type: ingredient.type,
           quantityNeeded: this.roundNumber(input.plannedQuantity, 3),
-          quantityUnit: ingredient.purchaseUnit,
-          estimatedCost: this.roundNumber(input.plannedQuantity * unitPrice, 2),
-          purchaseChannel:
-            input.purchaseChannel || ingredient.purchaseChannel || undefined,
-          productModel: input.productModel || ingredient.productModel || undefined,
-          displayUnit: ingredient.unitDisplayLabel || ingredient.purchaseUnit,
+          quantityUnit: profile.purchaseUnit,
+          estimatedCost: this.roundNumber(
+            input.plannedQuantity * profile.effectivePricePerPurchaseUnit,
+            2,
+          ),
+          purchaseChannel: profile.purchaseChannel || undefined,
+          productModel: profile.productModel || undefined,
+          displayUnit: profile.displayUnit || profile.purchaseUnit,
+          procurementSkuId: profile.procurementSku?.id,
+          procurementSkuName: profile.procurementSku?.name,
         };
       }),
       ingredientLookup,

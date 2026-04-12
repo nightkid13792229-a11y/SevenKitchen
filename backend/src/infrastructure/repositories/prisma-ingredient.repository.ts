@@ -13,7 +13,7 @@ import {
 } from '../../domain/ingredient/enums';
 import {
   denormalizeNutritionProfileForPersistence,
-  normalizeNutritionProfile,
+  normalizeNutritionProfileForRead,
 } from '../../domain/ingredient/nutrition-profile.utils';
 import { PrismaService } from '../prisma.service';
 
@@ -218,7 +218,7 @@ export class PrismaIngredientRepository implements IngredientRepository {
       record.reorderPoint,
       record.targetStock,
       record.properties,
-      normalizeNutritionProfile(record.nutritionProfile ?? null),
+      normalizeNutritionProfileForRead(record.nutritionProfile ?? null),
     );
   }
 }

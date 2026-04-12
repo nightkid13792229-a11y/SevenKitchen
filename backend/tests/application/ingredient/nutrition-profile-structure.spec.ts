@@ -1,9 +1,62 @@
 import {
+  normalizeNutritionProfileForRead,
+  normalizeNutritionProfileForWrite,
   denormalizeNutritionProfileForPersistence,
   normalizeNutritionProfile,
 } from '../../../src/domain/ingredient/nutrition-profile.utils';
 
 describe('nutrition profile structure', () => {
+  it('preserves legacy items[] on default read path', () => {
+    const legacyProfile = {
+      items: [
+        {
+          nutrientCode: 'CA',
+          nutrientName: '钙',
+          value: 240,
+          unit: 'mg',
+          basisType: 'PER_100_G',
+          basisQuantity: 100,
+          sourceType: 'MANUAL',
+          sourceName: '内部整理',
+          confidenceLevel: 'HIGH',
+          isKeyNutrient: true,
+          notes: '测试数据',
+        },
+      ],
+    };
+
+    expect(normalizeNutritionProfileForRead(legacyProfile as any)).toEqual(
+      legacyProfile,
+    );
+  });
+
+  it('preserves legacy items[] on default write path without dropping fields', () => {
+    const legacyProfile = {
+      items: [
+        {
+          nutrientCode: 'CA',
+          nutrientName: '钙',
+          value: 240,
+          unit: 'mg',
+          basisType: 'PER_100_G',
+          basisQuantity: 100,
+          sourceType: 'MANUAL',
+          sourceName: '内部整理',
+          confidenceLevel: 'HIGH',
+          isKeyNutrient: true,
+          notes: '测试数据',
+        },
+      ],
+    };
+
+    expect(normalizeNutritionProfileForWrite(legacyProfile as any)).toEqual(
+      legacyProfile,
+    );
+    expect(
+      denormalizeNutritionProfileForPersistence(legacyProfile as any),
+    ).toEqual(legacyProfile);
+  });
+
   it('normalizes legacy items[] payload into grouped profile', () => {
     const normalized = normalizeNutritionProfile({
       items: [
@@ -131,28 +184,52 @@ describe('nutrition profile structure', () => {
     expect(payload?.macros.crudeProtein).toBe(18);
   });
 
-  it('serializes legacy profile through normalization before persistence', () => {
-    const payload = denormalizeNutritionProfileForPersistence({
-      items: [
-        {
-          nutrientCode: 'protein',
-          nutrientName: '粗蛋白',
-          value: 18,
-          unit: 'g',
-          basisType: 'PER_100_G',
-        },
-        {
-          nutrientCode: 'p',
-          nutrientName: '磷',
-          value: 120,
-          unit: 'mg',
-          basisType: 'PER_100_G',
-        },
-      ],
-    } as any);
+  it('keeps v2 on default read and write paths while filling defaults', () => {
+    const input = {
+      meta: { rawBasisType: 'PER_100_ML' },
+      macros: { crudeProtein: 12 },
+      minerals: { calcium: 240 },
+      vitamins: {},
+      fattyAcids: {},
+      aminoAcids: {},
+      customItems: [],
+    };
 
-    expect(payload?.meta.rawBasisType).toBe('PER_100_G');
-    expect(payload?.macros.crudeProtein).toBe(18);
-    expect(payload?.minerals.phosphorus).toBe(120);
+    const readProfile = normalizeNutritionProfileForRead(input as any);
+    const writeProfile = normalizeNutritionProfileForWrite(input as any);
+
+    expect(readProfile).toEqual({
+      meta: { rawBasisType: 'PER_100_ML' },
+      macros: {
+        energyKcal: null,
+        moisture: null,
+        crudeProtein: 12,
+        crudeFat: null,
+        ash: null,
+        carbohydrate: null,
+        fiber: null,
+        solubleFiber: null,
+        insolubleFiber: null,
+      },
+      minerals: {
+        calcium: 240,
+        phosphorus: null,
+        potassium: null,
+        sodium: null,
+        magnesium: null,
+        chloride: null,
+        iron: null,
+        zinc: null,
+        copper: null,
+        manganese: null,
+        selenium: null,
+        iodine: null,
+      },
+      vitamins: {},
+      fattyAcids: {},
+      aminoAcids: {},
+      customItems: [],
+    });
+    expect(writeProfile).toEqual(readProfile);
   });
 });

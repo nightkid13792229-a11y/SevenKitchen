@@ -23,6 +23,18 @@ describe('runtime-base-url', () => {
     )
   })
 
+  it('migrates stale local overrides on port 3004 to the branch backend port', () => {
+    expect(migrateLegacyDevBaseUrl('http://localhost:3004/api/v1')).toBe(
+      'http://127.0.0.1:3011/api/v1',
+    )
+    expect(migrateLegacyDevBaseUrl('http://127.0.0.1:3004/api/v1')).toBe(
+      'http://127.0.0.1:3011/api/v1',
+    )
+    expect(migrateLegacyDevBaseUrl('http://192.168.31.43:3004/api/v1')).toBe(
+      'http://192.168.31.43:3011/api/v1',
+    )
+  })
+
   it('leaves non-legacy values untouched', () => {
     expect(migrateLegacyDevBaseUrl('http://127.0.0.1:3011/api/v1')).toBe(
       'http://127.0.0.1:3011/api/v1',

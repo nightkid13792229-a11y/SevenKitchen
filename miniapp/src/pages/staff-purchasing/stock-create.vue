@@ -117,6 +117,12 @@
                 <text v-if="ingredient.productModel"> · {{ ingredient.productModel }}</text>
               </text>
               <text
+                v-if="ingredient.procurementSkuName"
+                class="ingredient-detail"
+              >
+                默认采购 SKU · {{ ingredient.procurementSkuName }}
+              </text>
+              <text
                 v-if="ingredient.suggestedPurchaseQuantity > 0"
                 class="ingredient-suggestion"
               >
@@ -221,7 +227,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { onLoad } from '@dcloudio/uni-app';
+import { onLoad, onShow } from '@dcloudio/uni-app';
 import {
   createStockPurchaseList,
   getStockPurchaseIngredients,
@@ -288,6 +294,13 @@ const noPolicyIngredients = computed(() => {
 
 onLoad(() => {
   targetDate.value = getTodayString();
+  loadIngredients();
+});
+
+onShow(() => {
+  if (!targetDate.value) {
+    targetDate.value = getTodayString();
+  }
   loadIngredients();
 });
 

@@ -101,17 +101,6 @@
         </view>
       </view>
 
-      <!-- 收货信息 -->
-      <view class="section address-section" v-if="order.address">
-        <view class="section-title">收货信息</view>
-        <view class="address-card">
-          <view class="address-info">
-            <text class="recipient">{{ order.address.recipientName }} {{ order.address.phone }}</text>
-            <text class="detail">{{ order.address.regionText }} {{ order.address.detailAddress }}</text>
-          </view>
-        </view>
-      </view>
-
       <!-- 待付款状态下的支付引导 -->
       <view
         class="section payment-guide-section"
@@ -1803,30 +1792,6 @@ function contactSevenDad() {
   font-size: 24rpx;
   border: none;
   flex-shrink: 0;
-}
-
-/* 收货信息 */
-.address-card {
-  padding: 20rpx;
-  background-color: #f9f9f9;
-  border-radius: 12rpx;
-}
-
-.address-info {
-  display: flex;
-  flex-direction: column;
-  gap: 8rpx;
-}
-
-.recipient {
-  font-size: 28rpx;
-  color: #333;
-  font-weight: 500;
-}
-
-.detail {
-  font-size: 26rpx;
-  color: #666;
 }
 
 /* 商品明细 */

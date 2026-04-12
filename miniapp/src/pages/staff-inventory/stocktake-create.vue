@@ -89,6 +89,9 @@
                 {{ ingredient.purchaseChannel || '未设置渠道' }}
                 <text v-if="ingredient.productModel"> · {{ ingredient.productModel }}</text>
               </text>
+              <text v-if="ingredient.procurementSkuName" class="ingredient-meta">
+                默认采购 SKU · {{ ingredient.procurementSkuName }}
+              </text>
             </view>
             <button
               class="add-btn"
@@ -186,7 +189,7 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue';
-import { onLoad } from '@dcloudio/uni-app';
+import { onLoad, onShow } from '@dcloudio/uni-app';
 import {
   createInventoryStocktake,
   getInventoryOverview,
@@ -199,6 +202,7 @@ const PENDING_TAB_STORAGE_KEY = 'staff_inventory_pending_tab';
 
 interface SelectedStocktakeLine {
   ingredientId: string;
+  procurementSkuId?: string;
   name: string;
   type: InventoryIngredientType;
   stockUnitLabel: string;
@@ -227,6 +231,10 @@ const varianceCount = computed(() => {
 });
 
 onLoad(() => {
+  loadIngredients();
+});
+
+onShow(() => {
   loadIngredients();
 });
 
@@ -275,6 +283,7 @@ const addIngredient = (ingredient: InventoryOverviewItem) => {
 
   selectedLines.value.push({
     ingredientId: ingredient.id,
+    procurementSkuId: ingredient.procurementSkuId || undefined,
     name: ingredient.name,
     type: ingredient.type,
     stockUnitLabel: ingredient.stockUnitLabel,
@@ -367,6 +376,7 @@ const submit = async (applyImmediately: boolean) => {
 
   const lines = selectedLines.value.map((line) => ({
     ingredientId: line.ingredientId,
+    procurementSkuId: line.procurementSkuId,
     countedQuantityG: parseQuantity(line.countedQuantity),
   }));
 

@@ -1876,11 +1876,23 @@ export class AdminController {
   }
 
   private mapOrderToAdminDto(order: any): AdminOrderDto {
+    const address = order.address
+      ? {
+          id: order.address.id,
+          recipientName: order.address.recipientName,
+          phone: order.address.phone,
+          region: order.address.region,
+          regionText: `${order.address.region.province} ${order.address.region.city}${order.address.region.district ? ` ${order.address.region.district}` : ''}`,
+          detailAddress: order.address.detail,
+        }
+      : null;
+
     return {
       id: order.id,
       customerId: order.customerId,
       dogId: order.dogId,
       addressId: order.addressId,
+      address,
       status: order.status,
       type: order.type,
       targetProductionDate: order.targetProductionDate

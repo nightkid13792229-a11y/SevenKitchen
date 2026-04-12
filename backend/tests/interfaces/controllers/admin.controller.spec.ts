@@ -107,4 +107,85 @@ describe('AdminController', () => {
       ]);
     });
   });
+
+  describe('getOrderDetail', () => {
+    it('returns address details in the admin order response', async () => {
+      const order = {
+        id: 'order-1',
+        customerId: 'customer-1',
+        dogId: 'dog-1',
+        addressId: 'address-1',
+        address: {
+          id: 'address-1',
+          recipientName: '张三',
+          phone: '13800000000',
+          region: {
+            province: '上海市',
+            city: '上海市',
+            district: '浦东新区',
+          },
+          detail: '世纪大道100号',
+        },
+        status: 'PENDING_PAYMENT',
+        type: 'FRESH_FOOD',
+        targetProductionDate: null,
+        totalAmount: 128,
+        amountProduct: 118,
+        amountShipping: 10,
+        amountTotal: 128,
+        items: [],
+        pricingBreakdownSnapshot: null,
+        trackingNumber: null,
+        carrierCode: null,
+        shippedAt: null,
+        completedAt: null,
+        cancelledAt: null,
+        cancellationReason: null,
+        cancelledBy: null,
+        paymentMethod: null,
+        transactionId: null,
+        paidAt: null,
+        paymentStatus: null,
+        createdAt: new Date('2026-04-12T10:00:00.000Z'),
+        adminRemark: null,
+      };
+
+      const mockOrderService = {
+        getOrderById: jest.fn().mockResolvedValue(order),
+      };
+
+      const controller = new AdminController(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        mockOrderService as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+      );
+
+      const result = await controller.getOrderDetail('order-1');
+
+      expect(mockOrderService.getOrderById).toHaveBeenCalledWith('order-1');
+      expect(result.code).toBe(0);
+      expect(result.data?.address).toEqual({
+        id: 'address-1',
+        recipientName: '张三',
+        phone: '13800000000',
+        region: {
+          province: '上海市',
+          city: '上海市',
+          district: '浦东新区',
+        },
+        regionText: '上海市 上海市 浦东新区',
+        detailAddress: '世纪大道100号',
+      });
+    });
+  });
 });

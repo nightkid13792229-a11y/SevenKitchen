@@ -14,6 +14,17 @@
   3. 先跑生产回填
   4. 再开始人工治理生产数据
 
+## 当前部署基线
+
+- 当前候选分支：`codex/ingredient-sku-decoupling`
+- 当前候选部署基线 commit：`28dee9b79a69ec8b30fda83467f14d6515d59fed`
+- 本次基线已包含的关键提交：
+  - `9335134 feat: refactor ingredient sku domain and nutrition entry`
+  - `28dee9b feat: polish ingredient nutrition workflow and rollout docs`
+- 明确不纳入部署版本的本地临时材料：
+  - `.superpowers/`
+  - `docs/handoff/`
+
 ## 一、生产部署前清单
 
 ### A. 版本冻结
@@ -38,6 +49,21 @@
   - [ ] `20260411183000_add_procurement_sku_to_inventory_operations`
 - [ ] 确认生产环境可执行 Prisma migration 与 backfill 脚本
 
+建议的生产执行入口：
+
+- migration：
+  - `cd backend && npx prisma migrate deploy`
+- nutrition profile 回填 dry-run：
+  - `cd backend && npm run backfill:ingredient-nutrition-profile-v2`
+- nutrition profile 回填 apply：
+  - `cd backend && npm run backfill:ingredient-nutrition-profile-v2:apply`
+- procurement SKU 默认值回填 dry-run：
+  - `cd backend && npm run backfill:procurement-sku-defaults`
+- procurement SKU 默认值回填 apply：
+  - `cd backend && npm run backfill:procurement-sku-defaults:apply`
+- backend 构建校验：
+  - `cd backend && npm run build`
+
 ### C. 管理后台准备
 
 - [ ] 发布包含以下能力的 admin-web 版本：
@@ -50,6 +76,10 @@
   - [ ] `DIY SKU` 维护区
   - [ ] `采购 SKU` 维护区
 
+建议的发布前校验：
+
+- `cd admin-web && npm run build`
+
 ### D. 员工端准备
 
 - [ ] 发布包含 procurement SKU 优先消费逻辑的 miniapp 版本
@@ -57,6 +87,10 @@
   - [ ] 补货采购单页
   - [ ] 盘点创建页
   - [ ] 库存流水 / 盘点记录页
+
+建议的发布前校验：
+
+- `cd miniapp && npm run build:mp-weixin`
 
 ### E. 生产回填执行
 

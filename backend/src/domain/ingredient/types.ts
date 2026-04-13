@@ -65,6 +65,7 @@ export interface NutritionMeta {
   sourceProvider?: string | null;
   attachments?: string[];
   confidenceLevel?: 'HIGH' | 'MEDIUM' | 'LOW' | null;
+  fieldDisplayUnits?: Record<string, string>;
   versionNote?: string | null;
 }
 

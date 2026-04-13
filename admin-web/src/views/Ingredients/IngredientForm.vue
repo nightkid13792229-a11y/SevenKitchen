@@ -24,9 +24,9 @@
       class="structure-alert"
     >
       <template #title>
-        当前维护分三层：标准原料负责逻辑原料与统一营养数据，DIY 推荐商品负责小程序推荐，采购 SKU 负责采购、库存和生产执行。
+        当前维护分三层：标准原料负责逻辑原料，营养数据单独维护，DIY 推荐商品负责小程序推荐，采购 SKU 负责采购、库存和生产执行。
       </template>
-      标准原料页不再维护采购品牌、规格、渠道、采购单价与库存阈值，这些信息请统一在采购 SKU 中维护。
+      标准原料页不再维护采购品牌、规格、渠道、采购单价与库存阈值，这些信息请统一在采购 SKU 中维护；营养数据请在原料列表中通过“营养数据”入口单独编辑。
     </el-alert>
 
     <el-alert
@@ -378,16 +378,6 @@
           style="width: 300px"
         />
         <span class="hint-text">可选，如4号箱绑定4号袋</span>
-      </el-form-item>
-    </template>
-
-    <template v-if="formData.type !== IngredientType.PACKAGING">
-      <div class="section-title">统一营养数据</div>
-      <el-form-item label="营养档案">
-        <IngredientNutritionEditor
-          v-model="formData.nutritionProfile"
-          :ingredient-type="formData.type"
-        />
       </el-form-item>
     </template>
 
@@ -744,7 +734,7 @@ import { Plus, Delete } from '@element-plus/icons-vue'
 import { ingredientTagApi, type IngredientTag, type CreateTagDto } from '@/api/ingredientTags'
 import { ingredientApi } from '@/api/ingredients'
 import { INGREDIENT_NUTRITION_TAB_DEFINITIONS } from '@/constants/ingredientNutrition'
-import { normalizeIngredientNutritionProfileToForm } from '@/utils/ingredientNutrition'
+import { buildSupplementActiveNutrientsFromNutritionProfile } from '@/utils/ingredientNutrition'
 import {
   IngredientType,
   IngredientProcurementStrategy,
@@ -754,7 +744,6 @@ import {
   BaseUnitLabels,
   IngredientProcurementStrategyLabels,
   CFCT_CLASS_OPTIONS,
-  type ActiveNutrientValue,
   type PurchaseLinkConfig,
   type Ingredient,
   type IngredientForm,
@@ -766,7 +755,6 @@ import {
   type RecommendedProduct,
   type RecommendedProductForm
 } from '@/types/ingredient'
-import IngredientNutritionEditor from './components/IngredientNutritionEditor.vue'
 
 interface Props {
   ingredient?: IngredientForm | Ingredient
@@ -1031,7 +1019,7 @@ function syncProperties() {
   if (formData.type === IngredientType.FOOD) {
     formData.properties = { ...foodProperties }
   } else if (formData.type === IngredientType.SUPPLEMENT) {
-    supplementProperties.active_nutrients = buildSupplementActiveNutrients(
+    supplementProperties.active_nutrients = buildSupplementActiveNutrientsFromNutritionProfile(
       formData.nutritionProfile,
       supplementProperties.active_nutrients
     )
@@ -1039,51 +1027,6 @@ function syncProperties() {
   } else if (formData.type === IngredientType.PACKAGING) {
     formData.properties = { ...packagingProperties }
   }
-}
-
-function buildSupplementActiveNutrients(
-  nutritionProfile: IngredientForm['nutritionProfile'],
-  fallback: SupplementProperties['active_nutrients'] = {}
-): Record<string, ActiveNutrientValue> {
-  if (!nutritionProfile) {
-    return { ...(fallback || {}) }
-  }
-
-  const activeNutrients: Record<string, ActiveNutrientValue> = {}
-
-  const normalizedProfile = normalizeIngredientNutritionProfileToForm(nutritionProfile)
-  const normalizeLegacyTargetKey = (label: string) => label.replace(/\s+/g, '')
-
-  for (const tab of INGREDIENT_NUTRITION_TAB_DEFINITIONS) {
-    const tabValues = normalizedProfile[tab.key] as Record<string, number | null>
-
-    for (const field of tab.fields) {
-      const value = tabValues[field.key]
-      if (typeof value === 'number' && Number.isFinite(value)) {
-        activeNutrients[normalizeLegacyTargetKey(field.label)] = { value, unit: field.unit }
-      }
-    }
-  }
-
-  const epa = normalizedProfile.fattyAcids.epa
-  const dha = normalizedProfile.fattyAcids.dha
-  const combinedOmega3 = [epa, dha]
-    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
-    .reduce((sum, value) => sum + value, 0)
-
-  if (combinedOmega3 > 0) {
-    activeNutrients['EPA+DHA'] = { value: combinedOmega3, unit: 'g' }
-  }
-
-  for (const item of normalizedProfile.customItems ?? []) {
-    const name = item.name.trim()
-    const unit = item.unit.trim()
-    if (name && unit && typeof item.value === 'number' && Number.isFinite(item.value)) {
-      activeNutrients[name] = { value: item.value, unit }
-    }
-  }
-
-  return activeNutrients
 }
 
 // Load tags

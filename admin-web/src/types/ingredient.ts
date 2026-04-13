@@ -131,8 +131,9 @@ export type NutritionConfidenceLevel = 'HIGH' | 'MEDIUM' | 'LOW'
 export type NutritionProfileSourceType =
   | 'LAB_REPORT'
   | 'LABEL'
+  | 'CFCT'
+  | 'USDA'
   | 'LITERATURE'
-  | 'SUPPLIER'
   | 'MANUAL_ESTIMATE'
 
 export type NutritionSampleState =
@@ -170,6 +171,7 @@ export interface NutritionMeta {
   sourceProvider?: string | null
   attachments?: string[]
   confidenceLevel?: NutritionConfidenceLevel | null
+  fieldDisplayUnits?: Record<string, string>
   versionNote?: string | null
 }
 

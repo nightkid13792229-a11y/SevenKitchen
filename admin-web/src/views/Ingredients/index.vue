@@ -205,7 +205,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="操作" width="240" fixed="right">
+        <el-table-column label="操作" width="300" fixed="right">
           <template #default="{ row }">
             <el-button
               type="success"
@@ -222,6 +222,15 @@
               @click="handleEdit(row)"
             >
               编辑
+            </el-button>
+            <el-button
+              v-if="row.type !== IngredientType.PACKAGING"
+              type="warning"
+              size="small"
+              link
+              @click="handleEditNutrition(row)"
+            >
+              营养数据
             </el-button>
             <el-button
               type="info"
@@ -277,6 +286,12 @@
         @cancel="handleDialogClose"
       />
     </el-dialog>
+
+    <IngredientNutritionDialog
+      v-model="nutritionDialogVisible"
+      :ingredient="currentIngredientForNutrition"
+      @saved="handleNutritionSaved"
+    />
 
     <!-- Usage Dialog -->
     <el-dialog
@@ -363,6 +378,7 @@ import {
   type IngredientForm
 } from '@/types/ingredient'
 import IngredientFormComponent from './IngredientForm.vue'
+import IngredientNutritionDialog from './components/IngredientNutritionDialog.vue'
 
 // Data
 const loading = ref(false)
@@ -380,6 +396,8 @@ const usageDialogVisible = ref(false)
 const loadingUsage = ref(false)
 const currentIngredientForUsage = ref<Ingredient | null>(null)
 const usageRecipes = ref<any[]>([])
+const nutritionDialogVisible = ref(false)
+const currentIngredientForNutrition = ref<Ingredient | null>(null)
 
 // Pagination
 const currentPage = ref(1)
@@ -529,6 +547,19 @@ const handleEdit = async (ingredient: Ingredient) => {
     // Then set the ingredient data after dialog is mounted
     await nextTick()
     currentIngredient.value = fullIngredient
+  } catch (error: any) {
+    ElMessage.error(error.message || '获取原料详情失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleEditNutrition = async (ingredient: Ingredient) => {
+  try {
+    loading.value = true
+    const fullIngredient = await ingredientApi.getDetail(ingredient.id)
+    currentIngredientForNutrition.value = fullIngredient
+    nutritionDialogVisible.value = true
   } catch (error: any) {
     ElMessage.error(error.message || '获取原料详情失败')
   } finally {
@@ -742,6 +773,13 @@ const handleSubmit = async (data: IngredientForm) => {
     ElMessage.error(error.message || '操作失败')
   } finally {
     loading.value = false
+  }
+}
+
+const handleNutritionSaved = async () => {
+  await loadData()
+  if (currentIngredientForNutrition.value?.id) {
+    currentIngredientForNutrition.value = await ingredientApi.getDetail(currentIngredientForNutrition.value.id)
   }
 }
 

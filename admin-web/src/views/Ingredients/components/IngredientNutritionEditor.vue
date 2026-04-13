@@ -1,18 +1,5 @@
 <template>
   <div class="nutrition-editor">
-    <div class="nutrition-overview">
-      <div class="overview-copy">
-        <div class="overview-title">营养档案</div>
-        <div class="overview-desc">
-          {{ props.ingredientType === IngredientType.SUPPLEMENT ? '补剂可录入标准营养项与自定义有效成分。' : '食材使用统一结构化营养档案，供后续营养计算与食谱设计复用。' }}
-        </div>
-      </div>
-      <div class="overview-actions">
-        <el-tag type="info">{{ rawBasisLabel }}</el-tag>
-        <el-button size="small" :icon="Plus" @click="addCustomItem">添加自定义营养项</el-button>
-      </div>
-    </div>
-
     <div class="nutrition-meta-card">
       <div class="meta-grid">
         <div class="meta-item">
@@ -40,7 +27,7 @@
         </div>
 
         <div class="meta-item">
-          <div class="meta-label">来源类型</div>
+          <div class="meta-label">来源</div>
           <el-select v-model="formValue.meta.sourceType" clearable placeholder="可选">
             <el-option
               v-for="option in INGREDIENT_NUTRITION_SOURCE_TYPE_OPTIONS"
@@ -52,62 +39,31 @@
         </div>
 
         <div class="meta-item">
-          <div class="meta-label">置信度</div>
-          <el-select v-model="formValue.meta.confidenceLevel" clearable placeholder="可选">
-            <el-option
-              v-for="option in INGREDIENT_NUTRITION_CONFIDENCE_OPTIONS"
-              :key="option.value"
-              :label="option.label"
-              :value="option.value"
-            />
-          </el-select>
+          <div class="meta-label">密度</div>
+          <el-input-number
+            v-model="formValue.meta.densityGPerMl"
+            :min="0"
+            :step="0.01"
+            :precision="3"
+            controls-position="right"
+            placeholder="g/ml"
+          />
+          <div class="meta-hint">仅液体、浆体或油脂类原料需要填写，单位为 g/ml。</div>
         </div>
 
         <div class="meta-item">
-          <div class="meta-label">来源标题</div>
-          <el-input v-model="formValue.meta.sourceTitle" maxlength="100" placeholder="如：第三方检测报告、商品包装" />
-        </div>
-
-        <div class="meta-item">
-          <div class="meta-label">来源提供方</div>
-          <el-input v-model="formValue.meta.sourceProvider" maxlength="100" placeholder="如：供应商、实验室、品牌方" />
-        </div>
-
-        <div class="meta-item">
-          <div class="meta-label">可食部口径</div>
-          <div class="meta-inline">
-            <el-switch v-model="formValue.meta.isEdiblePortionBasis" />
-            <el-input-number
-              v-model="formValue.meta.ediblePortionRate"
-              :disabled="!formValue.meta.isEdiblePortionBasis"
-              :min="0"
-              :max="1"
-              :step="0.01"
-              :precision="2"
-              controls-position="right"
-            />
-          </div>
-        </div>
-
-        <div class="meta-item">
-          <div class="meta-label">密度 / 单份重量</div>
-          <div class="meta-inline">
-            <el-input-number
-              v-model="formValue.meta.densityGPerMl"
-              :min="0"
-              :step="0.01"
-              :precision="3"
-              controls-position="right"
-              placeholder="g/ml"
-            />
+          <div class="meta-label">单份重量</div>
+          <div class="meta-value-with-unit">
             <el-input-number
               v-model="formValue.meta.servingWeightG"
               :min="0"
               :step="0.01"
               :precision="3"
-              controls-position="right"
-              placeholder="g"
+              :controls="false"
+              :disabled="formValue.meta.rawBasisType !== 'PER_SERVING'"
+              placeholder="0"
             />
+            <span class="field-unit">g</span>
           </div>
         </div>
       </div>
@@ -149,18 +105,35 @@
             :key="field.key"
             class="tab-field"
           >
-            <div class="field-label">{{ field.label }}</div>
+            <div class="field-label">
+              {{ field.label }}
+              <span v-if="field.englishLabel" class="field-english-inline">({{ field.englishLabel }})</span>
+            </div>
             <div class="field-input">
               <el-input-number
-                :model-value="getTabFieldValue(tab.key, field.key)"
+                :model-value="getDisplayedFieldValue(tab.key, field.key)"
                 :min="0"
-                :step="field.unit === 'kcal' ? 1 : 0.1"
-                :precision="field.unit === 'kcal' ? 0 : 4"
-                controls-position="right"
-                @update:model-value="setTabFieldValue(tab.key, field.key, $event)"
+                :step="getUnitStep(getFieldDisplayUnit(field.key, field.unit))"
+                :precision="getUnitPrecision(getFieldDisplayUnit(field.key, field.unit))"
+                :controls="false"
+                @update:model-value="setDisplayedFieldValue(tab.key, field.key, $event)"
               />
-              <span class="field-unit">{{ field.unit }}</span>
+              <el-select
+                v-if="field.unitOptions && field.unitOptions.length > 1"
+                :model-value="getFieldDisplayUnit(field.key, field.unit)"
+                class="field-unit-select"
+                @update:model-value="setFieldDisplayUnit(field.key, field.unit, $event)"
+              >
+                <el-option
+                  v-for="unit in field.unitOptions"
+                  :key="unit"
+                  :label="unit"
+                  :value="unit"
+                />
+              </el-select>
+              <span v-else class="field-unit">{{ field.unit }}</span>
             </div>
+            <div class="field-basis">基于 {{ rawBasisLabel }} 录入</div>
           </div>
         </div>
       </el-tab-pane>
@@ -185,32 +158,26 @@
           :key="`custom-${index}`"
           class="custom-row"
         >
-          <el-input v-model="item.name" maxlength="50" placeholder="名称" />
-          <el-input-number
-            v-model="item.value"
-            :min="0"
-            :step="0.1"
-            :precision="4"
-            controls-position="right"
-          />
-          <el-select v-model="item.unit" filterable allow-create default-first-option placeholder="单位">
-            <el-option
-              v-for="unit in INGREDIENT_NUTRITION_CUSTOM_ITEM_UNIT_OPTIONS"
-              :key="unit"
-              :label="unit"
-              :value="unit"
+          <div class="custom-row-main">
+            <el-input v-model="item.name" maxlength="50" placeholder="名称" />
+            <el-input-number
+              v-model="item.value"
+              :min="0"
+              :step="0.1"
+              :precision="4"
+              :controls="false"
             />
-          </el-select>
-          <el-select v-model="item.rawBasisType" clearable placeholder="口径">
-            <el-option
-              v-for="option in INGREDIENT_NUTRITION_RAW_BASIS_OPTIONS"
-              :key="option.value"
-              :label="option.label"
-              :value="option.value"
-            />
-          </el-select>
-          <el-input v-model="item.note" maxlength="100" placeholder="备注（可选）" />
-          <el-button :icon="Delete" circle @click="removeCustomItem(index)" />
+            <el-select v-model="item.unit" filterable allow-create default-first-option placeholder="单位">
+              <el-option
+                v-for="unit in INGREDIENT_NUTRITION_CUSTOM_ITEM_UNIT_OPTIONS"
+                :key="unit"
+                :label="unit"
+                :value="unit"
+              />
+            </el-select>
+            <el-tag class="custom-basis-tag" type="info">{{ rawBasisLabel }}</el-tag>
+            <el-button :icon="Delete" circle @click="removeCustomItem(index)" />
+          </div>
         </div>
       </div>
     </div>
@@ -221,8 +188,9 @@
 import { computed, reactive, ref, watch } from 'vue'
 import { Delete, Plus } from '@element-plus/icons-vue'
 import {
-  INGREDIENT_NUTRITION_CONFIDENCE_OPTIONS,
+  getIngredientNutritionResolvedDisplayUnit,
   INGREDIENT_NUTRITION_CUSTOM_ITEM_UNIT_OPTIONS,
+  INGREDIENT_NUTRITION_FIELD_DEFINITION_MAP,
   INGREDIENT_NUTRITION_RAW_BASIS_OPTIONS,
   INGREDIENT_NUTRITION_SAMPLE_STATE_OPTIONS,
   INGREDIENT_NUTRITION_SOURCE_TYPE_OPTIONS,
@@ -237,6 +205,11 @@ import {
   normalizeIngredientNutritionProfileToForm,
   type IngredientNutritionFormValue
 } from '@/utils/ingredientNutrition'
+import {
+  convertIngredientNutritionFieldValue,
+  getIngredientNutritionUnitPrecision,
+  getIngredientNutritionUnitStep
+} from '@/utils/ingredientNutritionUnits'
 
 interface Props {
   modelValue: NutritionProfile | null | undefined
@@ -253,6 +226,7 @@ const emit = defineEmits<Emits>()
 const activeTab = ref<IngredientNutritionTabKey>('macros')
 const attachmentsText = ref('')
 const formValue = reactive<IngredientNutritionFormValue>(createEmptyIngredientNutritionFormValue())
+const fieldDisplayUnits = reactive<Record<string, string>>({})
 
 const rawBasisLabel = computed(() => (
   INGREDIENT_NUTRITION_RAW_BASIS_OPTIONS.find((option) => option.value === formValue.meta.rawBasisType)?.label || '原始基准'
@@ -281,6 +255,15 @@ function applyFormValue(nextValue: IngredientNutritionFormValue) {
       note: item.note ?? null
     }))
   )
+
+  for (const tab of INGREDIENT_NUTRITION_TAB_DEFINITIONS) {
+    for (const field of tab.fields) {
+      fieldDisplayUnits[field.key] = getIngredientNutritionResolvedDisplayUnit(
+        field.key,
+        nextValue.meta.fieldDisplayUnits?.[field.key]
+      ) || field.unit
+    }
+  }
 }
 
 function addCustomItem() {
@@ -297,12 +280,52 @@ function removeCustomItem(index: number) {
   formValue.customItems.splice(index, 1)
 }
 
-function getTabFieldValue(tabKey: IngredientNutritionTabKey, fieldKey: string) {
-  return (formValue[tabKey] as Record<string, number | null>)[fieldKey]
+function getFieldDisplayUnit(fieldKey: string, fallbackUnit: string) {
+  return fieldDisplayUnits[fieldKey] || fallbackUnit
 }
 
-function setTabFieldValue(tabKey: IngredientNutritionTabKey, fieldKey: string, value: number | undefined) {
-  ;(formValue[tabKey] as Record<string, number | null>)[fieldKey] = value ?? null
+function setFieldDisplayUnit(fieldKey: string, fallbackUnit: string, nextUnit: string) {
+  const resolvedUnit = nextUnit || fallbackUnit
+  fieldDisplayUnits[fieldKey] = resolvedUnit
+  formValue.meta.fieldDisplayUnits = {
+    ...(formValue.meta.fieldDisplayUnits || {}),
+    [fieldKey]: resolvedUnit
+  }
+}
+
+function getDisplayedFieldValue(tabKey: IngredientNutritionTabKey, fieldKey: string) {
+  const value = (formValue[tabKey] as Record<string, number | null>)[fieldKey]
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    return null
+  }
+
+  const field = INGREDIENT_NUTRITION_FIELD_DEFINITION_MAP[fieldKey]
+  const displayUnit = getFieldDisplayUnit(fieldKey, field?.unit || '')
+  return convertIngredientNutritionFieldValue(fieldKey, value, field?.unit || displayUnit, displayUnit)
+}
+
+function setDisplayedFieldValue(tabKey: IngredientNutritionTabKey, fieldKey: string, value: number | undefined) {
+  if (value === undefined || value === null) {
+    ;(formValue[tabKey] as Record<string, number | null>)[fieldKey] = null
+    return
+  }
+
+  const field = INGREDIENT_NUTRITION_FIELD_DEFINITION_MAP[fieldKey]
+  const displayUnit = getFieldDisplayUnit(fieldKey, field?.unit || '')
+  ;(formValue[tabKey] as Record<string, number | null>)[fieldKey] = convertIngredientNutritionFieldValue(
+    fieldKey,
+    value,
+    displayUnit,
+    field?.unit || displayUnit
+  )
+}
+
+function getUnitStep(unit: string) {
+  return getIngredientNutritionUnitStep(unit)
+}
+
+function getUnitPrecision(unit: string) {
+  return getIngredientNutritionUnitPrecision(unit)
 }
 
 watch(
@@ -331,6 +354,19 @@ watch(attachmentsText, (value) => {
 })
 
 watch(
+  () => formValue.meta.rawBasisType,
+  (rawBasisType) => {
+    if (rawBasisType !== 'PER_SERVING') {
+      formValue.meta.servingWeightG = null
+    }
+
+    for (const item of formValue.customItems) {
+      item.rawBasisType = rawBasisType
+    }
+  }
+)
+
+watch(
   () => serializeValue(buildIngredientNutritionPayload(formValue)),
   (payloadSnapshot) => {
     if (syncingFromProps || payloadSnapshot === lastAppliedPayloadSnapshot) {
@@ -352,35 +388,6 @@ watch(
   width: 100%;
 }
 
-.nutrition-overview {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px 18px;
-  border: 1px solid #e4e7ed;
-  border-radius: 12px;
-  background: linear-gradient(135deg, #f8fbff 0%, #f4f7fb 100%);
-}
-
-.overview-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #303133;
-}
-
-.overview-desc {
-  margin-top: 6px;
-  font-size: 13px;
-  line-height: 1.6;
-  color: #606266;
-}
-
-.overview-actions {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-}
-
 .nutrition-meta-card {
   padding: 18px;
   border: 1px solid #e4e7ed;
@@ -392,7 +399,7 @@ watch(
 .meta-textarea-grid {
   display: grid;
   gap: 16px;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
 }
 
 .meta-textarea-grid {
@@ -411,11 +418,21 @@ watch(
   color: #606266;
 }
 
-.meta-inline {
+.meta-hint {
+  font-size: 12px;
+  line-height: 1.5;
+  color: #909399;
+}
+
+.meta-value-with-unit {
   display: grid;
-  gap: 12px;
-  grid-template-columns: 88px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr) 28px;
   align-items: center;
+  gap: 10px;
+}
+
+.meta-value-with-unit :deep(.el-input-number) {
+  width: 100%;
 }
 
 .nutrition-tabs {
@@ -439,21 +456,43 @@ watch(
 }
 
 .field-label {
-  margin-bottom: 10px;
   font-size: 13px;
-  color: #606266;
+  font-weight: 600;
+  color: #303133;
+}
+
+.field-english-inline {
+  font-size: 12px;
+  color: #909399;
+  font-weight: 400;
+  margin-left: 4px;
 }
 
 .field-input {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 88px;
   align-items: center;
   gap: 10px;
+}
+
+.field-unit-select {
+  width: 100%;
+}
+
+.field-input :deep(.el-input-number) {
+  width: 100%;
 }
 
 .field-unit {
   font-size: 12px;
   color: #909399;
   white-space: nowrap;
+}
+
+.field-basis {
+  margin-top: 8px;
+  font-size: 12px;
+  color: #909399;
 }
 
 .custom-section {
@@ -497,23 +536,35 @@ watch(
 }
 
 .custom-row {
+  padding: 12px;
+  border: 1px solid #ebeef5;
+  border-radius: 10px;
+  background: #fafafa;
+}
+
+.custom-row-main {
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(140px, 1.4fr) minmax(120px, 0.9fr) 110px 140px minmax(160px, 1.2fr) 40px;
+  grid-template-columns: minmax(140px, 1.5fr) minmax(160px, 1.2fr) 88px 110px 40px;
   align-items: center;
 }
 
+.custom-basis-tag {
+  justify-content: center;
+  width: 100%;
+}
+
+.custom-row-main :deep(.el-input-number) {
+  width: 100%;
+}
+
 @media (max-width: 960px) {
-  .nutrition-overview,
   .custom-header {
     flex-direction: column;
   }
 
-  .overview-actions {
-    align-items: stretch;
-  }
-
-  .custom-row {
+  .field-input,
+  .custom-row-main {
     grid-template-columns: 1fr;
   }
 }

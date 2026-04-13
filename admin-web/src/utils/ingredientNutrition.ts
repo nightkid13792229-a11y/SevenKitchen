@@ -1,10 +1,12 @@
 import {
+  getIngredientNutritionResolvedDisplayUnit,
   INGREDIENT_NUTRITION_TAB_DEFINITIONS,
   INGREDIENT_NUTRITION_FIELD_UNITS,
   INGREDIENT_NUTRITION_TAB_EMPTY_RECORDS,
   type IngredientNutritionTabKey
 } from '@/constants/ingredientNutrition'
 import type {
+  ActiveNutrientValue,
   AminoAcidNutritionProfileTab,
   FattyAcidNutritionProfileTab,
   MacroNutritionProfileTab,
@@ -166,6 +168,26 @@ function normalizeCustomItem(item: NutritionCustomItem): NutritionCustomItem | n
   }
 }
 
+function normalizeFieldDisplayUnits(input: unknown): Record<string, string> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return {}
+  }
+
+  return Object.entries(input as Record<string, unknown>).reduce<Record<string, string>>((result, [fieldKey, unit]) => {
+    if (fieldKey.trim().length === 0 || typeof unit !== 'string' || unit.trim().length === 0) {
+      return result
+    }
+
+    const resolvedUnit = getIngredientNutritionResolvedDisplayUnit(fieldKey, unit)
+    if (!resolvedUnit) {
+      return result
+    }
+
+    result[fieldKey] = resolvedUnit
+    return result
+  }, {})
+}
+
 function assignLegacyItem(profile: NutritionProfileV2, item: NutritionItem): void {
   const nutrientCode = normalizeAlias(item.nutrientCode)
   const nutrientName = normalizeAlias(item.nutrientName)
@@ -255,6 +277,7 @@ export function createEmptyIngredientNutritionFormValue(): IngredientNutritionFo
       sourceProvider: null,
       attachments: [],
       confidenceLevel: null,
+      fieldDisplayUnits: {},
       versionNote: null
     },
     macros: cloneTabRecord('macros') as MacroNutritionProfileTab,
@@ -313,6 +336,7 @@ export function normalizeIngredientNutritionProfileToForm(
       ediblePortionRate: normalizeNumber(input.meta?.ediblePortionRate),
       densityGPerMl: normalizeNumber(input.meta?.densityGPerMl),
       servingWeightG: normalizeNumber(input.meta?.servingWeightG),
+      fieldDisplayUnits: normalizeFieldDisplayUnits(input.meta?.fieldDisplayUnits),
       attachments: Array.isArray(input.meta?.attachments)
         ? input.meta.attachments.filter((attachment): attachment is string => typeof attachment === 'string' && attachment.trim().length > 0)
         : []
@@ -342,15 +366,10 @@ function hasMeaningfulMetaValue(profile: IngredientNutritionFormValue): boolean 
   return (
     profile.meta.rawBasisType !== 'PER_100_G' ||
     !!profile.meta.sampleState ||
-    !!profile.meta.isEdiblePortionBasis ||
-    profile.meta.ediblePortionRate !== null ||
     profile.meta.densityGPerMl !== null ||
     profile.meta.servingWeightG !== null ||
     !!profile.meta.sourceType ||
-    !!profile.meta.sourceTitle?.trim() ||
-    !!profile.meta.sourceProvider?.trim() ||
     (profile.meta.attachments?.length ?? 0) > 0 ||
-    !!profile.meta.confidenceLevel ||
     !!profile.meta.versionNote?.trim()
   )
 }
@@ -374,15 +393,11 @@ export function buildIngredientNutritionPayload(
     meta: {
       rawBasisType: normalized.meta.rawBasisType,
       sampleState: normalized.meta.sampleState,
-      isEdiblePortionBasis: normalized.meta.isEdiblePortionBasis,
-      ediblePortionRate: normalized.meta.ediblePortionRate,
       densityGPerMl: normalized.meta.densityGPerMl,
       servingWeightG: normalized.meta.servingWeightG,
       sourceType: normalized.meta.sourceType ?? null,
-      sourceTitle: normalized.meta.sourceTitle?.trim() || null,
-      sourceProvider: normalized.meta.sourceProvider?.trim() || null,
+      fieldDisplayUnits: normalizeFieldDisplayUnits(normalized.meta.fieldDisplayUnits),
       attachments: normalized.meta.attachments ?? [],
-      confidenceLevel: normalized.meta.confidenceLevel ?? null,
       versionNote: normalized.meta.versionNote?.trim() || null
     },
     macros: cleanTabRecord<MacroNutritionProfileTab>('macros', normalized.macros),
@@ -394,6 +409,50 @@ export function buildIngredientNutritionPayload(
       .map((item) => normalizeCustomItem(item))
       .filter((item): item is NutritionCustomItem => item !== null)
   }
+}
+
+export function buildSupplementActiveNutrientsFromNutritionProfile(
+  nutritionProfile: NutritionProfile | null | undefined,
+  fallback: Record<string, ActiveNutrientValue> = {}
+): Record<string, ActiveNutrientValue> {
+  if (!nutritionProfile) {
+    return { ...(fallback || {}) }
+  }
+
+  const activeNutrients: Record<string, ActiveNutrientValue> = {}
+  const normalizedProfile = normalizeIngredientNutritionProfileToForm(nutritionProfile)
+  const normalizeLegacyTargetKey = (label: string) => label.replace(/\s+/g, '')
+
+  for (const tab of INGREDIENT_NUTRITION_TAB_DEFINITIONS) {
+    const tabValues = normalizedProfile[tab.key] as Record<string, number | null>
+
+    for (const field of tab.fields) {
+      const value = tabValues[field.key]
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        activeNutrients[normalizeLegacyTargetKey(field.label)] = { value, unit: field.unit }
+      }
+    }
+  }
+
+  const epa = normalizedProfile.fattyAcids.epa
+  const dha = normalizedProfile.fattyAcids.dha
+  const combinedOmega3 = [epa, dha]
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
+    .reduce((sum, value) => sum + value, 0)
+
+  if (combinedOmega3 > 0) {
+    activeNutrients['EPA+DHA'] = { value: combinedOmega3, unit: 'g' }
+  }
+
+  for (const item of normalizedProfile.customItems ?? []) {
+    const name = item.name.trim()
+    const unit = item.unit.trim()
+    if (name && unit && typeof item.value === 'number' && Number.isFinite(item.value)) {
+      activeNutrients[name] = { value: item.value, unit }
+    }
+  }
+
+  return activeNutrients
 }
 
 export type { IngredientNutritionFormValue }

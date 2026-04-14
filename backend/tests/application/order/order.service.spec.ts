@@ -17,6 +17,7 @@ import { PricingService } from 'src/domain/pricing/pricing.service';
 import { GlobalConfigService } from 'src/config/global-config.service';
 import { ShippingService } from 'src/shipping/shipping.service';
 import { Dog } from 'src/domain/dog/dog.entity';
+import { OrderPricingSnapshot } from 'src/domain/order-pricing-snapshot/order-pricing-snapshot.entity';
 import { PrismaService } from 'src/infrastructure/prisma.service';
 import {
   DogGender,
@@ -483,6 +484,77 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
           }),
         }),
       );
+
+    it('should preserve snapshot dailyIntakeG when the dog profile changes before order creation', async () => {
+      const recipe = createMockRecipe();
+      const ingredient = createMockIngredient();
+      const changedDog = createMockDog();
+      changedDog.currentWeightKg = 20;
+
+      const snapshotDailyIntakeG = 180;
+      const recalculatedDailyIntakeG = calculateDogEnergy(
+        changedDog,
+        recipe.energyDensityKcalPerKg,
+      ).dailyIntakeG!;
+
+      const snapshot = new OrderPricingSnapshot(
+        'snapshot-id-1',
+        'owner-id-1',
+        {
+          dogId: changedDog.id,
+          items: [
+            {
+              recipeId: recipe.id,
+              quantityG: 1260,
+              packageCount: 28,
+              packageSpecG: 45,
+              cycleDays: 7,
+              dailyIntakeG: snapshotDailyIntakeG,
+            },
+          ],
+        },
+        {
+          amountProduct: 180,
+          amountShipping: 20,
+          amountTotal: 200,
+          pricingBreakdown: {
+            costIngredients: 100,
+            costPackaging: 10,
+            costLabor: 20,
+            costOverhead: 5,
+            totalProductCost: 135,
+            productPrice: 180,
+            ingredientDetails: [],
+            packagingDetails: {
+              perPackConsumables: {
+                vacuumBagSpec: null,
+              },
+            },
+          },
+        },
+        new Date(Date.now() + 15 * 60 * 1000),
+        false,
+        new Date(),
+      );
+
+      mockPricingSnapshotRepository.findById.mockResolvedValue(snapshot);
+      dogRepository.findById.mockResolvedValue(changedDog);
+      recipeRepository.findById.mockResolvedValue(recipe);
+      mockIngredientRepository.findByIds.mockResolvedValue([ingredient]);
+      orderRepository.save.mockImplementation(async (order: Order) => order);
+
+      await service.createOrderDraft({
+        customerId: 'owner-id-1',
+        type: OrderType.FRESH_FOOD,
+        snapshotId: 'snapshot-id-1',
+        targetProductionDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      });
+
+      const savedOrder = orderRepository.save.mock.calls[0][0] as Order;
+      const orderItem = savedOrder.items[0];
+
+      expect(orderItem.dailyIntakeG).toBe(snapshotDailyIntakeG);
+      expect(orderItem.dailyIntakeG).not.toBeCloseTo(recalculatedDailyIntakeG, 1);
     });
   });
 });

@@ -409,15 +409,17 @@ export class OrderService {
       }),
     };
 
-    // 8. 计算 dailyIntakeG
+    // 8. 优先使用快照中的 dailyIntakeG，避免用户改档案后订单明细漂移。
     const dogCalcResult = calculateDogEnergy(
       dog,
       recipe.energyDensityKcalPerKg,
     );
-    const dailyIntakeG = calculateDailyIntakeG(
-      dogCalcResult.finalFoodKcal,
-      recipe.energyDensityKcalPerKg,
-    );
+    const dailyIntakeG =
+      itemParams.dailyIntakeG ??
+      calculateDailyIntakeG(
+        dogCalcResult.finalFoodKcal,
+        recipe.energyDensityKcalPerKg,
+      );
 
     // 9. 创建 OrderItem
     console.log(

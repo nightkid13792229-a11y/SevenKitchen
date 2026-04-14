@@ -25,6 +25,46 @@
   - `.superpowers/`
   - `docs/handoff/`
 
+## 2026-04-14 远端生产只读核查结果
+
+本节结论来自对远端服务器 `1.14.3.2` 的只读 SSH 检查与只读 SQL 查询，未执行任何写入。
+
+### 远端代码状态
+
+- 远端部署目录：`/opt/sevenkitchen/SevenKitchen/backend`
+- 当前分支：`main`
+- 当前 HEAD：`a7ab1d7edec87e820d009684e07c2b094e8a7e8a`
+- 最近提交：
+  - `a7ab1d7 fix(admin-order): include address in detail response`
+  - `bde48e7 Merge pull request #9 from nightkid13792229-a11y/codex/recipe-preparation-method-refactor`
+  - `5514902 fix: stabilize recipe editor validation`
+
+### 远端 migration 结论
+
+- 远端执行 `bash scripts/check_migration_history.sh` 通过，表示：
+  - 已应用 migration 的校验和与远端当前代码中的 migration 文件一致
+- 但这**不代表**远端已经承接当前本地分支的 2026-04-11 解耦 migration
+- 进一步只读 SQL 查询确认：
+  - `ingredient.nutrition_profile = false`
+  - `procurement_sku` 扩展字段（以 `supplier_name` 为代表）= `false`
+  - `inventory_ledger_entry.procurement_sku_id = false`
+  - `_prisma_migrations` 中未发现 `20260411%` 相关 migration
+
+### 远端生产数据现状复核
+
+- `procurement_sku` 总数：`1`
+- `recommended_product` 总数：`1`
+
+因此可以确认：
+
+- 远端生产环境当前**仍未承接**本分支的原料解耦结构
+- 2026-04-12 的只读审计结论依然有效
+- 下一步仍然应该是：
+  1. 先部署当前候选版本
+  2. 再执行生产 migration
+  3. 再执行生产回填
+  4. 再开始人工治理
+
 ## 一、生产部署前清单
 
 ### A. 版本冻结

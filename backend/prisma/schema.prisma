@@ -954,7 +954,7 @@ model IngredientPriceChange {
   reimbursementId            String                      @map("reimbursement_id")
   purchaseRecordId           String                      @unique @map("purchase_record_id")
   ingredientName             String                      @map("ingredient_name") @db.VarChar(200)
-  sourceQuantity             Int                         @map("source_quantity")
+  sourceQuantity             Decimal                     @map("source_quantity") @db.Decimal(18, 6)
   sourcePricePerPurchaseUnit Decimal                     @map("source_price_per_purchase_unit") @db.Decimal(10, 2)
   previousCurrentPricePerPurchaseUnit Decimal            @map("previous_current_price_per_purchase_unit") @db.Decimal(10, 2)
   previousEffectivePrice     Decimal                     @map("previous_effective_price") @db.Decimal(10, 2)

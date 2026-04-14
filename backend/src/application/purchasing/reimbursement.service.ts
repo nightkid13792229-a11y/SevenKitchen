@@ -520,6 +520,8 @@ export class ReimbursementService {
       throw new BadRequestException('只有待审核状态可以上传报销凭证');
     }
 
+    await this.ensureNoPendingPriceChangesBeforeAutoReimburse(reimbursement.id);
+
     const previousStatus = reimbursement.status;
 
     // 3. 验证凭证数量
@@ -579,6 +581,12 @@ export class ReimbursementService {
     // 2. 验证凭证数量
     if (!files || files.length === 0) {
       throw new BadRequestException('请至少上传一张报销凭证');
+    }
+
+    if (reimbursement.status === ReimbursementStatus.PENDING_REVIEW) {
+      await this.ensureNoPendingPriceChangesBeforeAutoReimburse(
+        reimbursement.id,
+      );
     }
 
     const previousStatus = reimbursement.status;
@@ -768,6 +776,23 @@ export class ReimbursementService {
         '系统在上传报销凭证后自动标记已报销并应用价格变更',
     );
     await this.unlockProductionForReimbursement(reimbursement);
+  }
+
+  private async ensureNoPendingPriceChangesBeforeAutoReimburse(
+    reimbursementId: string,
+  ): Promise<void> {
+    const priceChanges =
+      await this.ingredientPricingService.getPriceChangesForReimbursement(
+        reimbursementId,
+      );
+
+    const hasPendingChanges = priceChanges.some(
+      (change) => change.status === 'PENDING',
+    );
+
+    if (hasPendingChanges) {
+      throw new BadRequestException('存在待人工审核的价格变更，请先审核报销单');
+    }
   }
 
   /**

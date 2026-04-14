@@ -17,6 +17,7 @@ export class InventoryLedgerEntry {
     public readonly sourceType: InventorySourceType,
     public readonly sourceId: string, // PackagingUnit.id for KITCHEN_TASK
     public readonly createdAt: Date,
+    public readonly procurementSkuId?: string,
   ) {
     this.validateInvariants();
   }
@@ -53,6 +54,13 @@ export class InventoryLedgerEntry {
 
     if (!this.sourceId || this.sourceId.trim() === '') {
       throw new ValidationError('sourceId cannot be empty');
+    }
+
+    if (
+      this.procurementSkuId !== undefined &&
+      this.procurementSkuId.trim() === ''
+    ) {
+      throw new ValidationError('procurementSkuId cannot be blank');
     }
   }
 }

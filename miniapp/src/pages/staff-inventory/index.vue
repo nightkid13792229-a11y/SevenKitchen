@@ -184,6 +184,9 @@
           <view v-if="item.sourceDescription" class="ledger-note">
             <text>{{ item.sourceDescription }}</text>
           </view>
+          <view v-else-if="item.procurementSkuName" class="ledger-note">
+            <text>采购 SKU · {{ item.procurementSkuName }}</text>
+          </view>
         </view>
       </view>
     </view>
@@ -241,6 +244,9 @@
             </view>
             <text class="line-detail">
               账面 {{ formatQuantity(line.expectedQuantityG) }} / 盘点 {{ formatQuantity(line.countedQuantityG) }} {{ line.stockUnitLabel }}
+            </text>
+            <text v-if="line.procurementSkuName" class="line-detail">
+              采购 SKU · {{ line.procurementSkuName }}
             </text>
           </view>
 
@@ -329,7 +335,7 @@ const displayOverview = computed(() => {
         return true;
       }
 
-      return [item.name, item.purchaseChannel, item.productModel]
+      return [item.name, item.procurementSkuName, item.purchaseChannel, item.productModel]
         .filter(Boolean)
         .some((value) => String(value).toLowerCase().includes(normalizedKeyword));
     });
@@ -617,9 +623,13 @@ const formatThresholds = (item: InventoryOverviewItem) => {
 };
 
 const formatPurchaseInfo = (item: InventoryOverviewItem) => {
-  const channel = item.purchaseChannel || '未设置渠道';
-  const model = item.productModel || '未设置规格';
-  return `${channel} · ${model}`;
+  const parts = [
+    item.procurementSkuName,
+    item.purchaseChannel || '未设置渠道',
+    item.productModel || '未设置规格',
+  ].filter(Boolean);
+
+  return parts.join(' · ');
 };
 
 const formatLedgerDetail = (item: InventoryLedgerItem) => {

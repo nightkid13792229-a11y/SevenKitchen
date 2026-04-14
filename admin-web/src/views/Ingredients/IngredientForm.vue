@@ -24,13 +24,13 @@
       class="structure-alert"
     >
       <template #title>
-        当前维护分两层：标准原料负责食谱、生产、库存与定价口径；采购 SKU 负责渠道、规格、购买链接和替代采购建议。
+        当前维护分三层：标准原料负责逻辑原料，营养数据单独维护，DIY 推荐商品负责小程序推荐，采购 SKU 负责采购、库存和生产执行。
       </template>
-      标准原料页不再维护采购品牌、规格、渠道，相关信息请统一在采购 SKU 中维护。
+      标准原料页不再维护采购品牌、规格、渠道、采购单价与库存阈值，这些信息请统一在采购 SKU 中维护；营养数据请在原料列表中通过“营养数据”入口单独编辑。
     </el-alert>
 
     <el-alert
-      v-if="isEdit && !hasActiveRecommendedProduct"
+      v-if="isEdit && !hasActiveProcurementSku"
       type="warning"
       :closable="false"
       show-icon
@@ -178,8 +178,8 @@
       </el-dialog>
     </el-form-item>
 
-    <!-- 标准口径与成本 -->
-    <div class="section-title">标准口径与成本</div>
+    <!-- 标准口径 -->
+    <div class="section-title">标准口径</div>
 
     <el-form-item label="基准单位" prop="baseUnit">
       <el-radio-group v-model="formData.baseUnit" @change="handleBaseUnitChange">
@@ -189,86 +189,14 @@
       </el-radio-group>
     </el-form-item>
 
-    <el-form-item label="单位显示标签">
+    <el-form-item label="标准单位展示名">
       <el-input
-        v-model="formData.unitDisplayLabel"
+        v-model="formData.baseUnitDisplayName"
         placeholder="可选，如：平勺、条"
         maxlength="20"
         style="width: 200px"
       />
-      <span class="hint-text">替换基准单位在食谱中的显示名称</span>
-    </el-form-item>
-
-    <el-form-item label="默认采购单位" prop="purchaseUnit">
-      <el-autocomplete
-        v-model="formData.purchaseUnit"
-        :fetch-suggestions="querySearchUnits"
-        placeholder="输入或选择单位（如：kg、箱、瓶）"
-        clearable
-        style="width: 200px"
-        :trigger-on-focus="false"
-        @select="handleUnitSelect"
-        @input="handleUnitInput"
-      />
-      <!-- 相似单位提示 -->
-      <div v-if="similarUnits.length > 0" class="similar-units-warning">
-        <el-alert
-          type="info"
-          :closable="false"
-          show-icon
-        >
-          <template #title>
-            <span>相似的标准单位：</span>
-            <el-tag
-              v-for="unit in similarUnits"
-              :key="unit"
-              type="info"
-              size="small"
-              style="margin: 0 4px"
-              @click="formData.purchaseUnit = unit; similarUnits = []"
-              class="similar-unit-tag"
-            >
-              {{ unit }}
-            </el-tag>
-          </template>
-        </el-alert>
-      </div>
-    </el-form-item>
-
-    <el-form-item label="默认换算倍数" prop="purchaseToBaseRatio">
-      <el-input-number
-        v-model="formData.purchaseToBaseRatio"
-        :min="0.01"
-        :max="10000"
-        :step="0.01"
-        :precision="2"
-        controls-position="right"
-        style="width: 200px"
-      />
-      <span class="hint-text">采购单位 → 基准单位的转换倍数</span>
-    </el-form-item>
-
-    <el-form-item label="默认采购单价" prop="currentPricePerPurchaseUnit">
-      <el-input-number
-        v-model="formData.currentPricePerPurchaseUnit"
-        :min="0"
-        :max="100000"
-        :step="0.01"
-        :precision="2"
-        controls-position="right"
-        style="width: 200px"
-      />
-      <span class="unit-label">元 / {{ formData.purchaseUnit }}</span>
-    </el-form-item>
-
-    <el-form-item label="当前生效价">
-      <span class="cost-display">{{ calculatedEffectivePrice }} 元 / {{ formData.purchaseUnit }}</span>
-      <span class="hint-text">订单定价直接读取这条标准原料的生效价，后续采购审核也只更新当前原料</span>
-    </el-form-item>
-
-    <el-form-item label="标准单位成本">
-      <span class="cost-display">{{ calculatedUnitCost }} 元 / {{ BaseUnitLabels[formData.baseUnit] }}</span>
-      <span class="hint-text">自动计算: 采购单价 ÷ 转换倍数</span>
+      <span class="hint-text">仅用于标准单位展示别名，不用于表达袋、包、盒等采购包装</span>
     </el-form-item>
 
     <el-form-item v-if="formData.baseUnit === BaseUnit.PCS" label="单个重量(克)" prop="weightG">
@@ -305,7 +233,7 @@
       <span class="hint-text">包材装箱算法使用</span>
     </el-form-item>
 
-    <div class="section-title">采购策略与库存阈值</div>
+    <div class="section-title">业务策略</div>
 
     <el-form-item label="采购策略" prop="procurementStrategy">
       <el-radio-group v-model="formData.procurementStrategy">
@@ -323,63 +251,6 @@
         日采适合当天买当天用；库存补货适合海产、冻品、补剂、包材；混合表示两种采购方式都会发生。
       </span>
     </el-form-item>
-
-    <template v-if="formData.procurementStrategy !== IngredientProcurementStrategy.DAILY_PURCHASE">
-      <el-form-item label="安全库存">
-        <el-input-number
-          v-model="formData.safetyStock"
-          :min="0"
-          :max="1000000"
-          :step="0.1"
-          :precision="2"
-          controls-position="right"
-          style="width: 200px"
-        />
-        <span class="unit-label">{{ stockUnitLabel }}</span>
-        <span class="hint-text">库存进入保守区间的下限，建议用于提醒运营关注。</span>
-      </el-form-item>
-
-      <el-form-item label="补货点">
-        <el-input-number
-          v-model="formData.reorderPoint"
-          :min="0"
-          :max="1000000"
-          :step="0.1"
-          :precision="2"
-          controls-position="right"
-          style="width: 200px"
-        />
-        <span class="unit-label">{{ stockUnitLabel }}</span>
-        <span class="hint-text">库存低于补货点时应发起补货，建议大于等于安全库存。</span>
-      </el-form-item>
-
-      <el-form-item label="目标库存">
-        <el-input-number
-          v-model="formData.targetStock"
-          :min="0"
-          :max="1000000"
-          :step="0.1"
-          :precision="2"
-          controls-position="right"
-          style="width: 200px"
-        />
-        <span class="unit-label">{{ stockUnitLabel }}</span>
-        <span class="hint-text">补货完成后希望达到的库存量，建议大于等于补货点。</span>
-      </el-form-item>
-    </template>
-
-    <el-alert
-      v-else
-      type="info"
-      :closable="false"
-      show-icon
-      class="stock-policy-alert"
-    >
-      <template #title>
-        当前原料按“日采”管理。
-      </template>
-      如果它后续会提前囤货，可以把采购策略切到“库存补货”或“混合”，再补充安全库存、补货点和目标库存。
-    </el-alert>
 
     <!-- 类型特定属性 -->
     <div class="section-title">{{ getTypeSpecificTitle() }}</div>
@@ -473,85 +344,6 @@
         <span class="hint-text">补剂添加到食谱中的时机</span>
       </el-form-item>
 
-      <el-form-item label="有效成分含量" prop="active_nutrients">
-        <div class="nutrient-editor">
-          <!-- 成分列表表格 -->
-          <div class="nutrient-list">
-            <div
-              v-for="(nutrient, index) in nutrientList"
-              :key="index"
-              class="nutrient-row-enhanced"
-            >
-              <!-- 成分名称 -->
-              <el-autocomplete
-                v-model="nutrient.name"
-                :fetch-suggestions="querySearchNutrients"
-                placeholder="成分名称（如：钙、EPA）"
-                style="width: 180px"
-                :trigger-on-focus="false"
-                clearable
-              />
-
-              <!-- 含量值 -->
-              <el-input-number
-                v-model="nutrient.displayValue"
-                :min="0"
-                :step="1"
-                :precision="0"
-                controls-position="right"
-                :placeholder="formData.baseUnit === BaseUnit.PCS ? '每粒含量' : '每克含量'"
-                style="width: 120px"
-                @change="(val: number) => calculateConcentration(nutrient, val)"
-              />
-
-              <!-- 单位选择 -->
-              <el-select
-                v-model="nutrient.unit"
-                style="width: 120px"
-                @change="(val: string) => calculateConcentration(nutrient, nutrient.displayValue)"
-              >
-                <el-option
-                  v-for="unit in NUTRIENT_UNITS"
-                  :key="unit.value"
-                  :label="unit.label"
-                  :value="unit.value"
-                />
-              </el-select>
-
-              <!-- 删除按钮 -->
-              <el-button
-                type="danger"
-                :icon="Delete"
-                circle
-                size="small"
-                @click="removeNutrient(index)"
-                :disabled="nutrientList.length === 1"
-              />
-            </div>
-          </div>
-
-          <!-- 添加成分按钮 -->
-          <el-button
-            type="primary"
-            :icon="Plus"
-            size="small"
-            @click="addNutrient"
-            style="margin-top: 8px"
-          >
-            添加成分
-          </el-button>
-
-          <div class="hint-text" style="margin-top: 8px;">
-            <div v-if="formData.baseUnit === BaseUnit.PCS">
-              💡 输入每粒胶囊/片剂的营养素含量（查看产品标签）
-            </div>
-            <div v-else>
-              💡 输入每克粉末的营养素含量
-            </div>
-          </div>
-        </div>
-      </el-form-item>
-
       <el-form-item label="生产损耗率">
         <el-input-number
           v-model="supplementProperties.production_loss_rate"
@@ -564,52 +356,6 @@
         />
         <span class="hint-text">可选，覆盖全局默认值1.05</span>
       </el-form-item>
-
-      <el-divider content-position="left">购买链接配置</el-divider>
-
-      <el-form-item label="启用购买链接">
-        <el-switch v-model="hasPurchaseLink" />
-        <span class="hint-text">启用后，小程序端将显示"去购买"按钮</span>
-      </el-form-item>
-
-      <template v-if="hasPurchaseLink">
-        <el-form-item label="平台类型">
-          <el-select v-model="purchaseLinkConfig.platform" placeholder="请选择平台" style="width: 200px">
-            <el-option label="淘宝/天猫" value="TAOBAO" />
-            <el-option label="京东" value="JD" />
-            <el-option label="拼多多" value="PINDUODUO" />
-            <el-option label="其他小程序" value="OTHER" />
-            <el-option label="网页链接" value="WEBVIEW" />
-          </el-select>
-        </el-form-item>
-
-        <el-form-item label="购买链接">
-          <el-input
-            v-model="purchaseLinkConfig.url"
-            placeholder="请输入商品购买链接"
-            style="width: 400px"
-          />
-        </el-form-item>
-
-        <template v-if="purchaseLinkConfig.platform !== 'WEBVIEW'">
-          <el-form-item label="小程序AppID">
-            <el-input
-              v-model="purchaseLinkConfig.mini_program_appid"
-              placeholder="请输入目标小程序AppID"
-              style="width: 400px"
-            />
-            <span class="hint-text">淘宝: wxa1693a824e8c4747, 京东: wx... </span>
-          </el-form-item>
-
-          <el-form-item label="小程序路径">
-            <el-input
-              v-model="purchaseLinkConfig.mini_program_path"
-              placeholder="例如: pages/product/detail?id=123"
-              style="width: 400px"
-            />
-          </el-form-item>
-        </template>
-      </template>
     </template>
 
     <!-- 包材属性 -->
@@ -674,10 +420,18 @@
                 </el-popconfirm>
               </div>
             </div>
-            <div v-if="rp.purchaseChannel || rp.displayUnit || rp.purchaseLink?.url" class="rp-card-detail">
+            <div
+              v-if="rp.purchaseChannel || rp.displayUnit || rp.purchaseLink?.url || (rp.marketingNutritionHighlights && Object.keys(rp.marketingNutritionHighlights).length > 0)"
+              class="rp-card-detail"
+            >
               <span v-if="rp.purchaseChannel">渠道：{{ rp.purchaseChannel }}</span>
               <span v-if="rp.displayUnit">展示单位：{{ rp.displayUnit }}</span>
               <span v-if="rp.purchaseLink?.url">已配置推荐链接</span>
+              <span
+                v-if="rp.marketingNutritionHighlights && Object.keys(rp.marketingNutritionHighlights).length > 0"
+              >
+                已配置营养卖点
+              </span>
             </div>
           </div>
         </div>
@@ -687,7 +441,7 @@
       <div class="recommended-products-section">
         <div class="rp-header">
           <el-button type="primary" size="small" :icon="Plus" @click="openProcurementDialog()">新增采购SKU</el-button>
-          <span class="hint-text" style="margin-left: 8px;">面向采购和生产场景，维护品牌、渠道、规格和参考价格</span>
+          <span class="hint-text" style="margin-left: 8px;">面向采购和生产场景，维护渠道、规格、换算、价格和库存策略</span>
         </div>
         <div v-if="procurementSkus.length === 0" class="rp-empty">
           暂无生产采购 SKU，点击上方按钮添加
@@ -699,6 +453,7 @@
                 <span class="rp-name">{{ sku.name }}</span>
                 <el-tag v-if="sku.brand" size="small" type="info">{{ sku.brand }}</el-tag>
                 <el-tag v-if="sku.productModel" size="small" type="info">{{ sku.productModel }}</el-tag>
+                <el-tag v-if="sku.isDefault" size="small" type="primary">默认</el-tag>
                 <el-tag :type="sku.isActive ? 'success' : 'info'" size="small">
                   {{ sku.isActive ? '已启用' : '已停用' }}
                 </el-tag>
@@ -716,15 +471,19 @@
               </div>
             </div>
             <div
-              v-if="sku.purchaseChannel || sku.referencePricePerPurchaseUnit !== null || sku.displayUnit || sku.notes"
+              v-if="sku.purchaseChannel || sku.purchaseUnit || sku.currentPurchasePrice !== null || sku.referencePurchasePrice !== null || sku.notes"
               class="rp-card-detail"
             >
               <span v-if="sku.purchaseChannel">渠道：{{ sku.purchaseChannel }}</span>
-              <span v-if="sku.referencePricePerPurchaseUnit !== null">
-                参考价：¥{{ Number(sku.referencePricePerPurchaseUnit).toFixed(2) }}
-                <template v-if="sku.displayUnit">/ {{ sku.displayUnit }}</template>
+              <span v-if="sku.purchaseUnit">采购单位：{{ sku.purchaseUnit }}</span>
+              <span v-if="sku.currentPurchasePrice !== null">
+                当前采购价：¥{{ Number(sku.currentPurchasePrice).toFixed(2) }}
+                <template v-if="sku.purchaseUnit">/ {{ sku.purchaseUnit }}</template>
               </span>
-              <span v-else-if="sku.displayUnit">单位：{{ sku.displayUnit }}</span>
+              <span v-if="sku.referencePurchasePrice !== null">
+                参考价：¥{{ Number(sku.referencePurchasePrice).toFixed(2) }}
+              </span>
+              <span v-if="sku.purchaseToBaseRatio !== null">换算：1 {{ sku.purchaseUnit || sku.displayUnit || '单位' }} = {{ sku.purchaseToBaseRatio }} {{ BaseUnitLabels[formData.baseUnit] }}</span>
               <span v-if="sku.notes">备注：{{ sku.notes }}</span>
             </div>
           </div>
@@ -805,13 +564,13 @@
       <el-form-item label="商品图片">
         <el-input v-model="rpForm.imageUrl" placeholder="产品图片URL" style="width: 400px" />
       </el-form-item>
-      <el-form-item label="有效成分含量">
+      <el-form-item label="营养卖点">
         <div style="width: 100%;">
           <div class="nutrient-list">
             <div v-for="(nutrient, idx) in rpFormNutrients" :key="idx" class="nutrient-row-enhanced">
               <el-autocomplete
                 v-model="nutrient.name"
-                :fetch-suggestions="querySearchNutrients"
+                :fetch-suggestions="querySearchNutritionNames"
                 placeholder="营养素名称"
                 style="width: 160px"
               />
@@ -822,7 +581,7 @@
               <el-button :icon="Delete" size="small" circle @click="rpFormNutrients.splice(idx, 1)" />
             </div>
           </div>
-          <el-button size="small" :icon="Plus" @click="rpFormNutrients.push({ name: '', value: 0, unit: 'mg' })">添加成分</el-button>
+          <el-button size="small" :icon="Plus" @click="rpFormNutrients.push({ name: '', value: 0, unit: 'mg' })">添加卖点</el-button>
         </div>
       </el-form-item>
       <el-form-item label="展示单位">
@@ -874,17 +633,70 @@
           style="width: 320px"
         />
       </el-form-item>
-      <el-form-item label="参考单价">
+      <el-form-item label="供应商">
+        <el-input v-model="procurementForm.supplierName" placeholder="可选，供应商名称" maxlength="200" style="width: 240px" />
+      </el-form-item>
+      <el-form-item label="采购单位">
+        <el-input v-model="procurementForm.purchaseUnit" placeholder="如：袋、瓶、箱、kg" maxlength="50" style="width: 160px" />
+      </el-form-item>
+      <el-form-item label="换算倍数">
         <el-input-number
-          v-model="procurementForm.referencePricePerPurchaseUnit"
+          v-model="procurementForm.purchaseToBaseRatio"
+          :min="0.01"
+          :precision="2"
+          :step="0.01"
+          style="width: 180px"
+        />
+        <span class="hint-text" style="margin-left: 8px;">1 个采购单位等于多少 {{ BaseUnitLabels[formData.baseUnit] }}</span>
+      </el-form-item>
+      <el-form-item label="当前采购价">
+        <el-input-number
+          v-model="procurementForm.currentPurchasePrice"
           :min="0"
           :precision="2"
           :step="0.1"
           style="width: 180px"
         />
-        <span class="hint-text" style="margin-left: 8px;">用于采购侧推荐和录入时参考</span>
+        <span class="hint-text" style="margin-left: 8px;">采购和执行优先参考这个价格</span>
       </el-form-item>
-      <el-form-item label="采购单位展示">
+      <el-form-item label="参考单价">
+        <el-input-number
+          v-model="procurementForm.referencePurchasePrice"
+          :min="0"
+          :precision="2"
+          :step="0.1"
+          style="width: 180px"
+        />
+        <span class="hint-text" style="margin-left: 8px;">用于补货建议和历史参考</span>
+      </el-form-item>
+      <el-form-item label="安全库存">
+        <el-input-number
+          v-model="procurementForm.safetyStock"
+          :min="0"
+          :precision="2"
+          :step="0.1"
+          style="width: 180px"
+        />
+      </el-form-item>
+      <el-form-item label="补货点">
+        <el-input-number
+          v-model="procurementForm.reorderPoint"
+          :min="0"
+          :precision="2"
+          :step="0.1"
+          style="width: 180px"
+        />
+      </el-form-item>
+      <el-form-item label="目标库存">
+        <el-input-number
+          v-model="procurementForm.targetStock"
+          :min="0"
+          :precision="2"
+          :step="0.1"
+          style="width: 180px"
+        />
+      </el-form-item>
+      <el-form-item label="显示单位">
         <el-input v-model="procurementForm.displayUnit" placeholder="如：袋、瓶、箱" maxlength="50" style="width: 160px" />
       </el-form-item>
       <el-form-item label="备注">
@@ -899,6 +711,9 @@
       </el-form-item>
       <el-form-item label="排序">
         <el-input-number v-model="procurementForm.sortOrder" :min="0" style="width: 140px" />
+      </el-form-item>
+      <el-form-item label="默认 SKU">
+        <el-switch v-model="procurementForm.isDefault" />
       </el-form-item>
       <el-form-item label="启用状态">
         <el-switch v-model="procurementForm.isActive" />
@@ -918,6 +733,8 @@ import { ElMessage } from 'element-plus'
 import { Plus, Delete } from '@element-plus/icons-vue'
 import { ingredientTagApi, type IngredientTag, type CreateTagDto } from '@/api/ingredientTags'
 import { ingredientApi } from '@/api/ingredients'
+import { INGREDIENT_NUTRITION_TAB_DEFINITIONS } from '@/constants/ingredientNutrition'
+import { buildSupplementActiveNutrientsFromNutritionProfile } from '@/utils/ingredientNutrition'
 import {
   IngredientType,
   IngredientProcurementStrategy,
@@ -1026,22 +843,13 @@ const formData = reactive<IngredientForm>({
   name: props.ingredient?.name || '',
   type: props.ingredient?.type || IngredientType.FOOD,
   procurementStrategy: props.ingredient?.procurementStrategy || IngredientProcurementStrategy.DAILY_PURCHASE,
-  brand: props.ingredient?.brand || '',
-  productModel: props.ingredient?.productModel || '',
-  purchaseChannel: props.ingredient?.purchaseChannel || '',
   notes: props.ingredient?.notes || '',
   baseUnit: props.ingredient?.baseUnit || BaseUnit.G,
-  unitDisplayLabel: props.ingredient?.unitDisplayLabel || '',
-  purchaseUnit: props.ingredient?.purchaseUnit || 'kg',
-  purchaseToBaseRatio: props.ingredient?.purchaseToBaseRatio ?? 1.0,
-  currentPricePerPurchaseUnit: props.ingredient?.currentPricePerPurchaseUnit ?? 0,
-  effectivePricePerPurchaseUnit: props.ingredient?.effectivePricePerPurchaseUnit ?? props.ingredient?.currentPricePerPurchaseUnit ?? 0,
+  baseUnitDisplayName: props.ingredient?.baseUnitDisplayName || props.ingredient?.unitDisplayLabel || '',
   weightG: props.ingredient?.weightG ?? undefined,
   maxCapacityG: props.ingredient?.maxCapacityG ?? undefined,
-  safetyStock: props.ingredient?.safetyStock ?? undefined,
-  reorderPoint: props.ingredient?.reorderPoint ?? undefined,
-  targetStock: props.ingredient?.targetStock ?? undefined,
   properties: props.ingredient?.properties || getDefaultProperties(IngredientType.FOOD),
+  nutritionProfile: props.ingredient?.nutritionProfile || null,
   tagIds: props.ingredient?.tagIds || []
 })
 
@@ -1064,59 +872,8 @@ const packagingProperties = reactive<PackagingProperties>(
     : getDefaultPackagingProperties())
 )
 
-// 购买链接配置
-const hasPurchaseLink = ref(!!supplementProperties.purchase_link)
-const purchaseLinkConfig = reactive<PurchaseLinkConfig>(
-  supplementProperties.purchase_link || {
-    url: '',
-    platform: 'TAOBAO',
-    mini_program_appid: '',
-    mini_program_path: ''
-  }
-)
-
-// 编辑模式：初始化购买链接配置
-if (formData.type === IngredientType.SUPPLEMENT && supplementProperties.purchase_link) {
-  Object.assign(purchaseLinkConfig, supplementProperties.purchase_link)
-  hasPurchaseLink.value = true
-}
-
-// 监听购买链接启用状态变化
-watch(hasPurchaseLink, (newValue) => {
-  if (newValue) {
-    // 启用购买链接
-    if (!supplementProperties.purchase_link) {
-      supplementProperties.purchase_link = {
-        url: '',
-        platform: 'TAOBAO',
-        mini_program_appid: '',
-        mini_program_path: ''
-      }
-      Object.assign(purchaseLinkConfig, supplementProperties.purchase_link)
-    }
-  } else {
-    // 禁用购买链接
-    supplementProperties.purchase_link = undefined
-  }
-})
-
-// 监听购买链接配置变化，同步到supplementProperties
-watch(purchaseLinkConfig, (newValue) => {
-  if (hasPurchaseLink.value) {
-    supplementProperties.purchase_link = { ...newValue }
-  }
-}, { deep: true })
-
 // 编辑模式判断
 const isEdit = computed(() => !!props.ingredient?.id)
-
-// 有效成分列表管理
-interface NutrientItem {
-  name: string
-  value: number  // 浓度值（0-1之间的小数，用于后端计算）
-  displayValue: number  // 显示值（用户输入的含量，如500mg）
-  unit: string  // 单位（mg、g、μg、IU等）
-}
 
 // 营养成分单位枚举
 const NUTRIENT_UNITS = [
@@ -1127,103 +884,26 @@ const NUTRIENT_UNITS = [
   { label: '% (百分比)', value: '%' }
 ]
 
-const nutrientList = ref<NutrientItem[]>([
-  { name: '', value: 0, displayValue: 0, unit: 'mg' }
-])
+const NUTRITION_NAME_SUGGESTIONS = Array.from(
+  new Set([
+    ...INGREDIENT_NUTRITION_TAB_DEFINITIONS.flatMap((tab) => tab.fields.map((field) => field.label)),
+    '叶酸',
+    '生物素',
+    '益生菌',
+    '益生元',
+    '胶原蛋白',
+    '辅酶Q10'
+  ])
+)
 
-// 常见营养成分列表（用于自动补全）
-const COMMON_NUTRIENTS = [
-  // 矿物质
-  '钙', '铁', '锌', '镁', '钾', '钠', '磷', '碘', '硒', '铜', '锰', '铬',
-  // 维生素
-  '维生素A', '维生素D', '维生素E', '维生素K',
-  '维生素B1', '维生素B2', '维生素B3', '维生素B5', '维生素B6', '维生素B12', '维生素C',
-  '叶酸', '生物素',
-  // 氨基酸
-  '赖氨酸', '蛋氨酸', '色氨酸',
-  // 脂肪酸
-  'EPA', 'DHA', '亚油酸', 'α-亚麻酸',
-  // 其他
-  '益生菌', '益生元', '膳食纤维', '蛋白质', '胶原蛋白', '辅酶Q10'
-]
-
-// 搜索营养成分（用于自动补全）
-const querySearchNutrients = (queryString: string, cb: any) => {
-  const results = COMMON_NUTRIENTS
-    .filter(nutrient => nutrient.toLowerCase().includes(queryString.toLowerCase()))
-    .map(nutrient => ({ value: nutrient }))
+const querySearchNutritionNames = (queryString: string, cb: (results: Array<{ value: string }>) => void) => {
+  const normalizedQuery = queryString.trim().toLowerCase()
+  const results = NUTRITION_NAME_SUGGESTIONS
+    .filter((nutrient) => nutrient.toLowerCase().includes(normalizedQuery))
+    .slice(0, 12)
+    .map((nutrient) => ({ value: nutrient }))
   cb(results)
 }
-
-// 添加成分
-const addNutrient = () => {
-  nutrientList.value.push({ name: '', value: 0, displayValue: 0, unit: 'mg' })
-}
-
-// 删除成分
-const removeNutrient = (index: number) => {
-  if (nutrientList.value.length > 1) {
-    nutrientList.value.splice(index, 1)
-  }
-}
-
-// 计算浓度：根据显示值和单位计算浓度值
-const calculateConcentration = (nutrient: NutrientItem, displayValue: number | undefined) => {
-  if (displayValue === undefined || displayValue === null) {
-    nutrient.value = 0
-    return
-  }
-
-  // 单位换算系数（转换为克）
-  const unitConversions: Record<string, number> = {
-    'mg': 0.001,      // 1mg = 0.001g
-    'g': 1,           // 1g = 1g
-    'μg': 0.000001,   // 1μg = 0.000001g
-    'IU': 0.001,      // 1IU ≈ 0.001g (简化处理，实际需要根据具体营养素换算)
-    '%': 0.01         // 1% = 0.01g
-  }
-
-  // 将显示值转换为克数
-  const valueInGrams = displayValue * (unitConversions[nutrient.unit] || 0.001)
-
-  // ✅ Bug 1 修复: 直接存储"每基准单位的含量(克)"
-  // 根据文档: active_nutrients的Value是"每1个基准单位(1g粉 or 1粒) 含有的数值"
-  // - PCS类型: value = 每粒含有的克数
-  // - G类型: value = 每克粉末含有的克数
-  // 不需要除以purchaseToBaseRatio或weightG!
-  nutrient.value = valueInGrams
-}
-
-// 将显示值和单位转换为克数（用于内部计算）
-const convertToGrams = (displayValue: number, unit: string): number => {
-  const unitConversions: Record<string, number> = {
-    'mg': 0.001,      // 1mg = 0.001g
-    'g': 1,           // 1g = 1g
-    'μg': 0.000001,   // 1μg = 0.000001g
-    'IU': 0.001,      // 1IU ≈ 0.001g (简化处理，实际需要根据具体营养素换算)
-    '%': 0.01         // 1% = 0.01g
-  }
-  return displayValue * (unitConversions[unit] || 0.001)
-}
-
-// 监听成分列表变化，同步到active_nutrients对象
-watch(
-  () => nutrientList.value,
-  (newList) => {
-    const activeNutrients: Record<string, {value: number, unit: string}> = {}
-    newList.forEach(item => {
-      if (item.name && item.displayValue > 0) {
-        // 保存原始显示值和单位
-        activeNutrients[item.name] = {
-          value: item.displayValue,
-          unit: item.unit
-        }
-      }
-    })
-    supplementProperties.active_nutrients = activeNutrients
-  },
-  { deep: true }
-)
 
 // 补充分类选项
 const SUPPLEMENT_CATEGORY_OPTIONS = Object.entries({
@@ -1242,21 +922,6 @@ const SUPPLEMENT_ADD_TIMING_OPTIONS = Object.entries({
   [SupplementAddTiming.BEFORE_MEAL]: '饭前（冷却后）'
 }).map(([value, label]) => ({ value, label }))
 
-// 计算属性
-const calculatedUnitCost = computed(() => {
-  const cost = formData.currentPricePerPurchaseUnit / formData.purchaseToBaseRatio
-  return cost.toFixed(4)
-})
-
-const calculatedEffectivePrice = computed(() => {
-  const effectivePrice = formData.effectivePricePerPurchaseUnit ?? formData.currentPricePerPurchaseUnit
-  return Number(effectivePrice || 0).toFixed(2)
-})
-
-const stockUnitLabel = computed(() => {
-  return formData.unitDisplayLabel?.trim() || BaseUnitLabels[formData.baseUnit]
-})
-
 const recommendedProductCount = computed(() => recommendedProducts.value.length)
 const initialHasActiveRecommendedProduct = computed(() => (
   !!props.ingredient &&
@@ -1266,6 +931,15 @@ const initialHasActiveRecommendedProduct = computed(() => (
 const hasActiveRecommendedProduct = computed(() => (
   recommendedProducts.value.some(product => product.isActive) ||
   initialHasActiveRecommendedProduct.value
+))
+const initialHasActiveProcurementSku = computed(() => (
+  !!props.ingredient &&
+  'hasActiveProcurementSku' in props.ingredient &&
+  !!props.ingredient.hasActiveProcurementSku
+))
+const hasActiveProcurementSku = computed(() => (
+  procurementSkus.value.some(product => product.isActive) ||
+  initialHasActiveProcurementSku.value
 ))
 
 // 方法
@@ -1292,8 +966,7 @@ function getDefaultSupplementProperties(): SupplementProperties {
   return {
     category_type: '',
     active_nutrients: {},
-    production_loss_rate: undefined,
-    purchase_link: undefined
+    production_loss_rate: undefined
   }
 }
 
@@ -1318,20 +991,15 @@ function handleTypeChange() {
   // 切换类型时，重置特定属性为默认值
   const defaultProps = getDefaultProperties(formData.type)
   formData.properties = defaultProps
+  if (formData.type === IngredientType.PACKAGING) {
+    formData.nutritionProfile = null
+  }
 
   // 更新响应式对象
   if (formData.type === IngredientType.FOOD) {
     Object.assign(foodProperties, defaultProps)
   } else if (formData.type === IngredientType.SUPPLEMENT) {
     Object.assign(supplementProperties, defaultProps)
-    // 重置购买链接配置
-    hasPurchaseLink.value = false
-    Object.assign(purchaseLinkConfig, {
-      url: '',
-      platform: 'TAOBAO',
-      mini_program_appid: '',
-      mini_program_path: ''
-    })
   } else if (formData.type === IngredientType.PACKAGING) {
     Object.assign(packagingProperties, defaultProps)
   }
@@ -1351,6 +1019,10 @@ function syncProperties() {
   if (formData.type === IngredientType.FOOD) {
     formData.properties = { ...foodProperties }
   } else if (formData.type === IngredientType.SUPPLEMENT) {
+    supplementProperties.active_nutrients = buildSupplementActiveNutrientsFromNutritionProfile(
+      formData.nutritionProfile,
+      supplementProperties.active_nutrients
+    )
     formData.properties = { ...supplementProperties }
   } else if (formData.type === IngredientType.PACKAGING) {
     formData.properties = { ...packagingProperties }
@@ -1493,79 +1165,6 @@ const handleIngredientSelect = (item: any) => {
   similarIngredients.value = []
 }
 
-// 搜索单位（支持别名匹配）
-const querySearchUnits = (queryString: string, cb: any) => {
-  if (!queryString || queryString.length < 1) {
-    cb([])
-    return
-  }
-
-  const searchLower = queryString.toLowerCase()
-  const results: Array<{ value: string }> = []
-
-  // 1. 精确匹配常用单位
-  COMMON_PURCHASE_UNITS.forEach(unit => {
-    if (unit.toLowerCase().includes(searchLower)) {
-      results.push({ value: unit })
-    }
-  })
-
-  // 2. 检查是否为别名，如果返回标准单位
-  if (results.length === 0 && UNIT_ALIASES[queryString]) {
-    results.push({ value: UNIT_ALIASES[queryString] })
-  }
-
-  // 3. 检查别名映射表中包含搜索词的单位
-  Object.entries(UNIT_ALIASES).forEach(([alias, standard]) => {
-    if (alias.toLowerCase().includes(searchLower) && !results.find(r => r.value === standard)) {
-      results.push({ value: standard })
-    }
-  })
-
-  cb(results.slice(0, 8)) // 限制最多显示8条
-}
-
-// 处理单位输入，检测相似标准单位
-const handleUnitInput = (value: string) => {
-  if (!value || value.length < 1) {
-    similarUnits.value = []
-    return
-  }
-
-  const inputLower = value.toLowerCase()
-  const suggestions: string[] = []
-
-  // 1. 检查是否为别名，提示标准单位
-  if (UNIT_ALIASES[value]) {
-    suggestions.push(UNIT_ALIASES[value])
-  }
-
-  // 2. 查找相似的常用单位（基于包含关系）
-  COMMON_PURCHASE_UNITS.forEach(unit => {
-    if (unit !== value && !suggestions.includes(unit)) {
-      // 输入是单位的子串或单位包含输入
-      if (unit.toLowerCase().includes(inputLower) || inputLower.includes(unit.toLowerCase())) {
-        suggestions.push(unit)
-      }
-    }
-  })
-
-  // 3. 检查别名映射表
-  Object.entries(UNIT_ALIASES).forEach(([alias, standard]) => {
-    if (alias.toLowerCase().includes(inputLower) && !suggestions.includes(standard)) {
-      suggestions.push(standard)
-    }
-  })
-
-  // 去重并限制数量
-  similarUnits.value = [...new Set(suggestions)].slice(0, 3)
-}
-
-// 处理单位选择
-const handleUnitSelect = (item: any) => {
-  similarUnits.value = []
-}
-
 // 标签选择相关方法
 const toggleTag = (tagId: string) => {
   const index = selectedTagIds.value.indexOf(tagId)
@@ -1644,22 +1243,13 @@ watch(() => props.ingredient, (newIngredient, oldIngredient) => {
     formData.name = ''
     formData.type = IngredientType.FOOD
     formData.procurementStrategy = IngredientProcurementStrategy.DAILY_PURCHASE
-    formData.brand = ''
-    formData.productModel = ''
-    formData.purchaseChannel = ''
     formData.notes = ''
     formData.baseUnit = BaseUnit.G
-    formData.unitDisplayLabel = ''
-    formData.purchaseUnit = 'kg'
-    formData.purchaseToBaseRatio = 1.0
-    formData.currentPricePerPurchaseUnit = 0
-    formData.effectivePricePerPurchaseUnit = 0
+    formData.baseUnitDisplayName = ''
     formData.weightG = undefined
     formData.maxCapacityG = undefined
-    formData.safetyStock = undefined
-    formData.reorderPoint = undefined
-    formData.targetStock = undefined
     formData.properties = getDefaultProperties(IngredientType.FOOD)
+    formData.nutritionProfile = null
     formData.tagIds = []
 
     // 重置类型特定属性
@@ -1669,9 +1259,7 @@ watch(() => props.ingredient, (newIngredient, oldIngredient) => {
 
     // 重置其他状态
     selectedTagIds.value = []
-    nutrientList.value = [{ name: '', value: 0, displayValue: 0, unit: 'mg' }]
     similarIngredients.value = []
-    similarUnits.value = []
     clearIngredientSkuLists()
 
     // 清除表单验证状态
@@ -1681,40 +1269,16 @@ watch(() => props.ingredient, (newIngredient, oldIngredient) => {
   } else if (newIngredient) {
     // ✅ 重置相似原料提示和单位提示
     similarIngredients.value = []
-    similarUnits.value = []
 
     Object.assign(formData, newIngredient)
+    formData.baseUnitDisplayName = newIngredient.baseUnitDisplayName || newIngredient.unitDisplayLabel || ''
+    formData.nutritionProfile = newIngredient.nutritionProfile || null
 
     // Update type-specific properties
     if (newIngredient.type === IngredientType.FOOD) {
       Object.assign(foodProperties, newIngredient.properties as FoodProperties)
     } else if (newIngredient.type === IngredientType.SUPPLEMENT) {
       Object.assign(supplementProperties, newIngredient.properties as SupplementProperties)
-      // ✅ 从active_nutrients读取原始值和单位（新格式: {value: number, unit: string}）
-      const nutrients = (newIngredient.properties as SupplementProperties).active_nutrients || {}
-      const nutrientArray = Object.entries(nutrients).map(([name, data]) => {
-        // data 现在是 {value: number, unit: string} 格式
-        const displayValue = (data as any).value  // 原始显示值
-        const unit = (data as any).unit           // 单位
-        const valueInGrams = convertToGrams(displayValue, unit)  // 转换为克用于内部计算
-        return { name, value: valueInGrams, displayValue, unit }
-      })
-      nutrientList.value = nutrientArray.length > 0 ? nutrientArray : [{ name: '', value: 0, displayValue: 0, unit: 'mg' }]
-
-      // ✅ 修复：重置购买链接配置（防止切换补剂时数据污染）
-      const purchaseLink = (newIngredient.properties as SupplementProperties).purchase_link
-      if (purchaseLink) {
-        Object.assign(purchaseLinkConfig, purchaseLink)
-        hasPurchaseLink.value = true
-      } else {
-        Object.assign(purchaseLinkConfig, {
-          url: '',
-          platform: 'TAOBAO',
-          mini_program_appid: '',
-          mini_program_path: ''
-        })
-        hasPurchaseLink.value = false
-      }
     } else if (newIngredient.type === IngredientType.PACKAGING) {
       Object.assign(packagingProperties, newIngredient.properties as PackagingProperties)
     }
@@ -1776,11 +1340,20 @@ const procurementForm = reactive({
   brand: '',
   productModel: '',
   purchaseChannel: '',
+  supplierName: '',
+  purchaseUnit: '',
+  purchaseToBaseRatio: undefined as number | undefined,
+  currentPurchasePrice: undefined as number | undefined,
+  referencePurchasePrice: undefined as number | undefined,
   referencePricePerPurchaseUnit: undefined as number | undefined,
   displayUnit: '',
   notes: '',
+  isDefault: false,
   isActive: true,
-  sortOrder: 0
+  sortOrder: 0,
+  safetyStock: undefined as number | undefined,
+  reorderPoint: undefined as number | undefined,
+  targetStock: undefined as number | undefined
 })
 
 const clearIngredientSkuLists = () => {
@@ -1889,9 +1462,9 @@ const openRpDialog = (rp?: RecommendedProduct) => {
     rpForm.displayUnit = rp.displayUnit || ''
     rpForm.isActive = rp.isActive
     rpForm.sortOrder = rp.sortOrder
-    // Parse activeNutrients to nutrient list
-    rpFormNutrients.value = rp.activeNutrients
-      ? Object.entries(rp.activeNutrients).map(([name, v]) => ({
+    const highlights = rp.marketingNutritionHighlights || rp.activeNutrients
+    rpFormNutrients.value = highlights
+      ? Object.entries(highlights).map(([name, v]) => ({
           name,
           value: (v as any).value || 0,
           unit: (v as any).unit || 'mg'
@@ -1921,22 +1494,40 @@ const openProcurementDialog = (sku?: ProcurementSku) => {
     procurementForm.brand = sku.brand || ''
     procurementForm.productModel = sku.productModel || ''
     procurementForm.purchaseChannel = sku.purchaseChannel || ''
+    procurementForm.supplierName = sku.supplierName || ''
+    procurementForm.purchaseUnit = sku.purchaseUnit || ''
+    procurementForm.purchaseToBaseRatio = sku.purchaseToBaseRatio ?? undefined
+    procurementForm.currentPurchasePrice = sku.currentPurchasePrice ?? undefined
+    procurementForm.referencePurchasePrice = sku.referencePurchasePrice ?? sku.referencePricePerPurchaseUnit ?? undefined
     procurementForm.referencePricePerPurchaseUnit = sku.referencePricePerPurchaseUnit ?? undefined
     procurementForm.displayUnit = sku.displayUnit || ''
     procurementForm.notes = sku.notes || ''
+    procurementForm.isDefault = sku.isDefault
     procurementForm.isActive = sku.isActive
     procurementForm.sortOrder = sku.sortOrder
+    procurementForm.safetyStock = sku.safetyStock ?? undefined
+    procurementForm.reorderPoint = sku.reorderPoint ?? undefined
+    procurementForm.targetStock = sku.targetStock ?? undefined
   } else {
     procurementEditingId.value = null
     procurementForm.name = ''
     procurementForm.brand = ''
     procurementForm.productModel = ''
     procurementForm.purchaseChannel = ''
+    procurementForm.supplierName = ''
+    procurementForm.purchaseUnit = ''
+    procurementForm.purchaseToBaseRatio = undefined
+    procurementForm.currentPurchasePrice = undefined
+    procurementForm.referencePurchasePrice = undefined
     procurementForm.referencePricePerPurchaseUnit = undefined
     procurementForm.displayUnit = ''
     procurementForm.notes = ''
+    procurementForm.isDefault = false
     procurementForm.isActive = true
     procurementForm.sortOrder = 0
+    procurementForm.safetyStock = undefined
+    procurementForm.reorderPoint = undefined
+    procurementForm.targetStock = undefined
   }
   procurementDialogVisible.value = true
 }
@@ -1970,7 +1561,7 @@ const saveRp = async () => {
     purchaseChannel: rpForm.purchaseChannel || undefined,
     purchaseLink: purchaseLink as any,
     imageUrl: rpForm.imageUrl || undefined,
-    activeNutrients: buildNutrientsFromList(rpFormNutrients.value) as any,
+    marketingNutritionHighlights: buildNutrientsFromList(rpFormNutrients.value) as any,
     displayUnit: rpForm.displayUnit || undefined,
     isActive: rpForm.isActive,
     sortOrder: rpForm.sortOrder
@@ -2006,11 +1597,20 @@ const saveProcurementSku = async () => {
     brand: procurementForm.brand || undefined,
     productModel: procurementForm.productModel || undefined,
     purchaseChannel: procurementForm.purchaseChannel || undefined,
-    referencePricePerPurchaseUnit: procurementForm.referencePricePerPurchaseUnit ?? null,
+    supplierName: procurementForm.supplierName || undefined,
+    purchaseUnit: procurementForm.purchaseUnit || undefined,
+    purchaseToBaseRatio: procurementForm.purchaseToBaseRatio ?? null,
+    currentPurchasePrice: procurementForm.currentPurchasePrice ?? null,
+    referencePurchasePrice: procurementForm.referencePurchasePrice ?? null,
+    referencePricePerPurchaseUnit: procurementForm.referencePurchasePrice ?? procurementForm.referencePricePerPurchaseUnit ?? null,
     displayUnit: procurementForm.displayUnit || undefined,
     notes: procurementForm.notes || undefined,
+    isDefault: procurementForm.isDefault,
     isActive: procurementForm.isActive,
-    sortOrder: procurementForm.sortOrder
+    sortOrder: procurementForm.sortOrder,
+    safetyStock: procurementForm.safetyStock ?? null,
+    reorderPoint: procurementForm.reorderPoint ?? null,
+    targetStock: procurementForm.targetStock ?? null
   }
 
   procurementSaving.value = true
@@ -2057,7 +1657,7 @@ const deleteRp = async (id: string) => {
   if (!props.ingredient?.id) return
   try {
     await ingredientApi.deleteRecommendedProduct(props.ingredient.id, id)
-    ElMessage.success('采购 SKU 已删除')
+    ElMessage.success('家庭 DIY 推荐商品已删除')
     await loadRecommendedProducts()
   } catch (e: any) {
     ElMessage.error('删除失败')
@@ -2097,17 +1697,6 @@ const formRules: FormRules = {
   ],
   baseUnit: [
     { required: true, message: '请选择基准单位', trigger: 'change' }
-  ],
-  purchaseUnit: [
-    { required: true, message: '请输入采购单位', trigger: 'blur' }
-  ],
-  purchaseToBaseRatio: [
-    { required: true, message: '请输入转换倍数', trigger: 'blur' },
-    { type: 'number', min: 0.01, message: '转换倍数必须大于0', trigger: 'blur' }
-  ],
-  currentPricePerPurchaseUnit: [
-    { required: true, message: '请输入采购单价', trigger: 'blur' },
-    { type: 'number', min: 0, message: '采购单价必须大于等于0', trigger: 'blur' }
   ],
   weightG: [
     {
@@ -2155,9 +1744,6 @@ const handleSubmit = async () => {
       if (!supplementProperties.category_type) {
         throw new Error('请选择营养分类')
       }
-      if (!supplementProperties.active_nutrients || Object.keys(supplementProperties.active_nutrients).length === 0) {
-        throw new Error('请至少添加一种有效成分')
-      }
     } else if (formData.type === IngredientType.PACKAGING) {
       // 包材验证
       if (packagingProperties.is_consumable === null || packagingProperties.is_consumable === undefined) {
@@ -2165,39 +1751,13 @@ const handleSubmit = async () => {
       }
     }
 
-    if (formData.safetyStock !== undefined && formData.safetyStock < 0) {
-      throw new Error('安全库存不能小于 0')
-    }
-
-    if (formData.reorderPoint !== undefined && formData.reorderPoint < 0) {
-      throw new Error('补货点不能小于 0')
-    }
-
-    if (formData.targetStock !== undefined && formData.targetStock < 0) {
-      throw new Error('目标库存不能小于 0')
-    }
-
-    if (
-      formData.safetyStock !== undefined &&
-      formData.reorderPoint !== undefined &&
-      formData.reorderPoint < formData.safetyStock
-    ) {
-      throw new Error('补货点不能小于安全库存')
-    }
-
-    if (
-      formData.reorderPoint !== undefined &&
-      formData.targetStock !== undefined &&
-      formData.targetStock < formData.reorderPoint
-    ) {
-      throw new Error('目标库存不能小于补货点')
+    if (formData.type === IngredientType.PACKAGING) {
+      formData.nutritionProfile = null
     }
 
     syncProperties()
     submitting.value = true
     const payload = { ...formData }
-
-    delete payload.effectivePricePerPurchaseUnit
     emit('submit', payload)
   } catch (error: any) {
     // Validation failed

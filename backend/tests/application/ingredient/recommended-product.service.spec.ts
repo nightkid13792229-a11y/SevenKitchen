@@ -83,4 +83,51 @@ describe('RecommendedProductService', () => {
       },
     });
   });
+
+  it('create accepts marketing nutrition highlights as compatibility input', async () => {
+    mockPrismaService.ingredient.findUnique.mockResolvedValue({
+      id: 'ingredient-1',
+    });
+    mockPrismaService.recommendedProduct.create.mockImplementation(
+      async ({ data }: { data: Record<string, unknown> }) => ({
+        id: 'rp-1',
+        ingredientId: data.ingredientId,
+        name: data.name,
+        brand: data.brand ?? null,
+        productModel: data.productModel ?? null,
+        purchaseChannel: data.purchaseChannel ?? null,
+        purchaseLink: data.purchaseLink ?? null,
+        imageUrl: data.imageUrl ?? null,
+        activeNutrients: data.activeNutrients ?? null,
+        displayUnit: data.displayUnit ?? null,
+        isActive: data.isActive ?? true,
+        sortOrder: data.sortOrder ?? 0,
+      }),
+    );
+
+    const marketingNutritionHighlights = {
+      EPA: { value: 120, unit: 'mg' },
+      DHA: { value: 80, unit: 'mg' },
+    };
+
+    await expect(
+      service.create('ingredient-1', {
+        name: '深海鱼油胶囊',
+        marketingNutritionHighlights,
+      } as any),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        activeNutrients: marketingNutritionHighlights,
+        marketingNutritionHighlights,
+      }),
+    );
+
+    expect(mockPrismaService.recommendedProduct.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        ingredientId: 'ingredient-1',
+        name: '深海鱼油胶囊',
+        activeNutrients: marketingNutritionHighlights,
+      }),
+    });
+  });
 });

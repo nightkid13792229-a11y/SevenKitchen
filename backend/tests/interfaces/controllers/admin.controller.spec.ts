@@ -7,6 +7,89 @@ import { MIXED_BREED_VIRTUAL_ID } from '../../../src/domain/dog/constants';
 import { DogSizeCategory, GrowthCurveType } from '../../../src/domain/dog/enums';
 
 describe('AdminController', () => {
+  describe('getIngredientById', () => {
+    it('returns legacy nutritionProfile items[] as-is for admin reads', async () => {
+      const legacyProfile = {
+        items: [
+          {
+            nutrientCode: 'CA',
+            nutrientName: '钙',
+            value: 240,
+            unit: 'mg',
+            basisType: 'PER_100_G',
+            sourceType: 'MANUAL',
+            sourceName: '内部整理',
+            confidenceLevel: 'HIGH',
+            isKeyNutrient: true,
+            notes: '测试数据',
+          },
+        ],
+      };
+      const ingredient = {
+        id: 'ingredient-1',
+        name: '碳酸钙',
+        type: 'SUPPLEMENT',
+        brand: null,
+        productModel: null,
+        purchaseChannel: null,
+        notes: null,
+        baseUnit: 'PCS',
+        baseUnitDisplayName: '粒',
+        unitDisplayLabel: '粒',
+        procurementStrategy: 'DAILY_PURCHASE',
+        purchaseUnit: 'bottle',
+        purchaseToBaseRatio: 1,
+        currentPricePerPurchaseUnit: 10,
+        getEffectivePricePerPurchaseUnit: () => 10,
+        getUnitCost: () => 10,
+        weightG: null,
+        maxCapacityG: null,
+        safetyStock: null,
+        reorderPoint: null,
+        targetStock: null,
+        properties: { category_type: 'MINERAL' },
+        nutritionProfile: legacyProfile,
+      };
+
+      const mockIngredientService = {
+        getIngredientById: jest.fn().mockResolvedValue(ingredient),
+      };
+      const mockPrisma = {
+        ingredient: {
+          findUnique: jest.fn().mockResolvedValue({
+            createdAt: new Date('2026-04-12T10:00:00.000Z'),
+            updatedAt: new Date('2026-04-12T10:00:00.000Z'),
+            tags: [],
+            recommendedProducts: [],
+          }),
+        },
+      };
+
+      const controller = new AdminController(
+        mockIngredientService as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        mockPrisma as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+      );
+
+      const result = await controller.getIngredientById('ingredient-1');
+
+      expect(mockIngredientService.getIngredientById).toHaveBeenCalledWith(
+        'ingredient-1',
+      );
+      expect(result.data?.nutritionProfile).toEqual(legacyProfile);
+    });
+  });
+
   describe('getBreeds', () => {
     it('returns standard breeds sorted by profile count desc with profileCount included', async () => {
       const mockDogBreedRepository = {

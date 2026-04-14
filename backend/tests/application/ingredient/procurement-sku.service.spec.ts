@@ -69,32 +69,26 @@ describe('ProcurementSkuService', () => {
 
     await expect(service.batchFindActive(['ingredient-1'])).resolves.toEqual({
       'ingredient-1': [
-        {
+        expect.objectContaining({
           id: 'sku-1',
           ingredientId: 'ingredient-1',
           name: '京东鸡胸 1kg/袋',
-          brand: null,
-          productModel: null,
           purchaseChannel: '京东冷链',
           referencePricePerPurchaseUnit: 39.9,
           displayUnit: '袋',
-          notes: null,
           isActive: true,
           sortOrder: 1,
-        },
-        {
+        }),
+        expect.objectContaining({
           id: 'sku-2',
           ingredientId: 'ingredient-1',
           name: '京东鸡胸 500g/袋',
-          brand: null,
-          productModel: null,
           purchaseChannel: '京东冷链',
           referencePricePerPurchaseUnit: 21.5,
           displayUnit: '袋',
-          notes: null,
           isActive: true,
           sortOrder: 2,
-        },
+        }),
       ],
     });
 
@@ -155,6 +149,77 @@ describe('ProcurementSkuService', () => {
         purchaseChannel: null,
         displayUnit: null,
         notes: null,
+      }),
+    );
+  });
+
+  it('create persists procurement execution fields and stock policy fields', async () => {
+    mockPrismaService.ingredient.findUnique.mockResolvedValue({
+      id: 'ingredient-1',
+    });
+    mockPrismaService.procurementSku.create.mockImplementation(
+      async ({ data }: { data: Record<string, unknown> }) => ({
+        id: 'sku-4',
+        ingredientId: data.ingredientId,
+        name: data.name,
+        brand: data.brand ?? null,
+        productModel: data.productModel ?? null,
+        purchaseChannel: data.purchaseChannel ?? null,
+        supplierName: data.supplierName ?? null,
+        purchaseUnit: data.purchaseUnit ?? null,
+        purchaseToBaseRatio: data.purchaseToBaseRatio ?? null,
+        currentPurchasePrice: data.currentPurchasePrice ?? null,
+        referencePurchasePrice: data.referencePurchasePrice ?? null,
+        referencePricePerPurchaseUnit: null,
+        displayUnit: data.displayUnit ?? null,
+        notes: data.notes ?? null,
+        isDefault: data.isDefault ?? false,
+        isActive: data.isActive ?? true,
+        sortOrder: data.sortOrder ?? 0,
+        safetyStock: data.safetyStock ?? null,
+        reorderPoint: data.reorderPoint ?? null,
+        targetStock: data.targetStock ?? null,
+        createdAt: new Date('2026-04-11T00:00:00.000Z'),
+      }),
+    );
+
+    await expect(
+      service.create('ingredient-1', {
+        name: '山姆猪里脊',
+        purchaseUnit: 'kg',
+        purchaseToBaseRatio: 1000,
+        currentPurchasePrice: 79.9,
+        referencePurchasePrice: 82.5,
+        isDefault: true,
+        safetyStock: 5,
+        reorderPoint: 8,
+        targetStock: 15,
+      } as any),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        purchaseUnit: 'kg',
+        purchaseToBaseRatio: 1000,
+        currentPurchasePrice: 79.9,
+        referencePurchasePrice: 82.5,
+        isDefault: true,
+        safetyStock: 5,
+        reorderPoint: 8,
+        targetStock: 15,
+      }),
+    );
+
+    expect(mockPrismaService.procurementSku.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          purchaseUnit: 'kg',
+          purchaseToBaseRatio: 1000,
+          currentPurchasePrice: 79.9,
+          referencePurchasePrice: 82.5,
+          isDefault: true,
+          safetyStock: 5,
+          reorderPoint: 8,
+          targetStock: 15,
+        }),
       }),
     );
   });

@@ -11,6 +11,10 @@ import {
   BaseUnit,
   IngredientProcurementStrategy,
 } from '../../domain/ingredient/enums';
+import {
+  denormalizeNutritionProfileForPersistence,
+  normalizeNutritionProfileForRead,
+} from '../../domain/ingredient/nutrition-profile.utils';
 import { PrismaService } from '../prisma.service';
 
 @Injectable()
@@ -80,6 +84,9 @@ export class PrismaIngredientRepository implements IngredientRepository {
       reorderPoint: ingredient.reorderPoint,
       targetStock: ingredient.targetStock,
       properties: ingredient.properties as any,
+      nutritionProfile: denormalizeNutritionProfileForPersistence(
+        ingredient.nutritionProfile as any,
+      ) as any,
     };
 
     this.logger.debug(`Saving ingredient ${ingredient.id}: ${ingredient.name}`);
@@ -211,6 +218,7 @@ export class PrismaIngredientRepository implements IngredientRepository {
       record.reorderPoint,
       record.targetStock,
       record.properties,
+      normalizeNutritionProfileForRead(record.nutritionProfile ?? null),
     );
   }
 }

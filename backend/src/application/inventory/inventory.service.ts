@@ -39,6 +39,8 @@ export interface InventoryLedgerItemDto {
   id: string;
   ingredientId: string;
   ingredientName: string;
+  procurementSkuId?: string | null;
+  procurementSkuName?: string | null;
   deltaG: number;
   stockUnitLabel: string;
   sourceType: InventorySourceType;
@@ -54,6 +56,7 @@ export interface InventoryLedgerItemDto {
 
 export interface CreateInventoryAdjustmentDto {
   ingredientId: string;
+  procurementSkuId?: string;
   adjustmentMode: InventoryAdjustmentMode;
   quantity: number;
   reason: string;
@@ -64,6 +67,7 @@ export interface InventoryAdjustmentDto {
   id: string;
   ingredientId: string;
   ingredientName: string;
+  procurementSkuId?: string | null;
   stockUnitLabel: string;
   adjustmentMode: InventoryAdjustmentMode;
   quantityBeforeG: number;
@@ -76,6 +80,7 @@ export interface InventoryAdjustmentDto {
 
 export interface CreateInventoryStocktakeLineDto {
   ingredientId: string;
+  procurementSkuId?: string;
   countedQuantityG: number;
 }
 
@@ -88,6 +93,8 @@ export interface CreateInventoryStocktakeDto {
 export interface InventoryStocktakeLineDto {
   id: string;
   ingredientId: string;
+  procurementSkuId?: string | null;
+  procurementSkuName?: string | null;
   ingredientName: string;
   stockUnitLabel: string;
   expectedQuantityG: number;
@@ -260,6 +267,7 @@ export class InventoryService {
           InventorySourceType.PURCHASE_RECORD,
           record.id,
           new Date(),
+          record.procurementSkuId,
         ),
       );
     }
@@ -339,8 +347,25 @@ export class InventoryService {
           .map((entry) => entry.sourceId),
       ),
     );
+    const purchaseRecordSourceIds = Array.from(
+      new Set(
+        entries
+          .filter(
+            (entry) => entry.sourceType === InventorySourceType.PURCHASE_RECORD,
+          )
+          .map((entry) => entry.sourceId),
+      ),
+    );
+    const procurementSkuIds = Array.from(
+      new Set(
+        entries
+          .map((entry) => entry.procurementSkuId)
+          .filter((value): value is string => Boolean(value)),
+      ),
+    );
 
-    const [adjustments, stocktakeLines] = await Promise.all([
+    const [adjustments, stocktakeLines, purchaseRecords, procurementSkus] =
+      await Promise.all([
       manualSourceIds.length > 0
         ? this.prisma.inventoryAdjustment.findMany({
             where: {
@@ -365,6 +390,35 @@ export class InventoryService {
             },
           })
         : Promise.resolve([]),
+      purchaseRecordSourceIds.length > 0
+        ? this.prisma.purchaseRecord.findMany({
+            where: {
+              id: {
+                in: purchaseRecordSourceIds,
+              },
+            },
+            select: {
+              id: true,
+              procurementSkuId: true,
+              procurementSkuName: true,
+              purchaseChannel: true,
+              productModel: true,
+            },
+          })
+        : Promise.resolve([]),
+      procurementSkuIds.length > 0
+        ? this.prisma.procurementSku.findMany({
+            where: {
+              id: {
+                in: procurementSkuIds,
+              },
+            },
+            select: {
+              id: true,
+              name: true,
+            },
+          })
+        : Promise.resolve([]),
     ]);
 
     const adjustmentMap = new Map(adjustments.map((item) => [item.id, item]));
@@ -373,6 +427,12 @@ export class InventoryService {
         `${item.stocktakeId}:${item.ingredientId}`,
         item,
       ]),
+    );
+    const purchaseRecordMap = new Map(
+      purchaseRecords.map((item) => [item.id, item]),
+    );
+    const procurementSkuMap = new Map(
+      procurementSkus.map((item) => [item.id, item]),
     );
 
     return entries.map((entry) => {
@@ -385,11 +445,24 @@ export class InventoryService {
         entry.sourceType === InventorySourceType.STOCKTAKE
           ? stocktakeLineMap.get(`${entry.sourceId}:${entry.ingredientId}`)
           : null;
+      const purchaseRecord =
+        entry.sourceType === InventorySourceType.PURCHASE_RECORD
+          ? purchaseRecordMap.get(entry.sourceId)
+          : null;
 
       return {
         id: entry.id,
         ingredientId: entry.ingredientId,
         ingredientName: ingredient?.name ?? entry.ingredientId,
+        procurementSkuId:
+          entry.procurementSkuId ??
+          purchaseRecord?.procurementSkuId ??
+          null,
+        procurementSkuName:
+          purchaseRecord?.procurementSkuName ??
+          (entry.procurementSkuId
+            ? procurementSkuMap.get(entry.procurementSkuId)?.name ?? null
+            : null),
         deltaG: entry.deltaG,
         stockUnitLabel: this.resolveStockUnitLabel(ingredient),
         sourceType: entry.sourceType as InventorySourceType,
@@ -399,6 +472,7 @@ export class InventoryService {
           entry.sourceType as InventorySourceType,
           adjustment,
           stocktakeLine,
+          purchaseRecord,
         ),
         quantityBeforeG: adjustment?.quantityBeforeG ?? null,
         quantityAfterG: adjustment?.quantityAfterG ?? null,
@@ -451,6 +525,7 @@ export class InventoryService {
     }
 
     const currentBalance = await this.getBalanceByIngredient(dto.ingredientId);
+    const procurementSkuId = dto.procurementSkuId?.trim() || null;
     const reason = dto.reason.trim();
     const note = dto.note?.trim() || null;
     const deltaG =
@@ -470,6 +545,7 @@ export class InventoryService {
     const adjustment = new InventoryAdjustment(
       randomUUID(),
       dto.ingredientId,
+      procurementSkuId,
       dto.adjustmentMode,
       currentBalance,
       quantityAfterG,
@@ -484,6 +560,7 @@ export class InventoryService {
         data: {
           id: adjustment.id,
           ingredientId: adjustment.ingredientId,
+          procurementSkuId: adjustment.procurementSkuId,
           adjustmentMode: adjustment.adjustmentMode as any,
           quantityBeforeG: adjustment.quantityBeforeG,
           quantityAfterG: adjustment.quantityAfterG,
@@ -498,6 +575,7 @@ export class InventoryService {
         data: {
           id: randomUUID(),
           ingredientId: adjustment.ingredientId,
+          procurementSkuId: adjustment.procurementSkuId,
           deltaG: adjustment.deltaG,
           sourceType: InventorySourceType.MANUAL_ADJUSTMENT as any,
           sourceId: adjustment.id,
@@ -510,6 +588,7 @@ export class InventoryService {
       id: adjustment.id,
       ingredientId: adjustment.ingredientId,
       ingredientName: ingredient.name,
+      procurementSkuId: adjustment.procurementSkuId,
       stockUnitLabel: this.resolveStockUnitLabel(ingredient),
       adjustmentMode: adjustment.adjustmentMode,
       quantityBeforeG: adjustment.quantityBeforeG,
@@ -560,11 +639,13 @@ export class InventoryService {
       : InventoryStocktakeStatus.DRAFT;
     const lines = ingredientIds.map((ingredientId) => {
       const expectedQuantityG = balances.get(ingredientId) ?? 0;
-      const countedQuantityG = lineMap.get(ingredientId)!.countedQuantityG;
+      const sourceLine = lineMap.get(ingredientId)!;
+      const countedQuantityG = sourceLine.countedQuantityG;
       return new InventoryStocktakeLine(
         randomUUID(),
         stocktakeId,
         ingredientId,
+        sourceLine.procurementSkuId?.trim() || null,
         expectedQuantityG,
         countedQuantityG,
         countedQuantityG - expectedQuantityG,
@@ -596,6 +677,7 @@ export class InventoryService {
           id: line.id,
           stocktakeId: line.stocktakeId,
           ingredientId: line.ingredientId,
+          procurementSkuId: line.procurementSkuId,
           expectedQuantityG: line.expectedQuantityG,
           countedQuantityG: line.countedQuantityG,
           deltaG: line.deltaG,
@@ -608,6 +690,7 @@ export class InventoryService {
           .map((line) => ({
             id: randomUUID(),
             ingredientId: line.ingredientId,
+            procurementSkuId: line.procurementSkuId,
             deltaG: line.deltaG,
             sourceType: InventorySourceType.STOCKTAKE as any,
             sourceId: stocktake.id,
@@ -654,6 +737,7 @@ export class InventoryService {
         .map((line) => ({
           id: randomUUID(),
           ingredientId: line.ingredientId,
+          procurementSkuId: line.procurementSkuId ?? null,
           deltaG: line.deltaG,
           sourceType: InventorySourceType.STOCKTAKE as any,
           sourceId: stocktakeId,
@@ -709,7 +793,8 @@ export class InventoryService {
       },
     });
 
-    return stocktakes.map((stocktake) => this.mapStocktake(stocktake));
+    const enriched = await this.attachProcurementSkuNamesToStocktakes(stocktakes);
+    return enriched.map((stocktake) => this.mapStocktake(stocktake));
   }
 
   private async getStocktakeById(id: string): Promise<InventoryStocktakeDto> {
@@ -740,13 +825,18 @@ export class InventoryService {
       throw new NotFoundException(`Stocktake not found: ${id}`);
     }
 
-    return this.mapStocktake(stocktake);
+    const [enriched] = await this.attachProcurementSkuNamesToStocktakes([
+      stocktake,
+    ]);
+    return this.mapStocktake(enriched);
   }
 
   private mapStocktake(stocktake: any): InventoryStocktakeDto {
     const lines: InventoryStocktakeLineDto[] = stocktake.lines.map((line: any) => ({
       id: line.id,
       ingredientId: line.ingredientId,
+      procurementSkuId: line.procurementSkuId ?? null,
+      procurementSkuName: line.procurementSkuName ?? null,
       ingredientName: line.ingredient?.name ?? line.ingredientId,
       stockUnitLabel: this.resolveStockUnitLabel(line.ingredient),
       expectedQuantityG: line.expectedQuantityG,
@@ -768,6 +858,50 @@ export class InventoryService {
       ),
       lines,
     };
+  }
+
+  private async attachProcurementSkuNamesToStocktakes(
+    stocktakes: any[],
+  ): Promise<any[]> {
+    const procurementSkuIds = Array.from(
+      new Set(
+        stocktakes.flatMap((stocktake) =>
+          (stocktake.lines || [])
+            .map((line: any) => line.procurementSkuId)
+            .filter(Boolean),
+        ),
+      ),
+    );
+
+    if (procurementSkuIds.length === 0) {
+      return stocktakes;
+    }
+
+    const procurementSkus = await this.prisma.procurementSku.findMany({
+      where: {
+        id: {
+          in: procurementSkuIds,
+        },
+      },
+      select: {
+        id: true,
+        name: true,
+      },
+    });
+
+    const procurementSkuMap = new Map(
+      procurementSkus.map((sku) => [sku.id, sku.name]),
+    );
+
+    return stocktakes.map((stocktake) => ({
+      ...stocktake,
+      lines: (stocktake.lines || []).map((line: any) => ({
+        ...line,
+        procurementSkuName: line.procurementSkuId
+          ? procurementSkuMap.get(line.procurementSkuId) ?? null
+          : null,
+      })),
+    }));
   }
 
   private async getIngredientMetaMap(
@@ -863,6 +997,11 @@ export class InventoryService {
     sourceType: InventorySourceType,
     adjustment: any,
     stocktakeLine: any,
+    purchaseRecord?: {
+      procurementSkuName?: string | null;
+      purchaseChannel?: string | null;
+      productModel?: string | null;
+    } | null,
   ): string | null {
     if (sourceType === InventorySourceType.MANUAL_ADJUSTMENT && adjustment) {
       return adjustment.note
@@ -872,6 +1011,16 @@ export class InventoryService {
 
     if (sourceType === InventorySourceType.STOCKTAKE && stocktakeLine) {
       return stocktakeLine.stocktake?.note || '盘点差异入账';
+    }
+
+    if (sourceType === InventorySourceType.PURCHASE_RECORD && purchaseRecord) {
+      const parts = [
+        purchaseRecord.procurementSkuName,
+        purchaseRecord.purchaseChannel,
+        purchaseRecord.productModel,
+      ].filter(Boolean);
+
+      return parts.length > 0 ? parts.join(' · ') : '采购入库';
     }
 
     return null;

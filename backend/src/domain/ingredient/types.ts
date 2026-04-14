@@ -4,6 +4,119 @@
  * Based on 07_Core_Architecture.md Section 2.3
  */
 
+import type {
+  AMINO_ACID_NUTRIENT_KEYS,
+  FATTY_ACID_NUTRIENT_KEYS,
+  MACRO_NUTRIENT_KEYS,
+  MINERAL_NUTRIENT_KEYS,
+  VITAMIN_NUTRIENT_KEYS,
+} from './nutrition-profile.constants';
+
+export type NutritionBasisType =
+  | 'PER_100_G'
+  | 'PER_100_ML'
+  | 'PER_1_G'
+  | 'PER_1_ML'
+  | 'PER_1_PCS';
+
+export type NutritionRawBasisType =
+  | 'PER_100_G'
+  | 'PER_100_ML'
+  | 'PER_1_G'
+  | 'PER_1_ML'
+  | 'PER_SERVING';
+
+export interface NutritionItem {
+  nutrientCode?: string | null;
+  nutrientName: string;
+  value: number;
+  unit: string;
+  basisType: NutritionBasisType;
+  basisQuantity?: number;
+  sourceType?: string | null;
+  sourceName?: string | null;
+  confidenceLevel?: string | null;
+  isKeyNutrient?: boolean;
+  notes?: string | null;
+}
+
+export interface NutritionMeta {
+  rawBasisType: NutritionRawBasisType;
+  sampleState?:
+    | 'RAW'
+    | 'COOKED'
+    | 'FREEZE_DRIED'
+    | 'AIR_DRIED'
+    | 'POWDER'
+    | 'OIL'
+    | 'CONCENTRATE';
+  isEdiblePortionBasis?: boolean;
+  ediblePortionRate?: number | null;
+  densityGPerMl?: number | null;
+  servingWeightG?: number | null;
+  sourceType?:
+    | 'LAB_REPORT'
+    | 'LABEL'
+    | 'LITERATURE'
+    | 'SUPPLIER'
+    | 'MANUAL_ESTIMATE'
+    | null;
+  sourceTitle?: string | null;
+  sourceProvider?: string | null;
+  attachments?: string[];
+  confidenceLevel?: 'HIGH' | 'MEDIUM' | 'LOW' | null;
+  fieldDisplayUnits?: Record<string, string>;
+  versionNote?: string | null;
+}
+
+type NutritionTabValue = number | null;
+
+type NutritionTabRecord<TKey extends readonly string[]> = {
+  [K in TKey[number]]: NutritionTabValue;
+};
+
+export type MacroNutritionProfileTab = NutritionTabRecord<
+  typeof MACRO_NUTRIENT_KEYS
+>;
+
+export type MineralNutritionProfileTab = NutritionTabRecord<
+  typeof MINERAL_NUTRIENT_KEYS
+>;
+
+export type VitaminNutritionProfileTab = NutritionTabRecord<
+  typeof VITAMIN_NUTRIENT_KEYS
+>;
+
+export type FattyAcidNutritionProfileTab = NutritionTabRecord<
+  typeof FATTY_ACID_NUTRIENT_KEYS
+>;
+
+export type AminoAcidNutritionProfileTab = NutritionTabRecord<
+  typeof AMINO_ACID_NUTRIENT_KEYS
+>;
+
+export interface NutritionProfileV2 {
+  meta: NutritionMeta;
+  macros: MacroNutritionProfileTab;
+  minerals: MineralNutritionProfileTab;
+  vitamins: VitaminNutritionProfileTab;
+  fattyAcids: FattyAcidNutritionProfileTab;
+  aminoAcids: AminoAcidNutritionProfileTab;
+  customItems: Array<{
+    name: string;
+    value: number;
+    unit: string;
+    rawBasisType?: NutritionRawBasisType;
+    note?: string | null;
+  }>;
+}
+
+export interface LegacyNutritionProfile {
+  items: NutritionItem[];
+}
+
+export type NutritionProfile = NutritionProfileV2 | LegacyNutritionProfile;
+
 /**
  * Food Properties (when Ingredient.type === 'FOOD')
  */
@@ -46,10 +159,8 @@ export interface SupplementProperties {
   // 添加时机
   add_timing?: 'BEFORE_MIXING' | 'BEFORE_MEAL'; // 添加时机: "搅拌前（生产中）" 或 "饭前（加热后）"
 
-  // 有效成分浓度表 (Key-Value Map)
-  // 允许一款补剂包含多种营养素。
-  // Key: 营养素名称 (e.g. "钙", "维生素D3", "EPA")
-  // Value: {value: 显示数值, unit: 单位} - 保存用户输入的原始值和单位
+  // 兼容历史数据：补剂专属营养字段已迁移到统一 nutritionProfile。
+  // 在过渡阶段保留该字段，方便脚本回填与兼容旧数据读取。
   active_nutrients: Record<string, ActiveNutrientValue>;
 
   // 个性化损耗率 (Override Global)

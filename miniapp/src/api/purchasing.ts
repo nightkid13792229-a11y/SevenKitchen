@@ -328,6 +328,8 @@ export interface StockPurchaseIngredient {
   unitDisplayLabel?: string | null;
   purchaseChannel?: string | null;
   productModel?: string | null;
+  procurementSkuId?: string;
+  procurementSkuName?: string;
   currentPricePerPurchaseUnit: number;
   effectivePricePerPurchaseUnit?: number | null;
   currentStock: number;

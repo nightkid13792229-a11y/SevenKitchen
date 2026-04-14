@@ -6,6 +6,7 @@ export class InventoryStocktakeLine {
     public readonly id: string,
     public readonly stocktakeId: string,
     public readonly ingredientId: string,
+    public readonly procurementSkuId: string | null,
     public readonly expectedQuantityG: number,
     public readonly countedQuantityG: number,
     public readonly deltaG: number,
@@ -20,6 +21,10 @@ export class InventoryStocktakeLine {
 
     if (!this.ingredientId.trim()) {
       throw new ValidationError('ingredientId cannot be empty');
+    }
+
+    if (this.procurementSkuId !== null && !this.procurementSkuId.trim()) {
+      throw new ValidationError('procurementSkuId cannot be blank');
     }
 
     if (this.expectedQuantityG < 0) {

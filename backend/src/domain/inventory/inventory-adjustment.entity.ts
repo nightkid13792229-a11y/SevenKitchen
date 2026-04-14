@@ -5,6 +5,7 @@ export class InventoryAdjustment {
   constructor(
     public readonly id: string,
     public readonly ingredientId: string,
+    public readonly procurementSkuId: string | null,
     public readonly adjustmentMode: InventoryAdjustmentMode,
     public readonly quantityBeforeG: number,
     public readonly quantityAfterG: number,
@@ -19,6 +20,10 @@ export class InventoryAdjustment {
   private validateInvariants(): void {
     if (!this.ingredientId.trim()) {
       throw new ValidationError('ingredientId cannot be empty');
+    }
+
+    if (this.procurementSkuId !== null && !this.procurementSkuId.trim()) {
+      throw new ValidationError('procurementSkuId cannot be blank');
     }
 
     if (this.quantityBeforeG < 0) {

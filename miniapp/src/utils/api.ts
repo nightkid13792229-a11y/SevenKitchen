@@ -62,6 +62,43 @@ interface RequestOptions {
   suppressErrorToast?: boolean
 }
 
+function isEmptyQueryValue(value: unknown): boolean {
+  if (value === undefined || value === null) {
+    return true
+  }
+
+  if (typeof value !== 'string') {
+    return false
+  }
+
+  const trimmed = value.trim().toLowerCase()
+  return trimmed === '' || trimmed === 'undefined' || trimmed === 'null'
+}
+
+export function normalizeRequestData(
+  method: RequestOptions['method'] | string | undefined,
+  data: any,
+) {
+  const normalizedMethod = String(method || 'GET').toUpperCase()
+  if (normalizedMethod !== 'GET') {
+    return data
+  }
+
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return data
+  }
+
+  const sanitizedEntries = Object.entries(data).filter(([, value]) => {
+    return !isEmptyQueryValue(value)
+  })
+
+  if (sanitizedEntries.length === 0) {
+    return undefined
+  }
+
+  return Object.fromEntries(sanitizedEntries)
+}
+
 // Token storage helpers - single source of truth
 export function getToken(): string | null {
   try {
@@ -211,10 +248,13 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
       header['Authorization'] = `Bearer ${token}`
     }
     
+    const method = options.method || 'GET'
+    const data = normalizeRequestData(method, options.data)
+
     uni.request({
       url,
-      method: options.method || 'GET',
-      data: options.data,
+      method,
+      data,
       header,
       success: (res: any) => {
         // Handle 204 No Content (DELETE responses)

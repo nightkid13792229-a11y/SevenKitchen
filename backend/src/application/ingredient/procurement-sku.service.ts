@@ -12,11 +12,20 @@ type ProcurementSkuRecord = {
   brand: string | null;
   productModel: string | null;
   purchaseChannel: string | null;
+  supplierName: string | null;
+  purchaseUnit: string | null;
+  purchaseToBaseRatio: number | null;
+  currentPurchasePrice: DecimalLike | number | null;
+  referencePurchasePrice: DecimalLike | number | null;
   referencePricePerPurchaseUnit: DecimalLike | number | null;
   displayUnit: string | null;
   notes: string | null;
+  isDefault: boolean;
   isActive: boolean;
   sortOrder: number;
+  safetyStock: number | null;
+  reorderPoint: number | null;
+  targetStock: number | null;
   createdAt: Date;
 };
 
@@ -27,11 +36,20 @@ export interface ProcurementSkuSummary {
   brand: string | null;
   productModel: string | null;
   purchaseChannel: string | null;
+  supplierName: string | null;
+  purchaseUnit: string | null;
+  purchaseToBaseRatio: number | null;
+  currentPurchasePrice: number | null;
+  referencePurchasePrice: number | null;
   referencePricePerPurchaseUnit: number | null;
   displayUnit: string | null;
   notes: string | null;
+  isDefault: boolean;
   isActive: boolean;
   sortOrder: number;
+  safetyStock: number | null;
+  reorderPoint: number | null;
+  targetStock: number | null;
 }
 
 export interface CreateProcurementSkuDto {
@@ -39,11 +57,20 @@ export interface CreateProcurementSkuDto {
   brand?: string | null;
   productModel?: string | null;
   purchaseChannel?: string | null;
+  supplierName?: string | null;
+  purchaseUnit?: string | null;
+  purchaseToBaseRatio?: number | null;
+  currentPurchasePrice?: number | null;
+  referencePurchasePrice?: number | null;
   referencePricePerPurchaseUnit?: number | null;
   displayUnit?: string | null;
   notes?: string | null;
+  isDefault?: boolean;
   isActive?: boolean;
   sortOrder?: number;
+  safetyStock?: number | null;
+  reorderPoint?: number | null;
+  targetStock?: number | null;
 }
 
 export interface UpdateProcurementSkuDto
@@ -64,9 +91,9 @@ const normalizeOptionalText = (
 };
 
 const toNullableNumber = (
-  value: DecimalLike | number | null,
+  value: DecimalLike | number | null | undefined,
 ): number | null => {
-  if (value === null) {
+  if (value === null || value === undefined) {
     return null;
   }
 
@@ -80,13 +107,22 @@ const toSummary = (sku: ProcurementSkuRecord): ProcurementSkuSummary => ({
   brand: sku.brand,
   productModel: sku.productModel,
   purchaseChannel: sku.purchaseChannel,
+  supplierName: sku.supplierName ?? null,
+  purchaseUnit: sku.purchaseUnit ?? null,
+  purchaseToBaseRatio: sku.purchaseToBaseRatio ?? null,
+  currentPurchasePrice: toNullableNumber(sku.currentPurchasePrice),
+  referencePurchasePrice: toNullableNumber(sku.referencePurchasePrice),
   referencePricePerPurchaseUnit: toNullableNumber(
-    sku.referencePricePerPurchaseUnit,
+    sku.referencePurchasePrice ?? sku.referencePricePerPurchaseUnit,
   ),
-  displayUnit: sku.displayUnit,
+  displayUnit: sku.displayUnit ?? sku.purchaseUnit ?? null,
   notes: sku.notes,
+  isDefault: sku.isDefault ?? false,
   isActive: sku.isActive,
   sortOrder: sku.sortOrder,
+  safetyStock: sku.safetyStock ?? null,
+  reorderPoint: sku.reorderPoint ?? null,
+  targetStock: sku.targetStock ?? null,
 });
 
 const sortProcurementSkus = <T extends ProcurementSkuRecord>(skus: T[]): T[] =>
@@ -159,12 +195,25 @@ export class ProcurementSkuService {
         brand: normalizeOptionalText(dto.brand) ?? null,
         productModel: normalizeOptionalText(dto.productModel) ?? null,
         purchaseChannel: normalizeOptionalText(dto.purchaseChannel) ?? null,
+        supplierName: normalizeOptionalText(dto.supplierName) ?? null,
+        purchaseUnit: normalizeOptionalText(dto.purchaseUnit) ?? null,
+        purchaseToBaseRatio: dto.purchaseToBaseRatio ?? null,
+        currentPurchasePrice: dto.currentPurchasePrice ?? null,
+        referencePurchasePrice:
+          dto.referencePurchasePrice ?? dto.referencePricePerPurchaseUnit ?? null,
         referencePricePerPurchaseUnit:
-          dto.referencePricePerPurchaseUnit ?? null,
-        displayUnit: normalizeOptionalText(dto.displayUnit) ?? null,
+          dto.referencePricePerPurchaseUnit ?? dto.referencePurchasePrice ?? null,
+        displayUnit:
+          normalizeOptionalText(dto.displayUnit) ??
+          normalizeOptionalText(dto.purchaseUnit) ??
+          null,
         notes: normalizeOptionalText(dto.notes) ?? null,
+        isDefault: dto.isDefault ?? false,
         isActive: dto.isActive ?? true,
         sortOrder: dto.sortOrder ?? 0,
+        safetyStock: dto.safetyStock ?? null,
+        reorderPoint: dto.reorderPoint ?? null,
+        targetStock: dto.targetStock ?? null,
       },
     });
 
@@ -228,8 +277,34 @@ export class ProcurementSkuService {
       data.purchaseChannel = purchaseChannel;
     }
 
+    const supplierName = normalizeOptionalText(dto.supplierName);
+    if (supplierName !== undefined) {
+      data.supplierName = supplierName;
+    }
+
+    const purchaseUnit = normalizeOptionalText(dto.purchaseUnit);
+    if (purchaseUnit !== undefined) {
+      data.purchaseUnit = purchaseUnit;
+    }
+
+    if (dto.purchaseToBaseRatio !== undefined) {
+      data.purchaseToBaseRatio = dto.purchaseToBaseRatio;
+    }
+
+    if (dto.currentPurchasePrice !== undefined) {
+      data.currentPurchasePrice = dto.currentPurchasePrice;
+    }
+
+    if (dto.referencePurchasePrice !== undefined) {
+      data.referencePurchasePrice = dto.referencePurchasePrice;
+      data.referencePricePerPurchaseUnit = dto.referencePurchasePrice;
+    }
+
     if (dto.referencePricePerPurchaseUnit !== undefined) {
       data.referencePricePerPurchaseUnit = dto.referencePricePerPurchaseUnit;
+      if (dto.referencePurchasePrice === undefined) {
+        data.referencePurchasePrice = dto.referencePricePerPurchaseUnit;
+      }
     }
 
     const displayUnit = normalizeOptionalText(dto.displayUnit);
@@ -246,8 +321,24 @@ export class ProcurementSkuService {
       data.isActive = dto.isActive;
     }
 
+    if (dto.isDefault !== undefined) {
+      data.isDefault = dto.isDefault;
+    }
+
     if (dto.sortOrder !== undefined) {
       data.sortOrder = dto.sortOrder;
+    }
+
+    if (dto.safetyStock !== undefined) {
+      data.safetyStock = dto.safetyStock;
+    }
+
+    if (dto.reorderPoint !== undefined) {
+      data.reorderPoint = dto.reorderPoint;
+    }
+
+    if (dto.targetStock !== undefined) {
+      data.targetStock = dto.targetStock;
     }
 
     const updated = await this.prisma.procurementSku.update({

@@ -30,6 +30,8 @@ export interface InventoryOverviewItem {
   unitDisplayLabel?: string | null;
   purchaseChannel?: string | null;
   productModel?: string | null;
+  procurementSkuId?: string;
+  procurementSkuName?: string;
   currentPricePerPurchaseUnit: number;
   effectivePricePerPurchaseUnit?: number | null;
   currentStock: number;
@@ -48,6 +50,8 @@ export interface InventoryLedgerItem {
   id: string;
   ingredientId: string;
   ingredientName: string;
+  procurementSkuId?: string | null;
+  procurementSkuName?: string | null;
   deltaG: number;
   stockUnitLabel: string;
   sourceType: InventorySourceType;
@@ -64,6 +68,8 @@ export interface InventoryLedgerItem {
 export interface InventoryStocktakeLineItem {
   id: string;
   ingredientId: string;
+  procurementSkuId?: string | null;
+  procurementSkuName?: string | null;
   ingredientName: string;
   stockUnitLabel: string;
   expectedQuantityG: number;
@@ -85,6 +91,7 @@ export interface InventoryStocktakeItem {
 
 export interface CreateInventoryStocktakeLinePayload {
   ingredientId: string;
+  procurementSkuId?: string;
   countedQuantityG: number;
 }
 

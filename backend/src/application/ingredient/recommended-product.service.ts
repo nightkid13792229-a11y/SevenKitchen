@@ -16,6 +16,7 @@ export interface RecommendedProductSummary {
   purchaseLink?: any;
   imageUrl?: string | null;
   activeNutrients?: any;
+  marketingNutritionHighlights?: any;
   displayUnit?: string | null;
 }
 
@@ -27,6 +28,7 @@ export interface CreateRecommendedProductDto {
   purchaseLink?: object;
   imageUrl?: string;
   activeNutrients?: Record<string, { value: number; unit: string }>;
+  marketingNutritionHighlights?: Record<string, { value: number; unit: string }>;
   displayUnit?: string;
   isActive?: boolean;
   sortOrder?: number;
@@ -40,6 +42,7 @@ export interface UpdateRecommendedProductDto {
   purchaseLink?: object;
   imageUrl?: string;
   activeNutrients?: Record<string, { value: number; unit: string }>;
+  marketingNutritionHighlights?: Record<string, { value: number; unit: string }>;
   displayUnit?: string;
   isActive?: boolean;
   sortOrder?: number;
@@ -90,6 +93,7 @@ export class RecommendedProductService {
         purchaseLink: p.purchaseLink,
         imageUrl: p.imageUrl,
         activeNutrients: p.activeNutrients,
+        marketingNutritionHighlights: p.activeNutrients,
         displayUnit: p.displayUnit,
       });
     }
@@ -136,10 +140,15 @@ export class RecommendedProductService {
    * Find all recommended products for an ingredient (admin)
    */
   async findByIngredientId(ingredientId: string): Promise<any[]> {
-    return this.prisma.recommendedProduct.findMany({
+    const products = await this.prisma.recommendedProduct.findMany({
       where: { ingredientId },
       orderBy: { sortOrder: 'asc' },
     });
+
+    return products.map((product) => ({
+      ...product,
+      marketingNutritionHighlights: product.activeNutrients,
+    }));
   }
 
   /**
@@ -168,12 +177,16 @@ export class RecommendedProductService {
         purchaseChannel: dto.purchaseChannel || null,
         purchaseLink: dto.purchaseLink || undefined,
         imageUrl: dto.imageUrl || null,
-        activeNutrients: dto.activeNutrients || undefined,
+        activeNutrients:
+          dto.marketingNutritionHighlights || dto.activeNutrients || undefined,
         displayUnit: dto.displayUnit || null,
         isActive: dto.isActive ?? true,
         sortOrder: dto.sortOrder ?? 0,
       },
-    });
+    }).then((product) => ({
+      ...product,
+      marketingNutritionHighlights: product.activeNutrients,
+    }));
   }
 
   /**
@@ -202,8 +215,11 @@ export class RecommendedProductService {
           purchaseLink: dto.purchaseLink as any,
         }),
         ...(dto.imageUrl !== undefined && { imageUrl: dto.imageUrl || null }),
-        ...(dto.activeNutrients !== undefined && {
-          activeNutrients: dto.activeNutrients as any,
+        ...((dto.activeNutrients !== undefined ||
+          dto.marketingNutritionHighlights !== undefined) && {
+          activeNutrients: (
+            dto.marketingNutritionHighlights ?? dto.activeNutrients
+          ) as any,
         }),
         ...(dto.displayUnit !== undefined && {
           displayUnit: dto.displayUnit || null,
@@ -211,7 +227,10 @@ export class RecommendedProductService {
         ...(dto.isActive !== undefined && { isActive: dto.isActive }),
         ...(dto.sortOrder !== undefined && { sortOrder: dto.sortOrder }),
       },
-    });
+    }).then((product) => ({
+      ...product,
+      marketingNutritionHighlights: product.activeNutrients,
+    }));
   }
 
   /**

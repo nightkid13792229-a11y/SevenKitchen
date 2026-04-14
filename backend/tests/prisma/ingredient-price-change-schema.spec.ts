@@ -11,5 +11,6 @@ describe('IngredientPriceChange Prisma schema', () => {
     expect(schema).toMatch(
       /sourceQuantity\s+Decimal\s+@map\("source_quantity"\)\s+@db\.Decimal\(18,\s*6\)/,
     );
+    expect(schema).not.toMatch(/sourceQuantity\s+Int\b/);
   });
 });

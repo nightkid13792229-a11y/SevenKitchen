@@ -53,7 +53,7 @@ interface IngredientPriceChangeRecord {
   reimbursementId: string;
   purchaseRecordId: string;
   ingredientName: string;
-  sourceQuantity: number;
+  sourceQuantity: number | DecimalLike;
   sourcePricePerPurchaseUnit: DecimalLike;
   previousCurrentPricePerPurchaseUnit: DecimalLike;
   previousEffectivePrice: DecimalLike;
@@ -71,7 +71,7 @@ interface IngredientPriceChangeRecord {
 interface IngredientPriceChangeApplyRecord {
   id: string;
   ingredientId: string;
-  sourceQuantity: number;
+  sourceQuantity: number | DecimalLike;
   sourcePricePerPurchaseUnit: DecimalLike;
   proposedEffectivePrice: DecimalLike;
 }
@@ -338,7 +338,7 @@ export class IngredientPricingService {
       reimbursementId: row.reimbursementId,
       purchaseRecordId: row.purchaseRecordId,
       purchaseUnit: row.ingredient?.purchaseUnit ?? null,
-      sourceQuantity: row.sourceQuantity,
+      sourceQuantity: this.toNumericSourceQuantity(row.sourceQuantity),
       sourcePricePerPurchaseUnit: row.sourcePricePerPurchaseUnit.toNumber(),
       previousCurrentPricePerPurchaseUnit:
         row.previousCurrentPricePerPurchaseUnit.toNumber(),
@@ -398,7 +398,8 @@ export class IngredientPricingService {
           groupedEffectiveAccumulator.get(effectiveKey),
           change.sourcePricePerPurchaseUnit.toNumber() /
             sourceIngredient.purchaseToBaseRatio,
-          change.sourceQuantity * sourceIngredient.purchaseToBaseRatio,
+          this.toNumericSourceQuantity(change.sourceQuantity) *
+            sourceIngredient.purchaseToBaseRatio,
         ),
       );
       ingredientCurrentAccumulator.set(
@@ -406,7 +407,7 @@ export class IngredientPricingService {
         this.mergeWeightedAccumulator(
           ingredientCurrentAccumulator.get(change.ingredientId),
           change.sourcePricePerPurchaseUnit.toNumber(),
-          change.sourceQuantity,
+          this.toNumericSourceQuantity(change.sourceQuantity),
         ),
       );
     }
@@ -633,7 +634,8 @@ export class IngredientPricingService {
             historicalBaseQuantities,
           );
           const currentBaseQuantity =
-            change.sourceQuantity * ingredient.purchaseToBaseRatio;
+            this.toNumericSourceQuantity(change.sourceQuantity) *
+            ingredient.purchaseToBaseRatio;
 
           if (
             currentBaseQuantity <
@@ -725,6 +727,19 @@ export class IngredientPricingService {
 
   private roundRatio(value: number): number {
     return Number(value.toFixed(4));
+  }
+
+  private toNumericSourceQuantity(sourceQuantity: number | DecimalLike): number {
+    if (
+      sourceQuantity !== null &&
+      typeof sourceQuantity === 'object' &&
+      'toNumber' in sourceQuantity &&
+      typeof sourceQuantity.toNumber === 'function'
+    ) {
+      return sourceQuantity.toNumber();
+    }
+
+    return Number(sourceQuantity);
   }
 
   private calculateMedian(values: number[]): number {

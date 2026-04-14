@@ -484,6 +484,7 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
           }),
         }),
       );
+    });
 
     it('should preserve snapshot dailyIntakeG when the dog profile changes before order creation', async () => {
       const recipe = createMockRecipe();

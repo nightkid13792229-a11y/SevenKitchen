@@ -712,6 +712,7 @@ export class OrderService {
         });
 
         return {
+          id: (ri as any).id,
           ingredientId: ri.ingredientId,
           ingredient,
           preparationMethod: prepMethodText,
@@ -1196,6 +1197,7 @@ export class OrderService {
         }) ?? null;
 
       return {
+        id: (ri as any).id,
         ingredientId: ri.ingredientId,
         ingredient,
         preparationMethod: prepMethodText,

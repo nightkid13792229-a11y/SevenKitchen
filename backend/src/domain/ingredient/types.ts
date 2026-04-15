@@ -161,14 +161,18 @@ export interface SupplementProperties {
 
   // 兼容历史数据：补剂专属营养字段已迁移到统一 nutritionProfile。
   // 在过渡阶段保留该字段，方便脚本回填与兼容旧数据读取。
-  active_nutrients: Record<string, ActiveNutrientValue>;
+  active_nutrients?: Record<string, ActiveNutrientValue>;
+
+  // 直连产品信息（单层补剂模型）
+  display_unit?: string;
+  supplier_name?: string | null;
+  purchase_link?: PurchaseLinkConfig;
+  image_url?: string | null;
+  marketing_highlights?: Record<string, ActiveNutrientValue>;
 
   // 个性化损耗率 (Override Global)
   // 默认建议 1.05 (5%)。鱼油可设为 1.0, 易损粉末设为 1.10
   production_loss_rate?: number;
-
-  // 购买链接配置
-  purchase_link?: PurchaseLinkConfig;
 }
 
 /**
@@ -178,4 +182,5 @@ export interface PackagingProperties {
   // 业务属性
   is_consumable: boolean; // true=消耗品(随单扣减), false=固定资产
   linked_item_id?: string; // 关联配件 (e.g. 4号箱绑定4号袋)
+  supplier_name?: string | null;
 }

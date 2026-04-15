@@ -632,6 +632,38 @@
               </span>
             </div>
           </el-form-item>
+
+          <el-form-item label="替代补剂">
+            <el-select
+              v-model="ingredientForm.supplementAlternativeIngredientIds"
+              multiple
+              clearable
+              placeholder="可选：为这条补剂配置替代产品"
+              style="width: 100%"
+            >
+              <el-option
+                v-for="option in availableSupplementAlternativeOptions"
+                :key="option.id"
+                :label="formatIngredientDisplayLabel(option)"
+                :value="option.id"
+              >
+                <div style="display: flex; flex-direction: column; gap: 4px">
+                  <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+                    <span style="font-weight: 500">{{ option.name }}</span>
+                    <span v-if="option.brand" style="color: #909399; font-size: 12px">
+                      {{ option.brand }}
+                    </span>
+                    <span v-if="option.productModel" style="color: #909399; font-size: 12px">
+                      {{ option.productModel }}
+                    </span>
+                  </div>
+                </div>
+              </el-option>
+            </el-select>
+            <div style="color: #909399; font-size: 12px; margin-top: 4px">
+              💡 用户在 DIY 制作单里可在这些补剂产品间切换，系统会按所选补剂的营养数据重算默认用量
+            </div>
+          </el-form-item>
         </template>
       </el-form>
 
@@ -800,6 +832,7 @@ const ingredientForm = reactive({
   ratioPercent: undefined as number | undefined,
   nutrientTargetKey: '',
   nutrientTargetValue: undefined as number | undefined,
+  supplementAlternativeIngredientIds: [] as string[],
 });
 const ingredientPreparationMethodHistory = ref<
   IngredientPreparationMethodHistoryItem[]
@@ -851,6 +884,30 @@ const nutrientUnit = computed(() => {
   return '';
 });
 
+const availableSupplementAlternativeOptions = computed(() => {
+  if (!selectedIngredient.value || !selectedIngredientIsSupplement.value) {
+    return [];
+  }
+
+  return availableIngredients.value.filter((ingredient) => {
+    return (
+      ingredient.type === 'SUPPLEMENT' &&
+      ingredient.id !== ingredientForm.ingredientId
+    );
+  });
+});
+
+const formatIngredientDisplayLabel = (ingredient: {
+  name?: string;
+  brand?: string | null;
+  productModel?: string | null;
+}) => {
+  return [ingredient.name, ingredient.brand, ingredient.productModel]
+    .map((part) => (typeof part === 'string' ? part.trim() : ''))
+    .filter(Boolean)
+    .join(' · ');
+};
+
 const applyPreparationMethodHistory = (historyText: string) => {
   ingredientForm.preparationMethodText = appendPreparationMethodText(
     ingredientForm.preparationMethodText,
@@ -873,6 +930,7 @@ watch(
     if (ingredient && ingredient.type !== 'SUPPLEMENT') {
       ingredientForm.nutrientTargetKey = '';
       ingredientForm.nutrientTargetValue = undefined;
+      ingredientForm.supplementAlternativeIngredientIds = [];
     }
 
     ingredientPreparationMethodHistory.value = [];
@@ -1436,6 +1494,7 @@ const resetIngredientForm = () => {
   ingredientForm.ratioPercent = undefined;
   ingredientForm.nutrientTargetKey = '';
   ingredientForm.nutrientTargetValue = undefined;
+  ingredientForm.supplementAlternativeIngredientIds = [];
   ingredientPreparationMethodHistory.value = [];
   ingredientPreparationMethodHistoryLoading.value = false;
 };
@@ -1486,6 +1545,8 @@ const saveIngredient = () => {
       ratioPercent: ingredientForm.ratioPercent,
       nutrientTargetKey: undefined,
       nutrientTargetValue: undefined,
+      supplementAlternativeIngredientIds: [],
+      supplementAlternatives: [],
     }),
     // 补剂类型：保存营养目标
     ...(ingredient.type === 'SUPPLEMENT' && {
@@ -1493,6 +1554,25 @@ const saveIngredient = () => {
       ratioPercent: undefined,
       nutrientTargetKey: ingredientForm.nutrientTargetKey || undefined,
       nutrientTargetValue: ingredientForm.nutrientTargetValue || undefined,
+      supplementAlternativeIngredientIds: [
+        ...ingredientForm.supplementAlternativeIngredientIds,
+      ],
+      supplementAlternatives: ingredientForm.supplementAlternativeIngredientIds
+        .map((alternativeIngredientId) => {
+          const alternativeIngredient = availableIngredients.value.find(
+            (candidate) => candidate.id === alternativeIngredientId,
+          );
+
+          if (!alternativeIngredient) {
+            return null;
+          }
+
+          return {
+            ingredientId: alternativeIngredient.id,
+            ingredientName: alternativeIngredient.name,
+          };
+        })
+        .filter(Boolean) as Array<{ ingredientId: string; ingredientName: string }>,
     }),
   };
 
@@ -1556,6 +1636,9 @@ const editIngredient = (row: RecipeItem, index: number) => {
   ingredientForm.ratioPercent = row.ratioPercent;
   ingredientForm.nutrientTargetKey = row.nutrientTargetKey || '';
   ingredientForm.nutrientTargetValue = row.nutrientTargetValue;
+  ingredientForm.supplementAlternativeIngredientIds = [
+    ...(row.supplementAlternativeIngredientIds || []),
+  ];
   ingredientDialogVisible.value = true;
 };
 
@@ -1597,7 +1680,14 @@ const formatNutrientTarget = (row: any) => {
     }
   }
 
-  return `${key}: ${value}${unit}`;
+  const alternativesCount = row.supplementAlternativeIngredientIds?.length || 0;
+  const baseText = `${key}: ${value}${unit}`;
+
+  if (alternativesCount <= 0) {
+    return baseText;
+  }
+
+  return `${baseText} · 替代 ${alternativesCount} 项`;
 };
 
 // Format preparation methods for display

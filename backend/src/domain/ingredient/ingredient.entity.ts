@@ -29,6 +29,8 @@ export class Ingredient {
     public readonly name: string,
     public readonly type: IngredientType,
     public readonly procurementStrategy: IngredientProcurementStrategy,
+    public readonly diyEnabled: boolean,
+    public readonly procurementEnabled: boolean,
     public readonly brand: string | null,
     public readonly productModel: string | null,
     public readonly purchaseChannel: string | null,
@@ -194,6 +196,14 @@ export class Ingredient {
     }
     const suppProps = this.properties as SupplementProperties;
     return suppProps.production_loss_rate ?? null;
+  }
+
+  canUseForDiy(): boolean {
+    return this.diyEnabled;
+  }
+
+  canUseForProcurement(): boolean {
+    return this.procurementEnabled;
   }
 
   /**

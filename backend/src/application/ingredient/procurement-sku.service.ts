@@ -1,4 +1,9 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { IngredientType } from '../../domain/ingredient/enums';
 import { PrismaService } from '../../infrastructure/prisma.service';
 
 type DecimalLike = {
@@ -138,6 +143,21 @@ const sortProcurementSkus = <T extends ProcurementSkuRecord>(skus: T[]): T[] =>
 export class ProcurementSkuService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private assertFoodIngredientCanOwnProcurementSkus(ingredient: {
+    id: string;
+    type: string;
+  } | null): asserts ingredient is { id: string; type: string } {
+    if (!ingredient) {
+      throw new NotFoundException('Ingredient not found');
+    }
+
+    if (ingredient.type !== IngredientType.FOOD) {
+      throw new BadRequestException(
+        'Only FOOD ingredients can own procurement SKUs',
+      );
+    }
+  }
+
   private normalizeDistinctValues(values: Array<string | null | undefined>): string[] {
     return Array.from(
       new Set(
@@ -181,12 +201,12 @@ export class ProcurementSkuService {
   ): Promise<ProcurementSkuSummary> {
     const ingredient = await this.prisma.ingredient.findUnique({
       where: { id: ingredientId },
-      select: { id: true },
+      select: {
+        id: true,
+        type: true,
+      },
     });
-
-    if (!ingredient) {
-      throw new NotFoundException(`Ingredient not found: ${ingredientId}`);
-    }
+    this.assertFoodIngredientCanOwnProcurementSkus(ingredient);
 
     const created = await this.prisma.procurementSku.create({
       data: {
@@ -249,12 +269,21 @@ export class ProcurementSkuService {
   ): Promise<ProcurementSkuSummary> {
     const existing = await this.prisma.procurementSku.findUnique({
       where: { id },
-      select: { id: true },
+      select: {
+        id: true,
+        ingredient: {
+          select: {
+            id: true,
+            type: true,
+          },
+        },
+      },
     });
 
     if (!existing) {
       throw new NotFoundException(`Procurement sku not found: ${id}`);
     }
+    this.assertFoodIngredientCanOwnProcurementSkus(existing.ingredient);
 
     const data: Record<string, unknown> = {};
 
@@ -352,12 +381,21 @@ export class ProcurementSkuService {
   async delete(id: string): Promise<void> {
     const existing = await this.prisma.procurementSku.findUnique({
       where: { id },
-      select: { id: true },
+      select: {
+        id: true,
+        ingredient: {
+          select: {
+            id: true,
+            type: true,
+          },
+        },
+      },
     });
 
     if (!existing) {
       throw new NotFoundException(`Procurement sku not found: ${id}`);
     }
+    this.assertFoodIngredientCanOwnProcurementSkus(existing.ingredient);
 
     await this.prisma.procurementSku.delete({
       where: { id },

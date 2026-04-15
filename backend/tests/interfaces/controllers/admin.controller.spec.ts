@@ -61,6 +61,7 @@ describe('AdminController', () => {
             updatedAt: new Date('2026-04-12T10:00:00.000Z'),
             tags: [],
             recommendedProducts: [],
+            procurementSkus: [],
           }),
         },
       };
@@ -269,6 +270,83 @@ describe('AdminController', () => {
         regionText: '上海市 上海市 浦东新区',
         detailAddress: '世纪大道100号',
       });
+    });
+  });
+
+  describe('supplement DIY image management', () => {
+    it('uploads supplement DIY images into the ingredient-diy-images folder', async () => {
+      const mockCosService = {
+        uploadImage: jest.fn().mockResolvedValue({
+          url: 'https://cdn.example.com/ingredient-diy-images/1711111111-abcd1234.jpg',
+          key: 'ingredient-diy-images/1711111111-abcd1234.jpg',
+        }),
+      };
+
+      const controller = new AdminController(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        mockCosService as any,
+      );
+
+      const file = {
+        originalname: 'vitamin-e.jpg',
+        buffer: Buffer.from('image'),
+      } as Express.Multer.File;
+
+      const result = await controller.uploadIngredientDiyImage(file);
+
+      expect(mockCosService.uploadImage).toHaveBeenCalledWith(
+        file,
+        'vitamin-e.jpg',
+        'ingredient-diy-images',
+      );
+      expect(result.code).toBe(0);
+      expect(result.data).toEqual({
+        url: 'https://cdn.example.com/ingredient-diy-images/1711111111-abcd1234.jpg',
+        key: 'ingredient-diy-images/1711111111-abcd1234.jpg',
+      });
+    });
+
+    it('deletes supplement DIY images from COS by key', async () => {
+      const mockCosService = {
+        deleteImage: jest.fn().mockResolvedValue(undefined),
+      };
+
+      const controller = new AdminController(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        mockCosService as any,
+      );
+
+      const result = await controller.deleteIngredientDiyImage({
+        key: 'ingredient-diy-images/1711111111-abcd1234.jpg',
+      });
+
+      expect(mockCosService.deleteImage).toHaveBeenCalledWith(
+        'ingredient-diy-images/1711111111-abcd1234.jpg',
+      );
+      expect(result.code).toBe(0);
+      expect(result.data).toEqual({ message: 'Image deleted successfully' });
     });
   });
 });

@@ -24,13 +24,13 @@
       class="structure-alert"
     >
       <template #title>
-        当前维护分三层：标准原料负责逻辑原料，营养数据单独维护，DIY 推荐商品负责小程序推荐，采购 SKU 负责采购、库存和生产执行。
+        当前维护按原料类型分治：食材保留三层模型，补剂与包材逐步切换为单层产品模型。
       </template>
-      标准原料页不再维护采购品牌、规格、渠道、采购单价与库存阈值，这些信息请统一在采购 SKU 中维护；营养数据请在原料列表中通过“营养数据”入口单独编辑。
+      {{ structureAlertDescription }}
     </el-alert>
 
     <el-alert
-      v-if="isEdit && !hasActiveProcurementSku"
+      v-if="isEdit && typeCapabilities.supportsChildSkus && !hasActiveProcurementSku"
       type="warning"
       :closable="false"
       show-icon
@@ -85,10 +85,13 @@
 
     <el-form-item label="原料类型" prop="type">
       <el-radio-group v-model="formData.type" @change="handleTypeChange">
-        <el-radio :value="IngredientType.FOOD">食材</el-radio>
-        <el-radio :value="IngredientType.SUPPLEMENT">补剂</el-radio>
-        <el-radio :value="IngredientType.PACKAGING">包材</el-radio>
+        <el-radio :value="IngredientType.FOOD" :disabled="isEdit">食材</el-radio>
+        <el-radio :value="IngredientType.SUPPLEMENT" :disabled="isEdit">补剂</el-radio>
+        <el-radio :value="IngredientType.PACKAGING" :disabled="isEdit">包材</el-radio>
       </el-radio-group>
+      <div v-if="isEdit" class="form-item-helper">
+        已创建原料的类型不可再修改，避免子 SKU、采购与营养链路悬空。
+      </div>
     </el-form-item>
 
     <el-form-item label="备注">
@@ -102,7 +105,7 @@
       />
     </el-form-item>
 
-    <el-form-item label="标签分类">
+    <el-form-item v-if="typeCapabilities.showTagSelector" label="标签分类">
       <div class="tag-selector-wrapper">
         <!-- 操作按钮 -->
         <div class="tag-selector-actions">
@@ -233,9 +236,13 @@
       <span class="hint-text">包材装箱算法使用</span>
     </el-form-item>
 
-    <div class="section-title">业务策略</div>
+    <div v-if="typeCapabilities.showProcurementStrategyEditor" class="section-title">业务策略</div>
 
-    <el-form-item label="采购策略" prop="procurementStrategy">
+    <el-form-item
+      v-if="typeCapabilities.showProcurementStrategyEditor"
+      label="采购策略"
+      prop="procurementStrategy"
+    >
       <el-radio-group v-model="formData.procurementStrategy">
         <el-radio :value="IngredientProcurementStrategy.DAILY_PURCHASE">
           {{ IngredientProcurementStrategyLabels[IngredientProcurementStrategy.DAILY_PURCHASE] }}
@@ -313,19 +320,31 @@
 
     <!-- 补剂属性 -->
     <template v-if="formData.type === IngredientType.SUPPLEMENT">
-      <el-form-item label="营养分类" prop="category_type">
-        <el-select
-          v-model="supplementProperties.category_type"
-          placeholder="请选择分类"
-          style="width: 200px"
-        >
-          <el-option
-            v-for="cat in SUPPLEMENT_CATEGORY_OPTIONS"
-            :key="cat.value"
-            :label="cat.label"
-            :value="cat.value"
-          />
-        </el-select>
+      <el-form-item label="产品品牌">
+        <el-input
+          v-model="formData.brand"
+          placeholder="如：NOW FOODS"
+          maxlength="100"
+          style="width: 240px"
+        />
+      </el-form-item>
+
+      <el-form-item label="产品规格">
+        <el-input
+          v-model="formData.productModel"
+          placeholder="如：100粒/瓶，134mg(200IU)/粒"
+          maxlength="100"
+          style="width: 320px"
+        />
+      </el-form-item>
+
+      <el-form-item label="购买/采购渠道">
+        <el-input
+          v-model="formData.purchaseChannel"
+          placeholder="如：京东、天猫旗舰店"
+          maxlength="200"
+          style="width: 320px"
+        />
       </el-form-item>
 
       <el-form-item label="添加时机" prop="add_timing">
@@ -356,10 +375,202 @@
         />
         <span class="hint-text">可选，覆盖全局默认值1.05</span>
       </el-form-item>
+
+      <div class="capability-section">
+        <el-form-item label="用于 DIY 推荐">
+          <el-switch v-model="formData.diyEnabled" />
+          <span class="hint-text">开启后，这条补剂可出现在食谱补剂替代选项和 DIY 制作单中</span>
+        </el-form-item>
+
+        <template v-if="showSupplementPurchaseLinkField">
+          <div class="capability-fields">
+            <el-form-item label="购买链接">
+              <div style="width: 100%;">
+                <el-select
+                  v-model="supplementPurchaseLink.platform"
+                  placeholder="平台类型"
+                  style="width: 180px; margin-bottom: 8px;"
+                >
+                  <el-option label="淘宝/天猫" value="TAOBAO" />
+                  <el-option label="京东" value="JD" />
+                  <el-option label="拼多多" value="PINDUODUO" />
+                  <el-option label="其他小程序" value="OTHER" />
+                  <el-option label="网页链接" value="WEBVIEW" />
+                </el-select>
+                <el-input
+                  v-model="supplementPurchaseLink.url"
+                  placeholder="补剂产品购买链接"
+                  style="width: 100%;"
+                />
+              </div>
+            </el-form-item>
+
+            <el-form-item
+              v-if="typeCapabilities.showSupplementImageField"
+              label="产品图片"
+            >
+              <div class="supplement-image-panel">
+                <div v-if="supplementProperties.image_url" class="supplement-image-preview-card">
+                  <el-image
+                    :src="supplementProperties.image_url"
+                    :preview-src-list="[supplementProperties.image_url]"
+                    fit="cover"
+                    preview-teleported
+                    class="supplement-image-preview"
+                  />
+                  <div class="supplement-image-actions">
+                    <el-upload
+                      :show-file-list="false"
+                      accept="image/*"
+                      :before-upload="handleSupplementImageUpload"
+                      :disabled="supplementImageUploading || !props.ingredient?.id"
+                    >
+                      <el-button :loading="supplementImageUploading">替换图片</el-button>
+                    </el-upload>
+                    <el-button
+                      type="danger"
+                      plain
+                      :loading="supplementImageUploading"
+                      @click="handleRemoveSupplementImage"
+                    >
+                      删除图片
+                    </el-button>
+                  </div>
+                </div>
+                <div v-else class="supplement-image-empty">
+                  <div class="supplement-image-empty-copy">
+                    推荐上传 1:1 方图，系统会自动裁切并用于小程序 DIY 制作单推荐弹窗展示。
+                  </div>
+                  <el-upload
+                    :show-file-list="false"
+                    accept="image/*"
+                    :before-upload="handleSupplementImageUpload"
+                    :disabled="supplementImageUploading || !props.ingredient?.id"
+                  >
+                    <el-button type="primary" :loading="supplementImageUploading">上传图片</el-button>
+                  </el-upload>
+                </div>
+                <div class="hint-text">
+                  建议原图清晰、主体居中，推荐尺寸 1200 × 1200。
+                  <span v-if="!props.ingredient?.id">请先保存补剂原料，再上传产品图片。</span>
+                </div>
+              </div>
+            </el-form-item>
+          </div>
+        </template>
+      </div>
+
+      <div class="capability-section">
+        <el-form-item label="用于采购/生产">
+          <el-switch v-model="formData.procurementEnabled" />
+          <span class="hint-text">开启后，这条补剂可用于采购、生产和库存执行</span>
+        </el-form-item>
+
+        <template v-if="showSupplementPurchaseFields">
+          <div class="capability-fields">
+            <el-form-item label="采购单位">
+              <el-input
+                v-model="formData.purchaseUnit"
+                placeholder="如：瓶、盒、袋"
+                maxlength="50"
+                style="width: 180px"
+              />
+            </el-form-item>
+
+            <el-form-item label="换算倍数">
+              <el-input-number
+                v-model="formData.purchaseToBaseRatio"
+                :min="0.01"
+                :precision="2"
+                :step="0.01"
+                controls-position="right"
+                style="width: 180px"
+              />
+              <span class="hint-text">1 个采购单位等于多少 {{ BaseUnitLabels[formData.baseUnit] }}</span>
+            </el-form-item>
+
+            <el-form-item label="当前采购价">
+              <el-input-number
+                v-model="formData.currentPricePerPurchaseUnit"
+                :min="0"
+                :precision="2"
+                :step="0.1"
+                controls-position="right"
+                style="width: 180px"
+              />
+              <span class="hint-text">单层补剂直接使用这条标准原料上的采购价格</span>
+            </el-form-item>
+          </div>
+        </template>
+      </div>
     </template>
 
     <!-- 包材属性 -->
     <template v-if="formData.type === IngredientType.PACKAGING">
+      <el-form-item label="用于采购/生产">
+        <el-switch v-model="formData.procurementEnabled" />
+        <span class="hint-text">开启后，这条包材可用于采购、库存和生产执行</span>
+      </el-form-item>
+
+      <el-form-item label="产品品牌">
+        <el-input
+          v-model="formData.brand"
+          placeholder="如：盒马、某包材品牌"
+          maxlength="100"
+          style="width: 240px"
+        />
+      </el-form-item>
+
+      <el-form-item label="产品规格">
+        <el-input
+          v-model="formData.productModel"
+          placeholder="如：4号泡沫箱 / 30个装"
+          maxlength="100"
+          style="width: 320px"
+        />
+      </el-form-item>
+
+      <el-form-item label="采购渠道">
+        <el-input
+          v-model="formData.purchaseChannel"
+          placeholder="如：盒马、线下包材供应商"
+          maxlength="200"
+          style="width: 320px"
+        />
+      </el-form-item>
+
+      <el-form-item label="采购单位">
+        <el-input
+          v-model="formData.purchaseUnit"
+          placeholder="如：箱、卷、袋"
+          maxlength="50"
+          style="width: 180px"
+        />
+      </el-form-item>
+
+      <el-form-item label="换算倍数">
+        <el-input-number
+          v-model="formData.purchaseToBaseRatio"
+          :min="0.01"
+          :precision="2"
+          :step="0.01"
+          controls-position="right"
+          style="width: 180px"
+        />
+        <span class="hint-text">1 个采购单位等于多少 {{ BaseUnitLabels[formData.baseUnit] }}</span>
+      </el-form-item>
+
+      <el-form-item label="当前采购价">
+        <el-input-number
+          v-model="formData.currentPricePerPurchaseUnit"
+          :min="0"
+          :precision="2"
+          :step="0.1"
+          controls-position="right"
+          style="width: 180px"
+        />
+      </el-form-item>
+
       <el-form-item label="消耗品类型" prop="is_consumable">
         <el-radio-group v-model="packagingProperties.is_consumable">
           <el-radio :value="true">消耗品</el-radio>
@@ -371,18 +582,43 @@
         </div>
       </el-form-item>
 
-      <el-form-item label="关联配件">
-        <el-input
-          v-model="packagingProperties.linked_item_id"
-          placeholder="关联配件ID"
-          style="width: 300px"
+      <el-form-item v-if="showPackagingStockPolicyFields" label="安全库存">
+        <el-input-number
+          v-model="formData.safetyStock"
+          :min="0"
+          :precision="2"
+          :step="0.1"
+          controls-position="right"
+          style="width: 180px"
         />
-        <span class="hint-text">可选，如4号箱绑定4号袋</span>
       </el-form-item>
+
+      <el-form-item v-if="showPackagingStockPolicyFields" label="补货点">
+        <el-input-number
+          v-model="formData.reorderPoint"
+          :min="0"
+          :precision="2"
+          :step="0.1"
+          controls-position="right"
+          style="width: 180px"
+        />
+      </el-form-item>
+
+      <el-form-item v-if="showPackagingStockPolicyFields" label="目标库存">
+        <el-input-number
+          v-model="formData.targetStock"
+          :min="0"
+          :precision="2"
+          :step="0.1"
+          controls-position="right"
+          style="width: 180px"
+        />
+      </el-form-item>
+
     </template>
 
-    <!-- 家庭 DIY 推荐商品管理（所有类型原料都可用） -->
-    <template v-if="isEdit">
+    <!-- FOOD only child SKU management -->
+    <template v-if="typeCapabilities.supportsChildSkus && isEdit">
       <div class="section-title section-title-with-tag">
         <span>家庭 DIY 推荐商品</span>
         <el-tag size="small" type="primary">已配置 {{ recommendedProductCount }} 个</el-tag>
@@ -490,7 +726,7 @@
         </div>
       </div>
     </template>
-    <template v-else>
+    <template v-else-if="typeCapabilities.supportsChildSkus && !isEdit">
       <div class="section-title">SKU 管理</div>
       <div class="sku-guide-card">
         <div class="sku-guide-title">先保存标准原料，再继续补充推荐商品和采购 SKU</div>
@@ -728,7 +964,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, watch, computed, onMounted, nextTick } from 'vue'
-import type { FormInstance, FormRules } from 'element-plus'
+import type { FormInstance, FormRules, UploadProps } from 'element-plus'
 import { ElMessage } from 'element-plus'
 import { Plus, Delete } from '@element-plus/icons-vue'
 import { ingredientTagApi, type IngredientTag, type CreateTagDto } from '@/api/ingredientTags'
@@ -736,10 +972,17 @@ import { ingredientApi } from '@/api/ingredients'
 import { INGREDIENT_NUTRITION_TAB_DEFINITIONS } from '@/constants/ingredientNutrition'
 import { buildSupplementActiveNutrientsFromNutritionProfile } from '@/utils/ingredientNutrition'
 import {
+  getDefaultProcurementStrategyForType,
+  getIngredientTypeCapabilities,
+  shouldLoadChildSkuData,
+  shouldShowPackagingStockPolicyFields as resolvePackagingStockPolicyVisibility,
+  shouldShowSupplementPurchaseFields as resolveSupplementPurchaseFieldsVisibility,
+  shouldShowSupplementPurchaseLinkField as resolveSupplementPurchaseLinkVisibility,
+} from '@/utils/ingredientTypeCapabilities'
+import {
   IngredientType,
   IngredientProcurementStrategy,
   BaseUnit,
-  SupplementCategoryType,
   SupplementAddTiming,
   BaseUnitLabels,
   IngredientProcurementStrategyLabels,
@@ -842,7 +1085,17 @@ const formData = reactive<IngredientForm>({
   id: props.ingredient?.id,
   name: props.ingredient?.name || '',
   type: props.ingredient?.type || IngredientType.FOOD,
-  procurementStrategy: props.ingredient?.procurementStrategy || IngredientProcurementStrategy.DAILY_PURCHASE,
+  procurementStrategy: (
+    (props.ingredient?.type || IngredientType.FOOD) === IngredientType.PACKAGING
+      ? getDefaultProcurementStrategyForType(IngredientType.PACKAGING)
+      : (props.ingredient?.procurementStrategy ||
+        getDefaultProcurementStrategyForType(props.ingredient?.type || IngredientType.FOOD))
+  ) as IngredientProcurementStrategy,
+  brand: props.ingredient?.brand || '',
+  productModel: props.ingredient?.productModel || '',
+  purchaseChannel: props.ingredient?.purchaseChannel || '',
+  diyEnabled: props.ingredient?.diyEnabled ?? false,
+  procurementEnabled: props.ingredient?.procurementEnabled ?? false,
   notes: props.ingredient?.notes || '',
   baseUnit: props.ingredient?.baseUnit || BaseUnit.G,
   baseUnitDisplayName: props.ingredient?.baseUnitDisplayName || props.ingredient?.unitDisplayLabel || '',
@@ -851,6 +1104,18 @@ const formData = reactive<IngredientForm>({
   properties: props.ingredient?.properties || getDefaultProperties(IngredientType.FOOD),
   nutritionProfile: props.ingredient?.nutritionProfile || null,
   tagIds: props.ingredient?.tagIds || []
+})
+
+const structureAlertDescription = computed(() => {
+  if (formData.type === IngredientType.FOOD) {
+    return '食材继续通过 DIY 推荐商品和采购 SKU 管理用户推荐与采购执行；营养数据请在原料列表中通过“营养数据”入口单独编辑。'
+  }
+
+  if (formData.type === IngredientType.SUPPLEMENT) {
+    return '补剂直接在标准原料上维护产品信息、采购信息与营养数据；营养数据请在原料列表中通过“营养数据”入口单独编辑。'
+  }
+
+  return '包材直接在标准原料上维护采购、库存与生产信息，不提供营养数据入口。'
 })
 
 // 类型特定属性
@@ -862,13 +1127,19 @@ const foodProperties = reactive<FoodProperties>(
 
 const supplementProperties = reactive<SupplementProperties>(
   (formData.type === IngredientType.SUPPLEMENT
-    ? (formData.properties as SupplementProperties)
+    ? { ...getDefaultSupplementProperties(), ...(formData.properties as SupplementProperties) }
+    : getDefaultSupplementProperties())
+)
+const supplementImageUploading = ref(false)
+const persistedSupplementProperties = ref<SupplementProperties>(
+  (props.ingredient?.type === IngredientType.SUPPLEMENT
+    ? { ...getDefaultSupplementProperties(), ...(props.ingredient.properties as SupplementProperties) }
     : getDefaultSupplementProperties())
 )
 
 const packagingProperties = reactive<PackagingProperties>(
   (formData.type === IngredientType.PACKAGING
-    ? (formData.properties as PackagingProperties)
+    ? { ...getDefaultPackagingProperties(), ...(formData.properties as PackagingProperties) }
     : getDefaultPackagingProperties())
 )
 
@@ -905,21 +1176,10 @@ const querySearchNutritionNames = (queryString: string, cb: (results: Array<{ va
   cb(results)
 }
 
-// 补充分类选项
-const SUPPLEMENT_CATEGORY_OPTIONS = Object.entries({
-  [SupplementCategoryType.MINERAL]: '矿物质',
-  [SupplementCategoryType.VITAMIN]: '维生素',
-  [SupplementCategoryType.AMINO_ACID]: '氨基酸',
-  [SupplementCategoryType.FATTY_ACID]: '脂肪酸',
-  [SupplementCategoryType.PROBIOTIC]: '益生菌',
-  [SupplementCategoryType.FUNCTIONAL]: '功能性成分',
-  [SupplementCategoryType.OTHER]: '其他'
-}).map(([value, label]) => ({ value, label }))
-
 // 补剂添加时机选项
 const SUPPLEMENT_ADD_TIMING_OPTIONS = Object.entries({
-  [SupplementAddTiming.BEFORE_MIXING]: '制作中（须拌匀）',
-  [SupplementAddTiming.BEFORE_MEAL]: '饭前（冷却后）'
+  [SupplementAddTiming.BEFORE_MIXING]: '制作中',
+  [SupplementAddTiming.BEFORE_MEAL]: '随餐'
 }).map(([value, label]) => ({ value, label }))
 
 const recommendedProductCount = computed(() => recommendedProducts.value.length)
@@ -941,6 +1201,182 @@ const hasActiveProcurementSku = computed(() => (
   procurementSkus.value.some(product => product.isActive) ||
   initialHasActiveProcurementSku.value
 ))
+
+const typeCapabilities = computed(() => getIngredientTypeCapabilities(formData.type))
+const showPackagingStockPolicyFields = computed(() => (
+  resolvePackagingStockPolicyVisibility({
+    type: formData.type,
+    procurementEnabled: !!formData.procurementEnabled,
+    procurementStrategy: formData.procurementStrategy
+  })
+))
+const showSupplementPurchaseLinkField = computed(() => (
+  resolveSupplementPurchaseLinkVisibility({
+    type: formData.type,
+    diyEnabled: !!formData.diyEnabled
+  })
+))
+const showSupplementPurchaseFields = computed(() => (
+  resolveSupplementPurchaseFieldsVisibility({
+    type: formData.type,
+    procurementEnabled: !!formData.procurementEnabled
+  })
+))
+const supplementPurchaseLink = computed<PurchaseLinkConfig>({
+  get: () => {
+    if (!supplementProperties.purchase_link) {
+      supplementProperties.purchase_link = {
+        url: '',
+        platform: 'WEBVIEW'
+      }
+    }
+    return supplementProperties.purchase_link
+  },
+  set: (value) => {
+    supplementProperties.purchase_link = value
+  }
+})
+
+function extractIngredientDiyImageKey(imageUrl?: string | null): string | null {
+  if (!imageUrl) return null
+
+  try {
+    const parsedUrl = new URL(imageUrl)
+    const normalizedPath = parsedUrl.pathname.replace(/^\/+/, '')
+    return normalizedPath.includes('ingredient-diy-images/') ? normalizedPath : null
+  } catch {
+    const normalizedPath = imageUrl.replace(/^https?:\/\/[^/]+\//, '').replace(/^\/+/, '')
+    return normalizedPath.includes('ingredient-diy-images/') ? normalizedPath : null
+  }
+}
+
+function loadImageFromFile(file: File): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const objectUrl = URL.createObjectURL(file)
+    const image = new Image()
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl)
+      resolve(image)
+    }
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl)
+      reject(new Error('图片读取失败，请重试'))
+    }
+    image.src = objectUrl
+  })
+}
+
+async function cropImageFileToSquare(file: File): Promise<File> {
+  const image = await loadImageFromFile(file)
+  const side = Math.min(image.width, image.height)
+  const offsetX = Math.max(0, (image.width - side) / 2)
+  const offsetY = Math.max(0, (image.height - side) / 2)
+  const canvas = document.createElement('canvas')
+  canvas.width = side
+  canvas.height = side
+  const ctx = canvas.getContext('2d')
+
+  if (!ctx) {
+    throw new Error('图片裁切失败，请重试')
+  }
+
+  ctx.drawImage(image, offsetX, offsetY, side, side, 0, 0, side, side)
+
+  const blob = await new Promise<Blob>((resolve, reject) => {
+    canvas.toBlob((result) => {
+      if (result) {
+        resolve(result)
+      } else {
+        reject(new Error('图片裁切失败，请重试'))
+      }
+    }, 'image/jpeg', 0.92)
+  })
+
+  return new File([blob], `supplement-diy-square-${Date.now()}.jpg`, {
+    type: 'image/jpeg'
+  })
+}
+
+async function deleteSupplementImageByUrl(imageUrl?: string | null) {
+  const key = extractIngredientDiyImageKey(imageUrl)
+  if (!key) return
+  await ingredientApi.deleteIngredientDiyImage(key)
+}
+
+const handleSupplementImageUpload: UploadProps['beforeUpload'] = async (rawFile) => {
+  if (!props.ingredient?.id) {
+    ElMessage.warning('请先保存补剂原料，再上传产品图片')
+    return false
+  }
+
+  if (!rawFile.type.startsWith('image/')) {
+    ElMessage.error('请上传图片文件')
+    return false
+  }
+
+  if (rawFile.size > 10 * 1024 * 1024) {
+    ElMessage.error('图片大小不能超过 10MB')
+    return false
+  }
+
+  supplementImageUploading.value = true
+
+  try {
+    const previousImageUrl = supplementProperties.image_url || null
+    const croppedFile = await cropImageFileToSquare(rawFile as File)
+    const uploaded = await ingredientApi.uploadIngredientDiyImage(croppedFile)
+    supplementProperties.image_url = uploaded.url
+    await persistSupplementImageUrl(uploaded.url)
+
+    if (previousImageUrl && previousImageUrl !== uploaded.url) {
+      try {
+        await deleteSupplementImageByUrl(previousImageUrl)
+      } catch (deleteError) {
+        console.error('Failed to delete previous supplement DIY image:', deleteError)
+        ElMessage.warning('新图片已上传，但旧图片删除失败，请稍后重试')
+      }
+    }
+
+    ElMessage.success('图片已上传并裁切为 1:1 方图')
+  } catch (error: any) {
+    const latestImageUrl = supplementProperties.image_url || null
+    supplementProperties.image_url = persistedSupplementProperties.value.image_url || null
+    if (latestImageUrl && latestImageUrl !== persistedSupplementProperties.value.image_url) {
+      try {
+        await deleteSupplementImageByUrl(latestImageUrl)
+      } catch (cleanupError) {
+        console.error('Failed to cleanup uploaded supplement DIY image:', cleanupError)
+      }
+    }
+    console.error('Failed to upload supplement DIY image:', error)
+    ElMessage.error(error?.message || '图片上传失败')
+  } finally {
+    supplementImageUploading.value = false
+  }
+
+  return false
+}
+
+async function handleRemoveSupplementImage() {
+  if (!supplementProperties.image_url) {
+    return
+  }
+
+  supplementImageUploading.value = true
+  try {
+    const previousImageUrl = supplementProperties.image_url
+    supplementProperties.image_url = null
+    await persistSupplementImageUrl(null)
+    await deleteSupplementImageByUrl(previousImageUrl)
+    ElMessage.success('图片已删除')
+  } catch (error: any) {
+    supplementProperties.image_url = persistedSupplementProperties.value.image_url || null
+    console.error('Failed to remove supplement DIY image:', error)
+    ElMessage.error(error?.message || '删除图片失败')
+  } finally {
+    supplementImageUploading.value = false
+  }
+}
 
 // 方法
 function getDefaultProperties(type: IngredientType): FoodProperties | SupplementProperties | PackagingProperties {
@@ -966,13 +1402,58 @@ function getDefaultSupplementProperties(): SupplementProperties {
   return {
     category_type: '',
     active_nutrients: {},
+    display_unit: '',
+    supplier_name: null,
+    purchase_link: {
+      url: '',
+      platform: 'WEBVIEW'
+    },
+    image_url: null,
+    marketing_highlights: {},
     production_loss_rate: undefined
   }
 }
 
+function cloneSupplementProperties(properties?: SupplementProperties | null): SupplementProperties {
+  return {
+    ...getDefaultSupplementProperties(),
+    ...(properties || {}),
+    purchase_link: properties?.purchase_link
+      ? { ...properties.purchase_link }
+      : undefined,
+    active_nutrients: properties?.active_nutrients
+      ? { ...properties.active_nutrients }
+      : {},
+    marketing_highlights: properties?.marketing_highlights
+      ? { ...properties.marketing_highlights }
+      : {},
+  }
+}
+
+function buildPersistedSupplementPropertiesPatch(imageUrl: string | null): SupplementProperties {
+  return {
+    ...cloneSupplementProperties(persistedSupplementProperties.value),
+    image_url: imageUrl
+  }
+}
+
+async function persistSupplementImageUrl(imageUrl: string | null) {
+  if (!props.ingredient?.id) {
+    throw new Error('请先保存补剂原料，再上传产品图片')
+  }
+
+  const nextProperties = buildPersistedSupplementPropertiesPatch(imageUrl)
+  await ingredientApi.update(props.ingredient.id, {
+    properties: nextProperties
+  })
+  persistedSupplementProperties.value = cloneSupplementProperties(nextProperties)
+  formData.properties = nextProperties
+}
+
 function getDefaultPackagingProperties(): PackagingProperties {
   return {
-    is_consumable: true
+    is_consumable: true,
+    supplier_name: null
   }
 }
 
@@ -987,12 +1468,65 @@ function getTypeSpecificTitle() {
   }
 }
 
+function getResolvedFoodPurchaseUnit() {
+  return formData.baseUnitDisplayName || BaseUnitLabels[formData.baseUnit] || ''
+}
+
+function getSingleLayerPurchaseUnit() {
+  return formData.purchaseUnit?.trim() || ''
+}
+
+function sanitizeTopLevelFieldsForFood() {
+  formData.brand = ''
+  formData.productModel = ''
+  formData.purchaseChannel = ''
+  formData.diyEnabled = false
+  formData.procurementEnabled = false
+  formData.purchaseUnit = getResolvedFoodPurchaseUnit()
+  formData.purchaseToBaseRatio = 1
+  formData.currentPricePerPurchaseUnit = 0
+  formData.effectivePricePerPurchaseUnit = 0
+  formData.safetyStock = undefined
+  formData.reorderPoint = undefined
+  formData.targetStock = undefined
+}
+
+function sanitizeTypeSpecificPayload() {
+  if (formData.type === IngredientType.FOOD) {
+    sanitizeTopLevelFieldsForFood()
+    return
+  }
+
+  if (formData.type === IngredientType.SUPPLEMENT) {
+    formData.safetyStock = undefined
+    formData.reorderPoint = undefined
+    formData.targetStock = undefined
+    return
+  }
+
+  formData.diyEnabled = false
+  formData.procurementStrategy = IngredientProcurementStrategy.STOCK_REPLENISHMENT
+  formData.nutritionProfile = null
+}
+
 function handleTypeChange() {
   // 切换类型时，重置特定属性为默认值
   const defaultProps = getDefaultProperties(formData.type)
   formData.properties = defaultProps
+  formData.procurementStrategy = getDefaultProcurementStrategyForType(formData.type) as IngredientProcurementStrategy
+  if (!typeCapabilities.value.supportsChildSkus) {
+    clearIngredientSkuLists()
+  }
   if (formData.type === IngredientType.PACKAGING) {
     formData.nutritionProfile = null
+    formData.diyEnabled = false
+  }
+  if (formData.type === IngredientType.FOOD) {
+    sanitizeTopLevelFieldsForFood()
+  } else if (formData.type === IngredientType.SUPPLEMENT) {
+    formData.safetyStock = undefined
+    formData.reorderPoint = undefined
+    formData.targetStock = undefined
   }
 
   // 更新响应式对象
@@ -1019,13 +1553,26 @@ function syncProperties() {
   if (formData.type === IngredientType.FOOD) {
     formData.properties = { ...foodProperties }
   } else if (formData.type === IngredientType.SUPPLEMENT) {
+    const normalizedPurchaseLink = supplementProperties.purchase_link?.url?.trim()
+      ? {
+          ...supplementProperties.purchase_link,
+          url: supplementProperties.purchase_link.url.trim()
+        }
+      : undefined
     supplementProperties.active_nutrients = buildSupplementActiveNutrientsFromNutritionProfile(
       formData.nutritionProfile,
       supplementProperties.active_nutrients
     )
-    formData.properties = { ...supplementProperties }
+    formData.properties = {
+      ...supplementProperties,
+      purchase_link: normalizedPurchaseLink,
+    }
   } else if (formData.type === IngredientType.PACKAGING) {
-    formData.properties = { ...packagingProperties }
+    formData.properties = {
+      ...packagingProperties,
+      supplier_name: packagingProperties.supplier_name?.trim() || null,
+      linked_item_id: packagingProperties.linked_item_id?.trim() || undefined
+    }
   }
 }
 
@@ -1243,11 +1790,23 @@ watch(() => props.ingredient, (newIngredient, oldIngredient) => {
     formData.name = ''
     formData.type = IngredientType.FOOD
     formData.procurementStrategy = IngredientProcurementStrategy.DAILY_PURCHASE
+    formData.brand = ''
+    formData.productModel = ''
+    formData.purchaseChannel = ''
+    formData.diyEnabled = false
+    formData.procurementEnabled = false
     formData.notes = ''
     formData.baseUnit = BaseUnit.G
     formData.baseUnitDisplayName = ''
+    formData.purchaseUnit = ''
+    formData.purchaseToBaseRatio = undefined
+    formData.currentPricePerPurchaseUnit = undefined
+    formData.effectivePricePerPurchaseUnit = undefined
     formData.weightG = undefined
     formData.maxCapacityG = undefined
+    formData.safetyStock = undefined
+    formData.reorderPoint = undefined
+    formData.targetStock = undefined
     formData.properties = getDefaultProperties(IngredientType.FOOD)
     formData.nutritionProfile = null
     formData.tagIds = []
@@ -1255,6 +1814,7 @@ watch(() => props.ingredient, (newIngredient, oldIngredient) => {
     // 重置类型特定属性
     Object.assign(foodProperties, getDefaultFoodProperties())
     Object.assign(supplementProperties, getDefaultSupplementProperties())
+    persistedSupplementProperties.value = cloneSupplementProperties(getDefaultSupplementProperties())
     Object.assign(packagingProperties, getDefaultPackagingProperties())
 
     // 重置其他状态
@@ -1276,11 +1836,12 @@ watch(() => props.ingredient, (newIngredient, oldIngredient) => {
 
     // Update type-specific properties
     if (newIngredient.type === IngredientType.FOOD) {
-      Object.assign(foodProperties, newIngredient.properties as FoodProperties)
+      Object.assign(foodProperties, getDefaultFoodProperties(), newIngredient.properties as FoodProperties)
     } else if (newIngredient.type === IngredientType.SUPPLEMENT) {
-      Object.assign(supplementProperties, newIngredient.properties as SupplementProperties)
+      Object.assign(supplementProperties, getDefaultSupplementProperties(), newIngredient.properties as SupplementProperties)
+      persistedSupplementProperties.value = cloneSupplementProperties(newIngredient.properties as SupplementProperties)
     } else if (newIngredient.type === IngredientType.PACKAGING) {
-      Object.assign(packagingProperties, newIngredient.properties as PackagingProperties)
+      Object.assign(packagingProperties, getDefaultPackagingProperties(), newIngredient.properties as PackagingProperties)
     }
 
     // Update selected tag IDs
@@ -1419,7 +1980,7 @@ const loadSkuSuggestions = async () => {
 }
 
 const loadRecommendedProducts = async () => {
-  if (!props.ingredient?.id) {
+  if (!props.ingredient?.id || !shouldLoadChildSkuData(formData.type, isEdit.value)) {
     recommendedProducts.value = []
     return
   }
@@ -1431,7 +1992,7 @@ const loadRecommendedProducts = async () => {
 }
 
 const loadProcurementSkus = async () => {
-  if (!props.ingredient?.id) {
+  if (!props.ingredient?.id || !shouldLoadChildSkuData(formData.type, isEdit.value)) {
     procurementSkus.value = []
     return
   }
@@ -1443,6 +2004,10 @@ const loadProcurementSkus = async () => {
 }
 
 const loadIngredientSkuLists = async () => {
+  if (!shouldLoadChildSkuData(formData.type, isEdit.value)) {
+    clearIngredientSkuLists()
+    return
+  }
   await Promise.all([
     loadRecommendedProducts(),
     loadProcurementSkus()
@@ -1450,6 +2015,10 @@ const loadIngredientSkuLists = async () => {
 }
 
 const openRpDialog = (rp?: RecommendedProduct) => {
+  if (!typeCapabilities.value.supportsChildSkus) {
+    ElMessage.warning('当前类型不再维护家庭 DIY 推荐商品')
+    return
+  }
   if (rp) {
     rpEditingId.value = rp.id
     rpForm.name = rp.name
@@ -1488,6 +2057,10 @@ const openRpDialog = (rp?: RecommendedProduct) => {
 }
 
 const openProcurementDialog = (sku?: ProcurementSku) => {
+  if (!typeCapabilities.value.supportsChildSkus) {
+    ElMessage.warning('当前类型不再维护生产采购 SKU')
+    return
+  }
   if (sku) {
     procurementEditingId.value = sku.id
     procurementForm.name = sku.name
@@ -1680,7 +2253,7 @@ onMounted(() => {
   loadTags()
   loadIngredients()  // ✅ 确保组件加载时获取原料列表
   loadSkuSuggestions()
-  loadIngredientSkuLists()  // 加载 DIY 推荐商品和生产采购 SKU（编辑模式）
+  loadIngredientSkuLists()  // FOOD 编辑态才加载 DIY 推荐商品和生产采购 SKU
 })
 
 // 表单验证规则
@@ -1741,18 +2314,43 @@ const handleSubmit = async () => {
       }
     } else if (formData.type === IngredientType.SUPPLEMENT) {
       // 补剂验证
-      if (!supplementProperties.category_type) {
-        throw new Error('请选择营养分类')
+      if (formData.procurementEnabled) {
+        if (!getSingleLayerPurchaseUnit()) {
+          throw new Error('请填写采购单位')
+        }
+        if (!formData.purchaseToBaseRatio || formData.purchaseToBaseRatio <= 0) {
+          throw new Error('请填写有效的换算倍数')
+        }
+        if (formData.currentPricePerPurchaseUnit === undefined || formData.currentPricePerPurchaseUnit === null || formData.currentPricePerPurchaseUnit < 0) {
+          throw new Error('请填写当前采购价')
+        }
       }
     } else if (formData.type === IngredientType.PACKAGING) {
       // 包材验证
       if (packagingProperties.is_consumable === null || packagingProperties.is_consumable === undefined) {
         throw new Error('请选择消耗品类型')
       }
+      if (packagingProperties.is_consumable && (!formData.weightG || formData.weightG <= 0)) {
+        throw new Error('消耗型包材必须填写单个重量')
+      }
+      if (!getSingleLayerPurchaseUnit()) {
+        throw new Error('请填写采购单位')
+      }
+      if (!formData.purchaseToBaseRatio || formData.purchaseToBaseRatio <= 0) {
+        throw new Error('请填写有效的换算倍数')
+      }
+      if (formData.currentPricePerPurchaseUnit === undefined || formData.currentPricePerPurchaseUnit === null || formData.currentPricePerPurchaseUnit < 0) {
+        throw new Error('请填写当前采购价')
+      }
     }
 
-    if (formData.type === IngredientType.PACKAGING) {
-      formData.nutritionProfile = null
+    sanitizeTypeSpecificPayload()
+
+    if (formData.type === IngredientType.FOOD) {
+      formData.effectivePricePerPurchaseUnit = formData.currentPricePerPurchaseUnit
+    } else {
+      formData.purchaseUnit = getSingleLayerPurchaseUnit()
+      formData.effectivePricePerPurchaseUnit = formData.currentPricePerPurchaseUnit
     }
 
     syncProperties()
@@ -2024,6 +2622,79 @@ const handleCancel = () => {
 .tag-description {
   color: #909399;
   font-size: 12px;
+}
+
+.form-item-helper {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #909399;
+}
+
+.capability-section {
+  margin-top: 16px;
+  padding: 16px 16px 4px;
+  border: 1px solid #ebeef5;
+  border-radius: 8px;
+  background: #fafcff;
+}
+
+.capability-fields {
+  padding-left: 8px;
+}
+
+.supplement-image-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.supplement-image-preview-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.supplement-image-preview {
+  width: 120px;
+  height: 120px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1px solid #ebeef5;
+  background: #f5f7fa;
+}
+
+.supplement-image-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.supplement-image-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px;
+  border: 1px dashed #dcdfe6;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.supplement-image-empty-copy {
+  flex: 1;
+  min-width: 240px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #606266;
 }
 
 /* 推荐产品样式 */

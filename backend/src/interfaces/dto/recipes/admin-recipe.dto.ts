@@ -51,6 +51,11 @@ export class RecipeItemDto {
   @IsNumber()
   @Min(0)
   nutrientTargetValue?: number;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  supplementAlternativeIngredientIds?: string[];
 }
 
 /**
@@ -305,6 +310,11 @@ export interface RecipeItemResponseDto {
   ratioPercent?: number;
   nutrientTargetKey?: string;
   nutrientTargetValue?: number;
+  supplementAlternativeIngredientIds?: string[];
+  supplementAlternatives?: Array<{
+    ingredientId: string;
+    ingredientName: string;
+  }>;
 }
 
 export interface IngredientPreparationMethodHistoryDto {

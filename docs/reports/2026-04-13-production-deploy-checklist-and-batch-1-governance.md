@@ -101,8 +101,43 @@
   - `cd backend && npm run backfill:procurement-sku-defaults`
 - procurement SKU 默认值回填 apply：
   - `cd backend && npm run backfill:procurement-sku-defaults:apply`
+- 补剂/包材单层化 dry-run：
+  - `cd backend && npm run backfill:supplement-packaging-single-layer`
+- 补剂/包材单层化 apply：
+  - `cd backend && npm run backfill:supplement-packaging-single-layer:apply`
+- 食谱补剂替代项 dry-run：
+  - `cd backend && npm run backfill:recipe-supplement-alternatives`
+- 食谱补剂替代项 apply：
+  - `cd backend && npm run backfill:recipe-supplement-alternatives:apply`
 - backend 构建校验：
   - `cd backend && npm run build`
+
+## 五、补剂/包材单层化专项回填顺序
+
+当补剂与包材单层化重构进入生产部署阶段时，建议执行顺序固定为：
+
+1. `npx prisma migrate deploy`
+2. `npm run backfill:supplement-packaging-single-layer`
+3. 人工检查 dry-run 输出：
+   - 将扁平更新多少条旧补剂/包材
+   - 将拆分创建多少条新标准原料
+   - 将归档多少条旧 `recommended_product / procurement_sku`
+   - 将生成多少条补剂替代候选 seed
+4. `npm run backfill:supplement-packaging-single-layer:apply`
+5. `npm run backfill:recipe-supplement-alternatives`
+6. 人工检查将生成多少条 `recipe_supplement_alternative`
+7. `npm run backfill:recipe-supplement-alternatives:apply`
+
+### 回滚点
+
+- `migrate deploy` 前：数据库快照
+- `single-layer apply` 前：数据库快照
+- `recipe supplement alternatives apply` 前：数据库快照
+
+### 额外说明
+
+- `single-layer` 脚本会把非食材类型下的旧 `recommended_product / procurement_sku` 标记为停用，不会再让它们继续作为线上主数据入口。
+- `recipe-supplement-alternatives` 脚本依赖 `single-layer` 脚本写入的 `properties.single_layer_origin.legacy_ingredient_id` 元数据，因此两者必须按顺序执行。
 
 ### C. 管理后台准备
 

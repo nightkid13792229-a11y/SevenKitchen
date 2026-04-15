@@ -54,6 +54,8 @@ import {
   extractLegacyPreparationMethodIds,
   resolvePreparationMethodText,
 } from '../../application/recipe/preparation-method-text.util';
+import { resolveSupplementNutrients } from '../../domain/ingredient/supplement-nutrition-resolver';
+import { resolveSupplementAddTimingLabel } from '../../domain/ingredient/supplement-add-timing';
 
 // Create a symbol for recipe repository token
 export const RECIPE_REPOSITORY_TOKEN = Symbol('RecipeRepository');
@@ -144,6 +146,43 @@ export class RecipesController {
       where: { id: latestRecipe.id },
       data: { viewCount: { increment: 1 } },
     });
+  }
+
+  private mapPublicIngredient(ingredient: any): any {
+    if (!ingredient) {
+      return undefined;
+    }
+
+    const purchaseLink = ingredient.properties?.purchase_link;
+    const activeNutrients =
+      ingredient.type === 'SUPPLEMENT'
+        ? resolveSupplementNutrients({
+            nutritionProfile: ingredient.nutritionProfile,
+            fallback: ingredient.properties?.active_nutrients,
+          })
+        : ingredient.properties?.active_nutrients || undefined;
+    const addTimingLabel =
+      ingredient.type === 'SUPPLEMENT'
+        ? resolveSupplementAddTimingLabel(ingredient.properties?.add_timing)
+        : undefined;
+
+    return {
+      id: ingredient.id,
+      name: ingredient.name,
+      type: ingredient.type,
+      brand: ingredient.brand || undefined,
+      productModel: ingredient.productModel || undefined,
+      purchaseChannel: ingredient.purchaseChannel || undefined,
+      displayUnit: ingredient.unitDisplayLabel || undefined,
+      imageUrl: ingredient.properties?.image_url || undefined,
+      purchaseLink: purchaseLink || undefined,
+      addTimingLabel,
+      activeNutrients:
+        activeNutrients && Object.keys(activeNutrients).length > 0
+          ? activeNutrients
+          : undefined,
+      properties: ingredient.properties || undefined,
+    };
   }
 
   @Get('filter-options')
@@ -402,14 +441,15 @@ export class RecipesController {
               item.ratioPercent != null ? item.ratioPercent : undefined,
             nutrientTargetKey: item.nutrientTargetKey || undefined,
             nutrientTargetValue: item.nutrientTargetValue || undefined,
-            ingredient: item.ingredient
-              ? {
-                  id: item.ingredient.id,
-                  name: item.ingredient.name,
-                  type: item.ingredient.type,
-                  properties: item.ingredient?.properties || undefined,
-                }
-              : undefined,
+            ingredient: this.mapPublicIngredient(item.ingredient),
+            supplementAlternativeIngredientIds:
+              item.supplementAlternativeIngredientIds || undefined,
+            supplementAlternatives:
+              item.supplementAlternatives?.map((alternative: any) => ({
+                ingredientId: alternative.ingredientId,
+                ingredientName: alternative.ingredientName,
+                ingredient: this.mapPublicIngredient(alternative.ingredient),
+              })) || undefined,
           };
 
           // FOOD type: include ratio (for backward compatibility)

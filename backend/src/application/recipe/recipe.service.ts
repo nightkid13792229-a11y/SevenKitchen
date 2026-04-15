@@ -33,6 +33,133 @@ import type {
 export class RecipeService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private readonly recipeDetailInclude = {
+    items: {
+      include: {
+        ingredient: true,
+        supplementAlternatives: {
+          include: {
+            alternativeIngredient: true,
+          },
+          orderBy: {
+            sortOrder: 'asc' as const,
+          },
+        },
+      },
+      orderBy: {
+        sortOrder: 'asc' as const,
+      },
+    },
+    healthTagAssignments: {
+      include: {
+        healthTag: true,
+      },
+    },
+  };
+
+  private normalizeSupplementAlternativeIngredientIds(
+    ingredientIds?: string[] | null,
+  ): string[] {
+    if (!Array.isArray(ingredientIds) || ingredientIds.length === 0) {
+      return [];
+    }
+
+    return [...new Set(ingredientIds.map((id) => id?.trim()).filter(Boolean))];
+  }
+
+  private buildRecipeItemCreateData(item: Record<string, any>, index: number) {
+    const supplementAlternativeIngredientIds =
+      this.normalizeSupplementAlternativeIngredientIds(
+        item.supplementAlternativeIngredientIds ??
+          item.supplementAlternatives?.map(
+            (alternative: Record<string, any>) =>
+              alternative.alternativeIngredientId,
+          ),
+      );
+
+    return {
+      ingredientId: item.ingredientId,
+      preparationMethod: item.preparationMethod,
+      exampleWeight: item.exampleWeight,
+      ratioPercent: item.ratioPercent,
+      nutrientTargetKey: item.nutrientTargetKey,
+      nutrientTargetValue: item.nutrientTargetValue,
+      sortOrder: index,
+      ...(supplementAlternativeIngredientIds.length > 0 && {
+        supplementAlternatives: {
+          create: supplementAlternativeIngredientIds.map(
+            (alternativeIngredientId, alternativeIndex) => ({
+              alternativeIngredientId,
+              sortOrder: alternativeIndex,
+            }),
+          ),
+        },
+      }),
+    };
+  }
+
+  private async validateSupplementAlternativeItems(
+    items?: Array<Record<string, any>>,
+  ): Promise<void> {
+    if (!items || items.length === 0) {
+      return;
+    }
+
+    const itemsWithAlternatives = items
+      .map((item) => ({
+        item,
+        alternativeIds: this.normalizeSupplementAlternativeIngredientIds(
+          item.supplementAlternativeIngredientIds,
+        ),
+      }))
+      .filter(({ alternativeIds }) => alternativeIds.length > 0);
+
+    if (itemsWithAlternatives.length === 0) {
+      return;
+    }
+
+    const ingredientIds = [
+      ...new Set(
+        itemsWithAlternatives.flatMap(({ item, alternativeIds }) => [
+          item.ingredientId,
+          ...alternativeIds,
+        ]),
+      ),
+    ];
+
+    const ingredients = await this.prisma.ingredient.findMany({
+      where: {
+        id: {
+          in: ingredientIds,
+        },
+      },
+      select: {
+        id: true,
+        type: true,
+      },
+    });
+
+    const ingredientTypeMap = new Map(
+      ingredients.map((ingredient) => [ingredient.id, ingredient.type]),
+    );
+
+    for (const { item, alternativeIds } of itemsWithAlternatives) {
+      if (ingredientTypeMap.get(item.ingredientId) !== 'SUPPLEMENT') {
+        throw new BadRequestException('只有补剂原料可以配置替代补剂');
+      }
+
+      for (const alternativeIngredientId of alternativeIds) {
+        if (alternativeIngredientId === item.ingredientId) {
+          throw new BadRequestException('补剂替代项不能与默认补剂相同');
+        }
+
+        if (ingredientTypeMap.get(alternativeIngredientId) !== 'SUPPLEMENT') {
+          throw new BadRequestException('补剂替代项必须引用补剂原料');
+        }
+      }
+    }
+  }
+
   private async loadPreparationMethodNameMap(
     values: Array<string | null | undefined>,
   ): Promise<Map<string, string>> {
@@ -198,21 +325,7 @@ export class RecipeService {
   async getRecipeById(id: string): Promise<RecipeDetailResponseDto> {
     const recipe = await this.prisma.recipe.findUnique({
       where: { id },
-      include: {
-        items: {
-          include: {
-            ingredient: true,
-          },
-          orderBy: {
-            sortOrder: 'asc',
-          },
-        },
-        healthTagAssignments: {
-          include: {
-            healthTag: true,
-          },
-        },
-      },
+      include: this.recipeDetailInclude,
     });
 
     if (!recipe) {
@@ -244,6 +357,8 @@ export class RecipeService {
     const version = 1;
     const targetHealthTags = dto.targetHealthTags || [];
 
+    await this.validateSupplementAlternativeItems(dto.items);
+
     // Create recipe with items
     const recipe = await this.prisma.recipe.create({
       data: {
@@ -268,15 +383,9 @@ export class RecipeService {
         productionSteps: dto.productionSteps,
         items: dto.items
           ? {
-              create: dto.items.map((item: any, index: number) => ({
-                ingredientId: item.ingredientId,
-                preparationMethod: item.preparationMethod,
-                exampleWeight: item.exampleWeight,
-                ratioPercent: item.ratioPercent,
-                nutrientTargetKey: item.nutrientTargetKey,
-                nutrientTargetValue: item.nutrientTargetValue,
-                sortOrder: index,
-              })),
+              create: dto.items.map((item: any, index: number) =>
+                this.buildRecipeItemCreateData(item, index),
+              ),
             }
           : undefined,
       },
@@ -299,21 +408,7 @@ export class RecipeService {
     // Fetch the recipe with health tag assignments
     const recipeWithTags = await this.prisma.recipe.findUnique({
       where: { id: recipe.id },
-      include: {
-        items: {
-          include: {
-            ingredient: true,
-          },
-          orderBy: {
-            sortOrder: 'asc',
-          },
-        },
-        healthTagAssignments: {
-          include: {
-            healthTag: true,
-          },
-        },
-      },
+      include: this.recipeDetailInclude,
     });
 
     return await this.mapToDetailDto(recipeWithTags!);
@@ -330,7 +425,15 @@ export class RecipeService {
     const existing = await this.prisma.recipe.findUnique({
       where: { id },
       include: {
-        items: true,
+        items: {
+          include: {
+            supplementAlternatives: {
+              orderBy: {
+                sortOrder: 'asc',
+              },
+            },
+          },
+        },
       },
     });
 
@@ -339,6 +442,8 @@ export class RecipeService {
     }
 
     const targetHealthTags = dto.targetHealthTags ?? undefined;
+
+    await this.validateSupplementAlternativeItems(dto.items);
 
     // Check if recipe items have changed (ingredient name, ratio, or usage amount)
     const itemsChanged = dto.items
@@ -384,15 +489,9 @@ export class RecipeService {
         productionSteps: dto.productionSteps,
         items: dto.items
           ? {
-              create: dto.items.map((item: any, index: number) => ({
-                ingredientId: item.ingredientId,
-                preparationMethod: item.preparationMethod,
-                exampleWeight: item.exampleWeight,
-                ratioPercent: item.ratioPercent,
-                nutrientTargetKey: item.nutrientTargetKey,
-                nutrientTargetValue: item.nutrientTargetValue,
-                sortOrder: index,
-              })),
+              create: dto.items.map((item: any, index: number) =>
+                this.buildRecipeItemCreateData(item, index),
+              ),
             }
           : undefined,
       },
@@ -423,21 +522,7 @@ export class RecipeService {
     // Fetch the recipe with health tag assignments
     const recipeWithTags = await this.prisma.recipe.findUnique({
       where: { id: recipe.id },
-      include: {
-        items: {
-          include: {
-            ingredient: true,
-          },
-          orderBy: {
-            sortOrder: 'asc',
-          },
-        },
-        healthTagAssignments: {
-          include: {
-            healthTag: true,
-          },
-        },
-      },
+      include: this.recipeDetailInclude,
     });
 
     return await this.mapToDetailDto(recipeWithTags!);
@@ -497,14 +582,7 @@ export class RecipeService {
     const updated = await this.prisma.recipe.update({
       where: { id },
       data: { status: RecipeStatus.PUBLIC },
-      include: {
-        items: true,
-        healthTagAssignments: {
-          include: {
-            healthTag: true,
-          },
-        },
-      },
+      include: this.recipeDetailInclude,
     });
 
     return await this.mapToDetailDto(updated);
@@ -539,14 +617,7 @@ export class RecipeService {
     const updated = await this.prisma.recipe.update({
       where: { id },
       data: { status: RecipeStatus.DRAFT },
-      include: {
-        items: true,
-        healthTagAssignments: {
-          include: {
-            healthTag: true,
-          },
-        },
-      },
+      include: this.recipeDetailInclude,
     });
 
     return await this.mapToDetailDto(updated);
@@ -558,14 +629,7 @@ export class RecipeService {
   async duplicateRecipe(id: string): Promise<RecipeDetailResponseDto> {
     const recipe = await this.prisma.recipe.findUnique({
       where: { id },
-      include: {
-        items: true,
-        healthTagAssignments: {
-          include: {
-            healthTag: true,
-          },
-        },
-      },
+      include: this.recipeDetailInclude,
     });
 
     if (!recipe) {
@@ -600,12 +664,7 @@ export class RecipeService {
         productionSteps: recipe.productionSteps,
         items: {
           create: recipe.items.map((item: any) => ({
-            ingredientId: item.ingredientId,
-            preparationMethod: item.preparationMethod,
-            exampleWeight: item.exampleWeight,
-            ratioPercent: item.ratioPercent,
-            nutrientTargetKey: item.nutrientTargetKey,
-            nutrientTargetValue: item.nutrientTargetValue,
+            ...this.buildRecipeItemCreateData(item, item.sortOrder),
             sortOrder: item.sortOrder,
           })),
         },
@@ -629,21 +688,7 @@ export class RecipeService {
     // Fetch with health tag assignments
     const duplicatedWithTags = await this.prisma.recipe.findUnique({
       where: { id: duplicated.id },
-      include: {
-        items: {
-          include: {
-            ingredient: true,
-          },
-          orderBy: {
-            sortOrder: 'asc',
-          },
-        },
-        healthTagAssignments: {
-          include: {
-            healthTag: true,
-          },
-        },
-      },
+      include: this.recipeDetailInclude,
     });
 
     return await this.mapToDetailDto(duplicatedWithTags!);
@@ -824,6 +869,15 @@ export class RecipeService {
           ratioPercent: item.ratioPercent || undefined,
           nutrientTargetKey: item.nutrientTargetKey || undefined,
           nutrientTargetValue: item.nutrientTargetValue || undefined,
+          supplementAlternativeIngredientIds:
+            item.supplementAlternatives?.map(
+              (alternative: any) => alternative.alternativeIngredientId,
+            ) || undefined,
+          supplementAlternatives:
+            item.supplementAlternatives?.map((alternative: any) => ({
+              ingredientId: alternative.alternativeIngredientId,
+              ingredientName: alternative.alternativeIngredient?.name,
+            })) || undefined,
         })) || [],
     };
   }

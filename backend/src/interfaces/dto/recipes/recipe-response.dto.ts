@@ -82,6 +82,7 @@ export class RecipeDetailDto extends RecipeSummaryDto {
     description: 'All ingredients with preparation',
   })
   declare items: Array<{
+    id: string;
     ingredientId: string;
     name: string;
     preparationMethod?: string;
@@ -90,5 +91,38 @@ export class RecipeDetailDto extends RecipeSummaryDto {
     nutrientTargetKey?: string;
     nutrientTargetValue?: number;
     ingredientType?: string;
+    ingredient?: {
+      id: string;
+      name: string;
+      type?: string;
+      brand?: string;
+      productModel?: string;
+      purchaseChannel?: string;
+      displayUnit?: string;
+      imageUrl?: string;
+      addTimingLabel?: string;
+      purchaseLink?: { url?: string; platform?: string };
+      activeNutrients?: Record<string, { value: number; unit: string }>;
+      properties?: Record<string, any>;
+    };
+    supplementAlternativeIngredientIds?: string[];
+    supplementAlternatives?: Array<{
+      ingredientId: string;
+      ingredientName: string;
+      ingredient?: {
+        id: string;
+        name: string;
+        type?: string;
+        brand?: string;
+        productModel?: string;
+        purchaseChannel?: string;
+        displayUnit?: string;
+        imageUrl?: string;
+        addTimingLabel?: string;
+        purchaseLink?: { url?: string; platform?: string };
+        activeNutrients?: Record<string, { value: number; unit: string }>;
+        properties?: Record<string, any>;
+      };
+    }>;
   }>;
 }

@@ -8,6 +8,13 @@ export interface IngredientRef {
   name: string;
   type?: string;
   properties?: any;
+  brand?: string | null;
+  productModel?: string | null;
+  purchaseChannel?: string | null;
+  unitDisplayLabel?: string | null;
+  diyEnabled?: boolean;
+  procurementEnabled?: boolean;
+  nutritionProfile?: any;
 }
 
 export interface RecipeItem {
@@ -19,6 +26,12 @@ export interface RecipeItem {
   sortOrder?: number | null;
   nutrientTargetKey?: string | null;
   nutrientTargetValue?: number | null;
+  supplementAlternativeIngredientIds?: string[] | null;
+  supplementAlternatives?: Array<{
+    ingredientId: string;
+    ingredientName: string;
+    ingredient?: IngredientRef;
+  }> | null;
   ingredient?: IngredientRef;
 }
 

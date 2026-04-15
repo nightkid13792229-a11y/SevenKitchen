@@ -12,7 +12,7 @@
         <div>
           <div class="dialog-name">{{ ingredient.name }}</div>
           <div class="dialog-desc">
-            仅维护该标准原料的营养数据，不影响 DIY 推荐商品和采购 SKU 信息。
+            {{ dialogDescription }}
           </div>
         </div>
         <div class="dialog-tags">
@@ -81,6 +81,18 @@ const dialogTitle = computed(() => (
 const baseUnitLabel = computed(() => (
   props.ingredient ? BaseUnitLabels[props.ingredient.baseUnit] || props.ingredient.baseUnit : ''
 ))
+
+const dialogDescription = computed(() => {
+  if (!props.ingredient) {
+    return ''
+  }
+
+  if (props.ingredient.type === IngredientType.SUPPLEMENT) {
+    return '该补剂产品的营养数据将直接影响补剂默认浓度、食谱营养目标、定价预览和 DIY 制作单中的默认添加量。'
+  }
+
+  return '仅维护该标准原料的营养数据，不影响 DIY 推荐商品和采购 SKU 信息。'
+})
 
 watch(
   () => props.ingredient,

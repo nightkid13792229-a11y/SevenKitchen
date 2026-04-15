@@ -148,6 +148,9 @@ export class PriceExplanationDto {
  * Detailed Ingredient Cost Breakdown
  */
 export class IngredientCostItemDto {
+  @ApiPropertyOptional({ description: 'Recipe item ID' })
+  recipeItemId?: string;
+
   @ApiProperty({ description: 'Ingredient name' })
   name!: string;
 

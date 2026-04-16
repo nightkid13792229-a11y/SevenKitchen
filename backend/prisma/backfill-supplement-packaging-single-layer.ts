@@ -210,12 +210,12 @@ const buildIdentityKey = (seed: {
   purchaseChannel?: string | null;
   displayUnit?: string | null;
 }) => {
+  // Align variant merging with Ingredient's unique constraint so a legacy
+  // procurement SKU cannot be split into a duplicate concrete ingredient.
   const parts = [
     normalizeText(seed.name)?.toLowerCase(),
     normalizeText(seed.brand)?.toLowerCase(),
     normalizeText(seed.productModel)?.toLowerCase(),
-    normalizeText(seed.purchaseChannel)?.toLowerCase(),
-    normalizeText(seed.displayUnit)?.toLowerCase(),
   ].filter(Boolean);
 
   return parts.length > 0 ? parts.join('|') : Math.random().toString(36);

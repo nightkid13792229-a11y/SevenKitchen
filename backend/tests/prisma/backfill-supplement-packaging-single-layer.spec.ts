@@ -87,6 +87,64 @@ describe('supplement and packaging single-layer backfill planning', () => {
     );
   });
 
+  it('merges supplement variants that share the database unique key', () => {
+    const result = planSupplementPackagingSingleLayerBackfill([
+      {
+        id: 'supp-vitamin-d',
+        name: '维生素D',
+        type: 'SUPPLEMENT',
+        baseUnit: 'PCS',
+        unitDisplayLabel: '粒',
+        brand: 'NOW FOODS',
+        productModel: '维生素D3胶囊，1000IU维D-3/粒，360粒/瓶',
+        purchaseChannel: null,
+        purchaseUnit: '瓶',
+        purchaseToBaseRatio: 360,
+        currentPricePerPurchaseUnit: 85,
+        effectivePricePerPurchaseUnit: 85,
+        diyEnabled: false,
+        procurementEnabled: false,
+        properties: {
+          display_unit: '粒'
+        },
+        nutritionProfile: null,
+        recipeItems: [],
+        recommendedProducts: [],
+        procurementSkus: [
+          {
+            id: 'sku-vitamin-d',
+            name: '维生素D',
+            brand: 'NOW FOODS',
+            productModel: '维生素D3胶囊，1000IU维D-3/粒，360粒/瓶',
+            purchaseChannel: '京东',
+            supplierName: 'NOW FOODS 京东自营',
+            purchaseUnit: '瓶',
+            purchaseToBaseRatio: 360,
+            currentPurchasePrice: 85,
+            referencePurchasePrice: 85,
+            displayUnit: '瓶',
+            isActive: true,
+            isDefault: true,
+            sortOrder: 0
+          }
+        ]
+      }
+    ] as any);
+
+    expect(result.flattenIngredientUpdates).toHaveLength(1);
+    expect(result.createIngredients).toHaveLength(0);
+    expect(result.archiveProcurementSkus).toEqual(['sku-vitamin-d']);
+    expect(result.flattenIngredientUpdates[0]).toEqual(
+      expect.objectContaining({
+        ingredientId: 'supp-vitamin-d',
+        brand: 'NOW FOODS',
+        productModel: '维生素D3胶囊，1000IU维D-3/粒，360粒/瓶',
+        purchaseChannel: '京东',
+        procurementEnabled: true
+      })
+    );
+  });
+
   it('creates recipe supplement alternative links from split ingredient groups', () => {
     const result = planRecipeSupplementAlternativesBackfill({
       recipeItems: [

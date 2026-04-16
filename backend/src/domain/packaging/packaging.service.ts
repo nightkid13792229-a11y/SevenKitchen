@@ -8,6 +8,11 @@ import { Ingredient } from '../ingredient';
 import type { IngredientRepository } from '../ingredient';
 import { IngredientType } from '../ingredient/enums';
 import { INGREDIENT_REPOSITORY } from '../../application/ingredient/ingredient.service';
+import {
+  normalizePackagePlan,
+  summarizePackagePlan,
+  type OrderPackagePlanItem,
+} from '../order';
 
 export interface ShippingContainer {
   boxItem: Ingredient;
@@ -28,6 +33,24 @@ export interface PackagingCost {
       labelCostPerPack: number; // 标签每袋成本
       costPerPack: number; // 每袋总成本
       weightPerPack: number;
+      vacuumBagTotalCost?: number;
+      labelTotalCost?: number;
+      totalCost?: number;
+      vacuumBagsCount?: number;
+      labelsCount?: number;
+      calculation?: string;
+      packageRows?: Array<{
+        packageSpecG: number;
+        packageCount: number;
+        vacuumBagName: string;
+        vacuumBagSpec: string;
+        vacuumBagCostPerPack: number;
+        vacuumBagTotalCost: number;
+        labelCostPerPack: number;
+        labelTotalCost: number;
+        totalCost: number;
+        weightG: number;
+      }>;
     };
     shippingContainers: Array<{
       boxName: string;
@@ -179,6 +202,144 @@ export class PackagingService {
     }
 
     return containers;
+  }
+
+  async calculatePackagingCostForPlan(
+    packagePlanInput: OrderPackagePlanItem[],
+    totalFoodWeightG: number,
+  ): Promise<PackagingCost> {
+    const packagePlan = normalizePackagePlan(packagePlanInput);
+    const summary = summarizePackagePlan(packagePlan);
+    const productLabel = await this.ingredientRepo.findById(
+      '22831322-3463-49c7-8346-f5cc14277943',
+    );
+
+    if (!productLabel) {
+      throw new NotFoundException('Product label not found in database');
+    }
+
+    let cost = 0;
+    let weight = 0;
+    let vacuumBagTotalCost = 0;
+    let labelTotalCost = 0;
+    let perPackWeightTotal = 0;
+    const labelCostPerPack = productLabel.getUnitCost();
+    const packageRows: NonNullable<
+      PackagingCost['breakdown']['perPackConsumables']['packageRows']
+    > = [];
+
+    for (const row of packagePlan) {
+      const vacuumBag = await this.selectVacuumBag(row.packageSpecG);
+      const vacuumBagCostPerPack = vacuumBag.getUnitCost();
+      const rowVacuumBagTotalCost = row.packageCount * vacuumBagCostPerPack;
+      const rowLabelTotalCost = row.packageCount * labelCostPerPack;
+      const rowWeight =
+        row.packageCount *
+        ((vacuumBag.weightG || 0) + (productLabel.weightG || 0));
+
+      vacuumBagTotalCost += rowVacuumBagTotalCost;
+      labelTotalCost += rowLabelTotalCost;
+      perPackWeightTotal += rowWeight;
+      cost += rowVacuumBagTotalCost + rowLabelTotalCost;
+      weight += rowWeight;
+
+      packageRows.push({
+        packageSpecG: row.packageSpecG,
+        packageCount: row.packageCount,
+        vacuumBagName: vacuumBag.name,
+        vacuumBagSpec: vacuumBag.productModel || vacuumBag.name,
+        vacuumBagCostPerPack,
+        vacuumBagTotalCost: rowVacuumBagTotalCost,
+        labelCostPerPack,
+        labelTotalCost: rowLabelTotalCost,
+        totalCost: rowVacuumBagTotalCost + rowLabelTotalCost,
+        weightG: rowWeight,
+      });
+    }
+
+    const containers = await this.calculateShippingContainers(totalFoodWeightG);
+    const ice = await this.ingredientRepo.findById(
+      '1e3d5990-e553-44fb-8bb9-6144593b6899',
+    );
+
+    if (!ice) {
+      throw new NotFoundException('Ice pack not found');
+    }
+
+    const shippingContainersBreakdown = [];
+
+    for (const c of containers) {
+      const boxCost = c.boxItem.getUnitCost();
+      const bagCost = c.thermalItem.getUnitCost();
+      const iceCost = c.icePacks * ice.getUnitCost();
+
+      const containerCost = boxCost + bagCost + iceCost;
+      cost += containerCost;
+
+      const boxWeight = c.boxItem.weightG || 0;
+      const bagWeight = c.thermalItem.weightG || 0;
+      const iceWeight = c.icePacks * (ice.weightG || 0);
+
+      const containerWeight = boxWeight + bagWeight + iceWeight;
+      weight += containerWeight;
+
+      shippingContainersBreakdown.push({
+        boxName: c.boxItem.name,
+        boxSpec: c.boxItem.maxCapacityG
+          ? `容量${(c.boxItem.maxCapacityG / 1000).toFixed(1)}kg`
+          : c.boxItem.productModel || c.boxItem.name,
+        thermalBagName: c.thermalItem.name,
+        thermalBagSpec: c.thermalItem.productModel || c.thermalItem.name,
+        icePacks: c.icePacks,
+        cost: containerCost,
+        weight: containerWeight,
+      });
+    }
+
+    const firstRow = packageRows[0]!;
+    const hasMultipleSpecs = packageRows.length > 1;
+    const totalPerPackCost = vacuumBagTotalCost + labelTotalCost;
+    const averageVacuumBagCostPerPack =
+      vacuumBagTotalCost / summary.totalPackageCount;
+    const averageLabelCostPerPack = labelTotalCost / summary.totalPackageCount;
+
+    console.log('[PackagingService] Package plan consumables:', {
+      packagePlan,
+      totalPacks: summary.totalPackageCount,
+      totalFoodWeightG,
+      vacuumBagTotalCost,
+      labelTotalCost,
+      totalPerPackCost,
+    });
+
+    return {
+      cost,
+      weightG: weight,
+      breakdown: {
+        perPackConsumables: {
+          vacuumBagName: hasMultipleSpecs
+            ? '多规格食品真空袋'
+            : firstRow.vacuumBagName,
+          vacuumBagSpec: hasMultipleSpecs
+            ? summary.packageSpecSummary
+            : firstRow.vacuumBagSpec,
+          labelName: productLabel.name,
+          labelSpec: productLabel.productModel || productLabel.name,
+          vacuumBagCostPerPack: averageVacuumBagCostPerPack,
+          labelCostPerPack: averageLabelCostPerPack,
+          costPerPack: totalPerPackCost / summary.totalPackageCount,
+          weightPerPack: perPackWeightTotal / summary.totalPackageCount,
+          vacuumBagTotalCost,
+          labelTotalCost,
+          totalCost: totalPerPackCost,
+          vacuumBagsCount: summary.totalPackageCount,
+          labelsCount: summary.totalPackageCount,
+          calculation: `${summary.packageSpecSummary} 包材小计 = ¥${totalPerPackCost.toFixed(2)}`,
+          packageRows,
+        },
+        shippingContainers: shippingContainersBreakdown,
+      },
+    };
   }
 
   /**

@@ -23,7 +23,10 @@ import {
 } from 'src/application/order/order.service';
 import { PRODUCTION_BATCH_REPOSITORY } from 'src/application/production/production.service';
 import type { OrderStatusHistoryRepository } from 'src/domain/order/order-status-history.repository';
-import { RECIPE_REPOSITORY, DOG_REPOSITORY } from 'src/application/dog/dog.service';
+import {
+  RECIPE_REPOSITORY,
+  DOG_REPOSITORY,
+} from 'src/application/dog/dog.service';
 import { INGREDIENT_REPOSITORY } from 'src/application/ingredient/ingredient.service';
 import { ADDRESS_REPOSITORY } from 'src/application/address/address.service';
 import { InMemoryOrderRepository } from 'src/infrastructure/repositories/in-memory-order.repository';
@@ -39,7 +42,15 @@ import { PackagingService } from 'src/domain/packaging/packaging.service';
 import { SHIPPING_TEMPLATE_REPOSITORY } from 'src/application/shipping/shipping.service.tokens';
 import { InMemoryShippingTemplateRepository } from 'src/infrastructure/repositories/in-memory-shipping-template.repository';
 import type { Recipe } from 'src/domain/recipe/recipe.repository';
-import { OrderStatus, OrderType, DogGender, ActivityLevel, LifeStageOverride, TreatInputMode, TreatLevel } from 'src/domain';
+import {
+  OrderStatus,
+  OrderType,
+  DogGender,
+  ActivityLevel,
+  LifeStageOverride,
+  TreatInputMode,
+  TreatLevel,
+} from 'src/domain';
 import { Order, OrderItem, PricingBreakdownSnapshot } from 'src/domain/order';
 import type { RecipeSnapshot } from 'src/domain/recipe/types';
 import { JwtAuthService } from 'src/auth/jwt.service';
@@ -214,30 +225,36 @@ describe('OrdersController (e2e)', () => {
           useValue: (() => {
             const historyRecords: OrderStatusHistory[] = [];
             return {
-              append: jest.fn().mockImplementation(async (
-                orderId: string,
-                fromStatus: OrderStatus,
-                toStatus: OrderStatus,
-                actor: 'customer' | 'staff' | 'admin' | 'system',
-                actorId?: string | null,
-                metadata?: Record<string, any> | null,
-              ) => {
-                const record = new OrderStatusHistory(
-                  `history-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
-                  orderId,
-                  fromStatus,
-                  toStatus,
-                  new Date(),
-                  actor,
-                  actorId ?? null,
-                  metadata ?? null,
-                );
-                historyRecords.push(record);
-                return record;
-              }),
-              findByOrderId: jest.fn().mockImplementation(async (orderId: string) => {
-                return historyRecords.filter(r => r.orderId === orderId);
-              }),
+              append: jest
+                .fn()
+                .mockImplementation(
+                  async (
+                    orderId: string,
+                    fromStatus: OrderStatus,
+                    toStatus: OrderStatus,
+                    actor: 'customer' | 'staff' | 'admin' | 'system',
+                    actorId?: string | null,
+                    metadata?: Record<string, any> | null,
+                  ) => {
+                    const record = new OrderStatusHistory(
+                      `history-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+                      orderId,
+                      fromStatus,
+                      toStatus,
+                      new Date(),
+                      actor,
+                      actorId ?? null,
+                      metadata ?? null,
+                    );
+                    historyRecords.push(record);
+                    return record;
+                  },
+                ),
+              findByOrderId: jest
+                .fn()
+                .mockImplementation(async (orderId: string) => {
+                  return historyRecords.filter((r) => r.orderId === orderId);
+                }),
             } as jest.Mocked<OrderStatusHistoryRepository>;
           })(),
         },
@@ -286,33 +303,38 @@ describe('OrdersController (e2e)', () => {
           // Format validation errors into a readable message with nested field paths (same as main.ts)
           const formatError = (error: any, prefix = ''): string[] => {
             const messages: string[] = [];
-            const propertyPath = prefix ? `${prefix}.${error.property}` : error.property;
-            
+            const propertyPath = prefix
+              ? `${prefix}.${error.property}`
+              : error.property;
+
             const constraints = error.constraints || {};
             const constraintMessages = Object.values(constraints);
             if (constraintMessages.length > 0) {
-              messages.push(`${propertyPath}: ${constraintMessages.join(', ')}`);
+              messages.push(
+                `${propertyPath}: ${constraintMessages.join(', ')}`,
+              );
             }
-            
+
             // Handle nested validation errors (including array items)
             if (error.children && error.children.length > 0) {
               error.children.forEach((child: any, index: number) => {
                 // For ValidateNested with { each: true }, children represent array items
                 // Each child represents one array item's validation errors
                 // Check if parent is an array by looking at error.value or error.target[error.property]
-                const parentIsArray = Array.isArray(error.value) || 
-                                      (error.target && Array.isArray(error.target[error.property]));
-                
-                const childPrefix = parentIsArray 
+                const parentIsArray =
+                  Array.isArray(error.value) ||
+                  (error.target && Array.isArray(error.target[error.property]));
+
+                const childPrefix = parentIsArray
                   ? `${propertyPath}[${index}]`
                   : propertyPath;
-                
+
                 const childMessages = formatError(child, childPrefix);
                 // Always add child messages - they contain the actual field-level errors
                 messages.push(...childMessages);
               });
             }
-            
+
             // Only add generic "validation failed" if we have no constraints and no children with messages
             // This prevents "items: validation failed" when children exist but have no messages
             // But if children exist and we still have no messages, it means children had no constraints
@@ -323,20 +345,25 @@ describe('OrdersController (e2e)', () => {
                 messages.push(`${propertyPath}: validation failed`);
               } else {
                 // Children exist but no messages - this shouldn't happen, but if it does, try to extract from children directly
-                const hasChildConstraints = error.children.some((child: any) => 
-                  child.constraints && Object.keys(child.constraints).length > 0
+                const hasChildConstraints = error.children.some(
+                  (child: any) =>
+                    child.constraints &&
+                    Object.keys(child.constraints).length > 0,
                 );
                 if (!hasChildConstraints) {
                   messages.push(`${propertyPath}: validation failed`);
                 }
               }
             }
-            
+
             return messages;
           };
-          
+
           const allMessages = errors.flatMap((error) => formatError(error));
-          const finalMessage = allMessages.length > 0 ? allMessages.join('; ') : 'Validation failed';
+          const finalMessage =
+            allMessages.length > 0
+              ? allMessages.join('; ')
+              : 'Validation failed';
           return new BadRequestException(finalMessage);
         },
       }),
@@ -351,7 +378,9 @@ describe('OrdersController (e2e)', () => {
     orderService = moduleFixture.get(OrderService);
     dogRepository = moduleFixture.get(DOG_REPOSITORY);
     ingredientRepository = moduleFixture.get(INGREDIENT_REPOSITORY);
-    statusHistoryRepository = moduleFixture.get(ORDER_STATUS_HISTORY_REPOSITORY);
+    statusHistoryRepository = moduleFixture.get(
+      ORDER_STATUS_HISTORY_REPOSITORY,
+    );
 
     await app.init();
   });
@@ -496,14 +525,13 @@ describe('OrdersController (e2e)', () => {
       amountProduct,
       amountShipping,
       params.amountTotal ?? amountProduct + amountShipping,
-      params.items ??
-        [
-          createTestOrderItem({
-            id: `item-${params.id}`,
-            orderId: params.id,
-            dogId: params.dogId ?? null,
-          }),
-        ],
+      params.items ?? [
+        createTestOrderItem({
+          id: `item-${params.id}`,
+          orderId: params.id,
+          dogId: params.dogId ?? null,
+        }),
+      ],
       undefined,
       params.pricingBreakdown,
       params.dogId,
@@ -525,7 +553,10 @@ describe('OrdersController (e2e)', () => {
   }
 
   // Helper function to create test recipe with items
-  async function createTestRecipeWithItems(recipeId: string, ingredientId: string): Promise<void> {
+  async function createTestRecipeWithItems(
+    recipeId: string,
+    ingredientId: string,
+  ): Promise<void> {
     const recipe: Recipe = {
       id: recipeId,
       version: 1,
@@ -558,7 +589,7 @@ describe('OrdersController (e2e)', () => {
       await createTestDog(customerId, dogId);
       await createTestIngredient(ingredientId);
       await createTestRecipeWithItems(recipeId, ingredientId);
-      
+
       // Create address
       const address = {
         id: addressId,
@@ -637,7 +668,9 @@ describe('OrdersController (e2e)', () => {
       expect(response.body.message).toBeTruthy();
       // Verify detailed field paths are included
       expect(response.body.message).toMatch(/items\[0\]/);
-      expect(response.body.message.toLowerCase()).toMatch(/recipeid|quantityg|packagecount|packagespecg/i);
+      expect(response.body.message.toLowerCase()).toMatch(
+        /recipeid|quantityg|packagecount|packagespecg/i,
+      );
       expect(response.body.data).toBeNull();
     });
 
@@ -862,7 +895,9 @@ describe('OrdersController (e2e)', () => {
       expect(payResponse.body.data.status).toBe(OrderStatus.PAID);
       expect(payResponse.body.data.paymentStatus).toBe('SUCCESS');
       expect(payResponse.body.data.paymentMethod).toBe('WECHAT');
-      expect(payResponse.body.data.transactionId).toMatch(/^MOCK_\d+_[a-z0-9]+$/);
+      expect(payResponse.body.data.transactionId).toMatch(
+        /^MOCK_\d+_[a-z0-9]+$/,
+      );
       expect(payResponse.body.data.paidAt).toBeDefined();
     });
   });
@@ -1603,6 +1638,113 @@ describe('OrdersController (e2e)', () => {
   });
 
   describe('POST /api/v1/orders/pricing/preview', () => {
+    it('should accept multi-spec packagePlan and store normalized snapshot params', async () => {
+      const customerId = 'test-customer-preview-package-plan';
+      const dogId = '550e8400-e29b-41d4-a716-446655440000';
+      const recipeId = '550e8400-e29b-41d4-a716-446655440001';
+      const ingredientId = '550e8400-e29b-41d4-a716-446655440002';
+      const packagePlan = [
+        { packageSpecG: 100, packageCount: 2 },
+        { packageSpecG: 200, packageCount: 3 },
+      ];
+
+      await createTestDog(customerId, dogId);
+      await createTestIngredient(ingredientId);
+      await createTestRecipeWithItems(recipeId, ingredientId);
+
+      mockPricingService.calculateOrderPrice.mockResolvedValueOnce({
+        costIngredients: 50,
+        costPackaging: 2,
+        costLabor: 10,
+        costOverhead: 5,
+        totalProductCost: 67,
+        productPrice: 111.67,
+        shippingFee: 0,
+        totalPrice: 111.67,
+        weightPackagingG: 100,
+        ingredientDetails: [],
+        packagingDetails: {
+          perPackConsumables: {
+            vacuumBagName: '多规格食品真空袋',
+            vacuumBagSpec: '100g×2袋，200g×3袋',
+            labelName: '产品标签',
+            labelSpec: '默认',
+            vacuumBagCostPerPack: 0.1,
+            labelCostPerPack: 0.05,
+            vacuumBagTotalCost: 0.5,
+            labelTotalCost: 0.25,
+            totalCost: 0.75,
+            weightPerPack: 1,
+            calculation: 'mock',
+            vacuumBagsCount: 5,
+            labelsCount: 5,
+          },
+          shippingContainers: [],
+        },
+        laborDetails: {
+          standardBatchOutputKg: 10,
+          standardLaborCostPerKg: 1,
+          rawInputWeightKg: 0.8,
+          totalCost: 10,
+          calculation: 'mock',
+        },
+        overheadDetails: {
+          overheadCostPerKg: 5,
+          rawInputWeightKg: 0.8,
+          totalCost: 5,
+          calculation: 'mock',
+        },
+      });
+
+      const response = await request(app.getHttpServer())
+        .post('/api/v1/orders/pricing/preview')
+        .set('X-Customer-Id', customerId)
+        .send({
+          dogId,
+          type: OrderType.FRESH_FOOD,
+          ingredientSourcePlan: 'MARKET_PREMIUM',
+          items: [
+            {
+              recipeId,
+              packagePlan,
+              dailyIntakeG: 300,
+            },
+          ],
+        })
+        .expect(200);
+
+      expect(response.body).toHaveProperty('code', 0);
+      expect(response.body.data.snapshotId).toBe('pricing-snapshot-test-id');
+      expect(
+        response.body.data.pricingBreakdown.packagingDetails.perPackConsumables
+          .vacuumBagsCount,
+      ).toBe(5);
+      expect(mockPricingService.calculateOrderPrice).toHaveBeenCalledWith(
+        expect.objectContaining({
+          totalNetFoodWeightG: 800,
+          packagePlan,
+          singlePackSpecG: 200,
+        }),
+      );
+      expect(mockPricingSnapshotRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          requestParams: expect.objectContaining({
+            ingredientSourcePlan: 'MARKET_PREMIUM',
+            items: [
+              expect.objectContaining({
+                recipeId,
+                quantityG: 800,
+                packageCount: 5,
+                packageSpecG: 200,
+                packagePlan,
+                dailyIntakeG: 300,
+              }),
+            ],
+          }),
+        }),
+      );
+    });
+
     it('should compute packageCount when missing (ceil(quantityG/packageSpecG))', async () => {
       const customerId = 'test-customer-preview';
       const dogId = '550e8400-e29b-41d4-a716-446655440000';
@@ -1898,7 +2040,7 @@ describe('OrdersController (e2e)', () => {
       expect(response.body.data).toBeDefined();
       expect(response.body.data).toHaveProperty('priceExplanation');
       expect(response.body.data.priceExplanation).toBeDefined();
-      
+
       const explanation = response.body.data.priceExplanation;
       expect(explanation).toHaveProperty('productPrice', 111.67);
       expect(explanation).toHaveProperty('shippingFee', 12.0);
@@ -1907,7 +2049,7 @@ describe('OrdersController (e2e)', () => {
       expect(explanation).toHaveProperty('costPackaging', 2.0);
       expect(explanation).toHaveProperty('costLabor', 10.0);
       expect(explanation).toHaveProperty('costOverhead', 5.0);
-      
+
       // marginAmount = productPrice - totalProductCost = 111.67 - 67.0 = 44.67
       expect(explanation).toHaveProperty('marginAmount', 44.67);
       expect(explanation).toHaveProperty('explanationLines');
@@ -2044,7 +2186,12 @@ describe('OrdersController (e2e)', () => {
 
       // Simulate history by calling service methods that create history
       await orderService.confirmOrder(order.id, 'customer', customerId);
-      await orderService.processPayment(order.id, 'WECHAT', 'customer', customerId);
+      await orderService.processPayment(
+        order.id,
+        'WECHAT',
+        'customer',
+        customerId,
+      );
 
       const response = await request(app.getHttpServer())
         .get(`/api/v1/orders/${order.id}/history`)

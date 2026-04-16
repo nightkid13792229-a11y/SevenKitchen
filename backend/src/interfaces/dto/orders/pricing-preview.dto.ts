@@ -17,6 +17,24 @@ import { Type } from 'class-transformer';
 import { OrderType } from '../../../domain';
 import { PreparationMethod, CookingMethod } from '../../../domain/order';
 
+const INGREDIENT_SOURCE_PLAN_CODES = [
+  'ORGANIC',
+  'MARKET_PREMIUM',
+  'WHOLESALE',
+] as const;
+
+export class PricingPreviewPackagePlanItemDto {
+  @ApiProperty({ description: 'Package specification in grams', example: 100 })
+  @IsInt()
+  @Min(1)
+  packageSpecG!: number;
+
+  @ApiProperty({ description: 'Number of packages for this spec', example: 2 })
+  @IsInt()
+  @Min(1)
+  packageCount!: number;
+}
+
 /**
  * Pricing Preview Item DTO
  * Allows packageCount to be optional - will be computed if missing
@@ -26,10 +44,14 @@ export class PricingPreviewItemDto {
   @IsUUID()
   recipeId!: string;
 
-  @ApiProperty({ description: 'Total quantity in grams', example: 1400 })
+  @ApiPropertyOptional({
+    description: 'Total quantity in grams',
+    example: 1400,
+  })
+  @IsOptional()
   @IsNumber()
   @Min(1)
-  quantityG!: number;
+  quantityG?: number;
 
   @ApiPropertyOptional({
     description:
@@ -41,15 +63,30 @@ export class PricingPreviewItemDto {
   @Min(1)
   packageCount?: number;
 
-  @ApiProperty({ description: 'Package specification in grams', example: 100 })
+  @ApiPropertyOptional({
+    description: 'Package specification in grams',
+    example: 100,
+  })
+  @IsOptional()
   @IsInt()
   @Min(1)
-  packageSpecG!: number;
+  packageSpecG?: number;
 
-  @ApiProperty({ description: 'Order cycle days', example: 7 })
+  @ApiPropertyOptional({
+    type: [PricingPreviewPackagePlanItemDto],
+    description: 'Multi-row package plan; derives quantity/packageCount/spec',
+  })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => PricingPreviewPackagePlanItemDto)
+  packagePlan?: PricingPreviewPackagePlanItemDto[];
+
+  @ApiPropertyOptional({ description: 'Order cycle days', example: 7 })
+  @IsOptional()
   @IsInt()
   @Min(1)
-  cycleDays!: number;
+  cycleDays?: number;
 
   @ApiProperty({ description: 'Daily food intake in grams', example: 312 })
   @IsNumber()
@@ -95,6 +132,15 @@ export class PricingPreviewRequestDto {
   @ApiProperty({ enum: OrderType, example: OrderType.FRESH_FOOD })
   @IsEnum(OrderType)
   type!: OrderType;
+
+  @ApiPropertyOptional({
+    description: 'Ingredient source plan',
+    enum: INGREDIENT_SOURCE_PLAN_CODES,
+    example: 'MARKET_PREMIUM',
+  })
+  @IsOptional()
+  @IsEnum(INGREDIENT_SOURCE_PLAN_CODES)
+  ingredientSourcePlan?: string;
 }
 
 /**

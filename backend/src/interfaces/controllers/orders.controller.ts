@@ -118,6 +118,7 @@ export class OrdersController {
         customerId,
         dogId: createOrderDto.dogId,
         type: createOrderDto.type,
+        ingredientSourcePlan: createOrderDto.ingredientSourcePlan,
         targetProductionDate: createOrderDto.targetProductionDate
           ? new Date(createOrderDto.targetProductionDate)
           : null,
@@ -618,6 +619,7 @@ export class OrdersController {
         customerId,
         dogId: requestDto.dogId,
         type: requestDto.type,
+        ingredientSourcePlan: requestDto.ingredientSourcePlan,
         targetProductionDate: null,
         items: requestDto.items,
         addressId: requestDto.addressId,

@@ -12,6 +12,11 @@ import { resolveSupplementNutrients } from '../ingredient/supplement-nutrition-r
 import { ValidationError } from '../common/errors';
 import { PackagingService } from '../packaging';
 import { INGREDIENT_REPOSITORY } from '../../application/ingredient/ingredient.service';
+import {
+  normalizePackagePlan,
+  summarizePackagePlan,
+  type OrderPackagePlanItem,
+} from '../order';
 
 export interface GlobalConfig {
   laborHourlyRate: number;
@@ -84,8 +89,10 @@ export interface DogProfile {
 export interface PricingCalculationInput {
   dog: DogProfile;
   recipe: Recipe;
-  dailyG: number;
-  days: number;
+  dailyG?: number;
+  days?: number;
+  totalNetFoodWeightG?: number;
+  packagePlan?: OrderPackagePlanItem[];
   discountRate?: number;
   globalConfig: GlobalConfig;
   singlePackSpecG?: number; // Optional: use provided value instead of calculating
@@ -201,14 +208,32 @@ export class PricingService {
       recipe,
       dailyG,
       days,
+      totalNetFoodWeightG: providedTotalNetFoodWeightG,
       discountRate = 1.0,
       globalConfig,
     } = input;
+    const packagePlan = input.packagePlan
+      ? normalizePackagePlan(input.packagePlan)
+      : null;
+    const packagePlanSummary = packagePlan
+      ? summarizePackagePlan(packagePlan)
+      : null;
+
+    const hasLegacyQuantityInput = dailyG !== undefined && days !== undefined;
+    const hasPackagePlanQuantityInput =
+      providedTotalNetFoodWeightG !== undefined && packagePlan !== null;
+
+    if (!hasLegacyQuantityInput && !hasPackagePlanQuantityInput) {
+      throw new ValidationError(
+        'Pricing calculation requires either dailyG and days, or totalNetFoodWeightG and packagePlan',
+      );
+    }
 
     // ==========================================
     // 0. 起订量检查 (Minimum Order Check)
     // ==========================================
-    const totalNetFoodWeightG = dailyG * days;
+    const totalNetFoodWeightG =
+      providedTotalNetFoodWeightG ?? (dailyG as number) * (days as number);
     if (totalNetFoodWeightG < globalConfig.minOrderWeightG) {
       throw new ValidationError(
         `订单净重不足 ${globalConfig.minOrderWeightG}g (当前 ${totalNetFoodWeightG}g)`,
@@ -220,8 +245,12 @@ export class PricingService {
     // ==========================================
     const mealsPerDay = dog.mealsPerDay;
     // Use provided singlePackSpecG if available, otherwise calculate from dailyG
-    const singlePackSpecG = input.singlePackSpecG || dailyG / mealsPerDay;
-    const totalPacks = mealsPerDay * days;
+    const singlePackSpecG =
+      input.singlePackSpecG ||
+      packagePlanSummary?.primaryPackageSpecG ||
+      (dailyG as number) / mealsPerDay;
+    const totalPacks =
+      packagePlanSummary?.totalPackageCount ?? mealsPerDay * (days as number);
 
     // 生产投料毛重 (含烹饪损耗) (Gross input weight with production loss)
     // 单位：kg (从 totalNetFoodWeightG 转换)
@@ -297,8 +326,7 @@ export class PricingService {
           itemGrossPurchaseKg,
         );
         const itemCost = grossPurchaseBaseAmount * unitCost;
-        const unitCostLabel =
-          ingredient.baseUnit === 'ML' ? '元/ml' : '元/g';
+        const unitCostLabel = ingredient.baseUnit === 'ML' ? '元/ml' : '元/g';
         const foodCalculation =
           ingredient.baseUnit === 'ML'
             ? `净需求${itemNetNeededKg.toFixed(3)}kg ÷ 出成率${yieldRate} × 损耗率${recipe.productionLossRate} = 毛需求${itemGrossPurchaseKg.toFixed(3)}kg ≈ ${grossPurchaseBaseAmount.toFixed(1)}ml（按密度${this.getFoodDensityGPerMl(ingredient).toFixed(3)}g/ml换算） × ${unitCost.toFixed(4)}${unitCostLabel} = ${itemCost.toFixed(2)}元`
@@ -496,11 +524,16 @@ export class PricingService {
 
     // --- D. 包材成本与重量 (Packaging Cost & Weight) ---
     // Use PackagingService to calculate packaging costs
-    const packagingResult = await this.packagingService.calculatePackagingCost(
-      totalPacks,
-      singlePackSpecG,
-      totalNetFoodWeightG,
-    );
+    const packagingResult = packagePlan
+      ? await this.packagingService.calculatePackagingCostForPlan(
+          packagePlan,
+          totalNetFoodWeightG,
+        )
+      : await this.packagingService.calculatePackagingCost(
+          totalPacks,
+          singlePackSpecG,
+          totalNetFoodWeightG,
+        );
 
     const costPackaging = packagingResult.cost;
     const weightPackagingG = packagingResult.weightG;
@@ -518,33 +551,43 @@ export class PricingService {
       ),
     });
 
+    const perPackConsumables = packagingResult.breakdown
+      .perPackConsumables as typeof packagingResult.breakdown.perPackConsumables & {
+      vacuumBagTotalCost?: number;
+      labelTotalCost?: number;
+      totalCost?: number;
+      vacuumBagsCount?: number;
+      labelsCount?: number;
+      calculation?: string;
+    };
+    const vacuumBagTotalCost =
+      perPackConsumables.vacuumBagTotalCost ??
+      perPackConsumables.vacuumBagCostPerPack * totalPacks;
+    const labelTotalCost =
+      perPackConsumables.labelTotalCost ??
+      perPackConsumables.labelCostPerPack * totalPacks;
+    const totalPerPackConsumablesCost =
+      perPackConsumables.totalCost ??
+      (perPackConsumables.vacuumBagCostPerPack +
+        perPackConsumables.labelCostPerPack) *
+        totalPacks;
     const packagingDetails = {
       perPackConsumables: {
-        vacuumBagName:
-          packagingResult.breakdown.perPackConsumables.vacuumBagName,
-        vacuumBagSpec:
-          packagingResult.breakdown.perPackConsumables.vacuumBagSpec,
-        labelName: packagingResult.breakdown.perPackConsumables.labelName,
-        labelSpec: packagingResult.breakdown.perPackConsumables.labelSpec,
-        vacuumBagCostPerPack:
-          packagingResult.breakdown.perPackConsumables.vacuumBagCostPerPack,
-        labelCostPerPack:
-          packagingResult.breakdown.perPackConsumables.labelCostPerPack,
-        vacuumBagTotalCost:
-          packagingResult.breakdown.perPackConsumables.vacuumBagCostPerPack *
-          totalPacks,
-        labelTotalCost:
-          packagingResult.breakdown.perPackConsumables.labelCostPerPack *
-          totalPacks,
-        totalCost:
-          (packagingResult.breakdown.perPackConsumables.vacuumBagCostPerPack +
-            packagingResult.breakdown.perPackConsumables.labelCostPerPack) *
-          totalPacks,
-        weightPerPack:
-          packagingResult.breakdown.perPackConsumables.weightPerPack,
-        vacuumBagsCount: totalPacks, // 真空袋总数量 = 总袋数
-        labelsCount: totalPacks, // 标签总数量 = 总袋数
-        calculation: `每袋¥${packagingResult.breakdown.perPackConsumables.vacuumBagCostPerPack.toFixed(4)} + ¥${packagingResult.breakdown.perPackConsumables.labelCostPerPack.toFixed(4)}，共${totalPacks}袋 = ¥${((packagingResult.breakdown.perPackConsumables.vacuumBagCostPerPack + packagingResult.breakdown.perPackConsumables.labelCostPerPack) * totalPacks).toFixed(2)}`,
+        vacuumBagName: perPackConsumables.vacuumBagName,
+        vacuumBagSpec: perPackConsumables.vacuumBagSpec,
+        labelName: perPackConsumables.labelName,
+        labelSpec: perPackConsumables.labelSpec,
+        vacuumBagCostPerPack: perPackConsumables.vacuumBagCostPerPack,
+        labelCostPerPack: perPackConsumables.labelCostPerPack,
+        vacuumBagTotalCost,
+        labelTotalCost,
+        totalCost: totalPerPackConsumablesCost,
+        weightPerPack: perPackConsumables.weightPerPack,
+        vacuumBagsCount: perPackConsumables.vacuumBagsCount ?? totalPacks, // 真空袋总数量 = 总袋数
+        labelsCount: perPackConsumables.labelsCount ?? totalPacks, // 标签总数量 = 总袋数
+        calculation:
+          perPackConsumables.calculation ??
+          `每袋¥${perPackConsumables.vacuumBagCostPerPack.toFixed(4)} + ¥${perPackConsumables.labelCostPerPack.toFixed(4)}，共${totalPacks}袋 = ¥${totalPerPackConsumablesCost.toFixed(2)}`,
       },
       shippingContainers: packagingResult.breakdown.shippingContainers.map(
         (container) => ({

@@ -13,7 +13,15 @@ import { randomUUID } from 'crypto';
 import type { OrderRepository } from '../../domain/order/order.repository';
 import type { RecipeRepository } from '../../domain/recipe/recipe.repository';
 import type { IngredientRepository } from '../../domain/ingredient/ingredient.repository';
-import { Order, OrderItem, PricingBreakdownSnapshot } from '../../domain/order';
+import {
+  Order,
+  OrderItem,
+  PricingBreakdownSnapshot,
+  normalizeIngredientSourcePlan,
+  normalizePackagePlan,
+  summarizePackagePlan,
+} from '../../domain/order';
+import type { OrderPackagePlanItem } from '../../domain/order';
 import type { PriceExplanationDto } from '../../interfaces/dto/orders/pricing-preview.dto';
 import {
   OrderType,
@@ -56,6 +64,7 @@ export interface CreateOrderDraftDto {
   customerId: string;
   dogId?: string;
   type: OrderType;
+  ingredientSourcePlan?: string;
   targetProductionDate?: Date | null;
   items?: CreateOrderItemDto[];
   cartItemIds?: string[];
@@ -65,12 +74,20 @@ export interface CreateOrderDraftDto {
 
 export interface CreateOrderItemDto {
   recipeId: string;
-  quantityG: number;
+  quantityG?: number;
   packageCount?: number; // Optional - will be computed if missing
-  packageSpecG: number;
+  packageSpecG?: number;
+  packagePlan?: OrderPackagePlanItem[];
   cycleDays?: number; // Order cycle days
   dailyIntakeG?: number; // Daily food intake in grams
   customRequirements?: string | null;
+}
+
+interface ResolvedOrderItemPackageInput {
+  quantityG: number;
+  packageCount: number;
+  packageSpecG: number;
+  packagePlan: OrderPackagePlanItem[];
 }
 
 @Injectable()
@@ -205,6 +222,52 @@ export class OrderService {
     }
 
     return computed;
+  }
+
+  private resolveOrderItemPackageInput(
+    itemDto: CreateOrderItemDto,
+  ): ResolvedOrderItemPackageInput {
+    if (itemDto.packagePlan !== undefined && itemDto.packagePlan !== null) {
+      const packagePlan = normalizePackagePlan(itemDto.packagePlan);
+      const summary = summarizePackagePlan(packagePlan);
+
+      return {
+        quantityG: summary.totalQuantityG,
+        packageCount: summary.totalPackageCount,
+        packageSpecG: summary.primaryPackageSpecG,
+        packagePlan,
+      };
+    }
+
+    if (itemDto.quantityG === undefined || itemDto.quantityG === null) {
+      throw new BadRequestException(
+        'quantityG is required when packagePlan is not provided',
+      );
+    }
+
+    if (itemDto.packageSpecG === undefined || itemDto.packageSpecG === null) {
+      throw new BadRequestException(
+        'packageSpecG is required when packagePlan is not provided',
+      );
+    }
+
+    const packageCount = this.normalizePackageCount(
+      itemDto.quantityG,
+      itemDto.packageCount,
+      itemDto.packageSpecG,
+    );
+
+    return {
+      quantityG: itemDto.quantityG,
+      packageCount,
+      packageSpecG: itemDto.packageSpecG,
+      packagePlan: normalizePackagePlan([
+        {
+          packageSpecG: itemDto.packageSpecG,
+          packageCount,
+        },
+      ]),
+    };
   }
 
   /**
@@ -650,6 +713,10 @@ export class OrderService {
       throw new BadRequestException('items is required when not using cart');
     }
 
+    const ingredientSourcePlan = normalizeIngredientSourcePlan(
+      dto.ingredientSourcePlan,
+    );
+
     // Load dog profile for pricing calculation
     const dog = await this.dogRepository.findById(dto.dogId);
     if (!dog) {
@@ -731,17 +798,11 @@ export class OrderService {
       // Assumption: quantityG = total grams, packageCount = days, packageSpecG = grams per pack
       // dailyG = total / days = quantityG / packageCount
       const globalConfig = await this.globalConfigService.getGlobalConfig();
-
-      // Normalize packageCount (compute if missing, validate inputs)
-      const normalizedPackageCount = this.normalizePackageCount(
-        itemDto.quantityG,
-        itemDto.packageCount,
-        itemDto.packageSpecG,
-      );
+      const packageInput = this.resolveOrderItemPackageInput(itemDto);
 
       // Use frontend-provided cycleDays and dailyIntakeG if available
-      const days = itemDto.cycleDays ?? normalizedPackageCount;
-      const dailyG = itemDto.dailyIntakeG ?? itemDto.quantityG / days;
+      const days = itemDto.cycleDays ?? packageInput.packageCount;
+      const dailyG = itemDto.dailyIntakeG ?? packageInput.quantityG / days;
 
       pricing = await this.pricingService.calculateOrderPrice({
         dog: {
@@ -757,7 +818,9 @@ export class OrderService {
         days,
         discountRate: 1.0,
         globalConfig,
-        singlePackSpecG: itemDto.packageSpecG, // Use frontend-provided package spec
+        totalNetFoodWeightG: packageInput.quantityG,
+        packagePlan: packageInput.packagePlan,
+        singlePackSpecG: packageInput.packageSpecG, // Use frontend-provided package spec
       });
 
       // Calculate shipping fee if address is provided
@@ -767,7 +830,7 @@ export class OrderService {
           if (address) {
             // Calculate total shipping weight (food weight only, packaging weight will be added after pricing calculation)
             // TODO: Include packaging weight in shipping fee calculation for accurate pricing
-            const totalWeightG = itemDto.quantityG;
+            const totalWeightG = packageInput.quantityG;
             const shippingResult =
               await this.shippingService.calculateShippingFeePreview({
                 region: address.region,
@@ -845,7 +908,7 @@ export class OrderService {
       };
 
       const itemId = randomUUID();
-      // Use normalized packageCount (already computed above)
+      // Use normalized package input (already computed above)
       // Phase 8.9: Include calculated dailyIntakeG (immutable after order creation)
 
       // Extract vacuum bag spec from pricing result
@@ -858,9 +921,9 @@ export class OrderService {
         orderId,
         dto.dogId, // Save dogId to link order item with dog
         recipeSnapshot,
-        itemDto.quantityG,
-        normalizedPackageCount,
-        itemDto.packageSpecG,
+        packageInput.quantityG,
+        packageInput.packageCount,
+        packageInput.packageSpecG,
         typeof itemDto.customRequirements === 'string'
           ? itemDto.customRequirements
           : itemDto.customRequirements !== null &&
@@ -869,6 +932,10 @@ export class OrderService {
             : null,
         dailyIntakeG, // Calculated from DogCalc.finalFoodKcal ÷ Recipe.energyDensityKcalPerKg
         vacuumBagSpec, // vacuum bag specification
+        null,
+        null,
+        packageInput.packagePlan,
+        ingredientSourcePlan,
       );
 
       items.push(orderItem);
@@ -894,8 +961,10 @@ export class OrderService {
       quantityG: dto.items[0].quantityG,
       packageCount: dto.items[0].packageCount,
       packageSpecG: dto.items[0].packageSpecG,
+      packagePlan: dto.items[0].packagePlan,
       cycleDays: dto.items[0].cycleDays,
       dailyIntakeG: dto.items[0].dailyIntakeG,
+      ingredientSourcePlan,
     });
 
     // Phase 7.1: Create pricing breakdown snapshot
@@ -1144,7 +1213,12 @@ export class OrderService {
       throw new NotFoundException('Order must have at least one item');
     }
 
+    const ingredientSourcePlan = normalizeIngredientSourcePlan(
+      dto.ingredientSourcePlan,
+    );
+
     const itemDto = dto.items[0];
+    const packageInput = this.resolveOrderItemPackageInput(itemDto);
     const recipe = await this.recipeRepository.findById(itemDto.recipeId);
     if (!recipe) {
       throw new NotFoundException(`Recipe not found: ${itemDto.recipeId}`);
@@ -1214,16 +1288,9 @@ export class OrderService {
     // Calculate product pricing
     const globalConfig = await this.globalConfigService.getGlobalConfig();
 
-    // Normalize packageCount (compute if missing, validate inputs)
-    const normalizedPackageCount = this.normalizePackageCount(
-      itemDto.quantityG,
-      itemDto.packageCount,
-      itemDto.packageSpecG,
-    );
-
     // Use frontend-provided cycleDays and dailyIntakeG if available
-    const days = itemDto.cycleDays ?? normalizedPackageCount;
-    const dailyG = itemDto.dailyIntakeG ?? itemDto.quantityG / days;
+    const days = itemDto.cycleDays ?? packageInput.packageCount;
+    const dailyG = itemDto.dailyIntakeG ?? packageInput.quantityG / days;
 
     const pricing = await this.pricingService.calculateOrderPrice({
       dog: {
@@ -1239,14 +1306,17 @@ export class OrderService {
       days,
       discountRate: 1.0,
       globalConfig,
-      singlePackSpecG: itemDto.packageSpecG, // Use frontend-provided package spec
+      totalNetFoodWeightG: packageInput.quantityG,
+      packagePlan: packageInput.packagePlan,
+      singlePackSpecG: packageInput.packageSpecG, // Use frontend-provided package spec
     });
 
     // Calculate shipping fee using default shipping template
     let shippingFee = 0;
     try {
       // Calculate total shipping weight (food + packaging materials)
-      const totalWeightG = itemDto.quantityG + (pricing.weightPackagingG || 0);
+      const totalWeightG =
+        packageInput.quantityG + (pricing.weightPackagingG || 0);
 
       const shippingResult =
         await this.shippingService.calculateShippingFeePreview({
@@ -1265,11 +1335,13 @@ export class OrderService {
     console.log('  shippingFee:', shippingFee);
     console.log('  amountTotal:', pricing.productPrice + shippingFee);
     console.log('  Input params:', {
-      quantityG: itemDto.quantityG,
-      packageCount: itemDto.packageCount,
-      packageSpecG: itemDto.packageSpecG,
+      quantityG: packageInput.quantityG,
+      packageCount: packageInput.packageCount,
+      packageSpecG: packageInput.packageSpecG,
+      packagePlan: packageInput.packagePlan,
       cycleDays: itemDto.cycleDays,
       dailyIntakeG: itemDto.dailyIntakeG,
+      ingredientSourcePlan,
     });
 
     const pricingResult = {
@@ -1297,12 +1369,14 @@ export class OrderService {
       requestParams: {
         dogId: dto.dogId,
         addressId: dto.addressId, // ✅ 修复：保存addressId到快照
+        ingredientSourcePlan,
         items: [
           {
             recipeId: itemDto.recipeId,
-            quantityG: itemDto.quantityG,
-            packageCount: itemDto.packageCount,
-            packageSpecG: itemDto.packageSpecG,
+            quantityG: packageInput.quantityG,
+            packageCount: packageInput.packageCount,
+            packageSpecG: packageInput.packageSpecG,
+            packagePlan: packageInput.packagePlan,
             cycleDays: itemDto.cycleDays,
             dailyIntakeG: itemDto.dailyIntakeG,
           },

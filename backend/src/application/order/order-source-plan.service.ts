@@ -77,19 +77,18 @@ export class OrderSourcePlanService {
       sku.currentPurchasePrice ??
       sku.referencePurchasePrice ??
       sku.referencePricePerPurchaseUnit;
-    const hasUsableSkuPricing = this.hasUsablePricingProfile(sku, skuPrice);
-    const currentPrice = hasUsableSkuPricing
-      ? skuPrice
+    const pricingProfile = this.getUsablePricingProfile(sku, skuPrice);
+    const currentPrice = pricingProfile
+      ? pricingProfile.price
       : ingredient.currentPricePerPurchaseUnit;
-    const effectivePrice = hasUsableSkuPricing
-      ? skuPrice
+    const effectivePrice = pricingProfile
+      ? pricingProfile.price
       : ingredient.effectivePricePerPurchaseUnit;
-    const purchaseUnit = hasUsableSkuPricing
+    const purchaseUnit = pricingProfile
       ? (sku.purchaseUnit ?? ingredient.purchaseUnit)
       : ingredient.purchaseUnit;
-    const purchaseToBaseRatio = hasUsableSkuPricing
-      ? sku.purchaseToBaseRatio
-      : ingredient.purchaseToBaseRatio;
+    const purchaseToBaseRatio =
+      pricingProfile?.purchaseToBaseRatio ?? ingredient.purchaseToBaseRatio;
     const properties = {
       ...ingredient.properties,
       procurement_sku_id: sku.id,
@@ -133,11 +132,11 @@ export class OrderSourcePlanService {
     return cloned;
   }
 
-  private hasUsablePricingProfile(
+  private getUsablePricingProfile(
     sku: ProcurementSkuSummary,
     price: number | null | undefined,
-  ): price is number {
-    return (
+  ): { price: number; purchaseToBaseRatio: number } | null {
+    if (
       price !== null &&
       price !== undefined &&
       Number.isFinite(price) &&
@@ -145,6 +144,10 @@ export class OrderSourcePlanService {
       sku.purchaseToBaseRatio !== undefined &&
       Number.isFinite(sku.purchaseToBaseRatio) &&
       sku.purchaseToBaseRatio > 0
-    );
+    ) {
+      return { price, purchaseToBaseRatio: sku.purchaseToBaseRatio };
+    }
+
+    return null;
   }
 }

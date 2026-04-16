@@ -210,12 +210,12 @@ const buildIdentityKey = (seed: {
   purchaseChannel?: string | null;
   displayUnit?: string | null;
 }) => {
+  // Align variant merging with Ingredient's unique constraint so a legacy
+  // procurement SKU cannot be split into a duplicate concrete ingredient.
   const parts = [
     normalizeText(seed.name)?.toLowerCase(),
     normalizeText(seed.brand)?.toLowerCase(),
     normalizeText(seed.productModel)?.toLowerCase(),
-    normalizeText(seed.purchaseChannel)?.toLowerCase(),
-    normalizeText(seed.displayUnit)?.toLowerCase(),
   ].filter(Boolean);
 
   return parts.length > 0 ? parts.join('|') : Math.random().toString(36);
@@ -486,6 +486,16 @@ const buildConcreteIngredientName = (
   return ingredient.name;
 };
 
+const buildFinalIngredientIdentityKey = (
+  ingredient: LegacySingleLayerIngredientSnapshot,
+  variant: ProductVariant,
+) =>
+  buildIdentityKey({
+    name: buildConcreteIngredientName(ingredient, variant),
+    brand: variant.brand || normalizeText(ingredient.brand),
+    productModel: variant.productModel || normalizeText(ingredient.productModel),
+  });
+
 const buildFlattenUpdate = (
   ingredient: LegacySingleLayerIngredientSnapshot,
   variant: ProductVariant,
@@ -562,12 +572,17 @@ export function planSupplementPackagingSingleLayerBackfill(
       return;
     }
 
-    const mergedVariants = sortVariants(
-      mergeVariants([
+    const variants = [
         ...(buildBaseVariant(ingredient) ? [buildBaseVariant(ingredient)!] : []),
         ...buildRecommendedVariants(ingredient),
         ...buildProcurementVariants(ingredient),
-      ]),
+      ].map((variant) => ({
+        ...variant,
+        identityKey: buildFinalIngredientIdentityKey(ingredient, variant),
+      }));
+
+    const mergedVariants = sortVariants(
+      mergeVariants(variants),
     );
 
     if (mergedVariants.length === 0) {

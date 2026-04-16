@@ -93,6 +93,7 @@ export interface PricingCalculationInput {
   days?: number;
   totalNetFoodWeightG?: number;
   packagePlan?: OrderPackagePlanItem[];
+  totalPacks?: number;
   discountRate?: number;
   globalConfig: GlobalConfig;
   singlePackSpecG?: number; // Optional: use provided value instead of calculating
@@ -261,7 +262,9 @@ export class PricingService {
       packagePlanSummary?.primaryPackageSpecG ||
       (dailyG as number) / mealsPerDay;
     const totalPacks =
-      packagePlanSummary?.totalPackageCount ?? mealsPerDay * (days as number);
+      packagePlanSummary?.totalPackageCount ??
+      input.totalPacks ??
+      mealsPerDay * (days as number);
 
     // 生产投料毛重 (含烹饪损耗) (Gross input weight with production loss)
     // 单位：kg (从 totalNetFoodWeightG 转换)

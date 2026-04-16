@@ -87,7 +87,8 @@ interface ResolvedOrderItemPackageInput {
   quantityG: number;
   packageCount: number;
   packageSpecG: number;
-  packagePlan: OrderPackagePlanItem[];
+  packagePlan?: OrderPackagePlanItem[];
+  hasExplicitPackagePlan: boolean;
 }
 
 @Injectable()
@@ -266,6 +267,7 @@ export class OrderService {
         packageCount: summary.totalPackageCount,
         packageSpecG: summary.primaryPackageSpecG,
         packagePlan,
+        hasExplicitPackagePlan: true,
       };
     }
 
@@ -291,12 +293,16 @@ export class OrderService {
       quantityG: itemDto.quantityG,
       packageCount,
       packageSpecG: itemDto.packageSpecG,
-      packagePlan: normalizePackagePlan([
-        {
-          packageSpecG: itemDto.packageSpecG,
-          packageCount,
-        },
-      ]),
+      packagePlan:
+        itemDto.quantityG === itemDto.packageSpecG * packageCount
+          ? normalizePackagePlan([
+              {
+                packageSpecG: itemDto.packageSpecG,
+                packageCount,
+              },
+            ])
+          : undefined,
+      hasExplicitPackagePlan: false,
     };
   }
 
@@ -849,7 +855,10 @@ export class OrderService {
         discountRate: 1.0,
         globalConfig,
         totalNetFoodWeightG: packageInput.quantityG,
-        packagePlan: packageInput.packagePlan,
+        packagePlan: packageInput.hasExplicitPackagePlan
+          ? packageInput.packagePlan
+          : undefined,
+        totalPacks: packageInput.packageCount,
         singlePackSpecG: packageInput.packageSpecG, // Use frontend-provided package spec
       });
 
@@ -963,7 +972,7 @@ export class OrderService {
         vacuumBagSpec, // vacuum bag specification
         null,
         null,
-        packageInput.packagePlan,
+        packageInput.packagePlan ?? null,
         ingredientSourcePlan,
       );
 
@@ -1336,7 +1345,10 @@ export class OrderService {
       discountRate: 1.0,
       globalConfig,
       totalNetFoodWeightG: packageInput.quantityG,
-      packagePlan: packageInput.packagePlan,
+      packagePlan: packageInput.hasExplicitPackagePlan
+        ? packageInput.packagePlan
+        : undefined,
+      totalPacks: packageInput.packageCount,
       singlePackSpecG: packageInput.packageSpecG, // Use frontend-provided package spec
     });
 
@@ -1405,7 +1417,9 @@ export class OrderService {
             quantityG: packageInput.quantityG,
             packageCount: packageInput.packageCount,
             packageSpecG: packageInput.packageSpecG,
-            packagePlan: packageInput.packagePlan,
+            ...(packageInput.packagePlan
+              ? { packagePlan: packageInput.packagePlan }
+              : {}),
             cycleDays: itemDto.cycleDays,
             dailyIntakeG: itemDto.dailyIntakeG,
           },

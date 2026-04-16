@@ -535,6 +535,65 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       },
     );
 
+    it('passes legacy non-divisible package count without synthesizing a packagePlan for pricing', async () => {
+      const dog = createMockDog();
+      const recipe = createMockRecipe();
+      const ingredient = createMockIngredient();
+
+      dogRepository.findById.mockResolvedValue(dog);
+      recipeRepository.findById.mockResolvedValue(recipe);
+      mockIngredientRepository.findByIds.mockResolvedValue([ingredient]);
+      mockPricingService.calculateOrderPrice.mockReturnValue({
+        costIngredients: 50,
+        costPackaging: 10,
+        costLabor: 20,
+        costOverhead: 5,
+        totalProductCost: 85,
+        productPrice: 141.67,
+        weightPackagingG: 0,
+      });
+      mockPricingSnapshotRepository.create.mockResolvedValue({
+        id: 'snapshot-legacy-non-divisible',
+      });
+      mockShippingService.calculateShippingFeePreview.mockResolvedValue({
+        amountShipping: 0,
+        templateId: null,
+      });
+
+      await service.previewPricing({
+        customerId: 'customer-id-1',
+        dogId: 'dog-id-1',
+        type: OrderType.FRESH_FOOD,
+        items: [
+          {
+            recipeId: 'recipe-id-1',
+            quantityG: 1000,
+            packageSpecG: 300,
+          },
+        ],
+      });
+
+      const pricingInput = mockPricingService.calculateOrderPrice.mock
+        .calls[0][0] as any;
+      expect(pricingInput.totalNetFoodWeightG).toBe(1000);
+      expect(pricingInput.totalPacks).toBe(4);
+      expect(pricingInput.singlePackSpecG).toBe(300);
+      expect(pricingInput.packagePlan).toBeUndefined();
+
+      const snapshotInput = mockPricingSnapshotRepository.create.mock
+        .calls[0][0] as any;
+      expect(snapshotInput.requestParams.items[0]).toEqual(
+        expect.objectContaining({
+          quantityG: 1000,
+          packageCount: 4,
+          packageSpecG: 300,
+        }),
+      );
+      expect(snapshotInput.requestParams.items[0]).not.toHaveProperty(
+        'packagePlan',
+      );
+    });
+
     it('includes packaging weight when calculating direct-create shipping fee', async () => {
       const dog = createMockDog();
       const recipe = createMockRecipe();

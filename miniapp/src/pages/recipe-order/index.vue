@@ -74,44 +74,25 @@
       </button>
     </view>
 
-    <!-- 确定饭量 -->
+    <!-- 饭量参考 -->
     <view class="section feeding-section" v-if="selectedDog">
       <view class="section-title">
-        <text class="title-text">确定饭量</text>
+        <text class="title-text">饭量参考</text>
       </view>
 
       <view class="feeding-info">
         <view class="feeding-item">
           <text class="feeding-label">每日饭量</text>
-          <text class="feeding-value readonly">{{ Math.round(displayDailyIntakeG) }}g/天</text>
+          <text class="feeding-value">{{ Math.round(displayDailyIntakeG) }}g/天</text>
         </view>
         <view class="feeding-item">
           <text class="feeding-label">每餐饭量</text>
-
-          <!-- 只读模式 -->
-          <view v-if="!isEditingPerMeal" class="feeding-value-wrapper">
-            <text class="feeding-value">{{ Math.round(perMealG) }}g/餐</text>
-            <button class="btn-edit" @tap="startEditPerMeal">修改</button>
-            <button v-if="isPerMealModified" class="btn-reset" @tap="resetPerMeal">重置</button>
-          </view>
-
-          <!-- 编辑模式 -->
-          <view v-else class="feeding-edit-wrapper">
-            <input
-              class="feeding-input-small"
-              type="number"
-              v-model="tempPerMealG"
-              @input="onTempPerMealChange"
-            />
-            <text class="feeding-unit">g/餐</text>
-            <button class="btn-save" @tap="savePerMeal">确定</button>
-            <button class="btn-cancel" @tap="cancelEditPerMeal">取消</button>
-          </view>
+          <text class="feeding-value">{{ Math.round(perMealG) }}g/餐</text>
         </view>
       </view>
 
-      <!-- 计算说明 - 仅在未手动修改每餐饭量时显示 -->
-      <view v-if="!isPerMealModified" class="calculation-explanation">
+      <!-- 计算说明 -->
+      <view class="calculation-explanation">
         <view class="explanation-header" @tap="toggleCalculationDetails">
           <view class="explanation-title-row">
             <text class="explanation-title">饭量计算过程</text>
@@ -191,53 +172,84 @@
     </view>
 
     <!-- 订购周期 -->
-    <view class="section cycle-section">
+    <view class="section cycle-section" v-if="selectedDog">
       <view class="section-title">
         <text class="title-text">订购周期</text>
         <text class="required">*</text>
       </view>
 
-      <view class="cycle-and-custom-row">
-        <view class="cycle-options">
-          <view
-            v-for="option in cycleOptions"
-            :key="option.days"
-            class="cycle-option"
-            :class="{ active: selectedCycleDays === option.days }"
-            @tap="selectCycle(option.days)"
-          >
-            <text class="cycle-text">{{ option.days }}天</text>
-          </view>
+      <view class="cycle-options">
+        <view
+          v-for="days in ORDER_CYCLE_OPTIONS"
+          :key="days"
+          class="cycle-option"
+          :class="{ active: selectedCycleDays === days }"
+          @tap="selectCycle(days)"
+        >
+          <text class="cycle-text">{{ days }}天</text>
         </view>
+      </view>
+    </view>
 
-        <!-- 自选天数 -->
-        <view class="custom-cycle-inline">
-          <text class="custom-label">自选</text>
-          <input
-            class="custom-input-white"
-            type="number"
-            v-model="customDays"
-            placeholder="1-90"
-          />
-          <text class="custom-unit">天</text>
-          <button class="btn-confirm-custom" @tap="confirmCustomDays">确定</button>
+    <!-- 自定义分装 -->
+    <view class="section package-plan-section" v-if="selectedDog">
+      <view class="section-title">
+        <text class="title-text">自定义分装</text>
+        <button class="btn-add-row" @tap="addPackagePlanRow">添加</button>
+      </view>
+
+      <view class="package-plan-list">
+        <view
+          v-for="(row, index) in packagePlan"
+          :key="index"
+          class="package-plan-row"
+        >
+          <view class="package-input-group">
+            <text class="package-input-label">每袋</text>
+            <input
+              class="package-input"
+              type="number"
+              :value="row.packageSpecG"
+              @input="updatePackagePlanRow(index, 'packageSpecG', $event.detail.value)"
+            />
+            <text class="package-input-unit">g</text>
+          </view>
+          <view class="package-input-group">
+            <text class="package-input-label">袋数</text>
+            <input
+              class="package-input"
+              type="number"
+              :value="row.packageCount"
+              @input="updatePackagePlanRow(index, 'packageCount', $event.detail.value)"
+            />
+            <text class="package-input-unit">袋</text>
+          </view>
+          <button
+            class="btn-remove-row"
+            :disabled="packagePlan.length <= 1"
+            @tap="removePackagePlanRow(index)"
+          >
+            删除
+          </button>
         </view>
       </view>
 
-      <!-- 总袋数和总净重 -->
-      <view class="total-summary">
+      <view class="total-summary package-summary">
         <view class="summary-item">
-          <text class="summary-label">总袋数：</text>
-          <text class="summary-value">{{ totalPackages }}袋（{{ selectedDog?.mealsPerDay || '-' }}餐/天）</text>
-        </view>
-        <view class="summary-item">
-          <text class="summary-label">总净重：</text>
+          <text class="summary-label">总净重</text>
           <text class="summary-value">{{ Math.round(totalGrams) }}g</text>
         </view>
+        <view class="summary-item">
+          <text class="summary-label">总袋数</text>
+          <text class="summary-value">{{ totalPackages }}袋</text>
+        </view>
+        <view class="summary-item">
+          <text class="summary-label">预计喂食</text>
+          <text class="summary-value">{{ estimatedFeedDays }}天</text>
+        </view>
       </view>
 
-      <!-- 最低订购量提醒 -->
-      <view v-if="totalGrams < 1000" class="min-order-warning">
+      <view v-if="!minimumOrderMet" class="min-order-warning">
         <text class="warning-icon">⚠️</text>
         <text class="warning-text">订单净重不足1000克，最低订购量为1000克</text>
       </view>
@@ -263,6 +275,38 @@
           </view>
         </view>
       </view>
+    </view>
+
+    <!-- 原料采购方案 -->
+    <view class="section source-plan-section" v-if="selectedDog">
+      <view class="section-title">
+        <text class="title-text">原料采购方案</text>
+      </view>
+
+      <view class="source-plan-options">
+        <view
+          v-for="option in SOURCE_PLAN_OPTIONS"
+          :key="option.code"
+          class="source-plan-option"
+          :class="{ active: selectedSourcePlan === option.code }"
+          @tap="selectSourcePlan(option.code)"
+        >
+          <view class="source-plan-main">
+            <text class="source-plan-name">{{ option.label }}</text>
+            <text class="source-plan-desc">{{ option.description }}</text>
+          </view>
+          <text class="source-plan-check" v-if="selectedSourcePlan === option.code">✓</text>
+        </view>
+      </view>
+    </view>
+
+    <!-- 产品介绍 -->
+    <view class="section product-intro-section">
+      <image
+        class="product-intro-image"
+        src="/static/share-recipe.png"
+        mode="widthFix"
+      />
     </view>
 
     <!-- 原料清单 -->
@@ -446,8 +490,8 @@
           <text class="price-value total">¥{{ pricePreview.amountTotal.toFixed(2) }}</text>
         </view>
         <view class="price-item">
-          <text class="price-label">每餐价格</text>
-          <text class="price-value">¥{{ pricePerMeal.toFixed(1) }}/餐</text>
+          <text class="price-label">每日预估</text>
+          <text class="price-value">¥{{ pricePerDay.toFixed(1) }}/天</text>
         </view>
       </view>
     </view>
@@ -735,6 +779,10 @@
 
     <!-- 底部操作栏 -->
     <view class="bottom-bar">
+      <view class="bottom-price">
+        <text class="bottom-total">¥{{ pricePreview ? pricePreview.amountTotal.toFixed(2) : '--' }}</text>
+        <text class="bottom-estimate">约 ¥{{ pricePerDay.toFixed(1) }}/天</text>
+      </view>
       <button
         class="btn-buy-now"
         :disabled="!canBuyNow"
@@ -750,6 +798,18 @@
 import { ref, computed, onMounted } from 'vue'
 import { request } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
+import {
+  DEFAULT_ORDER_CYCLE_DAYS,
+  ORDER_CYCLE_OPTIONS,
+  SOURCE_PLAN_OPTIONS,
+  buildDefaultPackagePlan,
+  estimateFeedDays,
+  getPackagePlanTotal,
+  getSourcePlanLabel,
+  isMinimumOrderMet,
+  type IngredientSourcePlanCode,
+  type PackagePlanItem,
+} from '../../utils/order-package-plan'
 
 interface Dog {
   id: string
@@ -902,8 +962,9 @@ const recipe = ref<Recipe>({
 const dogs = ref<Dog[]>([])
 const breeds = ref<Breed[]>([])
 const selectedDogId = ref('')
-const selectedCycleDays = ref(7)
-const customDays = ref('')
+const selectedCycleDays = ref(DEFAULT_ORDER_CYCLE_DAYS)
+const selectedSourcePlan = ref<IngredientSourcePlanCode>('MARKET_PREMIUM')
+const packagePlan = ref<PackagePlanItem[]>([])
 const dogCalcResult = ref<CalcResult | null>(null)
 
 // 生命阶段校验
@@ -913,21 +974,10 @@ const pricePreview = ref<PricePreview | null>(null)
 const pricingSnapshotId = ref<string | null>(null)  // ✅ 新增：快照ID
 let pricingPreviewRequestSeq = 0
 let dogCalcRequestSeq = 0
-const perMealG = ref(0)
 const globalConfig = ref<GlobalConfig>({})
 
-// 系统原始计算的每餐饭量（用于重置）
-const systemCalculatedPerMealG = ref(0)
-
-// 显示的每日饭量（可根据手动修改的每餐饭量倒推计算）
+// 显示的每日饭量
 const displayDailyIntakeG = ref(0)
-
-// 每餐饭量编辑状态
-const isEditingPerMeal = ref(false)
-const tempPerMealG = ref('')
-
-// 每餐饭量是否被手动修改过
-const isPerMealModified = ref(false)
 
 // 制作要求（默认值：打碎、生）
 const preparationMethod = ref<PreparationMethod | null>('CHOPPED')
@@ -958,13 +1008,6 @@ const showCalculationDetails = ref(false)
 // 健康标签UUID到名称的映射（动态加载）
 const healthTagUuidLabelMap = ref<Record<string, string>>({})
 
-// 周期选项
-const cycleOptions = [
-  { days: 7, packageCount: 14 },
-  { days: 15, packageCount: 30 },
-  { days: 30, packageCount: 60 }
-]
-
 // 选中的狗狗
 const selectedDog = computed(() => {
   return dogs.value.find(d => d.id === selectedDogId.value)
@@ -978,33 +1021,36 @@ const dogPickerOptions = computed(() => {
   }))
 })
 
-// 每日饭量（只读，用于计算参考）
-const dailyIntakeG = computed(() => {
-  // 基于每餐饭量计算每日饭量，而不是使用后端返回的dailyIntakeG
-  if (!perMealG.value || !selectedDog.value) return 0
-  return perMealG.value * selectedDog.value.mealsPerDay
+const packagePlanTotal = computed(() => getPackagePlanTotal(packagePlan.value))
+const totalGrams = computed(() => packagePlanTotal.value.totalGrams)
+const totalPackages = computed(() => packagePlanTotal.value.totalPackages)
+const estimatedFeedDays = computed(() =>
+  estimateFeedDays(totalGrams.value, displayDailyIntakeG.value),
+)
+const minimumOrderMet = computed(() => isMinimumOrderMet(totalGrams.value))
+const sourcePlanLabel = computed(() => getSourcePlanLabel(selectedSourcePlan.value))
+const perMealG = computed(() => {
+  if (!displayDailyIntakeG.value || !selectedDog.value?.mealsPerDay) return 0
+  return displayDailyIntakeG.value / selectedDog.value.mealsPerDay
 })
 
-// 总重量（克）
-const totalGrams = computed(() => {
-  return displayDailyIntakeG.value * selectedCycleDays.value
-})
-
-// 总袋数
-const totalPackages = computed(() => {
-  if (!selectedDog.value) return 0
-  return selectedDog.value.mealsPerDay * selectedCycleDays.value
-})
-
-// 每餐价格
-const pricePerMeal = computed(() => {
-  if (!pricePreview.value || !totalPackages.value) return 0
-  return pricePreview.value.amountTotal / totalPackages.value
+const pricePerDay = computed(() => {
+  const days = Number(estimatedFeedDays.value)
+  if (!pricePreview.value || !Number.isFinite(days) || days <= 0) return 0
+  return pricePreview.value.amountTotal / days
 })
 
 // 是否可以立即购买
 const canBuyNow = computed(() => {
-  return selectedDogId.value && selectedCycleDays.value && pricePreview.value !== null && pricingSnapshotId.value !== null && perMealG.value > 0
+  return Boolean(
+    selectedDogId.value
+    && selectedCycleDays.value
+    && packagePlan.value.length > 0
+    && minimumOrderMet.value
+    && pricePreview.value !== null
+    && pricingSnapshotId.value !== null
+    && displayDailyIntakeG.value > 0,
+  )
 })
 
 function resetPricePreviewState() {
@@ -1340,8 +1386,6 @@ async function loadDogCalcResult(dogId: string) {
   })
   console.log('[更新前]', {
     perMealG: perMealG.value,
-    isPerMealModified: isPerMealModified.value,
-    systemCalculatedPerMealG: systemCalculatedPerMealG.value,
     displayDailyIntakeG: displayDailyIntakeG.value
   })
 
@@ -1378,21 +1422,14 @@ async function loadDogCalcResult(dogId: string) {
         calcDetails: result.calcDetails
       }
 
-      // 初始化每餐饭量（后端已计算）
-      perMealG.value = result.perMealIntakeG
-      systemCalculatedPerMealG.value = result.perMealIntakeG
-
       // 重新计算每日饭量：每餐饭量 × 每日餐数
       displayDailyIntakeG.value = result.perMealIntakeG * (selectedDog.value?.mealsPerDay || 2)
-
-      // 重置修改标记
-      isPerMealModified.value = false
+      rebuildPackagePlan()
 
       console.log('[更新后]', {
         perMealG: perMealG.value,
         displayDailyIntakeG: displayDailyIntakeG.value,
-        isPerMealModified: isPerMealModified.value,
-        systemCalculatedPerMealG: systemCalculatedPerMealG.value
+        packagePlan: packagePlan.value
       })
       console.log('========== [RecipeOrder] loadDogCalcResult 结束 ==========')
 
@@ -1421,116 +1458,61 @@ async function loadDogCalcResult(dogId: string) {
 function applyAutoConfig() {
   const params = autoConfigParams.value
 
-  // 应用每餐饭量（如果有）
   if (params.perMealG && params.perMealG > 0) {
-    perMealG.value = params.perMealG
-    systemCalculatedPerMealG.value = params.perMealG
     displayDailyIntakeG.value = params.perMealG * (selectedDog.value?.mealsPerDay || 2)
-    isPerMealModified.value = true
     console.log('[AutoConfig] 已设置每餐饭量:', params.perMealG)
   }
 
-  // 应用订购周期（如果有）
   if (params.packageCount) {
-    // 从 packageCount 推算 cycleDays
-    // 例如：packageCount=14 对应 cycleDays=7（假设每天2餐）
-    // cycleDays = packageCount / mealsPerDay
     const mealsPerDay = selectedDog.value?.mealsPerDay || 2
     const cycleDays = Math.round(params.packageCount / mealsPerDay)
-
-    // 检查是否匹配预设选项，如果不匹配则使用自定义
-    const presetOption = cycleOptions.find(opt => opt.packageCount === params.packageCount)
-    if (presetOption) {
-      selectedCycleDays.value = presetOption.days
-      customDays.value = ''
-      console.log('[AutoConfig] 已设置订购周期（预设）:', presetOption.days, '天')
-    } else {
+    if ((ORDER_CYCLE_OPTIONS as readonly number[]).includes(cycleDays)) {
       selectedCycleDays.value = cycleDays
-      customDays.value = String(cycleDays)
-      console.log('[AutoConfig] 已设置订购周期（自定义）:', cycleDays, '天')
+      console.log('[AutoConfig] 已设置订购周期:', cycleDays, '天')
     }
   }
+
+  rebuildPackagePlan()
 }
 
-function onPerMealChange() {
-  // 每餐饭量改变时，需要重新计算价格（已废弃，保留兼容）
+function rebuildPackagePlan() {
+  packagePlan.value = buildDefaultPackagePlan({
+    dailyIntakeG: displayDailyIntakeG.value,
+    mealsPerDay: selectedDog.value?.mealsPerDay || 2,
+    days: selectedCycleDays.value,
+  })
+}
+
+function addPackagePlanRow() {
+  packagePlan.value = [
+    ...packagePlan.value,
+    {
+      packageSpecG: Math.max(1, Math.round(perMealG.value || displayDailyIntakeG.value || 100)),
+      packageCount: 1,
+    },
+  ]
   loadPricePreview()
 }
 
-// 开始编辑每餐饭量
-function startEditPerMeal() {
-  tempPerMealG.value = String(Math.round(perMealG.value))
-  isEditingPerMeal.value = true
+function updatePackagePlanRow(index: number, field: keyof PackagePlanItem, value: string | number) {
+  const nextValue = Math.max(0, Math.floor(Number(value) || 0))
+  packagePlan.value = packagePlan.value.map((row, rowIndex) =>
+    rowIndex === index ? { ...row, [field]: nextValue } : row
+  )
+  loadPricePreview()
 }
 
-// 保存每餐饭量
-function savePerMeal() {
-  const newPerMeal = parseInt(tempPerMealG.value)
-  if (!isNaN(newPerMeal) && newPerMeal > 0 && selectedDog.value) {
-    console.log('========== [RecipeOrder] savePerMeal 开始 ==========')
-    console.log('[保存前]', {
-      perMealG: perMealG.value,
-      isPerMealModified: isPerMealModified.value,
-      tempPerMealG: tempPerMealG.value,
-      newPerMeal
-    })
-
-    perMealG.value = newPerMeal
-
-    // 倒推计算每日饭量
-    displayDailyIntakeG.value = newPerMeal * selectedDog.value.mealsPerDay
-
-    // 标记已修改
-    isPerMealModified.value = true
-
-    console.log('[保存后]', {
-      perMealG: perMealG.value,
-      displayDailyIntakeG: displayDailyIntakeG.value,
-      isPerMealModified: isPerMealModified.value,
-      systemCalculatedPerMealG: systemCalculatedPerMealG.value
-    })
-    console.log('========== [RecipeOrder] savePerMeal 结束 ==========')
-
-    // 重新计算价格
-    loadPricePreview()
+function removePackagePlanRow(index: number) {
+  if (packagePlan.value.length <= 1) {
+    return
   }
-  isEditingPerMeal.value = false
+  packagePlan.value = packagePlan.value.filter((_, rowIndex) => rowIndex !== index)
+  loadPricePreview()
 }
 
-// 取消编辑每餐饭量
-function cancelEditPerMeal() {
-  isEditingPerMeal.value = false
-  tempPerMealG.value = ''
-}
-
-// 重置每餐饭量为系统计算值
-function resetPerMeal() {
-  if (systemCalculatedPerMealG.value > 0 && selectedDog.value) {
-    perMealG.value = systemCalculatedPerMealG.value
-
-    // 恢复每日饭量为系统计算值
-    displayDailyIntakeG.value = dailyIntakeG.value
-
-    // 清除修改标记
-    isPerMealModified.value = false
-
-    // 重新计算价格
-    loadPricePreview()
-
-    uni.showToast({
-      title: '已重置为系统推荐值',
-      icon: 'success'
-    })
-  }
-}
-
-// 编辑时的临时输入变化
-function onTempPerMealChange() {
-  // 仅用于验证，不触发价格计算
-  const val = parseInt(tempPerMealG.value)
-  if (isNaN(val) || val <= 0) {
-    // 可以添加错误提示
-  }
+function selectSourcePlan(code: IngredientSourcePlanCode) {
+  selectedSourcePlan.value = code
+  loadPricePreview()
 }
 
 // 选择制作工艺
@@ -1587,41 +1569,7 @@ function toggleWeightDetails() {
 
 function selectCycle(days: number) {
   selectedCycleDays.value = days
-  customDays.value = '' // 清空自选天数
-  loadPricePreview()
-}
-
-function confirmCustomDays() {
-  const days = Number(customDays.value)
-
-  // 检查是否为数字
-  if (isNaN(days)) {
-    uni.showToast({
-      title: '请输入有效的天数',
-      icon: 'none'
-    })
-    return
-  }
-
-  // 检查是否为整数
-  if (!Number.isInteger(days)) {
-    uni.showToast({
-      title: '天数必须是整数',
-      icon: 'none'
-    })
-    return
-  }
-
-  // 检查范围
-  if (days < 1 || days > 90) {
-    uni.showToast({
-      title: '请输入1-90之间的天数',
-      icon: 'none'
-    })
-    return
-  }
-
-  selectedCycleDays.value = days
+  rebuildPackagePlan()
   loadPricePreview()
 }
 
@@ -1629,11 +1577,8 @@ async function loadPricePreview() {
   const requestSeq = ++pricingPreviewRequestSeq
   resetPricePreviewState()
 
-  if (!selectedDogId.value || !selectedCycleDays.value || !perMealG.value) return
-
-  const totalG = totalGrams.value
-  const pkgCount = totalPackages.value
-  const pkgSpecG = perMealG.value
+  if (!selectedDog.value || packagePlan.value.length === 0) return
+  if (!minimumOrderMet.value) return
 
   try {
     const res = await request({
@@ -1642,12 +1587,10 @@ async function loadPricePreview() {
       data: {
         dogId: selectedDogId.value,
         type: 'FRESH_FOOD',
+        ingredientSourcePlan: selectedSourcePlan.value,
         items: [{
           recipeId: recipeId.value,
-          quantityG: totalG,
-          packageCount: pkgCount,
-          packageSpecG: pkgSpecG,
-          cycleDays: selectedCycleDays.value,
+          packagePlan: packagePlan.value,
           dailyIntakeG: displayDailyIntakeG.value,
           preparationMethod: preparationMethod.value || undefined,
           cookingMethod: cookingMethod.value || undefined,
@@ -1697,36 +1640,30 @@ async function buyNow() {
     return
   }
 
-  const params = {
-    mode: 'directBuy',
-    snapshotId: pricingSnapshotId.value,  // ✅ 使用快照ID
-    // 保留最少必要参数用于页面显示（不用于价格计算）
+  const orderConfig = {
+    snapshotId: pricingSnapshotId.value,
     dogName: selectedDog.value?.name || '',
-    recipeName: recipe.value.name,
-    recipeCoverImage: recipe.value.coverImageUrl || '',
-    // ✅ 新增：配置信息参数（用于订单确认页展示）
     breedName: selectedDog.value?.breedName || '',
     weightKg: selectedDog.value?.currentWeightKg || 0,
     mealsPerDay: selectedDog.value?.mealsPerDay || 2,
-    perMealG: perMealG.value,
+    dailyIntakeG: displayDailyIntakeG.value,
+    estimatedFeedDays: estimatedFeedDays.value,
+    recipeName: recipe.value.name,
+    recipeCoverImage: recipe.value.coverImageUrl || '',
+    packagePlan: packagePlan.value,
     totalPackages: totalPackages.value,
-    cycleDays: selectedCycleDays.value,
     totalGrams: totalGrams.value,
-    preparationMethod: preparationMethod.value || 'CHOPPED',
-    cookingMethod: cookingMethod.value || 'RAW',
-    // ✅ 添加价格信息用于显示（实际价格以快照为准）
+    ingredientSourcePlan: selectedSourcePlan.value,
+    ingredientSourcePlanLabel: sourcePlanLabel.value,
     amountProduct: pricePreview.value?.amountProduct || 0,
     amountShipping: pricePreview.value?.amountShipping || 0,
     amountTotal: pricePreview.value?.amountTotal || 0,
   }
 
-  // 将参数编码到URL中
-  const queryString = Object.keys(params)
-    .map(key => `${key}=${encodeURIComponent(params[key])}`)
-    .join('&')
+  uni.setStorageSync('direct_buy_order_config', orderConfig)
 
   uni.navigateTo({
-    url: `/pages/checkout/index?${queryString}`
+    url: `/pages/checkout/index?mode=directBuy&snapshotId=${encodeURIComponent(pricingSnapshotId.value)}`
   })
 }
 
@@ -2184,17 +2121,9 @@ function goToCreateDog() {
 }
 
 /* 订购周期 */
-.cycle-and-custom-row {
-  display: flex;
-  align-items: center;
-  gap: 16rpx;
-  margin-bottom: 20rpx;
-}
-
 .cycle-options {
   display: flex;
   gap: 12rpx;
-  flex: 1;
 }
 
 .cycle-option {
@@ -2223,48 +2152,6 @@ function goToCreateDog() {
   color: #999;
 }
 
-.custom-cycle-inline {
-  display: flex;
-  align-items: center;
-  gap: 8rpx;
-  padding: 20rpx 16rpx;
-  background-color: #fff;
-  border: 2rpx solid #e8e8e8;
-  border-radius: 12rpx;
-}
-
-.custom-label {
-  font-size: 26rpx;
-  color: #666;
-}
-
-.custom-input-white {
-  width: 80rpx;
-  height: 56rpx;
-  text-align: center;
-  border: 2rpx solid #e8e8e8;
-  border-radius: 8rpx;
-  font-size: 26rpx;
-  color: #333;
-  background-color: #fff;
-}
-
-.custom-unit {
-  font-size: 24rpx;
-  color: #999;
-}
-
-.btn-confirm-custom {
-  padding: 8rpx 16rpx;
-  background-color: #1890ff;
-  color: #fff;
-  border: none;
-  border-radius: 8rpx;
-  font-size: 24rpx;
-  line-height: 1.2;
-  margin-left: 8rpx;
-}
-
 .total-summary {
   display: flex;
   justify-content: space-between;
@@ -2289,6 +2176,136 @@ function goToCreateDog() {
   font-size: 30rpx;
   font-weight: bold;
   color: #333;
+}
+
+.package-plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.package-plan-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 16rpx;
+  background-color: #f9f9f9;
+  border-radius: 12rpx;
+}
+
+.package-input-group {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  min-width: 0;
+}
+
+.package-input-label,
+.package-input-unit {
+  font-size: 24rpx;
+  color: #666;
+  flex-shrink: 0;
+}
+
+.package-input {
+  width: 120rpx;
+  height: 60rpx;
+  text-align: center;
+  border: 2rpx solid #e8e8e8;
+  border-radius: 8rpx;
+  font-size: 28rpx;
+  color: #333;
+  background-color: #fff;
+}
+
+.btn-add-row {
+  min-width: 112rpx;
+  height: 56rpx;
+  line-height: 56rpx;
+  padding: 0 20rpx;
+  background-color: #1890ff;
+  color: #fff;
+  border: none;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+}
+
+.btn-remove-row {
+  min-width: 96rpx;
+  height: 56rpx;
+  line-height: 56rpx;
+  padding: 0 16rpx;
+  background-color: #fff;
+  color: #ff4d4f;
+  border: 2rpx solid #ffccc7;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+}
+
+.btn-remove-row[disabled] {
+  color: #bfbfbf;
+  border-color: #f0f0f0;
+}
+
+.package-summary {
+  margin-top: 20rpx;
+}
+
+.source-plan-options {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.source-plan-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 20rpx;
+  border: 2rpx solid #e8e8e8;
+  border-radius: 12rpx;
+  background-color: #fff;
+}
+
+.source-plan-option.active {
+  border-color: #1890ff;
+  background-color: #f0f9ff;
+}
+
+.source-plan-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.source-plan-name {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #333;
+}
+
+.source-plan-desc {
+  font-size: 24rpx;
+  color: #666;
+  line-height: 1.4;
+}
+
+.source-plan-check {
+  font-size: 32rpx;
+  color: #1890ff;
+  font-weight: bold;
+  margin-left: 16rpx;
+}
+
+.product-intro-section {
+  padding: 0;
+  overflow: hidden;
+}
+
+.product-intro-image {
+  display: block;
+  width: 100%;
 }
 
 .min-order-warning {
@@ -2960,6 +2977,7 @@ function goToCreateDog() {
   left: 0;
   right: 0;
   display: flex;
+  align-items: center;
   gap: 16rpx;
   padding: 16rpx 20rpx;
   background-color: #fff;
@@ -2967,8 +2985,26 @@ function goToCreateDog() {
   z-index: 999;
 }
 
+.bottom-price {
+  min-width: 220rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.bottom-total {
+  font-size: 36rpx;
+  font-weight: bold;
+  color: #ff4d4f;
+}
+
+.bottom-estimate {
+  font-size: 22rpx;
+  color: #666;
+}
+
 .btn-buy-now {
-  width: 100%;
+  flex: 1;
   height: 88rpx;
   display: flex;
   align-items: center;

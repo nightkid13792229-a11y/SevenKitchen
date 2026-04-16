@@ -66,6 +66,10 @@ import {
 import { OrderStatusHistory } from 'src/domain/order/order-status-history.entity';
 import { PrismaService } from 'src/infrastructure/prisma.service';
 import { RecipeService } from 'src/application/recipe/recipe.service';
+import {
+  PreparationMethod,
+  CookingMethod,
+} from 'src/domain/order';
 
 describe('OrdersController (e2e)', () => {
   let app: INestApplication;
@@ -489,6 +493,8 @@ describe('OrdersController (e2e)', () => {
     packageSpecG?: number;
     customRequirements?: string | null;
     dailyIntakeG?: number;
+    preparationMethod?: PreparationMethod | null;
+    cookingMethod?: CookingMethod | null;
   }): OrderItem {
     return new OrderItem(
       params.id,
@@ -500,6 +506,13 @@ describe('OrdersController (e2e)', () => {
       params.packageSpecG ?? 100,
       params.customRequirements ?? null,
       params.dailyIntakeG ?? 310.34,
+      null,
+      null,
+      null,
+      null,
+      null,
+      params.preparationMethod ?? null,
+      params.cookingMethod ?? null,
     );
   }
 
@@ -1098,6 +1111,8 @@ describe('OrdersController (e2e)', () => {
             id: 'item-id-1',
             orderId: 'order-id-1',
             recipeSnapshot,
+            preparationMethod: PreparationMethod.DICED,
+            cookingMethod: CookingMethod.COOKED,
           }),
         ],
         amountProduct: 250.0,
@@ -1144,6 +1159,8 @@ describe('OrdersController (e2e)', () => {
       expect(summaries[0]).toHaveProperty('totalAmount');
       expect(summaries[0]).toHaveProperty('itemCount');
       expect(summaries[0]).not.toHaveProperty('items'); // Summary should not include full items
+      expect(summaries[0].firstItem).not.toHaveProperty('preparationMethod');
+      expect(summaries[0].firstItem).not.toHaveProperty('cookingMethod');
 
       // Verify order IDs are present
       // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment, @typescript-eslint/no-unsafe-call
@@ -1314,6 +1331,8 @@ describe('OrdersController (e2e)', () => {
         id: 'item-id-3',
         orderId: 'test-order-id-3',
         recipeSnapshot,
+        preparationMethod: PreparationMethod.CHOPPED,
+        cookingMethod: CookingMethod.COOKED,
       });
       const order = createTestOrder({
         id: 'test-order-id-3',
@@ -1335,6 +1354,12 @@ describe('OrdersController (e2e)', () => {
       expect(response.body.data).toBeDefined();
       expect(response.body.data.id).toBe(order.id);
       expect(response.body.data.status).toBe(OrderStatus.INIT);
+      expect(response.body.data.items[0].preparationMethod).toBe(
+        PreparationMethod.CHOPPED,
+      );
+      expect(response.body.data.items[0].cookingMethod).toBe(
+        CookingMethod.COOKED,
+      );
     });
   });
 
@@ -1717,6 +1742,8 @@ describe('OrdersController (e2e)', () => {
               recipeId,
               packagePlan,
               dailyIntakeG: 300,
+              preparationMethod: PreparationMethod.DICED,
+              cookingMethod: CookingMethod.RAW,
             },
           ],
         })
@@ -1747,6 +1774,8 @@ describe('OrdersController (e2e)', () => {
                 packageSpecG: 200,
                 packagePlan,
                 dailyIntakeG: 300,
+                preparationMethod: PreparationMethod.DICED,
+                cookingMethod: CookingMethod.RAW,
               }),
             ],
           }),

@@ -17,6 +17,8 @@ import {
   Order,
   OrderItem,
   PricingBreakdownSnapshot,
+  PreparationMethod,
+  CookingMethod,
   normalizeIngredientSourcePlan,
   normalizePackagePlan,
   summarizePackagePlan,
@@ -82,6 +84,8 @@ export interface CreateOrderItemDto {
   cycleDays?: number; // Order cycle days
   dailyIntakeG?: number; // Daily food intake in grams
   customRequirements?: string | null;
+  preparationMethod?: PreparationMethod | null;
+  cookingMethod?: CookingMethod | null;
 }
 
 interface ResolvedOrderItemPackageInput {
@@ -548,6 +552,8 @@ export class OrderService {
       null,
       itemParams.packagePlan ?? null,
       requestParams.ingredientSourcePlan ?? null,
+      itemParams.preparationMethod ?? null,
+      itemParams.cookingMethod ?? null,
     );
     console.log(
       '[CreateOrderFromSnapshot] OrderItem created, dogId:',
@@ -681,6 +687,10 @@ export class OrderService {
         cartItem.packageSpecG,
         null, // customRequirements
         cartItem.dailyIntakeG,
+        null,
+        null,
+        null,
+        null,
       );
 
       orderItems.push(orderItem);
@@ -979,6 +989,8 @@ export class OrderService {
         null,
         packageInput.packagePlan ?? null,
         ingredientSourcePlan,
+        itemDto.preparationMethod ?? null,
+        itemDto.cookingMethod ?? null,
       );
 
       items.push(orderItem);
@@ -1425,6 +1437,8 @@ export class OrderService {
             quantityG: packageInput.quantityG,
             packageCount: packageInput.packageCount,
             packageSpecG: packageInput.packageSpecG,
+            preparationMethod: itemDto.preparationMethod ?? null,
+            cookingMethod: itemDto.cookingMethod ?? null,
             ...(packageInput.packagePlan
               ? { packagePlan: packageInput.packagePlan }
               : {}),

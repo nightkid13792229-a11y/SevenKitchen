@@ -12,7 +12,12 @@ import type { RecipeRepository } from 'src/domain/recipe/recipe.repository';
 import type { IngredientRepository } from 'src/domain/ingredient/ingredient.repository';
 import type { DogRepository } from 'src/domain/dog/dog.repository';
 import type { AddressRepository } from 'src/domain/address/address.repository';
-import { Order, OrderItem } from 'src/domain/order';
+import {
+  Order,
+  OrderItem,
+  PreparationMethod,
+  CookingMethod,
+} from 'src/domain/order';
 import { OrderType, OrderStatus, calculateDogEnergy } from 'src/domain';
 import { Ingredient } from 'src/domain/ingredient/ingredient.entity';
 import {
@@ -956,6 +961,87 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       expect(savedOrder.items[0].packageSpecG).toBe(200);
       expect(savedOrder.items[0].packagePlan).toEqual(packagePlan);
       expect(savedOrder.items[0].ingredientSourcePlan).toBe('WHOLESALE');
+    });
+
+    it('should preserve item-level preparation and cooking methods from preview snapshot into the created order item', async () => {
+      const recipe = createMockRecipe();
+      const ingredient = createMockIngredient();
+      const dog = createMockDog();
+      dog.ownerId = 'customer-id-1';
+
+      dogRepository.findById.mockResolvedValue(dog);
+      recipeRepository.findById.mockResolvedValue(recipe);
+      mockIngredientRepository.findByIds.mockResolvedValue([ingredient]);
+      mockPricingService.calculateOrderPrice.mockReturnValue({
+        costIngredients: 50,
+        costPackaging: 10,
+        costLabor: 20,
+        costOverhead: 5,
+        totalProductCost: 85,
+        productPrice: 141.67,
+        weightPackagingG: 0,
+        packagingDetails: {
+          perPackConsumables: {
+            vacuumBagSpec: '12*17cm',
+          },
+        },
+      });
+      mockShippingService.calculateShippingFeePreview.mockResolvedValue({
+        amountShipping: 0,
+        templateId: null,
+      });
+      mockPricingSnapshotRepository.create.mockResolvedValue({
+        id: 'snapshot-methods',
+      });
+      orderRepository.save.mockImplementation(async (order: Order) => order);
+
+      await service.previewPricing({
+        customerId: 'customer-id-1',
+        dogId: 'dog-id-1',
+        type: OrderType.FRESH_FOOD,
+        items: [
+          {
+            recipeId: 'recipe-id-1',
+            quantityG: 1000,
+            packageSpecG: 200,
+            packageCount: 5,
+            preparationMethod: PreparationMethod.DICED,
+            cookingMethod: CookingMethod.COOKED,
+          },
+        ],
+      });
+
+      const snapshotInput = mockPricingSnapshotRepository.create.mock.calls[0][0] as any;
+      expect(snapshotInput.requestParams.items[0]).toEqual(
+        expect.objectContaining({
+          preparationMethod: PreparationMethod.DICED,
+          cookingMethod: CookingMethod.COOKED,
+        }),
+      );
+
+      mockPricingSnapshotRepository.findById.mockResolvedValue(
+        new OrderPricingSnapshot(
+          'snapshot-methods',
+          snapshotInput.customerId,
+          snapshotInput.requestParams,
+          snapshotInput.pricingResult,
+          snapshotInput.expiresAt,
+          false,
+          new Date(),
+        ),
+      );
+
+      await service.createOrderDraft({
+        customerId: 'customer-id-1',
+        type: OrderType.FRESH_FOOD,
+        snapshotId: 'snapshot-methods',
+      });
+
+      const savedOrder = orderRepository.save.mock.calls[0][0] as Order;
+      expect(savedOrder.items[0].preparationMethod).toBe(
+        PreparationMethod.DICED,
+      );
+      expect(savedOrder.items[0].cookingMethod).toBe(CookingMethod.COOKED);
     });
   });
 });

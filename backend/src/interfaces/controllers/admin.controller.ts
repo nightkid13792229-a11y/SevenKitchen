@@ -1899,6 +1899,8 @@ export class AdminController {
       packageSpecG: item.packageSpecG,
       packagePlan: item.packagePlan ?? null,
       ingredientSourcePlan: item.ingredientSourcePlan ?? null,
+      preparationMethod: item.preparationMethod ?? null,
+      cookingMethod: item.cookingMethod ?? null,
       customRequirements: item.customRequirements,
       dailyIntakeG: item.dailyIntakeG,
     };

@@ -177,14 +177,13 @@ export class InMemoryOrderRepository implements OrderRepository {
           packageSpecG: item.packageSpecG,
           packagePlan: item.packagePlan ?? null,
           ingredientSourcePlan: item.ingredientSourcePlan ?? null,
+          preparationMethod: item.preparationMethod ?? null,
+          cookingMethod: item.cookingMethod ?? null,
           customRequirements: item.customRequirements,
           dailyIntakeG: item.dailyIntakeG,
           vacuumBagSpec: item.vacuumBagSpec,
           allocatedAt: item.allocatedAt,
           productionBatchId: item.productionBatchId,
-          // Note: These fields are not in the domain entity but included for production service
-          preparationMethod: (item as any).preparationMethod || null,
-          cookingMethod: (item as any).cookingMethod || null,
           createdAt: (item as any).createdAt || new Date(),
         };
       }

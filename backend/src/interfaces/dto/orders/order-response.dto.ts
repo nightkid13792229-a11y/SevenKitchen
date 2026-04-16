@@ -4,6 +4,7 @@
 
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { OrderStatus, OrderType } from '../../../domain';
+import { PreparationMethod, CookingMethod } from '../../../domain/order';
 import type { RecipeSnapshot } from '../../../domain/recipe/types';
 
 export class OrderPackagePlanItemDto {
@@ -51,6 +52,20 @@ export class OrderItemDto {
     nullable: true,
   })
   ingredientSourcePlan?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Preparation method selected for this order item',
+    enum: PreparationMethod,
+    nullable: true,
+  })
+  preparationMethod?: PreparationMethod | null;
+
+  @ApiPropertyOptional({
+    description: 'Cooking method selected for this order item',
+    enum: CookingMethod,
+    nullable: true,
+  })
+  cookingMethod?: CookingMethod | null;
 
   @ApiPropertyOptional({ nullable: true })
   customRequirements?: string | null;

@@ -13,6 +13,8 @@ import { PricingBreakdownSnapshot } from '../../domain/order/pricing-breakdown-s
 import type { OrderRepository } from '../../domain/order/order.repository';
 import { OrderStatus, OrderType } from '../../domain';
 import { normalizeIngredientSourcePlan } from '../../domain/order/ingredient-source-plan';
+import { PreparationMethod } from '../../domain/order/preparation-method.enum';
+import { CookingMethod } from '../../domain/order/cooking-method.enum';
 
 interface OrderData {
   id: string;
@@ -37,6 +39,8 @@ interface OrderData {
     packageSpecG: number;
     packagePlan?: Array<{ packageSpecG: number; packageCount: number }> | null;
     ingredientSourcePlan?: string | null;
+    preparationMethod?: string | null;
+    cookingMethod?: string | null;
     customRequirements: string | null;
     dailyIntakeG?: number; // Optional for backward compatibility
     productionBatchId?: string | null; // Phase 8.11: Allocation lock
@@ -56,6 +60,22 @@ interface OrderData {
     createdAt: string;
     ingredientPriceVersionHash?: string | null;
   };
+}
+
+function normalizeStoredPreparationMethod(
+  value: string | null | undefined,
+): PreparationMethod | null {
+  return Object.values(PreparationMethod).includes(value as PreparationMethod)
+    ? (value as PreparationMethod)
+    : null;
+}
+
+function normalizeStoredCookingMethod(
+  value: string | null | undefined,
+): CookingMethod | null {
+  return Object.values(CookingMethod).includes(value as CookingMethod)
+    ? (value as CookingMethod)
+    : null;
 }
 
 @Injectable()
@@ -144,6 +164,8 @@ export class FileBackedOrderRepository
           itemData.ingredientSourcePlan
             ? normalizeIngredientSourcePlan(itemData.ingredientSourcePlan)
             : null,
+          normalizeStoredPreparationMethod(itemData.preparationMethod),
+          normalizeStoredCookingMethod(itemData.cookingMethod),
         ),
     );
 
@@ -252,6 +274,8 @@ export class FileBackedOrderRepository
         packageSpecG: item.packageSpecG,
         packagePlan: item.packagePlan ?? null,
         ingredientSourcePlan: item.ingredientSourcePlan ?? null,
+        preparationMethod: item.preparationMethod ?? null,
+        cookingMethod: item.cookingMethod ?? null,
         customRequirements: item.customRequirements,
         dailyIntakeG: item.dailyIntakeG,
         // Phase 8.11: Allocation fields
@@ -448,14 +472,13 @@ export class FileBackedOrderRepository
           packageSpecG: item.packageSpecG,
           packagePlan: item.packagePlan ?? null,
           ingredientSourcePlan: item.ingredientSourcePlan ?? null,
+          preparationMethod: item.preparationMethod ?? null,
+          cookingMethod: item.cookingMethod ?? null,
           customRequirements: item.customRequirements,
           dailyIntakeG: item.dailyIntakeG,
           vacuumBagSpec: item.vacuumBagSpec,
           allocatedAt: item.allocatedAt,
           productionBatchId: item.productionBatchId,
-          // Note: These fields are not in the domain entity but included for production service
-          preparationMethod: (item as any).preparationMethod || null,
-          cookingMethod: (item as any).cookingMethod || null,
           createdAt: (item as any).createdAt || new Date(),
         };
       }

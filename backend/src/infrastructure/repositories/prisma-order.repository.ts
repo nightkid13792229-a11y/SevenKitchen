@@ -128,6 +128,8 @@ export class PrismaOrderRepository implements OrderRepository {
               packageSpecG: item.packageSpecG,
               packagePlan: item.packagePlan ?? undefined,
               ingredientSourcePlan: item.ingredientSourcePlan ?? null,
+              preparationMethod: item.preparationMethod ?? null,
+              cookingMethod: item.cookingMethod ?? null,
               customRequirements: item.customRequirements,
               dailyIntakeG: item.dailyIntakeG,
               // Phase 8.11: Allocation fields (null on creation, set when allocated to batch)
@@ -247,6 +249,8 @@ export class PrismaOrderRepository implements OrderRepository {
           this.normalizeStoredIngredientSourcePlan(
             (i as any).ingredientSourcePlan,
           ),
+          (i as any).preparationMethod ?? null,
+          (i as any).cookingMethod ?? null,
         ),
     );
 
@@ -568,8 +572,7 @@ export class PrismaOrderRepository implements OrderRepository {
       vacuumBagSpec: orderItem.vacuumBagSpec,
       allocatedAt: orderItem.allocatedAt,
       productionBatchId: orderItem.productionBatchId,
-      // Note: preparationMethod, cookingMethod, and createdAt are not in the domain entity
-      // but exist in the Prisma schema. We include them for production service use.
+      // createdAt exists in the Prisma schema and is included for production service use.
       preparationMethod: (orderItem as any).preparationMethod,
       cookingMethod: (orderItem as any).cookingMethod,
       createdAt: (orderItem as any).createdAt,

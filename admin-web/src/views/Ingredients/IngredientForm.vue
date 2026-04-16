@@ -420,18 +420,26 @@
                   />
                   <div class="supplement-image-actions">
                     <el-upload
+                      v-if="props.ingredient?.id"
                       :show-file-list="false"
                       accept="image/*"
                       :before-upload="handleSupplementImageUpload"
-                      :disabled="supplementImageUploading || !props.ingredient?.id"
+                      :disabled="supplementImageUploading"
                     >
                       <el-button :loading="supplementImageUploading">替换图片</el-button>
                     </el-upload>
                     <el-button
+                      v-else
+                      :loading="supplementImageUploading"
+                      @click="notifySupplementImageRequiresSavedIngredient"
+                    >
+                      替换图片
+                    </el-button>
+                    <el-button
                       type="danger"
                       plain
                       :loading="supplementImageUploading"
-                      @click="handleRemoveSupplementImage"
+                      @click="props.ingredient?.id ? handleRemoveSupplementImage() : notifySupplementImageRequiresSavedIngredient()"
                     >
                       删除图片
                     </el-button>
@@ -442,13 +450,22 @@
                     推荐上传 1:1 方图，系统会自动裁切并用于小程序 DIY 制作单推荐弹窗展示。
                   </div>
                   <el-upload
+                    v-if="props.ingredient?.id"
                     :show-file-list="false"
                     accept="image/*"
                     :before-upload="handleSupplementImageUpload"
-                    :disabled="supplementImageUploading || !props.ingredient?.id"
+                    :disabled="supplementImageUploading"
                   >
                     <el-button type="primary" :loading="supplementImageUploading">上传图片</el-button>
                   </el-upload>
+                  <el-button
+                    v-else
+                    type="primary"
+                    :loading="supplementImageUploading"
+                    @click="notifySupplementImageRequiresSavedIngredient"
+                  >
+                    上传图片
+                  </el-button>
                 </div>
                 <div class="hint-text">
                   建议原图清晰、主体居中，推荐尺寸 1200 × 1200。
@@ -1250,6 +1267,10 @@ function extractIngredientDiyImageKey(imageUrl?: string | null): string | null {
   }
 }
 
+function notifySupplementImageRequiresSavedIngredient() {
+  ElMessage.warning('请先保存补剂原料，保存成功后可继续上传产品图片')
+}
+
 function loadImageFromFile(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const objectUrl = URL.createObjectURL(file)
@@ -1305,7 +1326,7 @@ async function deleteSupplementImageByUrl(imageUrl?: string | null) {
 
 const handleSupplementImageUpload: UploadProps['beforeUpload'] = async (rawFile) => {
   if (!props.ingredient?.id) {
-    ElMessage.warning('请先保存补剂原料，再上传产品图片')
+    notifySupplementImageRequiresSavedIngredient()
     return false
   }
 

@@ -266,6 +266,38 @@ describe('OrderSourcePlanService', () => {
     expect((selected as any).procurementSkuId).toBe('sku-unpriced-wholesale');
   });
 
+  it('preserves original purchase unit, ratio, and prices when selected SKU has price but no valid ratio', async () => {
+    const ingredient = createFoodIngredient();
+    procurementSkuService.batchFindActive.mockResolvedValue({
+      [ingredient.id]: [
+        sku({
+          id: 'sku-priced-missing-ratio',
+          purchaseChannel: '生鲜批发商',
+          purchaseUnit: '箱',
+          purchaseToBaseRatio: null,
+          currentPurchasePrice: 320,
+        }),
+      ],
+    });
+
+    const result = await service.applySourcePlanToIngredients(
+      [ingredient],
+      'WHOLESALE',
+    );
+
+    const selected = result.get(ingredient.id)!;
+    expect(selected.purchaseChannel).toBe('生鲜批发商');
+    expect(selected.purchaseUnit).toBe(ingredient.purchaseUnit);
+    expect(selected.purchaseToBaseRatio).toBe(ingredient.purchaseToBaseRatio);
+    expect(selected.currentPricePerPurchaseUnit).toBe(
+      ingredient.currentPricePerPurchaseUnit,
+    );
+    expect(selected.effectivePricePerPurchaseUnit).toBe(
+      ingredient.effectivePricePerPurchaseUnit,
+    );
+    expect((selected as any).procurementSkuId).toBe('sku-priced-missing-ratio');
+  });
+
   it('preserves original stock thresholds when the selected SKU has no threshold values', async () => {
     const ingredient = createFoodIngredient();
     procurementSkuService.batchFindActive.mockResolvedValue({

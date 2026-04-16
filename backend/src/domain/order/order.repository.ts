@@ -15,6 +15,8 @@ export interface OrderItemDto {
   quantityG: number;
   packageCount: number;
   packageSpecG: number;
+  packagePlan: Array<{ packageSpecG: number; packageCount: number }> | null;
+  ingredientSourcePlan: string | null;
   customRequirements: string | null;
   dailyIntakeG: number | null;
   vacuumBagSpec: string | null;

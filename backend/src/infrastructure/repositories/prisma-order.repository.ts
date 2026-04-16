@@ -125,6 +125,8 @@ export class PrismaOrderRepository implements OrderRepository {
               quantityG: item.quantityG,
               packageCount: item.packageCount,
               packageSpecG: item.packageSpecG,
+              packagePlan: item.packagePlan ?? undefined,
+              ingredientSourcePlan: item.ingredientSourcePlan ?? null,
               customRequirements: item.customRequirements,
               dailyIntakeG: item.dailyIntakeG,
               // Phase 8.11: Allocation fields (null on creation, set when allocated to batch)
@@ -234,11 +236,14 @@ export class PrismaOrderRepository implements OrderRepository {
           i.customRequirements ?? null,
           // Type assertion needed: dailyIntakeG may not exist in Prisma type until migration is applied
           (i as any).dailyIntakeG ?? i.quantityG / (i.packageCount || 1), // Fallback for backward compatibility
+          i.vacuumBagSpec ?? null,
           // Phase 8.11: Allocation fields
           (i as any).productionBatchId ?? null,
           ((i as any).allocatedAt
             ? new Date((i as any).allocatedAt)
             : null) as any,
+          (i as any).packagePlan ?? null,
+          (i as any).ingredientSourcePlan ?? null,
         ),
     );
 
@@ -549,6 +554,8 @@ export class PrismaOrderRepository implements OrderRepository {
       quantityG: orderItem.quantityG,
       packageCount: orderItem.packageCount,
       packageSpecG: orderItem.packageSpecG,
+      packagePlan: (orderItem as any).packagePlan ?? null,
+      ingredientSourcePlan: (orderItem as any).ingredientSourcePlan ?? null,
       customRequirements: orderItem.customRequirements,
       dailyIntakeG: orderItem.dailyIntakeG,
       vacuumBagSpec: orderItem.vacuumBagSpec,

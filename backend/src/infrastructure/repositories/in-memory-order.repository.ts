@@ -175,6 +175,8 @@ export class InMemoryOrderRepository implements OrderRepository {
           quantityG: item.quantityG,
           packageCount: item.packageCount,
           packageSpecG: item.packageSpecG,
+          packagePlan: item.packagePlan ?? null,
+          ingredientSourcePlan: item.ingredientSourcePlan ?? null,
           customRequirements: item.customRequirements,
           dailyIntakeG: item.dailyIntakeG,
           vacuumBagSpec: item.vacuumBagSpec,

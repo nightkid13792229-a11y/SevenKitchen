@@ -5,6 +5,7 @@
 
 import { RecipeSnapshot } from '../recipe/types';
 import { ValidationError } from '../common/errors';
+import type { IngredientSourcePlanCode, OrderPackagePlanItem } from './index';
 
 export class OrderItem {
   constructor(
@@ -20,6 +21,8 @@ export class OrderItem {
     public readonly vacuumBagSpec: string | null = null, // Vacuum bag specification (e.g., "12*17cm")
     public readonly productionBatchId: string | null = null, // Phase 8.11: Allocation lock - prevents duplicate allocation
     public readonly allocatedAt: Date | null = null, // Phase 8.11: Timestamp when item was allocated to a batch
+    public readonly packagePlan: OrderPackagePlanItem[] | null = null,
+    public readonly ingredientSourcePlan: IngredientSourcePlanCode | null = null,
   ) {
     this.validateInvariants();
   }
@@ -50,6 +53,29 @@ export class OrderItem {
       throw new ValidationError(
         `Daily intake must be positive, got: ${this.dailyIntakeG}`,
       );
+    }
+
+    if (this.packagePlan && this.packagePlan.length > 0) {
+      const totalQuantity = this.packagePlan.reduce(
+        (sum, row) => sum + row.packageSpecG * row.packageCount,
+        0,
+      );
+      const totalCount = this.packagePlan.reduce(
+        (sum, row) => sum + row.packageCount,
+        0,
+      );
+
+      if (Math.round(totalQuantity) !== Math.round(this.quantityG)) {
+        throw new ValidationError(
+          `Package plan total (${totalQuantity}) must equal quantityG (${this.quantityG})`,
+        );
+      }
+
+      if (totalCount !== this.packageCount) {
+        throw new ValidationError(
+          `Package plan count (${totalCount}) must equal packageCount (${this.packageCount})`,
+        );
+      }
     }
 
     // TODO: Add more validation rules

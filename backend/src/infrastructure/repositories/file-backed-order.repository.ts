@@ -34,6 +34,8 @@ interface OrderData {
     quantityG: number;
     packageCount: number;
     packageSpecG: number;
+    packagePlan?: Array<{ packageSpecG: number; packageCount: number }> | null;
+    ingredientSourcePlan?: string | null;
     customRequirements: string | null;
     dailyIntakeG?: number; // Optional for backward compatibility
     productionBatchId?: string | null; // Phase 8.11: Allocation lock
@@ -133,9 +135,12 @@ export class FileBackedOrderRepository
           itemData.customRequirements,
           itemData.dailyIntakeG ??
             itemData.quantityG / (itemData.packageCount || 1), // Fallback for backward compatibility
+          null,
           // Phase 8.11: Allocation fields
           itemData.productionBatchId ?? null,
           (itemData.allocatedAt ? new Date(itemData.allocatedAt) : null) as any,
+          itemData.packagePlan ?? null,
+          itemData.ingredientSourcePlan ?? null,
         ),
     );
 
@@ -242,6 +247,8 @@ export class FileBackedOrderRepository
         quantityG: item.quantityG,
         packageCount: item.packageCount,
         packageSpecG: item.packageSpecG,
+        packagePlan: item.packagePlan ?? null,
+        ingredientSourcePlan: item.ingredientSourcePlan ?? null,
         customRequirements: item.customRequirements,
         dailyIntakeG: item.dailyIntakeG,
         // Phase 8.11: Allocation fields
@@ -436,6 +443,8 @@ export class FileBackedOrderRepository
           quantityG: item.quantityG,
           packageCount: item.packageCount,
           packageSpecG: item.packageSpecG,
+          packagePlan: item.packagePlan ?? null,
+          ingredientSourcePlan: item.ingredientSourcePlan ?? null,
           customRequirements: item.customRequirements,
           dailyIntakeG: item.dailyIntakeG,
           vacuumBagSpec: item.vacuumBagSpec,

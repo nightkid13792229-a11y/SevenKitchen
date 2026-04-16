@@ -443,6 +443,10 @@ export class OrderService {
       null, // customRequirements
       dailyIntakeG,
       vacuumBagSpec, // vacuum bag specification
+      null,
+      null,
+      itemParams.packagePlan ?? null,
+      requestParams.ingredientSourcePlan ?? null,
     );
     console.log(
       '[CreateOrderFromSnapshot] OrderItem created, dogId:',

@@ -557,6 +557,76 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       expect(orderItem.dailyIntakeG).toBe(snapshotDailyIntakeG);
       expect(orderItem.dailyIntakeG).not.toBeCloseTo(recalculatedDailyIntakeG, 1);
     });
+
+    it('should create order items from snapshot with packagePlan and ingredientSourcePlan', async () => {
+      const recipe = createMockRecipe();
+      const ingredient = createMockIngredient();
+      const dog = createMockDog();
+      const packagePlan = [
+        { packageSpecG: 100, packageCount: 2 },
+        { packageSpecG: 200, packageCount: 3 },
+      ];
+
+      const snapshot = new OrderPricingSnapshot(
+        'snapshot-package-plan',
+        'owner-id-1',
+        {
+          dogId: dog.id,
+          ingredientSourcePlan: 'WHOLESALE',
+          items: [
+            {
+              recipeId: recipe.id,
+              packagePlan,
+              quantityG: 800,
+              packageCount: 5,
+              packageSpecG: 200,
+              cycleDays: 3,
+              dailyIntakeG: 300,
+            },
+          ],
+        },
+        {
+          amountProduct: 180,
+          amountShipping: 20,
+          amountTotal: 200,
+          pricingBreakdown: {
+            costIngredients: 100,
+            costPackaging: 10,
+            costLabor: 20,
+            costOverhead: 5,
+            totalProductCost: 135,
+            productPrice: 180,
+            ingredientDetails: [],
+            packagingDetails: {
+              perPackConsumables: { vacuumBagSpec: '多规格' },
+            },
+          },
+        },
+        new Date(Date.now() + 15 * 60 * 1000),
+        false,
+        new Date(),
+      );
+
+      mockPricingSnapshotRepository.findById.mockResolvedValue(snapshot);
+      dogRepository.findById.mockResolvedValue(dog);
+      recipeRepository.findById.mockResolvedValue(recipe);
+      mockIngredientRepository.findByIds.mockResolvedValue([ingredient]);
+      orderRepository.save.mockImplementation(async (order: Order) => order);
+
+      await service.createOrderDraft({
+        customerId: 'owner-id-1',
+        type: OrderType.FRESH_FOOD,
+        snapshotId: 'snapshot-package-plan',
+        targetProductionDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      });
+
+      const savedOrder = orderRepository.save.mock.calls[0][0] as Order;
+      expect(savedOrder.items[0].quantityG).toBe(800);
+      expect(savedOrder.items[0].packageCount).toBe(5);
+      expect(savedOrder.items[0].packageSpecG).toBe(200);
+      expect(savedOrder.items[0].packagePlan).toEqual(packagePlan);
+      expect(savedOrder.items[0].ingredientSourcePlan).toBe('WHOLESALE');
+    });
   });
 });
 

@@ -24,4 +24,31 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).not.toContain('修改</button>');
     expect(source).not.toContain('重置</button>');
   });
+
+  it('ties package plan readiness to the selected dog', () => {
+    expect(source).toContain('packagePlanDogId');
+    expect(source).toContain('isPackagePlanReadyForDog');
+    expect(source).toContain('packagePlanDogId.value = null');
+    expect(source).toContain('packagePlanDogId.value = selectedDogId.value');
+  });
+
+  it('uses normalized package rows for totals, preview, and checkout storage', () => {
+    expect(source).toContain('normalizedPackagePlan');
+    expect(source).toContain('getPackagePlanTotal(normalizedPackagePlan.value)');
+    expect(source).toContain('packagePlan: normalizedPackagePlan.value');
+    expect(source).not.toContain('packagePlan: packagePlan.value,');
+  });
+
+  it('debounces package input-driven price preview refreshes', () => {
+    expect(source).toContain('pricePreviewDebounceTimer');
+    expect(source).toContain('function schedulePricePreview');
+    expect(source).toContain('clearTimeout(pricePreviewDebounceTimer');
+    expect(source).toContain('schedulePricePreview()');
+  });
+
+  it('stores preparation and cooking methods for checkout display', () => {
+    expect(source).toContain("uni.setStorageSync('direct_buy_order_config'");
+    expect(source).toContain("preparationMethod: preparationMethod.value || 'CHOPPED'");
+    expect(source).toContain("cookingMethod: cookingMethod.value || 'RAW'");
+  });
 });

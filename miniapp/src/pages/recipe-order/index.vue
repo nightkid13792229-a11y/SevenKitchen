@@ -781,7 +781,7 @@
     <view class="bottom-bar">
       <view class="bottom-price">
         <text class="bottom-total">¥{{ pricePreview ? pricePreview.amountTotal.toFixed(2) : '--' }}</text>
-        <text class="bottom-estimate">约 ¥{{ pricePerDay.toFixed(1) }}/天</text>
+        <text class="bottom-estimate">{{ pricePerDayText }}</text>
       </view>
       <button
         class="btn-buy-now"
@@ -795,7 +795,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { request } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
 import {
@@ -965,6 +965,7 @@ const selectedDogId = ref('')
 const selectedCycleDays = ref(DEFAULT_ORDER_CYCLE_DAYS)
 const selectedSourcePlan = ref<IngredientSourcePlanCode>('MARKET_PREMIUM')
 const packagePlan = ref<PackagePlanItem[]>([])
+const packagePlanDogId = ref<string | null>(null)
 const dogCalcResult = ref<CalcResult | null>(null)
 
 // 生命阶段校验
@@ -974,6 +975,7 @@ const pricePreview = ref<PricePreview | null>(null)
 const pricingSnapshotId = ref<string | null>(null)  // ✅ 新增：快照ID
 let pricingPreviewRequestSeq = 0
 let dogCalcRequestSeq = 0
+let pricePreviewDebounceTimer: ReturnType<typeof setTimeout> | null = null
 const globalConfig = ref<GlobalConfig>({})
 
 // 显示的每日饭量
@@ -1021,7 +1023,18 @@ const dogPickerOptions = computed(() => {
   }))
 })
 
-const packagePlanTotal = computed(() => getPackagePlanTotal(packagePlan.value))
+const normalizedPackagePlan = computed(() =>
+  packagePlan.value.map(row => normalizePackagePlanRow(row))
+)
+const isPackagePlanReadyForDog = computed(() =>
+  Boolean(
+    selectedDogId.value
+    && packagePlanDogId.value === selectedDogId.value
+    && normalizedPackagePlan.value.length > 0
+    && displayDailyIntakeG.value > 0,
+  )
+)
+const packagePlanTotal = computed(() => getPackagePlanTotal(normalizedPackagePlan.value))
 const totalGrams = computed(() => packagePlanTotal.value.totalGrams)
 const totalPackages = computed(() => packagePlanTotal.value.totalPackages)
 const estimatedFeedDays = computed(() =>
@@ -1039,13 +1052,18 @@ const pricePerDay = computed(() => {
   if (!pricePreview.value || !Number.isFinite(days) || days <= 0) return 0
   return pricePreview.value.amountTotal / days
 })
+const pricePerDayText = computed(() => {
+  const days = Number(estimatedFeedDays.value)
+  if (!pricePreview.value || !Number.isFinite(days) || days <= 0) return '--/天'
+  return `约 ¥${(pricePreview.value.amountTotal / days).toFixed(1)}/天`
+})
 
 // 是否可以立即购买
 const canBuyNow = computed(() => {
   return Boolean(
     selectedDogId.value
     && selectedCycleDays.value
-    && packagePlan.value.length > 0
+    && isPackagePlanReadyForDog.value
     && minimumOrderMet.value
     && pricePreview.value !== null
     && pricingSnapshotId.value !== null
@@ -1109,6 +1127,10 @@ onMounted(async () => {
     await loadDogs()
     loadGlobalConfig()
   }
+})
+
+onUnmounted(() => {
+  clearPricePreviewDebounce()
 })
 
 async function loadBreeds() {
@@ -1371,7 +1393,13 @@ async function loadGlobalConfig() {
 }
 
 function selectDog(dogId: string) {
+  clearPricePreviewDebounce()
+  pricingPreviewRequestSeq += 1
   selectedDogId.value = dogId
+  packagePlan.value = []
+  displayDailyIntakeG.value = 0
+  dogCalcResult.value = null
+  packagePlanDogId.value = null
   resetPricePreviewState()
   loadDogCalcResult(dogId)
   checkLifeStageMatch()  // 校验生命阶段
@@ -1400,7 +1428,7 @@ async function loadDogCalcResult(dogId: string) {
     })
 
     if (res.code === 0 && res.data) {
-      if (requestSeq !== dogCalcRequestSeq) {
+      if (requestSeq !== dogCalcRequestSeq || dogId !== selectedDogId.value) {
         return
       }
 
@@ -1481,6 +1509,29 @@ function rebuildPackagePlan() {
     mealsPerDay: selectedDog.value?.mealsPerDay || 2,
     days: selectedCycleDays.value,
   })
+  packagePlanDogId.value = selectedDogId.value
+}
+
+function normalizePackagePlanRow(row: PackagePlanItem): PackagePlanItem {
+  return {
+    packageSpecG: Math.max(1, Math.floor(Number(row.packageSpecG) || 1)),
+    packageCount: Math.max(1, Math.floor(Number(row.packageCount) || 1)),
+  }
+}
+
+function clearPricePreviewDebounce() {
+  if (pricePreviewDebounceTimer !== null) {
+    clearTimeout(pricePreviewDebounceTimer)
+    pricePreviewDebounceTimer = null
+  }
+}
+
+function schedulePricePreview() {
+  clearPricePreviewDebounce()
+  pricePreviewDebounceTimer = setTimeout(() => {
+    pricePreviewDebounceTimer = null
+    loadPricePreview()
+  }, 300)
 }
 
 function addPackagePlanRow() {
@@ -1495,11 +1546,11 @@ function addPackagePlanRow() {
 }
 
 function updatePackagePlanRow(index: number, field: keyof PackagePlanItem, value: string | number) {
-  const nextValue = Math.max(0, Math.floor(Number(value) || 0))
+  const nextValue = Math.max(1, Math.floor(Number(value) || 1))
   packagePlan.value = packagePlan.value.map((row, rowIndex) =>
     rowIndex === index ? { ...row, [field]: nextValue } : row
   )
-  loadPricePreview()
+  schedulePricePreview()
 }
 
 function removePackagePlanRow(index: number) {
@@ -1577,7 +1628,7 @@ async function loadPricePreview() {
   const requestSeq = ++pricingPreviewRequestSeq
   resetPricePreviewState()
 
-  if (!selectedDog.value || packagePlan.value.length === 0) return
+  if (!selectedDog.value || !isPackagePlanReadyForDog.value) return
   if (!minimumOrderMet.value) return
 
   try {
@@ -1590,7 +1641,7 @@ async function loadPricePreview() {
         ingredientSourcePlan: selectedSourcePlan.value,
         items: [{
           recipeId: recipeId.value,
-          packagePlan: packagePlan.value,
+          packagePlan: normalizedPackagePlan.value,
           dailyIntakeG: displayDailyIntakeG.value,
           preparationMethod: preparationMethod.value || undefined,
           cookingMethod: cookingMethod.value || undefined,
@@ -1650,11 +1701,13 @@ async function buyNow() {
     estimatedFeedDays: estimatedFeedDays.value,
     recipeName: recipe.value.name,
     recipeCoverImage: recipe.value.coverImageUrl || '',
-    packagePlan: packagePlan.value,
+    packagePlan: normalizedPackagePlan.value,
     totalPackages: totalPackages.value,
     totalGrams: totalGrams.value,
     ingredientSourcePlan: selectedSourcePlan.value,
     ingredientSourcePlanLabel: sourcePlanLabel.value,
+    preparationMethod: preparationMethod.value || 'CHOPPED',
+    cookingMethod: cookingMethod.value || 'RAW',
     amountProduct: pricePreview.value?.amountProduct || 0,
     amountShipping: pricePreview.value?.amountShipping || 0,
     amountTotal: pricePreview.value?.amountTotal || 0,

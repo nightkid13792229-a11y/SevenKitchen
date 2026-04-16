@@ -80,6 +80,16 @@
                   <text class="value">{{ order.recipeName }}</text>
                 </view>
 
+                <view v-if="order.packagePlan && order.packagePlan.length > 0" class="info-row">
+                  <text class="label">分装明细：</text>
+                  <text class="value">{{ formatPackagePlan(order) }}</text>
+                </view>
+
+                <view v-if="order.ingredientSourcePlan" class="info-row">
+                  <text class="label">原料方案：</text>
+                  <text class="value">{{ order.ingredientSourcePlan }}</text>
+                </view>
+
                 <!-- 可编辑：重量规格 -->
                 <view class="info-row editable-row">
                   <text class="label">规格：</text>
@@ -148,6 +158,16 @@
               <view class="info-row">
                 <text class="label">食谱：</text>
                 <text class="value">{{ order.recipeName }}</text>
+              </view>
+
+              <view v-if="order.packagePlan && order.packagePlan.length > 0" class="info-row">
+                <text class="label">分装明细：</text>
+                <text class="value">{{ formatPackagePlan(order) }}</text>
+              </view>
+
+              <view v-if="order.ingredientSourcePlan" class="info-row">
+                <text class="label">原料方案：</text>
+                <text class="value">{{ order.ingredientSourcePlan }}</text>
               </view>
 
               <!-- 可编辑：重量规格 -->
@@ -263,6 +283,8 @@ interface OrderPrintConfig {
   recipeName: string;
   packageSpecG: number;
   packageCount: number;
+  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>;
+  ingredientSourcePlan?: string | null;
   printCount: number;
   recipeSnapshot: any;
   createdAt: string;
@@ -378,6 +400,8 @@ async function loadAllBatchesForRecipe(
           recipeName: item.recipeName || '未知食谱',
           packageSpecG: item.packageSpecG || 500,
           packageCount: item.packageCount || 1,
+          packagePlan: item.packagePlan,
+          ingredientSourcePlan: item.ingredientSourcePlan ?? null,
           printCount: 2,
           recipeSnapshot: item.recipeSnapshot,
           createdAt: item.createdAt,
@@ -426,6 +450,8 @@ function initializeOrders(taskData: any) {
     recipeName: taskData.recipeName || '未知食谱',
     packageSpecG: item.packageSpecG || 500,
     packageCount: item.packageCount || 1,
+    packagePlan: item.packagePlan,
+    ingredientSourcePlan: item.ingredientSourcePlan ?? null,
     printCount: 2, // 默认打印2份
     recipeSnapshot: taskData.recipeSnapshot,
     createdAt: taskData.createdAt || new Date().toISOString(),
@@ -556,6 +582,29 @@ function increaseCount(index: number) {
   if (orders.value[index].printCount < 10) {
     orders.value[index].printCount++;
   }
+}
+
+function formatPackagePlan(item: {
+  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
+  packageSpecG?: number
+  packageCount?: number
+}): string {
+  const packagePlanRows = (item.packagePlan || [])
+    .map(row => {
+      const packageSpecG = Number(row?.packageSpecG)
+      const packageCount = Number(row?.packageCount)
+      if (!Number.isFinite(packageSpecG) || !Number.isFinite(packageCount) || packageSpecG <= 0 || packageCount <= 0) {
+        return ''
+      }
+      return `${packageSpecG}g×${packageCount}袋`
+    })
+    .filter(Boolean)
+
+  if (packagePlanRows.length > 0) {
+    return packagePlanRows.join('，')
+  }
+
+  return `${item.packageSpecG || 0}g×${item.packageCount || 0}袋`
 }
 
 // 减少打印份数

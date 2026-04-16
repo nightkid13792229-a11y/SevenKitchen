@@ -12,4 +12,24 @@ describe('order detail runtime regressions', () => {
     expect(source).toContain('收货地址:')
     expect(source).not.toContain('<view class="section-title">收货信息</view>')
   })
+
+  it('supports packagePlan and ingredientSourcePlan on order items', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('packagePlan?: Array<{ packageSpecG: number; packageCount: number }>')
+    expect(source).toContain('ingredientSourcePlan?: string | null')
+  })
+
+  it('renders package plan details with formatPackagePlan', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('分装明细')
+    expect(source).toContain('formatPackagePlan(item)')
+  })
 })

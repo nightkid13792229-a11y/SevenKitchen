@@ -203,13 +203,23 @@
                 <text class="package-label">总净重:</text>
                 <text class="package-value">{{ Math.round(item.quantityG) }}g</text>
               </view>
-              <view class="package-row">
-                <text class="package-label">总餐数:</text>
-                <text class="package-value">{{ item.packageCount }}餐</text>
+              <view class="package-row" v-if="item.packagePlan && item.packagePlan.length > 0">
+                <text class="package-label">分装明细:</text>
+                <text class="package-value">{{ formatPackagePlan(item) }}</text>
               </view>
-              <view class="package-row">
-                <text class="package-label">每餐重量:</text>
-                <text class="package-value">{{ item.packageSpecG }}g/餐</text>
+              <template v-else>
+                <view class="package-row">
+                  <text class="package-label">总餐数:</text>
+                  <text class="package-value">{{ item.packageCount }}餐</text>
+                </view>
+                <view class="package-row">
+                  <text class="package-label">每餐重量:</text>
+                  <text class="package-value">{{ item.packageSpecG }}g/餐</text>
+                </view>
+              </template>
+              <view class="package-row" v-if="item.ingredientSourcePlan">
+                <text class="package-label">原料方案:</text>
+                <text class="package-value">{{ item.ingredientSourcePlan }}</text>
               </view>
               <view class="package-row" v-if="order.amountTotal && getTotalPackageCount()">
                 <text class="package-label">单价:</text>
@@ -448,6 +458,8 @@ interface OrderItem {
   quantityG: number
   packageCount: number
   packageSpecG: number
+  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
+  ingredientSourcePlan?: string | null
   totalPrice?: number
 }
 
@@ -1117,6 +1129,29 @@ function formatAmount(amount?: number): string {
 function calculateUnitPrice(item: OrderItem): number {
   if (!item.packageCount || item.packageCount === 0) return 0
   return (item.totalPrice || 0) / item.packageCount
+}
+
+function formatPackagePlan(item: {
+  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
+  packageSpecG?: number
+  packageCount?: number
+}): string {
+  const packagePlanRows = (item.packagePlan || [])
+    .map(row => {
+      const packageSpecG = Number(row?.packageSpecG)
+      const packageCount = Number(row?.packageCount)
+      if (!Number.isFinite(packageSpecG) || !Number.isFinite(packageCount) || packageSpecG <= 0 || packageCount <= 0) {
+        return ''
+      }
+      return `${packageSpecG}g×${packageCount}袋`
+    })
+    .filter(Boolean)
+
+  if (packagePlanRows.length > 0) {
+    return packagePlanRows.join('，')
+  }
+
+  return `${item.packageSpecG || 0}g×${item.packageCount || 0}袋`
 }
 
 function getStatusText(status: string): string {

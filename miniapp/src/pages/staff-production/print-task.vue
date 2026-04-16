@@ -38,14 +38,20 @@
                   <text class="label">总净重:</text>
                   <text class="value">{{ formatDecimal(order.packageSpecG * order.packageCount) }}g</text>
                 </view>
-                <view class="order-row">
-                  <text class="label">规格:</text>
-                  <text class="value">{{ order.packageSpecG }}g/袋</text>
+                <view v-if="order.packagePlan && order.packagePlan.length > 0" class="order-row">
+                  <text class="label">分装明细:</text>
+                  <text class="value">{{ formatPackagePlan(order) }}</text>
                 </view>
-                <view class="order-row">
-                  <text class="label">袋数:</text>
-                  <text class="value">{{ order.packageCount }}袋</text>
-                </view>
+                <template v-else>
+                  <view class="order-row">
+                    <text class="label">规格:</text>
+                    <text class="value">{{ order.packageSpecG }}g/袋</text>
+                  </view>
+                  <view class="order-row">
+                    <text class="label">袋数:</text>
+                    <text class="value">{{ order.packageCount }}袋</text>
+                  </view>
+                </template>
                 <view class="order-row">
                   <text class="label">狗狗:</text>
                   <text class="value">{{ order.dogName }}</text>
@@ -136,6 +142,8 @@ interface PrintData {
   orderItems: Array<{
     packageSpecG: number;
     packageCount: number;
+    packagePlan?: Array<{ packageSpecG: number; packageCount: number }>;
+    ingredientSourcePlan?: string | null;
     dogName: string;
     recipientName?: string;
     recipientCity?: string;
@@ -244,6 +252,29 @@ const statusText = computed(() => {
 function formatDecimal(value: number | null | undefined, decimals = 2): string {
   if (value === null || value === undefined || isNaN(value)) return '-';
   return value.toFixed(decimals);
+}
+
+function formatPackagePlan(item: {
+  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
+  packageSpecG?: number
+  packageCount?: number
+}): string {
+  const packagePlanRows = (item.packagePlan || [])
+    .map(row => {
+      const packageSpecG = Number(row?.packageSpecG)
+      const packageCount = Number(row?.packageCount)
+      if (!Number.isFinite(packageSpecG) || !Number.isFinite(packageCount) || packageSpecG <= 0 || packageCount <= 0) {
+        return ''
+      }
+      return `${packageSpecG}g×${packageCount}袋`
+    })
+    .filter(Boolean)
+
+  if (packagePlanRows.length > 0) {
+    return packagePlanRows.join('，')
+  }
+
+  return `${item.packageSpecG || 0}g×${item.packageCount || 0}袋`
 }
 
 // 格式化日期时间

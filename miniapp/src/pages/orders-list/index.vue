@@ -55,7 +55,10 @@
             <view class="meal-info">
               <text class="meal-text">共{{ getTotalMeals(order) }}餐</text>
               <text class="meal-separator">·</text>
-              <text class="meal-text">每餐{{ getMealWeight(order) }}g</text>
+              <text v-if="order.firstItem?.packagePlan && order.firstItem.packagePlan.length > 0" class="meal-text">
+                {{ formatPackagePlan(order.firstItem) }}
+              </text>
+              <text v-else class="meal-text">每餐{{ getMealWeight(order) }}g</text>
             </view>
           </view>
 
@@ -110,6 +113,8 @@ interface Order {
     }
     packageCount: number
     packageSpecG: number
+    packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
+    ingredientSourcePlan?: string | null
     dailyIntakeG?: number
   }
   address?: {
@@ -328,6 +333,29 @@ function getMealWeight(order: Order): number {
   return firstItem.packageSpecG || 0
 }
 
+function formatPackagePlan(item: {
+  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
+  packageSpecG?: number
+  packageCount?: number
+}): string {
+  const packagePlanRows = (item.packagePlan || [])
+    .map(row => {
+      const packageSpecG = Number(row?.packageSpecG)
+      const packageCount = Number(row?.packageCount)
+      if (!Number.isFinite(packageSpecG) || !Number.isFinite(packageCount) || packageSpecG <= 0 || packageCount <= 0) {
+        return ''
+      }
+      return `${packageSpecG}g×${packageCount}袋`
+    })
+    .filter(Boolean)
+
+  if (packagePlanRows.length > 0) {
+    return packagePlanRows.join('，')
+  }
+
+  return `${item.packageSpecG || 0}g×${item.packageCount || 0}袋`
+}
+
 function formatAddress(address?: { regionText?: string }): string {
   if (!address || !address.regionText) {
     return ''
@@ -535,5 +563,4 @@ function formatAddress(address?: { regionText?: string }): string {
   color: #999;
 }
 </style>
-
 

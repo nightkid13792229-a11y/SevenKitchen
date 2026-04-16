@@ -6,6 +6,11 @@
 import { request } from '../utils/api';
 import { getBaseUrl } from '../utils/config';
 
+type PackagePlanItem = {
+  packageSpecG: number;
+  packageCount: number;
+};
+
 // ==========================================
 // 生产统计
 // ==========================================
@@ -86,6 +91,8 @@ export function getPackagingUnits(params: {
         dogName: string;
         packageSpecG: number; // 单包规格（g）
         packageCount: number; // 总袋数
+        packagePlan?: PackagePlanItem[] | null;
+        ingredientSourcePlan?: string | null;
         recipientName?: string;
         recipientCity?: string;
         adminRemark?: string;
@@ -268,16 +275,18 @@ export function getRecipeBatchesWithOrders(params: {
       batchCode?: string;
       productionDate: string;
       isCurrentBatch: boolean;
-      orderItems: Array<{
-        orderItemId: string;
-        orderId: string;
-        dogName: string;
-        recipeName: string;
-        packageSpecG: number;
-        packageCount: number;
-        recipeSnapshot: any;
-        createdAt: string;
-      }>;
+        orderItems: Array<{
+          orderItemId: string;
+          orderId: string;
+          dogName: string;
+          recipeName: string;
+          packageSpecG: number;
+          packageCount: number;
+          packagePlan?: PackagePlanItem[] | null;
+          ingredientSourcePlan?: string | null;
+          recipeSnapshot: any;
+          createdAt: string;
+        }>;
     }>;
   }>({
     url: `/staff/production/recipe-batches/${params.recipeId}`,

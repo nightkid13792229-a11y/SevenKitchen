@@ -557,6 +557,8 @@ export class ProductionService {
         recipeName: string;
         packageSpecG: number;
         packageCount: number;
+        packagePlan: Array<{ packageSpecG: number; packageCount: number }> | null;
+        ingredientSourcePlan: string | null;
         recipeSnapshot: any;
         createdAt: string;
       }>;
@@ -591,6 +593,8 @@ export class ProductionService {
         recipeName: string;
         packageSpecG: number;
         packageCount: number;
+        packagePlan: Array<{ packageSpecG: number; packageCount: number }> | null;
+        ingredientSourcePlan: string | null;
         recipeSnapshot: any;
         createdAt: string;
       }>;
@@ -666,6 +670,8 @@ export class ProductionService {
             recipeName: (unit.recipeSnapshot as any).name || '未知食谱',
             packageSpecG: orderItem.packageSpecG,
             packageCount: orderItem.packageCount,
+            packagePlan: orderItem.packagePlan ?? null,
+            ingredientSourcePlan: orderItem.ingredientSourcePlan ?? null,
             recipeSnapshot: unit.recipeSnapshot,
             createdAt: orderItem.createdAt.toISOString(),
           });
@@ -813,6 +819,8 @@ export class ProductionService {
             dogName,
             packageSpecG: orderItem.packageSpecG,
             packageCount: orderItem.packageCount,
+            packagePlan: orderItem.packagePlan ?? null,
+            ingredientSourcePlan: orderItem.ingredientSourcePlan ?? null,
           });
         }
 

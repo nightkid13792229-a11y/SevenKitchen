@@ -7,8 +7,8 @@ import {
   IsNumber,
   IsArray,
   IsOptional,
-  IsObject,
 } from 'class-validator';
+import type { OrderPackagePlanItemDto } from '../orders/order-response.dto';
 
 export class PrintTaskOrderItemDto {
   @IsNumber()
@@ -16,6 +16,14 @@ export class PrintTaskOrderItemDto {
 
   @IsNumber()
   packageCount!: number;
+
+  @IsArray()
+  @IsOptional()
+  packagePlan?: OrderPackagePlanItemDto[];
+
+  @IsString()
+  @IsOptional()
+  ingredientSourcePlan?: string;
 
   @IsString()
   dogName!: string;
@@ -88,6 +96,10 @@ export class PrintTaskDto {
 
   @IsArray()
   parsedIngredients!: PrintTaskIngredientDto[];
+
+  @IsString()
+  @IsOptional()
+  taskId?: string;
 
   @IsString()
   @IsOptional()

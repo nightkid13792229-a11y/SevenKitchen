@@ -862,6 +862,8 @@ export class OrdersController {
       quantityG: item.quantityG,
       packageCount: item.packageCount,
       packageSpecG: item.packageSpecG,
+      packagePlan: item.packagePlan ?? null,
+      ingredientSourcePlan: item.ingredientSourcePlan ?? null,
       customRequirements: item.customRequirements,
       dailyIntakeG: item.dailyIntakeG,
       dog: dogInfo,
@@ -930,6 +932,8 @@ export class OrdersController {
           : undefined,
         packageCount: item.packageCount,
         packageSpecG: item.packageSpecG,
+        packagePlan: item.packagePlan ?? null,
+        ingredientSourcePlan: item.ingredientSourcePlan ?? null,
         dailyIntakeG: item.dailyIntakeG,
       };
     }

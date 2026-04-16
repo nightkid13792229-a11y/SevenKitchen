@@ -13,6 +13,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { PackagingUnitStatus } from '../../../domain/production/enums';
+import type { OrderPackagePlanItemDto } from '../orders/order-response.dto';
 
 /**
  * Auto Schedule Request DTO
@@ -37,6 +38,12 @@ export class OrderPackagingInfoDto {
 
   @IsNumber()
   packageCount!: number; // 总袋数
+
+  @IsOptional()
+  packagePlan?: OrderPackagePlanItemDto[] | null;
+
+  @IsOptional()
+  ingredientSourcePlan?: string | null;
 
   recipientName?: string;
   recipientCity?: string;

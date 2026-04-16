@@ -6,6 +6,7 @@
 import { Injectable } from '@nestjs/common';
 const PDFDocument = require('pdfkit');
 import * as path from 'path';
+import type { PrintTaskDto, PrintTaskOrderItemDto } from '../../interfaces/dto/production/print-task.dto';
 
 interface IngredientItem {
   name: string;
@@ -17,28 +18,8 @@ interface IngredientItem {
   isTotalWeight?: boolean;
 }
 
-interface OrderItem {
-  packageSpecG: number;
-  packageCount: number;
-  dogName: string;
-  recipientName?: string;
-  recipientCity?: string;
-  adminRemark?: string;
-}
-
-interface PrintTaskData {
-  recipeName: string;
-  recipeVersion: string;
-  currentPotNumber: number;
-  totalPots: number;
-  status: string;
-  totalProductionG: number;
-  createdAt: string;
-  completedAt?: string;
-  orderItems: OrderItem[];
-  parsedIngredients: IngredientItem[];
-  createdBy?: string;
-}
+type PrintTaskData = PrintTaskDto;
+type PackagePlanRow = NonNullable<PrintTaskOrderItemDto['packagePlan']>[number];
 
 @Injectable()
 export class PdfGeneratorService {
@@ -365,17 +346,34 @@ export class PdfGeneratorService {
         .fillColor('#000000')
         .font('Chinese');
       const detailsY = cardInnerY + Math.floor(12 * scaleFactor);
-      const orderTotalWeight = order.packageSpecG * order.packageCount;
+      const hasPackagePlan = Array.isArray(order.packagePlan) && order.packagePlan.length > 0;
+      const orderTotalWeight = hasPackagePlan
+        ? this.getPackagePlanTotalWeight(order.packagePlan || [])
+        : order.packageSpecG * order.packageCount;
+      const packagePlanSummary = hasPackagePlan
+        ? this.formatPackagePlan(order.packagePlan || [])
+        : '';
 
       const rowHeight = Math.floor(14 * scaleFactor);
       const textX = cardX + Math.floor(8 * scaleFactor);
       doc.text(`总净重: ${orderTotalWeight}g`, textX, detailsY);
-      doc.text(`规格: ${order.packageSpecG}g/袋`, textX, detailsY + rowHeight);
-      doc.text(
-        `袋数: ${order.packageCount}袋`,
-        textX + Math.floor(80 * scaleFactor),
-        detailsY,
-      );
+      if (hasPackagePlan) {
+        doc.text(
+          `分装: ${packagePlanSummary}`,
+          textX,
+          detailsY + rowHeight,
+          {
+            width: cardWidth - Math.floor(16 * scaleFactor),
+          },
+        );
+      } else {
+        doc.text(`规格: ${order.packageSpecG}g/袋`, textX, detailsY + rowHeight);
+        doc.text(
+          `袋数: ${order.packageCount}袋`,
+          textX + Math.floor(80 * scaleFactor),
+          detailsY,
+        );
+      }
       doc.text(
         `狗狗: ${order.dogName}`,
         textX + Math.floor(80 * scaleFactor),
@@ -404,6 +402,19 @@ export class PdfGeneratorService {
     }
 
     return y;
+  }
+
+  private formatPackagePlan(packagePlan: PackagePlanRow[]): string {
+    return packagePlan
+      .map((row) => `${row.packageSpecG}g×${row.packageCount}袋`)
+      .join('，');
+  }
+
+  private getPackagePlanTotalWeight(packagePlan: PackagePlanRow[]): number {
+    return packagePlan.reduce(
+      (sum, row) => sum + row.packageSpecG * row.packageCount,
+      0,
+    );
   }
 
   /**

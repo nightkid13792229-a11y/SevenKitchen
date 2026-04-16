@@ -65,7 +65,11 @@ import {
 import type { DogBreedRepository } from '../../domain/dog/dog-breed.repository';
 import { OrderStatus } from '../../domain';
 import { CancelOrderDto } from '../dto/orders/cancel-order.dto';
-import { AdminOrderDto, OrderDto } from '../dto/orders/order-response.dto';
+import {
+  AdminOrderDto,
+  OrderDto,
+} from '../dto/orders/order-response.dto';
+import type { OrderItemDto } from '../dto/orders/order-response.dto';
 import { InvalidStateTransitionError } from '../../domain/common/errors';
 import { UpdateOrderAdminRemarkDto } from '../dto/orders/admin-order-operations.dto';
 import {
@@ -1053,16 +1057,7 @@ export class AdminController {
         amountProduct: order.amountProduct,
         amountShipping: order.amountShipping,
         amountTotal: order.amountTotal,
-        items: order.items.map((item) => ({
-          id: item.id,
-          orderId: item.orderId,
-          recipeSnapshot: item.recipeSnapshot,
-          quantityG: item.quantityG,
-          packageCount: item.packageCount,
-          packageSpecG: item.packageSpecG,
-          customRequirements: item.customRequirements,
-          dailyIntakeG: item.dailyIntakeG,
-        })),
+        items: order.items.map((item) => this.mapAdminOrderItem(item)),
         pricingBreakdown: order.pricingBreakdownSnapshot
           ? {
               costIngredients: order.pricingBreakdownSnapshot.costIngredients,
@@ -1309,6 +1304,8 @@ export class AdminController {
                 : undefined,
               packageCount: item.packageCount,
               packageSpecG: item.packageSpecG,
+              packagePlan: item.packagePlan ?? null,
+              ingredientSourcePlan: item.ingredientSourcePlan ?? null,
               dailyIntakeG: item.dailyIntakeG,
             };
           }
@@ -1561,16 +1558,7 @@ export class AdminController {
         amountProduct: order.amountProduct,
         amountShipping: order.amountShipping,
         amountTotal: order.amountTotal,
-        items: order.items.map((item) => ({
-          id: item.id,
-          orderId: item.orderId,
-          recipeSnapshot: item.recipeSnapshot,
-          quantityG: item.quantityG,
-          packageCount: item.packageCount,
-          packageSpecG: item.packageSpecG,
-          customRequirements: item.customRequirements,
-          dailyIntakeG: item.dailyIntakeG,
-        })),
+        items: order.items.map((item) => this.mapAdminOrderItem(item)),
         trackingNumber: order.trackingNumber ?? null,
         carrierCode: order.carrierCode ?? null,
         shippedAt: order.shippedAt ? order.shippedAt.toISOString() : null,
@@ -1631,16 +1619,7 @@ export class AdminController {
         amountProduct: order.amountProduct,
         amountShipping: order.amountShipping,
         amountTotal: order.amountTotal,
-        items: order.items.map((item) => ({
-          id: item.id,
-          orderId: item.orderId,
-          recipeSnapshot: item.recipeSnapshot,
-          quantityG: item.quantityG,
-          packageCount: item.packageCount,
-          packageSpecG: item.packageSpecG,
-          customRequirements: item.customRequirements,
-          dailyIntakeG: item.dailyIntakeG,
-        })),
+        items: order.items.map((item) => this.mapAdminOrderItem(item)),
         trackingNumber: order.trackingNumber ?? null,
         carrierCode: order.carrierCode ?? null,
         shippedAt: order.shippedAt ? order.shippedAt.toISOString() : null,
@@ -1718,16 +1697,7 @@ export class AdminController {
         amountProduct: order.amountProduct,
         amountShipping: order.amountShipping,
         amountTotal: order.amountTotal,
-        items: order.items.map((item) => ({
-          id: item.id,
-          orderId: item.orderId,
-          recipeSnapshot: item.recipeSnapshot,
-          quantityG: item.quantityG,
-          packageCount: item.packageCount,
-          packageSpecG: item.packageSpecG,
-          customRequirements: item.customRequirements,
-          dailyIntakeG: item.dailyIntakeG,
-        })),
+        items: order.items.map((item) => this.mapAdminOrderItem(item)),
         trackingNumber: order.trackingNumber ?? null,
         carrierCode: order.carrierCode ?? null,
         paymentMethod: order.paymentMethod ?? null,
@@ -1790,16 +1760,7 @@ export class AdminController {
         amountProduct: order.amountProduct,
         amountShipping: order.amountShipping,
         amountTotal: order.amountTotal,
-        items: order.items.map((item) => ({
-          id: item.id,
-          orderId: item.orderId,
-          recipeSnapshot: item.recipeSnapshot,
-          quantityG: item.quantityG,
-          packageCount: item.packageCount,
-          packageSpecG: item.packageSpecG,
-          customRequirements: item.customRequirements,
-          dailyIntakeG: item.dailyIntakeG,
-        })),
+        items: order.items.map((item) => this.mapAdminOrderItem(item)),
         trackingNumber: order.trackingNumber ?? null,
         carrierCode: order.carrierCode ?? null,
         shippedAt: order.shippedAt ? order.shippedAt.toISOString() : null,
@@ -1899,16 +1860,7 @@ export class AdminController {
       amountProduct: order.amountProduct,
       amountShipping: order.amountShipping,
       amountTotal: order.amountTotal,
-      items: order.items.map((item: any) => ({
-        id: item.id,
-        orderId: item.orderId,
-        recipeSnapshot: item.recipeSnapshot,
-        quantityG: item.quantityG,
-        packageCount: item.packageCount,
-        packageSpecG: item.packageSpecG,
-        customRequirements: item.customRequirements,
-        dailyIntakeG: item.dailyIntakeG,
-      })),
+      items: order.items.map((item: any) => this.mapAdminOrderItem(item)),
       pricingBreakdown: order.pricingBreakdownSnapshot
         ? {
             costIngredients: order.pricingBreakdownSnapshot.costIngredients,
@@ -1934,6 +1886,21 @@ export class AdminController {
       paymentStatus: order.paymentStatus ?? null,
       createdAt: order.createdAt.toISOString(),
       adminRemark: order.adminRemark ?? null,
+    };
+  }
+
+  private mapAdminOrderItem(item: any): OrderItemDto {
+    return {
+      id: item.id,
+      orderId: item.orderId,
+      recipeSnapshot: item.recipeSnapshot,
+      quantityG: item.quantityG,
+      packageCount: item.packageCount,
+      packageSpecG: item.packageSpecG,
+      packagePlan: item.packagePlan ?? null,
+      ingredientSourcePlan: item.ingredientSourcePlan ?? null,
+      customRequirements: item.customRequirements,
+      dailyIntakeG: item.dailyIntakeG,
     };
   }
 

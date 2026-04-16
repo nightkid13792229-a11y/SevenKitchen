@@ -32,6 +32,7 @@ import {
   GetPackagingUnitsDto,
   TodayStatisticsDto,
 } from '../../interfaces/dto/production/kitchen.dto';
+import type { PrintTaskDto } from '../../interfaces/dto/production/print-task.dto';
 import { DateUtil } from '../../utils/date.util';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import { PdfGeneratorService } from '../../infrastructure/services/pdf-generator.service';
@@ -275,6 +276,8 @@ export class StaffProductionService {
             dogName: order.dog?.name || '未知狗狗', // ✅ 使用真实狗狗名称
             packageSpecG: item.packageSpecG,
             packageCount: item.packageCount,
+            packagePlan: item.packagePlan ?? null,
+            ingredientSourcePlan: item.ingredientSourcePlan ?? null,
             recipientName: order.address?.recipientName, // ✅ 收货人姓名
             recipientCity: order.address?.region?.city, // ✅ 收货城市
             adminRemark: order.adminRemark ?? undefined,
@@ -698,7 +701,7 @@ export class StaffProductionService {
   /**
    * Generate PDF for production task and upload to COS
    */
-  async printProductionTask(taskData: any): Promise<{ pdfUrl: string }> {
+  async printProductionTask(taskData: PrintTaskDto): Promise<{ pdfUrl: string }> {
     this.logger.log(`[PrintProductionTask] Generating PDF for task`);
 
     try {

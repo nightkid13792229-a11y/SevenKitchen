@@ -6,6 +6,14 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { OrderStatus, OrderType } from '../../../domain';
 import type { RecipeSnapshot } from '../../../domain/recipe/types';
 
+export class OrderPackagePlanItemDto {
+  @ApiProperty({ example: 100 })
+  packageSpecG!: number;
+
+  @ApiProperty({ example: 2 })
+  packageCount!: number;
+}
+
 export class OrderItemDto {
   @ApiProperty({ example: 'uuid' })
   id!: string;
@@ -29,6 +37,20 @@ export class OrderItemDto {
 
   @ApiProperty({ example: 100 })
   packageSpecG!: number;
+
+  @ApiPropertyOptional({
+    type: [OrderPackagePlanItemDto],
+    nullable: true,
+    description: 'Multi-row package plan when the order is split into multiple package specs',
+  })
+  packagePlan?: OrderPackagePlanItemDto[] | null;
+
+  @ApiPropertyOptional({
+    description: 'Ingredient source plan code',
+    example: 'MARKET_PREMIUM',
+    nullable: true,
+  })
+  ingredientSourcePlan?: string | null;
 
   @ApiPropertyOptional({ nullable: true })
   customRequirements?: string | null;
@@ -307,6 +329,8 @@ export class OrderSummaryDto {
     };
     packageCount: number;
     packageSpecG: number;
+    packagePlan?: OrderPackagePlanItemDto[] | null;
+    ingredientSourcePlan?: string | null;
     dailyIntakeG?: number;
   };
 

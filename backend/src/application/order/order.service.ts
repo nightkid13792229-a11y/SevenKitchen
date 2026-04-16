@@ -231,6 +231,36 @@ export class OrderService {
       const packagePlan = normalizePackagePlan(itemDto.packagePlan);
       const summary = summarizePackagePlan(packagePlan);
 
+      if (
+        itemDto.quantityG !== undefined &&
+        itemDto.quantityG !== null &&
+        itemDto.quantityG !== summary.totalQuantityG
+      ) {
+        throw new BadRequestException(
+          `packagePlan does not match quantityG: expected ${summary.totalQuantityG}, got ${itemDto.quantityG}`,
+        );
+      }
+
+      if (
+        itemDto.packageCount !== undefined &&
+        itemDto.packageCount !== null &&
+        itemDto.packageCount !== summary.totalPackageCount
+      ) {
+        throw new BadRequestException(
+          `packagePlan does not match packageCount: expected ${summary.totalPackageCount}, got ${itemDto.packageCount}`,
+        );
+      }
+
+      if (
+        itemDto.packageSpecG !== undefined &&
+        itemDto.packageSpecG !== null &&
+        itemDto.packageSpecG !== summary.primaryPackageSpecG
+      ) {
+        throw new BadRequestException(
+          `packagePlan does not match packageSpecG: expected ${summary.primaryPackageSpecG}, got ${itemDto.packageSpecG}`,
+        );
+      }
+
       return {
         quantityG: summary.totalQuantityG,
         packageCount: summary.totalPackageCount,
@@ -828,9 +858,8 @@ export class OrderService {
         try {
           const address = await this.addressRepository.findById(dto.addressId);
           if (address) {
-            // Calculate total shipping weight (food weight only, packaging weight will be added after pricing calculation)
-            // TODO: Include packaging weight in shipping fee calculation for accurate pricing
-            const totalWeightG = packageInput.quantityG;
+            const totalWeightG =
+              packageInput.quantityG + (pricing.weightPackagingG || 0);
             const shippingResult =
               await this.shippingService.calculateShippingFeePreview({
                 region: address.region,

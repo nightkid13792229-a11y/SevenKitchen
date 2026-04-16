@@ -220,8 +220,7 @@ export class PricingService {
       : null;
 
     const hasLegacyQuantityInput = dailyG !== undefined && days !== undefined;
-    const hasPackagePlanQuantityInput =
-      providedTotalNetFoodWeightG !== undefined && packagePlan !== null;
+    const hasPackagePlanQuantityInput = packagePlan !== null;
 
     if (!hasLegacyQuantityInput && !hasPackagePlanQuantityInput) {
       throw new ValidationError(
@@ -229,11 +228,23 @@ export class PricingService {
       );
     }
 
+    if (
+      packagePlanSummary &&
+      providedTotalNetFoodWeightG !== undefined &&
+      providedTotalNetFoodWeightG !== packagePlanSummary.totalQuantityG
+    ) {
+      throw new ValidationError(
+        `packagePlan total weight (${packagePlanSummary.totalQuantityG}g) must equal totalNetFoodWeightG (${providedTotalNetFoodWeightG}g)`,
+      );
+    }
+
     // ==========================================
     // 0. 起订量检查 (Minimum Order Check)
     // ==========================================
     const totalNetFoodWeightG =
-      providedTotalNetFoodWeightG ?? (dailyG as number) * (days as number);
+      packagePlanSummary?.totalQuantityG ??
+      providedTotalNetFoodWeightG ??
+      (dailyG as number) * (days as number);
     if (totalNetFoodWeightG < globalConfig.minOrderWeightG) {
       throw new ValidationError(
         `订单净重不足 ${globalConfig.minOrderWeightG}g (当前 ${totalNetFoodWeightG}g)`,

@@ -350,7 +350,7 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       // Simulate Recipe energy density change (should NOT affect existing order)
       // In a real scenario, if Recipe.energyDensityKcalPerKg changes from 1450 to 2000,
       // the order's snapshot should still have the original 1450 value
-      
+
       // Verify that the snapshot still has the original value (immutability)
       expect(orderItem.recipeSnapshot.energy_density_kcal_per_kg).toBe(
         recipe.energyDensityKcalPerKg, // Still original, not updated
@@ -482,6 +482,115 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
               }),
             ],
           }),
+        }),
+      );
+    });
+
+    it.each([
+      {
+        field: 'quantityG',
+        legacyOverride: { quantityG: 1200 },
+        expectedMessage: 'packagePlan does not match quantityG',
+      },
+      {
+        field: 'packageCount',
+        legacyOverride: { packageCount: 6 },
+        expectedMessage: 'packagePlan does not match packageCount',
+      },
+      {
+        field: 'packageSpecG',
+        legacyOverride: { packageSpecG: 100 },
+        expectedMessage: 'packagePlan does not match packageSpecG',
+      },
+    ])(
+      'rejects packagePlan when legacy $field conflicts with derived values',
+      async ({ legacyOverride, expectedMessage }) => {
+        const dog = createMockDog();
+
+        dogRepository.findById.mockResolvedValue(dog);
+
+        await expect(
+          service.previewPricing({
+            customerId: 'customer-id-1',
+            dogId: 'dog-id-1',
+            type: OrderType.FRESH_FOOD,
+            items: [
+              {
+                recipeId: 'recipe-id-1',
+                quantityG: 800,
+                packageCount: 5,
+                packageSpecG: 200,
+                packagePlan: [
+                  { packageSpecG: 100, packageCount: 2 },
+                  { packageSpecG: 200, packageCount: 3 },
+                ],
+                dailyIntakeG: 300,
+                ...legacyOverride,
+              },
+            ],
+          }),
+        ).rejects.toThrow(expectedMessage);
+        expect(recipeRepository.findById).not.toHaveBeenCalled();
+        expect(mockPricingService.calculateOrderPrice).not.toHaveBeenCalled();
+      },
+    );
+
+    it('includes packaging weight when calculating direct-create shipping fee', async () => {
+      const dog = createMockDog();
+      const recipe = createMockRecipe();
+      const ingredient = createMockIngredient();
+
+      dogRepository.findById.mockResolvedValue(dog);
+      recipeRepository.findById.mockResolvedValue(recipe);
+      mockIngredientRepository.findByIds.mockResolvedValue([ingredient]);
+      mockAddressRepository.findById.mockResolvedValue({
+        id: 'address-id-1',
+        userId: 'customer-id-1',
+        recipientName: 'Test Recipient',
+        phone: '13800000000',
+        region: {
+          province: 'Shanghai',
+          city: 'Shanghai',
+          district: 'Pudong',
+        },
+        detailAddress: 'Test Address',
+        isDefault: true,
+      } as any);
+      mockPricingService.calculateOrderPrice.mockReturnValue({
+        costIngredients: 50,
+        costPackaging: 10,
+        costLabor: 20,
+        costOverhead: 5,
+        totalProductCost: 85,
+        productPrice: 141.67,
+        weightPackagingG: 125,
+      });
+      mockShippingService.calculateShippingFeePreview.mockResolvedValue({
+        amountShipping: 10,
+        templateId: 'template-1',
+      });
+      orderRepository.save.mockImplementation(async (order: Order) => order);
+
+      await service.createOrderDraft({
+        customerId: 'customer-id-1',
+        dogId: 'dog-id-1',
+        type: OrderType.FRESH_FOOD,
+        addressId: 'address-id-1',
+        items: [
+          {
+            recipeId: 'recipe-id-1',
+            quantityG: 1000,
+            packageSpecG: 200,
+            packageCount: 5,
+          },
+        ],
+      });
+
+      expect(
+        mockShippingService.calculateShippingFeePreview,
+      ).toHaveBeenCalledWith(
+        expect.objectContaining({
+          totalWeightG: 1125,
         }),
       );
     });

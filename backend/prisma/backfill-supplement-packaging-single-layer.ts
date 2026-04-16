@@ -486,6 +486,16 @@ const buildConcreteIngredientName = (
   return ingredient.name;
 };
 
+const buildFinalIngredientIdentityKey = (
+  ingredient: LegacySingleLayerIngredientSnapshot,
+  variant: ProductVariant,
+) =>
+  buildIdentityKey({
+    name: buildConcreteIngredientName(ingredient, variant),
+    brand: variant.brand || normalizeText(ingredient.brand),
+    productModel: variant.productModel || normalizeText(ingredient.productModel),
+  });
+
 const buildFlattenUpdate = (
   ingredient: LegacySingleLayerIngredientSnapshot,
   variant: ProductVariant,
@@ -562,12 +572,17 @@ export function planSupplementPackagingSingleLayerBackfill(
       return;
     }
 
-    const mergedVariants = sortVariants(
-      mergeVariants([
+    const variants = [
         ...(buildBaseVariant(ingredient) ? [buildBaseVariant(ingredient)!] : []),
         ...buildRecommendedVariants(ingredient),
         ...buildProcurementVariants(ingredient),
-      ]),
+      ].map((variant) => ({
+        ...variant,
+        identityKey: buildFinalIngredientIdentityKey(ingredient, variant),
+      }));
+
+    const mergedVariants = sortVariants(
+      mergeVariants(variants),
     );
 
     if (mergedVariants.length === 0) {

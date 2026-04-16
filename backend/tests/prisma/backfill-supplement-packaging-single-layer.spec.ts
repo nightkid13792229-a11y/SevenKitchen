@@ -145,6 +145,74 @@ describe('supplement and packaging single-layer backfill planning', () => {
     );
   });
 
+  it('merges variants whose final concrete names collide after model suffixing', () => {
+    const result = planSupplementPackagingSingleLayerBackfill([
+      {
+        id: 'supp-b-complex',
+        name: 'B族维生素',
+        type: 'SUPPLEMENT',
+        baseUnit: 'PCS',
+        unitDisplayLabel: '粒',
+        purchaseUnit: '瓶',
+        purchaseToBaseRatio: 100,
+        currentPricePerPurchaseUnit: 90,
+        effectivePricePerPurchaseUnit: 90,
+        diyEnabled: false,
+        procurementEnabled: false,
+        properties: {},
+        nutritionProfile: null,
+        recipeItems: [],
+        recommendedProducts: [
+          {
+            id: 'rp-b-complex',
+            name: 'B族维生素',
+            brand: 'NOW FOODS',
+            productModel: 'B-50胶囊，50mgB族维生素/粒，100粒/瓶',
+            purchaseChannel: '京东',
+            displayUnit: '粒',
+            purchaseLink: { platform: 'JD', url: 'https://jd.example/b' },
+            imageUrl: 'https://img.example/b.png',
+            activeNutrients: {},
+            isActive: true,
+            sortOrder: 0
+          }
+        ],
+        procurementSkus: [
+          {
+            id: 'sku-b-complex',
+            name: 'B族维生素 B-50胶囊，50mgB族维生素/粒，100粒/瓶',
+            brand: 'NOW FOODS',
+            productModel: 'B-50胶囊，50mgB族维生素/粒，100粒/瓶',
+            purchaseChannel: '京东',
+            supplierName: 'NOW FOODS 京东自营',
+            purchaseUnit: '瓶',
+            purchaseToBaseRatio: 100,
+            currentPurchasePrice: 90,
+            referencePurchasePrice: 90,
+            displayUnit: '瓶',
+            isActive: true,
+            isDefault: true,
+            sortOrder: 0
+          }
+        ]
+      }
+    ] as any);
+
+    expect(result.flattenIngredientUpdates).toHaveLength(1);
+    expect(result.createIngredients).toHaveLength(0);
+    expect(result.archiveRecommendedProducts).toEqual(['rp-b-complex']);
+    expect(result.archiveProcurementSkus).toEqual(['sku-b-complex']);
+    expect(result.flattenIngredientUpdates[0]).toEqual(
+      expect.objectContaining({
+        name: 'B族维生素 B-50胶囊，50mgB族维生素/粒，100粒/瓶',
+        brand: 'NOW FOODS',
+        productModel: 'B-50胶囊，50mgB族维生素/粒，100粒/瓶',
+        diyEnabled: true,
+        procurementEnabled: true
+      })
+    );
+  });
+
   it('creates recipe supplement alternative links from split ingredient groups', () => {
     const result = planRecipeSupplementAlternativesBackfill({
       recipeItems: [

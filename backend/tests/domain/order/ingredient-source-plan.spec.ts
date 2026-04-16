@@ -27,5 +27,18 @@ describe('ingredient-source-plan', () => {
     expect(() =>
       normalizeIngredientSourcePlan('RANDOM' as IngredientSourcePlanCode),
     ).toThrow('Unknown ingredientSourcePlan');
+    expect(() =>
+      normalizeIngredientSourcePlan('toString' as IngredientSourcePlanCode),
+    ).toThrow('Unknown ingredientSourcePlan');
+    expect(() =>
+      normalizeIngredientSourcePlan('constructor' as IngredientSourcePlanCode),
+    ).toThrow('Unknown ingredientSourcePlan');
+  });
+
+  it('returns false for empty and cross-plan channel matches', () => {
+    expect(matchSourcePlanChannel('', 'MARKET_PREMIUM')).toBe(false);
+    expect(matchSourcePlanChannel(null, 'MARKET_PREMIUM')).toBe(false);
+    expect(matchSourcePlanChannel('有机农场', 'WHOLESALE')).toBe(false);
+    expect(matchSourcePlanChannel('生鲜批发商', 'ORGANIC')).toBe(false);
   });
 });

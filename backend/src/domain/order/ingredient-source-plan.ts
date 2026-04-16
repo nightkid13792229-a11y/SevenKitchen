@@ -43,7 +43,7 @@ export function normalizeIngredientSourcePlan(
     return 'MARKET_PREMIUM';
   }
 
-  if (code in INGREDIENT_SOURCE_PLANS) {
+  if (Object.prototype.hasOwnProperty.call(INGREDIENT_SOURCE_PLANS, code)) {
     return code as IngredientSourcePlanCode;
   }
 

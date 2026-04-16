@@ -11,3 +11,4 @@ export * from './order-status-history.entity';
 export * from './pricing-breakdown-snapshot';
 export * from './order.repository';
 export * from './order-status-history.repository';
+export * from './order-package-plan';

@@ -301,7 +301,7 @@ export class PdfGeneratorService {
     // Two columns layout
     const cardWidth = Math.floor(252 * scaleFactor); // 每个订单卡片宽度 (512/2 - gap)
     const gap = Math.floor(8 * scaleFactor); // 两列之间的间距
-    const cardHeight = Math.floor(65 * scaleFactor);
+    const cardHeight = Math.floor(92 * scaleFactor);
 
     data.orderItems.forEach((order, index) => {
       const isLeftColumn = index % 2 === 0;
@@ -357,15 +357,24 @@ export class PdfGeneratorService {
       const rowHeight = Math.floor(14 * scaleFactor);
       const textX = cardX + Math.floor(8 * scaleFactor);
       doc.text(`总净重: ${orderTotalWeight}g`, textX, detailsY);
+      let nextDetailY = detailsY + rowHeight * 2;
+
       if (hasPackagePlan) {
+        const packageText = `分装: ${packagePlanSummary}`;
+        const packageTextY = detailsY + rowHeight;
+        const packageTextWidth = cardWidth - Math.floor(16 * scaleFactor);
         doc.text(
-          `分装: ${packagePlanSummary}`,
+          packageText,
           textX,
-          detailsY + rowHeight,
+          packageTextY,
           {
-            width: cardWidth - Math.floor(16 * scaleFactor),
+            width: packageTextWidth,
           },
         );
+        const packageTextHeight = doc.heightOfString(packageText, {
+          width: packageTextWidth,
+        });
+        nextDetailY = packageTextY + Math.max(rowHeight, packageTextHeight) + Math.floor(2 * scaleFactor);
       } else {
         doc.text(`规格: ${order.packageSpecG}g/袋`, textX, detailsY + rowHeight);
         doc.text(
@@ -376,8 +385,8 @@ export class PdfGeneratorService {
       }
       doc.text(
         `狗狗: ${order.dogName}`,
-        textX + Math.floor(80 * scaleFactor),
-        detailsY + rowHeight,
+        hasPackagePlan ? textX : textX + Math.floor(80 * scaleFactor),
+        hasPackagePlan ? nextDetailY : detailsY + rowHeight,
       );
 
       if (order.recipientName) {
@@ -389,7 +398,7 @@ export class PdfGeneratorService {
         doc.text(
           `${order.recipientName}（${order.recipientCity}）`,
           textX,
-          detailsY + rowHeight * 2,
+          hasPackagePlan ? nextDetailY + rowHeight : detailsY + rowHeight * 2,
         );
       }
 

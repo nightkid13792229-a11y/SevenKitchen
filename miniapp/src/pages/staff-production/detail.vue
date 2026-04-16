@@ -56,16 +56,22 @@
           <view class="order-info">
             <view class="info-row">
               <text class="label">总净重：</text>
-              <text class="value">{{ formatDecimal(taskDetail.totalProductionG) }}g</text>
+              <text class="value">{{ formatDecimal(getOrderTotalNetWeight(order)) }}g</text>
             </view>
-            <view class="info-row">
-              <text class="label">规格：</text>
-              <text class="value">{{ order.packageSpecG }}g/袋</text>
+            <view v-if="hasPackagePlan(order)" class="info-row">
+              <text class="label">分装明细：</text>
+              <text class="value package-plan-text">{{ formatPackagePlan(order) }}</text>
             </view>
-            <view class="info-row">
-              <text class="label">袋数：</text>
-              <text class="value">{{ order.packageCount }}袋</text>
-            </view>
+            <template v-else>
+              <view class="info-row">
+                <text class="label">规格：</text>
+                <text class="value">{{ order.packageSpecG }}g/袋</text>
+              </view>
+              <view class="info-row">
+                <text class="label">袋数：</text>
+                <text class="value">{{ order.packageCount }}袋</text>
+              </view>
+            </template>
             <view class="info-row">
               <text class="label">狗狗：</text>
               <text class="value">{{ order.dogName }}</text>
@@ -197,6 +203,55 @@ import { calculateSupplementAmountForProduction } from '../../utils/supplement-n
 function formatDecimal(value: number | null | undefined, decimals: number = 2): string {
   if (value === null || value === undefined || isNaN(value)) return '-';
   return value.toFixed(decimals);
+}
+
+function normalizePackagePlanRows(
+  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
+): Array<{ packageSpecG: number; packageCount: number }> {
+  return (packagePlan || [])
+    .map((row) => {
+      const packageSpecG = Math.floor(Number(row?.packageSpecG));
+      const packageCount = Math.floor(Number(row?.packageCount));
+      if (!Number.isFinite(packageSpecG) || !Number.isFinite(packageCount) || packageSpecG <= 0 || packageCount <= 0) {
+        return null;
+      }
+      return { packageSpecG, packageCount };
+    })
+    .filter((row): row is { packageSpecG: number; packageCount: number } => row !== null);
+}
+
+function hasPackagePlan(order: {
+  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
+}): boolean {
+  return normalizePackagePlanRows(order.packagePlan).length > 0;
+}
+
+function formatPackagePlan(order: {
+  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
+  packageSpecG?: number
+  packageCount?: number
+}): string {
+  const rows = normalizePackagePlanRows(order.packagePlan);
+  if (rows.length > 0) {
+    return rows
+      .map((row) => `${row.packageSpecG}g×${row.packageCount}袋`)
+      .join('，');
+  }
+
+  return `${order.packageSpecG || 0}g×${order.packageCount || 0}袋`;
+}
+
+function getOrderTotalNetWeight(order: {
+  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
+  packageSpecG?: number
+  packageCount?: number
+}): number {
+  const rows = normalizePackagePlanRows(order.packagePlan);
+  if (rows.length > 0) {
+    return rows.reduce((sum, row) => sum + row.packageSpecG * row.packageCount, 0);
+  }
+
+  return Number(order.packageSpecG || 0) * Number(order.packageCount || 0);
 }
 
 // 上传任务接口
@@ -861,6 +916,8 @@ const printLabel = () => {
     font-size: 26rpx;
     color: #333;
     flex: 1;
+    min-width: 0;
+    word-break: break-word;
   }
 
   .remark-text {

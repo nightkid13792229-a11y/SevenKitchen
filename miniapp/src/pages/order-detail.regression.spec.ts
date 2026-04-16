@@ -41,6 +41,8 @@ describe('order detail runtime regressions', () => {
 
     expect(source).toContain('getPackagePlanTotal')
     expect(source).toContain('totalGrams')
+    expect(source).toContain('row.packageSpecG}g×${row.packageCount}袋')
+    expect(source).not.toContain("packagePlanRows.join('，')")
   })
 
   it('includes packagePlan in label payload normalization', () => {
@@ -67,5 +69,32 @@ describe('order detail runtime regressions', () => {
 
     expect(source).toContain('v-if="!hasPackagePlan(order)"')
     expect(source).toContain('class="info-row editable-row"')
+  })
+
+  it('keeps backend label image rendering package-plan aware', () => {
+    const dtoSource = readFileSync(
+      resolve(process.cwd(), '../backend/src/label/dto/label-data.dto.ts'),
+      'utf-8',
+    )
+    const serviceSource = readFileSync(
+      resolve(process.cwd(), '../backend/src/label/label.service.ts'),
+      'utf-8',
+    )
+
+    expect(dtoSource).toContain('packagePlan?: LabelPackagePlanItemDto[]')
+    expect(serviceSource).toContain('getOrderInfoLines')
+    expect(serviceSource).toContain('labelData.packagePlan')
+    expect(serviceSource).toContain('分装: ${planText}')
+  })
+
+  it('keeps production detail order totals tied to each order package plan', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/staff-production/detail.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('getOrderTotalNetWeight(order)')
+    expect(source).toContain('formatPackagePlan(order)')
+    expect(source).toContain('hasPackagePlan(order)')
   })
 })

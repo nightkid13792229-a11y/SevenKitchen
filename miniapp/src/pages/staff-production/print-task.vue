@@ -263,7 +263,9 @@ function formatPackagePlan(item: {
   const packagePlanRows = normalizePackagePlanRows(item.packagePlan)
 
   if (packagePlanRows.length > 0) {
-    return packagePlanRows.join('，')
+    return packagePlanRows
+      .map(row => `${row.packageSpecG}g×${row.packageCount}袋`)
+      .join('，')
   }
 
   return `${item.packageSpecG || 0}g×${item.packageCount || 0}袋`

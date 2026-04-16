@@ -43,6 +43,14 @@ export class CookingMethodDto {
   sousvide!: string;
 }
 
+export class LabelPackagePlanItemDto {
+  @ApiProperty({ description: '单袋规格(g)' })
+  packageSpecG!: number;
+
+  @ApiProperty({ description: '袋数' })
+  packageCount!: number;
+}
+
 /**
  * 标签数据传输对象
  * 与小程序 LabelData 接口保持一致
@@ -80,6 +88,13 @@ export class LabelDataDto {
 
   @ApiProperty({ description: '总重量(g)' })
   totalWeight!: number;
+
+  @ApiProperty({
+    description: '多规格分装明细',
+    required: false,
+    type: [LabelPackagePlanItemDto],
+  })
+  packagePlan?: LabelPackagePlanItemDto[];
 
   @ApiProperty({ description: '营养成分分析', required: false })
   nutritionAnalysis?: NutritionAnalysisDto;

@@ -212,9 +212,12 @@ export class LabelService {
     y += mmToPx(LABEL_LAYOUT.lineHeight.compact);
 
     // 订购信息
-    const orderInfo = `${labelData.weightPerPack}g/袋 × ${labelData.packageCount}袋 = ${labelData.totalWeight}g`;
-    ctx.fillText(orderInfo, centerX, y);
-    y += mmToPx(LABEL_LAYOUT.lineHeight.loose);
+    const orderInfoLines = this.getOrderInfoLines(labelData, ctx, maxWidth);
+    orderInfoLines.forEach((line) => {
+      ctx.fillText(line, centerX, y);
+      y += mmToPx(LABEL_LAYOUT.lineHeight.compact);
+    });
+    y += mmToPx(LABEL_LAYOUT.spacing.blockInternal);
     y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
 
     // 4. 原料表
@@ -494,5 +497,66 @@ export class LabelService {
     }
 
     return lines;
+  }
+
+  private normalizePackagePlanRows(
+    packagePlan?: LabelDataDto['packagePlan'],
+  ): Array<{ packageSpecG: number; packageCount: number }> {
+    return (packagePlan || [])
+      .map((row) => {
+        const packageSpecG = Math.floor(Number(row?.packageSpecG));
+        const packageCount = Math.floor(Number(row?.packageCount));
+
+        if (
+          !Number.isFinite(packageSpecG) ||
+          !Number.isFinite(packageCount) ||
+          packageSpecG <= 0 ||
+          packageCount <= 0
+        ) {
+          return null;
+        }
+
+        return { packageSpecG, packageCount };
+      })
+      .filter(
+        (row): row is { packageSpecG: number; packageCount: number } =>
+          row !== null,
+      );
+  }
+
+  private getPackagePlanTotalWeight(
+    packagePlan: Array<{ packageSpecG: number; packageCount: number }>,
+  ): number {
+    return packagePlan.reduce(
+      (sum, row) => sum + row.packageSpecG * row.packageCount,
+      0,
+    );
+  }
+
+  private getOrderInfoLines(
+    labelData: LabelDataDto,
+    ctx: CanvasRenderingContext2D,
+    maxWidth: number,
+  ): string[] {
+    const packagePlanRows = this.normalizePackagePlanRows(
+      labelData.packagePlan,
+    );
+
+    if (packagePlanRows.length === 0) {
+      return [
+        `${labelData.weightPerPack}g/袋 × ${labelData.packageCount}袋 = ${labelData.totalWeight}g`,
+      ];
+    }
+
+    const planText = packagePlanRows
+      .map((row) => `${row.packageSpecG}g×${row.packageCount}袋`)
+      .join('、');
+    const totalWeight = this.getPackagePlanTotalWeight(packagePlanRows);
+
+    return this.wrapText(
+      `分装: ${planText}、总净重${totalWeight}g`,
+      maxWidth,
+      ctx,
+    );
   }
 }

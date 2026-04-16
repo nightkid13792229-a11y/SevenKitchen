@@ -23,6 +23,15 @@ describe('order-package-plan', () => {
     });
   });
 
+  it('prefers the larger spec when package counts tie', () => {
+    const summary = summarizePackagePlan([
+      { packageSpecG: 100, packageCount: 2 },
+      { packageSpecG: 200, packageCount: 2 },
+    ]);
+
+    expect(summary.primaryPackageSpecG).toBe(200);
+  });
+
   it('rejects empty or non-positive rows', () => {
     expect(() => normalizePackagePlan([])).toThrow(
       'packagePlan must contain at least one row',
@@ -39,5 +48,6 @@ describe('order-package-plan', () => {
     expect(estimatePackagePlanDays(4500, 300)).toBe(15);
     expect(estimatePackagePlanDays(4400, 300)).toBeCloseTo(14.7, 1);
     expect(estimatePackagePlanDays(4400, 0)).toBeNull();
+    expect(estimatePackagePlanDays(4400, Infinity)).toBeNull();
   });
 });

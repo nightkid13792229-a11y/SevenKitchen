@@ -70,7 +70,7 @@ export function estimatePackagePlanDays(
   totalQuantityG: number,
   dailyIntakeG: number | null | undefined,
 ): number | null {
-  if (!dailyIntakeG || dailyIntakeG <= 0) {
+  if (!Number.isFinite(dailyIntakeG) || dailyIntakeG <= 0) {
     return null;
   }
 

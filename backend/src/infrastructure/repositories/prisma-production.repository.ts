@@ -11,6 +11,7 @@ import { ProductionBatchStatus } from '../../domain/production/enums';
 import { OrderItem } from '../../domain/order/order-item.entity';
 import type { RecipeSnapshot } from '../../domain/recipe/types';
 import { PrismaService } from '../prisma.service';
+import { normalizeIngredientSourcePlan } from '../../domain/order/ingredient-source-plan';
 
 @Injectable()
 export class PrismaProductionRepository implements ProductionBatchRepository {
@@ -493,6 +494,12 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
           item.vacuumBagSpec,
           item.productionBatchId,
           item.allocatedAt,
+          (item as any).packagePlan ?? null,
+          (item as any).ingredientSourcePlan
+            ? normalizeIngredientSourcePlan(
+                String((item as any).ingredientSourcePlan),
+              )
+            : null,
         ),
     );
   }

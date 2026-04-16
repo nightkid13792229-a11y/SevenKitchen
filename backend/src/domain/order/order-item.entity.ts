@@ -55,7 +55,13 @@ export class OrderItem {
       );
     }
 
-    if (this.packagePlan && this.packagePlan.length > 0) {
+    if (this.packagePlan) {
+      if (this.packagePlan.length === 0) {
+        throw new ValidationError(
+          'Package plan must contain at least one row when provided',
+        );
+      }
+
       const totalQuantity = this.packagePlan.reduce(
         (sum, row) => sum + row.packageSpecG * row.packageCount,
         0,

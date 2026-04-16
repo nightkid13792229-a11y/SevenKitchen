@@ -7,6 +7,7 @@ import { PricingBreakdownSnapshot } from '../../domain/order/pricing-breakdown-s
 import { RecipeSnapshot } from '../../domain/recipe/types';
 import { PrismaService } from '../prisma.service';
 import { OrderStatus, OrderType } from '../../domain';
+import { normalizeIngredientSourcePlan } from '../../domain/order/ingredient-source-plan';
 
 @Injectable()
 export class PrismaOrderRepository implements OrderRepository {
@@ -243,7 +244,9 @@ export class PrismaOrderRepository implements OrderRepository {
             ? new Date((i as any).allocatedAt)
             : null) as any,
           (i as any).packagePlan ?? null,
-          (i as any).ingredientSourcePlan ?? null,
+          this.normalizeStoredIngredientSourcePlan(
+            (i as any).ingredientSourcePlan,
+          ),
         ),
     );
 
@@ -348,6 +351,10 @@ export class PrismaOrderRepository implements OrderRepository {
       raw.ingredientPriceVersionHash ?? null,
       raw.ingredientDetails ?? undefined, // 读取原料详情
     );
+  }
+
+  private normalizeStoredIngredientSourcePlan(raw: unknown) {
+    return raw ? normalizeIngredientSourcePlan(String(raw)) : null;
   }
 
   /**

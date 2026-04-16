@@ -12,6 +12,7 @@ import { OrderItem } from '../../domain/order/order-item.entity';
 import { PricingBreakdownSnapshot } from '../../domain/order/pricing-breakdown-snapshot';
 import type { OrderRepository } from '../../domain/order/order.repository';
 import { OrderStatus, OrderType } from '../../domain';
+import { normalizeIngredientSourcePlan } from '../../domain/order/ingredient-source-plan';
 
 interface OrderData {
   id: string;
@@ -140,7 +141,9 @@ export class FileBackedOrderRepository
           itemData.productionBatchId ?? null,
           (itemData.allocatedAt ? new Date(itemData.allocatedAt) : null) as any,
           itemData.packagePlan ?? null,
-          itemData.ingredientSourcePlan ?? null,
+          itemData.ingredientSourcePlan
+            ? normalizeIngredientSourcePlan(itemData.ingredientSourcePlan)
+            : null,
         ),
     );
 

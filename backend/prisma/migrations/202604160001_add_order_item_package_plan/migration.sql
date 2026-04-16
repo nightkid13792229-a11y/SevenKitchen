@@ -9,4 +9,8 @@ SET "package_plan" = jsonb_build_array(
     'packageCount', "package_count"
   )
 )
-WHERE "package_plan" IS NULL;
+-- Only backfill package_plan when the legacy single-spec total is exact.
+-- Some legacy rows use ceil(quantity_g / package_spec_g), so deriving a
+-- package_plan for those rows would fail domain validation on hydration.
+WHERE "package_plan" IS NULL
+  AND "package_spec_g" * "package_count" = "quantity_g";

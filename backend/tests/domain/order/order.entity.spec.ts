@@ -74,3 +74,76 @@ describe('Order domain behaviors', () => {
     expect(order.adminRemark).toBeNull();
   });
 });
+
+describe('OrderItem packagePlan validation', () => {
+  function createOrderItem(
+    packagePlan: Array<{ packageSpecG: number; packageCount: number }> | null,
+    overrides: Partial<{
+      quantityG: number;
+      packageCount: number;
+      packageSpecG: number;
+    }> = {},
+  ): OrderItem {
+    return new OrderItem(
+      'item-1',
+      'order-1',
+      null,
+      {} as any,
+      overrides.quantityG ?? 800,
+      overrides.packageCount ?? 5,
+      overrides.packageSpecG ?? 200,
+      null,
+      100,
+      null,
+      null,
+      null,
+      packagePlan,
+      null,
+    );
+  }
+
+  it('accepts a packagePlan matching quantity and package count', () => {
+    const item = createOrderItem([
+      { packageSpecG: 100, packageCount: 2 },
+      { packageSpecG: 200, packageCount: 3 },
+    ]);
+
+    expect(item.packagePlan).toEqual([
+      { packageSpecG: 100, packageCount: 2 },
+      { packageSpecG: 200, packageCount: 3 },
+    ]);
+  });
+
+  it('rejects a packagePlan whose total quantity differs from quantityG', () => {
+    expect(() =>
+      createOrderItem([{ packageSpecG: 200, packageCount: 5 }], {
+        quantityG: 900,
+      }),
+    ).toThrow('Package plan total (1000) must equal quantityG (900)');
+  });
+
+  it('rejects a packagePlan whose package count differs from packageCount', () => {
+    expect(() =>
+      createOrderItem([{ packageSpecG: 200, packageCount: 4 }], {
+        quantityG: 800,
+        packageCount: 5,
+      }),
+    ).toThrow('Package plan count (4) must equal packageCount (5)');
+  });
+
+  it('rejects an explicitly empty packagePlan', () => {
+    expect(() => createOrderItem([])).toThrow(
+      'Package plan must contain at least one row when provided',
+    );
+  });
+
+  it('accepts a null packagePlan for legacy order items', () => {
+    const item = createOrderItem(null, {
+      quantityG: 1350,
+      packageSpecG: 100,
+      packageCount: 14,
+    });
+
+    expect(item.packagePlan).toBeNull();
+  });
+});

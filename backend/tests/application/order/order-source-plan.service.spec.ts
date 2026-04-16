@@ -39,8 +39,9 @@ describe('OrderSourcePlanService', () => {
       null,
       null,
       null,
-      null,
-      null,
+      3,
+      6,
+      12,
       { edible_yield_rate: 0.8 },
       { protein_g: 23 } as any,
     );
@@ -135,13 +136,24 @@ describe('OrderSourcePlanService', () => {
     ]);
     expect(selected).not.toBe(ingredient);
     expect(selected.name).toBe(ingredient.name);
-    expect(selected.properties).toBe(ingredient.properties);
     expect(selected.nutritionProfile).toBe(ingredient.nutritionProfile);
     expect(selected.brand).toBe('批发品牌');
     expect(selected.productModel).toBe('10kg/箱');
     expect(selected.purchaseChannel).toBe('生鲜批发商');
+    expect(selected.unitDisplayLabel).toBe(ingredient.unitDisplayLabel);
     expect(selected.currentPricePerPurchaseUnit).toBe(42);
     expect(selected.effectivePricePerPurchaseUnit).toBe(42);
+    expect(selected.safetyStock).toBe(2);
+    expect(selected.reorderPoint).toBe(5);
+    expect(selected.targetStock).toBe(10);
+    expect(selected.properties).toEqual(
+      expect.objectContaining({
+        edible_yield_rate: 0.8,
+        procurement_sku_id: 'sku-wholesale',
+        procurement_sku_name: '批发鸡胸肉',
+        procurement_sku_display_unit: 'kg',
+      }),
+    );
     expect((selected as any).procurementSkuId).toBe('sku-wholesale');
     expect((selected as any).procurementSkuName).toBe('批发鸡胸肉');
   });
@@ -174,6 +186,75 @@ describe('OrderSourcePlanService', () => {
     expect(selected.purchaseChannel).toBe('山姆会员店');
     expect(selected.currentPricePerPurchaseUnit).toBe(70);
     expect((selected as any).procurementSkuId).toBe('sku-sam');
+  });
+
+  it('falls back to the first active SKU when no channel matches and no SKU is default', async () => {
+    const ingredient = createFoodIngredient();
+    procurementSkuService.batchFindActive.mockResolvedValue({
+      [ingredient.id]: [
+        sku({
+          id: 'sku-first',
+          purchaseChannel: '普通零售',
+          currentPurchasePrice: 66,
+          isDefault: false,
+        }),
+        sku({
+          id: 'sku-second',
+          purchaseChannel: '盒马',
+          currentPurchasePrice: 68,
+          isDefault: false,
+        }),
+      ],
+    });
+
+    const result = await service.applySourcePlanToIngredients(
+      [ingredient],
+      'ORGANIC',
+    );
+
+    const selected = result.get(ingredient.id)!;
+    expect(selected.purchaseChannel).toBe('普通零售');
+    expect(selected.currentPricePerPurchaseUnit).toBe(66);
+    expect((selected as any).procurementSkuId).toBe('sku-first');
+  });
+
+  it('returns the original food ingredient when no active SKUs are available', async () => {
+    const ingredient = createFoodIngredient();
+    procurementSkuService.batchFindActive.mockResolvedValue({
+      [ingredient.id]: [],
+    });
+
+    const result = await service.applySourcePlanToIngredients(
+      [ingredient],
+      'WHOLESALE',
+    );
+
+    expect(result.get(ingredient.id)).toBe(ingredient);
+  });
+
+  it('preserves original stock thresholds when the selected SKU has no threshold values', async () => {
+    const ingredient = createFoodIngredient();
+    procurementSkuService.batchFindActive.mockResolvedValue({
+      [ingredient.id]: [
+        sku({
+          id: 'sku-wholesale',
+          purchaseChannel: '生鲜批发商',
+          safetyStock: null,
+          reorderPoint: null,
+          targetStock: null,
+        }),
+      ],
+    });
+
+    const result = await service.applySourcePlanToIngredients(
+      [ingredient],
+      'WHOLESALE',
+    );
+
+    const selected = result.get(ingredient.id)!;
+    expect(selected.safetyStock).toBe(ingredient.safetyStock);
+    expect(selected.reorderPoint).toBe(ingredient.reorderPoint);
+    expect(selected.targetStock).toBe(ingredient.targetStock);
   });
 
   it('leaves non-food ingredients unchanged and only queries food ingredient SKUs', async () => {

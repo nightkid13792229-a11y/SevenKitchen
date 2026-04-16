@@ -272,6 +272,7 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       null,
       null,
       null,
+      null,
       { edible_yield_rate: 0.8 },
       { protein_g: 20 } as any,
     );
@@ -626,7 +627,14 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       expect(pricedIngredient.productModel).toBe('10kg/箱');
       expect(pricedIngredient.currentPricePerPurchaseUnit).toBe(42);
       expect(pricedIngredient.effectivePricePerPurchaseUnit).toBe(42);
-      expect(pricedIngredient.properties).toBe(ingredient.properties);
+      expect(pricedIngredient.properties).toEqual(
+        expect.objectContaining({
+          edible_yield_rate: 0.8,
+          procurement_sku_id: 'sku-wholesale',
+          procurement_sku_name: '批发鸡胸肉',
+          procurement_sku_display_unit: 'kg',
+        }),
+      );
       expect(pricedIngredient.nutritionProfile).toBe(
         ingredient.nutritionProfile,
       );

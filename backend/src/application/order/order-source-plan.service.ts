@@ -78,6 +78,13 @@ export class OrderSourcePlanService {
       sku.referencePurchasePrice ??
       sku.referencePricePerPurchaseUnit;
     const price = skuPrice ?? ingredient.currentPricePerPurchaseUnit;
+    const properties = {
+      ...ingredient.properties,
+      procurement_sku_id: sku.id,
+      procurement_sku_name: sku.name,
+      procurement_sku_display_unit: sku.displayUnit,
+      procurement_sku_supplier_name: sku.supplierName,
+    };
 
     const cloned = new Ingredient(
       ingredient.id,
@@ -91,7 +98,7 @@ export class OrderSourcePlanService {
       sku.purchaseChannel ?? ingredient.purchaseChannel,
       ingredient.notes,
       ingredient.baseUnit,
-      sku.displayUnit ?? ingredient.unitDisplayLabel,
+      ingredient.unitDisplayLabel,
       sku.purchaseUnit ?? ingredient.purchaseUnit,
       sku.purchaseToBaseRatio ?? ingredient.purchaseToBaseRatio,
       price,
@@ -100,10 +107,10 @@ export class OrderSourcePlanService {
         : ingredient.effectivePricePerPurchaseUnit,
       ingredient.weightG,
       ingredient.maxCapacityG,
-      sku.safetyStock,
-      sku.reorderPoint,
-      sku.targetStock,
-      ingredient.properties,
+      sku.safetyStock ?? ingredient.safetyStock,
+      sku.reorderPoint ?? ingredient.reorderPoint,
+      sku.targetStock ?? ingredient.targetStock,
+      properties,
       ingredient.nutritionProfile,
     ) as SourcePlanIngredient;
 

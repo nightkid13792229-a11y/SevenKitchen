@@ -124,6 +124,10 @@
             <text class="config-label">每日餐数</text>
             <text class="config-value">{{ orderConfig.mealsPerDay }}餐</text>
           </view>
+          <view class="config-item">
+            <text class="config-label">每日食量</text>
+            <text class="config-value">{{ orderConfig.dailyIntakeG }}g</text>
+          </view>
         </view>
       </view>
 
@@ -132,20 +136,31 @@
         <text class="info-card-title">订购信息</text>
         <view class="config-grid">
           <view class="config-item">
-            <text class="config-label">订购周期</text>
-            <text class="config-value">{{ orderConfig.cycleDays }}天</text>
+            <text class="config-label">预计可喂</text>
+            <text class="config-value">{{ orderConfig.estimatedFeedDays }}天</text>
           </view>
           <view class="config-item">
-            <text class="config-label">每餐饭量</text>
-            <text class="config-value">{{ orderConfig.perMealG }}g</text>
-          </view>
-          <view class="config-item">
-            <text class="config-label">总餐数</text>
+            <text class="config-label">总分装数</text>
             <text class="config-value">{{ orderConfig.totalPackages }}袋</text>
           </view>
           <view class="config-item">
             <text class="config-label">总净重</text>
             <text class="config-value">{{ orderConfig.totalGrams }}g</text>
+          </view>
+          <view class="config-item">
+            <text class="config-label">来源方案</text>
+            <text class="config-value">{{ orderConfig.ingredientSourcePlanLabel || '-' }}</text>
+          </view>
+        </view>
+
+        <view v-if="orderConfig.packagePlan.length" class="package-plan-section">
+          <text class="info-card-subtitle">分装明细</text>
+          <view
+            v-for="(row, index) in orderConfig.packagePlan"
+            :key="`${row.packageSpecG}-${row.packageCount}-${index}`"
+            class="package-plan-row"
+          >
+            <text class="package-plan-row-text">{{ row.packageSpecG }}g × {{ row.packageCount }}袋</text>
           </view>
         </view>
       </view>
@@ -180,6 +195,13 @@
 
     <!-- 底部操作栏 -->
     <view class="bottom-bar">
+      <view class="bottom-bar-summary">
+        <text class="bottom-bar-amount-label">合计</text>
+        <text class="bottom-bar-amount">¥{{ totalAmount.toFixed(2) }}</text>
+        <text class="bottom-bar-subtitle">
+          预计可喂{{ orderConfig.estimatedFeedDays }}天 · {{ orderConfig.totalGrams }}g / {{ orderConfig.dailyIntakeG }}g
+        </text>
+      </view>
       <button
         class="btn-pay-with-amount"
         :disabled="!canSubmitOrder"
@@ -226,6 +248,12 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
+import {
+  buildDefaultPackagePlan,
+  estimateFeedDays,
+  getPackagePlanTotal,
+  getSourcePlanLabel,
+} from '../../utils/order-package-plan'
 
 interface CartItem {
   id: string
@@ -247,6 +275,11 @@ interface CartItem {
   cookingMethod?: string
 }
 
+interface PackagePlanItem {
+  packageSpecG: number
+  packageCount: number
+}
+
 interface Address {
   id: string
   recipientName: string
@@ -257,16 +290,23 @@ interface Address {
 }
 
 interface OrderConfig {
+  dogId?: string
   dogName: string
   breedName?: string
   weightKg?: number
   mealsPerDay: number
+  dailyIntakeG: number
   perMealG: number
   totalPackages: number
   cycleDays: number
   totalGrams: number
+  estimatedFeedDays: string
+  packagePlan: PackagePlanItem[]
+  ingredientSourcePlan?: string
+  ingredientSourcePlanLabel: string
   preparationMethod: 'CHOPPED' | 'DICED'
   cookingMethod: 'RAW' | 'COOKED'
+  recipeId?: string
   recipeName: string
   recipeCoverImage?: string
 }
@@ -275,16 +315,23 @@ const cartItems = ref<CartItem[]>([])
 const selectedAddress = ref<Address | null>(null)
 const pricingSnapshotId = ref<string | null>(null)
 const orderConfig = ref<OrderConfig>({
+  dogId: '',
   dogName: '',
   breedName: '',
   weightKg: undefined,
   mealsPerDay: 2,
+  dailyIntakeG: 0,
   perMealG: 0,
   totalPackages: 0,
   cycleDays: 0,
   totalGrams: 0,
+  estimatedFeedDays: '-',
+  packagePlan: [],
+  ingredientSourcePlan: '',
+  ingredientSourcePlanLabel: '',
   preparationMethod: 'CHOPPED',
   cookingMethod: 'RAW',
+  recipeId: '',
   recipeName: '',
   recipeCoverImage: ''
 })
@@ -378,6 +425,246 @@ function formatDisplayDate(dateStr: string): string {
   const month = date.getMonth() + 1
   const day = date.getDate()
   return `${month}月${day}日`
+}
+
+function normalizeText(value: unknown): string {
+  if (typeof value === 'string') {
+    return value.trim()
+  }
+
+  if (value === null || value === undefined) {
+    return ''
+  }
+
+  return String(value).trim()
+}
+
+function decodeURLText(value: unknown): string {
+  const text = normalizeText(value)
+  if (!text) {
+    return ''
+  }
+
+  try {
+    return decodeURIComponent(text)
+  } catch (error) {
+    return text
+  }
+}
+
+function readTextValue(primary: unknown, fallback: unknown = ''): string {
+  const primaryText = normalizeText(primary)
+  if (primaryText) {
+    return primaryText
+  }
+
+  return decodeURLText(fallback)
+}
+
+function readNumberValue(primary: unknown, fallback: unknown = 0): number {
+  const primaryNumber = Number(primary)
+  if (Number.isFinite(primaryNumber)) {
+    return primaryNumber
+  }
+
+  const fallbackNumber = Number(fallback)
+  return Number.isFinite(fallbackNumber) ? fallbackNumber : 0
+}
+
+function readPositiveNumber(primary: unknown, fallback: unknown = 0): number {
+  const primaryNumber = Number(primary)
+  if (Number.isFinite(primaryNumber) && primaryNumber > 0) {
+    return primaryNumber
+  }
+
+  const fallbackNumber = Number(fallback)
+  return Number.isFinite(fallbackNumber) && fallbackNumber > 0 ? fallbackNumber : 0
+}
+
+function readPositiveInteger(primary: unknown, fallback: unknown = 0): number {
+  const primaryNumber = Math.floor(Number(primary))
+  if (Number.isFinite(primaryNumber) && primaryNumber > 0) {
+    return primaryNumber
+  }
+
+  const fallbackNumber = Math.floor(Number(fallback))
+  return Number.isFinite(fallbackNumber) && fallbackNumber > 0 ? fallbackNumber : 0
+}
+
+function normalizePackagePlanRows(rows: unknown): PackagePlanItem[] {
+  if (!Array.isArray(rows)) {
+    return []
+  }
+
+  return rows.reduce<PackagePlanItem[]>((plan, row: any) => {
+    const packageSpecG = readPositiveInteger(row?.packageSpecG)
+    const packageCount = readPositiveInteger(row?.packageCount)
+
+    if (packageSpecG > 0 && packageCount > 0) {
+      plan.push({ packageSpecG, packageCount })
+    }
+
+    return plan
+  }, [])
+}
+
+function resolvePackagePlan(
+  storedConfig: Record<string, any>,
+  options: Record<string, any>,
+  dailyIntakeG: number,
+  mealsPerDay: number,
+  cycleDays: number,
+  totalPackages: number,
+  perMealG: number,
+): PackagePlanItem[] {
+  const storedPlan = normalizePackagePlanRows(storedConfig.packagePlan)
+  if (storedPlan.length > 0) {
+    return storedPlan
+  }
+
+  const storedRowPackageSpecG = readPositiveInteger(storedConfig.packageSpecG)
+  const storedRowPackageCount = readPositiveInteger(storedConfig.packageCount)
+  if (storedRowPackageSpecG > 0 && storedRowPackageCount > 0) {
+    return [
+      {
+        packageSpecG: storedRowPackageSpecG,
+        packageCount: storedRowPackageCount,
+      },
+    ]
+  }
+
+  const optionPlan = normalizePackagePlanRows(options.packagePlan)
+  if (optionPlan.length > 0) {
+    return optionPlan
+  }
+
+  const optionRowPackageSpecG = readPositiveInteger(options.packageSpecG)
+  const optionRowPackageCount = readPositiveInteger(options.packageCount || options.totalPackages)
+  if (optionRowPackageSpecG > 0 && optionRowPackageCount > 0) {
+    return [
+      {
+        packageSpecG: optionRowPackageSpecG,
+        packageCount: optionRowPackageCount,
+      },
+    ]
+  }
+
+  if (dailyIntakeG > 0 && mealsPerDay > 0) {
+    return buildDefaultPackagePlan({
+      dailyIntakeG,
+      mealsPerDay,
+      days: cycleDays,
+    })
+  }
+
+  if (perMealG > 0 && totalPackages > 0) {
+    return [
+      {
+        packageSpecG: perMealG,
+        packageCount: totalPackages,
+      },
+    ]
+  }
+
+  return []
+}
+
+function buildDirectBuyPrice(
+  storedConfig: Record<string, any>,
+  options: Record<string, any>,
+) {
+  const amountProduct = Math.max(
+    0,
+    readNumberValue(storedConfig.amountProduct, readNumberValue(options.amountProduct, 0)),
+  )
+  const amountShipping = Math.max(
+    0,
+    readNumberValue(storedConfig.amountShipping, readNumberValue(options.amountShipping, 0)),
+  )
+  const amountTotalFallback = amountProduct + amountShipping
+  const amountTotal = Math.max(
+    0,
+    readNumberValue(storedConfig.amountTotal, readNumberValue(options.amountTotal, amountTotalFallback)),
+  )
+
+  return {
+    amountProduct,
+    amountShipping,
+    amountTotal: amountTotal > 0 ? amountTotal : amountTotalFallback,
+  }
+}
+
+function buildDirectBuyOrderConfig(
+  storedConfig: Record<string, any>,
+  options: Record<string, any>,
+): OrderConfig {
+  const dogId = readTextValue(storedConfig.dogId, options.dogId)
+  const dogName = readTextValue(storedConfig.dogName, options.dogName)
+  const breedName = readTextValue(storedConfig.breedName, options.breedName)
+  const weightKg = readPositiveNumber(storedConfig.weightKg, options.weightKg)
+  const mealsPerDay = readPositiveInteger(storedConfig.mealsPerDay, options.mealsPerDay || 2) || 2
+  const optionDailyIntakeG = readPositiveNumber(
+    options.dailyIntakeG,
+    readPositiveNumber(options.perMealG, 0) * mealsPerDay,
+  )
+  const dailyIntakeG = readPositiveNumber(storedConfig.dailyIntakeG, optionDailyIntakeG)
+  const perMealG = readPositiveNumber(
+    storedConfig.perMealG,
+    readPositiveNumber(
+      options.perMealG,
+      dailyIntakeG > 0 && mealsPerDay > 0 ? dailyIntakeG / mealsPerDay : 0,
+    ),
+  )
+  const cycleDays = readPositiveInteger(storedConfig.cycleDays, options.cycleDays)
+  const packagePlan = resolvePackagePlan(
+    storedConfig,
+    options,
+    dailyIntakeG || optionDailyIntakeG,
+    mealsPerDay,
+    cycleDays,
+    readPositiveInteger(storedConfig.totalPackages, options.totalPackages),
+    perMealG || readPositiveInteger(options.perMealG),
+  )
+  const packagePlanTotal = getPackagePlanTotal(packagePlan)
+  const totalPackages = readPositiveInteger(storedConfig.totalPackages, options.totalPackages) || packagePlanTotal.totalPackages
+  const totalGrams = readPositiveNumber(storedConfig.totalGrams, readPositiveNumber(options.totalGrams, packagePlanTotal.totalGrams))
+  const estimatedFeedDays = readTextValue(
+    storedConfig.estimatedFeedDays,
+    options.estimatedFeedDays || estimateFeedDays(totalGrams, dailyIntakeG || optionDailyIntakeG),
+  )
+  const ingredientSourcePlan = readTextValue(
+    storedConfig.ingredientSourcePlan,
+    options.ingredientSourcePlan,
+  )
+  const ingredientSourcePlanLabel = readTextValue(
+    storedConfig.ingredientSourcePlanLabel,
+    options.ingredientSourcePlanLabel || (ingredientSourcePlan ? getSourcePlanLabel(ingredientSourcePlan as any) : ''),
+  )
+  const recipeId = readTextValue(storedConfig.recipeId, options.recipeId)
+  const recipeName = readTextValue(storedConfig.recipeName, options.recipeName)
+  const recipeCoverImage = readTextValue(storedConfig.recipeCoverImage, options.recipeCoverImage)
+
+  return {
+    dogId,
+    dogName,
+    breedName,
+    weightKg: Number.isFinite(weightKg) ? weightKg : undefined,
+    mealsPerDay,
+    dailyIntakeG: dailyIntakeG || optionDailyIntakeG || 0,
+    perMealG,
+    totalPackages,
+    cycleDays,
+    totalGrams,
+    estimatedFeedDays: estimatedFeedDays || estimateFeedDays(totalGrams, dailyIntakeG || optionDailyIntakeG),
+    packagePlan,
+    ingredientSourcePlan,
+    ingredientSourcePlanLabel,
+    preparationMethod: (readTextValue(storedConfig.preparationMethod, options.preparationMethod) || 'CHOPPED') as 'CHOPPED' | 'DICED',
+    cookingMethod: (readTextValue(storedConfig.cookingMethod, options.cookingMethod) || 'RAW') as 'RAW' | 'COOKED',
+    recipeId,
+    recipeName,
+    recipeCoverImage,
+  }
 }
 
 // ========== 地址选择器相关 ==========
@@ -507,33 +794,30 @@ async function loadAddressById(addressId: string) {
 }
 
 function loadDirectBuyItem(options: any) {
-  pricingSnapshotId.value = options.snapshotId || null
+  const storedConfig = (uni.getStorageSync('direct_buy_order_config') || {}) as Record<string, any>
+
+  pricingSnapshotId.value = options.snapshotId || storedConfig.snapshotId || null
   console.log('[Checkout] Pricing Snapshot ID:', pricingSnapshotId.value)
 
-  directBuyPrice.value = {
-    amountProduct: parseFloat(options.amountProduct || '0'),
-    amountShipping: parseFloat(options.amountShipping || '0'),
-    amountTotal: parseFloat(options.amountTotal || '0')
-  }
-
-  loadOrderConfigFromURL(options)
+  directBuyPrice.value = buildDirectBuyPrice(storedConfig, options)
+  orderConfig.value = buildDirectBuyOrderConfig(storedConfig, options)
 
   const item: CartItem = {
     id: 'direct-buy-temp',
-    dogId: '',
+    dogId: orderConfig.value.dogId || '',
     dogName: orderConfig.value.dogName,
     dogBreedName: orderConfig.value.breedName,
-    dogWeightKg: 0,
-    recipeId: '',
+    dogWeightKg: orderConfig.value.weightKg,
+    recipeId: orderConfig.value.recipeId || '',
     recipeName: orderConfig.value.recipeName,
     recipeCoverImage: orderConfig.value.recipeCoverImage,
     cycleDays: orderConfig.value.cycleDays,
-    dailyIntakeG: orderConfig.value.perMealG * orderConfig.value.mealsPerDay,
+    dailyIntakeG: orderConfig.value.dailyIntakeG,
     totalGrams: orderConfig.value.totalGrams,
     packageCount: orderConfig.value.totalPackages,
-    packageSpecG: orderConfig.value.perMealG,
+    packageSpecG: orderConfig.value.packagePlan[0]?.packageSpecG || orderConfig.value.perMealG,
     unitPrice: 0,
-    totalPrice: directBuyPrice.value.amountProduct,
+    totalPrice: directBuyPrice.value.amountTotal,
     preparationMethod: orderConfig.value.preparationMethod,
     cookingMethod: orderConfig.value.cookingMethod
   }
@@ -544,25 +828,6 @@ function loadDirectBuyItem(options: any) {
     amountShipping: directBuyPrice.value.amountShipping,
     amountTotal: directBuyPrice.value.amountTotal
   })
-}
-
-function loadOrderConfigFromURL(options: any) {
-  orderConfig.value = {
-    dogName: decodeURIComponent(options.dogName || ''),
-    breedName: decodeURIComponent(options.breedName || ''),
-    weightKg: options.weightKg ? parseFloat(options.weightKg) : undefined,
-    mealsPerDay: parseInt(options.mealsPerDay || '2'),
-    perMealG: parseFloat(options.perMealG || '0'),
-    totalPackages: parseInt(options.totalPackages || '0'),
-    cycleDays: parseInt(options.cycleDays || '0'),
-    totalGrams: parseFloat(options.totalGrams || '0'),
-    preparationMethod: (options.preparationMethod || 'CHOPPED') as 'CHOPPED' | 'DICED',
-    cookingMethod: (options.cookingMethod || 'RAW') as 'RAW' | 'COOKED',
-    recipeName: decodeURIComponent(options.recipeName || ''),
-    recipeCoverImage: decodeURIComponent(options.recipeCoverImage || '')
-  }
-
-  console.log('[Checkout] Order config loaded:', orderConfig.value)
 }
 
 async function loadDefaultAddress() {
@@ -1070,19 +1335,24 @@ function goToAddAddress() {
 .config-item {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  gap: 16rpx;
   padding: 12rpx 0;
 }
 
 .config-label {
   font-size: 26rpx;
   color: #666;
+  flex-shrink: 0;
 }
 
 .config-value {
+  flex: 1;
   font-size: 28rpx;
   color: #333;
   font-weight: 500;
+  text-align: right;
+  word-break: break-word;
 }
 
 .recipe-content {
@@ -1120,6 +1390,35 @@ function goToAddAddress() {
   font-size: 28rpx;
   color: #333;
   font-weight: 500;
+}
+
+.info-card-subtitle {
+  display: block;
+  margin-top: 16rpx;
+  margin-bottom: 12rpx;
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.package-plan-section {
+  padding-top: 8rpx;
+}
+
+.package-plan-row {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 12rpx 16rpx;
+  margin-top: 12rpx;
+  background-color: rgba(255, 255, 255, 0.6);
+  border-radius: 8rpx;
+}
+
+.package-plan-row-text {
+  font-size: 26rpx;
+  color: #333;
+  word-break: break-word;
 }
 
 /* 简化价格展示 */
@@ -1273,14 +1572,44 @@ function goToAddAddress() {
   bottom: 0;
   left: 0;
   right: 0;
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
   padding: 16rpx 20rpx;
   background-color: #fff;
   border-top: 1rpx solid #e5e5e5;
   z-index: 100;
 }
 
+.bottom-bar-summary {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.bottom-bar-amount-label {
+  font-size: 22rpx;
+  color: #8c8c8c;
+}
+
+.bottom-bar-amount {
+  font-size: 40rpx;
+  font-weight: bold;
+  color: #ff4d4f;
+  line-height: 1.1;
+}
+
+.bottom-bar-subtitle {
+  font-size: 22rpx;
+  color: #666;
+  line-height: 1.3;
+}
+
 .btn-pay-with-amount {
-  width: 100%;
+  width: 260rpx;
+  flex-shrink: 0;
   height: 96rpx;
   display: flex;
   align-items: center;

@@ -794,9 +794,15 @@ async function loadAddressById(addressId: string) {
 }
 
 function loadDirectBuyItem(options: any) {
-  const storedConfig = (uni.getStorageSync('direct_buy_order_config') || {}) as Record<string, any>
+  const rawStoredConfig = (uni.getStorageSync('direct_buy_order_config') || {}) as Record<string, any>
+  const optionSnapshotId = readTextValue(options.snapshotId)
+  const storedSnapshotId = readTextValue(rawStoredConfig.snapshotId)
+  const shouldUseStoredConfig = Boolean(
+    storedSnapshotId && (!optionSnapshotId || storedSnapshotId === optionSnapshotId),
+  )
+  const storedConfig = shouldUseStoredConfig ? rawStoredConfig : {}
 
-  pricingSnapshotId.value = options.snapshotId || storedConfig.snapshotId || null
+  pricingSnapshotId.value = optionSnapshotId || storedSnapshotId || null
   console.log('[Checkout] Pricing Snapshot ID:', pricingSnapshotId.value)
 
   directBuyPrice.value = buildDirectBuyPrice(storedConfig, options)
@@ -947,7 +953,7 @@ function goToAddAddress() {
 .checkout-page {
   min-height: 100vh;
   background-color: #f5f5f5;
-  padding-bottom: 140rpx;
+  padding-bottom: 200rpx;
 }
 
 .section {
@@ -1602,9 +1608,13 @@ function goToAddAddress() {
 }
 
 .bottom-bar-subtitle {
+  display: block;
   font-size: 22rpx;
   color: #666;
   line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .btn-pay-with-amount {

@@ -10,7 +10,21 @@ describe('checkout direct-buy storage contract', () => {
 
   it('reads direct_buy_order_config from storage for direct-buy navigation', () => {
     expect(source).toContain("uni.getStorageSync('direct_buy_order_config')")
-    expect(source).toContain('storedConfig.snapshotId')
+    expect(source).toContain('storedSnapshotId')
+  })
+
+  it('uses stored direct-buy config only when it matches the URL snapshot', () => {
+    expect(source).toContain('rawStoredConfig')
+    expect(source).toContain('optionSnapshotId = readTextValue(options.snapshotId)')
+    expect(source).toContain('storedSnapshotId = readTextValue(rawStoredConfig.snapshotId)')
+    expect(source).toContain('shouldUseStoredConfig')
+    expect(source).toContain('storedSnapshotId === optionSnapshotId')
+    expect(source).toContain('storedConfig = shouldUseStoredConfig ? rawStoredConfig : {}')
+    expect(source).toContain('pricingSnapshotId.value = optionSnapshotId || storedSnapshotId || null')
+    expect(source).toContain('buildDirectBuyPrice(storedConfig, options)')
+    expect(source).toContain('buildDirectBuyOrderConfig(storedConfig, options)')
+    expect(source).not.toContain('buildDirectBuyPrice(rawStoredConfig, options)')
+    expect(source).not.toContain('buildDirectBuyOrderConfig(rawStoredConfig, options)')
   })
 
   it('includes package plan and ingredient source plan label in order config', () => {

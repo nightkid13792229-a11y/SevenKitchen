@@ -77,7 +77,19 @@ export class OrderSourcePlanService {
       sku.currentPurchasePrice ??
       sku.referencePurchasePrice ??
       sku.referencePricePerPurchaseUnit;
-    const price = skuPrice ?? ingredient.currentPricePerPurchaseUnit;
+    const hasSkuPrice = skuPrice !== null && skuPrice !== undefined;
+    const currentPrice = hasSkuPrice
+      ? skuPrice
+      : ingredient.currentPricePerPurchaseUnit;
+    const effectivePrice = hasSkuPrice
+      ? skuPrice
+      : ingredient.effectivePricePerPurchaseUnit;
+    const purchaseUnit = hasSkuPrice
+      ? (sku.purchaseUnit ?? ingredient.purchaseUnit)
+      : ingredient.purchaseUnit;
+    const purchaseToBaseRatio = hasSkuPrice
+      ? (sku.purchaseToBaseRatio ?? ingredient.purchaseToBaseRatio)
+      : ingredient.purchaseToBaseRatio;
     const properties = {
       ...ingredient.properties,
       procurement_sku_id: sku.id,
@@ -99,17 +111,15 @@ export class OrderSourcePlanService {
       ingredient.notes,
       ingredient.baseUnit,
       ingredient.unitDisplayLabel,
-      sku.purchaseUnit ?? ingredient.purchaseUnit,
-      sku.purchaseToBaseRatio ?? ingredient.purchaseToBaseRatio,
-      price,
-      skuPrice !== null && skuPrice !== undefined
-        ? price
-        : ingredient.effectivePricePerPurchaseUnit,
+      purchaseUnit,
+      purchaseToBaseRatio,
+      currentPrice,
+      effectivePrice,
       ingredient.weightG,
       ingredient.maxCapacityG,
-      sku.safetyStock ?? ingredient.safetyStock,
-      sku.reorderPoint ?? ingredient.reorderPoint,
-      sku.targetStock ?? ingredient.targetStock,
+      ingredient.safetyStock,
+      ingredient.reorderPoint,
+      ingredient.targetStock,
       properties,
       ingredient.nutritionProfile,
     ) as SourcePlanIngredient;

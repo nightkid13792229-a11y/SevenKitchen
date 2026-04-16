@@ -143,9 +143,9 @@ describe('OrderSourcePlanService', () => {
     expect(selected.unitDisplayLabel).toBe(ingredient.unitDisplayLabel);
     expect(selected.currentPricePerPurchaseUnit).toBe(42);
     expect(selected.effectivePricePerPurchaseUnit).toBe(42);
-    expect(selected.safetyStock).toBe(2);
-    expect(selected.reorderPoint).toBe(5);
-    expect(selected.targetStock).toBe(10);
+    expect(selected.safetyStock).toBe(ingredient.safetyStock);
+    expect(selected.reorderPoint).toBe(ingredient.reorderPoint);
+    expect(selected.targetStock).toBe(ingredient.targetStock);
     expect(selected.properties).toEqual(
       expect.objectContaining({
         edible_yield_rate: 0.8,
@@ -232,6 +232,40 @@ describe('OrderSourcePlanService', () => {
     expect(result.get(ingredient.id)).toBe(ingredient);
   });
 
+  it('preserves original purchase unit, ratio, and prices when selected SKU has no usable price', async () => {
+    const ingredient = createFoodIngredient();
+    procurementSkuService.batchFindActive.mockResolvedValue({
+      [ingredient.id]: [
+        sku({
+          id: 'sku-unpriced-wholesale',
+          purchaseChannel: '生鲜批发商',
+          purchaseUnit: '箱',
+          purchaseToBaseRatio: 10000,
+          currentPurchasePrice: null,
+          referencePurchasePrice: null,
+          referencePricePerPurchaseUnit: null,
+        }),
+      ],
+    });
+
+    const result = await service.applySourcePlanToIngredients(
+      [ingredient],
+      'WHOLESALE',
+    );
+
+    const selected = result.get(ingredient.id)!;
+    expect(selected.purchaseChannel).toBe('生鲜批发商');
+    expect(selected.purchaseUnit).toBe(ingredient.purchaseUnit);
+    expect(selected.purchaseToBaseRatio).toBe(ingredient.purchaseToBaseRatio);
+    expect(selected.currentPricePerPurchaseUnit).toBe(
+      ingredient.currentPricePerPurchaseUnit,
+    );
+    expect(selected.effectivePricePerPurchaseUnit).toBe(
+      ingredient.effectivePricePerPurchaseUnit,
+    );
+    expect((selected as any).procurementSkuId).toBe('sku-unpriced-wholesale');
+  });
+
   it('preserves original stock thresholds when the selected SKU has no threshold values', async () => {
     const ingredient = createFoodIngredient();
     procurementSkuService.batchFindActive.mockResolvedValue({
@@ -240,6 +274,31 @@ describe('OrderSourcePlanService', () => {
           id: 'sku-wholesale',
           purchaseChannel: '生鲜批发商',
           safetyStock: null,
+          reorderPoint: null,
+          targetStock: null,
+        }),
+      ],
+    });
+
+    const result = await service.applySourcePlanToIngredients(
+      [ingredient],
+      'WHOLESALE',
+    );
+
+    const selected = result.get(ingredient.id)!;
+    expect(selected.safetyStock).toBe(ingredient.safetyStock);
+    expect(selected.reorderPoint).toBe(ingredient.reorderPoint);
+    expect(selected.targetStock).toBe(ingredient.targetStock);
+  });
+
+  it('preserves original stock thresholds when the selected SKU has partial threshold values', async () => {
+    const ingredient = createFoodIngredient();
+    procurementSkuService.batchFindActive.mockResolvedValue({
+      [ingredient.id]: [
+        sku({
+          id: 'sku-partial-thresholds',
+          purchaseChannel: '生鲜批发商',
+          safetyStock: 10,
           reorderPoint: null,
           targetStock: null,
         }),

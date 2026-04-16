@@ -399,6 +399,8 @@ describe('OrdersController (e2e)', () => {
       'Test Ingredient',
       IngredientType.FOOD,
       IngredientProcurementStrategy.DAILY_PURCHASE,
+      false,
+      true,
       null, // brand
       null, // productModel
       null, // purchaseChannel
@@ -406,7 +408,7 @@ describe('OrdersController (e2e)', () => {
       BaseUnit.G,
       null, // unitDisplayLabel
       'kg',
-      1.0, // purchaseToBaseRatio
+      1000, // purchaseToBaseRatio
       50.0, // currentPricePerPurchaseUnit (50 CNY per kg)
       50.0, // effectivePricePerPurchaseUnit
       null, // weightG
@@ -414,7 +416,12 @@ describe('OrdersController (e2e)', () => {
       null, // safetyStock
       null, // reorderPoint
       null, // targetStock
-      { edible_yield_rate: 0.8 }, // properties
+      {
+        edible_yield_rate: 0.8,
+        cfct_class: '测试',
+        main_nutrients_desc: '测试原料',
+      }, // properties
+      null,
     );
     await ingredientRepository.save(ingredient);
   }

@@ -260,62 +260,89 @@
               v-for="(rp, rpIdx) in currentSpec.allRecommendedProducts"
               :key="rp.id"
               class="rp-card"
-              :class="{ 'rp-card-active': rpIdx === (selectedRpIndexMap[currentSpec.ingredientId] ?? 0) }"
-              @tap="selectRecommendedProduct(currentSpec.ingredientId, rpIdx)"
+              :class="{ 'rp-card-active': rpIdx === modalSelectedRpIndex }"
+              @tap="selectRecommendedProduct(modalSelectionKey, rpIdx)"
             >
               <view class="rp-card-header">
                 <text class="rp-card-name">{{ rp.name }}</text>
-                <text v-if="rpIdx === (selectedRpIndexMap[currentSpec.ingredientId] ?? 0)" class="rp-card-badge">已选</text>
+                <text v-if="rpIdx === modalSelectedRpIndex" class="rp-card-badge">已选</text>
               </view>
-              <view class="rp-card-body">
-                <view v-if="rp.brand" class="rp-card-row">
-                  <text class="rp-card-label">品牌</text>
-                  <text class="rp-card-value">{{ rp.brand }}</text>
+              <view class="rp-card-main">
+                <view class="rp-card-body">
+                  <view v-if="rp.brand" class="rp-card-field">
+                    <text class="rp-card-field-label">品牌</text>
+                    <text class="rp-card-field-value">{{ rp.brand }}</text>
+                  </view>
+                  <view v-if="rp.productModel" class="rp-card-field">
+                    <text class="rp-card-field-label">规格</text>
+                    <text class="rp-card-field-value">{{ rp.productModel }}</text>
+                  </view>
+                  <view v-if="rp.purchaseChannel" class="rp-card-field">
+                    <text class="rp-card-field-label">推荐购买渠道</text>
+                    <text class="rp-card-field-value">{{ rp.purchaseChannel }}</text>
+                  </view>
                 </view>
-                <view v-if="rp.productModel" class="rp-card-row">
-                  <text class="rp-card-label">规格</text>
-                  <text class="rp-card-value">{{ rp.productModel }}</text>
+                <view class="rp-card-aside">
+                  <view v-if="rp.imageUrl" class="rp-card-media">
+                    <image
+                      :src="normalizeImageUrl(rp.imageUrl)"
+                      class="rp-card-image"
+                      mode="aspectFill"
+                    />
+                  </view>
+                  <view v-if="rp.purchaseLink" class="rp-card-actions">
+                    <button
+                      class="btn-purchase btn-purchase-sm"
+                      @tap.stop="handlePurchase(rp.purchaseLink, rp.name)"
+                    >去购买</button>
+                  </view>
                 </view>
-                <view v-if="rp.purchaseChannel" class="rp-card-row">
-                  <text class="rp-card-label">渠道</text>
-                  <text class="rp-card-value">{{ rp.purchaseChannel }}</text>
-                </view>
-              </view>
-              <view v-if="rp.purchaseLink" class="rp-card-footer">
-                <button
-                  class="btn-purchase btn-purchase-sm"
-                  @tap.stop="handlePurchase(rp.purchaseLink, rp.name)"
-                >去购买</button>
               </view>
             </view>
+          </view>
+          <view class="spec-actions">
+            <button class="spec-action-btn spec-action-btn-secondary" @tap="closeSpecModal">取消</button>
+            <button class="spec-action-btn spec-action-btn-primary" @tap="confirmRecommendedProductSelection">确认选择</button>
           </view>
         </view>
         <!-- 只有1个或没有推荐产品时：原有展示 -->
         <view v-else class="spec-body">
-          <view class="spec-row">
-            <text class="spec-label">商品名称：</text>
-            <text class="spec-value">{{ currentSpec.name }}</text>
-          </view>
-          <view class="spec-row">
-            <text class="spec-label">品牌：</text>
-            <text class="spec-value">{{ currentSpec.brand }}</text>
-          </view>
-          <view v-if="currentSpec.productModel" class="spec-row">
-            <text class="spec-label">规格：</text>
-            <text class="spec-value">{{ currentSpec.productModel }}</text>
-          </view>
-          <view v-if="currentSpec.purchaseLink" class="spec-row">
-            <text class="spec-label">{{ DIY_SHEET_PURCHASE_LABEL }}：</text>
-            <button
-              class="btn-purchase"
-              @tap="handlePurchase(currentSpec.purchaseLink, currentSpec.name)"
-            >
-              去购买
-            </button>
-          </view>
-          <view v-else-if="currentSpec.purchaseChannel" class="spec-row">
-            <text class="spec-label">{{ DIY_SHEET_PURCHASE_LABEL }}：</text>
-            <text class="spec-value">{{ currentSpec.purchaseChannel }}</text>
+          <view class="spec-detail-main">
+            <view class="spec-detail-body">
+              <view class="spec-detail-field">
+                <text class="spec-detail-field-label">商品名称</text>
+                <text class="spec-detail-field-value">{{ currentSpec.name }}</text>
+              </view>
+              <view class="spec-detail-field">
+                <text class="spec-detail-field-label">品牌</text>
+                <text class="spec-detail-field-value">{{ currentSpec.brand }}</text>
+              </view>
+              <view v-if="currentSpec.productModel" class="spec-detail-field">
+                <text class="spec-detail-field-label">规格</text>
+                <text class="spec-detail-field-value">{{ currentSpec.productModel }}</text>
+              </view>
+              <view v-if="currentSpec.purchaseChannel" class="spec-detail-field">
+                <text class="spec-detail-field-label">推荐购买渠道</text>
+                <text class="spec-detail-field-value">{{ currentSpec.purchaseChannel }}</text>
+              </view>
+            </view>
+            <view v-if="currentSpec.imageUrl || currentSpec.purchaseLink" class="spec-detail-aside">
+              <view v-if="currentSpec.imageUrl" class="spec-image-block">
+                <image
+                  :src="normalizeImageUrl(currentSpec.imageUrl)"
+                  class="spec-image"
+                  mode="aspectFill"
+                />
+              </view>
+              <view v-if="currentSpec.purchaseLink" class="spec-detail-actions">
+                <button
+                  class="btn-purchase btn-purchase-sm"
+                  @tap="handlePurchase(currentSpec.purchaseLink, currentSpec.name)"
+                >
+                  去购买
+                </button>
+              </view>
+            </view>
           </view>
         </view>
       </view>
@@ -452,10 +479,15 @@ import ImagePreviewModal from '../../components/ImagePreviewModal.vue'
 import { normalizeImageUrl } from '../../utils/config'
 import { formatSupplementAmountWithDisplayUnit } from '../../utils/diy-sheet-format'
 import {
+  buildSupplementCandidateOptions,
+  calculateSupplementAmountForOption,
+  getSupplementNutrientUnit,
+  getSupplementSelectionKey
+} from './supplement-alternatives'
+import {
   DIY_SHEET_FOOD_RECOMMENDATION_LABEL,
   DIY_SHEET_SUPPLEMENT_RECOMMENDATION_LABEL,
-  DIY_SHEET_SPEC_MODAL_TITLE,
-  DIY_SHEET_PURCHASE_LABEL
+  DIY_SHEET_SPEC_MODAL_TITLE
 } from './copy'
 
 // 页面参数
@@ -490,6 +522,8 @@ const recommendedProductsMap = ref<Record<string, any[]>>({})
 // 规格弹窗状态
 const showSpec = ref(false)
 const currentSpec = ref<any>({})
+const modalSelectedRpIndex = ref(0)
+const modalSelectionKey = ref('')
 
 // 用量详情弹窗状态
 const showAmountDetail = ref(false)
@@ -587,6 +621,7 @@ const foodItemsDetailed = computed(() => {
 
       return {
         ...base,
+        selectionKey: item.ingredientId,
         ingredientId: item.ingredientId,
         ingredientName: item.name,
         name: selectedRp?.name || item.name,
@@ -612,10 +647,20 @@ const supplementItemsDetailed = computed(() => {
   const supplementItems = allItems.filter((item: any) => item.type === 'SUPPLEMENT')
 
   return supplementItems.map((item: any) => {
-    // 获取推荐产品
-    const rps = recommendedProductsMap.value[item.ingredientId]
-    const rpIdx = selectedRpIndexMap.value[item.ingredientId] ?? 0
-    const selectedRp = rps?.[rpIdx]
+    const recipeItem = (recipe.value.items || []).find((candidate: any) => {
+      if (item.recipeItemId && candidate.id === item.recipeItemId) {
+        return true
+      }
+      return (
+        candidate.ingredientId === item.ingredientId &&
+        candidate.nutrientTargetKey === item.nutrientTargetKey &&
+        candidate.nutrientTargetValue === item.nutrientTargetValue
+      )
+    })
+    const supplementOptions = buildSupplementCandidateOptions(item, recipeItem)
+    const selectionKey = getSupplementSelectionKey(item)
+    const rpIdx = selectedRpIndexMap.value[selectionKey] ?? 0
+    const selectedRp = supplementOptions[rpIdx] || supplementOptions[0]
 
     // 使用displayUnit作为显示单位
     const displayUnit = selectedRp?.displayUnit || item.displayUnit || item.unit || 'g'
@@ -624,36 +669,35 @@ const supplementItemsDetailed = computed(() => {
     const purchaseLink = selectedRp?.purchaseLink || item.properties?.purchase_link || undefined
     const hasSpecDetail = hasRecommendationDetail(selectedRp, item, purchaseLink)
 
-    // 如果推荐产品有有效成分浓度，重新计算用量
-    let amount = item.amount
-    if (selectedRp?.activeNutrients && item.nutrientTargetKey) {
-      const rpConcentration = selectedRp.activeNutrients[item.nutrientTargetKey]?.value
-      if (rpConcentration && rpConcentration > 0 && item.nutrientTargetValue) {
-        const totalNutrientNeeded = item.nutrientTargetValue * (totalFoodNetWeightG.value / 1000)
-        const theoretical = totalNutrientNeeded / rpConcentration
-        amount = theoretical * (1 + globalSupplementLossRate.value)
-      }
-    }
+    const amount = calculateSupplementAmountForOption(
+      item,
+      selectedRp,
+      totalFoodNetWeightG.value,
+      globalSupplementLossRate.value
+    )
 
     return {
+      selectionKey,
       name: selectedRp?.name || item.name,                          // 推荐营养品
       brand: selectedRp?.brand || item.brand || '-',                // 推荐品牌
-      preparationMethod: item.preparationMethod || '',              // 添加时机
+      preparationMethod: selectedRp?.timingLabel || item.preparationMethod || '', // 添加时机
       amount: amount,                                               // 用量数值
       unit: item.unit,                                              // 原始单位（用于计算）
       displayUnit: displayUnit,                                     // 显示单位（用于展示）
       amountStr: formatSupplementAmountWithDisplayUnit(amount, item.unit, displayUnit),  // 格式化用量
       productModel: selectedRp?.productModel || item.productModel,  // 规格
       purchaseChannel: selectedRp?.purchaseChannel || item.purchaseChannel,  // 购买渠道
+      imageUrl: selectedRp?.imageUrl || item.imageUrl || item.properties?.image_url || undefined,
       purchaseLink: purchaseLink,                                   // 购买链接
       ingredientId: item.ingredientId,                              // 原料ID
       nutrientTargetKey: item.nutrientTargetKey,                    // 营养素名称
       nutrientTargetValue: item.nutrientTargetValue,                // 营养目标值
+      activeNutrients: selectedRp?.activeNutrients || item.properties?.active_nutrients || undefined,
       type: item.type,                                              // 类型标识
       properties: item.properties,                                  // 完整的properties
       specDisplayText: getSupplementSpecDisplayText(selectedRp, item, purchaseLink), // 规格入口文案
       hasSpecDetail,                                                // 是否有规格/购买信息
-      allRecommendedProducts: rps || [],                            // 所有推荐产品
+      allRecommendedProducts: supplementOptions,                    // 所有候选补剂
       selectedRPIndex: 0                                            // 当前选中的推荐产品索引
     }
   })
@@ -864,6 +908,7 @@ async function loadRecommendedProducts() {
   try {
     // 从 pricePreview 的 ingredientDetails 中收集所有原料 ID
     const ingredientIds = pricePreview.value?.pricingBreakdown?.ingredientDetails
+      ?.filter((item: any) => item.type === 'FOOD')
       ?.map((item: any) => item.ingredientId)
       ?.filter(Boolean) || []
     const uniqueIngredientIds = Array.from(new Set(ingredientIds))
@@ -1005,7 +1050,7 @@ async function handlePrint() {
         let nutrientUnit = ''
         if (item.nutrientTargetKey && item.nutrientTargetValue && foodItemsTotal.value.actualAmount) {
           const total = Math.round(item.nutrientTargetValue * foodItemsTotal.value.actualAmount / 1000)
-          nutrientUnit = item.properties?.active_nutrients?.[item.nutrientTargetKey]?.unit || 'mg'
+          nutrientUnit = item.activeNutrients?.[item.nutrientTargetKey]?.unit || item.properties?.active_nutrients?.[item.nutrientTargetKey]?.unit || 'mg'
           nutrientTotal = `${total}${nutrientUnit}`
         }
 
@@ -1189,12 +1234,16 @@ const shareTitle = computed(() => {
 // 规格弹窗控制
 function showSpecModal(item: any) {
   currentSpec.value = item
+  modalSelectionKey.value = item.selectionKey || item.ingredientId || ''
+  modalSelectedRpIndex.value = selectedRpIndexMap.value[modalSelectionKey.value] ?? 0
   showSpec.value = true
 }
 
 function closeSpecModal() {
   showSpec.value = false
   currentSpec.value = {}
+  modalSelectionKey.value = ''
+  modalSelectedRpIndex.value = 0
 }
 
 // 显示用量详情弹窗
@@ -1209,8 +1258,12 @@ function closeAmountDetailModal() {
 
 // 显示营养信息弹窗
 function showNutritionInfoModal(item: any) {
-  // 从properties中获取营养素的实际单位（μg 或 mg）
-  const nutrientUnit = item.properties?.active_nutrients?.[item.nutrientTargetKey]?.unit || 'mg'
+  const nutrientUnit = getSupplementNutrientUnit(item, {
+    id: item.ingredientId,
+    ingredientId: item.ingredientId,
+    name: item.name,
+    activeNutrients: item.activeNutrients
+  })
 
   // 计算营养素总量 = 营养目标 * 食材采购量总量 / 1000
   const nutrientTotal = item.nutrientTargetValue && foodItemsTotal.value.actualAmount
@@ -1233,8 +1286,17 @@ function closeNutritionInfoModal() {
 
 // 选择推荐产品（在弹窗中切换）
 function selectRecommendedProduct(ingredientId: string, rpIndex: number | string) {
-  selectedRpIndexMap.value[ingredientId] = Number(rpIndex)
-  // 选择后关闭弹窗，让用户看到更新后的结果
+  modalSelectionKey.value = ingredientId
+  modalSelectedRpIndex.value = Number(rpIndex)
+}
+
+function confirmRecommendedProductSelection() {
+  if (!modalSelectionKey.value) {
+    closeSpecModal()
+    return
+  }
+
+  selectedRpIndexMap.value[modalSelectionKey.value] = modalSelectedRpIndex.value
   closeSpecModal()
 }
 
@@ -1336,6 +1398,8 @@ function buildPurchaseListItem(item: any) {
 function hasRecommendationDetail(selectedRp: any, item: any, purchaseLink: any): boolean {
   return !!(
     selectedRp ||
+    item.imageUrl ||
+    item.properties?.image_url ||
     item.brand ||
     item.productModel ||
     item.purchaseChannel ||
@@ -2371,31 +2435,153 @@ onShareTimeline(() => {
 .rp-card-body {
   display: flex;
   flex-direction: column;
-  gap: 8rpx;
+  gap: 12rpx;
+  flex: 1;
+  min-width: 0;
 }
 
-.rp-card-row {
+.rp-card-main {
   display: flex;
-  align-items: center;
+  align-items: stretch;
+  gap: 20rpx;
 }
 
-.rp-card-label {
-  font-size: 24rpx;
-  color: #999;
-  min-width: 80rpx;
+.rp-card-aside {
+  width: 180rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
   flex-shrink: 0;
 }
 
-.rp-card-value {
-  font-size: 24rpx;
-  color: #333;
-  flex: 1;
+.rp-card-media {
+  width: 180rpx;
+  height: 180rpx;
+  border-radius: 12rpx;
+  overflow: hidden;
+  background-color: #fff;
 }
 
-.rp-card-footer {
-  margin-top: 12rpx;
+.rp-card-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background-color: #fff;
+}
+
+.rp-card-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4rpx;
+}
+
+.rp-card-field-label {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.rp-card-field-value {
+  font-size: 24rpx;
+  color: #333;
+  line-height: 1.5;
+  text-align: left;
+  word-break: break-all;
+}
+
+.rp-card-actions {
+  display: flex;
+  width: 100%;
+}
+
+.spec-actions {
   display: flex;
   justify-content: flex-end;
+  gap: 16rpx;
+  margin-top: 20rpx;
+}
+
+.spec-action-btn {
+  min-width: 160rpx;
+  border-radius: 12rpx;
+  font-size: 26rpx;
+  font-weight: 500;
+}
+
+.spec-action-btn-secondary {
+  background: #f5f5f5;
+  color: #666;
+  border: 1rpx solid #d9d9d9;
+}
+
+.spec-action-btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: #fff;
+  border: none;
+}
+
+.spec-image-block {
+  width: 220rpx;
+  height: 220rpx;
+  flex-shrink: 0;
+  border-radius: 16rpx;
+  overflow: hidden;
+  background-color: #f5f5f5;
+}
+
+.spec-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+  background-color: #f5f5f5;
+}
+
+.spec-detail-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 24rpx;
+  margin-bottom: 24rpx;
+}
+
+.spec-detail-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.spec-detail-field {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6rpx;
+}
+
+.spec-detail-field-label {
+  font-size: 24rpx;
+  color: #999;
+}
+
+.spec-detail-field-value {
+  font-size: 26rpx;
+  color: #333;
+  line-height: 1.5;
+  text-align: left;
+  word-break: break-all;
+}
+
+.spec-detail-aside {
+  width: 220rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  flex-shrink: 0;
+}
+
+.spec-detail-actions {
+  display: flex;
+  width: 100%;
 }
 
 .btn-purchase-sm {
@@ -2403,9 +2589,11 @@ onShareTimeline(() => {
   color: #fff;
   border: none;
   border-radius: 8rpx;
+  width: 100%;
   padding: 8rpx 24rpx;
   font-size: 24rpx;
   font-weight: 500;
+  margin-left: 0;
 }
 
 .btn-purchase-sm:active {

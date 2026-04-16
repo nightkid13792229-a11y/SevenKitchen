@@ -54,6 +54,29 @@ export const ingredientApi = {
   getUsage: (id: string): Promise<any[]> =>
     api.get(`/admin/ingredients/${id}/usage`),
 
+  /**
+   * 上传补剂 DIY 推荐图片到腾讯 COS
+   */
+  uploadIngredientDiyImage: async (file: File) => {
+    const formData = new FormData()
+    formData.append('file', file)
+
+    return api.post<{
+      url: string
+      key: string
+    }>('/admin/ingredients/upload-diy-image', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data'
+      }
+    })
+  },
+
+  /**
+   * 删除补剂 DIY 推荐图片
+   */
+  deleteIngredientDiyImage: async (key: string) =>
+    api.post('/admin/ingredients/delete-diy-image', { key }),
+
   // ==================== 家庭 DIY 推荐商品 ====================
 
   /**

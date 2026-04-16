@@ -150,12 +150,27 @@
         <el-table-column label="SKU状态" width="160">
           <template #default="{ row }">
             <div class="sku-status-cell">
-              <el-tag :type="row.hasActiveRecommendedProduct ? 'success' : 'warning'" size="small">
-                DIY {{ row.hasActiveRecommendedProduct ? '已配' : '缺失' }}
-              </el-tag>
-              <el-tag :type="row.hasActiveProcurementSku ? 'success' : 'danger'" size="small">
-                采购 {{ row.hasActiveProcurementSku ? '已配' : '缺失' }}
-              </el-tag>
+              <template v-if="row.type === IngredientType.FOOD">
+                <el-tag :type="row.hasActiveRecommendedProduct ? 'success' : 'warning'" size="small">
+                  DIY {{ row.hasActiveRecommendedProduct ? '已配' : '缺失' }}
+                </el-tag>
+                <el-tag :type="row.hasActiveProcurementSku ? 'success' : 'danger'" size="small">
+                  采购 {{ row.hasActiveProcurementSku ? '已配' : '缺失' }}
+                </el-tag>
+              </template>
+              <template v-else-if="row.type === IngredientType.SUPPLEMENT">
+                <el-tag :type="row.diyEnabled ? 'success' : 'info'" size="small">
+                  DIY {{ row.diyEnabled ? '启用' : '关闭' }}
+                </el-tag>
+                <el-tag :type="row.procurementEnabled ? 'success' : 'info'" size="small">
+                  采购 {{ row.procurementEnabled ? '启用' : '关闭' }}
+                </el-tag>
+              </template>
+              <template v-else>
+                <el-tag :type="row.procurementEnabled ? 'success' : 'info'" size="small">
+                  采购 {{ row.procurementEnabled ? '启用' : '关闭' }}
+                </el-tag>
+              </template>
             </div>
           </template>
         </el-table-column>
@@ -185,17 +200,32 @@
 
         <el-table-column label="DIY推荐" width="120" align="center">
           <template #default="{ row }">
-            <el-tag :type="row.hasActiveRecommendedProduct ? 'success' : 'info'" size="small">
-              {{ row.activeRecommendedProductCount ?? 0 }}/{{ row.recommendedProductCount ?? 0 }}
-            </el-tag>
+            <template v-if="row.type === IngredientType.FOOD">
+              <el-tag :type="row.hasActiveRecommendedProduct ? 'success' : 'info'" size="small">
+                {{ row.activeRecommendedProductCount ?? 0 }}/{{ row.recommendedProductCount ?? 0 }}
+              </el-tag>
+            </template>
+            <template v-else-if="row.type === IngredientType.SUPPLEMENT">
+              <el-tag :type="row.diyEnabled ? 'success' : 'info'" size="small">
+                {{ row.diyEnabled ? '启用' : '关闭' }}
+              </el-tag>
+            </template>
+            <span v-else style="color: #909399;">-</span>
           </template>
         </el-table-column>
 
         <el-table-column label="采购SKU" width="120" align="center">
           <template #default="{ row }">
-            <el-tag :type="row.hasActiveProcurementSku ? 'success' : 'info'" size="small">
-              {{ row.activeProcurementSkuCount ?? 0 }}/{{ row.procurementSkuCount ?? 0 }}
-            </el-tag>
+            <template v-if="row.type === IngredientType.FOOD">
+              <el-tag :type="row.hasActiveProcurementSku ? 'success' : 'info'" size="small">
+                {{ row.activeProcurementSkuCount ?? 0 }}/{{ row.procurementSkuCount ?? 0 }}
+              </el-tag>
+            </template>
+            <template v-else>
+              <el-tag :type="row.procurementEnabled ? 'success' : 'info'" size="small">
+                {{ row.procurementEnabled ? '启用' : '关闭' }}
+              </el-tag>
+            </template>
           </template>
         </el-table-column>
 
@@ -224,7 +254,7 @@
               编辑
             </el-button>
             <el-button
-              v-if="row.type !== IngredientType.PACKAGING"
+              v-if="canEditNutrition(row.type)"
               type="warning"
               size="small"
               link
@@ -379,6 +409,7 @@ import {
 } from '@/types/ingredient'
 import IngredientFormComponent from './IngredientForm.vue'
 import IngredientNutritionDialog from './components/IngredientNutritionDialog.vue'
+import { getIngredientTypeCapabilities } from '@/utils/ingredientTypeCapabilities'
 
 // Data
 const loading = ref(false)
@@ -423,10 +454,14 @@ const typeStats = computed(() => ({
 }))
 
 const missingRecommendedSkuCount = computed(() => (
-  ingredients.value.filter(item => !item.hasActiveRecommendedProduct).length
+  ingredients.value.filter(
+    item => item.type === IngredientType.FOOD && !item.hasActiveRecommendedProduct
+  ).length
 ))
 const missingProcurementSkuCount = computed(() => (
-  ingredients.value.filter(item => !item.hasActiveProcurementSku).length
+  ingredients.value.filter(
+    item => item.type === IngredientType.FOOD && !item.hasActiveProcurementSku
+  ).length
 ))
 
 // 筛选结果数量
@@ -601,6 +636,11 @@ const buildDuplicateDraft = (ingredient: Ingredient): IngredientForm => ({
   name: buildDuplicateName(ingredient.name),
   type: ingredient.type,
   procurementStrategy: ingredient.procurementStrategy,
+  brand: ingredient.brand || '',
+  productModel: ingredient.productModel || '',
+  purchaseChannel: ingredient.purchaseChannel || '',
+  diyEnabled: ingredient.diyEnabled ?? false,
+  procurementEnabled: ingredient.procurementEnabled ?? false,
   notes: ingredient.notes || '',
   baseUnit: ingredient.baseUnit,
   baseUnitDisplayName: ingredient.baseUnitDisplayName || ingredient.unitDisplayLabel || '',
@@ -609,8 +649,18 @@ const buildDuplicateDraft = (ingredient: Ingredient): IngredientForm => ({
   properties: cloneIngredientValue(ingredient.properties),
   nutritionProfile: cloneIngredientValue(ingredient.nutritionProfile),
   tagIds: ingredient.tagIds ? [...ingredient.tagIds] : [],
-  tags: ingredient.tags ? cloneIngredientValue(ingredient.tags) : []
+  tags: ingredient.tags ? cloneIngredientValue(ingredient.tags) : [],
+  purchaseUnit: ingredient.purchaseUnit || '',
+  purchaseToBaseRatio: ingredient.purchaseToBaseRatio ?? undefined,
+  currentPricePerPurchaseUnit: ingredient.currentPricePerPurchaseUnit ?? undefined,
+  effectivePricePerPurchaseUnit: ingredient.effectivePricePerPurchaseUnit ?? undefined,
+  safetyStock: ingredient.safetyStock ?? undefined,
+  reorderPoint: ingredient.reorderPoint ?? undefined,
+  targetStock: ingredient.targetStock ?? undefined
 })
+
+const canEditNutrition = (type: IngredientType) =>
+  getIngredientTypeCapabilities(type).supportsNutritionEditing
 
 const handleDuplicate = async (ingredient: Ingredient) => {
   try {
@@ -763,10 +813,16 @@ const handleSubmit = async (data: IngredientForm) => {
       currentIngredient.value = undefined  // 重置状态，避免污染
     } else {
       const createdIngredient = await ingredientApi.create(data)
-      currentIngredient.value = createdIngredient
       copySourceName.value = ''
-      await nextTick()
-      ElMessage.success(isCopyCreate ? '复制新增成功，可继续补充采购 SKU' : '标准原料已创建，可继续补充采购 SKU')
+      if (createdIngredient.type === IngredientType.FOOD) {
+        currentIngredient.value = createdIngredient
+        await nextTick()
+        ElMessage.success(isCopyCreate ? '复制新增成功，可继续补充采购 SKU' : '标准原料已创建，可继续补充采购 SKU')
+      } else {
+        dialogVisible.value = false
+        currentIngredient.value = undefined
+        ElMessage.success(isCopyCreate ? '复制新增成功' : '标准原料已创建')
+      }
     }
     await loadData()
   } catch (error: any) {

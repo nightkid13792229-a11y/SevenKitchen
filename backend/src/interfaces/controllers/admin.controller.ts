@@ -96,6 +96,7 @@ import {
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UseInterceptors } from '@nestjs/common';
 import type { IngredientPreparationMethodHistoryDto } from '../dto/recipes/admin-recipe.dto';
+import type { Ingredient } from '../../domain/ingredient';
 
 @ApiTags('Admin')
 @Controller('api/v1/admin')
@@ -116,6 +117,95 @@ export class AdminController {
     private readonly coverImageService: CoverImageService,
     private readonly cosService: TencentCosService,
   ) {}
+
+  private async buildIngredientDetailResponse(ingredient: Ingredient) {
+    const prismaIngredient = await this.prisma.ingredient.findUnique({
+      where: { id: ingredient.id },
+      select: {
+        createdAt: true,
+        updatedAt: true,
+        tags: {
+          select: {
+            tag: {
+              select: {
+                id: true,
+                name: true,
+                color: true,
+              },
+            },
+          },
+        },
+        recommendedProducts: {
+          select: {
+            isActive: true,
+          },
+        },
+        procurementSkus: {
+          select: {
+            isActive: true,
+          },
+        },
+      },
+    });
+
+    const tagIds = prismaIngredient?.tags.map((t) => t.tag.id) || [];
+    const tags = prismaIngredient?.tags.map((t) => t.tag) || [];
+    const createdAt =
+      prismaIngredient?.createdAt.toISOString() || new Date().toISOString();
+    const updatedAt =
+      prismaIngredient?.updatedAt.toISOString() || new Date().toISOString();
+    const activeRecommendedProductCount =
+      prismaIngredient?.recommendedProducts.filter((rp) => rp.isActive).length ||
+      0;
+    const recommendedProductCount =
+      prismaIngredient?.recommendedProducts.length || 0;
+    const activeProcurementSkuCount =
+      prismaIngredient?.procurementSkus.filter((sku) => sku.isActive).length ||
+      0;
+    const procurementSkuCount = prismaIngredient?.procurementSkus.length || 0;
+
+    return {
+      id: ingredient.id,
+      name: ingredient.name,
+      type: ingredient.type,
+      brand: ingredient.brand,
+      productModel: ingredient.productModel,
+      purchaseChannel: ingredient.purchaseChannel,
+      diyEnabled: ingredient.diyEnabled,
+      procurementEnabled: ingredient.procurementEnabled,
+      notes: ingredient.notes,
+      baseUnit: ingredient.baseUnit,
+      baseUnitDisplayName: ingredient.baseUnitDisplayName,
+      unitDisplayLabel: ingredient.unitDisplayLabel,
+      procurementStrategy: ingredient.procurementStrategy,
+      purchaseUnit: ingredient.purchaseUnit,
+      purchaseToBaseRatio: ingredient.purchaseToBaseRatio,
+      currentPricePerPurchaseUnit: Number(
+        ingredient.currentPricePerPurchaseUnit,
+      ),
+      effectivePricePerPurchaseUnit: Number(
+        ingredient.getEffectivePricePerPurchaseUnit(),
+      ),
+      unitCost: ingredient.getUnitCost(),
+      weightG: ingredient.weightG,
+      maxCapacityG: ingredient.maxCapacityG,
+      safetyStock: ingredient.safetyStock,
+      reorderPoint: ingredient.reorderPoint,
+      targetStock: ingredient.targetStock,
+      properties: ingredient.properties,
+      nutritionProfile: ingredient.nutritionProfile,
+      tagIds,
+      tags,
+      activeRecommendedProductCount,
+      recommendedProductCount,
+      hasActiveRecommendedProduct: activeRecommendedProductCount > 0,
+      activeProcurementSkuCount,
+      procurementSkuCount,
+      hasActiveProcurementSku: activeProcurementSkuCount > 0,
+      createdAt,
+      updatedAt,
+    };
+  }
 
   @Get('inventory')
   @ApiOperation({ summary: 'Get inventory list (ingredients with prices)' })
@@ -307,6 +397,8 @@ export class AdminController {
       brand: ing.brand,
       productModel: ing.productModel,
       purchaseChannel: ing.purchaseChannel,
+      diyEnabled: ing.diyEnabled,
+      procurementEnabled: ing.procurementEnabled,
       notes: ing.notes,
       baseUnit: ing.baseUnit,
       baseUnitDisplayName: ing.baseUnitDisplayName,
@@ -356,83 +448,9 @@ export class AdminController {
     @Param('id') id: string,
   ): Promise<ApiResponseDto<any>> {
     const ingredient = await this.ingredientService.getIngredientById(id);
-
-    // Get tags from Prisma
-    const prismaIngredient = await this.prisma.ingredient.findUnique({
-      where: { id },
-      select: {
-        createdAt: true,
-        updatedAt: true,
-        tags: {
-          select: {
-            tag: {
-              select: {
-                id: true,
-                name: true,
-                color: true,
-              },
-            },
-          },
-        },
-        recommendedProducts: {
-          select: {
-            isActive: true,
-          },
-        },
-      },
-    });
-
-    const tagIds = prismaIngredient?.tags.map((t) => t.tag.id) || [];
-    const tags = prismaIngredient?.tags.map((t) => t.tag) || [];
-    const createdAt =
-      prismaIngredient?.createdAt.toISOString() || new Date().toISOString();
-    const updatedAt =
-      prismaIngredient?.updatedAt.toISOString() || new Date().toISOString();
-    const activeRecommendedProductCount =
-      prismaIngredient?.recommendedProducts.filter((rp) => rp.isActive).length ||
-      0;
-    const recommendedProductCount =
-      prismaIngredient?.recommendedProducts.length || 0;
-
-    // Map to ingredient response format
-    const ingredientData = {
-      id: ingredient.id,
-      name: ingredient.name,
-      type: ingredient.type,
-      brand: ingredient.brand,
-      productModel: ingredient.productModel,
-      purchaseChannel: ingredient.purchaseChannel,
-      notes: ingredient.notes,
-      baseUnit: ingredient.baseUnit,
-      baseUnitDisplayName: ingredient.baseUnitDisplayName,
-      unitDisplayLabel: ingredient.unitDisplayLabel,
-      procurementStrategy: ingredient.procurementStrategy,
-      purchaseUnit: ingredient.purchaseUnit,
-      purchaseToBaseRatio: ingredient.purchaseToBaseRatio,
-      currentPricePerPurchaseUnit: Number(
-        ingredient.currentPricePerPurchaseUnit,
-      ),
-      effectivePricePerPurchaseUnit: Number(
-        ingredient.getEffectivePricePerPurchaseUnit(),
-      ),
-      unitCost: ingredient.getUnitCost(),
-      weightG: ingredient.weightG,
-      maxCapacityG: ingredient.maxCapacityG,
-      safetyStock: ingredient.safetyStock,
-      reorderPoint: ingredient.reorderPoint,
-      targetStock: ingredient.targetStock,
-      properties: ingredient.properties,
-      nutritionProfile: ingredient.nutritionProfile,
-      tagIds,
-      tags,
-      activeRecommendedProductCount,
-      recommendedProductCount,
-      hasActiveRecommendedProduct: activeRecommendedProductCount > 0,
-      createdAt,
-      updatedAt,
-    };
-
-    return ApiResponseDto.success(ingredientData);
+    return ApiResponseDto.success(
+      await this.buildIngredientDetailResponse(ingredient),
+    );
   }
 
   @Post('ingredients')
@@ -446,28 +464,9 @@ export class AdminController {
     @Body() dto: CreateIngredientDto,
   ): Promise<ApiResponseDto<any>> {
     const ingredient = await this.ingredientService.createIngredient(dto);
-    return ApiResponseDto.success({
-      id: ingredient.id,
-      name: ingredient.name,
-      type: ingredient.type,
-      procurementStrategy: ingredient.procurementStrategy,
-      baseUnit: ingredient.baseUnit,
-      baseUnitDisplayName: ingredient.baseUnitDisplayName,
-      notes: ingredient.notes,
-      properties: ingredient.properties,
-      nutritionProfile: ingredient.nutritionProfile,
-      weightG: ingredient.weightG,
-      maxCapacityG: ingredient.maxCapacityG,
-      currentPricePerPurchaseUnit: Number(
-        ingredient.currentPricePerPurchaseUnit,
-      ),
-      effectivePricePerPurchaseUnit: Number(
-        ingredient.getEffectivePricePerPurchaseUnit(),
-      ),
-      safetyStock: ingredient.safetyStock,
-      reorderPoint: ingredient.reorderPoint,
-      targetStock: ingredient.targetStock,
-    });
+    return ApiResponseDto.success(
+      await this.buildIngredientDetailResponse(ingredient),
+    );
   }
 
   @Put('ingredients/:id')
@@ -486,29 +485,9 @@ export class AdminController {
   ): Promise<ApiResponseDto<any>> {
     try {
       const ingredient = await this.ingredientService.updateIngredient(id, dto);
-      return ApiResponseDto.success({
-        id: ingredient.id,
-        name: ingredient.name,
-        type: ingredient.type,
-        procurementStrategy: ingredient.procurementStrategy,
-        baseUnit: ingredient.baseUnit,
-        baseUnitDisplayName: ingredient.baseUnitDisplayName,
-        notes: ingredient.notes,
-        properties: ingredient.properties,
-        nutritionProfile: ingredient.nutritionProfile,
-        weightG: ingredient.weightG,
-        maxCapacityG: ingredient.maxCapacityG,
-        currentPricePerPurchaseUnit: Number(
-          ingredient.currentPricePerPurchaseUnit,
-        ),
-        effectivePricePerPurchaseUnit: Number(
-          ingredient.getEffectivePricePerPurchaseUnit(),
-        ),
-        unitCost: ingredient.getUnitCost(),
-        safetyStock: ingredient.safetyStock,
-        reorderPoint: ingredient.reorderPoint,
-        targetStock: ingredient.targetStock,
-      });
+      return ApiResponseDto.success(
+        await this.buildIngredientDetailResponse(ingredient),
+      );
     } catch (error) {
       if (error instanceof NotFoundException) {
         throw new NotFoundException('Ingredient not found');
@@ -2715,6 +2694,30 @@ export class AdminController {
     }
   }
 
+  @Post('ingredients/upload-diy-image')
+  @UseGuards(AuthGuard, AdminGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Upload supplement DIY recommendation image to Tencent COS' })
+  @ApiResponse({ status: 201, description: 'Image uploaded' })
+  @ApiResponse({ status: 400, description: 'Upload failed' })
+  async uploadIngredientDiyImage(
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<ApiResponseDto<any>> {
+    try {
+      const result = await this.cosService.uploadImage(
+        file,
+        file.originalname,
+        'ingredient-diy-images',
+      );
+      return ApiResponseDto.success(result);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
   @Post('upload-package-image')
   @UseGuards(AuthGuard, AdminGuard)
   @UseInterceptors(FileInterceptor('file'))
@@ -2795,6 +2798,25 @@ export class AdminController {
   @ApiResponse({ status: 200, description: 'Image deleted' })
   @ApiResponse({ status: 400, description: 'Delete failed' })
   async deleteRecipeImage(
+    @Body() body: { key: string },
+  ): Promise<ApiResponseDto<any>> {
+    try {
+      await this.cosService.deleteImage(body.key);
+      return ApiResponseDto.success({ message: 'Image deleted successfully' });
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  @Post('ingredients/delete-diy-image')
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiOperation({ summary: 'Delete supplement DIY recommendation image from Tencent COS' })
+  @ApiResponse({ status: 200, description: 'Image deleted' })
+  @ApiResponse({ status: 400, description: 'Delete failed' })
+  async deleteIngredientDiyImage(
     @Body() body: { key: string },
   ): Promise<ApiResponseDto<any>> {
     try {

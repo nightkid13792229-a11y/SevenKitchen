@@ -297,6 +297,7 @@ export default {
 import { ref, computed, onMounted } from 'vue'
 import { request, addFavorite, removeFavorite, checkFavorite, createRecipeShareToken, reviewApi, trackRecipeView } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
+import { getResolvedSupplementNutrientUnit } from '../../utils/supplement-nutrients'
 import ReviewList from '../../components/ReviewList.vue'
 import ReviewForm from '../../components/ReviewForm.vue'
 
@@ -678,26 +679,7 @@ function getIngredientTypeClass(type: string): string {
 
 function getNutrientUnit(item: RecipeItem): string {
   if (!item.nutrientTargetKey) return ''
-
-  let unit = ''
-
-  // 策略1: 从item.properties获取（如果有）
-  if (item.properties?.active_nutrients) {
-    const nutrientData = item.properties.active_nutrients[item.nutrientTargetKey]
-    if (nutrientData && typeof nutrientData === 'object') {
-      unit = nutrientData.unit || ''
-    }
-  }
-
-  // 策略2: 从item.ingredient.properties获取（如果有）
-  if (!unit && (item as any).ingredient?.properties?.active_nutrients) {
-    const nutrientData = (item as any).ingredient.properties.active_nutrients[item.nutrientTargetKey]
-    if (nutrientData && typeof nutrientData === 'object') {
-      unit = nutrientData.unit || ''
-    }
-  }
-
-  return unit
+  return getResolvedSupplementNutrientUnit(item)
 }
 
 function formatNumber(value: number | undefined | null): string {

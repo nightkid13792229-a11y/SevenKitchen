@@ -53,6 +53,19 @@ describe('RecipeService', () => {
             nutrientTargetKey: null,
             nutrientTargetValue: null,
             sortOrder: 0,
+            supplementAlternatives: [
+              {
+                id: 'alt-1',
+                alternativeIngredientId: 'ingredient-2',
+                sortOrder: 0,
+                isActive: true,
+                alternativeIngredient: {
+                  id: 'ingredient-2',
+                  name: '鸡腿肉',
+                  type: 'SUPPLEMENT',
+                },
+              },
+            ],
           },
         ],
       };
@@ -122,6 +135,14 @@ describe('RecipeService', () => {
                   ingredientId: 'ingredient-1',
                   exampleWeight: 180.5,
                   ratioPercent: 60,
+                  supplementAlternatives: {
+                    create: [
+                      expect.objectContaining({
+                        alternativeIngredientId: 'ingredient-2',
+                        sortOrder: 0,
+                      }),
+                    ],
+                  },
                 }),
               ],
             },

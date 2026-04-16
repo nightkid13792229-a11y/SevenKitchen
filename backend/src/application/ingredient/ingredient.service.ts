@@ -3,7 +3,7 @@
  * Application layer service for Ingredient domain operations
  */
 
-import { Injectable, Inject, NotFoundException } from '@nestjs/common';
+import { Injectable, Inject, NotFoundException, BadRequestException } from '@nestjs/common';
 import type { IngredientRepository } from '../../domain/ingredient/ingredient.repository';
 import { Ingredient } from '../../domain/ingredient';
 import {
@@ -12,7 +12,8 @@ import {
   IngredientProcurementStrategy,
 } from '../../domain/ingredient/enums';
 import { normalizeNutritionProfileForWrite } from '../../domain/ingredient/nutrition-profile.utils';
-import type { NutritionProfile } from '../../domain/ingredient/types';
+import { resolveSupplementNutrients } from '../../domain/ingredient/supplement-nutrition-resolver';
+import type { NutritionProfile, SupplementProperties } from '../../domain/ingredient/types';
 
 export const INGREDIENT_REPOSITORY = Symbol('INGREDIENT_REPOSITORY');
 
@@ -20,6 +21,8 @@ export interface CreateIngredientDto {
   name: string;
   type: IngredientType;
   procurementStrategy?: IngredientProcurementStrategy;
+  diyEnabled?: boolean;
+  procurementEnabled?: boolean;
   brand?: string | null;
   productModel?: string | null;
   purchaseChannel?: string | null;
@@ -44,6 +47,8 @@ export interface CreateIngredientDto {
 export interface UpdateIngredientDto {
   name?: string;
   procurementStrategy?: IngredientProcurementStrategy;
+  diyEnabled?: boolean;
+  procurementEnabled?: boolean;
   brand?: string | null;
   productModel?: string | null;
   purchaseChannel?: string | null;
@@ -92,6 +97,27 @@ export class IngredientService {
     return fallback;
   }
 
+  private resolvePropertiesForPersistence(input: {
+    type: IngredientType;
+    properties: Record<string, any>;
+    nutritionProfile: NutritionProfile | null;
+  }): Record<string, any> {
+    if (input.type !== IngredientType.SUPPLEMENT) {
+      return input.properties;
+    }
+
+    const supplementProperties = {
+      ...(input.properties as SupplementProperties),
+    };
+
+    supplementProperties.active_nutrients = resolveSupplementNutrients({
+      nutritionProfile: input.nutritionProfile,
+      fallback: supplementProperties.active_nutrients,
+    });
+
+    return supplementProperties;
+  }
+
   /**
    * Get ingredient by ID
    */
@@ -131,12 +157,19 @@ export class IngredientService {
     const normalizedProfile = normalizeNutritionProfileForWrite(
       dto.nutritionProfile ?? null,
     );
+    const normalizedProperties = this.resolvePropertiesForPersistence({
+      type: dto.type,
+      properties: dto.properties,
+      nutritionProfile: normalizedProfile,
+    });
 
     const ingredient = new Ingredient(
       crypto.randomUUID(),
       dto.name,
       dto.type,
       dto.procurementStrategy ?? IngredientProcurementStrategy.DAILY_PURCHASE,
+      dto.diyEnabled ?? false,
+      dto.procurementEnabled ?? false,
       dto.brand ?? null,
       dto.productModel ?? null,
       dto.purchaseChannel ?? null,
@@ -152,7 +185,7 @@ export class IngredientService {
       dto.safetyStock ?? null,
       dto.reorderPoint ?? null,
       dto.targetStock ?? null,
-      dto.properties,
+      normalizedProperties,
       normalizedProfile,
     );
 
@@ -171,13 +204,32 @@ export class IngredientService {
       throw new NotFoundException(`Ingredient not found: ${id}`);
     }
 
+    if (dto.type !== undefined && dto.type !== existing.type) {
+      throw new BadRequestException('已创建原料的类型不可修改');
+    }
+
+    const nextType = dto.type !== undefined ? dto.type : existing.type;
+    const nextNutritionProfile =
+      dto.nutritionProfile !== undefined
+        ? normalizeNutritionProfileForWrite(dto.nutritionProfile)
+        : existing.nutritionProfile;
+    const nextProperties = this.resolvePropertiesForPersistence({
+      type: nextType,
+      properties: dto.properties !== undefined ? dto.properties : existing.properties,
+      nutritionProfile: nextNutritionProfile,
+    });
+
     const updated = new Ingredient(
       existing.id,
       dto.name !== undefined ? dto.name : existing.name,
-      dto.type !== undefined ? dto.type : existing.type,
+      nextType,
       dto.procurementStrategy !== undefined
         ? dto.procurementStrategy
         : existing.procurementStrategy,
+      dto.diyEnabled !== undefined ? dto.diyEnabled : existing.diyEnabled,
+      dto.procurementEnabled !== undefined
+        ? dto.procurementEnabled
+        : existing.procurementEnabled,
       dto.brand !== undefined ? dto.brand : existing.brand,
       dto.productModel !== undefined
         ? dto.productModel
@@ -205,10 +257,8 @@ export class IngredientService {
         ? dto.reorderPoint
         : existing.reorderPoint,
       dto.targetStock !== undefined ? dto.targetStock : existing.targetStock,
-      dto.properties !== undefined ? dto.properties : existing.properties,
-      dto.nutritionProfile !== undefined
-        ? normalizeNutritionProfileForWrite(dto.nutritionProfile)
-        : existing.nutritionProfile,
+      nextProperties,
+      nextNutritionProfile,
     );
 
     // Update tag associations if provided

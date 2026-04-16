@@ -16,6 +16,14 @@ type RecipeWithItems = Prisma.RecipeGetPayload<{
     items: {
       include: {
         ingredient: true;
+        supplementAlternatives: {
+          include: {
+            alternativeIngredient: true;
+          };
+          orderBy: {
+            sortOrder: 'asc';
+          };
+        };
       };
       orderBy: {
         sortOrder: 'asc'; // 按照 sortOrder 升序排列
@@ -42,6 +50,14 @@ export class PrismaRecipeRepository implements RecipeRepository {
         items: {
           include: {
             ingredient: true,
+            supplementAlternatives: {
+              include: {
+                alternativeIngredient: true,
+              },
+              orderBy: {
+                sortOrder: 'asc',
+              },
+            },
           },
           orderBy: {
             sortOrder: 'asc', // 按照 sortOrder 升序排列
@@ -72,6 +88,14 @@ export class PrismaRecipeRepository implements RecipeRepository {
         items: {
           include: {
             ingredient: true,
+            supplementAlternatives: {
+              include: {
+                alternativeIngredient: true,
+              },
+              orderBy: {
+                sortOrder: 'asc',
+              },
+            },
           },
         },
         healthTagAssignments: {
@@ -108,6 +132,14 @@ export class PrismaRecipeRepository implements RecipeRepository {
             ingredient: {
               include: {
                 tags: true,
+              },
+            },
+            supplementAlternatives: {
+              include: {
+                alternativeIngredient: true,
+              },
+              orderBy: {
+                sortOrder: 'asc',
               },
             },
           },
@@ -216,6 +248,14 @@ export class PrismaRecipeRepository implements RecipeRepository {
             ingredient: {
               include: {
                 tags: true,
+              },
+            },
+            supplementAlternatives: {
+              include: {
+                alternativeIngredient: true,
+              },
+              orderBy: {
+                sortOrder: 'asc',
               },
             },
           },
@@ -593,6 +633,14 @@ export class PrismaRecipeRepository implements RecipeRepository {
         items: {
           include: {
             ingredient: true,
+            supplementAlternatives: {
+              include: {
+                alternativeIngredient: true,
+              },
+              orderBy: {
+                sortOrder: 'asc',
+              },
+            },
           },
         },
         healthTagAssignments: {
@@ -639,12 +687,47 @@ export class PrismaRecipeRepository implements RecipeRepository {
           nutrientTargetValue: item.nutrientTargetValue
             ? Number(item.nutrientTargetValue)
             : null,
+          supplementAlternativeIngredientIds:
+            item.supplementAlternatives?.map(
+              (alternative) => alternative.alternativeIngredientId,
+            ) ?? null,
+          supplementAlternatives:
+            item.supplementAlternatives?.map((alternative) => ({
+              ingredientId: alternative.alternativeIngredientId,
+              ingredientName: alternative.alternativeIngredient.name,
+              ingredient: alternative.alternativeIngredient
+                ? {
+                    id: alternative.alternativeIngredient.id,
+                    name: alternative.alternativeIngredient.name,
+                    type: alternative.alternativeIngredient.type,
+                    properties: alternative.alternativeIngredient.properties,
+                    brand: alternative.alternativeIngredient.brand,
+                    productModel: alternative.alternativeIngredient.productModel,
+                    purchaseChannel:
+                      alternative.alternativeIngredient.purchaseChannel,
+                    unitDisplayLabel:
+                      alternative.alternativeIngredient.unitDisplayLabel,
+                    diyEnabled: alternative.alternativeIngredient.diyEnabled,
+                    procurementEnabled:
+                      alternative.alternativeIngredient.procurementEnabled,
+                    nutritionProfile:
+                      alternative.alternativeIngredient.nutritionProfile,
+                  }
+                : undefined,
+            })) ?? null,
           ingredient: item.ingredient
             ? {
                 id: item.ingredient.id,
                 name: item.ingredient.name,
                 type: item.ingredient.type,
                 properties: item.ingredient.properties,
+                brand: item.ingredient.brand,
+                productModel: item.ingredient.productModel,
+                purchaseChannel: item.ingredient.purchaseChannel,
+                unitDisplayLabel: item.ingredient.unitDisplayLabel,
+                diyEnabled: item.ingredient.diyEnabled,
+                procurementEnabled: item.ingredient.procurementEnabled,
+                nutritionProfile: item.ingredient.nutritionProfile,
               }
             : undefined,
         }),

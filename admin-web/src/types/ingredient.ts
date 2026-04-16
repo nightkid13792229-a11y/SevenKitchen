@@ -35,8 +35,8 @@ export enum SupplementCategoryType {
 
 // 补剂添加时机枚举
 export enum SupplementAddTiming {
-  BEFORE_MIXING = 'BEFORE_MIXING',     // 制作中（须拌匀）
-  BEFORE_MEAL = 'BEFORE_MEAL'          // 饭前（冷却后）
+  BEFORE_MIXING = 'BEFORE_MIXING',     // 制作中
+  BEFORE_MEAL = 'BEFORE_MEAL'          // 随餐
 }
 
 // 类型标签映射
@@ -285,8 +285,8 @@ export const SupplementCategoryLabels: Record<string, string> = {
 }
 
 export const SupplementAddTimingLabels: Record<string, string> = {
-  [SupplementAddTiming.BEFORE_MIXING]: '制作中（须拌匀）',
-  [SupplementAddTiming.BEFORE_MEAL]: '饭前（冷却后）'
+  [SupplementAddTiming.BEFORE_MIXING]: '制作中',
+  [SupplementAddTiming.BEFORE_MEAL]: '随餐'
 }
 
 // 食材属性
@@ -316,6 +316,11 @@ export interface SupplementProperties {
   category_type: string                                    // 营养分类
   add_timing?: string                                      // 添加时机
   active_nutrients?: Record<string, ActiveNutrientValue>  // 兼容旧数据
+  display_unit?: string                                    // 单层补剂默认展示单位
+  supplier_name?: string | null
+  purchase_link?: PurchaseLinkConfig                       // 直连购买信息
+  image_url?: string | null
+  marketing_highlights?: Record<string, ActiveNutrientValue>
   production_loss_rate?: number                            // 个性化损耗率
 }
 
@@ -323,6 +328,7 @@ export interface SupplementProperties {
 export interface PackagingProperties {
   is_consumable: boolean      // true=消耗品(随单扣减), false=固定资产
   linked_item_id?: string     // 关联配件
+  supplier_name?: string | null
 }
 
 // 原料实体
@@ -331,6 +337,11 @@ export interface Ingredient {
   name: string
   type: IngredientType
   procurementStrategy: IngredientProcurementStrategy
+  brand?: string | null
+  productModel?: string | null
+  purchaseChannel?: string | null
+  diyEnabled?: boolean
+  procurementEnabled?: boolean
   notes: string | null
   baseUnit: BaseUnit
   baseUnitDisplayName: string | null
@@ -370,6 +381,11 @@ export interface IngredientForm {
   name: string
   type: IngredientType
   procurementStrategy: IngredientProcurementStrategy
+  brand?: string | null
+  productModel?: string | null
+  purchaseChannel?: string | null
+  diyEnabled?: boolean
+  procurementEnabled?: boolean
   notes?: string
   baseUnit: BaseUnit
   baseUnitDisplayName?: string

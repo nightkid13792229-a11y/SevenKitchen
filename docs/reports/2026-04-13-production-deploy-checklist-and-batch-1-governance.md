@@ -1,5 +1,82 @@
 # 2026-04-13 生产部署前清单与第一批生产治理名单
 
+## 2026-04-16 Ingredient Domain Restructure 上线补充
+
+本节对应 PR：
+
+- `#14` `Restructure ingredient domains by type`
+- 分支：`codex/ingredient-domain-restructure`
+- 当前发布基线 commit：`f56cce7`
+
+### 本次上线范围
+
+- 食材继续保留三层模型
+- 补剂改单层产品模型
+- 包材改单层产品模型
+- 食谱新增“补剂替代项”
+- 补剂浓度解析统一切到 `nutrition_profile -> resolver -> compatibility cache`
+- 管理后台按类型分流编辑页
+- DIY 制作单补剂推荐/替代/图片展示链路更新
+
+### 合并后最短执行顺序
+
+1. 合并 PR `#14` 到 `main`
+2. SSH 到生产机并拉取最新 `main`
+3. 执行 backend migration
+4. 先跑单层化与补剂替代项 backfill dry-run
+5. 人工确认 dry-run 输出
+6. 执行 apply
+7. 发布 admin-web
+8. 发布 miniapp
+9. 做上线后冒烟验收
+
+### 建议命令
+
+```bash
+ssh -i ~/.ssh/claude_deploy root@1.14.3.2
+cd /opt/sevenkitchen/SevenKitchen
+git checkout main
+git pull origin main
+
+cd backend
+npm install
+npx prisma generate
+npm run build
+npx prisma migrate deploy
+
+npm run backfill:supplement-packaging-single-layer
+npm run backfill:recipe-supplement-alternatives
+
+npm run backfill:supplement-packaging-single-layer:apply
+npm run backfill:recipe-supplement-alternatives:apply
+```
+
+### 本次最小冒烟清单
+
+- [ ] 管理后台食材编辑页仍保留 `家庭 DIY 推荐商品` 和 `生产采购 SKU`
+- [ ] 管理后台补剂编辑页已切成单层，并保留 `营养数据` 独立入口
+- [ ] 管理后台包材编辑页不再显示 `营养数据`
+- [ ] 食谱编辑补剂时可以配置 `替代补剂`
+- [ ] 小程序 DIY 制作单里补剂推荐弹窗可显示右侧方图、推荐购买渠道、确认选择按钮
+- [ ] 小程序员工端补货页和盘点页仍能搜到 `猪里脊` 和 `泡沫箱`
+
+### 本次回填顺序要求
+
+- 必须先跑 `supplement-packaging-single-layer`
+- 再跑 `recipe-supplement-alternatives`
+- 不要倒序执行
+
+原因：
+
+- 第二条脚本依赖第一条脚本写入的 `properties.single_layer_origin.legacy_ingredient_id`
+- 如果跳过或倒序执行，食谱补剂替代项无法正确回填
+
+### 本次上线注意事项
+
+- `admin-web` 本地部署脚本仍然是“本地 build 后上传”，发布前必须确认本地 checkout 已更新到合并后的 `main`
+- `miniapp` 联调使用 `dist/dev/mp-weixin`，正式上传使用 `dist/build/mp-weixin`
+- 当前补剂图片上传/替换/删除会同步操作 COS，手测时不要用真实线上商品图做无意义反复覆盖
+
 ## 目标
 
 在不直接手改旧生产结构的前提下，先让生产环境承接当前分支的“标准原料 / DIY SKU / 采购 SKU”解耦模型，然后按最小风险顺序启动第一批生产数据治理。
@@ -101,8 +178,43 @@
   - `cd backend && npm run backfill:procurement-sku-defaults`
 - procurement SKU 默认值回填 apply：
   - `cd backend && npm run backfill:procurement-sku-defaults:apply`
+- 补剂/包材单层化 dry-run：
+  - `cd backend && npm run backfill:supplement-packaging-single-layer`
+- 补剂/包材单层化 apply：
+  - `cd backend && npm run backfill:supplement-packaging-single-layer:apply`
+- 食谱补剂替代项 dry-run：
+  - `cd backend && npm run backfill:recipe-supplement-alternatives`
+- 食谱补剂替代项 apply：
+  - `cd backend && npm run backfill:recipe-supplement-alternatives:apply`
 - backend 构建校验：
   - `cd backend && npm run build`
+
+## 五、补剂/包材单层化专项回填顺序
+
+当补剂与包材单层化重构进入生产部署阶段时，建议执行顺序固定为：
+
+1. `npx prisma migrate deploy`
+2. `npm run backfill:supplement-packaging-single-layer`
+3. 人工检查 dry-run 输出：
+   - 将扁平更新多少条旧补剂/包材
+   - 将拆分创建多少条新标准原料
+   - 将归档多少条旧 `recommended_product / procurement_sku`
+   - 将生成多少条补剂替代候选 seed
+4. `npm run backfill:supplement-packaging-single-layer:apply`
+5. `npm run backfill:recipe-supplement-alternatives`
+6. 人工检查将生成多少条 `recipe_supplement_alternative`
+7. `npm run backfill:recipe-supplement-alternatives:apply`
+
+### 回滚点
+
+- `migrate deploy` 前：数据库快照
+- `single-layer apply` 前：数据库快照
+- `recipe supplement alternatives apply` 前：数据库快照
+
+### 额外说明
+
+- `single-layer` 脚本会把非食材类型下的旧 `recommended_product / procurement_sku` 标记为停用，不会再让它们继续作为线上主数据入口。
+- `recipe-supplement-alternatives` 脚本依赖 `single-layer` 脚本写入的 `properties.single_layer_origin.legacy_ingredient_id` 元数据，因此两者必须按顺序执行。
 
 ### C. 管理后台准备
 

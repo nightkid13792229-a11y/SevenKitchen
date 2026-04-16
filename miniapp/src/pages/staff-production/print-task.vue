@@ -121,6 +121,7 @@
 import { ref, computed } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { getBaseUrl } from '../../utils/config';
+import { calculateSupplementAmountForProduction } from '../../utils/supplement-nutrients';
 
 // 打印数据
 interface PrintData {
@@ -187,21 +188,9 @@ const parsedIngredients = computed(() => {
       : '';
 
     if (item.ingredient_type === 'SUPPLEMENT') {
-      const finishedProductKG = totalProductionG / 1000;
-      const totalNutrientNeeded = finishedProductKG * item.nutrient_target_value;
-      const nutrientKey = item.nutrient_target_key;
-      const activeNutrientValue = item.properties?.active_nutrients?.[nutrientKey]?.value;
-
-      if (activeNutrientValue) {
-        const baseUnits = totalNutrientNeeded / activeNutrientValue;
-        const supplementLossRate = item.properties?.production_loss_rate || 1.05;
-        const finalUnits = baseUnits * supplementLossRate;
-        amount = finalUnits;
-        unit = item.unit_display_label || 'g';
-      } else {
-        amount = 0;
-        unit = 'g';
-      }
+      const supplementAmount = calculateSupplementAmountForProduction(item, totalProductionG);
+      amount = supplementAmount.amount;
+      unit = supplementAmount.unit;
     } else {
       amount = theoreticalWeight * (item.ratio / 100);
       unit = 'g';

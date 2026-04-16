@@ -191,6 +191,7 @@ import {
   deleteProductionPhoto,
 } from '../../api/production';
 import { getBaseUrl } from '../../utils/config';
+import { calculateSupplementAmountForProduction } from '../../utils/supplement-nutrients';
 
 // 格式化函数
 function formatDecimal(value: number | null | undefined, decimals: number = 2): string {
@@ -267,47 +268,9 @@ const parsedIngredients = computed(() => {
 
     // 根据原料类型计算用量
     if (item.ingredient_type === 'SUPPLEMENT') {
-      // 补剂计算：基于成品净重
-      const finishedProductKG = totalProductionG / 1000; // 转换为公斤
-
-      // 步骤1: 计算该锅次需要的营养素总量
-      const totalNutrientNeeded = finishedProductKG * item.nutrient_target_value;
-
-      // 步骤2: 获取补剂每单位含量
-      const nutrientKey = item.nutrient_target_key;
-      const activeNutrientValue = item.properties?.active_nutrients?.[nutrientKey]?.value;
-      const activeNutrientUnit = item.properties?.active_nutrients?.[nutrientKey]?.unit;
-
-      if (activeNutrientValue && activeNutrientUnit) {
-        // 步骤3: 计算基础单位数
-        const baseUnits = totalNutrientNeeded / activeNutrientValue;
-
-        // 步骤4: 考虑补剂生产损耗
-        const supplementLossRate = item.properties?.production_loss_rate || 1.05;
-        const finalUnits = baseUnits * supplementLossRate;
-
-        amount = finalUnits;
-
-        // 获取单位显示标签
-        unit = item.unit_display_label || 'g';
-
-        // 🔍 调试日志
-        console.log(`[补剂] ${item.name}:`, {
-          finishedProductKG: finishedProductKG.toFixed(4),
-          nutrientTargetValue: item.nutrient_target_value,
-          totalNutrientNeeded: totalNutrientNeeded.toFixed(2),
-          activeNutrientValue: activeNutrientValue,
-          activeNutrientUnit: activeNutrientUnit,
-          baseUnits: baseUnits.toFixed(2),
-          supplementLossRate: supplementLossRate,
-          finalUnits: finalUnits.toFixed(2),
-          unit: unit
-        });
-      } else {
-        console.warn(`[补剂] ${item.name}: 缺少active_nutrients数据`);
-        amount = 0;
-        unit = 'g';
-      }
+      const supplementAmount = calculateSupplementAmountForProduction(item, totalProductionG);
+      amount = supplementAmount.amount;
+      unit = supplementAmount.unit;
     } else {
       // 食材和包材：按配比计算
       amount = theoreticalWeight * (item.ratio / 100);

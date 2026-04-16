@@ -85,4 +85,40 @@ describe('IngredientService domain refactor', () => {
       ['tag-1'],
     );
   });
+
+  it('rejects changing ingredient type after creation', async () => {
+    ingredientRepository.findById.mockResolvedValue({
+      id: 'ingredient-1',
+      name: '海藻粉',
+      type: IngredientType.FOOD,
+      procurementStrategy: IngredientProcurementStrategy.DAILY_PURCHASE,
+      diyEnabled: false,
+      procurementEnabled: false,
+      brand: null,
+      productModel: null,
+      purchaseChannel: null,
+      notes: null,
+      baseUnit: BaseUnit.G,
+      unitDisplayLabel: '克',
+      purchaseUnit: 'kg',
+      purchaseToBaseRatio: 1000,
+      currentPricePerPurchaseUnit: 10,
+      effectivePricePerPurchaseUnit: 10,
+      weightG: null,
+      maxCapacityG: null,
+      safetyStock: null,
+      reorderPoint: null,
+      targetStock: null,
+      properties: { cfct_class: '海产类', edible_yield_rate: 1, main_nutrients_desc: '' },
+      nutritionProfile: null,
+    });
+
+    await expect(
+      service.updateIngredient('ingredient-1', {
+        type: IngredientType.SUPPLEMENT,
+      }),
+    ).rejects.toThrow('已创建原料的类型不可修改');
+
+    expect(ingredientRepository.save).not.toHaveBeenCalled();
+  });
 });

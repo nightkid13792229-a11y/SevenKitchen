@@ -262,6 +262,120 @@ describe('RecipesController (e2e)', () => {
         missingId,
       );
     });
+
+    it('returns supplement alternatives with product fields and resolved active nutrients', async () => {
+      const recipe: Recipe = {
+        id: '550e8400-e29b-41d4-a716-446655440013',
+        version: 1,
+        name: 'Supplement Alternatives Recipe',
+        status: 'PUBLIC',
+        energyDensityKcalPerKg: 1450,
+        productionLossRate: 1.07,
+        items: [
+          {
+            id: 'item-supplement',
+            ingredientId: 'ingredient-supplement-default',
+            sortOrder: 0,
+            nutrientTargetKey: '维生素E',
+            nutrientTargetValue: 200,
+            supplementAlternativeIngredientIds: ['ingredient-supplement-alt'],
+            supplementAlternatives: [
+              {
+                ingredientId: 'ingredient-supplement-alt',
+                ingredientName: '维生素E-400',
+                ingredient: {
+                  id: 'ingredient-supplement-alt',
+                  name: '维生素E-400',
+                  type: 'SUPPLEMENT',
+                  brand: 'NOW FOODS',
+                  productModel: '400IU/粒',
+                  purchaseChannel: '京东',
+                  unitDisplayLabel: '粒',
+                  properties: {
+                    image_url: 'https://cdn.example.com/e400-square.jpg',
+                    purchase_link: {
+                      platform: 'JD',
+                  url: 'https://jd.example/e400',
+                },
+                add_timing: 'BEFORE_MEAL',
+                active_nutrients: {
+                  维生素E: {
+                    value: 400,
+                        unit: 'IU',
+                      },
+                    },
+                  },
+                } as any,
+              },
+            ],
+            ingredient: {
+              id: 'ingredient-supplement-default',
+              name: '维生素E-200',
+              type: 'SUPPLEMENT',
+              brand: 'NOW FOODS',
+              productModel: '200IU/粒',
+              purchaseChannel: '京东',
+              unitDisplayLabel: '粒',
+              properties: {
+                image_url: 'https://cdn.example.com/e200-square.jpg',
+                purchase_link: {
+                  platform: 'JD',
+                  url: 'https://jd.example/e200',
+                },
+                add_timing: 'BEFORE_MEAL',
+                active_nutrients: {
+                  维生素E: {
+                    value: 200,
+                    unit: 'IU',
+                  },
+                },
+              },
+            } as any,
+          } as any,
+        ],
+      };
+      await recipeRepository.save(recipe);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/${recipe.id}`)
+        .expect(200);
+
+      expect(response.body.code).toBe(0);
+      expect(response.body.data.items[0].ingredient.displayUnit).toBe('粒');
+      expect(response.body.data.items[0].ingredient.addTimingLabel).toBe('随餐');
+      expect(response.body.data.items[0].ingredient.imageUrl).toBe(
+        'https://cdn.example.com/e200-square.jpg',
+      );
+      expect(response.body.data.items[0].ingredient.activeNutrients.维生素E).toEqual({
+        value: 200,
+        unit: 'IU',
+      });
+      expect(
+        response.body.data.items[0].supplementAlternatives[0].ingredient.brand,
+      ).toBe('NOW FOODS');
+      expect(
+        response.body.data.items[0].supplementAlternatives[0].ingredient
+          .addTimingLabel,
+      ).toBe('随餐');
+      expect(
+        response.body.data.items[0].supplementAlternatives[0].ingredient
+          .purchaseLink,
+      ).toEqual({
+        platform: 'JD',
+        url: 'https://jd.example/e400',
+      });
+      expect(
+        response.body.data.items[0].supplementAlternatives[0].ingredient
+          .imageUrl,
+      ).toBe('https://cdn.example.com/e400-square.jpg');
+      expect(
+        response.body.data.items[0].supplementAlternatives[0].ingredient
+          .activeNutrients.维生素E,
+      ).toEqual({
+        value: 400,
+        unit: 'IU',
+      });
+    });
   });
 
   describe('POST /api/v1/recipes/:id/view', () => {

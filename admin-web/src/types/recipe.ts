@@ -54,6 +54,11 @@ export interface RecipeItem {
   ratioPercent?: number;
   nutrientTargetKey?: string;
   nutrientTargetValue?: number;
+  supplementAlternativeIngredientIds?: string[];
+  supplementAlternatives?: Array<{
+    ingredientId: string;
+    ingredientName: string;
+  }>;
   ingredient?: {
     id: string;
     name: string;

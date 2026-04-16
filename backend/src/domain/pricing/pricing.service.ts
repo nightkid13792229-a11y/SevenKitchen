@@ -7,6 +7,8 @@
 import { Injectable, Inject } from '@nestjs/common';
 import { Ingredient } from '../ingredient/ingredient.entity';
 import { IngredientType } from '../ingredient/enums';
+import { resolveSupplementAddTimingLabel } from '../ingredient/supplement-add-timing';
+import { resolveSupplementNutrients } from '../ingredient/supplement-nutrition-resolver';
 import { ValidationError } from '../common/errors';
 import { PackagingService } from '../packaging';
 import { INGREDIENT_REPOSITORY } from '../../application/ingredient/ingredient.service';
@@ -58,6 +60,7 @@ export interface PurchaseLink {
 }
 
 export interface RecipeItem {
+  id?: string;
   ingredientId: string;
   ingredient: Ingredient;
   preparationMethod?: string | null; // 添加时机/制备方法
@@ -105,6 +108,7 @@ export interface PricingBreakdown {
 }
 
 export interface IngredientCostItem {
+  recipeItemId?: string;
   name: string;
   type: string;
   amount: number; // 成本计算用量（含出肉率和生产损耗率）
@@ -315,6 +319,7 @@ export class PricingService {
 
         // Collect detailed data
         ingredientDetails.push({
+          recipeItemId: item.id,
           name: ingredient.name,
           type: 'FOOD',
           amount: itemGrossPurchaseKg, // 成本计算用量（含出肉率和生产损耗率）
@@ -353,10 +358,13 @@ export class PricingService {
 
         const targetKey = item.nutrientTargetKey;
         const targetVal = item.nutrientTargetValue;
-        const suppProps = ingredient.properties as any;
-        const activeNutrients = suppProps.active_nutrients || {};
+        const activeNutrients = resolveSupplementNutrients({
+          nutritionProfile: ingredient.nutritionProfile,
+          fallback: (ingredient.properties as any)?.active_nutrients,
+        });
         const concentrationObj = activeNutrients[targetKey];
         const concentration = concentrationObj?.value || 0;
+        const concentrationUnit = concentrationObj?.unit || '';
 
         console.log('[PricingService] SUPPLEMENT concentration lookup:', {
           name: ingredient.name,
@@ -400,17 +408,8 @@ export class PricingService {
           itemCost,
         });
 
-        // For SUPPLEMENTS: preparationMethod is actually "添加时机" (Adding Timing)
-        // Convert enum values to Chinese display names (must match admin-web labels)
         const addTimingEnum = (ingredient.properties as any)?.add_timing;
-        const addTimingMap: Record<string, string> = {
-          BEFORE_MIXING: '制作中（须拌匀）',
-          BEFORE_MEAL: '饭前（冷却后）',
-        };
-
-        const finalPrepMethod = addTimingEnum
-          ? addTimingMap[addTimingEnum] || addTimingEnum
-          : undefined;
+        const finalPrepMethod = resolveSupplementAddTimingLabel(addTimingEnum);
 
         console.log('[PricingService] SUPPLEMENT 添加时机:', {
           name: ingredient.name,
@@ -420,6 +419,7 @@ export class PricingService {
 
         // Collect detailed data for SUPPLEMENT
         ingredientDetails.push({
+          recipeItemId: item.id,
           name: ingredient.name,
           type: 'SUPPLEMENT',
           amount: unitsNeeded, // 补剂的用量已含损耗率
@@ -428,7 +428,7 @@ export class PricingService {
           unit: 'g',
           unitCost: unitCost,
           cost: itemCost,
-          calculation: `营养需求${totalNutrientNeeded.toFixed(3)}mg ÷ 浓度${concentration} = 理论用量${unitsTheoretical.toFixed(3)}g × 损耗率${customLoss} = 实际用量${unitsNeeded.toFixed(3)}g × ${unitCost.toFixed(4)}元/g = ${itemCost.toFixed(2)}元`,
+          calculation: `营养需求${totalNutrientNeeded.toFixed(3)}${concentrationUnit} ÷ 浓度${concentration}${concentrationUnit} = 理论用量${unitsTheoretical.toFixed(3)}g × 损耗率${customLoss} = 实际用量${unitsNeeded.toFixed(3)}g × ${unitCost.toFixed(4)}元/g = ${itemCost.toFixed(2)}元`,
           purchaseChannel: ingredient.purchaseChannel || undefined,
           brand: ingredient.brand || undefined,
           productModel: ingredient.productModel || undefined,

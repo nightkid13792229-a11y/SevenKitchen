@@ -3,7 +3,12 @@
  * Handles CRUD and batch queries for recommended products
  */
 
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
+import { IngredientType } from '../../domain/ingredient/enums';
 import { PrismaService } from '../../infrastructure/prisma.service';
 
 export interface RecommendedProductSummary {
@@ -51,6 +56,21 @@ export interface UpdateRecommendedProductDto {
 @Injectable()
 export class RecommendedProductService {
   constructor(private readonly prisma: PrismaService) {}
+
+  private assertFoodIngredientCanOwnRecommendedProducts(ingredient: {
+    id: string;
+    type: string;
+  } | null): asserts ingredient is { id: string; type: string } {
+    if (!ingredient) {
+      throw new NotFoundException('Ingredient not found');
+    }
+
+    if (ingredient.type !== IngredientType.FOOD) {
+      throw new BadRequestException(
+        'Only FOOD ingredients can own recommended products',
+      );
+    }
+  }
 
   private normalizeDistinctValues(values: Array<string | null | undefined>): string[] {
     return Array.from(
@@ -158,15 +178,14 @@ export class RecommendedProductService {
     ingredientId: string,
     dto: CreateRecommendedProductDto,
   ): Promise<any> {
-    // Verify ingredient exists
     const ingredient = await this.prisma.ingredient.findUnique({
       where: { id: ingredientId },
+      select: {
+        id: true,
+        type: true,
+      },
     });
-    if (!ingredient) {
-      throw new NotFoundException(
-        `Ingredient not found: ${ingredientId}`,
-      );
-    }
+    this.assertFoodIngredientCanOwnRecommendedProducts(ingredient);
 
     return this.prisma.recommendedProduct.create({
       data: {
@@ -195,10 +214,20 @@ export class RecommendedProductService {
   async update(id: string, dto: UpdateRecommendedProductDto): Promise<any> {
     const existing = await this.prisma.recommendedProduct.findUnique({
       where: { id },
+      select: {
+        id: true,
+        ingredient: {
+          select: {
+            id: true,
+            type: true,
+          },
+        },
+      },
     });
     if (!existing) {
       throw new NotFoundException(`Recommended product not found: ${id}`);
     }
+    this.assertFoodIngredientCanOwnRecommendedProducts(existing.ingredient);
 
     return this.prisma.recommendedProduct.update({
       where: { id },
@@ -239,10 +268,20 @@ export class RecommendedProductService {
   async delete(id: string): Promise<void> {
     const existing = await this.prisma.recommendedProduct.findUnique({
       where: { id },
+      select: {
+        id: true,
+        ingredient: {
+          select: {
+            id: true,
+            type: true,
+          },
+        },
+      },
     });
     if (!existing) {
       throw new NotFoundException(`Recommended product not found: ${id}`);
     }
+    this.assertFoodIngredientCanOwnRecommendedProducts(existing.ingredient);
     await this.prisma.recommendedProduct.delete({ where: { id } });
   }
 }

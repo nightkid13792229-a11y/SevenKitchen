@@ -36,7 +36,7 @@
               <view class="order-body">
                 <view class="order-row">
                   <text class="label">总净重:</text>
-                  <text class="value">{{ formatDecimal(order.packageSpecG * order.packageCount) }}g</text>
+                  <text class="value">{{ formatDecimal(getOrderTotalNetWeight(order)) }}g</text>
                 </view>
                 <view v-if="order.packagePlan && order.packagePlan.length > 0" class="order-row">
                   <text class="label">分装明细:</text>
@@ -128,6 +128,7 @@ import { ref, computed } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { getBaseUrl } from '../../utils/config';
 import { calculateSupplementAmountForProduction } from '../../utils/supplement-nutrients';
+import { getPackagePlanTotal } from '../../utils/order-package-plan';
 
 // 打印数据
 interface PrintData {
@@ -259,22 +260,41 @@ function formatPackagePlan(item: {
   packageSpecG?: number
   packageCount?: number
 }): string {
-  const packagePlanRows = (item.packagePlan || [])
-    .map(row => {
-      const packageSpecG = Number(row?.packageSpecG)
-      const packageCount = Number(row?.packageCount)
-      if (!Number.isFinite(packageSpecG) || !Number.isFinite(packageCount) || packageSpecG <= 0 || packageCount <= 0) {
-        return ''
-      }
-      return `${packageSpecG}g×${packageCount}袋`
-    })
-    .filter(Boolean)
+  const packagePlanRows = normalizePackagePlanRows(item.packagePlan)
 
   if (packagePlanRows.length > 0) {
     return packagePlanRows.join('，')
   }
 
   return `${item.packageSpecG || 0}g×${item.packageCount || 0}袋`
+}
+
+function normalizePackagePlanRows(
+  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>,
+): Array<{ packageSpecG: number; packageCount: number }> {
+  return (packagePlan || [])
+    .map((row) => {
+      const packageSpecG = Math.floor(Number(row?.packageSpecG))
+      const packageCount = Math.floor(Number(row?.packageCount))
+      if (!Number.isFinite(packageSpecG) || !Number.isFinite(packageCount) || packageSpecG <= 0 || packageCount <= 0) {
+        return null
+      }
+      return { packageSpecG, packageCount }
+    })
+    .filter((row): row is { packageSpecG: number; packageCount: number } => row !== null)
+}
+
+function getOrderTotalNetWeight(item: {
+  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
+  packageSpecG?: number
+  packageCount?: number
+}): number {
+  const packagePlanRows = normalizePackagePlanRows(item.packagePlan)
+  if (packagePlanRows.length > 0) {
+    return getPackagePlanTotal(packagePlanRows).totalGrams
+  }
+
+  return Number(item.packageSpecG || 0) * Number(item.packageCount || 0)
 }
 
 // 格式化日期时间
@@ -554,6 +574,8 @@ const handlePrint = async () => {
 
 .order-row {
   display: flex;
+  align-items: flex-start;
+  gap: 12rpx;
   margin-bottom: 12rpx;
   font-size: 24rpx;
 
@@ -569,8 +591,10 @@ const handlePrint = async () => {
   .value {
     color: #333;
     flex: 1;
+    min-width: 0;
     font-weight: 500;
     word-break: break-all;
+    overflow-wrap: anywhere;
   }
 }
 

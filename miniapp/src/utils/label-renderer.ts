@@ -32,6 +32,10 @@ export interface LabelData {
   weightPerPack: number;
   packageCount: number;
   totalWeight: number;
+  packagePlan?: Array<{
+    packageSpecG: number;
+    packageCount: number;
+  }>;
 
   // 营养成分分析
   nutritionAnalysis?: {
@@ -106,6 +110,33 @@ export function getCookingAdvice(cookingMethod: {
   ];
 }
 
+function normalizePackagePlanRows(
+  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
+): Array<{ packageSpecG: number; packageCount: number }> {
+  return (packagePlan || [])
+    .map((row) => {
+      const packageSpecG = Math.floor(Number(row?.packageSpecG));
+      const packageCount = Math.floor(Number(row?.packageCount));
+      if (!Number.isFinite(packageSpecG) || !Number.isFinite(packageCount) || packageSpecG <= 0 || packageCount <= 0) {
+        return null;
+      }
+      return { packageSpecG, packageCount };
+    })
+    .filter((row): row is { packageSpecG: number; packageCount: number } => row !== null);
+}
+
+function getOrderInfoLines(labelData: LabelData): string[] {
+  const packagePlanRows = normalizePackagePlanRows(labelData.packagePlan);
+  if (packagePlanRows.length > 0) {
+    const packagePlanText = packagePlanRows
+      .map((row) => `${row.packageSpecG}g×${row.packageCount}袋`)
+      .join('、');
+    return splitTextBySeparators(packagePlanText, 28);
+  }
+
+  return [`${labelData.weightPerPack}g × ${labelData.packageCount}袋  总净重${labelData.totalWeight}g`];
+}
+
 /**
  * 测量标签绘制后的总高度（不实际输出）
  * @param ctx Canvas上下文
@@ -122,7 +153,8 @@ function measureLabelHeight(ctx: any, labelData: LabelData): number {
   y += mmToPx(LABEL_ELEMENTS.recipeName.lineHeight);
 
   // 2. 制作信息
-  y += mmToPx(LABEL_ELEMENTS.productionInfo.lineHeight) * 2;
+  y += mmToPx(LABEL_ELEMENTS.productionInfo.lineHeight);
+  y += getOrderInfoLines(labelData).length * mmToPx(LABEL_ELEMENTS.productionInfo.lineHeight);
   y += mmToPx(LABEL_LAYOUT.lineHeight.loose);
   y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
 
@@ -246,9 +278,13 @@ export async function drawProductionLabel(
       ctx.fillText(`为"${labelData.dogName}"制作于${labelData.productionTime}`, centerX, y);
       y += mmToPx(LABEL_ELEMENTS.productionInfo.lineHeight);
 
-      // 订购信息（第二行）
-      const orderInfo = `${labelData.weightPerPack}g × ${labelData.packageCount}袋  总净重${labelData.totalWeight}g`;
-      ctx.fillText(orderInfo, centerX, y);
+      // 订购信息
+      const orderInfoLines = getOrderInfoLines(labelData);
+      orderInfoLines.forEach((line) => {
+        ctx.fillText(line, centerX, y);
+        y += mmToPx(LABEL_ELEMENTS.productionInfo.lineHeight);
+      });
+
       y += mmToPx(LABEL_LAYOUT.lineHeight.loose);
 
       // 粗分隔线已移除
@@ -572,7 +608,8 @@ function measureLabelHeightForJCSDK(labelData: LabelData): number {
   y += LABEL_ELEMENTS.recipeName.lineHeight;
 
   // 2. 制作信息
-  y += LABEL_ELEMENTS.productionInfo.lineHeight * 2;
+  y += LABEL_ELEMENTS.productionInfo.lineHeight;
+  y += getOrderInfoLines(labelData).length * LABEL_ELEMENTS.productionInfo.lineHeight;
   y += LABEL_LAYOUT.lineHeight.loose;
   y += LABEL_LAYOUT.spacing.sectionGap;
 
@@ -689,11 +726,15 @@ export async function drawProductionLabelWithJCSDK(
       });
       y += LABEL_ELEMENTS.productionInfo.lineHeight * scale;
 
-      // 订购信息（第二行）
-      const orderInfo = `${labelData.weightPerPack}g × ${labelData.packageCount}袋  总净重${labelData.totalWeight}g`;
-      JCAPI.drawText(orderInfo, centerX, y, LABEL_ELEMENTS.productionInfo.fontSize * scale, 0, {
-        align: 'center'
+      // 订购信息
+      const orderInfoLines = getOrderInfoLines(labelData);
+      orderInfoLines.forEach((line) => {
+        JCAPI.drawText(line, centerX, y, LABEL_ELEMENTS.productionInfo.fontSize * scale, 0, {
+          align: 'center'
+        });
+        y += LABEL_ELEMENTS.productionInfo.lineHeight * scale;
       });
+
       y += LABEL_LAYOUT.lineHeight.loose * scale;
 
       // 粗分隔线已移除

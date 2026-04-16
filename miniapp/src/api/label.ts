@@ -26,6 +26,11 @@ export interface CookingMethod {
   sousvide: string;
 }
 
+export interface PackagePlanItem {
+  packageSpecG: number;
+  packageCount: number;
+}
+
 /**
  * 标签数据
  */
@@ -41,6 +46,7 @@ export interface LabelData {
   weightPerPack: number;
   packageCount: number;
   totalWeight: number;
+  packagePlan?: PackagePlanItem[];
   nutritionAnalysis?: NutritionAnalysis;
   shelfLife: string;
   cookingMethod?: CookingMethod | string;

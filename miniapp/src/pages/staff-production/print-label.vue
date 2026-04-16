@@ -80,7 +80,7 @@
                   <text class="value">{{ order.recipeName }}</text>
                 </view>
 
-                <view v-if="order.packagePlan && order.packagePlan.length > 0" class="info-row">
+                <view v-if="hasPackagePlan(order)" class="info-row">
                   <text class="label">分装明细：</text>
                   <text class="value">{{ formatPackagePlan(order) }}</text>
                 </view>
@@ -91,7 +91,7 @@
                 </view>
 
                 <!-- 可编辑：重量规格 -->
-                <view class="info-row editable-row">
+                <view v-if="!hasPackagePlan(order)" class="info-row editable-row">
                   <text class="label">规格：</text>
                   <input
                     v-model.number="order.packageSpecG"
@@ -160,7 +160,7 @@
                 <text class="value">{{ order.recipeName }}</text>
               </view>
 
-              <view v-if="order.packagePlan && order.packagePlan.length > 0" class="info-row">
+              <view v-if="hasPackagePlan(order)" class="info-row">
                 <text class="label">分装明细：</text>
                 <text class="value">{{ formatPackagePlan(order) }}</text>
               </view>
@@ -171,7 +171,7 @@
               </view>
 
               <!-- 可编辑：重量规格 -->
-              <view class="info-row editable-row">
+              <view v-if="!hasPackagePlan(order)" class="info-row editable-row">
                 <text class="label">规格：</text>
                 <input
                   v-model.number="order.packageSpecG"
@@ -251,6 +251,7 @@ import {
 } from '../../utils/label-mapping';
 import { getRecipeBatchesWithOrders } from '../../api/production';
 import { generateLabelImage, type LabelData as ApiLabelData } from '../../api/label';
+import { getPackagePlanTotal } from '../../utils/order-package-plan';
 
 const CANVAS_WIDTH = 600;
 const CANVAS_HEIGHT = 800;
@@ -292,6 +293,11 @@ interface OrderPrintConfig {
   // 可编辑字段
   productionDate?: string;          // 制作日期
 }
+
+type PackagePlanRow = {
+  packageSpecG: number;
+  packageCount: number;
+};
 
 const orders = ref<OrderPrintConfig[]>([]);
 
@@ -398,9 +404,9 @@ async function loadAllBatchesForRecipe(
           orderId: item.orderId,
           dogName: item.dogName || '未知',
           recipeName: item.recipeName || '未知食谱',
+          packagePlan: normalizePackagePlanRows(item.packagePlan),
           packageSpecG: item.packageSpecG || 500,
           packageCount: item.packageCount || 1,
-          packagePlan: item.packagePlan,
           ingredientSourcePlan: item.ingredientSourcePlan ?? null,
           printCount: 2,
           recipeSnapshot: item.recipeSnapshot,
@@ -448,9 +454,9 @@ function initializeOrders(taskData: any) {
     orderId: item.orderId || '',
     dogName: item.dogName || '未知',
     recipeName: taskData.recipeName || '未知食谱',
+    packagePlan: normalizePackagePlanRows(item.packagePlan),
     packageSpecG: item.packageSpecG || 500,
     packageCount: item.packageCount || 1,
-    packagePlan: item.packagePlan,
     ingredientSourcePlan: item.ingredientSourcePlan ?? null,
     printCount: 2, // 默认打印2份
     recipeSnapshot: taskData.recipeSnapshot,
@@ -584,27 +590,52 @@ function increaseCount(index: number) {
   }
 }
 
+function normalizePackagePlanRows(
+  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
+): PackagePlanRow[] {
+  return (packagePlan || [])
+    .map((row) => {
+      const packageSpecG = Math.floor(Number(row?.packageSpecG))
+      const packageCount = Math.floor(Number(row?.packageCount))
+      if (!Number.isFinite(packageSpecG) || !Number.isFinite(packageCount) || packageSpecG <= 0 || packageCount <= 0) {
+        return null
+      }
+      return { packageSpecG, packageCount }
+    })
+    .filter((row): row is PackagePlanRow => row !== null)
+}
+
+function hasPackagePlan(item: { packagePlan?: Array<{ packageSpecG: number; packageCount: number }> }): boolean {
+  return normalizePackagePlanRows(item.packagePlan).length > 0
+}
+
 function formatPackagePlan(item: {
   packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
   packageSpecG?: number
   packageCount?: number
 }): string {
-  const packagePlanRows = (item.packagePlan || [])
-    .map(row => {
-      const packageSpecG = Number(row?.packageSpecG)
-      const packageCount = Number(row?.packageCount)
-      if (!Number.isFinite(packageSpecG) || !Number.isFinite(packageCount) || packageSpecG <= 0 || packageCount <= 0) {
-        return ''
-      }
-      return `${packageSpecG}g×${packageCount}袋`
-    })
-    .filter(Boolean)
+  const packagePlanRows = normalizePackagePlanRows(item.packagePlan)
+    .map(row => `${row.packageSpecG}g×${row.packageCount}袋`)
 
   if (packagePlanRows.length > 0) {
     return packagePlanRows.join('，')
   }
 
   return `${item.packageSpecG || 0}g×${item.packageCount || 0}袋`
+}
+
+function getPackagePlanTotalWeight(item: {
+  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
+  packageSpecG?: number
+  packageCount?: number
+}): number {
+  const packagePlanRows = normalizePackagePlanRows(item.packagePlan)
+
+  if (packagePlanRows.length > 0) {
+    return getPackagePlanTotal(packagePlanRows).totalGrams
+  }
+
+  return Number(item.packageSpecG || 0) * Number(item.packageCount || 0)
 }
 
 // 减少打印份数
@@ -674,6 +705,10 @@ function prepareLabelData(order: OrderPrintConfig): LabelData {
   // 获取生命阶段和健康标签
   const lifeStages = order.recipeSnapshot?.applicable_life_stages || [];
   const healthTags = order.recipeSnapshot?.target_health_tags || [];
+  const packagePlan = normalizePackagePlanRows(order.packagePlan);
+  const firstPackageRow = packagePlan[0];
+  const weightPerPack = firstPackageRow?.packageSpecG ?? Number(order.packageSpecG || 0);
+  const packageCount = firstPackageRow?.packageCount ?? Number(order.packageCount || 0);
 
   // 提取营养成分分析数据（字段名与数据库保持一致）
   const nutritionAnalysis = order.recipeSnapshot?.nutrition_detailed_data ? {
@@ -699,9 +734,10 @@ function prepareLabelData(order: OrderPrintConfig): LabelData {
     dogName: order.dogName,
     foodIngredients,
     supplementIngredients,
-    weightPerPack: order.packageSpecG,
-    packageCount: order.packageCount,
-    totalWeight: order.packageSpecG * order.packageCount,
+    weightPerPack,
+    packageCount,
+    totalWeight: getPackagePlanTotalWeight(order),
+    packagePlan: packagePlan.length > 0 ? packagePlan : undefined,
     nutritionAnalysis,
     shelfLife: getShelfLifeText(),
     cookingMethod: '', // 不再使用真空袋规格
@@ -1010,11 +1046,13 @@ function goBack() {
 
 .order-info {
   flex: 1;
+  min-width: 0;
 
   .info-row {
     display: flex;
     align-items: center;
     margin-bottom: 12rpx;
+    min-width: 0;
 
     &.editable-row {
       background-color: #f8f9fa;
@@ -1033,6 +1071,9 @@ function goBack() {
       font-size: 26rpx;
       color: #333;
       flex: 1;
+      min-width: 0;
+      word-break: break-all;
+      overflow-wrap: anywhere;
     }
 
     .edit-input {
@@ -1126,6 +1167,9 @@ function goBack() {
       color: #333;
       flex: 1;
       margin-left: 16rpx;
+      min-width: 0;
+      word-break: break-all;
+      overflow-wrap: anywhere;
     }
 
     .search-btn {

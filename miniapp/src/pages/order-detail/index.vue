@@ -1942,8 +1942,9 @@ function contactSevenDad() {
 .package-row {
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
   margin-bottom: 12rpx;
+  gap: 16rpx;
 }
 
 .package-row:last-child {
@@ -1959,6 +1960,11 @@ function contactSevenDad() {
   font-size: 26rpx;
   color: #333;
   font-weight: 500;
+  min-width: 0;
+  flex: 1;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .package-value.price {

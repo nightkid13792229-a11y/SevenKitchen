@@ -499,17 +499,24 @@ function formatAddress(address?: { regionText?: string }): string {
   font-size: 28rpx;
   color: #333;
   font-weight: 500;
+  min-width: 0;
+  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 .meal-info {
   display: flex;
   align-items: center;
   gap: 8rpx;
+  min-width: 0;
 }
 
 .meal-text {
   font-size: 26rpx;
   color: #666;
+  min-width: 0;
+  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 .meal-separator {
@@ -563,4 +570,3 @@ function formatAddress(address?: { regionText?: string }): string {
   color: #999;
 }
 </style>
-

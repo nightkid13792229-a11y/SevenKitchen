@@ -126,7 +126,9 @@ export class PrismaOrderRepository implements OrderRepository {
               quantityG: item.quantityG,
               packageCount: item.packageCount,
               packageSpecG: item.packageSpecG,
-              packagePlan: item.packagePlan ?? undefined,
+              packagePlan: item.packagePlan
+                ? (item.packagePlan as unknown as Prisma.InputJsonValue)
+                : undefined,
               ingredientSourcePlan: item.ingredientSourcePlan ?? null,
               preparationMethod: item.preparationMethod ?? null,
               cookingMethod: item.cookingMethod ?? null,

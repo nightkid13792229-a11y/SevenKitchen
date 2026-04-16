@@ -76,7 +76,11 @@ export function estimatePackagePlanDays(
   totalQuantityG: number,
   dailyIntakeG: number | null | undefined,
 ): number | null {
-  if (!Number.isFinite(dailyIntakeG) || dailyIntakeG <= 0) {
+  if (
+    typeof dailyIntakeG !== 'number' ||
+    !Number.isFinite(dailyIntakeG) ||
+    dailyIntakeG <= 0
+  ) {
     return null;
   }
 

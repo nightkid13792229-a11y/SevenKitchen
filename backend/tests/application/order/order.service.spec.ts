@@ -5,6 +5,7 @@
 
 import { Test, TestingModule } from '@nestjs/testing';
 import { OrderService, ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY } from 'src/order.service';
+import { OrderSourcePlanService } from 'src/order/order-source-plan.service';
 import type { OrderRepository } from 'src/domain/order/order.repository';
 import type { OrderStatusHistoryRepository } from 'src/domain/order/order-status-history.repository';
 import type { RecipeRepository } from 'src/domain/recipe/recipe.repository';
@@ -13,6 +14,12 @@ import type { DogRepository } from 'src/domain/dog/dog.repository';
 import type { AddressRepository } from 'src/domain/address/address.repository';
 import { Order, OrderItem } from 'src/domain/order';
 import { OrderType, OrderStatus, calculateDogEnergy } from 'src/domain';
+import { Ingredient } from 'src/domain/ingredient/ingredient.entity';
+import {
+  BaseUnit,
+  IngredientProcurementStrategy,
+  IngredientType,
+} from 'src/domain/ingredient/enums';
 import { PricingService } from 'src/domain/pricing/pricing.service';
 import { GlobalConfigService } from 'src/config/global-config.service';
 import { ShippingService } from 'src/shipping/shipping.service';
@@ -28,6 +35,7 @@ import {
 } from 'src/domain';
 import { RECIPE_REPOSITORY } from 'src/dog/dog.service';
 import { INGREDIENT_REPOSITORY } from 'src/ingredient/ingredient.service';
+import { ProcurementSkuService } from 'src/ingredient/procurement-sku.service';
 import { DOG_REPOSITORY } from 'src/dog/dog.service';
 import { ADDRESS_REPOSITORY } from 'src/address/address.service';
 
@@ -76,6 +84,10 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
 
   const mockPricingService = {
     calculateOrderPrice: jest.fn(),
+  };
+
+  const mockProcurementSkuService = {
+    batchFindActive: jest.fn(),
   };
 
   const mockGlobalConfigService = {
@@ -147,6 +159,11 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
           provide: PricingService,
           useValue: mockPricingService,
         },
+        OrderSourcePlanService,
+        {
+          provide: ProcurementSkuService,
+          useValue: mockProcurementSkuService,
+        },
         {
           provide: GlobalConfigService,
           useValue: mockGlobalConfigService,
@@ -172,6 +189,7 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
     dogRepository = module.get(DOG_REPOSITORY);
 
     jest.clearAllMocks();
+    mockProcurementSkuService.batchFindActive.mockResolvedValue({});
   });
 
   const createMockDog = (): Dog => {
@@ -231,6 +249,32 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       purchaseToBaseRatio: 1000,
     };
   };
+
+  const createFullFoodIngredient = () =>
+    new Ingredient(
+      'ingredient-1',
+      'Test Ingredient',
+      IngredientType.FOOD,
+      IngredientProcurementStrategy.DAILY_PURCHASE,
+      true,
+      true,
+      'Original Brand',
+      'Original Model',
+      '山姆会员店',
+      null,
+      BaseUnit.G,
+      'g',
+      'kg',
+      1000,
+      80,
+      null,
+      null,
+      null,
+      null,
+      null,
+      { edible_yield_rate: 0.8 },
+      { protein_g: 20 } as any,
+    );
 
   describe('createOrderDraft - dailyIntakeG calculation', () => {
     it('should calculate dailyIntakeG from DogCalc.finalFoodKcal and Recipe.energyDensityKcalPerKg', async () => {
@@ -483,6 +527,116 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
             ],
           }),
         }),
+      );
+    });
+
+    it('uses the selected ingredient source plan SKU in preview pricing and snapshot params', async () => {
+      const dog = createMockDog();
+      const recipe = createMockRecipe();
+      const ingredient = createFullFoodIngredient();
+
+      dogRepository.findById.mockResolvedValue(dog);
+      recipeRepository.findById.mockResolvedValue(recipe);
+      mockIngredientRepository.findByIds.mockResolvedValue([ingredient]);
+      mockProcurementSkuService.batchFindActive.mockResolvedValue({
+        [ingredient.id]: [
+          {
+            id: 'sku-default',
+            ingredientId: ingredient.id,
+            name: '山姆鸡胸肉',
+            brand: '山姆',
+            productModel: '2kg/包',
+            purchaseChannel: '山姆会员店',
+            supplierName: null,
+            purchaseUnit: 'kg',
+            purchaseToBaseRatio: 1000,
+            currentPurchasePrice: 80,
+            referencePurchasePrice: null,
+            referencePricePerPurchaseUnit: null,
+            displayUnit: 'kg',
+            notes: null,
+            isDefault: true,
+            isActive: true,
+            sortOrder: 0,
+            safetyStock: 1,
+            reorderPoint: 3,
+            targetStock: 5,
+          },
+          {
+            id: 'sku-wholesale',
+            ingredientId: ingredient.id,
+            name: '批发鸡胸肉',
+            brand: '批发品牌',
+            productModel: '10kg/箱',
+            purchaseChannel: '生鲜批发商',
+            supplierName: null,
+            purchaseUnit: 'kg',
+            purchaseToBaseRatio: 1000,
+            currentPurchasePrice: 42,
+            referencePurchasePrice: null,
+            referencePricePerPurchaseUnit: null,
+            displayUnit: 'kg',
+            notes: null,
+            isDefault: false,
+            isActive: true,
+            sortOrder: 1,
+            safetyStock: 2,
+            reorderPoint: 4,
+            targetStock: 8,
+          },
+        ],
+      });
+      mockPricingService.calculateOrderPrice.mockReturnValue({
+        costIngredients: 42,
+        costPackaging: 10,
+        costLabor: 20,
+        costOverhead: 5,
+        totalProductCost: 77,
+        productPrice: 128.33,
+        weightPackagingG: 0,
+      });
+      mockPricingSnapshotRepository.create.mockResolvedValue({
+        id: 'snapshot-wholesale',
+      });
+      mockShippingService.calculateShippingFeePreview.mockResolvedValue({
+        amountShipping: 0,
+        templateId: null,
+      });
+
+      await service.previewPricing({
+        customerId: 'customer-id-1',
+        dogId: 'dog-id-1',
+        type: OrderType.FRESH_FOOD,
+        ingredientSourcePlan: 'WHOLESALE',
+        items: [
+          {
+            recipeId: 'recipe-id-1',
+            quantityG: 1000,
+            packageSpecG: 200,
+            packageCount: 5,
+          },
+        ],
+      });
+
+      const pricingInput = mockPricingService.calculateOrderPrice.mock
+        .calls[0][0] as any;
+      const pricedIngredient = pricingInput.recipe.items[0].ingredient;
+      expect(pricedIngredient.purchaseChannel).toBe('生鲜批发商');
+      expect(pricedIngredient.brand).toBe('批发品牌');
+      expect(pricedIngredient.productModel).toBe('10kg/箱');
+      expect(pricedIngredient.currentPricePerPurchaseUnit).toBe(42);
+      expect(pricedIngredient.effectivePricePerPurchaseUnit).toBe(42);
+      expect(pricedIngredient.properties).toBe(ingredient.properties);
+      expect(pricedIngredient.nutritionProfile).toBe(
+        ingredient.nutritionProfile,
+      );
+      expect(pricedIngredient.procurementSkuId).toBe('sku-wholesale');
+      expect(pricedIngredient.procurementSkuName).toBe('批发鸡胸肉');
+
+      const snapshotInput = mockPricingSnapshotRepository.create.mock
+        .calls[0][0] as any;
+      expect(snapshotInput.requestParams.ingredientSourcePlan).toBe(
+        'WHOLESALE',
       );
     });
 
@@ -864,6 +1018,10 @@ describe('OrderService - Phase 8.16: Order Cancellation', () => {
           useValue: {},
         },
         {
+          provide: OrderSourcePlanService,
+          useValue: { applySourcePlanToIngredients: jest.fn() },
+        },
+        {
           provide: 'IOrderPricingSnapshotRepository',
           useValue: {
             findById: jest.fn(),
@@ -1112,6 +1270,10 @@ describe('OrderService - Phase 8.17: Payment Transaction Tracking', () => {
         {
           provide: ShippingService,
           useValue: {},
+        },
+        {
+          provide: OrderSourcePlanService,
+          useValue: { applySourcePlanToIngredients: jest.fn() },
         },
         {
           provide: 'IOrderPricingSnapshotRepository',

@@ -55,6 +55,7 @@ import {
   resolvePreparationMethodText,
   resolvePreparationMethodTokens,
 } from '../recipe/preparation-method-text.util';
+import { OrderSourcePlanService } from './order-source-plan.service';
 
 // Re-export for convenience
 export { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY };
@@ -107,6 +108,7 @@ export class OrderService {
     private readonly pricingService: PricingService,
     private readonly globalConfigService: GlobalConfigService,
     private readonly shippingService: ShippingService,
+    private readonly orderSourcePlanService: OrderSourcePlanService,
     @Inject(ADDRESS_REPOSITORY)
     private readonly addressRepository: AddressRepository,
     // @Inject('CartRepository')
@@ -793,8 +795,11 @@ export class OrderService {
         resolvedIds: Array.from(prepMethodMap.keys()),
       });
 
-      // Create map for quick lookup
-      const ingredientMap = new Map(ingredients.map((ing) => [ing.id, ing]));
+      const ingredientMap =
+        await this.orderSourcePlanService.applySourcePlanToIngredients(
+          ingredients,
+          ingredientSourcePlan,
+        );
 
       // Helper function to convert preparationMethod IDs to names
       // Build enriched recipe items with ingredient objects for pricing
@@ -1295,8 +1300,11 @@ export class OrderService {
       ingredientIds: ingredients.map((ing) => ing.id),
     });
 
-    // Create map for quick lookup
-    const ingredientMap = new Map(ingredients.map((ing) => [ing.id, ing]));
+    const ingredientMap =
+      await this.orderSourcePlanService.applySourcePlanToIngredients(
+        ingredients,
+        ingredientSourcePlan,
+      );
 
     // Helper function to convert preparationMethod IDs to names
     // Build enriched recipe items with ingredient objects for pricing

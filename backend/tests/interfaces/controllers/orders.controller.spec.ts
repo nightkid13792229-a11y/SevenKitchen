@@ -21,6 +21,7 @@ import {
   ORDER_REPOSITORY,
   ORDER_STATUS_HISTORY_REPOSITORY,
 } from 'src/application/order/order.service';
+import { OrderSourcePlanService } from 'src/application/order/order-source-plan.service';
 import { PRODUCTION_BATCH_REPOSITORY } from 'src/application/production/production.service';
 import type { OrderStatusHistoryRepository } from 'src/domain/order/order-status-history.repository';
 import {
@@ -271,6 +272,14 @@ describe('OrdersController (e2e)', () => {
         {
           provide: ShippingService,
           useValue: mockShippingService,
+        },
+        {
+          provide: OrderSourcePlanService,
+          useValue: {
+            applySourcePlanToIngredients: jest.fn(async (ingredients: any[]) =>
+              new Map(ingredients.map((ingredient) => [ingredient.id, ingredient])),
+            ),
+          },
         },
         {
           provide: RecipeService,

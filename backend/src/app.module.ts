@@ -68,6 +68,7 @@ import {
   OrderService,
   ORDER_REPOSITORY,
 } from './application/order/order.service';
+import { OrderSourcePlanService } from './application/order/order-source-plan.service';
 import {
   AddressService,
   ADDRESS_REPOSITORY,
@@ -312,6 +313,7 @@ validatePrismaConfig();
         ]
       : []),
     OrderService,
+    OrderSourcePlanService,
     RecipeService,
     CoverImageService,
     AddressService,

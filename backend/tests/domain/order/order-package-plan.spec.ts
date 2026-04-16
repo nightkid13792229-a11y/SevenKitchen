@@ -36,17 +36,34 @@ describe('order-package-plan', () => {
     expect(() => normalizePackagePlan([])).toThrow(
       'packagePlan must contain at least one row',
     );
+    expect(() => normalizePackagePlan(null)).toThrow(
+      'packagePlan must contain at least one row',
+    );
+    expect(() => normalizePackagePlan(undefined)).toThrow(
+      'packagePlan must contain at least one row',
+    );
+    expect(() =>
+      normalizePackagePlan('not-an-array' as unknown as Array<
+        Partial<{ packageSpecG: number; packageCount: number }>
+      >),
+    ).toThrow('packagePlan must contain at least one row');
     expect(() =>
       normalizePackagePlan([{ packageSpecG: 0, packageCount: 1 }]),
     ).toThrow('packageSpecG must be >= 1');
     expect(() =>
       normalizePackagePlan([{ packageSpecG: 100, packageCount: 0 }]),
     ).toThrow('packageCount must be >= 1');
+    expect(() => normalizePackagePlan([null as unknown as never])).toThrow(
+      'packagePlan[0] must be an object with packageSpecG and packageCount',
+    );
+    expect(() => normalizePackagePlan([123 as unknown as never])).toThrow(
+      'packagePlan[0] must be an object with packageSpecG and packageCount',
+    );
   });
 
   it('estimates days from total quantity and daily intake', () => {
     expect(estimatePackagePlanDays(4500, 300)).toBe(15);
-    expect(estimatePackagePlanDays(4400, 300)).toBeCloseTo(14.7, 1);
+    expect(estimatePackagePlanDays(4400, 300)).toBe(14.7);
     expect(estimatePackagePlanDays(4400, 0)).toBeNull();
     expect(estimatePackagePlanDays(4400, Infinity)).toBeNull();
   });

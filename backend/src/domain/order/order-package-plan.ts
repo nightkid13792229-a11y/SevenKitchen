@@ -20,6 +20,12 @@ export function normalizePackagePlan(
   }
 
   return input.map((row, index) => {
+    if (row == null || typeof row !== 'object' || Array.isArray(row)) {
+      throw new BadRequestException(
+        `packagePlan[${index}] must be an object with packageSpecG and packageCount`,
+      );
+    }
+
     const packageSpecG = Math.floor(Number(row.packageSpecG));
     const packageCount = Math.floor(Number(row.packageCount));
 

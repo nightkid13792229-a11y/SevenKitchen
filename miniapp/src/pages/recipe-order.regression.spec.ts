@@ -46,6 +46,19 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).toContain('schedulePricePreview()');
   });
 
+  it('invalidates stale preview state before debounced package row repricing', () => {
+    const updatePackagePlanRowSource = source.match(
+      /function updatePackagePlanRow[\s\S]*?\n}\n\nfunction removePackagePlanRow/,
+    )?.[0] || '';
+
+    expect(source).toContain('function invalidatePackagePlanPricingPreview');
+    expect(source).toContain('pricingPreviewRequestSeq += 1');
+    expect(source).toContain('resetPricePreviewState()');
+    expect(updatePackagePlanRowSource).toContain('invalidatePackagePlanPricingPreview()');
+    expect(updatePackagePlanRowSource.indexOf('invalidatePackagePlanPricingPreview()'))
+      .toBeLessThan(updatePackagePlanRowSource.indexOf('schedulePricePreview()'));
+  });
+
   it('stores preparation and cooking methods for checkout display', () => {
     expect(source).toContain("uni.setStorageSync('direct_buy_order_config'");
     expect(source).toContain("preparationMethod: preparationMethod.value || 'CHOPPED'");

@@ -1534,6 +1534,12 @@ function schedulePricePreview() {
   }, 300)
 }
 
+function invalidatePackagePlanPricingPreview() {
+  clearPricePreviewDebounce()
+  pricingPreviewRequestSeq += 1
+  resetPricePreviewState()
+}
+
 function addPackagePlanRow() {
   packagePlan.value = [
     ...packagePlan.value,
@@ -1542,7 +1548,8 @@ function addPackagePlanRow() {
       packageCount: 1,
     },
   ]
-  loadPricePreview()
+  invalidatePackagePlanPricingPreview()
+  schedulePricePreview()
 }
 
 function updatePackagePlanRow(index: number, field: keyof PackagePlanItem, value: string | number) {
@@ -1550,6 +1557,7 @@ function updatePackagePlanRow(index: number, field: keyof PackagePlanItem, value
   packagePlan.value = packagePlan.value.map((row, rowIndex) =>
     rowIndex === index ? { ...row, [field]: nextValue } : row
   )
+  invalidatePackagePlanPricingPreview()
   schedulePricePreview()
 }
 
@@ -1558,7 +1566,8 @@ function removePackagePlanRow(index: number) {
     return
   }
   packagePlan.value = packagePlan.value.filter((_, rowIndex) => rowIndex !== index)
-  loadPricePreview()
+  invalidatePackagePlanPricingPreview()
+  schedulePricePreview()
 }
 
 function selectSourcePlan(code: IngredientSourcePlanCode) {

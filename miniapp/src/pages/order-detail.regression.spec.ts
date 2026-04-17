@@ -33,6 +33,19 @@ describe('order detail runtime regressions', () => {
     expect(source).toContain('formatPackagePlan(item)')
   })
 
+  it('shows customer-facing production settlement without internal cost fields', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('生产结算')
+    expect(source).toContain('fetchOrderFinancialSummary')
+    expect(source).toContain('formatAdjustmentText')
+    expect(source).not.toContain('actualCost')
+    expect(source).not.toContain('actualMargin')
+  })
+
   it('keeps print-task totals tied to package plan rows when available', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/staff-production/print-task.vue'),

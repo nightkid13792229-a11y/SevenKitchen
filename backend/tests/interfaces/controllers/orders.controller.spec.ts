@@ -1363,6 +1363,96 @@ describe('OrdersController (e2e)', () => {
     });
   });
 
+  describe('GET /api/v1/orders/:id/financial-summary', () => {
+    it('should return financial summary for the owning customer', async () => {
+      const customerId = 'financial-customer';
+      const order = createTestOrder({
+        id: 'financial-order-1',
+        customerId,
+        status: OrderStatus.IN_PRODUCTION,
+        amountProduct: 120,
+        amountShipping: 0,
+        amountTotal: 120,
+      });
+      await orderRepository.save(order);
+
+      mockPrismaService.order.findUnique.mockResolvedValueOnce({
+        id: order.id,
+        amountTotal: 120,
+        pricingBreakdownSnapshot: {
+          totalProductCost: 70,
+          costIngredients: 50,
+          costPackaging: 10,
+          costLabor: 5,
+          costOverhead: 5,
+        },
+        costSettlements: [
+          {
+            id: 'order-settlement-1',
+            productionBatchSettlementId: 'batch-settlement-1',
+            plannedOutputG: 5000,
+            actualOutputG: 4500,
+            shortageG: 500,
+            actualCost: 80,
+            actualMargin: 40,
+            suggestedAdjustmentAmount: -12,
+            requiresCustomerPayment: false,
+            createdAt: new Date('2026-04-17T06:00:00.000Z'),
+            productionBatchSettlement: {
+              id: 'batch-settlement-1',
+              productionBatchId: 'batch-1',
+              settledAt: new Date('2026-04-17T06:00:00.000Z'),
+            },
+          },
+        ],
+      });
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/orders/${order.id}/financial-summary`)
+        .set('X-Customer-Id', customerId)
+        .expect(200);
+
+      expect(response.body).toHaveProperty('code', 0);
+      expect(response.body.data).toEqual(
+        expect.objectContaining({
+          orderId: order.id,
+          shortageAdjustmentAmount: -12,
+          requiresCustomerPayment: false,
+          settlementStatus: 'SETTLED',
+        }),
+      );
+      expect(response.body.data).not.toHaveProperty('estimatedCost');
+      expect(response.body.data).not.toHaveProperty('actualCost');
+      expect(response.body.data).not.toHaveProperty('actualMargin');
+      expect(response.body.data.latestSettlement).toEqual(
+        expect.objectContaining({
+          plannedOutputG: 5000,
+          actualOutputG: 4500,
+          shortageG: 500,
+        }),
+      );
+    });
+
+    it('should not leak financial summary to a different customer', async () => {
+      const order = createTestOrder({
+        id: 'financial-order-2',
+        customerId: 'financial-owner',
+        status: OrderStatus.IN_PRODUCTION,
+      });
+      await orderRepository.save(order);
+      mockPrismaService.order.findUnique.mockClear();
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/orders/${order.id}/financial-summary`)
+        .set('X-Customer-Id', 'other-customer')
+        .expect(200);
+
+      expect(response.body).toHaveProperty('code', 404);
+      expect(response.body).toHaveProperty('message', 'Order not found');
+      expect(mockPrismaService.order.findUnique).not.toHaveBeenCalled();
+    });
+  });
+
   describe('GET /api/v1/orders/items/:itemId/snapshot', () => {
     it('should return snapshot for order item', async () => {
       const recipeSnapshot: RecipeSnapshot = {

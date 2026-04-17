@@ -70,6 +70,34 @@
         </view>
       </view>
 
+      <view v-if="shouldShowFinancialSummary" class="section settlement-section">
+        <view class="section-title">生产结算</view>
+        <view
+          class="settlement-card"
+          :class="settlementAdjustmentClass"
+        >
+          <view class="settlement-header">
+            <text class="settlement-title">{{ formatAdjustmentText() }}</text>
+            <text class="settlement-status">{{ orderFinancialSummary?.settlementStatus === 'SETTLED' ? '已结算' : '待结算' }}</text>
+          </view>
+          <text class="settlement-desc">{{ settlementDescription }}</text>
+          <view v-if="orderFinancialSummary?.latestSettlement" class="settlement-metrics">
+            <view class="settlement-metric">
+              <text class="metric-label">计划成品</text>
+              <text class="metric-value">{{ Math.round(orderFinancialSummary.latestSettlement.plannedOutputG) }}g</text>
+            </view>
+            <view class="settlement-metric">
+              <text class="metric-label">实际成品</text>
+              <text class="metric-value">{{ Math.round(orderFinancialSummary.latestSettlement.actualOutputG) }}g</text>
+            </view>
+            <view class="settlement-metric">
+              <text class="metric-label">成品缺口</text>
+              <text class="metric-value">{{ Math.round(orderFinancialSummary.latestSettlement.shortageG) }}g</text>
+            </view>
+          </view>
+        </view>
+      </view>
+
       <view v-if="isStaffOrAdmin" class="section remark-section">
         <view class="section-title">管理员备注</view>
         <textarea
@@ -418,7 +446,12 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { onShow, onShareAppMessage } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
-import { getAdminOrderDetail, updateAdminOrderRemark } from '../../api/orders'
+import {
+  getAdminOrderDetail,
+  getOrderFinancialSummary,
+  updateAdminOrderRemark,
+  type CustomerOrderFinancialSummary
+} from '../../api/orders'
 import OrderProgressBar from '../../components/OrderProgressBar.vue'
 import { formatDateTime } from '../../utils/date'
 
@@ -513,6 +546,7 @@ interface Order {
 
 const order = ref<Order | null>(null)
 const orderId = ref('')
+const orderFinancialSummary = ref<CustomerOrderFinancialSummary | null>(null)
 const remarkDraft = ref('')
 const savingAdminRemark = ref(false)
 
@@ -533,6 +567,28 @@ const isAdminRemarkDirty = computed(() => {
 })
 const canClearAdminRemark = computed(() => {
   return Boolean(normalizedRemarkDraft.value || currentAdminRemark.value)
+})
+
+const shouldShowFinancialSummary = computed(() => {
+  return orderFinancialSummary.value?.settlementStatus === 'SETTLED'
+})
+
+const settlementAdjustmentClass = computed(() => {
+  const amount = orderFinancialSummary.value?.shortageAdjustmentAmount || 0
+  if (amount < 0) return 'refund'
+  if (amount > 0) return 'extra-payment'
+  return 'balanced'
+})
+
+const settlementDescription = computed(() => {
+  const amount = orderFinancialSummary.value?.shortageAdjustmentAmount || 0
+  if (amount < 0) {
+    return '本次生产存在成品缺口，客服会联系您确认退差价或抵扣方式。'
+  }
+  if (amount > 0) {
+    return '本次生产结算后需要补收差价，客服会联系您确认补款方式。'
+  }
+  return '本次生产已完成结算，无需补收或退差价。'
 })
 
 // 原料清单展开状态
@@ -864,11 +920,24 @@ async function loadOrderDetail() {
 
       // 预获取分享照片的 token
       prefetchShareToken()
+      fetchOrderFinancialSummary()
     }
   } catch (error) {
     console.error('Load order detail error:', error)
   } finally {
     uni.hideLoading()
+  }
+}
+
+async function fetchOrderFinancialSummary() {
+  if (!orderId.value) return
+
+  try {
+    const res = await getOrderFinancialSummary(orderId.value)
+    orderFinancialSummary.value = res.code === 0 && res.data ? res.data : null
+  } catch (error) {
+    console.warn('[Order Detail] Failed to load financial summary:', error)
+    orderFinancialSummary.value = null
   }
 }
 
@@ -1124,6 +1193,14 @@ function formatDate(dateStr?: string | null): string {
 function formatAmount(amount?: number): string {
   if (!amount) return '0.00'
   return amount.toFixed(2)
+}
+
+function formatAdjustmentText(): string {
+  const amount = orderFinancialSummary.value?.shortageAdjustmentAmount || 0
+  const absAmount = Math.abs(amount).toFixed(2)
+  if (amount < 0) return `建议退差价 ¥${absAmount}`
+  if (amount > 0) return `建议补收 ¥${absAmount}`
+  return '无需调整'
 }
 
 function calculateUnitPrice(item: OrderItem): number {
@@ -1808,6 +1885,89 @@ function contactSevenDad() {
   font-size: 32rpx;
   font-weight: bold;
   color: #ff4d4f;
+}
+
+.settlement-section {
+  margin-bottom: 20rpx;
+}
+
+.settlement-card {
+  padding: 22rpx;
+  border-radius: 12rpx;
+  border-left: 6rpx solid #52c41a;
+  background-color: #f6ffed;
+}
+
+.settlement-card.refund {
+  border-left-color: #faad14;
+  background-color: #fffbe6;
+}
+
+.settlement-card.extra-payment {
+  border-left-color: #ff4d4f;
+  background-color: #fff1f0;
+}
+
+.settlement-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  margin-bottom: 12rpx;
+}
+
+.settlement-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #333;
+  word-break: break-word;
+}
+
+.settlement-status {
+  flex-shrink: 0;
+  padding: 4rpx 14rpx;
+  border-radius: 999rpx;
+  background-color: rgba(255, 255, 255, 0.8);
+  font-size: 22rpx;
+  color: #666;
+}
+
+.settlement-desc {
+  display: block;
+  font-size: 25rpx;
+  line-height: 1.5;
+  color: #666;
+}
+
+.settlement-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12rpx;
+  margin-top: 18rpx;
+}
+
+.settlement-metric {
+  min-width: 0;
+  padding: 14rpx 10rpx;
+  border-radius: 8rpx;
+  background-color: rgba(255, 255, 255, 0.72);
+  text-align: center;
+}
+
+.metric-label {
+  display: block;
+  font-size: 22rpx;
+  color: #888;
+  margin-bottom: 6rpx;
+}
+
+.metric-value {
+  display: block;
+  font-size: 25rpx;
+  font-weight: 600;
+  color: #333;
 }
 
 .btn-copy {

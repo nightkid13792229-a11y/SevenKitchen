@@ -5,12 +5,35 @@
 
 import { request } from '../utils/api';
 
+export interface CustomerOrderFinancialSummary {
+  orderId: string;
+  settlementStatus: 'PENDING' | 'SETTLED';
+  shortageAdjustmentAmount: number;
+  requiresCustomerPayment: boolean;
+  latestSettlement: {
+    plannedOutputG: number;
+    actualOutputG: number;
+    shortageG: number;
+    settledAt: string | null;
+  } | null;
+}
+
 /**
  * 获取后台订单详情
  */
 export function getAdminOrderDetail(orderId: string) {
   return request({
     url: `/admin/orders/${orderId}`,
+    method: 'GET',
+  });
+}
+
+/**
+ * 获取顾客可见的订单生产结算摘要
+ */
+export function getOrderFinancialSummary(orderId: string) {
+  return request<CustomerOrderFinancialSummary>({
+    url: `/orders/${orderId}/financial-summary`,
     method: 'GET',
   });
 }

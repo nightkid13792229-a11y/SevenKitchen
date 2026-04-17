@@ -371,6 +371,47 @@ export class OrdersController {
     return ApiResponseDto.success(summaries);
   }
 
+  @Get(':id/financial-summary')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Get customer-facing order financial summary' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiHeader({
+    name: 'X-Customer-Id',
+    description: 'Customer ID for authentication',
+    required: true,
+  })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  async getOrderFinancialSummary(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any> | ApiResponseDto<null>> {
+    const order = await this.orderService.getOrderById(id);
+    if (!order) {
+      return ApiResponseDto.error(404, 'Order not found');
+    }
+
+    const isStaffOrAdmin = user.role === 'STAFF' || user.role === 'ADMIN';
+    if (!isStaffOrAdmin && order.customerId !== user.customerId) {
+      return ApiResponseDto.error(404, 'Order not found');
+    }
+
+    const summary = await this.orderService.getOrderFinancialSummary(id);
+    return ApiResponseDto.success({
+      orderId: summary.orderId,
+      settlementStatus: summary.settlementStatus,
+      shortageAdjustmentAmount: summary.shortageAdjustmentAmount,
+      requiresCustomerPayment: summary.requiresCustomerPayment,
+      latestSettlement: summary.latestSettlement
+        ? {
+            plannedOutputG: summary.latestSettlement.plannedOutputG,
+            actualOutputG: summary.latestSettlement.actualOutputG,
+            shortageG: summary.latestSettlement.shortageG,
+            settledAt: summary.latestSettlement.settledAt,
+          }
+        : null,
+    });
+  }
+
   @Get(':id')
   @UseGuards(AuthGuard)
   @ApiOperation({ summary: 'Get order detail' })

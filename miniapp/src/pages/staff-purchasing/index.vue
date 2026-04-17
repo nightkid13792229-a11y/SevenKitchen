@@ -831,8 +831,14 @@ const generateList = async () => {
       });
 
       if (response.code === 0) {
+        const result = response.data || {};
+        const fullyCoveredByInventory = result.fullyCoveredByInventory === true;
         uni.showToast({
-          title: isSupplemental ? '增量清单已生成' : '生成成功',
+          title: fullyCoveredByInventory
+            ? '库存已分配'
+            : isSupplemental
+              ? '增量清单已生成'
+              : '生成成功',
           icon: 'success',
         });
         await Promise.all([

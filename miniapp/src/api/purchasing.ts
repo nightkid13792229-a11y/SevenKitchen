@@ -167,6 +167,21 @@ export function resolvePurchaseItemDisplay(item: any) {
       normalizeText(item?.displayUnit) ||
       normalizeText(item?.quantityUnit) ||
       normalizeText(item?.ingredient?.purchaseUnit),
+    resolvedGrossQuantityNeeded:
+      toOptionalNumber(item?.grossQuantityNeeded) ??
+      toOptionalNumber(item?.quantityNeeded) ??
+      0,
+    resolvedStockDeductedQuantity:
+      toOptionalNumber(item?.stockDeductedQuantity) ?? 0,
+    resolvedPurchaseShortageQuantity:
+      toOptionalNumber(item?.purchaseShortageQuantity) ??
+      toOptionalNumber(item?.quantityNeeded) ??
+      0,
+    resolvedOnHandQuantity: toOptionalNumber(item?.onHandQuantity) ?? 0,
+    resolvedAllocatedQuantity: toOptionalNumber(item?.allocatedQuantity) ?? 0,
+    resolvedAvailableQuantity: toOptionalNumber(item?.availableQuantity) ?? 0,
+    resolvedUsesInventory: item?.usesInventory === true,
+    resolvedAllocationRequired: item?.allocationRequired === true,
   };
 }
 

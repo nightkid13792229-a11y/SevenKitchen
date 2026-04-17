@@ -161,6 +161,11 @@
                       <text class="quantity-value">{{ formatQuantity(item) }}</text>
                       <text class="quantity-unit">{{ getDisplayUnit(item) }}</text>
                     </view>
+                    <view v-if="item.resolvedUsesInventory" class="item-stock-offset">
+                      <text>订单需求 {{ formatBaseQuantity(item.resolvedGrossQuantityNeeded) }}{{ getDisplayUnit(item) }}</text>
+                      <text>库存抵扣 {{ formatBaseQuantity(item.resolvedStockDeductedQuantity) }}{{ getDisplayUnit(item) }}</text>
+                      <text>仍需采购 {{ formatBaseQuantity(item.resolvedPurchaseShortageQuantity) }}{{ getDisplayUnit(item) }}</text>
+                    </view>
                   </view>
 
                   <view class="item-actions">
@@ -1549,6 +1554,15 @@ const formatFullDateTime = (dateStr?: string) => {
   return `${year}-${month}-${day} ${hours}:${minutes}`;
 };
 
+const formatBaseQuantity = (value: number) => {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric)) {
+    return '0';
+  }
+  const rounded = Number(numeric.toFixed(1));
+  return Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1);
+};
+
 // 格式化原料用量（根据原料类型处理）
 const formatDisplayValue = (value: number, unit: string) => {
   if (unit === 'g') {
@@ -2050,6 +2064,20 @@ const confirmDeleteItem = (item: any) => {
           font-size: 22rpx;
           color: #999;
         }
+      }
+
+      .item-stock-offset {
+        display: flex;
+        flex-direction: column;
+        gap: 6rpx;
+        margin-top: 12rpx;
+        padding: 12rpx 16rpx;
+        background-color: #f2fbf6;
+        border: 1rpx solid #c7ead4;
+        border-radius: 6rpx;
+        color: #4f735b;
+        font-size: 24rpx;
+        line-height: 1.45;
       }
     }
 

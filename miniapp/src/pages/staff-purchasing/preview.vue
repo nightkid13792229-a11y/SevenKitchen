@@ -114,6 +114,7 @@
                 v-for="(item, index) in group.items"
                 :key="index"
                 class="ingredient-item"
+                :class="{ 'fully-covered': item.resolvedUsesInventory && item.resolvedPurchaseShortageQuantity <= 0 }"
               >
                 <view class="ingredient-main">
                   <view class="ingredient-info">
@@ -138,6 +139,13 @@
                     <text class="quantity">{{ formatQuantity(item) }}</text>
                     <text class="unit">{{ getDisplayUnit(item) }}</text>
                   </view>
+                </view>
+
+                <view v-if="item.resolvedUsesInventory" class="stock-offset-lines">
+                  <text>订单需求：{{ formatBaseQuantity(item.resolvedGrossQuantityNeeded) }}{{ getDisplayUnit(item) }}</text>
+                  <text>可用库存：{{ formatBaseQuantity(item.resolvedAvailableQuantity) }}{{ getDisplayUnit(item) }}</text>
+                  <text>库存抵扣：{{ formatBaseQuantity(item.resolvedStockDeductedQuantity) }}{{ getDisplayUnit(item) }}</text>
+                  <text>仍需采购：{{ formatBaseQuantity(item.resolvedPurchaseShortageQuantity) }}{{ getDisplayUnit(item) }}</text>
                 </view>
 
                 <view
@@ -384,6 +392,15 @@ const formatDate = (dateStr: string) => {
 const formatAmount = (amount: number) => {
   const value = Number(amount);
   return Number.isFinite(value) ? `¥${value.toFixed(2)}` : '¥0.00';
+};
+
+const formatBaseQuantity = (value: number) => {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric)) {
+    return '0';
+  }
+  const rounded = Number(numeric.toFixed(1));
+  return Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(1);
 };
 
 // 格式化原料数量
@@ -723,6 +740,11 @@ const getPreparationLabel = (item: any) => {
   border-radius: 8rpx;
   border: 1rpx solid #f0f0f0;
 
+  &.fully-covered {
+    border-color: #6bbf8f;
+    background-color: #f2fbf6;
+  }
+
   .ingredient-main {
     display: flex;
     justify-content: space-between;
@@ -792,6 +814,18 @@ const getPreparationLabel = (item: any) => {
       font-size: 22rpx;
       color: #999;
     }
+  }
+
+  .stock-offset-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 6rpx;
+    padding: 12rpx 16rpx;
+    background-color: rgba(107, 191, 143, 0.1);
+    border-radius: 6rpx;
+    color: #4f735b;
+    font-size: 24rpx;
+    line-height: 1.45;
   }
 
   .preparation-section {

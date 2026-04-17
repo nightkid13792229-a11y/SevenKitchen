@@ -147,6 +147,20 @@ export class PriceExplanationDto {
 /**
  * Detailed Ingredient Cost Breakdown
  */
+export class SupplementTargetCostDto {
+  @ApiProperty({ description: 'Nutrition profile field path' })
+  fieldPath!: string;
+
+  @ApiProperty({ description: 'Nutrition label' })
+  label!: string;
+
+  @ApiProperty({ description: 'Target value per kg food' })
+  targetValuePerKg!: number;
+
+  @ApiProperty({ description: 'Target unit' })
+  unit!: string;
+}
+
 export class IngredientCostItemDto {
   @ApiPropertyOptional({ description: 'Recipe item ID' })
   recipeItemId?: string;
@@ -194,6 +208,12 @@ export class IngredientCostItemDto {
     description: 'Nutrient target value (for supplements)',
   })
   nutrientTargetValue?: number;
+
+  @ApiPropertyOptional({
+    description: 'Structured supplement targets (for supplements)',
+    type: [SupplementTargetCostDto],
+  })
+  supplementTargets?: SupplementTargetCostDto[];
 }
 
 /**

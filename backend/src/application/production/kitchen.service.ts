@@ -27,6 +27,7 @@ import { PURCHASE_LIST_REPOSITORY } from '../purchasing/purchasing.service.token
 import { ORDER_REPOSITORY } from '../order/order.service';
 import {
   AutoScheduleDto,
+  CompleteProductionDto,
   PackagingUnitDetailDto,
   OrderPackagingInfoDto,
   GetPackagingUnitsDto,
@@ -451,7 +452,10 @@ export class StaffProductionService {
   /**
    * Complete production task
    */
-  async completeProductionTask(unitId: string): Promise<PackagingUnit> {
+  async completeProductionTask(
+    unitId: string,
+    dto: CompleteProductionDto = {},
+  ): Promise<PackagingUnit> {
     const unit = await this.productionRepository.findPackagingUnitById(unitId);
 
     if (!unit) {
@@ -467,6 +471,12 @@ export class StaffProductionService {
     // Check if photos are uploaded (optional based on requirements)
     // For now, we'll allow completion without photos
 
+    unit.recordProductionResult({
+      resultStatus: dto.resultStatus || 'NORMAL',
+      surplusG: dto.surplusG,
+      shortageG: dto.shortageG,
+      resultPhotoUrls: dto.resultPhotoUrls,
+    });
     unit.transitionTo(PackagingUnitStatus.COMPLETED);
     const updated = await this.productionRepository.updatePackagingUnit(unit);
 

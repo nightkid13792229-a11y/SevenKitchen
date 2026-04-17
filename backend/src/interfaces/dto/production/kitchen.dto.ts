@@ -138,7 +138,25 @@ export class UploadPhotosResponseDto {
  * Complete Production Task DTO
  */
 export class CompleteProductionDto {
-  // 预留扩展字段
+  @IsOptional()
+  @IsString()
+  resultStatus?: 'NORMAL' | 'SURPLUS' | 'SHORTAGE';
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  surplusG?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  shortageG?: number;
+
+  @IsOptional()
+  @IsArray()
+  resultPhotoUrls?: string[];
 }
 
 /**

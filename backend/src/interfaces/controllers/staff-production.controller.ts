@@ -288,7 +288,31 @@ export class StaffProductionController {
           properties: {
             id: { type: 'string' },
             status: { type: 'string' },
+            resultStatus: { type: 'string' },
+            actualOutputG: { type: 'number' },
+            surplusG: { type: 'number' },
+            shortageG: { type: 'number' },
           },
+        },
+      },
+    },
+  })
+  @ApiBody({
+    required: false,
+    schema: {
+      type: 'object',
+      properties: {
+        resultStatus: {
+          type: 'string',
+          enum: ['NORMAL', 'SURPLUS', 'SHORTAGE'],
+          description: '生产结果：正常、有余量、有缺口',
+        },
+        surplusG: { type: 'number', description: '成品余量克数' },
+        shortageG: { type: 'number', description: '成品缺口克数' },
+        resultPhotoUrls: {
+          type: 'array',
+          items: { type: 'string' },
+          description: '可选生产结果照片',
         },
       },
     },
@@ -297,13 +321,21 @@ export class StaffProductionController {
     @Param('id') id: string,
     @Body() dto: CompleteProductionDto,
   ): Promise<ApiResponseDto<any>> {
-    const unit = await this.staffProductionService.completeProductionTask(id);
+    const unit = await this.staffProductionService.completeProductionTask(
+      id,
+      dto,
+    );
     return {
       code: 0,
       message: '制作完成',
       data: {
         id: unit.id,
         status: unit.status,
+        resultStatus: unit.resultStatus,
+        actualOutputG: unit.actualOutputG,
+        surplusG: unit.surplusG,
+        shortageG: unit.shortageG,
+        resultPhotoUrls: unit.resultPhotoUrls,
       },
     };
   }

@@ -277,9 +277,9 @@
                     <text class="rp-card-field-label">规格</text>
                     <text class="rp-card-field-value">{{ rp.productModel }}</text>
                   </view>
-                  <view v-if="rp.purchaseChannel" class="rp-card-field">
+                  <view v-if="getSpecPurchaseChannelDisplay(rp)" class="rp-card-field">
                     <text class="rp-card-field-label">推荐购买渠道</text>
-                    <text class="rp-card-field-value">{{ rp.purchaseChannel }}</text>
+                    <text class="rp-card-field-value">{{ getSpecPurchaseChannelDisplay(rp) }}</text>
                   </view>
                 </view>
                 <view class="rp-card-aside">
@@ -321,9 +321,9 @@
                 <text class="spec-detail-field-label">规格</text>
                 <text class="spec-detail-field-value">{{ currentSpec.productModel }}</text>
               </view>
-              <view v-if="currentSpec.purchaseChannel" class="spec-detail-field">
+              <view v-if="getSpecPurchaseChannelDisplay(currentSpec)" class="spec-detail-field">
                 <text class="spec-detail-field-label">推荐购买渠道</text>
-                <text class="spec-detail-field-value">{{ currentSpec.purchaseChannel }}</text>
+                <text class="spec-detail-field-value">{{ getSpecPurchaseChannelDisplay(currentSpec) }}</text>
               </view>
             </view>
             <view v-if="currentSpec.imageUrl || currentSpec.purchaseLink" class="spec-detail-aside">
@@ -487,7 +487,9 @@ import {
 import {
   DIY_SHEET_FOOD_RECOMMENDATION_LABEL,
   DIY_SHEET_SUPPLEMENT_RECOMMENDATION_LABEL,
-  DIY_SHEET_SPEC_MODAL_TITLE
+  DIY_SHEET_SPEC_MODAL_TITLE,
+  getPurchaseTipByPlatform,
+  getSpecRecommendedPurchaseChannelDisplay
 } from './copy'
 
 // 页面参数
@@ -660,14 +662,19 @@ const supplementItemsDetailed = computed(() => {
     const supplementOptions = buildSupplementCandidateOptions(item, recipeItem)
     const selectionKey = getSupplementSelectionKey(item)
     const rpIdx = selectedRpIndexMap.value[selectionKey] ?? 0
-    const selectedRp = supplementOptions[rpIdx] || supplementOptions[0]
+    const hasRecommendedOptions = supplementOptions.length > 0
+    const selectedRp = hasRecommendedOptions
+      ? (supplementOptions[rpIdx] || supplementOptions[0])
+      : undefined
 
     // 使用displayUnit作为显示单位
     const displayUnit = selectedRp?.displayUnit || item.displayUnit || item.unit || 'g'
 
-    // 从推荐产品或properties中提取购买链接
-    const purchaseLink = selectedRp?.purchaseLink || item.properties?.purchase_link || undefined
-    const hasSpecDetail = hasRecommendationDetail(selectedRp, item, purchaseLink)
+    // 只用开启 DIY 推荐的补剂生成用户可见购买链接和详情
+    const purchaseLink = hasRecommendedOptions ? selectedRp?.purchaseLink : undefined
+    const hasSpecDetail = hasRecommendedOptions
+      ? hasRecommendationDetail(selectedRp, {}, purchaseLink)
+      : false
 
     const amount = calculateSupplementAmountForOption(
       item,
@@ -679,15 +686,15 @@ const supplementItemsDetailed = computed(() => {
     return {
       selectionKey,
       name: selectedRp?.name || item.name,                          // 推荐营养品
-      brand: selectedRp?.brand || item.brand || '-',                // 推荐品牌
+      brand: hasRecommendedOptions ? (selectedRp?.brand || '-') : '-', // 推荐品牌
       preparationMethod: selectedRp?.timingLabel || item.preparationMethod || '', // 添加时机
       amount: amount,                                               // 用量数值
       unit: item.unit,                                              // 原始单位（用于计算）
       displayUnit: displayUnit,                                     // 显示单位（用于展示）
       amountStr: formatSupplementAmountWithDisplayUnit(amount, item.unit, displayUnit),  // 格式化用量
-      productModel: selectedRp?.productModel || item.productModel,  // 规格
-      purchaseChannel: selectedRp?.purchaseChannel || item.purchaseChannel,  // 购买渠道
-      imageUrl: selectedRp?.imageUrl || item.imageUrl || item.properties?.image_url || undefined,
+      productModel: hasRecommendedOptions ? selectedRp?.productModel : undefined, // 规格
+      purchaseChannel: hasRecommendedOptions ? selectedRp?.purchaseChannel : undefined, // 购买渠道
+      imageUrl: hasRecommendedOptions ? selectedRp?.imageUrl : undefined,
       purchaseLink: purchaseLink,                                   // 购买链接
       ingredientId: item.ingredientId,                              // 原料ID
       nutrientTargetKey: item.nutrientTargetKey,                    // 营养素名称
@@ -695,7 +702,9 @@ const supplementItemsDetailed = computed(() => {
       activeNutrients: selectedRp?.activeNutrients || item.properties?.active_nutrients || undefined,
       type: item.type,                                              // 类型标识
       properties: item.properties,                                  // 完整的properties
-      specDisplayText: getSupplementSpecDisplayText(selectedRp, item, purchaseLink), // 规格入口文案
+      specDisplayText: hasRecommendedOptions
+        ? getSupplementSpecDisplayText(selectedRp, {}, purchaseLink)
+        : '-',                                                   // 规格入口文案
       hasSpecDetail,                                                // 是否有规格/购买信息
       allRecommendedProducts: supplementOptions,                    // 所有候选补剂
       selectedRPIndex: 0                                            // 当前选中的推荐产品索引
@@ -1246,6 +1255,14 @@ function closeSpecModal() {
   modalSelectedRpIndex.value = 0
 }
 
+function getSpecPurchaseChannelDisplay(target: any): string {
+  return getSpecRecommendedPurchaseChannelDisplay({
+    ingredientType: currentSpec.value?.type,
+    purchaseLink: target?.purchaseLink,
+    purchaseChannel: target?.purchaseChannel
+  })
+}
+
 // 显示用量详情弹窗
 function showAmountDetailModal(item: any) {
   currentAmountDetail.value = item
@@ -1300,18 +1317,6 @@ function confirmRecommendedProductSelection() {
   closeSpecModal()
 }
 
-// 根据平台类型获取提示文案
-function getPurchaseTipByPlatform(platform: string): string {
-  const tipMap: Record<string, string> = {
-    'TAOBAO': '口令已复制，打开淘宝即可查看商品',
-    'JD': '口令已复制，打开京东即可查看商品',
-    'PINDUODUO': '口令已复制，打开拼多多即可查看商品',
-    'OTHER': '已复制，打开对应App即可查看',
-    'WEBVIEW': '已复制购买链接'
-  }
-  return tipMap[platform] || '已复制购买链接'
-}
-
 // 从链接判断平台类型
 function detectPlatformFromUrl(url: string): string {
   if (url.includes('taobao') || url.includes('tmall') || url.includes('tb.cn') || url.includes('m.tb.cn')) {
@@ -1322,6 +1327,9 @@ function detectPlatformFromUrl(url: string): string {
   }
   if (url.includes('pinduoduo') || url.includes('yangkeduo') || url.includes('pdd')) {
     return 'PINDUODUO'
+  }
+  if (url.includes('iherb.com') || url.includes('iherb.cn')) {
+    return 'IHERB'
   }
   return 'OTHER'
 }

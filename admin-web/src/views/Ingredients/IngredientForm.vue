@@ -394,6 +394,7 @@
                   <el-option label="淘宝/天猫" value="TAOBAO" />
                   <el-option label="京东" value="JD" />
                   <el-option label="拼多多" value="PINDUODUO" />
+                  <el-option label="iHerb" value="IHERB" />
                   <el-option label="其他小程序" value="OTHER" />
                   <el-option label="网页链接" value="WEBVIEW" />
                 </el-select>
@@ -808,6 +809,7 @@
             <el-option label="淘宝/天猫" value="TAOBAO" />
             <el-option label="京东" value="JD" />
             <el-option label="拼多多" value="PINDUODUO" />
+            <el-option label="iHerb" value="IHERB" />
             <el-option label="其他小程序" value="OTHER" />
             <el-option label="网页链接" value="WEBVIEW" />
           </el-select>

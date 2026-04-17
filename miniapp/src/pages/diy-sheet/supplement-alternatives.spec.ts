@@ -85,6 +85,82 @@ describe('supplement alternatives helpers', () => {
     })
   })
 
+  it('only exposes diy-enabled supplement options for customer recommendations', () => {
+    const options = buildSupplementCandidateOptions(
+      {
+        ingredientId: 'supp-default',
+        name: '自制鸡蛋壳粉',
+        brand: '自制',
+        properties: {}
+      },
+      {
+        ingredient: {
+          id: 'supp-default',
+          diyEnabled: false,
+          properties: {}
+        },
+        supplementAlternatives: [
+          {
+            ingredientId: 'supp-alt-disabled',
+            ingredientName: '内部采购鸡蛋壳粉',
+            ingredient: {
+              id: 'supp-alt-disabled',
+              name: '内部采购鸡蛋壳粉',
+              diyEnabled: false,
+              properties: {}
+            }
+          },
+          {
+            ingredientId: 'supp-alt-enabled',
+            ingredientName: '第三方鸡蛋壳粉',
+            ingredient: {
+              id: 'supp-alt-enabled',
+              name: '第三方鸡蛋壳粉',
+              brand: '西红柿',
+              diyEnabled: true,
+              properties: {}
+            }
+          }
+        ]
+      }
+    )
+
+    expect(options).toHaveLength(1)
+    expect(options[0].ingredientId).toBe('supp-alt-enabled')
+    expect(options[0].brand).toBe('西红柿')
+  })
+
+  it('returns no recommendation options when every supplement candidate disables diy recommendations', () => {
+    const options = buildSupplementCandidateOptions(
+      {
+        ingredientId: 'supp-default',
+        name: '自制鸡蛋壳粉',
+        properties: {}
+      },
+      {
+        ingredient: {
+          id: 'supp-default',
+          diyEnabled: false,
+          properties: {}
+        },
+        supplementAlternatives: [
+          {
+            ingredientId: 'supp-alt-disabled',
+            ingredientName: '采购鸡蛋壳粉',
+            ingredient: {
+              id: 'supp-alt-disabled',
+              name: '采购鸡蛋壳粉',
+              diyEnabled: false,
+              properties: {}
+            }
+          }
+        ]
+      }
+    )
+
+    expect(options).toEqual([])
+  })
+
   it('recalculates supplement amount and nutrient unit from selected alternative', () => {
     const baseItem = {
       amount: 5,

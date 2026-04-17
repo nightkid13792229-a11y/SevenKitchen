@@ -7,6 +7,7 @@ export interface SupplementOption {
   id: string;
   ingredientId: string;
   name: string;
+  diyEnabled?: boolean;
   brand?: string;
   productModel?: string;
   purchaseChannel?: string;
@@ -17,6 +18,10 @@ export interface SupplementOption {
   properties?: Record<string, any>;
   timingLabel?: string;
   addTimingLabel?: string;
+}
+
+function isDiyRecommendationEnabled(candidate: any): boolean {
+  return candidate?.diyEnabled !== false;
 }
 
 export function getSupplementSelectionKey(item: {
@@ -31,11 +36,14 @@ export function buildSupplementCandidateOptions(
   recipeItem: any,
 ): SupplementOption[] {
   const defaultIngredient = recipeItem?.ingredient;
-  const options: SupplementOption[] = [
-    {
+  const options: SupplementOption[] = [];
+
+  if (isDiyRecommendationEnabled(defaultIngredient || baseItem)) {
+    options.push({
       id: `default:${baseItem.ingredientId}`,
       ingredientId: baseItem.ingredientId,
       name: baseItem.name,
+      diyEnabled: defaultIngredient?.diyEnabled ?? baseItem.diyEnabled,
       brand: baseItem.brand,
       productModel: baseItem.productModel,
       purchaseChannel: baseItem.purchaseChannel,
@@ -53,8 +61,8 @@ export function buildSupplementCandidateOptions(
       properties: defaultIngredient?.properties || baseItem.properties,
       addTimingLabel: defaultIngredient?.addTimingLabel,
       timingLabel: defaultIngredient?.addTimingLabel || baseItem.preparationMethod,
-    },
-  ];
+    });
+  }
 
   for (const alternative of recipeItem?.supplementAlternatives || []) {
     const ingredient = alternative.ingredient;
@@ -62,10 +70,15 @@ export function buildSupplementCandidateOptions(
       continue;
     }
 
+    if (!isDiyRecommendationEnabled(ingredient)) {
+      continue;
+    }
+
     options.push({
       id: ingredient.id,
       ingredientId: ingredient.id,
       name: ingredient.name || alternative.ingredientName,
+      diyEnabled: ingredient.diyEnabled,
       brand: ingredient.brand,
       productModel: ingredient.productModel,
       purchaseChannel: ingredient.purchaseChannel,

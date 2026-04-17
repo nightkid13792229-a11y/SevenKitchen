@@ -95,6 +95,7 @@ export class RecipeDetailDto extends RecipeSummaryDto {
       id: string;
       name: string;
       type?: string;
+      diyEnabled?: boolean;
       brand?: string;
       productModel?: string;
       purchaseChannel?: string;
@@ -113,6 +114,7 @@ export class RecipeDetailDto extends RecipeSummaryDto {
         id: string;
         name: string;
         type?: string;
+        diyEnabled?: boolean;
         brand?: string;
         productModel?: string;
         purchaseChannel?: string;

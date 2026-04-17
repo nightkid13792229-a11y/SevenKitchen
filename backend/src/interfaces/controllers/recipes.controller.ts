@@ -170,6 +170,7 @@ export class RecipesController {
       id: ingredient.id,
       name: ingredient.name,
       type: ingredient.type,
+      diyEnabled: ingredient.diyEnabled,
       brand: ingredient.brand || undefined,
       productModel: ingredient.productModel || undefined,
       purchaseChannel: ingredient.purchaseChannel || undefined,

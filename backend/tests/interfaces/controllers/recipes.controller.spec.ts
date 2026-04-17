@@ -287,6 +287,7 @@ describe('RecipesController (e2e)', () => {
                   id: 'ingredient-supplement-alt',
                   name: '维生素E-400',
                   type: 'SUPPLEMENT',
+                  diyEnabled: true,
                   brand: 'NOW FOODS',
                   productModel: '400IU/粒',
                   purchaseChannel: '京东',
@@ -312,6 +313,7 @@ describe('RecipesController (e2e)', () => {
               id: 'ingredient-supplement-default',
               name: '维生素E-200',
               type: 'SUPPLEMENT',
+              diyEnabled: false,
               brand: 'NOW FOODS',
               productModel: '200IU/粒',
               purchaseChannel: '京东',
@@ -342,6 +344,7 @@ describe('RecipesController (e2e)', () => {
 
       expect(response.body.code).toBe(0);
       expect(response.body.data.items[0].ingredient.displayUnit).toBe('粒');
+      expect(response.body.data.items[0].ingredient.diyEnabled).toBe(false);
       expect(response.body.data.items[0].ingredient.addTimingLabel).toBe('随餐');
       expect(response.body.data.items[0].ingredient.imageUrl).toBe(
         'https://cdn.example.com/e200-square.jpg',
@@ -353,6 +356,10 @@ describe('RecipesController (e2e)', () => {
       expect(
         response.body.data.items[0].supplementAlternatives[0].ingredient.brand,
       ).toBe('NOW FOODS');
+      expect(
+        response.body.data.items[0].supplementAlternatives[0].ingredient
+          .diyEnabled,
+      ).toBe(true);
       expect(
         response.body.data.items[0].supplementAlternatives[0].ingredient
           .addTimingLabel,

@@ -892,7 +892,8 @@ const availableSupplementAlternativeOptions = computed(() => {
   return availableIngredients.value.filter((ingredient) => {
     return (
       ingredient.type === 'SUPPLEMENT' &&
-      ingredient.id !== ingredientForm.ingredientId
+      ingredient.id !== ingredientForm.ingredientId &&
+      ingredient.diyEnabled === true
     );
   });
 });
@@ -1529,6 +1530,15 @@ const saveIngredient = () => {
     return;
   }
 
+  const enabledSupplementAlternativeIds =
+    ingredient.type === 'SUPPLEMENT'
+      ? ingredientForm.supplementAlternativeIngredientIds.filter((alternativeId) =>
+          availableSupplementAlternativeOptions.value.some(
+            (option) => option.id === alternativeId,
+          ),
+        )
+      : [];
+
   // Create item object - 根据原料类型保存相应字段
   const item: RecipeItem = {
     id: editingIngredientIndex.value >= 0
@@ -1555,9 +1565,9 @@ const saveIngredient = () => {
       nutrientTargetKey: ingredientForm.nutrientTargetKey || undefined,
       nutrientTargetValue: ingredientForm.nutrientTargetValue || undefined,
       supplementAlternativeIngredientIds: [
-        ...ingredientForm.supplementAlternativeIngredientIds,
+        ...enabledSupplementAlternativeIds,
       ],
-      supplementAlternatives: ingredientForm.supplementAlternativeIngredientIds
+      supplementAlternatives: enabledSupplementAlternativeIds
         .map((alternativeIngredientId) => {
           const alternativeIngredient = availableIngredients.value.find(
             (candidate) => candidate.id === alternativeIngredientId,

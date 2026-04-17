@@ -1466,6 +1466,14 @@ export class PurchasingService {
       quantityNeeded: number;
       quantityUnit: string;
       estimatedCost: number;
+      grossQuantityNeeded?: number;
+      stockDeductedQuantity?: number;
+      purchaseShortageQuantity?: number;
+      onHandQuantity?: number;
+      allocatedQuantity?: number;
+      availableQuantity?: number;
+      usesInventory?: boolean;
+      allocationRequired?: boolean;
       type: 'FOOD' | 'SUPPLEMENT' | 'PACKAGING';
       displayUnit?: string;
       ingredientBaseUnit?: string;
@@ -1521,6 +1529,15 @@ export class PurchasingService {
       quantityNeeded: req.quantityNeeded,
       quantityUnit: req.quantityUnit,
       estimatedCost: req.estimatedCost,
+      grossQuantityNeeded: req.grossQuantityNeeded ?? req.quantityNeeded,
+      stockDeductedQuantity: req.stockDeductedQuantity ?? 0,
+      purchaseShortageQuantity:
+        req.purchaseShortageQuantity ?? req.quantityNeeded,
+      onHandQuantity: req.onHandQuantity ?? 0,
+      allocatedQuantity: req.allocatedQuantity ?? 0,
+      availableQuantity: req.availableQuantity ?? 0,
+      usesInventory: req.usesInventory ?? false,
+      allocationRequired: req.allocationRequired ?? false,
       type: req.type,
       displayUnit: req.displayUnit,
       ingredientBaseUnit: req.ingredientBaseUnit,

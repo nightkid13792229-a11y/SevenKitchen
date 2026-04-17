@@ -125,6 +125,38 @@ export class StaffPurchasingController {
                   quantityNeeded: { type: 'number' },
                   quantityUnit: { type: 'string' },
                   estimatedCost: { type: 'number' },
+                  grossQuantityNeeded: {
+                    type: 'number',
+                    description: '订单原始需求量',
+                  },
+                  stockDeductedQuantity: {
+                    type: 'number',
+                    description: '库存抵扣量',
+                  },
+                  purchaseShortageQuantity: {
+                    type: 'number',
+                    description: '仍需采购量',
+                  },
+                  onHandQuantity: {
+                    type: 'number',
+                    description: '当前在库量',
+                  },
+                  allocatedQuantity: {
+                    type: 'number',
+                    description: '已分配量',
+                  },
+                  availableQuantity: {
+                    type: 'number',
+                    description: '可用库存量',
+                  },
+                  usesInventory: {
+                    type: 'boolean',
+                    description: '是否参与库存抵扣',
+                  },
+                  allocationRequired: {
+                    type: 'boolean',
+                    description: '是否会生成库存分配',
+                  },
                   type: {
                     type: 'string',
                     enum: ['FOOD', 'SUPPLEMENT', 'PACKAGING'],
@@ -243,12 +275,15 @@ export class StaffPurchasingController {
       `Generating purchase list for ${dto.startDate} - ${dto.endDate || dto.startDate} by user ${userId}`,
     );
 
-    const purchaseList = await this.purchasingService.generatePurchaseList(
+    const result = await this.purchasingService.generatePurchaseList(
       dto,
       userId,
     );
+    const message = result.purchaseList
+      ? '采购清单生成成功'
+      : '库存已分配，本批订单无需采购';
 
-    return ApiResponseDto.success(purchaseList, '采购清单生成成功');
+    return ApiResponseDto.success(result, message);
   }
 
   @Get('stock-ingredients')

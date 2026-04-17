@@ -284,6 +284,27 @@ describe('PurchasingService inventory allocation calculation', () => {
     expect(purchaseListRepository.save).not.toHaveBeenCalled();
   });
 
+  it('returns stock offset fields in purchase preview responses', async () => {
+    const { service } = await createService();
+
+    const preview: any = await service.previewPurchaseRequirements('2026-04-20');
+
+    expect(preview.totalEstimatedCost).toBe(6);
+    expect(preview.items[0]).toEqual(
+      expect.objectContaining({
+        ingredientId: 'beef',
+        grossQuantityNeeded: 3000,
+        stockDeductedQuantity: 3000,
+        purchaseShortageQuantity: 0,
+        onHandQuantity: 5000,
+        allocatedQuantity: 1000,
+        availableQuantity: 4000,
+        usesInventory: true,
+        allocationRequired: true,
+      }),
+    );
+  });
+
   it('releases active allocations before deleting a pending purchase list', async () => {
     const {
       service,

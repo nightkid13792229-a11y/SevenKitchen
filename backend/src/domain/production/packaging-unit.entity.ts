@@ -17,6 +17,16 @@ export interface IngredientsUsageSnapshot {
   };
 }
 
+export type ProductionResultStatus = 'NORMAL' | 'SURPLUS' | 'SHORTAGE';
+
+export interface ProductionResultInput {
+  resultStatus?: ProductionResultStatus;
+  surplusG?: number;
+  shortageG?: number;
+  resultPhotoUrls?: string[];
+  completedAt?: Date;
+}
+
 export class PackagingUnit {
   constructor(
     public readonly id: string,
@@ -32,6 +42,12 @@ export class PackagingUnit {
     public photosCooked: string[] = [],
     public photosPortioned: string[] = [],
     public updatedAt: Date = new Date(),
+    public resultStatus: ProductionResultStatus | null = null,
+    public actualOutputG: number | null = null,
+    public surplusG: number = 0,
+    public shortageG: number = 0,
+    public resultPhotoUrls: string[] = [],
+    public completedAt: Date | null = null,
   ) {
     this.validateInvariants();
   }
@@ -72,6 +88,49 @@ export class PackagingUnit {
 
     // RecipeSnapshot must be immutable (read-only after creation)
     // This is enforced by using readonly property and not providing update methods
+  }
+
+  recordProductionResult(input: ProductionResultInput = {}): void {
+    const resultStatus = input.resultStatus ?? 'NORMAL';
+    const surplusG = Number(input.surplusG ?? 0);
+    const shortageG = Number(input.shortageG ?? 0);
+
+    if (!['NORMAL', 'SURPLUS', 'SHORTAGE'].includes(resultStatus)) {
+      throw new ValidationError(`Invalid production result: ${resultStatus}`);
+    }
+
+    if (!Number.isFinite(surplusG) || surplusG < 0) {
+      throw new ValidationError('surplusG must be a non-negative number');
+    }
+
+    if (!Number.isFinite(shortageG) || shortageG < 0) {
+      throw new ValidationError('shortageG must be a non-negative number');
+    }
+
+    if (resultStatus === 'NORMAL' && (surplusG > 0 || shortageG > 0)) {
+      throw new ValidationError('NORMAL result cannot include surplus or shortage');
+    }
+
+    if (resultStatus === 'SURPLUS' && (surplusG <= 0 || shortageG > 0)) {
+      throw new ValidationError('SURPLUS result requires positive surplusG only');
+    }
+
+    if (resultStatus === 'SHORTAGE' && (shortageG <= 0 || surplusG > 0)) {
+      throw new ValidationError('SHORTAGE result requires positive shortageG only');
+    }
+
+    this.resultStatus = resultStatus;
+    this.surplusG = resultStatus === 'SURPLUS' ? surplusG : 0;
+    this.shortageG = resultStatus === 'SHORTAGE' ? shortageG : 0;
+    this.actualOutputG = Math.max(
+      this.totalProductionG + this.surplusG - this.shortageG,
+      0,
+    );
+    this.resultPhotoUrls = Array.isArray(input.resultPhotoUrls)
+      ? input.resultPhotoUrls
+      : [];
+    this.completedAt = input.completedAt || new Date();
+    this.updatedAt = new Date();
   }
 
   /**

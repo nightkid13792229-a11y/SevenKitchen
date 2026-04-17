@@ -140,6 +140,13 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
             id: batch.id,
             productionDate: batch.productionDate,
             status: batch.status as any,
+            plannedOutputG: batch.plannedOutputG,
+            actualOutputG: batch.actualOutputG,
+            surplusG: batch.surplusG,
+            shortageG: batch.shortageG,
+            actualCost: batch.actualCost,
+            costSettlementSnapshot: batch.costSettlementSnapshot as any,
+            completedAt: batch.completedAt,
           },
         });
 
@@ -160,6 +167,12 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
               photosRaw: unit.photosRaw || [],
               photosCooked: unit.photosCooked || [],
               photosPortioned: unit.photosPortioned || [],
+              resultStatus: unit.resultStatus,
+              actualOutputG: unit.actualOutputG,
+              surplusG: unit.surplusG,
+              shortageG: unit.shortageG,
+              resultPhotoUrls: unit.resultPhotoUrls || [],
+              completedAt: unit.completedAt,
             })),
           });
           this.logger.debug(
@@ -177,6 +190,13 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
         where: { id: batch.id },
         data: {
           status: batch.status as any,
+          plannedOutputG: batch.plannedOutputG,
+          actualOutputG: batch.actualOutputG,
+          surplusG: batch.surplusG,
+          shortageG: batch.shortageG,
+          actualCost: batch.actualCost,
+          costSettlementSnapshot: batch.costSettlementSnapshot as any,
+          completedAt: batch.completedAt,
         },
       });
     }
@@ -213,6 +233,12 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
         photosRaw: unit.photosRaw,
         photosCooked: unit.photosCooked,
         photosPortioned: unit.photosPortioned,
+        resultStatus: unit.resultStatus,
+        actualOutputG: unit.actualOutputG,
+        surplusG: unit.surplusG,
+        shortageG: unit.shortageG,
+        resultPhotoUrls: unit.resultPhotoUrls,
+        completedAt: unit.completedAt,
       },
     });
 
@@ -370,6 +396,9 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
     const photosPortioned = Array.isArray(pu.photosPortioned)
       ? pu.photosPortioned
       : [];
+    const resultPhotoUrls = Array.isArray(pu.resultPhotoUrls)
+      ? pu.resultPhotoUrls
+      : [];
 
     // Phase 8.12: Handle ingredients usage snapshot
     let ingredientsUsageSnapshot = null;
@@ -397,67 +426,25 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
       photosCooked,
       photosPortioned,
       pu.updatedAt ? new Date(pu.updatedAt) : new Date(),
+      pu.resultStatus ?? null,
+      pu.actualOutputG !== undefined && pu.actualOutputG !== null
+        ? Number(pu.actualOutputG)
+        : null,
+      pu.surplusG !== undefined && pu.surplusG !== null
+        ? Number(pu.surplusG)
+        : 0,
+      pu.shortageG !== undefined && pu.shortageG !== null
+        ? Number(pu.shortageG)
+        : 0,
+      resultPhotoUrls,
+      pu.completedAt ? new Date(pu.completedAt) : null,
     );
   }
 
   private mapToDomain(record: any): ProductionBatch {
-    const packagingUnits = (record.packagingUnits || []).map((pu: any) => {
-      // Ensure sourceOrderItemIds is always an array
-      // Prisma String[] should already be an array, but handle edge cases
-      let sourceOrderItemIds: string[] = [];
-      if (Array.isArray(pu.sourceOrderItemIds)) {
-        sourceOrderItemIds = pu.sourceOrderItemIds;
-      } else if (typeof pu.sourceOrderItemIds === 'string') {
-        // If it's a JSON string, parse it
-        try {
-          const parsed = JSON.parse(pu.sourceOrderItemIds);
-          sourceOrderItemIds = Array.isArray(parsed) ? parsed : [];
-        } catch {
-          // If parsing fails, treat as single item or empty
-          sourceOrderItemIds = pu.sourceOrderItemIds
-            ? [pu.sourceOrderItemIds]
-            : [];
-        }
-      }
-
-      // Phase 8.12: Handle photos arrays
-      const photosRaw = Array.isArray(pu.photosRaw) ? pu.photosRaw : [];
-      const photosCooked = Array.isArray(pu.photosCooked)
-        ? pu.photosCooked
-        : [];
-      const photosPortioned = Array.isArray(pu.photosPortioned)
-        ? pu.photosPortioned
-        : [];
-
-      // Phase 8.12: Handle ingredients usage snapshot
-      let ingredientsUsageSnapshot = null;
-      if (pu.ingredientsUsageSnapshot) {
-        try {
-          ingredientsUsageSnapshot =
-            typeof pu.ingredientsUsageSnapshot === 'string'
-              ? JSON.parse(pu.ingredientsUsageSnapshot)
-              : pu.ingredientsUsageSnapshot;
-        } catch {
-          ingredientsUsageSnapshot = null;
-        }
-      }
-
-      return new PackagingUnit(
-        pu.id,
-        pu.productionBatchId,
-        pu.recipeSnapshot as unknown as RecipeSnapshot,
-        pu.totalProductionG,
-        sourceOrderItemIds,
-        pu.createdAt,
-        // Phase 8.12: Kitchen task fields
-        pu.status || 'PENDING',
-        ingredientsUsageSnapshot,
-        photosRaw,
-        photosCooked,
-        photosPortioned,
-        pu.updatedAt ? new Date(pu.updatedAt) : new Date(),
-      );
-    });
+    const packagingUnits = (record.packagingUnits || []).map((pu: any) =>
+      this.mapPackagingUnitToDomain(pu),
+    );
 
     return new ProductionBatch(
       record.id,
@@ -465,6 +452,23 @@ export class PrismaProductionRepository implements ProductionBatchRepository {
       record.status as ProductionBatchStatus,
       packagingUnits,
       record.createdAt,
+      record.plannedOutputG !== undefined && record.plannedOutputG !== null
+        ? Number(record.plannedOutputG)
+        : null,
+      record.actualOutputG !== undefined && record.actualOutputG !== null
+        ? Number(record.actualOutputG)
+        : null,
+      record.surplusG !== undefined && record.surplusG !== null
+        ? Number(record.surplusG)
+        : 0,
+      record.shortageG !== undefined && record.shortageG !== null
+        ? Number(record.shortageG)
+        : 0,
+      record.actualCost !== undefined && record.actualCost !== null
+        ? Number(record.actualCost)
+        : null,
+      record.costSettlementSnapshot ?? null,
+      record.completedAt ? new Date(record.completedAt) : null,
     );
   }
 

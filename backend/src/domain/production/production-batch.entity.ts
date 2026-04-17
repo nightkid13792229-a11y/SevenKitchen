@@ -15,6 +15,13 @@ export class ProductionBatch {
     public status: ProductionBatchStatus,
     public readonly packagingUnits: PackagingUnit[],
     public readonly createdAt: Date,
+    public plannedOutputG: number | null = null,
+    public actualOutputG: number | null = null,
+    public surplusG: number = 0,
+    public shortageG: number = 0,
+    public actualCost: number | null = null,
+    public costSettlementSnapshot: Record<string, any> | null = null,
+    public completedAt: Date | null = null,
   ) {
     this.validateInvariants();
   }
@@ -98,5 +105,22 @@ export class ProductionBatch {
     return this.packagingUnits.every(
       (unit) => unit.status === PackagingUnitStatus.COMPLETED,
     );
+  }
+
+  recordCompletionAggregate(): void {
+    this.plannedOutputG = this.getTotalProductionG();
+    this.actualOutputG = this.packagingUnits.reduce(
+      (sum, unit) => sum + (unit.actualOutputG ?? unit.totalProductionG),
+      0,
+    );
+    this.surplusG = this.packagingUnits.reduce(
+      (sum, unit) => sum + Number(unit.surplusG || 0),
+      0,
+    );
+    this.shortageG = this.packagingUnits.reduce(
+      (sum, unit) => sum + Number(unit.shortageG || 0),
+      0,
+    );
+    this.completedAt = new Date();
   }
 }

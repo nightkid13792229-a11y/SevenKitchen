@@ -1137,6 +1137,8 @@ export class InventoryService {
       [InventorySourceType.PURCHASE_RECORD]: '采购入库',
       [InventorySourceType.MANUAL_ADJUSTMENT]: '手工调整',
       [InventorySourceType.STOCKTAKE]: '盘点差异',
+      [InventorySourceType.PRODUCTION_ALLOCATION_CONSUMPTION]: '生产领用',
+      [InventorySourceType.PRODUCTION_SURPLUS]: '生产余量入库',
     };
     return labelMap[sourceType];
   }
@@ -1169,6 +1171,14 @@ export class InventoryService {
       ].filter(Boolean);
 
       return parts.length > 0 ? parts.join(' · ') : '采购入库';
+    }
+
+    if (sourceType === InventorySourceType.PRODUCTION_ALLOCATION_CONSUMPTION) {
+      return '生产完成后消耗已分配库存';
+    }
+
+    if (sourceType === InventorySourceType.PRODUCTION_SURPLUS) {
+      return '生产完成后可保存余量入库';
     }
 
     return null;

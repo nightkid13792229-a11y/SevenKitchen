@@ -44,6 +44,7 @@ model Order {
   dog                          Dog?                 @relation(fields: [dogId], references: [id])
   items                        OrderItem[]
   statusHistory                OrderStatusHistory[]
+  costSettlements              OrderCostSettlement[]
 
   photoShareTokens PhotoShareToken[]
 
@@ -406,11 +407,19 @@ model PreparationMethod {
 }
 
 model ProductionBatch {
-  id             String                @id @default(uuid()) @map("id")
-  productionDate DateTime              @map("production_date")
-  status         ProductionBatchStatus @map("status")
-  createdAt      DateTime              @default(now()) @map("created_at")
-  packagingUnits PackagingUnit[]
+  id                     String                         @id @default(uuid()) @map("id")
+  productionDate         DateTime                       @map("production_date")
+  status                 ProductionBatchStatus          @map("status")
+  plannedOutputG         Float?                         @map("planned_output_g")
+  actualOutputG          Float?                         @map("actual_output_g")
+  surplusG               Float?                         @map("surplus_g")
+  shortageG              Float?                         @map("shortage_g")
+  actualCost             Decimal?                       @map("actual_cost") @db.Decimal(10, 2)
+  costSettlementSnapshot Json?                          @map("cost_settlement_snapshot")
+  completedAt            DateTime?                      @map("completed_at")
+  createdAt              DateTime                       @default(now()) @map("created_at")
+  packagingUnits         PackagingUnit[]
+  costSettlement         ProductionBatchCostSettlement?
 
   @@index([productionDate])
   @@index([status])
@@ -429,6 +438,12 @@ model PackagingUnit {
   photosPortioned          String[]            @default([]) @map("photos_portioned")
   photosRaw                String[]            @default([]) @map("photos_raw")
   status                   PackagingUnitStatus @default(PENDING) @map("status")
+  resultStatus             String?             @map("result_status") @db.VarChar(20)
+  actualOutputG            Float?              @map("actual_output_g")
+  surplusG                 Float?              @map("surplus_g")
+  shortageG                Float?              @map("shortage_g")
+  resultPhotoUrls          String[]            @default([]) @map("result_photo_urls")
+  completedAt              DateTime?           @map("completed_at")
   updatedAt                DateTime            @updatedAt @map("updated_at")
   productionBatch          ProductionBatch     @relation(fields: [productionBatchId], references: [id], onDelete: Cascade)
 
@@ -575,6 +590,7 @@ model InventoryLedgerEntry {
   procurementSkuId String?             @map("procurement_sku_id") @db.VarChar(36)
   sourceType       InventorySourceType @map("source_type")
   sourceId         String              @map("source_id")
+  costAmount       Decimal?            @map("cost_amount") @db.Decimal(10, 2)
   createdAt        DateTime            @default(now()) @map("created_at")
 
   @@unique([sourceType, sourceId, ingredientId])
@@ -583,6 +599,51 @@ model InventoryLedgerEntry {
   @@index([sourceType, sourceId])
   @@index([createdAt])
   @@map("inventory_ledger_entry")
+}
+
+model ProductionBatchCostSettlement {
+  id                     String          @id @default(uuid()) @map("id")
+  productionBatchId      String          @unique @map("production_batch_id")
+  plannedOutputG         Float           @map("planned_output_g")
+  actualOutputG          Float           @map("actual_output_g")
+  surplusG               Float           @default(0) @map("surplus_g")
+  shortageG              Float           @default(0) @map("shortage_g")
+  inventoryCost          Decimal         @default(0) @map("inventory_cost") @db.Decimal(10, 2)
+  purchaseCost           Decimal         @default(0) @map("purchase_cost") @db.Decimal(10, 2)
+  lossCost               Decimal         @default(0) @map("loss_cost") @db.Decimal(10, 2)
+  totalActualCost        Decimal         @default(0) @map("total_actual_cost") @db.Decimal(10, 2)
+  suggestedRefundAmount  Decimal         @default(0) @map("suggested_refund_amount") @db.Decimal(10, 2)
+  snapshot               Json            @map("snapshot")
+  settledAt              DateTime        @default(now()) @map("settled_at")
+  productionBatch        ProductionBatch @relation(fields: [productionBatchId], references: [id], onDelete: Cascade)
+  orderCostSettlements   OrderCostSettlement[]
+
+  @@index([settledAt])
+  @@map("production_batch_cost_settlement")
+}
+
+model OrderCostSettlement {
+  id                          String                        @id @default(uuid()) @map("id")
+  orderId                     String                        @map("order_id")
+  productionBatchSettlementId String                        @map("production_batch_settlement_id")
+  plannedOutputG              Float                         @map("planned_output_g")
+  actualOutputG               Float                         @map("actual_output_g")
+  shortageG                   Float                         @default(0) @map("shortage_g")
+  estimatedCost               Decimal                       @default(0) @map("estimated_cost") @db.Decimal(10, 2)
+  actualCost                  Decimal                       @default(0) @map("actual_cost") @db.Decimal(10, 2)
+  revenue                     Decimal                       @default(0) @map("revenue") @db.Decimal(10, 2)
+  actualMargin                Decimal                       @default(0) @map("actual_margin") @db.Decimal(10, 2)
+  suggestedAdjustmentAmount   Decimal                       @default(0) @map("suggested_adjustment_amount") @db.Decimal(10, 2)
+  requiresCustomerPayment     Boolean                       @default(false) @map("requires_customer_payment")
+  snapshot                    Json                          @map("snapshot")
+  createdAt                   DateTime                      @default(now()) @map("created_at")
+  order                       Order                         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productionBatchSettlement   ProductionBatchCostSettlement @relation(fields: [productionBatchSettlementId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, productionBatchSettlementId])
+  @@index([orderId])
+  @@index([productionBatchSettlementId])
+  @@map("order_cost_settlement")
 }
 
 model InventoryAllocation {
@@ -1225,6 +1286,8 @@ enum InventorySourceType {
   PURCHASE_RECORD
   MANUAL_ADJUSTMENT
   STOCKTAKE
+  PRODUCTION_ALLOCATION_CONSUMPTION
+  PRODUCTION_SURPLUS
 }
 
 enum InventoryAdjustmentMode {

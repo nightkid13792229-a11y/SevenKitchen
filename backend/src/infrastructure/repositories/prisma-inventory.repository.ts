@@ -30,6 +30,7 @@ export class PrismaInventoryRepository implements InventoryRepository {
           procurementSkuId: entry.procurementSkuId ?? null,
           sourceType: entry.sourceType as any,
           sourceId: entry.sourceId,
+          costAmount: entry.costAmount ?? null,
           createdAt: entry.createdAt,
         })),
         skipDuplicates: true, // Handle unique constraint violations gracefully
@@ -94,6 +95,9 @@ export class PrismaInventoryRepository implements InventoryRepository {
       record.sourceId,
       record.createdAt,
       record.procurementSkuId ?? undefined,
+      record.costAmount !== undefined && record.costAmount !== null
+        ? Number(record.costAmount)
+        : undefined,
     );
   }
 }

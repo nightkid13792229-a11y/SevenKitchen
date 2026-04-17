@@ -18,6 +18,7 @@ export class InventoryLedgerEntry {
     public readonly sourceId: string, // PackagingUnit.id for KITCHEN_TASK
     public readonly createdAt: Date,
     public readonly procurementSkuId?: string,
+    public readonly costAmount?: number,
   ) {
     this.validateInvariants();
   }

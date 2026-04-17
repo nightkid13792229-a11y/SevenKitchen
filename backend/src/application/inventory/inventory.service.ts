@@ -114,6 +114,25 @@ export interface InventoryStocktakeDto {
   lines: InventoryStocktakeLineDto[];
 }
 
+export interface InventoryAvailabilitySnapshot {
+  ingredientId: string;
+  onHandQuantityG: number;
+  allocatedQuantityG: number;
+  availableQuantityG: number;
+}
+
+export interface CreateInventoryAllocationDto {
+  targetDate: Date;
+  purchaseListId?: string | null;
+  sourceOrderIds: string[];
+  createdById?: string | null;
+  lines: Array<{
+    ingredientId: string;
+    procurementSkuId?: string | null;
+    quantityG: number;
+  }>;
+}
+
 type IngredientStockMeta = {
   id: string;
   name: string;
@@ -290,6 +309,135 @@ export class InventoryService {
    */
   async getBalanceByIngredient(ingredientId: string): Promise<number> {
     return this.inventoryRepository.getCurrentBalanceByIngredient(ingredientId);
+  }
+
+  /**
+   * Get stock availability for purchase planning.
+   * Physical stock comes from ledger balances; allocation is a logical claim
+   * that keeps the same stock from being assigned to multiple orders.
+   */
+  async getAvailabilityByIngredientIds(
+    ingredientIds: string[],
+  ): Promise<Map<string, InventoryAvailabilitySnapshot>> {
+    const uniqueIds = Array.from(new Set(ingredientIds.filter(Boolean)));
+    if (uniqueIds.length === 0) {
+      return new Map();
+    }
+
+    const [balances, allocationLines] = await Promise.all([
+      Promise.all(
+        uniqueIds.map(
+          async (ingredientId) =>
+            [
+              ingredientId,
+              await this.getBalanceByIngredient(ingredientId),
+            ] as const,
+        ),
+      ),
+      this.prisma.inventoryAllocationLine.groupBy({
+        by: ['ingredientId'],
+        where: {
+          ingredientId: {
+            in: uniqueIds,
+          },
+          allocation: {
+            status: 'ACTIVE',
+          },
+        },
+        _sum: {
+          quantityG: true,
+        },
+      }),
+    ]);
+
+    const balanceMap = new Map(balances);
+    const allocatedMap = new Map(
+      allocationLines.map((item: any) => [
+        item.ingredientId,
+        Number(item._sum.quantityG ?? 0),
+      ]),
+    );
+
+    return new Map(
+      uniqueIds.map((ingredientId) => {
+        const onHandQuantityG = Number(balanceMap.get(ingredientId) ?? 0);
+        const allocatedQuantityG = Number(allocatedMap.get(ingredientId) ?? 0);
+
+        return [
+          ingredientId,
+          {
+            ingredientId,
+            onHandQuantityG,
+            allocatedQuantityG,
+            availableQuantityG: Math.max(
+              onHandQuantityG - allocatedQuantityG,
+              0,
+            ),
+          },
+        ];
+      }),
+    );
+  }
+
+  async createAllocationForOrderDemand(
+    dto: CreateInventoryAllocationDto,
+  ): Promise<{ id: string }> {
+    if (Number.isNaN(dto.targetDate.getTime())) {
+      throw new BadRequestException('targetDate must be valid');
+    }
+
+    const validLines = dto.lines
+      .filter((line) => Number.isFinite(line.quantityG) && line.quantityG > 0)
+      .map((line) => ({
+        id: randomUUID(),
+        ingredientId: line.ingredientId,
+        procurementSkuId: line.procurementSkuId ?? null,
+        quantityG: Number(line.quantityG.toFixed(3)),
+        createdAt: new Date(),
+      }));
+
+    if (validLines.length === 0) {
+      throw new BadRequestException('库存分配至少需要一条有效明细');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const allocation = await tx.inventoryAllocation.create({
+        data: {
+          targetDate: dto.targetDate,
+          purchaseListId: dto.purchaseListId ?? null,
+          sourceOrderIds: dto.sourceOrderIds,
+          createdById: dto.createdById ?? null,
+          status: 'ACTIVE',
+        },
+        select: {
+          id: true,
+        },
+      });
+
+      await tx.inventoryAllocationLine.createMany({
+        data: validLines.map((line) => ({
+          ...line,
+          allocationId: allocation.id,
+        })),
+      });
+
+      return allocation;
+    });
+  }
+
+  async releaseAllocationsForPurchaseList(
+    purchaseListId: string,
+  ): Promise<void> {
+    await this.prisma.inventoryAllocation.updateMany({
+      where: {
+        purchaseListId,
+        status: 'ACTIVE',
+      },
+      data: {
+        status: 'RELEASED',
+        releasedAt: new Date(),
+      },
+    });
   }
 
   /**

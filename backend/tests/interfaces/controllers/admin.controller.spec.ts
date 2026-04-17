@@ -193,6 +193,44 @@ describe('AdminController', () => {
   });
 
   describe('getOrderDetail', () => {
+    it('returns an order financial summary for admins', async () => {
+      const financialSummary = {
+        orderId: 'order-1',
+        amountTotal: 120,
+        estimatedCost: 70,
+        actualCost: 80,
+        actualMargin: 40,
+        shortageAdjustmentAmount: -12,
+        requiresCustomerPayment: false,
+      };
+      const mockOrderService = {
+        getOrderFinancialSummary: jest.fn().mockResolvedValue(financialSummary),
+      };
+      const controller = new AdminController(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        mockOrderService as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+      );
+
+      const result = await controller.getOrderFinancialSummary('order-1');
+
+      expect(mockOrderService.getOrderFinancialSummary).toHaveBeenCalledWith(
+        'order-1',
+      );
+      expect(result.code).toBe(0);
+      expect(result.data).toEqual(financialSummary);
+    });
+
     it('returns address details in the admin order response', async () => {
       const order = {
         id: 'order-1',

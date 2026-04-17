@@ -1403,6 +1403,33 @@ export class AdminController {
   }
 
   /**
+   * GET /admin/orders/:orderId/financial-summary - Get order financial summary
+   */
+  @Get('orders/:orderId/financial-summary')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Get order financial summary (admin-only)' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order financial summary',
+  })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  async getOrderFinancialSummary(
+    @Param('orderId') orderId: string,
+  ): Promise<ApiResponseDto<any> | ApiResponseDto<null>> {
+    try {
+      const summary =
+        await this.orderService.getOrderFinancialSummary(orderId);
+      return ApiResponseDto.success(summary);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
    * GET /admin/orders/:orderId - Get order details
    */
   @Get('orders/:orderId')

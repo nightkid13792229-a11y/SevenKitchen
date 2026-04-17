@@ -88,6 +88,29 @@ export interface CreateOrderItemDto {
   cookingMethod?: CookingMethod | null;
 }
 
+export interface OrderFinancialSummaryDto {
+  orderId: string;
+  amountTotal: number;
+  revenue: number;
+  estimatedCost: number;
+  estimatedMargin: number;
+  actualCost: number | null;
+  actualMargin: number | null;
+  shortageAdjustmentAmount: number;
+  requiresCustomerPayment: boolean;
+  settlementStatus: 'PENDING' | 'SETTLED';
+  latestSettlement: {
+    id: string;
+    productionBatchId: string;
+    productionBatchSettlementId: string;
+    plannedOutputG: number;
+    actualOutputG: number;
+    shortageG: number;
+    settledAt: string | null;
+    createdAt: string | null;
+  } | null;
+}
+
 interface ResolvedOrderItemPackageInput {
   quantityG: number;
   packageCount: number;
@@ -141,6 +164,105 @@ export class OrderService {
         method.name,
       ]),
     );
+  }
+
+  async getOrderFinancialSummary(
+    orderId: string,
+  ): Promise<OrderFinancialSummaryDto> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        costSettlements: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          include: {
+            productionBatchSettlement: true,
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order not found: ${orderId}`);
+    }
+
+    const latestSettlement = order.costSettlements[0] ?? null;
+    const revenue = this.roundMoney(this.toNumber(order.amountTotal));
+    const estimatedCost = this.extractEstimatedCost(
+      order.pricingBreakdownSnapshot,
+    );
+    const actualCost = latestSettlement
+      ? this.roundMoney(this.toNumber(latestSettlement.actualCost))
+      : null;
+    const actualMargin = latestSettlement
+      ? this.roundMoney(this.toNumber(latestSettlement.actualMargin))
+      : null;
+
+    return {
+      orderId: order.id,
+      amountTotal: revenue,
+      revenue,
+      estimatedCost,
+      estimatedMargin: this.roundMoney(revenue - estimatedCost),
+      actualCost,
+      actualMargin,
+      shortageAdjustmentAmount: latestSettlement
+        ? this.roundMoney(
+            this.toNumber(latestSettlement.suggestedAdjustmentAmount),
+          )
+        : 0,
+      requiresCustomerPayment:
+        latestSettlement?.requiresCustomerPayment ?? false,
+      settlementStatus: latestSettlement ? 'SETTLED' : 'PENDING',
+      latestSettlement: latestSettlement
+        ? {
+            id: latestSettlement.id,
+            productionBatchId:
+              latestSettlement.productionBatchSettlement.productionBatchId,
+            productionBatchSettlementId:
+              latestSettlement.productionBatchSettlementId,
+            plannedOutputG: latestSettlement.plannedOutputG,
+            actualOutputG: latestSettlement.actualOutputG,
+            shortageG: latestSettlement.shortageG,
+            settledAt:
+              latestSettlement.productionBatchSettlement.settledAt?.toISOString() ??
+              null,
+            createdAt: latestSettlement.createdAt?.toISOString() ?? null,
+          }
+        : null,
+    };
+  }
+
+  private extractEstimatedCost(snapshot: unknown): number {
+    if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
+      return 0;
+    }
+
+    const record = snapshot as Record<string, unknown>;
+    const totalProductCost = this.toNumber(record.totalProductCost);
+    if (totalProductCost > 0) {
+      return this.roundMoney(totalProductCost);
+    }
+
+    return this.roundMoney(
+      this.toNumber(record.costIngredients) +
+        this.toNumber(record.costPackaging) +
+        this.toNumber(record.costLabor) +
+        this.toNumber(record.costOverhead),
+    );
+  }
+
+  private toNumber(value: unknown): number {
+    if (value === null || value === undefined) {
+      return 0;
+    }
+
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : 0;
+  }
+
+  private roundMoney(value: number): number {
+    return Math.round((value + Number.EPSILON) * 100) / 100;
   }
 
   /**

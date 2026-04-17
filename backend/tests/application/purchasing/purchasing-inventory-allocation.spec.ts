@@ -159,6 +159,7 @@ describe('PurchasingService inventory allocation calculation', () => {
       findByDateRange: jest.fn().mockResolvedValue([]),
       save: jest.fn(async (list) => list),
       findById: jest.fn(),
+      recalculateItems: jest.fn(async (_id, list) => list),
       delete: jest.fn(),
     };
 
@@ -345,6 +346,111 @@ describe('PurchasingService inventory allocation calculation', () => {
 
     expect(inventoryService.releaseAllocationsForPurchaseList).toHaveBeenCalledWith(
       'purchase-list-1',
+    );
+  });
+
+  it('recreates allocation for remaining order demand when removing orders from a pending purchase list', async () => {
+    const {
+      service,
+      inventoryService,
+      orderRepository,
+      purchaseListRepository,
+    } = await createService({
+      availability: new Map([
+        [
+          'beef',
+          {
+            ingredientId: 'beef',
+            onHandQuantityG: 1000,
+            allocatedQuantityG: 0,
+            availableQuantityG: 1000,
+          },
+        ],
+      ]),
+    });
+    purchaseListRepository.findById.mockResolvedValue(makePendingPurchaseList());
+    orderRepository.findById.mockImplementation(async (id: string) => {
+      if (id === 'order-beef') {
+        return makePaidOrder('beef', '牛肉', 3000);
+      }
+      if (id === 'order-spinach') {
+        return makePaidOrder('spinach', '菠菜', 600);
+      }
+      return null;
+    });
+
+    await service.removeOrdersFromPurchaseList(
+      'purchase-list-1',
+      ['order-spinach'],
+      'admin-1',
+    );
+
+    expect(inventoryService.releaseAllocationsForPurchaseList).toHaveBeenCalledWith(
+      'purchase-list-1',
+    );
+    expect(inventoryService.createAllocationForOrderDemand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        purchaseListId: 'purchase-list-1',
+        sourceOrderIds: ['order-beef'],
+        createdById: 'admin-1',
+        lines: [
+          expect.objectContaining({
+            ingredientId: 'beef',
+            quantityG: 1000,
+          }),
+        ],
+      }),
+    );
+  });
+
+  it('releases and recreates allocation when recalculating a pending purchase list', async () => {
+    const {
+      service,
+      inventoryService,
+      orderRepository,
+      purchaseListRepository,
+    } = await createService({
+      availability: new Map([
+        [
+          'beef',
+          {
+            ingredientId: 'beef',
+            onHandQuantityG: 1000,
+            allocatedQuantityG: 0,
+            availableQuantityG: 1000,
+          },
+        ],
+      ]),
+    });
+    purchaseListRepository.findById.mockResolvedValue(makePendingPurchaseList());
+    orderRepository.findById.mockImplementation(async (id: string) => {
+      if (id === 'order-beef') {
+        return makePaidOrder('beef', '牛肉', 3000);
+      }
+      if (id === 'order-spinach') {
+        return makePaidOrder('spinach', '菠菜', 600);
+      }
+      return null;
+    });
+
+    await service.recalculatePurchaseList('purchase-list-1', 'admin-1');
+
+    expect(inventoryService.releaseAllocationsForPurchaseList).toHaveBeenCalledWith(
+      'purchase-list-1',
+    );
+    expect(purchaseListRepository.recalculateItems).toHaveBeenCalled();
+    expect(inventoryService.createAllocationForOrderDemand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        purchaseListId: 'purchase-list-1',
+        sourceOrderIds: ['order-beef', 'order-spinach'],
+        createdById: 'admin-1',
+        lines: [
+          expect.objectContaining({
+            ingredientId: 'beef',
+            quantityG: 1000,
+          }),
+        ],
+      }),
     );
   });
 });

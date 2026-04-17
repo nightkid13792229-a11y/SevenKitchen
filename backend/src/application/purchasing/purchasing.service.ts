@@ -595,6 +595,40 @@ export class PurchasingService {
     );
   }
 
+  private buildInventoryAllocationLines(requirements: PurchaseRequirement[]) {
+    return requirements
+      .filter((requirement) => (requirement.stockDeductedQuantity ?? 0) > 0)
+      .map((requirement) => ({
+        ingredientId: requirement.ingredientId,
+        procurementSkuId: requirement.procurementSkuId,
+        quantityG: requirement.stockDeductedQuantity!,
+      }));
+  }
+
+  private async createInventoryAllocationForRequirements(params: {
+    requirements: PurchaseRequirement[];
+    targetDate: Date;
+    purchaseListId: string | null;
+    sourceOrderIds: string[];
+    createdById?: string | null;
+  }): Promise<{ id: string } | null> {
+    const allocationLines = this.buildInventoryAllocationLines(
+      params.requirements,
+    );
+
+    if (allocationLines.length === 0) {
+      return null;
+    }
+
+    return this.inventoryService.createAllocationForOrderDemand({
+      targetDate: params.targetDate,
+      purchaseListId: params.purchaseListId,
+      sourceOrderIds: params.sourceOrderIds,
+      createdById: params.createdById,
+      lines: allocationLines,
+    });
+  }
+
   private getStockLevelStatus(params: {
     currentStock: number;
     safetyStock?: number | null;
@@ -910,6 +944,123 @@ export class PurchasingService {
 
     const ingredients = await this.ingredientRepository.findByIds(ingredientIds);
     return new Map(ingredients.map((ingredient) => [ingredient.id, ingredient]));
+  }
+
+  private async calculatePurchaseRequirementsFromOrders(
+    orders: Order[],
+  ): Promise<PurchaseRequirement[]> {
+    if (orders.length === 0) {
+      return [];
+    }
+
+    const ingredientLookup = await this.buildIngredientLookupFromOrders(orders);
+    const ingredientMap = new Map<string, PurchaseRequirement>();
+
+    for (const order of orders) {
+      if (!order.pricingBreakdownSnapshot) {
+        this.logger.warn(
+          `Order ${order.id} has no pricing breakdown snapshot, skipping`,
+        );
+        continue;
+      }
+
+      const pricingBreakdown = order.pricingBreakdownSnapshot as any;
+      const ingredientDetails = pricingBreakdown.ingredientDetails || [];
+
+      const recipeSnapshotMap = new Map<string, any>();
+      for (const orderItem of order.items) {
+        if (orderItem.recipeSnapshot?.items) {
+          for (const item of orderItem.recipeSnapshot.items) {
+            recipeSnapshotMap.set(item.ingredient_id, item);
+          }
+        }
+      }
+
+      for (const detail of ingredientDetails) {
+        const key = detail.ingredientId;
+        const ingredientId = detail.ingredientId;
+        const recipeItem = recipeSnapshotMap.get(ingredientId);
+        if (!recipeItem) {
+          this.logger.warn(
+            `Ingredient ${ingredientId} (${detail.name}) not found in recipe snapshot, skipping`,
+          );
+          continue;
+        }
+
+        const purchaseQuantity = detail.purchaseAmount || detail.amount || 0;
+        if (purchaseQuantity <= 0) {
+          this.logger.warn(
+            `Skipping ingredient ${detail.name} due to non-positive quantity: ${purchaseQuantity}`,
+          );
+          continue;
+        }
+
+        const type = recipeItem.ingredient_type || detail.type || 'FOOD';
+        const totalCost = detail.cost || 0;
+        const preparationMethods = resolvePreparationMethodTokens(
+          (detail as any).preparationMethod,
+          new Map(),
+          { preserveUnresolvedLegacy: false },
+        );
+
+        if (ingredientMap.has(key)) {
+          const existing = ingredientMap.get(key)!;
+          existing.quantityNeeded += purchaseQuantity;
+          existing.estimatedCost += totalCost;
+          existing.preparationMethods = this.mergePreparationMethods(
+            existing.preparationMethods,
+            preparationMethods,
+          );
+          if (recipeItem.sort_order !== undefined) {
+            existing.minSortOrder = Math.min(
+              existing.minSortOrder ?? 99999,
+              recipeItem.sort_order,
+            );
+          }
+        } else {
+          const ingredient = ingredientLookup.get(key);
+          ingredientMap.set(key, {
+            ingredientId: key,
+            ingredientName: detail.name,
+            type,
+            quantityNeeded: purchaseQuantity,
+            quantityUnit: detail.unit || 'G',
+            estimatedCost: totalCost,
+            preparationMethods:
+              preparationMethods.length > 0 ? preparationMethods : undefined,
+            purchaseChannel: detail.purchaseChannel,
+            productModel: detail.productModel,
+            displayUnit: detail.displayUnit,
+            ingredientBaseUnit: ingredient?.baseUnit,
+            foodDensityGPerMl:
+              ingredient?.baseUnit === 'ML'
+                ? Number(
+                    (ingredient.properties as any)?.density_g_per_ml ?? 0,
+                  ) || null
+                : null,
+            minSortOrder: recipeItem.sort_order,
+          });
+        }
+      }
+    }
+
+    const requirements = Array.from(ingredientMap.values()).sort((a, b) => {
+      const typeOrder = { FOOD: 1, SUPPLEMENT: 2, PACKAGING: 3 };
+      const typeDiff = typeOrder[a.type] - typeOrder[b.type];
+      if (typeDiff !== 0) return typeDiff;
+
+      return (a.minSortOrder ?? 99999) - (b.minSortOrder ?? 99999);
+    });
+
+    const enrichedRequirements = await this.enrichRequirementsWithCatalogData(
+      requirements,
+      ingredientLookup,
+    );
+
+    return this.applyInventoryAvailability(
+      enrichedRequirements,
+      ingredientLookup,
+    );
   }
 
   async getStockReplenishmentIngredients(params?: {
@@ -2121,6 +2272,21 @@ export class PurchasingService {
     await this.inventoryService.releaseAllocationsForPurchaseList(
       purchaseListId,
     );
+    const remainingOrderResults = await Promise.all(
+      purchaseList.sourceOrderIds.map((id) => this.orderRepository.findById(id)),
+    );
+    const remainingOrders = remainingOrderResults.filter(
+      (order): order is Order => order !== null,
+    );
+    const remainingRequirements =
+      await this.calculatePurchaseRequirementsFromOrders(remainingOrders);
+    await this.createInventoryAllocationForRequirements({
+      requirements: remainingRequirements,
+      targetDate: new Date(purchaseList.targetDate),
+      purchaseListId,
+      sourceOrderIds: purchaseList.sourceOrderIds,
+      createdById: operatorId,
+    });
 
     this.logger.log(
       `Removed ${orders.length} orders from purchase list ${purchaseListId}`,
@@ -2274,16 +2440,23 @@ export class PurchasingService {
       throw new BadRequestException('只有待采购状态的清单可以重新计算需求');
     }
 
-    // 获取采购清单的targetDate
-    const targetDate = new Date(purchaseList.targetDate);
-    const startDate = targetDate.toISOString().split('T')[0];
-    const endDate = startDate;
-
-    // 计算原始原料需求（基于订单）
-    const calculatedRequirements = await this.calculatePurchaseRequirements(
-      startDate,
-      endDate,
+    const sourceOrderResults = await Promise.all(
+      purchaseList.sourceOrderIds.map((id) => this.orderRepository.findById(id)),
     );
+    const sourceOrders = sourceOrderResults.filter(
+      (order): order is Order => order !== null,
+    );
+
+    if (sourceOrders.length === 0) {
+      throw new BadRequestException('没有找到可以纳入的订单');
+    }
+
+    await this.inventoryService.releaseAllocationsForPurchaseList(
+      purchaseListId,
+    );
+
+    const calculatedRequirements =
+      await this.calculatePurchaseRequirementsFromOrders(sourceOrders);
 
     if (calculatedRequirements.length === 0) {
       throw new BadRequestException('没有找到可以纳入的订单');
@@ -2360,9 +2533,13 @@ export class PurchasingService {
       purchaseListId,
       updatedList,
     );
-    await this.inventoryService.releaseAllocationsForPurchaseList(
+    await this.createInventoryAllocationForRequirements({
+      requirements: enrichedRequirements,
+      targetDate: new Date(purchaseList.targetDate),
       purchaseListId,
-    );
+      sourceOrderIds: purchaseList.sourceOrderIds,
+      createdById: operatorId,
+    });
 
     this.logger.log(
       `Recalculated purchase list ${purchaseListId}: ${mergedItems.length} items`,

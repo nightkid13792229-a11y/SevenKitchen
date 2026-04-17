@@ -188,7 +188,7 @@ const parsedIngredients = computed(() => {
       : '';
 
     if (item.ingredient_type === 'SUPPLEMENT') {
-      const supplementAmount = calculateSupplementAmountForProduction(item, totalProductionG);
+      const supplementAmount = calculateSupplementAmountForProduction(item, theoreticalWeight);
       amount = supplementAmount.amount;
       unit = supplementAmount.unit;
     } else {

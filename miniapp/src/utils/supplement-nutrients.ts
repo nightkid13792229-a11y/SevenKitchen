@@ -12,14 +12,6 @@ function getSupplementTargetValue(item: any): number {
   return typeof value === 'number' ? value : Number(value || 0)
 }
 
-function getSupplementLossRate(item: any): number {
-  return (
-    item?.properties?.production_loss_rate ||
-    item?.ingredient?.properties?.production_loss_rate ||
-    1.05
-  )
-}
-
 export function getResolvedSupplementNutrient(
   item: any
 ): ActiveNutrientValue | undefined {
@@ -71,7 +63,7 @@ export function getResolvedSupplementDisplayUnit(item: any): string {
 
 export function calculateSupplementAmountForProduction(
   item: any,
-  totalProductionG: number
+  totalFoodInputWeightG: number
 ): { amount: number; unit: string } {
   const nutrient = getResolvedSupplementNutrient(item)
   const nutrientTargetValue = getSupplementTargetValue(item)
@@ -84,13 +76,12 @@ export function calculateSupplementAmountForProduction(
     }
   }
 
-  const finishedProductKG = totalProductionG / 1000
-  const totalNutrientNeeded = finishedProductKG * nutrientTargetValue
+  const foodInputWeightKG = totalFoodInputWeightG / 1000
+  const totalNutrientNeeded = foodInputWeightKG * nutrientTargetValue
   const baseUnits = totalNutrientNeeded / nutrient.value
-  const finalUnits = baseUnits * getSupplementLossRate(item)
 
   return {
-    amount: finalUnits,
+    amount: baseUnits,
     unit
   }
 }

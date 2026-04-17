@@ -30,7 +30,7 @@ describe('supplement nutrient resolution', () => {
     expect(getResolvedSupplementNutrientUnit(item)).toBe('IU')
   })
 
-  it('calculates supplement production amount from resolved nutrient concentration', () => {
+  it('calculates production supplement amount from input weight without supplement loss', () => {
     const item = {
       nutrient_target_key: '维生素E',
       nutrient_target_value: 1000,
@@ -47,7 +47,7 @@ describe('supplement nutrient resolution', () => {
     }
 
     expect(calculateSupplementAmountForProduction(item, 1000)).toEqual({
-      amount: 2.75,
+      amount: 2.5,
       unit: '粒'
     })
   })
@@ -68,8 +68,27 @@ describe('supplement nutrient resolution', () => {
     expect(getResolvedSupplementDisplayUnit(item)).toBe('平勺')
     expect(getResolvedSupplementNutrientUnit(item)).toBe('μg')
     expect(calculateSupplementAmountForProduction(item, 2000)).toEqual({
-      amount: 4.2,
+      amount: 4,
       unit: '平勺'
+    })
+  })
+
+  it('uses production pot input weight as the production supplement baseline', () => {
+    const item = {
+      nutrient_target_key: '碘',
+      nutrient_target_value: 660,
+      unit_display_label: '片',
+      properties: {
+        production_loss_rate: 1.05,
+        active_nutrients: {
+          碘: { value: 150, unit: 'μg' }
+        }
+      }
+    }
+
+    expect(calculateSupplementAmountForProduction(item, 3260)).toEqual({
+      amount: 14.344,
+      unit: '片'
     })
   })
 })

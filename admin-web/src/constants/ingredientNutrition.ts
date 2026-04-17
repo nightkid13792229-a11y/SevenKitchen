@@ -48,25 +48,19 @@ export interface IngredientNutritionTabDefinition<
   fields: Array<IngredientNutritionFieldDefinition<TKey>>
 }
 
+export interface SupplementTargetFieldOption {
+  group: string
+  fieldPath: `${IngredientNutritionTabKey}.${string}`
+  label: string
+  unit: string
+}
+
 export const INGREDIENT_NUTRITION_TAB_KEYS: readonly IngredientNutritionTabKey[] = [
   'macros',
   'minerals',
   'vitamins',
   'fattyAcids',
   'aminoAcids'
-] as const
-
-export const SUPPLEMENT_TARGET_FIELD_OPTIONS = [
-  { group: '矿物质', fieldPath: 'minerals.iodine', label: '碘', unit: 'μg' },
-  { group: '矿物质', fieldPath: 'minerals.calcium', label: '钙', unit: 'mg' },
-  { group: '矿物质', fieldPath: 'minerals.zinc', label: '锌', unit: 'mg' },
-  { group: '矿物质', fieldPath: 'minerals.selenium', label: '硒', unit: 'μg' },
-  { group: '维生素', fieldPath: 'vitamins.vitaminD', label: '维生素 D', unit: 'IU' },
-  { group: '维生素', fieldPath: 'vitamins.vitaminE', label: '维生素 E', unit: 'IU' },
-  { group: '维生素', fieldPath: 'vitamins.choline', label: '胆碱', unit: 'mg' },
-  { group: '脂肪酸', fieldPath: 'fattyAcids.epa', label: 'EPA', unit: 'mg' },
-  { group: '脂肪酸', fieldPath: 'fattyAcids.dha', label: 'DHA', unit: 'mg' },
-  { group: '脂肪酸', fieldPath: 'fattyAcids.dpa', label: 'DPA', unit: 'mg' }
 ] as const
 
 export const INGREDIENT_NUTRITION_META_FIELDS: readonly IngredientNutritionMetaFieldDefinition[] = [
@@ -243,6 +237,16 @@ export const INGREDIENT_NUTRITION_TAB_DEFINITIONS: readonly IngredientNutritionT
     ]
   }
 ] as const
+
+export const SUPPLEMENT_TARGET_FIELD_OPTIONS: readonly SupplementTargetFieldOption[] =
+  INGREDIENT_NUTRITION_TAB_DEFINITIONS.flatMap((tab) =>
+    tab.fields.map((field) => ({
+      group: tab.label,
+      fieldPath: `${tab.key}.${field.key}` as `${IngredientNutritionTabKey}.${string}`,
+      label: field.label,
+      unit: field.unit
+    }))
+  )
 
 export const INGREDIENT_NUTRITION_TAB_LABELS: Readonly<Record<IngredientNutritionTabKey, string>> =
   Object.fromEntries(

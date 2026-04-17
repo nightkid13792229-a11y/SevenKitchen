@@ -585,6 +585,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
             ratioPercent: item.ratioPercent,
             nutrientTargetKey: item.nutrientTargetKey,
             nutrientTargetValue: item.nutrientTargetValue,
+            supplementTargets: item.supplementTargets ?? undefined,
           })),
         });
       }
@@ -617,6 +618,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
             ratioPercent: item.ratioPercent,
             nutrientTargetKey: item.nutrientTargetKey,
             nutrientTargetValue: item.nutrientTargetValue,
+            supplementTargets: item.supplementTargets ?? undefined,
           })),
         });
       }
@@ -687,6 +689,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
           nutrientTargetValue: item.nutrientTargetValue
             ? Number(item.nutrientTargetValue)
             : null,
+          supplementTargets: (item.supplementTargets as any) ?? null,
           supplementAlternativeIngredientIds:
             item.supplementAlternatives?.map(
               (alternative) => alternative.alternativeIngredientId,

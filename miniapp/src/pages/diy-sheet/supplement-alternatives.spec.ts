@@ -25,11 +25,11 @@ describe('supplement alternatives helpers', () => {
         displayUnit: '粒',
         imageUrl: 'https://cdn.example.com/default-square.jpg',
         preparationMethod: '随餐',
+        nutrition_profile_snapshot: {
+          vitamins: { vitaminE: 200 }
+        },
         properties: {
-          image_url: 'https://cdn.example.com/default-square.jpg',
-          active_nutrients: {
-            维生素E: { value: 200, unit: 'IU' }
-          }
+          image_url: 'https://cdn.example.com/default-square.jpg'
         }
       },
       {
@@ -38,8 +38,10 @@ describe('supplement alternatives helpers', () => {
           displayUnit: '粒',
           imageUrl: 'https://cdn.example.com/default-square.jpg',
           addTimingLabel: '随餐',
-          activeNutrients: {
-            维生素E: { value: 200, unit: 'IU' }
+          nutritionProfile: {
+            vitamins: {
+              vitaminE: 200
+            }
           },
           properties: {
             image_url: 'https://cdn.example.com/default-square.jpg'
@@ -62,8 +64,10 @@ describe('supplement alternatives helpers', () => {
                 url: 'https://jd.example/e400'
               },
               addTimingLabel: '随餐',
-              activeNutrients: {
-                维生素E: { value: 400, unit: 'IU' }
+              nutritionProfile: {
+                vitamins: {
+                  vitaminE: 400
+                }
               },
               properties: {}
             }
@@ -164,21 +168,24 @@ describe('supplement alternatives helpers', () => {
   it('recalculates supplement amount and nutrient unit from selected alternative without supplement loss', () => {
     const baseItem = {
       amount: 5,
-      nutrientTargetKey: '维生素E',
-      nutrientTargetValue: 1000,
-      properties: {
-        active_nutrients: {
-          维生素E: { value: 200, unit: 'IU' }
+      supplementTargets: [
+        {
+          fieldPath: 'vitamins.vitaminE',
+          label: '维生素 E',
+          targetValuePerKg: 1000,
+          unit: 'IU'
         }
-      }
+      ]
     }
 
     const selectedOption = {
       id: 'supp-alt-1',
       ingredientId: 'supp-alt-1',
       name: '维生素E-400',
-      activeNutrients: {
-        维生素E: { value: 400, unit: 'IU' }
+      nutritionProfile: {
+        vitamins: {
+          vitaminE: 400
+        }
       }
     }
 
@@ -195,8 +202,14 @@ describe('supplement alternatives helpers', () => {
   it('keeps fractional tablet amounts when calculating from ingredient input weight', () => {
     const baseItem = {
       amount: 12,
-      nutrientTargetKey: '碘',
-      nutrientTargetValue: 660,
+      supplementTargets: [
+        {
+          fieldPath: 'minerals.iodine',
+          label: '碘',
+          targetValuePerKg: 660,
+          unit: 'μg'
+        }
+      ],
       properties: {}
     }
 
@@ -204,8 +217,10 @@ describe('supplement alternatives helpers', () => {
       id: 'kelp-tablet',
       ingredientId: 'kelp-tablet',
       name: '海带片',
-      activeNutrients: {
-        碘: { value: 150, unit: 'μg' }
+      nutritionProfile: {
+        minerals: {
+          iodine: 150
+        }
       }
     }
 

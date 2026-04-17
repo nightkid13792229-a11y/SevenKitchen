@@ -96,8 +96,8 @@
           {{ formatRatio(item.ratio) }}%
         </text>
         <!-- 补剂类型：显示营养目标值 -->
-        <text v-else-if="item.ingredientType === 'SUPPLEMENT' && item.nutrientTargetValue" class="ingredient-ratio nutrient-target-value">
-          每kg添加{{ item.nutrientTargetValue }}{{ getNutrientUnit(item) }}{{ item.nutrientTargetKey }}
+        <text v-else-if="item.ingredientType === 'SUPPLEMENT' && getNutrientTargetText(item)" class="ingredient-ratio nutrient-target-value">
+          {{ getNutrientTargetText(item) }}
         </text>
         <!-- 其他情况：显示占位符 -->
         <text v-else class="ingredient-ratio">
@@ -297,7 +297,7 @@ export default {
 import { ref, computed, onMounted } from 'vue'
 import { request, addFavorite, removeFavorite, checkFavorite, createRecipeShareToken, reviewApi, trackRecipeView } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
-import { getResolvedSupplementNutrientUnit } from '../../utils/supplement-nutrients'
+import { formatSupplementTargets } from '../../utils/supplement-nutrients'
 import ReviewList from '../../components/ReviewList.vue'
 import ReviewForm from '../../components/ReviewForm.vue'
 
@@ -309,6 +309,7 @@ interface RecipeItem {
   sortOrder: number
   nutrientTargetKey?: string  // 补剂类型才有此字段
   nutrientTargetValue?: number  // 补剂类型才有此字段
+  supplementTargets?: any[]
   ingredientType?: string
   properties?: any
 }
@@ -677,9 +678,11 @@ function getIngredientTypeClass(type: string): string {
   return map[type] || ''
 }
 
-function getNutrientUnit(item: RecipeItem): string {
-  if (!item.nutrientTargetKey) return ''
-  return getResolvedSupplementNutrientUnit(item)
+function getNutrientTargetText(item: RecipeItem): string {
+  const targetText = formatSupplementTargets(item)
+  if (targetText) return targetText
+  if (!item.nutrientTargetKey || !item.nutrientTargetValue) return ''
+  return `每kg添加${item.nutrientTargetValue}${item.nutrientTargetKey}`
 }
 
 function formatNumber(value: number | undefined | null): string {

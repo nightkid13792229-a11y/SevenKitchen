@@ -18,6 +18,13 @@ export interface PurchaseItemConstructor {
   quantityNeeded: number;
   quantityUnit: string;
   estimatedCost: number;
+  grossQuantityNeeded?: number;
+  stockDeductedQuantity?: number;
+  purchaseShortageQuantity?: number;
+  onHandQuantity?: number;
+  allocatedQuantity?: number;
+  availableQuantity?: number;
+  usesInventory?: boolean;
   purchaseChannel?: string;
   productModel?: string;
   displayUnit?: string; // 显示单位标签
@@ -55,6 +62,13 @@ export class PurchaseItem {
   public quantityNeeded: number; // 可写，用于动态更新
   public readonly quantityUnit: string;
   public estimatedCost: number; // 可写，用于动态更新
+  public readonly grossQuantityNeeded?: number;
+  public readonly stockDeductedQuantity?: number;
+  public readonly purchaseShortageQuantity?: number;
+  public readonly onHandQuantity?: number;
+  public readonly allocatedQuantity?: number;
+  public readonly availableQuantity?: number;
+  public readonly usesInventory: boolean;
   public readonly purchaseChannel?: string;
   public readonly productModel?: string;
   public readonly displayUnit?: string; // 显示单位标签
@@ -77,6 +91,13 @@ export class PurchaseItem {
     this.quantityNeeded = data.quantityNeeded;
     this.quantityUnit = data.quantityUnit;
     this.estimatedCost = data.estimatedCost;
+    this.grossQuantityNeeded = data.grossQuantityNeeded;
+    this.stockDeductedQuantity = data.stockDeductedQuantity;
+    this.purchaseShortageQuantity = data.purchaseShortageQuantity;
+    this.onHandQuantity = data.onHandQuantity;
+    this.allocatedQuantity = data.allocatedQuantity;
+    this.availableQuantity = data.availableQuantity;
+    this.usesInventory = data.usesInventory ?? false;
     this.purchaseChannel = data.purchaseChannel;
     this.productModel = data.productModel;
     this.displayUnit = data.displayUnit;
@@ -117,6 +138,13 @@ export class PurchaseItem {
       quantityNeeded: this.quantityNeeded,
       quantityUnit: this.quantityUnit,
       estimatedCost: this.estimatedCost,
+      grossQuantityNeeded: this.grossQuantityNeeded,
+      stockDeductedQuantity: this.stockDeductedQuantity,
+      purchaseShortageQuantity: this.purchaseShortageQuantity,
+      onHandQuantity: this.onHandQuantity,
+      allocatedQuantity: this.allocatedQuantity,
+      availableQuantity: this.availableQuantity,
+      usesInventory: this.usesInventory,
       purchaseChannel: this.purchaseChannel,
       productModel: this.productModel,
       displayUnit: this.displayUnit,
@@ -142,6 +170,35 @@ export class PurchaseItem {
       quantityNeeded: data.quantityNeeded,
       quantityUnit: data.quantityUnit,
       estimatedCost: Number(data.estimatedCost),
+      grossQuantityNeeded:
+        data.grossQuantityNeeded !== undefined &&
+        data.grossQuantityNeeded !== null
+          ? Number(data.grossQuantityNeeded)
+          : undefined,
+      stockDeductedQuantity:
+        data.stockDeductedQuantity !== undefined &&
+        data.stockDeductedQuantity !== null
+          ? Number(data.stockDeductedQuantity)
+          : undefined,
+      purchaseShortageQuantity:
+        data.purchaseShortageQuantity !== undefined &&
+        data.purchaseShortageQuantity !== null
+          ? Number(data.purchaseShortageQuantity)
+          : undefined,
+      onHandQuantity:
+        data.onHandQuantity !== undefined && data.onHandQuantity !== null
+          ? Number(data.onHandQuantity)
+          : undefined,
+      allocatedQuantity:
+        data.allocatedQuantity !== undefined &&
+        data.allocatedQuantity !== null
+          ? Number(data.allocatedQuantity)
+          : undefined,
+      availableQuantity:
+        data.availableQuantity !== undefined && data.availableQuantity !== null
+          ? Number(data.availableQuantity)
+          : undefined,
+      usesInventory: data.usesInventory ?? false,
       purchaseChannel: data.purchaseChannel,
       productModel: data.productModel,
       displayUnit: data.displayUnit,

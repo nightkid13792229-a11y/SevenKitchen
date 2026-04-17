@@ -52,3 +52,12 @@ ALTER TABLE "inventory_allocation_line"
 ALTER TABLE "inventory_allocation_line"
   ADD CONSTRAINT "inventory_allocation_line_ingredient_id_fkey"
   FOREIGN KEY ("ingredient_id") REFERENCES "ingredient"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+
+ALTER TABLE "purchase_item"
+  ADD COLUMN "gross_quantity_needed" DOUBLE PRECISION,
+  ADD COLUMN "stock_deducted_quantity" DOUBLE PRECISION,
+  ADD COLUMN "purchase_shortage_quantity" DOUBLE PRECISION,
+  ADD COLUMN "on_hand_quantity" DOUBLE PRECISION,
+  ADD COLUMN "allocated_quantity" DOUBLE PRECISION,
+  ADD COLUMN "available_quantity" DOUBLE PRECISION,
+  ADD COLUMN "uses_inventory" BOOLEAN NOT NULL DEFAULT false;

@@ -1,4 +1,9 @@
 import { PrismaPurchaseListRepository } from '../../../src/infrastructure/repositories/prisma-purchase-list.repository';
+import {
+  PurchaseItem,
+  PurchaseList,
+  PurchaseListStatus,
+} from '../../../src/domain/purchasing';
 
 jest.mock('uuid', () => ({
   v4: () => 'test-uuid',
@@ -128,5 +133,121 @@ describe('PrismaPurchaseListRepository', () => {
         },
       },
     });
+  });
+
+  it('persists purchase stock offset metadata when saving list items', async () => {
+    const tx = {
+      purchaseList: {
+        findUnique: jest.fn().mockResolvedValue({ id: 'list-1' }),
+        update: jest.fn().mockResolvedValue({ id: 'list-1' }),
+        findUniqueOrThrow: jest.fn().mockResolvedValue({
+          id: 'list-1',
+          targetDate: new Date('2026-04-05T04:00:00.000Z'),
+          status: 'PENDING',
+          totalEstimatedCost: 6,
+          itemCount: 1,
+          createdById: 'user-1',
+          createdBy: {
+            id: 'user-1',
+            nickname: 'Tester',
+            phone: null,
+          },
+          sourceOrderIds: ['order-1'],
+          orderDateSnapshot: null,
+          reimbursementId: null,
+          createdAt: new Date('2026-04-05T01:00:00.000Z'),
+          updatedAt: new Date('2026-04-05T01:00:00.000Z'),
+          startedAt: null,
+          completedAt: null,
+          records: [],
+          items: [
+            {
+              id: 'item-1',
+              purchaseListId: 'list-1',
+              ingredientId: 'spinach',
+              ingredientName: '菠菜',
+              type: 'FOOD',
+              quantityNeeded: 600,
+              quantityUnit: 'G',
+              estimatedCost: 6,
+              grossQuantityNeeded: 900,
+              stockDeductedQuantity: 300,
+              purchaseShortageQuantity: 600,
+              onHandQuantity: 500,
+              allocatedQuantity: 100,
+              availableQuantity: 400,
+              usesInventory: true,
+              purchaseChannel: null,
+              productModel: null,
+              displayUnit: 'G',
+              notes: null,
+              createdAt: new Date('2026-04-05T01:00:00.000Z'),
+            },
+          ],
+        }),
+      },
+      purchaseItem: {
+        upsert: jest.fn().mockResolvedValue({ id: 'item-1' }),
+      },
+    };
+    const prisma = {
+      $transaction: jest.fn(async (callback: any) => callback(tx)),
+    } as any;
+    const repository = new PrismaPurchaseListRepository(prisma);
+    const purchaseList = new PurchaseList({
+      id: 'list-1',
+      targetDate: new Date('2026-04-05T04:00:00.000Z'),
+      status: PurchaseListStatus.PENDING,
+      totalEstimatedCost: 6,
+      itemCount: 1,
+      createdById: 'user-1',
+      sourceOrderIds: ['order-1'],
+      items: [
+        new PurchaseItem({
+          id: 'item-1',
+          purchaseListId: 'list-1',
+          ingredientId: 'spinach',
+          ingredientName: '菠菜',
+          type: 'FOOD',
+          quantityNeeded: 600,
+          quantityUnit: 'G',
+          estimatedCost: 6,
+          grossQuantityNeeded: 900,
+          stockDeductedQuantity: 300,
+          purchaseShortageQuantity: 600,
+          onHandQuantity: 500,
+          allocatedQuantity: 100,
+          availableQuantity: 400,
+          usesInventory: true,
+        } as any),
+      ],
+    });
+
+    const saved = await repository.save(purchaseList);
+
+    expect(tx.purchaseItem.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        update: expect.objectContaining({
+          grossQuantityNeeded: 900,
+          stockDeductedQuantity: 300,
+          purchaseShortageQuantity: 600,
+          onHandQuantity: 500,
+          allocatedQuantity: 100,
+          availableQuantity: 400,
+          usesInventory: true,
+        }),
+      }),
+    );
+    expect(saved.items[0]).toEqual(
+      expect.objectContaining({
+        grossQuantityNeeded: 900,
+        stockDeductedQuantity: 300,
+        purchaseShortageQuantity: 600,
+        onHandQuantity: 500,
+        allocatedQuantity: 100,
+        availableQuantity: 400,
+        usesInventory: true,
+      }),
+    );
   });
 });

@@ -1677,6 +1677,13 @@ export class PurchasingService {
           quantityNeeded: req.quantityNeeded,
           quantityUnit: req.quantityUnit,
           estimatedCost: req.estimatedCost,
+          grossQuantityNeeded: req.grossQuantityNeeded,
+          stockDeductedQuantity: req.stockDeductedQuantity,
+          purchaseShortageQuantity: req.purchaseShortageQuantity,
+          onHandQuantity: req.onHandQuantity,
+          allocatedQuantity: req.allocatedQuantity,
+          availableQuantity: req.availableQuantity,
+          usesInventory: req.usesInventory,
           purchaseChannel: req.purchaseChannel,
           productModel: req.productModel,
           displayUnit: req.displayUnit, // ✅ 传入显示单位

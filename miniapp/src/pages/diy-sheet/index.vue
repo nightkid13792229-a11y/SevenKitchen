@@ -117,19 +117,13 @@
               <text class="header-item dosage-col">添加总量</text>
             </view>
             <view v-for="(item, idx) in supplementItemsDetailed" :key="'supp-' + idx" class="table-row supplement-table">
+              <text class="row-item product-col">{{ item.name }}</text>
               <text
-                class="row-item product-col"
-                :class="{ 'brand-link': item.hasSpecDetail && item.brand === '-' }"
-                @tap.stop="item.hasSpecDetail && item.brand === '-' && showSpecModal(item)"
-              >
-                {{ item.name }}
-              </text>
-              <text
-                v-if="item.hasSpecDetail && item.brand !== '-'"
+                v-if="item.hasSpecDetail"
                 class="row-item brand-col brand-link"
                 @tap.stop="showSpecModal(item)"
               >
-                {{ item.brand }}
+                {{ item.specDisplayText }}
               </text>
               <text v-else class="row-item brand-col">{{ item.specDisplayText }}</text>
               <text class="row-item timing-col">{{ item.preparationMethod }}</text>
@@ -489,6 +483,7 @@ import {
   DIY_SHEET_SUPPLEMENT_RECOMMENDATION_LABEL,
   DIY_SHEET_SPEC_MODAL_TITLE,
   getPurchaseTipByPlatform,
+  getRecommendationEntryDisplayText,
   getSpecRecommendedPurchaseChannelDisplay
 } from './copy'
 
@@ -631,7 +626,7 @@ const foodItemsDetailed = computed(() => {
         productModel: selectedRp?.productModel || item.productModel,
         purchaseChannel: selectedRp?.purchaseChannel || item.purchaseChannel,
         purchaseLink,
-        recommendedDisplayText: getFoodRecommendationDisplayText(selectedRp, item),
+        recommendedDisplayText: getRecommendationEntryDisplayText(hasSpecDetail),
         allRecommendedProducts: rps,
         hasSpecDetail
       }
@@ -702,9 +697,7 @@ const supplementItemsDetailed = computed(() => {
       activeNutrients: selectedRp?.activeNutrients || item.properties?.active_nutrients || undefined,
       type: item.type,                                              // 类型标识
       properties: item.properties,                                  // 完整的properties
-      specDisplayText: hasRecommendedOptions
-        ? getSupplementSpecDisplayText(selectedRp, {}, purchaseLink)
-        : '-',                                                   // 规格入口文案
+      specDisplayText: getRecommendationEntryDisplayText(hasSpecDetail), // 规格入口文案
       hasSpecDetail,                                                // 是否有规格/购买信息
       allRecommendedProducts: supplementOptions,                    // 所有候选补剂
       selectedRPIndex: 0                                            // 当前选中的推荐产品索引
@@ -1413,55 +1406,6 @@ function hasRecommendationDetail(selectedRp: any, item: any, purchaseLink: any):
     item.purchaseChannel ||
     purchaseLink
   )
-}
-
-function formatRecommendedProductDisplay(product: any): string {
-  if (!product) return '-'
-
-  const brand = product.brand?.trim()
-  const name = product.name?.trim()
-
-  if (brand && name) {
-    return name.includes(brand) ? name : `${brand} · ${name}`
-  }
-
-  return name || brand || '-'
-}
-
-function getFoodRecommendationDisplayText(selectedRp: any, item: any): string {
-  if (selectedRp) {
-    return formatRecommendedProductDisplay(selectedRp)
-  }
-
-  return item.brand || item.productModel || item.purchaseChannel || '-'
-}
-
-function getSupplementSpecDisplayText(selectedRp: any, item: any, purchaseLink: any): string {
-  if (selectedRp?.brand?.trim()) {
-    return selectedRp.brand.trim()
-  }
-
-  if (item.brand?.trim()) {
-    return item.brand.trim()
-  }
-
-  if (selectedRp?.productModel?.trim()) {
-    return selectedRp.productModel.trim()
-  }
-
-  if (item.productModel?.trim()) {
-    return item.productModel.trim()
-  }
-
-  if (selectedRp?.purchaseChannel?.trim()) {
-    return selectedRp.purchaseChannel.trim()
-  }
-
-  if (item.purchaseChannel?.trim()) {
-    return item.purchaseChannel.trim()
-  }
-
-  return purchaseLink ? '查看详情' : '-'
 }
 
 function getAmountDetailName(item: any): string {

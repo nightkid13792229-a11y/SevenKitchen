@@ -3,6 +3,7 @@ import {
   DIY_SHEET_FOOD_RECOMMENDATION_LABEL,
   getPurchaseTipByPlatform,
   getRecommendedPurchaseChannelDisplay,
+  getRecommendationEntryDisplayText,
   getSpecRecommendedPurchaseChannelDisplay,
   DIY_SHEET_SUPPLEMENT_RECOMMENDATION_LABEL,
   DIY_SHEET_SPEC_MODAL_TITLE,
@@ -15,6 +16,11 @@ describe('diy-sheet copy', () => {
     expect(DIY_SHEET_SUPPLEMENT_RECOMMENDATION_LABEL).toBe('推荐商品')
     expect(DIY_SHEET_SPEC_MODAL_TITLE).toBe('推荐商品')
     expect(DIY_SHEET_PURCHASE_LABEL).toBe('推荐商品')
+  })
+
+  it('uses 点击查看 for recommendation entries with detail', () => {
+    expect(getRecommendationEntryDisplayText(true)).toBe('点击查看')
+    expect(getRecommendationEntryDisplayText(false)).toBe('-')
   })
 
   it('prefers purchase link platform label for recommended purchase channel display', () => {

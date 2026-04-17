@@ -2,6 +2,7 @@ export const DIY_SHEET_FOOD_RECOMMENDATION_LABEL = '推荐商品'
 export const DIY_SHEET_SUPPLEMENT_RECOMMENDATION_LABEL = '推荐商品'
 export const DIY_SHEET_SPEC_MODAL_TITLE = '推荐商品'
 export const DIY_SHEET_PURCHASE_LABEL = '推荐商品'
+export const DIY_SHEET_RECOMMENDATION_ENTRY_TEXT = '点击查看'
 
 type PurchaseLinkLike = {
   platform?: string | null
@@ -48,6 +49,10 @@ export function getPurchaseTipByPlatform(platform?: string | null): string {
   return normalizedPlatform
     ? PURCHASE_TIP_BY_PLATFORM[normalizedPlatform] || '已复制购买链接'
     : '已复制购买链接'
+}
+
+export function getRecommendationEntryDisplayText(hasRecommendationDetail: boolean): string {
+  return hasRecommendationDetail ? DIY_SHEET_RECOMMENDATION_ENTRY_TEXT : '-'
 }
 
 export function getSpecRecommendedPurchaseChannelDisplay({

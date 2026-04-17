@@ -435,8 +435,8 @@ export class PricingService {
           ingredientId: ingredient.id,
           displayUnit: ingredient.unitDisplayLabel || 'g', // 使用显示单位标签
           properties: ingredient.properties, // 添加完整properties（包含purchase_link）
-          nutrientTargetKey: item.nutrientTargetKey, // 营养素名称
-          nutrientTargetValue: item.nutrientTargetValue, // 营养目标值
+          nutrientTargetKey: item.nutrientTargetKey || undefined, // 营养素名称
+          nutrientTargetValue: item.nutrientTargetValue || undefined, // 营养目标值
           supplementTargets: targets,
         });
 

@@ -472,6 +472,7 @@ model Ingredient {
   recommendedProducts           RecommendedProduct[]
   inventoryAdjustments          InventoryAdjustment[]
   inventoryStocktakeLines       InventoryStocktakeLine[]
+  inventoryAllocationLines      InventoryAllocationLine[]
   procurementSkus               ProcurementSku[]
 
   @@unique([name, brand, productModel])
@@ -582,6 +583,41 @@ model InventoryLedgerEntry {
   @@index([sourceType, sourceId])
   @@index([createdAt])
   @@map("inventory_ledger_entry")
+}
+
+model InventoryAllocation {
+  id             String                    @id @default(uuid()) @map("id")
+  targetDate     DateTime                  @map("target_date")
+  status         InventoryAllocationStatus @default(ACTIVE) @map("status")
+  purchaseListId String?                   @map("purchase_list_id")
+  sourceOrderIds String[]                  @default([]) @map("source_order_ids")
+  createdById    String?                   @map("created_by_id")
+  createdAt      DateTime                  @default(now()) @map("created_at")
+  releasedAt     DateTime?                 @map("released_at")
+  consumedAt     DateTime?                 @map("consumed_at")
+  purchaseList   PurchaseList?             @relation(fields: [purchaseListId], references: [id], onDelete: SetNull)
+  lines          InventoryAllocationLine[]
+
+  @@index([targetDate])
+  @@index([status])
+  @@index([purchaseListId])
+  @@map("inventory_allocation")
+}
+
+model InventoryAllocationLine {
+  id               String              @id @default(uuid()) @map("id")
+  allocationId     String              @map("allocation_id")
+  ingredientId     String              @map("ingredient_id")
+  procurementSkuId String?             @map("procurement_sku_id") @db.VarChar(36)
+  quantityG        Float               @map("quantity_g")
+  createdAt        DateTime            @default(now()) @map("created_at")
+  allocation       InventoryAllocation @relation(fields: [allocationId], references: [id], onDelete: Cascade)
+  ingredient       Ingredient          @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  @@unique([allocationId, ingredientId])
+  @@index([ingredientId])
+  @@index([procurementSkuId])
+  @@map("inventory_allocation_line")
 }
 
 model InventoryAdjustment {
@@ -824,6 +860,7 @@ model PurchaseList {
   startedAt          DateTime?          @map("started_at")
   orderDateSnapshot  Json?              @map("order_date_snapshot")
   items              PurchaseItem[]
+  inventoryAllocations InventoryAllocation[]
   createdBy          User               @relation("PurchaseListCreator", fields: [createdById], references: [id])
   reimbursement      Reimbursement?     @relation(fields: [reimbursementId], references: [id])
   records            PurchaseRecord[]   @relation("PurchaseListRecords")
@@ -1191,6 +1228,12 @@ enum InventoryAdjustmentMode {
 enum InventoryStocktakeStatus {
   DRAFT
   APPLIED
+}
+
+enum InventoryAllocationStatus {
+  ACTIVE
+  RELEASED
+  CONSUMED
 }
 
 enum IngredientType {

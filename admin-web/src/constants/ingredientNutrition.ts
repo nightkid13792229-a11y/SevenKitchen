@@ -56,6 +56,19 @@ export const INGREDIENT_NUTRITION_TAB_KEYS: readonly IngredientNutritionTabKey[]
   'aminoAcids'
 ] as const
 
+export const SUPPLEMENT_TARGET_FIELD_OPTIONS = [
+  { group: '矿物质', fieldPath: 'minerals.iodine', label: '碘', unit: 'μg' },
+  { group: '矿物质', fieldPath: 'minerals.calcium', label: '钙', unit: 'mg' },
+  { group: '矿物质', fieldPath: 'minerals.zinc', label: '锌', unit: 'mg' },
+  { group: '矿物质', fieldPath: 'minerals.selenium', label: '硒', unit: 'μg' },
+  { group: '维生素', fieldPath: 'vitamins.vitaminD', label: '维生素 D', unit: 'IU' },
+  { group: '维生素', fieldPath: 'vitamins.vitaminE', label: '维生素 E', unit: 'IU' },
+  { group: '维生素', fieldPath: 'vitamins.choline', label: '胆碱', unit: 'mg' },
+  { group: '脂肪酸', fieldPath: 'fattyAcids.epa', label: 'EPA', unit: 'mg' },
+  { group: '脂肪酸', fieldPath: 'fattyAcids.dha', label: 'DHA', unit: 'mg' },
+  { group: '脂肪酸', fieldPath: 'fattyAcids.dpa', label: 'DPA', unit: 'mg' }
+] as const
+
 export const INGREDIENT_NUTRITION_META_FIELDS: readonly IngredientNutritionMetaFieldDefinition[] = [
   { key: 'rawBasisType', label: '原始基准' },
   { key: 'sampleState', label: '样品状态' },
@@ -202,9 +215,9 @@ export const INGREDIENT_NUTRITION_TAB_DEFINITIONS: readonly IngredientNutritionT
       { key: 'linoleicAcid', label: '亚油酸', englishLabel: 'Linoleic Acid', unit: 'g', unitOptions: ['g', 'mg'] },
       { key: 'alphaLinolenicAcid', label: 'α-亚麻酸', englishLabel: 'Alpha-Linolenic Acid', unit: 'g', unitOptions: ['g', 'mg'] },
       { key: 'arachidonicAcid', label: '花生四烯酸', englishLabel: 'Arachidonic Acid', unit: 'g', unitOptions: ['g', 'mg'] },
-      { key: 'epa', label: 'EPA', englishLabel: 'Eicosapentaenoic Acid', unit: 'g', unitOptions: ['g', 'mg'] },
-      { key: 'dpa', label: 'DPA', englishLabel: 'Docosapentaenoic Acid', unit: 'g', unitOptions: ['g', 'mg'] },
-      { key: 'dha', label: 'DHA', englishLabel: 'Docosahexaenoic Acid', unit: 'g', unitOptions: ['g', 'mg'] }
+      { key: 'epa', label: 'EPA', englishLabel: 'Eicosapentaenoic Acid', unit: 'mg', unitOptions: ['mg', 'g'] },
+      { key: 'dpa', label: 'DPA', englishLabel: 'Docosapentaenoic Acid', unit: 'mg', unitOptions: ['mg', 'g'] },
+      { key: 'dha', label: 'DHA', englishLabel: 'Docosahexaenoic Acid', unit: 'mg', unitOptions: ['mg', 'g'] }
     ]
   },
   {

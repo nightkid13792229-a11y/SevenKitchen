@@ -44,6 +44,13 @@ export interface NutritionDetailedData {
   energy_density_kcal_per_kg: number;
 }
 
+export interface SupplementTarget {
+  fieldPath: string;
+  label: string;
+  targetValuePerKg: number;
+  unit: string;
+}
+
 export interface RecipeItem {
   id: string;
   ingredientId: string;
@@ -54,6 +61,7 @@ export interface RecipeItem {
   ratioPercent?: number;
   nutrientTargetKey?: string;
   nutrientTargetValue?: number;
+  supplementTargets?: SupplementTarget[];
   supplementAlternativeIngredientIds?: string[];
   supplementAlternatives?: Array<{
     ingredientId: string;

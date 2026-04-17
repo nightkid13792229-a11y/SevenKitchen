@@ -7,7 +7,7 @@
 import JCAPI from './jcing-sdk/JCAPI';
 import { getLifeStageLabel, getHealthTagLabel, getNutritionStandardLabel } from './label-mapping';
 import { LABEL_LAYOUT, LABEL_ELEMENTS, mmToPx } from './label-config';
-import { getResolvedSupplementNutrientUnit } from './supplement-nutrients';
+import { formatSupplementTargets } from './supplement-nutrients';
 
 // Canvas尺寸：75mm × 100mm @ 8像素/mm = 600 × 800 像素
 const CANVAS_WIDTH = mmToPx(LABEL_LAYOUT.canvas.width);  // 600px
@@ -516,10 +516,13 @@ export function formatIngredients(recipeSnapshot: any) {
       // ratio 已经是百分比值（如 25.51 表示 25.51%），直接格式化即可
       const percentage = Number(item.ratio).toFixed(2);
       foodIngredients.push(`${item.name}${percentage}%`);
-    } else if (item.ingredient_type === 'SUPPLEMENT' && item.nutrient_target_value) {
-      const nutrientKey = item.nutrient_target_key;
-      const nutrientUnit = getResolvedSupplementNutrientUnit(item);
-      supplementIngredients.push(`${item.name}（每kg添加${item.nutrient_target_value}${nutrientUnit}${nutrientKey}）`);
+    } else if (item.ingredient_type === 'SUPPLEMENT') {
+      const targetText = formatSupplementTargets(item);
+      if (targetText) {
+        supplementIngredients.push(`${item.name}（${targetText}）`);
+      } else if (item.nutrient_target_value) {
+        supplementIngredients.push(`${item.name}（每kg添加${item.nutrient_target_value}${item.nutrient_target_key || ''}）`);
+      }
     }
   });
 

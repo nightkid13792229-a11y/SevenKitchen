@@ -218,7 +218,7 @@
                       <span v-else>-</span>
                     </div>
                     <div class="row-cell nutrient-target">
-                      <span v-if="item.nutrientTargetKey">
+                      <span v-if="getSupplementTargets(item).length > 0 || item.nutrientTargetKey">
                         {{ formatNutrientTarget(item) }}
                       </span>
                       <span v-else>-</span>
@@ -595,41 +595,48 @@
         <template v-if="ingredientForm.ingredientId && selectedIngredient && selectedIngredient.type === 'SUPPLEMENT'">
           <el-divider content-position="left">营养目标</el-divider>
 
-          <el-form-item label="营养素">
-            <el-select
-              v-model="ingredientForm.nutrientTargetKey"
-              placeholder="请选择营养素"
-              style="width: 100%"
-              clearable
-            >
-              <el-option
-                v-for="(label, key) in availableNutrients"
-                :key="key"
-                :label="label"
-                :value="key"
-              />
-            </el-select>
-            <div style="color: #909399; font-size: 12px; margin-top: 4px">
-              💡 补剂类型需设置营养目标，表示该补剂在食谱中的目标含量
-            </div>
-          </el-form-item>
-
-          <el-form-item label="目标值">
-            <el-input-number
-              v-model="ingredientForm.nutrientTargetValue"
-              :min="0"
-              :precision="2"
-              :disabled="!ingredientForm.nutrientTargetKey"
-              placeholder="目标数值"
-              style="width: 100%"
-            />
-            <div style="display: flex; align-items: center; margin-top: 8px;">
-              <span v-if="nutrientUnit" style="margin-right: 12px; color: #909399; font-size: 12px">
-                单位: {{ nutrientUnit }}
-              </span>
-              <span style="color: #606266; font-size: 12px">
-                💡 设置该补剂在食谱中的目标含量（例如：每1000g食谱含钙1200mg）
-              </span>
+          <el-form-item label="目标字段" required>
+            <div class="supplement-target-editor">
+              <div
+                v-for="(target, targetIndex) in ingredientForm.supplementTargets"
+                :key="targetIndex"
+                class="supplement-target-row"
+              >
+                <el-select
+                  v-model="target.fieldPath"
+                  placeholder="选择营养字段"
+                  filterable
+                  class="supplement-target-field"
+                  @change="handleSupplementTargetFieldChange(target)"
+                >
+                  <el-option
+                    v-for="option in supplementTargetFieldOptions"
+                    :key="option.fieldPath"
+                    :label="`${option.group} · ${option.label}`"
+                    :value="option.fieldPath"
+                  >
+                    <span>{{ option.group }} · {{ option.label }}</span>
+                    <span style="float: right; color: #909399">{{ option.unit }}</span>
+                  </el-option>
+                </el-select>
+                <el-input-number
+                  v-model="target.targetValuePerKg"
+                  :min="0"
+                  :precision="2"
+                  :step="10"
+                  placeholder="目标值"
+                  class="supplement-target-value"
+                />
+                <span class="supplement-target-unit">{{ target.unit || '-' }}/kg</span>
+                <el-button
+                  :icon="Delete"
+                  link
+                  type="danger"
+                  class="supplement-target-remove"
+                  @click="removeSupplementTarget(targetIndex)"
+                />
+              </div>
+              <el-button :icon="Plus" @click="addSupplementTarget">添加目标</el-button>
             </div>
           </el-form-item>
 
@@ -760,6 +767,7 @@ import { recipeApi } from '@/api/recipes';
 import { recipeHealthTagApi } from '@/api/recipeHealthTags';
 import { inventoryApi } from '@/api';
 import { IngredientTypeLabels } from '@/types/ingredient';
+import { SUPPLEMENT_TARGET_FIELD_OPTIONS } from '@/constants/ingredientNutrition';
 import {
   appendPreparationMethodText,
 } from '@/utils/preparationMethodText';
@@ -771,6 +779,7 @@ import {
   type RecipeItem,
   type NutritionDetailedData,
   type IngredientPreparationMethodHistoryItem,
+  type SupplementTarget,
 } from '@/types/recipe';
 
 // Enum option type
@@ -832,6 +841,7 @@ const ingredientForm = reactive({
   ratioPercent: undefined as number | undefined,
   nutrientTargetKey: '',
   nutrientTargetValue: undefined as number | undefined,
+  supplementTargets: [] as SupplementTarget[],
   supplementAlternativeIngredientIds: [] as string[],
 });
 const ingredientPreparationMethodHistory = ref<
@@ -850,39 +860,11 @@ const selectedIngredientIsSupplement = computed(() => {
   return selectedIngredient.value?.type === 'SUPPLEMENT';
 });
 
-const availableNutrients = computed(() => {
-  if (!selectedIngredient.value || !selectedIngredientIsSupplement.value) {
-    return {};
-  }
+const supplementTargetFieldOptions = [...SUPPLEMENT_TARGET_FIELD_OPTIONS];
 
-  const activeNutrients = (selectedIngredient.value.properties as any)?.active_nutrients || {};
-
-  const result: Record<string, string> = {};
-  for (const [name, data] of Object.entries(activeNutrients)) {
-    // 新格式: data = {value: number, unit: string}
-    const nutrientValue = (data as any).value;
-    const nutrientUnit = (data as any).unit;
-    result[name] = `${name} (${nutrientValue} ${nutrientUnit} per ${selectedIngredient.value?.baseUnit || 'unit'})`;
-  }
-
-  return result;
-});
-
-const nutrientUnit = computed(() => {
-  if (!ingredientForm.nutrientTargetKey || !selectedIngredient.value) {
-    return '';
-  }
-
-  // 从 active_nutrients 对象中获取单位（新格式）
-  const activeNutrients = (selectedIngredient.value.properties as any)?.active_nutrients || {};
-  const nutrientData = activeNutrients[ingredientForm.nutrientTargetKey];
-
-  if (nutrientData && typeof nutrientData === 'object') {
-    return (nutrientData as any).unit || '';
-  }
-
-  return '';
-});
+const findSupplementTargetOption = (fieldPath: string) => {
+  return supplementTargetFieldOptions.find((option) => option.fieldPath === fieldPath);
+};
 
 const availableSupplementAlternativeOptions = computed(() => {
   if (!selectedIngredient.value || !selectedIngredientIsSupplement.value) {
@@ -909,6 +891,89 @@ const formatIngredientDisplayLabel = (ingredient: {
     .join(' · ');
 };
 
+const createEmptySupplementTarget = (): SupplementTarget => ({
+  fieldPath: '',
+  label: '',
+  targetValuePerKg: 0,
+  unit: '',
+});
+
+const normalizeTargetLabel = (value?: string | null) =>
+  (value || '').replace(/\s+/g, '').toLowerCase();
+
+const getSupplementTargets = (item: Pick<RecipeItem, 'supplementTargets'>) => {
+  return Array.isArray(item.supplementTargets)
+    ? item.supplementTargets.filter((target) => target.fieldPath)
+    : [];
+};
+
+const legacySupplementTargetsFromRow = (row: RecipeItem): SupplementTarget[] => {
+  if (!row.nutrientTargetKey || row.nutrientTargetValue === undefined) {
+    return [];
+  }
+
+  const option = supplementTargetFieldOptions.find(
+    (candidate) =>
+      normalizeTargetLabel(candidate.label) === normalizeTargetLabel(row.nutrientTargetKey),
+  );
+
+  if (!option) {
+    return [];
+  }
+
+  return [{
+    fieldPath: option.fieldPath,
+    label: option.label,
+    targetValuePerKg: Number(row.nutrientTargetValue),
+    unit: option.unit,
+  }];
+};
+
+const addSupplementTarget = () => {
+  ingredientForm.supplementTargets.push(createEmptySupplementTarget());
+};
+
+const removeSupplementTarget = (index: number) => {
+  ingredientForm.supplementTargets.splice(index, 1);
+  if (ingredientForm.supplementTargets.length === 0) {
+    addSupplementTarget();
+  }
+};
+
+const handleSupplementTargetFieldChange = (target: SupplementTarget) => {
+  const option = findSupplementTargetOption(target.fieldPath);
+  if (!option) {
+    target.label = '';
+    target.unit = '';
+    return;
+  }
+
+  target.label = option.label;
+  target.unit = option.unit;
+};
+
+const normalizeSupplementTargetsForSave = (): SupplementTarget[] => {
+  const targets: SupplementTarget[] = [];
+
+  for (const target of ingredientForm.supplementTargets) {
+    const option = findSupplementTargetOption(target.fieldPath);
+    const targetValuePerKg = Number(target.targetValuePerKg);
+
+    if (!option || !Number.isFinite(targetValuePerKg) || targetValuePerKg <= 0) {
+      continue;
+    }
+
+    targets.push({
+      fieldPath: option.fieldPath,
+      label: option.label,
+      targetValuePerKg,
+      unit: option.unit,
+    });
+  }
+
+  return targets;
+};
+
 const applyPreparationMethodHistory = (historyText: string) => {
   ingredientForm.preparationMethodText = appendPreparationMethodText(
     ingredientForm.preparationMethodText,
@@ -931,7 +996,10 @@ watch(
     if (ingredient && ingredient.type !== 'SUPPLEMENT') {
       ingredientForm.nutrientTargetKey = '';
       ingredientForm.nutrientTargetValue = undefined;
+      ingredientForm.supplementTargets = [];
       ingredientForm.supplementAlternativeIngredientIds = [];
+    } else if (ingredient?.type === 'SUPPLEMENT' && ingredientForm.supplementTargets.length === 0) {
+      addSupplementTarget();
     }
 
     ingredientPreparationMethodHistory.value = [];
@@ -1085,14 +1153,11 @@ const loadRecipeDetail = async () => {
       items: detail.items || [],
     });
 
-    // 预填充营养素单位信息到 items
+    // 补齐旧记录的展示目标，避免编辑老食谱时看不到营养目标。
     if (form.items && form.items.length > 0) {
       form.items = form.items.map((item: any) => {
-        if (item.nutrientTargetKey && item.ingredient?.properties?.active_nutrients) {
-          const nutrientData = item.ingredient.properties.active_nutrients[item.nutrientTargetKey];
-          if (nutrientData && typeof nutrientData === 'object') {
-            item._nutrientUnit = nutrientData.unit || '';
-          }
+        if (!item.supplementTargets?.length) {
+          item.supplementTargets = legacySupplementTargetsFromRow(item);
         }
         return item;
       });
@@ -1495,6 +1560,7 @@ const resetIngredientForm = () => {
   ingredientForm.ratioPercent = undefined;
   ingredientForm.nutrientTargetKey = '';
   ingredientForm.nutrientTargetValue = undefined;
+  ingredientForm.supplementTargets = [];
   ingredientForm.supplementAlternativeIngredientIds = [];
   ingredientPreparationMethodHistory.value = [];
   ingredientPreparationMethodHistoryLoading.value = false;
@@ -1525,8 +1591,18 @@ const saveIngredient = () => {
     }
   }
 
-  if (ingredient.type === 'SUPPLEMENT' && !ingredientForm.nutrientTargetKey) {
+  const supplementTargets =
+    ingredient.type === 'SUPPLEMENT' ? normalizeSupplementTargetsForSave() : [];
+
+  if (ingredient.type === 'SUPPLEMENT' && supplementTargets.length === 0) {
     ElMessage.warning('补剂类型请设置营养目标');
+    return;
+  }
+  if (
+    ingredient.type === 'SUPPLEMENT' &&
+    new Set(supplementTargets.map((target) => target.fieldPath)).size !== supplementTargets.length
+  ) {
+    ElMessage.warning('补剂营养目标不能重复');
     return;
   }
 
@@ -1555,6 +1631,7 @@ const saveIngredient = () => {
       ratioPercent: ingredientForm.ratioPercent,
       nutrientTargetKey: undefined,
       nutrientTargetValue: undefined,
+      supplementTargets: [],
       supplementAlternativeIngredientIds: [],
       supplementAlternatives: [],
     }),
@@ -1562,8 +1639,9 @@ const saveIngredient = () => {
     ...(ingredient.type === 'SUPPLEMENT' && {
       exampleWeight: undefined,
       ratioPercent: undefined,
-      nutrientTargetKey: ingredientForm.nutrientTargetKey || undefined,
-      nutrientTargetValue: ingredientForm.nutrientTargetValue || undefined,
+      nutrientTargetKey: undefined,
+      nutrientTargetValue: undefined,
+      supplementTargets,
       supplementAlternativeIngredientIds: [
         ...enabledSupplementAlternativeIds,
       ],
@@ -1586,18 +1664,9 @@ const saveIngredient = () => {
     }),
   };
 
-  // ===== 新增代码：预填充营养素单位和ingredient对象 =====
-  if (ingredient.type === 'SUPPLEMENT' && ingredientForm.nutrientTargetKey) {
-    const activeNutrients = (ingredient.properties as any)?.active_nutrients || {};
-    const nutrientData = activeNutrients[ingredientForm.nutrientTargetKey];
-    if (nutrientData && typeof nutrientData === 'object') {
-      (item as any)._nutrientUnit = (nutrientData as any).unit || '';
-    }
-
-    // 同时嵌入完整的ingredient对象，确保properties可用
+  if (ingredient.type === 'SUPPLEMENT') {
     (item as any).ingredient = ingredient;
   }
-  // ===== 新增代码结束 =====
 
   if (!form.items) {
     form.items = [];
@@ -1646,6 +1715,12 @@ const editIngredient = (row: RecipeItem, index: number) => {
   ingredientForm.ratioPercent = row.ratioPercent;
   ingredientForm.nutrientTargetKey = row.nutrientTargetKey || '';
   ingredientForm.nutrientTargetValue = row.nutrientTargetValue;
+  ingredientForm.supplementTargets = getSupplementTargets(row).length > 0
+    ? getSupplementTargets(row).map((target) => ({ ...target }))
+    : legacySupplementTargetsFromRow(row);
+  if (row.ingredientType === 'SUPPLEMENT' && ingredientForm.supplementTargets.length === 0) {
+    addSupplementTarget();
+  }
   ingredientForm.supplementAlternativeIngredientIds = [
     ...(row.supplementAlternativeIngredientIds || []),
   ];
@@ -1659,39 +1734,16 @@ const removeIngredient = (index: number) => {
 
 // Format nutrient target for display
 const formatNutrientTarget = (row: any) => {
-  const key = row.nutrientTargetKey;
-  const value = row.nutrientTargetValue;
-
-  if (!key || value === undefined) return '-';
-
-  // 策略1: 优先使用预填充的单位
-  let unit = row._nutrientUnit || '';
-
-  // 策略2: 从 row.ingredient.properties 获取
-  if (!unit && row.ingredient?.properties?.active_nutrients) {
-    const activeNutrients = (row.ingredient.properties as any).active_nutrients || {};
-    const nutrientData = activeNutrients[key];
-    if (nutrientData && typeof nutrientData === 'object') {
-      unit = (nutrientData as any).unit || '';
-    }
-  }
-
-  // 策略3: 从 availableIngredients 中查找（新增）
-  if (!unit) {
-    const ingredient = availableIngredients.value.find(
-      (ing) => ing.id === row.ingredientId
-    );
-    if (ingredient?.properties?.active_nutrients) {
-      const activeNutrients = (ingredient.properties as any).active_nutrients || {};
-      const nutrientData = activeNutrients[key];
-      if (nutrientData && typeof nutrientData === 'object') {
-        unit = (nutrientData as any).unit || '';
-      }
-    }
-  }
-
+  const targets = getSupplementTargets(row);
   const alternativesCount = row.supplementAlternativeIngredientIds?.length || 0;
-  const baseText = `${key}: ${value}${unit}`;
+  const baseText =
+    targets.length > 0
+      ? targets
+          .map((target) => `${target.label || target.fieldPath}: ${target.targetValuePerKg}${target.unit}/kg`)
+          .join('、')
+      : row.nutrientTargetKey && row.nutrientTargetValue !== undefined
+        ? `${row.nutrientTargetKey}: ${row.nutrientTargetValue}`
+        : '-';
 
   if (alternativesCount <= 0) {
     return baseText;
@@ -2018,6 +2070,35 @@ onMounted(async () => {
 
 .row-cell.nutrient-target {
   padding-left: 16px !important;
+}
+
+.supplement-target-editor {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.supplement-target-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 140px 72px 32px;
+  align-items: center;
+  gap: 8px;
+}
+
+.supplement-target-field,
+.supplement-target-value {
+  width: 100%;
+}
+
+.supplement-target-unit {
+  color: #606266;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.supplement-target-remove {
+  justify-self: center;
 }
 
 .header-cell:nth-child(8) {

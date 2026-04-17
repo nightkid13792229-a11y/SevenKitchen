@@ -442,6 +442,7 @@ export class RecipesController {
               item.ratioPercent != null ? item.ratioPercent : undefined,
             nutrientTargetKey: item.nutrientTargetKey || undefined,
             nutrientTargetValue: item.nutrientTargetValue || undefined,
+            supplementTargets: item.supplementTargets || undefined,
             ingredient: this.mapPublicIngredient(item.ingredient),
             supplementAlternativeIngredientIds:
               item.supplementAlternativeIngredientIds || undefined,

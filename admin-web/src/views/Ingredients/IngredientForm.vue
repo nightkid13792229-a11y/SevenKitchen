@@ -989,7 +989,6 @@ import { Plus, Delete } from '@element-plus/icons-vue'
 import { ingredientTagApi, type IngredientTag, type CreateTagDto } from '@/api/ingredientTags'
 import { ingredientApi } from '@/api/ingredients'
 import { INGREDIENT_NUTRITION_TAB_DEFINITIONS } from '@/constants/ingredientNutrition'
-import { buildSupplementActiveNutrientsFromNutritionProfile } from '@/utils/ingredientNutrition'
 import {
   getDefaultProcurementStrategyForType,
   getIngredientTypeCapabilities,
@@ -1424,7 +1423,6 @@ function getDefaultFoodProperties(): FoodProperties {
 function getDefaultSupplementProperties(): SupplementProperties {
   return {
     category_type: '',
-    active_nutrients: {},
     display_unit: '',
     supplier_name: null,
     purchase_link: {
@@ -1444,9 +1442,6 @@ function cloneSupplementProperties(properties?: SupplementProperties | null): Su
     purchase_link: properties?.purchase_link
       ? { ...properties.purchase_link }
       : undefined,
-    active_nutrients: properties?.active_nutrients
-      ? { ...properties.active_nutrients }
-      : {},
     marketing_highlights: properties?.marketing_highlights
       ? { ...properties.marketing_highlights }
       : {},
@@ -1582,10 +1577,6 @@ function syncProperties() {
           url: supplementProperties.purchase_link.url.trim()
         }
       : undefined
-    supplementProperties.active_nutrients = buildSupplementActiveNutrientsFromNutritionProfile(
-      formData.nutritionProfile,
-      supplementProperties.active_nutrients
-    )
     formData.properties = {
       ...supplementProperties,
       purchase_link: normalizedPurchaseLink,

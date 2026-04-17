@@ -40,6 +40,8 @@ export interface RecipeItem {
   preparation_methods?: string[];
   nutrient_target_key?: string;
   nutrient_target_value?: number;
+  supplement_targets?: any[];
+  nutrition_profile_snapshot?: any;
   unit_display_label?: string;
   properties?: {
     active_nutrients?: Record<string, { value: number; unit: string }>;

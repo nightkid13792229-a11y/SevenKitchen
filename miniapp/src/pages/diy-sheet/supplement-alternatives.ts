@@ -1,7 +1,7 @@
-export interface ActiveNutrientValue {
-  value: number;
-  unit: string;
-}
+import {
+  calculateSupplementAmountForProduction,
+  getSupplementTargets,
+} from '../../utils/supplement-nutrients';
 
 export interface SupplementOption {
   id: string;
@@ -14,7 +14,7 @@ export interface SupplementOption {
   imageUrl?: string;
   purchaseLink?: any;
   displayUnit?: string;
-  activeNutrients?: Record<string, ActiveNutrientValue>;
+  nutritionProfile?: any;
   properties?: Record<string, any>;
   timingLabel?: string;
   addTimingLabel?: string;
@@ -56,8 +56,10 @@ export function buildSupplementCandidateOptions(
         defaultIngredient?.purchaseLink || baseItem.properties?.purchase_link,
       displayUnit:
         defaultIngredient?.displayUnit || baseItem.displayUnit || baseItem.unit,
-      activeNutrients:
-        defaultIngredient?.activeNutrients || baseItem.properties?.active_nutrients,
+      nutritionProfile:
+        defaultIngredient?.nutritionProfile ||
+        baseItem.nutritionProfile ||
+        baseItem.nutrition_profile_snapshot,
       properties: defaultIngredient?.properties || baseItem.properties,
       addTimingLabel: defaultIngredient?.addTimingLabel,
       timingLabel: defaultIngredient?.addTimingLabel || baseItem.preparationMethod,
@@ -85,8 +87,7 @@ export function buildSupplementCandidateOptions(
       imageUrl: ingredient.imageUrl || ingredient.properties?.image_url,
       purchaseLink: ingredient.purchaseLink || ingredient.properties?.purchase_link,
       displayUnit: ingredient.displayUnit,
-      activeNutrients:
-        ingredient.activeNutrients || ingredient.properties?.active_nutrients,
+      nutritionProfile: ingredient.nutritionProfile,
       properties: ingredient.properties,
       addTimingLabel: ingredient.addTimingLabel,
       timingLabel: ingredient.addTimingLabel,
@@ -108,26 +109,33 @@ export function calculateSupplementAmountForOption(
   selectedOption: SupplementOption | undefined,
   totalFoodInputWeightG: number,
 ): number {
-  let amount = baseItem.amount;
-  if (selectedOption?.activeNutrients && baseItem.nutrientTargetKey) {
-    const concentration =
-      selectedOption.activeNutrients[baseItem.nutrientTargetKey]?.value;
-    if (concentration && concentration > 0 && baseItem.nutrientTargetValue) {
-      const totalNutrientNeeded =
-        baseItem.nutrientTargetValue * (totalFoodInputWeightG / 1000);
-      amount = totalNutrientNeeded / concentration;
-    }
-  }
-  return amount;
+  const result = calculateSupplementAmountForProduction(
+    {
+      ...baseItem,
+      nutritionProfile:
+        selectedOption?.nutritionProfile ||
+        baseItem.nutritionProfile ||
+        baseItem.nutrition_profile_snapshot,
+      displayUnit: selectedOption?.displayUnit || baseItem.displayUnit,
+      ingredient: {
+        ...(baseItem.ingredient || {}),
+        nutritionProfile:
+          selectedOption?.nutritionProfile ||
+          baseItem.ingredient?.nutritionProfile ||
+          baseItem.nutritionProfile,
+        unitDisplayLabel:
+          selectedOption?.displayUnit || baseItem.ingredient?.unitDisplayLabel,
+      },
+    },
+    totalFoodInputWeightG,
+  );
+
+  return result.amount || baseItem.amount || 0;
 }
 
 export function getSupplementNutrientUnit(
   baseItem: any,
   selectedOption: SupplementOption | undefined,
 ): string {
-  return (
-    selectedOption?.activeNutrients?.[baseItem.nutrientTargetKey]?.unit ||
-    baseItem.properties?.active_nutrients?.[baseItem.nutrientTargetKey]?.unit ||
-    'mg'
-  );
+  return getSupplementTargets(baseItem)[0]?.unit || 'mg';
 }

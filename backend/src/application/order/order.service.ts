@@ -399,6 +399,11 @@ export class OrderService {
           ingredient_type: ingredient?.type,
           nutrient_target_key: ri.nutrientTargetKey ?? undefined,
           nutrient_target_value: ri.nutrientTargetValue ?? undefined,
+          supplement_targets: ri.supplementTargets ?? undefined,
+          nutrition_profile_snapshot:
+            ingredient?.type === 'SUPPLEMENT'
+              ? ingredient?.nutritionProfile ?? null
+              : undefined,
           properties: ingredient?.properties,
           preparation_methods:
             preparationMethodNames.length > 0
@@ -719,6 +724,7 @@ export class OrderService {
           ratioPercent: ri.ratioPercent ?? null,
           nutrientTargetKey: ri.nutrientTargetKey ?? null,
           nutrientTargetValue: ri.nutrientTargetValue ?? null,
+          supplementTargets: ri.supplementTargets ?? null,
         };
       });
 
@@ -829,6 +835,11 @@ export class OrderService {
             ingredient_type: ingredient?.type,
             nutrient_target_key: ri.nutrientTargetKey ?? undefined,
             nutrient_target_value: ri.nutrientTargetValue ?? undefined,
+            supplement_targets: ri.supplementTargets ?? undefined,
+            nutrition_profile_snapshot:
+              ingredient?.type === 'SUPPLEMENT'
+                ? ingredient?.nutritionProfile ?? null
+                : undefined,
             properties: ingredient?.properties,
             preparation_methods:
               preparationMethodNames.length > 0
@@ -1157,6 +1168,7 @@ export class OrderService {
         ratioPercent: ri.ratioPercent,
         nutrientTargetKey: ri.nutrientTargetKey,
         nutrientTargetValue: ri.nutrientTargetValue,
+        supplementTargets: ri.supplementTargets,
       })),
     });
 
@@ -1204,6 +1216,7 @@ export class OrderService {
         ratioPercent: ri.ratioPercent ?? null,
         nutrientTargetKey: ri.nutrientTargetKey ?? null,
         nutrientTargetValue: ri.nutrientTargetValue ?? null,
+        supplementTargets: ri.supplementTargets ?? null,
       };
     });
 

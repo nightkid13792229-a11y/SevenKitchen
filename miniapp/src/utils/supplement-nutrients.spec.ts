@@ -2,23 +2,32 @@ import { describe, expect, it } from 'vitest'
 
 import {
   calculateSupplementAmountForProduction,
+  formatSupplementTargets,
   getResolvedSupplementDisplayUnit,
   getResolvedSupplementNutrient,
   getResolvedSupplementNutrientUnit
 } from './supplement-nutrients'
 
 describe('supplement nutrient resolution', () => {
-  it('prefers ingredient activeNutrients over legacy active_nutrients', () => {
+  it('resolves supplement concentration from nutrition profile target path', () => {
     const item = {
-      nutrientTargetKey: '维生素E',
-      properties: {
-        active_nutrients: {
-          维生素E: { value: 200, unit: 'IU' }
+      supplementTargets: [
+        {
+          fieldPath: 'vitamins.vitaminE',
+          label: '维生素 E',
+          targetValuePerKg: 1000,
+          unit: 'IU'
         }
-      },
+      ],
       ingredient: {
-        activeNutrients: {
-          维生素E: { value: 400, unit: 'IU' }
+        nutritionProfile: {
+          meta: { rawBasisType: 'PER_SERVING' },
+          macros: {},
+          minerals: {},
+          vitamins: { vitaminE: 400 },
+          fattyAcids: {},
+          aminoAcids: {},
+          customItems: []
         }
       }
     }
@@ -32,17 +41,26 @@ describe('supplement nutrient resolution', () => {
 
   it('calculates production supplement amount from input weight without supplement loss', () => {
     const item = {
-      nutrient_target_key: '维生素E',
-      nutrient_target_value: 1000,
-      unit_display_label: '粒',
-      ingredient: {
-        unitDisplayLabel: '粒',
-        activeNutrients: {
-          维生素E: { value: 400, unit: 'IU' }
-        },
-        properties: {
-          production_loss_rate: 1.1
+      supplement_targets: [
+        {
+          fieldPath: 'vitamins.vitaminE',
+          label: '维生素 E',
+          targetValuePerKg: 1000,
+          unit: 'IU'
         }
+      ],
+      nutrition_profile_snapshot: {
+        meta: { rawBasisType: 'PER_SERVING' },
+        macros: {},
+        minerals: {},
+        vitamins: { vitaminE: 400 },
+        fattyAcids: {},
+        aminoAcids: {},
+        customItems: []
+      },
+      unit_display_label: '粒',
+      properties: {
+        production_loss_rate: 1.1
       }
     }
 
@@ -52,43 +70,74 @@ describe('supplement nutrient resolution', () => {
     })
   })
 
-  it('falls back to legacy snapshot active_nutrients and unit labels', () => {
+  it('calculates multi-target supplements from nutrition profile snapshots', () => {
     const item = {
-      nutrient_target_key: '碘',
-      nutrient_target_value: 500,
-      unit_display_label: '平勺',
-      properties: {
-        production_loss_rate: 1.05,
-        active_nutrients: {
-          碘: { value: 250, unit: 'μg' }
-        }
-      }
+      supplement_targets: [
+        { fieldPath: 'fattyAcids.epa', label: 'EPA', targetValuePerKg: 360, unit: 'mg' },
+        { fieldPath: 'fattyAcids.dha', label: 'DHA', targetValuePerKg: 360, unit: 'mg' }
+      ],
+      nutrition_profile_snapshot: {
+        meta: { rawBasisType: 'PER_SERVING' },
+        macros: {},
+        minerals: {},
+        vitamins: {},
+        fattyAcids: { epa: 180, dha: 120 },
+        aminoAcids: {},
+        customItems: []
+      },
+      unit_display_label: '粒'
     }
 
-    expect(getResolvedSupplementDisplayUnit(item)).toBe('平勺')
-    expect(getResolvedSupplementNutrientUnit(item)).toBe('μg')
-    expect(calculateSupplementAmountForProduction(item, 2000)).toEqual({
-      amount: 4,
-      unit: '平勺'
+    expect(calculateSupplementAmountForProduction(item, 1000)).toEqual({
+      amount: 3,
+      unit: '粒'
     })
   })
 
   it('uses production pot input weight as the production supplement baseline', () => {
     const item = {
-      nutrient_target_key: '碘',
-      nutrient_target_value: 660,
-      unit_display_label: '片',
-      properties: {
-        production_loss_rate: 1.05,
-        active_nutrients: {
-          碘: { value: 150, unit: 'μg' }
+      supplement_targets: [
+        {
+          fieldPath: 'minerals.iodine',
+          label: '碘',
+          targetValuePerKg: 660,
+          unit: 'μg'
         }
-      }
+      ],
+      nutrition_profile_snapshot: {
+        meta: { rawBasisType: 'PER_SERVING' },
+        macros: {},
+        minerals: { iodine: 150 },
+        vitamins: {},
+        fattyAcids: {},
+        aminoAcids: {},
+        customItems: []
+      },
+      unit_display_label: '片'
     }
 
     expect(calculateSupplementAmountForProduction(item, 3260)).toEqual({
       amount: 14.344,
       unit: '片'
     })
+  })
+
+  it('formats supplement target labels', () => {
+    expect(
+      formatSupplementTargets({
+        supplement_targets: [
+          {
+            fieldPath: 'minerals.iodine',
+            label: '碘',
+            targetValuePerKg: 660,
+            unit: 'μg'
+          }
+        ]
+      })
+    ).toBe('每kg添加660μg碘')
+  })
+
+  it('returns display unit from item snapshot', () => {
+    expect(getResolvedSupplementDisplayUnit({ unit_display_label: '平勺' })).toBe('平勺')
   })
 })

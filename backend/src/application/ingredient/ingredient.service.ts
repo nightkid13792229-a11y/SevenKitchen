@@ -12,7 +12,6 @@ import {
   IngredientProcurementStrategy,
 } from '../../domain/ingredient/enums';
 import { normalizeNutritionProfileForWrite } from '../../domain/ingredient/nutrition-profile.utils';
-import { resolveSupplementNutrients } from '../../domain/ingredient/supplement-nutrition-resolver';
 import type { NutritionProfile, SupplementProperties } from '../../domain/ingredient/types';
 
 export const INGREDIENT_REPOSITORY = Symbol('INGREDIENT_REPOSITORY');
@@ -132,11 +131,6 @@ export class IngredientService {
     const supplementProperties = {
       ...(input.properties as SupplementProperties),
     };
-
-    supplementProperties.active_nutrients = resolveSupplementNutrients({
-      nutritionProfile: input.nutritionProfile,
-      fallback: supplementProperties.active_nutrients,
-    });
 
     return supplementProperties;
   }

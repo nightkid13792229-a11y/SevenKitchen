@@ -61,9 +61,9 @@ const SUPPLEMENT_NUTRIENT_FIELDS: readonly SupplementNutrientFieldDefinition[] =
   { tabKey: 'fattyAcids', fieldKey: 'linoleicAcid', label: '亚油酸', unit: 'g' },
   { tabKey: 'fattyAcids', fieldKey: 'alphaLinolenicAcid', label: 'α-亚麻酸', unit: 'g' },
   { tabKey: 'fattyAcids', fieldKey: 'arachidonicAcid', label: '花生四烯酸', unit: 'g' },
-  { tabKey: 'fattyAcids', fieldKey: 'epa', label: 'EPA', unit: 'g' },
-  { tabKey: 'fattyAcids', fieldKey: 'dpa', label: 'DPA', unit: 'g' },
-  { tabKey: 'fattyAcids', fieldKey: 'dha', label: 'DHA', unit: 'g' },
+  { tabKey: 'fattyAcids', fieldKey: 'epa', label: 'EPA', unit: 'mg' },
+  { tabKey: 'fattyAcids', fieldKey: 'dpa', label: 'DPA', unit: 'mg' },
+  { tabKey: 'fattyAcids', fieldKey: 'dha', label: 'DHA', unit: 'mg' },
   { tabKey: 'aminoAcids', fieldKey: 'arginine', label: '精氨酸', unit: 'g' },
   { tabKey: 'aminoAcids', fieldKey: 'lysine', label: '赖氨酸', unit: 'g' },
   { tabKey: 'aminoAcids', fieldKey: 'methionine', label: '蛋氨酸', unit: 'g' },
@@ -114,17 +114,6 @@ function buildFromStructuredProfile(
     );
   }
 
-  const fattyAcidValues = profile.fattyAcids as Record<string, number | null | undefined>;
-  const epa = fattyAcidValues?.epa;
-  const dha = fattyAcidValues?.dha;
-  const combinedOmega3 = [epa, dha]
-    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
-    .reduce((sum, value) => sum + value, 0);
-
-  if (combinedOmega3 > 0) {
-    activeNutrients['EPA+DHA'] = { value: combinedOmega3, unit: 'g' };
-  }
-
   for (const item of profile.customItems ?? []) {
     const name = item.name?.trim();
     const unit = item.unit?.trim();
@@ -141,6 +130,8 @@ export function resolveSupplementNutrients(input: {
   nutritionProfile: NutritionProfile | null | undefined;
   fallback?: Record<string, ActiveNutrientValue>;
 }): Record<string, ActiveNutrientValue> {
+  // Temporary display compatibility for old clients that still read active_nutrients.
+  // New supplement dosing must use nutritionProfile + supplementTargets directly.
   if (!input.nutritionProfile) {
     return { ...(input.fallback ?? {}) };
   }

@@ -22,6 +22,21 @@ import {
 } from '../../../domain/recipe/enums';
 import type { NutritionDetailedData } from '../../../domain/recipe/types';
 
+export class SupplementTargetDto {
+  @IsString()
+  fieldPath!: string;
+
+  @IsString()
+  label!: string;
+
+  @IsNumber()
+  @Min(0)
+  targetValuePerKg!: number;
+
+  @IsString()
+  unit!: string;
+}
+
 /**
  * Recipe Item DTO (for create/update)
  */
@@ -51,6 +66,12 @@ export class RecipeItemDto {
   @IsNumber()
   @Min(0)
   nutrientTargetValue?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SupplementTargetDto)
+  supplementTargets?: SupplementTargetDto[];
 
   @IsOptional()
   @IsArray()
@@ -310,6 +331,7 @@ export interface RecipeItemResponseDto {
   ratioPercent?: number;
   nutrientTargetKey?: string;
   nutrientTargetValue?: number;
+  supplementTargets?: SupplementTargetDto[];
   supplementAlternativeIngredientIds?: string[];
   supplementAlternatives?: Array<{
     ingredientId: string;

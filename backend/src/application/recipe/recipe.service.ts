@@ -84,6 +84,7 @@ export class RecipeService {
       ratioPercent: item.ratioPercent,
       nutrientTargetKey: item.nutrientTargetKey,
       nutrientTargetValue: item.nutrientTargetValue,
+      supplementTargets: item.supplementTargets ?? null,
       sortOrder: index,
       ...(supplementAlternativeIngredientIds.length > 0 && {
         supplementAlternatives: {
@@ -191,6 +192,7 @@ export class RecipeService {
       ratioPercent: number | null;
       nutrientTargetKey: string | null;
       nutrientTargetValue: number | null;
+      supplementTargets?: unknown;
       sortOrder: number;
     }>,
     newItems: Array<{
@@ -199,6 +201,7 @@ export class RecipeService {
       ratioPercent: number | null;
       nutrientTargetKey: string | null;
       nutrientTargetValue: number | null;
+      supplementTargets?: unknown;
     }>,
   ): boolean {
     // If item count differs, items have changed
@@ -231,6 +234,13 @@ export class RecipeService {
 
       // Check if nutrient target value changed (for SUPPLEMENT ingredients)
       if (existing.nutrientTargetValue !== newItem.nutrientTargetValue) {
+        return true;
+      }
+
+      if (
+        JSON.stringify(existing.supplementTargets ?? null) !==
+        JSON.stringify(newItem.supplementTargets ?? null)
+      ) {
         return true;
       }
 
@@ -869,6 +879,7 @@ export class RecipeService {
           ratioPercent: item.ratioPercent || undefined,
           nutrientTargetKey: item.nutrientTargetKey || undefined,
           nutrientTargetValue: item.nutrientTargetValue || undefined,
+          supplementTargets: item.supplementTargets || undefined,
           supplementAlternativeIngredientIds:
             item.supplementAlternatives?.map(
               (alternative: any) => alternative.alternativeIngredientId,

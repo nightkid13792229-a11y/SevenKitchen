@@ -391,14 +391,14 @@
             <text class="spec-label">添加总量：</text>
             <text class="spec-value">{{ currentNutritionInfo.amountStr }}</text>
           </view>
-          <view v-if="currentNutritionInfo.nutrientTargetKey" class="spec-divider"></view>
-          <view v-if="currentNutritionInfo.nutrientTargetKey" class="spec-row">
-            <text class="spec-label">营养素：</text>
-            <text class="spec-value">{{ currentNutritionInfo.nutrientTargetKey }}</text>
+          <view v-if="currentNutritionInfo.targetSummary" class="spec-divider"></view>
+          <view v-if="currentNutritionInfo.targetSummary" class="spec-row">
+            <text class="spec-label">营养目标：</text>
+            <text class="spec-value">{{ currentNutritionInfo.targetSummary }}</text>
           </view>
           <view v-if="currentNutritionInfo.nutrientTotal" class="spec-row highlight-row">
             <text class="spec-label">营养素总量：</text>
-            <text class="spec-value highlight-value">{{ currentNutritionInfo.nutrientTotal }}{{ currentNutritionInfo.nutrientUnit }}</text>
+            <text class="spec-value highlight-value">{{ currentNutritionInfo.nutrientTotal }}</text>
           </view>
         </view>
       </view>
@@ -473,9 +473,12 @@ import ImagePreviewModal from '../../components/ImagePreviewModal.vue'
 import { normalizeImageUrl } from '../../utils/config'
 import { formatSupplementAmountWithDisplayUnit } from '../../utils/diy-sheet-format'
 import {
+  formatSupplementTargets,
+  getSupplementTargetBreakdowns
+} from '../../utils/supplement-nutrients'
+import {
   buildSupplementCandidateOptions,
   calculateSupplementAmountForOption,
-  getSupplementNutrientUnit,
   getSupplementSelectionKey
 } from './supplement-alternatives'
 import {
@@ -645,11 +648,7 @@ const supplementItemsDetailed = computed(() => {
       if (item.recipeItemId && candidate.id === item.recipeItemId) {
         return true
       }
-      return (
-        candidate.ingredientId === item.ingredientId &&
-        candidate.nutrientTargetKey === item.nutrientTargetKey &&
-        candidate.nutrientTargetValue === item.nutrientTargetValue
-      )
+      return candidate.ingredientId === item.ingredientId
     })
     const supplementOptions = buildSupplementCandidateOptions(item, recipeItem)
     const selectionKey = getSupplementSelectionKey(item)
@@ -690,7 +689,9 @@ const supplementItemsDetailed = computed(() => {
       ingredientId: item.ingredientId,                              // 原料ID
       nutrientTargetKey: item.nutrientTargetKey,                    // 营养素名称
       nutrientTargetValue: item.nutrientTargetValue,                // 营养目标值
-      activeNutrients: selectedRp?.activeNutrients || item.properties?.active_nutrients || undefined,
+      supplementTargets: item.supplementTargets || item.supplement_targets || recipeItem?.supplementTargets || recipeItem?.supplement_targets || [],
+      nutritionProfile: selectedRp?.nutritionProfile || item.nutritionProfile || item.nutrition_profile_snapshot || item.ingredient?.nutritionProfile,
+      nutrition_profile_snapshot: selectedRp?.nutritionProfile || item.nutrition_profile_snapshot,
       type: item.type,                                              // 类型标识
       properties: item.properties,                                  // 完整的properties
       specDisplayText: getRecommendationEntryDisplayText(hasSpecDetail), // 规格入口文案
@@ -1043,14 +1044,13 @@ async function handlePrint() {
       builder.drawSectionTitle('营养补充剂')
 
       const supplementRows = supplementItemsDetailed.value.map(item => {
-        // 计算营养素总量 = 营养目标值 * 食材总量 / 1000
-        let nutrientTotal = ''
-        let nutrientUnit = ''
-        if (item.nutrientTargetKey && item.nutrientTargetValue && foodItemsTotal.value.actualAmount) {
-          const total = Math.round(item.nutrientTargetValue * foodItemsTotal.value.actualAmount / 1000)
-          nutrientUnit = item.activeNutrients?.[item.nutrientTargetKey]?.unit || item.properties?.active_nutrients?.[item.nutrientTargetKey]?.unit || 'mg'
-          nutrientTotal = `${total}${nutrientUnit}`
-        }
+        const targetSummary = formatSupplementTargets(item) || '-'
+        const nutrientTotal = getSupplementTargetBreakdowns(
+          item,
+          foodItemsTotal.value.actualAmount
+        )
+          .map((breakdown) => `${Number(breakdown.totalNutrientNeeded.toFixed(2))}${breakdown.target.unit}${breakdown.target.label}`)
+          .join('、')
 
         return [
           item.name,
@@ -1058,8 +1058,8 @@ async function handlePrint() {
           item.productModel || '-',
           item.preparationMethod || '-',
           item.amountStr,
-          item.nutrientTargetKey || '-',
-          nutrientTotal
+          targetSummary,
+          nutrientTotal || '-'
         ]
       })
 
@@ -1264,23 +1264,19 @@ function closeAmountDetailModal() {
 
 // 显示营养信息弹窗
 function showNutritionInfoModal(item: any) {
-  const nutrientUnit = getSupplementNutrientUnit(item, {
-    id: item.ingredientId,
-    ingredientId: item.ingredientId,
-    name: item.name,
-    activeNutrients: item.activeNutrients
-  })
-
-  // 计算营养素总量 = 营养目标 * 食材采购量总量 / 1000
-  const nutrientTotal = item.nutrientTargetValue && foodItemsTotal.value.actualAmount
-    ? (item.nutrientTargetValue * foodItemsTotal.value.actualAmount / 1000).toFixed(0)
-    : null
+  const targetSummary = formatSupplementTargets(item)
+  const nutrientTotal = getSupplementTargetBreakdowns(
+    item,
+    foodItemsTotal.value.actualAmount
+  )
+    .map((breakdown) => `${Number(breakdown.totalNutrientNeeded.toFixed(2))}${breakdown.target.unit}${breakdown.target.label}`)
+    .join('、')
 
   // 将计算的营养素总量和单位添加到item中
   currentNutritionInfo.value = {
     ...item,
-    nutrientTotal,
-    nutrientUnit
+    targetSummary,
+    nutrientTotal
   }
 
   showNutritionInfo.value = true

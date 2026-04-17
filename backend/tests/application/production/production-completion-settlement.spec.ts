@@ -6,6 +6,7 @@ import { PackagingUnit } from 'src/domain/production';
 import { PackagingUnitStatus } from 'src/domain/production/enums';
 import type { RecipeSnapshot } from 'src/domain/recipe/types';
 import { StaffProductionService } from 'src/application/production/kitchen.service';
+import { ProductionCostSettlementService } from 'src/application/production/production-cost-settlement.service';
 
 const recipeSnapshot: RecipeSnapshot = {
   id: 'recipe-1',
@@ -91,6 +92,116 @@ describe('production completion result', () => {
         resultStatus: 'SHORTAGE',
         shortageG: 300,
         actualOutputG: 4700,
+      }),
+    );
+  });
+
+  it('settles a completed batch into batch and order cost snapshots', async () => {
+    const prisma = {
+      productionBatch: {
+        findUnique: jest.fn().mockResolvedValue({
+          id: 'batch-1',
+          packagingUnits: [
+            {
+              id: 'unit-1',
+              totalProductionG: 5000,
+              actualOutputG: 4700,
+              surplusG: 0,
+              shortageG: 300,
+              sourceOrderItemIds: ['order-item-1'],
+            },
+          ],
+        }),
+        update: jest.fn(),
+      },
+      orderItem: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'order-item-1',
+            orderId: 'order-1',
+            quantityG: 5000,
+            order: {
+              id: 'order-1',
+              amountTotal: 100,
+              pricingBreakdownSnapshot: {
+                totalProductCost: 60,
+                costIngredients: 40,
+                costPackaging: 10,
+                costLabor: 5,
+                costOverhead: 5,
+              },
+            },
+          },
+        ]),
+      },
+      purchaseList: {
+        findMany: jest.fn().mockResolvedValue([
+          {
+            id: 'purchase-list-1',
+            records: [{ actualCost: 30 }],
+          },
+        ]),
+      },
+      productionBatchCostSettlement: {
+        upsert: jest.fn().mockResolvedValue({ id: 'settlement-1' }),
+      },
+      orderCostSettlement: {
+        upsert: jest.fn(),
+      },
+    };
+    const inventoryService = {
+      consumeAllocationsForOrderIds: jest.fn().mockResolvedValue({
+        consumedAllocationCount: 1,
+        ledgerEntryCount: 1,
+        totalConsumedQuantityG: 1200,
+        totalInventoryCost: 20,
+      }),
+    };
+    const service = new ProductionCostSettlementService(
+      prisma as any,
+      inventoryService as any,
+    );
+
+    const result = await service.settleCompletedBatch('batch-1');
+
+    expect(inventoryService.consumeAllocationsForOrderIds).toHaveBeenCalledWith(
+      ['order-1'],
+      'batch-1',
+    );
+    expect(result).toEqual(
+      expect.objectContaining({
+        batchId: 'batch-1',
+        plannedOutputG: 5000,
+        actualOutputG: 4700,
+        shortageG: 300,
+        purchaseCost: 30,
+        inventoryCost: 20,
+        totalActualCost: 50,
+        suggestedRefundAmount: 6,
+      }),
+    );
+    expect(prisma.productionBatchCostSettlement.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { productionBatchId: 'batch-1' },
+      }),
+    );
+    expect(prisma.orderCostSettlement.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          orderId_productionBatchSettlementId: {
+            orderId: 'order-1',
+            productionBatchSettlementId: 'settlement-1',
+          },
+        },
+        create: expect.objectContaining({
+          orderId: 'order-1',
+          plannedOutputG: 5000,
+          actualOutputG: 4700,
+          actualCost: 50,
+          revenue: 100,
+          actualMargin: 50,
+          suggestedAdjustmentAmount: -6,
+        }),
       }),
     );
   });

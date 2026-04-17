@@ -16,6 +16,7 @@ import type { RecipeSnapshot } from 'src/domain/recipe/types';
 import { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY } from 'src/order/order.service';
 import { GlobalConfigService } from 'src/config/global-config.service';
 import type { ProductionBatchSummaryDto } from 'src/production.service';
+import { PRODUCTION_COST_SETTLEMENT_SERVICE } from 'src/production/production-cost-settlement.tokens';
 
 describe('ProductionService - Phase 8.10', () => {
   let service: ProductionService;
@@ -62,6 +63,9 @@ describe('ProductionService - Phase 8.10', () => {
       minPotWeightG: 2000,
     }),
   };
+  const mockProductionCostSettlementService = {
+    settleCompletedBatch: jest.fn().mockResolvedValue(undefined),
+  };
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -82,6 +86,10 @@ describe('ProductionService - Phase 8.10', () => {
         {
           provide: GlobalConfigService,
           useValue: mockGlobalConfigService,
+        },
+        {
+          provide: PRODUCTION_COST_SETTLEMENT_SERVICE,
+          useValue: mockProductionCostSettlementService,
         },
       ],
     }).compile();
@@ -647,6 +655,9 @@ describe('ProductionService - Phase 8.10', () => {
       expect(orderRepository.findById).toHaveBeenCalledWith('order-1');
       expect(orderRepository.save).not.toHaveBeenCalled();
       expect(currentOrderStatus).toBe(OrderStatus.IN_PRODUCTION);
+      expect(
+        mockProductionCostSettlementService.settleCompletedBatch,
+      ).toHaveBeenCalledWith('batch-1');
     });
 
     it('should complete batch even when domain object units are not hydrated (database-based check)', async () => {

@@ -8,6 +8,7 @@ import {
   Inject,
   BadRequestException,
   Logger,
+  Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import type { ProductionBatchRepository } from '../../domain/production/production.repository';
@@ -25,6 +26,10 @@ import {
 } from '../order/order.service';
 import { GlobalConfigService } from '../config/global-config.service';
 import { DateUtil } from '../../utils/date.util';
+import {
+  PRODUCTION_COST_SETTLEMENT_SERVICE,
+  type ProductionCostSettlementRunner,
+} from './production-cost-settlement.tokens';
 
 export const PRODUCTION_BATCH_REPOSITORY = Symbol('ProductionBatchRepository');
 
@@ -60,6 +65,9 @@ export class ProductionService {
     @Inject(ORDER_STATUS_HISTORY_REPOSITORY)
     private readonly statusHistoryRepository: OrderStatusHistoryRepository,
     private readonly globalConfigService: GlobalConfigService,
+    @Optional()
+    @Inject(PRODUCTION_COST_SETTLEMENT_SERVICE)
+    private readonly productionCostSettlementService?: ProductionCostSettlementRunner,
   ) {}
 
   /**
@@ -1042,6 +1050,10 @@ export class ProductionService {
     this.logger.log(
       `Batch ${batchId} completion: ${transitionedCount} orders in IN_PRODUCTION status`,
     );
+
+    if (this.productionCostSettlementService) {
+      await this.productionCostSettlementService.settleCompletedBatch(batchId);
+    }
 
     return true;
   }

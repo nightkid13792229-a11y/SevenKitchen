@@ -100,6 +100,8 @@ import {
   ProductionService,
   PRODUCTION_BATCH_REPOSITORY,
 } from './application/production/production.service';
+import { ProductionCostSettlementService } from './application/production/production-cost-settlement.service';
+import { PRODUCTION_COST_SETTLEMENT_SERVICE } from './application/production/production-cost-settlement.tokens';
 import { PrismaProductionRepository } from './infrastructure/repositories/prisma-production.repository';
 import { KitchenService } from './application/kitchen/kitchen.service';
 import {
@@ -386,6 +388,11 @@ validatePrismaConfig();
     },
     // Phase 8.10: Production Service
     ProductionService,
+    ProductionCostSettlementService,
+    {
+      provide: PRODUCTION_COST_SETTLEMENT_SERVICE,
+      useExisting: ProductionCostSettlementService,
+    },
     // Phase 8.12: Kitchen Service
     KitchenService,
     // Phase 8.13: Inventory Service

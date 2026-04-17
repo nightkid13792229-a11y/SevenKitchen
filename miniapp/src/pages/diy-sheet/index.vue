@@ -545,9 +545,6 @@ const previewImageUrl = ref('')
 // 全局配置中的补剂损耗率（默认5%）
 const globalSupplementLossRate = ref(0.05)
 
-// 总食材净重（克），用于推荐产品用量重算
-const totalFoodNetWeightG = computed(() => dailyIntakeG.value * cycleDays.value)
-
 const ingredientDetails = computed(() => {
   return pricePreview.value?.pricingBreakdown?.ingredientDetails || []
 })
@@ -674,8 +671,7 @@ const supplementItemsDetailed = computed(() => {
     const amount = calculateSupplementAmountForOption(
       item,
       selectedRp,
-      totalFoodNetWeightG.value,
-      globalSupplementLossRate.value
+      foodItemsTotal.value.actualAmount
     )
 
     return {

@@ -161,7 +161,7 @@ describe('supplement alternatives helpers', () => {
     expect(options).toEqual([])
   })
 
-  it('recalculates supplement amount and nutrient unit from selected alternative', () => {
+  it('recalculates supplement amount and nutrient unit from selected alternative without supplement loss', () => {
     const baseItem = {
       amount: 5,
       nutrientTargetKey: '维生素E',
@@ -186,10 +186,35 @@ describe('supplement alternatives helpers', () => {
       calculateSupplementAmountForOption(
         baseItem,
         selectedOption,
-        1000,
-        0.05
+        1000
       )
-    ).toBeCloseTo(2.625, 6)
+    ).toBeCloseTo(2.5, 6)
     expect(getSupplementNutrientUnit(baseItem, selectedOption)).toBe('IU')
+  })
+
+  it('keeps fractional tablet amounts when calculating from ingredient input weight', () => {
+    const baseItem = {
+      amount: 12,
+      nutrientTargetKey: '碘',
+      nutrientTargetValue: 660,
+      properties: {}
+    }
+
+    const kelpTablet = {
+      id: 'kelp-tablet',
+      ingredientId: 'kelp-tablet',
+      name: '海带片',
+      activeNutrients: {
+        碘: { value: 150, unit: 'μg' }
+      }
+    }
+
+    expect(
+      calculateSupplementAmountForOption(
+        baseItem,
+        kelpTablet,
+        2962
+      )
+    ).toBeCloseTo(13.0328, 6)
   })
 })

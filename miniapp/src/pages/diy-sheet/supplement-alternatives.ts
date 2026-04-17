@@ -106,8 +106,7 @@ export function buildSupplementCandidateOptions(
 export function calculateSupplementAmountForOption(
   baseItem: any,
   selectedOption: SupplementOption | undefined,
-  totalFoodNetWeightG: number,
-  supplementLossRate: number,
+  totalFoodInputWeightG: number,
 ): number {
   let amount = baseItem.amount;
   if (selectedOption?.activeNutrients && baseItem.nutrientTargetKey) {
@@ -115,9 +114,8 @@ export function calculateSupplementAmountForOption(
       selectedOption.activeNutrients[baseItem.nutrientTargetKey]?.value;
     if (concentration && concentration > 0 && baseItem.nutrientTargetValue) {
       const totalNutrientNeeded =
-        baseItem.nutrientTargetValue * (totalFoodNetWeightG / 1000);
-      const theoretical = totalNutrientNeeded / concentration;
-      amount = theoretical * (1 + supplementLossRate);
+        baseItem.nutrientTargetValue * (totalFoodInputWeightG / 1000);
+      amount = totalNutrientNeeded / concentration;
     }
   }
   return amount;

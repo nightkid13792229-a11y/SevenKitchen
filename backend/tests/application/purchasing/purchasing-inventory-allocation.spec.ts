@@ -24,8 +24,9 @@ const makePaidOrder = (
   ingredientId: string,
   name: string,
   purchaseAmount: number,
+  orderId = `order-${ingredientId}`,
 ) => ({
-  id: `order-${ingredientId}`,
+  id: orderId,
   status: OrderStatus.PAID,
   targetProductionDate: new Date('2026-04-20T00:00:00.000Z'),
   pricingBreakdownSnapshot: {
@@ -450,6 +451,65 @@ describe('PurchasingService inventory allocation calculation', () => {
             quantityG: 1000,
           }),
         ],
+      }),
+    );
+  });
+
+  it('allocates available stock only for newly added orders before adding purchase shortages', async () => {
+    const {
+      service,
+      inventoryService,
+      orderRepository,
+      purchaseListRepository,
+    } = await createService({
+      availability: new Map([
+        [
+          'beef',
+          {
+            ingredientId: 'beef',
+            onHandQuantityG: 3600,
+            allocatedQuantityG: 3000,
+            availableQuantityG: 600,
+          },
+        ],
+      ]),
+    });
+    purchaseListRepository.findById.mockResolvedValue(makePendingPurchaseList());
+    orderRepository.findById.mockResolvedValue(
+      makePaidOrder('beef', '牛肉', 1000, 'order-beef-extra'),
+    );
+
+    const result = await service.addOrdersToPurchaseList(
+      'purchase-list-1',
+      ['order-beef-extra'],
+      'admin-1',
+    );
+
+    expect(
+      inventoryService.releaseAllocationsForPurchaseList,
+    ).not.toHaveBeenCalled();
+    expect(inventoryService.createAllocationForOrderDemand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        purchaseListId: 'purchase-list-1',
+        sourceOrderIds: ['order-beef-extra'],
+        createdById: 'admin-1',
+        lines: [
+          expect.objectContaining({
+            ingredientId: 'beef',
+            quantityG: 600,
+          }),
+        ],
+      }),
+    );
+    expect(result.newItems).toHaveLength(1);
+    expect(result.newItems[0]).toEqual(
+      expect.objectContaining({
+        ingredientId: 'beef',
+        grossQuantityNeeded: 1000,
+        stockDeductedQuantity: 600,
+        purchaseShortageQuantity: 400,
+        quantityNeeded: 400,
+        usesInventory: true,
       }),
     );
   });

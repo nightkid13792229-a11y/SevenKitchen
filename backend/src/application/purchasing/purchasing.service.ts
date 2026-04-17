@@ -1968,55 +1968,13 @@ export class PurchasingService {
       `Found ${validOrders.length}/${orders.length} valid PAID orders to add`,
     );
 
-    const ingredientLookup = await this.buildIngredientLookupFromOrders(
-      validOrders,
-    );
-
-    // 3. 计算新增订单的原料需求
-    const ingredientMap = new Map<string, any>();
-
-    for (const order of validOrders) {
-      if (!order.pricingBreakdownSnapshot) {
-        this.logger.warn(
-          `Order ${order.id} has no pricing breakdown snapshot, skipping`,
-        );
-        continue;
-      }
-
-      const pricingBreakdown = order.pricingBreakdownSnapshot as any;
-      const ingredientDetails = pricingBreakdown.ingredientDetails || [];
-
-      for (const detail of ingredientDetails) {
-        const key = detail.ingredientId;
-        const purchaseQuantity = detail.purchaseAmount || detail.amount || 0;
-
-        if (purchaseQuantity <= 0) continue;
-
-        if (ingredientMap.has(key)) {
-          const existing = ingredientMap.get(key);
-          existing.quantityNeeded += purchaseQuantity;
-          existing.estimatedCost += detail.cost || 0;
-        } else {
-          ingredientMap.set(key, {
-            ingredientId: key,
-            ingredientName: detail.name,
-            type: detail.type || 'FOOD',
-            quantityNeeded: purchaseQuantity,
-            quantityUnit: detail.unit || 'G',
-            estimatedCost: detail.cost || 0,
-            purchaseChannel: detail.purchaseChannel,
-            productModel: detail.productModel,
-            displayUnit: detail.displayUnit,
-          });
-        }
-      }
-    }
-
+    // 3. 计算新增订单的原料需求，并按当前可用库存抵扣。
+    // 已有采购单的库存分配仍保持 ACTIVE，因此这里的可用库存天然排除了已占用库存。
     const enrichedRequirements =
-      await this.enrichRequirementsWithCatalogData(
-        Array.from(ingredientMap.values()),
-        ingredientLookup,
-      );
+      await this.calculatePurchaseRequirementsFromOrders(validOrders);
+    const purchaseRequirements = enrichedRequirements.filter(
+      (requirement) => requirement.quantityNeeded > 0,
+    );
 
     // 4. 合并到现有采购清单
     const existingItemMap = new Map(
@@ -2026,7 +1984,7 @@ export class PurchasingService {
     const newItems: PurchaseItem[] = [];
     const updatedItems: PurchaseItem[] = [];
 
-    for (const requirement of enrichedRequirements) {
+    for (const requirement of purchaseRequirements) {
       const ingredientId = requirement.ingredientId;
       if (existingItemMap.has(ingredientId)) {
         // 更新现有项
@@ -2049,6 +2007,13 @@ export class PurchasingService {
           quantityNeeded: requirement.quantityNeeded,
           quantityUnit: requirement.quantityUnit,
           estimatedCost: requirement.estimatedCost,
+          grossQuantityNeeded: requirement.grossQuantityNeeded,
+          stockDeductedQuantity: requirement.stockDeductedQuantity,
+          purchaseShortageQuantity: requirement.purchaseShortageQuantity,
+          onHandQuantity: requirement.onHandQuantity,
+          allocatedQuantity: requirement.allocatedQuantity,
+          availableQuantity: requirement.availableQuantity,
+          usesInventory: requirement.usesInventory,
           purchaseChannel: requirement.purchaseChannel,
           productModel: requirement.productModel,
           displayUnit: requirement.displayUnit,
@@ -2104,6 +2069,13 @@ export class PurchasingService {
 
     // 7. 保存采购清单
     const saved = await this.purchaseListRepository.save(purchaseList);
+    await this.createInventoryAllocationForRequirements({
+      requirements: enrichedRequirements,
+      targetDate: new Date(purchaseList.targetDate),
+      purchaseListId,
+      sourceOrderIds: validOrders.map((order) => order.id),
+      createdById: operatorId,
+    });
 
     this.logger.log(
       `Added ${validOrders.length} orders to purchase list ${purchaseListId}`,

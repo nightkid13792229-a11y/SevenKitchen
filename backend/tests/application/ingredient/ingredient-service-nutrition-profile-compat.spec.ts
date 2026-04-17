@@ -88,6 +88,38 @@ describe('IngredientService nutrition profile compatibility', () => {
     ingredientRepository.save.mockImplementation(async (ingredient: any) => ingredient);
   });
 
+  it('does not generate legacy active_nutrients from nutritionProfile on create', async () => {
+    const result = await service.createIngredient({
+      name: '海带片',
+      type: IngredientType.SUPPLEMENT,
+      procurementStrategy: IngredientProcurementStrategy.DAILY_PURCHASE,
+      diyEnabled: true,
+      procurementEnabled: false,
+      baseUnit: BaseUnit.PCS,
+      unitDisplayLabel: '片',
+      properties: { category_type: 'MINERAL' },
+      nutritionProfile: {
+        meta: { rawBasisType: 'PER_SERVING' },
+        macros: {},
+        minerals: { iodine: 150 },
+        vitamins: {},
+        fattyAcids: {},
+        aminoAcids: {},
+        customItems: [],
+      } as any,
+    });
+
+    expect((result.properties as any).active_nutrients).toBeUndefined();
+    expect(ingredientRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        properties: expect.not.objectContaining({
+          active_nutrients: expect.anything(),
+        }),
+      }),
+      undefined,
+    );
+  });
+
   it('preserves explicit legacy items[] payload on update', async () => {
     const updatedLegacyProfile = {
       items: [

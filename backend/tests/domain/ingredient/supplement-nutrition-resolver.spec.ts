@@ -35,7 +35,7 @@ describe('resolveSupplementNutrients', () => {
     });
   });
 
-  it('derives EPA+DHA and preserves custom nutrient items', () => {
+  it('does not derive EPA+DHA combined nutrients', () => {
     const result = resolveSupplementNutrients({
       nutritionProfile: {
         meta: { rawBasisType: 'PER_SERVING' },
@@ -57,9 +57,9 @@ describe('resolveSupplementNutrients', () => {
       } as any,
     });
 
-    expect(result['EPA']).toEqual({ value: 0.3, unit: 'g' });
-    expect(result['DHA']).toEqual({ value: 0.4, unit: 'g' });
-    expect(result['EPA+DHA']).toEqual({ value: 0.7, unit: 'g' });
+    expect(result['EPA']).toEqual({ value: 0.3, unit: 'mg' });
+    expect(result['DHA']).toEqual({ value: 0.4, unit: 'mg' });
+    expect(result['EPA+DHA']).toBeUndefined();
     expect(result['辅酶Q10']).toEqual({ value: 25, unit: 'mg' });
   });
 

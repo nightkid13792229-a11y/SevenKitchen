@@ -22,10 +22,14 @@ describe('InventoryService allocations', () => {
     prisma = {
       inventoryAllocation: {
         create: jest.fn().mockResolvedValue({ id: 'allocation-1' }),
+        findMany: jest.fn(),
         updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       inventoryAllocationLine: {
         groupBy: jest.fn(),
+        createMany: jest.fn().mockResolvedValue({ count: 1 }),
+      },
+      inventoryLedgerEntry: {
         createMany: jest.fn().mockResolvedValue({ count: 1 }),
       },
       $transaction: jest.fn(async (callback: any) => callback(prisma)),
@@ -121,6 +125,59 @@ describe('InventoryService allocations', () => {
       data: {
         status: 'RELEASED',
         releasedAt: expect.any(Date),
+      },
+    });
+  });
+
+  it('consumes active allocations for produced orders as inventory ledger entries', async () => {
+    prisma.inventoryAllocation.findMany.mockResolvedValue([
+      {
+        id: 'allocation-1',
+        sourceOrderIds: ['order-1'],
+        lines: [
+          {
+            ingredientId: 'beef',
+            procurementSkuId: 'sku-beef',
+            quantityG: 1200,
+          },
+        ],
+      },
+    ]);
+
+    const result = await (service as any).consumeAllocationsForOrderIds(
+      ['order-1'],
+      'batch-1',
+    );
+
+    expect(result).toEqual({
+      consumedAllocationCount: 1,
+      ledgerEntryCount: 1,
+      totalConsumedQuantityG: 1200,
+      totalInventoryCost: 0,
+    });
+    expect(prisma.inventoryLedgerEntry.createMany).toHaveBeenCalledWith({
+      data: [
+        expect.objectContaining({
+          ingredientId: 'beef',
+          deltaG: -1200,
+          procurementSkuId: 'sku-beef',
+          sourceType: 'PRODUCTION_ALLOCATION_CONSUMPTION',
+          sourceId: 'batch-1:allocation-1',
+          costAmount: 0,
+        }),
+      ],
+      skipDuplicates: true,
+    });
+    expect(prisma.inventoryAllocation.updateMany).toHaveBeenCalledWith({
+      where: {
+        id: {
+          in: ['allocation-1'],
+        },
+        status: 'ACTIVE',
+      },
+      data: {
+        status: 'CONSUMED',
+        consumedAt: expect.any(Date),
       },
     });
   });

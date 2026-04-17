@@ -133,6 +133,20 @@ export interface CreateInventoryAllocationDto {
   }>;
 }
 
+export interface ConsumeInventoryAllocationResult {
+  consumedAllocationCount: number;
+  ledgerEntryCount: number;
+  totalConsumedQuantityG: number;
+  totalInventoryCost: number;
+}
+
+export interface RecordProductionSurplusLineDto {
+  ingredientId: string;
+  procurementSkuId?: string | null;
+  quantityG: number;
+  costAmount?: number;
+}
+
 type IngredientStockMeta = {
   id: string;
   name: string;
@@ -438,6 +452,126 @@ export class InventoryService {
         releasedAt: new Date(),
       },
     });
+  }
+
+  async consumeAllocationsForOrderIds(
+    orderIds: string[],
+    batchId: string,
+  ): Promise<ConsumeInventoryAllocationResult> {
+    const uniqueOrderIds = Array.from(new Set(orderIds.filter(Boolean)));
+    if (uniqueOrderIds.length === 0) {
+      return {
+        consumedAllocationCount: 0,
+        ledgerEntryCount: 0,
+        totalConsumedQuantityG: 0,
+        totalInventoryCost: 0,
+      };
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      const allocations = await tx.inventoryAllocation.findMany({
+        where: {
+          status: 'ACTIVE',
+          sourceOrderIds: {
+            hasSome: uniqueOrderIds,
+          },
+        },
+        include: {
+          lines: true,
+        },
+      });
+
+      const now = new Date();
+      const ledgerEntries = allocations.flatMap((allocation: any) =>
+        (allocation.lines || []).map((line: any) => ({
+          id: randomUUID(),
+          ingredientId: line.ingredientId,
+          deltaG: -Math.abs(Number(line.quantityG || 0)),
+          procurementSkuId: line.procurementSkuId ?? null,
+          sourceType: InventorySourceType.PRODUCTION_ALLOCATION_CONSUMPTION as any,
+          sourceId: `${batchId}:${allocation.id}`,
+          costAmount: 0,
+          createdAt: now,
+        })),
+      ).filter((entry: any) => entry.deltaG < 0);
+
+      if (ledgerEntries.length > 0) {
+        await tx.inventoryLedgerEntry.createMany({
+          data: ledgerEntries,
+          skipDuplicates: true,
+        });
+      }
+
+      const allocationIds = allocations.map((allocation: any) => allocation.id);
+      if (allocationIds.length > 0) {
+        await tx.inventoryAllocation.updateMany({
+          where: {
+            id: {
+              in: allocationIds,
+            },
+            status: 'ACTIVE',
+          },
+          data: {
+            status: 'CONSUMED',
+            consumedAt: now,
+          },
+        });
+      }
+
+      return {
+        consumedAllocationCount: allocationIds.length,
+        ledgerEntryCount: ledgerEntries.length,
+        totalConsumedQuantityG: this.roundNumber(
+          ledgerEntries.reduce(
+            (sum: number, entry: any) => sum + Math.abs(entry.deltaG),
+            0,
+          ),
+          3,
+        ),
+        totalInventoryCost: this.roundNumber(
+          ledgerEntries.reduce(
+            (sum: number, entry: any) => sum + Number(entry.costAmount || 0),
+            0,
+          ),
+          2,
+        ),
+      };
+    });
+  }
+
+  async recordProductionSurplus(
+    batchId: string,
+    lines: RecordProductionSurplusLineDto[],
+  ): Promise<{ ledgerEntryCount: number; totalSurplusQuantityG: number }> {
+    const validLines = lines
+      .filter((line) => Number.isFinite(line.quantityG) && line.quantityG > 0)
+      .map((line) => ({
+        id: randomUUID(),
+        ingredientId: line.ingredientId,
+        deltaG: this.roundNumber(line.quantityG, 3),
+        procurementSkuId: line.procurementSkuId ?? null,
+        sourceType: InventorySourceType.PRODUCTION_SURPLUS as any,
+        sourceId: batchId,
+        costAmount: this.roundNumber(Number(line.costAmount || 0), 2),
+        createdAt: new Date(),
+      }));
+
+    if (validLines.length === 0) {
+      return { ledgerEntryCount: 0, totalSurplusQuantityG: 0 };
+    }
+
+    await this.prisma.inventoryLedgerEntry.createMany({
+      data: validLines,
+      skipDuplicates: true,
+    });
+
+    return {
+      ledgerEntryCount: validLines.length,
+      totalSurplusQuantityG: this.roundNumber(
+        validLines.reduce((sum, line) => sum + line.deltaG, 0),
+        3,
+      ),
+    };
   }
 
   /**
@@ -1123,6 +1257,10 @@ export class InventoryService {
       return 50;
     }
     return Math.max(min, Math.min(max, Math.floor(parsed)));
+  }
+
+  private roundNumber(value: number, decimals: number): number {
+    return Number(value.toFixed(decimals));
   }
 
   private resolveStockUnitLabel(

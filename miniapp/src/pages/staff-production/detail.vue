@@ -159,12 +159,49 @@
 
         <!-- 确认完成区域 -->
         <view class="complete-section">
+          <view class="completion-panel">
+            <view class="completion-title">生产结果</view>
+            <view class="completion-options">
+              <view
+                class="completion-option"
+                :class="{ active: completionResultStatus === 'NORMAL' }"
+                @tap="selectCompletionResult('NORMAL')"
+              >
+                <text>正常完成</text>
+              </view>
+              <view
+                class="completion-option"
+                :class="{ active: completionResultStatus === 'SURPLUS' }"
+                @tap="selectCompletionResult('SURPLUS')"
+              >
+                <text>有余量</text>
+              </view>
+              <view
+                class="completion-option"
+                :class="{ active: completionResultStatus === 'SHORTAGE' }"
+                @tap="selectCompletionResult('SHORTAGE')"
+              >
+                <text>有缺口</text>
+              </view>
+            </view>
+            <view v-if="completionResultStatus !== 'NORMAL'" class="completion-input-row">
+              <text class="completion-input-label">{{ completionInputLabel }}</text>
+              <input
+                v-model="completionDeltaG"
+                class="completion-input"
+                type="digit"
+                :placeholder="completionInputPlaceholder"
+                placeholder-class="completion-placeholder"
+              />
+              <text class="completion-input-unit">g</text>
+            </view>
+          </view>
           <button
             class="complete-btn"
-            :disabled="totalPhotoCount < 2"
+            :disabled="!canSubmitCompletion"
             @tap="completeTask"
           >
-            {{ totalPhotoCount < 2 ? '请至少上传2张照片' : '完成制作任务' }}
+            {{ completeButtonText }}
           </button>
         </view>
       </view>
@@ -195,6 +232,8 @@ import {
   getPackagingUnits,
   completeProductionTask,
   deleteProductionPhoto,
+  type CompleteProductionTaskPayload,
+  type ProductionResultStatus,
 } from '../../api/production';
 import { getBaseUrl } from '../../utils/config';
 import { calculateSupplementAmountForProduction } from '../../utils/supplement-nutrients';
@@ -280,6 +319,10 @@ const uploadingPhotos = ref<UploadTask[]>([]);
 
 // 完成操作进行中状态
 const isCompleting = ref(false);
+
+// 生产完成结果
+const completionResultStatus = ref<ProductionResultStatus>('NORMAL');
+const completionDeltaG = ref('');
 
 // 计算属性：状态文本
 const statusText = computed(() => {
@@ -387,6 +430,39 @@ const canUploadMore = computed(() => {
 // 计算属性：总照片数（包括正在上传的）
 const totalPhotoCount = computed(() => {
   return uploadedPhotos.value.length + uploadingPhotos.value.length;
+});
+
+const completionDeltaValue = computed(() => {
+  const value = Number(completionDeltaG.value);
+  return Number.isFinite(value) ? value : 0;
+});
+
+const completionInputLabel = computed(() => {
+  return completionResultStatus.value === 'SURPLUS' ? '余量' : '缺口';
+});
+
+const completionInputPlaceholder = computed(() => {
+  return completionResultStatus.value === 'SURPLUS'
+    ? '请输入剩余成品重量'
+    : '请输入不足成品重量';
+});
+
+const hasValidCompletionResult = computed(() => {
+  if (completionResultStatus.value === 'NORMAL') {
+    return true;
+  }
+  return completionDeltaValue.value > 0;
+});
+
+const canSubmitCompletion = computed(() => {
+  return totalPhotoCount.value >= 2 && hasValidCompletionResult.value && !isCompleting.value;
+});
+
+const completeButtonText = computed(() => {
+  if (isCompleting.value) return '提交中...';
+  if (totalPhotoCount.value < 2) return '请至少上传2张照片';
+  if (!hasValidCompletionResult.value) return `请输入${completionInputLabel.value}克数`;
+  return '完成制作任务';
 });
 
 // 获取类型对应的CSS类名
@@ -677,18 +753,57 @@ const retryUpload = async (task: UploadTask) => {
   await uploadSinglePhoto(task);
 };
 
+const selectCompletionResult = (status: ProductionResultStatus) => {
+  completionResultStatus.value = status;
+  if (status === 'NORMAL') {
+    completionDeltaG.value = '';
+  }
+};
+
+const buildCompletionPayload = (): CompleteProductionTaskPayload => {
+  const payload: CompleteProductionTaskPayload = {
+    resultStatus: completionResultStatus.value,
+    resultPhotoUrls: uploadedPhotos.value,
+  };
+
+  if (completionResultStatus.value === 'SURPLUS') {
+    payload.surplusG = completionDeltaValue.value;
+  }
+  if (completionResultStatus.value === 'SHORTAGE') {
+    payload.shortageG = completionDeltaValue.value;
+  }
+
+  return payload;
+};
+
+const completionConfirmText = computed(() => {
+  if (completionResultStatus.value === 'NORMAL') {
+    return '确认完成制作任务？';
+  }
+  return `确认记录${completionInputLabel.value}${completionDeltaValue.value}g，并完成制作任务？`;
+});
+
 // 完成制作
 const completeTask = async () => {
+  if (!canSubmitCompletion.value) {
+    uni.showToast({
+      title: completeButtonText.value,
+      icon: 'none',
+    });
+    return;
+  }
+
   uni.showModal({
     title: '确认完成',
-    content: '确认完成制作任务？',
+    content: completionConfirmText.value,
     success: async (res) => {
       if (!res.confirm) return;
 
+      isCompleting.value = true;
       uni.showLoading({ title: '提交中...' });
 
       try {
-        await completeProductionTask(taskId.value);
+        await completeProductionTask(taskId.value, buildCompletionPayload());
         uni.hideLoading();
 
         uni.showToast({
@@ -707,6 +822,8 @@ const completeTask = async () => {
           title: error.message || '操作失败',
           icon: 'none',
         });
+      } finally {
+        isCompleting.value = false;
       }
     },
   });
@@ -1162,6 +1279,87 @@ const printLabel = () => {
   margin-top: 24rpx;
   padding-top: 24rpx;
   border-top: 1rpx solid #f0f0f0;
+}
+
+.completion-panel {
+  margin-bottom: 24rpx;
+}
+
+.completion-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333;
+  margin-bottom: 16rpx;
+}
+
+.completion-options {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12rpx;
+}
+
+.completion-option {
+  height: 72rpx;
+  border: 2rpx solid #d9e8e2;
+  border-radius: 8rpx;
+  background-color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  text {
+    font-size: 26rpx;
+    color: #45645a;
+    white-space: nowrap;
+  }
+
+  &.active {
+    background-color: #56ab91;
+    border-color: #56ab91;
+
+    text {
+      color: #fff;
+      font-weight: 600;
+    }
+  }
+}
+
+.completion-input-row {
+  margin-top: 16rpx;
+  height: 80rpx;
+  padding: 0 20rpx;
+  border: 2rpx solid #e5e5e5;
+  border-radius: 8rpx;
+  display: flex;
+  align-items: center;
+  background-color: #fafafa;
+}
+
+.completion-input-label {
+  font-size: 26rpx;
+  color: #666;
+  margin-right: 16rpx;
+  flex-shrink: 0;
+}
+
+.completion-input {
+  flex: 1;
+  min-width: 0;
+  height: 72rpx;
+  font-size: 28rpx;
+  color: #333;
+}
+
+.completion-input-unit {
+  font-size: 26rpx;
+  color: #999;
+  margin-left: 12rpx;
+  flex-shrink: 0;
+}
+
+.completion-placeholder {
+  color: #bbb;
+  font-size: 26rpx;
 }
 
 .complete-btn {

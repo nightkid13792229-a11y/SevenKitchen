@@ -11,6 +11,15 @@ type PackagePlanItem = {
   packageCount: number;
 };
 
+export type ProductionResultStatus = 'NORMAL' | 'SURPLUS' | 'SHORTAGE';
+
+export type CompleteProductionTaskPayload = {
+  resultStatus?: ProductionResultStatus;
+  surplusG?: number;
+  shortageG?: number;
+  resultPhotoUrls?: string[];
+};
+
 // ==========================================
 // 生产统计
 // ==========================================
@@ -235,13 +244,22 @@ export function uploadProductionPhotos(
 /**
  * 完成制作任务
  */
-export function completeProductionTask(unitId: string) {
+export function completeProductionTask(
+  unitId: string,
+  payload: CompleteProductionTaskPayload = {}
+) {
   return request<{
     id: string;
     status: string;
+    resultStatus?: ProductionResultStatus;
+    actualOutputG?: number;
+    surplusG?: number;
+    shortageG?: number;
+    resultPhotoUrls?: string[];
   }>({
     url: `/staff/production/packaging-units/${unitId}/complete`,
     method: 'POST',
+    data: payload,
   });
 }
 

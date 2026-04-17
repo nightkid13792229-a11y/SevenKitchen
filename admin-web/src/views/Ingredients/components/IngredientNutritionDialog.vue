@@ -42,14 +42,12 @@
 import { computed, ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { ingredientApi } from '@/api/ingredients'
-import { buildSupplementActiveNutrientsFromNutritionProfile } from '@/utils/ingredientNutrition'
 import {
   BaseUnitLabels,
   type IngredientForm,
   IngredientType,
   type Ingredient,
-  type NutritionProfile,
-  type SupplementProperties
+  type NutritionProfile
 } from '@/types/ingredient'
 import IngredientNutritionEditor from './IngredientNutritionEditor.vue'
 
@@ -114,17 +112,6 @@ const handleSave = async () => {
   try {
     const payload: Partial<IngredientForm> = {
       nutritionProfile: draftNutritionProfile.value
-    }
-
-    if (props.ingredient.type === IngredientType.SUPPLEMENT) {
-      const supplementProperties = JSON.parse(
-        JSON.stringify(props.ingredient.properties || {})
-      ) as SupplementProperties
-      supplementProperties.active_nutrients = buildSupplementActiveNutrientsFromNutritionProfile(
-        draftNutritionProfile.value,
-        supplementProperties.active_nutrients
-      )
-      payload.properties = supplementProperties
     }
 
     await ingredientApi.update(props.ingredient.id, payload)

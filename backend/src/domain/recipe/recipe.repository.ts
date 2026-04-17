@@ -3,6 +3,8 @@
  * Domain layer repository interface (no Prisma dependency)
  */
 
+import type { SupplementTarget } from '../ingredient/types';
+
 export interface IngredientRef {
   id: string;
   name: string;
@@ -26,6 +28,7 @@ export interface RecipeItem {
   sortOrder?: number | null;
   nutrientTargetKey?: string | null;
   nutrientTargetValue?: number | null;
+  supplementTargets?: SupplementTarget[] | null;
   supplementAlternativeIngredientIds?: string[] | null;
   supplementAlternatives?: Array<{
     ingredientId: string;

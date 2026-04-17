@@ -2,14 +2,7 @@ import {
   findNutritionField,
   getNutritionProfileFieldValue,
 } from './nutrition-field-catalog';
-import type { NutritionProfile } from './types';
-
-export interface SupplementTarget {
-  fieldPath: string;
-  label: string;
-  targetValuePerKg: number;
-  unit: string;
-}
+import type { NutritionProfile, SupplementTarget } from './types';
 
 export interface SupplementDoseTargetBreakdown {
   fieldPath: string;

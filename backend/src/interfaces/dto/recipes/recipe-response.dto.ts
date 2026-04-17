@@ -10,6 +10,13 @@ import {
   LifeStage,
 } from '../../../domain';
 
+export interface SupplementTargetResponseDto {
+  fieldPath: string;
+  label: string;
+  targetValuePerKg: number;
+  unit: string;
+}
+
 export class RecipeSummaryDto {
   @ApiProperty({ example: 'uuid' })
   id!: string;
@@ -90,6 +97,7 @@ export class RecipeDetailDto extends RecipeSummaryDto {
     sortOrder: number;
     nutrientTargetKey?: string;
     nutrientTargetValue?: number;
+    supplementTargets?: SupplementTargetResponseDto[];
     ingredientType?: string;
     ingredient?: {
       id: string;

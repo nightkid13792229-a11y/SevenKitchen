@@ -10,6 +10,11 @@ import {
   PURCHASE_RECORD_REPOSITORY,
 } from 'src/application/purchasing/purchasing.service.tokens';
 import { OrderStatus } from 'src/domain';
+import {
+  PurchaseItem,
+  PurchaseList,
+  PurchaseListStatus,
+} from 'src/domain/purchasing';
 
 jest.mock('uuid', () => ({
   v4: () => 'test-uuid',
@@ -74,6 +79,29 @@ const spinachIngredient = {
   purchaseToBaseRatio: 1,
   currentPricePerPurchaseUnit: 0.03,
 };
+
+const makePendingPurchaseList = () =>
+  new PurchaseList({
+    id: 'purchase-list-1',
+    targetDate: new Date('2026-04-20T12:00:00.000Z'),
+    status: PurchaseListStatus.PENDING,
+    totalEstimatedCost: 6,
+    itemCount: 1,
+    createdById: 'admin-1',
+    sourceOrderIds: ['order-beef', 'order-spinach'],
+    items: [
+      new PurchaseItem({
+        id: 'item-spinach',
+        purchaseListId: 'purchase-list-1',
+        ingredientId: 'spinach',
+        ingredientName: '菠菜',
+        type: 'FOOD',
+        quantityNeeded: 600,
+        quantityUnit: 'G',
+        estimatedCost: 6,
+      }),
+    ],
+  });
 
 describe('PurchasingService inventory allocation calculation', () => {
   async function createService(params?: {
@@ -254,5 +282,48 @@ describe('PurchasingService inventory allocation calculation', () => {
     });
     expect(result.fullyCoveredByInventory).toBe(true);
     expect(purchaseListRepository.save).not.toHaveBeenCalled();
+  });
+
+  it('releases active allocations before deleting a pending purchase list', async () => {
+    const {
+      service,
+      inventoryService,
+      orderRepository,
+      purchaseListRepository,
+    } = await createService();
+    purchaseListRepository.findById.mockResolvedValue(makePendingPurchaseList());
+    orderRepository.findById.mockResolvedValue(
+      makePaidOrder('beef', '牛肉', 3000),
+    );
+    purchaseListRepository.delete.mockResolvedValue(undefined);
+
+    await service.deletePurchaseList('purchase-list-1', 'admin-1');
+
+    expect(inventoryService.releaseAllocationsForPurchaseList).toHaveBeenCalledWith(
+      'purchase-list-1',
+    );
+  });
+
+  it('releases active allocations when removing orders from a pending purchase list', async () => {
+    const {
+      service,
+      inventoryService,
+      orderRepository,
+      purchaseListRepository,
+    } = await createService();
+    purchaseListRepository.findById.mockResolvedValue(makePendingPurchaseList());
+    orderRepository.findById.mockResolvedValue(
+      makePaidOrder('beef', '牛肉', 3000),
+    );
+
+    await service.removeOrdersFromPurchaseList(
+      'purchase-list-1',
+      ['order-beef'],
+      'admin-1',
+    );
+
+    expect(inventoryService.releaseAllocationsForPurchaseList).toHaveBeenCalledWith(
+      'purchase-list-1',
+    );
   });
 });

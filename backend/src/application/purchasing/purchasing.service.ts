@@ -2101,6 +2101,9 @@ export class PurchasingService {
 
     // 8. 保存采购清单
     const saved = await this.purchaseListRepository.save(purchaseList);
+    await this.inventoryService.releaseAllocationsForPurchaseList(
+      purchaseListId,
+    );
 
     this.logger.log(
       `Removed ${orders.length} orders from purchase list ${purchaseListId}`,
@@ -2340,6 +2343,9 @@ export class PurchasingService {
       purchaseListId,
       updatedList,
     );
+    await this.inventoryService.releaseAllocationsForPurchaseList(
+      purchaseListId,
+    );
 
     this.logger.log(
       `Recalculated purchase list ${purchaseListId}: ${mergedItems.length} items`,
@@ -2398,7 +2404,10 @@ export class PurchasingService {
       }
     }
 
-    // 删除采购清单
+    // 删除采购清单前先释放库存分配，避免分配记录因外键置空后仍保持占用
+    await this.inventoryService.releaseAllocationsForPurchaseList(
+      purchaseListId,
+    );
     await this.purchaseListRepository.delete(purchaseListId);
 
     this.logger.log(

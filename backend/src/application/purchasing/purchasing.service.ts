@@ -52,6 +52,16 @@ export interface GeneratePurchaseListDto {
   endDate?: string; // YYYY-MM-DD format, optional (defaults to startDate)
 }
 
+export interface GeneratePurchaseListResult {
+  purchaseList: PurchaseList | null;
+  inventoryAllocation: {
+    id: string;
+    lineCount: number;
+    totalAllocatedQuantityG: number;
+  } | null;
+  fullyCoveredByInventory: boolean;
+}
+
 export interface CreateStockPurchaseListDto {
   targetDate: string; // YYYY-MM-DD format
   items: Array<{
@@ -100,6 +110,14 @@ export interface PurchaseRequirement {
   quantityNeeded: number; // 基于baseUnit
   quantityUnit: string; // G / ML / PCS
   estimatedCost: number; // 基于currentPricePerPurchaseUnit
+  grossQuantityNeeded?: number;
+  stockDeductedQuantity?: number;
+  purchaseShortageQuantity?: number;
+  onHandQuantity?: number;
+  allocatedQuantity?: number;
+  availableQuantity?: number;
+  usesInventory?: boolean;
+  allocationRequired?: boolean;
   preparationMethods?: string[];
   purchaseChannel?: string;
   productModel?: string;
@@ -491,6 +509,90 @@ export class PurchasingService {
   private roundUpNumber(value: number, decimals: number): number {
     const factor = Math.pow(10, decimals);
     return Math.ceil((value - Number.EPSILON) * factor) / factor;
+  }
+
+  private usesInventoryForRequirement(ingredient: any): boolean {
+    return (
+      ingredient?.procurementStrategy ===
+        IngredientProcurementStrategy.STOCK_REPLENISHMENT ||
+      ingredient?.procurementStrategy === IngredientProcurementStrategy.HYBRID
+    );
+  }
+
+  private applyInventoryOffset(params: {
+    requirement: PurchaseRequirement;
+    ingredient: any;
+    availability?: {
+      onHandQuantityG: number;
+      allocatedQuantityG: number;
+      availableQuantityG: number;
+    };
+  }): PurchaseRequirement {
+    const grossQuantity = this.roundNumber(
+      params.requirement.grossQuantityNeeded ??
+        params.requirement.quantityNeeded,
+      3,
+    );
+    const usesInventory = this.usesInventoryForRequirement(params.ingredient);
+    const unitCost =
+      grossQuantity > 0
+        ? Number(params.requirement.estimatedCost || 0) / grossQuantity
+        : 0;
+    const stockDeductedQuantity = usesInventory
+      ? this.roundNumber(
+          Math.min(
+            grossQuantity,
+            params.availability?.availableQuantityG ?? 0,
+          ),
+          3,
+        )
+      : 0;
+    const shortage = this.roundNumber(
+      Math.max(grossQuantity - stockDeductedQuantity, 0),
+      3,
+    );
+
+    return {
+      ...params.requirement,
+      grossQuantityNeeded: grossQuantity,
+      stockDeductedQuantity,
+      purchaseShortageQuantity: shortage,
+      quantityNeeded: shortage,
+      estimatedCost: this.roundNumber(unitCost * shortage, 2),
+      onHandQuantity: params.availability?.onHandQuantityG ?? 0,
+      allocatedQuantity: params.availability?.allocatedQuantityG ?? 0,
+      availableQuantity: params.availability?.availableQuantityG ?? 0,
+      usesInventory,
+      allocationRequired: stockDeductedQuantity > 0,
+    };
+  }
+
+  private async applyInventoryAvailability(
+    requirements: PurchaseRequirement[],
+    ingredientLookup: Map<string, any>,
+  ): Promise<PurchaseRequirement[]> {
+    const stockManagedIngredientIds = requirements
+      .filter((requirement) =>
+        this.usesInventoryForRequirement(
+          ingredientLookup.get(requirement.ingredientId),
+        ),
+      )
+      .map((requirement) => requirement.ingredientId);
+
+    const availabilityMap =
+      stockManagedIngredientIds.length > 0
+        ? await this.inventoryService.getAvailabilityByIngredientIds(
+            stockManagedIngredientIds,
+          )
+        : new Map();
+
+    return requirements.map((requirement) =>
+      this.applyInventoryOffset({
+        requirement,
+        ingredient: ingredientLookup.get(requirement.ingredientId),
+        availability: availabilityMap.get(requirement.ingredientId),
+      }),
+    );
   }
 
   private getStockLevelStatus(params: {
@@ -1337,8 +1439,13 @@ export class PurchasingService {
       `Calculated ${requirements.length} unique ingredient requirements`,
     );
 
-    return this.enrichRequirementsWithCatalogData(
+    const enrichedRequirements = await this.enrichRequirementsWithCatalogData(
       requirements,
+      ingredientLookup,
+    );
+
+    return this.applyInventoryAvailability(
+      enrichedRequirements,
       ingredientLookup,
     );
   }
@@ -1447,7 +1554,7 @@ export class PurchasingService {
   async generatePurchaseList(
     dto: GeneratePurchaseListDto,
     createdById: string,
-  ): Promise<PurchaseList> {
+  ): Promise<GeneratePurchaseListResult> {
     const end = dto.endDate || dto.startDate;
 
     // 为targetProductionDate查询创建范围（使用午夜00:00:00，因为数据库中存储的是午夜时间）
@@ -1511,6 +1618,16 @@ export class PurchasingService {
     }
 
     const enrichedRequirements = requirements;
+    const purchaseRequirements = enrichedRequirements.filter(
+      (requirement) => requirement.quantityNeeded > 0,
+    );
+    const allocationLines = enrichedRequirements
+      .filter((requirement) => (requirement.stockDeductedQuantity ?? 0) > 0)
+      .map((requirement) => ({
+        ingredientId: requirement.ingredientId,
+        procurementSkuId: requirement.procurementSkuId,
+        quantityG: requirement.stockDeductedQuantity!,
+      }));
 
     // 查询订单ID列表（使用制作日期查询）
     const { list: orders } =
@@ -1541,12 +1658,12 @@ export class PurchasingService {
       `Transitioned ${transitionedCount}/${orders.length} orders to PURCHASING status`,
     );
 
-    // 创建采购明细
-    const totalEstimatedCost = enrichedRequirements.reduce(
+    // 创建采购明细：只采购库存抵扣后的缺口
+    const totalEstimatedCost = purchaseRequirements.reduce(
       (sum, r) => sum + r.estimatedCost,
       0,
     );
-    const items = enrichedRequirements.map(
+    const items = purchaseRequirements.map(
       (req) =>
         new PurchaseItem({
           purchaseListId: '', // 会在创建PurchaseList时更新
@@ -1579,27 +1696,56 @@ export class PurchasingService {
       };
     }
 
-    // 创建采购清单（使用中午12点的targetDate）
-    const purchaseList = new PurchaseList({
-      targetDate: targetDate,
-      kind: PurchaseListKind.ORDER_DEMAND,
-      status: PurchaseListStatus.PENDING,
-      totalEstimatedCost,
-      itemCount: items.length,
-      createdById,
-      sourceOrderIds,
-      orderDateSnapshot,
-      items,
-    });
+    let saved: PurchaseList | null = null;
 
-    // 保存到数据库
-    const saved = await this.purchaseListRepository.save(purchaseList);
+    if (items.length > 0) {
+      // 创建采购清单（使用中午12点的targetDate）
+      const purchaseList = new PurchaseList({
+        targetDate: targetDate,
+        kind: PurchaseListKind.ORDER_DEMAND,
+        status: PurchaseListStatus.PENDING,
+        totalEstimatedCost,
+        itemCount: items.length,
+        createdById,
+        sourceOrderIds,
+        orderDateSnapshot,
+        items,
+      });
 
-    this.logger.log(
-      `Purchase list ${saved.id} created successfully with ${items.length} items`,
-    );
+      // 保存到数据库
+      saved = await this.purchaseListRepository.save(purchaseList);
 
-    return saved;
+      this.logger.log(
+        `Purchase list ${saved.id} created successfully with ${items.length} items`,
+      );
+    }
+
+    const inventoryAllocation =
+      allocationLines.length > 0
+        ? await this.inventoryService.createAllocationForOrderDemand({
+            targetDate,
+            purchaseListId: saved?.id ?? null,
+            sourceOrderIds,
+            createdById,
+            lines: allocationLines,
+          })
+        : null;
+
+    return {
+      purchaseList: saved,
+      inventoryAllocation: inventoryAllocation
+        ? {
+            id: inventoryAllocation.id,
+            lineCount: allocationLines.length,
+            totalAllocatedQuantityG: this.roundNumber(
+              allocationLines.reduce((sum, line) => sum + line.quantityG, 0),
+              3,
+            ),
+          }
+        : null,
+      fullyCoveredByInventory:
+        saved === null && allocationLines.length > 0 && items.length === 0,
+    };
   }
 
   /**

@@ -257,6 +257,95 @@
         </el-descriptions>
       </el-card>
 
+      <!-- 财务结算 -->
+      <el-card class="info-card" shadow="never">
+        <template #header>
+          <div class="card-header-with-action">
+            <span class="card-title">财务结算</span>
+            <el-button
+              size="small"
+              :loading="financialLoading"
+              @click="loadFinancialSummary"
+            >
+              刷新
+            </el-button>
+          </div>
+        </template>
+
+        <el-skeleton v-if="financialLoading && !financialSummary" :rows="4" animated />
+        <template v-else-if="financialSummary">
+          <el-alert
+            v-if="financialSummary.settlementStatus === 'PENDING'"
+            title="该订单尚未完成生产成本结算，实际成本和差价建议会在生产批次完成后生成。"
+            type="info"
+            :closable="false"
+            class="financial-alert"
+          />
+          <el-alert
+            v-else-if="financialSummary.shortageAdjustmentAmount !== 0"
+            :title="getAdjustmentText(financialSummary.shortageAdjustmentAmount)"
+            :type="getAdjustmentTagType(financialSummary.shortageAdjustmentAmount)"
+            :closable="false"
+            class="financial-alert"
+          />
+
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="结算状态">
+              <el-tag :type="financialSummary.settlementStatus === 'SETTLED' ? 'success' : 'info'">
+                {{ financialSummary.settlementStatus === 'SETTLED' ? '已结算' : '待结算' }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="订单收入">
+              {{ formatFinancialAmount(financialSummary.revenue) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="预计成本">
+              {{ formatFinancialAmount(financialSummary.estimatedCost) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="预计毛利">
+              {{ formatFinancialAmount(financialSummary.estimatedMargin) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="实际成本">
+              {{ formatFinancialAmount(financialSummary.actualCost) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="实际毛利">
+              {{ formatFinancialAmount(financialSummary.actualMargin) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="差价建议">
+              <el-tag :type="getAdjustmentTagType(financialSummary.shortageAdjustmentAmount)">
+                {{ getAdjustmentText(financialSummary.shortageAdjustmentAmount) }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item label="需要补收">
+              <el-tag :type="financialSummary.requiresCustomerPayment ? 'danger' : 'success'">
+                {{ financialSummary.requiresCustomerPayment ? '是' : '否' }}
+              </el-tag>
+            </el-descriptions-item>
+            <template v-if="financialSummary.latestSettlement">
+              <el-descriptions-item label="生产批次">
+                {{ financialSummary.latestSettlement.productionBatchId }}
+              </el-descriptions-item>
+              <el-descriptions-item label="结算时间">
+                {{
+                  financialSummary.latestSettlement.settledAt
+                    ? formatTime(financialSummary.latestSettlement.settledAt)
+                    : '-'
+                }}
+              </el-descriptions-item>
+              <el-descriptions-item label="计划成品">
+                {{ financialSummary.latestSettlement.plannedOutputG }}g
+              </el-descriptions-item>
+              <el-descriptions-item label="实际成品">
+                {{ financialSummary.latestSettlement.actualOutputG }}g
+              </el-descriptions-item>
+              <el-descriptions-item label="成品缺口">
+                {{ financialSummary.latestSettlement.shortageG }}g
+              </el-descriptions-item>
+            </template>
+          </el-descriptions>
+        </template>
+        <el-empty v-else description="暂无财务结算数据" />
+      </el-card>
+
       <!-- 操作记录 -->
       <el-card class="info-card" shadow="never">
         <template #header>
@@ -380,8 +469,14 @@ import type {
   Order,
   CancelledBy,
   OrderHistory,
+  OrderFinancialSummary,
   RecipeSnapshot
 } from '@/types/order'
+import {
+  formatFinancialAmount,
+  getAdjustmentTagType,
+  getAdjustmentText
+} from './orderFinancialSummary'
 
 // 使枚举在模板中可用
 const OrderStatusEnum = OrderStatus
@@ -396,6 +491,8 @@ const orderId = computed(() => route.params.id as string)
 const loading = ref(false)
 const order = ref<Order | null>(null)
 const orderHistory = ref<OrderHistory[]>([])
+const financialSummary = ref<OrderFinancialSummary | null>(null)
+const financialLoading = ref(false)
 const remarkDraft = ref('')
 const savingRemark = ref(false)
 
@@ -444,6 +541,19 @@ const loadHistory = async () => {
     orderHistory.value = data
   } catch (error) {
     console.error('加载订单历史失败:', error)
+  }
+}
+
+const loadFinancialSummary = async () => {
+  financialLoading.value = true
+  try {
+    financialSummary.value = await orderApi.getFinancialSummary(orderId.value)
+  } catch (error) {
+    console.error('加载订单财务结算失败:', error)
+    financialSummary.value = null
+    ElMessage.error('加载订单财务结算失败')
+  } finally {
+    financialLoading.value = false
   }
 }
 
@@ -676,6 +786,7 @@ const handleViewSnapshot = (snapshot: RecipeSnapshot) => {
 onMounted(() => {
   loadOrder()
   loadHistory()
+  loadFinancialSummary()
 })
 </script>
 
@@ -727,6 +838,10 @@ onMounted(() => {
   margin-top: 10px;
   font-size: 13px;
   color: #909399;
+}
+
+.financial-alert {
+  margin-bottom: 16px;
 }
 
 .total-price {

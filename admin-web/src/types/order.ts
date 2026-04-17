@@ -88,6 +88,32 @@ export interface PricingBreakdown {
 }
 
 /**
+ * 订单财务结算摘要
+ */
+export interface OrderFinancialSummary {
+  orderId: string
+  amountTotal: number
+  revenue: number
+  estimatedCost: number
+  estimatedMargin: number
+  actualCost: number | null
+  actualMargin: number | null
+  shortageAdjustmentAmount: number
+  requiresCustomerPayment: boolean
+  settlementStatus: 'PENDING' | 'SETTLED'
+  latestSettlement: {
+    id: string
+    productionBatchId: string
+    productionBatchSettlementId: string
+    plannedOutputG: number
+    actualOutputG: number
+    shortageG: number
+    settledAt: string | null
+    createdAt: string | null
+  } | null
+}
+
+/**
  * 订单基础信息
  */
 export interface Order {

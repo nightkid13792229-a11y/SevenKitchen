@@ -6,6 +6,7 @@ import type {
   OrderListResponse,
   OrderStats,
   OrderHistory,
+  OrderFinancialSummary,
   ShipRequest,
   CancelRequest
 } from '@/types/order'
@@ -26,6 +27,13 @@ export const orderApi = {
    */
   getDetail: (id: string): Promise<Order> => {
     return api.get(`/admin/orders/${id}`)
+  },
+
+  /**
+   * 获取订单财务结算摘要
+   */
+  getFinancialSummary: (id: string): Promise<OrderFinancialSummary> => {
+    return api.get(`/admin/orders/${id}/financial-summary`)
   },
 
   /**

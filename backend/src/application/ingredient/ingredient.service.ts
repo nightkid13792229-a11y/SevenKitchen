@@ -30,9 +30,9 @@ export interface CreateIngredientDto {
   baseUnit: string;
   baseUnitDisplayName?: string | null;
   unitDisplayLabel?: string | null;
-  purchaseUnit: string;
-  purchaseToBaseRatio: number;
-  currentPricePerPurchaseUnit: number;
+  purchaseUnit?: string | null;
+  purchaseToBaseRatio?: number | null;
+  currentPricePerPurchaseUnit?: number | null;
   effectivePricePerPurchaseUnit?: number | null;
   weightG?: number | null;
   maxCapacityG?: number | null;
@@ -56,9 +56,9 @@ export interface UpdateIngredientDto {
   baseUnit?: BaseUnit;
   baseUnitDisplayName?: string | null;
   unitDisplayLabel?: string | null;
-  purchaseUnit?: string;
-  purchaseToBaseRatio?: number;
-  currentPricePerPurchaseUnit?: number;
+  purchaseUnit?: string | null;
+  purchaseToBaseRatio?: number | null;
+  currentPricePerPurchaseUnit?: number | null;
   effectivePricePerPurchaseUnit?: number | null;
   weightG?: number | null;
   maxCapacityG?: number | null;
@@ -95,6 +95,29 @@ export class IngredientService {
     }
 
     return fallback;
+  }
+
+  private normalizeOptionalText(value: string | null | undefined): string | null {
+    const normalized = value?.trim();
+    return normalized ? normalized : null;
+  }
+
+  private resolvePurchaseUnitForPersistence(
+    dto: {
+      purchaseUnit?: string | null;
+      baseUnit?: string | null;
+      baseUnitDisplayName?: string | null;
+      unitDisplayLabel?: string | null;
+    },
+    fallback: string | null = null,
+  ): string {
+    return (
+      this.normalizeOptionalText(dto.purchaseUnit) ??
+      this.normalizeOptionalText(this.resolveBaseUnitDisplayName(dto)) ??
+      this.normalizeOptionalText(fallback) ??
+      this.normalizeOptionalText(dto.baseUnit) ??
+      BaseUnit.PCS
+    );
   }
 
   private resolvePropertiesForPersistence(input: {
@@ -162,6 +185,9 @@ export class IngredientService {
       properties: dto.properties,
       nutritionProfile: normalizedProfile,
     });
+    const purchaseUnit = this.resolvePurchaseUnitForPersistence(dto);
+    const purchaseToBaseRatio = dto.purchaseToBaseRatio ?? 1;
+    const currentPricePerPurchaseUnit = dto.currentPricePerPurchaseUnit ?? 0;
 
     const ingredient = new Ingredient(
       crypto.randomUUID(),
@@ -176,10 +202,10 @@ export class IngredientService {
       dto.notes ?? null,
       dto.baseUnit as any,
       this.resolveBaseUnitDisplayName(dto),
-      dto.purchaseUnit,
-      dto.purchaseToBaseRatio,
-      dto.currentPricePerPurchaseUnit,
-      dto.effectivePricePerPurchaseUnit ?? dto.currentPricePerPurchaseUnit ?? 0,
+      purchaseUnit,
+      purchaseToBaseRatio,
+      currentPricePerPurchaseUnit,
+      dto.effectivePricePerPurchaseUnit ?? currentPricePerPurchaseUnit,
       dto.weightG ?? null,
       dto.maxCapacityG ?? null,
       dto.safetyStock ?? null,
@@ -218,6 +244,42 @@ export class IngredientService {
       properties: dto.properties !== undefined ? dto.properties : existing.properties,
       nutritionProfile: nextNutritionProfile,
     });
+    const nextBaseUnit =
+      dto.baseUnit !== undefined ? dto.baseUnit : existing.baseUnit;
+    const nextUnitDisplayLabel = this.resolveBaseUnitDisplayName(
+      dto,
+      existing.unitDisplayLabel,
+    );
+    const nextPurchaseUnit =
+      dto.purchaseUnit !== undefined
+        ? this.resolvePurchaseUnitForPersistence(
+            {
+              purchaseUnit: dto.purchaseUnit,
+              baseUnit: nextBaseUnit,
+              baseUnitDisplayName: nextUnitDisplayLabel,
+              unitDisplayLabel: nextUnitDisplayLabel,
+            },
+            existing.purchaseUnit,
+          )
+        : this.resolvePurchaseUnitForPersistence(
+            {
+              purchaseUnit: existing.purchaseUnit,
+              baseUnit: nextBaseUnit,
+              baseUnitDisplayName: nextUnitDisplayLabel,
+              unitDisplayLabel: nextUnitDisplayLabel,
+            },
+          );
+    const nextPurchaseToBaseRatio =
+      dto.purchaseToBaseRatio ?? existing.purchaseToBaseRatio ?? 1;
+    const nextCurrentPricePerPurchaseUnit =
+      dto.currentPricePerPurchaseUnit ??
+      existing.currentPricePerPurchaseUnit ??
+      0;
+    const nextEffectivePricePerPurchaseUnit =
+      dto.effectivePricePerPurchaseUnit !== undefined
+        ? dto.effectivePricePerPurchaseUnit ?? nextCurrentPricePerPurchaseUnit
+        : existing.effectivePricePerPurchaseUnit ??
+          nextCurrentPricePerPurchaseUnit;
 
     const updated = new Ingredient(
       existing.id,
@@ -238,18 +300,12 @@ export class IngredientService {
         ? dto.purchaseChannel
         : existing.purchaseChannel,
       dto.notes !== undefined ? dto.notes : existing.notes,
-      dto.baseUnit !== undefined ? dto.baseUnit : existing.baseUnit,
-      this.resolveBaseUnitDisplayName(dto, existing.unitDisplayLabel),
-      dto.purchaseUnit !== undefined ? dto.purchaseUnit : existing.purchaseUnit,
-      dto.purchaseToBaseRatio !== undefined
-        ? dto.purchaseToBaseRatio
-        : existing.purchaseToBaseRatio,
-      dto.currentPricePerPurchaseUnit !== undefined
-        ? dto.currentPricePerPurchaseUnit
-        : existing.currentPricePerPurchaseUnit,
-      dto.effectivePricePerPurchaseUnit !== undefined
-        ? dto.effectivePricePerPurchaseUnit
-        : existing.effectivePricePerPurchaseUnit,
+      nextBaseUnit,
+      nextUnitDisplayLabel,
+      nextPurchaseUnit,
+      nextPurchaseToBaseRatio,
+      nextCurrentPricePerPurchaseUnit,
+      nextEffectivePricePerPurchaseUnit,
       dto.weightG !== undefined ? dto.weightG : existing.weightG,
       dto.maxCapacityG !== undefined ? dto.maxCapacityG : existing.maxCapacityG,
       dto.safetyStock !== undefined ? dto.safetyStock : existing.safetyStock,

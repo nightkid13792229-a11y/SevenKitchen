@@ -1,18 +1,19 @@
 <template>
   <view class="recipe-order-page">
-    <view class="product-hero">
+    <view class="recipe-info-section">
+      <view class="section-label">食谱信息</view>
       <image
         v-if="recipe.coverImageUrl"
         :src="normalizeImageUrl(recipe.coverImageUrl)"
-        class="hero-image"
+        class="recipe-cover-image"
         mode="aspectFill"
       />
-      <view v-else class="hero-image-placeholder">
+      <view v-else class="recipe-cover-placeholder">
         <text class="hero-placeholder-text">成品鲜食</text>
       </view>
 
-      <view class="hero-content">
-        <text class="recipe-name">{{ recipe.name || '成品鲜食' }}</text>
+      <view class="recipe-info-body">
+        <text class="recipe-info-title">{{ recipe.name || '成品鲜食' }}</text>
         <view class="recipe-tags">
           <text
             v-for="stage in recipe.applicableLifeStages"
@@ -30,28 +31,19 @@
           </text>
         </view>
 
-        <view class="hero-meta-row">
-          <text class="hero-meta-label">能量密度</text>
-          <text class="hero-meta-value">{{ recipe.energyDensityKcalPerKg || '-' }} kcal/kg</text>
-        </view>
-
-        <view class="hero-dog-card">
-          <view class="hero-dog-copy">
-            <text class="hero-dog-label">当前狗狗</text>
-            <text v-if="!selectedDog" class="hero-dog-value">请选择狗狗后查看饭量和价格</text>
-            <text v-else class="hero-dog-value">{{ dogSummaryText }}</text>
-            <text class="hero-dog-hint">{{ feedingHintText }}</text>
+        <view class="recipe-meta-grid">
+          <view class="recipe-meta-card">
+            <text class="recipe-meta-label">营养标准</text>
+            <text class="recipe-meta-value">{{ recipeNutritionStandardLabel }}</text>
           </view>
-          <picker
-            v-if="dogs.length > 0"
-            mode="selector"
-            :range="dogPickerOptions"
-            range-key="label"
-            @change="onDogPickerChange"
-          >
-            <view class="hero-dog-action">{{ selectedDog ? '切换' : '选择' }}</view>
-          </picker>
-          <button v-else class="hero-dog-action button-reset" @tap="goToCreateDog">创建</button>
+          <view class="recipe-meta-card">
+            <text class="recipe-meta-label">配方软件</text>
+            <text class="recipe-meta-value">{{ recipeFormulaSoftwareLabel }}</text>
+          </view>
+          <view class="recipe-meta-card">
+            <text class="recipe-meta-label">能量密度</text>
+            <text class="recipe-meta-value">{{ recipe.energyDensityKcalPerKg || '-' }} kcal/kg</text>
+          </view>
         </view>
       </view>
     </view>
@@ -68,69 +60,53 @@
       </button>
     </view>
 
-    <view class="section feeding-section" v-if="selectedDog">
+    <view class="section dog-feeding-section">
       <view class="section-title">
-        <text class="title-text">饭量参考</text>
+        <text class="title-text">狗狗档案与饭量参考</text>
+        <picker
+          v-if="dogs.length > 0"
+          mode="selector"
+          :range="dogPickerOptions"
+          range-key="label"
+          @change="onDogPickerChange"
+        >
+          <view class="section-action-button">{{ selectedDog ? '切换狗狗' : '选择狗狗' }}</view>
+        </picker>
+        <button v-else class="section-action-button button-reset" @tap="goToCreateDog">创建档案</button>
       </view>
 
-      <view class="feeding-grid">
-        <view class="feeding-item">
-          <text class="feeding-label">每日建议饭量</text>
-          <text class="feeding-value">{{ Math.round(displayDailyIntakeG) }}g/天</text>
+      <view v-if="!selectedDog" class="dog-empty-state">
+        <text class="dog-empty-title">请选择狗狗后查看饭量和价格</text>
+        <text class="dog-empty-copy">系统会结合狗狗档案和当前食谱计算参考饭量。</text>
+      </view>
+
+      <view v-else class="dog-feeding-grid">
+        <view class="dog-feeding-item dog-profile-item">
+          <text class="feeding-label">姓名</text>
+          <text class="feeding-value">{{ selectedDog.name }}</text>
         </view>
-        <view class="feeding-item">
+        <view class="dog-feeding-item">
+          <text class="feeding-label">体重</text>
+          <text class="feeding-value">{{ selectedDog.currentWeightKg }}kg</text>
+        </view>
+        <view class="dog-feeding-item">
+          <text class="feeding-label">每日主食能量</text>
+          <text class="feeding-value">{{ dailyMainFoodEnergyText }}</text>
+        </view>
+        <view class="dog-feeding-item">
           <text class="feeding-label">每日餐数</text>
           <text class="feeding-value">{{ selectedDog.mealsPerDay }}餐</text>
         </view>
-        <view class="feeding-item">
-          <text class="feeding-label">每餐参考量</text>
-          <text class="feeding-value">{{ Math.round(perMealG) }}g/餐</text>
-        </view>
-      </view>
-
-      <text class="section-note">饭量为喂食参考，实际购买总量由下方分装方案汇总决定。</text>
-
-      <view class="calculation-explanation">
-        <view class="explanation-header" @tap="toggleCalculationDetails">
-          <text class="explanation-title">查看计算过程</text>
-          <text class="toggle-icon">{{ showCalculationDetails ? '▲' : '▼' }}</text>
-        </view>
-
-        <view v-if="showCalculationDetails && dogCalcResult" class="explanation-content">
-          <view class="calc-cards">
-            <view class="calc-card">
-              <text class="card-title">狗狗体重和体态</text>
-              <text class="calc-line">{{ selectedDog.name }} 当前 {{ selectedDog.currentWeightKg }}kg，系统结合档案体态计算。</text>
-            </view>
-            <view class="calc-card">
-              <text class="card-title">每日能量需求</text>
-              <text class="calc-line">{{ Math.round(dogCalcResult.totalDer || 0) }} kcal/天</text>
-            </view>
-            <view class="calc-card">
-              <text class="card-title">零食热量扣除</text>
-              <text class="calc-line" v-if="dogCalcResult.treatDeduction && dogCalcResult.treatDeduction > 0">{{ Math.round(dogCalcResult.treatDeduction) }} kcal/天</text>
-              <text class="calc-line" v-else>未配置零食扣除</text>
-            </view>
-            <view class="calc-card">
-              <text class="card-title">鲜食热量和食谱密度</text>
-              <text class="calc-line">{{ Math.round(dogCalcResult.finalFoodKcal || 0) }} kcal/天 ÷ {{ recipe.energyDensityKcalPerKg }} kcal/kg</text>
-            </view>
-            <view class="calc-card highlight">
-              <text class="card-title">推算出的每日饭量</text>
-              <text class="calc-line strong">{{ Math.round(dogCalcResult.dailyIntakeG || displayDailyIntakeG) }}g/天，约 {{ Math.round(perMealG) }}g/餐</text>
-            </view>
-          </view>
+        <view class="dog-feeding-item daily-intake-item">
+          <text class="feeding-label">本食谱每日建议饭量</text>
+          <text class="feeding-value">{{ dailySuggestedIntakeText }}</text>
         </view>
       </view>
     </view>
 
     <view class="section package-plan-section" v-if="selectedDog">
       <view class="section-title">
-        <view class="title-stack">
-          <text class="title-text">当前分装方案</text>
-          <text class="title-subtitle">系统已按 {{ selectedCycleDays }} 天生成，您可以按冷冻空间或每餐习惯修改规格。</text>
-        </view>
-        <text class="custom-tag">可自定义</text>
+        <text class="title-text">当前分装方案</text>
       </view>
 
       <view class="cycle-options">
@@ -153,21 +129,6 @@
         >
           <text class="package-preview-main">{{ row.packageSpecG }}g × {{ row.packageCount }}袋</text>
           <text class="package-preview-sub">{{ row.packageSpecG * row.packageCount }}g</text>
-        </view>
-      </view>
-
-      <view class="total-summary package-summary">
-        <view class="summary-item">
-          <text class="summary-label">总净重</text>
-          <text class="summary-value">{{ Math.round(totalGrams) }}g</text>
-        </view>
-        <view class="summary-item">
-          <text class="summary-label">总袋数</text>
-          <text class="summary-value">{{ totalPackages }}袋</text>
-        </view>
-        <view class="summary-item">
-          <text class="summary-label">预计可喂</text>
-          <text class="summary-value">{{ estimatedFeedDays }}天</text>
         </view>
       </view>
 
@@ -215,8 +176,6 @@
         </view>
         <button class="btn-add-row" @tap="addPackagePlanRow">+ 添加另一种规格</button>
       </view>
-
-      <text class="section-note">订单总量由分装明细自动汇总，满 1000g 可下单。</text>
     </view>
 
     <view class="section source-plan-section" v-if="selectedDog">
@@ -439,6 +398,8 @@ interface Recipe {
   description?: string
   coverImageUrl?: string
   energyDensityKcalPerKg: number
+  nutritionStandard?: string
+  designSource?: string
   applicableLifeStages?: string[]
   targetHealthTags?: string[]
 }
@@ -687,6 +648,21 @@ const sourcePlanLabel = computed(() => getSourcePlanLabel(selectedSourcePlan.val
 const perMealG = computed(() => {
   if (!displayDailyIntakeG.value || !selectedDog.value?.mealsPerDay) return 0
   return displayDailyIntakeG.value / selectedDog.value.mealsPerDay
+})
+const recipeNutritionStandardLabel = computed(() =>
+  getNutritionStandardLabel(recipe.value.nutritionStandard || 'FEDIAF_2021')
+)
+const recipeFormulaSoftwareLabel = computed(() =>
+  recipe.value.designSource || 'SevenKitchen 配方系统'
+)
+const dailyMainFoodEnergyText = computed(() => {
+  const kcal = dogCalcResult.value?.finalFoodKcal
+  if (!kcal || !Number.isFinite(kcal)) return '计算中'
+  return `${Math.round(kcal)} kcal/天`
+})
+const dailySuggestedIntakeText = computed(() => {
+  if (!displayDailyIntakeG.value) return '计算中'
+  return `${Math.round(displayDailyIntakeG.value)}g/天`
 })
 
 const averagePricePerPackage = computed(() => {
@@ -1072,6 +1048,18 @@ function getHealthTagLabel(tagOrUuid: string): string {
   }
 
   return tagOrUuid
+}
+
+function getNutritionStandardLabel(standard: string): string {
+  const map: Record<string, string> = {
+    'FEDIAF_2021': 'FEDIAF 2021',
+    'AAFCO_2019': 'AAFCO 2019',
+    'AAFCO_2021': 'AAFCO 2021',
+    'AAFCO_2022': 'AAFCO 2022',
+    'NRC_2006': 'NRC 2006',
+    'GB_T_31216': '国标 GB/T 31216',
+  }
+  return map[standard] || standard
 }
 
 function dismissWarning() {
@@ -2896,13 +2884,29 @@ function goToCreateDog() {
   margin-bottom: 20rpx;
 }
 
+.recipe-info-section {
+  background-color: #fff;
+  margin-bottom: 20rpx;
+}
+
+.section-label {
+  display: block;
+  padding: 24rpx 28rpx 16rpx;
+  font-size: 28rpx;
+  font-weight: 800;
+  color: #25282b;
+}
+
 .hero-image,
-.hero-image-placeholder {
+.hero-image-placeholder,
+.recipe-cover-image,
+.recipe-cover-placeholder {
   width: 100%;
   height: 360rpx;
 }
 
-.hero-image-placeholder {
+.hero-image-placeholder,
+.recipe-cover-placeholder {
   display: flex;
   align-items: center;
   justify-content: center;
@@ -2918,7 +2922,12 @@ function goToCreateDog() {
   padding: 28rpx 28rpx 32rpx;
 }
 
-.recipe-name {
+.recipe-info-body {
+  padding: 28rpx 28rpx 32rpx;
+}
+
+.recipe-name,
+.recipe-info-title {
   display: block;
   font-size: 40rpx;
   font-weight: 800;
@@ -2978,11 +2987,40 @@ function goToCreateDog() {
 }
 
 .hero-meta-value,
+.recipe-meta-value,
 .summary-value,
 .feeding-value {
   font-size: 28rpx;
   color: #25282b;
   font-weight: 700;
+}
+
+.recipe-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12rpx;
+  margin-top: 24rpx;
+}
+
+.recipe-meta-card {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  padding: 18rpx;
+  border-radius: 8rpx;
+  background-color: #f8faf9;
+}
+
+.recipe-meta-label {
+  font-size: 23rpx;
+  color: #687078;
+  line-height: 1.3;
+}
+
+.recipe-meta-value {
+  line-height: 1.35;
+  word-break: break-word;
 }
 
 .hero-dog-card {
@@ -3027,6 +3065,7 @@ function goToCreateDog() {
 }
 
 .hero-dog-action,
+.section-action-button,
 .btn-secondary-full {
   border-radius: 8rpx;
   border: 2rpx solid #2f8f4e;
@@ -3040,6 +3079,13 @@ function goToCreateDog() {
   min-width: 104rpx;
   height: 60rpx;
   line-height: 60rpx;
+}
+
+.section-action-button {
+  min-width: 136rpx;
+  height: 60rpx;
+  line-height: 60rpx;
+  padding: 0 18rpx;
 }
 
 .button-reset {
@@ -3073,7 +3119,36 @@ function goToCreateDog() {
   gap: 12rpx;
 }
 
-.feeding-item {
+.dog-empty-state {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  padding: 24rpx;
+  border-radius: 8rpx;
+  background-color: #f7faf8;
+  border: 1rpx solid #e3ede5;
+}
+
+.dog-empty-title {
+  font-size: 28rpx;
+  font-weight: 800;
+  color: #25282b;
+}
+
+.dog-empty-copy {
+  font-size: 24rpx;
+  color: #687078;
+  line-height: 1.5;
+}
+
+.dog-feeding-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12rpx;
+}
+
+.feeding-item,
+.dog-feeding-item {
   flex: 1;
   min-width: 0;
   display: flex;
@@ -3082,6 +3157,16 @@ function goToCreateDog() {
   padding: 18rpx;
   background-color: #f8faf9;
   border-radius: 8rpx;
+}
+
+.dog-profile-item,
+.daily-intake-item {
+  grid-column: span 1;
+}
+
+.dog-feeding-item:nth-child(3),
+.daily-intake-item {
+  background-color: #f4fbf5;
 }
 
 .section-note {

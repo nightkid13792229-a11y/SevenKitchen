@@ -76,8 +76,8 @@ describe('recipe-order phase one UI contract', () => {
 
   it('presents the redesigned purchase decision sections in order', () => {
     const sectionOrder = [
-      '请选择狗狗后查看饭量和价格',
-      '饭量参考',
+      '食谱信息',
+      '狗狗档案与饭量参考',
       '当前分装方案',
       '原料采购方案',
       '原料清单',
@@ -99,12 +99,25 @@ describe('recipe-order phase one UI contract', () => {
     }
   });
 
-  it('makes custom package planning obvious without quick meal-size editing', () => {
-    expect(source).toContain('可自定义');
+  it('classifies the top recipe, dog feeding, and package blocks without repeated package summaries', () => {
+    expect(templateSource).toContain('食谱信息');
+    expect(templateSource).toContain('营养标准');
+    expect(templateSource).toContain('配方软件');
+    expect(templateSource).toContain('能量密度');
+    expect(templateSource).toContain('狗狗档案与饭量参考');
+    expect(templateSource).toContain('每日主食能量');
+    expect(templateSource).toContain('每日餐数');
+    expect(templateSource).toContain('本食谱每日建议饭量');
     expect(source).toContain('修改分装方案');
     expect(source).toContain('+ 添加另一种规格');
-    expect(source).toContain('订单总量由分装明细自动汇总，满 1000g 可下单。');
     expect(source).toContain('当前 {{ Math.round(totalGrams) }}g，最低订购量为 1000g');
+    expect(templateSource).not.toContain('查看计算过程');
+    expect(templateSource).not.toContain('可自定义');
+    expect(templateSource).not.toContain('系统已按 {{ selectedCycleDays }} 天生成');
+    expect(templateSource).not.toContain('总净重');
+    expect(templateSource).not.toContain('总袋数');
+    expect(templateSource).not.toContain('预计可喂');
+    expect(templateSource).not.toContain('订单总量由分装明细自动汇总');
   });
 
   it('shows source plan cards with pricing impact copy', () => {

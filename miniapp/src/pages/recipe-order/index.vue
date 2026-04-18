@@ -176,7 +176,7 @@
     <view class="section ingredient-source-section" v-if="selectedDog">
       <view class="section-title">
         <view class="title-stack">
-          <text class="title-text">采购来源</text>
+          <text class="title-text">原料采购来源</text>
         </view>
       </view>
 
@@ -195,7 +195,6 @@
 
       <view class="ingredient-summary">
         <text class="ingredient-summary-title">{{ sourcePlanDescription }}</text>
-        <text class="ingredient-summary-meta">{{ ingredientSummaryMeta }}</text>
       </view>
 
       <view v-if="totalIngredientCount === 0" class="ingredient-empty-state">
@@ -204,16 +203,16 @@
 
       <view v-if="totalIngredientCount > 0" class="ingredients-content">
         <view v-if="foodIngredients.length > 0" class="ingredient-group">
-          <view class="ingredient-category-title">主要食材</view>
+          <view class="ingredient-category-title">原料列表</view>
           <view class="ingredient-header compact">
             <text class="ingredient-header-item name">原料名称</text>
-            <text class="ingredient-header-item spec">规格</text>
             <text class="ingredient-header-item channel">采购渠道</text>
             <text class="ingredient-header-item amount">用量</text>
           </view>
           <view v-for="(ingredient, idx) in foodIngredients" :key="'food-' + idx" class="ingredient-row-compact">
-            <text class="ingredient-name">{{ ingredient.name }}</text>
-            <text class="ingredient-spec">{{ ingredient.brand || '-' }}</text>
+            <text class="ingredient-name ingredient-name-button" @tap="showIngredientDetail(ingredient)">
+              {{ ingredient.name }}
+            </text>
             <text class="ingredient-channel-tag">{{ ingredient.purchaseChannel || '默认来源' }}</text>
             <text class="ingredient-amount">
               {{ formatIngredientAmount(ingredient) }}
@@ -225,13 +224,13 @@
           <view class="ingredient-category-title">营养补剂</view>
           <view class="ingredient-header compact">
             <text class="ingredient-header-item name">原料名称</text>
-            <text class="ingredient-header-item spec">规格</text>
             <text class="ingredient-header-item channel">采购渠道</text>
             <text class="ingredient-header-item amount">用量</text>
           </view>
           <view v-for="(ingredient, idx) in supplementIngredients" :key="'supplement-' + idx" class="ingredient-row-compact">
-            <text class="ingredient-name">{{ ingredient.name }}</text>
-            <text class="ingredient-spec">{{ ingredient.brand || '-' }}</text>
+            <text class="ingredient-name ingredient-name-button" @tap="showIngredientDetail(ingredient)">
+              {{ ingredient.name }}
+            </text>
             <text class="ingredient-channel-tag supplement">{{ ingredient.purchaseChannel || '默认来源' }}</text>
             <text class="ingredient-amount">
               {{ formatIngredientAmount(ingredient) }}
@@ -440,6 +439,7 @@ interface IngredientCostItem {
   amount: number
   unit: string
   brand?: string
+  productModel?: string
   purchaseChannel?: string
   displayUnit?: string
   unitCost: number
@@ -742,13 +742,6 @@ const supplementIngredients = computed(() => {
 })
 
 const totalIngredientCount = computed(() => foodIngredients.value.length + supplementIngredients.value.length)
-const ingredientSummaryMeta = computed(() => {
-  const totalFoodKg = foodIngredients.value.reduce(
-    (sum, item) => sum + (item.netAmount ?? item.amount),
-    0,
-  )
-  return `${foodIngredients.value.length}种食材 · ${supplementIngredients.value.length}种补剂 · 净重 ${totalFoodKg.toFixed(2)}kg`
-})
 const sourcePlanDescription = computed(() => getSourcePlanDescription(selectedSourcePlan.value))
 
 function formatSourcePlanShortName(code: IngredientSourcePlanCode): string {
@@ -785,6 +778,18 @@ function formatIngredientAmount(ingredient: IngredientCostItem): string {
   }
 
   return `${amount.toFixed(1)}${displayUnit}`
+}
+
+function showIngredientDetail(ingredient: IngredientCostItem) {
+  uni.showModal({
+    title: ingredient.name,
+    content: [
+      `品牌：${ingredient.brand || '-'}`,
+      `规格：${ingredient.productModel || '-'}`,
+    ].join('\n'),
+    showCancel: false,
+    confirmText: '知道了',
+  })
 }
 
 function togglePackageEditor() {
@@ -3729,7 +3734,6 @@ function goToCreateDog() {
 
 .ingredient-header-item,
 .ingredient-name,
-.ingredient-spec,
 .ingredient-channel-tag,
 .ingredient-amount {
   min-width: 0;
@@ -3744,11 +3748,6 @@ function goToCreateDog() {
 
 .ingredient-header-item.name,
 .ingredient-name {
-  flex: 1.2;
-}
-
-.ingredient-header-item.spec,
-.ingredient-spec {
   flex: 1;
 }
 
@@ -3769,9 +3768,9 @@ function goToCreateDog() {
   color: #25282b;
 }
 
-.ingredient-spec {
-  font-size: 24rpx;
-  color: #687078;
+.ingredient-name-button {
+  color: #257b43;
+  text-decoration: underline;
 }
 
 .ingredient-channel-tag {

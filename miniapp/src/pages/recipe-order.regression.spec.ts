@@ -79,7 +79,7 @@ describe('recipe-order phase one UI contract', () => {
       '食谱信息',
       'dogProfileSummaryText',
       '订购天数',
-      '采购来源',
+      '原料采购来源',
       '产品说明',
       '分装及物流说明',
       'bottom-bar',
@@ -163,15 +163,18 @@ describe('recipe-order phase one UI contract', () => {
 
   it('merges source plan selection and ingredient list into one compact section', () => {
     expect(templateSource).toContain('ingredient-source-section');
-    expect(templateSource).toContain('采购来源');
+    expect(templateSource).toContain('原料采购来源');
     expect(templateSource).not.toContain('方案会影响原料清单和订单价格');
     expect(templateSource).toContain('source-plan-card compact');
     expect(templateSource).toContain('formatSourcePlanShortName(option.code)');
     expect(templateSource).toContain('sourcePlanDescription');
-    expect(templateSource).toContain('ingredientSummaryMeta');
+    expect(source).not.toContain('ingredientSummaryMeta');
+    expect(source).not.toContain('种食材 · ${supplementIngredients.value.length}种补剂');
+    expect(source).not.toContain('净重 ${totalFoodKg.toFixed(2)}kg');
     expect(templateSource).toContain('原料清单生成中，请稍后查看');
     expect(templateSource).not.toContain('<text class="title-text">原料采购方案</text>');
     expect(templateSource).not.toContain('<text class="title-text">原料清单</text>');
+    expect(templateSource).not.toContain('<text class="title-text">采购来源</text>');
     expect(templateSource).not.toContain('<text class="title-text">原料与采购</text>');
     expect(templateSource).not.toContain('当前部分原料暂无替代来源时');
     expect(templateSource).not.toContain('>已选</text>');
@@ -196,11 +199,21 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).not.toContain('toggleIngredientDetails');
     expect(source).not.toContain('查看全部 ${totalIngredientCount.value} 种原料');
     expect(source).not.toContain('收起原料清单');
-    expect(source).toContain('原料名称');
-    expect(source).toContain('规格');
+    expect(templateSource).toContain('原料列表');
+    expect(templateSource).toContain('原料名称');
+    expect(templateSource).not.toContain('<text class="ingredient-header-item spec">规格</text>');
+    expect(templateSource).not.toContain("<text class=\"ingredient-spec\">{{ ingredient.brand || '-' }}</text>");
+    expect(templateSource).toContain('@tap="showIngredientDetail(ingredient)"');
+    expect(templateSource).toContain('ingredient-name-button');
     expect(source).toContain('采购渠道');
     expect(source).toContain('用量');
     expect(source).toContain('ingredient-channel-tag');
+    expect(source).toContain('productModel?: string');
+    expect(source).toContain('function showIngredientDetail(ingredient: IngredientCostItem)');
+    expect(source).toContain('uni.showModal({');
+    expect(source).toContain('title: ingredient.name');
+    expect(source).toContain("品牌：${ingredient.brand || '-'}");
+    expect(source).toContain("规格：${ingredient.productModel || '-'}");
   });
 
   it('explains product handling, storage, production, and logistics before checkout', () => {

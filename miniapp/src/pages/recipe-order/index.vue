@@ -1312,6 +1312,30 @@ function selectCycle(days: number) {
   loadSourcePlanPricePreviews()
 }
 
+function getPrimaryPackageSpecG(plan: PackagePlanItem[]): number {
+  const primaryRow = [...plan].sort(
+    (left, right) =>
+      right.packageCount - left.packageCount
+      || right.packageSpecG - left.packageSpecG,
+  )[0]
+
+  return primaryRow?.packageSpecG || 1
+}
+
+function buildPricingPreviewItem() {
+  return {
+    recipeId: recipeId.value,
+    quantityG: Math.round(totalGrams.value),
+    packageCount: totalPackages.value,
+    packageSpecG: getPrimaryPackageSpecG(normalizedPackagePlan.value),
+    packagePlan: normalizedPackagePlan.value,
+    cycleDays: selectedCycleDays.value,
+    dailyIntakeG: displayDailyIntakeG.value,
+    preparationMethod: preparationMethod.value || undefined,
+    cookingMethod: cookingMethod.value || undefined,
+  }
+}
+
 async function requestPricingPreview(sourcePlan: IngredientSourcePlanCode) {
   return request({
     url: '/orders/pricing/preview',
@@ -1320,13 +1344,7 @@ async function requestPricingPreview(sourcePlan: IngredientSourcePlanCode) {
       dogId: selectedDogId.value,
       type: 'FRESH_FOOD',
       ingredientSourcePlan: sourcePlan,
-      items: [{
-        recipeId: recipeId.value,
-        packagePlan: normalizedPackagePlan.value,
-        dailyIntakeG: displayDailyIntakeG.value,
-        preparationMethod: preparationMethod.value || undefined,
-        cookingMethod: cookingMethod.value || undefined,
-      }]
+      items: [buildPricingPreviewItem()]
     }
   })
 }

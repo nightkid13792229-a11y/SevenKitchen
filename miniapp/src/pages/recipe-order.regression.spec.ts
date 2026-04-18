@@ -40,6 +40,14 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).not.toContain('packagePlan: packagePlan.value,');
   });
 
+  it('sends legacy pricing preview fields alongside packagePlan for production API compatibility', () => {
+    expect(source).toContain('function buildPricingPreviewItem');
+    expect(source).toContain('quantityG: Math.round(totalGrams.value)');
+    expect(source).toContain('packageCount: totalPackages.value');
+    expect(source).toContain('packageSpecG: getPrimaryPackageSpecG(normalizedPackagePlan.value)');
+    expect(source).toContain('cycleDays: selectedCycleDays.value');
+  });
+
   it('debounces package input-driven price preview refreshes', () => {
     expect(source).toContain('pricePreviewDebounceTimer');
     expect(source).toContain('function schedulePricePreview');

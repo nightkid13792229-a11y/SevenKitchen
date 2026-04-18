@@ -27,6 +27,7 @@ export interface PackagePlanTotal {
 export const DEFAULT_ORDER_CYCLE_DAYS = 7
 export const ORDER_CYCLE_OPTIONS = [7, 15, 30] as const
 export const MIN_ORDER_WEIGHT_G = 1000
+export const MIN_PACKAGE_SPEC_G = 30
 
 export const SOURCE_PLAN_OPTIONS: Array<{
   code: IngredientSourcePlanCode
@@ -56,7 +57,7 @@ export function buildDefaultPackagePlan(
   const mealsPerDay = normalizePositiveInteger(input.mealsPerDay, 1)
   const days = normalizePositiveInteger(input.days, DEFAULT_ORDER_CYCLE_DAYS)
   const dailyIntakeG = normalizePositiveNumber(input.dailyIntakeG, 0)
-  const packageSpecG = Math.max(1, Math.round(dailyIntakeG / mealsPerDay))
+  const packageSpecG = Math.max(MIN_PACKAGE_SPEC_G, Math.round(dailyIntakeG / mealsPerDay))
 
   return [
     {
@@ -122,11 +123,16 @@ function normalizePackageRowValue(value: number | null | undefined): number {
   return Number.isFinite(normalized) && normalized > 0 ? normalized : 0
 }
 
+function normalizePackageSpecG(value: number | null | undefined): number {
+  const normalized = normalizePackageRowValue(value)
+  return normalized > 0 ? Math.max(MIN_PACKAGE_SPEC_G, normalized) : 0
+}
+
 function addPackageRowTotals(
   total: PackagePlanTotal,
   row: PackagePlanRowInput | null | undefined,
 ): PackagePlanTotal {
-  const packageSpecG = normalizePackageRowValue(row?.packageSpecG)
+  const packageSpecG = normalizePackageSpecG(row?.packageSpecG)
   const packageCount = normalizePackageRowValue(row?.packageCount)
 
   if (!packageSpecG || !packageCount) {

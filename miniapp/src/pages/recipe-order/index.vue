@@ -113,7 +113,7 @@
           v-for="days in ORDER_CYCLE_OPTIONS"
           :key="days"
           class="cycle-option"
-          :class="{ active: selectedCycleDays === days }"
+          :class="{ active: selectedCycleDays === days, disabled: isCustomPackagePlan }"
           @tap="selectCycle(days)"
         >
           <text class="cycle-text">{{ days }}天</text>
@@ -123,7 +123,7 @@
       <view class="package-plan-toolbar">
         <text class="package-plan-inline-summary">{{ packagePlanInlineSummaryText }}</text>
         <button class="package-edit-button" @tap="togglePackageEditor">
-          {{ showPackageEditor ? '收起' : '自定义分装' }}
+          {{ showPackageEditor ? '取消自定义' : '自定义分装' }}
         </button>
       </view>
 
@@ -360,6 +360,7 @@ import { request } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
 import {
   DEFAULT_ORDER_CYCLE_DAYS,
+  MIN_PACKAGE_SPEC_G,
   ORDER_CYCLE_OPTIONS,
   SOURCE_PLAN_OPTIONS,
   buildDefaultPackagePlan,
@@ -550,6 +551,7 @@ const sourcePlanPriceLoading = ref(false)
 const isPricePreviewLoading = ref(false)
 const pricePreviewError = ref('')
 const showPackageEditor = ref(false)
+const isCustomPackagePlan = ref(false)
 let pricingPreviewRequestSeq = 0
 let dogCalcRequestSeq = 0
 let sourcePlanPriceRequestSeq = 0
@@ -787,7 +789,23 @@ function formatIngredientAmount(ingredient: IngredientCostItem): string {
 }
 
 function togglePackageEditor() {
-  showPackageEditor.value = !showPackageEditor.value
+  if (isCustomPackagePlan.value) {
+    cancelCustomPackagePlan()
+    return
+  }
+
+  isCustomPackagePlan.value = true
+  showPackageEditor.value = true
+}
+
+function cancelCustomPackagePlan() {
+  clearPricePreviewDebounce()
+  isCustomPackagePlan.value = false
+  showPackageEditor.value = false
+  rebuildPackagePlan()
+  pricePreviewError.value = ''
+  loadPricePreview()
+  loadSourcePlanPricePreviews()
 }
 
 // 自动配置参数（从订单详情页"再次购买"传递）
@@ -1130,6 +1148,8 @@ function selectDog(dogId: string) {
   pricingPreviewRequestSeq += 1
   sourcePlanPriceRequestSeq += 1
   selectedDogId.value = dogId
+  isCustomPackagePlan.value = false
+  showPackageEditor.value = false
   packagePlan.value = []
   displayDailyIntakeG.value = 0
   dogCalcResult.value = null
@@ -1255,7 +1275,7 @@ function rebuildPackagePlan() {
 
 function normalizePackagePlanRow(row: PackagePlanItem): PackagePlanItem {
   return {
-    packageSpecG: Math.max(1, Math.floor(Number(row.packageSpecG) || 1)),
+    packageSpecG: Math.max(MIN_PACKAGE_SPEC_G, Math.floor(Number(row.packageSpecG) || MIN_PACKAGE_SPEC_G)),
     packageCount: Math.max(1, Math.floor(Number(row.packageCount) || 1)),
   }
 }
@@ -1288,7 +1308,7 @@ function addPackagePlanRow() {
   packagePlan.value = [
     ...packagePlan.value,
     {
-      packageSpecG: Math.max(1, Math.round(perMealG.value || displayDailyIntakeG.value || 100)),
+      packageSpecG: Math.max(MIN_PACKAGE_SPEC_G, Math.round(perMealG.value || displayDailyIntakeG.value || 100)),
       packageCount: 1,
     },
   ]
@@ -1297,7 +1317,8 @@ function addPackagePlanRow() {
 }
 
 function updatePackagePlanRow(index: number, field: keyof PackagePlanItem, value: string | number) {
-  const nextValue = Math.max(1, Math.floor(Number(value) || 1))
+  const minimumValue = field === 'packageSpecG' ? MIN_PACKAGE_SPEC_G : 1
+  const nextValue = Math.max(minimumValue, Math.floor(Number(value) || minimumValue))
   packagePlan.value = packagePlan.value.map((row, rowIndex) =>
     rowIndex === index ? { ...row, [field]: nextValue } : row
   )
@@ -1349,6 +1370,14 @@ function toggleCalculationDetails() {
 }
 
 function selectCycle(days: number) {
+  if (isCustomPackagePlan.value) {
+    uni.showToast({
+      title: '请先取消自定义分装后再切换订购天数',
+      icon: 'none',
+    })
+    return
+  }
+
   selectedCycleDays.value = days
   showPackageEditor.value = false
   rebuildPackagePlan()
@@ -2010,6 +2039,10 @@ function goToCreateDog() {
 .cycle-option.active {
   border-color: #1890ff;
   background-color: #f0f9ff;
+}
+
+.cycle-option.disabled {
+  opacity: 0.5;
 }
 
 .cycle-text {
@@ -3354,6 +3387,10 @@ function goToCreateDog() {
 .cycle-option.active {
   border-color: #2f8f4e;
   background-color: #f4fbf5;
+}
+
+.cycle-option.disabled {
+  opacity: 0.5;
 }
 
 .cycle-text {

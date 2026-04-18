@@ -109,6 +109,13 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).toContain('本食谱参考饭量');
     expect(templateSource).toContain('packagePlanInlineSummaryText');
     expect(source).toContain('自定义分装');
+    expect(source).toContain('isCustomPackagePlan');
+    expect(source).toContain('cancelCustomPackagePlan');
+    expect(source).toContain('请先取消自定义分装后再切换订购天数');
+    expect(source).toContain('MIN_PACKAGE_SPEC_G');
+    expect(source).toContain('Math.max(MIN_PACKAGE_SPEC_G');
+    expect(templateSource).toContain("{{ showPackageEditor ? '取消自定义' : '自定义分装' }}");
+    expect(templateSource).toContain(':class="{ active: selectedCycleDays === days, disabled: isCustomPackagePlan }"');
     expect(source).toContain('v-if="dogs.length > 1"');
     expect(source).toContain("].join(' ｜ ')");
     expect(source).toContain('.recipe-meta-card');

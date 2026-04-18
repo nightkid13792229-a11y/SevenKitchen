@@ -7,6 +7,7 @@ describe('recipe-order phase one UI contract', () => {
     resolve(process.cwd(), 'src/pages/recipe-order/index.vue'),
     'utf-8',
   );
+  const templateSource = source.slice(0, source.indexOf('<script setup'));
 
   it('exposes the three default order cycles and no custom days input', () => {
     expect(source).toContain('ORDER_CYCLE_OPTIONS');
@@ -63,5 +64,72 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).toContain("uni.setStorageSync('direct_buy_order_config'");
     expect(source).toContain("preparationMethod: preparationMethod.value || 'CHOPPED'");
     expect(source).toContain("cookingMethod: cookingMethod.value || 'RAW'");
+  });
+
+  it('presents the redesigned purchase decision sections in order', () => {
+    const sectionOrder = [
+      '请选择狗狗后查看饭量和价格',
+      '饭量参考',
+      '当前分装方案',
+      '原料采购方案',
+      '原料清单',
+      '产品说明',
+      '分装及物流说明',
+      'bottom-bar',
+    ];
+
+    const positions = sectionOrder.map((text) => templateSource.indexOf(text));
+    positions.forEach((position, index) => {
+      expect(position, `${sectionOrder[index]} should exist`).toBeGreaterThan(-1);
+    });
+
+    for (let index = 1; index < positions.length; index += 1) {
+      expect(
+        positions[index],
+        `${sectionOrder[index]} should appear after ${sectionOrder[index - 1]}`,
+      ).toBeGreaterThan(positions[index - 1]);
+    }
+  });
+
+  it('makes custom package planning obvious without quick meal-size editing', () => {
+    expect(source).toContain('可自定义');
+    expect(source).toContain('修改分装方案');
+    expect(source).toContain('+ 添加另一种规格');
+    expect(source).toContain('订单总量由分装明细自动汇总，满 1000g 可下单。');
+    expect(source).toContain('当前 {{ Math.round(totalGrams) }}g，最低订购量为 1000g');
+  });
+
+  it('shows source plan cards with pricing impact copy', () => {
+    expect(source).toContain('source-plan-card');
+    expect(source).toContain('方案会影响原料清单和订单价格');
+    expect(source).toContain('formatSourcePlanPrice(option.code)');
+    expect(source).toContain('loadSourcePlanPricePreviews');
+  });
+
+  it('shows a compact ingredient summary and the full four-column ingredient list', () => {
+    expect(source).toContain('ingredient-summary-title');
+    expect(source).toContain('查看全部 ${totalIngredientCount.value} 种原料');
+    expect(source).toContain('原料名称');
+    expect(source).toContain('规格');
+    expect(source).toContain('采购渠道');
+    expect(source).toContain('用量');
+    expect(source).toContain('ingredient-channel-tag');
+  });
+
+  it('explains product handling, storage, production, and logistics before checkout', () => {
+    expect(source).toContain('为什么要把所有原料打碎？');
+    expect(source).toContain('保存方法、保质期和烹饪说明');
+    expect(source).toContain('当日采购当日制作，冷冻 24 小时后发货');
+    expect(source).toContain('分装及物流说明');
+    expect(source).toContain('按袋真空分装');
+  });
+
+  it('uses bag-based bottom pricing states instead of daily pricing', () => {
+    expect(source).toContain('bottomPriceTitle');
+    expect(source).toContain('bottomPriceSubtitle');
+    expect(source).toContain('¥${averagePricePerPackage.value.toFixed(2)}/袋');
+    expect(source).toContain('多规格共 ${totalPackages.value}袋');
+    expect(source).not.toContain('每日预估');
+    expect(source).not.toContain('pricePerDayText');
   });
 });

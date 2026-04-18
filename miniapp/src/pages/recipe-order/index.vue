@@ -1,17 +1,18 @@
 <template>
   <view class="recipe-order-page">
-    <!-- 食谱基本信息 -->
-    <view class="recipe-header">
-      <view class="recipe-cover-wrapper">
-        <image
-          v-if="recipe.coverImageUrl"
-          :src="normalizeImageUrl(recipe.coverImageUrl)"
-          class="recipe-cover"
-          mode="aspectFill"
-        />
+    <view class="product-hero">
+      <image
+        v-if="recipe.coverImageUrl"
+        :src="normalizeImageUrl(recipe.coverImageUrl)"
+        class="hero-image"
+        mode="aspectFill"
+      />
+      <view v-else class="hero-image-placeholder">
+        <text class="hero-placeholder-text">成品鲜食</text>
       </view>
-      <view class="recipe-info">
-        <text class="recipe-name">{{ recipe.name }}</text>
+
+      <view class="hero-content">
+        <text class="recipe-name">{{ recipe.name || '成品鲜食' }}</text>
         <view class="recipe-tags">
           <text
             v-for="stage in recipe.applicableLifeStages"
@@ -28,154 +29,108 @@
             {{ getHealthTagLabel(tag) }}
           </text>
         </view>
-      </view>
-    </view>
 
-    <!-- 选择狗狗 -->
-    <view class="section dog-section">
-      <view class="section-title">
-        <text class="title-text">选择狗狗</text>
-        <text class="required">*</text>
-      </view>
-
-      <view v-if="dogs.length === 0" class="empty-dogs">
-        <text class="empty-text">暂无狗狗档案</text>
-        <button class="btn-create-dog" @tap="goToCreateDog">创建狗狗档案</button>
-      </view>
-
-      <picker v-else mode="selector" :range="dogPickerOptions" range-key="label" @change="onDogPickerChange">
-        <view class="dog-picker">
-          <text v-if="!selectedDog" class="picker-placeholder">请选择狗狗</text>
-          <view v-else class="dog-selected">
-            <text class="dog-emoji">🐶</text>
-            <text class="dog-text">{{ selectedDog?.name || '-' }} | {{ selectedDog?.breedName || '-' }} | {{ selectedDog?.currentWeightKg || '-' }}kg | {{ selectedDog?.mealsPerDay || '-' }}餐/天</text>
-            <text class="picker-arrow">▼</text>
-          </view>
+        <view class="hero-meta-row">
+          <text class="hero-meta-label">能量密度</text>
+          <text class="hero-meta-value">{{ recipe.energyDensityKcalPerKg || '-' }} kcal/kg</text>
         </view>
-      </picker>
+
+        <view class="hero-dog-card">
+          <view class="hero-dog-copy">
+            <text class="hero-dog-label">当前狗狗</text>
+            <text v-if="!selectedDog" class="hero-dog-value">请选择狗狗后查看饭量和价格</text>
+            <text v-else class="hero-dog-value">{{ dogSummaryText }}</text>
+            <text class="hero-dog-hint">{{ feedingHintText }}</text>
+          </view>
+          <picker
+            v-if="dogs.length > 0"
+            mode="selector"
+            :range="dogPickerOptions"
+            range-key="label"
+            @change="onDogPickerChange"
+          >
+            <view class="hero-dog-action">{{ selectedDog ? '切换' : '选择' }}</view>
+          </picker>
+          <button v-else class="hero-dog-action button-reset" @tap="goToCreateDog">创建</button>
+        </view>
+      </view>
     </view>
 
-    <!-- 生命阶段不匹配警告 -->
     <view v-if="!isLifeStageMatch && selectedDog && showWarning" class="warning-card">
       <view class="warning-header">
-        <text class="warning-icon">⚠️</text>
-        <text class="warning-title">生命阶段不匹配</text>
+        <text class="warning-title">生命阶段提醒</text>
       </view>
       <text class="warning-text">
-        该食谱适用于"{{ getLifeStageLabel(recipe.applicableLifeStages[0]) }}"，
-        您选择的狗狗"{{ selectedDog.name }}"是"{{ getDogLifeStageLabel(selectedDog) }}"阶段，
-        可能不太适合。
-      </text>
-      <text class="warning-text">
-        建议选择其他食谱。
+        该食谱可能不完全适合当前生命阶段，建议确认后再下单。
       </text>
       <button class="btn-continue" @tap="dismissWarning">
-        我已知晓，仍要继续
+        我已知晓，继续订购
       </button>
     </view>
 
-    <!-- 饭量参考 -->
     <view class="section feeding-section" v-if="selectedDog">
       <view class="section-title">
         <text class="title-text">饭量参考</text>
       </view>
 
-      <view class="feeding-info">
+      <view class="feeding-grid">
         <view class="feeding-item">
-          <text class="feeding-label">每日饭量</text>
+          <text class="feeding-label">每日建议饭量</text>
           <text class="feeding-value">{{ Math.round(displayDailyIntakeG) }}g/天</text>
         </view>
         <view class="feeding-item">
-          <text class="feeding-label">每餐饭量</text>
+          <text class="feeding-label">每日餐数</text>
+          <text class="feeding-value">{{ selectedDog.mealsPerDay }}餐</text>
+        </view>
+        <view class="feeding-item">
+          <text class="feeding-label">每餐参考量</text>
           <text class="feeding-value">{{ Math.round(perMealG) }}g/餐</text>
         </view>
       </view>
 
-      <!-- 计算说明 -->
+      <text class="section-note">饭量为喂食参考，实际购买总量由下方分装方案汇总决定。</text>
+
       <view class="calculation-explanation">
         <view class="explanation-header" @tap="toggleCalculationDetails">
-          <view class="explanation-title-row">
-            <text class="explanation-title">饭量计算过程</text>
-            <text class="toggle-icon">{{ showCalculationDetails ? '▲' : '▼' }}</text>
-          </view>
+          <text class="explanation-title">查看计算过程</text>
+          <text class="toggle-icon">{{ showCalculationDetails ? '▲' : '▼' }}</text>
         </view>
 
         <view v-if="showCalculationDetails && dogCalcResult" class="explanation-content">
-          <!-- 计算卡片 -->
           <view class="calc-cards">
-
-            <!-- ① 每日能量需求 -->
             <view class="calc-card">
-              <text class="card-title">每日能量需求 (DER)</text>
-              <view class="calc-result">
-                <text class="result-value">{{ Math.round(dogCalcResult.totalDer || 0) }} kcal/天</text>
-              </view>
+              <text class="card-title">狗狗体重和体态</text>
+              <text class="calc-line">{{ selectedDog.name }} 当前 {{ selectedDog.currentWeightKg }}kg，系统结合档案体态计算。</text>
             </view>
-
-            <!-- ② 每日零食能量 -->
             <view class="calc-card">
-              <text class="card-title">每日零食能量</text>
-              <view v-if="dogCalcResult.treatDeduction > 0" class="calc-result">
-                <text class="result-value">{{ Math.round(dogCalcResult.treatDeduction) }} kcal/天</text>
-                <text v-if="dogCalcResult.isTreatCapped" class="result-warning">⚠️ 已触发10%安全上限</text>
-              </view>
-              <view v-else class="calc-result">
-                <text class="result-note">未配置零食</text>
-              </view>
+              <text class="card-title">每日能量需求</text>
+              <text class="calc-line">{{ Math.round(dogCalcResult.totalDer || 0) }} kcal/天</text>
             </view>
-
-            <!-- ③ 每日鲜食能量 -->
             <view class="calc-card">
-              <text class="card-title">每日鲜食能量</text>
-              <view class="calc-result">
-                <text class="result-value">{{ Math.round(dogCalcResult.finalFoodKcal) }} kcal/天</text>
-              </view>
+              <text class="card-title">零食热量扣除</text>
+              <text class="calc-line" v-if="dogCalcResult.treatDeduction && dogCalcResult.treatDeduction > 0">{{ Math.round(dogCalcResult.treatDeduction) }} kcal/天</text>
+              <text class="calc-line" v-else>未配置零食扣除</text>
             </view>
-
-            <!-- ④ 每日饭量 -->
+            <view class="calc-card">
+              <text class="card-title">鲜食热量和食谱密度</text>
+              <text class="calc-line">{{ Math.round(dogCalcResult.finalFoodKcal || 0) }} kcal/天 ÷ {{ recipe.energyDensityKcalPerKg }} kcal/kg</text>
+            </view>
             <view class="calc-card highlight">
-              <text class="card-title">每日饭量</text>
-              <view class="formula-box">
-                <text class="formula-text">每日饭量 = (鲜食能量 ÷ 食谱能量密度) × 1000</text>
-              </view>
-              <view class="step-data">
-                <view class="data-item">
-                  <text class="data-label">食谱能量密度：</text>
-                  <text class="data-value">{{ recipe.energyDensityKcalPerKg }} kcal/kg</text>
-                </view>
-              </view>
-              <view class="calc-result final">
-                <text class="result-value highlight">{{ Math.round(dogCalcResult.dailyIntakeG) }} g/天</text>
-              </view>
+              <text class="card-title">推算出的每日饭量</text>
+              <text class="calc-line strong">{{ Math.round(dogCalcResult.dailyIntakeG || displayDailyIntakeG) }}g/天，约 {{ Math.round(perMealG) }}g/餐</text>
             </view>
-
-            <!-- ⑤ 每餐饭量 -->
-            <view class="calc-card highlight">
-              <text class="card-title">每餐饭量</text>
-              <view class="formula-box">
-                <text class="formula-text">每餐饭量 = 每日饭量 ÷ 每日餐数</text>
-              </view>
-              <view class="step-data">
-                <view class="data-item">
-                  <text class="data-label">每日餐数：</text>
-                  <text class="data-value">{{ selectedDog.mealsPerDay }} 餐/天</text>
-                </view>
-              </view>
-              <view class="calc-result final">
-                <text class="result-value highlight">{{ Math.round(perMealG) }} g/餐</text>
-              </view>
-            </view>
-
           </view>
         </view>
       </view>
     </view>
 
-    <!-- 订购周期 -->
-    <view class="section cycle-section" v-if="selectedDog">
+    <view class="section package-plan-section" v-if="selectedDog">
       <view class="section-title">
-        <text class="title-text">订购周期</text>
-        <text class="required">*</text>
+        <view class="title-stack">
+          <text class="title-text">当前分装方案</text>
+          <text class="title-subtitle">系统已按 {{ selectedCycleDays }} 天生成，您可以按冷冻空间或每餐习惯修改规格。</text>
+        </view>
+        <text class="custom-tag">可自定义</text>
       </view>
 
       <view class="cycle-options">
@@ -189,16 +144,42 @@
           <text class="cycle-text">{{ days }}天</text>
         </view>
       </view>
-    </view>
 
-    <!-- 自定义分装 -->
-    <view class="section package-plan-section" v-if="selectedDog">
-      <view class="section-title">
-        <text class="title-text">自定义分装</text>
-        <button class="btn-add-row" @tap="addPackagePlanRow">添加</button>
+      <view class="package-plan-preview">
+        <view
+          v-for="(row, index) in normalizedPackagePlan"
+          :key="index"
+          class="package-preview-row"
+        >
+          <text class="package-preview-main">{{ row.packageSpecG }}g × {{ row.packageCount }}袋</text>
+          <text class="package-preview-sub">{{ row.packageSpecG * row.packageCount }}g</text>
+        </view>
       </view>
 
-      <view class="package-plan-list">
+      <view class="total-summary package-summary">
+        <view class="summary-item">
+          <text class="summary-label">总净重</text>
+          <text class="summary-value">{{ Math.round(totalGrams) }}g</text>
+        </view>
+        <view class="summary-item">
+          <text class="summary-label">总袋数</text>
+          <text class="summary-value">{{ totalPackages }}袋</text>
+        </view>
+        <view class="summary-item">
+          <text class="summary-label">预计可喂</text>
+          <text class="summary-value">{{ estimatedFeedDays }}天</text>
+        </view>
+      </view>
+
+      <view v-if="!minimumOrderMet" class="min-order-warning">
+        <text class="warning-text">当前 {{ Math.round(totalGrams) }}g，最低订购量为 1000g</text>
+      </view>
+
+      <button class="btn-secondary-full" @tap="togglePackageEditor">
+        {{ showPackageEditor ? '收起分装方案' : '修改分装方案' }}
+      </button>
+
+      <view v-if="showPackageEditor" class="package-plan-list">
         <view
           v-for="(row, index) in packagePlan"
           :key="index"
@@ -232,62 +213,25 @@
             删除
           </button>
         </view>
+        <button class="btn-add-row" @tap="addPackagePlanRow">+ 添加另一种规格</button>
       </view>
 
-      <view class="total-summary package-summary">
-        <view class="summary-item">
-          <text class="summary-label">总净重</text>
-          <text class="summary-value">{{ Math.round(totalGrams) }}g</text>
-        </view>
-        <view class="summary-item">
-          <text class="summary-label">总袋数</text>
-          <text class="summary-value">{{ totalPackages }}袋</text>
-        </view>
-        <view class="summary-item">
-          <text class="summary-label">预计喂食</text>
-          <text class="summary-value">{{ estimatedFeedDays }}天</text>
-        </view>
-      </view>
-
-      <view v-if="!minimumOrderMet" class="min-order-warning">
-        <text class="warning-icon">⚠️</text>
-        <text class="warning-text">订单净重不足1000克，最低订购量为1000克</text>
-      </view>
-
-      <!-- 保质期说明 -->
-      <view class="shelf-life-notice">
-        <view class="notice-title" @tap="toggleShelfLife">
-          <text class="notice-title-text">📅 保质期说明</text>
-          <text class="toggle-icon">{{ showShelfLife ? '▲' : '▼' }}</text>
-        </view>
-        <view v-if="showShelfLife" class="notice-content">
-          <view class="notice-item">
-            <text class="notice-dot">🧊</text>
-            <text class="notice-text">-18℃冷冻保存保质期6个月，建议3个月内吃完</text>
-          </view>
-          <view class="notice-item">
-            <text class="notice-dot">❄️</text>
-            <text class="notice-text">0-5℃冷藏保存保质期3天，建议当天吃完</text>
-          </view>
-          <view class="notice-item">
-            <text class="notice-dot">⏱️</text>
-            <text class="notice-text">开袋后，建议3小时内吃完</text>
-          </view>
-        </view>
-      </view>
+      <text class="section-note">订单总量由分装明细自动汇总，满 1000g 可下单。</text>
     </view>
 
-    <!-- 原料采购方案 -->
     <view class="section source-plan-section" v-if="selectedDog">
       <view class="section-title">
-        <text class="title-text">原料采购方案</text>
+        <view class="title-stack">
+          <text class="title-text">原料采购方案</text>
+          <text class="title-subtitle">方案会影响原料清单和订单价格</text>
+        </view>
       </view>
 
       <view class="source-plan-options">
         <view
           v-for="option in SOURCE_PLAN_OPTIONS"
           :key="option.code"
-          class="source-plan-option"
+          class="source-plan-card"
           :class="{ active: selectedSourcePlan === option.code }"
           @tap="selectSourcePlan(option.code)"
         >
@@ -295,481 +239,148 @@
             <text class="source-plan-name">{{ option.label }}</text>
             <text class="source-plan-desc">{{ option.description }}</text>
           </view>
-          <text class="source-plan-check" v-if="selectedSourcePlan === option.code">✓</text>
+          <view class="source-plan-side">
+            <text class="source-plan-price">{{ formatSourcePlanPrice(option.code) }}</text>
+            <text v-if="selectedSourcePlan === option.code" class="source-plan-check">已选</text>
+          </view>
         </view>
       </view>
+
+      <text class="section-note">当前部分原料暂无替代来源时，系统会按可用来源匹配。</text>
     </view>
 
-    <!-- 产品介绍 -->
-    <view class="section product-intro-section">
-      <image
-        class="product-intro-image"
-        src="/static/share-recipe.png"
-        mode="widthFix"
-      />
-    </view>
-
-    <!-- 原料清单 -->
-    <view class="section ingredients-section">
-      <view class="section-title clickable" @tap="toggleIngredientDetails">
-        <text class="title-text">原料清单</text>
-        <text class="toggle-icon">{{ showIngredientDetails ? '▲' : '▼' }}</text>
+    <view class="section ingredients-section" v-if="selectedDog">
+      <view class="section-title">
+        <view class="title-stack">
+          <text class="title-text">原料清单</text>
+          <text class="title-subtitle">{{ sourcePlanLabel }}</text>
+        </view>
       </view>
+
+      <view class="ingredient-summary">
+        <text class="ingredient-summary-title">{{ ingredientSummaryTitle }}</text>
+        <text class="ingredient-summary-meta">{{ ingredientSummaryMeta }}</text>
+      </view>
+
+      <button
+        v-if="totalIngredientCount > 0"
+        class="btn-secondary-full"
+        @tap="toggleIngredientDetails"
+      >
+        {{ ingredientDetailsButtonText }}
+      </button>
 
       <view v-if="showIngredientDetails" class="ingredients-content">
-        <!-- 食材类 -->
         <view v-if="foodIngredients.length > 0" class="ingredient-group">
-          <view class="ingredient-category-title">食材类</view>
-          <view class="ingredient-header">
-            <text class="ingredient-header-item">原料名称</text>
-            <text class="ingredient-header-item">品牌</text>
-            <text class="ingredient-header-item">采购渠道</text>
-            <text class="ingredient-header-item">用量</text>
+          <view class="ingredient-category-title">主要食材</view>
+          <view class="ingredient-header compact">
+            <text class="ingredient-header-item name">原料名称</text>
+            <text class="ingredient-header-item spec">规格</text>
+            <text class="ingredient-header-item channel">采购渠道</text>
+            <text class="ingredient-header-item amount">用量</text>
           </view>
-          <view v-for="(ingredient, idx) in foodIngredients" :key="'food-' + idx" class="ingredient-row">
-            <text class="ingredient-item">{{ ingredient.name }}</text>
-            <text class="ingredient-item">{{ ingredient.brand || '-' }}</text>
-            <text class="ingredient-item">{{ ingredient.purchaseChannel || '-' }}</text>
-            <text class="ingredient-item">
-              {{ Math.round((ingredient.netAmount ?? ingredient.amount) * 1000) }}{{ ingredient.displayUnit || ingredient.unit }}
+          <view v-for="(ingredient, idx) in foodIngredients" :key="'food-' + idx" class="ingredient-row-compact">
+            <text class="ingredient-name">{{ ingredient.name }}</text>
+            <text class="ingredient-spec">{{ ingredient.brand || '-' }}</text>
+            <text class="ingredient-channel-tag">{{ ingredient.purchaseChannel || '默认来源' }}</text>
+            <text class="ingredient-amount">
+              {{ formatIngredientAmount(ingredient) }}
             </text>
           </view>
         </view>
 
-        <!-- 补剂类 -->
         <view v-if="supplementIngredients.length > 0" class="ingredient-group">
-          <view class="ingredient-category-title">补剂类</view>
-          <view class="ingredient-header">
-            <text class="ingredient-header-item">原料名称</text>
-            <text class="ingredient-header-item">品牌</text>
-            <text class="ingredient-header-item">采购渠道</text>
-            <text class="ingredient-header-item">用量</text>
+          <view class="ingredient-category-title">营养补剂</view>
+          <view class="ingredient-header compact">
+            <text class="ingredient-header-item name">原料名称</text>
+            <text class="ingredient-header-item spec">规格</text>
+            <text class="ingredient-header-item channel">采购渠道</text>
+            <text class="ingredient-header-item amount">用量</text>
           </view>
-          <view v-for="(ingredient, idx) in supplementIngredients" :key="'supplement-' + idx" class="ingredient-row">
-            <text class="ingredient-item">{{ ingredient.name }}</text>
-            <text class="ingredient-item">{{ ingredient.brand || '-' }}</text>
-            <text class="ingredient-item">{{ ingredient.purchaseChannel || '-' }}</text>
-            <text class="ingredient-item">
-              {{ (ingredient.netAmount ?? ingredient.amount).toFixed(1) }}{{ ingredient.displayUnit || ingredient.unit }}
+          <view v-for="(ingredient, idx) in supplementIngredients" :key="'supplement-' + idx" class="ingredient-row-compact">
+            <text class="ingredient-name">{{ ingredient.name }}</text>
+            <text class="ingredient-spec">{{ ingredient.brand || '-' }}</text>
+            <text class="ingredient-channel-tag supplement">{{ ingredient.purchaseChannel || '默认来源' }}</text>
+            <text class="ingredient-amount">
+              {{ formatIngredientAmount(ingredient) }}
             </text>
           </view>
         </view>
-
-        <!-- 无数据提示 -->
-        <view v-if="foodIngredients.length === 0 && supplementIngredients.length === 0" class="no-ingredients">
-          <text class="no-data-text">暂无原料数据</text>
-        </view>
       </view>
     </view>
 
-    <!-- 制作要求 - 暂时隐藏 -->
-    <view class="section requirements-section" v-if="false">
+    <view class="section product-explanation-section">
       <view class="section-title">
-        <text class="title-text">制作要求</text>
+        <text class="title-text">产品说明</text>
       </view>
 
-      <!-- 第一组：口感选择 -->
-      <view class="requirement-group preparation-group">
-        <view class="option-row">
-          <view
-            class="option-card"
-            :class="{ active: preparationMethod === 'CHOPPED' }"
-            @tap="selectPreparationMethod('CHOPPED')"
+      <view class="explanation-card-list">
+        <view
+          v-for="card in productExplanationCards"
+          :key="card.title"
+          class="product-explanation-card"
+        >
+          <text class="product-explanation-title">{{ card.title }}</text>
+          <text
+            v-for="point in card.points"
+            :key="point"
+            class="product-explanation-point"
           >
-            <text class="option-name">打碎</text>
-            <text class="option-tip">更易消化</text>
-          </view>
-          <view
-            class="option-card"
-            :class="{ active: preparationMethod === 'DICED' }"
-            @tap="selectPreparationMethod('DICED')"
-          >
-            <text class="option-name">切丁</text>
-            <text class="option-tip">帮助咀嚼</text>
-          </view>
-        </view>
-      </view>
-
-      <!-- 第二组：烹饪方式 -->
-      <view class="requirement-group cooking-group">
-        <view class="option-row">
-          <view
-            class="option-card option-card-large"
-            :class="{ active: cookingMethod === 'RAW' }"
-            @tap="selectCookingMethod('RAW')"
-          >
-            <text class="option-name">生</text>
-            <view class="option-tips">
-              <text class="option-tip-highlight">喂食前须加热</text>
-              <text class="option-tip">加热前无需提前解冻</text>
-            </view>
-          </view>
-          <view
-            class="option-card option-card-large"
-            :class="{ active: cookingMethod === 'COOKED' }"
-            @tap="selectCookingMethod('COOKED')"
-          >
-            <text class="option-name">预加热</text>
-            <view class="option-tips">
-              <text class="option-tip">低温预煮</text>
-              <text class="option-tip">可提前解冻后放入微波炉加热</text>
-              <text class="option-tip-warning">二次加热营养损失更大</text>
-            </view>
-          </view>
+            {{ point }}
+          </text>
         </view>
       </view>
     </view>
 
-    <!-- 包装及说明 -->
-    <view class="section package-info-section">
+    <view class="section logistics-section">
       <view class="section-title">
-        <text class="title-text">包装及说明</text>
+        <text class="title-text">分装及物流说明</text>
       </view>
 
-      <view class="package-info-row">
-        <!-- 左侧：包装示例图片 -->
-        <view class="package-example-card">
-          <text class="example-title">包装示例</text>
-          <view class="example-image-container">
-            <image
-              v-if="globalConfig.packageExampleImageUrl"
-              :src="globalConfig.packageExampleImageUrl"
-              class="example-image"
-              mode="aspectFill"
-            />
-            <view v-else class="example-placeholder">
-              <text class="placeholder-icon">📦</text>
-              <text class="placeholder-text">包装示例图</text>
-            </view>
-          </view>
+      <view class="logistics-grid">
+        <view class="logistics-item">
+          <text class="logistics-title">按袋真空分装</text>
+          <text class="logistics-copy">每袋贴标签，支持自定义规格。</text>
         </view>
-
-        <!-- 右侧：包装规格及配送服务 -->
-        <view class="package-info-right">
-          <!-- 包装说明 -->
-          <view class="package-detail-card">
-            <view class="detail-title">
-              <text class="title-icon">📦</text>
-              <text class="title-text">包装规格</text>
-            </view>
-            <view class="detail-content">
-              <text class="detail-text">每餐独立食品真空袋</text>
-            </view>
-          </view>
-
-          <!-- 快递服务说明 -->
-          <view class="shipping-service-card">
-            <view class="detail-title">
-              <text class="title-icon">🚚</text>
-              <text class="title-text">配送服务</text>
-            </view>
-            <view class="shipping-company">
-              <image
-                v-if="globalConfig.shippingCompanyLogoUrl"
-                :src="globalConfig.shippingCompanyLogoUrl"
-                class="shipping-logo-image"
-                mode="aspectFit"
-              />
-              <text v-else class="shipping-logo">SF</text>
-              <text class="shipping-name">顺丰生鲜特快</text>
-            </view>
-          </view>
+        <view class="logistics-item">
+          <text class="logistics-title">冷冻包材</text>
+          <text class="logistics-copy">使用冷冻包材和冰袋，降低运输温度波动。</text>
+        </view>
+        <view class="logistics-item">
+          <text class="logistics-title">顺丰生鲜或冷链配送</text>
+          <text class="logistics-copy">按制作和冷冻节奏安排发货。</text>
         </view>
       </view>
     </view>
 
-    <!-- 价格 -->
-    <view class="section price-section" v-if="selectedDog && selectedCycleDays && pricePreview">
-      <view class="section-title">
-        <text class="title-text">价格</text>
-      </view>
-
-      <view class="price-card">
-        <view class="price-item">
-          <text class="price-label">总金额</text>
-          <text class="price-value total">¥{{ pricePreview.amountTotal.toFixed(2) }}</text>
+    <view class="section price-breakdown-section" v-if="isAdminUser && selectedDog && pricePreview && pricePreview.pricingBreakdown">
+      <view class="section-title clickable" @tap="togglePriceBreakdown">
+        <view class="title-stack">
+          <text class="title-text">价格计算明细</text>
+          <text class="title-subtitle">管理员可见，点击查看成本摘要</text>
         </view>
-        <view class="price-item">
-          <text class="price-label">每日预估</text>
-          <text class="price-value">¥{{ pricePerDay.toFixed(1) }}/天</text>
-        </view>
-      </view>
-    </view>
-
-    <!-- 价格明细（仅管理员可见） -->
-    <view class="section price-breakdown-section" v-if="isAdminUser && selectedDog && selectedCycleDays && pricePreview && pricePreview.pricingBreakdown">
-      <view class="section-title" @tap="togglePriceBreakdown">
-        <view class="title-row">
-          <text class="title-text">💰 价格计算明细</text>
-          <text class="toggle-icon">{{ showPriceBreakdown ? '▲' : '▼' }}</text>
-        </view>
-        <text class="subtitle">点击查看/隐藏详细计算过程</text>
+        <text class="toggle-icon">{{ showPriceBreakdown ? '▲' : '▼' }}</text>
       </view>
 
       <view v-if="showPriceBreakdown" class="breakdown-content">
-        <!-- 原料成本详情 -->
         <view class="breakdown-group">
-          <view class="breakdown-group-title clickable" @tap="toggleIngredientDetails">
-            <text>📦 原料成本</text>
-            <text class="toggle-icon-small">{{ showIngredientDetails ? '▲' : '▼' }}</text>
-          </view>
-          <view class="breakdown-item summary">
-            <text class="breakdown-label">小计</text>
+          <view class="breakdown-item">
+            <text class="breakdown-label">原料成本</text>
             <text class="breakdown-value">¥{{ pricePreview.pricingBreakdown.costIngredients.toFixed(2) }}</text>
           </view>
-          <view v-if="showIngredientDetails && pricePreview.pricingBreakdown.ingredientDetails" class="detail-list">
-            <view v-for="(item, index) in pricePreview.pricingBreakdown.ingredientDetails" :key="index" class="detail-item">
-              <view class="detail-header">
-                <text class="detail-name">{{ item.name }}</text>
-                <text class="detail-type">{{ item.type === 'FOOD' ? '食材' : '补剂' }}</text>
-              </view>
-              <view class="detail-row">
-                <text class="detail-label">用量：</text>
-                <text class="detail-value">{{ item.amount.toFixed(3) }} {{ item.unit }}</text>
-              </view>
-              <view class="detail-row">
-                <text class="detail-label">单价：</text>
-                <text class="detail-value">¥{{ item.unitCost.toFixed(4) }}/{{ item.unit }}</text>
-              </view>
-              <view class="detail-row">
-                <text class="detail-label">成本：</text>
-                <text class="detail-value highlight">¥{{ item.cost.toFixed(2) }}</text>
-              </view>
-              <view class="detail-calculation">{{ item.calculation }}</view>
-            </view>
-          </view>
-        </view>
-
-        <!-- 人工成本详情 -->
-        <view class="breakdown-group">
-          <view class="breakdown-group-title clickable" @tap="toggleLaborDetails">
-            <text>👨‍🍳 人工成本</text>
-            <text class="toggle-icon-small">{{ showLaborDetails ? '▲' : '▼' }}</text>
-          </view>
-          <view class="breakdown-item summary">
-            <text class="breakdown-label">小计</text>
-            <text class="breakdown-value">¥{{ pricePreview.pricingBreakdown.costLabor.toFixed(2) }}</text>
-          </view>
-          <view v-if="showLaborDetails && pricePreview.pricingBreakdown.laborDetails" class="detail-box">
-            <view class="detail-row">
-              <text class="detail-label">标准批次产量：</text>
-              <text class="detail-value">{{ pricePreview.pricingBreakdown.laborDetails.standardBatchOutputKg.toFixed(3) }} kg</text>
-            </view>
-            <view class="detail-row">
-              <text class="detail-label">标准人工成本/kg：</text>
-              <text class="detail-value">¥{{ pricePreview.pricingBreakdown.laborDetails.standardLaborCostPerKg.toFixed(4) }}</text>
-            </view>
-            <view class="detail-row">
-              <text class="detail-label">投料重量：</text>
-              <text class="detail-value">{{ pricePreview.pricingBreakdown.laborDetails.rawInputWeightKg.toFixed(3) }} kg</text>
-            </view>
-            <view class="detail-row">
-              <text class="detail-label">总成本：</text>
-              <text class="detail-value highlight">¥{{ pricePreview.pricingBreakdown.laborDetails.totalCost.toFixed(2) }}</text>
-            </view>
-            <view class="detail-calculation">{{ pricePreview.pricingBreakdown.laborDetails.calculation }}</view>
-          </view>
-        </view>
-
-        <!-- 间接成本详情 -->
-        <view class="breakdown-group">
-          <view class="breakdown-group-title clickable" @tap="toggleOverheadDetails">
-            <text>🏭 间接成本</text>
-            <text class="toggle-icon-small">{{ showOverheadDetails ? '▲' : '▼' }}</text>
-          </view>
-          <view class="breakdown-item summary">
-            <text class="breakdown-label">小计</text>
-            <text class="breakdown-value">¥{{ pricePreview.pricingBreakdown.costOverhead.toFixed(2) }}</text>
-          </view>
-          <view v-if="showOverheadDetails && pricePreview.pricingBreakdown.overheadDetails" class="detail-box">
-            <view class="detail-row">
-              <text class="detail-label">间接成本/kg：</text>
-              <text class="detail-value">¥{{ pricePreview.pricingBreakdown.overheadDetails.overheadCostPerKg.toFixed(4) }}</text>
-            </view>
-            <view class="detail-row">
-              <text class="detail-label">投料重量：</text>
-              <text class="detail-value">{{ pricePreview.pricingBreakdown.overheadDetails.rawInputWeightKg.toFixed(3) }} kg</text>
-            </view>
-            <view class="detail-row">
-              <text class="detail-label">总成本：</text>
-              <text class="detail-value highlight">¥{{ pricePreview.pricingBreakdown.overheadDetails.totalCost.toFixed(2) }}</text>
-            </view>
-            <view class="detail-calculation">{{ pricePreview.pricingBreakdown.overheadDetails.calculation }}</view>
-          </view>
-        </view>
-
-        <!-- 包材成本详情 -->
-        <view class="breakdown-group">
-          <view class="breakdown-group-title clickable" @tap="togglePackagingDetails">
-            <text>📦 包材成本</text>
-            <text class="toggle-icon-small">{{ showPackagingDetails ? '▲' : '▼' }}</text>
-          </view>
-          <view class="breakdown-item summary">
-            <text class="breakdown-label">小计</text>
+          <view class="breakdown-item">
+            <text class="breakdown-label">包材成本</text>
             <text class="breakdown-value">¥{{ pricePreview.pricingBreakdown.costPackaging.toFixed(2) }}</text>
           </view>
-          <view v-if="showPackagingDetails && pricePreview.pricingBreakdown.packagingDetails" class="detail-box">
-            <!-- 每袋包装 -->
-            <view class="detail-subtitle">每袋包装</view>
-            <view class="detail-row">
-              <text class="detail-label">真空袋：</text>
-              <text class="detail-value">{{ pricePreview.pricingBreakdown.packagingDetails.perPackConsumables.vacuumBagName }}</text>
-              <text class="detail-spec">{{ pricePreview.pricingBreakdown.packagingDetails.perPackConsumables.vacuumBagSpec }}</text>
-              <text class="detail-count">{{ pricePreview.pricingBreakdown.packagingDetails.perPackConsumables.vacuumBagsCount || totalPackages }}个</text>
-              <text class="detail-cost">¥{{ pricePreview.pricingBreakdown.packagingDetails.perPackConsumables.vacuumBagTotalCost.toFixed(2) }}</text>
-            </view>
-            <view class="detail-row">
-              <text class="detail-label">标签：</text>
-              <text class="detail-value">{{ pricePreview.pricingBreakdown.packagingDetails.perPackConsumables.labelName }}</text>
-              <text class="detail-spec">{{ pricePreview.pricingBreakdown.packagingDetails.perPackConsumables.labelSpec }}</text>
-              <text class="detail-count">{{ pricePreview.pricingBreakdown.packagingDetails.perPackConsumables.labelsCount || totalPackages }}个</text>
-              <text class="detail-cost">¥{{ pricePreview.pricingBreakdown.packagingDetails.perPackConsumables.labelTotalCost.toFixed(2) }}</text>
-            </view>
-            <view class="detail-row">
-              <text class="detail-label">小计：</text>
-              <text class="detail-value highlight">¥{{ pricePreview.pricingBreakdown.packagingDetails.perPackConsumables.totalCost.toFixed(2) }}</text>
-            </view>
-            <view class="detail-calculation">{{ pricePreview.pricingBreakdown.packagingDetails.perPackConsumables.calculation }}</view>
-
-            <!-- 快递包装 -->
-            <view class="detail-subtitle">快递包装</view>
-            <view v-for="(container, idx) in pricePreview.pricingBreakdown.packagingDetails.shippingContainers" :key="idx" class="detail-item-nested">
-              <view class="detail-row">
-                <text class="detail-label">纸箱：</text>
-                <text class="detail-value">{{ container.boxName }}</text>
-                <text class="detail-spec">{{ container.boxSpec }}</text>
-                <text class="detail-count">{{ container.boxesCount || 1 }}个</text>
-              </view>
-              <view class="detail-row">
-                <text class="detail-label">保温袋：</text>
-                <text class="detail-value">{{ container.thermalBagName }}</text>
-                <text class="detail-spec">{{ container.thermalBagSpec }}</text>
-                <text class="detail-count">{{ container.thermalBagsCount || 1 }}个</text>
-              </view>
-              <view class="detail-row">
-                <text class="detail-label">冰袋数量：</text>
-                <text class="detail-value">{{ container.icePacks }}个</text>
-              </view>
-              <view class="detail-row">
-                <text class="detail-label">小计：</text>
-                <text class="detail-value highlight">¥{{ container.totalCost.toFixed(2) }}</text>
-              </view>
-              <view class="detail-calculation">{{ container.calculation }}</view>
-            </view>
-          </view>
-        </view>
-
-        <!-- 总成本汇总 -->
-        <view class="breakdown-group">
-          <view class="breakdown-group-title">成本汇总</view>
-          <view class="breakdown-item total">
-            <text class="breakdown-label">总成本</text>
-            <text class="breakdown-value">¥{{ pricePreview.pricingBreakdown.totalProductCost.toFixed(2) }}</text>
-          </view>
-        </view>
-
-        <!-- 价格计算 -->
-        <view class="breakdown-group">
-          <view class="breakdown-group-title">价格计算</view>
           <view class="breakdown-item">
-            <text class="breakdown-label">产品成本</text>
-            <text class="breakdown-value">¥{{ pricePreview.pricingBreakdown.totalProductCost.toFixed(2) }}</text>
+            <text class="breakdown-label">人工成本</text>
+            <text class="breakdown-value">¥{{ pricePreview.pricingBreakdown.costLabor.toFixed(2) }}</text>
           </view>
           <view class="breakdown-item">
-            <text class="breakdown-label">毛利（50%）</text>
-            <text class="breakdown-value highlight">+¥{{ (pricePreview.pricingBreakdown.productPrice - pricePreview.pricingBreakdown.totalProductCost).toFixed(2) }}</text>
+            <text class="breakdown-label">间接成本</text>
+            <text class="breakdown-value">¥{{ pricePreview.pricingBreakdown.costOverhead.toFixed(2) }}</text>
           </view>
           <view class="breakdown-item total">
-            <text class="breakdown-label">产品价格</text>
-            <text class="breakdown-value">¥{{ pricePreview.pricingBreakdown.productPrice.toFixed(2) }}</text>
-          </view>
-        </view>
-
-        <!-- 最终金额 -->
-        <view class="breakdown-group final">
-          <view class="breakdown-item final clickable" @tap="toggleWeightDetails">
-            <text class="breakdown-label">物流重量</text>
-            <text class="breakdown-value">{{ ((totalGrams + (pricePreview.pricingBreakdown?.weightPackagingG || 0)) / 1000).toFixed(2) }}kg</text>
-            <text class="toggle-icon-small">{{ showWeightDetails ? '▲' : '▼' }}</text>
-          </view>
-
-          <!-- 物流重量详情 -->
-          <view v-if="showWeightDetails && pricePreview.pricingBreakdown?.packagingDetails" class="detail-box" style="margin-top: 12px;">
-            <view class="detail-subtitle">物流重量计算流程</view>
-
-            <!-- 计算公式 -->
-            <view class="detail-calculation">
-              物流重量 = 总食品净重 + 包装材料总重量
-            </view>
-
-            <!-- 每袋包装重量 -->
-            <view class="detail-subtitle" style="margin-top: 16rpx;">每袋包装材料</view>
-            <view class="detail-row">
-              <text class="detail-label">真空袋：</text>
-              <text class="detail-value">{{ pricePreview.pricingBreakdown.packagingDetails.perPackConsumables?.vacuumBagName || '-' }}</text>
-              <text class="detail-spec">{{ pricePreview.pricingBreakdown.packagingDetails.perPackConsumables?.vacuumBagSpec || '' }}</text>
-            </view>
-            <view class="detail-row">
-              <text class="detail-label">产品标签：</text>
-              <text class="detail-value">{{ pricePreview.pricingBreakdown.packagingDetails.perPackConsumables?.labelName || '-' }}</text>
-              <text class="detail-spec">{{ pricePreview.pricingBreakdown.packagingDetails.perPackConsumables?.labelSpec || '' }}</text>
-            </view>
-            <view class="detail-row">
-              <text class="detail-label">每袋包装重量：</text>
-              <text class="detail-value">{{ (pricePreview.pricingBreakdown.packagingDetails.perPackConsumables?.weightPerPack || 0).toFixed(0) }}g</text>
-            </view>
-            <view class="detail-row">
-              <text class="detail-label">总袋数：</text>
-              <text class="detail-value">{{ totalPackages }}袋</text>
-            </view>
-            <view class="detail-row">
-              <text class="detail-label">小计：</text>
-              <text class="detail-value highlight">{{ ((pricePreview.pricingBreakdown.packagingDetails.perPackConsumables?.weightPerPack || 0) * totalPackages).toFixed(0) }}g</text>
-            </view>
-
-            <!-- 快递包装重量 -->
-            <view class="detail-subtitle" style="margin-top: 16rpx;">快递包装材料</view>
-            <view v-for="(container, idx) in pricePreview.pricingBreakdown.packagingDetails.shippingContainers" :key="idx" class="detail-item-nested">
-              <view class="detail-row">
-                <text class="detail-label">泡沫箱：</text>
-                <text class="detail-value">{{ container.boxName || '-' }}</text>
-                <text class="detail-spec">{{ container.boxSpec || '' }}</text>
-              </view>
-              <view class="detail-row">
-                <text class="detail-label">保温袋：</text>
-                <text class="detail-value">{{ container.thermalBagName || '-' }}</text>
-                <text class="detail-spec">{{ container.thermalBagSpec || '' }}</text>
-              </view>
-              <view class="detail-row">
-                <text class="detail-label">冰袋数量：</text>
-                <text class="detail-value">{{ container.icePacks || 0 }}个</text>
-              </view>
-              <view class="detail-row">
-                <text class="detail-label">该包装重量：</text>
-                <text class="detail-value highlight">{{ (container.weight || 0).toFixed(0) }}g</text>
-              </view>
-            </view>
-
-            <!-- 物流总重量 -->
-            <view class="detail-row" style="margin-top: 12rpx; padding-top: 12rpx; border-top: 1rpx dashed #d9d9d9;">
-              <text class="detail-label">总食品净重：</text>
-              <text class="detail-value">{{ Math.round(totalGrams) }}g</text>
-            </view>
-            <view class="detail-row">
-              <text class="detail-label">包装材料总重：</text>
-              <text class="detail-value">{{ (pricePreview.pricingBreakdown.weightPackagingG || 0).toFixed(0) }}g</text>
-            </view>
-            <view class="detail-row">
-              <text class="detail-label">物流总重量：</text>
-              <text class="detail-value final">{{ ((totalGrams + (pricePreview.pricingBreakdown.weightPackagingG || 0))).toFixed(0) }}g = {{ ((totalGrams + (pricePreview.pricingBreakdown.weightPackagingG || 0)) / 1000).toFixed(2) }}kg</text>
-            </view>
-          </view>
-
-          <view class="breakdown-item final">
-            <text class="breakdown-label">运费</text>
-            <text class="breakdown-value">¥{{ pricePreview.amountShipping.toFixed(2) }}</text>
-          </view>
-          <view class="breakdown-item final total">
             <text class="breakdown-label">最终金额</text>
             <text class="breakdown-value final">¥{{ pricePreview.amountTotal.toFixed(2) }}</text>
           </view>
@@ -777,11 +388,10 @@
       </view>
     </view>
 
-    <!-- 底部操作栏 -->
     <view class="bottom-bar">
       <view class="bottom-price">
-        <text class="bottom-total">¥{{ pricePreview ? pricePreview.amountTotal.toFixed(2) : '--' }}</text>
-        <text class="bottom-estimate">{{ pricePerDayText }}</text>
+        <text class="bottom-total">{{ bottomPriceTitle }}</text>
+        <text class="bottom-estimate">{{ bottomPriceSubtitle }}</text>
       </view>
       <button
         class="btn-buy-now"
@@ -881,11 +491,21 @@ interface PricePreview {
   }
 }
 
+type SourcePlanPriceState = Record<IngredientSourcePlanCode, number | null>
+
+interface ProductExplanationCard {
+  title: string
+  points: string[]
+}
+
 interface IngredientCostItem {
   name: string
   type: string
   amount: number
   unit: string
+  brand?: string
+  purchaseChannel?: string
+  displayUnit?: string
   unitCost: number
   cost: number
   calculation: string
@@ -943,11 +563,6 @@ interface OverheadCostDetail {
   calculation: string
 }
 
-interface GlobalConfig {
-  packageExampleImageUrl?: string
-  shippingCompanyLogoUrl?: string
-}
-
 // 制作要求枚举
 type PreparationMethod = 'CHOPPED' | 'DICED'
 type CookingMethod = 'RAW' | 'COOKED'
@@ -973,10 +588,19 @@ const isLifeStageMatch = ref(true)
 const showWarning = ref(true)
 const pricePreview = ref<PricePreview | null>(null)
 const pricingSnapshotId = ref<string | null>(null)  // ✅ 新增：快照ID
+const sourcePlanPrices = ref<SourcePlanPriceState>({
+  ORGANIC: null,
+  MARKET_PREMIUM: null,
+  WHOLESALE: null,
+})
+const sourcePlanPriceLoading = ref(false)
+const isPricePreviewLoading = ref(false)
+const pricePreviewError = ref('')
+const showPackageEditor = ref(false)
 let pricingPreviewRequestSeq = 0
 let dogCalcRequestSeq = 0
+let sourcePlanPriceRequestSeq = 0
 let pricePreviewDebounceTimer: ReturnType<typeof setTimeout> | null = null
-const globalConfig = ref<GlobalConfig>({})
 
 // 显示的每日饭量
 const displayDailyIntakeG = ref(0)
@@ -988,24 +612,42 @@ const cookingMethod = ref<CookingMethod | null>('RAW')
 // 价格明细展开状态
 const showPriceBreakdown = ref(false)
 const showIngredientDetails = ref(false)
-const showLaborDetails = ref(false)
-const showOverheadDetails = ref(false)
-const showPackagingDetails = ref(false)
+
+// 计算说明展开状态
+const showCalculationDetails = ref(false)
+
+const productExplanationCards: ProductExplanationCard[] = [
+  {
+    title: '为什么要把所有原料打碎？',
+    points: [
+      '让不同原料充分混合，每袋营养更均匀。',
+      '减少挑食，避免只挑肉不吃菜或补剂。',
+      '更适合冷冻、解冻和复热后的状态稳定。',
+    ],
+  },
+  {
+    title: '保存方法、保质期和烹饪说明',
+    points: [
+      '-18℃ 冷冻保存，建议 3 个月内吃完。',
+      '冷藏后请尽快食用，不建议反复冷冻解冻。',
+      '喂食前充分解冻，可隔水复温或按说明加热。',
+    ],
+  },
+  {
+    title: '当日采购当日制作，冷冻 24 小时后发货',
+    points: [
+      '根据目标制作日期采购原料。',
+      '当日制作并按袋分装。',
+      '冷冻 24 小时后再安排冷链发货。',
+    ],
+  },
+]
 
 // 权限检查：只有管理员才能查看价格计算明细
 const isAdminUser = computed(() => {
   const user = uni.getStorageSync('user')
   return user && user.role === 'ADMIN'
 })
-
-// 保质期说明展开状态
-const showShelfLife = ref(false)
-
-// 物流重量详情展开状态
-const showWeightDetails = ref(false)
-
-// 计算说明展开状态
-const showCalculationDetails = ref(false)
 
 // 健康标签UUID到名称的映射（动态加载）
 const healthTagUuidLabelMap = ref<Record<string, string>>({})
@@ -1047,15 +689,46 @@ const perMealG = computed(() => {
   return displayDailyIntakeG.value / selectedDog.value.mealsPerDay
 })
 
-const pricePerDay = computed(() => {
-  const days = Number(estimatedFeedDays.value)
-  if (!pricePreview.value || !Number.isFinite(days) || days <= 0) return 0
-  return pricePreview.value.amountTotal / days
+const averagePricePerPackage = computed(() => {
+  if (!pricePreview.value || totalPackages.value <= 0) return 0
+  return pricePreview.value.amountTotal / totalPackages.value
 })
-const pricePerDayText = computed(() => {
-  const days = Number(estimatedFeedDays.value)
-  if (!pricePreview.value || !Number.isFinite(days) || days <= 0) return '--/天'
-  return `约 ¥${(pricePreview.value.amountTotal / days).toFixed(1)}/天`
+const isSinglePackageSpec = computed(() => normalizedPackagePlan.value.length === 1)
+const packagePlanSummaryText = computed(() => {
+  if (isSinglePackageSpec.value) {
+    const row = normalizedPackagePlan.value[0]
+    if (!row) return ''
+    return `${row.packageSpecG}g × ${row.packageCount}袋`
+  }
+  return `多规格共 ${totalPackages.value}袋`
+})
+const bottomPriceTitle = computed(() => {
+  if (!selectedDogId.value) return '请选择狗狗'
+  if (isPricePreviewLoading.value) return '计算中'
+  if (!minimumOrderMet.value) return '未满 1000g'
+  if (pricePreviewError.value) return '价格暂未生成'
+  if (!pricePreview.value) return '--'
+  return `¥${pricePreview.value.amountTotal.toFixed(2)}`
+})
+const bottomPriceSubtitle = computed(() => {
+  if (!selectedDogId.value) return '选择狗狗后查看饭量和价格'
+  if (isPricePreviewLoading.value) return '价格生成后可下单'
+  if (!minimumOrderMet.value) return `当前 ${Math.round(totalGrams.value)}g，暂不可下单`
+  if (pricePreviewError.value) return '请稍后重试或切换分装/采购方案'
+  if (!pricePreview.value || totalPackages.value <= 0) return '等待价格生成'
+  if (isSinglePackageSpec.value) {
+    return `¥${averagePricePerPackage.value.toFixed(2)}/袋 · ${packagePlanSummaryText.value}`
+  }
+  return `均价 ¥${averagePricePerPackage.value.toFixed(2)}/袋 · ${packagePlanSummaryText.value}`
+})
+const dogSummaryText = computed(() => {
+  if (!selectedDog.value) return '请选择狗狗后查看饭量和价格'
+  return `${selectedDog.value.name} · ${selectedDog.value.currentWeightKg}kg · ${selectedDog.value.mealsPerDay}餐/天`
+})
+const feedingHintText = computed(() => {
+  if (!selectedDog.value) return '请选择狗狗后查看饭量和价格'
+  if (!displayDailyIntakeG.value || !perMealG.value) return '饭量和价格计算中'
+  return `系统建议每日 ${Math.round(displayDailyIntakeG.value)}g，每餐约 ${Math.round(perMealG.value)}g`
 })
 
 // 是否可以立即购买
@@ -1067,7 +740,9 @@ const canBuyNow = computed(() => {
     && minimumOrderMet.value
     && pricePreview.value !== null
     && pricingSnapshotId.value !== null
-    && displayDailyIntakeG.value > 0,
+    && displayDailyIntakeG.value > 0
+    && !isPricePreviewLoading.value
+    && !pricePreviewError.value
   )
 })
 
@@ -1087,15 +762,46 @@ const supplementIngredients = computed(() => {
   return pricePreview.value.pricingBreakdown.ingredientDetails.filter(item => item.type === 'SUPPLEMENT')
 })
 
-const foodTotalWeight = computed(() => {
-  return foodIngredients.value.reduce((sum, item) =>
-    sum + ((item.netAmount ?? item.amount) * 1000), 0
-  ).toFixed(3)
+const totalIngredientCount = computed(() => foodIngredients.value.length + supplementIngredients.value.length)
+const ingredientSummaryTitle = computed(() => {
+  if (totalIngredientCount.value === 0) return '当前食谱暂无可展示原料，请联系客服确认'
+  const names = foodIngredients.value.slice(0, 3).map((item) => item.name).join('、')
+  return `${names}${totalIngredientCount.value > 3 ? '等' : ''} ${totalIngredientCount.value} 种原料`
 })
+const ingredientSummaryMeta = computed(() => {
+  const totalFoodKg = foodIngredients.value.reduce(
+    (sum, item) => sum + (item.netAmount ?? item.amount),
+    0,
+  )
+  return `${foodIngredients.value.length}种食材 · ${supplementIngredients.value.length}种补剂 · 净重 ${totalFoodKg.toFixed(2)}kg`
+})
+const ingredientDetailsButtonText = computed(() => (
+  showIngredientDetails.value
+    ? '收起原料清单'
+    : `查看全部 ${totalIngredientCount.value} 种原料`
+))
 
-const foodCount = computed(() => {
-  return foodIngredients.value.length
-})
+function formatSourcePlanPrice(code: IngredientSourcePlanCode): string {
+  if (sourcePlanPriceLoading.value) return '计算中'
+  const amount = sourcePlanPrices.value[code]
+  if (amount === null || !Number.isFinite(amount)) return '切换后计算'
+  return `¥${amount.toFixed(2)}`
+}
+
+function formatIngredientAmount(ingredient: IngredientCostItem): string {
+  const amount = ingredient.netAmount ?? ingredient.amount
+  const displayUnit = ingredient.displayUnit || ingredient.unit
+
+  if (ingredient.type === 'FOOD') {
+    return `${Math.round(amount * 1000)}${displayUnit === 'kg' ? 'g' : displayUnit}`
+  }
+
+  return `${amount.toFixed(1)}${displayUnit}`
+}
+
+function togglePackageEditor() {
+  showPackageEditor.value = !showPackageEditor.value
+}
 
 // 自动配置参数（从订单详情页"再次购买"传递）
 const autoConfigParams = ref<{
@@ -1125,7 +831,6 @@ onMounted(async () => {
     await loadHealthTagMapping()  // 加载健康标签映射
     await loadRecipeDetail()
     await loadDogs()
-    loadGlobalConfig()
   }
 })
 
@@ -1375,31 +1080,21 @@ function dismissWarning() {
 
 // ========== 结束：生命阶段校验逻辑 ==========
 
-async function loadGlobalConfig() {
-  try {
-    const res = await request({
-      url: '/global-config',
-      method: 'GET'
-    })
-    if (res.code === 0 && res.data) {
-      globalConfig.value = {
-        packageExampleImageUrl: res.data.packageExampleImageUrl || '',
-        shippingCompanyLogoUrl: res.data.shippingCompanyLogoUrl || ''
-      }
-    }
-  } catch (error) {
-    console.error('Load global config error:', error)
-  }
-}
-
 function selectDog(dogId: string) {
   clearPricePreviewDebounce()
   pricingPreviewRequestSeq += 1
+  sourcePlanPriceRequestSeq += 1
   selectedDogId.value = dogId
   packagePlan.value = []
   displayDailyIntakeG.value = 0
   dogCalcResult.value = null
   packagePlanDogId.value = null
+  pricePreviewError.value = ''
+  sourcePlanPrices.value = {
+    ORGANIC: null,
+    MARKET_PREMIUM: null,
+    WHOLESALE: null,
+  }
   resetPricePreviewState()
   loadDogCalcResult(dogId)
   checkLifeStageMatch()  // 校验生命阶段
@@ -1466,6 +1161,7 @@ async function loadDogCalcResult(dogId: string) {
 
       // 加载价格预览
       loadPricePreview()
+      loadSourcePlanPricePreviews()
     }
   } catch (error) {
     if (requestSeq !== dogCalcRequestSeq) {
@@ -1531,12 +1227,15 @@ function schedulePricePreview() {
   pricePreviewDebounceTimer = setTimeout(() => {
     pricePreviewDebounceTimer = null
     loadPricePreview()
+    loadSourcePlanPricePreviews()
   }, 300)
 }
 
 function invalidatePackagePlanPricingPreview() {
   clearPricePreviewDebounce()
   pricingPreviewRequestSeq += 1
+  sourcePlanPriceRequestSeq += 1
+  pricePreviewError.value = ''
   resetPricePreviewState()
 }
 
@@ -1572,7 +1271,9 @@ function removePackagePlanRow(index: number) {
 
 function selectSourcePlan(code: IngredientSourcePlanCode) {
   selectedSourcePlan.value = code
+  pricePreviewError.value = ''
   loadPricePreview()
+  loadSourcePlanPricePreviews()
 }
 
 // 选择制作工艺
@@ -1597,66 +1298,51 @@ function toggleIngredientDetails() {
   showIngredientDetails.value = !showIngredientDetails.value
 }
 
-// 切换人工成本详情
-function toggleLaborDetails() {
-  showLaborDetails.value = !showLaborDetails.value
-}
-
-// 切换间接成本详情
-function toggleOverheadDetails() {
-  showOverheadDetails.value = !showOverheadDetails.value
-}
-
-// 切换包材成本详情
-function togglePackagingDetails() {
-  showPackagingDetails.value = !showPackagingDetails.value
-}
-
 // 切换计算说明
 function toggleCalculationDetails() {
   showCalculationDetails.value = !showCalculationDetails.value
 }
 
-// 切换保质期说明
-function toggleShelfLife() {
-  showShelfLife.value = !showShelfLife.value
-}
-
-// 切换物流重量详情
-function toggleWeightDetails() {
-  showWeightDetails.value = !showWeightDetails.value
-}
-
 function selectCycle(days: number) {
   selectedCycleDays.value = days
+  showPackageEditor.value = false
   rebuildPackagePlan()
+  pricePreviewError.value = ''
   loadPricePreview()
+  loadSourcePlanPricePreviews()
+}
+
+async function requestPricingPreview(sourcePlan: IngredientSourcePlanCode) {
+  return request({
+    url: '/orders/pricing/preview',
+    method: 'POST',
+    data: {
+      dogId: selectedDogId.value,
+      type: 'FRESH_FOOD',
+      ingredientSourcePlan: sourcePlan,
+      items: [{
+        recipeId: recipeId.value,
+        packagePlan: normalizedPackagePlan.value,
+        dailyIntakeG: displayDailyIntakeG.value,
+        preparationMethod: preparationMethod.value || undefined,
+        cookingMethod: cookingMethod.value || undefined,
+      }]
+    }
+  })
 }
 
 async function loadPricePreview() {
   const requestSeq = ++pricingPreviewRequestSeq
   resetPricePreviewState()
+  pricePreviewError.value = ''
 
   if (!selectedDog.value || !isPackagePlanReadyForDog.value) return
   if (!minimumOrderMet.value) return
 
+  isPricePreviewLoading.value = true
+
   try {
-    const res = await request({
-      url: '/orders/pricing/preview',
-      method: 'POST',
-      data: {
-        dogId: selectedDogId.value,
-        type: 'FRESH_FOOD',
-        ingredientSourcePlan: selectedSourcePlan.value,
-        items: [{
-          recipeId: recipeId.value,
-          packagePlan: normalizedPackagePlan.value,
-          dailyIntakeG: displayDailyIntakeG.value,
-          preparationMethod: preparationMethod.value || undefined,
-          cookingMethod: cookingMethod.value || undefined,
-        }]
-      }
-    })
+    const res = await requestPricingPreview(selectedSourcePlan.value)
     if (res.code === 0 && res.data) {
       if (requestSeq !== pricingPreviewRequestSeq) {
         return
@@ -1670,7 +1356,13 @@ async function loadPricePreview() {
       }
       // ✅ 保存快照ID
       pricingSnapshotId.value = res.data.snapshotId || null
+      sourcePlanPrices.value = {
+        ...sourcePlanPrices.value,
+        [selectedSourcePlan.value]: pricePreview.value.amountTotal,
+      }
       console.log('[Price Preview] Snapshot ID:', pricingSnapshotId.value)
+    } else if (requestSeq === pricingPreviewRequestSeq) {
+      pricePreviewError.value = '价格暂未生成'
     }
   } catch (error: any) {
     if (requestSeq !== pricingPreviewRequestSeq) {
@@ -1684,7 +1376,61 @@ async function loadPricePreview() {
     }
 
     // 订单净重不足时，清空价格预览
+    pricePreviewError.value = '价格暂未生成'
     resetPricePreviewState()
+  } finally {
+    if (requestSeq === pricingPreviewRequestSeq) {
+      isPricePreviewLoading.value = false
+    }
+  }
+}
+
+async function loadSourcePlanPricePreviews() {
+  const requestSeq = ++sourcePlanPriceRequestSeq
+
+  if (!selectedDog.value || !isPackagePlanReadyForDog.value || !minimumOrderMet.value) {
+    sourcePlanPrices.value = {
+      ORGANIC: null,
+      MARKET_PREMIUM: null,
+      WHOLESALE: null,
+    }
+    return
+  }
+
+  sourcePlanPriceLoading.value = true
+
+  try {
+    const previews = await Promise.all(
+      SOURCE_PLAN_OPTIONS.map(async (option) => {
+        try {
+          const res = await requestPricingPreview(option.code)
+          return [
+            option.code,
+            res.code === 0 && res.data ? Number(res.data.amountTotal || 0) : null,
+          ] as const
+        } catch (error) {
+          console.error('[Source Plan Price] preview failed:', option.code, error)
+          return [option.code, null] as const
+        }
+      }),
+    )
+
+    if (requestSeq !== sourcePlanPriceRequestSeq) {
+      return
+    }
+
+    sourcePlanPrices.value = previews.reduce((next, [code, amount]) => ({
+      ...next,
+      [code]: amount,
+    }), {
+      ORGANIC: null,
+      MARKET_PREMIUM: null,
+      WHOLESALE: null,
+    } as SourcePlanPriceState)
+  } finally {
+    if (requestSeq === sourcePlanPriceRequestSeq) {
+      sourcePlanPriceLoading.value = false
+    }
   }
 }
 
@@ -3118,6 +2864,743 @@ function goToCreateDog() {
   text-align: center;
   color: #666;
   word-break: break-all;
+}
+
+/* Redesigned recipe order page */
+.recipe-order-page {
+  min-height: 100vh;
+  background-color: #f6f7f8;
+  padding-bottom: 170rpx;
+}
+
+.product-hero {
+  background-color: #fff;
+  margin-bottom: 20rpx;
+}
+
+.hero-image,
+.hero-image-placeholder {
+  width: 100%;
+  height: 360rpx;
+}
+
+.hero-image-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #eef5ef;
+}
+
+.hero-placeholder-text {
+  font-size: 32rpx;
+  color: #6f8f76;
+}
+
+.hero-content {
+  padding: 28rpx 28rpx 32rpx;
+}
+
+.recipe-name {
+  display: block;
+  font-size: 40rpx;
+  font-weight: 800;
+  color: #25282b;
+  line-height: 1.3;
+  text-align: left;
+}
+
+.recipe-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10rpx;
+  justify-content: flex-start;
+  margin-top: 16rpx;
+}
+
+.recipe-tags .tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8rpx 14rpx;
+  border-radius: 6rpx;
+  font-size: 22rpx;
+}
+
+.recipe-tags .life-stage-tag {
+  background-color: #eef6ff;
+  color: #2566a8;
+}
+
+.recipe-tags .health-tag {
+  background-color: #fff5e8;
+  color: #a76416;
+}
+
+.hero-meta-row,
+.hero-dog-card,
+.package-preview-row,
+.source-plan-card,
+.logistics-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.hero-meta-row {
+  margin-top: 22rpx;
+  padding-top: 20rpx;
+  border-top: 1rpx solid #edf0f2;
+}
+
+.hero-meta-label,
+.summary-label,
+.feeding-label {
+  font-size: 24rpx;
+  color: #687078;
+}
+
+.hero-meta-value,
+.summary-value,
+.feeding-value {
+  font-size: 28rpx;
+  color: #25282b;
+  font-weight: 700;
+}
+
+.hero-dog-card {
+  gap: 18rpx;
+  margin-top: 24rpx;
+  padding: 22rpx;
+  border-radius: 8rpx;
+  background-color: #f6faf7;
+  border: 2rpx solid #dceee0;
+}
+
+.hero-dog-copy,
+.title-stack,
+.source-plan-main {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  min-width: 0;
+}
+
+.hero-dog-label,
+.title-subtitle,
+.section-note,
+.ingredient-summary-meta,
+.product-explanation-point,
+.logistics-copy,
+.hero-dog-hint,
+.calc-line {
+  font-size: 24rpx;
+  color: #6f7378;
+  line-height: 1.5;
+}
+
+.hero-dog-value,
+.ingredient-summary-title,
+.product-explanation-title,
+.logistics-title {
+  font-size: 28rpx;
+  color: #25282b;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+.hero-dog-action,
+.btn-secondary-full {
+  border-radius: 8rpx;
+  border: 2rpx solid #2f8f4e;
+  color: #2f8f4e;
+  background-color: #fff;
+  font-size: 26rpx;
+  text-align: center;
+}
+
+.hero-dog-action {
+  min-width: 104rpx;
+  height: 60rpx;
+  line-height: 60rpx;
+}
+
+.button-reset {
+  padding: 0;
+}
+
+.section {
+  background-color: #fff;
+  padding: 28rpx;
+  margin-bottom: 20rpx;
+}
+
+.section-title {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18rpx;
+  margin-bottom: 22rpx;
+}
+
+.title-text {
+  display: block;
+  font-size: 32rpx;
+  font-weight: 800;
+  color: #25282b;
+  line-height: 1.35;
+}
+
+.feeding-grid {
+  display: flex;
+  gap: 12rpx;
+}
+
+.feeding-item {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  padding: 18rpx;
+  background-color: #f8faf9;
+  border-radius: 8rpx;
+}
+
+.section-note {
+  display: block;
+  margin-top: 18rpx;
+}
+
+.calculation-explanation {
+  margin-top: 22rpx;
+  padding: 20rpx;
+  border-radius: 8rpx;
+  background-color: #f8fafc;
+  border: 1rpx solid #e6ebef;
+}
+
+.explanation-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.explanation-title {
+  font-size: 27rpx;
+  font-weight: 700;
+  color: #25282b;
+}
+
+.calc-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+  margin-top: 18rpx;
+}
+
+.calc-card {
+  padding: 18rpx;
+  background-color: #fff;
+  border-radius: 8rpx;
+  border: 1rpx solid #edf0f2;
+}
+
+.calc-card.highlight {
+  border-color: #f2d6a4;
+  background-color: #fff9ed;
+}
+
+.card-title {
+  display: block;
+  margin-bottom: 8rpx;
+  font-size: 26rpx;
+  font-weight: 700;
+  color: #25282b;
+}
+
+.calc-line.strong {
+  color: #e6543f;
+  font-weight: 800;
+}
+
+.custom-tag,
+.source-plan-check,
+.ingredient-channel-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6rpx;
+  font-size: 22rpx;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.custom-tag {
+  padding: 10rpx 14rpx;
+  color: #2f8f4e;
+  background-color: #ecf8ef;
+}
+
+.cycle-options {
+  display: flex;
+  gap: 12rpx;
+}
+
+.cycle-option {
+  flex: 1;
+  padding: 18rpx 12rpx;
+  border: 2rpx solid #e5e7eb;
+  border-radius: 8rpx;
+  text-align: center;
+  background-color: #fff;
+}
+
+.cycle-option.active {
+  border-color: #2f8f4e;
+  background-color: #f4fbf5;
+}
+
+.cycle-text {
+  font-size: 28rpx;
+  color: #25282b;
+  font-weight: 700;
+}
+
+.package-plan-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  margin-top: 18rpx;
+}
+
+.package-preview-row {
+  padding: 18rpx;
+  border-radius: 8rpx;
+  background-color: #f8faf9;
+}
+
+.package-preview-main {
+  font-size: 28rpx;
+  color: #25282b;
+  font-weight: 700;
+}
+
+.package-preview-sub {
+  font-size: 24rpx;
+  color: #6f7378;
+}
+
+.total-summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12rpx;
+  margin-top: 18rpx;
+  padding: 18rpx;
+  background-color: #f8faf9;
+  border-radius: 8rpx;
+}
+
+.summary-item {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.min-order-warning {
+  margin-top: 16rpx;
+  padding: 16rpx 18rpx;
+  background-color: #fff7e8;
+  border: 1rpx solid #f3c67d;
+  border-radius: 8rpx;
+}
+
+.warning-card {
+  margin: 0 0 20rpx;
+  padding: 24rpx 28rpx;
+  background-color: #fff9ed;
+  border-left: 6rpx solid #e5a23c;
+}
+
+.warning-title {
+  font-size: 30rpx;
+  font-weight: 800;
+  color: #7a5317;
+}
+
+.warning-text {
+  display: block;
+  margin-bottom: 12rpx;
+  font-size: 26rpx;
+  color: #7a5317;
+  line-height: 1.5;
+}
+
+.btn-continue {
+  margin-top: 10rpx;
+  border-radius: 8rpx;
+  background-color: #e5a23c;
+  color: #fff;
+  font-size: 28rpx;
+}
+
+.btn-secondary-full {
+  width: 100%;
+  height: 76rpx;
+  line-height: 76rpx;
+  margin-top: 20rpx;
+}
+
+.package-plan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+  margin-top: 18rpx;
+}
+
+.package-plan-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 16rpx;
+  border-radius: 8rpx;
+  background-color: #f8faf9;
+}
+
+.package-input-group {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  min-width: 0;
+}
+
+.package-input-label,
+.package-input-unit {
+  font-size: 24rpx;
+  color: #687078;
+}
+
+.package-input {
+  width: 116rpx;
+  height: 58rpx;
+  text-align: center;
+  border: 1rpx solid #d8dee4;
+  border-radius: 8rpx;
+  font-size: 28rpx;
+  color: #25282b;
+  background-color: #fff;
+}
+
+.btn-add-row,
+.btn-remove-row {
+  min-width: 118rpx;
+  height: 60rpx;
+  line-height: 60rpx;
+  padding: 0 16rpx;
+  border-radius: 8rpx;
+  font-size: 24rpx;
+}
+
+.btn-add-row {
+  color: #fff;
+  background-color: #2f8f4e;
+  border: none;
+}
+
+.btn-remove-row {
+  color: #c74b35;
+  background-color: #fff;
+  border: 1rpx solid #f0c5bc;
+}
+
+.btn-remove-row[disabled] {
+  color: #a8b0b8;
+  border-color: #e5e7eb;
+}
+
+.source-plan-options {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.source-plan-card {
+  gap: 18rpx;
+  padding: 22rpx;
+  border: 2rpx solid #e5e7eb;
+  border-radius: 8rpx;
+  background-color: #fff;
+}
+
+.source-plan-card.active {
+  border-color: #2f8f4e;
+  background-color: #f4fbf5;
+}
+
+.source-plan-name {
+  font-size: 28rpx;
+  font-weight: 800;
+  color: #25282b;
+}
+
+.source-plan-desc {
+  font-size: 24rpx;
+  color: #687078;
+  line-height: 1.45;
+}
+
+.source-plan-side {
+  min-width: 150rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10rpx;
+}
+
+.source-plan-price {
+  font-size: 28rpx;
+  font-weight: 800;
+  color: #e6543f;
+}
+
+.source-plan-check {
+  padding: 8rpx 12rpx;
+  color: #2f8f4e;
+  background-color: #e7f6eb;
+}
+
+.ingredient-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  padding: 20rpx;
+  border-radius: 8rpx;
+  background-color: #f7faf8;
+}
+
+.ingredients-content {
+  margin-top: 20rpx;
+}
+
+.ingredient-group {
+  margin-bottom: 28rpx;
+}
+
+.ingredient-category-title {
+  margin-bottom: 12rpx;
+  font-size: 28rpx;
+  font-weight: 800;
+  color: #25282b;
+}
+
+.ingredient-header.compact,
+.ingredient-row-compact {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding: 14rpx 0;
+}
+
+.ingredient-header.compact {
+  border-bottom: 1rpx solid #dfe5e9;
+}
+
+.ingredient-row-compact {
+  border-bottom: 1rpx solid #eef0f2;
+}
+
+.ingredient-header-item,
+.ingredient-name,
+.ingredient-spec,
+.ingredient-channel-tag,
+.ingredient-amount {
+  min-width: 0;
+}
+
+.ingredient-header-item {
+  font-size: 22rpx;
+  color: #7a828a;
+  font-weight: 700;
+  text-align: left;
+}
+
+.ingredient-header-item.name,
+.ingredient-name {
+  flex: 1.2;
+}
+
+.ingredient-header-item.spec,
+.ingredient-spec {
+  flex: 1;
+}
+
+.ingredient-header-item.channel,
+.ingredient-channel-tag {
+  width: 128rpx;
+}
+
+.ingredient-header-item.amount,
+.ingredient-amount {
+  width: 104rpx;
+  text-align: right;
+}
+
+.ingredient-name {
+  font-size: 26rpx;
+  font-weight: 800;
+  color: #25282b;
+}
+
+.ingredient-spec {
+  font-size: 24rpx;
+  color: #687078;
+}
+
+.ingredient-channel-tag {
+  padding: 8rpx 10rpx;
+  color: #257b43;
+  background-color: #e7f6eb;
+}
+
+.ingredient-channel-tag.supplement {
+  color: #526173;
+  background-color: #edf2f7;
+}
+
+.ingredient-amount {
+  font-size: 24rpx;
+  color: #25282b;
+  font-weight: 800;
+}
+
+.explanation-card-list,
+.logistics-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.product-explanation-card,
+.logistics-item {
+  padding: 22rpx;
+  border-radius: 8rpx;
+  background-color: #f8fafc;
+  border: 1rpx solid #e8edf2;
+}
+
+.product-explanation-title,
+.product-explanation-point {
+  display: block;
+}
+
+.product-explanation-point {
+  margin-top: 10rpx;
+}
+
+.logistics-item {
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.price-breakdown-section {
+  background-color: #fff;
+  padding: 28rpx;
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+.breakdown-content {
+  margin-top: 16rpx;
+}
+
+.breakdown-group {
+  padding: 18rpx;
+  border-radius: 8rpx;
+  background-color: #f8fafc;
+}
+
+.breakdown-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10rpx 0;
+}
+
+.breakdown-item.total {
+  margin-top: 8rpx;
+  padding-top: 16rpx;
+  border-top: 1rpx solid #e2e8ef;
+}
+
+.breakdown-label {
+  font-size: 25rpx;
+  color: #687078;
+}
+
+.breakdown-value {
+  font-size: 26rpx;
+  color: #25282b;
+  font-weight: 700;
+}
+
+.breakdown-value.final {
+  color: #e6543f;
+}
+
+.bottom-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  padding: 20rpx 28rpx calc(20rpx + env(safe-area-inset-bottom));
+  background-color: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 -8rpx 28rpx rgba(18, 24, 31, 0.08);
+}
+
+.bottom-price {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.bottom-total {
+  font-size: 36rpx;
+  color: #e6543f;
+  font-weight: 800;
+  line-height: 1.15;
+}
+
+.bottom-estimate {
+  font-size: 23rpx;
+  color: #687078;
+  line-height: 1.3;
+}
+
+.btn-buy-now {
+  width: 240rpx;
+  height: 84rpx;
+  line-height: 84rpx;
+  border-radius: 8rpx;
+  background-color: #1890ff;
+  color: #fff;
+  font-size: 30rpx;
+  font-weight: 700;
+  border: none;
+}
+
+.btn-buy-now[disabled] {
+  background-color: #d8dde3;
+  color: #fff;
 }
 
 </style>

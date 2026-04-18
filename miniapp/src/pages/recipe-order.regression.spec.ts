@@ -77,7 +77,7 @@ describe('recipe-order phase one UI contract', () => {
   it('presents the redesigned purchase decision sections in order', () => {
     const sectionOrder = [
       '食谱信息',
-      '参考饭量',
+      'dogProfileSummaryText',
       '订购天数',
       '原料采购方案',
       '原料清单',
@@ -104,19 +104,31 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).toContain('营养标准');
     expect(templateSource).toContain('配方软件');
     expect(templateSource).toContain('能量密度');
-    expect(templateSource).toContain('参考饭量');
     expect(templateSource).toContain('dogProfileSummaryText');
     expect(templateSource).toContain('主食能量');
-    expect(source).toContain('每日餐数');
     expect(templateSource).toContain('本食谱参考饭量');
+    expect(templateSource).toContain('packagePlanInlineSummaryText');
     expect(source).toContain('修改分装方案');
     expect(source).toContain('添加规格');
-    expect(templateSource).toContain('{{ Math.round(totalGrams) }}g（总净重）');
     expect(source).toContain('当前 {{ Math.round(totalGrams) }}g，最低订购量为 1000g');
     expect(source).toContain('getInitials');
     expect(source).toContain('calculateDogAgeText');
+    expect(source).toContain("MALE: '弟弟'");
+    expect(source).toContain("FEMALE: '妹妹'");
+    expect(source).toContain('return `${years}岁`');
+    expect(source).not.toContain("MALE: '男孩'");
+    expect(source).not.toContain("FEMALE: '女孩'");
+    expect(source).not.toContain('restMonths > 0 ? `${years}岁${restMonths}个月`');
+    expect(source).not.toContain('`姓名 ${selectedDog.value.name}`');
+    expect(source).not.toContain('`年龄 ${calculateDogAgeText(selectedDog.value)}`');
+    expect(source).not.toContain('`性别 ${getDogGenderLabel(selectedDog.value.gender)}`');
+    expect(source).not.toContain('`体重 ${selectedDog.value.currentWeightKg}kg`');
+    expect(source).not.toContain('`每日餐数 ${selectedDog.value.mealsPerDay}餐/天`');
+    expect(templateSource).not.toContain('<text class="title-text">参考饭量</text>');
     expect(templateSource).not.toContain('狗狗档案与饭量参考');
     expect(templateSource).not.toContain('当前分装方案');
+    expect(templateSource).not.toContain('分装方案</text>');
+    expect(templateSource).not.toContain('（总净重）');
     expect(templateSource).not.toContain('每日主食能量');
     expect(templateSource).not.toContain('本食谱每日建议饭量');
     expect(templateSource).not.toContain('查看计算过程');

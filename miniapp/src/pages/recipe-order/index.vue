@@ -49,13 +49,9 @@
     </view>
 
     <view class="section dog-feeding-section">
-      <view class="section-title">
-        <text class="title-text">参考饭量</text>
-      </view>
-
       <view v-if="!selectedDog" class="dog-empty-state">
         <text class="dog-empty-title">请选择狗狗后查看饭量和价格</text>
-        <text class="dog-empty-copy">系统会结合狗狗档案和当前食谱计算参考饭量。</text>
+        <text class="dog-empty-copy">系统会结合狗狗档案和当前食谱计算建议用量。</text>
         <picker
           v-if="dogs.length > 0"
           mode="selector"
@@ -125,10 +121,7 @@
       </view>
 
       <view class="package-plan-toolbar">
-        <view class="package-plan-heading-group">
-          <text class="package-plan-heading">分装方案</text>
-          <text class="package-plan-total">{{ Math.round(totalGrams) }}g（总净重）</text>
-        </view>
+        <text class="package-plan-inline-summary">{{ packagePlanInlineSummaryText }}</text>
         <button class="package-edit-button" @tap="togglePackageEditor">
           {{ showPackageEditor ? '收起' : '修改分装方案' }}
         </button>
@@ -669,11 +662,11 @@ const dogProfileSummaryText = computed(() => {
   if (!selectedDog.value) return ''
 
   return [
-    `姓名 ${selectedDog.value.name}`,
-    `年龄 ${calculateDogAgeText(selectedDog.value)}`,
-    `性别 ${getDogGenderLabel(selectedDog.value.gender)}`,
-    `体重 ${selectedDog.value.currentWeightKg}kg`,
-    `每日餐数 ${selectedDog.value.mealsPerDay}餐/天`,
+    selectedDog.value.name,
+    calculateDogAgeText(selectedDog.value),
+    getDogGenderLabel(selectedDog.value.gender),
+    `${selectedDog.value.currentWeightKg}kg`,
+    `${selectedDog.value.mealsPerDay}餐/天`,
   ].join(' / ')
 })
 const dailyMainFoodEnergyText = computed(() => {
@@ -684,6 +677,14 @@ const dailyMainFoodEnergyText = computed(() => {
 const dailySuggestedIntakeText = computed(() => {
   if (!displayDailyIntakeG.value) return '计算中'
   return `${Math.round(displayDailyIntakeG.value)}g/天`
+})
+const packagePlanInlineSummaryText = computed(() => {
+  const specs = Array.from(new Set(
+    normalizedPackagePlan.value.map(row => `${row.packageSpecG}g`)
+  ))
+  const specText = specs.length > 0 ? specs.join('、') : '-'
+
+  return `每袋 ${specText} / 共${totalPackages.value}袋 / 总净重 ${Math.round(totalGrams.value)}g`
 })
 
 const averagePricePerPackage = computed(() => {
@@ -1118,14 +1119,13 @@ function calculateDogAgeText(dog: Dog): string {
   if (months < 12) return `${months}个月`
 
   const years = Math.floor(months / 12)
-  const restMonths = months % 12
-  return restMonths > 0 ? `${years}岁${restMonths}个月` : `${years}岁`
+  return `${years}岁`
 }
 
 function getDogGenderLabel(gender?: string): string {
   const map: Record<string, string> = {
-    MALE: '男孩',
-    FEMALE: '女孩',
+    MALE: '弟弟',
+    FEMALE: '妹妹',
   }
   return gender ? map[gender] || gender : '性别未知'
 }
@@ -3369,29 +3369,19 @@ function goToCreateDog() {
 
 .package-plan-toolbar {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: 18rpx;
   margin-top: 24rpx;
 }
 
-.package-plan-heading-group {
+.package-plan-inline-summary {
   flex: 1;
   min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6rpx;
-}
-
-.package-plan-heading {
-  font-size: 29rpx;
-  font-weight: 800;
+  font-size: 26rpx;
+  font-weight: 700;
   color: #25282b;
-}
-
-.package-plan-total {
-  font-size: 24rpx;
-  color: #687078;
+  line-height: 1.45;
 }
 
 .package-edit-button {

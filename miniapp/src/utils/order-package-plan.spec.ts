@@ -10,8 +10,8 @@ import {
 } from './order-package-plan'
 
 describe('order-package-plan miniapp helper', () => {
-  it('uses 15 days as the default cycle', () => {
-    expect(DEFAULT_ORDER_CYCLE_DAYS).toBe(15)
+  it('uses 7 days as the default cycle', () => {
+    expect(DEFAULT_ORDER_CYCLE_DAYS).toBe(7)
   })
 
   it('exposes the supported cycle options', () => {
@@ -35,7 +35,7 @@ describe('order-package-plan miniapp helper', () => {
         mealsPerDay: 2,
         days: 0,
       }),
-    ).toEqual([{ packageSpecG: 150, packageCount: 30 }])
+    ).toEqual([{ packageSpecG: 150, packageCount: 14 }])
 
     expect(
       buildDefaultPackagePlan({
@@ -43,7 +43,7 @@ describe('order-package-plan miniapp helper', () => {
         mealsPerDay: 2,
         days: Number.NaN,
       }),
-    ).toEqual([{ packageSpecG: 150, packageCount: 30 }])
+    ).toEqual([{ packageSpecG: 150, packageCount: 14 }])
   })
 
   it('summarizes custom package rows', () => {

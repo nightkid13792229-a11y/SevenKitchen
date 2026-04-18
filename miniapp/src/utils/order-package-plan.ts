@@ -24,7 +24,7 @@ export interface PackagePlanTotal {
   totalPackages: number
 }
 
-export const DEFAULT_ORDER_CYCLE_DAYS = 15
+export const DEFAULT_ORDER_CYCLE_DAYS = 7
 export const ORDER_CYCLE_OPTIONS = [7, 15, 30] as const
 export const MIN_ORDER_WEIGHT_G = 1000
 

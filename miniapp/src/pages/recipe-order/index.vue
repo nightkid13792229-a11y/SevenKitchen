@@ -48,21 +48,14 @@
       </view>
     </view>
 
-    <view v-if="!isLifeStageMatch && selectedDog && showWarning" class="warning-card">
-      <view class="warning-header">
-        <text class="warning-title">生命阶段提醒</text>
-      </view>
-      <text class="warning-text">
-        该食谱可能不完全适合当前生命阶段，建议确认后再下单。
-      </text>
-      <button class="btn-continue" @tap="dismissWarning">
-        我已知晓，继续订购
-      </button>
-    </view>
-
     <view class="section dog-feeding-section">
       <view class="section-title">
-        <text class="title-text">狗狗档案与饭量参考</text>
+        <text class="title-text">参考饭量</text>
+      </view>
+
+      <view v-if="!selectedDog" class="dog-empty-state">
+        <text class="dog-empty-title">请选择狗狗后查看饭量和价格</text>
+        <text class="dog-empty-copy">系统会结合狗狗档案和当前食谱计算参考饭量。</text>
         <picker
           v-if="dogs.length > 0"
           mode="selector"
@@ -70,43 +63,53 @@
           range-key="label"
           @change="onDogPickerChange"
         >
-          <view class="section-action-button">{{ selectedDog ? '切换狗狗' : '选择狗狗' }}</view>
+          <view class="section-action-button dog-empty-action">选择狗狗</view>
         </picker>
-        <button v-else class="section-action-button button-reset" @tap="goToCreateDog">创建档案</button>
+        <button v-else class="section-action-button dog-empty-action button-reset" @tap="goToCreateDog">创建档案</button>
       </view>
 
-      <view v-if="!selectedDog" class="dog-empty-state">
-        <text class="dog-empty-title">请选择狗狗后查看饭量和价格</text>
-        <text class="dog-empty-copy">系统会结合狗狗档案和当前食谱计算参考饭量。</text>
-      </view>
+      <view v-else class="dog-feeding-content">
+        <view class="dog-profile-summary-row">
+          <text class="dog-profile-summary">{{ dogProfileSummaryText }}</text>
+          <picker
+            v-if="dogs.length > 0"
+            mode="selector"
+            :range="dogPickerOptions"
+            range-key="label"
+            @change="onDogPickerChange"
+          >
+            <view class="section-action-button">切换狗狗</view>
+          </picker>
+        </view>
 
-      <view v-else class="dog-feeding-grid">
-        <view class="dog-feeding-item dog-profile-item">
-          <text class="feeding-label">姓名</text>
-          <text class="feeding-value">{{ selectedDog.name }}</text>
+        <view v-if="!isLifeStageMatch && showWarning" class="warning-card inline-warning-card">
+          <view class="warning-header">
+            <text class="warning-title">生命阶段提醒</text>
+          </view>
+          <text class="warning-text">
+            该食谱可能不完全适合当前生命阶段，建议确认后再下单。
+          </text>
+          <button class="btn-continue" @tap="dismissWarning">
+            我已知晓，继续订购
+          </button>
         </view>
-        <view class="dog-feeding-item">
-          <text class="feeding-label">体重</text>
-          <text class="feeding-value">{{ selectedDog.currentWeightKg }}kg</text>
-        </view>
-        <view class="dog-feeding-item">
-          <text class="feeding-label">每日主食能量</text>
-          <text class="feeding-value">{{ dailyMainFoodEnergyText }}</text>
-        </view>
-        <view class="dog-feeding-item">
-          <text class="feeding-label">每日餐数</text>
-          <text class="feeding-value">{{ selectedDog.mealsPerDay }}餐</text>
-        </view>
-        <view class="dog-feeding-item daily-intake-item">
-          <text class="feeding-label">本食谱每日建议饭量</text>
-          <text class="feeding-value">{{ dailySuggestedIntakeText }}</text>
+
+        <view class="dog-feeding-grid">
+          <view class="dog-feeding-item">
+            <text class="feeding-label">主食能量</text>
+            <text class="feeding-value">{{ dailyMainFoodEnergyText }}</text>
+          </view>
+          <view class="dog-feeding-item daily-intake-item">
+            <text class="feeding-label">本食谱参考饭量</text>
+            <text class="feeding-value">{{ dailySuggestedIntakeText }}</text>
+          </view>
         </view>
       </view>
     </view>
 
     <view class="section package-plan-section" v-if="selectedDog">
       <view class="section-title">
-        <text class="title-text">当前分装方案</text>
+        <text class="title-text">订购天数</text>
       </view>
 
       <view class="cycle-options">
@@ -119,6 +122,16 @@
         >
           <text class="cycle-text">{{ days }}天</text>
         </view>
+      </view>
+
+      <view class="package-plan-toolbar">
+        <view class="package-plan-heading-group">
+          <text class="package-plan-heading">分装方案</text>
+          <text class="package-plan-total">{{ Math.round(totalGrams) }}g（总净重）</text>
+        </view>
+        <button class="package-edit-button" @tap="togglePackageEditor">
+          {{ showPackageEditor ? '收起' : '修改分装方案' }}
+        </button>
       </view>
 
       <view class="package-plan-preview">
@@ -135,10 +148,6 @@
       <view v-if="!minimumOrderMet" class="min-order-warning">
         <text class="warning-text">当前 {{ Math.round(totalGrams) }}g，最低订购量为 1000g</text>
       </view>
-
-      <button class="btn-secondary-full" @tap="togglePackageEditor">
-        {{ showPackageEditor ? '收起分装方案' : '修改分装方案' }}
-      </button>
 
       <view v-if="showPackageEditor" class="package-plan-list">
         <view
@@ -174,7 +183,7 @@
             删除
           </button>
         </view>
-        <button class="btn-add-row" @tap="addPackagePlanRow">+ 添加另一种规格</button>
+        <button class="btn-add-row" @tap="addPackagePlanRow">添加规格</button>
       </view>
     </view>
 
@@ -389,6 +398,7 @@ interface Dog {
   mealsPerDay: number
   birthday?: string
   ageText?: string
+  gender?: string
   lifeStageOverride?: string
 }
 
@@ -653,8 +663,19 @@ const recipeNutritionStandardLabel = computed(() =>
   getNutritionStandardLabel(recipe.value.nutritionStandard || 'FEDIAF_2021')
 )
 const recipeFormulaSoftwareLabel = computed(() =>
-  recipe.value.designSource || 'SevenKitchen 配方系统'
+  getInitials(recipe.value.designSource || 'SevenKitchen')
 )
+const dogProfileSummaryText = computed(() => {
+  if (!selectedDog.value) return ''
+
+  return [
+    `姓名 ${selectedDog.value.name}`,
+    `年龄 ${calculateDogAgeText(selectedDog.value)}`,
+    `性别 ${getDogGenderLabel(selectedDog.value.gender)}`,
+    `体重 ${selectedDog.value.currentWeightKg}kg`,
+    `每日餐数 ${selectedDog.value.mealsPerDay}餐/天`,
+  ].join(' / ')
+})
 const dailyMainFoodEnergyText = computed(() => {
   const kcal = dogCalcResult.value?.finalFoodKcal
   if (!kcal || !Number.isFinite(kcal)) return '计算中'
@@ -1050,6 +1071,22 @@ function getHealthTagLabel(tagOrUuid: string): string {
   return tagOrUuid
 }
 
+function getInitials(value: string): string {
+  const source = value.trim()
+  if (!source) return 'SK'
+
+  const words = source.match(/[A-Za-z0-9]+/g) || []
+  if (words.length === 0) return source
+  if (words.length === 1) {
+    const camelParts = words[0].match(/[A-Z][a-z0-9]*/g)
+    if (camelParts && camelParts.length > 1) {
+      return camelParts.map(part => part[0]).join('').toUpperCase()
+    }
+  }
+
+  return words.map(word => word[0]).join('').toUpperCase()
+}
+
 function getNutritionStandardLabel(standard: string): string {
   const map: Record<string, string> = {
     'FEDIAF_2021': 'FEDIAF 2021',
@@ -1060,6 +1097,37 @@ function getNutritionStandardLabel(standard: string): string {
     'GB_T_31216': '国标 GB/T 31216',
   }
   return map[standard] || standard
+}
+
+function calculateDogAgeText(dog: Dog): string {
+  if (dog.ageText) return dog.ageText
+  if (!dog.birthday) return '年龄未知'
+
+  const birthday = new Date(dog.birthday)
+  if (Number.isNaN(birthday.getTime())) return '年龄未知'
+
+  const now = new Date()
+  let months = (now.getFullYear() - birthday.getFullYear()) * 12
+    + now.getMonth() - birthday.getMonth()
+
+  if (now.getDate() < birthday.getDate()) {
+    months -= 1
+  }
+
+  if (months < 0) return '年龄未知'
+  if (months < 12) return `${months}个月`
+
+  const years = Math.floor(months / 12)
+  const restMonths = months % 12
+  return restMonths > 0 ? `${years}岁${restMonths}个月` : `${years}岁`
+}
+
+function getDogGenderLabel(gender?: string): string {
+  const map: Record<string, string> = {
+    MALE: '男孩',
+    FEMALE: '女孩',
+  }
+  return gender ? map[gender] || gender : '性别未知'
 }
 
 function dismissWarning() {
@@ -2933,14 +3001,14 @@ function goToCreateDog() {
   font-weight: 800;
   color: #25282b;
   line-height: 1.3;
-  text-align: left;
+  text-align: center;
 }
 
 .recipe-tags {
   display: flex;
   flex-wrap: wrap;
   gap: 10rpx;
-  justify-content: flex-start;
+  justify-content: center;
   margin-top: 16rpx;
 }
 
@@ -3141,6 +3209,32 @@ function goToCreateDog() {
   line-height: 1.5;
 }
 
+.dog-empty-action {
+  align-self: flex-start;
+  margin-top: 8rpx;
+}
+
+.dog-feeding-content {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.dog-profile-summary-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+}
+
+.dog-profile-summary {
+  flex: 1;
+  min-width: 0;
+  font-size: 27rpx;
+  color: #25282b;
+  line-height: 1.55;
+}
+
 .dog-feeding-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -3167,6 +3261,10 @@ function goToCreateDog() {
 .dog-feeding-item:nth-child(3),
 .daily-intake-item {
   background-color: #f4fbf5;
+}
+
+.inline-warning-card {
+  margin: 0;
 }
 
 .section-note {
@@ -3269,11 +3367,50 @@ function goToCreateDog() {
   font-weight: 700;
 }
 
+.package-plan-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18rpx;
+  margin-top: 24rpx;
+}
+
+.package-plan-heading-group {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.package-plan-heading {
+  font-size: 29rpx;
+  font-weight: 800;
+  color: #25282b;
+}
+
+.package-plan-total {
+  font-size: 24rpx;
+  color: #687078;
+}
+
+.package-edit-button {
+  min-width: 172rpx;
+  height: 60rpx;
+  line-height: 60rpx;
+  padding: 0 18rpx;
+  border-radius: 8rpx;
+  border: 2rpx solid #2f8f4e;
+  color: #2f8f4e;
+  background-color: #fff;
+  font-size: 25rpx;
+}
+
 .package-plan-preview {
   display: flex;
   flex-direction: column;
   gap: 12rpx;
-  margin-top: 18rpx;
+  margin-top: 16rpx;
 }
 
 .package-preview-row {
@@ -3406,6 +3543,7 @@ function goToCreateDog() {
 }
 
 .btn-add-row {
+  align-self: flex-start;
   color: #fff;
   background-color: #2f8f4e;
   border: none;

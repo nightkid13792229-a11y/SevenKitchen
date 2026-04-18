@@ -77,8 +77,8 @@ describe('recipe-order phase one UI contract', () => {
   it('presents the redesigned purchase decision sections in order', () => {
     const sectionOrder = [
       '食谱信息',
-      '狗狗档案与饭量参考',
-      '当前分装方案',
+      '参考饭量',
+      '订购天数',
       '原料采购方案',
       '原料清单',
       '产品说明',
@@ -104,17 +104,24 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).toContain('营养标准');
     expect(templateSource).toContain('配方软件');
     expect(templateSource).toContain('能量密度');
-    expect(templateSource).toContain('狗狗档案与饭量参考');
-    expect(templateSource).toContain('每日主食能量');
-    expect(templateSource).toContain('每日餐数');
-    expect(templateSource).toContain('本食谱每日建议饭量');
+    expect(templateSource).toContain('参考饭量');
+    expect(templateSource).toContain('dogProfileSummaryText');
+    expect(templateSource).toContain('主食能量');
+    expect(source).toContain('每日餐数');
+    expect(templateSource).toContain('本食谱参考饭量');
     expect(source).toContain('修改分装方案');
-    expect(source).toContain('+ 添加另一种规格');
+    expect(source).toContain('添加规格');
+    expect(templateSource).toContain('{{ Math.round(totalGrams) }}g（总净重）');
     expect(source).toContain('当前 {{ Math.round(totalGrams) }}g，最低订购量为 1000g');
+    expect(source).toContain('getInitials');
+    expect(source).toContain('calculateDogAgeText');
+    expect(templateSource).not.toContain('狗狗档案与饭量参考');
+    expect(templateSource).not.toContain('当前分装方案');
+    expect(templateSource).not.toContain('每日主食能量');
+    expect(templateSource).not.toContain('本食谱每日建议饭量');
     expect(templateSource).not.toContain('查看计算过程');
     expect(templateSource).not.toContain('可自定义');
     expect(templateSource).not.toContain('系统已按 {{ selectedCycleDays }} 天生成');
-    expect(templateSource).not.toContain('总净重');
     expect(templateSource).not.toContain('总袋数');
     expect(templateSource).not.toContain('预计可喂');
     expect(templateSource).not.toContain('订单总量由分装明细自动汇总');

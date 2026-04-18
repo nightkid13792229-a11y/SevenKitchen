@@ -205,11 +205,9 @@
         <view v-if="foodIngredients.length > 0" class="ingredient-group">
           <view class="ingredient-category-title">原料用量</view>
           <view v-for="(ingredient, idx) in foodIngredients" :key="'food-' + idx" class="ingredient-row-compact">
-            <text class="ingredient-name ingredient-name-button" @tap="showIngredientDetail(ingredient)">
-              {{ ingredient.name }}
-              <text class="ingredient-name-arrow">›</text>
-            </text>
+            <text class="ingredient-name">{{ ingredient.name }}</text>
             <text class="ingredient-channel-tag">{{ ingredient.purchaseChannel || '默认来源' }}</text>
+            <text class="ingredient-spec-inline">{{ ingredient.productModel || '-' }}</text>
             <text class="ingredient-amount">
               {{ formatIngredientAmount(ingredient) }}
             </text>
@@ -219,11 +217,9 @@
         <view v-if="supplementIngredients.length > 0" class="ingredient-group">
           <view class="ingredient-category-title">补剂用量</view>
           <view v-for="(ingredient, idx) in supplementIngredients" :key="'supplement-' + idx" class="ingredient-row-compact">
-            <text class="ingredient-name ingredient-name-button" @tap="showIngredientDetail(ingredient)">
-              {{ ingredient.name }}
-              <text class="ingredient-name-arrow">›</text>
-            </text>
+            <text class="ingredient-name">{{ ingredient.name }}</text>
             <text class="ingredient-channel-tag supplement">{{ ingredient.purchaseChannel || '默认来源' }}</text>
+            <text class="ingredient-spec-inline">{{ ingredient.productModel || '-' }}</text>
             <text class="ingredient-amount">
               {{ formatIngredientAmount(ingredient) }}
             </text>
@@ -770,18 +766,6 @@ function formatIngredientAmount(ingredient: IngredientCostItem): string {
   }
 
   return `${amount.toFixed(1)}${displayUnit}`
-}
-
-function showIngredientDetail(ingredient: IngredientCostItem) {
-  uni.showModal({
-    title: ingredient.name,
-    content: [
-      `品牌：${ingredient.brand || '-'}`,
-      `规格：${ingredient.productModel || '-'}`,
-    ].join('\n'),
-    showCancel: false,
-    confirmText: '知道了',
-  })
 }
 
 function togglePackageEditor() {
@@ -3709,8 +3693,7 @@ function goToCreateDog() {
 }
 
 .ingredient-row-compact {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  display: flex;
   align-items: center;
   gap: 12rpx;
   min-height: 64rpx;
@@ -3720,11 +3703,14 @@ function goToCreateDog() {
 
 .ingredient-name,
 .ingredient-channel-tag,
+.ingredient-spec-inline,
 .ingredient-amount {
   min-width: 0;
 }
 
 .ingredient-name {
+  flex: 0 1 auto;
+  max-width: 196rpx;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -3733,17 +3719,8 @@ function goToCreateDog() {
   color: #25282b;
 }
 
-.ingredient-name-button {
-  color: #257b43;
-}
-
-.ingredient-name-arrow {
-  margin-left: 6rpx;
-  color: #8aa194;
-  font-weight: 800;
-}
-
 .ingredient-channel-tag {
+  flex: 0 0 auto;
   max-width: 128rpx;
   overflow: hidden;
   white-space: nowrap;
@@ -3759,7 +3736,17 @@ function goToCreateDog() {
   background-color: #edf2f7;
 }
 
+.ingredient-spec-inline {
+  flex: 1 1 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 24rpx;
+  color: #687078;
+}
+
 .ingredient-amount {
+  flex: 0 0 auto;
   min-width: 92rpx;
   text-align: right;
   font-size: 24rpx;

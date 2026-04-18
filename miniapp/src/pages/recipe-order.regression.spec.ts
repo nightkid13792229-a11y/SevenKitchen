@@ -209,19 +209,21 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).not.toContain('<text class="ingredient-header-item amount">用量</text>');
     expect(templateSource).not.toContain('<text class="ingredient-header-item spec">规格</text>');
     expect(templateSource).not.toContain("<text class=\"ingredient-spec\">{{ ingredient.brand || '-' }}</text>");
-    expect(templateSource).toContain('@tap="showIngredientDetail(ingredient)"');
-    expect(templateSource).toContain('ingredient-name-button');
-    expect(templateSource).toContain('ingredient-name-arrow');
+    expect(templateSource).not.toContain('@tap="showIngredientDetail(ingredient)"');
+    expect(templateSource).not.toContain('ingredient-name-button');
+    expect(templateSource).not.toContain('ingredient-name-arrow');
+    expect(templateSource).toContain('<text class="ingredient-name">{{ ingredient.name }}</text>');
+    expect(templateSource).toContain("<text class=\"ingredient-spec-inline\">{{ ingredient.productModel || '-' }}</text>");
     expect(source).toContain('ingredient-channel-tag');
-    expect(source).toContain('grid-template-columns: minmax(0, 1fr) auto auto;');
+    expect(source).toContain('display: flex;');
     expect(source).toContain('max-width: 128rpx;');
-    expect(source).not.toContain('text-decoration: underline;');
+    expect(source).toContain('ingredient-spec-inline');
     expect(source).toContain('productModel?: string');
-    expect(source).toContain('function showIngredientDetail(ingredient: IngredientCostItem)');
-    expect(source).toContain('uni.showModal({');
-    expect(source).toContain('title: ingredient.name');
-    expect(source).toContain("品牌：${ingredient.brand || '-'}");
-    expect(source).toContain("规格：${ingredient.productModel || '-'}");
+    expect(source).not.toContain('function showIngredientDetail(ingredient: IngredientCostItem)');
+    expect(source).not.toContain('uni.showModal({');
+    expect(source).not.toContain('title: ingredient.name');
+    expect(source).not.toContain("品牌：${ingredient.brand || '-'}");
+    expect(source).not.toContain("规格：${ingredient.productModel || '-'}");
   });
 
   it('explains product handling, storage, production, and logistics before checkout', () => {

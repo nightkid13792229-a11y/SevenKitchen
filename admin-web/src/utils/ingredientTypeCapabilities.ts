@@ -76,7 +76,7 @@ export function shouldLoadChildSkuData(type: IngredientTypeCapabilityKey, isEdit
 export function getDefaultProcurementStrategyForType(
   type: IngredientTypeCapabilityKey
 ): 'DAILY_PURCHASE' | 'STOCK_REPLENISHMENT' {
-  return type === 'PACKAGING' ? 'STOCK_REPLENISHMENT' : 'DAILY_PURCHASE'
+  return type === 'FOOD' ? 'DAILY_PURCHASE' : 'STOCK_REPLENISHMENT'
 }
 
 export function shouldShowPackagingStockPolicyFields(params: {

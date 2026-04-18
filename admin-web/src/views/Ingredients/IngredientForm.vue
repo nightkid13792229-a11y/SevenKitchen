@@ -1803,7 +1803,7 @@ watch(() => props.ingredient, (newIngredient, oldIngredient) => {
     formData.id = undefined
     formData.name = ''
     formData.type = IngredientType.FOOD
-    formData.procurementStrategy = IngredientProcurementStrategy.DAILY_PURCHASE
+    formData.procurementStrategy = getDefaultProcurementStrategyForType(IngredientType.FOOD) as IngredientProcurementStrategy
     formData.brand = ''
     formData.productModel = ''
     formData.purchaseChannel = ''

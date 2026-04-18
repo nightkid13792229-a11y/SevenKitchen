@@ -191,7 +191,7 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).toContain('loadSourcePlanPricePreviews');
   });
 
-  it('shows the full four-column ingredient list without collapsed preview controls', () => {
+  it('shows ingredient and supplement amounts in a compact inline source layout', () => {
     expect(templateSource).toContain('v-if="totalIngredientCount > 0" class="ingredients-content"');
     expect(source).not.toContain('ingredientPreviewItems');
     expect(source).not.toContain('ingredientDetailsButtonText');
@@ -199,15 +199,23 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).not.toContain('toggleIngredientDetails');
     expect(source).not.toContain('查看全部 ${totalIngredientCount.value} 种原料');
     expect(source).not.toContain('收起原料清单');
-    expect(templateSource).toContain('原料列表');
-    expect(templateSource).toContain('原料名称');
+    expect(templateSource).toContain('原料用量');
+    expect(templateSource).toContain('补剂用量');
+    expect(templateSource).not.toContain('原料列表');
+    expect(templateSource).not.toContain('营养补剂');
+    expect(templateSource).not.toContain('ingredient-header compact');
+    expect(templateSource).not.toContain('原料名称');
+    expect(templateSource).not.toContain('<text class="ingredient-header-item channel">采购渠道</text>');
+    expect(templateSource).not.toContain('<text class="ingredient-header-item amount">用量</text>');
     expect(templateSource).not.toContain('<text class="ingredient-header-item spec">规格</text>');
     expect(templateSource).not.toContain("<text class=\"ingredient-spec\">{{ ingredient.brand || '-' }}</text>");
     expect(templateSource).toContain('@tap="showIngredientDetail(ingredient)"');
     expect(templateSource).toContain('ingredient-name-button');
-    expect(source).toContain('采购渠道');
-    expect(source).toContain('用量');
+    expect(templateSource).toContain('ingredient-name-arrow');
     expect(source).toContain('ingredient-channel-tag');
+    expect(source).toContain('grid-template-columns: minmax(0, 1fr) auto auto;');
+    expect(source).toContain('max-width: 128rpx;');
+    expect(source).not.toContain('text-decoration: underline;');
     expect(source).toContain('productModel?: string');
     expect(source).toContain('function showIngredientDetail(ingredient: IngredientCostItem)');
     expect(source).toContain('uni.showModal({');

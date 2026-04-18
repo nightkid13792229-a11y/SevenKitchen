@@ -203,15 +203,11 @@
 
       <view v-if="totalIngredientCount > 0" class="ingredients-content">
         <view v-if="foodIngredients.length > 0" class="ingredient-group">
-          <view class="ingredient-category-title">原料列表</view>
-          <view class="ingredient-header compact">
-            <text class="ingredient-header-item name">原料名称</text>
-            <text class="ingredient-header-item channel">采购渠道</text>
-            <text class="ingredient-header-item amount">用量</text>
-          </view>
+          <view class="ingredient-category-title">原料用量</view>
           <view v-for="(ingredient, idx) in foodIngredients" :key="'food-' + idx" class="ingredient-row-compact">
             <text class="ingredient-name ingredient-name-button" @tap="showIngredientDetail(ingredient)">
               {{ ingredient.name }}
+              <text class="ingredient-name-arrow">›</text>
             </text>
             <text class="ingredient-channel-tag">{{ ingredient.purchaseChannel || '默认来源' }}</text>
             <text class="ingredient-amount">
@@ -221,15 +217,11 @@
         </view>
 
         <view v-if="supplementIngredients.length > 0" class="ingredient-group">
-          <view class="ingredient-category-title">营养补剂</view>
-          <view class="ingredient-header compact">
-            <text class="ingredient-header-item name">原料名称</text>
-            <text class="ingredient-header-item channel">采购渠道</text>
-            <text class="ingredient-header-item amount">用量</text>
-          </view>
+          <view class="ingredient-category-title">补剂用量</view>
           <view v-for="(ingredient, idx) in supplementIngredients" :key="'supplement-' + idx" class="ingredient-row-compact">
             <text class="ingredient-name ingredient-name-button" @tap="showIngredientDetail(ingredient)">
               {{ ingredient.name }}
+              <text class="ingredient-name-arrow">›</text>
             </text>
             <text class="ingredient-channel-tag supplement">{{ ingredient.purchaseChannel || '默认来源' }}</text>
             <text class="ingredient-amount">
@@ -3716,53 +3708,26 @@ function goToCreateDog() {
   color: #25282b;
 }
 
-.ingredient-header.compact,
 .ingredient-row-compact {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
   align-items: center;
   gap: 12rpx;
-  padding: 14rpx 0;
-}
-
-.ingredient-header.compact {
-  border-bottom: 1rpx solid #dfe5e9;
-}
-
-.ingredient-row-compact {
+  min-height: 64rpx;
+  padding: 16rpx 0;
   border-bottom: 1rpx solid #eef0f2;
 }
 
-.ingredient-header-item,
 .ingredient-name,
 .ingredient-channel-tag,
 .ingredient-amount {
   min-width: 0;
 }
 
-.ingredient-header-item {
-  font-size: 22rpx;
-  color: #7a828a;
-  font-weight: 700;
-  text-align: left;
-}
-
-.ingredient-header-item.name,
 .ingredient-name {
-  flex: 1;
-}
-
-.ingredient-header-item.channel,
-.ingredient-channel-tag {
-  width: 128rpx;
-}
-
-.ingredient-header-item.amount,
-.ingredient-amount {
-  width: 104rpx;
-  text-align: right;
-}
-
-.ingredient-name {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   font-size: 26rpx;
   font-weight: 800;
   color: #25282b;
@@ -3770,11 +3735,21 @@ function goToCreateDog() {
 
 .ingredient-name-button {
   color: #257b43;
-  text-decoration: underline;
+}
+
+.ingredient-name-arrow {
+  margin-left: 6rpx;
+  color: #8aa194;
+  font-weight: 800;
 }
 
 .ingredient-channel-tag {
+  max-width: 128rpx;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
   padding: 8rpx 10rpx;
+  border-radius: 6rpx;
   color: #257b43;
   background-color: #e7f6eb;
 }
@@ -3785,6 +3760,8 @@ function goToCreateDog() {
 }
 
 .ingredient-amount {
+  min-width: 92rpx;
+  text-align: right;
   font-size: 24rpx;
   color: #25282b;
   font-weight: 800;

@@ -79,8 +79,7 @@ describe('recipe-order phase one UI contract', () => {
       '食谱信息',
       'dogProfileSummaryText',
       '订购天数',
-      '原料采购方案',
-      '原料清单',
+      '原料与采购',
       '产品说明',
       '分装及物流说明',
       'bottom-bar',
@@ -162,15 +161,30 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).not.toContain('订单总量由分装明细自动汇总');
   });
 
-  it('shows source plan cards with pricing impact copy', () => {
+  it('merges source plan selection and ingredient list into one compact section', () => {
+    expect(templateSource).toContain('ingredient-source-section');
+    expect(templateSource).toContain('原料与采购');
+    expect(templateSource).toContain('方案会影响原料清单和订单价格');
+    expect(templateSource).toContain('source-plan-card compact');
+    expect(templateSource).toContain('formatSourcePlanShortName(option.code)');
+    expect(templateSource).toContain('当前：{{ sourcePlanLabel }}');
+    expect(templateSource).toContain('ingredientSummaryMeta');
+    expect(templateSource).toContain('ingredientPreviewItems');
+    expect(templateSource).toContain('原料清单生成中，请稍后查看');
+    expect(templateSource).not.toContain('<text class="title-text">原料采购方案</text>');
+    expect(templateSource).not.toContain('<text class="title-text">原料清单</text>');
+    expect(templateSource).not.toContain('当前部分原料暂无替代来源时');
+    expect(source).toContain('function formatSourcePlanShortName');
+    expect(source).toContain("ORGANIC: '有机优先'");
+    expect(source).toContain("MARKET_PREMIUM: '山姆盒马'");
+    expect(source).toContain("WHOLESALE: '批发优选'");
     expect(source).toContain('source-plan-card');
-    expect(source).toContain('方案会影响原料清单和订单价格');
     expect(source).toContain('formatSourcePlanPrice(option.code)');
     expect(source).toContain('loadSourcePlanPricePreviews');
   });
 
-  it('shows a compact ingredient summary and the full four-column ingredient list', () => {
-    expect(source).toContain('ingredient-summary-title');
+  it('shows an ingredient preview and the full four-column ingredient list', () => {
+    expect(source).toContain('ingredientPreviewItems');
     expect(source).toContain('查看全部 ${totalIngredientCount.value} 种原料');
     expect(source).toContain('原料名称');
     expect(source).toContain('规格');

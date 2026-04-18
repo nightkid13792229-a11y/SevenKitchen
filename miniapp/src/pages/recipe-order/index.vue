@@ -173,47 +173,50 @@
       </view>
     </view>
 
-    <view class="section source-plan-section" v-if="selectedDog">
+    <view class="section ingredient-source-section" v-if="selectedDog">
       <view class="section-title">
         <view class="title-stack">
-          <text class="title-text">原料采购方案</text>
+          <text class="title-text">原料与采购</text>
           <text class="title-subtitle">方案会影响原料清单和订单价格</text>
         </view>
       </view>
 
-      <view class="source-plan-options">
+      <view class="source-plan-options compact">
         <view
           v-for="option in SOURCE_PLAN_OPTIONS"
           :key="option.code"
-          class="source-plan-card"
+          class="source-plan-card compact"
           :class="{ active: selectedSourcePlan === option.code }"
           @tap="selectSourcePlan(option.code)"
         >
-          <view class="source-plan-main">
-            <text class="source-plan-name">{{ option.label }}</text>
-            <text class="source-plan-desc">{{ option.description }}</text>
-          </view>
-          <view class="source-plan-side">
-            <text class="source-plan-price">{{ formatSourcePlanPrice(option.code) }}</text>
-            <text v-if="selectedSourcePlan === option.code" class="source-plan-check">已选</text>
-          </view>
-        </view>
-      </view>
-
-      <text class="section-note">当前部分原料暂无替代来源时，系统会按可用来源匹配。</text>
-    </view>
-
-    <view class="section ingredients-section" v-if="selectedDog">
-      <view class="section-title">
-        <view class="title-stack">
-          <text class="title-text">原料清单</text>
-          <text class="title-subtitle">{{ sourcePlanLabel }}</text>
+          <text class="source-plan-name">{{ formatSourcePlanShortName(option.code) }}</text>
+          <text class="source-plan-price">{{ formatSourcePlanPrice(option.code) }}</text>
+          <text v-if="selectedSourcePlan === option.code" class="source-plan-check">已选</text>
         </view>
       </view>
 
       <view class="ingredient-summary">
-        <text class="ingredient-summary-title">{{ ingredientSummaryTitle }}</text>
+        <text class="ingredient-summary-title">当前：{{ sourcePlanLabel }}</text>
         <text class="ingredient-summary-meta">{{ ingredientSummaryMeta }}</text>
+      </view>
+
+      <view v-if="totalIngredientCount === 0" class="ingredient-empty-state">
+        <text class="ingredient-empty-text">原料清单生成中，请稍后查看</text>
+      </view>
+
+      <view v-else class="ingredient-preview-list">
+        <view
+          v-for="(ingredient, idx) in ingredientPreviewItems"
+          :key="'preview-' + idx"
+          class="ingredient-row-compact preview"
+        >
+          <text class="ingredient-name">{{ ingredient.name }}</text>
+          <text class="ingredient-spec">{{ ingredient.brand || '-' }}</text>
+          <text class="ingredient-channel-tag">{{ ingredient.purchaseChannel || '默认来源' }}</text>
+          <text class="ingredient-amount">
+            {{ formatIngredientAmount(ingredient) }}
+          </text>
+        </view>
       </view>
 
       <button
@@ -764,6 +767,7 @@ const supplementIngredients = computed(() => {
   return pricePreview.value.pricingBreakdown.ingredientDetails.filter(item => item.type === 'SUPPLEMENT')
 })
 
+const ingredientPreviewItems = computed(() => foodIngredients.value.slice(0, 4))
 const totalIngredientCount = computed(() => foodIngredients.value.length + supplementIngredients.value.length)
 const ingredientSummaryTitle = computed(() => {
   if (totalIngredientCount.value === 0) return '当前食谱暂无可展示原料，请联系客服确认'
@@ -782,6 +786,15 @@ const ingredientDetailsButtonText = computed(() => (
     ? '收起原料清单'
     : `查看全部 ${totalIngredientCount.value} 种原料`
 ))
+
+function formatSourcePlanShortName(code: IngredientSourcePlanCode): string {
+  const map: Record<IngredientSourcePlanCode, string> = {
+    ORGANIC: '有机优先',
+    MARKET_PREMIUM: '山姆盒马',
+    WHOLESALE: '批发优选',
+  }
+  return map[code]
+}
 
 function formatSourcePlanPrice(code: IngredientSourcePlanCode): string {
   if (sourcePlanPriceLoading.value) return '计算中'
@@ -3617,12 +3630,28 @@ function goToCreateDog() {
   gap: 16rpx;
 }
 
+.source-plan-options.compact {
+  flex-direction: row;
+  gap: 12rpx;
+}
+
 .source-plan-card {
   gap: 18rpx;
   padding: 22rpx;
   border: 2rpx solid #e5e7eb;
   border-radius: 8rpx;
   background-color: #fff;
+}
+
+.source-plan-card.compact {
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  padding: 16rpx 8rpx;
+  text-align: center;
 }
 
 .source-plan-card.active {
@@ -3634,6 +3663,11 @@ function goToCreateDog() {
   font-size: 28rpx;
   font-weight: 800;
   color: #25282b;
+}
+
+.source-plan-card.compact .source-plan-name {
+  font-size: 25rpx;
+  line-height: 1.25;
 }
 
 .source-plan-desc {
@@ -3656,10 +3690,19 @@ function goToCreateDog() {
   color: #e6543f;
 }
 
+.source-plan-card.compact .source-plan-price {
+  font-size: 25rpx;
+  line-height: 1.25;
+}
+
 .source-plan-check {
   padding: 8rpx 12rpx;
   color: #2f8f4e;
   background-color: #e7f6eb;
+}
+
+.source-plan-card.compact .source-plan-check {
+  padding: 6rpx 10rpx;
 }
 
 .ingredient-summary {
@@ -3667,8 +3710,27 @@ function goToCreateDog() {
   flex-direction: column;
   gap: 8rpx;
   padding: 20rpx;
+  margin-top: 18rpx;
   border-radius: 8rpx;
   background-color: #f7faf8;
+}
+
+.ingredient-empty-state {
+  margin-top: 16rpx;
+  padding: 20rpx;
+  border-radius: 8rpx;
+  background-color: #f8fafc;
+  border: 1rpx solid #e8edf2;
+}
+
+.ingredient-empty-text {
+  font-size: 25rpx;
+  color: #687078;
+}
+
+.ingredient-preview-list {
+  margin-top: 16rpx;
+  border-top: 1rpx solid #eef0f2;
 }
 
 .ingredients-content {
@@ -3700,6 +3762,10 @@ function goToCreateDog() {
 
 .ingredient-row-compact {
   border-bottom: 1rpx solid #eef0f2;
+}
+
+.ingredient-row-compact.preview {
+  padding: 14rpx 0;
 }
 
 .ingredient-header-item,

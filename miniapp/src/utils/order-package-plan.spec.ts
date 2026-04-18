@@ -61,7 +61,7 @@ describe('order-package-plan miniapp helper', () => {
     ).toEqual([{ packageSpecG: 150, packageCount: 14 }])
   })
 
-  it('summarizes custom package rows', () => {
+  it('summarizes custom package rows without silently raising below-minimum specs', () => {
     const total = getPackagePlanTotal([
       { packageSpecG: 10, packageCount: 2 },
       { packageSpecG: 100, packageCount: 10 },
@@ -69,9 +69,9 @@ describe('order-package-plan miniapp helper', () => {
       { packageSpecG: 200, packageCount: 5 },
     ])
 
-    expect(total).toEqual({ totalGrams: 5060, totalPackages: 37 })
+    expect(total).toEqual({ totalGrams: 5020, totalPackages: 37 })
     expect(isMinimumOrderMet(total.totalGrams)).toBe(true)
-    expect(estimateFeedDays(total.totalGrams, 300)).toBe('16.9')
+    expect(estimateFeedDays(total.totalGrams, 300)).toBe('16.7')
   })
 
   it('ignores invalid rows instead of producing NaN totals', () => {

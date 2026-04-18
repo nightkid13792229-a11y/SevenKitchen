@@ -127,7 +127,11 @@
         </button>
       </view>
 
-      <view v-if="!minimumOrderMet" class="min-order-warning">
+      <view v-if="packagePlanValidationMessage" class="min-order-warning">
+        <text class="warning-text">{{ packagePlanValidationMessage }}</text>
+      </view>
+
+      <view v-else-if="!minimumOrderMet" class="min-order-warning">
         <text class="warning-text">当前 {{ Math.round(totalGrams) }}g，最低订购量为 1000g</text>
       </view>
 
@@ -638,6 +642,12 @@ const estimatedFeedDays = computed(() =>
   estimateFeedDays(totalGrams.value, displayDailyIntakeG.value),
 )
 const minimumOrderMet = computed(() => isMinimumOrderMet(totalGrams.value))
+const hasInvalidPackageSpec = computed(() =>
+  normalizedPackagePlan.value.some(row => row.packageSpecG < MIN_PACKAGE_SPEC_G)
+)
+const packagePlanValidationMessage = computed(() => (
+  hasInvalidPackageSpec.value ? `每袋重量不能少于 ${MIN_PACKAGE_SPEC_G}g` : ''
+))
 const sourcePlanLabel = computed(() => getSourcePlanLabel(selectedSourcePlan.value))
 const perMealG = computed(() => {
   if (!displayDailyIntakeG.value || !selectedDog.value?.mealsPerDay) return 0
@@ -693,6 +703,7 @@ const packagePlanSummaryText = computed(() => {
 })
 const bottomPriceTitle = computed(() => {
   if (!selectedDogId.value) return '请选择狗狗'
+  if (packagePlanValidationMessage.value) return '分装需调整'
   if (isPricePreviewLoading.value) return '计算中'
   if (!minimumOrderMet.value) return '未满 1000g'
   if (pricePreviewError.value) return '价格暂未生成'
@@ -701,6 +712,7 @@ const bottomPriceTitle = computed(() => {
 })
 const bottomPriceSubtitle = computed(() => {
   if (!selectedDogId.value) return '选择狗狗后查看饭量和价格'
+  if (packagePlanValidationMessage.value) return packagePlanValidationMessage.value
   if (isPricePreviewLoading.value) return '价格生成后可下单'
   if (!minimumOrderMet.value) return `当前 ${Math.round(totalGrams.value)}g，暂不可下单`
   if (pricePreviewError.value) return '请稍后重试或切换分装/采购方案'
@@ -730,6 +742,7 @@ const canBuyNow = computed(() => {
     && pricePreview.value !== null
     && pricingSnapshotId.value !== null
     && displayDailyIntakeG.value > 0
+    && !packagePlanValidationMessage.value
     && !isPricePreviewLoading.value
     && !pricePreviewError.value
   )
@@ -1275,9 +1288,14 @@ function rebuildPackagePlan() {
 
 function normalizePackagePlanRow(row: PackagePlanItem): PackagePlanItem {
   return {
-    packageSpecG: Math.max(MIN_PACKAGE_SPEC_G, Math.floor(Number(row.packageSpecG) || MIN_PACKAGE_SPEC_G)),
+    packageSpecG: normalizePackageSpecValue(row.packageSpecG),
     packageCount: Math.max(1, Math.floor(Number(row.packageCount) || 1)),
   }
+}
+
+function normalizePackageSpecValue(value: string | number | null | undefined): number {
+  const normalized = Math.floor(Number(value))
+  return Number.isFinite(normalized) && normalized > 0 ? normalized : 0
 }
 
 function clearPricePreviewDebounce() {
@@ -1317,8 +1335,9 @@ function addPackagePlanRow() {
 }
 
 function updatePackagePlanRow(index: number, field: keyof PackagePlanItem, value: string | number) {
-  const minimumValue = field === 'packageSpecG' ? MIN_PACKAGE_SPEC_G : 1
-  const nextValue = Math.max(minimumValue, Math.floor(Number(value) || minimumValue))
+  const nextValue = field === 'packageSpecG'
+    ? normalizePackageSpecValue(value)
+    : Math.max(1, Math.floor(Number(value) || 1))
   packagePlan.value = packagePlan.value.map((row, rowIndex) =>
     rowIndex === index ? { ...row, [field]: nextValue } : row
   )
@@ -1429,6 +1448,7 @@ async function loadPricePreview() {
   pricePreviewError.value = ''
 
   if (!selectedDog.value || !isPackagePlanReadyForDog.value) return
+  if (packagePlanValidationMessage.value) return
   if (!minimumOrderMet.value) return
 
   isPricePreviewLoading.value = true
@@ -1481,6 +1501,15 @@ async function loadSourcePlanPricePreviews() {
   const requestSeq = ++sourcePlanPriceRequestSeq
 
   if (!selectedDog.value || !isPackagePlanReadyForDog.value || !minimumOrderMet.value) {
+    sourcePlanPrices.value = {
+      ORGANIC: null,
+      MARKET_PREMIUM: null,
+      WHOLESALE: null,
+    }
+    return
+  }
+
+  if (packagePlanValidationMessage.value) {
     sourcePlanPrices.value = {
       ORGANIC: null,
       MARKET_PREMIUM: null,

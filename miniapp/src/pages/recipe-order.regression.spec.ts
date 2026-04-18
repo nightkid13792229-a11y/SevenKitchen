@@ -113,9 +113,16 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).toContain('cancelCustomPackagePlan');
     expect(source).toContain('请先取消自定义分装后再切换订购天数');
     expect(source).toContain('MIN_PACKAGE_SPEC_G');
+    expect(source).toContain('hasInvalidPackageSpec');
+    expect(source).toContain('packagePlanValidationMessage');
+    expect(source).toContain('每袋重量不能少于 ${MIN_PACKAGE_SPEC_G}g');
+    expect(source).toContain('if (packagePlanValidationMessage.value) return');
     expect(source).toContain('Math.max(MIN_PACKAGE_SPEC_G');
     expect(templateSource).toContain("{{ showPackageEditor ? '取消自定义' : '自定义分装' }}");
     expect(templateSource).toContain(':class="{ active: selectedCycleDays === days, disabled: isCustomPackagePlan }"');
+    expect(templateSource).toContain('v-if="packagePlanValidationMessage"');
+    expect(templateSource).toContain('{{ packagePlanValidationMessage }}');
+    expect(source).not.toContain('packageSpecG: Math.max(MIN_PACKAGE_SPEC_G, Math.floor(Number(row.packageSpecG) || MIN_PACKAGE_SPEC_G))');
     expect(source).toContain('v-if="dogs.length > 1"');
     expect(source).toContain("].join(' ｜ ')");
     expect(source).toContain('.recipe-meta-card');

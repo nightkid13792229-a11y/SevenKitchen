@@ -124,8 +124,7 @@ function normalizePackageRowValue(value: number | null | undefined): number {
 }
 
 function normalizePackageSpecG(value: number | null | undefined): number {
-  const normalized = normalizePackageRowValue(value)
-  return normalized > 0 ? Math.max(MIN_PACKAGE_SPEC_G, normalized) : 0
+  return normalizePackageRowValue(value)
 }
 
 function addPackageRowTotals(

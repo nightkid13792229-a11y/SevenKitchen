@@ -68,7 +68,7 @@
         <view class="dog-profile-summary-row">
           <text class="dog-profile-summary">{{ dogProfileSummaryText }}</text>
           <picker
-            v-if="dogs.length > 0"
+            v-if="dogs.length > 1"
             mode="selector"
             :range="dogPickerOptions"
             range-key="label"
@@ -123,19 +123,8 @@
       <view class="package-plan-toolbar">
         <text class="package-plan-inline-summary">{{ packagePlanInlineSummaryText }}</text>
         <button class="package-edit-button" @tap="togglePackageEditor">
-          {{ showPackageEditor ? '收起' : '修改分装方案' }}
+          {{ showPackageEditor ? '收起' : '自定义分装' }}
         </button>
-      </view>
-
-      <view class="package-plan-preview">
-        <view
-          v-for="(row, index) in normalizedPackagePlan"
-          :key="index"
-          class="package-preview-row"
-        >
-          <text class="package-preview-main">{{ row.packageSpecG }}g × {{ row.packageCount }}袋</text>
-          <text class="package-preview-sub">{{ row.packageSpecG * row.packageCount }}g</text>
-        </view>
       </view>
 
       <view v-if="!minimumOrderMet" class="min-order-warning">
@@ -667,7 +656,7 @@ const dogProfileSummaryText = computed(() => {
     getDogGenderLabel(selectedDog.value.gender),
     `${selectedDog.value.currentWeightKg}kg`,
     `${selectedDog.value.mealsPerDay}餐/天`,
-  ].join(' / ')
+  ].join(' ｜ ')
 })
 const dailyMainFoodEnergyText = computed(() => {
   const kcal = dogCalcResult.value?.finalFoodKcal
@@ -3074,10 +3063,13 @@ function goToCreateDog() {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 8rpx;
   padding: 18rpx;
   border-radius: 8rpx;
   background-color: #f8faf9;
+  text-align: center;
 }
 
 .recipe-meta-label {
@@ -3247,10 +3239,13 @@ function goToCreateDog() {
   min-width: 0;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: center;
   gap: 8rpx;
   padding: 18rpx;
   background-color: #f8faf9;
   border-radius: 8rpx;
+  text-align: center;
 }
 
 .dog-profile-item,

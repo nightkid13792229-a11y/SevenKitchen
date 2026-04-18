@@ -108,7 +108,12 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).toContain('主食能量');
     expect(templateSource).toContain('本食谱参考饭量');
     expect(templateSource).toContain('packagePlanInlineSummaryText');
-    expect(source).toContain('修改分装方案');
+    expect(source).toContain('自定义分装');
+    expect(source).toContain('v-if="dogs.length > 1"');
+    expect(source).toContain("].join(' ｜ ')");
+    expect(source).toContain('.recipe-meta-card');
+    expect(source).toContain('align-items: center;');
+    expect(source).toContain('text-align: center;');
     expect(source).toContain('添加规格');
     expect(source).toContain('当前 {{ Math.round(totalGrams) }}g，最低订购量为 1000g');
     expect(source).toContain('getInitials');
@@ -124,6 +129,10 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).not.toContain('`性别 ${getDogGenderLabel(selectedDog.value.gender)}`');
     expect(source).not.toContain('`体重 ${selectedDog.value.currentWeightKg}kg`');
     expect(source).not.toContain('`每日餐数 ${selectedDog.value.mealsPerDay}餐/天`');
+    expect(source).not.toContain("].join(' / ')");
+    expect(templateSource).not.toContain('修改分装方案');
+    expect(templateSource).not.toContain('package-plan-preview');
+    expect(templateSource).not.toContain('package-preview-row');
     expect(templateSource).not.toContain('<text class="title-text">参考饭量</text>');
     expect(templateSource).not.toContain('狗狗档案与饭量参考');
     expect(templateSource).not.toContain('当前分装方案');

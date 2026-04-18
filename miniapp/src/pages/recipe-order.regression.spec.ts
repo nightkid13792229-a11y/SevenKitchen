@@ -79,7 +79,7 @@ describe('recipe-order phase one UI contract', () => {
       '食谱信息',
       'dogProfileSummaryText',
       '订购天数',
-      '原料与采购',
+      '采购来源',
       '产品说明',
       '分装及物流说明',
       'bottom-bar',
@@ -163,29 +163,39 @@ describe('recipe-order phase one UI contract', () => {
 
   it('merges source plan selection and ingredient list into one compact section', () => {
     expect(templateSource).toContain('ingredient-source-section');
-    expect(templateSource).toContain('原料与采购');
-    expect(templateSource).toContain('方案会影响原料清单和订单价格');
+    expect(templateSource).toContain('采购来源');
+    expect(templateSource).not.toContain('方案会影响原料清单和订单价格');
     expect(templateSource).toContain('source-plan-card compact');
     expect(templateSource).toContain('formatSourcePlanShortName(option.code)');
-    expect(templateSource).toContain('当前：{{ sourcePlanLabel }}');
+    expect(templateSource).toContain('sourcePlanDescription');
     expect(templateSource).toContain('ingredientSummaryMeta');
-    expect(templateSource).toContain('ingredientPreviewItems');
     expect(templateSource).toContain('原料清单生成中，请稍后查看');
     expect(templateSource).not.toContain('<text class="title-text">原料采购方案</text>');
     expect(templateSource).not.toContain('<text class="title-text">原料清单</text>');
+    expect(templateSource).not.toContain('<text class="title-text">原料与采购</text>');
     expect(templateSource).not.toContain('当前部分原料暂无替代来源时');
+    expect(templateSource).not.toContain('>已选</text>');
     expect(source).toContain('function formatSourcePlanShortName');
     expect(source).toContain("ORGANIC: '有机优先'");
-    expect(source).toContain("MARKET_PREMIUM: '山姆盒马'");
-    expect(source).toContain("WHOLESALE: '批发优选'");
+    expect(source).toContain("MARKET_PREMIUM: '超市优先'");
+    expect(source).toContain("WHOLESALE: '性价比优先'");
+    expect(source).toContain('function getSourcePlanDescription');
+    expect(source).toContain('原料优先选择有机、非转基因、生态散养来源');
+    expect(source).toContain('原料优先选择山姆、盒马、沃集鲜等知名商超来源');
+    expect(source).toContain('原料选择以人食级为底线，尽量选择肉团、生鲜批发等性价比高的来源');
     expect(source).toContain('source-plan-card');
     expect(source).toContain('formatSourcePlanPrice(option.code)');
     expect(source).toContain('loadSourcePlanPricePreviews');
   });
 
-  it('shows an ingredient preview and the full four-column ingredient list', () => {
-    expect(source).toContain('ingredientPreviewItems');
-    expect(source).toContain('查看全部 ${totalIngredientCount.value} 种原料');
+  it('shows the full four-column ingredient list without collapsed preview controls', () => {
+    expect(templateSource).toContain('v-if="totalIngredientCount > 0" class="ingredients-content"');
+    expect(source).not.toContain('ingredientPreviewItems');
+    expect(source).not.toContain('ingredientDetailsButtonText');
+    expect(source).not.toContain('showIngredientDetails');
+    expect(source).not.toContain('toggleIngredientDetails');
+    expect(source).not.toContain('查看全部 ${totalIngredientCount.value} 种原料');
+    expect(source).not.toContain('收起原料清单');
     expect(source).toContain('原料名称');
     expect(source).toContain('规格');
     expect(source).toContain('采购渠道');

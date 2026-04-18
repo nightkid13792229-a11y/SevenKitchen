@@ -176,8 +176,7 @@
     <view class="section ingredient-source-section" v-if="selectedDog">
       <view class="section-title">
         <view class="title-stack">
-          <text class="title-text">原料与采购</text>
-          <text class="title-subtitle">方案会影响原料清单和订单价格</text>
+          <text class="title-text">采购来源</text>
         </view>
       </view>
 
@@ -191,12 +190,11 @@
         >
           <text class="source-plan-name">{{ formatSourcePlanShortName(option.code) }}</text>
           <text class="source-plan-price">{{ formatSourcePlanPrice(option.code) }}</text>
-          <text v-if="selectedSourcePlan === option.code" class="source-plan-check">已选</text>
         </view>
       </view>
 
       <view class="ingredient-summary">
-        <text class="ingredient-summary-title">当前：{{ sourcePlanLabel }}</text>
+        <text class="ingredient-summary-title">{{ sourcePlanDescription }}</text>
         <text class="ingredient-summary-meta">{{ ingredientSummaryMeta }}</text>
       </view>
 
@@ -204,30 +202,7 @@
         <text class="ingredient-empty-text">原料清单生成中，请稍后查看</text>
       </view>
 
-      <view v-else class="ingredient-preview-list">
-        <view
-          v-for="(ingredient, idx) in ingredientPreviewItems"
-          :key="'preview-' + idx"
-          class="ingredient-row-compact preview"
-        >
-          <text class="ingredient-name">{{ ingredient.name }}</text>
-          <text class="ingredient-spec">{{ ingredient.brand || '-' }}</text>
-          <text class="ingredient-channel-tag">{{ ingredient.purchaseChannel || '默认来源' }}</text>
-          <text class="ingredient-amount">
-            {{ formatIngredientAmount(ingredient) }}
-          </text>
-        </view>
-      </view>
-
-      <button
-        v-if="totalIngredientCount > 0"
-        class="btn-secondary-full"
-        @tap="toggleIngredientDetails"
-      >
-        {{ ingredientDetailsButtonText }}
-      </button>
-
-      <view v-if="showIngredientDetails" class="ingredients-content">
+      <view v-if="totalIngredientCount > 0" class="ingredients-content">
         <view v-if="foodIngredients.length > 0" class="ingredient-group">
           <view class="ingredient-category-title">主要食材</view>
           <view class="ingredient-header compact">
@@ -573,7 +548,6 @@ const cookingMethod = ref<CookingMethod | null>('RAW')
 
 // 价格明细展开状态
 const showPriceBreakdown = ref(false)
-const showIngredientDetails = ref(false)
 
 // 计算说明展开状态
 const showCalculationDetails = ref(false)
@@ -767,13 +741,7 @@ const supplementIngredients = computed(() => {
   return pricePreview.value.pricingBreakdown.ingredientDetails.filter(item => item.type === 'SUPPLEMENT')
 })
 
-const ingredientPreviewItems = computed(() => foodIngredients.value.slice(0, 4))
 const totalIngredientCount = computed(() => foodIngredients.value.length + supplementIngredients.value.length)
-const ingredientSummaryTitle = computed(() => {
-  if (totalIngredientCount.value === 0) return '当前食谱暂无可展示原料，请联系客服确认'
-  const names = foodIngredients.value.slice(0, 3).map((item) => item.name).join('、')
-  return `${names}${totalIngredientCount.value > 3 ? '等' : ''} ${totalIngredientCount.value} 种原料`
-})
 const ingredientSummaryMeta = computed(() => {
   const totalFoodKg = foodIngredients.value.reduce(
     (sum, item) => sum + (item.netAmount ?? item.amount),
@@ -781,17 +749,22 @@ const ingredientSummaryMeta = computed(() => {
   )
   return `${foodIngredients.value.length}种食材 · ${supplementIngredients.value.length}种补剂 · 净重 ${totalFoodKg.toFixed(2)}kg`
 })
-const ingredientDetailsButtonText = computed(() => (
-  showIngredientDetails.value
-    ? '收起原料清单'
-    : `查看全部 ${totalIngredientCount.value} 种原料`
-))
+const sourcePlanDescription = computed(() => getSourcePlanDescription(selectedSourcePlan.value))
 
 function formatSourcePlanShortName(code: IngredientSourcePlanCode): string {
   const map: Record<IngredientSourcePlanCode, string> = {
     ORGANIC: '有机优先',
-    MARKET_PREMIUM: '山姆盒马',
-    WHOLESALE: '批发优选',
+    MARKET_PREMIUM: '超市优先',
+    WHOLESALE: '性价比优先',
+  }
+  return map[code]
+}
+
+function getSourcePlanDescription(code: IngredientSourcePlanCode): string {
+  const map: Record<IngredientSourcePlanCode, string> = {
+    ORGANIC: '原料优先选择有机、非转基因、生态散养来源',
+    MARKET_PREMIUM: '原料优先选择山姆、盒马、沃集鲜等知名商超来源',
+    WHOLESALE: '原料选择以人食级为底线，尽量选择肉团、生鲜批发等性价比高的来源',
   }
   return map[code]
 }
@@ -1389,11 +1362,6 @@ function selectCookingMethod(method: CookingMethod) {
 // 切换价格明细显示
 function togglePriceBreakdown() {
   showPriceBreakdown.value = !showPriceBreakdown.value
-}
-
-// 切换原料成本详情
-function toggleIngredientDetails() {
-  showIngredientDetails.value = !showIngredientDetails.value
 }
 
 // 切换计算说明
@@ -3728,11 +3696,6 @@ function goToCreateDog() {
   color: #687078;
 }
 
-.ingredient-preview-list {
-  margin-top: 16rpx;
-  border-top: 1rpx solid #eef0f2;
-}
-
 .ingredients-content {
   margin-top: 20rpx;
 }
@@ -3762,10 +3725,6 @@ function goToCreateDog() {
 
 .ingredient-row-compact {
   border-bottom: 1rpx solid #eef0f2;
-}
-
-.ingredient-row-compact.preview {
-  padding: 14rpx 0;
 }
 
 .ingredient-header-item,

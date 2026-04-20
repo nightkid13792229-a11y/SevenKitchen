@@ -368,6 +368,62 @@
               </el-form-item>
             </el-col>
           </el-row>
+
+          <el-form-item label="营养报告PDF">
+            <div class="report-upload">
+              <template v-if="form.nutritionReportUrl">
+                <div class="report-file">
+                  <el-icon><Document /></el-icon>
+                  <span class="report-file-name">已上传营养报告</span>
+                </div>
+                <div class="report-actions">
+                  <el-button
+                    size="small"
+                    :icon="View"
+                    :disabled="false"
+                    @click="viewNutritionReport"
+                  >
+                    查看
+                  </el-button>
+                  <el-upload
+                    v-if="!isReadOnly"
+                    :show-file-list="false"
+                    :before-upload="handleNutritionReportUpload"
+                    accept="application/pdf,.pdf"
+                  >
+                    <el-button size="small" type="primary" :icon="Document">
+                      重新上传
+                    </el-button>
+                  </el-upload>
+                  <el-button
+                    v-if="!isReadOnly"
+                    size="small"
+                    type="danger"
+                    :icon="Delete"
+                    @click="removeNutritionReport"
+                  >
+                    删除
+                  </el-button>
+                </div>
+              </template>
+
+              <el-upload
+                v-else-if="!isReadOnly"
+                :show-file-list="false"
+                :before-upload="handleNutritionReportUpload"
+                accept="application/pdf,.pdf"
+              >
+                <el-button type="primary" :icon="Document">
+                  上传营养报告PDF
+                </el-button>
+              </el-upload>
+              <span v-else class="empty-report">未上传</span>
+            </div>
+            <div v-if="!isReadOnly" class="upload-tips">
+              <el-icon color="#909399"><InfoFilled /></el-icon>
+              <span>仅支持 PDF，文件大小≤10MB。保存食谱后，小程序端才会展示下载入口。</span>
+            </div>
+          </el-form-item>
         </div>
 
         <!-- Target Audience -->
@@ -761,7 +817,7 @@ import { ref, reactive, computed, watch, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import type { FormInstance, FormRules, UploadProps } from 'element-plus';
-import { Plus, Delete, InfoFilled } from '@element-plus/icons-vue';
+import { Plus, Delete, InfoFilled, Document, View } from '@element-plus/icons-vue';
 import VueDraggable from 'vuedraggable';
 import { recipeApi } from '@/api/recipes';
 import { recipeHealthTagApi } from '@/api/recipeHealthTags';
@@ -808,6 +864,7 @@ const form = reactive<RecipeForm>({
   videoUrl: undefined,
   description: undefined,
   designSource: undefined,
+  nutritionReportUrl: null,
   nutritionStandard: NutritionStandard.FEDIAF_2021,
   energyDensityKcalPerKg: 1500,
   items: [],
@@ -1142,6 +1199,7 @@ const loadRecipeDetail = async () => {
       videoUrl: detail.videoUrl,
       description: detail.description,
       designSource: detail.designSource,
+      nutritionReportUrl: detail.nutritionReportUrl || null,
       nutritionStandard: detail.nutritionStandard,
       energyDensityKcalPerKg: detail.energyDensityKcalPerKg,
       productionLossRate: detail.productionLossRate,
@@ -1302,6 +1360,65 @@ const removeCoverImage = async () => {
   }
 
   form.coverImageUrl = undefined;
+};
+
+const extractCosKeyFromUrl = (url: string): string | null => {
+  try {
+    const parsed = new URL(url);
+    const key = parsed.pathname.replace(/^\/+/, '');
+    return key || null;
+  } catch {
+    const match = url.match(/\/([^/?#]+\/[^?#]+)$/);
+    return match?.[1] || null;
+  }
+};
+
+const handleNutritionReportUpload: UploadProps['beforeUpload'] = async (file) => {
+  const isPdf =
+    file.type === 'application/pdf' ||
+    file.name.toLowerCase().endsWith('.pdf');
+  if (!isPdf) {
+    ElMessage.error('只能上传 PDF 文件');
+    return false;
+  }
+
+  const maxSize = 10 * 1024 * 1024;
+  if (file.size > maxSize) {
+    ElMessage.error(`PDF大小不能超过 10MB（当前大小：${(file.size / 1024 / 1024).toFixed(2)} MB）`);
+    return false;
+  }
+
+  try {
+    const result = await recipeApi.uploadNutritionReport(file);
+    form.nutritionReportUrl = result.url;
+    ElMessage.success('营养报告上传成功');
+  } catch (error: any) {
+    ElMessage.error(error.message || '营养报告上传失败');
+  }
+
+  return false;
+};
+
+const viewNutritionReport = () => {
+  if (!form.nutritionReportUrl) return;
+  window.open(form.nutritionReportUrl, '_blank', 'noopener,noreferrer');
+};
+
+const removeNutritionReport = async () => {
+  if (!form.nutritionReportUrl) return;
+
+  const key = extractCosKeyFromUrl(form.nutritionReportUrl);
+  if (key) {
+    try {
+      await recipeApi.deleteImage(key);
+    } catch (error: any) {
+      ElMessage.error(error.message || '营养报告删除失败');
+      return;
+    }
+  }
+
+  form.nutritionReportUrl = null;
+  ElMessage.success('营养报告已删除');
 };
 
 const handleSubmit = async () => {
@@ -1868,6 +1985,35 @@ onMounted(async () => {
   align-items: center;
   gap: 6px;
   font-size: 12px;
+  color: #909399;
+}
+
+.report-upload {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.report-file {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: #303133;
+  line-height: 32px;
+}
+
+.report-file-name {
+  font-size: 14px;
+}
+
+.report-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.empty-report {
   color: #909399;
 }
 

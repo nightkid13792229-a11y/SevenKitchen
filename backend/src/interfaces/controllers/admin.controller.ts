@@ -2694,6 +2694,41 @@ export class AdminController {
     }
   }
 
+  @Post('recipes/upload-nutrition-report')
+  @UseGuards(AuthGuard, AdminGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Upload recipe nutrition report PDF to Tencent COS' })
+  @ApiResponse({ status: 201, description: 'Nutrition report uploaded' })
+  @ApiResponse({ status: 400, description: 'Upload failed' })
+  async uploadRecipeNutritionReport(
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<ApiResponseDto<any>> {
+    if (!file) {
+      return ApiResponseDto.error(400, '请上传营养报告 PDF 文件');
+    }
+
+    const isPdf =
+      file.mimetype === 'application/pdf' ||
+      file.originalname?.toLowerCase().endsWith('.pdf');
+    if (!isPdf) {
+      return ApiResponseDto.error(400, '只支持 PDF 格式的营养报告');
+    }
+
+    try {
+      const result = await this.cosService.uploadFile(
+        file,
+        file.originalname,
+        'recipe-nutrition-reports',
+      );
+      return ApiResponseDto.success(result);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
   @Post('ingredients/upload-diy-image')
   @UseGuards(AuthGuard, AdminGuard)
   @UseInterceptors(FileInterceptor('file'))

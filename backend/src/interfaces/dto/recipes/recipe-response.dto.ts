@@ -72,6 +72,11 @@ export class RecipeDetailDto extends RecipeSummaryDto {
   @ApiPropertyOptional({ example: '七厨房' })
   designSource?: string;
 
+  @ApiPropertyOptional({
+    example: 'https://example.com/recipe-nutrition-reports/report.pdf',
+  })
+  nutritionReportUrl?: string;
+
   @ApiPropertyOptional({ description: 'Detailed nutrition data' })
   nutritionDetailedData?: {
     energyDensityKcalPerKg?: number;

@@ -566,6 +566,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
       energyDensityKcalPerKg: recipe.energyDensityKcalPerKg,
       productionLossRate: recipe.productionLossRate,
       batchLaborHours: recipe.batchLaborHours,
+      nutritionReportUrl: recipe.nutritionReportUrl,
     };
 
     if (!existing) {
@@ -677,6 +678,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
       designSource: record.designSource,
       nutritionStandard: record.nutritionStandard,
       nutritionDetailedData: record.nutritionDetailedData,
+      nutritionReportUrl: record.nutritionReportUrl,
       description: record.description,
       viewCount: record.viewCount ?? 0,
       favoriteCount: record.favoriteCount ?? 0,
@@ -693,7 +695,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
           nutrientTargetValue: item.nutrientTargetValue
             ? Number(item.nutrientTargetValue)
             : null,
-          supplementTargets: (item.supplementTargets as any) ?? null,
+          supplementTargets: ((item as any).supplementTargets as any) ?? null,
           supplementAlternativeIngredientIds:
             item.supplementAlternatives?.map(
               (alternative) => alternative.alternativeIngredientId,

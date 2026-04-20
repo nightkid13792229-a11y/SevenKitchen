@@ -485,6 +485,7 @@ export class RecipesController {
       targetHealthTags: (recipe as any).targetHealthTags || [],
       applicableLifeStages: (recipe as any).applicableLifeStages || [],
       nutritionDetailedData,
+      nutritionReportUrl: (recipe as any).nutritionReportUrl || undefined,
       items: allIngredients,
       description: (recipe as any).description,
     };

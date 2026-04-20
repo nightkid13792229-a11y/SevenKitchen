@@ -263,6 +263,30 @@ describe('RecipesController (e2e)', () => {
       );
     });
 
+    it('returns nutrition report url when the recipe has an uploaded PDF report', async () => {
+      const recipe: Recipe = {
+        id: '550e8400-e29b-41d4-a716-446655440014',
+        version: 1,
+        name: 'Report Recipe',
+        status: 'PUBLIC',
+        energyDensityKcalPerKg: 1450,
+        productionLossRate: 1.07,
+        items: [],
+        nutritionReportUrl:
+          'https://cdn.example.com/recipe-nutrition-reports/report.pdf',
+      } as any;
+      await recipeRepository.save(recipe);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/${recipe.id}`)
+        .expect(200);
+
+      expect(response.body.code).toBe(0);
+      expect(response.body.data.nutritionReportUrl).toBe(
+        'https://cdn.example.com/recipe-nutrition-reports/report.pdf',
+      );
+    });
+
     it('returns supplement alternatives with product fields and resolved active nutrients', async () => {
       const recipe: Recipe = {
         id: '550e8400-e29b-41d4-a716-446655440013',

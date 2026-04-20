@@ -57,6 +57,17 @@ export class RecipeService {
     },
   };
 
+  private resolveNutritionReportUrlForUpdate(
+    dto: Record<string, any>,
+    existingUrl?: string | null,
+  ): string | null | undefined {
+    if (Object.prototype.hasOwnProperty.call(dto, 'nutritionReportUrl')) {
+      return dto.nutritionReportUrl || null;
+    }
+
+    return existingUrl;
+  }
+
   private normalizeSupplementAlternativeIngredientIds(
     ingredientIds?: string[] | null,
   ): string[] {
@@ -385,6 +396,7 @@ export class RecipeService {
         videoUrl: dto.videoUrl,
         description: dto.description,
         designSource: dto.designSource,
+        nutritionReportUrl: dto.nutritionReportUrl || null,
         nutritionStandard: dto.nutritionStandard,
         nutritionDetailedData: (dto.nutritionDetailedData ||
           Prisma.JsonNull) as unknown as Prisma.InputJsonValue,
@@ -491,6 +503,10 @@ export class RecipeService {
         videoUrl: dto.videoUrl,
         description: dto.description,
         designSource: dto.designSource,
+        nutritionReportUrl: this.resolveNutritionReportUrlForUpdate(
+          dto,
+          existing.nutritionReportUrl,
+        ),
         nutritionStandard: dto.nutritionStandard,
         nutritionDetailedData: (dto.nutritionDetailedData ??
           Prisma.JsonNull) as unknown as Prisma.InputJsonValue,
@@ -665,6 +681,7 @@ export class RecipeService {
         videoUrl: recipe.videoUrl,
         description: recipe.description,
         designSource: recipe.designSource,
+        nutritionReportUrl: recipe.nutritionReportUrl,
         nutritionStandard: recipe.nutritionStandard,
         nutritionDetailedData:
           recipe.nutritionDetailedData as Prisma.InputJsonValue,
@@ -854,6 +871,7 @@ export class RecipeService {
       designSource: recipe.designSource || undefined,
       nutritionStandard: recipe.nutritionStandard as NutritionStandard,
       nutritionDetailedData: recipe.nutritionDetailedData || undefined,
+      nutritionReportUrl: recipe.nutritionReportUrl || undefined,
       productionSteps: recipe.productionSteps || undefined,
       productionLossRate: recipe.productionLossRate,
       batchLaborHours: recipe.batchLaborHours || undefined,

@@ -106,10 +106,10 @@
       </view>
     </view>
 
-    <!-- 营养成分分析 -->
+    <!-- 核心营养成分 -->
     <view class="nutrition-panel" v-if="recipe.nutritionDetailedData">
       <view class="card-header">
-        <text class="card-title">营养成分分析</text>
+        <text class="card-title">核心营养成分</text>
       </view>
 
       <view class="nutrition-grid">
@@ -192,6 +192,20 @@
           </view>
         </view>
       </view>
+    </view>
+
+    <!-- 详细营养报告下载 -->
+    <view
+      v-if="recipe.nutritionReportUrl"
+      class="nutrition-report-card"
+      @tap="openNutritionReport"
+    >
+      <view class="report-icon">PDF</view>
+      <view class="report-copy">
+        <text class="report-title">详细营养报告</text>
+        <text class="report-subtitle">查看PDF格式报告</text>
+      </view>
+      <text class="report-action">下载</text>
     </view>
 
     <!-- 用户评价板块 -->
@@ -339,6 +353,7 @@ interface RecipeDetail {
   targetHealthTags: string[]
   applicableLifeStages: string[]
   nutritionDetailedData?: NutritionDetailedData
+  nutritionReportUrl?: string
   items: RecipeItem[]
 }
 
@@ -356,6 +371,7 @@ const recipe = ref<RecipeDetail>({
   targetHealthTags: [],
   applicableLifeStages: [],
   nutritionDetailedData: undefined,
+  nutritionReportUrl: undefined,
   items: []
 })
 
@@ -562,6 +578,47 @@ function previewImage() {
   uni.previewImage({
     urls: [normalizedUrl],
     current: normalizedUrl
+  })
+}
+
+function openNutritionReport() {
+  const reportUrl = recipe.value.nutritionReportUrl
+  if (!reportUrl) return
+
+  uni.showLoading({ title: '下载中...' })
+  uni.downloadFile({
+    url: reportUrl,
+    success: (downloadRes: any) => {
+      if (downloadRes.statusCode !== 200 || !downloadRes.tempFilePath) {
+        uni.showToast({
+          title: '报告打开失败',
+          icon: 'none'
+        })
+        return
+      }
+
+      uni.openDocument({
+        filePath: downloadRes.tempFilePath,
+        fileType: 'pdf',
+        fail: (err: any) => {
+          console.error('[RecipeDetail] Open nutrition report failed:', err)
+          uni.showToast({
+            title: '报告打开失败',
+            icon: 'none'
+          })
+        }
+      })
+    },
+    fail: (err: any) => {
+      console.error('[RecipeDetail] Download nutrition report failed:', err)
+      uni.showToast({
+        title: '报告打开失败',
+        icon: 'none'
+      })
+    },
+    complete: () => {
+      uni.hideLoading()
+    }
   })
 }
 
@@ -890,6 +947,53 @@ function onReviewSubmitted() {
   color: #333;
 }
 
+.nutrition-report-card {
+  background-color: #fff;
+  border-radius: 16rpx;
+  padding: 22rpx 24rpx;
+  margin: 20rpx;
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+}
+
+.report-icon {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 8rpx;
+  background-color: #e8f5e9;
+  color: #07c160;
+  font-size: 22rpx;
+  font-weight: 700;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.report-copy {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.report-title {
+  font-size: 30rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.report-subtitle {
+  font-size: 24rpx;
+  color: #888;
+}
+
+.report-action {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #07c160;
+}
+
 /* 原料卡片 */
 .ingredients-card {
   background-color: #fff;
@@ -1024,7 +1128,7 @@ function onReviewSubmitted() {
   font-weight: normal;
 }
 
-/* 营养成分分析板块 */
+/* 核心营养成分板块 */
 .nutrition-panel {
   background-color: #fff;
   border-radius: 16rpx;

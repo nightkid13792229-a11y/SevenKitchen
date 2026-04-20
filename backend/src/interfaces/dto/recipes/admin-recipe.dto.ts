@@ -112,6 +112,10 @@ export class CreateRecipeDto {
   @IsString()
   designSource?: string;
 
+  @IsOptional()
+  @IsString()
+  nutritionReportUrl?: string;
+
   @IsString()
   nutritionStandard!: string;
 
@@ -189,6 +193,10 @@ export class UpdateRecipeDto {
   @IsOptional()
   @IsString()
   designSource?: string;
+
+  @IsOptional()
+  @IsString()
+  nutritionReportUrl?: string | null;
 
   @IsOptional()
   @IsString()
@@ -299,6 +307,7 @@ export interface RecipeDetailResponseDto extends RecipeSummaryResponseDto {
   videoUrl?: string;
   description?: string;
   designSource?: string;
+  nutritionReportUrl?: string;
   nutritionStandard: NutritionStandard;
   nutritionDetailedData?: NutritionDetailedData;
   productionSteps?: string;

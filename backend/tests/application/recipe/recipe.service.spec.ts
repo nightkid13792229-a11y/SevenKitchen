@@ -5,6 +5,7 @@ describe('RecipeService', () => {
   const mockPrismaService = {
     recipe: {
       findUnique: jest.fn(),
+      findFirst: jest.fn(),
       create: jest.fn(),
     },
     recipeHealthTagAssignment: {
@@ -151,6 +152,64 @@ describe('RecipeService', () => {
       );
       expect(result.designSource).toBe('Animal Diet Formulator');
       expect(result.items[0].exampleWeight).toBe(180.5);
+    });
+  });
+
+  describe('createRecipe', () => {
+    it('persists and returns the nutrition report url for the current recipe record', async () => {
+      const reportUrl =
+        'https://cdn.example.com/recipe-nutrition-reports/report.pdf';
+      const createdRecipe = {
+        id: 'recipe-created-id',
+        recipeId: 'recipe-created',
+        version: 1,
+        name: '营养报告食谱',
+        status: RecipeStatus.DRAFT,
+        energyDensityKcalPerKg: 1320,
+        productionLossRate: 1.07,
+        batchLaborHours: 2,
+        coverImageUrl: null,
+        coverTitle: null,
+        detailImages: [],
+        videoUrl: null,
+        description: null,
+        designSource: null,
+        nutritionStandard: 'FEDIAF_2021',
+        nutritionDetailedData: null,
+        applicableLifeStages: [],
+        productionSteps: null,
+        nutritionReportUrl: reportUrl,
+        salesCount: 0,
+        diyGenCount: 0,
+        likeCount: 0,
+        favoriteCount: 0,
+        createdAt: new Date('2026-04-20T10:00:00.000Z'),
+        updatedAt: new Date('2026-04-20T10:00:00.000Z'),
+        healthTagAssignments: [],
+        items: [],
+      };
+
+      mockPrismaService.recipe.findFirst.mockResolvedValue(null);
+      mockPrismaService.recipe.create.mockResolvedValue({
+        id: 'recipe-created-id',
+      });
+      mockPrismaService.recipe.findUnique.mockResolvedValue(createdRecipe);
+
+      const result = await service.createRecipe({
+        name: '营养报告食谱',
+        nutritionStandard: 'FEDIAF_2021',
+        energyDensityKcalPerKg: 1320,
+        nutritionReportUrl: reportUrl,
+      });
+
+      expect(mockPrismaService.recipe.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            nutritionReportUrl: reportUrl,
+          }),
+        }),
+      );
+      expect(result.nutritionReportUrl).toBe(reportUrl);
     });
   });
 });

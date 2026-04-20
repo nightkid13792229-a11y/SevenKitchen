@@ -88,6 +88,7 @@ export interface RecipeSummary {
   status: RecipeStatus;
   coverImageUrl?: string;
   coverTitle?: string;
+  nutritionReportUrl?: string | null;
   energyDensityKcalPerKg: number;
   applicableLifeStages: LifeStage[];
   targetHealthTags: string[]; // Now using UUIDs instead of enum
@@ -105,6 +106,7 @@ export interface RecipeDetail extends RecipeSummary {
   videoUrl?: string;
   description?: string;
   designSource?: string;
+  nutritionReportUrl?: string | null;
   nutritionStandard: NutritionStandard;
   nutritionDetailedData?: NutritionDetailedData;
   productionSteps?: string;
@@ -121,6 +123,7 @@ export interface RecipeForm {
   videoUrl?: string;
   description?: string;
   designSource?: string;
+  nutritionReportUrl?: string | null;
   nutritionStandard: NutritionStandard;
   energyDensityKcalPerKg: number;
   items?: RecipeItem[];

@@ -7,6 +7,78 @@ import { MIXED_BREED_VIRTUAL_ID } from '../../../src/domain/dog/constants';
 import { DogSizeCategory, GrowthCurveType } from '../../../src/domain/dog/enums';
 
 describe('AdminController', () => {
+  describe('uploadRecipeNutritionReport', () => {
+    it('rejects non-PDF files before uploading to COS', async () => {
+      const mockCosService = {
+        uploadFile: jest.fn(),
+      };
+      const controller = new AdminController(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        mockCosService as any,
+      );
+
+      const result = await (controller as any).uploadRecipeNutritionReport({
+        originalname: 'report.png',
+        mimetype: 'image/png',
+      } as Express.Multer.File);
+
+      expect(result.code).toBe(400);
+      expect(result.message).toContain('PDF');
+      expect(mockCosService.uploadFile).not.toHaveBeenCalled();
+    });
+
+    it('uploads PDF reports to the recipe nutrition report folder', async () => {
+      const mockCosService = {
+        uploadFile: jest.fn().mockResolvedValue({
+          url: 'https://cdn.example.com/recipe-nutrition-reports/report.pdf',
+          key: 'recipe-nutrition-reports/report.pdf',
+        }),
+      };
+      const controller = new AdminController(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        mockCosService as any,
+      );
+      const file = {
+        originalname: 'report.pdf',
+        mimetype: 'application/pdf',
+      } as Express.Multer.File;
+
+      const result = await (controller as any).uploadRecipeNutritionReport(file);
+
+      expect(mockCosService.uploadFile).toHaveBeenCalledWith(
+        file,
+        'report.pdf',
+        'recipe-nutrition-reports',
+      );
+      expect(result.data).toEqual({
+        url: 'https://cdn.example.com/recipe-nutrition-reports/report.pdf',
+        key: 'recipe-nutrition-reports/report.pdf',
+      });
+    });
+  });
+
   describe('getIngredientById', () => {
     it('returns legacy nutritionProfile items[] as-is for admin reads', async () => {
       const legacyProfile = {

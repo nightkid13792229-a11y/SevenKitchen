@@ -70,13 +70,13 @@
             <text class="summary-text">费用构成: {{ getExpenseSummary(item) }}</text>
           </view>
 
-          <!-- 审核信息 -->
+          <!-- 报销处理信息 -->
           <view v-if="item.status !== 'PENDING_REVIEW'" class="item-review">
             <text class="review-info">
-              审核人: {{ item.reviewedBy?.nickname || '-' }}
+              报销处理人: {{ item.reviewedBy?.nickname || '-' }}
             </text>
             <text v-if="item.reviewComment" class="review-comment">
-              意见: {{ item.reviewComment }}
+              备注: {{ item.reviewComment }}
             </text>
           </view>
         </view>
@@ -106,7 +106,7 @@ import { summarizeReimbursementCustomFees } from '@/constants/reimbursement';
 // 状态筛选标签
 const statusTabs = [
   { label: '全部', value: '' },
-  { label: '待审核', value: 'PENDING_REVIEW' },
+  { label: '待报销', value: 'PENDING_REVIEW' },
   { label: '已报销', value: 'REIMBURSED' },
   { label: '已驳回', value: 'REJECTED' },
   { label: '需重提', value: 'REQUIRES_RESUBMIT' },
@@ -205,7 +205,7 @@ const goToSubmit = () => {
 // 获取状态文本
 const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
-    'PENDING_REVIEW': '待审核',
+    'PENDING_REVIEW': '待报销',
     'REIMBURSED': '已报销',
     'REJECTED': '已驳回',
     'REQUIRES_RESUBMIT': '需重新提交',
@@ -263,7 +263,7 @@ const getExpenseSummary = (item: any) => {
   return parts.join('、');
 };
 
-// 判断是否可以删除（只有待审核、已驳回、需重新提交状态可以删除）
+// 判断是否可以删除（只有待报销、已驳回、需重新提交状态可以删除）
 const canDelete = (item: any) => {
   return ['PENDING_REVIEW', 'REJECTED', 'REQUIRES_RESUBMIT'].includes(item.status);
 };

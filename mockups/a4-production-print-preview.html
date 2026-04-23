@@ -1,0 +1,614 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>SevenKitchen A4 一页制作单预览</title>
+  <style>
+    :root {
+      --paper-w: 794px;
+      --paper-h: 1123px;
+      --green: #4f9f86;
+      --green-dark: #2f7a63;
+      --green-soft: #e8f4ef;
+      --orange: #d68218;
+      --orange-soft: #fff3df;
+      --ink: #202326;
+      --muted: #6f767d;
+      --line: #dce2df;
+      --soft-line: #edf1ef;
+      --page-bg: #eef1f3;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      color: var(--ink);
+      background: var(--page-bg);
+    }
+
+    .screen-shell {
+      min-height: 100vh;
+      padding: 22px 16px 112px;
+    }
+
+    .top-note {
+      width: min(100%, var(--paper-w));
+      margin: 0 auto 12px;
+      color: #596169;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    .paper {
+      width: min(100%, var(--paper-w));
+      height: var(--paper-h);
+      margin: 0 auto;
+      background: #fff;
+      box-shadow: 0 14px 38px rgba(25, 35, 45, 0.18);
+      border-radius: 4px;
+      overflow: hidden;
+      position: relative;
+    }
+
+    .paper-inner {
+      height: 100%;
+      padding: 32px 38px 28px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .print-header {
+      text-align: center;
+      border-bottom: 2px solid var(--green);
+      padding-bottom: 14px;
+      margin-bottom: 15px;
+      flex: 0 0 auto;
+    }
+
+    .recipe-name {
+      font-size: 28px;
+      font-weight: 850;
+      letter-spacing: 0;
+      line-height: 1.15;
+      margin-bottom: 6px;
+    }
+
+    .pot-line {
+      font-size: 19px;
+      color: var(--green);
+      font-weight: 800;
+      line-height: 1.2;
+      margin-bottom: 9px;
+    }
+
+    .meta-row {
+      display: flex;
+      justify-content: center;
+      gap: 22px;
+      color: #555d63;
+      font-size: 13px;
+      font-weight: 650;
+      line-height: 1.25;
+    }
+
+    .section {
+      flex: 0 0 auto;
+      margin-bottom: 14px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 18px;
+      font-weight: 850;
+      line-height: 1.2;
+      margin-bottom: 9px;
+    }
+
+    .section-title::before {
+      content: "";
+      width: 5px;
+      height: 22px;
+      border-radius: 1px;
+      background: var(--green);
+    }
+
+    .order-box {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .order-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      background: var(--green);
+      color: #fff;
+      padding: 8px 12px;
+      font-size: 14px;
+      font-weight: 850;
+      line-height: 1.2;
+    }
+
+    .order-grid {
+      padding: 9px 12px 7px;
+      display: grid;
+      grid-template-columns: 1.1fr 1.1fr 0.85fr 1.15fr;
+      column-gap: 13px;
+      row-gap: 5px;
+      font-size: 13px;
+      line-height: 1.28;
+      border-bottom: 1px solid var(--soft-line);
+    }
+
+    .label {
+      color: var(--muted);
+      margin-right: 5px;
+      font-weight: 700;
+    }
+
+    .value {
+      font-weight: 780;
+    }
+
+    .remark-line {
+      display: flex;
+      gap: 7px;
+      padding: 7px 12px 8px;
+      background: #fffaf0;
+      color: #57483a;
+      font-size: 12px;
+      line-height: 1.35;
+      min-height: 40px;
+    }
+
+    .remark-label {
+      color: #9a6422;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .remark-text {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .ingredient-section {
+      flex: 1 1 auto;
+      min-height: 0;
+      margin-bottom: 8px;
+    }
+
+    .ingredient-table {
+      border: 1px solid #9ba39d;
+      border-radius: 6px;
+      overflow: hidden;
+    }
+
+    .table-head,
+    .ingredient-row,
+    .summary-row {
+      display: grid;
+      grid-template-columns: 44px 210px 72px 205px 1fr;
+      align-items: stretch;
+    }
+
+    .table-head {
+      background: #f3f6f4;
+      color: #29302d;
+      font-size: 12px;
+      font-weight: 850;
+      line-height: 1.2;
+      border-bottom: 1px solid #cdd6d1;
+    }
+
+    .head-cell,
+    .cell {
+      padding: 5px 7px;
+      border-right: 1px solid var(--soft-line);
+      min-width: 0;
+    }
+
+    .head-cell:last-child,
+    .cell:last-child {
+      border-right: 0;
+    }
+
+    .ingredient-row {
+      min-height: 33px;
+      border-bottom: 1px solid var(--soft-line);
+      font-size: 10.5px;
+      line-height: 1.18;
+    }
+
+    .ingredient-row:nth-child(odd) {
+      background: #fbfcfb;
+    }
+
+    .summary-row {
+      background: #eaf4ed;
+      color: #1f3a30;
+      font-size: 12px;
+      font-weight: 850;
+      border-bottom: 1px solid #bdd6ca;
+      border-top: 2px solid var(--green);
+      line-height: 1.2;
+    }
+
+    .type-badge {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 31px;
+      height: 20px;
+      padding: 0 5px;
+      border-radius: 4px;
+      background: var(--green-soft);
+      color: var(--green-dark);
+      font-size: 11px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .type-badge.supplement {
+      background: var(--orange-soft);
+      color: var(--orange);
+    }
+
+    .ingredient-name-line {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      color: #202326;
+      line-height: 1.22;
+    }
+
+    .standard-name {
+      font-size: 11.4px;
+      font-weight: 850;
+    }
+
+    .sku-name {
+      font-size: 10.8px;
+      color: #2b5eaa;
+      font-weight: 760;
+    }
+
+    .name-separator {
+      color: #9aa1a6;
+      margin: 0 3px;
+    }
+
+    .amount {
+      font-size: 11.5px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .purchase-info {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+      color: #30373a;
+      font-size: 10.4px;
+      line-height: 1.22;
+      font-weight: 720;
+    }
+
+    .method {
+      color: #30373a;
+      font-weight: 710;
+      font-size: 10.4px;
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    .print-rules {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+      margin-top: 8px;
+      font-size: 11px;
+      color: #667078;
+      line-height: 1.35;
+      flex: 0 0 auto;
+    }
+
+    .rule {
+      background: #f7f9f8;
+      border: 1px solid var(--soft-line);
+      border-radius: 5px;
+      padding: 6px 8px;
+    }
+
+    .page-footer {
+      flex: 0 0 auto;
+      margin-top: auto;
+      padding-top: 8px;
+      border-top: 1px solid var(--line);
+      display: flex;
+      justify-content: space-between;
+      color: #9aa1a6;
+      font-size: 11px;
+      line-height: 1.4;
+    }
+
+    .bottom-actions {
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(255, 255, 255, 0.96);
+      border-top: 1px solid #dce2df;
+      box-shadow: 0 -8px 28px rgba(24, 34, 44, 0.12);
+      padding: 10px 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      z-index: 20;
+    }
+
+    .print-hint {
+      color: #986011;
+      background: #fff5df;
+      border: 1px solid #ffd996;
+      border-radius: 6px;
+      padding: 8px 12px;
+      font-size: 13px;
+      line-height: 1.35;
+      text-align: center;
+    }
+
+    .print-button {
+      height: 52px;
+      border: 0;
+      border-radius: 8px;
+      background: var(--green);
+      color: #fff;
+      font-size: 20px;
+      font-weight: 850;
+    }
+
+    @media print {
+      body {
+        background: #fff;
+      }
+
+      .screen-shell {
+        padding: 0;
+      }
+
+      .top-note,
+      .bottom-actions {
+        display: none;
+      }
+
+      .paper {
+        width: 210mm;
+        height: 297mm;
+        margin: 0;
+        border-radius: 0;
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="screen-shell">
+    <div class="top-note">一页 A4 紧凑预览：备注只占固定空间，超长 SKU/规格/制备方法自动压缩，不让内容溢出纸面。</div>
+
+    <section class="paper" aria-label="A4 一页制作单">
+      <div class="paper-inner">
+        <header class="print-header">
+          <div class="recipe-name">糙米鸡蛋牛肉 v4</div>
+          <div class="pot-line">第 3 / 3 锅</div>
+          <div class="meta-row">
+            <span>状态：已完成</span>
+            <span>创建时间：2026-04-21 23:15</span>
+            <span>制作人：厨房管理员</span>
+          </div>
+        </header>
+
+        <section class="section">
+          <div class="section-title">分装订单（1个）</div>
+          <div class="order-box">
+            <div class="order-title">
+              <span>订单 1</span>
+              <span>一页打印模式</span>
+            </div>
+            <div class="order-grid">
+              <div><span class="label">总净重</span><span class="value">12480.00g</span></div>
+              <div><span class="label">分装</span><span class="value">208g x 60袋</span></div>
+              <div><span class="label">狗狗</span><span class="value">setar</span></div>
+              <div><span class="label">收货人</span><span class="value">赵晨（成都市）</span></div>
+            </div>
+            <div class="remark-line">
+              <span class="remark-label">备注</span>
+              <span class="remark-text">不要太碎，牛肉颗粒略大一点；胡萝卜和南瓜籽仁需要充分打碎后再混合。备注过长时最多显示两行，完整内容请在系统中查看。</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="ingredient-section">
+          <div class="section-title">原料清单（16项）</div>
+          <div class="ingredient-table">
+            <div class="table-head">
+              <div class="head-cell">类型</div>
+              <div class="head-cell">标准原料 / SKU</div>
+              <div class="head-cell">用量</div>
+              <div class="head-cell">品牌 / 渠道 / 规格</div>
+              <div class="head-cell">制备</div>
+            </div>
+
+            <div class="ingredient-row">
+              <div class="cell"><span class="type-badge">食材</span></div>
+              <div class="cell"><div class="ingredient-name-line"><span class="standard-name">牛霖</span><span class="name-separator">/</span><span class="sku-name">进口冷冻牛霖</span></div></div>
+              <div class="cell amount">1557.82g</div>
+              <div class="cell purchase-info">新西兰银蕨 / 本地生鲜市场 / 1kg/袋</div>
+              <div class="cell method">去油、生重、打碎、充分搅拌</div>
+            </div>
+
+            <div class="ingredient-row">
+              <div class="cell"><span class="type-badge">食材</span></div>
+              <div class="cell"><div class="ingredient-name-line"><span class="standard-name">牛肝</span><span class="name-separator">/</span><span class="sku-name">牛肝</span></div></div>
+              <div class="cell amount">186.94g</div>
+              <div class="cell purchase-info">- / 本地生鲜市场 / 散称</div>
+              <div class="cell method">去油、生重、打碎、充分搅拌</div>
+            </div>
+
+            <div class="ingredient-row">
+              <div class="cell"><span class="type-badge">食材</span></div>
+              <div class="cell"><div class="ingredient-name-line"><span class="standard-name">牛脾</span><span class="name-separator">/</span><span class="sku-name">牛脾</span></div></div>
+              <div class="cell amount">311.56g</div>
+              <div class="cell purchase-info">- / 本地生鲜市场 / 500g/份</div>
+              <div class="cell method">去油、生重、打碎、充分搅拌</div>
+            </div>
+
+            <div class="ingredient-row">
+              <div class="cell"><span class="type-badge">食材</span></div>
+              <div class="cell"><div class="ingredient-name-line"><span class="standard-name">牛心</span><span class="name-separator">/</span><span class="sku-name">牛心</span></div></div>
+              <div class="cell amount">311.56g</div>
+              <div class="cell purchase-info">- / 本地生鲜市场 / 散称</div>
+              <div class="cell method">去油、生重、打碎、充分搅拌</div>
+            </div>
+
+            <div class="ingredient-row">
+              <div class="cell"><span class="type-badge">食材</span></div>
+              <div class="cell"><div class="ingredient-name-line"><span class="standard-name">鸡蛋</span><span class="name-separator">/</span><span class="sku-name">安心保洁蛋</span></div></div>
+              <div class="cell amount">934.69g</div>
+              <div class="cell purchase-info">沃尔玛 / 沃尔玛 / 1.59kg(30枚)/盒</div>
+              <div class="cell method">去壳、全蛋、生重、充分搅拌</div>
+            </div>
+
+            <div class="ingredient-row">
+              <div class="cell"><span class="type-badge">食材</span></div>
+              <div class="cell"><div class="ingredient-name-line"><span class="standard-name">生蚝</span><span class="name-separator">/</span><span class="sku-name">生蚝</span></div></div>
+              <div class="cell amount">467.35g</div>
+              <div class="cell purchase-info">- / 天猫旗舰店 / 200g/包</div>
+              <div class="cell method">去壳、生重、打碎、充分搅拌</div>
+            </div>
+
+            <div class="ingredient-row">
+              <div class="cell"><span class="type-badge">食材</span></div>
+              <div class="cell"><div class="ingredient-name-line"><span class="standard-name">青花鱼</span><span class="name-separator">/</span><span class="sku-name">青花鱼</span></div></div>
+              <div class="cell amount">155.78g</div>
+              <div class="cell purchase-info">盒马 / 盒马鲜生 / 1kg/袋</div>
+              <div class="cell method">去骨、生重、打碎、充分搅拌</div>
+            </div>
+
+            <div class="ingredient-row">
+              <div class="cell"><span class="type-badge">食材</span></div>
+              <div class="cell"><div class="ingredient-name-line"><span class="standard-name">糙米</span><span class="name-separator">/</span><span class="sku-name">糙米</span></div></div>
+              <div class="cell amount">623.13g</div>
+              <div class="cell purchase-info">- / 永辉超市 / 500g/袋</div>
+              <div class="cell method">生重、打粉、充分搅拌</div>
+            </div>
+
+            <div class="ingredient-row">
+              <div class="cell"><span class="type-badge">食材</span></div>
+              <div class="cell"><div class="ingredient-name-line"><span class="standard-name">红薯</span><span class="name-separator">/</span><span class="sku-name">红薯</span></div></div>
+              <div class="cell amount">467.35g</div>
+              <div class="cell purchase-info">- / 本地生鲜市场 / 散称</div>
+              <div class="cell method">去皮、生重、打碎、充分搅拌</div>
+            </div>
+
+            <div class="ingredient-row">
+              <div class="cell"><span class="type-badge">食材</span></div>
+              <div class="cell"><div class="ingredient-name-line"><span class="standard-name">胡萝卜</span><span class="name-separator">/</span><span class="sku-name">胡萝卜</span></div></div>
+              <div class="cell amount">311.56g</div>
+              <div class="cell purchase-info">- / 本地生鲜市场 / 散称</div>
+              <div class="cell method">留皮、生重、打碎、充分搅拌</div>
+            </div>
+
+            <div class="ingredient-row">
+              <div class="cell"><span class="type-badge">食材</span></div>
+              <div class="cell"><div class="ingredient-name-line"><span class="standard-name">羽衣甘蓝</span><span class="name-separator">/</span><span class="sku-name">羽衣甘蓝</span></div></div>
+              <div class="cell amount">155.78g</div>
+              <div class="cell purchase-info">盒马 / 盒马鲜生 / 150g/份</div>
+              <div class="cell method">生重、打碎、充分搅拌</div>
+            </div>
+
+            <div class="ingredient-row">
+              <div class="cell"><span class="type-badge">食材</span></div>
+              <div class="cell"><div class="ingredient-name-line"><span class="standard-name">生南瓜籽仁</span><span class="name-separator">/</span><span class="sku-name">有机生南瓜籽仁</span></div></div>
+              <div class="cell amount">93.47g</div>
+              <div class="cell purchase-info">人民食品 / 天猫旗舰店 / 300g/瓶</div>
+              <div class="cell method">生重、打碎、充分搅拌</div>
+            </div>
+
+            <div class="ingredient-row">
+              <div class="cell"><span class="type-badge">食材</span></div>
+              <div class="cell"><div class="ingredient-name-line"><span class="standard-name">小麦胚芽油</span><span class="name-separator">/</span><span class="sku-name">小麦胚芽油</span></div></div>
+              <div class="cell amount">31.16g</div>
+              <div class="cell purchase-info">NOW FOODS / 天猫旗舰店 / 500ml/瓶</div>
+              <div class="cell method">充分搅拌</div>
+            </div>
+
+            <div class="ingredient-row">
+              <div class="cell"><span class="type-badge">食材</span></div>
+              <div class="cell"><div class="ingredient-name-line"><span class="standard-name">食用盐</span><span class="name-separator">/</span><span class="sku-name">未加碘低钠海盐</span></div></div>
+              <div class="cell amount">9.35g</div>
+              <div class="cell purchase-info">中盐 / 天猫超市 / 袋装</div>
+              <div class="cell method">充分搅拌</div>
+            </div>
+
+            <div class="summary-row">
+              <div class="cell">-</div>
+              <div class="cell">食材类原料总重</div>
+              <div class="cell">5617.50g</div>
+              <div class="cell">-</div>
+              <div class="cell">-</div>
+            </div>
+
+            <div class="ingredient-row">
+              <div class="cell"><span class="type-badge supplement">补剂</span></div>
+              <div class="cell"><div class="ingredient-name-line"><span class="standard-name">骨粉</span><span class="name-separator">/</span><span class="sku-name">骨粉，16盎司，450g/罐。每6克含1300mg钙，440mg磷，15mg镁。</span></div></div>
+              <div class="cell amount">119.40g</div>
+              <div class="cell purchase-info">KAL / iHerb / 450g/罐</div>
+              <div class="cell method">充分搅拌</div>
+            </div>
+
+            <div class="ingredient-row">
+              <div class="cell"><span class="type-badge supplement">补剂</span></div>
+              <div class="cell"><div class="ingredient-name-line"><span class="standard-name">海藻粉</span><span class="name-separator">/</span><span class="sku-name">海藻粉 450mcg碘/平勺（90mg），8盎司/227g/瓶，2522平勺/瓶</span></div></div>
+              <div class="cell amount">8.94平勺</div>
+              <div class="cell purchase-info">NOW FOODS / 天猫旗舰店 / 227g/瓶</div>
+              <div class="cell method">充分搅拌</div>
+            </div>
+          </div>
+
+          <div class="print-rules">
+            <div class="rule">备注最多占两行，完整备注在系统中查看。</div>
+            <div class="rule">长 SKU、规格、制备方法最多两行，避免溢出。</div>
+            <div class="rule">原料清单优先保留：标准原料、SKU、用量、渠道、规格。</div>
+          </div>
+        </section>
+
+        <footer class="page-footer">
+          <span>SevenKitchen 专业鲜食套餐定制</span>
+          <span>第 1 / 1 页</span>
+        </footer>
+      </div>
+    </section>
+  </main>
+
+  <div class="bottom-actions">
+    <div class="print-hint">PDF 打开后，使用页面右上角菜单或分享入口选择打印。底部操作区不会进入 A4 纸面。</div>
+    <button class="print-button">生成PDF打印</button>
+  </div>
+</body>
+</html>

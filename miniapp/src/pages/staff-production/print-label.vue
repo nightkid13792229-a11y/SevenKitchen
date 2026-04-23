@@ -22,6 +22,10 @@
         <text class="value">{{ printerName || '未连接' }}</text>
         <button class="search-btn" @tap="connectPrinter">搜索</button>
       </view>
+      <view class="setting-row label-paper-row">
+        <text class="label">标签纸：</text>
+        <text class="value">70mm × 100mm</text>
+      </view>
 
       <!-- 打印机列表（直接在打印机字段下方显示） -->
       <view v-if="showPrinterList" class="printer-list-inline">
@@ -45,10 +49,10 @@
       </view>
     </view>
 
-    <!-- 订单列表 -->
+    <!-- 标签项列表 -->
     <view class="orders-list">
       <view class="section-title">
-        订单列表（{{ orders.length }}个）
+        标签项（{{ orders.length }}个）
         <text v-if="isBatchMode" class="batch-badge">批量模式：包含{{ batchCount }}个批次</text>
       </view>
 
@@ -60,9 +64,9 @@
             <text v-if="batch.isCurrentBatch" class="current-badge">当前批次</text>
           </view>
 
-          <view v-for="(order, orderIndex) in batch.orderItems" :key="order.orderItemId" class="order-card">
+          <view v-for="(order, orderIndex) in batch.orderItems" :key="order.labelItemId" class="order-card">
             <view class="order-header">
-              <text class="order-index">订单 {{ orderIndex + 1 }}</text>
+              <text class="order-index">{{ getLabelItemTitle(order) }}</text>
               <view class="header-buttons">
                 <button class="preview-btn" @tap="previewLabel(order)">预览</button>
                 <button class="print-btn" @tap="printSingleOrder(order)">打印</button>
@@ -81,13 +85,12 @@
                 </view>
 
                 <view v-if="hasPackagePlan(order)" class="info-row">
-                  <text class="label">分装明细：</text>
-                  <text class="value">{{ formatPackagePlan(order) }}</text>
+                  <text class="label">标签规格：</text>
+                  <text class="value">{{ order.packageLabelTitle }}</text>
                 </view>
-
-                <view v-if="order.ingredientSourcePlan" class="info-row">
-                  <text class="label">原料方案：</text>
-                  <text class="value">{{ order.ingredientSourcePlan }}</text>
+                <view v-if="order.isSplitPackageLabel" class="info-row">
+                  <text class="label">标签项：</text>
+                  <text class="value">{{ order.packageLabelIndex + 1 }}/{{ order.packageLabelCount }}</text>
                 </view>
 
                 <!-- 可编辑：重量规格 -->
@@ -110,7 +113,7 @@
                 </view>
 
                 <!-- 可编辑：制作日期 -->
-                <view class="info-row editable-row">
+                <view class="info-row date-row">
                   <text class="label">制作日期：</text>
                   <picker
                     mode="date"
@@ -140,9 +143,9 @@
 
       <!-- 原有的单批次显示（非批量模式） -->
       <view v-else>
-        <view v-for="(order, index) in orders" :key="order.orderItemId" class="order-card">
+        <view v-for="(order, index) in orders" :key="order.labelItemId" class="order-card">
           <view class="order-header">
-            <text class="order-index">订单 {{ index + 1 }}</text>
+            <text class="order-index">{{ getLabelItemTitle(order) }}</text>
             <view class="header-buttons">
               <button class="preview-btn" @tap="previewLabel(order)">预览</button>
               <button class="print-btn" @tap="printSingleOrder(order)">打印</button>
@@ -161,13 +164,12 @@
               </view>
 
               <view v-if="hasPackagePlan(order)" class="info-row">
-                <text class="label">分装明细：</text>
-                <text class="value">{{ formatPackagePlan(order) }}</text>
+                <text class="label">标签规格：</text>
+                <text class="value">{{ order.packageLabelTitle }}</text>
               </view>
-
-              <view v-if="order.ingredientSourcePlan" class="info-row">
-                <text class="label">原料方案：</text>
-                <text class="value">{{ order.ingredientSourcePlan }}</text>
+              <view v-if="order.isSplitPackageLabel" class="info-row">
+                <text class="label">标签项：</text>
+                <text class="value">{{ order.packageLabelIndex + 1 }}/{{ order.packageLabelCount }}</text>
               </view>
 
               <!-- 可编辑：重量规格 -->
@@ -190,7 +192,7 @@
               </view>
 
               <!-- 可编辑：制作日期 -->
-              <view class="info-row editable-row">
+              <view class="info-row date-row">
                 <text class="label">制作日期：</text>
                 <picker
                   mode="date"
@@ -251,9 +253,16 @@ import {
 } from '../../utils/label-mapping';
 import { getRecipeBatchesWithOrders } from '../../api/production';
 import { generateLabelImage, type LabelData as ApiLabelData } from '../../api/label';
-import { getPackagePlanTotal } from '../../utils/order-package-plan';
+import {
+  expandOrderPrintLabels,
+  formatPackagePlan,
+  getPackagePlanTotalWeight,
+  normalizePackagePlanRows,
+  type LabelPrintFields,
+  type PackagePlanRow
+} from '../../utils/label-print-items';
 
-const CANVAS_WIDTH = 600;
+const CANVAS_WIDTH = 560;
 const CANVAS_HEIGHT = 800;
 
 // 状态栏高度
@@ -277,14 +286,14 @@ onMounted(() => {
 });
 
 // 订单数据
-interface OrderPrintConfig {
+interface OrderPrintBase {
   orderItemId: string;
   orderId: string;
   dogName: string;
   recipeName: string;
   packageSpecG: number;
   packageCount: number;
-  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>;
+  packagePlan?: PackagePlanRow[];
   ingredientSourcePlan?: string | null;
   printCount: number;
   recipeSnapshot: any;
@@ -294,10 +303,7 @@ interface OrderPrintConfig {
   productionDate?: string;          // 制作日期
 }
 
-type PackagePlanRow = {
-  packageSpecG: number;
-  packageCount: number;
-};
+interface OrderPrintConfig extends OrderPrintBase, LabelPrintFields {}
 
 const orders = ref<OrderPrintConfig[]>([]);
 
@@ -392,14 +398,19 @@ async function loadAllBatchesForRecipe(
     if (response.code === 0 && response.data.batches.length > 0) {
       // 有多个批次，启用批量模式
       isBatchMode.value = true;
-      batchGroups.value = response.data.batches;
-
       // 展平所有订单到orders数组
       const allOrders: OrderPrintConfig[] = [];
+      const nextBatchGroups: Array<{
+        batchId: string;
+        batchCode?: string;
+        productionDate: string;
+        isCurrentBatch: boolean;
+        orderItems: OrderPrintConfig[];
+      }> = [];
       const todayDate = `${year}-${month}-${day}`;
 
       for (const batch of response.data.batches) {
-        const batchOrders = batch.orderItems.map((item: any) => ({
+        const baseOrders: OrderPrintBase[] = batch.orderItems.map((item: any) => ({
           orderItemId: item.orderItemId,
           orderId: item.orderId,
           dogName: item.dogName || '未知',
@@ -413,13 +424,19 @@ async function loadAllBatchesForRecipe(
           createdAt: item.createdAt,
           productionDate: todayDate
         }));
+        const batchOrders: OrderPrintConfig[] = expandOrderPrintLabels(baseOrders);
 
         allOrders.push(...batchOrders);
+        nextBatchGroups.push({
+          ...batch,
+          orderItems: batchOrders
+        });
       }
 
+      batchGroups.value = nextBatchGroups;
       orders.value = allOrders;
 
-      console.log(`[PrintLabel] 批量模式：加载了${response.data.batches.length}个批次，共${allOrders.length}个订单`);
+      console.log(`[PrintLabel] 批量模式：加载了${response.data.batches.length}个批次，共${allOrders.length}个标签项`);
     } else {
       // 只有一个批次或没有其他批次，使用原有逻辑
       isBatchMode.value = false;
@@ -449,7 +466,7 @@ function initializeOrders(taskData: any) {
   const day = String(now.getDate()).padStart(2, '0');
   const today = `${year}-${month}-${day}`;
 
-  orders.value = taskData.orderItems.map((item: any) => ({
+  const baseOrders: OrderPrintBase[] = taskData.orderItems.map((item: any) => ({
     orderItemId: item.orderItemId || '',
     orderId: item.orderId || '',
     dogName: item.dogName || '未知',
@@ -466,7 +483,9 @@ function initializeOrders(taskData: any) {
     productionDate: today
   }));
 
-  console.log('[PrintLabel] 订单列表初始化完成，共', orders.value.length, '个订单');
+  orders.value = expandOrderPrintLabels(baseOrders);
+
+  console.log('[PrintLabel] 标签项初始化完成，共', orders.value.length, '个标签项');
 }
 
 /**
@@ -590,52 +609,13 @@ function increaseCount(index: number) {
   }
 }
 
-function normalizePackagePlanRows(
-  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
-): PackagePlanRow[] {
-  return (packagePlan || [])
-    .map((row) => {
-      const packageSpecG = Math.floor(Number(row?.packageSpecG))
-      const packageCount = Math.floor(Number(row?.packageCount))
-      if (!Number.isFinite(packageSpecG) || !Number.isFinite(packageCount) || packageSpecG <= 0 || packageCount <= 0) {
-        return null
-      }
-      return { packageSpecG, packageCount }
-    })
-    .filter((row): row is PackagePlanRow => row !== null)
-}
-
 function hasPackagePlan(item: { packagePlan?: Array<{ packageSpecG: number; packageCount: number }> }): boolean {
   return normalizePackagePlanRows(item.packagePlan).length > 0
 }
 
-function formatPackagePlan(item: {
-  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
-  packageSpecG?: number
-  packageCount?: number
-}): string {
-  const packagePlanRows = normalizePackagePlanRows(item.packagePlan)
-    .map(row => `${row.packageSpecG}g×${row.packageCount}袋`)
-
-  if (packagePlanRows.length > 0) {
-    return packagePlanRows.join('，')
-  }
-
-  return `${item.packageSpecG || 0}g×${item.packageCount || 0}袋`
-}
-
-function getPackagePlanTotalWeight(item: {
-  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
-  packageSpecG?: number
-  packageCount?: number
-}): number {
-  const packagePlanRows = normalizePackagePlanRows(item.packagePlan)
-
-  if (packagePlanRows.length > 0) {
-    return getPackagePlanTotal(packagePlanRows).totalGrams
-  }
-
-  return Number(item.packageSpecG || 0) * Number(item.packageCount || 0)
+function getLabelItemTitle(order: OrderPrintConfig): string {
+  const baseTitle = `订单 ${order.sourceOrderIndex + 1}`;
+  return order.isSplitPackageLabel ? `${baseTitle} - ${order.packageLabelTitle}` : baseTitle;
 }
 
 // 减少打印份数
@@ -697,11 +677,6 @@ function prepareLabelData(order: OrderPrintConfig): LabelData {
   console.log('[PrintLabel] nutrition_detailed_data是否存在:', !!order.recipeSnapshot?.nutrition_detailed_data);
   console.log('[PrintLabel] nutrition_detailed_data内容:', order.recipeSnapshot?.nutrition_detailed_data);
 
-  // 使用默认原料表
-  const formatted = formatIngredients(order.recipeSnapshot);
-  const foodIngredients = formatted.foodIngredients;
-  const supplementIngredients = formatted.supplementIngredients;
-
   // 获取生命阶段和健康标签
   const lifeStages = order.recipeSnapshot?.applicable_life_stages || [];
   const healthTags = order.recipeSnapshot?.target_health_tags || [];
@@ -709,6 +684,14 @@ function prepareLabelData(order: OrderPrintConfig): LabelData {
   const firstPackageRow = packagePlan[0];
   const weightPerPack = firstPackageRow?.packageSpecG ?? Number(order.packageSpecG || 0);
   const packageCount = firstPackageRow?.packageCount ?? Number(order.packageCount || 0);
+  const totalWeight = hasPackagePlan(order)
+    ? order.packageTotalWeightG
+    : getPackagePlanTotalWeight(order);
+
+  // 使用当前订单净重计算补剂实际添加总量
+  const formatted = formatIngredients(order.recipeSnapshot, totalWeight);
+  const foodIngredients = formatted.foodIngredients;
+  const supplementIngredients = formatted.supplementIngredients;
 
   // 提取营养成分分析数据（字段名与数据库保持一致）
   const nutritionAnalysis = order.recipeSnapshot?.nutrition_detailed_data ? {
@@ -736,7 +719,7 @@ function prepareLabelData(order: OrderPrintConfig): LabelData {
     supplementIngredients,
     weightPerPack,
     packageCount,
-    totalWeight: getPackagePlanTotalWeight(order),
+    totalWeight,
     packagePlan: packagePlan.length > 0 ? packagePlan : undefined,
     nutritionAnalysis,
     shelfLife: getShelfLifeText(),
@@ -860,6 +843,10 @@ async function printSingleOrder(order: OrderPrintConfig) {
 
 // 字段编辑事件处理
 function onFieldChange(order: OrderPrintConfig) {
+  if (!hasPackagePlan(order)) {
+    order.packageLabelTitle = formatPackagePlan(order);
+    order.packageTotalWeightG = getPackagePlanTotalWeight(order);
+  }
   console.log('[PrintLabel] 字段已更新:', order);
 }
 

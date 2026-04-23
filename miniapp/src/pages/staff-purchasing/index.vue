@@ -2,13 +2,13 @@
   <view class="purchasing-page">
     <view class="header">
       <text class="title">采购管理</text>
-      <text class="subtitle">查看采购清单与原料需求</text>
+      <text class="subtitle">查看日采、补货与原料需求</text>
     </view>
 
     <view class="planning-card">
       <view class="section-heading">
-        <text class="section-title">待采购日期</text>
-        <text class="section-subtitle">先选生产日期，再决定是生成新清单还是查看已有清单</text>
+        <text class="section-title">日采</text>
+        <text class="section-subtitle">先选制作日期，再决定生成日采清单还是查看已有清单</text>
       </view>
 
       <view class="date-chip-group">
@@ -50,7 +50,7 @@
         </view>
 
         <view v-if="selectedOverviewLoading" class="summary-loading">
-          <text>正在加载该日期的采购信息...</text>
+          <text>正在加载该日期的日采信息...</text>
         </view>
 
         <view v-else class="summary-body">
@@ -80,8 +80,8 @@
 
     <view class="quick-entry-card" @tap="goToStockCreate">
       <view class="quick-entry-copy">
-        <text class="quick-entry-title">创建补货采购单</text>
-        <text class="quick-entry-subtitle">海产、冻品、补剂、包材等可提前备货原料走这里</text>
+        <text class="quick-entry-title">补货</text>
+        <text class="quick-entry-subtitle">海产、冻品、补剂、包材等提前备货走这里</text>
       </view>
       <text class="quick-entry-arrow">›</text>
     </view>
@@ -106,7 +106,7 @@
     <view class="purchase-lists">
       <view class="section-heading list-heading">
         <text class="section-title">采购清单列表</text>
-        <text class="section-subtitle">这里展示已经生成的采购清单，状态筛选只作用于下方列表</text>
+        <text class="section-subtitle">这里展示已经生成的日采和补货清单，状态筛选只作用于下方列表</text>
       </view>
 
       <view v-if="loading" class="loading-state">
@@ -116,7 +116,7 @@
       <view v-else-if="purchaseLists.length === 0" class="empty-state">
         <text class="empty-icon">📋</text>
         <text class="empty-text">暂无采购清单</text>
-        <text class="empty-hint">可以先在上方选择日期，生成第一张采购清单</text>
+        <text class="empty-hint">可以先在上方选择日期，生成第一张日采清单</text>
       </view>
 
       <view v-else class="list-items">
@@ -164,7 +164,7 @@
             </view>
             <view class="info-row" v-else-if="list.kind === 'STOCK_REPLENISHMENT'">
               <text class="label">来源:</text>
-              <text class="value">库存补货</text>
+              <text class="value">补货</text>
             </view>
             <view class="info-row" v-if="list.completedAt">
               <text class="label">完成时间:</text>
@@ -336,7 +336,7 @@ const createFallbackOverview = (date: string): DateOverview => {
       generateMode: 'none',
       statusText: '过去日期不可生成',
       chipText: '不可生成',
-      summaryLine: '过去日期不支持生成采购清单',
+      summaryLine: '过去日期不支持生成日采清单',
       hintText: '请选择今天或未来日期进行采购安排',
       orderCount: 0,
       itemCount: 0,
@@ -417,7 +417,7 @@ const buildCompletedSummaryLine = (
   amountLabel: string,
 ) => {
   const parts = [
-    completedListCount > 1 ? `${completedListCount}张已完成清单` : '已完成采购清单',
+    completedListCount > 1 ? `${completedListCount}张已完成日采清单` : '已完成日采清单',
     `${orderCount}个关联订单`,
   ];
   if (amount > 0) {
@@ -433,7 +433,7 @@ const buildSupplementSummaryLine = (
   estimatedCost: number,
 ) => {
   const parts = [
-    completedListCount > 1 ? `已有${completedListCount}张已完成清单` : '已有已完成清单',
+    completedListCount > 1 ? `已有${completedListCount}张已完成日采清单` : '已有已完成日采清单',
     `新增${pendingOrderCount}个订单`,
     `${itemCount}种原料`,
   ];
@@ -476,7 +476,7 @@ const buildDateOverview = (date: string, existingLists: any[], preview: any | nu
       state: 'EXISTING',
       actionType: 'view',
       generateMode: 'none',
-      statusText: hasPendingAppendOrders ? '有新增订单待合并' : '已有采购清单',
+      statusText: hasPendingAppendOrders ? '有新增订单待合并' : '已有日采清单',
       chipText: hasPendingAppendOrders ? `${pendingAppendOrderCount}单待合并` : '已有清单',
       summaryLine: hasPendingAppendOrders
         ? buildExistingSummaryWithPendingAppend(
@@ -489,8 +489,8 @@ const buildDateOverview = (date: string, existingLists: any[], preview: any | nu
           )
         : buildExistingSummaryLine(orderCount, itemCount, displayAmount, displayAmountLabel),
       hintText: hasPendingAppendOrders
-        ? '该日期已有待采购清单，但新增了已付款订单。进入详情后可一键合并，无需新建第二张清单。'
-        : '该日期已有待采购清单，可直接进入详情继续采购。',
+        ? '该日期已有待采购日采清单，但新增了已付款订单。进入详情后可一键合并，无需新建第二张清单。'
+        : '该日期已有待采购日采清单，可直接进入详情继续采购。',
       orderCount,
       itemCount,
       estimatedCost: displayAmount,
@@ -535,7 +535,7 @@ const buildDateOverview = (date: string, existingLists: any[], preview: any | nu
           estimatedCost,
         ),
         hintText:
-          '该日期已有已完成采购清单。本次会新建一张独立的增量采购清单，只处理新增订单，不影响原已完成清单。',
+          '该日期已有已完成日采清单。本次会新建一张独立的增量日采清单，只处理新增订单，不影响原已完成清单。',
         orderCount,
         itemCount,
         estimatedCost,
@@ -553,7 +553,7 @@ const buildDateOverview = (date: string, existingLists: any[], preview: any | nu
       state: 'EXISTING',
       actionType: 'view',
       generateMode: 'none',
-      statusText: completedListCount > 1 ? `已有${completedListCount}张采购清单` : '已有采购清单',
+      statusText: completedListCount > 1 ? `已有${completedListCount}张日采清单` : '已有日采清单',
       chipText: completedListCount > 1 ? `${completedListCount}张已完成` : '已完成',
       summaryLine: buildCompletedSummaryLine(
         completedListCount,
@@ -563,7 +563,7 @@ const buildDateOverview = (date: string, existingLists: any[], preview: any | nu
       ),
       hintText:
         completedListCount > 1
-          ? '该日期采购已完成，下方列表可查看当天全部采购清单。'
+          ? '该日期采购已完成，下方列表可查看当天全部日采清单。'
           : '该日期采购已完成，可进入清单查看记录或继续报销流程。',
       orderCount: totalCompletedOrders,
       itemCount: completedLists.reduce((sum, list) => sum + Number(list.itemCount || 0), 0),
@@ -583,7 +583,7 @@ const buildDateOverview = (date: string, existingLists: any[], preview: any | nu
       state: 'GENERATE',
       actionType: 'generate',
       generateMode: 'initial',
-      statusText: '可生成采购清单',
+      statusText: '可生成日采清单',
       chipText: `${orderCount}单待采购`,
       summaryLine: buildSummaryLine(orderCount, itemCount, estimatedCost),
       hintText:
@@ -625,7 +625,7 @@ const customDateMetaText = computed(() => {
 const shouldShowPreviewButton = computed(() => selectedDateOverview.value.actionType === 'generate');
 
 const previewActionText = computed(() =>
-  selectedDateOverview.value.generateMode === 'supplement' ? '预览新增需求' : '预览该日期需求',
+  selectedDateOverview.value.generateMode === 'supplement' ? '预览新增日采需求' : '预览日采需求',
 );
 
 const primaryActionText = computed(() => {
@@ -640,15 +640,15 @@ const primaryActionText = computed(() => {
         selectedDateOverview.value.completedListCount > 1 &&
         selectedDateOverview.value.pendingListCount === 0
       ) {
-        return '查看最新采购清单';
+        return '查看最新日采清单';
       }
       return selectedDateOverview.value.pendingAppendOrderCount > 0
         ? '查看并合并订单'
-        : '查看采购清单';
+        : '查看日采清单';
     case 'generate':
       return selectedDateOverview.value.generateMode === 'supplement'
-        ? '生成增量采购清单'
-        : '生成采购清单';
+        ? '生成增量日采清单'
+        : '生成日采清单';
     default:
       return '暂无待采购订单';
   }
@@ -818,7 +818,7 @@ const generateList = async () => {
   const isSupplemental = selectedDateOverview.value.generateMode === 'supplement';
 
   if (compareDateStrings(selectedTargetDate.value, today) < 0) {
-    uni.showToast({ title: '不能生成过去日期的采购清单', icon: 'none' });
+    uni.showToast({ title: '不能生成过去日期的日采清单', icon: 'none' });
     return;
   }
 
@@ -849,7 +849,7 @@ const generateList = async () => {
         uni.showToast({ title: response.message || '生成失败', icon: 'none' });
       }
     } catch (error: any) {
-      console.error('生成采购清单失败', error);
+      console.error('生成日采清单失败', error);
       uni.showToast({ title: error.message || '生成失败', icon: 'none' });
     } finally {
       generating.value = false;
@@ -873,17 +873,17 @@ const generateList = async () => {
     showFinalConfirm(
       '非当天采购提醒',
       isSupplemental
-        ? `当前日期是 ${today}，你选择为 ${selectedTargetDate.value} 生成增量采购清单。系统只会处理这一天新增的已付款订单，不会影响已完成清单，请确认是否继续。`
-        : `当前日期是 ${today}，你选择生成的是 ${selectedTargetDate.value} 的采购清单。这不是当天生产清单，请确认是否继续。`,
+        ? `当前日期是 ${today}，你选择为 ${selectedTargetDate.value} 生成增量日采清单。系统只会处理这一天新增的已付款订单，不会影响已完成清单，请确认是否继续。`
+        : `当前日期是 ${today}，你选择生成的是 ${selectedTargetDate.value} 的日采清单。这不是当天生产清单，请确认是否继续。`,
     );
     return;
   }
 
   showFinalConfirm(
-    isSupplemental ? '生成增量采购清单' : '生成采购清单',
+    isSupplemental ? '生成增量日采清单' : '生成日采清单',
     isSupplemental
-      ? `该日期已有已完成采购清单。本次只会把 ${selectedTargetDate.value} 新增的已付款订单生成一张独立的增量采购清单，不会影响原已完成清单，确认继续？`
-      : `将根据 ${selectedTargetDate.value} 制作日期的已付款订单生成采购清单，确认继续？`,
+      ? `该日期已有已完成日采清单。本次只会把 ${selectedTargetDate.value} 新增的已付款订单生成一张独立的增量日采清单，不会影响原已完成清单，确认继续？`
+      : `将根据 ${selectedTargetDate.value} 制作日期的已付款订单生成日采清单，确认继续？`,
   );
 };
 
@@ -914,10 +914,10 @@ const goToStockCreate = () => {
 
 const getListKindText = (kind?: string) => {
   const kindMap: Record<string, string> = {
-    ORDER_DEMAND: '订单采购',
-    STOCK_REPLENISHMENT: '库存补货',
+    ORDER_DEMAND: '日采',
+    STOCK_REPLENISHMENT: '补货',
   };
-  return kindMap[kind || 'ORDER_DEMAND'] || '订单采购';
+  return kindMap[kind || 'ORDER_DEMAND'] || '日采';
 };
 
 const getListKindClass = (kind?: string) => {

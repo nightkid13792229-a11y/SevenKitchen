@@ -21,7 +21,8 @@ import {
   PackagingUnitStatus,
   ProductionBatchStatus,
 } from '../../domain/production/enums';
-import { OrderStatus } from '../../domain';
+import { PurchaseListKind, PurchaseListStatus } from '../../domain/purchasing';
+import { Order, OrderStatus } from '../../domain';
 import { PRODUCTION_BATCH_REPOSITORY } from './production.service';
 import { PURCHASE_LIST_REPOSITORY } from '../purchasing/purchasing.service.tokens';
 import { ORDER_REPOSITORY } from '../order/order.service';
@@ -75,21 +76,23 @@ export class StaffProductionService {
     );
 
     const { list: purchaseLists } = await this.purchaseListRepository.findMany({
+      kind: PurchaseListKind.ORDER_DEMAND,
       startDate: today,
       endDate: tomorrow,
     });
 
-    const purchaseList = purchaseLists[0];
-
-    if (!purchaseList) {
+    if (purchaseLists.length === 0) {
       throw new BadRequestException(
         `未找到 ${dto.startDate} 的采购清单，请先生成采购清单`,
       );
     }
 
-    if (purchaseList.status !== 'COMPLETED') {
+    const pendingPurchaseLists = purchaseLists.filter(
+      (list) => list.status !== PurchaseListStatus.COMPLETED,
+    );
+    if (pendingPurchaseLists.length > 0) {
       throw new BadRequestException(
-        `请先完成 ${dto.startDate} 的采购任务后再进行排单`,
+        `请先完成 ${dto.startDate} 的所有采购任务后再进行排单`,
       );
     }
 
@@ -104,7 +107,7 @@ export class StaffProductionService {
     // - Splits by capacity (default_batch_capacity_g)
     // - FIFO allocates orders to pots
 
-    // Note: We're passing undefined for orderIds to include all PAID orders for today
+    // Passing undefined includes all eligible PURCHASING orders for the date.
     const batch = await this.productionService.createProductionBatch({
       productionDate: dto.startDate,
       orderIds: undefined, // Include all eligible PAID orders
@@ -124,35 +127,43 @@ export class StaffProductionService {
     list: PackagingUnitDetailDto[];
     total: number;
   }> {
-    const { page = 1, pageSize = 20, status, targetDate } = query;
+    const {
+      page = 1,
+      pageSize = 20,
+      status,
+      targetDate,
+      includeUnfinishedCarryover = false,
+    } = query;
+    const shouldIncludeUnfinishedCarryover =
+      includeUnfinishedCarryover === true ||
+      String(includeUnfinishedCarryover) === 'true';
 
     // Get all packaging units from all batches
     const batches = await this.productionRepository.findAll();
+    const productionDateByBatchId = new Map<string, Date>();
     let units: PackagingUnit[] = [];
     batches.forEach((batch) => {
+      productionDateByBatchId.set(batch.id, batch.productionDate);
       units = units.concat(batch.packagingUnits || []);
     });
 
-    // Filter by status
-    if (status) {
-      units = units.filter((u: PackagingUnit) => u.status === status);
-    }
-
     // Filter by target date (via production batch)
     if (targetDate) {
-      // 使用统一的日期工具创建查询范围（中午12点避免时区问题）
-      const { start: targetDateTime, end: targetEndDateTime } =
-        DateUtil.createDateRange(targetDate);
+      units = units.filter((unit: PackagingUnit) => {
+        const productionDate = productionDateByBatchId.get(unit.productionBatchId);
+        const isSelectedDate =
+          productionDate && DateUtil.formatDate(productionDate) === targetDate;
+        const isUnfinishedCarryover =
+          shouldIncludeUnfinishedCarryover &&
+          unit.status !== PackagingUnitStatus.COMPLETED;
 
-      // Get batches for target date
-      const targetDateBatches =
-        await this.productionRepository.findByProductionDate(targetDateTime);
-      const targetDateBatchIds = new Set(targetDateBatches.map((b) => b.id));
+        return Boolean(isSelectedDate || isUnfinishedCarryover);
+      });
+    }
 
-      units = units.filter(
-        (u: PackagingUnit) =>
-          u.productionBatchId && targetDateBatchIds.has(u.productionBatchId),
-      );
+    // Filter by status after date/carryover selection.
+    if (status) {
+      units = units.filter((u: PackagingUnit) => u.status === status);
     }
 
     // Sort by creation time (newest first)
@@ -161,20 +172,27 @@ export class StaffProductionService {
         b.createdAt.getTime() - a.createdAt.getTime(),
     );
 
-    // Calculate pot numbers for each recipe group
-    // Group by (productionBatchId, recipeSnapshot.id)
+    const orderInfoMap = await this.getOrderPackagingInfoMap(units);
+
+    // Calculate pot numbers for each display group.
+    // Group by batch, recipe and ingredient source plan so same-recipe orders
+    // with different procurement strategies are not presented as one pot series.
     const potNumberMap = new Map<string, number>();
     const totalPotsMap = new Map<string, number>();
 
     for (const unit of units) {
-      const recipeId = (unit.recipeSnapshot as any).id;
-      const key = `${unit.productionBatchId}-${recipeId}`;
+      const key = this.buildPackagingUnitDisplayGroupKey(
+        unit,
+        orderInfoMap.get(unit.id) || [],
+      );
 
       if (!totalPotsMap.has(key)) {
         const sameRecipeUnits = units.filter(
           (u: PackagingUnit) =>
-            u.productionBatchId === unit.productionBatchId &&
-            (u.recipeSnapshot as any).id === recipeId,
+            this.buildPackagingUnitDisplayGroupKey(
+              u,
+              orderInfoMap.get(u.id) || [],
+            ) === key,
         );
         totalPotsMap.set(key, sameRecipeUnits.length);
         sameRecipeUnits
@@ -193,23 +211,39 @@ export class StaffProductionService {
     const startIndex = (page - 1) * pageSize;
     const endIndex = startIndex + pageSize;
     const paginatedUnits = units.slice(startIndex, endIndex);
+    const purchaseListsByDate =
+      await this.getOrderDemandPurchaseListsByProductionDate(
+        paginatedUnits,
+        productionDateByBatchId,
+      );
 
     // Convert to DTOs with order information
     const list = await Promise.all(
       paginatedUnits.map(async (unit: PackagingUnit) => {
         const recipeSnapshot = unit.recipeSnapshot as any;
-        const recipeId = recipeSnapshot.id;
-        const key = `${unit.productionBatchId}-${recipeId}`;
 
         // Get order items information
-        const orderItems = await this.getOrderPackagingInfo(unit);
+        const orderItems = orderInfoMap.get(unit.id) || [];
+        const ingredientSourcePlan =
+          this.resolvePackagingUnitIngredientSourcePlan(orderItems);
+        const key = this.buildPackagingUnitDisplayGroupKey(unit, orderItems);
 
         // Convert times to local time
         const createdAt = this.toLocalTime(unit.createdAt);
-        const completedAt =
-          unit.updatedAt !== unit.createdAt
-            ? this.toLocalTime(unit.updatedAt)
-            : undefined;
+        const completedAt = unit.completedAt
+          ? this.toLocalTime(unit.completedAt)
+          : undefined;
+        const productionDate = DateUtil.formatDate(
+          productionDateByBatchId.get(unit.productionBatchId) ||
+            unit.createdAt,
+        );
+        const productionRecipeSnapshot =
+          this.enrichRecipeSnapshotWithProcurementSku({
+            recipeSnapshot,
+            ingredientSourcePlan,
+            orderItems,
+            purchaseLists: purchaseListsByDate.get(productionDate) || [],
+          });
 
         return {
           id: unit.id,
@@ -219,13 +253,22 @@ export class StaffProductionService {
           totalProductionG: unit.totalProductionG,
           status: unit.status,
           orderItems,
+          ingredientSourcePlan,
+          ingredientSourcePlanLabel:
+            this.getIngredientSourcePlanLabel(ingredientSourcePlan),
           currentPotNumber: potNumberMap.get(unit.id) || 1,
           totalPots: totalPotsMap.get(key) || 1,
+          productionDate,
           createdAt,
           completedAt,
+          resultStatus: unit.resultStatus || undefined,
+          actualOutputG: unit.actualOutputG ?? undefined,
+          surplusG: unit.surplusG,
+          shortageG: unit.shortageG,
+          resultPhotoUrls: unit.resultPhotoUrls || [],
           photosRaw: unit.photosRaw || [],
           ingredientsUsageSnapshot: unit.ingredientsUsageSnapshot,
-          recipeSnapshot: unit.recipeSnapshot, // 添加完整的食谱快照（包含原料列表）
+          recipeSnapshot: productionRecipeSnapshot, // 添加完整的食谱快照（包含原料列表和生产采购SKU）
         } as PackagingUnitDetailDto;
       }),
     );
@@ -239,10 +282,25 @@ export class StaffProductionService {
   private async getOrderPackagingInfo(
     unit: PackagingUnit,
   ): Promise<OrderPackagingInfoDto[]> {
-    const orderItemIds = unit.sourceOrderItemIds || [];
+    const infoMap = await this.getOrderPackagingInfoMap([unit]);
+    return infoMap.get(unit.id) || [];
+  }
 
-    if (orderItemIds.length === 0) {
-      return [];
+  private async getOrderPackagingInfoMap(
+    units: PackagingUnit[],
+  ): Promise<Map<string, OrderPackagingInfoDto[]>> {
+    const result = new Map<string, OrderPackagingInfoDto[]>();
+    const requestedOrderItemIds = new Set<string>();
+
+    for (const unit of units) {
+      result.set(unit.id, []);
+      for (const orderItemId of unit.sourceOrderItemIds || []) {
+        requestedOrderItemIds.add(orderItemId);
+      }
+    }
+
+    if (requestedOrderItemIds.size === 0) {
+      return result;
     }
 
     // Get all orders that could be associated with production tasks (all except CANCELLED and INIT)
@@ -265,13 +323,13 @@ export class StaffProductionService {
     // Flatten the array of arrays
     const orders = allOrders.flat();
 
-    const orderPackagingInfo: OrderPackagingInfoDto[] = [];
+    const infoByOrderItemId = new Map<string, OrderPackagingInfoDto>();
 
     for (const order of orders) {
       for (const item of order.items) {
-        if (orderItemIds.includes(item.id)) {
+        if (requestedOrderItemIds.has(item.id)) {
           // 🔧 修复：从order.dog和order.address获取真实数据
-          orderPackagingInfo.push({
+          infoByOrderItemId.set(item.id, {
             orderId: order.id,
             orderItemId: item.id,
             dogName: order.dog?.name || '未知狗狗', // ✅ 使用真实狗狗名称
@@ -290,7 +348,283 @@ export class StaffProductionService {
       }
     }
 
-    return orderPackagingInfo;
+    for (const unit of units) {
+      const unitOrderItems: OrderPackagingInfoDto[] = [];
+      for (const orderItemId of unit.sourceOrderItemIds || []) {
+        const info = infoByOrderItemId.get(orderItemId);
+        if (info) {
+          unitOrderItems.push(info);
+        }
+      }
+      result.set(unit.id, unitOrderItems);
+    }
+
+    return result;
+  }
+
+  private async getOrderDemandPurchaseListsByProductionDate(
+    units: PackagingUnit[],
+    productionDateByBatchId: Map<string, Date>,
+  ): Promise<Map<string, any[]>> {
+    const dateStrings = Array.from(
+      new Set(
+        units
+          .map((unit) =>
+            DateUtil.formatDate(
+              productionDateByBatchId.get(unit.productionBatchId) ||
+                unit.createdAt,
+            ),
+          )
+          .filter(Boolean),
+      ),
+    );
+
+    const entries = await Promise.all(
+      dateStrings.map(async (dateString) => {
+        const { start, end } = DateUtil.createDateRange(dateString);
+        const { list } = await this.purchaseListRepository.findMany({
+          kind: PurchaseListKind.ORDER_DEMAND,
+          startDate: start,
+          endDate: end,
+        });
+        return [dateString, list] as const;
+      }),
+    );
+
+    return new Map(entries);
+  }
+
+  private enrichRecipeSnapshotWithProcurementSku(params: {
+    recipeSnapshot: any;
+    ingredientSourcePlan?: string | null;
+    orderItems: OrderPackagingInfoDto[];
+    purchaseLists: any[];
+  }): any {
+    const items = Array.isArray(params.recipeSnapshot?.items)
+      ? params.recipeSnapshot.items
+      : [];
+
+    if (items.length === 0 || params.purchaseLists.length === 0) {
+      return params.recipeSnapshot;
+    }
+
+    const orderIds = new Set(
+      params.orderItems.map((item) => item.orderId).filter(Boolean),
+    );
+    const relevantPurchaseItems = params.purchaseLists
+      .filter((list) => {
+        const sourceOrderIds = Array.isArray(list.sourceOrderIds)
+          ? list.sourceOrderIds
+          : [];
+
+        return (
+          sourceOrderIds.length === 0 ||
+          sourceOrderIds.some((orderId: string) => orderIds.has(orderId))
+        );
+      })
+      .flatMap((list) => (Array.isArray(list.items) ? list.items : []));
+
+    if (relevantPurchaseItems.length === 0) {
+      return params.recipeSnapshot;
+    }
+
+    return {
+      ...params.recipeSnapshot,
+      items: items.map((item: any) => {
+        const ingredientId = item.ingredient_id || item.ingredientId;
+        const candidates = relevantPurchaseItems.filter(
+          (purchaseItem: any) => purchaseItem.ingredientId === ingredientId,
+        );
+        const selectedPurchaseItem = this.selectPurchaseItemForSourcePlan(
+          candidates,
+          params.ingredientSourcePlan,
+          item.ingredient_type,
+        );
+
+        if (!selectedPurchaseItem?.procurementSkuName) {
+          return item;
+        }
+
+        const selectedSku =
+          this.getPurchaseItemProcurementSku(selectedPurchaseItem);
+        const procurementSkuBrand =
+          selectedPurchaseItem.brand || selectedSku?.brand || undefined;
+        const procurementSkuPurchaseChannel =
+          selectedPurchaseItem.purchaseChannel ||
+          selectedSku?.purchaseChannel ||
+          undefined;
+        const procurementSkuProductModel =
+          selectedPurchaseItem.productModel ||
+          selectedSku?.productModel ||
+          undefined;
+
+        return {
+          ...item,
+          standardIngredientName: item.standardIngredientName || item.name,
+          procurementSkuId: selectedPurchaseItem.procurementSkuId || undefined,
+          procurementSkuName: selectedPurchaseItem.procurementSkuName,
+          procurementSkuBrand,
+          procurementSkuPurchaseChannel,
+          procurementSkuProductModel,
+          procurement_sku_id: selectedPurchaseItem.procurementSkuId || undefined,
+          procurement_sku_name: selectedPurchaseItem.procurementSkuName,
+          procurement_sku_brand: procurementSkuBrand,
+          procurement_sku_purchase_channel: procurementSkuPurchaseChannel,
+          procurement_sku_product_model: procurementSkuProductModel,
+        };
+      }),
+    };
+  }
+
+  private selectPurchaseItemForSourcePlan(
+    candidates: any[],
+    ingredientSourcePlan?: string | null,
+    ingredientType?: string | null,
+  ): any | undefined {
+    const validCandidates = candidates.filter(
+      (candidate) => candidate?.procurementSkuName,
+    );
+
+    if (validCandidates.length <= 1) {
+      return validCandidates[0];
+    }
+
+    if (ingredientType !== 'FOOD') {
+      return validCandidates[0];
+    }
+
+    const plan = ingredientSourcePlan || 'WHOLESALE';
+    const tierPriority: Record<string, string[]> = {
+      ORGANIC: ['ORGANIC', 'MARKET_PREMIUM', 'WHOLESALE'],
+      MARKET_PREMIUM: ['MARKET_PREMIUM', 'ORGANIC', 'WHOLESALE'],
+      WHOLESALE: ['WHOLESALE', 'MARKET_PREMIUM', 'ORGANIC'],
+    };
+    const orderedTiers = tierPriority[plan] || tierPriority.WHOLESALE;
+
+    let tierCandidates = validCandidates;
+    for (const tier of orderedTiers) {
+      const matched = validCandidates.filter(
+        (candidate) => this.getPurchaseItemSourceTier(candidate) === tier,
+      );
+      if (matched.length > 0) {
+        tierCandidates = matched;
+        break;
+      }
+    }
+
+    const preferLowestPrice = plan === 'WHOLESALE';
+    return [...tierCandidates].sort((a, b) => {
+      const priceA = this.getPurchaseItemPrice(a);
+      const priceB = this.getPurchaseItemPrice(b);
+
+      if (priceA !== null && priceB !== null && priceA !== priceB) {
+        return preferLowestPrice ? priceA - priceB : priceB - priceA;
+      }
+
+      return String(a.procurementSkuName).localeCompare(
+        String(b.procurementSkuName),
+        'zh-Hans-CN',
+      );
+    })[0];
+  }
+
+  private getPurchaseItemSourceTier(purchaseItem: any): string | null {
+    const sku = this.getPurchaseItemProcurementSku(purchaseItem);
+
+    return sku?.sourceTier || null;
+  }
+
+  private getPurchaseItemPrice(purchaseItem: any): number | null {
+    const sku = this.getPurchaseItemProcurementSku(purchaseItem);
+    const price =
+      sku?.currentPurchasePrice ??
+      sku?.referencePricePerPurchaseUnit ??
+      (purchaseItem.quantityNeeded
+        ? Number(purchaseItem.estimatedCost) / Number(purchaseItem.quantityNeeded)
+        : null);
+    const numericPrice = Number(price);
+
+    return Number.isFinite(numericPrice) ? numericPrice : null;
+  }
+
+  private getPurchaseItemProcurementSku(purchaseItem: any): any | null {
+    return (
+      (purchaseItem.ingredient?.procurementSkus || []).find(
+        (item: any) => item.id === purchaseItem.procurementSkuId,
+      ) || null
+    );
+  }
+
+  private resolvePackagingUnitIngredientSourcePlan(
+    orderItems: OrderPackagingInfoDto[],
+  ): string | null {
+    const plans = Array.from(
+      new Set(
+        orderItems
+          .map((item) => item.ingredientSourcePlan)
+          .filter((plan): plan is string => Boolean(plan)),
+      ),
+    );
+
+    if (plans.length === 0) {
+      return null;
+    }
+
+    if (plans.length > 1) {
+      return 'MIXED';
+    }
+
+    return plans[0];
+  }
+
+  private getIngredientSourcePlanLabel(plan?: string | null): string | undefined {
+    const labels: Record<string, string> = {
+      ORGANIC: '有机优先',
+      MARKET_PREMIUM: '超市优先',
+      WHOLESALE: '性价比优先',
+      MIXED: '多采购策略',
+    };
+
+    if (!plan) {
+      return undefined;
+    }
+
+    return labels[plan] || plan;
+  }
+
+  private buildPackagingUnitDisplayGroupKey(
+    unit: PackagingUnit,
+    orderItems: OrderPackagingInfoDto[],
+  ): string {
+    const recipeId = (unit.recipeSnapshot as any).id || 'unknown-recipe';
+    const sourcePlan =
+      this.resolvePackagingUnitIngredientSourcePlan(orderItems) ||
+      'DEFAULT_SOURCE_PLAN';
+
+    return `${unit.productionBatchId}-${recipeId}-${sourcePlan}`;
+  }
+
+  private areAllPackagingUnitsForOrderCompleted(
+    order: Order,
+    batch: ProductionBatch | null,
+  ): boolean {
+    if (!batch) return false;
+
+    const orderItemIds = new Set((order.items || []).map((item) => item.id));
+    if (orderItemIds.size === 0) return false;
+
+    const relatedUnits = (batch.packagingUnits || []).filter((packagingUnit) =>
+      (packagingUnit.sourceOrderItemIds || []).some((orderItemId) =>
+        orderItemIds.has(orderItemId),
+      ),
+    );
+
+    if (relatedUnits.length === 0) return false;
+
+    return relatedUnits.every(
+      (packagingUnit) =>
+        packagingUnit.status === PackagingUnitStatus.COMPLETED,
+    );
   }
 
   /**
@@ -482,6 +816,10 @@ export class StaffProductionService {
 
     this.logger.log(`[KitchenService] Completed production task ${unitId}`);
 
+    const batch = await this.productionRepository.findById(
+      unit.productionBatchId,
+    );
+
     // Update order status: IN_PRODUCTION → FREEZING (制作中 → 急冻中待发货)
     if (unit.sourceOrderItemIds.length > 0) {
       const orderItems = await this.productionRepository.findOrderItemsByIds(
@@ -510,6 +848,14 @@ export class StaffProductionService {
 
           // Transition IN_PRODUCTION orders to FREEZING
           if (order.status === OrderStatus.IN_PRODUCTION) {
+            if (!this.areAllPackagingUnitsForOrderCompleted(order, batch)) {
+              skippedCount++;
+              this.logger.log(
+                `[KitchenService] Order ${orderId} skipped (not all packaging units completed)`,
+              );
+              continue;
+            }
+
             order.markAsFreezing();
             await this.orderRepository.save(order);
             transitionedCount++;
@@ -538,9 +884,6 @@ export class StaffProductionService {
     }
 
     // Check if all units in the batch are completed
-    const batch = await this.productionRepository.findById(
-      unit.productionBatchId,
-    );
     if (batch && batch.status === ProductionBatchStatus.IN_PRODUCTION) {
       await this.productionService.checkAndCompleteBatch(
         unit.productionBatchId,
@@ -553,15 +896,27 @@ export class StaffProductionService {
   /**
    * Get today's statistics
    */
-  async getTodayStatistics(): Promise<TodayStatisticsDto> {
-    // 使用统一的日期工具获取今日查询范围（中午12点避免时区问题）
-    const { start: today, end: todayEnd } = DateUtil.createTodayRange();
+  async getTodayStatistics(targetDate?: string): Promise<TodayStatisticsDto> {
+    const productionDate = targetDate || DateUtil.formatDate(new Date());
+    const { start: selectedDate } = DateUtil.createDateRange(productionDate);
+    const queryStartDate = new Date(`${productionDate}T00:00:00`);
+    const queryEndDate = new Date(`${productionDate}T23:59:59.999`);
 
-    // Get today's production batches
-    const batches = await this.productionRepository.findByProductionDate(today);
+    // Get production batches for the selected date
+    const batches =
+      await this.productionRepository.findByProductionDate(selectedDate);
+    const { list: purchasingOrders } =
+      await this.orderRepository.findByTargetProductionDateRange({
+        status: OrderStatus.PURCHASING,
+        startDate: queryStartDate,
+        endDate: queryEndDate,
+      });
 
     // Count all packaging units
     const allUnits = batches.flatMap((b) => b.packagingUnits);
+    const pendingScheduleOrders = purchasingOrders.filter((order) =>
+      order.items.some((item) => item.productionBatchId === null),
+    ).length;
 
     const todayTasks = allUnits.length; // 统计制作单数量（每一锅为一个制作单）
 
@@ -575,6 +930,7 @@ export class StaffProductionService {
 
     return {
       todayOrders: todayTasks, // 保持字段名不变，只修改值
+      pendingScheduleOrders,
       inProgress,
       completed,
     };

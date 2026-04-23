@@ -35,7 +35,6 @@ export interface LegacyProcurementSkuSnapshot {
   purchaseToBaseRatio?: number | null;
   currentPurchasePrice?: number | null;
   referencePurchasePrice?: number | null;
-  displayUnit?: string | null;
   isActive?: boolean;
   isDefault?: boolean;
   sortOrder?: number;
@@ -325,7 +324,7 @@ const buildProcurementVariants = (
         brand: item.brand,
         productModel: item.productModel,
         purchaseChannel: item.purchaseChannel,
-        displayUnit: item.displayUnit,
+        displayUnit: item.purchaseUnit,
       }),
       sourceKey: `procurement_sku:${item.id}`,
       sourceType: 'procurement_sku' as const,
@@ -334,7 +333,7 @@ const buildProcurementVariants = (
       brand: normalizeText(item.brand),
       productModel: normalizeText(item.productModel),
       purchaseChannel: normalizeText(item.purchaseChannel),
-      displayUnit: normalizeText(item.displayUnit),
+      displayUnit: normalizeText(item.purchaseUnit),
       purchaseLink: null,
       imageUrl: null,
       activeNutrients: null,
@@ -696,7 +695,6 @@ export async function runSupplementPackagingSingleLayerBackfill(options?: {
           purchaseToBaseRatio: true,
           currentPurchasePrice: true,
           referencePurchasePrice: true,
-          displayUnit: true,
           isActive: true,
           isDefault: true,
           sortOrder: true,

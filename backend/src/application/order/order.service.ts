@@ -68,6 +68,7 @@ export interface CreateOrderDraftDto {
   dogId?: string;
   type: OrderType;
   ingredientSourcePlan?: string;
+  pricingPurpose?: 'ORDER' | 'DIY_SHEET';
   targetProductionDate?: Date | null;
   items?: CreateOrderItemDto[];
   cartItemIds?: string[];
@@ -92,12 +93,15 @@ export interface OrderFinancialSummaryDto {
   orderId: string;
   amountTotal: number;
   revenue: number;
+  netRevenue: number;
   estimatedCost: number;
   estimatedMargin: number;
   actualCost: number | null;
   actualMargin: number | null;
   shortageAdjustmentAmount: number;
   requiresCustomerPayment: boolean;
+  adjustmentSummary: OrderSettlementAdjustmentSummaryDto;
+  adjustments: OrderSettlementAdjustmentDto[];
   settlementStatus: 'PENDING' | 'SETTLED';
   latestSettlement: {
     id: string;
@@ -109,6 +113,48 @@ export interface OrderFinancialSummaryDto {
     settledAt: string | null;
     createdAt: string | null;
   } | null;
+}
+
+export interface OrderSettlementAdjustmentDto {
+  id: string;
+  orderId: string;
+  sourceType: string;
+  sourceId: string | null;
+  adjustmentType: string;
+  amount: number;
+  reason: string;
+  status: 'PENDING' | 'SETTLED' | 'CANCELLED' | string;
+  requiresCustomerPayment: boolean;
+  visibleToCustomer: boolean;
+  createdBy: string;
+  createdById: string | null;
+  metadata: unknown;
+  settledAt: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface OrderSettlementAdjustmentSummaryDto {
+  totalIncreaseAmount: number;
+  totalDecreaseAmount: number;
+  pendingExtraPaymentAmount: number;
+  pendingRefundAmount: number;
+  settledExtraPaymentAmount: number;
+  settledRefundAmount: number;
+  netAdjustmentAmount: number;
+  netRevenue: number;
+}
+
+export interface CreateOrderSettlementAdjustmentInput {
+  orderId: string;
+  amount: number;
+  reason: string;
+  adjustmentType?: 'REFUND' | 'EXTRA_PAYMENT' | 'DISCOUNT' | 'MANUAL_CORRECTION';
+  visibleToCustomer?: boolean;
+  requiresCustomerPayment?: boolean;
+  createdBy?: 'admin' | 'staff' | 'system';
+  createdById?: string | null;
+  metadata?: unknown;
 }
 
 interface ResolvedOrderItemPackageInput {
@@ -179,6 +225,9 @@ export class OrderService {
             productionBatchSettlement: true,
           },
         },
+        settlementAdjustments: {
+          orderBy: { createdAt: 'desc' },
+        },
       },
     });
 
@@ -197,11 +246,17 @@ export class OrderService {
     const actualMargin = latestSettlement
       ? this.roundMoney(this.toNumber(latestSettlement.actualMargin))
       : null;
+    const adjustments = (order as any).settlementAdjustments ?? [];
+    const adjustmentSummary = this.summarizeSettlementAdjustments(
+      adjustments,
+      revenue,
+    );
 
     return {
       orderId: order.id,
       amountTotal: revenue,
       revenue,
+      netRevenue: adjustmentSummary.netRevenue,
       estimatedCost,
       estimatedMargin: this.roundMoney(revenue - estimatedCost),
       actualCost,
@@ -212,7 +267,12 @@ export class OrderService {
           )
         : 0,
       requiresCustomerPayment:
-        latestSettlement?.requiresCustomerPayment ?? false,
+        (latestSettlement?.requiresCustomerPayment ?? false) ||
+        adjustmentSummary.pendingExtraPaymentAmount > 0,
+      adjustmentSummary,
+      adjustments: adjustments.map((adjustment: any) =>
+        this.mapOrderSettlementAdjustment(adjustment),
+      ),
       settlementStatus: latestSettlement ? 'SETTLED' : 'PENDING',
       latestSettlement: latestSettlement
         ? {
@@ -230,6 +290,147 @@ export class OrderService {
             createdAt: latestSettlement.createdAt?.toISOString() ?? null,
           }
         : null,
+    };
+  }
+
+  async createOrderSettlementAdjustment(
+    input: CreateOrderSettlementAdjustmentInput,
+  ): Promise<OrderSettlementAdjustmentDto> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: input.orderId },
+      select: { id: true, amountTotal: true },
+    });
+
+    if (!order) {
+      throw new NotFoundException(`Order not found: ${input.orderId}`);
+    }
+
+    const amount = this.roundMoney(this.toNumber(input.amount));
+    if (!Number.isFinite(amount) || amount === 0) {
+      throw new BadRequestException('Adjustment amount must be non-zero');
+    }
+
+    const reason = input.reason?.trim();
+    if (!reason) {
+      throw new BadRequestException('Adjustment reason is required');
+    }
+
+    const id = randomUUID();
+    const adjustmentType =
+      input.adjustmentType ?? (amount > 0 ? 'EXTRA_PAYMENT' : 'REFUND');
+    const requiresCustomerPayment =
+      input.requiresCustomerPayment ?? amount > 0;
+
+    const adjustment = await this.prisma.orderSettlementAdjustment.create({
+      data: {
+        id,
+        orderId: input.orderId,
+        sourceType: 'MANUAL',
+        sourceId: id,
+        adjustmentType,
+        amount,
+        reason,
+        status: 'PENDING',
+        requiresCustomerPayment,
+        visibleToCustomer: input.visibleToCustomer ?? true,
+        createdBy: input.createdBy ?? 'admin',
+        createdById: input.createdById ?? null,
+        metadata: (input.metadata ?? null) as any,
+      },
+    });
+
+    return this.mapOrderSettlementAdjustment(adjustment);
+  }
+
+  async updateOrderSettlementAdjustmentStatus(
+    orderId: string,
+    adjustmentId: string,
+    status: 'PENDING' | 'SETTLED' | 'CANCELLED',
+  ): Promise<OrderSettlementAdjustmentDto> {
+    const existing = await this.prisma.orderSettlementAdjustment.findFirst({
+      where: { id: adjustmentId, orderId },
+    });
+
+    if (!existing) {
+      throw new NotFoundException(
+        `Settlement adjustment not found: ${adjustmentId}`,
+      );
+    }
+
+    const adjustment = await this.prisma.orderSettlementAdjustment.update({
+      where: { id: adjustmentId },
+      data: {
+        status,
+        settledAt: status === 'SETTLED' ? new Date() : null,
+      },
+    });
+
+    return this.mapOrderSettlementAdjustment(adjustment);
+  }
+
+  private summarizeSettlementAdjustments(
+    adjustments: any[],
+    baseRevenue: number,
+  ): OrderSettlementAdjustmentSummaryDto {
+    const activeAdjustments = adjustments.filter(
+      (adjustment) => adjustment.status !== 'CANCELLED',
+    );
+    const amountOf = (adjustment: any) =>
+      this.roundMoney(this.toNumber(adjustment.amount));
+    const sum = (predicate: (adjustment: any, amount: number) => boolean) =>
+      this.roundMoney(
+        activeAdjustments.reduce((total, adjustment) => {
+          const amount = amountOf(adjustment);
+          return predicate(adjustment, amount) ? total + Math.abs(amount) : total;
+        }, 0),
+      );
+    const netAdjustmentAmount = this.roundMoney(
+      activeAdjustments.reduce(
+        (total, adjustment) => total + amountOf(adjustment),
+        0,
+      ),
+    );
+
+    return {
+      totalIncreaseAmount: sum((_, amount) => amount > 0),
+      totalDecreaseAmount: sum((_, amount) => amount < 0),
+      pendingExtraPaymentAmount: sum(
+        (adjustment, amount) => adjustment.status === 'PENDING' && amount > 0,
+      ),
+      pendingRefundAmount: sum(
+        (adjustment, amount) => adjustment.status === 'PENDING' && amount < 0,
+      ),
+      settledExtraPaymentAmount: sum(
+        (adjustment, amount) => adjustment.status === 'SETTLED' && amount > 0,
+      ),
+      settledRefundAmount: sum(
+        (adjustment, amount) => adjustment.status === 'SETTLED' && amount < 0,
+      ),
+      netAdjustmentAmount,
+      netRevenue: this.roundMoney(baseRevenue + netAdjustmentAmount),
+    };
+  }
+
+  private mapOrderSettlementAdjustment(
+    adjustment: any,
+  ): OrderSettlementAdjustmentDto {
+    return {
+      id: adjustment.id,
+      orderId: adjustment.orderId,
+      sourceType: adjustment.sourceType,
+      sourceId: adjustment.sourceId ?? null,
+      adjustmentType: adjustment.adjustmentType,
+      amount: this.roundMoney(this.toNumber(adjustment.amount)),
+      reason: adjustment.reason,
+      status: adjustment.status,
+      requiresCustomerPayment: Boolean(adjustment.requiresCustomerPayment),
+      visibleToCustomer: Boolean(adjustment.visibleToCustomer),
+      createdBy: adjustment.createdBy,
+      createdById: adjustment.createdById ?? null,
+      metadata: adjustment.metadata ?? null,
+      settledAt: adjustment.settledAt?.toISOString() ?? null,
+      createdAt: adjustment.createdAt?.toISOString() ?? null,
+      updatedAt: adjustment.updatedAt?.toISOString() ?? null,
     };
   }
 
@@ -1314,7 +1515,7 @@ export class OrderService {
     amountProduct: number;
     amountShipping: number;
     amountTotal: number;
-    snapshotId: string; // ✅ 新增：快照ID
+    snapshotId?: string; // ✅ 新增：快照ID
     pricingBreakdown?: {
       costIngredients: number;
       costPackaging: number;
@@ -1390,9 +1591,10 @@ export class OrderService {
       throw new NotFoundException('Order must have at least one item');
     }
 
-    const ingredientSourcePlan = normalizeIngredientSourcePlan(
-      dto.ingredientSourcePlan,
-    );
+    const isDiySheetPreview = dto.pricingPurpose === 'DIY_SHEET';
+    const ingredientSourcePlan = isDiySheetPreview
+      ? null
+      : normalizeIngredientSourcePlan(dto.ingredientSourcePlan);
 
     const itemDto = dto.items[0];
     const packageInput = this.resolveOrderItemPackageInput(itemDto);
@@ -1434,11 +1636,12 @@ export class OrderService {
       ingredientIds: ingredients.map((ing) => ing.id),
     });
 
-    const ingredientMap =
-      await this.orderSourcePlanService.applySourcePlanToIngredients(
-        ingredients,
-        ingredientSourcePlan,
-      );
+    const ingredientMap = isDiySheetPreview
+      ? new Map(ingredients.map((ingredient) => [ingredient.id, ingredient]))
+      : await this.orderSourcePlanService.applySourcePlanToIngredients(
+          ingredients,
+          ingredientSourcePlan!,
+        );
 
     // Helper function to convert preparationMethod IDs to names
     // Build enriched recipe items with ingredient objects for pricing
@@ -1525,6 +1728,7 @@ export class OrderService {
       cycleDays: itemDto.cycleDays,
       dailyIntakeG: itemDto.dailyIntakeG,
       ingredientSourcePlan,
+      pricingPurpose: dto.pricingPurpose ?? 'ORDER',
     });
 
     const pricingResult = {
@@ -1545,6 +1749,10 @@ export class OrderService {
         overheadDetails: pricing.overheadDetails,
       },
     };
+
+    if (isDiySheetPreview) {
+      return pricingResult;
+    }
 
     // ✅ Save pricing snapshot to database
     const snapshot = await this.pricingSnapshotRepository.create({

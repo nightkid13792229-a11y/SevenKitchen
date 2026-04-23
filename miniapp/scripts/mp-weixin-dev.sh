@@ -157,6 +157,8 @@ while [ "$elapsed_seconds" -lt "$PREVIEW_TIMEOUT_SECONDS" ]; do
 done
 
 if [ -n "$OUTPUT_DIR" ]; then
+    node scripts/fix-components-injection.js
+
     echo -e "\n${GREEN}✓${NC} Build successful!\n"
     
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"

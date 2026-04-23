@@ -22,7 +22,15 @@
     "ignoreDevUnusedFiles": false,
     "ignoreUploadUnusedFiles": false,
     "ignoreUnusedFiles": false,
-    "filterNoDependencyFile": false
+    "filterNoDependencyFile": false,
+    "compileWorklet": false,
+    "uploadWithSourceMap": true,
+    "packNpmManually": false,
+    "minifyWXSS": true,
+    "localPlugins": false,
+    "disableUseStrict": false,
+    "swc": false,
+    "disableSWC": true
   },
   "simulatorPluginLibVersion": {},
   "packOptions": {
@@ -32,5 +40,6 @@
   "editorSetting": {
     "tabIndent": "insertSpaces",
     "tabSize": 2
-  }
+  },
+  "libVersion": "3.13.0"
 }

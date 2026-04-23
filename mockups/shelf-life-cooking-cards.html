@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>产品说明 - 保质期与烹饪方法预览</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        background: #edf1f4;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei",
+          sans-serif;
+        color: #25282b;
+      }
+
+      .phone {
+        width: 390px;
+        min-height: 100vh;
+        background: #f6f7f8;
+        padding: 18px 12px 30px;
+      }
+
+      .section {
+        margin-bottom: 14px;
+        padding: 16px 14px;
+        border-radius: 8px;
+        background: #fff;
+      }
+
+      .section-title {
+        margin: 0 0 12px;
+        font-size: 20px;
+        font-weight: 800;
+        line-height: 1.35;
+        letter-spacing: 0;
+      }
+
+      .section-note {
+        margin: -4px 0 14px;
+        font-size: 13px;
+        line-height: 1.5;
+        color: #687078;
+      }
+
+      .storage-grid {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 8px;
+      }
+
+      .storage-card,
+      .method-card {
+        border: 1px solid #e4ebf0;
+        border-radius: 8px;
+        background: #fbfcfd;
+      }
+
+      .storage-card {
+        min-height: 124px;
+        padding: 12px 8px;
+        text-align: center;
+      }
+
+      .storage-temp {
+        display: block;
+        margin-bottom: 7px;
+        font-size: 18px;
+        font-weight: 800;
+        line-height: 1.2;
+        color: #2f8f4e;
+      }
+
+      .storage-title {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 14px;
+        font-weight: 800;
+        line-height: 1.25;
+      }
+
+      .storage-copy {
+        display: block;
+        font-size: 12px;
+        line-height: 1.45;
+        color: #687078;
+      }
+
+      .storage-card.highlight {
+        background: #fff9ed;
+        border-color: #f0d4a1;
+      }
+
+      .storage-card.highlight .storage-temp {
+        color: #a76416;
+      }
+
+      .method-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .method-card {
+        display: grid;
+        grid-template-columns: 70px minmax(0, 1fr);
+        gap: 12px;
+        padding: 13px;
+      }
+
+      .method-label {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 70px;
+        border-radius: 8px;
+        font-size: 15px;
+        font-weight: 800;
+        line-height: 1.25;
+        text-align: center;
+      }
+
+      .method-label.recommend {
+        background: #ecf8ef;
+        color: #2f8f4e;
+      }
+
+      .method-label.avoid {
+        background: #fff2ef;
+        color: #c74b35;
+      }
+
+      .method-title {
+        display: block;
+        margin-bottom: 7px;
+        font-size: 17px;
+        font-weight: 800;
+        line-height: 1.35;
+      }
+
+      .method-copy {
+        display: block;
+        margin-top: 4px;
+        font-size: 14px;
+        line-height: 1.55;
+        color: #687078;
+      }
+
+      .tag-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+
+      .method-tag {
+        padding: 4px 8px;
+        border-radius: 6px;
+        background: #f2f6f4;
+        color: #2f633f;
+        font-size: 12px;
+        font-weight: 800;
+        line-height: 1.2;
+      }
+
+      .method-card.avoid .method-tag {
+        background: #fff6f4;
+        color: #a33d28;
+      }
+
+      .preview-footer {
+        margin-top: 14px;
+        padding: 12px;
+        border-radius: 8px;
+        border: 1px dashed #cad3dc;
+        background: #fff;
+        color: #687078;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="phone">
+      <section class="section">
+        <h1 class="section-title">保质期与存储方式</h1>
+        <p class="section-note">收到后请尽快放入冷冻或冷藏环境，按实际喂食节奏取用。</p>
+
+        <div class="storage-grid">
+          <article class="storage-card">
+            <span class="storage-temp">-18℃</span>
+            <span class="storage-title">冷冻保存</span>
+            <span class="storage-copy">可保存 6 个月。</span>
+          </article>
+
+          <article class="storage-card">
+            <span class="storage-temp">0-4℃</span>
+            <span class="storage-title">冷藏保存</span>
+            <span class="storage-copy">可保存 3 天。</span>
+          </article>
+
+          <article class="storage-card highlight">
+            <span class="storage-temp">1 个月</span>
+            <span class="storage-title">最佳营养保存期</span>
+            <span class="storage-copy">建议 1 个月内吃完，不建议囤货。</span>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <h1 class="section-title">烹饪方法</h1>
+
+        <div class="method-list">
+          <article class="method-card">
+            <div class="method-label recommend">建议</div>
+            <div>
+              <span class="method-title">温和加热</span>
+              <div class="tag-row">
+                <span class="method-tag">蒸</span>
+                <span class="method-tag">炖</span>
+                <span class="method-tag">低温慢煮</span>
+              </div>
+              <span class="method-copy">烹饪时间与重量和体积相关，请参考产品标签。</span>
+            </div>
+          </article>
+
+          <article class="method-card avoid">
+            <div class="method-label avoid">不建议</div>
+            <div>
+              <span class="method-title">高温快速烹饪</span>
+              <div class="tag-row">
+                <span class="method-tag">微波</span>
+                <span class="method-tag">炸</span>
+                <span class="method-tag">炒</span>
+                <span class="method-tag">煎</span>
+              </div>
+              <span class="method-copy">高温方式容易造成局部过热，也会影响食物状态。</span>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <div class="preview-footer">
+        设计意图：保质期信息先让用户快速扫到“温度 + 时长”，烹饪信息用推荐和不建议做对照，减少长段说明。
+      </div>
+    </main>
+  </body>
+</html>

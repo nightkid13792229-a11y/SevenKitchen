@@ -154,7 +154,95 @@ describe('PricingService supplement nutrition resolver integration', () => {
 
     expect(supplementDetail?.amount).toBeCloseTo(5, 6);
     expect(supplementDetail?.recipeItemId).toBe('recipe-item-supp-1');
+    expect(supplementDetail?.unit).toBe('粒');
     expect(supplementDetail?.displayUnit).toBe('粒');
+    expect(supplementDetail?.calculation).toContain('理论用量5.000粒');
     expect(supplementDetail?.calculation).toContain('200IU');
+  });
+
+  it('copies procurement sku source metadata into food ingredient cost details', async () => {
+    const foodIngredient = new Ingredient(
+      'food-1',
+      '鸡胸肉',
+      IngredientType.FOOD,
+      IngredientProcurementStrategy.DAILY_PURCHASE,
+      false,
+      false,
+      '批发品牌',
+      '10kg/箱',
+      '普通渠道',
+      null,
+      BaseUnit.G,
+      '克',
+      'kg',
+      1000,
+      42,
+      42,
+      null,
+      null,
+      null,
+      null,
+      null,
+      {
+        edible_yield_rate: 1,
+        procurement_sku_id: 'sku-wholesale',
+        procurement_sku_name: '批发鸡胸肉',
+        procurement_sku_source_plan: 'WHOLESALE',
+        procurement_sku_source_tier: 'WHOLESALE',
+        procurement_sku_fallback_level: 0,
+      },
+      null,
+    );
+
+    const result = await service.calculateOrderPrice({
+      dog: { mealsPerDay: 2 },
+      recipe: {
+        id: 'recipe-1',
+        productionLossRate: 1,
+        batchLaborHours: 0,
+        items: [
+          {
+            id: 'recipe-item-food-1',
+            ingredientId: foodIngredient.id,
+            ingredient: foodIngredient,
+            ratioPercent: 100,
+          },
+        ],
+      },
+      dailyG: 1000,
+      days: 1,
+      globalConfig: {
+        laborHourlyRate: 0,
+        minOrderWeightG: 1,
+        defaultBatchCapacityG: 1000,
+        minPotWeightG: 0,
+        targetMargin: 0,
+        overheadCostPerKg: 0,
+        targetBatchUtilization: 1,
+        supplementLossRate: 1,
+        defaultProductLabelId: null,
+        defaultIcePackId: null,
+        defaultShippingTemplateId: null,
+        packageExampleImageUrl: null,
+        shippingCompanyLogoUrl: null,
+        paymentTimeoutMinutes: 30,
+        homeHeaderBgImageUrl: null,
+      },
+      singlePackSpecG: 500,
+    });
+
+    const foodDetail = result.ingredientDetails?.find(
+      (item) => item.type === 'FOOD',
+    );
+
+    expect(foodDetail).toEqual(
+      expect.objectContaining({
+        procurementSkuId: 'sku-wholesale',
+        procurementSkuName: '批发鸡胸肉',
+        procurementSkuSourcePlan: 'WHOLESALE',
+        procurementSkuSourceTier: 'WHOLESALE',
+        procurementSkuFallbackLevel: 0,
+      }),
+    );
   });
 });

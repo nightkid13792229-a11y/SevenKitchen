@@ -138,6 +138,33 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
     }
   }
 
+  private async findUniqueWithFallback(
+    args: Omit<Prisma.PurchaseListFindUniqueArgs, 'include'>,
+  ): Promise<any | null> {
+    try {
+      return await this.prisma.purchaseList.findUnique({
+        ...args,
+        include: purchaseListDetailInclude,
+      });
+    } catch (error) {
+      if (!this.isInconsistentIngredientRelationError(error)) {
+        throw error;
+      }
+
+      const list = await this.prisma.purchaseList.findUnique({
+        ...args,
+        include: purchaseListFallbackInclude,
+      });
+
+      if (!list) {
+        return null;
+      }
+
+      const [hydrated] = await this.hydrateIngredientsForLists([list]);
+      return hydrated;
+    }
+  }
+
   async save(purchaseList: PurchaseList): Promise<PurchaseList> {
     const data = purchaseList.toPrisma();
 
@@ -184,6 +211,10 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
               allocatedQuantity: item.allocatedQuantity,
               availableQuantity: item.availableQuantity,
               usesInventory: item.usesInventory,
+              noPurchaseNeeded: item.noPurchaseNeeded,
+              noPurchaseReason: item.noPurchaseReason,
+              noPurchaseMarkedAt: item.noPurchaseMarkedAt,
+              noPurchaseMarkedById: item.noPurchaseMarkedById,
               purchaseChannel: item.purchaseChannel,
               productModel: item.productModel,
               suggestedProductId: item.suggestedProductId,
@@ -231,9 +262,8 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
   }
 
   async findById(id: string): Promise<PurchaseList | null> {
-    const found = await this.prisma.purchaseList.findUnique({
+    const found = await this.findUniqueWithFallback({
       where: { id },
-      include: purchaseListDetailInclude,
     });
 
     return found ? PurchaseList.fromPrisma(found) : null;
@@ -243,14 +273,13 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
     startDate: Date,
     endDate: Date,
   ): Promise<PurchaseList[]> {
-    const lists = await this.prisma.purchaseList.findMany({
+    const lists = await this.findManyWithFallback({
       where: {
         targetDate: {
           gte: startDate,
           lt: endDate,
         },
       },
-      include: purchaseListDetailInclude,
       orderBy: {
         targetDate: 'desc',
       },
@@ -260,9 +289,8 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
   }
 
   async findByStatus(status: PurchaseListStatus): Promise<PurchaseList[]> {
-    const lists = await this.prisma.purchaseList.findMany({
+    const lists = await this.findManyWithFallback({
       where: { status },
-      include: purchaseListDetailInclude,
       orderBy: {
         createdAt: 'desc',
       },
@@ -272,9 +300,8 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
   }
 
   async findByCreatedBy(createdById: string): Promise<PurchaseList[]> {
-    const lists = await this.prisma.purchaseList.findMany({
+    const lists = await this.findManyWithFallback({
       where: { createdById },
-      include: purchaseListDetailInclude,
       orderBy: {
         createdAt: 'desc',
       },
@@ -361,9 +388,8 @@ export class PrismaPurchaseListRepository implements PurchaseListRepository {
   async findByReimbursementId(
     reimbursementId: string,
   ): Promise<PurchaseList[]> {
-    const lists = await this.prisma.purchaseList.findMany({
+    const lists = await this.findManyWithFallback({
       where: { reimbursementId },
-      include: purchaseListDetailInclude,
       orderBy: {
         createdAt: 'desc',
       },

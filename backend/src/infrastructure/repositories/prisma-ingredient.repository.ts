@@ -3,7 +3,7 @@
  * Production-ready implementation using PostgreSQL database
  */
 
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import type { IngredientRepository } from '../../domain/ingredient/ingredient.repository';
 import { Ingredient } from '../../domain/ingredient/ingredient.entity';
 import {
@@ -16,6 +16,34 @@ import {
   normalizeNutritionProfileForRead,
 } from '../../domain/ingredient/nutrition-profile.utils';
 import { PrismaService } from '../prisma.service';
+
+const isIngredientIdentityUniqueError = (error: unknown): boolean => {
+  if (!error || typeof error !== 'object') {
+    return false;
+  }
+
+  const maybePrismaError = error as {
+    code?: string;
+    meta?: {
+      target?: unknown;
+    };
+  };
+
+  if (maybePrismaError.code !== 'P2002') {
+    return false;
+  }
+
+  const target = maybePrismaError.meta?.target;
+  const fields = Array.isArray(target)
+    ? target
+    : typeof target === 'string'
+      ? target.split(',').map((field) => field.trim())
+      : [];
+
+  return ['name', 'brand', 'product_model'].every((field) =>
+    fields.includes(field),
+  );
+};
 
 @Injectable()
 export class PrismaIngredientRepository implements IngredientRepository {
@@ -93,11 +121,22 @@ export class PrismaIngredientRepository implements IngredientRepository {
 
     this.logger.debug(`Saving ingredient ${ingredient.id}: ${ingredient.name}`);
 
-    const saved = await this.prisma.ingredient.upsert({
-      where: { id: ingredient.id },
-      update: data,
-      create: { id: ingredient.id, ...data },
-    });
+    let saved: Awaited<ReturnType<typeof this.prisma.ingredient.upsert>>;
+    try {
+      saved = await this.prisma.ingredient.upsert({
+        where: { id: ingredient.id },
+        update: data,
+        create: { id: ingredient.id, ...data },
+      });
+    } catch (error) {
+      if (isIngredientIdentityUniqueError(error)) {
+        throw new BadRequestException(
+          `已存在名称、品牌、规格相同的标准原料：${ingredient.name}。请合并已有原料，或调整名称/品牌/规格后再保存。`,
+        );
+      }
+
+      throw error;
+    }
 
     // Save tag associations if provided
     if (tagIds !== undefined) {

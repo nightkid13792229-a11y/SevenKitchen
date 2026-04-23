@@ -67,22 +67,17 @@
       </view>
     </view>
 
-    <!-- 生命阶段不匹配警告 -->
+    <!-- 生命阶段提醒 -->
     <view v-if="!isLifeStageMatch && selectedDog && showWarning" class="warning-card">
       <view class="warning-header">
         <text class="warning-icon">⚠️</text>
-        <text class="warning-title">生命阶段不匹配</text>
+        <text class="warning-title">生命阶段提醒</text>
       </view>
       <text class="warning-text">
-        该食谱适用于"{{ getLifeStageLabel(recipe.applicableLifeStages[0]) }}"，
-        您选择的狗狗"{{ selectedDog.name }}"是"{{ getDogLifeStageLabel(selectedDog) }}"阶段，
-        可能不太适合。
-      </text>
-      <text class="warning-text">
-        建议选择其他食谱。
+        {{ lifeStageReminderText }}
       </text>
       <button class="btn-continue" @tap="dismissWarning">
-        我已知晓，仍要继续
+        我已知晓
       </button>
     </view>
 
@@ -285,6 +280,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { request } from '../../utils/api'
+import {
+  buildLifeStageReminderText,
+  getLifeStageLabel,
+  isRecipeLifeStageMatch,
+  resolveDogLifeStage,
+} from '../../utils/life-stage-match'
 
 interface Dog {
   id: string
@@ -346,6 +347,12 @@ const dogPickerOptions = computed(() => {
 // 生命阶段校验
 const isLifeStageMatch = ref(true)
 const showWarning = ref(true)
+const selectedDogLifeStage = computed(() => resolveDogLifeStage(selectedDog.value, breeds.value))
+const lifeStageReminderText = computed(() => buildLifeStageReminderText({
+  applicableStages: recipe.value.applicableLifeStages,
+  dogLifeStage: selectedDogLifeStage.value,
+  dogName: selectedDog.value?.name,
+}))
 
 // 饭量相关
 const dogCalcResult = ref<any>(null)
@@ -600,36 +607,20 @@ function checkLifeStageMatch() {
 
   if (!selectedDog.value || !recipe.value) {
     console.log('[RecipeDiy] 缺少必要数据，跳过校验')
+    isLifeStageMatch.value = true
     return
   }
 
-  const dogLifeStage = getDogLifeStage(selectedDog.value)
-
-  // 【修复】对 applicableLifeStages 进行格式校验，处理可能的空格、大小写问题
-  const applicableStages = (recipe.value.applicableLifeStages || [])
-    .map((s: string) => {
-      if (typeof s !== 'string') return s
-      return s.trim().toUpperCase()
-    })
-    .filter((s: string) => s) // 过滤掉空字符串
+  const dogLifeStage = selectedDogLifeStage.value
 
   console.log('[RecipeDiy] 生命阶段校验:', {
     dogLifeStage,
-    applicableStages: Array.from(applicableStages), // 将Proxy转为数组
+    applicableStages: recipe.value.applicableLifeStages,
     dogName: selectedDog.value.name
   })
 
-  // 如果无法判断狗狗的生命阶段（无品种信息），则不显示警告
-  if (dogLifeStage === null) {
-    console.log('[RecipeDiy] 无法判断狗狗生命阶段（无品种信息），跳过警告')
-    isLifeStageMatch.value = true  // 默认为匹配，不显示警告
-  } else {
-    // 【修复】确保比较时使用统一的大写格式
-    const normalizedDogLifeStage = dogLifeStage.toUpperCase()
-    isLifeStageMatch.value = applicableStages.includes(normalizedDogLifeStage)
-    console.log('[RecipeDiy] 校验结果:', isLifeStageMatch.value ? '匹配' : '不匹配',
-      { normalizedDogLifeStage, applicableStages })
-  }
+  isLifeStageMatch.value = isRecipeLifeStageMatch(recipe.value.applicableLifeStages, dogLifeStage)
+  console.log('[RecipeDiy] 校验结果:', isLifeStageMatch.value ? '匹配' : '不匹配')
 
   // 修复：切换狗狗时重置警告状态
   // 无论匹配还是不匹配，都应该重置showWarning为true
@@ -644,88 +635,6 @@ function checkLifeStageMatch() {
   })
 
   console.log('[RecipeDiy] checkLifeStageMatch 结束')
-}
-
-function getDogLifeStage(dog: Dog): string | null {
-  console.log('[getDogLifeStage] 开始计算狗狗生命阶段:', dog.name)
-
-  // 优先使用用户设置的覆盖值
-  if (dog.lifeStageOverride && dog.lifeStageOverride !== 'NONE') {
-    console.log('[getDogLifeStage] 使用用户设置的覆盖值:', dog.lifeStageOverride)
-    return dog.lifeStageOverride
-  }
-
-  // 根据品种和年龄自动判断
-  const birthday = new Date(dog.birthday)
-  const now = new Date()
-
-  console.log('[getDogLifeStage] 生日信息:', {
-    birthday: dog.birthday,
-    birthdayObj: birthday,
-    now: now,
-    timeDiff: now.getTime() - birthday.getTime()
-  })
-
-  const ageInDays = Math.floor((now.getTime() - birthday.getTime()) / (1000 * 60 * 60 * 24))
-  const ageInMonths = Math.floor(ageInDays / 30.4375) // 使用更精确的月数计算（平均每月30.4375天）
-  const ageInYears = ageInMonths / 12.0
-
-  console.log('[getDogLifeStage] 年龄计算:', {
-    ageInDays,
-    ageInMonths,
-    ageInYears
-  })
-
-  console.log('[getDogLifeStage] 检查品种信息:', {
-    breedId: dog.breedId,
-    breedName: dog.breedName
-  })
-
-  // 在本地breeds列表中查找品种对象
-  const breed = breeds.value.find(b => b.id === dog.breedId)
-
-  if (!breed || !breed.adultAgeMonths) {
-    console.log('[getDogLifeStage] 缺少完整的品种信息（breed.adultAgeMonths），返回null')
-    console.log('[getDogLifeStage] 找到的breed对象:', breed)
-    return null  // 没有品种信息，无法判断，返回null
-  }
-
-  // 使用品种特定的标准
-  const adultAgeMonths = breed.adultAgeMonths
-  const seniorAgeYears = breed.seniorAgeYears || 7  // 默认7岁老年
-
-  console.log('[getDogLifeStage] 使用品种特定标准:', {
-    breedName: breed.name,
-    adultAgeMonths,
-    seniorAgeYears
-  })
-
-  if (ageInMonths < adultAgeMonths) {
-    console.log('[getDogLifeStage] 判断为幼犬（PUPPY）', { ageInMonths, adultAgeMonths })
-    return 'PUPPY'  // 幼犬
-  } else if (ageInYears >= seniorAgeYears) {
-    console.log('[getDogLifeStage] 判断为老年犬（SENIOR）', { ageInYears, seniorAgeYears })
-    return 'SENIOR'  // 老年犬
-  } else {
-    console.log('[getDogLifeStage] 判断为成犬（ADULT）', { ageInMonths, ageInYears, adultAgeMonths, seniorAgeYears })
-    return 'ADULT'  // 成犬
-  }
-}
-
-function getDogLifeStageLabel(dog: Dog): string {
-  const stage = getDogLifeStage(dog)
-
-  // 如果无法判断生命阶段，返回"未知"
-  if (stage === null) {
-    return '未知'
-  }
-
-  const stageMap: Record<string, string> = {
-    'PUPPY': '幼犬',
-    'ADULT': '成犬',
-    'SENIOR': '老年犬',
-  }
-  return stageMap[stage] || stage
 }
 
 function dismissWarning() {
@@ -845,10 +754,11 @@ function generateSheet() {
 
   if (!isLifeStageMatch.value && showWarning.value) {
     uni.showModal({
-      title: '提示',
-      content: '狗狗生命阶段与食谱不匹配，确定要继续吗？',
+      title: '生命阶段提醒',
+      content: '当前狗狗生命阶段与食谱适用阶段不一致，仍要生成 DIY 制作单吗？',
       success: (res) => {
         if (res.confirm) {
+          showWarning.value = false
           void generateAndNavigateToSheet()
         }
       }
@@ -910,17 +820,6 @@ function goToCreateDog() {
   uni.navigateTo({
     url: '/pages/dog-create/index'
   })
-}
-
-function getLifeStageLabel(stage: string): string {
-  const map: Record<string, string> = {
-    'PUPPY': '幼犬',
-    'ADULT': '成犬',
-    'SENIOR': '老年犬',
-    'PREGNANCY': '妊娠期',
-    'LACTATION': '哺乳期',
-  }
-  return map[stage] || stage
 }
 
 function getHealthTagLabel(tagOrUuid: string): string {

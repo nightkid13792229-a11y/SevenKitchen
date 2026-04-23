@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>产品说明 - 分装与物流布局预览</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        justify-content: center;
+        background: #edf1f4;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei",
+          sans-serif;
+        color: #25282b;
+      }
+
+      .phone {
+        width: 390px;
+        min-height: 100vh;
+        background: #f6f7f8;
+        padding: 18px 12px 28px;
+      }
+
+      .section-title {
+        margin: 0 0 14px;
+        font-size: 20px;
+        font-weight: 800;
+        letter-spacing: 0;
+      }
+
+      .card-list {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .info-card {
+        display: grid;
+        grid-template-columns: 92px minmax(0, 1fr);
+        gap: 14px;
+        padding: 14px;
+        border: 1px solid #e5ebf0;
+        border-radius: 8px;
+        background: #fbfcfd;
+      }
+
+      .media-label {
+        height: 78px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        border-radius: 6px;
+        background: #fff4e4;
+        color: #a76416;
+        font-size: 15px;
+        font-weight: 800;
+      }
+
+      .media-label.blue {
+        background: #edf6ff;
+        color: #2566a8;
+      }
+
+      .copy-title {
+        margin: 0 0 8px;
+        font-size: 18px;
+        font-weight: 800;
+        line-height: 1.35;
+      }
+
+      .copy-text {
+        margin: 5px 0 0;
+        font-size: 15px;
+        line-height: 1.65;
+        color: #626a73;
+      }
+
+      .logistics-card {
+        overflow: hidden;
+        padding: 14px;
+        border: 1px solid #e2e9ef;
+        border-radius: 8px;
+        background: #fbfcfd;
+      }
+
+      .logistics-visual {
+        margin-top: 10px;
+        padding: 12px;
+        border-radius: 8px;
+        background: linear-gradient(180deg, #f7fafc 0%, #eef3f6 100%);
+      }
+
+      .package-frame {
+        width: 100%;
+        aspect-ratio: 4 / 3;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+        border-radius: 8px;
+        background: #fff;
+        border: 1px solid #e4ebf0;
+      }
+
+      .package-image {
+        width: 100%;
+        height: 100%;
+        display: block;
+        object-fit: contain;
+      }
+
+      .shipping-service-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-top: 10px;
+        padding: 9px 10px;
+        border-radius: 8px;
+        background: rgba(255, 255, 255, 0.9);
+        border: 1px solid #e2e9ef;
+      }
+
+      .shipping-main {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        min-width: 0;
+      }
+
+      .shipping-logo {
+        width: 50px;
+        height: 28px;
+        flex: 0 0 auto;
+        object-fit: contain;
+      }
+
+      .shipping-copy {
+        min-width: 0;
+      }
+
+      .shipping-title {
+        display: block;
+        font-size: 14px;
+        font-weight: 800;
+        color: #25282b;
+        line-height: 1.35;
+      }
+
+      .shipping-subtitle {
+        display: block;
+        margin-top: 2px;
+        font-size: 12px;
+        color: #687078;
+        line-height: 1.35;
+      }
+
+      .shipping-pill {
+        flex: 0 0 auto;
+        padding: 4px 8px;
+        border-radius: 6px;
+        background: #edf6ff;
+        color: #2566a8;
+        font-size: 12px;
+        font-weight: 800;
+        white-space: nowrap;
+      }
+
+      .logistics-title {
+        margin: 0;
+        font-size: 18px;
+        font-weight: 800;
+        line-height: 1.35;
+      }
+
+      .comparison-note {
+        margin: 14px 0 0;
+        padding: 12px;
+        border-radius: 8px;
+        background: #fff;
+        border: 1px dashed #cad3dc;
+        color: #687078;
+        font-size: 13px;
+        line-height: 1.6;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="phone">
+      <h1 class="section-title">产品说明</h1>
+
+      <section class="card-list">
+        <article class="info-card">
+          <div class="media-label">成品实拍</div>
+          <div>
+            <h2 class="copy-title">成品形态</h2>
+            <p class="copy-text">所有食材会按配方处理后打碎，并充分混匀。</p>
+            <p class="copy-text">每袋都是同一批次分装，方便按餐喂食。</p>
+          </div>
+        </article>
+
+        <article class="logistics-card">
+          <h2 class="logistics-title">分装与物流</h2>
+          <div class="logistics-visual">
+            <div class="package-frame">
+              <img
+                class="package-image"
+                src="https://img.sevenkitchen.cloud/package-images/1769932497277-7bf4f880.jpg"
+                alt="分装示例"
+              />
+            </div>
+            <div class="shipping-service-row">
+              <div class="shipping-main">
+                <img
+                  class="shipping-logo"
+                  src="https://img.sevenkitchen.cloud/shipping-logos/1769932504418-14b5188c.png"
+                  alt="快递公司 Logo"
+                />
+                <div class="shipping-copy">
+                  <span class="shipping-title">顺丰生鲜配送</span>
+                  <span class="shipping-subtitle">冷冻包材 + 冰袋随箱</span>
+                </div>
+              </div>
+              <span class="shipping-pill">冷链配送</span>
+            </div>
+          </div>
+        </article>
+
+        <article class="info-card">
+          <div class="media-label">喂食方法</div>
+          <div>
+            <h2 class="copy-title">保质期、保存方法、烹饪方法</h2>
+            <p class="copy-text">保质期：冷冻保存，建议 3 个月内吃完。</p>
+            <p class="copy-text">保存方法：收到后请立即冷冻，单袋解冻后尽快喂完。</p>
+            <p class="copy-text">烹饪方法：提前冷藏解冻，可隔水温热后喂食，不建议反复冻融。</p>
+          </div>
+        </article>
+
+        <article class="info-card">
+          <div class="media-label blue">制作流程</div>
+          <div>
+            <h2 class="copy-title">当日采购当日制作</h2>
+            <p class="copy-text">按订单采购原料，当日处理、制作和分装。</p>
+            <p class="copy-text">冷冻满 24 小时后发货。</p>
+            <p class="copy-text">具体制作与发货时间以下单确认页为准。</p>
+          </div>
+        </article>
+      </section>
+
+      <p class="comparison-note">
+        这一版只把“分装与物流”做成大图卡片，其他说明仍保持紧凑左右结构。这样图片能看清，页面长度也不会明显增加。
+      </p>
+    </main>
+  </body>
+</html>

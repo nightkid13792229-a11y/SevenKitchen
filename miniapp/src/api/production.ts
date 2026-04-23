@@ -25,16 +25,18 @@ export type CompleteProductionTaskPayload = {
 // ==========================================
 
 /**
- * 获取今日生产统计
+ * 获取生产统计
  */
-export function getTodayStatistics() {
+export function getTodayStatistics(params?: { targetDate?: string }) {
   return request<{
     todayOrders: number; // 今日订单数
+    pendingScheduleOrders: number; // 今日待排单订单数
     inProgress: number; // 制作中数量
     completed: number; // 已完成数量
   }>({
     url: '/staff/production/statistics/today',
     method: 'GET',
+    data: params,
   });
 }
 
@@ -81,6 +83,7 @@ export function getPackagingUnits(params: {
   page?: number;
   pageSize?: number;
   targetDate?: string; // YYYY-MM-DD格式
+  includeUnfinishedCarryover?: boolean;
 }) {
   // 🔧 修复：过滤掉 undefined 值，避免序列化为 "undefined" 字符串
   const cleanParams = Object.fromEntries(
@@ -90,10 +93,13 @@ export function getPackagingUnits(params: {
   return request<{
     list: Array<{
       id: string;
+      productionDate: string;
       recipeName: string;
       recipeVersion: number;
       totalProductionG: number;
       status: 'PENDING' | 'IN_PROGRESS' | 'COMPLETED';
+      ingredientSourcePlan?: string | null;
+      ingredientSourcePlanLabel?: string;
       orderItems: Array<{
         orderId: string;
         orderItemId: string;
@@ -111,6 +117,11 @@ export function getPackagingUnits(params: {
       totalPots: number; // 总共几锅
       createdAt: string; // 本地时间格式
       completedAt?: string; // 本地时间格式
+      resultStatus?: ProductionResultStatus;
+      actualOutputG?: number;
+      surplusG?: number;
+      shortageG?: number;
+      resultPhotoUrls?: string[];
       photosRaw?: string[]; // 备料照片URL列表
       ingredientsUsageSnapshot?: any; // 原料用量快照
       recipeSnapshot?: {

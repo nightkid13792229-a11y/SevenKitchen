@@ -6,11 +6,32 @@
       <text class="subtitle">自动排单、查看任务、完成制作</text>
     </view>
 
+    <view class="date-section">
+      <picker
+        mode="date"
+        :value="selectedProductionDate"
+        @change="handleProductionDateChange"
+      >
+        <view class="date-picker">
+          <view>
+            <text class="date-label">生产日期</text>
+            <text class="date-value">{{ selectedProductionDate }}</text>
+          </view>
+          <text class="date-arrow">切换</text>
+        </view>
+      </picker>
+      <text class="date-hint">未完成的历史制作单会继续显示，避免跨天漏单</text>
+    </view>
+
     <!-- 统计卡片 -->
     <view class="stats-section">
       <view class="stat-card">
         <text class="stat-value">{{ statistics.todayOrders }}</text>
-        <text class="stat-label">今日制作单</text>
+        <text class="stat-label">制作单</text>
+      </view>
+      <view class="stat-card">
+        <text class="stat-value">{{ statistics.pendingScheduleOrders }}</text>
+        <text class="stat-label">待排单订单</text>
       </view>
       <view class="stat-card">
         <text class="stat-value">{{ statistics.inProgress }}</text>
@@ -22,13 +43,13 @@
       </view>
     </view>
 
-    <!-- 自动排单按钮（仅今天未排单时显示） -->
-    <view v-if="!hasTodayBatch" class="schedule-section">
+    <!-- 自动排单按钮（所选日期仍有未分配订单时显示） -->
+    <view v-if="canAutoSchedule" class="schedule-section">
       <button class="schedule-btn" @tap="autoScheduleToday">
         <text>📋 开始自动排单</text>
       </button>
-      <text class="schedule-hint">将为今天到期的订单创建生产批次</text>
-      <text class="schedule-warning">⚠️ 点击前会检查今天的采购清单是否已完成</text>
+      <text class="schedule-hint">将为 {{ selectedProductionDate }} 的 {{ statistics.pendingScheduleOrders }} 笔待排单订单创建生产批次</text>
+      <text class="schedule-warning">⚠️ 点击前会检查所选日期的采购清单是否已完成</text>
     </view>
 
     <!-- Tab切换 -->
@@ -41,6 +62,7 @@
         @tap="switchTab(tab.value)"
       >
         <text>{{ tab.label }}</text>
+        <text class="tab-count">{{ tab.count }}</text>
       </view>
     </view>
 
@@ -56,7 +78,10 @@
       <view v-else>
         <view v-for="task in filteredTasks" :key="task.id" class="task-card">
           <view class="task-header" @tap="viewDetails(task)">
-            <text class="recipe-name">{{ task.recipeName }} v{{ task.recipeVersion }}</text>
+            <view class="recipe-title">
+              <text class="recipe-name">{{ task.recipeName }} v{{ task.recipeVersion }}</text>
+              <text v-if="isCarryoverTask(task)" class="carryover-badge">逾期</text>
+            </view>
             <text class="pot-info">({{ task.currentPotNumber }}/{{ task.totalPots }})</text>
           </view>
 
@@ -72,6 +97,10 @@
             <view class="info-row">
               <text class="label">创建时间：</text>
               <text class="value">{{ task.createdAt }}</text>
+            </view>
+            <view v-if="isCarryoverTask(task)" class="info-row">
+              <text class="label">生产日期：</text>
+              <text class="value carryover-text">{{ task.productionDate }}</text>
             </view>
           </view>
 
@@ -136,15 +165,23 @@ import {
 } from '../../api/production';
 import { formatDecimal } from '../../utils/format';
 
+const getTodayDateText = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
+
+const selectedProductionDate = ref(getTodayDateText());
+
 // 统计数据
 const statistics = ref({
   todayOrders: 0,
+  pendingScheduleOrders: 0,
   inProgress: 0,
   completed: 0,
 });
-
-// 是否已有今天的批次
-const hasTodayBatch = ref(false);
 
 // 任务列表
 const allTasks = ref<any[]>([]);
@@ -153,17 +190,34 @@ const allTasks = ref<any[]>([]);
 const historyBatches = ref<any[]>([]);
 const expandedHistoryId = ref<string | null>(null);
 
-// Tab筛选
-const tabs = [
-  { label: '待制作', value: 'PENDING' },
-  { label: '制作中', value: 'IN_PROGRESS' },
-  { label: '已完成', value: 'COMPLETED' },
-];
 const activeTab = ref('PENDING');
+
+const taskStatusCounts = computed(() => {
+  return allTasks.value.reduce(
+    (counts, task) => {
+      if (task.status === 'PENDING') counts.PENDING += 1;
+      if (task.status === 'IN_PROGRESS') counts.IN_PROGRESS += 1;
+      if (task.status === 'COMPLETED') counts.COMPLETED += 1;
+      return counts;
+    },
+    {
+      PENDING: 0,
+      IN_PROGRESS: 0,
+      COMPLETED: 0,
+    },
+  );
+});
+
+// Tab筛选
+const tabs = computed(() => [
+  { label: '待制作', value: 'PENDING', count: taskStatusCounts.value.PENDING },
+  { label: '制作中', value: 'IN_PROGRESS', count: taskStatusCounts.value.IN_PROGRESS },
+  { label: '已完成', value: 'COMPLETED', count: taskStatusCounts.value.COMPLETED },
+]);
 
 // 计算属性：当前标签的文本
 const currentTabLabel = computed(() => {
-  const tab = tabs.find(t => t.value === activeTab.value);
+  const tab = tabs.value.find(t => t.value === activeTab.value);
   return tab ? tab.label : '';
 });
 
@@ -171,6 +225,18 @@ const currentTabLabel = computed(() => {
 const filteredTasks = computed(() => {
   return allTasks.value.filter(task => task.status === activeTab.value);
 });
+
+const canAutoSchedule = computed(() => {
+  return Number(statistics.value.pendingScheduleOrders || 0) > 0;
+});
+
+const isCarryoverTask = (task: any) => {
+  return (
+    task?.productionDate &&
+    task.productionDate !== selectedProductionDate.value &&
+    task.status !== 'COMPLETED'
+  );
+};
 
 // 页面加载
 onMounted(() => {
@@ -187,7 +253,9 @@ onShow(() => {
 // 加载今日统计
 const loadTodayStatistics = async () => {
   try {
-    const res = await getTodayStatistics();
+    const res = await getTodayStatistics({
+      targetDate: selectedProductionDate.value,
+    });
     statistics.value = res.data;
   } catch (error: any) {
     console.error('Failed to load statistics:', error);
@@ -198,25 +266,29 @@ const loadTodayStatistics = async () => {
   }
 };
 
+const handleProductionDateChange = async (event: any) => {
+  const nextDate = event?.detail?.value;
+  if (!nextDate || nextDate === selectedProductionDate.value) {
+    return;
+  }
+
+  selectedProductionDate.value = nextDate;
+  await loadTodayStatistics();
+  await loadPackagingUnits();
+};
+
 // 自动排单
 const autoScheduleToday = async () => {
   uni.showModal({
     title: '确认排单',
-    content: '系统将检查今天的采购清单是否已完成，确认后开始自动排单',
+    content: `系统将检查 ${selectedProductionDate.value} 的采购清单是否已完成，确认后开始自动排单`,
     success: async (res) => {
       if (!res.confirm) return;
 
       uni.showLoading({ title: '排单中...' });
 
       try {
-        // 获取本地日期（避免UTC时区问题）
-        const now = new Date();
-        const year = now.getFullYear();
-        const month = String(now.getMonth() + 1).padStart(2, '0');
-        const day = String(now.getDate()).padStart(2, '0');
-        const today = `${year}-${month}-${day}`;
-
-        const result = await autoSchedule({ startDate: today });
+        const result = await autoSchedule({ startDate: selectedProductionDate.value });
 
         uni.hideLoading();
         uni.showToast({
@@ -224,7 +296,6 @@ const autoScheduleToday = async () => {
           icon: 'success',
         });
 
-        hasTodayBatch.value = true;
         await loadPackagingUnits();
         await loadTodayStatistics();
       } catch (error: any) {
@@ -246,19 +317,11 @@ const loadPackagingUnits = async () => {
       status: undefined, // 获取所有状态
       page: 1,
       pageSize: 100,
+      targetDate: selectedProductionDate.value,
+      includeUnfinishedCarryover: true,
     });
 
     const units = res.data.list;
-
-    // 检查是否有今天的批次（使用本地日期）
-    const now = new Date();
-    const year = now.getFullYear();
-    const month = String(now.getMonth() + 1).padStart(2, '0');
-    const day = String(now.getDate()).padStart(2, '0');
-    const today = `${year}-${month}-${day}`;
-
-    const hasToday = units.some(unit => unit.createdAt.substring(0, 10) === today);
-    hasTodayBatch.value = hasToday;
 
     // 按状态分组：所有任务都在列表中（包括已完成）
     allTasks.value = units;
@@ -268,7 +331,7 @@ const loadPackagingUnits = async () => {
     units
       .filter(unit => unit.status === 'COMPLETED')
       .forEach(unit => {
-        const date = unit.createdAt.split(' ')[0];
+        const date = unit.productionDate || unit.createdAt.split(' ')[0];
         if (!historyMap.has(date)) {
           historyMap.set(date, []);
         }
@@ -323,9 +386,11 @@ const handleStartTask = async (task: any) => {
             icon: 'success',
           });
 
-          // 刷新任务列表
-          loadPackagingUnits();
-          loadTodayStatistics();
+          await loadPackagingUnits();
+          await loadTodayStatistics();
+          uni.navigateTo({
+            url: `/pages/staff-production/detail?id=${task.id}`,
+          });
         } else {
           uni.showToast({
             title: result.message || '操作失败',
@@ -464,6 +529,51 @@ const toggleHistory = (batchId: string) => {
   padding: 0 32rpx 24rpx;
 }
 
+.date-section {
+  background-color: #fff;
+  margin: 0 32rpx 24rpx;
+  padding: 24rpx;
+  border-radius: 16rpx;
+  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+}
+
+.date-picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.date-label {
+  display: block;
+  font-size: 24rpx;
+  color: #666;
+  margin-bottom: 6rpx;
+}
+
+.date-value {
+  display: block;
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #333;
+}
+
+.date-arrow {
+  font-size: 24rpx;
+  color: #2196f3;
+  background-color: #edf6ff;
+  border-radius: 8rpx;
+  padding: 8rpx 16rpx;
+  white-space: nowrap;
+}
+
+.date-hint {
+  display: block;
+  margin-top: 14rpx;
+  font-size: 22rpx;
+  color: #888;
+}
+
 .stat-card {
   flex: 1;
   background-color: #fff;
@@ -573,11 +683,33 @@ const toggleHistory = (batchId: string) => {
   font-size: 28rpx;
   color: #666;
   transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8rpx;
+  min-height: 44rpx;
 
   &.active {
     background-color: #56ab91;
     color: #fff;
     font-weight: bold;
+
+    .tab-count {
+      background-color: rgba(255, 255, 255, 0.24);
+      color: #fff;
+    }
+  }
+
+  .tab-count {
+    min-width: 32rpx;
+    height: 32rpx;
+    line-height: 32rpx;
+    padding: 0 8rpx;
+    border-radius: 16rpx;
+    background-color: #f0f4f2;
+    color: #56ab91;
+    font-size: 22rpx;
+    font-weight: 600;
   }
 }
 
@@ -620,11 +752,32 @@ const toggleHistory = (batchId: string) => {
     justify-content: space-between;
     align-items: center;
     margin-bottom: 16rpx;
+    gap: 16rpx;
+
+    .recipe-title {
+      flex: 1;
+      min-width: 0;
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10rpx;
+    }
 
     .recipe-name {
       font-size: 30rpx;
       font-weight: bold;
       color: #333;
+    }
+
+    .carryover-badge {
+      font-size: 22rpx;
+      color: #d63f3f;
+      background-color: #fff0f0;
+      border: 1rpx solid #ffc6c6;
+      border-radius: 8rpx;
+      padding: 4rpx 10rpx;
+      line-height: 1.3;
+      white-space: nowrap;
     }
 
     .pot-info {
@@ -634,6 +787,7 @@ const toggleHistory = (batchId: string) => {
       padding: 4rpx 12rpx;
       background-color: #e8f5e9;
       border-radius: 8rpx;
+      white-space: nowrap;
     }
   }
 
@@ -651,6 +805,11 @@ const toggleHistory = (batchId: string) => {
       .value {
         font-size: 26rpx;
         color: #333;
+      }
+
+      .carryover-text {
+        color: #d63f3f;
+        font-weight: 600;
       }
     }
   }

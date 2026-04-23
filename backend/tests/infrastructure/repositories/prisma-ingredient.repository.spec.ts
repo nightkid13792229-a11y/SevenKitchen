@@ -1,3 +1,4 @@
+import { BadRequestException } from '@nestjs/common';
 import { Ingredient } from '../../../src/domain/ingredient';
 import {
   BaseUnit,
@@ -51,6 +52,8 @@ describe('PrismaIngredientRepository nutrition profile compatibility', () => {
       '碳酸钙',
       IngredientType.SUPPLEMENT,
       IngredientProcurementStrategy.DAILY_PURCHASE,
+      false,
+      false,
       null,
       null,
       null,
@@ -89,5 +92,56 @@ describe('PrismaIngredientRepository nutrition profile compatibility', () => {
       }),
     );
     expect(result.nutritionProfile).toEqual(legacyProfile);
+  });
+
+  it('converts duplicate ingredient identity errors into a readable bad request', async () => {
+    const repository = new PrismaIngredientRepository(prisma as any);
+    const ingredient = new Ingredient(
+      'ingredient-duplicate',
+      '牛霖',
+      IngredientType.FOOD,
+      IngredientProcurementStrategy.DAILY_PURCHASE,
+      false,
+      false,
+      '',
+      '',
+      null,
+      '测试原料',
+      BaseUnit.G,
+      '克',
+      '克',
+      1,
+      0,
+      0,
+      null,
+      null,
+      null,
+      null,
+      null,
+      {
+        cfct_class: '畜肉及制品',
+        edible_yield_rate: 0.95,
+        main_nutrients_desc: '',
+      },
+      null,
+    );
+    prisma.ingredient.upsert.mockRejectedValue(
+      Object.assign(
+        new Error(
+          'Unique constraint failed on the fields: (`name`, `brand`, `product_model`)',
+        ),
+        {
+          code: 'P2002',
+          meta: {
+            target: ['name', 'brand', 'product_model'],
+          },
+        },
+      ),
+    );
+
+    await repository.save(ingredient).catch((error) => {
+      expect(error).toBeInstanceOf(BadRequestException);
+      expect(error.message).toContain('已存在名称、品牌、规格相同的标准原料');
+    });
   });
 });

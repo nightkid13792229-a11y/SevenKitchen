@@ -146,7 +146,11 @@ describe('production completion result', () => {
         upsert: jest.fn().mockResolvedValue({ id: 'settlement-1' }),
       },
       orderCostSettlement: {
+        upsert: jest.fn().mockResolvedValue({ id: 'order-settlement-1' }),
+      },
+      orderSettlementAdjustment: {
         upsert: jest.fn(),
+        updateMany: jest.fn(),
       },
     };
     const inventoryService = {
@@ -201,6 +205,27 @@ describe('production completion result', () => {
           revenue: 100,
           actualMargin: 50,
           suggestedAdjustmentAmount: -6,
+        }),
+      }),
+    );
+    expect(prisma.orderSettlementAdjustment.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          orderId_sourceType_sourceId: {
+            orderId: 'order-1',
+            sourceType: 'PRODUCTION_SHORTAGE',
+            sourceId: 'order-settlement-1',
+          },
+        },
+        create: expect.objectContaining({
+          orderId: 'order-1',
+          sourceType: 'PRODUCTION_SHORTAGE',
+          sourceId: 'order-settlement-1',
+          adjustmentType: 'REFUND',
+          amount: -6,
+          status: 'PENDING',
+          requiresCustomerPayment: false,
+          visibleToCustomer: true,
         }),
       }),
     );

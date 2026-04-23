@@ -231,6 +231,97 @@ describe('AdminController', () => {
       expect(result.data).toEqual(financialSummary);
     });
 
+    it('creates manual order settlement adjustments for admins', async () => {
+      const adjustment = {
+        id: 'adjustment-1',
+        orderId: 'order-1',
+        amount: 18,
+        reason: '补收定制分装差价',
+        status: 'PENDING',
+      };
+      const mockOrderService = {
+        createOrderSettlementAdjustment: jest
+          .fn()
+          .mockResolvedValue(adjustment),
+      };
+      const controller = new AdminController(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        mockOrderService as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+      );
+
+      const result = await controller.createOrderSettlementAdjustment('order-1', {
+        amount: 18,
+        reason: '补收定制分装差价',
+        visibleToCustomer: true,
+      });
+
+      expect(
+        mockOrderService.createOrderSettlementAdjustment,
+      ).toHaveBeenCalledWith({
+        orderId: 'order-1',
+        amount: 18,
+        reason: '补收定制分装差价',
+        adjustmentType: undefined,
+        visibleToCustomer: true,
+        requiresCustomerPayment: undefined,
+        createdBy: 'admin',
+        createdById: null,
+      });
+      expect(result.code).toBe(0);
+      expect(result.data).toEqual(adjustment);
+    });
+
+    it('updates manual settlement adjustment status for admins', async () => {
+      const adjustment = {
+        id: 'adjustment-1',
+        orderId: 'order-1',
+        status: 'SETTLED',
+      };
+      const mockOrderService = {
+        updateOrderSettlementAdjustmentStatus: jest
+          .fn()
+          .mockResolvedValue(adjustment),
+      };
+      const controller = new AdminController(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        mockOrderService as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+      );
+
+      const result = await controller.updateOrderSettlementAdjustmentStatus(
+        'order-1',
+        'adjustment-1',
+        { status: 'SETTLED' },
+      );
+
+      expect(
+        mockOrderService.updateOrderSettlementAdjustmentStatus,
+      ).toHaveBeenCalledWith('order-1', 'adjustment-1', 'SETTLED');
+      expect(result.code).toBe(0);
+      expect(result.data).toEqual(adjustment);
+    });
+
     it('returns address details in the admin order response', async () => {
       const order = {
         id: 'order-1',
@@ -307,6 +398,103 @@ describe('AdminController', () => {
         },
         regionText: '上海市 上海市 浦东新区',
         detailAddress: '世纪大道100号',
+      });
+    });
+
+    it('returns dog details on admin order items for the miniapp detail page', async () => {
+      const order = {
+        id: 'order-1',
+        customerId: 'customer-1',
+        dogId: 'dog-1',
+        addressId: null,
+        address: null,
+        status: 'PENDING_PAYMENT',
+        type: 'FRESH_FOOD',
+        targetProductionDate: null,
+        totalAmount: 128,
+        amountProduct: 118,
+        amountShipping: 10,
+        amountTotal: 128,
+        items: [
+          {
+            id: 'item-1',
+            orderId: 'order-1',
+            dogId: 'dog-1',
+            recipeSnapshot: { id: 'recipe-1', name: '糙米鸡蛋牛肉' },
+            quantityG: 1974,
+            packageCount: 21,
+            packageSpecG: 94,
+            packagePlan: [{ packageSpecG: 94, packageCount: 21 }],
+            ingredientSourcePlan: 'WHOLESALE',
+            preparationMethod: 'CHOPPED',
+            cookingMethod: 'RAW',
+            customRequirements: null,
+            dailyIntakeG: 282,
+          },
+        ],
+        pricingBreakdownSnapshot: null,
+        trackingNumber: null,
+        carrierCode: null,
+        shippedAt: null,
+        completedAt: null,
+        cancelledAt: null,
+        cancellationReason: null,
+        cancelledBy: null,
+        paymentMethod: null,
+        transactionId: null,
+        paidAt: null,
+        paymentStatus: null,
+        createdAt: new Date('2026-04-12T10:00:00.000Z'),
+        adminRemark: null,
+      };
+
+      const mockOrderService = {
+        getOrderById: jest.fn().mockResolvedValue(order),
+      };
+      const mockPrisma = {
+        dog: {
+          findUnique: jest.fn().mockResolvedValue({
+            id: 'dog-1',
+            name: 'Star',
+            breedId: 'breed-1',
+            customBreedName: null,
+            currentWeightKg: 4.5,
+            gender: 'FEMALE',
+          }),
+        },
+      };
+      const mockDogBreedRepository = {
+        findById: jest.fn().mockResolvedValue({ id: 'breed-1', name: '雪纳瑞（迷你）' }),
+      };
+
+      const controller = new AdminController(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        mockOrderService as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        mockPrisma as any,
+        mockDogBreedRepository as any,
+        {} as any,
+        {} as any,
+        {} as any,
+      );
+
+      const result = await controller.getOrderDetail('order-1');
+
+      expect(result.code).toBe(0);
+      expect(result.data?.items[0]).toMatchObject({
+        dogId: 'dog-1',
+        dog: {
+          id: 'dog-1',
+          name: 'Star',
+          breedName: '雪纳瑞（迷你）',
+          weightKg: 4.5,
+          gender: 'FEMALE',
+        },
       });
     });
   });

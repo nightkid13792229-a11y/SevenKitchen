@@ -1,6 +1,5 @@
 <template>
   <view class="print-page">
-    <!-- 顶部操作栏 -->
     <view class="action-bar" :style="{ paddingTop: statusBarHeight + 'px' }">
       <button class="action-btn back" @tap="goBack">
         <text>← 返回</text>
@@ -8,113 +7,97 @@
       <view class="action-title">制作单打印预览</view>
     </view>
 
-    <!-- 打印内容区域 -->
-    <scroll-view scroll-y class="print-container" enable-flex :style="{ paddingTop: navBarHeight + 20 + 'px', paddingBottom: '120rpx' }">
-      <view class="print-content">
-        <!-- 标题区域 -->
-        <view class="header-section">
-          <view class="recipe-title">{{ printData.recipeName }} v{{ printData.recipeVersion }}</view>
-          <view class="pot-info">第 {{ printData.currentPotNumber }}/{{ printData.totalPots }} 锅</view>
-          <view class="meta-info">
-            <text class="meta-item">状态: {{ statusText }}</text>
-            <text class="meta-item">创建时间: {{ formatDateTime(printData.createdAt) }}</text>
+    <scroll-view
+      scroll-y
+      class="print-container"
+      enable-flex
+      :style="{ paddingTop: navBarHeight + 20 + 'px', paddingBottom: '132rpx' }"
+    >
+      <view class="a4-paper">
+        <view class="print-paper-inner">
+          <view class="header-section">
+            <view class="compact-task-title-line">
+              {{ printData.recipeName }} v{{ printData.recipeVersion }} · 第 {{ printData.currentPotNumber }}/{{ printData.totalPots }} 锅
+            </view>
+            <view class="meta-info">
+              <text>状态: {{ statusText }}</text>
+              <text>创建时间: {{ formatDateTime(printData.createdAt) }}</text>
+            </view>
           </view>
-        </view>
 
-        <!-- 分装订单 -->
-        <view class="section">
-          <view class="section-title">分装订单（{{ printData.orderItems?.length || 0 }}个）</view>
-          <view class="order-cards">
-            <view
-              v-for="(order, index) in printData.orderItems"
-              :key="index"
-              class="order-card"
-            >
-              <view class="order-header">
-                <text class="order-label">订单 {{ index + 1 }}</text>
-              </view>
-              <view class="order-body">
-                <view class="order-row">
-                  <text class="label">总净重:</text>
-                  <text class="value">{{ formatDecimal(getOrderTotalNetWeight(order)) }}g</text>
-                </view>
-                <view v-if="order.packagePlan && order.packagePlan.length > 0" class="order-row">
-                  <text class="label">分装明细:</text>
-                  <text class="value">{{ formatPackagePlan(order) }}</text>
-                </view>
-                <template v-else>
-                  <view class="order-row">
-                    <text class="label">规格:</text>
-                    <text class="value">{{ order.packageSpecG }}g/袋</text>
+          <view class="section order-section">
+            <view :class="orderCardsClass">
+              <view
+                v-for="(order, index) in printData.orderItems"
+                :key="index"
+                class="order-card"
+              >
+                <view class="order-card-title">订单 {{ index + 1 }}</view>
+                <view class="order-grid">
+                  <view class="order-field">
+                    <text class="field-label">总净重</text>
+                    <text class="field-value">{{ formatDecimal(getOrderTotalNetWeight(order)) }}g</text>
                   </view>
-                  <view class="order-row">
-                    <text class="label">袋数:</text>
-                    <text class="value">{{ order.packageCount }}袋</text>
+                  <view class="order-field">
+                    <text class="field-label">狗狗</text>
+                    <text class="field-value">{{ order.dogName }}</text>
                   </view>
-                </template>
-                <view class="order-row">
-                  <text class="label">狗狗:</text>
-                  <text class="value">{{ order.dogName }}</text>
+                  <view v-if="order.recipientName" class="order-field">
+                    <text class="field-label">收货人</text>
+                    <text class="field-value">{{ order.recipientName }}（{{ order.recipientCity }}）</text>
+                  </view>
+                  <view class="order-field package-field">
+                    <text class="field-label">分装</text>
+                    <text class="field-value package-value">{{ formatPackagePlan(order) }}</text>
+                  </view>
                 </view>
-                <view v-if="order.recipientName" class="order-row">
-                  <text class="label">收货人:</text>
-                  <text class="value">{{ order.recipientName }}（{{ order.recipientCity }}）</text>
-                </view>
-                <view v-if="order.adminRemark" class="order-row order-remark-row">
-                  <text class="label">备注:</text>
-                  <text class="value">{{ order.adminRemark }}</text>
+                <view v-if="order.adminRemark" class="order-remark">
+                  <text class="field-label">备注</text>
+                  <text class="remark-text">{{ order.adminRemark }}</text>
                 </view>
               </view>
             </view>
           </view>
-        </view>
 
-        <!-- 原料清单 -->
-        <view class="section">
-          <view class="section-title">原料清单（{{ parsedIngredients.length }}项）</view>
-          <view class="ingredients-table">
-            <view class="table-header">
-              <view class="table-cell type">类型</view>
-              <view class="table-cell name">名称</view>
-              <view class="table-cell amount">用量</view>
-              <view class="table-cell method">制备方法</view>
-            </view>
-            <view
-              v-for="(ingredient, index) in parsedIngredients"
-              :key="index"
-              class="table-row"
-              :class="{ 'total-weight': ingredient.isTotalWeight }"
-            >
-              <view class="table-cell type">
-                <text v-if="ingredient.typeLabel" :class="['type-tag', ingredient.typeClass]">
-                  {{ ingredient.typeLabel }}
-                </text>
-                <text v-else>-</text>
+          <view class="section ingredients-section">
+            <view class="section-title">原料清单（{{ realIngredientCount }}项）</view>
+            <view class="compact-print-table">
+              <view class="compact-table-row compact-table-header">
+                <view class="table-cell type">类型</view>
+                <view class="table-cell name">标准原料 / SKU</view>
+                <view class="table-cell amount">用量</view>
+                <view class="table-cell purchase">品牌 / 渠道 / 规格</view>
+                <view class="table-cell method">制备</view>
               </view>
-              <view class="table-cell name">{{ ingredient.name }}</view>
-              <view class="table-cell amount">{{ ingredient.amount }}{{ ingredient.unit }}</view>
-              <view class="table-cell method">{{ ingredient.method || '-' }}</view>
+              <view
+                v-for="(ingredient, index) in parsedIngredients"
+                :key="index"
+                class="compact-table-row"
+                :class="{ 'total-weight': ingredient.isTotalWeight }"
+              >
+                <view class="table-cell type">
+                  <text v-if="ingredient.typeLabel" :class="['type-tag', ingredient.typeClass]">
+                    {{ ingredient.typeLabel }}
+                  </text>
+                  <text v-else>-</text>
+                </view>
+                <view class="table-cell name">
+                  <view class="ingredient-name-line">{{ formatIngredientNameLine(ingredient) }}</view>
+                </view>
+                <view class="table-cell amount">{{ ingredient.amount }}{{ ingredient.unit }}</view>
+                <view class="table-cell purchase">
+                  <view class="purchase-summary purchase-summary-full">{{ formatPurchaseSummary(ingredient) }}</view>
+                </view>
+                <view class="table-cell method">
+                  <view class="method-text">{{ ingredient.method || '-' }}</view>
+                </view>
+              </view>
             </view>
           </view>
-          <view class="ingredients-note">
-            <text>注：用量已包含生产损耗</text>
-          </view>
-        </view>
-
-        <!-- 页脚 -->
-        <view class="footer">
-          <text>SevenKitchen 专业鲜食套餐定制</text>
-          <text>制作人: {{ printData.createdBy || '厨房管理员' }}</text>
         </view>
       </view>
     </scroll-view>
 
-    <!-- 打印提示 -->
-    <view class="screenshot-hint">
-      <text>💡 提示：PDF打开后，点击页面右上角"..."或"分享"图标，选择"打印"功能</text>
-    </view>
-
-    <!-- 底部打印按钮 -->
     <view class="bottom-action-bar">
       <button class="bottom-print-btn" @tap="handlePrint">
         <text>生成PDF打印</text>
@@ -130,7 +113,6 @@ import { getBaseUrl } from '../../utils/config';
 import { calculateSupplementAmountForProduction } from '../../utils/supplement-nutrients';
 import { getPackagePlanTotal } from '../../utils/order-package-plan';
 
-// 打印数据
 interface PrintData {
   recipeName: string;
   recipeVersion: string;
@@ -167,32 +149,29 @@ const printData = ref<PrintData>({
   createdBy: '厨房管理员',
 });
 
-// 状态栏高度
 const statusBarHeight = ref(0);
-// 自定义导航栏高度（状态栏 + 标题栏）
 const navBarHeight = ref(44);
 
-// 解析原料列表
 const parsedIngredients = computed(() => {
   if (!printData.value.recipeSnapshot?.items) return [];
 
   const recipeSnapshot = printData.value.recipeSnapshot;
-  const totalProductionG = printData.value.totalProductionG;
-  const productionLossRate = recipeSnapshot.production_loss_rate || 1.1;
+  const totalProductionG = Number(printData.value.totalProductionG || 0);
+  const productionLossRate = Number(recipeSnapshot.production_loss_rate || 1.1);
   const theoreticalWeight = totalProductionG * productionLossRate;
 
-  let ingredients = recipeSnapshot.items.map((item: any) => {
+  const ingredients = recipeSnapshot.items.map((item: any) => {
     let amount = 0;
     let unit = 'g';
 
     const typeMap: Record<string, { label: string; class: string }> = {
-      'FOOD': { label: '食材', class: 'type-food' },
-      'SUPPLEMENT': { label: '补剂', class: 'type-supplement' },
-      'PACKAGING': { label: '包装', class: 'type-packaging' },
+      FOOD: { label: '食材', class: 'type-food' },
+      SUPPLEMENT: { label: '补剂', class: 'type-supplement' },
+      PACKAGING: { label: '包装', class: 'type-packaging' },
     };
     const typeInfo = item.ingredient_type ? typeMap[item.ingredient_type] : null;
 
-    const preparationMethods = item.preparation_methods && item.preparation_methods.length > 0
+    const preparationMethods = Array.isArray(item.preparation_methods) && item.preparation_methods.length > 0
       ? item.preparation_methods.join('、')
       : '';
 
@@ -201,12 +180,43 @@ const parsedIngredients = computed(() => {
       amount = supplementAmount.amount;
       unit = supplementAmount.unit;
     } else {
-      amount = theoreticalWeight * (item.ratio / 100);
+      amount = theoreticalWeight * (Number(item.ratio || 0) / 100);
       unit = 'g';
     }
 
+    const standardIngredientName = getFirstString(
+      item.standardIngredientName,
+      item.standard_ingredient_name,
+      item.name,
+    );
+    const procurementSkuName = getFirstString(
+      item.procurementSkuName,
+      item.procurement_sku_name,
+      item.properties?.procurement_sku_name,
+    );
+
     return {
-      name: item.name,
+      name: procurementSkuName || standardIngredientName || item.name || '',
+      standardIngredientName,
+      procurementSkuName,
+      procurementSkuBrand: getFirstString(
+        item.procurementSkuBrand,
+        item.procurement_sku_brand,
+        item.brand,
+        item.properties?.procurement_sku_brand,
+      ),
+      procurementSkuPurchaseChannel: getFirstString(
+        item.procurementSkuPurchaseChannel,
+        item.procurement_sku_purchase_channel,
+        item.purchaseChannel,
+        item.properties?.procurement_sku_purchase_channel,
+      ),
+      procurementSkuProductModel: getFirstString(
+        item.procurementSkuProductModel,
+        item.procurement_sku_product_model,
+        item.productModel,
+        item.properties?.procurement_sku_product_model,
+      ),
       amount: formatDecimal(amount),
       unit,
       typeLabel: typeInfo?.label || '',
@@ -216,43 +226,112 @@ const parsedIngredients = computed(() => {
     };
   });
 
-  // 计算食材总重
   const totalFoodWeight = ingredients
-    .filter(ing => ing.typeLabel === '食材')
-    .reduce((sum, ing) => sum + parseFloat(ing.amount), 0);
+    .filter((ing) => ing.typeLabel === '食材')
+    .reduce((sum, ing) => sum + Number.parseFloat(ing.amount || '0'), 0);
 
-  // 添加总重行（在最后一个食材后面）
-  const lastFoodIndex = ingredients.map((ing, i) => ing.typeLabel === '食材' ? i : -1).filter(i => i !== -1).pop();
+  const lastFoodIndex = ingredients
+    .map((ing, index) => (ing.typeLabel === '食材' ? index : -1))
+    .filter((index) => index !== -1)
+    .pop();
+
   if (lastFoodIndex !== undefined) {
-    const totalWeightRow = {
+    ingredients.splice(lastFoodIndex + 1, 0, {
       name: '食材类原料总重',
+      standardIngredientName: '',
+      procurementSkuName: '',
+      procurementSkuBrand: '',
+      procurementSkuPurchaseChannel: '',
+      procurementSkuProductModel: '',
       amount: formatDecimal(totalFoodWeight),
       unit: 'g',
       typeLabel: '',
       typeClass: '',
       method: '',
       isTotalWeight: true,
-    };
-    ingredients.splice(lastFoodIndex + 1, 0, totalWeightRow);
+    });
   }
 
   return ingredients;
 });
 
-// 状态文本
+const realIngredientCount = computed(() => {
+  return parsedIngredients.value.filter(
+    (ingredient) => !ingredient.isTotalWeight,
+  ).length;
+});
+
+const orderCardsClass = computed(() => [
+  'order-cards',
+  printData.value.orderItems.length === 1 ? 'single-order' : '',
+]);
+
 const statusText = computed(() => {
   const statusMap: Record<string, string> = {
-    'PENDING': '待制作',
-    'IN_PROGRESS': '制作中',
-    'COMPLETED': '已完成',
+    PENDING: '待制作',
+    IN_PROGRESS: '制作中',
+    COMPLETED: '已完成',
   };
   return statusMap[printData.value.status] || printData.value.status;
 });
 
-// 格式化数字
+function getFirstString(...values: unknown[]): string {
+  const value = values.find((item) => typeof item === 'string' && item.trim());
+  return typeof value === 'string' ? value.trim() : '';
+}
+
 function formatDecimal(value: number | null | undefined, decimals = 2): string {
-  if (value === null || value === undefined || isNaN(value)) return '-';
+  if (value === null || value === undefined || Number.isNaN(value)) return '-';
   return value.toFixed(decimals);
+}
+
+function formatIngredientNameLine(ingredient: {
+  name?: string
+  standardIngredientName?: string
+  procurementSkuName?: string
+  isTotalWeight?: boolean
+}): string {
+  if (ingredient.isTotalWeight) {
+    return ingredient.name || '-';
+  }
+
+  const standardName = ingredient.standardIngredientName || '';
+  const skuName = ingredient.procurementSkuName || ingredient.name || '';
+
+  if (standardName && skuName && standardName !== skuName) {
+    return `${standardName} / ${skuName}`;
+  }
+
+  return skuName || standardName || '-';
+}
+
+function formatPurchaseSummary(ingredient: {
+  procurementSkuBrand?: string
+  procurementSkuPurchaseChannel?: string
+  procurementSkuProductModel?: string
+  isTotalWeight?: boolean
+}): string {
+  if (ingredient.isTotalWeight) {
+    return '-';
+  }
+
+  const parts = getPrintablePurchaseSummaryParts(
+    ingredient.procurementSkuBrand,
+    ingredient.procurementSkuPurchaseChannel,
+    ingredient.procurementSkuProductModel,
+  );
+
+  return parts.length > 0 ? parts.join(' / ') : '-';
+}
+
+function getPrintablePurchaseSummaryParts(...values: unknown[]): string[] {
+  return values
+    .map((value) => String(value || '').trim())
+    .filter((value) => !shouldSkipPurchaseSummaryPart(value));
+}
+
+function shouldSkipPurchaseSummaryPart(value: string): boolean {
+  return ['无', '暂无', '-', 'null', 'undefined'].includes(value);
 }
 
 function formatPackagePlan(item: {
@@ -260,15 +339,15 @@ function formatPackagePlan(item: {
   packageSpecG?: number
   packageCount?: number
 }): string {
-  const packagePlanRows = normalizePackagePlanRows(item.packagePlan)
+  const packagePlanRows = normalizePackagePlanRows(item.packagePlan);
 
   if (packagePlanRows.length > 0) {
     return packagePlanRows
-      .map(row => `${row.packageSpecG}g×${row.packageCount}袋`)
-      .join('，')
+      .map((row) => `${row.packageSpecG}g×${row.packageCount}袋`)
+      .join('，');
   }
 
-  return `${item.packageSpecG || 0}g×${item.packageCount || 0}袋`
+  return `${item.packageSpecG || 0}g×${item.packageCount || 0}袋`;
 }
 
 function normalizePackagePlanRows(
@@ -276,14 +355,14 @@ function normalizePackagePlanRows(
 ): Array<{ packageSpecG: number; packageCount: number }> {
   return (packagePlan || [])
     .map((row) => {
-      const packageSpecG = Math.floor(Number(row?.packageSpecG))
-      const packageCount = Math.floor(Number(row?.packageCount))
+      const packageSpecG = Math.floor(Number(row?.packageSpecG));
+      const packageCount = Math.floor(Number(row?.packageCount));
       if (!Number.isFinite(packageSpecG) || !Number.isFinite(packageCount) || packageSpecG <= 0 || packageCount <= 0) {
-        return null
+        return null;
       }
-      return { packageSpecG, packageCount }
+      return { packageSpecG, packageCount };
     })
-    .filter((row): row is { packageSpecG: number; packageCount: number } => row !== null)
+    .filter((row): row is { packageSpecG: number; packageCount: number } => row !== null);
 }
 
 function getOrderTotalNetWeight(item: {
@@ -291,15 +370,14 @@ function getOrderTotalNetWeight(item: {
   packageSpecG?: number
   packageCount?: number
 }): number {
-  const packagePlanRows = normalizePackagePlanRows(item.packagePlan)
+  const packagePlanRows = normalizePackagePlanRows(item.packagePlan);
   if (packagePlanRows.length > 0) {
-    return getPackagePlanTotal(packagePlanRows).totalGrams
+    return getPackagePlanTotal(packagePlanRows).totalGrams;
   }
 
-  return Number(item.packageSpecG || 0) * Number(item.packageCount || 0)
+  return Number(item.packageSpecG || 0) * Number(item.packageCount || 0);
 }
 
-// 格式化日期时间
 function formatDateTime(dateStr: string): string {
   if (!dateStr) return '-';
   const date = new Date(dateStr);
@@ -311,13 +389,9 @@ function formatDateTime(dateStr: string): string {
   return `${year}-${month}-${day} ${hours}:${minutes}`;
 }
 
-// 页面加载
 onLoad((options: any) => {
-  // 获取系统信息，计算状态栏高度
   const systemInfo = uni.getSystemInfoSync();
   statusBarHeight.value = systemInfo.statusBarHeight || 0;
-
-  // 计算导航栏总高度 = 状态栏高度 + 导航栏内容高度
   navBarHeight.value = statusBarHeight.value + 44;
 
   if (options.taskData) {
@@ -338,12 +412,10 @@ onLoad((options: any) => {
   }
 });
 
-// 返回
 const goBack = () => {
   uni.navigateBack();
 };
 
-// 打印/生成PDF
 const handlePrint = async () => {
   console.log('[PrintTask] ========== Print Debug Start ==========');
   uni.showLoading({ title: '生成PDF中...' });
@@ -352,15 +424,9 @@ const handlePrint = async () => {
     const token = uni.getStorageSync('token');
     const baseUrl = getBaseUrl();
 
-    console.log('[PrintTask] Token present:', !!token);
-    console.log('[PrintTask] BaseURL from getBaseUrl():', baseUrl);
-    console.log('[PrintTask] Full URL will be:', `${baseUrl}/staff/production/print-task`);
-    console.log('[PrintTask] Original recipeVersion:', printData.value.recipeVersion, 'Type:', typeof printData.value.recipeVersion);
-
-    // 准备发送的数据，包括parsedIngredients
     const requestData = {
       recipeName: printData.value.recipeName,
-      recipeVersion: String(printData.value.recipeVersion), // 确保是字符串
+      recipeVersion: String(printData.value.recipeVersion),
       currentPotNumber: printData.value.currentPotNumber,
       totalPots: printData.value.totalPots,
       status: printData.value.status,
@@ -372,14 +438,11 @@ const handlePrint = async () => {
       createdBy: printData.value.createdBy || '厨房管理员',
     };
 
-    console.log('[PrintTask] Request data:', JSON.stringify(requestData, null, 2));
-
-    // 调用后端API生成PDF
     const res = await uni.request({
       url: `${baseUrl}/staff/production/print-task`,
       method: 'POST',
       header: {
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
         'Content-Type': 'application/json',
       },
       data: requestData,
@@ -387,17 +450,10 @@ const handlePrint = async () => {
 
     uni.hideLoading();
 
-    console.log('[PrintTask] Response statusCode:', res.statusCode, 'Type:', typeof res.statusCode);
-    console.log('[PrintTask] Response code:', res.data.code, 'Type:', typeof res.data.code);
-
-    // 接受 200 和 201 状态码（201 = Created，RESTful API创建资源的标准响应）
     const isSuccess = (res.statusCode === 200 || res.statusCode === 201) && (res.data.code == 0);
-    console.log('[PrintTask] Success check:', isSuccess, 'statusCode check:', res.statusCode === 200 || res.statusCode === 201, 'code check:', res.data.code == 0);
-
     if (isSuccess) {
       const pdfUrl = res.data.data.pdfUrl;
 
-      // 下载PDF文件
       uni.showLoading({ title: '下载中...' });
 
       const downloadRes = await uni.downloadFile({
@@ -407,7 +463,6 @@ const handlePrint = async () => {
       uni.hideLoading();
 
       if (downloadRes.statusCode === 200) {
-        // 打开PDF文档预览
         uni.openDocument({
           filePath: downloadRes.tempFilePath,
           fileType: 'pdf',
@@ -428,14 +483,11 @@ const handlePrint = async () => {
       }
     } else {
       const errorMsg = res.data?.message || '生成PDF失败';
-      console.error('[PrintTask] API Error:', errorMsg);
-      console.error('[PrintTask] Response data:', res.data);
       throw new Error(errorMsg);
     }
   } catch (error: any) {
     uni.hideLoading();
     console.error('[PrintTask] Print failed:', error);
-    console.error('[PrintTask] Error stack:', error.stack);
     uni.showToast({
       title: error.message || '生成PDF失败',
       icon: 'none',
@@ -449,7 +501,7 @@ const handlePrint = async () => {
   height: 100vh;
   display: flex;
   flex-direction: column;
-  background-color: #f5f5f5;
+  background-color: #f2f3f2;
   overflow: hidden;
 }
 
@@ -460,7 +512,7 @@ const handlePrint = async () => {
   padding-left: 24rpx;
   padding-right: 24rpx;
   padding-bottom: 20rpx;
-  background: linear-gradient(135deg, #56ab91 0%, #4a9680 100%);
+  background: #56ab91;
   box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.1);
   position: fixed;
   top: 0;
@@ -478,7 +530,7 @@ const handlePrint = async () => {
   line-height: 1.4;
 
   &.back {
-    background-color: rgba(255, 255, 255, 0.2);
+    background-color: rgba(255, 255, 255, 0.22);
     color: #fff;
   }
 }
@@ -493,231 +545,273 @@ const handlePrint = async () => {
 
 .print-container {
   flex: 1;
-  padding: 0 32rpx;
+  padding: 0 20rpx;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   box-sizing: border-box;
 }
 
-.print-content {
+.a4-paper {
+  width: 710rpx;
+  min-height: 1004rpx;
+  aspect-ratio: 210 / 297;
+  margin: 0 auto 28rpx;
   background-color: #fff;
-  border-radius: 16rpx;
-  padding: 32rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.05);
+  box-shadow: 0 6rpx 24rpx rgba(0, 0, 0, 0.12);
+  box-sizing: border-box;
+}
+
+.print-paper-inner {
+  min-height: 1004rpx;
+  padding: 32rpx 34rpx 28rpx;
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
 }
 
 .header-section {
   text-align: center;
-  padding-bottom: 32rpx;
+  padding-bottom: 14rpx;
   border-bottom: 2rpx solid #56ab91;
-  margin-bottom: 32rpx;
+  margin-bottom: 14rpx;
 }
 
-.recipe-title {
-  font-size: 40rpx;
+.compact-task-title-line {
+  font-size: 32rpx;
   font-weight: bold;
   color: #333;
-  margin-bottom: 12rpx;
-}
-
-.pot-info {
-  font-size: 28rpx;
-  color: #56ab91;
-  font-weight: bold;
-  margin-bottom: 20rpx;
+  line-height: 1.18;
 }
 
 .meta-info {
+  margin-top: 8rpx;
   display: flex;
   justify-content: center;
-  gap: 24rpx;
-  font-size: 22rpx;
+  gap: 22rpx;
+  font-size: 18rpx;
   color: #666;
-  flex-wrap: wrap;
 }
 
 .section {
-  margin-bottom: 36rpx;
+  margin-bottom: 20rpx;
 }
 
 .section-title {
-  font-size: 28rpx;
+  font-size: 24rpx;
   font-weight: bold;
   color: #333;
-  margin-bottom: 20rpx;
-  padding-left: 12rpx;
-  border-left: 6rpx solid #56ab91;
+  line-height: 1.2;
+  margin-bottom: 12rpx;
+  padding-left: 10rpx;
+  border-left: 5rpx solid #56ab91;
 }
 
 .order-cards {
-  display: flex;
-  flex-direction: column;
-  gap: 20rpx;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10rpx;
+
+  &.single-order {
+    grid-template-columns: 1fr;
+  }
 }
 
 .order-card {
-  background-color: #f9f9f9;
-  border-radius: 12rpx;
+  border: 1rpx solid #d9e9e3;
+  background-color: #fbfdfc;
   overflow: hidden;
-  border: 1rpx solid #e0e0e0;
 }
 
-.order-header {
+.order-card-title {
+  padding: 7rpx 10rpx;
   background-color: #56ab91;
   color: #fff;
-  padding: 12rpx 20rpx;
-  font-size: 24rpx;
+  font-size: 20rpx;
   font-weight: bold;
 }
 
-.order-body {
-  padding: 20rpx;
+.order-grid {
+  padding: 10rpx 10rpx 4rpx;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 5rpx 10rpx;
 }
 
-.order-row {
+.order-field,
+.order-remark {
+  min-width: 0;
+  font-size: 17rpx;
+  line-height: 1.25;
+}
+
+.order-field {
   display: flex;
-  align-items: flex-start;
-  gap: 12rpx;
-  margin-bottom: 12rpx;
-  font-size: 24rpx;
+  gap: 6rpx;
+}
+
+.field-label {
+  color: #777;
+  flex: 0 0 auto;
+}
+
+.field-value {
+  min-width: 0;
+  flex: 1;
+  color: #333;
+  font-weight: 600;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.package-field {
+  grid-column: 1 / -1;
+}
+
+.package-value {
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+}
+
+.order-remark {
+  display: flex;
+  gap: 6rpx;
+  padding: 0 10rpx 10rpx;
+}
+
+.remark-text {
+  flex: 1;
+  min-width: 0;
+  color: #555;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.ingredients-section {
+  flex: 1;
+}
+
+.compact-print-table {
+  border: 1rpx solid #333;
+  overflow: hidden;
+  font-size: 16rpx;
+}
+
+.compact-table-row {
+  display: flex;
+  min-height: 38rpx;
+  border-bottom: 1rpx solid #e1e1e1;
 
   &:last-child {
-    margin-bottom: 0;
-  }
-
-  .label {
-    color: #666;
-    min-width: 150rpx;
-  }
-
-  .value {
-    color: #333;
-    flex: 1;
-    min-width: 0;
-    font-weight: 500;
-    word-break: break-all;
-    overflow-wrap: anywhere;
-  }
-}
-
-.order-remark-row {
-  align-items: flex-start;
-}
-
-.ingredients-table {
-  border: 1rpx solid #333;
-  border-radius: 8rpx;
-  overflow: hidden;
-  font-size: 20rpx;
-}
-
-.table-header,
-.table-row {
-  display: flex;
-  border-bottom: 1rpx solid #ddd;
-}
-
-.table-header {
-  background-color: #f5f5f5;
-  font-weight: bold;
-}
-
-.table-row {
-  &:nth-child(even) {
-    background-color: #fafafa;
+    border-bottom: none;
   }
 
   &.total-weight {
-    background-color: #e8f5e9 !important;
+    background-color: #eef8f2;
+    color: #2f8f76;
     font-weight: bold;
     border-top: 2rpx solid #56ab91;
   }
 }
 
+.compact-table-header {
+  min-height: 34rpx;
+  background-color: #f6f6f6;
+  color: #333;
+  font-size: 15rpx;
+  font-weight: bold;
+}
+
 .table-cell {
-  padding: 10rpx 12rpx;
-  text-align: center;
-  flex-shrink: 0;
+  min-width: 0;
+  padding: 6rpx 5rpx;
+  box-sizing: border-box;
+  border-right: 1rpx solid #e5e5e5;
+  line-height: 1.22;
+
+  &:last-child {
+    border-right: none;
+  }
 
   &.type {
-    width: 70rpx;
+    flex: 0 0 58rpx;
+    text-align: center;
   }
 
   &.name {
-    flex: 0 0 140rpx;
-    text-align: left;
-    word-break: break-all;
+    flex: 0 0 178rpx;
+  }
+
+  &.amount {
+    flex: 0 0 82rpx;
+    white-space: nowrap;
+  }
+
+  &.purchase {
+    flex: 0 0 156rpx;
   }
 
   &.method {
     flex: 1;
-    text-align: left;
-    word-break: break-all;
-    min-width: 120rpx;
   }
+}
 
-  &.amount {
-    flex: 0 0 130rpx;
-    text-align: left;
-    word-break: keep-all;
-  }
+.ingredient-name-line,
+.method-text {
+  display: block;
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+
+.ingredient-name-line {
+  color: #222;
+  font-weight: 600;
+}
+
+.purchase-summary {
+  color: #555;
+}
+
+.purchase-summary-full {
+  display: block;
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+  word-break: break-all;
+  overflow-wrap: anywhere;
+}
+
+.method-text {
+  color: #333;
 }
 
 .type-tag {
   display: inline-block;
-  padding: 2rpx 10rpx;
+  padding: 2rpx 6rpx;
   border-radius: 4rpx;
-  font-size: 18rpx;
+  font-size: 14rpx;
   font-weight: bold;
 
   &.type-food {
-    background-color: #e8f5e9;
-    color: #56ab91;
+    background-color: #e7f4ef;
+    color: #389078;
   }
 
   &.type-supplement {
-    background-color: #fff3e0;
-    color: #ff9800;
+    background-color: #fff3dc;
+    color: #d28a17;
   }
 
   &.type-packaging {
-    background-color: #e3f2fd;
-    color: #2196f3;
+    background-color: #e8f1fb;
+    color: #2e7acb;
   }
-}
-
-.ingredients-note {
-  margin-top: 12rpx;
-  font-size: 20rpx;
-  color: #999;
-  text-align: center;
-}
-
-.footer {
-  margin-top: 36rpx;
-  padding-top: 24rpx;
-  border-top: 1rpx solid #e0e0e0;
-  text-align: center;
-  font-size: 20rpx;
-  color: #999;
-  display: flex;
-  flex-direction: column;
-  gap: 6rpx;
-}
-
-.screenshot-hint {
-  position: fixed;
-  bottom: 120rpx;
-  left: 0;
-  right: 0;
-  background-color: rgba(255, 243, 224, 0.95);
-  padding: 20rpx 24rpx;
-  font-size: 20rpx;
-  color: #ff9800;
-  text-align: center;
-  border-top: 1rpx solid #ffe0b2;
-  box-shadow: 0 -2rpx 8rpx rgba(0, 0, 0, 0.05);
-  z-index: 99;
 }
 
 .bottom-action-bar {
@@ -738,7 +832,7 @@ const handlePrint = async () => {
   background-color: #56ab91;
   color: #fff;
   border: none;
-  border-radius: 12rpx;
+  border-radius: 8rpx;
   font-size: 32rpx;
   font-weight: bold;
   text-align: center;

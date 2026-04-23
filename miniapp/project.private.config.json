@@ -1,6 +1,6 @@
 {
   "libVersion": "3.13.0",
-  "projectname": "SevenKitchen",
+  "projectname": "miniapp",
   "setting": {
     "urlCheck": false,
     "coverView": true,
@@ -12,6 +12,25 @@
     "compileHotReLoad": true,
     "ignoreDevUnusedFiles": false,
     "ignoreUploadUnusedFiles": false,
-    "ignoreUnusedFiles": false
+    "ignoreUnusedFiles": false,
+    "useApiHook": true,
+    "useStaticServer": false,
+    "useLanDebug": false,
+    "showES6CompileOption": false,
+    "checkInvalidKey": true,
+    "bigPackageSizeSupport": false
+  },
+  "condition": {
+    "miniprogram": {
+      "list": [
+        {
+          "name": "pages/recipe-order/index",
+          "pathName": "pages/recipe-order/index",
+          "query": "recipeId=c8362aad-2a39-4823-b3ef-d06e798dc793",
+          "scene": null,
+          "launchMode": "default"
+        }
+      ]
+    }
   }
 }

@@ -95,6 +95,8 @@ describe('order-package-plan miniapp helper', () => {
   })
 
   it('returns customer-facing source plan labels', () => {
-    expect(getSourcePlanLabel('MARKET_PREMIUM')).toBe('尽量山姆、盒马、沃集鲜')
+    expect(getSourcePlanLabel('ORGANIC')).toBe('有机优先')
+    expect(getSourcePlanLabel('MARKET_PREMIUM')).toBe('超市优先')
+    expect(getSourcePlanLabel('WHOLESALE')).toBe('性价比优先')
   })
 })

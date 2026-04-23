@@ -13,7 +13,6 @@ export interface LegacyProcurementSkuSnapshot {
   currentPurchasePrice?: NullableNumber;
   referencePurchasePrice?: NullableNumber;
   referencePricePerPurchaseUnit?: NullableNumber;
-  displayUnit?: NullableText;
   notes?: NullableText;
   isDefault?: boolean;
   isActive?: boolean;
@@ -52,7 +51,6 @@ export interface ProcurementSkuBackfillPayload {
   currentPurchasePrice: number | null;
   referencePurchasePrice: number | null;
   referencePricePerPurchaseUnit: number | null;
-  displayUnit: string | null;
   notes: string | null;
   isDefault: boolean;
   isActive: boolean;
@@ -165,8 +163,6 @@ const buildLegacyProcurementPayload = (
     normalizeNumber(ingredient.effectivePricePerPurchaseUnit) ??
     currentPurchasePrice;
   const purchaseUnit = normalizeText(ingredient.purchaseUnit);
-  const displayUnit =
-    normalizeText(ingredient.unitDisplayLabel) ?? purchaseUnit;
   const purchaseToBaseRatio =
     typeof ingredient.purchaseToBaseRatio === 'number' &&
     Number.isFinite(ingredient.purchaseToBaseRatio) &&
@@ -185,7 +181,6 @@ const buildLegacyProcurementPayload = (
     currentPurchasePrice,
     referencePurchasePrice,
     referencePricePerPurchaseUnit: referencePurchasePrice,
-    displayUnit,
     notes: buildBackfillNote(),
     isDefault: true,
     isActive: true,
@@ -265,9 +260,6 @@ const buildUpdatePatch = (
     patch.referencePurchasePrice = referencePurchasePrice;
     patch.referencePricePerPurchaseUnit = referencePurchasePrice;
   }
-
-  const displayUnit = fillMissingText(sku.displayUnit, legacy.displayUnit);
-  assignIfPresent('displayUnit', displayUnit);
 
   const notes = fillMissingText(sku.notes, legacy.notes);
   assignIfPresent('notes', notes);

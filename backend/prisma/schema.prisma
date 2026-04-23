@@ -45,6 +45,7 @@ model Order {
   items                        OrderItem[]
   statusHistory                OrderStatusHistory[]
   costSettlements              OrderCostSettlement[]
+  settlementAdjustments        OrderSettlementAdjustment[]
 
   photoShareTokens PhotoShareToken[]
 
@@ -489,6 +490,7 @@ model Ingredient {
   inventoryStocktakeLines       InventoryStocktakeLine[]
   inventoryAllocationLines      InventoryAllocationLine[]
   procurementSkus               ProcurementSku[]
+  procurementSkuPriceHistories  ProcurementSkuPriceHistory[]
 
   @@unique([name, brand, productModel])
   @@index([type])
@@ -565,7 +567,7 @@ model ProcurementSku {
   currentPurchasePrice          Decimal? @map("current_purchase_price") @db.Decimal(10, 2)
   referencePurchasePrice        Decimal? @map("reference_purchase_price") @db.Decimal(10, 2)
   referencePricePerPurchaseUnit Decimal? @map("reference_price_per_purchase_unit") @db.Decimal(10, 2)
-  displayUnit                   String?  @map("display_unit") @db.VarChar(50)
+  sourceTier                    ProcurementSkuSourceTier? @map("source_tier")
   notes                         String?
   isDefault                     Boolean  @default(false) @map("is_default")
   isActive                      Boolean  @default(true) @map("is_active")
@@ -576,11 +578,39 @@ model ProcurementSku {
   createdAt                     DateTime @default(now()) @map("created_at")
   updatedAt                     DateTime @default(now()) @updatedAt @map("updated_at")
 
-  ingredient Ingredient @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  ingredient   Ingredient                    @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  priceHistory ProcurementSkuPriceHistory[]
 
   @@index([ingredientId])
   @@index([isActive])
+  @@index([sourceTier])
   @@map("procurement_sku")
+}
+
+model ProcurementSkuPriceHistory {
+  id                    String                           @id @default(uuid()) @db.VarChar(36)
+  procurementSkuId      String                           @map("procurement_sku_id") @db.VarChar(36)
+  ingredientId          String                           @map("ingredient_id") @db.VarChar(36)
+  oldPrice              Decimal?                         @map("old_price") @db.Decimal(10, 2)
+  newPrice              Decimal                          @map("new_price") @db.Decimal(10, 2)
+  source                ProcurementSkuPriceHistorySource @map("source")
+  reimbursementId       String?                          @map("reimbursement_id") @db.VarChar(36)
+  purchaseRecordId      String?                          @map("purchase_record_id") @db.VarChar(36)
+  rollbackFromHistoryId String?                          @map("rollback_from_history_id") @db.VarChar(36)
+  operatorId            String?                          @map("operator_id") @db.VarChar(36)
+  note                  String?
+  createdAt             DateTime                         @default(now()) @map("created_at")
+
+  procurementSku ProcurementSku @relation(fields: [procurementSkuId], references: [id], onDelete: Cascade)
+  ingredient     Ingredient     @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+
+  @@index([procurementSkuId])
+  @@index([ingredientId])
+  @@index([source])
+  @@index([reimbursementId])
+  @@index([purchaseRecordId])
+  @@index([createdAt])
+  @@map("procurement_sku_price_history")
 }
 
 model InventoryLedgerEntry {
@@ -644,6 +674,31 @@ model OrderCostSettlement {
   @@index([orderId])
   @@index([productionBatchSettlementId])
   @@map("order_cost_settlement")
+}
+
+model OrderSettlementAdjustment {
+  id                      String   @id @default(uuid()) @map("id")
+  orderId                 String   @map("order_id")
+  sourceType              String   @map("source_type") @db.VarChar(40)
+  sourceId                String?  @map("source_id") @db.VarChar(80)
+  adjustmentType          String   @map("adjustment_type") @db.VarChar(40)
+  amount                  Decimal  @map("amount") @db.Decimal(10, 2)
+  reason                  String   @map("reason") @db.VarChar(200)
+  status                  String   @default("PENDING") @map("status") @db.VarChar(20)
+  requiresCustomerPayment Boolean  @default(false) @map("requires_customer_payment")
+  visibleToCustomer       Boolean  @default(true) @map("visible_to_customer")
+  createdBy               String   @default("system") @map("created_by") @db.VarChar(20)
+  createdById             String?  @map("created_by_id") @db.VarChar(80)
+  metadata                Json?    @map("metadata")
+  settledAt               DateTime? @map("settled_at")
+  createdAt               DateTime @default(now()) @map("created_at")
+  updatedAt               DateTime @updatedAt @map("updated_at")
+  order                   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@unique([orderId, sourceType, sourceId])
+  @@index([orderId, status])
+  @@index([createdAt])
+  @@map("order_settlement_adjustment")
 }
 
 model InventoryAllocation {
@@ -951,6 +1006,10 @@ model PurchaseItem {
   allocatedQuantity        Float?  @map("allocated_quantity")
   availableQuantity        Float?  @map("available_quantity")
   usesInventory            Boolean @default(false) @map("uses_inventory")
+  noPurchaseNeeded         Boolean @default(false) @map("no_purchase_needed")
+  noPurchaseReason         String? @map("no_purchase_reason") @db.VarChar(120)
+  noPurchaseMarkedAt       DateTime? @map("no_purchase_marked_at")
+  noPurchaseMarkedById     String? @map("no_purchase_marked_by_id") @db.VarChar(80)
   purchaseChannel      String?      @map("purchase_channel") @db.VarChar(200)
   productModel         String?      @map("product_model") @db.VarChar(100)
   notes                String?      @map("notes")
@@ -1318,6 +1377,12 @@ enum IngredientProcurementStrategy {
   HYBRID
 }
 
+enum ProcurementSkuSourceTier {
+  ORGANIC
+  MARKET_PREMIUM
+  WHOLESALE
+}
+
 enum BaseUnit {
   G
   ML
@@ -1390,6 +1455,12 @@ enum IngredientPriceChangeStatus {
   PENDING
   APPROVED
   REJECTED
+}
+
+enum ProcurementSkuPriceHistorySource {
+  MANUAL
+  REIMBURSEMENT
+  ROLLBACK
 }
 
 enum TargetGoal {

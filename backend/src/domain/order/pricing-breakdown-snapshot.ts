@@ -34,6 +34,11 @@ export class PricingBreakdownSnapshot {
       cost: number;
       purchaseChannel?: string;
       productModel?: string;
+      procurementSkuId?: string;
+      procurementSkuName?: string;
+      procurementSkuSourcePlan?: string;
+      procurementSkuSourceTier?: string;
+      procurementSkuFallbackLevel?: number;
     }>,
   ) {
     // Validate all cost fields are non-negative

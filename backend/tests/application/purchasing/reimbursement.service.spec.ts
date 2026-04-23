@@ -2,7 +2,6 @@ jest.mock('uuid', () => ({
   v4: () => 'test-uuid',
 }));
 
-import { BadRequestException } from '@nestjs/common';
 import { Test, TestingModule } from '@nestjs/testing';
 import { IngredientPricingService } from '../../../src/application/ingredient/ingredient-pricing.service';
 import { ORDER_REPOSITORY } from '../../../src/application/order/order.service';
@@ -15,6 +14,9 @@ import {
   REIMBURSEMENT_REPOSITORY,
 } from '../../../src/application/purchasing/purchasing.service.tokens';
 import {
+  PurchaseItem,
+  PurchaseList,
+  PurchaseListStatus,
   Reimbursement,
   ReimbursementStatus,
 } from '../../../src/domain/purchasing';
@@ -32,8 +34,13 @@ describe('ReimbursementService', () => {
     unlockProductionByReimbursementId: jest.fn(),
   } as any;
 
-  const mockOrderRepository = {} as any;
-  const mockStatusHistoryRepository = {} as any;
+  const mockOrderRepository = {
+    findById: jest.fn(),
+    save: jest.fn(),
+  } as any;
+  const mockStatusHistoryRepository = {
+    append: jest.fn(),
+  } as any;
   const mockCosService = {
     uploadImage: jest.fn(),
   } as any;
@@ -101,7 +108,7 @@ describe('ReimbursementService', () => {
       purchaseLists: [],
     });
 
-  it('blocks payment proof upload while ingredient price changes are still pending review', async () => {
+  it('accepts pending price changes when payment proof URLs complete reimbursement', async () => {
     mockReimbursementRepository.findById.mockResolvedValue(
       createPendingReviewReimbursement(),
     );
@@ -133,21 +140,33 @@ describe('ReimbursementService', () => {
       ],
     );
 
-    await expect(
-      service.uploadPaymentProof('reimbursement-1', [
-        'https://example.com/payment-proof-1.jpg',
-      ]),
-    ).rejects.toThrow(
-      new BadRequestException('存在待人工审核的价格变更，请先审核报销单'),
+    const result = await service.uploadPaymentProof(
+      'reimbursement-1',
+      ['https://example.com/payment-proof-1.jpg'],
+      'admin-1',
     );
 
-    expect(mockReimbursementRepository.save).not.toHaveBeenCalled();
+    expect(result.status).toBe(ReimbursementStatus.REIMBURSED);
+    expect(result.paymentProofUrls).toEqual([
+      'https://example.com/payment-proof-1.jpg',
+    ]);
+    expect(mockReimbursementRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: ReimbursementStatus.REIMBURSED,
+        reviewedById: 'admin-1',
+        paymentProofUrls: ['https://example.com/payment-proof-1.jpg'],
+      }),
+    );
     expect(
       mockIngredientPricingService.applyApprovedChangesForReimbursement,
-    ).not.toHaveBeenCalled();
+    ).toHaveBeenCalledWith(
+      'reimbursement-1',
+      'admin-1',
+      '系统在上传报销凭证后自动标记已报销并应用价格变更',
+    );
   });
 
-  it('blocks payment proof file upload while ingredient price changes are still pending review', async () => {
+  it('uploads payment proof files and completes reimbursement even when price changes are pending', async () => {
     mockReimbursementRepository.findById.mockResolvedValue(
       createPendingReviewReimbursement(),
     );
@@ -179,8 +198,9 @@ describe('ReimbursementService', () => {
       ],
     );
 
-    await expect(
-      service.uploadPaymentProofFiles('reimbursement-1', [
+    const result = await service.uploadPaymentProofFiles(
+      'reimbursement-1',
+      [
         {
           fieldname: 'file',
           originalname: 'payment-proof-1.jpg',
@@ -193,15 +213,79 @@ describe('ReimbursementService', () => {
           path: '/tmp/payment-proof-1.jpg',
           buffer: Buffer.from('proof'),
         } as Express.Multer.File,
-      ]),
-    ).rejects.toThrow(
-      new BadRequestException('存在待人工审核的价格变更，请先审核报销单'),
+      ],
+      'admin-1',
     );
 
-    expect(mockCosService.uploadImage).not.toHaveBeenCalled();
-    expect(mockReimbursementRepository.save).not.toHaveBeenCalled();
+    expect(result.status).toBe(ReimbursementStatus.REIMBURSED);
+    expect(result.paymentProofUrls).toEqual([
+      'https://example.com/payment-proof-1.jpg',
+    ]);
+    expect(mockCosService.uploadImage).toHaveBeenCalled();
+    expect(mockReimbursementRepository.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: ReimbursementStatus.REIMBURSED,
+        reviewedById: 'admin-1',
+        paymentProofUrls: ['https://example.com/payment-proof-1.jpg'],
+        paymentProofKeys: ['payment-proof-1'],
+      }),
+    );
     expect(
       mockIngredientPricingService.applyApprovedChangesForReimbursement,
-    ).not.toHaveBeenCalled();
+    ).toHaveBeenCalledWith(
+      'reimbursement-1',
+      'admin-1',
+      '系统在上传报销凭证后自动标记已报销并应用价格变更',
+    );
+  });
+
+  it('does not unlock production from reimbursement approval', async () => {
+    const reimbursement = new Reimbursement({
+      id: 'reimbursement-1',
+      claimNumber: 'BX202604140001',
+      status: ReimbursementStatus.PENDING_REVIEW,
+      totalActualCost: 180,
+      totalEstimatedCost: 180,
+      receiptUrls: ['https://example.com/receipt-1.jpg'],
+      submittedById: 'user-1',
+      submittedAt: new Date('2026-04-14T00:00:00.000Z'),
+      purchaseLists: [
+        new PurchaseList({
+          id: 'purchase-list-1',
+          targetDate: new Date('2026-04-14T04:00:00.000Z'),
+          status: PurchaseListStatus.COMPLETED,
+          totalEstimatedCost: 180,
+          itemCount: 1,
+          createdById: 'staff-1',
+          sourceOrderIds: ['order-1'],
+          completedAt: new Date('2026-04-14T06:00:00.000Z'),
+          items: [
+            new PurchaseItem({
+              id: 'item-1',
+              purchaseListId: 'purchase-list-1',
+              ingredientId: 'ingredient-1',
+              ingredientName: '牛霖',
+              type: 'FOOD',
+              quantityNeeded: 1,
+              quantityUnit: 'kg',
+              estimatedCost: 180,
+            }),
+          ],
+        }),
+      ],
+    });
+    mockReimbursementRepository.findById.mockResolvedValue(reimbursement);
+
+    await service.reviewReimbursement('reimbursement-1', 'admin-1', {
+      decision: 'APPROVE',
+      comment: '已报销',
+    });
+
+    expect(
+      mockIngredientPricingService.applyApprovedChangesForReimbursement,
+    ).toHaveBeenCalledWith('reimbursement-1', 'admin-1', '已报销');
+    expect(mockOrderRepository.findById).not.toHaveBeenCalled();
+    expect(mockOrderRepository.save).not.toHaveBeenCalled();
+    expect(mockStatusHistoryRepository.append).not.toHaveBeenCalled();
   });
 });

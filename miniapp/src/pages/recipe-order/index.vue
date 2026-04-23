@@ -83,10 +83,10 @@
             <text class="warning-title">生命阶段提醒</text>
           </view>
           <text class="warning-text">
-            该食谱可能不完全适合当前生命阶段，建议确认后再下单。
+            {{ lifeStageReminderText }}
           </text>
           <button class="btn-continue" @tap="dismissWarning">
-            我已知晓，继续订购
+            我已知晓
           </button>
         </view>
 
@@ -195,6 +195,7 @@
 
       <view class="ingredient-summary">
         <text class="ingredient-summary-title">{{ sourcePlanDescription }}</text>
+        <text class="ingredient-summary-note">{{ sourcePlanFallbackNote }}</text>
       </view>
 
       <view v-if="totalIngredientCount === 0" class="ingredient-empty-state">
@@ -202,26 +203,38 @@
       </view>
 
       <view v-if="totalIngredientCount > 0" class="ingredients-content">
-        <view v-if="foodIngredients.length > 0" class="ingredient-group">
-          <view class="ingredient-category-title">原料用量</view>
-          <view v-for="(ingredient, idx) in foodIngredients" :key="'food-' + idx" class="ingredient-row-compact">
-            <text class="ingredient-name">{{ ingredient.name }}</text>
-            <text class="ingredient-channel-tag">{{ ingredient.purchaseChannel || '默认来源' }}</text>
-            <text class="ingredient-spec-inline">{{ ingredient.productModel || '-' }}</text>
-            <text class="ingredient-amount">
-              {{ formatIngredientAmount(ingredient) }}
-            </text>
-          </view>
+        <view class="ingredient-list-title">
+          <text class="ingredient-list-title-text">原料明细</text>
         </view>
 
-        <view v-if="supplementIngredients.length > 0" class="ingredient-group">
-          <view class="ingredient-category-title">补剂用量</view>
-          <view v-for="(ingredient, idx) in supplementIngredients" :key="'supplement-' + idx" class="ingredient-row-compact">
-            <text class="ingredient-name">{{ ingredient.name }}</text>
-            <text class="ingredient-channel-tag supplement">{{ ingredient.purchaseChannel || '默认来源' }}</text>
-            <text class="ingredient-spec-inline">{{ ingredient.productModel || '-' }}</text>
+        <view
+          v-for="ingredient in displayIngredientRows"
+          :key="ingredient.key"
+          class="ingredient-row-compact"
+        >
+          <view class="ingredient-row-main">
+            <view class="ingredient-name-cell">
+              <text class="ingredient-type-tag" :class="ingredient.typeClass">
+                {{ ingredient.typeLabel }}
+              </text>
+              <text class="ingredient-name">{{ ingredient.nameText }}</text>
+            </view>
             <text class="ingredient-amount">
-              {{ formatIngredientAmount(ingredient) }}
+              {{ ingredient.amountText }}
+            </text>
+          </view>
+          <view class="ingredient-meta-row">
+            <text class="ingredient-meta-item">
+              <text class="ingredient-meta-label">渠道</text>
+              {{ ingredient.purchaseChannelText }}
+            </text>
+            <text class="ingredient-meta-item">
+              <text class="ingredient-meta-label">品牌</text>
+              {{ ingredient.brandText }}
+            </text>
+            <text class="ingredient-meta-item">
+              <text class="ingredient-meta-label">规格</text>
+              {{ ingredient.productModelText }}
             </text>
           </view>
         </view>
@@ -238,36 +251,152 @@
           v-for="card in productExplanationCards"
           :key="card.title"
           class="product-explanation-card"
+          :class="{
+            'product-explanation-logistics-card': card.mediaKind === 'logistics',
+            'product-explanation-storage-card': card.mediaKind === 'storage',
+            'product-explanation-cooking-card': card.mediaKind === 'cooking',
+            'product-explanation-plain-card': card.mediaKind === 'plain',
+          }"
         >
-          <text class="product-explanation-title">{{ card.title }}</text>
-          <text
-            v-for="point in card.points"
-            :key="point"
-            class="product-explanation-point"
-          >
-            {{ point }}
-          </text>
-        </view>
-      </view>
-    </view>
+          <template v-if="card.mediaKind === 'logistics'">
+            <text class="product-explanation-title product-explanation-logistics-title">
+              {{ card.title }}
+            </text>
+            <view class="product-explanation-logistics-visual">
+              <view class="product-explanation-package-frame">
+                <image
+                  v-if="card.packageImageUrl"
+                  :src="normalizeImageUrl(card.packageImageUrl)"
+                  class="product-explanation-package-image product-explanation-logistics-package-image"
+                  mode="aspectFit"
+                  @error="handleProductExplanationPackageImageError"
+                />
+              </view>
+              <view v-if="card.shippingLogoUrl" class="product-explanation-shipping-row">
+                <view class="product-explanation-shipping-main">
+                  <image
+                    :src="normalizeImageUrl(card.shippingLogoUrl)"
+                    class="product-explanation-shipping-logo product-explanation-shipping-logo-large"
+                    mode="aspectFit"
+                    @error="handleProductExplanationShippingLogoError"
+                  />
+                  <view class="product-explanation-shipping-copy">
+                    <text class="product-explanation-shipping-title">顺丰生鲜配送</text>
+                    <text class="product-explanation-shipping-subtitle">冷冻包材 + 冰袋随箱</text>
+                  </view>
+                </view>
+                <text class="product-explanation-shipping-pill">冷链配送</text>
+              </view>
+            </view>
+          </template>
 
-    <view class="section logistics-section">
-      <view class="section-title">
-        <text class="title-text">分装及物流说明</text>
-      </view>
+          <template v-else-if="card.mediaKind === 'storage'">
+            <text class="product-explanation-title">{{ card.title }}</text>
+            <text
+              v-for="point in card.points"
+              :key="point"
+              class="product-explanation-storage-note"
+            >
+              {{ point }}
+            </text>
+            <view class="product-explanation-storage-grid">
+              <view
+                v-for="item in card.storageItems"
+                :key="item.title"
+                class="product-explanation-storage-item"
+                :class="{ highlight: item.highlight }"
+              >
+                <text class="product-explanation-storage-temp">{{ item.temperature }}</text>
+                <text class="product-explanation-storage-title">{{ item.title }}</text>
+                <text class="product-explanation-storage-copy">{{ item.copy }}</text>
+              </view>
+            </view>
+          </template>
 
-      <view class="logistics-grid">
-        <view class="logistics-item">
-          <text class="logistics-title">按袋真空分装</text>
-          <text class="logistics-copy">每袋贴标签，支持自定义规格。</text>
-        </view>
-        <view class="logistics-item">
-          <text class="logistics-title">冷冻包材</text>
-          <text class="logistics-copy">使用冷冻包材和冰袋，降低运输温度波动。</text>
-        </view>
-        <view class="logistics-item">
-          <text class="logistics-title">顺丰生鲜或冷链配送</text>
-          <text class="logistics-copy">按制作和冷冻节奏安排发货。</text>
+          <template v-else-if="card.mediaKind === 'cooking'">
+            <text class="product-explanation-title">{{ card.title }}</text>
+            <view class="product-explanation-cooking-list">
+              <view
+                v-for="method in card.cookingMethods"
+                :key="method.title"
+                class="product-explanation-cooking-item"
+                :class="method.tone"
+              >
+                <view class="product-explanation-cooking-label">
+                  {{ method.label }}
+                </view>
+                <view class="product-explanation-cooking-copy">
+                  <text class="product-explanation-cooking-title">{{ method.title }}</text>
+                  <view class="product-explanation-cooking-tags">
+                    <text
+                      v-for="tag in method.tags"
+                      :key="tag"
+                      class="product-explanation-cooking-tag"
+                    >
+                      {{ tag }}
+                    </text>
+                  </view>
+                  <text
+                    v-for="line in method.lines"
+                    :key="line"
+                    class="product-explanation-cooking-line"
+                  >
+                    {{ line }}
+                  </text>
+                </view>
+              </view>
+            </view>
+          </template>
+
+          <template v-else-if="card.mediaKind === 'plain'">
+            <view class="product-explanation-copy">
+              <text class="product-explanation-title">{{ card.title }}</text>
+              <text
+                v-for="point in card.points"
+                :key="point"
+                class="product-explanation-point"
+              >
+                {{ point }}
+              </text>
+            </view>
+          </template>
+
+          <template v-else>
+            <view class="product-explanation-media" :class="card.mediaKind">
+            <view
+              v-if="card.packageImageUrl || card.shippingLogoUrl"
+              class="product-explanation-media-stack"
+            >
+              <image
+                v-if="card.packageImageUrl"
+                :src="normalizeImageUrl(card.packageImageUrl)"
+                class="product-explanation-package-image"
+                mode="aspectFill"
+                @error="handleProductExplanationPackageImageError"
+              />
+              <view v-if="card.shippingLogoUrl" class="product-explanation-shipping-company">
+                <image
+                  :src="normalizeImageUrl(card.shippingLogoUrl)"
+                  class="product-explanation-shipping-logo"
+                  mode="aspectFit"
+                  @error="handleProductExplanationShippingLogoError"
+                />
+                <text class="product-explanation-shipping-text">冷链配送</text>
+              </view>
+            </view>
+            <text v-else class="product-explanation-media-label">{{ card.mediaLabel }}</text>
+            </view>
+            <view class="product-explanation-copy">
+              <text class="product-explanation-title">{{ card.title }}</text>
+              <text
+                v-for="point in card.points"
+                :key="point"
+                class="product-explanation-point"
+              >
+                {{ point }}
+              </text>
+            </view>
+          </template>
         </view>
       </view>
     </view>
@@ -328,6 +457,12 @@ import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { request } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
 import {
+  buildLifeStageReminderText,
+  getLifeStageLabel,
+  isRecipeLifeStageMatch,
+  resolveDogLifeStage,
+} from '../../utils/life-stage-match'
+import {
   DEFAULT_ORDER_CYCLE_DAYS,
   MIN_PACKAGE_SPEC_G,
   ORDER_CYCLE_OPTIONS,
@@ -340,6 +475,11 @@ import {
   type IngredientSourcePlanCode,
   type PackagePlanItem,
 } from '../../utils/order-package-plan'
+import {
+  buildIngredientBrandText,
+  buildIngredientDisplayName,
+  buildIngredientPurchaseChannelText,
+} from './ingredientDisplay'
 
 interface Dog {
   id: string
@@ -418,6 +558,23 @@ type SourcePlanPriceState = Record<IngredientSourcePlanCode, number | null>
 
 interface ProductExplanationCard {
   title: string
+  mediaKind: 'plain' | 'image' | 'video' | 'logistics' | 'storage' | 'cooking'
+  mediaLabel?: string
+  packageImageUrl?: string
+  shippingLogoUrl?: string
+  storageItems?: Array<{
+    temperature: string
+    title: string
+    copy: string
+    highlight?: boolean
+  }>
+  cookingMethods?: Array<{
+    label: string
+    title: string
+    tags: string[]
+    lines: string[]
+    tone: 'recommend' | 'avoid'
+  }>
   points: string[]
 }
 
@@ -426,6 +583,7 @@ interface IngredientCostItem {
   type: string
   amount: number
   unit: string
+  procurementSkuName?: string
   brand?: string
   productModel?: string
   purchaseChannel?: string
@@ -434,6 +592,17 @@ interface IngredientCostItem {
   cost: number
   calculation: string
   netAmount?: number  // 净需求（不含生产损耗和出肉率）
+}
+
+interface IngredientDisplayRow {
+  key: string
+  typeLabel: string
+  typeClass: string
+  nameText: string
+  amountText: string
+  purchaseChannelText: string
+  brandText: string
+  productModelText: string
 }
 
 interface PackagingPerPackConsumables {
@@ -502,7 +671,7 @@ const dogs = ref<Dog[]>([])
 const breeds = ref<Breed[]>([])
 const selectedDogId = ref('')
 const selectedCycleDays = ref(DEFAULT_ORDER_CYCLE_DAYS)
-const selectedSourcePlan = ref<IngredientSourcePlanCode>('MARKET_PREMIUM')
+const selectedSourcePlan = ref<IngredientSourcePlanCode>('WHOLESALE')
 const packagePlan = ref<PackagePlanItem[]>([])
 const packagePlanDogId = ref<string | null>(null)
 const dogCalcResult = ref<CalcResult | null>(null)
@@ -540,32 +709,94 @@ const showPriceBreakdown = ref(false)
 // 计算说明展开状态
 const showCalculationDetails = ref(false)
 
-const productExplanationCards: ProductExplanationCard[] = [
+const REMOTE_PACKAGE_EXAMPLE_IMAGE_URL = 'https://img.sevenkitchen.cloud/package-images/1769932497277-7bf4f880.jpg'
+const REMOTE_SHIPPING_COMPANY_LOGO_URL = 'https://img.sevenkitchen.cloud/shipping-logos/1769932504418-14b5188c.png'
+const LOCAL_PACKAGE_EXAMPLE_IMAGE_URL = '/static/product-explanation/package-example.png'
+const LOCAL_SHIPPING_COMPANY_LOGO_URL = '/static/product-explanation/shipping-logo.png'
+const STALE_PRODUCT_EXPLANATION_MEDIA_URLS = new Set([
+  normalizeImageUrl('http://img.sevenkitchen.cloud/package-images/1767527958742-149215e3.jpg'),
+  normalizeImageUrl('https://img.sevenkitchen.cloud/package-images/1767527958742-149215e3.jpg'),
+  normalizeImageUrl('http://img.sevenkitchen.cloud/shipping-logos/1767529001420-55fde8f2.png'),
+  normalizeImageUrl('https://img.sevenkitchen.cloud/shipping-logos/1767529001420-55fde8f2.png'),
+].filter(Boolean))
+
+const productExplanationMediaConfig = ref({
+  packageImageUrl: LOCAL_PACKAGE_EXAMPLE_IMAGE_URL,
+  shippingLogoUrl: LOCAL_SHIPPING_COMPANY_LOGO_URL,
+})
+
+const productExplanationCards = computed<ProductExplanationCard[]>(() => [
   {
-    title: '为什么要把所有原料打碎？',
+    title: '当日采购当日制作',
+    mediaKind: 'plain',
     points: [
-      '让不同原料充分混合，每袋营养更均匀。',
-      '减少挑食，避免只挑肉不吃菜或补剂。',
-      '更适合冷冻、解冻和复热后的状态稳定。',
+      '按订单采购原料，当日处理、制作和分装。',
+      '冷冻满 24 小时后发货。',
+      '具体制作与发货时间以下单确认页为准。',
     ],
   },
   {
-    title: '保存方法、保质期和烹饪说明',
+    title: '分装与物流',
+    mediaKind: 'logistics',
+    mediaLabel: '包装实拍',
+    packageImageUrl: productExplanationMediaConfig.value.packageImageUrl,
+    shippingLogoUrl: productExplanationMediaConfig.value.shippingLogoUrl,
+    points: [],
+  },
+  {
+    title: '保质期与存储方式',
+    mediaKind: 'storage',
+    mediaLabel: '保质期',
     points: [
-      '-18℃ 冷冻保存，建议 3 个月内吃完。',
-      '冷藏后请尽快食用，不建议反复冷冻解冻。',
-      '喂食前充分解冻，可隔水复温或按说明加热。',
+      '收到后请尽快放入冷冻或冷藏环境，按实际喂食节奏取用。',
+    ],
+    storageItems: [
+      {
+        temperature: '-18℃',
+        title: '冷冻保存',
+        copy: '可保存 6 个月。',
+      },
+      {
+        temperature: '0-4℃',
+        title: '冷藏保存',
+        copy: '可保存 3 天。',
+      },
+      {
+        temperature: '1 个月',
+        title: '最佳营养保存期',
+        copy: '建议 1 个月内吃完，不建议囤货。',
+        highlight: true,
+      },
     ],
   },
   {
-    title: '当日采购当日制作，冷冻 24 小时后发货',
-    points: [
-      '根据目标制作日期采购原料。',
-      '当日制作并按袋分装。',
-      '冷冻 24 小时后再安排冷链发货。',
+    title: '烹饪方法',
+    mediaKind: 'cooking',
+    mediaLabel: '烹饪',
+    points: [],
+    cookingMethods: [
+      {
+        label: '建议',
+        title: '温和加热',
+        tags: ['蒸', '炖', '低温慢煮'],
+        lines: [
+          '建议蒸、炖、低温慢煮。',
+          '烹饪时间与重量和体积相关，请参考产品标签。',
+        ],
+        tone: 'recommend',
+      },
+      {
+        label: '不建议',
+        title: '高温快速烹饪',
+        tags: ['微波', '炸', '炒', '煎'],
+        lines: [
+          '不建议微波、炸、炒、煎等高温烹饪方式。',
+        ],
+        tone: 'avoid',
+      },
     ],
   },
-]
+])
 
 // 权限检查：只有管理员才能查看价格计算明细
 const isAdminUser = computed(() => {
@@ -580,6 +811,12 @@ const healthTagUuidLabelMap = ref<Record<string, string>>({})
 const selectedDog = computed(() => {
   return dogs.value.find(d => d.id === selectedDogId.value)
 })
+const selectedDogLifeStage = computed(() => resolveDogLifeStage(selectedDog.value, breeds.value))
+const lifeStageReminderText = computed(() => buildLifeStageReminderText({
+  applicableStages: recipe.value.applicableLifeStages || [],
+  dogLifeStage: selectedDogLifeStage.value,
+  dogName: selectedDog.value?.name,
+}))
 
 // 狗狗选择器的选项（用于 picker）
 const dogPickerOptions = computed(() => {
@@ -718,19 +955,37 @@ function resetPricePreviewState() {
   pricingSnapshotId.value = null
 }
 
-// 原料分组计算属性
-const foodIngredients = computed(() => {
+const displayIngredients = computed(() => {
   if (!pricePreview.value?.pricingBreakdown?.ingredientDetails) return []
-  return pricePreview.value.pricingBreakdown.ingredientDetails.filter(item => item.type === 'FOOD')
+  return pricePreview.value.pricingBreakdown.ingredientDetails
 })
 
-const supplementIngredients = computed(() => {
-  if (!pricePreview.value?.pricingBreakdown?.ingredientDetails) return []
-  return pricePreview.value.pricingBreakdown.ingredientDetails.filter(item => item.type === 'SUPPLEMENT')
+const displayIngredientRows = computed<IngredientDisplayRow[]>(() => {
+  return displayIngredients.value.map((ingredient, index) => ({
+    key: `ingredient-${index}`,
+    typeLabel: getIngredientTypeLabel(ingredient.type),
+    typeClass: getIngredientTypeClass(ingredient.type),
+    nameText: buildIngredientDisplayName(ingredient),
+    amountText: formatIngredientAmount(ingredient),
+    purchaseChannelText: buildIngredientPurchaseChannelText(ingredient),
+    brandText: buildIngredientBrandText(ingredient),
+    productModelText: ingredient.productModel || '-',
+  }))
 })
 
-const totalIngredientCount = computed(() => foodIngredients.value.length + supplementIngredients.value.length)
+const totalIngredientCount = computed(() => displayIngredientRows.value.length)
 const sourcePlanDescription = computed(() => getSourcePlanDescription(selectedSourcePlan.value))
+const sourcePlanFallbackNote = computed(() =>
+  '会优先按所选来源采购；个别原料买不到时，会自动选择标准接近的来源。'
+)
+
+function getIngredientTypeLabel(type: string): string {
+  return type === 'SUPPLEMENT' ? '补剂' : '食材'
+}
+
+function getIngredientTypeClass(type: string): string {
+  return type === 'SUPPLEMENT' ? 'supplement' : 'food'
+}
 
 function formatSourcePlanShortName(code: IngredientSourcePlanCode): string {
   const map: Record<IngredientSourcePlanCode, string> = {
@@ -743,9 +998,9 @@ function formatSourcePlanShortName(code: IngredientSourcePlanCode): string {
 
 function getSourcePlanDescription(code: IngredientSourcePlanCode): string {
   const map: Record<IngredientSourcePlanCode, string> = {
-    ORGANIC: '原料优先选择有机、非转基因、生态散养来源',
-    MARKET_PREMIUM: '原料优先选择山姆、盒马、沃集鲜等知名商超来源',
-    WHOLESALE: '原料选择以人食级为底线，尽量选择肉团、生鲜批发等性价比高的来源',
+    ORGANIC: '优先选择有机、草饲、散养、非转基因来源',
+    MARKET_PREMIUM: '优先选择山姆、盒马、沃集鲜等商超来源',
+    WHOLESALE: '人食级原料，优先选择生鲜批发来源',
   }
   return map[code]
 }
@@ -799,6 +1054,8 @@ onMounted(async () => {
   const pages = getCurrentPages()
   const currentPage = pages[pages.length - 1] as any
 
+  loadProductExplanationMediaConfig()
+
   recipeId.value = currentPage.options?.recipeId || ''
 
   // 解析自动配置参数
@@ -822,6 +1079,57 @@ onMounted(async () => {
 onUnmounted(() => {
   clearPricePreviewDebounce()
 })
+
+async function loadProductExplanationMediaConfig() {
+  try {
+    const res = await request<{
+      packageExampleImageUrl?: string | null
+      shippingCompanyLogoUrl?: string | null
+    }>({
+      url: '/global-config',
+      method: 'GET',
+      quiet: true,
+      suppressErrorToast: true,
+    })
+
+    if (res.code === 0 && res.data) {
+      const configuredPackageImageUrl = normalizeImageUrl(res.data.packageExampleImageUrl)
+      const configuredShippingLogoUrl = normalizeImageUrl(res.data.shippingCompanyLogoUrl)
+      productExplanationMediaConfig.value = {
+        packageImageUrl: isUsableProductExplanationMediaUrl(configuredPackageImageUrl)
+          ? configuredPackageImageUrl
+          : LOCAL_PACKAGE_EXAMPLE_IMAGE_URL,
+        shippingLogoUrl: isUsableProductExplanationMediaUrl(configuredShippingLogoUrl)
+          ? configuredShippingLogoUrl
+          : LOCAL_SHIPPING_COMPANY_LOGO_URL,
+      }
+    }
+  } catch (error) {
+    console.warn('[RecipeOrder] Load product explanation media config failed:', error)
+  }
+}
+
+function isUsableProductExplanationMediaUrl(url: string | null | undefined): url is string {
+  return Boolean(url && !STALE_PRODUCT_EXPLANATION_MEDIA_URLS.has(url))
+}
+
+function handleProductExplanationPackageImageError() {
+  if (productExplanationMediaConfig.value.packageImageUrl !== LOCAL_PACKAGE_EXAMPLE_IMAGE_URL) {
+    productExplanationMediaConfig.value = {
+      ...productExplanationMediaConfig.value,
+      packageImageUrl: LOCAL_PACKAGE_EXAMPLE_IMAGE_URL,
+    }
+  }
+}
+
+function handleProductExplanationShippingLogoError() {
+  if (productExplanationMediaConfig.value.shippingLogoUrl !== LOCAL_SHIPPING_COMPANY_LOGO_URL) {
+    productExplanationMediaConfig.value = {
+      ...productExplanationMediaConfig.value,
+      shippingLogoUrl: LOCAL_SHIPPING_COMPANY_LOGO_URL,
+    }
+  }
+}
 
 async function loadBreeds() {
   console.log('[RecipeOrder] loadBreeds 开始')
@@ -928,10 +1236,11 @@ function checkLifeStageMatch() {
 
   if (!selectedDog.value || !recipe.value) {
     console.log('[RecipeOrder] 缺少必要数据，跳过校验')
+    isLifeStageMatch.value = true
     return
   }
 
-  const dogLifeStage = getDogLifeStage(selectedDog.value)
+  const dogLifeStage = selectedDogLifeStage.value
   const applicableStages = recipe.value.applicableLifeStages || []
 
   // 详细调试日志
@@ -943,19 +1252,13 @@ function checkLifeStageMatch() {
     '计算的狗狗生命阶段': dogLifeStage,
     '食谱适用生命阶段': applicableStages,
     '食谱名称': recipe.value.name,
-    '检查结果': applicableStages.includes(dogLifeStage),
+    '检查结果': isRecipeLifeStageMatch(applicableStages, dogLifeStage),
     'breeds列表长度': breeds.value.length,
     'breeds列表': breeds.value.map(b => ({ id: b.id, name: b.name, adultAgeMonths: b.adultAgeMonths }))
   })
 
-  // 如果无法判断生命阶段（无品种信息），跳过警告
-  if (dogLifeStage === null) {
-    console.log('[RecipeOrder] 无法判断狗狗生命阶段（无品种信息），跳过警告')
-    isLifeStageMatch.value = true
-  } else {
-    isLifeStageMatch.value = applicableStages.includes(dogLifeStage)
-    console.log('[RecipeOrder] 校验结果:', isLifeStageMatch.value ? '匹配' : '不匹配')
-  }
+  isLifeStageMatch.value = isRecipeLifeStageMatch(applicableStages, dogLifeStage)
+  console.log('[RecipeOrder] 校验结果:', isLifeStageMatch.value ? '匹配' : '不匹配')
 
   // 每次切换狗狗时重置警告状态
   showWarning.value = true
@@ -966,74 +1269,6 @@ function checkLifeStageMatch() {
     'showWarning': showWarning.value,
     '应该显示警告': !isLifeStageMatch.value && selectedDog.value && showWarning.value
   })
-}
-
-function getDogLifeStage(dog: Dog): string | null {
-  console.log('[getDogLifeStage] 开始计算狗狗生命阶段:', dog.name)
-
-  // 优先使用用户设置的覆盖值
-  if (dog.lifeStageOverride && dog.lifeStageOverride !== 'NONE') {
-    console.log('[getDogLifeStage] 使用用户设置的覆盖值:', dog.lifeStageOverride)
-    return dog.lifeStageOverride
-  }
-
-  // 根据品种和年龄自动判断
-  const birthday = new Date(dog.birthday)
-  const now = new Date()
-
-  const ageInDays = Math.floor((now.getTime() - birthday.getTime()) / (1000 * 60 * 60 * 24))
-  const ageInMonths = Math.floor(ageInDays / 30.4375)
-  const ageInYears = ageInMonths / 12.0
-
-  console.log('[getDogLifeStage] 年龄计算:', {
-    ageInDays,
-    ageInMonths,
-    ageInYears
-  })
-
-  // 在本地breeds列表中查找品种对象
-  const breed = breeds.value.find(b => b.id === dog.breedId)
-
-  if (!breed || !breed.adultAgeMonths) {
-    console.log('[getDogLifeStage] 缺少完整的品种信息，返回null')
-    return null
-  }
-
-  // 使用品种特定的标准
-  const adultAgeMonths = breed.adultAgeMonths
-  const seniorAgeYears = breed.seniorAgeYears || 7
-
-  if (ageInMonths < adultAgeMonths) {
-    return 'PUPPY'
-  } else if (ageInYears >= seniorAgeYears) {
-    return 'SENIOR'
-  } else {
-    return 'ADULT'
-  }
-}
-
-function getDogLifeStageLabel(dog: Dog): string {
-  const stage = getDogLifeStage(dog)
-
-  if (stage === null) {
-    return '未知'
-  }
-
-  const stageMap: Record<string, string> = {
-    'PUPPY': '幼犬',
-    'ADULT': '成犬',
-    'SENIOR': '老年犬',
-  }
-  return stageMap[stage] || stage
-}
-
-function getLifeStageLabel(stage: string): string {
-  const stageMap: Record<string, string> = {
-    'PUPPY': '幼犬',
-    'ADULT': '成犬',
-    'SENIOR': '老年犬',
-  }
-  return stageMap[stage] || stage
 }
 
 function getHealthTagLabel(tagOrUuid: string): string {
@@ -1517,9 +1752,27 @@ async function loadSourcePlanPricePreviews() {
   }
 }
 
-async function buyNow() {
+function buyNow() {
   if (!canBuyNow.value) return
 
+  if (!isLifeStageMatch.value && showWarning.value) {
+    uni.showModal({
+      title: '生命阶段提醒',
+      content: '当前狗狗生命阶段与食谱适用阶段不一致，仍要继续下单吗？',
+      success: (res) => {
+        if (res.confirm) {
+          showWarning.value = false
+          continueBuyNow()
+        }
+      }
+    })
+    return
+  }
+
+  continueBuyNow()
+}
+
+function continueBuyNow() {
   // ✅ 安全改进：使用快照ID而不是传递所有参数（防止价格篡改）
   if (!pricingSnapshotId.value) {
     uni.showToast({
@@ -1531,6 +1784,8 @@ async function buyNow() {
 
   const orderConfig = {
     snapshotId: pricingSnapshotId.value,
+    dogId: selectedDog.value?.id || selectedDogId.value,
+    recipeId: recipeId.value,
     dogName: selectedDog.value?.name || '',
     breedName: selectedDog.value?.breedName || '',
     weightKg: selectedDog.value?.currentWeightKg || 0,
@@ -2275,93 +2530,6 @@ function goToCreateDog() {
   flex: 1;
 }
 
-/* 原料清单 */
-.ingredients-section {
-  background-color: #fff;
-  padding: 24rpx;
-  margin-bottom: 20rpx;
-}
-
-.ingredients-content {
-  margin-top: 16rpx;
-}
-
-.no-ingredients {
-  padding: 40rpx 0;
-  text-align: center;
-}
-
-.no-data-text {
-  color: #999;
-  font-size: 28rpx;
-}
-
-/* 原料分组 */
-.ingredient-group {
-  margin-bottom: 32rpx;
-}
-
-.ingredient-group:last-child {
-  margin-bottom: 0;
-}
-
-.ingredient-category-title {
-  font-size: 30rpx;
-  font-weight: bold;
-  color: #333;
-  padding: 16rpx 0;
-  border-bottom: 2rpx solid #f0f0f0;
-  margin-bottom: 16rpx;
-}
-
-.ingredient-header {
-  display: flex;
-  padding: 12rpx 16rpx;
-  background-color: #f9f9f9;
-  border-radius: 8rpx;
-  margin-bottom: 8rpx;
-}
-
-.ingredient-header-item {
-  flex: 1;
-  font-size: 26rpx;
-  color: #666;
-  text-align: center;
-  font-weight: 500;
-}
-
-.ingredient-row {
-  display: flex;
-  padding: 16rpx;
-  border-bottom: 1rpx solid #f5f5f5;
-}
-
-.ingredient-row:last-child {
-  border-bottom: none;
-}
-
-.ingredient-item {
-  flex: 1;
-  font-size: 26rpx;
-  color: #333;
-  text-align: center;
-  word-break: break-all;
-}
-
-.ingredient-summary-row {
-  padding: 16rpx;
-  background-color: #fff7e6;
-  border-radius: 8rpx;
-  margin-top: 12rpx;
-  border-left: 4rpx solid #ff9800;
-}
-
-.summary-text {
-  font-size: 28rpx;
-  color: #ff9800;
-  font-weight: 500;
-}
-
 /* 制作要求 */
 .requirements-section {
   background-color: #fff;
@@ -2916,43 +3084,6 @@ function goToCreateDog() {
   color: #999;
 }
 
-/* 原料清单样式 */
-.ingredient-header {
-  display: flex;
-  justify-content: space-between;
-  padding: 12rpx 16rpx;
-  background-color: #f5f5f5;
-  border-radius: 8rpx;
-  font-weight: bold;
-  font-size: 26rpx;
-  margin-bottom: 8rpx;
-}
-
-.ingredient-header-item {
-  flex: 1;
-  text-align: center;
-  color: #333;
-}
-
-.ingredient-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 12rpx 16rpx;
-  border-bottom: 1rpx solid #f0f0f0;
-  font-size: 26rpx;
-}
-
-.ingredient-row:last-child {
-  border-bottom: none;
-}
-
-.ingredient-item {
-  flex: 1;
-  text-align: center;
-  color: #666;
-  word-break: break-all;
-}
-
 /* Redesigned recipe order page */
 .recipe-order-page {
   min-height: 100vh;
@@ -3344,8 +3475,7 @@ function goToCreateDog() {
 }
 
 .custom-tag,
-.source-plan-check,
-.ingredient-channel-tag {
+.source-plan-check {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -3664,6 +3794,12 @@ function goToCreateDog() {
   background-color: #f7faf8;
 }
 
+.ingredient-summary-note {
+  font-size: 23rpx;
+  color: #687078;
+  line-height: 1.45;
+}
+
 .ingredient-empty-state {
   margin-top: 16rpx;
   padding: 20rpx;
@@ -3681,92 +3817,439 @@ function goToCreateDog() {
   margin-top: 20rpx;
 }
 
-.ingredient-group {
-  margin-bottom: 28rpx;
+.ingredient-list-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8rpx;
 }
 
-.ingredient-category-title {
-  margin-bottom: 12rpx;
+.ingredient-list-title-text {
   font-size: 28rpx;
   font-weight: 800;
   color: #25282b;
+  line-height: 1.35;
 }
 
 .ingredient-row-compact {
-  display: flex;
-  align-items: center;
-  gap: 12rpx;
-  min-height: 64rpx;
-  padding: 16rpx 0;
+  padding: 22rpx 0;
   border-bottom: 1rpx solid #eef0f2;
 }
 
+.ingredient-row-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18rpx;
+  align-items: flex-start;
+}
+
+.ingredient-name-cell,
 .ingredient-name,
-.ingredient-channel-tag,
-.ingredient-spec-inline,
+.ingredient-meta-row,
+.ingredient-meta-item,
 .ingredient-amount {
   min-width: 0;
 }
 
-.ingredient-name {
-  flex: 0 1 auto;
-  max-width: 196rpx;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 26rpx;
-  font-weight: 800;
-  color: #25282b;
+.ingredient-name-cell {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 6rpx;
+  line-height: 1.35;
 }
 
-.ingredient-channel-tag {
+.ingredient-type-tag {
+  display: inline-flex;
   flex: 0 0 auto;
-  max-width: 128rpx;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  padding: 8rpx 10rpx;
+  align-items: center;
+  justify-content: center;
+  padding: 4rpx 7rpx;
   border-radius: 6rpx;
+  font-size: 19rpx;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.ingredient-type-tag.food {
   color: #257b43;
   background-color: #e7f6eb;
 }
 
-.ingredient-channel-tag.supplement {
+.ingredient-type-tag.supplement {
   color: #526173;
   background-color: #edf2f7;
 }
 
-.ingredient-spec-inline {
-  flex: 1 1 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 24rpx;
+.ingredient-name {
+  flex: 1 1 180rpx;
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+  font-size: 26rpx;
+  font-weight: 800;
+  color: #25282b;
+  line-height: 1.35;
+  word-break: break-all;
+}
+
+.ingredient-meta-row {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 18rpx;
+  row-gap: 6rpx;
+  margin-top: 10rpx;
   color: #687078;
+  line-height: 1.42;
+}
+
+.ingredient-meta-item {
+  font-size: 23rpx;
+  white-space: normal;
+  word-break: break-all;
+}
+
+.ingredient-meta-label {
+  color: #8b949e;
+  margin-right: 6rpx;
 }
 
 .ingredient-amount {
-  flex: 0 0 auto;
   min-width: 92rpx;
   text-align: right;
-  font-size: 24rpx;
+  font-size: 26rpx;
   color: #25282b;
   font-weight: 800;
+  line-height: 1.35;
+  white-space: nowrap;
 }
 
-.explanation-card-list,
-.logistics-grid {
+.explanation-card-list {
   display: flex;
   flex-direction: column;
   gap: 16rpx;
 }
 
-.product-explanation-card,
-.logistics-item {
+.product-explanation-card {
+  display: flex;
+  gap: 18rpx;
   padding: 22rpx;
   border-radius: 8rpx;
   background-color: #f8fafc;
   border: 1rpx solid #e8edf2;
+}
+
+.product-explanation-logistics-card {
+  flex-direction: column;
+  gap: 14rpx;
+}
+
+.product-explanation-storage-card,
+.product-explanation-cooking-card,
+.product-explanation-plain-card {
+  flex-direction: column;
+  gap: 14rpx;
+}
+
+.product-explanation-logistics-title {
+  margin-bottom: 0;
+}
+
+.product-explanation-storage-note {
+  display: block;
+  margin-top: -4rpx;
+  font-size: 24rpx;
+  color: #687078;
+  line-height: 1.5;
+}
+
+.product-explanation-storage-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10rpx;
+}
+
+.product-explanation-storage-item {
+  min-width: 0;
+  min-height: 180rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 18rpx 10rpx;
+  border-radius: 8rpx;
+  border: 1rpx solid #e4ebf0;
+  background-color: #fbfcfd;
+  text-align: center;
+}
+
+.product-explanation-storage-item.highlight {
+  border-color: #f0d4a1;
+  background-color: #fff9ed;
+}
+
+.product-explanation-storage-temp {
+  display: block;
+  margin-bottom: 10rpx;
+  font-size: 30rpx;
+  font-weight: 800;
+  color: #2f8f4e;
+  line-height: 1.2;
+}
+
+.product-explanation-storage-item.highlight .product-explanation-storage-temp {
+  color: #a76416;
+}
+
+.product-explanation-storage-title {
+  display: block;
+  margin-bottom: 8rpx;
+  font-size: 24rpx;
+  font-weight: 800;
+  color: #25282b;
+  line-height: 1.25;
+}
+
+.product-explanation-storage-copy {
+  display: block;
+  font-size: 21rpx;
+  color: #687078;
+  line-height: 1.45;
+}
+
+.product-explanation-cooking-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.product-explanation-cooking-item {
+  display: grid;
+  grid-template-columns: 112rpx minmax(0, 1fr);
+  gap: 16rpx;
+  padding: 18rpx;
+  border-radius: 8rpx;
+  border: 1rpx solid #e4ebf0;
+  background-color: #fbfcfd;
+}
+
+.product-explanation-cooking-label {
+  min-height: 102rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8rpx;
+  font-size: 26rpx;
+  font-weight: 800;
+  line-height: 1.25;
+  text-align: center;
+}
+
+.product-explanation-cooking-item.recommend .product-explanation-cooking-label {
+  background-color: #ecf8ef;
+  color: #2f8f4e;
+}
+
+.product-explanation-cooking-item.avoid .product-explanation-cooking-label {
+  background-color: #fff2ef;
+  color: #c74b35;
+}
+
+.product-explanation-cooking-copy {
+  min-width: 0;
+}
+
+.product-explanation-cooking-title {
+  display: block;
+  margin-bottom: 10rpx;
+  font-size: 27rpx;
+  font-weight: 800;
+  color: #25282b;
+  line-height: 1.35;
+}
+
+.product-explanation-cooking-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+  margin-bottom: 10rpx;
+}
+
+.product-explanation-cooking-tag {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6rpx 12rpx;
+  border-radius: 6rpx;
+  background-color: #f2f6f4;
+  color: #2f633f;
+  font-size: 22rpx;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.product-explanation-cooking-item.avoid .product-explanation-cooking-tag {
+  background-color: #fff6f4;
+  color: #a33d28;
+}
+
+.product-explanation-cooking-line {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 24rpx;
+  color: #687078;
+  line-height: 1.55;
+}
+
+.product-explanation-media {
+  flex: 0 0 148rpx;
+  height: 116rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8rpx;
+  background-color: #eef6ff;
+  color: #2566a8;
+}
+
+.product-explanation-media.video {
+  background-color: #fff5e8;
+  color: #a76416;
+}
+
+.product-explanation-media-label {
+  padding: 0 12rpx;
+  font-size: 22rpx;
+  font-weight: 700;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.product-explanation-media-stack {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.product-explanation-package-image {
+  width: 100%;
+  height: 72rpx;
+  border-radius: 8rpx;
+  background-color: #f1f5f9;
+}
+
+.product-explanation-logistics-visual {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+  padding: 16rpx;
+  border-radius: 8rpx;
+  background: linear-gradient(180deg, #f7fafc 0%, #eef3f6 100%);
+}
+
+.product-explanation-package-frame {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: 8rpx;
+  background-color: #fff;
+  border: 1rpx solid #e4ebf0;
+}
+
+.product-explanation-logistics-package-image {
+  width: 100%;
+  height: 100%;
+  border-radius: 8rpx;
+}
+
+.product-explanation-shipping-row {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  padding: 12rpx 14rpx;
+  border-radius: 8rpx;
+  background-color: #fff;
+  border: 1rpx solid #e6edf5;
+}
+
+.product-explanation-shipping-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 14rpx;
+}
+
+.product-explanation-shipping-logo-large {
+  width: 112rpx;
+  height: 42rpx;
+  flex: 0 0 112rpx;
+}
+
+.product-explanation-shipping-copy {
+  flex: 1;
+  min-width: 0;
+}
+
+.product-explanation-shipping-title,
+.product-explanation-shipping-subtitle {
+  display: block;
+  line-height: 1.35;
+}
+
+.product-explanation-shipping-title {
+  font-size: 26rpx;
+  font-weight: 800;
+  color: #25282b;
+}
+
+.product-explanation-shipping-subtitle {
+  margin-top: 2rpx;
+  font-size: 22rpx;
+  color: #687078;
+}
+
+.product-explanation-shipping-pill {
+  margin-left: auto;
+  padding: 6rpx 14rpx;
+  border-radius: 999rpx;
+  background-color: #edf6ff;
+  color: #2566a8;
+  font-size: 22rpx;
+  font-weight: 700;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.product-explanation-shipping-company {
+  display: flex;
+  align-items: center;
+  gap: 8rpx;
+  min-width: 0;
+}
+
+.product-explanation-shipping-logo {
+  width: 42rpx;
+  height: 28rpx;
+  flex: 0 0 42rpx;
+}
+
+.product-explanation-shipping-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 20rpx;
+  font-weight: 700;
+  color: #2566a8;
+}
+
+.product-explanation-copy {
+  flex: 1;
+  min-width: 0;
 }
 
 .product-explanation-title,
@@ -3776,12 +4259,6 @@ function goToCreateDog() {
 
 .product-explanation-point {
   margin-top: 10rpx;
-}
-
-.logistics-item {
-  align-items: flex-start;
-  flex-direction: column;
-  gap: 8rpx;
 }
 
 .price-breakdown-section {

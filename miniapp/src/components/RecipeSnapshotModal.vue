@@ -56,7 +56,7 @@
               </text>
               <!-- 补剂类型：显示营养目标值 -->
               <text v-else-if="item.ingredient_type === 'SUPPLEMENT' && item.nutrient_target_value" class="ingredient-item">
-                每kg添加{{ item.nutrient_target_value }}{{ getNutrientUnit(item) }}{{ item.nutrient_target_key || '' }}
+                每kg食材添加{{ item.nutrient_target_value }}{{ getNutrientUnit(item) }}{{ item.nutrient_target_key || '' }}
               </text>
               <!-- 其他情况：显示占位符 -->
               <text v-else class="ingredient-item">-</text>

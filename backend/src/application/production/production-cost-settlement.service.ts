@@ -368,7 +368,7 @@ export class ProductionCostSettlementService {
       suggestedAdjustmentAmount,
     };
 
-    await this.prisma.orderCostSettlement.upsert({
+    const orderSettlement = await this.prisma.orderCostSettlement.upsert({
       where: {
         orderId_productionBatchSettlementId: {
           orderId: input.order.orderId,
@@ -400,6 +400,98 @@ export class ProductionCostSettlementService {
         suggestedAdjustmentAmount,
         requiresCustomerPayment: suggestedAdjustmentAmount > 0,
         snapshot,
+      },
+    });
+
+    await this.upsertSettlementAdjustment({
+      order: input.order,
+      orderSettlementId: orderSettlement.id,
+      productionBatchSettlementId: input.settlementId,
+      shortageG,
+      actualOutputG,
+      suggestedAdjustmentAmount,
+    });
+  }
+
+  private async upsertSettlementAdjustment(input: {
+    order: {
+      orderId: string;
+      plannedOutputG: number;
+      orderItemIds: string[];
+    };
+    orderSettlementId: string;
+    productionBatchSettlementId: string;
+    shortageG: number;
+    actualOutputG: number;
+    suggestedAdjustmentAmount: number;
+  }): Promise<void> {
+    const amount = this.roundNumber(input.suggestedAdjustmentAmount, 2);
+    const sourceType = 'PRODUCTION_SHORTAGE';
+    const sourceId = input.orderSettlementId;
+
+    if (amount === 0) {
+      await this.prisma.orderSettlementAdjustment.updateMany({
+        where: {
+          orderId: input.order.orderId,
+          sourceType,
+          sourceId,
+          status: 'PENDING',
+        },
+        data: {
+          status: 'CANCELLED',
+          metadata: {
+            cancelledReason: 'production_settlement_adjustment_zeroed',
+            productionBatchSettlementId: input.productionBatchSettlementId,
+          },
+        },
+      });
+      return;
+    }
+
+    const requiresCustomerPayment = amount > 0;
+    const adjustmentType = requiresCustomerPayment ? 'EXTRA_PAYMENT' : 'REFUND';
+    const reason = requiresCustomerPayment
+      ? `生产结算需补收差价 ${Math.abs(amount).toFixed(2)} 元`
+      : `生产成品缺口 ${input.shortageG}g，建议退差价`;
+    const metadata: Prisma.InputJsonObject = {
+      productionBatchSettlementId: input.productionBatchSettlementId,
+      orderSettlementId: input.orderSettlementId,
+      orderItemIds: input.order.orderItemIds,
+      plannedOutputG: input.order.plannedOutputG,
+      actualOutputG: input.actualOutputG,
+      shortageG: input.shortageG,
+      suggestedAdjustmentAmount: amount,
+    };
+
+    await this.prisma.orderSettlementAdjustment.upsert({
+      where: {
+        orderId_sourceType_sourceId: {
+          orderId: input.order.orderId,
+          sourceType,
+          sourceId,
+        },
+      },
+      create: {
+        orderId: input.order.orderId,
+        sourceType,
+        sourceId,
+        adjustmentType,
+        amount,
+        reason,
+        status: 'PENDING',
+        requiresCustomerPayment,
+        visibleToCustomer: true,
+        createdBy: 'system',
+        metadata,
+      },
+      update: {
+        adjustmentType,
+        amount,
+        reason,
+        status: 'PENDING',
+        requiresCustomerPayment,
+        visibleToCustomer: true,
+        metadata,
       },
     });
   }

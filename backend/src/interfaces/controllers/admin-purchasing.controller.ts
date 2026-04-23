@@ -62,7 +62,7 @@ export class AdminPurchasingController {
 
   /**
    * ==========================================
-   * 报销审核管理
+   * 报销管理
    * ==========================================
    */
 
@@ -250,7 +250,7 @@ export class AdminPurchasingController {
   }
 
   @Post('reimbursements/:id/review')
-  @ApiOperation({ summary: '审核报销单' })
+  @ApiOperation({ summary: '处理报销单（兼容旧审核接口）' })
   @ApiParam({ name: 'id', description: '报销单ID' })
   @ApiBody({
     schema: {
@@ -259,11 +259,11 @@ export class AdminPurchasingController {
         decision: {
           type: 'string',
           enum: ['APPROVE', 'REJECT', 'REQUIRES_RESUBMIT'],
-          description: '审核决策',
+          description: '处理决策',
         },
         comment: {
           type: 'string',
-          description: '审核意见',
+          description: '处理备注',
         },
       },
       required: ['decision'],
@@ -271,7 +271,7 @@ export class AdminPurchasingController {
   })
   @ApiResponse({
     status: 200,
-    description: '报销单审核成功',
+    description: '报销单处理成功',
     schema: {
       type: 'object',
       properties: {
@@ -476,7 +476,7 @@ export class AdminPurchasingController {
             totalReimbursements: { type: 'number', description: '报销单总数' },
             pendingReimbursements: {
               type: 'number',
-              description: '待审核报销单数',
+              description: '待报销单数',
             },
             approvedReimbursements: {
               type: 'number',
@@ -623,7 +623,7 @@ export class AdminPurchasingController {
     }
 
     const reimbursement =
-      await this.reimbursementService.uploadPaymentProofFiles(id, files);
+      await this.reimbursementService.uploadPaymentProofFiles(id, files, userId);
 
     return ApiResponseDto.success(reimbursement, '报销凭证上传成功');
   }

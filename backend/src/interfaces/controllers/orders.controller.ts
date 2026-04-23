@@ -396,11 +396,33 @@ export class OrdersController {
     }
 
     const summary = await this.orderService.getOrderFinancialSummary(id);
+    const visibleAdjustments = (summary.adjustments ?? []).filter(
+      (adjustment) => adjustment.visibleToCustomer,
+    );
+    const customerAdjustmentSummary = this.summarizeCustomerAdjustments(
+      visibleAdjustments,
+      summary.amountTotal,
+    );
+
     return ApiResponseDto.success({
       orderId: summary.orderId,
       settlementStatus: summary.settlementStatus,
       shortageAdjustmentAmount: summary.shortageAdjustmentAmount,
-      requiresCustomerPayment: summary.requiresCustomerPayment,
+      requiresCustomerPayment:
+        customerAdjustmentSummary.pendingExtraPaymentAmount > 0,
+      adjustmentSummary: customerAdjustmentSummary,
+      adjustments: visibleAdjustments.map((adjustment) => ({
+        id: adjustment.id,
+        sourceType: adjustment.sourceType,
+        adjustmentType: adjustment.adjustmentType,
+        amount: adjustment.amount,
+        reason: adjustment.reason,
+        status: adjustment.status,
+        requiresCustomerPayment: adjustment.requiresCustomerPayment,
+        visibleToCustomer: adjustment.visibleToCustomer,
+        settledAt: adjustment.settledAt,
+        createdAt: adjustment.createdAt,
+      })),
       latestSettlement: summary.latestSettlement
         ? {
             plannedOutputG: summary.latestSettlement.plannedOutputG,
@@ -410,6 +432,59 @@ export class OrdersController {
           }
         : null,
     });
+  }
+
+  private summarizeCustomerAdjustments(
+    adjustments: Array<{ amount: number; status: string }>,
+    baseAmount: number,
+  ) {
+    const activeAdjustments = adjustments.filter(
+      (adjustment) => adjustment.status !== 'CANCELLED',
+    );
+    const sum = (
+      predicate: (adjustment: { amount: number; status: string }) => boolean,
+    ) =>
+      Number(
+        activeAdjustments
+          .reduce(
+            (total, adjustment) =>
+              predicate(adjustment)
+                ? total + Math.abs(Number(adjustment.amount || 0))
+                : total,
+            0,
+          )
+          .toFixed(2),
+      );
+    const netAdjustmentAmount = Number(
+      activeAdjustments
+        .reduce((total, adjustment) => total + Number(adjustment.amount || 0), 0)
+        .toFixed(2),
+    );
+
+    return {
+      totalIncreaseAmount: sum((adjustment) => adjustment.amount > 0),
+      totalDecreaseAmount: sum((adjustment) => adjustment.amount < 0),
+      pendingExtraPaymentAmount: sum(
+        (adjustment) =>
+          adjustment.status === 'PENDING' && adjustment.amount > 0,
+      ),
+      pendingRefundAmount: sum(
+        (adjustment) =>
+          adjustment.status === 'PENDING' && adjustment.amount < 0,
+      ),
+      settledExtraPaymentAmount: sum(
+        (adjustment) =>
+          adjustment.status === 'SETTLED' && adjustment.amount > 0,
+      ),
+      settledRefundAmount: sum(
+        (adjustment) =>
+          adjustment.status === 'SETTLED' && adjustment.amount < 0,
+      ),
+      netAdjustmentAmount,
+      netRevenue: Number(
+        (Number(baseAmount || 0) + netAdjustmentAmount).toFixed(2),
+      ),
+    };
   }
 
   @Get(':id')
@@ -654,6 +729,7 @@ export class OrdersController {
         itemCount: requestDto.items?.length || 0,
         hasAddressId: !!requestDto.addressId,
         hasDogId: !!requestDto.dogId,
+        pricingPurpose: requestDto.pricingPurpose ?? 'ORDER',
       });
 
       const preview = await this.orderService.previewPricing({
@@ -661,6 +737,7 @@ export class OrdersController {
         dogId: requestDto.dogId,
         type: requestDto.type,
         ingredientSourcePlan: requestDto.ingredientSourcePlan,
+        pricingPurpose: requestDto.pricingPurpose,
         targetProductionDate: null,
         items: requestDto.items,
         addressId: requestDto.addressId,

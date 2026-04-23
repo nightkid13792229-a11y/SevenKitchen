@@ -1,6 +1,6 @@
 /**
  * Reimbursement Service
- * 报销审核服务
+ * 报销服务
  * Phase 1: Purchasing Management Feature
  */
 
@@ -17,10 +17,6 @@ import {
 } from './purchasing.service.tokens';
 import type { ReimbursementRepository } from '../../domain/purchasing/reimbursement.repository';
 import type { PurchaseListRepository } from '../../domain/purchasing/purchase-list.repository';
-import { ORDER_REPOSITORY } from '../order/order.service';
-import type { OrderRepository } from '../../domain/order/order.repository';
-import { ORDER_STATUS_HISTORY_REPOSITORY } from '../order/order.service';
-import type { OrderStatusHistoryRepository } from '../../domain/order/order-status-history.repository';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import { IngredientPricingService } from '../ingredient/ingredient-pricing.service';
 import {
@@ -31,7 +27,6 @@ import {
   REIMBURSEMENT_CUSTOM_FEE_CATEGORIES,
   type ReimbursementCustomFee,
 } from '../../domain/purchasing';
-import { OrderStatus } from '../../domain';
 
 export interface SubmitReimbursementDto {
   purchaseListIds?: string[];
@@ -57,10 +52,6 @@ export class ReimbursementService {
     private readonly reimbursementRepository: ReimbursementRepository,
     @Inject(PURCHASE_LIST_REPOSITORY)
     private readonly purchaseListRepository: PurchaseListRepository,
-    @Inject(ORDER_REPOSITORY)
-    private readonly orderRepository: OrderRepository,
-    @Inject(ORDER_STATUS_HISTORY_REPOSITORY)
-    private readonly statusHistoryRepository: OrderStatusHistoryRepository,
     private readonly cosService: TencentCosService,
     private readonly ingredientPricingService: IngredientPricingService,
   ) {}
@@ -239,7 +230,7 @@ export class ReimbursementService {
   }
 
   /**
-   * 审核报销单
+   * 处理报销单（兼容旧审核接口）
    */
   async reviewReimbursement(
     id: string,
@@ -255,7 +246,7 @@ export class ReimbursementService {
     // 验证状态
     if (reimbursement.status !== ReimbursementStatus.PENDING_REVIEW) {
       throw new BadRequestException(
-        `只有待审核状态的报销单可以审核。当前状态：${reimbursement.status}`,
+        `只有待报销状态的报销单可以处理。当前状态：${reimbursement.status}`,
       );
     }
 
@@ -263,7 +254,7 @@ export class ReimbursementService {
       `Reviewer ${reviewerId} reviewing reimbursement ${id} with decision: ${dto.decision}`,
     );
 
-    // 审核报销单
+    // 处理报销单
     reimbursement.review(reviewerId, dto.decision, dto.comment);
 
     // 保存报销单
@@ -275,9 +266,6 @@ export class ReimbursementService {
         reviewerId,
         dto.comment,
       );
-
-      // 如果批准，解锁相关订单的生产排单功能
-      await this.unlockProductionForReimbursement(saved);
     } else {
       await this.ingredientPricingService.rejectChangesForReimbursement(
         saved.id,
@@ -291,67 +279,6 @@ export class ReimbursementService {
     );
 
     return saved;
-  }
-
-  /**
-   * 解锁生产排单
-   *
-   * 逻辑:
-   * 1. 找到报销单关联的所有采购清单
-   * 2. 找到这些采购清单关联的订单(sourceOrderIds)
-   * 3. 将订单状态从 PAID → PURCHASING
-   */
-  private async unlockProductionForReimbursement(
-    reimbursement: Reimbursement,
-  ): Promise<void> {
-    const purchaseLists = reimbursement.purchaseLists;
-    const orderIds = new Set<string>();
-
-    // 收集所有关联订单ID
-    for (const list of purchaseLists) {
-      list.sourceOrderIds.forEach((id) => orderIds.add(id));
-    }
-
-    this.logger.log(
-      `Unlocking production for ${orderIds.size} orders after reimbursement ${reimbursement.id} approval`,
-    );
-
-    // 批量更新订单状态
-    let unlockedCount = 0;
-    for (const orderId of orderIds) {
-      const order = await this.orderRepository.findById(orderId);
-      if (!order) {
-        this.logger.warn(`Order ${orderId} not found, skipping`);
-        continue;
-      }
-
-      // 仅当订单状态为PAID时才解锁(防止重复解锁)
-      if (order.status === OrderStatus.PAID) {
-        const fromStatus = order.status;
-        order.transitionTo(OrderStatus.PURCHASING);
-        await this.orderRepository.save(order);
-
-        // 记录状态历史
-        await this.statusHistoryRepository.append(
-          order.id,
-          fromStatus,
-          OrderStatus.PURCHASING,
-          'system',
-          null,
-          {
-            reimbursementId: reimbursement.id,
-            claimNumber: reimbursement.claimNumber,
-            triggeredBy: 'reimbursement_approved',
-          },
-        );
-
-        unlockedCount++;
-      }
-    }
-
-    this.logger.log(
-      `Reimbursement ${reimbursement.id} approved: unlocked ${unlockedCount} orders for production`,
-    );
   }
 
   /**
@@ -507,6 +434,7 @@ export class ReimbursementService {
   async uploadPaymentProof(
     id: string,
     paymentProofUrls: string[],
+    operatorId?: string | null,
   ): Promise<Reimbursement> {
     // 1. 查询报销单
     const reimbursement = await this.reimbursementRepository.findById(id);
@@ -517,10 +445,8 @@ export class ReimbursementService {
 
     // 2. 状态验证
     if (reimbursement.status !== ReimbursementStatus.PENDING_REVIEW) {
-      throw new BadRequestException('只有待审核状态可以上传报销凭证');
+      throw new BadRequestException('只有待报销状态可以上传报销凭证');
     }
-
-    await this.ensureNoPendingPriceChangesBeforeAutoReimburse(reimbursement.id);
 
     const previousStatus = reimbursement.status;
 
@@ -539,7 +465,7 @@ export class ReimbursementService {
       receiptUrls: reimbursement.receiptUrls,
       submittedById: reimbursement.submittedById,
       submittedAt: reimbursement.submittedAt,
-      reviewedById: reimbursement.reviewedById,
+      reviewedById: operatorId ?? reimbursement.reviewedById,
       reviewedAt: new Date(),
       reviewComment: reimbursement.reviewComment,
       createdAt: reimbursement.createdAt,
@@ -570,6 +496,7 @@ export class ReimbursementService {
   async uploadPaymentProofFiles(
     id: string,
     files: Express.Multer.File[],
+    operatorId?: string | null,
   ): Promise<Reimbursement> {
     // 1. 查询报销单
     const reimbursement = await this.reimbursementRepository.findById(id);
@@ -581,12 +508,6 @@ export class ReimbursementService {
     // 2. 验证凭证数量
     if (!files || files.length === 0) {
       throw new BadRequestException('请至少上传一张报销凭证');
-    }
-
-    if (reimbursement.status === ReimbursementStatus.PENDING_REVIEW) {
-      await this.ensureNoPendingPriceChangesBeforeAutoReimburse(
-        reimbursement.id,
-      );
     }
 
     const previousStatus = reimbursement.status;
@@ -645,7 +566,7 @@ export class ReimbursementService {
     }
 
     // 5. 创建新的报销单实体（因为属性是readonly的）
-    // 只有待审核状态上传凭证后，才自动改为已报销状态
+    // 只有待报销状态上传凭证后，才自动改为已报销状态
     const finalStatus =
       reimbursement.status === ReimbursementStatus.PENDING_REVIEW
         ? ReimbursementStatus.REIMBURSED
@@ -661,7 +582,10 @@ export class ReimbursementService {
       receiptKeys: reimbursement.receiptKeys,
       submittedById: reimbursement.submittedById,
       submittedAt: reimbursement.submittedAt,
-      reviewedById: reimbursement.reviewedById,
+      reviewedById:
+        finalStatus === ReimbursementStatus.REIMBURSED
+          ? operatorId ?? reimbursement.reviewedById
+          : reimbursement.reviewedById,
       reviewedAt:
         finalStatus === ReimbursementStatus.REIMBURSED
           ? new Date()
@@ -775,24 +699,6 @@ export class ReimbursementService {
       reimbursement.reviewComment ??
         '系统在上传报销凭证后自动标记已报销并应用价格变更',
     );
-    await this.unlockProductionForReimbursement(reimbursement);
-  }
-
-  private async ensureNoPendingPriceChangesBeforeAutoReimburse(
-    reimbursementId: string,
-  ): Promise<void> {
-    const priceChanges =
-      await this.ingredientPricingService.getPriceChangesForReimbursement(
-        reimbursementId,
-      );
-
-    const hasPendingChanges = priceChanges.some(
-      (change) => change.status === 'PENDING',
-    );
-
-    if (hasPendingChanges) {
-      throw new BadRequestException('存在待人工审核的价格变更，请先审核报销单');
-    }
   }
 
   /**
@@ -816,7 +722,7 @@ export class ReimbursementService {
       throw new ForbiddenException('您没有权限修改该报销单');
     }
 
-    // 3. 状态验证：只有待审核、被驳回、需重新提交状态可以修改
+    // 3. 状态验证：只有待报销、被驳回、需重新提交状态可以修改
     const editableStatuses = [
       ReimbursementStatus.PENDING_REVIEW,
       ReimbursementStatus.REJECTED,
@@ -933,7 +839,7 @@ export class ReimbursementService {
       throw new ForbiddenException('您没有权限修改该报销单');
     }
 
-    // 3. 状态验证：只有待审核、被驳回、需重新提交状态可以修改
+    // 3. 状态验证：只有待报销、被驳回、需重新提交状态可以修改
     const editableStatuses = [
       ReimbursementStatus.PENDING_REVIEW,
       ReimbursementStatus.REJECTED,

@@ -7,6 +7,7 @@ import type {
   IngredientForm,
   ProcurementSku,
   ProcurementSkuForm,
+  ProcurementSkuPriceHistory,
   RecommendedProduct,
   RecommendedProductForm
 } from '@/types/ingredient'
@@ -134,6 +135,18 @@ export const ingredientApi = {
    */
   updateProcurementSku: (ingredientId: string, id: string, data: Partial<ProcurementSkuForm>): Promise<ProcurementSku> =>
     api.put(`/admin/ingredients/${ingredientId}/procurement-skus/${id}`, data),
+
+  /**
+   * 获取生产采购 SKU 生效采购价历史
+   */
+  listProcurementSkuPriceHistory: (ingredientId: string, id: string): Promise<ProcurementSkuPriceHistory[]> =>
+    api.get(`/admin/ingredients/${ingredientId}/procurement-skus/${id}/price-history`),
+
+  /**
+   * 回退生产采购 SKU 当前采购价到某条历史价格
+   */
+  rollbackProcurementSkuPrice: (ingredientId: string, id: string, historyId: string): Promise<ProcurementSku> =>
+    api.post(`/admin/ingredients/${ingredientId}/procurement-skus/${id}/price-history/${historyId}/rollback`),
 
   /**
    * 删除生产采购 SKU

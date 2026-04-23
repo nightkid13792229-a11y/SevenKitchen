@@ -8,6 +8,7 @@ import {
   Param,
   Post,
   Put,
+  Req,
 } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
 import {
@@ -50,9 +51,38 @@ export class ProcurementSkuController {
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateProcurementSkuDto,
+    @Req() request: { user?: { userId?: string } },
   ) {
     return ApiResponseDto.success(
-      await this.procurementSkuService.update(id, dto),
+      await this.procurementSkuService.update(
+        id,
+        dto,
+        request.user?.userId ?? null,
+      ),
+    );
+  }
+
+  @Get(':id/price-history')
+  @ApiOperation({ summary: 'Get effective purchase price history for a procurement sku' })
+  async priceHistory(@Param('id') id: string) {
+    return ApiResponseDto.success(
+      await this.procurementSkuService.listPriceHistory(id),
+    );
+  }
+
+  @Post(':id/price-history/:historyId/rollback')
+  @ApiOperation({ summary: 'Rollback procurement sku current purchase price to a history row' })
+  async rollbackPrice(
+    @Param('id') id: string,
+    @Param('historyId') historyId: string,
+    @Req() request: { user?: { userId?: string } },
+  ) {
+    return ApiResponseDto.success(
+      await this.procurementSkuService.rollbackCurrentPurchasePrice(
+        id,
+        historyId,
+        request.user?.userId ?? null,
+      ),
     );
   }
 

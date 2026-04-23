@@ -868,8 +868,102 @@ function formatRegionText(region: any): string {
   return parts.join('')
 }
 
+function getPrimaryPackageSpecG(plan: PackagePlanItem[]): number {
+  const primaryRow = [...plan].sort(
+    (left, right) =>
+      right.packageCount - left.packageCount
+      || right.packageSpecG - left.packageSpecG,
+  )[0]
+
+  return primaryRow?.packageSpecG || orderConfig.value.perMealG || 1
+}
+
+function buildPricingPreviewItemFromOrderConfig() {
+  return {
+    recipeId: orderConfig.value.recipeId,
+    quantityG: Math.round(orderConfig.value.totalGrams),
+    packageCount: orderConfig.value.totalPackages,
+    packageSpecG: getPrimaryPackageSpecG(orderConfig.value.packagePlan),
+    packagePlan: orderConfig.value.packagePlan,
+    cycleDays: orderConfig.value.cycleDays,
+    dailyIntakeG: orderConfig.value.dailyIntakeG,
+    preparationMethod: orderConfig.value.preparationMethod || undefined,
+    cookingMethod: orderConfig.value.cookingMethod || undefined,
+  }
+}
+
+function isPricingSnapshotExpiredError(error: any): boolean {
+  const message = normalizeText(error?.message || error)
+  return message.includes('Pricing snapshot has expired')
+    || message.includes('Pricing snapshot not found or expired')
+    || message.includes('价格快照已失效')
+}
+
+async function refreshDirectBuyPricingSnapshot(): Promise<{ success: boolean; priceChanged: boolean }> {
+  if (!orderConfig.value.dogId || !orderConfig.value.recipeId || orderConfig.value.packagePlan.length === 0) {
+    uni.showToast({
+      title: '价格已过期，请返回重新下单',
+      icon: 'none',
+    })
+    return { success: false, priceChanged: false }
+  }
+
+  const previousAmount = directBuyPrice.value.amountTotal
+
+  try {
+    uni.showLoading({ title: '更新价格...' })
+    const res = await request({
+      url: '/orders/pricing/preview',
+      method: 'POST',
+      suppressErrorToast: true,
+      data: {
+        dogId: orderConfig.value.dogId,
+        type: 'FRESH_FOOD',
+        ingredientSourcePlan: orderConfig.value.ingredientSourcePlan,
+        addressId: selectedAddress.value?.id,
+        items: [buildPricingPreviewItemFromOrderConfig()],
+      },
+    })
+
+    if (res.code !== 0 || !res.data?.snapshotId) {
+      throw new Error(res.message || '价格刷新失败')
+    }
+
+    const refreshedPrice = {
+      amountProduct: res.data.amountProduct || 0,
+      amountShipping: res.data.amountShipping || 0,
+      amountTotal: res.data.amountTotal || 0,
+    }
+
+    pricingSnapshotId.value = res.data.snapshotId
+    directBuyPrice.value = refreshedPrice
+    const storedConfig = (uni.getStorageSync('direct_buy_order_config') || {}) as Record<string, any>
+    uni.setStorageSync('direct_buy_order_config', {
+      ...storedConfig,
+      snapshotId: pricingSnapshotId.value,
+      amountProduct: refreshedPrice.amountProduct,
+      amountShipping: refreshedPrice.amountShipping,
+      amountTotal: refreshedPrice.amountTotal,
+    })
+
+    return {
+      success: true,
+      priceChanged: Math.abs(refreshedPrice.amountTotal - previousAmount) >= 0.01,
+    }
+  } catch (error) {
+    console.error('Refresh pricing snapshot error:', error)
+    uni.showToast({
+      title: '价格已过期，请返回重新下单',
+      icon: 'none',
+    })
+    return { success: false, priceChanged: false }
+  } finally {
+    uni.hideLoading()
+  }
+}
+
 // ========== 订单提交和支付 ==========
-async function submitOrder() {
+async function submitOrder(hasRefreshedSnapshot = false) {
   if (!canSubmitOrder.value) return
 
   if (!selectedAddress.value) {
@@ -895,6 +989,7 @@ async function submitOrder() {
     const createRes = await request({
       url: '/orders',
       method: 'POST',
+      suppressErrorToast: true,
       data: {
         type: 'FRESH_FOOD',
         addressId: selectedAddress.value!.id,
@@ -926,6 +1021,21 @@ async function submitOrder() {
     })
   } catch (error: any) {
     console.error('Submit order error:', error)
+    if (isPricingSnapshotExpiredError(error) && !hasRefreshedSnapshot) {
+      uni.hideLoading()
+      const refreshed = await refreshDirectBuyPricingSnapshot()
+      if (!refreshed.success) return
+      if (refreshed.priceChanged) {
+        uni.showToast({
+          title: '价格已更新，请确认后重新提交',
+          icon: 'none',
+        })
+        return
+      }
+      await submitOrder(true)
+      return
+    }
+
     uni.showToast({
       title: error.message || '提交失败',
       icon: 'none'

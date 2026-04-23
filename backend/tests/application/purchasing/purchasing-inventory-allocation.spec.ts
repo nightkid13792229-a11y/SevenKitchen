@@ -3,7 +3,10 @@ import { ProcurementSkuService } from 'src/application/ingredient/procurement-sk
 import { RecommendedProductService } from 'src/application/ingredient/recommended-product.service';
 import { INGREDIENT_REPOSITORY } from 'src/application/ingredient/ingredient.service';
 import { InventoryService } from 'src/application/inventory/inventory.service';
-import { ORDER_REPOSITORY } from 'src/application/order/order.service';
+import {
+  ORDER_REPOSITORY,
+  ORDER_STATUS_HISTORY_REPOSITORY,
+} from 'src/application/order/order.service';
 import { PurchasingService } from 'src/application/purchasing/purchasing.service';
 import {
   PURCHASE_LIST_REPOSITORY,
@@ -25,6 +28,12 @@ const makePaidOrder = (
   name: string,
   purchaseAmount: number,
   orderId = `order-${ingredientId}`,
+  options?: {
+    unit?: string;
+    cost?: number;
+    procurementSkuId?: string;
+    procurementSkuName?: string;
+  },
 ) => ({
   id: orderId,
   status: OrderStatus.PAID,
@@ -35,9 +44,11 @@ const makePaidOrder = (
         ingredientId,
         name,
         purchaseAmount,
-        unit: 'G',
-        cost: purchaseAmount / 100,
+        unit: options?.unit ?? 'G',
+        cost: options?.cost ?? purchaseAmount / 100,
         type: 'FOOD',
+        procurementSkuId: options?.procurementSkuId,
+        procurementSkuName: options?.procurementSkuName,
       },
     ],
   },
@@ -163,11 +174,18 @@ describe('PurchasingService inventory allocation calculation', () => {
       recalculateItems: jest.fn(async (_id, list) => list),
       delete: jest.fn(),
     };
+    const statusHistoryRepository = {
+      append: jest.fn(),
+    };
 
     const module = await Test.createTestingModule({
       providers: [
         PurchasingService,
         { provide: ORDER_REPOSITORY, useValue: orderRepository },
+        {
+          provide: ORDER_STATUS_HISTORY_REPOSITORY,
+          useValue: statusHistoryRepository,
+        },
         { provide: INGREDIENT_REPOSITORY, useValue: ingredientRepository },
         { provide: InventoryService, useValue: inventoryService },
         {
@@ -188,8 +206,119 @@ describe('PurchasingService inventory allocation calculation', () => {
       inventoryService,
       orderRepository,
       purchaseListRepository,
+      statusHistoryRepository,
     };
   }
+
+  it('converts kilogram purchase demand before applying gram inventory availability', async () => {
+    const { service, inventoryService } = await createService({
+      orders: [
+        makePaidOrder('beef', '牛肉', 3.703, 'order-beef-kg', {
+          unit: 'kg',
+          cost: 37.03,
+        }),
+      ],
+      availability: new Map([
+        [
+          'beef',
+          {
+            ingredientId: 'beef',
+            onHandQuantityG: 1000,
+            allocatedQuantityG: 0,
+            availableQuantityG: 1000,
+          },
+        ],
+      ]),
+    });
+
+    const result: any = await service.generatePurchaseList(
+      { startDate: '2026-04-20' },
+      'admin-1',
+    );
+
+    expect(result.purchaseList?.items).toEqual([
+      expect.objectContaining({
+        ingredientId: 'beef',
+        quantityUnit: 'kg',
+        grossQuantityNeeded: 3.703,
+        stockDeductedQuantity: 1,
+        purchaseShortageQuantity: 2.703,
+        quantityNeeded: 2.703,
+        onHandQuantity: 1,
+        availableQuantity: 1,
+        estimatedCost: 27.03,
+        usesInventory: true,
+      }),
+    ]);
+    expect(inventoryService.createAllocationForOrderDemand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lines: [
+          expect.objectContaining({
+            ingredientId: 'beef',
+            quantityG: 1000,
+          }),
+        ],
+      }),
+    );
+  });
+
+  it('does not over-allocate shared inventory when one ingredient has multiple procurement SKUs', async () => {
+    const { service, inventoryService } = await createService({
+      orders: [
+        makePaidOrder('beef', '牛肉', 0.6, 'order-beef-wholesale', {
+          unit: 'kg',
+          cost: 6,
+          procurementSkuId: 'sku-wholesale',
+          procurementSkuName: '批发牛肉',
+        }),
+        makePaidOrder('beef', '牛肉', 0.5, 'order-beef-premium', {
+          unit: 'kg',
+          cost: 5,
+          procurementSkuId: 'sku-premium',
+          procurementSkuName: '商超牛肉',
+        }),
+      ],
+      availability: new Map([
+        [
+          'beef',
+          {
+            ingredientId: 'beef',
+            onHandQuantityG: 1000,
+            allocatedQuantityG: 0,
+            availableQuantityG: 1000,
+          },
+        ],
+      ]),
+    });
+
+    const result: any = await service.generatePurchaseList(
+      { startDate: '2026-04-20' },
+      'admin-1',
+    );
+    const beefItems = result.purchaseList?.items.filter(
+      (item: PurchaseItem) => item.ingredientId === 'beef',
+    );
+
+    expect(beefItems).toHaveLength(2);
+    expect(
+      beefItems.reduce(
+        (sum: number, item: PurchaseItem) =>
+          sum + Number(item.stockDeductedQuantity || 0),
+        0,
+      ),
+    ).toBe(1);
+    expect(inventoryService.createAllocationForOrderDemand).toHaveBeenCalledWith(
+      expect.objectContaining({
+        lines: [
+          expect.objectContaining({
+            ingredientId: 'beef',
+            procurementSkuId: null,
+            quantityG: 1000,
+          }),
+        ],
+      }),
+    );
+  });
 
   it('offsets hybrid ingredients by available stock but leaves daily purchase ingredients untouched', async () => {
     const { service } = await createService();
@@ -219,7 +348,7 @@ describe('PurchasingService inventory allocation calculation', () => {
     ]);
   });
 
-  it('creates a purchase list for shortages and an allocation for stock offsets', async () => {
+  it('creates a purchase list with stock-covered items for manual audit', async () => {
     const { service, inventoryService } = await createService();
 
     const result: any = await service.generatePurchaseList(
@@ -227,8 +356,25 @@ describe('PurchasingService inventory allocation calculation', () => {
       'admin-1',
     );
 
-    expect(result.purchaseList?.items).toHaveLength(1);
-    expect(result.purchaseList?.items[0]).toEqual(
+    expect(result.purchaseList?.items).toHaveLength(2);
+    expect(result.purchaseList?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ingredientId: 'beef',
+          grossQuantityNeeded: 3000,
+          stockDeductedQuantity: 3000,
+          quantityNeeded: 0,
+          purchaseShortageQuantity: 0,
+          estimatedCost: 0,
+          usesInventory: true,
+        }),
+        expect.objectContaining({
+          ingredientId: 'spinach',
+          quantityNeeded: 600,
+        }),
+      ]),
+    );
+    expect(result.purchaseList?.items.find((item: PurchaseItem) => item.ingredientId === 'spinach')).toEqual(
       expect.objectContaining({
         ingredientId: 'spinach',
         quantityNeeded: 600,
@@ -255,7 +401,40 @@ describe('PurchasingService inventory allocation calculation', () => {
     );
   });
 
-  it('creates only an inventory allocation when all order demand is covered by stock', async () => {
+  it('records order status history when generated purchase lists move orders into purchasing', async () => {
+    const { service, statusHistoryRepository } = await createService();
+
+    const result: any = await service.generatePurchaseList(
+      { startDate: '2026-04-20' },
+      'admin-1',
+    );
+
+    expect(statusHistoryRepository.append).toHaveBeenCalledTimes(2);
+    expect(statusHistoryRepository.append).toHaveBeenCalledWith(
+      'order-beef',
+      OrderStatus.PAID,
+      OrderStatus.PURCHASING,
+      'staff',
+      'admin-1',
+      expect.objectContaining({
+        purchaseListId: result.purchaseList.id,
+        triggeredBy: 'purchase_list_generation',
+      }),
+    );
+    expect(statusHistoryRepository.append).toHaveBeenCalledWith(
+      'order-spinach',
+      OrderStatus.PAID,
+      OrderStatus.PURCHASING,
+      'staff',
+      'admin-1',
+      expect.objectContaining({
+        purchaseListId: result.purchaseList.id,
+        triggeredBy: 'purchase_list_generation',
+      }),
+    );
+  });
+
+  it('still creates a zero-shortage purchase list when all order demand is covered by stock', async () => {
     const { service, purchaseListRepository } = await createService({
       orders: [makePaidOrder('beef', '牛肉', 3000)],
       availability: new Map([
@@ -276,14 +455,25 @@ describe('PurchasingService inventory allocation calculation', () => {
       'admin-1',
     );
 
-    expect(result.purchaseList).toBeNull();
+    expect(result.purchaseList).not.toBeNull();
+    expect(result.purchaseList.items).toHaveLength(1);
+    expect(result.purchaseList.items[0]).toEqual(
+      expect.objectContaining({
+        ingredientId: 'beef',
+        quantityNeeded: 0,
+        grossQuantityNeeded: 3000,
+        stockDeductedQuantity: 3000,
+        purchaseShortageQuantity: 0,
+        estimatedCost: 0,
+      }),
+    );
     expect(result.inventoryAllocation).toEqual({
       id: 'allocation-1',
       lineCount: 1,
       totalAllocatedQuantityG: 3000,
     });
     expect(result.fullyCoveredByInventory).toBe(true);
-    expect(purchaseListRepository.save).not.toHaveBeenCalled();
+    expect(purchaseListRepository.save).toHaveBeenCalledTimes(1);
   });
 
   it('returns stock offset fields in purchase preview responses', async () => {
@@ -510,6 +700,37 @@ describe('PurchasingService inventory allocation calculation', () => {
         purchaseShortageQuantity: 400,
         quantityNeeded: 400,
         usesInventory: true,
+      }),
+    );
+  });
+
+  it('records order status history when adding orders to an existing purchase list', async () => {
+    const {
+      service,
+      orderRepository,
+      purchaseListRepository,
+      statusHistoryRepository,
+    } = await createService();
+    purchaseListRepository.findById.mockResolvedValue(makePendingPurchaseList());
+    orderRepository.findById.mockResolvedValue(
+      makePaidOrder('beef', '牛肉', 1000, 'order-beef-extra'),
+    );
+
+    await service.addOrdersToPurchaseList(
+      'purchase-list-1',
+      ['order-beef-extra'],
+      'admin-1',
+    );
+
+    expect(statusHistoryRepository.append).toHaveBeenCalledWith(
+      'order-beef-extra',
+      OrderStatus.PAID,
+      OrderStatus.PURCHASING,
+      'staff',
+      'admin-1',
+      expect.objectContaining({
+        purchaseListId: 'purchase-list-1',
+        triggeredBy: 'purchase_list_order_addition',
       }),
     );
   });

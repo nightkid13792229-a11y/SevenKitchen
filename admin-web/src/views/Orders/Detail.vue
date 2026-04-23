@@ -262,13 +262,18 @@
         <template #header>
           <div class="card-header-with-action">
             <span class="card-title">财务结算</span>
-            <el-button
-              size="small"
-              :loading="financialLoading"
-              @click="loadFinancialSummary"
-            >
-              刷新
-            </el-button>
+            <div class="financial-actions">
+              <el-button size="small" @click="openAdjustmentDialog">
+                新增调整
+              </el-button>
+              <el-button
+                size="small"
+                :loading="financialLoading"
+                @click="loadFinancialSummary"
+              >
+                刷新
+              </el-button>
+            </div>
           </div>
         </template>
 
@@ -282,9 +287,9 @@
             class="financial-alert"
           />
           <el-alert
-            v-else-if="financialSummary.shortageAdjustmentAmount !== 0"
-            :title="getAdjustmentText(financialSummary.shortageAdjustmentAmount)"
-            :type="getAdjustmentTagType(financialSummary.shortageAdjustmentAmount)"
+            v-else-if="getPendingAdjustmentAmount(financialSummary.adjustmentSummary) !== 0"
+            :title="getPendingAdjustmentText(financialSummary.adjustmentSummary)"
+            :type="getPendingAdjustmentTagType(financialSummary.adjustmentSummary)"
             :closable="false"
             class="financial-alert"
           />
@@ -320,6 +325,15 @@
                 {{ financialSummary.requiresCustomerPayment ? '是' : '否' }}
               </el-tag>
             </el-descriptions-item>
+            <el-descriptions-item label="待补差价">
+              {{ formatFinancialAmount(financialSummary.adjustmentSummary?.pendingExtraPaymentAmount) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="待退差价">
+              {{ formatFinancialAmount(financialSummary.adjustmentSummary?.pendingRefundAmount) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="净收入">
+              {{ formatFinancialAmount(financialSummary.netRevenue) }}
+            </el-descriptions-item>
             <template v-if="financialSummary.latestSettlement">
               <el-descriptions-item label="生产批次">
                 {{ financialSummary.latestSettlement.productionBatchId }}
@@ -342,6 +356,57 @@
               </el-descriptions-item>
             </template>
           </el-descriptions>
+          <el-table
+            v-if="financialSummary.adjustments?.length"
+            :data="financialSummary.adjustments"
+            class="adjustment-table"
+            size="small"
+            border
+          >
+            <el-table-column label="类型" width="110">
+              <template #default="{ row }">
+                {{ getAdjustmentTypeText(row.adjustmentType) }}
+              </template>
+            </el-table-column>
+            <el-table-column label="金额" width="120">
+              <template #default="{ row }">
+                {{ formatFinancialAmount(row.amount) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="reason" label="原因" min-width="180" />
+            <el-table-column label="状态" width="100">
+              <template #default="{ row }">
+                <el-tag :type="getAdjustmentStatusType(row.status)">
+                  {{ getAdjustmentStatusText(row.status) }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column label="顾客可见" width="95">
+              <template #default="{ row }">
+                {{ row.visibleToCustomer ? '是' : '否' }}
+              </template>
+            </el-table-column>
+            <el-table-column label="操作" width="150">
+              <template #default="{ row }">
+                <el-button
+                  v-if="row.status === 'PENDING'"
+                  link
+                  type="success"
+                  @click="updateAdjustmentStatus(row, 'SETTLED')"
+                >
+                  标记已处理
+                </el-button>
+                <el-button
+                  v-if="row.status === 'PENDING'"
+                  link
+                  type="danger"
+                  @click="updateAdjustmentStatus(row, 'CANCELLED')"
+                >
+                  取消
+                </el-button>
+              </template>
+            </el-table-column>
+          </el-table>
         </template>
         <el-empty v-else description="暂无财务结算数据" />
       </el-card>
@@ -446,11 +511,57 @@
       v-model="snapshotDialogVisible"
       :snapshot="currentSnapshot"
     />
+
+    <el-dialog
+      v-model="adjustmentDialogVisible"
+      title="新增结算调整"
+      width="520px"
+    >
+      <el-form label-width="110px">
+        <el-form-item label="调整金额">
+          <el-input-number
+            v-model="adjustmentForm.amount"
+            :precision="2"
+            :step="1"
+            controls-position="right"
+          />
+        </el-form-item>
+        <el-form-item label="调整类型">
+          <el-select v-model="adjustmentForm.adjustmentType">
+            <el-option label="补收差价" value="EXTRA_PAYMENT" />
+            <el-option label="退款/退差价" value="REFUND" />
+            <el-option label="人工优惠" value="DISCOUNT" />
+            <el-option label="人工修正" value="MANUAL_CORRECTION" />
+          </el-select>
+        </el-form-item>
+        <el-form-item label="原因">
+          <el-input
+            v-model="adjustmentForm.reason"
+            maxlength="200"
+            show-word-limit
+            placeholder="例如补收定制分装差价、退生产缺口差价"
+          />
+        </el-form-item>
+        <el-form-item label="顾客可见">
+          <el-switch v-model="adjustmentForm.visibleToCustomer" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="adjustmentDialogVisible = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="savingAdjustment"
+          @click="submitAdjustment"
+        >
+          保存
+        </el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, reactive } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import OrderTimeline from './components/OrderTimeline.vue'
@@ -470,12 +581,16 @@ import type {
   CancelledBy,
   OrderHistory,
   OrderFinancialSummary,
+  OrderSettlementAdjustment,
   RecipeSnapshot
 } from '@/types/order'
 import {
   formatFinancialAmount,
   getAdjustmentTagType,
-  getAdjustmentText
+  getAdjustmentText,
+  getPendingAdjustmentAmount,
+  getPendingAdjustmentTagType,
+  getPendingAdjustmentText
 } from './orderFinancialSummary'
 
 // 使枚举在模板中可用
@@ -495,6 +610,18 @@ const financialSummary = ref<OrderFinancialSummary | null>(null)
 const financialLoading = ref(false)
 const remarkDraft = ref('')
 const savingRemark = ref(false)
+const adjustmentDialogVisible = ref(false)
+const savingAdjustment = ref(false)
+const adjustmentForm = reactive({
+  amount: 0,
+  adjustmentType: 'EXTRA_PAYMENT' as
+    | 'REFUND'
+    | 'EXTRA_PAYMENT'
+    | 'DISCOUNT'
+    | 'MANUAL_CORRECTION',
+  reason: '',
+  visibleToCustomer: true
+})
 
 // 对话框
 const cancelDialogVisible = ref(false)
@@ -555,6 +682,82 @@ const loadFinancialSummary = async () => {
   } finally {
     financialLoading.value = false
   }
+}
+
+const openAdjustmentDialog = () => {
+  adjustmentForm.amount = 0
+  adjustmentForm.adjustmentType = 'EXTRA_PAYMENT'
+  adjustmentForm.reason = ''
+  adjustmentForm.visibleToCustomer = true
+  adjustmentDialogVisible.value = true
+}
+
+const submitAdjustment = async () => {
+  if (!adjustmentForm.amount) {
+    ElMessage.warning('调整金额不能为0')
+    return
+  }
+  if (!adjustmentForm.reason.trim()) {
+    ElMessage.warning('请填写调整原因')
+    return
+  }
+
+  savingAdjustment.value = true
+  try {
+    await orderApi.createSettlementAdjustment(orderId.value, {
+      amount: adjustmentForm.amount,
+      adjustmentType: adjustmentForm.adjustmentType,
+      reason: adjustmentForm.reason.trim(),
+      visibleToCustomer: adjustmentForm.visibleToCustomer
+    })
+    ElMessage.success('结算调整已创建')
+    adjustmentDialogVisible.value = false
+    await loadFinancialSummary()
+  } catch (error: any) {
+    ElMessage.error(error.message || '创建结算调整失败')
+  } finally {
+    savingAdjustment.value = false
+  }
+}
+
+const updateAdjustmentStatus = async (
+  adjustment: OrderSettlementAdjustment,
+  status: 'SETTLED' | 'CANCELLED'
+) => {
+  try {
+    await orderApi.updateSettlementAdjustmentStatus(orderId.value, adjustment.id, {
+      status
+    })
+    ElMessage.success(status === 'SETTLED' ? '已标记处理完成' : '已取消调整')
+    await loadFinancialSummary()
+  } catch (error: any) {
+    ElMessage.error(error.message || '更新结算调整失败')
+  }
+}
+
+const getAdjustmentTypeText = (type: string) => {
+  const textMap: Record<string, string> = {
+    REFUND: '退款/退差价',
+    EXTRA_PAYMENT: '补收差价',
+    DISCOUNT: '人工优惠',
+    MANUAL_CORRECTION: '人工修正'
+  }
+  return textMap[type] || type
+}
+
+const getAdjustmentStatusText = (status: string) => {
+  const textMap: Record<string, string> = {
+    PENDING: '待处理',
+    SETTLED: '已处理',
+    CANCELLED: '已取消'
+  }
+  return textMap[status] || status
+}
+
+const getAdjustmentStatusType = (status: string) => {
+  if (status === 'SETTLED') return 'success'
+  if (status === 'CANCELLED') return 'info'
+  return 'warning'
 }
 
 // 获取进度条激活步骤
@@ -827,6 +1030,16 @@ onMounted(() => {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.financial-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.adjustment-table {
+  margin-top: 16px;
 }
 
 .remark-actions {

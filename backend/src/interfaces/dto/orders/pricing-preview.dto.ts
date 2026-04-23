@@ -23,6 +23,8 @@ const INGREDIENT_SOURCE_PLAN_CODES = [
   'WHOLESALE',
 ] as const;
 
+const PRICING_PURPOSE_CODES = ['ORDER', 'DIY_SHEET'] as const;
+
 export class PricingPreviewPackagePlanItemDto {
   @ApiProperty({ description: 'Package specification in grams', example: 100 })
   @IsInt()
@@ -141,6 +143,16 @@ export class PricingPreviewRequestDto {
   @IsOptional()
   @IsEnum(INGREDIENT_SOURCE_PLAN_CODES)
   ingredientSourcePlan?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Pricing preview purpose. DIY sheet previews reuse ingredient quantity calculation without creating an order snapshot.',
+    enum: PRICING_PURPOSE_CODES,
+    example: 'ORDER',
+  })
+  @IsOptional()
+  @IsEnum(PRICING_PURPOSE_CODES)
+  pricingPurpose?: 'ORDER' | 'DIY_SHEET';
 }
 
 /**
@@ -232,6 +244,21 @@ export class IngredientCostItemDto {
 
   @ApiPropertyOptional({ description: 'Ingredient ID' })
   ingredientId?: string;
+
+  @ApiPropertyOptional({ description: 'Procurement SKU ID used for pricing' })
+  procurementSkuId?: string;
+
+  @ApiPropertyOptional({ description: 'Procurement SKU name used for pricing' })
+  procurementSkuName?: string;
+
+  @ApiPropertyOptional({ description: 'Selected ingredient source plan' })
+  procurementSkuSourcePlan?: string;
+
+  @ApiPropertyOptional({ description: 'Matched procurement SKU source tier' })
+  procurementSkuSourceTier?: string;
+
+  @ApiPropertyOptional({ description: 'Source tier fallback level' })
+  procurementSkuFallbackLevel?: number;
 
   @ApiPropertyOptional({ description: 'Nutrient target key (for supplements)' })
   nutrientTargetKey?: string;

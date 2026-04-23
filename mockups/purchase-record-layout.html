@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>添加采购记录布局稿</title>
+    <style>
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: #eceff3;
+        color: #222;
+        font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif;
+        letter-spacing: 0;
+      }
+
+      .stage {
+        min-height: 100vh;
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+        padding: 28px 18px;
+      }
+
+      .phone {
+        width: min(390px, 100%);
+        min-height: 844px;
+        background: #f6f6f6;
+        border-radius: 28px;
+        overflow: hidden;
+        box-shadow: 0 22px 70px rgba(19, 31, 48, 0.22);
+      }
+
+      .status {
+        height: 28px;
+        background: #fff;
+      }
+
+      .modal {
+        min-height: 816px;
+        background: #fff;
+      }
+
+      .modal-header {
+        height: 58px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 22px;
+        border-bottom: 1px solid #edf0f4;
+      }
+
+      .modal-title {
+        font-size: 21px;
+        font-weight: 700;
+      }
+
+      .close {
+        font-size: 32px;
+        color: #888;
+        line-height: 1;
+      }
+
+      .modal-body {
+        padding: 18px 18px 84px;
+      }
+
+      .summary-card {
+        padding: 18px;
+        border-radius: 14px;
+        background: #fff8df;
+        margin-bottom: 16px;
+      }
+
+      .summary-main {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        margin-bottom: 12px;
+      }
+
+      .ingredient {
+        font-size: 18px;
+        font-weight: 700;
+      }
+
+      .task-tag {
+        flex-shrink: 0;
+        font-size: 13px;
+        font-weight: 700;
+        color: #7a4a00;
+      }
+
+      .metrics {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
+      }
+
+      .metric {
+        padding: 9px 8px;
+        border-radius: 10px;
+        background: rgba(255, 255, 255, 0.72);
+      }
+
+      .metric-label {
+        display: block;
+        font-size: 11px;
+        color: #90774c;
+      }
+
+      .metric-value {
+        display: block;
+        margin-top: 4px;
+        font-size: 14px;
+        font-weight: 700;
+        color: #5e3d00;
+      }
+
+      .section {
+        padding: 16px;
+        border-radius: 14px;
+        background: #fafafa;
+        margin-bottom: 14px;
+      }
+
+      .section-head {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .section-title {
+        font-size: 15px;
+        font-weight: 700;
+      }
+
+      .section-hint {
+        font-size: 12px;
+        color: #888;
+      }
+
+      .sku-list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+
+      .sku-card {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 13px 14px;
+        border-radius: 12px;
+        border: 1.5px solid #1677ff;
+        background: #f0f7ff;
+      }
+
+      .sku-title-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-bottom: 7px;
+      }
+
+      .sku-badge {
+        padding: 2px 7px;
+        border-radius: 999px;
+        color: #1677ff;
+        background: #e0efff;
+        font-size: 11px;
+        font-weight: 700;
+      }
+
+      .sku-name {
+        font-size: 15px;
+        font-weight: 700;
+      }
+
+      .sku-meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+      }
+
+      .sku-meta span {
+        padding: 3px 7px;
+        border-radius: 6px;
+        background: #e8edf4;
+        color: #666;
+        font-size: 12px;
+      }
+
+      .check {
+        color: #1677ff;
+        font-size: 22px;
+        font-weight: 800;
+      }
+
+      .entry-grid {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .entry-card {
+        padding: 14px;
+        border-radius: 14px;
+        background: #fafafa;
+        min-width: 0;
+      }
+
+      .field-label {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 10px;
+      }
+
+      .field-title {
+        font-size: 15px;
+        font-weight: 700;
+      }
+
+      .unit-badge {
+        flex-shrink: 0;
+        padding: 2px 7px;
+        border-radius: 999px;
+        background: #eaf3ff;
+        color: #1677ff;
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .input-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        height: 44px;
+        padding: 0 12px;
+        border-radius: 10px;
+        background: #f0f1f4;
+      }
+
+      .input-value {
+        flex: 1;
+        min-width: 0;
+        font-size: 20px;
+        font-weight: 700;
+      }
+
+      .input-unit {
+        flex-shrink: 0;
+        color: #666;
+        font-size: 14px;
+        font-weight: 700;
+      }
+
+      .assist-list {
+        margin-top: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+
+      .assist-row {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        font-size: 12px;
+        line-height: 1.35;
+      }
+
+      .assist-label {
+        color: #777;
+      }
+
+      .assist-value {
+        font-weight: 700;
+        color: #333;
+        text-align: right;
+      }
+
+      .good {
+        color: #14a058;
+      }
+
+      .bad {
+        color: #e5484d;
+      }
+
+      .note-toggle {
+        margin-top: 4px;
+        padding: 15px 16px;
+        border-radius: 14px;
+        background: #fafafa;
+        color: #333;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        font-size: 15px;
+        font-weight: 700;
+      }
+
+      .footer {
+        position: sticky;
+        bottom: 0;
+        display: grid;
+        grid-template-columns: 112px 1fr;
+        gap: 12px;
+        padding: 12px 18px 18px;
+        background: rgba(255, 255, 255, 0.96);
+        border-top: 1px solid #edf0f4;
+      }
+
+      .btn {
+        height: 46px;
+        border-radius: 10px;
+        border: 0;
+        font-size: 16px;
+        font-weight: 700;
+      }
+
+      .cancel {
+        background: #f0f1f4;
+        color: #555;
+      }
+
+      .submit {
+        background: #26c63f;
+        color: #fff;
+      }
+
+      @media (max-width: 374px) {
+        .entry-grid {
+          grid-template-columns: 1fr;
+        }
+
+        .phone {
+          border-radius: 0;
+          min-height: 100vh;
+        }
+
+        .stage {
+          padding: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="stage">
+      <section class="phone">
+        <div class="status"></div>
+        <div class="modal">
+          <header class="modal-header">
+            <div class="modal-title">添加采购记录</div>
+            <div class="close">×</div>
+          </header>
+
+          <div class="modal-body">
+            <section class="summary-card">
+              <div class="summary-main">
+                <div class="ingredient">牛霖</div>
+                <div class="task-tag">采购任务</div>
+              </div>
+              <div class="metrics">
+                <div class="metric">
+                  <span class="metric-label">订单需求</span>
+                  <span class="metric-value">2172g</span>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">库存抵扣</span>
+                  <span class="metric-value">0g</span>
+                </div>
+                <div class="metric">
+                  <span class="metric-label">仍需采购</span>
+                  <span class="metric-value">2172g</span>
+                </div>
+              </div>
+            </section>
+
+            <section class="section">
+              <div class="section-head">
+                <div class="section-title">采购商品</div>
+                <div class="section-hint">选择本次实际买到的商品</div>
+              </div>
+              <div class="sku-list">
+                <div class="sku-card">
+                  <div>
+                    <div class="sku-title-row">
+                      <span class="sku-badge">推荐</span>
+                      <span class="sku-name">MM澳洲谷饲牛霖</span>
+                    </div>
+                    <div class="sku-meta">
+                      <span>山姆会员店</span>
+                      <span>1.2kg/盒</span>
+                      <span>历史单价 ¥49.80/500g</span>
+                    </div>
+                  </div>
+                  <div class="check">✓</div>
+                </div>
+              </div>
+            </section>
+
+            <section class="entry-grid">
+              <div class="entry-card">
+                <div class="field-label">
+                  <span class="field-title">购买数量 *</span>
+                </div>
+                <div class="input-row">
+                  <span class="input-value">3</span>
+                  <span class="input-unit">盒</span>
+                </div>
+                <div class="assist-list">
+                  <div class="assist-row">
+                    <span class="assist-label">总量</span>
+                    <span class="assist-value">3600g</span>
+                  </div>
+                  <div class="assist-row">
+                    <span class="assist-label">余量</span>
+                    <span class="assist-value good">1428g</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="entry-card">
+                <div class="field-label">
+                  <span class="field-title">付款金额 *</span>
+                </div>
+                <div class="input-row">
+                  <span class="input-value">165.03</span>
+                  <span class="input-unit">元</span>
+                </div>
+                <div class="assist-list">
+                  <div class="assist-row">
+                    <span class="assist-label">单价</span>
+                    <span class="assist-value">¥22.92/500g</span>
+                  </div>
+                  <div class="assist-row">
+                    <span class="assist-label">历史单价</span>
+                    <span class="assist-value">¥49.80/500g</span>
+                  </div>
+                  <div class="assist-row">
+                    <span class="assist-label">价格提醒</span>
+                    <span class="assist-value good">低于历史 54%</span>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <footer class="footer">
+            <button class="btn cancel">取消</button>
+            <button class="btn submit">保存</button>
+          </footer>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

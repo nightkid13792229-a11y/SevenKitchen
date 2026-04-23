@@ -1,13 +1,10 @@
 <template>
   <view class="record-form-page">
-    <!-- 加载状态 -->
     <view v-if="loading" class="loading-state">
       <text>加载中...</text>
     </view>
 
-    <!-- 表单内容 -->
     <view v-else class="form-content">
-      <!-- 原料选择 -->
       <view class="form-section">
         <text class="section-title">原料名称 *</text>
         <picker
@@ -23,92 +20,61 @@
             <text class="picker-arrow">›</text>
           </view>
         </picker>
-        <text v-if="getSelectedItemProcurementLabel(selectedItem)" class="section-hint">
-          采购 SKU：{{ getSelectedItemProcurementLabel(selectedItem) }}
-        </text>
-        <text v-if="selectedItem?.suggestedProductName" class="section-hint">
-          推荐参考：{{ selectedItem.suggestedProductName }}
-        </text>
       </view>
 
-      <!-- 采购SKU -->
-      <view v-if="procurementSkuOptions.length > 1" class="form-section">
-        <text class="section-title">采购 SKU（可选）</text>
-        <picker
-          mode="selector"
-          :range="procurementSkuOptions"
-          range-key="label"
-          :value="procurementSkuIndex"
-          @change="onProcurementSkuChange"
-        >
-          <view class="picker">
-            <text v-if="formData.procurementSkuId" class="picker-text">
-              {{ selectedProcurementSku?.label }}
-            </text>
-            <text v-else class="picker-placeholder">请选择生产采购 SKU</text>
-            <text class="picker-arrow">›</text>
+      <view class="form-section">
+        <text class="section-title">采购商品 *</text>
+        <view v-if="procurementSkuOptions.length > 0" class="sku-list">
+          <view
+            v-for="sku in procurementSkuOptions"
+            :key="sku.id"
+            class="sku-card"
+            :class="{ active: formData.procurementSkuId === sku.id }"
+            @tap="selectProcurementSku(sku)"
+          >
+            <view class="sku-main">
+              <view class="sku-title-row">
+                <text class="sku-name">{{ sku.name }}</text>
+                <text v-if="isRecommendedSku(sku)" class="sku-badge">推荐</text>
+              </view>
+              <view class="sku-meta">
+                <text v-if="sku.purchaseChannel">{{ sku.purchaseChannel }}</text>
+                <text v-if="sku.productModel">{{ sku.productModel }}</text>
+                <text v-if="formatProcurementSkuReferencePrice(sku)">
+                  {{ formatProcurementSkuReferencePrice(sku) }}
+                </text>
+              </view>
+            </view>
+            <text class="sku-check">✓</text>
           </view>
-        </picker>
-        <text class="section-hint">优先选生产采购 SKU；如果没有合适项，可保持不选。</text>
+        </view>
+        <view v-else class="sku-empty">
+          <text class="empty-title">暂无可用采购商品</text>
+          <text class="empty-desc">请联系管理员在该标准原料下新增采购 SKU 后再记录采购。</text>
+        </view>
       </view>
 
-      <!-- 采购渠道 -->
       <view class="form-section">
-        <text class="section-title">采购渠道 *</text>
-        <input
-          v-model="formData.purchaseChannel"
-          class="form-input"
-          placeholder="如：京东、淘宝、本地市场"
-          placeholder-class="input-placeholder"
-        />
+        <view class="field-label-row">
+          <text class="section-title inline">购买数量 *</text>
+        </view>
+        <view class="input-with-unit">
+          <input
+            v-model="formData.actualPackageCount"
+            type="digit"
+            class="form-input unit-input"
+            :placeholder="purchaseQuantityPlaceholder"
+            placeholder-class="input-placeholder"
+          />
+          <text class="input-unit">{{ purchaseUnitLabel }}</text>
+        </view>
       </view>
 
-      <!-- 实际购买件数 -->
       <view class="form-section">
-        <text class="section-title">实际购买件数 *</text>
-        <input
-          v-model="formData.actualPackageCount"
-          type="digit"
-          class="form-input"
-          placeholder="请输入本次实际买了几件，如：2"
-          placeholder-class="input-placeholder"
-        />
-        <text class="section-hint">按实际买到的件数填写，不需要先折算成 {{ getPurchaseRecordUnit(selectedItem) }}</text>
-      </view>
-
-      <!-- 单件规格 -->
-      <view class="form-section">
-        <text class="section-title">单件规格 *</text>
-        <input
-          v-model="formData.actualPackageSize"
-          type="digit"
-          class="form-input"
-          placeholder="请输入单件规格数值，如：1000"
-          placeholder-class="input-placeholder"
-        />
-      </view>
-
-      <!-- 规格单位 -->
-      <view class="form-section">
-        <text class="section-title">规格单位 *</text>
-        <picker
-          mode="selector"
-          :range="packageUnitOptions"
-          :value="packageUnitIndex"
-          @change="onPackageUnitChange"
-        >
-          <view class="picker">
-            <text v-if="formData.actualPackageUnit" class="picker-text">{{ formData.actualPackageUnit }}</text>
-            <text v-else class="picker-placeholder">请选择规格单位</text>
-            <text class="picker-arrow">›</text>
-          </view>
-        </picker>
-        <text class="section-hint">例如 1件 x 1000g，系统会自动折算为标准采购单位</text>
-      </view>
-
-      <!-- 实际采购金额 -->
-      <view class="form-section">
-        <text class="section-title">实际采购金额（元） *</text>
+        <view class="field-label-row">
+          <text class="section-title inline">付款金额 *</text>
+          <text v-if="actualUnitPriceText" class="price-hint">单价 {{ actualUnitPriceText }}</text>
+        </view>
         <input
           v-model="formData.actualCost"
           type="digit"
@@ -116,34 +82,8 @@
           placeholder="请输入金额，如：156.50"
           placeholder-class="input-placeholder"
         />
-        <text class="section-hint">精确到分，单位：元</text>
       </view>
 
-      <!-- 产品型号（选填） -->
-      <view class="form-section">
-        <text class="section-title">产品型号（选填）</text>
-        <input
-          v-model="formData.productModel"
-          class="form-input"
-          placeholder="如：500g装"
-          placeholder-class="input-placeholder"
-        />
-      </view>
-
-      <!-- 备注信息（选填） -->
-      <view class="form-section">
-        <text class="section-title">备注信息（选填）</text>
-        <textarea
-          v-model="formData.notes"
-          class="form-textarea"
-          placeholder="请输入备注信息"
-          placeholder-class="input-placeholder"
-          :maxlength="200"
-        />
-        <text class="char-count">{{ formData.notes.length }}/200</text>
-      </view>
-
-      <!-- 底部操作按钮 -->
       <view class="bottom-actions">
         <button class="action-btn cancel" @tap="goBack">取消</button>
         <button class="action-btn submit" @tap="submit" :loading="submitting">
@@ -164,8 +104,13 @@ import {
   resolvePurchaseItemDisplay,
   resolveProcurementSkuProfile,
 } from '@/api/purchasing';
+import type { ProcurementSkuOption } from '@/api/purchasing';
 
-// 状态管理
+type RecordSkuOption = ProcurementSkuOption & {
+  id: string;
+  label: string;
+};
+
 const purchaseListId = ref('');
 const items = ref<any[]>([]);
 const selectedItem = ref<any>(null);
@@ -173,34 +118,16 @@ const selectedItemIndex = ref(0);
 const loading = ref(true);
 const submitting = ref(false);
 
-// 表单数据
 const formData = ref({
   purchaseItemId: '',
   procurementSkuId: '',
-  procurementSkuName: '',
   purchaseChannel: '',
+  purchaseUnit: '',
   actualPackageCount: '',
   actualPackageSize: '',
   actualPackageUnit: '',
   actualCost: '',
   productModel: '',
-  notes: '',
-});
-
-const procurementSkuProfile = computed(() => resolveProcurementSkuProfile(selectedItem.value));
-const procurementSkuOptions = computed(() => [
-  { id: '', label: '不选择采购 SKU' },
-  ...procurementSkuProfile.value.procurementSkuChoices.map((sku) => ({
-    ...sku,
-    label: [sku.name, sku.productModel, sku.purchaseChannel].filter(Boolean).join(' · '),
-  })),
-]);
-const selectedProcurementSku = computed(() => {
-  return procurementSkuOptions.value.find((sku) => sku.id === formData.value.procurementSkuId) || null;
-});
-const procurementSkuIndex = computed(() => {
-  const index = procurementSkuOptions.value.findIndex((sku) => sku.id === formData.value.procurementSkuId);
-  return index >= 0 ? index : 0;
 });
 
 const formatMeasurementUnit = (unit?: string | null): string => {
@@ -221,74 +148,239 @@ const formatMeasurementUnit = (unit?: string | null): string => {
   return labelMap[normalized] || `${unit}`.trim();
 };
 
+const formatDecimal = (value: number, maxDecimalPlaces = 3) => {
+  if (!Number.isFinite(value)) {
+    return '';
+  }
+  return Number(value.toFixed(maxDecimalPlaces)).toString();
+};
+
+const formatMoney = (value: number) => {
+  if (!Number.isFinite(value)) {
+    return '';
+  }
+  return Number(value.toFixed(2)).toString();
+};
+
+const formatCompactLabel = (parts: Array<string | null | undefined>) => {
+  return parts.map((part) => (part || '').trim()).filter(Boolean).join(' · ');
+};
+
 const getIngredientBaseUnit = (item: any): string => {
-  return item?.ingredient?.baseUnit || item?.quantityUnit || 'PCS';
+  return item?.ingredient?.baseUnit || item?.resolvedBaseUnit || item?.quantityUnit || 'PCS';
 };
 
 const getSuggestedPackageSize = (item: any): string => {
-  const ratio = Number(item?.ingredient?.purchaseToBaseRatio || 0);
-  if (!Number.isFinite(ratio) || ratio <= 0) {
-    return '';
+  const rawRatio = Number(item?.ingredient?.purchaseToBaseRatio || item?.resolvedPurchaseToBaseRatio || 0);
+  if (Number.isFinite(rawRatio) && rawRatio > 0) {
+    return formatDecimal(rawRatio, 3);
   }
-  return `${ratio}`.replace(/\.?0+$/, '');
+  return '';
 };
 
 const getSuggestedPackageUnit = (item: any): string => {
   return formatMeasurementUnit(getIngredientBaseUnit(item)) || '个';
 };
 
-const getPackageUnitOptions = (item: any): string[] => {
-  const baseUnit = getIngredientBaseUnit(item);
-  const hasDensity = Number(item?.ingredient?.properties?.density_g_per_ml || 0) > 0;
-
-  if (baseUnit === 'ML') {
-    return hasDensity ? ['ml', 'L', 'g', 'kg'] : ['ml', 'L'];
-  }
-
-  if (baseUnit === 'G') {
-    return hasDensity ? ['g', 'kg', '斤', 'ml', 'L'] : ['g', 'kg', '斤'];
-  }
-
-  return ['个', '件', '袋', '包', '盒', '瓶', '罐', '张', '片'];
-};
-
-const getPurchaseRecordUnit = (item: any): string => {
-  if (item?.ingredient?.purchaseUnit) {
-    return item.ingredient.purchaseUnit;
-  }
-
-  if (item?.quantityUnit) {
-    return item.quantityUnit;
-  }
-
-  return '个';
-};
-
-const getSelectedItemProcurementLabel = (item: any) => {
-  if (!item) {
+const parsePurchaseUnitFromProductModel = (productModel?: string | null) => {
+  const normalized = (productModel || '').trim();
+  if (!normalized.includes('/')) {
     return '';
   }
 
-  const profile = resolveProcurementSkuProfile(item);
+  return formatMeasurementUnit(normalized.split('/').pop()?.trim()) || '';
+};
+
+const getSkuPurchaseUnit = (sku: ProcurementSkuOption | null | undefined, item: any): string => {
   return (
-    profile.procurementSkuName ||
-    [profile.purchaseChannel, profile.productModel].filter(Boolean).join(' · ') ||
-    item.purchaseChannel ||
-    item.productModel ||
-    ''
+    formatMeasurementUnit(sku?.purchaseUnit) ||
+    parsePurchaseUnitFromProductModel(sku?.productModel) ||
+    formatMeasurementUnit(sku?.displayUnit) ||
+    formatMeasurementUnit(item?.ingredient?.purchaseUnit) ||
+    '件'
   );
 };
 
-const packageUnitOptions = computed(() => getPackageUnitOptions(selectedItem.value));
-const packageUnitIndex = computed(() => {
-  const index = packageUnitOptions.value.indexOf(formData.value.actualPackageUnit);
-  return index >= 0 ? index : 0;
+const getSkuPackageFacts = (sku: ProcurementSkuOption, item: any) => {
+  const ratio = Number(sku?.purchaseToBaseRatio || 0);
+  const baseUnit = getIngredientBaseUnit(item);
+  const purchaseUnit = getSkuPurchaseUnit(sku, item);
+
+  if (Number.isFinite(ratio) && ratio > 0) {
+    if (baseUnit === 'G') {
+      if (ratio >= 1000) {
+        return { size: formatDecimal(ratio / 1000, 3), unit: 'kg', purchaseUnit };
+      }
+      return { size: formatDecimal(ratio, 3), unit: 'g', purchaseUnit };
+    }
+
+    if (baseUnit === 'ML') {
+      if (ratio >= 1000) {
+        return { size: formatDecimal(ratio / 1000, 3), unit: 'L', purchaseUnit };
+      }
+      return { size: formatDecimal(ratio, 3), unit: 'ml', purchaseUnit };
+    }
+
+    return {
+      size: formatDecimal(ratio, 3),
+      unit: item?.ingredient?.unitDisplayLabel || item?.quantityUnit || '个',
+      purchaseUnit,
+    };
+  }
+
+  return {
+    size: getSuggestedPackageSize(item),
+    unit: getSuggestedPackageUnit(item),
+    purchaseUnit,
+  };
+};
+
+const procurementSkuProfile = computed(() => resolveProcurementSkuProfile(selectedItem.value));
+const procurementSkuOptions = computed<RecordSkuOption[]>(() =>
+  procurementSkuProfile.value.procurementSkuChoices
+    .filter((sku) => Boolean(sku.id))
+    .map((sku) => ({
+      ...sku,
+      id: sku.id as string,
+      label: formatCompactLabel([sku.name, sku.productModel, sku.purchaseChannel]),
+    })),
+);
+
+const selectedProcurementSku = computed(() => {
+  return procurementSkuOptions.value.find((sku) => sku.id === formData.value.procurementSkuId) || null;
 });
 
-const hasMaxDecimalPlaces = (value: string | number, maxDecimalPlaces: number) => {
-  const normalized = `${value}`;
-  const decimalPart = normalized.split('.')[1];
-  return !decimalPart || decimalPart.length <= maxDecimalPlaces;
+const purchaseUnitLabel = computed(() => {
+  return formatMeasurementUnit(formData.value.purchaseUnit) || '件';
+});
+
+const purchaseQuantityPlaceholder = computed(() => {
+  return `请输入本次实际买了多少${purchaseUnitLabel.value}，如：2`;
+});
+
+const isRecommendedSku = (sku: RecordSkuOption) => {
+  const profile = procurementSkuProfile.value;
+  if (profile.procurementSkuId && sku.id) {
+    return profile.procurementSkuId === sku.id;
+  }
+  return Boolean(profile.procurementSkuName && profile.procurementSkuName === sku.name);
+};
+
+const convertPackageSizeToBaseQuantity = (size: number, unit: string, item: any) => {
+  const baseUnit = getIngredientBaseUnit(item);
+  const normalizedUnit = formatMeasurementUnit(unit);
+
+  if (baseUnit === 'G') {
+    if (normalizedUnit === 'kg') {
+      return size * 1000;
+    }
+    if (normalizedUnit === '斤') {
+      return size * 500;
+    }
+    return size;
+  }
+
+  if (baseUnit === 'ML') {
+    if (normalizedUnit === 'L') {
+      return size * 1000;
+    }
+    return size;
+  }
+
+  return size;
+};
+
+const getReferencePriceParts = (sku: ProcurementSkuOption) => {
+  const price = Number(sku?.currentPurchasePrice || sku?.referencePricePerPurchaseUnit || 0);
+  const ratio = Number(sku?.purchaseToBaseRatio || 0);
+  const baseUnit = getIngredientBaseUnit(selectedItem.value);
+
+  if (!Number.isFinite(price) || price <= 0) {
+    return null;
+  }
+
+  if (Number.isFinite(ratio) && ratio > 0) {
+    if (baseUnit === 'G') {
+      return { price: price / ratio * 500, unit: '500g' };
+    }
+
+    if (baseUnit === 'ML') {
+      return { price: price / ratio * 500, unit: '500ml' };
+    }
+
+    if (baseUnit === 'PCS') {
+      return {
+        price: price / ratio,
+        unit: formatMeasurementUnit(selectedItem.value?.ingredient?.unitDisplayLabel) || '个',
+      };
+    }
+  }
+
+  return {
+    price,
+    unit: getSkuPurchaseUnit(sku, selectedItem.value),
+  };
+};
+
+const formatProcurementSkuReferencePrice = (sku: ProcurementSkuOption) => {
+  const parts = getReferencePriceParts(sku);
+  if (!parts) {
+    return '';
+  }
+  return `历史单价 ¥${formatMoney(parts.price)}/${parts.unit}`;
+};
+
+const actualUnitPriceText = computed(() => {
+  const packageCount = Number(formData.value.actualPackageCount);
+  const packageSize = Number(formData.value.actualPackageSize);
+  const cost = Number(formData.value.actualCost);
+
+  if (
+    !Number.isFinite(packageCount) ||
+    packageCount <= 0 ||
+    !Number.isFinite(packageSize) ||
+    packageSize <= 0 ||
+    !Number.isFinite(cost) ||
+    cost <= 0
+  ) {
+    return '';
+  }
+
+  const singleBaseQuantity = convertPackageSizeToBaseQuantity(
+    packageSize,
+    formData.value.actualPackageUnit,
+    selectedItem.value,
+  );
+  const totalBaseQuantity = packageCount * singleBaseQuantity;
+
+  if (!Number.isFinite(totalBaseQuantity) || totalBaseQuantity <= 0) {
+    return '';
+  }
+
+  const baseUnit = getIngredientBaseUnit(selectedItem.value);
+  if (baseUnit === 'G') {
+    return `¥${formatMoney(cost / totalBaseQuantity * 500)}/500g`;
+  }
+  if (baseUnit === 'ML') {
+    return `¥${formatMoney(cost / totalBaseQuantity * 500)}/500ml`;
+  }
+
+  const unit = formatMeasurementUnit(selectedItem.value?.ingredient?.unitDisplayLabel) || formData.value.actualPackageUnit || '个';
+  return `¥${formatMoney(cost / totalBaseQuantity)}/${unit}`;
+});
+
+const applyProcurementSkuDefaults = (sku: RecordSkuOption) => {
+  if (!selectedItem.value) {
+    return;
+  }
+
+  const facts = getSkuPackageFacts(sku, selectedItem.value);
+  formData.value.procurementSkuId = sku.id;
+  formData.value.purchaseChannel = sku.purchaseChannel || '';
+  formData.value.productModel = sku.productModel || '';
+  formData.value.purchaseUnit = facts.purchaseUnit || '件';
+  formData.value.actualPackageSize = facts.size || '';
+  formData.value.actualPackageUnit = facts.unit || '';
 };
 
 const applySelectedItemDefaults = (item: any) => {
@@ -296,37 +388,52 @@ const applySelectedItemDefaults = (item: any) => {
     return;
   }
 
-  formData.value.purchaseItemId = item.id;
+  formData.value = {
+    purchaseItemId: item.id,
+    procurementSkuId: '',
+    purchaseChannel: '',
+    purchaseUnit: '',
+    actualPackageCount: '',
+    actualPackageSize: '',
+    actualPackageUnit: '',
+    actualCost: '',
+    productModel: '',
+  };
+
   const profile = resolveProcurementSkuProfile(item);
-  formData.value.procurementSkuId = profile.procurementSkuId || '';
-  formData.value.procurementSkuName = profile.procurementSkuName || '';
-  formData.value.purchaseChannel = profile.purchaseChannel || '';
-  formData.value.productModel = profile.productModel || '';
-  formData.value.actualPackageSize = getSuggestedPackageSize(item);
-  formData.value.actualPackageUnit = getSuggestedPackageUnit(item);
+  const choices = profile.procurementSkuChoices
+    .filter((sku) => Boolean(sku.id))
+    .map((sku) => ({
+      ...sku,
+      id: sku.id as string,
+      label: formatCompactLabel([sku.name, sku.productModel, sku.purchaseChannel]),
+    }));
+  const preferredSku =
+    choices.find((sku) => profile.procurementSkuId && sku.id === profile.procurementSkuId) ||
+    choices.find((sku) => profile.procurementSkuName && sku.name === profile.procurementSkuName) ||
+    choices[0] ||
+    null;
+
+  if (preferredSku) {
+    applyProcurementSkuDefaults(preferredSku);
+  }
 };
-// 页面加载
+
 onLoad((options: any) => {
-  console.log('[RecordForm] onLoad options:', options);
   purchaseListId.value = options.id;
-  console.log('[RecordForm] purchaseListId:', purchaseListId.value);
   loadPurchaseListDetail();
 });
 
-// 加载采购清单详情
 const loadPurchaseListDetail = async () => {
-  console.log('[RecordForm] loadPurchaseListDetail called, purchaseListId:', purchaseListId.value);
   loading.value = true;
 
   try {
     const res: any = await getPurchaseListDetail(purchaseListId.value);
-    console.log('[RecordForm] API response:', res);
 
     if (res.code === 0) {
       items.value = (res.data.items || []).map((item: any) =>
         resolvePurchaseItemDisplay(item)
       );
-      console.log('[RecordForm] items loaded:', items.value.length);
 
       if (items.value.length > 0) {
         selectedItem.value = items.value[0];
@@ -350,96 +457,85 @@ const loadPurchaseListDetail = async () => {
   }
 };
 
-// 选择原料
 const onItemChange = (e: any) => {
   selectedItemIndex.value = e.detail.value;
   selectedItem.value = items.value[e.detail.value];
-
-  // 自动填充原料信息
   applySelectedItemDefaults(selectedItem.value);
 };
 
-const onPackageUnitChange = (e: any) => {
-  const unit = packageUnitOptions.value[e.detail.value];
-  if (unit) {
-    formData.value.actualPackageUnit = unit;
-  }
+const selectProcurementSku = (sku: RecordSkuOption) => {
+  applyProcurementSkuDefaults(sku);
 };
 
-const onProcurementSkuChange = (e: any) => {
-  const sku = procurementSkuOptions.value[e.detail.value];
-  if (!sku) {
-    return;
-  }
-
-  const profile = resolveProcurementSkuProfile(selectedItem.value);
-  formData.value.procurementSkuId = sku.id || '';
-  formData.value.procurementSkuName = sku.id ? sku.name : '';
-
-  if (sku.id) {
-    formData.value.purchaseChannel = sku.purchaseChannel || formData.value.purchaseChannel;
-    formData.value.productModel = sku.productModel || formData.value.productModel;
-  } else {
-    formData.value.purchaseChannel = profile.purchaseChannel || '';
-    formData.value.productModel = profile.productModel || '';
-  }
+const hasMaxDecimalPlaces = (value: string | number, maxDecimalPlaces: number) => {
+  const normalized = `${value}`;
+  const decimalPart = normalized.split('.')[1];
+  return !decimalPart || decimalPart.length <= maxDecimalPlaces;
 };
 
-// 表单验证
 const validateForm = (): boolean => {
   if (!selectedItem.value) {
     uni.showToast({ title: '请选择原料', icon: 'none' });
     return false;
   }
 
+  if (!formData.value.procurementSkuId || formData.value.procurementSkuId.trim().length === 0) {
+    uni.showToast({ title: '请选择采购商品', icon: 'none' });
+    return false;
+  }
+
+  if (!selectedProcurementSku.value) {
+    uni.showToast({ title: '采购商品不存在，请重新选择', icon: 'none' });
+    return false;
+  }
+
   if (!formData.value.purchaseChannel || formData.value.purchaseChannel.trim().length === 0) {
-    uni.showToast({ title: '请输入采购渠道', icon: 'none' });
+    uni.showToast({ title: '采购商品缺少采购渠道，请联系管理员补充', icon: 'none' });
+    return false;
+  }
+
+  if (!formData.value.purchaseUnit || formData.value.purchaseUnit.trim().length === 0) {
+    uni.showToast({ title: '采购商品缺少采购单位，请联系管理员补充', icon: 'none' });
     return false;
   }
 
   if (!formData.value.actualPackageCount || formData.value.actualPackageCount.toString().trim().length === 0) {
-    uni.showToast({ title: '请输入实际购买件数', icon: 'none' });
+    uni.showToast({ title: '请输入购买数量', icon: 'none' });
     return false;
   }
 
   const packageCount = Number(formData.value.actualPackageCount);
   if (isNaN(packageCount) || packageCount <= 0) {
-    uni.showToast({ title: '件数必须大于0', icon: 'none' });
+    uni.showToast({ title: '购买数量必须大于0', icon: 'none' });
     return false;
   }
 
   if (!hasMaxDecimalPlaces(formData.value.actualPackageCount, 3)) {
-    uni.showToast({ title: '件数最多三位小数', icon: 'none' });
+    uni.showToast({ title: '购买数量最多三位小数', icon: 'none' });
     return false;
   }
 
   if (!formData.value.actualPackageSize || formData.value.actualPackageSize.toString().trim().length === 0) {
-    uni.showToast({ title: '请输入单件规格', icon: 'none' });
+    uni.showToast({ title: '采购商品缺少换算规格，请联系管理员补充', icon: 'none' });
     return false;
   }
 
   const packageSize = Number(formData.value.actualPackageSize);
   if (isNaN(packageSize) || packageSize <= 0) {
-    uni.showToast({ title: '单件规格必须大于0', icon: 'none' });
-    return false;
-  }
-
-  if (!hasMaxDecimalPlaces(formData.value.actualPackageSize, 3)) {
-    uni.showToast({ title: '单件规格最多三位小数', icon: 'none' });
+    uni.showToast({ title: '采购商品换算规格必须大于0', icon: 'none' });
     return false;
   }
 
   if (!formData.value.actualPackageUnit) {
-    uni.showToast({ title: '请选择规格单位', icon: 'none' });
+    uni.showToast({ title: '采购商品缺少换算单位，请联系管理员补充', icon: 'none' });
     return false;
   }
 
   if (!formData.value.actualCost || formData.value.actualCost.toString().trim().length === 0) {
-    uni.showToast({ title: '请输入实际采购金额', icon: 'none' });
+    uni.showToast({ title: '请输入付款金额', icon: 'none' });
     return false;
   }
 
-  // 验证金额格式（最多两位小数）
   const cost = Number(formData.value.actualCost);
   if (isNaN(cost) || cost <= 0) {
     uni.showToast({ title: '金额必须大于0', icon: 'none' });
@@ -456,7 +552,6 @@ const validateForm = (): boolean => {
   return true;
 };
 
-// 提交表单
 const submit = async () => {
   if (!validateForm()) {
     return;
@@ -465,17 +560,18 @@ const submit = async () => {
   submitting.value = true;
 
   try {
+    const packageCount = Number(formData.value.actualPackageCount);
+    const packageSize = Number(formData.value.actualPackageSize);
+    const cost = Number(formData.value.actualCost);
     const data = {
       purchaseItemId: formData.value.purchaseItemId,
-      procurementSkuId: formData.value.procurementSkuId || undefined,
-      procurementSkuName: formData.value.procurementSkuName || undefined,
+      procurementSkuId: formData.value.procurementSkuId,
       purchaseChannel: formData.value.purchaseChannel.trim(),
-      actualPackageCount: Number(Number(formData.value.actualPackageCount).toFixed(3)),
-      actualPackageSize: Number(Number(formData.value.actualPackageSize).toFixed(3)),
+      actualPackageCount: Number(packageCount.toFixed(3)),
+      actualPackageSize: Number(packageSize.toFixed(3)),
       actualPackageUnit: formData.value.actualPackageUnit,
-      actualCost: Number(formData.value.actualCost),
+      actualCost: Number(cost.toFixed(2)),
       productModel: formData.value.productModel?.trim() || undefined,
-      notes: formData.value.notes?.trim() || undefined,
     };
 
     const response: any = await addPurchaseRecord(purchaseListId.value, data);
@@ -496,7 +592,6 @@ const submit = async () => {
   }
 };
 
-// 返回上一页
 const goBack = () => {
   uni.navigateBack();
 };
@@ -537,22 +632,27 @@ const goBack = () => {
     font-weight: 500;
     color: #333;
     margin-bottom: 16rpx;
-  }
 
-  .section-hint {
-    display: block;
-    font-size: 22rpx;
-    color: #999;
-    margin-top: 8rpx;
+    &.inline {
+      margin-bottom: 0;
+    }
   }
+}
 
-  .char-count {
-    display: block;
-    font-size: 22rpx;
-    color: #999;
-    text-align: right;
-    margin-top: 8rpx;
-  }
+.field-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-bottom: 16rpx;
+}
+
+.unit-badge,
+.price-hint {
+  flex-shrink: 0;
+  font-size: 24rpx;
+  font-weight: 600;
+  color: #1677ff;
 }
 
 .form-input {
@@ -566,15 +666,25 @@ const goBack = () => {
   box-sizing: border-box;
 }
 
-.form-textarea {
-  width: 100%;
-  min-height: 160rpx;
-  padding: 16rpx 24rpx;
-  font-size: 28rpx;
-  color: #333;
+.input-with-unit {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  padding-right: 24rpx;
   background-color: #f5f5f5;
   border-radius: 8rpx;
-  box-sizing: border-box;
+}
+
+.unit-input {
+  flex: 1;
+  background-color: transparent;
+}
+
+.input-unit {
+  flex-shrink: 0;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #666;
 }
 
 .input-placeholder {
@@ -604,6 +714,103 @@ const goBack = () => {
     font-size: 40rpx;
     color: #999;
   }
+}
+
+.sku-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.sku-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  padding: 22rpx 24rpx;
+  border: 2rpx solid #eef0f5;
+  border-radius: 12rpx;
+  background-color: #fafafa;
+
+  &.active {
+    border-color: #1677ff;
+    background-color: #f0f7ff;
+
+    .sku-check {
+      color: #1677ff;
+      opacity: 1;
+    }
+  }
+}
+
+.sku-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.sku-title-row {
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-bottom: 10rpx;
+}
+
+.sku-name {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.sku-badge {
+  flex-shrink: 0;
+  padding: 3rpx 10rpx;
+  border-radius: 999rpx;
+  font-size: 20rpx;
+  color: #1677ff;
+  background-color: #eaf3ff;
+}
+
+.sku-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8rpx;
+
+  text {
+    padding: 3rpx 8rpx;
+    border-radius: 6rpx;
+    font-size: 22rpx;
+    color: #666;
+    background-color: #eef0f5;
+  }
+}
+
+.sku-check {
+  flex-shrink: 0;
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #bbb;
+  opacity: 0.45;
+}
+
+.sku-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  padding: 24rpx;
+  border-radius: 12rpx;
+  background-color: #fff7e8;
+}
+
+.empty-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #5f3b00;
+}
+
+.empty-desc {
+  font-size: 24rpx;
+  line-height: 1.5;
+  color: #8a5a00;
 }
 
 .bottom-actions {

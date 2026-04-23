@@ -59,7 +59,6 @@ const mapProcurementSku = (sku: {
   currentPurchasePrice: unknown;
   referencePurchasePrice: unknown;
   referencePricePerPurchaseUnit: unknown;
-  displayUnit: string | null;
   notes: string | null;
   isDefault: boolean;
   isActive: boolean;
@@ -81,7 +80,6 @@ const mapProcurementSku = (sku: {
   referencePricePerPurchaseUnit: toNullableNumber(
     sku.referencePricePerPurchaseUnit,
   ),
-  displayUnit: sku.displayUnit,
   notes: sku.notes,
   isDefault: sku.isDefault,
   isActive: sku.isActive,
@@ -140,7 +138,6 @@ const serializePayload = (payload: ProcurementSkuBackfillPayload) =>
     currentPurchasePrice: payload.currentPurchasePrice,
     referencePurchasePrice: payload.referencePurchasePrice,
     referencePricePerPurchaseUnit: payload.referencePricePerPurchaseUnit,
-    displayUnit: payload.displayUnit,
     notes: payload.notes,
     isDefault: payload.isDefault,
     isActive: payload.isActive,
@@ -164,7 +161,6 @@ const serializePatch = (
     currentPurchasePrice: payload.currentPurchasePrice,
     referencePurchasePrice: payload.referencePurchasePrice,
     referencePricePerPurchaseUnit: payload.referencePricePerPurchaseUnit,
-    displayUnit: payload.displayUnit,
     notes: payload.notes,
     isDefault: payload.isDefault,
     isActive: payload.isActive,
@@ -252,7 +248,6 @@ async function main() {
           currentPurchasePrice: true,
           referencePurchasePrice: true,
           referencePricePerPurchaseUnit: true,
-          displayUnit: true,
           notes: true,
           isDefault: true,
           isActive: true,

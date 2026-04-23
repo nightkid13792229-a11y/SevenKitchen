@@ -4,16 +4,25 @@
  */
 
 import { Test, TestingModule } from '@nestjs/testing';
-import { ProductionService, PRODUCTION_BATCH_REPOSITORY } from 'src/production.service';
+import {
+  ProductionService,
+  PRODUCTION_BATCH_REPOSITORY,
+} from 'src/production.service';
 import type { ProductionBatchRepository } from 'src/domain/production/production.repository';
 import type { OrderRepository } from 'src/domain/order/order.repository';
 import type { OrderStatusHistoryRepository } from 'src/domain/order/order-status-history.repository';
 import { ProductionBatch, PackagingUnit } from 'src/domain/production';
-import { ProductionBatchStatus, PackagingUnitStatus } from 'src/domain/production/enums';
+import {
+  ProductionBatchStatus,
+  PackagingUnitStatus,
+} from 'src/domain/production/enums';
 import { Order, OrderItem } from 'src/domain/order';
 import { OrderStatus, OrderType } from 'src/domain';
 import type { RecipeSnapshot } from 'src/domain/recipe/types';
-import { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY } from 'src/order/order.service';
+import {
+  ORDER_REPOSITORY,
+  ORDER_STATUS_HISTORY_REPOSITORY,
+} from 'src/order/order.service';
 import { GlobalConfigService } from 'src/config/global-config.service';
 import type { ProductionBatchSummaryDto } from 'src/production.service';
 import { PRODUCTION_COST_SETTLEMENT_SERVICE } from 'src/production/production-cost-settlement.tokens';
@@ -52,10 +61,11 @@ describe('ProductionService - Phase 8.10', () => {
     findDogById: jest.fn(),
   };
 
-  const mockStatusHistoryRepository: jest.Mocked<OrderStatusHistoryRepository> = {
-    append: jest.fn(),
-    findByOrderId: jest.fn(),
-  };
+  const mockStatusHistoryRepository: jest.Mocked<OrderStatusHistoryRepository> =
+    {
+      append: jest.fn(),
+      findByOrderId: jest.fn(),
+    };
 
   const mockGlobalConfigService = {
     getGlobalConfig: jest.fn().mockResolvedValue({
@@ -101,7 +111,7 @@ describe('ProductionService - Phase 8.10', () => {
     jest.clearAllMocks();
     // Reset mock implementations
     mockProductionRepository.allocateOrderItems = jest.fn();
-    
+
     // Suppress console.warn during tests (especially for allocation warnings)
     jest.spyOn(console, 'warn').mockImplementation(() => {});
   });
@@ -127,6 +137,11 @@ describe('ProductionService - Phase 8.10', () => {
     id: string,
     recipeSnapshot: RecipeSnapshot,
     dailyIntakeG: number,
+    ingredientSourcePlan:
+      | 'ORGANIC'
+      | 'MARKET_PREMIUM'
+      | 'WHOLESALE'
+      | null = null,
   ): OrderItem => {
     return new OrderItem(
       id,
@@ -138,6 +153,11 @@ describe('ProductionService - Phase 8.10', () => {
       200, // packageSpecG
       null, // customRequirements
       dailyIntakeG,
+      null,
+      null,
+      null,
+      null,
+      ingredientSourcePlan,
     );
   };
 
@@ -193,7 +213,10 @@ describe('ProductionService - Phase 8.10', () => {
       packagingUnits,
       totalProductionG: batch.getTotalProductionG(),
       uniqueRecipeCount: batch.getUniqueRecipeCount(),
-      orderItemCount: packagingUnits.reduce((sum, unit) => sum + unit.orderItemCount, 0),
+      orderItemCount: packagingUnits.reduce(
+        (sum, unit) => sum + unit.orderItemCount,
+        0,
+      ),
     };
   };
 
@@ -207,7 +230,10 @@ describe('ProductionService - Phase 8.10', () => {
       const orderItem2 = createMockOrderItem('item-2', recipeSnapshot1, 250.0); // 250g (same recipe)
       const orderItem3 = createMockOrderItem('item-3', recipeSnapshot2, 400.0); // 400g (different recipe)
 
-      const order1 = createMockPurchasingOrder('order-1', [orderItem1, orderItem2]);
+      const order1 = createMockPurchasingOrder('order-1', [
+        orderItem1,
+        orderItem2,
+      ]);
       const order2 = createMockPurchasingOrder('order-2', [orderItem3]);
 
       orderRepository.findByTargetProductionDateRange.mockResolvedValue({
@@ -244,11 +270,48 @@ describe('ProductionService - Phase 8.10', () => {
       expect(result.getTotalProductionG()).toBeCloseTo(3000, 2);
     });
 
+    it('should not merge same-recipe order items when ingredient source plans differ', async () => {
+      const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
+      const organicItem = createMockOrderItem(
+        'item-organic',
+        recipeSnapshot,
+        310.34,
+        'ORGANIC',
+      );
+      const wholesaleItem = createMockOrderItem(
+        'item-wholesale',
+        recipeSnapshot,
+        250,
+        'WHOLESALE',
+      );
+      const order = createMockPurchasingOrder('order-1', [
+        organicItem,
+        wholesaleItem,
+      ]);
+
+      orderRepository.findByTargetProductionDateRange.mockResolvedValue({
+        list: [order],
+        total: 1,
+      });
+      productionRepository.save.mockImplementation(async (batch) => batch);
+
+      const result = await service.createProductionBatch({
+        productionDate: '2025-01-20',
+      });
+
+      expect(result.packagingUnits).toHaveLength(2);
+      expect(
+        result.packagingUnits.map((unit) => unit.sourceOrderItemIds),
+      ).toEqual(expect.arrayContaining([['item-organic'], ['item-wholesale']]));
+    });
+
     it('should reject non-PURCHASING orders', async () => {
       // Arrange: Create order with INIT status
       const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
       const orderItem = createMockOrderItem('item-1', recipeSnapshot, 310.34);
-      const initOrder = createMockOrder('order-1', OrderStatus.INIT, [orderItem]);
+      const initOrder = createMockOrder('order-1', OrderStatus.INIT, [
+        orderItem,
+      ]);
 
       orderRepository.findByTargetProductionDateRange.mockResolvedValue({
         list: [initOrder],
@@ -287,13 +350,21 @@ describe('ProductionService - Phase 8.10', () => {
       expect(unit.recipeSnapshot.energy_density_kcal_per_kg).toBe(1450);
 
       // Verify immutability: modifying the snapshot should not affect the unit
-      const originalEnergyDensity = unit.recipeSnapshot.energy_density_kcal_per_kg;
+      const originalEnergyDensity =
+        unit.recipeSnapshot.energy_density_kcal_per_kg;
       // Simulate Recipe update (should NOT affect batch)
-      const updatedSnapshot = { ...recipeSnapshot, energy_density_kcal_per_kg: 2000 };
-      
+      const updatedSnapshot = {
+        ...recipeSnapshot,
+        energy_density_kcal_per_kg: 2000,
+      };
+
       // Unit should still have original value
-      expect(unit.recipeSnapshot.energy_density_kcal_per_kg).toBe(originalEnergyDensity);
-      expect(unit.recipeSnapshot.energy_density_kcal_per_kg).not.toBe(updatedSnapshot.energy_density_kcal_per_kg);
+      expect(unit.recipeSnapshot.energy_density_kcal_per_kg).toBe(
+        originalEnergyDensity,
+      );
+      expect(unit.recipeSnapshot.energy_density_kcal_per_kg).not.toBe(
+        updatedSnapshot.energy_density_kcal_per_kg,
+      );
     });
 
     it('should include sourceOrderItemIds as string[] in domain entities', async () => {
@@ -301,7 +372,10 @@ describe('ProductionService - Phase 8.10', () => {
       const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
       const orderItem1 = createMockOrderItem('item-1', recipeSnapshot, 310.34);
       const orderItem2 = createMockOrderItem('item-2', recipeSnapshot, 250.0);
-      const order = createMockPurchasingOrder('order-1', [orderItem1, orderItem2]);
+      const order = createMockPurchasingOrder('order-1', [
+        orderItem1,
+        orderItem2,
+      ]);
 
       orderRepository.findByTargetProductionDateRange.mockResolvedValue({
         list: [order],
@@ -317,7 +391,7 @@ describe('ProductionService - Phase 8.10', () => {
       // Assert: sourceOrderItemIds must be an array
       expect(result.packagingUnits).toHaveLength(1);
       const unit = result.packagingUnits[0];
-      
+
       // Verify sourceOrderItemIds is an array
       expect(Array.isArray(unit.sourceOrderItemIds)).toBe(true);
       expect(unit.sourceOrderItemIds).toEqual(['item-1', 'item-2']);
@@ -333,7 +407,10 @@ describe('ProductionService - Phase 8.10', () => {
       const orderItem2 = createMockOrderItem('item-2', recipeSnapshot1, 250.0);
       const orderItem3 = createMockOrderItem('item-3', recipeSnapshot2, 400.0);
 
-      const order1 = createMockPurchasingOrder('order-1', [orderItem1, orderItem2]);
+      const order1 = createMockPurchasingOrder('order-1', [
+        orderItem1,
+        orderItem2,
+      ]);
       const order2 = createMockPurchasingOrder('order-2', [orderItem3]);
 
       orderRepository.findByTargetProductionDateRange.mockResolvedValue({
@@ -350,16 +427,20 @@ describe('ProductionService - Phase 8.10', () => {
 
       // Assert: DTO must include sourceOrderItemIds as string[]
       expect(dto.packagingUnits).toHaveLength(2);
-      
+
       // Verify first unit
-      const unit1 = dto.packagingUnits.find((u) => u.recipeSnapshotId === 'recipe-1');
+      const unit1 = dto.packagingUnits.find(
+        (u) => u.recipeSnapshotId === 'recipe-1',
+      );
       expect(unit1).toBeDefined();
       expect(Array.isArray(unit1!.sourceOrderItemIds)).toBe(true);
       expect(unit1!.sourceOrderItemIds).toEqual(['item-1', 'item-2']);
       expect(unit1!.orderItemCount).toBe(2);
 
       // Verify second unit
-      const unit2 = dto.packagingUnits.find((u) => u.recipeSnapshotId === 'recipe-2');
+      const unit2 = dto.packagingUnits.find(
+        (u) => u.recipeSnapshotId === 'recipe-2',
+      );
       expect(unit2).toBeDefined();
       expect(Array.isArray(unit2!.sourceOrderItemIds)).toBe(true);
       expect(unit2!.sourceOrderItemIds).toEqual(['item-3']);
@@ -382,16 +463,11 @@ describe('ProductionService - Phase 8.10', () => {
       // Mock findById to return a fresh order instance each time (to track transitions)
       let orderStatus = OrderStatus.PURCHASING;
       orderRepository.findById.mockImplementation(async (id) => {
-        const currentOrder = createMockOrder(
-          id,
-          orderStatus,
-          order.items,
-          {
-            product: order.amountProduct,
-            shipping: order.amountShipping,
-            total: order.amountTotal,
-          },
-        );
+        const currentOrder = createMockOrder(id, orderStatus, order.items, {
+          product: order.amountProduct,
+          shipping: order.amountShipping,
+          total: order.amountTotal,
+        });
         return currentOrder;
       });
       productionRepository.save.mockImplementation(async (batch) => batch);
@@ -434,7 +510,7 @@ describe('ProductionService - Phase 8.10', () => {
       const batch = await service.createProductionBatch({
         productionDate: '2025-01-20',
       });
-      
+
       // Simulate edge case: unit with empty array
       const unit = batch.packagingUnits[0];
       expect(Array.isArray(unit.sourceOrderItemIds)).toBe(true);
@@ -443,7 +519,7 @@ describe('ProductionService - Phase 8.10', () => {
       // Map to DTO
       const dto = mapBatchToDto(batch);
       const dtoUnit = dto.packagingUnits[0];
-      
+
       // Assert: Even if empty, should be an array
       expect(Array.isArray(dtoUnit.sourceOrderItemIds)).toBe(true);
       expect(dtoUnit.sourceOrderItemIds.length).toBe(1); // item-1
@@ -456,14 +532,19 @@ describe('ProductionService - Phase 8.10', () => {
       const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
       const orderItem1 = createMockOrderItem('item-1', recipeSnapshot, 310.34);
       const orderItem2 = createMockOrderItem('item-2', recipeSnapshot, 250.0);
-      const order = createMockPurchasingOrder('order-1', [orderItem1, orderItem2]);
+      const order = createMockPurchasingOrder('order-1', [
+        orderItem1,
+        orderItem2,
+      ]);
 
       orderRepository.findByTargetProductionDateRange.mockResolvedValue({
         list: [order],
         total: 1,
       });
       productionRepository.save.mockImplementation(async (batch) => batch);
-      (productionRepository.allocateOrderItems as jest.Mock).mockResolvedValue(2); // All 2 items allocated
+      (productionRepository.allocateOrderItems as jest.Mock).mockResolvedValue(
+        2,
+      ); // All 2 items allocated
 
       // Act
       const result = await service.createProductionBatch({
@@ -507,7 +588,7 @@ describe('ProductionService - Phase 8.10', () => {
           productionDate: '2025-01-20',
         }),
       ).rejects.toThrow('No eligible OrderItems found');
-      
+
       // Allocation should not be called
       expect(productionRepository.allocateOrderItems).not.toHaveBeenCalled();
     });
@@ -517,7 +598,10 @@ describe('ProductionService - Phase 8.10', () => {
       const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
       const orderItem1 = createMockOrderItem('item-1', recipeSnapshot, 310.34);
       const orderItem2 = createMockOrderItem('item-2', recipeSnapshot, 250.0);
-      const order = createMockPurchasingOrder('order-1', [orderItem1, orderItem2]);
+      const order = createMockPurchasingOrder('order-1', [
+        orderItem1,
+        orderItem2,
+      ]);
 
       orderRepository.findByTargetProductionDateRange.mockResolvedValue({
         list: [order],
@@ -525,7 +609,9 @@ describe('ProductionService - Phase 8.10', () => {
       });
       productionRepository.save.mockImplementation(async (batch) => batch);
       // Simulate concurrent allocation: only 1 of 2 items allocated
-      (productionRepository.allocateOrderItems as jest.Mock).mockResolvedValue(1);
+      (productionRepository.allocateOrderItems as jest.Mock).mockResolvedValue(
+        1,
+      );
 
       // Act
       const result = await service.createProductionBatch({
@@ -612,12 +698,14 @@ describe('ProductionService - Phase 8.10', () => {
         .mockResolvedValueOnce(batch); // Second call: reload after save
       productionRepository.areAllUnitsCompleted.mockResolvedValue(true);
       productionRepository.save.mockImplementation(async (b) => b);
-      orderRepository.findByStatus.mockImplementation(async (status: OrderStatus) => {
-        if (status === OrderStatus.IN_PRODUCTION) {
-          return [order];
-        }
-        return [];
-      });
+      orderRepository.findByStatus.mockImplementation(
+        async (status: OrderStatus) => {
+          if (status === OrderStatus.IN_PRODUCTION) {
+            return [order];
+          }
+          return [];
+        },
+      );
       // Mock findById to return a fresh order instance each time (to track state transitions)
       let currentOrderStatus = OrderStatus.IN_PRODUCTION;
       orderRepository.findById.mockImplementation(async (id: string) => {
@@ -644,7 +732,9 @@ describe('ProductionService - Phase 8.10', () => {
 
       // Assert
       expect(result).toBe(true);
-      expect(productionRepository.areAllUnitsCompleted).toHaveBeenCalledWith('batch-1');
+      expect(productionRepository.areAllUnitsCompleted).toHaveBeenCalledWith(
+        'batch-1',
+      );
       expect(batch.status).toBe(ProductionBatchStatus.COMPLETED);
       expect(productionRepository.save).toHaveBeenCalledWith(batch);
       // Verify batch was reloaded after save
@@ -664,7 +754,7 @@ describe('ProductionService - Phase 8.10', () => {
       // Arrange: Simulate scenario where batch object has empty/incomplete units array
       // but database shows all units are COMPLETED
       const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
-      
+
       // Create batch with empty units array (simulating unhydrated state)
       const batchWithEmptyUnits = new ProductionBatch(
         'batch-1',
@@ -739,34 +829,31 @@ describe('ProductionService - Phase 8.10', () => {
       productionRepository.findById
         .mockResolvedValueOnce(batchWithEmptyUnits) // First call: unhydrated
         .mockResolvedValueOnce(batchWithHydratedUnits); // Second call: after save, reloaded with units
-      
+
       // Mock: Database check says all units are completed (this is the key fix)
       productionRepository.areAllUnitsCompleted.mockResolvedValue(true);
-      
+
       productionRepository.save.mockImplementation(async (b) => {
         // Batch status is already COMPLETED after transitionTo call in service
         return b;
       });
 
-      orderRepository.findByStatus.mockImplementation(async (status: OrderStatus) => {
-        if (status === OrderStatus.IN_PRODUCTION) {
-          return [order];
-        }
-        return [];
-      });
+      orderRepository.findByStatus.mockImplementation(
+        async (status: OrderStatus) => {
+          if (status === OrderStatus.IN_PRODUCTION) {
+            return [order];
+          }
+          return [];
+        },
+      );
 
       let currentOrderStatus = OrderStatus.IN_PRODUCTION;
       orderRepository.findById.mockImplementation(async (id: string) => {
-        return createMockOrder(
-          id,
-          currentOrderStatus,
-          order.items,
-          {
-            product: order.amountProduct,
-            shipping: order.amountShipping,
-            total: order.amountTotal,
-          },
-        );
+        return createMockOrder(id, currentOrderStatus, order.items, {
+          product: order.amountProduct,
+          shipping: order.amountShipping,
+          total: order.amountTotal,
+        });
       });
       orderRepository.save.mockImplementation(async (o: Order) => {
         currentOrderStatus = o.status;
@@ -779,10 +866,13 @@ describe('ProductionService - Phase 8.10', () => {
       // Assert
       expect(result).toBe(true);
       // Verify database-based check was used (not domain method)
-      expect(productionRepository.areAllUnitsCompleted).toHaveBeenCalledWith('batch-1');
+      expect(productionRepository.areAllUnitsCompleted).toHaveBeenCalledWith(
+        'batch-1',
+      );
       // Verify batch was saved with COMPLETED status
       expect(productionRepository.save).toHaveBeenCalled();
-      const savedBatch = productionRepository.save.mock.calls[0][0] as ProductionBatch;
+      const savedBatch = productionRepository.save.mock
+        .calls[0][0] as ProductionBatch;
       expect(savedBatch.status).toBe(ProductionBatchStatus.COMPLETED);
       // Verify batch was reloaded to get hydrated units for orderItemIds extraction
       expect(productionRepository.findById).toHaveBeenCalledTimes(2);
@@ -839,12 +929,14 @@ describe('ProductionService - Phase 8.10', () => {
         .mockResolvedValueOnce(batch); // Second call: reload after save
       productionRepository.areAllUnitsCompleted.mockResolvedValue(true);
       productionRepository.save.mockImplementation(async (b) => b);
-      orderRepository.findByStatus.mockImplementation(async (status: OrderStatus) => {
-        if (status === OrderStatus.IN_PRODUCTION) {
-          return [order];
-        }
-        return [];
-      });
+      orderRepository.findByStatus.mockImplementation(
+        async (status: OrderStatus) => {
+          if (status === OrderStatus.IN_PRODUCTION) {
+            return [order];
+          }
+          return [];
+        },
+      );
       // Mock findById to return a fresh order instance each time (to track state transitions)
       let currentOrderStatus = OrderStatus.IN_PRODUCTION;
       orderRepository.findById.mockImplementation(async (id: string) => {
@@ -919,12 +1011,14 @@ describe('ProductionService - Phase 8.10', () => {
       productionRepository.findById.mockResolvedValue(batch);
       productionRepository.areAllUnitsCompleted.mockResolvedValue(true);
       productionRepository.save.mockImplementation(async (b) => b);
-      orderRepository.findByStatus.mockImplementation(async (status: OrderStatus) => {
-        if (status === OrderStatus.IN_PRODUCTION) {
-          return [order];
-        }
-        return [];
-      });
+      orderRepository.findByStatus.mockImplementation(
+        async (status: OrderStatus) => {
+          if (status === OrderStatus.IN_PRODUCTION) {
+            return [order];
+          }
+          return [];
+        },
+      );
 
       // Track status transitions
       const statusTransitions: OrderStatus[] = [];
@@ -955,6 +1049,72 @@ describe('ProductionService - Phase 8.10', () => {
       expect(result).toBe(true);
       expect(statusTransitions).toHaveLength(0);
       expect(currentOrderStatus).toBe(OrderStatus.IN_PRODUCTION);
+    });
+
+    it('should settle completed batch when staff task has already moved orders to FREEZING', async () => {
+      const recipeSnapshot = createMockRecipeSnapshot('recipe-1');
+      const unit1 = new PackagingUnit(
+        'unit-1',
+        'batch-1',
+        recipeSnapshot,
+        3000,
+        ['item-1'],
+        new Date(),
+        PackagingUnitStatus.COMPLETED,
+      );
+      const batch = new ProductionBatch(
+        'batch-1',
+        new Date('2025-01-20'),
+        ProductionBatchStatus.IN_PRODUCTION,
+        [unit1],
+        new Date(),
+      );
+      const orderItem1 = new OrderItem(
+        'item-1',
+        'order-1',
+        'dog-id-1',
+        recipeSnapshot,
+        3000,
+        30,
+        100,
+        null,
+        310.34,
+        null,
+        null,
+      );
+      const order = createMockOrder(
+        'order-1',
+        OrderStatus.FREEZING,
+        [orderItem1],
+        { product: 300, shipping: 0, total: 300 },
+      );
+
+      productionRepository.findById
+        .mockResolvedValueOnce(batch)
+        .mockResolvedValueOnce(batch);
+      productionRepository.areAllUnitsCompleted.mockResolvedValue(true);
+      productionRepository.save.mockImplementation(async (b) => b);
+      orderRepository.findByStatus.mockImplementation(
+        async (status: OrderStatus) => {
+          if (status === OrderStatus.FREEZING) {
+            return [order];
+          }
+          return [];
+        },
+      );
+      orderRepository.findById.mockResolvedValue(order);
+
+      const result = await service.checkAndCompleteBatch('batch-1');
+
+      expect(result).toBe(true);
+      expect(orderRepository.findByStatus).toHaveBeenCalledWith(
+        OrderStatus.FREEZING,
+      );
+      expect(orderRepository.findById).toHaveBeenCalledWith('order-1');
+      expect(orderRepository.save).not.toHaveBeenCalled();
+      expect(
+        mockProductionCostSettlementService.settleCompletedBatch,
+      ).toHaveBeenCalledWith('batch-1');
     });
 
     it('should not complete batch if any unit is not COMPLETED', async () => {
@@ -995,7 +1155,9 @@ describe('ProductionService - Phase 8.10', () => {
 
       // Assert
       expect(result).toBe(false);
-      expect(productionRepository.areAllUnitsCompleted).toHaveBeenCalledWith('batch-1');
+      expect(productionRepository.areAllUnitsCompleted).toHaveBeenCalledWith(
+        'batch-1',
+      );
       expect(batch.status).toBe(ProductionBatchStatus.IN_PRODUCTION);
       expect(productionRepository.save).not.toHaveBeenCalled();
       expect(orderRepository.save).not.toHaveBeenCalled();

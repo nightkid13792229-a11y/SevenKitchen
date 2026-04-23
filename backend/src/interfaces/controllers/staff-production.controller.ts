@@ -60,8 +60,12 @@ export class StaffProductionController {
     description: 'Today statistics',
     type: ApiResponseDto<TodayStatisticsDto>,
   })
-  async getTodayStatistics(): Promise<ApiResponseDto<TodayStatisticsDto>> {
-    const stats = await this.staffProductionService.getTodayStatistics();
+  async getTodayStatistics(
+    @Query('targetDate') targetDate?: string,
+  ): Promise<ApiResponseDto<TodayStatisticsDto>> {
+    const stats = await this.staffProductionService.getTodayStatistics(
+      targetDate,
+    );
     return {
       code: 0,
       message: 'Success',

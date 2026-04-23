@@ -1,13 +1,5 @@
 <template>
   <view class="detail-page">
-    <!-- 返回按钮 -->
-    <view class="nav-bar">
-      <view class="back-btn" @tap="goBack">
-        <text>←</text>
-      </view>
-      <text class="nav-title">任务详情</text>
-    </view>
-
     <!-- 加载状态 -->
     <view v-if="loading" class="loading-state">
       <text>加载中...</text>
@@ -32,8 +24,12 @@
           <text class="value">{{ taskDetail.recipeName }} v{{ taskDetail.recipeVersion }}</text>
         </view>
         <view class="info-row">
-          <text class="label">订单编号：</text>
-          <text class="value">{{ taskDetail.orderItems?.[0]?.orderId || '-' }}</text>
+          <text class="label">本锅制作量：</text>
+          <text class="value">{{ formatDecimal(taskDetail.totalProductionG) }}g</text>
+        </view>
+        <view class="info-row">
+          <text class="label">关联订单：</text>
+          <text class="value">{{ formatAssociatedOrderIds(taskDetail.orderItems) }}</text>
         </view>
         <view class="info-row">
           <text class="label">状态：</text>
@@ -43,32 +39,35 @@
           <text class="label">创建时间：</text>
           <text class="value">{{ taskDetail.createdAt }}</text>
         </view>
-        <view v-if="taskDetail.completedAt" class="info-row">
+        <view v-if="taskDetail.status === 'COMPLETED' && taskDetail.completedAt" class="info-row">
           <text class="label">完成时间：</text>
           <text class="value">{{ taskDetail.completedAt }}</text>
         </view>
       </view>
 
-      <!-- 分装信息（按订单展示） -->
+      <!-- 订单分装信息（按订单展示） -->
       <view class="section">
-        <view class="section-title">分装信息</view>
+        <view class="section-title">订单分装信息</view>
         <view v-for="order in taskDetail.orderItems" :key="order.orderItemId" class="order-item">
+          <view class="order-header">
+            <text class="order-id">订单 {{ formatShortOrderId(order.orderId) }}</text>
+          </view>
           <view class="order-info">
             <view class="info-row">
-              <text class="label">总净重：</text>
+              <text class="label">订单总净重：</text>
               <text class="value">{{ formatDecimal(getOrderTotalNetWeight(order)) }}g</text>
             </view>
             <view v-if="hasPackagePlan(order)" class="info-row">
-              <text class="label">分装明细：</text>
+              <text class="label">订单分装：</text>
               <text class="value package-plan-text">{{ formatPackagePlan(order) }}</text>
             </view>
             <template v-else>
               <view class="info-row">
-                <text class="label">规格：</text>
+                <text class="label">订单规格：</text>
                 <text class="value">{{ order.packageSpecG }}g/袋</text>
               </view>
               <view class="info-row">
-                <text class="label">袋数：</text>
+                <text class="label">订单袋数：</text>
                 <text class="value">{{ order.packageCount }}袋</text>
               </view>
             </template>
@@ -88,6 +87,34 @@
         </view>
       </view>
 
+      <!-- 完成后的生产结果 -->
+      <view v-if="taskDetail.status === 'COMPLETED'" class="section">
+        <view class="section-title">生产结果</view>
+        <view class="result-panel" :class="resultStatusClass">
+          <view class="result-header">
+            <text class="result-title">{{ resultStatusText }}</text>
+            <text v-if="resultDeltaText" class="result-delta">{{ resultDeltaText }}</text>
+          </view>
+          <view class="info-row">
+            <text class="label">计划产出：</text>
+            <text class="value">{{ formatDecimal(taskDetail.totalProductionG) }}g</text>
+          </view>
+          <view class="info-row">
+            <text class="label">实际产出：</text>
+            <text class="value">{{ formatDecimal(taskDetail.actualOutputG || taskDetail.totalProductionG) }}g</text>
+          </view>
+        </view>
+
+        <view v-if="resultPhotos.length > 0" class="result-photos">
+          <view class="result-photo-title">生产照片</view>
+          <view class="photos-preview">
+            <view v-for="(photo, index) in resultPhotos" :key="'result-'+index" class="photo-item">
+              <image :src="photo" mode="aspectFill" class="photo-image" @tap="previewPhoto(photo)" />
+            </view>
+          </view>
+        </view>
+      </view>
+
       <!-- 原料清单 -->
       <view v-if="taskDetail.recipeSnapshot?.items && taskDetail.recipeSnapshot.items.length > 0" class="section">
         <view class="section-title">原料清单（{{ totalIngredientCount }}）</view>
@@ -98,7 +125,10 @@
             class="ingredient-item"
           >
             <text v-if="ingredient.type" class="ingredient-type" :class="getTypeClass(ingredient.type)">[{{ ingredient.type }}]</text>
-            <text class="ingredient-name">{{ ingredient.name }} {{ ingredient.amount }}{{ ingredient.unit }}</text>
+            <view class="ingredient-main">
+              <text class="ingredient-name">{{ ingredient.name }} {{ ingredient.amount }}{{ ingredient.unit }}</text>
+              <text v-if="ingredient.standardIngredientName" class="ingredient-standard-name">标准：{{ ingredient.standardIngredientName }}</text>
+            </view>
             <text v-if="ingredient.method" class="ingredient-method">（{{ ingredient.method }}）</text>
           </view>
         </view>
@@ -293,6 +323,35 @@ function getOrderTotalNetWeight(order: {
   return Number(order.packageSpecG || 0) * Number(order.packageCount || 0);
 }
 
+function formatShortOrderId(orderId?: string): string {
+  if (!orderId) return '-';
+  if (orderId.length <= 12) return orderId;
+  return `${orderId.slice(0, 8)}...${orderId.slice(-4)}`;
+}
+
+function formatAssociatedOrderIds(orderItems?: Array<{ orderId?: string }>): string {
+  const orderIds = Array.from(
+    new Set(
+      (orderItems || [])
+        .map((order) => order.orderId)
+        .filter((orderId): orderId is string => Boolean(orderId)),
+    ),
+  );
+
+  if (orderIds.length === 0) return '-';
+  return orderIds.map(formatShortOrderId).join('、');
+}
+
+function formatIngredientDisplayName(item: any): string {
+  return (
+    item?.procurementSkuName ||
+    item?.procurement_sku_name ||
+    item?.properties?.procurement_sku_name ||
+    item?.name ||
+    '-'
+  );
+}
+
 // 上传任务接口
 interface UploadTask {
   id: number;
@@ -384,9 +443,20 @@ const parsedIngredients = computed(() => {
       });
     }
 
+    const standardIngredientName = item.standardIngredientName || item.name || '';
+    const procurementSkuName =
+      item.procurementSkuName ||
+      item.procurement_sku_name ||
+      item.properties?.procurement_sku_name ||
+      '';
+
     return {
       id: item.ingredient_id,
-      name: item.name,
+      name: formatIngredientDisplayName(item),
+      standardIngredientName:
+        procurementSkuName && standardIngredientName && procurementSkuName !== standardIngredientName
+          ? standardIngredientName
+          : '',
       amount: formatDecimal(amount),
       unit, // 单位
       type, // 原料类型
@@ -463,6 +533,38 @@ const completeButtonText = computed(() => {
   if (totalPhotoCount.value < 2) return '请至少上传2张照片';
   if (!hasValidCompletionResult.value) return `请输入${completionInputLabel.value}克数`;
   return '完成制作任务';
+});
+
+const resultStatusText = computed(() => {
+  if (!taskDetail.value) return '';
+  const statusMap: Record<string, string> = {
+    NORMAL: '正常完成',
+    SURPLUS: '有余量',
+    SHORTAGE: '有缺口',
+  };
+  return statusMap[taskDetail.value.resultStatus || 'NORMAL'] || '正常完成';
+});
+
+const resultDeltaText = computed(() => {
+  if (!taskDetail.value) return '';
+  if (taskDetail.value.resultStatus === 'SURPLUS') {
+    return `余量 ${formatDecimal(Number(taskDetail.value.surplusG || 0))}g`;
+  }
+  if (taskDetail.value.resultStatus === 'SHORTAGE') {
+    return `缺口 ${formatDecimal(Number(taskDetail.value.shortageG || 0))}g`;
+  }
+  return '';
+});
+
+const resultStatusClass = computed(() => {
+  const status = taskDetail.value?.resultStatus || 'NORMAL';
+  return `result-${String(status).toLowerCase()}`;
+});
+
+const resultPhotos = computed(() => {
+  const explicitPhotos = taskDetail.value?.resultPhotoUrls || [];
+  if (explicitPhotos.length > 0) return explicitPhotos;
+  return taskDetail.value?.photosRaw || [];
 });
 
 // 获取类型对应的CSS类名
@@ -898,26 +1000,6 @@ const printLabel = () => {
   padding-bottom: 120rpx; // 为打印按钮留出空间
 }
 
-.nav-bar {
-  display: flex;
-  align-items: center;
-  padding: 24rpx 32rpx;
-  background-color: #fff;
-  border-bottom: 1rpx solid #f0f0f0;
-
-  .back-btn {
-    font-size: 40rpx;
-    color: #333;
-    margin-right: 24rpx;
-  }
-
-  .nav-title {
-    font-size: 32rpx;
-    font-weight: bold;
-    color: #333;
-  }
-}
-
 .detail-content {
   padding-bottom: 100rpx; // 为打印按钮留出空间
 }
@@ -1040,6 +1122,7 @@ const printLabel = () => {
   .remark-text {
     word-break: break-all;
   }
+
 }
 
 .order-item {
@@ -1088,6 +1171,64 @@ const printLabel = () => {
   margin-bottom: 16rpx;
 }
 
+.result-panel {
+  border: 2rpx solid #e5e5e5;
+  border-radius: 8rpx;
+  padding: 20rpx;
+  background-color: #fafafa;
+  margin-bottom: 20rpx;
+
+  &.result-normal {
+    border-color: #d9e8e2;
+    background-color: #f7fbf9;
+  }
+
+  &.result-surplus {
+    border-color: #bfe5ce;
+    background-color: #f1fbf5;
+
+    .result-delta {
+      color: #2e9f59;
+    }
+  }
+
+  &.result-shortage {
+    border-color: #ffd3d3;
+    background-color: #fff7f7;
+
+    .result-delta {
+      color: #d63f3f;
+    }
+  }
+}
+
+.result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+  margin-bottom: 16rpx;
+}
+
+.result-title {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #333;
+}
+
+.result-delta {
+  font-size: 28rpx;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.result-photo-title {
+  font-size: 26rpx;
+  font-weight: 600;
+  color: #666;
+  margin-bottom: 12rpx;
+}
+
 .ingredient-item {
   display: flex;
   align-items: center;
@@ -1118,11 +1259,25 @@ const printLabel = () => {
     }
   }
 
+  .ingredient-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 4rpx;
+  }
+
   .ingredient-name {
     font-size: 28rpx;
     color: #333;
     font-weight: 500;
-    flex: 1;
+    word-break: break-all;
+  }
+
+  .ingredient-standard-name {
+    font-size: 22rpx;
+    color: #999;
+    word-break: break-all;
   }
 
   .ingredient-method {

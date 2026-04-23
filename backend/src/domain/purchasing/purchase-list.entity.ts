@@ -179,6 +179,25 @@ export class PurchaseList {
   }
 
   /**
+   * 撤回采购完成。仅用于报销/生产使用前的现场纠错。
+   */
+  reopen(): void {
+    if (this.status !== PurchaseListStatus.COMPLETED) {
+      throw new InvalidStateTransitionError(
+        `Cannot reopen purchase list in ${this.status} status`,
+      );
+    }
+
+    if (this.reimbursementId) {
+      throw new Error('Purchase list with reimbursement cannot be reopened');
+    }
+
+    this.status = PurchaseListStatus.PENDING;
+    this.completedAt = undefined;
+    this.updatedAt = new Date();
+  }
+
+  /**
    * 转换为Prisma格式
    */
   toPrisma() {

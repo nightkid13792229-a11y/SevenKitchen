@@ -226,14 +226,14 @@
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="审核方式" width="110">
+          <el-table-column label="生效方式" width="110">
             <template #default="{ row }">
               <el-tag :type="getApprovalModeType(row.approvalMode)" size="small">
                 {{ getApprovalModeText(row.approvalMode) }}
               </el-tag>
             </template>
           </el-table-column>
-          <el-table-column label="拦截原因/说明" min-width="220" show-overflow-tooltip>
+          <el-table-column label="变更说明" min-width="220" show-overflow-tooltip>
             <template #default="{ row }">
               {{ formatReviewReasons(row.reviewReasons, row.reviewComment) }}
             </template>
@@ -262,68 +262,42 @@
         </div>
       </el-card>
 
-      <!-- 审核信息 -->
+      <!-- 报销信息 -->
       <el-card shadow="never" class="section-card" v-if="reimbursement.status !== 'PENDING_REVIEW'">
         <template #header>
           <div class="card-header">
-            <span class="title">审核信息</span>
+            <span class="title">报销信息</span>
           </div>
         </template>
 
         <el-descriptions :column="2" border>
-          <el-descriptions-item label="审核人">
+          <el-descriptions-item label="处理人">
             {{ reimbursement.reviewedBy?.nickname || '-' }}
           </el-descriptions-item>
-          <el-descriptions-item label="审核时间">
+          <el-descriptions-item label="处理时间">
             {{ formatDateTime(reimbursement.reviewedAt) }}
           </el-descriptions-item>
-          <el-descriptions-item label="审核结果" :span="2">
+          <el-descriptions-item label="报销状态" :span="2">
             <el-tag :type="getStatusType(reimbursement.status)">
               {{ getStatusText(reimbursement.status) }}
             </el-tag>
           </el-descriptions-item>
-          <el-descriptions-item label="审核意见" :span="2" v-if="reimbursement.reviewComment">
+          <el-descriptions-item label="处理备注" :span="2" v-if="reimbursement.reviewComment">
             {{ reimbursement.reviewComment }}
           </el-descriptions-item>
         </el-descriptions>
       </el-card>
 
-      <!-- 审核操作 -->
+      <!-- 报销处理提示 -->
       <el-card shadow="never" class="action-card" v-if="reimbursement.status === 'PENDING_REVIEW'">
-        <el-form :model="reviewForm" label-width="100px">
-          <el-form-item label="审核决定">
-            <el-radio-group v-model="reviewForm.decision">
-              <el-radio label="APPROVE">
-                <el-text type="success">批准</el-text>
-              </el-radio>
-              <el-radio label="REJECT">
-                <el-text type="danger">驳回</el-text>
-              </el-radio>
-              <el-radio label="REQUIRES_RESUBMIT">
-                <el-text type="warning">要求重新提交</el-text>
-              </el-radio>
-            </el-radio-group>
-          </el-form-item>
-
-          <el-form-item label="审核意见">
-            <el-input
-              v-model="reviewForm.comment"
-              type="textarea"
-              :rows="4"
-              placeholder="请输入审核意见（驳回时必填）"
-            />
-          </el-form-item>
-
-          <el-form-item>
-            <el-button type="primary" @click="submitReview" :loading="submitting">
-              提交审核
-            </el-button>
-            <el-button @click="$router.back()">返回</el-button>
-          </el-form-item>
-        </el-form>
+        <div class="pending-reimbursement-note">
+          <el-tag type="warning">待报销</el-tag>
+          <span>上传报销凭证后将完成报销并确认本次价格变更。</span>
+        </div>
+        <el-button @click="$router.back()">返回列表</el-button>
       </el-card>
 
-      <!-- 返回按钮（非待审核状态） -->
+      <!-- 返回按钮（非待报销状态） -->
       <div v-else class="back-actions">
         <el-button @click="$router.back()">返回列表</el-button>
       </div>
@@ -351,15 +325,8 @@ const route = useRoute()
 
 // 状态管理
 const loading = ref(true)
-const submitting = ref(false)
 const reimbursement = ref<any>(null)
 const activeLists = ref<number[]>([])
-
-// 审核表单
-const reviewForm = ref({
-  decision: 'APPROVE' as 'APPROVE' | 'REJECT' | 'REQUIRES_RESUBMIT',
-  comment: ''
-})
 
 // 计算属性
 const costDiff = computed(() => {
@@ -431,7 +398,7 @@ const getExpenseSummary = (target: any) => {
 // 获取状态文本
 const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
-    'PENDING_REVIEW': '待审核',
+    'PENDING_REVIEW': '待报销',
     'REIMBURSED': '已报销',
     'REJECTED': '已驳回',
     'REQUIRES_RESUBMIT': '需重新提交'
@@ -470,8 +437,8 @@ const getPriceChangeStatusType = (status: string) => {
 const getApprovalModeText = (approvalMode?: string | null) => {
   const modeMap: Record<string, string> = {
     'AUTO': '自动生效',
-    'MANUAL': '人工审核',
-    'MANUAL_REQUIRED': '待老板审核'
+    'MANUAL': '凭证确认',
+    'MANUAL_REQUIRED': '凭证确认'
   }
   return approvalMode ? modeMap[approvalMode] || approvalMode : '-'
 }
@@ -561,31 +528,6 @@ const loadDetail = async () => {
     ElMessage.error('加载失败')
   } finally {
     loading.value = false
-  }
-}
-
-// 提交审核
-const submitReview = async () => {
-  if (reviewForm.value.decision !== 'APPROVE' && !reviewForm.value.comment) {
-    ElMessage.warning('请填写审核意见')
-    return
-  }
-
-  submitting.value = true
-  try {
-    await purchasingApi.reviewReimbursement(reimbursement.value.id, {
-      decision: reviewForm.value.decision,
-      comment: reviewForm.value.comment
-    })
-
-    ElMessage.success('审核成功')
-    setTimeout(() => {
-      router.back()
-    }, 1500)
-  } catch (error) {
-    console.error('审核失败', error)
-  } finally {
-    submitting.value = false
   }
 }
 
@@ -773,8 +715,12 @@ onMounted(() => {
 }
 
 .action-card {
-  .el-form {
-    max-width: 800px;
+  .pending-reimbursement-note {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+    color: #606266;
   }
 }
 

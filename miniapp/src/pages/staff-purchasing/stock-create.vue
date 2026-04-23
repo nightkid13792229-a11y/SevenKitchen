@@ -1,7 +1,7 @@
 <template>
   <view class="stock-create-page">
     <view class="hero">
-      <text class="hero-title">创建补货采购单</text>
+      <text class="hero-title">补货</text>
       <text class="hero-subtitle">适合海产、冻品、补剂、包材等可提前备货的原料</text>
     </view>
 
@@ -219,7 +219,7 @@
         <text class="summary-amount">¥{{ formatPrice(totalEstimatedCost) }}</text>
       </view>
       <button class="submit-btn" :loading="submitting" @tap="submit">
-        {{ submitting ? '创建中...' : '创建补货采购单' }}
+        {{ submitting ? '创建中...' : '创建补货单' }}
       </button>
     </view>
   </view>

@@ -1,4 +1,5 @@
 import {
+  INGREDIENT_SOURCE_PLAN_FALLBACKS,
   INGREDIENT_SOURCE_PLANS,
   IngredientSourcePlanCode,
   matchSourcePlanChannel,
@@ -8,9 +9,25 @@ import {
 describe('ingredient-source-plan', () => {
   it('defaults to MARKET_PREMIUM', () => {
     expect(normalizeIngredientSourcePlan(undefined)).toBe('MARKET_PREMIUM');
-    expect(INGREDIENT_SOURCE_PLANS.MARKET_PREMIUM.label).toBe(
-      '尽量山姆、盒马、沃集鲜',
-    );
+    expect(INGREDIENT_SOURCE_PLANS.MARKET_PREMIUM.label).toBe('超市优先');
+  });
+
+  it('defines manual source-tier fallback chains', () => {
+    expect(INGREDIENT_SOURCE_PLAN_FALLBACKS.ORGANIC).toEqual([
+      'ORGANIC',
+      'MARKET_PREMIUM',
+      'WHOLESALE',
+    ]);
+    expect(INGREDIENT_SOURCE_PLAN_FALLBACKS.MARKET_PREMIUM).toEqual([
+      'MARKET_PREMIUM',
+      'ORGANIC',
+      'WHOLESALE',
+    ]);
+    expect(INGREDIENT_SOURCE_PLAN_FALLBACKS.WHOLESALE).toEqual([
+      'WHOLESALE',
+      'MARKET_PREMIUM',
+      'ORGANIC',
+    ]);
   });
 
   it('matches organic, premium market, and wholesale channels', () => {

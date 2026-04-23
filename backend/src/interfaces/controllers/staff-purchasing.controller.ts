@@ -37,6 +37,7 @@ import type {
   GeneratePurchaseListDto,
   CreateStockPurchaseListDto,
   CompletePurchaseDto,
+  MarkPurchaseItemNoPurchaseDto,
   AddPurchaseRecordDto,
   UpdatePurchaseRecordDto,
 } from '../../application/purchasing/purchasing.service';
@@ -762,6 +763,82 @@ export class StaffPurchasingController {
     return ApiResponseDto.success(purchaseList, '采购完成确认成功');
   }
 
+  @Post('lists/:id/reopen')
+  @ApiOperation({ summary: '撤回采购完成' })
+  @ApiParam({ name: 'id', description: '采购清单ID' })
+  @ApiResponse({
+    status: 200,
+    description: '撤回完成成功',
+  })
+  async reopenPurchaseList(
+    @Param('id') id: string,
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<any>> {
+    this.logger.log(`Reopening purchase list: ${id}`);
+
+    const purchaseList = await this.purchasingService.reopenPurchaseList(
+      id,
+      userId,
+    );
+
+    return ApiResponseDto.success(purchaseList, '撤回完成成功');
+  }
+
+  @Post('lists/:id/items/:itemId/no-purchase')
+  @ApiOperation({ summary: '标记采购明细无需采购' })
+  @ApiParam({ name: 'id', description: '采购清单ID' })
+  @ApiParam({ name: 'itemId', description: '采购明细ID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      properties: {
+        reason: { type: 'string', description: '无需采购原因（选填）' },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 200,
+    description: '标记无需采购成功',
+  })
+  async markPurchaseItemNoPurchase(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+    @Body() dto: MarkPurchaseItemNoPurchaseDto,
+    @UserId() userId: string,
+  ): Promise<ApiResponseDto<any>> {
+    this.logger.log(`Marking purchase item ${itemId} as no purchase needed`);
+
+    const purchaseList =
+      await this.purchasingService.markPurchaseItemNoPurchase(
+        id,
+        itemId,
+        dto,
+        userId,
+      );
+
+    return ApiResponseDto.success(purchaseList, '标记无需采购成功');
+  }
+
+  @Delete('lists/:id/items/:itemId/no-purchase')
+  @ApiOperation({ summary: '取消采购明细无需采购标记' })
+  @ApiParam({ name: 'id', description: '采购清单ID' })
+  @ApiParam({ name: 'itemId', description: '采购明细ID' })
+  @ApiResponse({
+    status: 200,
+    description: '取消无需采购标记成功',
+  })
+  async clearPurchaseItemNoPurchase(
+    @Param('id') id: string,
+    @Param('itemId') itemId: string,
+  ): Promise<ApiResponseDto<any>> {
+    this.logger.log(`Clearing no purchase marker on purchase item ${itemId}`);
+
+    const purchaseList =
+      await this.purchasingService.clearPurchaseItemNoPurchase(id, itemId);
+
+    return ApiResponseDto.success(purchaseList, '取消无需采购标记成功');
+  }
+
   /**
    * ==========================================
    * 采购记录管理
@@ -810,7 +887,7 @@ export class StaffPurchasingController {
         ingredientName: { type: 'string', description: '原料名称' },
         procurementSkuId: {
           type: 'string',
-          description: '生产采购 SKU ID（选填）',
+          description: '生产采购 SKU ID',
         },
         purchaseChannel: { type: 'string', description: '采购渠道' },
         actualQuantity: {
@@ -835,6 +912,7 @@ export class StaffPurchasingController {
       },
       required: [
         'purchaseItemId',
+        'procurementSkuId',
         'purchaseChannel',
         'actualCost',
       ],
@@ -912,6 +990,15 @@ export class StaffPurchasingController {
               productModel: { type: 'string' },
               notes: { type: 'string' },
               purchasedAt: { type: 'string', format: 'date-time' },
+              procurementSkuStockBaseQuantity: {
+                type: 'number',
+                nullable: true,
+              },
+              procurementSkuStockBaseUnit: {
+                type: 'string',
+                nullable: true,
+              },
+              procurementSkuHasStockLedger: { type: 'boolean' },
             },
           },
         },
@@ -936,6 +1023,10 @@ export class StaffPurchasingController {
     schema: {
       type: 'object',
       properties: {
+        procurementSkuId: {
+          type: 'string',
+          description: '生产采购 SKU ID',
+        },
         purchaseChannel: { type: 'string', description: '采购渠道' },
         actualQuantity: {
           type: 'number',

@@ -47,6 +47,19 @@
       </view>
     </view>
 
+    <!-- 生命阶段提醒 -->
+    <view v-if="!isLifeStageMatch && dog && showWarning" class="warning-card">
+      <view class="warning-header">
+        <text class="warning-title">生命阶段提醒</text>
+      </view>
+      <text class="warning-text">
+        {{ lifeStageReminderText }}
+      </text>
+      <button class="btn-continue" @tap="dismissWarning">
+        我已知晓
+      </button>
+    </view>
+
     <!-- 2. 制作清单 -->
     <view class="section purchase-list-section">
       <view class="section-title">
@@ -66,6 +79,9 @@
           <text class="info-text">
             制作周期：{{ cycleDays }}天 | 每餐：{{ perMealG }}g | 每日：{{ dailyIntakeG }}g
           </text>
+          <text v-if="foodItemsTotal.actualAmount > 0" class="info-text secondary-info-text">
+            净食材约 {{ foodItemsTotal.theoreticalAmountStr }} | 采购量约 {{ foodItemsTotal.actualAmountStr }}（含损耗）
+          </text>
         </view>
 
         <!-- 食材 -->
@@ -80,14 +96,23 @@
             </view>
             <view v-for="(item, idx) in foodItemsDetailed" :key="'food-' + idx" class="table-row food-table">
               <text class="row-item name-col">{{ item.ingredientName }}</text>
-              <text
-                v-if="item.recommendedDisplayText !== '-' && item.hasSpecDetail"
-                class="row-item recommend-col recommend-link"
-                @tap.stop="showSpecModal(item)"
+              <view
+                v-if="item.selectedProductDisplayText !== '-' && item.hasSpecDetail"
+                class="row-item recommend-col recommend-choice"
               >
-                {{ item.recommendedDisplayText }}
-              </text>
-              <text v-else class="row-item recommend-col">{{ item.recommendedDisplayText }}</text>
+                <text class="recommend-main">{{ item.selectedProductDisplayText }}</text>
+                <text
+                  v-if="item.choiceLabel"
+                  class="recommend-badge"
+                  :class="{ 'recommend-badge-replace': item.allRecommendedProducts && item.allRecommendedProducts.length > 1 }"
+                  @tap.stop="showSpecModal(item)"
+                >
+                  {{ item.choiceLabel }}
+                </text>
+              </view>
+              <view v-else class="row-item recommend-col">
+                <text class="recommend-main">{{ item.selectedProductDisplayText }}</text>
+              </view>
               <text class="row-item method-col">{{ item.preparationMethod || '-' }}</text>
               <text
                 class="row-item actual-col highlight amount-link"
@@ -117,21 +142,24 @@
               <text class="header-item dosage-col">添加总量</text>
             </view>
             <view v-for="(item, idx) in supplementItemsDetailed" :key="'supp-' + idx" class="table-row supplement-table">
-              <text
-                class="row-item product-col"
-                :class="{ 'brand-link': item.hasSpecDetail && item.brand === '-' }"
-                @tap.stop="item.hasSpecDetail && item.brand === '-' && showSpecModal(item)"
+              <text class="row-item product-col">{{ item.name }}</text>
+              <view
+                v-if="item.hasSpecDetail"
+                class="row-item brand-col recommend-choice"
               >
-                {{ item.name }}
-              </text>
-              <text
-                v-if="item.hasSpecDetail && item.brand !== '-'"
-                class="row-item brand-col brand-link"
-                @tap.stop="showSpecModal(item)"
-              >
-                {{ item.brand }}
-              </text>
-              <text v-else class="row-item brand-col">{{ item.specDisplayText }}</text>
+                <text class="recommend-main">{{ item.selectedProductDisplayText }}</text>
+                <text
+                  v-if="item.choiceLabel"
+                  class="recommend-badge"
+                  :class="{ 'recommend-badge-replace': item.allRecommendedProducts && item.allRecommendedProducts.length > 1 }"
+                  @tap.stop="showSpecModal(item)"
+                >
+                  {{ item.choiceLabel }}
+                </text>
+              </view>
+              <view v-else class="row-item brand-col">
+                <text class="recommend-main">{{ item.selectedProductDisplayText }}</text>
+              </view>
               <text class="row-item timing-col">{{ item.preparationMethod }}</text>
               <text
                 class="row-item dosage-col highlight amount-link"
@@ -188,7 +216,7 @@
         </view>
         <view class="card-content multi-line">
           <text class="content-line">-18℃冷冻保存6个月</text>
-          <text class="content-line">0-5℃冷藏保存3天</text>
+          <text class="content-line">0-4℃冷藏保存3天</text>
           <text class="content-line">开封后3小时内吃完</text>
         </view>
       </view>
@@ -474,6 +502,12 @@ import { ref, computed, onMounted } from 'vue'
 import { onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 import { PrintCanvasBuilder } from '../../utils/print-canvas'
+import {
+  buildLifeStageReminderText,
+  getLifeStageLabel,
+  isRecipeLifeStageMatch,
+  resolveDogLifeStage
+} from '../../utils/life-stage-match'
 import ShareButton from '../../components/ShareButton.vue'
 import ImagePreviewModal from '../../components/ImagePreviewModal.vue'
 import { normalizeImageUrl } from '../../utils/config'
@@ -487,7 +521,9 @@ import {
 import {
   DIY_SHEET_FOOD_RECOMMENDATION_LABEL,
   DIY_SHEET_SUPPLEMENT_RECOMMENDATION_LABEL,
-  DIY_SHEET_SPEC_MODAL_TITLE
+  DIY_SHEET_SPEC_MODAL_TITLE,
+  formatRecommendationActionLabel,
+  formatSelectedProductDisplayText
 } from './copy'
 
 // 页面参数
@@ -502,6 +538,7 @@ const healthTagUuidLabelMap = ref<Record<string, string>>({})
 
 // 数据
 const dog = ref<any>(null)  // 狗狗信息
+const breeds = ref<any[]>([])
 const recipe = ref<any>({
   id: '',
   name: '',
@@ -544,6 +581,7 @@ const selectedRpIndexMap = ref<Record<string, number>>({})
 // 图片预览弹窗状态
 const showImagePreview = ref(false)
 const previewImageUrl = ref('')
+const showWarning = ref(true)
 
 // 全局配置中的补剂损耗率（默认5%）
 const globalSupplementLossRate = ref(0.05)
@@ -586,6 +624,22 @@ const foodItemsTotal = computed(() => {
   }
 })
 
+const supplementNutrientBaseWeightG = computed(() => {
+  return foodItemsTotal.value.theoreticalAmount || totalFoodNetWeightG.value
+})
+
+const selectedDogLifeStage = computed(() => resolveDogLifeStage(dog.value, breeds.value))
+
+const isLifeStageMatch = computed(() => {
+  return isRecipeLifeStageMatch(recipe.value.applicableLifeStages || [], selectedDogLifeStage.value)
+})
+
+const lifeStageReminderText = computed(() => buildLifeStageReminderText({
+  applicableStages: recipe.value.applicableLifeStages || [],
+  dogLifeStage: selectedDogLifeStage.value,
+  dogName: dog.value?.name,
+}))
+
 // 格式化狗狗年龄
 const dogAgeText = computed(() => {
   if (!dog.value) return '-'
@@ -610,6 +664,7 @@ const foodItemsDetailed = computed(() => {
       const rps = recommendedProductsMap.value[item.ingredientId] || []
       const selectedRpIndex = selectedRpIndexMap.value[item.ingredientId] ?? 0
       const selectedRp = rps[selectedRpIndex] || rps[0]
+      const selectedProductDisplayText = formatSelectedProductDisplayText(selectedRp || item, item.name)
       const purchaseLink = selectedRp?.purchaseLink || item.properties?.purchase_link || undefined
       const hasSpecDetail = !!(
         selectedRp ||
@@ -629,7 +684,9 @@ const foodItemsDetailed = computed(() => {
         productModel: selectedRp?.productModel || item.productModel,
         purchaseChannel: selectedRp?.purchaseChannel || item.purchaseChannel,
         purchaseLink,
-        recommendedDisplayText: getFoodRecommendationDisplayText(selectedRp, item),
+        selectedProductDisplayText,
+        choiceLabel: formatRecommendationActionLabel(rps.length),
+        recommendedPrintText: selectedProductDisplayText,
         allRecommendedProducts: rps,
         hasSpecDetail
       }
@@ -661,6 +718,7 @@ const supplementItemsDetailed = computed(() => {
     const selectionKey = getSupplementSelectionKey(item)
     const rpIdx = selectedRpIndexMap.value[selectionKey] ?? 0
     const selectedRp = supplementOptions[rpIdx] || supplementOptions[0]
+    const selectedProductDisplayText = formatSelectedProductDisplayText(selectedRp || item, item.name)
 
     // 使用displayUnit作为显示单位
     const displayUnit = selectedRp?.displayUnit || item.displayUnit || item.unit || 'g'
@@ -672,7 +730,7 @@ const supplementItemsDetailed = computed(() => {
     const amount = calculateSupplementAmountForOption(
       item,
       selectedRp,
-      totalFoodNetWeightG.value,
+      supplementNutrientBaseWeightG.value,
       globalSupplementLossRate.value
     )
 
@@ -695,7 +753,9 @@ const supplementItemsDetailed = computed(() => {
       activeNutrients: selectedRp?.activeNutrients || item.properties?.active_nutrients || undefined,
       type: item.type,                                              // 类型标识
       properties: item.properties,                                  // 完整的properties
-      specDisplayText: getSupplementSpecDisplayText(selectedRp, item, purchaseLink), // 规格入口文案
+      selectedProductDisplayText,                                   // 已选商品入口文案
+      choiceLabel: formatRecommendationActionLabel(supplementOptions.length), // 候选数量提示
+      recommendedSpecPrintText: selectedProductDisplayText,
       hasSpecDetail,                                                // 是否有规格/购买信息
       allRecommendedProducts: supplementOptions,                    // 所有候选补剂
       selectedRPIndex: 0                                            // 当前选中的推荐产品索引
@@ -712,6 +772,33 @@ function formatAmount(amount: number, isFood: boolean): string {
     // 补剂类：保留1位小数
     return `${amount.toFixed(1)}g`
   }
+}
+
+function formatFoodPrepAmountForPrint(amount: number): string {
+  return `${amount.toFixed(1)}g`
+}
+
+function formatFoodPrepTotalForPrint(amount: number): string {
+  return `${amount.toFixed(1)}g`
+}
+
+function formatRecipeLossRatePercent(): string {
+  const percent = getRecipeLossRate() * 100
+  return Number.isInteger(percent) ? `${percent.toFixed(0)}%` : `${percent.toFixed(1)}%`
+}
+
+function getFoodPrepAmountHeaderForPrint(): string {
+  return `备料量（含${formatRecipeLossRatePercent()}损耗）`
+}
+
+function formatSupplementTargetForPrint(item: any): string {
+  if (!item.nutrientTargetKey || !item.nutrientTargetValue || !supplementNutrientBaseWeightG.value) {
+    return '-'
+  }
+
+  const total = Math.round(item.nutrientTargetValue * supplementNutrientBaseWeightG.value / 1000)
+  const nutrientUnit = getSupplementNutrientUnit(item, { activeNutrients: item.activeNutrients } as any) || 'mg'
+  return `${item.nutrientTargetKey} ${total}${nutrientUnit}`
 }
 
 // 格式化补剂用量显示（参考订购成品页，保留用于向后兼容）
@@ -765,6 +852,7 @@ async function loadData() {
     // 并行加载食谱详情、价格预览、狗狗信息和设备推荐
     await Promise.all([
       loadRecipe(),
+      loadBreeds(),
       loadPricePreview(),
       loadDog(),
       loadEquipmentRecommendations()
@@ -822,6 +910,21 @@ async function loadRecipe() {
       title: '加载食谱失败',
       icon: 'none'
     })
+  }
+}
+
+async function loadBreeds() {
+  try {
+    const res = await request({
+      url: '/dogs/breeds',
+      method: 'GET'
+    })
+
+    if (res.code === 0 && Array.isArray(res.data)) {
+      breeds.value = res.data
+    }
+  } catch (error) {
+    console.error('[DIYSheet] Load breeds error:', error)
   }
 }
 
@@ -883,6 +986,7 @@ async function loadPricePreview() {
       data: {
         dogId: dogId.value,
         type: 'FRESH_FOOD',
+        pricingPurpose: 'DIY_SHEET',
         items: [{
           recipeId: recipeId.value,
           quantityG: totalG,
@@ -992,98 +1096,85 @@ async function handlePrint() {
       height: canvasHeight
     })
 
-    // 2. 绘制标题（食谱名称）
-    builder.drawTitle(recipe.value.name)
+    // 2. 绘制分享图品牌头部
+    builder.drawBrandHeader({
+      brand: 'seven 的厨房',
+      logoPath: '/static/logo.png',
+      avatarPath: dog.value?.avatarUrl ? normalizeImageUrl(dog.value.avatarUrl) : undefined,
+      title: recipe.value.name,
+      subtitle: dog.value ? `${dog.value.name} 的 ${cycleDays.value} 天鲜食计划` : `${cycleDays.value} 天鲜食计划`,
+      stages: recipe.value.applicableLifeStages.map(getLifeStageLabel)
+    })
 
-    // 3. 绘制标签（适用阶段、健康标签）
-    const tags = [
-      ...recipe.value.applicableLifeStages.map(getLifeStageLabel),
-      ...recipe.value.targetHealthTags.map(getHealthTagLabel)
-    ]
-    builder.drawTags(tags)
-
-    // 4. 绘制狗狗信息和制作参数合并卡片（8个字段）
+    // 3. 绘制狗狗信息和制作参数合并卡片（8个字段）
     if (dog.value) {
-      builder.drawInfoCard([
-        { label: '狗狗', value: dog.value.name },
-        { label: '年龄', value: dogAgeText.value },
-        { label: '体重', value: `${dog.value.currentWeightKg}kg` },
-        { label: '每日餐数', value: `${dog.value.mealsPerDay}餐/天` },
-        { label: '制作周期', value: `${cycleDays.value}天` },
-        { label: '每餐饭量', value: `${perMealG.value}g` },
-        { label: '每日饭量', value: `${dailyIntakeG.value}g` },
-        { label: '营养标准', value: getNutritionStandardLabel(recipe.value.nutritionStandard) }
-      ], '#1890ff')
+      builder.drawShareSummaryCards({
+        dogInfo: `${dogAgeText.value}  /  ${dog.value.currentWeightKg}kg  /  ${dog.value.mealsPerDay}餐/天`,
+        dogSub: `专为 ${dog.value.name} 生成`,
+        cycle: `${cycleDays.value}天`,
+        cycleSub: `每日 ${dailyIntakeG.value}g，每餐 ${perMealG.value}g`,
+        packagePlan: `${perMealG.value}g × ${cycleDays.value * dog.value.mealsPerDay}份`,
+        packageSub: '每餐一份',
+        formulaStandard: getNutritionStandardLabel(recipe.value.nutritionStandard),
+        formulaSource: recipe.value.designSource
+      })
     }
 
-    // 5. 绘制食材清单表格
+    // 4. 绘制食材清单表格
     if (foodItemsDetailed.value.length > 0) {
       builder.drawSectionTitle('食材清单')
 
       const foodRows = foodItemsDetailed.value.map(item => [
         item.ingredientName,
-        item.recommendedDisplayText,
-        item.preparationMethod || '-',
-        item.actualAmountStr
+        item.recommendedPrintText,
+        formatFoodPrepAmountForPrint(item.actualAmount),
+        item.preparationMethod || '-'
       ])
 
       builder.drawTable(
-        ['原料名称', DIY_SHEET_FOOD_RECOMMENDATION_LABEL, '制备方法', '采购量'],
+        ['原料名称', '已选商品', getFoodPrepAmountHeaderForPrint(), '制备方法'],
         foodRows,
         {
-          showTotal: true,
-          totalText: '合计',
-          totalValue: foodItemsTotal.value.actualAmountStr,
-          colWidths: [240, 360, 300, 220],
-          wrapColumns: [true, true, true, false]
+          totalRow: ['备料合计', '-', formatFoodPrepTotalForPrint(foodItemsTotal.value.actualAmount), '-'],
+          colWidths: [210, 300, 210, 400],
+          wrapColumns: [true, true, false, true]
         }
       )
     }
 
-    // 7. 绘制补剂清单表格
+    // 5. 绘制补剂清单表格
     if (supplementItemsDetailed.value.length > 0) {
       builder.drawSectionTitle('营养补充剂')
 
-      const supplementRows = supplementItemsDetailed.value.map(item => {
-        // 计算营养素总量 = 营养目标值 * 食材总量 / 1000
-        let nutrientTotal = ''
-        let nutrientUnit = ''
-        if (item.nutrientTargetKey && item.nutrientTargetValue && foodItemsTotal.value.actualAmount) {
-          const total = Math.round(item.nutrientTargetValue * foodItemsTotal.value.actualAmount / 1000)
-          nutrientUnit = item.activeNutrients?.[item.nutrientTargetKey]?.unit || item.properties?.active_nutrients?.[item.nutrientTargetKey]?.unit || 'mg'
-          nutrientTotal = `${total}${nutrientUnit}`
-        }
-
-        return [
-          item.name,
-          item.brand || '-',
-          item.productModel || '-',
-          item.preparationMethod || '-',
-          item.amountStr,
-          item.nutrientTargetKey || '-',
-          nutrientTotal
-        ]
-      })
+      const supplementRows = supplementItemsDetailed.value.map(item => [
+        item.name,
+        item.recommendedSpecPrintText,
+        item.amountStr,
+        formatSupplementTargetForPrint(item)
+      ])
 
       builder.drawTable(
-        ['补剂名称', DIY_SHEET_SUPPLEMENT_RECOMMENDATION_LABEL, '规格', '最佳添加时机', '添加总量', '营养素', '营养素总量'],
+        ['补剂名称', '已选商品 / 规格', '添加总量', '目标补充量'],
         supplementRows,
         {
-          colWidths: [160, 120, 300, 120, 120, 150, 150],
-          wrapColumns: [false, false, true, false, false, false, false]
+          colWidths: [180, 520, 170, 250],
+          wrapColumns: [false, true, false, false]
         }
+      )
+
+      builder.drawSupplementNotice(
+        '营养补充剂的添加总量与已选商品严格匹配。由于不同营养补剂营养浓度不同，如果要选择其它产品，须按目标补充量自行换算添加总量。'
       )
     }
 
-    // 8. 绘制制作流程
+    // 6. 绘制制作流程
     if (recipe.value.productionSteps) {
       builder.drawSectionTitle('制作流程')
       builder.drawProductionSteps(recipe.value.productionSteps)
     }
 
-    // 9. 绘制提示卡片（3个横向排列）
-    builder.drawSectionTitle('重要提示')
-    builder.drawTipsCards([
+    // 7. 绘制提示卡片（3个横向排列）
+    builder.drawImportantTipsSection([
       {
         title: '烹饪建议',
         content: ['建议蒸、炖、低温慢煮', '不建议微波、烤、煎等高温烹饪']
@@ -1094,7 +1185,7 @@ async function handlePrint() {
       },
       {
         title: '储存&保质期',
-        content: ['-18℃冷冻保存6个月', '0-5℃冷藏保存3天', '开封后3小时内吃完']
+        content: ['-18℃冷冻保存6个月', '0-4℃冷藏保存3天', '开封后3小时内吃完']
       }
     ])
 
@@ -1265,9 +1356,9 @@ function showNutritionInfoModal(item: any) {
     activeNutrients: item.activeNutrients
   })
 
-  // 计算营养素总量 = 营养目标 * 食材采购量总量 / 1000
-  const nutrientTotal = item.nutrientTargetValue && foodItemsTotal.value.actualAmount
-    ? (item.nutrientTargetValue * foodItemsTotal.value.actualAmount / 1000).toFixed(0)
+  // 计算营养素总量 = 营养目标 * 食材净量 / 1000
+  const nutrientTotal = item.nutrientTargetValue && supplementNutrientBaseWeightG.value
+    ? (item.nutrientTargetValue * supplementNutrientBaseWeightG.value / 1000).toFixed(0)
     : null
 
   // 将计算的营养素总量和单位添加到item中
@@ -1282,6 +1373,10 @@ function showNutritionInfoModal(item: any) {
 
 function closeNutritionInfoModal() {
   showNutritionInfo.value = false
+}
+
+function dismissWarning() {
+  showWarning.value = false
 }
 
 // 选择推荐产品（在弹窗中切换）
@@ -1306,6 +1401,7 @@ function getPurchaseTipByPlatform(platform: string): string {
     'TAOBAO': '口令已复制，打开淘宝即可查看商品',
     'JD': '口令已复制，打开京东即可查看商品',
     'PINDUODUO': '口令已复制，打开拼多多即可查看商品',
+    'IHERB': '已复制 iHerb 购买链接',
     'OTHER': '已复制，打开对应App即可查看',
     'WEBVIEW': '已复制购买链接'
   }
@@ -1322,6 +1418,9 @@ function detectPlatformFromUrl(url: string): string {
   }
   if (url.includes('pinduoduo') || url.includes('yangkeduo') || url.includes('pdd')) {
     return 'PINDUODUO'
+  }
+  if (url.includes('iherb.com') || url.includes('iherb.cn')) {
+    return 'IHERB'
   }
   return 'OTHER'
 }
@@ -1407,55 +1506,6 @@ function hasRecommendationDetail(selectedRp: any, item: any, purchaseLink: any):
   )
 }
 
-function formatRecommendedProductDisplay(product: any): string {
-  if (!product) return '-'
-
-  const brand = product.brand?.trim()
-  const name = product.name?.trim()
-
-  if (brand && name) {
-    return name.includes(brand) ? name : `${brand} · ${name}`
-  }
-
-  return name || brand || '-'
-}
-
-function getFoodRecommendationDisplayText(selectedRp: any, item: any): string {
-  if (selectedRp) {
-    return formatRecommendedProductDisplay(selectedRp)
-  }
-
-  return item.brand || item.productModel || item.purchaseChannel || '-'
-}
-
-function getSupplementSpecDisplayText(selectedRp: any, item: any, purchaseLink: any): string {
-  if (selectedRp?.brand?.trim()) {
-    return selectedRp.brand.trim()
-  }
-
-  if (item.brand?.trim()) {
-    return item.brand.trim()
-  }
-
-  if (selectedRp?.productModel?.trim()) {
-    return selectedRp.productModel.trim()
-  }
-
-  if (item.productModel?.trim()) {
-    return item.productModel.trim()
-  }
-
-  if (selectedRp?.purchaseChannel?.trim()) {
-    return selectedRp.purchaseChannel.trim()
-  }
-
-  if (item.purchaseChannel?.trim()) {
-    return item.purchaseChannel.trim()
-  }
-
-  return purchaseLink ? '查看详情' : '-'
-}
-
 function getAmountDetailName(item: any): string {
   if (!item) return '-'
   return item.type === 'FOOD' ? (item.ingredientName || item.name || '-') : (item.name || '-')
@@ -1463,18 +1513,6 @@ function getAmountDetailName(item: any): string {
 
 function getAmountDetailNameLabel(item: any): string {
   return item?.type === 'SUPPLEMENT' ? '补剂名称：' : '原料名称：'
-}
-
-// 辅助函数
-function getLifeStageLabel(stage: string): string {
-  const map: Record<string, string> = {
-    'PUPPY': '幼犬',
-    'ADULT': '成犬',
-    'SENIOR': '老年犬',
-    'PREGNANCY': '妊娠期',
-    'LACTATION': '哺乳期',
-  }
-  return map[stage] || stage
 }
 
 function getHealthTagLabel(tagOrUuid: string): string {
@@ -1722,6 +1760,44 @@ onShareTimeline(() => {
   font-weight: 500;
 }
 
+.warning-card {
+  margin: 20rpx 24rpx;
+  padding: 24rpx;
+  background-color: #fff7e6;
+  border: 1rpx solid #ffd591;
+  border-radius: 12rpx;
+}
+
+.warning-header {
+  display: flex;
+  align-items: center;
+  margin-bottom: 12rpx;
+}
+
+.warning-title {
+  font-size: 28rpx;
+  font-weight: bold;
+  color: #d46b08;
+}
+
+.warning-text {
+  display: block;
+  font-size: 26rpx;
+  color: #8c5a00;
+  line-height: 1.6;
+  margin-bottom: 16rpx;
+}
+
+.btn-continue {
+  height: 64rpx;
+  line-height: 64rpx;
+  background-color: #faad14;
+  color: #fff;
+  border-radius: 8rpx;
+  font-size: 26rpx;
+  border: none;
+}
+
 /* 采购清单 */
 .purchase-list-content {
   display: flex;
@@ -1746,9 +1822,15 @@ onShareTimeline(() => {
 }
 
 .info-text {
+  display: block;
   font-size: 26rpx;
   color: #333;
   line-height: 1.5;
+}
+
+.secondary-info-text {
+  margin-top: 6rpx;
+  color: #666;
 }
 
 .ingredient-group {
@@ -1887,10 +1969,38 @@ onShareTimeline(() => {
   flex: 0.7;
 }
 
-.recommend-link {
-  color: #1890ff;
-  text-decoration: underline;
+.recommend-choice {
+  flex-direction: column;
+  gap: 4rpx;
+  min-width: 0;
+}
+
+.recommend-main {
+  max-width: 100%;
+  font-size: 22rpx;
+  color: #333;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.recommend-badge {
+  padding: 2rpx 10rpx;
+  border-radius: 999rpx;
+  background-color: #e6f4ff;
+  color: #1677ff;
+  border: 1rpx solid #bae0ff;
+  font-size: 19rpx;
+  font-weight: 600;
+  line-height: 1.35;
+  text-decoration: none !important;
+  white-space: nowrap;
   cursor: pointer;
+}
+
+.recommend-badge-replace {
+  background-color: #fff7e6;
+  border-color: #ffd591;
+  color: #d46b08;
 }
 
 /* 补剂表格4列布局 */
@@ -1906,12 +2016,6 @@ onShareTimeline(() => {
   text-align: center;
   font-size: 24rpx;
   color: #333;
-}
-
-.supplement-table .brand-link {
-  color: #1890ff;
-  text-decoration: underline;
-  cursor: pointer;
 }
 
 .supplement-table .timing-col {

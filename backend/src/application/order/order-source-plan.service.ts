@@ -1,9 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import { Ingredient } from '../../domain/ingredient/ingredient.entity';
 import { IngredientType } from '../../domain/ingredient/enums';
 import {
-  matchSourcePlanChannel,
+  INGREDIENT_SOURCE_PLAN_FALLBACKS,
+  INGREDIENT_SOURCE_PLANS,
   type IngredientSourcePlanCode,
+  type IngredientSourceTierCode,
 } from '../../domain/order/ingredient-source-plan';
 import {
   ProcurementSkuService,
@@ -16,6 +18,15 @@ export type SourcePlanIngredient = Ingredient & {
   procurementSku?: ProcurementSkuSummary;
   procurementSkuSupplierName?: string | null;
   procurementSkuDisplayUnit?: string | null;
+  procurementSkuSourceTier?: IngredientSourceTierCode | null;
+  sourcePlanCode?: IngredientSourcePlanCode;
+  sourcePlanFallbackLevel?: number;
+};
+
+type SelectedProcurementSku = {
+  sku: ProcurementSkuSummary & { sourceTier: IngredientSourceTierCode };
+  sourceTier: IngredientSourceTierCode;
+  fallbackLevel: number;
 };
 
 @Injectable()
@@ -35,48 +46,103 @@ export class OrderSourcePlanService {
         ? await this.procurementSkuService.batchFindActive(foodIds)
         : {};
 
-    return new Map(
-      ingredients.map((ingredient) => {
-        if (ingredient.type !== IngredientType.FOOD) {
-          return [ingredient.id, ingredient];
-        }
+    const result = new Map<string, Ingredient>();
+    const missingIngredients: string[] = [];
 
-        const selectedSku = this.selectSkuForPlan(
-          skuMap[ingredient.id] || [],
-          planCode,
-        );
+    for (const ingredient of ingredients) {
+      if (ingredient.type !== IngredientType.FOOD) {
+        result.set(ingredient.id, ingredient);
+        continue;
+      }
 
-        return [
-          ingredient.id,
-          selectedSku
-            ? this.withProcurementSku(ingredient, selectedSku)
-            : ingredient,
-        ];
-      }),
-    );
+      const selectedSku = this.selectSkuForPlan(
+        skuMap[ingredient.id] || [],
+        planCode,
+      );
+
+      if (!selectedSku) {
+        missingIngredients.push(ingredient.name);
+        result.set(ingredient.id, ingredient);
+        continue;
+      }
+
+      result.set(
+        ingredient.id,
+        this.withProcurementSku(ingredient, selectedSku, planCode),
+      );
+    }
+
+    if (missingIngredients.length > 0) {
+      throw new BadRequestException(
+        `部分食材缺少可用于${INGREDIENT_SOURCE_PLANS[planCode].label}的采购来源 SKU：${missingIngredients.join(
+          '、',
+        )}。请先在后台维护来源等级、采购单位、换算比例和价格。`,
+      );
+    }
+
+    return result;
   }
 
   private selectSkuForPlan(
     skus: ProcurementSkuSummary[],
     planCode: IngredientSourcePlanCode,
-  ): ProcurementSkuSummary | undefined {
+  ): SelectedProcurementSku | undefined {
+    const eligibleSkus = skus.filter(
+      (
+        sku,
+      ): sku is ProcurementSkuSummary & {
+        sourceTier: IngredientSourceTierCode;
+      } => this.isEligibleSourceSku(sku),
+    );
+
+    const fallbackChain = INGREDIENT_SOURCE_PLAN_FALLBACKS[planCode];
+    for (const [fallbackLevel, sourceTier] of fallbackChain.entries()) {
+      const candidates = eligibleSkus.filter(
+        (sku) => sku.sourceTier === sourceTier,
+      );
+
+      if (candidates.length === 0) {
+        continue;
+      }
+
+      const selected = this.selectSkuByPlanCostPreference(
+        candidates,
+        planCode,
+      );
+      return {
+        sku: selected,
+        sourceTier,
+        fallbackLevel,
+      };
+    }
+
+    return undefined;
+  }
+
+  private isEligibleSourceSku(sku: ProcurementSkuSummary): boolean {
+    const skuPrice = this.getSkuPurchasePrice(sku);
+
     return (
-      skus.find((sku) =>
-        matchSourcePlanChannel(sku.purchaseChannel, planCode),
-      ) ||
-      skus.find((sku) => sku.isDefault) ||
-      skus[0]
+      Boolean(sku.sourceTier) &&
+      Boolean(sku.purchaseUnit?.trim()) &&
+      sku.purchaseToBaseRatio !== null &&
+      sku.purchaseToBaseRatio !== undefined &&
+      Number.isFinite(sku.purchaseToBaseRatio) &&
+      sku.purchaseToBaseRatio > 0 &&
+      skuPrice !== null &&
+      skuPrice !== undefined &&
+      Number.isFinite(skuPrice) &&
+      skuPrice > 0
     );
   }
 
   private withProcurementSku(
     ingredient: Ingredient,
-    sku: ProcurementSkuSummary,
+    selectedSku: SelectedProcurementSku,
+    planCode: IngredientSourcePlanCode,
   ): SourcePlanIngredient {
-    const skuPrice =
-      sku.currentPurchasePrice ??
-      sku.referencePurchasePrice ??
-      sku.referencePricePerPurchaseUnit;
+    const { sku } = selectedSku;
+    const skuPrice = this.getSkuPurchasePrice(sku);
     const pricingProfile = this.getUsablePricingProfile(sku, skuPrice);
     const currentPrice = pricingProfile
       ? pricingProfile.price
@@ -93,8 +159,11 @@ export class OrderSourcePlanService {
       ...ingredient.properties,
       procurement_sku_id: sku.id,
       procurement_sku_name: sku.name,
-      procurement_sku_display_unit: sku.displayUnit,
+      procurement_sku_display_unit: sku.purchaseUnit,
       procurement_sku_supplier_name: sku.supplierName,
+      procurement_sku_source_plan: planCode,
+      procurement_sku_source_tier: selectedSku.sourceTier,
+      procurement_sku_fallback_level: selectedSku.fallbackLevel,
     };
 
     const cloned = new Ingredient(
@@ -127,7 +196,10 @@ export class OrderSourcePlanService {
     cloned.procurementSkuName = sku.name;
     cloned.procurementSku = sku;
     cloned.procurementSkuSupplierName = sku.supplierName;
-    cloned.procurementSkuDisplayUnit = sku.displayUnit;
+    cloned.procurementSkuDisplayUnit = sku.purchaseUnit;
+    cloned.procurementSkuSourceTier = selectedSku.sourceTier;
+    cloned.sourcePlanCode = planCode;
+    cloned.sourcePlanFallbackLevel = selectedSku.fallbackLevel;
 
     return cloned;
   }
@@ -140,6 +212,7 @@ export class OrderSourcePlanService {
       price !== null &&
       price !== undefined &&
       Number.isFinite(price) &&
+      price > 0 &&
       sku.purchaseToBaseRatio !== null &&
       sku.purchaseToBaseRatio !== undefined &&
       Number.isFinite(sku.purchaseToBaseRatio) &&
@@ -149,5 +222,69 @@ export class OrderSourcePlanService {
     }
 
     return null;
+  }
+
+  private selectSkuByPlanCostPreference<T extends ProcurementSkuSummary>(
+    candidates: T[],
+    planCode: IngredientSourcePlanCode,
+  ): T {
+    return planCode === 'WHOLESALE'
+      ? this.selectSkuByUnitCost(candidates, 'LOWEST')
+      : this.selectSkuByUnitCost(candidates, 'HIGHEST');
+  }
+
+  private selectSkuByUnitCost<T extends ProcurementSkuSummary>(
+    candidates: T[],
+    costPreference: 'HIGHEST' | 'LOWEST',
+  ): T {
+    return candidates
+      .map((sku, index) => ({
+        sku,
+        index,
+        unitCost: this.getSkuUnitCost(sku),
+      }))
+      .sort((left, right) => {
+        if (left.unitCost !== right.unitCost) {
+          return costPreference === 'LOWEST'
+            ? left.unitCost - right.unitCost
+            : right.unitCost - left.unitCost;
+        }
+
+        const nameCompare = left.sku.name.localeCompare(
+          right.sku.name,
+          'zh-Hans-CN',
+        );
+        if (nameCompare !== 0) {
+          return nameCompare;
+        }
+
+        return (
+          left.sku.id.localeCompare(right.sku.id) || left.index - right.index
+        );
+      })[0].sku;
+  }
+
+  private getSkuUnitCost(sku: ProcurementSkuSummary): number {
+    const price = this.getSkuPurchasePrice(sku);
+    if (
+      price === null ||
+      price === undefined ||
+      !Number.isFinite(price) ||
+      price <= 0 ||
+      sku.purchaseToBaseRatio === null ||
+      sku.purchaseToBaseRatio === undefined ||
+      !Number.isFinite(sku.purchaseToBaseRatio) ||
+      sku.purchaseToBaseRatio <= 0
+    ) {
+      return Number.POSITIVE_INFINITY;
+    }
+
+    return price / sku.purchaseToBaseRatio;
+  }
+
+  private getSkuPurchasePrice(
+    sku: ProcurementSkuSummary,
+  ): number | null | undefined {
+    return sku.currentPurchasePrice;
   }
 }

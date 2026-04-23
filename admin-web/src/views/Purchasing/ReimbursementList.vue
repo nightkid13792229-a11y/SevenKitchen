@@ -3,7 +3,7 @@
     <!-- 页面标题 -->
     <el-page-header @back="$router.back()" class="page-header">
       <template #content>
-        <div class="page-title">报销审核管理</div>
+        <div class="page-title">报销管理</div>
       </template>
     </el-page-header>
 
@@ -16,7 +16,7 @@
       </el-col>
       <el-col :span="6">
         <el-card shadow="hover" class="stat-card warning">
-          <el-statistic title="待审核" :value="stats.pendingReimbursements" />
+          <el-statistic title="待报销" :value="stats.pendingReimbursements" />
         </el-card>
       </el-col>
       <el-col :span="6">
@@ -42,7 +42,7 @@
             style="width: 150px"
             @change="handleFilter"
           >
-            <el-option label="待审核" value="PENDING_REVIEW" />
+            <el-option label="待报销" value="PENDING_REVIEW" />
             <el-option label="已报销" value="REIMBURSED" />
             <el-option label="已驳回" value="REJECTED" />
             <el-option label="需重新提交" value="REQUIRES_RESUBMIT" />
@@ -139,7 +139,7 @@
           </template>
         </el-table-column>
 
-        <el-table-column label="审核信息" width="180">
+        <el-table-column label="报销处理" width="180">
           <template #default="{ row }">
             <div v-if="row.status !== 'PENDING_REVIEW'">
               <div>{{ row.reviewedBy?.nickname || '-' }}</div>
@@ -157,14 +157,6 @@
               @click="handleViewDetail(row.id)"
             >
               查看详情
-            </el-button>
-            <el-button
-              v-if="row.status === 'PENDING_REVIEW'"
-              type="success"
-              size="small"
-              @click="handleReview(row)"
-            >
-              审核
             </el-button>
           </template>
         </el-table-column>
@@ -184,63 +176,6 @@
       </div>
     </el-card>
 
-    <!-- 审核对话框 -->
-    <el-dialog
-      v-model="reviewDialogVisible"
-      title="审核报销单"
-      width="600px"
-    >
-      <el-form :model="reviewForm" label-width="100px">
-        <el-form-item label="报销单号">
-          <el-input v-model="currentReimbursement.claimNumber" disabled />
-        </el-form-item>
-
-        <el-form-item label="预估金额">
-          <el-input :value="`¥${currentReimbursement.totalEstimatedCost}`" disabled />
-        </el-form-item>
-
-        <el-form-item label="实际金额">
-          <el-input :value="`¥${currentReimbursement.totalActualCost}`" disabled />
-        </el-form-item>
-
-        <el-form-item label="成本差异">
-          <el-input
-            :value="`${getCostDifference(currentReimbursement) > 0 ? '+' : ''}¥${Math.abs(getCostDifference(currentReimbursement)).toFixed(2)}`"
-            disabled
-          />
-        </el-form-item>
-
-        <el-form-item label="审核决定" required>
-          <el-radio-group v-model="reviewForm.decision">
-            <el-radio label="APPROVE">
-              <el-text type="success">批准</el-text>
-            </el-radio>
-            <el-radio label="REJECT">
-              <el-text type="danger">驳回</el-text>
-            </el-radio>
-            <el-radio label="REQUIRES_RESUBMIT">
-              <el-text type="warning">要求重新提交</el-text>
-            </el-radio>
-          </el-radio-group>
-        </el-form-item>
-
-        <el-form-item label="审核意见">
-          <el-input
-            v-model="reviewForm.comment"
-            type="textarea"
-            :rows="4"
-            placeholder="请输入审核意见（驳回时必填）"
-          />
-        </el-form-item>
-      </el-form>
-
-      <template #footer>
-        <el-button @click="reviewDialogVisible = false">取消</el-button>
-        <el-button type="primary" @click="submitReview" :loading="submitting">
-          提交审核
-        </el-button>
-      </template>
-    </el-dialog>
   </div>
 </template>
 
@@ -248,17 +183,13 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { purchasingApi } from '@/api/purchasing'
-import { ElMessage } from 'element-plus'
 import { summarizeReimbursementCustomFees } from '@/constants/reimbursement'
 
 const router = useRouter()
 
 // 状态管理
 const loading = ref(false)
-const submitting = ref(false)
 const reimbursementList = ref<any[]>([])
-const reviewDialogVisible = ref(false)
-const currentReimbursement = ref<any>({})
 
 // 统计数据
 const stats = reactive({
@@ -282,16 +213,10 @@ const pagination = reactive({
   total: 0
 })
 
-// 审核表单
-const reviewForm = reactive({
-  decision: 'APPROVE' as 'APPROVE' | 'REJECT' | 'REQUIRES_RESUBMIT',
-  comment: ''
-})
-
 // 计算属性
 const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
-    'PENDING_REVIEW': '待审核',
+    'PENDING_REVIEW': '待报销',
     'REIMBURSED': '已报销',
     'REJECTED': '已驳回',
     'REQUIRES_RESUBMIT': '需重新提交'
@@ -433,39 +358,6 @@ const handleViewDetail = (id: string) => {
     path: '/purchasing/reimbursements/detail',
     query: { id }
   })
-}
-
-// 审核
-const handleReview = (row: any) => {
-  currentReimbursement.value = row
-  reviewForm.decision = 'APPROVE'
-  reviewForm.comment = ''
-  reviewDialogVisible.value = true
-}
-
-// 提交审核
-const submitReview = async () => {
-  if (reviewForm.decision !== 'APPROVE' && !reviewForm.comment) {
-    ElMessage.warning('请填写审核意见')
-    return
-  }
-
-  submitting.value = true
-  try {
-    await purchasingApi.reviewReimbursement(currentReimbursement.value.id, {
-      decision: reviewForm.decision,
-      comment: reviewForm.comment
-    })
-
-    ElMessage.success('审核成功')
-    reviewDialogVisible.value = false
-    loadReimbursements()
-    loadStatistics()
-  } catch (error) {
-    console.error('审核失败', error)
-  } finally {
-    submitting.value = false
-  }
 }
 
 // 页面加载

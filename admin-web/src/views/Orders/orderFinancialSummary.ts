@@ -27,3 +27,35 @@ export function getAdjustmentTagType(
   if (value > 0) return 'danger'
   return 'success'
 }
+
+export interface PendingAdjustmentSummary {
+  pendingExtraPaymentAmount?: number | null
+  pendingRefundAmount?: number | null
+}
+
+export function getPendingAdjustmentAmount(
+  summary: PendingAdjustmentSummary | null | undefined,
+): number {
+  const pendingExtraPayment = Number(summary?.pendingExtraPaymentAmount || 0)
+  const pendingRefund = Number(summary?.pendingRefundAmount || 0)
+  return pendingExtraPayment - pendingRefund
+}
+
+export function getPendingAdjustmentText(
+  summary: PendingAdjustmentSummary | null | undefined,
+): string {
+  const value = getPendingAdjustmentAmount(summary)
+  if (value < 0) {
+    return `待退差价 ${formatFinancialAmount(Math.abs(value))}`
+  }
+  if (value > 0) {
+    return `待补差价 ${formatFinancialAmount(value)}`
+  }
+  return '差价已处理'
+}
+
+export function getPendingAdjustmentTagType(
+  summary: PendingAdjustmentSummary | null | undefined,
+): 'success' | 'warning' | 'danger' {
+  return getAdjustmentTagType(getPendingAdjustmentAmount(summary))
+}

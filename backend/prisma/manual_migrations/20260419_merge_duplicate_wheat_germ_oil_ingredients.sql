@@ -1,0 +1,126 @@
+-- Merge duplicate FOOD ingredients named "小麦胚芽油" into a single standard ingredient.
+--
+-- Keep as the standard ingredient:
+--   96cc4fd8-4fc5-4070-8d34-b23a376b7bc8  小麦胚芽油
+--
+-- Merge into it:
+--   8f6e6f93-d7a3-4b21-8c6f-cdc27495a6e7  小麦胚芽油 / 帝麦 / 小麦胚芽油 500毫升/瓶
+--
+-- The source procurement SKU remains as a child SKU under the retained ingredient.
+
+BEGIN;
+
+DO $$
+DECLARE
+  target_id CONSTANT text := '96cc4fd8-4fc5-4070-8d34-b23a376b7bc8';
+  source_ids CONSTANT text[] := ARRAY[
+    '8f6e6f93-d7a3-4b21-8c6f-cdc27495a6e7'
+  ];
+  source_count integer;
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM ingredient
+    WHERE id = target_id
+      AND name = '小麦胚芽油'
+      AND type = 'FOOD'
+  ) THEN
+    RAISE EXCEPTION 'Target wheat germ oil ingredient % does not exist or is not FOOD 小麦胚芽油', target_id;
+  END IF;
+
+  SELECT COUNT(*)
+    INTO source_count
+  FROM ingredient
+  WHERE id = ANY(source_ids)
+    AND name = '小麦胚芽油'
+    AND type = 'FOOD';
+
+  UPDATE ingredient
+  SET
+    brand = NULL,
+    product_model = NULL,
+    purchase_channel = NULL,
+    purchase_unit = 'ml',
+    purchase_to_base_ratio = 1,
+    current_price_per_purchase_unit = 0,
+    effective_price_per_purchase_unit = 0,
+    updated_at = CURRENT_TIMESTAMP
+  WHERE id = target_id;
+
+  IF source_count = 0 THEN
+    RAISE NOTICE 'Duplicate wheat germ oil ingredients already merged.';
+    RETURN;
+  END IF;
+
+  UPDATE recipe_item
+  SET ingredient_id = target_id
+  WHERE ingredient_id = ANY(source_ids);
+
+  UPDATE purchase_item
+  SET ingredient_id = target_id,
+      ingredient_name = '小麦胚芽油'
+  WHERE ingredient_id = ANY(source_ids);
+
+  UPDATE purchase_record
+  SET ingredient_id = target_id,
+      ingredient_name = '小麦胚芽油'
+  WHERE ingredient_id = ANY(source_ids);
+
+  UPDATE inventory_ledger_entry
+  SET ingredient_id = target_id
+  WHERE ingredient_id = ANY(source_ids);
+
+  UPDATE inventory_adjustment
+  SET ingredient_id = target_id
+  WHERE ingredient_id = ANY(source_ids);
+
+  UPDATE inventory_allocation_line
+  SET ingredient_id = target_id
+  WHERE ingredient_id = ANY(source_ids);
+
+  UPDATE inventory_stocktake_line
+  SET ingredient_id = target_id
+  WHERE ingredient_id = ANY(source_ids);
+
+  UPDATE ingredient_price_change
+  SET ingredient_id = target_id,
+      ingredient_name = '小麦胚芽油'
+  WHERE ingredient_id = ANY(source_ids);
+
+  UPDATE procurement_sku
+  SET ingredient_id = target_id
+  WHERE ingredient_id = ANY(source_ids);
+
+  UPDATE procurement_sku_price_history
+  SET ingredient_id = target_id
+  WHERE ingredient_id = ANY(source_ids);
+
+  UPDATE recommended_product
+  SET ingredient_id = target_id
+  WHERE ingredient_id = ANY(source_ids);
+
+  UPDATE nutrition_food_mapping
+  SET ingredient_id = target_id
+  WHERE ingredient_id = ANY(source_ids);
+
+  UPDATE recipe_supplement_alternative
+  SET alternative_ingredient_id = target_id
+  WHERE alternative_ingredient_id = ANY(source_ids);
+
+  INSERT INTO ingredient_tag_assignment (id, ingredient_id, tag_id)
+  SELECT DISTINCT
+    gen_random_uuid()::text,
+    target_id,
+    tag_id
+  FROM ingredient_tag_assignment
+  WHERE ingredient_id = ANY(source_ids)
+  ON CONFLICT (ingredient_id, tag_id) DO NOTHING;
+
+  DELETE FROM ingredient_tag_assignment
+  WHERE ingredient_id = ANY(source_ids);
+
+  DELETE FROM ingredient
+  WHERE id = ANY(source_ids);
+END $$;
+
+COMMIT;

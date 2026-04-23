@@ -2,6 +2,7 @@ import { Inject, Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { INGREDIENT_REPOSITORY } from './ingredient.service';
 import { GlobalConfigService } from '../config/global-config.service';
+import { ProcurementSkuService } from './procurement-sku.service';
 import {
   PURCHASE_RECORD_REPOSITORY,
 } from '../purchasing/purchasing.service.tokens';
@@ -71,6 +72,8 @@ interface IngredientPriceChangeRecord {
 interface IngredientPriceChangeApplyRecord {
   id: string;
   ingredientId: string;
+  reimbursementId: string;
+  purchaseRecordId: string;
   sourceQuantity: number | DecimalLike;
   sourcePricePerPurchaseUnit: DecimalLike;
   proposedEffectivePrice: DecimalLike;
@@ -92,6 +95,7 @@ export class IngredientPricingService {
     @Inject(PURCHASE_RECORD_REPOSITORY)
     private readonly purchaseRecordRepository: PurchaseRecordRepository,
     private readonly globalConfigService: GlobalConfigService,
+    private readonly procurementSkuService: ProcurementSkuService,
   ) {}
 
   async syncPendingChangesForReimbursement(
@@ -378,6 +382,14 @@ export class IngredientPricingService {
 
     const groupedEffectiveAccumulator = new Map<string, WeightedAccumulator>();
     const ingredientCurrentAccumulator = new Map<string, WeightedAccumulator>();
+    const procurementSkuCurrentAccumulator = new Map<string, WeightedAccumulator>();
+    const procurementSkuContext = new Map<
+      string,
+      {
+        reimbursementId: string;
+        purchaseRecordIds: Set<string>;
+      }
+    >();
     const ingredients = await this.ingredientRepository.findByIds(
       Array.from(new Set(changes.map((change) => change.ingredientId))),
     );
@@ -410,6 +422,29 @@ export class IngredientPricingService {
           this.toNumericSourceQuantity(change.sourceQuantity),
         ),
       );
+
+      const purchaseRecord = await this.purchaseRecordRepository.findById(
+        change.purchaseRecordId,
+      );
+      if (purchaseRecord?.procurementSkuId) {
+        procurementSkuCurrentAccumulator.set(
+          purchaseRecord.procurementSkuId,
+          this.mergeWeightedAccumulator(
+            procurementSkuCurrentAccumulator.get(purchaseRecord.procurementSkuId),
+            change.sourcePricePerPurchaseUnit.toNumber(),
+            this.toNumericSourceQuantity(change.sourceQuantity),
+          ),
+        );
+
+        const context = procurementSkuContext.get(
+          purchaseRecord.procurementSkuId,
+        ) ?? {
+          reimbursementId: change.reimbursementId,
+          purchaseRecordIds: new Set<string>(),
+        };
+        context.purchaseRecordIds.add(change.purchaseRecordId);
+        procurementSkuContext.set(purchaseRecord.procurementSkuId, context);
+      }
     }
 
     const appliedCurrentPriceByIngredient = new Map<string, number>();
@@ -419,6 +454,27 @@ export class IngredientPricingService {
       await this.ingredientRepository.update(ingredientId, {
         currentPricePerPurchaseUnit: currentPrice,
       });
+    }
+
+    for (const [
+      procurementSkuId,
+      accumulator,
+    ] of procurementSkuCurrentAccumulator.entries()) {
+      const currentPrice = this.toWeightedPrice(accumulator);
+      const context = procurementSkuContext.get(procurementSkuId);
+      const purchaseRecordIds = Array.from(context?.purchaseRecordIds ?? []);
+      await this.procurementSkuService.applyCurrentPurchasePrice(
+        procurementSkuId,
+        currentPrice,
+        {
+          source: 'REIMBURSEMENT',
+          reimbursementId: context?.reimbursementId ?? null,
+          purchaseRecordId:
+            purchaseRecordIds.length === 1 ? purchaseRecordIds[0] : null,
+          operatorId: reviewerId,
+          note: reviewComment ?? '报销凭证确认后自动更新',
+        },
+      );
     }
 
     const appliedEffectiveUnitCostByKey = new Map<string, number>();

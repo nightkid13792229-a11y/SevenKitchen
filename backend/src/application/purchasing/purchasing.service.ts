@@ -13,8 +13,12 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { OrderStatus, Order } from '../../domain';
-import { ORDER_REPOSITORY } from '../order/order.service';
+import {
+  ORDER_REPOSITORY,
+  ORDER_STATUS_HISTORY_REPOSITORY,
+} from '../order/order.service';
 import type { OrderRepository } from '../../domain/order/order.repository';
+import type { OrderStatusHistoryRepository } from '../../domain/order/order-status-history.repository';
 import { INGREDIENT_REPOSITORY } from '../ingredient/ingredient.service';
 import type { IngredientRepository } from '../../domain/ingredient/ingredient.repository';
 import {
@@ -77,11 +81,16 @@ export interface CompletePurchaseDto {
   actualCosts?: Array<{ itemId: string; actualCost: number }>;
 }
 
+export interface MarkPurchaseItemNoPurchaseDto {
+  reason?: string;
+}
+
 export interface AddPurchaseRecordDto {
   purchaseItemId: string;
   ingredientId?: string;
   ingredientName?: string;
   procurementSkuId?: string;
+  procurementSkuName?: string;
   purchaseChannel: string;
   actualQuantity?: number;
   actualPackageCount?: number;
@@ -93,6 +102,8 @@ export interface AddPurchaseRecordDto {
 }
 
 export interface UpdatePurchaseRecordDto {
+  procurementSkuId?: string;
+  procurementSkuName?: string;
   purchaseChannel?: string;
   actualQuantity?: number;
   actualPackageCount?: number;
@@ -188,6 +199,12 @@ interface ProcurementExecutionProfile {
   targetStock?: number | null;
 }
 
+type PurchaseRecordWithProcurementSkuStock = PurchaseRecord & {
+  procurementSkuStockBaseQuantity?: number | null;
+  procurementSkuStockBaseUnit?: string | null;
+  procurementSkuHasStockLedger?: boolean;
+};
+
 @Injectable()
 export class PurchasingService {
   private readonly logger = new Logger(PurchasingService.name);
@@ -195,6 +212,8 @@ export class PurchasingService {
   constructor(
     @Inject(ORDER_REPOSITORY)
     private readonly orderRepository: OrderRepository,
+    @Inject(ORDER_STATUS_HISTORY_REPOSITORY)
+    private readonly statusHistoryRepository: OrderStatusHistoryRepository,
     @Inject(INGREDIENT_REPOSITORY)
     private readonly ingredientRepository: IngredientRepository,
     private readonly recommendedProductService: RecommendedProductService,
@@ -205,6 +224,36 @@ export class PurchasingService {
     @Inject(PURCHASE_RECORD_REPOSITORY)
     private readonly purchaseRecordRepository: PurchaseRecordRepository,
   ) {}
+
+  private async appendOrderStatusHistory(params: {
+    orderId: string;
+    fromStatus: OrderStatus;
+    toStatus: OrderStatus;
+    actorId: string;
+    purchaseListId: string | null;
+    triggeredBy: 'purchase_list_generation' | 'purchase_list_order_addition';
+  }): Promise<void> {
+    await this.statusHistoryRepository.append(
+      params.orderId,
+      params.fromStatus,
+      params.toStatus,
+      'staff',
+      params.actorId,
+      {
+        purchaseListId: params.purchaseListId,
+        triggeredBy: params.triggeredBy,
+      },
+    );
+  }
+
+  private buildPurchaseRequirementKey(
+    ingredientId: string,
+    procurementSkuId?: string | null,
+  ): string {
+    return procurementSkuId
+      ? `${ingredientId}:${procurementSkuId}`
+      : ingredientId;
+  }
 
   private mergePreparationMethods(
     current: string[] | undefined,
@@ -217,9 +266,7 @@ export class PurchasingService {
     return unique.length > 0 ? unique : undefined;
   }
 
-  private normalizeComparableText(
-    value?: string | null,
-  ): string | undefined {
+  private normalizeComparableText(value?: string | null): string | undefined {
     if (!value) {
       return undefined;
     }
@@ -235,7 +282,9 @@ export class PurchasingService {
     const ingredients =
       await this.ingredientRepository.findByIds(uniqueIngredientIds);
 
-    return new Map(ingredients.map((ingredient) => [ingredient.id, ingredient]));
+    return new Map(
+      ingredients.map((ingredient) => [ingredient.id, ingredient]),
+    );
   }
 
   private selectSuggestedRecommendedProduct(
@@ -255,7 +304,8 @@ export class PurchasingService {
         let score = 0;
         if (
           normalizedChannel &&
-          this.normalizeComparableText(product.purchaseChannel) === normalizedChannel
+          this.normalizeComparableText(product.purchaseChannel) ===
+            normalizedChannel
         ) {
           score += 1;
         }
@@ -295,9 +345,6 @@ export class PurchasingService {
     const ranked = skus
       .map((sku, index) => {
         let score = 0;
-        if (!hasExplicitPreference && sku.isDefault) {
-          score += 100;
-        }
         if (
           normalizedChannel &&
           this.normalizeComparableText(sku.purchaseChannel) ===
@@ -311,21 +358,61 @@ export class PurchasingService {
         ) {
           score += 1;
         }
-        if (sku.isDefault) {
-          score += 0.5;
-        }
 
-        return { sku, index, score };
+        return {
+          sku,
+          index,
+          score,
+          unitCost: this.getProcurementSkuUnitCost(sku),
+        };
       })
       .sort((left, right) => {
         if (right.score !== left.score) {
           return right.score - left.score;
         }
 
-        return left.index - right.index;
+        if (left.unitCost !== right.unitCost) {
+          return left.unitCost - right.unitCost;
+        }
+
+        const nameCompare = left.sku.name.localeCompare(
+          right.sku.name,
+          'zh-Hans-CN',
+        );
+        if (nameCompare !== 0) {
+          return nameCompare;
+        }
+
+        return (
+          left.sku.id.localeCompare(right.sku.id) || left.index - right.index
+        );
       });
 
     return ranked[0]?.sku;
+  }
+
+  private getProcurementSkuUnitCost(sku: ProcurementSkuSummary): number {
+    const price = this.getProcurementSkuPurchasePrice(sku);
+    if (
+      price === null ||
+      price === undefined ||
+      !Number.isFinite(price) ||
+      price <= 0 ||
+      sku.purchaseToBaseRatio === null ||
+      sku.purchaseToBaseRatio === undefined ||
+      !Number.isFinite(sku.purchaseToBaseRatio) ||
+      sku.purchaseToBaseRatio <= 0
+    ) {
+      return Number.POSITIVE_INFINITY;
+    }
+
+    return price / sku.purchaseToBaseRatio;
+  }
+
+  private getProcurementSkuPurchasePrice(
+    sku: ProcurementSkuSummary,
+  ): number | null | undefined {
+    return sku.currentPurchasePrice;
   }
 
   private resolveProcurementExecutionProfile(params: {
@@ -342,15 +429,11 @@ export class PurchasingService {
     );
     const currentPricePerPurchaseUnit =
       procurementSku?.currentPurchasePrice ??
-      procurementSku?.referencePurchasePrice ??
-      procurementSku?.referencePricePerPurchaseUnit ??
       ingredient?.currentPricePerPurchaseUnit ??
       ingredient?.effectivePricePerPurchaseUnit ??
       0;
     const effectivePricePerPurchaseUnit =
       procurementSku?.currentPurchasePrice ??
-      procurementSku?.referencePurchasePrice ??
-      procurementSku?.referencePricePerPurchaseUnit ??
       ingredient?.effectivePricePerPurchaseUnit ??
       ingredient?.currentPricePerPurchaseUnit ??
       0;
@@ -366,7 +449,6 @@ export class PurchasingService {
         ingredient?.purchaseToBaseRatio ??
         1,
       displayUnit:
-        procurementSku?.displayUnit ||
         procurementSku?.purchaseUnit ||
         ingredient?.unitDisplayLabel ||
         ingredient?.purchaseUnit ||
@@ -383,10 +465,12 @@ export class PurchasingService {
         null,
       currentPricePerPurchaseUnit,
       effectivePricePerPurchaseUnit,
-      safetyStock: procurementSku?.safetyStock ?? ingredient?.safetyStock ?? null,
+      safetyStock:
+        procurementSku?.safetyStock ?? ingredient?.safetyStock ?? null,
       reorderPoint:
         procurementSku?.reorderPoint ?? ingredient?.reorderPoint ?? null,
-      targetStock: procurementSku?.targetStock ?? ingredient?.targetStock ?? null,
+      targetStock:
+        procurementSku?.targetStock ?? ingredient?.targetStock ?? null,
     };
   }
 
@@ -474,14 +558,19 @@ export class PurchasingService {
           ingredient?.productModel ||
           undefined,
         displayUnit:
-          selectedSku?.displayUnit ||
-          requirement.displayUnit ||
-          ingredient?.unitDisplayLabel ||
-          ingredient?.purchaseUnit ||
-          undefined,
+          requirement.type === 'SUPPLEMENT'
+            ? requirement.displayUnit ||
+              ingredient?.unitDisplayLabel ||
+              requirement.quantityUnit ||
+              ingredient?.baseUnit ||
+              undefined
+            : selectedSku?.purchaseUnit ||
+              requirement.displayUnit ||
+              ingredient?.unitDisplayLabel ||
+              ingredient?.purchaseUnit ||
+              undefined,
         procurementSkuId: requirement.procurementSkuId || selectedSku?.id,
-        procurementSkuName:
-          requirement.procurementSkuName || selectedSku?.name,
+        procurementSkuName: requirement.procurementSkuName || selectedSku?.name,
       };
     });
   }
@@ -533,23 +622,39 @@ export class PurchasingService {
         params.requirement.quantityNeeded,
       3,
     );
+    const grossBaseQuantity = this.convertRequirementQuantityToInventoryBase(
+      params.requirement,
+      params.ingredient,
+      grossQuantity,
+    );
     const usesInventory = this.usesInventoryForRequirement(params.ingredient);
     const unitCost =
       grossQuantity > 0
         ? Number(params.requirement.estimatedCost || 0) / grossQuantity
         : 0;
-    const stockDeductedQuantity = usesInventory
+    const stockDeductedBaseQuantity = usesInventory
       ? this.roundNumber(
           Math.min(
-            grossQuantity,
+            grossBaseQuantity,
             params.availability?.availableQuantityG ?? 0,
           ),
           3,
         )
       : 0;
-    const shortage = this.roundNumber(
-      Math.max(grossQuantity - stockDeductedQuantity, 0),
+    const shortageBaseQuantity = this.roundNumber(
+      Math.max(grossBaseQuantity - stockDeductedBaseQuantity, 0),
       3,
+    );
+    const stockDeductedQuantity =
+      this.convertInventoryBaseQuantityToRequirementUnit(
+        params.requirement,
+        params.ingredient,
+        stockDeductedBaseQuantity,
+      );
+    const shortage = this.convertInventoryBaseQuantityToRequirementUnit(
+      params.requirement,
+      params.ingredient,
+      shortageBaseQuantity,
     );
 
     return {
@@ -559,11 +664,23 @@ export class PurchasingService {
       purchaseShortageQuantity: shortage,
       quantityNeeded: shortage,
       estimatedCost: this.roundNumber(unitCost * shortage, 2),
-      onHandQuantity: params.availability?.onHandQuantityG ?? 0,
-      allocatedQuantity: params.availability?.allocatedQuantityG ?? 0,
-      availableQuantity: params.availability?.availableQuantityG ?? 0,
+      onHandQuantity: this.convertInventoryBaseQuantityToRequirementUnit(
+        params.requirement,
+        params.ingredient,
+        params.availability?.onHandQuantityG ?? 0,
+      ),
+      allocatedQuantity: this.convertInventoryBaseQuantityToRequirementUnit(
+        params.requirement,
+        params.ingredient,
+        params.availability?.allocatedQuantityG ?? 0,
+      ),
+      availableQuantity: this.convertInventoryBaseQuantityToRequirementUnit(
+        params.requirement,
+        params.ingredient,
+        params.availability?.availableQuantityG ?? 0,
+      ),
       usesInventory,
-      allocationRequired: stockDeductedQuantity > 0,
+      allocationRequired: stockDeductedBaseQuantity > 0,
     };
   }
 
@@ -586,23 +703,88 @@ export class PurchasingService {
           )
         : new Map();
 
-    return requirements.map((requirement) =>
-      this.applyInventoryOffset({
-        requirement,
-        ingredient: ingredientLookup.get(requirement.ingredientId),
-        availability: availabilityMap.get(requirement.ingredientId),
-      }),
+    const remainingAvailableQuantityGByIngredient = new Map(
+      Array.from(availabilityMap.entries()).map(([ingredientId, availability]) => [
+        ingredientId,
+        availability.availableQuantityG,
+      ]),
     );
+
+    return requirements.map((requirement) => {
+      const ingredient = ingredientLookup.get(requirement.ingredientId);
+      const availability = availabilityMap.get(requirement.ingredientId);
+      const remainingAvailableQuantityG =
+        remainingAvailableQuantityGByIngredient.get(requirement.ingredientId) ??
+        availability?.availableQuantityG ??
+        0;
+      const result = this.applyInventoryOffset({
+        requirement,
+        ingredient,
+        availability: availability
+          ? {
+              ...availability,
+              availableQuantityG: Math.max(remainingAvailableQuantityG, 0),
+            }
+          : undefined,
+      });
+      const deductedBaseQuantity =
+        this.convertRequirementQuantityToInventoryBase(
+          result,
+          ingredient,
+          result.stockDeductedQuantity ?? 0,
+        );
+      if (deductedBaseQuantity > 0) {
+        remainingAvailableQuantityGByIngredient.set(
+          requirement.ingredientId,
+          Math.max(remainingAvailableQuantityG - deductedBaseQuantity, 0),
+        );
+      }
+
+      return result;
+    });
   }
 
   private buildInventoryAllocationLines(requirements: PurchaseRequirement[]) {
-    return requirements
-      .filter((requirement) => (requirement.stockDeductedQuantity ?? 0) > 0)
-      .map((requirement) => ({
+    const lineMap = new Map<
+      string,
+      {
+        ingredientId: string;
+        procurementSkuId: string | null;
+        quantityG: number;
+      }
+    >();
+
+    for (const requirement of requirements) {
+      if ((requirement.stockDeductedQuantity ?? 0) <= 0) {
+        continue;
+      }
+
+      const quantityG = this.convertRequirementQuantityToInventoryBase(
+        requirement,
+        undefined,
+        requirement.stockDeductedQuantity!,
+      );
+      if (quantityG <= 0) {
+        continue;
+      }
+
+      const existing = lineMap.get(requirement.ingredientId);
+      if (existing) {
+        existing.quantityG = this.roundNumber(existing.quantityG + quantityG, 3);
+        if (existing.procurementSkuId !== (requirement.procurementSkuId ?? null)) {
+          existing.procurementSkuId = null;
+        }
+        continue;
+      }
+
+      lineMap.set(requirement.ingredientId, {
         ingredientId: requirement.ingredientId,
-        procurementSkuId: requirement.procurementSkuId,
-        quantityG: requirement.stockDeductedQuantity!,
-      }));
+        procurementSkuId: requirement.procurementSkuId ?? null,
+        quantityG,
+      });
+    }
+
+    return Array.from(lineMap.values());
   }
 
   private async createInventoryAllocationForRequirements(params: {
@@ -637,21 +819,26 @@ export class PurchasingService {
   }): StockLevelStatus {
     const { currentStock, safetyStock, reorderPoint, targetStock } = params;
 
-    if (reorderPoint !== null && reorderPoint !== undefined && currentStock < reorderPoint) {
+    if (
+      reorderPoint !== null &&
+      reorderPoint !== undefined &&
+      currentStock < reorderPoint
+    ) {
       return 'NEEDS_REPLENISHMENT';
-    }
-
-    if (safetyStock !== null && safetyStock !== undefined && currentStock < safetyStock) {
-      return 'LOW_STOCK';
     }
 
     if (
       safetyStock !== null &&
-      safetyStock !== undefined ||
-      reorderPoint !== null &&
-      reorderPoint !== undefined ||
-      targetStock !== null &&
-      targetStock !== undefined
+      safetyStock !== undefined &&
+      currentStock < safetyStock
+    ) {
+      return 'LOW_STOCK';
+    }
+
+    if (
+      (safetyStock !== null && safetyStock !== undefined) ||
+      (reorderPoint !== null && reorderPoint !== undefined) ||
+      (targetStock !== null && targetStock !== undefined)
     ) {
       return 'SUFFICIENT';
     }
@@ -702,10 +889,25 @@ export class PurchasingService {
         '支',
         '桶',
         '箱',
+        '勺',
+        '平勺',
       ].includes(upper) ||
-      ['个', '件', '袋', '包', '盒', '瓶', '罐', '张', '片', '支', '桶', '箱'].includes(
-        normalized,
-      )
+      [
+        '个',
+        '件',
+        '袋',
+        '包',
+        '盒',
+        '瓶',
+        '罐',
+        '张',
+        '片',
+        '支',
+        '桶',
+        '箱',
+        '勺',
+        '平勺',
+      ].includes(normalized)
     ) {
       return 'PCS';
     }
@@ -714,7 +916,8 @@ export class PurchasingService {
   }
 
   private resolveBaseUnit(purchaseItem: PurchaseItem): BaseUnit {
-    const rawUnit = purchaseItem.ingredient?.baseUnit || purchaseItem.quantityUnit;
+    const rawUnit =
+      purchaseItem.ingredient?.baseUnit || purchaseItem.quantityUnit;
     const normalized = (rawUnit || '').toUpperCase();
 
     if (
@@ -838,6 +1041,152 @@ export class PurchasingService {
     );
   }
 
+  private resolveInventoryBaseUnit(
+    requirement: PurchaseRequirement,
+    ingredient?: any,
+  ): BaseUnit {
+    const rawUnit =
+      ingredient?.baseUnit ||
+      requirement.ingredientBaseUnit ||
+      requirement.quantityUnit;
+    const normalized = this.normalizeMeasurementUnit(rawUnit);
+
+    if (normalized === BaseUnit.G || normalized === 'KG' || normalized === 'JIN') {
+      return BaseUnit.G;
+    }
+    if (normalized === BaseUnit.ML || normalized === 'L') {
+      return BaseUnit.ML;
+    }
+    if (normalized === BaseUnit.PCS) {
+      return BaseUnit.PCS;
+    }
+
+    throw new BadRequestException(
+      `原料 ${requirement.ingredientName} 缺少可识别的库存基础单位，无法计算库存抵扣`,
+    );
+  }
+
+  private resolveRequirementDensity(
+    requirement: PurchaseRequirement,
+    ingredient?: any,
+  ): number | null {
+    const density = Number(
+      ingredient?.properties?.density_g_per_ml ??
+        requirement.foodDensityGPerMl ??
+        0,
+    );
+    return Number.isFinite(density) && density > 0 ? density : null;
+  }
+
+  private convertRequirementQuantityToInventoryBase(
+    requirement: PurchaseRequirement,
+    ingredient: any | undefined,
+    quantity: number,
+  ): number {
+    const amount = Number(quantity || 0);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return 0;
+    }
+
+    return this.roundNumber(
+      this.convertAmountToBaseQuantity({
+        baseUnit: this.resolveInventoryBaseUnit(requirement, ingredient),
+        inputUnit: requirement.quantityUnit,
+        amount,
+        density: this.resolveRequirementDensity(requirement, ingredient),
+        ingredientName: requirement.ingredientName,
+      }),
+      3,
+    );
+  }
+
+  private convertInventoryBaseQuantityToRequirementUnit(
+    requirement: PurchaseRequirement,
+    ingredient: any | undefined,
+    quantity: number,
+  ): number {
+    const baseQuantity = Number(quantity || 0);
+    if (!Number.isFinite(baseQuantity) || baseQuantity <= 0) {
+      return 0;
+    }
+
+    const baseUnit = this.resolveInventoryBaseUnit(requirement, ingredient);
+    const outputUnit = this.normalizeMeasurementUnit(requirement.quantityUnit);
+    const density = this.resolveRequirementDensity(requirement, ingredient);
+    let converted = baseQuantity;
+
+    if (baseUnit === BaseUnit.G) {
+      switch (outputUnit) {
+        case 'G':
+          converted = baseQuantity;
+          break;
+        case 'KG':
+          converted = baseQuantity / 1000;
+          break;
+        case 'JIN':
+          converted = baseQuantity / 500;
+          break;
+        case 'ML':
+          if (!density) {
+            throw new BadRequestException(
+              `${requirement.ingredientName} 缺少密度信息，无法把克换算为毫升`,
+            );
+          }
+          converted = baseQuantity / density;
+          break;
+        case 'L':
+          if (!density) {
+            throw new BadRequestException(
+              `${requirement.ingredientName} 缺少密度信息，无法把克换算为升`,
+            );
+          }
+          converted = baseQuantity / density / 1000;
+          break;
+        default:
+          converted = baseQuantity;
+      }
+    } else if (baseUnit === BaseUnit.ML) {
+      switch (outputUnit) {
+        case 'ML':
+          converted = baseQuantity;
+          break;
+        case 'L':
+          converted = baseQuantity / 1000;
+          break;
+        case 'G':
+          if (!density) {
+            throw new BadRequestException(
+              `${requirement.ingredientName} 缺少密度信息，无法把毫升换算为克`,
+            );
+          }
+          converted = baseQuantity * density;
+          break;
+        case 'KG':
+          if (!density) {
+            throw new BadRequestException(
+              `${requirement.ingredientName} 缺少密度信息，无法把毫升换算为千克`,
+            );
+          }
+          converted = (baseQuantity * density) / 1000;
+          break;
+        case 'JIN':
+          if (!density) {
+            throw new BadRequestException(
+              `${requirement.ingredientName} 缺少密度信息，无法把毫升换算为斤`,
+            );
+          }
+          converted = (baseQuantity * density) / 500;
+          break;
+        default:
+          converted = baseQuantity;
+      }
+    } else if (baseUnit === BaseUnit.PCS) {
+      converted = baseQuantity;
+    }
+
+    return this.roundNumber(converted, 3);
+  }
+
   private buildNormalizedPurchaseRecordData(
     purchaseItem: PurchaseItem,
     dto: AddPurchaseRecordDto | UpdatePurchaseRecordDto,
@@ -913,7 +1262,10 @@ export class PurchasingService {
         actualPackageUnit: existingRecord.actualPackageUnit,
         actualBaseQuantity:
           existingRecord.actualBaseQuantity ??
-          this.roundNumber(existingRecord.actualQuantity * purchaseToBaseRatio, 6),
+          this.roundNumber(
+            existingRecord.actualQuantity * purchaseToBaseRatio,
+            6,
+          ),
         actualBaseUnit: existingRecord.actualBaseUnit || baseUnit,
       };
     }
@@ -942,8 +1294,30 @@ export class PurchasingService {
       return new Map();
     }
 
-    const ingredients = await this.ingredientRepository.findByIds(ingredientIds);
-    return new Map(ingredients.map((ingredient) => [ingredient.id, ingredient]));
+    const ingredients =
+      await this.ingredientRepository.findByIds(ingredientIds);
+    return new Map(
+      ingredients.map((ingredient) => [ingredient.id, ingredient]),
+    );
+  }
+
+  private resolveSnapshotPurchaseQuantity(
+    detail: any,
+    ingredientType?: string,
+  ): number {
+    const type = String(ingredientType || detail?.type || '').toUpperCase();
+    const amount = Number(detail?.amount || 0);
+    const purchaseAmount = Number(detail?.purchaseAmount || 0);
+
+    if (type === 'FOOD' && Number.isFinite(amount) && amount > 0) {
+      return amount;
+    }
+
+    if (Number.isFinite(purchaseAmount) && purchaseAmount > 0) {
+      return purchaseAmount;
+    }
+
+    return Number.isFinite(amount) && amount > 0 ? amount : 0;
   }
 
   private async calculatePurchaseRequirementsFromOrders(
@@ -977,8 +1351,12 @@ export class PurchasingService {
       }
 
       for (const detail of ingredientDetails) {
-        const key = detail.ingredientId;
         const ingredientId = detail.ingredientId;
+        const procurementSkuId = detail.procurementSkuId || undefined;
+        const key = this.buildPurchaseRequirementKey(
+          ingredientId,
+          procurementSkuId,
+        );
         const recipeItem = recipeSnapshotMap.get(ingredientId);
         if (!recipeItem) {
           this.logger.warn(
@@ -987,7 +1365,11 @@ export class PurchasingService {
           continue;
         }
 
-        const purchaseQuantity = detail.purchaseAmount || detail.amount || 0;
+        const type = recipeItem.ingredient_type || detail.type || 'FOOD';
+        const purchaseQuantity = this.resolveSnapshotPurchaseQuantity(
+          detail,
+          type,
+        );
         if (purchaseQuantity <= 0) {
           this.logger.warn(
             `Skipping ingredient ${detail.name} due to non-positive quantity: ${purchaseQuantity}`,
@@ -995,7 +1377,6 @@ export class PurchasingService {
           continue;
         }
 
-        const type = recipeItem.ingredient_type || detail.type || 'FOOD';
         const totalCost = detail.cost || 0;
         const preparationMethods = resolvePreparationMethodTokens(
           (detail as any).preparationMethod,
@@ -1018,19 +1399,32 @@ export class PurchasingService {
             );
           }
         } else {
-          const ingredient = ingredientLookup.get(key);
+          const ingredient = ingredientLookup.get(ingredientId);
+          const demandUnit =
+            type === 'SUPPLEMENT'
+              ? ingredient?.unitDisplayLabel ||
+                detail.displayUnit ||
+                detail.unit ||
+                'G'
+              : detail.unit || 'G';
+          const demandDisplayUnit =
+            type === 'SUPPLEMENT'
+              ? ingredient?.unitDisplayLabel || detail.displayUnit || demandUnit
+              : detail.displayUnit;
           ingredientMap.set(key, {
-            ingredientId: key,
+            ingredientId,
             ingredientName: detail.name,
             type,
             quantityNeeded: purchaseQuantity,
-            quantityUnit: detail.unit || 'G',
+            quantityUnit: demandUnit,
             estimatedCost: totalCost,
             preparationMethods:
               preparationMethods.length > 0 ? preparationMethods : undefined,
             purchaseChannel: detail.purchaseChannel,
             productModel: detail.productModel,
-            displayUnit: detail.displayUnit,
+            displayUnit: demandDisplayUnit,
+            procurementSkuId,
+            procurementSkuName: detail.procurementSkuName || undefined,
             ingredientBaseUnit: ingredient?.baseUnit,
             foodDensityGPerMl:
               ingredient?.baseUnit === 'ML'
@@ -1087,7 +1481,11 @@ export class PurchasingService {
           return true;
         }
 
-        return [ingredient.name, ingredient.purchaseChannel, ingredient.productModel]
+        return [
+          ingredient.name,
+          ingredient.purchaseChannel,
+          ingredient.productModel,
+        ]
           .concat(
             (procurementSkuMap[ingredient.id] || []).flatMap((sku) => [
               sku.name,
@@ -1112,91 +1510,100 @@ export class PurchasingService {
       filteredIngredients.map((ingredient) => [ingredient.id, ingredient]),
     );
 
-    let insights = filteredIngredients.map((ingredient): StockReplenishmentInsight => {
-      const profile = this.resolveProcurementExecutionProfile({
-        ingredient,
-        procurementSkus: procurementSkuMap[ingredient.id] || [],
-      });
-      const currentStock = this.roundNumber(
-        currentStockMap.get(ingredient.id) ?? 0,
-        3,
-      );
-      const stockStatus = this.getStockLevelStatus({
-        currentStock,
-        safetyStock: profile.safetyStock,
-        reorderPoint: profile.reorderPoint,
-        targetStock: profile.targetStock,
-      });
-      const targetBaseQuantity =
-        profile.targetStock ??
-        profile.reorderPoint ??
-        profile.safetyStock ??
-        null;
-      const suggestedBaseQuantity =
-        stockStatus === 'NEEDS_REPLENISHMENT' && targetBaseQuantity !== null
-          ? this.roundNumber(Math.max(targetBaseQuantity - currentStock, 0), 3)
-          : 0;
-      const suggestedPurchaseQuantity =
-        suggestedBaseQuantity > 0
-          ? this.roundUpNumber(
-              suggestedBaseQuantity / profile.purchaseToBaseRatio,
-              3,
-            )
-          : 0;
+    let insights = filteredIngredients.map(
+      (ingredient): StockReplenishmentInsight => {
+        const profile = this.resolveProcurementExecutionProfile({
+          ingredient,
+          procurementSkus: procurementSkuMap[ingredient.id] || [],
+        });
+        const currentStock = this.roundNumber(
+          currentStockMap.get(ingredient.id) ?? 0,
+          3,
+        );
+        const stockStatus = this.getStockLevelStatus({
+          currentStock,
+          safetyStock: profile.safetyStock,
+          reorderPoint: profile.reorderPoint,
+          targetStock: profile.targetStock,
+        });
+        const targetBaseQuantity =
+          profile.targetStock ??
+          profile.reorderPoint ??
+          profile.safetyStock ??
+          null;
+        const suggestedBaseQuantity =
+          stockStatus === 'NEEDS_REPLENISHMENT' && targetBaseQuantity !== null
+            ? this.roundNumber(
+                Math.max(targetBaseQuantity - currentStock, 0),
+                3,
+              )
+            : 0;
+        const suggestedPurchaseQuantity =
+          suggestedBaseQuantity > 0
+            ? this.roundUpNumber(
+                suggestedBaseQuantity / profile.purchaseToBaseRatio,
+                3,
+              )
+            : 0;
 
-      return {
-        id: ingredient.id,
-        name: ingredient.name,
-        type: ingredient.type,
-        procurementStrategy: ingredient.procurementStrategy,
-        baseUnit: ingredient.baseUnit,
-        stockUnitLabel: ingredient.unitDisplayLabel || ingredient.baseUnit,
-        purchaseUnit: profile.purchaseUnit,
-        purchaseToBaseRatio: profile.purchaseToBaseRatio,
-        unitDisplayLabel: profile.displayUnit || ingredient.unitDisplayLabel,
-        purchaseChannel: profile.purchaseChannel,
-        productModel: profile.productModel,
-        procurementSkuId: profile.procurementSku?.id,
-        procurementSkuName: profile.procurementSku?.name,
-        currentPricePerPurchaseUnit: profile.currentPricePerPurchaseUnit,
-        effectivePricePerPurchaseUnit: profile.effectivePricePerPurchaseUnit,
-        currentStock,
-        safetyStock: profile.safetyStock,
-        reorderPoint: profile.reorderPoint,
-        targetStock: profile.targetStock,
-        stockStatus,
-        suggestedBaseQuantity,
-        suggestedPurchaseQuantity,
-        suggestedEstimatedCost: this.roundNumber(
-          suggestedPurchaseQuantity * profile.effectivePricePerPurchaseUnit,
-          2,
-        ),
-      };
-    });
+        return {
+          id: ingredient.id,
+          name: ingredient.name,
+          type: ingredient.type,
+          procurementStrategy: ingredient.procurementStrategy,
+          baseUnit: ingredient.baseUnit,
+          stockUnitLabel: ingredient.unitDisplayLabel || ingredient.baseUnit,
+          purchaseUnit: profile.purchaseUnit,
+          purchaseToBaseRatio: profile.purchaseToBaseRatio,
+          unitDisplayLabel: profile.displayUnit || ingredient.unitDisplayLabel,
+          purchaseChannel: profile.purchaseChannel,
+          productModel: profile.productModel,
+          procurementSkuId: profile.procurementSku?.id,
+          procurementSkuName: profile.procurementSku?.name,
+          currentPricePerPurchaseUnit: profile.currentPricePerPurchaseUnit,
+          effectivePricePerPurchaseUnit: profile.effectivePricePerPurchaseUnit,
+          currentStock,
+          safetyStock: profile.safetyStock,
+          reorderPoint: profile.reorderPoint,
+          targetStock: profile.targetStock,
+          stockStatus,
+          suggestedBaseQuantity,
+          suggestedPurchaseQuantity,
+          suggestedEstimatedCost: this.roundNumber(
+            suggestedPurchaseQuantity * profile.effectivePricePerPurchaseUnit,
+            2,
+          ),
+        };
+      },
+    );
 
     const replenishmentRequirements = insights
       .filter((item) => item.suggestedPurchaseQuantity > 0)
-      .map((item): PurchaseRequirement => ({
-        ingredientId: item.id,
-        ingredientName: item.name,
-        type: item.type,
-        quantityNeeded: item.suggestedPurchaseQuantity,
-        quantityUnit: item.purchaseUnit,
-        estimatedCost: item.suggestedEstimatedCost,
-        purchaseChannel: item.purchaseChannel || undefined,
-        productModel: item.productModel || undefined,
-        displayUnit: item.unitDisplayLabel || item.purchaseUnit,
-        procurementSkuId: item.procurementSkuId,
-        procurementSkuName: item.procurementSkuName,
-      }));
-
-    const enrichedRequirements =
-      await this.enrichRequirementsWithCatalogData(
-        replenishmentRequirements,
-        ingredientLookup,
+      .map(
+        (item): PurchaseRequirement => ({
+          ingredientId: item.id,
+          ingredientName: item.name,
+          type: item.type,
+          quantityNeeded: item.suggestedPurchaseQuantity,
+          quantityUnit: item.purchaseUnit,
+          estimatedCost: item.suggestedEstimatedCost,
+          purchaseChannel: item.purchaseChannel || undefined,
+          productModel: item.productModel || undefined,
+          displayUnit: item.unitDisplayLabel || item.purchaseUnit,
+          procurementSkuId: item.procurementSkuId,
+          procurementSkuName: item.procurementSkuName,
+        }),
       );
+
+    const enrichedRequirements = await this.enrichRequirementsWithCatalogData(
+      replenishmentRequirements,
+      ingredientLookup,
+    );
     const enrichedRequirementMap = new Map(
-      enrichedRequirements.map((requirement) => [requirement.ingredientId, requirement]),
+      enrichedRequirements.map((requirement) => [
+        requirement.ingredientId,
+        requirement,
+      ]),
     );
 
     insights = insights
@@ -1305,7 +1712,8 @@ export class PurchasingService {
       const existing = mergedItems.get(item.ingredientId);
       if (existing) {
         existing.plannedQuantity += item.plannedQuantity;
-        existing.purchaseChannel = item.purchaseChannel || existing.purchaseChannel;
+        existing.purchaseChannel =
+          item.purchaseChannel || existing.purchaseChannel;
         existing.productModel = item.productModel || existing.productModel;
         existing.notes = item.notes || existing.notes;
       } else {
@@ -1320,7 +1728,8 @@ export class PurchasingService {
     }
 
     const ingredientIds = Array.from(mergedItems.keys());
-    const ingredients = await this.ingredientRepository.findByIds(ingredientIds);
+    const ingredients =
+      await this.ingredientRepository.findByIds(ingredientIds);
     if (ingredients.length !== ingredientIds.length) {
       const foundIds = new Set(ingredients.map((ingredient) => ingredient.id));
       const missingIds = ingredientIds.filter((id) => !foundIds.has(id));
@@ -1332,9 +1741,8 @@ export class PurchasingService {
     const ingredientLookup = new Map(
       ingredients.map((ingredient) => [ingredient.id, ingredient]),
     );
-    const procurementSkuMap = await this.procurementSkuService.batchFindActive(
-      ingredientIds,
-    );
+    const procurementSkuMap =
+      await this.procurementSkuService.batchFindActive(ingredientIds);
 
     const requirements = await this.enrichRequirementsWithCatalogData(
       ingredientIds.map((ingredientId): PurchaseRequirement => {
@@ -1486,8 +1894,12 @@ export class PurchasingService {
 
       // 遍历定价快照中的每个原料
       for (const detail of ingredientDetails) {
-        const key = detail.ingredientId;
         const ingredientId = detail.ingredientId;
+        const procurementSkuId = detail.procurementSkuId || undefined;
+        const key = this.buildPurchaseRequirementKey(
+          ingredientId,
+          procurementSkuId,
+        );
 
         // 从recipeSnapshot中获取原料信息（用于排序和类型）
         const recipeItem = recipeSnapshotMap.get(ingredientId);
@@ -1498,9 +1910,11 @@ export class PurchasingService {
           continue;
         }
 
-        // purchaseAmount 是整个订单的采购总量（已包含制作损耗，不含出肉率）
-        // 如果没有 purchaseAmount，回退到 amount
-        const purchaseQuantity = detail.purchaseAmount || detail.amount || 0;
+        const type = recipeItem.ingredient_type || detail.type || 'FOOD';
+        const purchaseQuantity = this.resolveSnapshotPurchaseQuantity(
+          detail,
+          type,
+        );
 
         // 调试日志
         this.logger.debug(`Ingredient calculation: ${detail.name}`, {
@@ -1508,7 +1922,7 @@ export class PurchasingService {
           purchaseAmount: detail.purchaseAmount,
           amount: detail.amount,
           purchaseQuantity,
-          type: detail.type,
+          type,
           sortOrder: recipeItem.sort_order,
         });
 
@@ -1519,9 +1933,6 @@ export class PurchasingService {
           );
           continue;
         }
-
-        // 获取原料类型（从recipeSnapshot或ingredientDetails）
-        const type = recipeItem.ingredient_type || detail.type || 'FOOD';
 
         // 使用订单的总成本
         const totalCost = detail.cost || 0;
@@ -1548,20 +1959,33 @@ export class PurchasingService {
             );
           }
         } else {
-          const ingredient = ingredientLookup.get(key);
+          const ingredient = ingredientLookup.get(ingredientId);
+          const demandUnit =
+            type === 'SUPPLEMENT'
+              ? ingredient?.unitDisplayLabel ||
+                detail.displayUnit ||
+                detail.unit ||
+                'G'
+              : detail.unit || 'G';
+          const demandDisplayUnit =
+            type === 'SUPPLEMENT'
+              ? ingredient?.unitDisplayLabel || detail.displayUnit || demandUnit
+              : detail.displayUnit;
           // 新增原料
           ingredientMap.set(key, {
-            ingredientId: key,
+            ingredientId,
             ingredientName: detail.name,
             type: type,
             quantityNeeded: purchaseQuantity,
-            quantityUnit: detail.unit || 'G',
+            quantityUnit: demandUnit,
             estimatedCost: totalCost,
             preparationMethods:
               preparationMethods.length > 0 ? preparationMethods : undefined,
             purchaseChannel: detail.purchaseChannel,
             productModel: detail.productModel,
-            displayUnit: detail.displayUnit,
+            displayUnit: demandDisplayUnit,
+            procurementSkuId,
+            procurementSkuName: detail.procurementSkuName || undefined,
             ingredientBaseUnit: ingredient?.baseUnit,
             foodDensityGPerMl:
               ingredient?.baseUnit === 'ML'
@@ -1786,16 +2210,11 @@ export class PurchasingService {
     }
 
     const enrichedRequirements = requirements;
-    const purchaseRequirements = enrichedRequirements.filter(
-      (requirement) => requirement.quantityNeeded > 0,
+    // 日采清单保留所有订单原料，包括已被库存完全抵扣的项，方便人工审核兜底。
+    const purchaseRequirements = enrichedRequirements;
+    const allocationLines = this.buildInventoryAllocationLines(
+      enrichedRequirements,
     );
-    const allocationLines = enrichedRequirements
-      .filter((requirement) => (requirement.stockDeductedQuantity ?? 0) > 0)
-      .map((requirement) => ({
-        ingredientId: requirement.ingredientId,
-        procurementSkuId: requirement.procurementSkuId,
-        quantityG: requirement.stockDeductedQuantity!,
-      }));
 
     // 查询订单ID列表（使用制作日期查询）
     const { list: orders } =
@@ -1805,26 +2224,6 @@ export class PurchasingService {
         endDate: queryEndDate,
       });
     const sourceOrderIds = orders.map((o) => o.id);
-
-    // 转换订单状态：PAID → PURCHASING
-    let transitionedCount = 0;
-    for (const order of orders) {
-      try {
-        order.transitionTo(OrderStatus.PURCHASING);
-        await this.orderRepository.save(order);
-        transitionedCount++;
-        this.logger.log(
-          `Order ${order.id} transitioned from PAID to PURCHASING`,
-        );
-      } catch (error) {
-        this.logger.error(
-          `Failed to transition order ${order.id} to PURCHASING: ${error}`,
-        );
-      }
-    }
-    this.logger.log(
-      `Transitioned ${transitionedCount}/${orders.length} orders to PURCHASING status`,
-    );
 
     // 创建采购明细：只采购库存抵扣后的缺口
     const totalEstimatedCost = purchaseRequirements.reduce(
@@ -1906,6 +2305,35 @@ export class PurchasingService {
           })
         : null;
 
+    // 转换订单状态：PAID → PURCHASING
+    let transitionedCount = 0;
+    for (const order of orders) {
+      try {
+        const fromStatus = order.status;
+        order.transitionTo(OrderStatus.PURCHASING);
+        await this.orderRepository.save(order);
+        await this.appendOrderStatusHistory({
+          orderId: order.id,
+          fromStatus,
+          toStatus: OrderStatus.PURCHASING,
+          actorId: createdById,
+          purchaseListId: saved?.id ?? null,
+          triggeredBy: 'purchase_list_generation',
+        });
+        transitionedCount++;
+        this.logger.log(
+          `Order ${order.id} transitioned from PAID to PURCHASING`,
+        );
+      } catch (error) {
+        this.logger.error(
+          `Failed to transition order ${order.id} to PURCHASING: ${error}`,
+        );
+      }
+    }
+    this.logger.log(
+      `Transitioned ${transitionedCount}/${orders.length} orders to PURCHASING status`,
+    );
+
     return {
       purchaseList: saved,
       inventoryAllocation: inventoryAllocation
@@ -1919,7 +2347,7 @@ export class PurchasingService {
           }
         : null,
       fullyCoveredByInventory:
-        saved === null && allocationLines.length > 0 && items.length === 0,
+        allocationLines.length > 0 && totalEstimatedCost === 0,
     };
   }
 
@@ -1972,9 +2400,7 @@ export class PurchasingService {
     // 已有采购单的库存分配仍保持 ACTIVE，因此这里的可用库存天然排除了已占用库存。
     const enrichedRequirements =
       await this.calculatePurchaseRequirementsFromOrders(validOrders);
-    const purchaseRequirements = enrichedRequirements.filter(
-      (requirement) => requirement.quantityNeeded > 0,
-    );
+    const purchaseRequirements = enrichedRequirements;
 
     // 4. 合并到现有采购清单
     const existingItemMap = new Map(
@@ -2054,8 +2480,17 @@ export class PurchasingService {
     let transitionedCount = 0;
     for (const order of validOrders) {
       try {
+        const fromStatus = order.status;
         order.transitionTo(OrderStatus.PURCHASING);
         await this.orderRepository.save(order);
+        await this.appendOrderStatusHistory({
+          orderId: order.id,
+          fromStatus,
+          toStatus: OrderStatus.PURCHASING,
+          actorId: operatorId,
+          purchaseListId,
+          triggeredBy: 'purchase_list_order_addition',
+        });
         transitionedCount++;
         this.logger.log(
           `Order ${order.id} transitioned from PAID to PURCHASING`,
@@ -2150,8 +2585,14 @@ export class PurchasingService {
       const ingredientDetails = pricingBreakdown.ingredientDetails || [];
 
       for (const detail of ingredientDetails) {
-        const key = detail.ingredientId;
-        const purchaseQuantity = detail.purchaseAmount || detail.amount || 0;
+        const key = this.buildPurchaseRequirementKey(
+          detail.ingredientId,
+          detail.procurementSkuId,
+        );
+        const purchaseQuantity = this.resolveSnapshotPurchaseQuantity(
+          detail,
+          detail.type,
+        );
         const cost = detail.cost || 0;
 
         if (purchaseQuantity <= 0) continue;
@@ -2175,7 +2616,11 @@ export class PurchasingService {
     const itemsToKeep: PurchaseItem[] = [];
 
     for (const item of purchaseList.items) {
-      const deduction = ingredientDeductionMap.get(item.ingredientId) || 0;
+      const itemKey = this.buildPurchaseRequirementKey(
+        item.ingredientId,
+        item.procurementSkuId,
+      );
+      const deduction = ingredientDeductionMap.get(itemKey) || 0;
 
       if (deduction > 0) {
         const oldQuantity = item.quantityNeeded;
@@ -2192,8 +2637,7 @@ export class PurchasingService {
           // 不添加到 itemsToKeep，相当于删除
         } else {
           item.estimatedCost =
-            Number(item.estimatedCost) -
-            (ingredientCostMap.get(item.ingredientId) || 0);
+            Number(item.estimatedCost) - (ingredientCostMap.get(itemKey) || 0);
           affectedItems.push({
             ingredientId: item.ingredientId,
             ingredientName: item.ingredientName,
@@ -2245,7 +2689,9 @@ export class PurchasingService {
       purchaseListId,
     );
     const remainingOrderResults = await Promise.all(
-      purchaseList.sourceOrderIds.map((id) => this.orderRepository.findById(id)),
+      purchaseList.sourceOrderIds.map((id) =>
+        this.orderRepository.findById(id),
+      ),
     );
     const remainingOrders = remainingOrderResults.filter(
       (order): order is Order => order !== null,
@@ -2413,7 +2859,9 @@ export class PurchasingService {
     }
 
     const sourceOrderResults = await Promise.all(
-      purchaseList.sourceOrderIds.map((id) => this.orderRepository.findById(id)),
+      purchaseList.sourceOrderIds.map((id) =>
+        this.orderRepository.findById(id),
+      ),
     );
     const sourceOrders = sourceOrderResults.filter(
       (order): order is Order => order !== null,
@@ -2457,8 +2905,16 @@ export class PurchasingService {
         quantityNeeded: req.quantityNeeded,
         quantityUnit: req.quantityUnit,
         estimatedCost: req.estimatedCost,
+        grossQuantityNeeded: req.grossQuantityNeeded,
+        stockDeductedQuantity: req.stockDeductedQuantity,
+        purchaseShortageQuantity: req.purchaseShortageQuantity,
+        onHandQuantity: req.onHandQuantity,
+        allocatedQuantity: req.allocatedQuantity,
+        availableQuantity: req.availableQuantity,
+        usesInventory: req.usesInventory,
         purchaseChannel: req.purchaseChannel,
         productModel: req.productModel,
+        displayUnit: req.displayUnit,
       });
     }
 
@@ -2704,6 +3160,29 @@ export class PurchasingService {
     return purchaseList;
   }
 
+  private getPurchaseItemRequiredQuantity(item: PurchaseItem): number {
+    return Number(item.purchaseShortageQuantity ?? item.quantityNeeded ?? 0);
+  }
+
+  private assertCanManagePurchaseListExecution(
+    purchaseList: PurchaseList,
+    actionLabel: string,
+  ): void {
+    if (purchaseList.status !== PurchaseListStatus.PENDING) {
+      throw new BadRequestException(
+        `采购清单已完成，请先撤回完成后再${actionLabel}`,
+      );
+    }
+
+    if (!purchaseList.startedAt) {
+      throw new BadRequestException(`请先开始采购后再${actionLabel}`);
+    }
+
+    if (purchaseList.reimbursementId) {
+      throw new BadRequestException(`已关联报销单的采购清单不能${actionLabel}`);
+    }
+  }
+
   /**
    * 确认采购完成
    * 状态转换: DRAFT/PENDING → COMPLETED
@@ -2738,6 +3217,34 @@ export class PurchasingService {
 
     const purchaseRecords =
       await this.purchaseRecordRepository.findByPurchaseListId(id);
+    const recordedItemIds = new Set(
+      purchaseRecords.map((record) => record.purchaseItemId),
+    );
+    const missingRecordItems = purchaseList.items.filter((item) => {
+      const requiredQuantity = Number(
+        item.purchaseShortageQuantity ?? item.quantityNeeded ?? 0,
+      );
+      return (
+        requiredQuantity > 0 &&
+        !item.noPurchaseNeeded &&
+        !recordedItemIds.has(item.id)
+      );
+    });
+
+    if (missingRecordItems.length > 0) {
+      const sampleNames = missingRecordItems
+        .slice(0, 3)
+        .map((item) => item.procurementSkuName || item.ingredientName)
+        .join('、');
+      const suffix =
+        missingRecordItems.length > 3
+          ? `等 ${missingRecordItems.length} 个原料`
+          : `${missingRecordItems.length} 个原料`;
+      throw new BadRequestException(
+        `还有 ${suffix}未添加采购记录：${sampleNames}`,
+      );
+    }
+
     if (purchaseRecords.length > 0) {
       const inboundResult =
         await this.inventoryService.inboundFromPurchaseRecords(purchaseRecords);
@@ -2757,6 +3264,109 @@ export class PurchasingService {
     const saved = await this.purchaseListRepository.save(purchaseList);
 
     this.logger.log(`Purchase list ${id} marked as completed`);
+
+    return saved;
+  }
+
+  async markPurchaseItemNoPurchase(
+    purchaseListId: string,
+    itemId: string,
+    dto: MarkPurchaseItemNoPurchaseDto,
+    userId: string,
+  ): Promise<PurchaseList> {
+    const purchaseList =
+      await this.purchaseListRepository.findById(purchaseListId);
+
+    if (!purchaseList) {
+      throw new BadRequestException(`未找到采购清单：${purchaseListId}`);
+    }
+
+    this.assertCanManagePurchaseListExecution(purchaseList, '标记无需采购');
+
+    const item = purchaseList.items.find((candidate) => candidate.id === itemId);
+    if (!item) {
+      throw new BadRequestException(`未找到采购明细：${itemId}`);
+    }
+
+    if (this.getPurchaseItemRequiredQuantity(item) <= 0) {
+      throw new BadRequestException('该原料当前无需采购，不需要额外标记');
+    }
+
+    const existingRecords =
+      await this.purchaseRecordRepository.findByPurchaseItemId(itemId);
+    if (existingRecords.length > 0) {
+      throw new BadRequestException('已有采购记录，不能标记无需采购');
+    }
+
+    item.markNoPurchaseNeeded(dto.reason, userId);
+    purchaseList.updatedAt = new Date();
+
+    const saved = await this.purchaseListRepository.save(purchaseList);
+    this.logger.log(
+      `Purchase item ${itemId} marked no purchase needed in list ${purchaseListId}`,
+    );
+
+    return saved;
+  }
+
+  async clearPurchaseItemNoPurchase(
+    purchaseListId: string,
+    itemId: string,
+  ): Promise<PurchaseList> {
+    const purchaseList =
+      await this.purchaseListRepository.findById(purchaseListId);
+
+    if (!purchaseList) {
+      throw new BadRequestException(`未找到采购清单：${purchaseListId}`);
+    }
+
+    this.assertCanManagePurchaseListExecution(purchaseList, '取消无需采购标记');
+
+    const item = purchaseList.items.find((candidate) => candidate.id === itemId);
+    if (!item) {
+      throw new BadRequestException(`未找到采购明细：${itemId}`);
+    }
+
+    item.clearNoPurchaseNeeded();
+    purchaseList.updatedAt = new Date();
+
+    const saved = await this.purchaseListRepository.save(purchaseList);
+    this.logger.log(
+      `Purchase item ${itemId} no purchase marker cleared in list ${purchaseListId}`,
+    );
+
+    return saved;
+  }
+
+  async reopenPurchaseList(
+    id: string,
+    userId?: string,
+  ): Promise<PurchaseList> {
+    const purchaseList = await this.purchaseListRepository.findById(id);
+
+    if (!purchaseList) {
+      throw new BadRequestException(`未找到采购清单：${id}`);
+    }
+
+    if (purchaseList.status !== PurchaseListStatus.COMPLETED) {
+      throw new BadRequestException('只有已完成的采购清单可以撤回完成');
+    }
+
+    if (purchaseList.reimbursementId) {
+      throw new BadRequestException('已关联报销单的采购清单不能撤回完成');
+    }
+
+    const releaseResult =
+      await this.inventoryService.releasePurchaseRecordInboundsForPurchaseList(
+        id,
+      );
+
+    purchaseList.reopen();
+    const saved = await this.purchaseListRepository.save(purchaseList);
+
+    this.logger.log(
+      `Purchase list ${id} reopened by ${userId || 'unknown'}; released ${releaseResult.deletedCount} inbound inventory entries`,
+    );
 
     return saved;
   }
@@ -2818,9 +3428,25 @@ export class PurchasingService {
       throw new BadRequestException('已关联报销单的采购记录不能新增');
     }
 
+    if (purchaseList.status !== undefined) {
+      this.assertCanManagePurchaseListExecution(purchaseList, '新增采购记录');
+    }
+
+    if (purchaseItem.noPurchaseNeeded) {
+      throw new BadRequestException('该原料已标记无需采购，请先取消标记');
+    }
+
+    if (!dto.procurementSkuId || dto.procurementSkuId.trim().length === 0) {
+      throw new BadRequestException('请选择已配置的采购 SKU 后再记录采购');
+    }
+
     const selectedProcurementSku = dto.procurementSkuId
       ? await this.procurementSkuService.findById(dto.procurementSkuId)
       : undefined;
+
+    if (!selectedProcurementSku) {
+      throw new BadRequestException('所选生产采购 SKU 不存在');
+    }
 
     if (
       selectedProcurementSku &&
@@ -2839,10 +3465,8 @@ export class PurchasingService {
       purchaseListId,
       purchaseItemId: dto.purchaseItemId,
       ingredientId: purchaseItem.ingredientId,
-      procurementSkuId:
-        selectedProcurementSku?.id || purchaseItem.procurementSkuId,
-      procurementSkuName:
-        selectedProcurementSku?.name || purchaseItem.procurementSkuName,
+      procurementSkuId: selectedProcurementSku.id,
+      procurementSkuName: selectedProcurementSku.name,
       ingredientName: purchaseItem.ingredientName,
       purchaseChannel: dto.purchaseChannel,
       actualQuantity: normalizedRecordData.actualQuantity,
@@ -2899,6 +3523,10 @@ export class PurchasingService {
       throw new BadRequestException('已关联报销单的采购记录不能修改');
     }
 
+    if (purchaseList.status !== undefined) {
+      this.assertCanManagePurchaseListExecution(purchaseList, '更新采购记录');
+    }
+
     const purchaseItem = purchaseList.items.find(
       (item) => item.id === purchaseRecord.purchaseItemId,
     );
@@ -2908,14 +3536,33 @@ export class PurchasingService {
       );
     }
 
+    if (dto.procurementSkuName !== undefined && dto.procurementSkuId === undefined) {
+      throw new BadRequestException('请选择已配置的采购 SKU 后再记录采购');
+    }
+
     const normalizedRecordData = this.buildNormalizedPurchaseRecordData(
       purchaseItem,
       dto,
       purchaseRecord,
     );
+    const selectedProcurementSku =
+      dto.procurementSkuId !== undefined && dto.procurementSkuId.trim().length > 0
+        ? await this.procurementSkuService.findById(dto.procurementSkuId)
+        : undefined;
 
-    // 更新采购记录
-    purchaseRecord.update({
+    if (dto.procurementSkuId !== undefined && !selectedProcurementSku) {
+      throw new BadRequestException('所选生产采购 SKU 不存在');
+    }
+
+    if (
+      selectedProcurementSku &&
+      selectedProcurementSku.ingredientId !== purchaseItem.ingredientId
+    ) {
+      throw new BadRequestException('所选生产采购 SKU 与采购明细原料不匹配');
+    }
+
+    const shouldUpdateProcurementSku = dto.procurementSkuId !== undefined;
+    const updateData: Parameters<PurchaseRecord['update']>[0] = {
       ...dto,
       actualQuantity: normalizedRecordData.actualQuantity,
       actualPackageCount: normalizedRecordData.actualPackageCount,
@@ -2923,7 +3570,15 @@ export class PurchasingService {
       actualPackageUnit: normalizedRecordData.actualPackageUnit,
       actualBaseQuantity: normalizedRecordData.actualBaseQuantity,
       actualBaseUnit: normalizedRecordData.actualBaseUnit,
-    });
+    };
+
+    if (shouldUpdateProcurementSku) {
+      updateData.procurementSkuId = selectedProcurementSku!.id;
+      updateData.procurementSkuName = selectedProcurementSku!.name;
+    }
+
+    // 更新采购记录
+    purchaseRecord.update(updateData);
 
     // 保存到数据库
     const saved = await this.purchaseRecordRepository.save(purchaseRecord);
@@ -2963,6 +3618,10 @@ export class PurchasingService {
       throw new BadRequestException('已关联报销单的采购记录不能删除');
     }
 
+    if (purchaseList.status !== undefined) {
+      this.assertCanManagePurchaseListExecution(purchaseList, '删除采购记录');
+    }
+
     // 删除采购记录
     await this.purchaseRecordRepository.delete(id);
 
@@ -2972,7 +3631,9 @@ export class PurchasingService {
   /**
    * 查询采购记录列表
    */
-  async getPurchaseRecords(purchaseListId: string): Promise<PurchaseRecord[]> {
+  async getPurchaseRecords(
+    purchaseListId: string,
+  ): Promise<PurchaseRecordWithProcurementSkuStock[]> {
     const purchaseList =
       await this.purchaseListRepository.findById(purchaseListId);
 
@@ -2980,7 +3641,28 @@ export class PurchasingService {
       throw new BadRequestException(`未找到采购清单：${purchaseListId}`);
     }
 
-    return this.purchaseRecordRepository.findByPurchaseListId(purchaseListId);
+    const records =
+      await this.purchaseRecordRepository.findByPurchaseListId(purchaseListId);
+    const procurementSkuIds = records
+      .map((record) => record.procurementSkuId)
+      .filter((id): id is string => Boolean(id));
+
+    const stockMap =
+      await this.inventoryService.getProcurementSkuInventoryBalances(
+        procurementSkuIds,
+      );
+
+    return records.map((record) => {
+      const stock = record.procurementSkuId
+        ? stockMap.get(record.procurementSkuId)
+        : undefined;
+
+      return Object.assign(record, {
+        procurementSkuStockBaseQuantity: stock?.currentStock ?? null,
+        procurementSkuStockBaseUnit: record.actualBaseUnit || null,
+        procurementSkuHasStockLedger: stock?.hasLedger ?? false,
+      });
+    });
   }
 
   /**
@@ -2990,9 +3672,9 @@ export class PurchasingService {
   async getPurchaseChannels(): Promise<string[]> {
     const [ingredients, recommendedChannels, procurementChannels] =
       await Promise.all([
-      this.ingredientRepository.findAll(),
-      this.recommendedProductService.listActivePurchaseChannels(),
-      this.procurementSkuService.listActivePurchaseChannels(),
+        this.ingredientRepository.findAll(),
+        this.recommendedProductService.listActivePurchaseChannels(),
+        this.procurementSkuService.listActivePurchaseChannels(),
       ]);
 
     // 提取所有不同的采购渠道并过滤掉空值

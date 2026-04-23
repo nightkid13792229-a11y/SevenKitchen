@@ -2,7 +2,7 @@
   <view class="preview-page">
     <!-- 顶部标题 -->
     <view class="header">
-      <text class="title">采购需求预览</text>
+      <text class="title">日采需求预览</text>
     </view>
 
     <!-- 日期选择器 -->
@@ -58,7 +58,7 @@
 
       <view class="action-buttons">
         <button class="preview-btn" @tap="handlePreview" :loading="loading">
-          {{ loading ? '预览中...' : '预览需求' }}
+          {{ loading ? '预览中...' : '预览日采需求' }}
         </button>
       </view>
     </view>
@@ -121,7 +121,7 @@
                     <text class="ingredient-name">{{ item.ingredientName }}</text>
                   <view v-if="item.resolvedProcurementSkuName || item.resolvedSuggestedProductName" class="ingredient-sku-lines">
                     <text v-if="item.resolvedProcurementSkuName" class="procurement-sku">
-                      采购SKU：{{ item.resolvedProcurementSkuName }}
+                      {{ item.resolvedProcurementSkuName }}
                     </text>
                     <text
                       v-if="item.resolvedSuggestedProductName && item.resolvedSuggestedProductName !== item.resolvedProcurementSkuName"
@@ -142,10 +142,10 @@
                 </view>
 
                 <view v-if="item.resolvedUsesInventory" class="stock-offset-lines">
-                  <text>订单需求：{{ formatBaseQuantity(item.resolvedGrossQuantityNeeded) }}{{ getDisplayUnit(item) }}</text>
-                  <text>可用库存：{{ formatBaseQuantity(item.resolvedAvailableQuantity) }}{{ getDisplayUnit(item) }}</text>
-                  <text>库存抵扣：{{ formatBaseQuantity(item.resolvedStockDeductedQuantity) }}{{ getDisplayUnit(item) }}</text>
-                  <text>仍需采购：{{ formatBaseQuantity(item.resolvedPurchaseShortageQuantity) }}{{ getDisplayUnit(item) }}</text>
+                  <text>订单需求：{{ formatResolvedQuantity(item.resolvedGrossQuantityNeeded, item) }}</text>
+                  <text>可用库存：{{ formatResolvedQuantity(item.resolvedAvailableQuantity, item) }}</text>
+                  <text>库存抵扣：{{ formatResolvedQuantity(item.resolvedStockDeductedQuantity, item) }}</text>
+                  <text>仍需采购：{{ formatResolvedQuantity(item.resolvedPurchaseShortageQuantity, item) }}</text>
                 </view>
 
                 <view
@@ -199,7 +199,7 @@
     <!-- 空状态 -->
     <view v-else-if="!loading" class="empty-state">
       <text class="empty-icon">📋</text>
-      <text class="empty-text">请选择日期并预览采购需求</text>
+      <text class="empty-text">请选择日期并预览日采需求</text>
     </view>
   </view>
 </template>
@@ -417,8 +417,8 @@ const formatDisplayValue = (value: number, unit: string) => {
   return value.toFixed(2);
 };
 
-const resolveFoodDisplayMeta = (item: any) => {
-  const quantity = Number(item.quantityNeeded || 0);
+const resolveFoodDisplayMeta = (item: any, quantityOverride?: number) => {
+  const quantity = Number(quantityOverride ?? item.quantityNeeded ?? 0);
   const quantityUnit = String(item.quantityUnit || '').toLowerCase();
   const ingredientBaseUnit = String(item.ingredientBaseUnit || '').toUpperCase();
   const density = Number(item.foodDensityGPerMl || 0);
@@ -448,6 +448,16 @@ const resolveFoodDisplayMeta = (item: any) => {
   return { value: quantity, unit: item.displayUnit || item.quantityUnit || '' };
 };
 
+const formatSupplementDisplayValue = (value: number) => {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric)) {
+    return '0';
+  }
+
+  const rounded = Number(numeric.toFixed(2));
+  return Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(2);
+};
+
 const formatQuantity = (item: any) => {
   if (item.type === 'FOOD') {
     const meta = resolveFoodDisplayMeta(item);
@@ -455,7 +465,16 @@ const formatQuantity = (item: any) => {
   }
 
   // 补剂类型和其他：保留两位小数
-  return Number(item.quantityNeeded).toFixed(2);
+  return formatSupplementDisplayValue(Number(item.quantityNeeded || 0));
+};
+
+const formatResolvedQuantity = (value: number, item: any) => {
+  if (item.type === 'FOOD') {
+    const meta = resolveFoodDisplayMeta(item, value);
+    return `${formatDisplayValue(meta.value, meta.unit)}${meta.unit}`;
+  }
+
+  return `${formatSupplementDisplayValue(Number(value || 0))}${getDisplayUnit(item)}`;
 };
 
 // 获取显示单位
@@ -464,13 +483,13 @@ const getDisplayUnit = (item: any) => {
     return resolveFoodDisplayMeta(item).unit;
   }
 
-  if (item.resolvedDisplayUnit) {
-    return item.resolvedDisplayUnit;
+  // 补剂的需求量应使用配方计算单位；SKU的瓶、罐只作为规格信息展示。
+  if (item.type === 'SUPPLEMENT') {
+    return item.quantityUnit || item.displayUnit || 'g';
   }
 
-  // 补剂类型：优先使用displayUnit，回退到quantityUnit
-  if (item.type === 'SUPPLEMENT') {
-    return item.displayUnit || item.quantityUnit || 'g';
+  if (item.resolvedDisplayUnit) {
+    return item.resolvedDisplayUnit;
   }
 
   // 其他类型：使用quantityUnit

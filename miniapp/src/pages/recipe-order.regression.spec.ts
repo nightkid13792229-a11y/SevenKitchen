@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 describe('recipe-order phase one UI contract', () => {
@@ -70,6 +70,8 @@ describe('recipe-order phase one UI contract', () => {
 
   it('stores preparation and cooking methods for checkout display', () => {
     expect(source).toContain("uni.setStorageSync('direct_buy_order_config'");
+    expect(source).toContain('dogId: selectedDog.value?.id || selectedDogId.value');
+    expect(source).toContain('recipeId: recipeId.value');
     expect(source).toContain("preparationMethod: preparationMethod.value || 'CHOPPED'");
     expect(source).toContain("cookingMethod: cookingMethod.value || 'RAW'");
   });
@@ -81,7 +83,6 @@ describe('recipe-order phase one UI contract', () => {
       '订购天数',
       '原料采购来源',
       '产品说明',
-      '分装及物流说明',
       'bottom-bar',
     ];
 
@@ -96,6 +97,12 @@ describe('recipe-order phase one UI contract', () => {
         `${sectionOrder[index]} should appear after ${sectionOrder[index - 1]}`,
       ).toBeGreaterThan(positions[index - 1]);
     }
+  });
+
+  it('renders all recipe life-stage tags in Chinese on the order page', () => {
+    expect(templateSource).toContain('getLifeStageLabel(stage)');
+    expect(source).toContain('../../utils/life-stage-match');
+    expect(source).toContain('getLifeStageLabel');
   });
 
   it('classifies the top recipe, dog feeding, and package blocks without repeated package summaries', () => {
@@ -168,6 +175,9 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).toContain('source-plan-card compact');
     expect(templateSource).toContain('formatSourcePlanShortName(option.code)');
     expect(templateSource).toContain('sourcePlanDescription');
+    expect(templateSource).toContain('sourcePlanFallbackNote');
+    expect(source).toContain("const selectedSourcePlan = ref<IngredientSourcePlanCode>('WHOLESALE')");
+    expect(source).not.toContain("const selectedSourcePlan = ref<IngredientSourcePlanCode>('MARKET_PREMIUM')");
     expect(source).not.toContain('ingredientSummaryMeta');
     expect(source).not.toContain('种食材 · ${supplementIngredients.value.length}种补剂');
     expect(source).not.toContain('净重 ${totalFoodKg.toFixed(2)}kg');
@@ -183,15 +193,19 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).toContain("MARKET_PREMIUM: '超市优先'");
     expect(source).toContain("WHOLESALE: '性价比优先'");
     expect(source).toContain('function getSourcePlanDescription');
-    expect(source).toContain('原料优先选择有机、非转基因、生态散养来源');
-    expect(source).toContain('原料优先选择山姆、盒马、沃集鲜等知名商超来源');
-    expect(source).toContain('原料选择以人食级为底线，尽量选择肉团、生鲜批发等性价比高的来源');
+    expect(source).toContain('优先选择有机、草饲、散养、非转基因来源');
+    expect(source).toContain('优先选择山姆、盒马、沃集鲜等商超来源');
+    expect(source).toContain('人食级原料，优先选择生鲜批发来源');
+    expect(source).not.toContain('原料优先选择有机、非转基因、生态散养来源');
+    expect(source).not.toContain('原料优先选择山姆、盒马、沃集鲜等知名商超来源');
+    expect(source).not.toContain('原料选择以人食级为底线，尽量选择肉团、生鲜批发等性价比高的来源');
+    expect(source).toContain('个别原料买不到时，会自动选择标准接近的来源');
     expect(source).toContain('source-plan-card');
     expect(source).toContain('formatSourcePlanPrice(option.code)');
     expect(source).toContain('loadSourcePlanPricePreviews');
   });
 
-  it('shows ingredient and supplement amounts in a compact inline source layout', () => {
+  it('shows ingredients and supplements in a compact two-line detail layout', () => {
     expect(templateSource).toContain('v-if="totalIngredientCount > 0" class="ingredients-content"');
     expect(source).not.toContain('ingredientPreviewItems');
     expect(source).not.toContain('ingredientDetailsButtonText');
@@ -199,39 +213,140 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).not.toContain('toggleIngredientDetails');
     expect(source).not.toContain('查看全部 ${totalIngredientCount.value} 种原料');
     expect(source).not.toContain('收起原料清单');
-    expect(templateSource).toContain('原料用量');
-    expect(templateSource).toContain('补剂用量');
+    expect(templateSource).not.toContain('原料用量');
+    expect(templateSource).not.toContain('补剂用量');
     expect(templateSource).not.toContain('原料列表');
     expect(templateSource).not.toContain('营养补剂');
-    expect(templateSource).not.toContain('ingredient-header compact');
-    expect(templateSource).not.toContain('原料名称');
-    expect(templateSource).not.toContain('<text class="ingredient-header-item channel">采购渠道</text>');
-    expect(templateSource).not.toContain('<text class="ingredient-header-item amount">用量</text>');
-    expect(templateSource).not.toContain('<text class="ingredient-header-item spec">规格</text>');
+    expect(templateSource).not.toContain('ingredient-table-header');
+    expect(templateSource).not.toContain('ingredient-header-cell');
+    expect(templateSource).not.toContain('采购渠道</text>');
+    expect(templateSource).not.toContain('产品规格</text>');
+    expect(templateSource).toContain('ingredient-list-title');
+    expect(templateSource).toContain('原料明细</text>');
     expect(templateSource).not.toContain("<text class=\"ingredient-spec\">{{ ingredient.brand || '-' }}</text>");
     expect(templateSource).not.toContain('@tap="showIngredientDetail(ingredient)"');
     expect(templateSource).not.toContain('ingredient-name-button');
     expect(templateSource).not.toContain('ingredient-name-arrow');
-    expect(templateSource).toContain('<text class="ingredient-name">{{ ingredient.name }}</text>');
-    expect(templateSource).toContain("<text class=\"ingredient-spec-inline\">{{ ingredient.productModel || '-' }}</text>");
-    expect(source).toContain('ingredient-channel-tag');
-    expect(source).toContain('display: flex;');
-    expect(source).toContain('max-width: 128rpx;');
-    expect(source).toContain('ingredient-spec-inline');
+    expect(templateSource).toContain('v-for="ingredient in displayIngredientRows"');
+    expect(templateSource).toContain('ingredient-type-tag');
+    expect(templateSource).toContain('{{ ingredient.typeLabel }}');
+    expect(templateSource).toContain('ingredient.typeClass');
+    expect(templateSource).toContain('ingredient-row-main');
+    expect(templateSource).toContain('<text class="ingredient-name">{{ ingredient.nameText }}</text>');
+    expect(templateSource).toContain('{{ ingredient.amountText }}');
+    expect(templateSource).toContain('ingredient-meta-row');
+    expect(templateSource).toContain('ingredient-meta-item');
+    expect(templateSource).toContain('ingredient-meta-label');
+    expect(templateSource).toContain('渠道</text>');
+    expect(templateSource).toContain('品牌</text>');
+    expect(templateSource).toContain('规格</text>');
+    expect(templateSource).toContain('{{ ingredient.purchaseChannelText }}');
+    expect(templateSource).toContain('{{ ingredient.brandText }}');
+    expect(templateSource).toContain('{{ ingredient.productModelText }}');
+    expect(templateSource).not.toContain('{{ formatIngredientAmount(ingredient) }}');
+    expect(templateSource).not.toContain('{{ buildIngredientDisplayName(ingredient) }}');
+    expect(templateSource).not.toContain('{{ buildIngredientPurchaseChannelText(ingredient) }}');
+    expect(templateSource).not.toContain('{{ buildIngredientBrandText(ingredient) }}');
+    expect(source).toContain('displayIngredientRows');
+    expect(source).toContain('procurementSkuName?: string');
+    expect(source).toContain('buildIngredientDisplayName');
+    expect(source).toContain('buildIngredientPurchaseChannelText');
+    expect(source).toContain('buildIngredientBrandText');
+    expect(source).toContain('displayIngredients');
+    expect(source).toContain('getIngredientTypeLabel');
+    expect(source).toContain('getIngredientTypeClass');
+    expect(source).not.toContain('ingredient-table-grid');
+    expect(source).toContain('grid-template-columns: minmax(0, 1fr) auto;');
+    expect(source).toContain('white-space: normal;');
+    expect(source).not.toContain('ingredient-spec-cell');
     expect(source).toContain('productModel?: string');
     expect(source).not.toContain('function showIngredientDetail(ingredient: IngredientCostItem)');
-    expect(source).not.toContain('uni.showModal({');
     expect(source).not.toContain('title: ingredient.name');
     expect(source).not.toContain("品牌：${ingredient.brand || '-'}");
     expect(source).not.toContain("规格：${ingredient.productModel || '-'}");
   });
 
   it('explains product handling, storage, production, and logistics before checkout', () => {
-    expect(source).toContain('为什么要把所有原料打碎？');
-    expect(source).toContain('保存方法、保质期和烹饪说明');
-    expect(source).toContain('当日采购当日制作，冷冻 24 小时后发货');
-    expect(source).toContain('分装及物流说明');
-    expect(source).toContain('按袋真空分装');
+    expect(templateSource).toContain('product-explanation-media');
+    expect(templateSource).toContain('product-explanation-media-label');
+    expect(templateSource).toContain('product-explanation-logistics-card');
+    expect(templateSource).toContain('product-explanation-logistics-visual');
+    expect(templateSource).toContain('product-explanation-package-frame');
+    expect(templateSource).toContain('product-explanation-package-image');
+    expect(templateSource).toContain('mode="aspectFit"');
+    expect(templateSource).toContain('product-explanation-shipping-row');
+    expect(templateSource).toContain('product-explanation-shipping-main');
+    expect(templateSource).toContain('product-explanation-shipping-copy');
+    expect(templateSource).toContain('product-explanation-shipping-logo');
+    expect(templateSource).toContain('product-explanation-shipping-title');
+    expect(templateSource).toContain('product-explanation-shipping-subtitle');
+    expect(templateSource).toContain('product-explanation-shipping-pill');
+    expect(source).toContain('mediaKind');
+    expect(source).toContain('mediaLabel');
+    expect(source).toContain('packageImageUrl');
+    expect(source).toContain('shippingLogoUrl');
+    expect(source).toContain('loadProductExplanationMediaConfig');
+    expect(source).toContain("url: '/global-config'");
+    expect(source).toContain('packageExampleImageUrl');
+    expect(source).toContain('shippingCompanyLogoUrl');
+    expect(source).toContain("const LOCAL_PACKAGE_EXAMPLE_IMAGE_URL = '/static/product-explanation/package-example.png'");
+    expect(source).toContain("const LOCAL_SHIPPING_COMPANY_LOGO_URL = '/static/product-explanation/shipping-logo.png'");
+    expect(source).toContain('https://img.sevenkitchen.cloud/package-images/1769932497277-7bf4f880.jpg');
+    expect(source).toContain('https://img.sevenkitchen.cloud/shipping-logos/1769932504418-14b5188c.png');
+    expect(source).toContain('STALE_PRODUCT_EXPLANATION_MEDIA_URLS');
+    expect(source).toContain('isUsableProductExplanationMediaUrl');
+    expect(source).toContain('isUsableProductExplanationMediaUrl(configuredPackageImageUrl)');
+    expect(source).toContain('isUsableProductExplanationMediaUrl(configuredShippingLogoUrl)');
+    expect(source).toContain('packageImageUrl: LOCAL_PACKAGE_EXAMPLE_IMAGE_URL');
+    expect(source).toContain('shippingLogoUrl: LOCAL_SHIPPING_COMPANY_LOGO_URL');
+    expect(existsSync(resolve(process.cwd(), 'src/static/product-explanation/package-example.png'))).toBe(true);
+    expect(existsSync(resolve(process.cwd(), 'src/static/product-explanation/shipping-logo.png'))).toBe(true);
+    expect(source).toContain("normalizeImageUrl('http://img.sevenkitchen.cloud/package-images/1767527958742-149215e3.jpg')");
+    expect(source).toContain("normalizeImageUrl('http://img.sevenkitchen.cloud/shipping-logos/1767529001420-55fde8f2.png')");
+    expect(source).toContain('分装与物流');
+    expect(source).toContain('顺丰生鲜配送');
+    expect(source).toContain('冷冻包材 + 冰袋随箱');
+    expect(source).toContain('保质期与存储方式');
+    expect(source).toContain('-18℃');
+    expect(source).toContain('冷冻保存');
+    expect(source).toContain('可保存 6 个月');
+    expect(source).toContain('0-4℃');
+    expect(source).toContain('冷藏保存');
+    expect(source).toContain('可保存 3 天');
+    expect(source).toContain('最佳营养保存期');
+    expect(source).toContain('建议 1 个月内吃完，不建议囤货');
+    expect(source).toContain('烹饪方法');
+    expect(source).toContain('蒸');
+    expect(source).toContain('炖');
+    expect(source).toContain('低温慢煮');
+    expect(source).toContain('烹饪时间与重量和体积相关，请参考产品标签');
+    expect(source).toContain('微波');
+    expect(source).toContain('炸');
+    expect(source).toContain('炒');
+    expect(source).toContain('煎');
+    expect(source).toContain('不建议微波、炸、炒、煎等高温烹饪方式');
+    expect(source).toContain('当日采购当日制作');
+    expect(source).toContain('product-explanation-plain-card');
+    expect(source).not.toContain('制作流程');
+    expect(source).not.toContain('保质期、保存方法、烹饪方法');
+    expect(source).not.toContain('保质期：冷冻保存，建议 3 个月内吃完');
+    expect(source).not.toContain('保存方法：收到后请立即冷冻，单袋解冻后尽快喂完');
+    expect(source).not.toContain('烹饪方法：提前冷藏解冻，可隔水温热后喂食');
+    expect(source).not.toContain('成品形态');
+    expect(source).not.toContain('所有食材会按配方处理后打碎，并充分混匀');
+    expect(source.indexOf('当日采购当日制作')).toBeLessThan(source.indexOf('分装与物流'));
+    expect(source.indexOf('分装与物流')).toBeLessThan(source.indexOf('保质期与存储方式'));
+    expect(source.indexOf('保质期与存储方式')).toBeLessThan(source.indexOf('烹饪方法'));
+    expect(source).not.toContain('为什么要把所有原料打碎？');
+    expect(source).not.toContain('减少挑食，避免只挑肉不吃菜或补剂');
+    expect(source).not.toContain('保存和喂食方法');
+    expect(source).not.toContain('按袋真空分装，每袋贴有信息标签');
+    expect(source).not.toContain('使用冷冻包材和冰袋配送，减少运输温度波动');
+    expect(source).not.toContain('明显完全解冻，请拍照后联系客服');
+    expect(source).toContain('冷冻满 24 小时后发货');
+    expect(source).toContain('具体制作与发货时间以下单确认页为准');
+    expect(templateSource).not.toContain('<view class="section logistics-section">');
+    expect(templateSource).not.toContain('<text class="title-text">分装及物流说明</text>');
   });
 
   it('uses bag-based bottom pricing states instead of daily pricing', () => {

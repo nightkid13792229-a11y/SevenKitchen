@@ -4,7 +4,7 @@
  */
 
 // 单位转换常量
-const MM_TO_PX = 8; // 1mm = 8像素 (75mm × 100mm = 600px × 800px)
+const MM_TO_PX = 8; // 1mm = 8像素 (70mm × 100mm = 560px × 800px)
 
 export interface LabelLayoutConfig {
   // 位置和尺寸（毫米单位）
@@ -33,7 +33,7 @@ export interface LabelLayoutConfig {
  */
 export const LABEL_LAYOUT = {
   canvas: {
-    width: 75,   // mm
+    width: 70,   // mm
     height: 100, // mm
   },
 

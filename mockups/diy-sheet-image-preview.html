@@ -1,0 +1,712 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DIY 制作单分享图片优化预览</title>
+  <style>
+    :root {
+      --blue: #1f8fe5;
+      --blue-2: #5d58c8;
+      --blue-soft: #edf7ff;
+      --blue-line: #cfe6fb;
+      --ink: #27313a;
+      --muted: #6f7a84;
+      --soft: #f6f9fc;
+      --line: #e0e6eb;
+      --orange: #e99a19;
+      --orange-soft: #fff7e8;
+      --green: #28a16c;
+      --paper: #fff;
+      --bg: #eef2f6;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+    }
+
+    .page {
+      min-height: 100vh;
+      padding: 24px 18px 56px;
+    }
+
+    .hint {
+      width: min(100%, 1120px);
+      margin: 0 auto 14px;
+      padding: 10px 14px;
+      border: 1px solid #c7d9ee;
+      border-radius: 8px;
+      background: #fff;
+      color: #5d6873;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .sheet {
+      width: min(100%, 1120px);
+      margin: 0 auto;
+      background: var(--paper);
+      box-shadow: 0 18px 50px rgba(25, 35, 50, 0.14);
+      overflow: hidden;
+    }
+
+    .hero {
+      position: relative;
+      padding: 34px 42px 28px;
+      color: #fff;
+      background:
+        radial-gradient(circle at 12% 18%, rgba(255, 255, 255, 0.22), transparent 28%),
+        linear-gradient(128deg, #4eaff7 0%, #4d67d5 52%, #6c4bbb 100%);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 9px;
+      width: 100%;
+      font-size: 15px;
+      font-weight: 800;
+      opacity: 0.92;
+      margin-bottom: 18px;
+      letter-spacing: 0.02em;
+    }
+
+    .brand-logo {
+      position: relative;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background:
+        radial-gradient(circle at 38% 45%, #20242a 0 7%, transparent 8%),
+        radial-gradient(circle at 62% 45%, #20242a 0 7%, transparent 8%),
+        radial-gradient(circle at 50% 59%, #20242a 0 9%, transparent 10%),
+        radial-gradient(circle at 50% 70%, #ff7b68 0 7%, transparent 8%),
+        radial-gradient(circle at 50% 50%, #f6f8fb 0 45%, transparent 46%),
+        linear-gradient(145deg, #dce3ea, #aebbc6);
+      border: 2px solid rgba(255, 255, 255, 0.7);
+      box-shadow: 0 5px 14px rgba(30, 40, 62, 0.18);
+    }
+
+    .brand-logo::before,
+    .brand-logo::after {
+      content: "";
+      position: absolute;
+      top: 6px;
+      width: 13px;
+      height: 16px;
+      border-radius: 58% 58% 42% 42%;
+      background: #c8d2dc;
+      z-index: -1;
+    }
+
+    .brand-logo::before {
+      left: -6px;
+      transform: rotate(-26deg);
+    }
+
+    .brand-logo::after {
+      right: -6px;
+      transform: rotate(26deg);
+    }
+
+    .hero-main {
+      display: grid;
+      grid-template-columns: 88px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 22px;
+    }
+
+    .avatar {
+      position: relative;
+      width: 88px;
+      height: 88px;
+      border-radius: 50%;
+      border: 4px solid rgba(255, 255, 255, 0.65);
+      background:
+        linear-gradient(92deg, transparent 24%, #dce5ed 24% 34%, transparent 34% 43%, #dce5ed 43% 53%, transparent 53% 62%, #dce5ed 62% 72%, transparent 72%),
+        radial-gradient(circle at 50% 39%, #f7f9fb 0 17%, transparent 18%),
+        radial-gradient(circle at 38% 44%, #30353b 0 5%, transparent 6%),
+        radial-gradient(circle at 62% 44%, #30353b 0 5%, transparent 6%),
+        radial-gradient(circle at 50% 56%, #24282d 0 7%, transparent 8%),
+        linear-gradient(145deg, #e1e8ee, #b7c4cf);
+      box-shadow: 0 12px 24px rgba(27, 36, 56, 0.24);
+    }
+
+    .avatar::before,
+    .avatar::after {
+      content: "";
+      position: absolute;
+      top: 21px;
+      width: 22px;
+      height: 37px;
+      border-radius: 45% 45% 58% 58%;
+      background: #aebbc6;
+      z-index: -1;
+    }
+
+    .avatar::before {
+      left: -10px;
+      transform: rotate(-15deg);
+    }
+
+    .avatar::after {
+      right: -10px;
+      transform: rotate(15deg);
+    }
+
+    .title-block {
+      min-width: 0;
+    }
+
+    .eyebrow {
+      font-size: 16px;
+      font-weight: 760;
+      opacity: 0.88;
+      margin-bottom: 6px;
+    }
+
+    .recipe-name {
+      margin: 0;
+      font-size: 38px;
+      font-weight: 880;
+      line-height: 1.12;
+      letter-spacing: 0;
+      word-break: keep-all;
+    }
+
+    .stage-card {
+      min-width: 248px;
+      padding: 15px 18px;
+      border-radius: 10px;
+      background: rgba(255, 255, 255, 0.16);
+      border: 1px solid rgba(255, 255, 255, 0.18);
+    }
+
+    .stage-title {
+      font-size: 13px;
+      font-weight: 760;
+      opacity: 0.8;
+      margin-bottom: 8px;
+    }
+
+    .stage-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 7px;
+    }
+
+    .stage-tag {
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.24);
+      font-size: 14px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .content {
+      padding: 28px 34px 34px;
+    }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1.15fr 1.1fr 1fr 1.35fr;
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .summary-card {
+      padding: 15px 16px;
+      border: 1px solid var(--blue-line);
+      border-radius: 10px;
+      background: #fbfdff;
+      min-width: 0;
+    }
+
+    .summary-label {
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 760;
+      margin-bottom: 8px;
+      white-space: nowrap;
+    }
+
+    .summary-value {
+      color: #243746;
+      font-size: 19px;
+      font-weight: 880;
+      line-height: 1.25;
+      word-break: break-word;
+    }
+
+    .summary-sub {
+      margin-top: 5px;
+      color: #8a939b;
+      font-size: 12px;
+      font-weight: 650;
+      line-height: 1.35;
+    }
+
+    .dog-line {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px 14px;
+      font-size: 15px;
+      font-weight: 780;
+      line-height: 1.4;
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .formula-lines {
+      display: grid;
+      gap: 5px;
+      color: #243746;
+      font-size: 15px;
+      font-weight: 780;
+      line-height: 1.25;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      min-height: 26px;
+      padding: 4px 9px;
+      border-radius: 999px;
+      background: var(--blue-soft);
+      color: #2472b9;
+      font-size: 13px;
+      font-weight: 780;
+    }
+
+    .note-bar {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 12px;
+      align-items: start;
+      margin-bottom: 30px;
+      padding: 12px 15px;
+      border-radius: 8px;
+      background: var(--orange-soft);
+      color: #7b5b1f;
+      font-size: 14px;
+      line-height: 1.55;
+    }
+
+    .note-title {
+      color: #d88a00;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .section {
+      margin-top: 28px;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: baseline;
+      gap: 12px;
+      margin: 0 0 14px;
+      color: var(--blue);
+      font-size: 25px;
+      font-weight: 850;
+      letter-spacing: 0;
+    }
+
+    .section-title small {
+      color: #8a939b;
+      font-size: 14px;
+      font-weight: 720;
+    }
+
+    .table {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-collapse: collapse;
+      table-layout: fixed;
+      background: #fff;
+    }
+
+    .table th,
+    .table td {
+      border-bottom: 1px solid var(--line);
+      padding: 10px 12px;
+      vertical-align: middle;
+      text-align: center;
+      line-height: 1.45;
+    }
+
+    .table th {
+      color: #5a626a;
+      background: #fafcfd;
+      font-size: 14px;
+      font-weight: 820;
+    }
+
+    .table td {
+      font-size: 15px;
+      font-weight: 690;
+      word-break: break-word;
+    }
+
+    .food-name {
+      font-weight: 830;
+    }
+
+    .product {
+      color: #4b89d8;
+      font-weight: 780;
+    }
+
+    .choice-pill {
+      display: inline-flex;
+      align-items: center;
+      margin-left: 6px;
+      padding: 1px 7px;
+      border-radius: 999px;
+      background: #e6f4ff;
+      color: #1677ff;
+      font-size: 11px;
+      font-weight: 820;
+      vertical-align: middle;
+      white-space: nowrap;
+    }
+
+    .product-detail {
+      display: block;
+      margin-top: 3px;
+      color: #66717a;
+      font-size: 12px;
+      font-weight: 650;
+      line-height: 1.35;
+    }
+
+    .muted {
+      color: #9aa3aa;
+    }
+
+    .amount {
+      color: #227fe8;
+      font-size: 16px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+
+    .amount-note {
+      display: inline;
+      margin-left: 4px;
+      color: #8e98a1;
+      font-size: 12px;
+      font-weight: 720;
+      white-space: nowrap;
+    }
+
+    .prep {
+      color: #4d555c;
+      font-weight: 700;
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+
+    .summary-row td {
+      background: #fff8e8;
+      color: var(--orange);
+      font-size: 17px;
+      font-weight: 860;
+    }
+
+    .supp-product {
+      text-align: left;
+    }
+
+    .supp-main {
+      display: block;
+      color: #347ed3;
+      font-weight: 820;
+      margin-bottom: 4px;
+    }
+
+    .supp-spec {
+      display: block;
+      color: #626d76;
+      font-size: 13px;
+      font-weight: 650;
+      line-height: 1.45;
+    }
+
+    .supp-note {
+      margin-top: 10px;
+      padding: 10px 12px;
+      border: 1px solid #f2d08c;
+      border-radius: 8px;
+      background: #fff8e8;
+      color: #7b5b1f;
+      font-size: 13px;
+      line-height: 1.55;
+      font-weight: 680;
+    }
+
+    .important {
+      margin-top: 28px;
+      padding: 18px 20px 20px;
+      border-radius: 10px;
+      background: #fffaf0;
+      border: 1px solid #f2d08c;
+    }
+
+    .important-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 12px;
+      color: #d68218;
+      font-size: 20px;
+      font-weight: 880;
+    }
+
+    .important-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+
+    .important-item {
+      min-height: 108px;
+      padding: 11px 13px;
+      border-radius: 8px;
+      background: #fff;
+      border: 1px solid #f1e1c2;
+    }
+
+    .important-item h3 {
+      margin: 0 0 7px;
+      color: #38414a;
+      font-size: 15px;
+      font-weight: 860;
+    }
+
+    .important-item p {
+      margin: 0;
+      color: #6d747b;
+      font-size: 12px;
+      line-height: 1.45;
+      font-weight: 650;
+    }
+
+    .footer {
+      margin-top: 22px;
+      color: #9099a2;
+      font-size: 12px;
+      line-height: 1.5;
+      text-align: center;
+    }
+
+    @media (max-width: 900px) {
+      .page {
+        padding: 16px 10px 44px;
+      }
+
+      .content {
+        padding: 20px 12px 26px;
+      }
+
+      .hero {
+        padding: 26px 18px 24px;
+      }
+
+      .hero-main,
+      .summary-grid,
+      .important-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .stage-card {
+        min-width: 0;
+      }
+
+      .recipe-name {
+        font-size: 30px;
+      }
+
+      .table th,
+      .table td {
+        padding: 8px 6px;
+        font-size: 13px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <div class="hint">
+      预览目标：重构“DIY 制作单分享图片”。这一版保留重要提示，合并重复信息，使用默认雪纳瑞头像，并把已选商品放到备料量前方。
+    </div>
+
+    <article class="sheet">
+      <header class="hero">
+        <div class="brand"><span class="brand-logo" aria-hidden="true"></span><span>seven 的厨房</span></div>
+        <div class="hero-main">
+          <div class="avatar" aria-label="狗狗头像"></div>
+          <div class="title-block">
+            <div class="eyebrow">Star 的 7 天鲜食计划</div>
+            <h1 class="recipe-name">糙米鸡蛋牛肉</h1>
+          </div>
+          <div class="stage-card">
+            <div class="stage-title">适用生命阶段</div>
+            <div class="stage-tags">
+              <span class="stage-tag">幼犬</span>
+              <span class="stage-tag">妊娠期</span>
+              <span class="stage-tag">哺乳期</span>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div class="content">
+        <section class="summary-grid" aria-label="制作单信息">
+          <div class="summary-card">
+            <div class="summary-label">狗狗信息</div>
+            <div class="dog-line">
+              <span>6个月</span>
+              <span>3.7kg</span>
+              <span>2餐/天</span>
+            </div>
+            <div class="summary-sub">专为 Star 生成</div>
+          </div>
+
+          <div class="summary-card">
+            <div class="summary-label">制作周期</div>
+            <div class="summary-value">7天</div>
+            <div class="summary-sub">每日 244g，每餐 122g</div>
+          </div>
+
+          <div class="summary-card">
+            <div class="summary-label">分装规格</div>
+            <div class="summary-value">122g × 14份</div>
+            <div class="summary-sub">每餐一份</div>
+          </div>
+
+          <div class="summary-card">
+            <div class="summary-label">配方依据</div>
+            <div class="formula-lines">
+              <span>营养标准 FEDIAF 2021</span>
+              <span>设计软件 Animal Diet Formulator</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2 class="section-title">食材清单 <small>从左到右：原料、已选商品、备料量、制备</small></h2>
+          <table class="table food-table">
+            <colgroup>
+              <col style="width: 19%" />
+              <col style="width: 27%" />
+              <col style="width: 19%" />
+              <col style="width: 35%" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>原料名称</th>
+                <th>已选商品</th>
+                <th>备料量（含7%损耗）</th>
+                <th>制备方法</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td class="food-name">牛霖</td><td class="product">新西兰银蕨<span class="choice-pill">2选1</span><span class="product-detail">1kg/袋</span></td><td class="amount">507.0g</td><td class="prep">去油、打碎、充分搅拌</td></tr>
+              <tr><td class="food-name">牛肝</td><td class="product">本地生鲜市场<span class="product-detail">散称</span></td><td class="amount">61.0g</td><td class="prep">去油、打碎、充分搅拌</td></tr>
+              <tr><td class="food-name">牛脾</td><td class="product">本地生鲜市场<span class="product-detail">500g/份</span></td><td class="amount">101.0g</td><td class="prep">去油、打碎、充分搅拌</td></tr>
+              <tr><td class="food-name">牛心</td><td class="product">本地生鲜市场<span class="product-detail">散称</span></td><td class="amount">101.0g</td><td class="prep">去油、打碎、充分搅拌</td></tr>
+              <tr><td class="food-name">鸡蛋</td><td class="product">沃尔玛<span class="product-detail">1.59kg（30枚）/盒</span></td><td class="amount">304.0g</td><td class="prep">去壳、全蛋、充分搅拌</td></tr>
+              <tr><td class="food-name">生蚝</td><td class="product">贝司令<span class="product-detail">200g/包</span></td><td class="amount">152.0g</td><td class="prep">去壳、打碎、充分搅拌</td></tr>
+              <tr><td class="food-name">青花鱼</td><td class="product">盒马自营<span class="product-detail">1kg/袋</span></td><td class="amount">51.0g</td><td class="prep">去骨、打碎、充分搅拌</td></tr>
+              <tr><td class="food-name">糙米</td><td class="product">永辉定制<span class="product-detail">500g/袋</span></td><td class="amount">203.0g</td><td class="prep">熟重、打粉、充分搅拌</td></tr>
+              <tr><td class="food-name">红薯</td><td class="product">本地生鲜市场<span class="product-detail">散称</span></td><td class="amount">152.0g</td><td class="prep">去皮、打碎、充分搅拌</td></tr>
+              <tr><td class="food-name">胡萝卜</td><td class="product">本地生鲜市场<span class="product-detail">散称</span></td><td class="amount">101.0g</td><td class="prep">留皮、打碎、充分搅拌</td></tr>
+              <tr><td class="food-name">羽衣甘蓝</td><td class="product">盒马自营<span class="product-detail">150g/份</span></td><td class="amount">51.0g</td><td class="prep">打碎、充分搅拌</td></tr>
+              <tr><td class="food-name">生南瓜籽仁</td><td class="product">人民食品<span class="product-detail">300g/瓶</span></td><td class="amount">30.0g</td><td class="prep">打碎、充分搅拌</td></tr>
+              <tr><td class="food-name">小麦胚芽油</td><td class="product">帝麦<span class="product-detail">500ml/瓶</span></td><td class="amount">10.0g</td><td class="prep">充分搅拌</td></tr>
+              <tr><td class="food-name">食用盐</td><td class="product">中盐<span class="product-detail">未加碘低钠海盐</span></td><td class="amount">3.0g</td><td class="prep">充分搅拌</td></tr>
+              <tr class="summary-row"><td>备料合计</td><td>-</td><td>1828.0g</td><td>-</td></tr>
+            </tbody>
+          </table>
+        </section>
+
+        <section class="section">
+          <h2 class="section-title">营养补充剂 <small>按添加总量称量</small></h2>
+          <table class="table supp-table">
+            <colgroup>
+              <col style="width: 18%" />
+              <col style="width: 46%" />
+              <col style="width: 16%" />
+              <col style="width: 20%" />
+            </colgroup>
+            <thead>
+              <tr>
+                <th>补剂名称</th>
+                <th>已选商品 / 规格</th>
+                <th>添加总量</th>
+                <th>目标补充量</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="food-name">骨粉</td>
+                <td class="supp-product">
+                  <span class="supp-main">KAL <span class="choice-pill">2选1</span></span>
+                  <span class="supp-spec">骨粉，16盎司，450g/罐。每6克含1300mg钙、440mg磷、15mg镁。</span>
+                </td>
+                <td class="amount">37.7g</td>
+                <td>钙 8028mg</td>
+              </tr>
+              <tr>
+                <td class="food-name">海藻粉</td>
+                <td class="supp-product">
+                  <span class="supp-main">NOW FOODS</span>
+                  <span class="supp-spec">450mcg碘/平勺（90mg），8盎司/227g/瓶，约2522平勺/瓶。</span>
+                </td>
+                <td class="amount">2.8平勺</td>
+                <td>碘 1247μg</td>
+              </tr>
+            </tbody>
+          </table>
+          <div class="supp-note">营养补充剂的添加总量与已选商品严格匹配。由于不同营养补剂营养浓度不同，如果要选择其它产品，须按目标补充量自行换算添加总量。</div>
+        </section>
+
+        <section class="important" aria-label="重要提示">
+          <h2 class="important-title">重要提示</h2>
+          <div class="important-grid">
+            <article class="important-item">
+              <h3>烹饪建议</h3>
+              <p>建议蒸、炖、低温慢煮；不建议微波、炸、炒、煎等高温烹饪方式。</p>
+            </article>
+            <article class="important-item">
+              <h3>分装建议</h3>
+              <p>按 122g 每份分装，共 14 份。冷却后再密封，尽量排出空气。</p>
+            </article>
+            <article class="important-item">
+              <h3>储存与保质期</h3>
+              <p>-18°C 冷冻保存 6 个月；0-4°C 冷藏保存 3 天；开封后尽快吃完。</p>
+            </article>
+          </div>
+        </section>
+
+        <div class="footer">本制作单仅适用于 Star 当前体况与所选食谱；调整体重、餐数或制作天数后请重新生成。</div>
+      </div>
+    </article>
+  </main>
+</body>
+</html>

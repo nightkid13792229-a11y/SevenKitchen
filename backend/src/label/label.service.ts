@@ -13,32 +13,34 @@ import * as path from 'path';
  */
 const LABEL_LAYOUT = {
   canvas: {
-    width: 75, // mm
+    width: 70, // mm
     height: 100, // mm
   },
   margin: {
-    top: 0, // 品牌名称紧贴标签纸最上方
+    top: 3,
     bottom: 4,
-    left: 7,
-    right: 7,
+    left: 4.5,
+    right: 4.5,
   },
   fontSize: {
-    brand: 2.5,
-    title: 5.5,
-    subtitle: 3.0,
-    sectionTitle: 3.6,
-    body: 2.7,
-    small: 2.3,
+    brand: 2.1,
+    title: 5.0,
+    meta: 2.0,
+    sectionTitle: 2.8,
+    body: 2.25,
+    compactBody: 1.8,
+    small: 1.85,
     brandBottom: 2.5,
   },
   lineHeight: {
-    compact: 3.2,
-    normal: 4.2,
-    loose: 5.0,
+    compact: 2.8,
+    tight: 2.2,
+    normal: 4.0,
+    loose: 4.6,
   },
   spacing: {
-    sectionGap: 3.5,
-    blockInternal: 1.5,
+    sectionGap: 2.0,
+    blockInternal: 1.0,
   },
 };
 
@@ -85,6 +87,8 @@ const NUTRITION_STANDARD_LABELS: Record<string, string> = {
   AAFCO_2023: 'AAFCO 2023',
   NRC_2006: 'NRC 2006',
 };
+
+type LabelRenderMode = 'regular' | 'compact';
 
 @Injectable()
 export class LabelService {
@@ -174,101 +178,457 @@ export class LabelService {
 
     const canvas = createCanvas(width, height);
     const ctx = canvas.getContext('2d');
+    const ingredientItems = this.buildIngredientItems(labelData);
+    const mode = this.resolveLabelRenderMode(ingredientItems);
 
-    // 白色背景
     ctx.fillStyle = '#FFFFFF';
     ctx.fillRect(0, 0, width, height);
-
-    // 黑色文字
     ctx.fillStyle = '#000000';
 
-    // 设置中文字体（使用已注册的字体）
-    ctx.font = `${mmToPx(LABEL_LAYOUT.fontSize.body)}px "Chinese"`;
-
-    // 品牌名称位置：字体大小 + 1mm 下移
-    let y = mmToPx(LABEL_LAYOUT.fontSize.brand) + mmToPx(1);
     const centerX = width / 2;
-    const maxWidth =
-      width - mmToPx(LABEL_LAYOUT.margin.left + LABEL_LAYOUT.margin.right);
+    const contentLeft = mmToPx(LABEL_LAYOUT.margin.left);
+    const contentRight = width - mmToPx(LABEL_LAYOUT.margin.right);
+    const contentWidth = contentRight - contentLeft;
+    let y = mmToPx(LABEL_LAYOUT.margin.top);
 
-    // 1. 品牌名称（顶部，紧贴标签纸边缘）
-    ctx.font = `bold ${mmToPx(LABEL_LAYOUT.fontSize.brand)}px "Chinese-Bold"`;
-    ctx.textAlign = 'center';
-    ctx.fillText(labelData.brandName, centerX, y);
-    y += mmToPx(LABEL_LAYOUT.lineHeight.compact);
-
-    // 分隔线已移除，品牌名称与食谱标题之间保留3mm间距
-    y += mmToPx(3); // 3mm 间距
-
-    // 2. 食谱名称
-    ctx.font = `bold ${mmToPx(LABEL_LAYOUT.fontSize.title)}px "Noto Sans CJK SC", "Source Han Sans SC", "SimHei", sans-serif`;
-    ctx.fillText(labelData.recipeName, centerX, y);
-    y += mmToPx(LABEL_LAYOUT.lineHeight.normal);
-
-    // 3. 制作信息
-    ctx.font = `${mmToPx(LABEL_LAYOUT.fontSize.body)}px "Noto Sans CJK SC", "Source Han Sans SC", "SimHei", sans-serif`;
-    const productionInfo = `为"${labelData.dogName}"制作于${labelData.productionTime}`;
-    ctx.fillText(productionInfo, centerX, y);
-    y += mmToPx(LABEL_LAYOUT.lineHeight.compact);
-
-    // 订购信息
-    const orderInfoLines = this.getOrderInfoLines(labelData, ctx, maxWidth);
-    orderInfoLines.forEach((line) => {
-      ctx.fillText(line, centerX, y);
-      y += mmToPx(LABEL_LAYOUT.lineHeight.compact);
-    });
-    y += mmToPx(LABEL_LAYOUT.spacing.blockInternal);
-    y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
-
-    // 4. 原料表
-    y = this.drawSectionWithTitle(
+    y = this.drawLabelHeader(ctx, labelData, y, centerX, contentLeft, contentRight);
+    const metaLineLayout = this.getMetaLineLayout();
+    y = this.drawMetaLine(
       ctx,
-      '原料表',
-      labelData.foodIngredients,
-      labelData.supplementIngredients,
-      y,
-      centerX,
-      maxWidth,
-      width,
+      labelData,
+      y + mmToPx(metaLineLayout.topGapMm),
+      contentLeft,
+      contentWidth,
     );
+
+    y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
+    y = this.drawIngredientGrid(
+      ctx,
+      ingredientItems,
+      y,
+      contentLeft,
+      contentWidth,
+      mode,
+    );
+
     y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
 
-    // 5. 营养成分分析
     if (labelData.nutritionAnalysis) {
-      y = this.drawNutritionSection(
+      y = this.drawCompleteNutritionSection(
         ctx,
         labelData.nutritionAnalysis,
         y,
-        centerX,
-        maxWidth,
-        width,
+        contentLeft,
+        contentWidth,
+        mode,
       );
       y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
     }
 
-    // 6. 保质期
-    y = this.drawShelfLifeSection(ctx, labelData.shelfLife, y, centerX, width);
-    y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
+    this.drawStorageSection(ctx, y, contentLeft, contentWidth);
 
-    // 7. 烹饪建议（如果有）
-    if (
-      labelData.cookingMethod &&
-      typeof labelData.cookingMethod !== 'string'
-    ) {
-      y = this.drawCookingSection(
-        ctx,
-        labelData.cookingMethod,
-        y,
-        centerX,
-        maxWidth,
-        width,
-      );
-      y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
-    }
-
-    // 转换为base64
     const buffer = canvas.toBuffer('image/png');
     return buffer.toString('base64');
+  }
+
+  private resolveLabelRenderMode(ingredientItems: string[]): LabelRenderMode {
+    return ingredientItems.length > 16 ? 'compact' : 'regular';
+  }
+
+  private drawLabelHeader(
+    ctx: CanvasRenderingContext2D,
+    labelData: LabelDataDto,
+    startY: number,
+    centerX: number,
+    contentLeft: number,
+    contentRight: number,
+  ): number {
+    let y = startY;
+
+    ctx.fillStyle = '#111111';
+    ctx.textAlign = 'center';
+    ctx.font = `bold ${mmToPx(LABEL_LAYOUT.fontSize.brand)}px "Chinese-Bold"`;
+    ctx.fillText(labelData.brandName, centerX, y + mmToPx(1.8));
+
+    y += mmToPx(4.4);
+    ctx.font = `bold ${mmToPx(LABEL_LAYOUT.fontSize.title)}px "Chinese-Bold"`;
+    ctx.fillText(labelData.recipeName, centerX, y + mmToPx(4.4));
+
+    y += mmToPx(6.2);
+    ctx.strokeStyle = '#111111';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(contentLeft, y);
+    ctx.lineTo(contentRight, y);
+    ctx.stroke();
+
+    return y + mmToPx(0.6);
+  }
+
+  private drawMetaBox(
+    ctx: CanvasRenderingContext2D,
+    labelData: LabelDataDto,
+    startY: number,
+    left: number,
+    width: number,
+  ): number {
+    const rowHeight = mmToPx(3.1);
+    const boxHeight = rowHeight * 2 + mmToPx(1.6);
+    const top = startY;
+    const colWidth = width / 2;
+
+    ctx.strokeStyle = '#C8C8C8';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(left, top, width, boxHeight);
+    ctx.fillStyle = '#222222';
+    ctx.font = `${mmToPx(LABEL_LAYOUT.fontSize.meta)}px "Chinese"`;
+    ctx.textAlign = 'left';
+
+    const packageText = this.buildPackageSummary(labelData);
+    const rows = [
+      [`定制：${labelData.dogName}`, `制作：${labelData.productionTime}`],
+      [packageText, `净重：${this.getTotalWeight(labelData)}g`],
+    ];
+
+    rows.forEach((row, rowIndex) => {
+      row.forEach((text, colIndex) => {
+        const x = left + colIndex * colWidth + mmToPx(1.4);
+        const y = top + mmToPx(2.6) + rowIndex * rowHeight;
+        ctx.fillText(this.clipText(ctx, text, colWidth - mmToPx(2)), x, y);
+      });
+    });
+
+    return top + boxHeight;
+  }
+
+  private drawMetaLine(
+    ctx: CanvasRenderingContext2D,
+    labelData: LabelDataDto,
+    startY: number,
+    left: number,
+    width: number,
+  ): number {
+    const top = startY;
+    const layout = this.getMetaLineLayout();
+    const height = mmToPx(layout.heightMm);
+
+    ctx.fillStyle = '#222222';
+    ctx.font = `${mmToPx(LABEL_LAYOUT.fontSize.meta)}px "Chinese"`;
+    ctx.textAlign = 'center';
+    ctx.fillText(
+      this.clipText(ctx, this.buildMetaLine(labelData), width - mmToPx(1)),
+      left + width / 2,
+      top + mmToPx(2.4),
+    );
+
+    return top + height;
+  }
+
+  private getMetaLineLayout(): {
+    drawRules: boolean;
+    topGapMm: number;
+    heightMm: number;
+  } {
+    return {
+      drawRules: false,
+      topGapMm: 0.2,
+      heightMm: 3.2,
+    };
+  }
+
+  private drawIngredientGrid(
+    ctx: CanvasRenderingContext2D,
+    items: string[],
+    startY: number,
+    left: number,
+    width: number,
+    mode: LabelRenderMode,
+  ): number {
+    let y = startY;
+    y = this.drawSectionTitle(ctx, '原料表', y, left, width);
+
+    const gridConfig = this.getIngredientGridConfig(mode);
+    const rowHeight = mmToPx(gridConfig.lineHeight);
+    const colWidth = width / gridConfig.columns;
+
+    ctx.font = `${mmToPx(gridConfig.fontSize)}px "Chinese"`;
+    ctx.fillStyle = '#222222';
+    ctx.textAlign = 'left';
+
+    let row = 0;
+    let col = 0;
+    items.forEach((item) => {
+      const label = this.formatIngredientLabel(item);
+
+      const x = left + col * colWidth;
+      const itemY = y + row * rowHeight;
+      ctx.fillText(
+        this.clipText(
+          ctx,
+          label,
+          colWidth - mmToPx(1.2),
+        ),
+        x,
+        itemY,
+      );
+
+      col += 1;
+      if (col >= gridConfig.columns) {
+        row += 1;
+        col = 0;
+      }
+    });
+
+    const rowCount = row + (col > 0 ? 1 : 0);
+    return y + rowCount * rowHeight;
+  }
+
+  private drawCompleteNutritionSection(
+    ctx: CanvasRenderingContext2D,
+    nutrition: NonNullable<LabelDataDto['nutritionAnalysis']>,
+    startY: number,
+    left: number,
+    width: number,
+    mode: LabelRenderMode,
+  ): number {
+    let y = this.drawSectionTitle(ctx, '营养成分', startY, left, width);
+    const rows = this.buildCompleteNutritionRows(nutrition);
+    const fontSize = mode === 'compact'
+      ? LABEL_LAYOUT.fontSize.small
+      : LABEL_LAYOUT.fontSize.meta;
+    const rowHeight = mmToPx(mode === 'compact' ? 2.15 : 2.45);
+
+    ctx.font = `${mmToPx(fontSize)}px "Chinese"`;
+    ctx.fillStyle = '#222222';
+    ctx.textAlign = 'left';
+
+    const colWidth = width / this.getNutritionGridColumnCount();
+    rows.forEach((row) => {
+      row.forEach((text, colIndex) => {
+        const x = left + colIndex * colWidth;
+        ctx.fillText(this.clipText(ctx, text, colWidth - mmToPx(1.2)), x, y);
+      });
+      y += rowHeight;
+    });
+
+    return y;
+  }
+
+  private getNutritionGridColumnCount(): number {
+    return 3;
+  }
+
+  private drawStorageSection(
+    ctx: CanvasRenderingContext2D,
+    startY: number,
+    left: number,
+    width: number,
+  ): number {
+    const layout = this.getStorageSectionLayout();
+    const top = startY + mmToPx(layout.topGapMm);
+    const colWidth = width / 2;
+    const contentY = this.drawSectionTitle(
+      ctx,
+      layout.title,
+      top,
+      left,
+      width,
+    );
+
+    ctx.fillStyle = '#111111';
+    ctx.font = `bold ${mmToPx(LABEL_LAYOUT.fontSize.small)}px "Chinese-Bold"`;
+    ctx.textAlign = 'left';
+    ctx.fillText('冷冻', left, contentY);
+    ctx.fillText('冷藏', left + colWidth, contentY);
+
+    ctx.font = `${mmToPx(LABEL_LAYOUT.fontSize.small)}px "Chinese"`;
+    ctx.fillText('-18℃保存6个月', left, contentY + mmToPx(3.2));
+    ctx.fillText('0-5℃保存3天', left + colWidth, contentY + mmToPx(3.2));
+
+    return contentY + mmToPx(6.2);
+  }
+
+  private drawSectionTitle(
+    ctx: CanvasRenderingContext2D,
+    title: string,
+    startY: number,
+    left: number,
+    width: number,
+  ): number {
+    const centerX = left + width / 2;
+    const titleY = startY + mmToPx(2.4);
+
+    ctx.font = `bold ${mmToPx(LABEL_LAYOUT.fontSize.sectionTitle)}px "Chinese-Bold"`;
+    ctx.fillStyle = '#111111';
+    ctx.textAlign = 'center';
+    ctx.fillText(title, centerX, titleY);
+
+    const textWidth = ctx.measureText(title).width;
+    const lineY = titleY - mmToPx(0.8);
+    const gap = mmToPx(3);
+    ctx.strokeStyle = '#111111';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(left, lineY);
+    ctx.lineTo(centerX - textWidth / 2 - gap, lineY);
+    ctx.moveTo(centerX + textWidth / 2 + gap, lineY);
+    ctx.lineTo(left + width, lineY);
+    ctx.stroke();
+
+    return startY + mmToPx(5.4);
+  }
+
+  private getIngredientGridConfig(
+    mode: LabelRenderMode,
+  ): { columns: number; fontSize: number; lineHeight: number } {
+    if (mode === 'compact') {
+      return {
+        columns: 3,
+        fontSize: 2.05,
+        lineHeight: 2.45,
+      };
+    }
+
+    return {
+      columns: 3,
+      fontSize: LABEL_LAYOUT.fontSize.body,
+      lineHeight: LABEL_LAYOUT.lineHeight.compact,
+    };
+  }
+
+  private buildIngredientItems(labelData: LabelDataDto): string[] {
+    return [labelData.foodIngredients, labelData.supplementIngredients]
+      .filter(Boolean)
+      .flatMap((text) => text.split('、'))
+      .map((item) => item.trim())
+      .filter(Boolean);
+  }
+
+  private formatIngredientLabel(item: string): string {
+    const supplement = item.match(/^(.+?)（(.+?)）$/);
+    if (supplement) {
+      return `${supplement[1]} ${supplement[2]}`;
+    }
+    const ratio = item.match(/^(.+?)(\d+(?:\.\d+)?%)$/);
+    if (ratio) {
+      return `${ratio[1]} ${Number(ratio[2].replace('%', '')).toFixed(1)}%`;
+    }
+
+    const amount = item.match(/^(.+?)(\d+(?:\.\d+)?(?:g|kg|mg|ml|mL|L|平勺|粒|片|颗|枚|袋|盒|份|滴|IU|μg|ug|mcg))$/i);
+    if (amount) {
+      return `${amount[1]} ${amount[2]}`;
+    }
+
+    return item;
+  }
+
+  private buildMetaLine(labelData: LabelDataDto): string {
+    return [
+      labelData.dogName,
+      labelData.productionTime,
+      this.buildPackageSummary(labelData).replace(/^分装：/, ''),
+      `净重${this.getTotalWeight(labelData)}g`,
+    ]
+      .filter(Boolean)
+      .join('｜');
+  }
+
+  private buildCompleteNutritionRows(
+    nutrition?: LabelDataDto['nutritionAnalysis'],
+  ): string[][] {
+    if (!nutrition) {
+      return [];
+    }
+
+    const items = [
+      nutrition.proteinPercent !== undefined
+        ? `蛋白质 ${nutrition.proteinPercent.toFixed(1)}%`
+        : null,
+      nutrition.fatPercent !== undefined
+        ? `脂肪 ${nutrition.fatPercent.toFixed(1)}%`
+        : null,
+      nutrition.ashPercent !== undefined
+        ? `灰分 ${nutrition.ashPercent.toFixed(1)}%`
+        : null,
+      nutrition.moisturePercent !== undefined
+        ? `水分 ${nutrition.moisturePercent.toFixed(1)}%`
+        : null,
+      nutrition.crudeFiberPercent !== undefined
+        ? `纤维 ${nutrition.crudeFiberPercent.toFixed(1)}%`
+        : null,
+      nutrition.carbohydratePercent !== undefined
+        ? `碳水 ${nutrition.carbohydratePercent.toFixed(1)}%`
+        : null,
+      nutrition.energyDensityKcalPerKg
+        ? `能量 ${nutrition.energyDensityKcalPerKg}kcal/kg`
+        : null,
+      nutrition.calciumPhosphorusRatio
+        ? `钙磷比 ${nutrition.calciumPhosphorusRatio}`
+        : null,
+    ].filter((item): item is string => Boolean(item));
+
+    const primaryItems = items.slice(0, 6);
+    const rows: string[][] = [];
+    for (let index = 0; index < primaryItems.length; index += 3) {
+      rows.push(primaryItems.slice(index, index + 3));
+    }
+    if (items.length > 6) {
+      rows.push(items.slice(6));
+    }
+
+    return rows;
+  }
+
+  private getStorageFooterTitle(): string {
+    return '保存方式';
+  }
+
+  private getStorageSectionLayout(): {
+    position: 'flow';
+    title: string;
+    topGapMm: number;
+  } {
+    return {
+      position: 'flow',
+      title: this.getStorageFooterTitle(),
+      topGapMm: 0,
+    };
+  }
+
+  private buildPackageSummary(labelData: LabelDataDto): string {
+    const packagePlanRows = this.normalizePackagePlanRows(labelData.packagePlan);
+    if (packagePlanRows.length === 0) {
+      return `分装：${labelData.weightPerPack}g×${labelData.packageCount}袋`;
+    }
+
+    const planText = packagePlanRows
+      .map((row) => `${row.packageSpecG}g×${row.packageCount}袋`)
+      .join('、');
+    return `分装：${planText}`;
+  }
+
+  private getTotalWeight(labelData: LabelDataDto): number {
+    const packagePlanRows = this.normalizePackagePlanRows(labelData.packagePlan);
+    if (packagePlanRows.length > 0) {
+      return this.getPackagePlanTotalWeight(packagePlanRows);
+    }
+    return labelData.totalWeight;
+  }
+
+  private clipText(
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    maxWidth: number,
+  ): string {
+    if (ctx.measureText(text).width <= maxWidth) {
+      return text;
+    }
+
+    let next = text;
+    while (next.length > 1 && ctx.measureText(`${next}...`).width > maxWidth) {
+      next = next.slice(0, -1);
+    }
+    return `${next}...`;
   }
 
   /**

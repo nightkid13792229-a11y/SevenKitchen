@@ -2,7 +2,7 @@
   <view class="purchase-detail-page">
     <!-- 顶部标题 -->
     <view class="header">
-      <text class="title">采购清单详情</text>
+      <text class="title">{{ detailTitle }}</text>
     </view>
 
     <!-- 加载状态 -->
@@ -39,9 +39,7 @@
           <view class="header-left">
             <view class="target-line">
               <text class="target-date">{{ formatDate(purchaseList.targetDate) }}</text>
-              <text class="kind-badge" :class="getListKindClass(purchaseList.kind)">
-                {{ getListKindText(purchaseList.kind) }}
-              </text>
+              <text class="time-badge">采购时间</text>
             </view>
             <text class="create-time">创建于 {{ formatFullDateTime(purchaseList.createdAt) }}</text>
           </view>
@@ -60,11 +58,6 @@
         <view class="creator">
           <text class="label">创建人:</text>
           <text class="value">{{ purchaseList.createdBy?.nickname || '-' }}</text>
-        </view>
-
-        <view class="creator">
-          <text class="label">采购类型:</text>
-          <text class="value">{{ getListKindText(purchaseList.kind) }}</text>
         </view>
       </view>
 
@@ -140,38 +133,43 @@
                 <!-- 原料基本信息（始终显示） -->
                 <view class="item-basic">
                   <view class="item-info">
-                    <text class="item-name">{{ item.ingredientName || '未知原料' }}</text>
-                    <view v-if="item.resolvedProcurementSkuName || item.resolvedSuggestedProductName" class="item-sku-lines">
-                      <text v-if="item.resolvedProcurementSkuName" class="item-sku primary">
-                        采购SKU：{{ item.resolvedProcurementSkuName }}
-                      </text>
+                    <view class="item-heading">
+                      <text class="item-name">{{ getPurchaseItemTitle(item) }}</text>
+                      <text v-if="formatSkuReferencePrice(item)" class="sku-price">{{ formatSkuReferencePrice(item) }}</text>
+                    </view>
+                    <view v-if="item.resolvedSuggestedProductName && item.resolvedSuggestedProductName !== getPurchaseItemTitle(item)" class="item-sku-lines">
                       <text
-                        v-if="item.resolvedSuggestedProductName && item.resolvedSuggestedProductName !== item.resolvedProcurementSkuName"
                         class="item-sku secondary"
                       >
                         推荐参考：{{ item.resolvedSuggestedProductName }}
                       </text>
                     </view>
-                    <view v-if="item.resolvedPurchaseChannel || item.resolvedProductModel" class="item-specs">
+                    <view
+                      v-if="formatBrandLabel(item.resolvedBrand) || item.resolvedPurchaseChannel || item.resolvedProductModel"
+                      class="item-specs"
+                    >
+                      <text v-if="formatBrandLabel(item.resolvedBrand)" class="spec brand">{{ formatBrandLabel(item.resolvedBrand) }}</text>
                       <text v-if="item.resolvedPurchaseChannel" class="spec">{{ item.resolvedPurchaseChannel }}</text>
                       <text v-if="item.resolvedProductModel" class="spec">{{ item.resolvedProductModel }}</text>
                     </view>
-                    <view class="item-quantity">
-                      <text class="quantity-label">需求: </text>
-                      <text class="quantity-value">{{ formatQuantity(item) }}</text>
-                      <text class="quantity-unit">{{ getDisplayUnit(item) }}</text>
-                    </view>
-                    <view v-if="item.resolvedUsesInventory" class="item-stock-offset">
-                      <text>订单需求 {{ formatBaseQuantity(item.resolvedGrossQuantityNeeded) }}{{ getDisplayUnit(item) }}</text>
-                      <text>库存抵扣 {{ formatBaseQuantity(item.resolvedStockDeductedQuantity) }}{{ getDisplayUnit(item) }}</text>
-                      <text>仍需采购 {{ formatBaseQuantity(item.resolvedPurchaseShortageQuantity) }}{{ getDisplayUnit(item) }}</text>
+                    <view class="item-demand-row">
+                      <view class="stock-audit-inline">
+                        <text>订单需求 {{ formatResolvedQuantity(item.resolvedGrossQuantityNeeded, item) }}</text>
+                        <text class="audit-divider">|</text>
+                        <text>库存抵扣 {{ formatResolvedQuantity(item.resolvedStockDeductedQuantity, item) }}</text>
+                      </view>
+                      <view class="item-quantity">
+                        <text class="quantity-label">仍需采购</text>
+                        <text class="quantity-value">{{ formatQuantity(item) }}</text>
+                        <text class="quantity-unit">{{ getDisplayUnit(item) }}</text>
+                      </view>
                     </view>
                   </view>
 
                   <view class="item-actions">
-                    <!-- 删除原料按钮 (仅PENDING状态且未开始采购时显示) -->
+                    <!-- 删除原料按钮：仅补货清单允许人工删除，日采清单由订单生成不允许删除 -->
                     <button
-                      v-if="purchaseList.status === 'PENDING' && !purchaseList.startedAt"
+                      v-if="purchaseList.kind === 'STOCK_REPLENISHMENT' && purchaseList.status === 'PENDING' && !purchaseList.startedAt"
                       class="delete-item-btn"
                       @tap="confirmDeleteItem(item)"
                     >
@@ -180,13 +178,36 @@
 
                     <!-- 开始采购后显示的添加按钮 -->
                     <button
-                      v-if="canManagePurchaseRecords"
+                      v-if="canManagePurchaseRecords && !item.noPurchaseNeeded"
                       class="continue-add-btn"
                       @tap="handleContinueAdd(item)"
                     >
                       添加采购记录
                     </button>
+                    <button
+                      v-if="canManagePurchaseRecords && shouldShowNoPurchaseButton(item)"
+                      class="no-purchase-btn"
+                      @tap="markItemNoPurchase(item)"
+                      :loading="noPurchaseMarkingItemId === item.id"
+                      :disabled="Boolean(noPurchaseMarkingItemId)"
+                    >
+                      无需采购
+                    </button>
                   </view>
+                </view>
+
+                <view v-if="item.noPurchaseNeeded" class="no-purchase-card">
+                  <view class="no-purchase-main">
+                    <text class="no-purchase-title">无需采购</text>
+                    <text v-if="item.noPurchaseReason" class="no-purchase-reason">{{ item.noPurchaseReason }}</text>
+                  </view>
+                  <button
+                    v-if="canManagePurchaseRecords"
+                    class="clear-no-purchase-btn"
+                    @tap="clearItemNoPurchase(item)"
+                  >
+                    取消标记
+                  </button>
                 </view>
 
                 <!-- 已开始采购且有记录：显示采购记录列表 -->
@@ -202,7 +223,7 @@
                     >
                       <view class="record-main">
                         <text v-if="record.resolvedProcurementSkuName" class="record-sku">
-                          采购SKU：{{ record.resolvedProcurementSkuName }}
+                          {{ record.resolvedProcurementSkuName }}
                         </text>
                         <view class="record-info">
                           <text class="record-quantity">{{ formatRecordQuantity(record, item) }}</text>
@@ -288,6 +309,14 @@
         class="bottom-actions completed"
       >
         <text class="completed-text">✓ 采购已完成</text>
+        <button
+          v-if="canReopenCompletedPurchase"
+          class="action-btn reopen"
+          @tap="reopenCompletedPurchase"
+          :loading="reopening"
+        >
+          撤回完成
+        </button>
       </view>
     </view>
 
@@ -310,164 +339,109 @@
           <view class="ingredient-summary-card">
             <view class="summary-main">
               <text class="summary-name">{{ selectedIngredient.ingredientName }}</text>
-              <text class="summary-demand">
-                需求 {{ formatQuantity(selectedIngredient) }}{{ getDisplayUnit(selectedIngredient) }}
-              </text>
+              <text class="summary-demand">采购任务</text>
             </view>
-            <text
-              v-if="getItemSuggestedProductLabel(selectedIngredient)"
-              class="summary-subtext suggestion"
-            >
-              推荐参考：{{ getItemSuggestedProductLabel(selectedIngredient) }}
-            </text>
-            <text v-if="getItemProcurementSkuLabel(selectedIngredient)" class="summary-subtext suggestion">
-              采购 SKU：{{ getItemProcurementSkuLabel(selectedIngredient) }}
-            </text>
+            <view class="record-demand-metrics">
+              <view class="record-demand-metric">
+                <text class="metric-label">订单需求</text>
+                <text class="metric-value">{{ formatResolvedQuantity(selectedIngredient.resolvedGrossQuantityNeeded, selectedIngredient) }}</text>
+              </view>
+              <view class="record-demand-metric">
+                <text class="metric-label">库存抵扣</text>
+                <text class="metric-value">{{ formatResolvedQuantity(selectedIngredient.resolvedStockDeductedQuantity, selectedIngredient) }}</text>
+              </view>
+              <view class="record-demand-metric primary">
+                <text class="metric-label">仍需采购</text>
+                <text class="metric-value">{{ formatQuantity(selectedIngredient) }}{{ getDisplayUnit(selectedIngredient) }}</text>
+              </view>
+            </view>
             <text v-if="latestRecordSummary" class="summary-subtext">{{ latestRecordSummary }}</text>
           </view>
 
-          <view v-if="recordProcurementSkuOptions.length > 1" class="form-section">
-            <text class="form-label">采购 SKU（可选）</text>
-            <picker
-              mode="selector"
-              :range="recordProcurementSkuOptions"
-              range-key="label"
-              :value="recordProcurementSkuIndex"
-              @change="onProcurementSkuChange"
-            >
-              <view class="channel-input-wrapper">
-                <view class="picker">
-                  <text v-if="recordForm.procurementSkuId" class="picker-text">
-                    {{ selectedRecordProcurementSku?.label }}
-                  </text>
-                  <text v-else class="picker-placeholder">请选择生产采购 SKU</text>
-                  <text class="picker-arrow">›</text>
+          <view class="form-section">
+            <view class="form-section-head">
+              <text class="form-label">采购商品</text>
+              <text class="form-title-hint">选择本次实际买到的商品</text>
+            </view>
+            <view v-if="recordProcurementSkuOptions.length > 0" class="record-sku-list">
+              <view
+                v-for="sku in recordProcurementSkuOptions"
+                :key="sku.id || sku.name"
+                class="record-sku-option"
+                :class="{ active: recordForm.procurementSkuId === sku.id }"
+                @tap.stop="selectRecordSku(sku)"
+              >
+                <view class="record-sku-main">
+                  <view class="record-sku-title-row">
+                    <text class="record-sku-badge">{{ isRecommendedRecordSku(sku) ? '推荐' : '可替换' }}</text>
+                    <text class="record-sku-name">{{ sku.name }}</text>
+                  </view>
+                  <view class="record-sku-meta">
+                    <text v-if="sku.purchaseChannel">{{ sku.purchaseChannel }}</text>
+                    <text v-if="sku.productModel">{{ sku.productModel }}</text>
+                    <text v-if="formatProcurementSkuReferencePrice(sku)">历史单价 {{ formatProcurementSkuReferencePrice(sku) }}</text>
+                  </view>
+                </view>
+                <text class="record-sku-check">✓</text>
+              </view>
+            </view>
+            <view v-else class="record-sku-empty">
+              <text class="empty-title">暂无可用采购商品</text>
+              <text class="empty-desc">请联系管理员在该标准原料下新增采购 SKU 后再记录采购。</text>
+            </view>
+          </view>
+
+          <view class="record-entry-grid">
+            <view class="form-section record-entry-card">
+              <view class="field-label-row">
+                <text class="form-label">购买数量 *</text>
+              </view>
+              <view class="input-with-unit">
+                <input
+                  v-model="recordForm.actualPackageCount"
+                  type="digit"
+                  class="form-input unit-input"
+                  :placeholder="recordPurchaseQuantityPlaceholder"
+                  placeholder-class="input-placeholder"
+                />
+                <text v-if="recordPurchaseUnitLabel" class="input-unit-label">{{ recordPurchaseUnitLabel }}</text>
+              </view>
+              <view v-if="recordQuantityMetaRows.length > 0" class="record-entry-meta">
+                <view
+                  v-for="row in recordQuantityMetaRows"
+                  :key="row.label"
+                  class="record-entry-meta-row"
+                >
+                  <text class="meta-label">{{ row.label }}</text>
+                  <text class="meta-value" :class="row.tone ? `price-tone-${row.tone}` : ''">{{ row.value }}</text>
                 </view>
               </view>
-            </picker>
-            <text class="form-hint">优先录入生产采购 SKU，没有配置时可直接留空。</text>
-          </view>
+            </view>
 
-          <view class="form-section">
-            <text class="form-label">采购渠道 *</text>
-            <view v-if="recordChannelChoices.length > 0" class="channel-chip-group">
-              <view
-                v-for="channel in recordChannelChoices"
-                :key="channel"
-                class="channel-chip"
-                :class="{ active: isPresetChannelSelected(channel) }"
-                @tap.stop="selectChannel(channel)"
-              >
-                <text>{{ channel }}</text>
+            <view class="form-section record-entry-card">
+              <view class="field-label-row">
+                <text class="form-label">付款金额 *</text>
               </view>
-              <view
-                class="channel-chip custom-entry"
-                :class="{ active: isCustomChannelMode }"
-                @tap.stop="activateCustomChannelInput"
-              >
-                <text>其它渠道</text>
+              <view class="input-with-unit">
+                <input
+                  v-model="recordForm.actualCost"
+                  type="digit"
+                  class="form-input unit-input"
+                  placeholder="请输入金额，如：156.50"
+                  placeholder-class="input-placeholder"
+                />
+                <text class="input-unit-label">元</text>
               </view>
-            </view>
-
-            <view v-if="isCustomChannelMode" class="channel-input-wrapper">
-              <input
-                v-model="recordForm.purchaseChannel"
-                class="form-input channel-input"
-                placeholder="请输入采购渠道"
-                placeholder-class="input-placeholder"
-              />
-            </view>
-            <text class="form-hint">
-              {{ isCustomChannelMode ? '手动输入不会新增按钮，只作为这次采购记录使用' : '直接点选一个常用渠道即可，点“其它渠道”时再手动输入' }}
-            </text>
-          </view>
-
-          <view class="form-section">
-            <text class="form-label">实际购买件数 *</text>
-            <input
-              v-model="recordForm.actualPackageCount"
-              type="digit"
-              class="form-input"
-              placeholder="请输入本次实际买了几件，如：2"
-              placeholder-class="input-placeholder"
-            />
-            <text class="form-hint">
-              按实际买到的件数填写，不需要先手算成 {{ getPurchaseRecordUnit(selectedIngredient) }}
-            </text>
-          </view>
-
-          <view class="form-section">
-            <text class="form-label">单件规格 *</text>
-            <input
-              v-model="recordForm.actualPackageSize"
-              type="digit"
-              class="form-input"
-              placeholder="请输入单件规格数值，如：1000"
-              placeholder-class="input-placeholder"
-            />
-          </view>
-
-          <view class="form-section">
-            <text class="form-label">规格单位 *</text>
-            <view class="channel-chip-group">
-              <view
-                v-for="unit in currentPackageUnitOptions"
-                :key="unit"
-                class="channel-chip"
-                :class="{ active: recordForm.actualPackageUnit === unit }"
-                @tap.stop="selectPackageUnit(unit)"
-              >
-                <text>{{ unit }}</text>
+              <view v-if="recordPriceMetaRows.length > 0" class="record-entry-meta">
+                <view
+                  v-for="row in recordPriceMetaRows"
+                  :key="row.label"
+                  class="record-entry-meta-row"
+                >
+                  <text class="meta-label">{{ row.label }}</text>
+                  <text class="meta-value" :class="row.tone ? `price-tone-${row.tone}` : ''">{{ row.value }}</text>
+                </view>
               </view>
-            </view>
-            <text class="form-hint">
-              例如 1件 x 1000g、2件 x 500ml，系统会自动折算成标准采购单位
-            </text>
-          </view>
-
-          <view class="form-section">
-            <text class="form-label">实际采购金额（元） *</text>
-            <input
-              v-model="recordForm.actualCost"
-              type="digit"
-              class="form-input"
-              placeholder="请输入金额，如：156.50"
-              placeholder-class="input-placeholder"
-            />
-          </view>
-
-          <view v-if="recordInputSummary" class="price-preview-card">
-            <text class="price-preview-label">系统自动折算</text>
-            <text class="price-preview-value">{{ recordInputSummary }}</text>
-            <text class="price-preview-hint">{{ recordAutoConvertHint }}</text>
-          </view>
-
-          <view class="extra-toggle" @tap="toggleExtraFields">
-            <text class="extra-toggle-text">{{ showExtraFields ? '收起补充信息' : '补充信息（选填）' }}</text>
-            <text class="extra-toggle-arrow">{{ showExtraFields ? '▲' : '▼' }}</text>
-          </view>
-
-          <view v-if="showExtraFields" class="extra-fields">
-            <view class="form-section">
-              <text class="form-label">产品型号（选填）</text>
-              <input
-                v-model="recordForm.productModel"
-                class="form-input"
-                placeholder="如：500g装"
-                placeholder-class="input-placeholder"
-              />
-            </view>
-
-            <view class="form-section">
-              <text class="form-label">备注信息（选填）</text>
-              <textarea
-                v-model="recordForm.notes"
-                class="form-textarea"
-                placeholder="例如：缺货换了规格、临时涨价等"
-                placeholder-class="input-placeholder"
-                :maxlength="200"
-              />
-              <text class="char-count">{{ recordForm.notes.length }}/200</text>
             </view>
           </view>
         </view>
@@ -489,11 +463,14 @@ import { onLoad } from '@dcloudio/uni-app';
 import {
   getPurchaseListDetail,
   completePurchase as completePurchaseApi,
+  reopenPurchaseList as reopenPurchaseListApi,
   startPurchase as startPurchaseApi,
   getPurchaseRecords,
   deletePurchaseRecord as deletePurchaseRecordApi,
   addPurchaseRecord,
   updatePurchaseRecord as updatePurchaseRecordApi,
+  markPurchaseItemNoPurchase as markPurchaseItemNoPurchaseApi,
+  clearPurchaseItemNoPurchase as clearPurchaseItemNoPurchaseApi,
   removeItemFromList,
   checkOrderDateChanges,
   getPurchaseChannels,
@@ -510,6 +487,8 @@ const purchaseList = ref<any>(null);
 const items = ref<any[]>([]);
 const loading = ref(true);
 const completing = ref(false);
+const reopening = ref(false);
+const noPurchaseMarkingItemId = ref('');
 const allPurchaseChannels = ref<string[]>([]); // 所有采购渠道列表
 const pendingAppendLoading = ref(false);
 const appendingOrders = ref(false);
@@ -520,6 +499,12 @@ const pendingAppendOrders = ref<
     targetProductionDate: string;
   }>
 >([]);
+
+const detailTitle = computed(() => {
+  return purchaseList.value?.kind === 'STOCK_REPLENISHMENT'
+    ? '补货清单详情'
+    : '日采清单详情';
+});
 
 // 按类型分组的原料（计算属性）
 const groupedItems = computed(() => {
@@ -563,7 +548,6 @@ const getTypeLabel = (type: string) => {
 const showRecordForm = ref(false);
 const selectedIngredient = ref<any>(null);
 const submitting = ref(false);
-const showExtraFields = ref(false);
 const channelInputMode = ref<'preset' | 'custom'>('preset');
 const recordChannelChoices = ref<string[]>([]);
 const editingRecord = ref<any>(null);
@@ -572,6 +556,7 @@ const recordForm = ref({
   procurementSkuId: '',
   procurementSkuName: '',
   purchaseChannel: '',
+  purchaseUnit: '',
   actualPackageCount: '',
   actualPackageSize: '',
   actualPackageUnit: '',
@@ -581,8 +566,53 @@ const recordForm = ref({
 });
 
 const canManagePurchaseRecords = computed(() => {
-  return Boolean(purchaseList.value?.startedAt) && !purchaseList.value?.reimbursementId;
+  return (
+    Boolean(purchaseList.value?.startedAt) &&
+    purchaseList.value?.status === 'PENDING' &&
+    !purchaseList.value?.reimbursementId
+  );
 });
+
+const canReopenCompletedPurchase = computed(() => {
+  return (
+    purchaseList.value?.status === 'COMPLETED' &&
+    !purchaseList.value?.reimbursementId
+  );
+});
+
+const getItemRequiredQuantity = (item: any) => {
+  return Number(
+    item?.resolvedPurchaseShortageQuantity ??
+      item?.purchaseShortageQuantity ??
+      item?.quantityNeeded ??
+      0,
+  );
+};
+
+const requiresItemHandling = (item: any) => {
+  const requiredQuantity = getItemRequiredQuantity(item);
+  return Number.isFinite(requiredQuantity) && requiredQuantity > 0;
+};
+
+const isItemHandled = (item: any) => {
+  return (
+    !requiresItemHandling(item) ||
+    item.noPurchaseNeeded === true ||
+    (item.records || []).length > 0
+  );
+};
+
+const shouldShowNoPurchaseButton = (item: any) => {
+  return (
+    requiresItemHandling(item) &&
+    !item.noPurchaseNeeded &&
+    (item.records || []).length === 0
+  );
+};
+
+const getUnhandledPurchaseItems = () => {
+  return items.value.filter((item) => !isItemHandled(item));
+};
 
 const modalTitle = computed(() => {
   return editingRecord.value ? '编辑采购记录' : '添加采购记录';
@@ -637,23 +667,32 @@ const getSuggestedPackageUnit = (item: any): string => {
   return formatMeasurementUnit(getIngredientBaseUnit(item)) || '个';
 };
 
-const getPackageUnitOptions = (item: any): string[] => {
-  const baseUnit = getIngredientBaseUnit(item);
-  const hasDensity = Number(item?.ingredient?.properties?.density_g_per_ml || 0) > 0;
-
-  if (baseUnit === 'ML') {
-    return hasDensity ? ['ml', 'L', 'g', 'kg'] : ['ml', 'L'];
+const parsePurchaseUnitFromProductModel = (productModel?: string | null) => {
+  const normalized = (productModel || '').trim();
+  if (!normalized.includes('/')) {
+    return '';
   }
 
-  if (baseUnit === 'G') {
-    return hasDensity ? ['g', 'kg', '斤', 'ml', 'L'] : ['g', 'kg', '斤'];
-  }
-
-  return ['个', '件', '袋', '包', '盒', '瓶', '罐', '张', '片'];
+  return formatMeasurementUnit(normalized.split('/').pop()?.trim()) || '';
 };
 
-const currentPackageUnitOptions = computed(() => {
-  return getPackageUnitOptions(selectedIngredient.value);
+const getSkuPurchaseUnit = (sku: any, item: any): string => {
+  return (
+    formatMeasurementUnit(sku?.purchaseUnit) ||
+    parsePurchaseUnitFromProductModel(sku?.productModel) ||
+    formatMeasurementUnit(sku?.displayUnit) ||
+    formatMeasurementUnit(item?.ingredient?.purchaseUnit) ||
+    '件'
+  );
+};
+
+const recordPurchaseUnitLabel = computed(() => {
+  return formatMeasurementUnit(recordForm.value.purchaseUnit) || '件';
+});
+
+const recordPurchaseQuantityPlaceholder = computed(() => {
+  const unit = recordPurchaseUnitLabel.value || '件';
+  return `请输入本次实际买了多少${unit}，如：2`;
 });
 
 // 采购渠道选项（从所有原料数据库中加载）
@@ -713,14 +752,12 @@ const isPresetChannelSelected = (channel: string) => {
 };
 
 const procurementSkuProfile = computed(() => resolveProcurementSkuProfile(selectedIngredient.value));
-
-const recordProcurementSkuOptions = computed(() => [
-  { id: '', label: '不选择采购 SKU' },
-  ...procurementSkuProfile.value.procurementSkuChoices.map((sku) => ({
+const recordProcurementSkuOptions = computed(() =>
+  procurementSkuProfile.value.procurementSkuChoices.map((sku) => ({
     ...sku,
     label: formatCompactLabel([sku.name, sku.productModel, sku.purchaseChannel]),
   })),
-]);
+);
 
 const selectedRecordProcurementSku = computed(() => {
   return (
@@ -736,7 +773,123 @@ const recordProcurementSkuIndex = computed(() => {
   return index >= 0 ? index : 0;
 });
 
-const recordInputSummary = computed(() => {
+const getReferencePriceParts = (sku: any) => {
+  const price = Number(sku?.currentPurchasePrice || sku?.referencePricePerPurchaseUnit || 0);
+  const ratio = Number(sku?.purchaseToBaseRatio || 0);
+  const baseUnit = getIngredientBaseUnit(selectedIngredient.value);
+
+  if (!Number.isFinite(price) || price <= 0) {
+    return null;
+  }
+
+  if (Number.isFinite(ratio) && ratio > 0) {
+    if (baseUnit === 'G') {
+      return {
+        price: price / ratio * 500,
+        unit: '500g',
+      };
+    }
+
+    if (baseUnit === 'ML') {
+      return {
+        price: price / ratio * 500,
+        unit: '500ml',
+      };
+    }
+
+    if (baseUnit === 'PCS') {
+      return {
+        price: price / ratio,
+        unit: formatMeasurementUnit(selectedIngredient.value?.ingredient?.unitDisplayLabel) || '个',
+      };
+    }
+  }
+
+  return {
+    price,
+    unit: sku?.purchaseUnit || sku?.displayUnit || '件',
+  };
+};
+
+const formatProcurementSkuReferencePrice = (sku: any) => {
+  const parts = getReferencePriceParts(sku);
+  if (!parts) {
+    return '';
+  }
+
+  return `¥${formatDecimal(parts.price, 2)}/${parts.unit}`;
+};
+
+const isRecommendedRecordSku = (sku: any) => {
+  const profile = procurementSkuProfile.value;
+  if (profile.procurementSkuId && sku.id) {
+    return profile.procurementSkuId === sku.id;
+  }
+  return Boolean(profile.procurementSkuName && profile.procurementSkuName === sku.name);
+};
+
+const getSkuPackageFacts = (sku: any, item: any) => {
+  const ratio = Number(sku?.purchaseToBaseRatio || 0);
+  const baseUnit = getIngredientBaseUnit(item);
+  const purchaseUnit = getSkuPurchaseUnit(sku, item);
+
+  if (Number.isFinite(ratio) && ratio > 0) {
+    if (baseUnit === 'G') {
+      if (ratio >= 1000) {
+        return { size: formatDecimal(ratio / 1000, 3), unit: 'kg', purchaseUnit };
+      }
+      return { size: formatDecimal(ratio, 3), unit: 'g', purchaseUnit };
+    }
+
+    if (baseUnit === 'ML') {
+      if (ratio >= 1000) {
+        return { size: formatDecimal(ratio / 1000, 3), unit: 'L', purchaseUnit };
+      }
+      return { size: formatDecimal(ratio, 3), unit: 'ml', purchaseUnit };
+    }
+
+    return {
+      size: formatDecimal(ratio, 3),
+      unit: item?.ingredient?.unitDisplayLabel || item?.quantityUnit || '个',
+      purchaseUnit,
+    };
+  }
+
+  return {
+    size: getSuggestedPackageSize(item),
+    unit: getSuggestedPackageUnit(item),
+    purchaseUnit,
+  };
+};
+
+const applyRecordSkuDefaults = (sku: any) => {
+  if (!selectedIngredient.value || !sku) {
+    return;
+  }
+
+  const facts = getSkuPackageFacts(sku, selectedIngredient.value);
+  recordForm.value.procurementSkuId = sku.id || '';
+  recordForm.value.procurementSkuName = sku.name || '';
+  recordForm.value.purchaseChannel = sku.purchaseChannel || '';
+  recordForm.value.productModel = sku.productModel || '';
+  recordForm.value.purchaseUnit = facts.purchaseUnit || '件';
+  recordForm.value.actualPackageSize = facts.size || '';
+  recordForm.value.actualPackageUnit = facts.unit || '';
+  channelInputMode.value =
+    recordForm.value.purchaseChannel && recordChannelChoices.value.includes(recordForm.value.purchaseChannel)
+      ? 'preset'
+      : 'custom';
+};
+
+const selectRecordSku = (sku: any) => {
+  applyRecordSkuDefaults(sku);
+};
+
+const buildRecordProductModel = () => {
+  return recordForm.value.productModel;
+};
+
+const getRecordBaseQuantity = () => {
   const packageCount = Number(recordForm.value.actualPackageCount);
   const packageSize = Number(recordForm.value.actualPackageSize);
   const packageUnit = recordForm.value.actualPackageUnit;
@@ -748,20 +901,145 @@ const recordInputSummary = computed(() => {
     packageSize <= 0 ||
     !packageUnit
   ) {
+    return 0;
+  }
+
+  return convertToBaseQuantity(packageCount * packageSize, packageUnit, selectedIngredient.value);
+};
+
+const convertToBaseQuantity = (amount: number, unit: string, item: any) => {
+  const baseUnit = getIngredientBaseUnit(item);
+  const normalized = `${unit}`.trim().toUpperCase();
+  const density = Number(item?.ingredient?.properties?.density_g_per_ml || 0);
+
+  if (baseUnit === 'G') {
+    if (normalized === 'KG') return amount * 1000;
+    if (normalized === 'JIN') return amount * 500;
+    if (normalized === 'G') return amount;
+    if (normalized === 'ML' && density > 0) return amount * density;
+    if (normalized === 'L' && density > 0) return amount * 1000 * density;
+  }
+
+  if (baseUnit === 'ML') {
+    if (normalized === 'L') return amount * 1000;
+    if (normalized === 'ML') return amount;
+    if (normalized === 'G' && density > 0) return amount / density;
+    if (normalized === 'KG' && density > 0) return amount * 1000 / density;
+  }
+
+  return amount;
+};
+
+const getBaseUnitLabel = (item: any) => {
+  const baseUnit = getIngredientBaseUnit(item);
+  if (baseUnit === 'G') return 'g';
+  if (baseUnit === 'ML') return 'ml';
+  return item?.ingredient?.unitDisplayLabel || item?.quantityUnit || '个';
+};
+
+const recordTotalQuantityText = computed(() => {
+  const baseQuantity = getRecordBaseQuantity();
+  if (!Number.isFinite(baseQuantity) || baseQuantity <= 0) {
     return '';
   }
 
-  return `${formatDecimal(packageCount)}件 x ${formatDecimal(packageSize)}${packageUnit}`;
+  return `${formatDecimal(baseQuantity, 3)}${getBaseUnitLabel(selectedIngredient.value)}`;
 });
 
-const recordAutoConvertHint = computed(() => {
-  if (!selectedIngredient.value) {
-    return '保存后由后端自动折算，不需要手算';
+const recordQuantityBalanceRow = computed(() => {
+  const baseQuantity = getRecordBaseQuantity();
+  const shortageBaseQuantity = convertToBaseQuantity(
+    Number(selectedIngredient.value?.quantityNeeded || 0),
+    selectedIngredient.value?.quantityUnit || getDisplayUnit(selectedIngredient.value),
+    selectedIngredient.value,
+  );
+
+  if (!Number.isFinite(baseQuantity) || baseQuantity <= 0 || !Number.isFinite(shortageBaseQuantity) || shortageBaseQuantity <= 0) {
+    return null;
   }
 
-  const purchaseUnit = getPurchaseRecordUnit(selectedIngredient.value);
-  const baseUnit = formatMeasurementUnit(getIngredientBaseUnit(selectedIngredient.value));
-  return `保存后会自动换算为 ${purchaseUnit}，并沉淀为 ${baseUnit} 口径用于后续价格学习`;
+  const diff = baseQuantity - shortageBaseQuantity;
+  const unit = getBaseUnitLabel(selectedIngredient.value);
+  if (diff >= 0) {
+    return { label: '余量', value: `${formatDecimal(diff, 3)}${unit}`, tone: 'good' };
+  }
+  return { label: '缺口', value: `${formatDecimal(Math.abs(diff), 3)}${unit}`, tone: 'bad' };
+});
+
+const recordQuantityMetaRows = computed(() => {
+  const rows: Array<{ label: string; value: string; tone?: string }> = [];
+  if (recordTotalQuantityText.value) {
+    rows.push({ label: '总量', value: recordTotalQuantityText.value });
+  }
+  if (recordQuantityBalanceRow.value) {
+    rows.push(recordQuantityBalanceRow.value);
+  }
+  return rows;
+});
+
+const recordActualUnitPriceValue = computed(() => {
+  const cost = Number(recordForm.value.actualCost);
+  const baseQuantity = getRecordBaseQuantity();
+  const baseUnit = getIngredientBaseUnit(selectedIngredient.value);
+
+  if (!Number.isFinite(cost) || cost <= 0 || !Number.isFinite(baseQuantity) || baseQuantity <= 0) {
+    return null;
+  }
+
+  if (baseUnit === 'G' || baseUnit === 'ML') {
+    return cost / baseQuantity * 500;
+  }
+
+  return cost / baseQuantity;
+});
+
+const recordActualUnitPriceText = computed(() => {
+  const value = recordActualUnitPriceValue.value;
+  if (value === null) {
+    return '';
+  }
+
+  const baseUnit = getIngredientBaseUnit(selectedIngredient.value);
+  if (baseUnit === 'G') {
+    return `¥${formatDecimal(value, 2)}/500g`;
+  }
+  if (baseUnit === 'ML') {
+    return `¥${formatDecimal(value, 2)}/500ml`;
+  }
+  return `¥${formatDecimal(value, 2)}/${getBaseUnitLabel(selectedIngredient.value)}`;
+});
+
+const recordHistoricalUnitPriceText = computed(() => {
+  const label = formatProcurementSkuReferencePrice(selectedRecordProcurementSku.value);
+  return label || '暂无';
+});
+
+const recordPriceDiffRow = computed(() => {
+  const actual = recordActualUnitPriceValue.value;
+  const reference = getReferencePriceParts(selectedRecordProcurementSku.value);
+  if (actual === null || !reference || !reference.price) {
+    return null;
+  }
+
+  const diff = (actual - reference.price) / reference.price * 100;
+  if (diff >= 0) {
+    return { label: '价格提醒', value: `高于历史 ${Math.round(diff)}%`, tone: 'bad' };
+  }
+  return { label: '价格提醒', value: `低于历史 ${Math.round(Math.abs(diff))}%`, tone: 'good' };
+});
+
+const recordPriceMetaRows = computed(() => {
+  const rows: Array<{ label: string; value: string; tone?: string }> = [];
+  if (recordActualUnitPriceText.value) {
+    rows.push({ label: '单价', value: recordActualUnitPriceText.value });
+  }
+  if (recordHistoricalUnitPriceText.value) {
+    rows.push({ label: '历史单价', value: recordHistoricalUnitPriceText.value });
+  }
+  if (recordPriceDiffRow.value) {
+    rows.push(recordPriceDiffRow.value);
+  }
+  return rows;
 });
 
 // 获取系统内部标准采购单位（用于展示归一化结果）
@@ -788,10 +1066,14 @@ const hasMaxDecimalPlaces = (value: string | number, maxDecimalPlaces: number) =
   return !decimalPart || decimalPart.length <= maxDecimalPlaces;
 };
 
-const formatRecordRawSummary = (record: any) => {
+const formatRecordRawSummary = (record: any, item: any) => {
   const packageCount = Number(record.actualPackageCount || 0);
   const packageSize = Number(record.actualPackageSize || 0);
   const packageUnit = record.actualPackageUnit;
+  const countUnit =
+    parsePurchaseUnitFromProductModel(record.productModel) ||
+    getRecordSkuPurchaseUnit(record, item) ||
+    '件';
 
   if (
     Number.isFinite(packageCount) &&
@@ -800,14 +1082,14 @@ const formatRecordRawSummary = (record: any) => {
     packageSize > 0 &&
     packageUnit
   ) {
-    return `${formatDecimal(packageCount)}件 x ${formatDecimal(packageSize)}${packageUnit}`;
+    return `${formatDecimal(packageCount)}${countUnit} x ${formatDecimal(packageSize)}${packageUnit}`;
   }
 
   return '';
 };
 
 const formatRecordQuantity = (record: any, item: any) => {
-  const rawSummary = formatRecordRawSummary(record);
+  const rawSummary = formatRecordRawSummary(record, item);
   if (rawSummary) {
     return rawSummary;
   }
@@ -819,21 +1101,22 @@ const formatRecordQuantity = (record: any, item: any) => {
 const formatRecordNormalizedSummary = (record: any, item: any) => {
   const quantity = Number(record.actualQuantity || 0);
   const baseQuantity = Number(record.actualBaseQuantity || 0);
-  const parts: string[] = [];
 
-  if (Number.isFinite(baseQuantity) && baseQuantity > 0 && record.actualBaseUnit) {
-    parts.push(`${formatDecimal(baseQuantity, 3)}${formatMeasurementUnit(record.actualBaseUnit)}`);
-  }
-
-  if (Number.isFinite(quantity) && quantity > 0) {
-    parts.push(`${formatDecimal(quantity, 3)}${getPurchaseRecordUnit(item)}`);
-  }
-
-  if (parts.length <= 1) {
+  if (!Number.isFinite(baseQuantity) || baseQuantity <= 0 || !record.actualBaseUnit) {
     return '';
   }
 
-  return `折算 ${parts.join(' ≈ ')}`;
+  const baseSummary = `${formatDecimal(baseQuantity, 3)}${formatMeasurementUnit(record.actualBaseUnit)}`;
+  const purchaseSummary = Number.isFinite(quantity) && quantity > 0
+    ? `${formatDecimal(quantity, 3)}${getPurchaseRecordUnit(item)}`
+    : '';
+  const rawSummary = formatRecordRawSummary(record, item);
+
+  if (!rawSummary && purchaseSummary === baseSummary) {
+    return '';
+  }
+
+  return `总量 ${baseSummary}`;
 };
 
 const buildRecordChannelChoices = (item: any) => {
@@ -901,6 +1184,17 @@ const getRecordSkuLabel = (record: any, item: any) => {
   );
 };
 
+const getRecordSkuPurchaseUnit = (record: any, item: any) => {
+  const profile = resolveProcurementSkuProfile(item, record.procurementSkuId);
+  const sku = profile.procurementSkuChoices.find((choice: any) => {
+    return record.procurementSkuId
+      ? choice.id === record.procurementSkuId
+      : record.procurementSkuName && choice.name === record.procurementSkuName;
+  });
+
+  return getSkuPurchaseUnit(sku || profile, item);
+};
+
 // 日期变更检测
 const dateChanges = ref<any>({
   hasChanges: false,
@@ -925,6 +1219,7 @@ const loadDetail = async () => {
 
     if (res.code === 0) {
       purchaseList.value = res.data;
+      uni.setNavigationBarTitle({ title: detailTitle.value });
       items.value = (res.data.items || []).map((item: any) => ({
         ...resolvePurchaseItemDisplay(item),
         records: [],
@@ -1085,7 +1380,7 @@ const loadPurchaseRecords = async () => {
       // 按原料ID分组
       const grouped = new Map<string, any[]>();
       allRecords.forEach((record: any) => {
-        const key = record.ingredientId;
+        const key = record.purchaseItemId || record.ingredientId;
         if (!grouped.has(key)) {
           grouped.set(key, []);
         }
@@ -1094,7 +1389,7 @@ const loadPurchaseRecords = async () => {
 
       // 将采购记录关联到对应的原料卡片
       items.value.forEach(item => {
-        item.records = grouped.get(item.ingredientId) || [];
+        item.records = grouped.get(item.id) || grouped.get(item.ingredientId) || [];
       });
     }
   } catch (error: any) {
@@ -1111,26 +1406,38 @@ const handleContinueAdd = (item: any) => {
 
   const latest = getLatestPurchaseRecord(item);
   const latestProfile = resolveProcurementSkuProfile(item, latest?.procurementSkuId);
+  const selectedSku =
+    recordProcurementSkuOptions.value.find((sku) => {
+      return latest?.procurementSkuId
+        ? sku.id === latest.procurementSkuId
+        : sku.id === latestProfile.procurementSkuId || sku.name === latestProfile.procurementSkuName;
+    }) || recordProcurementSkuOptions.value[0];
 
-  recordForm.value.procurementSkuId = latestProfile.procurementSkuId || '';
-  recordForm.value.procurementSkuName = latestProfile.procurementSkuName || '';
-  recordForm.value.productModel = latest?.productModel || latestProfile.productModel || '';
+  if (selectedSku) {
+    applyRecordSkuDefaults(selectedSku);
+  }
+
   recordForm.value.actualPackageCount = latest?.actualPackageCount
     ? formatDecimal(Number(latest.actualPackageCount || 0))
     : '';
-  recordForm.value.actualPackageSize = latest?.actualPackageSize
-    ? formatDecimal(Number(latest.actualPackageSize || 0))
-    : getSuggestedPackageSize(item);
-  recordForm.value.actualPackageUnit =
-    latest?.actualPackageUnit || getSuggestedPackageUnit(item);
 
-  // 预填充采购渠道
-  recordForm.value.purchaseChannel =
-    latestProfile.purchaseChannel ||
-    normalizeChannelLabel(latest?.purchaseChannel) ||
-    '';
+  if (latest?.actualPackageSize) {
+    recordForm.value.actualPackageSize = formatDecimal(Number(latest.actualPackageSize || 0));
+  }
+  if (latest?.actualPackageUnit) {
+    recordForm.value.actualPackageUnit = latest.actualPackageUnit;
+  }
+  if (latest?.purchaseChannel) {
+    recordForm.value.purchaseChannel = normalizeChannelLabel(latest.purchaseChannel);
+  }
+  if (latest?.productModel) {
+    recordForm.value.productModel = latest.productModel;
+    recordForm.value.purchaseUnit =
+      parsePurchaseUnitFromProductModel(latest.productModel) ||
+      recordForm.value.purchaseUnit ||
+      '件';
+  }
 
-  showExtraFields.value = false;
   channelInputMode.value =
     recordForm.value.purchaseChannel && recordChannelChoices.value.includes(recordForm.value.purchaseChannel)
       ? 'preset'
@@ -1153,8 +1460,13 @@ const editRecord = (record: any) => {
   recordChannelChoices.value = buildRecordChannelChoices(item);
 
   const recordProfile = resolveProcurementSkuProfile(item, record.procurementSkuId);
-  recordForm.value.procurementSkuId = recordProfile.procurementSkuId || '';
-  recordForm.value.procurementSkuName = recordProfile.procurementSkuName || '';
+  const selectedSku = record.procurementSkuId
+    ? recordProcurementSkuOptions.value.find((sku) => sku.id === record.procurementSkuId)
+    : null;
+
+  if (selectedSku) {
+    applyRecordSkuDefaults(selectedSku);
+  }
   recordForm.value.purchaseChannel = normalizeChannelLabel(record.purchaseChannel);
   recordForm.value.actualPackageCount = record.actualPackageCount
     ? formatDecimal(Number(record.actualPackageCount || 0))
@@ -1169,9 +1481,13 @@ const editRecord = (record: any) => {
     .replace(/\.00$/, '')
     .replace(/(\.\d)0$/, '$1');
   recordForm.value.productModel = record.productModel || recordProfile.productModel || '';
+  recordForm.value.purchaseUnit =
+    parsePurchaseUnitFromProductModel(record.productModel) ||
+    parsePurchaseUnitFromProductModel(recordProfile.productModel) ||
+    recordForm.value.purchaseUnit ||
+    '件';
   recordForm.value.notes = record.notes || '';
 
-  showExtraFields.value = Boolean(record.productModel || record.notes);
   channelInputMode.value =
     recordForm.value.purchaseChannel &&
     recordChannelChoices.value.includes(recordForm.value.purchaseChannel)
@@ -1210,29 +1526,7 @@ const onProcurementSkuChange = (e: any) => {
     return;
   }
 
-  const profile = resolveProcurementSkuProfile(selectedIngredient.value);
-  recordForm.value.procurementSkuId = sku.id || '';
-  recordForm.value.procurementSkuName = sku.id ? sku.name : '';
-
-  if (sku.id) {
-    recordForm.value.purchaseChannel = sku.purchaseChannel || recordForm.value.purchaseChannel;
-    recordForm.value.productModel = sku.productModel || recordForm.value.productModel;
-    channelInputMode.value =
-      recordForm.value.purchaseChannel && recordChannelChoices.value.includes(recordForm.value.purchaseChannel)
-        ? 'preset'
-        : 'custom';
-  } else {
-    recordForm.value.purchaseChannel = profile.purchaseChannel || '';
-    recordForm.value.productModel = profile.productModel || '';
-    channelInputMode.value =
-      recordForm.value.purchaseChannel && recordChannelChoices.value.includes(recordForm.value.purchaseChannel)
-        ? 'preset'
-        : 'custom';
-  }
-};
-
-const selectPackageUnit = (unit: string) => {
-  recordForm.value.actualPackageUnit = unit;
+  applyRecordSkuDefaults(sku);
 };
 
 const activateCustomChannelInput = () => {
@@ -1243,16 +1537,13 @@ const activateCustomChannelInput = () => {
   }
 };
 
-const toggleExtraFields = () => {
-  showExtraFields.value = !showExtraFields.value;
-};
-
 // 重置表单
 const resetRecordForm = () => {
   recordForm.value = {
     procurementSkuId: '',
     procurementSkuName: '',
     purchaseChannel: '',
+    purchaseUnit: '',
     actualPackageCount: '',
     actualPackageSize: '',
     actualPackageUnit: '',
@@ -1260,7 +1551,6 @@ const resetRecordForm = () => {
     productModel: '',
     notes: '',
   };
-  showExtraFields.value = false;
   recordChannelChoices.value = [];
   channelInputMode.value = 'preset';
 };
@@ -1268,50 +1558,60 @@ const resetRecordForm = () => {
 // 提交采购记录
 const submitRecord = async () => {
   // 表单验证
+  if (!recordForm.value.procurementSkuId || recordForm.value.procurementSkuId.trim().length === 0) {
+    uni.showToast({ title: '请选择采购商品', icon: 'none' });
+    return;
+  }
+
   if (!recordForm.value.purchaseChannel || recordForm.value.purchaseChannel.trim().length === 0) {
-    uni.showToast({ title: '请输入采购渠道', icon: 'none' });
+    uni.showToast({ title: '采购商品缺少采购渠道，请联系管理员补充', icon: 'none' });
+    return;
+  }
+
+  if (!recordForm.value.purchaseUnit || recordForm.value.purchaseUnit.trim().length === 0) {
+    uni.showToast({ title: '采购商品缺少采购单位，请联系管理员补充', icon: 'none' });
     return;
   }
 
   if (!recordForm.value.actualPackageCount || recordForm.value.actualPackageCount.toString().trim().length === 0) {
-    uni.showToast({ title: '请输入实际购买件数', icon: 'none' });
+    uni.showToast({ title: '请输入购买数量', icon: 'none' });
     return;
   }
 
   const packageCount = Number(recordForm.value.actualPackageCount);
   if (isNaN(packageCount) || packageCount <= 0) {
-    uni.showToast({ title: '件数必须大于0', icon: 'none' });
+    uni.showToast({ title: '购买数量必须大于0', icon: 'none' });
     return;
   }
 
   if (!hasMaxDecimalPlaces(recordForm.value.actualPackageCount, 3)) {
-    uni.showToast({ title: '件数最多三位小数', icon: 'none' });
+    uni.showToast({ title: '购买数量最多三位小数', icon: 'none' });
     return;
   }
 
   if (!recordForm.value.actualPackageSize || recordForm.value.actualPackageSize.toString().trim().length === 0) {
-    uni.showToast({ title: '请输入单件规格', icon: 'none' });
+    uni.showToast({ title: '采购商品缺少换算规格', icon: 'none' });
     return;
   }
 
   const packageSize = Number(recordForm.value.actualPackageSize);
   if (isNaN(packageSize) || packageSize <= 0) {
-    uni.showToast({ title: '单件规格必须大于0', icon: 'none' });
+    uni.showToast({ title: '采购商品换算规格必须大于0', icon: 'none' });
     return;
   }
 
   if (!hasMaxDecimalPlaces(recordForm.value.actualPackageSize, 3)) {
-    uni.showToast({ title: '单件规格最多三位小数', icon: 'none' });
+    uni.showToast({ title: '采购商品换算规格最多三位小数', icon: 'none' });
     return;
   }
 
   if (!recordForm.value.actualPackageUnit) {
-    uni.showToast({ title: '请选择规格单位', icon: 'none' });
+    uni.showToast({ title: '采购商品缺少换算单位', icon: 'none' });
     return;
   }
 
   if (!recordForm.value.actualCost || recordForm.value.actualCost.toString().trim().length === 0) {
-    uni.showToast({ title: '请输入实际采购金额', icon: 'none' });
+    uni.showToast({ title: '请输入付款金额', icon: 'none' });
     return;
   }
 
@@ -1331,15 +1631,15 @@ const submitRecord = async () => {
   submitting.value = true;
 
   try {
+    const productModel = buildRecordProductModel();
     const data: any = {
       procurementSkuId: recordForm.value.procurementSkuId || undefined,
-      procurementSkuName: recordForm.value.procurementSkuName || undefined,
       purchaseChannel: recordForm.value.purchaseChannel.trim(),
       actualPackageCount: Number(packageCount.toFixed(3)),
       actualPackageSize: Number(packageSize.toFixed(3)),
       actualPackageUnit: recordForm.value.actualPackageUnit,
       actualCost: Number(cost.toFixed(2)),
-      productModel: recordForm.value.productModel?.trim() || undefined,
+      productModel: productModel?.trim() || undefined,
       notes: recordForm.value.notes?.trim() || undefined,
     };
 
@@ -1414,11 +1714,77 @@ const deleteRecord = (recordId: string) => {
   });
 };
 
+const markItemNoPurchase = async (item: any) => {
+  if (noPurchaseMarkingItemId.value) {
+    return;
+  }
+
+  noPurchaseMarkingItemId.value = item.id;
+
+  try {
+    const response: any = await markPurchaseItemNoPurchaseApi(
+      purchaseListId.value,
+      item.id,
+      { reason: '现场确认无需采购' },
+    );
+
+    if (response.code === 0) {
+      uni.showToast({ title: '已标记，可点取消标记撤销', icon: 'none' });
+      await loadDetail();
+    } else {
+      uni.showToast({ title: response.message || '标记失败', icon: 'none' });
+    }
+  } catch (error: any) {
+    console.error('标记无需采购失败', error);
+    uni.showToast({ title: error.message || '标记失败', icon: 'none' });
+  } finally {
+    noPurchaseMarkingItemId.value = '';
+  }
+};
+
+const clearItemNoPurchase = (item: any) => {
+  uni.showModal({
+    title: '取消无需采购',
+    content: `确认取消"${getPurchaseItemTitle(item)}"的无需采购标记？`,
+    success: async (res) => {
+      if (!res.confirm) {
+        return;
+      }
+
+      try {
+        const response: any = await clearPurchaseItemNoPurchaseApi(
+          purchaseListId.value,
+          item.id,
+        );
+
+        if (response.code === 0) {
+          uni.showToast({ title: '已取消', icon: 'success' });
+          await loadDetail();
+        } else {
+          uni.showToast({ title: response.message || '取消失败', icon: 'none' });
+        }
+      } catch (error: any) {
+        console.error('取消无需采购标记失败', error);
+        uni.showToast({ title: error.message || '取消失败', icon: 'none' });
+      }
+    },
+  });
+};
+
 // 确认采购完成
 const completePurchase = () => {
+  const unhandledItems = getUnhandledPurchaseItems();
+  if (unhandledItems.length > 0) {
+    uni.showToast({
+      title: `还有 ${unhandledItems.length} 个原料未处理`,
+      icon: 'none',
+    });
+    return;
+  }
+
   uni.showModal({
     title: '确认采购完成',
-    content: '确认该采购清单的所有原料已采购完成？',
+    content: '确认该采购清单的所有原料都已处理？',
     success: async (res) => {
       if (res.confirm) {
         completing.value = true;
@@ -1439,6 +1805,36 @@ const completePurchase = () => {
         } finally {
           completing.value = false;
         }
+      }
+    },
+  });
+};
+
+const reopenCompletedPurchase = () => {
+  uni.showModal({
+    title: '撤回完成',
+    content: '撤回后可继续修改采购记录，已入库的采购记录会先回滚。确认继续？',
+    success: async (res) => {
+      if (!res.confirm) {
+        return;
+      }
+
+      reopening.value = true;
+
+      try {
+        const response: any = await reopenPurchaseListApi(purchaseListId.value);
+
+        if (response.code === 0) {
+          uni.showToast({ title: '已撤回', icon: 'success' });
+          await loadDetail();
+        } else {
+          uni.showToast({ title: response.message || '撤回失败', icon: 'none' });
+        }
+      } catch (error: any) {
+        console.error('撤回采购完成失败', error);
+        uni.showToast({ title: error.message || '撤回失败', icon: 'none' });
+      } finally {
+        reopening.value = false;
       }
     },
   });
@@ -1494,14 +1890,49 @@ const getStatusClass = (status: string) => {
 
 const getListKindText = (kind?: string) => {
   const kindMap: Record<string, string> = {
-    ORDER_DEMAND: '订单采购',
-    STOCK_REPLENISHMENT: '库存补货',
+    ORDER_DEMAND: '日采',
+    STOCK_REPLENISHMENT: '补货',
   };
-  return kindMap[kind || 'ORDER_DEMAND'] || '订单采购';
+  return kindMap[kind || 'ORDER_DEMAND'] || '日采';
 };
 
-const getListKindClass = (kind?: string) => {
-  return kind === 'STOCK_REPLENISHMENT' ? 'stock' : 'order';
+const getPurchaseItemTitle = (item: any) => {
+  return (
+    item?.resolvedProcurementSkuName ||
+    item?.resolvedSuggestedProductName ||
+    item?.ingredientName ||
+    '未知原料'
+  );
+};
+
+const formatBrandLabel = (brand?: string | null) => {
+  const normalized = (brand || '').trim();
+  if (!normalized || normalized === '-' || normalized === '无') {
+    return '';
+  }
+  return normalized;
+};
+
+const formatSkuReferencePrice = (item: any) => {
+  const price = Number(item?.resolvedCurrentPurchasePrice || 0);
+  const ratio = Number(item?.resolvedPurchaseToBaseRatio || 0);
+  if (!Number.isFinite(price) || price <= 0 || !Number.isFinite(ratio) || ratio <= 0) {
+    return '';
+  }
+
+  const baseUnit = String(item?.resolvedBaseUnit || item?.ingredient?.baseUnit || '').toUpperCase();
+  const unitPrice = price / ratio;
+  if (baseUnit === 'G' || baseUnit === 'ML') {
+    const unitLabel = baseUnit === 'ML' ? 'ml' : 'g';
+    return `参考单价 ¥${(unitPrice * 500).toFixed(2)}/500${unitLabel}`;
+  }
+
+  const unitLabel =
+    item?.resolvedUnitDisplayLabel ||
+    item?.quantityUnit ||
+    item?.resolvedDisplayUnit ||
+    '个';
+  return `参考单价 ¥${unitPrice.toFixed(2)}/${unitLabel}`;
 };
 
 // 格式化订单ID（简化显示）
@@ -1577,8 +2008,8 @@ const formatDisplayValue = (value: number, unit: string) => {
   return value.toFixed(2);
 };
 
-const resolveFoodDisplayMeta = (item: any) => {
-  const quantity = Number(item.quantityNeeded || 0);
+const resolveFoodDisplayMeta = (item: any, quantityOverride?: number) => {
+  const quantity = Number(quantityOverride ?? item.quantityNeeded ?? 0);
   const quantityUnit = String(item.quantityUnit || '').toLowerCase();
   const ingredientBaseUnit = String(item?.ingredient?.baseUnit || '').toUpperCase();
   const density = Number(item?.ingredient?.properties?.density_g_per_ml || 0);
@@ -1608,6 +2039,16 @@ const resolveFoodDisplayMeta = (item: any) => {
   return { value: quantity, unit: item.displayUnit || item.quantityUnit || '' };
 };
 
+const formatSupplementDisplayValue = (value: number) => {
+  const numeric = Number(value || 0);
+  if (!Number.isFinite(numeric)) {
+    return '0';
+  }
+
+  const rounded = Number(numeric.toFixed(2));
+  return Number.isInteger(rounded) ? rounded.toFixed(0) : rounded.toFixed(2);
+};
+
 const formatQuantity = (item: any) => {
   if (item.type === 'FOOD') {
     const meta = resolveFoodDisplayMeta(item);
@@ -1615,7 +2056,16 @@ const formatQuantity = (item: any) => {
   }
 
   // 补剂类型和其他：保留两位小数
-  return Number(item.quantityNeeded).toFixed(2);
+  return formatSupplementDisplayValue(Number(item.quantityNeeded || 0));
+};
+
+const formatResolvedQuantity = (value: number, item: any) => {
+  if (item.type === 'FOOD') {
+    const meta = resolveFoodDisplayMeta(item, value);
+    return `${formatDisplayValue(meta.value, meta.unit)}${meta.unit}`;
+  }
+
+  return `${formatSupplementDisplayValue(Number(value || 0))}${getDisplayUnit(item)}`;
 };
 
 // 获取显示单位
@@ -1624,13 +2074,13 @@ const getDisplayUnit = (item: any) => {
     return resolveFoodDisplayMeta(item).unit;
   }
 
-  if (item.resolvedDisplayUnit) {
-    return item.resolvedDisplayUnit;
+  // 补剂的需求量应使用配方计算单位；SKU的瓶、罐只作为规格信息展示。
+  if (item.type === 'SUPPLEMENT') {
+    return item.quantityUnit || item.displayUnit || 'g';
   }
 
-  // 补剂类型：优先使用displayUnit，回退到quantityUnit
-  if (item.type === 'SUPPLEMENT') {
-    return item.displayUnit || item.quantityUnit || 'g';
+  if (item.resolvedDisplayUnit) {
+    return item.resolvedDisplayUnit;
   }
 
   // 其他类型：使用quantityUnit
@@ -1658,7 +2108,7 @@ const ignoreDateChanges = () => {
 const confirmDeleteItem = (item: any) => {
   uni.showModal({
     title: '删除原料',
-    content: `确认删除原料"${item.ingredientName}"？`,
+    content: `确认删除"${getPurchaseItemTitle(item)}"？`,
     success: async (res) => {
       if (res.confirm) {
         try {
@@ -1788,21 +2238,13 @@ const confirmDeleteItem = (item: any) => {
         color: #333;
       }
 
-      .kind-badge {
+      .time-badge {
         padding: 6rpx 14rpx;
         border-radius: 999rpx;
         font-size: 22rpx;
         font-weight: 600;
-
-        &.order {
-          background: rgba(255, 202, 40, 0.18);
-          color: #8a5a00;
-        }
-
-        &.stock {
-          background: rgba(34, 197, 94, 0.14);
-          color: #15803d;
-        }
+        background: rgba(255, 202, 40, 0.18);
+        color: #8a5a00;
       }
 
       .create-time {
@@ -2001,12 +2443,31 @@ const confirmDeleteItem = (item: any) => {
       flex: 1;
       min-width: 0;
 
-      .item-name {
-        font-size: 30rpx;
-        font-weight: 500;
-        color: #333;
-        margin-bottom: 12rpx;
-        display: block;
+      .item-heading {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16rpx;
+        margin-bottom: 10rpx;
+
+        .item-name {
+          flex: 1;
+          min-width: 0;
+          font-size: 30rpx;
+          font-weight: 600;
+          color: #333;
+          line-height: 1.45;
+        }
+
+        .sku-price {
+          flex-shrink: 0;
+          max-width: 260rpx;
+          font-size: 22rpx;
+          font-weight: 600;
+          color: #fa541c;
+          line-height: 1.4;
+          text-align: right;
+        }
       }
 
       .item-sku-lines {
@@ -2041,43 +2502,60 @@ const confirmDeleteItem = (item: any) => {
           padding: 4rpx 12rpx;
           background-color: #f0f0f0;
           border-radius: 4rpx;
+
+          &.brand {
+            background-color: #eef8f1;
+            color: #2f855a;
+          }
         }
       }
 
-      .item-quantity {
+      .item-demand-row {
         display: flex;
         align-items: baseline;
-        gap: 4rpx;
+        justify-content: space-between;
+        flex-wrap: wrap;
+        gap: 8rpx 16rpx;
+        margin-top: 4rpx;
 
-        .quantity-label {
-          font-size: 24rpx;
-          color: #666;
-        }
-
-        .quantity-value {
-          font-size: 32rpx;
-          font-weight: bold;
-          color: #1890ff;
-        }
-
-        .quantity-unit {
+        .stock-audit-inline {
+          display: flex;
+          align-items: center;
+          flex-wrap: wrap;
+          gap: 4rpx;
+          flex: 1;
+          min-width: 260rpx;
           font-size: 22rpx;
-          color: #999;
-        }
-      }
+          line-height: 1.45;
+          color: #8c8c8c;
 
-      .item-stock-offset {
-        display: flex;
-        flex-direction: column;
-        gap: 6rpx;
-        margin-top: 12rpx;
-        padding: 12rpx 16rpx;
-        background-color: #f2fbf6;
-        border: 1rpx solid #c7ead4;
-        border-radius: 6rpx;
-        color: #4f735b;
-        font-size: 24rpx;
-        line-height: 1.45;
+          .audit-divider {
+            color: #d9d9d9;
+          }
+        }
+
+        .item-quantity {
+          display: flex;
+          align-items: baseline;
+          gap: 4rpx;
+          flex-shrink: 0;
+
+          .quantity-label {
+            font-size: 24rpx;
+            color: #666;
+          }
+
+          .quantity-value {
+            font-size: 32rpx;
+            font-weight: bold;
+            color: #1890ff;
+          }
+
+          .quantity-unit {
+            font-size: 22rpx;
+            color: #999;
+          }
+        }
       }
     }
 
@@ -2303,6 +2781,14 @@ const confirmDeleteItem = (item: any) => {
       box-shadow: 0 8rpx 16rpx rgba(81, 207, 102, 0.3);
     }
 
+    &.reopen {
+      width: 100%;
+      background: #fff7e6;
+      color: #ad6800;
+      border: 1rpx solid #ffd591;
+      box-shadow: none;
+    }
+
     &:active {
       opacity: 0.8;
     }
@@ -2443,10 +2929,62 @@ const confirmDeleteItem = (item: any) => {
   .summary-subtext.suggestion {
     font-weight: 500;
   }
+
+  .record-demand-metrics {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10rpx;
+  }
+
+  .record-demand-metric {
+    min-width: 0;
+    padding: 14rpx 10rpx;
+    border-radius: 12rpx;
+    background-color: rgba(255, 255, 255, 0.72);
+    border: 1rpx solid rgba(232, 197, 115, 0.48);
+
+    .metric-label {
+      display: block;
+      margin-bottom: 6rpx;
+      font-size: 20rpx;
+      color: #8c6d1f;
+      white-space: nowrap;
+    }
+
+    .metric-value {
+      display: block;
+      font-size: 26rpx;
+      font-weight: 700;
+      color: #333;
+      white-space: nowrap;
+    }
+
+    &.primary .metric-value {
+      color: #1890ff;
+    }
+  }
 }
 
 .form-section {
   margin-bottom: 24rpx;
+
+  .form-section-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16rpx;
+    margin-bottom: 12rpx;
+
+    .form-label {
+      margin-bottom: 0;
+    }
+
+    .form-title-hint {
+      flex-shrink: 0;
+      font-size: 22rpx;
+      color: #999;
+    }
+  }
 
   .form-label {
     display: block;
@@ -2454,6 +2992,47 @@ const confirmDeleteItem = (item: any) => {
     font-weight: 500;
     color: #333;
     margin-bottom: 12rpx;
+  }
+
+  .field-label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16rpx;
+    margin-bottom: 12rpx;
+
+    .form-label {
+      margin-bottom: 0;
+    }
+  }
+
+  .field-unit-badge {
+    flex-shrink: 0;
+    padding: 4rpx 14rpx;
+    border-radius: 999rpx;
+    background-color: #e6f4ff;
+    color: #096dd9;
+    font-size: 22rpx;
+    font-weight: 600;
+  }
+
+  .input-with-unit {
+    position: relative;
+
+    .unit-input {
+      padding-right: 108rpx;
+    }
+
+    .input-unit-label {
+      position: absolute;
+      right: 24rpx;
+      top: 50%;
+      transform: translateY(-50%);
+      color: #666;
+      font-size: 26rpx;
+      font-weight: 600;
+      pointer-events: none;
+    }
   }
 
   .form-input {
@@ -2580,6 +3159,123 @@ const confirmDeleteItem = (item: any) => {
     }
   }
 
+  .record-sku-list {
+    display: flex;
+    flex-direction: column;
+    gap: 14rpx;
+  }
+
+  .record-sku-empty {
+    padding: 24rpx;
+    border-radius: 16rpx;
+    background-color: #fff7e6;
+    border: 1rpx solid rgba(250, 173, 20, 0.28);
+    display: flex;
+    flex-direction: column;
+    gap: 8rpx;
+
+    .empty-title {
+      font-size: 28rpx;
+      font-weight: 700;
+      color: #ad6800;
+    }
+
+    .empty-desc {
+      font-size: 24rpx;
+      line-height: 1.5;
+      color: #8c6d1f;
+    }
+  }
+
+  .record-sku-option {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16rpx;
+    padding: 18rpx 20rpx;
+    border-radius: 16rpx;
+    border: 2rpx solid #f0f0f0;
+    background-color: #fafafa;
+
+    &.active {
+      border-color: #1890ff;
+      background-color: #edf6ff;
+      box-shadow: 0 8rpx 20rpx rgba(24, 144, 255, 0.12);
+
+      .record-sku-check {
+        border-color: #1890ff;
+        background-color: #1890ff;
+        color: #fff;
+      }
+    }
+
+  }
+
+  .record-sku-main {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .record-sku-title-row {
+    display: flex;
+    align-items: center;
+    gap: 10rpx;
+    margin-bottom: 10rpx;
+  }
+
+  .record-sku-badge {
+    flex-shrink: 0;
+    padding: 4rpx 12rpx;
+    border-radius: 999rpx;
+    background-color: #f0f0f0;
+    color: #666;
+    font-size: 20rpx;
+    font-weight: 600;
+  }
+
+  .record-sku-option.active .record-sku-badge {
+    background-color: rgba(24, 144, 255, 0.12);
+    color: #096dd9;
+  }
+
+  .record-sku-name {
+    flex: 1;
+    min-width: 0;
+    font-size: 28rpx;
+    color: #333;
+    font-weight: 700;
+    line-height: 1.35;
+  }
+
+  .record-sku-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8rpx;
+
+    text {
+      padding: 4rpx 10rpx;
+      border-radius: 8rpx;
+      background-color: #f0f0f0;
+      color: #666;
+      font-size: 22rpx;
+      line-height: 1.35;
+    }
+  }
+
+  .record-sku-check {
+    flex-shrink: 0;
+    width: 36rpx;
+    height: 36rpx;
+    border-radius: 50%;
+    border: 3rpx solid #d9d9d9;
+    color: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22rpx;
+    font-weight: 700;
+  }
+
   .form-textarea {
     width: 100%;
     min-height: 160rpx;
@@ -2608,58 +3304,56 @@ const confirmDeleteItem = (item: any) => {
   }
 }
 
-.price-preview-card {
-  margin-top: -4rpx;
+.record-entry-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16rpx;
   margin-bottom: 24rpx;
-  padding: 20rpx 24rpx;
+}
+
+.record-entry-card {
+  min-width: 0;
+  margin-bottom: 0;
+  padding: 22rpx;
   border-radius: 16rpx;
-  background: #f6ffed;
-  border: 1rpx solid rgba(82, 196, 26, 0.18);
+  background-color: #fafafa;
+}
+
+.record-entry-meta {
+  margin-top: 14rpx;
   display: flex;
   flex-direction: column;
   gap: 8rpx;
-
-  .price-preview-label {
-    font-size: 22rpx;
-    color: #666;
-  }
-
-  .price-preview-value {
-    font-size: 30rpx;
-    font-weight: 700;
-    color: #389e0d;
-  }
-
-  .price-preview-hint {
-    font-size: 22rpx;
-    color: #666;
-    line-height: 1.5;
-  }
 }
 
-.extra-toggle {
-  margin-bottom: 20rpx;
-  padding: 24rpx;
-  border-radius: 16rpx;
-  background: #fafafa;
+.record-entry-meta-row {
   display: flex;
-  align-items: center;
   justify-content: space-between;
+  align-items: baseline;
+  gap: 10rpx;
+  font-size: 22rpx;
+  line-height: 1.35;
 
-  .extra-toggle-text {
-    font-size: 26rpx;
+  .meta-label {
+    flex-shrink: 0;
+    color: #777;
+  }
+
+  .meta-value {
+    min-width: 0;
     color: #333;
-    font-weight: 500;
-  }
+    font-weight: 700;
+    text-align: right;
+    overflow-wrap: anywhere;
 
-  .extra-toggle-arrow {
-    font-size: 24rpx;
-    color: #999;
-  }
-}
+    &.price-tone-good {
+      color: #2f855a;
+    }
 
-.extra-fields {
-  padding-top: 4rpx;
+    &.price-tone-bad {
+      color: #e5484d;
+    }
+  }
 }
 
 .input-placeholder {
@@ -2814,6 +3508,63 @@ const confirmDeleteItem = (item: any) => {
     &:active {
       opacity: 0.8;
     }
+  }
+
+  .no-purchase-btn {
+    padding: 12rpx 20rpx;
+    background-color: #fff7e6;
+    color: #ad6800;
+    border-radius: 8rpx;
+    font-size: 24rpx;
+    border: 1rpx solid #ffd591;
+    line-height: 1.5;
+    white-space: nowrap;
+
+    &:active {
+      opacity: 0.8;
+    }
+  }
+}
+
+.no-purchase-card {
+  margin: 0 24rpx 24rpx;
+  padding: 20rpx 24rpx;
+  border-radius: 12rpx;
+  background-color: #fff7e6;
+  border: 1rpx solid #ffd591;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+
+  .no-purchase-main {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6rpx;
+  }
+
+  .no-purchase-title {
+    font-size: 26rpx;
+    font-weight: 600;
+    color: #ad6800;
+  }
+
+  .no-purchase-reason {
+    font-size: 22rpx;
+    color: #8c8c8c;
+  }
+
+  .clear-no-purchase-btn {
+    padding: 8rpx 18rpx;
+    border-radius: 8rpx;
+    background-color: #fff;
+    color: #ad6800;
+    border: 1rpx solid #ffd591;
+    font-size: 22rpx;
+    line-height: 1.5;
+    white-space: nowrap;
   }
 }
 </style>

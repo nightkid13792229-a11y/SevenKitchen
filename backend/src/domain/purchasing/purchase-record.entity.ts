@@ -30,13 +30,32 @@ export interface PurchaseRecordConstructor {
   updatedAt?: Date;
 }
 
+type PurchaseRecordUpdateData = Partial<
+  Pick<
+    PurchaseRecordConstructor,
+    | 'purchaseChannel'
+    | 'actualQuantity'
+    | 'actualPackageCount'
+    | 'actualPackageSize'
+    | 'actualPackageUnit'
+    | 'actualBaseQuantity'
+    | 'actualBaseUnit'
+    | 'actualCost'
+    | 'productModel'
+    | 'notes'
+  >
+> & {
+  procurementSkuId?: string | null;
+  procurementSkuName?: string | null;
+};
+
 export class PurchaseRecord {
   public readonly id: string;
   public readonly purchaseListId: string;
   public readonly purchaseItemId: string;
   public readonly ingredientId: string;
-  public readonly procurementSkuId?: string;
-  public readonly procurementSkuName?: string;
+  public procurementSkuId?: string;
+  public procurementSkuName?: string;
   public readonly ingredientName: string;
   public purchaseChannel: string;
   public actualQuantity: number; // 归一化后的实际采购数量（按采购单位）
@@ -168,23 +187,13 @@ export class PurchaseRecord {
   /**
    * 更新采购记录
    */
-  update(
-    data: Partial<
-      Pick<
-        PurchaseRecordConstructor,
-        | 'purchaseChannel'
-        | 'actualQuantity'
-        | 'actualPackageCount'
-        | 'actualPackageSize'
-        | 'actualPackageUnit'
-        | 'actualBaseQuantity'
-        | 'actualBaseUnit'
-        | 'actualCost'
-        | 'productModel'
-        | 'notes'
-      >
-    >,
-  ): void {
+  update(data: PurchaseRecordUpdateData): void {
+    if (Object.prototype.hasOwnProperty.call(data, 'procurementSkuId')) {
+      this.procurementSkuId = data.procurementSkuId || undefined;
+    }
+    if (Object.prototype.hasOwnProperty.call(data, 'procurementSkuName')) {
+      this.procurementSkuName = data.procurementSkuName || undefined;
+    }
     if (data.purchaseChannel !== undefined) {
       this.purchaseChannel = data.purchaseChannel;
     }

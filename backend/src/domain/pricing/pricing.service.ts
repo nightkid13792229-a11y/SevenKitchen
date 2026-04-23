@@ -131,6 +131,11 @@ export interface IngredientCostItem {
   purchaseAmount?: number; // 采购用量（仅含生产损耗率，不含出肉率）
   productModel?: string; // 规格
   ingredientId?: string; // 原料ID
+  procurementSkuId?: string; // 采购 SKU ID
+  procurementSkuName?: string; // 采购 SKU 名称
+  procurementSkuSourcePlan?: string; // 顾客选择的采购来源方案
+  procurementSkuSourceTier?: string; // 实际命中的采购 SKU 来源等级
+  procurementSkuFallbackLevel?: number; // 来源方案回退层级
   properties?: any; // 完整的properties对象（包含purchase_link等）
   preparationMethod?: string; // 添加时机/制备方法
   nutrientTargetKey?: string; // 营养素名称（补剂用）
@@ -359,6 +364,28 @@ export class PricingService {
           itemCost,
         });
 
+        const ingredientProperties = (ingredient.properties || {}) as any;
+        const procurementSkuId =
+          (ingredient as any).procurementSkuId ||
+          ingredientProperties.procurement_sku_id ||
+          undefined;
+        const procurementSkuName =
+          (ingredient as any).procurementSkuName ||
+          ingredientProperties.procurement_sku_name ||
+          undefined;
+        const procurementSkuSourcePlan =
+          (ingredient as any).sourcePlanCode ||
+          ingredientProperties.procurement_sku_source_plan ||
+          undefined;
+        const procurementSkuSourceTier =
+          (ingredient as any).procurementSkuSourceTier ||
+          ingredientProperties.procurement_sku_source_tier ||
+          undefined;
+        const procurementSkuFallbackLevel =
+          (ingredient as any).sourcePlanFallbackLevel ??
+          ingredientProperties.procurement_sku_fallback_level ??
+          undefined;
+
         // Collect detailed data
         ingredientDetails.push({
           recipeItemId: item.id,
@@ -376,6 +403,11 @@ export class PricingService {
           productModel: ingredient.productModel || undefined,
           preparationMethod: item.preparationMethod || undefined,
           ingredientId: ingredient.id,
+          procurementSkuId,
+          procurementSkuName,
+          procurementSkuSourcePlan,
+          procurementSkuSourceTier,
+          procurementSkuFallbackLevel,
           displayUnit: 'g', // 前端显示时转换为克
           properties: ingredient.properties, // 添加完整properties
         });
@@ -452,6 +484,14 @@ export class PricingService {
 
         const addTimingEnum = (ingredient.properties as any)?.add_timing;
         const finalPrepMethod = resolveSupplementAddTimingLabel(addTimingEnum);
+        const supplementUnit =
+          ingredient.baseUnitDisplayName ||
+          ingredient.unitDisplayLabel ||
+          (ingredient.baseUnit === 'G'
+            ? 'g'
+            : ingredient.baseUnit === 'ML'
+              ? 'ml'
+              : '个');
 
         console.log('[PricingService] SUPPLEMENT 添加时机:', {
           name: ingredient.name,
@@ -467,16 +507,16 @@ export class PricingService {
           amount: unitsNeeded, // 补剂的用量已含损耗率
           netAmount: unitsTheoretical, // 补剂净需求 = 理论用量（不含损耗）
           purchaseAmount: unitsNeeded, // 补剂采购用量 = 实际用量（含损耗）
-          unit: 'g',
+          unit: supplementUnit,
           unitCost: unitCost,
           cost: itemCost,
-          calculation: `营养需求${totalNutrientNeeded.toFixed(3)}${concentrationUnit} ÷ 浓度${concentration}${concentrationUnit} = 理论用量${unitsTheoretical.toFixed(3)}g × 损耗率${customLoss} = 实际用量${unitsNeeded.toFixed(3)}g × ${unitCost.toFixed(4)}元/g = ${itemCost.toFixed(2)}元`,
+          calculation: `营养需求${totalNutrientNeeded.toFixed(3)}${concentrationUnit} ÷ 浓度${concentration}${concentrationUnit} = 理论用量${unitsTheoretical.toFixed(3)}${supplementUnit} × 损耗率${customLoss} = 实际用量${unitsNeeded.toFixed(3)}${supplementUnit} × ${unitCost.toFixed(4)}元/${supplementUnit} = ${itemCost.toFixed(2)}元`,
           purchaseChannel: ingredient.purchaseChannel || undefined,
           brand: ingredient.brand || undefined,
           productModel: ingredient.productModel || undefined,
           preparationMethod: finalPrepMethod,
           ingredientId: ingredient.id,
-          displayUnit: ingredient.unitDisplayLabel || 'g', // 使用显示单位标签
+          displayUnit: supplementUnit, // 需求展示单位来自标准原料，不使用采购SKU包装单位
           properties: ingredient.properties, // 添加完整properties（包含purchase_link）
           nutrientTargetKey: item.nutrientTargetKey, // 营养素名称
           nutrientTargetValue: item.nutrientTargetValue, // 营养目标值

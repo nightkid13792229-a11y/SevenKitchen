@@ -31,7 +31,7 @@ export const purchasingApi = {
   },
 
   /**
-   * 审核报销单
+   * 处理报销单（兼容旧接口）
    */
   reviewReimbursement: (
     id: string,

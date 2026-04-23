@@ -1,5 +1,6 @@
 import { Controller, Get } from '@nestjs/common';
 import { ApiOperation, ApiTags } from '@nestjs/swagger';
+import { IngredientService } from '../../application/ingredient/ingredient.service';
 import { RecommendedProductService } from '../../application/ingredient/recommended-product.service';
 import { ProcurementSkuService } from '../../application/ingredient/procurement-sku.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
@@ -19,6 +20,7 @@ const normalizeDistinctValues = (
 @Controller('api/v1/admin/ingredient-suggestions')
 export class IngredientSuggestionsController {
   constructor(
+    private readonly ingredientService: IngredientService,
     private readonly recommendedProductService: RecommendedProductService,
     private readonly procurementSkuService: ProcurementSkuService,
   ) {}
@@ -26,13 +28,15 @@ export class IngredientSuggestionsController {
   @Get('brands')
   @ApiOperation({ summary: 'Get global historical ingredient/SKU brand suggestions' })
   async getBrandSuggestions(): Promise<ApiResponseDto<string[]>> {
-    const [recommendedBrands, procurementBrands] = await Promise.all([
+    const [ingredients, recommendedBrands, procurementBrands] = await Promise.all([
+      this.ingredientService.getAllIngredients(),
       this.recommendedProductService.listBrands(),
       this.procurementSkuService.listBrands(),
     ]);
 
     return ApiResponseDto.success(
       normalizeDistinctValues([
+        ...ingredients.map((ingredient) => ingredient.brand),
         ...recommendedBrands,
         ...procurementBrands,
       ]),
@@ -42,13 +46,15 @@ export class IngredientSuggestionsController {
   @Get('purchase-channels')
   @ApiOperation({ summary: 'Get global historical ingredient/SKU purchase channel suggestions' })
   async getPurchaseChannelSuggestions(): Promise<ApiResponseDto<string[]>> {
-    const [recommendedChannels, procurementChannels] = await Promise.all([
+    const [ingredients, recommendedChannels, procurementChannels] = await Promise.all([
+      this.ingredientService.getAllIngredients(),
       this.recommendedProductService.listPurchaseChannels(),
       this.procurementSkuService.listPurchaseChannels(),
     ]);
 
     return ApiResponseDto.success(
       normalizeDistinctValues([
+        ...ingredients.map((ingredient) => ingredient.purchaseChannel),
         ...recommendedChannels,
         ...procurementChannels,
       ]),

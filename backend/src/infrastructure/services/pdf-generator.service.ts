@@ -10,16 +10,27 @@ import type { PrintTaskDto, PrintTaskOrderItemDto } from '../../interfaces/dto/p
 
 interface IngredientItem {
   name: string;
+  standardIngredientName?: string;
+  procurementSkuName?: string;
+  procurementSkuBrand?: string;
+  procurementSkuPurchaseChannel?: string;
+  procurementSkuProductModel?: string;
   amount: string;
   unit: string;
   typeLabel: string;
   typeClass: string;
-  method: string;
+  method?: string;
   isTotalWeight?: boolean;
 }
 
 type PrintTaskData = PrintTaskDto;
 type PackagePlanRow = NonNullable<PrintTaskOrderItemDto['packagePlan']>[number];
+type PrintTableColumn = {
+  key: string;
+  label: string;
+  x: number;
+  width: number;
+};
 
 @Injectable()
 export class PdfGeneratorService {
@@ -104,9 +115,7 @@ export class PdfGeneratorService {
         // Draw all sections with compact layout
         let currentY = this.drawHeader(doc, data, scaleFactor);
         currentY = this.drawPackagingOrders(doc, data, currentY, scaleFactor);
-        currentY = this.drawOrderRemarks(doc, data, currentY, scaleFactor);
-        currentY = this.drawIngredients(doc, data, currentY, scaleFactor);
-        this.drawFooter(doc, data, currentY, scaleFactor);
+        this.drawIngredients(doc, data, currentY, scaleFactor);
 
         // Finalize PDF
         doc.end();
@@ -122,35 +131,17 @@ export class PdfGeneratorService {
    */
   private calculateScaleFactor(data: PrintTaskData): number {
     const pageHeight = 792; // A4 height - margins
-    const pageWidth = 512; // A4 width - margins
-
     // Estimate content height
     let estimatedHeight = 0;
 
-    // Header: ~100pt
-    estimatedHeight += 100;
+    // Header: title, pot number, meta and separator condensed into two rows.
+    estimatedHeight += 54;
 
-    // Orders: 现在每行两个订单，每行高度约75pt
-    const orderRows = Math.ceil(data.orderItems.length / 2);
-    estimatedHeight += orderRows * 75;
+    // Orders: two compact cards per row, without a redundant section heading.
+    estimatedHeight += 6 + this.estimatePackagingOrdersHeight(data);
 
-    const orderRemarks = data.orderItems.filter((item) =>
-      item.adminRemark?.trim(),
-    );
-    if (orderRemarks.length > 0) {
-      estimatedHeight += 24;
-      for (const item of orderRemarks) {
-        const remarkText = `备注：${item.adminRemark}`;
-        const estimatedLines = Math.max(1, Math.ceil(remarkText.length / 34));
-        estimatedHeight += estimatedLines * 14 + 12;
-      }
-    }
-
-    // Ingredients table: 18pt per row + title + spacing + note
-    estimatedHeight += 30 + 8 + data.parsedIngredients.length * 18 + 20;
-
-    // Footer: ~60pt
-    estimatedHeight += 60;
+    // Ingredients table: compact five-column table with wrapped purchase summaries.
+    estimatedHeight += 22 + 18 + this.estimateIngredientRowsHeight(data);
 
     // Safety margin: 40pt
     const availableHeight = pageHeight - 40;
@@ -158,11 +149,66 @@ export class PdfGeneratorService {
     // Calculate scale factor
     if (estimatedHeight > availableHeight) {
       const scale = availableHeight / estimatedHeight;
-      // Minimum scale 0.7 (don't shrink too much)
-      return Math.max(scale, 0.7);
+      return Math.max(scale, 0.72);
     }
 
     return 1.0;
+  }
+
+  private estimatePackagingOrdersHeight(data: PrintTaskData): number {
+    const isSingleOrder = data.orderItems.length === 1;
+    const ordersPerRow = isSingleOrder ? 1 : 2;
+    let height = 0;
+
+    for (let index = 0; index < data.orderItems.length; index += ordersPerRow) {
+      const rowItems = data.orderItems.slice(index, index + ordersPerRow);
+      const rowHeight = Math.max(
+        ...rowItems.map((order) =>
+          this.estimateOrderCardHeight(order, isSingleOrder),
+        ),
+      );
+      height += rowHeight + 8;
+    }
+
+    return Math.max(0, height - 8);
+  }
+
+  private estimateOrderCardHeight(
+    order: PrintTaskOrderItemDto,
+    isSingleOrder: boolean,
+  ): number {
+    const packagePlanSummary = this.getOrderPackagePlanSummary(order).summary;
+    const packageText = `分装: ${packagePlanSummary}`;
+    const packageCharsPerLine = isSingleOrder ? 52 : 24;
+    const packageLines = Math.max(
+      1,
+      Math.ceil(packageText.length / packageCharsPerLine),
+    );
+    const recipientLines = order.recipientName ? 1 : 0;
+    const remarkLines = order.adminRemark?.trim()
+      ? Math.min(2, Math.ceil(order.adminRemark.trim().length / (isSingleOrder ? 58 : 28)))
+      : 0;
+
+    return 68 + (packageLines - 1) * 11 + recipientLines * 11 + remarkLines * 9;
+  }
+
+  private getPrintableIngredientCount(data: PrintTaskData): number {
+    return data.parsedIngredients.filter(
+      (ingredient) => !ingredient.isTotalWeight,
+    ).length;
+  }
+
+  private estimateIngredientRowsHeight(data: PrintTaskData): number {
+    return data.parsedIngredients.reduce(
+      (sum, ingredient) => sum + this.estimateIngredientRowHeight(ingredient),
+      0,
+    );
+  }
+
+  private estimateIngredientRowHeight(ingredient: IngredientItem): number {
+    const purchaseText = this.formatPurchaseSummary(ingredient);
+    const purchaseLines = Math.max(1, Math.ceil(purchaseText.length / 18));
+    return 20 + (purchaseLines - 1) * 9;
   }
 
   /**
@@ -176,50 +222,98 @@ export class PdfGeneratorService {
     const top = 40;
     let y = top;
 
-    // Title
-    const fontSize = Math.floor(20 * scaleFactor);
     doc
-      .fontSize(fontSize)
+      .fontSize(Math.floor(18 * scaleFactor))
       .font('Chinese-Bold')
-      .fillColor('#000000')
-      .text('SevenKitchen 生产任务单', { align: 'center' });
-    y += Math.floor(30 * scaleFactor);
-
-    // Recipe name and version
-    doc
-      .fontSize(Math.floor(16 * scaleFactor))
-      .font('Chinese-Bold')
-      .fillColor('#000000')
-      .text(`${data.recipeName} v${data.recipeVersion}`, { align: 'center' });
-    y += Math.floor(20 * scaleFactor);
-
-    // Pot number
-    doc
-      .fontSize(Math.floor(12 * scaleFactor))
-      .fillColor('#000000')
-      .text(`第 ${data.currentPotNumber}/${data.totalPots} 锅`, {
+      .fillColor('#333333')
+      .text(this.buildTaskTitleLine(data), 40, y, {
         align: 'center',
+        width: 512,
       });
-    y += Math.floor(16 * scaleFactor);
+    y += Math.floor(25 * scaleFactor);
 
-    // Meta info
     doc
       .fontSize(Math.floor(9 * scaleFactor))
-      .fillColor('#000000')
-      .text(`创建时间: ${this.formatDateTime(data.createdAt)}`, {
-        align: 'center',
-      });
-    y += Math.floor(30 * scaleFactor);
+      .fillColor('#555555')
+      .font('Chinese')
+      .text(
+        `状态: ${this.getStatusText(data.status)}    创建时间: ${this.formatDateTime(data.createdAt)}`,
+        40,
+        y,
+        { align: 'center', width: 512 },
+      );
+    y += Math.floor(18 * scaleFactor);
 
-    // Separator line - 黑色分隔线
     doc
       .moveTo(40, y)
       .lineTo(552, y)
-      .strokeColor('#000000')
-      .lineWidth(2)
+      .strokeColor('#58a891')
+      .lineWidth(1)
       .stroke();
 
-    return y;
+    return y + Math.floor(8 * scaleFactor);
+  }
+
+  private buildTaskTitleLine(data: PrintTaskData): string {
+    return `${data.recipeName} v${data.recipeVersion} · 第 ${data.currentPotNumber}/${data.totalPots} 锅`;
+  }
+
+  private getStatusText(status: string): string {
+    const statusMap: Record<string, string> = {
+      PENDING: '待制作',
+      IN_PROGRESS: '制作中',
+      COMPLETED: '已完成',
+    };
+
+    return statusMap[status] || status;
+  }
+
+  private truncateText(value: string | null | undefined, maxLength: number): string {
+    const text = String(value || '').trim();
+    if (text.length <= maxLength) {
+      return text;
+    }
+
+    return `${text.slice(0, Math.max(0, maxLength - 1))}…`;
+  }
+
+  private formatIngredientNameLine(ingredient: IngredientItem): string {
+    if (ingredient.isTotalWeight) {
+      return ingredient.name || '-';
+    }
+
+    const standardName = (ingredient.standardIngredientName || '').trim();
+    const skuName = (ingredient.procurementSkuName || ingredient.name || '').trim();
+
+    if (standardName && skuName && standardName !== skuName) {
+      return `${standardName} / ${skuName}`;
+    }
+
+    return skuName || standardName || '-';
+  }
+
+  private formatPurchaseSummary(ingredient: IngredientItem): string {
+    if (ingredient.isTotalWeight) {
+      return '-';
+    }
+
+    const parts = this.getPrintablePurchaseSummaryParts(
+      ingredient.procurementSkuBrand,
+      ingredient.procurementSkuPurchaseChannel,
+      ingredient.procurementSkuProductModel,
+    );
+
+    return parts.length > 0 ? parts.join(' / ') : '-';
+  }
+
+  private getPrintablePurchaseSummaryParts(...values: unknown[]): string[] {
+    return values
+      .map((value) => String(value || '').trim())
+      .filter((value) => !this.shouldSkipPurchaseSummaryPart(value));
+  }
+
+  private shouldSkipPurchaseSummaryPart(value: string): boolean {
+    return ['无', '暂无', '-', 'null', 'undefined'].includes(value);
   }
 
   /**
@@ -288,129 +382,219 @@ export class PdfGeneratorService {
     startY: number,
     scaleFactor: number,
   ): number {
-    let y = startY + Math.floor(20 * scaleFactor);
+    let y = startY + Math.floor(6 * scaleFactor);
 
-    // Section title
-    doc
-      .fontSize(Math.floor(12 * scaleFactor))
-      .fillColor('#000000')
-      .font('Chinese-Bold')
-      .text('分装订单', 40, y);
-    y += Math.floor(30 * scaleFactor); // 增加标题与表格的间距（从16改为30）
+    const isSingleOrder = data.orderItems.length === 1;
+    const cardWidth = isSingleOrder ? Math.floor(512 * scaleFactor) : Math.floor(250 * scaleFactor);
+    const gap = Math.floor(12 * scaleFactor);
+    const rowGap = Math.floor(8 * scaleFactor);
+    const ordersPerRow = isSingleOrder ? 1 : 2;
 
-    // Two columns layout
-    const cardWidth = Math.floor(252 * scaleFactor); // 每个订单卡片宽度 (512/2 - gap)
-    const gap = Math.floor(8 * scaleFactor); // 两列之间的间距
-    const cardHeight = Math.floor(92 * scaleFactor);
-
-    data.orderItems.forEach((order, index) => {
-      const isLeftColumn = index % 2 === 0;
-      const cardX = isLeftColumn ? 40 : 40 + cardWidth + gap; // 左列或右列的X坐标
-
-      // 如果是右列，需要回到同一行的Y坐标
-      if (!isLeftColumn) {
-        y -= cardHeight;
-      }
-
-      // Card border only - no background fill
-      doc
-        .rect(cardX, y, cardWidth, cardHeight)
-        .strokeColor('#000000')
-        .lineWidth(1)
-        .stroke();
-      const cardInnerY = y + Math.floor(8 * scaleFactor);
-
-      // Order title bar - just text, no background
-      const titleBarHeight = Math.floor(18 * scaleFactor);
-      doc
-        .fontSize(Math.floor(10 * scaleFactor))
-        .fillColor('#000000')
-        .font('Chinese-Bold')
-        .text(
-          `订单 ${index + 1}`,
-          cardX + Math.floor(8 * scaleFactor),
-          cardInnerY,
-        );
-
-      // Add a line below title
-      doc
-        .moveTo(cardX, cardInnerY + titleBarHeight - 2)
-        .lineTo(cardX + cardWidth, cardInnerY + titleBarHeight - 2)
-        .strokeColor('#000000')
-        .lineWidth(0.5)
-        .stroke();
-
-      // Order details
-      doc
-        .fontSize(Math.floor(9 * scaleFactor))
-        .fillColor('#000000')
-        .font('Chinese');
-      const detailsY = cardInnerY + Math.floor(12 * scaleFactor);
-      const hasPackagePlan = Array.isArray(order.packagePlan) && order.packagePlan.length > 0;
-      const orderTotalWeight = hasPackagePlan
-        ? this.getPackagePlanTotalWeight(order.packagePlan || [])
-        : order.packageSpecG * order.packageCount;
-      const packagePlanSummary = hasPackagePlan
-        ? this.formatPackagePlan(order.packagePlan || [])
-        : '';
-
-      const rowHeight = Math.floor(14 * scaleFactor);
-      const textX = cardX + Math.floor(8 * scaleFactor);
-      doc.text(`总净重: ${orderTotalWeight}g`, textX, detailsY);
-      let nextDetailY = detailsY + rowHeight * 2;
-
-      if (hasPackagePlan) {
-        const packageText = `分装: ${packagePlanSummary}`;
-        const packageTextY = detailsY + rowHeight;
-        const packageTextWidth = cardWidth - Math.floor(16 * scaleFactor);
-        doc.text(
-          packageText,
-          textX,
-          packageTextY,
-          {
-            width: packageTextWidth,
-          },
-        );
-        const packageTextHeight = doc.heightOfString(packageText, {
-          width: packageTextWidth,
-        });
-        nextDetailY = packageTextY + Math.max(rowHeight, packageTextHeight) + Math.floor(2 * scaleFactor);
-      } else {
-        doc.text(`规格: ${order.packageSpecG}g/袋`, textX, detailsY + rowHeight);
-        doc.text(
-          `袋数: ${order.packageCount}袋`,
-          textX + Math.floor(80 * scaleFactor),
-          detailsY,
-        );
-      }
-      doc.text(
-        `狗狗: ${order.dogName}`,
-        hasPackagePlan ? textX : textX + Math.floor(80 * scaleFactor),
-        hasPackagePlan ? nextDetailY : detailsY + rowHeight,
+    for (let index = 0; index < data.orderItems.length; index += ordersPerRow) {
+      const rowItems = data.orderItems.slice(index, index + ordersPerRow);
+      const cardHeights = rowItems.map((order) =>
+        this.calculateOrderCardHeight(doc, order, cardWidth, scaleFactor),
       );
+      const rowHeight = Math.max(...cardHeights);
 
-      if (order.recipientName) {
-        // 如果有收货人信息，紧凑显示
-        doc
-          .fontSize(Math.floor(8 * scaleFactor))
-          .fillColor('#000000')
-          .font('Chinese');
-        doc.text(
-          `${order.recipientName}（${order.recipientCity}）`,
-          textX,
-          hasPackagePlan ? nextDetailY + rowHeight : detailsY + rowHeight * 2,
+      rowItems.forEach((order, rowOffset) => {
+        const cardX = rowOffset === 0 ? 40 : 40 + cardWidth + gap;
+        this.drawPackagingOrderCard(
+          doc,
+          order,
+          index + rowOffset,
+          cardX,
+          y,
+          cardWidth,
+          rowHeight,
+          isSingleOrder,
+          scaleFactor,
         );
-      }
+      });
 
-      y += cardHeight;
-    });
-
-    // 如果最后一个订单在左列，需要调整y位置
-    if (data.orderItems.length % 2 !== 0) {
-      y += cardHeight;
+      y += rowHeight + rowGap;
     }
 
-    return y;
+    return y - rowGap;
+  }
+
+  private calculateOrderCardHeight(
+    doc: any,
+    order: PrintTaskOrderItemDto,
+    cardWidth: number,
+    scaleFactor: number,
+  ): number {
+    const minHeight = Math.floor(68 * scaleFactor);
+    const contentTop = Math.floor(22 * scaleFactor);
+    const rowHeight = Math.floor(11 * scaleFactor);
+    const paddingX = Math.floor(8 * scaleFactor);
+    const contentWidth = cardWidth - paddingX * 2;
+    const packageText = `分装: ${this.getOrderPackagePlanSummary(order).summary}`;
+
+    doc.fontSize(Math.floor(8 * scaleFactor)).font('Chinese');
+    const packageHeight = this.getWrappedOrderTextHeight(
+      doc,
+      packageText,
+      contentWidth,
+      rowHeight,
+    );
+    const recipientHeight = order.recipientName ? rowHeight : 0;
+    const remarkText = order.adminRemark?.trim()
+      ? `备注: ${this.truncateText(order.adminRemark, 56)}`
+      : '';
+    const remarkHeight = remarkText
+      ? this.getWrappedOrderTextHeight(doc, remarkText, contentWidth, rowHeight)
+      : 0;
+
+    return Math.max(
+      minHeight,
+      contentTop +
+        rowHeight +
+        recipientHeight +
+        Math.floor(4 * scaleFactor) +
+        packageHeight +
+        (remarkHeight ? Math.floor(4 * scaleFactor) + remarkHeight : 0) +
+        Math.floor(8 * scaleFactor),
+    );
+  }
+
+  private drawPackagingOrderCard(
+    doc: any,
+    order: PrintTaskOrderItemDto,
+    index: number,
+    cardX: number,
+    y: number,
+    cardWidth: number,
+    cardHeight: number,
+    isSingleOrder: boolean,
+    scaleFactor: number,
+  ): void {
+    doc
+      .rect(cardX, y, cardWidth, cardHeight)
+      .strokeColor('#58a891')
+      .lineWidth(0.8)
+      .stroke();
+    doc
+      .rect(cardX, y, cardWidth, Math.floor(16 * scaleFactor))
+      .fill('#58a891');
+    doc
+      .fontSize(Math.floor(9 * scaleFactor))
+      .fillColor('#ffffff')
+      .font('Chinese-Bold')
+      .text(
+        `订单 ${index + 1}`,
+        cardX + Math.floor(8 * scaleFactor),
+        y + Math.floor(3 * scaleFactor),
+      );
+
+    const { totalWeight, summary: packagePlanSummary } =
+      this.getOrderPackagePlanSummary(order);
+    const textX = cardX + Math.floor(8 * scaleFactor);
+    const contentWidth = cardWidth - Math.floor(16 * scaleFactor);
+    const secondColumnX =
+      textX + Math.floor((isSingleOrder ? 250 : 112) * scaleFactor);
+    const secondColumnWidth = Math.max(
+      Math.floor(80 * scaleFactor),
+      cardX + cardWidth - secondColumnX - Math.floor(8 * scaleFactor),
+    );
+    let detailY = y + Math.floor(22 * scaleFactor);
+    const rowHeight = Math.floor(11 * scaleFactor);
+
+    doc
+      .fontSize(Math.floor(8 * scaleFactor))
+      .fillColor('#333333')
+      .font('Chinese');
+    doc.text(`总净重: ${totalWeight}g`, textX, detailY, {
+      width: secondColumnX - textX - Math.floor(6 * scaleFactor),
+    });
+    doc.text(`狗狗: ${order.dogName}`, secondColumnX, detailY, {
+      width: secondColumnWidth,
+    });
+    detailY += rowHeight;
+
+    if (order.recipientName) {
+      doc.text(
+        `收货人: ${this.truncateText(`${order.recipientName}（${order.recipientCity || '-'}）`, 26)}`,
+        textX,
+        detailY,
+        { width: contentWidth },
+      );
+      detailY += rowHeight;
+    }
+
+    detailY += Math.floor(4 * scaleFactor);
+    detailY += this.drawWrappedOrderText(
+      doc,
+      `分装: ${packagePlanSummary}`,
+      textX,
+      detailY,
+      contentWidth,
+      rowHeight,
+    );
+
+    if (order.adminRemark?.trim()) {
+      detailY += Math.floor(4 * scaleFactor);
+      doc.fontSize(Math.floor(7 * scaleFactor)).fillColor('#666666');
+      this.drawWrappedOrderText(
+        doc,
+        `备注: ${this.truncateText(order.adminRemark, 56)}`,
+        textX,
+        detailY,
+        contentWidth,
+        rowHeight,
+      );
+    }
+  }
+
+  private getOrderPackagePlanSummary(order: PrintTaskOrderItemDto): {
+    totalWeight: number;
+    summary: string;
+  } {
+    const hasPackagePlan =
+      Array.isArray(order.packagePlan) && order.packagePlan.length > 0;
+    if (hasPackagePlan) {
+      return {
+        totalWeight: this.getPackagePlanTotalWeight(order.packagePlan || []),
+        summary: this.formatPackagePlan(order.packagePlan || []),
+      };
+    }
+
+    return {
+      totalWeight: order.packageSpecG * order.packageCount,
+      summary: `${order.packageSpecG}g×${order.packageCount}袋`,
+    };
+  }
+
+  private drawWrappedOrderText(
+    doc: any,
+    text: string,
+    x: number,
+    y: number,
+    width: number,
+    minHeight: number,
+  ): number {
+    doc.text(text, x, y, {
+      width,
+      lineGap: 0,
+    });
+    return this.getWrappedOrderTextHeight(doc, text, width, minHeight);
+  }
+
+  private getWrappedOrderTextHeight(
+    doc: any,
+    text: string,
+    width: number,
+    minHeight: number,
+  ): number {
+    return Math.max(
+      minHeight,
+      Math.ceil(
+        doc.heightOfString(text, {
+          width,
+          lineGap: 0,
+        }),
+      ),
+    );
   }
 
   private formatPackagePlan(packagePlan: PackagePlanRow[]): string {
@@ -436,131 +620,157 @@ export class PdfGeneratorService {
     startY: number,
     scaleFactor: number,
   ): number {
-    let y = startY + Math.floor(20 * scaleFactor);
+    let y = startY + Math.floor(14 * scaleFactor);
 
-    // Section title
     doc
       .fontSize(Math.floor(12 * scaleFactor))
-      .fillColor('#000000')
+      .fillColor('#333333')
       .font('Chinese-Bold')
-      .text(`原料清单（${data.parsedIngredients.length}项）`, 40, y);
-    y += Math.floor(30 * scaleFactor); // 增加标题与表头的间距（从16改为30）
+      .text(`原料清单（${this.getPrintableIngredientCount(data)}项）`, 40, y);
+    y += Math.floor(24 * scaleFactor);
 
-    // Table header - adjusted columns
-    const colX = {
-      type: 40,
-      name: 70,
-      amount: 160,
-      method: 260,
-    };
-    const rowHeight = Math.floor(16 * scaleFactor);
     const tableWidth = 512;
+    const columns: PrintTableColumn[] = [
+      { key: 'type', label: '类型', x: 40, width: 48 },
+      { key: 'name', label: '标准原料 / SKU', x: 88, width: 138 },
+      { key: 'amount', label: '用量', x: 226, width: 60 },
+      { key: 'purchase', label: '品牌 / 渠道 / 规格', x: 286, width: 148 },
+      { key: 'method', label: '制备', x: 434, width: 118 },
+    ];
+    const headerHeight = Math.floor(18 * scaleFactor);
 
-    // Draw table header with border
     doc
-      .rect(40, y, tableWidth, rowHeight)
-      .strokeColor('#000000')
-      .lineWidth(1)
-      .stroke();
-    doc
-      .fontSize(Math.floor(8 * scaleFactor))
-      .fillColor('#000000')
-      .font('Chinese-Bold');
-    doc.text('类型', colX.type, y + 4);
-    doc.text('名称', colX.name, y + 4);
-    doc.text('用量', colX.amount, y + 4);
-    doc.text('制备方法', colX.method, y + 4);
-    y += rowHeight;
-    y += Math.floor(8 * scaleFactor); // 增加表头与内容行的间距（新增8pt）
-
-    // Table rows
-    data.parsedIngredients.forEach((ing) => {
-      // Draw row border - no background fill
-      doc
-        .rect(40, y, tableWidth, rowHeight)
-        .strokeColor('#000000')
-        .lineWidth(1)
-        .stroke();
-
-      doc
-        .fontSize(Math.floor(8 * scaleFactor))
-        .fillColor('#000000')
-        .font('Chinese');
-      doc.text(ing.typeLabel || '-', colX.type, y + 4);
-      doc.text(ing.name, colX.name, y + 4);
-      // Combine amount and unit
-      const amountText = `${ing.amount}${ing.unit}`;
-      doc.text(amountText, colX.amount, y + 4);
-      doc.text(ing.method || '-', colX.method, y + 4);
-      y += rowHeight;
-
-      // No pagination - must fit on one page
-    });
-
-    // Draw bottom border of the table
-    doc
-      .rect(40, y - rowHeight, tableWidth, rowHeight)
-      .strokeColor('#000000')
-      .lineWidth(1)
-      .stroke();
-
-    // Note
-    y += Math.floor(12 * scaleFactor);
+      .rect(40, y, tableWidth, headerHeight)
+      .fillAndStroke('#f5f5f5', '#333333');
     doc
       .fontSize(Math.floor(7 * scaleFactor))
-      .fillColor('#000000')
-      .font('Chinese')
-      .text('注：用量已包含生产损耗', 40, y, { align: 'center' });
+      .fillColor('#333333')
+      .font('Chinese-Bold');
+    columns.forEach((column) => {
+      doc.text(column.label, column.x + 3, y + Math.floor(5 * scaleFactor), {
+        width: column.width - 6,
+      });
+    });
+    y += headerHeight;
+
+    const tableTop = y - headerHeight;
+    data.parsedIngredients.forEach((ing: IngredientItem) => {
+      const fillColor = ing.isTotalWeight ? '#eef8f2' : '#ffffff';
+      const rowHeight = this.calculateIngredientRowHeight(
+        doc,
+        ing,
+        columns,
+        scaleFactor,
+      );
+      doc
+        .rect(40, y, tableWidth, rowHeight)
+        .fillAndStroke(fillColor, '#dddddd');
+
+      doc
+        .fontSize(Math.floor(7 * scaleFactor))
+        .fillColor(ing.isTotalWeight ? '#2f8f76' : '#333333')
+        .font('Chinese');
+
+      const textY = y + Math.floor(4 * scaleFactor);
+      const amountText = `${ing.amount}${ing.unit}`;
+      doc.text(ing.typeLabel || '-', columns[0].x + 3, textY, {
+        width: columns[0].width - 6,
+      });
+      this.drawWrappedTableText(
+        doc,
+        this.formatIngredientNameLine(ing),
+        columns[1].x + 3,
+        textY,
+        columns[1].width - 6,
+      );
+      doc.text(amountText, columns[2].x + 3, textY, {
+        width: columns[2].width - 6,
+      });
+      this.drawWrappedTableText(
+        doc,
+        this.formatPurchaseSummary(ing),
+        columns[3].x + 3,
+        textY,
+        columns[3].width - 6,
+      );
+      this.drawWrappedTableText(
+        doc,
+        ing.method || '-',
+        columns[4].x + 3,
+        textY,
+        columns[4].width - 6,
+      );
+      y += rowHeight;
+    });
+
+    doc
+      .rect(40, tableTop, tableWidth, y - tableTop)
+      .strokeColor('#333333')
+      .lineWidth(1)
+      .stroke();
 
     return y;
   }
 
-  /**
-   * Draw footer section with scaling
-   * Black and white design
-   */
-  private drawFooter(
+  private calculateIngredientRowHeight(
     doc: any,
-    data: PrintTaskData,
-    currentY: number,
+    ingredient: IngredientItem,
+    columns: PrintTableColumn[],
     scaleFactor: number,
-  ): void {
-    // Add padding before footer
-    const footerY = currentY + Math.floor(30 * scaleFactor);
+  ): number {
+    const minRowHeight = Math.floor(20 * scaleFactor);
+    const verticalPadding = Math.floor(8 * scaleFactor);
+    doc.fontSize(Math.floor(7 * scaleFactor)).font('Chinese');
 
-    // Ensure footer doesn't exceed page
-    const maxY = 752; // page.height - margins - footer padding
-    const actualY = Math.min(footerY, maxY);
+    const nameHeight = this.getWrappedTableTextHeight(
+      doc,
+      this.formatIngredientNameLine(ingredient),
+      columns[1].width - 6,
+    );
+    const purchaseHeight = this.getWrappedTableTextHeight(
+      doc,
+      this.formatPurchaseSummary(ingredient),
+      columns[3].width - 6,
+    );
+    const methodHeight = this.getWrappedTableTextHeight(
+      doc,
+      ingredient.method || '-',
+      columns[4].width - 6,
+    );
 
-    // Separator - 黑色分隔线
-    if (actualY < maxY - 40) {
-      doc
-        .moveTo(40, actualY)
-        .lineTo(552, actualY)
-        .strokeColor('#000000')
-        .lineWidth(1)
-        .stroke();
-    }
+    return Math.max(
+      minRowHeight,
+      nameHeight + verticalPadding,
+      purchaseHeight + verticalPadding,
+      methodHeight + verticalPadding,
+    );
+  }
 
-    // Footer text - 黑色
-    const footerTextY = Math.max(actualY + 15, maxY - 35);
-    doc
-      .fontSize(Math.floor(8 * scaleFactor))
-      .fillColor('#000000')
-      .font('Chinese')
-      .text('SevenKitchen 专业鲜食套餐定制', 40, footerTextY, {
-        align: 'center',
-      });
-    doc
-      .fontSize(Math.floor(8 * scaleFactor))
-      .fillColor('#000000')
-      .font('Chinese')
-      .text(
-        `制作人: ${data.createdBy || '厨房管理员'}`,
-        40,
-        footerTextY + Math.floor(12 * scaleFactor),
-        { align: 'center' },
-      );
+  private drawWrappedTableText(
+    doc: any,
+    text: string,
+    x: number,
+    y: number,
+    width: number,
+  ): number {
+    doc.text(text, x, y, {
+      width,
+      lineGap: 0,
+    });
+    return this.getWrappedTableTextHeight(doc, text, width);
+  }
+
+  private getWrappedTableTextHeight(
+    doc: any,
+    text: string,
+    width: number,
+  ): number {
+    return Math.ceil(
+      doc.heightOfString(text, {
+        width,
+        lineGap: 0,
+      }),
+    );
   }
 
   /**

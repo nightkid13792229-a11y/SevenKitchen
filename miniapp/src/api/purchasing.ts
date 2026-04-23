@@ -13,6 +13,9 @@ export interface ProcurementSkuOption {
   brand?: string | null;
   productModel?: string | null;
   purchaseChannel?: string | null;
+  purchaseUnit?: string | null;
+  purchaseToBaseRatio?: number | null;
+  currentPurchasePrice?: number | null;
   displayUnit?: string | null;
   referencePricePerPurchaseUnit?: number | null;
   notes?: string | null;
@@ -35,6 +38,29 @@ const toOptionalNumber = (value: unknown): number | null => {
 
   return null;
 };
+
+export function parseUploadFileErrorMessage(
+  statusCode: number,
+  data: unknown,
+  fallback: string,
+): string {
+  if (typeof data === 'string' && data.trim()) {
+    try {
+      const parsed = JSON.parse(data);
+      if (parsed?.message) {
+        return parsed.message;
+      }
+    } catch (error) {
+      // Non-JSON upload responses fall back to the status-code message below.
+    }
+  }
+
+  if (data && typeof data === 'object' && (data as any).message) {
+    return (data as any).message;
+  }
+
+  return `${fallback}，状态码: ${statusCode}`;
+}
 
 export function normalizeProcurementSkuOption(raw: any): ProcurementSkuOption | null {
   if (typeof raw === 'string') {
@@ -62,6 +88,9 @@ export function normalizeProcurementSkuOption(raw: any): ProcurementSkuOption | 
     brand: normalizeText(raw.brand) || null,
     productModel: normalizeText(raw.productModel) || normalizeText(raw.model) || null,
     purchaseChannel: normalizeText(raw.purchaseChannel) || normalizeText(raw.channel) || null,
+    purchaseUnit: normalizeText(raw.purchaseUnit) || normalizeText(raw.displayUnit) || null,
+    purchaseToBaseRatio: toOptionalNumber(raw.purchaseToBaseRatio),
+    currentPurchasePrice: toOptionalNumber(raw.currentPurchasePrice),
     displayUnit: normalizeText(raw.displayUnit) || normalizeText(raw.purchaseUnit) || null,
     referencePricePerPurchaseUnit:
       toOptionalNumber(raw.referencePricePerPurchaseUnit ?? raw.referencePrice ?? raw.price),
@@ -162,6 +191,24 @@ export function resolvePurchaseItemDisplay(item: any) {
       normalizeText(context.preferredSku?.productModel) ||
       normalizeText(item?.productModel) ||
       normalizeText(item?.ingredient?.productModel),
+    resolvedBrand:
+      normalizeText(context.preferredSku?.brand) ||
+      normalizeText(item?.brand) ||
+      normalizeText(item?.ingredient?.brand),
+    resolvedPurchaseUnit:
+      normalizeText(context.preferredSku?.purchaseUnit) ||
+      normalizeText(context.preferredSku?.displayUnit) ||
+      normalizeText(item?.ingredient?.purchaseUnit),
+    resolvedPurchaseToBaseRatio:
+      toOptionalNumber(context.preferredSku?.purchaseToBaseRatio) ??
+      toOptionalNumber(item?.ingredient?.purchaseToBaseRatio) ??
+      0,
+    resolvedCurrentPurchasePrice:
+      toOptionalNumber(context.preferredSku?.currentPurchasePrice) ??
+      toOptionalNumber(context.preferredSku?.referencePricePerPurchaseUnit) ??
+      0,
+    resolvedBaseUnit: normalizeText(item?.ingredient?.baseUnit),
+    resolvedUnitDisplayLabel: normalizeText(item?.ingredient?.unitDisplayLabel),
     resolvedDisplayUnit:
       normalizeText(context.preferredSku?.displayUnit) ||
       normalizeText(item?.displayUnit) ||
@@ -464,6 +511,16 @@ export function completePurchase(
   });
 }
 
+/**
+ * 撤回采购完成
+ */
+export function reopenPurchaseList(id: string) {
+  return request({
+    url: `/staff/purchasing/lists/${id}/reopen`,
+    method: 'POST',
+  });
+}
+
 // ==========================================
 // 采购记录管理
 // ==========================================
@@ -479,13 +536,40 @@ export function startPurchase(id: string) {
 }
 
 /**
+ * 标记采购明细无需采购
+ */
+export function markPurchaseItemNoPurchase(
+  purchaseListId: string,
+  itemId: string,
+  data?: { reason?: string }
+) {
+  return request({
+    url: `/staff/purchasing/lists/${purchaseListId}/items/${itemId}/no-purchase`,
+    method: 'POST',
+    data,
+  });
+}
+
+/**
+ * 取消采购明细无需采购标记
+ */
+export function clearPurchaseItemNoPurchase(
+  purchaseListId: string,
+  itemId: string
+) {
+  return request({
+    url: `/staff/purchasing/lists/${purchaseListId}/items/${itemId}/no-purchase`,
+    method: 'DELETE',
+  });
+}
+
+/**
  * 添加采购记录
  */
 export function addPurchaseRecord(purchaseListId: string, data: {
   purchaseItemId: string;
   purchaseChannel: string;
-  procurementSkuId?: string;
-  procurementSkuName?: string;
+  procurementSkuId: string;
   suggestedProductId?: string;
   suggestedProductName?: string;
   actualQuantity?: number;
@@ -493,7 +577,6 @@ export function addPurchaseRecord(purchaseListId: string, data: {
   actualPackageSize?: number;
   actualPackageUnit?: string;
   actualCost: number;
-  procurementSkuId?: string;
   productModel?: string;
   notes?: string;
 }) {
@@ -520,7 +603,6 @@ export function getPurchaseRecords(purchaseListId: string) {
 export function updatePurchaseRecord(purchaseListId: string, recordId: string, data: {
   purchaseChannel?: string;
   procurementSkuId?: string;
-  procurementSkuName?: string;
   suggestedProductId?: string;
   suggestedProductName?: string;
   actualQuantity?: number;
@@ -528,7 +610,6 @@ export function updatePurchaseRecord(purchaseListId: string, recordId: string, d
   actualPackageSize?: number;
   actualPackageUnit?: string;
   actualCost?: number;
-  procurementSkuId?: string;
   productModel?: string;
   notes?: string;
 }) {
@@ -760,7 +841,7 @@ export function appendReceiptUrls(reimbursementId: string, files: string[]) {
               reject(new Error('解析响应失败'));
             }
           } else {
-            reject(new Error(`上传失败，状态码: ${res.statusCode}`));
+            reject(new Error(parseUploadFileErrorMessage(res.statusCode, res.data, '上传失败')));
           }
         },
         fail: (err) => {
@@ -861,9 +942,9 @@ export function uploadPaymentProofFiles(reimbursementId: string, files: string[]
             } catch (e) {
               reject(new Error('解析响应失败'));
             }
-          } else {
-            reject(new Error(`上传失败，状态码: ${res.statusCode}`));
-          }
+        } else {
+          reject(new Error(parseUploadFileErrorMessage(res.statusCode, res.data, '上传失败')));
+        }
         },
         fail: (err) => {
           reject(new Error(err.errMsg || '网络请求失败'));

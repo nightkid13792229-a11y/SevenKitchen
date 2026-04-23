@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { RecommendedProductService } from '../../../src/application/ingredient/recommended-product.service';
+import { IngredientType } from '../../../src/domain/ingredient/enums';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
 
 describe('RecommendedProductService', () => {
@@ -87,6 +88,7 @@ describe('RecommendedProductService', () => {
   it('create accepts marketing nutrition highlights as compatibility input', async () => {
     mockPrismaService.ingredient.findUnique.mockResolvedValue({
       id: 'ingredient-1',
+      type: IngredientType.FOOD,
     });
     mockPrismaService.recommendedProduct.create.mockImplementation(
       async ({ data }: { data: Record<string, unknown> }) => ({

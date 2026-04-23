@@ -5,6 +5,19 @@
 
 import { v4 as uuidv4 } from 'uuid';
 
+const toNullableNumber = (value: any): number | null => {
+  if (value === undefined || value === null) {
+    return null;
+  }
+
+  if (typeof value?.toNumber === 'function') {
+    return value.toNumber();
+  }
+
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : null;
+};
+
 export interface PurchaseItemConstructor {
   id?: string;
   purchaseListId: string;
@@ -25,6 +38,10 @@ export interface PurchaseItemConstructor {
   allocatedQuantity?: number;
   availableQuantity?: number;
   usesInventory?: boolean;
+  noPurchaseNeeded?: boolean;
+  noPurchaseReason?: string | null;
+  noPurchaseMarkedAt?: Date | null;
+  noPurchaseMarkedById?: string | null;
   purchaseChannel?: string;
   productModel?: string;
   displayUnit?: string; // 显示单位标签
@@ -40,9 +57,14 @@ export interface PurchaseItemConstructor {
     procurementSkus?: Array<{
       id: string;
       name: string;
+      brand?: string | null;
       purchaseChannel?: string | null;
       productModel?: string | null;
-      displayUnit?: string | null;
+      purchaseUnit?: string | null;
+      purchaseToBaseRatio?: number | null;
+      currentPurchasePrice?: number | null;
+      referencePricePerPurchaseUnit?: number | null;
+      sourceTier?: string | null;
       isActive: boolean;
     }>;
   };
@@ -69,6 +91,10 @@ export class PurchaseItem {
   public readonly allocatedQuantity?: number;
   public readonly availableQuantity?: number;
   public readonly usesInventory: boolean;
+  public noPurchaseNeeded: boolean;
+  public noPurchaseReason?: string | null;
+  public noPurchaseMarkedAt?: Date | null;
+  public noPurchaseMarkedById?: string | null;
   public readonly purchaseChannel?: string;
   public readonly productModel?: string;
   public readonly displayUnit?: string; // 显示单位标签
@@ -98,6 +124,10 @@ export class PurchaseItem {
     this.allocatedQuantity = data.allocatedQuantity;
     this.availableQuantity = data.availableQuantity;
     this.usesInventory = data.usesInventory ?? false;
+    this.noPurchaseNeeded = data.noPurchaseNeeded ?? false;
+    this.noPurchaseReason = data.noPurchaseReason ?? null;
+    this.noPurchaseMarkedAt = data.noPurchaseMarkedAt ?? null;
+    this.noPurchaseMarkedById = data.noPurchaseMarkedById ?? null;
     this.purchaseChannel = data.purchaseChannel;
     this.productModel = data.productModel;
     this.displayUnit = data.displayUnit;
@@ -108,12 +138,26 @@ export class PurchaseItem {
     this.validateInvariants();
   }
 
+  markNoPurchaseNeeded(reason: string | null | undefined, userId: string): void {
+    this.noPurchaseNeeded = true;
+    this.noPurchaseReason = reason?.trim() || null;
+    this.noPurchaseMarkedAt = new Date();
+    this.noPurchaseMarkedById = userId;
+  }
+
+  clearNoPurchaseNeeded(): void {
+    this.noPurchaseNeeded = false;
+    this.noPurchaseReason = null;
+    this.noPurchaseMarkedAt = null;
+    this.noPurchaseMarkedById = null;
+  }
+
   /**
    * 验证领域不变式
    */
   private validateInvariants(): void {
-    if (this.quantityNeeded <= 0) {
-      throw new Error('Quantity needed must be positive');
+    if (this.quantityNeeded < 0) {
+      throw new Error('Quantity needed cannot be negative');
     }
 
     if (this.estimatedCost < 0) {
@@ -145,6 +189,10 @@ export class PurchaseItem {
       allocatedQuantity: this.allocatedQuantity,
       availableQuantity: this.availableQuantity,
       usesInventory: this.usesInventory,
+      noPurchaseNeeded: this.noPurchaseNeeded,
+      noPurchaseReason: this.noPurchaseReason,
+      noPurchaseMarkedAt: this.noPurchaseMarkedAt,
+      noPurchaseMarkedById: this.noPurchaseMarkedById,
       purchaseChannel: this.purchaseChannel,
       productModel: this.productModel,
       displayUnit: this.displayUnit,
@@ -199,6 +247,10 @@ export class PurchaseItem {
           ? Number(data.availableQuantity)
           : undefined,
       usesInventory: data.usesInventory ?? false,
+      noPurchaseNeeded: data.noPurchaseNeeded ?? false,
+      noPurchaseReason: data.noPurchaseReason ?? null,
+      noPurchaseMarkedAt: data.noPurchaseMarkedAt ?? null,
+      noPurchaseMarkedById: data.noPurchaseMarkedById ?? null,
       purchaseChannel: data.purchaseChannel,
       productModel: data.productModel,
       displayUnit: data.displayUnit,
@@ -220,9 +272,20 @@ export class PurchaseItem {
               (sku: any) => ({
                 id: sku.id,
                 name: sku.name,
+                brand: sku.brand ?? null,
                 purchaseChannel: sku.purchaseChannel ?? null,
                 productModel: sku.productModel ?? null,
-                displayUnit: sku.displayUnit ?? null,
+                purchaseUnit: sku.purchaseUnit ?? null,
+                purchaseToBaseRatio: toNullableNumber(
+                  sku.purchaseToBaseRatio,
+                ),
+                currentPurchasePrice: toNullableNumber(
+                  sku.currentPurchasePrice,
+                ),
+                referencePricePerPurchaseUnit: toNullableNumber(
+                  sku.referencePricePerPurchaseUnit,
+                ),
+                sourceTier: sku.sourceTier ?? null,
                 isActive: sku.isActive,
               }),
             ),

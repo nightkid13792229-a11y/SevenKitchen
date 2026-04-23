@@ -37,6 +37,18 @@ describe('checkout direct-buy storage contract', () => {
     expect(source).toContain('cookingMethod')
   })
 
+  it('can refresh an expired direct-buy pricing snapshot from stored order inputs', () => {
+    expect(source).toContain('refreshDirectBuyPricingSnapshot')
+    expect(source).toContain('isPricingSnapshotExpiredError')
+    expect(source).toContain("url: '/orders/pricing/preview'")
+    expect(source).toContain('dogId: orderConfig.value.dogId')
+    expect(source).toContain('recipeId: orderConfig.value.recipeId')
+    expect(source).toContain('ingredientSourcePlan: orderConfig.value.ingredientSourcePlan')
+    expect(source).toContain('addressId: selectedAddress.value?.id')
+    expect(source).toContain("uni.setStorageSync('direct_buy_order_config'")
+    expect(source).toContain('价格已更新，请确认后重新提交')
+  })
+
   it('shows total, estimated feed days, and the subtitle in the bottom bar', () => {
     expect(source).toContain('estimatedFeedDays')
     expect(source).toContain('totalAmount')

@@ -36,18 +36,18 @@ export const SOURCE_PLAN_OPTIONS: Array<{
 }> = [
   {
     code: 'ORGANIC',
-    label: '尽量有机来源',
-    description: '优先匹配有机、生态、认证来源',
+    label: '有机优先',
+    description: '优先选择有机、草饲、散养、非转基因来源',
   },
   {
     code: 'MARKET_PREMIUM',
-    label: '尽量山姆、盒马、沃集鲜',
-    description: '默认方案，稳定且品质较好',
+    label: '超市优先',
+    description: '优先选择山姆、盒马、沃集鲜等商超来源',
   },
   {
     code: 'WHOLESALE',
-    label: '生鲜批发商',
-    description: '高性价比，适合大规格订购',
+    label: '性价比优先',
+    description: '人食级原料，优先选择生鲜批发来源',
   },
 ]
 

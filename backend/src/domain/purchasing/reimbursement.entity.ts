@@ -184,7 +184,7 @@ export class Reimbursement {
   }
 
   /**
-   * 审核报销单
+   * 处理报销单
    * 状态转换: PENDING_REVIEW → APPROVED/REJECTED/REQUIRES_RESUBMIT
    */
   review(
@@ -267,7 +267,7 @@ export class Reimbursement {
   }
 
   /**
-   * 检查是否待审核
+   * 检查是否待报销
    */
   isPendingReview(): boolean {
     return this.status === ReimbursementStatus.PENDING_REVIEW;
@@ -275,7 +275,7 @@ export class Reimbursement {
 
   /**
    * 检查是否可以删除
-   * 只有待审核、已驳回、需重新提交状态可以删除
+   * 只有待报销、已驳回、需重新提交状态可以删除
    */
   canBeDeleted(): void {
     if (this.status === ReimbursementStatus.REIMBURSED) {

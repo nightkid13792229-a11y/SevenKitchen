@@ -23,7 +23,7 @@ export enum PurchaseListKind {
  * 报销单状态
  */
 export enum ReimbursementStatus {
-  PENDING_REVIEW = 'PENDING_REVIEW', // 待审核
+  PENDING_REVIEW = 'PENDING_REVIEW', // 待报销（内部沿用旧枚举名）
   REIMBURSED = 'REIMBURSED', // 已报销
   REJECTED = 'REJECTED', // 已驳回
   REQUIRES_RESUBMIT = 'REQUIRES_RESUBMIT', // 需重新提交

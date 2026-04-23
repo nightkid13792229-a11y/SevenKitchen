@@ -70,6 +70,38 @@ export class ProductionService {
     private readonly productionCostSettlementService?: ProductionCostSettlementRunner,
   ) {}
 
+  private buildRecipeSourceSignature(recipeSnapshot: any): string {
+    const items = Array.isArray(recipeSnapshot?.items)
+      ? recipeSnapshot.items
+      : [];
+    const signature = items
+      .map((item: any) => {
+        const properties = item?.properties || {};
+        return [
+          item?.ingredient_id || item?.ingredientId || '',
+          properties.procurement_sku_id || '',
+          properties.procurement_sku_source_tier || '',
+          properties.procurement_sku_source_plan || '',
+        ].join(':');
+      })
+      .sort()
+      .join('|');
+
+    return signature || 'no-source-signature';
+  }
+
+  private buildProductionGroupKey(params: {
+    recipeSnapshotId: string;
+    recipeSnapshot: any;
+    ingredientSourcePlan?: string | null;
+  }): string {
+    return [
+      params.recipeSnapshotId,
+      params.ingredientSourcePlan || 'DEFAULT_SOURCE_PLAN',
+      this.buildRecipeSourceSignature(params.recipeSnapshot),
+    ].join('::');
+  }
+
   /**
    * Create production batch from PURCHASING orders
    * Groups OrderItems by recipeSnapshotId and aggregates dailyIntakeG
@@ -130,6 +162,7 @@ export class ProductionService {
     const orderItemsWithDailyIntake: Array<{
       orderItemId: string;
       recipeSnapshotId: string; // Use recipeSnapshot.id as unique identifier
+      productionGroupKey: string;
       recipeSnapshot: any; // Full RecipeSnapshot for PackagingUnit
       dailyIntakeG: number;
       quantityG: number; // OrderItem total net weight (已考虑订购周期)
@@ -153,10 +186,16 @@ export class ProductionService {
 
         // Use recipeSnapshot.id as the grouping key
         const recipeSnapshotId = item.recipeSnapshot.id;
+        const productionGroupKey = this.buildProductionGroupKey({
+          recipeSnapshotId,
+          recipeSnapshot: item.recipeSnapshot,
+          ingredientSourcePlan: item.ingredientSourcePlan,
+        });
 
         orderItemsWithDailyIntake.push({
           orderItemId: item.id,
           recipeSnapshotId,
+          productionGroupKey,
           recipeSnapshot: item.recipeSnapshot,
           dailyIntakeG: item.dailyIntakeG,
           quantityG: item.quantityG,
@@ -191,6 +230,7 @@ export class ProductionService {
     };
 
     type ProductionGroup = {
+      recipeSnapshotId: string;
       recipeSnapshot: any;
       totalRawWeightG: number; // 生肉总重（用于分锅）
       itemQueue: OrderItemWithRawWeight[]; // 待分配的订单队列（FIFO）
@@ -200,6 +240,7 @@ export class ProductionService {
 
     for (const item of orderItemsWithDailyIntake) {
       const recipeSnapshotId = item.recipeSnapshotId;
+      const productionGroupKey = item.productionGroupKey;
       const recipeSnapshot = item.recipeSnapshot;
 
       // 从recipe snapshot中读取损耗率
@@ -213,16 +254,17 @@ export class ProductionService {
         `Item ${item.orderItemId}: dailyIntake=${item.dailyIntakeG}g, lossRate=${lossRate}, rawWeight=${rawWeightNeededG}g`,
       );
 
-      // 按recipe分组
-      if (!productionGroups.has(recipeSnapshotId)) {
-        productionGroups.set(recipeSnapshotId, {
+      // 按食谱和采购来源快照分组，避免不同来源方案被合并生产
+      if (!productionGroups.has(productionGroupKey)) {
+        productionGroups.set(productionGroupKey, {
+          recipeSnapshotId,
           recipeSnapshot,
           totalRawWeightG: 0,
           itemQueue: [],
         });
       }
 
-      const group = productionGroups.get(recipeSnapshotId)!;
+      const group = productionGroups.get(productionGroupKey)!;
       group.totalRawWeightG += rawWeightNeededG;
       group.itemQueue.push({
         orderItemId: item.orderItemId,
@@ -245,9 +287,9 @@ export class ProductionService {
     const packagingUnits: PackagingUnit[] = [];
     const allOrderItemIds: string[] = [];
 
-    for (const [recipeSnapshotId, group] of productionGroups.entries()) {
+    for (const [productionGroupKey, group] of productionGroups.entries()) {
       this.logger.log(
-        `[createProductionBatch] Processing recipe ${recipeSnapshotId}: totalRawWeight=${group.totalRawWeightG}g, capacity=${maxCapacityG}g`,
+        `[createProductionBatch] Processing recipe ${group.recipeSnapshotId}: totalRawWeight=${group.totalRawWeightG}g, capacity=${maxCapacityG}g`,
       );
 
       // 获取损耗率（所有订单的损耗率应该相同，因为都是同一个recipe）
@@ -332,6 +374,7 @@ export class ProductionService {
 
         // 将生肉重量分配信息附加到 unit 对象上（用于后续分装）
         (unit as any).rawMaterialAllocations = rawMaterialAllocations;
+        (unit as any).productionGroupKey = productionGroupKey;
 
         packagingUnits.push(unit);
         allOrderItemIds.push(...sourceOrderItemIds);
@@ -346,7 +389,7 @@ export class ProductionService {
       }
 
       this.logger.log(
-        `[createProductionBatch] Recipe ${recipeSnapshotId} split into ${potNumber - 1} pot(s)`,
+        `[createProductionBatch] Recipe ${group.recipeSnapshotId} split into ${potNumber - 1} pot(s)`,
       );
     }
 
@@ -356,10 +399,10 @@ export class ProductionService {
 
     const minThresholdG = globalConfig.minPotWeightG || 2000;
 
-    for (const [recipeSnapshotId, group] of productionGroups.entries()) {
+    for (const [productionGroupKey, group] of productionGroups.entries()) {
       // 获取该食谱的所有锅次
       const recipeUnits = packagingUnits.filter(
-        (unit) => (unit.recipeSnapshot as any).id === recipeSnapshotId,
+        (unit) => (unit as any).productionGroupKey === productionGroupKey,
       );
 
       if (recipeUnits.length > 1) {
@@ -367,7 +410,7 @@ export class ProductionService {
         const lossRate = group.recipeSnapshot.production_loss_rate || 1.07;
 
         this.logger.log(
-          `[createProductionBatch] 优化食谱 ${recipeSnapshotId} 的锅次重量，最小阈值=${minThresholdG}g`,
+          `[createProductionBatch] 优化食谱 ${group.recipeSnapshotId} 的锅次重量，最小阈值=${minThresholdG}g`,
         );
         this.optimizePotWeights(recipeUnits, minThresholdG, lossRate);
       }
@@ -382,7 +425,10 @@ export class ProductionService {
     // ============================================================
 
     for (const unit of packagingUnits) {
-      const allocations = (unit as any).rawMaterialAllocations as Record<string, number>;
+      const allocations = (unit as any).rawMaterialAllocations as Record<
+        string,
+        number
+      >;
       const totalRawWeight = Object.values(allocations).reduce(
         (sum: number, weight: number) => sum + weight,
         0,
@@ -565,7 +611,10 @@ export class ProductionService {
         recipeName: string;
         packageSpecG: number;
         packageCount: number;
-        packagePlan: Array<{ packageSpecG: number; packageCount: number }> | null;
+        packagePlan: Array<{
+          packageSpecG: number;
+          packageCount: number;
+        }> | null;
         ingredientSourcePlan: string | null;
         recipeSnapshot: any;
         createdAt: string;
@@ -601,7 +650,10 @@ export class ProductionService {
         recipeName: string;
         packageSpecG: number;
         packageCount: number;
-        packagePlan: Array<{ packageSpecG: number; packageCount: number }> | null;
+        packagePlan: Array<{
+          packageSpecG: number;
+          packageCount: number;
+        }> | null;
         ingredientSourcePlan: string | null;
         recipeSnapshot: any;
         createdAt: string;
@@ -936,13 +988,17 @@ export class ProductionService {
     );
 
     // Get unique order IDs from order items
-    // Phase 8.14: Look for orders in IN_PRODUCTION, but also check PAID/PURCHASING
-    // as defensive fallback in case transitions didn't happen during batch creation
+    // Phase 8.14: Look for orders in IN_PRODUCTION/FREEZING, but also check PAID
+    // as defensive fallback in case transitions didn't happen during batch creation.
+    // Staff task completion moves orders to FREEZING before this batch check runs.
     // Root cause fix: Match orders by item ID from sourceOrderItemIds (primary key).
     // productionBatchId check is secondary validation but not required if item ID matches.
     const orderIds = new Set<string>();
-    // Phase 9: Simplified status check - only check PAID and IN_PRODUCTION
-    const statusesToCheck = [OrderStatus.IN_PRODUCTION, OrderStatus.PAID];
+    const statusesToCheck = [
+      OrderStatus.IN_PRODUCTION,
+      OrderStatus.FREEZING,
+      OrderStatus.PAID,
+    ];
 
     for (const status of statusesToCheck) {
       const orders = await this.orderRepository.findByStatus(status);
@@ -1033,11 +1089,14 @@ export class ProductionService {
           this.logger.log(
             `Order ${orderId} transitioned from PAID to IN_PRODUCTION after batch ${batchId} completion`,
           );
-        } else if (order.status === OrderStatus.IN_PRODUCTION) {
-          // Already in IN_PRODUCTION (idempotent)
+        } else if (
+          order.status === OrderStatus.IN_PRODUCTION ||
+          order.status === OrderStatus.FREEZING
+        ) {
+          // Already in the production/post-production flow (idempotent)
           transitionedCount++;
           this.logger.debug(
-            `Order ${orderId} is already IN_PRODUCTION, staying in this state after batch ${batchId} completion`,
+            `Order ${orderId} is already ${order.status}, staying in this state after batch ${batchId} completion`,
           );
         }
       } catch (error) {
@@ -1101,9 +1160,9 @@ export class ProductionService {
 
       throw new BadRequestException(
         `Cannot delete batch: ${completedUnits.length} packaging unit(s) have been completed. ` +
-        `Deleting would lose production photos and data. ` +
-        `Affected order(s): ${Array.from(affectedOrderIds).join(', ')}. ` +
-        `Please ship these orders first, or contact technical support.`,
+          `Deleting would lose production photos and data. ` +
+          `Affected order(s): ${Array.from(affectedOrderIds).join(', ')}. ` +
+          `Please ship these orders first, or contact technical support.`,
       );
     }
 
@@ -1135,17 +1194,15 @@ export class ProductionService {
     for (const orderId of orderIdsArray) {
       const order = await this.orderRepository.findById(orderId);
       if (order && order.status !== OrderStatus.IN_PRODUCTION) {
-        nonRevertibleOrders.push(
-          `${orderId.slice(-8)} (${order.status})`,
-        );
+        nonRevertibleOrders.push(`${orderId.slice(-8)} (${order.status})`);
       }
     }
 
     if (nonRevertibleOrders.length > 0) {
       throw new BadRequestException(
         `Cannot delete batch: Some orders are not in IN_PRODUCTION status. ` +
-        `Orders: ${nonRevertibleOrders.join(', ')}. ` +
-        `Only batches where all orders are IN_PRODUCTION can be deleted.`,
+          `Orders: ${nonRevertibleOrders.join(', ')}. ` +
+          `Only batches where all orders are IN_PRODUCTION can be deleted.`,
       );
     }
 

@@ -4,52 +4,52 @@
 
 // 原料类型枚举
 export enum IngredientType {
-  FOOD = 'FOOD',           // 食材
+  FOOD = 'FOOD', // 食材
   SUPPLEMENT = 'SUPPLEMENT', // 补剂
-  PACKAGING = 'PACKAGING'   // 包装材料
+  PACKAGING = 'PACKAGING', // 包装材料
 }
 
 export enum IngredientProcurementStrategy {
   DAILY_PURCHASE = 'DAILY_PURCHASE',
   STOCK_REPLENISHMENT = 'STOCK_REPLENISHMENT',
-  HYBRID = 'HYBRID'
+  HYBRID = 'HYBRID',
 }
 
 // 基准单位枚举
 export enum BaseUnit {
-  G = 'G',     // 克
-  ML = 'ML',   // 毫升
-  PCS = 'PCS'  // 个/件
+  G = 'G', // 克
+  ML = 'ML', // 毫升
+  PCS = 'PCS', // 个/件
 }
 
 // 补剂分类枚举
 export enum SupplementCategoryType {
-  MINERAL = 'MINERAL',           // 矿物质
-  VITAMIN = 'VITAMIN',           // 维生素
-  AMINO_ACID = 'AMINO_ACID',     // 氨基酸
-  FATTY_ACID = 'FATTY_ACID',     // 脂肪酸
-  PROBIOTIC = 'PROBIOTIC',       // 益生菌
-  FUNCTIONAL = 'FUNCTIONAL',     // 功能性成分
-  OTHER = 'OTHER'                // 其他
+  MINERAL = 'MINERAL', // 矿物质
+  VITAMIN = 'VITAMIN', // 维生素
+  AMINO_ACID = 'AMINO_ACID', // 氨基酸
+  FATTY_ACID = 'FATTY_ACID', // 脂肪酸
+  PROBIOTIC = 'PROBIOTIC', // 益生菌
+  FUNCTIONAL = 'FUNCTIONAL', // 功能性成分
+  OTHER = 'OTHER', // 其他
 }
 
 // 补剂添加时机枚举
 export enum SupplementAddTiming {
-  BEFORE_MIXING = 'BEFORE_MIXING',     // 制作中
-  BEFORE_MEAL = 'BEFORE_MEAL'          // 随餐
+  BEFORE_MIXING = 'BEFORE_MIXING', // 制作中
+  BEFORE_MEAL = 'BEFORE_MEAL', // 随餐
 }
 
 // 类型标签映射
 export const IngredientTypeLabels: Record<string, string> = {
   [IngredientType.FOOD]: '食材',
   [IngredientType.SUPPLEMENT]: '补剂',
-  [IngredientType.PACKAGING]: '包材'
+  [IngredientType.PACKAGING]: '包材',
 }
 
 export const IngredientProcurementStrategyLabels: Record<string, string> = {
   [IngredientProcurementStrategy.DAILY_PURCHASE]: '日采',
   [IngredientProcurementStrategy.STOCK_REPLENISHMENT]: '库存补货',
-  [IngredientProcurementStrategy.HYBRID]: '混合'
+  [IngredientProcurementStrategy.HYBRID]: '混合',
 }
 
 export type StockLevelStatus =
@@ -62,47 +62,47 @@ export enum InventorySourceType {
   KITCHEN_TASK = 'KITCHEN_TASK',
   PURCHASE_RECORD = 'PURCHASE_RECORD',
   MANUAL_ADJUSTMENT = 'MANUAL_ADJUSTMENT',
-  STOCKTAKE = 'STOCKTAKE'
+  STOCKTAKE = 'STOCKTAKE',
 }
 
 export enum InventoryAdjustmentMode {
   DELTA = 'DELTA',
-  SET = 'SET'
+  SET = 'SET',
 }
 
 export enum InventoryStocktakeStatus {
   DRAFT = 'DRAFT',
-  APPLIED = 'APPLIED'
+  APPLIED = 'APPLIED',
 }
 
 export const StockLevelStatusLabels: Record<StockLevelStatus, string> = {
   NO_POLICY: '未设置阈值',
   SUFFICIENT: '库存充足',
   LOW_STOCK: '低于安全库存',
-  NEEDS_REPLENISHMENT: '需要补货'
+  NEEDS_REPLENISHMENT: '需要补货',
 }
 
 export const InventorySourceTypeLabels: Record<string, string> = {
   [InventorySourceType.KITCHEN_TASK]: '厨房领用',
   [InventorySourceType.PURCHASE_RECORD]: '采购入库',
   [InventorySourceType.MANUAL_ADJUSTMENT]: '手工调整',
-  [InventorySourceType.STOCKTAKE]: '盘点差异'
+  [InventorySourceType.STOCKTAKE]: '盘点差异',
 }
 
 export const InventoryAdjustmentModeLabels: Record<string, string> = {
   [InventoryAdjustmentMode.DELTA]: '按差异调整',
-  [InventoryAdjustmentMode.SET]: '设置为盘点值'
+  [InventoryAdjustmentMode.SET]: '设置为盘点值',
 }
 
 export const InventoryStocktakeStatusLabels: Record<string, string> = {
   [InventoryStocktakeStatus.DRAFT]: '草稿',
-  [InventoryStocktakeStatus.APPLIED]: '已入账'
+  [InventoryStocktakeStatus.APPLIED]: '已入账',
 }
 
 export const BaseUnitLabels: Record<string, string> = {
   [BaseUnit.G]: '克',
   [BaseUnit.ML]: '毫升',
-  [BaseUnit.PCS]: '个/件'
+  [BaseUnit.PCS]: '个/件',
 }
 
 export type NutritionBasisType =
@@ -177,7 +177,10 @@ export interface NutritionMeta {
 
 type NutritionTabValue = number | null
 
-export type NutritionTabRecord<TKey extends string = string> = Record<TKey, NutritionTabValue>
+export type NutritionTabRecord<TKey extends string = string> = Record<
+  TKey,
+  NutritionTabValue
+>
 
 export interface MacroNutritionProfileTab extends NutritionTabRecord<
   | 'energyKcal'
@@ -281,53 +284,53 @@ export const SupplementCategoryLabels: Record<string, string> = {
   [SupplementCategoryType.FATTY_ACID]: '脂肪酸',
   [SupplementCategoryType.PROBIOTIC]: '益生菌',
   [SupplementCategoryType.FUNCTIONAL]: '功能性成分',
-  [SupplementCategoryType.OTHER]: '其他'
+  [SupplementCategoryType.OTHER]: '其他',
 }
 
 export const SupplementAddTimingLabels: Record<string, string> = {
   [SupplementAddTiming.BEFORE_MIXING]: '制作中',
-  [SupplementAddTiming.BEFORE_MEAL]: '随餐'
+  [SupplementAddTiming.BEFORE_MEAL]: '随餐',
 }
 
 // 食材属性
 export interface FoodProperties {
-  cfct_class: string              // CFCT分类 (e.g. "畜肉类", "蔬菜类")
-  edible_yield_rate: number       // 可食部/出肉率 (0.1-1.0)
-  main_nutrients_desc: string     // 主要营养价值
-  density_g_per_ml?: number       // 密度- 仅当 base_unit == 'ML' 时必需
+  cfct_class: string // CFCT分类 (e.g. "畜肉类", "蔬菜类")
+  edible_yield_rate: number // 可食部/出肉率 (0.1-1.0)
+  main_nutrients_desc: string // 主要营养价值
+  density_g_per_ml?: number // 密度- 仅当 base_unit == 'ML' 时必需
 }
 
 // 有效成分含量值（包含数值和单位）
 export interface ActiveNutrientValue {
-  value: number  // 显示的数值（原始输入值）
-  unit: string   // 单位 (mg, g, μg, IU, %)
+  value: number // 显示的数值（原始输入值）
+  unit: string // 单位 (mg, g, μg, IU, %)
 }
 
 // 购买链接配置
 export interface PurchaseLinkConfig {
-  url: string                  // 购买链接URL
-  platform: 'TAOBAO' | 'JD' | 'PINDUODUO' | 'OTHER' | 'WEBVIEW'  // 平台类型
-  mini_program_appid?: string  // 小程序appid（跳转小程序时必需）
-  mini_program_path?: string   // 小程序路径（跳转小程序时必需）
+  url: string // 购买链接URL
+  platform: 'TAOBAO' | 'JD' | 'PINDUODUO' | 'IHERB' | 'OTHER' | 'WEBVIEW' // 平台类型
+  mini_program_appid?: string // 小程序appid（跳转小程序时必需）
+  mini_program_path?: string // 小程序路径（跳转小程序时必需）
 }
 
 // 补剂属性
 export interface SupplementProperties {
-  category_type: string                                    // 营养分类
-  add_timing?: string                                      // 添加时机
-  active_nutrients?: Record<string, ActiveNutrientValue>  // 兼容旧数据
-  display_unit?: string                                    // 单层补剂默认展示单位
+  category_type: string // 营养分类
+  add_timing?: string // 添加时机
+  active_nutrients?: Record<string, ActiveNutrientValue> // 兼容旧数据
+  display_unit?: string // 单层补剂默认展示单位
   supplier_name?: string | null
-  purchase_link?: PurchaseLinkConfig                       // 直连购买信息
+  purchase_link?: PurchaseLinkConfig // 直连购买信息
   image_url?: string | null
   marketing_highlights?: Record<string, ActiveNutrientValue>
-  production_loss_rate?: number                            // 个性化损耗率
+  production_loss_rate?: number // 个性化损耗率
 }
 
 // 包材属性
 export interface PackagingProperties {
-  is_consumable: boolean      // true=消耗品(随单扣减), false=固定资产
-  linked_item_id?: string     // 关联配件
+  is_consumable: boolean // true=消耗品(随单扣减), false=固定资产
+  linked_item_id?: string // 关联配件
   supplier_name?: string | null
 }
 
@@ -350,7 +353,7 @@ export interface Ingredient {
   weightG: number | null
   maxCapacityG: number | null
   properties: FoodProperties | SupplementProperties | PackagingProperties
-  tagIds: string[]  // 标签ID数组
+  tagIds: string[] // 标签ID数组
   tags?: Array<{
     id: string
     name: string
@@ -359,7 +362,7 @@ export interface Ingredient {
   activeRecommendedProductCount?: number
   recommendedProductCount?: number
   hasActiveRecommendedProduct?: boolean
-  stock?: number  // 库存占位符（MVP阶段）
+  stock?: number // 库存占位符（MVP阶段）
   activeProcurementSkuCount?: number
   procurementSkuCount?: number
   hasActiveProcurementSku?: boolean
@@ -394,8 +397,8 @@ export interface IngredientForm {
   maxCapacityG?: number
   properties: FoodProperties | SupplementProperties | PackagingProperties
   nutritionProfile?: NutritionProfile | null
-  tagIds?: string[]  // 标签ID数组
-  tags?: any[]  // 标签完整信息（用于显示）
+  tagIds?: string[] // 标签ID数组
+  tags?: any[] // 标签完整信息（用于显示）
   purchaseUnit?: string
   purchaseToBaseRatio?: number
   currentPricePerPurchaseUnit?: number
@@ -475,7 +478,7 @@ export const CFCT_CLASS_OPTIONS = [
   '水产类',
   '油脂类',
   '调味品类',
-  '其他'
+  '其他',
 ]
 
 // 家庭 DIY 推荐商品
@@ -511,6 +514,16 @@ export interface RecommendedProductForm {
   sortOrder?: number
 }
 
+export type ProcurementSkuSourceTier =
+  | 'ORGANIC'
+  | 'MARKET_PREMIUM'
+  | 'WHOLESALE'
+
+export type ProcurementSkuPriceHistorySource =
+  | 'MANUAL'
+  | 'REIMBURSEMENT'
+  | 'ROLLBACK'
+
 // 生产采购 SKU
 export interface ProcurementSku {
   id: string
@@ -525,7 +538,7 @@ export interface ProcurementSku {
   currentPurchasePrice: number | null
   referencePurchasePrice: number | null
   referencePricePerPurchaseUnit: number | null
-  displayUnit: string | null
+  sourceTier: ProcurementSkuSourceTier | null
   notes: string | null
   isDefault: boolean
   isActive: boolean
@@ -539,21 +552,32 @@ export interface ProcurementSku {
 
 export interface ProcurementSkuForm {
   name: string
-  brand?: string
-  productModel?: string
-  purchaseChannel?: string
-  supplierName?: string
-  purchaseUnit?: string
+  brand?: string | null
+  productModel?: string | null
+  purchaseChannel?: string | null
+  supplierName?: string | null
+  purchaseUnit?: string | null
   purchaseToBaseRatio?: number | null
   currentPurchasePrice?: number | null
-  referencePurchasePrice?: number | null
-  referencePricePerPurchaseUnit?: number | null
-  displayUnit?: string
-  notes?: string
-  isDefault?: boolean
+  sourceTier?: ProcurementSkuSourceTier | null
+  notes?: string | null
   isActive?: boolean
-  sortOrder?: number
   safetyStock?: number | null
   reorderPoint?: number | null
   targetStock?: number | null
+}
+
+export interface ProcurementSkuPriceHistory {
+  id: string
+  procurementSkuId: string
+  ingredientId: string
+  oldPrice: number | null
+  newPrice: number
+  source: ProcurementSkuPriceHistorySource
+  reimbursementId: string | null
+  purchaseRecordId: string | null
+  rollbackFromHistoryId: string | null
+  operatorId: string | null
+  note: string | null
+  createdAt: string
 }

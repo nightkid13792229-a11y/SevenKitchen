@@ -66,7 +66,7 @@
             <el-icon><List /></el-icon>
             <span>采购管理</span>
           </template>
-          <el-menu-item index="/purchasing/reimbursements">报销审核</el-menu-item>
+          <el-menu-item index="/purchasing/reimbursements">报销管理</el-menu-item>
           <el-menu-item index="/purchasing/history">采购历史</el-menu-item>
         </el-sub-menu>
         <el-sub-menu index="finance">

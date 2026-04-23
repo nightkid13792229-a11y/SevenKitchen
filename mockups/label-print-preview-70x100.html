@@ -1,0 +1,917 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SevenKitchen 标签打印预览 70×100mm V2</title>
+  <style>
+    :root {
+      --ink: #242424;
+      --muted: #696969;
+      --faint: #f2f2f0;
+      --line: #deded8;
+      --green: #4f9f88;
+      --green-dark: #2d7663;
+      --blue: #2a7de1;
+      --paper: #fffef9;
+      --page: #f3f4f3;
+      --cream: #fbf6e8;
+      --gold: #d5a443;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--page);
+      color: var(--ink);
+    }
+
+    .stage {
+      width: min(1220px, 100vw);
+      margin: 0 auto;
+      padding: 28px;
+      display: grid;
+      grid-template-columns: 430px minmax(0, 1fr);
+      gap: 28px;
+      align-items: start;
+    }
+
+    .phone {
+      width: 430px;
+      min-height: 840px;
+      background: #f6f6f6;
+      border: 1px solid #d8d8d8;
+      border-radius: 28px;
+      overflow: hidden;
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.12);
+    }
+
+    .nav {
+      height: 58px;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      border-bottom: 1px solid #e7e7e7;
+      padding: 0 16px;
+      gap: 16px;
+    }
+
+    .back {
+      color: #555;
+      font-size: 18px;
+      width: 58px;
+    }
+
+    .nav-title {
+      flex: 1;
+      font-weight: 800;
+      font-size: 18px;
+      text-align: center;
+    }
+
+    .menu {
+      width: 58px;
+      display: flex;
+      justify-content: flex-end;
+      gap: 5px;
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #111;
+    }
+
+    .content {
+      padding: 18px 16px 28px;
+    }
+
+    .section {
+      margin-bottom: 20px;
+    }
+
+    .section-title {
+      margin: 0 0 12px;
+      font-size: 20px;
+      font-weight: 800;
+    }
+
+    .printer-row {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      background: #fff;
+      border-radius: 8px;
+      padding: 12px;
+    }
+
+    .printer-status {
+      flex: 1;
+      color: var(--muted);
+      line-height: 1.35;
+    }
+
+    .printer-status strong {
+      display: block;
+      color: var(--ink);
+      font-size: 16px;
+    }
+
+    .primary-btn,
+    .secondary-btn {
+      border: 0;
+      border-radius: 8px;
+      color: #fff;
+      font-weight: 800;
+      font-size: 15px;
+      padding: 11px 14px;
+      min-width: 58px;
+    }
+
+    .primary-btn {
+      background: var(--blue);
+    }
+
+    .secondary-btn {
+      background: var(--green);
+    }
+
+    .order-card {
+      background: #fff;
+      border-radius: 10px;
+      padding: 16px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    }
+
+    .order-top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+
+    .order-title {
+      flex: 1;
+      font-weight: 800;
+      font-size: 18px;
+    }
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: 82px 1fr;
+      gap: 7px 10px;
+      font-size: 15px;
+      line-height: 1.35;
+      margin-bottom: 14px;
+    }
+
+    .info-label {
+      color: var(--muted);
+    }
+
+    .info-value {
+      font-weight: 650;
+    }
+
+    .form-row {
+      display: grid;
+      grid-template-columns: 82px 1fr;
+      align-items: center;
+      gap: 10px;
+      padding: 12px 0;
+      border-top: 1px solid var(--faint);
+    }
+
+    .date-picker {
+      height: 42px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0 12px;
+      color: var(--blue);
+      font-weight: 800;
+      background: #fbfbfb;
+    }
+
+    .stepper {
+      justify-self: end;
+      display: grid;
+      grid-template-columns: 40px 58px 40px;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .stepper button,
+    .stepper output {
+      height: 38px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      background: #fafafa;
+      color: var(--ink);
+      font-weight: 800;
+      font-size: 18px;
+    }
+
+    .preview-panel {
+      margin-top: 16px;
+      display: grid;
+      place-items: center;
+      padding: 14px 0 2px;
+      background: #f5f5f5;
+      border-radius: 10px;
+    }
+
+    .preview-note {
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .workspace {
+      min-height: 840px;
+      background: #fff;
+      border-radius: 20px;
+      box-shadow: 0 18px 48px rgba(0, 0, 0, 0.1);
+      padding: 28px;
+    }
+
+    .workspace-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 18px;
+      margin-bottom: 24px;
+      border-bottom: 1px solid #e7e7e7;
+      padding-bottom: 18px;
+    }
+
+    .workspace h1 {
+      margin: 0 0 6px;
+      font-size: 26px;
+      line-height: 1.2;
+    }
+
+    .workspace p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    .spec-pill {
+      border: 1px solid #c9e1d9;
+      color: var(--green-dark);
+      background: #edf8f4;
+      border-radius: 999px;
+      padding: 8px 14px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .label-area {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 22px;
+      align-items: start;
+    }
+
+    .label-demo {
+      display: grid;
+      gap: 12px;
+    }
+
+    .label-shell {
+      display: grid;
+      place-items: center;
+      padding: 22px;
+      background:
+        linear-gradient(90deg, rgba(0, 0, 0, 0.04) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(0, 0, 0, 0.04) 1px, transparent 1px);
+      background-size: 20px 20px;
+      border-radius: 12px;
+    }
+
+    .label-ruler {
+      text-align: center;
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.4;
+    }
+
+    .label-ruler strong {
+      display: block;
+      color: var(--ink);
+      font-size: 15px;
+      margin-bottom: 2px;
+    }
+
+    .label {
+      width: 280px;
+      height: 400px;
+      background: var(--paper);
+      border: 1.5px solid #1e1e1e;
+      border-radius: 4px;
+      padding: 12px 12px 10px;
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      text-align: center;
+      box-shadow: 0 10px 22px rgba(0, 0, 0, 0.16);
+      overflow: hidden;
+    }
+
+    .brand {
+      font-size: 9px;
+      line-height: 1.1;
+      font-weight: 900;
+      color: #111;
+    }
+
+    .recipe-name {
+      margin-top: 3px;
+      padding-bottom: 3px;
+      font-size: 22px;
+      line-height: 1.06;
+      font-weight: 900;
+      color: #111;
+      border-bottom: 1px solid #222;
+    }
+
+    .label-meta {
+      margin-top: 3px;
+      padding: 1px 2px 0;
+      font-size: 9.7px;
+      line-height: 1.15;
+      text-align: center;
+      color: #282828;
+      white-space: nowrap;
+    }
+
+    .label-meta strong {
+      font-weight: 850;
+    }
+
+    .label-block {
+      margin-top: 9px;
+      min-height: 0;
+    }
+
+    .block-title {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      font-weight: 900;
+      font-size: 12px;
+      line-height: 1.1;
+      margin-bottom: 8px;
+    }
+
+    .block-title::before,
+    .block-title::after {
+      content: "";
+      width: 22px;
+      border-top: 1px solid #222;
+    }
+
+    .ingredient-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      column-gap: 7px;
+      row-gap: 3px;
+      text-align: left;
+      font-size: 8.9px;
+      line-height: 1.18;
+      font-weight: 720;
+    }
+
+    .ingredient-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 4px;
+      min-width: 0;
+      border-bottom: 1px dotted #ddd6c4;
+    }
+
+    .ingredient-line span:first-child {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .ingredient-line span:last-child {
+      flex: 0 0 auto;
+    }
+
+    .nutrition-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 3px 7px;
+      font-size: 8.9px;
+      line-height: 1.18;
+      text-align: left;
+      color: #333;
+    }
+
+    .nutrition-grid div {
+      display: flex;
+      justify-content: space-between;
+      gap: 4px;
+      border-bottom: 1px dotted #ddd6c4;
+    }
+
+    .storage-block {
+      margin-top: 8px;
+    }
+
+    .storage {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      font-size: 9.1px;
+      line-height: 1.18;
+      text-align: left;
+      font-weight: 800;
+    }
+
+    .storage strong {
+      display: block;
+      color: var(--green-dark);
+      font-size: 9px;
+      margin-bottom: 1px;
+    }
+
+    .label--compact .recipe-name {
+      font-size: 21px;
+    }
+
+    .label--compact .label-meta {
+      padding: 1px 0 0;
+      font-size: 8.9px;
+      gap: 2px;
+    }
+
+    .label--compact .ingredient-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      column-gap: 7px;
+      row-gap: 2px;
+      font-size: 8.3px;
+      line-height: 1.12;
+    }
+
+    .label--compact .nutrition-grid {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      font-size: 8.2px;
+      line-height: 1.12;
+    }
+
+    .label--compact .storage {
+      font-size: 7.9px;
+      line-height: 1.1;
+      gap: 3px;
+    }
+
+    .label--qr .recipe-name {
+      font-size: 22px;
+    }
+
+    .hero-ingredients {
+      display: grid;
+      gap: 4px;
+      margin-top: 2px;
+      font-size: 11px;
+      line-height: 1.2;
+      text-align: left;
+      font-weight: 800;
+    }
+
+    .hero-ingredients div {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      border-bottom: 1px dotted #d9d0b9;
+    }
+
+    .qr-row {
+      margin-top: 8px;
+      padding: 7px;
+      display: grid;
+      grid-template-columns: 58px 1fr;
+      gap: 8px;
+      align-items: center;
+      border: 1px solid #222;
+      text-align: left;
+    }
+
+    .qr-box {
+      width: 58px;
+      height: 58px;
+      background:
+        linear-gradient(90deg, #111 8px, transparent 8px) 0 0 / 14px 14px,
+        linear-gradient(#111 8px, transparent 8px) 0 0 / 14px 14px,
+        #fff;
+      border: 4px solid #111;
+      box-shadow: inset 16px 16px 0 #fff, inset 22px 22px 0 #111;
+    }
+
+    .qr-copy {
+      font-size: 9px;
+      line-height: 1.35;
+      font-weight: 800;
+    }
+
+    .qr-copy strong {
+      display: block;
+      color: var(--green-dark);
+      font-size: 10px;
+      margin-bottom: 2px;
+    }
+
+    .rules {
+      margin-top: 22px;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 12px;
+    }
+
+    .rule-card {
+      border: 1px solid #e4e4e4;
+      border-radius: 10px;
+      padding: 14px;
+      background: #fbfbfb;
+    }
+
+    .rule-card strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 15px;
+    }
+
+    .rule-card span {
+      color: var(--muted);
+      line-height: 1.5;
+      font-size: 14px;
+    }
+
+    @media (max-width: 980px) {
+      .stage,
+      .label-area,
+      .rules {
+        grid-template-columns: 1fr;
+      }
+
+      .phone {
+        width: min(430px, 100%);
+        margin: 0 auto;
+      }
+
+      .workspace {
+        padding: 20px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="stage">
+    <section class="phone" aria-label="小程序页面预览">
+      <header class="nav">
+        <div class="back">返回</div>
+        <div class="nav-title">打印产品标签</div>
+        <div class="menu" aria-hidden="true"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+      </header>
+
+      <div class="content">
+        <section class="section">
+          <h2 class="section-title">打印设置</h2>
+          <div class="printer-row">
+            <div class="printer-status">
+              <strong>打印机未连接</strong>
+              <span>标签纸 70mm × 100mm</span>
+            </div>
+            <button class="secondary-btn">搜索</button>
+          </div>
+        </section>
+
+        <section class="section">
+          <h2 class="section-title">订单列表（1个）</h2>
+          <article class="order-card">
+            <div class="order-top">
+              <div class="order-title">订单 1</div>
+              <button class="secondary-btn">预览</button>
+              <button class="primary-btn">打印</button>
+            </div>
+
+            <div class="info-grid">
+              <div class="info-label">狗狗</div>
+              <div class="info-value">setar</div>
+              <div class="info-label">食谱</div>
+              <div class="info-value">糙米鸡蛋牛肉</div>
+              <div class="info-label">分装明细</div>
+              <div class="info-value">208g × 60袋</div>
+              <div class="info-label">总净重</div>
+              <div class="info-value">12480g</div>
+            </div>
+
+            <div class="form-row">
+              <div class="info-label">制作日期</div>
+              <div class="date-picker">2026-04-22 <span>选择</span></div>
+            </div>
+
+            <div class="form-row">
+              <div class="info-label">打印份数</div>
+              <div class="stepper">
+                <button>-</button>
+                <output>2</output>
+                <button>+</button>
+              </div>
+            </div>
+
+            <div class="preview-panel">
+              <div class="label" aria-label="70mm × 100mm 标签预览">
+                <div class="brand">seven的厨房</div>
+                <div class="recipe-name">糙米鸡蛋牛肉</div>
+                <div class="label-meta">setar｜2026-04-22｜208g×60袋｜净重12480g</div>
+
+                <section class="label-block">
+                  <div class="block-title">原料表</div>
+                  <div class="ingredient-grid">
+                    <div class="ingredient-line"><span>牛霖</span><span>27.7%</span></div>
+                    <div class="ingredient-line"><span>鸡蛋</span><span>16.6%</span></div>
+                    <div class="ingredient-line"><span>糙米</span><span>11.1%</span></div>
+                    <div class="ingredient-line"><span>生蚝</span><span>8.3%</span></div>
+                    <div class="ingredient-line"><span>红薯</span><span>8.3%</span></div>
+                    <div class="ingredient-line"><span>牛心</span><span>5.6%</span></div>
+                    <div class="ingredient-line"><span>牛脾</span><span>5.6%</span></div>
+                    <div class="ingredient-line"><span>胡萝卜</span><span>5.6%</span></div>
+                    <div class="ingredient-line"><span>牛肝</span><span>3.3%</span></div>
+                    <div class="ingredient-line"><span>青花鱼</span><span>2.8%</span></div>
+                    <div class="ingredient-line"><span>羽衣甘蓝</span><span>2.8%</span></div>
+                    <div class="ingredient-line"><span>南瓜籽仁</span><span>1.7%</span></div>
+                    <div class="ingredient-line"><span>小麦胚芽油</span><span>0.6%</span></div>
+                    <div class="ingredient-line"><span>食用盐</span><span>0.2%</span></div>
+                    <div class="ingredient-line"><span>骨粉</span><span>119.40g</span></div>
+                    <div class="ingredient-line"><span>海藻粉</span><span>8.94平勺</span></div>
+                  </div>
+                </section>
+
+                <section class="label-block">
+                  <div class="block-title">营养成分</div>
+                  <div class="nutrition-grid">
+                    <div><span>蛋白质</span><span>39.0%</span></div>
+                    <div><span>脂肪</span><span>17.1%</span></div>
+                    <div><span>灰分</span><span>9.6%</span></div>
+                    <div><span>水分</span><span>65.8%</span></div>
+                    <div><span>纤维</span><span>3.1%</span></div>
+                    <div><span>碳水</span><span>31.3%</span></div>
+                    <div><span>能量</span><span>1487kcal/kg</span></div>
+                    <div><span>钙磷比</span><span>1.35</span></div>
+                  </div>
+                </section>
+
+                <section class="label-block storage-block">
+                  <div class="block-title">保存方式</div>
+                  <div class="storage">
+                    <div><strong>冷冻</strong>-18°C 保存 6个月</div>
+                    <div><strong>冷藏</strong>0-5°C 保存 3天</div>
+                  </div>
+                </section>
+
+              </div>
+              <div class="preview-note">预览按 70mm × 100mm 比例缩放显示</div>
+            </div>
+          </article>
+        </section>
+      </div>
+    </section>
+
+    <section class="workspace" aria-label="设计说明">
+      <div class="workspace-header">
+        <div>
+          <h1>食品袋标签优化稿 V3</h1>
+          <p>标签用于贴在真空袋外，不显示内部采购策略；基础信息单行展示，补剂显示本单实际添加总量，正文优先保证热敏纸可读。</p>
+        </div>
+        <div class="spec-pill">70mm × 100mm</div>
+      </div>
+
+      <div class="label-area">
+        <div class="label-demo">
+          <div class="label-shell">
+            <div>
+              <div class="label">
+                <div class="brand">seven的厨房</div>
+                <div class="recipe-name">糙米鸡蛋牛肉</div>
+                <div class="label-meta">setar｜2026-04-22｜208g×60袋｜净重12480g</div>
+
+                <section class="label-block">
+                  <div class="block-title">原料表</div>
+                  <div class="ingredient-grid">
+                    <div class="ingredient-line"><span>牛霖</span><span>27.7%</span></div>
+                    <div class="ingredient-line"><span>鸡蛋</span><span>16.6%</span></div>
+                    <div class="ingredient-line"><span>糙米</span><span>11.1%</span></div>
+                    <div class="ingredient-line"><span>生蚝</span><span>8.3%</span></div>
+                    <div class="ingredient-line"><span>红薯</span><span>8.3%</span></div>
+                    <div class="ingredient-line"><span>牛心</span><span>5.6%</span></div>
+                    <div class="ingredient-line"><span>牛脾</span><span>5.6%</span></div>
+                    <div class="ingredient-line"><span>胡萝卜</span><span>5.6%</span></div>
+                    <div class="ingredient-line"><span>牛肝</span><span>3.3%</span></div>
+                    <div class="ingredient-line"><span>青花鱼</span><span>2.8%</span></div>
+                    <div class="ingredient-line"><span>羽衣甘蓝</span><span>2.8%</span></div>
+                    <div class="ingredient-line"><span>南瓜籽仁</span><span>1.7%</span></div>
+                    <div class="ingredient-line"><span>小麦胚芽油</span><span>0.6%</span></div>
+                    <div class="ingredient-line"><span>食用盐</span><span>0.2%</span></div>
+                    <div class="ingredient-line"><span>骨粉</span><span>119.40g</span></div>
+                    <div class="ingredient-line"><span>海藻粉</span><span>8.94平勺</span></div>
+                  </div>
+                </section>
+
+                <section class="label-block">
+                  <div class="block-title">营养成分</div>
+                  <div class="nutrition-grid">
+                    <div><span>蛋白质</span><span>39.0%</span></div>
+                    <div><span>脂肪</span><span>17.1%</span></div>
+                    <div><span>灰分</span><span>9.6%</span></div>
+                    <div><span>水分</span><span>65.8%</span></div>
+                    <div><span>纤维</span><span>3.1%</span></div>
+                    <div><span>碳水</span><span>31.3%</span></div>
+                    <div><span>能量</span><span>1487kcal/kg</span></div>
+                    <div><span>钙磷比</span><span>1.35</span></div>
+                  </div>
+                </section>
+
+                <section class="label-block storage-block">
+                  <div class="block-title">保存方式</div>
+                  <div class="storage">
+                    <div><strong>冷冻</strong>-18°C 保存 6个月</div>
+                    <div><strong>冷藏</strong>0-5°C 保存 3天</div>
+                  </div>
+                </section>
+
+              </div>
+              <div class="label-ruler">
+                <strong>方案 A：常规全量</strong>
+                16种左右原料，全量展示，适合当前大部分食谱。
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="label-demo">
+          <div class="label-shell">
+            <div>
+              <div class="label label--compact">
+                <div class="brand">seven的厨房</div>
+                <div class="recipe-name">糙米鸡蛋牛肉</div>
+                <div class="label-meta">
+                  setar｜2026-04-22｜208g×60袋｜净重12480g
+                </div>
+
+                <section class="label-block">
+                  <div class="block-title">原料表</div>
+                  <div class="ingredient-grid">
+                    <div class="ingredient-line"><span>牛霖</span><span>27.7%</span></div>
+                    <div class="ingredient-line"><span>鸡蛋</span><span>16.6%</span></div>
+                    <div class="ingredient-line"><span>糙米</span><span>11.1%</span></div>
+                    <div class="ingredient-line"><span>生蚝</span><span>8.3%</span></div>
+                    <div class="ingredient-line"><span>红薯</span><span>8.3%</span></div>
+                    <div class="ingredient-line"><span>牛心</span><span>5.6%</span></div>
+                    <div class="ingredient-line"><span>牛脾</span><span>5.6%</span></div>
+                    <div class="ingredient-line"><span>胡萝卜</span><span>5.6%</span></div>
+                    <div class="ingredient-line"><span>牛肝</span><span>3.3%</span></div>
+                    <div class="ingredient-line"><span>青花鱼</span><span>2.8%</span></div>
+                    <div class="ingredient-line"><span>羽衣甘蓝</span><span>2.8%</span></div>
+                    <div class="ingredient-line"><span>南瓜籽仁</span><span>1.7%</span></div>
+                    <div class="ingredient-line"><span>小麦胚芽油</span><span>0.6%</span></div>
+                    <div class="ingredient-line"><span>食用盐</span><span>0.2%</span></div>
+                    <div class="ingredient-line"><span>骨粉</span><span>119.40g</span></div>
+                    <div class="ingredient-line"><span>海藻粉</span><span>8.94平勺</span></div>
+                    <div class="ingredient-line"><span>牛肉汤</span><span>添加</span></div>
+                    <div class="ingredient-line"><span>南瓜</span><span>添加</span></div>
+                    <div class="ingredient-line"><span>蓝莓</span><span>添加</span></div>
+                    <div class="ingredient-line"><span>菠菜</span><span>添加</span></div>
+                    <div class="ingredient-line"><span>亚麻籽</span><span>添加</span></div>
+                    <div class="ingredient-line"><span>牛磺酸</span><span>6.24g</span></div>
+                    <div class="ingredient-line"><span>维E</span><span>0.94粒</span></div>
+                    <div class="ingredient-line"><span>锌</span><span>2.10片</span></div>
+                  </div>
+                </section>
+
+                <section class="label-block">
+                  <div class="block-title">营养成分</div>
+                  <div class="nutrition-grid">
+                    <div><span>蛋白质</span><span>39.0%</span></div>
+                    <div><span>脂肪</span><span>17.1%</span></div>
+                    <div><span>灰分</span><span>9.6%</span></div>
+                    <div><span>水分</span><span>65.8%</span></div>
+                    <div><span>纤维</span><span>3.1%</span></div>
+                    <div><span>碳水</span><span>31.3%</span></div>
+                    <div><span>能量</span><span>1487kcal/kg</span></div>
+                    <div><span>钙磷比</span><span>1.35</span></div>
+                  </div>
+                </section>
+
+                <section class="label-block storage-block">
+                  <div class="block-title">保存方式</div>
+                  <div class="storage">
+                    <div><strong>冷冻</strong>-18°C 保存 6个月</div>
+                    <div><strong>冷藏</strong>0-5°C 保存 3天</div>
+                  </div>
+                </section>
+
+              </div>
+              <div class="label-ruler">
+                <strong>方案 B：可读紧凑</strong>
+                原料较多时压缩间距但保持三列，补剂显示本单实际添加总量。
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="label-demo">
+          <div class="label-shell">
+            <div>
+              <div class="label label--qr">
+                <div class="brand">seven的厨房</div>
+                <div class="recipe-name">糙米鸡蛋牛肉</div>
+                <div class="label-meta">setar｜2026-04-22｜208g×60袋｜净重12480g</div>
+
+                <section class="label-block">
+                  <div class="block-title">主要原料</div>
+                  <div class="hero-ingredients">
+                    <div><span>牛霖</span><span>27.7%</span></div>
+                    <div><span>鸡蛋</span><span>16.6%</span></div>
+                    <div><span>糙米</span><span>11.1%</span></div>
+                    <div><span>生蚝</span><span>8.3%</span></div>
+                    <div><span>红薯</span><span>8.3%</span></div>
+                    <div><span>牛心</span><span>5.6%</span></div>
+                    <div><span>牛脾</span><span>5.6%</span></div>
+                    <div><span>胡萝卜</span><span>5.6%</span></div>
+                  </div>
+                </section>
+
+                <section class="label-block">
+                  <div class="block-title">营养成分</div>
+                  <div class="nutrition-grid">
+                    <div><span>蛋白质</span><span>39.0%</span></div>
+                    <div><span>脂肪</span><span>17.1%</span></div>
+                    <div><span>灰分</span><span>9.6%</span></div>
+                    <div><span>水分</span><span>65.8%</span></div>
+                    <div><span>纤维</span><span>3.1%</span></div>
+                    <div><span>碳水</span><span>31.3%</span></div>
+                    <div><span>能量</span><span>1487kcal/kg</span></div>
+                    <div><span>钙磷比</span><span>1.35</span></div>
+                  </div>
+                </section>
+
+                <div class="qr-row">
+                  <div class="qr-box" aria-label="二维码示意"></div>
+                  <div class="qr-copy">
+                    <strong>扫码查看完整信息</strong>
+                    完整原料表、营养分析、保存说明和订单批次信息
+                  </div>
+                </div>
+
+                <section class="label-block storage-block">
+                  <div class="block-title">保存方式</div>
+                  <div class="storage">
+                    <div><strong>冷冻</strong>-18°C 保存 6个月</div>
+                    <div><strong>冷藏</strong>0-5°C 保存 3天</div>
+                  </div>
+                </section>
+
+              </div>
+              <div class="label-ruler">
+                <strong>方案 C：主要原料 + 二维码</strong>
+                视觉最清楚，永不溢出；但不是标签上直接展示完整原料表。
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="rules">
+        <div class="rule-card">
+          <strong>固定版心，不允许撑高</strong>
+          <span>标签渲染区永远是 70×100mm。生成图片前先计算文字高度，超过可用高度就自动进入紧凑模式。</span>
+        </div>
+        <div class="rule-card">
+          <strong>按优先级压缩</strong>
+          <span>食谱名、狗狗、制作日期、净重、储存方式保留；营养成分可压缩到关键指标；原料表从两列切到三列。</span>
+        </div>
+        <div class="rule-card">
+          <strong>最后兜底不溢出</strong>
+          <span>如果保持可读字号后仍然超长，页面应阻止打印并提示管理员调整标签内容，不能继续压小到热敏纸看不清。</span>
+        </div>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

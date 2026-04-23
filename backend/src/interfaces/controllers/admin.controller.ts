@@ -1057,7 +1057,9 @@ export class AdminController {
         amountProduct: order.amountProduct,
         amountShipping: order.amountShipping,
         amountTotal: order.amountTotal,
-        items: order.items.map((item) => this.mapAdminOrderItem(item)),
+        items: await Promise.all(
+          order.items.map((item) => this.mapAdminOrderItem(item)),
+        ),
         pricingBreakdown: order.pricingBreakdownSnapshot
           ? {
               costIngredients: order.pricingBreakdownSnapshot.costIngredients,
@@ -1430,6 +1432,119 @@ export class AdminController {
   }
 
   /**
+   * POST /admin/orders/:orderId/settlement-adjustments - Create order settlement adjustment
+   */
+  @Post('orders/:orderId/settlement-adjustments')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Create order settlement adjustment (admin-only)' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['amount', 'reason'],
+      properties: {
+        amount: {
+          type: 'number',
+          description:
+            'Signed adjustment amount. Positive means extra payment, negative means refund/credit.',
+          example: 18,
+        },
+        reason: { type: 'string', example: '补收定制分装差价' },
+        adjustmentType: {
+          type: 'string',
+          enum: ['REFUND', 'EXTRA_PAYMENT', 'DISCOUNT', 'MANUAL_CORRECTION'],
+        },
+        visibleToCustomer: { type: 'boolean', default: true },
+        requiresCustomerPayment: { type: 'boolean' },
+      },
+    },
+  })
+  async createOrderSettlementAdjustment(
+    @Param('orderId') orderId: string,
+    @Body()
+    body: {
+      amount: number;
+      reason: string;
+      adjustmentType?: 'REFUND' | 'EXTRA_PAYMENT' | 'DISCOUNT' | 'MANUAL_CORRECTION';
+      visibleToCustomer?: boolean;
+      requiresCustomerPayment?: boolean;
+    },
+  ): Promise<ApiResponseDto<any> | ApiResponseDto<null>> {
+    try {
+      const adjustment =
+        await this.orderService.createOrderSettlementAdjustment({
+          orderId,
+          amount: Number(body.amount),
+          reason: body.reason,
+          adjustmentType: body.adjustmentType,
+          visibleToCustomer: body.visibleToCustomer,
+          requiresCustomerPayment: body.requiresCustomerPayment,
+          createdBy: 'admin',
+          createdById: null,
+        });
+      return ApiResponseDto.success(adjustment);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * PATCH /admin/orders/:orderId/settlement-adjustments/:adjustmentId/status
+   */
+  @Patch('orders/:orderId/settlement-adjustments/:adjustmentId/status')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Update order settlement adjustment status (admin-only)',
+  })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  @ApiParam({ name: 'adjustmentId', description: 'Adjustment ID' })
+  @ApiBody({
+    schema: {
+      type: 'object',
+      required: ['status'],
+      properties: {
+        status: {
+          type: 'string',
+          enum: ['PENDING', 'SETTLED', 'CANCELLED'],
+          example: 'SETTLED',
+        },
+      },
+    },
+  })
+  async updateOrderSettlementAdjustmentStatus(
+    @Param('orderId') orderId: string,
+    @Param('adjustmentId') adjustmentId: string,
+    @Body() body: { status: 'PENDING' | 'SETTLED' | 'CANCELLED' },
+  ): Promise<ApiResponseDto<any> | ApiResponseDto<null>> {
+    try {
+      if (!['PENDING', 'SETTLED', 'CANCELLED'].includes(body.status)) {
+        return ApiResponseDto.error(400, 'Invalid adjustment status');
+      }
+      const adjustment =
+        await this.orderService.updateOrderSettlementAdjustmentStatus(
+          orderId,
+          adjustmentId,
+          body.status,
+        );
+      return ApiResponseDto.success(adjustment);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
    * GET /admin/orders/:orderId - Get order details
    */
   @Get('orders/:orderId')
@@ -1450,7 +1565,7 @@ export class AdminController {
       if (!order) {
         return ApiResponseDto.error(404, 'Order not found');
       }
-      return ApiResponseDto.success(this.mapOrderToAdminDto(order));
+      return ApiResponseDto.success(await this.mapOrderToAdminDto(order));
     } catch (error: any) {
       throw error;
     }
@@ -1480,7 +1595,7 @@ export class AdminController {
         orderId,
         body.adminRemark ?? null,
       );
-      return ApiResponseDto.success(this.mapOrderToAdminDto(order));
+      return ApiResponseDto.success(await this.mapOrderToAdminDto(order));
     } catch (error) {
       if (error instanceof NotFoundException) {
         return ApiResponseDto.error(404, error.message);
@@ -1585,7 +1700,9 @@ export class AdminController {
         amountProduct: order.amountProduct,
         amountShipping: order.amountShipping,
         amountTotal: order.amountTotal,
-        items: order.items.map((item) => this.mapAdminOrderItem(item)),
+        items: await Promise.all(
+          order.items.map((item) => this.mapAdminOrderItem(item)),
+        ),
         trackingNumber: order.trackingNumber ?? null,
         carrierCode: order.carrierCode ?? null,
         shippedAt: order.shippedAt ? order.shippedAt.toISOString() : null,
@@ -1646,7 +1763,9 @@ export class AdminController {
         amountProduct: order.amountProduct,
         amountShipping: order.amountShipping,
         amountTotal: order.amountTotal,
-        items: order.items.map((item) => this.mapAdminOrderItem(item)),
+        items: await Promise.all(
+          order.items.map((item) => this.mapAdminOrderItem(item)),
+        ),
         trackingNumber: order.trackingNumber ?? null,
         carrierCode: order.carrierCode ?? null,
         shippedAt: order.shippedAt ? order.shippedAt.toISOString() : null,
@@ -1724,7 +1843,9 @@ export class AdminController {
         amountProduct: order.amountProduct,
         amountShipping: order.amountShipping,
         amountTotal: order.amountTotal,
-        items: order.items.map((item) => this.mapAdminOrderItem(item)),
+        items: await Promise.all(
+          order.items.map((item) => this.mapAdminOrderItem(item)),
+        ),
         trackingNumber: order.trackingNumber ?? null,
         carrierCode: order.carrierCode ?? null,
         paymentMethod: order.paymentMethod ?? null,
@@ -1787,7 +1908,9 @@ export class AdminController {
         amountProduct: order.amountProduct,
         amountShipping: order.amountShipping,
         amountTotal: order.amountTotal,
-        items: order.items.map((item) => this.mapAdminOrderItem(item)),
+        items: await Promise.all(
+          order.items.map((item) => this.mapAdminOrderItem(item)),
+        ),
         trackingNumber: order.trackingNumber ?? null,
         carrierCode: order.carrierCode ?? null,
         shippedAt: order.shippedAt ? order.shippedAt.toISOString() : null,
@@ -1860,7 +1983,7 @@ export class AdminController {
     }
   }
 
-  private mapOrderToAdminDto(order: any): AdminOrderDto {
+  private async mapOrderToAdminDto(order: any): Promise<AdminOrderDto> {
     const address = order.address
       ? {
           id: order.address.id,
@@ -1887,7 +2010,9 @@ export class AdminController {
       amountProduct: order.amountProduct,
       amountShipping: order.amountShipping,
       amountTotal: order.amountTotal,
-      items: order.items.map((item: any) => this.mapAdminOrderItem(item)),
+      items: await Promise.all(
+        order.items.map((item: any) => this.mapAdminOrderItem(item)),
+      ),
       pricingBreakdown: order.pricingBreakdownSnapshot
         ? {
             costIngredients: order.pricingBreakdownSnapshot.costIngredients,
@@ -1916,10 +2041,14 @@ export class AdminController {
     };
   }
 
-  private mapAdminOrderItem(item: any): OrderItemDto {
+  private async mapAdminOrderItem(item: any): Promise<OrderItemDto> {
+    const dogId = item.dogId ?? null;
+    const dogInfo = await this.resolveAdminOrderItemDogInfo(dogId);
+
     return {
       id: item.id,
       orderId: item.orderId,
+      dogId,
       recipeSnapshot: item.recipeSnapshot,
       quantityG: item.quantityG,
       packageCount: item.packageCount,
@@ -1930,7 +2059,54 @@ export class AdminController {
       cookingMethod: item.cookingMethod ?? null,
       customRequirements: item.customRequirements,
       dailyIntakeG: item.dailyIntakeG,
+      dog: dogInfo,
     };
+  }
+
+  private async resolveAdminOrderItemDogInfo(
+    dogId?: string | null,
+  ): Promise<OrderItemDto['dog'] | undefined> {
+    if (!dogId) {
+      return undefined;
+    }
+
+    const dogModel = (this.prisma as any)?.dog;
+    if (!dogModel?.findUnique) {
+      return undefined;
+    }
+
+    try {
+      const dog = await dogModel.findUnique({
+        where: { id: dogId },
+      });
+
+      if (!dog) {
+        return undefined;
+      }
+
+      let breedName = dog.customBreedName ?? undefined;
+      if (!breedName && dog.breedId && this.dogBreedRepository?.findById) {
+        try {
+          const breed = await this.dogBreedRepository.findById(dog.breedId);
+          breedName = breed?.name ?? undefined;
+        } catch {
+          breedName = undefined;
+        }
+      }
+
+      return {
+        id: dog.id,
+        name: dog.name,
+        breedName,
+        weightKg:
+          typeof dog.currentWeightKg === 'number'
+            ? dog.currentWeightKg
+            : undefined,
+        gender: dog.gender,
+      };
+    } catch {
+      return undefined;
+    }
   }
 
   // ==========================================

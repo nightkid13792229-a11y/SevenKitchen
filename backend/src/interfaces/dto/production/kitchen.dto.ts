@@ -9,9 +9,10 @@ import {
   IsEnum,
   IsArray,
   IsNumber,
+  IsBoolean,
   Min,
 } from 'class-validator';
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import { PackagingUnitStatus } from '../../../domain/production/enums';
 import type { OrderPackagePlanItemDto } from '../orders/order-response.dto';
 
@@ -74,6 +75,12 @@ export class PackagingUnitDetailDto {
   @IsArray()
   orderItems!: OrderPackagingInfoDto[];
 
+  @IsOptional()
+  ingredientSourcePlan?: string | null;
+
+  @IsOptional()
+  ingredientSourcePlanLabel?: string;
+
   // 锅号信息
   @IsNumber()
   currentPotNumber!: number; // 当前是第几锅
@@ -82,8 +89,27 @@ export class PackagingUnitDetailDto {
   totalPots!: number; // 总共几锅
 
   // 时间字段（已转换为本地时间）
+  productionDate!: string; // YYYY-MM-DD
   createdAt!: string; // 本地时间格式
   completedAt?: string; // 本地时间格式
+
+  @IsOptional()
+  resultStatus?: 'NORMAL' | 'SURPLUS' | 'SHORTAGE';
+
+  @IsOptional()
+  @IsNumber()
+  actualOutputG?: number;
+
+  @IsOptional()
+  @IsNumber()
+  surplusG?: number;
+
+  @IsOptional()
+  @IsNumber()
+  shortageG?: number;
+
+  @IsOptional()
+  resultPhotoUrls?: string[];
 
   @IsOptional()
   photosRaw?: string[]; // 备料照片URL列表
@@ -118,6 +144,11 @@ export class GetPackagingUnitsDto {
   @IsOptional()
   @IsString()
   targetDate?: string; // YYYY-MM-DD format
+
+  @IsOptional()
+  @Transform(({ value }) => value === true || value === 'true')
+  @IsBoolean()
+  includeUnfinishedCarryover?: boolean = false;
 }
 
 /**
@@ -165,6 +196,9 @@ export class CompleteProductionDto {
 export class TodayStatisticsDto {
   @IsNumber()
   todayOrders!: number; // 今日订单数
+
+  @IsNumber()
+  pendingScheduleOrders!: number; // 今日待排单订单数
 
   @IsNumber()
   inProgress!: number; // 制作中数量

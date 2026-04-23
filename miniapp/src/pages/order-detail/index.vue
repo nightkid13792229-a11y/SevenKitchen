@@ -95,6 +95,27 @@
               <text class="metric-value">{{ Math.round(orderFinancialSummary.latestSettlement.shortageG) }}g</text>
             </view>
           </view>
+          <view
+            v-if="visibleSettlementAdjustments.length > 0"
+            class="settlement-adjustments"
+          >
+            <view
+              v-for="adjustment in visibleSettlementAdjustments"
+              :key="adjustment.id"
+              class="settlement-adjustment-row"
+            >
+              <view class="adjustment-main">
+                <text class="adjustment-reason">{{ adjustment.reason }}</text>
+                <text class="adjustment-status">{{ getAdjustmentStatusText(adjustment.status) }}</text>
+              </view>
+              <text
+                class="adjustment-amount"
+                :class="adjustment.amount > 0 ? 'positive' : 'negative'"
+              >
+                {{ formatSettlementAdjustmentAmount(adjustment.amount, adjustment.status) }}
+              </text>
+            </view>
+          </view>
         </view>
       </view>
 
@@ -222,7 +243,7 @@
             <view class="item-header">
               <text class="recipe-name">{{ item.recipeSnapshot?.name }}</text>
               <text class="recipe-version">v{{ item.recipeSnapshot?.version }}</text>
-              <text class="nutrition-standard">{{ item.recipeSnapshot?.nutrition_standard }}</text>
+              <text class="nutrition-standard">{{ getNutritionStandardLabel(item.recipeSnapshot?.nutrition_standard || '') }}</text>
             </view>
 
             <!-- 第2层：订购信息 -->
@@ -237,21 +258,21 @@
               </view>
               <template v-else>
                 <view class="package-row">
-                  <text class="package-label">总餐数:</text>
-                  <text class="package-value">{{ item.packageCount }}餐</text>
+                  <text class="package-label">总袋数:</text>
+                  <text class="package-value">{{ item.packageCount }}袋</text>
                 </view>
                 <view class="package-row">
-                  <text class="package-label">每餐重量:</text>
-                  <text class="package-value">{{ item.packageSpecG }}g/餐</text>
+                  <text class="package-label">每袋重量:</text>
+                  <text class="package-value">{{ item.packageSpecG }}g/袋</text>
                 </view>
               </template>
               <view class="package-row" v-if="item.ingredientSourcePlan">
                 <text class="package-label">原料方案:</text>
-                <text class="package-value">{{ item.ingredientSourcePlan }}</text>
+                <text class="package-value">{{ formatIngredientSourcePlan(item.ingredientSourcePlan) }}</text>
               </view>
               <view class="package-row" v-if="order.amountTotal && getTotalPackageCount()">
                 <text class="package-label">单价:</text>
-                <text class="package-value price">¥{{ calculatePricePerMeal() }}/餐</text>
+                <text class="package-value price">¥{{ calculatePricePerPackage() }}/袋</text>
               </view>
             </view>
 
@@ -448,12 +469,18 @@ import { onShow, onShareAppMessage } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 import {
   getAdminOrderDetail,
+  getAdminOrderFinancialSummary,
   getOrderFinancialSummary,
   updateAdminOrderRemark,
   type CustomerOrderFinancialSummary
 } from '../../api/orders'
 import OrderProgressBar from '../../components/OrderProgressBar.vue'
 import { formatDateTime } from '../../utils/date'
+import { getNutritionStandardLabel } from '../../utils/label-mapping'
+import {
+  getSourcePlanLabel,
+  type IngredientSourcePlanCode
+} from '../../utils/order-package-plan'
 
 interface RecipeSnapshotItem {
   ingredient_id: string
@@ -573,23 +600,44 @@ const shouldShowFinancialSummary = computed(() => {
   return orderFinancialSummary.value?.settlementStatus === 'SETTLED'
 })
 
+const visibleSettlementAdjustments = computed(() => {
+  return orderFinancialSummary.value?.adjustments || []
+})
+
+const displayAdjustmentAmount = computed(() => {
+  const adjustmentSummary = orderFinancialSummary.value?.adjustmentSummary
+  if (adjustmentSummary) {
+    return adjustmentSummary.pendingExtraPaymentAmount - adjustmentSummary.pendingRefundAmount
+  }
+  return orderFinancialSummary.value?.shortageAdjustmentAmount || 0
+})
+
 const settlementAdjustmentClass = computed(() => {
-  const amount = orderFinancialSummary.value?.shortageAdjustmentAmount || 0
+  const amount = displayAdjustmentAmount.value
   if (amount < 0) return 'refund'
   if (amount > 0) return 'extra-payment'
   return 'balanced'
 })
 
 const settlementDescription = computed(() => {
-  const amount = orderFinancialSummary.value?.shortageAdjustmentAmount || 0
-  if (amount < 0) {
+  const adjustmentSummary = orderFinancialSummary.value?.adjustmentSummary
+  if (adjustmentSummary?.pendingRefundAmount) {
     return '本次生产存在成品缺口，客服会联系您确认退差价或抵扣方式。'
   }
-  if (amount > 0) {
+  if (adjustmentSummary?.pendingExtraPaymentAmount) {
     return '本次生产结算后需要补收差价，客服会联系您确认补款方式。'
   }
   return '本次生产已完成结算，无需补收或退差价。'
 })
+
+function shouldFetchOrderFinancialSummary(status?: string | null): boolean {
+  return ['IN_PRODUCTION', 'FREEZING', 'SHIPPED', 'COMPLETED', 'AFTERSALE'].includes(status)
+}
+
+function formatIngredientSourcePlan(plan?: string | null): string {
+  if (!plan) return ''
+  return getSourcePlanLabel(plan as IngredientSourcePlanCode) || plan
+}
 
 // 原料清单展开状态
 const expandedIngredients = ref<Record<string, boolean>>({})
@@ -931,9 +979,15 @@ async function loadOrderDetail() {
 
 async function fetchOrderFinancialSummary() {
   if (!orderId.value) return
+  if (!shouldFetchOrderFinancialSummary(order.value?.status)) {
+    orderFinancialSummary.value = null
+    return
+  }
 
   try {
-    const res = await getOrderFinancialSummary(orderId.value)
+    const res = isStaffOrAdmin.value
+      ? await getAdminOrderFinancialSummary(orderId.value)
+      : await getOrderFinancialSummary(orderId.value)
     orderFinancialSummary.value = res.code === 0 && res.data ? res.data : null
   } catch (error) {
     console.warn('[Order Detail] Failed to load financial summary:', error)
@@ -1196,11 +1250,39 @@ function formatAmount(amount?: number): string {
 }
 
 function formatAdjustmentText(): string {
-  const amount = orderFinancialSummary.value?.shortageAdjustmentAmount || 0
+  const amount = displayAdjustmentAmount.value
   const absAmount = Math.abs(amount).toFixed(2)
   if (amount < 0) return `建议退差价 ¥${absAmount}`
   if (amount > 0) return `建议补收 ¥${absAmount}`
+  if (visibleSettlementAdjustments.value.length > 0) return '差价已处理'
   return '无需调整'
+}
+
+function formatSettlementAdjustmentAmount(amount: number, status: string): string {
+  const absAmount = Math.abs(Number(amount || 0)).toFixed(2)
+  const prefix = getSettlementAdjustmentAmountPrefix(amount, status)
+  if (prefix) return `${prefix} ¥${absAmount}`
+  return '¥0.00'
+}
+
+function getSettlementAdjustmentAmountPrefix(amount: number, status: string): string {
+  if (amount === 0) return ''
+  if (status === 'SETTLED') {
+    return amount > 0 ? '已补' : '已退'
+  }
+  if (status === 'CANCELLED') {
+    return '已取消'
+  }
+  return amount > 0 ? '待补' : '待退'
+}
+
+function getAdjustmentStatusText(status: string): string {
+  const statusMap: Record<string, string> = {
+    PENDING: '待处理',
+    SETTLED: '已处理',
+    CANCELLED: '已取消'
+  }
+  return statusMap[status] || status
 }
 
 function calculateUnitPrice(item: OrderItem): number {
@@ -1550,17 +1632,17 @@ function canApplyAftersale(status: string): boolean {
   return ['FREEZING', 'SHIPPED', 'COMPLETED'].includes(status)
 }
 
-// 计算总餐数
+// 计算总袋数
 function getTotalPackageCount(): number {
   if (!order.value?.items) return 0
   return order.value.items.reduce((sum, item) => sum + (item.packageCount || 0), 0)
 }
 
-// 计算每餐单价（包含运费）
-function calculatePricePerMeal(): string {
+// 计算每袋单价（包含运费）
+function calculatePricePerPackage(): string {
   if (!order.value?.amountTotal || !getTotalPackageCount()) return '0.00'
-  const pricePerMeal = order.value.amountTotal / getTotalPackageCount()
-  return pricePerMeal.toFixed(2)
+  const pricePerPackage = order.value.amountTotal / getTotalPackageCount()
+  return pricePerPackage.toFixed(2)
 }
 
 // 获取售后类型文本
@@ -1968,6 +2050,58 @@ function contactSevenDad() {
   font-size: 25rpx;
   font-weight: 600;
   color: #333;
+}
+
+.settlement-adjustments {
+  margin-top: 18rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.settlement-adjustment-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16rpx;
+  padding: 14rpx 12rpx;
+  border-radius: 8rpx;
+  background-color: rgba(255, 255, 255, 0.72);
+}
+
+.adjustment-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.adjustment-reason {
+  font-size: 24rpx;
+  line-height: 1.45;
+  color: #333;
+  word-break: break-word;
+}
+
+.adjustment-status {
+  font-size: 22rpx;
+  color: #888;
+}
+
+.adjustment-amount {
+  flex-shrink: 0;
+  font-size: 25rpx;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.adjustment-amount.positive {
+  color: #ff4d4f;
+}
+
+.adjustment-amount.negative {
+  color: #fa8c16;
 }
 
 .btn-copy {

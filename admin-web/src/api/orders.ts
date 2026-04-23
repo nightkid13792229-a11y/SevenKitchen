@@ -37,6 +37,33 @@ export const orderApi = {
   },
 
   /**
+   * 创建订单结算调整
+   */
+  createSettlementAdjustment: (
+    id: string,
+    data: {
+      amount: number
+      reason: string
+      adjustmentType?: 'REFUND' | 'EXTRA_PAYMENT' | 'DISCOUNT' | 'MANUAL_CORRECTION'
+      visibleToCustomer?: boolean
+      requiresCustomerPayment?: boolean
+    }
+  ) => {
+    return api.post(`/admin/orders/${id}/settlement-adjustments`, data)
+  },
+
+  /**
+   * 更新订单结算调整状态
+   */
+  updateSettlementAdjustmentStatus: (
+    id: string,
+    adjustmentId: string,
+    data: { status: 'PENDING' | 'SETTLED' | 'CANCELLED' }
+  ) => {
+    return api.patch(`/admin/orders/${id}/settlement-adjustments/${adjustmentId}/status`, data)
+  },
+
+  /**
    * 更新管理员备注
    */
   updateRemark: (id: string, data: { adminRemark?: string | null }): Promise<Order> => {

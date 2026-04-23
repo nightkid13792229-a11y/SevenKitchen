@@ -132,6 +132,30 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
     findByOrderId: jest.fn(),
   };
 
+  const createMockProcurementSku = (overrides: Record<string, unknown> = {}) => ({
+    id: 'sku-market',
+    ingredientId: 'ingredient-1',
+    name: '超市鸡胸肉',
+    brand: '超市品牌',
+    productModel: '1kg/包',
+    purchaseChannel: '山姆会员店',
+    supplierName: null,
+    purchaseUnit: 'kg',
+    purchaseToBaseRatio: 1000,
+    currentPurchasePrice: 80,
+    referencePurchasePrice: null,
+    referencePricePerPurchaseUnit: null,
+    sourceTier: 'MARKET_PREMIUM',
+    notes: null,
+    isDefault: true,
+    isActive: true,
+    sortOrder: 0,
+    safetyStock: 1,
+    reorderPoint: 3,
+    targetStock: 5,
+    ...overrides,
+  });
+
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -194,7 +218,9 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
     dogRepository = module.get(DOG_REPOSITORY);
 
     jest.clearAllMocks();
-    mockProcurementSkuService.batchFindActive.mockResolvedValue({});
+    mockProcurementSkuService.batchFindActive.mockResolvedValue({
+      'ingredient-1': [createMockProcurementSku()],
+    });
   });
 
   const createMockDog = (): Dog => {
@@ -559,7 +585,7 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
             currentPurchasePrice: 80,
             referencePurchasePrice: null,
             referencePricePerPurchaseUnit: null,
-            displayUnit: 'kg',
+            sourceTier: 'MARKET_PREMIUM',
             notes: null,
             isDefault: true,
             isActive: true,
@@ -581,7 +607,7 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
             currentPurchasePrice: 42,
             referencePurchasePrice: null,
             referencePricePerPurchaseUnit: null,
-            displayUnit: 'kg',
+            sourceTier: 'WHOLESALE',
             notes: null,
             isDefault: false,
             isActive: true,
@@ -651,6 +677,52 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       expect(snapshotInput.requestParams.ingredientSourcePlan).toBe(
         'WHOLESALE',
       );
+    });
+
+    it('does not require procurement source SKUs or create an order snapshot for DIY sheet previews', async () => {
+      const dog = createMockDog();
+      const recipe = createMockRecipe();
+      const ingredient = createFullFoodIngredient();
+
+      dogRepository.findById.mockResolvedValue(dog);
+      recipeRepository.findById.mockResolvedValue(recipe);
+      mockIngredientRepository.findByIds.mockResolvedValue([ingredient]);
+      mockProcurementSkuService.batchFindActive.mockResolvedValue({});
+      mockPricingService.calculateOrderPrice.mockReturnValue({
+        costIngredients: 50,
+        costPackaging: 10,
+        costLabor: 20,
+        costOverhead: 5,
+        totalProductCost: 85,
+        productPrice: 141.67,
+        weightPackagingG: 0,
+      });
+      mockShippingService.calculateShippingFeePreview.mockResolvedValue({
+        amountShipping: 0,
+        templateId: null,
+      });
+
+      const result = await service.previewPricing({
+        customerId: 'customer-id-1',
+        dogId: 'dog-id-1',
+        type: OrderType.FRESH_FOOD,
+        pricingPurpose: 'DIY_SHEET',
+        items: [
+          {
+            recipeId: 'recipe-id-1',
+            quantityG: 1000,
+            packageSpecG: 200,
+            packageCount: 5,
+          },
+        ],
+      } as any);
+
+      const pricingInput = mockPricingService.calculateOrderPrice.mock
+        .calls[0][0] as any;
+      expect(mockProcurementSkuService.batchFindActive).not.toHaveBeenCalled();
+      expect(pricingInput.recipe.items[0].ingredient).toBe(ingredient);
+      expect(mockPricingSnapshotRepository.create).not.toHaveBeenCalled();
+      expect(result.snapshotId).toBeUndefined();
     });
 
     it.each([

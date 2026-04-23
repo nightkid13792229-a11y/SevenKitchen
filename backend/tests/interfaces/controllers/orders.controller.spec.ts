@@ -1405,6 +1405,44 @@ describe('OrdersController (e2e)', () => {
             },
           },
         ],
+        settlementAdjustments: [
+          {
+            id: 'visible-refund-1',
+            orderId: order.id,
+            sourceType: 'PRODUCTION_SHORTAGE',
+            sourceId: 'order-settlement-1',
+            adjustmentType: 'REFUND',
+            amount: -12,
+            reason: '生产成品缺口 500g，建议退差价',
+            status: 'PENDING',
+            requiresCustomerPayment: false,
+            visibleToCustomer: true,
+            createdBy: 'system',
+            createdById: null,
+            metadata: null,
+            settledAt: null,
+            createdAt: new Date('2026-04-17T06:00:00.000Z'),
+            updatedAt: new Date('2026-04-17T06:00:00.000Z'),
+          },
+          {
+            id: 'hidden-correction-1',
+            orderId: order.id,
+            sourceType: 'MANUAL',
+            sourceId: 'hidden-correction-1',
+            adjustmentType: 'MANUAL_CORRECTION',
+            amount: 99,
+            reason: '内部成本修正',
+            status: 'PENDING',
+            requiresCustomerPayment: true,
+            visibleToCustomer: false,
+            createdBy: 'admin',
+            createdById: 'admin-1',
+            metadata: null,
+            settledAt: null,
+            createdAt: new Date('2026-04-17T07:00:00.000Z'),
+            updatedAt: new Date('2026-04-17T07:00:00.000Z'),
+          },
+        ],
       });
 
       const response = await request(app.getHttpServer())
@@ -1419,8 +1457,21 @@ describe('OrdersController (e2e)', () => {
           shortageAdjustmentAmount: -12,
           requiresCustomerPayment: false,
           settlementStatus: 'SETTLED',
+          adjustmentSummary: expect.objectContaining({
+            pendingRefundAmount: 12,
+            pendingExtraPaymentAmount: 0,
+            netAdjustmentAmount: -12,
+          }),
         }),
       );
+      expect(response.body.data.adjustments).toEqual([
+        expect.objectContaining({
+          id: 'visible-refund-1',
+          amount: -12,
+          reason: '生产成品缺口 500g，建议退差价',
+          visibleToCustomer: true,
+        }),
+      ]);
       expect(response.body.data).not.toHaveProperty('estimatedCost');
       expect(response.body.data).not.toHaveProperty('actualCost');
       expect(response.body.data).not.toHaveProperty('actualMargin');

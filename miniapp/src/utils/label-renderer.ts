@@ -1,16 +1,16 @@
 /**
  * 标签Canvas渲染器
- * 负责在Canvas上绘制产品标签（75mm × 100mm）
+ * 负责在Canvas上绘制产品标签（70mm × 100mm）
  * 使用统一配置，确保预览和打印完全一致
  */
 
 import JCAPI from './jcing-sdk/JCAPI';
 import { getLifeStageLabel, getHealthTagLabel, getNutritionStandardLabel } from './label-mapping';
 import { LABEL_LAYOUT, LABEL_ELEMENTS, mmToPx } from './label-config';
-import { getResolvedSupplementNutrientUnit } from './supplement-nutrients';
+import { calculateSupplementAmountForProduction } from './supplement-nutrients';
 
-// Canvas尺寸：75mm × 100mm @ 8像素/mm = 600 × 800 像素
-const CANVAS_WIDTH = mmToPx(LABEL_LAYOUT.canvas.width);  // 600px
+// Canvas尺寸：70mm × 100mm @ 8像素/mm = 560 × 800 像素
+const CANVAS_WIDTH = mmToPx(LABEL_LAYOUT.canvas.width);  // 560px
 const CANVAS_HEIGHT = mmToPx(LABEL_LAYOUT.canvas.height); // 800px
 
 export interface LabelData {
@@ -70,6 +70,26 @@ export interface LabelData {
     showShelfLife: boolean;
     showBrand: boolean;
   };
+}
+
+export function buildCompleteNutritionItems(
+  nutritionAnalysis?: LabelData['nutritionAnalysis']
+): string[] {
+  if (!nutritionAnalysis) {
+    return [];
+  }
+
+  const na = nutritionAnalysis;
+  return [
+    na.proteinPercent !== undefined ? `蛋白质 ${na.proteinPercent.toFixed(1)}%` : null,
+    na.fatPercent !== undefined ? `脂肪 ${na.fatPercent.toFixed(1)}%` : null,
+    na.ashPercent !== undefined ? `灰分 ${na.ashPercent.toFixed(1)}%` : null,
+    na.moisturePercent !== undefined ? `水分 ${na.moisturePercent.toFixed(1)}%` : null,
+    na.crudeFiberPercent !== undefined ? `纤维 ${na.crudeFiberPercent.toFixed(1)}%` : null,
+    na.carbohydratePercent !== undefined ? `碳水 ${na.carbohydratePercent.toFixed(1)}%` : null,
+    na.energyDensityKcalPerKg ? `能量 ${na.energyDensityKcalPerKg}kcal/kg` : null,
+    na.calciumPhosphorusRatio ? `钙磷比 ${na.calciumPhosphorusRatio}` : null,
+  ].filter((item): item is string => Boolean(item));
 }
 
 /**
@@ -539,7 +559,7 @@ export function getCookingTime(vacuumBagSpec: string) {
  * @param recipeSnapshot 食谱快照
  * @returns 食材字符串和补剂字符串（用顿号分隔）
  */
-export function formatIngredients(recipeSnapshot: any) {
+export function formatIngredients(recipeSnapshot: any, totalWeightG = 0) {
   const foodIngredients: string[] = [];
   const supplementIngredients: string[] = [];
 
@@ -553,9 +573,8 @@ export function formatIngredients(recipeSnapshot: any) {
       const percentage = Number(item.ratio).toFixed(2);
       foodIngredients.push(`${item.name}${percentage}%`);
     } else if (item.ingredient_type === 'SUPPLEMENT' && item.nutrient_target_value) {
-      const nutrientKey = item.nutrient_target_key;
-      const nutrientUnit = getResolvedSupplementNutrientUnit(item);
-      supplementIngredients.push(`${item.name}（每kg添加${item.nutrient_target_value}${nutrientUnit}${nutrientKey}）`);
+      const supplementAmount = calculateSupplementAmountForProduction(item, totalWeightG);
+      supplementIngredients.push(`${item.name}${formatSupplementAmount(supplementAmount.amount)}${supplementAmount.unit}`);
     }
   });
 
@@ -563,6 +582,13 @@ export function formatIngredients(recipeSnapshot: any) {
     foodIngredients: foodIngredients.join('、'),
     supplementIngredients: supplementIngredients.join('、')
   };
+}
+
+function formatSupplementAmount(amount: number): string {
+  if (!Number.isFinite(amount)) {
+    return '0';
+  }
+  return amount.toFixed(2);
 }
 
 /**

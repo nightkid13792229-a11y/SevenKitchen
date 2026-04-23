@@ -10,6 +10,28 @@ export interface CustomerOrderFinancialSummary {
   settlementStatus: 'PENDING' | 'SETTLED';
   shortageAdjustmentAmount: number;
   requiresCustomerPayment: boolean;
+  adjustmentSummary: {
+    totalIncreaseAmount: number;
+    totalDecreaseAmount: number;
+    pendingExtraPaymentAmount: number;
+    pendingRefundAmount: number;
+    settledExtraPaymentAmount: number;
+    settledRefundAmount: number;
+    netAdjustmentAmount: number;
+    netRevenue: number;
+  };
+  adjustments: Array<{
+    id: string;
+    sourceType: string;
+    adjustmentType: string;
+    amount: number;
+    reason: string;
+    status: 'PENDING' | 'SETTLED' | 'CANCELLED' | string;
+    requiresCustomerPayment: boolean;
+    visibleToCustomer: boolean;
+    settledAt: string | null;
+    createdAt: string | null;
+  }>;
   latestSettlement: {
     plannedOutputG: number;
     actualOutputG: number;
@@ -29,12 +51,26 @@ export function getAdminOrderDetail(orderId: string) {
 }
 
 /**
+ * 获取后台订单生产结算摘要
+ */
+export function getAdminOrderFinancialSummary(orderId: string) {
+  return request<CustomerOrderFinancialSummary>({
+    url: `/admin/orders/${orderId}/financial-summary`,
+    method: 'GET',
+    quiet: true,
+    suppressErrorToast: true,
+  });
+}
+
+/**
  * 获取顾客可见的订单生产结算摘要
  */
 export function getOrderFinancialSummary(orderId: string) {
   return request<CustomerOrderFinancialSummary>({
     url: `/orders/${orderId}/financial-summary`,
     method: 'GET',
+    quiet: true,
+    suppressErrorToast: true,
   });
 }
 

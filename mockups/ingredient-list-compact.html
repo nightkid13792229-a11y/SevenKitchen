@@ -1,0 +1,323 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>原料列表两行式草图</title>
+  <style>
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: #eef1f3;
+      color: #25282b;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .phone {
+      width: 390px;
+      margin: 24px auto;
+      background: #f6f7f8;
+      box-shadow: 0 10px 36px rgba(20, 28, 38, 0.16);
+    }
+
+    .section {
+      background: #fff;
+      padding: 18px 16px 20px;
+      border-bottom: 8px solid #f1f3f4;
+    }
+
+    .title {
+      margin: 0 0 14px;
+      font-size: 19px;
+      font-weight: 800;
+      line-height: 1.25;
+    }
+
+    .plans {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .plan {
+      min-width: 0;
+      padding: 11px 6px;
+      border: 1px solid #e2e6e9;
+      border-radius: 6px;
+      text-align: center;
+      background: #fff;
+    }
+
+    .plan.active {
+      border-color: #2f8f4e;
+      background: #f3fbf5;
+    }
+
+    .plan-name {
+      display: block;
+      font-size: 15px;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    .plan-price {
+      display: block;
+      margin-top: 4px;
+      color: #e6543f;
+      font-size: 14px;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    .summary {
+      margin: 0 0 16px;
+      padding: 11px 12px;
+      border-radius: 6px;
+      background: #f7faf8;
+      font-size: 15px;
+      font-weight: 700;
+      line-height: 1.5;
+    }
+
+    .list-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 8px;
+    }
+
+    .list-title h2 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 800;
+    }
+
+    .legend {
+      display: flex;
+      gap: 6px;
+      color: #76808a;
+      font-size: 11px;
+    }
+
+    .row {
+      padding: 12px 0;
+      border-top: 1px solid #edf0f2;
+    }
+
+    .row-main {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: start;
+    }
+
+    .name-wrap {
+      min-width: 0;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 6px;
+    }
+
+    .tag {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      flex: 0 0 auto;
+      padding: 3px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 800;
+      line-height: 1.2;
+    }
+
+    .tag.food {
+      color: #257b43;
+      background: #e7f6eb;
+    }
+
+    .tag.supplement {
+      color: #526173;
+      background: #edf2f7;
+    }
+
+    .name {
+      min-width: 0;
+      font-size: 16px;
+      font-weight: 800;
+      line-height: 1.38;
+      word-break: break-word;
+    }
+
+    .amount {
+      min-width: 56px;
+      color: #25282b;
+      font-size: 15px;
+      font-weight: 800;
+      line-height: 1.38;
+      text-align: right;
+      white-space: nowrap;
+    }
+
+    .row-meta {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 3px;
+      margin-top: 7px;
+      padding-left: 0;
+      color: #687078;
+      font-size: 13px;
+      line-height: 1.42;
+    }
+
+    .meta-line {
+      min-width: 0;
+      word-break: break-word;
+    }
+
+    .meta-label {
+      color: #8b949e;
+    }
+
+    .meta-dot {
+      margin: 0 4px;
+      color: #c1c7cd;
+    }
+
+    .row.compact .row-meta {
+      display: flex;
+      flex-wrap: wrap;
+      column-gap: 10px;
+      row-gap: 3px;
+    }
+
+    .note {
+      margin: 14px 0 0;
+      padding: 10px 12px;
+      border-radius: 6px;
+      background: #fbfcfd;
+      color: #7a838c;
+      font-size: 12px;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+<body>
+  <main class="phone">
+    <section class="section">
+      <h1 class="title">原料采购来源</h1>
+
+      <div class="plans">
+        <div class="plan active">
+          <span class="plan-name">有机优先</span>
+          <span class="plan-price">¥267.61</span>
+        </div>
+        <div class="plan">
+          <span class="plan-name">超市优先</span>
+          <span class="plan-price">¥213.70</span>
+        </div>
+        <div class="plan">
+          <span class="plan-name">性价比优先</span>
+          <span class="plan-price">¥202.98</span>
+        </div>
+      </div>
+
+      <p class="summary">原料优先选择有机、非转基因、生态散养来源</p>
+
+      <div class="list-title">
+        <h2>原料明细</h2>
+        <div class="legend">
+          <span>第一行看原料和用量</span>
+        </div>
+      </div>
+
+      <article class="row compact">
+        <div class="row-main">
+          <div class="name-wrap">
+            <span class="tag food">食材</span>
+            <span class="name">藏区散养牦牛牛霖</span>
+          </div>
+          <div class="amount">307g</div>
+        </div>
+        <div class="row-meta">
+          <span class="meta-line"><span class="meta-label">渠道</span> 本地生鲜市场</span>
+          <span class="meta-line"><span class="meta-label">品牌</span> -</span>
+          <span class="meta-line"><span class="meta-label">规格</span> 散称精修牛霖</span>
+        </div>
+      </article>
+
+      <article class="row compact">
+        <div class="row-main">
+          <div class="name-wrap">
+            <span class="tag food">食材</span>
+            <span class="name">安心保洁蛋</span>
+          </div>
+          <div class="amount">184g</div>
+        </div>
+        <div class="row-meta">
+          <span class="meta-line"><span class="meta-label">渠道</span> 沃尔玛</span>
+          <span class="meta-line"><span class="meta-label">品牌</span> 沃集鲜（沃尔玛自营）</span>
+          <span class="meta-line"><span class="meta-label">规格</span> 1.59kg（30枚）/盒</span>
+        </div>
+      </article>
+
+      <article class="row compact">
+        <div class="row-main">
+          <div class="name-wrap">
+            <span class="tag food">食材</span>
+            <span class="name">MM有机三色糙米</span>
+          </div>
+          <div class="amount">123g</div>
+        </div>
+        <div class="row-meta">
+          <span class="meta-line"><span class="meta-label">渠道</span> 山姆会员店</span>
+          <span class="meta-line"><span class="meta-label">品牌</span> 山姆自营</span>
+          <span class="meta-line"><span class="meta-label">规格</span> 2.1kg/罐</span>
+        </div>
+      </article>
+
+      <article class="row">
+        <div class="row-main">
+          <div class="name-wrap">
+            <span class="tag supplement">补剂</span>
+            <span class="name">骨粉</span>
+          </div>
+          <div class="amount">24.0g</div>
+        </div>
+        <div class="row-meta">
+          <span class="meta-line">
+            <span class="meta-label">渠道</span> iHerb
+            <span class="meta-dot">·</span>
+            <span class="meta-label">品牌</span> KAL
+          </span>
+          <span class="meta-line"><span class="meta-label">规格</span> 骨粉，16盎司，450g/罐</span>
+        </div>
+      </article>
+
+      <article class="row">
+        <div class="row-main">
+          <div class="name-wrap">
+            <span class="tag supplement">补剂</span>
+            <span class="name">海藻粉</span>
+          </div>
+          <div class="amount">1.8平勺</div>
+        </div>
+        <div class="row-meta">
+          <span class="meta-line">
+            <span class="meta-label">渠道</span> 天猫旗舰店
+            <span class="meta-dot">·</span>
+            <span class="meta-label">品牌</span> NOW FOODS
+          </span>
+          <span class="meta-line"><span class="meta-label">规格</span> 450mcg碘/平勺，90g/瓶</span>
+        </div>
+      </article>
+
+      <p class="note">草图重点：顾客先扫“原料 + 用量”，采购渠道、品牌和规格作为第二层信息保留，但不再挤在五列里。</p>
+    </section>
+  </main>
+</body>
+</html>

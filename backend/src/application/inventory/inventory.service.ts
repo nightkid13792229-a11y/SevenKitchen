@@ -121,6 +121,11 @@ export interface InventoryAvailabilitySnapshot {
   availableQuantityG: number;
 }
 
+export interface ProcurementSkuInventoryBalance {
+  currentStock: number;
+  hasLedger: boolean;
+}
+
 export interface CreateInventoryAllocationDto {
   targetDate: Date;
   purchaseListId?: string | null;
@@ -270,12 +275,49 @@ export class InventoryService {
 
     const ledgerEntries: InventoryLedgerEntry[] = [];
     let skippedCount = 0;
+    const stockManagedStrategies = new Set([
+      'STOCK_REPLENISHMENT',
+      'HYBRID',
+    ]);
+    const stockManagedIngredientIds = new Set(
+      (
+        await this.prisma.ingredient.findMany({
+          where: {
+            id: {
+              in: Array.from(
+                new Set(
+                  purchaseRecords
+                    .map((record) => record.ingredientId)
+                    .filter(Boolean),
+                ),
+              ),
+            },
+          },
+          select: {
+            id: true,
+            procurementStrategy: true,
+          },
+        })
+      )
+        .filter((ingredient) =>
+          stockManagedStrategies.has(ingredient.procurementStrategy),
+        )
+        .map((ingredient) => ingredient.id),
+    );
 
     for (const record of purchaseRecords) {
       const baseQuantity = Number(record.actualBaseQuantity || 0);
       if (!Number.isFinite(baseQuantity) || baseQuantity <= 0) {
         this.logger.warn(
           `Skipping purchase record ${record.id}: actualBaseQuantity is ${record.actualBaseQuantity}`,
+        );
+        skippedCount++;
+        continue;
+      }
+
+      if (!stockManagedIngredientIds.has(record.ingredientId)) {
+        this.logger.log(
+          `Skipping purchase record ${record.id}: ingredient ${record.ingredientId} is not stock-managed`,
         );
         skippedCount++;
         continue;
@@ -318,11 +360,80 @@ export class InventoryService {
     };
   }
 
+  async releasePurchaseRecordInboundsForPurchaseList(
+    purchaseListId: string,
+  ): Promise<{ deletedCount: number }> {
+    const purchaseRecords = await this.prisma.purchaseRecord.findMany({
+      where: { purchaseListId },
+      select: { id: true },
+    });
+
+    const purchaseRecordIds = purchaseRecords.map((record) => record.id);
+    if (purchaseRecordIds.length === 0) {
+      return { deletedCount: 0 };
+    }
+
+    // This is limited to pre-reimbursement correction: reopening a just-completed
+    // purchase list should undo the automatic inbound entries before staff edit it.
+    const result = await this.prisma.inventoryLedgerEntry.deleteMany({
+      where: {
+        sourceType: InventorySourceType.PURCHASE_RECORD,
+        sourceId: { in: purchaseRecordIds },
+      },
+    });
+
+    return { deletedCount: result.count };
+  }
+
   /**
    * Get current inventory balance for an ingredient (SUM(delta_g)).
    */
   async getBalanceByIngredient(ingredientId: string): Promise<number> {
     return this.inventoryRepository.getCurrentBalanceByIngredient(ingredientId);
+  }
+
+  async getProcurementSkuInventoryBalances(
+    procurementSkuIds: string[],
+  ): Promise<Map<string, ProcurementSkuInventoryBalance>> {
+    const uniqueIds = Array.from(new Set(procurementSkuIds.filter(Boolean)));
+    const result = new Map<string, ProcurementSkuInventoryBalance>();
+
+    for (const procurementSkuId of uniqueIds) {
+      result.set(procurementSkuId, {
+        currentStock: 0,
+        hasLedger: false,
+      });
+    }
+
+    if (uniqueIds.length === 0) {
+      return result;
+    }
+
+    const grouped = await this.prisma.inventoryLedgerEntry.groupBy({
+      by: ['procurementSkuId'],
+      where: {
+        procurementSkuId: {
+          in: uniqueIds,
+        },
+      },
+      _sum: {
+        deltaG: true,
+      },
+      _count: {
+        _all: true,
+      },
+    });
+
+    for (const row of grouped) {
+      if (!row.procurementSkuId) continue;
+
+      result.set(row.procurementSkuId, {
+        currentStock: row._sum.deltaG ?? 0,
+        hasLedger: row._count._all > 0,
+      });
+    }
+
+    return result;
   }
 
   /**

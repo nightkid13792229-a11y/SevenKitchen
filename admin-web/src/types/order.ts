@@ -94,12 +94,24 @@ export interface OrderFinancialSummary {
   orderId: string
   amountTotal: number
   revenue: number
+  netRevenue: number
   estimatedCost: number
   estimatedMargin: number
   actualCost: number | null
   actualMargin: number | null
   shortageAdjustmentAmount: number
   requiresCustomerPayment: boolean
+  adjustmentSummary: {
+    totalIncreaseAmount: number
+    totalDecreaseAmount: number
+    pendingExtraPaymentAmount: number
+    pendingRefundAmount: number
+    settledExtraPaymentAmount: number
+    settledRefundAmount: number
+    netAdjustmentAmount: number
+    netRevenue: number
+  }
+  adjustments: OrderSettlementAdjustment[]
   settlementStatus: 'PENDING' | 'SETTLED'
   latestSettlement: {
     id: string
@@ -111,6 +123,25 @@ export interface OrderFinancialSummary {
     settledAt: string | null
     createdAt: string | null
   } | null
+}
+
+export interface OrderSettlementAdjustment {
+  id: string
+  orderId: string
+  sourceType: string
+  sourceId: string | null
+  adjustmentType: string
+  amount: number
+  reason: string
+  status: 'PENDING' | 'SETTLED' | 'CANCELLED' | string
+  requiresCustomerPayment: boolean
+  visibleToCustomer: boolean
+  createdBy: string
+  createdById: string | null
+  metadata: unknown
+  settledAt: string | null
+  createdAt: string | null
+  updatedAt: string | null
 }
 
 /**

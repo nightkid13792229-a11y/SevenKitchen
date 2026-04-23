@@ -54,6 +54,8 @@ describe('IngredientService nutrition profile compatibility', () => {
       null,
       null,
       null,
+      null,
+      null,
       '已有原料',
       BaseUnit.PCS,
       '粒',

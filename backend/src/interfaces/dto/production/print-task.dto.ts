@@ -46,6 +46,26 @@ export class PrintTaskIngredientDto {
   name!: string;
 
   @IsString()
+  @IsOptional()
+  standardIngredientName?: string;
+
+  @IsString()
+  @IsOptional()
+  procurementSkuName?: string;
+
+  @IsString()
+  @IsOptional()
+  procurementSkuBrand?: string;
+
+  @IsString()
+  @IsOptional()
+  procurementSkuPurchaseChannel?: string;
+
+  @IsString()
+  @IsOptional()
+  procurementSkuProductModel?: string;
+
+  @IsString()
   amount!: string;
 
   @IsString()

@@ -1,7 +1,7 @@
 #!/bin/bash
 # Assert PUBLIC Recipe Exists
 # Verifies that at least one PUBLIC recipe exists via HTTP API
-# Used in CI to ensure application seeding is working correctly
+# Used in CI to ensure verification fixtures expose at least one PUBLIC recipe
 
 set -euo pipefail
 
@@ -110,7 +110,14 @@ if [ "$RECIPES_CODE" != "0" ]; then
 fi
 
 # Step 4: Count PUBLIC recipes
-PUBLIC_COUNT=$(echo "$RECIPES_RESPONSE" | jq -r '[.data[] | select(.status == "PUBLIC")] | length' 2>/dev/null || echo "0")
+PUBLIC_COUNT=$(echo "$RECIPES_RESPONSE" | jq -r '
+  def recipe_list:
+    if (.data | type) == "array" then .data
+    elif (.data.data | type) == "array" then .data.data
+    else []
+    end;
+  recipe_list | map(select(.status == "PUBLIC")) | length
+' 2>/dev/null || echo "0")
 
 if [ "$PUBLIC_COUNT" -eq 0 ]; then
   echo ""
@@ -128,10 +135,9 @@ if [ "$PUBLIC_COUNT" -eq 0 ]; then
     tail -50 "$SERVER_LOG_PATH"
     echo ""
   fi
-  fail "No PUBLIC recipe found. The application must seed at least one PUBLIC recipe on startup. Please ensure the application seeding logic creates at least one PUBLIC recipe."
+  fail "No PUBLIC recipe found. Please bootstrap at least one PUBLIC recipe before running verify-orders."
 fi
 
 success "Found ${PUBLIC_COUNT} PUBLIC recipe(s)"
 echo ""
 exit 0
-

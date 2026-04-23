@@ -62,6 +62,21 @@ export function formatSelectedProductDisplayText(product?: any, fallbackName?: s
   return '-'
 }
 
+export function formatFoodSelectedProductDisplayText(
+  recommendedProduct?: any,
+  fallbackIngredient?: string | { name?: string | null } | null
+): string {
+  if (!recommendedProduct) {
+    return '-'
+  }
+
+  const fallbackName = typeof fallbackIngredient === 'string'
+    ? fallbackIngredient
+    : fallbackIngredient?.name
+
+  return formatSelectedProductDisplayText(recommendedProduct, fallbackName)
+}
+
 export function getPurchaseLinkPlatformLabel(purchaseLink: PurchaseLinkLike): string {
   const platform = purchaseLink?.platform?.trim().toUpperCase()
   return platform ? PURCHASE_LINK_PLATFORM_LABELS[platform] || '' : ''

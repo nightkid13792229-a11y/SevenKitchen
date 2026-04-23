@@ -525,6 +525,7 @@ import {
   DIY_SHEET_FOOD_RECOMMENDATION_LABEL,
   DIY_SHEET_SUPPLEMENT_RECOMMENDATION_LABEL,
   DIY_SHEET_SPEC_MODAL_TITLE,
+  formatFoodSelectedProductDisplayText,
   formatRecommendationActionLabel,
   formatSelectedProductDisplayText,
   getPurchaseTipByPlatform,
@@ -666,15 +667,9 @@ const foodItemsDetailed = computed(() => {
       const rps = recommendedProductsMap.value[item.ingredientId] || []
       const selectedRpIndex = selectedRpIndexMap.value[item.ingredientId] ?? 0
       const selectedRp = rps[selectedRpIndex] || rps[0]
-      const selectedProductDisplayText = formatSelectedProductDisplayText(selectedRp || item, item.name)
-      const purchaseLink = selectedRp?.purchaseLink || item.properties?.purchase_link || undefined
-      const hasSpecDetail = !!(
-        selectedRp ||
-        item.brand ||
-        item.productModel ||
-        item.purchaseChannel ||
-        purchaseLink
-      )
+      const selectedProductDisplayText = formatFoodSelectedProductDisplayText(selectedRp, item)
+      const purchaseLink = selectedRp?.purchaseLink || undefined
+      const hasSpecDetail = hasRecommendationDetail(selectedRp, {}, purchaseLink)
 
       return {
         ...base,
@@ -682,9 +677,9 @@ const foodItemsDetailed = computed(() => {
         ingredientId: item.ingredientId,
         ingredientName: item.name,
         name: selectedRp?.name || item.name,
-        brand: selectedRp?.brand || item.brand || '-',
-        productModel: selectedRp?.productModel || item.productModel,
-        purchaseChannel: selectedRp?.purchaseChannel || item.purchaseChannel,
+        brand: selectedRp?.brand || '-',
+        productModel: selectedRp?.productModel,
+        purchaseChannel: selectedRp?.purchaseChannel,
         purchaseLink,
         selectedProductDisplayText,
         choiceLabel: formatRecommendationActionLabel(rps.length),

@@ -22,6 +22,21 @@ import {
 } from '../../../domain/recipe/enums';
 import type { NutritionDetailedData } from '../../../domain/recipe/types';
 
+export class SupplementTargetDto {
+  @IsString()
+  fieldPath!: string;
+
+  @IsString()
+  label!: string;
+
+  @IsNumber()
+  @Min(0)
+  targetValuePerKg!: number;
+
+  @IsString()
+  unit!: string;
+}
+
 /**
  * Recipe Item DTO (for create/update)
  */
@@ -51,6 +66,12 @@ export class RecipeItemDto {
   @IsNumber()
   @Min(0)
   nutrientTargetValue?: number;
+
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => SupplementTargetDto)
+  supplementTargets?: SupplementTargetDto[];
 
   @IsOptional()
   @IsArray()
@@ -90,6 +111,10 @@ export class CreateRecipeDto {
   @IsOptional()
   @IsString()
   designSource?: string;
+
+  @IsOptional()
+  @IsString()
+  nutritionReportUrl?: string;
 
   @IsString()
   nutritionStandard!: string;
@@ -168,6 +193,10 @@ export class UpdateRecipeDto {
   @IsOptional()
   @IsString()
   designSource?: string;
+
+  @IsOptional()
+  @IsString()
+  nutritionReportUrl?: string | null;
 
   @IsOptional()
   @IsString()
@@ -278,6 +307,7 @@ export interface RecipeDetailResponseDto extends RecipeSummaryResponseDto {
   videoUrl?: string;
   description?: string;
   designSource?: string;
+  nutritionReportUrl?: string;
   nutritionStandard: NutritionStandard;
   nutritionDetailedData?: NutritionDetailedData;
   productionSteps?: string;
@@ -310,6 +340,7 @@ export interface RecipeItemResponseDto {
   ratioPercent?: number;
   nutrientTargetKey?: string;
   nutrientTargetValue?: number;
+  supplementTargets?: SupplementTargetDto[];
   supplementAlternativeIngredientIds?: string[];
   supplementAlternatives?: Array<{
     ingredientId: string;

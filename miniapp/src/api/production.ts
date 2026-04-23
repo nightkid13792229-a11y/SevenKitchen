@@ -135,6 +135,8 @@ export function getPackagingUnits(params: {
           ingredient_type?: 'FOOD' | 'SUPPLEMENT' | 'PACKAGING';
           nutrient_target_key?: string;
           nutrient_target_value?: number;
+          supplement_targets?: any[];
+          nutrition_profile_snapshot?: any;
           preparation_methods?: string[]; // 制备方法名称数组
         }>;
         production_loss_rate?: number;

@@ -41,7 +41,7 @@ describe('IngredientService domain refactor', () => {
     ingredientRepository.save.mockImplementation(async (ingredient: any) => ingredient);
   });
 
-  it('creates a standard ingredient without requiring procurement fields', async () => {
+  it('creates a standard ingredient without requiring visible procurement fields', async () => {
     const nutritionProfile = {
       items: [
         {
@@ -77,9 +77,10 @@ describe('IngredientService domain refactor', () => {
 
     expect(result.baseUnitDisplayName).toBe('粒');
     expect(result.nutritionProfile).toEqual(nutritionProfile);
-    expect(result.purchaseUnit).toBeUndefined();
-    expect(result.purchaseToBaseRatio).toBeUndefined();
-    expect(result.currentPricePerPurchaseUnit).toBeUndefined();
+    expect(result.purchaseUnit).toBe('粒');
+    expect(result.purchaseToBaseRatio).toBe(1);
+    expect(result.currentPricePerPurchaseUnit).toBe(0);
+    expect(result.effectivePricePerPurchaseUnit).toBe(0);
     expect(ingredientRepository.save).toHaveBeenCalledWith(
       expect.anything(),
       ['tag-1'],

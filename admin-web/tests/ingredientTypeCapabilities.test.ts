@@ -74,10 +74,10 @@ test('SUPPLEMENT hides weakly-used fields from the main form', () => {
   assert.equal(caps.showSupplementCategoryField, false)
 })
 
-test('packaging defaults to stock replenishment strategy', () => {
+test('food defaults to daily purchase while supplements and packaging default to stock replenishment', () => {
   assert.equal(getDefaultProcurementStrategyForType('PACKAGING'), 'STOCK_REPLENISHMENT')
   assert.equal(getDefaultProcurementStrategyForType('FOOD'), 'DAILY_PURCHASE')
-  assert.equal(getDefaultProcurementStrategyForType('SUPPLEMENT'), 'DAILY_PURCHASE')
+  assert.equal(getDefaultProcurementStrategyForType('SUPPLEMENT'), 'STOCK_REPLENISHMENT')
 })
 
 test('packaging stock policy fields require procurement', () => {

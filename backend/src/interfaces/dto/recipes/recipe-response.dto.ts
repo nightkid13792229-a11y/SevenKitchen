@@ -10,6 +10,13 @@ import {
   LifeStage,
 } from '../../../domain';
 
+export interface SupplementTargetResponseDto {
+  fieldPath: string;
+  label: string;
+  targetValuePerKg: number;
+  unit: string;
+}
+
 export class RecipeSummaryDto {
   @ApiProperty({ example: 'uuid' })
   id!: string;
@@ -65,6 +72,11 @@ export class RecipeDetailDto extends RecipeSummaryDto {
   @ApiPropertyOptional({ example: '七厨房' })
   designSource?: string;
 
+  @ApiPropertyOptional({
+    example: 'https://example.com/recipe-nutrition-reports/report.pdf',
+  })
+  nutritionReportUrl?: string;
+
   @ApiPropertyOptional({ description: 'Detailed nutrition data' })
   nutritionDetailedData?: {
     energyDensityKcalPerKg?: number;
@@ -90,11 +102,13 @@ export class RecipeDetailDto extends RecipeSummaryDto {
     sortOrder: number;
     nutrientTargetKey?: string;
     nutrientTargetValue?: number;
+    supplementTargets?: SupplementTargetResponseDto[];
     ingredientType?: string;
     ingredient?: {
       id: string;
       name: string;
       type?: string;
+      diyEnabled?: boolean;
       brand?: string;
       productModel?: string;
       purchaseChannel?: string;
@@ -113,6 +127,7 @@ export class RecipeDetailDto extends RecipeSummaryDto {
         id: string;
         name: string;
         type?: string;
+        diyEnabled?: boolean;
         brand?: string;
         productModel?: string;
         purchaseChannel?: string;

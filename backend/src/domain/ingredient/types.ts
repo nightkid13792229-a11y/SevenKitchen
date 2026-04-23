@@ -139,6 +139,13 @@ export interface ActiveNutrientValue {
   unit: string; // 单位 (mg, g, μg, IU, %)
 }
 
+export interface SupplementTarget {
+  fieldPath: string;
+  label: string;
+  targetValuePerKg: number;
+  unit: string;
+}
+
 /**
  * 购买链接配置
  */

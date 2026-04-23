@@ -44,6 +44,13 @@ export interface NutritionDetailedData {
   energy_density_kcal_per_kg: number;
 }
 
+export interface SupplementTarget {
+  fieldPath: string;
+  label: string;
+  targetValuePerKg: number;
+  unit: string;
+}
+
 export interface RecipeItem {
   id: string;
   ingredientId: string;
@@ -54,6 +61,7 @@ export interface RecipeItem {
   ratioPercent?: number;
   nutrientTargetKey?: string;
   nutrientTargetValue?: number;
+  supplementTargets?: SupplementTarget[];
   supplementAlternativeIngredientIds?: string[];
   supplementAlternatives?: Array<{
     ingredientId: string;
@@ -80,6 +88,7 @@ export interface RecipeSummary {
   status: RecipeStatus;
   coverImageUrl?: string;
   coverTitle?: string;
+  nutritionReportUrl?: string | null;
   energyDensityKcalPerKg: number;
   applicableLifeStages: LifeStage[];
   targetHealthTags: string[]; // Now using UUIDs instead of enum
@@ -97,6 +106,7 @@ export interface RecipeDetail extends RecipeSummary {
   videoUrl?: string;
   description?: string;
   designSource?: string;
+  nutritionReportUrl?: string | null;
   nutritionStandard: NutritionStandard;
   nutritionDetailedData?: NutritionDetailedData;
   productionSteps?: string;
@@ -113,6 +123,7 @@ export interface RecipeForm {
   videoUrl?: string;
   description?: string;
   designSource?: string;
+  nutritionReportUrl?: string | null;
   nutritionStandard: NutritionStandard;
   energyDensityKcalPerKg: number;
   items?: RecipeItem[];

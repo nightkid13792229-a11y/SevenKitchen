@@ -11,7 +11,7 @@ export function formatSupplementAmountWithDisplayUnit(
   }
 
   if (displayUnit === '粒' || displayUnit === '片' || displayUnit === '颗') {
-    return `${amountInG.toFixed(1)}${displayUnit}`
+    return `${formatFlexibleDecimal(amountInG, 2)}${displayUnit}`
   }
 
   if (displayUnit === 'ml') {
@@ -33,4 +33,10 @@ export function formatSupplementAmountWithDisplayUnit(
   }
 
   return `${amountInG.toFixed(1)}${displayUnit}`
+}
+
+function formatFlexibleDecimal(value: number, maxFractionDigits: number): string {
+  return value
+    .toFixed(maxFractionDigits)
+    .replace(/\.?0+$/, '')
 }

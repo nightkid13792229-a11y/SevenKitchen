@@ -48,6 +48,13 @@ export interface IngredientNutritionTabDefinition<
   fields: Array<IngredientNutritionFieldDefinition<TKey>>
 }
 
+export interface SupplementTargetFieldOption {
+  group: string
+  fieldPath: `${IngredientNutritionTabKey}.${string}`
+  label: string
+  unit: string
+}
+
 export const INGREDIENT_NUTRITION_TAB_KEYS: readonly IngredientNutritionTabKey[] = [
   'macros',
   'minerals',
@@ -202,9 +209,9 @@ export const INGREDIENT_NUTRITION_TAB_DEFINITIONS: readonly IngredientNutritionT
       { key: 'linoleicAcid', label: '亚油酸', englishLabel: 'Linoleic Acid', unit: 'g', unitOptions: ['g', 'mg'] },
       { key: 'alphaLinolenicAcid', label: 'α-亚麻酸', englishLabel: 'Alpha-Linolenic Acid', unit: 'g', unitOptions: ['g', 'mg'] },
       { key: 'arachidonicAcid', label: '花生四烯酸', englishLabel: 'Arachidonic Acid', unit: 'g', unitOptions: ['g', 'mg'] },
-      { key: 'epa', label: 'EPA', englishLabel: 'Eicosapentaenoic Acid', unit: 'g', unitOptions: ['g', 'mg'] },
-      { key: 'dpa', label: 'DPA', englishLabel: 'Docosapentaenoic Acid', unit: 'g', unitOptions: ['g', 'mg'] },
-      { key: 'dha', label: 'DHA', englishLabel: 'Docosahexaenoic Acid', unit: 'g', unitOptions: ['g', 'mg'] }
+      { key: 'epa', label: 'EPA', englishLabel: 'Eicosapentaenoic Acid', unit: 'mg', unitOptions: ['mg', 'g'] },
+      { key: 'dpa', label: 'DPA', englishLabel: 'Docosapentaenoic Acid', unit: 'mg', unitOptions: ['mg', 'g'] },
+      { key: 'dha', label: 'DHA', englishLabel: 'Docosahexaenoic Acid', unit: 'mg', unitOptions: ['mg', 'g'] }
     ]
   },
   {
@@ -230,6 +237,16 @@ export const INGREDIENT_NUTRITION_TAB_DEFINITIONS: readonly IngredientNutritionT
     ]
   }
 ] as const
+
+export const SUPPLEMENT_TARGET_FIELD_OPTIONS: readonly SupplementTargetFieldOption[] =
+  INGREDIENT_NUTRITION_TAB_DEFINITIONS.flatMap((tab) =>
+    tab.fields.map((field) => ({
+      group: tab.label,
+      fieldPath: `${tab.key}.${field.key}` as `${IngredientNutritionTabKey}.${string}`,
+      label: field.label,
+      unit: field.unit
+    }))
+  )
 
 export const INGREDIENT_NUTRITION_TAB_LABELS: Readonly<Record<IngredientNutritionTabKey, string>> =
   Object.fromEntries(

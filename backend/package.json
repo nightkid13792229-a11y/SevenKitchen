@@ -26,6 +26,8 @@
     "backfill:supplement-packaging-single-layer:apply": "ts-node -r tsconfig-paths/register prisma/backfill-supplement-packaging-single-layer.ts --apply",
     "backfill:recipe-supplement-alternatives": "ts-node -r tsconfig-paths/register prisma/backfill-recipe-supplement-alternatives.ts",
     "backfill:recipe-supplement-alternatives:apply": "ts-node -r tsconfig-paths/register prisma/backfill-recipe-supplement-alternatives.ts --apply",
+    "backfill:recipe-supplement-targets-v2": "ts-node -r tsconfig-paths/register prisma/backfill-recipe-supplement-targets-v2.ts",
+    "backfill:recipe-supplement-targets-v2:apply": "ts-node -r tsconfig-paths/register prisma/backfill-recipe-supplement-targets-v2.ts --apply",
     "audit:recipe-stats": "ts-node scripts/audit-recipe-stats.ts",
     "repair:favorite-counts": "ts-node scripts/repair-favorite-counts.ts",
     "smoke:pricing-purchase": "node scripts/smoke_pricing_purchase_flow.js",

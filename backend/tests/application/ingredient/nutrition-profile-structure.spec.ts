@@ -1,4 +1,5 @@
 import {
+  createEmptyNutritionProfile,
   normalizeNutritionProfileForRead,
   normalizeNutritionProfileForWrite,
   denormalizeNutritionProfileForPersistence,
@@ -90,7 +91,7 @@ describe('nutrition profile structure', () => {
     expect(normalized?.minerals.phosphorus).toBe(120);
   });
 
-  it('keeps structured profile unchanged when already v2', () => {
+  it('fills structured profile defaults when already v2', () => {
     const input = {
       meta: { rawBasisType: 'PER_SERVING', servingWeightG: 0.22 },
       macros: {
@@ -124,7 +125,13 @@ describe('nutrition profile structure', () => {
       customItems: [],
     };
 
-    expect(normalizeNutritionProfile(input as any)).toEqual(input);
+    expect(normalizeNutritionProfile(input as any)).toEqual({
+      ...createEmptyNutritionProfile(),
+      meta: input.meta,
+      macros: input.macros,
+      minerals: input.minerals,
+      customItems: [],
+    });
   });
 
   it('fills missing v2 tab defaults for partial structured input', () => {
@@ -199,6 +206,7 @@ describe('nutrition profile structure', () => {
     const writeProfile = normalizeNutritionProfileForWrite(input as any);
 
     expect(readProfile).toEqual({
+      ...createEmptyNutritionProfile(),
       meta: { rawBasisType: 'PER_100_ML' },
       macros: {
         energyKcal: null,
@@ -225,9 +233,6 @@ describe('nutrition profile structure', () => {
         selenium: null,
         iodine: null,
       },
-      vitamins: {},
-      fattyAcids: {},
-      aminoAcids: {},
       customItems: [],
     });
     expect(writeProfile).toEqual(readProfile);

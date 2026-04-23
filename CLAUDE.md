@@ -23,9 +23,9 @@
 2. **执行成功后，必须明确告知用户微信开发者工具应打开的目录**：
    - `npm run preview` → `miniapp/dist/dev/mp-weixin`
    - `npm run build:mp-weixin` → `miniapp/dist/build/mp-weixin`
-3. **如果用户当前使用统一预览目录** `/Users/zhaochen/Documents/SevenKitchen-miniapp-preview` **进行微信开发者工具联调，那么凡是修改 `miniapp/` 的代码，在完成预览或构建后，都必须把最新产物同步到这个目录**
-4. **同步完成后，默认优先告知用户微信开发者工具可直接打开** `/Users/zhaochen/Documents/SevenKitchen-miniapp-preview` **进行验证**，除非用户明确要求改看 `miniapp/dist/dev/mp-weixin` 或 `miniapp/dist/build/mp-weixin`
-5. **如果预览、构建或预览目录同步失败，必须明确告知失败原因**，不能让用户自己猜测是不是没编译、目录不对、同步没完成或输出没更新
+3. **默认不要把小程序构建产物同步到统一预览目录** `/Users/zhaochen/Documents/SevenKitchen-miniapp-preview`；只有用户明确要求“同步到预览目录”时才执行同步
+4. **默认优先告知用户微信开发者工具应打开实际构建目录**：预览构建打开 `miniapp/dist/dev/mp-weixin`，发布构建打开 `miniapp/dist/build/mp-weixin`
+5. **如果预览、构建或用户明确要求的预览目录同步失败，必须明确告知失败原因**，不能让用户自己猜测是不是没编译、目录不对、同步没完成或输出没更新
 6. **凡是小程序本地开发默认 API 地址，都以** `http://127.0.0.1:3000/api/v1` **为准**，除非用户明确要求切换
 
 ## 本地后端协作硬规则

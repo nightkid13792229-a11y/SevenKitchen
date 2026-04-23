@@ -305,9 +305,9 @@
                     <text class="rp-card-field-label">规格</text>
                     <text class="rp-card-field-value">{{ rp.productModel }}</text>
                   </view>
-                  <view v-if="rp.purchaseChannel" class="rp-card-field">
+                  <view v-if="getSpecPurchaseChannelDisplay(rp)" class="rp-card-field">
                     <text class="rp-card-field-label">推荐购买渠道</text>
-                    <text class="rp-card-field-value">{{ rp.purchaseChannel }}</text>
+                    <text class="rp-card-field-value">{{ getSpecPurchaseChannelDisplay(rp) }}</text>
                   </view>
                 </view>
                 <view class="rp-card-aside">
@@ -349,9 +349,9 @@
                 <text class="spec-detail-field-label">规格</text>
                 <text class="spec-detail-field-value">{{ currentSpec.productModel }}</text>
               </view>
-              <view v-if="currentSpec.purchaseChannel" class="spec-detail-field">
+              <view v-if="getSpecPurchaseChannelDisplay(currentSpec)" class="spec-detail-field">
                 <text class="spec-detail-field-label">推荐购买渠道</text>
-                <text class="spec-detail-field-value">{{ currentSpec.purchaseChannel }}</text>
+                <text class="spec-detail-field-value">{{ getSpecPurchaseChannelDisplay(currentSpec) }}</text>
               </view>
             </view>
             <view v-if="currentSpec.imageUrl || currentSpec.purchaseLink" class="spec-detail-aside">
@@ -425,14 +425,14 @@
             <text class="spec-label">添加总量：</text>
             <text class="spec-value">{{ currentNutritionInfo.amountStr }}</text>
           </view>
-          <view v-if="currentNutritionInfo.nutrientTargetKey" class="spec-divider"></view>
-          <view v-if="currentNutritionInfo.nutrientTargetKey" class="spec-row">
-            <text class="spec-label">营养素：</text>
-            <text class="spec-value">{{ currentNutritionInfo.nutrientTargetKey }}</text>
+          <view v-if="currentNutritionInfo.targetSummary" class="spec-divider"></view>
+          <view v-if="currentNutritionInfo.targetSummary" class="spec-row">
+            <text class="spec-label">营养目标：</text>
+            <text class="spec-value">{{ currentNutritionInfo.targetSummary }}</text>
           </view>
           <view v-if="currentNutritionInfo.nutrientTotal" class="spec-row highlight-row">
             <text class="spec-label">营养素总量：</text>
-            <text class="spec-value highlight-value">{{ currentNutritionInfo.nutrientTotal }}{{ currentNutritionInfo.nutrientUnit }}</text>
+            <text class="spec-value highlight-value">{{ currentNutritionInfo.nutrientTotal }}</text>
           </view>
         </view>
       </view>
@@ -513,9 +513,12 @@ import ImagePreviewModal from '../../components/ImagePreviewModal.vue'
 import { normalizeImageUrl } from '../../utils/config'
 import { formatSupplementAmountWithDisplayUnit } from '../../utils/diy-sheet-format'
 import {
+  formatSupplementTargets,
+  getSupplementTargetBreakdowns
+} from '../../utils/supplement-nutrients'
+import {
   buildSupplementCandidateOptions,
   calculateSupplementAmountForOption,
-  getSupplementNutrientUnit,
   getSupplementSelectionKey
 } from './supplement-alternatives'
 import {
@@ -523,7 +526,9 @@ import {
   DIY_SHEET_SUPPLEMENT_RECOMMENDATION_LABEL,
   DIY_SHEET_SPEC_MODAL_TITLE,
   formatRecommendationActionLabel,
-  formatSelectedProductDisplayText
+  formatSelectedProductDisplayText,
+  getPurchaseTipByPlatform,
+  getSpecRecommendedPurchaseChannelDisplay
 } from './copy'
 
 // 页面参数
@@ -585,9 +590,6 @@ const showWarning = ref(true)
 
 // 全局配置中的补剂损耗率（默认5%）
 const globalSupplementLossRate = ref(0.05)
-
-// 总食材净重（克），用于推荐产品用量重算
-const totalFoodNetWeightG = computed(() => dailyIntakeG.value * cycleDays.value)
 
 const ingredientDetails = computed(() => {
   return pricePreview.value?.pricingBreakdown?.ingredientDetails || []
@@ -708,49 +710,51 @@ const supplementItemsDetailed = computed(() => {
       if (item.recipeItemId && candidate.id === item.recipeItemId) {
         return true
       }
-      return (
-        candidate.ingredientId === item.ingredientId &&
-        candidate.nutrientTargetKey === item.nutrientTargetKey &&
-        candidate.nutrientTargetValue === item.nutrientTargetValue
-      )
+      return candidate.ingredientId === item.ingredientId
     })
     const supplementOptions = buildSupplementCandidateOptions(item, recipeItem)
     const selectionKey = getSupplementSelectionKey(item)
     const rpIdx = selectedRpIndexMap.value[selectionKey] ?? 0
-    const selectedRp = supplementOptions[rpIdx] || supplementOptions[0]
+    const hasRecommendedOptions = supplementOptions.length > 0
+    const selectedRp = hasRecommendedOptions
+      ? (supplementOptions[rpIdx] || supplementOptions[0])
+      : undefined
     const selectedProductDisplayText = formatSelectedProductDisplayText(selectedRp || item, item.name)
 
     // 使用displayUnit作为显示单位
     const displayUnit = selectedRp?.displayUnit || item.displayUnit || item.unit || 'g'
 
-    // 从推荐产品或properties中提取购买链接
-    const purchaseLink = selectedRp?.purchaseLink || item.properties?.purchase_link || undefined
-    const hasSpecDetail = hasRecommendationDetail(selectedRp, item, purchaseLink)
+    // 只用开启 DIY 推荐的补剂生成用户可见购买链接和详情
+    const purchaseLink = hasRecommendedOptions ? selectedRp?.purchaseLink : undefined
+    const hasSpecDetail = hasRecommendedOptions
+      ? hasRecommendationDetail(selectedRp, {}, purchaseLink)
+      : false
 
     const amount = calculateSupplementAmountForOption(
       item,
       selectedRp,
-      supplementNutrientBaseWeightG.value,
-      globalSupplementLossRate.value
+      supplementNutrientBaseWeightG.value
     )
 
     return {
       selectionKey,
       name: selectedRp?.name || item.name,                          // 推荐营养品
-      brand: selectedRp?.brand || item.brand || '-',                // 推荐品牌
+      brand: hasRecommendedOptions ? (selectedRp?.brand || '-') : '-', // 推荐品牌
       preparationMethod: selectedRp?.timingLabel || item.preparationMethod || '', // 添加时机
       amount: amount,                                               // 用量数值
       unit: item.unit,                                              // 原始单位（用于计算）
       displayUnit: displayUnit,                                     // 显示单位（用于展示）
       amountStr: formatSupplementAmountWithDisplayUnit(amount, item.unit, displayUnit),  // 格式化用量
-      productModel: selectedRp?.productModel || item.productModel,  // 规格
-      purchaseChannel: selectedRp?.purchaseChannel || item.purchaseChannel,  // 购买渠道
-      imageUrl: selectedRp?.imageUrl || item.imageUrl || item.properties?.image_url || undefined,
+      productModel: hasRecommendedOptions ? selectedRp?.productModel : undefined, // 规格
+      purchaseChannel: hasRecommendedOptions ? selectedRp?.purchaseChannel : undefined, // 购买渠道
+      imageUrl: hasRecommendedOptions ? selectedRp?.imageUrl : undefined,
       purchaseLink: purchaseLink,                                   // 购买链接
       ingredientId: item.ingredientId,                              // 原料ID
       nutrientTargetKey: item.nutrientTargetKey,                    // 营养素名称
       nutrientTargetValue: item.nutrientTargetValue,                // 营养目标值
-      activeNutrients: selectedRp?.activeNutrients || item.properties?.active_nutrients || undefined,
+      supplementTargets: item.supplementTargets || item.supplement_targets || recipeItem?.supplementTargets || recipeItem?.supplement_targets || [],
+      nutritionProfile: selectedRp?.nutritionProfile || item.nutritionProfile || item.nutrition_profile_snapshot || item.ingredient?.nutritionProfile,
+      nutrition_profile_snapshot: selectedRp?.nutritionProfile || item.nutrition_profile_snapshot,
       type: item.type,                                              // 类型标识
       properties: item.properties,                                  // 完整的properties
       selectedProductDisplayText,                                   // 已选商品入口文案
@@ -792,13 +796,7 @@ function getFoodPrepAmountHeaderForPrint(): string {
 }
 
 function formatSupplementTargetForPrint(item: any): string {
-  if (!item.nutrientTargetKey || !item.nutrientTargetValue || !supplementNutrientBaseWeightG.value) {
-    return '-'
-  }
-
-  const total = Math.round(item.nutrientTargetValue * supplementNutrientBaseWeightG.value / 1000)
-  const nutrientUnit = getSupplementNutrientUnit(item, { activeNutrients: item.activeNutrients } as any) || 'mg'
-  return `${item.nutrientTargetKey} ${total}${nutrientUnit}`
+  return formatSupplementTargets(item) || '-'
 }
 
 // 格式化补剂用量显示（参考订购成品页，保留用于向后兼容）
@@ -1337,6 +1335,14 @@ function closeSpecModal() {
   modalSelectedRpIndex.value = 0
 }
 
+function getSpecPurchaseChannelDisplay(target: any): string {
+  return getSpecRecommendedPurchaseChannelDisplay({
+    ingredientType: currentSpec.value?.type,
+    purchaseLink: target?.purchaseLink,
+    purchaseChannel: target?.purchaseChannel
+  })
+}
+
 // 显示用量详情弹窗
 function showAmountDetailModal(item: any) {
   currentAmountDetail.value = item
@@ -1349,23 +1355,19 @@ function closeAmountDetailModal() {
 
 // 显示营养信息弹窗
 function showNutritionInfoModal(item: any) {
-  const nutrientUnit = getSupplementNutrientUnit(item, {
-    id: item.ingredientId,
-    ingredientId: item.ingredientId,
-    name: item.name,
-    activeNutrients: item.activeNutrients
-  })
-
-  // 计算营养素总量 = 营养目标 * 食材净量 / 1000
-  const nutrientTotal = item.nutrientTargetValue && supplementNutrientBaseWeightG.value
-    ? (item.nutrientTargetValue * supplementNutrientBaseWeightG.value / 1000).toFixed(0)
-    : null
+  const targetSummary = formatSupplementTargets(item)
+  const nutrientTotal = getSupplementTargetBreakdowns(
+    item,
+    supplementNutrientBaseWeightG.value
+  )
+    .map((breakdown) => `${Number(breakdown.totalNutrientNeeded.toFixed(2))}${breakdown.target.unit}${breakdown.target.label}`)
+    .join('、')
 
   // 将计算的营养素总量和单位添加到item中
   currentNutritionInfo.value = {
     ...item,
-    nutrientTotal,
-    nutrientUnit
+    targetSummary,
+    nutrientTotal
   }
 
   showNutritionInfo.value = true
@@ -1393,19 +1395,6 @@ function confirmRecommendedProductSelection() {
 
   selectedRpIndexMap.value[modalSelectionKey.value] = modalSelectedRpIndex.value
   closeSpecModal()
-}
-
-// 根据平台类型获取提示文案
-function getPurchaseTipByPlatform(platform: string): string {
-  const tipMap: Record<string, string> = {
-    'TAOBAO': '口令已复制，打开淘宝即可查看商品',
-    'JD': '口令已复制，打开京东即可查看商品',
-    'PINDUODUO': '口令已复制，打开拼多多即可查看商品',
-    'IHERB': '已复制 iHerb 购买链接',
-    'OTHER': '已复制，打开对应App即可查看',
-    'WEBVIEW': '已复制购买链接'
-  }
-  return tipMap[platform] || '已复制购买链接'
 }
 
 // 从链接判断平台类型

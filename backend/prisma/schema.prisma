@@ -303,6 +303,7 @@ model RecipeItem {
   ratioPercent           Float?                        @map("ratio_percent")
   nutrientTargetKey      String?                       @map("nutrient_target_key")
   nutrientTargetValue    Float?                        @map("nutrient_target_value")
+  supplementTargets      Json?                         @map("supplement_targets")
   sortOrder              Int                           @default(0) @map("sort_order")
   exampleWeight          Float?                        @map("example_weight")
   ingredient             Ingredient                    @relation(fields: [ingredientId], references: [id])

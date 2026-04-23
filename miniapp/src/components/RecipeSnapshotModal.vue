@@ -55,8 +55,8 @@
                 {{ formatRatio(item.ratio) }}%
               </text>
               <!-- 补剂类型：显示营养目标值 -->
-              <text v-else-if="item.ingredient_type === 'SUPPLEMENT' && item.nutrient_target_value" class="ingredient-item">
-                每kg食材添加{{ item.nutrient_target_value }}{{ getNutrientUnit(item) }}{{ item.nutrient_target_key || '' }}
+              <text v-else-if="item.ingredient_type === 'SUPPLEMENT' && getNutrientTargetText(item)" class="ingredient-item">
+                {{ getNutrientTargetText(item) }}
               </text>
               <!-- 其他情况：显示占位符 -->
               <text v-else class="ingredient-item">-</text>
@@ -75,6 +75,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
+import { formatSupplementTargets } from '../utils/supplement-nutrients'
 
 interface RecipeSnapshotItem {
   ingredient_id: string
@@ -83,6 +84,7 @@ interface RecipeSnapshotItem {
   ingredient_type?: string  // 'FOOD' | 'SUPPLEMENT' | 'PACKAGING'
   nutrient_target_key?: string  // 补剂类型：营养素名称
   nutrient_target_value?: number  // 补剂类型：营养目标值
+  supplement_targets?: any[]
   properties?: any  // 补剂类型：完整属性
 }
 
@@ -125,23 +127,11 @@ function formatRatio(ratio: number | null | undefined): string {
   return ratio.toFixed(2)
 }
 
-// 获取营养素单位
-function getNutrientUnit(item: RecipeSnapshotItem): string {
-  try {
-    if (!item || !item.properties || !item.nutrient_target_key) return ''
-
-    const activeNutrients = item.properties?.active_nutrients || {}
-    const nutrientData = activeNutrients[item.nutrient_target_key]
-
-    if (nutrientData && typeof nutrientData === 'object' && nutrientData.unit) {
-      return nutrientData.unit
-    }
-
-    return ''
-  } catch (error) {
-    console.error('[RecipeSnapshotModal] getNutrientUnit error:', error)
-    return ''
-  }
+function getNutrientTargetText(item: RecipeSnapshotItem): string {
+  const targetText = formatSupplementTargets(item)
+  if (targetText) return targetText
+  if (!item.nutrient_target_key || !item.nutrient_target_value) return ''
+  return `每kg食材添加${item.nutrient_target_value}${item.nutrient_target_key}`
 }
 
 function getNutritionStandardLabel(standard: string): string {

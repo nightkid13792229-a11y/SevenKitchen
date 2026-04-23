@@ -25,11 +25,11 @@ describe('supplement alternatives helpers', () => {
         displayUnit: '粒',
         imageUrl: 'https://cdn.example.com/default-square.jpg',
         preparationMethod: '随餐',
+        nutrition_profile_snapshot: {
+          vitamins: { vitaminE: 200 }
+        },
         properties: {
-          image_url: 'https://cdn.example.com/default-square.jpg',
-          active_nutrients: {
-            维生素E: { value: 200, unit: 'IU' }
-          }
+          image_url: 'https://cdn.example.com/default-square.jpg'
         }
       },
       {
@@ -38,8 +38,10 @@ describe('supplement alternatives helpers', () => {
           displayUnit: '粒',
           imageUrl: 'https://cdn.example.com/default-square.jpg',
           addTimingLabel: '随餐',
-          activeNutrients: {
-            维生素E: { value: 200, unit: 'IU' }
+          nutritionProfile: {
+            vitamins: {
+              vitaminE: 200
+            }
           },
           properties: {
             image_url: 'https://cdn.example.com/default-square.jpg'
@@ -62,8 +64,10 @@ describe('supplement alternatives helpers', () => {
                 url: 'https://jd.example/e400'
               },
               addTimingLabel: '随餐',
-              activeNutrients: {
-                维生素E: { value: 400, unit: 'IU' }
+              nutritionProfile: {
+                vitamins: {
+                  vitaminE: 400
+                }
               },
               properties: {}
             }
@@ -85,24 +89,103 @@ describe('supplement alternatives helpers', () => {
     })
   })
 
-  it('recalculates supplement amount and nutrient unit from selected alternative', () => {
+  it('only exposes diy-enabled supplement options for customer recommendations', () => {
+    const options = buildSupplementCandidateOptions(
+      {
+        ingredientId: 'supp-default',
+        name: '自制鸡蛋壳粉',
+        brand: '自制',
+        properties: {}
+      },
+      {
+        ingredient: {
+          id: 'supp-default',
+          diyEnabled: false,
+          properties: {}
+        },
+        supplementAlternatives: [
+          {
+            ingredientId: 'supp-alt-disabled',
+            ingredientName: '内部采购鸡蛋壳粉',
+            ingredient: {
+              id: 'supp-alt-disabled',
+              name: '内部采购鸡蛋壳粉',
+              diyEnabled: false,
+              properties: {}
+            }
+          },
+          {
+            ingredientId: 'supp-alt-enabled',
+            ingredientName: '第三方鸡蛋壳粉',
+            ingredient: {
+              id: 'supp-alt-enabled',
+              name: '第三方鸡蛋壳粉',
+              brand: '西红柿',
+              diyEnabled: true,
+              properties: {}
+            }
+          }
+        ]
+      }
+    )
+
+    expect(options).toHaveLength(1)
+    expect(options[0].ingredientId).toBe('supp-alt-enabled')
+    expect(options[0].brand).toBe('西红柿')
+  })
+
+  it('returns no recommendation options when every supplement candidate disables diy recommendations', () => {
+    const options = buildSupplementCandidateOptions(
+      {
+        ingredientId: 'supp-default',
+        name: '自制鸡蛋壳粉',
+        properties: {}
+      },
+      {
+        ingredient: {
+          id: 'supp-default',
+          diyEnabled: false,
+          properties: {}
+        },
+        supplementAlternatives: [
+          {
+            ingredientId: 'supp-alt-disabled',
+            ingredientName: '采购鸡蛋壳粉',
+            ingredient: {
+              id: 'supp-alt-disabled',
+              name: '采购鸡蛋壳粉',
+              diyEnabled: false,
+              properties: {}
+            }
+          }
+        ]
+      }
+    )
+
+    expect(options).toEqual([])
+  })
+
+  it('recalculates supplement amount and nutrient unit from selected alternative without supplement loss', () => {
     const baseItem = {
       amount: 5,
-      nutrientTargetKey: '维生素E',
-      nutrientTargetValue: 1000,
-      properties: {
-        active_nutrients: {
-          维生素E: { value: 200, unit: 'IU' }
+      supplementTargets: [
+        {
+          fieldPath: 'vitamins.vitaminE',
+          label: '维生素 E',
+          targetValuePerKg: 1000,
+          unit: 'IU'
         }
-      }
+      ]
     }
 
     const selectedOption = {
       id: 'supp-alt-1',
       ingredientId: 'supp-alt-1',
       name: '维生素E-400',
-      activeNutrients: {
-        维生素E: { value: 400, unit: 'IU' }
+      nutritionProfile: {
+        vitamins: {
+          vitaminE: 400
+        }
       }
     }
 
@@ -110,10 +193,43 @@ describe('supplement alternatives helpers', () => {
       calculateSupplementAmountForOption(
         baseItem,
         selectedOption,
-        1000,
-        0.05
+        1000
       )
-    ).toBeCloseTo(2.625, 6)
+    ).toBeCloseTo(2.5, 6)
     expect(getSupplementNutrientUnit(baseItem, selectedOption)).toBe('IU')
+  })
+
+  it('keeps fractional tablet amounts when calculating from ingredient input weight', () => {
+    const baseItem = {
+      amount: 12,
+      supplementTargets: [
+        {
+          fieldPath: 'minerals.iodine',
+          label: '碘',
+          targetValuePerKg: 660,
+          unit: 'μg'
+        }
+      ],
+      properties: {}
+    }
+
+    const kelpTablet = {
+      id: 'kelp-tablet',
+      ingredientId: 'kelp-tablet',
+      name: '海带片',
+      nutritionProfile: {
+        minerals: {
+          iodine: 150
+        }
+      }
+    }
+
+    expect(
+      calculateSupplementAmountForOption(
+        baseItem,
+        kelpTablet,
+        2962
+      )
+    ).toBeCloseTo(13.0328, 6)
   })
 })

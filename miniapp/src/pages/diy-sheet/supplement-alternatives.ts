@@ -1,22 +1,27 @@
-export interface ActiveNutrientValue {
-  value: number;
-  unit: string;
-}
+import {
+  calculateSupplementAmountForProduction,
+  getSupplementTargets,
+} from '../../utils/supplement-nutrients';
 
 export interface SupplementOption {
   id: string;
   ingredientId: string;
   name: string;
+  diyEnabled?: boolean;
   brand?: string;
   productModel?: string;
   purchaseChannel?: string;
   imageUrl?: string;
   purchaseLink?: any;
   displayUnit?: string;
-  activeNutrients?: Record<string, ActiveNutrientValue>;
+  nutritionProfile?: any;
   properties?: Record<string, any>;
   timingLabel?: string;
   addTimingLabel?: string;
+}
+
+function isDiyRecommendationEnabled(candidate: any): boolean {
+  return candidate?.diyEnabled !== false;
 }
 
 export function getSupplementSelectionKey(item: {
@@ -31,11 +36,14 @@ export function buildSupplementCandidateOptions(
   recipeItem: any,
 ): SupplementOption[] {
   const defaultIngredient = recipeItem?.ingredient;
-  const options: SupplementOption[] = [
-    {
+  const options: SupplementOption[] = [];
+
+  if (isDiyRecommendationEnabled(defaultIngredient || baseItem)) {
+    options.push({
       id: `default:${baseItem.ingredientId}`,
       ingredientId: baseItem.ingredientId,
       name: baseItem.name,
+      diyEnabled: defaultIngredient?.diyEnabled ?? baseItem.diyEnabled,
       brand: baseItem.brand,
       productModel: baseItem.productModel,
       purchaseChannel: baseItem.purchaseChannel,
@@ -48,13 +56,15 @@ export function buildSupplementCandidateOptions(
         defaultIngredient?.purchaseLink || baseItem.properties?.purchase_link,
       displayUnit:
         defaultIngredient?.displayUnit || baseItem.displayUnit || baseItem.unit,
-      activeNutrients:
-        defaultIngredient?.activeNutrients || baseItem.properties?.active_nutrients,
+      nutritionProfile:
+        defaultIngredient?.nutritionProfile ||
+        baseItem.nutritionProfile ||
+        baseItem.nutrition_profile_snapshot,
       properties: defaultIngredient?.properties || baseItem.properties,
       addTimingLabel: defaultIngredient?.addTimingLabel,
       timingLabel: defaultIngredient?.addTimingLabel || baseItem.preparationMethod,
-    },
-  ];
+    });
+  }
 
   for (const alternative of recipeItem?.supplementAlternatives || []) {
     const ingredient = alternative.ingredient;
@@ -62,18 +72,22 @@ export function buildSupplementCandidateOptions(
       continue;
     }
 
+    if (!isDiyRecommendationEnabled(ingredient)) {
+      continue;
+    }
+
     options.push({
       id: ingredient.id,
       ingredientId: ingredient.id,
       name: ingredient.name || alternative.ingredientName,
+      diyEnabled: ingredient.diyEnabled,
       brand: ingredient.brand,
       productModel: ingredient.productModel,
       purchaseChannel: ingredient.purchaseChannel,
       imageUrl: ingredient.imageUrl || ingredient.properties?.image_url,
       purchaseLink: ingredient.purchaseLink || ingredient.properties?.purchase_link,
       displayUnit: ingredient.displayUnit,
-      activeNutrients:
-        ingredient.activeNutrients || ingredient.properties?.active_nutrients,
+      nutritionProfile: ingredient.nutritionProfile,
       properties: ingredient.properties,
       addTimingLabel: ingredient.addTimingLabel,
       timingLabel: ingredient.addTimingLabel,
@@ -93,30 +107,35 @@ export function buildSupplementCandidateOptions(
 export function calculateSupplementAmountForOption(
   baseItem: any,
   selectedOption: SupplementOption | undefined,
-  totalFoodNetWeightG: number,
-  supplementLossRate: number,
+  totalFoodInputWeightG: number,
 ): number {
-  let amount = baseItem.amount;
-  if (selectedOption?.activeNutrients && baseItem.nutrientTargetKey) {
-    const concentration =
-      selectedOption.activeNutrients[baseItem.nutrientTargetKey]?.value;
-    if (concentration && concentration > 0 && baseItem.nutrientTargetValue) {
-      const totalNutrientNeeded =
-        baseItem.nutrientTargetValue * (totalFoodNetWeightG / 1000);
-      const theoretical = totalNutrientNeeded / concentration;
-      amount = theoretical * (1 + supplementLossRate);
-    }
-  }
-  return amount;
+  const result = calculateSupplementAmountForProduction(
+    {
+      ...baseItem,
+      nutritionProfile:
+        selectedOption?.nutritionProfile ||
+        baseItem.nutritionProfile ||
+        baseItem.nutrition_profile_snapshot,
+      displayUnit: selectedOption?.displayUnit || baseItem.displayUnit,
+      ingredient: {
+        ...(baseItem.ingredient || {}),
+        nutritionProfile:
+          selectedOption?.nutritionProfile ||
+          baseItem.ingredient?.nutritionProfile ||
+          baseItem.nutritionProfile,
+        unitDisplayLabel:
+          selectedOption?.displayUnit || baseItem.ingredient?.unitDisplayLabel,
+      },
+    },
+    totalFoodInputWeightG,
+  );
+
+  return result.amount || baseItem.amount || 0;
 }
 
 export function getSupplementNutrientUnit(
   baseItem: any,
   selectedOption: SupplementOption | undefined,
 ): string {
-  return (
-    selectedOption?.activeNutrients?.[baseItem.nutrientTargetKey]?.unit ||
-    baseItem.properties?.active_nutrients?.[baseItem.nutrientTargetKey]?.unit ||
-    'mg'
-  );
+  return getSupplementTargets(baseItem)[0]?.unit || 'mg';
 }

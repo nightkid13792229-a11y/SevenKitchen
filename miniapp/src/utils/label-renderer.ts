@@ -573,7 +573,9 @@ export function formatIngredients(recipeSnapshot: any, totalWeightG = 0) {
       const percentage = Number(item.ratio).toFixed(2);
       foodIngredients.push(`${item.name}${percentage}%`);
     } else if (item.ingredient_type === 'SUPPLEMENT' && item.nutrient_target_value) {
-      const supplementAmount = calculateSupplementAmountForProduction(item, totalWeightG);
+      const supplementAmount = calculateSupplementAmountForProduction(item, totalWeightG, {
+        includeProductionLoss: true
+      });
       supplementIngredients.push(`${item.name}${formatSupplementAmount(supplementAmount.amount)}${supplementAmount.unit}`);
     }
   });

@@ -476,6 +476,7 @@
                   />
                   <div class="supplement-image-actions">
                     <el-upload
+                      v-if="props.ingredient?.id"
                       :show-file-list="false"
                       accept="image/*"
                       :before-upload="handleSupplementImageUpload"
@@ -488,10 +489,17 @@
                       >
                     </el-upload>
                     <el-button
+                      v-else
+                      :loading="supplementImageUploading"
+                      @click="notifySupplementImageRequiresSavedIngredient"
+                    >
+                      替换图片
+                    </el-button>
+                    <el-button
                       type="danger"
                       plain
                       :loading="supplementImageUploading"
-                      @click="handleRemoveSupplementImage"
+                      @click="props.ingredient?.id ? handleRemoveSupplementImage() : notifySupplementImageRequiresSavedIngredient()"
                     >
                       删除图片
                     </el-button>
@@ -503,6 +511,7 @@
                     制作单推荐弹窗展示。
                   </div>
                   <el-upload
+                    v-if="props.ingredient?.id"
                     :show-file-list="false"
                     accept="image/*"
                     :before-upload="handleSupplementImageUpload"
@@ -516,6 +525,14 @@
                       >上传图片</el-button
                     >
                   </el-upload>
+                  <el-button
+                    v-else
+                    type="primary"
+                    :loading="supplementImageUploading"
+                    @click="notifySupplementImageRequiresSavedIngredient"
+                  >
+                    上传图片
+                  </el-button>
                 </div>
                 <div class="hint-text">
                   建议原图清晰、主体居中，推荐尺寸 1200 × 1200。
@@ -1777,6 +1794,10 @@ function extractIngredientDiyImageKey(imageUrl?: string | null): string | null {
   }
 }
 
+function notifySupplementImageRequiresSavedIngredient() {
+  ElMessage.warning('请先保存补剂原料，保存成功后可继续上传产品图片')
+}
+
 function loadImageFromFile(file: File): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const objectUrl = URL.createObjectURL(file)
@@ -1838,7 +1859,7 @@ const handleSupplementImageUpload: UploadProps['beforeUpload'] = async (
   rawFile,
 ) => {
   if (!props.ingredient?.id) {
-    ElMessage.warning('请先保存补剂原料，再上传产品图片')
+    notifySupplementImageRequiresSavedIngredient()
     return false
   }
 
@@ -1947,7 +1968,6 @@ function getDefaultFoodProperties(): FoodProperties {
 function getDefaultSupplementProperties(): SupplementProperties {
   return {
     category_type: '',
-    active_nutrients: {},
     display_unit: '',
     supplier_name: null,
     purchase_link: {
@@ -1969,9 +1989,6 @@ function cloneSupplementProperties(
     purchase_link: properties?.purchase_link
       ? { ...properties.purchase_link }
       : undefined,
-    active_nutrients: properties?.active_nutrients
-      ? { ...properties.active_nutrients }
-      : {},
     marketing_highlights: properties?.marketing_highlights
       ? { ...properties.marketing_highlights }
       : {},
@@ -2349,7 +2366,7 @@ watch(
       formData.name = ''
       formData.type = IngredientType.FOOD
       formData.procurementStrategy =
-        IngredientProcurementStrategy.DAILY_PURCHASE
+        getDefaultProcurementStrategyForType(IngredientType.FOOD) as IngredientProcurementStrategy
       formData.brand = ''
       formData.productModel = ''
       formData.purchaseChannel = ''

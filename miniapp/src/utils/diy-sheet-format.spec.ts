@@ -2,9 +2,10 @@ import { describe, expect, it } from 'vitest'
 import { formatSupplementAmountWithDisplayUnit } from './diy-sheet-format'
 
 describe('diy-sheet-format', () => {
-  it('keeps one decimal place for count-based supplement display units', () => {
+  it('keeps fractional count-based supplement display units without integer rounding', () => {
+    expect(formatSupplementAmountWithDisplayUnit(13.0328, 'g', '片')).toBe('13.03片')
     expect(formatSupplementAmountWithDisplayUnit(1.6, 'g', '片')).toBe('1.6片')
-    expect(formatSupplementAmountWithDisplayUnit(2, 'g', '粒')).toBe('2.0粒')
+    expect(formatSupplementAmountWithDisplayUnit(2, 'g', '粒')).toBe('2粒')
     expect(formatSupplementAmountWithDisplayUnit(0.4, 'g', '颗')).toBe('0.4颗')
   })
 

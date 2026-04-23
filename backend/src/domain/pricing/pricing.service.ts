@@ -8,7 +8,8 @@ import { Injectable, Inject } from '@nestjs/common';
 import { Ingredient } from '../ingredient/ingredient.entity';
 import { IngredientType } from '../ingredient/enums';
 import { resolveSupplementAddTimingLabel } from '../ingredient/supplement-add-timing';
-import { resolveSupplementNutrients } from '../ingredient/supplement-nutrition-resolver';
+import { calculateSupplementDose } from '../ingredient/supplement-targets';
+import type { SupplementTarget } from '../ingredient/types';
 import { ValidationError } from '../common/errors';
 import { PackagingService } from '../packaging';
 import { INGREDIENT_REPOSITORY } from '../../application/ingredient/ingredient.service';
@@ -73,6 +74,7 @@ export interface RecipeItem {
   exampleWeight?: number | null;
   nutrientTargetKey?: string | null;
   nutrientTargetValue?: number | null;
+  supplementTargets?: SupplementTarget[] | null;
 }
 
 export interface Recipe {
@@ -140,6 +142,7 @@ export interface IngredientCostItem {
   preparationMethod?: string; // 添加时机/制备方法
   nutrientTargetKey?: string; // 营养素名称（补剂用）
   nutrientTargetValue?: number; // 营养目标值（补剂用）
+  supplementTargets?: SupplementTarget[];
 }
 
 export interface PackagingPerPackConsumables {
@@ -316,6 +319,7 @@ export class PricingService {
         ratioPercent: item.ratioPercent,
         nutrientTargetKey: item.nutrientTargetKey,
         nutrientTargetValue: item.nutrientTargetValue,
+        supplementTargets: item.supplementTargets,
       });
 
       // --- A. 食材 (Food - Yield Rate Logic) ---
@@ -422,55 +426,50 @@ export class PricingService {
           name: ingredient.name,
           nutrientTargetKey: item.nutrientTargetKey,
           nutrientTargetValue: item.nutrientTargetValue,
+          supplementTargets: item.supplementTargets,
         });
 
-        if (!item.nutrientTargetKey || !item.nutrientTargetValue) {
+        const targets = item.supplementTargets ?? [];
+        if (targets.length === 0) {
           throw new ValidationError(
-            `nutrient_target_key and nutrient_target_value are required for SUPPLEMENT ingredient: ${ingredient.name}`,
+            `supplementTargets are required for SUPPLEMENT ingredient: ${ingredient.name}`,
           );
         }
 
-        const targetKey = item.nutrientTargetKey;
-        const targetVal = item.nutrientTargetValue;
-        const activeNutrients = resolveSupplementNutrients({
+        const customLoss =
+          ingredient.getProductionLossRate() ?? globalConfig.supplementLossRate;
+        const dose = calculateSupplementDose({
           nutritionProfile: ingredient.nutritionProfile,
-          fallback: (ingredient.properties as any)?.active_nutrients,
+          targets,
+          basisWeightG: totalNetFoodWeightG,
+          displayUnit: ingredient.unitDisplayLabel,
+          lossRate: customLoss,
         });
-        const concentrationObj = activeNutrients[targetKey];
-        const concentration = concentrationObj?.value || 0;
-        const concentrationUnit = concentrationObj?.unit || '';
+        const limitingTarget = dose.limitingTarget;
+        const concentration = limitingTarget.concentration;
+        const concentrationUnit = limitingTarget.concentrationUnit;
+        const totalNutrientNeeded = limitingTarget.totalNutrientNeeded;
+        const unitsNeeded = dose.amount;
+        const unitsTheoretical = customLoss > 0 ? unitsNeeded / customLoss : 0;
+        const targetVal = targets.find(
+          (target) => target.fieldPath === limitingTarget.fieldPath,
+        )!.targetValuePerKg;
 
         console.log('[PricingService] SUPPLEMENT concentration lookup:', {
           name: ingredient.name,
-          targetKey,
+          targetKey: limitingTarget.fieldPath,
           targetVal,
-          activeNutrients,
-          concentrationObj,
+          targets,
+          targetBreakdown: dose.targetBreakdown,
           concentration,
         });
-
-        if (concentration <= 0) {
-          throw new ValidationError(
-            `Missing or zero concentration for ${targetKey} in ingredient ${ingredient.name}`,
-          );
-        }
-
-        // Total nutrient needed: target_val * total_food_net_weight_kg
-        // 补剂用量基于食材类原料的总净重，而不是所有原料的毛重
-        // 单位：mg 或 μg (totalFoodNetWeightKg 单位为 kg)
-        const totalNutrientNeeded = targetVal * (totalNetFoodWeightG / 1000.0);
-        const unitsTheoretical = totalNutrientNeeded / concentration;
-
-        // Read ingredient-specific loss rate (default to global)
-        const customLoss =
-          ingredient.getProductionLossRate() ?? globalConfig.supplementLossRate;
-        const unitsNeeded = unitsTheoretical * customLoss;
 
         const unitCost = ingredient.getUnitCost();
         const itemCost = unitsNeeded * unitCost;
 
         console.log('[PricingService] SUPPLEMENT cost:', {
           name: ingredient.name,
+          limitingTarget: limitingTarget.fieldPath,
           targetVal,
           totalFoodNetWeightKg: totalNetFoodWeightG / 1000.0, // 食材总净重
           rawInputWeightKg, // 所有原料毛重（对比用）
@@ -510,7 +509,7 @@ export class PricingService {
           unit: supplementUnit,
           unitCost: unitCost,
           cost: itemCost,
-          calculation: `营养需求${totalNutrientNeeded.toFixed(3)}${concentrationUnit} ÷ 浓度${concentration}${concentrationUnit} = 理论用量${unitsTheoretical.toFixed(3)}${supplementUnit} × 损耗率${customLoss} = 实际用量${unitsNeeded.toFixed(3)}${supplementUnit} × ${unitCost.toFixed(4)}元/${supplementUnit} = ${itemCost.toFixed(2)}元`,
+          calculation: `${limitingTarget.label}营养需求${totalNutrientNeeded.toFixed(3)}${concentrationUnit} ÷ 浓度${concentration}${concentrationUnit} = 理论用量${unitsTheoretical.toFixed(3)}${supplementUnit} × 损耗率${customLoss} = 实际用量${unitsNeeded.toFixed(3)}${supplementUnit} × ${unitCost.toFixed(4)}元/${supplementUnit} = ${itemCost.toFixed(2)}元`,
           purchaseChannel: ingredient.purchaseChannel || undefined,
           brand: ingredient.brand || undefined,
           productModel: ingredient.productModel || undefined,
@@ -518,8 +517,9 @@ export class PricingService {
           ingredientId: ingredient.id,
           displayUnit: supplementUnit, // 需求展示单位来自标准原料，不使用采购SKU包装单位
           properties: ingredient.properties, // 添加完整properties（包含purchase_link）
-          nutrientTargetKey: item.nutrientTargetKey, // 营养素名称
-          nutrientTargetValue: item.nutrientTargetValue, // 营养目标值
+          nutrientTargetKey: item.nutrientTargetKey || undefined, // 营养素名称
+          nutrientTargetValue: item.nutrientTargetValue || undefined, // 营养目标值
+          supplementTargets: targets,
         });
 
         costIngredients += itemCost;

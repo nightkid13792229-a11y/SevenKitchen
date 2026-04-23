@@ -170,6 +170,7 @@ export class RecipesController {
       id: ingredient.id,
       name: ingredient.name,
       type: ingredient.type,
+      diyEnabled: ingredient.diyEnabled,
       brand: ingredient.brand || undefined,
       productModel: ingredient.productModel || undefined,
       purchaseChannel: ingredient.purchaseChannel || undefined,
@@ -441,6 +442,7 @@ export class RecipesController {
               item.ratioPercent != null ? item.ratioPercent : undefined,
             nutrientTargetKey: item.nutrientTargetKey || undefined,
             nutrientTargetValue: item.nutrientTargetValue || undefined,
+            supplementTargets: item.supplementTargets || undefined,
             ingredient: this.mapPublicIngredient(item.ingredient),
             supplementAlternativeIngredientIds:
               item.supplementAlternativeIngredientIds || undefined,
@@ -483,6 +485,7 @@ export class RecipesController {
       targetHealthTags: (recipe as any).targetHealthTags || [],
       applicableLifeStages: (recipe as any).applicableLifeStages || [],
       nutritionDetailedData,
+      nutritionReportUrl: (recipe as any).nutritionReportUrl || undefined,
       items: allIngredients,
       description: (recipe as any).description,
     };

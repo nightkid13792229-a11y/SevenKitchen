@@ -814,10 +814,17 @@ const handleSubmit = async (data: IngredientForm) => {
     } else {
       const createdIngredient = await ingredientApi.create(data)
       copySourceName.value = ''
-      if (createdIngredient.type === IngredientType.FOOD) {
+      if (
+        createdIngredient.type === IngredientType.FOOD ||
+        createdIngredient.type === IngredientType.SUPPLEMENT
+      ) {
         currentIngredient.value = createdIngredient
         await nextTick()
-        ElMessage.success(isCopyCreate ? '复制新增成功，可继续补充采购 SKU' : '标准原料已创建，可继续补充采购 SKU')
+        if (createdIngredient.type === IngredientType.FOOD) {
+          ElMessage.success(isCopyCreate ? '复制新增成功，可继续补充采购 SKU' : '标准原料已创建，可继续补充采购 SKU')
+        } else {
+          ElMessage.success(isCopyCreate ? '复制新增成功，可继续上传产品图片' : '标准原料已创建，可继续上传产品图片')
+        }
       } else {
         dialogVisible.value = false
         currentIngredient.value = undefined

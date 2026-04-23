@@ -263,6 +263,30 @@ describe('RecipesController (e2e)', () => {
       );
     });
 
+    it('returns nutrition report url when the recipe has an uploaded PDF report', async () => {
+      const recipe: Recipe = {
+        id: '550e8400-e29b-41d4-a716-446655440014',
+        version: 1,
+        name: 'Report Recipe',
+        status: 'PUBLIC',
+        energyDensityKcalPerKg: 1450,
+        productionLossRate: 1.07,
+        items: [],
+        nutritionReportUrl:
+          'https://cdn.example.com/recipe-nutrition-reports/report.pdf',
+      } as any;
+      await recipeRepository.save(recipe);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/${recipe.id}`)
+        .expect(200);
+
+      expect(response.body.code).toBe(0);
+      expect(response.body.data.nutritionReportUrl).toBe(
+        'https://cdn.example.com/recipe-nutrition-reports/report.pdf',
+      );
+    });
+
     it('returns supplement alternatives with product fields and resolved active nutrients', async () => {
       const recipe: Recipe = {
         id: '550e8400-e29b-41d4-a716-446655440013',
@@ -287,6 +311,7 @@ describe('RecipesController (e2e)', () => {
                   id: 'ingredient-supplement-alt',
                   name: '维生素E-400',
                   type: 'SUPPLEMENT',
+                  diyEnabled: true,
                   brand: 'NOW FOODS',
                   productModel: '400IU/粒',
                   purchaseChannel: '京东',
@@ -312,6 +337,7 @@ describe('RecipesController (e2e)', () => {
               id: 'ingredient-supplement-default',
               name: '维生素E-200',
               type: 'SUPPLEMENT',
+              diyEnabled: false,
               brand: 'NOW FOODS',
               productModel: '200IU/粒',
               purchaseChannel: '京东',
@@ -342,6 +368,7 @@ describe('RecipesController (e2e)', () => {
 
       expect(response.body.code).toBe(0);
       expect(response.body.data.items[0].ingredient.displayUnit).toBe('粒');
+      expect(response.body.data.items[0].ingredient.diyEnabled).toBe(false);
       expect(response.body.data.items[0].ingredient.addTimingLabel).toBe('随餐');
       expect(response.body.data.items[0].ingredient.imageUrl).toBe(
         'https://cdn.example.com/e200-square.jpg',
@@ -353,6 +380,10 @@ describe('RecipesController (e2e)', () => {
       expect(
         response.body.data.items[0].supplementAlternatives[0].ingredient.brand,
       ).toBe('NOW FOODS');
+      expect(
+        response.body.data.items[0].supplementAlternatives[0].ingredient
+          .diyEnabled,
+      ).toBe(true);
       expect(
         response.body.data.items[0].supplementAlternatives[0].ingredient
           .addTimingLabel,

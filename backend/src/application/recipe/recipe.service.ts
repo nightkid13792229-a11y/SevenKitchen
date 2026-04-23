@@ -57,6 +57,17 @@ export class RecipeService {
     },
   };
 
+  private resolveNutritionReportUrlForUpdate(
+    dto: Record<string, any>,
+    existingUrl?: string | null,
+  ): string | null | undefined {
+    if (Object.prototype.hasOwnProperty.call(dto, 'nutritionReportUrl')) {
+      return dto.nutritionReportUrl || null;
+    }
+
+    return existingUrl;
+  }
+
   private normalizeSupplementAlternativeIngredientIds(
     ingredientIds?: string[] | null,
   ): string[] {
@@ -84,6 +95,7 @@ export class RecipeService {
       ratioPercent: item.ratioPercent,
       nutrientTargetKey: item.nutrientTargetKey,
       nutrientTargetValue: item.nutrientTargetValue,
+      supplementTargets: item.supplementTargets ?? null,
       sortOrder: index,
       ...(supplementAlternativeIngredientIds.length > 0 && {
         supplementAlternatives: {
@@ -191,6 +203,7 @@ export class RecipeService {
       ratioPercent: number | null;
       nutrientTargetKey: string | null;
       nutrientTargetValue: number | null;
+      supplementTargets?: unknown;
       sortOrder: number;
     }>,
     newItems: Array<{
@@ -199,6 +212,7 @@ export class RecipeService {
       ratioPercent: number | null;
       nutrientTargetKey: string | null;
       nutrientTargetValue: number | null;
+      supplementTargets?: unknown;
     }>,
   ): boolean {
     // If item count differs, items have changed
@@ -231,6 +245,13 @@ export class RecipeService {
 
       // Check if nutrient target value changed (for SUPPLEMENT ingredients)
       if (existing.nutrientTargetValue !== newItem.nutrientTargetValue) {
+        return true;
+      }
+
+      if (
+        JSON.stringify(existing.supplementTargets ?? null) !==
+        JSON.stringify(newItem.supplementTargets ?? null)
+      ) {
         return true;
       }
 
@@ -375,6 +396,7 @@ export class RecipeService {
         videoUrl: dto.videoUrl,
         description: dto.description,
         designSource: dto.designSource,
+        nutritionReportUrl: dto.nutritionReportUrl || null,
         nutritionStandard: dto.nutritionStandard,
         nutritionDetailedData: (dto.nutritionDetailedData ||
           Prisma.JsonNull) as unknown as Prisma.InputJsonValue,
@@ -481,6 +503,10 @@ export class RecipeService {
         videoUrl: dto.videoUrl,
         description: dto.description,
         designSource: dto.designSource,
+        nutritionReportUrl: this.resolveNutritionReportUrlForUpdate(
+          dto,
+          existing.nutritionReportUrl,
+        ),
         nutritionStandard: dto.nutritionStandard,
         nutritionDetailedData: (dto.nutritionDetailedData ??
           Prisma.JsonNull) as unknown as Prisma.InputJsonValue,
@@ -655,6 +681,7 @@ export class RecipeService {
         videoUrl: recipe.videoUrl,
         description: recipe.description,
         designSource: recipe.designSource,
+        nutritionReportUrl: recipe.nutritionReportUrl,
         nutritionStandard: recipe.nutritionStandard,
         nutritionDetailedData:
           recipe.nutritionDetailedData as Prisma.InputJsonValue,
@@ -844,6 +871,7 @@ export class RecipeService {
       designSource: recipe.designSource || undefined,
       nutritionStandard: recipe.nutritionStandard as NutritionStandard,
       nutritionDetailedData: recipe.nutritionDetailedData || undefined,
+      nutritionReportUrl: recipe.nutritionReportUrl || undefined,
       productionSteps: recipe.productionSteps || undefined,
       productionLossRate: recipe.productionLossRate,
       batchLaborHours: recipe.batchLaborHours || undefined,
@@ -869,6 +897,7 @@ export class RecipeService {
           ratioPercent: item.ratioPercent || undefined,
           nutrientTargetKey: item.nutrientTargetKey || undefined,
           nutrientTargetValue: item.nutrientTargetValue || undefined,
+          supplementTargets: item.supplementTargets || undefined,
           supplementAlternativeIngredientIds:
             item.supplementAlternatives?.map(
               (alternative: any) => alternative.alternativeIngredientId,

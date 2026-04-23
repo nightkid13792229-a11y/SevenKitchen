@@ -12,11 +12,12 @@ test('family DIY recommendation purchase links expose iHerb across admin, backen
   const adminTypes = read('admin-web/src/types/ingredient.ts')
   const backendTypes = read('backend/src/domain/ingredient/types.ts')
   const miniappSheet = read('miniapp/src/pages/diy-sheet/index.vue')
+  const miniappCopy = read('miniapp/src/pages/diy-sheet/copy.ts')
 
   assert.equal((adminForm.match(/value="IHERB"/g) || []).length, 2)
   assert.match(adminTypes, /platform: .*'IHERB'/)
   assert.match(backendTypes, /platform: .*'IHERB'/)
   assert.match(miniappSheet, /iherb\.com/)
   assert.match(miniappSheet, /iherb\.cn/)
-  assert.match(miniappSheet, /已复制 iHerb 购买链接/)
+  assert.match(miniappCopy, /已复制 iHerb 购买链接/)
 })

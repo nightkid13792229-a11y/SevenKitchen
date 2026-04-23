@@ -64,6 +64,21 @@ describe('diy sheet layout regressions', () => {
     expect(source).not.toContain('function getSupplementSpecDisplayText')
   })
 
+  it('does not fall back to standard ingredient fields for food selected products', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
+      'utf-8',
+    )
+    const foodBlock = source.match(/const foodItemsDetailed = computed\(\(\) => \{[\s\S]*?\n\}\)\n\n\/\/ 补剂类详细数据/)?.[0] || ''
+
+    expect(foodBlock).toContain('formatFoodSelectedProductDisplayText(selectedRp, item)')
+    expect(foodBlock).not.toContain('formatSelectedProductDisplayText(selectedRp || item, item.name)')
+    expect(foodBlock).toContain('const purchaseLink = selectedRp?.purchaseLink || undefined')
+    expect(foodBlock).toContain('productModel: selectedRp?.productModel')
+    expect(foodBlock).toContain('purchaseChannel: selectedRp?.purchaseChannel')
+    expect(source).toContain('const selectedProductDisplayText = formatSelectedProductDisplayText(selectedRp || item, item.name)')
+  })
+
   it('keeps life-stage warning visible on the generated DIY sheet', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),

@@ -89,9 +89,11 @@ request_json() {
   local curl_cmd="curl -s -w \"\n%{http_code}\" -X \"${method}\""
   
   # Add headers
-  for header in "${headers[@]}"; do
-    curl_cmd="${curl_cmd} -H \"${header}\""
-  done
+  if [ ${#headers[@]} -gt 0 ]; then
+    for header in "${headers[@]}"; do
+      curl_cmd="${curl_cmd} -H \"${header}\""
+    done
+  fi
   
   # Add data if present
   if [ "$has_data" = true ]; then
@@ -270,7 +272,14 @@ if [ "$RECIPES_CODE_VALUE" != "0" ]; then
 fi
 
 # Get first PUBLIC recipe sorted by id (deterministic)
-RECIPE_ID=$(extract_json "[.data[] | select(.status == \"PUBLIC\") | .id] | sort | .[0] // \"\"" "$RECIPES_BODY")
+RECIPE_ID=$(extract_json "
+  def recipe_list:
+    if (.data | type) == \"array\" then .data
+    elif (.data.data | type) == \"array\" then .data.data
+    else []
+    end;
+  (recipe_list | map(select(.status == \"PUBLIC\") | .id) | sort | .[0]) // \"\"
+" "$RECIPES_BODY")
 if [ -z "$RECIPE_ID" ] || [ "$RECIPE_ID" = "null" ]; then
   fail "No PUBLIC recipe found. Please seed at least one PUBLIC recipe in the database."
 fi
@@ -454,4 +463,3 @@ echo "Snapshot verified: recipe snapshot is immutable"
 echo ""
 
 exit 0
-

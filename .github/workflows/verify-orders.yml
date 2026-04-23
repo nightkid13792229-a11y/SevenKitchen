@@ -72,8 +72,19 @@ jobs:
         run: |
           cd backend
           pnpm prisma generate
-          pnpm prisma migrate reset --force --skip-seed
-          pnpm prisma migrate deploy
+          # This workflow verifies the current order flow on a fresh CI database.
+          # The repository still contains legacy db-push-era migrations that are
+          # not replay-safe from an empty database, so we provision the schema
+          # directly from the current Prisma schema here.
+          pnpm prisma db push --force-reset --skip-generate
+        continue-on-error: false
+
+      - name: Bootstrap verification fixtures
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/sevenkitchen_test
+        run: |
+          cd backend
+          pnpm ts-node -r tsconfig-paths/register scripts/bootstrap-verify-orders-fixtures.ts
         continue-on-error: false
 
       - name: Start server
@@ -154,4 +165,3 @@ jobs:
           fi
           # Fallback: kill any remaining nest processes
           pkill -f "nest start" || true
-

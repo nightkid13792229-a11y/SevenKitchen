@@ -26,6 +26,26 @@ describe('diy-sheet copy', () => {
     expect(formatSelectedProductDisplayText({ purchaseChannel: '本地生鲜市场' }, '牛霖')).toBe('-')
   })
 
+  it('shows no food selected product unless a DIY recommended SKU exists', async () => {
+    const { formatFoodSelectedProductDisplayText } = await import('./copy')
+
+    expect(formatFoodSelectedProductDisplayText(undefined, {
+      name: '牛霖',
+      brand: '无',
+      productModel: '牛霖',
+      purchaseChannel: '本地生鲜市场'
+    })).toBe('-')
+
+    expect(formatFoodSelectedProductDisplayText({
+      brand: '盒马自营',
+      productModel: '中心150g/份'
+    }, {
+      name: '牛心',
+      brand: '无',
+      productModel: '牛心'
+    })).toBe('盒马自营 / 中心150g/份')
+  })
+
   it('formats configured selected products from brand/spec or a distinct product name', () => {
     expect(formatSelectedProductDisplayText({
       brand: 'NOW FOODS',

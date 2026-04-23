@@ -102,6 +102,35 @@ describe('diy sheet layout regressions', () => {
     expect(source).not.toContain('0-5℃冷藏保存3天')
   })
 
+  it('falls back to recipe food items when pricing preview cannot provide ingredient details', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain("import {\n  buildFallbackFoodIngredientItems,")
+    expect(source).toContain('collectFoodIngredientIdsForRecommendations(')
+    expect(source).toContain('const totalFoodNetWeightG = computed(() => dailyIntakeG.value * cycleDays.value)')
+    expect(source).toContain('const foodSourceItems = computed(() => {')
+    expect(source).toContain('return buildFallbackFoodIngredientItems(recipe.value.items || [], totalFoodNetWeightG.value)')
+    expect(source).toContain('...foodSourceItems.value.map((item: any) => buildPurchaseListItem(item))')
+    expect(source).toContain('return foodSourceItems.value')
+  })
+
+  it('keeps the diy sheet readable by showing a warning when supplement pricing preview fails', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('const pricePreviewWarning = ref(\'\')')
+    expect(source).toContain('pricePreviewWarning.value = \'\'')
+    expect(source).toContain('pricePreview.value = null')
+    expect(source).toContain('pricePreviewWarning.value = getDiySheetPricePreviewWarning(error)')
+    expect(source).toContain('<view v-if="pricePreviewWarning" class="preview-warning-summary">')
+    expect(source).toContain('{{ pricePreviewWarning }}')
+  })
+
   it('renders the saved diy sheet image as a cooking-first share card', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),

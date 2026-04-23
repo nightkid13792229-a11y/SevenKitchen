@@ -84,6 +84,10 @@
           </text>
         </view>
 
+        <view v-if="pricePreviewWarning" class="preview-warning-summary">
+          <text class="preview-warning-text">{{ pricePreviewWarning }}</text>
+        </view>
+
         <!-- 食材 -->
         <view v-if="foodItemsDetailed.length > 0" class="ingredient-group">
           <view class="ingredient-category-title">食材</view>
@@ -531,6 +535,11 @@ import {
   getPurchaseTipByPlatform,
   getSpecRecommendedPurchaseChannelDisplay
 } from './copy'
+import {
+  buildFallbackFoodIngredientItems,
+  collectFoodIngredientIdsForRecommendations,
+  getDiySheetPricePreviewWarning
+} from './fallback'
 
 // 页面参数
 const recipeId = ref('')
@@ -588,21 +597,37 @@ const selectedRpIndexMap = ref<Record<string, number>>({})
 const showImagePreview = ref(false)
 const previewImageUrl = ref('')
 const showWarning = ref(true)
+const pricePreviewWarning = ref('')
 
 // 全局配置中的补剂损耗率（默认5%）
 const globalSupplementLossRate = ref(0.05)
+const totalFoodNetWeightG = computed(() => dailyIntakeG.value * cycleDays.value)
 
 const ingredientDetails = computed(() => {
   return pricePreview.value?.pricingBreakdown?.ingredientDetails || []
 })
 
+const foodSourceItems = computed(() => {
+  const pricedFoodItems = ingredientDetails.value.filter((item: any) => item.type === 'FOOD')
+  if (pricedFoodItems.length > 0) {
+    return pricedFoodItems
+  }
+
+  return buildFallbackFoodIngredientItems(recipe.value.items || [], totalFoodNetWeightG.value)
+})
+
 // 计算采购清单数据
 const purchaseListData = computed(() => {
-  if (ingredientDetails.value.length === 0) {
+  if (foodSourceItems.value.length === 0 && ingredientDetails.value.length === 0) {
     return []
   }
 
-  return ingredientDetails.value.map((item: any) => buildPurchaseListItem(item))
+  return [
+    ...foodSourceItems.value.map((item: any) => buildPurchaseListItem(item)),
+    ...ingredientDetails.value
+      .filter((item: any) => item.type === 'SUPPLEMENT')
+      .map((item: any) => buildPurchaseListItem(item))
+  ]
 })
 
 // 分类：食材类
@@ -660,8 +685,7 @@ const dogAgeText = computed(() => {
 })
 
 const foodItemsDetailed = computed(() => {
-  return ingredientDetails.value
-    .filter((item: any) => item.type === 'FOOD')
+  return foodSourceItems.value
     .map((item: any) => {
       const base = buildPurchaseListItem(item)
       const rps = recommendedProductsMap.value[item.ingredientId] || []
@@ -993,9 +1017,12 @@ async function loadPricePreview() {
 
     if (res.code === 0 && res.data) {
       pricePreview.value = res.data
+      pricePreviewWarning.value = ''
       console.log('[DIYSheet] 价格预览加载成功')
     }
   } catch (error) {
+    pricePreview.value = null
+    pricePreviewWarning.value = getDiySheetPricePreviewWarning(error)
     console.error('[DIYSheet] Load price preview error:', error)
     // 不显示错误提示，因为采购清单可以降级处理
   }
@@ -1003,12 +1030,10 @@ async function loadPricePreview() {
 
 async function loadRecommendedProducts() {
   try {
-    // 从 pricePreview 的 ingredientDetails 中收集所有原料 ID
-    const ingredientIds = pricePreview.value?.pricingBreakdown?.ingredientDetails
-      ?.filter((item: any) => item.type === 'FOOD')
-      ?.map((item: any) => item.ingredientId)
-      ?.filter(Boolean) || []
-    const uniqueIngredientIds = Array.from(new Set(ingredientIds))
+    const uniqueIngredientIds = collectFoodIngredientIdsForRecommendations(
+      pricePreview.value,
+      recipe.value.items || []
+    )
 
     if (uniqueIngredientIds.length === 0) return
 
@@ -1803,6 +1828,20 @@ onShareTimeline(() => {
   background-color: #f0f9ff;
   border-radius: 8rpx;
   border-left: 4rpx solid #1890ff;
+}
+
+.preview-warning-summary {
+  padding: 16rpx 18rpx;
+  background-color: #fff7e6;
+  border-radius: 8rpx;
+  border-left: 4rpx solid #faad14;
+}
+
+.preview-warning-text {
+  display: block;
+  font-size: 25rpx;
+  color: #ad6800;
+  line-height: 1.5;
 }
 
 .info-text {

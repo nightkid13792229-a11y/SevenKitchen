@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 
 describe('recipe-order phase one UI contract', () => {
@@ -289,18 +289,24 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).toContain("url: '/global-config'");
     expect(source).toContain('packageExampleImageUrl');
     expect(source).toContain('shippingCompanyLogoUrl');
-    expect(source).toContain("const LOCAL_PACKAGE_EXAMPLE_IMAGE_URL = '/static/product-explanation/package-example.png'");
-    expect(source).toContain("const LOCAL_SHIPPING_COMPANY_LOGO_URL = '/static/product-explanation/shipping-logo.png'");
+    expect(source).toContain("const DEFAULT_PACKAGE_EXAMPLE_IMAGE_URL = 'https://img.sevenkitchen.cloud/package-images/1769932497277-7bf4f880.jpg'");
+    expect(source).toContain("const DEFAULT_SHIPPING_COMPANY_LOGO_URL = 'https://img.sevenkitchen.cloud/shipping-logos/1769932504418-14b5188c.png'");
+    expect(source).not.toContain('/static/product-explanation/package-example');
+    expect(source).not.toContain('/static/product-explanation/shipping-logo');
     expect(source).toContain('https://img.sevenkitchen.cloud/package-images/1769932497277-7bf4f880.jpg');
     expect(source).toContain('https://img.sevenkitchen.cloud/shipping-logos/1769932504418-14b5188c.png');
     expect(source).toContain('STALE_PRODUCT_EXPLANATION_MEDIA_URLS');
     expect(source).toContain('isUsableProductExplanationMediaUrl');
     expect(source).toContain('isUsableProductExplanationMediaUrl(configuredPackageImageUrl)');
     expect(source).toContain('isUsableProductExplanationMediaUrl(configuredShippingLogoUrl)');
-    expect(source).toContain('packageImageUrl: LOCAL_PACKAGE_EXAMPLE_IMAGE_URL');
-    expect(source).toContain('shippingLogoUrl: LOCAL_SHIPPING_COMPANY_LOGO_URL');
-    expect(existsSync(resolve(process.cwd(), 'src/static/product-explanation/package-example.png'))).toBe(true);
-    expect(existsSync(resolve(process.cwd(), 'src/static/product-explanation/shipping-logo.png'))).toBe(true);
+    expect(source).toContain('packageImageUrl: DEFAULT_PACKAGE_EXAMPLE_IMAGE_URL');
+    expect(source).toContain('shippingLogoUrl: DEFAULT_SHIPPING_COMPANY_LOGO_URL');
+    const localProductExplanationStaticDir = resolve(process.cwd(), 'src/static/product-explanation');
+    expect(
+      existsSync(localProductExplanationStaticDir)
+        ? readdirSync(localProductExplanationStaticDir)
+        : [],
+    ).toEqual([]);
     expect(source).toContain("normalizeImageUrl('http://img.sevenkitchen.cloud/package-images/1767527958742-149215e3.jpg')");
     expect(source).toContain("normalizeImageUrl('http://img.sevenkitchen.cloud/shipping-logos/1767529001420-55fde8f2.png')");
     expect(source).toContain('分装与物流');

@@ -709,10 +709,8 @@ const showPriceBreakdown = ref(false)
 // 计算说明展开状态
 const showCalculationDetails = ref(false)
 
-const REMOTE_PACKAGE_EXAMPLE_IMAGE_URL = 'https://img.sevenkitchen.cloud/package-images/1769932497277-7bf4f880.jpg'
-const REMOTE_SHIPPING_COMPANY_LOGO_URL = 'https://img.sevenkitchen.cloud/shipping-logos/1769932504418-14b5188c.png'
-const LOCAL_PACKAGE_EXAMPLE_IMAGE_URL = '/static/product-explanation/package-example.png'
-const LOCAL_SHIPPING_COMPANY_LOGO_URL = '/static/product-explanation/shipping-logo.png'
+const DEFAULT_PACKAGE_EXAMPLE_IMAGE_URL = 'https://img.sevenkitchen.cloud/package-images/1769932497277-7bf4f880.jpg'
+const DEFAULT_SHIPPING_COMPANY_LOGO_URL = 'https://img.sevenkitchen.cloud/shipping-logos/1769932504418-14b5188c.png'
 const STALE_PRODUCT_EXPLANATION_MEDIA_URLS = new Set([
   normalizeImageUrl('http://img.sevenkitchen.cloud/package-images/1767527958742-149215e3.jpg'),
   normalizeImageUrl('https://img.sevenkitchen.cloud/package-images/1767527958742-149215e3.jpg'),
@@ -721,8 +719,8 @@ const STALE_PRODUCT_EXPLANATION_MEDIA_URLS = new Set([
 ].filter(Boolean))
 
 const productExplanationMediaConfig = ref({
-  packageImageUrl: LOCAL_PACKAGE_EXAMPLE_IMAGE_URL,
-  shippingLogoUrl: LOCAL_SHIPPING_COMPANY_LOGO_URL,
+  packageImageUrl: DEFAULT_PACKAGE_EXAMPLE_IMAGE_URL,
+  shippingLogoUrl: DEFAULT_SHIPPING_COMPANY_LOGO_URL,
 })
 
 const productExplanationCards = computed<ProductExplanationCard[]>(() => [
@@ -1098,10 +1096,10 @@ async function loadProductExplanationMediaConfig() {
       productExplanationMediaConfig.value = {
         packageImageUrl: isUsableProductExplanationMediaUrl(configuredPackageImageUrl)
           ? configuredPackageImageUrl
-          : LOCAL_PACKAGE_EXAMPLE_IMAGE_URL,
+          : DEFAULT_PACKAGE_EXAMPLE_IMAGE_URL,
         shippingLogoUrl: isUsableProductExplanationMediaUrl(configuredShippingLogoUrl)
           ? configuredShippingLogoUrl
-          : LOCAL_SHIPPING_COMPANY_LOGO_URL,
+          : DEFAULT_SHIPPING_COMPANY_LOGO_URL,
       }
     }
   } catch (error) {
@@ -1114,19 +1112,19 @@ function isUsableProductExplanationMediaUrl(url: string | null | undefined): url
 }
 
 function handleProductExplanationPackageImageError() {
-  if (productExplanationMediaConfig.value.packageImageUrl !== LOCAL_PACKAGE_EXAMPLE_IMAGE_URL) {
+  if (productExplanationMediaConfig.value.packageImageUrl !== DEFAULT_PACKAGE_EXAMPLE_IMAGE_URL) {
     productExplanationMediaConfig.value = {
       ...productExplanationMediaConfig.value,
-      packageImageUrl: LOCAL_PACKAGE_EXAMPLE_IMAGE_URL,
+      packageImageUrl: DEFAULT_PACKAGE_EXAMPLE_IMAGE_URL,
     }
   }
 }
 
 function handleProductExplanationShippingLogoError() {
-  if (productExplanationMediaConfig.value.shippingLogoUrl !== LOCAL_SHIPPING_COMPANY_LOGO_URL) {
+  if (productExplanationMediaConfig.value.shippingLogoUrl !== DEFAULT_SHIPPING_COMPANY_LOGO_URL) {
     productExplanationMediaConfig.value = {
       ...productExplanationMediaConfig.value,
-      shippingLogoUrl: LOCAL_SHIPPING_COMPANY_LOGO_URL,
+      shippingLogoUrl: DEFAULT_SHIPPING_COMPANY_LOGO_URL,
     }
   }
 }

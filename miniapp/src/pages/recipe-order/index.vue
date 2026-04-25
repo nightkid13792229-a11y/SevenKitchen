@@ -446,7 +446,7 @@
         :disabled="!canBuyNow"
         @tap="buyNow"
       >
-        立即下单
+        确认订单
       </button>
     </view>
   </view>
@@ -3039,6 +3039,7 @@ function goToCreateDog() {
   right: 0;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 16rpx;
   padding: 16rpx 20rpx;
   background-color: #fff;
@@ -3047,25 +3048,35 @@ function goToCreateDog() {
 }
 
 .bottom-price {
-  min-width: 220rpx;
+  min-width: 0;
+  max-width: calc(100% - 256rpx);
+  flex: 0 1 auto;
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   gap: 4rpx;
+  text-align: right;
 }
 
 .bottom-total {
+  max-width: 100%;
   font-size: 36rpx;
   font-weight: bold;
   color: #ff4d4f;
+  text-align: right;
 }
 
 .bottom-estimate {
+  max-width: 100%;
   font-size: 22rpx;
   color: #666;
+  text-align: right;
 }
 
 .btn-buy-now {
-  flex: 1;
+  flex-shrink: 0;
+  width: 240rpx;
+  margin: 0;
   height: 88rpx;
   display: flex;
   align-items: center;
@@ -4314,6 +4325,7 @@ function goToCreateDog() {
   z-index: 20;
   display: flex;
   align-items: center;
+  justify-content: flex-end;
   gap: 18rpx;
   padding: 20rpx 28rpx calc(20rpx + env(safe-area-inset-bottom));
   background-color: rgba(255, 255, 255, 0.98);
@@ -4322,27 +4334,36 @@ function goToCreateDog() {
 
 .bottom-price {
   min-width: 0;
-  flex: 1;
+  max-width: calc(100% - 258rpx);
+  flex: 0 1 auto;
   display: flex;
   flex-direction: column;
+  align-items: flex-end;
   gap: 6rpx;
+  text-align: right;
 }
 
 .bottom-total {
+  max-width: 100%;
   font-size: 36rpx;
   color: #e6543f;
   font-weight: 800;
   line-height: 1.15;
+  text-align: right;
 }
 
 .bottom-estimate {
+  max-width: 100%;
   font-size: 23rpx;
   color: #687078;
   line-height: 1.3;
+  text-align: right;
 }
 
 .btn-buy-now {
   width: 240rpx;
+  flex-shrink: 0;
+  margin: 0;
   height: 84rpx;
   line-height: 84rpx;
   border-radius: 8rpx;

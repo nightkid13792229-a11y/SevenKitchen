@@ -49,10 +49,55 @@ describe('checkout direct-buy storage contract', () => {
     expect(source).toContain('价格已更新，请确认后重新提交')
   })
 
-  it('shows total, estimated feed days, and the subtitle in the bottom bar', () => {
+  it('keeps total amount and estimated feed days available on checkout', () => {
     expect(source).toContain('estimatedFeedDays')
     expect(source).toContain('totalAmount')
     expect(source).toContain('bottom-bar')
     expect(source).toContain('预计可喂')
+  })
+
+  it('matches the recipe order bottom bar layout for amount and package summary', () => {
+    const templateSource = source.slice(0, source.indexOf('<script setup'))
+    const bottomBarBlocks = [...source.matchAll(/\.bottom-bar\s*\{([\s\S]*?)\}/g)]
+      .map((match) => match[1])
+    const bottomPriceBlocks = [...source.matchAll(/\.bottom-price\s*\{([\s\S]*?)\}/g)]
+      .map((match) => match[1])
+    const submitButtonBlocks = [...source.matchAll(/\.btn-submit-order\s*\{([\s\S]*?)\}/g)]
+      .map((match) => match[1])
+
+    expect(templateSource).toContain('bottom-price')
+    expect(templateSource).toContain('bottom-total')
+    expect(templateSource).toContain('bottom-estimate')
+    expect(templateSource).toContain('btn-submit-order')
+    expect(templateSource).toContain('提交订单')
+    expect(templateSource).not.toContain('bottom-bar-amount-label')
+    expect(templateSource).not.toContain('预计可喂{{ orderConfig.estimatedFeedDays }}天')
+
+    expect(source).toContain('bottomPriceTitle')
+    expect(source).toContain('bottomPriceSubtitle')
+    expect(source).toContain('averagePricePerPackage')
+    expect(source).toContain('packagePlanSummaryText')
+    expect(source).toContain('¥${averagePricePerPackage.value.toFixed(2)}/袋')
+    expect(source).toContain('多规格共 ${orderConfig.value.totalPackages}袋')
+
+    expect(bottomBarBlocks.length).toBeGreaterThan(0)
+    expect(bottomPriceBlocks.length).toBeGreaterThan(0)
+    expect(submitButtonBlocks.length).toBeGreaterThan(0)
+
+    bottomBarBlocks.forEach((block) => {
+      expect(block).toContain('justify-content: flex-end;')
+    })
+
+    bottomPriceBlocks.forEach((block) => {
+      expect(block).toContain('flex: 0 1 auto;')
+      expect(block).toContain('align-items: flex-end;')
+      expect(block).toContain('text-align: right;')
+      expect(block).not.toContain('flex: 1;')
+    })
+
+    submitButtonBlocks.forEach((block) => {
+      expect(block).toContain('width: 240rpx;')
+      expect(block).toContain('margin: 0;')
+    })
   })
 })

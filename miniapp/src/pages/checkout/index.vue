@@ -195,19 +195,16 @@
 
     <!-- 底部操作栏 -->
     <view class="bottom-bar">
-      <view class="bottom-bar-summary">
-        <text class="bottom-bar-amount-label">合计</text>
-        <text class="bottom-bar-amount">¥{{ totalAmount.toFixed(2) }}</text>
-        <text class="bottom-bar-subtitle">
-          预计可喂{{ orderConfig.estimatedFeedDays }}天 · {{ orderConfig.totalGrams }}g / {{ orderConfig.dailyIntakeG }}g
-        </text>
+      <view class="bottom-price">
+        <text class="bottom-total">{{ bottomPriceTitle }}</text>
+        <text class="bottom-estimate">{{ bottomPriceSubtitle }}</text>
       </view>
       <button
-        class="btn-pay-with-amount"
+        class="btn-submit-order"
         :disabled="!canSubmitOrder"
         @tap="submitOrder"
       >
-        <text class="btn-text">提交订单</text>
+        提交订单
       </button>
     </view>
 
@@ -405,6 +402,39 @@ const estimatedDeliveryDateRange = computed(() => {
 // ========== 计算属性 ==========
 const totalAmount = computed(() => {
   return directBuyPrice.value.amountTotal
+})
+
+const averagePricePerPackage = computed(() => {
+  if (orderConfig.value.totalPackages <= 0) return 0
+  return totalAmount.value / orderConfig.value.totalPackages
+})
+
+const isSinglePackageSpec = computed(() => orderConfig.value.packagePlan.length === 1)
+
+const packagePlanSummaryText = computed(() => {
+  if (isSinglePackageSpec.value) {
+    const row = orderConfig.value.packagePlan[0]
+    if (!row) return ''
+    return `${row.packageSpecG}g × ${row.packageCount}袋`
+  }
+
+  return `多规格共 ${orderConfig.value.totalPackages}袋`
+})
+
+const bottomPriceTitle = computed(() => {
+  return `¥${totalAmount.value.toFixed(2)}`
+})
+
+const bottomPriceSubtitle = computed(() => {
+  if (orderConfig.value.totalPackages <= 0 || orderConfig.value.packagePlan.length === 0) {
+    return '等待分装信息'
+  }
+
+  if (isSinglePackageSpec.value) {
+    return `¥${averagePricePerPackage.value.toFixed(2)}/袋 · ${packagePlanSummaryText.value}`
+  }
+
+  return `均价 ¥${averagePricePerPackage.value.toFixed(2)}/袋 · ${packagePlanSummaryText.value}`
 })
 
 const canSubmitOrder = computed(() => {
@@ -1690,68 +1720,66 @@ function goToAddAddress() {
   right: 0;
   display: flex;
   align-items: center;
-  gap: 20rpx;
-  padding: 16rpx 20rpx;
-  background-color: #fff;
-  border-top: 1rpx solid #e5e5e5;
+  justify-content: flex-end;
+  gap: 18rpx;
+  padding: 20rpx 28rpx calc(20rpx + env(safe-area-inset-bottom));
+  background-color: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 -8rpx 28rpx rgba(18, 24, 31, 0.08);
   z-index: 100;
 }
 
-.bottom-bar-summary {
-  flex: 1;
+.bottom-price {
   min-width: 0;
+  max-width: calc(100% - 258rpx);
+  flex: 0 1 auto;
   display: flex;
   flex-direction: column;
-  gap: 4rpx;
+  align-items: flex-end;
+  gap: 6rpx;
+  text-align: right;
 }
 
-.bottom-bar-amount-label {
-  font-size: 22rpx;
-  color: #8c8c8c;
+.bottom-total {
+  max-width: 100%;
+  font-size: 36rpx;
+  color: #e6543f;
+  font-weight: 800;
+  line-height: 1.15;
+  text-align: right;
 }
 
-.bottom-bar-amount {
-  font-size: 40rpx;
-  font-weight: bold;
-  color: #ff4d4f;
-  line-height: 1.1;
-}
-
-.bottom-bar-subtitle {
+.bottom-estimate {
+  max-width: 100%;
   display: block;
-  font-size: 22rpx;
-  color: #666;
+  font-size: 23rpx;
+  color: #687078;
   line-height: 1.3;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  text-align: right;
 }
 
-.btn-pay-with-amount {
-  width: 260rpx;
+.btn-submit-order {
+  width: 240rpx;
   flex-shrink: 0;
-  height: 96rpx;
+  margin: 0;
+  height: 84rpx;
+  line-height: 84rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 16rpx;
   background-color: #1890ff;
   color: #fff;
-  border-radius: 48rpx;
-  font-size: 32rpx;
-  font-weight: bold;
+  border-radius: 8rpx;
+  font-size: 30rpx;
+  font-weight: 700;
   border: none;
-  box-shadow: 0 4rpx 12rpx rgba(24, 144, 255, 0.3);
 }
 
-.btn-pay-with-amount[disabled] {
-  background-color: #ccc;
-  color: #999;
-  box-shadow: none;
-}
-
-.btn-text {
-  font-size: 32rpx;
+.btn-submit-order[disabled] {
+  background-color: #d8dde3;
+  color: #fff;
 }
 
 .btn-amount {

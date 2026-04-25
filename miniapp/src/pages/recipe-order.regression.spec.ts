@@ -363,4 +363,35 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).not.toContain('每日预估');
     expect(source).not.toContain('pricePerDayText');
   });
+
+  it('keeps the bottom pricing summary next to the confirmation button and right aligned', () => {
+    expect(templateSource).toContain('确认订单');
+    expect(templateSource).not.toContain('立即下单');
+
+    const bottomBarBlocks = [...source.matchAll(/\.bottom-bar\s*\{([\s\S]*?)\}/g)]
+      .map((match) => match[1]);
+    const bottomPriceBlocks = [...source.matchAll(/\.bottom-price\s*\{([\s\S]*?)\}/g)]
+      .map((match) => match[1]);
+    const buyButtonBlocks = [...source.matchAll(/\.btn-buy-now\s*\{([\s\S]*?)\}/g)]
+      .map((match) => match[1]);
+
+    expect(bottomBarBlocks.length).toBeGreaterThan(0);
+    expect(bottomPriceBlocks.length).toBeGreaterThan(0);
+    expect(buyButtonBlocks.length).toBeGreaterThan(0);
+
+    bottomBarBlocks.forEach((block) => {
+      expect(block).toContain('justify-content: flex-end;');
+    });
+
+    bottomPriceBlocks.forEach((block) => {
+      expect(block).toContain('flex: 0 1 auto;');
+      expect(block).toContain('align-items: flex-end;');
+      expect(block).toContain('text-align: right;');
+      expect(block).not.toContain('flex: 1;');
+    });
+
+    buyButtonBlocks.forEach((block) => {
+      expect(block).toContain('margin: 0;');
+    });
+  });
 });

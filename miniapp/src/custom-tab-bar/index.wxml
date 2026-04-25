@@ -29,7 +29,7 @@
     data-index="{{isStaff ? 2 : 1}}"
     bindtap="switchTab"
   >
-    <image class="icon" src="{{isStaff && selected === 2 ? list[1].selectedIconPath : list[1].iconPath}}" mode="aspectFit" />
+    <image class="icon" src="{{(isStaff && selected === 2) || (!isStaff && selected === 1) ? list[1].selectedIconPath : list[1].iconPath}}" mode="aspectFit" />
     <text class="text">我的</text>
   </view>
 </view>

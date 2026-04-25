@@ -336,6 +336,7 @@ import { onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
 import { getRecipeCoverImageUrl, isKnownStaleRecipeCoverUrl, normalizeImageUrl } from '../../utils/config'
 import { resolveDogProfileEntryRoute } from '../../utils/dog-profile-form'
+import { refreshCurrentTabBar } from '../../utils/tabbar'
 import { CURRENT_SHARE_CONFIG } from '@/config/share.config'
 
 interface RecipeItem {
@@ -513,15 +514,12 @@ onUnmounted(() => {
 
 // 页面显示时重新检查登录状态（解决switchTab后不更新的问题）
 onShow(() => {
+  refreshCurrentTabBar()
   checkLoginStatus()
 
   if (!hasMountedHome.value) {
     return
   }
-
-  // 更新自定义 TabBar 状态
-  // 注意：自定义TabBar会在页面切换时自动检测当前页面路径并更新selected状态
-  // 不需要页面主动调用更新方法
 
   // 根据登录状态处理狗狗数据
   if (isLoggedIn.value) {

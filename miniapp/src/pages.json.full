@@ -286,6 +286,8 @@
       },
       {
         "pagePath": "pages/staff-workbench/index",
+        "iconPath": "static/tabbar/staff.png",
+        "selectedIconPath": "static/tabbar/staff-active.png",
         "text": "工作台"
       },
       {
@@ -297,4 +299,3 @@
     ]
   }
 }
-

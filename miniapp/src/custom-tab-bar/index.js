@@ -35,6 +35,38 @@ Component({
   },
 
   methods: {
+    getStoredUser() {
+      try {
+        let user = wx.getStorageSync('user');
+
+        if (!user || user === '{}') {
+          user = wx.getStorageSync('userInfo');
+        }
+
+        if (typeof user === 'string') {
+          const trimmed = user.trim();
+          if (!trimmed || trimmed === '{}') {
+            return null;
+          }
+          return JSON.parse(trimmed);
+        }
+
+        if (user && typeof user === 'object') {
+          return user;
+        }
+
+        return null;
+      } catch (error) {
+        console.error('[TabBar] Failed to parse stored user:', error);
+        return null;
+      }
+    },
+
+    isStoredStaffUser() {
+      const user = this.getStoredUser();
+      return !!user && (user.role === 'STAFF' || user.role === 'ADMIN');
+    },
+
     /**
      * 根据当前页面路径自动计算selected值
      * 这是消除闪烁的关键：不依赖storage，直接从页面路径判断
@@ -53,8 +85,7 @@ Component({
         }
 
         // 直接从storage读取用户角色，避免依赖this.data.isStaff（可能有异步延迟）
-        const user = wx.getStorageSync('user');
-        const isStaff = user && (user.role === 'STAFF' || user.role === 'ADMIN');
+        const isStaff = this.isStoredStaffUser();
 
         // 根据页面路径计算selected索引
         let newSelected = 0;
@@ -85,8 +116,7 @@ Component({
 
     checkUserRole() {
       try {
-        const user = wx.getStorageSync('user');
-        const isStaff = user && (user.role === 'STAFF' || user.role === 'ADMIN');
+        const isStaff = this.isStoredStaffUser();
 
         // 只在isStaff变化时才更新
         if (this.data.isStaff !== isStaff) {
@@ -109,6 +139,11 @@ Component({
       const url = data.path;
       const index = parseInt(data.index, 10); // 确保是数字
 
+      if (!url || Number.isNaN(index)) {
+        this.updateSelectedByCurrentPage();
+        return;
+      }
+
       // 立即更新本地状态（视觉反馈）
       this.setData({
         selected: index
@@ -119,6 +154,7 @@ Component({
         url: url,
         fail: (err) => {
           console.error('[TabBar] Failed to switch page:', err);
+          this.updateSelectedByCurrentPage();
         }
       });
     },

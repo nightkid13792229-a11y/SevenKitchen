@@ -18,4 +18,81 @@ describe('custom tab bar runtime regressions', () => {
     expect(source).not.toContain("console.log('[TabBar] User from storage:'")
     expect(source).not.toContain("console.log('[TabBar] Current page route:'")
   })
+
+  it('normalizes stored user data before deciding staff tab visibility', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/custom-tab-bar/index.js'),
+      'utf-8',
+    )
+
+    expect(source).toContain('getStoredUser()')
+    expect(source).toContain("wx.getStorageSync('userInfo')")
+    expect(source).toContain('JSON.parse(trimmed)')
+    expect(source).toContain('isStoredStaffUser()')
+  })
+
+  it('keeps the mine tab selected icon in sync for staff and non-staff layouts', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/custom-tab-bar/index.wxml'),
+      'utf-8',
+    )
+
+    expect(source).toContain('(isStaff && selected === 2) || (!isStaff && selected === 1)')
+  })
+
+  it('keeps the staff tab configured with icons in the native tabBar list', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages.json'),
+      'utf-8',
+    )
+
+    expect(source).toContain('"pagePath": "pages/staff-workbench/index"')
+    expect(source).toContain('"iconPath": "static/tabbar/staff.png"')
+    expect(source).toContain('"selectedIconPath": "static/tabbar/staff-active.png"')
+  })
+
+  it('uses switchTab when staff login enters a tabBar page', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/login/staff.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain("uni.switchTab({ url: '/pages/home/index' })")
+    expect(source).not.toContain("uni.redirectTo({ url: '/pages/home/index' })")
+  })
+
+  it('does not rewrite the primary user cache as a JSON string', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain("uni.setStorageSync('user', res.data)")
+    expect(source).not.toContain("uni.setStorageSync('user', JSON.stringify(res.data))")
+  })
+
+  it('actively refreshes the custom tab bar from each tab page on show', () => {
+    const tabPagePaths = [
+      'src/pages/home/index.vue',
+      'src/pages/staff-workbench/index.vue',
+      'src/pages/me/index.vue',
+    ]
+
+    for (const pagePath of tabPagePaths) {
+      const source = readFileSync(resolve(process.cwd(), pagePath), 'utf-8')
+      expect(source).toContain("import { refreshCurrentTabBar } from '../../utils/tabbar'")
+      expect(source).toContain('refreshCurrentTabBar()')
+    }
+  })
+
+  it('uses the current page getTabBar bridge to refresh the custom tab bar instance', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/utils/tabbar.ts'),
+      'utf-8',
+    )
+
+    expect(source).toContain('getCurrentPages()')
+    expect(source).toContain('$scope?.getTabBar?.()')
+    expect(source).toContain('tabBar.refresh()')
+  })
 })

@@ -143,7 +143,7 @@ const handleLogin = async () => {
 
       // 跳转到首页（员工首页）
       setTimeout(() => {
-        uni.redirectTo({ url: '/pages/home/index' });
+        uni.switchTab({ url: '/pages/home/index' });
       }, 500);
     } else {
       throw new Error(response.message || '登录失败');

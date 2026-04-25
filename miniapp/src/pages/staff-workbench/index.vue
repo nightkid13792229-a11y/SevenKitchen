@@ -117,6 +117,7 @@
 import { ref, computed, onMounted } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import { request } from '../../utils/api';
+import { refreshCurrentTabBar } from '../../utils/tabbar';
 
 const user = ref<any>(null);
 const isStaff = ref(false);
@@ -146,9 +147,7 @@ onMounted(() => {
 
 onShow(() => {
   console.log('[StaffWorkbench] onShow - checking permission...');
-  // 更新自定义 TabBar 状态
-  // 注意：自定义TabBar会在页面切换时自动检测当前页面路径并更新selected状态
-  // 不需要页面主动调用更新方法
+  refreshCurrentTabBar()
 
   checkPermission()
 });
@@ -217,6 +216,7 @@ const loadUserInfoFromApi = async () => {
       console.log('[StaffWorkbench] User info loaded from API:', res.data);
       // 更新storage
       uni.setStorageSync('user', res.data);
+      refreshCurrentTabBar()
 
       // 重新检查权限
       checkPermission();

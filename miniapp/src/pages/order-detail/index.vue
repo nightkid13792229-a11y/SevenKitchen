@@ -915,9 +915,9 @@ async function loadUserInfoFromApi() {
       }
       console.log('[Order Detail] User info loaded from API:', userInfo.value)
 
-      // 保存到两个key，确保兼容性
-      uni.setStorageSync('user', JSON.stringify(res.data))
-      uni.setStorageSync('userInfo', JSON.stringify(res.data))
+      // 保存到两个key，确保兼容性；user 保持对象格式，避免 TabBar 角色判断失效
+      uni.setStorageSync('user', res.data)
+      uni.setStorageSync('userInfo', res.data)
 
       if (orderId.value) {
         await loadOrderDetail()

@@ -232,4 +232,62 @@ describe('supplement alternatives helpers', () => {
       )
     ).toBeCloseTo(13.0328, 6)
   })
+
+  it('recalculates supplement amount from selected alternative active nutrients when public payload has no nutritionProfile', () => {
+    const options = buildSupplementCandidateOptions(
+      {
+        ingredientId: 'vitamin-e-default',
+        name: '维生素E-200',
+        properties: {}
+      },
+      {
+        ingredient: {
+          id: 'vitamin-e-default',
+          activeNutrients: {
+            'vitamins.vitaminE': {
+              value: 200,
+              unit: 'IU'
+            }
+          },
+          properties: {}
+        },
+        supplementAlternatives: [
+          {
+            ingredientId: 'vitamin-e-400',
+            ingredientName: '维生素E-400',
+            ingredient: {
+              id: 'vitamin-e-400',
+              name: '维生素E-400',
+              activeNutrients: {
+                'vitamins.vitaminE': {
+                  value: 400,
+                  unit: 'IU'
+                }
+              },
+              properties: {}
+            }
+          }
+        ]
+      }
+    )
+
+    expect(options).toHaveLength(2)
+    expect(
+      calculateSupplementAmountForOption(
+        {
+          amount: 5,
+          supplementTargets: [
+            {
+              fieldPath: 'vitamins.vitaminE',
+              label: '维生素 E',
+              targetValuePerKg: 1000,
+              unit: 'IU'
+            }
+          ]
+        },
+        options[1],
+        1000
+      )
+    ).toBeCloseTo(2.5, 6)
+  })
 })

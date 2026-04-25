@@ -15,6 +15,7 @@ export interface SupplementOption {
   purchaseLink?: any;
   displayUnit?: string;
   nutritionProfile?: any;
+  activeNutrients?: Record<string, { value: number; unit: string }>;
   properties?: Record<string, any>;
   timingLabel?: string;
   addTimingLabel?: string;
@@ -60,6 +61,10 @@ export function buildSupplementCandidateOptions(
         defaultIngredient?.nutritionProfile ||
         baseItem.nutritionProfile ||
         baseItem.nutrition_profile_snapshot,
+      activeNutrients:
+        defaultIngredient?.activeNutrients ||
+        baseItem.activeNutrients ||
+        baseItem.properties?.active_nutrients,
       properties: defaultIngredient?.properties || baseItem.properties,
       addTimingLabel: defaultIngredient?.addTimingLabel,
       timingLabel: defaultIngredient?.addTimingLabel || baseItem.preparationMethod,
@@ -88,6 +93,8 @@ export function buildSupplementCandidateOptions(
       purchaseLink: ingredient.purchaseLink || ingredient.properties?.purchase_link,
       displayUnit: ingredient.displayUnit,
       nutritionProfile: ingredient.nutritionProfile,
+      activeNutrients:
+        ingredient.activeNutrients || ingredient.properties?.active_nutrients,
       properties: ingredient.properties,
       addTimingLabel: ingredient.addTimingLabel,
       timingLabel: ingredient.addTimingLabel,
@@ -109,6 +116,9 @@ export function calculateSupplementAmountForOption(
   selectedOption: SupplementOption | undefined,
   totalFoodInputWeightG: number,
 ): number {
+  const selectedActiveNutrients =
+    selectedOption?.activeNutrients || selectedOption?.properties?.active_nutrients;
+
   const result = calculateSupplementAmountForProduction(
     {
       ...baseItem,
@@ -116,6 +126,16 @@ export function calculateSupplementAmountForOption(
         selectedOption?.nutritionProfile ||
         baseItem.nutritionProfile ||
         baseItem.nutrition_profile_snapshot,
+      activeNutrients:
+        selectedActiveNutrients ||
+        baseItem.activeNutrients ||
+        baseItem.active_nutrients,
+      properties: {
+        ...(baseItem.properties || {}),
+        ...(selectedActiveNutrients
+          ? { active_nutrients: selectedActiveNutrients }
+          : {}),
+      },
       displayUnit: selectedOption?.displayUnit || baseItem.displayUnit,
       ingredient: {
         ...(baseItem.ingredient || {}),
@@ -123,6 +143,16 @@ export function calculateSupplementAmountForOption(
           selectedOption?.nutritionProfile ||
           baseItem.ingredient?.nutritionProfile ||
           baseItem.nutritionProfile,
+        activeNutrients:
+          selectedActiveNutrients ||
+          baseItem.ingredient?.activeNutrients ||
+          baseItem.activeNutrients,
+        properties: {
+          ...(baseItem.ingredient?.properties || {}),
+          ...(selectedActiveNutrients
+            ? { active_nutrients: selectedActiveNutrients }
+            : {}),
+        },
         unitDisplayLabel:
           selectedOption?.displayUnit || baseItem.ingredient?.unitDisplayLabel,
       },

@@ -773,9 +773,22 @@ const supplementItemsDetailed = computed(() => {
       nutrientTargetValue: item.nutrientTargetValue,                // 营养目标值
       supplementTargets: item.supplementTargets || item.supplement_targets || recipeItem?.supplementTargets || recipeItem?.supplement_targets || [],
       nutritionProfile: selectedRp?.nutritionProfile || item.nutritionProfile || item.nutrition_profile_snapshot || item.ingredient?.nutritionProfile,
+      activeNutrients:
+        selectedRp?.activeNutrients ||
+        selectedRp?.properties?.active_nutrients ||
+        item.activeNutrients ||
+        item.properties?.active_nutrients,
       nutrition_profile_snapshot: selectedRp?.nutritionProfile || item.nutrition_profile_snapshot,
       type: item.type,                                              // 类型标识
-      properties: item.properties,                                  // 完整的properties
+      properties: {
+        ...(item.properties || {}),
+        ...((selectedRp?.activeNutrients || selectedRp?.properties?.active_nutrients)
+          ? {
+              active_nutrients:
+                selectedRp?.activeNutrients || selectedRp?.properties?.active_nutrients
+            }
+          : {})
+      },                                                            // 完整的properties
       selectedProductDisplayText,                                   // 已选商品入口文案
       choiceLabel: formatRecommendationActionLabel(supplementOptions.length), // 候选数量提示
       recommendedSpecPrintText: selectedProductDisplayText,

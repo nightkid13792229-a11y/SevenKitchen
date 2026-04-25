@@ -724,6 +724,7 @@ const foodItemsDetailed = computed(() => {
         brand: selectedRp?.brand || '-',
         productModel: selectedRp?.productModel,
         purchaseChannel: selectedRp?.purchaseChannel,
+        imageUrl: selectedRp?.imageUrl,
         purchaseLink,
         selectedProductDisplayText,
         choiceLabel: formatRecommendationActionLabel(rps.length),

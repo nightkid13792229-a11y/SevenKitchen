@@ -15,7 +15,7 @@
     </view>
 
     <!-- 顶部欢迎区 -->
-    <view class="header-section">
+    <view class="header-section" :style="headerSectionStyle">
       <view class="welcome-text">Hi~欢迎来到Seven的厨房</view>
     </view>
 
@@ -391,6 +391,7 @@ interface FilterState {
 // 登录状态
 const isLoggedIn = ref(false)
 const showLoginBanner = ref(true)
+const homeHeaderBgImageUrl = ref('')
 const HOME_RECIPE_STATS_DIRTY_KEY = 'home_recipe_stats_dirty'
 const RECIPE_COVER_ORIGINAL_ONLY_STORAGE_KEY = 'home_recipe_cover_original_only_urls_v2'
 
@@ -462,6 +463,19 @@ const renderedRecipes = computed(() => {
   return recipes.value.slice(0, visibleRecipesCount.value)
 })
 
+const headerSectionStyle = computed(() => {
+  if (!homeHeaderBgImageUrl.value) {
+    return {}
+  }
+
+  return {
+    backgroundImage: `linear-gradient(135deg, rgba(102, 126, 234, 0.54) 0%, rgba(118, 75, 162, 0.62) 100%), url("${homeHeaderBgImageUrl.value}")`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat'
+  }
+})
+
 // 检查登录状态
 const checkLoginStatus = () => {
   const token = getToken()
@@ -473,6 +487,7 @@ onMounted(() => {
   hasMountedHome.value = true
   checkLoginStatus()
   loadRecipeCoverOriginalOnlyMap()
+  loadHomeHeaderBackground()
 
   // 检查是否已关闭过Banner（当天有效）
   const bannerClosed = uni.getStorageSync('loginBannerClosed')
@@ -532,6 +547,8 @@ onShow(() => {
     }
   }
 
+  loadHomeHeaderBackground()
+
   const recipeStatsDirty = uni.getStorageSync(HOME_RECIPE_STATS_DIRTY_KEY)
   if (recipeStatsDirty) {
     uni.removeStorageSync(HOME_RECIPE_STATS_DIRTY_KEY)
@@ -540,6 +557,21 @@ onShow(() => {
     })
   }
 })
+
+function loadHomeHeaderBackground(): Promise<void> {
+  return request({
+    url: '/global-config',
+    method: 'GET',
+    quiet: true,
+    suppressErrorToast: true
+  }).then((res: any) => {
+    if (res.code === 0 && res.data) {
+      homeHeaderBgImageUrl.value = normalizeImageUrl(res.data.homeHeaderBgImageUrl)
+    }
+  }).catch((err: any) => {
+    console.warn('[Home] Load homepage header background error:', err)
+  })
+}
 
 // 加载狗狗列表
 const loadDogList = async () => {

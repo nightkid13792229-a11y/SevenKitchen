@@ -3,6 +3,77 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 describe('diy sheet layout regressions', () => {
+  it('keeps the generated image preview constrained on real devices', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/components/ImagePreviewModal.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('class="preview-image-frame"')
+    expect(source).toContain('mode="aspectFit"')
+    expect(source).not.toContain('mode="widthFix"')
+    expect(source).toMatch(/\.preview-image-frame\s*\{[\s\S]*height: 740rpx;[\s\S]*overflow: hidden;/)
+    expect(source).toMatch(/\.preview-image\s*\{[\s\S]*width: 100%;[\s\S]*height: 100%;/)
+  })
+
+  it('renders the diy sheet canvas offscreen instead of hiding it from real devices', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('left: -9999px;')
+    expect(source).toContain('position: fixed;')
+    expect(source).not.toContain('visibility: hidden;')
+  })
+
+  it('exports the full diy sheet canvas from origin and logs actual image dimensions', () => {
+    const canvasSource = readFileSync(
+      resolve(process.cwd(), 'src/utils/print-canvas.ts'),
+      'utf-8',
+    )
+
+    expect(canvasSource).toContain('x: 0')
+    expect(canvasSource).toContain('y: 0')
+    expect(canvasSource).toContain('uni.getImageInfo({')
+    expect(canvasSource).toContain('actualSize')
+  })
+
+  it('exports a high-density png so saved diy sheet text remains sharp when zoomed', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
+      'utf-8',
+    )
+    const canvasSource = readFileSync(
+      resolve(process.cwd(), 'src/utils/print-canvas.ts'),
+      'utf-8',
+    )
+
+    expect(source).toContain('const PRINT_CANVAS_OUTPUT_SCALE = 2')
+    expect(source).toContain('const PRINT_CANVAS_LOGICAL_WIDTH = 1200')
+    expect(source).toContain('const PRINT_CANVAS_LOGICAL_HEIGHT = 1697')
+    expect(source).toContain('const PRINT_CANVAS_OUTPUT_WIDTH = PRINT_CANVAS_LOGICAL_WIDTH * PRINT_CANVAS_OUTPUT_SCALE')
+    expect(source).toContain(':width="PRINT_CANVAS_OUTPUT_WIDTH"')
+    expect(source).toContain(':height="PRINT_CANVAS_OUTPUT_HEIGHT"')
+    expect(source).toContain('outputScale: PRINT_CANVAS_OUTPUT_SCALE')
+    expect(canvasSource).toContain('outputScale?: number')
+    expect(canvasSource).toContain('this.ctx.scale(this.outputScale, this.outputScale)')
+    expect(canvasSource).toContain('destWidth: this.outputWidth')
+    expect(canvasSource).toContain("fileType: 'png'")
+  })
+
+  it('prevents generating a DIY sheet image before page data is ready or while already generating', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('const isPageDataLoaded = ref(false)')
+    expect(source).toContain('const isGeneratingImage = ref(false)')
+    expect(source).toContain(':disabled="!isPageDataLoaded || isGeneratingImage"')
+    expect(source).toContain('if (!isPageDataLoaded.value || !recipe.value.name || !dog.value)')
+  })
+
   it('allocates more width to the visible food-table preparation method column', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
@@ -239,8 +310,13 @@ describe('diy sheet layout regressions', () => {
     expect(source).not.toContain('return `${amount.toFixed(1)}g（含损耗）`')
 
     expect(canvasSource).toContain('const sectionHeight = 176')
-    expect(canvasSource).toContain('const cardHeight = 104')
+    expect(canvasSource).toContain('const cardHeight = 116')
+    expect(canvasSource).toContain('const cardY = this.currentY + 50')
+    expect(canvasSource).toContain('const tipContentY = cardY + 44')
+    expect(canvasSource).toContain('const tipLineHeight = 15')
     expect(canvasSource).toContain('const tipMaxLines = [2, 2, 3]')
+    expect(canvasSource).toContain("tip.content.join('\\n')")
+    expect(canvasSource).not.toContain("tip.content.join('；')")
     expect(canvasSource).toContain('tipMaxLines[index] || 2')
   })
 })

@@ -7,6 +7,7 @@ export interface PrintCanvasOptions {
   canvasId: string
   width: number
   height: number
+  outputScale?: number
 }
 
 export interface CanvasImageInfo {
@@ -17,8 +18,12 @@ export interface CanvasImageInfo {
 
 export class PrintCanvasBuilder {
   private ctx: UniApp.CanvasContext
+  private canvasId: string
   private canvasWidth: number
   private canvasHeight: number
+  private outputScale: number
+  private outputWidth: number
+  private outputHeight: number
   private currentY: number = 0
   private pagePadding: number = 40
 
@@ -54,13 +59,23 @@ export class PrintCanvasBuilder {
   }
 
   constructor(options: PrintCanvasOptions) {
-    this.ctx = uni.createCanvasContext(options.canvasId)
+    this.canvasId = options.canvasId
+    this.ctx = uni.createCanvasContext(this.canvasId)
     this.canvasWidth = options.width
     this.canvasHeight = options.height
+    this.outputScale = options.outputScale || 1
+    this.outputWidth = Math.round(this.canvasWidth * this.outputScale)
+    this.outputHeight = Math.round(this.canvasHeight * this.outputScale)
+
+    if (this.outputScale !== 1) {
+      this.ctx.scale(this.outputScale, this.outputScale)
+    }
 
     console.log('[PrintCanvas] Canvas初始化:', {
       width: this.canvasWidth,
       height: this.canvasHeight,
+      outputScale: this.outputScale,
+      outputSize: `${this.outputWidth}x${this.outputHeight}`,
       orientation: this.canvasHeight > this.canvasWidth ? '竖版' : '横版'
     })
 
@@ -728,8 +743,10 @@ export class PrintCanvasBuilder {
     const sectionHeight = 176
     const cardGap = 12
     const cardWidth = (sectionWidth - 40 - cardGap * 2) / 3
-    const cardHeight = 104
-    const cardY = this.currentY + 54
+    const cardHeight = 116
+    const cardY = this.currentY + 50
+    const tipContentY = cardY + 44
+    const tipLineHeight = 15
     const tipMaxLines = [2, 2, 3]
 
     this.ctx.setFillStyle('#fffaf0')
@@ -755,8 +772,8 @@ export class PrintCanvasBuilder {
       this.ctx.fillText(tip.title, xPos + 12, cardY + 24)
 
       this.ctx.setFillStyle('#6d747b')
-      this.ctx.setFontSize(this.FONT_SIZES.SMALL - 1)
-      this.fillWrappedText(tip.content.join('；'), xPos + 12, cardY + 46, cardWidth - 24, 17, tipMaxLines[index] || 2)
+      this.ctx.setFontSize(this.FONT_SIZES.SMALL - 2)
+      this.fillWrappedText(tip.content.join('\n'), xPos + 12, tipContentY, cardWidth - 24, tipLineHeight, tipMaxLines[index] || 2)
     })
 
     this.currentY += sectionHeight + 18
@@ -863,15 +880,18 @@ export class PrintCanvasBuilder {
       this.ctx.draw(false, () => {
         setTimeout(() => {
           uni.canvasToTempFilePath({
-            canvasId: 'printCanvas',
-            width: this.canvasWidth,
-            height: this.canvasHeight,
-            destWidth: this.canvasWidth,
-            destHeight: this.canvasHeight,
-            fileType: 'jpg',
+            canvasId: this.canvasId,
+            x: 0,
+            y: 0,
+            width: this.outputWidth,
+            height: this.outputHeight,
+            destWidth: this.outputWidth,
+            destHeight: this.outputHeight,
+            fileType: 'png',
             quality: 1,
-            success: (res) => {
+            success: async (res) => {
               console.log('[PrintCanvas] 图片导出成功:', res.tempFilePath)
+              await this.logExportedImageInfo(res.tempFilePath)
               resolve(res.tempFilePath)
             },
             fail: (err) => {
@@ -880,6 +900,27 @@ export class PrintCanvasBuilder {
             }
           })
         }, 500)
+      })
+    })
+  }
+
+  private logExportedImageInfo(filePath: string): Promise<void> {
+    return new Promise((resolve) => {
+      uni.getImageInfo({
+        src: filePath,
+        success: (info) => {
+          console.log('[PrintCanvas] 导出图片尺寸:', {
+            path: filePath,
+            logicalSize: `${this.canvasWidth}x${this.canvasHeight}`,
+            expectedSize: `${this.outputWidth}x${this.outputHeight}`,
+            actualSize: `${info.width}x${info.height}`
+          })
+          resolve()
+        },
+        fail: (err) => {
+          console.warn('[PrintCanvas] 读取导出图片尺寸失败:', err)
+          resolve()
+        }
       })
     })
   }

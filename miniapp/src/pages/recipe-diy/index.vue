@@ -791,8 +791,18 @@ async function generateAndNavigateToSheet() {
   } catch (error) {
     console.error('[RecipeDiy] Generate sheet error:', error)
   } finally {
-    uni.hideLoading()
+    safeHideLoading()
     isGeneratingSheet.value = false
+  }
+}
+
+function safeHideLoading() {
+  try {
+    uni.hideLoading({
+      fail: () => {}
+    } as any)
+  } catch {
+    // 页面跳转后 loading 可能已被微信自动清理，真机调试下忽略即可。
   }
 }
 

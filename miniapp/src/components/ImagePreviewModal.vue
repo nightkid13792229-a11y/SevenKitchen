@@ -8,13 +8,14 @@
 
       <!-- 图片预览区域 -->
       <view class="preview-content">
-        <image
-          v-if="imageUrl"
-          :src="imageUrl"
-          class="preview-image"
-          mode="widthFix"
-          @tap="handleImageTap"
-        />
+        <view v-if="imageUrl" class="preview-image-frame">
+          <image
+            :src="imageUrl"
+            class="preview-image"
+            mode="aspectFit"
+            @tap="handleImageTap"
+          />
+        </view>
         <view v-else class="loading-placeholder">
           <text class="loading-text">加载中...</text>
         </view>
@@ -32,8 +33,6 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
-
 interface Props {
   visible: boolean
   imageUrl?: string
@@ -120,22 +119,31 @@ function handleImageTap() {
 
 .preview-content {
   flex: 1;
-  overflow-y: auto;
   padding: 80rpx 40rpx 20rpx;
   background-color: #f5f5f5;
-  min-height: 600rpx;
 }
 
-.preview-image {
+.preview-image-frame {
   width: 100%;
-  display: block;
+  height: 740rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background-color: #fff;
   border-radius: 12rpx;
   box-shadow: 0 4rpx 20rpx rgba(0, 0, 0, 0.1);
 }
 
+.preview-image {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 .loading-placeholder {
   width: 100%;
-  height: 600rpx;
+  height: 740rpx;
   display: flex;
   align-items: center;
   justify-content: center;

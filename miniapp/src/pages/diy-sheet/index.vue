@@ -254,7 +254,11 @@
 
     <!-- 底部操作栏 -->
     <view class="bottom-actions">
-      <button class="action-btn primary" @tap="handlePrint">
+      <button
+        class="action-btn primary"
+        :disabled="!isPageDataLoaded || isGeneratingImage"
+        @tap="handlePrint"
+      >
         <text class="btn-text">生成图片</text>
       </button>
       <button class="action-btn success" @tap="handleSave">
@@ -269,13 +273,13 @@
       />
     </view>
 
-    <!-- Canvas用于打印功能（隐藏） - A4竖版: 1200px × 1697px -->
+    <!-- Canvas用于打印功能（隐藏） - A4竖版: 1200px × 1697px，2倍像素导出 -->
     <canvas
       canvas-id="printCanvas"
       id="printCanvas"
       class="print-canvas"
-      :width="1200"
-      :height="1697"
+      :width="PRINT_CANVAS_OUTPUT_WIDTH"
+      :height="PRINT_CANVAS_OUTPUT_HEIGHT"
     ></canvas>
 
     <!-- 规格详情弹窗 -->
@@ -599,8 +603,16 @@ const selectedRpIndexMap = ref<Record<string, number>>({})
 // 图片预览弹窗状态
 const showImagePreview = ref(false)
 const previewImageUrl = ref('')
+const isPageDataLoaded = ref(false)
+const isGeneratingImage = ref(false)
 const showWarning = ref(true)
 const pricePreviewWarning = ref('')
+
+const PRINT_CANVAS_LOGICAL_WIDTH = 1200
+const PRINT_CANVAS_LOGICAL_HEIGHT = 1697
+const PRINT_CANVAS_OUTPUT_SCALE = 2
+const PRINT_CANVAS_OUTPUT_WIDTH = PRINT_CANVAS_LOGICAL_WIDTH * PRINT_CANVAS_OUTPUT_SCALE
+const PRINT_CANVAS_OUTPUT_HEIGHT = PRINT_CANVAS_LOGICAL_HEIGHT * PRINT_CANVAS_OUTPUT_SCALE
 
 // 全局配置中的补剂损耗率（默认5%）
 const globalSupplementLossRate = ref(0.05)
@@ -878,6 +890,8 @@ onMounted(() => {
 })
 
 async function loadData() {
+  isPageDataLoaded.value = false
+
   try {
     // 先加载健康标签映射
     await loadHealthTagMapping()
@@ -898,6 +912,8 @@ async function loadData() {
     autoSaveDiySheet()
   } catch (error) {
     console.error('[DIYSheet] Load data error:', error)
+  } finally {
+    isPageDataLoaded.value = true
   }
 }
 
@@ -1137,23 +1153,39 @@ function resolveCanvasImageInfo(imageUrl: string): Promise<CanvasImageInfo | und
 
 // 打印制作单
 async function handlePrint() {
+  if (isGeneratingImage.value) {
+    return
+  }
+
+  if (!isPageDataLoaded.value || !recipe.value.name || !dog.value) {
+    uni.showToast({
+      title: '制作单加载中',
+      icon: 'none'
+    })
+    return
+  }
+
+  isGeneratingImage.value = true
   uni.showLoading({ title: '生成中...' })
 
   try {
-    // 1. 创建Canvas构建器（A4纸规格 @150dpi - 竖版）
-    const canvasWidth = 1200
-    const canvasHeight = 1697
+    // 1. 创建Canvas构建器（A4纸规格按2倍像素渲染，提升保存后放大清晰度）
+    const canvasWidth = PRINT_CANVAS_LOGICAL_WIDTH
+    const canvasHeight = PRINT_CANVAS_LOGICAL_HEIGHT
 
     console.log('[DIYSheet] 开始生成制作单图片:', {
       width: canvasWidth,
       height: canvasHeight,
+      outputScale: PRINT_CANVAS_OUTPUT_SCALE,
+      outputSize: `${PRINT_CANVAS_OUTPUT_WIDTH}x${PRINT_CANVAS_OUTPUT_HEIGHT}`,
       orientation: canvasHeight > canvasWidth ? '竖版(Portrait)' : '横版(Landscape)'
     })
 
     const builder = new PrintCanvasBuilder({
       canvasId: 'printCanvas',
       width: canvasWidth,
-      height: canvasHeight
+      height: canvasHeight,
+      outputScale: PRINT_CANVAS_OUTPUT_SCALE
     })
     const headerBackground = await resolveCanvasImageInfo(diySheetHeaderBgImageUrl.value)
 
@@ -1256,7 +1288,6 @@ async function handlePrint() {
     builder.drawFooter(`Seven厨房 | ${dateStr}`)
 
     // 11. 导出为图片
-    uni.showLoading({ title: '正在生成图片...' })
     const imagePath = await builder.toImage()
 
     console.log('[DIYSheet] 图片生成成功:', {
@@ -1265,18 +1296,30 @@ async function handlePrint() {
       orientation: canvasHeight > canvasWidth ? '竖版' : '横版'
     })
 
-    uni.hideLoading()
+    safeHideLoading()
 
     // 12. 显示图片预览弹窗
     previewImageUrl.value = imagePath
     showImagePreview.value = true
   } catch (error) {
     console.error('[DIYSheet] 生成图片失败:', error)
-    uni.hideLoading()
+    safeHideLoading()
     uni.showToast({
       title: '生成失败',
       icon: 'none'
     })
+  } finally {
+    isGeneratingImage.value = false
+  }
+}
+
+function safeHideLoading() {
+  try {
+    uni.hideLoading({
+      fail: () => {}
+    } as any)
+  } catch {
+    // 真机上 loading 可能已经被页面切换或 toast 自动清理，忽略即可。
   }
 }
 
@@ -2211,14 +2254,13 @@ onShareTimeline(() => {
   font-weight: 500;
 }
 
-/* Canvas隐藏 - A4竖版规格: 1200px × 1697px */
+/* Canvas离屏渲染 - A4竖版规格: 1200px × 1697px */
 .print-canvas {
-  position: absolute;
-  left: 0;
+  position: fixed;
+  left: -9999px;
   top: 0;
   width: 1200px;
   height: 1697px;
-  visibility: hidden;
   z-index: -1;
   pointer-events: none;
 }

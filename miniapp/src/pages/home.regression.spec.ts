@@ -14,6 +14,20 @@ describe('home runtime regressions', () => {
     expect(source).toContain("/pages/feedback-list/index")
   })
 
+  it('uses the configured global homepage header background image', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/home/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain(':style="headerSectionStyle"')
+    expect(source).toContain("const homeHeaderBgImageUrl = ref('')")
+    expect(source).toContain('const headerSectionStyle = computed(() =>')
+    expect(source).toContain("url: '/global-config'")
+    expect(source).toContain('res.data.homeHeaderBgImageUrl')
+    expect(source).toContain('loadHomeHeaderBackground()')
+  })
+
   it('falls back to original recipe cover URLs when thumbnail loading fails', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/home/index.vue'),

@@ -161,9 +161,9 @@ if [ "$SERVICE_INSTALLED" = true ]; then
     exit 1
   fi
 
-  # Show service status
+  # Show service status without triggering SIGPIPE under pipefail.
   echo ""
-  sudo systemctl status sevenkitchen-backend --no-pager | head -15
+  sudo systemctl status sevenkitchen-backend --no-pager | sed -n '1,15p'
 else
   warn "Systemd service is not installed"
   warn "To install systemd service, run: sudo bash scripts/install_systemd_service.sh"

@@ -26,6 +26,11 @@ describe('home runtime regressions', () => {
     expect(source).toContain("url: '/global-config'")
     expect(source).toContain('res.data.homeHeaderBgImageUrl')
     expect(source).toContain('loadHomeHeaderBackground()')
+    expect(source).toContain("backgroundSize: 'contain'")
+    expect(source).toContain('height: 400rpx')
+    expect(source).toContain('padding: 0')
+    expect(source).not.toContain('Hi~欢迎来到Seven的厨房')
+    expect(source).not.toContain('class="welcome-text"')
   })
 
   it('falls back to original recipe cover URLs when thumbnail loading fails', () => {

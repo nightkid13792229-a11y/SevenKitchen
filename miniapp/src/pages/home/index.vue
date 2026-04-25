@@ -15,9 +15,7 @@
     </view>
 
     <!-- 顶部欢迎区 -->
-    <view class="header-section" :style="headerSectionStyle">
-      <view class="welcome-text">Hi~欢迎来到Seven的厨房</view>
-    </view>
+    <view class="header-section" :style="headerSectionStyle"></view>
 
     <!-- 快捷功能入口 -->
     <view class="quick-actions">
@@ -469,8 +467,8 @@ const headerSectionStyle = computed(() => {
   }
 
   return {
-    backgroundImage: `linear-gradient(135deg, rgba(102, 126, 234, 0.54) 0%, rgba(118, 75, 162, 0.62) 100%), url("${homeHeaderBgImageUrl.value}")`,
-    backgroundSize: 'cover',
+    backgroundImage: `url("${homeHeaderBgImageUrl.value}")`,
+    backgroundSize: 'contain',
     backgroundPosition: 'center',
     backgroundRepeat: 'no-repeat'
   }
@@ -1416,22 +1414,14 @@ defineOptions({
 }
 
 
-/* 顶部欢迎区 */
+/* 顶部图片区 */
 .header-section {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  padding: 40px 20px 30px;
-  color: white;
-}
-
-.welcome-text {
-  font-size: 24px;
-  font-weight: bold;
-  margin-bottom: 8px;
-}
-
-.subtitle-text {
-  font-size: 14px;
-  opacity: 0.9;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: contain;
+  height: 400rpx;
+  padding: 0;
 }
 
 /* 快捷功能入口 */
@@ -1439,7 +1429,7 @@ defineOptions({
   display: flex;
   justify-content: space-around;
   background: white;
-  margin: -15px 15px 15px;
+  margin: 15px 15px 15px;
   border-radius: 12px;
   padding: 20px 10px;
   box-shadow: 0 2px 10px rgba(0,0,0,0.05);

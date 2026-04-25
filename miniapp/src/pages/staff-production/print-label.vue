@@ -238,21 +238,21 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, getCurrentInstance } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
-import jcPrinter from '../../utils/jcing-printer';
+import jcPrinter from './utils/jcing-printer';
 import {
   drawProductionLabel,
   drawProductionLabelWithJCSDK,
   formatIngredients,
   getShelfLifeText,
   type LabelData
-} from '../../utils/label-renderer';
+} from './utils/label-renderer';
 import {
   loadHealthTagMapping,
   getLifeStageLabel,
   getHealthTagLabel
 } from '../../utils/label-mapping';
-import { getRecipeBatchesWithOrders } from '../../api/production';
-import { generateLabelImage, type LabelData as ApiLabelData } from '../../api/label';
+import { getRecipeBatchesWithOrders } from './api/production';
+import { generateLabelImage, type LabelData as ApiLabelData } from './api/label';
 import {
   expandOrderPrintLabels,
   formatPackagePlan,
@@ -260,7 +260,7 @@ import {
   normalizePackagePlanRows,
   type LabelPrintFields,
   type PackagePlanRow
-} from '../../utils/label-print-items';
+} from './utils/label-print-items';
 
 const CANVAS_WIDTH = 560;
 const CANVAS_HEIGHT = 800;

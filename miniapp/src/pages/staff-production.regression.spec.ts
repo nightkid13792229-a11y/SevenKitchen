@@ -7,7 +7,7 @@ const indexSource = readFileSync(
   'utf8',
 );
 const productionApiSource = readFileSync(
-  resolve(__dirname, '../api/production.ts'),
+  resolve(__dirname, 'staff-production/api/production.ts'),
   'utf8',
 );
 const detailSource = readFileSync(
@@ -23,11 +23,11 @@ const printLabelSource = readFileSync(
   'utf8',
 );
 const labelConfigSource = readFileSync(
-  resolve(__dirname, '../utils/label-config.ts'),
+  resolve(__dirname, 'staff-production/utils/label-config.ts'),
   'utf8',
 );
 const labelRendererSource = readFileSync(
-  resolve(__dirname, '../utils/label-renderer.ts'),
+  resolve(__dirname, 'staff-production/utils/label-renderer.ts'),
   'utf8',
 );
 

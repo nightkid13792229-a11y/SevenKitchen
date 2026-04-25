@@ -75,7 +75,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { drawProductionTaskPrint, type TaskDetail } from '../../utils/canvas-printer';
+import { drawProductionTaskPrint, type TaskDetail } from './utils/canvas-printer';
 
 // Canvas尺寸（A4 @150 DPI）
 const canvasWidth = 1240;

@@ -195,7 +195,7 @@ import {
   generatePurchaseList,
   getPurchaseLists,
   previewPurchaseList,
-} from '@/api/purchasing';
+} from './api/purchasing';
 
 interface DateOption {
   label: string;

@@ -100,8 +100,8 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
-import { getMyReimbursements, deleteReimbursement } from '@/api/purchasing';
-import { summarizeReimbursementCustomFees } from '@/constants/reimbursement';
+import { getMyReimbursements, deleteReimbursement } from '../api/purchasing';
+import { summarizeReimbursementCustomFees } from '../constants/reimbursement';
 
 // 状态筛选标签
 const statusTabs = [

@@ -6,18 +6,19 @@
  * 2. 同步 project.config.json 中的依赖分析相关设置，避免 dist 目录被直接打开时误过滤依赖文件
  * 3. 补齐 uni 构建未稳定复制的静态资源目录，避免微信开发者工具启动失败
  * 4. 补齐 app.json 的微信开发者工具兼容默认值，避免 WXSS 编译器读取空配置时报错
+ * 5. 移除微信代码质量扫描会标记为无依赖的可选生成文件
  */
 
 const fs = require('fs');
 const path = require('path');
 
 const ROOT_PROJECT_CONFIG_PATH = path.join(__dirname, '../project.config.json');
-const ROOT_PRIVATE_PROJECT_CONFIG_PATH = path.join(__dirname, '../project.private.config.json');
 const STATIC_SOURCE_ROOTS = [
   path.join(__dirname, '../src/static'),
   path.join(__dirname, '../static'),
 ];
 const STATIC_ASSET_DIRECTORIES = ['tabbar'];
+const CODE_QUALITY_NO_DEPENDENCY_FILES = ['project.private.config.json', 'App.wxml'];
 const DIST_DIRS = [
   path.join(__dirname, '../dist/build/mp-weixin'),
   path.join(__dirname, '../dist/dev/mp-weixin'),
@@ -87,23 +88,28 @@ const assertTabBarIconsExist = (distDir, appJson) => {
   }
 };
 
+const removeCodeQualityNoDependencyFiles = (distDir) => {
+  for (const fileName of CODE_QUALITY_NO_DEPENDENCY_FILES) {
+    const filePath = path.join(distDir, fileName);
+
+    if (!fs.existsSync(filePath)) {
+      continue;
+    }
+
+    fs.rmSync(filePath, { force: true });
+    console.log(`✅ 已移除无依赖生成文件 ${fileName}: ${distDir}`);
+  }
+};
+
 const rootProjectConfig = safeReadJson(ROOT_PROJECT_CONFIG_PATH) || {};
-const rootPrivateProjectConfig = safeReadJson(ROOT_PRIVATE_PROJECT_CONFIG_PATH) || {};
 
 const normalizedProjectSetting = {
   ...(rootProjectConfig.setting || {}),
-  ignoreDevUnusedFiles: false,
-  ignoreUploadUnusedFiles: false,
-  ignoreUnusedFiles: false,
-  filterNoDependencyFile: false,
-};
-
-const normalizedPrivateSetting = {
-  ...(rootPrivateProjectConfig.setting || {}),
   urlCheck: false,
   ignoreDevUnusedFiles: false,
   ignoreUploadUnusedFiles: false,
   ignoreUnusedFiles: false,
+  filterNoDependencyFile: false,
 };
 
 let processedDistCount = 0;
@@ -117,7 +123,6 @@ for (const distDir of DIST_DIRS) {
 
   const appJsonPath = path.join(distDir, 'app.json');
   const projectConfigPath = path.join(distDir, 'project.config.json');
-  const privateProjectConfigPath = path.join(distDir, 'project.private.config.json');
 
   for (const assetDirName of STATIC_ASSET_DIRECTORIES) {
     syncStaticAssetDirectory(distDir, assetDirName);
@@ -158,13 +163,7 @@ for (const distDir of DIST_DIRS) {
     console.log(`✅ 已同步 project.config.json: ${distDir}`);
   }
 
-  const privateProjectConfig = safeReadJson(privateProjectConfigPath) || {};
-  privateProjectConfig.setting = {
-    ...(privateProjectConfig.setting || {}),
-    ...normalizedPrivateSetting,
-  };
-  safeWriteJson(privateProjectConfigPath, privateProjectConfig);
-  console.log(`✅ 已同步 project.private.config.json: ${distDir}`);
+  removeCodeQualityNoDependencyFiles(distDir);
 }
 
 if (processedDistCount === 0) {

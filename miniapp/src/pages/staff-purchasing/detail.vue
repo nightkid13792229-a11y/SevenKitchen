@@ -479,7 +479,7 @@ import {
   resolveProcurementSkuProfile,
   resolvePurchaseItemDisplay,
   resolvePurchaseRecordDisplay,
-} from '@/api/purchasing';
+} from './api/purchasing';
 
 // 状态管理
 const purchaseListId = ref('');

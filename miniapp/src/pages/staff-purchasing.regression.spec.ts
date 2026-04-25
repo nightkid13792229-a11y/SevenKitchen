@@ -11,7 +11,7 @@ const recordFormSource = readPage('staff-purchasing/record-form.vue');
 const stockCreateSource = readPage('staff-purchasing/stock-create.vue');
 const reimbursementListSource = readPage('staff-purchasing/reimbursement/list.vue');
 const reimbursementDetailSource = readPage('staff-purchasing/reimbursement/detail.vue');
-const purchasingApiSource = readPage('../api/purchasing.ts');
+const purchasingApiSource = readPage('staff-purchasing/api/purchasing.ts');
 
 describe('staff purchasing wording', () => {
   it('uses daily purchase wording for order-demand actions', () => {

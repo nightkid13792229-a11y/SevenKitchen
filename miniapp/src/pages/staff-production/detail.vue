@@ -264,7 +264,7 @@ import {
   deleteProductionPhoto,
   type CompleteProductionTaskPayload,
   type ProductionResultStatus,
-} from '../../api/production';
+} from './api/production';
 import { getBaseUrl } from '../../utils/config';
 import { calculateSupplementAmountForProduction } from '../../utils/supplement-nutrients';
 

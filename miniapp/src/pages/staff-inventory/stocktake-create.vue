@@ -196,7 +196,7 @@ import {
   type InventoryIngredientType,
   type InventoryOverviewItem,
   type InventoryStockStatus,
-} from '@/api/inventory';
+} from './api/inventory';
 
 const PENDING_TAB_STORAGE_KEY = 'staff_inventory_pending_tab';
 

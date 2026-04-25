@@ -103,8 +103,8 @@ import {
   addPurchaseRecord,
   resolvePurchaseItemDisplay,
   resolveProcurementSkuProfile,
-} from '@/api/purchasing';
-import type { ProcurementSkuOption } from '@/api/purchasing';
+} from './api/purchasing';
+import type { ProcurementSkuOption } from './api/purchasing';
 
 type RecordSkuOption = ProcurementSkuOption & {
   id: string;

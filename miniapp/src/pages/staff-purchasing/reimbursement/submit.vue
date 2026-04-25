@@ -162,13 +162,13 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
-import { getPurchaseLists, submitReimbursement as submitReimbursementApi, uploadReceiptPhoto, deleteReceiptPhoto, getReimbursementDetail } from '@/api/purchasing';
+import { getPurchaseLists, submitReimbursement as submitReimbursementApi, uploadReceiptPhoto, deleteReceiptPhoto, getReimbursementDetail } from '../api/purchasing';
 import {
   reimbursementCustomFeeCategoryOptions,
   type ReimbursementCustomFeeCategory,
   inferReimbursementCustomFeeCategory,
   getReimbursementCustomFeeCategoryLabel,
-} from '@/constants/reimbursement';
+} from '../constants/reimbursement';
 
 // 自定义费用类型
 interface CustomFee {

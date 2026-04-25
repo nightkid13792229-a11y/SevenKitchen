@@ -162,8 +162,8 @@ import {
   completeProductionTask,
   startProductionTask,
   deleteProductionBatch,
-} from '../../api/production';
-import { formatDecimal } from '../../utils/format';
+} from './api/production';
+import { formatDecimal } from './utils/format';
 
 const getTodayDateText = () => {
   const now = new Date();

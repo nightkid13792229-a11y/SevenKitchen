@@ -232,7 +232,7 @@ import {
   createStockPurchaseList,
   getStockPurchaseIngredients,
   type StockPurchaseIngredient,
-} from '@/api/purchasing';
+} from './api/purchasing';
 
 interface SelectedStockItem {
   ingredientId: string;

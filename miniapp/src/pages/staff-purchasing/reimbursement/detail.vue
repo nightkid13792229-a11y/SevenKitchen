@@ -325,11 +325,11 @@ import {
   clearPaymentProof as clearPaymentProofApi,
   appendReceiptUrls,
   removeReceiptUrl
-} from '@/api/purchasing';
+} from '../api/purchasing';
 import {
   formatReimbursementCustomFeeTitle,
   getReimbursementCustomFeeCategoryLabel,
-} from '@/constants/reimbursement';
+} from '../constants/reimbursement';
 
 // 状态管理
 const reimbursementId = ref('');

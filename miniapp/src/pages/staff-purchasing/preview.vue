@@ -207,7 +207,7 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
-import { previewPurchaseList, resolvePurchaseItemDisplay } from '@/api/purchasing';
+import { previewPurchaseList, resolvePurchaseItemDisplay } from './api/purchasing';
 
 // 表单数据
 const formData = ref({

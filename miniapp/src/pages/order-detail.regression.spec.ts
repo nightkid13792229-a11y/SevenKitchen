@@ -103,6 +103,31 @@ describe('order detail runtime regressions', () => {
     expect(source).toContain('getAdminOrderFinancialSummary(orderId.value)')
   })
 
+  it('prepares a local image for production photo share cards', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('sharePhotoImageUrl')
+    expect(source).toContain('uni.downloadFile')
+    expect(source).toContain('normalizeImageUrl(firstPhoto)')
+    expect(source).toContain('prefetchSharePhotoImage()')
+    expect(source).toContain('imageUrl: getProductionPhotosShareImageUrl()')
+  })
+
+  it('uses the dog name in production photo share titles', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('function getProductionPhotosShareTitle()')
+    expect(source).toContain('return `${dogName}原料照片`')
+    expect(source).toContain('title: getProductionPhotosShareTitle()')
+    expect(source).not.toContain("title: 'SevenKitchen原料照片'")
+  })
+
   it('labels settlement adjustment amounts by processing status', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/order-detail/index.vue'),

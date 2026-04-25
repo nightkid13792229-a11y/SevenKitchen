@@ -475,6 +475,7 @@ import {
   type CustomerOrderFinancialSummary
 } from '../../api/orders'
 import OrderProgressBar from '../../components/OrderProgressBar.vue'
+import { normalizeImageUrl } from '../../utils/config'
 import { formatDateTime } from '../../utils/date'
 import { getNutritionStandardLabel } from '../../utils/label-mapping'
 import {
@@ -502,6 +503,9 @@ interface OrderItem {
   dogBreedName?: string
   dogWeightKg?: number
   dog?: {
+    name?: string
+    breedName?: string
+    weightKg?: number
     mealsPerDay?: number
     gender?: 'MALE' | 'FEMALE'
   }
@@ -968,6 +972,7 @@ async function loadOrderDetail() {
 
       // 预获取分享照片的 token
       prefetchShareToken()
+      prefetchSharePhotoImage()
       fetchOrderFinancialSummary()
     }
   } catch (error) {
@@ -1174,11 +1179,112 @@ onShow(() => {
 
 // 分享照片相关 - 预获取的分享 token（只有获取成功时才会有值）
 const shareToken = ref<string>('')
+const shareTokenOrderId = ref<string>('')
+const sharePhotoImageUrl = ref<string>('')
+const sharePhotoSourceUrl = ref<string>('')
+const isPreparingSharePhotoImage = ref(false)
+
+function getFirstProductionPhotoUrl(): string {
+  return order.value?.productionPhotos?.photos?.[0] || ''
+}
+
+function getProductionPhotosShareDogName(): string {
+  const names = new Set<string>()
+
+  order.value?.items?.forEach((item) => {
+    const dogName = (item.dog?.name || item.dogName || '').trim()
+    if (dogName && dogName !== '未知狗狗') {
+      names.add(dogName)
+    }
+  })
+
+  const dogNames = Array.from(names)
+  if (dogNames.length === 0) {
+    return 'SevenKitchen'
+  }
+  if (dogNames.length === 1) {
+    return dogNames[0]
+  }
+  return `${dogNames[0]}等${dogNames.length}只狗狗`
+}
+
+function getProductionPhotosShareTitle(): string {
+  const dogName = getProductionPhotosShareDogName()
+  return `${dogName}原料照片`
+}
+
+function getProductionPhotosShareImageUrl(): string {
+  return sharePhotoImageUrl.value || normalizeImageUrl(getFirstProductionPhotoUrl())
+}
+
+async function prefetchSharePhotoImage() {
+  const firstPhoto = getFirstProductionPhotoUrl()
+  if (!firstPhoto) {
+    sharePhotoImageUrl.value = ''
+    sharePhotoSourceUrl.value = ''
+    isPreparingSharePhotoImage.value = false
+    return
+  }
+
+  const normalizedPhoto = normalizeImageUrl(firstPhoto)
+  if (!normalizedPhoto) {
+    sharePhotoImageUrl.value = ''
+    sharePhotoSourceUrl.value = ''
+    isPreparingSharePhotoImage.value = false
+    return
+  }
+
+  if (sharePhotoSourceUrl.value === normalizedPhoto && sharePhotoImageUrl.value) {
+    return
+  }
+  if (sharePhotoSourceUrl.value === normalizedPhoto && isPreparingSharePhotoImage.value) {
+    return
+  }
+
+  sharePhotoSourceUrl.value = normalizedPhoto
+  sharePhotoImageUrl.value = ''
+
+  if (!/^https?:\/\//.test(normalizedPhoto)) {
+    sharePhotoImageUrl.value = normalizedPhoto
+    return
+  }
+
+  isPreparingSharePhotoImage.value = true
+
+  try {
+    const downloadRes = await uni.downloadFile({
+      url: normalizedPhoto,
+    })
+
+    if (sharePhotoSourceUrl.value !== normalizedPhoto) {
+      return
+    }
+
+    const statusCode = Number(downloadRes.statusCode || 0)
+    if (statusCode >= 200 && statusCode < 300 && downloadRes.tempFilePath) {
+      sharePhotoImageUrl.value = downloadRes.tempFilePath
+      console.log('[Order Detail] Share photo image downloaded successfully')
+      return
+    }
+
+    sharePhotoImageUrl.value = normalizedPhoto
+    console.warn('[Order Detail] Share photo image download failed:', downloadRes)
+  } catch (error) {
+    if (sharePhotoSourceUrl.value === normalizedPhoto) {
+      sharePhotoImageUrl.value = normalizedPhoto
+    }
+    console.warn('[Order Detail] Error downloading share photo image:', error)
+  } finally {
+    if (sharePhotoSourceUrl.value === normalizedPhoto) {
+      isPreparingSharePhotoImage.value = false
+    }
+  }
+}
 
 // 预获取分享 token
 async function prefetchShareToken() {
   // 如果已有 token，不再重复获取
-  if (shareToken.value) {
+  if (shareToken.value && shareTokenOrderId.value === order.value?.id) {
     return
   }
 
@@ -1188,6 +1294,8 @@ async function prefetchShareToken() {
 
   // 检查是否有照片
   if (!order.value.productionPhotos?.photos?.length) {
+    shareToken.value = ''
+    shareTokenOrderId.value = ''
     return
   }
 
@@ -1199,6 +1307,7 @@ async function prefetchShareToken() {
 
     if (response.code === 0 && response.data?.token) {
       shareToken.value = response.data.token
+      shareTokenOrderId.value = order.value.id
       console.log('[Order Detail] Share token prefetched successfully')
     } else {
       console.log('[Order Detail] Failed to prefetch share token:', response.message)
@@ -1217,9 +1326,9 @@ onShareAppMessage((e: any) => {
     // 使用预获取的 token，直接返回同步结果
     // 如果 token 不存在，按钮不会显示，所以这里 token 一定存在
     return {
-      title: 'SevenKitchen原料照片',
+      title: getProductionPhotosShareTitle(),
       path: `/pages/shared-photos/index?token=${shareToken.value}`,
-      imageUrl: order.value?.productionPhotos?.photos?.[0] || ''
+      imageUrl: getProductionPhotosShareImageUrl()
     }
   }
 

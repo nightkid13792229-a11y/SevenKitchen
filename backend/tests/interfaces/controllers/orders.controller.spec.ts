@@ -1361,6 +1361,84 @@ describe('OrdersController (e2e)', () => {
         CookingMethod.COOKED,
       );
     });
+
+    it('should include uploaded preparation photos from all matching packaging units', async () => {
+      const customerId = 'test-customer-production-photos';
+      const recipeSnapshot: RecipeSnapshot = {
+        id: 'recipe-id',
+        version: 1,
+        name: 'Test Recipe',
+        production_loss_rate: 1.07,
+        energy_density_kcal_per_kg: 1450,
+        nutrition_standard: 'FEDIAF_2021',
+        items: [],
+      };
+      const order = createTestOrder({
+        id: 'order-with-production-photos',
+        customerId,
+        status: OrderStatus.IN_PRODUCTION,
+        items: [
+          createTestOrderItem({
+            id: 'item-production-photos-1',
+            orderId: 'order-with-production-photos',
+            recipeSnapshot,
+          }),
+          createTestOrderItem({
+            id: 'item-production-photos-2',
+            orderId: 'order-with-production-photos',
+            recipeSnapshot,
+          }),
+        ],
+      });
+      await orderRepository.save(order);
+
+      mockPrismaService.packagingUnit.findMany.mockResolvedValueOnce([
+        {
+          id: 'unit-1',
+          photosRaw: ['https://cdn.example.com/raw-1.jpg'],
+          updatedAt: new Date('2026-04-24T10:00:00.000Z'),
+        },
+        {
+          id: 'unit-2',
+          photosRaw: [
+            'https://cdn.example.com/raw-2.jpg',
+            'https://cdn.example.com/raw-3.jpg',
+          ],
+          updatedAt: new Date('2026-04-24T10:05:00.000Z'),
+        },
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/orders/${order.id}`)
+        .set('X-Customer-Id', customerId)
+        .expect(200);
+
+      expect(response.body).toHaveProperty('code', 0);
+      expect(mockPrismaService.packagingUnit.findMany).toHaveBeenCalledWith({
+        where: {
+          sourceOrderItemIds: {
+            hasSome: ['item-production-photos-1', 'item-production-photos-2'],
+          },
+        },
+        select: {
+          id: true,
+          photosRaw: true,
+          updatedAt: true,
+        },
+        orderBy: {
+          updatedAt: 'asc',
+        },
+      });
+      expect(response.body.data.productionPhotos).toEqual({
+        unitId: 'unit-1',
+        photos: [
+          'https://cdn.example.com/raw-1.jpg',
+          'https://cdn.example.com/raw-2.jpg',
+          'https://cdn.example.com/raw-3.jpg',
+        ],
+        uploadedAt: '2026-04-24T10:05:00.000Z',
+      });
+    });
   });
 
   describe('GET /api/v1/orders/:id/financial-summary', () => {

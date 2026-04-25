@@ -102,6 +102,7 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { UseInterceptors } from '@nestjs/common';
 import type { IngredientPreparationMethodHistoryDto } from '../dto/recipes/admin-recipe.dto';
 import type { Ingredient } from '../../domain/ingredient';
+import { resolveOrderProductionPhotos } from './order-production-photos';
 
 @ApiTags('Admin')
 @Controller('api/v1/admin')
@@ -1996,6 +1997,8 @@ export class AdminController {
         }
       : null;
 
+    const productionPhotos = await this.getOrderProductionPhotos(order);
+
     return {
       id: order.id,
       customerId: order.customerId,
@@ -2039,7 +2042,20 @@ export class AdminController {
       paymentStatus: order.paymentStatus ?? null,
       createdAt: order.createdAt.toISOString(),
       adminRemark: order.adminRemark ?? null,
+      productionPhotos,
     };
+  }
+
+  private async getOrderProductionPhotos(order: any) {
+    try {
+      return await resolveOrderProductionPhotos(this.prisma, order);
+    } catch (error) {
+      console.error(
+        '[Admin Order Detail] Failed to query production photos:',
+        error,
+      );
+      return null;
+    }
   }
 
   private async mapAdminOrderItem(item: any): Promise<OrderItemDto> {

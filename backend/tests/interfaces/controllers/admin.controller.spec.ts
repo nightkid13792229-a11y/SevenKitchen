@@ -661,6 +661,108 @@ describe('AdminController', () => {
         },
       });
     });
+
+    it('returns uploaded preparation photos in admin order detail for the miniapp staff path', async () => {
+      const order = {
+        id: 'order-1',
+        customerId: 'customer-1',
+        dogId: 'dog-1',
+        addressId: null,
+        address: null,
+        status: 'IN_PRODUCTION',
+        type: 'FRESH_FOOD',
+        targetProductionDate: null,
+        totalAmount: 128,
+        amountProduct: 118,
+        amountShipping: 10,
+        amountTotal: 128,
+        items: [
+          {
+            id: 'item-1',
+            orderId: 'order-1',
+            dogId: 'dog-1',
+            recipeSnapshot: { id: 'recipe-1', name: '糙米鸡蛋牛肉' },
+            quantityG: 1974,
+            packageCount: 21,
+            packageSpecG: 94,
+            customRequirements: null,
+            dailyIntakeG: 282,
+          },
+        ],
+        pricingBreakdownSnapshot: null,
+        trackingNumber: null,
+        carrierCode: null,
+        shippedAt: null,
+        completedAt: null,
+        cancelledAt: null,
+        cancellationReason: null,
+        cancelledBy: null,
+        paymentMethod: null,
+        transactionId: null,
+        paidAt: null,
+        paymentStatus: null,
+        createdAt: new Date('2026-04-12T10:00:00.000Z'),
+        adminRemark: null,
+      };
+
+      const mockOrderService = {
+        getOrderById: jest.fn().mockResolvedValue(order),
+      };
+      const mockPrisma = {
+        dog: {
+          findUnique: jest.fn().mockResolvedValue(null),
+        },
+        packagingUnit: {
+          findMany: jest.fn().mockResolvedValue([
+            {
+              id: 'unit-1',
+              photosRaw: ['https://cdn.example.com/raw-1.jpg'],
+              updatedAt: new Date('2026-04-24T10:00:00.000Z'),
+            },
+          ]),
+        },
+      };
+
+      const controller = new AdminController(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        mockOrderService as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        mockPrisma as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+      );
+
+      const result = await controller.getOrderDetail('order-1');
+
+      expect(result.code).toBe(0);
+      expect(mockPrisma.packagingUnit.findMany).toHaveBeenCalledWith({
+        where: {
+          sourceOrderItemIds: {
+            hasSome: ['item-1'],
+          },
+        },
+        select: {
+          id: true,
+          photosRaw: true,
+          updatedAt: true,
+        },
+        orderBy: {
+          updatedAt: 'asc',
+        },
+      });
+      expect(result.data?.productionPhotos).toEqual({
+        unitId: 'unit-1',
+        photos: ['https://cdn.example.com/raw-1.jpg'],
+        uploadedAt: '2026-04-24T10:00:00.000Z',
+      });
+    });
   });
 
   describe('supplement DIY image management', () => {

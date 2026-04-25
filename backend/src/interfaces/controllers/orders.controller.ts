@@ -58,6 +58,7 @@ import { ApiResponseDto } from '../dto/common/response.dto';
 import type { RecipeSnapshot } from '../../domain/recipe/types';
 import { AuthGuard, CurrentUser } from '../auth';
 import type { RequestUser } from '../auth';
+import { resolveOrderProductionPhotos } from './order-production-photos';
 
 @ApiTags('Orders')
 @Controller('api/v1/orders')
@@ -872,24 +873,7 @@ export class OrdersController {
       );
     }
 
-    // Query production photos (原料照片)
-    let productionPhotos = null;
-    try {
-      const photosUnit =
-        await this.productionRepository.findFirstCompletedByOrderId(order.id);
-      if (photosUnit) {
-        productionPhotos = {
-          unitId: photosUnit.id,
-          photos: photosUnit.photosRaw || [],
-          uploadedAt: photosUnit.updatedAt
-            ? photosUnit.updatedAt.toISOString()
-            : null,
-        };
-      }
-    } catch (error) {
-      console.error('[Order Detail] Failed to query production photos:', error);
-      // Non-fatal, continue without photos
-    }
+    const productionPhotos = await this.getOrderProductionPhotos(order);
 
     return {
       id: order.id,
@@ -940,6 +924,15 @@ export class OrdersController {
       paymentStatus: order.paymentStatus ?? null,
       createdAt: order.createdAt.toISOString(),
     };
+  }
+
+  private async getOrderProductionPhotos(order: Order) {
+    try {
+      return await resolveOrderProductionPhotos(this.prisma, order);
+    } catch (error) {
+      console.error('[Order Detail] Failed to query production photos:', error);
+      return null;
+    }
   }
 
   private async mapOrderItemToDto(

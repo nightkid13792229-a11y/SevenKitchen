@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable } from '@nestjs/common';
 import {
   createCanvas,
   Canvas,
@@ -89,6 +89,37 @@ const NUTRITION_STANDARD_LABELS: Record<string, string> = {
 };
 
 type LabelRenderMode = 'regular' | 'compact';
+
+const LABEL_CONTENT_OVERFLOW_MESSAGE =
+  '标签内容超出：无法在70×100mm标签内完整显示所有原料信息，请减少标签内容或改用更大标签。';
+
+type ParsedIngredientLabel = {
+  nameText: string;
+  detailText: string;
+};
+
+type IngredientGridCellLayout = {
+  nameLines: string[];
+  detailText: string;
+  detailOnOwnLine: boolean;
+  lineCount: number;
+};
+
+type IngredientGridRowLayout = {
+  cells: IngredientGridCellLayout[];
+  lineCount: number;
+};
+
+type IngredientGridLayout = {
+  columns: number;
+  colWidth: number;
+  textWidth: number;
+  fontSize: number;
+  lineHeight: number;
+  rowGap: number;
+  bodyHeight: number;
+  rows: IngredientGridRowLayout[];
+};
 
 @Injectable()
 export class LabelService {
@@ -202,14 +233,16 @@ export class LabelService {
     );
 
     y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
-    y = this.drawIngredientGrid(
+    const ingredientLayout = this.resolveIngredientGridLayout(
       ctx,
+      labelData,
       ingredientItems,
       y,
-      contentLeft,
       contentWidth,
       mode,
+      height - mmToPx(LABEL_LAYOUT.margin.bottom),
     );
+    y = this.drawIngredientGrid(ctx, ingredientLayout, y, contentLeft);
 
     y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
 
@@ -338,49 +371,228 @@ export class LabelService {
 
   private drawIngredientGrid(
     ctx: CanvasRenderingContext2D,
-    items: string[],
+    layout: IngredientGridLayout,
     startY: number,
     left: number,
-    width: number,
-    mode: LabelRenderMode,
   ): number {
     let y = startY;
-    y = this.drawSectionTitle(ctx, '原料表', y, left, width);
+    y = this.drawSectionTitle(
+      ctx,
+      '原料表',
+      y,
+      left,
+      layout.colWidth * layout.columns,
+    );
 
-    const gridConfig = this.getIngredientGridConfig(mode);
-    const rowHeight = mmToPx(gridConfig.lineHeight);
-    const colWidth = width / gridConfig.columns;
-
-    ctx.font = `${mmToPx(gridConfig.fontSize)}px "Chinese"`;
+    ctx.font = `${mmToPx(layout.fontSize)}px "Chinese"`;
     ctx.fillStyle = '#222222';
     ctx.textAlign = 'left';
 
-    let row = 0;
-    let col = 0;
-    items.forEach((item) => {
-      const label = this.formatIngredientLabel(item);
-
-      const x = left + col * colWidth;
-      const itemY = y + row * rowHeight;
-      ctx.fillText(
-        this.clipText(
-          ctx,
-          label,
-          colWidth - mmToPx(1.2),
-        ),
-        x,
-        itemY,
-      );
-
-      col += 1;
-      if (col >= gridConfig.columns) {
-        row += 1;
-        col = 0;
-      }
+    let offsetY = 0;
+    layout.rows.forEach((row) => {
+      row.cells.forEach((cell, colIndex) => {
+        const x = left + colIndex * layout.colWidth;
+        const itemY = y + offsetY;
+        this.drawIngredientGridCell(ctx, cell, x, itemY, layout);
+      });
+      offsetY += row.lineCount * mmToPx(layout.lineHeight) + layout.rowGap;
     });
 
-    const rowCount = row + (col > 0 ? 1 : 0);
-    return y + rowCount * rowHeight;
+    return y + layout.bodyHeight;
+  }
+
+  private resolveIngredientGridLayout(
+    ctx: CanvasRenderingContext2D,
+    labelData: LabelDataDto,
+    items: string[],
+    ingredientStartY: number,
+    width: number,
+    mode: LabelRenderMode,
+    bottomLimit: number,
+  ): IngredientGridLayout {
+    const candidateColumns = this.getIngredientGridColumnCandidates();
+
+    for (const columns of candidateColumns) {
+      const layout = this.buildIngredientGridLayout(
+        ctx,
+        items,
+        width,
+        mode,
+        columns,
+      );
+      const finalY = this.measureLabelFinalY(
+        labelData,
+        ingredientStartY,
+        layout,
+        mode,
+      );
+
+      if (finalY <= bottomLimit) {
+        return layout;
+      }
+    }
+
+    throw new BadRequestException(LABEL_CONTENT_OVERFLOW_MESSAGE);
+  }
+
+  private getIngredientGridColumnCandidates(): number[] {
+    return [3, 2, 1];
+  }
+
+  private buildIngredientGridLayout(
+    ctx: CanvasRenderingContext2D,
+    items: string[],
+    width: number,
+    mode: LabelRenderMode,
+    columns: number,
+  ): IngredientGridLayout {
+    const gridConfig = this.getIngredientGridConfig(mode);
+    const colWidth = width / columns;
+    const textWidth = colWidth - mmToPx(1.2);
+    const rowGap = mmToPx(0.25);
+    const lineHeightPx = mmToPx(gridConfig.lineHeight);
+
+    ctx.font = `${mmToPx(gridConfig.fontSize)}px "Chinese"`;
+
+    const cells = items.map((item) =>
+      this.buildIngredientGridCellLayout(ctx, item, textWidth),
+    );
+    const rows: IngredientGridRowLayout[] = [];
+
+    for (let index = 0; index < cells.length; index += columns) {
+      const rowCells = cells.slice(index, index + columns);
+      rows.push({
+        cells: rowCells,
+        lineCount: Math.max(...rowCells.map((cell) => cell.lineCount), 1),
+      });
+    }
+
+    const bodyHeight = rows.reduce((sum, row, index) => {
+      const gap = index === rows.length - 1 ? 0 : rowGap;
+      return sum + row.lineCount * lineHeightPx + gap;
+    }, 0);
+
+    return {
+      columns,
+      colWidth,
+      textWidth,
+      fontSize: gridConfig.fontSize,
+      lineHeight: gridConfig.lineHeight,
+      rowGap,
+      bodyHeight,
+      rows,
+    };
+  }
+
+  private buildIngredientGridCellLayout(
+    ctx: CanvasRenderingContext2D,
+    item: string,
+    maxWidth: number,
+  ): IngredientGridCellLayout {
+    const parsed = this.parseIngredientLabel(item);
+    const nameLines = this.wrapTextByWidth(ctx, parsed.nameText, maxWidth);
+
+    if (!parsed.detailText) {
+      return {
+        nameLines,
+        detailText: '',
+        detailOnOwnLine: false,
+        lineCount: Math.max(nameLines.length, 1),
+      };
+    }
+
+    const lastLine = nameLines[nameLines.length - 1] || '';
+    const detailWidth = ctx.measureText(parsed.detailText).width;
+    const lastLineWidth = ctx.measureText(lastLine).width;
+    const detailGap = mmToPx(1);
+    const detailOnOwnLine =
+      lastLineWidth + detailGap + detailWidth > maxWidth;
+
+    return {
+      nameLines,
+      detailText: parsed.detailText,
+      detailOnOwnLine,
+      lineCount: nameLines.length + (detailOnOwnLine ? 1 : 0),
+    };
+  }
+
+  private drawIngredientGridCell(
+    ctx: CanvasRenderingContext2D,
+    cell: IngredientGridCellLayout,
+    x: number,
+    y: number,
+    layout: IngredientGridLayout,
+  ): void {
+    const lineHeightPx = mmToPx(layout.lineHeight);
+
+    ctx.textAlign = 'left';
+    cell.nameLines.forEach((line, index) => {
+      ctx.fillText(line, x, y + index * lineHeightPx);
+    });
+
+    if (!cell.detailText) {
+      return;
+    }
+
+    const detailLineIndex = cell.detailOnOwnLine
+      ? cell.nameLines.length
+      : Math.max(cell.nameLines.length - 1, 0);
+
+    ctx.textAlign = 'right';
+    ctx.fillText(
+      cell.detailText,
+      x + layout.textWidth,
+      y + detailLineIndex * lineHeightPx,
+    );
+    ctx.textAlign = 'left';
+  }
+
+  private measureLabelFinalY(
+    labelData: LabelDataDto,
+    ingredientStartY: number,
+    ingredientLayout: IngredientGridLayout,
+    mode: LabelRenderMode,
+  ): number {
+    let y =
+      ingredientStartY +
+      this.getSectionTitleHeight() +
+      ingredientLayout.bodyHeight;
+
+    y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
+
+    if (labelData.nutritionAnalysis) {
+      y += this.measureCompleteNutritionSection(
+        labelData.nutritionAnalysis,
+        mode,
+      );
+      y += mmToPx(LABEL_LAYOUT.spacing.sectionGap);
+    }
+
+    y += this.measureStorageSection();
+
+    return y;
+  }
+
+  private measureCompleteNutritionSection(
+    nutrition: NonNullable<LabelDataDto['nutritionAnalysis']>,
+    mode: LabelRenderMode,
+  ): number {
+    const rows = this.buildCompleteNutritionRows(nutrition);
+    const rowHeight = mmToPx(mode === 'compact' ? 2.15 : 2.45);
+    return this.getSectionTitleHeight() + rows.length * rowHeight;
+  }
+
+  private measureStorageSection(): number {
+    const layout = this.getStorageSectionLayout();
+    return (
+      mmToPx(layout.topGapMm) +
+      this.getSectionTitleHeight() +
+      mmToPx(6.2)
+    );
+  }
+
+  private getSectionTitleHeight(): number {
+    return mmToPx(5.4);
   }
 
   private drawCompleteNutritionSection(
@@ -520,6 +732,63 @@ export class LabelService {
     }
 
     return item;
+  }
+
+  private parseIngredientLabel(item: string): ParsedIngredientLabel {
+    const supplement = item.match(/^(.+?)（(.+?)）$/);
+    if (supplement) {
+      return {
+        nameText: supplement[1].trim(),
+        detailText: supplement[2].trim(),
+      };
+    }
+
+    const ratio = item.match(/^(.+?)(\d+(?:\.\d+)?%)$/);
+    if (ratio) {
+      return {
+        nameText: ratio[1].trim(),
+        detailText: `${Number(ratio[2].replace('%', '')).toFixed(1)}%`,
+      };
+    }
+
+    const amount = item.match(/^(.+?)(\d+(?:\.\d+)?(?:g|kg|mg|ml|mL|L|平勺|粒|片|颗|枚|袋|盒|份|滴|IU|μg|ug|mcg))$/i);
+    if (amount) {
+      return {
+        nameText: amount[1].trim(),
+        detailText: amount[2].trim(),
+      };
+    }
+
+    return {
+      nameText: item.trim(),
+      detailText: '',
+    };
+  }
+
+  private wrapTextByWidth(
+    ctx: CanvasRenderingContext2D,
+    text: string,
+    maxWidth: number,
+  ): string[] {
+    const chars = Array.from(text);
+    const lines: string[] = [];
+    let currentLine = '';
+
+    chars.forEach((char) => {
+      const nextLine = currentLine + char;
+      if (currentLine && ctx.measureText(nextLine).width > maxWidth) {
+        lines.push(currentLine);
+        currentLine = char;
+      } else {
+        currentLine = nextLine;
+      }
+    });
+
+    if (currentLine) {
+      lines.push(currentLine);
+    }
+
+    return lines.length > 0 ? lines : [''];
   }
 
   private buildMetaLine(labelData: LabelDataDto): string {

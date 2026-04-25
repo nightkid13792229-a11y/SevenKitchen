@@ -148,6 +148,13 @@ describe('staff production scheduling guardrails', () => {
     expect(labelRendererSource).toContain('buildCompleteNutritionItems');
   });
 
+  it('shows a clear blocking message when full label content exceeds the paper size', () => {
+    expect(printLabelSource).toContain('isLabelContentOverflowError');
+    expect(printLabelSource).toContain('showLabelContentOverflowModal');
+    expect(printLabelSource).toContain('标签内容过多');
+    expect(printLabelSource).toContain('无法完整放入 70mm × 100mm 标签纸');
+  });
+
   it('splits custom package plans into separate product label items', () => {
     expect(printLabelSource).toContain('expandOrderPrintLabels');
     expect(printLabelSource).toContain('packageLabelTitle');

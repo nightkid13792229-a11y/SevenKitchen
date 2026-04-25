@@ -625,6 +625,24 @@ function decreaseCount(index: number) {
   }
 }
 
+function getErrorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isLabelContentOverflowError(error: unknown): boolean {
+  const errorMessage = getErrorMessage(error);
+  return errorMessage.includes('标签内容超出') || errorMessage.includes('无法在70×100mm标签内完整显示');
+}
+
+function showLabelContentOverflowModal() {
+  uni.showModal({
+    title: '标签内容过多',
+    content: '当前原料名称、占比和用量无法完整放入 70mm × 100mm 标签纸。\n\n请减少标签内容、缩短原料名称，或改用更大标签后再打印。',
+    showCancel: false,
+    confirmText: '知道了'
+  });
+}
+
 // 预览标签
 async function previewLabel(order: OrderPrintConfig) {
   try {
@@ -656,6 +674,10 @@ async function previewLabel(order: OrderPrintConfig) {
   } catch (error) {
     uni.hideLoading();
     console.error('[PrintLabel] 预览失败:', error);
+    if (isLabelContentOverflowError(error)) {
+      showLabelContentOverflowModal();
+      return;
+    }
     uni.showToast({
       title: '预览失败',
       icon: 'none'
@@ -821,9 +843,11 @@ async function printSingleOrder(order: OrderPrintConfig) {
         console.error('[PrintLabel] 打印失败:', error);
 
         // 判断错误类型
-        const errorMessage = error instanceof Error ? error.message : String(error);
+        const errorMessage = getErrorMessage(error);
 
-        if (errorMessage.includes('SDK忙') || errorMessage.includes('startJob回调未触发')) {
+        if (isLabelContentOverflowError(error)) {
+          showLabelContentOverflowModal();
+        } else if (errorMessage.includes('SDK忙') || errorMessage.includes('startJob回调未触发')) {
           uni.showModal({
             title: '打印机忙碌',
             content: '打印机正在处理任务，请稍等几秒后重试。',

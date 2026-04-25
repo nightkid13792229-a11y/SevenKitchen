@@ -63,6 +63,7 @@ export async function generateLabelImage(labelData: LabelData): Promise<string> 
     url: '/labels/generate-image',
     method: 'POST',
     data: labelData,
+    suppressErrorToast: true,
   });
 
   if (response.code !== 0) {

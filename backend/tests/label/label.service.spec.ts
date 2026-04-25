@@ -1,4 +1,5 @@
 import { loadImage } from 'canvas';
+import { createCanvas } from 'canvas';
 import { LabelService } from '../../src/label/label.service';
 import { LabelDataDto } from '../../src/label/dto/label-data.dto';
 
@@ -108,6 +109,49 @@ describe('LabelService 70x100 food label rendering', () => {
     expect((service as any).formatIngredientLabel('海藻粉8.94平勺')).toBe(
       '海藻粉 8.94平勺',
     );
+  });
+
+  it('wraps long ingredient names without dropping ratio or amount text', () => {
+    const service = new LabelService();
+    const ctx = createCanvas(559, 799).getContext('2d');
+    const contentWidth = 487;
+
+    const layout = (service as any).buildIngredientGridLayout(
+      ctx,
+      ['有机散养去皮去骨鸡胸肉25.51%', '超长品牌复合维生素矿物质营养粉119.40g'],
+      contentWidth,
+      'regular',
+      2,
+    );
+
+    expect(layout.rows[0].cells[0].nameLines.join('')).toBe(
+      '有机散养去皮去骨鸡胸肉',
+    );
+    expect(layout.rows[0].cells[0].detailText).toBe('25.5%');
+    expect(layout.rows[0].cells[0].nameLines.join('')).not.toContain('...');
+
+    expect(layout.rows[0].cells[1].nameLines.join('')).toBe(
+      '超长品牌复合维生素矿物质营养粉',
+    );
+    expect(layout.rows[0].cells[1].detailText).toBe('119.40g');
+    expect(layout.rows[0].cells[1].nameLines.join('')).not.toContain('...');
+  });
+
+  it('blocks label generation when complete ingredient text cannot fit the 70x100 label', () => {
+    const service = new LabelService();
+    const longIngredients = Array.from(
+      { length: 42 },
+      (_, index) =>
+        `第${index + 1}种超长完整显示有机散养去皮去骨精选原料${(index + 1).toFixed(2)}%`,
+    ).join('、');
+
+    expect(() =>
+      service.generateLabelImage({
+        ...createLabelData(),
+        foodIngredients: longIngredients,
+        supplementIngredients: '',
+      }),
+    ).toThrow('标签内容超出');
   });
 
   it('uses three columns for compact ingredient layout after supplement amounts are short', () => {

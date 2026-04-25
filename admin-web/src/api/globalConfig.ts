@@ -20,6 +20,7 @@ export interface GlobalConfig {
   packageExampleImageUrl: string | null;
   shippingCompanyLogoUrl: string | null;
   homeHeaderBgImageUrl: string | null;
+  diySheetHeaderBgImageUrl: string | null;
   paymentTimeoutMinutes: number;
   equipmentRecommendations: EquipmentRecommendation[] | null;
 }
@@ -99,6 +100,24 @@ export const globalConfigApi = {
       url: string;
       key: string;
     }>('/admin/upload-home-header-bg', formData, {
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+    });
+  },
+
+  /**
+   * 上传DIY制作单头部背景图
+   * @param file 图片文件
+   */
+  uploadDiySheetHeaderBg: async (file: File): Promise<{ url: string; key: string }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return api.post<{
+      url: string;
+      key: string;
+    }>('/admin/upload-diy-sheet-header-bg', formData, {
       headers: {
         'Content-Type': 'multipart/form-data',
       },

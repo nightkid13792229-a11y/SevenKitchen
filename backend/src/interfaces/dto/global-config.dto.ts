@@ -68,6 +68,10 @@ export class UpdateGlobalConfigDto {
   homeHeaderBgImageUrl?: string | null;
 
   @IsOptional()
+  @IsString()
+  diySheetHeaderBgImageUrl?: string | null;
+
+  @IsOptional()
   @IsNumber()
   @Min(5)
   @Max(180)

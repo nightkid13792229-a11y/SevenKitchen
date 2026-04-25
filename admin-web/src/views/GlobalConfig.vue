@@ -258,6 +258,32 @@
           <div class="form-tip">建议尺寸：750×400px（宽高比约2:1），支持jpg、png格式，大小不超过2MB。未配置时显示默认紫色渐变。</div>
         </el-form-item>
 
+        <el-divider content-position="left">DIY制作单背景图配置</el-divider>
+
+        <el-form-item label="制作单头部背景图" prop="diySheetHeaderBgImageUrl">
+          <div class="image-upload-container">
+            <div v-if="form.diySheetHeaderBgImageUrl" class="uploaded-image">
+              <el-image
+                :src="form.diySheetHeaderBgImageUrl"
+                fit="cover"
+                style="width: 480px; height: 92px; border-radius: 4px; border: 1px solid #dcdfe6;"
+                :preview-src-list="[form.diySheetHeaderBgImageUrl]"
+              />
+              <el-button type="danger" size="small" @click="handleRemoveDiySheetHeaderBg" style="margin-top: 8px">
+                删除图片
+              </el-button>
+            </div>
+            <div v-else class="upload-placeholder">
+              <el-icon :size="40" color="#dcdfe6"><Picture /></el-icon>
+              <div class="upload-text">点击上传制作单背景图</div>
+              <el-button type="primary" size="small" @click="handleUploadDiySheetHeaderBg">
+                选择图片
+              </el-button>
+            </div>
+          </div>
+          <div class="form-tip">建议尺寸：2400×460px 或 1200×230px，支持jpg、png格式，大小不超过2MB。替换或删除时会自动删除 COS 中旧图片。</div>
+        </el-form-item>
+
         <el-divider content-position="left">制作设备推荐配置</el-divider>
 
         <el-form-item label="推荐设备管理">
@@ -534,6 +560,7 @@ const form = ref<GlobalConfig>({
   packageExampleImageUrl: null,
   shippingCompanyLogoUrl: null,
   homeHeaderBgImageUrl: null,
+  diySheetHeaderBgImageUrl: null,
   paymentTimeoutMinutes: 30,
   equipmentRecommendations: null,
 })
@@ -778,6 +805,61 @@ const handleRemoveHomeHeaderBg = () => {
   }).then(() => {
     form.value.homeHeaderBgImageUrl = null
     ElMessage.success('已删除')
+  }).catch(() => {
+    // 用户取消
+  })
+}
+
+// 上传DIY制作单头部背景图
+const handleUploadDiySheetHeaderBg = () => {
+  const input = document.createElement('input')
+  input.type = 'file'
+  input.accept = 'image/jpeg,image/png'
+
+  input.onchange = async (e: Event) => {
+    const target = e.target as HTMLInputElement
+    const file = target.files?.[0]
+    if (!file) return
+
+    if (file.size > 2 * 1024 * 1024) {
+      ElMessage.error('图片大小不能超过2MB')
+      return
+    }
+
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      ElMessage.error('只支持JPG和PNG格式')
+      return
+    }
+
+    try {
+      const result = await globalConfigApi.uploadDiySheetHeaderBg(file)
+      await globalConfigApi.update({ diySheetHeaderBgImageUrl: result.url })
+      form.value.diySheetHeaderBgImageUrl = result.url
+      ElMessage.success('DIY制作单背景图上传并保存成功')
+    } catch (error: any) {
+      console.error('Upload error:', error)
+      ElMessage.error(error.message || '上传失败')
+    }
+  }
+
+  input.click()
+}
+
+// 删除DIY制作单头部背景图
+const handleRemoveDiySheetHeaderBg = () => {
+  ElMessageBox.confirm('确定要删除制作单背景图吗？删除后将恢复默认渐变背景。', '提示', {
+    confirmButtonText: '确定',
+    cancelButtonText: '取消',
+    type: 'warning',
+  }).then(async () => {
+    try {
+      await globalConfigApi.update({ diySheetHeaderBgImageUrl: null })
+      form.value.diySheetHeaderBgImageUrl = null
+      ElMessage.success('已删除')
+    } catch (error: any) {
+      console.error('Remove error:', error)
+      ElMessage.error(error.message || '删除失败')
+    }
   }).catch(() => {
     // 用户取消
   })

@@ -35,6 +35,7 @@ export interface GlobalConfig {
   shippingCompanyLogoUrl: string | null;
   paymentTimeoutMinutes: number;
   homeHeaderBgImageUrl: string | null;
+  diySheetHeaderBgImageUrl: string | null;
   ingredientPriceAutoApproveThreshold?: number;
   equipmentRecommendations?: EquipmentRecommendations | null;
 }

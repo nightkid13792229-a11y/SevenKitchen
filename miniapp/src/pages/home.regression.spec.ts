@@ -14,6 +14,32 @@ describe('home runtime regressions', () => {
     expect(source).toContain("/pages/feedback-list/index")
   })
 
+  it('uses minimal abstract quick action icons instead of emoji or detailed illustrations', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/home/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('action-icon-message')
+    expect(source).toContain('action-icon-weight-scale')
+    expect(source).toContain('weight-scale-shell')
+    expect(source).toContain('weight-scale-display')
+    expect(source).toContain('weight-scale-needle')
+    expect(source).toContain('action-icon-bowl')
+    expect(source).not.toContain('💬')
+    expect(source).not.toContain('⚖️')
+    expect(source).not.toContain('🥣')
+    expect(source).not.toContain('action-icon-weight-solid')
+    expect(source).not.toContain('weight-body')
+    expect(source).not.toContain('weight-handle')
+    expect(source).not.toContain('action-icon-trend')
+    expect(source).not.toContain('trend-line')
+    expect(source).not.toContain('trend-point')
+    expect(source).not.toContain('scale-pan')
+    expect(source).not.toContain('spoon-head')
+    expect(source).not.toContain('feedback-dots')
+  })
+
   it('uses the configured global homepage header background image', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/home/index.vue'),

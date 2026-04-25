@@ -91,6 +91,7 @@ import { AdminGuard } from '../guards/role.guard';
 import { AuthGuard } from '../auth/auth.guard';
 import { RecipeService } from '../../application/recipe/recipe.service';
 import { CoverImageService } from '../../application/recipe/cover-image.service';
+import { ImageOptimizationService } from '../../infrastructure/services/image-optimization.service';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import {
   NutritionStandard,
@@ -121,6 +122,7 @@ export class AdminController {
     private readonly dogBreedRepository: DogBreedRepository,
     private readonly recipeService: RecipeService,
     private readonly coverImageService: CoverImageService,
+    private readonly imageOptimizationService: ImageOptimizationService,
     private readonly cosService: TencentCosService,
   ) {}
 
@@ -2885,9 +2887,13 @@ export class AdminController {
     @UploadedFile() file: Express.Multer.File,
   ): Promise<ApiResponseDto<any>> {
     try {
-      const result = await this.cosService.uploadImage(
+      const optimizedImage = await this.imageOptimizationService.optimizeForUpload(
         file,
-        file.originalname,
+        'recipe-cover',
+      );
+      const result = await this.cosService.uploadImage(
+        optimizedImage.buffer,
+        optimizedImage.filename,
         'recipes',
       );
       return ApiResponseDto.success(result);
@@ -3018,9 +3024,13 @@ export class AdminController {
     @UploadedFile() file: Express.Multer.File,
   ): Promise<ApiResponseDto<any>> {
     try {
-      const result = await this.cosService.uploadImage(
+      const optimizedImage = await this.imageOptimizationService.optimizeForUpload(
         file,
-        file.originalname,
+        'home-header-bg',
+      );
+      const result = await this.cosService.uploadImage(
+        optimizedImage.buffer,
+        optimizedImage.filename,
         'home-header-bg',
       );
       return ApiResponseDto.success(result);

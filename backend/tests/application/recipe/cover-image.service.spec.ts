@@ -71,6 +71,8 @@ describe('CoverImageService', () => {
 
     const metadata = await sharp(uploadedBuffer!).metadata();
     expect(metadata.format).toBe('jpeg');
+    expect(metadata.width).toBe(750);
+    expect(metadata.height).toBe(422);
     expect(uploadedBuffer!.length).toBeLessThan(800 * 1024);
   });
 });

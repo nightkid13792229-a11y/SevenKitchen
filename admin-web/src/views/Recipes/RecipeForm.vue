@@ -50,7 +50,7 @@
             </div>
             <div class="upload-tips">
               <el-icon color="#909399"><InfoFilled /></el-icon>
-              <span>图片要求：16:9比例，文件大小≤200KB</span>
+              <span>图片要求：16:9比例，支持JPG/PNG/WebP，文件大小≤5MB；上传后自动压缩为小程序封面图</span>
             </div>
           </el-form-item>
 
@@ -1232,16 +1232,17 @@ const loadRecipeDetail = async () => {
 };
 
 const handleCoverUpload: UploadProps['beforeUpload'] = async (file) => {
-  const isImage = file.type.startsWith('image/');
-  if (!isImage) {
-    ElMessage.error('只能上传图片文件');
+  const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+  if (!allowedTypes.includes(file.type)) {
+    ElMessage.error('只支持JPG、PNG和WebP格式');
     return false;
   }
 
-  // Check file size (200KB = 200 * 1024 bytes)
-  const maxSize = 200 * 1024;
+  // The backend compresses uploaded covers for the miniapp, so admins can upload
+  // a higher-quality source while still keeping runtime images lightweight.
+  const maxSize = 5 * 1024 * 1024;
   if (file.size > maxSize) {
-    ElMessage.error(`图片大小不能超过 200KB（当前大小：${(file.size / 1024).toFixed(2)} KB）`);
+    ElMessage.error(`图片大小不能超过 5MB（当前大小：${(file.size / 1024 / 1024).toFixed(2)} MB）`);
     return false;
   }
 

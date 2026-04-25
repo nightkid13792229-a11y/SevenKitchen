@@ -10,6 +10,9 @@ import * as fs from 'fs';
 import sharp from 'sharp';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 
+const MINIAPP_RECIPE_COVER_WIDTH = 750;
+const MINIAPP_RECIPE_COVER_HEIGHT = 422;
+
 /**
  * Cover title rendering options
  */
@@ -127,7 +130,13 @@ export class CoverImageService {
       const renderedPngBuffer = canvas.toBuffer('image/png');
       const outputBuffer = await sharp(renderedPngBuffer)
         .flatten({ background: '#ffffff' })
-        .jpeg({ quality: 82, mozjpeg: true })
+        .resize({
+          width: MINIAPP_RECIPE_COVER_WIDTH,
+          height: MINIAPP_RECIPE_COVER_HEIGHT,
+          fit: 'cover',
+          position: 'centre',
+        })
+        .jpeg({ quality: 76, mozjpeg: true, progressive: true })
         .toBuffer();
 
       // Upload to COS

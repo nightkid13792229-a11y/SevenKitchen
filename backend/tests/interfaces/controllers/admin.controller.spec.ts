@@ -25,6 +25,7 @@ describe('AdminController', () => {
         {} as any,
         {} as any,
         {} as any,
+        {} as any,
         mockCosService as any,
       );
 
@@ -46,6 +47,7 @@ describe('AdminController', () => {
         }),
       };
       const controller = new AdminController(
+        {} as any,
         {} as any,
         {} as any,
         {} as any,
@@ -152,6 +154,7 @@ describe('AdminController', () => {
         {} as any,
         {} as any,
         {} as any,
+        {} as any,
       );
 
       const result = await controller.getIngredientById('ingredient-1');
@@ -228,6 +231,7 @@ describe('AdminController', () => {
         {} as any,
         mockPrisma as any,
         mockDogBreedRepository as any,
+        {} as any,
         {} as any,
         {} as any,
         {} as any,
@@ -316,6 +320,7 @@ describe('AdminController', () => {
         {} as any,
         {} as any,
         {} as any,
+        {} as any,
       );
 
       const result = await (controller as any).getAllDogs(
@@ -384,6 +389,7 @@ describe('AdminController', () => {
         {} as any,
         {} as any,
         {} as any,
+        {} as any,
       );
 
       const result = await controller.getOrderFinancialSummary('order-1');
@@ -414,6 +420,7 @@ describe('AdminController', () => {
         {} as any,
         {} as any,
         mockOrderService as any,
+        {} as any,
         {} as any,
         {} as any,
         {} as any,
@@ -463,6 +470,7 @@ describe('AdminController', () => {
         {} as any,
         {} as any,
         mockOrderService as any,
+        {} as any,
         {} as any,
         {} as any,
         {} as any,
@@ -537,6 +545,7 @@ describe('AdminController', () => {
         {} as any,
         {} as any,
         mockOrderService as any,
+        {} as any,
         {} as any,
         {} as any,
         {} as any,
@@ -645,6 +654,7 @@ describe('AdminController', () => {
         {} as any,
         {} as any,
         {} as any,
+        {} as any,
       );
 
       const result = await controller.getOrderDetail('order-1');
@@ -737,6 +747,7 @@ describe('AdminController', () => {
         {} as any,
         {} as any,
         {} as any,
+        {} as any,
       );
 
       const result = await controller.getOrderDetail('order-1');
@@ -775,6 +786,7 @@ describe('AdminController', () => {
       };
 
       const controller = new AdminController(
+        {} as any,
         {} as any,
         {} as any,
         {} as any,
@@ -827,6 +839,7 @@ describe('AdminController', () => {
         {} as any,
         {} as any,
         {} as any,
+        {} as any,
         mockCosService as any,
       );
 
@@ -850,6 +863,7 @@ describe('AdminController', () => {
       };
 
       const controller = new AdminController(
+        {} as any,
         {} as any,
         {} as any,
         {} as any,

@@ -255,7 +255,7 @@
               </el-button>
             </div>
           </div>
-          <div class="form-tip">建议尺寸：750×400px（宽高比约2:1），支持jpg、png格式，大小不超过2MB。未配置时显示默认紫色渐变。</div>
+          <div class="form-tip">建议尺寸：1125×600px，支持jpg、png、webp格式，大小不超过5MB；上传后会自动压缩为小程序专用图。未配置时显示默认紫色渐变。</div>
         </el-form-item>
 
         <el-divider content-position="left">DIY制作单背景图配置</el-divider>
@@ -763,7 +763,7 @@ const handleRemoveShippingLogo = () => {
 const handleUploadHomeHeaderBg = () => {
   const input = document.createElement('input')
   input.type = 'file'
-  input.accept = 'image/jpeg,image/png'
+  input.accept = 'image/jpeg,image/png,image/webp'
 
   input.onchange = async (e: Event) => {
     const target = e.target as HTMLInputElement
@@ -771,14 +771,14 @@ const handleUploadHomeHeaderBg = () => {
     if (!file) return
 
     // 验证文件大小
-    if (file.size > 2 * 1024 * 1024) {
-      ElMessage.error('图片大小不能超过2MB')
+    if (file.size > 5 * 1024 * 1024) {
+      ElMessage.error('图片大小不能超过5MB')
       return
     }
 
     // 验证文件类型
-    if (!['image/jpeg', 'image/png'].includes(file.type)) {
-      ElMessage.error('只支持JPG和PNG格式')
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      ElMessage.error('只支持JPG、PNG和WebP格式')
       return
     }
 

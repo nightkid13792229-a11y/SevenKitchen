@@ -20,28 +20,15 @@
     <!-- 快捷功能入口 -->
     <view class="quick-actions">
       <view class="action-item" @tap="goToFeedback">
-        <view class="action-icon action-icon-message">
-          <view class="message-box">
-            <view class="message-line message-line-long"></view>
-            <view class="message-line message-line-short"></view>
-          </view>
-        </view>
+        <image class="action-icon" src="/static/home-actions/feedback.png" mode="aspectFit" />
         <text class="action-text">建议反馈</text>
       </view>
       <view class="action-item" @tap="goToWeightManagement">
-        <view class="action-icon action-icon-weight-scale">
-          <view class="weight-scale-shell">
-            <view class="weight-scale-display"></view>
-            <view class="weight-scale-needle"></view>
-          </view>
-        </view>
+        <image class="action-icon" src="/static/home-actions/weight-management.png" mode="aspectFit" />
         <text class="action-text">体重管理</text>
       </view>
       <view class="action-item" @tap="goToCalculatePortion">
-        <view class="action-icon action-icon-bowl">
-          <view class="portion-rim"></view>
-          <view class="portion-bowl"></view>
-        </view>
+        <image class="action-icon" src="/static/home-actions/calculate-portion.png" mode="aspectFit" />
         <text class="action-text">饭量计算</text>
       </view>
     </view>
@@ -1456,96 +1443,10 @@ defineOptions({
 }
 
 .action-icon {
-  position: relative;
   width: 56rpx;
   height: 56rpx;
+  display: block;
   flex-shrink: 0;
-}
-
-.message-box {
-  position: absolute;
-  left: 10rpx;
-  top: 12rpx;
-  width: 36rpx;
-  height: 28rpx;
-  border: 3rpx solid #2f3337;
-  border-radius: 8rpx;
-  box-sizing: border-box;
-}
-
-.message-line {
-  position: absolute;
-  left: 8rpx;
-  height: 3rpx;
-  background: #2f3337;
-  border-radius: 999rpx;
-}
-
-.message-line-long {
-  top: 8rpx;
-  width: 20rpx;
-}
-
-.message-line-short {
-  top: 16rpx;
-  width: 14rpx;
-}
-
-.weight-scale-shell {
-  position: absolute;
-  left: 10rpx;
-  top: 10rpx;
-  width: 36rpx;
-  height: 34rpx;
-  border: 3rpx solid #2f3337;
-  border-radius: 12rpx;
-  box-sizing: border-box;
-}
-
-.weight-scale-display {
-  position: absolute;
-  left: 8rpx;
-  top: 7rpx;
-  width: 14rpx;
-  height: 7rpx;
-  border: 3rpx solid #2f3337;
-  border-top: 0;
-  border-radius: 999rpx;
-  box-sizing: border-box;
-}
-
-.weight-scale-needle {
-  position: absolute;
-  left: 17rpx;
-  top: 12rpx;
-  width: 3rpx;
-  height: 10rpx;
-  background: #2f3337;
-  border-radius: 999rpx;
-  transform: rotate(28deg);
-  transform-origin: center bottom;
-}
-
-.portion-rim {
-  position: absolute;
-  left: 9rpx;
-  top: 21rpx;
-  width: 38rpx;
-  height: 3rpx;
-  background: #2f3337;
-  border-radius: 999rpx;
-}
-
-.portion-bowl {
-  position: absolute;
-  left: 13rpx;
-  top: 25rpx;
-  width: 30rpx;
-  height: 16rpx;
-  border: 3rpx solid #2f3337;
-  border-top: 0;
-  border-radius: 0 0 18rpx 18rpx;
-  box-sizing: border-box;
 }
 
 .action-text {

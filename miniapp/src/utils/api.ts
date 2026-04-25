@@ -62,6 +62,10 @@ interface RequestOptions {
   suppressErrorToast?: boolean
 }
 
+type MiniProgramRuntime = {
+  request?: (options: Record<string, any>) => any
+}
+
 function isEmptyQueryValue(value: unknown): boolean {
   if (value === undefined || value === null) {
     return true
@@ -97,6 +101,52 @@ export function normalizeRequestData(
   }
 
   return Object.fromEntries(sanitizedEntries)
+}
+
+function getGlobalRuntime(
+  name: 'wx' | 'uni',
+  globalRuntime?: Record<string, any>,
+): MiniProgramRuntime | undefined {
+  if (!globalRuntime) {
+    return undefined
+  }
+
+  return globalRuntime[name]
+}
+
+export function resolveRuntimeRequest(
+  nativeWx?: MiniProgramRuntime,
+  nativeUni?: MiniProgramRuntime,
+  globalRuntime: Record<string, any> | undefined =
+    typeof globalThis === 'undefined' ? undefined : (globalThis as any),
+) {
+  const candidates = [
+    () => nativeWx,
+    () => getGlobalRuntime('wx', globalRuntime),
+    () => nativeUni,
+    () => getGlobalRuntime('uni', globalRuntime),
+  ]
+
+  for (const getCandidate of candidates) {
+    try {
+      const candidate = getCandidate()
+      const requestFn = candidate?.request
+      if (typeof requestFn === 'function') {
+        return requestFn.bind(candidate)
+      }
+    } catch (err) {
+      // Try the next runtime; some DevTools states expose a partial uni proxy.
+    }
+  }
+
+  return null
+}
+
+function getRuntimeRequest() {
+  return resolveRuntimeRequest(
+    typeof wx !== 'undefined' ? wx : undefined,
+    typeof uni !== 'undefined' ? uni : undefined,
+  )
 }
 
 // Token storage helpers - single source of truth
@@ -251,7 +301,13 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
     const method = options.method || 'GET'
     const data = normalizeRequestData(method, options.data)
 
-    uni.request({
+    const runtimeRequest = getRuntimeRequest()
+    if (!runtimeRequest) {
+      reject(new Error('当前环境不支持网络请求'))
+      return
+    }
+
+    runtimeRequest({
       url,
       method,
       data,

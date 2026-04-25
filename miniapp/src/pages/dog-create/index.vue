@@ -617,7 +617,6 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, onUnmounted, watch, reactive } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { request } from '../../utils/api'
 import HealthRecordsSection from '../../components/dog-profile/HealthRecordsSection.vue'
 import RecommendationSummaryCard from '../../components/dog-profile/RecommendationSummaryCard.vue'
 import StepProgressHeader from '../../components/dog-profile/StepProgressHeader.vue'
@@ -678,6 +677,15 @@ import {
   resolveDogAvatarSrc,
   resolveDogAvatarUploadErrorMessage,
 } from '../../utils/dog-avatar'
+
+const dogCreateApi = {
+  breeds: dogApi.breeds,
+  hotBreeds: dogApi.hotBreeds,
+  preview: dogApi.preview,
+  create: dogApi.create,
+  createWeightRecord: dogApi.createWeightRecord,
+  uploadAvatar: dogApi.uploadAvatar,
+}
 
 interface FormData {
   name: string
@@ -1299,7 +1307,7 @@ function trackCreateStepCompleted(step: DogProfileCreateStep) {
 async function loadBreeds() {
   loadingBreeds.value = true
   try {
-    const res: any = await dogApi.breeds()
+    const res: any = await dogCreateApi.breeds()
     if (res.code === 0 && res.data) {
       breeds.value = res.data
       console.log('[DogCreate] Loaded breeds:', breeds.value.length)
@@ -1327,7 +1335,7 @@ async function loadBreeds() {
 
 async function loadHotBreeds() {
   try {
-    const res: any = await dogApi.hotBreeds()
+    const res: any = await dogCreateApi.hotBreeds()
     if (res.code === 0 && Array.isArray(res.data)) {
       hotBreeds.value = res.data
       return
@@ -1894,11 +1902,7 @@ async function previewCalculation(options?: { silent?: boolean }) {
 
     console.log('[DogCreate] Preview calculation payload:', payload)
 
-    const res: any = await request({
-      url: '/dogs/calc-preview',
-      method: 'POST',
-      data: payload
-    })
+    const res: any = await dogCreateApi.preview(payload)
 
     console.log('[DogCreate] Preview calculation response:', res)
 
@@ -2272,14 +2276,8 @@ async function submit() {
   console.log('[DogCreate] formData.breedId:', formData.value.breedId)
   console.log('[DogCreate] selectedBreed:', selectedBreed.value)
 
-  const requestConfig = {
-    url: '/dogs',
-    method: 'POST',
-    data: payload
-  }
-
   try {
-    const res: any = await request(requestConfig)
+    const res: any = await dogCreateApi.create(payload)
     console.log('[DogCreate] Submit response:', res)
     if (res.code === 0 && res.data) {
       const updatedDog = res.data.profile || res.data
@@ -2310,7 +2308,7 @@ async function submit() {
 
       if (hasValidCurrentWeightKg.value) {
         try {
-          await dogApi.createWeightRecord(
+          await dogCreateApi.createWeightRecord(
             resultDogId,
             buildInitialWeightRecordPayload({
               recordDate: new Date().toISOString().split('T')[0],
@@ -2325,7 +2323,7 @@ async function submit() {
       let avatarUploadFailed = false
       if (selectedAvatarTempPath) {
         try {
-          updatedDog.avatarUrl = await dogApi.uploadAvatar(resultDogId, selectedAvatarTempPath)
+          updatedDog.avatarUrl = await dogCreateApi.uploadAvatar(resultDogId, selectedAvatarTempPath)
         } catch (avatarError: any) {
           avatarUploadFailed = true
           console.error(

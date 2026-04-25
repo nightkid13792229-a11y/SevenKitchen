@@ -280,6 +280,7 @@
       class="print-canvas"
       :width="PRINT_CANVAS_OUTPUT_WIDTH"
       :height="PRINT_CANVAS_OUTPUT_HEIGHT"
+      :style="printCanvasStyle"
     ></canvas>
 
     <!-- 规格详情弹窗 -->
@@ -613,6 +614,10 @@ const PRINT_CANVAS_LOGICAL_HEIGHT = 1697
 const PRINT_CANVAS_OUTPUT_SCALE = 2
 const PRINT_CANVAS_OUTPUT_WIDTH = PRINT_CANVAS_LOGICAL_WIDTH * PRINT_CANVAS_OUTPUT_SCALE
 const PRINT_CANVAS_OUTPUT_HEIGHT = PRINT_CANVAS_LOGICAL_HEIGHT * PRINT_CANVAS_OUTPUT_SCALE
+const printCanvasStyle = computed(() => ({
+  width: `${PRINT_CANVAS_OUTPUT_WIDTH}px`,
+  height: `${PRINT_CANVAS_OUTPUT_HEIGHT}px`
+}))
 
 // 全局配置中的补剂损耗率（默认5%）
 const globalSupplementLossRate = ref(0.05)
@@ -1191,7 +1196,7 @@ async function handlePrint() {
 
     // 2. 绘制分享图品牌头部
     builder.drawBrandHeader({
-      brand: 'seven 的厨房',
+      brand: 'Seven的厨房',
       logoPath: '/static/logo.png',
       avatarPath: dog.value?.avatarUrl ? normalizeImageUrl(dog.value.avatarUrl) : undefined,
       backgroundImage: headerBackground,
@@ -2254,13 +2259,11 @@ onShareTimeline(() => {
   font-weight: 500;
 }
 
-/* Canvas离屏渲染 - A4竖版规格: 1200px × 1697px */
+/* Canvas离屏渲染 - 实际尺寸由 printCanvasStyle 绑定到高分辨率输出尺寸 */
 .print-canvas {
   position: fixed;
   left: -9999px;
   top: 0;
-  width: 1200px;
-  height: 1697px;
   z-index: -1;
   pointer-events: none;
 }

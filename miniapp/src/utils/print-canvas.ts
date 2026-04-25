@@ -147,14 +147,22 @@ export class PrintCanvasBuilder {
     this.drawBrandHeaderBackground(headerHeight, options)
 
     const brandCenterX = this.canvasWidth / 2
-    const logoSize = 56
-    const brandGap = 14
-    const brandTextWidth = Math.max(150, options.brand.length * 20)
+    const logoSize = 58
+    const brandGap = 8
+    const brandTextWidth = Math.max(154, options.brand.length * 20)
     const brandStartX = brandCenterX - (logoSize + brandGap + brandTextWidth) / 2
     const brandY = 40
+    const brandBadgeHeight = 66
+    const brandBadgePaddingX = 16
+    const brandBadgeWidth = logoSize + brandGap + brandTextWidth + brandBadgePaddingX * 2
+    const brandBadgeX = brandCenterX - brandBadgeWidth / 2
+    const brandBadgeY = brandY - brandBadgeHeight / 2
 
-    this.ctx.setFillStyle('rgba(255,255,255,0.18)')
-    this.ctx.fillRect(brandStartX - 18, brandY - 36, logoSize + brandGap + brandTextWidth + 36, 72)
+    this.ctx.setFillStyle('rgba(255,255,255,0.66)')
+    this.ctx.fillRect(brandBadgeX, brandBadgeY, brandBadgeWidth, brandBadgeHeight)
+    this.ctx.setStrokeStyle('rgba(255,255,255,0.66)')
+    this.ctx.setLineWidth(2)
+    this.ctx.strokeRect(brandBadgeX, brandBadgeY, brandBadgeWidth, brandBadgeHeight)
 
     if (options.logoPath) {
       try {
@@ -165,8 +173,8 @@ export class PrintCanvasBuilder {
     }
 
     this.ctx.setTextAlign('left')
-    this.ctx.setFillStyle('rgba(255,255,255,0.94)')
-    this.ctx.setFontSize(this.FONT_SIZES.NORMAL + 6)
+    this.ctx.setFillStyle('#2f3337')
+    this.ctx.setFontSize(this.FONT_SIZES.NORMAL + 8)
     this.ctx.fillText(options.brand, brandStartX + logoSize + brandGap, brandY + 8)
 
     const avatarSize = 78
@@ -176,11 +184,11 @@ export class PrintCanvasBuilder {
       try {
         this.ctx.drawImage(options.avatarPath, avatarX, avatarY, avatarSize, avatarSize)
       } catch (error) {
-        console.warn('[PrintCanvas] 绘制狗狗头像失败，使用占位头像:', error)
-        this.drawSchnauzerAvatarPlaceholder(avatarX, avatarY, avatarSize)
+        console.warn('[PrintCanvas] 绘制狗狗头像失败，使用品牌logo占位:', error)
+        this.drawAvatarFallbackLogo(options.logoPath, avatarX, avatarY, avatarSize)
       }
     } else {
-      this.drawSchnauzerAvatarPlaceholder(avatarX, avatarY, avatarSize)
+      this.drawAvatarFallbackLogo(options.logoPath, avatarX, avatarY, avatarSize)
     }
 
     const titleX = avatarX + avatarSize + 28
@@ -256,10 +264,22 @@ export class PrintCanvasBuilder {
       this.ctx.fillRect(0, 0, this.canvasWidth, headerHeight)
     }
 
+    const overlayStops = usedImage
+      ? [
+          [0, 'rgba(26, 135, 219, 0.14)'],
+          [0.5, 'rgba(50, 75, 173, 0.10)'],
+          [1, 'rgba(88, 55, 151, 0.16)']
+        ]
+      : [
+          [0, 'rgba(26, 135, 219, 0.52)'],
+          [0.5, 'rgba(50, 75, 173, 0.42)'],
+          [1, 'rgba(88, 55, 151, 0.58)']
+        ]
+
     const overlay = this.ctx.createLinearGradient(0, 0, this.canvasWidth, headerHeight)
-    overlay.addColorStop(0, 'rgba(26, 135, 219, 0.52)')
-    overlay.addColorStop(0.5, 'rgba(50, 75, 173, 0.42)')
-    overlay.addColorStop(1, 'rgba(88, 55, 151, 0.58)')
+    overlayStops.forEach(([offset, color]) => {
+      overlay.addColorStop(offset as number, color as string)
+    })
     this.ctx.setFillStyle(overlay)
     this.ctx.fillRect(0, 0, this.canvasWidth, headerHeight)
   }
@@ -295,60 +315,108 @@ export class PrintCanvasBuilder {
     )
   }
 
+  private drawAvatarFallbackLogo(logoPath: string | undefined, x: number, y: number, size: number) {
+    const centerX = x + size / 2
+    const centerY = y + size / 2
+
+    // 品牌logo头像占位
+    this.ctx.beginPath()
+    this.ctx.arc(centerX, centerY, size / 2 + 6, 0, Math.PI * 2)
+    this.ctx.setFillStyle('rgba(255,255,255,0.9)')
+    this.ctx.fill()
+    this.ctx.setStrokeStyle('rgba(255,255,255,0.95)')
+    this.ctx.setLineWidth(3)
+    this.ctx.stroke()
+
+    if (logoPath) {
+      try {
+        const logoPadding = 8
+        this.ctx.drawImage(
+          logoPath,
+          x + logoPadding,
+          y + logoPadding,
+          size - logoPadding * 2,
+          size - logoPadding * 2
+        )
+        return
+      } catch (error) {
+        console.warn('[PrintCanvas] 绘制品牌logo头像占位失败，使用默认头像:', error)
+      }
+    }
+
+    this.drawSchnauzerAvatarPlaceholder(x, y, size)
+  }
+
   private drawSchnauzerAvatarPlaceholder(x: number, y: number, size: number) {
     const centerX = x + size / 2
     const centerY = y + size / 2
 
-    // 左耳
-    this.ctx.setFillStyle('#b8c3ce')
-    this.ctx.fillRect(x + 4, y + 18, 18, 34)
+    // 头像徽章
+    this.ctx.beginPath()
+    this.ctx.arc(centerX, centerY, size / 2 + 6, 0, Math.PI * 2)
+    this.ctx.setFillStyle('rgba(255,255,255,0.9)')
+    this.ctx.fill()
+    this.ctx.setStrokeStyle('rgba(255,255,255,0.95)')
+    this.ctx.setLineWidth(3)
+    this.ctx.stroke()
 
-    // 右耳
-    this.ctx.setFillStyle('#b8c3ce')
-    this.ctx.fillRect(x + size - 22, y + 18, 18, 34)
+    this.ctx.beginPath()
+    this.ctx.arc(centerX, centerY, size / 2 - 2, 0, Math.PI * 2)
+    this.ctx.setFillStyle('#f7fbff')
+    this.ctx.fill()
+
+    // 耳朵
+    this.ctx.setFillStyle('#9aa7b4')
+    this.ctx.beginPath()
+    this.ctx.arc(x + 18, y + 38, 15, Math.PI * 0.55, Math.PI * 1.55)
+    this.ctx.lineTo(x + 24, y + 56)
+    this.ctx.fill()
+
+    this.ctx.beginPath()
+    this.ctx.arc(x + size - 18, y + 38, 15, Math.PI * 1.45, Math.PI * 0.45)
+    this.ctx.lineTo(x + size - 24, y + 56)
+    this.ctx.fill()
 
     // 头部
     this.ctx.beginPath()
-    this.ctx.arc(centerX, centerY, size / 2, 0, Math.PI * 2)
-    this.ctx.setFillStyle('#edf2f6')
+    this.ctx.arc(centerX, centerY + 1, size / 2 - 8, 0, Math.PI * 2)
+    this.ctx.setFillStyle('#e8eef4')
     this.ctx.fill()
 
-    // 额头毛发
-    this.ctx.setFillStyle('#d7e0e8')
-    this.ctx.fillRect(x + 22, y + 10, 8, 24)
-    this.ctx.fillRect(x + 34, y + 7, 8, 28)
-    this.ctx.fillRect(x + 46, y + 10, 8, 24)
+    // 简化毛发
+    this.ctx.setFillStyle('#cdd7e1')
+    this.ctx.fillRect(x + 27, y + 14, 6, 21)
+    this.ctx.fillRect(x + 36, y + 11, 7, 24)
+    this.ctx.fillRect(x + 46, y + 14, 6, 21)
 
     // 眼睛
     this.ctx.setFillStyle('#252a30')
     this.ctx.beginPath()
-    this.ctx.arc(x + 27, y + 34, 4, 0, Math.PI * 2)
+    this.ctx.arc(x + 29, y + 39, 4, 0, Math.PI * 2)
     this.ctx.fill()
     this.ctx.beginPath()
-    this.ctx.arc(x + size - 27, y + 34, 4, 0, Math.PI * 2)
+    this.ctx.arc(x + size - 29, y + 39, 4, 0, Math.PI * 2)
     this.ctx.fill()
 
     // 鼻子
+    this.ctx.setFillStyle('#252a30')
     this.ctx.beginPath()
-    this.ctx.arc(centerX, y + 46, 6, 0, Math.PI * 2)
+    this.ctx.arc(centerX, y + 50, 6, 0, Math.PI * 2)
     this.ctx.fill()
 
-    // 胡须
-    this.ctx.setStrokeStyle('#f8fafc')
-    this.ctx.setLineWidth(8)
+    // 微笑嘴巴
+    this.ctx.setStrokeStyle('#2f3337')
+    this.ctx.setLineWidth(3)
     this.ctx.beginPath()
-    this.ctx.moveTo(centerX - 18, y + 56)
-    this.ctx.lineTo(centerX - 4, y + 52)
-    this.ctx.lineTo(centerX, y + 57)
-    this.ctx.lineTo(centerX + 4, y + 52)
-    this.ctx.lineTo(centerX + 18, y + 56)
+    this.ctx.arc(centerX, y + 52, 12, Math.PI * 0.18, Math.PI * 0.82)
     this.ctx.stroke()
 
-    this.ctx.setStrokeStyle('#252a30')
-    this.ctx.setLineWidth(2)
+    // 项圈
+    this.ctx.setStrokeStyle('#ff8f70')
+    this.ctx.setLineWidth(3)
     this.ctx.beginPath()
-    this.ctx.moveTo(centerX, y + 52)
-    this.ctx.lineTo(centerX, y + 60)
+    this.ctx.moveTo(centerX - 12, y + 67)
+    this.ctx.lineTo(centerX + 12, y + 67)
     this.ctx.stroke()
   }
 

@@ -170,123 +170,6 @@
       }
     },
     {
-      "path": "pages/staff-inventory/index",
-      "style": {
-        "navigationBarTitleText": "库存管理"
-      }
-    },
-    {
-      "path": "pages/staff-inventory/stocktake-create",
-      "style": {
-        "navigationBarTitleText": "移动端盘点录入"
-      }
-    },
-    {
-      "path": "pages/staff-purchasing/index",
-      "style": {
-        "navigationBarTitleText": "采购管理"
-      }
-    },
-    {
-      "path": "pages/staff-purchasing/stock-create",
-      "style": {
-        "navigationBarTitleText": "创建补货采购单"
-      }
-    },
-    {
-      "path": "pages/staff-purchasing/reimbursement/submit",
-      "style": {
-        "navigationBarTitleText": "提交报销申请"
-      }
-    },
-    {
-      "path": "pages/staff-purchasing/reimbursement/list",
-      "style": {
-        "navigationBarTitleText": "我的报销申请"
-      }
-    },
-    {
-      "path": "pages/staff-purchasing/reimbursement/detail",
-      "style": {
-        "navigationBarTitleText": "报销单详情"
-      }
-    },
-    {
-      "path": "pages/staff-purchasing/detail",
-      "style": {
-        "navigationBarTitleText": "采购清单详情"
-      }
-    },
-    {
-      "path": "pages/staff-purchasing/record-form",
-      "style": {
-        "navigationBarTitleText": "添加采购记录"
-      }
-    },
-    {
-      "path": "pages/staff-purchasing/preview",
-      "style": {
-        "navigationBarTitleText": "预览采购需求"
-      }
-    },
-    {
-      "path": "pages/staff-production/index",
-      "style": {
-        "navigationBarTitleText": "生产管理"
-      }
-    },
-    {
-      "path": "pages/staff-production/detail",
-      "style": {
-        "navigationBarTitleText": "任务详情"
-      }
-    },
-    {
-      "path": "pages/staff-production/print",
-      "style": {
-        "navigationStyle": "custom"
-      }
-    },
-    {
-      "path": "pages/staff-production/print-label",
-      "style": {
-        "navigationBarTitleText": "打印标签",
-        "navigationStyle": "custom"
-      }
-    },
-    {
-      "path": "pages/staff-production/print-task",
-      "style": {
-        "navigationBarTitleText": "制作单打印",
-        "navigationStyle": "custom"
-      }
-    },
-    {
-      "path": "pages/staff-shipping/index",
-      "style": {
-        "navigationBarTitleText": "发货管理"
-      }
-    },
-    {
-      "path": "pages/staff-orders/index",
-      "style": {
-        "navigationBarTitleText": "后台订单",
-        "navigationStyle": "custom"
-      }
-    },
-    {
-      "path": "pages/staff-orders/detail",
-      "style": {
-        "navigationBarTitleText": "订单详情"
-      }
-    },
-    {
-      "path": "pages/staff-recipes/index",
-      "style": {
-        "navigationBarTitleText": "食谱管理"
-      }
-    },
-    {
       "path": "pages/shared-photos/index",
       "style": {
         "navigationBarTitleText": "原料照片"
@@ -322,6 +205,155 @@
       "style": {
         "navigationBarTitleText": "提交反馈"
       }
+    }
+  ],
+  "subPackages": [
+    {
+      "root": "pages/staff-inventory",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "库存管理"
+          }
+        },
+        {
+          "path": "stocktake-create",
+          "style": {
+            "navigationBarTitleText": "移动端盘点录入"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/staff-purchasing",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "采购管理"
+          }
+        },
+        {
+          "path": "stock-create",
+          "style": {
+            "navigationBarTitleText": "创建补货采购单"
+          }
+        },
+        {
+          "path": "reimbursement/submit",
+          "style": {
+            "navigationBarTitleText": "提交报销申请"
+          }
+        },
+        {
+          "path": "reimbursement/list",
+          "style": {
+            "navigationBarTitleText": "我的报销申请"
+          }
+        },
+        {
+          "path": "reimbursement/detail",
+          "style": {
+            "navigationBarTitleText": "报销单详情"
+          }
+        },
+        {
+          "path": "detail",
+          "style": {
+            "navigationBarTitleText": "采购清单详情"
+          }
+        },
+        {
+          "path": "record-form",
+          "style": {
+            "navigationBarTitleText": "添加采购记录"
+          }
+        },
+        {
+          "path": "preview",
+          "style": {
+            "navigationBarTitleText": "预览采购需求"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/staff-production",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "生产管理"
+          }
+        },
+        {
+          "path": "detail",
+          "style": {
+            "navigationBarTitleText": "任务详情"
+          }
+        },
+        {
+          "path": "print",
+          "style": {
+            "navigationStyle": "custom"
+          }
+        },
+        {
+          "path": "print-label",
+          "style": {
+            "navigationBarTitleText": "打印标签",
+            "navigationStyle": "custom"
+          }
+        },
+        {
+          "path": "print-task",
+          "style": {
+            "navigationBarTitleText": "制作单打印",
+            "navigationStyle": "custom"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/staff-orders",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "后台订单",
+            "navigationStyle": "custom"
+          }
+        },
+        {
+          "path": "detail",
+          "style": {
+            "navigationBarTitleText": "订单详情"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/staff-shipping",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "发货管理"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/staff-recipes",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "食谱管理"
+          }
+        }
+      ]
     }
   ],
   "permission": {

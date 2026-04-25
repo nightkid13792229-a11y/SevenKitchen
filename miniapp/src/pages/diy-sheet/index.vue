@@ -317,9 +317,10 @@
                 <view class="rp-card-aside">
                   <view v-if="rp.imageUrl" class="rp-card-media">
                     <image
-                      :src="normalizeImageUrl(rp.imageUrl)"
+                      :src="getOptimizedProductImageUrl(rp.imageUrl)"
                       class="rp-card-image"
                       mode="aspectFill"
+                      lazy-load
                     />
                   </view>
                   <view v-if="rp.purchaseLink" class="rp-card-actions">
@@ -361,9 +362,10 @@
             <view v-if="currentSpec.imageUrl || currentSpec.purchaseLink" class="spec-detail-aside">
               <view v-if="currentSpec.imageUrl" class="spec-image-block">
                 <image
-                  :src="normalizeImageUrl(currentSpec.imageUrl)"
+                  :src="getOptimizedProductImageUrl(currentSpec.imageUrl)"
                   class="spec-image"
                   mode="aspectFill"
+                  lazy-load
                 />
               </view>
               <view v-if="currentSpec.purchaseLink" class="spec-detail-actions">
@@ -514,7 +516,7 @@ import {
 } from '../../utils/life-stage-match'
 import ShareButton from '../../components/ShareButton.vue'
 import ImagePreviewModal from '../../components/ImagePreviewModal.vue'
-import { normalizeImageUrl } from '../../utils/config'
+import { normalizeImageUrl, getOptimizedProductImageUrl } from '../../utils/config'
 import { formatSupplementAmountWithDisplayUnit } from '../../utils/diy-sheet-format'
 import {
   formatSupplementTargets,

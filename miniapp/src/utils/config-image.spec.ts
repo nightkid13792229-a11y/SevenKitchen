@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   appendRecipeCoverThumbnailParams,
+  getOptimizedProductImageUrl,
   getRecipeCoverImageUrl,
   isKnownStaleRecipeCoverUrl,
 } from './config'
@@ -63,5 +64,29 @@ describe('config image helpers', () => {
         'https://img.sevenkitchen.cloud/recipes/covers/demo-cover.png',
       ),
     ).toBe(false)
+  })
+
+  it('adds a small thumbnail transform to CDN product images for picker cards', () => {
+    expect(
+      getOptimizedProductImageUrl(
+        'https://img.sevenkitchen.cloud/recommended-products/demo-product.png',
+      ),
+    ).toBe(
+      'https://img.sevenkitchen.cloud/recommended-products/demo-product.png?imageMogr2/thumbnail/360x/format/jpg',
+    )
+  })
+
+  it('keeps existing image transforms and external product images unchanged', () => {
+    expect(
+      getOptimizedProductImageUrl(
+        'https://img.sevenkitchen.cloud/recommended-products/demo-product.png?imageMogr2/thumbnail/360x/format/jpg',
+      ),
+    ).toBe(
+      'https://img.sevenkitchen.cloud/recommended-products/demo-product.png?imageMogr2/thumbnail/360x/format/jpg',
+    )
+
+    expect(
+      getOptimizedProductImageUrl('https://img.example.com/demo-product.png'),
+    ).toBe('https://img.example.com/demo-product.png')
   })
 })

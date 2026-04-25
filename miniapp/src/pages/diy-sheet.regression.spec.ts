@@ -28,6 +28,19 @@ describe('diy sheet layout regressions', () => {
     expect(selectFnMatch?.[0]).not.toContain('closeSpecModal()')
   })
 
+  it('loads optimized product thumbnails lazily in the recommendation picker modal', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('getOptimizedProductImageUrl')
+    expect(source).toContain(':src="getOptimizedProductImageUrl(rp.imageUrl)"')
+    expect(source).toContain(':src="getOptimizedProductImageUrl(currentSpec.imageUrl)"')
+    expect(source.match(/class="rp-card-image"[\s\S]{0,120}lazy-load/)?.[0]).toContain('lazy-load')
+    expect(source.match(/class="spec-image"[\s\S]{0,120}lazy-load/)?.[0]).toContain('lazy-load')
+  })
+
   it('marks pricing previews as DIY sheet usage so procurement source plans do not block sheet generation', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),

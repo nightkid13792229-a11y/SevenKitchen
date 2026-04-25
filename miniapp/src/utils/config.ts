@@ -219,6 +219,7 @@ export function normalizeImageUrl(imageUrl: string | undefined | null): string {
 }
 
 const RECIPE_COVER_THUMBNAIL_TRANSFORM = 'imageMogr2/thumbnail/750x/format/jpg'
+const PRODUCT_IMAGE_THUMBNAIL_TRANSFORM = 'imageMogr2/thumbnail/360x/format/jpg'
 const KNOWN_STALE_RECIPE_COVER_URLS = new Set([
   'https://img.sevenkitchen.cloud/recipes/covers/1774240957971-2792c7e2.png',
 ])
@@ -247,6 +248,24 @@ export function appendRecipeCoverThumbnailParams(imageUrl: string): string {
 
 export function getOptimizedRecipeCoverUrl(imageUrl: string | undefined | null): string {
   return getRecipeCoverImageUrl(imageUrl)
+}
+
+export function getOptimizedProductImageUrl(imageUrl: string | undefined | null): string {
+  const normalized = normalizeImageUrl(imageUrl)
+  if (!normalized) {
+    return normalized
+  }
+
+  if (!normalized.includes('img.sevenkitchen.cloud/')) {
+    return normalized
+  }
+
+  if (normalized.includes('imageMogr2/')) {
+    return normalized
+  }
+
+  const separator = normalized.includes('?') ? '&' : '?'
+  return `${normalized}${separator}${PRODUCT_IMAGE_THUMBNAIL_TRANSFORM}`
 }
 
 export function getRecipeCoverImageUrl(

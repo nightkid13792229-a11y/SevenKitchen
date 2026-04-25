@@ -201,6 +201,27 @@ describe('diy sheet layout regressions', () => {
     expect(canvasSource).toContain('drawImportantTipsSection(tips:')
   })
 
+  it('uses the configured DIY sheet header background image when generating the saved image', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
+      'utf-8',
+    )
+    const canvasSource = readFileSync(
+      resolve(process.cwd(), 'src/utils/print-canvas.ts'),
+      'utf-8',
+    )
+
+    expect(source).toContain("const diySheetHeaderBgImageUrl = ref('')")
+    expect(source).toContain('res.data.diySheetHeaderBgImageUrl')
+    expect(source).toContain('resolveCanvasImageInfo(diySheetHeaderBgImageUrl.value)')
+    expect(source).toContain('backgroundImage: headerBackground')
+
+    expect(canvasSource).toContain('backgroundImage?: CanvasImageInfo')
+    expect(canvasSource).toContain('private drawBrandHeaderBackground(')
+    expect(canvasSource).toContain('this.drawCoverImage(options.backgroundImage')
+    expect(canvasSource).toContain('const logoSize = 56')
+  })
+
   it('keeps prep loss and storage guidance readable on the saved diy sheet image', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),

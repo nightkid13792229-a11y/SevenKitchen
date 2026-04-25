@@ -7,10 +7,14 @@
 import { Injectable } from '@nestjs/common';
 import type { GlobalConfig } from '../../domain/pricing/pricing.service';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 
 @Injectable()
 export class GlobalConfigService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly cosService: TencentCosService,
+  ) {}
 
   /**
    * Get global configuration from database
@@ -52,6 +56,8 @@ export class GlobalConfigService {
       equipmentRecommendations:
         (config as any).equipmentRecommendations ?? null,
       homeHeaderBgImageUrl: (config as any).homeHeaderBgImageUrl ?? null,
+      diySheetHeaderBgImageUrl:
+        (config as any).diySheetHeaderBgImageUrl ?? null,
     };
   }
 
@@ -77,11 +83,17 @@ export class GlobalConfigService {
       packageExampleImageUrl: string | null;
       shippingCompanyLogoUrl: string | null;
       homeHeaderBgImageUrl: string | null;
+      diySheetHeaderBgImageUrl: string | null;
       paymentTimeoutMinutes: number;
       ingredientPriceAutoApproveThreshold: number;
       equipmentRecommendations: any;
     }>,
   ): Promise<GlobalConfig> {
+    const previousDiySheetHeaderBgImageUrl =
+      dto.diySheetHeaderBgImageUrl !== undefined
+        ? await this.getCurrentDiySheetHeaderBgImageUrl()
+        : null;
+
     // Build update data object with only provided fields
     // Convert empty strings to null for URL fields
     const updateData: any = {};
@@ -120,6 +132,11 @@ export class GlobalConfigService {
       updateData.homeHeaderBgImageUrl = dto.homeHeaderBgImageUrl || null;
     }
 
+    if (dto.diySheetHeaderBgImageUrl !== undefined) {
+      updateData.diySheetHeaderBgImageUrl =
+        dto.diySheetHeaderBgImageUrl || null;
+    }
+
     if (dto.paymentTimeoutMinutes !== undefined)
       updateData.paymentTimeoutMinutes = dto.paymentTimeoutMinutes;
     if (dto.ingredientPriceAutoApproveThreshold !== undefined) {
@@ -139,6 +156,13 @@ export class GlobalConfigService {
         ...updateData,
       },
     });
+
+    if (dto.diySheetHeaderBgImageUrl !== undefined) {
+      await this.deleteReplacedDiySheetHeaderBgImage(
+        previousDiySheetHeaderBgImageUrl,
+        updateData.diySheetHeaderBgImageUrl,
+      );
+    }
 
     return {
       laborHourlyRate: parseFloat(config.laborHourlyRate.toString()),
@@ -166,6 +190,8 @@ export class GlobalConfigService {
       equipmentRecommendations:
         (config as any).equipmentRecommendations ?? null,
       homeHeaderBgImageUrl: (config as any).homeHeaderBgImageUrl ?? null,
+      diySheetHeaderBgImageUrl:
+        (config as any).diySheetHeaderBgImageUrl ?? null,
     };
   }
 
@@ -189,9 +215,37 @@ export class GlobalConfigService {
       shippingCompanyLogoUrl: null,
       paymentTimeoutMinutes: 30,
       homeHeaderBgImageUrl: null,
+      diySheetHeaderBgImageUrl: null,
       ingredientPriceAutoApproveThreshold: this.defaultAutoApproveThreshold(),
       equipmentRecommendations: null,
     };
+  }
+
+  private async getCurrentDiySheetHeaderBgImageUrl(): Promise<string | null> {
+    const config = await this.prisma.globalConfig.findUnique({
+      where: { id: 'singleton' },
+      select: { diySheetHeaderBgImageUrl: true } as any,
+    });
+
+    return (config as any)?.diySheetHeaderBgImageUrl || null;
+  }
+
+  private async deleteReplacedDiySheetHeaderBgImage(
+    previousUrl: string | null,
+    nextUrl: string | null,
+  ): Promise<void> {
+    if (!previousUrl || previousUrl === nextUrl) {
+      return;
+    }
+
+    try {
+      await this.cosService.deleteImageByUrl(previousUrl);
+    } catch (error) {
+      console.warn(
+        '[GlobalConfigService] Failed to delete previous DIY sheet header background:',
+        error,
+      );
+    }
   }
 
   private defaultAutoApproveThreshold(): number {

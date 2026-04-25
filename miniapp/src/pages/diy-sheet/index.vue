@@ -507,7 +507,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { onShareAppMessage, onShareTimeline } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
-import { PrintCanvasBuilder } from '../../utils/print-canvas'
+import { PrintCanvasBuilder, type CanvasImageInfo } from '../../utils/print-canvas'
 import {
   buildLifeStageReminderText,
   getLifeStageLabel,
@@ -589,6 +589,7 @@ const currentNutritionInfo = ref<any>({})
 
 // 设备推荐相关状态
 const equipmentRecommendations = ref<any[]>([])
+const diySheetHeaderBgImageUrl = ref('')
 const showEquipmentList = ref(false)
 const currentEquipmentDetail = ref<any>(null)
 
@@ -1074,6 +1075,8 @@ async function loadEquipmentRecommendations() {
     })
 
     if (res.code === 0 && res.data) {
+      diySheetHeaderBgImageUrl.value = normalizeImageUrl(res.data.diySheetHeaderBgImageUrl)
+
       // 获取设备推荐
       if (res.data.equipmentRecommendations) {
         equipmentRecommendations.value = res.data.equipmentRecommendations
@@ -1097,6 +1100,7 @@ async function loadEquipmentRecommendations() {
     }
   } catch (error) {
     console.error('[DIYSheet] Load equipment recommendations error:', error)
+    diySheetHeaderBgImageUrl.value = ''
     // 出错时使用默认列表
     equipmentRecommendations.value = [
       { id: 'meat-grinder', name: '绞肉机', brand: '', specification: '', reason: '', imageUrl: null, purchaseLink: '' },
@@ -1106,6 +1110,29 @@ async function loadEquipmentRecommendations() {
       { id: 'vacuum-bag', name: '真空袋', brand: '', specification: '', reason: '', imageUrl: null, purchaseLink: '' },
     ]
   }
+}
+
+function resolveCanvasImageInfo(imageUrl: string): Promise<CanvasImageInfo | undefined> {
+  if (!imageUrl) {
+    return Promise.resolve(undefined)
+  }
+
+  return new Promise((resolve) => {
+    uni.getImageInfo({
+      src: imageUrl,
+      success: (info) => {
+        resolve({
+          path: info.path || imageUrl,
+          width: info.width,
+          height: info.height
+        })
+      },
+      fail: (error) => {
+        console.warn('[DIYSheet] 制作单头部背景图加载失败，使用默认背景:', error)
+        resolve(undefined)
+      }
+    })
+  })
 }
 
 // 打印制作单
@@ -1128,12 +1155,14 @@ async function handlePrint() {
       width: canvasWidth,
       height: canvasHeight
     })
+    const headerBackground = await resolveCanvasImageInfo(diySheetHeaderBgImageUrl.value)
 
     // 2. 绘制分享图品牌头部
     builder.drawBrandHeader({
       brand: 'seven 的厨房',
       logoPath: '/static/logo.png',
       avatarPath: dog.value?.avatarUrl ? normalizeImageUrl(dog.value.avatarUrl) : undefined,
+      backgroundImage: headerBackground,
       title: recipe.value.name,
       subtitle: dog.value ? `${dog.value.name} 的 ${cycleDays.value} 天鲜食计划` : `${cycleDays.value} 天鲜食计划`,
       stages: recipe.value.applicableLifeStages.map(getLifeStageLabel)

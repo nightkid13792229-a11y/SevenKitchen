@@ -907,6 +907,7 @@ model GlobalConfig {
   minPotWeightG                       Int      @default(2000) @map("min_pot_weight_g")
   ingredientPriceAutoApproveThreshold Decimal? @default(0.08) @map("ingredient_price_auto_approve_threshold") @db.Decimal(5, 4)
   homeHeaderBgImageUrl                String?  @map("home_header_bg_image_url")
+  diySheetHeaderBgImageUrl            String?  @map("diy_sheet_header_bg_image_url")
 
   @@map("global_config")
 }

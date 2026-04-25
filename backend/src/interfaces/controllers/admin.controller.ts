@@ -3032,6 +3032,30 @@ export class AdminController {
     }
   }
 
+  @Post('upload-diy-sheet-header-bg')
+  @UseGuards(AuthGuard, AdminGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Upload DIY sheet header background image to Tencent COS' })
+  @ApiResponse({ status: 201, description: 'Image uploaded successfully' })
+  @ApiResponse({ status: 400, description: 'Upload failed' })
+  async uploadDiySheetHeaderBg(
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<ApiResponseDto<any>> {
+    try {
+      const result = await this.cosService.uploadImage(
+        file,
+        file.originalname,
+        'diy-sheet-header-bg',
+      );
+      return ApiResponseDto.success(result);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
   @Delete('recipes/delete-image')
   @UseGuards(AuthGuard, AdminGuard)
   @ApiOperation({ summary: 'Delete recipe image from Tencent COS' })

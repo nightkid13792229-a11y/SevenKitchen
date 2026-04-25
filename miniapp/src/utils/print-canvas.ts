@@ -9,6 +9,12 @@ export interface PrintCanvasOptions {
   height: number
 }
 
+export interface CanvasImageInfo {
+  path: string
+  width?: number
+  height?: number
+}
+
 export class PrintCanvasBuilder {
   private ctx: UniApp.CanvasContext
   private canvasWidth: number
@@ -117,28 +123,27 @@ export class PrintCanvasBuilder {
     brand: string
     logoPath?: string
     avatarPath?: string
+    backgroundImage?: CanvasImageInfo
     title: string
     subtitle?: string
     stages?: string[]
   }) {
     const headerHeight = 230
-    const gradient = this.ctx.createLinearGradient(0, 0, this.canvasWidth, headerHeight)
-    gradient.addColorStop(0, '#4eaff7')
-    gradient.addColorStop(0.55, '#4d67d5')
-    gradient.addColorStop(1, '#6c4bbb')
-    this.ctx.setFillStyle(gradient)
-    this.ctx.fillRect(0, 0, this.canvasWidth, headerHeight)
+    this.drawBrandHeaderBackground(headerHeight, options)
 
     const brandCenterX = this.canvasWidth / 2
-    const logoSize = 34
-    const brandGap = 10
-    const brandTextWidth = Math.max(92, options.brand.length * 17)
+    const logoSize = 56
+    const brandGap = 14
+    const brandTextWidth = Math.max(150, options.brand.length * 20)
     const brandStartX = brandCenterX - (logoSize + brandGap + brandTextWidth) / 2
-    const brandY = 26
+    const brandY = 40
+
+    this.ctx.setFillStyle('rgba(255,255,255,0.18)')
+    this.ctx.fillRect(brandStartX - 18, brandY - 36, logoSize + brandGap + brandTextWidth + 36, 72)
 
     if (options.logoPath) {
       try {
-        this.ctx.drawImage(options.logoPath, brandStartX, brandY - 19, logoSize, logoSize)
+        this.ctx.drawImage(options.logoPath, brandStartX, brandY - logoSize / 2, logoSize, logoSize)
       } catch (error) {
         console.warn('[PrintCanvas] 绘制品牌logo失败，继续生成文字头部:', error)
       }
@@ -146,8 +151,8 @@ export class PrintCanvasBuilder {
 
     this.ctx.setTextAlign('left')
     this.ctx.setFillStyle('rgba(255,255,255,0.94)')
-    this.ctx.setFontSize(this.FONT_SIZES.SMALL + 2)
-    this.ctx.fillText(options.brand, brandStartX + logoSize + brandGap, brandY + 5)
+    this.ctx.setFontSize(this.FONT_SIZES.NORMAL + 6)
+    this.ctx.fillText(options.brand, brandStartX + logoSize + brandGap, brandY + 8)
 
     const avatarSize = 78
     const avatarX = this.pagePadding + 42
@@ -213,6 +218,66 @@ export class PrintCanvasBuilder {
       title: options.title,
       y: this.currentY
     })
+  }
+
+  private drawBrandHeaderBackground(headerHeight: number, options: { backgroundImage?: CanvasImageInfo }) {
+    let usedImage = false
+
+    if (options.backgroundImage?.path) {
+      try {
+        this.drawCoverImage(options.backgroundImage, 0, 0, this.canvasWidth, headerHeight)
+        usedImage = true
+      } catch (error) {
+        console.warn('[PrintCanvas] 绘制制作单头部背景图失败，使用默认渐变:', error)
+      }
+    }
+
+    if (!usedImage) {
+      const gradient = this.ctx.createLinearGradient(0, 0, this.canvasWidth, headerHeight)
+      gradient.addColorStop(0, '#4eaff7')
+      gradient.addColorStop(0.55, '#4d67d5')
+      gradient.addColorStop(1, '#6c4bbb')
+      this.ctx.setFillStyle(gradient)
+      this.ctx.fillRect(0, 0, this.canvasWidth, headerHeight)
+    }
+
+    const overlay = this.ctx.createLinearGradient(0, 0, this.canvasWidth, headerHeight)
+    overlay.addColorStop(0, 'rgba(26, 135, 219, 0.52)')
+    overlay.addColorStop(0.5, 'rgba(50, 75, 173, 0.42)')
+    overlay.addColorStop(1, 'rgba(88, 55, 151, 0.58)')
+    this.ctx.setFillStyle(overlay)
+    this.ctx.fillRect(0, 0, this.canvasWidth, headerHeight)
+  }
+
+  private drawCoverImage(
+    image: CanvasImageInfo,
+    x: number,
+    y: number,
+    width: number,
+    height: number
+  ) {
+    if (!image.width || !image.height) {
+      this.ctx.drawImage(image.path, x, y, width, height)
+      return
+    }
+
+    const scale = Math.max(width / image.width, height / image.height)
+    const sourceWidth = width / scale
+    const sourceHeight = height / scale
+    const sourceX = Math.max(0, (image.width - sourceWidth) / 2)
+    const sourceY = Math.max(0, (image.height - sourceHeight) / 2)
+
+    ;(this.ctx.drawImage as any)(
+      image.path,
+      sourceX,
+      sourceY,
+      sourceWidth,
+      sourceHeight,
+      x,
+      y,
+      width,
+      height
+    )
   }
 
   private drawSchnauzerAvatarPlaceholder(x: number, y: number, size: number) {

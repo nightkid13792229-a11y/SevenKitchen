@@ -840,5 +840,48 @@ describe('AdminController', () => {
       expect(result.code).toBe(0);
       expect(result.data).toEqual({ message: 'Image deleted successfully' });
     });
+
+    it('uploads DIY sheet header background images to the dedicated COS folder', async () => {
+      const mockCosService = {
+        uploadImage: jest.fn().mockResolvedValue({
+          url: 'https://cdn.example.com/diy-sheet-header-bg/1711111111-abcd1234.jpg',
+          key: 'diy-sheet-header-bg/1711111111-abcd1234.jpg',
+        }),
+      };
+
+      const controller = new AdminController(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        mockCosService as any,
+      );
+
+      const file = {
+        originalname: 'diy-sheet-header.jpg',
+        buffer: Buffer.from('image'),
+      } as Express.Multer.File;
+
+      const result = await controller.uploadDiySheetHeaderBg(file);
+
+      expect(mockCosService.uploadImage).toHaveBeenCalledWith(
+        file,
+        'diy-sheet-header.jpg',
+        'diy-sheet-header-bg',
+      );
+      expect(result.code).toBe(0);
+      expect(result.data).toEqual({
+        url: 'https://cdn.example.com/diy-sheet-header-bg/1711111111-abcd1234.jpg',
+        key: 'diy-sheet-header-bg/1711111111-abcd1234.jpg',
+      });
+    });
   });
 });

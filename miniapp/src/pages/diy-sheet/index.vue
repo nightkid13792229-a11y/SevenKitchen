@@ -2727,18 +2727,26 @@ onShareTimeline(() => {
 }
 
 .btn-purchase-sm {
-  background-color: #1890ff;
-  color: #fff;
-  border: none;
+  background: #fff;
+  color: #6f4fc8;
+  border: 2rpx solid #d8cff7;
   border-radius: 8rpx;
   width: 100%;
-  padding: 8rpx 24rpx;
+  height: 64rpx;
+  line-height: 60rpx;
+  padding: 0 20rpx;
   font-size: 24rpx;
   font-weight: 500;
   margin-left: 0;
+  box-sizing: border-box;
 }
 
 .btn-purchase-sm:active {
-  opacity: 0.8;
+  background: #f6f1ff;
+  opacity: 1;
+}
+
+.btn-purchase-sm::after {
+  border: none;
 }
 </style>

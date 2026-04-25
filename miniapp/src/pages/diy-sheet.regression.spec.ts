@@ -41,6 +41,22 @@ describe('diy sheet layout regressions', () => {
     expect(source.match(/class="spec-image"[\s\S]{0,120}lazy-load/)?.[0]).toContain('lazy-load')
   })
 
+  it('keeps purchase buttons visually secondary to the confirm selection action', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
+      'utf-8',
+    )
+    const purchaseButtonBlock = source.match(/\.btn-purchase-sm\s*\{[\s\S]*?\}/)?.[0] || ''
+    const confirmButtonBlock = source.match(/\.spec-action-btn-primary\s*\{[\s\S]*?\}/)?.[0] || ''
+
+    expect(purchaseButtonBlock).toContain('background: #fff')
+    expect(purchaseButtonBlock).toContain('color: #6f4fc8')
+    expect(purchaseButtonBlock).toContain('border: 2rpx solid #d8cff7')
+    expect(purchaseButtonBlock).not.toContain('linear-gradient')
+    expect(confirmButtonBlock).toContain('background: linear-gradient(135deg, #667eea 0%, #764ba2 100%)')
+    expect(confirmButtonBlock).toContain('color: #fff')
+  })
+
   it('marks pricing previews as DIY sheet usage so procurement source plans do not block sheet generation', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),

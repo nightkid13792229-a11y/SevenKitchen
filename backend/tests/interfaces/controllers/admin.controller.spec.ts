@@ -264,6 +264,98 @@ describe('AdminController', () => {
     });
   });
 
+  describe('getAllDogs', () => {
+    it('applies admin dog list filters before pagination', async () => {
+      const dogRecord = {
+        id: 'dog-1',
+        ownerId: 'customer-1',
+        name: 'Star',
+        breedId: 'breed-1',
+        customBreedName: null,
+        birthday: new Date('2024-01-01T00:00:00.000Z'),
+        gender: 'FEMALE',
+        isNeutered: true,
+        currentWeightKg: 4.5,
+        bcsScore: 5,
+        activityLevel: 'NORMAL',
+        lifeStageOverride: 'NONE',
+        sizeClassOverride: null,
+        mealsPerDay: 2,
+        treatInputMode: 'ESTIMATE_LEVEL',
+        treatLevel: 'LOW',
+        manualTreatKcal: null,
+        medicalHistory: null,
+        cachedTargetFoodKcal: 220,
+        createdAt: new Date('2026-04-12T10:00:00.000Z'),
+      };
+      const mockPrisma = {
+        dog: {
+          findMany: jest.fn().mockResolvedValue([dogRecord]),
+          count: jest.fn().mockResolvedValue(1),
+        },
+      };
+      const mockDogBreedRepository = {
+        findAll: jest.fn().mockResolvedValue([
+          {
+            id: 'breed-1',
+            name: '雪纳瑞（迷你）',
+          },
+        ]),
+      };
+      const controller = new AdminController(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        mockPrisma as any,
+        mockDogBreedRepository as any,
+        {} as any,
+        {} as any,
+        {} as any,
+      );
+
+      const result = await (controller as any).getAllDogs(
+        '2',
+        '10',
+        'Star',
+        'breed-1',
+      );
+
+      const expectedWhere = {
+        breedId: 'breed-1',
+        OR: [
+          { name: { contains: 'Star', mode: 'insensitive' } },
+          { id: { contains: 'Star', mode: 'insensitive' } },
+        ],
+      };
+      expect(mockPrisma.dog.findMany).toHaveBeenCalledWith({
+        where: expectedWhere,
+        orderBy: { createdAt: 'desc' },
+        skip: 10,
+        take: 10,
+      });
+      expect(mockPrisma.dog.count).toHaveBeenCalledWith({
+        where: expectedWhere,
+      });
+      expect(result.data).toMatchObject({
+        total: 1,
+        page: 2,
+        pageSize: 10,
+        data: [
+          {
+            id: 'dog-1',
+            name: 'Star',
+            breedName: '雪纳瑞（迷你）',
+          },
+        ],
+      });
+    });
+  });
+
   describe('getOrderDetail', () => {
     it('returns an order financial summary for admins', async () => {
       const financialSummary = {

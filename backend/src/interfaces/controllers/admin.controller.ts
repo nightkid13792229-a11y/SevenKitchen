@@ -29,6 +29,7 @@ import {
   ApiParam,
   ApiBody,
 } from '@nestjs/swagger';
+import type { Prisma } from '@prisma/client';
 import { IngredientService } from '../../application/ingredient/ingredient.service';
 import {
   RecommendedProductService,
@@ -2124,6 +2125,8 @@ export class AdminController {
   async getAllDogs(
     @Query('page') page?: string,
     @Query('pageSize') pageSize?: string,
+    @Query('search') search?: string,
+    @Query('breedId') breedId?: string,
   ): Promise<
     ApiResponseDto<{
       data: any[];
@@ -2134,13 +2137,31 @@ export class AdminController {
   > {
     const pageNum = page ? parseInt(page, 10) : 1;
     const pageSizeNum = pageSize ? parseInt(pageSize, 10) : 20;
+    const searchText = search?.trim();
+    const where: Prisma.DogWhereInput = {};
 
-    // Get all dogs using Prisma (admin cross-customer access)
+    if (breedId) {
+      where.breedId = breedId;
+    }
+
+    if (searchText) {
+      where.OR = [
+        { name: { contains: searchText, mode: 'insensitive' } },
+        { id: { contains: searchText, mode: 'insensitive' } },
+      ];
+    }
+
+    const skip = (pageNum - 1) * pageSizeNum;
+
+    // Get dogs using Prisma (admin cross-customer access)
     const [allDogs, totalResult] = await Promise.all([
       this.prisma.dog.findMany({
+        where,
         orderBy: { createdAt: 'desc' },
+        skip,
+        take: pageSizeNum,
       }),
-      this.prisma.dog.count(),
+      this.prisma.dog.count({ where }),
     ]);
 
     // Get breeds for name mapping
@@ -2172,14 +2193,10 @@ export class AdminController {
       createdAt: dog.createdAt ? dog.createdAt.toISOString() : undefined,
     }));
 
-    // Pagination
     const total = totalResult;
-    const start = (pageNum - 1) * pageSizeNum;
-    const end = start + pageSizeNum;
-    const paginatedDogs = dogs.slice(start, end);
 
     return ApiResponseDto.success({
-      data: paginatedDogs,
+      data: dogs,
       total,
       page: pageNum,
       pageSize: pageSizeNum,

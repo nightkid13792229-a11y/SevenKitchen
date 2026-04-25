@@ -506,7 +506,7 @@ export interface RecommendedProductForm {
   productModel?: string
   purchaseChannel?: string
   purchaseLink?: PurchaseLinkConfig
-  imageUrl?: string
+  imageUrl?: string | null
   activeNutrients?: Record<string, ActiveNutrientValue>
   marketingNutritionHighlights?: Record<string, ActiveNutrientValue>
   displayUnit?: string

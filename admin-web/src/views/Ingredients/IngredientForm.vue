@@ -480,9 +480,7 @@
                       :show-file-list="false"
                       accept="image/*"
                       :before-upload="handleSupplementImageUpload"
-                      :disabled="
-                        supplementImageUploading || !props.ingredient?.id
-                      "
+                      :disabled="supplementImageUploading"
                     >
                       <el-button :loading="supplementImageUploading"
                         >替换图片</el-button
@@ -515,9 +513,7 @@
                     :show-file-list="false"
                     accept="image/*"
                     :before-upload="handleSupplementImageUpload"
-                    :disabled="
-                      supplementImageUploading || !props.ingredient?.id
-                    "
+                    :disabled="supplementImageUploading"
                   >
                     <el-button
                       type="primary"
@@ -787,26 +783,16 @@
             <div
               v-if="
                 rp.purchaseChannel ||
-                rp.displayUnit ||
                 rp.purchaseLink?.url ||
-                (rp.marketingNutritionHighlights &&
-                  Object.keys(rp.marketingNutritionHighlights).length > 0)
+                rp.imageUrl
               "
               class="rp-card-detail"
             >
               <span v-if="rp.purchaseChannel"
                 >渠道：{{ rp.purchaseChannel }}</span
               >
-              <span v-if="rp.displayUnit">展示单位：{{ rp.displayUnit }}</span>
               <span v-if="rp.purchaseLink?.url">已配置推荐链接</span>
-              <span
-                v-if="
-                  rp.marketingNutritionHighlights &&
-                  Object.keys(rp.marketingNutritionHighlights).length > 0
-                "
-              >
-                已配置营养卖点
-              </span>
+              <span v-if="rp.imageUrl">已配置商品图片</span>
             </div>
           </div>
         </div>
@@ -963,6 +949,7 @@
     :title="rpEditingId ? '编辑家庭DIY推荐商品' : '新增家庭DIY推荐商品'"
     width="640px"
     destroy-on-close
+    @closed="handleRpDialogClosed"
   >
     <el-form :model="rpForm" label-width="120px">
       <el-alert
@@ -972,7 +959,7 @@
         class="sku-dialog-alert"
       >
         这里记录的是面向家庭 DIY
-        的推荐商品，可配置购买链接、展示单位和营养信息，方便小程序端展示给用户。
+        的推荐商品，可配置购买链接和商品图片，方便小程序端展示给用户。
       </el-alert>
       <el-form-item label="SKU 名称" required>
         <el-input
@@ -1029,64 +1016,55 @@
         </div>
       </el-form-item>
       <el-form-item label="商品图片">
-        <el-input
-          v-model="rpForm.imageUrl"
-          placeholder="产品图片URL"
-          style="width: 400px"
-        />
-      </el-form-item>
-      <el-form-item label="营养卖点">
-        <div style="width: 100%">
-          <div class="nutrient-list">
-            <div
-              v-for="(nutrient, idx) in rpFormNutrients"
-              :key="idx"
-              class="nutrient-row-enhanced"
-            >
-              <el-autocomplete
-                v-model="nutrient.name"
-                :fetch-suggestions="querySearchNutritionNames"
-                placeholder="营养素名称"
-                style="width: 160px"
-              />
-              <el-input-number
-                v-model="nutrient.value"
-                :min="0"
-                :precision="2"
-                placeholder="含量"
-                style="width: 140px"
-              />
-              <el-select v-model="nutrient.unit" style="width: 110px">
-                <el-option
-                  v-for="u in NUTRIENT_UNITS"
-                  :key="u.value"
-                  :label="u.label"
-                  :value="u.value"
-                />
-              </el-select>
+        <div class="rp-image-panel">
+          <div v-if="rpForm.imageUrl" class="rp-image-preview-card">
+            <el-image
+              :src="rpForm.imageUrl"
+              :preview-src-list="[rpForm.imageUrl]"
+              fit="cover"
+              preview-teleported
+              class="rp-image-preview"
+            />
+            <div class="rp-image-actions">
+              <el-upload
+                :show-file-list="false"
+                accept="image/*"
+                :before-upload="handleRpImageUpload"
+                :disabled="rpImageUploading"
+              >
+                <el-button :loading="rpImageUploading">替换图片</el-button>
+              </el-upload>
               <el-button
-                :icon="Delete"
-                size="small"
-                circle
-                @click="rpFormNutrients.splice(idx, 1)"
-              />
+                type="danger"
+                plain
+                :loading="rpImageUploading"
+                @click="handleRemoveRpImage"
+              >
+                删除图片
+              </el-button>
             </div>
           </div>
-          <el-button
-            size="small"
-            :icon="Plus"
-            @click="rpFormNutrients.push({ name: '', value: 0, unit: 'mg' })"
-            >添加卖点</el-button
-          >
+          <div v-else class="rp-image-empty">
+            <div class="rp-image-empty-copy">
+              推荐上传 1:1 方图，系统会自动裁切并用于小程序 DIY
+              制作单推荐商品展示。
+            </div>
+            <el-upload
+              :show-file-list="false"
+              accept="image/*"
+              :before-upload="handleRpImageUpload"
+              :disabled="rpImageUploading"
+            >
+              <el-button type="primary" :loading="rpImageUploading"
+                >上传图片</el-button
+              >
+            </el-upload>
+          </div>
+          <div class="hint-text">
+            建议原图清晰、主体居中，推荐尺寸 1200 × 1200。
+            新增商品未保存前上传的图片会在取消弹窗时自动清理。
+          </div>
         </div>
-      </el-form-item>
-      <el-form-item label="展示单位">
-        <el-input
-          v-model="rpForm.displayUnit"
-          placeholder="如：罐、袋、瓶、粒"
-          maxlength="50"
-          style="width: 140px"
-        />
       </el-form-item>
       <el-form-item label="建议顺序">
         <el-input-number
@@ -1349,7 +1327,6 @@ import {
   type CreateTagDto,
 } from '@/api/ingredientTags'
 import { ingredientApi } from '@/api/ingredients'
-import { INGREDIENT_NUTRITION_TAB_DEFINITIONS } from '@/constants/ingredientNutrition'
 import { buildSupplementActiveNutrientsFromNutritionProfile } from '@/utils/ingredientNutrition'
 import {
   getDefaultProcurementStrategyForType,
@@ -1619,42 +1596,6 @@ const packagingProperties = reactive<PackagingProperties>(
 // 编辑模式判断
 const isEdit = computed(() => !!props.ingredient?.id)
 
-// 营养成分单位枚举
-const NUTRIENT_UNITS = [
-  { label: 'mg (毫克)', value: 'mg' },
-  { label: 'g (克)', value: 'g' },
-  { label: 'μg (微克)', value: 'μg' },
-  { label: 'IU (国际单位)', value: 'IU' },
-  { label: '% (百分比)', value: '%' },
-]
-
-const NUTRITION_NAME_SUGGESTIONS = Array.from(
-  new Set([
-    ...INGREDIENT_NUTRITION_TAB_DEFINITIONS.flatMap((tab) =>
-      tab.fields.map((field) => field.label),
-    ),
-    '叶酸',
-    '生物素',
-    '益生菌',
-    '益生元',
-    '胶原蛋白',
-    '辅酶Q10',
-  ]),
-)
-
-const querySearchNutritionNames = (
-  queryString: string,
-  cb: (results: Array<{ value: string }>) => void,
-) => {
-  const normalizedQuery = queryString.trim().toLowerCase()
-  const results = NUTRITION_NAME_SUGGESTIONS.filter((nutrient) =>
-    nutrient.toLowerCase().includes(normalizedQuery),
-  )
-    .slice(0, 12)
-    .map((nutrient) => ({ value: nutrient }))
-  cb(results)
-}
-
 // 补剂添加时机选项
 const SUPPLEMENT_ADD_TIMING_OPTIONS = Object.entries({
   [SupplementAddTiming.BEFORE_MIXING]: '制作中',
@@ -1844,12 +1785,12 @@ async function cropImageFileToSquare(file: File): Promise<File> {
     )
   })
 
-  return new File([blob], `supplement-diy-square-${Date.now()}.jpg`, {
+  return new File([blob], `ingredient-diy-square-${Date.now()}.jpg`, {
     type: 'image/jpeg',
   })
 }
 
-async function deleteSupplementImageByUrl(imageUrl?: string | null) {
+async function deleteIngredientDiyImageByUrl(imageUrl?: string | null) {
   const key = extractIngredientDiyImageKey(imageUrl)
   if (!key) return
   await ingredientApi.deleteIngredientDiyImage(key)
@@ -1884,7 +1825,7 @@ const handleSupplementImageUpload: UploadProps['beforeUpload'] = async (
 
     if (previousImageUrl && previousImageUrl !== uploaded.url) {
       try {
-        await deleteSupplementImageByUrl(previousImageUrl)
+        await deleteIngredientDiyImageByUrl(previousImageUrl)
       } catch (deleteError) {
         console.error(
           'Failed to delete previous supplement DIY image:',
@@ -1904,7 +1845,7 @@ const handleSupplementImageUpload: UploadProps['beforeUpload'] = async (
       latestImageUrl !== persistedSupplementProperties.value.image_url
     ) {
       try {
-        await deleteSupplementImageByUrl(latestImageUrl)
+        await deleteIngredientDiyImageByUrl(latestImageUrl)
       } catch (cleanupError) {
         console.error(
           'Failed to cleanup uploaded supplement DIY image:',
@@ -1931,7 +1872,7 @@ async function handleRemoveSupplementImage() {
     const previousImageUrl = supplementProperties.image_url
     supplementProperties.image_url = null
     await persistSupplementImageUrl(null)
-    await deleteSupplementImageByUrl(previousImageUrl)
+    await deleteIngredientDiyImageByUrl(previousImageUrl)
     ElMessage.success('图片已删除')
   } catch (error: any) {
     supplementProperties.image_url =
@@ -2466,6 +2407,9 @@ const recommendedProducts = ref<RecommendedProduct[]>([])
 const rpDialogVisible = ref(false)
 const rpEditingId = ref<string | null>(null)
 const rpSaving = ref(false)
+const rpImageUploading = ref(false)
+const rpPersistedImageUrl = ref<string | null>(null)
+const rpImageCommitted = ref(false)
 const procurementSkus = ref<ProcurementSku[]>([])
 const procurementDialogVisible = ref(false)
 const procurementEditingId = ref<string | null>(null)
@@ -2514,13 +2458,6 @@ const getPriceHistorySourceTag = (
   return tagMap[value] || ''
 }
 
-interface RpNutrientItem {
-  name: string
-  value: number
-  unit: string
-}
-
-const rpFormNutrients = ref<RpNutrientItem[]>([])
 const rpForm = reactive({
   name: '',
   brand: '',
@@ -2529,7 +2466,6 @@ const rpForm = reactive({
   purchaseLinkUrl: '',
   purchaseLinkPlatform: 'TAOBAO' as string,
   imageUrl: '',
-  displayUnit: '',
   isActive: true,
   sortOrder: 0,
 })
@@ -2755,6 +2691,7 @@ const openRpDialog = (rp?: RecommendedProduct) => {
     ElMessage.warning('当前类型不再维护家庭 DIY 推荐商品')
     return
   }
+  rpImageCommitted.value = false
   if (rp) {
     rpEditingId.value = rp.id
     rpForm.name = rp.name
@@ -2764,17 +2701,9 @@ const openRpDialog = (rp?: RecommendedProduct) => {
     rpForm.purchaseLinkUrl = rp.purchaseLink?.url || ''
     rpForm.purchaseLinkPlatform = rp.purchaseLink?.platform || 'TAOBAO'
     rpForm.imageUrl = rp.imageUrl || ''
-    rpForm.displayUnit = rp.displayUnit || ''
     rpForm.isActive = rp.isActive
     rpForm.sortOrder = rp.sortOrder
-    const highlights = rp.marketingNutritionHighlights || rp.activeNutrients
-    rpFormNutrients.value = highlights
-      ? Object.entries(highlights).map(([name, v]) => ({
-          name,
-          value: (v as any).value || 0,
-          unit: (v as any).unit || 'mg',
-        }))
-      : []
+    rpPersistedImageUrl.value = rp.imageUrl || null
   } else {
     rpEditingId.value = null
     rpForm.name = ''
@@ -2784,10 +2713,9 @@ const openRpDialog = (rp?: RecommendedProduct) => {
     rpForm.purchaseLinkUrl = ''
     rpForm.purchaseLinkPlatform = 'TAOBAO'
     rpForm.imageUrl = ''
-    rpForm.displayUnit = ''
     rpForm.isActive = true
     rpForm.sortOrder = 0
-    rpFormNutrients.value = []
+    rpPersistedImageUrl.value = null
   }
   rpDialogVisible.value = true
 }
@@ -2833,17 +2761,96 @@ const openProcurementDialog = (sku?: ProcurementSku) => {
   procurementDialogVisible.value = true
 }
 
-const buildNutrientsFromList = (
-  list: RpNutrientItem[],
-): Record<string, { value: number; unit: string }> | undefined => {
-  if (list.length === 0) return undefined
-  const result: Record<string, { value: number; unit: string }> = {}
-  for (const n of list) {
-    if (n.name && n.value > 0) {
-      result[n.name] = { value: n.value, unit: n.unit }
-    }
+async function cleanupUncommittedRpImage() {
+  const currentImageUrl = rpForm.imageUrl || null
+  if (!currentImageUrl || currentImageUrl === rpPersistedImageUrl.value) {
+    return
   }
-  return Object.keys(result).length > 0 ? result : undefined
+
+  try {
+    await deleteIngredientDiyImageByUrl(currentImageUrl)
+  } catch (error) {
+    console.error('Failed to cleanup uncommitted recommendation image:', error)
+  }
+}
+
+const handleRpDialogClosed = async () => {
+  if (!rpImageCommitted.value) {
+    await cleanupUncommittedRpImage()
+  }
+  rpPersistedImageUrl.value = null
+  rpImageCommitted.value = false
+  rpImageUploading.value = false
+}
+
+const handleRpImageUpload: UploadProps['beforeUpload'] = async (rawFile) => {
+  if (!rawFile.type.startsWith('image/')) {
+    ElMessage.error('请上传图片文件')
+    return false
+  }
+
+  if (rawFile.size > 10 * 1024 * 1024) {
+    ElMessage.error('图片大小不能超过 10MB')
+    return false
+  }
+
+  rpImageUploading.value = true
+  try {
+    const previousImageUrl = rpForm.imageUrl || null
+    const croppedFile = await cropImageFileToSquare(rawFile as File)
+    const uploaded = await ingredientApi.uploadIngredientDiyImage(croppedFile)
+    rpForm.imageUrl = uploaded.url
+
+    if (
+      previousImageUrl &&
+      previousImageUrl !== rpPersistedImageUrl.value &&
+      previousImageUrl !== uploaded.url
+    ) {
+      try {
+        await deleteIngredientDiyImageByUrl(previousImageUrl)
+      } catch (deleteError) {
+        console.error(
+          'Failed to delete previous uncommitted recommendation image:',
+          deleteError,
+        )
+        ElMessage.warning('新图片已上传，但旧图片删除失败，请稍后重试')
+      }
+    }
+
+    ElMessage.success('图片已上传并裁切为 1:1 方图')
+  } catch (error: any) {
+    console.error('Failed to upload recommendation image:', error)
+    ElMessage.error(error?.message || '图片上传失败')
+  } finally {
+    rpImageUploading.value = false
+  }
+
+  return false
+}
+
+const handleRemoveRpImage = async () => {
+  const currentImageUrl = rpForm.imageUrl || null
+  if (!currentImageUrl) {
+    return
+  }
+
+  if (currentImageUrl === rpPersistedImageUrl.value) {
+    rpForm.imageUrl = ''
+    ElMessage.success('已移除图片，保存后生效')
+    return
+  }
+
+  rpImageUploading.value = true
+  try {
+    await deleteIngredientDiyImageByUrl(currentImageUrl)
+    rpForm.imageUrl = ''
+    ElMessage.success('图片已删除')
+  } catch (error: any) {
+    console.error('Failed to remove uncommitted recommendation image:', error)
+    ElMessage.error(error?.message || '删除图片失败')
+  } finally {
+    rpImageUploading.value = false
+  }
 }
 
 const saveRp = async () => {
@@ -2863,17 +2870,15 @@ const saveRp = async () => {
     productModel: rpForm.productModel || undefined,
     purchaseChannel: rpForm.purchaseChannel || undefined,
     purchaseLink: purchaseLink as any,
-    imageUrl: rpForm.imageUrl || undefined,
-    marketingNutritionHighlights: buildNutrientsFromList(
-      rpFormNutrients.value,
-    ) as any,
-    displayUnit: rpForm.displayUnit || undefined,
+    imageUrl: rpForm.imageUrl || null,
     isActive: rpForm.isActive,
     sortOrder: rpForm.sortOrder,
   }
 
   rpSaving.value = true
   try {
+    const previousPersistedImageUrl = rpPersistedImageUrl.value
+    const currentImageUrl = rpForm.imageUrl || null
     if (rpEditingId.value) {
       await ingredientApi.updateRecommendedProduct(
         props.ingredient.id,
@@ -2885,6 +2890,24 @@ const saveRp = async () => {
       await ingredientApi.createRecommendedProduct(props.ingredient.id, data)
       ElMessage.success('家庭 DIY 推荐商品已创建')
     }
+
+    if (
+      previousPersistedImageUrl &&
+      previousPersistedImageUrl !== currentImageUrl
+    ) {
+      try {
+        await deleteIngredientDiyImageByUrl(previousPersistedImageUrl)
+      } catch (deleteError) {
+        console.error(
+          'Failed to delete previous persisted recommendation image:',
+          deleteError,
+        )
+        ElMessage.warning('商品已保存，但旧图片删除失败，请稍后重试')
+      }
+    }
+
+    rpPersistedImageUrl.value = currentImageUrl
+    rpImageCommitted.value = true
     rpDialogVisible.value = false
     await Promise.all([loadRecommendedProducts(), loadSkuSuggestions()])
   } catch (e: any) {
@@ -3463,6 +3486,60 @@ const handleCancel = () => {
 }
 
 .supplement-image-empty-copy {
+  flex: 1;
+  min-width: 240px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: #606266;
+}
+
+.rp-image-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+}
+
+.rp-image-preview-card {
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.rp-image-preview {
+  width: 120px;
+  height: 120px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+  border: 1px solid #ebeef5;
+  background: #f5f7fa;
+}
+
+.rp-image-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rp-image-empty {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 12px;
+  border: 1px dashed #dcdfe6;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.rp-image-empty-copy {
   flex: 1;
   min-width: 240px;
   font-size: 13px;

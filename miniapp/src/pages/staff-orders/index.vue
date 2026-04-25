@@ -54,23 +54,23 @@
 
     <view class="quick-search-bar">
       <view class="quick-search-input-wrap">
-        <text class="quick-search-icon">#</text>
+        <text class="quick-search-icon">🔍</text>
         <input
           class="quick-search-input"
-          v-model="orderIdKeyword"
-          placeholder="按订单号快速搜索，支持模糊匹配"
+          v-model="searchKeyword"
+          placeholder="按订单号/狗狗名称快速搜索，支持模糊匹配"
           confirm-type="search"
-          @confirm="performOrderIdFilter"
+          @confirm="performSearch"
         />
         <text
-          v-if="orderIdKeyword"
+          v-if="searchKeyword"
           class="quick-search-clear"
-          @tap.stop="clearOrderIdKeyword"
+          @tap.stop="clearSearchKeyword"
         >
           ×
         </text>
       </view>
-      <button class="quick-search-btn" @tap="performOrderIdFilter">搜索</button>
+      <button class="quick-search-btn" @tap="performSearch">搜索</button>
     </view>
 
     <!-- 订单列表 -->
@@ -449,7 +449,6 @@ const pageSize = 20
 const selectedStatus = ref<string>('ALL')
 const selectedDate = ref<string>('all')
 const searchKeyword = ref('')
-const orderIdKeyword = ref('')  // 订单编号快速搜索
 
 // 弹窗显示状态
 const statusFilterVisible = ref(false)
@@ -492,8 +491,7 @@ const dateFilterText = computed(() => {
 const hasActiveFilters = computed(() => {
   return selectedStatus.value !== 'ALL' ||
          selectedDate.value !== 'all' ||
-         searchKeyword.value.trim() !== '' ||
-         orderIdKeyword.value.trim() !== ''
+         searchKeyword.value.trim() !== ''
 })
 
 const hasMore = computed(() => {
@@ -563,7 +561,6 @@ async function fetchAllAdminOrders(params: Record<string, any>): Promise<any[]> 
 // 加载订单列表
 async function loadOrders(reset = true) {
   const keyword = searchKeyword.value.trim()
-  const orderId = orderIdKeyword.value.trim()
   const targetPage = reset ? 1 : currentPage.value + 1
 
   if (!reset && (!hasMore.value || loading.value || loadingMore.value)) {
@@ -577,7 +574,6 @@ async function loadOrders(reset = true) {
       status: selectedStatus.value,
       date: selectedDate.value,
       keyword,
-      orderId,
       page: targetPage,
       pageSize
     })
@@ -613,10 +609,6 @@ async function loadOrders(reset = true) {
 
     if (keyword) {
       params.keyword = keyword
-    }
-
-    if (orderId) {
-      params.orderId = orderId
     }
 
     params.page = targetPage
@@ -796,13 +788,8 @@ function selectDate(date: string) {
   loadOrders(true)
 }
 
-function performOrderIdFilter() {
-  orderIdKeyword.value = orderIdKeyword.value.trim()
-  loadOrders(true)
-}
-
-function clearOrderIdKeyword() {
-  orderIdKeyword.value = ''
+function clearSearchKeyword() {
+  searchKeyword.value = ''
   loadOrders(true)
 }
 
@@ -810,7 +797,6 @@ function resetFilters() {
   selectedStatus.value = 'ALL'
   selectedDate.value = 'all'
   searchKeyword.value = ''
-  orderIdKeyword.value = ''
   loadOrders(true)
 }
 

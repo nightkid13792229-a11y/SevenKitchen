@@ -1,13 +1,18 @@
-import { describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   DEFAULT_DOG_AVATAR_SRC,
   buildDogAvatarUploadUrl,
   parseDogAvatarUploadResponse,
+  persistDogAvatarLocalPreviewPath,
   resolveDogAvatarUploadErrorMessage,
   resolveDogAvatarSrc,
 } from './dog-avatar'
 
 describe('dog-avatar utils', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals()
+  })
+
   it('builds dog avatar upload URLs from the active runtime base URL', () => {
     expect(buildDogAvatarUploadUrl('http://127.0.0.1:3011/api/v1', 'dog-123')).toBe(
       'http://127.0.0.1:3011/api/v1/dogs/dog-123/avatar',
@@ -70,6 +75,28 @@ describe('dog-avatar utils', () => {
   it('keeps meaningful upload errors when they are already user-friendly', () => {
     expect(resolveDogAvatarUploadErrorMessage(new Error('文件大小不能超过 5MB'))).toBe(
       '文件大小不能超过 5MB',
+    )
+  })
+
+  it('persists local avatar previews before storing them in create drafts', async () => {
+    const saveFile = vi.fn((options: any) => {
+      options.success({ savedFilePath: 'wxfile://user/dog-avatar.png' })
+    })
+    vi.stubGlobal('uni', { saveFile })
+
+    await expect(persistDogAvatarLocalPreviewPath('wxfile://tmp/dog-avatar.png')).resolves.toBe(
+      'wxfile://user/dog-avatar.png',
+    )
+    expect(saveFile).toHaveBeenCalledWith(expect.objectContaining({
+      tempFilePath: 'wxfile://tmp/dog-avatar.png',
+    }))
+  })
+
+  it('falls back to the selected avatar path when local persistence is unavailable', async () => {
+    vi.stubGlobal('uni', {})
+
+    await expect(persistDogAvatarLocalPreviewPath('wxfile://tmp/dog-avatar.png')).resolves.toBe(
+      'wxfile://tmp/dog-avatar.png',
     )
   })
 })

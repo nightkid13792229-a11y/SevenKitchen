@@ -674,6 +674,7 @@ import {
   writeDogHealthStateSnapshotCache,
 } from '../../utils/health-records'
 import {
+  persistDogAvatarLocalPreviewPath,
   resolveDogAvatarSrc,
   resolveDogAvatarUploadErrorMessage,
 } from '../../utils/dog-avatar'
@@ -1453,8 +1454,8 @@ function closeCreateAvatarCropper() {
   avatarCropSourcePath.value = ''
 }
 
-function handleCreateAvatarCropConfirm(croppedFilePath: string) {
-  formData.value.avatarTempFilePath = croppedFilePath
+async function handleCreateAvatarCropConfirm(croppedFilePath: string) {
+  formData.value.avatarTempFilePath = await persistDogAvatarLocalPreviewPath(croppedFilePath)
   closeCreateAvatarCropper()
 }
 

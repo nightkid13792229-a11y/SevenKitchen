@@ -13,6 +13,21 @@ export function resolveDogAvatarSrc(
   return normalized || DEFAULT_DOG_AVATAR_SRC
 }
 
+export function persistDogAvatarLocalPreviewPath(filePath: string): Promise<string> {
+  const normalized = typeof filePath === 'string' ? filePath.trim() : ''
+  if (!normalized || typeof uni === 'undefined' || typeof uni.saveFile !== 'function') {
+    return Promise.resolve(normalized)
+  }
+
+  return new Promise(resolve => {
+    uni.saveFile({
+      tempFilePath: normalized,
+      success: res => resolve(res.savedFilePath || normalized),
+      fail: () => resolve(normalized),
+    })
+  })
+}
+
 export function buildDogAvatarUploadUrl(baseUrl: string, dogId: string): string {
   const normalizedBaseUrl = baseUrl.replace(/\/+$/, '')
   return `${normalizedBaseUrl}/dogs/${dogId}/avatar`

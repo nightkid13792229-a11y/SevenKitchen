@@ -1001,6 +1001,7 @@ export class DogsController {
       breedId: dog.breedId,
       breedName,
       customBreedName: dog.customBreedName,
+      avatarUrl: dog.avatarUrl,
       birthday: dog.birthday.toISOString(),
       gender: dog.gender,
       isNeutered: dog.isNeutered,

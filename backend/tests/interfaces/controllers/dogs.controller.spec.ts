@@ -684,5 +684,44 @@ describe('DogsController (e2e)', () => {
       expect(response.body.data.profile).toHaveProperty('id', dog.id);
       expect(response.body.data.profile).toHaveProperty('name', 'Test Dog');
     });
+
+    it('should include the persisted dog avatar url in dog detail responses', async () => {
+      const avatarUrl =
+        'https://img.sevenkitchen.cloud/dogs/avatars/test-dog-id.png';
+      const dog = new Dog(
+        'test-dog-with-avatar-id',
+        'test-owner-id',
+        'Test Dog With Avatar',
+        '550e8400-e29b-41d4-a716-446655440000',
+        null,
+        new Date('2020-01-01'),
+        DogGender.MALE,
+        false,
+        10.0,
+        5,
+        ActivityLevel.NORMAL,
+        LifeStageOverride.NONE,
+        null,
+        2,
+        TreatInputMode.ESTIMATE_LEVEL,
+        TreatLevel.LOW,
+        null,
+        null,
+        null,
+        null,
+        0,
+        avatarUrl,
+      );
+
+      await dogRepository.save(dog);
+
+      const response = await request(app.getHttpAdapter().getInstance())
+        .get(`/api/v1/dogs/${dog.id}`)
+        .set('X-Customer-Id', 'test-owner-id')
+        .expect(200);
+
+      expect(response.body).toHaveProperty('code', 0);
+      expect(response.body.data.profile).toHaveProperty('avatarUrl', avatarUrl);
+    });
   });
 });

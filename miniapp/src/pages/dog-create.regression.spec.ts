@@ -13,6 +13,7 @@ describe('dog-create runtime regressions', () => {
     expect(source).toContain('showAvatarCropper')
     expect(source).toContain('avatarCropSourcePath')
     expect(source).toContain('handleCreateAvatarCropConfirm')
+    expect(source).toContain('persistDogAvatarLocalPreviewPath')
     expect(source).toContain('avatarTempFilePath')
     expect(source).toContain('await dogCreateApi.uploadAvatar(')
     expect(source).toContain('档案已创建，头像上传失败')

@@ -11,8 +11,13 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import type { OrderRepository } from '../../domain/order/order.repository';
-import type { RecipeRepository } from '../../domain/recipe/recipe.repository';
+import type {
+  RecipeItem as RecipeDomainItem,
+  RecipeRepository,
+} from '../../domain/recipe/recipe.repository';
 import type { IngredientRepository } from '../../domain/ingredient/ingredient.repository';
+import { Ingredient } from '../../domain/ingredient/ingredient.entity';
+import { IngredientType } from '../../domain/ingredient/enums';
 import {
   Order,
   OrderItem,
@@ -58,6 +63,7 @@ import {
   resolvePreparationMethodTokens,
 } from '../recipe/preparation-method-text.util';
 import { OrderSourcePlanService } from './order-source-plan.service';
+import type { IngredientSourcePlanCode } from '../../domain/order/ingredient-source-plan';
 
 // Re-export for convenience
 export { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY };
@@ -209,6 +215,150 @@ export class OrderService {
         method.id,
         method.name,
       ]),
+    );
+  }
+
+  private collectRecipeIngredientIds(
+    recipeItems: RecipeDomainItem[],
+    useSupplementProcurementAlternatives: boolean,
+    pricedIngredientIdsByRecipeItemId?: Map<string, string>,
+  ): string[] {
+    const ids = new Set<string>();
+
+    for (const item of recipeItems) {
+      ids.add(item.ingredientId);
+
+      const pricedIngredientId = pricedIngredientIdsByRecipeItemId?.get(item.id);
+      if (pricedIngredientId) {
+        ids.add(pricedIngredientId);
+      }
+
+      if (!useSupplementProcurementAlternatives) {
+        continue;
+      }
+
+      for (const alternative of item.supplementAlternatives || []) {
+        if ((alternative as any).isActive === false) {
+          continue;
+        }
+
+        ids.add(alternative.ingredientId);
+      }
+    }
+
+    return Array.from(ids);
+  }
+
+  private selectSupplementProcurementAlternative(
+    item: RecipeDomainItem,
+    ingredientMap: Map<string, Ingredient>,
+  ): Ingredient | undefined {
+    const primaryIngredient = ingredientMap.get(item.ingredientId);
+    if (primaryIngredient?.type !== IngredientType.SUPPLEMENT) {
+      return undefined;
+    }
+
+    for (const alternative of item.supplementAlternatives || []) {
+      if ((alternative as any).isActive === false) {
+        continue;
+      }
+
+      const candidate = ingredientMap.get(alternative.ingredientId);
+      if (
+        candidate?.type === IngredientType.SUPPLEMENT &&
+        candidate.canUseForProcurement()
+      ) {
+        return candidate;
+      }
+    }
+
+    return undefined;
+  }
+
+  private async resolveOrderRecipeIngredientMap(params: {
+    recipeItems: RecipeDomainItem[];
+    ingredientSourcePlan?: IngredientSourcePlanCode | null;
+    useSupplementProcurementAlternatives: boolean;
+    pricedIngredientIdsByRecipeItemId?: Map<string, string>;
+  }): Promise<Map<string, Ingredient>> {
+    const ingredientIds = this.collectRecipeIngredientIds(
+      params.recipeItems,
+      params.useSupplementProcurementAlternatives,
+      params.pricedIngredientIdsByRecipeItemId,
+    );
+    const ingredients = await this.ingredientRepository.findByIds(ingredientIds);
+    const catalogIngredientMap = new Map(
+      ingredients.map((ingredient) => [ingredient.id, ingredient]),
+    );
+
+    const selectedByRecipeIngredientId = new Map<string, Ingredient>();
+    for (const item of params.recipeItems) {
+      const pricedIngredientId = params.pricedIngredientIdsByRecipeItemId?.get(
+        item.id,
+      );
+      const pricedIngredient = pricedIngredientId
+        ? catalogIngredientMap.get(pricedIngredientId)
+        : undefined;
+      const primaryIngredient = catalogIngredientMap.get(item.ingredientId);
+      const selectedIngredient =
+        pricedIngredient ||
+        (params.useSupplementProcurementAlternatives
+          ? this.selectSupplementProcurementAlternative(
+              item,
+              catalogIngredientMap,
+            )
+          : undefined) ||
+        primaryIngredient;
+
+      if (selectedIngredient) {
+        selectedByRecipeIngredientId.set(item.ingredientId, selectedIngredient);
+      }
+    }
+
+    const selectedIngredients = Array.from(
+      new Map(
+        Array.from(selectedByRecipeIngredientId.values()).map((ingredient) => [
+          ingredient.id,
+          ingredient,
+        ]),
+      ).values(),
+    );
+
+    const sourcePlanIngredientMap = params.ingredientSourcePlan
+      ? await this.orderSourcePlanService.applySourcePlanToIngredients(
+          selectedIngredients,
+          params.ingredientSourcePlan,
+        )
+      : new Map(
+          selectedIngredients.map((ingredient) => [ingredient.id, ingredient]),
+        );
+
+    return new Map(
+      Array.from(selectedByRecipeIngredientId.entries()).map(
+        ([recipeIngredientId, selectedIngredient]) => [
+          recipeIngredientId,
+          sourcePlanIngredientMap.get(selectedIngredient.id) ||
+            selectedIngredient,
+        ],
+      ),
+    );
+  }
+
+  private getPricedIngredientIdsByRecipeItemId(
+    pricingResult: any,
+  ): Map<string, string> {
+    const details =
+      pricingResult?.pricingBreakdown?.ingredientDetails ||
+      pricingResult?.ingredientDetails ||
+      [];
+
+    return new Map(
+      details
+        .map((detail: any) => [detail?.recipeItemId, detail?.ingredientId])
+        .filter(
+          (entry: unknown[]): entry is [string, string] =>
+            typeof entry[0] === 'string' && typeof entry[1] === 'string',
+        ),
     );
   }
 
@@ -792,10 +942,16 @@ export class OrderService {
 
     // 7. 创建 RecipeSnapshot
     const recipeItems = recipe.items || [];
-    const ingredientIds = recipeItems.map((ri) => ri.ingredientId);
-    const ingredients =
-      await this.ingredientRepository.findByIds(ingredientIds);
-    const ingredientMap = new Map(ingredients.map((ing) => [ing.id, ing]));
+    const ingredientSourcePlan = normalizeIngredientSourcePlan(
+      requestParams.ingredientSourcePlan,
+    );
+    const ingredientMap = await this.resolveOrderRecipeIngredientMap({
+      recipeItems,
+      ingredientSourcePlan,
+      useSupplementProcurementAlternatives: true,
+      pricedIngredientIdsByRecipeItemId:
+        this.getPricedIngredientIdsByRecipeItemId(pricingResult),
+    });
 
     const prepMethodMap = await this.loadPreparationMethodNameMap(
       recipeItems.map((item) => item.preparationMethod),
@@ -821,7 +977,7 @@ export class OrderService {
         );
 
         return {
-          ingredient_id: ri.ingredientId,
+          ingredient_id: ingredient?.id || ri.ingredientId,
           name: ingredient?.name || 'Unknown',
           ratio: ri.ratioPercent ?? 0,
           ingredient_type: ingredient?.type,
@@ -1119,9 +1275,11 @@ export class OrderService {
 
       // Load ingredients for recipe items
       const recipeItems = recipe.items || [];
-      const ingredientIds = recipeItems.map((ri) => ri.ingredientId);
-      const ingredients =
-        await this.ingredientRepository.findByIds(ingredientIds);
+      const ingredientMap = await this.resolveOrderRecipeIngredientMap({
+        recipeItems,
+        ingredientSourcePlan,
+        useSupplementProcurementAlternatives: true,
+      });
 
       const prepMethodMap = await this.loadPreparationMethodNameMap(
         recipeItems.map((item) => item.preparationMethod),
@@ -1132,12 +1290,6 @@ export class OrderService {
         resolvedCount: prepMethodMap.size,
         resolvedIds: Array.from(prepMethodMap.keys()),
       });
-
-      const ingredientMap =
-        await this.orderSourcePlanService.applySourcePlanToIngredients(
-          ingredients,
-          ingredientSourcePlan,
-        );
 
       // Helper function to convert preparationMethod IDs to names
       // Build enriched recipe items with ingredient objects for pricing
@@ -1163,7 +1315,7 @@ export class OrderService {
 
         return {
           id: (ri as any).id,
-          ingredientId: ri.ingredientId,
+          ingredientId: ingredient.id,
           ingredient,
           preparationMethod: prepMethodText,
           ratioPercent: ri.ratioPercent ?? null,
@@ -1272,7 +1424,7 @@ export class OrderService {
           }
 
           return {
-            ingredient_id: ri.ingredientId,
+            ingredient_id: ingredient?.id || ri.ingredientId,
             name: ingredient?.name || 'Unknown',
             ratio: ri.ratioPercent ?? 0,
             ingredient_type: ingredient?.type,
@@ -1629,9 +1781,11 @@ export class OrderService {
       })),
     });
 
-    const ingredientIds = recipeItems.map((ri) => ri.ingredientId);
-    const ingredients =
-      await this.ingredientRepository.findByIds(ingredientIds);
+    const ingredientMap = await this.resolveOrderRecipeIngredientMap({
+      recipeItems,
+      ingredientSourcePlan,
+      useSupplementProcurementAlternatives: !isDiySheetPreview,
+    });
 
     const prepMethodMap = await this.loadPreparationMethodNameMap(
       recipeItems.map((item) => item.preparationMethod),
@@ -1643,17 +1797,12 @@ export class OrderService {
     });
 
     console.log('[PricingPreview] Ingredients loaded:', {
-      requestedIds: ingredientIds.length,
-      found: ingredients.length,
-      ingredientIds: ingredients.map((ing) => ing.id),
+      requestedItems: recipeItems.length,
+      found: ingredientMap.size,
+      ingredientIds: Array.from(ingredientMap.values()).map(
+        (ingredient) => ingredient.id,
+      ),
     });
-
-    const ingredientMap = isDiySheetPreview
-      ? new Map(ingredients.map((ingredient) => [ingredient.id, ingredient]))
-      : await this.orderSourcePlanService.applySourcePlanToIngredients(
-          ingredients,
-          ingredientSourcePlan!,
-        );
 
     // Helper function to convert preparationMethod IDs to names
     // Build enriched recipe items with ingredient objects for pricing
@@ -1671,7 +1820,7 @@ export class OrderService {
 
       return {
         id: (ri as any).id,
-        ingredientId: ri.ingredientId,
+        ingredientId: ingredient.id,
         ingredient,
         preparationMethod: prepMethodText,
         ratioPercent: ri.ratioPercent ?? null,

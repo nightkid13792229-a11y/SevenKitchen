@@ -33,6 +33,7 @@ export interface RecipeItem {
   supplementAlternatives?: Array<{
     ingredientId: string;
     ingredientName: string;
+    isActive?: boolean;
     ingredient?: IngredientRef;
   }> | null;
   ingredient?: IngredientRef;

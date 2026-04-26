@@ -308,6 +308,45 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       { protein_g: 20 } as any,
     );
 
+  const createSupplementIngredient = (
+    id: string,
+    overrides: Partial<{
+      name: string;
+      diyEnabled: boolean;
+      procurementEnabled: boolean;
+      brand: string | null;
+      productModel: string | null;
+      purchaseChannel: string | null;
+    }> = {},
+  ) =>
+    new Ingredient(
+      id,
+      overrides.name ?? '鸡蛋壳粉',
+      IngredientType.SUPPLEMENT,
+      IngredientProcurementStrategy.STOCK_REPLENISHMENT,
+      overrides.diyEnabled ?? false,
+      overrides.procurementEnabled ?? true,
+      overrides.brand ?? null,
+      overrides.productModel ?? '散装',
+      overrides.purchaseChannel ?? '自制',
+      null,
+      BaseUnit.G,
+      'g',
+      'g',
+      1,
+      0,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      { production_loss_rate: 1.02, add_timing: 'BEFORE_MIXING' },
+      {
+        minerals: { calcium: 360 },
+      } as any,
+    );
+
   describe('createOrderDraft - dailyIntakeG calculation', () => {
     it('should calculate dailyIntakeG from DogCalc.finalFoodKcal and Recipe.energyDensityKcalPerKg', async () => {
       // Arrange
@@ -723,6 +762,201 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       expect(pricingInput.recipe.items[0].ingredient).toBe(ingredient);
       expect(mockPricingSnapshotRepository.create).not.toHaveBeenCalled();
       expect(result.snapshotId).toBeUndefined();
+    });
+
+    it('uses an active procurement-enabled supplement alternative for order pricing and production snapshots', async () => {
+      const dog = createMockDog();
+      const mainSupplement = createSupplementIngredient('supplement-diy', {
+        diyEnabled: true,
+        procurementEnabled: false,
+        brand: '西知堂',
+        productModel: '500g/罐',
+        purchaseChannel: '京东',
+      });
+      const procurementSupplement = createSupplementIngredient(
+        'supplement-procurement',
+        {
+          diyEnabled: false,
+          procurementEnabled: true,
+          brand: '无',
+          productModel: '散装',
+          purchaseChannel: '自制',
+        },
+      );
+      const recipe = {
+        ...createMockRecipe(),
+        items: [
+          {
+            id: 'supplement-item-1',
+            ingredientId: mainSupplement.id,
+            ratioPercent: 0,
+            nutrientTargetKey: '钙',
+            nutrientTargetValue: 2500,
+            supplementTargets: [
+              {
+                label: '钙',
+                fieldPath: 'minerals.calcium',
+                unit: 'mg',
+                targetValuePerKg: 2500,
+              },
+            ],
+            supplementAlternatives: [
+              {
+                ingredientId: procurementSupplement.id,
+                ingredientName: procurementSupplement.name,
+                isActive: true,
+                ingredient: {
+                  id: procurementSupplement.id,
+                  name: procurementSupplement.name,
+                  type: 'SUPPLEMENT',
+                  procurementEnabled: true,
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      dogRepository.findById.mockResolvedValue(dog);
+      recipeRepository.findById.mockResolvedValue(recipe);
+      mockIngredientRepository.findByIds.mockResolvedValue([
+        mainSupplement,
+        procurementSupplement,
+      ]);
+      mockPricingService.calculateOrderPrice.mockReturnValue({
+        costIngredients: 50,
+        costPackaging: 10,
+        costLabor: 20,
+        costOverhead: 5,
+        totalProductCost: 85,
+        productPrice: 141.67,
+      });
+      orderRepository.save.mockImplementation(async (order: Order) => order);
+
+      await service.createOrderDraft({
+        customerId: 'customer-id-1',
+        dogId: 'dog-id-1',
+        type: OrderType.FRESH_FOOD,
+        items: [
+          {
+            recipeId: 'recipe-id-1',
+            quantityG: 1000,
+            packageSpecG: 200,
+            packageCount: 5,
+          },
+        ],
+      });
+
+      const pricingInput = mockPricingService.calculateOrderPrice.mock
+        .calls[0][0] as any;
+      expect(pricingInput.recipe.items[0].ingredient).toBe(
+        procurementSupplement,
+      );
+      expect(pricingInput.recipe.items[0].ingredientId).toBe(
+        procurementSupplement.id,
+      );
+
+      const savedOrder = orderRepository.save.mock.calls[0][0] as Order;
+      const snapshotItem = savedOrder.items[0].recipeSnapshot.items[0];
+      expect(snapshotItem.ingredient_id).toBe(procurementSupplement.id);
+      expect(snapshotItem.name).toBe(procurementSupplement.name);
+      expect(snapshotItem.properties).toBe(procurementSupplement.properties);
+    });
+
+    it('keeps the original supplement ingredient for DIY sheet pricing previews even when a procurement alternative exists', async () => {
+      const dog = createMockDog();
+      const mainSupplement = createSupplementIngredient('supplement-diy', {
+        diyEnabled: true,
+        procurementEnabled: false,
+        brand: '西知堂',
+        productModel: '500g/罐',
+        purchaseChannel: '京东',
+      });
+      const procurementSupplement = createSupplementIngredient(
+        'supplement-procurement',
+        {
+          diyEnabled: false,
+          procurementEnabled: true,
+          brand: '无',
+          productModel: '散装',
+          purchaseChannel: '自制',
+        },
+      );
+      const recipe = {
+        ...createMockRecipe(),
+        items: [
+          {
+            id: 'supplement-item-1',
+            ingredientId: mainSupplement.id,
+            ratioPercent: 0,
+            nutrientTargetKey: '钙',
+            nutrientTargetValue: 2500,
+            supplementTargets: [
+              {
+                label: '钙',
+                fieldPath: 'minerals.calcium',
+                unit: 'mg',
+                targetValuePerKg: 2500,
+              },
+            ],
+            supplementAlternatives: [
+              {
+                ingredientId: procurementSupplement.id,
+                ingredientName: procurementSupplement.name,
+                isActive: true,
+                ingredient: {
+                  id: procurementSupplement.id,
+                  name: procurementSupplement.name,
+                  type: 'SUPPLEMENT',
+                  procurementEnabled: true,
+                },
+              },
+            ],
+          },
+        ],
+      };
+
+      dogRepository.findById.mockResolvedValue(dog);
+      recipeRepository.findById.mockResolvedValue(recipe);
+      mockIngredientRepository.findByIds.mockResolvedValue([
+        mainSupplement,
+        procurementSupplement,
+      ]);
+      mockPricingService.calculateOrderPrice.mockReturnValue({
+        costIngredients: 50,
+        costPackaging: 10,
+        costLabor: 20,
+        costOverhead: 5,
+        totalProductCost: 85,
+        productPrice: 141.67,
+        weightPackagingG: 0,
+      });
+      mockShippingService.calculateShippingFeePreview.mockResolvedValue({
+        amountShipping: 0,
+        templateId: null,
+      });
+
+      await service.previewPricing({
+        customerId: 'customer-id-1',
+        dogId: 'dog-id-1',
+        type: OrderType.FRESH_FOOD,
+        pricingPurpose: 'DIY_SHEET',
+        items: [
+          {
+            recipeId: 'recipe-id-1',
+            quantityG: 1000,
+            packageSpecG: 200,
+            packageCount: 5,
+          },
+        ],
+      } as any);
+
+      const pricingInput = mockPricingService.calculateOrderPrice.mock
+        .calls[0][0] as any;
+      expect(pricingInput.recipe.items[0].ingredient).toBe(mainSupplement);
+      expect(pricingInput.recipe.items[0].ingredientId).toBe(
+        mainSupplement.id,
+      );
     });
 
     it.each([

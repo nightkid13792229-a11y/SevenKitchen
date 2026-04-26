@@ -704,6 +704,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
             item.supplementAlternatives?.map((alternative) => ({
               ingredientId: alternative.alternativeIngredientId,
               ingredientName: alternative.alternativeIngredient.name,
+              isActive: alternative.isActive,
               ingredient: alternative.alternativeIngredient
                 ? {
                     id: alternative.alternativeIngredient.id,

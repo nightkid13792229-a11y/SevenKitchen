@@ -125,6 +125,27 @@ describe('LabelService 70x100 food label rendering', () => {
     );
   });
 
+  it('formats production timestamp as date-only top-card text', () => {
+    const service = new LabelService();
+    const ctx = createCanvas(559, 799).getContext('2d');
+    const data = {
+      ...createLabelData(),
+      productionTime: '2026-04-26 20:35',
+    };
+
+    const items = (service as any).buildMetaItems(data);
+    (service as any).drawMetaLine(ctx, data, 0, 0, 487);
+    const cards = (service as any).resolveMetaCardLayout(ctx, data, 487);
+    const dateCard = cards.find((card: { text: string }) =>
+      card.text.startsWith('2026-04-26'),
+    );
+
+    expect(items[1]).toBe('2026-04-26');
+    expect(items.join('')).not.toContain('20:35');
+    expect(dateCard.text).toBe('2026-04-26');
+    expect(dateCard.textWidth).toBeLessThanOrEqual(dateCard.maxTextWidth);
+  });
+
   it('keeps supplement actual total amount on the ingredient label', () => {
     const service = new LabelService();
 

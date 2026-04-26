@@ -121,6 +121,14 @@ type IngredientGridLayout = {
   rows: IngredientGridRowLayout[];
 };
 
+type MetaCardLayout = {
+  text: string;
+  left: number;
+  width: number;
+  textWidth: number;
+  maxTextWidth: number;
+};
+
 @Injectable()
 export class LabelService {
   private regularFontPath: string;
@@ -351,10 +359,6 @@ export class LabelService {
     const top = startY;
     const layout = this.getMetaLineLayout();
     const height = mmToPx(layout.heightMm);
-    const items = this.buildMetaItems(labelData);
-    const gap = mmToPx(0.6);
-    const cellWidth = (width - gap * (items.length - 1)) / items.length;
-    const textPadding = mmToPx(0.6);
 
     ctx.fillStyle = '#222222';
     ctx.strokeStyle = '#D0D0D0';
@@ -362,17 +366,87 @@ export class LabelService {
     ctx.font = `bold ${mmToPx(LABEL_LAYOUT.fontSize.meta)}px "Chinese-Bold"`;
     ctx.textAlign = 'center';
 
-    items.forEach((text, index) => {
-      const cellLeft = left + index * (cellWidth + gap);
-      ctx.strokeRect(cellLeft, top, cellWidth, height);
+    this.resolveMetaCardLayout(ctx, labelData, width).forEach((card) => {
+      const cellLeft = left + card.left;
+      ctx.strokeRect(cellLeft, top, card.width, height);
       ctx.fillText(
-        this.clipText(ctx, text, cellWidth - textPadding * 2),
-        cellLeft + cellWidth / 2,
+        this.clipText(ctx, card.text, card.maxTextWidth),
+        cellLeft + card.width / 2,
         top + mmToPx(2.45),
       );
     });
 
     return top + height;
+  }
+
+  private resolveMetaCardLayout(
+    ctx: CanvasRenderingContext2D,
+    labelData: LabelDataDto,
+    width: number,
+  ): MetaCardLayout[] {
+    const items = this.buildMetaItems(labelData);
+    const gap = mmToPx(0.6);
+    const textPadding = mmToPx(0.6);
+    const availableWidth = width - gap * Math.max(items.length - 1, 0);
+    const preferredSlackWeights = [0.8, 1.35, 1.2, 0.85];
+    const fallbackFloorMm = [7, 0, 10, 8];
+    const measuredWidths = items.map((text) => ctx.measureText(text).width);
+    let cardWidths = measuredWidths.map((textWidth) =>
+      Math.ceil(textWidth + textPadding * 2),
+    );
+    const preferredWidth = cardWidths.reduce((sum, item) => sum + item, 0);
+
+    if (preferredWidth < availableWidth) {
+      const slack = availableWidth - preferredWidth;
+      const activeWeights = items.map(
+        (_, index) => preferredSlackWeights[index] ?? 1,
+      );
+      const totalWeight = activeWeights.reduce((sum, item) => sum + item, 0);
+      cardWidths = cardWidths.map(
+        (cardWidth, index) =>
+          cardWidth + (slack * activeWeights[index]) / totalWeight,
+      );
+    } else if (preferredWidth > availableWidth) {
+      let overflow = preferredWidth - availableWidth;
+      const floorWidths = cardWidths.map((cardWidth, index) => {
+        if (index === 1) {
+          return cardWidth;
+        }
+        return Math.min(cardWidth, mmToPx(fallbackFloorMm[index] ?? 7));
+      });
+
+      [0, 3, 2, 1].forEach((index) => {
+        if (overflow <= 0 || cardWidths[index] === undefined) {
+          return;
+        }
+
+        const shrinkBy = Math.min(
+          overflow,
+          cardWidths[index] - floorWidths[index],
+        );
+        cardWidths[index] -= shrinkBy;
+        overflow -= shrinkBy;
+      });
+
+      if (overflow > 0) {
+        const scale = availableWidth / preferredWidth;
+        cardWidths = cardWidths.map((cardWidth) => cardWidth * scale);
+      }
+    }
+
+    let currentLeft = 0;
+    return items.map((text, index) => {
+      const cardWidth = cardWidths[index];
+      const card: MetaCardLayout = {
+        text,
+        left: currentLeft,
+        width: cardWidth,
+        textWidth: measuredWidths[index],
+        maxTextWidth: cardWidth - textPadding * 2,
+      };
+      currentLeft += cardWidth + gap;
+      return card;
+    });
   }
 
   private getMetaLineLayout(): {
@@ -812,10 +886,21 @@ export class LabelService {
   private buildMetaItems(labelData: LabelDataDto): string[] {
     return [
       labelData.dogName,
-      labelData.productionTime,
+      this.formatProductionDate(labelData.productionTime),
       this.buildPackageSummary(labelData).replace(/^分装：/, ''),
       `${this.getTotalWeight(labelData)}g`,
     ].filter(Boolean);
+  }
+
+  private formatProductionDate(productionTime: string): string {
+    const value = productionTime.trim();
+    const dateMatch = value.match(/^(\d{4}-\d{2}-\d{2})/);
+
+    if (dateMatch) {
+      return dateMatch[1];
+    }
+
+    return value.split(/\s+/)[0] || value;
   }
 
   private buildCompleteNutritionRows(

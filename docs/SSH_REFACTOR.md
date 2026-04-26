@@ -67,8 +67,7 @@
 ```
 backend/scripts/
 ├── ssh-helper.sh           ← 新建：纯SSH工具
-├── remote_deploy.sh        ← 原版：保留不删
-└── remote_deploy_v2.sh     ← 新建：重构版，使用ssh-helper
+└── remote_deploy_v2.sh     ← 当前推荐：使用ssh-helper的后端生产部署脚本
 ```
 
 ## 🔧 ssh-helper.sh 功能
@@ -176,29 +175,22 @@ ssh-helper.sh (具体实现)
 
 ## 🚀 迁移指南
 
-### 逐步替换旧脚本
+### 当前推荐入口
 
-**第1步：测试新脚本**
+后端生产部署只使用重构后的脚本：
+
 ```bash
-# 使用v2版本进行部署
 bash backend/scripts/remote_deploy_v2.sh
 ```
 
-**第2步：验证功能**
+该脚本会 source `backend/scripts/ssh-helper.sh`，并在任何远程操作前执行 `validate_ssh_connection`。
+
+**验证功能**
 - 检查SSH连接是否正常
 - 验证部署流程是否成功
 - 确认服务正确启动
 
-**第3步：替换旧脚本**
-```bash
-# 备份旧版本
-mv backend/scripts/remote_deploy.sh backend/scripts/remote_deploy_old.sh
-
-# 使用新版本
-mv backend/scripts/remote_deploy_v2.sh backend/scripts/remote_deploy.sh
-```
-
-**第4步：更新其他脚本**
+**更新其他脚本**
 将其他使用SSH的脚本改为使用ssh-helper：
 ```bash
 # 在脚本顶部添加
@@ -212,8 +204,7 @@ ssh_exec "your command"
 
 - **SSH规范文档**：`skills/production-ssh/SKILL.md`
 - **SSH工具源码**：`backend/scripts/ssh-helper.sh`
-- **重构后部署**：`backend/scripts/remote_deploy_v2.sh`
-- **原始部署**：`backend/scripts/remote_deploy.sh`
+- **后端生产部署**：`backend/scripts/remote_deploy_v2.sh`
 
 ## ✅ 验证检查清单
 

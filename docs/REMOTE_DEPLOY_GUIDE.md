@@ -1,8 +1,8 @@
-# remote_deploy.sh 脚本说明
+# remote_deploy_v2.sh 脚本说明
 
-## 📖 什么是 remote_deploy.sh？
+## 📖 什么是 remote_deploy_v2.sh？
 
-`backend/scripts/remote_deploy.sh` 是一个**自动化远程部署脚本**，用于将SevenKitchen backend部署到腾讯云Lighthouse生产服务器。
+`backend/scripts/remote_deploy_v2.sh` 是当前唯一推荐的**后端生产远程部署脚本**，用于将 SevenKitchen backend 部署到腾讯云 Lighthouse 生产服务器。根目录 `deploy.sh` 包装脚本已删除，避免误把本地部署脚本当成生产远程部署入口。
 
 ## 🎯 主要功能
 
@@ -73,8 +73,8 @@ fi
 
 ```bash
 # 从项目根目录执行
-cd /Users/zhaochen/Documents/SevenKitchen/backend
-bash scripts/remote_deploy.sh
+cd /Users/zhaochen/Documents/SevenKitchen
+bash backend/scripts/remote_deploy_v2.sh
 ```
 
 ### 执行流程
@@ -96,56 +96,22 @@ bash scripts/remote_deploy.sh
 
 ## 📊 与 production-ssh skill 的关系
 
-### remote_deploy.sh 的状态
+### remote_deploy_v2.sh 的状态
 
-**当前状态：** ⚠️ 部分遵循skill规范
+**当前状态：** ✅ 遵循 production-ssh skill 规范
 
 **符合的规则：**
 - ✅ 定义了SSH变量（SERVER_HOST, SERVER_USER, SSH_KEY_PATH）
-- ✅ 使用了SSH连接测试
+- ✅ 使用 `ssh-helper.sh` 中的 `validate_ssh_connection`
 - ✅ 有错误处理（`set -euo pipefail`）
 - ✅ 检查了exit code
-
-**可以改进的地方：**
-- ⚠️ 没有使用`validate_ssh_connection`函数
-- ⚠️ 连接测试代码重复（可以提取为函数）
-
-### 改进建议
-
-如果要让`remote_deploy.sh`完全符合skill规范：
-
-```bash
-# 添加validate_ssh_connection函数
-validate_ssh_connection() {
-  local key_path="$1"
-  local user="$2"
-  local host="$3"
-
-  if [ ! -f "$key_path" ]; then
-    echo "ERROR: SSH key not found: $key_path"
-    return 1
-  fi
-
-  if ! ssh -i "$key_path" -o ConnectTimeout=10 -o StrictHostKeyChecking=no \
-      "$user@$host" "echo 'Connection test successful'" >/dev/null 2>&1; then
-    echo "ERROR: SSH connection failed"
-    return 1
-  fi
-
-  echo "✓ SSH connection validated"
-  return 0
-}
-
-# 使用函数（替换第34-53行）
-validate_ssh_connection "$SSH_KEY_PATH" "$SERVER_USER" "$SERVER_HOST" || exit 1
-```
 
 ## 🛠️ 实际部署流程
 
 ### 完整的部署链
 
 ```
-remote_deploy.sh (本地)
+remote_deploy_v2.sh (本地)
     ↓ SSH连接
     ├─ 拉取最新代码 (git pull)
     ↓
@@ -211,7 +177,7 @@ Next steps:
 
 ## 🎓 总结
 
-**remote_deploy.sh的作用：**
+**remote_deploy_v2.sh的作用：**
 - 从本地触发远程部署
 - 自动化SSH连接和代码更新
 - 确保部署过程安全可靠
@@ -230,7 +196,8 @@ Next steps:
 ---
 
 **相关文件：**
-- 脚本位置：`backend/scripts/remote_deploy.sh`
+- 脚本位置：`backend/scripts/remote_deploy_v2.sh`
+- SSH工具：`backend/scripts/ssh-helper.sh`
 - 远程部署：`backend/scripts/deploy_lighthouse.sh`
 - 部署验证：`backend/scripts/post_deploy_verify.sh`
 - SSH规范：`skills/production-ssh/SKILL.md`

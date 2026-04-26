@@ -27,7 +27,7 @@
 ### 2. 远程部署
 
 ```bash
-# backend/scripts/remote_deploy.sh 遵循此skill
+# backend/scripts/remote_deploy_v2.sh 遵循此skill
 # 部署前会自动验证SSH连接
 ```
 
@@ -76,7 +76,7 @@ ssh root@1.14.3.2 "command"  # 缺少所有安全检查
 ## 📚 相关文档
 
 - **完整的skill文档**: `skills/production-ssh/SKILL.md`
-- **部署脚本示例**: `backend/scripts/remote_deploy.sh`
+- **部署脚本示例**: `backend/scripts/remote_deploy_v2.sh`
 - **项目文档**: `docs/`
 
 ## 🛡️ 安全提示

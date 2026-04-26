@@ -127,7 +127,7 @@ SSH到服务器（太模糊，可能不触发skill）
 - **Skill文档**：`skills/production-ssh/SKILL.md`
 - **快速指南**：`skills/production-ssh/README.md`
 - **示例脚本**：`skills/production-ssh/example-view-logs.sh`
-- **实际部署**：`backend/scripts/remote_deploy.sh`
+- **实际部署**：`backend/scripts/remote_deploy_v2.sh`
 
 ---
 

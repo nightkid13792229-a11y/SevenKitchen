@@ -79,7 +79,7 @@ Expected: pass.
 ### Task 4: Full release validation and deployment decision
 
 **Files:**
-- Verify only: `backend/`, `admin-web/`, `miniapp/`, `deploy.sh`
+- Verify only: `backend/`, `admin-web/`, `miniapp/`, backend remote deployment scripts
 
 - [ ] **Step 1: Re-run all release checks**
 
@@ -89,10 +89,15 @@ Run:
 - `cd /Users/zhaochen/Documents/SevenKitchen/admin-web && npm run build`
 - `cd /Users/zhaochen/Documents/SevenKitchen/miniapp && npm test`
 - `cd /Users/zhaochen/Documents/SevenKitchen/miniapp && npm run build:mp-weixin`
-- `cd /Users/zhaochen/Documents/SevenKitchen && bash ./deploy.sh all --dry-run`
+- `cd /Users/zhaochen/Documents/SevenKitchen/backend && bash scripts/pre-deploy-check.sh`
+- `cd /Users/zhaochen/Documents/SevenKitchen && bash -n backend/scripts/remote_deploy_v2.sh`
+- `cd /Users/zhaochen/Documents/SevenKitchen && bash -n deploy-admin-web.sh`
 
-Expected: all checks pass, dry-run shows the intended backend and admin-web deployment paths.
+Expected: all checks pass, and deployment scripts parse cleanly. The root `deploy.sh` wrapper has been removed; use the explicit deployment commands only.
 
 - [ ] **Step 2: Summarize release readiness**
 
-Record which checks passed, which risks remain, and whether it is safe to run `/Users/zhaochen/Documents/SevenKitchen/deploy.sh`.
+Record which checks passed, which risks remain, and whether it is safe to deploy with the explicit commands:
+- Backend production: `cd /Users/zhaochen/Documents/SevenKitchen && bash backend/scripts/remote_deploy_v2.sh`
+- Admin web production: `cd /Users/zhaochen/Documents/SevenKitchen && bash deploy-admin-web.sh`
+- Miniapp production build: `cd /Users/zhaochen/Documents/SevenKitchen/miniapp && npm run build:mp-weixin`

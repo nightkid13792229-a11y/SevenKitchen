@@ -20,7 +20,7 @@
 
 ### ✅ RED阶段 - 观察基线行为
 
-**方法：** 分析现有脚本`backend/scripts/remote_deploy.sh`
+**方法：** 分析现有脚本`backend/scripts/remote_deploy_v2.sh`
 
 **发现的问题模式：**
 1. SSH命令缺少统一的连接测试函数
@@ -189,7 +189,7 @@ fi
 ## 📚 相关资源
 
 - **Superpowers Writing Skills**: `~/.claude/plugins/cache/superpowers-marketplace/superpowers/4.1.1/skills/writing-skills/`
-- **现有部署脚本**: `backend/scripts/remote_deploy.sh`
+- **现有部署脚本**: `backend/scripts/remote_deploy_v2.sh`
 - **项目文档**: `docs/`
 
 ---

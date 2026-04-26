@@ -42,6 +42,21 @@ describe('recipe detail nutrition report regressions', () => {
     expect(reportIndex).toBeGreaterThan(analysisIndex)
   })
 
+  it('renders cover titles as bottom badges instead of top-left overlays', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('v-if="recipe.coverImageUrl && recipe.coverTitle"')
+    expect(source).toContain('class="recipe-detail-cover-badge-gradient"')
+    expect(source).toContain('class="recipe-detail-cover-title-badge"')
+    expect(source).toContain('{{ recipe.coverTitle }}')
+    expect(source).not.toContain('class="cover-title-overlay"')
+    expect(source).not.toContain('.cover-title-overlay')
+    expect(source).not.toContain('.cover-title-text')
+  })
+
   it('uses customer-facing labels for nutrition sections', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),

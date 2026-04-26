@@ -3696,23 +3696,6 @@ export class AdminController {
         applicableLifeStages: dto.applicableLifeStages,
       };
 
-      // Render cover title on image if both coverTitle and coverImageUrl are provided
-      if (dto.coverTitle && dto.coverImageUrl) {
-        try {
-          const renderedUrl = await this.coverImageService.renderTitleOnCover(
-            dto.coverImageUrl,
-            dto.coverTitle,
-          );
-          transformedDto.coverImageUrl = renderedUrl;
-        } catch (error: any) {
-          console.error(
-            '[AdminController] Failed to render cover title:',
-            error.message,
-          );
-          // Continue without rendering - keep original image
-        }
-      }
-
       const recipe = await this.recipeService.createRecipe(transformedDto);
       return ApiResponseDto.success(recipe);
     } catch (error) {
@@ -3766,23 +3749,6 @@ export class AdminController {
         targetHealthTags: dto.targetHealthTags || [], // Keep as UUID array
         applicableLifeStages: dto.applicableLifeStages,
       };
-
-      // Render cover title on image if both coverTitle and coverImageUrl are provided
-      if (dto.coverTitle && dto.coverImageUrl) {
-        try {
-          const renderedUrl = await this.coverImageService.renderTitleOnCover(
-            dto.coverImageUrl,
-            dto.coverTitle,
-          );
-          transformedDto.coverImageUrl = renderedUrl;
-        } catch (error: any) {
-          console.error(
-            '[AdminController] Failed to render cover title:',
-            error.message,
-          );
-          // Continue without rendering - keep original image
-        }
-      }
 
       const recipe = await this.recipeService.updateRecipe(id, transformedDto);
       return ApiResponseDto.success(recipe);
@@ -3911,9 +3877,7 @@ export class AdminController {
 
   @Post('recipes/regenerate-covers')
   // @UseGuards(AuthGuard, AdminGuard) // 暂时移除认证以便测试
-  @ApiOperation({
-    summary: 'Regenerate cover images with titles for recipes missing them',
-  })
+  @ApiOperation({ summary: 'Deprecated: cover title rendering is disabled' })
   @ApiBody({
     schema: {
       type: 'object',
@@ -3930,101 +3894,12 @@ export class AdminController {
   async regenerateCovers(
     @Body() body: { recipeIds?: string[] },
   ): Promise<ApiResponseDto<any>> {
-    const results: {
-      recipeId: string;
-      name: string;
-      status: string;
-      message: string;
-    }[] = [];
-
-    // Get recipes that need cover regeneration
-    const recipes = body.recipeIds
-      ? await this.prisma.recipe.findMany({
-          where: {
-            recipeId: { in: body.recipeIds },
-          },
-          orderBy: { version: 'desc' },
-          distinct: ['recipeId'],
-        })
-      : await this.prisma.$queryRaw`
-        SELECT DISTINCT ON ("recipe_id") *
-        FROM "recipe"
-        WHERE "cover_image_url" NOT LIKE '%/recipes/covers/%'
-           OR "cover_image_url" LIKE '%.webp'
-        ORDER BY "recipe_id", "version" DESC
-      `;
-
-    for (const recipe of recipes as any[]) {
-      try {
-        // Raw query returns snake_case column names
-        const coverTitle = recipe.cover_title;
-        const coverImageUrl = recipe.cover_image_url;
-        const recipeId = recipe.recipe_id;
-
-        // Skip if no cover title or cover image
-        if (!coverTitle || !coverImageUrl) {
-          results.push({
-            recipeId: recipeId,
-            name: recipe.name,
-            status: 'skipped',
-            message: 'Missing coverTitle or coverImageUrl',
-          });
-          continue;
-        }
-
-        // Check if already has rendered title (in /recipes/covers/ path)
-        if (
-          coverImageUrl.includes('/recipes/covers/') &&
-          !coverImageUrl.endsWith('.webp')
-        ) {
-          results.push({
-            recipeId: recipeId,
-            name: recipe.name,
-            status: 'skipped',
-            message: 'Already has rendered cover',
-          });
-          continue;
-        }
-
-        // Render title on cover
-        const renderedUrl = await this.coverImageService.renderTitleOnCover(
-          coverImageUrl,
-          coverTitle,
-        );
-
-        // Update recipe with new cover URL
-        await this.prisma.recipe.update({
-          where: {
-            recipeId_version: {
-              recipeId: recipeId,
-              version: recipe.version,
-            },
-          },
-          data: {
-            coverImageUrl: renderedUrl,
-          },
-        });
-
-        results.push({
-          recipeId: recipeId,
-          name: recipe.name,
-          status: 'success',
-          message: `Cover regenerated: ${renderedUrl}`,
-        });
-      } catch (error: any) {
-        results.push({
-          recipeId: recipe.recipe_id,
-          name: recipe.name,
-          status: 'error',
-          message: error.message,
-        });
-      }
-    }
-
+    void body;
     return ApiResponseDto.success({
-      total: (recipes as any[]).length,
-      processed: results.filter((r) => r.status !== 'skipped').length,
-      results,
+      total: 0,
+      results: [],
+      message:
+        'Cover title rendering is disabled; use clean coverImageUrl images and display coverTitle in the miniapp UI.',
     });
   }
 

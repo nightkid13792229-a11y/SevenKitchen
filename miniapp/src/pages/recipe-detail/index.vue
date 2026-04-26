@@ -12,9 +12,11 @@
       <view v-else class="cover-placeholder">
         <text class="placeholder-text">{{ recipe.name.charAt(0) }}</text>
       </view>
-      <!-- 封面标题 - 显示在左上角 -->
-      <view v-if="recipe.coverTitle" class="cover-title-overlay">
-        <text class="cover-title-text">{{ recipe.coverTitle }}</text>
+      <view
+        v-if="recipe.coverImageUrl && recipe.coverTitle"
+        class="recipe-detail-cover-badge-gradient"
+      >
+        <text class="recipe-detail-cover-title-badge">{{ recipe.coverTitle }}</text>
       </view>
     </view>
 
@@ -813,25 +815,37 @@ function onReviewSubmitted() {
   height: 100%;
 }
 
-/* 封面标题覆盖层 */
-.cover-title-overlay {
+.recipe-detail-cover-badge-gradient {
   position: absolute;
-  top: 24rpx;
-  left: 24rpx;
-  background: rgba(0, 0, 0, 0.6);
-  padding: 8rpx 16rpx;
-  border-radius: 8rpx;
-  max-width: 60%;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  display: flex;
+  align-items: flex-end;
+  padding: 56rpx 24rpx 20rpx;
+  box-sizing: border-box;
+  pointer-events: none;
+  background: linear-gradient(
+    180deg,
+    rgba(20, 18, 16, 0) 0%,
+    rgba(20, 18, 16, 0.18) 52%,
+    rgba(20, 18, 16, 0.34) 100%
+  );
 }
 
-.cover-title-text {
+.recipe-detail-cover-title-badge {
+  max-width: 340rpx;
+  padding: 8rpx 16rpx;
+  border-radius: 8rpx;
+  background: rgba(32, 29, 25, 0.58);
   color: #fff;
-  font-size: 28rpx;
+  font-size: 24rpx;
   font-weight: 500;
+  line-height: 32rpx;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
-  display: block;
+  box-shadow: 0 4rpx 14rpx rgba(0, 0, 0, 0.16);
 }
 
 .cover-placeholder {

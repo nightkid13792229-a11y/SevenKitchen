@@ -7,6 +7,32 @@ import { MIXED_BREED_VIRTUAL_ID } from '../../../src/domain/dog/constants';
 import { DogSizeCategory, GrowthCurveType } from '../../../src/domain/dog/enums';
 
 describe('AdminController', () => {
+  const buildController = ({
+    recipeService = {},
+    coverImageService = {},
+    prisma = {},
+  }: {
+    recipeService?: Record<string, any>;
+    coverImageService?: Record<string, any>;
+    prisma?: Record<string, any>;
+  } = {}) =>
+    new AdminController(
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      prisma as any,
+      {} as any,
+      recipeService as any,
+      coverImageService as any,
+      {} as any,
+      {} as any,
+    );
+
   describe('uploadRecipeNutritionReport', () => {
     it('rejects non-PDF files before uploading to COS', async () => {
       const mockCosService = {
@@ -77,6 +103,123 @@ describe('AdminController', () => {
       expect(result.data).toEqual({
         url: 'https://cdn.example.com/recipe-nutrition-reports/report.pdf',
         key: 'recipe-nutrition-reports/report.pdf',
+      });
+    });
+  });
+
+  describe('recipe cover title rendering', () => {
+    const cleanCoverUrl =
+      'https://img.sevenkitchen.cloud/recipes/source-clean-cover.jpg';
+    const bakedCoverUrl =
+      'https://img.sevenkitchen.cloud/recipes/covers/cover-with-title.jpg';
+
+    it('keeps recipe create cover images clean when coverTitle is present', async () => {
+      const recipeService = {
+        createRecipe: jest.fn().mockResolvedValue({
+          id: 'recipe-row-1',
+          coverImageUrl: cleanCoverUrl,
+          coverTitle: '肿瘤预防',
+        }),
+      };
+      const coverImageService = {
+        renderTitleOnCover: jest.fn().mockResolvedValue(bakedCoverUrl),
+      };
+      const controller = buildController({
+        recipeService,
+        coverImageService,
+      });
+
+      const result = await controller.createRecipe({
+        name: '十字花科全谷物三文鱼鸡肉',
+        nutritionStandard: 'FEDIAF_2021',
+        status: 'PUBLIC',
+        coverImageUrl: cleanCoverUrl,
+        coverTitle: '肿瘤预防',
+        applicableLifeStages: ['ADULT'],
+        targetHealthTags: [],
+      });
+
+      expect(coverImageService.renderTitleOnCover).not.toHaveBeenCalled();
+      expect(recipeService.createRecipe).toHaveBeenCalledWith(
+        expect.objectContaining({
+          coverImageUrl: cleanCoverUrl,
+          coverTitle: '肿瘤预防',
+        }),
+      );
+      expect(result.code).toBe(0);
+    });
+
+    it('keeps recipe update cover images clean when coverTitle is present', async () => {
+      const recipeService = {
+        updateRecipe: jest.fn().mockResolvedValue({
+          id: 'recipe-row-1',
+          coverImageUrl: cleanCoverUrl,
+          coverTitle: '肿瘤预防',
+        }),
+      };
+      const coverImageService = {
+        renderTitleOnCover: jest.fn().mockResolvedValue(bakedCoverUrl),
+      };
+      const controller = buildController({
+        recipeService,
+        coverImageService,
+      });
+
+      const result = await controller.updateRecipe('recipe-row-1', {
+        nutritionStandard: 'FEDIAF_2021',
+        status: 'PUBLIC',
+        coverImageUrl: cleanCoverUrl,
+        coverTitle: '肿瘤预防',
+        applicableLifeStages: ['ADULT'],
+        targetHealthTags: [],
+      });
+
+      expect(coverImageService.renderTitleOnCover).not.toHaveBeenCalled();
+      expect(recipeService.updateRecipe).toHaveBeenCalledWith(
+        'recipe-row-1',
+        expect.objectContaining({
+          coverImageUrl: cleanCoverUrl,
+          coverTitle: '肿瘤预防',
+        }),
+      );
+      expect(result.code).toBe(0);
+    });
+
+    it('does not regenerate baked title cover images through the legacy admin endpoint', async () => {
+      const prisma = {
+        recipe: {
+          findMany: jest.fn().mockResolvedValue([
+            {
+              recipe_id: 'recipe-1',
+              version: 1,
+              name: '十字花科全谷物三文鱼鸡肉',
+              cover_title: '肿瘤预防',
+              cover_image_url: cleanCoverUrl,
+            },
+          ]),
+          update: jest.fn().mockResolvedValue({}),
+        },
+      };
+      const coverImageService = {
+        renderTitleOnCover: jest.fn().mockResolvedValue(bakedCoverUrl),
+      };
+      const controller = buildController({
+        prisma,
+        coverImageService,
+      });
+
+      const result = await controller.regenerateCovers({
+        recipeIds: ['recipe-1'],
+      });
+
+      expect(prisma.recipe.findMany).not.toHaveBeenCalled();
+      expect(coverImageService.renderTitleOnCover).not.toHaveBeenCalled();
+      expect(prisma.recipe.update).not.toHaveBeenCalled();
+      expect(result.data).toEqual({
+        total: 0,
+        results: [],
+        message:
+          'Cover title rendering is disabled; use clean coverImageUrl images and display coverTitle in the miniapp UI.',
       });
     });
   });

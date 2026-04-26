@@ -44,20 +44,22 @@ describe('DogsController attachment cleanup', () => {
       findById: jest.fn(),
       save: jest.fn(),
     };
-    const dogBreedRepository = {};
+    const dogBreedRepository = {
+      findById: jest.fn(),
+    };
     const recipeRepository = {};
     const medicalRecordRepository = {
-      findByDogId: jest.fn(),
+      findByDogId: jest.fn().mockResolvedValue([]),
       delete: jest.fn(),
       create: jest.fn(),
     };
     const checkupRecordRepository = {
-      findByDogId: jest.fn(),
+      findByDogId: jest.fn().mockResolvedValue([]),
       delete: jest.fn(),
       create: jest.fn(),
     };
     const allergyRecordRepository = {
-      findByDogId: jest.fn(),
+      findByDogId: jest.fn().mockResolvedValue([]),
       delete: jest.fn(),
       create: jest.fn(),
     };
@@ -89,6 +91,7 @@ describe('DogsController attachment cleanup', () => {
     return {
       controller,
       dogRepository,
+      dogBreedRepository,
       medicalRecordRepository,
       checkupRecordRepository,
       allergyRecordRepository,
@@ -161,6 +164,159 @@ describe('DogsController attachment cleanup', () => {
     expect(cosService.deleteImage).not.toHaveBeenCalledWith(
       'medical-records/keep.jpg',
     );
+  });
+
+  it('fails the dog update instead of deleting old records when medical record creation fails', async () => {
+    const {
+      controller,
+      medicalRecordRepository,
+      dogService,
+    } = createController();
+
+    const dogId = 'dog-1';
+    medicalRecordRepository.findByDogId.mockResolvedValue([
+      {
+        id: 'medical-old',
+        attachments: [],
+      },
+    ]);
+    medicalRecordRepository.create.mockRejectedValue(new Error('medical create failed'));
+    dogService.updateDogProfile.mockResolvedValue(createDog({ id: dogId }));
+    dogService.calcPreview.mockResolvedValue(null);
+
+    await expect(
+      controller.updateDog(dogId, {
+        medicalRecords: [
+          {
+            chiefComplaint: '胃炎',
+            visitDate: '2026-04-09',
+            diagnosis: '恢复中',
+            notes: '',
+            attachments: [],
+          },
+        ],
+      } as any),
+    ).rejects.toThrow('medical create failed');
+
+    expect(medicalRecordRepository.delete).not.toHaveBeenCalled();
+  });
+
+  it('returns freshly loaded health records after saving a dog health section', async () => {
+    const {
+      controller,
+      medicalRecordRepository,
+      checkupRecordRepository,
+      allergyRecordRepository,
+      dogService,
+    } = createController();
+
+    const dogId = 'dog-1';
+    medicalRecordRepository.findByDogId
+      .mockResolvedValueOnce([])
+      .mockResolvedValueOnce([
+        {
+          id: 'medical-new',
+          chiefComplaint: '胃炎',
+          visitDate: new Date('2026-04-09T00:00:00.000Z'),
+          diagnosis: '恢复中',
+          notes: '继续观察',
+          attachments: [],
+        },
+      ]);
+    checkupRecordRepository.findByDogId.mockResolvedValue([
+      {
+        id: 'checkup-1',
+        checkupDate: new Date('2026-04-10T00:00:00.000Z'),
+        checkupType: '年度体检',
+        findings: '正常',
+        attachments: [],
+      },
+    ]);
+    allergyRecordRepository.findByDogId.mockResolvedValue([
+      {
+        id: 'allergy-1',
+        allergen: '鸡肉',
+        notes: '腹泻',
+        attachments: [],
+      },
+    ]);
+    medicalRecordRepository.create.mockResolvedValue(undefined);
+    dogService.updateDogProfile.mockResolvedValue(createDog({ id: dogId }));
+    dogService.calcPreview.mockResolvedValue(null);
+
+    const result: any = await controller.updateDog(dogId, {
+      medicalRecords: [
+        {
+          chiefComplaint: '胃炎',
+          visitDate: '2026-04-09',
+          diagnosis: '恢复中',
+          notes: '继续观察',
+          attachments: [],
+        },
+      ],
+    } as any);
+
+    expect(result.data.profile.medicalRecords).toEqual([
+      {
+        id: 'medical-new',
+        chiefComplaint: '胃炎',
+        visitDate: '2026-04-09',
+        diagnosis: '恢复中',
+        notes: '继续观察',
+        attachments: [],
+      },
+    ]);
+    expect(result.data.profile.checkupRecords).toEqual([
+      {
+        id: 'checkup-1',
+        checkupDate: '2026-04-10',
+        checkupType: '年度体检',
+        notes: '正常',
+        attachments: [],
+      },
+    ]);
+    expect(result.data.profile.allergyRecords).toEqual([
+      {
+        id: 'allergy-1',
+        allergen: '鸡肉',
+        notes: '腹泻',
+        attachments: [],
+      },
+    ]);
+  });
+
+  it('loads allergy records without legacy allergy fields on dog detail', async () => {
+    const {
+      controller,
+      dogRepository,
+      dogBreedRepository,
+      allergyRecordRepository,
+      dogService,
+    } = createController();
+
+    const dog = createDog();
+    dogRepository.findById.mockResolvedValue(dog);
+    dogBreedRepository.findById.mockResolvedValue(null);
+    allergyRecordRepository.findByDogId.mockResolvedValue([
+      {
+        id: 'allergy-1',
+        allergen: '鸡肉',
+        notes: '腹泻',
+        attachments: [],
+      },
+    ]);
+    dogService.calcPreview.mockResolvedValue(null);
+
+    const result: any = await controller.getDog(dog.id);
+
+    expect(result.data.profile.allergyRecords).toEqual([
+      {
+        id: 'allergy-1',
+        allergen: '鸡肉',
+        notes: '腹泻',
+        attachments: [],
+      },
+    ]);
   });
 
   it('persists the uploaded dog avatar url back onto the dog profile', async () => {

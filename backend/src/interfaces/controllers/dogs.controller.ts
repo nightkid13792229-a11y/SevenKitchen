@@ -282,170 +282,16 @@ export class DogsController {
   ): Promise<ApiResponseDto<DogDetailResponseDto>> {
     const dog = await this.dogService.updateDogProfile(id, updateDogDto);
 
-    // Update medical records if provided
     if ('medicalRecords' in updateDogDto) {
-      try {
-        // Delete existing medical records for this dog
-        const existingRecords =
-          await this.medicalRecordRepository.findByDogId(id);
-        const removedMedicalAttachmentKeys =
-          this.collectRemovedAttachmentKeys(
-            existingRecords,
-            updateDogDto.medicalRecords,
-          );
-        for (const record of existingRecords) {
-          await this.medicalRecordRepository.delete(record.id);
-        }
-
-        // Create new medical records
-        if (
-          updateDogDto.medicalRecords &&
-          updateDogDto.medicalRecords.length > 0
-        ) {
-          for (const record of updateDogDto.medicalRecords) {
-            // 使用parseYYYYMMDD正确解析日期（处理上海时区）
-            const visitDate = record.visitDate
-              ? parseYYYYMMDD(record.visitDate.split('T')[0])
-              : new Date();
-
-            await this.medicalRecordRepository.create({
-              dogId: id,
-              visitDate: visitDate,
-              chiefComplaint: record.chiefComplaint,
-              diagnosis: record.diagnosis || '',
-              treatment: null,
-              medications: [],
-              status: 'RECOVERED', // Default status for historical records
-              followUpDate: null,
-              veterinarian: null,
-              notes: record.notes || null,
-              attachments: record.attachments || [],
-            });
-          }
-          console.log(
-            `[DogsController] Updated ${updateDogDto.medicalRecords.length} medical records for dog ${id}`,
-          );
-        } else {
-          console.log(
-            `[DogsController] Cleared all medical records for dog ${id}`,
-          );
-        }
-        await this.cleanupRemovedAttachments(
-          'medical',
-          removedMedicalAttachmentKeys,
-        );
-      } catch (error: any) {
-        console.error(
-          `[DogsController] Failed to update medical records for dog ${id}:`,
-          error,
-        );
-        // Don't fail the entire operation if medical records update fails
-      }
+      await this.replaceMedicalRecords(id, updateDogDto.medicalRecords);
     }
 
-    // Update checkup records if provided
     if ('checkupRecords' in updateDogDto) {
-      try {
-        // Delete existing checkup records for this dog
-        const existingCheckups =
-          await this.checkupRecordRepository.findByDogId(id);
-        const removedCheckupAttachmentKeys =
-          this.collectRemovedAttachmentKeys(
-            existingCheckups,
-            updateDogDto.checkupRecords,
-          );
-        for (const checkup of existingCheckups) {
-          await this.checkupRecordRepository.delete(checkup.id);
-        }
-
-        // Create new checkup records
-        if (
-          updateDogDto.checkupRecords &&
-          updateDogDto.checkupRecords.length > 0
-        ) {
-          for (const record of updateDogDto.checkupRecords) {
-            // 使用parseYYYYMMDD正确解析日期（处理上海时区）
-            const dateOnly = record.checkupDate.split('T')[0];
-            const checkupDate = parseYYYYMMDD(dateOnly);
-
-            await this.checkupRecordRepository.create({
-              dogId: id,
-              checkupDate: checkupDate,
-              checkupType: record.checkupType,
-              findings: record.notes || '',
-              recommendations: null,
-              veterinarian: null,
-              attachments: record.attachments || [],
-            });
-          }
-          console.log(
-            `[DogsController] Updated ${updateDogDto.checkupRecords.length} checkup records for dog ${id}`,
-          );
-        } else {
-          console.log(
-            `[DogsController] Cleared all checkup records for dog ${id}`,
-          );
-        }
-        await this.cleanupRemovedAttachments(
-          'checkup',
-          removedCheckupAttachmentKeys,
-        );
-      } catch (error: any) {
-        console.error(
-          `[DogsController] Failed to update checkup records for dog ${id}:`,
-          error,
-        );
-        // Don't fail the entire operation if checkup records update fails
-      }
+      await this.replaceCheckupRecords(id, updateDogDto.checkupRecords);
     }
 
-    // Update allergy records if provided
     if ('allergyRecords' in updateDogDto) {
-      try {
-        // Delete existing allergy records for this dog
-        const existingAllergies =
-          await this.allergyRecordRepository.findByDogId(id);
-        const removedAllergyAttachmentKeys =
-          this.collectRemovedAttachmentKeys(
-            existingAllergies,
-            updateDogDto.allergyRecords,
-          );
-        for (const allergy of existingAllergies) {
-          await this.allergyRecordRepository.delete(allergy.id);
-        }
-
-        // Create new allergy records
-        if (
-          updateDogDto.allergyRecords &&
-          updateDogDto.allergyRecords.length > 0
-        ) {
-          for (const record of updateDogDto.allergyRecords) {
-            await this.allergyRecordRepository.create({
-              dogId: id,
-              allergen: record.allergen,
-              notes: record.notes || null,
-              attachments: record.attachments || [],
-            });
-          }
-          console.log(
-            `[DogsController] Updated ${updateDogDto.allergyRecords.length} allergy records for dog ${id}`,
-          );
-        } else {
-          console.log(
-            `[DogsController] Cleared all allergy records for dog ${id}`,
-          );
-        }
-        await this.cleanupRemovedAttachments(
-          'allergy',
-          removedAllergyAttachmentKeys,
-        );
-      } catch (error: any) {
-        console.error(
-          `[DogsController] Failed to update allergy records for dog ${id}:`,
-          error,
-        );
-        // Don't fail the entire operation if allergy records update fails
-      }
+      await this.replaceAllergyRecords(id, updateDogDto.allergyRecords);
     }
 
     // Try to calculate preview, but don't fail if calculation fails
@@ -460,12 +306,185 @@ export class DogsController {
       );
     }
 
+    const healthRecords = await this.loadDogHealthRecordDtos(id);
     const response: DogDetailResponseDto = {
-      profile: this.mapDogToProfileDto(dog),
+      profile: this.mapDogToProfileDto(
+        dog,
+        undefined,
+        healthRecords.medicalRecords,
+        healthRecords.checkupRecords,
+        healthRecords.allergyRecords,
+      ),
       calcResult,
     };
 
     return ApiResponseDto.success(response);
+  }
+
+  private async replaceMedicalRecords(
+    dogId: string,
+    medicalRecords: UpdateDogDto['medicalRecords'],
+  ): Promise<void> {
+    const existingRecords = await this.medicalRecordRepository.findByDogId(dogId);
+    const removedAttachmentKeys = this.collectRemovedAttachmentKeys(
+      existingRecords,
+      medicalRecords,
+    );
+
+    if (medicalRecords && medicalRecords.length > 0) {
+      for (const record of medicalRecords) {
+        const visitDate = record.visitDate
+          ? parseYYYYMMDD(record.visitDate.split('T')[0])
+          : new Date();
+
+        await this.medicalRecordRepository.create({
+          dogId,
+          visitDate,
+          chiefComplaint: record.chiefComplaint,
+          diagnosis: record.diagnosis || '',
+          treatment: null,
+          medications: [],
+          status: 'RECOVERED',
+          followUpDate: null,
+          veterinarian: null,
+          notes: record.notes || null,
+          attachments: record.attachments || [],
+        });
+      }
+      console.log(
+        `[DogsController] Updated ${medicalRecords.length} medical records for dog ${dogId}`,
+      );
+    } else {
+      console.log(`[DogsController] Cleared all medical records for dog ${dogId}`);
+    }
+
+    for (const record of existingRecords) {
+      await this.medicalRecordRepository.delete(record.id);
+    }
+    await this.cleanupRemovedAttachments('medical', removedAttachmentKeys);
+  }
+
+  private async replaceCheckupRecords(
+    dogId: string,
+    checkupRecords: UpdateDogDto['checkupRecords'],
+  ): Promise<void> {
+    const existingCheckups = await this.checkupRecordRepository.findByDogId(dogId);
+    const removedAttachmentKeys = this.collectRemovedAttachmentKeys(
+      existingCheckups,
+      checkupRecords,
+    );
+
+    if (checkupRecords && checkupRecords.length > 0) {
+      for (const record of checkupRecords) {
+        const dateOnly = record.checkupDate.split('T')[0];
+        const checkupDate = parseYYYYMMDD(dateOnly);
+
+        await this.checkupRecordRepository.create({
+          dogId,
+          checkupDate,
+          checkupType: record.checkupType,
+          findings: record.notes || '',
+          recommendations: null,
+          veterinarian: null,
+          attachments: record.attachments || [],
+        });
+      }
+      console.log(
+        `[DogsController] Updated ${checkupRecords.length} checkup records for dog ${dogId}`,
+      );
+    } else {
+      console.log(`[DogsController] Cleared all checkup records for dog ${dogId}`);
+    }
+
+    for (const checkup of existingCheckups) {
+      await this.checkupRecordRepository.delete(checkup.id);
+    }
+    await this.cleanupRemovedAttachments('checkup', removedAttachmentKeys);
+  }
+
+  private async replaceAllergyRecords(
+    dogId: string,
+    allergyRecords: UpdateDogDto['allergyRecords'],
+  ): Promise<void> {
+    const existingAllergies = await this.allergyRecordRepository.findByDogId(dogId);
+    const removedAttachmentKeys = this.collectRemovedAttachmentKeys(
+      existingAllergies,
+      allergyRecords,
+    );
+
+    if (allergyRecords && allergyRecords.length > 0) {
+      for (const record of allergyRecords) {
+        await this.allergyRecordRepository.create({
+          dogId,
+          allergen: record.allergen,
+          notes: record.notes || null,
+          attachments: record.attachments || [],
+        });
+      }
+      console.log(
+        `[DogsController] Updated ${allergyRecords.length} allergy records for dog ${dogId}`,
+      );
+    } else {
+      console.log(`[DogsController] Cleared all allergy records for dog ${dogId}`);
+    }
+
+    for (const allergy of existingAllergies) {
+      await this.allergyRecordRepository.delete(allergy.id);
+    }
+    await this.cleanupRemovedAttachments('allergy', removedAttachmentKeys);
+  }
+
+  private async loadDogHealthRecordDtos(id: string): Promise<{
+    medicalRecords: any[];
+    checkupRecords: any[];
+    allergyRecords: any[];
+  }> {
+    const medicalRecords = (await this.medicalRecordRepository.findByDogId(id)).map(
+      (record: any) => ({
+        id: record.id,
+        chiefComplaint: record.chiefComplaint,
+        visitDate: record.visitDate
+          ? record.visitDate.toISOString().split('T')[0]
+          : null,
+        diagnosis: record.diagnosis || null,
+        notes: record.notes || null,
+        attachments: record.attachments || [],
+      }),
+    );
+    console.log(
+      `[DogsController] Loaded ${medicalRecords.length} medical records for dog ${id}`,
+    );
+
+    const checkupRecords = (await this.checkupRecordRepository.findByDogId(id)).map(
+      (record: any) => ({
+        id: record.id,
+        checkupDate: record.checkupDate.toISOString().split('T')[0],
+        checkupType: record.checkupType,
+        notes: record.findings || null,
+        attachments: record.attachments || [],
+      }),
+    );
+    console.log(
+      `[DogsController] Loaded ${checkupRecords.length} checkup records for dog ${id}`,
+    );
+
+    const allergyRecords = (await this.allergyRecordRepository.findByDogId(id)).map(
+      (record: any) => ({
+        id: record.id,
+        allergen: record.allergen,
+        notes: record.notes || null,
+        attachments: record.attachments || [],
+      }),
+    );
+    console.log(
+      `[DogsController] Loaded ${allergyRecords.length} allergy records for dog ${id}`,
+    );
+
+    return {
+      medicalRecords,
+      checkupRecords,
+      allergyRecords,
+    };
   }
 
   private collectRemovedAttachmentKeys(
@@ -704,79 +723,7 @@ export class DogsController {
     const breed = await this.dogBreedRepository.findById(dog.breedId);
     const breedMap = breed ? new Map([[dog.breedId, breed.name]]) : new Map();
 
-    // Load medical records
-    let medicalRecords: any[] | null = null;
-    try {
-      const records = await this.medicalRecordRepository.findByDogId(id);
-      // Convert to DTO format
-      medicalRecords = records.map((record: any) => ({
-        id: record.id,
-        chiefComplaint: record.chiefComplaint,
-        visitDate: record.visitDate
-          ? record.visitDate.toISOString().split('T')[0]
-          : null, // Only YYYY-MM-DD
-        diagnosis: record.diagnosis || null,
-        notes: record.notes || null,
-        attachments: record.attachments || null,
-      }));
-      console.log(
-        `[DogsController] Loaded ${medicalRecords?.length || 0} medical records for dog ${id}`,
-      );
-    } catch (error: any) {
-      console.warn(
-        `[DogsController] Failed to load medical records for dog ${id}:`,
-        error.message,
-      );
-    }
-
-    // Load checkup records
-    let checkupRecords: any[] | null = null;
-    try {
-      const records = await this.checkupRecordRepository.findByDogId(id);
-      // Convert to DTO format
-      checkupRecords = records.map((record: any) => ({
-        id: record.id,
-        checkupDate: record.checkupDate.toISOString().split('T')[0], // Only YYYY-MM-DD
-        checkupType: record.checkupType,
-        notes: record.findings || null, // findings maps to notes
-        attachments: record.attachments || null,
-      }));
-      console.log(
-        `[DogsController] Loaded ${checkupRecords?.length || 0} checkup records for dog ${id}`,
-      );
-    } catch (error: any) {
-      console.warn(
-        `[DogsController] Failed to load checkup records for dog ${id}:`,
-        error.message,
-      );
-    }
-
-    // Load allergy records
-    let allergyRecords: any[] | null = null;
-    try {
-      const records = await this.allergyRecordRepository.findByDogId(id);
-      // Convert to DTO format
-      allergyRecords = records.map((record: any) => ({
-        id: record.id,
-        allergen: record.allergen,
-        allergenType: record.allergenType,
-        discoveryDate: record.discoveryDate.toISOString().split('T')[0], // Only YYYY-MM-DD
-        symptoms: record.symptoms,
-        severity: record.severity,
-        confirmedBy: record.confirmedBy,
-        treatment: record.treatment || null,
-        notes: record.notes || null,
-        attachments: record.attachments || [],
-      }));
-      console.log(
-        `[DogsController] Loaded ${allergyRecords?.length || 0} allergy records for dog ${id}`,
-      );
-    } catch (error: any) {
-      console.warn(
-        `[DogsController] Failed to load allergy records for dog ${id}:`,
-        error.message,
-      );
-    }
+    const healthRecords = await this.loadDogHealthRecordDtos(id);
 
     // Try to calculate preview, but don't fail if calculation fails
     let calcResult = null;
@@ -794,9 +741,9 @@ export class DogsController {
       profile: this.mapDogToProfileDto(
         dog,
         breedMap,
-        medicalRecords,
-        checkupRecords,
-        allergyRecords,
+        healthRecords.medicalRecords,
+        healthRecords.checkupRecords,
+        healthRecords.allergyRecords,
       ),
       calcResult,
     };

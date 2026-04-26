@@ -66,8 +66,8 @@
                 <view class="table-cell type">类型</view>
                 <view class="table-cell name">标准原料 / SKU</view>
                 <view class="table-cell amount">用量</view>
-                <view class="table-cell purchase">品牌 / 渠道 / 规格</view>
                 <view class="table-cell method">制备</view>
+                <view class="table-cell purchase">品牌 / 渠道 / 规格</view>
               </view>
               <view
                 v-for="(ingredient, index) in parsedIngredients"
@@ -85,11 +85,11 @@
                   <view class="ingredient-name-line">{{ formatIngredientNameLine(ingredient) }}</view>
                 </view>
                 <view class="table-cell amount">{{ ingredient.amount }}{{ ingredient.unit }}</view>
-                <view class="table-cell purchase">
-                  <view class="purchase-summary purchase-summary-full">{{ formatPurchaseSummary(ingredient) }}</view>
-                </view>
                 <view class="table-cell method">
                   <view class="method-text">{{ ingredient.method || '-' }}</view>
+                </view>
+                <view class="table-cell purchase">
+                  <view class="purchase-summary purchase-summary-full">{{ formatPurchaseSummary(ingredient) }}</view>
                 </view>
               </view>
             </view>
@@ -331,7 +331,7 @@ function getPrintablePurchaseSummaryParts(...values: unknown[]): string[] {
 }
 
 function shouldSkipPurchaseSummaryPart(value: string): boolean {
-  return ['无', '暂无', '-', 'null', 'undefined'].includes(value);
+  return ['无', '暂无', '-', '/', '／', 'null', 'undefined'].includes(value);
 }
 
 function formatPackagePlan(item: {

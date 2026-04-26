@@ -313,7 +313,7 @@ export class PdfGeneratorService {
   }
 
   private shouldSkipPurchaseSummaryPart(value: string): boolean {
-    return ['无', '暂无', '-', 'null', 'undefined'].includes(value);
+    return ['无', '暂无', '-', '/', '／', 'null', 'undefined'].includes(value);
   }
 
   /**
@@ -634,8 +634,8 @@ export class PdfGeneratorService {
       { key: 'type', label: '类型', x: 40, width: 48 },
       { key: 'name', label: '标准原料 / SKU', x: 88, width: 138 },
       { key: 'amount', label: '用量', x: 226, width: 60 },
-      { key: 'purchase', label: '品牌 / 渠道 / 规格', x: 286, width: 148 },
-      { key: 'method', label: '制备', x: 434, width: 118 },
+      { key: 'method', label: '制备', x: 286, width: 118 },
+      { key: 'purchase', label: '品牌 / 渠道 / 规格', x: 404, width: 148 },
     ];
     const headerHeight = Math.floor(18 * scaleFactor);
 
@@ -688,14 +688,14 @@ export class PdfGeneratorService {
       });
       this.drawWrappedTableText(
         doc,
-        this.formatPurchaseSummary(ing),
+        ing.method || '-',
         columns[3].x + 3,
         textY,
         columns[3].width - 6,
       );
       this.drawWrappedTableText(
         doc,
-        ing.method || '-',
+        this.formatPurchaseSummary(ing),
         columns[4].x + 3,
         textY,
         columns[4].width - 6,
@@ -730,12 +730,12 @@ export class PdfGeneratorService {
     const purchaseHeight = this.getWrappedTableTextHeight(
       doc,
       this.formatPurchaseSummary(ingredient),
-      columns[3].width - 6,
+      columns[4].width - 6,
     );
     const methodHeight = this.getWrappedTableTextHeight(
       doc,
       ingredient.method || '-',
-      columns[4].width - 6,
+      columns[3].width - 6,
     );
 
     return Math.max(

@@ -44,6 +44,15 @@ describe('production task PDF layout guardrails', () => {
     expect(source).not.toContain('truncateText(this.formatPurchaseSummary(ing)');
   });
 
+  it('places preparation before purchase summary in the production task PDF table', () => {
+    const methodColumnIndex = source.indexOf("{ key: 'method', label: '制备'");
+    const purchaseColumnIndex = source.indexOf("{ key: 'purchase', label: '品牌 / 渠道 / 规格'");
+
+    expect(methodColumnIndex).toBeGreaterThan(-1);
+    expect(purchaseColumnIndex).toBeGreaterThan(-1);
+    expect(methodColumnIndex).toBeLessThan(purchaseColumnIndex);
+  });
+
   it('wraps standard ingredient sku names and preparation methods instead of hard truncating them', () => {
     expect(source).toContain('const nameHeight = this.getWrappedTableTextHeight');
     expect(source).toContain('const methodHeight = this.getWrappedTableTextHeight');

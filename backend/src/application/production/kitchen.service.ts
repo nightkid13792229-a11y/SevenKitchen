@@ -441,33 +441,41 @@ export class StaffProductionService {
           item.ingredient_type,
         );
 
-        if (!selectedPurchaseItem?.procurementSkuName) {
+        const selectedSku =
+          this.getPurchaseItemProcurementSku(selectedPurchaseItem);
+        const procurementSkuName =
+          this.getPurchaseItemProcurementSkuName(selectedPurchaseItem);
+
+        if (!selectedPurchaseItem || !procurementSkuName) {
           return item;
         }
 
-        const selectedSku =
-          this.getPurchaseItemProcurementSku(selectedPurchaseItem);
         const procurementSkuBrand =
-          selectedPurchaseItem.brand || selectedSku?.brand || undefined;
+          this.getFirstPrintablePurchaseMetadata(
+            selectedPurchaseItem.brand,
+            selectedSku?.brand,
+          ) || undefined;
         const procurementSkuPurchaseChannel =
-          selectedPurchaseItem.purchaseChannel ||
-          selectedSku?.purchaseChannel ||
-          undefined;
+          this.getFirstPrintablePurchaseMetadata(
+            selectedPurchaseItem.purchaseChannel,
+            selectedSku?.purchaseChannel,
+          ) || undefined;
         const procurementSkuProductModel =
-          selectedPurchaseItem.productModel ||
-          selectedSku?.productModel ||
-          undefined;
+          this.getFirstPrintablePurchaseMetadata(
+            selectedPurchaseItem.productModel,
+            selectedSku?.productModel,
+          ) || undefined;
 
         return {
           ...item,
           standardIngredientName: item.standardIngredientName || item.name,
           procurementSkuId: selectedPurchaseItem.procurementSkuId || undefined,
-          procurementSkuName: selectedPurchaseItem.procurementSkuName,
+          procurementSkuName,
           procurementSkuBrand,
           procurementSkuPurchaseChannel,
           procurementSkuProductModel,
           procurement_sku_id: selectedPurchaseItem.procurementSkuId || undefined,
-          procurement_sku_name: selectedPurchaseItem.procurementSkuName,
+          procurement_sku_name: procurementSkuName,
           procurement_sku_brand: procurementSkuBrand,
           procurement_sku_purchase_channel: procurementSkuPurchaseChannel,
           procurement_sku_product_model: procurementSkuProductModel,
@@ -482,7 +490,7 @@ export class StaffProductionService {
     ingredientType?: string | null,
   ): any | undefined {
     const validCandidates = candidates.filter(
-      (candidate) => candidate?.procurementSkuName,
+      (candidate) => this.getPurchaseItemProcurementSkuName(candidate),
     );
 
     if (validCandidates.length <= 1) {
@@ -521,8 +529,8 @@ export class StaffProductionService {
         return preferLowestPrice ? priceA - priceB : priceB - priceA;
       }
 
-      return String(a.procurementSkuName).localeCompare(
-        String(b.procurementSkuName),
+      return this.getPurchaseItemProcurementSkuName(a).localeCompare(
+        this.getPurchaseItemProcurementSkuName(b),
         'zh-Hans-CN',
       );
     })[0];
@@ -548,10 +556,39 @@ export class StaffProductionService {
   }
 
   private getPurchaseItemProcurementSku(purchaseItem: any): any | null {
+    const procurementSkus = purchaseItem?.ingredient?.procurementSkus || [];
+    const exactMatch = procurementSkus.find(
+      (item: any) => item.id === purchaseItem?.procurementSkuId,
+    );
+
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    return procurementSkus.length === 1 ? procurementSkus[0] : null;
+  }
+
+  private getPurchaseItemProcurementSkuName(purchaseItem: any): string {
     return (
-      (purchaseItem.ingredient?.procurementSkus || []).find(
-        (item: any) => item.id === purchaseItem.procurementSkuId,
-      ) || null
+      this.getFirstPrintablePurchaseMetadata(
+        purchaseItem?.procurementSkuName,
+        this.getPurchaseItemProcurementSku(purchaseItem)?.name,
+      ) || ''
+    );
+  }
+
+  private getFirstPrintablePurchaseMetadata(...values: unknown[]): string {
+    const value = values.find((item) => {
+      const text = String(item || '').trim();
+      return text.length > 0 && !this.isBlankPurchaseMetadata(text);
+    });
+
+    return typeof value === 'string' ? value.trim() : '';
+  }
+
+  private isBlankPurchaseMetadata(value: string): boolean {
+    return ['无', '暂无', '-', '/', '／', 'null', 'undefined'].includes(
+      value.trim(),
     );
   }
 

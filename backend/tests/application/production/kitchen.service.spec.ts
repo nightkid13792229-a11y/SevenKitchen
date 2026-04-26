@@ -460,6 +460,115 @@ describe('StaffProductionService', () => {
     );
   });
 
+  it('adds supplement procurement sku metadata from the selected active sku', async () => {
+    const recipeSnapshot = {
+      id: 'recipe-1',
+      name: '补剂测试食谱',
+      version: 1,
+      items: [
+        {
+          ingredient_id: 'ingredient-seaweed',
+          name: '海藻粉',
+          ratio: 0,
+          ingredient_type: 'SUPPLEMENT',
+        },
+      ],
+    };
+    const unit = new PackagingUnit(
+      'unit-supplement-1',
+      'batch-1',
+      recipeSnapshot as any,
+      1200,
+      ['item-supplement'],
+      new Date('2026-04-21T15:17:00.000Z'),
+      PackagingUnitStatus.PENDING,
+    );
+    const productionRepository = {
+      findAll: jest.fn().mockResolvedValue([
+        {
+          id: 'batch-1',
+          productionDate: new Date('2026-04-21T12:00:00.000Z'),
+          packagingUnits: [unit],
+        },
+      ]),
+    };
+    const orderRepository = {
+      findByStatus: jest.fn().mockImplementation(async (status) => {
+        if (status !== OrderStatus.IN_PRODUCTION) return [];
+        return [
+          {
+            id: 'order-supplement',
+            status: OrderStatus.IN_PRODUCTION,
+            dog: { name: '咖喱' },
+            address: { recipientName: '邱', region: { city: '深圳' } },
+            items: [
+              {
+                id: 'item-supplement',
+                packageSpecG: 90,
+                packageCount: 60,
+                packagePlan: null,
+                ingredientSourcePlan: 'WHOLESALE',
+              },
+            ],
+          },
+        ];
+      }),
+    };
+    const purchaseListRepository = {
+      findMany: jest.fn().mockResolvedValue({
+        list: [
+          {
+            id: 'purchase-list-1',
+            sourceOrderIds: ['order-supplement'],
+            items: [
+              {
+                ingredientId: 'ingredient-seaweed',
+                ingredientName: '海藻粉',
+                procurementSkuId: 'sku-seaweed',
+                type: 'SUPPLEMENT',
+                ingredient: {
+                  procurementSkus: [
+                    {
+                      id: 'sku-seaweed',
+                      name: '海藻粉 450mcg碘/平勺',
+                      brand: 'NOW FOODS',
+                      purchaseChannel: 'iHerb',
+                      productModel: '227g/瓶',
+                      currentPurchasePrice: 89.4,
+                    },
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    };
+    const service = await buildService({
+      productionRepository,
+      orderRepository,
+      purchaseListRepository,
+    });
+
+    const result = await service.getPackagingUnits({
+      page: 1,
+      pageSize: 20,
+      targetDate: '2026-04-21',
+    } as any);
+
+    expect(result.list[0].recipeSnapshot.items[0]).toEqual(
+      expect.objectContaining({
+        name: '海藻粉',
+        procurementSkuId: 'sku-seaweed',
+        procurementSkuName: '海藻粉 450mcg碘/平勺',
+        procurementSkuBrand: 'NOW FOODS',
+        procurementSkuPurchaseChannel: 'iHerb',
+        procurementSkuProductModel: '227g/瓶',
+        standardIngredientName: '海藻粉',
+      }),
+    );
+  });
+
   it('keeps unfinished carryover tasks visible when filtering by production date', async () => {
     const recipeSnapshot = {
       id: 'recipe-1',

@@ -176,6 +176,20 @@ describe('staff production scheduling guardrails', () => {
     expect(printTaskSource).not.toContain('<view class="purchase-summary">{{ formatPurchaseSummary(ingredient) }}</view>');
   });
 
+  it('shows preparation before purchase summary in production task print preview', () => {
+    const methodHeaderIndex = printTaskSource.indexOf('<view class="table-cell method">制备</view>');
+    const purchaseHeaderIndex = printTaskSource.indexOf('<view class="table-cell purchase">品牌 / 渠道 / 规格</view>');
+    const methodCellIndex = printTaskSource.indexOf('<view class="table-cell method">', methodHeaderIndex + 1);
+    const purchaseCellIndex = printTaskSource.indexOf('<view class="table-cell purchase">', purchaseHeaderIndex + 1);
+
+    expect(methodHeaderIndex).toBeGreaterThan(-1);
+    expect(purchaseHeaderIndex).toBeGreaterThan(-1);
+    expect(methodHeaderIndex).toBeLessThan(purchaseHeaderIndex);
+    expect(methodCellIndex).toBeGreaterThan(-1);
+    expect(purchaseCellIndex).toBeGreaterThan(-1);
+    expect(methodCellIndex).toBeLessThan(purchaseCellIndex);
+  });
+
   it('lets ingredient name and preparation cells wrap in production task print preview', () => {
     expect(printTaskSource).toContain('ingredient-name-line');
     expect(printTaskSource).toContain('method-text');

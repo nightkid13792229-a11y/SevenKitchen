@@ -30,6 +30,14 @@ const labelRendererSource = readFileSync(
   resolve(__dirname, 'staff-production/utils/label-renderer.ts'),
   'utf8',
 );
+const jcingPrinterSource = readFileSync(
+  resolve(__dirname, 'staff-production/utils/jcing-printer.ts'),
+  'utf8',
+);
+const sharedJcingPrinterSource = readFileSync(
+  resolve(__dirname, '../utils/jcing-printer.ts'),
+  'utf8',
+);
 
 describe('staff production scheduling guardrails', () => {
   it('shows auto-schedule based on unscheduled purchasing orders instead of existing batches', () => {
@@ -153,6 +161,21 @@ describe('staff production scheduling guardrails', () => {
     expect(printLabelSource).toContain('showLabelContentOverflowModal');
     expect(printLabelSource).toContain('标签内容过多');
     expect(printLabelSource).toContain('无法完整放入 70mm × 100mm 标签纸');
+  });
+
+  it('prints backend-generated product label images at the actual 70x100mm paper size', () => {
+    [jcingPrinterSource, sharedJcingPrinterSource].forEach((source) => {
+      expect(source).toContain('const LABEL_PAPER_WIDTH_MM = 70');
+      expect(source).toContain('const LABEL_PAPER_HEIGHT_MM = 100');
+      expect(source).toContain(
+        'JCAPI.startDrawLabel(canvasId, component, LABEL_PAPER_WIDTH_MM, LABEL_PAPER_HEIGHT_MM, 0, null)',
+      );
+      expect(source).toContain(
+        'JCAPI.drawImage(tempFilePath, 0, 0, LABEL_PAPER_WIDTH_MM, LABEL_PAPER_HEIGHT_MM, 0)',
+      );
+      expect(source).not.toContain('JCAPI.startDrawLabel(canvasId, component, 75, 100, 0, null)');
+      expect(source).not.toContain('JCAPI.drawImage(tempFilePath, 0, 0, 75, 100, 0)');
+    });
   });
 
   it('splits custom package plans into separate product label items', () => {

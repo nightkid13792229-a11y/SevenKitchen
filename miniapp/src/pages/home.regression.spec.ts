@@ -203,4 +203,27 @@ describe('home runtime regressions', () => {
     expect(source).toContain('filterState.value.selectedHealthTags = [...draftFilterState.value.selectedHealthTags]')
     expect(source).toContain('filterState.value.excludedIngredients = [...draftFilterState.value.excludedIngredients]')
   })
+
+  it('renders dog profile previews as square avatar tiles with name-only overlays', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/home/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain("import { resolveDogAvatarSrc } from '../../utils/dog-avatar'")
+    expect(source).toContain('class="dog-card-avatar"')
+    expect(source).toContain(':src="resolveDogAvatarSrc(dog.avatarUrl)"')
+    expect(source).toContain('mode="aspectFill"')
+    expect(source).toContain('class="dog-card-name-overlay"')
+    expect(source).toContain('<text class="dog-card-name">{{ dog.name }}</text>')
+    expect(source).toContain('height: 220rpx !important;')
+    expect(source).toContain('padding: 0;')
+    expect(source).toContain('background: rgba(18, 20, 24, 0.58);')
+    expect(source).toContain('border-radius: 999rpx;')
+    expect(source).toContain('padding: 6rpx 12rpx;')
+    expect(source).not.toContain('class="dog-breed"')
+    expect(source).not.toContain('class="dog-detail"')
+    expect(source).not.toContain('ageText: calculateAgeText')
+    expect(source).not.toContain('const calculateAgeText =')
+  })
 })

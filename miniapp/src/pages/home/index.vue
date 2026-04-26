@@ -44,19 +44,17 @@
       </view>
       <scroll-view scroll-x class="dog-scroll">
         <view class="dog-card" v-for="dog in dogs" :key="dog.id" @tap="goToDogDetail(dog.id)">
-          <view class="dog-info">
-            <view class="dog-name-row">
-              <text class="dog-name">{{ dog.name }}</text>
-              <text class="dog-gender" :class="dog.gender === 'MALE' ? 'male' : 'female'">
-                {{ dog.gender === 'MALE' ? '♂' : '♀' }}
-              </text>
-            </view>
-            <text class="dog-breed">{{ dog.breedName || '未知品种' }}</text>
-            <text class="dog-detail">{{ dog.currentWeightKg }}kg · {{ dog.ageText }}</text>
+          <image
+            class="dog-card-avatar"
+            :src="resolveDogAvatarSrc(dog.avatarUrl)"
+            mode="aspectFill"
+          />
+          <view class="dog-card-name-overlay">
+            <text class="dog-card-name">{{ dog.name }}</text>
           </view>
         </view>
         <view class="dog-card add-dog" @tap="goToDogCreate">
-          <view class="add-icon">+</view>
+          <text class="add-icon">+</text>
           <text class="add-text">添加档案</text>
         </view>
       </scroll-view>
@@ -340,6 +338,7 @@ import { onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
 import { getRecipeCoverImageUrl, isKnownStaleRecipeCoverUrl, normalizeImageUrl } from '../../utils/config'
 import { resolveDogProfileEntryRoute } from '../../utils/dog-profile-form'
+import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
 import { refreshCurrentTabBar } from '../../utils/tabbar'
 import { CURRENT_SHARE_CONFIG } from '@/config/share.config'
 
@@ -587,26 +586,11 @@ const loadDogList = async () => {
       quiet: true
     })
     if (res.code === 0 && res.data) {
-      dogs.value = res.data.map((dog: any) => ({
-        ...dog,
-        ageText: calculateAgeText(dog.birthday)
-      }))
+      dogs.value = Array.isArray(res.data) ? res.data : []
     }
   } catch (err) {
     console.error('加载狗狗列表失败:', err)
   }
-}
-
-// 计算年龄文本
-const calculateAgeText = (birthday: string) => {
-  const birth = new Date(birthday)
-  const now = new Date()
-  const months = Math.floor((now.getTime() - birth.getTime()) / (1000 * 60 * 60 * 24 * 30))
-  if (months < 12) {
-    return `${months}个月`
-  }
-  const years = Math.floor(months / 12)
-  return `${years}岁`
 }
 
 // ==================== 食谱相关方法 ====================
@@ -1512,14 +1496,17 @@ defineOptions({
 .dog-card {
   display: inline-flex;
   align-items: center;
-  /* 强制固定宽度，确保能明显露出下一张卡片 */
+  justify-content: center;
+  position: relative;
+  overflow: hidden;
   width: 220rpx !important;
   min-width: 220rpx !important;
   max-width: 220rpx !important;
+  height: 220rpx !important;
   flex-shrink: 0 !important; /* 防止卡片被压缩 */
   background: #f8f8f8;
   border-radius: 8px;
-  padding: 15px;
+  padding: 0;
   margin-right: 20rpx; /* 增加卡片间距 */
   vertical-align: top;
   box-sizing: border-box !important;
@@ -1530,61 +1517,58 @@ defineOptions({
   background: white;
   flex-direction: column;
   justify-content: center;
+  gap: 8rpx;
 }
 
-.dog-info {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+.dog-card-avatar {
   width: 100%;
+  height: 100%;
+  display: block;
 }
 
-.dog-name-row {
+.dog-card-name-overlay {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
   display: flex;
-  align-items: center;
-  gap: 6px;
+  align-items: flex-end;
+  padding: 54rpx 18rpx 16rpx;
+  box-sizing: border-box;
+  background: linear-gradient(
+    180deg,
+    rgba(26, 28, 33, 0) 0%,
+    rgba(26, 28, 33, 0.42) 100%
+  );
 }
 
-.dog-name {
-  font-size: 14px;
-  font-weight: bold;
-  color: #333;
-}
-
-.dog-gender {
-  font-size: 12px;
-  font-weight: bold;
-}
-
-.dog-gender.male {
-  color: #1890ff;
-}
-
-.dog-gender.female {
-  color: #ff69b4;
-}
-
-.dog-breed {
-  font-size: 11px;
-  color: #999;
+.dog-card-name {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  padding: 6rpx 12rpx;
+  border-radius: 999rpx;
+  background: rgba(18, 20, 24, 0.58);
+  box-shadow: 0 6rpx 18rpx rgba(0, 0, 0, 0.16);
+  box-sizing: border-box;
+  font-size: 28rpx;
+  line-height: 1.2;
+  font-weight: 700;
+  color: #fff;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.dog-detail {
-  font-size: 12px;
-  color: #999;
+  text-shadow: 0 2rpx 4rpx rgba(0, 0, 0, 0.22);
 }
 
 .add-icon {
-  font-size: 24px;
+  font-size: 48rpx;
+  line-height: 1;
   color: #999;
-  margin-bottom: 5px;
 }
 
 .add-text {
-  font-size: 12px;
+  font-size: 24rpx;
   color: #999;
 }
 

@@ -7,6 +7,8 @@ import JCAPI from './jcing-sdk/JCAPI';
 import { drawProductionLabelWithJCSDK, LabelData } from './label-renderer';
 
 const PRINTER_STORAGE_KEY = 'jc_printer_info';
+const LABEL_PAPER_WIDTH_MM = 70;
+const LABEL_PAPER_HEIGHT_MM = 100;
 
 // 初始化SDK: 设置编译平台为uniapp（必须在SDK使用前调用）
 JCAPI.setBuildPlatform('uniapp');
@@ -321,12 +323,12 @@ export class JCPrinter {
         // 步骤3: 开始绘制标签
         console.log('[JCPrinter] 步骤4: 调用 startDrawLabel');
         // 参数: canvasId, component, width(mm), height(mm), rotation, canvas对象(uniapp需要传null)
-        JCAPI.startDrawLabel(canvasId, component, 75, 100, 0, null);
+        JCAPI.startDrawLabel(canvasId, component, LABEL_PAPER_WIDTH_MM, LABEL_PAPER_HEIGHT_MM, 0, null);
 
         // 步骤4: 绘制图片
         console.log('[JCPrinter] 步骤5: 调用 drawImage, path=' + tempFilePath);
         // 参数: path, x(mm), y(mm), width(mm), height(mm), rotation
-        JCAPI.drawImage(tempFilePath, 0, 0, 75, 100, 0);
+        JCAPI.drawImage(tempFilePath, 0, 0, LABEL_PAPER_WIDTH_MM, LABEL_PAPER_HEIGHT_MM, 0);
 
         // 步骤5: 结束绘制
         console.log('[JCPrinter] 步骤6: 调用 endDrawLabel');

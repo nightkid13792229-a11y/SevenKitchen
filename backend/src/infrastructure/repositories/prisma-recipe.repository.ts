@@ -672,6 +672,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
         ? Number(record.batchLaborHours)
         : undefined,
       coverImageUrl: record.coverImageUrl,
+      coverTitle: record.coverTitle,
       targetHealthTags:
         record.healthTagAssignments?.map((assign) => assign.healthTagId) || [],
       applicableLifeStages: (record.applicableLifeStages as string[]) || [],

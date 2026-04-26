@@ -48,6 +48,7 @@ export interface Recipe {
   productionLossRate: number;
   batchLaborHours?: number;
   coverImageUrl?: string | null;
+  coverTitle?: string | null;
   targetHealthTags?: string[];
   applicableLifeStages?: string[];
   items?: RecipeItem[]; // Recipe items with ingredient references

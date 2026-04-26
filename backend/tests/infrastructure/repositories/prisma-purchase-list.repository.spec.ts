@@ -349,6 +349,7 @@ describe('PrismaPurchaseListRepository', () => {
       notes: null,
       createdAt: new Date('2026-04-05T01:00:00.000Z'),
       ingredient: {
+        brand: 'NOW FOODS',
         productModel: null,
         purchaseChannel: null,
         purchaseUnit: 'g',
@@ -373,6 +374,7 @@ describe('PrismaPurchaseListRepository', () => {
       },
     });
 
+    expect(item.ingredient?.brand).toBe('NOW FOODS');
     expect(item.ingredient?.procurementSkus?.[0]).toEqual(
       expect.objectContaining({
         id: 'sku-1',

@@ -569,6 +569,112 @@ describe('StaffProductionService', () => {
     );
   });
 
+  it('adds legacy supplement brand metadata when no procurement sku exists', async () => {
+    const recipeSnapshot = {
+      id: 'recipe-1',
+      name: '补剂测试食谱',
+      version: 1,
+      items: [
+        {
+          ingredient_id: 'ingredient-eggshell',
+          name: '鸡蛋壳粉',
+          ratio: 0,
+          ingredient_type: 'SUPPLEMENT',
+        },
+      ],
+    };
+    const unit = new PackagingUnit(
+      'unit-legacy-supplement-1',
+      'batch-1',
+      recipeSnapshot as any,
+      1200,
+      ['item-supplement'],
+      new Date('2026-04-26T03:57:00.000Z'),
+      PackagingUnitStatus.PENDING,
+    );
+    const productionRepository = {
+      findAll: jest.fn().mockResolvedValue([
+        {
+          id: 'batch-1',
+          productionDate: new Date('2026-04-26T04:00:00.000Z'),
+          packagingUnits: [unit],
+        },
+      ]),
+    };
+    const orderRepository = {
+      findByStatus: jest.fn().mockImplementation(async (status) => {
+        if (status !== OrderStatus.IN_PRODUCTION) return [];
+        return [
+          {
+            id: 'order-supplement',
+            status: OrderStatus.IN_PRODUCTION,
+            dog: { name: '咖喱' },
+            address: { recipientName: '邱', region: { city: '深圳' } },
+            items: [
+              {
+                id: 'item-supplement',
+                packageSpecG: 90,
+                packageCount: 60,
+                packagePlan: null,
+                ingredientSourcePlan: 'WHOLESALE',
+              },
+            ],
+          },
+        ];
+      }),
+    };
+    const purchaseListRepository = {
+      findMany: jest.fn().mockResolvedValue({
+        list: [
+          {
+            id: 'purchase-list-1',
+            sourceOrderIds: ['order-supplement'],
+            items: [
+              {
+                ingredientId: 'ingredient-eggshell',
+                ingredientName: '鸡蛋壳粉',
+                procurementSkuId: undefined,
+                procurementSkuName: undefined,
+                type: 'SUPPLEMENT',
+                purchaseChannel: '京东',
+                productModel: '500g/罐',
+                ingredient: {
+                  name: '鸡蛋壳粉',
+                  brand: '西知堂',
+                  purchaseChannel: '京东',
+                  productModel: '500g/罐',
+                  procurementSkus: [],
+                },
+              },
+            ],
+          },
+        ],
+      }),
+    };
+    const service = await buildService({
+      productionRepository,
+      orderRepository,
+      purchaseListRepository,
+    });
+
+    const result = await service.getPackagingUnits({
+      page: 1,
+      pageSize: 20,
+      targetDate: '2026-04-26',
+    } as any);
+
+    expect(result.list[0].recipeSnapshot.items[0]).toEqual(
+      expect.objectContaining({
+        name: '鸡蛋壳粉',
+        procurementSkuName: '鸡蛋壳粉',
+        procurementSkuBrand: '西知堂',
+        procurementSkuPurchaseChannel: '京东',
+        procurementSkuProductModel: '500g/罐',
+        standardIngredientName: '鸡蛋壳粉',
+      }),
+    );
+  });
+
   it('keeps unfinished carryover tasks visible when filtering by production date', async () => {
     const recipeSnapshot = {
       id: 'recipe-1',

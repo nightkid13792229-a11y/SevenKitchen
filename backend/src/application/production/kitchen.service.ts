@@ -454,16 +454,19 @@ export class StaffProductionService {
           this.getFirstPrintablePurchaseMetadata(
             selectedPurchaseItem.brand,
             selectedSku?.brand,
+            selectedPurchaseItem.ingredient?.brand,
           ) || undefined;
         const procurementSkuPurchaseChannel =
           this.getFirstPrintablePurchaseMetadata(
             selectedPurchaseItem.purchaseChannel,
             selectedSku?.purchaseChannel,
+            selectedPurchaseItem.ingredient?.purchaseChannel,
           ) || undefined;
         const procurementSkuProductModel =
           this.getFirstPrintablePurchaseMetadata(
             selectedPurchaseItem.productModel,
             selectedSku?.productModel,
+            selectedPurchaseItem.ingredient?.productModel,
           ) || undefined;
 
         return {
@@ -490,7 +493,7 @@ export class StaffProductionService {
     ingredientType?: string | null,
   ): any | undefined {
     const validCandidates = candidates.filter(
-      (candidate) => this.getPurchaseItemProcurementSkuName(candidate),
+      (candidate) => this.hasPrintablePurchaseMetadata(candidate),
     );
 
     if (validCandidates.length <= 1) {
@@ -573,7 +576,22 @@ export class StaffProductionService {
       this.getFirstPrintablePurchaseMetadata(
         purchaseItem?.procurementSkuName,
         this.getPurchaseItemProcurementSku(purchaseItem)?.name,
+        purchaseItem?.ingredientName,
       ) || ''
+    );
+  }
+
+  private hasPrintablePurchaseMetadata(purchaseItem: any): boolean {
+    return Boolean(
+      this.getPurchaseItemProcurementSkuName(purchaseItem) ||
+        this.getFirstPrintablePurchaseMetadata(
+          purchaseItem?.brand,
+          purchaseItem?.purchaseChannel,
+          purchaseItem?.productModel,
+          purchaseItem?.ingredient?.brand,
+          purchaseItem?.ingredient?.purchaseChannel,
+          purchaseItem?.ingredient?.productModel,
+        ),
     );
   }
 

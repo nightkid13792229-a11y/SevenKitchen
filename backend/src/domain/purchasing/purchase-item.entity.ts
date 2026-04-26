@@ -47,6 +47,7 @@ export interface PurchaseItemConstructor {
   displayUnit?: string; // 显示单位标签
   notes?: string;
   ingredient?: {
+    brand?: string | null;
     productModel?: string | null;
     purchaseChannel?: string | null;
     purchaseUnit?: string | null;
@@ -257,6 +258,7 @@ export class PurchaseItem {
       notes: data.notes,
       ingredient: data.ingredient
         ? {
+            brand: data.ingredient.brand ?? null,
             productModel: data.ingredient.productModel ?? null,
             purchaseChannel: data.ingredient.purchaseChannel ?? null,
             purchaseUnit: data.ingredient.purchaseUnit ?? null,

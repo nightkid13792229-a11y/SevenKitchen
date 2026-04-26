@@ -25,22 +25,22 @@ const LABEL_LAYOUT = {
   fontSize: {
     brand: 2.1,
     title: 5.0,
-    meta: 2.0,
-    sectionTitle: 2.8,
-    body: 2.25,
-    compactBody: 1.8,
-    small: 1.85,
+    meta: 2.4,
+    sectionTitle: 3.1,
+    body: 2.5,
+    compactBody: 2.25,
+    small: 2.25,
     brandBottom: 2.5,
   },
   lineHeight: {
-    compact: 2.8,
-    tight: 2.2,
+    compact: 3.0,
+    tight: 2.6,
     normal: 4.0,
-    loose: 4.6,
+    loose: 4.4,
   },
   spacing: {
-    sectionGap: 2.0,
-    blockInternal: 1.0,
+    sectionGap: 1.8,
+    blockInternal: 0.8,
   },
 };
 
@@ -365,7 +365,7 @@ export class LabelService {
     return {
       drawRules: false,
       topGapMm: 0.2,
-      heightMm: 3.2,
+      heightMm: 3.5,
     };
   }
 
@@ -578,7 +578,7 @@ export class LabelService {
     mode: LabelRenderMode,
   ): number {
     const rows = this.buildCompleteNutritionRows(nutrition);
-    const rowHeight = mmToPx(mode === 'compact' ? 2.15 : 2.45);
+    const rowHeight = mmToPx(mode === 'compact' ? 2.65 : 2.85);
     return this.getSectionTitleHeight() + rows.length * rowHeight;
   }
 
@@ -587,12 +587,12 @@ export class LabelService {
     return (
       mmToPx(layout.topGapMm) +
       this.getSectionTitleHeight() +
-      mmToPx(6.2)
+      mmToPx(6.8)
     );
   }
 
   private getSectionTitleHeight(): number {
-    return mmToPx(5.4);
+    return mmToPx(5.5);
   }
 
   private drawCompleteNutritionSection(
@@ -608,7 +608,7 @@ export class LabelService {
     const fontSize = mode === 'compact'
       ? LABEL_LAYOUT.fontSize.small
       : LABEL_LAYOUT.fontSize.meta;
-    const rowHeight = mmToPx(mode === 'compact' ? 2.15 : 2.45);
+    const rowHeight = mmToPx(mode === 'compact' ? 2.65 : 2.85);
 
     ctx.font = `${mmToPx(fontSize)}px "Chinese"`;
     ctx.fillStyle = '#222222';
@@ -654,10 +654,10 @@ export class LabelService {
     ctx.fillText('冷藏', left + colWidth, contentY);
 
     ctx.font = `${mmToPx(LABEL_LAYOUT.fontSize.small)}px "Chinese"`;
-    ctx.fillText('-18℃保存6个月', left, contentY + mmToPx(3.2));
-    ctx.fillText('0-5℃保存3天', left + colWidth, contentY + mmToPx(3.2));
+    ctx.fillText('-18℃保存6个月', left, contentY + mmToPx(3.4));
+    ctx.fillText('0-5℃保存3天', left + colWidth, contentY + mmToPx(3.4));
 
-    return contentY + mmToPx(6.2);
+    return contentY + mmToPx(6.8);
   }
 
   private drawSectionTitle(
@@ -668,7 +668,7 @@ export class LabelService {
     width: number,
   ): number {
     const centerX = left + width / 2;
-    const titleY = startY + mmToPx(2.4);
+    const titleY = startY + mmToPx(2.5);
 
     ctx.font = `bold ${mmToPx(LABEL_LAYOUT.fontSize.sectionTitle)}px "Chinese-Bold"`;
     ctx.fillStyle = '#111111';
@@ -687,7 +687,7 @@ export class LabelService {
     ctx.lineTo(left + width, lineY);
     ctx.stroke();
 
-    return startY + mmToPx(5.4);
+    return startY + mmToPx(5.5);
   }
 
   private getIngredientGridConfig(
@@ -696,8 +696,8 @@ export class LabelService {
     if (mode === 'compact') {
       return {
         columns: 3,
-        fontSize: 2.05,
-        lineHeight: 2.45,
+        fontSize: LABEL_LAYOUT.fontSize.compactBody,
+        lineHeight: 2.6,
       };
     }
 

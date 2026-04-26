@@ -4,6 +4,13 @@ import { LabelService } from '../../src/label/label.service';
 import { LabelDataDto } from '../../src/label/dto/label-data.dto';
 
 describe('LabelService 70x100 food label rendering', () => {
+  const testDpi = 203;
+  const mmToExpectedPx = (mm: number): number => Math.round((mm * testDpi) / 25.4);
+  const extractFontPx = (font: string): number => {
+    const match = font.match(/(\d+)px/);
+    return match ? Number(match[1]) : 0;
+  };
+
   const createLabelData = (): LabelDataDto => ({
     brandName: 'seven的厨房',
     recipeName: '糙米鸡蛋牛肉',
@@ -100,6 +107,15 @@ describe('LabelService 70x100 food label rendering', () => {
     expect((service as any).getMetaLineLayout().heightMm).toBeLessThan(4);
   });
 
+  it('uses a print-readable font size for the compact dog/date/package line', () => {
+    const service = new LabelService();
+    const ctx = createCanvas(559, 799).getContext('2d');
+
+    (service as any).drawMetaLine(ctx, createLabelData(), 0, 0, 487);
+
+    expect(extractFontPx(ctx.font)).toBeGreaterThanOrEqual(mmToExpectedPx(2.35));
+  });
+
   it('keeps supplement actual total amount on the ingredient label', () => {
     const service = new LabelService();
 
@@ -164,6 +180,13 @@ describe('LabelService 70x100 food label rendering', () => {
     expect((service as any).getIngredientGridConfig('compact').fontSize).toBeGreaterThanOrEqual(2);
   });
 
+  it('uses print-readable ingredient fonts in both regular and compact layouts', () => {
+    const service = new LabelService();
+
+    expect((service as any).getIngredientGridConfig('regular').fontSize).toBeGreaterThanOrEqual(2.45);
+    expect((service as any).getIngredientGridConfig('compact').fontSize).toBeGreaterThanOrEqual(2.25);
+  });
+
   it('uses three nutrition columns while keeping energy and calcium phosphorus ratio together', () => {
     const service = new LabelService();
 
@@ -180,6 +203,25 @@ describe('LabelService 70x100 food label rendering', () => {
     const service = new LabelService();
 
     expect((service as any).getNutritionGridColumnCount()).toBe(3);
+  });
+
+  it('uses print-readable body fonts for nutrition and storage sections', () => {
+    const service = new LabelService();
+    const ctx = createCanvas(559, 799).getContext('2d');
+    const data = createLabelData();
+
+    (service as any).drawCompleteNutritionSection(
+      ctx,
+      data.nutritionAnalysis,
+      0,
+      0,
+      487,
+      'regular',
+    );
+    expect(extractFontPx(ctx.font)).toBeGreaterThanOrEqual(mmToExpectedPx(2.35));
+
+    (service as any).drawStorageSection(ctx, 0, 0, 487);
+    expect(extractFontPx(ctx.font)).toBeGreaterThanOrEqual(mmToExpectedPx(2.2));
   });
 
   it('uses a table-style title for storage instructions', () => {

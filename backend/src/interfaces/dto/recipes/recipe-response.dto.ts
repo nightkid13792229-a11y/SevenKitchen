@@ -36,6 +36,9 @@ export class RecipeSummaryDto {
   @ApiPropertyOptional({ example: 'https://example.com/cover.jpg' })
   coverImageUrl?: string;
 
+  @ApiPropertyOptional({ example: '皮毛友好【成年犬】' })
+  coverTitle?: string;
+
   @ApiProperty({ type: [String], enum: RecipeHealthTag })
   targetHealthTags!: RecipeHealthTag[];
 

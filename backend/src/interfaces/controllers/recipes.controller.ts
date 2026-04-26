@@ -330,6 +330,7 @@ export class RecipesController {
           status: recipe.status as RecipeStatus,
           energyDensityKcalPerKg: recipe.energyDensityKcalPerKg,
           coverImageUrl: recipe.coverImageUrl?.replace('http://', 'https://'),
+          coverTitle: recipe.coverTitle || undefined,
           targetHealthTags: targetHealthTags,
           applicableLifeStages: applicableLifeStages,
           items: topIngredients,

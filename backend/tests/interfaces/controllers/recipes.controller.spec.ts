@@ -186,6 +186,30 @@ describe('RecipesController (e2e)', () => {
       expect(seededRecipe?.energyDensityKcalPerKg).toBe(1200);
     });
 
+    it('returns coverTitle so the miniapp can render the cover badge', async () => {
+      const recipe: Recipe = {
+        id: '550e8400-e29b-41d4-a716-446655440015',
+        version: 1,
+        name: 'Badge Title Recipe',
+        status: 'PUBLIC',
+        energyDensityKcalPerKg: 1200,
+        productionLossRate: 1.07,
+        coverImageUrl: 'https://img.sevenkitchen.cloud/recipes/cover.jpg',
+        coverTitle: '皮毛友好【成年犬】',
+      };
+      await recipeRepository.save(recipe);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes')
+        .expect(200);
+
+      const listedRecipe = response.body.data.data.find(
+        (r: { id: string }) => r.id === recipe.id,
+      );
+      expect(listedRecipe).toBeDefined();
+      expect(listedRecipe.coverTitle).toBe('皮毛友好【成年犬】');
+    });
+
     it('should return empty array when no public recipes exist', async () => {
       // Note: InMemoryRepository doesn't have a clear method
       // This test verifies the endpoint handles empty state correctly

@@ -222,7 +222,14 @@ export class LabelService {
     const contentWidth = contentRight - contentLeft;
     let y = mmToPx(LABEL_LAYOUT.margin.top);
 
-    y = this.drawLabelHeader(ctx, labelData, y, centerX, contentLeft, contentRight);
+    y = this.drawLabelHeader(
+      ctx,
+      labelData,
+      y,
+      centerX,
+      contentLeft,
+      contentRight,
+    );
     const metaLineLayout = this.getMetaLineLayout();
     y = this.drawMetaLine(
       ctx,
@@ -344,15 +351,26 @@ export class LabelService {
     const top = startY;
     const layout = this.getMetaLineLayout();
     const height = mmToPx(layout.heightMm);
+    const items = this.buildMetaItems(labelData);
+    const gap = mmToPx(0.6);
+    const cellWidth = (width - gap * (items.length - 1)) / items.length;
+    const textPadding = mmToPx(0.6);
 
     ctx.fillStyle = '#222222';
-    ctx.font = `${mmToPx(LABEL_LAYOUT.fontSize.meta)}px "Chinese"`;
+    ctx.strokeStyle = '#D0D0D0';
+    ctx.lineWidth = 1;
+    ctx.font = `bold ${mmToPx(LABEL_LAYOUT.fontSize.meta)}px "Chinese-Bold"`;
     ctx.textAlign = 'center';
-    ctx.fillText(
-      this.clipText(ctx, this.buildMetaLine(labelData), width - mmToPx(1)),
-      left + width / 2,
-      top + mmToPx(2.4),
-    );
+
+    items.forEach((text, index) => {
+      const cellLeft = left + index * (cellWidth + gap);
+      ctx.strokeRect(cellLeft, top, cellWidth, height);
+      ctx.fillText(
+        this.clipText(ctx, text, cellWidth - textPadding * 2),
+        cellLeft + cellWidth / 2,
+        top + mmToPx(2.45),
+      );
+    });
 
     return top + height;
   }
@@ -436,7 +454,7 @@ export class LabelService {
   }
 
   private getIngredientGridColumnCandidates(): number[] {
-    return [3, 2, 1];
+    return [2, 1];
   }
 
   private buildIngredientGridLayout(
@@ -505,8 +523,7 @@ export class LabelService {
     const detailWidth = ctx.measureText(parsed.detailText).width;
     const lastLineWidth = ctx.measureText(lastLine).width;
     const detailGap = mmToPx(1);
-    const detailOnOwnLine =
-      lastLineWidth + detailGap + detailWidth > maxWidth;
+    const detailOnOwnLine = lastLineWidth + detailGap + detailWidth > maxWidth;
 
     return {
       nameLines,
@@ -584,11 +601,7 @@ export class LabelService {
 
   private measureStorageSection(): number {
     const layout = this.getStorageSectionLayout();
-    return (
-      mmToPx(layout.topGapMm) +
-      this.getSectionTitleHeight() +
-      mmToPx(6.8)
-    );
+    return mmToPx(layout.topGapMm) + this.getSectionTitleHeight() + mmToPx(6.8);
   }
 
   private getSectionTitleHeight(): number {
@@ -605,9 +618,10 @@ export class LabelService {
   ): number {
     let y = this.drawSectionTitle(ctx, '营养成分', startY, left, width);
     const rows = this.buildCompleteNutritionRows(nutrition);
-    const fontSize = mode === 'compact'
-      ? LABEL_LAYOUT.fontSize.small
-      : LABEL_LAYOUT.fontSize.meta;
+    const fontSize =
+      mode === 'compact'
+        ? LABEL_LAYOUT.fontSize.small
+        : LABEL_LAYOUT.fontSize.meta;
     const rowHeight = mmToPx(mode === 'compact' ? 2.65 : 2.85);
 
     ctx.font = `${mmToPx(fontSize)}px "Chinese"`;
@@ -639,13 +653,7 @@ export class LabelService {
     const layout = this.getStorageSectionLayout();
     const top = startY + mmToPx(layout.topGapMm);
     const colWidth = width / 2;
-    const contentY = this.drawSectionTitle(
-      ctx,
-      layout.title,
-      top,
-      left,
-      width,
-    );
+    const contentY = this.drawSectionTitle(ctx, layout.title, top, left, width);
 
     ctx.fillStyle = '#111111';
     ctx.font = `bold ${mmToPx(LABEL_LAYOUT.fontSize.small)}px "Chinese-Bold"`;
@@ -690,19 +698,21 @@ export class LabelService {
     return startY + mmToPx(5.5);
   }
 
-  private getIngredientGridConfig(
-    mode: LabelRenderMode,
-  ): { columns: number; fontSize: number; lineHeight: number } {
+  private getIngredientGridConfig(mode: LabelRenderMode): {
+    columns: number;
+    fontSize: number;
+    lineHeight: number;
+  } {
     if (mode === 'compact') {
       return {
-        columns: 3,
+        columns: 2,
         fontSize: LABEL_LAYOUT.fontSize.compactBody,
         lineHeight: 2.6,
       };
     }
 
     return {
-      columns: 3,
+      columns: 2,
       fontSize: LABEL_LAYOUT.fontSize.body,
       lineHeight: LABEL_LAYOUT.lineHeight.compact,
     };
@@ -726,7 +736,9 @@ export class LabelService {
       return `${ratio[1]} ${Number(ratio[2].replace('%', '')).toFixed(1)}%`;
     }
 
-    const amount = item.match(/^(.+?)(\d+(?:\.\d+)?(?:g|kg|mg|ml|mL|L|平勺|粒|片|颗|枚|袋|盒|份|滴|IU|μg|ug|mcg))$/i);
+    const amount = item.match(
+      /^(.+?)(\d+(?:\.\d+)?(?:g|kg|mg|ml|mL|L|平勺|粒|片|颗|枚|袋|盒|份|滴|IU|μg|ug|mcg))$/i,
+    );
     if (amount) {
       return `${amount[1]} ${amount[2]}`;
     }
@@ -751,7 +763,9 @@ export class LabelService {
       };
     }
 
-    const amount = item.match(/^(.+?)(\d+(?:\.\d+)?(?:g|kg|mg|ml|mL|L|平勺|粒|片|颗|枚|袋|盒|份|滴|IU|μg|ug|mcg))$/i);
+    const amount = item.match(
+      /^(.+?)(\d+(?:\.\d+)?(?:g|kg|mg|ml|mL|L|平勺|粒|片|颗|枚|袋|盒|份|滴|IU|μg|ug|mcg))$/i,
+    );
     if (amount) {
       return {
         nameText: amount[1].trim(),
@@ -792,14 +806,16 @@ export class LabelService {
   }
 
   private buildMetaLine(labelData: LabelDataDto): string {
+    return this.buildMetaItems(labelData).join('｜');
+  }
+
+  private buildMetaItems(labelData: LabelDataDto): string[] {
     return [
       labelData.dogName,
       labelData.productionTime,
       this.buildPackageSummary(labelData).replace(/^分装：/, ''),
-      `净重${this.getTotalWeight(labelData)}g`,
-    ]
-      .filter(Boolean)
-      .join('｜');
+      `${this.getTotalWeight(labelData)}g`,
+    ].filter(Boolean);
   }
 
   private buildCompleteNutritionRows(
@@ -865,7 +881,9 @@ export class LabelService {
   }
 
   private buildPackageSummary(labelData: LabelDataDto): string {
-    const packagePlanRows = this.normalizePackagePlanRows(labelData.packagePlan);
+    const packagePlanRows = this.normalizePackagePlanRows(
+      labelData.packagePlan,
+    );
     if (packagePlanRows.length === 0) {
       return `分装：${labelData.weightPerPack}g×${labelData.packageCount}袋`;
     }
@@ -877,7 +895,9 @@ export class LabelService {
   }
 
   private getTotalWeight(labelData: LabelDataDto): number {
-    const packagePlanRows = this.normalizePackagePlanRows(labelData.packagePlan);
+    const packagePlanRows = this.normalizePackagePlanRows(
+      labelData.packagePlan,
+    );
     if (packagePlanRows.length > 0) {
       return this.getPackagePlanTotalWeight(packagePlanRows);
     }

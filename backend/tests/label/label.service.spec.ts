@@ -5,7 +5,8 @@ import { LabelDataDto } from '../../src/label/dto/label-data.dto';
 
 describe('LabelService 70x100 food label rendering', () => {
   const testDpi = 203;
-  const mmToExpectedPx = (mm: number): number => Math.round((mm * testDpi) / 25.4);
+  const mmToExpectedPx = (mm: number): number =>
+    Math.round((mm * testDpi) / 25.4);
   const extractFontPx = (font: string): number => {
     const match = font.match(/(\d+)px/);
     return match ? Number(match[1]) : 0;
@@ -87,12 +88,16 @@ describe('LabelService 70x100 food label rendering', () => {
     expect(flattened).toContain('钙磷比 1.35');
   });
 
-  it('renders basic package facts as one compact customer-facing line', () => {
+  it('renders basic package facts as value-only top cards', () => {
     const service = new LabelService();
 
-    expect((service as any).buildMetaLine(createLabelData())).toBe(
-      'setar｜2026-04-22｜208g×60袋｜净重12480g',
-    );
+    const items = (service as any).buildMetaItems(createLabelData());
+
+    expect(items).toEqual(['setar', '2026-04-22', '208g×60袋', '12480g']);
+    expect(items.join('')).not.toContain('狗狗');
+    expect(items.join('')).not.toContain('制作');
+    expect(items.join('')).not.toContain('分装');
+    expect(items.join('')).not.toContain('净重');
   });
 
   it('keeps the basic facts line close to the title without extra rule lines', () => {
@@ -103,7 +108,9 @@ describe('LabelService 70x100 food label rendering', () => {
       topGapMm: expect.any(Number),
       heightMm: expect.any(Number),
     });
-    expect((service as any).getMetaLineLayout().topGapMm).toBeLessThanOrEqual(0.4);
+    expect((service as any).getMetaLineLayout().topGapMm).toBeLessThanOrEqual(
+      0.4,
+    );
     expect((service as any).getMetaLineLayout().heightMm).toBeLessThan(4);
   });
 
@@ -113,7 +120,9 @@ describe('LabelService 70x100 food label rendering', () => {
 
     (service as any).drawMetaLine(ctx, createLabelData(), 0, 0, 487);
 
-    expect(extractFontPx(ctx.font)).toBeGreaterThanOrEqual(mmToExpectedPx(2.35));
+    expect(extractFontPx(ctx.font)).toBeGreaterThanOrEqual(
+      mmToExpectedPx(2.35),
+    );
   });
 
   it('keeps supplement actual total amount on the ingredient label', () => {
@@ -170,21 +179,54 @@ describe('LabelService 70x100 food label rendering', () => {
     ).toThrow('标签内容超出');
   });
 
-  it('uses three columns for compact ingredient layout after supplement amounts are short', () => {
+  it('uses two-column ingredient tables before falling back to one column', () => {
     const service = new LabelService();
 
-    expect((service as any).getIngredientGridConfig('compact')).toMatchObject({
-      columns: 3,
-      fontSize: expect.any(Number),
-    });
-    expect((service as any).getIngredientGridConfig('compact').fontSize).toBeGreaterThanOrEqual(2);
+    expect((service as any).getIngredientGridColumnCandidates()).toEqual([
+      2, 1,
+    ]);
+    expect(
+      (service as any).getIngredientGridConfig('compact').fontSize,
+    ).toBeGreaterThanOrEqual(2);
   });
 
   it('uses print-readable ingredient fonts in both regular and compact layouts', () => {
     const service = new LabelService();
 
-    expect((service as any).getIngredientGridConfig('regular').fontSize).toBeGreaterThanOrEqual(2.45);
-    expect((service as any).getIngredientGridConfig('compact').fontSize).toBeGreaterThanOrEqual(2.25);
+    expect(
+      (service as any).getIngredientGridConfig('regular').fontSize,
+    ).toBeGreaterThanOrEqual(2.45);
+    expect(
+      (service as any).getIngredientGridConfig('compact').fontSize,
+    ).toBeGreaterThanOrEqual(2.25);
+  });
+
+  it('keeps nutrition and storage inside the 70x100 label with dense real-world ingredients', () => {
+    const service = new LabelService();
+    const ctx = createCanvas(559, 799).getContext('2d');
+    const data = createLabelData();
+    const labelWidthPx = Math.round((70 * testDpi) / 25.4);
+    const labelHeightPx = Math.round((100 * testDpi) / 25.4);
+    const contentLeft = Math.round((4.5 * testDpi) / 25.4);
+    const contentWidth = labelWidthPx - contentLeft * 2;
+    const bottomLimit = labelHeightPx - Math.round((4 * testDpi) / 25.4);
+    const ingredientStartY = Math.round((19.7 * testDpi) / 25.4);
+    const ingredientItems = (service as any).buildIngredientItems(data);
+    const mode = (service as any).resolveLabelRenderMode(ingredientItems);
+    const layout = (service as any).resolveIngredientGridLayout(
+      ctx,
+      data,
+      ingredientItems,
+      ingredientStartY,
+      contentWidth,
+      mode,
+      bottomLimit,
+    );
+
+    expect(layout.columns).toBe(2);
+    expect(
+      (service as any).measureLabelFinalY(data, ingredientStartY, layout, mode),
+    ).toBeLessThanOrEqual(bottomLimit);
   });
 
   it('uses three nutrition columns while keeping energy and calcium phosphorus ratio together', () => {
@@ -218,7 +260,9 @@ describe('LabelService 70x100 food label rendering', () => {
       487,
       'regular',
     );
-    expect(extractFontPx(ctx.font)).toBeGreaterThanOrEqual(mmToExpectedPx(2.35));
+    expect(extractFontPx(ctx.font)).toBeGreaterThanOrEqual(
+      mmToExpectedPx(2.35),
+    );
 
     (service as any).drawStorageSection(ctx, 0, 0, 487);
     expect(extractFontPx(ctx.font)).toBeGreaterThanOrEqual(mmToExpectedPx(2.2));

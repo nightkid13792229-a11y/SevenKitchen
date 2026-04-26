@@ -84,6 +84,22 @@ describe('home runtime regressions', () => {
     expect(source).toContain('scheduleStaleRecipeCoverReveal()')
   })
 
+  it('renders recipe cover titles as subtle bottom badges only when a real cover image exists', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/home/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('coverTitle?: string')
+    expect(source).toContain('v-if="recipe.displayCoverUrl && recipe.coverTitle"')
+    expect(source).toContain('class="recipe-cover-badge-gradient"')
+    expect(source).toContain('class="recipe-cover-title-badge"')
+    expect(source).toContain('{{ recipe.coverTitle }}')
+    expect(source).toContain('.recipe-cover-badge-gradient')
+    expect(source).toContain('.recipe-cover-title-badge')
+    expect(source).not.toContain('class="cover-title-overlay"')
+  })
+
   it('refreshes recipe stats on return when the DIY flow marked them dirty', () => {
     const homeSource = readFileSync(
       resolve(process.cwd(), 'src/pages/home/index.vue'),

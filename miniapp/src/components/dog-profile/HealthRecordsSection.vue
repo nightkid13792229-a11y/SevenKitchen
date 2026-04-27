@@ -1,15 +1,35 @@
 <template>
-  <view class="records-section">
+  <view class="records-section" :class="activeTypeMeta.accentClass">
     <view class="records-section__header">
       <view>
-        <text class="records-section__title">{{ title }}</text>
-        <text v-if="description" class="records-section__description">{{ description }}</text>
+        <text class="records-section__title">健康记录</text>
+        <text class="records-section__description">
+          按类别整理每一条记录，附件可在展开后上传和预览。
+        </text>
       </view>
       <text class="records-section__count">{{ savedRecordCount }} 条</text>
     </view>
 
+    <view class="record-type-tabs">
+      <button
+        v-for="type in HEALTH_RECORD_TYPES"
+        :key="type"
+        class="record-type-tabs__item"
+        :class="[
+          getHealthRecordTypeMeta(type).accentClass,
+          { 'record-type-tabs__item--active': type === currentType },
+        ]"
+        :disabled="loading || hasUploadingRecords"
+        @tap="requestTypeChange(type)"
+      >
+        {{ getHealthRecordTypeMeta(type).label }}
+      </button>
+    </view>
+
     <view v-if="draftRecords.length === 0" class="records-section__empty">
-      <text class="records-section__empty-title">{{ emptyTitle }}</text>
+      <text class="records-section__empty-title">
+        {{ loading ? '记录加载中' : activeTypeMeta.emptyTitle }}
+      </text>
       <text class="records-section__empty-desc">先补充一条基础记录，之后可以继续添加。</text>
     </view>
 
@@ -49,7 +69,13 @@
         </view>
 
         <view class="record-card__header-actions">
-          <button class="record-card__delete" @tap.stop="removeRecord(index)">删除</button>
+          <button
+            class="record-card__delete"
+            :disabled="loading || hasUploadingRecords || isRecordSaving(record, index)"
+            @tap.stop="removeRecord(index)"
+          >
+            删除
+          </button>
           <text class="record-card__toggle" @tap.stop="toggleRecordExpanded(index)">
             {{ isRecordExpanded(record, index) ? '收起' : '展开' }}
           </text>
@@ -58,47 +84,47 @@
 
       <view v-if="isRecordExpanded(record, index)" class="record-card__body">
         <view class="field-group">
-          <text class="field-label">{{ primaryLabel }}</text>
+          <text class="field-label">{{ fieldConfig.primary.label }}</text>
           <input
             class="field-input"
             type="text"
-            :placeholder="`请输入${primaryLabel}`"
-            :value="readField(record, primaryFieldKey)"
-            @input="updateTextField(index, primaryFieldKey, $event.detail.value)"
+            :placeholder="`请输入${fieldConfig.primary.label}`"
+            :value="readField(record, fieldConfig.primary.key)"
+            @input="updateTextField(index, fieldConfig.primary.key, $event.detail.value)"
           />
         </view>
 
-        <view v-if="dateFieldKey" class="field-group">
-          <text class="field-label">{{ dateLabel }}</text>
+        <view v-if="fieldConfig.date" class="field-group">
+          <text class="field-label">{{ fieldConfig.date.label }}</text>
           <picker
             mode="date"
-            :value="readField(record, dateFieldKey)"
-            @change="updateTextField(index, dateFieldKey, $event.detail.value)"
+            :value="readField(record, fieldConfig.date.key)"
+            @change="updateTextField(index, fieldConfig.date.key, $event.detail.value)"
           >
             <view class="field-picker">
-              {{ readField(record, dateFieldKey) || `请选择${dateLabel}` }}
+              {{ readField(record, fieldConfig.date.key) || `请选择${fieldConfig.date.label}` }}
             </view>
           </picker>
         </view>
 
-        <view v-if="secondaryFieldKey" class="field-group">
-          <text class="field-label">{{ secondaryLabel }}</text>
+        <view v-if="fieldConfig.secondary" class="field-group">
+          <text class="field-label">{{ fieldConfig.secondary.label }}</text>
           <input
             class="field-input"
             type="text"
-            :placeholder="`请输入${secondaryLabel}`"
-            :value="readField(record, secondaryFieldKey)"
-            @input="updateTextField(index, secondaryFieldKey, $event.detail.value)"
+            :placeholder="`请输入${fieldConfig.secondary.label}`"
+            :value="readField(record, fieldConfig.secondary.key)"
+            @input="updateTextField(index, fieldConfig.secondary.key, $event.detail.value)"
           />
         </view>
 
         <view class="field-group">
-          <text class="field-label">{{ notesLabel }}</text>
+          <text class="field-label">{{ fieldConfig.notes.label }}</text>
           <textarea
             class="field-textarea"
-            :placeholder="`请输入${notesLabel}`"
-            :value="readField(record, notesFieldKey)"
-            @input="updateTextField(index, notesFieldKey, $event.detail.value)"
+            :placeholder="`请输入${fieldConfig.notes.label}`"
+            :value="readField(record, fieldConfig.notes.key)"
+            @input="updateTextField(index, fieldConfig.notes.key, $event.detail.value)"
           />
         </view>
 
@@ -127,6 +153,7 @@
               </view>
               <button
                 class="attachment-item__remove"
+                :disabled="isRecordSaving(record, index)"
                 @tap="removeAttachment(index, attachmentIndex)"
               >
                 删除
@@ -137,7 +164,7 @@
           <button
             class="attachment-button"
             :loading="isUploading(record, index)"
-            :disabled="isUploading(record, index) || savingKeys[recordKey(record, index)]"
+            :disabled="loading || isUploading(record, index) || isRecordSaving(record, index)"
             @tap="chooseAttachment(index)"
           >
             上传附件
@@ -148,6 +175,7 @@
           <button
             v-if="secondaryActionText(record, index)"
             class="record-card__action record-card__action--ghost"
+            :disabled="hasUploadingRecords || isRecordSaving(record, index)"
             @tap="cancelRecord(index)"
           >
             {{ secondaryActionText(record, index) }}
@@ -158,7 +186,7 @@
               'record-card__action--primary-only': !secondaryActionText(record, index),
               'record-card__action--disabled': saveButtonDisabled(record, index),
             }"
-            :loading="savingKeys[recordKey(record, index)]"
+            :loading="isRecordSaving(record, index)"
             :disabled="saveButtonDisabled(record, index)"
             @tap="saveRecord(index)"
           >
@@ -168,7 +196,9 @@
       </view>
     </view>
 
-    <button class="records-section__add" @tap="addRecord">新增记录</button>
+    <button class="records-section__add" :disabled="loading || hasUploadingRecords" @tap="addRecord">
+      {{ activeTypeMeta.addLabel }}
+    </button>
   </view>
 </template>
 
@@ -176,82 +206,85 @@
 import { computed, nextTick, ref, watch } from 'vue'
 import { dogApi } from '../../api/dogs'
 import {
+  HEALTH_RECORD_TYPES,
   type HealthRecordType,
+  buildHealthAttachmentDisplayMeta,
+  buildHealthAttachmentFieldHint,
   buildHealthRecordFocusIdentity,
   buildHealthRecordSummary,
-  buildHealthAttachmentDisplayMeta,
   createHealthRecordDraft,
   extractHealthAttachmentKey,
   findHealthRecordFocusIndex,
-  buildHealthAttachmentFieldHint,
+  getHealthRecordTypeMeta,
+  getHealthRecordValidationError,
+  readHealthAttachmentFileSize,
   resolveHealthAttachmentFileSizeError,
   resolveHealthAttachmentPreviewType,
   resolveHealthAttachmentSelectionError,
-  getHealthRecordValidationError,
-  readHealthAttachmentFileSize,
   resolveHealthAttachmentUploadErrorMessage,
   resolveHealthRecordSecondaryActionText,
-  findPersistedHealthRecordMatch,
-  shouldUseRemoteHealthRecordSync,
 } from '../../utils/health-records'
 
+type FieldConfig = {
+  primary: { key: string, label: string }
+  date: { key: string, label: string } | null
+  secondary: { key: string, label: string } | null
+  notes: { key: string, label: string }
+}
+
 const props = withDefaults(defineProps<{
-  modelValue?: Record<string, any>[]
   dogId: string
-  recordType: HealthRecordType
-  title: string
-  description?: string
-  emptyTitle?: string
-  primaryFieldKey: string
-  primaryLabel: string
-  dateFieldKey?: string
-  dateLabel?: string
-  secondaryFieldKey?: string
-  secondaryLabel?: string
-  notesFieldKey?: string
-  notesLabel?: string
-  attachmentsFieldKey?: string
+  activeType?: HealthRecordType
+  records?: Record<string, any>[]
+  loading?: boolean
+  savingRecordKey?: string
   preferredExpandedRecordIdentity?: string
+  modelValue?: Record<string, any>[]
+  recordType?: HealthRecordType
 }>(), {
-  modelValue: () => [],
-  description: '',
-  emptyTitle: '还没有记录',
-  dateFieldKey: '',
-  dateLabel: '日期',
-  secondaryFieldKey: '',
-  secondaryLabel: '',
-  notesFieldKey: 'notes',
-  notesLabel: '备注',
-  attachmentsFieldKey: 'attachments',
+  activeType: undefined,
+  records: () => [],
+  loading: false,
+  savingRecordKey: '',
   preferredExpandedRecordIdentity: '',
+  modelValue: () => [],
+  recordType: undefined,
 })
 
 const emit = defineEmits<{
-  (event: 'update:modelValue', value: Record<string, any>[]): void
+  (event: 'change-type', value: HealthRecordType): void
+  (event: 'save-record', value: {
+    type: HealthRecordType
+    record: Record<string, any>
+    recordKey: string
+  }): void
+  (event: 'delete-record', value: { type: HealthRecordType, record: Record<string, any> }): void
+  (event: 'dirty-change', value: boolean): void
   (event: 'record-saved', identity: string): void
 }>()
 
 const draftRecords = ref<Record<string, any>[]>([])
 const savedSnapshots = ref<Record<string, Record<string, any>>>({})
-const savingKeys = ref<Record<string, boolean>>({})
 const uploadingKeys = ref<Record<string, boolean>>({})
-const skipNextSync = ref(false)
 const expandedRecordKey = ref<string | null>(null)
 const attachmentHintText = buildHealthAttachmentFieldHint()
 
-const savedRecordCount = computed(() =>
-  draftRecords.value.filter((record, index) => isSavedRecord(record, index)).length,
+const currentType = computed<HealthRecordType>(() => props.activeType || props.recordType || 'medical')
+const activeTypeMeta = computed(() => getHealthRecordTypeMeta(currentType.value))
+const sourceRecords = computed(() => (
+  props.records.length > 0 || !props.modelValue.length ? props.records : props.modelValue
+))
+const savedRecordCount = computed(() => sourceRecords.value.length)
+const fieldConfig = computed<FieldConfig>(() => getFieldConfig(currentType.value))
+const hasDirtyRecords = computed(() =>
+  draftRecords.value.some((record, index) => isRecordDirty(record, index)),
 )
+const hasUploadingRecords = computed(() => Object.values(uploadingKeys.value).some(Boolean))
 
 watch(
-  () => props.modelValue,
-  (nextValue) => {
-    if (skipNextSync.value) {
-      skipNextSync.value = false
-      return
-    }
-
-    syncDraftRecords(Array.isArray(nextValue) ? nextValue : [])
+  () => [currentType.value, sourceRecords.value] as const,
+  () => {
+    syncDraftRecords(sourceRecords.value)
   },
   { immediate: true, deep: true },
 )
@@ -266,6 +299,41 @@ watch(
     focusRecordByIdentity(nextIdentity)
   },
 )
+
+watch(
+  hasDirtyRecords,
+  (nextValue) => {
+    emit('dirty-change', nextValue)
+  },
+  { immediate: true },
+)
+
+function getFieldConfig(type: HealthRecordType): FieldConfig {
+  if (type === 'medical') {
+    return {
+      primary: { key: 'chiefComplaint', label: '症状或疾病' },
+      date: { key: 'visitDate', label: '发病日期' },
+      secondary: { key: 'diagnosis', label: '诊断结果' },
+      notes: { key: 'notes', label: '补充说明' },
+    }
+  }
+
+  if (type === 'checkup') {
+    return {
+      primary: { key: 'checkupType', label: '体检类型' },
+      date: { key: 'checkupDate', label: '体检日期' },
+      secondary: null,
+      notes: { key: 'notes', label: '体检说明' },
+    }
+  }
+
+  return {
+    primary: { key: 'allergen', label: '过敏原' },
+    date: null,
+    secondary: null,
+    notes: { key: 'notes', label: '过敏反应/说明' },
+  }
+}
 
 function cloneRecord<T>(value: T): T {
   return JSON.parse(JSON.stringify(value))
@@ -286,21 +354,26 @@ function createLocalKey(record: Record<string, any>, index: number) {
     return record.id
   }
 
-  return `${props.recordType}-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`
+  return `${currentType.value}-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+function normalizeDraftRecord(record: Record<string, any>, localId: string) {
+  return {
+    ...cloneRecord(record),
+    __localId: localId,
+    attachments: attachmentList(record),
+  }
 }
 
 function syncDraftRecords(records: Record<string, any>[]) {
   const nextSnapshots: Record<string, Record<string, any>> = {}
   const nextDraftRecords = records.map((record, index) => {
     const localId = createLocalKey(record, index)
-    const draftRecord = {
-      ...cloneRecord(record),
-      __localId: localId,
-      [props.attachmentsFieldKey]: attachmentList(record),
-    }
+    const draftRecord = normalizeDraftRecord(record, localId)
     nextSnapshots[localId] = stripLocalFields(draftRecord)
     return draftRecord
   })
+
   draftRecords.value = nextDraftRecords
   savedSnapshots.value = nextSnapshots
 
@@ -315,12 +388,18 @@ function syncDraftRecords(records: Record<string, any>[]) {
 }
 
 function recordKey(record: Record<string, any>, index: number) {
-  return record.__localId || record.id || `${props.title}-${index}`
+  return record.__localId || record.id || `${currentType.value}-${index}`
+}
+
+function findRecordIndexByKey(key: string) {
+  return draftRecords.value.findIndex((record, currentIndex) =>
+    recordKey(record, currentIndex) === key,
+  )
 }
 
 function recordAnchorId(record: Record<string, any>, index: number) {
-  const safeKey = recordKey(record, index).replace(/[^A-Za-z0-9_-]/g, '-')
-  return `health-record-${props.recordType}-${safeKey}`
+  const safeKey = String(recordKey(record, index)).replace(/[^A-Za-z0-9_-]/g, '-')
+  return `health-record-${currentType.value}-${safeKey}`
 }
 
 function savedSnapshot(record: Record<string, any>, index: number) {
@@ -337,9 +416,21 @@ function readField(record: Record<string, any>, key: string) {
 }
 
 function attachmentList(record: Record<string, any>) {
-  const attachments = record?.[props.attachmentsFieldKey]
+  const attachments = record?.attachments
   return Array.isArray(attachments)
-    ? attachments.filter((item) => typeof item === 'string' && item.trim())
+    ? attachments
+      .map((item) => {
+        if (typeof item === 'string') {
+          return item.trim()
+        }
+
+        if (item && typeof item === 'object' && typeof item.url === 'string') {
+          return item.url.trim()
+        }
+
+        return ''
+      })
+      .filter(Boolean)
     : []
 }
 
@@ -372,34 +463,11 @@ function scrollToRecord(index: number) {
   })
 }
 
-function focusRecordAtIndex(index: number) {
-  if (index < 0 || index >= draftRecords.value.length) {
-    return false
-  }
-
-  const record = draftRecords.value[index]
-  expandedRecordKey.value = recordKey(record, index)
-  scrollToRecord(index)
-  return true
-}
-
-function collapseRecordAtIndex(index: number) {
-  if (index < 0 || index >= draftRecords.value.length) {
-    return false
-  }
-
-  expandedRecordKey.value = null
-  nextTick(() => {
-    scrollToRecord(index)
-  })
-  return true
-}
-
 function focusRecordByIdentity(
   identity: string | null | undefined,
   records: Record<string, any>[] = draftRecords.value,
 ) {
-  const index = findHealthRecordFocusIndex(props.recordType, records, identity)
+  const index = findHealthRecordFocusIndex(currentType.value, records, identity)
   if (index < 0) {
     return false
   }
@@ -409,15 +477,53 @@ function focusRecordByIdentity(
   return true
 }
 
+async function requestTypeChange(type: HealthRecordType) {
+  if (type === currentType.value) {
+    return
+  }
+
+  if (hasUploadingRecords.value) {
+    uni.showToast({ title: '附件上传中，请稍候', icon: 'none' })
+    return
+  }
+
+  if (hasDirtyRecords.value) {
+    const confirmed = await new Promise<boolean>((resolve) => {
+      uni.showModal({
+        title: '切换分类',
+        content: '当前分类有未保存的记录，切换后将放弃这些修改，确认继续吗？',
+        success: (res) => resolve(Boolean(res.confirm)),
+        fail: () => resolve(false),
+      })
+    })
+
+    if (!confirmed) {
+      return
+    }
+  }
+
+  emit('change-type', type)
+}
+
 function updateTextField(index: number, key: string, value: string) {
+  const record = draftRecords.value[index]
+  if (!record) {
+    return
+  }
+
   draftRecords.value[index] = {
-    ...draftRecords.value[index],
+    ...record,
     [key]: value,
   }
 }
 
 function addRecord() {
-  const nextRecord = createHealthRecordDraft(props.recordType)
+  if (hasUploadingRecords.value) {
+    uni.showToast({ title: '附件上传中，请稍候', icon: 'none' })
+    return
+  }
+
+  const nextRecord = createHealthRecordDraft(currentType.value)
   draftRecords.value.push(nextRecord)
   expandedRecordKey.value = nextRecord.__localId || null
 }
@@ -427,12 +533,17 @@ function isRecordExpanded(record: Record<string, any>, index: number) {
 }
 
 function toggleRecordExpanded(index: number) {
-  const key = recordKey(draftRecords.value[index], index)
+  const record = draftRecords.value[index]
+  if (!record) {
+    return
+  }
+
+  const key = recordKey(record, index)
   expandedRecordKey.value = expandedRecordKey.value === key ? null : key
 }
 
 function recordSummary(record: Record<string, any>, index: number) {
-  const summary = buildHealthRecordSummary(props.recordType, record)
+  const summary = buildHealthRecordSummary(currentType.value, record)
   if (!isSavedRecord(record, index) && summary.title.startsWith('未填写')) {
     return {
       title: '新记录',
@@ -444,19 +555,17 @@ function recordSummary(record: Record<string, any>, index: number) {
 }
 
 function saveButtonText(record: Record<string, any>, index: number) {
-  if (!isSavedRecord(record, index)) {
-    return '保存记录'
-  }
-
-  return isRecordDirty(record, index) ? '更新记录' : '已保存'
+  return isSavedRecord(record, index) && !isRecordDirty(record, index)
+    ? '已保存'
+    : '保存这一条'
 }
 
 function saveButtonDisabled(record: Record<string, any>, index: number) {
-  if (savingKeys.value[recordKey(record, index)]) {
-    return true
-  }
-
-  return isSavedRecord(record, index) && !isRecordDirty(record, index)
+  return props.loading ||
+    hasUploadingRecords.value ||
+    isUploading(record, index) ||
+    isRecordSaving(record, index) ||
+    (isSavedRecord(record, index) && !isRecordDirty(record, index))
 }
 
 function secondaryActionText(record: Record<string, any>, index: number) {
@@ -471,7 +580,7 @@ function recordStatusText(record: Record<string, any>, index: number) {
     return '未保存'
   }
 
-  return isRecordDirty(record, index) ? '待更新' : '已保存'
+  return isRecordDirty(record, index) ? '待保存' : '已保存'
 }
 
 function isRecordDirty(record: Record<string, any>, index: number) {
@@ -483,164 +592,80 @@ function isRecordDirty(record: Record<string, any>, index: number) {
   return JSON.stringify(stripLocalFields(record)) !== JSON.stringify(snapshot)
 }
 
-function buildPersistedRecordsForSave(targetIndex: number) {
-  return draftRecords.value.flatMap((record, index) => {
-    if (index === targetIndex) {
-      return [stripLocalFields(record)]
-    }
-
-    const snapshot = savedSnapshot(record, index)
-    return snapshot ? [cloneRecord(snapshot)] : []
-  })
-}
-
-function buildPersistedRecordsAfterDelete(targetIndex: number) {
-  return draftRecords.value.flatMap((record, index) => {
-    if (index === targetIndex) {
-      return []
-    }
-
-    const snapshot = savedSnapshot(record, index)
-    return snapshot ? [cloneRecord(snapshot)] : []
-  })
-}
-
-function emitPersistedRecords() {
-  skipNextSync.value = true
-  emit(
-    'update:modelValue',
-    draftRecords.value.flatMap((record, index) => {
-      const snapshot = savedSnapshot(record, index)
-      return snapshot ? [cloneRecord(snapshot)] : []
-    }),
-  )
-}
-
-function resolveProfileRecords(profile: Record<string, any> | undefined) {
-  if (!profile) {
-    return []
+function isRecordSaving(record: Record<string, any>, index: number) {
+  const savingKey = props.savingRecordKey
+  if (!savingKey) {
+    return false
   }
 
-  if (props.recordType === 'medical') {
-    return Array.isArray(profile.medicalRecords) ? profile.medicalRecords : []
-  }
-
-  if (props.recordType === 'checkup') {
-    return Array.isArray(profile.checkupRecords) ? profile.checkupRecords : []
-  }
-
-  return Array.isArray(profile.allergyRecords) ? profile.allergyRecords : []
+  return [
+    recordKey(record, index),
+    record.id,
+    buildHealthRecordFocusIdentity(currentType.value, record),
+  ].some((value) => value === savingKey)
 }
 
-function normalizeServerRecord(record: Record<string, any>, localId: string) {
-  return {
-    ...cloneRecord(record),
-    __localId: localId,
-    [props.attachmentsFieldKey]: attachmentList(record),
+function saveRecord(index: number) {
+  if (hasUploadingRecords.value) {
+    uni.showToast({ title: '附件上传中，请稍候', icon: 'none' })
+    return
   }
-}
 
-function findSavedRecordFromProfile(
-  profileRecords: Record<string, any>[],
-  record: Record<string, any>,
-  index: number,
-) {
-  return findPersistedHealthRecordMatch(
-    props.recordType,
-    profileRecords,
-    record,
-    draftRecords.value
-      .filter((item, currentIndex) => currentIndex !== index)
-      .map((item) => item.id),
-  )
-}
-
-async function saveRecord(index: number) {
   const record = draftRecords.value[index]
-  const wasSaved = isSavedRecord(record, index)
-  const validationError = getHealthRecordValidationError(props.recordType, record)
+  if (!record) {
+    return
+  }
+
+  const validationError = getHealthRecordValidationError(currentType.value, record)
   if (validationError) {
     uni.showToast({ title: validationError, icon: 'none' })
     return
   }
 
   const key = recordKey(record, index)
-  savingKeys.value[key] = true
-
-  try {
-    const isRemoteSave = shouldUseRemoteHealthRecordSync(props.dogId)
-    if (isRemoteSave) {
-      uni.showLoading({ title: '保存中...' })
-      const res: any = await dogApi.updateHealthRecords(
-        props.dogId,
-        props.recordType,
-        buildPersistedRecordsForSave(index),
-      )
-
-      if (res.code !== 0 || !res.data?.profile) {
-        throw new Error(res.message || '保存失败')
-      }
-
-      const nextRecord = findSavedRecordFromProfile(
-        resolveProfileRecords(res.data.profile),
-        record,
-        index,
-      )
-      if (!nextRecord) {
-        throw new Error('保存成功但未返回最新记录，请重试')
-      }
-
-      const normalizedRecord = normalizeServerRecord(nextRecord, key)
-      draftRecords.value[index] = normalizedRecord
-      savedSnapshots.value[key] = stripLocalFields(normalizedRecord)
-      const focusIdentity = buildHealthRecordFocusIdentity(props.recordType, normalizedRecord)
-      emit('record-saved', focusIdentity)
-      emitPersistedRecords()
-      collapseRecordAtIndex(index)
-      uni.hideLoading()
-      uni.showToast({ title: wasSaved ? '已更新' : '已保存', icon: 'success' })
-      return
-    }
-
-    const normalizedRecord = normalizeServerRecord(stripLocalFields(record), key)
-    draftRecords.value[index] = normalizedRecord
-    savedSnapshots.value[key] = stripLocalFields(normalizedRecord)
-    const focusIdentity = buildHealthRecordFocusIdentity(props.recordType, normalizedRecord)
-    emit('record-saved', focusIdentity)
-    emitPersistedRecords()
-    collapseRecordAtIndex(index)
-    uni.showToast({ title: wasSaved ? '已更新' : '已保存', icon: 'success' })
-  } catch (error: any) {
-    if (props.dogId) {
-      uni.hideLoading()
-    }
-    uni.showToast({ title: error?.message || '保存失败', icon: 'none' })
-  } finally {
-    delete savingKeys.value[key]
-  }
+  emit('save-record', { type: currentType.value, record: stripLocalFields(record), recordKey: key })
 }
 
 function cancelRecord(index: number) {
+  if (hasUploadingRecords.value) {
+    uni.showToast({ title: '附件上传中，请稍候', icon: 'none' })
+    return
+  }
+
   const record = draftRecords.value[index]
+  if (!record) {
+    return
+  }
+
+  const key = recordKey(record, index)
   const snapshot = savedSnapshot(record, index)
   if (!snapshot) {
     draftRecords.value.splice(index, 1)
-    if (expandedRecordKey.value === recordKey(record, index)) {
+    if (expandedRecordKey.value === key) {
       expandedRecordKey.value = null
     }
     return
   }
 
-  draftRecords.value[index] = normalizeServerRecord(snapshot, recordKey(record, index))
+  draftRecords.value[index] = normalizeDraftRecord(snapshot, key)
   expandedRecordKey.value = null
 }
 
 async function removeRecord(index: number) {
+  if (hasUploadingRecords.value) {
+    uni.showToast({ title: '附件上传中，请稍候', icon: 'none' })
+    return
+  }
+
   const record = draftRecords.value[index]
-  const snapshot = savedSnapshot(record, index)
-  if (!snapshot) {
+  if (!record) {
+    return
+  }
+
+  const key = recordKey(record, index)
+  if (!isSavedRecord(record, index)) {
     draftRecords.value.splice(index, 1)
-    if (expandedRecordKey.value === recordKey(record, index)) {
+    if (expandedRecordKey.value === key) {
       expandedRecordKey.value = null
     }
     return
@@ -659,42 +684,7 @@ async function removeRecord(index: number) {
     return
   }
 
-  const key = recordKey(record, index)
-  savingKeys.value[key] = true
-
-  try {
-    const isRemoteSave = shouldUseRemoteHealthRecordSync(props.dogId)
-    if (isRemoteSave) {
-      uni.showLoading({ title: '删除中...' })
-      const res: any = await dogApi.updateHealthRecords(
-        props.dogId,
-        props.recordType,
-        buildPersistedRecordsAfterDelete(index),
-      )
-
-      if (res.code !== 0 || !res.data?.profile) {
-        throw new Error(res.message || '删除失败')
-      }
-    }
-
-    draftRecords.value.splice(index, 1)
-    delete savedSnapshots.value[key]
-    if (expandedRecordKey.value === key) {
-      expandedRecordKey.value = null
-    }
-    emitPersistedRecords()
-    if (isRemoteSave) {
-      uni.hideLoading()
-    }
-    uni.showToast({ title: '已删除', icon: 'success' })
-  } catch (error: any) {
-    if (shouldUseRemoteHealthRecordSync(props.dogId)) {
-      uni.hideLoading()
-    }
-    uni.showToast({ title: error?.message || '删除失败', icon: 'none' })
-  } finally {
-    delete savingKeys.value[key]
-  }
+  emit('delete-record', { type: currentType.value, record: stripLocalFields(record) })
 }
 
 function isUploading(record: Record<string, any>, index: number) {
@@ -703,8 +693,14 @@ function isUploading(record: Record<string, any>, index: number) {
 
 async function chooseAttachment(index: number) {
   const record = draftRecords.value[index]
+  if (!record) {
+    return
+  }
+
   const key = recordKey(record, index)
-  if (uploadingKeys.value[key]) {
+  const uploadType = currentType.value
+  const uploadKey = key
+  if (uploadingKeys.value[uploadKey]) {
     return
   }
 
@@ -740,15 +736,27 @@ async function chooseAttachment(index: number) {
     return
   }
 
-  uploadingKeys.value[key] = true
+  uploadingKeys.value[uploadKey] = true
 
   try {
     uni.showLoading({ title: '上传中...' })
-    const uploaded = await dogApi.uploadHealthAttachment(props.recordType, selectedFile.path)
-    const attachments = attachmentList(record)
-    draftRecords.value[index] = {
-      ...record,
-      [props.attachmentsFieldKey]: [...attachments, uploaded.url],
+    const uploaded = await dogApi.uploadHealthAttachment(uploadType, selectedFile.path)
+    if (currentType.value !== uploadType) {
+      uni.hideLoading()
+      return
+    }
+
+    const targetIndex = findRecordIndexByKey(uploadKey)
+    if (targetIndex < 0) {
+      uni.hideLoading()
+      return
+    }
+
+    const targetRecord = draftRecords.value[targetIndex]
+    const attachments = attachmentList(targetRecord)
+    draftRecords.value[targetIndex] = {
+      ...targetRecord,
+      attachments: [...attachments, uploaded.url],
     }
     uni.hideLoading()
     uni.showToast({ title: '附件已添加，请保存记录', icon: 'none' })
@@ -756,12 +764,12 @@ async function chooseAttachment(index: number) {
     uni.hideLoading()
     uni.showToast({ title: resolveHealthAttachmentUploadErrorMessage(error), icon: 'none' })
   } finally {
-    delete uploadingKeys.value[key]
+    delete uploadingKeys.value[uploadKey]
   }
 }
 
 function chooseImageFile() {
-  return new Promise<{ path: string; name: string; size: number | null } | null>((resolve) => {
+  return new Promise<{ path: string, name: string, size: number | null } | null>((resolve) => {
     uni.chooseImage({
       count: 1,
       sizeType: ['compressed'],
@@ -789,7 +797,7 @@ function chooseImageFile() {
 }
 
 function choosePdfFile() {
-  return new Promise<{ path: string; name: string; size: number | null } | null>((resolve) => {
+  return new Promise<{ path: string, name: string, size: number | null } | null>((resolve) => {
     uni.chooseMessageFile({
       count: 1,
       type: 'file',
@@ -862,21 +870,26 @@ async function previewAttachment(url: string) {
 
 function removeAttachment(index: number, attachmentIndex: number) {
   const record = draftRecords.value[index]
+  if (!record) {
+    return
+  }
+
   const attachments = attachmentList(record)
   if (attachments.length <= attachmentIndex) {
     return
   }
 
+  const removedUrl = attachments[attachmentIndex]
   const nextAttachments = attachments.filter((_, currentIndex) => currentIndex !== attachmentIndex)
   draftRecords.value[index] = {
     ...record,
-    [props.attachmentsFieldKey]: nextAttachments,
+    attachments: nextAttachments,
   }
 
-  const removedUrl = attachments[attachmentIndex]
+  const savedAttachments = new Set(attachmentList(savedSnapshot(record, index) || {}))
   const removedKey = extractHealthAttachmentKey(removedUrl)
-  if (removedKey && !isSavedRecord(record, index)) {
-    void dogApi.deleteHealthAttachment(props.recordType, removedKey).catch(() => {})
+  if (removedKey && !savedAttachments.has(removedUrl)) {
+    void dogApi.deleteHealthAttachment(currentType.value, removedKey).catch(() => {})
   }
 }
 </script>
@@ -920,11 +933,65 @@ function removeAttachment(index: number, attachmentIndex: number) {
   background: rgba(7, 193, 96, 0.1);
 }
 
+.record-type-tabs {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12rpx;
+  margin-top: 24rpx;
+  padding: 8rpx;
+  border-radius: 24rpx;
+  background: rgba(32, 52, 63, 0.06);
+}
+
+.record-type-tabs__item {
+  margin: 0;
+  height: 68rpx;
+  line-height: 68rpx;
+  border-radius: 18rpx;
+  font-size: 24rpx;
+  font-weight: 700;
+  color: #526872;
+  background: transparent;
+}
+
+.record-type-tabs__item::after,
+.record-card__delete::after,
+.attachment-item__remove::after,
+.record-card__action::after,
+.attachment-button::after,
+.records-section__add::after {
+  border: none;
+}
+
+.record-type-tabs__item--active {
+  color: #fff;
+}
+
+.record-type-tabs__item--active.health-records--medical {
+  background: #0f7b49;
+}
+
+.record-type-tabs__item--active.health-records--checkup {
+  background: #216d9b;
+}
+
+.record-type-tabs__item--active.health-records--allergy {
+  background: #ad5b2a;
+}
+
 .records-section__empty {
   margin-top: 24rpx;
   padding: 24rpx;
   border-radius: 24rpx;
   background: rgba(7, 193, 96, 0.06);
+}
+
+.health-records--checkup .records-section__empty {
+  background: rgba(33, 109, 155, 0.08);
+}
+
+.health-records--allergy .records-section__empty {
+  background: rgba(173, 91, 42, 0.08);
 }
 
 .records-section__empty-title {
@@ -950,9 +1017,19 @@ function removeAttachment(index: number, attachmentIndex: number) {
   border: 1rpx solid rgba(15, 107, 67, 0.08);
 }
 
+.health-records--checkup .record-card {
+  background: #f7fbfd;
+  border-color: rgba(33, 109, 155, 0.1);
+}
+
+.health-records--allergy .record-card {
+  background: #fffaf6;
+  border-color: rgba(173, 91, 42, 0.1);
+}
+
 .record-card--dirty {
-  border-color: rgba(15, 107, 67, 0.18);
-  box-shadow: inset 0 0 0 1rpx rgba(15, 107, 67, 0.04);
+  border-color: rgba(15, 107, 67, 0.22);
+  box-shadow: inset 0 0 0 1rpx rgba(15, 107, 67, 0.05);
 }
 
 .record-card__header,
@@ -1037,6 +1114,16 @@ function removeAttachment(index: number, attachmentIndex: number) {
   background: rgba(7, 193, 96, 0.12);
 }
 
+.health-records--checkup .record-card__index {
+  color: #216d9b;
+  background: rgba(33, 109, 155, 0.12);
+}
+
+.health-records--allergy .record-card__index {
+  color: #ad5b2a;
+  background: rgba(173, 91, 42, 0.12);
+}
+
 .record-card__status {
   padding: 6rpx 14rpx;
   border-radius: 999rpx;
@@ -1073,14 +1160,6 @@ function removeAttachment(index: number, attachmentIndex: number) {
   font-size: 24rpx;
   color: #a63f3f;
   background: rgba(218, 82, 82, 0.08);
-}
-
-.record-card__delete::after,
-.attachment-item__remove::after,
-.record-card__action::after,
-.attachment-button::after,
-.records-section__add::after {
-  border: none;
 }
 
 .field-group {
@@ -1160,6 +1239,14 @@ function removeAttachment(index: number, attachmentIndex: number) {
   background: rgba(15, 107, 67, 0.06);
 }
 
+.health-records--checkup .attachment-item {
+  background: rgba(33, 109, 155, 0.07);
+}
+
+.health-records--allergy .attachment-item {
+  background: rgba(173, 91, 42, 0.07);
+}
+
 .attachment-item__preview {
   flex: 1;
   min-width: 0;
@@ -1206,6 +1293,16 @@ function removeAttachment(index: number, attachmentIndex: number) {
   background: rgba(7, 193, 96, 0.12);
 }
 
+.health-records--checkup .attachment-item__action {
+  color: #216d9b;
+  background: rgba(33, 109, 155, 0.12);
+}
+
+.health-records--allergy .attachment-item__action {
+  color: #ad5b2a;
+  background: rgba(173, 91, 42, 0.12);
+}
+
 .attachment-button {
   margin-top: 14rpx;
   height: 72rpx;
@@ -1241,6 +1338,14 @@ function removeAttachment(index: number, attachmentIndex: number) {
   background: linear-gradient(135deg, #15aa67 0%, #0f7b49 100%);
 }
 
+.health-records--checkup .record-card__action--primary {
+  background: linear-gradient(135deg, #2a87bd 0%, #216d9b 100%);
+}
+
+.health-records--allergy .record-card__action--primary {
+  background: linear-gradient(135deg, #c87439 0%, #ad5b2a 100%);
+}
+
 .record-card__action--primary-only {
   width: 100%;
 }
@@ -1259,5 +1364,17 @@ function removeAttachment(index: number, attachmentIndex: number) {
   font-weight: 700;
   color: #0f6b43;
   background: rgba(7, 193, 96, 0.1);
+}
+
+.health-records--checkup .records-section__add,
+.health-records--checkup .attachment-button {
+  color: #216d9b;
+  background: rgba(33, 109, 155, 0.1);
+}
+
+.health-records--allergy .records-section__add,
+.health-records--allergy .attachment-button {
+  color: #ad5b2a;
+  background: rgba(173, 91, 42, 0.1);
 }
 </style>

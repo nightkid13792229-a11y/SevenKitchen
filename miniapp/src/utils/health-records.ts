@@ -26,6 +26,7 @@ export const HEALTH_ATTACHMENT_MAX_SIZE_BYTES = 10 * 1024 * 1024
 export const HEALTH_ATTACHMENT_MAX_SIZE_LABEL = '10MB'
 export const HEALTH_ATTACHMENT_HINT_TEXT =
   '支持 JPG、PNG、GIF、WEBP、HEIC、HEIF 或 PDF，单个文件不超过 10MB，上传后可点击预览。'
+const HEALTH_RECORD_ATTACHMENT_CACHE_PREFIX = 'dog-health-record-attachments'
 
 type HealthRecordShape = Record<string, any>
 
@@ -257,6 +258,128 @@ export function removeHealthRecordFromList(
   recordId: string,
 ) {
   return records.filter(record => record?.id !== recordId)
+}
+
+function getHealthRecordAttachmentCacheKey(dogId: string, type: HealthRecordType) {
+  return `${HEALTH_RECORD_ATTACHMENT_CACHE_PREFIX}:${dogId}:${type}`
+}
+
+function hasMiniProgramStorage() {
+  return typeof uni !== 'undefined' &&
+    typeof uni.getStorageSync === 'function' &&
+    typeof uni.setStorageSync === 'function'
+}
+
+function readHealthRecordAttachmentCache(
+  dogId: string,
+  type: HealthRecordType,
+): Record<string, string[]> {
+  if (!dogId || !hasMiniProgramStorage()) {
+    return {}
+  }
+
+  try {
+    const cached = uni.getStorageSync(getHealthRecordAttachmentCacheKey(dogId, type))
+    return cached && typeof cached === 'object' && !Array.isArray(cached)
+      ? cached as Record<string, string[]>
+      : {}
+  } catch {
+    return {}
+  }
+}
+
+function writeHealthRecordAttachmentCacheEntries(
+  dogId: string,
+  type: HealthRecordType,
+  cache: Record<string, string[]>,
+) {
+  if (!dogId || !hasMiniProgramStorage()) {
+    return
+  }
+
+  const key = getHealthRecordAttachmentCacheKey(dogId, type)
+  const hasEntries = Object.keys(cache).length > 0
+
+  try {
+    if (hasEntries) {
+      uni.setStorageSync(key, cache)
+      return
+    }
+
+    if (typeof uni.removeStorageSync === 'function') {
+      uni.removeStorageSync(key)
+    } else {
+      uni.setStorageSync(key, {})
+    }
+  } catch {
+    // Ignore cache failures; remote health records remain the source of truth.
+  }
+}
+
+function getHealthRecordAttachmentCacheIdentities(
+  type: HealthRecordType,
+  record: HealthRecordShape,
+) {
+  return [
+    typeof record?.id === 'string' && record.id ? `id:${record.id}` : '',
+    buildHealthRecordFocusIdentity(type, record),
+  ].filter(Boolean)
+}
+
+export function writeHealthRecordAttachmentCache(
+  dogId: string,
+  type: HealthRecordType,
+  record: HealthRecordShape,
+) {
+  const cache = readHealthRecordAttachmentCache(dogId, type)
+  const attachments = normalizeAttachments(record?.attachments)
+  const identities = getHealthRecordAttachmentCacheIdentities(type, record)
+
+  for (const identity of identities) {
+    if (attachments.length > 0) {
+      cache[identity] = attachments
+    } else {
+      delete cache[identity]
+    }
+  }
+
+  writeHealthRecordAttachmentCacheEntries(dogId, type, cache)
+}
+
+export function removeHealthRecordAttachmentCache(
+  dogId: string,
+  type: HealthRecordType,
+  record: HealthRecordShape,
+) {
+  const cache = readHealthRecordAttachmentCache(dogId, type)
+  for (const identity of getHealthRecordAttachmentCacheIdentities(type, record)) {
+    delete cache[identity]
+  }
+  writeHealthRecordAttachmentCacheEntries(dogId, type, cache)
+}
+
+export function mergeHealthRecordListWithCachedAttachments(
+  dogId: string,
+  type: HealthRecordType,
+  records: HealthRecordShape[],
+) {
+  const cache = readHealthRecordAttachmentCache(dogId, type)
+
+  return records.map((record) => {
+    const attachments = normalizeAttachments(record?.attachments)
+    if (attachments.length > 0) {
+      writeHealthRecordAttachmentCache(dogId, type, record)
+      return record
+    }
+
+    const cachedAttachments = getHealthRecordAttachmentCacheIdentities(type, record)
+      .map(identity => cache[identity])
+      .find(value => Array.isArray(value) && value.length > 0)
+
+    return cachedAttachments
+      ? { ...record, attachments: cachedAttachments }
+      : record
+  })
 }
 
 export function buildHealthRecordSectionPayload(

@@ -99,12 +99,15 @@ import {
   buildCrudHealthRecordPayload,
   buildHealthRecordFocusIdentity,
   hasUnsavedDietReminderChange,
+  mergeHealthRecordListWithCachedAttachments,
   normalizeHealthRecordListResponse,
   normalizeSavedHealthRecordResponse,
+  removeHealthRecordAttachmentCache,
   removeHealthRecordFromList,
   replaceHealthRecordInList,
   resolveDogHealthSelectionState,
   shouldDiscardDogHealthProfileResponse,
+  writeHealthRecordAttachmentCache,
 } from '../../utils/health-records'
 import { resolveDogProfileEntryRoute } from '../../utils/dog-profile-form'
 
@@ -466,7 +469,11 @@ async function loadHealthRecordList(type: HealthRecordType, targetDogId = dogId.
       throw new Error(res.message || '加载健康记录失败')
     }
 
-    recordsByType[type] = normalizeHealthRecordListResponse(res)
+    recordsByType[type] = mergeHealthRecordListWithCachedAttachments(
+      targetDogId,
+      type,
+      normalizeHealthRecordListResponse(res),
+    )
   } catch (error: any) {
     if (shouldDiscardHealthRecordListResponse(targetDogId)) {
       return
@@ -520,6 +527,7 @@ async function saveHealthRecord({
     }
 
     const nextRecord = normalizeSavedHealthRecordResponse(res.data, record)
+    writeHealthRecordAttachmentCache(targetDogId, type, nextRecord)
     recordsByType[type] = replaceHealthRecordInList(recordsByType[type], nextRecord)
     healthRecordFocusIdentity[type] = buildHealthRecordFocusIdentity(type, nextRecord)
     uni.showToast({ title: '已保存', icon: 'success' })
@@ -558,6 +566,7 @@ async function deleteHealthRecord({
       return
     }
 
+    removeHealthRecordAttachmentCache(targetDogId, type, record)
     recordsByType[type] = removeHealthRecordFromList(recordsByType[type], recordId)
     uni.showToast({ title: '已删除', icon: 'success' })
   } catch (error: any) {

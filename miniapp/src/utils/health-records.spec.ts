@@ -20,11 +20,13 @@ import {
   getHealthRecordValidationError,
   hasUnsavedDietReminderChange,
   mergeDogHealthStateSnapshot,
+  mergeHealthRecordListWithCachedAttachments,
   normalizeHealthRecordListResponse,
   normalizeSavedHealthRecordResponse,
   parseHealthAttachmentUploadResponse,
   readHealthAttachmentFileSize,
   removeHealthRecordFromList,
+  removeHealthRecordAttachmentCache,
   replaceHealthRecordInList,
   resolveDogHealthSelectionState,
   resolveHealthAttachmentPreviewType,
@@ -34,6 +36,7 @@ import {
   resolveHealthRecordSecondaryActionText,
   shouldDiscardDogHealthProfileResponse,
   shouldUseRemoteHealthRecordSync,
+  writeHealthRecordAttachmentCache,
 } from './health-records'
 
 describe('health-records', () => {
@@ -226,6 +229,55 @@ describe('health-records', () => {
       id: 'medical-1',
       attachments: ['https://cdn.test/medical-records/report.png'],
     })
+  })
+
+  it('restores saved attachments from cache when a reloaded list omits them', () => {
+    const storage: Record<string, any> = {}
+    vi.stubGlobal('uni', {
+      getStorageSync: (key: string) => storage[key],
+      setStorageSync: (key: string, value: any) => {
+        storage[key] = value
+      },
+      removeStorageSync: (key: string) => {
+        delete storage[key]
+      },
+    })
+
+    writeHealthRecordAttachmentCache('dog-1', 'medical', {
+      id: 'medical-1',
+      chiefComplaint: '急性肠胃炎',
+      visitDate: '2026-04-28',
+      diagnosis: '急性肠胃炎',
+      attachments: ['https://cdn.test/medical-records/report.png'],
+    })
+
+    expect(
+      mergeHealthRecordListWithCachedAttachments('dog-1', 'medical', [
+        {
+          id: 'medical-1',
+          chiefComplaint: '急性肠胃炎',
+          visitDate: '2026-04-28',
+          diagnosis: '急性肠胃炎',
+          attachments: [],
+        },
+      ]),
+    ).toEqual([
+      {
+        id: 'medical-1',
+        chiefComplaint: '急性肠胃炎',
+        visitDate: '2026-04-28',
+        diagnosis: '急性肠胃炎',
+        attachments: ['https://cdn.test/medical-records/report.png'],
+      },
+    ])
+
+    removeHealthRecordAttachmentCache('dog-1', 'medical', { id: 'medical-1' })
+
+    expect(
+      mergeHealthRecordListWithCachedAttachments('dog-1', 'medical', [
+        { id: 'medical-1', attachments: [] },
+      ]),
+    ).toEqual([{ id: 'medical-1', attachments: [] }])
   })
 
   it('replaces matching health records and prepends new records', () => {

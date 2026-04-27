@@ -12,14 +12,19 @@ import {
   doHealthRecordsMatchPersistedPayload,
   findPersistedHealthRecordMatch,
   buildHealthAttachmentDisplayMeta,
+  buildCrudHealthRecordPayload,
   createHealthRecordDraft,
   extractHealthAttachmentKey,
   findHealthRecordFocusIndex,
+  getHealthRecordTypeMeta,
   getHealthRecordValidationError,
   hasUnsavedDietReminderChange,
   mergeDogHealthStateSnapshot,
+  normalizeHealthRecordListResponse,
   parseHealthAttachmentUploadResponse,
   readHealthAttachmentFileSize,
+  removeHealthRecordFromList,
+  replaceHealthRecordInList,
   resolveDogHealthSelectionState,
   resolveHealthAttachmentPreviewType,
   resolveHealthAttachmentSelectionError,
@@ -121,6 +126,120 @@ describe('health-records', () => {
       notes: '皮肤状态稳定',
       attachments: ['https://cdn.test/checkup-records/a.pdf'],
     })
+  })
+
+  it('returns display metadata for segmented health record types', () => {
+    expect(getHealthRecordTypeMeta('medical')).toMatchObject({
+      label: '病史',
+      addLabel: '新增病史',
+      emptyTitle: '还没有病史记录',
+      accentClass: 'health-records--medical',
+    })
+    expect(getHealthRecordTypeMeta('checkup')).toMatchObject({
+      label: '体检',
+      addLabel: '新增体检',
+      emptyTitle: '还没有体检记录',
+      accentClass: 'health-records--checkup',
+    })
+    expect(getHealthRecordTypeMeta('allergy')).toMatchObject({
+      label: '过敏',
+      addLabel: '新增过敏',
+      emptyTitle: '还没有过敏记录',
+      accentClass: 'health-records--allergy',
+    })
+  })
+
+  it('builds checkup CRUD payloads with findings while preserving attachments', () => {
+    expect(
+      buildCrudHealthRecordPayload('checkup', {
+        checkupType: ' 年度体检 ',
+        checkupDate: '2026-04-07',
+        notes: ' 皮肤状态稳定 ',
+        attachments: [
+          'https://cdn.test/checkup-records/a.pdf',
+          { url: ' https://cdn.test/checkup-records/b.png ' },
+        ],
+      }),
+    ).toEqual({
+      checkupType: '年度体检',
+      checkupDate: '2026-04-07',
+      findings: '皮肤状态稳定',
+      attachments: [
+        'https://cdn.test/checkup-records/a.pdf',
+        'https://cdn.test/checkup-records/b.png',
+      ],
+    })
+  })
+
+  it('normalizes wrapped independent health record list responses', () => {
+    expect(
+      normalizeHealthRecordListResponse({
+        code: 0,
+        data: {
+          records: [
+            {
+              id: 'checkup-1',
+              checkupType: '年度体检',
+              findings: '皮肤状态稳定',
+              attachments: [
+                'https://cdn.test/checkup-records/a.pdf',
+                { url: ' https://cdn.test/checkup-records/b.png ' },
+              ],
+            },
+          ],
+        },
+      }),
+    ).toEqual([
+      {
+        id: 'checkup-1',
+        checkupType: '年度体检',
+        findings: '皮肤状态稳定',
+        notes: '皮肤状态稳定',
+        attachments: [
+          'https://cdn.test/checkup-records/a.pdf',
+          'https://cdn.test/checkup-records/b.png',
+        ],
+      },
+    ])
+
+    expect(normalizeHealthRecordListResponse({ code: 0, data: {} })).toEqual([])
+  })
+
+  it('replaces matching health records and prepends new records', () => {
+    const records = [
+      { id: 'record-1', notes: '保留' },
+      { id: 'record-2', notes: '旧记录' },
+    ]
+
+    expect(
+      replaceHealthRecordInList(records, { id: 'record-2', notes: '新记录' }),
+    ).toEqual([
+      { id: 'record-1', notes: '保留' },
+      { id: 'record-2', notes: '新记录' },
+    ])
+    expect(
+      replaceHealthRecordInList(records, { id: 'record-3', notes: '新增记录' }),
+    ).toEqual([
+      { id: 'record-3', notes: '新增记录' },
+      { id: 'record-1', notes: '保留' },
+      { id: 'record-2', notes: '旧记录' },
+    ])
+  })
+
+  it('removes only the matching health record by id', () => {
+    expect(
+      removeHealthRecordFromList(
+        [
+          { id: 'record-1', notes: '保留' },
+          { id: 'record-2', notes: '删除' },
+          { id: 'record-3', notes: '也保留' },
+        ],
+        'record-2',
+      ),
+    ).toEqual([
+      { id: 'record-1', notes: '保留' },
+      { id: 'record-3', notes: '也保留' },
+    ])
   })
 
   it('builds an allergy payload with trimmed fields', () => {

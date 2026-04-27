@@ -6,6 +6,14 @@ export interface HealthRecordSummary {
   detail: string
 }
 
+export interface HealthRecordTypeMeta {
+  type: HealthRecordType
+  label: string
+  addLabel: string
+  emptyTitle: string
+  accentClass: string
+}
+
 export interface DogHealthStateSnapshot {
   medicalRecords: any[]
   checkupRecords: any[]
@@ -13,6 +21,7 @@ export interface DogHealthStateSnapshot {
   pickyFoods: string
 }
 
+export const HEALTH_RECORD_TYPES: HealthRecordType[] = ['medical', 'checkup', 'allergy']
 export const HEALTH_ATTACHMENT_MAX_SIZE_BYTES = 10 * 1024 * 1024
 export const HEALTH_ATTACHMENT_MAX_SIZE_LABEL = '10MB'
 export const HEALTH_ATTACHMENT_HINT_TEXT =
@@ -43,6 +52,34 @@ function normalizeAttachments(value: unknown) {
       return ''
     })
     .filter(Boolean)
+}
+
+const HEALTH_RECORD_TYPE_META: Record<HealthRecordType, HealthRecordTypeMeta> = {
+  medical: {
+    type: 'medical',
+    label: '病史',
+    addLabel: '新增病史',
+    emptyTitle: '还没有病史记录',
+    accentClass: 'health-records--medical',
+  },
+  checkup: {
+    type: 'checkup',
+    label: '体检',
+    addLabel: '新增体检',
+    emptyTitle: '还没有体检记录',
+    accentClass: 'health-records--checkup',
+  },
+  allergy: {
+    type: 'allergy',
+    label: '过敏',
+    addLabel: '新增过敏',
+    emptyTitle: '还没有过敏记录',
+    accentClass: 'health-records--allergy',
+  },
+}
+
+export function getHealthRecordTypeMeta(type: HealthRecordType) {
+  return HEALTH_RECORD_TYPE_META[type]
 }
 
 export function createHealthRecordDraft(type: HealthRecordType): HealthRecordShape {
@@ -142,6 +179,63 @@ export function buildHealthRecordPayload(
     notes: normalizeOptionalText(record.notes),
     attachments: normalizeAttachments(record.attachments),
   }
+}
+
+export function buildCrudHealthRecordPayload(
+  type: HealthRecordType,
+  record: HealthRecordShape,
+) {
+  const payload = buildHealthRecordPayload(type, record)
+
+  if (type !== 'checkup') {
+    return payload
+  }
+
+  const { notes, ...checkupPayload } = payload
+  return {
+    ...checkupPayload,
+    findings: notes,
+  }
+}
+
+export function normalizeHealthRecordResponse(record: HealthRecordShape) {
+  return {
+    ...record,
+    notes: record?.notes ?? record?.findings ?? '',
+    attachments: normalizeAttachments(record?.attachments),
+  }
+}
+
+export function normalizeHealthRecordListResponse(response: Record<string, any> | null | undefined) {
+  const records = response?.data?.records
+  if (!Array.isArray(records)) {
+    return []
+  }
+
+  return records.map(record => normalizeHealthRecordResponse(record))
+}
+
+export function replaceHealthRecordInList(
+  records: HealthRecordShape[],
+  nextRecord: HealthRecordShape,
+) {
+  if (!nextRecord?.id) {
+    return records
+  }
+
+  const existingIndex = records.findIndex(record => record?.id === nextRecord.id)
+  if (existingIndex < 0) {
+    return [nextRecord, ...records]
+  }
+
+  return records.map((record, index) => (index === existingIndex ? nextRecord : record))
+}
+
+export function removeHealthRecordFromList(
+  records: HealthRecordShape[],
+  recordId: string,
+) {
+  return records.filter(record => record?.id !== recordId)
 }
 
 export function buildHealthRecordSectionPayload(

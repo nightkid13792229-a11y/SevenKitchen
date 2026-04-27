@@ -316,6 +316,112 @@ describe('LabelService 70x100 food label rendering', () => {
     ).toBe(false);
   });
 
+  it('aligns basic nutrition columns left, center, and right', () => {
+    const service = new LabelService();
+    const ctx = createCanvas(559, 799).getContext('2d');
+    const drawn: Array<{ text: string; x: number; textAlign: string }> = [];
+    const originalFillText = ctx.fillText.bind(ctx);
+
+    (ctx as any).fillText = (
+      text: string,
+      x: number,
+      y: number,
+      maxWidth?: number,
+    ) => {
+      drawn.push({ text: String(text), x, textAlign: ctx.textAlign });
+      return originalFillText(text, x, y, maxWidth);
+    };
+
+    (service as any).drawCompleteNutritionSection(
+      ctx,
+      createLabelData().nutritionAnalysis,
+      0,
+      0,
+      487,
+      'regular',
+    );
+
+    expect(drawn).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          text: '蛋白质 39.0%',
+          x: 0,
+          textAlign: 'left',
+        }),
+        expect.objectContaining({
+          text: '脂肪 17.1%',
+          x: 487 / 2,
+          textAlign: 'center',
+        }),
+        expect.objectContaining({
+          text: '灰分 9.6%',
+          x: 487,
+          textAlign: 'right',
+        }),
+        expect.objectContaining({
+          text: '纤维 3.1%',
+          x: 487 / 2,
+          textAlign: 'center',
+        }),
+        expect.objectContaining({
+          text: '碳水 31.3%',
+          x: 487,
+          textAlign: 'right',
+        }),
+      ]),
+    );
+  });
+
+  it('renders storage instructions in three aligned columns', () => {
+    const service = new LabelService();
+    const ctx = createCanvas(559, 799).getContext('2d');
+    const drawn: Array<{ text: string; x: number; textAlign: string }> = [];
+    const originalFillText = ctx.fillText.bind(ctx);
+
+    (ctx as any).fillText = (
+      text: string,
+      x: number,
+      y: number,
+      maxWidth?: number,
+    ) => {
+      drawn.push({ text: String(text), x, textAlign: ctx.textAlign });
+      return originalFillText(text, x, y, maxWidth);
+    };
+
+    (service as any).drawStorageSection(ctx, 0, 0, 487);
+
+    expect(drawn).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ text: '冷冻', x: 0, textAlign: 'left' }),
+        expect.objectContaining({
+          text: '冷藏',
+          x: 487 / 2,
+          textAlign: 'center',
+        }),
+        expect.objectContaining({
+          text: '开封后',
+          x: 487,
+          textAlign: 'right',
+        }),
+        expect.objectContaining({
+          text: '-18℃保存6个月',
+          x: 0,
+          textAlign: 'left',
+        }),
+        expect.objectContaining({
+          text: '0-5℃保存3天',
+          x: 487 / 2,
+          textAlign: 'center',
+        }),
+        expect.objectContaining({
+          text: '6小时内吃完',
+          x: 487,
+          textAlign: 'right',
+        }),
+      ]),
+    );
+  });
+
   it('uses print-readable body fonts for nutrition and storage sections', () => {
     const service = new LabelService();
     const ctx = createCanvas(559, 799).getContext('2d');

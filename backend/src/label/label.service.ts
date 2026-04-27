@@ -708,22 +708,19 @@ export class LabelService {
         width / (isSummaryRow ? 2 : this.getNutritionGridColumnCount());
 
       row.forEach((text, colIndex) => {
-        if (isSummaryRow && colIndex === 1) {
-          ctx.textAlign = 'right';
-          ctx.fillText(
-            this.clipText(ctx, text, colWidth - mmToPx(1.2)),
-            left + width,
-            y,
-          );
-          ctx.textAlign = 'left';
-          return;
-        }
-
-        const x = left + colIndex * colWidth;
+        const { x, textAlign } = this.getNutritionColumnPosition(
+          left,
+          width,
+          colIndex,
+          isSummaryRow,
+        );
+        ctx.textAlign = textAlign;
         ctx.fillText(this.clipText(ctx, text, colWidth - mmToPx(1.2)), x, y);
       });
       y += rowHeight;
     });
+
+    ctx.textAlign = 'left';
 
     return y;
   }
@@ -738,6 +735,29 @@ export class LabelService {
     );
   }
 
+  private getNutritionColumnPosition(
+    left: number,
+    width: number,
+    colIndex: number,
+    isSummaryRow: boolean,
+  ): { x: number; textAlign: CanvasRenderingContext2D['textAlign'] } {
+    if (isSummaryRow) {
+      return colIndex === 1
+        ? { x: left + width, textAlign: 'right' }
+        : { x: left, textAlign: 'left' };
+    }
+
+    if (colIndex === 1) {
+      return { x: left + width / 2, textAlign: 'center' };
+    }
+
+    if (colIndex === 2) {
+      return { x: left + width, textAlign: 'right' };
+    }
+
+    return { x: left, textAlign: 'left' };
+  }
+
   private drawStorageSection(
     ctx: CanvasRenderingContext2D,
     startY: number,
@@ -746,18 +766,55 @@ export class LabelService {
   ): number {
     const layout = this.getStorageSectionLayout();
     const top = startY + mmToPx(layout.topGapMm);
-    const colWidth = width / 2;
+    const colWidth = width / 3;
     const contentY = this.drawSectionTitle(ctx, layout.title, top, left, width);
+    const columns: Array<{
+      title: string;
+      description: string;
+      x: number;
+      textAlign: CanvasRenderingContext2D['textAlign'];
+    }> = [
+      {
+        title: '冷冻',
+        description: '-18℃保存6个月',
+        x: left,
+        textAlign: 'left',
+      },
+      {
+        title: '冷藏',
+        description: '0-5℃保存3天',
+        x: left + width / 2,
+        textAlign: 'center',
+      },
+      {
+        title: '开封后',
+        description: '6小时内吃完',
+        x: left + width,
+        textAlign: 'right',
+      },
+    ];
 
     ctx.fillStyle = '#111111';
     ctx.font = `bold ${mmToPx(LABEL_LAYOUT.fontSize.small)}px "Chinese-Bold"`;
-    ctx.textAlign = 'left';
-    ctx.fillText('冷冻', left, contentY);
-    ctx.fillText('冷藏', left + colWidth, contentY);
+    columns.forEach((column) => {
+      ctx.textAlign = column.textAlign;
+      ctx.fillText(
+        this.clipText(ctx, column.title, colWidth - mmToPx(1.2)),
+        column.x,
+        contentY,
+      );
+    });
 
     ctx.font = `${mmToPx(LABEL_LAYOUT.fontSize.small)}px "Chinese"`;
-    ctx.fillText('-18℃保存6个月', left, contentY + mmToPx(3.4));
-    ctx.fillText('0-5℃保存3天', left + colWidth, contentY + mmToPx(3.4));
+    columns.forEach((column) => {
+      ctx.textAlign = column.textAlign;
+      ctx.fillText(
+        this.clipText(ctx, column.description, colWidth - mmToPx(1.2)),
+        column.x,
+        contentY + mmToPx(3.4),
+      );
+    });
+    ctx.textAlign = 'left';
 
     return contentY + mmToPx(6.8);
   }

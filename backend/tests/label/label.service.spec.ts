@@ -262,10 +262,58 @@ describe('LabelService 70x100 food label rendering', () => {
     expect(rows[2]).toEqual(['能量 1487kcal/kg', '钙磷比 1.35']);
   });
 
-  it('aligns the final nutrition row to the same three-column grid', () => {
+  it('uses three columns for the basic nutrition grid', () => {
     const service = new LabelService();
 
     expect((service as any).getNutritionGridColumnCount()).toBe(3);
+  });
+
+  it('draws energy density without clipping it to a three-column cell', () => {
+    const service = new LabelService();
+    const ctx = createCanvas(559, 799).getContext('2d');
+    const drawnText: string[] = [];
+    const clippingWidths = new Map<string, number>();
+    const originalFillText = ctx.fillText.bind(ctx);
+    const originalClipText = (service as any).clipText.bind(service);
+
+    (ctx as any).fillText = (
+      text: string,
+      x: number,
+      y: number,
+      maxWidth?: number,
+    ) => {
+      drawnText.push(String(text));
+      return originalFillText(text, x, y, maxWidth);
+    };
+    jest.spyOn(service as any, 'clipText').mockImplementation(
+      (
+        canvasContext: CanvasRenderingContext2D,
+        text: string,
+        maxWidth: number,
+      ) => {
+        if (text.startsWith('能量 ') || text.startsWith('钙磷比 ')) {
+          clippingWidths.set(text, maxWidth);
+        }
+        return originalClipText(canvasContext, text, maxWidth);
+      },
+    );
+
+    (service as any).drawCompleteNutritionSection(
+      ctx,
+      createLabelData().nutritionAnalysis,
+      0,
+      0,
+      487,
+      'regular',
+    );
+
+    expect(drawnText).toContain('能量 1487kcal/kg');
+    expect(drawnText).toContain('钙磷比 1.35');
+    expect(clippingWidths.get('能量 1487kcal/kg')).toBeGreaterThan(220);
+    expect(clippingWidths.get('钙磷比 1.35')).toBeGreaterThan(220);
+    expect(
+      drawnText.some((text) => text.startsWith('能量 ') && text.includes('...')),
+    ).toBe(false);
   });
 
   it('uses print-readable body fonts for nutrition and storage sections', () => {

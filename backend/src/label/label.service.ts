@@ -702,9 +702,23 @@ export class LabelService {
     ctx.fillStyle = '#222222';
     ctx.textAlign = 'left';
 
-    const colWidth = width / this.getNutritionGridColumnCount();
     rows.forEach((row) => {
+      const isSummaryRow = this.isNutritionSummaryRow(row);
+      const colWidth =
+        width / (isSummaryRow ? 2 : this.getNutritionGridColumnCount());
+
       row.forEach((text, colIndex) => {
+        if (isSummaryRow && colIndex === 1) {
+          ctx.textAlign = 'right';
+          ctx.fillText(
+            this.clipText(ctx, text, colWidth - mmToPx(1.2)),
+            left + width,
+            y,
+          );
+          ctx.textAlign = 'left';
+          return;
+        }
+
         const x = left + colIndex * colWidth;
         ctx.fillText(this.clipText(ctx, text, colWidth - mmToPx(1.2)), x, y);
       });
@@ -716,6 +730,12 @@ export class LabelService {
 
   private getNutritionGridColumnCount(): number {
     return 3;
+  }
+
+  private isNutritionSummaryRow(row: string[]): boolean {
+    return row.some(
+      (text) => text.startsWith('能量 ') || text.startsWith('钙磷比 '),
+    );
   }
 
   private drawStorageSection(

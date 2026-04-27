@@ -199,10 +199,31 @@ export function buildCrudHealthRecordPayload(
 }
 
 export function normalizeHealthRecordResponse(record: HealthRecordShape) {
+  const source = record && typeof record === 'object' && !Array.isArray(record) && record.record
+    ? record.record
+    : record
+
   return {
-    ...record,
-    notes: record?.notes ?? record?.findings ?? '',
-    attachments: normalizeAttachments(record?.attachments),
+    ...source,
+    notes: source?.notes ?? source?.findings ?? '',
+    attachments: normalizeAttachments(source?.attachments),
+  }
+}
+
+export function normalizeSavedHealthRecordResponse(
+  responseRecord: HealthRecordShape,
+  submittedRecord: HealthRecordShape,
+) {
+  const normalizedRecord = normalizeHealthRecordResponse(responseRecord)
+  const submittedAttachments = normalizeAttachments(submittedRecord?.attachments)
+
+  if (submittedAttachments.length === 0 || normalizedRecord.attachments.length > 0) {
+    return normalizedRecord
+  }
+
+  return {
+    ...normalizedRecord,
+    attachments: submittedAttachments,
   }
 }
 

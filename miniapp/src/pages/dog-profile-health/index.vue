@@ -100,7 +100,7 @@ import {
   buildHealthRecordFocusIdentity,
   hasUnsavedDietReminderChange,
   normalizeHealthRecordListResponse,
-  normalizeHealthRecordResponse,
+  normalizeSavedHealthRecordResponse,
   removeHealthRecordFromList,
   replaceHealthRecordInList,
   resolveDogHealthSelectionState,
@@ -519,7 +519,7 @@ async function saveHealthRecord({
       return
     }
 
-    const nextRecord = normalizeHealthRecordResponse(res.data)
+    const nextRecord = normalizeSavedHealthRecordResponse(res.data, record)
     recordsByType[type] = replaceHealthRecordInList(recordsByType[type], nextRecord)
     healthRecordFocusIdentity[type] = buildHealthRecordFocusIdentity(type, nextRecord)
     uni.showToast({ title: '已保存', icon: 'success' })

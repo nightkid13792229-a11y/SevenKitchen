@@ -21,6 +21,7 @@ import {
   hasUnsavedDietReminderChange,
   mergeDogHealthStateSnapshot,
   normalizeHealthRecordListResponse,
+  normalizeSavedHealthRecordResponse,
   parseHealthAttachmentUploadResponse,
   readHealthAttachmentFileSize,
   removeHealthRecordFromList,
@@ -203,6 +204,28 @@ describe('health-records', () => {
     ])
 
     expect(normalizeHealthRecordListResponse({ code: 0, data: {} })).toEqual([])
+  })
+
+  it('keeps submitted attachments when a save response omits them', () => {
+    expect(
+      normalizeSavedHealthRecordResponse(
+        {
+          id: 'medical-1',
+          chiefComplaint: '急性肠胃炎',
+          visitDate: '2026-04-28',
+          diagnosis: '急性肠胃炎',
+        },
+        {
+          chiefComplaint: '急性肠胃炎',
+          visitDate: '2026-04-28',
+          diagnosis: '急性肠胃炎',
+          attachments: ['https://cdn.test/medical-records/report.png'],
+        },
+      ),
+    ).toMatchObject({
+      id: 'medical-1',
+      attachments: ['https://cdn.test/medical-records/report.png'],
+    })
   })
 
   it('replaces matching health records and prepends new records', () => {

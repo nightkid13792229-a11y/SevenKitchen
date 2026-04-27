@@ -9,77 +9,111 @@
     <view v-if="loadError" class="state-card">
       <text class="state-card__title">加载失败</text>
       <text class="state-card__desc">{{ loadError }}</text>
-      <button class="state-card__button" @tap="loadDogProfile">重试</button>
+      <button class="state-card__button" @tap="loadErrorRetry">重试</button>
+    </view>
+
+    <view v-else-if="isLoading && !dogId" class="state-card">
+      <text class="state-card__title">正在加载狗狗档案</text>
+      <text class="state-card__desc">正在获取可维护健康记录的狗狗列表，请稍候。</text>
+    </view>
+
+    <view v-else-if="hasNoDogs" class="state-card">
+      <text class="state-card__title">还没有狗狗档案</text>
+      <text class="state-card__desc">创建档案后，即可维护病史、体检、过敏和饮食提醒。</text>
+      <button class="state-card__button" @tap="goToDogCreate">创建狗狗档案</button>
     </view>
 
     <view v-else class="content">
-      <HealthRecordsSection
-        v-model="form.medicalRecords"
-        :dog-id="dogId"
-        :preferred-expanded-record-identity="healthRecordFocusIdentity.medical"
-        record-type="medical"
-        title="病史记录"
-        description="记录症状、发病日期和诊断结果。"
-        empty-title="还没有病史记录"
-        primary-field-key="chiefComplaint"
-        primary-label="症状或疾病"
-        date-field-key="visitDate"
-        date-label="发病日期"
-        secondary-field-key="diagnosis"
-        secondary-label="诊断结果"
-        notes-label="补充说明"
-        @record-saved="rememberHealthRecordFocus('medical', $event)"
-      />
+      <view v-if="dogs.length > 0" class="section-card dog-picker-card">
+        <text class="section-card__title">选择狗狗</text>
+        <picker mode="selector" :range="dogs" range-key="name" :value="selectedDogIndex" @change="onDogPickerChange">
+          <view class="dog-selector">
+            <text class="dog-selector__name">{{ selectedDog ? selectedDog.name : '请选择狗狗' }}</text>
+            <text class="dog-selector__arrow">▼</text>
+          </view>
+        </picker>
+      </view>
 
-      <HealthRecordsSection
-        v-model="form.checkupRecords"
-        :dog-id="dogId"
-        :preferred-expanded-record-identity="healthRecordFocusIdentity.checkup"
-        record-type="checkup"
-        title="体检记录"
-        description="更新最近的体检时间和发现。"
-        empty-title="还没有体检记录"
-        primary-field-key="checkupType"
-        primary-label="体检类型"
-        date-field-key="checkupDate"
-        date-label="体检日期"
-        notes-label="体检说明"
-        @record-saved="rememberHealthRecordFocus('checkup', $event)"
-      />
+      <view v-if="isProfileLoading" class="state-card">
+        <text class="state-card__title">正在加载健康记录</text>
+        <text class="state-card__desc">正在切换到所选狗狗，请稍候。</text>
+      </view>
 
-      <HealthRecordsSection
-        v-model="form.allergyRecords"
-        :dog-id="dogId"
-        :preferred-expanded-record-identity="healthRecordFocusIdentity.allergy"
-        record-type="allergy"
-        title="过敏记录"
-        description="记录明确的过敏原和相关备注。"
-        empty-title="还没有过敏记录"
-        primary-field-key="allergen"
-        primary-label="过敏原"
-        notes-label="备注"
-        @record-saved="rememberHealthRecordFocus('allergy', $event)"
-      />
+      <template v-else-if="dogId">
+        <HealthRecordsSection
+          v-model="form.medicalRecords"
+          :dog-id="dogId"
+          :preferred-expanded-record-identity="healthRecordFocusIdentity.medical"
+          record-type="medical"
+          title="病史记录"
+          description="记录症状、发病日期和诊断结果。"
+          empty-title="还没有病史记录"
+          primary-field-key="chiefComplaint"
+          primary-label="症状或疾病"
+          date-field-key="visitDate"
+          date-label="发病日期"
+          secondary-field-key="diagnosis"
+          secondary-label="诊断结果"
+          notes-label="补充说明"
+          @record-saved="rememberHealthRecordFocus('medical', $event)"
+        />
 
-      <view class="section-card">
-        <text class="section-card__title">饮食提醒</text>
+        <HealthRecordsSection
+          v-model="form.checkupRecords"
+          :dog-id="dogId"
+          :preferred-expanded-record-identity="healthRecordFocusIdentity.checkup"
+          record-type="checkup"
+          title="体检记录"
+          description="更新最近的体检时间和发现。"
+          empty-title="还没有体检记录"
+          primary-field-key="checkupType"
+          primary-label="体检类型"
+          date-field-key="checkupDate"
+          date-label="体检日期"
+          notes-label="体检说明"
+          @record-saved="rememberHealthRecordFocus('checkup', $event)"
+        />
 
-        <view class="field-group">
-          <text class="field-label">挑食 / 不爱吃的食物</text>
-          <text v-if="dietReminderStatusText" class="field-help">{{ dietReminderStatusText }}</text>
-          <textarea
-            class="field-textarea"
-            placeholder="记录口味偏好，方便后续推荐"
-            v-model="form.pickyFoods"
-          />
+        <HealthRecordsSection
+          v-model="form.allergyRecords"
+          :dog-id="dogId"
+          :preferred-expanded-record-identity="healthRecordFocusIdentity.allergy"
+          record-type="allergy"
+          title="过敏记录"
+          description="记录明确的过敏原和相关备注。"
+          empty-title="还没有过敏记录"
+          primary-field-key="allergen"
+          primary-label="过敏原"
+          notes-label="备注"
+          @record-saved="rememberHealthRecordFocus('allergy', $event)"
+        />
+
+        <view class="section-card">
+          <text class="section-card__title">饮食提醒</text>
+
+          <view class="field-group">
+            <text class="field-label">挑食 / 不爱吃的食物</text>
+            <text v-if="dietReminderStatusText" class="field-help">{{ dietReminderStatusText }}</text>
+            <textarea
+              class="field-textarea"
+              placeholder="记录口味偏好，方便后续推荐"
+              v-model="form.pickyFoods"
+            />
+          </view>
         </view>
+      </template>
+
+      <view v-else class="section-card">
+        <text class="section-card__title">先选择狗狗</text>
+        <text class="state-card__desc">选择一只狗狗后，即可维护病史、体检、过敏和饮食提醒。</text>
+        <button class="state-card__button" @tap="goToDogCreate">创建狗狗档案</button>
       </view>
     </view>
 
     <StickyActionBar
       primary-text="保存饮食提醒"
       secondary-text="返回概览"
-      :primary-disabled="isLoading || isSaving"
+      :primary-disabled="!dogId || isProfileLoading || isSaving"
       :secondary-disabled="isLoading || isSaving"
       @primary="saveDietReminders"
       @secondary="goBack"
@@ -96,15 +130,29 @@ import { dogApi } from '../../api/dogs'
 import { trackDogProfileEvent } from '../../utils/dog-profile-analytics'
 import {
   buildDogHealthStateSnapshot,
+  hasUnsavedDietReminderChange,
   mergeDogHealthStateSnapshot,
   readDogHealthStateSnapshotCache,
+  resolveDogHealthSelectionState,
+  shouldDiscardDogHealthProfileResponse,
   writeDogHealthStateSnapshotCache,
 } from '../../utils/health-records'
+import { resolveDogProfileEntryRoute } from '../../utils/dog-profile-form'
+
+interface DogProfileSummary {
+  id: string
+  name: string
+}
 
 const dogId = ref('')
+const dogs = ref<DogProfileSummary[]>([])
+const selectedDogIndex = ref(-1)
 const isLoading = ref(false)
+const isProfileLoading = ref(false)
 const isSaving = ref(false)
+const hasNoDogs = ref(false)
 const loadError = ref('')
+const latestRequestedDogId = ref('')
 const loadedFields = reactive({
   pickyFoods: true,
 })
@@ -114,6 +162,12 @@ const healthRecordFocusIdentity = reactive({
   allergy: '',
 })
 const savedPickyFoods = ref('')
+const selectedDog = computed(() => (
+  selectedDogIndex.value >= 0 ? dogs.value[selectedDogIndex.value] || null : null
+))
+const hasUnsavedDietReminder = computed(() =>
+  hasUnsavedDietReminderChange(form.pickyFoods, savedPickyFoods.value),
+)
 
 const form = reactive<Record<string, any>>({
   id: '',
@@ -140,13 +194,11 @@ const form = reactive<Record<string, any>>({
 })
 
 const dietReminderStatusText = computed(() => {
-  const current = String(form.pickyFoods || '').trim()
-  const saved = String(savedPickyFoods.value || '').trim()
-
-  if (current !== saved) {
+  if (hasUnsavedDietReminder.value) {
     return '已修改，待保存'
   }
 
+  const saved = String(savedPickyFoods.value || '').trim()
   if (saved) {
     return '已保存'
   }
@@ -156,18 +208,7 @@ const dietReminderStatusText = computed(() => {
 
 onLoad((options: any) => {
   const value = Array.isArray(options?.dogId) ? options.dogId[0] : options?.dogId
-  if (!value) {
-    loadError.value = '缺少狗狗ID，无法打开健康信息页。'
-    return
-  }
-
-  dogId.value = value
-  void trackDogProfileEvent('dog_profile_step_viewed', {
-    mode: 'edit',
-    dogId: dogId.value,
-    moduleName: 'health',
-  })
-  void loadDogProfile()
+  void loadDogs(typeof value === 'string' ? value : '')
 })
 
 watch(
@@ -193,33 +234,196 @@ watch(
   },
 )
 
-async function loadDogProfile() {
-  if (!dogId.value) {
-    return
-  }
-
+async function loadDogs(preferredDogId = '') {
   isLoading.value = true
+  hasNoDogs.value = false
   loadError.value = ''
 
   try {
     uni.showLoading({ title: '加载中...' })
-    const res: any = await dogApi.detail(dogId.value)
-    if (res.code !== 0 || !res.data?.profile) {
-      throw new Error(res.message || '加载狗狗档案失败')
+    const res: any = await dogApi.list()
+    if (res.code !== 0 || !Array.isArray(res.data)) {
+      throw new Error(res.message || '加载狗狗列表失败')
     }
 
-    populateForm(res.data.profile)
+    dogs.value = res.data
+    const selection = resolveDogHealthSelectionState(dogs.value, preferredDogId)
+
+    if (selection.hasNoDogs) {
+      dogId.value = ''
+      selectedDogIndex.value = -1
+      latestRequestedDogId.value = ''
+      resetHealthForm()
+      hasNoDogs.value = true
+      return
+    }
+
+    await selectDogByIndex(selection.selectedIndex)
   } catch (error: any) {
-    loadError.value = error?.message || '加载狗狗档案失败，请稍后重试。'
+    if (preferredDogId) {
+      latestRequestedDogId.value = preferredDogId
+      selectedDogIndex.value = -1
+      await loadDogProfile(preferredDogId)
+      return
+    }
+
+    loadError.value = error?.message || '加载狗狗列表失败，请稍后重试。'
   } finally {
     isLoading.value = false
     uni.hideLoading()
   }
 }
 
-function populateForm(profile: Record<string, any>) {
+function onDogPickerChange(event: any) {
+  const index = Number(event?.detail?.value)
+  if (!Number.isInteger(index)) {
+    return
+  }
+
+  if (isSaving.value || isProfileLoading.value) {
+    selectedDogIndex.value = getCurrentDogIndex()
+    return
+  }
+
+  if (hasUnsavedDietReminder.value) {
+    confirmSwitchDogWithUnsavedDietReminder(index)
+    return
+  }
+
+  void selectDogByIndex(index)
+}
+
+function selectDogByIndex(index: number) {
+  const nextDog = dogs.value[index]
+  if (!nextDog?.id) {
+    return
+  }
+
+  selectedDogIndex.value = index
+  dogId.value = ''
+  latestRequestedDogId.value = nextDog.id
+  isProfileLoading.value = true
+  resetHealthForm()
+  healthRecordFocusIdentity.medical = ''
+  healthRecordFocusIdentity.checkup = ''
+  healthRecordFocusIdentity.allergy = ''
+  void trackDogProfileEvent('dog_profile_step_viewed', {
+    mode: 'edit',
+    dogId: nextDog.id,
+    moduleName: 'health',
+  })
+  return loadDogProfile(nextDog.id)
+}
+
+function loadErrorRetry() {
+  if (dogId.value) {
+    void loadDogProfile(dogId.value)
+    return
+  }
+
+  void loadDogs()
+}
+
+function getCurrentDogIndex() {
+  const index = dogs.value.findIndex(dog => dog.id === dogId.value)
+  return index >= 0 ? index : selectedDogIndex.value
+}
+
+function confirmSwitchDogWithUnsavedDietReminder(index: number) {
+  uni.showModal({
+    title: '切换狗狗？',
+    content: '当前饮食提醒尚未保存，切换后会放弃本次修改。',
+    confirmText: '继续切换',
+    cancelText: '继续编辑',
+    success: (res) => {
+      if (res.confirm) {
+        void selectDogByIndex(index)
+        return
+      }
+
+      selectedDogIndex.value = getCurrentDogIndex()
+    },
+    fail: () => {
+      selectedDogIndex.value = getCurrentDogIndex()
+    },
+  })
+}
+
+function resetHealthForm() {
+  loadedFields.pickyFoods = true
+  form.id = ''
+  form.name = ''
+  form.breedId = ''
+  form.breedName = ''
+  form.customBreedName = ''
+  form.birthday = ''
+  form.gender = 'MALE'
+  form.isNeutered = false
+  form.currentWeightKg = ''
+  form.bcsScore = 5
+  form.activityLevel = 'NORMAL'
+  form.lifeStageOverride = 'NONE'
+  form.sizeClassOverride = null
+  form.mealsPerDay = '2'
+  form.treatInputMode = 'ESTIMATE_LEVEL'
+  form.treatLevel = 'LOW'
+  form.manualTreatKcal = ''
+  form.medicalRecords = []
+  form.checkupRecords = []
+  form.allergyRecords = []
+  form.pickyFoods = ''
+  savedPickyFoods.value = ''
+}
+
+async function loadDogProfile(requestedDogId: string) {
+  if (!requestedDogId) {
+    return
+  }
+
+  latestRequestedDogId.value = requestedDogId
+  isProfileLoading.value = true
+  loadError.value = ''
+
+  try {
+    uni.showLoading({ title: '加载中...' })
+    const res: any = await dogApi.detail(requestedDogId)
+    if (res.code !== 0 || !res.data?.profile) {
+      throw new Error(res.message || '加载狗狗档案失败')
+    }
+
+    if (shouldDiscardDogHealthProfileResponse({
+      requestedDogId,
+      latestRequestedDogId: latestRequestedDogId.value,
+    })) {
+      return
+    }
+
+    dogId.value = requestedDogId
+    populateForm(res.data.profile, requestedDogId)
+  } catch (error: any) {
+    if (shouldDiscardDogHealthProfileResponse({
+      requestedDogId,
+      latestRequestedDogId: latestRequestedDogId.value,
+    })) {
+      return
+    }
+
+    dogId.value = ''
+    loadError.value = error?.message || '加载狗狗档案失败，请稍后重试。'
+  } finally {
+    if (!shouldDiscardDogHealthProfileResponse({
+      requestedDogId,
+      latestRequestedDogId: latestRequestedDogId.value,
+    })) {
+      isProfileLoading.value = false
+      uni.hideLoading()
+    }
+  }
+}
+
+function populateForm(profile: Record<string, any>, targetDogId = dogId.value || profile.id || '') {
   loadedFields.pickyFoods = Object.prototype.hasOwnProperty.call(profile, 'pickyFoods')
-  const cachedHealthState = readDogHealthStateSnapshotCache(dogId.value || profile.id || '')
+  const cachedHealthState = readDogHealthStateSnapshotCache(targetDogId)
   const mergedHealthState = mergeDogHealthStateSnapshot(
     cachedHealthState || buildDogHealthStateSnapshot(form),
     profile,
@@ -248,7 +452,7 @@ function populateForm(profile: Record<string, any>) {
   savedPickyFoods.value = mergedHealthState.pickyFoods
 
   writeDogHealthStateSnapshotCache(
-    dogId.value || profile.id || '',
+    targetDogId,
     mergedHealthState,
   )
 }
@@ -258,34 +462,35 @@ function rememberHealthRecordFocus(type: 'medical' | 'checkup' | 'allergy', iden
 }
 
 async function saveDietReminders() {
-  if (!dogId.value) {
+  if (!dogId.value || isProfileLoading.value) {
     return
   }
 
+  const targetDogId = dogId.value
   isSaving.value = true
 
   try {
     void trackDogProfileEvent('dog_profile_submit_requested', {
       mode: 'edit',
-      dogId: dogId.value,
+      dogId: targetDogId,
       moduleName: 'health',
       submitStatus: 'requested',
     })
     uni.showLoading({ title: '保存中...' })
-    const res: any = await dogApi.updateDietReminders(dogId.value, {
+    const res: any = await dogApi.updateDietReminders(targetDogId, {
       pickyFoods: form.pickyFoods,
     })
     if (res.code !== 0) {
       throw new Error(res.message || '保存失败')
     }
 
-    if (res.data?.profile) {
-      populateForm(res.data.profile)
+    if (res.data?.profile && targetDogId === dogId.value) {
+      populateForm(res.data.profile, targetDogId)
     }
 
     void trackDogProfileEvent('dog_profile_submit_succeeded', {
       mode: 'edit',
-      dogId: dogId.value,
+      dogId: targetDogId,
       moduleName: 'health',
       submitStatus: 'success',
     })
@@ -297,7 +502,7 @@ async function saveDietReminders() {
   } catch (error: any) {
     void trackDogProfileEvent('dog_profile_submit_failed', {
       mode: 'edit',
-      dogId: dogId.value,
+      dogId: targetDogId,
       moduleName: 'health',
       submitStatus: 'failed',
     })
@@ -314,9 +519,18 @@ function goBack() {
     return
   }
 
+  if (!dogId.value) {
+    uni.redirectTo({ url: '/pages/home/index' })
+    return
+  }
+
   uni.redirectTo({
     url: `/pages/dog-profile-overview/index?dogId=${encodeURIComponent(dogId.value)}`,
   })
+}
+
+function goToDogCreate() {
+  uni.redirectTo({ url: resolveDogProfileEntryRoute() })
 }
 </script>
 
@@ -385,6 +599,41 @@ function goBack() {
   font-size: 32rpx;
   font-weight: 700;
   color: #17313f;
+}
+
+.dog-picker-card {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.dog-selector {
+  min-height: 84rpx;
+  border-radius: 22rpx;
+  padding: 0 24rpx;
+  background: #f8fbf9;
+  border: 1rpx solid rgba(20, 47, 58, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.dog-selector__name {
+  min-width: 0;
+  flex: 1;
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #17313f;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dog-selector__arrow {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  color: #6b7d86;
 }
 
 .state-card__desc {

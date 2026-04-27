@@ -9,18 +9,24 @@ import {
   buildHealthAttachmentFieldHint,
   buildHealthRecordPayload,
   buildHealthRecordSectionPayload,
+  doHealthRecordsMatchPersistedPayload,
+  findPersistedHealthRecordMatch,
+  buildHealthAttachmentDisplayMeta,
   createHealthRecordDraft,
   extractHealthAttachmentKey,
   findHealthRecordFocusIndex,
   getHealthRecordValidationError,
+  hasUnsavedDietReminderChange,
   mergeDogHealthStateSnapshot,
   parseHealthAttachmentUploadResponse,
   readHealthAttachmentFileSize,
+  resolveDogHealthSelectionState,
   resolveHealthAttachmentPreviewType,
   resolveHealthAttachmentSelectionError,
   resolveHealthAttachmentFileSizeError,
   resolveHealthAttachmentUploadErrorMessage,
   resolveHealthRecordSecondaryActionText,
+  shouldDiscardDogHealthProfileResponse,
   shouldUseRemoteHealthRecordSync,
 } from './health-records'
 
@@ -153,6 +159,48 @@ describe('health-records', () => {
     })
   })
 
+  it('detects unsaved diet reminder changes with trimmed values', () => {
+    expect(hasUnsavedDietReminderChange(' 胡萝卜 ', '胡萝卜')).toBe(false)
+    expect(hasUnsavedDietReminderChange('胡萝卜、鸡肉', '胡萝卜')).toBe(true)
+  })
+
+  it('resolves empty dog selections separately from loading errors', () => {
+    expect(resolveDogHealthSelectionState([], 'dog-1')).toEqual({
+      hasNoDogs: true,
+      selectedIndex: -1,
+      selectedDogId: '',
+    })
+  })
+
+  it('selects the preferred dog when opening health records with a dog id', () => {
+    expect(
+      resolveDogHealthSelectionState([
+        { id: 'dog-1', name: '七七' },
+        { id: 'dog-2', name: '饭团' },
+      ], 'dog-2'),
+    ).toEqual({
+      hasNoDogs: false,
+      selectedIndex: 1,
+      selectedDogId: 'dog-2',
+    })
+  })
+
+  it('discards stale health profile responses that no longer match the active request', () => {
+    expect(
+      shouldDiscardDogHealthProfileResponse({
+        requestedDogId: 'dog-1',
+        latestRequestedDogId: 'dog-2',
+      }),
+    ).toBe(true)
+
+    expect(
+      shouldDiscardDogHealthProfileResponse({
+        requestedDogId: 'dog-2',
+        latestRequestedDogId: 'dog-2',
+      }),
+    ).toBe(false)
+  })
+
   it('builds a partial profile update payload for a single health record section', () => {
     expect(
       buildHealthRecordSectionPayload('medical', [
@@ -174,6 +222,81 @@ describe('health-records', () => {
           attachments: ['https://cdn.test/medical-records/a.png'],
         },
       ],
+    })
+  })
+
+  it('matches a newly persisted health record when the server adds an id', () => {
+    expect(
+      doHealthRecordsMatchPersistedPayload(
+        'medical',
+        {
+          __localId: 'medical-local-1',
+          chiefComplaint: '急性胰腺炎。',
+          visitDate: '2026-03-26',
+          diagnosis: '急性胰腺炎。',
+          notes: '急性胰腺炎的补充说明。',
+          attachments: ['https://cdn.example.com/medical-records/report.png'],
+        },
+        {
+          id: 'medical-server-1',
+          chiefComplaint: '急性胰腺炎。',
+          visitDate: '2026-03-26',
+          diagnosis: '急性胰腺炎。',
+          notes: '急性胰腺炎的补充说明。',
+          attachments: ['https://cdn.example.com/medical-records/report.png'],
+        },
+      ),
+    ).toBe(true)
+  })
+
+  it('matches optional empty notes after the backend normalizes them to null', () => {
+    expect(
+      doHealthRecordsMatchPersistedPayload(
+        'checkup',
+        {
+          checkupType: '年度体检',
+          checkupDate: '2026-03-26',
+          notes: '',
+          attachments: [],
+        },
+        {
+          id: 'checkup-server-1',
+          checkupType: '年度体检',
+          checkupDate: '2026-03-26',
+          notes: null,
+          attachments: [],
+        },
+      ),
+    ).toBe(true)
+  })
+
+  it('falls back to payload matching when the backend replaces a saved record id', () => {
+    expect(
+      findPersistedHealthRecordMatch(
+        'checkup',
+        [
+          {
+            id: 'new-checkup-id',
+            checkupType: '666',
+            checkupDate: '2026-04-27',
+            notes: '777888',
+            attachments: [],
+          },
+        ],
+        {
+          id: 'old-checkup-id',
+          checkupType: '666',
+          checkupDate: '2026-04-27',
+          notes: '777888',
+          attachments: [],
+        },
+      ),
+    ).toEqual({
+      id: 'new-checkup-id',
+      checkupType: '666',
+      checkupDate: '2026-04-27',
+      notes: '777888',
+      attachments: [],
     })
   })
 
@@ -314,6 +437,42 @@ describe('health-records', () => {
     expect(resolveHealthAttachmentPreviewType('https://cdn.example.com/a.pdf')).toBe('pdf')
     expect(resolveHealthAttachmentPreviewType('https://cdn.example.com/a.png')).toBe('image')
     expect(resolveHealthAttachmentPreviewType('https://cdn.example.com/a.bin')).toBe('file')
+  })
+
+  it('builds clear clickable display metadata for uploaded attachments', () => {
+    expect(
+      buildHealthAttachmentDisplayMeta(
+        'https://cdn.example.com/health/%E4%BD%93%E6%A3%80%E6%8A%A5%E5%91%8A.pdf',
+        0,
+      ),
+    ).toEqual({
+      title: 'PDF 附件 1',
+      detail: '体检报告.pdf · 点击预览',
+    })
+
+    expect(
+      buildHealthAttachmentDisplayMeta('https://cdn.example.com/health/image.png', 1),
+    ).toEqual({
+      title: '图片附件 2',
+      detail: 'image.png · 点击预览',
+    })
+  })
+
+  it('shows attachment count in collapsed health record summaries', () => {
+    expect(
+      buildHealthRecordSummary('medical', {
+        chiefComplaint: '胃炎',
+        visitDate: '2026-04-07',
+        diagnosis: '',
+        attachments: [
+          'https://cdn.example.com/health/a.png',
+          'https://cdn.example.com/health/b.pdf',
+        ],
+      }),
+    ).toEqual({
+      title: '胃炎',
+      detail: '2026-04-07 · 含 2 个附件',
+    })
   })
 
   it('uses clearer reset labels for saved and unsaved records', () => {

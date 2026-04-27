@@ -114,9 +114,17 @@
               :key="`${recordKey(record, index)}-${attachment}-${attachmentIndex}`"
               class="attachment-item"
             >
-              <button class="attachment-item__preview" @tap="previewAttachment(attachment)">
-                {{ attachmentName(attachment) }}
-              </button>
+              <view class="attachment-item__preview" @tap="previewAttachment(attachment)">
+                <view class="attachment-item__content">
+                  <text class="attachment-item__title">
+                    {{ attachmentDisplay(attachment, attachmentIndex).title }}
+                  </text>
+                  <text class="attachment-item__hint">
+                    {{ attachmentDisplay(attachment, attachmentIndex).detail }}
+                  </text>
+                </view>
+                <text class="attachment-item__action">预览</text>
+              </view>
               <button
                 class="attachment-item__remove"
                 @tap="removeAttachment(index, attachmentIndex)"
@@ -171,6 +179,7 @@ import {
   type HealthRecordType,
   buildHealthRecordFocusIdentity,
   buildHealthRecordSummary,
+  buildHealthAttachmentDisplayMeta,
   createHealthRecordDraft,
   extractHealthAttachmentKey,
   findHealthRecordFocusIndex,
@@ -182,6 +191,7 @@ import {
   readHealthAttachmentFileSize,
   resolveHealthAttachmentUploadErrorMessage,
   resolveHealthRecordSecondaryActionText,
+  findPersistedHealthRecordMatch,
   shouldUseRemoteHealthRecordSync,
 } from '../../utils/health-records'
 
@@ -333,13 +343,8 @@ function attachmentList(record: Record<string, any>) {
     : []
 }
 
-function attachmentName(url: string) {
-  try {
-    const { pathname } = new URL(url)
-    return decodeURIComponent(pathname.split('/').filter(Boolean).pop() || '附件')
-  } catch {
-    return '附件'
-  }
+function attachmentDisplay(url: string, index: number) {
+  return buildHealthAttachmentDisplayMeta(url, index)
 }
 
 function scrollToRecord(index: number) {
@@ -540,22 +545,13 @@ function findSavedRecordFromProfile(
   record: Record<string, any>,
   index: number,
 ) {
-  if (record.id) {
-    return profileRecords.find((item) => item.id === record.id) || null
-  }
-
-  const target = JSON.stringify(stripLocalFields(record))
-  const knownIds = new Set(
+  return findPersistedHealthRecordMatch(
+    props.recordType,
+    profileRecords,
+    record,
     draftRecords.value
-      .filter((item, currentIndex) => currentIndex !== index && item.id)
+      .filter((item, currentIndex) => currentIndex !== index)
       .map((item) => item.id),
-  )
-
-  return (
-    profileRecords.find(
-      (item) =>
-        !knownIds.has(item.id) && JSON.stringify(stripLocalFields(item)) === target,
-    ) || null
   )
 }
 
@@ -585,9 +581,14 @@ async function saveRecord(index: number) {
         throw new Error(res.message || '保存失败')
       }
 
-      const nextRecord =
-        findSavedRecordFromProfile(resolveProfileRecords(res.data.profile), record, index) ||
-        stripLocalFields(record)
+      const nextRecord = findSavedRecordFromProfile(
+        resolveProfileRecords(res.data.profile),
+        record,
+        index,
+      )
+      if (!nextRecord) {
+        throw new Error('保存成功但未返回最新记录，请重试')
+      }
 
       const normalizedRecord = normalizeServerRecord(nextRecord, key)
       draftRecords.value[index] = normalizedRecord
@@ -1162,17 +1163,47 @@ function removeAttachment(index: number, attachmentIndex: number) {
 .attachment-item__preview {
   flex: 1;
   min-width: 0;
-  margin: 0;
-  padding: 0;
-  text-align: left;
-  font-size: 24rpx;
-  line-height: 1.5;
-  color: #415a65;
-  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
 }
 
-.attachment-item__preview::after {
-  border: none;
+.attachment-item__content {
+  min-width: 0;
+  flex: 1;
+}
+
+.attachment-item__title,
+.attachment-item__hint {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-item__title {
+  font-size: 25rpx;
+  font-weight: 700;
+  color: #17313f;
+}
+
+.attachment-item__hint {
+  margin-top: 4rpx;
+  font-size: 22rpx;
+  line-height: 1.4;
+  color: #6d808a;
+}
+
+.attachment-item__action {
+  flex-shrink: 0;
+  padding: 8rpx 14rpx;
+  border-radius: 999rpx;
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #0f6b43;
+  background: rgba(7, 193, 96, 0.12);
 }
 
 .attachment-button {

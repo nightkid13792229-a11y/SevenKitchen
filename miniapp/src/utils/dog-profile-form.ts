@@ -34,7 +34,6 @@ export interface DogProfileCreateStepAvailability {
   basic: boolean
   feeding: boolean
   recommendation: boolean
-  health: boolean
 }
 
 function hasValue(value: unknown) {
@@ -254,10 +253,10 @@ export function canAdvanceCreateStep(
   }
 
   if (step === 'recommendation') {
-    return availability.health
+    return availability.recommendation
   }
 
-  return availability.health
+  return availability.recommendation
 }
 
 export function resolveDogProfileEntryRoute(dogId?: string) {
@@ -358,7 +357,7 @@ export function getCreateStepAvailability(form: Record<string, any>): DogProfile
     (!needsManualTreatKcal || hasValidManualTreatKcal),
   )
 
-  return { basic, feeding, recommendation, health: recommendation }
+  return { basic, feeding, recommendation }
 }
 
 export function buildDogCreatePayload(form: Record<string, any>) {

@@ -44,7 +44,6 @@ const stepLabelMap: Record<DogProfileCreateStep, string> = {
   basic: '基础信息',
   feeding: '喂食信息',
   recommendation: '喂食建议',
-  health: '健康记录',
 }
 
 const stepItems = computed(() => {

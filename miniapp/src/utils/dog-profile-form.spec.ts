@@ -147,7 +147,11 @@ describe('dog-profile-form', () => {
     expect(getNextCreateStep('feeding')).toBe('recommendation')
   })
 
-  it('allows recommendation to advance to health when create prerequisites are complete even without preview state', () => {
+  it('keeps recommendation as the final create step', () => {
+    expect(getNextCreateStep('recommendation')).toBe('recommendation')
+  })
+
+  it('allows recommendation to complete when create prerequisites are complete even without preview state', () => {
     expect(
       canAdvanceCreateStep(
         'recommendation',

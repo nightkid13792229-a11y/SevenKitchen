@@ -31,24 +31,10 @@ export function getCreateWizardActionConfig(input: CreateWizardActionInput): Cre
 
   if (input.step === 'recommendation') {
     return {
-      primaryText: '继续填写健康记录',
-      primaryDisabled: !input.canAdvanceFromRecommendation || !input.recommendationReady || input.calculating,
-      secondaryText: '返回上一步',
-      secondaryDisabled: false,
-      tertiaryText: '保存档案',
-      tertiaryDisabled: !input.canSubmit || !input.recommendationReady || input.calculating,
-    }
-  }
-
-  if (input.step === 'health') {
-    const submitDisabled = !input.canSubmit || !input.recommendationReady || input.calculating
-    return {
       primaryText: '完成建档',
-      primaryDisabled: submitDisabled,
+      primaryDisabled: !input.canAdvanceFromRecommendation || !input.canSubmit || !input.recommendationReady || input.calculating,
       secondaryText: '返回上一步',
       secondaryDisabled: false,
-      tertiaryText: '跳过并创建',
-      tertiaryDisabled: submitDisabled,
     }
   }
 

@@ -1,4 +1,4 @@
-export const DOG_PROFILE_CREATE_STEPS = ['basic', 'feeding', 'recommendation', 'health'] as const
+export const DOG_PROFILE_CREATE_STEPS = ['basic', 'feeding', 'recommendation'] as const
 
 export type DogProfileCreateStep = (typeof DOG_PROFILE_CREATE_STEPS)[number]
 

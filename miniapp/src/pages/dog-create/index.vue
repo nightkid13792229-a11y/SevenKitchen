@@ -486,63 +486,6 @@
         </view>
       </view>
 
-      <!-- 健康补充区 -->
-      <view v-if="showHealthSection" class="wizard-step wizard-step--health">
-        <HealthRecordsSection
-          v-model="formData.medicalRecords"
-          :dog-id="dogId || ''"
-          record-type="medical"
-          title="病史记录"
-          description="记录症状、发病日期和诊断结果。"
-          empty-title="还没有病史记录"
-          primary-field-key="chiefComplaint"
-          primary-label="症状或疾病"
-          date-field-key="visitDate"
-          date-label="发病日期"
-          secondary-field-key="diagnosis"
-          secondary-label="诊断结果"
-          notes-label="补充说明"
-        />
-
-        <HealthRecordsSection
-          v-model="formData.checkupRecords"
-          :dog-id="dogId || ''"
-          record-type="checkup"
-          title="体检记录"
-          description="更新最近的体检时间和发现。"
-          empty-title="还没有体检记录"
-          primary-field-key="checkupType"
-          primary-label="体检类型"
-          date-field-key="checkupDate"
-          date-label="体检日期"
-          notes-label="体检说明"
-        />
-
-        <HealthRecordsSection
-          v-model="formData.allergyRecords"
-          :dog-id="dogId || ''"
-          record-type="allergy"
-          title="过敏记录"
-          description="记录明确的过敏原和相关备注。"
-          empty-title="还没有过敏记录"
-          primary-field-key="allergen"
-          primary-label="过敏原"
-          notes-label="备注"
-        />
-
-        <view class="profile-card">
-          <view class="profile-card__section-heading">
-            <text class="profile-card__section-title">挑食提醒</text>
-            <text class="profile-card__section-desc">补充不爱吃的食物，方便后续查看和喂养参考。</text>
-          </view>
-          <textarea
-            class="textarea"
-            placeholder="例如：胡萝卜、某种肉罐头"
-            v-model="formData.pickyFoods"
-          />
-        </view>
-      </view>
-
       <view v-if="showRecommendationSection" class="wizard-recommendation-section">
         <view v-if="calcStaleNotice" class="calc-stale-notice">
           <text class="calc-stale-text">信息已更新，我们会自动刷新最新喂食建议</text>
@@ -617,7 +560,6 @@
 <script setup lang="ts">
 import { ref, computed, nextTick, onMounted, onUnmounted, watch, reactive } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import HealthRecordsSection from '../../components/dog-profile/HealthRecordsSection.vue'
 import RecommendationSummaryCard from '../../components/dog-profile/RecommendationSummaryCard.vue'
 import StepProgressHeader from '../../components/dog-profile/StepProgressHeader.vue'
 import StickyActionBar from '../../components/dog-profile/StickyActionBar.vue'
@@ -649,9 +591,6 @@ import {
   normalizeCreateTreatLevel,
   resolveCreateDraftStep,
 } from '../../utils/dog-profile-create-view'
-import {
-  buildDogOverviewHealthSummary,
-} from '../../utils/dog-profile-overview'
 import {
   buildDogCreatePayload,
   canAdvanceCreateStep,
@@ -831,7 +770,6 @@ const backendLifeStageInfo = ref<{
   detail: string
 } | null>(null)
 
-const dogId = ref<string | null>(null)
 const isLegacyRedirecting = ref(false)
 const currentCreateStep = ref<DogProfileCreateStep>('basic')
 const restoringCreateDraft = ref(false)
@@ -1132,7 +1070,6 @@ const createStepAvailability = computed(() => getCreateStepAvailability(formData
 const showBasicSection = computed(() => currentCreateStep.value === 'basic')
 const showFeedingSection = computed(() => currentCreateStep.value === 'feeding')
 const showRecommendationSection = computed(() => currentCreateStep.value === 'recommendation')
-const showHealthSection = computed(() => currentCreateStep.value === 'health')
 const canAdvanceFromBasic = computed(() => canAdvanceCreateStep('basic', createStepAvailability.value))
 const canAdvanceFromFeeding = computed(() => canAdvanceCreateStep('feeding', createStepAvailability.value))
 const canAdvanceFromRecommendation = computed(() => canAdvanceCreateStep('recommendation', createStepAvailability.value))
@@ -1218,7 +1155,7 @@ onMounted(async () => {
   console.log('[DogCreate] onMounted: create mode')
   const restoredDraft = restoreCreateDraft()
 
-  if ((currentCreateStep.value === 'recommendation' || currentCreateStep.value === 'health') && createPreviewReady.value) {
+  if (currentCreateStep.value === 'recommendation' && createPreviewReady.value) {
     scheduleCreateAutoPreview()
   }
 
@@ -1275,7 +1212,7 @@ watch(currentCreateStep, (step) => {
   saveCreateDraft()
   trackCreateStepViewed(step)
 
-  if ((step === 'recommendation' || step === 'health') && !calcResult.value) {
+  if (step === 'recommendation' && !calcResult.value) {
     scheduleCreateAutoPreview()
   }
 })
@@ -1285,7 +1222,6 @@ function getCreateAnalyticsStepName(step: DogProfileCreateStep) {
     basic: 'basic_info',
     feeding: 'feeding_info',
     recommendation: 'recommendation',
-    health: 'health',
   }
 
   return stepMap[step]
@@ -1528,10 +1464,6 @@ function setCreateStep(step: DogProfileCreateStep) {
 }
 
 function getPreviousCreateStep(step: DogProfileCreateStep): DogProfileCreateStep {
-  if (step === 'health') {
-    return 'recommendation'
-  }
-
   if (step === 'recommendation') {
     return 'feeding'
   }
@@ -2011,7 +1943,6 @@ function showCreateStepBlockedToast(step: DogProfileCreateStep) {
     basic: '请先补齐名字、生日、体重，并确认品种/体型',
     feeding: '请先补齐基础信息',
     recommendation: '请先完善喂食信息并生成建议',
-    health: '请先生成喂食建议',
   }
 
   uni.showToast({
@@ -2073,17 +2004,12 @@ async function handleCreatePrimaryAction() {
 
   if (currentCreateStep.value === 'recommendation') {
     if (!canAdvanceFromRecommendation.value || !hasCreateRecommendationResult.value) {
-      showCreateStepBlockedToast('health')
+      showCreateStepBlockedToast('recommendation')
       return
     }
 
     trackCreateStepCompleted('recommendation')
-    setCreateStep(getNextCreateStep('recommendation'))
-    return
-  }
-
-  if (currentCreateStep.value === 'health' && !hasCreateRecommendationResult.value) {
-    showCreateStepBlockedToast('health')
+    await submit()
     return
   }
 
@@ -2099,25 +2025,7 @@ async function handleCreateSecondaryAction() {
 }
 
 async function handleCreateTertiaryAction() {
-  if (currentCreateStep.value === 'recommendation') {
-    if (!hasCreateRecommendationResult.value) {
-      showCreateStepBlockedToast('health')
-      return
-    }
-
-    await submit()
-    return
-  }
-
-  if (currentCreateStep.value !== 'health') {
-    return
-  }
-
-  void trackDogProfileEvent('dog_profile_health_skipped', {
-    mode: 'create',
-    stepName: 'health',
-  })
-  await submit()
+  return
 }
 
 // ========== 计算过程辅助函数 ==========
@@ -2232,7 +2140,7 @@ async function submit() {
   const { name, breedId, birthday, currentWeightKg, activityLevel } = formData.value
 
   if (!hasCreateRecommendationResult.value) {
-    showCreateStepBlockedToast('health')
+    showCreateStepBlockedToast('recommendation')
     return false
   }
 

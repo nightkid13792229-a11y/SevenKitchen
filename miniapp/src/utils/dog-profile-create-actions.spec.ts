@@ -57,7 +57,7 @@ describe('dog-profile-create-actions', () => {
     })
   })
 
-  it('keeps recommendation step on continue health-record entry with a save archive tertiary action', () => {
+  it('lets the recommendation step complete the profile directly', () => {
     expect(
       getCreateWizardActionConfig({
         step: 'recommendation',
@@ -69,12 +69,10 @@ describe('dog-profile-create-actions', () => {
         calculating: false,
       }),
     ).toEqual({
-      primaryText: '继续填写健康记录',
+      primaryText: '完成建档',
       primaryDisabled: false,
       secondaryText: '返回上一步',
       secondaryDisabled: false,
-      tertiaryText: '保存档案',
-      tertiaryDisabled: false,
     })
   })
 
@@ -90,33 +88,10 @@ describe('dog-profile-create-actions', () => {
         calculating: false,
       }),
     ).toEqual({
-      primaryText: '继续填写健康记录',
+      primaryText: '完成建档',
       primaryDisabled: true,
       secondaryText: '返回上一步',
       secondaryDisabled: false,
-      tertiaryText: '保存档案',
-      tertiaryDisabled: true,
-    })
-  })
-
-  it('keeps health step on complete, back, and skip-create actions', () => {
-    expect(
-      getCreateWizardActionConfig({
-        step: 'health',
-        canAdvanceFromBasic: true,
-        canAdvanceFromFeeding: true,
-        canAdvanceFromRecommendation: true,
-        canSubmit: true,
-        recommendationReady: true,
-        calculating: false,
-      }),
-    ).toEqual({
-      primaryText: '完成建档',
-      primaryDisabled: false,
-      secondaryText: '返回上一步',
-      secondaryDisabled: false,
-      tertiaryText: '跳过并创建',
-      tertiaryDisabled: false,
     })
   })
 })

@@ -165,6 +165,49 @@ export function buildHealthRecordSectionPayload(
   }
 }
 
+export function doHealthRecordsMatchPersistedPayload(
+  type: HealthRecordType,
+  localRecord: HealthRecordShape,
+  persistedRecord: HealthRecordShape,
+) {
+  return (
+    JSON.stringify(buildHealthRecordPayload(type, localRecord)) ===
+    JSON.stringify(buildHealthRecordPayload(type, persistedRecord))
+  )
+}
+
+export function findPersistedHealthRecordMatch(
+  type: HealthRecordType,
+  profileRecords: HealthRecordShape[],
+  localRecord: HealthRecordShape,
+  otherKnownIds: unknown[] = [],
+) {
+  if (!Array.isArray(profileRecords)) {
+    return null
+  }
+
+  if (localRecord?.id) {
+    const sameIdRecord = profileRecords.find((item) => item?.id === localRecord.id)
+    if (sameIdRecord) {
+      return sameIdRecord
+    }
+  }
+
+  const knownIds = new Set(
+    otherKnownIds.filter((id): id is string => typeof id === 'string' && Boolean(id)),
+  )
+
+  return (
+    profileRecords.find((item) => {
+      const itemId = typeof item?.id === 'string' ? item.id : ''
+      return (
+        !knownIds.has(itemId) &&
+        doHealthRecordsMatchPersistedPayload(type, localRecord, item)
+      )
+    }) || null
+  )
+}
+
 export function buildDietRemindersPayload(form: {
   allergyFoods?: unknown
   pickyFoods?: unknown
@@ -180,6 +223,44 @@ export function buildDietRemindersPayload(form: {
   }
 
   return payload
+}
+
+export function hasUnsavedDietReminderChange(current: unknown, saved: unknown) {
+  return normalizeOptionalText(current) !== normalizeOptionalText(saved)
+}
+
+export function resolveDogHealthSelectionState(
+  dogs: Array<{ id?: string }>,
+  preferredDogId = '',
+) {
+  if (!Array.isArray(dogs) || dogs.length === 0) {
+    return {
+      hasNoDogs: true,
+      selectedIndex: -1,
+      selectedDogId: '',
+    }
+  }
+
+  const preferredIndex = preferredDogId
+    ? dogs.findIndex(dog => dog?.id === preferredDogId)
+    : -1
+  const selectedIndex = preferredIndex >= 0 ? preferredIndex : 0
+
+  return {
+    hasNoDogs: false,
+    selectedIndex,
+    selectedDogId: dogs[selectedIndex]?.id || '',
+  }
+}
+
+export function shouldDiscardDogHealthProfileResponse({
+  requestedDogId,
+  latestRequestedDogId,
+}: {
+  requestedDogId: string
+  latestRequestedDogId: string
+}) {
+  return !requestedDogId || requestedDogId !== latestRequestedDogId
 }
 
 function cloneHealthStateValue<T>(value: T): T {
@@ -470,6 +551,32 @@ export function resolveHealthAttachmentPreviewType(
   return 'file'
 }
 
+function readHealthAttachmentFileName(value: string) {
+  try {
+    const { pathname } = new URL(value)
+    const fileName = pathname.split('/').filter(Boolean).pop() || ''
+    return decodeURIComponent(fileName)
+  } catch {
+    return ''
+  }
+}
+
+export function buildHealthAttachmentDisplayMeta(value: string, index: number) {
+  const previewType = resolveHealthAttachmentPreviewType(value)
+  const typeLabel = previewType === 'pdf'
+    ? 'PDF 附件'
+    : previewType === 'image'
+      ? '图片附件'
+      : '附件'
+  const fileName = readHealthAttachmentFileName(value)
+  const fallbackIndex = Number.isFinite(index) && index >= 0 ? index + 1 : 1
+
+  return {
+    title: `${typeLabel} ${fallbackIndex}`,
+    detail: fileName ? `${fileName} · 点击预览` : '点击预览',
+  }
+}
+
 export function resolveHealthRecordSecondaryActionText(
   isSaved: boolean,
   isDirty: boolean,
@@ -521,6 +628,12 @@ export function buildHealthRecordSummary(
   type: HealthRecordType,
   record: Record<string, any>,
 ): HealthRecordSummary {
+  const attachmentCount = normalizeAttachments(record?.attachments).length
+  const attachmentSummary = attachmentCount > 0 ? `含 ${attachmentCount} 个附件` : ''
+  const joinDetailParts = (parts: string[]) => (
+    [...parts, attachmentSummary].filter(Boolean).join(' · ')
+  )
+
   if (type === 'medical') {
     const title = String(record?.chiefComplaint || '').trim() || '未填写症状'
     const parts = [
@@ -530,7 +643,7 @@ export function buildHealthRecordSummary(
 
     return {
       title,
-      detail: parts.join(' · '),
+      detail: joinDetailParts(parts),
     }
   }
 
@@ -540,7 +653,7 @@ export function buildHealthRecordSummary(
 
     return {
       title,
-      detail,
+      detail: joinDetailParts([detail]),
     }
   }
 
@@ -549,6 +662,6 @@ export function buildHealthRecordSummary(
 
   return {
     title,
-    detail,
+    detail: joinDetailParts([detail]),
   }
 }

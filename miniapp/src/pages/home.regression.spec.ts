@@ -14,6 +14,17 @@ describe('home runtime regressions', () => {
     expect(source).toContain("/pages/feedback-list/index")
   })
 
+  it('adds health records to the home quick action tools', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/home/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('健康记录')
+    expect(source).toContain('@tap="goToHealthRecords"')
+    expect(source).toContain("/pages/dog-profile-health/index")
+  })
+
   it('uses minimal abstract quick action icons instead of emoji or detailed illustrations', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/home/index.vue'),

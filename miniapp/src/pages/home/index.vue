@@ -19,17 +19,23 @@
 
     <!-- 快捷功能入口 -->
     <view class="quick-actions">
-      <view class="action-item" @tap="goToFeedback">
-        <image class="action-icon" src="/static/home-actions/feedback.png" mode="aspectFit" />
-        <text class="action-text">建议反馈</text>
+      <view class="action-item" @tap="goToCalculatePortion">
+        <image class="action-icon" src="/static/home-actions/calculate-portion.png" mode="aspectFit" />
+        <text class="action-text">饭量计算</text>
       </view>
       <view class="action-item" @tap="goToWeightManagement">
         <image class="action-icon" src="/static/home-actions/weight-management.png" mode="aspectFit" />
         <text class="action-text">体重管理</text>
       </view>
-      <view class="action-item" @tap="goToCalculatePortion">
-        <image class="action-icon" src="/static/home-actions/calculate-portion.png" mode="aspectFit" />
-        <text class="action-text">饭量计算</text>
+      <view class="action-item" @tap="goToHealthRecords">
+        <view class="action-icon action-icon--health">
+          <text class="action-icon__cross">+</text>
+        </view>
+        <text class="action-text">健康记录</text>
+      </view>
+      <view class="action-item" @tap="goToFeedback">
+        <image class="action-icon" src="/static/home-actions/feedback.png" mode="aspectFit" />
+        <text class="action-text">建议反馈</text>
       </view>
     </view>
 
@@ -1261,6 +1267,22 @@ const goToWeightManagement = () => {
   uni.navigateTo({ url: '/pages/weight-management/index' })
 }
 
+// 跳转到健康记录
+const goToHealthRecords = () => {
+  if (!isLoggedIn.value) {
+    checkLoginAndNavigate('/pages/dog-profile-health/index')
+    return
+  }
+
+  if (dogs.value.length === 0) {
+    uni.showToast({ title: '请先创建狗狗档案', icon: 'none' })
+    goToDogCreate()
+    return
+  }
+
+  uni.navigateTo({ url: '/pages/dog-profile-health/index' })
+}
+
 // 跳转到饭量计算
 const goToCalculatePortion = () => {
   uni.navigateTo({ url: '/pages/calculate-portion/index' })
@@ -1438,6 +1460,21 @@ defineOptions({
   height: 56rpx;
   display: block;
   flex-shrink: 0;
+}
+
+.action-icon--health {
+  border-radius: 16rpx;
+  background: linear-gradient(135deg, #e8f6ee 0%, #d5efe1 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.action-icon__cross {
+  font-size: 42rpx;
+  line-height: 1;
+  font-weight: 700;
+  color: #178352;
 }
 
 .action-text {

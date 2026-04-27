@@ -44,6 +44,9 @@ export class MedicalRecordResponseDto {
   notes!: string | null;
 
   @Expose()
+  attachments!: string[];
+
+  @Expose()
   createdAt!: string;
 
   @Expose()

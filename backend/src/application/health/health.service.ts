@@ -342,6 +342,7 @@ export class HealthService {
       followUpDate: dto.followUpDate ? new Date(dto.followUpDate) : null,
       veterinarian: dto.veterinarian ?? null,
       notes: dto.notes ?? null,
+      attachments: dto.attachments ?? undefined,
     });
 
     return this.mapMedicalRecordToDto(updated);
@@ -537,6 +538,7 @@ export class HealthService {
       followUpDate: record.followUpDate,
       veterinarian: record.veterinarian,
       notes: record.notes,
+      attachments: record.attachments || [],
       createdAt: record.createdAt,
       updatedAt: record.updatedAt,
     });

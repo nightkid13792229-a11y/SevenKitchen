@@ -1,17 +1,13 @@
 import {
+  IsArray,
   IsDateString,
   IsOptional,
   IsString,
-  IsArray,
-  IsUrl,
-  IsIn,
 } from 'class-validator';
-import { CHECKUP_TYPES } from './create-checkup.dto';
 
 export class UpdateCheckupDto {
   @IsOptional()
   @IsString()
-  @IsIn(CHECKUP_TYPES)
   checkupType?: string;
 
   @IsOptional()
@@ -32,6 +28,6 @@ export class UpdateCheckupDto {
 
   @IsOptional()
   @IsArray()
-  @IsUrl({}, { each: true })
+  @IsString({ each: true })
   attachments?: string[];
 }

@@ -78,8 +78,8 @@
     <StickyActionBar
       primary-text="保存饮食提醒"
       secondary-text="返回概览"
-      :primary-disabled="!dogId || isProfileLoading || isSaving || savingRecordKey"
-      :secondary-disabled="isLoading || isSaving || savingRecordKey"
+      :primary-disabled="isDietReminderActionDisabled"
+      :secondary-disabled="isSecondaryActionDisabled"
       @primary="saveDietReminders"
       @secondary="goBack"
     />
@@ -141,6 +141,13 @@ const healthRecordFocusIdentity = reactive<Record<HealthRecordType, string>>({
   allergy: '',
 })
 const savedPickyFoods = ref('')
+const isHealthRecordSaving = computed(() => Boolean(savingRecordKey.value))
+const isDietReminderActionDisabled = computed(() =>
+  !dogId.value || isProfileLoading.value || isSaving.value || isHealthRecordSaving.value,
+)
+const isSecondaryActionDisabled = computed(() =>
+  isLoading.value || isSaving.value || isHealthRecordSaving.value,
+)
 const selectedDog = computed(() => (
   selectedDogIndex.value >= 0 ? dogs.value[selectedDogIndex.value] || null : null
 ))
@@ -237,7 +244,7 @@ function onDogPickerChange(event: any) {
     return
   }
 
-  if (isSaving.value || isProfileLoading.value || savingRecordKey.value) {
+  if (isSaving.value || isProfileLoading.value || isHealthRecordSaving.value) {
     selectedDogIndex.value = getCurrentDogIndex()
     return
   }
@@ -563,7 +570,7 @@ async function deleteHealthRecord({
 }
 
 async function saveDietReminders() {
-  if (!dogId.value || isProfileLoading.value || savingRecordKey.value) {
+  if (!dogId.value || isProfileLoading.value || isHealthRecordSaving.value) {
     return
   }
 
@@ -617,7 +624,7 @@ async function saveDietReminders() {
 }
 
 function goBack() {
-  if (savingRecordKey.value) {
+  if (isHealthRecordSaving.value) {
     return
   }
 

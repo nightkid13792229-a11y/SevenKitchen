@@ -34,7 +34,7 @@ describe('dog profile health page regressions', () => {
     expect(source).toContain('const isProfileLoading = ref(false)')
     expect(source).toContain('<template v-else-if="dogId">')
     expect(source).toContain('v-if="isProfileLoading"')
-    expect(source).toContain(':primary-disabled="!dogId || isProfileLoading || isSaving || savingRecordKey"')
+    expect(source).toContain(':primary-disabled="isDietReminderActionDisabled"')
   })
 
   it('guards dog switching when diet reminders have unsaved changes', () => {
@@ -84,8 +84,13 @@ describe('dog profile health page regressions', () => {
     expect(source).toContain(':records="recordsByType[activeRecordType]"')
     expect(source).toContain(':loading="loadingByType[activeRecordType]"')
     expect(source).toContain(':saving-record-key="savingRecordKey"')
-    expect(source).toContain(':primary-disabled="!dogId || isProfileLoading || isSaving || savingRecordKey"')
-    expect(source).toContain(':secondary-disabled="isLoading || isSaving || savingRecordKey"')
+    expect(source).toContain(':primary-disabled="isDietReminderActionDisabled"')
+    expect(source).toContain(':secondary-disabled="isSecondaryActionDisabled"')
+    expect(source).toContain('const isHealthRecordSaving = computed(() => Boolean(savingRecordKey.value))')
+    expect(source).toContain('const isDietReminderActionDisabled = computed(() =>')
+    expect(source).toContain('const isSecondaryActionDisabled = computed(() =>')
+    expect(source).not.toContain(':primary-disabled="!dogId || isProfileLoading || isSaving || savingRecordKey"')
+    expect(source).not.toContain(':secondary-disabled="isLoading || isSaving || savingRecordKey"')
     expect(source).toContain('@save-record="saveHealthRecord"')
     expect(source).toContain('@delete-record="deleteHealthRecord"')
     expect(source).toContain('@dirty-change="hasUnsavedRecordDraft = $event"')
@@ -117,12 +122,12 @@ describe('dog profile health page regressions', () => {
       source,
       'async function saveDietReminders',
       'function goBack',
-    )).toContain('savingRecordKey.value')
+    )).toContain('isHealthRecordSaving.value')
     expect(functionSource(
       source,
       'function goBack',
       'function goToDogCreate',
-    )).toContain('savingRecordKey.value')
+    )).toContain('isHealthRecordSaving.value')
     expect(source).not.toContain('dogApi.updateHealthRecords')
     expect(source).not.toContain('buildDogHealthStateSnapshot')
     expect(source).not.toContain('mergeDogHealthStateSnapshot')

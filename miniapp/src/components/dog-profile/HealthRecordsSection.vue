@@ -65,6 +65,29 @@
             >
               {{ recordSummary(record, index).detail }}
             </text>
+
+            <view
+              v-if="!isRecordExpanded(record, index) && attachmentList(record).length > 0"
+              class="record-card__attachments-preview"
+            >
+              <view
+                v-for="(attachment, attachmentIndex) in attachmentList(record).slice(0, 2)"
+                :key="`${recordKey(record, index)}-preview-${attachment}-${attachmentIndex}`"
+                class="record-card__attachment-preview"
+                @tap.stop="previewAttachment(attachment)"
+              >
+                <text class="record-card__attachment-name">
+                  {{ attachmentDisplay(attachment, attachmentIndex).detail }}
+                </text>
+                <text class="record-card__attachment-action">预览</text>
+              </view>
+              <text
+                v-if="attachmentList(record).length > 2"
+                class="record-card__attachment-more"
+              >
+                还有 {{ attachmentList(record).length - 2 }} 个附件
+              </text>
+            </view>
           </view>
         </view>
 
@@ -1270,6 +1293,65 @@ function removeAttachment(index: number, attachmentIndex: number) {
   margin-top: 6rpx;
   font-size: 22rpx;
   line-height: 1.6;
+  color: #6d808a;
+}
+
+.record-card__attachments-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  margin-top: 12rpx;
+}
+
+.record-card__attachment-preview {
+  min-width: 0;
+  padding: 10rpx 12rpx;
+  border-radius: 14rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12rpx;
+  background: rgba(15, 107, 67, 0.07);
+}
+
+.health-records--checkup .record-card__attachment-preview {
+  background: rgba(33, 109, 155, 0.08);
+}
+
+.health-records--allergy .record-card__attachment-preview {
+  background: rgba(173, 91, 42, 0.08);
+}
+
+.record-card__attachment-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 22rpx;
+  font-weight: 600;
+  color: #265060;
+}
+
+.record-card__attachment-action {
+  flex-shrink: 0;
+  font-size: 22rpx;
+  font-weight: 700;
+  color: #0f7b49;
+}
+
+.health-records--checkup .record-card__attachment-action {
+  color: #216d9b;
+}
+
+.health-records--allergy .record-card__attachment-action {
+  color: #ad5b2a;
+}
+
+.record-card__attachment-more {
+  display: block;
+  font-size: 22rpx;
+  line-height: 1.5;
   color: #6d808a;
 }
 

@@ -14,6 +14,9 @@ vi.mock('../utils/api', async () => {
 })
 
 import { dogApi } from './dogs'
+import { request } from '../utils/api'
+
+const mockedRequest = vi.mocked(request)
 
 const uploadFile = vi.fn()
 
@@ -50,5 +53,85 @@ describe('dogApi avatar upload', () => {
         Authorization: 'Bearer token-123',
       }),
     }))
+  })
+})
+
+describe('dogApi healthRecords', () => {
+  beforeEach(() => {
+    mockedRequest.mockReset()
+  })
+
+  it('uses independent medical record endpoints for list, create, update, and delete', () => {
+    const createPayload = {
+      chiefComplaint: 'Limping',
+      visitDate: '2026-04-20',
+      diagnosis: 'Mild sprain',
+      notes: 'Rest for one week',
+      treatment: 'Anti-inflammatory medication',
+      medications: ['Carprofen'],
+      status: 'TREATING' as const,
+      followUpDate: '2026-05-01',
+      veterinarian: 'Dr. Lin',
+      attachments: ['oss://records/xray.png'],
+    }
+    const updatePayload = {
+      notes: null,
+      treatment: 'Continue rest',
+      attachments: [],
+    }
+
+    dogApi.healthRecords.medical.list('dog-1')
+    dogApi.healthRecords.medical.create('dog-1', createPayload)
+    dogApi.healthRecords.medical.update('dog-1', 'medical-1', updatePayload)
+    dogApi.healthRecords.medical.delete('dog-1', 'medical-1')
+
+    expect(mockedRequest).toHaveBeenNthCalledWith(1, {
+      url: '/dogs/dog-1/medical-records',
+      method: 'GET',
+    })
+    expect(mockedRequest).toHaveBeenNthCalledWith(2, {
+      url: '/dogs/dog-1/medical-records',
+      method: 'POST',
+      data: createPayload,
+    })
+    expect(mockedRequest).toHaveBeenNthCalledWith(3, {
+      url: '/dogs/dog-1/medical-records/medical-1',
+      method: 'PUT',
+      data: updatePayload,
+    })
+    expect(mockedRequest).toHaveBeenNthCalledWith(4, {
+      url: '/dogs/dog-1/medical-records/medical-1',
+      method: 'DELETE',
+    })
+  })
+
+  it('uses independent checkup and allergy record endpoints', () => {
+    const checkupPayload = {
+      checkupType: 'annual',
+      checkupDate: '2026-04-21',
+      findings: 'Healthy',
+      recommendations: null,
+      veterinarian: 'Dr. Zhang',
+      attachments: ['oss://records/checkup.pdf'],
+    }
+    const allergyPayload = {
+      allergen: 'Chicken',
+      notes: null,
+      attachments: [],
+    }
+
+    dogApi.healthRecords.checkup.create('dog-1', checkupPayload)
+    dogApi.healthRecords.allergy.update('dog-1', 'allergy-1', allergyPayload)
+
+    expect(mockedRequest).toHaveBeenNthCalledWith(1, {
+      url: '/dogs/dog-1/checkups',
+      method: 'POST',
+      data: checkupPayload,
+    })
+    expect(mockedRequest).toHaveBeenNthCalledWith(2, {
+      url: '/dogs/dog-1/allergies/allergy-1',
+      method: 'PUT',
+      data: allergyPayload,
+    })
   })
 })

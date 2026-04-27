@@ -37,6 +37,49 @@ export interface DogProfileFormValue {
   allergyRecords?: any[]
 }
 
+type MedicalRecordStatus = 'TREATING' | 'RECOVERED' | 'CHRONIC'
+
+type MedicalRecordCreatePayload = {
+  chiefComplaint: string
+  visitDate: string
+  diagnosis: string
+  notes?: string | null
+  treatment?: string | null
+  medications?: string[]
+  status?: MedicalRecordStatus
+  followUpDate?: string | null
+  veterinarian?: string | null
+  attachments?: string[]
+}
+
+type CheckupRecordCreatePayload = {
+  checkupType: string
+  checkupDate: string
+  findings?: string | null
+  recommendations?: string | null
+  veterinarian?: string | null
+  attachments?: string[]
+}
+
+type AllergyRecordCreatePayload = {
+  allergen: string
+  notes?: string | null
+  attachments?: string[]
+}
+
+const healthRecordCrud = <
+  TCreatePayload,
+  TUpdatePayload = Partial<TCreatePayload>,
+>(basePath: string) => ({
+  list: (dogId: string) => request({ url: `/dogs/${dogId}/${basePath}`, method: 'GET' }),
+  create: (dogId: string, data: TCreatePayload) =>
+    request({ url: `/dogs/${dogId}/${basePath}`, method: 'POST', data }),
+  update: (dogId: string, recordId: string, data: TUpdatePayload) =>
+    request({ url: `/dogs/${dogId}/${basePath}/${recordId}`, method: 'PUT', data }),
+  delete: (dogId: string, recordId: string) =>
+    request({ url: `/dogs/${dogId}/${basePath}/${recordId}`, method: 'DELETE' }),
+})
+
 export const dogApi = {
   list: () => request({ url: '/dogs', method: 'GET' }),
   detail: (dogId: string) => request({ url: `/dogs/${dogId}`, method: 'GET' }),
@@ -47,6 +90,11 @@ export const dogApi = {
   create: (data: Record<string, any>) => request({ url: '/dogs', method: 'POST', data }),
   update: (dogId: string, data: Record<string, any>) =>
     request({ url: `/dogs/${dogId}`, method: 'PUT', data }),
+  healthRecords: {
+    medical: healthRecordCrud<MedicalRecordCreatePayload>('medical-records'),
+    checkup: healthRecordCrud<CheckupRecordCreatePayload>('checkups'),
+    allergy: healthRecordCrud<AllergyRecordCreatePayload>('allergies'),
+  },
   uploadAvatar: (dogId: string, filePath: string): Promise<string> =>
     new Promise((resolve, reject) => {
       const token = getToken()

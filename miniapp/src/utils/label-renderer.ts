@@ -572,11 +572,13 @@ export function formatIngredients(recipeSnapshot: any, totalWeightG = 0) {
       // ratio 已经是百分比值（如 25.51 表示 25.51%），直接格式化即可
       const percentage = Number(item.ratio).toFixed(2);
       foodIngredients.push(`${item.name}${percentage}%`);
-    } else if (item.ingredient_type === 'SUPPLEMENT' && item.nutrient_target_value) {
+    } else if (item.ingredient_type === 'SUPPLEMENT') {
       const supplementAmount = calculateSupplementAmountForProduction(item, totalWeightG, {
         includeProductionLoss: true
       });
-      supplementIngredients.push(`${item.name}${formatSupplementAmount(supplementAmount.amount)}${supplementAmount.unit}`);
+      if (supplementAmount.amount > 0) {
+        supplementIngredients.push(`${item.name}${formatSupplementAmount(supplementAmount.amount)}${supplementAmount.unit}`);
+      }
     }
   });
 

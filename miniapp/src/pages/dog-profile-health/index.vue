@@ -41,54 +41,19 @@
 
       <template v-else-if="dogId">
         <HealthRecordsSection
-          v-model="form.medicalRecords"
           :dog-id="dogId"
-          :preferred-expanded-record-identity="healthRecordFocusIdentity.medical"
-          record-type="medical"
-          title="病史记录"
-          description="记录症状、发病日期和诊断结果。"
-          empty-title="还没有病史记录"
-          primary-field-key="chiefComplaint"
-          primary-label="症状或疾病"
-          date-field-key="visitDate"
-          date-label="发病日期"
-          secondary-field-key="diagnosis"
-          secondary-label="诊断结果"
-          notes-label="补充说明"
-          @record-saved="rememberHealthRecordFocus('medical', $event)"
+          :active-type="activeRecordType"
+          :records="recordsByType[activeRecordType]"
+          :loading="loadingByType[activeRecordType]"
+          :saving-record-key="savingRecordKey"
+          :preferred-expanded-record-identity="healthRecordFocusIdentity[activeRecordType]"
+          @change-type="activeRecordType = $event"
+          @save-record="saveHealthRecord"
+          @delete-record="deleteHealthRecord"
+          @dirty-change="hasUnsavedRecordDraft = $event"
         />
 
-        <HealthRecordsSection
-          v-model="form.checkupRecords"
-          :dog-id="dogId"
-          :preferred-expanded-record-identity="healthRecordFocusIdentity.checkup"
-          record-type="checkup"
-          title="体检记录"
-          description="更新最近的体检时间和发现。"
-          empty-title="还没有体检记录"
-          primary-field-key="checkupType"
-          primary-label="体检类型"
-          date-field-key="checkupDate"
-          date-label="体检日期"
-          notes-label="体检说明"
-          @record-saved="rememberHealthRecordFocus('checkup', $event)"
-        />
-
-        <HealthRecordsSection
-          v-model="form.allergyRecords"
-          :dog-id="dogId"
-          :preferred-expanded-record-identity="healthRecordFocusIdentity.allergy"
-          record-type="allergy"
-          title="过敏记录"
-          description="记录明确的过敏原和相关备注。"
-          empty-title="还没有过敏记录"
-          primary-field-key="allergen"
-          primary-label="过敏原"
-          notes-label="备注"
-          @record-saved="rememberHealthRecordFocus('allergy', $event)"
-        />
-
-        <view class="section-card">
+        <view class="section-card diet-reminder-card">
           <text class="section-card__title">饮食提醒</text>
 
           <view class="field-group">
@@ -113,8 +78,8 @@
     <StickyActionBar
       primary-text="保存饮食提醒"
       secondary-text="返回概览"
-      :primary-disabled="!dogId || isProfileLoading || isSaving"
-      :secondary-disabled="isLoading || isSaving"
+      :primary-disabled="!dogId || isProfileLoading || isSaving || savingRecordKey"
+      :secondary-disabled="isLoading || isSaving || savingRecordKey"
       @primary="saveDietReminders"
       @secondary="goBack"
     />
@@ -122,20 +87,24 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import HealthRecordsSection from '../../components/dog-profile/HealthRecordsSection.vue'
 import StickyActionBar from '../../components/dog-profile/StickyActionBar.vue'
 import { dogApi } from '../../api/dogs'
 import { trackDogProfileEvent } from '../../utils/dog-profile-analytics'
 import {
-  buildDogHealthStateSnapshot,
+  HEALTH_RECORD_TYPES,
+  type HealthRecordType,
+  buildCrudHealthRecordPayload,
+  buildHealthRecordFocusIdentity,
   hasUnsavedDietReminderChange,
-  mergeDogHealthStateSnapshot,
-  readDogHealthStateSnapshotCache,
+  normalizeHealthRecordListResponse,
+  normalizeHealthRecordResponse,
+  removeHealthRecordFromList,
+  replaceHealthRecordInList,
   resolveDogHealthSelectionState,
   shouldDiscardDogHealthProfileResponse,
-  writeDogHealthStateSnapshotCache,
 } from '../../utils/health-records'
 import { resolveDogProfileEntryRoute } from '../../utils/dog-profile-form'
 
@@ -153,10 +122,20 @@ const isSaving = ref(false)
 const hasNoDogs = ref(false)
 const loadError = ref('')
 const latestRequestedDogId = ref('')
-const loadedFields = reactive({
-  pickyFoods: true,
+const activeRecordType = ref<HealthRecordType>('medical')
+const recordsByType = reactive<Record<HealthRecordType, Record<string, any>[]>>({
+  medical: [],
+  checkup: [],
+  allergy: [],
 })
-const healthRecordFocusIdentity = reactive({
+const loadingByType = reactive<Record<HealthRecordType, boolean>>({
+  medical: false,
+  checkup: false,
+  allergy: false,
+})
+const savingRecordKey = ref('')
+const hasUnsavedRecordDraft = ref(false)
+const healthRecordFocusIdentity = reactive<Record<HealthRecordType, string>>({
   medical: '',
   checkup: '',
   allergy: '',
@@ -187,9 +166,6 @@ const form = reactive<Record<string, any>>({
   treatInputMode: 'ESTIMATE_LEVEL',
   treatLevel: 'LOW',
   manualTreatKcal: '',
-  medicalRecords: [],
-  checkupRecords: [],
-  allergyRecords: [],
   pickyFoods: '',
 })
 
@@ -210,29 +186,6 @@ onLoad((options: any) => {
   const value = Array.isArray(options?.dogId) ? options.dogId[0] : options?.dogId
   void loadDogs(typeof value === 'string' ? value : '')
 })
-
-watch(
-  () => [
-    JSON.stringify(form.medicalRecords),
-    JSON.stringify(form.checkupRecords),
-    JSON.stringify(form.allergyRecords),
-  ],
-  () => {
-    if (!dogId.value) {
-      return
-    }
-
-    writeDogHealthStateSnapshotCache(
-      dogId.value,
-      buildDogHealthStateSnapshot({
-        medicalRecords: form.medicalRecords,
-        checkupRecords: form.checkupRecords,
-        allergyRecords: form.allergyRecords,
-        pickyFoods: form.pickyFoods,
-      }),
-    )
-  },
-)
 
 async function loadDogs(preferredDogId = '') {
   isLoading.value = true
@@ -263,7 +216,11 @@ async function loadDogs(preferredDogId = '') {
     if (preferredDogId) {
       latestRequestedDogId.value = preferredDogId
       selectedDogIndex.value = -1
-      await loadDogProfile(preferredDogId)
+      resetHealthForm()
+      await Promise.all([
+        loadDogProfile(preferredDogId),
+        loadAllHealthRecordLists(preferredDogId),
+      ])
       return
     }
 
@@ -280,28 +237,29 @@ function onDogPickerChange(event: any) {
     return
   }
 
-  if (isSaving.value || isProfileLoading.value) {
+  if (isSaving.value || isProfileLoading.value || savingRecordKey.value) {
     selectedDogIndex.value = getCurrentDogIndex()
     return
   }
 
-  if (hasUnsavedDietReminder.value) {
-    confirmSwitchDogWithUnsavedDietReminder(index)
+  if (hasUnsavedDietReminder.value || hasUnsavedRecordDraft.value) {
+    confirmSwitchDogWithUnsavedChanges(index)
     return
   }
 
   void selectDogByIndex(index)
 }
 
-function selectDogByIndex(index: number) {
+async function selectDogByIndex(index: number) {
   const nextDog = dogs.value[index]
   if (!nextDog?.id) {
     return
   }
 
+  const requestedDogId = nextDog.id
   selectedDogIndex.value = index
   dogId.value = ''
-  latestRequestedDogId.value = nextDog.id
+  latestRequestedDogId.value = requestedDogId
   isProfileLoading.value = true
   resetHealthForm()
   healthRecordFocusIdentity.medical = ''
@@ -309,15 +267,22 @@ function selectDogByIndex(index: number) {
   healthRecordFocusIdentity.allergy = ''
   void trackDogProfileEvent('dog_profile_step_viewed', {
     mode: 'edit',
-    dogId: nextDog.id,
+    dogId: requestedDogId,
     moduleName: 'health',
   })
-  return loadDogProfile(nextDog.id)
+  await Promise.all([
+    loadDogProfile(requestedDogId),
+    loadAllHealthRecordLists(requestedDogId),
+  ])
 }
 
 function loadErrorRetry() {
   if (dogId.value) {
-    void loadDogProfile(dogId.value)
+    const requestedDogId = dogId.value
+    void Promise.all([
+      loadDogProfile(requestedDogId),
+      loadAllHealthRecordLists(requestedDogId),
+    ])
     return
   }
 
@@ -329,10 +294,10 @@ function getCurrentDogIndex() {
   return index >= 0 ? index : selectedDogIndex.value
 }
 
-function confirmSwitchDogWithUnsavedDietReminder(index: number) {
+function confirmSwitchDogWithUnsavedChanges(index: number) {
   uni.showModal({
     title: '切换狗狗？',
-    content: '当前饮食提醒尚未保存，切换后会放弃本次修改。',
+    content: '当前页面有未保存的修改，切换后会放弃本次修改。',
     confirmText: '继续切换',
     cancelText: '继续编辑',
     success: (res) => {
@@ -350,7 +315,6 @@ function confirmSwitchDogWithUnsavedDietReminder(index: number) {
 }
 
 function resetHealthForm() {
-  loadedFields.pickyFoods = true
   form.id = ''
   form.name = ''
   form.breedId = ''
@@ -368,11 +332,14 @@ function resetHealthForm() {
   form.treatInputMode = 'ESTIMATE_LEVEL'
   form.treatLevel = 'LOW'
   form.manualTreatKcal = ''
-  form.medicalRecords = []
-  form.checkupRecords = []
-  form.allergyRecords = []
   form.pickyFoods = ''
   savedPickyFoods.value = ''
+  savingRecordKey.value = ''
+  hasUnsavedRecordDraft.value = false
+  for (const type of HEALTH_RECORD_TYPES) {
+    recordsByType[type] = []
+    loadingByType[type] = false
+  }
 }
 
 async function loadDogProfile(requestedDogId: string) {
@@ -399,7 +366,7 @@ async function loadDogProfile(requestedDogId: string) {
     }
 
     dogId.value = requestedDogId
-    populateForm(res.data.profile, requestedDogId)
+    populateForm(res.data.profile)
   } catch (error: any) {
     if (shouldDiscardDogHealthProfileResponse({
       requestedDogId,
@@ -421,13 +388,7 @@ async function loadDogProfile(requestedDogId: string) {
   }
 }
 
-function populateForm(profile: Record<string, any>, targetDogId = dogId.value || profile.id || '') {
-  loadedFields.pickyFoods = Object.prototype.hasOwnProperty.call(profile, 'pickyFoods')
-  const cachedHealthState = readDogHealthStateSnapshotCache(targetDogId)
-  const mergedHealthState = mergeDogHealthStateSnapshot(
-    cachedHealthState || buildDogHealthStateSnapshot(form),
-    profile,
-  )
+function populateForm(profile: Record<string, any>) {
   form.id = profile.id || ''
   form.name = profile.name || ''
   form.breedId = profile.breedId || ''
@@ -445,24 +406,164 @@ function populateForm(profile: Record<string, any>, targetDogId = dogId.value ||
   form.treatInputMode = profile.treatInputMode || 'ESTIMATE_LEVEL'
   form.treatLevel = profile.treatLevel || 'LOW'
   form.manualTreatKcal = profile.manualTreatKcal?.toString() || ''
-  form.medicalRecords = mergedHealthState.medicalRecords
-  form.checkupRecords = mergedHealthState.checkupRecords
-  form.allergyRecords = mergedHealthState.allergyRecords
-  form.pickyFoods = mergedHealthState.pickyFoods
-  savedPickyFoods.value = mergedHealthState.pickyFoods
+  form.pickyFoods = typeof profile.pickyFoods === 'string' ? profile.pickyFoods : ''
+  savedPickyFoods.value = form.pickyFoods
+}
 
-  writeDogHealthStateSnapshotCache(
-    targetDogId,
-    mergedHealthState,
+function recordApiForType(type: HealthRecordType) {
+  if (type === 'medical') {
+    return dogApi.healthRecords.medical
+  }
+
+  if (type === 'checkup') {
+    return dogApi.healthRecords.checkup
+  }
+
+  return dogApi.healthRecords.allergy
+}
+
+function recordListApiForType(type: HealthRecordType) {
+  if (type === 'medical') {
+    return dogApi.healthRecords.medical.list
+  }
+
+  if (type === 'checkup') {
+    return dogApi.healthRecords.checkup.list
+  }
+
+  return dogApi.healthRecords.allergy.list
+}
+
+function shouldDiscardHealthRecordListResponse(requestedDogId: string) {
+  return shouldDiscardDogHealthProfileResponse({
+    requestedDogId,
+    latestRequestedDogId: latestRequestedDogId.value,
+  })
+}
+
+async function loadHealthRecordList(type: HealthRecordType, targetDogId = dogId.value) {
+  if (!targetDogId) {
+    recordsByType[type] = []
+    return
+  }
+
+  loadingByType[type] = true
+
+  try {
+    const res: any = await recordListApiForType(type)(targetDogId)
+    if (shouldDiscardHealthRecordListResponse(targetDogId)) {
+      return
+    }
+
+    if (res.code !== 0) {
+      throw new Error(res.message || '加载健康记录失败')
+    }
+
+    recordsByType[type] = normalizeHealthRecordListResponse(res)
+  } catch (error: any) {
+    if (shouldDiscardHealthRecordListResponse(targetDogId)) {
+      return
+    }
+
+    recordsByType[type] = []
+    uni.showToast({ title: error?.message || '加载健康记录失败', icon: 'none' })
+  } finally {
+    if (!shouldDiscardHealthRecordListResponse(targetDogId)) {
+      loadingByType[type] = false
+    }
+  }
+}
+
+async function loadAllHealthRecordLists(targetDogId: string) {
+  await Promise.all(
+    HEALTH_RECORD_TYPES.map(type => loadHealthRecordList(type, targetDogId)),
   )
 }
 
-function rememberHealthRecordFocus(type: 'medical' | 'checkup' | 'allergy', identity: string) {
-  healthRecordFocusIdentity[type] = identity
+async function saveHealthRecord({
+  type,
+  record,
+  recordKey,
+}: {
+  type: HealthRecordType
+  record: Record<string, any>
+  recordKey: string
+}) {
+  if (!dogId.value) {
+    return
+  }
+
+  const targetDogId = dogId.value
+  const recordId = typeof record.id === 'string' ? record.id : ''
+  const nextSavingKey = recordId || recordKey || buildHealthRecordFocusIdentity(type, record)
+  savingRecordKey.value = nextSavingKey
+
+  try {
+    const payload = buildCrudHealthRecordPayload(type, record)
+    const res: any = recordId
+      ? await recordApiForType(type).update(targetDogId, recordId, payload)
+      : await recordApiForType(type).create(targetDogId, payload)
+
+    if (res.code !== 0 || !res.data) {
+      throw new Error(res.message || '保存失败')
+    }
+
+    if (targetDogId !== dogId.value) {
+      return
+    }
+
+    const nextRecord = normalizeHealthRecordResponse(res.data)
+    recordsByType[type] = replaceHealthRecordInList(recordsByType[type], nextRecord)
+    healthRecordFocusIdentity[type] = buildHealthRecordFocusIdentity(type, nextRecord)
+    uni.showToast({ title: '已保存', icon: 'success' })
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '保存失败', icon: 'none' })
+  } finally {
+    if (savingRecordKey.value === nextSavingKey) {
+      savingRecordKey.value = ''
+    }
+  }
+}
+
+async function deleteHealthRecord({
+  type,
+  record,
+}: {
+  type: HealthRecordType
+  record: Record<string, any>
+}) {
+  if (!dogId.value || !record.id) {
+    return
+  }
+
+  const targetDogId = dogId.value
+  const recordId = String(record.id)
+  const nextSavingKey = recordId || buildHealthRecordFocusIdentity(type, record)
+  savingRecordKey.value = nextSavingKey
+
+  try {
+    const res: any = await recordApiForType(type).delete(targetDogId, recordId)
+    if (res.code !== 0) {
+      throw new Error(res.message || '删除失败')
+    }
+
+    if (targetDogId !== dogId.value) {
+      return
+    }
+
+    recordsByType[type] = removeHealthRecordFromList(recordsByType[type], recordId)
+    uni.showToast({ title: '已删除', icon: 'success' })
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || '删除失败', icon: 'none' })
+  } finally {
+    if (savingRecordKey.value === nextSavingKey) {
+      savingRecordKey.value = ''
+    }
+  }
 }
 
 async function saveDietReminders() {
-  if (!dogId.value || isProfileLoading.value) {
+  if (!dogId.value || isProfileLoading.value || savingRecordKey.value) {
     return
   }
 
@@ -484,8 +585,10 @@ async function saveDietReminders() {
       throw new Error(res.message || '保存失败')
     }
 
-    if (res.data?.profile && targetDogId === dogId.value) {
-      populateForm(res.data.profile, targetDogId)
+    if (targetDogId === dogId.value && res.data?.profile) {
+      populateForm(res.data.profile)
+    } else if (targetDogId === dogId.value) {
+      savedPickyFoods.value = form.pickyFoods
     }
 
     void trackDogProfileEvent('dog_profile_submit_succeeded', {
@@ -514,6 +617,10 @@ async function saveDietReminders() {
 }
 
 function goBack() {
+  if (savingRecordKey.value) {
+    return
+  }
+
   if (getCurrentPages().length > 1) {
     uni.navigateBack()
     return

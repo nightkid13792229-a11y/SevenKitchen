@@ -19,7 +19,7 @@
           getHealthRecordTypeMeta(type).accentClass,
           { 'record-type-tabs__item--active': type === currentType },
         ]"
-        :disabled="loading || hasUploadingRecords"
+        :disabled="loading || hasUploadingRecords || hasSavingRecord"
         @tap="requestTypeChange(type)"
       >
         {{ getHealthRecordTypeMeta(type).label }}
@@ -71,7 +71,7 @@
         <view class="record-card__header-actions">
           <button
             class="record-card__delete"
-            :disabled="loading || hasUploadingRecords || isRecordSaving(record, index)"
+            :disabled="loading || hasUploadingRecords || hasSavingRecord || isRecordSaving(record, index)"
             @tap.stop="removeRecord(index)"
           >
             删除
@@ -88,6 +88,7 @@
           <input
             class="field-input"
             type="text"
+            :disabled="hasSavingRecord"
             :placeholder="`请输入${fieldConfig.primary.label}`"
             :value="readField(record, fieldConfig.primary.key)"
             @input="updateTextField(index, fieldConfig.primary.key, $event.detail.value)"
@@ -98,6 +99,7 @@
           <text class="field-label">{{ fieldConfig.date.label }}</text>
           <picker
             mode="date"
+            :disabled="hasSavingRecord"
             :value="readField(record, fieldConfig.date.key)"
             @change="updateTextField(index, fieldConfig.date.key, $event.detail.value)"
           >
@@ -112,6 +114,7 @@
           <input
             class="field-input"
             type="text"
+            :disabled="hasSavingRecord"
             :placeholder="`请输入${fieldConfig.secondary.label}`"
             :value="readField(record, fieldConfig.secondary.key)"
             @input="updateTextField(index, fieldConfig.secondary.key, $event.detail.value)"
@@ -122,6 +125,7 @@
           <text class="field-label">{{ fieldConfig.notes.label }}</text>
           <textarea
             class="field-textarea"
+            :disabled="hasSavingRecord"
             :placeholder="`请输入${fieldConfig.notes.label}`"
             :value="readField(record, fieldConfig.notes.key)"
             @input="updateTextField(index, fieldConfig.notes.key, $event.detail.value)"
@@ -153,7 +157,7 @@
               </view>
               <button
                 class="attachment-item__remove"
-                :disabled="isRecordSaving(record, index)"
+                :disabled="hasSavingRecord || isRecordSaving(record, index)"
                 @tap="removeAttachment(index, attachmentIndex)"
               >
                 删除
@@ -164,7 +168,7 @@
           <button
             class="attachment-button"
             :loading="isUploading(record, index)"
-            :disabled="loading || isUploading(record, index) || isRecordSaving(record, index)"
+            :disabled="loading || hasSavingRecord || isUploading(record, index) || isRecordSaving(record, index)"
             @tap="chooseAttachment(index)"
           >
             上传附件
@@ -175,7 +179,7 @@
           <button
             v-if="secondaryActionText(record, index)"
             class="record-card__action record-card__action--ghost"
-            :disabled="hasUploadingRecords || isRecordSaving(record, index)"
+            :disabled="hasUploadingRecords || hasSavingRecord || isRecordSaving(record, index)"
             @tap="cancelRecord(index)"
           >
             {{ secondaryActionText(record, index) }}
@@ -196,7 +200,7 @@
       </view>
     </view>
 
-    <button class="records-section__add" :disabled="loading || hasUploadingRecords" @tap="addRecord">
+    <button class="records-section__add" :disabled="loading || hasUploadingRecords || hasSavingRecord" @tap="addRecord">
       {{ activeTypeMeta.addLabel }}
     </button>
   </view>
@@ -213,6 +217,7 @@ import {
   buildHealthRecordFocusIdentity,
   buildHealthRecordSummary,
   createHealthRecordDraft,
+  doHealthRecordsMatchPersistedPayload,
   extractHealthAttachmentKey,
   findHealthRecordFocusIndex,
   getHealthRecordTypeMeta,
@@ -267,6 +272,8 @@ const draftRecords = ref<Record<string, any>[]>([])
 const savedSnapshots = ref<Record<string, Record<string, any>>>({})
 const uploadingKeys = ref<Record<string, boolean>>({})
 const expandedRecordKey = ref<string | null>(null)
+const lastSyncedType = ref<HealthRecordType | null>(null)
+const recentSavingRecordKey = ref('')
 const attachmentHintText = buildHealthAttachmentFieldHint()
 
 const currentType = computed<HealthRecordType>(() => props.activeType || props.recordType || 'medical')
@@ -280,6 +287,26 @@ const hasDirtyRecords = computed(() =>
   draftRecords.value.some((record, index) => isRecordDirty(record, index)),
 )
 const hasUploadingRecords = computed(() => Object.values(uploadingKeys.value).some(Boolean))
+const hasSavingRecord = computed(() => Boolean(props.savingRecordKey))
+
+watch(
+  () => props.savingRecordKey,
+  (nextKey, previousKey) => {
+    if (nextKey) {
+      recentSavingRecordKey.value = nextKey
+      return
+    }
+
+    if (previousKey) {
+      nextTick(() => {
+        if (recentSavingRecordKey.value === previousKey && !props.savingRecordKey) {
+          recentSavingRecordKey.value = ''
+        }
+      })
+    }
+  },
+  { immediate: true },
+)
 
 watch(
   () => [currentType.value, sourceRecords.value] as const,
@@ -365,6 +392,114 @@ function normalizeDraftRecord(record: Record<string, any>, localId: string) {
   }
 }
 
+function hasMatchingIncomingRecord(
+  record: Record<string, any>,
+  recordIndex: number,
+  incomingRecords: Record<string, any>[],
+  usedIncomingIndexes: Set<number>,
+) {
+  const matchingIndex = incomingRecords.findIndex((incomingRecord, index) =>
+    !usedIncomingIndexes.has(index) &&
+    doHealthRecordsMatchPersistedPayload(currentType.value, record, incomingRecord),
+  )
+
+  if (matchingIndex < 0) {
+    return false
+  }
+
+  usedIncomingIndexes.add(matchingIndex)
+  consumeRecentSavingRecordKey(record, recordIndex)
+  return true
+}
+
+function preserveUnsavedDrafts(
+  incomingRecords: Record<string, any>[],
+  nextSnapshots: Record<string, Record<string, any>>,
+) {
+  const usedIncomingIndexes = new Set<number>()
+  const preservedDrafts: Record<string, any>[] = []
+
+  draftRecords.value.forEach((record, index) => {
+    const key = recordKey(record, index)
+    if (!isRecordDirty(record, index)) {
+      return
+    }
+
+    if (replaceIncomingRecordWithDirtyDraft(record, index, key, incomingRecords, nextSnapshots)) {
+      return
+    }
+
+    if (hasMatchingIncomingRecord(record, index, incomingRecords, usedIncomingIndexes)) {
+      return
+    }
+
+    if (shouldSkipPreservingSavingRecord(record, index)) {
+      consumeRecentSavingRecordKey(record, index)
+      return
+    }
+
+    const snapshot = savedSnapshot(record, index)
+    if (snapshot) {
+      nextSnapshots[key] = snapshot
+    }
+
+    preservedDrafts.push(normalizeDraftRecord(record, key))
+  })
+
+  return [...incomingRecords, ...preservedDrafts]
+}
+
+function shouldSkipPreservingSavingRecord(record: Record<string, any>, index: number) {
+  return recordMatchesSavingKey(record, index, props.savingRecordKey || recentSavingRecordKey.value)
+}
+
+function replaceIncomingRecordWithDirtyDraft(
+  record: Record<string, any>,
+  index: number,
+  key: string,
+  incomingRecords: Record<string, any>[],
+  nextSnapshots: Record<string, Record<string, any>>,
+) {
+  const incomingIndex = incomingRecords.findIndex((incomingRecord, currentIndex) =>
+    recordKey(incomingRecord, currentIndex) === key,
+  )
+
+  if (incomingIndex < 0) {
+    return false
+  }
+
+  if (shouldUseIncomingSavingRecord(record, index, incomingRecords[incomingIndex])) {
+    return true
+  }
+
+  const snapshot = savedSnapshot(record, index)
+  if (snapshot) {
+    nextSnapshots[key] = snapshot
+  }
+
+  incomingRecords[incomingIndex] = normalizeDraftRecord(record, key)
+  return true
+}
+
+function shouldUseIncomingSavingRecord(
+  record: Record<string, any>,
+  index: number,
+  incomingRecord: Record<string, any>,
+) {
+  if (!incomingRecord || !recordMatchesSavingKey(record, index, props.savingRecordKey || recentSavingRecordKey.value)) {
+    return false
+  }
+
+  consumeRecentSavingRecordKey(record, index)
+  return true
+}
+
+function consumeRecentSavingRecordKey(record: Record<string, any>, index: number) {
+  if (recordMatchesSavingKey(record, index, recentSavingRecordKey.value)) {
+    recentSavingRecordKey.value = ''
+  }
+}
+
 function syncDraftRecords(records: Record<string, any>[]) {
   const nextSnapshots: Record<string, Record<string, any>> = {}
   const nextDraftRecords = records.map((record, index) => {
@@ -373,15 +508,20 @@ function syncDraftRecords(records: Record<string, any>[]) {
     nextSnapshots[localId] = stripLocalFields(draftRecord)
     return draftRecord
   })
+  const shouldPreserveDrafts = lastSyncedType.value === currentType.value
+  const recordsWithPreservedDrafts = shouldPreserveDrafts
+    ? preserveUnsavedDrafts(nextDraftRecords, nextSnapshots)
+    : nextDraftRecords
 
-  draftRecords.value = nextDraftRecords
+  draftRecords.value = recordsWithPreservedDrafts
   savedSnapshots.value = nextSnapshots
+  lastSyncedType.value = currentType.value
 
-  if (focusRecordByIdentity(props.preferredExpandedRecordIdentity, nextDraftRecords)) {
+  if (focusRecordByIdentity(props.preferredExpandedRecordIdentity, recordsWithPreservedDrafts)) {
     return
   }
 
-  const nextKeys = nextDraftRecords.map((record, index) => recordKey(record, index))
+  const nextKeys = recordsWithPreservedDrafts.map((record, index) => recordKey(record, index))
   expandedRecordKey.value = nextKeys.includes(expandedRecordKey.value || '')
     ? expandedRecordKey.value
     : null
@@ -482,6 +622,11 @@ async function requestTypeChange(type: HealthRecordType) {
     return
   }
 
+  if (hasSavingRecord.value) {
+    uni.showToast({ title: '记录保存中，请稍候', icon: 'none' })
+    return
+  }
+
   if (hasUploadingRecords.value) {
     uni.showToast({ title: '附件上传中，请稍候', icon: 'none' })
     return
@@ -506,6 +651,10 @@ async function requestTypeChange(type: HealthRecordType) {
 }
 
 function updateTextField(index: number, key: string, value: string) {
+  if (hasSavingRecord.value) {
+    return
+  }
+
   const record = draftRecords.value[index]
   if (!record) {
     return
@@ -518,6 +667,11 @@ function updateTextField(index: number, key: string, value: string) {
 }
 
 function addRecord() {
+  if (hasSavingRecord.value) {
+    uni.showToast({ title: '记录保存中，请稍候', icon: 'none' })
+    return
+  }
+
   if (hasUploadingRecords.value) {
     uni.showToast({ title: '附件上传中，请稍候', icon: 'none' })
     return
@@ -562,6 +716,7 @@ function saveButtonText(record: Record<string, any>, index: number) {
 
 function saveButtonDisabled(record: Record<string, any>, index: number) {
   return props.loading ||
+    hasSavingRecord.value ||
     hasUploadingRecords.value ||
     isUploading(record, index) ||
     isRecordSaving(record, index) ||
@@ -593,7 +748,10 @@ function isRecordDirty(record: Record<string, any>, index: number) {
 }
 
 function isRecordSaving(record: Record<string, any>, index: number) {
-  const savingKey = props.savingRecordKey
+  return recordMatchesSavingKey(record, index, props.savingRecordKey)
+}
+
+function recordMatchesSavingKey(record: Record<string, any>, index: number, savingKey: string) {
   if (!savingKey) {
     return false
   }
@@ -606,6 +764,11 @@ function isRecordSaving(record: Record<string, any>, index: number) {
 }
 
 function saveRecord(index: number) {
+  if (hasSavingRecord.value) {
+    uni.showToast({ title: '记录保存中，请稍候', icon: 'none' })
+    return
+  }
+
   if (hasUploadingRecords.value) {
     uni.showToast({ title: '附件上传中，请稍候', icon: 'none' })
     return
@@ -627,6 +790,11 @@ function saveRecord(index: number) {
 }
 
 function cancelRecord(index: number) {
+  if (hasSavingRecord.value) {
+    uni.showToast({ title: '记录保存中，请稍候', icon: 'none' })
+    return
+  }
+
   if (hasUploadingRecords.value) {
     uni.showToast({ title: '附件上传中，请稍候', icon: 'none' })
     return
@@ -652,6 +820,11 @@ function cancelRecord(index: number) {
 }
 
 async function removeRecord(index: number) {
+  if (hasSavingRecord.value) {
+    uni.showToast({ title: '记录保存中，请稍候', icon: 'none' })
+    return
+  }
+
   if (hasUploadingRecords.value) {
     uni.showToast({ title: '附件上传中，请稍候', icon: 'none' })
     return
@@ -692,6 +865,11 @@ function isUploading(record: Record<string, any>, index: number) {
 }
 
 async function chooseAttachment(index: number) {
+  if (hasSavingRecord.value) {
+    uni.showToast({ title: '记录保存中，请稍候', icon: 'none' })
+    return
+  }
+
   const record = draftRecords.value[index]
   if (!record) {
     return
@@ -869,6 +1047,10 @@ async function previewAttachment(url: string) {
 }
 
 function removeAttachment(index: number, attachmentIndex: number) {
+  if (hasSavingRecord.value) {
+    return
+  }
+
   const record = draftRecords.value[index]
   if (!record) {
     return

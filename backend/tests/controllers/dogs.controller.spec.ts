@@ -7,6 +7,7 @@ import {
   TreatInputMode,
   TreatLevel,
 } from '../../src/domain';
+import { UpdateDogDto } from '../../src/interfaces/dto/dogs/update-dog.dto';
 
 describe('DogsController attachment cleanup', () => {
   function createDog(overrides: Partial<Dog> = {}) {
@@ -283,6 +284,66 @@ describe('DogsController attachment cleanup', () => {
         attachments: [],
       },
     ]);
+  });
+
+  it('does not clear health records when only diet reminders are updated', async () => {
+    const {
+      controller,
+      medicalRecordRepository,
+      checkupRecordRepository,
+      allergyRecordRepository,
+      dogService,
+    } = createController();
+
+    const dogId = 'dog-1';
+    const dto = Object.assign(new UpdateDogDto(), {
+      pickyFoods: '鸡蛋',
+      medicalRecords: undefined,
+      checkupRecords: undefined,
+      allergyRecords: undefined,
+    });
+
+    medicalRecordRepository.findByDogId.mockResolvedValue([
+      {
+        id: 'medical-1',
+        chiefComplaint: '胃炎',
+        visitDate: new Date('2026-04-09T00:00:00.000Z'),
+        diagnosis: '恢复中',
+        notes: '继续观察',
+        attachments: [],
+      },
+    ]);
+    checkupRecordRepository.findByDogId.mockResolvedValue([
+      {
+        id: 'checkup-1',
+        checkupDate: new Date('2026-04-10T00:00:00.000Z'),
+        checkupType: 'ROUTINE',
+        findings: '正常',
+        attachments: [],
+      },
+    ]);
+    allergyRecordRepository.findByDogId.mockResolvedValue([
+      {
+        id: 'allergy-1',
+        allergen: '鸡肉',
+        notes: '腹泻',
+        attachments: [],
+      },
+    ]);
+    dogService.updateDogProfile.mockResolvedValue(createDog({ id: dogId }));
+    dogService.calcPreview.mockResolvedValue(null);
+
+    await controller.updateDog(dogId, dto);
+
+    expect(medicalRecordRepository.findByDogId).toHaveBeenCalledTimes(1);
+    expect(checkupRecordRepository.findByDogId).toHaveBeenCalledTimes(1);
+    expect(allergyRecordRepository.findByDogId).toHaveBeenCalledTimes(1);
+    expect(medicalRecordRepository.delete).not.toHaveBeenCalled();
+    expect(checkupRecordRepository.delete).not.toHaveBeenCalled();
+    expect(allergyRecordRepository.delete).not.toHaveBeenCalled();
+    expect(medicalRecordRepository.create).not.toHaveBeenCalled();
+    expect(checkupRecordRepository.create).not.toHaveBeenCalled();
+    expect(allergyRecordRepository.create).not.toHaveBeenCalled();
   });
 
   it('loads allergy records without legacy allergy fields on dog detail', async () => {

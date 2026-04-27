@@ -282,15 +282,15 @@ export class DogsController {
   ): Promise<ApiResponseDto<DogDetailResponseDto>> {
     const dog = await this.dogService.updateDogProfile(id, updateDogDto);
 
-    if ('medicalRecords' in updateDogDto) {
+    if (updateDogDto.medicalRecords !== undefined) {
       await this.replaceMedicalRecords(id, updateDogDto.medicalRecords);
     }
 
-    if ('checkupRecords' in updateDogDto) {
+    if (updateDogDto.checkupRecords !== undefined) {
       await this.replaceCheckupRecords(id, updateDogDto.checkupRecords);
     }
 
-    if ('allergyRecords' in updateDogDto) {
+    if (updateDogDto.allergyRecords !== undefined) {
       await this.replaceAllergyRecords(id, updateDogDto.allergyRecords);
     }
 

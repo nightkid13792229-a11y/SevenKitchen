@@ -16,6 +16,8 @@ import {
   createHealthRecordDraft,
   extractHealthAttachmentKey,
   findHealthRecordFocusIndex,
+  formatHealthCheckupTypeLabel,
+  getHealthCheckupTypeOptions,
   getHealthRecordTypeMeta,
   getHealthRecordValidationError,
   hasUnsavedDietReminderChange,
@@ -80,12 +82,23 @@ describe('health-records', () => {
   it('validates required checkup fields', () => {
     expect(
       getHealthRecordValidationError('checkup', {
-        checkupType: '年度体检',
+        checkupType: 'ROUTINE',
         checkupDate: '',
         notes: '',
         attachments: [],
       }),
     ).toBe('请补充体检日期')
+  })
+
+  it('rejects unsupported checkup type values before sending them to the API', () => {
+    expect(
+      getHealthRecordValidationError('checkup', {
+        checkupType: '222',
+        checkupDate: '2025-04-28',
+        notes: '',
+        attachments: [],
+      }),
+    ).toBe('请选择体检类型')
   })
 
   it('validates required allergy fields', () => {
@@ -125,7 +138,7 @@ describe('health-records', () => {
         attachments: ['https://cdn.test/checkup-records/a.pdf'],
       }),
     ).toEqual({
-      checkupType: '年度体检',
+      checkupType: 'ROUTINE',
       checkupDate: '2026-04-07',
       notes: '皮肤状态稳定',
       attachments: ['https://cdn.test/checkup-records/a.pdf'],
@@ -165,7 +178,7 @@ describe('health-records', () => {
         ],
       }),
     ).toEqual({
-      checkupType: '年度体检',
+      checkupType: 'ROUTINE',
       checkupDate: '2026-04-07',
       findings: '皮肤状态稳定',
       attachments: [
@@ -173,6 +186,19 @@ describe('health-records', () => {
         'https://cdn.test/checkup-records/b.png',
       ],
     })
+  })
+
+  it('exposes backend-compatible checkup type options with readable labels', () => {
+    expect(getHealthCheckupTypeOptions()).toEqual([
+      { value: 'ROUTINE', label: '常规体检' },
+      { value: 'PRE_PURCHASE', label: '购前体检' },
+      { value: 'SENIOR_WELLNESS', label: '老年健康检查' },
+      { value: 'PRE_ANESTHESIA', label: '麻醉前检查' },
+      { value: 'EMERGENCY', label: '急诊检查' },
+      { value: 'FOLLOW_UP', label: '复查' },
+    ])
+    expect(formatHealthCheckupTypeLabel('ROUTINE')).toBe('常规体检')
+    expect(formatHealthCheckupTypeLabel('年度体检')).toBe('常规体检')
   })
 
   it('normalizes wrapped independent health record list responses', () => {
@@ -808,11 +834,11 @@ describe('health-records', () => {
 
     expect(
       buildHealthRecordSummary('checkup', {
-        checkupType: '年度体检',
+        checkupType: 'ROUTINE',
         checkupDate: '2026-04-01',
       }),
     ).toEqual({
-      title: '年度体检',
+      title: '常规体检',
       detail: '2026-04-01',
     })
 

@@ -108,7 +108,20 @@
       <view v-if="isRecordExpanded(record, index)" class="record-card__body">
         <view class="field-group">
           <text class="field-label">{{ fieldConfig.primary.label }}</text>
+          <picker
+            v-if="fieldConfig.primary.options"
+            mode="selector"
+            :range="fieldOptionLabels(fieldConfig.primary.options)"
+            :value="fieldOptionIndex(record, fieldConfig.primary.options, fieldConfig.primary.key)"
+            :disabled="hasSavingRecord"
+            @change="updateOptionField(index, fieldConfig.primary.key, fieldConfig.primary.options, $event.detail.value)"
+          >
+            <view class="field-picker">
+              {{ readOptionFieldLabel(record, fieldConfig.primary.options, fieldConfig.primary.key) || `请选择${fieldConfig.primary.label}` }}
+            </view>
+          </picker>
           <input
+            v-else
             class="field-input"
             type="text"
             :disabled="hasSavingRecord"
@@ -234,6 +247,7 @@ import { computed, nextTick, ref, watch } from 'vue'
 import { dogApi } from '../../api/dogs'
 import {
   HEALTH_RECORD_TYPES,
+  type HealthCheckupTypeOption,
   type HealthRecordType,
   buildHealthAttachmentDisplayMeta,
   buildHealthAttachmentFieldHint,
@@ -243,6 +257,8 @@ import {
   doHealthRecordsMatchPersistedPayload,
   extractHealthAttachmentKey,
   findHealthRecordFocusIndex,
+  formatHealthCheckupTypeLabel,
+  getHealthCheckupTypeOptions,
   getHealthRecordTypeMeta,
   getHealthRecordValidationError,
   readHealthAttachmentFileSize,
@@ -254,7 +270,7 @@ import {
 } from '../../utils/health-records'
 
 type FieldConfig = {
-  primary: { key: string, label: string }
+  primary: { key: string, label: string, options?: HealthCheckupTypeOption[] }
   date: { key: string, label: string } | null
   secondary: { key: string, label: string } | null
   notes: { key: string, label: string }
@@ -370,7 +386,7 @@ function getFieldConfig(type: HealthRecordType): FieldConfig {
 
   if (type === 'checkup') {
     return {
-      primary: { key: 'checkupType', label: '体检类型' },
+      primary: { key: 'checkupType', label: '体检类型', options: getHealthCheckupTypeOptions() },
       date: { key: 'checkupDate', label: '体检日期' },
       secondary: null,
       notes: { key: 'notes', label: '体检说明' },
@@ -576,6 +592,49 @@ function isSavedRecord(record: Record<string, any>, index: number) {
 function readField(record: Record<string, any>, key: string) {
   const value = key ? record?.[key] : ''
   return typeof value === 'string' ? value : (value ?? '')
+}
+
+function fieldOptionLabels(options: HealthCheckupTypeOption[]) {
+  return options.map(option => option.label)
+}
+
+function fieldOptionIndex(
+  record: Record<string, any>,
+  options: HealthCheckupTypeOption[],
+  key: string,
+) {
+  const currentValue = readField(record, key)
+  const matchedIndex = options.findIndex(option =>
+    option.value === currentValue || option.label === currentValue,
+  )
+  return matchedIndex >= 0 ? matchedIndex : 0
+}
+
+function readOptionFieldLabel(
+  record: Record<string, any>,
+  options: HealthCheckupTypeOption[],
+  key: string,
+) {
+  const currentValue = readField(record, key)
+  const matchedOption = options.find(option =>
+    option.value === currentValue || option.label === currentValue,
+  )
+  return matchedOption?.label || formatHealthCheckupTypeLabel(currentValue)
+}
+
+function updateOptionField(
+  index: number,
+  key: string,
+  options: HealthCheckupTypeOption[],
+  value: string | number,
+) {
+  const optionIndex = Number(value)
+  const option = Number.isInteger(optionIndex) ? options[optionIndex] : null
+  if (!option) {
+    return
+  }
+
+  updateTextField(index, key, option.value)
 }
 
 function attachmentList(record: Record<string, any>) {

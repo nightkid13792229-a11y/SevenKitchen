@@ -14,6 +14,11 @@ export interface HealthRecordTypeMeta {
   accentClass: string
 }
 
+export interface HealthCheckupTypeOption {
+  value: string
+  label: string
+}
+
 export interface DogHealthStateSnapshot {
   medicalRecords: any[]
   checkupRecords: any[]
@@ -27,6 +32,35 @@ export const HEALTH_ATTACHMENT_MAX_SIZE_LABEL = '10MB'
 export const HEALTH_ATTACHMENT_HINT_TEXT =
   '支持 JPG、PNG、GIF、WEBP、HEIC、HEIF 或 PDF，单个文件不超过 10MB，上传后可点击预览。'
 const HEALTH_RECORD_ATTACHMENT_CACHE_PREFIX = 'dog-health-record-attachments'
+
+const HEALTH_CHECKUP_TYPE_OPTIONS: HealthCheckupTypeOption[] = [
+  { value: 'ROUTINE', label: '常规体检' },
+  { value: 'PRE_PURCHASE', label: '购前体检' },
+  { value: 'SENIOR_WELLNESS', label: '老年健康检查' },
+  { value: 'PRE_ANESTHESIA', label: '麻醉前检查' },
+  { value: 'EMERGENCY', label: '急诊检查' },
+  { value: 'FOLLOW_UP', label: '复查' },
+]
+
+const LEGACY_CHECKUP_TYPE_VALUE_MAP: Record<string, string> = {
+  annual: 'ROUTINE',
+  routine: 'ROUTINE',
+  年度体检: 'ROUTINE',
+  常规体检: 'ROUTINE',
+  普通体检: 'ROUTINE',
+  购前体检: 'PRE_PURCHASE',
+  购犬体检: 'PRE_PURCHASE',
+  购买前体检: 'PRE_PURCHASE',
+  老年体检: 'SENIOR_WELLNESS',
+  老年健康检查: 'SENIOR_WELLNESS',
+  麻醉前检查: 'PRE_ANESTHESIA',
+  术前检查: 'PRE_ANESTHESIA',
+  急诊: 'EMERGENCY',
+  急诊检查: 'EMERGENCY',
+  复查: 'FOLLOW_UP',
+  术后复查: 'FOLLOW_UP',
+  牙齿复查: 'FOLLOW_UP',
+}
 
 type HealthRecordShape = Record<string, any>
 
@@ -83,6 +117,30 @@ export function getHealthRecordTypeMeta(type: HealthRecordType) {
   return HEALTH_RECORD_TYPE_META[type]
 }
 
+export function getHealthCheckupTypeOptions() {
+  return HEALTH_CHECKUP_TYPE_OPTIONS.map(option => ({ ...option }))
+}
+
+export function resolveHealthCheckupTypeValue(value: unknown) {
+  const normalized = typeof value === 'string' ? value.trim() : ''
+  if (!normalized) {
+    return ''
+  }
+
+  const upperValue = normalized.toUpperCase()
+  if (HEALTH_CHECKUP_TYPE_OPTIONS.some(option => option.value === upperValue)) {
+    return upperValue
+  }
+
+  return LEGACY_CHECKUP_TYPE_VALUE_MAP[normalized] || ''
+}
+
+export function formatHealthCheckupTypeLabel(value: unknown) {
+  const resolvedValue = resolveHealthCheckupTypeValue(value)
+  const matchedOption = HEALTH_CHECKUP_TYPE_OPTIONS.find(option => option.value === resolvedValue)
+  return matchedOption?.label || (typeof value === 'string' ? value.trim() : '')
+}
+
 export function createHealthRecordDraft(type: HealthRecordType): HealthRecordShape {
   const baseRecord: HealthRecordShape = {
     __localId: `${type}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
@@ -134,8 +192,8 @@ export function getHealthRecordValidationError(
   }
 
   if (type === 'checkup') {
-    if (!normalizeOptionalText(record.checkupType)) {
-      return '请补充体检类型'
+    if (!resolveHealthCheckupTypeValue(record.checkupType)) {
+      return '请选择体检类型'
     }
 
     if (!normalizeOptionalText(record.checkupDate)) {
@@ -168,7 +226,7 @@ export function buildHealthRecordPayload(
 
   if (type === 'checkup') {
     return {
-      checkupType: normalizeOptionalText(record.checkupType) || '',
+      checkupType: resolveHealthCheckupTypeValue(record.checkupType),
       checkupDate: normalizeOptionalText(record.checkupDate) || '',
       notes: normalizeOptionalText(record.notes),
       attachments: normalizeAttachments(record.attachments),
@@ -844,7 +902,7 @@ export function buildHealthRecordFocusIdentity(
   }
 
   if (type === 'checkup') {
-    return `checkup:${String(record?.checkupType || '').trim()}|${String(record?.checkupDate || '').trim()}|${String(record?.notes || '').trim()}`
+    return `checkup:${resolveHealthCheckupTypeValue(record?.checkupType)}|${String(record?.checkupDate || '').trim()}|${String(record?.notes || '').trim()}`
   }
 
   return `allergy:${String(record?.allergen || '').trim()}|${String(record?.notes || '').trim()}`
@@ -886,7 +944,7 @@ export function buildHealthRecordSummary(
   }
 
   if (type === 'checkup') {
-    const title = String(record?.checkupType || '').trim() || '未填写体检类型'
+    const title = formatHealthCheckupTypeLabel(record?.checkupType) || '未填写体检类型'
     const detail = String(record?.checkupDate || '').trim()
 
     return {

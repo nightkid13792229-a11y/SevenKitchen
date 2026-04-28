@@ -53,7 +53,10 @@ import type {
   CreateInventoryAdjustmentDto,
   CreateInventoryStocktakeDto,
 } from '../../application/inventory/inventory.service';
-import { OrderService } from '../../application/order/order.service';
+import {
+  OrderService,
+  type StaffOrderAddressInput,
+} from '../../application/order/order.service';
 import {
   DogService,
   DOG_BREED_REPOSITORY,
@@ -87,7 +90,7 @@ import {
   UpdateStaffDto,
   StaffResponseDto,
 } from '../dto/admin/staff.dto';
-import { AdminGuard } from '../guards/role.guard';
+import { AdminGuard, StaffGuard } from '../guards/role.guard';
 import { AuthGuard } from '../auth/auth.guard';
 import { RecipeService } from '../../application/recipe/recipe.service';
 import { CoverImageService } from '../../application/recipe/cover-image.service';
@@ -1576,6 +1579,130 @@ export class AdminController {
   }
 
   /**
+   * GET /admin/orders/:orderId/addresses - List addresses owned by the order customer
+   */
+  @Get('orders/:orderId/addresses')
+  @UseGuards(AuthGuard, StaffGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'List addresses for the order customer' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  async listOrderCustomerAddresses(
+    @Param('orderId') orderId: string,
+  ): Promise<ApiResponseDto<any> | ApiResponseDto<null>> {
+    try {
+      const addresses =
+        await this.orderService.listOrderCustomerAddresses(orderId);
+      return ApiResponseDto.success(
+        addresses.map((address) => this.mapAddressToAdminDto(address)),
+      );
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * POST /admin/orders/:orderId/addresses - Create address for the order customer and bind it
+   */
+  @Post('orders/:orderId/addresses')
+  @UseGuards(AuthGuard, StaffGuard)
+  @HttpCode(HttpStatus.CREATED)
+  @ApiOperation({ summary: 'Create an address for the order customer' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  async createOrderCustomerAddress(
+    @Param('orderId') orderId: string,
+    @Body() body: StaffOrderAddressInput,
+  ): Promise<ApiResponseDto<any> | ApiResponseDto<null>> {
+    try {
+      const result = await this.orderService.createOrderCustomerAddress(
+        orderId,
+        body,
+      );
+      return ApiResponseDto.success({
+        address: this.mapAddressToAdminDto(result.address),
+        order: result.order,
+      });
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * PUT /admin/orders/:orderId/address - Bind an existing customer address to the order
+   */
+  @Put('orders/:orderId/address')
+  @UseGuards(AuthGuard, StaffGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Bind an existing customer address to the order' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  async bindOrderCustomerAddress(
+    @Param('orderId') orderId: string,
+    @Body() body: { addressId: string },
+  ): Promise<ApiResponseDto<any> | ApiResponseDto<null>> {
+    try {
+      const order = await this.orderService.bindOrderCustomerAddress(
+        orderId,
+        body.addressId,
+      );
+      return ApiResponseDto.success(order);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
+   * PUT /admin/orders/:orderId/addresses/:addressId - Update customer address and refresh order binding
+   */
+  @Put('orders/:orderId/addresses/:addressId')
+  @UseGuards(AuthGuard, StaffGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Update an order customer address' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  @ApiParam({ name: 'addressId', description: 'Address ID' })
+  async updateOrderCustomerAddress(
+    @Param('orderId') orderId: string,
+    @Param('addressId') addressId: string,
+    @Body() body: StaffOrderAddressInput,
+  ): Promise<ApiResponseDto<any> | ApiResponseDto<null>> {
+    try {
+      const result = await this.orderService.updateOrderCustomerAddress(
+        orderId,
+        addressId,
+        body,
+      );
+      return ApiResponseDto.success({
+        address: this.mapAddressToAdminDto(result.address),
+        order: result.order,
+      });
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  /**
    * PUT /admin/orders/:orderId/admin-remark - Update admin remark
    */
   @Put('orders/:orderId/admin-remark')
@@ -1988,14 +2115,15 @@ export class AdminController {
   }
 
   private async mapOrderToAdminDto(order: any): Promise<AdminOrderDto> {
-    const address = order.address
+    const addressSource = order.shippingAddressSnapshot ?? order.address;
+    const address = addressSource
       ? {
-          id: order.address.id,
-          recipientName: order.address.recipientName,
-          phone: order.address.phone,
-          region: order.address.region,
-          regionText: `${order.address.region.province} ${order.address.region.city}${order.address.region.district ? ` ${order.address.region.district}` : ''}`,
-          detailAddress: order.address.detail,
+          id: addressSource.id ?? order.addressId,
+          recipientName: addressSource.recipientName,
+          phone: addressSource.phone,
+          region: addressSource.region,
+          regionText: this.formatAddressRegionText(addressSource.region),
+          detailAddress: addressSource.detail,
         }
       : null;
 
@@ -2046,6 +2174,28 @@ export class AdminController {
       adminRemark: order.adminRemark ?? null,
       productionPhotos,
     };
+  }
+
+  private mapAddressToAdminDto(address: any) {
+    return {
+      id: address.id,
+      userId: address.userId,
+      recipientName: address.recipientName,
+      phone: address.phone,
+      region: address.region,
+      detail: address.detail,
+      isDefault: address.isDefault ?? false,
+    };
+  }
+
+  private formatAddressRegionText(region: any): string {
+    if (!region) {
+      return '';
+    }
+
+    return [region.province, region.city, region.district]
+      .filter(Boolean)
+      .join(' ');
   }
 
   private async getOrderProductionPhotos(order: any) {

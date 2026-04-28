@@ -48,6 +48,7 @@ import type { DogRepository } from '../../domain/dog/dog.repository';
 import { DOG_REPOSITORY } from '../dog/dog.service';
 import { ShippingService } from '../shipping/shipping.service';
 import type { AddressRepository } from '../../domain/address/address.repository';
+import { Address, AddressRegion } from '../../domain/address/address.entity';
 import { ADDRESS_REPOSITORY } from '../address/address.service';
 import type { OrderStatusHistoryRepository } from '../../domain/order/order-status-history.repository';
 import { OrderStatusHistory } from '../../domain/order/order-status-history.entity';
@@ -161,6 +162,19 @@ export interface CreateOrderSettlementAdjustmentInput {
   createdBy?: 'admin' | 'staff' | 'system';
   createdById?: string | null;
   metadata?: unknown;
+}
+
+export interface StaffOrderAddressInput {
+  recipientName: string;
+  phone: string;
+  region: AddressRegion;
+  detail: string;
+  isDefault?: boolean;
+}
+
+export interface StaffOrderAddressResult {
+  address: Address;
+  order: Order;
 }
 
 interface ResolvedOrderItemPackageInput {
@@ -2492,6 +2506,150 @@ export class OrderService {
    */
   async getPendingAftersales(): Promise<Order[]> {
     return this.orderRepository.findByStatus(OrderStatus.AFTERSALE);
+  }
+
+  async listOrderCustomerAddresses(orderId: string): Promise<Address[]> {
+    const order = await this.getOrderForStaffAddress(orderId);
+    return this.addressRepository.findByUserId(order.customerId);
+  }
+
+  async createOrderCustomerAddress(
+    orderId: string,
+    dto: StaffOrderAddressInput,
+  ): Promise<StaffOrderAddressResult> {
+    const order = await this.getOrderForStaffAddress(orderId);
+    this.assertOrderAddressEditable(order);
+
+    if (dto.isDefault) {
+      await this.unsetOtherDefaultAddresses(order.customerId);
+    }
+
+    const address = new Address(
+      randomUUID(),
+      order.customerId,
+      dto.recipientName,
+      dto.phone,
+      dto.region,
+      dto.detail,
+      dto.isDefault ?? false,
+    );
+
+    const savedAddress = await this.addressRepository.save(address);
+    const savedOrder = await this.bindAddressToOrder(order, savedAddress);
+
+    return {
+      address: savedAddress,
+      order: savedOrder,
+    };
+  }
+
+  async bindOrderCustomerAddress(
+    orderId: string,
+    addressId: string,
+  ): Promise<Order> {
+    const order = await this.getOrderForStaffAddress(orderId);
+    this.assertOrderAddressEditable(order);
+    const address = await this.getAddressForOrderCustomer(addressId, order);
+
+    return this.bindAddressToOrder(order, address);
+  }
+
+  async updateOrderCustomerAddress(
+    orderId: string,
+    addressId: string,
+    dto: StaffOrderAddressInput,
+  ): Promise<StaffOrderAddressResult> {
+    const order = await this.getOrderForStaffAddress(orderId);
+    this.assertOrderAddressEditable(order);
+    const address = await this.getAddressForOrderCustomer(addressId, order);
+
+    address.update({
+      recipientName: dto.recipientName,
+      phone: dto.phone,
+      region: dto.region,
+      detail: dto.detail,
+    });
+
+    if (dto.isDefault === true) {
+      await this.unsetOtherDefaultAddresses(address.userId, address.id);
+      address.setAsDefault();
+    } else if (dto.isDefault === false) {
+      address.unsetAsDefault();
+    }
+
+    const savedAddress = await this.addressRepository.save(address);
+    const savedOrder = await this.bindAddressToOrder(order, savedAddress);
+
+    return {
+      address: savedAddress,
+      order: savedOrder,
+    };
+  }
+
+  private async getOrderForStaffAddress(orderId: string): Promise<Order> {
+    const order = await this.orderRepository.findById(orderId);
+    if (!order) {
+      throw new NotFoundException(`Order ${orderId} not found`);
+    }
+    return order;
+  }
+
+  private assertOrderAddressEditable(order: Order): void {
+    if (
+      order.status === OrderStatus.SHIPPED ||
+      order.status === OrderStatus.COMPLETED ||
+      order.status === OrderStatus.CANCELLED
+    ) {
+      throw new BadRequestException(
+        `Cannot update address for order in status: ${order.status}`,
+      );
+    }
+  }
+
+  private async getAddressForOrderCustomer(
+    addressId: string,
+    order: Order,
+  ): Promise<Address> {
+    const address = await this.addressRepository.findById(addressId);
+    if (!address) {
+      throw new NotFoundException(`Address ${addressId} not found`);
+    }
+
+    if (address.userId !== order.customerId) {
+      throw new BadRequestException(
+        'Address does not belong to the order customer',
+      );
+    }
+
+    return address;
+  }
+
+  private async bindAddressToOrder(
+    order: Order,
+    address: Address,
+  ): Promise<Order> {
+    order.updateAddress(address.id, {
+      id: address.id,
+      recipientName: address.recipientName,
+      phone: address.phone,
+      region: address.region,
+      detail: address.detail,
+    });
+
+    return this.orderRepository.save(order);
+  }
+
+  private async unsetOtherDefaultAddresses(
+    userId: string,
+    excludeId?: string,
+  ): Promise<void> {
+    const addresses = await this.addressRepository.findByUserId(userId);
+    for (const address of addresses) {
+      if (address.id !== excludeId && address.isDefault) {
+        address.unsetAsDefault();
+        await this.addressRepository.save(address);
+      }
+    }
   }
 
   /**

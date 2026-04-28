@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 describe('home runtime regressions', () => {
@@ -34,6 +34,7 @@ describe('home runtime regressions', () => {
     expect(source).toContain('src="/static/home-actions/feedback.png"')
     expect(source).toContain('src="/static/home-actions/weight-management.png"')
     expect(source).toContain('src="/static/home-actions/calculate-portion.png"')
+    expect(source).toContain('src="/static/home-actions/health-records.png"')
     expect(source).toContain('class="action-icon"')
     expect(source).not.toContain('message-box')
     expect(source).not.toContain('weight-scale-shell')
@@ -47,9 +48,26 @@ describe('home runtime regressions', () => {
     expect(source).not.toContain('action-icon-trend')
     expect(source).not.toContain('trend-line')
     expect(source).not.toContain('trend-point')
+    expect(source).not.toContain('action-icon--health')
+    expect(source).not.toContain('action-icon__cross')
     expect(source).not.toContain('scale-pan')
     expect(source).not.toContain('spoon-head')
     expect(source).not.toContain('feedback-dots')
+  })
+
+  it('keeps each homepage quick action backed by a static PNG asset', () => {
+    const actionIconNames = [
+      'calculate-portion',
+      'weight-management',
+      'health-records',
+      'feedback',
+    ]
+
+    actionIconNames.forEach((name) => {
+      expect(
+        existsSync(resolve(process.cwd(), `src/static/home-actions/${name}.png`)),
+      ).toBe(true)
+    })
   })
 
   it('uses the configured global homepage header background image', () => {

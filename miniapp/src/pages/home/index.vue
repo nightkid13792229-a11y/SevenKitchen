@@ -28,9 +28,7 @@
         <text class="action-text">体重管理</text>
       </view>
       <view class="action-item" @tap="goToHealthRecords">
-        <view class="action-icon action-icon--health">
-          <text class="action-icon__cross">+</text>
-        </view>
+        <image class="action-icon" src="/static/home-actions/health-records.png" mode="aspectFit" />
         <text class="action-text">健康记录</text>
       </view>
       <view class="action-item" @tap="goToFeedback">
@@ -1460,21 +1458,6 @@ defineOptions({
   height: 56rpx;
   display: block;
   flex-shrink: 0;
-}
-
-.action-icon--health {
-  border-radius: 16rpx;
-  background: linear-gradient(135deg, #e8f6ee 0%, #d5efe1 100%);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.action-icon__cross {
-  font-size: 42rpx;
-  line-height: 1;
-  font-weight: 700;
-  color: #178352;
 }
 
 .action-text {

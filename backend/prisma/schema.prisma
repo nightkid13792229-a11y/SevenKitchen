@@ -18,6 +18,7 @@ model Order {
   amountTotal                  Decimal              @map("amount_total")
   totalAmount                  Decimal?             @map("total_amount")
   pricingBreakdownSnapshot     Json?                @map("pricing_breakdown_snapshot")
+  shippingAddressSnapshot      Json?                @map("shipping_address_snapshot")
   addressId                    String?              @map("address_id")
   dogId                        String?              @map("dog_id")
   cancelledAt                  DateTime?            @map("cancelled_at")

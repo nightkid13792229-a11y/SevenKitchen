@@ -9,6 +9,18 @@ import { InvalidStateTransitionError, ValidationError } from '../common/errors';
 import { PricingBreakdownSnapshot } from './pricing-breakdown-snapshot';
 import { TimezoneUtil } from '../../utils/timezone.util';
 
+export interface ShippingAddressSnapshot {
+  id: string;
+  recipientName: string;
+  phone: string;
+  region: {
+    province: string;
+    city: string;
+    district?: string;
+  };
+  detail: string;
+}
+
 export class Order {
   private skipValidation?: boolean;
 
@@ -70,6 +82,7 @@ export class Order {
     public aftersalePhotos?: string[],
     skipValidation?: boolean, // Internal: skip validation for admin updates
     public adminRemark: string | null = null,
+    public shippingAddressSnapshot: ShippingAddressSnapshot | null = null,
   ) {
     // Compute totalAmount from amountTotal if not provided
     if (this.totalAmount === undefined) {
@@ -122,6 +135,7 @@ export class Order {
       data.aftersalePhotos,
       true, // skip validation
       data.adminRemark ?? null,
+      data.shippingAddressSnapshot ?? null,
     );
   }
 
@@ -556,6 +570,17 @@ export class Order {
     // Update address reference
     (this as any).addressId = addressId;
     (this as any).address = address;
+    this.shippingAddressSnapshot = {
+      id: address.id,
+      recipientName: address.recipientName,
+      phone: address.phone,
+      region: {
+        province: address.region.province,
+        city: address.region.city,
+        district: address.region.district,
+      },
+      detail: address.detail,
+    };
   }
 
   /**

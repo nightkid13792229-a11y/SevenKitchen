@@ -90,6 +90,9 @@ export class PrismaOrderRepository implements OrderRepository {
             pricingBreakdownSnapshot: order.pricingBreakdownSnapshot
               ? this.serializePricingSnapshot(order.pricingBreakdownSnapshot)
               : null,
+            shippingAddressSnapshot: order.shippingAddressSnapshot
+              ? (order.shippingAddressSnapshot as unknown as Prisma.InputJsonValue)
+              : null,
             // Phase 8.14: Shipping tracking fields
             trackingNumber: order.trackingNumber ?? null,
             carrierCode: order.carrierCode ?? null,
@@ -164,6 +167,9 @@ export class PrismaOrderRepository implements OrderRepository {
           amountTotal,
           totalAmount,
           // pricingBreakdownSnapshot intentionally not updated to preserve immutability
+          shippingAddressSnapshot: order.shippingAddressSnapshot
+            ? (order.shippingAddressSnapshot as unknown as Prisma.InputJsonValue)
+            : null,
           // Phase 8.14: Shipping tracking fields (must be updated when order is shipped)
           trackingNumber: order.trackingNumber ?? null,
           carrierCode: order.carrierCode ?? null,
@@ -320,6 +326,7 @@ export class PrismaOrderRepository implements OrderRepository {
       // Skip validation for orders loaded from database (allows admin-adjusted amounts)
       true, // skipValidation
       (record as any).adminRemark ?? null,
+      ((record as any).shippingAddressSnapshot as any) ?? null,
     );
   }
 

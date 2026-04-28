@@ -40,28 +40,64 @@
             <view class="btn-edit">修改</view>
           </picker>
         </view>
-        <view class="info-row address-row" v-if="order.address">
+        <view class="info-row address-row">
           <text class="label">收货地址:</text>
           <view class="address-content">
-            <text class="value address-value">
-              {{ order.address.recipientName }} {{ order.address.phone }}
-              {{ order.address.regionText }} {{ order.address.detailAddress }}
-            </text>
-            <view class="address-actions">
-              <button
-                class="btn-copy-address"
-                @tap="copyAddress"
-              >
-                复制
-              </button>
-              <button
-                v-if="canEditAddress"
-                class="btn-edit"
-                @tap="changeAddress"
-              >
-                更换
-              </button>
-            </view>
+            <template v-if="order.address">
+              <text class="value address-value">
+                {{ order.address.recipientName }} {{ getOrderAddressPhone(order.address) }}
+                {{ getOrderAddressRegionText(order.address) }} {{ getOrderAddressDetail(order.address) }}
+              </text>
+              <view class="address-actions">
+                <button
+                  class="btn-copy-address"
+                  @tap="copyAddress"
+                >
+                  复制
+                </button>
+                <button
+                  v-if="canEditAddress"
+                  class="btn-edit"
+                  @tap="changeAddress"
+                >
+                  更换
+                </button>
+                <button
+                  v-if="canEditAddress && isStaffOrAdmin"
+                  class="btn-edit btn-edit-secondary"
+                  @tap="openEditAddressForm"
+                >
+                  编辑地址
+                </button>
+              </view>
+            </template>
+            <template v-else>
+              <text class="value address-value address-empty-text">暂未录入收货地址</text>
+              <view v-if="canEditAddress" class="address-actions">
+                <button
+                  v-if="isStaffOrAdmin"
+                  class="btn-edit"
+                  @tap="openAddressSelect"
+                >
+                  选择已有地址
+                </button>
+                <button
+                  v-if="isStaffOrAdmin"
+                  class="btn-edit"
+                  @tap="openCreateAddressForm"
+                >
+                  录入新地址
+                </button>
+                <button
+                  v-else
+                  class="btn-edit"
+                  @tap="changeAddress"
+                >
+                  添加地址
+                </button>
+              </view>
+              <text v-else class="address-lock-hint">已发货后不可修改</text>
+            </template>
           </view>
         </view>
         <view class="info-row">
@@ -424,6 +460,78 @@
       </view>
     </view>
 
+    <view v-if="addressSelectVisible" class="address-modal-mask" @tap="closeAddressSelect">
+      <view class="address-modal-panel" @tap.stop>
+        <view class="address-modal-header">
+          <text class="address-modal-title">选择已有地址</text>
+          <text class="address-modal-close" @tap="closeAddressSelect">×</text>
+        </view>
+        <view v-if="addressLoading" class="address-modal-loading">加载中...</view>
+        <view v-else-if="customerAddresses.length === 0" class="address-modal-empty">
+          <text>该客户暂无地址</text>
+          <button class="address-action-btn primary" @tap="openCreateAddressFormFromSelect">录入新地址</button>
+        </view>
+        <view v-else class="address-select-list">
+          <view
+            v-for="address in customerAddresses"
+            :key="address.id"
+            class="address-select-item"
+            @tap="selectCustomerAddress(address)"
+          >
+            <view class="address-select-header">
+              <text class="address-recipient-name">{{ address.recipientName }}</text>
+              <text class="address-recipient-phone">{{ formatPhone(address.phone) }}</text>
+              <text v-if="address.isDefault" class="address-default-tag">默认</text>
+            </view>
+            <text class="address-select-text">{{ formatRegionText(address.region) }} {{ address.detail }}</text>
+          </view>
+          <button class="address-action-btn primary full" @tap="openCreateAddressFormFromSelect">录入新地址</button>
+        </view>
+      </view>
+    </view>
+
+    <view v-if="addressFormVisible" class="address-modal-mask" @tap="closeAddressForm">
+      <view class="address-modal-panel address-form-panel" @tap.stop>
+        <view class="address-modal-header">
+          <text class="address-modal-title">{{ addressFormMode === 'edit' ? '编辑地址' : '录入新地址' }}</text>
+          <text class="address-modal-close" @tap="closeAddressForm">×</text>
+        </view>
+        <view class="address-form-item">
+          <text class="address-form-label">收货人姓名</text>
+          <input class="address-form-input" v-model="addressForm.recipientName" placeholder="请输入收货人姓名" />
+        </view>
+        <view class="address-form-item">
+          <text class="address-form-label">手机号</text>
+          <input class="address-form-input" v-model="addressForm.phone" type="number" placeholder="请输入手机号" />
+        </view>
+        <view class="address-form-item">
+          <text class="address-form-label">所在地区</text>
+          <picker mode="region" :value="addressRegionValue" @change="onAddressRegionChange">
+            <view class="address-form-picker">
+              <text v-if="addressRegionText">{{ addressRegionText }}</text>
+              <text v-else class="address-form-placeholder">请选择省/市/区</text>
+              <text class="address-picker-arrow">▼</text>
+            </view>
+          </picker>
+        </view>
+        <view class="address-form-item">
+          <text class="address-form-label">详细地址</text>
+          <textarea class="address-form-textarea" v-model="addressForm.detail" placeholder="请输入详细地址" />
+        </view>
+        <view class="address-form-switch-row">
+          <text class="address-form-label">设为默认地址</text>
+          <switch :checked="addressForm.isDefault" @change="onAddressDefaultChange" />
+        </view>
+        <button
+          class="address-save-btn"
+          :disabled="savingAddress"
+          @tap="saveAddressForm"
+        >
+          {{ savingAddress ? '保存中...' : '保存地址' }}
+        </button>
+      </view>
+    </view>
+
     <!-- 底部操作按钮 -->
     <!-- Phase 9: Simplified action buttons aligned with e-commerce standards -->
     <!-- Phase 9.1: Added FREEZING and AFTERSALE status actions -->
@@ -468,11 +576,16 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { onShow, onShareAppMessage } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 import {
+  bindOrderCustomerAddress as bindExistingOrderAddress,
+  createOrderCustomerAddress,
   getAdminOrderDetail,
   getAdminOrderFinancialSummary,
   getOrderFinancialSummary,
+  listOrderCustomerAddresses,
   updateAdminOrderRemark,
-  type CustomerOrderFinancialSummary
+  updateOrderCustomerAddress,
+  type CustomerOrderFinancialSummary,
+  type StaffOrderAddress
 } from '../../api/orders'
 import OrderProgressBar from '../../components/OrderProgressBar.vue'
 import { normalizeImageUrl } from '../../utils/config'
@@ -540,11 +653,21 @@ interface Order {
   amountShipping?: number
   adminRemark?: string | null
   items?: OrderItem[]
+  addressId?: string | null
   address?: {
+    id?: string
     recipientName: string
-    phone: string
-    regionText: string
-    detailAddress: string
+    phone?: string
+    recipientPhone?: string
+    region?: {
+      province?: string
+      city?: string
+      district?: string
+    }
+    regionText?: string
+    detail?: string
+    detailAddress?: string
+    isDefault?: boolean
   }
   trackingNumber?: string
   carrierCode?: string
@@ -580,6 +703,23 @@ const orderId = ref('')
 const orderFinancialSummary = ref<CustomerOrderFinancialSummary | null>(null)
 const remarkDraft = ref('')
 const savingAdminRemark = ref(false)
+const customerAddresses = ref<StaffOrderAddress[]>([])
+const addressSelectVisible = ref(false)
+const addressFormVisible = ref(false)
+const addressLoading = ref(false)
+const savingAddress = ref(false)
+const addressFormMode = ref<'create' | 'edit'>('create')
+const editingAddressId = ref('')
+const addressRegionValue = ref<string[]>([])
+const addressForm = ref({
+  recipientName: '',
+  phone: '',
+  province: '',
+  city: '',
+  district: '',
+  detail: '',
+  isDefault: false,
+})
 
 // 获取当前用户信息
 const userInfo = ref({
@@ -598,6 +738,12 @@ const isAdminRemarkDirty = computed(() => {
 })
 const canClearAdminRemark = computed(() => {
   return Boolean(normalizedRemarkDraft.value || currentAdminRemark.value)
+})
+
+const addressRegionText = computed(() => {
+  return [addressForm.value.province, addressForm.value.city, addressForm.value.district]
+    .filter(Boolean)
+    .join(' ')
 })
 
 const shouldShowFinancialSummary = computed(() => {
@@ -717,9 +863,10 @@ const canEditOrder = computed(() => {
 
 // 判断是否可以修改地址（状态 < SHIPPED）
 const canEditAddress = computed(() => {
-  if (!order.value || !canEditOrder.value) return false
+  if (!order.value) return false
   const editableStatuses = ['INIT', 'PENDING_PAYMENT', 'PAID', 'PURCHASING', 'IN_PRODUCTION', 'FREEZING']
-  return editableStatuses.includes(order.value.status)
+  if (!editableStatuses.includes(order.value.status)) return false
+  return isStaffOrAdmin.value || canEditOrder.value
 })
 
 // 判断是否可以修改日期（状态 < PURCHASING）
@@ -1062,6 +1209,11 @@ function clearAdminRemark() {
 
 // 更换收货地址
 function changeAddress() {
+  if (isStaffOrAdmin.value) {
+    openAddressSelect()
+    return
+  }
+
   uni.navigateTo({
     url: `/pages/address-list/index?mode=select&orderId=${orderId.value}&from=order-detail`
   })
@@ -1081,11 +1233,13 @@ async function updateOrderAddress(addressId: string) {
   try {
     uni.showLoading({ title: '更新中...' })
 
-    const res = await request({
-      url: `/orders/${orderId.value}/address`,
-      method: 'PUT',
-      data: { addressId }
-    })
+    const res = isStaffOrAdmin.value
+      ? await bindExistingOrderAddress(orderId.value, addressId)
+      : await request({
+          url: `/orders/${orderId.value}/address`,
+          method: 'PUT',
+          data: { addressId }
+        })
 
     if (res.code === 0) {
       uni.showToast({
@@ -1105,6 +1259,178 @@ async function updateOrderAddress(addressId: string) {
     })
   } finally {
     uni.hideLoading()
+  }
+}
+
+async function loadCustomerAddresses() {
+  if (!orderId.value) return
+
+  addressLoading.value = true
+  try {
+    const response = await listOrderCustomerAddresses(orderId.value)
+    customerAddresses.value = response.data || []
+  } catch (error) {
+    console.error('[Order Detail] Load customer addresses error:', error)
+    uni.showToast({
+      title: '地址加载失败',
+      icon: 'none',
+    })
+  } finally {
+    addressLoading.value = false
+  }
+}
+
+async function openAddressSelect() {
+  if (!canEditAddress.value || !isStaffOrAdmin.value) return
+
+  addressSelectVisible.value = true
+  await loadCustomerAddresses()
+}
+
+function closeAddressSelect() {
+  addressSelectVisible.value = false
+}
+
+async function selectCustomerAddress(address: StaffOrderAddress) {
+  if (!orderId.value || savingAddress.value) return
+
+  savingAddress.value = true
+  try {
+    await bindExistingOrderAddress(orderId.value, address.id)
+    uni.showToast({
+      title: '地址已绑定',
+      icon: 'success',
+    })
+    addressSelectVisible.value = false
+    await loadOrderDetail()
+  } catch (error: any) {
+    console.error('[Order Detail] Bind address error:', error)
+    uni.showToast({
+      title: error?.message || '地址绑定失败',
+      icon: 'none',
+    })
+  } finally {
+    savingAddress.value = false
+  }
+}
+
+function resetAddressForm() {
+  addressForm.value = {
+    recipientName: '',
+    phone: '',
+    province: '',
+    city: '',
+    district: '',
+    detail: '',
+    isDefault: false,
+  }
+  addressRegionValue.value = []
+  editingAddressId.value = ''
+}
+
+function openCreateAddressForm() {
+  if (!canEditAddress.value || !isStaffOrAdmin.value) return
+
+  addressFormMode.value = 'create'
+  resetAddressForm()
+  addressFormVisible.value = true
+}
+
+function openCreateAddressFormFromSelect() {
+  closeAddressSelect()
+  openCreateAddressForm()
+}
+
+function openEditAddressForm() {
+  if (!canEditAddress.value || !isStaffOrAdmin.value || !order.value?.address) return
+
+  const address = order.value.address
+  addressFormMode.value = 'edit'
+  editingAddressId.value = address.id || order.value.addressId || ''
+  addressForm.value = {
+    recipientName: address.recipientName || '',
+    phone: getOrderAddressPhone(address),
+    province: address.region?.province || '',
+    city: address.region?.city || '',
+    district: address.region?.district || '',
+    detail: getOrderAddressDetail(address),
+    isDefault: !!address.isDefault,
+  }
+  addressRegionValue.value = [
+    addressForm.value.province,
+    addressForm.value.city,
+    addressForm.value.district,
+  ].filter(Boolean)
+  addressFormVisible.value = true
+}
+
+function closeAddressForm() {
+  if (savingAddress.value) return
+  addressFormVisible.value = false
+}
+
+function onAddressRegionChange(event: any) {
+  const value = event.detail.value || []
+  addressRegionValue.value = value
+  addressForm.value.province = value[0] || ''
+  addressForm.value.city = value[1] || ''
+  addressForm.value.district = value[2] || ''
+}
+
+function onAddressDefaultChange(event: any) {
+  addressForm.value.isDefault = !!event.detail.value
+}
+
+function validateAddressForm(): boolean {
+  const form = addressForm.value
+  if (!form.recipientName || !form.phone || !form.province || !form.city || !form.district || !form.detail) {
+    uni.showToast({
+      title: '请填写完整收货地址',
+      icon: 'none',
+    })
+    return false
+  }
+  return true
+}
+
+async function saveAddressForm() {
+  if (!orderId.value || savingAddress.value || !validateAddressForm()) return
+
+  const form = addressForm.value
+  const payload = {
+    recipientName: form.recipientName,
+    phone: form.phone,
+    region: {
+      province: form.province,
+      city: form.city,
+      district: form.district,
+    },
+    detail: form.detail,
+    isDefault: form.isDefault,
+  }
+
+  savingAddress.value = true
+  try {
+    if (addressFormMode.value === 'edit' && editingAddressId.value) {
+      await updateOrderCustomerAddress(orderId.value, editingAddressId.value, payload)
+    } else {
+      await createOrderCustomerAddress(orderId.value, payload)
+    }
+
+    uni.showToast({
+      title: '地址已保存',
+      icon: 'success',
+    })
+    addressFormVisible.value = false
+    await loadOrderDetail()
+  } catch (error: any) {
+    console.error('[Order Detail] Save address error:', error)
+    uni.showToast({
+      title: error?.message || '保存失败',
+      icon: 'none',
+    })
+  } finally {
+    savingAddress.value = false
   }
 }
 
@@ -1358,6 +1684,29 @@ function formatAmount(amount?: number): string {
   return amount.toFixed(2)
 }
 
+function formatPhone(phone?: string): string {
+  if (!phone) return ''
+  if (phone.length !== 11) return phone
+  return phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')
+}
+
+function formatRegionText(region?: { province?: string; city?: string; district?: string }): string {
+  if (!region) return ''
+  return [region.province, region.city, region.district].filter(Boolean).join(' ')
+}
+
+function getOrderAddressPhone(address: NonNullable<Order['address']>): string {
+  return address.phone || address.recipientPhone || ''
+}
+
+function getOrderAddressRegionText(address: NonNullable<Order['address']>): string {
+  return address.regionText || formatRegionText(address.region)
+}
+
+function getOrderAddressDetail(address: NonNullable<Order['address']>): string {
+  return address.detailAddress || address.detail || ''
+}
+
 function formatAdjustmentText(): string {
   const amount = displayAdjustmentAmount.value
   const absAmount = Math.abs(amount).toFixed(2)
@@ -1506,7 +1855,7 @@ function copyAddress() {
   if (!order.value?.address) return
 
   const address = order.value.address
-  const fullAddress = `${address.recipientName} ${address.phone} ${address.regionText} ${address.detailAddress}`
+  const fullAddress = `${address.recipientName} ${getOrderAddressPhone(address)} ${getOrderAddressRegionText(address)} ${getOrderAddressDetail(address)}`
 
   uni.setClipboardData({
     data: fullAddress,
@@ -2230,6 +2579,219 @@ function contactSevenDad() {
   font-size: 24rpx;
   border: none;
   flex-shrink: 0;
+}
+
+.btn-edit-secondary {
+  background-color: #fff;
+  color: #1890ff;
+  border: 1rpx solid #1890ff;
+}
+
+.address-empty-text,
+.address-lock-hint {
+  font-size: 26rpx;
+  color: #999;
+  line-height: 1.5;
+}
+
+.address-action-btn {
+  min-width: 180rpx;
+  height: 64rpx;
+  padding: 0 24rpx;
+  border-radius: 10rpx;
+  font-size: 26rpx;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.address-action-btn.primary {
+  background-color: #1890ff;
+  color: #fff;
+}
+
+.address-action-btn.secondary {
+  background-color: #fff;
+  color: #1890ff;
+  border: 2rpx solid #d6e8ff;
+}
+
+.address-action-btn.full {
+  width: 100%;
+  margin-top: 20rpx;
+}
+
+.address-action-btn::after {
+  border: none;
+}
+
+.address-modal-mask {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 120;
+  background-color: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: flex-end;
+}
+
+.address-modal-panel {
+  width: 100%;
+  max-height: 82vh;
+  overflow-y: auto;
+  background-color: #fff;
+  border-radius: 24rpx 24rpx 0 0;
+  padding: 32rpx;
+  box-sizing: border-box;
+}
+
+.address-form-panel {
+  padding-bottom: 48rpx;
+}
+
+.address-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 28rpx;
+}
+
+.address-modal-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #333;
+}
+
+.address-modal-close {
+  width: 56rpx;
+  height: 56rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 44rpx;
+  color: #999;
+}
+
+.address-modal-loading,
+.address-modal-empty {
+  min-height: 180rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 24rpx;
+  color: #999;
+  font-size: 28rpx;
+}
+
+.address-select-list {
+  display: flex;
+  flex-direction: column;
+  gap: 18rpx;
+}
+
+.address-select-item {
+  padding: 24rpx;
+  border-radius: 12rpx;
+  border: 2rpx solid #f0f0f0;
+}
+
+.address-select-header {
+  display: flex;
+  align-items: center;
+  gap: 16rpx;
+  margin-bottom: 10rpx;
+}
+
+.address-recipient-name {
+  font-size: 30rpx;
+  font-weight: 500;
+  color: #333;
+}
+
+.address-recipient-phone,
+.address-select-text {
+  font-size: 26rpx;
+  color: #666;
+  line-height: 1.6;
+}
+
+.address-default-tag {
+  padding: 2rpx 10rpx;
+  border-radius: 6rpx;
+  background-color: #e6f7ff;
+  color: #1890ff;
+  font-size: 22rpx;
+}
+
+.address-form-item {
+  margin-bottom: 24rpx;
+}
+
+.address-form-label {
+  display: block;
+  margin-bottom: 12rpx;
+  font-size: 26rpx;
+  color: #333;
+  font-weight: 500;
+}
+
+.address-form-input,
+.address-form-picker,
+.address-form-textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 2rpx solid #eee;
+  border-radius: 10rpx;
+  background-color: #fafafa;
+  font-size: 28rpx;
+  color: #333;
+}
+
+.address-form-input,
+.address-form-picker {
+  height: 76rpx;
+  padding: 0 20rpx;
+}
+
+.address-form-picker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.address-form-textarea {
+  min-height: 150rpx;
+  padding: 18rpx 20rpx;
+}
+
+.address-form-placeholder,
+.address-picker-arrow {
+  color: #999;
+}
+
+.address-form-switch-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 12rpx 0 28rpx;
+}
+
+.address-save-btn {
+  width: 100%;
+  height: 82rpx;
+  border-radius: 12rpx;
+  background-color: #1890ff;
+  color: #fff;
+  font-size: 30rpx;
+  border: none;
+}
+
+.address-save-btn::after {
+  border: none;
 }
 
 /* 商品明细 */

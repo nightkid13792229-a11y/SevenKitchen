@@ -13,6 +13,26 @@ describe('order detail runtime regressions', () => {
     expect(source).not.toContain('<view class="section-title">收货信息</view>')
   })
 
+  it('lets staff and admins manage reusable customer addresses on the order detail page', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/order-detail/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('listOrderCustomerAddresses')
+    expect(source).toContain('createOrderCustomerAddress')
+    expect(source).toContain('bindExistingOrderAddress')
+    expect(source).toContain('updateOrderCustomerAddress')
+    expect(source).toContain('暂未录入收货地址')
+    expect(source).toContain('选择已有地址')
+    expect(source).toContain('录入新地址')
+    expect(source).toContain('编辑地址')
+    expect(source).toContain('addressSelectVisible')
+    expect(source).toContain('addressFormVisible')
+    expect(source).toContain('addressForm.value.isDefault')
+    expect(source).toContain('isStaffOrAdmin.value || canEditOrder.value')
+  })
+
   it('supports packagePlan and ingredientSourcePlan on order items', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/order-detail/index.vue'),

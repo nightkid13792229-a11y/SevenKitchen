@@ -48,6 +48,45 @@ describe('mp-weixin build asset regressions', () => {
     )
   })
 
+  it('keeps heavyweight customer journey pages out of the main package', () => {
+    const pagesConfig = JSON.parse(
+      readFileSync(resolve(process.cwd(), 'src/pages.json'), 'utf-8'),
+    )
+    const mainPages = pagesConfig.pages.map((page: { path: string }) => page.path)
+    const packageRoots = pagesConfig.subPackages.map(
+      (subPackage: { root: string }) => subPackage.root,
+    )
+
+    expect(mainPages).toEqual(
+      expect.arrayContaining([
+        'pages/home/index',
+        'pages/me/index',
+        'pages/staff-workbench/index',
+        'pages/login/index',
+      ]),
+    )
+    expect(mainPages).not.toEqual(
+      expect.arrayContaining([
+        'pages/dog-create/index',
+        'pages/dog-profile-overview/index',
+        'pages/recipe-order/index',
+        'pages/checkout/index',
+        'pages/diy-sheet/index',
+        'pages/order-detail/index',
+      ]),
+    )
+    expect(packageRoots).toEqual(
+      expect.arrayContaining([
+        'pages/dog-create',
+        'pages/dog-profile-overview',
+        'pages/recipe-order',
+        'pages/checkout',
+        'pages/diy-sheet',
+        'pages/order-detail',
+      ]),
+    )
+  })
+
   it('keeps staff-only modules inside their subpackages instead of the main package', () => {
     const staffInventoryPages = [
       'src/pages/staff-inventory/index.vue',

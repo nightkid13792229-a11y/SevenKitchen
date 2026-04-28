@@ -20,12 +20,6 @@
       }
     },
     {
-      "path": "pages/dog-profile-overview/index",
-      "style": {
-        "navigationBarTitleText": "爱犬概览"
-      }
-    },
-    {
       "path": "pages/dog-profile-basic/index",
       "style": {
         "navigationBarTitleText": "基础信息"
@@ -41,12 +35,6 @@
       "path": "pages/dog-profile-health/index",
       "style": {
         "navigationBarTitleText": "健康记录"
-      }
-    },
-    {
-      "path": "pages/dog-create/index",
-      "style": {
-        "navigationBarTitleText": "创建狗狗档案"
       }
     },
     {
@@ -77,12 +65,6 @@
       "path": "pages/orders-list/index",
       "style": {
         "navigationBarTitleText": "我的订单"
-      }
-    },
-    {
-      "path": "pages/order-detail/index",
-      "style": {
-        "navigationBarTitleText": "订单详情"
       }
     },
     {
@@ -134,27 +116,9 @@
       }
     },
     {
-      "path": "pages/recipe-order/index",
-      "style": {
-        "navigationBarTitleText": "成品配置页面"
-      }
-    },
-    {
-      "path": "pages/checkout/index",
-      "style": {
-        "navigationBarTitleText": "确认订单"
-      }
-    },
-    {
       "path": "pages/recipe-diy/index",
       "style": {
         "navigationBarTitleText": "DIY食谱配置"
-      }
-    },
-    {
-      "path": "pages/diy-sheet/index",
-      "style": {
-        "navigationBarTitleText": "DIY制作单"
       }
     },
     {
@@ -351,6 +315,72 @@
           "path": "index",
           "style": {
             "navigationBarTitleText": "食谱管理"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/dog-create",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "创建狗狗档案"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/dog-profile-overview",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "爱犬概览"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/recipe-order",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "成品配置页面"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/checkout",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "确认订单"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/diy-sheet",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "DIY制作单"
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/order-detail",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "订单详情"
           }
         }
       ]

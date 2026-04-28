@@ -63,11 +63,6 @@
           <text class="function-count">({{ userInfo.dogCount || 0 }}只)</text>
         </view>
 
-        <view class="function-item" @tap="goToOrderList">
-          <text class="function-text">我的订单</text>
-          <text class="function-count">({{ userInfo.orderCount || 0 }}笔)</text>
-        </view>
-
         <view class="function-item" @tap="goToAddressList">
           <text class="function-text">收货地址</text>
           <text class="function-count">({{ userInfo.addressCount || 0 }}个)</text>
@@ -179,13 +174,6 @@ function goToLogin() {
 function goToDogList() {
   uni.navigateTo({
     url: '/pages/dog-profile-list/index'
-  })
-}
-
-// 跳转订单列表
-function goToOrderList() {
-  uni.navigateTo({
-    url: '/pages/orders-list/index'
   })
 }
 

@@ -84,4 +84,16 @@ describe('recipe detail nutrition report regressions', () => {
     expect(snapshotModalSource).toContain('每kg食材添加')
     expect(snapshotModalSource).not.toContain('每kg添加')
   })
+
+  it('uses concise bottom action button labels', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('自己做')
+    expect(source).toContain('成品')
+    expect(source).not.toContain('我要自己做')
+    expect(source).not.toContain('订购成品')
+  })
 })

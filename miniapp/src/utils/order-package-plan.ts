@@ -46,7 +46,7 @@ export const SOURCE_PLAN_OPTIONS: Array<{
   },
   {
     code: 'WHOLESALE',
-    label: '性价比优先',
+    label: '批发市场优先',
     description: '人食级原料，优先选择生鲜批发来源',
   },
 ]

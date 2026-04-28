@@ -8,6 +8,10 @@ describe('recipe-order phase one UI contract', () => {
     'utf-8',
   );
   const templateSource = source.slice(0, source.indexOf('<script setup'));
+  const pagesJsonSource = readFileSync(
+    resolve(process.cwd(), 'src/pages.json'),
+    'utf-8',
+  );
 
   it('exposes the three default order cycles and no custom days input', () => {
     expect(source).toContain('ORDER_CYCLE_OPTIONS');
@@ -80,9 +84,9 @@ describe('recipe-order phase one UI contract', () => {
     const sectionOrder = [
       '食谱信息',
       'dogProfileSummaryText',
-      '订购天数',
-      '原料采购来源',
-      '产品说明',
+      '配置天数',
+      '原料来源',
+      '说明',
       'bottom-bar',
     ];
 
@@ -97,6 +101,13 @@ describe('recipe-order phase one UI contract', () => {
         `${sectionOrder[index]} should appear after ${sectionOrder[index - 1]}`,
       ).toBeGreaterThan(positions[index - 1]);
     }
+
+    expect(pagesJsonSource).toContain('"navigationBarTitleText": "成品配置页面"');
+    expect(templateSource).toContain('保存采购及分装配置');
+    expect(templateSource).not.toContain('订购天数');
+    expect(templateSource).not.toContain('原料采购来源');
+    expect(templateSource).not.toContain('产品说明');
+    expect(templateSource).not.toContain('确认订单');
   });
 
   it('renders all recipe life-stage tags in Chinese on the order page', () => {
@@ -117,7 +128,7 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).toContain('自定义分装');
     expect(source).toContain('isCustomPackagePlan');
     expect(source).toContain('cancelCustomPackagePlan');
-    expect(source).toContain('请先取消自定义分装后再切换订购天数');
+    expect(source).toContain('请先取消自定义分装后再切换配置天数');
     expect(source).toContain('MIN_PACKAGE_SPEC_G');
     expect(source).toContain('hasInvalidPackageSpec');
     expect(source).toContain('packagePlanValidationMessage');
@@ -170,12 +181,13 @@ describe('recipe-order phase one UI contract', () => {
 
   it('merges source plan selection and ingredient list into one compact section', () => {
     expect(templateSource).toContain('ingredient-source-section');
-    expect(templateSource).toContain('原料采购来源');
+    expect(templateSource).toContain('原料来源');
     expect(templateSource).not.toContain('方案会影响原料清单和订单价格');
     expect(templateSource).toContain('source-plan-card compact');
     expect(templateSource).toContain('formatSourcePlanShortName(option.code)');
-    expect(templateSource).toContain('sourcePlanDescription');
-    expect(templateSource).toContain('sourcePlanFallbackNote');
+    expect(templateSource).not.toContain('ingredient-summary');
+    expect(templateSource).not.toContain('sourcePlanDescription');
+    expect(templateSource).not.toContain('sourcePlanFallbackNote');
     expect(source).toContain("const selectedSourcePlan = ref<IngredientSourcePlanCode>('WHOLESALE')");
     expect(source).not.toContain("const selectedSourcePlan = ref<IngredientSourcePlanCode>('MARKET_PREMIUM')");
     expect(source).not.toContain('ingredientSummaryMeta');
@@ -191,15 +203,16 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).toContain('function formatSourcePlanShortName');
     expect(source).toContain("ORGANIC: '有机优先'");
     expect(source).toContain("MARKET_PREMIUM: '超市优先'");
-    expect(source).toContain("WHOLESALE: '性价比优先'");
-    expect(source).toContain('function getSourcePlanDescription');
-    expect(source).toContain('优先选择有机、草饲、散养、非转基因来源');
-    expect(source).toContain('优先选择山姆、盒马、沃集鲜等商超来源');
-    expect(source).toContain('人食级原料，优先选择生鲜批发来源');
+    expect(source).toContain("WHOLESALE: '批发市场优先'");
+    expect(source).not.toContain("WHOLESALE: '性价比优先'");
+    expect(source).not.toContain('function getSourcePlanDescription');
+    expect(source).not.toContain('优先选择有机、草饲、散养、非转基因来源');
+    expect(source).not.toContain('优先选择山姆、盒马、沃集鲜等商超来源');
+    expect(source).not.toContain('人食级原料，优先选择生鲜批发来源');
     expect(source).not.toContain('原料优先选择有机、非转基因、生态散养来源');
     expect(source).not.toContain('原料优先选择山姆、盒马、沃集鲜等知名商超来源');
     expect(source).not.toContain('原料选择以人食级为底线，尽量选择肉团、生鲜批发等性价比高的来源');
-    expect(source).toContain('个别原料买不到时，会自动选择标准接近的来源');
+    expect(source).not.toContain('个别原料买不到时，会自动选择标准接近的来源');
     expect(source).toContain('source-plan-card');
     expect(source).toContain('formatSourcePlanPrice(option.code)');
     expect(source).toContain('loadSourcePlanPricePreviews');
@@ -309,9 +322,8 @@ describe('recipe-order phase one UI contract', () => {
     ).toEqual([]);
     expect(source).toContain("normalizeImageUrl('http://img.sevenkitchen.cloud/package-images/1767527958742-149215e3.jpg')");
     expect(source).toContain("normalizeImageUrl('http://img.sevenkitchen.cloud/shipping-logos/1767529001420-55fde8f2.png')");
-    expect(source).toContain('分装与物流');
-    expect(source).toContain('顺丰生鲜配送');
-    expect(source).toContain('冷冻包材 + 冰袋随箱');
+    expect(source).not.toContain("title: '分装与物流'");
+    expect(source).not.toContain("title: '当日采购当日制作'");
     expect(source).toContain('保质期与存储方式');
     expect(source).toContain('-18℃');
     expect(source).toContain('冷冻保存');
@@ -331,7 +343,6 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).toContain('炒');
     expect(source).toContain('煎');
     expect(source).toContain('不建议微波、炸、炒、煎等高温烹饪方式');
-    expect(source).toContain('当日采购当日制作');
     expect(source).toContain('product-explanation-plain-card');
     expect(source).not.toContain('制作流程');
     expect(source).not.toContain('保质期、保存方法、烹饪方法');
@@ -340,8 +351,6 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).not.toContain('烹饪方法：提前冷藏解冻，可隔水温热后喂食');
     expect(source).not.toContain('成品形态');
     expect(source).not.toContain('所有食材会按配方处理后打碎，并充分混匀');
-    expect(source.indexOf('当日采购当日制作')).toBeLessThan(source.indexOf('分装与物流'));
-    expect(source.indexOf('分装与物流')).toBeLessThan(source.indexOf('保质期与存储方式'));
     expect(source.indexOf('保质期与存储方式')).toBeLessThan(source.indexOf('烹饪方法'));
     expect(source).not.toContain('为什么要把所有原料打碎？');
     expect(source).not.toContain('减少挑食，避免只挑肉不吃菜或补剂');
@@ -349,8 +358,8 @@ describe('recipe-order phase one UI contract', () => {
     expect(source).not.toContain('按袋真空分装，每袋贴有信息标签');
     expect(source).not.toContain('使用冷冻包材和冰袋配送，减少运输温度波动');
     expect(source).not.toContain('明显完全解冻，请拍照后联系客服');
-    expect(source).toContain('冷冻满 24 小时后发货');
-    expect(source).toContain('具体制作与发货时间以下单确认页为准');
+    expect(source).not.toContain('冷冻满 24 小时后发货');
+    expect(source).not.toContain('具体制作与发货时间以下单确认页为准');
     expect(templateSource).not.toContain('<view class="section logistics-section">');
     expect(templateSource).not.toContain('<text class="title-text">分装及物流说明</text>');
   });
@@ -365,8 +374,9 @@ describe('recipe-order phase one UI contract', () => {
   });
 
   it('keeps the bottom pricing summary next to the confirmation button and right aligned', () => {
-    expect(templateSource).toContain('确认订单');
+    expect(templateSource).toContain('保存采购及分装配置');
     expect(templateSource).not.toContain('立即下单');
+    expect(templateSource).not.toContain('确认订单');
 
     const bottomBarBlocks = [...source.matchAll(/\.bottom-bar\s*\{([\s\S]*?)\}/g)]
       .map((match) => match[1]);
@@ -393,5 +403,59 @@ describe('recipe-order phase one UI contract', () => {
     buyButtonBlocks.forEach((block) => {
       expect(block).toContain('margin: 0;');
     });
+  });
+
+  it('keeps the long save configuration button label on one line', () => {
+    const buyButtonBlocks = [...source.matchAll(/\.btn-buy-now\s*\{([\s\S]*?)\}/g)]
+      .map((match) => match[1]);
+
+    expect(buyButtonBlocks.length).toBeGreaterThan(0);
+
+    buyButtonBlocks.forEach((block) => {
+      expect(block).toContain('width: 336rpx;');
+      expect(block).toContain('display: flex;');
+      expect(block).toContain('align-items: center;');
+      expect(block).toContain('justify-content: center;');
+      expect(block).toContain('white-space: nowrap;');
+      expect(block).toContain('line-height: 1;');
+      expect(block).not.toContain('width: 240rpx;');
+      expect(block).not.toContain('line-height: 84rpx;');
+    });
+  });
+
+  it('submits the saved purchase and package configuration directly with contact details', () => {
+    const continueBuyNowSource = source.match(
+      /async function continueBuyNow[\s\S]*?\n}\n\nfunction goToCreateDog/,
+    )?.[0] || '';
+
+    expect(continueBuyNowSource).toContain("url: '/orders'");
+    expect(continueBuyNowSource).toContain("method: 'POST'");
+    expect(continueBuyNowSource).toContain("type: 'FRESH_FOOD'");
+    expect(continueBuyNowSource).toContain('snapshotId: pricingSnapshotId.value');
+    expect(continueBuyNowSource).not.toContain('addressId:');
+    expect(continueBuyNowSource).not.toContain('targetProductionDate:');
+    expect(continueBuyNowSource).toContain("url: `/orders/${orderId}/confirm`");
+    expect(continueBuyNowSource).toContain('showSaveSuccessDialog.value = true');
+    expect(continueBuyNowSource).not.toContain("title: '保存成功'");
+    expect(continueBuyNowSource).not.toContain('Seven爸爸的微信号：zhaochengccc');
+    expect(continueBuyNowSource).not.toContain('/pages/checkout/index');
+    expect(source).not.toContain('uni.navigateTo({\n    url: `/pages/checkout/index');
+  });
+
+  it('shows the saved configuration success copy with one-tap WeChat ID copying', () => {
+    expect(templateSource).toContain('v-if="showSaveSuccessDialog"');
+    expect(templateSource).toContain('保存成功');
+    expect(templateSource).toContain('成品配置方案已经保存。');
+    expect(templateSource).toContain('请联系Seven爸爸了解制作信息。');
+    expect(templateSource).toContain('微信号：{{ SEVEN_DAD_WECHAT_ID }}');
+    expect(templateSource).toContain('@tap="copySevenDadWechatId"');
+    expect(templateSource).toContain('复制微信号');
+    expect(templateSource).toContain('@tap="closeSaveSuccessDialog"');
+    expect(templateSource).toContain('知道了');
+    expect(source).toContain("const SEVEN_DAD_WECHAT_ID = 'zhaochengccc'");
+    expect(source).toContain('function copySevenDadWechatId()');
+    expect(source).toContain('uni.setClipboardData');
+    expect(source).toContain('data: SEVEN_DAD_WECHAT_ID');
+    expect(source).toContain("title: '微信号已复制'");
   });
 });

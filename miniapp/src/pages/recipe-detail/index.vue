@@ -238,11 +238,11 @@
       </button>
 
       <button class="btn-diy" @tap="generateDiySheet">
-        我要自己做
+        自己做
       </button>
 
       <button class="btn-order" @tap="goToOrder">
-        订购成品
+        成品
       </button>
     </view>
   </view>

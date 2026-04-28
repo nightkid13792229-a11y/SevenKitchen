@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest'
-import { readFileSync } from 'node:fs'
+import { mkdtempSync, mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 
 const readSource = (path: string) => readFileSync(resolve(process.cwd(), path), 'utf-8')
+const requireScript = createRequire(import.meta.url)
 
 describe('mp-weixin build asset regressions', () => {
   it('keeps tabbar static assets available in the generated mini program project', () => {
@@ -136,5 +139,63 @@ describe('mp-weixin build asset regressions', () => {
     expect(fixScript).toContain('removeCodeQualityNoDependencyFiles')
     expect(fixScript).toContain("'project.private.config.json'")
     expect(fixScript).toContain("'App.wxml'")
+  })
+
+  it('localizes subpackage-only helper modules out of the main package', () => {
+    const { localizeSubpackageOnlyModules } = requireScript('../scripts/fix-components-injection.js')
+    const distDir = mkdtempSync(resolve(tmpdir(), 'sevenkitchen-mp-weixin-'))
+    const appJson = {
+      pages: [{ path: 'pages/home/index' }],
+      subPackages: [
+        { root: 'pages/order-detail', pages: [{ path: 'index' }] },
+        { root: 'pages/staff-production', pages: [{ path: 'print-label' }] },
+      ],
+    }
+
+    const writeFixture = (path: string, source: string) => {
+      const filePath = resolve(distDir, path)
+      mkdirSync(resolve(filePath, '..'), { recursive: true })
+      writeFileSync(filePath, source, 'utf-8')
+    }
+
+    writeFixture('pages/home/index.js', 'require("../../utils/api.js");')
+    writeFixture(
+      'pages/order-detail/index.js',
+      'const orders = require("../../api/orders.js"); const plan = require("../../utils/order-package-plan.js");',
+    )
+    writeFixture(
+      'pages/staff-production/utils/label-renderer.js',
+      'const labels = require("../../../utils/label-mapping.js");',
+    )
+    writeFixture('utils/api.js', 'exports.request = function request() {};')
+    writeFixture('utils/order-package-plan.js', 'exports.getPackagePlanTotal = function getPackagePlanTotal() {};')
+    writeFixture('utils/label-mapping.js', 'const api = require("./api.js"); exports.api = api;')
+    writeFixture('api/orders.js', 'const api = require("../utils/api.js"); exports.api = api;')
+
+    localizeSubpackageOnlyModules(distDir, appJson, [
+      'api/orders.js',
+      'utils/label-mapping.js',
+      'utils/order-package-plan.js',
+    ])
+
+    expect(readFileSync(resolve(distDir, 'pages/order-detail/index.js'), 'utf-8')).toContain(
+      'require("./api/orders.js")',
+    )
+    expect(readFileSync(resolve(distDir, 'pages/order-detail/index.js'), 'utf-8')).toContain(
+      'require("./utils/order-package-plan.js")',
+    )
+    expect(readFileSync(resolve(distDir, 'pages/order-detail/api/orders.js'), 'utf-8')).toContain(
+      'require("../../../utils/api.js")',
+    )
+    expect(
+      readFileSync(resolve(distDir, 'pages/staff-production/utils/label-renderer.js'), 'utf-8'),
+    ).toContain('require("./label-mapping.js")')
+    expect(
+      readFileSync(resolve(distDir, 'pages/staff-production/utils/label-mapping.js'), 'utf-8'),
+    ).toContain('require("../../../utils/api.js")')
+    expect(existsSync(resolve(distDir, 'api/orders.js'))).toBe(false)
+    expect(existsSync(resolve(distDir, 'utils/label-mapping.js'))).toBe(false)
+    expect(existsSync(resolve(distDir, 'utils/order-package-plan.js'))).toBe(false)
+    expect(existsSync(resolve(distDir, 'utils/api.js'))).toBe(true)
   })
 })

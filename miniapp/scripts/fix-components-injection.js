@@ -19,12 +19,26 @@ const STATIC_SOURCE_ROOTS = [
 ];
 const STATIC_ASSET_DIRECTORIES = ['tabbar'];
 const CODE_QUALITY_NO_DEPENDENCY_FILES = ['project.private.config.json', 'App.wxml'];
+const SUBPACKAGE_ONLY_HELPER_MODULES = [
+  'api/orders.js',
+  'utils/diy-sheet-format.js',
+  'utils/dog-breed-search.js',
+  'utils/dog-breed-search-catalog.js',
+  'utils/dog-breed-ui.js',
+  'utils/dog-profile-create-actions.js',
+  'utils/dog-profile-create-view.js',
+  'utils/dog-profile-draft.js',
+  'utils/dog-profile-overview.js',
+  'utils/dog-recommendation-summary.js',
+  'utils/label-mapping.js',
+  'utils/order-package-plan.js',
+  'utils/page-scroll.js',
+  'utils/print-canvas.js',
+];
 const DIST_DIRS = [
   path.join(__dirname, '../dist/build/mp-weixin'),
   path.join(__dirname, '../dist/dev/mp-weixin'),
 ];
-
-console.log('🔧 验证并同步微信小程序构建配置...');
 
 const safeReadJson = (filePath) => {
   if (!fs.existsSync(filePath)) {
@@ -101,74 +115,320 @@ const removeCodeQualityNoDependencyFiles = (distDir) => {
   }
 };
 
-const rootProjectConfig = safeReadJson(ROOT_PROJECT_CONFIG_PATH) || {};
+const toPosixPath = (filePath) => filePath.split(path.sep).join('/');
 
-const normalizedProjectSetting = {
-  ...(rootProjectConfig.setting || {}),
-  urlCheck: false,
-  ignoreDevUnusedFiles: false,
-  ignoreUploadUnusedFiles: false,
-  ignoreUnusedFiles: false,
-  filterNoDependencyFile: false,
+const normalizeModulePath = (filePath) => path.posix.normalize(toPosixPath(filePath)).replace(/^\.\//, '');
+
+const getSubpackageRoots = (appJson) => (appJson?.subPackages || appJson?.subpackages || [])
+  .map((subPackage) => normalizeModulePath(subPackage.root || ''))
+  .filter(Boolean);
+
+const isInsidePackageRoot = (filePath, packageRoot) => filePath === packageRoot || filePath.startsWith(`${packageRoot}/`);
+
+const isInsideAnySubpackage = (filePath, subpackageRoots) => subpackageRoots.some((root) => isInsidePackageRoot(filePath, root));
+
+const collectJsFiles = (dir) => {
+  if (!fs.existsSync(dir)) {
+    return [];
+  }
+
+  const entries = fs.readdirSync(dir, { withFileTypes: true });
+  const files = [];
+
+  for (const entry of entries) {
+    const entryPath = path.join(dir, entry.name);
+
+    if (entry.isDirectory()) {
+      files.push(...collectJsFiles(entryPath));
+    } else if (entry.isFile() && entry.name.endsWith('.js')) {
+      files.push(entryPath);
+    }
+  }
+
+  return files;
 };
 
-let processedDistCount = 0;
+const toDistRelativePath = (distDir, filePath) => normalizeModulePath(path.relative(distDir, filePath));
 
-for (const distDir of DIST_DIRS) {
-  if (!fs.existsSync(distDir)) {
-    continue;
+const resolveRequireTarget = (fromFile, requestPath) => {
+  if (!requestPath.startsWith('.')) {
+    return null;
   }
 
-  processedDistCount += 1;
+  return normalizeModulePath(path.posix.join(path.posix.dirname(fromFile), requestPath));
+};
 
-  const appJsonPath = path.join(distDir, 'app.json');
-  const projectConfigPath = path.join(distDir, 'project.config.json');
+const toRequirePath = (fromFile, targetFile) => {
+  let requestPath = path.posix.relative(path.posix.dirname(fromFile), targetFile);
 
-  for (const assetDirName of STATIC_ASSET_DIRECTORIES) {
-    syncStaticAssetDirectory(distDir, assetDirName);
+  if (!requestPath.startsWith('.')) {
+    requestPath = `./${requestPath}`;
   }
 
-  if (fs.existsSync(appJsonPath)) {
-    const appJson = safeReadJson(appJsonPath);
-    let appJsonChanged = false;
+  return requestPath;
+};
 
-    if (appJson && appJson.component2Dir) {
-      delete appJson.component2Dir;
-      appJsonChanged = true;
-      console.log(`✅ 已移除无效的 component2Dir 配置: ${distDir}`);
+const rewriteRequires = (source, fromFile, getReplacementPath) => source.replace(
+  /require\((['"])([^'"]+)\1\)/g,
+  (match, quote, requestPath) => {
+    const targetFile = resolveRequireTarget(fromFile, requestPath);
+
+    if (!targetFile) {
+      return match;
     }
 
-    if (appJson && !Object.prototype.hasOwnProperty.call(appJson, 'functionalPages')) {
-      appJson.functionalPages = false;
-      appJsonChanged = true;
-      console.log(`✅ 已补齐 functionalPages 默认配置: ${distDir}`);
-    }
+    const replacementPath = getReplacementPath(targetFile);
 
-    if (appJsonChanged) {
-      safeWriteJson(appJsonPath, appJson);
-    }
+    return replacementPath ? `require(${quote}${replacementPath}${quote})` : match;
+  },
+);
 
-    assertTabBarIconsExist(distDir, appJson);
+const getSelectedModuleDependencies = (distDir, modulePath, selectedModules) => {
+  const moduleFilePath = path.join(distDir, modulePath);
+
+  if (!fs.existsSync(moduleFilePath)) {
+    return [];
   }
 
-  if (fs.existsSync(projectConfigPath)) {
-    const projectConfig = safeReadJson(projectConfigPath) || {};
-    projectConfig.miniprogramRoot = './';
-    projectConfig.setting = {
-      ...(projectConfig.setting || {}),
-      ...normalizedProjectSetting,
-    };
-    projectConfig.packOptions = projectConfig.packOptions || { ignore: [] };
-    safeWriteJson(projectConfigPath, projectConfig);
-    console.log(`✅ 已同步 project.config.json: ${distDir}`);
+  const dependencies = new Set();
+  const source = fs.readFileSync(moduleFilePath, 'utf-8');
+
+  rewriteRequires(source, modulePath, (targetFile) => {
+    if (selectedModules.has(targetFile)) {
+      dependencies.add(targetFile);
+    }
+
+    return null;
+  });
+
+  return Array.from(dependencies);
+};
+
+const getSelectedModulesRequiredByMainPackage = (distDir, subpackageRoots, selectedModules) => {
+  const keepModules = new Set();
+  const jsFiles = collectJsFiles(distDir);
+
+  for (const filePath of jsFiles) {
+    const fileRelativePath = toDistRelativePath(distDir, filePath);
+
+    if (isInsideAnySubpackage(fileRelativePath, subpackageRoots) || selectedModules.has(fileRelativePath)) {
+      continue;
+    }
+
+    const source = fs.readFileSync(filePath, 'utf-8');
+
+    rewriteRequires(source, fileRelativePath, (targetFile) => {
+      if (selectedModules.has(targetFile)) {
+        keepModules.add(targetFile);
+      }
+
+      return null;
+    });
   }
 
-  removeCodeQualityNoDependencyFiles(distDir);
+  const pendingModules = Array.from(keepModules);
+
+  while (pendingModules.length > 0) {
+    const modulePath = pendingModules.pop();
+
+    for (const dependency of getSelectedModuleDependencies(distDir, modulePath, selectedModules)) {
+      if (!keepModules.has(dependency)) {
+        keepModules.add(dependency);
+        pendingModules.push(dependency);
+      }
+    }
+  }
+
+  return keepModules;
+};
+
+const localizeSubpackageOnlyModules = (
+  distDir,
+  appJson,
+  modulePaths = SUBPACKAGE_ONLY_HELPER_MODULES,
+) => {
+  const subpackageRoots = getSubpackageRoots(appJson);
+
+  if (subpackageRoots.length === 0) {
+    return { copiedModules: 0, removedModules: 0, rewrittenFiles: 0 };
+  }
+
+  const selectedModules = new Set(modulePaths.map(normalizeModulePath));
+  const copiedModulesByRoot = new Map();
+  let copiedModules = 0;
+  let rewrittenFiles = 0;
+
+  const copyModuleToSubpackage = (subpackageRoot, modulePath) => {
+    const sourcePath = path.join(distDir, modulePath);
+
+    if (!fs.existsSync(sourcePath)) {
+      return;
+    }
+
+    const packageModules = copiedModulesByRoot.get(subpackageRoot) || new Set();
+    copiedModulesByRoot.set(subpackageRoot, packageModules);
+
+    if (packageModules.has(modulePath)) {
+      return;
+    }
+
+    packageModules.add(modulePath);
+
+    const localizedPath = normalizeModulePath(path.posix.join(subpackageRoot, modulePath));
+    const localizedFilePath = path.join(distDir, localizedPath);
+    fs.mkdirSync(path.dirname(localizedFilePath), { recursive: true });
+
+    const source = fs.readFileSync(sourcePath, 'utf-8');
+    const localizedSource = rewriteRequires(source, modulePath, (targetFile) => {
+      if (selectedModules.has(targetFile)) {
+        copyModuleToSubpackage(subpackageRoot, targetFile);
+        return toRequirePath(localizedPath, normalizeModulePath(path.posix.join(subpackageRoot, targetFile)));
+      }
+
+      const targetPath = path.join(distDir, targetFile);
+      if (fs.existsSync(targetPath)) {
+        return toRequirePath(localizedPath, targetFile);
+      }
+
+      return null;
+    });
+
+    fs.writeFileSync(localizedFilePath, localizedSource, 'utf-8');
+    copiedModules += 1;
+  };
+
+  for (const root of subpackageRoots) {
+    const rootDir = path.join(distDir, root);
+
+    for (const filePath of collectJsFiles(rootDir)) {
+      const fileRelativePath = toDistRelativePath(distDir, filePath);
+      const source = fs.readFileSync(filePath, 'utf-8');
+      const rewrittenSource = rewriteRequires(source, fileRelativePath, (targetFile) => {
+        if (!selectedModules.has(targetFile)) {
+          return null;
+        }
+
+        const localizedTarget = normalizeModulePath(path.posix.join(root, targetFile));
+        copyModuleToSubpackage(root, targetFile);
+        return toRequirePath(fileRelativePath, localizedTarget);
+      });
+
+      if (rewrittenSource !== source) {
+        fs.writeFileSync(filePath, rewrittenSource, 'utf-8');
+        rewrittenFiles += 1;
+      }
+    }
+  }
+
+  const keepModules = getSelectedModulesRequiredByMainPackage(distDir, subpackageRoots, selectedModules);
+  let removedModules = 0;
+
+  for (const modulePath of selectedModules) {
+    const moduleFilePath = path.join(distDir, modulePath);
+
+    if (!fs.existsSync(moduleFilePath) || keepModules.has(modulePath)) {
+      continue;
+    }
+
+    fs.rmSync(moduleFilePath, { force: true });
+    removedModules += 1;
+  }
+
+  if (copiedModules > 0 || rewrittenFiles > 0 || removedModules > 0) {
+    console.log(
+      `✅ 已迁移分包专用 JS: 复制 ${copiedModules} 个，改写 ${rewrittenFiles} 个文件，移除主包 ${removedModules} 个`,
+    );
+  }
+
+  return { copiedModules, removedModules, rewrittenFiles };
+};
+
+const run = () => {
+  console.log('🔧 验证并同步微信小程序构建配置...');
+
+  const rootProjectConfig = safeReadJson(ROOT_PROJECT_CONFIG_PATH) || {};
+
+  const normalizedProjectSetting = {
+    ...(rootProjectConfig.setting || {}),
+    urlCheck: false,
+    ignoreDevUnusedFiles: false,
+    ignoreUploadUnusedFiles: false,
+    ignoreUnusedFiles: false,
+    filterNoDependencyFile: false,
+  };
+
+  let processedDistCount = 0;
+
+  for (const distDir of DIST_DIRS) {
+    if (!fs.existsSync(distDir)) {
+      continue;
+    }
+
+    processedDistCount += 1;
+
+    const appJsonPath = path.join(distDir, 'app.json');
+    const projectConfigPath = path.join(distDir, 'project.config.json');
+    let appJson = null;
+
+    for (const assetDirName of STATIC_ASSET_DIRECTORIES) {
+      syncStaticAssetDirectory(distDir, assetDirName);
+    }
+
+    if (fs.existsSync(appJsonPath)) {
+      appJson = safeReadJson(appJsonPath);
+      let appJsonChanged = false;
+
+      if (appJson && appJson.component2Dir) {
+        delete appJson.component2Dir;
+        appJsonChanged = true;
+        console.log(`✅ 已移除无效的 component2Dir 配置: ${distDir}`);
+      }
+
+      if (appJson && !Object.prototype.hasOwnProperty.call(appJson, 'functionalPages')) {
+        appJson.functionalPages = false;
+        appJsonChanged = true;
+        console.log(`✅ 已补齐 functionalPages 默认配置: ${distDir}`);
+      }
+
+      if (appJsonChanged) {
+        safeWriteJson(appJsonPath, appJson);
+      }
+
+      assertTabBarIconsExist(distDir, appJson);
+    }
+
+    if (appJson) {
+      localizeSubpackageOnlyModules(distDir, appJson);
+    }
+
+    if (fs.existsSync(projectConfigPath)) {
+      const projectConfig = safeReadJson(projectConfigPath) || {};
+      projectConfig.miniprogramRoot = './';
+      projectConfig.setting = {
+        ...(projectConfig.setting || {}),
+        ...normalizedProjectSetting,
+      };
+      projectConfig.packOptions = projectConfig.packOptions || { ignore: [] };
+      safeWriteJson(projectConfigPath, projectConfig);
+      console.log(`✅ 已同步 project.config.json: ${distDir}`);
+    }
+
+    removeCodeQualityNoDependencyFiles(distDir);
+  }
+
+  if (processedDistCount === 0) {
+    console.error('❌ 未找到任何可同步的 mp-weixin 构建目录');
+    process.exit(1);
+  }
+
+  console.log('✨ 构建配置同步完成！');
+};
+
+if (require.main === module) {
+  run();
 }
 
-if (processedDistCount === 0) {
-  console.error('❌ 未找到任何可同步的 mp-weixin 构建目录');
-  process.exit(1);
-}
-
-console.log('✨ 构建配置同步完成！');
+module.exports = {
+  localizeSubpackageOnlyModules,
+  run,
+};

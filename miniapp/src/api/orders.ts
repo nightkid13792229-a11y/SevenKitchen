@@ -40,6 +40,32 @@ export interface CustomerOrderFinancialSummary {
   } | null;
 }
 
+export interface StaffOrderAddress {
+  id: string;
+  userId?: string;
+  recipientName: string;
+  phone: string;
+  region: {
+    province: string;
+    city: string;
+    district: string;
+  };
+  detail: string;
+  isDefault: boolean;
+}
+
+export interface StaffOrderAddressInput {
+  recipientName: string;
+  phone: string;
+  region: {
+    province: string;
+    city: string;
+    district: string;
+  };
+  detail: string;
+  isDefault?: boolean;
+}
+
 /**
  * 获取后台订单详情
  */
@@ -103,5 +129,43 @@ export function updateAdminOrderRemark(
     data: {
       adminRemark: adminRemark ?? null,
     },
+  });
+}
+
+export function listOrderCustomerAddresses(orderId: string) {
+  return request<StaffOrderAddress[]>({
+    url: `/admin/orders/${orderId}/addresses`,
+    method: 'GET',
+  });
+}
+
+export function createOrderCustomerAddress(
+  orderId: string,
+  data: StaffOrderAddressInput,
+) {
+  return request<{ address: StaffOrderAddress; order: unknown }>({
+    url: `/admin/orders/${orderId}/addresses`,
+    method: 'POST',
+    data,
+  });
+}
+
+export function bindOrderCustomerAddress(orderId: string, addressId: string) {
+  return request({
+    url: `/admin/orders/${orderId}/address`,
+    method: 'PUT',
+    data: { addressId },
+  });
+}
+
+export function updateOrderCustomerAddress(
+  orderId: string,
+  addressId: string,
+  data: StaffOrderAddressInput,
+) {
+  return request<{ address: StaffOrderAddress; order: unknown }>({
+    url: `/admin/orders/${orderId}/addresses/${addressId}`,
+    method: 'PUT',
+    data,
   });
 }

@@ -78,13 +78,13 @@ describe('nutrition governance Prisma schema', () => {
     expect(block).toMatch(
       /dataType\s+String\?\s+@map\("data_type"\)\s+@db\.VarChar\(100\)/,
     );
-    expect(block).toMatch(/category\s+String\?\s+@db\.VarChar\(100\)/);
+    expect(block).toMatch(/category\s+String\?\s+@map\("category"\)\s+@db\.VarChar\(100\)/);
     expect(block).toMatch(/rawData\s+Json\s+@map\("raw_data"\)/);
     expect(block).toMatch(
       /normalizedNutrition\s+Json\?\s+@map\("normalized_nutrition"\)/,
     );
     expect(block).toMatch(
-      /status\s+NutritionGovernanceRecordStatus\s+@default\(ACTIVE\)/,
+      /status\s+NutritionGovernanceRecordStatus\s+@default\(ACTIVE\)\s+@map\("status"\)/,
     );
     expect(block).toMatch(/candidates\s+IngredientNutritionCandidate\[\]/);
     expect(block).toMatch(/supplementDrafts\s+SupplementNutritionDraft\[\]/);
@@ -101,14 +101,16 @@ describe('nutrition governance Prisma schema', () => {
     expect(block).toMatch(/ingredientId\s+String\s+@map\("ingredient_id"\)/);
     expect(block).toMatch(/sourceRecordId\s+String\s+@map\("source_record_id"\)/);
     expect(block).toMatch(/sourcePriority\s+Int\s+@map\("source_priority"\)/);
-    expect(block).toMatch(/confidence\s+NutritionMatchConfidence/);
-    expect(block).toMatch(/score\s+Float/);
+    expect(block).toMatch(
+      /confidence\s+NutritionMatchConfidence\s+@map\("confidence"\)/,
+    );
+    expect(block).toMatch(/score\s+Float\s+@map\("score"\)/);
     expect(block).toMatch(/matchReasons\s+Json\s+@map\("match_reasons"\)/);
     expect(block).toMatch(
       /normalizedNutrition\s+Json\s+@map\("normalized_nutrition"\)/,
     );
     expect(block).toMatch(
-      /status\s+NutritionCandidateStatus\s+@default\(CANDIDATE\)/,
+      /status\s+NutritionCandidateStatus\s+@default\(CANDIDATE\)\s+@map\("status"\)/,
     );
     expect(block).toMatch(
       /confirmationSnapshot\s+Json\?\s+@map\("confirmation_snapshot"\)/,
@@ -147,7 +149,7 @@ describe('nutrition governance Prisma schema', () => {
       /missingFields\s+String\[\]\s+@default\(\[\]\)\s+@map\("missing_fields"\)/,
     );
     expect(block).toMatch(
-      /status\s+SupplementNutritionDraftStatus\s+@default\(DRAFT\)/,
+      /status\s+SupplementNutritionDraftStatus\s+@default\(DRAFT\)\s+@map\("status"\)/,
     );
     expect(block).toMatch(/createdBy\s+String\?\s+@map\("created_by"\)/);
     expect(block).toMatch(/confirmedBy\s+String\?\s+@map\("confirmed_by"\)/);
@@ -191,5 +193,8 @@ describe('nutrition governance Prisma schema', () => {
     );
     expect(migration).toContain('ON DELETE CASCADE ON UPDATE CASCADE');
     expect(migration).toContain('ON DELETE SET NULL ON UPDATE CASCADE');
+    expect(migration).not.toMatch(
+      /"updated_at" TIMESTAMP\(3\) NOT NULL DEFAULT CURRENT_TIMESTAMP/,
+    );
   });
 });

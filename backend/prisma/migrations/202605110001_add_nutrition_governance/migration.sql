@@ -43,7 +43,7 @@ CREATE TABLE "nutrition_source_record" (
   "normalized_nutrition" JSONB,
   "status" "NutritionGovernanceRecordStatus" NOT NULL DEFAULT 'ACTIVE',
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP(3) NOT NULL,
 
   CONSTRAINT "nutrition_source_record_pkey" PRIMARY KEY ("id")
 );
@@ -62,7 +62,7 @@ CREATE TABLE "ingredient_nutrition_candidate" (
   "confirmed_by" TEXT,
   "confirmed_at" TIMESTAMP(3),
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP(3) NOT NULL,
 
   CONSTRAINT "ingredient_nutrition_candidate_pkey" PRIMARY KEY ("id")
 );
@@ -82,7 +82,7 @@ CREATE TABLE "supplement_nutrition_draft" (
   "confirmed_by" TEXT,
   "confirmed_at" TIMESTAMP(3),
   "created_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updated_at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updated_at" TIMESTAMP(3) NOT NULL,
 
   CONSTRAINT "supplement_nutrition_draft_pkey" PRIMARY KEY ("id")
 );

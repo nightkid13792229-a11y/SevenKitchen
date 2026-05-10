@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { NutritionCandidateStatus, Prisma } from '@prisma/client';
+import type { LabelRecognitionProvider } from '../../../src/application/nutrition-governance/label-recognition.provider';
 import { NutritionGovernanceService } from '../../../src/application/nutrition-governance/nutrition-governance.service';
 import { createEmptyNutritionProfile } from '../../../src/domain/ingredient/nutrition-profile.utils';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
@@ -33,6 +34,7 @@ describe('NutritionGovernanceService', () => {
     },
     supplementNutritionDraft: {
       count: jest.fn(),
+      create: jest.fn(),
     },
     $transaction: jest.fn(),
   } as any;
@@ -441,5 +443,60 @@ describe('NutritionGovernanceService', () => {
     );
 
     expect(mockPrismaService.ingredientNutritionCandidate.update).not.toHaveBeenCalled();
+  });
+
+  it('creates supplement label drafts without confirming them', async () => {
+    const labelExtraction = {
+      ocrText: '每粒含 EPA 180mg DHA 120mg',
+      extractedItems: [],
+      missingFields: ['servingWeightG'],
+      normalizedNutrition: null,
+    };
+    const labelRecognitionProvider: LabelRecognitionProvider = {
+      extractFromImage: jest.fn().mockResolvedValue(labelExtraction),
+    };
+    const serviceWithProvider = new NutritionGovernanceService(
+      mockPrismaService,
+      labelRecognitionProvider,
+    );
+    const draft = {
+      id: 'draft-1',
+      ingredientId: 'supplement-1',
+      status: 'DRAFT',
+      missingFields: ['servingWeightG'],
+    };
+    mockPrismaService.ingredient.findUnique.mockResolvedValue({
+      id: 'supplement-1',
+      name: '鱼油胶囊',
+      type: 'SUPPLEMENT',
+      nutritionProfile: { macros: { energyKcal: 10 } },
+    });
+    mockPrismaService.supplementNutritionDraft.create.mockResolvedValue(draft);
+
+    const result = await serviceWithProvider.createSupplementDraftFromLabelImage({
+      ingredientId: 'supplement-1',
+      imageUrl: 'https://cdn.example.com/label.jpg',
+      imageKey: 'supplement-labels/1.jpg',
+      createdBy: 'admin-1',
+    });
+
+    expect(result).toBe(draft);
+    expect(labelRecognitionProvider.extractFromImage).toHaveBeenCalledWith({
+      imageUrl: 'https://cdn.example.com/label.jpg',
+      ingredientName: '鱼油胶囊',
+    });
+    expect(mockPrismaService.supplementNutritionDraft.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        ingredientId: 'supplement-1',
+        imageUrl: 'https://cdn.example.com/label.jpg',
+        imageKey: 'supplement-labels/1.jpg',
+        ocrText: '每粒含 EPA 180mg DHA 120mg',
+        aiExtraction: labelExtraction,
+        missingFields: ['servingWeightG'],
+        status: 'DRAFT',
+        createdBy: 'admin-1',
+      }),
+    });
+    expect(mockPrismaService.ingredient.update).not.toHaveBeenCalled();
   });
 });

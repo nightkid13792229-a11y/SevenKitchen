@@ -156,6 +156,10 @@ import { NutritionFoodController } from './interfaces/controllers/nutrition-food
 import { NutritionFoodService } from './application/nutrition-food/nutrition-food.service';
 import { NutritionGovernanceController } from './interfaces/controllers/nutrition-governance.controller';
 import { NutritionGovernanceService } from './application/nutrition-governance/nutrition-governance.service';
+import {
+  DisabledLabelRecognitionProvider,
+  LABEL_RECOGNITION_PROVIDER,
+} from './application/nutrition-governance/label-recognition.provider';
 import { RecommendedProductController } from './interfaces/controllers/recommended-product.controller';
 import { ProcurementSkuController } from './interfaces/controllers/procurement-sku.controller';
 import { RecommendedProductService } from './application/ingredient/recommended-product.service';
@@ -615,6 +619,10 @@ validatePrismaConfig();
     // Nutrition Food Service (Recipe Designer)
     NutritionFoodService,
     NutritionGovernanceService,
+    {
+      provide: LABEL_RECOGNITION_PROVIDER,
+      useClass: DisabledLabelRecognitionProvider,
+    },
     // Recommended Product Service
     RecommendedProductService,
     DogProfileAnalyticsService,

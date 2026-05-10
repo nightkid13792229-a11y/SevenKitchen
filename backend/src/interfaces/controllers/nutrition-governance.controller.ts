@@ -5,10 +5,13 @@ import {
   Param,
   Post,
   Query,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
   UsePipes,
   ValidationPipe,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiBearerAuth,
   ApiOperation,
@@ -26,6 +29,7 @@ import { AuthGuard, CurrentUser } from '../auth';
 import type { RequestUser } from '../auth';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AdminGuard } from '../guards/role.guard';
+import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import {
   GenerateFoodCandidatesDto,
   ImportUsdaSourceDto,
@@ -40,6 +44,7 @@ import {
 export class NutritionGovernanceController {
   constructor(
     private readonly nutritionGovernanceService: NutritionGovernanceService,
+    private readonly cosService: TencentCosService,
   ) {}
 
   @Get('overview')
@@ -92,6 +97,33 @@ export class NutritionGovernanceController {
     const result =
       await this.nutritionGovernanceService.importUsdaSourceRecord(dto.fdcId);
     return new ApiResponseDto(0, 'USDA 来源导入成功', result);
+  }
+
+  @Post('supplement-drafts/:ingredientId/upload-label')
+  @ApiOperation({ summary: '上传补剂标签图片并生成待确认草稿' })
+  @ApiParam({ name: 'ingredientId', description: '补剂原料ID' })
+  @ApiResponse({ status: 201, description: '补剂标签草稿已生成' })
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadSupplementLabel(
+    @Param('ingredientId') ingredientId: string,
+    @UploadedFile() file: Express.Multer.File,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<unknown>> {
+    const upload = await this.cosService.uploadImage(
+      file,
+      file.originalname,
+      'supplement-labels',
+    );
+    const result =
+      await this.nutritionGovernanceService.createSupplementDraftFromLabelImage(
+        {
+          ingredientId,
+          imageUrl: upload.url,
+          imageKey: upload.key,
+          createdBy: user.userId,
+        },
+      );
+    return new ApiResponseDto(0, '补剂标签草稿已生成', result);
   }
 
   @Post('candidates/:id/confirm')

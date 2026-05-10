@@ -1,7 +1,9 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   IngredientType,
@@ -29,6 +31,11 @@ import {
   scoreIngredientSourceNameMatch,
 } from '../../domain/nutrition-governance/nutrition-governance.utils';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import {
+  DisabledLabelRecognitionProvider,
+  LABEL_RECOGNITION_PROVIDER,
+  type LabelRecognitionProvider,
+} from './label-recognition.provider';
 
 const FOOD_SOURCE_TYPES = ['USDA', 'CFCT'] as const;
 const MANAGED_INGREDIENT_TYPES = [
@@ -64,6 +71,13 @@ export interface ListNutritionCandidatesParams {
   confidence?: NutritionMatchConfidence;
 }
 
+export interface CreateSupplementDraftFromLabelImageInput {
+  ingredientId: string;
+  imageUrl: string;
+  imageKey: string;
+  createdBy?: string;
+}
+
 interface UsdaFoodData extends Record<string, unknown> {
   fdcId?: string | number;
   description?: string;
@@ -80,7 +94,12 @@ interface UsdaFoodData extends Record<string, unknown> {
 
 @Injectable()
 export class NutritionGovernanceService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional()
+    @Inject(LABEL_RECOGNITION_PROVIDER)
+    private readonly labelRecognitionProvider?: LabelRecognitionProvider,
+  ) {}
 
   async getOverview(): Promise<NutritionGovernanceOverview> {
     const managedIngredientsWhere: Prisma.IngredientWhereInput = {
@@ -339,6 +358,44 @@ export class NutritionGovernanceService {
     });
   }
 
+  async createSupplementDraftFromLabelImage(
+    input: CreateSupplementDraftFromLabelImageInput,
+  ) {
+    const ingredient = await this.prisma.ingredient.findUnique({
+      where: { id: input.ingredientId },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+      },
+    });
+
+    if (!ingredient || ingredient.type !== IngredientType.SUPPLEMENT) {
+      throw new NotFoundException('补剂原料不存在');
+    }
+
+    const extraction = await this.getLabelProvider().extractFromImage({
+      imageUrl: input.imageUrl,
+      ingredientName: ingredient.name,
+    });
+
+    return this.prisma.supplementNutritionDraft.create({
+      data: {
+        ingredientId: ingredient.id,
+        imageUrl: input.imageUrl,
+        imageKey: input.imageKey,
+        ocrText: extraction.ocrText,
+        aiExtraction: toJsonInput(extraction),
+        normalizedNutrition: toNullableJsonInput(
+          extraction.normalizedNutrition,
+        ),
+        missingFields: extraction.missingFields,
+        status: SupplementNutritionDraftStatus.DRAFT,
+        createdBy: input.createdBy ?? null,
+      },
+    });
+  }
+
   async confirmCandidate(candidateId: string, userId: string) {
     const candidate = await this.prisma.ingredientNutritionCandidate.findUnique(
       {
@@ -499,6 +556,12 @@ export class NutritionGovernanceService {
     }
 
     return NutritionFoodCategory.OTHER;
+  }
+
+  private getLabelProvider(): LabelRecognitionProvider {
+    return (
+      this.labelRecognitionProvider ?? new DisabledLabelRecognitionProvider()
+    );
   }
 }
 

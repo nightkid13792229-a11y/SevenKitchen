@@ -5,6 +5,7 @@ import { AuthGuard } from '../../../src/interfaces/auth';
 import type { RequestUser } from '../../../src/interfaces/auth';
 import { NutritionGovernanceController } from '../../../src/interfaces/controllers/nutrition-governance.controller';
 import { AdminGuard } from '../../../src/interfaces/guards/role.guard';
+import { TencentCosService } from '../../../src/infrastructure/services/tencent-cos.service';
 
 describe('NutritionGovernanceController', () => {
   let controller: NutritionGovernanceController;
@@ -13,8 +14,12 @@ describe('NutritionGovernanceController', () => {
     listCandidates: jest.Mock;
     generateFoodCandidatesForIngredient: jest.Mock;
     importUsdaSourceRecord: jest.Mock;
+    createSupplementDraftFromLabelImage: jest.Mock;
     confirmCandidate: jest.Mock;
     rejectCandidate: jest.Mock;
+  };
+  let cosService: {
+    uploadImage: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -23,8 +28,12 @@ describe('NutritionGovernanceController', () => {
       listCandidates: jest.fn(),
       generateFoodCandidatesForIngredient: jest.fn(),
       importUsdaSourceRecord: jest.fn(),
+      createSupplementDraftFromLabelImage: jest.fn(),
       confirmCandidate: jest.fn(),
       rejectCandidate: jest.fn(),
+    };
+    cosService = {
+      uploadImage: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -33,6 +42,10 @@ describe('NutritionGovernanceController', () => {
         {
           provide: NutritionGovernanceService,
           useValue: service,
+        },
+        {
+          provide: TencentCosService,
+          useValue: cosService,
         },
         { provide: AdminGuard, useValue: { canActivate: jest.fn() } },
       ],
@@ -105,6 +118,47 @@ describe('NutritionGovernanceController', () => {
       code: 0,
       message: 'USDA 来源导入成功',
       data: sourceRecord,
+    });
+  });
+
+  it('uploads a supplement label and asks the service to create a draft', async () => {
+    const file = {
+      originalname: 'label.jpg',
+      buffer: Buffer.from('image-bytes'),
+    } as Express.Multer.File;
+    const user = { userId: 'admin-user-1' } as RequestUser;
+    const upload = {
+      url: 'https://cdn.example.com/supplement-labels/label.jpg',
+      key: 'supplement-labels/label.jpg',
+    };
+    const draft = {
+      id: 'draft-1',
+      status: 'DRAFT',
+    };
+    cosService.uploadImage.mockResolvedValue(upload);
+    service.createSupplementDraftFromLabelImage.mockResolvedValue(draft);
+
+    const result = await controller.uploadSupplementLabel(
+      'supplement-1',
+      file,
+      user,
+    );
+
+    expect(cosService.uploadImage).toHaveBeenCalledWith(
+      file,
+      'label.jpg',
+      'supplement-labels',
+    );
+    expect(service.createSupplementDraftFromLabelImage).toHaveBeenCalledWith({
+      ingredientId: 'supplement-1',
+      imageUrl: upload.url,
+      imageKey: upload.key,
+      createdBy: 'admin-user-1',
+    });
+    expect(result).toEqual({
+      code: 0,
+      message: '补剂标签草稿已生成',
+      data: draft,
     });
   });
 

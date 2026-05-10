@@ -72,6 +72,7 @@
             type="primary"
             size="small"
             link
+            :disabled="!!busyId"
             :loading="busyId === row.id"
             @click="$emit('confirm', row)"
           >
@@ -81,6 +82,7 @@
             type="danger"
             size="small"
             link
+            :disabled="!!busyId"
             :loading="busyId === row.id"
             @click="$emit('reject', row)"
           >

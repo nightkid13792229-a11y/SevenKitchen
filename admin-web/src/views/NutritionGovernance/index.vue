@@ -95,7 +95,7 @@
           <el-upload
             :auto-upload="false"
             :show-file-list="false"
-            accept="image/*,.pdf"
+            accept=".jpg,.jpeg,.png,.webp,image/jpeg,image/png,image/webp"
             :on-change="handleSupplementFileChange"
           >
             <el-button
@@ -245,6 +245,9 @@ async function handleImportUsda() {
 }
 
 async function handleConfirmCandidate(candidate: IngredientNutritionCandidateListItem) {
+  if (candidateBusyId.value) return
+
+  candidateBusyId.value = candidate.id
   try {
     await ElMessageBox.confirm(
       `确认将「${candidate.sourceRecord?.foodName || '候选食物'}」写入「${candidate.ingredient?.name || '原料'}」的营养档案吗？`,
@@ -256,10 +259,10 @@ async function handleConfirmCandidate(candidate: IngredientNutritionCandidateLis
       }
     )
   } catch {
+    candidateBusyId.value = ''
     return
   }
 
-  candidateBusyId.value = candidate.id
   try {
     await nutritionGovernanceApi.confirmCandidate(candidate.id)
     ElMessage.success('候选已确认')
@@ -272,7 +275,24 @@ async function handleConfirmCandidate(candidate: IngredientNutritionCandidateLis
 }
 
 async function handleRejectCandidate(candidate: IngredientNutritionCandidateListItem) {
+  if (candidateBusyId.value) return
+
   candidateBusyId.value = candidate.id
+  try {
+    await ElMessageBox.confirm(
+      `确认拒绝「${candidate.sourceRecord?.foodName || '候选食物'}」吗？拒绝后该候选会从待确认流程中移除。`,
+      '拒绝候选',
+      {
+        type: 'warning',
+        confirmButtonText: '确认拒绝',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    candidateBusyId.value = ''
+    return
+  }
+
   try {
     await nutritionGovernanceApi.rejectCandidate(candidate.id)
     ElMessage.success('候选已拒绝')

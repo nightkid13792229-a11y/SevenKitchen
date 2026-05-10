@@ -213,6 +213,8 @@ describe('NutritionGovernanceService', () => {
           category: 'Poultry Products',
           sourceDetail: expect.objectContaining({
             fdcId: '171077',
+            provider: 'USDA FoodData Central',
+            sourceProvider: 'USDA FoodData Central',
             publicationDate: '2019-04-01',
           }),
           rawData: food,
@@ -242,6 +244,46 @@ describe('NutritionGovernanceService', () => {
     );
 
     expect(fetchMock).not.toHaveBeenCalled();
+    expect(mockPrismaService.nutritionSourceRecord.upsert).not.toHaveBeenCalled();
+  });
+
+  it('rejects USDA import when the response has no mappable nutrients', async () => {
+    process.env.USDA_API_KEY = 'test-usda-key';
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue({
+        fdcId: 171077,
+        description: 'Chicken breast, cooked, roasted',
+        foodNutrients: [],
+      }),
+    }) as unknown as typeof global.fetch;
+
+    await expect(service.importUsdaSourceRecord('171077')).rejects.toThrow(
+      'USDA 营养数据为空',
+    );
+
+    expect(mockPrismaService.nutritionSourceRecord.upsert).not.toHaveBeenCalled();
+  });
+
+  it('wraps USDA fetch and JSON parsing failures', async () => {
+    process.env.USDA_API_KEY = 'test-usda-key';
+    global.fetch = jest
+      .fn()
+      .mockRejectedValue(new Error('network down')) as unknown as typeof global.fetch;
+
+    await expect(service.importUsdaSourceRecord('171077')).rejects.toThrow(
+      'USDA API请求失败',
+    );
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockRejectedValue(new Error('invalid json')),
+    }) as unknown as typeof global.fetch;
+
+    await expect(service.importUsdaSourceRecord('171077')).rejects.toThrow(
+      'USDA API请求失败',
+    );
+
     expect(mockPrismaService.nutritionSourceRecord.upsert).not.toHaveBeenCalled();
   });
 

@@ -37,10 +37,10 @@ const MANAGED_INGREDIENT_TYPES = [
 ];
 const TERMINAL_CANDIDATE_STATUSES: ReadonlySet<NutritionCandidateStatus> =
   new Set([
-  NutritionCandidateStatus.CONFIRMED,
-  NutritionCandidateStatus.REJECTED,
-  NutritionCandidateStatus.SKIPPED,
-]);
+    NutritionCandidateStatus.CONFIRMED,
+    NutritionCandidateStatus.REJECTED,
+    NutritionCandidateStatus.SKIPPED,
+  ]);
 
 type NutritionGovernanceTransaction = Pick<
   PrismaService,
@@ -182,25 +182,37 @@ export class NutritionGovernanceService {
       throw new BadRequestException('USDA API密钥未配置');
     }
 
-    const response = await fetch(
-      `https://api.nal.usda.gov/fdc/v1/food/${encodeURIComponent(fdcId)}?api_key=${apiKey}`,
-      {
-        headers: {
-          Accept: 'application/json',
+    let food: UsdaFoodData;
+    try {
+      const response = await fetch(
+        `https://api.nal.usda.gov/fdc/v1/food/${encodeURIComponent(fdcId)}?api_key=${apiKey}`,
+        {
+          headers: {
+            Accept: 'application/json',
+          },
         },
-      },
-    );
+      );
 
-    if (!response.ok) {
+      if (!response.ok) {
+        throw new BadRequestException('USDA API请求失败');
+      }
+
+      food = (await response.json()) as UsdaFoodData;
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
       throw new BadRequestException('USDA API请求失败');
     }
 
-    const food = (await response.json()) as UsdaFoodData;
     const externalId = String(food.fdcId ?? fdcId);
     const description = food.description ?? '';
     const profile = mapUsdaNutrientsToNutritionProfile(
       food.foodNutrients || [],
     );
+    if (!hasMappedNutritionValues(profile)) {
+      throw new BadRequestException('USDA 营养数据为空');
+    }
 
     return this.upsertSourceRecord({
       sourceType: 'USDA',
@@ -212,6 +224,8 @@ export class NutritionGovernanceService {
       category: food.foodCategory?.description ?? null,
       sourceDetail: {
         fdcId: externalId,
+        provider: 'USDA FoodData Central',
+        sourceProvider: 'USDA FoodData Central',
         publicationDate: food.publicationDate ?? null,
       },
       rawData: food,
@@ -538,4 +552,18 @@ function withConfirmationMeta(
       ...meta,
     },
   };
+}
+
+function hasMappedNutritionValues(profile: NutritionProfileV2): boolean {
+  const groupedTabs = [
+    profile.macros,
+    profile.minerals,
+    profile.vitamins,
+    profile.fattyAcids,
+    profile.aminoAcids,
+  ];
+
+  return groupedTabs.some((tab) =>
+    Object.values(tab).some((value) => typeof value === 'number'),
+  );
 }

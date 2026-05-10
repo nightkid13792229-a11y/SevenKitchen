@@ -10,6 +10,7 @@ import {
   NutritionCandidateStatus,
   NutritionFoodCategory,
   NutritionFoodStatus,
+  NutritionSourceRecord,
   Prisma,
   SupplementNutritionDraftStatus,
 } from '@prisma/client';
@@ -55,6 +56,8 @@ type NutritionGovernanceTransaction = Pick<
   | 'ingredientNutritionCandidate'
   | 'nutritionFood'
   | 'nutritionFoodMapping'
+  | 'nutritionSourceRecord'
+  | 'supplementNutritionDraft'
 >;
 
 export interface NutritionGovernanceOverview {
@@ -69,6 +72,15 @@ export interface NutritionGovernanceOverview {
 export interface ListNutritionCandidatesParams {
   status?: NutritionCandidateStatus;
   confidence?: NutritionMatchConfidence;
+}
+
+export interface ListSupplementDraftsParams {
+  status?: SupplementNutritionDraftStatus;
+  ingredientId?: string;
+}
+
+export interface ImportUsdaSourceRecordOptions {
+  ingredientId?: string;
 }
 
 export interface CreateSupplementDraftFromLabelImageInput {
@@ -194,11 +206,28 @@ export class NutritionGovernanceService {
     });
   }
 
-  async importUsdaSourceRecord(fdcId: string) {
+  async importUsdaSourceRecord(
+    fdcId: string,
+    options: ImportUsdaSourceRecordOptions = {},
+  ) {
     const apiKey = process.env.USDA_API_KEY;
 
     if (!apiKey) {
       throw new BadRequestException('USDA API密钥未配置');
+    }
+
+    let linkedIngredient:
+      | { id: string; name: string; type: IngredientType }
+      | null = null;
+    if (options.ingredientId) {
+      linkedIngredient = await this.prisma.ingredient.findUnique({
+        where: { id: options.ingredientId },
+        select: { id: true, name: true, type: true },
+      });
+
+      if (!linkedIngredient || linkedIngredient.type !== IngredientType.FOOD) {
+        throw new NotFoundException('食材原料不存在');
+      }
     }
 
     let food: UsdaFoodData;
@@ -233,7 +262,7 @@ export class NutritionGovernanceService {
       throw new BadRequestException('USDA 营养数据为空');
     }
 
-    return this.upsertSourceRecord({
+    const sourceRecord = await this.upsertSourceRecord({
       sourceType: 'USDA',
       externalId,
       sourceTitle: 'USDA FoodData Central',
@@ -250,6 +279,30 @@ export class NutritionGovernanceService {
       rawData: food,
       normalizedNutrition: profile,
     });
+
+    if (linkedIngredient) {
+      await this.upsertFoodCandidateFromSource(
+        linkedIngredient,
+        sourceRecord,
+        {
+          score: 0.95,
+          reasons: [
+            {
+              code: 'MANUAL',
+              label: '人工指定 USDA FDC ID',
+              scoreDelta: 0.8,
+            },
+            {
+              code: 'SOURCE_PRIORITY',
+              label: 'USDA 优先来源',
+              scoreDelta: 0.15,
+            },
+          ],
+        },
+      );
+    }
+
+    return sourceRecord;
   }
 
   async generateFoodCandidatesForIngredient(ingredientId: string) {
@@ -279,8 +332,7 @@ export class NutritionGovernanceService {
     for (const sourceRecord of sourceRecords) {
       if (!sourceRecord.normalizedNutrition) continue;
 
-      const sourceType =
-        sourceRecord.sourceType as NutritionGovernanceSourceType;
+      const sourceType = sourceRecord.sourceType as NutritionGovernanceSourceType;
       const { score, reasons } = scoreIngredientSourceNameMatch({
         ingredientName: ingredient.name,
         sourceFoodName: sourceRecord.foodName,
@@ -289,49 +341,15 @@ export class NutritionGovernanceService {
 
       if (score < 0.35) continue;
 
-      const confidence = classifyMatchConfidence(score);
-      const candidateWhere = {
-        ingredientId_sourceRecordId: {
-          ingredientId,
-          sourceRecordId: sourceRecord.id,
-        },
-      };
-      const existingCandidate =
-        await this.prisma.ingredientNutritionCandidate.findUnique({
-          where: candidateWhere,
-          select: { id: true, status: true },
-        });
+      const candidate = await this.upsertFoodCandidateFromSource(
+        ingredient,
+        sourceRecord,
+        { score, reasons },
+      );
 
-      if (
-        existingCandidate &&
-        TERMINAL_CANDIDATE_STATUSES.has(existingCandidate.status)
-      ) {
-        continue;
+      if (candidate) {
+        candidates.push(candidate);
       }
-
-      const candidate = await this.prisma.ingredientNutritionCandidate.upsert({
-        where: candidateWhere,
-        create: {
-          ingredientId,
-          sourceRecordId: sourceRecord.id,
-          sourcePriority: getSourcePriority(sourceType),
-          confidence,
-          score,
-          matchReasons: toJsonInput(reasons),
-          normalizedNutrition: toJsonInput(sourceRecord.normalizedNutrition),
-          status: NutritionCandidateStatus.CANDIDATE,
-        },
-        update: {
-          sourcePriority: getSourcePriority(sourceType),
-          confidence,
-          score,
-          matchReasons: toJsonInput(reasons),
-          normalizedNutrition: toJsonInput(sourceRecord.normalizedNutrition),
-          status: NutritionCandidateStatus.CANDIDATE,
-        },
-      });
-
-      candidates.push(candidate);
     }
 
     return candidates;
@@ -393,6 +411,145 @@ export class NutritionGovernanceService {
         status: SupplementNutritionDraftStatus.DRAFT,
         createdBy: input.createdBy ?? null,
       },
+    });
+  }
+
+  async listSupplementDrafts(params: ListSupplementDraftsParams = {}) {
+    return this.prisma.supplementNutritionDraft.findMany({
+      where: {
+        ...(params.status && { status: params.status }),
+        ...(params.ingredientId && { ingredientId: params.ingredientId }),
+      },
+      include: {
+        ingredient: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            nutritionProfile: true,
+          },
+        },
+        sourceRecord: true,
+      },
+      orderBy: [{ createdAt: 'desc' }],
+    });
+  }
+
+  async confirmSupplementDraft(draftId: string, userId: string) {
+    const draft = await this.prisma.supplementNutritionDraft.findUnique({
+      where: { id: draftId },
+      include: {
+        ingredient: true,
+        sourceRecord: true,
+      },
+    });
+
+    if (!draft) {
+      throw new NotFoundException('补剂草稿不存在');
+    }
+
+    if (draft.status !== SupplementNutritionDraftStatus.DRAFT) {
+      throw new BadRequestException('仅草稿状态可以确认');
+    }
+
+    if (draft.ingredient.type !== IngredientType.SUPPLEMENT) {
+      throw new BadRequestException('补剂草稿关联的原料类型无效');
+    }
+
+    if (!draft.normalizedNutrition) {
+      throw new BadRequestException('草稿缺少标准化营养数据');
+    }
+
+    const profile = normalizeNutritionProfile(
+      draft.normalizedNutrition as unknown as NutritionProfile,
+    );
+
+    if (!profile) {
+      throw new BadRequestException('草稿缺少标准化营养数据');
+    }
+
+    const confirmedAt = new Date();
+    const confirmedProfile = withConfirmationMeta(profile, {
+      sourceType: 'SUPPLEMENT_LABEL',
+      sourceTitle: `${draft.ingredient.name} 补剂标签`,
+      sourceProvider: 'Product label',
+      confidenceLevel: draft.missingFields.length > 0 ? 'MEDIUM' : 'HIGH',
+      versionNote: `Confirmed from supplement label image: ${draft.imageKey}`,
+    });
+
+    return this.prisma.$transaction(async (tx) => {
+      const client = tx as NutritionGovernanceTransaction;
+      const sourceRecord = await client.nutritionSourceRecord.upsert({
+        where: {
+          sourceType_sourceKey: {
+            sourceType: 'SUPPLEMENT_LABEL',
+            sourceKey: buildNutritionSourceKey('SUPPLEMENT_LABEL', draft.id),
+          },
+        },
+        create: {
+          sourceType: 'SUPPLEMENT_LABEL',
+          sourceKey: buildNutritionSourceKey('SUPPLEMENT_LABEL', draft.id),
+          sourceTitle: `${draft.ingredient.name} 补剂标签`,
+          sourceDetail: toJsonInput({
+            provider: 'Product label',
+            sourceProvider: 'Product label',
+            imageUrl: draft.imageUrl,
+            imageKey: draft.imageKey,
+          }),
+          foodName: draft.ingredient.name,
+          foodNameEn: null,
+          dataType: 'PRODUCT_LABEL',
+          category: 'SUPPLEMENT',
+          rawData: toJsonInput({
+            draftId: draft.id,
+            imageUrl: draft.imageUrl,
+            imageKey: draft.imageKey,
+            ocrText: draft.ocrText,
+            aiExtraction: draft.aiExtraction,
+          }),
+          normalizedNutrition: toJsonInput(confirmedProfile),
+          status: 'ACTIVE',
+        },
+        update: {
+          sourceTitle: `${draft.ingredient.name} 补剂标签`,
+          sourceDetail: toJsonInput({
+            provider: 'Product label',
+            sourceProvider: 'Product label',
+            imageUrl: draft.imageUrl,
+            imageKey: draft.imageKey,
+          }),
+          foodName: draft.ingredient.name,
+          foodNameEn: null,
+          dataType: 'PRODUCT_LABEL',
+          category: 'SUPPLEMENT',
+          rawData: toJsonInput({
+            draftId: draft.id,
+            imageUrl: draft.imageUrl,
+            imageKey: draft.imageKey,
+            ocrText: draft.ocrText,
+            aiExtraction: draft.aiExtraction,
+          }),
+          normalizedNutrition: toJsonInput(confirmedProfile),
+        },
+      });
+
+      await client.ingredient.update({
+        where: { id: draft.ingredientId },
+        data: {
+          nutritionProfile: toJsonInput(confirmedProfile),
+        },
+      });
+
+      return client.supplementNutritionDraft.update({
+        where: { id: draft.id },
+        data: {
+          sourceRecordId: sourceRecord.id,
+          normalizedNutrition: toJsonInput(confirmedProfile),
+          status: SupplementNutritionDraftStatus.CONFIRMED,
+          confirmedBy: userId,
+          confirmedAt,
+        },
+      });
     });
   }
 
@@ -545,6 +702,78 @@ export class NutritionGovernanceService {
     return this.prisma.ingredientNutritionCandidate.update({
       where: { id: candidateId },
       data: { status: NutritionCandidateStatus.REJECTED },
+    });
+  }
+
+  async rejectSupplementDraft(draftId: string) {
+    const draft = await this.prisma.supplementNutritionDraft.findUnique({
+      where: { id: draftId },
+      select: { id: true, status: true },
+    });
+
+    if (!draft) {
+      throw new NotFoundException('补剂草稿不存在');
+    }
+
+    if (draft.status !== SupplementNutritionDraftStatus.DRAFT) {
+      throw new BadRequestException('仅草稿状态可以拒绝');
+    }
+
+    return this.prisma.supplementNutritionDraft.update({
+      where: { id: draftId },
+      data: { status: SupplementNutritionDraftStatus.REJECTED },
+    });
+  }
+
+  private async upsertFoodCandidateFromSource(
+    ingredient: { id: string; name: string; type: IngredientType },
+    sourceRecord: NutritionSourceRecord,
+    match: { score: number; reasons: Array<{ code: string; label: string; scoreDelta: number }> },
+  ) {
+    if (!sourceRecord.normalizedNutrition) {
+      return null;
+    }
+
+    const sourceType = sourceRecord.sourceType as NutritionGovernanceSourceType;
+    const candidateWhere = {
+      ingredientId_sourceRecordId: {
+        ingredientId: ingredient.id,
+        sourceRecordId: sourceRecord.id,
+      },
+    };
+    const existingCandidate =
+      await this.prisma.ingredientNutritionCandidate.findUnique({
+        where: candidateWhere,
+        select: { id: true, status: true },
+      });
+
+    if (
+      existingCandidate &&
+      TERMINAL_CANDIDATE_STATUSES.has(existingCandidate.status)
+    ) {
+      return null;
+    }
+
+    return this.prisma.ingredientNutritionCandidate.upsert({
+      where: candidateWhere,
+      create: {
+        ingredientId: ingredient.id,
+        sourceRecordId: sourceRecord.id,
+        sourcePriority: getSourcePriority(sourceType),
+        confidence: classifyMatchConfidence(match.score),
+        score: match.score,
+        matchReasons: toJsonInput(match.reasons),
+        normalizedNutrition: toJsonInput(sourceRecord.normalizedNutrition),
+        status: NutritionCandidateStatus.CANDIDATE,
+      },
+      update: {
+        sourcePriority: getSourcePriority(sourceType),
+        confidence: classifyMatchConfidence(match.score),
+        score: match.score,
+        matchReasons: toJsonInput(match.reasons),
+        normalizedNutrition: toJsonInput(sourceRecord.normalizedNutrition),
+        status: NutritionCandidateStatus.CANDIDATE,
+      },
     });
   }
 

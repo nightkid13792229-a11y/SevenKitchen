@@ -2,6 +2,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import {
   NutritionCandidateStatus,
   NutritionMatchConfidence,
+  SupplementNutritionDraftStatus,
 } from '@prisma/client';
 import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
@@ -35,4 +36,28 @@ export class ImportUsdaSourceDto {
   @IsString()
   @IsNotEmpty()
   fdcId!: string;
+
+  @ApiPropertyOptional({
+    description: '可选。选中后台食材后，导入同时为该食材生成高置信候选。',
+  })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  ingredientId?: string;
+}
+
+export class ListSupplementDraftsQueryDto {
+  @ApiPropertyOptional({
+    description: '补剂草稿状态',
+    enum: SupplementNutritionDraftStatus,
+  })
+  @IsOptional()
+  @IsEnum(SupplementNutritionDraftStatus)
+  status?: SupplementNutritionDraftStatus;
+
+  @ApiPropertyOptional({ description: '补剂原料ID' })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  ingredientId?: string;
 }

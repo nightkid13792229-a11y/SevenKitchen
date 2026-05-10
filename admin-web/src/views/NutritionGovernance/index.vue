@@ -108,7 +108,13 @@
           </el-upload>
         </div>
 
-        <SupplementDraftsTable :drafts="localSupplementDrafts" />
+        <SupplementDraftsTable
+          :drafts="supplementDrafts"
+          :loading="draftsLoading"
+          :busy-id="draftBusyId"
+          @confirm="handleConfirmSupplementDraft"
+          @reject="handleRejectSupplementDraft"
+        />
       </el-tab-pane>
     </el-tabs>
   </div>
@@ -135,7 +141,7 @@ import SupplementDraftsTable from './components/SupplementDraftsTable.vue'
 const overview = ref<NutritionGovernanceOverview | null>(null)
 const candidates = ref<IngredientNutritionCandidateListItem[]>([])
 const ingredients = ref<Ingredient[]>([])
-const localSupplementDrafts = ref<SupplementNutritionDraft[]>([])
+const supplementDrafts = ref<SupplementNutritionDraft[]>([])
 
 const activeTab = ref<'food' | 'supplement'>('food')
 const confidenceFilter = ref<NutritionMatchConfidence | ''>('')
@@ -151,6 +157,8 @@ const generating = ref(false)
 const importing = ref(false)
 const uploading = ref(false)
 const candidateBusyId = ref('')
+const draftsLoading = ref(false)
+const draftBusyId = ref('')
 
 const foodIngredients = computed(() => (
   ingredients.value.filter((ingredient) => ingredient.type === IngredientType.FOOD)
@@ -170,7 +178,8 @@ async function refreshAll() {
     await Promise.all([
       loadOverview(),
       loadCandidates(),
-      loadIngredients()
+      loadIngredients(),
+      loadSupplementDrafts()
     ])
   } finally {
     refreshing.value = false
@@ -213,6 +222,19 @@ async function loadIngredients() {
   }
 }
 
+async function loadSupplementDrafts() {
+  draftsLoading.value = true
+  try {
+    supplementDrafts.value = await nutritionGovernanceApi.listSupplementDrafts({
+      status: 'DRAFT'
+    })
+  } catch (error) {
+    ElMessage.error('补剂草稿加载失败')
+  } finally {
+    draftsLoading.value = false
+  }
+}
+
 async function handleGenerateCandidates() {
   if (!selectedFoodIngredientId.value) return
 
@@ -234,9 +256,17 @@ async function handleImportUsda() {
 
   importing.value = true
   try {
-    await nutritionGovernanceApi.importUsdaSource(nextFdcId)
-    ElMessage.success('USDA 来源已导入')
+    await nutritionGovernanceApi.importUsdaSource(
+      nextFdcId,
+      selectedFoodIngredientId.value || undefined
+    )
+    ElMessage.success(
+      selectedFoodIngredientId.value
+        ? 'USDA 来源已导入，并已生成候选'
+        : 'USDA 来源已导入'
+    )
     fdcId.value = ''
+    await Promise.all([loadOverview(), loadCandidates()])
   } catch (error) {
     ElMessage.error('USDA 来源导入失败')
   } finally {
@@ -309,31 +339,81 @@ async function handleSupplementFileChange(uploadFile: UploadFile) {
 
   uploading.value = true
   try {
-    const draft = await nutritionGovernanceApi.uploadSupplementLabel(
+    await nutritionGovernanceApi.uploadSupplementLabel(
       selectedSupplementIngredientId.value,
       uploadFile.raw
     )
-    const ingredient = ingredients.value.find((item) => item.id === draft.ingredientId)
-    localSupplementDrafts.value = [
-      {
-        ...draft,
-        ingredient: draft.ingredient || (ingredient
-          ? {
-              id: ingredient.id,
-              name: ingredient.name,
-              type: ingredient.type,
-              nutritionProfile: ingredient.nutritionProfile
-            }
-          : undefined)
-      },
-      ...localSupplementDrafts.value
-    ]
     ElMessage.success('补剂标签已上传')
-    await loadOverview()
+    await Promise.all([loadOverview(), loadSupplementDrafts()])
   } catch (error) {
     ElMessage.error('补剂标签上传失败')
   } finally {
     uploading.value = false
+  }
+}
+
+async function handleConfirmSupplementDraft(draft: SupplementNutritionDraft) {
+  if (draftBusyId.value) return
+
+  if (!draft.normalizedNutrition) {
+    ElMessage.warning('该草稿暂无可确认的标准化营养数据')
+    return
+  }
+
+  draftBusyId.value = draft.id
+  try {
+    await ElMessageBox.confirm(
+      `确认将补剂标签草稿写入「${draft.ingredient?.name || draft.ingredientId}」的营养档案吗？`,
+      '确认补剂草稿',
+      {
+        type: 'warning',
+        confirmButtonText: '确认写入',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    draftBusyId.value = ''
+    return
+  }
+
+  try {
+    await nutritionGovernanceApi.confirmSupplementDraft(draft.id)
+    ElMessage.success('补剂草稿已确认')
+    await Promise.all([loadOverview(), loadSupplementDrafts()])
+  } catch (error) {
+    ElMessage.error('补剂草稿确认失败')
+  } finally {
+    draftBusyId.value = ''
+  }
+}
+
+async function handleRejectSupplementDraft(draft: SupplementNutritionDraft) {
+  if (draftBusyId.value) return
+
+  draftBusyId.value = draft.id
+  try {
+    await ElMessageBox.confirm(
+      `确认拒绝「${draft.ingredient?.name || draft.ingredientId}」的补剂标签草稿吗？`,
+      '拒绝补剂草稿',
+      {
+        type: 'warning',
+        confirmButtonText: '确认拒绝',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    draftBusyId.value = ''
+    return
+  }
+
+  try {
+    await nutritionGovernanceApi.rejectSupplementDraft(draft.id)
+    ElMessage.success('补剂草稿已拒绝')
+    await Promise.all([loadOverview(), loadSupplementDrafts()])
+  } catch (error) {
+    ElMessage.error('补剂草稿拒绝失败')
+  } finally {
+    draftBusyId.value = ''
   }
 }
 </script>

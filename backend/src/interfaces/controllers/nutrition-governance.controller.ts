@@ -24,6 +24,7 @@ import {
 import {
   NutritionCandidateStatus,
   NutritionMatchConfidence,
+  SupplementNutritionDraftStatus,
 } from '@prisma/client';
 import { NutritionGovernanceService } from '../../application/nutrition-governance/nutrition-governance.service';
 import { AuthGuard, CurrentUser } from '../auth';
@@ -35,7 +36,31 @@ import {
   GenerateFoodCandidatesDto,
   ImportUsdaSourceDto,
   ListNutritionCandidatesQueryDto,
+  ListSupplementDraftsQueryDto,
 } from '../dto/nutrition-governance/nutrition-governance.dto';
+
+const SUPPLEMENT_LABEL_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
+const SUPPLEMENT_LABEL_ALLOWED_MIME_TYPES = [
+  'image/jpeg',
+  'image/png',
+  'image/webp',
+];
+
+function supplementLabelFileFilter(
+  _req: unknown,
+  file: Express.Multer.File,
+  callback: (error: Error | null, acceptFile: boolean) => void,
+) {
+  if (!SUPPLEMENT_LABEL_ALLOWED_MIME_TYPES.includes(file.mimetype)) {
+    callback(
+      new BadRequestException('仅支持 JPG、PNG、WEBP 格式的补剂标签图片'),
+      false,
+    );
+    return;
+  }
+
+  callback(null, true);
+}
 
 @ApiTags('Admin Nutrition Governance')
 @ApiBearerAuth()
@@ -96,15 +121,43 @@ export class NutritionGovernanceController {
     @Body() dto: ImportUsdaSourceDto,
   ): Promise<ApiResponseDto<unknown>> {
     const result =
-      await this.nutritionGovernanceService.importUsdaSourceRecord(dto.fdcId);
+      await this.nutritionGovernanceService.importUsdaSourceRecord(dto.fdcId, {
+        ingredientId: dto.ingredientId,
+      });
     return new ApiResponseDto(0, 'USDA 来源导入成功', result);
+  }
+
+  @Get('supplement-drafts')
+  @ApiOperation({ summary: '获取补剂标签草稿列表' })
+  @ApiQuery({
+    name: 'status',
+    required: false,
+    enum: SupplementNutritionDraftStatus,
+  })
+  @ApiQuery({
+    name: 'ingredientId',
+    required: false,
+    description: '补剂原料ID',
+  })
+  @ApiResponse({ status: 200, description: '补剂标签草稿列表' })
+  async listSupplementDrafts(
+    @Query() query: ListSupplementDraftsQueryDto,
+  ): Promise<ApiResponseDto<unknown>> {
+    const result =
+      await this.nutritionGovernanceService.listSupplementDrafts(query);
+    return new ApiResponseDto(0, 'Success', result);
   }
 
   @Post('supplement-drafts/:ingredientId/upload-label')
   @ApiOperation({ summary: '上传补剂标签图片并生成待确认草稿' })
   @ApiParam({ name: 'ingredientId', description: '补剂原料ID' })
   @ApiResponse({ status: 201, description: '补剂标签草稿已生成' })
-  @UseInterceptors(FileInterceptor('file'))
+  @UseInterceptors(
+    FileInterceptor('file', {
+      limits: { fileSize: SUPPLEMENT_LABEL_MAX_FILE_SIZE_BYTES },
+      fileFilter: supplementLabelFileFilter,
+    }),
+  )
   async uploadSupplementLabel(
     @Param('ingredientId') ingredientId: string,
     @UploadedFile() file: Express.Multer.File,
@@ -159,19 +212,49 @@ export class NutritionGovernanceController {
     return new ApiResponseDto(0, '已拒绝', result);
   }
 
+  @Post('supplement-drafts/:id/confirm')
+  @ApiOperation({ summary: '确认补剂标签草稿并写入营养档案' })
+  @ApiParam({ name: 'id', description: '补剂标签草稿ID' })
+  @ApiResponse({ status: 201, description: '补剂草稿已确认' })
+  async confirmSupplementDraft(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<unknown>> {
+    const result =
+      await this.nutritionGovernanceService.confirmSupplementDraft(
+        id,
+        user.userId,
+      );
+    return new ApiResponseDto(0, '补剂草稿已确认', result);
+  }
+
+  @Post('supplement-drafts/:id/reject')
+  @ApiOperation({ summary: '拒绝补剂标签草稿' })
+  @ApiParam({ name: 'id', description: '补剂标签草稿ID' })
+  @ApiResponse({ status: 201, description: '补剂草稿已拒绝' })
+  async rejectSupplementDraft(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<unknown>> {
+    const result =
+      await this.nutritionGovernanceService.rejectSupplementDraft(id);
+    return new ApiResponseDto(0, '补剂草稿已拒绝', result);
+  }
+
   private assertSupplementLabelFile(file: Express.Multer.File | undefined): asserts file is Express.Multer.File {
     if (!file) {
       throw new BadRequestException('请选择补剂标签图片');
     }
 
-    const maxSize = 10 * 1024 * 1024;
-    if (file.size > maxSize) {
+    if (file.size > SUPPLEMENT_LABEL_MAX_FILE_SIZE_BYTES) {
       throw new BadRequestException('补剂标签图片大小不能超过10MB');
     }
 
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
-    if (!allowedTypes.includes(file.mimetype)) {
+    if (!SUPPLEMENT_LABEL_ALLOWED_MIME_TYPES.includes(file.mimetype)) {
       throw new BadRequestException('仅支持 JPG、PNG、WEBP 格式的补剂标签图片');
+    }
+
+    if (!hasSupportedSupplementLabelImageSignature(file.buffer)) {
+      throw new BadRequestException('补剂标签图片内容格式无效');
     }
   }
 
@@ -182,4 +265,32 @@ export class NutritionGovernanceController {
       console.error('[NutritionGovernance] Failed to cleanup label upload:', error);
     }
   }
+}
+
+function hasSupportedSupplementLabelImageSignature(buffer?: Buffer): boolean {
+  if (!buffer || buffer.length < 4) {
+    return false;
+  }
+
+  const isJpeg =
+    buffer.length >= 3 &&
+    buffer[0] === 0xff &&
+    buffer[1] === 0xd8 &&
+    buffer[2] === 0xff;
+  const isPng =
+    buffer.length >= 8 &&
+    buffer[0] === 0x89 &&
+    buffer[1] === 0x50 &&
+    buffer[2] === 0x4e &&
+    buffer[3] === 0x47 &&
+    buffer[4] === 0x0d &&
+    buffer[5] === 0x0a &&
+    buffer[6] === 0x1a &&
+    buffer[7] === 0x0a;
+  const isWebp =
+    buffer.length >= 12 &&
+    buffer.toString('ascii', 0, 4) === 'RIFF' &&
+    buffer.toString('ascii', 8, 12) === 'WEBP';
+
+  return isJpeg || isPng || isWebp;
 }

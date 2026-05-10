@@ -3,6 +3,7 @@ import type {
   IngredientNutritionCandidate,
   IngredientNutritionCandidateListItem,
   ListNutritionCandidatesParams,
+  ListSupplementDraftsParams,
   NutritionGovernanceOverview,
   NutritionSourceRecord,
   SupplementNutritionDraft
@@ -24,14 +25,31 @@ export const nutritionGovernanceApi = {
       ingredientId
     }),
 
-  importUsdaSource: (fdcId: string): Promise<NutritionSourceRecord> =>
-    api.post('/admin/nutrition-governance/sources/usda/import', { fdcId }),
+  importUsdaSource: (
+    fdcId: string,
+    ingredientId?: string
+  ): Promise<NutritionSourceRecord> =>
+    api.post('/admin/nutrition-governance/sources/usda/import', {
+      fdcId,
+      ingredientId
+    }),
 
   confirmCandidate: (id: string): Promise<IngredientNutritionCandidate> =>
     api.post(`/admin/nutrition-governance/candidates/${id}/confirm`),
 
   rejectCandidate: (id: string): Promise<IngredientNutritionCandidate> =>
     api.post(`/admin/nutrition-governance/candidates/${id}/reject`),
+
+  listSupplementDrafts: (
+    params?: ListSupplementDraftsParams
+  ): Promise<SupplementNutritionDraft[]> =>
+    api.get('/admin/nutrition-governance/supplement-drafts', { params }),
+
+  confirmSupplementDraft: (id: string): Promise<SupplementNutritionDraft> =>
+    api.post(`/admin/nutrition-governance/supplement-drafts/${id}/confirm`),
+
+  rejectSupplementDraft: (id: string): Promise<SupplementNutritionDraft> =>
+    api.post(`/admin/nutrition-governance/supplement-drafts/${id}/reject`),
 
   uploadSupplementLabel: (
     ingredientId: string,

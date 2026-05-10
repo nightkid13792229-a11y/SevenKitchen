@@ -132,3 +132,8 @@ export interface ListNutritionCandidatesParams {
   status?: NutritionCandidateStatus
   confidence?: NutritionMatchConfidence
 }
+
+export interface ListSupplementDraftsParams {
+  status?: SupplementNutritionDraftStatus
+  ingredientId?: string
+}

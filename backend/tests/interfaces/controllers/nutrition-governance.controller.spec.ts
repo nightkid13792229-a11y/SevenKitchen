@@ -13,26 +13,33 @@ describe('NutritionGovernanceController', () => {
   let service: {
     getOverview: jest.Mock;
     listCandidates: jest.Mock;
+    listSupplementDrafts: jest.Mock;
     generateFoodCandidatesForIngredient: jest.Mock;
     importUsdaSourceRecord: jest.Mock;
     createSupplementDraftFromLabelImage: jest.Mock;
     confirmCandidate: jest.Mock;
     rejectCandidate: jest.Mock;
+    confirmSupplementDraft: jest.Mock;
+    rejectSupplementDraft: jest.Mock;
   };
   let cosService: {
     uploadImage: jest.Mock;
     deleteImage: jest.Mock;
   };
+  const validJpegBuffer = Buffer.from([0xff, 0xd8, 0xff, 0xdb, 0x00]);
 
   beforeEach(async () => {
     service = {
       getOverview: jest.fn(),
       listCandidates: jest.fn(),
+      listSupplementDrafts: jest.fn(),
       generateFoodCandidatesForIngredient: jest.fn(),
       importUsdaSourceRecord: jest.fn(),
       createSupplementDraftFromLabelImage: jest.fn(),
       confirmCandidate: jest.fn(),
       rejectCandidate: jest.fn(),
+      confirmSupplementDraft: jest.fn(),
+      rejectSupplementDraft: jest.fn(),
     };
     cosService = {
       uploadImage: jest.fn(),
@@ -114,13 +121,32 @@ describe('NutritionGovernanceController', () => {
 
     const result = await controller.importUsdaSourceRecord({
       fdcId: '171077',
+      ingredientId: 'ingredient-1',
     });
 
-    expect(service.importUsdaSourceRecord).toHaveBeenCalledWith('171077');
+    expect(service.importUsdaSourceRecord).toHaveBeenCalledWith('171077', {
+      ingredientId: 'ingredient-1',
+    });
     expect(result).toEqual({
       code: 0,
       message: 'USDA 来源导入成功',
       data: sourceRecord,
+    });
+  });
+
+  it('lists supplement drafts and wraps the response', async () => {
+    const drafts = [{ id: 'draft-1', status: 'DRAFT' }];
+    service.listSupplementDrafts.mockResolvedValue(drafts);
+
+    const result = await controller.listSupplementDrafts({ status: 'DRAFT' as any });
+
+    expect(service.listSupplementDrafts).toHaveBeenCalledWith({
+      status: 'DRAFT',
+    });
+    expect(result).toEqual({
+      code: 0,
+      message: 'Success',
+      data: drafts,
     });
   });
 
@@ -129,7 +155,7 @@ describe('NutritionGovernanceController', () => {
       originalname: 'label.jpg',
       mimetype: 'image/jpeg',
       size: 1024,
-      buffer: Buffer.from('image-bytes'),
+      buffer: validJpegBuffer,
     } as Express.Multer.File;
     const user = { userId: 'admin-user-1' } as RequestUser;
     const upload = {
@@ -201,10 +227,10 @@ describe('NutritionGovernanceController', () => {
       controller.uploadSupplementLabel(
         'supplement-1',
         {
-          originalname: 'label.jpg',
-          mimetype: 'image/jpeg',
-          size: 11 * 1024 * 1024,
-          buffer: Buffer.from('large-image'),
+      originalname: 'label.jpg',
+      mimetype: 'image/jpeg',
+      size: 11 * 1024 * 1024,
+      buffer: validJpegBuffer,
         } as Express.Multer.File,
         user,
       ),
@@ -218,7 +244,7 @@ describe('NutritionGovernanceController', () => {
       originalname: 'label.jpg',
       mimetype: 'image/jpeg',
       size: 1024,
-      buffer: Buffer.from('image-bytes'),
+      buffer: validJpegBuffer,
     } as Express.Multer.File;
     const user = { userId: 'admin-user-1' } as RequestUser;
     const upload = {
@@ -235,6 +261,44 @@ describe('NutritionGovernanceController', () => {
     ).rejects.toThrow('补剂原料不存在');
 
     expect(cosService.deleteImage).toHaveBeenCalledWith(upload.key);
+  });
+
+  it('confirms supplement drafts with the current user id', async () => {
+    const confirmedDraft = {
+      id: 'draft-1',
+      status: 'CONFIRMED',
+    };
+    const user = { userId: 'admin-user-1' } as RequestUser;
+    service.confirmSupplementDraft.mockResolvedValue(confirmedDraft);
+
+    const result = await controller.confirmSupplementDraft('draft-1', user);
+
+    expect(service.confirmSupplementDraft).toHaveBeenCalledWith(
+      'draft-1',
+      'admin-user-1',
+    );
+    expect(result).toEqual({
+      code: 0,
+      message: '补剂草稿已确认',
+      data: confirmedDraft,
+    });
+  });
+
+  it('rejects supplement drafts', async () => {
+    const rejectedDraft = {
+      id: 'draft-1',
+      status: 'REJECTED',
+    };
+    service.rejectSupplementDraft.mockResolvedValue(rejectedDraft);
+
+    const result = await controller.rejectSupplementDraft('draft-1');
+
+    expect(service.rejectSupplementDraft).toHaveBeenCalledWith('draft-1');
+    expect(result).toEqual({
+      code: 0,
+      message: '补剂草稿已拒绝',
+      data: rejectedDraft,
+    });
   });
 
   it('requires both authentication and admin authorization guards', () => {

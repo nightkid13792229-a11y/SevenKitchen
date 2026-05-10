@@ -1,8 +1,10 @@
 import { Test, TestingModule } from '@nestjs/testing';
+import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { NutritionGovernanceService } from '../../../src/application/nutrition-governance/nutrition-governance.service';
 import { AuthGuard } from '../../../src/interfaces/auth';
 import type { RequestUser } from '../../../src/interfaces/auth';
 import { NutritionGovernanceController } from '../../../src/interfaces/controllers/nutrition-governance.controller';
+import { AdminGuard } from '../../../src/interfaces/guards/role.guard';
 
 describe('NutritionGovernanceController', () => {
   let controller: NutritionGovernanceController;
@@ -30,9 +32,12 @@ describe('NutritionGovernanceController', () => {
           provide: NutritionGovernanceService,
           useValue: service,
         },
+        { provide: AdminGuard, useValue: { canActivate: jest.fn() } },
       ],
     })
       .overrideGuard(AuthGuard)
+      .useValue({ canActivate: jest.fn().mockReturnValue(true) })
+      .overrideGuard(AdminGuard)
       .useValue({ canActivate: jest.fn().mockReturnValue(true) })
       .compile();
 
@@ -79,5 +84,14 @@ describe('NutritionGovernanceController', () => {
       message: '确认成功',
       data: confirmedCandidate,
     });
+  });
+
+  it('requires both authentication and admin authorization guards', () => {
+    const guards = Reflect.getMetadata(
+      GUARDS_METADATA,
+      NutritionGovernanceController,
+    );
+
+    expect(guards).toEqual(expect.arrayContaining([AuthGuard, AdminGuard]));
   });
 });

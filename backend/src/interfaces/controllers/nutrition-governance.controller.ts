@@ -25,6 +25,7 @@ import { NutritionGovernanceService } from '../../application/nutrition-governan
 import { AuthGuard, CurrentUser } from '../auth';
 import type { RequestUser } from '../auth';
 import { ApiResponseDto } from '../dto/common/response.dto';
+import { AdminGuard } from '../guards/role.guard';
 import {
   GenerateFoodCandidatesDto,
   ListNutritionCandidatesQueryDto,
@@ -33,7 +34,7 @@ import {
 @ApiTags('Admin Nutrition Governance')
 @ApiBearerAuth()
 @Controller('api/v1/admin/nutrition-governance')
-@UseGuards(AuthGuard)
+@UseGuards(AuthGuard, AdminGuard)
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class NutritionGovernanceController {
   constructor(

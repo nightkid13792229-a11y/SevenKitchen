@@ -19,6 +19,8 @@ const CFCT_MACRO_NUTRIENTS = [
   'ash',
   'carbohydrate',
   'fiber',
+  'solubleFiber',
+  'insolubleFiber',
 ] as const satisfies readonly (keyof NutritionProfileV2['macros'])[];
 
 const CFCT_MINERAL_NUTRIENTS = [
@@ -27,11 +29,13 @@ const CFCT_MINERAL_NUTRIENTS = [
   'potassium',
   'sodium',
   'magnesium',
+  'chloride',
   'iron',
   'zinc',
   'copper',
   'manganese',
   'selenium',
+  'iodine',
 ] as const satisfies readonly (keyof NutritionProfileV2['minerals'])[];
 
 type CfctMacroNutrient = (typeof CFCT_MACRO_NUTRIENTS)[number];
@@ -103,6 +107,8 @@ export function mapCfctRowToSourceInput(
       page: row.page,
       row: row.row,
       privateLocalSource: true,
+      provider: CFCT_SOURCE_PROVIDER,
+      sourceProvider: CFCT_SOURCE_PROVIDER,
     },
     rawData: row as unknown as Record<string, unknown>,
     normalizedNutrition: profile,
@@ -155,6 +161,42 @@ function parseReviewedCfctRows(inputPath: string): ReviewedCfctRow[] {
   }
 
   throw new Error('Reviewed CFCT input must be a JSON array or an object with rows');
+}
+
+export function validateReviewedCfctRows(rows: ReviewedCfctRow[]): void {
+  rows.forEach((row, index) => {
+    const label = `row ${index + 1}`;
+    if (!row || typeof row !== 'object') {
+      throw new Error(`${label} must be an object`);
+    }
+    if (typeof row.volume !== 'string' || !row.volume.trim()) {
+      throw new Error(`${label} volume is required`);
+    }
+    if (row.page === null || row.page === undefined || `${row.page}`.trim() === '') {
+      throw new Error(`${label} page is required`);
+    }
+    if (row.row === null || row.row === undefined || `${row.row}`.trim() === '') {
+      throw new Error(`${label} row is required`);
+    }
+    if (typeof row.foodName !== 'string' || !row.foodName.trim()) {
+      throw new Error(`${label} foodName is required`);
+    }
+    if (!row.nutrients || typeof row.nutrients !== 'object') {
+      throw new Error(`${label} nutrients is required`);
+    }
+
+    const hasMappedNutrient = [
+      ...CFCT_MACRO_NUTRIENTS,
+      ...CFCT_MINERAL_NUTRIENTS,
+    ].some((key) => {
+      const value = row.nutrients[key];
+      return typeof value === 'number' && Number.isFinite(value);
+    });
+
+    if (!hasMappedNutrient) {
+      throw new Error(`${label} must include at least one mapped nutrient`);
+    }
+  });
 }
 
 export async function importCfctPrivateSourceRows({
@@ -242,6 +284,7 @@ export async function main(argv = process.argv.slice(2)): Promise<void> {
   const inputPath = getInputPath(argv);
   const apply = argv.includes('--apply');
   const rows = parseReviewedCfctRows(inputPath);
+  validateReviewedCfctRows(rows);
   const prisma = new PrismaClient();
 
   try {

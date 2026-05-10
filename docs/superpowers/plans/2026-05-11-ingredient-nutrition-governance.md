@@ -2562,11 +2562,11 @@ git commit -m "docs: update nutrition governance verification"
 
 ## Verification Results
 
-- Backend focused tests: PASS, 5 suites / 36 tests.
+- Backend focused tests: PASS, 5 suites / 45 tests.
 - Backend build: PASS, including Prisma client generation and font copy.
 - Admin web build: PASS. Vite reported the existing chunk-size warning only.
 - Local backend smoke: BLOCKED by local PostgreSQL not running at `localhost:5432`; `start:check` reached app boot with `DATABASE_URL` set, then Prisma returned `P1001`.
-- Admin web smoke: PASS with a temporary local mock API for the page endpoints. Verified sidebar entry `原料营养治理`, route `/nutrition-governance`, overview cards, food candidate table, confirm warning dialog, and supplement-recognition tab.
+- Admin web smoke: PASS with a temporary local mock API for the page endpoints. Verified sidebar entry `原料营养治理`, route `/nutrition-governance`, overview cards, food candidate table, confirm warning dialog, and supplement-recognition tab. Later fixes added persisted supplement draft listing/confirmation/rejection and constrained Chinese-to-English USDA alias matching; these are covered by focused tests and build verification.
 
 ---
 

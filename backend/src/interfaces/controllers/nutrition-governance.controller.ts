@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
@@ -109,21 +110,27 @@ export class NutritionGovernanceController {
     @UploadedFile() file: Express.Multer.File,
     @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<unknown>> {
+    this.assertSupplementLabelFile(file);
     const upload = await this.cosService.uploadImage(
       file,
       file.originalname,
       'supplement-labels',
     );
-    const result =
-      await this.nutritionGovernanceService.createSupplementDraftFromLabelImage(
-        {
-          ingredientId,
-          imageUrl: upload.url,
-          imageKey: upload.key,
-          createdBy: user.userId,
-        },
-      );
-    return new ApiResponseDto(0, '补剂标签草稿已生成', result);
+    try {
+      const result =
+        await this.nutritionGovernanceService.createSupplementDraftFromLabelImage(
+          {
+            ingredientId,
+            imageUrl: upload.url,
+            imageKey: upload.key,
+            createdBy: user.userId,
+          },
+        );
+      return new ApiResponseDto(0, '补剂标签草稿已生成', result);
+    } catch (error) {
+      await this.cleanupSupplementLabelUpload(upload.key);
+      throw error;
+    }
   }
 
   @Post('candidates/:id/confirm')
@@ -150,5 +157,29 @@ export class NutritionGovernanceController {
   ): Promise<ApiResponseDto<unknown>> {
     const result = await this.nutritionGovernanceService.rejectCandidate(id);
     return new ApiResponseDto(0, '已拒绝', result);
+  }
+
+  private assertSupplementLabelFile(file: Express.Multer.File | undefined): asserts file is Express.Multer.File {
+    if (!file) {
+      throw new BadRequestException('请选择补剂标签图片');
+    }
+
+    const maxSize = 10 * 1024 * 1024;
+    if (file.size > maxSize) {
+      throw new BadRequestException('补剂标签图片大小不能超过10MB');
+    }
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      throw new BadRequestException('仅支持 JPG、PNG、WEBP 格式的补剂标签图片');
+    }
+  }
+
+  private async cleanupSupplementLabelUpload(key: string): Promise<void> {
+    try {
+      await this.cosService.deleteImage(key);
+    } catch (error) {
+      console.error('[NutritionGovernance] Failed to cleanup label upload:', error);
+    }
   }
 }

@@ -1,5 +1,6 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { BadRequestException } from '@nestjs/common';
 import { NutritionGovernanceService } from '../../../src/application/nutrition-governance/nutrition-governance.service';
 import { AuthGuard } from '../../../src/interfaces/auth';
 import type { RequestUser } from '../../../src/interfaces/auth';
@@ -20,6 +21,7 @@ describe('NutritionGovernanceController', () => {
   };
   let cosService: {
     uploadImage: jest.Mock;
+    deleteImage: jest.Mock;
   };
 
   beforeEach(async () => {
@@ -34,6 +36,7 @@ describe('NutritionGovernanceController', () => {
     };
     cosService = {
       uploadImage: jest.fn(),
+      deleteImage: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({
@@ -124,6 +127,8 @@ describe('NutritionGovernanceController', () => {
   it('uploads a supplement label and asks the service to create a draft', async () => {
     const file = {
       originalname: 'label.jpg',
+      mimetype: 'image/jpeg',
+      size: 1024,
       buffer: Buffer.from('image-bytes'),
     } as Express.Multer.File;
     const user = { userId: 'admin-user-1' } as RequestUser;
@@ -160,6 +165,76 @@ describe('NutritionGovernanceController', () => {
       message: '补剂标签草稿已生成',
       data: draft,
     });
+  });
+
+  it('rejects missing supplement label files before upload', async () => {
+    const user = { userId: 'admin-user-1' } as RequestUser;
+
+    await expect(
+      controller.uploadSupplementLabel(
+        'supplement-1',
+        undefined as unknown as Express.Multer.File,
+        user,
+      ),
+    ).rejects.toThrow('请选择补剂标签图片');
+
+    expect(cosService.uploadImage).not.toHaveBeenCalled();
+  });
+
+  it('rejects non-image or oversized supplement label files before upload', async () => {
+    const user = { userId: 'admin-user-1' } as RequestUser;
+
+    await expect(
+      controller.uploadSupplementLabel(
+        'supplement-1',
+        {
+          originalname: 'label.pdf',
+          mimetype: 'application/pdf',
+          size: 1024,
+          buffer: Buffer.from('pdf'),
+        } as Express.Multer.File,
+        user,
+      ),
+    ).rejects.toThrow('仅支持 JPG、PNG、WEBP 格式的补剂标签图片');
+
+    await expect(
+      controller.uploadSupplementLabel(
+        'supplement-1',
+        {
+          originalname: 'label.jpg',
+          mimetype: 'image/jpeg',
+          size: 11 * 1024 * 1024,
+          buffer: Buffer.from('large-image'),
+        } as Express.Multer.File,
+        user,
+      ),
+    ).rejects.toThrow('补剂标签图片大小不能超过10MB');
+
+    expect(cosService.uploadImage).not.toHaveBeenCalled();
+  });
+
+  it('deletes uploaded supplement label image when draft creation fails', async () => {
+    const file = {
+      originalname: 'label.jpg',
+      mimetype: 'image/jpeg',
+      size: 1024,
+      buffer: Buffer.from('image-bytes'),
+    } as Express.Multer.File;
+    const user = { userId: 'admin-user-1' } as RequestUser;
+    const upload = {
+      url: 'https://cdn.example.com/supplement-labels/label.jpg',
+      key: 'supplement-labels/label.jpg',
+    };
+    cosService.uploadImage.mockResolvedValue(upload);
+    service.createSupplementDraftFromLabelImage.mockRejectedValue(
+      new BadRequestException('补剂原料不存在'),
+    );
+
+    await expect(
+      controller.uploadSupplementLabel('bad-supplement', file, user),
+    ).rejects.toThrow('补剂原料不存在');
+
+    expect(cosService.deleteImage).toHaveBeenCalledWith(upload.key);
   });
 
   it('requires both authentication and admin authorization guards', () => {

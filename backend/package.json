@@ -28,6 +28,8 @@
     "backfill:recipe-supplement-alternatives:apply": "ts-node -r tsconfig-paths/register prisma/backfill-recipe-supplement-alternatives.ts --apply",
     "backfill:recipe-supplement-targets-v2": "ts-node -r tsconfig-paths/register prisma/backfill-recipe-supplement-targets-v2.ts",
     "backfill:recipe-supplement-targets-v2:apply": "ts-node -r tsconfig-paths/register prisma/backfill-recipe-supplement-targets-v2.ts --apply",
+    "import:cfct-private": "ts-node -r tsconfig-paths/register prisma/import-cfct-private-source.ts",
+    "import:cfct-private:apply": "ts-node -r tsconfig-paths/register prisma/import-cfct-private-source.ts --apply",
     "audit:missing-supplement-concentrations": "ts-node -r tsconfig-paths/register scripts/audit-missing-supplement-concentrations.ts",
     "audit:recipe-stats": "ts-node scripts/audit-recipe-stats.ts",
     "repair:favorite-counts": "ts-node scripts/repair-favorite-counts.ts",

@@ -60,6 +60,10 @@ export interface NutritionMeta {
     | 'LITERATURE'
     | 'SUPPLIER'
     | 'MANUAL_ESTIMATE'
+    | 'USDA'
+    | 'CFCT'
+    | 'SUPPLEMENT_LABEL'
+    | 'MANUAL'
     | null;
   sourceTitle?: string | null;
   sourceProvider?: string | null;

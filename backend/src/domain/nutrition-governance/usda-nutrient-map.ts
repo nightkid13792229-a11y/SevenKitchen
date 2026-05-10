@@ -7,17 +7,20 @@ export interface UsdaNutrientMapping {
   tabKey: NutritionFieldTab;
   fieldKey: string;
   fieldPath: NutritionFieldPath;
+  amountMultiplier?: number;
 }
 
 const usdaField = (
   nutrientId: number,
   tabKey: NutritionFieldTab,
   fieldKey: string,
+  options: { amountMultiplier?: number } = {},
 ): UsdaNutrientMapping => ({
   nutrientId,
   tabKey,
   fieldKey,
   fieldPath: `${tabKey}.${fieldKey}`,
+  ...options,
 });
 
 export const USDA_NUTRIENT_MAP: readonly UsdaNutrientMapping[] = [
@@ -39,8 +42,8 @@ export const USDA_NUTRIENT_MAP: readonly UsdaNutrientMapping[] = [
   usdaField(1101, 'minerals', 'manganese'),
   usdaField(1103, 'minerals', 'selenium'),
   usdaField(1104, 'vitamins', 'vitaminA'),
-  usdaField(1114, 'vitamins', 'vitaminD'),
-  usdaField(1109, 'vitamins', 'vitaminE'),
+  usdaField(1114, 'vitamins', 'vitaminD', { amountMultiplier: 40 }),
+  usdaField(1109, 'vitamins', 'vitaminE', { amountMultiplier: 1 / 0.67 }),
   usdaField(1165, 'vitamins', 'vitaminB1'),
   usdaField(1166, 'vitamins', 'vitaminB2'),
   usdaField(1167, 'vitamins', 'vitaminB3'),
@@ -48,10 +51,11 @@ export const USDA_NUTRIENT_MAP: readonly UsdaNutrientMapping[] = [
   usdaField(1175, 'vitamins', 'vitaminB6'),
   usdaField(1178, 'vitamins', 'vitaminB12'),
   usdaField(1180, 'vitamins', 'choline'),
-  usdaField(1213, 'vitamins', 'vitaminB9'),
+  usdaField(1177, 'vitamins', 'vitaminB9'),
+  usdaField(1213, 'aminoAcids', 'leucine'),
   usdaField(1292, 'fattyAcids', 'monounsaturatedFattyAcids'),
   usdaField(1293, 'fattyAcids', 'polyunsaturatedFattyAcids'),
   usdaField(1316, 'fattyAcids', 'linoleicAcid'),
   usdaField(1404, 'fattyAcids', 'alphaLinolenicAcid'),
-  usdaField(1257, 'fattyAcids', 'saturatedFattyAcids'),
+  usdaField(1258, 'fattyAcids', 'saturatedFattyAcids'),
 ];

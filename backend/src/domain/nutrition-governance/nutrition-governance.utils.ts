@@ -99,7 +99,7 @@ export function mapUsdaNutrientsToNutritionProfile(
 ): NutritionProfileV2 {
   const profile = createEmptyNutritionProfile();
   profile.meta.rawBasisType = 'PER_100_G';
-  (profile.meta as Record<string, unknown>).sourceType = 'USDA';
+  profile.meta.sourceType = 'USDA';
 
   for (const nutrient of nutrients) {
     const nutrientId = nutrient.nutrient?.id;
@@ -118,7 +118,7 @@ export function mapUsdaNutrientsToNutritionProfile(
     if (!mapping) continue;
 
     const tab = profile[mapping.tabKey] as Record<string, number | null>;
-    tab[mapping.fieldKey] = amount;
+    tab[mapping.fieldKey] = amount * (mapping.amountMultiplier ?? 1);
   }
 
   return profile;

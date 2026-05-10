@@ -87,4 +87,36 @@ describe('nutrition governance utilities', () => {
     expect(profile.minerals.calcium).toBe(12);
     expect(profile.minerals.phosphorus).toBe(190);
   });
+
+  it('keeps USDA folate, leucine, and saturated fat ids in their correct fields', () => {
+    const profile = mapUsdaNutrientsToNutritionProfile([
+      { nutrient: { id: 1177, name: 'Folate, total', unitName: 'UG' }, amount: 47 },
+      { nutrient: { id: 1213, name: 'Leucine', unitName: 'G' }, amount: 1.09 },
+      {
+        nutrient: { id: 1257, name: 'Fatty acids, total trans', unitName: 'G' },
+        amount: 0.038,
+      },
+      {
+        nutrient: { id: 1258, name: 'Fatty acids, total saturated', unitName: 'G' },
+        amount: 3.13,
+      },
+    ]);
+
+    expect(profile.vitamins.vitaminB9).toBe(47);
+    expect(profile.aminoAcids.leucine).toBe(1.09);
+    expect(profile.fattyAcids.saturatedFattyAcids).toBe(3.13);
+  });
+
+  it('converts USDA vitamin D and E source units into local IU fields', () => {
+    const profile = mapUsdaNutrientsToNutritionProfile([
+      { nutrient: { id: 1114, name: 'Vitamin D (D2 + D3)', unitName: 'UG' }, amount: 2 },
+      {
+        nutrient: { id: 1109, name: 'Vitamin E (alpha-tocopherol)', unitName: 'MG' },
+        amount: 1.05,
+      },
+    ]);
+
+    expect(profile.vitamins.vitaminD).toBe(80);
+    expect(profile.vitamins.vitaminE).toBeCloseTo(1.57, 2);
+  });
 });

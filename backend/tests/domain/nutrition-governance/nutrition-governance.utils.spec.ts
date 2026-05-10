@@ -69,6 +69,26 @@ describe('nutrition governance utilities', () => {
     });
   });
 
+  it('scores common Chinese ingredient names against USDA English descriptions', () => {
+    expect(
+      scoreIngredientSourceNameMatch({
+        ingredientName: '鸡胸肉',
+        sourceFoodName: 'Chicken breast, cooked, roasted',
+        sourceType: 'USDA',
+      }),
+    ).toEqual({
+      score: 0.8,
+      reasons: [
+        {
+          code: 'NAME_PARTIAL',
+          label: '常用中英别名匹配',
+          scoreDelta: 0.65,
+        },
+        { code: 'SOURCE_PRIORITY', label: 'USDA 优先来源', scoreDelta: 0.15 },
+      ],
+    });
+  });
+
   it('maps USDA nutrient ids into nutritionProfile v2 groups', () => {
     const profile = mapUsdaNutrientsToNutritionProfile([
       { nutrient: { id: 1008, name: 'Energy', unitName: 'KCAL' }, amount: 145 },

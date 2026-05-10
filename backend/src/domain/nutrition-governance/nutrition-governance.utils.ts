@@ -7,6 +7,51 @@ import type {
 } from './nutrition-governance.types';
 import { USDA_NUTRIENT_MAP } from './usda-nutrient-map';
 
+const CHINESE_TO_ENGLISH_FOOD_ALIASES: ReadonlyArray<{
+  zh: string;
+  aliases: readonly string[];
+}> = [
+  { zh: '鸡胸肉', aliases: ['chicken breast'] },
+  { zh: '鸡腿肉', aliases: ['chicken leg', 'chicken thigh', 'chicken drumstick'] },
+  { zh: '鸡肉', aliases: ['chicken'] },
+  { zh: '鸭肉', aliases: ['duck'] },
+  { zh: '火鸡肉', aliases: ['turkey'] },
+  { zh: '牛肉', aliases: ['beef'] },
+  { zh: '牛腩', aliases: ['beef brisket'] },
+  { zh: '牛肝', aliases: ['beef liver'] },
+  { zh: '羊肉', aliases: ['lamb', 'mutton'] },
+  { zh: '猪肉', aliases: ['pork'] },
+  { zh: '猪肝', aliases: ['pork liver'] },
+  { zh: '三文鱼', aliases: ['salmon'] },
+  { zh: '鲑鱼', aliases: ['salmon'] },
+  { zh: '鳕鱼', aliases: ['cod'] },
+  { zh: '沙丁鱼', aliases: ['sardine'] },
+  { zh: '金枪鱼', aliases: ['tuna'] },
+  { zh: '虾', aliases: ['shrimp', 'prawn'] },
+  { zh: '鸡蛋', aliases: ['egg', 'chicken egg'] },
+  { zh: '蛋黄', aliases: ['egg yolk'] },
+  { zh: '蛋清', aliases: ['egg white'] },
+  { zh: '牛奶', aliases: ['milk'] },
+  { zh: '酸奶', aliases: ['yogurt', 'yoghurt'] },
+  { zh: '奶酪', aliases: ['cheese'] },
+  { zh: '南瓜', aliases: ['pumpkin'] },
+  { zh: '胡萝卜', aliases: ['carrot'] },
+  { zh: '西兰花', aliases: ['broccoli'] },
+  { zh: '菠菜', aliases: ['spinach'] },
+  { zh: '红薯', aliases: ['sweet potato'] },
+  { zh: '土豆', aliases: ['potato'] },
+  { zh: '马铃薯', aliases: ['potato'] },
+  { zh: '苹果', aliases: ['apple'] },
+  { zh: '蓝莓', aliases: ['blueberry'] },
+  { zh: '香蕉', aliases: ['banana'] },
+  { zh: '米饭', aliases: ['rice'] },
+  { zh: '糙米', aliases: ['brown rice'] },
+  { zh: '燕麦', aliases: ['oat', 'oats'] },
+  { zh: '橄榄油', aliases: ['olive oil'] },
+  { zh: '椰子油', aliases: ['coconut oil'] },
+  { zh: '亚麻籽油', aliases: ['flaxseed oil', 'linseed oil'] },
+];
+
 export function buildNutritionSourceKey(
   sourceType: NutritionGovernanceSourceType,
   externalId: string,
@@ -51,6 +96,11 @@ export function scoreIngredientSourceNameMatch(params: {
   const reasons: NutritionMatchReason[] = [];
   let score = 0;
 
+  const aliasMatched = findChineseEnglishAliasMatch(
+    ingredientName,
+    sourceFoodName,
+  );
+
   if (ingredientName && ingredientName === sourceFoodName) {
     score += 0.75;
     reasons.push({
@@ -69,6 +119,13 @@ export function scoreIngredientSourceNameMatch(params: {
       code: 'NAME_PARTIAL',
       label: '名称部分匹配',
       scoreDelta: 0.55,
+    });
+  } else if (aliasMatched) {
+    score += 0.65;
+    reasons.push({
+      code: 'NAME_PARTIAL',
+      label: '常用中英别名匹配',
+      scoreDelta: 0.65,
     });
   }
 
@@ -89,6 +146,29 @@ export function scoreIngredientSourceNameMatch(params: {
   }
 
   return { score: Math.min(score, 1), reasons };
+}
+
+function findChineseEnglishAliasMatch(
+  normalizedIngredientName: string,
+  normalizedSourceFoodName: string,
+): boolean {
+  if (!normalizedIngredientName || !normalizedSourceFoodName) {
+    return false;
+  }
+
+  return CHINESE_TO_ENGLISH_FOOD_ALIASES.some((entry) => {
+    const normalizedChinese = normalizeNameForMatch(entry.zh);
+    if (
+      !normalizedIngredientName.includes(normalizedChinese) &&
+      !normalizedChinese.includes(normalizedIngredientName)
+    ) {
+      return false;
+    }
+
+    return entry.aliases.some((alias) =>
+      normalizedSourceFoodName.includes(normalizeNameForMatch(alias)),
+    );
+  });
 }
 
 export function mapUsdaNutrientsToNutritionProfile(

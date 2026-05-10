@@ -86,6 +86,14 @@ export function normalizeNameForMatch(value: string): string {
   return value.trim().toLowerCase().replace(/[\p{P}\s]+/gu, '');
 }
 
+function normalizeEnglishFoodNameTokens(value: string): string[] {
+  return value
+    .trim()
+    .toLowerCase()
+    .split(/[^a-z0-9]+/u)
+    .filter(Boolean);
+}
+
 export function scoreIngredientSourceNameMatch(params: {
   ingredientName: string;
   sourceFoodName: string;
@@ -98,7 +106,7 @@ export function scoreIngredientSourceNameMatch(params: {
 
   const aliasMatched = findChineseEnglishAliasMatch(
     ingredientName,
-    sourceFoodName,
+    params.sourceFoodName,
   );
 
   if (ingredientName && ingredientName === sourceFoodName) {
@@ -150,11 +158,13 @@ export function scoreIngredientSourceNameMatch(params: {
 
 function findChineseEnglishAliasMatch(
   normalizedIngredientName: string,
-  normalizedSourceFoodName: string,
+  sourceFoodName: string,
 ): boolean {
-  if (!normalizedIngredientName || !normalizedSourceFoodName) {
+  if (!normalizedIngredientName || !sourceFoodName) {
     return false;
   }
+
+  const sourceTokens = normalizeEnglishFoodNameTokens(sourceFoodName);
 
   return CHINESE_TO_ENGLISH_FOOD_ALIASES.some((entry) => {
     const normalizedChinese = normalizeNameForMatch(entry.zh);
@@ -165,9 +175,18 @@ function findChineseEnglishAliasMatch(
       return false;
     }
 
-    return entry.aliases.some((alias) =>
-      normalizedSourceFoodName.includes(normalizeNameForMatch(alias)),
-    );
+    return entry.aliases.some((alias) => {
+      const aliasTokens = normalizeEnglishFoodNameTokens(alias);
+      if (aliasTokens.length === 0 || aliasTokens.length > sourceTokens.length) {
+        return false;
+      }
+
+      return sourceTokens.some((_, startIndex) =>
+        aliasTokens.every(
+          (token, aliasIndex) => sourceTokens[startIndex + aliasIndex] === token,
+        ),
+      );
+    });
   });
 }
 

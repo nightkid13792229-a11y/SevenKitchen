@@ -89,6 +89,34 @@ describe('nutrition governance utilities', () => {
     });
   });
 
+  it('does not match short English aliases inside unrelated USDA words', () => {
+    expect(
+      scoreIngredientSourceNameMatch({
+        ingredientName: '鸡蛋',
+        sourceFoodName: 'Eggplant, cooked, boiled',
+        sourceType: 'USDA',
+      }),
+    ).toEqual({
+      score: 0.15,
+      reasons: [
+        { code: 'SOURCE_PRIORITY', label: 'USDA 优先来源', scoreDelta: 0.15 },
+      ],
+    });
+
+    expect(
+      scoreIngredientSourceNameMatch({
+        ingredientName: '燕麦',
+        sourceFoodName: 'Goat, cooked, roasted',
+        sourceType: 'USDA',
+      }),
+    ).toEqual({
+      score: 0.15,
+      reasons: [
+        { code: 'SOURCE_PRIORITY', label: 'USDA 优先来源', scoreDelta: 0.15 },
+      ],
+    });
+  });
+
   it('maps USDA nutrient ids into nutritionProfile v2 groups', () => {
     const profile = mapUsdaNutrientsToNutritionProfile([
       { nutrient: { id: 1008, name: 'Energy', unitName: 'KCAL' }, amount: 145 },

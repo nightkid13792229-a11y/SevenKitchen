@@ -99,7 +99,7 @@ Important constraints:
 - Create: `backend/prisma/migrations/202605110001_add_nutrition_governance/migration.sql`
 - Test: `backend/tests/prisma/nutrition-governance-schema.spec.ts`
 
-- [ ] **Step 1: Write the schema regression test**
+- [x] **Step 1: Write the schema regression test**
 
 Create `backend/tests/prisma/nutrition-governance-schema.spec.ts`:
 
@@ -130,7 +130,7 @@ describe('nutrition governance prisma schema', () => {
 });
 ```
 
-- [ ] **Step 2: Run the failing schema test**
+- [x] **Step 2: Run the failing schema test**
 
 Run:
 
@@ -141,7 +141,7 @@ npm test -- tests/prisma/nutrition-governance-schema.spec.ts --runInBand
 
 Expected: FAIL with missing model names.
 
-- [ ] **Step 3: Add enums and relations to Prisma schema**
+- [x] **Step 3: Add enums and relations to Prisma schema**
 
 Modify `backend/prisma/schema.prisma`.
 
@@ -267,7 +267,7 @@ model SupplementNutritionDraft {
 }
 ```
 
-- [ ] **Step 4: Add the SQL migration**
+- [x] **Step 4: Add the SQL migration**
 
 Create `backend/prisma/migrations/202605110001_add_nutrition_governance/migration.sql`:
 
@@ -367,7 +367,7 @@ ALTER TABLE "supplement_nutrition_draft"
   FOREIGN KEY ("source_record_id") REFERENCES "nutrition_source_record"("id") ON DELETE SET NULL ON UPDATE CASCADE;
 ```
 
-- [ ] **Step 5: Run schema test and Prisma generate**
+- [x] **Step 5: Run schema test and Prisma generate**
 
 Run:
 
@@ -379,7 +379,7 @@ npx prisma generate
 
 Expected: PASS, then Prisma Client generated successfully.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen
@@ -397,7 +397,7 @@ git commit -m "feat: add nutrition governance schema"
 - Create: `backend/src/domain/nutrition-governance/usda-nutrient-map.ts`
 - Test: `backend/tests/domain/nutrition-governance/nutrition-governance.utils.spec.ts`
 
-- [ ] **Step 1: Write utility tests**
+- [x] **Step 1: Write utility tests**
 
 Create `backend/tests/domain/nutrition-governance/nutrition-governance.utils.spec.ts`:
 
@@ -447,7 +447,7 @@ describe('nutrition governance utilities', () => {
 });
 ```
 
-- [ ] **Step 2: Run failing utility tests**
+- [x] **Step 2: Run failing utility tests**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen/backend
@@ -456,7 +456,7 @@ npm test -- tests/domain/nutrition-governance/nutrition-governance.utils.spec.ts
 
 Expected: FAIL because the files do not exist.
 
-- [ ] **Step 3: Create shared types**
+- [x] **Step 3: Create shared types**
 
 Create `backend/src/domain/nutrition-governance/nutrition-governance.types.ts`:
 
@@ -521,7 +521,7 @@ export interface LabelExtractionResult {
 }
 ```
 
-- [ ] **Step 4: Create USDA nutrient map**
+- [x] **Step 4: Create USDA nutrient map**
 
 Create `backend/src/domain/nutrition-governance/usda-nutrient-map.ts`:
 
@@ -571,7 +571,7 @@ export const USDA_NUTRIENT_MAP: readonly UsdaNutrientMapping[] = [
 ];
 ```
 
-- [ ] **Step 5: Implement utilities**
+- [x] **Step 5: Implement utilities**
 
 Create `backend/src/domain/nutrition-governance/nutrition-governance.utils.ts`:
 
@@ -675,7 +675,7 @@ export function mapUsdaNutrientsToNutritionProfile(
 }
 ```
 
-- [ ] **Step 6: Run utility tests**
+- [x] **Step 6: Run utility tests**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen/backend
@@ -684,7 +684,7 @@ npm test -- tests/domain/nutrition-governance/nutrition-governance.utils.spec.ts
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen
@@ -700,7 +700,7 @@ git commit -m "feat: add nutrition governance utilities"
 - Create: `backend/src/application/nutrition-governance/nutrition-governance.service.ts`
 - Create: `backend/tests/application/nutrition-governance/nutrition-governance.service.spec.ts`
 
-- [ ] **Step 1: Write service tests**
+- [x] **Step 1: Write service tests**
 
 Create `backend/tests/application/nutrition-governance/nutrition-governance.service.spec.ts`:
 
@@ -846,7 +846,7 @@ describe('NutritionGovernanceService', () => {
 });
 ```
 
-- [ ] **Step 2: Run failing service tests**
+- [x] **Step 2: Run failing service tests**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen/backend
@@ -855,7 +855,7 @@ npm test -- tests/application/nutrition-governance/nutrition-governance.service.
 
 Expected: FAIL because service does not exist.
 
-- [ ] **Step 3: Implement service**
+- [x] **Step 3: Implement service**
 
 Create `backend/src/application/nutrition-governance/nutrition-governance.service.ts`:
 
@@ -1134,7 +1134,7 @@ export class NutritionGovernanceService {
 }
 ```
 
-- [ ] **Step 4: Run service tests**
+- [x] **Step 4: Run service tests**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen/backend
@@ -1143,7 +1143,7 @@ npm test -- tests/application/nutrition-governance/nutrition-governance.service.
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen
@@ -1161,7 +1161,7 @@ git commit -m "feat: add nutrition governance service"
 - Modify: `backend/src/app.module.ts`
 - Test: `backend/tests/interfaces/controllers/nutrition-governance.controller.spec.ts`
 
-- [ ] **Step 1: Write controller tests**
+- [x] **Step 1: Write controller tests**
 
 Create `backend/tests/interfaces/controllers/nutrition-governance.controller.spec.ts`:
 
@@ -1213,7 +1213,7 @@ describe('NutritionGovernanceController', () => {
 });
 ```
 
-- [ ] **Step 2: Run failing controller tests**
+- [x] **Step 2: Run failing controller tests**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen/backend
@@ -1222,7 +1222,7 @@ npm test -- tests/interfaces/controllers/nutrition-governance.controller.spec.ts
 
 Expected: FAIL because controller does not exist.
 
-- [ ] **Step 3: Create DTOs**
+- [x] **Step 3: Create DTOs**
 
 Create `backend/src/interfaces/dto/nutrition-governance/nutrition-governance.dto.ts`:
 
@@ -1248,7 +1248,7 @@ export class GenerateFoodCandidatesDto {
 }
 ```
 
-- [ ] **Step 4: Create controller**
+- [x] **Step 4: Create controller**
 
 Create `backend/src/interfaces/controllers/nutrition-governance.controller.ts`:
 
@@ -1328,7 +1328,7 @@ export class NutritionGovernanceController {
 }
 ```
 
-- [ ] **Step 5: Register controller and service**
+- [x] **Step 5: Register controller and service**
 
 Modify `backend/src/app.module.ts`:
 
@@ -1343,7 +1343,7 @@ Add `NutritionGovernanceController` to the `controllers` array near `NutritionFo
 
 Add `NutritionGovernanceService` to the `providers` array near `NutritionFoodService`.
 
-- [ ] **Step 6: Run controller test**
+- [x] **Step 6: Run controller test**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen/backend
@@ -1352,7 +1352,7 @@ npm test -- tests/interfaces/controllers/nutrition-governance.controller.spec.ts
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen
@@ -1370,7 +1370,7 @@ git commit -m "feat: expose nutrition governance admin api"
 - Modify: `backend/src/interfaces/controllers/nutrition-governance.controller.ts`
 - Test: `backend/tests/application/nutrition-governance/nutrition-governance.service.spec.ts`
 
-- [ ] **Step 1: Add USDA import service test**
+- [x] **Step 1: Add USDA import service test**
 
 Append this test to `backend/tests/application/nutrition-governance/nutrition-governance.service.spec.ts`:
 
@@ -1414,7 +1414,7 @@ Append this test to `backend/tests/application/nutrition-governance/nutrition-go
   });
 ```
 
-- [ ] **Step 2: Run failing test**
+- [x] **Step 2: Run failing test**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen/backend
@@ -1423,7 +1423,7 @@ npm test -- tests/application/nutrition-governance/nutrition-governance.service.
 
 Expected: FAIL with `importUsdaSourceRecord is not a function`.
 
-- [ ] **Step 3: Add DTO**
+- [x] **Step 3: Add DTO**
 
 Append to `backend/src/interfaces/dto/nutrition-governance/nutrition-governance.dto.ts`:
 
@@ -1434,7 +1434,7 @@ export class ImportUsdaSourceDto {
 }
 ```
 
-- [ ] **Step 4: Implement service method**
+- [x] **Step 4: Implement service method**
 
 Add imports in `backend/src/application/nutrition-governance/nutrition-governance.service.ts`:
 
@@ -1480,7 +1480,7 @@ Add method:
   }
 ```
 
-- [ ] **Step 5: Add controller endpoint**
+- [x] **Step 5: Add controller endpoint**
 
 Modify `backend/src/interfaces/controllers/nutrition-governance.controller.ts`.
 
@@ -1503,7 +1503,7 @@ Add endpoint:
   }
 ```
 
-- [ ] **Step 6: Run focused tests**
+- [x] **Step 6: Run focused tests**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen/backend
@@ -1512,7 +1512,7 @@ npm test -- tests/application/nutrition-governance/nutrition-governance.service.
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen
@@ -1529,7 +1529,7 @@ git commit -m "feat: import usda nutrition source records"
 - Modify: `backend/package.json`
 - Test: `backend/tests/prisma/import-cfct-private-source.spec.ts`
 
-- [ ] **Step 1: Write importer tests**
+- [x] **Step 1: Write importer tests**
 
 Create `backend/tests/prisma/import-cfct-private-source.spec.ts`:
 
@@ -1562,7 +1562,7 @@ describe('CFCT private source importer', () => {
 });
 ```
 
-- [ ] **Step 2: Run failing importer test**
+- [x] **Step 2: Run failing importer test**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen/backend
@@ -1571,7 +1571,7 @@ npm test -- tests/prisma/import-cfct-private-source.spec.ts --runInBand
 
 Expected: FAIL because importer does not exist.
 
-- [ ] **Step 3: Implement local-only importer**
+- [x] **Step 3: Implement local-only importer**
 
 Create `backend/prisma/import-cfct-private-source.ts`:
 
@@ -1727,7 +1727,7 @@ if (require.main === module) {
 }
 ```
 
-- [ ] **Step 4: Add package scripts**
+- [x] **Step 4: Add package scripts**
 
 Modify `backend/package.json` scripts:
 
@@ -1736,7 +1736,7 @@ Modify `backend/package.json` scripts:
 "import:cfct-private:apply": "ts-node -r tsconfig-paths/register prisma/import-cfct-private-source.ts --apply"
 ```
 
-- [ ] **Step 5: Run importer test**
+- [x] **Step 5: Run importer test**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen/backend
@@ -1745,7 +1745,7 @@ npm test -- tests/prisma/import-cfct-private-source.spec.ts --runInBand
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen
@@ -1764,7 +1764,7 @@ git commit -m "feat: add private cfct source importer"
 - Modify: `backend/src/app.module.ts`
 - Test: `backend/tests/application/nutrition-governance/nutrition-governance.service.spec.ts`
 
-- [ ] **Step 1: Add draft creation test**
+- [x] **Step 1: Add draft creation test**
 
 Append this test to `backend/tests/application/nutrition-governance/nutrition-governance.service.spec.ts`:
 
@@ -1805,7 +1805,7 @@ Append this test to `backend/tests/application/nutrition-governance/nutrition-go
   });
 ```
 
-- [ ] **Step 2: Run failing test**
+- [x] **Step 2: Run failing test**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen/backend
@@ -1814,7 +1814,7 @@ npm test -- tests/application/nutrition-governance/nutrition-governance.service.
 
 Expected: FAIL with constructor/method mismatch.
 
-- [ ] **Step 3: Create provider interface**
+- [x] **Step 3: Create provider interface**
 
 Create `backend/src/application/nutrition-governance/label-recognition.provider.ts`:
 
@@ -1854,7 +1854,7 @@ Implementation note for later OpenAI provider:
 - Keep provider behind `LabelRecognitionProvider` so the app can run without an OpenAI key.
 - Official OpenAI docs used for this boundary: Images and Vision, Structured Outputs.
 
-- [ ] **Step 4: Update service constructor and method**
+- [x] **Step 4: Update service constructor and method**
 
 Modify constructor in `NutritionGovernanceService`:
 
@@ -1919,7 +1919,7 @@ Add method:
   }
 ```
 
-- [ ] **Step 5: Add upload endpoint**
+- [x] **Step 5: Add upload endpoint**
 
 Modify `backend/src/interfaces/controllers/nutrition-governance.controller.ts`.
 
@@ -1966,7 +1966,7 @@ Add endpoint:
   }
 ```
 
-- [ ] **Step 6: Register provider**
+- [x] **Step 6: Register provider**
 
 Modify `backend/src/app.module.ts`.
 
@@ -1988,7 +1988,7 @@ Add provider:
     },
 ```
 
-- [ ] **Step 7: Run service test**
+- [x] **Step 7: Run service test**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen/backend
@@ -1997,7 +1997,7 @@ npm test -- tests/application/nutrition-governance/nutrition-governance.service.
 
 Expected: PASS.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen
@@ -2014,7 +2014,7 @@ git commit -m "feat: add supplement label draft workflow"
 - Create: `admin-web/src/api/nutritionGovernance.ts`
 - Modify: `admin-web/src/api/index.ts`
 
-- [ ] **Step 1: Create admin web types**
+- [x] **Step 1: Create admin web types**
 
 Create `admin-web/src/types/nutritionGovernance.ts`:
 
@@ -2078,7 +2078,7 @@ export interface SupplementNutritionDraft {
 }
 ```
 
-- [ ] **Step 2: Create API wrapper**
+- [x] **Step 2: Create API wrapper**
 
 Create `admin-web/src/api/nutritionGovernance.ts`:
 
@@ -2120,7 +2120,7 @@ export const nutritionGovernanceApi = {
 }
 ```
 
-- [ ] **Step 3: Re-export API**
+- [x] **Step 3: Re-export API**
 
 Modify `admin-web/src/api/index.ts` near other re-exports:
 
@@ -2128,7 +2128,7 @@ Modify `admin-web/src/api/index.ts` near other re-exports:
 export { nutritionGovernanceApi } from './nutritionGovernance'
 ```
 
-- [ ] **Step 4: Run admin build**
+- [x] **Step 4: Run admin build**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen/admin-web
@@ -2137,7 +2137,7 @@ npm run build
 
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen
@@ -2158,7 +2158,7 @@ git commit -m "feat: add nutrition governance admin client"
 - Modify: `admin-web/src/router/index.ts`
 - Modify: `admin-web/src/layouts/MainLayout.vue`
 
-- [ ] **Step 1: Create overview cards**
+- [x] **Step 1: Create overview cards**
 
 Create `admin-web/src/views/NutritionGovernance/components/OverviewCards.vue`:
 
@@ -2209,7 +2209,7 @@ const items = computed(() => [
 </style>
 ```
 
-- [ ] **Step 2: Create nutrition preview**
+- [x] **Step 2: Create nutrition preview**
 
 Create `admin-web/src/views/NutritionGovernance/components/NutritionProfilePreview.vue`:
 
@@ -2253,7 +2253,7 @@ defineProps<{ profile: any }>()
 </style>
 ```
 
-- [ ] **Step 3: Create food candidates table**
+- [x] **Step 3: Create food candidates table**
 
 Create `admin-web/src/views/NutritionGovernance/components/FoodCandidatesTable.vue`:
 
@@ -2309,7 +2309,7 @@ function confidenceType(confidence: NutritionMatchConfidence) {
 </script>
 ```
 
-- [ ] **Step 4: Create supplement drafts table**
+- [x] **Step 4: Create supplement drafts table**
 
 Create `admin-web/src/views/NutritionGovernance/components/SupplementDraftsTable.vue`:
 
@@ -2319,7 +2319,7 @@ Create `admin-web/src/views/NutritionGovernance/components/SupplementDraftsTable
 </template>
 ```
 
-- [ ] **Step 5: Create page**
+- [x] **Step 5: Create page**
 
 Create `admin-web/src/views/NutritionGovernance/index.vue`:
 
@@ -2441,7 +2441,7 @@ onMounted(loadData)
 </style>
 ```
 
-- [ ] **Step 6: Add route**
+- [x] **Step 6: Add route**
 
 Modify `admin-web/src/router/index.ts` under the main layout children near `ingredients`:
 
@@ -2454,7 +2454,7 @@ Modify `admin-web/src/router/index.ts` under the main layout children near `ingr
       },
 ```
 
-- [ ] **Step 7: Add sidebar menu item**
+- [x] **Step 7: Add sidebar menu item**
 
 Modify `admin-web/src/layouts/MainLayout.vue` after 原料管理:
 
@@ -2471,7 +2471,7 @@ Add icon import:
   DataAnalysis,
 ```
 
-- [ ] **Step 8: Run admin build**
+- [x] **Step 8: Run admin build**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen/admin-web
@@ -2480,7 +2480,7 @@ npm run build
 
 Expected: PASS.
 
-- [ ] **Step 9: Commit**
+- [x] **Step 9: Commit**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen
@@ -2495,7 +2495,7 @@ git commit -m "feat: add nutrition governance admin page"
 **Files:**
 - Modify: `docs/superpowers/plans/2026-05-11-ingredient-nutrition-governance.md`
 
-- [ ] **Step 1: Run backend focused tests**
+- [x] **Step 1: Run backend focused tests**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen/backend
@@ -2504,7 +2504,7 @@ npm test -- tests/domain/nutrition-governance/nutrition-governance.utils.spec.ts
 
 Expected: PASS.
 
-- [ ] **Step 2: Run backend build**
+- [x] **Step 2: Run backend build**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen/backend
@@ -2513,7 +2513,7 @@ npm run build
 
 Expected: PASS.
 
-- [ ] **Step 3: Run admin build**
+- [x] **Step 3: Run admin build**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen/admin-web
@@ -2522,7 +2522,7 @@ npm run build
 
 Expected: PASS.
 
-- [ ] **Step 4: Manual smoke check**
+- [x] **Step 4: Manual smoke check**
 
 Start backend if needed:
 
@@ -2550,13 +2550,23 @@ Open the printed local URL and check:
 - Food candidates tab loads an empty table or real candidates.
 - Confirm button shows a warning before writing.
 
-- [ ] **Step 5: Commit final verification note if the plan file checklist was updated**
+- [x] **Step 5: Commit final verification note if the plan file checklist was updated**
 
 ```bash
 cd /Users/zhaochen/Documents/SevenKitchen
 git add docs/superpowers/plans/2026-05-11-ingredient-nutrition-governance.md
 git commit -m "docs: update nutrition governance verification"
 ```
+
+---
+
+## Verification Results
+
+- Backend focused tests: PASS, 5 suites / 36 tests.
+- Backend build: PASS, including Prisma client generation and font copy.
+- Admin web build: PASS. Vite reported the existing chunk-size warning only.
+- Local backend smoke: BLOCKED by local PostgreSQL not running at `localhost:5432`; `start:check` reached app boot with `DATABASE_URL` set, then Prisma returned `P1001`.
+- Admin web smoke: PASS with a temporary local mock API for the page endpoints. Verified sidebar entry `原料营养治理`, route `/nutrition-governance`, overview cards, food candidate table, confirm warning dialog, and supplement-recognition tab.
 
 ---
 

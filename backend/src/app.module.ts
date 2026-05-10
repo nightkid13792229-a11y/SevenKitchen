@@ -154,6 +154,8 @@ import { PrismaPurchaseRecordRepository } from './infrastructure/repositories/pr
 import { StaffProductionService } from './application/production/kitchen.service';
 import { NutritionFoodController } from './interfaces/controllers/nutrition-food.controller';
 import { NutritionFoodService } from './application/nutrition-food/nutrition-food.service';
+import { NutritionGovernanceController } from './interfaces/controllers/nutrition-governance.controller';
+import { NutritionGovernanceService } from './application/nutrition-governance/nutrition-governance.service';
 import { RecommendedProductController } from './interfaces/controllers/recommended-product.controller';
 import { ProcurementSkuController } from './interfaces/controllers/procurement-sku.controller';
 import { RecommendedProductService } from './application/ingredient/recommended-product.service';
@@ -249,6 +251,7 @@ validatePrismaConfig();
     AdminCustomRecipeController,
     SharedPhotosController,
     NutritionFoodController,
+    NutritionGovernanceController,
     RecommendedProductController,
     ReviewsController,
     FeedbackController,
@@ -611,6 +614,7 @@ validatePrismaConfig();
     CustomRecipeService,
     // Nutrition Food Service (Recipe Designer)
     NutritionFoodService,
+    NutritionGovernanceService,
     // Recommended Product Service
     RecommendedProductService,
     DogProfileAnalyticsService,

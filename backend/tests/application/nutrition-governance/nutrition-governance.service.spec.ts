@@ -10,10 +10,13 @@ describe('NutritionGovernanceService', () => {
   const mockPrismaService = {
     ingredient: {
       count: jest.fn(),
+      findUnique: jest.fn(),
       update: jest.fn(),
     },
     ingredientNutritionCandidate: {
+      count: jest.fn(),
       findUnique: jest.fn(),
+      upsert: jest.fn(),
       update: jest.fn(),
     },
     nutritionFood: {
@@ -24,6 +27,7 @@ describe('NutritionGovernanceService', () => {
     },
     nutritionSourceRecord: {
       upsert: jest.fn(),
+      findMany: jest.fn(),
     },
     supplementNutritionDraft: {
       count: jest.fn(),
@@ -113,7 +117,7 @@ describe('NutritionGovernanceService', () => {
     });
 
     expect(mockPrismaService.nutritionSourceRecord.upsert).toHaveBeenCalledWith(
-      {
+      expect.objectContaining({
         where: {
           sourceType_sourceKey: {
             sourceType: 'USDA',
@@ -130,12 +134,42 @@ describe('NutritionGovernanceService', () => {
         }),
         update: expect.objectContaining({
           sourceTitle: 'USDA Chicken Breast',
-          status: 'ACTIVE',
           rawData: { fdcId: 123 },
           normalizedNutrition,
         }),
-      },
+      }),
     );
+    const call = mockPrismaService.nutritionSourceRecord.upsert.mock.calls[0][0];
+    expect(call.update).not.toHaveProperty('status');
+  });
+
+  it('does not reopen confirmed candidates when regenerating food matches', async () => {
+    const normalizedNutrition = createEmptyNutritionProfile();
+    mockPrismaService.ingredient.findUnique.mockResolvedValue({
+      id: 'ingredient-1',
+      name: 'Chicken Breast',
+      type: 'FOOD',
+    });
+    mockPrismaService.nutritionSourceRecord.findMany.mockResolvedValue([
+      {
+        id: 'source-record-1',
+        sourceType: 'USDA',
+        foodName: 'Chicken Breast',
+        normalizedNutrition,
+      },
+    ]);
+    mockPrismaService.ingredientNutritionCandidate.findUnique.mockResolvedValue({
+      id: 'candidate-1',
+      status: NutritionCandidateStatus.CONFIRMED,
+    });
+
+    await expect(
+      service.generateFoodCandidatesForIngredient('ingredient-1'),
+    ).resolves.toEqual([]);
+
+    expect(
+      mockPrismaService.ingredientNutritionCandidate.upsert,
+    ).not.toHaveBeenCalled();
   });
 
   it('confirmCandidate writes source metadata into Ingredient.nutritionProfile and confirms the candidate', async () => {
@@ -146,6 +180,7 @@ describe('NutritionGovernanceService', () => {
         id: 'candidate-1',
         ingredientId: 'ingredient-1',
         sourceRecordId: 'source-record-1',
+        status: NutritionCandidateStatus.CANDIDATE,
         confidence: 'HIGH',
         score: 0.9,
         matchReasons: [
@@ -204,5 +239,48 @@ describe('NutritionGovernanceService', () => {
         }),
       }),
     );
+  });
+
+  it('rejects confirmation for terminal candidates before writing nutrition data', async () => {
+    const normalizedNutrition = createEmptyNutritionProfile();
+    mockPrismaService.ingredientNutritionCandidate.findUnique.mockResolvedValue({
+      id: 'candidate-1',
+      ingredientId: 'ingredient-1',
+      sourceRecordId: 'source-record-1',
+      status: NutritionCandidateStatus.REJECTED,
+      confidence: 'HIGH',
+      score: 0.9,
+      normalizedNutrition,
+      ingredient: { id: 'ingredient-1', name: 'Chicken Breast', type: 'FOOD' },
+      sourceRecord: {
+        id: 'source-record-1',
+        sourceType: 'USDA',
+        sourceTitle: 'USDA Chicken Breast',
+        sourceDetail: null,
+        sourceKey: 'USDA:123',
+        foodName: 'Chicken Breast',
+        foodNameEn: null,
+      },
+    });
+
+    await expect(
+      service.confirmCandidate('candidate-1', 'admin-1'),
+    ).rejects.toThrow('仅待确认候选可以确认');
+
+    expect(mockPrismaService.ingredient.update).not.toHaveBeenCalled();
+    expect(mockPrismaService.nutritionFood.upsert).not.toHaveBeenCalled();
+  });
+
+  it('does not reject an already confirmed candidate', async () => {
+    mockPrismaService.ingredientNutritionCandidate.findUnique.mockResolvedValue({
+      id: 'candidate-1',
+      status: NutritionCandidateStatus.CONFIRMED,
+    });
+
+    await expect(service.rejectCandidate('candidate-1')).rejects.toThrow(
+      '仅待确认候选可以拒绝',
+    );
+
+    expect(mockPrismaService.ingredientNutritionCandidate.update).not.toHaveBeenCalled();
   });
 });

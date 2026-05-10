@@ -34,6 +34,12 @@ const MANAGED_INGREDIENT_TYPES = [
   IngredientType.FOOD,
   IngredientType.SUPPLEMENT,
 ];
+const TERMINAL_CANDIDATE_STATUSES: ReadonlySet<NutritionCandidateStatus> =
+  new Set([
+  NutritionCandidateStatus.CONFIRMED,
+  NutritionCandidateStatus.REJECTED,
+  NutritionCandidateStatus.SKIPPED,
+]);
 
 type NutritionGovernanceTransaction = Pick<
   PrismaService,
@@ -118,7 +124,7 @@ export class NutritionGovernanceService {
     const sourceDetail = toNullableJsonInput(input.sourceDetail);
     const rawData = toJsonInput(input.rawData);
     const normalizedNutrition = toNullableJsonInput(input.normalizedNutrition);
-    const data = {
+    const createData = {
       sourceType: input.sourceType,
       sourceKey,
       sourceTitle: input.sourceTitle,
@@ -131,6 +137,16 @@ export class NutritionGovernanceService {
       normalizedNutrition,
       status: 'ACTIVE',
     } satisfies Prisma.NutritionSourceRecordUncheckedCreateInput;
+    const updateData = {
+      sourceTitle: input.sourceTitle,
+      sourceDetail,
+      foodName: input.foodName,
+      foodNameEn: input.foodNameEn ?? null,
+      dataType: input.dataType ?? null,
+      category: input.category ?? null,
+      rawData,
+      normalizedNutrition,
+    } satisfies Prisma.NutritionSourceRecordUncheckedUpdateInput;
 
     return this.prisma.nutritionSourceRecord.upsert({
       where: {
@@ -139,12 +155,8 @@ export class NutritionGovernanceService {
           sourceKey,
         },
       },
-      create: data,
-      update: {
-        ...data,
-        sourceType: undefined,
-        sourceKey: undefined,
-      },
+      create: createData,
+      update: updateData,
     });
   }
 
@@ -186,13 +198,27 @@ export class NutritionGovernanceService {
       if (score < 0.35) continue;
 
       const confidence = classifyMatchConfidence(score);
-      const candidate = await this.prisma.ingredientNutritionCandidate.upsert({
-        where: {
-          ingredientId_sourceRecordId: {
-            ingredientId,
-            sourceRecordId: sourceRecord.id,
-          },
+      const candidateWhere = {
+        ingredientId_sourceRecordId: {
+          ingredientId,
+          sourceRecordId: sourceRecord.id,
         },
+      };
+      const existingCandidate =
+        await this.prisma.ingredientNutritionCandidate.findUnique({
+          where: candidateWhere,
+          select: { id: true, status: true },
+        });
+
+      if (
+        existingCandidate &&
+        TERMINAL_CANDIDATE_STATUSES.has(existingCandidate.status)
+      ) {
+        continue;
+      }
+
+      const candidate = await this.prisma.ingredientNutritionCandidate.upsert({
+        where: candidateWhere,
         create: {
           ingredientId,
           sourceRecordId: sourceRecord.id,
@@ -253,6 +279,10 @@ export class NutritionGovernanceService {
 
     if (!candidate) {
       throw new NotFoundException('营养候选不存在');
+    }
+
+    if (candidate.status !== NutritionCandidateStatus.CANDIDATE) {
+      throw new BadRequestException('仅待确认候选可以确认');
     }
 
     if (!candidate.normalizedNutrition) {
@@ -367,6 +397,21 @@ export class NutritionGovernanceService {
   }
 
   async rejectCandidate(candidateId: string) {
+    const candidate = await this.prisma.ingredientNutritionCandidate.findUnique(
+      {
+        where: { id: candidateId },
+        select: { id: true, status: true },
+      },
+    );
+
+    if (!candidate) {
+      throw new NotFoundException('营养候选不存在');
+    }
+
+    if (candidate.status !== NutritionCandidateStatus.CANDIDATE) {
+      throw new BadRequestException('仅待确认候选可以拒绝');
+    }
+
     return this.prisma.ingredientNutritionCandidate.update({
       where: { id: candidateId },
       data: { status: NutritionCandidateStatus.REJECTED },

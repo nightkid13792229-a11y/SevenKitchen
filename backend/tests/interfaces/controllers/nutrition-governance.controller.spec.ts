@@ -12,6 +12,7 @@ describe('NutritionGovernanceController', () => {
     getOverview: jest.Mock;
     listCandidates: jest.Mock;
     generateFoodCandidatesForIngredient: jest.Mock;
+    importUsdaSourceRecord: jest.Mock;
     confirmCandidate: jest.Mock;
     rejectCandidate: jest.Mock;
   };
@@ -21,6 +22,7 @@ describe('NutritionGovernanceController', () => {
       getOverview: jest.fn(),
       listCandidates: jest.fn(),
       generateFoodCandidatesForIngredient: jest.fn(),
+      importUsdaSourceRecord: jest.fn(),
       confirmCandidate: jest.fn(),
       rejectCandidate: jest.fn(),
     };
@@ -83,6 +85,26 @@ describe('NutritionGovernanceController', () => {
       code: 0,
       message: '确认成功',
       data: confirmedCandidate,
+    });
+  });
+
+  it('imports a USDA source record and wraps the response', async () => {
+    const sourceRecord = {
+      id: 'source-record-1',
+      sourceType: 'USDA',
+      sourceKey: 'USDA:171077',
+    };
+    service.importUsdaSourceRecord.mockResolvedValue(sourceRecord);
+
+    const result = await controller.importUsdaSourceRecord({
+      fdcId: '171077',
+    });
+
+    expect(service.importUsdaSourceRecord).toHaveBeenCalledWith('171077');
+    expect(result).toEqual({
+      code: 0,
+      message: 'USDA 来源导入成功',
+      data: sourceRecord,
     });
   });
 

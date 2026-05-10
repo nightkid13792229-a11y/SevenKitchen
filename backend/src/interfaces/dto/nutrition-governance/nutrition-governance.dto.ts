@@ -29,3 +29,10 @@ export class GenerateFoodCandidatesDto {
   @IsNotEmpty()
   ingredientId!: string;
 }
+
+export class ImportUsdaSourceDto {
+  @ApiProperty({ description: 'USDA FoodData Central FDC ID' })
+  @IsString()
+  @IsNotEmpty()
+  fdcId!: string;
+}

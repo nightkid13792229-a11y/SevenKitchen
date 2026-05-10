@@ -25,6 +25,7 @@ import {
   buildNutritionSourceKey,
   classifyMatchConfidence,
   getSourcePriority,
+  mapUsdaNutrientsToNutritionProfile,
   scoreIngredientSourceNameMatch,
 } from '../../domain/nutrition-governance/nutrition-governance.utils';
 import { PrismaService } from '../../infrastructure/prisma.service';
@@ -61,6 +62,20 @@ export interface NutritionGovernanceOverview {
 export interface ListNutritionCandidatesParams {
   status?: NutritionCandidateStatus;
   confidence?: NutritionMatchConfidence;
+}
+
+interface UsdaFoodData extends Record<string, unknown> {
+  fdcId?: string | number;
+  description?: string;
+  dataType?: string;
+  publicationDate?: string;
+  foodCategory?: {
+    description?: string;
+  };
+  foodNutrients?: Array<{
+    nutrient?: { id?: number; name?: string; unitName?: string };
+    amount?: number;
+  }>;
 }
 
 @Injectable()
@@ -157,6 +172,50 @@ export class NutritionGovernanceService {
       },
       create: createData,
       update: updateData,
+    });
+  }
+
+  async importUsdaSourceRecord(fdcId: string) {
+    const apiKey = process.env.USDA_API_KEY;
+
+    if (!apiKey) {
+      throw new BadRequestException('USDA API密钥未配置');
+    }
+
+    const response = await fetch(
+      `https://api.nal.usda.gov/fdc/v1/food/${encodeURIComponent(fdcId)}?api_key=${apiKey}`,
+      {
+        headers: {
+          Accept: 'application/json',
+        },
+      },
+    );
+
+    if (!response.ok) {
+      throw new BadRequestException('USDA API请求失败');
+    }
+
+    const food = (await response.json()) as UsdaFoodData;
+    const externalId = String(food.fdcId ?? fdcId);
+    const description = food.description ?? '';
+    const profile = mapUsdaNutrientsToNutritionProfile(
+      food.foodNutrients || [],
+    );
+
+    return this.upsertSourceRecord({
+      sourceType: 'USDA',
+      externalId,
+      sourceTitle: 'USDA FoodData Central',
+      foodName: description,
+      foodNameEn: description,
+      dataType: food.dataType ?? null,
+      category: food.foodCategory?.description ?? null,
+      sourceDetail: {
+        fdcId: externalId,
+        publicationDate: food.publicationDate ?? null,
+      },
+      rawData: food,
+      normalizedNutrition: profile,
     });
   }
 

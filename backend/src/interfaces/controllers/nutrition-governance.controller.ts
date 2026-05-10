@@ -28,6 +28,7 @@ import { ApiResponseDto } from '../dto/common/response.dto';
 import { AdminGuard } from '../guards/role.guard';
 import {
   GenerateFoodCandidatesDto,
+  ImportUsdaSourceDto,
   ListNutritionCandidatesQueryDto,
 } from '../dto/nutrition-governance/nutrition-governance.dto';
 
@@ -80,6 +81,17 @@ export class NutritionGovernanceController {
         dto.ingredientId,
       );
     return new ApiResponseDto(0, '生成候选成功', result);
+  }
+
+  @Post('sources/usda/import')
+  @ApiOperation({ summary: '导入USDA来源营养记录' })
+  @ApiResponse({ status: 201, description: 'USDA 来源导入成功' })
+  async importUsdaSourceRecord(
+    @Body() dto: ImportUsdaSourceDto,
+  ): Promise<ApiResponseDto<unknown>> {
+    const result =
+      await this.nutritionGovernanceService.importUsdaSourceRecord(dto.fdcId);
+    return new ApiResponseDto(0, 'USDA 来源导入成功', result);
   }
 
   @Post('candidates/:id/confirm')

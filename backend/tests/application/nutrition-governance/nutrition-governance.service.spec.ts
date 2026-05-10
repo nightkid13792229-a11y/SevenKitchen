@@ -6,6 +6,8 @@ import { PrismaService } from '../../../src/infrastructure/prisma.service';
 
 describe('NutritionGovernanceService', () => {
   let service: NutritionGovernanceService;
+  const originalUsdaApiKey = process.env.USDA_API_KEY;
+  const originalFetch = global.fetch;
 
   const mockPrismaService = {
     ingredient: {
@@ -51,6 +53,15 @@ describe('NutritionGovernanceService', () => {
     mockPrismaService.$transaction.mockImplementation(async (callback: any) =>
       callback(mockPrismaService),
     );
+  });
+
+  afterEach(() => {
+    if (originalUsdaApiKey === undefined) {
+      delete process.env.USDA_API_KEY;
+    } else {
+      process.env.USDA_API_KEY = originalUsdaApiKey;
+    }
+    global.fetch = originalFetch;
   });
 
   it('getOverview excludes packaging from coverage and returns mocked counts', async () => {
@@ -141,6 +152,112 @@ describe('NutritionGovernanceService', () => {
     );
     const call = mockPrismaService.nutritionSourceRecord.upsert.mock.calls[0][0];
     expect(call.update).not.toHaveProperty('status');
+  });
+
+  it('imports a USDA source record by FDC id', async () => {
+    process.env.USDA_API_KEY = 'test-usda-key';
+    const food = {
+      fdcId: 171077,
+      description: 'Chicken breast, cooked, roasted',
+      dataType: 'SR Legacy',
+      publicationDate: '2019-04-01',
+      foodCategory: { description: 'Poultry Products' },
+      foodNutrients: [
+        {
+          nutrient: { id: 1008, name: 'Energy', unitName: 'kcal' },
+          amount: 165,
+        },
+        {
+          nutrient: { id: 1003, name: 'Protein', unitName: 'g' },
+          amount: 31,
+        },
+      ],
+    };
+    const importedRecord = {
+      id: 'source-record-1',
+      sourceType: 'USDA',
+      sourceKey: 'USDA:171077',
+    };
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: jest.fn().mockResolvedValue(food),
+    });
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+    mockPrismaService.nutritionSourceRecord.upsert.mockResolvedValue(
+      importedRecord,
+    );
+
+    await expect(service.importUsdaSourceRecord('171077')).resolves.toBe(
+      importedRecord,
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      'https://api.nal.usda.gov/fdc/v1/food/171077?api_key=test-usda-key',
+      { headers: { Accept: 'application/json' } },
+    );
+    expect(mockPrismaService.nutritionSourceRecord.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          sourceType_sourceKey: {
+            sourceType: 'USDA',
+            sourceKey: 'USDA:171077',
+          },
+        },
+        create: expect.objectContaining({
+          sourceType: 'USDA',
+          sourceKey: 'USDA:171077',
+          sourceTitle: 'USDA FoodData Central',
+          foodName: 'Chicken breast, cooked, roasted',
+          foodNameEn: 'Chicken breast, cooked, roasted',
+          dataType: 'SR Legacy',
+          category: 'Poultry Products',
+          sourceDetail: expect.objectContaining({
+            fdcId: '171077',
+            publicationDate: '2019-04-01',
+          }),
+          rawData: food,
+          normalizedNutrition: expect.objectContaining({
+            meta: expect.objectContaining({ sourceType: 'USDA' }),
+            macros: expect.objectContaining({
+              energyKcal: 165,
+              crudeProtein: 31,
+            }),
+          }),
+        }),
+        update: expect.objectContaining({
+          sourceTitle: 'USDA FoodData Central',
+          rawData: food,
+        }),
+      }),
+    );
+  });
+
+  it('rejects USDA import when the API key is missing', async () => {
+    delete process.env.USDA_API_KEY;
+    const fetchMock = jest.fn();
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    await expect(service.importUsdaSourceRecord('171077')).rejects.toThrow(
+      'USDA API密钥未配置',
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mockPrismaService.nutritionSourceRecord.upsert).not.toHaveBeenCalled();
+  });
+
+  it('rejects USDA import when the API response fails', async () => {
+    process.env.USDA_API_KEY = 'test-usda-key';
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: false,
+      json: jest.fn(),
+    });
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+
+    await expect(service.importUsdaSourceRecord('171077')).rejects.toThrow(
+      'USDA API请求失败',
+    );
+
+    expect(mockPrismaService.nutritionSourceRecord.upsert).not.toHaveBeenCalled();
   });
 
   it('does not reopen confirmed candidates when regenerating food matches', async () => {

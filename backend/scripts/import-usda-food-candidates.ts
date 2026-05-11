@@ -106,7 +106,7 @@ const USDA_SEARCH_TERM_ALIASES: ReadonlyArray<{
   { names: ['冬瓜'], terms: ['wax gourd raw'] },
   { names: ['南瓜'], terms: ['pumpkin raw'] },
   { names: ['卷心菜'], terms: ['cabbage raw'] },
-  { names: ['口蘑'], terms: ['mushroom white raw'] },
+  { names: ['口蘑'], terms: ['mushrooms white raw'] },
   { names: ['咖喱粉'], terms: ['curry powder'] },
   { names: ['土豆', '马铃薯'], terms: ['potatoes raw'] },
   { names: ['大米'], terms: ['rice white raw'] },

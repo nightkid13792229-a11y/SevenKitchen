@@ -28,6 +28,7 @@ describe('USDA food candidate import helpers', () => {
   it('builds curated USDA search terms for Chinese food ingredients', () => {
     expect(getUsdaSearchTerms('鸡胸')).toEqual(['chicken breast raw']);
     expect(getUsdaSearchTerms('梨（鲜）')).toEqual(['pear raw']);
+    expect(getUsdaSearchTerms('口蘑')).toEqual(['mushrooms white raw']);
     expect(getUsdaSearchTerms('黑木耳')).toEqual(['cloud ears']);
     expect(getUsdaSearchTerms('完全未知食材')).toEqual(['完全未知食材']);
   });
@@ -126,6 +127,30 @@ describe('USDA food candidate import helpers', () => {
     expect(selected).toHaveLength(1);
     expect(selected[0]?.food.fdcId).toBe(2);
     expect(selected[0]?.score).toBeGreaterThan(0.7);
+  });
+
+  it('prefers ordinary white mushrooms over UV-exposed white mushrooms', () => {
+    const selected = selectUsdaFoodsForIngredient({
+      ingredientName: '口蘑',
+      searchTerm: getUsdaSearchTerms('口蘑')[0] ?? '',
+      maxResults: 1,
+      foods: [
+        {
+          fdcId: 1,
+          description: 'Mushroom, white, exposed to ultraviolet light, raw',
+          dataType: 'SR Legacy',
+          foodNutrients: REQUIRED_NUTRIENTS,
+        },
+        {
+          fdcId: 2,
+          description: 'Mushrooms, white, raw',
+          dataType: 'SR Legacy',
+          foodNutrients: REQUIRED_NUTRIENTS,
+        },
+      ],
+    });
+
+    expect(selected.map((item) => item.food.fdcId)).toEqual([2]);
   });
 
   it('rejects partial matches when a multi-word search term only matches a generic word', () => {

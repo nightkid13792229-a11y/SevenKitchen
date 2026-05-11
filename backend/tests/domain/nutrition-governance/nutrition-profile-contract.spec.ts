@@ -95,18 +95,12 @@ describe('nutrition profile contract', () => {
 
     const issues = validateNutritionProfileContract(profile);
 
-    expect(issues).not.toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'MISSING_CONVERSION_EVIDENCE',
-          fieldPath: 'vitamins.vitaminA',
-        }),
-        expect.objectContaining({
-          code: 'MISSING_CONVERSION_EVIDENCE',
-          fieldPath: 'vitamins.vitaminD',
-        }),
-      ]),
-    );
+    const missingEvidenceFields = issues
+      .filter((issue) => issue.code === 'MISSING_CONVERSION_EVIDENCE')
+      .map((issue) => issue.fieldPath);
+
+    expect(missingEvidenceFields).not.toContain('vitamins.vitaminA');
+    expect(missingEvidenceFields).not.toContain('vitamins.vitaminD');
   });
 
   it('rejects legacy items arrays before confirmation', () => {

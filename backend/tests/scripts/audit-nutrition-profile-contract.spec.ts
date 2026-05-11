@@ -17,6 +17,21 @@ describe('nutrition profile contract audit script', () => {
     );
   });
 
+  it('recommends conversion evidence remediation for warning-only issues', () => {
+    const issues: NutritionProfileContractIssue[] = [
+      {
+        severity: 'WARNING',
+        code: 'MISSING_CONVERSION_EVIDENCE',
+        fieldPath: 'vitamins.vitaminD',
+        message: 'vitamins.vitaminD requires conversion evidence.',
+      },
+    ];
+
+    expect(getRecommendedAction(issues)).toBe(
+      '补充原始来源形式和单位换算说明后再确认',
+    );
+  });
+
   it('prioritizes conversion evidence guidance when other issue codes are present', () => {
     const issues: NutritionProfileContractIssue[] = [
       {

@@ -260,13 +260,14 @@ function getContractOptions(
 export function getRecommendedAction(
   issues: readonly NutritionProfileContractIssue[],
 ): string {
+  const codes = new Set(issues.map((issue) => issue.code));
+  if (codes.has('MISSING_CONVERSION_EVIDENCE'))
+    return '补充原始来源形式和单位换算说明后再确认';
+
   if (!hasNutritionProfileContractErrors(issues)) {
     return '可用于后续确认流程';
   }
 
-  const codes = new Set(issues.map((issue) => issue.code));
-  if (codes.has('MISSING_CONVERSION_EVIDENCE'))
-    return '补充原始来源形式和单位换算说明后再确认';
   if (codes.has('MISSING_PROFILE')) return '补充或导入营养档案';
   if (codes.has('LEGACY_PROFILE'))
     return '先迁移旧 items[] 结构到 NutritionProfileV2';

@@ -34,6 +34,7 @@
     "audit:ingredient-nutrition-coverage": "ts-node -r tsconfig-paths/register scripts/audit-ingredient-nutrition-coverage.ts",
     "audit:missing-supplement-concentrations": "ts-node -r tsconfig-paths/register scripts/audit-missing-supplement-concentrations.ts",
     "audit:recipe-stats": "ts-node scripts/audit-recipe-stats.ts",
+    "review:usda-candidates": "ts-node -r tsconfig-paths/register scripts/export-usda-candidate-review.ts",
     "repair:favorite-counts": "ts-node scripts/repair-favorite-counts.ts",
     "smoke:pricing-purchase": "node scripts/smoke_pricing_purchase_flow.js",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",

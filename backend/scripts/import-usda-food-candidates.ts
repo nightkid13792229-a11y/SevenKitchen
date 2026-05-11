@@ -193,7 +193,7 @@ const USDA_SEARCH_TERM_ALIASES: ReadonlyArray<{
   { names: ['鸭心'], terms: ['duck heart raw'] },
   { names: ['鸭肝'], terms: ['duck liver raw'] },
   { names: ['鸭胗'], terms: ['duck gizzard raw'] },
-  { names: ['鸭胸'], terms: ['duck breast raw'] },
+  { names: ['鸭胸'], terms: ['duck domesticated meat only raw'] },
   { names: ['鸭蛋'], terms: ['duck egg'] },
   { names: ['鹅肝'], terms: ['goose liver raw'] },
   { names: ['鹅胸肉'], terms: ['goose meat raw'] },
@@ -570,6 +570,10 @@ function scoreUsdaFood({
     score -= 0.45;
   }
 
+  if (requiresBreastCut(ingredientName) && !description.includes('breast')) {
+    score -= 0.3;
+  }
+
   for (const token of DISTRACTION_TOKENS) {
     if (description.includes(token)) {
       score -= 0.25;
@@ -614,6 +618,11 @@ function isOilIngredient(ingredientName: string, searchTerm: string): boolean {
   return (
     ingredientName.includes('油') || tokenizeEnglish(searchTerm).includes('oil')
   );
+}
+
+function requiresBreastCut(ingredientName: string): boolean {
+  const normalizedName = normalizeIngredientName(ingredientName).toLowerCase();
+  return normalizedName.includes('胸') || normalizedName.includes('breast');
 }
 
 function hasFinite(value: number | null | undefined): boolean {

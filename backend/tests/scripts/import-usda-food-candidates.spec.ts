@@ -32,6 +32,9 @@ describe('USDA food candidate import helpers', () => {
     expect(getUsdaSearchTerms('黑木耳')).toEqual(['cloud ears']);
     expect(getUsdaSearchTerms('青口贝')).toEqual(['green lipped mussel raw']);
     expect(getUsdaSearchTerms('西红柿')).toEqual(['tomatoes red ripe raw']);
+    expect(getUsdaSearchTerms('鸭胸')).toEqual([
+      'duck domesticated meat only raw',
+    ]);
     expect(getUsdaSearchTerms('完全未知食材')).toEqual(['完全未知食材']);
   });
 
@@ -201,6 +204,31 @@ describe('USDA food candidate import helpers', () => {
     });
 
     expect(selected.map((item) => item.food.fdcId)).toEqual([2]);
+  });
+
+  it('prefers domesticated raw duck meat over wild duck breast for default duck breast', () => {
+    const selected = selectUsdaFoodsForIngredient({
+      ingredientName: '鸭胸',
+      searchTerm: getUsdaSearchTerms('鸭胸')[0] ?? '',
+      maxResults: 1,
+      foods: [
+        {
+          fdcId: 1,
+          description: 'Duck, wild, breast, meat only, raw',
+          dataType: 'SR Legacy',
+          foodNutrients: REQUIRED_NUTRIENTS,
+        },
+        {
+          fdcId: 2,
+          description: 'Duck, domesticated, meat only, raw',
+          dataType: 'SR Legacy',
+          foodNutrients: REQUIRED_NUTRIENTS,
+        },
+      ],
+    });
+
+    expect(selected.map((item) => item.food.fdcId)).toEqual([2]);
+    expect(selected[0]?.score).toBeLessThan(0.85);
   });
 
   it('rejects partial matches when a multi-word search term only matches a generic word', () => {

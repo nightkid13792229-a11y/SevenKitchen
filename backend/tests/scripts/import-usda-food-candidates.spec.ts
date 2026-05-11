@@ -32,6 +32,9 @@ describe('USDA food candidate import helpers', () => {
     expect(getUsdaSearchTerms('黑木耳')).toEqual(['cloud ears']);
     expect(getUsdaSearchTerms('青口贝')).toEqual(['green lipped mussel raw']);
     expect(getUsdaSearchTerms('西红柿')).toEqual(['tomatoes red ripe raw']);
+    expect(getUsdaSearchTerms('燕麦')).toEqual([
+      'cereals oats regular quick not fortified dry',
+    ]);
     expect(getUsdaSearchTerms('鸭胸')).toEqual([
       'duck domesticated meat only raw',
     ]);
@@ -229,6 +232,31 @@ describe('USDA food candidate import helpers', () => {
 
     expect(selected.map((item) => item.food.fdcId)).toEqual([2]);
     expect(selected[0]?.score).toBeLessThan(0.85);
+  });
+
+  it('prefers regular quick not fortified dry oats over USDA food distribution oats', () => {
+    const selected = selectUsdaFoodsForIngredient({
+      ingredientName: '燕麦',
+      searchTerm: getUsdaSearchTerms('燕麦')[0] ?? '',
+      maxResults: 1,
+      foods: [
+        {
+          fdcId: 169705,
+          description:
+            "Oats (Includes foods for USDA's Food Distribution Program)",
+          dataType: 'SR Legacy',
+          foodNutrients: REQUIRED_NUTRIENTS,
+        },
+        {
+          fdcId: 173904,
+          description: 'Cereals, oats, regular and quick, not fortified, dry',
+          dataType: 'SR Legacy',
+          foodNutrients: REQUIRED_NUTRIENTS,
+        },
+      ],
+    });
+
+    expect(selected.map((item) => item.food.fdcId)).toEqual([173904]);
   });
 
   it('rejects partial matches when a multi-word search term only matches a generic word', () => {

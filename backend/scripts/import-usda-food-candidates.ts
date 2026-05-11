@@ -129,7 +129,7 @@ const USDA_SEARCH_TERM_ALIASES: ReadonlyArray<{
   { names: ['沙丁鱼'], terms: ['sardine raw'] },
   { names: ['火鸡胸肉'], terms: ['turkey breast raw'] },
   { names: ['火麻籽'], terms: ['hemp seeds hulled'] },
-  { names: ['燕麦'], terms: ['oats raw'] },
+  { names: ['燕麦'], terms: ['cereals oats regular quick not fortified dry'] },
   { names: ['牛心'], terms: ['beef heart raw'] },
   { names: ['牛肝'], terms: ['beef liver raw'] },
   { names: ['牛脾'], terms: ['beef spleen raw'] },

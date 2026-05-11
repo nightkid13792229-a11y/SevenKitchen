@@ -172,7 +172,7 @@ const USDA_SEARCH_TERM_ALIASES: ReadonlyArray<{
   { names: ['薏仁米'], terms: ['pearl barley raw'] },
   { names: ['藜麦'], terms: ['quinoa uncooked'] },
   { names: ['西兰花'], terms: ['broccoli raw'] },
-  { names: ['西红柿'], terms: ['tomato raw'] },
+  { names: ['西红柿'], terms: ['tomatoes red ripe raw'] },
   { names: ['西葫芦'], terms: ['zucchini raw'] },
   { names: ['豆腐'], terms: ['tofu raw'] },
   { names: ['豌豆'], terms: ['peas green raw'] },

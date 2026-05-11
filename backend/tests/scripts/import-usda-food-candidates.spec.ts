@@ -31,6 +31,7 @@ describe('USDA food candidate import helpers', () => {
     expect(getUsdaSearchTerms('口蘑')).toEqual(['mushrooms white raw']);
     expect(getUsdaSearchTerms('黑木耳')).toEqual(['cloud ears']);
     expect(getUsdaSearchTerms('青口贝')).toEqual(['green lipped mussel raw']);
+    expect(getUsdaSearchTerms('西红柿')).toEqual(['tomatoes red ripe raw']);
     expect(getUsdaSearchTerms('完全未知食材')).toEqual(['完全未知食材']);
   });
 
@@ -176,6 +177,30 @@ describe('USDA food candidate import helpers', () => {
     });
 
     expect(selected).toEqual([]);
+  });
+
+  it('prefers ordinary red ripe tomatoes over grape tomatoes', () => {
+    const selected = selectUsdaFoodsForIngredient({
+      ingredientName: '西红柿',
+      searchTerm: getUsdaSearchTerms('西红柿')[0] ?? '',
+      maxResults: 1,
+      foods: [
+        {
+          fdcId: 1,
+          description: 'Tomatoes, grape, raw',
+          dataType: 'Foundation',
+          foodNutrients: REQUIRED_NUTRIENTS,
+        },
+        {
+          fdcId: 2,
+          description: 'Tomatoes, red, ripe, raw, year round average',
+          dataType: 'SR Legacy',
+          foodNutrients: REQUIRED_NUTRIENTS,
+        },
+      ],
+    });
+
+    expect(selected.map((item) => item.food.fdcId)).toEqual([2]);
   });
 
   it('rejects partial matches when a multi-word search term only matches a generic word', () => {

@@ -92,11 +92,14 @@ export const INGREDIENT_NUTRITION_SAMPLE_STATE_OPTIONS: readonly IngredientNutri
 ] as const
 
 export const INGREDIENT_NUTRITION_SOURCE_TYPE_OPTIONS: readonly IngredientNutritionOption<NutritionProfileSourceType>[] = [
-  { label: 'CFCT', value: 'CFCT' },
   { label: 'USDA', value: 'USDA' },
-  { label: '品牌商品标签', value: 'LABEL' },
+  { label: 'CFCT', value: 'CFCT' },
+  { label: '补剂标签', value: 'SUPPLEMENT_LABEL' },
+  { label: '商品标签', value: 'LABEL' },
   { label: '第三方检测', value: 'LAB_REPORT' },
+  { label: '供应商规格', value: 'SUPPLIER' },
   { label: '文献资料', value: 'LITERATURE' },
+  { label: '人工录入', value: 'MANUAL' },
   { label: '人工估算', value: 'MANUAL_ESTIMATE' }
 ] as const
 

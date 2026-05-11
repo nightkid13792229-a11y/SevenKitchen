@@ -4,7 +4,7 @@ import {
   INGREDIENT_NUTRITION_FIELD_UNITS,
   INGREDIENT_NUTRITION_TAB_EMPTY_RECORDS,
   type IngredientNutritionTabKey
-} from '@/constants/ingredientNutrition'
+} from '../constants/ingredientNutrition.ts'
 import type {
   ActiveNutrientValue,
   AminoAcidNutritionProfileTab,
@@ -16,8 +16,9 @@ import type {
   NutritionProfile,
   NutritionProfileV2,
   NutritionRawBasisType,
+  NutritionSourceForm,
   VitaminNutritionProfileTab
-} from '@/types/ingredient'
+} from '../types/ingredient.ts'
 
 interface LegacyNutritionProfile {
   items: NutritionItem[]
@@ -188,6 +189,122 @@ function normalizeFieldDisplayUnits(input: unknown): Record<string, string> {
   }, {})
 }
 
+function normalizeNullableString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null
+}
+
+function assignStringValue(
+  result: NutritionSourceForm,
+  key: keyof NutritionSourceForm,
+  value: unknown
+): void {
+  if (typeof value === 'string' && value.trim().length > 0) {
+    result[key] = value.trim()
+  }
+}
+
+function assignNumberValue(
+  result: NutritionSourceForm,
+  key: keyof NutritionSourceForm,
+  value: unknown
+): void {
+  const normalized = normalizeNumber(value)
+  if (normalized !== null) {
+    result[key] = normalized
+  }
+}
+
+function normalizeSourceForm(input: unknown): NutritionSourceForm | null {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return null
+  }
+
+  const form = input as Record<string, unknown>
+  const result: NutritionSourceForm = {}
+  const sourceNutrientId = form.sourceNutrientId
+
+  if (
+    typeof sourceNutrientId === 'number' &&
+    Number.isFinite(sourceNutrientId)
+  ) {
+    result.sourceNutrientId = sourceNutrientId
+  } else if (
+    typeof sourceNutrientId === 'string' &&
+    sourceNutrientId.trim().length > 0
+  ) {
+    result.sourceNutrientId = sourceNutrientId.trim()
+  }
+
+  assignStringValue(result, 'sourceNutrientName', form.sourceNutrientName)
+  assignNumberValue(result, 'originalValue', form.originalValue)
+  assignStringValue(result, 'originalUnit', form.originalUnit)
+  assignNumberValue(result, 'canonicalValue', form.canonicalValue)
+  assignStringValue(result, 'canonicalUnit', form.canonicalUnit)
+  assignStringValue(result, 'basisType', form.basisType)
+  assignStringValue(result, 'notes', form.notes)
+
+  for (const [key, value] of Object.entries(form)) {
+    if (key in result || [
+      'sourceNutrientId',
+      'sourceNutrientName',
+      'originalValue',
+      'originalUnit',
+      'canonicalValue',
+      'canonicalUnit',
+      'basisType',
+      'notes'
+    ].includes(key)) {
+      continue
+    }
+
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      result[key] = value
+    } else if (typeof value === 'boolean') {
+      result[key] = value
+    } else if (typeof value === 'string' && value.trim().length > 0) {
+      result[key] = value.trim()
+    }
+  }
+
+  return Object.keys(result).length > 0 ? result : null
+}
+
+function normalizeSourceForms(input: unknown): Record<string, NutritionSourceForm> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return {}
+  }
+
+  return Object.entries(input as Record<string, unknown>).reduce<Record<string, NutritionSourceForm>>((result, [fieldPath, form]) => {
+    const normalizedFieldPath = fieldPath.trim()
+    if (!normalizedFieldPath) {
+      return result
+    }
+
+    const normalizedForm = normalizeSourceForm(form)
+    if (!normalizedForm) {
+      return result
+    }
+
+    result[normalizedFieldPath] = normalizedForm
+    return result
+  }, {})
+}
+
+function normalizeConversionNotes(input: unknown): Record<string, string> {
+  if (!input || typeof input !== 'object' || Array.isArray(input)) {
+    return {}
+  }
+
+  return Object.entries(input as Record<string, unknown>).reduce<Record<string, string>>((result, [fieldPath, note]) => {
+    if (!fieldPath.trim() || typeof note !== 'string' || !note.trim()) {
+      return result
+    }
+
+    result[fieldPath] = note.trim()
+    return result
+  }, {})
+}
+
 function assignLegacyItem(profile: NutritionProfileV2, item: NutritionItem): void {
   const nutrientCode = normalizeAlias(item.nutrientCode)
   const nutrientName = normalizeAlias(item.nutrientName)
@@ -273,6 +390,13 @@ export function createEmptyIngredientNutritionFormValue(): IngredientNutritionFo
       densityGPerMl: null,
       servingWeightG: null,
       sourceType: null,
+      sourceKind: null,
+      sourceCode: null,
+      sourceVersion: null,
+      externalId: null,
+      sourceRecordId: null,
+      sourceForms: {},
+      conversionNotes: {},
       sourceTitle: null,
       sourceProvider: null,
       attachments: [],
@@ -336,6 +460,16 @@ export function normalizeIngredientNutritionProfileToForm(
       ediblePortionRate: normalizeNumber(input.meta?.ediblePortionRate),
       densityGPerMl: normalizeNumber(input.meta?.densityGPerMl),
       servingWeightG: normalizeNumber(input.meta?.servingWeightG),
+      sourceKind: normalizeNullableString(input.meta?.sourceKind),
+      sourceCode: normalizeNullableString(input.meta?.sourceCode),
+      sourceVersion: normalizeNullableString(input.meta?.sourceVersion),
+      externalId: normalizeNullableString(input.meta?.externalId),
+      sourceRecordId: normalizeNullableString(input.meta?.sourceRecordId),
+      sourceTitle: normalizeNullableString(input.meta?.sourceTitle),
+      sourceProvider: normalizeNullableString(input.meta?.sourceProvider),
+      confidenceLevel: input.meta?.confidenceLevel ?? null,
+      sourceForms: normalizeSourceForms(input.meta?.sourceForms),
+      conversionNotes: normalizeConversionNotes(input.meta?.conversionNotes),
       fieldDisplayUnits: normalizeFieldDisplayUnits(input.meta?.fieldDisplayUnits),
       attachments: Array.isArray(input.meta?.attachments)
         ? input.meta.attachments.filter((attachment): attachment is string => typeof attachment === 'string' && attachment.trim().length > 0)
@@ -369,6 +503,16 @@ function hasMeaningfulMetaValue(profile: IngredientNutritionFormValue): boolean 
     profile.meta.densityGPerMl !== null ||
     profile.meta.servingWeightG !== null ||
     !!profile.meta.sourceType ||
+    !!profile.meta.sourceKind ||
+    !!profile.meta.sourceCode ||
+    !!profile.meta.sourceVersion ||
+    !!profile.meta.externalId ||
+    !!profile.meta.sourceRecordId ||
+    !!profile.meta.sourceTitle ||
+    !!profile.meta.sourceProvider ||
+    !!profile.meta.confidenceLevel ||
+    Object.keys(profile.meta.sourceForms ?? {}).length > 0 ||
+    Object.keys(profile.meta.conversionNotes ?? {}).length > 0 ||
     (profile.meta.attachments?.length ?? 0) > 0 ||
     !!profile.meta.versionNote?.trim()
   )
@@ -396,6 +540,16 @@ export function buildIngredientNutritionPayload(
       densityGPerMl: normalized.meta.densityGPerMl,
       servingWeightG: normalized.meta.servingWeightG,
       sourceType: normalized.meta.sourceType ?? null,
+      sourceKind: normalized.meta.sourceKind ?? null,
+      sourceCode: normalized.meta.sourceCode ?? null,
+      sourceVersion: normalized.meta.sourceVersion ?? null,
+      externalId: normalized.meta.externalId ?? null,
+      sourceRecordId: normalized.meta.sourceRecordId ?? null,
+      sourceForms: normalizeSourceForms(normalized.meta.sourceForms),
+      conversionNotes: normalizeConversionNotes(normalized.meta.conversionNotes),
+      sourceTitle: normalized.meta.sourceTitle ?? null,
+      sourceProvider: normalized.meta.sourceProvider ?? null,
+      confidenceLevel: normalized.meta.confidenceLevel ?? null,
       fieldDisplayUnits: normalizeFieldDisplayUnits(normalized.meta.fieldDisplayUnits),
       attachments: normalized.meta.attachments ?? [],
       versionNote: normalized.meta.versionNote?.trim() || null

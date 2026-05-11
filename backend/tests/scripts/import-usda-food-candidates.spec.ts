@@ -9,15 +9,26 @@ const REQUIRED_NUTRIENTS = [
   { nutrientId: 1008, nutrientName: 'Energy', unitName: 'KCAL', value: 120 },
   { nutrientId: 1051, nutrientName: 'Water', unitName: 'G', value: 70 },
   { nutrientId: 1003, nutrientName: 'Protein', unitName: 'G', value: 20 },
-  { nutrientId: 1004, nutrientName: 'Total lipid (fat)', unitName: 'G', value: 3 },
+  {
+    nutrientId: 1004,
+    nutrientName: 'Total lipid (fat)',
+    unitName: 'G',
+    value: 3,
+  },
   { nutrientId: 1087, nutrientName: 'Calcium, Ca', unitName: 'MG', value: 12 },
-  { nutrientId: 1091, nutrientName: 'Phosphorus, P', unitName: 'MG', value: 210 },
+  {
+    nutrientId: 1091,
+    nutrientName: 'Phosphorus, P',
+    unitName: 'MG',
+    value: 210,
+  },
 ];
 
 describe('USDA food candidate import helpers', () => {
   it('builds curated USDA search terms for Chinese food ingredients', () => {
     expect(getUsdaSearchTerms('鸡胸')).toEqual(['chicken breast raw']);
     expect(getUsdaSearchTerms('梨（鲜）')).toEqual(['pear raw']);
+    expect(getUsdaSearchTerms('黑木耳')).toEqual(['cloud ears']);
     expect(getUsdaSearchTerms('完全未知食材')).toEqual(['完全未知食材']);
   });
 
@@ -139,6 +150,70 @@ describe('USDA food candidate import helpers', () => {
     });
 
     expect(selected.map((item) => item.food.fdcId)).toEqual([1]);
+  });
+
+  it('rejects dried USDA foods unless the ingredient name explicitly marks a dry state', () => {
+    const foods = [
+      {
+        fdcId: 1,
+        description: 'Fungi, Cloud ears, dried',
+        dataType: 'SR Legacy',
+        foodNutrients: REQUIRED_NUTRIENTS,
+      },
+    ];
+
+    expect(
+      selectUsdaFoodsForIngredient({
+        ingredientName: '黑木耳',
+        searchTerm: 'cloud ears',
+        maxResults: 2,
+        foods,
+      }),
+    ).toEqual([]);
+
+    expect(
+      selectUsdaFoodsForIngredient({
+        ingredientName: '干黑木耳',
+        searchTerm: 'cloud ears',
+        maxResults: 2,
+        foods,
+      }).map((item) => item.food.fdcId),
+    ).toEqual([1]);
+  });
+
+  it('rejects flour or ground USDA foods unless the ingredient name explicitly marks a powder state', () => {
+    const foods = [
+      {
+        fdcId: 1,
+        description: 'Seeds, sesame flour, partially defatted',
+        dataType: 'SR Legacy',
+        foodNutrients: REQUIRED_NUTRIENTS,
+      },
+      {
+        fdcId: 2,
+        description: 'Seeds, sesame meal, partially defatted',
+        dataType: 'SR Legacy',
+        foodNutrients: REQUIRED_NUTRIENTS,
+      },
+    ];
+
+    expect(
+      selectUsdaFoodsForIngredient({
+        ingredientName: '白芝麻',
+        searchTerm: 'sesame seeds',
+        maxResults: 2,
+        foods,
+      }),
+    ).toEqual([]);
+
+    expect(
+      selectUsdaFoodsForIngredient({
+        ingredientName: '芝麻粉',
+        searchTerm: 'sesame seeds',
+        maxResults: 2,
+        foods,
+      }).map((item) => item.food.fdcId),
+    ).toEqual([1, 2]);
   });
 
   it('ignores null USDA records from downloaded datasets', () => {

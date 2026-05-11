@@ -1,5 +1,6 @@
 import { normalizeNutritionProfile } from '../ingredient/nutrition-profile.utils';
 import type { NutritionProfile } from '../ingredient/types';
+import { getFoodStateMismatches } from './food-state-match';
 
 export type UsdaCandidateReviewRiskLevel = 'LOW' | 'MEDIUM' | 'HIGH';
 export type UsdaCandidateReviewAction =
@@ -15,6 +16,7 @@ export type UsdaCandidateReviewFlag =
   | 'ADDED_SALT'
   | 'SWEET_POTATO_MISMATCH'
   | 'LEAF_MISMATCH'
+  | 'STATE_MISMATCH'
   | 'OIL_MISMATCH'
   | 'MISSING_CRITICAL_NUTRIENTS'
   | 'MISSING_SUPPORTING_NUTRIENTS';
@@ -284,6 +286,14 @@ function getRiskFlags(params: {
     flags.push('LEAF_MISMATCH');
   }
   if (
+    getFoodStateMismatches({
+      ingredientName: params.ingredientName,
+      foodDescription: params.bestCandidate.sourceRecord.foodName ?? '',
+    }).length > 0
+  ) {
+    flags.push('STATE_MISMATCH');
+  }
+  if (
     !normalizedIngredientName.includes('油') &&
     descriptionHasToken(description, 'oil')
   ) {
@@ -320,6 +330,7 @@ function getRiskLevel(
         'ADDED_SALT',
         'SWEET_POTATO_MISMATCH',
         'LEAF_MISMATCH',
+        'STATE_MISMATCH',
         'OIL_MISMATCH',
         'MISSING_CRITICAL_NUTRIENTS',
       ].includes(flag),
@@ -472,6 +483,7 @@ function flagLabel(flag: UsdaCandidateReviewFlag): string {
     ADDED_SALT: '疑似加盐',
     SWEET_POTATO_MISMATCH: '可能误匹配红薯',
     LEAF_MISMATCH: '可能误匹配叶片',
+    STATE_MISMATCH: '干/粉状态可能不匹配',
     OIL_MISMATCH: '可能误匹配油脂',
     MISSING_CRITICAL_NUTRIENTS: '缺少核心营养值',
     MISSING_SUPPORTING_NUTRIENTS: '缺少水分/钙/磷等辅助值',

@@ -239,6 +239,98 @@ describe('USDA candidate review rows', () => {
     );
   });
 
+  it('flags dry or powder USDA descriptions when the ingredient name does not mark that state', () => {
+    const rows = buildUsdaCandidateReviewRows([
+      {
+        ingredient: { id: 'ingredient-8', name: '黑木耳' },
+        candidates: [
+          {
+            id: 'candidate-1',
+            confidence: 'HIGH',
+            score: 0.87,
+            normalizedNutrition: completeProfile(),
+            sourceRecord: {
+              sourceKey: 'USDA:8',
+              foodName: 'Fungi, Cloud ears, dried',
+            },
+          },
+        ],
+      },
+      {
+        ingredient: { id: 'ingredient-9', name: '丁香粉' },
+        candidates: [
+          {
+            id: 'candidate-2',
+            confidence: 'HIGH',
+            score: 0.87,
+            normalizedNutrition: completeProfile(),
+            sourceRecord: {
+              sourceKey: 'USDA:9',
+              foodName: 'Spices, cloves, ground',
+            },
+          },
+        ],
+      },
+      {
+        ingredient: { id: 'ingredient-10', name: '白芝麻' },
+        candidates: [
+          {
+            id: 'candidate-3',
+            confidence: 'HIGH',
+            score: 0.87,
+            normalizedNutrition: completeProfile(),
+            sourceRecord: {
+              sourceKey: 'USDA:10',
+              foodName: 'Seeds, sesame flour, partially defatted',
+            },
+          },
+        ],
+      },
+      {
+        ingredient: { id: 'ingredient-11', name: '南瓜籽粉' },
+        candidates: [
+          {
+            id: 'candidate-4',
+            confidence: 'HIGH',
+            score: 0.87,
+            normalizedNutrition: completeProfile(),
+            sourceRecord: {
+              sourceKey: 'USDA:11',
+              foodName: 'Seeds, pumpkin seed meal',
+            },
+          },
+        ],
+      },
+    ]);
+
+    expect(rows).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ingredientName: '黑木耳',
+          riskLevel: 'HIGH',
+          recommendedAction: 'CHANGE_OR_CFCT',
+          riskFlags: expect.arrayContaining(['STATE_MISMATCH']),
+        }),
+        expect.objectContaining({
+          ingredientName: '丁香粉',
+          riskLevel: 'LOW',
+          riskFlags: [],
+        }),
+        expect.objectContaining({
+          ingredientName: '白芝麻',
+          riskLevel: 'HIGH',
+          recommendedAction: 'CHANGE_OR_CFCT',
+          riskFlags: expect.arrayContaining(['STATE_MISMATCH']),
+        }),
+        expect.objectContaining({
+          ingredientName: '南瓜籽粉',
+          riskLevel: 'LOW',
+          riskFlags: [],
+        }),
+      ]),
+    );
+  });
+
   it('keeps food ingredients without candidates in the review queue', () => {
     const rows = buildUsdaCandidateReviewRows([
       {

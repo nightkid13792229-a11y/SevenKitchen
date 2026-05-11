@@ -12,6 +12,7 @@ import type {
   NutritionMatchReason,
   NutritionSourceInput,
 } from '../src/domain/nutrition-governance/nutrition-governance.types';
+import { getFoodStateMismatches } from '../src/domain/nutrition-governance/food-state-match';
 import {
   buildNutritionSourceKey,
   classifyMatchConfidence,
@@ -199,7 +200,7 @@ const USDA_SEARCH_TERM_ALIASES: ReadonlyArray<{
   { names: ['鹌鹑蛋'], terms: ['quail egg'] },
   { names: ['鹿腿肉'], terms: ['venison raw'] },
   { names: ['黄瓜'], terms: ['cucumber raw'] },
-  { names: ['黑木耳'], terms: ['cloud ears dried'] },
+  { names: ['黑木耳'], terms: ['cloud ears'] },
 ];
 
 const DISTRACTION_TOKENS = [
@@ -230,7 +231,9 @@ loadEnv({ path: process.env.ENV_FILE || '.env' });
 export function getUsdaSearchTerms(ingredientName: string): string[] {
   const normalizedName = normalizeIngredientName(ingredientName);
   const exactMatch = USDA_SEARCH_TERM_ALIASES.find((entry) =>
-    entry.names.some((name) => normalizedName === normalizeIngredientName(name)),
+    entry.names.some(
+      (name) => normalizedName === normalizeIngredientName(name),
+    ),
   );
   if (exactMatch) {
     return dedupe([...exactMatch.terms]);
@@ -417,7 +420,9 @@ export async function runUsdaFoodCandidateImport({
 
       if (selectedFoods.length === 0) {
         counters.noMatch += 1;
-        reportRows.push(buildReportRow(ingredient, searchTerm, null, 'NO_MATCH'));
+        reportRows.push(
+          buildReportRow(ingredient, searchTerm, null, 'NO_MATCH'),
+        );
       }
 
       for (const selected of selectedFoods) {
@@ -504,6 +509,15 @@ function scoreUsdaFood({
   food: UsdaSearchFood;
 }): number {
   const description = normalizeEnglishText(food.description ?? '');
+  if (
+    getFoodStateMismatches({
+      ingredientName,
+      foodDescription: food.description ?? '',
+    }).length > 0
+  ) {
+    return 0;
+  }
+
   const searchTokens = tokenizeEnglish(searchTerm);
   const coreTokens = searchTokens.filter(
     (token) => !['fresh', 'raw', 'uncooked'].includes(token),
@@ -541,11 +555,17 @@ function scoreUsdaFood({
     score += 0.1;
   }
 
-  if (!isOilIngredient(ingredientName, searchTerm) && description.includes('oil')) {
+  if (
+    !isOilIngredient(ingredientName, searchTerm) &&
+    description.includes('oil')
+  ) {
     score -= 0.45;
   }
 
-  if (!tokenizeEnglish(searchTerm).includes('sweet') && description.includes('sweet potato')) {
+  if (
+    !tokenizeEnglish(searchTerm).includes('sweet') &&
+    description.includes('sweet potato')
+  ) {
     score -= 0.45;
   }
 
@@ -565,9 +585,9 @@ function hasMinimumNutritionCoverage(food: UsdaSearchFood): boolean {
   }).normalizedNutrition;
   return Boolean(
     profile &&
-      hasFinite(profile.macros.energyKcal) &&
-      hasFinite(profile.macros.crudeProtein) &&
-      hasFinite(profile.macros.crudeFat),
+    hasFinite(profile.macros.energyKcal) &&
+    hasFinite(profile.macros.crudeProtein) &&
+    hasFinite(profile.macros.crudeFat),
   );
 }
 
@@ -579,7 +599,10 @@ function normalizeIngredientName(name: string): string {
 }
 
 function normalizeEnglishText(value: string): string {
-  return value.trim().toLowerCase().replace(/[^a-z0-9]+/gu, ' ');
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gu, ' ');
 }
 
 function tokenizeEnglish(value: string): string[] {
@@ -587,7 +610,9 @@ function tokenizeEnglish(value: string): string[] {
 }
 
 function isOilIngredient(ingredientName: string, searchTerm: string): boolean {
-  return ingredientName.includes('油') || tokenizeEnglish(searchTerm).includes('oil');
+  return (
+    ingredientName.includes('油') || tokenizeEnglish(searchTerm).includes('oil')
+  );
 }
 
 function hasFinite(value: number | null | undefined): boolean {
@@ -595,7 +620,9 @@ function hasFinite(value: number | null | undefined): boolean {
 }
 
 function dedupe(values: string[]): string[] {
-  return Array.from(new Set(values.map((value) => value.trim()).filter(Boolean)));
+  return Array.from(
+    new Set(values.map((value) => value.trim()).filter(Boolean)),
+  );
 }
 
 function roundScore(value: number): number {
@@ -623,7 +650,9 @@ async function fetchUsdaSearchFoods({
   url.searchParams.set('pageSize', String(pageSize));
   url.searchParams.set('dataType', 'Foundation,SR Legacy');
 
-  const response = await fetch(url, { headers: { Accept: 'application/json' } });
+  const response = await fetch(url, {
+    headers: { Accept: 'application/json' },
+  });
   if (!response.ok) {
     throw new Error(`USDA API ${response.status}`);
   }
@@ -632,7 +661,9 @@ async function fetchUsdaSearchFoods({
   return body.foods ?? [];
 }
 
-async function loadUsdaFoodsFromJsonFiles(paths: string[]): Promise<UsdaSearchFood[]> {
+async function loadUsdaFoodsFromJsonFiles(
+  paths: string[],
+): Promise<UsdaSearchFood[]> {
   const foods: UsdaSearchFood[] = [];
 
   for (const path of paths) {

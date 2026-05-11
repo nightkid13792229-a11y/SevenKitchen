@@ -31,7 +31,7 @@ export type NutritionRawBasisType =
   | 'PER_SERVING';
 
 export interface NutritionSourceForm {
-  sourceNutrientId?: string | null;
+  sourceNutrientId?: string | number | null;
   sourceNutrientName?: string | null;
   originalValue?: number | string | null;
   originalUnit?: string | null;

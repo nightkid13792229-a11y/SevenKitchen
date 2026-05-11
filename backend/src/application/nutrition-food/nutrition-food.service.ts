@@ -24,6 +24,7 @@ import {
   USDAFoodSearchResultDto,
   PaginatedNutritionFoodResponseDto,
 } from '../../interfaces/dto/nutrition-food/nutrition-food.dto';
+import { mapUsdaNutrientsToNutritionProfile } from '../../domain/nutrition-governance/nutrition-governance.utils';
 
 @Injectable()
 export class NutritionFoodService {
@@ -441,8 +442,13 @@ export class NutritionFoodService {
 
       const food = await response.json();
 
-      // 解析营养数据
-      const nutritionData = this.parseUSDANutrients(food.foodNutrients || []);
+      // New USDA imports use the structured governance mapping so source units
+      // and conversion evidence are retained for later confirmation.
+      const nutritionData = mapUsdaNutrientsToNutritionProfile(
+        food.foodNutrients || [],
+      );
+      nutritionData.meta.externalId = String(food.fdcId ?? fdcId);
+      nutritionData.meta.sourceTitle = food.description ?? name;
 
       // 创建营养原料
       const item = await this.prisma.nutritionFood.create({
@@ -470,7 +476,8 @@ export class NutritionFoodService {
   }
 
   /**
-   * 解析USDA营养数据
+   * Legacy flat USDA parser retained only for historical payload
+   * compatibility. New imports must use mapUsdaNutrientsToNutritionProfile().
    */
   private parseUSDANutrients(nutrients: any[]): Record<string, number> {
     const result: Record<string, number> = {};

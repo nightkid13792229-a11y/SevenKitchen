@@ -7,14 +7,20 @@ export interface UsdaNutrientMapping {
   tabKey: NutritionFieldTab;
   fieldKey: string;
   fieldPath: NutritionFieldPath;
+  sourceUnit?: string;
   amountMultiplier?: number;
+  conversionNote?: string;
 }
 
 const usdaField = (
   nutrientId: number,
   tabKey: NutritionFieldTab,
   fieldKey: string,
-  options: { amountMultiplier?: number } = {},
+  options: {
+    sourceUnit?: string;
+    amountMultiplier?: number;
+    conversionNote?: string;
+  } = {},
 ): UsdaNutrientMapping => ({
   nutrientId,
   tabKey,
@@ -40,10 +46,20 @@ export const USDA_NUTRIENT_MAP: readonly UsdaNutrientMapping[] = [
   usdaField(1095, 'minerals', 'zinc'),
   usdaField(1098, 'minerals', 'copper'),
   usdaField(1101, 'minerals', 'manganese'),
-  usdaField(1103, 'minerals', 'selenium'),
+  usdaField(1103, 'minerals', 'selenium', { sourceUnit: 'µg' }),
+  usdaField(1100, 'minerals', 'iodine', { sourceUnit: 'µg' }),
   usdaField(1104, 'vitamins', 'vitaminA'),
-  usdaField(1114, 'vitamins', 'vitaminD', { amountMultiplier: 40 }),
-  usdaField(1109, 'vitamins', 'vitaminE', { amountMultiplier: 1 / 0.67 }),
+  usdaField(1114, 'vitamins', 'vitaminD', {
+    sourceUnit: 'µg',
+    amountMultiplier: 40,
+    conversionNote: '1 µg vitamin D = 40 IU',
+  }),
+  usdaField(1109, 'vitamins', 'vitaminE', {
+    sourceUnit: 'mg',
+    amountMultiplier: 1 / 0.67,
+    conversionNote:
+      '1 IU natural vitamin E activity = 0.67 mg d-alpha-tocopherol',
+  }),
   usdaField(1165, 'vitamins', 'vitaminB1'),
   usdaField(1166, 'vitamins', 'vitaminB2'),
   usdaField(1167, 'vitamins', 'vitaminB3'),

@@ -1,5 +1,6 @@
 import { createEmptyNutritionProfile } from '../ingredient/nutrition-profile.utils';
 import type { NutritionProfileV2 } from '../ingredient/types';
+import { findNutritionField } from '../ingredient/nutrition-field-catalog';
 import type {
   NutritionGovernanceSourceType,
   NutritionMatchConfidence,
@@ -12,7 +13,10 @@ const CHINESE_TO_ENGLISH_FOOD_ALIASES: ReadonlyArray<{
   aliases: readonly string[];
 }> = [
   { zh: '鸡胸肉', aliases: ['chicken breast'] },
-  { zh: '鸡腿肉', aliases: ['chicken leg', 'chicken thigh', 'chicken drumstick'] },
+  {
+    zh: '鸡腿肉',
+    aliases: ['chicken leg', 'chicken thigh', 'chicken drumstick'],
+  },
   { zh: '鸡肉', aliases: ['chicken'] },
   { zh: '鸭肉', aliases: ['duck'] },
   { zh: '火鸡肉', aliases: ['turkey'] },
@@ -83,7 +87,10 @@ export function classifyMatchConfidence(
 }
 
 export function normalizeNameForMatch(value: string): string {
-  return value.trim().toLowerCase().replace(/[\p{P}\s]+/gu, '');
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/[\p{P}\s]+/gu, '');
 }
 
 function normalizeEnglishFoodNameTokens(value: string): string[] {
@@ -177,13 +184,17 @@ function findChineseEnglishAliasMatch(
 
     return entry.aliases.some((alias) => {
       const aliasTokens = normalizeEnglishFoodNameTokens(alias);
-      if (aliasTokens.length === 0 || aliasTokens.length > sourceTokens.length) {
+      if (
+        aliasTokens.length === 0 ||
+        aliasTokens.length > sourceTokens.length
+      ) {
         return false;
       }
 
       return sourceTokens.some((_, startIndex) =>
         aliasTokens.every(
-          (token, aliasIndex) => sourceTokens[startIndex + aliasIndex] === token,
+          (token, aliasIndex) =>
+            sourceTokens[startIndex + aliasIndex] === token,
         ),
       );
     });
@@ -199,6 +210,11 @@ export function mapUsdaNutrientsToNutritionProfile(
   const profile = createEmptyNutritionProfile();
   profile.meta.rawBasisType = 'PER_100_G';
   profile.meta.sourceType = 'USDA';
+  profile.meta.sourceKind = 'FOOD_DATABASE';
+  profile.meta.sourceCode = 'USDA_FDC';
+  profile.meta.sourceProvider = 'USDA FoodData Central';
+  profile.meta.sourceForms = {};
+  profile.meta.conversionNotes = {};
 
   for (const nutrient of nutrients) {
     const nutrientId = nutrient.nutrient?.id;
@@ -216,8 +232,23 @@ export function mapUsdaNutrientsToNutritionProfile(
     );
     if (!mapping) continue;
 
+    const canonicalValue = amount * (mapping.amountMultiplier ?? 1);
     const tab = profile[mapping.tabKey] as Record<string, number | null>;
-    tab[mapping.fieldKey] = amount * (mapping.amountMultiplier ?? 1);
+    tab[mapping.fieldKey] = canonicalValue;
+
+    const field = findNutritionField(mapping.fieldPath);
+    profile.meta.sourceForms[mapping.fieldPath] = {
+      sourceNutrientId: nutrientId,
+      sourceNutrientName: nutrient.nutrient?.name ?? null,
+      originalValue: amount,
+      originalUnit: nutrient.nutrient?.unitName ?? mapping.sourceUnit ?? null,
+      canonicalValue,
+      canonicalUnit: field?.unit ?? null,
+      basisType: profile.meta.rawBasisType,
+    };
+    if (mapping.conversionNote) {
+      profile.meta.conversionNotes[mapping.fieldPath] = mapping.conversionNote;
+    }
   }
 
   return profile;

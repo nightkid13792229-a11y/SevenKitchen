@@ -70,6 +70,302 @@ describe('supplement nutrient resolution', () => {
     })
   })
 
+  it('converts PER_100_G nutrition profiles before calculating supplement amount', () => {
+    const item = {
+      supplement_targets: [
+        {
+          fieldPath: 'vitamins.vitaminE',
+          label: '维生素 E',
+          targetValuePerKg: 1000,
+          unit: 'IU'
+        }
+      ],
+      nutrition_profile_snapshot: {
+        meta: { rawBasisType: 'PER_100_G' },
+        macros: {},
+        minerals: {},
+        vitamins: { vitaminE: 2000 },
+        fattyAcids: {},
+        aminoAcids: {},
+        customItems: []
+      },
+      unit_display_label: 'g'
+    }
+
+    expect(getResolvedSupplementNutrient(item)).toEqual({
+      value: 20,
+      unit: 'IU'
+    })
+    expect(calculateSupplementAmountForProduction(item, 1000)).toEqual({
+      amount: 50,
+      unit: 'g'
+    })
+  })
+
+  it('keeps PER_1_G nutrition profiles as per-gram concentration', () => {
+    const item = {
+      supplement_targets: [
+        {
+          fieldPath: 'vitamins.vitaminE',
+          label: '维生素 E',
+          targetValuePerKg: 1000,
+          unit: 'IU'
+        }
+      ],
+      nutrition_profile_snapshot: {
+        meta: { rawBasisType: 'PER_1_G' },
+        macros: {},
+        minerals: {},
+        vitamins: { vitaminE: 200 },
+        fattyAcids: {},
+        aminoAcids: {},
+        customItems: []
+      },
+      unit_display_label: 'g'
+    }
+
+    expect(calculateSupplementAmountForProduction(item, 1000)).toEqual({
+      amount: 5,
+      unit: 'g'
+    })
+  })
+
+  it('defaults missing nutrition profile basis to PER_100_G to match backend normalization', () => {
+    const item = {
+      supplement_targets: [
+        {
+          fieldPath: 'vitamins.vitaminE',
+          label: '维生素 E',
+          targetValuePerKg: 1000,
+          unit: 'IU'
+        }
+      ],
+      nutrition_profile_snapshot: {
+        meta: {},
+        macros: {},
+        minerals: {},
+        vitamins: { vitaminE: 2000 },
+        fattyAcids: {},
+        aminoAcids: {},
+        customItems: []
+      }
+    }
+
+    expect(getResolvedSupplementNutrient(item)).toEqual({
+      value: 20,
+      unit: 'IU'
+    })
+    expect(calculateSupplementAmountForProduction(item, 1000)).toEqual({
+      amount: 50,
+      unit: 'g'
+    })
+  })
+
+  it('defaults missing nutrition profile meta to PER_100_G to match backend normalization', () => {
+    const item = {
+      supplement_targets: [
+        {
+          fieldPath: 'vitamins.vitaminE',
+          label: '维生素 E',
+          targetValuePerKg: 1000,
+          unit: 'IU'
+        }
+      ],
+      nutrition_profile_snapshot: {
+        macros: {},
+        minerals: {},
+        vitamins: { vitaminE: 2000 },
+        fattyAcids: {},
+        aminoAcids: {},
+        customItems: []
+      }
+    }
+
+    expect(calculateSupplementAmountForProduction(item, 1000)).toEqual({
+      amount: 50,
+      unit: 'g'
+    })
+  })
+
+  it('returns no supplement amount for unknown nutrition profile basis', () => {
+    const item = {
+      supplement_targets: [
+        {
+          fieldPath: 'vitamins.vitaminE',
+          label: '维生素 E',
+          targetValuePerKg: 1000,
+          unit: 'IU'
+        }
+      ],
+      nutrition_profile_snapshot: {
+        meta: { rawBasisType: 'PER_TABLESPOON' },
+        macros: {},
+        minerals: {},
+        vitamins: { vitaminE: 2000 },
+        fattyAcids: {},
+        aminoAcids: {},
+        customItems: []
+      }
+    }
+
+    expect(calculateSupplementAmountForProduction(item, 1000)).toEqual({
+      amount: 0,
+      unit: 'g'
+    })
+  })
+
+  it('does not fall back to legacy active nutrients for unknown explicit profile basis', () => {
+    const item = {
+      supplement_targets: [
+        {
+          fieldPath: 'vitamins.vitaminE',
+          label: '维生素 E',
+          targetValuePerKg: 1000,
+          unit: 'IU'
+        }
+      ],
+      nutrition_profile_snapshot: {
+        meta: { rawBasisType: 'PER_TABLESPOON' },
+        macros: {},
+        minerals: {},
+        vitamins: { vitaminE: 2000 },
+        fattyAcids: {},
+        aminoAcids: {},
+        customItems: []
+      },
+      properties: {
+        active_nutrients: {
+          'vitamins.vitaminE': { value: 400, unit: 'IU' }
+        }
+      }
+    }
+
+    expect(calculateSupplementAmountForProduction(item, 1000)).toEqual({
+      amount: 0,
+      unit: 'g'
+    })
+  })
+
+  it('uses serving as fallback display unit for serving-based profiles', () => {
+    const item = {
+      supplement_targets: [
+        {
+          fieldPath: 'vitamins.vitaminE',
+          label: '维生素 E',
+          targetValuePerKg: 1000,
+          unit: 'IU'
+        }
+      ],
+      nutrition_profile_snapshot: {
+        meta: { rawBasisType: 'PER_SERVING' },
+        macros: {},
+        minerals: {},
+        vitamins: { vitaminE: 400 },
+        fattyAcids: {},
+        aminoAcids: {},
+        customItems: []
+      }
+    }
+
+    expect(calculateSupplementAmountForProduction(item, 1000)).toEqual({
+      amount: 2.5,
+      unit: 'serving'
+    })
+  })
+
+  it('resolves legacy nutritionProfile.items using PER_1_PCS as serving basis', () => {
+    const item = {
+      supplement_targets: [
+        {
+          fieldPath: 'vitamins.vitaminE',
+          label: '维生素 E',
+          targetValuePerKg: 1000,
+          unit: 'IU'
+        }
+      ],
+      nutrition_profile_snapshot: {
+        items: [
+          {
+            nutrientCode: 'vitamin_e',
+            nutrientName: '维生素 E',
+            value: 400,
+            unit: 'IU',
+            basisType: 'PER_1_PCS'
+          }
+        ]
+      }
+    }
+
+    expect(getResolvedSupplementNutrient(item)).toEqual({
+      value: 400,
+      unit: 'IU'
+    })
+    expect(calculateSupplementAmountForProduction(item, 1000)).toEqual({
+      amount: 2.5,
+      unit: 'serving'
+    })
+  })
+
+  it('converts legacy nutritionProfile.items PER_100_G values to per gram concentration', () => {
+    const item = {
+      supplement_targets: [
+        {
+          fieldPath: 'minerals.iodine',
+          label: '碘',
+          targetValuePerKg: 660,
+          unit: 'μg'
+        }
+      ],
+      nutrition_profile_snapshot: {
+        items: [
+          {
+            nutrientCode: 'i',
+            nutrientName: '碘',
+            value: 15000,
+            unit: 'μg',
+            basisType: 'PER_100_G'
+          }
+        ]
+      }
+    }
+
+    expect(getResolvedSupplementNutrient(item)).toEqual({
+      value: 150,
+      unit: 'μg'
+    })
+    expect(calculateSupplementAmountForProduction(item, 1000)).toEqual({
+      amount: 4.4,
+      unit: 'g'
+    })
+  })
+
+  it('uses ml as fallback display unit for ml-based supplement profiles', () => {
+    const item = {
+      supplement_targets: [
+        {
+          fieldPath: 'vitamins.vitaminE',
+          label: '维生素 E',
+          targetValuePerKg: 1000,
+          unit: 'IU'
+        }
+      ],
+      nutrition_profile_snapshot: {
+        meta: { rawBasisType: 'PER_100_ML' },
+        macros: {},
+        minerals: {},
+        vitamins: { vitaminE: 2000 },
+        fattyAcids: {},
+        aminoAcids: {},
+        customItems: []
+      }
+    }
+
+    expect(calculateSupplementAmountForProduction(item, 1000)).toEqual({
+      amount: 50,
+      unit: 'ml'
+    })
+  })
+
   it('calculates multi-target supplements from nutrition profile snapshots', () => {
     const item = {
       supplement_targets: [

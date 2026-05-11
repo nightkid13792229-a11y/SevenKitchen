@@ -67,6 +67,7 @@ describe('label renderer ingredient formatting', () => {
             },
           ],
           nutrition_profile_snapshot: {
+            meta: { rawBasisType: 'PER_1_G' },
             minerals: { calcium: 353 },
           },
           unit_display_label: 'g',
@@ -86,6 +87,7 @@ describe('label renderer ingredient formatting', () => {
             },
           ],
           nutrition_profile_snapshot: {
+            meta: { rawBasisType: 'PER_SERVING' },
             minerals: { iodine: 450 },
           },
           unit_display_label: '平勺',
@@ -111,6 +113,7 @@ describe('label renderer ingredient formatting', () => {
             },
           ],
           nutrition_profile_snapshot: {
+            meta: { rawBasisType: 'PER_SERVING' },
             fattyAcids: {
               epa: 180,
               dha: 120,
@@ -146,6 +149,7 @@ describe('label renderer ingredient formatting', () => {
             },
           ],
           nutrition_profile_snapshot: {
+            meta: { rawBasisType: 'PER_1_G' },
             minerals: { calcium: 353 },
           },
           unit_display_label: 'g',

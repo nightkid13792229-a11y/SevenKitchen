@@ -8,6 +8,8 @@ import type {
 } from './nutrition-governance.types';
 import { USDA_NUTRIENT_MAP } from './usda-nutrient-map';
 
+const USDA_SOURCE_PROVIDER = 'USDA FoodData Central';
+
 const CHINESE_TO_ENGLISH_FOOD_ALIASES: ReadonlyArray<{
   zh: string;
   aliases: readonly string[];
@@ -212,7 +214,7 @@ export function mapUsdaNutrientsToNutritionProfile(
   profile.meta.sourceType = 'USDA';
   profile.meta.sourceKind = 'FOOD_DATABASE';
   profile.meta.sourceCode = 'USDA_FDC';
-  profile.meta.sourceProvider = 'USDA FoodData Central';
+  profile.meta.sourceProvider = USDA_SOURCE_PROVIDER;
   profile.meta.sourceForms = {};
   profile.meta.conversionNotes = {};
 
@@ -251,5 +253,32 @@ export function mapUsdaNutrientsToNutritionProfile(
     }
   }
 
+  return profile;
+}
+
+export function buildUsdaFdcSourceVersion(
+  sourceDate: string | null | undefined,
+): string {
+  const normalizedDate = sourceDate?.trim();
+  return normalizedDate ? `USDA_FDC:${normalizedDate}` : 'USDA_FDC';
+}
+
+export function attachUsdaFdcProfileMetadata(
+  profile: NutritionProfileV2,
+  options: {
+    externalId: string | number;
+    sourceVersion?: string | null;
+    sourceTitle?: string | null;
+    confidenceLevel?: NutritionMatchConfidence;
+  },
+): NutritionProfileV2 {
+  profile.meta.sourceType = 'USDA';
+  profile.meta.sourceKind = 'FOOD_DATABASE';
+  profile.meta.sourceCode = 'USDA_FDC';
+  profile.meta.sourceProvider = USDA_SOURCE_PROVIDER;
+  profile.meta.externalId = String(options.externalId).trim();
+  profile.meta.sourceVersion = options.sourceVersion?.trim() || 'USDA_FDC';
+  profile.meta.confidenceLevel = options.confidenceLevel ?? 'MEDIUM';
+  profile.meta.sourceTitle = options.sourceTitle?.trim() || USDA_SOURCE_PROVIDER;
   return profile;
 }

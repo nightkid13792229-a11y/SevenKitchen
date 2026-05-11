@@ -1,5 +1,6 @@
 import { NutritionFoodCategory, NutritionFoodStatus } from '@prisma/client';
 import { NutritionFoodService } from '../../../src/application/nutrition-food/nutrition-food.service';
+import { validateNutritionProfileContract } from '../../../src/domain/nutrition-governance/nutrition-profile-contract';
 
 describe('NutritionFoodService USDA import', () => {
   const originalApiKey = process.env.USDA_API_KEY;
@@ -41,6 +42,8 @@ describe('NutritionFoodService USDA import', () => {
       ok: true,
       json: jest.fn().mockResolvedValue({
         fdcId: 173904,
+        description: 'Oats, regular and quick, not fortified, dry',
+        publicationDate: '2019-04-01',
         foodNutrients: [
           {
             nutrient: { id: 1008, name: 'Energy', unitName: 'kcal' },
@@ -77,10 +80,18 @@ describe('NutritionFoodService USDA import', () => {
         sourceKind: 'FOOD_DATABASE',
         sourceCode: 'USDA_FDC',
         sourceProvider: 'USDA FoodData Central',
+        sourceVersion: 'USDA_FDC:2019-04-01',
+        externalId: '173904',
+        confidenceLevel: 'MEDIUM',
       },
       macros: { energyKcal: 379 },
       vitamins: { vitaminD: 100 },
     });
+    expect(
+      validateNutritionProfileContract(nutritionData, {
+        requireSourceMeta: true,
+      }),
+    ).toEqual([]);
     expect(nutritionData).not.toHaveProperty('energy_kcal');
     expect(nutritionData.meta.sourceForms['vitamins.vitaminD']).toMatchObject({
       sourceNutrientId: 1114,

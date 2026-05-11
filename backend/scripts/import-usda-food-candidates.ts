@@ -14,6 +14,8 @@ import type {
 } from '../src/domain/nutrition-governance/nutrition-governance.types';
 import { getFoodStateMismatches } from '../src/domain/nutrition-governance/food-state-match';
 import {
+  attachUsdaFdcProfileMetadata,
+  buildUsdaFdcSourceVersion,
   buildNutritionSourceKey,
   classifyMatchConfidence,
   getSourcePriority,
@@ -275,9 +277,12 @@ export function mapUsdaSearchFoodToSourceInput({
       amount: nutrient.value ?? nutrient.amount,
     })),
   );
-  profile.meta.sourceTitle = USDA_SOURCE_TITLE;
-  profile.meta.sourceProvider = USDA_PROVIDER;
-  profile.meta.confidenceLevel = 'MEDIUM';
+  attachUsdaFdcProfileMetadata(profile, {
+    externalId,
+    sourceVersion: buildUsdaFdcSourceVersion(food.publishedDate),
+    sourceTitle: USDA_SOURCE_TITLE,
+    confidenceLevel: 'MEDIUM',
+  });
   profile.meta.versionNote = `Imported from USDA search term: ${searchTerm}`;
 
   return {

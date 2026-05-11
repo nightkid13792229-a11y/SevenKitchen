@@ -4,6 +4,10 @@ import {
   mapUsdaSearchFoodToSourceInput,
   selectUsdaFoodsForIngredient,
 } from '../../scripts/import-usda-food-candidates';
+import {
+  FOOD_CONFIRMATION_REQUIRED_FIELD_PATHS,
+  validateNutritionProfileContract,
+} from '../../src/domain/nutrition-governance/nutrition-profile-contract';
 
 const REQUIRED_NUTRIENTS = [
   { nutrientId: 1008, nutrientName: 'Energy', unitName: 'KCAL', value: 120 },
@@ -72,8 +76,20 @@ describe('USDA food candidate import helpers', () => {
     expect(input.normalizedNutrition?.meta).toMatchObject({
       rawBasisType: 'PER_100_G',
       sourceType: 'USDA',
+      sourceKind: 'FOOD_DATABASE',
+      sourceCode: 'USDA_FDC',
       sourceProvider: 'USDA FoodData Central',
+      sourceVersion: 'USDA_FDC:2019-04-01',
+      externalId: '123',
+      confidenceLevel: 'MEDIUM',
     });
+    expect(
+      validateNutritionProfileContract(input.normalizedNutrition, {
+        requiredFieldPaths: FOOD_CONFIRMATION_REQUIRED_FIELD_PATHS,
+        allowedRawBasisTypes: ['PER_100_G'],
+        requireSourceMeta: true,
+      }),
+    ).toEqual([]);
     expect(input.normalizedNutrition?.macros.energyKcal).toBe(120);
     expect(input.normalizedNutrition?.macros.moisture).toBe(70);
     expect(input.normalizedNutrition?.macros.crudeProtein).toBe(20);
@@ -102,6 +118,18 @@ describe('USDA food candidate import helpers', () => {
     });
 
     expect(input.category).toBe('Finfish and Shellfish Products');
+    expect(input.normalizedNutrition?.meta).toMatchObject({
+      sourceVersion: 'USDA_FDC',
+      externalId: '321',
+      confidenceLevel: 'MEDIUM',
+    });
+    expect(
+      validateNutritionProfileContract(input.normalizedNutrition, {
+        requiredFieldPaths: FOOD_CONFIRMATION_REQUIRED_FIELD_PATHS,
+        allowedRawBasisTypes: ['PER_100_G'],
+        requireSourceMeta: true,
+      }),
+    ).toEqual([]);
     expect(input.normalizedNutrition?.macros.energyKcal).toBe(120);
     expect(input.normalizedNutrition?.minerals.phosphorus).toBe(210);
   });

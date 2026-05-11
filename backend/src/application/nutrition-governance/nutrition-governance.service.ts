@@ -25,6 +25,8 @@ import type {
   NutritionSourceInput,
 } from '../../domain/nutrition-governance/nutrition-governance.types';
 import {
+  attachUsdaFdcProfileMetadata,
+  buildUsdaFdcSourceVersion,
   buildNutritionSourceKey,
   classifyMatchConfidence,
   getSourcePriority,
@@ -258,6 +260,12 @@ export class NutritionGovernanceService {
     const profile = mapUsdaNutrientsToNutritionProfile(
       food.foodNutrients || [],
     );
+    attachUsdaFdcProfileMetadata(profile, {
+      externalId,
+      sourceVersion: buildUsdaFdcSourceVersion(food.publicationDate),
+      sourceTitle: 'USDA FoodData Central',
+      confidenceLevel: 'MEDIUM',
+    });
     if (!hasMappedNutritionValues(profile)) {
       throw new BadRequestException('USDA 营养数据为空');
     }

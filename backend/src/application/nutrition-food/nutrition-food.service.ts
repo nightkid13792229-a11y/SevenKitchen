@@ -24,7 +24,11 @@ import {
   USDAFoodSearchResultDto,
   PaginatedNutritionFoodResponseDto,
 } from '../../interfaces/dto/nutrition-food/nutrition-food.dto';
-import { mapUsdaNutrientsToNutritionProfile } from '../../domain/nutrition-governance/nutrition-governance.utils';
+import {
+  attachUsdaFdcProfileMetadata,
+  buildUsdaFdcSourceVersion,
+  mapUsdaNutrientsToNutritionProfile,
+} from '../../domain/nutrition-governance/nutrition-governance.utils';
 
 @Injectable()
 export class NutritionFoodService {
@@ -447,8 +451,12 @@ export class NutritionFoodService {
       const nutritionData = mapUsdaNutrientsToNutritionProfile(
         food.foodNutrients || [],
       );
-      nutritionData.meta.externalId = String(food.fdcId ?? fdcId);
-      nutritionData.meta.sourceTitle = food.description ?? name;
+      attachUsdaFdcProfileMetadata(nutritionData, {
+        externalId: String(food.fdcId ?? fdcId),
+        sourceVersion: buildUsdaFdcSourceVersion(food.publicationDate),
+        sourceTitle: food.description ?? name,
+        confidenceLevel: 'MEDIUM',
+      });
 
       // 创建营养原料
       const item = await this.prisma.nutritionFood.create({

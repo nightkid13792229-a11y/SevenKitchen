@@ -7,6 +7,7 @@ import {
 import type { LabelRecognitionProvider } from '../../../src/application/nutrition-governance/label-recognition.provider';
 import { NutritionGovernanceService } from '../../../src/application/nutrition-governance/nutrition-governance.service';
 import { createEmptyNutritionProfile } from '../../../src/domain/ingredient/nutrition-profile.utils';
+import { validateNutritionProfileContract } from '../../../src/domain/nutrition-governance/nutrition-profile-contract';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
 
 describe('NutritionGovernanceService', () => {
@@ -228,7 +229,15 @@ describe('NutritionGovernanceService', () => {
           }),
           rawData: food,
           normalizedNutrition: expect.objectContaining({
-            meta: expect.objectContaining({ sourceType: 'USDA' }),
+            meta: expect.objectContaining({
+              sourceType: 'USDA',
+              sourceKind: 'FOOD_DATABASE',
+              sourceCode: 'USDA_FDC',
+              sourceProvider: 'USDA FoodData Central',
+              sourceVersion: 'USDA_FDC:2019-04-01',
+              externalId: '171077',
+              confidenceLevel: 'MEDIUM',
+            }),
             macros: expect.objectContaining({
               energyKcal: 165,
               crudeProtein: 31,
@@ -241,6 +250,14 @@ describe('NutritionGovernanceService', () => {
         }),
       }),
     );
+    const normalizedNutrition =
+      mockPrismaService.nutritionSourceRecord.upsert.mock.calls[0][0].create
+        .normalizedNutrition;
+    expect(
+      validateNutritionProfileContract(normalizedNutrition, {
+        requireSourceMeta: true,
+      }),
+    ).toEqual([]);
   });
 
   it('creates a candidate for a selected Chinese ingredient during USDA import', async () => {

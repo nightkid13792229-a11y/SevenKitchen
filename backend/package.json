@@ -32,6 +32,7 @@
     "import:cfct-private:apply": "ts-node -r tsconfig-paths/register prisma/import-cfct-private-source.ts --apply",
     "import:usda-food-candidates": "ts-node -r tsconfig-paths/register scripts/import-usda-food-candidates.ts",
     "audit:ingredient-nutrition-coverage": "ts-node -r tsconfig-paths/register scripts/audit-ingredient-nutrition-coverage.ts",
+    "audit:nutrition-profile-contract": "ts-node -r tsconfig-paths/register scripts/audit-nutrition-profile-contract.ts",
     "audit:missing-supplement-concentrations": "ts-node -r tsconfig-paths/register scripts/audit-missing-supplement-concentrations.ts",
     "audit:recipe-stats": "ts-node scripts/audit-recipe-stats.ts",
     "review:usda-candidates": "ts-node -r tsconfig-paths/register scripts/export-usda-candidate-review.ts",

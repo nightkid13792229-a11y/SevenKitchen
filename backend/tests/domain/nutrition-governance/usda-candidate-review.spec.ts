@@ -287,7 +287,7 @@ describe('USDA candidate review rows', () => {
         ],
       },
       {
-        ingredient: { id: 'ingredient-11', name: '南瓜籽粉' },
+        ingredient: { id: 'ingredient-11', name: '生南瓜籽仁' },
         candidates: [
           {
             id: 'candidate-4',
@@ -296,7 +296,24 @@ describe('USDA candidate review rows', () => {
             normalizedNutrition: completeProfile(),
             sourceRecord: {
               sourceKey: 'USDA:11',
+              foodName: 'Seeds, pumpkin and squash seed kernels, dried',
+              category: 'Nut and Seed Products',
+            },
+          },
+        ],
+      },
+      {
+        ingredient: { id: 'ingredient-12', name: '南瓜籽粉' },
+        candidates: [
+          {
+            id: 'candidate-5',
+            confidence: 'HIGH',
+            score: 0.87,
+            normalizedNutrition: completeProfile(),
+            sourceRecord: {
+              sourceKey: 'USDA:12',
               foodName: 'Seeds, pumpkin seed meal',
+              category: 'Nut and Seed Products',
             },
           },
         ],
@@ -321,6 +338,11 @@ describe('USDA candidate review rows', () => {
           riskLevel: 'HIGH',
           recommendedAction: 'CHANGE_OR_CFCT',
           riskFlags: expect.arrayContaining(['STATE_MISMATCH']),
+        }),
+        expect.objectContaining({
+          ingredientName: '生南瓜籽仁',
+          riskLevel: 'LOW',
+          riskFlags: [],
         }),
         expect.objectContaining({
           ingredientName: '南瓜籽粉',

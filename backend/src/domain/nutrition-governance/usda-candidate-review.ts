@@ -289,6 +289,7 @@ function getRiskFlags(params: {
     getFoodStateMismatches({
       ingredientName: params.ingredientName,
       foodDescription: params.bestCandidate.sourceRecord.foodName ?? '',
+      foodCategory: params.bestCandidate.sourceRecord.category ?? '',
     }).length > 0
   ) {
     flags.push('STATE_MISMATCH');

@@ -513,6 +513,7 @@ function scoreUsdaFood({
     getFoodStateMismatches({
       ingredientName,
       foodDescription: food.description ?? '',
+      foodCategory: getFoodCategoryDescription(food.foodCategory),
     }).length > 0
   ) {
     return 0;

@@ -41,13 +41,16 @@ const POWDER_DESCRIPTION_TOKENS = [
 export function getFoodStateMismatches(params: {
   ingredientName: string;
   foodDescription: string;
+  foodCategory?: string | null;
 }): FoodStateMismatch[] {
   const name = normalizeIngredientName(params.ingredientName);
   const descriptionTokens = tokenizeEnglish(params.foodDescription);
+  const categoryTokens = tokenizeEnglish(params.foodCategory ?? '');
   const mismatches: FoodStateMismatch[] = [];
 
   if (
     hasAnyToken(descriptionTokens, DRY_DESCRIPTION_TOKENS) &&
+    !isDefaultDryNutOrSeed({ descriptionTokens, categoryTokens }) &&
     !hasAnyMarker(name, DRY_NAME_MARKERS)
   ) {
     mismatches.push('DRY_DESCRIPTION_WITHOUT_DRY_NAME');
@@ -61,6 +64,24 @@ export function getFoodStateMismatches(params: {
   }
 
   return mismatches;
+}
+
+function isDefaultDryNutOrSeed(params: {
+  descriptionTokens: readonly string[];
+  categoryTokens: readonly string[];
+}): boolean {
+  const defaultDryTokens = [
+    'nut',
+    'nuts',
+    'seed',
+    'seeds',
+    'kernel',
+    'kernels',
+  ];
+  return (
+    hasAnyToken(params.categoryTokens, defaultDryTokens) ||
+    hasAnyToken(params.descriptionTokens, defaultDryTokens)
+  );
 }
 
 function normalizeIngredientName(value: string): string {

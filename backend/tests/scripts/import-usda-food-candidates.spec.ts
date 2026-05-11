@@ -181,6 +181,25 @@ describe('USDA food candidate import helpers', () => {
     ).toEqual([1]);
   });
 
+  it('allows dried USDA nuts and seeds as their default food state', () => {
+    const selected = selectUsdaFoodsForIngredient({
+      ingredientName: '生南瓜籽仁',
+      searchTerm: 'pumpkin seeds',
+      maxResults: 2,
+      foods: [
+        {
+          fdcId: 1,
+          description: 'Seeds, pumpkin and squash seed kernels, dried',
+          dataType: 'SR Legacy',
+          foodCategory: 'Nut and Seed Products',
+          foodNutrients: REQUIRED_NUTRIENTS,
+        },
+      ],
+    });
+
+    expect(selected.map((item) => item.food.fdcId)).toEqual([1]);
+  });
+
   it('rejects flour or ground USDA foods unless the ingredient name explicitly marks a powder state', () => {
     const foods = [
       {

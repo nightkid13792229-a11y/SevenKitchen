@@ -30,6 +30,7 @@ describe('USDA food candidate import helpers', () => {
     expect(getUsdaSearchTerms('梨（鲜）')).toEqual(['pear raw']);
     expect(getUsdaSearchTerms('口蘑')).toEqual(['mushrooms white raw']);
     expect(getUsdaSearchTerms('黑木耳')).toEqual(['cloud ears']);
+    expect(getUsdaSearchTerms('青口贝')).toEqual(['green lipped mussel raw']);
     expect(getUsdaSearchTerms('完全未知食材')).toEqual(['完全未知食材']);
   });
 
@@ -151,6 +152,30 @@ describe('USDA food candidate import helpers', () => {
     });
 
     expect(selected.map((item) => item.food.fdcId)).toEqual([2]);
+  });
+
+  it('does not match green-lipped mussel ingredients to blue mussel USDA records', () => {
+    const selected = selectUsdaFoodsForIngredient({
+      ingredientName: '青口贝',
+      searchTerm: getUsdaSearchTerms('青口贝')[0] ?? '',
+      maxResults: 2,
+      foods: [
+        {
+          fdcId: 1,
+          description: 'Mollusks, mussel, blue, raw',
+          dataType: 'SR Legacy',
+          foodNutrients: REQUIRED_NUTRIENTS,
+        },
+        {
+          fdcId: 2,
+          description: 'Mollusks, mussel, blue, cooked, moist heat',
+          dataType: 'SR Legacy',
+          foodNutrients: REQUIRED_NUTRIENTS,
+        },
+      ],
+    });
+
+    expect(selected).toEqual([]);
   });
 
   it('rejects partial matches when a multi-word search term only matches a generic word', () => {

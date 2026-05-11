@@ -177,7 +177,7 @@ const USDA_SEARCH_TERM_ALIASES: ReadonlyArray<{
   { names: ['豆腐'], terms: ['tofu raw'] },
   { names: ['豌豆'], terms: ['peas green raw'] },
   { names: ['金针菇'], terms: ['enoki mushrooms raw'] },
-  { names: ['青口贝'], terms: ['mussel raw'] },
+  { names: ['青口贝'], terms: ['green lipped mussel raw'] },
   { names: ['青花鱼'], terms: ['mackerel raw'] },
   { names: ['食用盐'], terms: ['salt table'] },
   { names: ['香菇'], terms: ['shiitake mushrooms raw'] },

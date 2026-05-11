@@ -35,6 +35,7 @@ describe('USDA food candidate import helpers', () => {
     expect(getUsdaSearchTerms('燕麦')).toEqual([
       'cereals oats regular quick not fortified dry',
     ]);
+    expect(getUsdaSearchTerms('薏仁米')).toEqual(['coix seed raw']);
     expect(getUsdaSearchTerms('鸭胸')).toEqual([
       'duck domesticated meat only raw',
     ]);
@@ -257,6 +258,30 @@ describe('USDA food candidate import helpers', () => {
     });
 
     expect(selected.map((item) => item.food.fdcId)).toEqual([173904]);
+  });
+
+  it('does not match coix seed ingredients to pearled barley USDA records', () => {
+    const selected = selectUsdaFoodsForIngredient({
+      ingredientName: '薏仁米',
+      searchTerm: getUsdaSearchTerms('薏仁米')[0] ?? '',
+      maxResults: 2,
+      foods: [
+        {
+          fdcId: 170284,
+          description: 'Barley, pearled, raw',
+          dataType: 'SR Legacy',
+          foodNutrients: REQUIRED_NUTRIENTS,
+        },
+        {
+          fdcId: 170285,
+          description: 'Barley, pearled, cooked',
+          dataType: 'SR Legacy',
+          foodNutrients: REQUIRED_NUTRIENTS,
+        },
+      ],
+    });
+
+    expect(selected).toEqual([]);
   });
 
   it('rejects partial matches when a multi-word search term only matches a generic word', () => {

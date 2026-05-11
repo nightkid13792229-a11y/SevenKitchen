@@ -169,7 +169,7 @@ const USDA_SEARCH_TERM_ALIASES: ReadonlyArray<{
   { names: ['菠萝'], terms: ['pineapple raw'] },
   { names: ['葵花籽油'], terms: ['sunflower oil'] },
   { names: ['蓝莓'], terms: ['blueberries raw'] },
-  { names: ['薏仁米'], terms: ['pearl barley raw'] },
+  { names: ['薏仁米'], terms: ['coix seed raw'] },
   { names: ['藜麦'], terms: ['quinoa uncooked'] },
   { names: ['西兰花'], terms: ['broccoli raw'] },
   { names: ['西红柿'], terms: ['tomatoes red ripe raw'] },

@@ -119,6 +119,39 @@ export type NutritionRawBasisType =
   | 'PER_1_ML'
   | 'PER_SERVING'
 
+export type NutritionSourceKind =
+  | 'FOOD_DATABASE'
+  | 'PRODUCT_LABEL'
+  | 'LAB_REPORT'
+  | 'SUPPLIER_SPEC'
+  | 'LITERATURE'
+  | 'MANUAL_ESTIMATE'
+
+export type NutritionSourceCode =
+  | 'USDA_FDC'
+  | 'CFCT'
+  | 'CNF'
+  | 'AUSNUT'
+  | 'NEVO'
+  | 'JP_FOOD_TABLE'
+  | 'SUPPLEMENT_LABEL'
+  | 'LAB_REPORT'
+  | 'SUPPLIER_SPEC'
+  | 'LITERATURE'
+  | 'MANUAL_ESTIMATE'
+
+export interface NutritionSourceForm {
+  sourceNutrientId?: string | null
+  sourceNutrientName?: string | null
+  originalValue?: number | string | null
+  originalUnit?: string | null
+  canonicalValue?: number | null
+  canonicalUnit?: string | null
+  basisType?: NutritionBasisType | NutritionRawBasisType | string | null
+  notes?: string | null
+  [key: string]: string | number | boolean | null | undefined
+}
+
 export type NutritionSourceType =
   | 'MANUAL'
   | 'CFCT'
@@ -134,6 +167,9 @@ export type NutritionProfileSourceType =
   | 'CFCT'
   | 'USDA'
   | 'LITERATURE'
+  | 'SUPPLIER'
+  | 'SUPPLEMENT_LABEL'
+  | 'MANUAL'
   | 'MANUAL_ESTIMATE'
 
 export type NutritionSampleState =
@@ -167,6 +203,13 @@ export interface NutritionMeta {
   densityGPerMl?: number | null
   servingWeightG?: number | null
   sourceType?: NutritionProfileSourceType | null
+  sourceKind?: NutritionSourceKind | string | null
+  sourceCode?: NutritionSourceCode | string | null
+  sourceVersion?: string | null
+  externalId?: string | null
+  sourceRecordId?: string | null
+  sourceForms?: Record<string, NutritionSourceForm>
+  conversionNotes?: Record<string, string>
   sourceTitle?: string | null
   sourceProvider?: string | null
   attachments?: string[]

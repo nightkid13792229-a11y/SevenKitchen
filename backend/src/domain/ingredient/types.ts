@@ -11,6 +11,10 @@ import type {
   MINERAL_NUTRIENT_KEYS,
   VITAMIN_NUTRIENT_KEYS,
 } from './nutrition-profile.constants';
+import type {
+  NutritionSourceCode,
+  NutritionSourceKind,
+} from './nutrition-source-contract';
 
 export type NutritionBasisType =
   | 'PER_100_G'
@@ -25,6 +29,18 @@ export type NutritionRawBasisType =
   | 'PER_1_G'
   | 'PER_1_ML'
   | 'PER_SERVING';
+
+export interface NutritionSourceForm {
+  sourceNutrientId?: string | null;
+  sourceNutrientName?: string | null;
+  originalValue?: number | string | null;
+  originalUnit?: string | null;
+  canonicalValue?: number | null;
+  canonicalUnit?: string | null;
+  basisType?: NutritionBasisType | NutritionRawBasisType | string | null;
+  notes?: string | null;
+  [key: string]: string | number | boolean | null | undefined;
+}
 
 export interface NutritionItem {
   nutrientCode?: string | null;
@@ -65,6 +81,13 @@ export interface NutritionMeta {
     | 'SUPPLEMENT_LABEL'
     | 'MANUAL'
     | null;
+  sourceKind?: NutritionSourceKind | string | null;
+  sourceCode?: NutritionSourceCode | string | null;
+  sourceVersion?: string | null;
+  externalId?: string | null;
+  sourceRecordId?: string | null;
+  sourceForms?: Record<string, NutritionSourceForm>;
+  conversionNotes?: Record<string, string>;
   sourceTitle?: string | null;
   sourceProvider?: string | null;
   attachments?: string[];

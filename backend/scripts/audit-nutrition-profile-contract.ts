@@ -15,8 +15,6 @@ import {
   type NutritionProfileContractOptions,
 } from '../src/domain/nutrition-governance/nutrition-profile-contract';
 
-loadEnv({ path: process.env.ENV_FILE || '.env' });
-
 type AuditLocation =
   | 'Ingredient.nutritionProfile'
   | 'IngredientNutritionCandidate.normalizedNutrition'
@@ -66,6 +64,8 @@ const DEFAULT_OUTPUT_PATH = 'reports/nutrition-profile-contract-audit.csv';
 const DEFAULT_SUMMARY_PATH = 'reports/nutrition-profile-contract-summary.md';
 
 async function main() {
+  loadEnv({ path: process.env.ENV_FILE || '.env' });
+
   if (!process.env.DATABASE_URL) {
     throw new Error(
       'DATABASE_URL 未设置。示例: DATABASE_URL=postgresql://postgres:postgres@localhost:5432/sevenkitchen npm run audit:nutrition-profile-contract',
@@ -257,7 +257,7 @@ function getContractOptions(
   return {};
 }
 
-function getRecommendedAction(
+export function getRecommendedAction(
   issues: readonly NutritionProfileContractIssue[],
 ): string {
   if (!hasNutritionProfileContractErrors(issues)) {
@@ -265,6 +265,8 @@ function getRecommendedAction(
   }
 
   const codes = new Set(issues.map((issue) => issue.code));
+  if (codes.has('MISSING_CONVERSION_EVIDENCE'))
+    return '补充原始来源形式和单位换算说明后再确认';
   if (codes.has('MISSING_PROFILE')) return '补充或导入营养档案';
   if (codes.has('LEGACY_PROFILE'))
     return '先迁移旧 items[] 结构到 NutritionProfileV2';
@@ -459,7 +461,9 @@ function getArgValue(argv: string[], name: string): string | null {
   return index >= 0 && argv[index + 1] ? argv[index + 1] : null;
 }
 
-main().catch((error) => {
-  console.error('[nutrition-profile-contract] Audit failed:', error);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error('[nutrition-profile-contract] Audit failed:', error);
+    process.exitCode = 1;
+  });
+}

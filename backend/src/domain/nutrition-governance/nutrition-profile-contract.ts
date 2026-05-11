@@ -23,6 +23,7 @@ export type NutritionProfileContractIssueCode =
   | 'INVALID_RAW_BASIS'
   | 'MISSING_REQUIRED_FIELD'
   | 'MISSING_SOURCE_META'
+  | 'MISSING_CONVERSION_EVIDENCE'
   | 'INVALID_CUSTOM_ITEMS';
 
 export interface NutritionProfileContractIssue {
@@ -80,6 +81,13 @@ const META_KEYS = [
   'densityGPerMl',
   'servingWeightG',
   'sourceType',
+  'sourceKind',
+  'sourceCode',
+  'sourceVersion',
+  'externalId',
+  'sourceRecordId',
+  'sourceForms',
+  'conversionNotes',
   'sourceTitle',
   'sourceProvider',
   'attachments',
@@ -183,6 +191,7 @@ export function validateNutritionProfileContract(
   validateTopLevelKeys(input, issues);
   validateMeta(input.meta, options, issues);
   validateTabs(input, issues);
+  validateActiveVitaminConversionEvidence(input, issues);
   validateCustomItems(input.customItems, issues);
   validateRequiredFields(input, options.requiredFieldPaths ?? [], issues);
 
@@ -273,9 +282,11 @@ function validateMeta(
 
   if (options.requireSourceMeta) {
     for (const fieldPath of [
-      'meta.sourceType',
-      'meta.sourceTitle',
+      'meta.sourceKind',
+      'meta.sourceCode',
       'meta.sourceProvider',
+      'meta.sourceVersion',
+      'meta.externalId',
       'meta.confidenceLevel',
     ]) {
       const value = readField(meta, fieldPath.replace(/^meta\./u, ''));
@@ -291,6 +302,64 @@ function validateMeta(
       }
     }
   }
+}
+
+function validateActiveVitaminConversionEvidence(
+  profile: Record<string, unknown>,
+  issues: NutritionProfileContractIssue[],
+) {
+  const meta = profile.meta;
+  if (!isRecord(meta)) {
+    return;
+  }
+
+  const sourceKind = meta.sourceKind;
+  if (sourceKind !== 'PRODUCT_LABEL' && sourceKind !== 'FOOD_DATABASE') {
+    return;
+  }
+
+  const severity: NutritionProfileContractIssueSeverity =
+    sourceKind === 'PRODUCT_LABEL' ? 'ERROR' : 'WARNING';
+
+  for (const fieldPath of [
+    'vitamins.vitaminA',
+    'vitamins.vitaminD',
+    'vitamins.vitaminE',
+  ]) {
+    if (!hasFiniteNumber(readField(profile, fieldPath))) {
+      continue;
+    }
+
+    if (hasConversionEvidence(meta, fieldPath)) {
+      continue;
+    }
+
+    issues.push(
+      issue(
+        severity,
+        'MISSING_CONVERSION_EVIDENCE',
+        fieldPath,
+        `${fieldPath} requires source form or conversion note evidence.`,
+      ),
+    );
+  }
+}
+
+function hasConversionEvidence(
+  meta: Record<string, unknown>,
+  fieldPath: string,
+): boolean {
+  const sourceForms = meta.sourceForms;
+  const sourceForm = isRecord(sourceForms) ? sourceForms[fieldPath] : undefined;
+  if (isRecord(sourceForm) && Object.keys(sourceForm).length > 0) {
+    return true;
+  }
+
+  const conversionNotes = meta.conversionNotes;
+  const conversionNote = isRecord(conversionNotes)
+    ? conversionNotes[fieldPath]
+    : undefined;
+  return typeof conversionNote === 'string' && conversionNote.trim().length > 0;
 }
 
 function validateTabs(

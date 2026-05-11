@@ -5,11 +5,14 @@ import {
 } from '../../../src/domain/nutrition-governance/nutrition-profile-contract';
 
 describe('nutrition profile contract', () => {
-  it('accepts a food confirmation profile using the internal v2 structure', () => {
+  it('accepts a food confirmation profile using registered USDA source metadata before confirmation', () => {
     const profile = createEmptyNutritionProfile();
     profile.meta.sourceType = 'USDA';
-    profile.meta.sourceTitle = 'USDA FoodData Central';
+    profile.meta.sourceKind = 'FOOD_DATABASE';
+    profile.meta.sourceCode = 'USDA_FDC';
     profile.meta.sourceProvider = 'USDA FoodData Central';
+    profile.meta.sourceVersion = '2026-04';
+    profile.meta.externalId = 'fdc-123';
     profile.meta.confidenceLevel = 'HIGH';
     profile.macros.energyKcal = 120;
     profile.macros.moisture = 70;
@@ -25,6 +28,85 @@ describe('nutrition profile contract', () => {
         requireSourceMeta: true,
       }),
     ).toEqual([]);
+  });
+
+  it('requires conversion evidence for product-label active vitamins', () => {
+    const profile = createEmptyNutritionProfile();
+    profile.meta.sourceKind = 'PRODUCT_LABEL';
+    profile.vitamins.vitaminA = 1200;
+    profile.vitamins.vitaminD = 400;
+    profile.vitamins.vitaminE = 8;
+
+    const issues = validateNutritionProfileContract(profile);
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          severity: 'ERROR',
+          code: 'MISSING_CONVERSION_EVIDENCE',
+          fieldPath: 'vitamins.vitaminA',
+        }),
+        expect.objectContaining({
+          severity: 'ERROR',
+          code: 'MISSING_CONVERSION_EVIDENCE',
+          fieldPath: 'vitamins.vitaminD',
+        }),
+        expect.objectContaining({
+          severity: 'ERROR',
+          code: 'MISSING_CONVERSION_EVIDENCE',
+          fieldPath: 'vitamins.vitaminE',
+        }),
+      ]),
+    );
+  });
+
+  it('warns when food-database active vitamins are missing conversion evidence', () => {
+    const profile = createEmptyNutritionProfile();
+    profile.meta.sourceKind = 'FOOD_DATABASE';
+    profile.vitamins.vitaminD = 400;
+
+    const issues = validateNutritionProfileContract(profile);
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          severity: 'WARNING',
+          code: 'MISSING_CONVERSION_EVIDENCE',
+          fieldPath: 'vitamins.vitaminD',
+        }),
+      ]),
+    );
+  });
+
+  it('accepts active vitamin conversion evidence from source forms or conversion notes', () => {
+    const profile = createEmptyNutritionProfile();
+    profile.meta.sourceKind = 'PRODUCT_LABEL';
+    profile.meta.sourceForms = {
+      'vitamins.vitaminA': {
+        originalValue: 360,
+        originalUnit: 'μg RAE',
+      },
+    };
+    profile.meta.conversionNotes = {
+      'vitamins.vitaminD': 'Label provided IU directly.',
+    };
+    profile.vitamins.vitaminA = 1200;
+    profile.vitamins.vitaminD = 400;
+
+    const issues = validateNutritionProfileContract(profile);
+
+    expect(issues).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'MISSING_CONVERSION_EVIDENCE',
+          fieldPath: 'vitamins.vitaminA',
+        }),
+        expect.objectContaining({
+          code: 'MISSING_CONVERSION_EVIDENCE',
+          fieldPath: 'vitamins.vitaminD',
+        }),
+      ]),
+    );
   });
 
   it('rejects legacy items arrays before confirmation', () => {
@@ -84,7 +166,7 @@ describe('nutrition profile contract', () => {
         }),
         expect.objectContaining({
           code: 'MISSING_SOURCE_META',
-          fieldPath: 'meta.sourceType',
+          fieldPath: 'meta.sourceKind',
         }),
       ]),
     );

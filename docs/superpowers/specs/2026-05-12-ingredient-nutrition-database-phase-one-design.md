@@ -8,10 +8,11 @@ This phase replaces chat-by-chat ingredient confirmation with a governed batch w
 
 1. Generate nutrition candidates from USDA, local CFCT, product labels, or manual entry.
 2. Normalize candidates into the project nutrition profile contract.
-3. Flag risky identity, state, unit, and source issues.
-4. Let an admin review candidates in batches.
-5. Confirm records into the official nutrition library.
-6. Report coverage and remaining gaps.
+3. Ask an Agent/model to produce structured semantic review advice for identity, state, edible portion, processing, and primary-mapping suitability.
+4. Apply deterministic hard gates for source evidence, nutrition completeness, unit traceability, and primary-mapping safety.
+5. Let an admin review and approve candidates in the Web management console.
+6. Confirm records into the official nutrition library.
+7. Report coverage and remaining gaps.
 
 ## Goal
 
@@ -29,7 +30,7 @@ Phase one does not implement:
 - Automatic cooking yield conversion.
 - Fully automatic supplement label OCR confirmation.
 - Public distribution of parsed CFCT data.
-- Agent permission to publish production recipes without human approval.
+- Agent permission to confirm formal nutrition profiles, publish production recipes, or bypass Web approval.
 
 ## Data Ownership Model
 
@@ -42,6 +43,7 @@ The official nutrition library uses these layers:
 - `NutritionSourceRecord`: source evidence and raw source metadata.
 - `IngredientNutritionCandidate`: a proposed match between an `Ingredient` and a `NutritionSourceRecord`.
 - `SupplementNutritionDraft`: a proposed supplement profile extracted from product label evidence.
+- Agent review advice: structured model output attached to a candidate or supplement draft. It is evidence for human review, not an approval authority.
 
 The recipe designer should eventually read concrete nutrition data through `RecipeItem.nutritionFoodId`, not by assuming one static profile per standard ingredient.
 
@@ -68,6 +70,15 @@ Every confirmed `NutritionFood` must carry:
   - confidence level.
   - review note.
   - whether this profile is the primary mapping for the standard ingredient.
+- Agent review metadata when available:
+  - model/provider name.
+  - review prompt version.
+  - identity verdict.
+  - state/specification verdict.
+  - recommended action.
+  - structured risk flags.
+  - short human-readable rationale.
+  - suggested state labels and primary-mapping choice.
 
 `preparationState` is for program rules. Labels are for humans. Labels may be more specific than the enum.
 
@@ -92,6 +103,55 @@ Supplement source priority:
 
 Supplement label OCR or AI extraction must create a draft only. It cannot directly confirm a formal profile.
 
+## Agent-Assisted Matching And Risk Review
+
+Phase one should not depend on an ever-growing list of hand-written special cases. The preferred review model is hybrid:
+
+- deterministic code generates candidates, normalizes nutrients, and runs hard validation gates.
+- an Agent/model evaluates semantic fit and produces structured review advice.
+- the Web admin console presents the advice, risks, source evidence, and nutrition preview for human approval.
+- only an admin action can confirm a profile into the formal nutrition library.
+
+The Agent/model is especially useful for:
+
+- recognizing that `blue mussel` is not the default match for business-defined `青口贝` if the business definition is New Zealand green-lipped mussel.
+- recognizing that `Job's tears` or `coix seed` better matches `薏仁米` than barley.
+- recognizing that grape tomatoes are not the default profile for ordinary `西红柿`.
+- recognizing UV-exposed, fortified, wild, canned, salted, dried, or cooked records that should not silently become the primary profile.
+- suggesting state labels such as `生重`, `熟重`, `干重`, `去皮去骨`, or `沥干`.
+
+The Agent/model output must be structured JSON, not free-form prose. It should include:
+
+- `identityVerdict`: `MATCH`, `POSSIBLE_MATCH`, `MISMATCH`, or `UNKNOWN`.
+- `stateVerdict`: `MATCH`, `MISMATCH`, `UNKNOWN`, or `NOT_APPLICABLE`.
+- `ediblePortionVerdict`: `MATCH`, `MISMATCH`, `UNKNOWN`, or `NOT_APPLICABLE`.
+- `processingVerdict`: `ACCEPTABLE`, `RISKY`, `INCOMPATIBLE`, or `UNKNOWN`.
+- `recommendedAction`: `CONFIRM_PRIMARY`, `CONFIRM_SECONDARY`, `NEEDS_HUMAN_REVIEW`, `REJECT`, or `FIND_ALTERNATIVE_SOURCE`.
+- `preparationState`, `preparationStateLabel`, `ediblePortionLabel`, and `processingLabel` suggestions.
+- `riskFlags`: short stable codes for filtering and reporting.
+- `rationale`: a short explanation for the admin.
+- `confidence`: `HIGH`, `MEDIUM`, or `LOW`.
+
+The system may cache Agent review output on the candidate so admins do not need to rerun model review every time they open the page.
+
+## Deterministic Hard Gates
+
+Hard gates are intentionally small and non-semantic. They protect the data pipeline from unsafe writes.
+
+The system must block batch confirmation when:
+
+- the candidate has no source record.
+- the source has no normalized nutrition profile.
+- critical nutrients needed for ingredient-level sanity checks are missing.
+- the source unit or raw basis cannot be traced.
+- the Agent/model output is missing for candidates that require semantic review.
+- the Agent/model recommends `REJECT` or `FIND_ALTERNATIVE_SOURCE`.
+- the Agent/model confidence is `LOW`.
+- confirming as primary would create a second primary mapping without clearing or explicitly replacing the old primary mapping.
+- the candidate is a supplement label draft and serving basis has not been reviewed.
+
+Admins may still open blocked candidates in detail view and manually resolve them. Manual override must save a review note and cannot be part of low-risk batch confirmation.
+
 ## Matching Rules
 
 The matching system must evaluate more than name similarity. A candidate should carry structured match signals for:
@@ -109,7 +169,7 @@ The matching system must evaluate more than name similarity. A candidate should 
 
 Candidates are grouped into:
 
-- `AUTO_REVIEWABLE`: strong identity and state agreement; eligible for batch review.
+- `AUTO_REVIEWABLE`: strong deterministic score, Agent semantic approval, and hard gates pass; eligible for Web batch review.
 - `NEEDS_REVIEW`: identity likely, but state, edible portion, processing, or source confidence needs human judgment.
 - `NOT_RECOMMENDED`: weak identity or incompatible state; cannot be batch confirmed.
 - `MISSING_SOURCE`: no usable USDA/CFCT/product-label source found.
@@ -156,6 +216,8 @@ Show:
 - Ingredients with candidates waiting for review.
 - Ingredients with no usable source.
 - Candidates blocked by state/specification risk.
+- Candidates pending Agent review.
+- Candidates blocked by hard gates.
 - Supplements waiting for label draft review.
 
 Packaging and non-nutrition materials are excluded from coverage.
@@ -167,10 +229,13 @@ Each row should show:
 - Standard ingredient name.
 - Source type and source record name.
 - Match level.
+- Agent recommended action.
+- Agent confidence and rationale.
 - Preparation state.
 - Edible portion/specification.
 - Processing markers.
 - Primary-mapping recommendation.
+- Hard-gate status.
 - Key nutrients for quick sanity check.
 - Match reasons and risk flags.
 
@@ -181,9 +246,10 @@ Admins can:
 - Reject.
 - Defer with reason.
 - Edit state labels before confirmation.
+- Request or rerun Agent review.
 - Open source detail for audit evidence.
 
-Batch confirmation is allowed only for `AUTO_REVIEWABLE` candidates after the list has been filtered and inspected.
+Batch confirmation is allowed only for `AUTO_REVIEWABLE` candidates after the list has been filtered and inspected in the Web management console.
 
 ### Detail Review
 
@@ -191,6 +257,8 @@ The detail page should show:
 
 - Standard ingredient context.
 - Source evidence.
+- Agent review advice.
+- Hard-gate results.
 - Original source nutrients.
 - Normalized profile.
 - Unit conversion notes.
@@ -225,7 +293,8 @@ When a candidate is confirmed:
 4. Upsert `NutritionFoodMapping` to the standard `Ingredient`.
 5. If confirmed as primary, clear other primary mappings for that ingredient.
 6. If confirmed as primary, update `Ingredient.nutritionProfile` as a compatibility cache.
-7. Preserve source evidence and review history.
+7. Store the Agent review snapshot when available.
+8. Preserve source evidence and review history.
 
 Manual edits should create a review note or version note. Silent overwrites are not allowed for confirmed profiles.
 
@@ -234,10 +303,10 @@ Manual edits should create a review note or version note. Silent overwrites are 
 To avoid reviewing every detail in chat, phase one has five user-facing review gates:
 
 1. **Data contract gate**: approve the final fields and source/state conventions before mass import.
-2. **Auto-reviewable sample gate**: review 10 to 20 high-confidence candidate examples across food categories.
-3. **Risk rule gate**: review the list of blocked/risky patterns, such as dried/fresh, wild/domestic, UV-exposed, grape tomato, green-lipped mussel, and fortified/unfortified.
+2. **Agent review sample gate**: review 10 to 20 Agent-reviewed candidate examples across food categories.
+3. **Hard-gate and prompt gate**: review the Agent prompt contract and the small list of deterministic hard gates.
 4. **Coverage gate**: review the dashboard after automatic matching to decide which missing ingredients need manual handling.
-5. **First batch confirmation gate**: approve the first batch write, then subsequent batches can follow the same rule set.
+5. **First Web batch confirmation gate**: approve the first batch write in the Web admin console, then subsequent batches can follow the same rule set.
 
 The user should not need to confirm every high-confidence row through chat.
 
@@ -254,8 +323,10 @@ Phase one is accepted when:
   - intentionally excluded with reason.
 - Confirmed food profiles have source, state, edible portion/specification, and review metadata.
 - Confirmed supplement profiles have source, serving basis, unit conversion, and review metadata.
+- Candidates expose Agent review advice and hard-gate results in the Web admin console.
 - Each standard ingredient has zero or one primary mapping.
 - The review UI allows batch review for auto-reviewable candidates and detail review for risky candidates.
+- Batch confirmation is available only from the Web admin console and only for candidates whose hard gates pass.
 - A coverage report can be exported for audit and continued data work.
 - Existing miniapp and recipe flows continue to work through `Ingredient.nutritionProfile` primary cache and `RecipeItem.nutritionFoodId` where available.
 

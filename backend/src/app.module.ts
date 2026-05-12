@@ -161,7 +161,7 @@ import {
   LABEL_RECOGNITION_PROVIDER,
 } from './application/nutrition-governance/label-recognition.provider';
 import {
-  DisabledNutritionCandidateReviewProvider,
+  createNutritionCandidateReviewProvider,
   NUTRITION_CANDIDATE_REVIEW_PROVIDER,
 } from './application/nutrition-governance/nutrition-candidate-review.provider';
 import { RecommendedProductController } from './interfaces/controllers/recommended-product.controller';
@@ -629,7 +629,7 @@ validatePrismaConfig();
     },
     {
       provide: NUTRITION_CANDIDATE_REVIEW_PROVIDER,
-      useClass: DisabledNutritionCandidateReviewProvider,
+      useFactory: createNutritionCandidateReviewProvider,
     },
     // Recommended Product Service
     RecommendedProductService,

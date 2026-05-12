@@ -1,6 +1,7 @@
 import { createEmptyNutritionProfile } from '../ingredient/nutrition-profile.utils';
 import type { NutritionProfileV2 } from '../ingredient/types';
 import { findNutritionField } from '../ingredient/nutrition-field-catalog';
+import { normalizeLegacyNutritionSourceType } from '../ingredient/nutrition-source-contract';
 import type {
   NutritionGovernanceSourceType,
   NutritionMatchConfidence,
@@ -281,4 +282,109 @@ export function attachUsdaFdcProfileMetadata(
   profile.meta.confidenceLevel = options.confidenceLevel ?? 'MEDIUM';
   profile.meta.sourceTitle = options.sourceTitle?.trim() || USDA_SOURCE_PROVIDER;
   return profile;
+}
+
+export function attachSourceRecordProfileMetadata(
+  profile: NutritionProfileV2,
+  options: {
+    sourceType?: string | null;
+    sourceKey?: string | null;
+    sourceTitle?: string | null;
+    sourceDetail?: unknown;
+    confidenceLevel?: NutritionMatchConfidence;
+    versionNote?: string | null;
+  },
+): NutritionProfileV2 {
+  const sourceDefinition = normalizeLegacyNutritionSourceType(
+    options.sourceType,
+  );
+  const sourceProvider =
+    getSourceProviderFromDetail(options.sourceDetail) ??
+    profile.meta.sourceProvider ??
+    sourceDefinition?.sourceProvider ??
+    null;
+  const externalId =
+    profile.meta.externalId ??
+    getExternalIdFromSourceKey(options.sourceKey, options.sourceType);
+  const sourceVersion =
+    profile.meta.sourceVersion ??
+    getSourceVersionFromSourceRecord({
+      sourceCode: sourceDefinition?.sourceCode ?? profile.meta.sourceCode,
+      sourceDetail: options.sourceDetail,
+    });
+
+  return {
+    ...profile,
+    meta: {
+      ...profile.meta,
+      sourceType:
+        (options.sourceType as NutritionProfileV2['meta']['sourceType']) ??
+        profile.meta.sourceType,
+      sourceKind: profile.meta.sourceKind ?? sourceDefinition?.sourceKind ?? null,
+      sourceCode: profile.meta.sourceCode ?? sourceDefinition?.sourceCode ?? null,
+      sourceVersion,
+      externalId,
+      sourceTitle:
+        options.sourceTitle?.trim() || profile.meta.sourceTitle || null,
+      sourceProvider,
+      confidenceLevel: options.confidenceLevel ?? profile.meta.confidenceLevel,
+      versionNote: options.versionNote ?? profile.meta.versionNote ?? null,
+    },
+  };
+}
+
+function getSourceProviderFromDetail(sourceDetail: unknown): string | null {
+  if (
+    !sourceDetail ||
+    typeof sourceDetail !== 'object' ||
+    Array.isArray(sourceDetail)
+  ) {
+    return null;
+  }
+
+  const detail = sourceDetail as Record<string, unknown>;
+  const provider = detail.provider ?? detail.sourceProvider;
+
+  return typeof provider === 'string' && provider.trim()
+    ? provider.trim()
+    : null;
+}
+
+function getExternalIdFromSourceKey(
+  sourceKey: string | null | undefined,
+  sourceType: string | null | undefined,
+): string | null {
+  const normalizedSourceKey = sourceKey?.trim();
+  if (!normalizedSourceKey) {
+    return null;
+  }
+
+  const prefix = sourceType?.trim() ? `${sourceType.trim()}:` : '';
+  if (prefix && normalizedSourceKey.startsWith(prefix)) {
+    return normalizedSourceKey.slice(prefix.length) || null;
+  }
+
+  return normalizedSourceKey;
+}
+
+function getSourceVersionFromSourceRecord({
+  sourceCode,
+  sourceDetail,
+}: {
+  sourceCode: string | null | undefined;
+  sourceDetail: unknown;
+}): string | null {
+  if (sourceCode !== 'USDA_FDC') {
+    return null;
+  }
+
+  const detail =
+    sourceDetail && typeof sourceDetail === 'object' && !Array.isArray(sourceDetail)
+      ? (sourceDetail as Record<string, unknown>)
+      : {};
+  const sourceDate = detail.publishedDate ?? detail.publicationDate;
+
+  return buildUsdaFdcSourceVersion(
+    typeof sourceDate === 'string' ? sourceDate : null,
+  );
 }

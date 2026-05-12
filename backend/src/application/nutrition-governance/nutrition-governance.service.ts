@@ -26,6 +26,7 @@ import type {
 } from '../../domain/nutrition-governance/nutrition-governance.types';
 import {
   attachUsdaFdcProfileMetadata,
+  attachSourceRecordProfileMetadata,
   buildUsdaFdcSourceVersion,
   buildNutritionSourceKey,
   classifyMatchConfidence,
@@ -593,11 +594,12 @@ export class NutritionGovernanceService {
     }
 
     const confirmedAt = new Date();
-    const confirmedProfile = withConfirmationMeta(profile, {
+    const confirmedProfile = attachSourceRecordProfileMetadata(profile, {
       sourceType: candidate.sourceRecord
         .sourceType as NutritionGovernanceSourceType,
+      sourceKey: candidate.sourceRecord.sourceKey,
       sourceTitle: candidate.sourceRecord.sourceTitle,
-      sourceProvider: getSourceProvider(candidate.sourceRecord.sourceDetail),
+      sourceDetail: candidate.sourceRecord.sourceDetail,
       confidenceLevel: candidate.confidence as NutritionMatchConfidence,
       versionNote: `Confirmed from ${candidate.sourceRecord.sourceTitle}`,
     });

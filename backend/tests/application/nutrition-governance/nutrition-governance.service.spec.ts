@@ -494,6 +494,10 @@ describe('NutritionGovernanceService', () => {
         nutritionProfile: expect.objectContaining({
           meta: expect.objectContaining({
             sourceType: 'USDA',
+            sourceKind: 'FOOD_DATABASE',
+            sourceCode: 'USDA_FDC',
+            sourceVersion: 'USDA_FDC',
+            externalId: '123',
             sourceTitle: 'USDA Chicken Breast',
             sourceProvider: 'USDA FoodData Central',
             confidenceLevel: 'HIGH',

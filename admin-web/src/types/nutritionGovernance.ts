@@ -10,6 +10,12 @@ export type NutritionGovernanceRecordStatus = 'ACTIVE' | 'DEPRECATED'
 
 export type NutritionMatchConfidence = 'HIGH' | 'MEDIUM' | 'LOW'
 
+export type NutritionCandidateReviewGroup =
+  | 'AUTO_REVIEWABLE'
+  | 'NEEDS_REVIEW'
+  | 'NOT_RECOMMENDED'
+  | 'MISSING_SOURCE'
+
 export type NutritionCandidateStatus =
   | 'CANDIDATE'
   | 'CONFIRMED'
@@ -44,6 +50,26 @@ export interface NutritionMatchReason {
   scoreDelta: number
 }
 
+export interface NutritionCandidateAgentReview {
+  provider?: string
+  model?: string
+  promptVersion?: string
+  recommendedAction: string
+  confidence: NutritionMatchConfidence
+  rationale: string
+  riskFlags: string[]
+  preparationState?: string | null
+  preparationStateLabel?: string | null
+  ediblePortionLabel?: string | null
+  processingLabel?: string | null
+}
+
+export interface CandidateHardGateResults {
+  canBatchConfirm: boolean
+  blockingReasons: string[]
+  warningReasons: string[]
+}
+
 export interface NutritionSourceRecord {
   id: string
   sourceType: NutritionGovernanceSourceType
@@ -76,6 +102,15 @@ export interface IngredientNutritionCandidate {
   confidence: NutritionMatchConfidence
   score: number
   matchReasons: NutritionMatchReason[]
+  agentReview?: NutritionCandidateAgentReview | null
+  agentReviewStatus?: string | null
+  hardGateResults?: CandidateHardGateResults | null
+  reviewGroup?: NutritionCandidateReviewGroup | string | null
+  preparationState?: string | null
+  preparationStateLabel?: string | null
+  ediblePortionLabel?: string | null
+  processingLabel?: string | null
+  reviewNote?: string | null
   normalizedNutrition: NutritionProfile
   status: NutritionCandidateStatus
   confirmationSnapshot?: Record<string, unknown> | null
@@ -131,6 +166,16 @@ export interface SupplementNutritionDraft {
 export interface ListNutritionCandidatesParams {
   status?: NutritionCandidateStatus
   confidence?: NutritionMatchConfidence
+  reviewGroup?: NutritionCandidateReviewGroup | string
+}
+
+export interface ConfirmNutritionCandidatePayload {
+  mappingRole: 'PRIMARY' | 'SECONDARY'
+  preparationState?: string | null
+  preparationStateLabel?: string | null
+  ediblePortionLabel?: string | null
+  processingLabel?: string | null
+  reviewNote?: string | null
 }
 
 export interface ListSupplementDraftsParams {

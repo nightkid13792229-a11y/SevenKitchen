@@ -33,10 +33,13 @@ import { ApiResponseDto } from '../dto/common/response.dto';
 import { AdminGuard } from '../guards/role.guard';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import {
+  BatchConfirmNutritionCandidatesDto,
+  ConfirmNutritionCandidateDto,
   GenerateFoodCandidatesDto,
   ImportUsdaSourceDto,
   ListNutritionCandidatesQueryDto,
   ListSupplementDraftsQueryDto,
+  ReviewCandidateWithAgentDto,
 } from '../dto/nutrition-governance/nutrition-governance.dto';
 
 const SUPPLEMENT_LABEL_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -93,6 +96,11 @@ export class NutritionGovernanceController {
     required: false,
     enum: NutritionMatchConfidence,
   })
+  @ApiQuery({
+    name: 'reviewGroup',
+    required: false,
+    description: '审核队列分组',
+  })
   @ApiResponse({ status: 200, description: '营养候选列表' })
   async listCandidates(
     @Query() query: ListNutritionCandidatesQueryDto,
@@ -125,6 +133,19 @@ export class NutritionGovernanceController {
         ingredientId: dto.ingredientId,
       });
     return new ApiResponseDto(0, 'USDA 来源导入成功', result);
+  }
+
+  @Post('candidates/:id/agent-review')
+  @ApiOperation({ summary: '运行 Agent 语义审核并缓存结果' })
+  @ApiParam({ name: 'id', description: '营养候选ID' })
+  @ApiResponse({ status: 201, description: 'Agent 审核已完成' })
+  async reviewCandidateWithAgent(
+    @Param('id') id: string,
+    @Body() _dto: ReviewCandidateWithAgentDto,
+  ): Promise<ApiResponseDto<unknown>> {
+    const result =
+      await this.nutritionGovernanceService.reviewCandidateWithAgent(id);
+    return new ApiResponseDto(0, 'Agent 审核已完成', result);
   }
 
   @Get('supplement-drafts')
@@ -186,18 +207,36 @@ export class NutritionGovernanceController {
     }
   }
 
+  @Post('candidates/batch-confirm')
+  @ApiOperation({ summary: '批量确认通过硬闸门的营养候选' })
+  @ApiResponse({ status: 201, description: '批量确认成功' })
+  async batchConfirmCandidates(
+    @Body() dto: BatchConfirmNutritionCandidatesDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<unknown>> {
+    const result =
+      await this.nutritionGovernanceService.batchConfirmCandidatesFromWorkbench(
+        dto.candidateIds,
+        user.userId,
+      );
+    return new ApiResponseDto(0, '批量确认成功', result);
+  }
+
   @Post('candidates/:id/confirm')
   @ApiOperation({ summary: '确认营养候选' })
   @ApiParam({ name: 'id', description: '营养候选ID' })
   @ApiResponse({ status: 201, description: '确认成功' })
   async confirmCandidate(
     @Param('id') id: string,
+    @Body() dto: ConfirmNutritionCandidateDto,
     @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<unknown>> {
-    const result = await this.nutritionGovernanceService.confirmCandidate(
-      id,
-      user.userId,
-    );
+    const result =
+      await this.nutritionGovernanceService.confirmCandidateFromWorkbench(
+        id,
+        user.userId,
+        dto ?? { mappingRole: 'PRIMARY' },
+      );
     return new ApiResponseDto(0, '确认成功', result);
   }
 

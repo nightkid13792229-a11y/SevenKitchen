@@ -1,5 +1,6 @@
 import api from './index'
 import type {
+  ConfirmNutritionCandidatePayload,
   IngredientNutritionCandidate,
   IngredientNutritionCandidateListItem,
   ListNutritionCandidatesParams,
@@ -34,8 +35,19 @@ export const nutritionGovernanceApi = {
       ingredientId
     }),
 
-  confirmCandidate: (id: string): Promise<IngredientNutritionCandidate> =>
-    api.post(`/admin/nutrition-governance/candidates/${id}/confirm`),
+  reviewCandidateWithAgent: (id: string): Promise<IngredientNutritionCandidate> =>
+    api.post(`/admin/nutrition-governance/candidates/${id}/agent-review`),
+
+  confirmCandidate: (
+    id: string,
+    data?: ConfirmNutritionCandidatePayload
+  ): Promise<IngredientNutritionCandidate> =>
+    api.post(`/admin/nutrition-governance/candidates/${id}/confirm`, data),
+
+  batchConfirmCandidates: (
+    candidateIds: string[]
+  ): Promise<IngredientNutritionCandidate[]> =>
+    api.post('/admin/nutrition-governance/candidates/batch-confirm', { candidateIds }),
 
   rejectCandidate: (id: string): Promise<IngredientNutritionCandidate> =>
     api.post(`/admin/nutrition-governance/candidates/${id}/reject`),

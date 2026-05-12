@@ -160,6 +160,10 @@ import {
   DisabledLabelRecognitionProvider,
   LABEL_RECOGNITION_PROVIDER,
 } from './application/nutrition-governance/label-recognition.provider';
+import {
+  DisabledNutritionCandidateReviewProvider,
+  NUTRITION_CANDIDATE_REVIEW_PROVIDER,
+} from './application/nutrition-governance/nutrition-candidate-review.provider';
 import { RecommendedProductController } from './interfaces/controllers/recommended-product.controller';
 import { ProcurementSkuController } from './interfaces/controllers/procurement-sku.controller';
 import { RecommendedProductService } from './application/ingredient/recommended-product.service';
@@ -622,6 +626,10 @@ validatePrismaConfig();
     {
       provide: LABEL_RECOGNITION_PROVIDER,
       useClass: DisabledLabelRecognitionProvider,
+    },
+    {
+      provide: NUTRITION_CANDIDATE_REVIEW_PROVIDER,
+      useClass: DisabledNutritionCandidateReviewProvider,
     },
     // Recommended Product Service
     RecommendedProductService,

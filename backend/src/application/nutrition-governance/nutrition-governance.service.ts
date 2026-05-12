@@ -25,6 +25,10 @@ import type {
   NutritionSourceInput,
 } from '../../domain/nutrition-governance/nutrition-governance.types';
 import {
+  evaluateNutritionCandidateHardGates,
+  resolveCandidateReviewGroup,
+} from '../../domain/nutrition-governance/nutrition-candidate-hard-gates';
+import {
   attachUsdaFdcProfileMetadata,
   attachSourceRecordProfileMetadata,
   buildUsdaFdcSourceVersion,
@@ -40,6 +44,11 @@ import {
   LABEL_RECOGNITION_PROVIDER,
   type LabelRecognitionProvider,
 } from './label-recognition.provider';
+import {
+  DisabledNutritionCandidateReviewProvider,
+  NUTRITION_CANDIDATE_REVIEW_PROVIDER,
+  type NutritionCandidateReviewProvider,
+} from './nutrition-candidate-review.provider';
 
 const FOOD_SOURCE_TYPES = ['USDA', 'CFCT'] as const;
 const MANAGED_INGREDIENT_TYPES = [
@@ -75,6 +84,7 @@ export interface NutritionGovernanceOverview {
 export interface ListNutritionCandidatesParams {
   status?: NutritionCandidateStatus;
   confidence?: NutritionMatchConfidence;
+  reviewGroup?: string;
 }
 
 export interface ListSupplementDraftsParams {
@@ -91,6 +101,16 @@ export interface CreateSupplementDraftFromLabelImageInput {
   imageUrl: string;
   imageKey: string;
   createdBy?: string;
+}
+
+export interface ConfirmCandidateFromWorkbenchInput {
+  mappingRole?: 'PRIMARY' | 'SECONDARY';
+  preparationState?: string | null;
+  preparationStateLabel?: string | null;
+  ediblePortionLabel?: string | null;
+  processingLabel?: string | null;
+  reviewNote?: string | null;
+  batchMode?: boolean;
 }
 
 interface UsdaFoodData extends Record<string, unknown> {
@@ -114,6 +134,9 @@ export class NutritionGovernanceService {
     @Optional()
     @Inject(LABEL_RECOGNITION_PROVIDER)
     private readonly labelRecognitionProvider?: LabelRecognitionProvider,
+    @Optional()
+    @Inject(NUTRITION_CANDIDATE_REVIEW_PROVIDER)
+    private readonly candidateReviewProvider?: NutritionCandidateReviewProvider,
   ) {}
 
   async getOverview(): Promise<NutritionGovernanceOverview> {
@@ -369,6 +392,7 @@ export class NutritionGovernanceService {
       where: {
         ...(params.status && { status: params.status }),
         ...(params.confidence && { confidence: params.confidence }),
+        ...(params.reviewGroup && { reviewGroup: params.reviewGroup }),
       },
       include: {
         ingredient: {
@@ -382,6 +406,60 @@ export class NutritionGovernanceService {
         sourceRecord: true,
       },
       orderBy: [{ sourcePriority: 'asc' }, { score: 'desc' }],
+    });
+  }
+
+  async reviewCandidateWithAgent(candidateId: string) {
+    const candidate = await this.prisma.ingredientNutritionCandidate.findUnique(
+      {
+        where: { id: candidateId },
+        include: {
+          ingredient: true,
+          sourceRecord: true,
+        },
+      },
+    );
+
+    if (!candidate) {
+      throw new NotFoundException('营养候选不存在');
+    }
+
+    const agentReview =
+      await this.getCandidateReviewProvider().reviewFoodCandidate({
+        ingredient: {
+          id: candidate.ingredient.id,
+          name: candidate.ingredient.name,
+          type: candidate.ingredient.type,
+        },
+        sourceRecord: candidate.sourceRecord,
+        normalizedNutrition: candidate.normalizedNutrition,
+      });
+    const hardGateResults = evaluateNutritionCandidateHardGates({
+      normalizedNutrition: candidate.normalizedNutrition,
+      sourceRecord: candidate.sourceRecord,
+      agentReview,
+    });
+    const reviewGroup = resolveCandidateReviewGroup(
+      hardGateResults,
+      agentReview,
+    );
+
+    return this.prisma.ingredientNutritionCandidate.update({
+      where: { id: candidate.id },
+      data: {
+        agentReview: toJsonInput(agentReview),
+        agentReviewStatus: 'COMPLETED',
+        hardGateResults: toJsonInput(hardGateResults),
+        reviewGroup,
+        preparationState: agentReview.preparationState ?? null,
+        preparationStateLabel: agentReview.preparationStateLabel ?? null,
+        ediblePortionLabel: agentReview.ediblePortionLabel ?? null,
+        processingLabel: agentReview.processingLabel ?? null,
+      },
+      include: {
+        ingredient: true,
+        sourceRecord: true,
+      },
     });
   }
 
@@ -563,6 +641,16 @@ export class NutritionGovernanceService {
   }
 
   async confirmCandidate(candidateId: string, userId: string) {
+    return this.confirmCandidateFromWorkbench(candidateId, userId, {
+      mappingRole: 'PRIMARY',
+    });
+  }
+
+  async confirmCandidateFromWorkbench(
+    candidateId: string,
+    userId: string,
+    input: ConfirmCandidateFromWorkbenchInput = {},
+  ) {
     const candidate = await this.prisma.ingredientNutritionCandidate.findUnique(
       {
         where: { id: candidateId },
@@ -593,6 +681,23 @@ export class NutritionGovernanceService {
       throw new BadRequestException('候选缺少标准化营养数据');
     }
 
+    if (input.batchMode && !candidateCanBatchConfirm(candidate)) {
+      throw new BadRequestException('该候选未通过批量确认硬闸门');
+    }
+
+    const isPrimary = (input.mappingRole ?? 'PRIMARY') === 'PRIMARY';
+    const candidateReviewData = candidate as unknown as Record<string, any>;
+    const preparationState =
+      input.preparationState ?? candidateReviewData.preparationState ?? null;
+    const preparationStateLabel =
+      input.preparationStateLabel ??
+      candidateReviewData.preparationStateLabel ??
+      null;
+    const ediblePortionLabel =
+      input.ediblePortionLabel ?? candidateReviewData.ediblePortionLabel ?? null;
+    const processingLabel =
+      input.processingLabel ?? candidateReviewData.processingLabel ?? null;
+    const reviewNote = input.reviewNote ?? null;
     const confirmedAt = new Date();
     const confirmedProfile = attachSourceRecordProfileMetadata(profile, {
       sourceType: candidate.sourceRecord
@@ -607,12 +712,14 @@ export class NutritionGovernanceService {
     return this.prisma.$transaction(async (tx) => {
       const client = tx as NutritionGovernanceTransaction;
 
-      await client.ingredient.update({
-        where: { id: candidate.ingredientId },
-        data: {
-          nutritionProfile: toJsonInput(confirmedProfile),
-        },
-      });
+      if (isPrimary) {
+        await client.ingredient.update({
+          where: { id: candidate.ingredientId },
+          data: {
+            nutritionProfile: toJsonInput(confirmedProfile),
+          },
+        });
+      }
 
       const nutritionFood = await client.nutritionFood.upsert({
         where: {
@@ -632,8 +739,12 @@ export class NutritionGovernanceService {
           externalId: candidate.sourceRecord.sourceKey,
           version: 1,
           status: NutritionFoodStatus.VERIFIED,
+          preparationState,
+          preparationStateLabel,
+          ediblePortionLabel,
+          processingLabel,
           nutritionData: toJsonInput(confirmedProfile),
-          notes: candidate.sourceRecord.sourceTitle,
+          notes: reviewNote ?? candidate.sourceRecord.sourceTitle,
           verifiedBy: userId,
           verifiedAt: confirmedAt,
         },
@@ -644,25 +755,31 @@ export class NutritionGovernanceService {
           ),
           externalId: candidate.sourceRecord.sourceKey,
           status: NutritionFoodStatus.VERIFIED,
+          preparationState,
+          preparationStateLabel,
+          ediblePortionLabel,
+          processingLabel,
           nutritionData: toJsonInput(confirmedProfile),
-          notes: candidate.sourceRecord.sourceTitle,
+          notes: reviewNote ?? candidate.sourceRecord.sourceTitle,
           verifiedBy: userId,
           verifiedAt: confirmedAt,
         },
       });
 
-      await client.nutritionFoodMapping.updateMany({
-        where: {
-          ingredientId: candidate.ingredientId,
-          isPrimary: true,
-          NOT: {
-            nutritionFoodId: nutritionFood.id,
+      if (isPrimary) {
+        await client.nutritionFoodMapping.updateMany({
+          where: {
+            ingredientId: candidate.ingredientId,
+            isPrimary: true,
+            NOT: {
+              nutritionFoodId: nutritionFood.id,
+            },
           },
-        },
-        data: {
-          isPrimary: false,
-        },
-      });
+          data: {
+            isPrimary: false,
+          },
+        });
+      }
 
       await client.nutritionFoodMapping.upsert({
         where: {
@@ -675,12 +792,12 @@ export class NutritionGovernanceService {
           nutritionFoodId: nutritionFood.id,
           ingredientId: candidate.ingredientId,
           yieldRate: 1,
-          isPrimary: true,
-          notes: candidate.sourceRecord.sourceTitle,
+          isPrimary,
+          notes: reviewNote ?? candidate.sourceRecord.sourceTitle,
         },
         update: {
-          isPrimary: true,
-          notes: candidate.sourceRecord.sourceTitle,
+          isPrimary,
+          notes: reviewNote ?? candidate.sourceRecord.sourceTitle,
         },
       });
 
@@ -690,6 +807,11 @@ export class NutritionGovernanceService {
           status: NutritionCandidateStatus.CONFIRMED,
           confirmedBy: userId,
           confirmedAt,
+          preparationState,
+          preparationStateLabel,
+          ediblePortionLabel,
+          processingLabel,
+          reviewNote,
           confirmationSnapshot: toJsonInput({
             ingredientId: candidate.ingredientId,
             sourceRecordId: candidate.sourceRecordId,
@@ -697,6 +819,14 @@ export class NutritionGovernanceService {
             sourceTitle: candidate.sourceRecord.sourceTitle,
             confidence: candidate.confidence,
             score: candidate.score,
+            mappingRole: isPrimary ? 'PRIMARY' : 'SECONDARY',
+            agentReview: candidateReviewData.agentReview ?? null,
+            hardGateResults: candidateReviewData.hardGateResults ?? null,
+            preparationState,
+            preparationStateLabel,
+            ediblePortionLabel,
+            processingLabel,
+            reviewNote,
             confirmedBy: userId,
             confirmedAt: confirmedAt.toISOString(),
             nutritionProfile: confirmedProfile,
@@ -704,6 +834,24 @@ export class NutritionGovernanceService {
         },
       });
     });
+  }
+
+  async batchConfirmCandidatesFromWorkbench(
+    candidateIds: string[],
+    userId: string,
+  ) {
+    const results = [];
+
+    for (const candidateId of candidateIds) {
+      results.push(
+        await this.confirmCandidateFromWorkbench(candidateId, userId, {
+          mappingRole: 'PRIMARY',
+          batchMode: true,
+        }),
+      );
+    }
+
+    return results;
   }
 
   async rejectCandidate(candidateId: string) {
@@ -815,6 +963,13 @@ export class NutritionGovernanceService {
       this.labelRecognitionProvider ?? new DisabledLabelRecognitionProvider()
     );
   }
+
+  private getCandidateReviewProvider(): NutritionCandidateReviewProvider {
+    return (
+      this.candidateReviewProvider ??
+      new DisabledNutritionCandidateReviewProvider()
+    );
+  }
 }
 
 function toJsonInput(value: unknown): Prisma.InputJsonValue {
@@ -829,6 +984,22 @@ function toNullableJsonInput(
   }
 
   return toJsonInput(value);
+}
+
+function candidateCanBatchConfirm(candidate: unknown): boolean {
+  if (!candidate || typeof candidate !== 'object') {
+    return false;
+  }
+
+  const hardGateResults = (candidate as Record<string, unknown>)
+    .hardGateResults;
+
+  return (
+    !!hardGateResults &&
+    typeof hardGateResults === 'object' &&
+    !Array.isArray(hardGateResults) &&
+    (hardGateResults as Record<string, unknown>).canBatchConfirm === true
+  );
 }
 
 function getSourceProvider(

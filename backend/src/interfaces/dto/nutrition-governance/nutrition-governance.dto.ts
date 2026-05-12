@@ -4,7 +4,16 @@ import {
   NutritionMatchConfidence,
   SupplementNutritionDraftStatus,
 } from '@prisma/client';
-import { IsEnum, IsNotEmpty, IsOptional, IsString } from 'class-validator';
+import {
+  ArrayNotEmpty,
+  IsBoolean,
+  IsEnum,
+  IsIn,
+  IsArray,
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+} from 'class-validator';
 
 export class ListNutritionCandidatesQueryDto {
   @ApiPropertyOptional({
@@ -22,6 +31,11 @@ export class ListNutritionCandidatesQueryDto {
   @IsOptional()
   @IsEnum(NutritionMatchConfidence)
   confidence?: NutritionMatchConfidence;
+
+  @ApiPropertyOptional({ description: '审核队列分组' })
+  @IsOptional()
+  @IsString()
+  reviewGroup?: string;
 }
 
 export class GenerateFoodCandidatesDto {
@@ -44,6 +58,62 @@ export class ImportUsdaSourceDto {
   @IsString()
   @IsNotEmpty()
   ingredientId?: string;
+}
+
+export class ReviewCandidateWithAgentDto {
+  @ApiPropertyOptional({ description: '强制重新生成 Agent 审核结果' })
+  @IsOptional()
+  @IsBoolean()
+  force?: boolean;
+}
+
+export class ConfirmNutritionCandidateDto {
+  @ApiPropertyOptional({
+    description: '映射角色',
+    enum: ['PRIMARY', 'SECONDARY'],
+    default: 'PRIMARY',
+  })
+  @IsOptional()
+  @IsIn(['PRIMARY', 'SECONDARY'])
+  mappingRole?: 'PRIMARY' | 'SECONDARY';
+
+  @ApiPropertyOptional({ description: '生熟/干鲜状态' })
+  @IsOptional()
+  @IsString()
+  preparationState?: string | null;
+
+  @ApiPropertyOptional({ description: '状态显示名' })
+  @IsOptional()
+  @IsString()
+  preparationStateLabel?: string | null;
+
+  @ApiPropertyOptional({ description: '可食部/规格显示名' })
+  @IsOptional()
+  @IsString()
+  ediblePortionLabel?: string | null;
+
+  @ApiPropertyOptional({ description: '加工标记显示名' })
+  @IsOptional()
+  @IsString()
+  processingLabel?: string | null;
+
+  @ApiPropertyOptional({ description: '审核备注' })
+  @IsOptional()
+  @IsString()
+  reviewNote?: string | null;
+
+  @ApiPropertyOptional({ description: '是否批量确认模式' })
+  @IsOptional()
+  @IsBoolean()
+  batchMode?: boolean;
+}
+
+export class BatchConfirmNutritionCandidatesDto {
+  @ApiProperty({ description: '候选ID列表', type: [String] })
+  @IsArray()
+  @ArrayNotEmpty()
+  @IsString({ each: true })
+  candidateIds!: string[];
 }
 
 export class ListSupplementDraftsQueryDto {

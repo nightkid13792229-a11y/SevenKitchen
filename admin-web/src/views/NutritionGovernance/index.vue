@@ -28,6 +28,19 @@
           </el-select>
 
           <el-select
+            v-model="reviewGroupFilter"
+            placeholder="审批队列"
+            clearable
+            style="width: 140px"
+            @change="loadCandidates"
+          >
+            <el-option label="可批量" value="AUTO_REVIEWABLE" />
+            <el-option label="需复核" value="NEEDS_REVIEW" />
+            <el-option label="不推荐" value="NOT_RECOMMENDED" />
+            <el-option label="缺来源" value="MISSING_SOURCE" />
+          </el-select>
+
+          <el-select
             v-model="selectedFoodIngredientId"
             filterable
             clearable
@@ -64,6 +77,15 @@
           >
             导入 USDA
           </el-button>
+
+          <el-button
+            type="success"
+            :disabled="!selectedCandidates.length || !!candidateBusyId"
+            :loading="batchConfirming"
+            @click="handleBatchConfirm"
+          >
+            批量确认
+          </el-button>
         </div>
 
         <FoodCandidatesTable
@@ -71,7 +93,19 @@
           :loading="candidatesLoading"
           :busy-id="candidateBusyId"
           @confirm="handleConfirmCandidate"
+          @review-agent="handleRunAgentReview"
           @reject="handleRejectCandidate"
+          @selection-change="handleCandidateSelectionChange"
+        />
+
+        <CandidateReviewDrawer
+          v-model="candidateDrawerVisible"
+          :candidate="selectedCandidate"
+          :busy="!!candidateBusyId"
+          @review-agent="handleRunAgentReview"
+          @confirm-primary="handleConfirmCandidateFromDrawer"
+          @confirm-secondary="handleConfirmCandidateFromDrawer"
+          @reject="handleRejectCandidateFromDrawer"
         />
       </el-tab-pane>
 
@@ -129,13 +163,16 @@ import { ingredientApi } from '@/api/ingredients'
 import { nutritionGovernanceApi } from '@/api/nutritionGovernance'
 import { IngredientType, type Ingredient } from '@/types/ingredient'
 import type {
+  ConfirmNutritionCandidatePayload,
   IngredientNutritionCandidateListItem,
+  NutritionCandidateReviewGroup,
   NutritionGovernanceOverview,
   NutritionMatchConfidence,
   SupplementNutritionDraft
 } from '@/types/nutritionGovernance'
 import OverviewCards from './components/OverviewCards.vue'
 import FoodCandidatesTable from './components/FoodCandidatesTable.vue'
+import CandidateReviewDrawer from './components/CandidateReviewDrawer.vue'
 import SupplementDraftsTable from './components/SupplementDraftsTable.vue'
 
 const overview = ref<NutritionGovernanceOverview | null>(null)
@@ -145,9 +182,13 @@ const supplementDrafts = ref<SupplementNutritionDraft[]>([])
 
 const activeTab = ref<'food' | 'supplement'>('food')
 const confidenceFilter = ref<NutritionMatchConfidence | ''>('')
+const reviewGroupFilter = ref<NutritionCandidateReviewGroup | ''>('')
 const selectedFoodIngredientId = ref('')
 const selectedSupplementIngredientId = ref('')
 const fdcId = ref('')
+const selectedCandidates = ref<IngredientNutritionCandidateListItem[]>([])
+const selectedCandidate = ref<IngredientNutritionCandidateListItem | null>(null)
+const candidateDrawerVisible = ref(false)
 
 const refreshing = ref(false)
 const overviewLoading = ref(false)
@@ -157,6 +198,7 @@ const generating = ref(false)
 const importing = ref(false)
 const uploading = ref(false)
 const candidateBusyId = ref('')
+const batchConfirming = ref(false)
 const draftsLoading = ref(false)
 const draftBusyId = ref('')
 
@@ -202,7 +244,8 @@ async function loadCandidates() {
   try {
     candidates.value = await nutritionGovernanceApi.listCandidates({
       status: 'CANDIDATE',
-      confidence: confidenceFilter.value || undefined
+      confidence: confidenceFilter.value || undefined,
+      reviewGroup: reviewGroupFilter.value || undefined
     })
   } catch (error) {
     ElMessage.error('候选列表加载失败')
@@ -275,7 +318,42 @@ async function handleImportUsda() {
 }
 
 async function handleConfirmCandidate(candidate: IngredientNutritionCandidateListItem) {
-  if (candidateBusyId.value) return
+  handleOpenCandidate(candidate)
+}
+
+function handleOpenCandidate(candidate: IngredientNutritionCandidateListItem) {
+  selectedCandidate.value = candidate
+  candidateDrawerVisible.value = true
+}
+
+function handleCandidateSelectionChange(selection: IngredientNutritionCandidateListItem[]) {
+  selectedCandidates.value = selection
+}
+
+async function handleRunAgentReview(candidate: IngredientNutritionCandidateListItem | null) {
+  if (!candidate || candidateBusyId.value) return
+
+  candidateBusyId.value = candidate.id
+  try {
+    const reviewed = await nutritionGovernanceApi.reviewCandidateWithAgent(candidate.id)
+    ElMessage.success('Agent 审核已完成')
+    await loadCandidates()
+    if (selectedCandidate.value?.id === candidate.id) {
+      selectedCandidate.value = {
+        ...selectedCandidate.value,
+        ...reviewed
+      } as IngredientNutritionCandidateListItem
+    }
+  } catch (error) {
+    ElMessage.error('Agent 审核失败')
+  } finally {
+    candidateBusyId.value = ''
+  }
+}
+
+async function handleConfirmCandidateFromDrawer(payload: ConfirmNutritionCandidatePayload) {
+  const candidate = selectedCandidate.value
+  if (!candidate || candidateBusyId.value) return
 
   candidateBusyId.value = candidate.id
   try {
@@ -294,14 +372,60 @@ async function handleConfirmCandidate(candidate: IngredientNutritionCandidateLis
   }
 
   try {
-    await nutritionGovernanceApi.confirmCandidate(candidate.id)
+    await nutritionGovernanceApi.confirmCandidate(candidate.id, payload)
     ElMessage.success('候选已确认')
+    candidateDrawerVisible.value = false
+    selectedCandidate.value = null
     await Promise.all([loadOverview(), loadCandidates()])
   } catch (error) {
     ElMessage.error('候选确认失败')
   } finally {
     candidateBusyId.value = ''
   }
+}
+
+async function handleBatchConfirm() {
+  const candidateIds = selectedCandidates.value
+    .filter((candidate) => candidate.hardGateResults?.canBatchConfirm)
+    .map((candidate) => candidate.id)
+
+  if (!candidateIds.length) {
+    ElMessage.warning('请选择已通过硬闸门的候选')
+    return
+  }
+
+  batchConfirming.value = true
+  try {
+    await ElMessageBox.confirm(
+      `确认批量写入 ${candidateIds.length} 条可批量候选吗？`,
+      '批量确认营养档案',
+      {
+        type: 'warning',
+        confirmButtonText: '确认写入',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    batchConfirming.value = false
+    return
+  }
+
+  try {
+    await nutritionGovernanceApi.batchConfirmCandidates(candidateIds)
+    ElMessage.success('批量确认成功')
+    selectedCandidates.value = []
+    await Promise.all([loadOverview(), loadCandidates()])
+  } catch (error) {
+    ElMessage.error('批量确认失败')
+  } finally {
+    batchConfirming.value = false
+  }
+}
+
+async function handleRejectCandidateFromDrawer(candidate: IngredientNutritionCandidateListItem | null) {
+  if (!candidate) return
+  await handleRejectCandidate(candidate)
+  candidateDrawerVisible.value = false
 }
 
 async function handleRejectCandidate(candidate: IngredientNutritionCandidateListItem) {

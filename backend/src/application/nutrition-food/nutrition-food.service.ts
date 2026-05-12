@@ -149,6 +149,8 @@ export class NutritionFoodService {
         category: dto.category,
         dataSource: dto.dataSource,
         externalId: dto.externalId,
+        preparationState: dto.preparationState,
+        preparationStateLabel: dto.preparationStateLabel,
         nutritionData: dto.nutritionData as any,
         notes: dto.notes,
         createdBy: userId,
@@ -182,6 +184,12 @@ export class NutritionFoodService {
       data: {
         ...(dto.nameEn !== undefined && { nameEn: dto.nameEn }),
         ...(dto.category !== undefined && { category: dto.category }),
+        ...(dto.preparationState !== undefined && {
+          preparationState: dto.preparationState,
+        }),
+        ...(dto.preparationStateLabel !== undefined && {
+          preparationStateLabel: dto.preparationStateLabel,
+        }),
         ...(dto.nutritionData !== undefined && {
           nutritionData: dto.nutritionData as any,
         }),
@@ -317,7 +325,7 @@ export class NutritionFoodService {
     // 如果设置为主要映射，先取消其他主要映射
     if (dto.isPrimary) {
       await this.prisma.nutritionFoodMapping.updateMany({
-        where: { nutritionFoodId, isPrimary: true },
+        where: { ingredientId: dto.ingredientId, isPrimary: true },
         data: { isPrimary: false },
       });
     }
@@ -543,6 +551,8 @@ export class NutritionFoodService {
       nameEn: item.nameEn ?? undefined,
       category: item.category,
       dataSource: item.dataSource,
+      preparationState: item.preparationState ?? undefined,
+      preparationStateLabel: item.preparationStateLabel ?? undefined,
       externalId: item.externalId ?? undefined,
       version: item.version,
       status: item.status,

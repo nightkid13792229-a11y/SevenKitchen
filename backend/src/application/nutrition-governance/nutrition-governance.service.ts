@@ -651,6 +651,19 @@ export class NutritionGovernanceService {
         },
       });
 
+      await client.nutritionFoodMapping.updateMany({
+        where: {
+          ingredientId: candidate.ingredientId,
+          isPrimary: true,
+          NOT: {
+            nutritionFoodId: nutritionFood.id,
+          },
+        },
+        data: {
+          isPrimary: false,
+        },
+      });
+
       await client.nutritionFoodMapping.upsert({
         where: {
           nutritionFoodId_ingredientId: {

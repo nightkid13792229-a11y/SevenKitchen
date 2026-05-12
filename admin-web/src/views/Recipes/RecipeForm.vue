@@ -173,6 +173,7 @@
                 <div class="header-cell header-drag" v-if="!isReadOnly"></div>
                 <div class="header-cell">原料名称</div>
                 <div class="header-cell">类型</div>
+                <div class="header-cell">营养状态</div>
                 <div class="header-cell">制备方法</div>
                 <div class="header-cell">示例重量</div>
                 <div class="header-cell">占比</div>
@@ -201,6 +202,9 @@
                       <el-tag :type="getTypeTagType(item.ingredientType)" size="small">
                         {{ IngredientTypeLabels[item.ingredientType] || item.ingredientType }}
                       </el-tag>
+                    </div>
+                    <div class="row-cell nutrition-state">
+                      {{ formatNutritionStateLabel(item) }}
                     </div>
                     <div class="row-cell preparation-method">
                       {{ formatPreparationMethods(item.preparationMethod) }}
@@ -620,6 +624,35 @@
 
         <!-- 食材类型：显示示例重量输入框，占比改为自动计算显示 -->
         <template v-if="ingredientForm.ingredientId && selectedIngredient && selectedIngredient.type === 'FOOD'">
+          <el-form-item
+            v-if="availableNutritionFoodMappings.length > 0"
+            label="营养状态"
+            required
+          >
+            <el-select
+              v-model="ingredientForm.nutritionFoodId"
+              placeholder="请选择用于计算的营养状态"
+              filterable
+              style="width: 100%"
+            >
+              <el-option
+                v-for="mapping in availableNutritionFoodMappings"
+                :key="mapping.nutritionFoodId"
+                :label="formatNutritionStateOptionLabel(mapping)"
+                :value="mapping.nutritionFoodId"
+              >
+                <div style="display: flex; flex-direction: column; gap: 4px">
+                  <span style="font-weight: 500">
+                    {{ formatNutritionStateLabel(mapping) }}
+                  </span>
+                  <span style="font-size: 12px; color: #909399">
+                    {{ mapping.nutritionFood?.nameEn || mapping.nutritionFood?.name || mapping.nutritionFoodId }}
+                  </span>
+                </div>
+              </el-option>
+            </el-select>
+          </el-form-item>
+
           <el-form-item label="示例重量" required>
             <el-input-number
               v-model="ingredientForm.exampleWeight"
@@ -822,7 +855,7 @@ import VueDraggable from 'vuedraggable';
 import { recipeApi } from '@/api/recipes';
 import { recipeHealthTagApi } from '@/api/recipeHealthTags';
 import { inventoryApi } from '@/api';
-import { IngredientTypeLabels } from '@/types/ingredient';
+import { IngredientTypeLabels, type NutritionFoodMapping } from '@/types/ingredient';
 import { SUPPLEMENT_TARGET_FIELD_OPTIONS } from '@/constants/ingredientNutrition';
 import {
   appendPreparationMethodText,
@@ -893,6 +926,7 @@ const ingredientDialogVisible = ref(false);
 const editingIngredientIndex = ref(-1);
 const ingredientForm = reactive({
   ingredientId: '',
+  nutritionFoodId: '',
   preparationMethodText: '',
   exampleWeight: undefined as number | undefined,
   ratioPercent: undefined as number | undefined,
@@ -916,6 +950,24 @@ const selectedIngredient = computed(() => {
 const selectedIngredientIsSupplement = computed(() => {
   return selectedIngredient.value?.type === 'SUPPLEMENT';
 });
+
+const getIngredientNutritionFoodMappings = (
+  ingredient: any,
+): NutritionFoodMapping[] => {
+  return Array.isArray(ingredient?.nutritionFoodMappings)
+    ? ingredient.nutritionFoodMappings
+    : [];
+};
+
+const availableNutritionFoodMappings = computed(() =>
+  getIngredientNutritionFoodMappings(selectedIngredient.value),
+);
+
+const selectedNutritionFoodMapping = computed(() =>
+  availableNutritionFoodMappings.value.find(
+    (mapping) => mapping.nutritionFoodId === ingredientForm.nutritionFoodId,
+  ),
+);
 
 const supplementTargetFieldOptions = [...SUPPLEMENT_TARGET_FIELD_OPTIONS];
 
@@ -946,6 +998,52 @@ const formatIngredientDisplayLabel = (ingredient: {
     .map((part) => (typeof part === 'string' ? part.trim() : ''))
     .filter(Boolean)
     .join(' · ');
+};
+
+const formatNutritionStateLabel = (value: any) => {
+  const nutritionFood = value?.nutritionFood || value;
+
+  return (
+    value?.nutritionStateLabel ||
+    value?.preparationStateLabel ||
+    nutritionFood?.preparationStateLabel ||
+    value?.nutritionState ||
+    value?.preparationState ||
+    nutritionFood?.preparationState ||
+    '-'
+  );
+};
+
+const formatNutritionStateOptionLabel = (mapping: NutritionFoodMapping) => {
+  const stateLabel = formatNutritionStateLabel(mapping);
+  const foodName =
+    mapping.nutritionFood?.nameEn ||
+    mapping.nutritionFood?.name ||
+    mapping.nutritionFoodId;
+
+  return stateLabel === '-' ? foodName : `${stateLabel} · ${foodName}`;
+};
+
+const selectDefaultNutritionFoodForIngredient = (ingredient: any) => {
+  const mappings = getIngredientNutritionFoodMappings(ingredient);
+
+  if (mappings.length === 0) {
+    ingredientForm.nutritionFoodId = '';
+    return;
+  }
+
+  if (
+    ingredientForm.nutritionFoodId &&
+    mappings.some(
+      (mapping) => mapping.nutritionFoodId === ingredientForm.nutritionFoodId,
+    )
+  ) {
+    return;
+  }
+
+  const defaultMapping =
+    mappings.find((mapping) => mapping.isPrimary) || mappings[0];
+  ingredientForm.nutritionFoodId = defaultMapping?.nutritionFoodId || '';
 };
 
 const createEmptySupplementTarget = (): SupplementTarget => ({
@@ -1055,8 +1153,14 @@ watch(
       ingredientForm.nutrientTargetValue = undefined;
       ingredientForm.supplementTargets = [];
       ingredientForm.supplementAlternativeIngredientIds = [];
+      if (ingredient.type === 'FOOD') {
+        selectDefaultNutritionFoodForIngredient(ingredient);
+      }
     } else if (ingredient?.type === 'SUPPLEMENT' && ingredientForm.supplementTargets.length === 0) {
+      ingredientForm.nutritionFoodId = '';
       addSupplementTarget();
+    } else if (!ingredient) {
+      ingredientForm.nutritionFoodId = '';
     }
 
     ingredientPreparationMethodHistory.value = [];
@@ -1673,6 +1777,7 @@ const showAddIngredientDialog = () => {
 
 const resetIngredientForm = () => {
   ingredientForm.ingredientId = '';
+  ingredientForm.nutritionFoodId = '';
   ingredientForm.preparationMethodText = '';
   ingredientForm.exampleWeight = undefined;
   ingredientForm.ratioPercent = undefined;
@@ -1705,6 +1810,10 @@ const saveIngredient = () => {
   if (ingredient.type === 'FOOD') {
     if (ingredientForm.exampleWeight === undefined || ingredientForm.exampleWeight <= 0) {
       ElMessage.warning('食材类型请输入示例重量');
+      return;
+    }
+    if (availableNutritionFoodMappings.value.length > 0 && !ingredientForm.nutritionFoodId) {
+      ElMessage.warning('食材类型请选择营养状态');
       return;
     }
   }
@@ -1745,6 +1854,13 @@ const saveIngredient = () => {
       ingredientForm.preparationMethodText.trim() || undefined,
     // 食材类型：保存示例重量和占比
     ...(ingredient.type === 'FOOD' && {
+      nutritionFoodId: ingredientForm.nutritionFoodId || undefined,
+      nutritionState:
+        selectedNutritionFoodMapping.value?.nutritionFood?.preparationState,
+      nutritionStateLabel: selectedNutritionFoodMapping.value
+        ? formatNutritionStateLabel(selectedNutritionFoodMapping.value)
+        : undefined,
+      nutritionFood: selectedNutritionFoodMapping.value?.nutritionFood,
       exampleWeight: ingredientForm.exampleWeight,
       ratioPercent: ingredientForm.ratioPercent,
       nutrientTargetKey: undefined,
@@ -1828,6 +1944,7 @@ const recalculateAllRatios = () => {
 const editIngredient = (row: RecipeItem, index: number) => {
   editingIngredientIndex.value = index;
   ingredientForm.ingredientId = row.ingredientId;
+  ingredientForm.nutritionFoodId = row.nutritionFoodId || '';
   ingredientForm.preparationMethodText = row.preparationMethod || '';
   ingredientForm.exampleWeight = row.exampleWeight;
   ingredientForm.ratioPercent = row.ratioPercent;
@@ -2191,13 +2308,13 @@ onMounted(async () => {
 }
 
 .header-cell:nth-child(4) {
-  width: 150px;
+  width: 120px;
+  justify-content: center;
+  display: flex;
 }
 
 .header-cell:nth-child(5) {
-  width: 120px;
-  justify-content: flex-end;
-  display: flex;
+  width: 150px;
 }
 
 .header-cell:nth-child(6) {
@@ -2207,6 +2324,12 @@ onMounted(async () => {
 }
 
 .header-cell:nth-child(7) {
+  width: 120px;
+  justify-content: flex-end;
+  display: flex;
+}
+
+.header-cell:nth-child(8) {
   width: 200px;
 }
 
@@ -2248,7 +2371,7 @@ onMounted(async () => {
   justify-self: center;
 }
 
-.header-cell:nth-child(8) {
+.header-cell:nth-child(9) {
   flex: 1;
   justify-content: center;
   display: flex;
@@ -2293,12 +2416,12 @@ onMounted(async () => {
 }
 
 .row-cell:nth-child(4) {
-  width: 150px;
+  width: 120px;
+  justify-content: center;
 }
 
 .row-cell:nth-child(5) {
-  width: 120px;
-  justify-content: flex-end;
+  width: 150px;
 }
 
 .row-cell:nth-child(6) {
@@ -2307,10 +2430,15 @@ onMounted(async () => {
 }
 
 .row-cell:nth-child(7) {
-  width: 200px;
+  width: 120px;
+  justify-content: flex-end;
 }
 
 .row-cell:nth-child(8) {
+  width: 200px;
+}
+
+.row-cell:nth-child(9) {
   flex: 1;
   justify-content: center;
   gap: 8px;

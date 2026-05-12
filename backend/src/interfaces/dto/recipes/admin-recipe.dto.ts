@@ -46,6 +46,10 @@ export class RecipeItemDto {
 
   @IsOptional()
   @IsString()
+  nutritionFoodId?: string;
+
+  @IsOptional()
+  @IsString()
   preparationMethod?: string;
 
   @IsOptional()
@@ -326,6 +330,14 @@ export interface IngredientReference {
   properties?: any; // Prisma JsonValue
 }
 
+export interface NutritionFoodReference {
+  id: string;
+  name: string;
+  nameEn?: string;
+  preparationState?: string;
+  preparationStateLabel?: string;
+}
+
 /**
  * Recipe Item Response DTO
  */
@@ -334,6 +346,10 @@ export interface RecipeItemResponseDto {
   ingredientId: string;
   ingredientName?: string;
   ingredientType?: string;
+  nutritionFoodId?: string;
+  nutritionState?: string;
+  nutritionStateLabel?: string;
+  nutritionFood?: NutritionFoodReference;
   ingredient?: IngredientReference; // 完整的原料对象，包含properties
   preparationMethod?: string;
   exampleWeight?: number;

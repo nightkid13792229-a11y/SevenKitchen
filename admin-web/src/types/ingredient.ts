@@ -377,6 +377,26 @@ export interface PackagingProperties {
   supplier_name?: string | null
 }
 
+export interface NutritionFoodReference {
+  id: string
+  name: string
+  nameEn?: string
+  dataSource?: string
+  externalId?: string
+  preparationState?: string
+  preparationStateLabel?: string
+}
+
+export interface NutritionFoodMapping {
+  id: string
+  nutritionFoodId: string
+  ingredientId: string
+  yieldRate: number
+  isPrimary: boolean
+  notes?: string
+  nutritionFood?: NutritionFoodReference
+}
+
 // 原料实体
 export interface Ingredient {
   id: string
@@ -393,6 +413,7 @@ export interface Ingredient {
   baseUnitDisplayName: string | null
   unitDisplayLabel?: string | null
   nutritionProfile: NutritionProfile | null
+  nutritionFoodMappings?: NutritionFoodMapping[]
   weightG: number | null
   maxCapacityG: number | null
   properties: FoodProperties | SupplementProperties | PackagingProperties

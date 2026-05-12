@@ -129,6 +129,30 @@ export class AdminController {
     private readonly cosService: TencentCosService,
   ) {}
 
+  private mapNutritionFoodMappings(mappings?: any[]) {
+    return (mappings || []).map((mapping) => ({
+      id: mapping.id,
+      nutritionFoodId: mapping.nutritionFoodId,
+      ingredientId: mapping.ingredientId,
+      yieldRate: mapping.yieldRate,
+      isPrimary: mapping.isPrimary,
+      notes: mapping.notes ?? undefined,
+      nutritionFood: mapping.nutritionFood
+        ? {
+            id: mapping.nutritionFood.id,
+            name: mapping.nutritionFood.name,
+            nameEn: mapping.nutritionFood.nameEn ?? undefined,
+            dataSource: mapping.nutritionFood.dataSource,
+            externalId: mapping.nutritionFood.externalId ?? undefined,
+            preparationState:
+              mapping.nutritionFood.preparationState ?? undefined,
+            preparationStateLabel:
+              mapping.nutritionFood.preparationStateLabel ?? undefined,
+          }
+        : undefined,
+    }));
+  }
+
   private async buildIngredientDetailResponse(ingredient: Ingredient) {
     const prismaIngredient = await this.prisma.ingredient.findUnique({
       where: { id: ingredient.id },
@@ -155,6 +179,22 @@ export class AdminController {
           select: {
             isActive: true,
           },
+        },
+        nutritionFoodMappings: {
+          include: {
+            nutritionFood: {
+              select: {
+                id: true,
+                name: true,
+                nameEn: true,
+                dataSource: true,
+                externalId: true,
+                preparationState: true,
+                preparationStateLabel: true,
+              },
+            },
+          },
+          orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
         },
       },
     });
@@ -205,6 +245,9 @@ export class AdminController {
       targetStock: ingredient.targetStock,
       properties: ingredient.properties,
       nutritionProfile: ingredient.nutritionProfile,
+      nutritionFoodMappings: this.mapNutritionFoodMappings(
+        prismaIngredient?.nutritionFoodMappings,
+      ),
       tagIds,
       tags,
       activeRecommendedProductCount,
@@ -355,6 +398,22 @@ export class AdminController {
             isActive: true,
           },
         },
+        nutritionFoodMappings: {
+          include: {
+            nutritionFood: {
+              select: {
+                id: true,
+                name: true,
+                nameEn: true,
+                dataSource: true,
+                externalId: true,
+                preparationState: true,
+                preparationStateLabel: true,
+              },
+            },
+          },
+          orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+        },
         tags: {
           select: {
             tag: {
@@ -399,6 +458,12 @@ export class AdminController {
     const tagIdsMap = new Map(
       prismaIngredients.map((p) => [p.id, p.tags.map((t) => t.tag.id)]),
     );
+    const nutritionFoodMappingsMap = new Map(
+      prismaIngredients.map((p) => [
+        p.id,
+        this.mapNutritionFoodMappings(p.nutritionFoodMappings),
+      ]),
+    );
 
     // Map to ingredient response format
     const ingredientList = ingredients.map((ing) => ({
@@ -439,6 +504,7 @@ export class AdminController {
       targetStock: ing.targetStock,
       properties: ing.properties,
       nutritionProfile: ing.nutritionProfile,
+      nutritionFoodMappings: nutritionFoodMappingsMap.get(ing.id) || [],
       tagIds: tagIdsMap.get(ing.id) || [],
       tags: tagsMap.get(ing.id) || [],
       createdAt: createdAtMap.get(ing.id) || new Date().toISOString(),

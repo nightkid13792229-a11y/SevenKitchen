@@ -96,4 +96,16 @@ describe('recipe detail nutrition report regressions', () => {
     expect(source).not.toContain('我要自己做')
     expect(source).not.toContain('订购成品')
   })
+
+  it('renders food nutrition state labels separately from preparation methods', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('nutritionStateLabel?: string')
+    expect(source).toContain('v-if="item.nutritionStateLabel"')
+    expect(source).toContain('class="nutrition-state-tag"')
+    expect(source).toContain('{{ item.nutritionStateLabel }}')
+  })
 })

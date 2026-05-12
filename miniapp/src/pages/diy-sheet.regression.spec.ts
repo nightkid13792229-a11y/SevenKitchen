@@ -233,6 +233,18 @@ describe('diy sheet layout regressions', () => {
     expect(source).toContain('return foodSourceItems.value')
   })
 
+  it('carries recipe nutrition state labels into food rows and print rows', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('formatNutritionStateForDisplay')
+    expect(source).toContain('nutritionStateLabel: formatNutritionStateForDisplay(item)')
+    expect(source).toContain('item.preparationMethod || item.nutritionStateLabel || \'-\'')
+    expect(source).toContain('item.nutritionStateLabel ? `${item.ingredientName}（${item.nutritionStateLabel}）` : item.ingredientName')
+  })
+
   it('keeps the diy sheet readable by showing a warning when supplement pricing preview fails', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/diy-sheet/index.vue'),

@@ -100,6 +100,16 @@ export class RecipeDetailDto extends RecipeSummaryDto {
     id: string;
     ingredientId: string;
     name: string;
+    nutritionFoodId?: string;
+    nutritionState?: string;
+    nutritionStateLabel?: string;
+    nutritionFood?: {
+      id: string;
+      name: string;
+      nameEn?: string | null;
+      preparationState?: string | null;
+      preparationStateLabel?: string | null;
+    };
     preparationMethod?: string;
     ratio: number;
     sortOrder: number;

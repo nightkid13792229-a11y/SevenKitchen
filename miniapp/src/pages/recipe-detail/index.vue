@@ -88,6 +88,9 @@
           >
             {{ getIngredientTypeLabel(item.ingredientType) }}
           </text>
+          <text v-if="item.nutritionStateLabel" class="nutrition-state-tag">
+            {{ item.nutritionStateLabel }}
+          </text>
         </view>
         <view class="preparation-method">
           <text v-if="item.preparationMethod" class="method-text">{{ item.preparationMethod }}</text>
@@ -320,6 +323,9 @@ import ReviewForm from '../../components/ReviewForm.vue'
 interface RecipeItem {
   ingredientId: string
   name: string
+  nutritionFoodId?: string
+  nutritionState?: string
+  nutritionStateLabel?: string
   preparationMethod?: string
   ratio?: number  // 食材类型才有此字段
   sortOrder: number
@@ -1095,6 +1101,16 @@ function onReviewSubmitted() {
   border-radius: 4rpx;
   font-size: 20rpx;
   font-weight: normal;
+}
+
+.nutrition-state-tag {
+  display: inline-block;
+  padding: 2rpx 10rpx;
+  border-radius: 4rpx;
+  font-size: 20rpx;
+  font-weight: normal;
+  background-color: #f4f4f5;
+  color: #606266;
 }
 
 .type-food {

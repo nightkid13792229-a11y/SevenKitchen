@@ -31,6 +31,7 @@ describe('NutritionGovernanceService', () => {
       upsert: jest.fn(),
     },
     nutritionFoodMapping: {
+      updateMany: jest.fn(),
       upsert: jest.fn(),
     },
     nutritionSourceRecord: {
@@ -512,6 +513,18 @@ describe('NutritionGovernanceService', () => {
         }),
       }),
     );
+    expect(mockPrismaService.nutritionFoodMapping.updateMany).toHaveBeenCalledWith({
+      where: {
+        ingredientId: 'ingredient-1',
+        isPrimary: true,
+        NOT: {
+          nutritionFoodId: 'nutrition-food-1',
+        },
+      },
+      data: {
+        isPrimary: false,
+      },
+    });
   });
 
   it('rejects confirmation for terminal candidates before writing nutrition data', async () => {

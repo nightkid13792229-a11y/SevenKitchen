@@ -36,6 +36,16 @@ export class CreateNutritionFoodDto {
   @IsString()
   dataSource!: string;
 
+  @ApiPropertyOptional({ description: '制备/加工状态编码', example: 'COOKED' })
+  @IsOptional()
+  @IsString()
+  preparationState?: string;
+
+  @ApiPropertyOptional({ description: '制备/加工状态展示名', example: '熟重' })
+  @IsOptional()
+  @IsString()
+  preparationStateLabel?: string;
+
   @ApiPropertyOptional({ description: '外部ID（如USDA FDC ID）' })
   @IsOptional()
   @IsString()
@@ -63,6 +73,16 @@ export class UpdateNutritionFoodDto {
   @IsOptional()
   @IsEnum(NutritionFoodCategory)
   category?: NutritionFoodCategory;
+
+  @ApiPropertyOptional({ description: '制备/加工状态编码', example: 'COOKED' })
+  @IsOptional()
+  @IsString()
+  preparationState?: string;
+
+  @ApiPropertyOptional({ description: '制备/加工状态展示名', example: '熟重' })
+  @IsOptional()
+  @IsString()
+  preparationStateLabel?: string;
 
   @ApiPropertyOptional({ description: '营养数据（每100g）' })
   @IsOptional()
@@ -145,6 +165,12 @@ export class NutritionFoodResponseDto {
 
   @ApiProperty()
   dataSource!: string;
+
+  @ApiPropertyOptional()
+  preparationState?: string;
+
+  @ApiPropertyOptional()
+  preparationStateLabel?: string;
 
   @ApiPropertyOptional()
   externalId?: string;

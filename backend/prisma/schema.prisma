@@ -300,6 +300,7 @@ model RecipeItem {
   recipeId               String                        @map("recipe_id")
   recipeVersion          Int                           @map("recipe_version")
   ingredientId           String                        @map("ingredient_id")
+  nutritionFoodId        String?                       @map("nutrition_food_id")
   preparationMethod      String?                       @map("preparation_method")
   ratioPercent           Float?                        @map("ratio_percent")
   nutrientTargetKey      String?                       @map("nutrient_target_key")
@@ -308,10 +309,12 @@ model RecipeItem {
   sortOrder              Int                           @default(0) @map("sort_order")
   exampleWeight          Float?                        @map("example_weight")
   ingredient             Ingredient                    @relation(fields: [ingredientId], references: [id])
+  nutritionFood          NutritionFood?                 @relation(fields: [nutritionFoodId], references: [id])
   recipe                 Recipe                        @relation(fields: [recipeId, recipeVersion], references: [recipeId, version], onDelete: Cascade)
   supplementAlternatives RecipeSupplementAlternative[]
 
   @@index([recipeId, recipeVersion])
+  @@index([nutritionFoodId])
   @@map("recipe_item")
 }
 
@@ -1573,6 +1576,8 @@ model NutritionFood {
   externalId        String?                @map("external_id") @db.VarChar(100)
   version           Int                    @default(1) @map("version")
   status            NutritionFoodStatus    @default(PENDING) @map("status")
+  preparationState  String?                @map("preparation_state") @db.VarChar(50)
+  preparationStateLabel String?            @map("preparation_state_label") @db.VarChar(100)
   nutritionData     Json                   @map("nutrition_data")
   notes             String?                @map("notes")
   createdBy         String?                @map("created_by")
@@ -1581,6 +1586,7 @@ model NutritionFood {
   createdAt         DateTime               @default(now()) @map("created_at")
   updatedAt         DateTime               @updatedAt @map("updated_at")
   mappings          NutritionFoodMapping[]
+  recipeItems       RecipeItem[]
   designRecipeItems DesignRecipeItem[]
 
   @@unique([name, dataSource, version])

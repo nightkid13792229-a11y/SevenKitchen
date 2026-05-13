@@ -46,9 +46,12 @@ import {
 } from './label-recognition.provider';
 import {
   DisabledNutritionCandidateReviewProvider,
+  DeepSeekNutritionCandidateReviewProvider,
   NUTRITION_CANDIDATE_REVIEW_PROVIDER,
+  NutritionCandidateReviewProviderError,
   type NutritionCandidateReviewProvider,
 } from './nutrition-candidate-review.provider';
+import { AgentProviderConfigService } from './agent-provider-config.service';
 
 const FOOD_SOURCE_TYPES = ['USDA', 'CFCT'] as const;
 const MANAGED_INGREDIENT_TYPES = [
@@ -113,6 +116,13 @@ export interface ConfirmCandidateFromWorkbenchInput {
   batchMode?: boolean;
 }
 
+export interface BatchAgentReviewInput {
+  limit?: number;
+  forceRerun?: boolean;
+  confidence?: NutritionMatchConfidence;
+  reviewGroup?: string;
+}
+
 interface UsdaFoodData extends Record<string, unknown> {
   fdcId?: string | number;
   description?: string;
@@ -137,6 +147,8 @@ export class NutritionGovernanceService {
     @Optional()
     @Inject(NUTRITION_CANDIDATE_REVIEW_PROVIDER)
     private readonly candidateReviewProvider?: NutritionCandidateReviewProvider,
+    @Optional()
+    private readonly agentProviderConfigService?: AgentProviderConfigService,
   ) {}
 
   async getOverview(): Promise<NutritionGovernanceOverview> {
@@ -425,7 +437,7 @@ export class NutritionGovernanceService {
     }
 
     const agentReview =
-      await this.getCandidateReviewProvider().reviewFoodCandidate({
+      await (await this.getBatchCandidateReviewProvider()).reviewFoodCandidate({
         ingredient: {
           id: candidate.ingredient.id,
           name: candidate.ingredient.name,
@@ -461,6 +473,178 @@ export class NutritionGovernanceService {
         sourceRecord: true,
       },
     });
+  }
+
+  async getAgentSettings() {
+    return this.getAgentProviderConfigService().getSettings();
+  }
+
+  async updateAgentSettings(input: unknown, userId: string) {
+    return this.getAgentProviderConfigService().updateSettings(
+      input as any,
+      userId,
+    );
+  }
+
+  async testAgentSettings() {
+    const runtime =
+      await this.getAgentProviderConfigService().getEnabledDeepSeekRuntimeConfig();
+    const provider = new DeepSeekNutritionCandidateReviewProvider(runtime);
+    const review = await provider.reviewFoodCandidate({
+      ingredient: { id: 'test', name: '鸡胸肉', type: 'FOOD' },
+      sourceRecord: {
+        id: 'test-source',
+        sourceType: 'USDA',
+        sourceKey: 'TEST',
+        foodName: 'Chicken breast, raw',
+      },
+      normalizedNutrition: {
+        macros: { energyKcal: 120, crudeProtein: 20, crudeFat: 5 },
+        meta: { rawBasisType: 'PER_100_G' },
+      },
+    });
+
+    return {
+      ok: true,
+      provider: review.provider,
+      model: review.model,
+      recommendedAction: review.recommendedAction,
+    };
+  }
+
+  async startBatchAgentReview(
+    input: BatchAgentReviewInput = {},
+    userId?: string,
+  ) {
+    const limit = clampInteger(input.limit ?? 50, 1, 500);
+    const forceRerun = Boolean(input.forceRerun);
+    const provider = await this.getBatchCandidateReviewProvider();
+    const job = await this.prisma.nutritionAgentReviewJob.create({
+      data: {
+        status: 'RUNNING',
+        provider: 'DEEPSEEK',
+        model: 'configured',
+        scope: toJsonInput({
+          confidence: input.confidence ?? null,
+          reviewGroup: input.reviewGroup ?? null,
+        }),
+        forceRerun,
+        limit,
+        createdBy: userId ?? null,
+        startedAt: new Date(),
+      },
+    });
+
+    const candidates = await this.prisma.ingredientNutritionCandidate.findMany({
+      where: {
+        status: NutritionCandidateStatus.CANDIDATE,
+        ...(input.confidence && { confidence: input.confidence }),
+        ...(input.reviewGroup && { reviewGroup: input.reviewGroup }),
+      },
+      include: {
+        ingredient: {
+          select: { id: true, name: true, type: true },
+        },
+        sourceRecord: true,
+      },
+      orderBy: [{ sourcePriority: 'asc' }, { score: 'desc' }],
+      take: limit,
+    });
+
+    const failures: Array<{ candidateId: string; message: string }> = [];
+    let processedCount = 0;
+    let successCount = 0;
+    let failedCount = 0;
+    let skippedCount = 0;
+
+    for (const candidate of candidates as any[]) {
+      if (candidate.agentReview && !forceRerun) {
+        skippedCount += 1;
+        continue;
+      }
+
+      processedCount += 1;
+      try {
+        const agentReview = await this.reviewCandidateWithRetry(
+          provider,
+          candidate,
+        );
+        const hardGateResults = evaluateNutritionCandidateHardGates({
+          normalizedNutrition: candidate.normalizedNutrition,
+          sourceRecord: candidate.sourceRecord,
+          agentReview,
+        });
+        const reviewGroup = resolveCandidateReviewGroup(
+          hardGateResults,
+          agentReview,
+        );
+
+        await this.prisma.ingredientNutritionCandidate.update({
+          where: { id: candidate.id },
+          data: {
+            agentReview: toJsonInput(agentReview),
+            agentReviewStatus: 'COMPLETED',
+            hardGateResults: toJsonInput(hardGateResults),
+            reviewGroup,
+            preparationState: agentReview.preparationState ?? null,
+            preparationStateLabel: agentReview.preparationStateLabel ?? null,
+            ediblePortionLabel: agentReview.ediblePortionLabel ?? null,
+            processingLabel: agentReview.processingLabel ?? null,
+          },
+        });
+        successCount += 1;
+      } catch (error) {
+        failedCount += 1;
+        const message = sanitizeErrorMessage(error);
+        failures.push({ candidateId: candidate.id, message });
+        await this.prisma.ingredientNutritionCandidate.update({
+          where: { id: candidate.id },
+          data: {
+            agentReviewStatus: 'FAILED',
+            reviewGroup: 'NEEDS_REVIEW',
+            hardGateResults: toJsonInput({
+              canBatchConfirm: false,
+              blockingReasons: ['AGENT_REVIEW_FAILED'],
+              warningReasons: [],
+            }),
+          },
+        });
+      }
+    }
+
+    const status = failedCount > 0 ? 'PARTIAL_FAILED' : 'SUCCEEDED';
+    return this.prisma.nutritionAgentReviewJob.update({
+      where: { id: job.id },
+      data: {
+        status,
+        totalCount: candidates.length,
+        processedCount,
+        successCount,
+        failedCount,
+        skippedCount,
+        failureDetails: failures.length ? toJsonInput(failures) : undefined,
+        lastError: failures.at(-1)?.message ?? null,
+        finishedAt: new Date(),
+      },
+    });
+  }
+
+  async getLatestAgentReviewJob() {
+    return this.prisma.nutritionAgentReviewJob.findFirst({
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getAgentReviewJob(jobId: string) {
+    const job = await this.prisma.nutritionAgentReviewJob.findUnique({
+      where: { id: jobId },
+    });
+
+    if (!job) {
+      throw new NotFoundException('Agent 审核任务不存在');
+    }
+
+    return job;
   }
 
   async createSupplementDraftFromLabelImage(
@@ -964,11 +1148,66 @@ export class NutritionGovernanceService {
     );
   }
 
-  private getCandidateReviewProvider(): NutritionCandidateReviewProvider {
-    return (
-      this.candidateReviewProvider ??
-      new DisabledNutritionCandidateReviewProvider()
-    );
+  private async getBatchCandidateReviewProvider(): Promise<NutritionCandidateReviewProvider> {
+    if (this.agentProviderConfigService) {
+      try {
+        const runtime =
+          await this.agentProviderConfigService.getEnabledDeepSeekRuntimeConfig();
+        return new DeepSeekNutritionCandidateReviewProvider(runtime);
+      } catch (error) {
+        if (
+          !this.candidateReviewProvider ||
+          this.candidateReviewProvider instanceof DisabledNutritionCandidateReviewProvider
+        ) {
+          throw error;
+        }
+      }
+    }
+
+    if (this.candidateReviewProvider) {
+      return this.candidateReviewProvider;
+    }
+
+    return new DisabledNutritionCandidateReviewProvider();
+  }
+
+  private getAgentProviderConfigService(): AgentProviderConfigService {
+    if (!this.agentProviderConfigService) {
+      throw new BadRequestException('Agent 设置服务未注册');
+    }
+
+    return this.agentProviderConfigService;
+  }
+
+  private async reviewCandidateWithRetry(
+    provider: NutritionCandidateReviewProvider,
+    candidate: any,
+  ) {
+    const retryCount = this.agentProviderConfigService
+      ? (await this.agentProviderConfigService.getSettings()).retryCount
+      : 2;
+    let attempt = 0;
+
+    while (true) {
+      try {
+        return await provider.reviewFoodCandidate({
+          ingredient: {
+            id: candidate.ingredient.id,
+            name: candidate.ingredient.name,
+            type: candidate.ingredient.type,
+          },
+          sourceRecord: candidate.sourceRecord,
+          normalizedNutrition: candidate.normalizedNutrition,
+        });
+      } catch (error) {
+        if (!shouldRetryProviderError(error) || attempt >= retryCount) {
+          throw error;
+        }
+
+        attempt += 1;
+        await delay(10 * attempt);
+      }
+    }
   }
 }
 
@@ -1052,4 +1291,29 @@ function hasMappedNutritionValues(profile: NutritionProfileV2): boolean {
   return groupedTabs.some((tab) =>
     Object.values(tab).some((value) => typeof value === 'number'),
   );
+}
+
+function clampInteger(value: number, min: number, max: number): number {
+  const integer = Number.isFinite(value) ? Math.trunc(value) : min;
+  return Math.min(max, Math.max(min, integer));
+}
+
+function sanitizeErrorMessage(error: unknown): string {
+  if (error instanceof Error && error.message) {
+    return error.message.slice(0, 500);
+  }
+
+  return String(error).slice(0, 500);
+}
+
+function shouldRetryProviderError(error: unknown): boolean {
+  if (error instanceof NutritionCandidateReviewProviderError) {
+    return error.status === 429 || Boolean(error.status && error.status >= 500);
+  }
+
+  return false;
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }

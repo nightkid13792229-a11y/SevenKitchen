@@ -55,6 +55,8 @@ export class DisabledNutritionCandidateReviewProvider
 }
 
 const OPENAI_RESPONSES_URL = 'https://api.openai.com/v1/responses';
+const DEFAULT_DEEPSEEK_BASE_URL = 'https://api.deepseek.com';
+const DEFAULT_DEEPSEEK_MODEL = 'deepseek-v4-flash';
 const PROMPT_VERSION = 'nutrition-candidate-review-v1';
 const DEFAULT_MODEL = 'gpt-4o-mini';
 
@@ -112,11 +114,11 @@ export class OpenAINutritionCandidateReviewProvider
         input: [
           {
             role: 'system',
-            content: buildSystemPrompt(),
+            content: buildNutritionCandidateReviewSystemPrompt(),
           },
           {
             role: 'user',
-            content: JSON.stringify(buildReviewPayload(input)),
+            content: JSON.stringify(buildNutritionCandidateReviewPayload(input)),
           },
         ],
         text: {
@@ -138,11 +140,117 @@ export class OpenAINutritionCandidateReviewProvider
     const responseBody = await response.json();
     const parsed = parseOpenAIJsonOutput(responseBody);
 
-    return normalizeAgentReview(parsed, {
+    return normalizeNutritionCandidateAgentReview(parsed, {
       provider: 'openai',
       model: this.model,
       promptVersion: PROMPT_VERSION,
     });
+  }
+}
+
+export interface DeepSeekNutritionCandidateReviewProviderOptions {
+  apiKey: string;
+  baseUrl?: string;
+  model?: string;
+  requestTimeoutMs?: number;
+}
+
+export class NutritionCandidateReviewProviderError extends Error {
+  constructor(
+    message: string,
+    readonly status?: number,
+  ) {
+    super(message);
+    this.name = 'NutritionCandidateReviewProviderError';
+  }
+}
+
+export class DeepSeekNutritionCandidateReviewProvider
+  implements NutritionCandidateReviewProvider
+{
+  private readonly apiKey: string;
+  private readonly baseUrl: string;
+  private readonly model: string;
+  private readonly requestTimeoutMs: number;
+
+  constructor(options: DeepSeekNutritionCandidateReviewProviderOptions) {
+    this.apiKey = options.apiKey.trim();
+    this.baseUrl = (options.baseUrl || DEFAULT_DEEPSEEK_BASE_URL).replace(
+      /\/+$/,
+      '',
+    );
+    this.model = options.model?.trim() || DEFAULT_DEEPSEEK_MODEL;
+    this.requestTimeoutMs = options.requestTimeoutMs ?? 90000;
+  }
+
+  async reviewFoodCandidate(
+    input: NutritionCandidateReviewInput,
+  ): Promise<NutritionCandidateAgentReview> {
+    if (!this.apiKey) {
+      throw new Error('DeepSeek API key is not configured');
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), this.requestTimeoutMs);
+
+    try {
+      const response = await fetch(`${this.baseUrl}/chat/completions`, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        signal: controller.signal,
+        body: JSON.stringify({
+          model: this.model,
+          messages: [
+            {
+              role: 'system',
+              content: buildNutritionCandidateReviewSystemPrompt(),
+            },
+            {
+              role: 'user',
+              content: JSON.stringify(buildNutritionCandidateReviewPayload(input)),
+            },
+          ],
+          response_format: { type: 'json_object' },
+          stream: false,
+          temperature: 0,
+        }),
+      });
+
+      if (!response.ok) {
+        const message = await safeReadResponseText(response);
+        throw new NutritionCandidateReviewProviderError(
+          `DeepSeek candidate review failed: ${message}`,
+          response.status,
+        );
+      }
+
+      const responseBody = await response.json();
+      const parsed = parseDeepSeekJsonOutput(responseBody);
+
+      return normalizeNutritionCandidateAgentReview(parsed, {
+        provider: 'deepseek',
+        model: this.model,
+        promptVersion: PROMPT_VERSION,
+      });
+    } catch (error) {
+      if (error instanceof NutritionCandidateReviewProviderError) {
+        throw error;
+      }
+
+      if ((error as Error)?.name === 'AbortError') {
+        throw new NutritionCandidateReviewProviderError(
+          'DeepSeek candidate review failed: request timeout',
+          408,
+        );
+      }
+
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 }
 
@@ -156,7 +264,7 @@ export function createNutritionCandidateReviewProvider(): NutritionCandidateRevi
   return new DisabledNutritionCandidateReviewProvider();
 }
 
-function buildSystemPrompt(): string {
+export function buildNutritionCandidateReviewSystemPrompt(): string {
   return [
     'You are reviewing food nutrition database candidates for a canine recipe design system.',
     'Return only JSON matching the schema.',
@@ -167,7 +275,9 @@ function buildSystemPrompt(): string {
   ].join('\n');
 }
 
-function buildReviewPayload(input: NutritionCandidateReviewInput) {
+export function buildNutritionCandidateReviewPayload(
+  input: NutritionCandidateReviewInput,
+) {
   return {
     ingredient: input.ingredient,
     sourceRecord: input.sourceRecord,
@@ -241,6 +351,25 @@ function parseOpenAIJsonOutput(responseBody: unknown): Record<string, unknown> {
   return parsed as Record<string, unknown>;
 }
 
+function parseDeepSeekJsonOutput(responseBody: unknown): Record<string, unknown> {
+  if (!responseBody || typeof responseBody !== 'object') {
+    throw new Error('DeepSeek response was not a JSON object');
+  }
+
+  const body = responseBody as Record<string, any>;
+  const content = body.choices?.[0]?.message?.content;
+  if (typeof content !== 'string' || !content.trim()) {
+    throw new Error('DeepSeek response did not include message content');
+  }
+
+  const parsed = JSON.parse(content);
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('DeepSeek response content was not a JSON object');
+  }
+
+  return parsed as Record<string, unknown>;
+}
+
 function extractOutputText(responseBody: unknown): string | null {
   if (!responseBody || typeof responseBody !== 'object') {
     return null;
@@ -269,7 +398,7 @@ function extractOutputText(responseBody: unknown): string | null {
   return null;
 }
 
-function normalizeAgentReview(
+export function normalizeNutritionCandidateAgentReview(
   value: Record<string, unknown>,
   meta: Pick<NutritionCandidateAgentReview, 'provider' | 'model' | 'promptVersion'>,
 ): NutritionCandidateAgentReview {

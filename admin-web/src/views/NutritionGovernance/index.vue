@@ -5,9 +5,14 @@
         <h2>原料营养治理</h2>
         <div class="page-subtitle">候选匹配、补剂标签识别与营养档案确认</div>
       </div>
-      <el-button :icon="Refresh" :loading="refreshing" @click="refreshAll">
-        刷新
-      </el-button>
+      <div class="header-actions">
+        <el-button :icon="Setting" @click="openAgentSettings">
+          Agent 设置
+        </el-button>
+        <el-button :icon="Refresh" :loading="refreshing" @click="refreshAll">
+          刷新
+        </el-button>
+      </div>
     </div>
 
     <OverviewCards :overview="overview" />
@@ -88,6 +93,14 @@
           </el-button>
         </div>
 
+        <AgentBatchReviewPanel
+          :latest-job="latestAgentJob"
+          :running="agentJobLoading"
+          :starting="batchAgentReviewing"
+          @start="handleStartBatchAgentReview"
+          @refresh="loadLatestAgentJob"
+        />
+
         <FoodCandidatesTable
           :candidates="candidates"
           :loading="candidatesLoading"
@@ -151,6 +164,16 @@
         />
       </el-tab-pane>
     </el-tabs>
+
+    <AgentSettingsDrawer
+      v-model="agentSettingsVisible"
+      :settings="agentSettings"
+      :loading="agentSettingsLoading"
+      :saving="agentSettingsSaving"
+      :testing="agentSettingsTesting"
+      @save="handleSaveAgentSettings"
+      @test="handleTestAgentSettings"
+    />
   </div>
 </template>
 
@@ -158,27 +181,35 @@
 import { computed, onMounted, ref } from 'vue'
 import type { UploadFile } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh } from '@element-plus/icons-vue'
+import { Refresh, Setting } from '@element-plus/icons-vue'
 import { ingredientApi } from '@/api/ingredients'
 import { nutritionGovernanceApi } from '@/api/nutritionGovernance'
 import { IngredientType, type Ingredient } from '@/types/ingredient'
 import type {
+  AgentProviderSettings,
+  BatchAgentReviewPayload,
   ConfirmNutritionCandidatePayload,
   IngredientNutritionCandidateListItem,
+  NutritionAgentReviewJob,
   NutritionCandidateReviewGroup,
   NutritionGovernanceOverview,
   NutritionMatchConfidence,
-  SupplementNutritionDraft
+  SupplementNutritionDraft,
+  UpdateAgentProviderSettingsPayload
 } from '@/types/nutritionGovernance'
 import OverviewCards from './components/OverviewCards.vue'
 import FoodCandidatesTable from './components/FoodCandidatesTable.vue'
 import CandidateReviewDrawer from './components/CandidateReviewDrawer.vue'
 import SupplementDraftsTable from './components/SupplementDraftsTable.vue'
+import AgentBatchReviewPanel from './components/AgentBatchReviewPanel.vue'
+import AgentSettingsDrawer from './components/AgentSettingsDrawer.vue'
 
 const overview = ref<NutritionGovernanceOverview | null>(null)
 const candidates = ref<IngredientNutritionCandidateListItem[]>([])
 const ingredients = ref<Ingredient[]>([])
 const supplementDrafts = ref<SupplementNutritionDraft[]>([])
+const agentSettings = ref<AgentProviderSettings | null>(null)
+const latestAgentJob = ref<NutritionAgentReviewJob | null>(null)
 
 const activeTab = ref<'food' | 'supplement'>('food')
 const confidenceFilter = ref<NutritionMatchConfidence | ''>('')
@@ -189,6 +220,7 @@ const fdcId = ref('')
 const selectedCandidates = ref<IngredientNutritionCandidateListItem[]>([])
 const selectedCandidate = ref<IngredientNutritionCandidateListItem | null>(null)
 const candidateDrawerVisible = ref(false)
+const agentSettingsVisible = ref(false)
 
 const refreshing = ref(false)
 const overviewLoading = ref(false)
@@ -201,6 +233,11 @@ const candidateBusyId = ref('')
 const batchConfirming = ref(false)
 const draftsLoading = ref(false)
 const draftBusyId = ref('')
+const agentSettingsLoading = ref(false)
+const agentSettingsSaving = ref(false)
+const agentSettingsTesting = ref(false)
+const agentJobLoading = ref(false)
+const batchAgentReviewing = ref(false)
 
 const foodIngredients = computed(() => (
   ingredients.value.filter((ingredient) => ingredient.type === IngredientType.FOOD)
@@ -221,7 +258,8 @@ async function refreshAll() {
       loadOverview(),
       loadCandidates(),
       loadIngredients(),
-      loadSupplementDrafts()
+      loadSupplementDrafts(),
+      loadLatestAgentJob()
     ])
   } finally {
     refreshing.value = false
@@ -275,6 +313,96 @@ async function loadSupplementDrafts() {
     ElMessage.error('补剂草稿加载失败')
   } finally {
     draftsLoading.value = false
+  }
+}
+
+async function loadAgentSettings() {
+  agentSettingsLoading.value = true
+  try {
+    agentSettings.value = await nutritionGovernanceApi.getAgentSettings()
+  } catch (error) {
+    ElMessage.error('Agent 设置加载失败')
+  } finally {
+    agentSettingsLoading.value = false
+  }
+}
+
+async function openAgentSettings() {
+  agentSettingsVisible.value = true
+  await loadAgentSettings()
+}
+
+async function handleSaveAgentSettings(payload: UpdateAgentProviderSettingsPayload) {
+  agentSettingsSaving.value = true
+  try {
+    agentSettings.value = await nutritionGovernanceApi.updateAgentSettings(payload)
+    ElMessage.success('Agent 设置已保存')
+  } catch (error) {
+    ElMessage.error('Agent 设置保存失败')
+  } finally {
+    agentSettingsSaving.value = false
+  }
+}
+
+async function handleTestAgentSettings() {
+  agentSettingsTesting.value = true
+  try {
+    const result = await nutritionGovernanceApi.testAgentSettings()
+    ElMessage.success(
+      result.recommendedAction
+        ? `DeepSeek 连接正常：${result.recommendedAction}`
+        : 'DeepSeek 连接正常'
+    )
+  } catch (error) {
+    ElMessage.error('DeepSeek 连接测试失败')
+  } finally {
+    agentSettingsTesting.value = false
+  }
+}
+
+async function loadLatestAgentJob() {
+  agentJobLoading.value = true
+  try {
+    latestAgentJob.value = await nutritionGovernanceApi.getLatestAgentReviewJob()
+  } catch (error) {
+    ElMessage.error('Agent 任务加载失败')
+  } finally {
+    agentJobLoading.value = false
+  }
+}
+
+async function handleStartBatchAgentReview(payload: BatchAgentReviewPayload) {
+  batchAgentReviewing.value = true
+  try {
+    await ElMessageBox.confirm(
+      '批量 Agent 匹配只会写入候选建议和审批队列，不会自动确认营养档案。确认开始吗？',
+      '开始批量 Agent 匹配',
+      {
+        type: 'warning',
+        confirmButtonText: '开始匹配',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch {
+    batchAgentReviewing.value = false
+    return
+  }
+
+  try {
+    const job = await nutritionGovernanceApi.startBatchAgentReview({
+      ...payload,
+      confidence: confidenceFilter.value || undefined,
+      reviewGroup: reviewGroupFilter.value || undefined
+    })
+    latestAgentJob.value = job
+    ElMessage.success(
+      `批量 Agent 匹配完成：成功 ${job.successCount} 条，失败 ${job.failedCount} 条`
+    )
+    await Promise.all([loadOverview(), loadCandidates(), loadLatestAgentJob()])
+  } catch (error) {
+    ElMessage.error('批量 Agent 匹配失败')
+  } finally {
+    batchAgentReviewing.value = false
   }
 }
 
@@ -556,6 +684,13 @@ async function handleRejectSupplementDraft(draft: SupplementNutritionDraft) {
   gap: 12px;
 }
 
+.header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
 .page-header h2 {
   margin: 0;
   color: #303133;
@@ -599,11 +734,14 @@ async function handleRejectSupplementDraft(draft: SupplementNutritionDraft) {
     flex-direction: column;
   }
 
+  .header-actions,
   .toolbar {
     align-items: stretch;
     flex-direction: column;
+    width: 100%;
   }
 
+  .header-actions :deep(.el-button),
   .toolbar :deep(.el-select),
   .toolbar :deep(.el-input),
   .toolbar :deep(.el-button),

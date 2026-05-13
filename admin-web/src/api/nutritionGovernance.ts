@@ -1,13 +1,18 @@
 import api from './index'
 import type {
+  AgentProviderSettings,
+  AgentSettingsTestResult,
+  BatchAgentReviewPayload,
   ConfirmNutritionCandidatePayload,
   IngredientNutritionCandidate,
   IngredientNutritionCandidateListItem,
   ListNutritionCandidatesParams,
   ListSupplementDraftsParams,
+  NutritionAgentReviewJob,
   NutritionGovernanceOverview,
   NutritionSourceRecord,
-  SupplementNutritionDraft
+  SupplementNutritionDraft,
+  UpdateAgentProviderSettingsPayload
 } from '@/types/nutritionGovernance'
 
 export const nutritionGovernanceApi = {
@@ -34,6 +39,28 @@ export const nutritionGovernanceApi = {
       fdcId,
       ingredientId
     }),
+
+  getAgentSettings: (): Promise<AgentProviderSettings> =>
+    api.get('/admin/nutrition-governance/agent-settings'),
+
+  updateAgentSettings: (
+    data: UpdateAgentProviderSettingsPayload
+  ): Promise<AgentProviderSettings> =>
+    api.put('/admin/nutrition-governance/agent-settings', data),
+
+  testAgentSettings: (): Promise<AgentSettingsTestResult> =>
+    api.post('/admin/nutrition-governance/agent-settings/test'),
+
+  startBatchAgentReview: (
+    data: BatchAgentReviewPayload
+  ): Promise<NutritionAgentReviewJob> =>
+    api.post('/admin/nutrition-governance/candidates/batch-agent-review', data),
+
+  getLatestAgentReviewJob: (): Promise<NutritionAgentReviewJob | null> =>
+    api.get('/admin/nutrition-governance/candidates/agent-review-jobs/latest'),
+
+  getAgentReviewJob: (id: string): Promise<NutritionAgentReviewJob> =>
+    api.get(`/admin/nutrition-governance/candidates/agent-review-jobs/${id}`),
 
   reviewCandidateWithAgent: (id: string): Promise<IngredientNutritionCandidate> =>
     api.post(`/admin/nutrition-governance/candidates/${id}/agent-review`),

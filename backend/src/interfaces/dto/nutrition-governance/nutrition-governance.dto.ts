@@ -10,9 +10,12 @@ import {
   IsEnum,
   IsIn,
   IsArray,
+  IsInt,
   IsNotEmpty,
   IsOptional,
   IsString,
+  Max,
+  Min,
 } from 'class-validator';
 
 export class ListNutritionCandidatesQueryDto {
@@ -114,6 +117,89 @@ export class BatchConfirmNutritionCandidatesDto {
   @ArrayNotEmpty()
   @IsString({ each: true })
   candidateIds!: string[];
+}
+
+export class UpdateAgentSettingsDto {
+  @ApiPropertyOptional({ description: '是否启用 DeepSeek Agent' })
+  @IsOptional()
+  @IsBoolean()
+  enabled?: boolean;
+
+  @ApiPropertyOptional({ description: 'DeepSeek API Base URL' })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  baseUrl?: string;
+
+  @ApiPropertyOptional({ description: 'DeepSeek 模型名' })
+  @IsOptional()
+  @IsString()
+  @IsNotEmpty()
+  model?: string;
+
+  @ApiPropertyOptional({
+    description: 'DeepSeek API Key。留空则保留现有密钥。',
+  })
+  @IsOptional()
+  @IsString()
+  apiKey?: string;
+
+  @ApiPropertyOptional({ description: '是否清除现有 API Key' })
+  @IsOptional()
+  @IsBoolean()
+  clearApiKey?: boolean;
+
+  @ApiPropertyOptional({ description: '最大并发数', minimum: 1, maximum: 5 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(5)
+  maxConcurrency?: number;
+
+  @ApiPropertyOptional({
+    description: '请求超时时间，毫秒',
+    minimum: 5000,
+    maximum: 300000,
+  })
+  @IsOptional()
+  @IsInt()
+  @Min(5000)
+  @Max(300000)
+  requestTimeoutMs?: number;
+
+  @ApiPropertyOptional({ description: '重试次数', minimum: 0, maximum: 5 })
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(5)
+  retryCount?: number;
+}
+
+export class BatchAgentReviewCandidatesDto {
+  @ApiPropertyOptional({ description: '最大处理数量', minimum: 1, maximum: 500 })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  @Max(500)
+  limit?: number;
+
+  @ApiPropertyOptional({ description: '是否覆盖已有 Agent 建议' })
+  @IsOptional()
+  @IsBoolean()
+  forceRerun?: boolean;
+
+  @ApiPropertyOptional({
+    description: '匹配置信度过滤',
+    enum: NutritionMatchConfidence,
+  })
+  @IsOptional()
+  @IsEnum(NutritionMatchConfidence)
+  confidence?: NutritionMatchConfidence;
+
+  @ApiPropertyOptional({ description: '审核队列过滤' })
+  @IsOptional()
+  @IsString()
+  reviewGroup?: string;
 }
 
 export class ListSupplementDraftsQueryDto {

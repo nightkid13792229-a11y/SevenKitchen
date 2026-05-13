@@ -968,6 +968,52 @@ model ShippingTemplate {
   @@map("shipping_template")
 }
 
+model AgentProviderConfig {
+  id               String   @id @default(uuid())
+  purpose          String   @db.VarChar(80)
+  provider         String   @db.VarChar(40)
+  enabled          Boolean  @default(false)
+  baseUrl          String   @map("base_url")
+  model            String   @db.VarChar(120)
+  apiKeyEncrypted  String?  @map("api_key_encrypted")
+  apiKeyLast4      String?  @map("api_key_last4") @db.VarChar(12)
+  maxConcurrency   Int      @default(1) @map("max_concurrency")
+  requestTimeoutMs Int      @default(90000) @map("request_timeout_ms")
+  retryCount       Int      @default(2) @map("retry_count")
+  updatedBy        String?  @map("updated_by")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@unique([purpose, provider])
+  @@map("agent_provider_config")
+}
+
+model NutritionAgentReviewJob {
+  id             String    @id @default(uuid())
+  status         String    @db.VarChar(40)
+  provider       String    @db.VarChar(40)
+  model          String    @db.VarChar(120)
+  scope          Json?
+  forceRerun     Boolean   @default(false) @map("force_rerun")
+  limit          Int       @default(50)
+  totalCount     Int       @default(0) @map("total_count")
+  processedCount Int       @default(0) @map("processed_count")
+  successCount   Int       @default(0) @map("success_count")
+  failedCount    Int       @default(0) @map("failed_count")
+  skippedCount   Int       @default(0) @map("skipped_count")
+  failureDetails Json?     @map("failure_details")
+  lastError      String?   @map("last_error")
+  createdBy      String?   @map("created_by")
+  startedAt      DateTime? @map("started_at")
+  finishedAt     DateTime? @map("finished_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([createdAt])
+  @@map("nutrition_agent_review_job")
+}
+
 model PurchaseList {
   id                 String             @id @default(uuid()) @map("id")
   targetDate         DateTime           @map("target_date")

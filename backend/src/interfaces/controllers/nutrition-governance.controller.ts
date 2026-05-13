@@ -5,6 +5,7 @@ import {
   Get,
   Param,
   Post,
+  Put,
   Query,
   UploadedFile,
   UseGuards,
@@ -34,12 +35,14 @@ import { AdminGuard } from '../guards/role.guard';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import {
   BatchConfirmNutritionCandidatesDto,
+  BatchAgentReviewCandidatesDto,
   ConfirmNutritionCandidateDto,
   GenerateFoodCandidatesDto,
   ImportUsdaSourceDto,
   ListNutritionCandidatesQueryDto,
   ListSupplementDraftsQueryDto,
   ReviewCandidateWithAgentDto,
+  UpdateAgentSettingsDto,
 } from '../dto/nutrition-governance/nutrition-governance.dto';
 
 const SUPPLEMENT_LABEL_MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
@@ -133,6 +136,70 @@ export class NutritionGovernanceController {
         ingredientId: dto.ingredientId,
       });
     return new ApiResponseDto(0, 'USDA 来源导入成功', result);
+  }
+
+  @Get('agent-settings')
+  @ApiOperation({ summary: '获取营养治理 Agent 设置' })
+  @ApiResponse({ status: 200, description: 'Agent 设置' })
+  async getAgentSettings(): Promise<ApiResponseDto<unknown>> {
+    const result = await this.nutritionGovernanceService.getAgentSettings();
+    return new ApiResponseDto(0, 'Success', result);
+  }
+
+  @Post('agent-settings/test')
+  @ApiOperation({ summary: '测试 DeepSeek Agent 连接' })
+  @ApiResponse({ status: 201, description: 'DeepSeek 连接测试完成' })
+  async testAgentSettings(): Promise<ApiResponseDto<unknown>> {
+    const result = await this.nutritionGovernanceService.testAgentSettings();
+    return new ApiResponseDto(0, 'DeepSeek 连接测试完成', result);
+  }
+
+  @Put('agent-settings')
+  @ApiOperation({ summary: '保存营养治理 Agent 设置' })
+  @ApiResponse({ status: 200, description: 'Agent 设置已保存' })
+  async updateAgentSettings(
+    @Body() dto: UpdateAgentSettingsDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<unknown>> {
+    const result = await this.nutritionGovernanceService.updateAgentSettings(
+      dto,
+      user.userId,
+    );
+    return new ApiResponseDto(0, 'Agent 设置已保存', result);
+  }
+
+  @Post('candidates/batch-agent-review')
+  @ApiOperation({ summary: '批量运行 Agent 匹配审核' })
+  @ApiResponse({ status: 201, description: '批量 Agent 匹配完成' })
+  async batchAgentReviewCandidates(
+    @Body() dto: BatchAgentReviewCandidatesDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<unknown>> {
+    const result = await this.nutritionGovernanceService.startBatchAgentReview(
+      dto,
+      user.userId,
+    );
+    return new ApiResponseDto(0, '批量 Agent 匹配完成', result);
+  }
+
+  @Get('candidates/agent-review-jobs/latest')
+  @ApiOperation({ summary: '获取最新 Agent 匹配任务' })
+  @ApiResponse({ status: 200, description: '最新 Agent 匹配任务' })
+  async getLatestAgentReviewJob(): Promise<ApiResponseDto<unknown>> {
+    const result =
+      await this.nutritionGovernanceService.getLatestAgentReviewJob();
+    return new ApiResponseDto(0, 'Success', result);
+  }
+
+  @Get('candidates/agent-review-jobs/:id')
+  @ApiOperation({ summary: '获取 Agent 匹配任务详情' })
+  @ApiParam({ name: 'id', description: 'Agent 匹配任务ID' })
+  @ApiResponse({ status: 200, description: 'Agent 匹配任务详情' })
+  async getAgentReviewJob(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<unknown>> {
+    const result = await this.nutritionGovernanceService.getAgentReviewJob(id);
+    return new ApiResponseDto(0, 'Success', result);
   }
 
   @Post('candidates/:id/agent-review')

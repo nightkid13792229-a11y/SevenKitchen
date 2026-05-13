@@ -44,6 +44,65 @@ export interface NutritionGovernanceOverview {
   supplementDraftCount: number
 }
 
+export interface AgentProviderSettings {
+  provider: 'DEEPSEEK'
+  enabled: boolean
+  baseUrl: string
+  model: string
+  apiKeyConfigured: boolean
+  apiKeyLast4?: string | null
+  maxConcurrency: number
+  requestTimeoutMs: number
+  retryCount: number
+}
+
+export interface UpdateAgentProviderSettingsPayload {
+  enabled?: boolean
+  baseUrl?: string
+  model?: string
+  apiKey?: string
+  clearApiKey?: boolean
+  maxConcurrency?: number
+  requestTimeoutMs?: number
+  retryCount?: number
+}
+
+export interface AgentSettingsTestResult {
+  ok: boolean
+  provider?: string
+  model?: string
+  recommendedAction?: string
+}
+
+export interface BatchAgentReviewPayload {
+  limit?: number
+  forceRerun?: boolean
+  confidence?: NutritionMatchConfidence
+  reviewGroup?: NutritionCandidateReviewGroup | string
+}
+
+export interface NutritionAgentReviewJob {
+  id: string
+  status: string
+  provider: string
+  model: string
+  scope?: Record<string, unknown> | null
+  forceRerun: boolean
+  limit: number
+  totalCount: number
+  processedCount: number
+  successCount: number
+  failedCount: number
+  skippedCount: number
+  failureDetails?: Array<Record<string, unknown>> | Record<string, unknown> | null
+  lastError?: string | null
+  createdBy?: string | null
+  startedAt?: string | null
+  finishedAt?: string | null
+  createdAt: string
+  updatedAt?: string
+}
+
 export interface NutritionMatchReason {
   code: NutritionMatchReasonCode | string
   label: string

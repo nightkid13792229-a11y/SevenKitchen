@@ -1,7 +1,3 @@
-import * as dotenv from 'dotenv';
-// 加载.env文件（必须在所有其他导入之前）
-dotenv.config();
-
 import { Module, OnModuleInit, Inject } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
@@ -175,6 +171,10 @@ import { DogProfileAnalyticsController } from './interfaces/controllers/dog-prof
 import { AdminDogProfileAnalyticsController } from './interfaces/controllers/admin-dog-profile-analytics.controller';
 import { ProcurementSkuService } from './application/ingredient/procurement-sku.service';
 import { IngredientSuggestionsController } from './interfaces/controllers/ingredient-suggestions.controller';
+import { loadEnvConfig } from './utils/env-config';
+
+// Load environment variables before module-level Prisma validation runs.
+loadEnvConfig();
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -275,7 +275,8 @@ validatePrismaConfig();
     {
       provide: DOG_REPOSITORY,
       useFactory: (prismaService?: PrismaService) => {
-        const mode = process.env.DOG_REPO ?? (isPrismaEnabled() ? 'prisma' : 'memory');
+        const mode =
+          process.env.DOG_REPO ?? (isPrismaEnabled() ? 'prisma' : 'memory');
         if (mode === 'prisma') {
           if (!prismaService) {
             throw new Error(

@@ -48,6 +48,9 @@
           <el-menu-item index="/nutrition-standards/ingredient-readiness"
             >原料计算就绪度</el-menu-item
           >
+          <el-menu-item index="/nutrition-standards/fediaf-target-preview"
+            >FEDIAF 目标预览</el-menu-item
+          >
         </el-sub-menu>
         <el-menu-item index="/orders">
           <el-icon><List /></el-icon>

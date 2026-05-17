@@ -89,6 +89,13 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "原料计算就绪度" },
       },
       {
+        path: "nutrition-standards/fediaf-target-preview",
+        name: "FediafTargetPreview",
+        component: () =>
+          import("@/views/NutritionStandards/FediafTargetPreview.vue"),
+        meta: { title: "FEDIAF 目标预览" },
+      },
+      {
         path: "recipes/create",
         name: "RecipeCreate",
         component: () => import("@/views/Recipes/RecipeForm.vue"),

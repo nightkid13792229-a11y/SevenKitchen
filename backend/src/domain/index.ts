@@ -13,6 +13,8 @@ export * from './user/enums';
 export * from './dog/enums';
 export * from './dog/dog.entity';
 export * from './dog/dog-breed.entity';
+export * from './dog/breed-health-risk.entity';
+export * from './dog/breed-health-risk.repository';
 export * from './dog/dog.repository';
 export * from './dog/constants';
 export * from './dog/dog-calc.service';

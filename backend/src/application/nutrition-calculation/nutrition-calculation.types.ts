@@ -95,6 +95,7 @@ export interface FediafTargetResult {
 }
 
 export interface FediafTargetEntry {
+  entryId: string;
   nutrientCode: string;
   nutrientName: string;
   sourceTable: string;

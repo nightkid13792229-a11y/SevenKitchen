@@ -1,4 +1,8 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import {
+  BadRequestException,
+  Injectable,
+  NotFoundException,
+} from '@nestjs/common';
 import { NutritionStandardReviewStatus, Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import type {
@@ -28,6 +32,7 @@ type ReviewEventLike = {
 };
 
 type StandardEntryLike = {
+  id: string;
   nutrient: {
     code: string;
     name: string;
@@ -69,11 +74,19 @@ export class FediafTargetSelectorService {
       orderBy: [{ sortOrder: 'asc' }],
     });
 
+    if (entries.length === 0) {
+      throw new NotFoundException(
+        `FEDIAF 2025 dog Annex 7.8 targets not found for ${input.lifeStage}`,
+      );
+    }
+
     return {
       versionCode: FEDIAF_2025_DOG_CODE,
       lifeStage: input.lifeStage,
       sourceType: ANNEX_7_8_SOURCE_TYPE,
-      entries: entries.map((entry) => this.mapEntry(entry as StandardEntryLike)),
+      entries: entries.map((entry) =>
+        this.mapEntry(entry as StandardEntryLike),
+      ),
     };
   }
 
@@ -116,6 +129,7 @@ export class FediafTargetSelectorService {
     const latestReview = this.getLatestReview(entry.reviewEvents);
 
     return {
+      entryId: entry.id,
       nutrientCode: entry.nutrient.code,
       nutrientName: entry.nutrient.name,
       sourceTable: entry.sourceTable,

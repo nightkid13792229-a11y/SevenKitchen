@@ -1,5 +1,6 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { FediafTargetSelectorService } from '../../../src/application/nutrition-calculation/fediaf-target-selector.service';
+import type { FediafTargetLifeStage } from '../../../src/application/nutrition-calculation/nutrition-calculation.types';
 
 describe('FediafTargetSelectorService', () => {
   const prisma = {
@@ -12,9 +13,27 @@ describe('FediafTargetSelectorService', () => {
     jest.resetAllMocks();
   });
 
+  const standardEntry = (
+    lifeStage: FediafTargetLifeStage,
+    sourceTable: string,
+  ) => ({
+    id: `entry-${lifeStage}`,
+    nutrient: { code: 'calcium', name: '钙' },
+    sourceTable,
+    pdfPage: 75,
+    lifeStage,
+    basis: 'PER_1000_KCAL_ME',
+    unit: 'g',
+    minValue: 0.5,
+    maxValue: 7.1,
+    recommendedValue: null,
+    reviewEvents: [],
+  });
+
   it('selects reviewed adult MER 110 Annex 7.8 targets', async () => {
     prisma.nutritionStandardEntry.findMany.mockResolvedValue([
       {
+        id: 'entry-1',
         nutrient: { code: 'calcium', name: '钙' },
         sourceTable: 'VII-17c',
         pdfPage: 75,
@@ -45,6 +64,7 @@ describe('FediafTargetSelectorService', () => {
       sourceType: 'ANNEX_7_8',
       entries: [
         {
+          entryId: 'entry-1',
           nutrientCode: 'calcium',
           nutrientName: '钙',
           sourceTable: 'VII-17c',
@@ -84,21 +104,39 @@ describe('FediafTargetSelectorService', () => {
     ).rejects.toBeInstanceOf(BadRequestException);
   });
 
-  it('maps adult MER 95 targets to Annex VII-17d', async () => {
-    prisma.nutritionStandardEntry.findMany.mockResolvedValue([]);
+  it.each([
+    ['EARLY_GROWTH_UNDER_14_WEEKS', 'VII-17a'],
+    ['REPRODUCTION', 'VII-17a'],
+    ['LATE_GROWTH_FROM_14_WEEKS', 'VII-17b'],
+    ['ADULT_MER_110', 'VII-17c'],
+    ['ADULT_MER_95', 'VII-17d'],
+  ] as Array<[FediafTargetLifeStage, string]>)(
+    'maps %s targets to Annex %s',
+    async (lifeStage, sourceTable) => {
+      prisma.nutritionStandardEntry.findMany.mockResolvedValue([
+        standardEntry(lifeStage, sourceTable),
+      ]);
 
-    const service = new FediafTargetSelectorService(prisma);
-    await service.selectFediaf2025DogTarget({ lifeStage: 'ADULT_MER_95' });
+      const service = new FediafTargetSelectorService(prisma);
+      const result = await service.selectFediaf2025DogTarget({ lifeStage });
 
-    expect(prisma.nutritionStandardEntry.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({
-        where: expect.objectContaining({
-          sourceTable: 'VII-17d',
-          lifeStage: 'ADULT_MER_95',
+      expect(result.entries[0]).toEqual(
+        expect.objectContaining({
+          entryId: `entry-${lifeStage}`,
+          sourceTable,
+          lifeStage,
         }),
-      }),
-    );
-  });
+      );
+      expect(prisma.nutritionStandardEntry.findMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: expect.objectContaining({
+            sourceTable,
+            lifeStage,
+          }),
+        }),
+      );
+    },
+  );
 
   it('rejects unsupported target life stages', async () => {
     const service = new FediafTargetSelectorService(prisma);
@@ -109,9 +147,24 @@ describe('FediafTargetSelectorService', () => {
     expect(prisma.nutritionStandardEntry.findMany).not.toHaveBeenCalled();
   });
 
+  it('throws not found when Annex 7.8 targets are missing', async () => {
+    prisma.nutritionStandardEntry.findMany.mockResolvedValue([]);
+
+    const service = new FediafTargetSelectorService(prisma);
+
+    await expect(
+      service.selectFediaf2025DogTarget({ lifeStage: 'ADULT_MER_110' }),
+    ).rejects.toThrow(
+      new NotFoundException(
+        'FEDIAF 2025 dog Annex 7.8 targets not found for ADULT_MER_110',
+      ),
+    );
+  });
+
   it('defaults to unreviewed and uses stable latest review tie ordering', async () => {
     prisma.nutritionStandardEntry.findMany.mockResolvedValue([
       {
+        id: 'entry-1',
         nutrient: { code: 'phosphorus', name: '磷' },
         sourceTable: 'VII-17a',
         pdfPage: 73,
@@ -124,6 +177,7 @@ describe('FediafTargetSelectorService', () => {
         reviewEvents: [],
       },
       {
+        id: 'entry-2',
         nutrient: { code: 'calcium', name: '钙' },
         sourceTable: 'VII-17a',
         pdfPage: 73,

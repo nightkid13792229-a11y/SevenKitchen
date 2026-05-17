@@ -55,16 +55,37 @@ describe('NutrientMappingAuditService', () => {
             },
           ],
         },
+        {
+          id: 'entry-question',
+          sourceTable: 'III-3b',
+          sortOrder: 1,
+          nutrient: {
+            code: 'questionOnly',
+            fieldPath: 'minerals.phosphorus',
+            defaultStandardUnit: 'g',
+            isDirect: true,
+            isDerived: false,
+            expression: null,
+          },
+          reviewEvents: [
+            {
+              id: 'review-3',
+              status: 'QUESTION',
+              reviewedAt: new Date('2026-05-17T00:00:00.000Z'),
+            },
+          ],
+        },
       ],
     });
 
     const service = new NutrientMappingAuditService(prisma);
     const result = await service.auditFediaf2025DogMappings();
 
+    expect(result.versionCode).toBe('FEDIAF_2025_DOG');
     expect(result.summary).toEqual({
-      totalNutrients: 2,
+      totalNutrients: 3,
       reviewedNutrients: 2,
-      resolvedMappings: 2,
+      resolvedMappings: 3,
       missingMappings: 0,
       unsupportedMappings: 0,
     });
@@ -81,7 +102,25 @@ describe('NutrientMappingAuditService', () => {
         mappingType: 'COMBINATION',
         sourceFieldPaths: ['fattyAcids.epa', 'fattyAcids.dha'],
       }),
+      expect.objectContaining({
+        nutrientCode: 'questionOnly',
+        reviewStatus: 'QUESTION',
+        mappingStatus: 'RESOLVED',
+      }),
     ]);
+    expect(prisma.nutritionStandardVersion.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({
+        include: expect.objectContaining({
+          entries: expect.objectContaining({
+            orderBy: [
+              { sourceTable: 'asc' },
+              { sortOrder: 'asc' },
+              { id: 'asc' },
+            ],
+          }),
+        }),
+      }),
+    );
   });
 
   it('marks unreviewed nutrients and missing field paths explicitly', async () => {
@@ -164,6 +203,54 @@ describe('NutrientMappingAuditService', () => {
       mappingType: 'UNSUPPORTED',
       mappingStatus: 'UNSUPPORTED_EXPRESSION',
       sourceFieldPaths: [],
+    });
+  });
+
+  it('audits divide expressions as resolved ratio mappings', async () => {
+    prisma.nutritionStandardVersion.findUnique.mockResolvedValue({
+      id: 'version-1',
+      code: 'FEDIAF_2025_DOG',
+      entries: [
+        {
+          id: 'entry-ca-p-ratio',
+          nutrient: {
+            code: 'calciumPhosphorusRatio',
+            fieldPath: null,
+            defaultStandardUnit: ':1',
+            isDirect: false,
+            isDerived: true,
+            expression: {
+              op: 'divide',
+              numerator: 'minerals.calcium',
+              denominator: 'minerals.phosphorus',
+            },
+          },
+          reviewEvents: [
+            {
+              id: 'review-1',
+              status: 'REVIEWED',
+              reviewedAt: new Date('2026-05-17T00:00:00.000Z'),
+            },
+          ],
+        },
+      ],
+    });
+
+    const service = new NutrientMappingAuditService(prisma);
+    const result = await service.auditFediaf2025DogMappings();
+
+    expect(result.summary).toEqual({
+      totalNutrients: 1,
+      reviewedNutrients: 1,
+      resolvedMappings: 1,
+      missingMappings: 0,
+      unsupportedMappings: 0,
+    });
+    expect(result.items[0]).toMatchObject({
+      nutrientCode: 'calciumPhosphorusRatio',
+      mappingType: 'RATIO',
+      mappingStatus: 'RESOLVED',
+      sourceFieldPaths: ['minerals.calcium', 'minerals.phosphorus'],
     });
   });
 });

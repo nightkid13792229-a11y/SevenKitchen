@@ -26,6 +26,7 @@ export interface NutrientMappingAuditSummary {
 }
 
 export interface NutrientMappingAuditResult {
+  versionCode: 'FEDIAF_2025_DOG';
   summary: NutrientMappingAuditSummary;
   items: NutrientMappingAuditItem[];
 }

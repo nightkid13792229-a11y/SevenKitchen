@@ -55,6 +55,11 @@ export class NutrientMappingAuditService {
               orderBy: REVIEW_EVENT_ORDER_BY,
             },
           },
+          orderBy: [
+            { sourceTable: 'asc' },
+            { sortOrder: 'asc' },
+            { id: 'asc' },
+          ],
         },
       },
     });
@@ -75,12 +80,14 @@ export class NutrientMappingAuditService {
     const items = [...entriesByNutrientCode.values()].map((entry) =>
       this.auditEntry(entry),
     );
+    items.sort((a, b) => a.nutrientCode.localeCompare(b.nutrientCode));
 
     return {
+      versionCode: FEDIAF_2025_DOG_CODE,
       summary: {
         totalNutrients: items.length,
         reviewedNutrients: items.filter(
-          (item) => item.reviewStatus !== 'UNREVIEWED',
+          (item) => item.reviewStatus === 'REVIEWED',
         ).length,
         resolvedMappings: items.filter(
           (item) => item.mappingStatus === 'RESOLVED',
@@ -158,7 +165,7 @@ export class NutrientMappingAuditService {
       return 'COMBINATION';
     }
 
-    if (expression?.op === 'ratio') {
+    if (expression?.op === 'ratio' || expression?.op === 'divide') {
       return 'RATIO';
     }
 
@@ -183,7 +190,7 @@ export class NutrientMappingAuditService {
       );
     }
 
-    if (expression?.op === 'ratio') {
+    if (expression?.op === 'ratio' || expression?.op === 'divide') {
       return [expression.numerator, expression.denominator].filter(
         (sourceField): sourceField is string => typeof sourceField === 'string',
       );

@@ -119,22 +119,13 @@ describe('IngredientReadinessService', () => {
     });
   });
 
-  it('uses numerator and denominator fields for ratio and divide expressions', async () => {
+  it('uses numerator and denominator fields for divide expressions', async () => {
     mockStandard([
       {
         code: 'calciumPhosphorusRatio',
         fieldPath: null,
         expression: {
           op: 'divide',
-          numerator: 'minerals.calcium',
-          denominator: 'minerals.phosphorus',
-        },
-      },
-      {
-        code: 'calciumPhosphorusRatioDuplicate',
-        fieldPath: null,
-        expression: {
-          op: 'ratio',
           numerator: 'minerals.calcium',
           denominator: 'minerals.phosphorus',
         },
@@ -156,12 +147,44 @@ describe('IngredientReadinessService', () => {
     expect(result.items[0]).toMatchObject({
       readinessLevel: 'READY_FULL',
       coverageRatio: 1,
-      resolvedNutrients: [
-        'calciumPhosphorusRatio',
-        'calciumPhosphorusRatioDuplicate',
-      ],
+      resolvedNutrients: ['calciumPhosphorusRatio'],
       missingNutrients: [],
     });
+  });
+
+  it('does not resolve unsupported expressions even when source fields exist', async () => {
+    mockStandard([
+      {
+        code: 'unsupportedMultiplier',
+        fieldPath: null,
+        expression: {
+          op: 'multiply',
+          fields: ['minerals.calcium'],
+        },
+      },
+    ]);
+    prisma.ingredient.findMany.mockResolvedValue([
+      ingredient({
+        nutritionProfile: {
+          macros: { energyKcal: 100, moisture: 60 },
+          minerals: { calcium: 1.2 },
+        },
+      }),
+    ]);
+
+    const result = await new IngredientReadinessService(
+      prisma,
+    ).listIngredientReadiness();
+
+    expect(result.items[0]).toMatchObject({
+      readinessLevel: 'NOT_READY',
+      coverageRatio: 0,
+      resolvedNutrients: [],
+      missingNutrients: ['unsupportedMultiplier'],
+    });
+    expect(result.missingNutrientRanking).toEqual([
+      { nutrientCode: 'unsupportedMultiplier', count: 1 },
+    ]);
   });
 
   it('classifies READY_BASIC when coverage is at least half and energy and moisture exist', async () => {

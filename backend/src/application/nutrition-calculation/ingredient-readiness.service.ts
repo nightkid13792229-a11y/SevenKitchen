@@ -138,19 +138,22 @@ export class IngredientReadinessService {
     }
 
     const expression = this.toExpression(nutrient.expression);
-    const fields =
-      Array.isArray(expression?.fields) &&
-      expression.fields.filter(
-        (fieldPath): fieldPath is string => typeof fieldPath === 'string',
-      );
 
-    if (fields) {
-      return this.unique(fields);
+    if (expression?.op === 'sum' && Array.isArray(expression.fields)) {
+      return this.unique(
+        expression.fields.filter(
+          (fieldPath): fieldPath is string => typeof fieldPath === 'string',
+        ),
+      );
     }
 
-    return this.unique([expression?.numerator, expression?.denominator]).filter(
-      (fieldPath): fieldPath is string => typeof fieldPath === 'string',
-    );
+    if (expression?.op === 'divide') {
+      return this.unique([expression.numerator, expression.denominator]).filter(
+        (fieldPath): fieldPath is string => typeof fieldPath === 'string',
+      );
+    }
+
+    return [];
   }
 
   private evaluateIngredient(

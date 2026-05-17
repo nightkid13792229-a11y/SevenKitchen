@@ -111,6 +111,7 @@ export class NutrientMappingAuditService {
     );
     const mappingStatus = this.getMappingStatus(
       mappingType,
+      Boolean(expression),
       sourceFieldPaths,
       missingFieldPaths,
     );
@@ -193,15 +194,16 @@ export class NutrientMappingAuditService {
 
   private getMappingStatus(
     mappingType: MappingType,
+    hasExpression: boolean,
     sourceFieldPaths: string[],
     missingFieldPaths: string[],
   ): MappingStatus {
-    if (sourceFieldPaths.length === 0 || missingFieldPaths.length > 0) {
-      return 'MISSING_MAPPING';
+    if (mappingType === 'UNSUPPORTED' && hasExpression) {
+      return 'UNSUPPORTED_EXPRESSION';
     }
 
-    if (mappingType === 'UNSUPPORTED') {
-      return 'UNSUPPORTED_EXPRESSION';
+    if (sourceFieldPaths.length === 0 || missingFieldPaths.length > 0) {
+      return 'MISSING_MAPPING';
     }
 
     return 'RESOLVED';

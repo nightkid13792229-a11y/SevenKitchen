@@ -122,4 +122,48 @@ describe('NutrientMappingAuditService', () => {
       sourceFieldPaths: [],
     });
   });
+
+  it('marks unsupported expression operators explicitly', async () => {
+    prisma.nutritionStandardVersion.findUnique.mockResolvedValue({
+      id: 'version-1',
+      code: 'FEDIAF_2025_DOG',
+      entries: [
+        {
+          id: 'entry-unsupported',
+          nutrient: {
+            code: 'unsupportedExpression',
+            fieldPath: null,
+            defaultStandardUnit: 'mg',
+            isDirect: false,
+            isDerived: true,
+            expression: { op: 'multiply', fields: ['minerals.calcium'] },
+          },
+          reviewEvents: [
+            {
+              id: 'review-1',
+              status: 'REVIEWED',
+              reviewedAt: new Date('2026-05-17T00:00:00.000Z'),
+            },
+          ],
+        },
+      ],
+    });
+
+    const service = new NutrientMappingAuditService(prisma);
+    const result = await service.auditFediaf2025DogMappings();
+
+    expect(result.summary).toEqual({
+      totalNutrients: 1,
+      reviewedNutrients: 1,
+      resolvedMappings: 0,
+      missingMappings: 0,
+      unsupportedMappings: 1,
+    });
+    expect(result.items[0]).toMatchObject({
+      nutrientCode: 'unsupportedExpression',
+      mappingType: 'UNSUPPORTED',
+      mappingStatus: 'UNSUPPORTED_EXPRESSION',
+      sourceFieldPaths: [],
+    });
+  });
 });

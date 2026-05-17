@@ -45,6 +45,9 @@
           <el-menu-item index="/nutrition-standards/fediaf-2025-dog"
             >FEDIAF 2025 犬标准</el-menu-item
           >
+          <el-menu-item index="/nutrition-standards/ingredient-readiness"
+            >原料计算就绪度</el-menu-item
+          >
         </el-sub-menu>
         <el-menu-item index="/orders">
           <el-icon><List /></el-icon>

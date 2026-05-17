@@ -82,6 +82,13 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "FEDIAF 2025 犬标准" },
       },
       {
+        path: "nutrition-standards/ingredient-readiness",
+        name: "IngredientNutritionReadiness",
+        component: () =>
+          import("@/views/NutritionStandards/IngredientReadiness.vue"),
+        meta: { title: "原料计算就绪度" },
+      },
+      {
         path: "recipes/create",
         name: "RecipeCreate",
         component: () => import("@/views/Recipes/RecipeForm.vue"),

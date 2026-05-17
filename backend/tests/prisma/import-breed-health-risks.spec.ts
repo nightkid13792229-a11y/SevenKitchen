@@ -32,6 +32,14 @@ describe('breed health risk import fixtures', () => {
     ).toBe(true);
   });
 
+  it('uses user-facing health topic names in the starter knowledge base', () => {
+    expect(
+      BREED_HEALTH_RISK_FIXTURE_SET.conditions.find(
+        (condition) => condition.key === 'cardiac-disease',
+      )?.nameCn,
+    ).toBe('心脏健康筛查');
+  });
+
   it('resolves local dog breed rows by name or alias before importing risks', () => {
     const plan = buildBreedHealthRiskImportPlan(
       BREED_HEALTH_RISK_FIXTURE_SET,

@@ -3,17 +3,26 @@
     <view class="breed-risk-section__header">
       <view>
         <text class="breed-risk-section__title">本品种健康关注项</text>
-        <text v-if="breedName" class="breed-risk-section__subtitle">{{ breedName }}</text>
+        <text v-if="breedName" class="breed-risk-section__subtitle">{{
+          breedName
+        }}</text>
       </view>
-      <text v-if="risks.length > 0" class="breed-risk-section__count">{{ risks.length }} 项</text>
+      <text v-if="risks.length > 0" class="breed-risk-section__count"
+        >{{ risks.length }} 项</text
+      >
     </view>
 
     <view v-if="loading" class="breed-risk-section__state">
       <text class="breed-risk-section__state-title">正在加载品种资料</text>
-      <text class="breed-risk-section__state-desc">正在获取本品种常见健康关注项。</text>
+      <text class="breed-risk-section__state-desc"
+        >正在获取本品种常见健康关注项。</text
+      >
     </view>
 
-    <view v-else-if="error" class="breed-risk-section__state breed-risk-section__state--error">
+    <view
+      v-else-if="error"
+      class="breed-risk-section__state breed-risk-section__state--error"
+    >
       <text class="breed-risk-section__state-title">加载失败</text>
       <text class="breed-risk-section__state-desc">{{ error }}</text>
       <text class="breed-risk-section__retry" @tap="emit('retry')">重试</text>
@@ -33,11 +42,18 @@
         <view class="breed-risk-card__summary" @tap="toggleRisk(risk)">
           <view class="breed-risk-card__summary-main">
             <view class="breed-risk-card__meta">
-              <text class="breed-risk-card__label">{{ risk.attentionLabel }}</text>
-              <text class="breed-risk-card__sources">{{ risk.sourceCount }} 个来源</text>
+              <text class="breed-risk-card__label">{{
+                risk.attentionLabel
+              }}</text>
+              <text class="breed-risk-card__sources"
+                >{{ risk.sourceCount }} 个来源</text
+              >
             </view>
             <text class="breed-risk-card__name">{{ risk.conditionName }}</text>
-            <text v-if="risk.oneLineSummary" class="breed-risk-card__summary-text">
+            <text
+              v-if="risk.oneLineSummary"
+              class="breed-risk-card__summary-text"
+            >
               {{ risk.oneLineSummary }}
             </text>
           </view>
@@ -49,7 +65,9 @@
         <view v-if="isRiskExpanded(risk)" class="breed-risk-card__detail">
           <view v-if="risk.breedSpecificReason" class="breed-risk-detail">
             <text class="breed-risk-detail__label">为什么需要关注</text>
-            <text class="breed-risk-detail__text">{{ risk.breedSpecificReason }}</text>
+            <text class="breed-risk-detail__text">{{
+              risk.breedSpecificReason
+            }}</text>
           </view>
 
           <view v-if="risk.commonSigns.length > 0" class="breed-risk-detail">
@@ -67,7 +85,9 @@
 
           <view v-if="risk.screeningAdvice" class="breed-risk-detail">
             <text class="breed-risk-detail__label">筛查建议</text>
-            <text class="breed-risk-detail__text">{{ risk.screeningAdvice }}</text>
+            <text class="breed-risk-detail__text">{{
+              risk.screeningAdvice
+            }}</text>
           </view>
 
           <view v-if="risk.careAdvice" class="breed-risk-detail">
@@ -76,25 +96,53 @@
           </view>
 
           <view class="breed-risk-sources">
-            <text class="breed-risk-sources__title">资料来源</text>
             <view
-              v-for="source in risk.sources"
-              :key="`${risk.id || risk.conditionId}-${source.sourceName}-${source.title}`"
-              class="breed-risk-source"
+              v-if="risk.sources.length > 0"
+              class="breed-risk-sources__summary"
+              @tap="toggleSource(risk)"
             >
-              <text class="breed-risk-source__name">{{ source.sourceName }}</text>
-              <text class="breed-risk-source__title">{{ source.title }}</text>
-              <text class="breed-risk-source__meta">
-                {{ sourcePublisherText(source) }}
-              </text>
-              <text v-if="source.url" class="breed-risk-source__url">
-                {{ source.url }}
-              </text>
-              <text v-if="source.accessedAt" class="breed-risk-source__date">
-                访问日期：{{ source.accessedAt }}
+              <view>
+                <text class="breed-risk-sources__title">资料来源</text>
+                <text class="breed-risk-sources__desc">
+                  {{ risk.sourceCount }} 个公开来源，展开后查看机构和链接。
+                </text>
+              </view>
+              <text class="breed-risk-sources__toggle">
+                {{ isSourceExpanded(risk) ? '收起资料来源' : '查看资料来源' }}
               </text>
             </view>
-            <text v-if="risk.sources.length === 0" class="breed-risk-sources__empty">
+
+            <view v-if="isSourceExpanded(risk)" class="breed-risk-source-list">
+              <view
+                v-for="source in risk.sources"
+                :key="`${risk.id || risk.conditionId}-${source.sourceName}-${source.title}`"
+                class="breed-risk-source"
+              >
+                <text class="breed-risk-source__name">{{
+                  source.sourceName
+                }}</text>
+                <text class="breed-risk-source__title">{{ source.title }}</text>
+                <text class="breed-risk-source__meta">
+                  {{ source.publisher || source.sourceTypeLabel }}
+                </text>
+                <text
+                  v-if="source.publisher && source.sourceTypeLabel"
+                  class="breed-risk-source__meta"
+                >
+                  {{ source.sourceTypeLabel }}
+                </text>
+                <text v-if="source.url" class="breed-risk-source__url">
+                  {{ source.url }}
+                </text>
+                <text v-if="source.accessedAt" class="breed-risk-source__date">
+                  访问日期：{{ source.accessedAt }}
+                </text>
+              </view>
+            </view>
+            <text
+              v-if="risk.sources.length === 0"
+              class="breed-risk-sources__empty"
+            >
               暂无可展示来源信息。
             </text>
           </view>
@@ -110,10 +158,7 @@
 
 <script setup lang="ts">
 import { ref } from 'vue'
-import type {
-  BreedHealthRiskItem,
-  BreedHealthRiskSource,
-} from '../../utils/breed-health-risks'
+import type { BreedHealthRiskItem } from '../../utils/breed-health-risks'
 
 defineProps<{
   breedName?: string
@@ -128,6 +173,7 @@ const emit = defineEmits<{
 }>()
 
 const expandedRiskIds = ref<string[]>([])
+const expandedSourceIds = ref<string[]>([])
 
 function riskKey(risk: BreedHealthRiskItem) {
   return risk.id || risk.conditionId || risk.conditionName
@@ -144,16 +190,23 @@ function toggleRisk(risk: BreedHealthRiskItem) {
   }
 
   expandedRiskIds.value = isRiskExpanded(risk)
-    ? expandedRiskIds.value.filter(item => item !== key)
+    ? expandedRiskIds.value.filter((item) => item !== key)
     : [...expandedRiskIds.value, key]
 }
 
-function sourcePublisherText(source: BreedHealthRiskSource) {
-  const parts = [source.publisher, source.sourceType]
-    .map(value => String(value || '').trim())
-    .filter(Boolean)
-  const uniqueParts = Array.from(new Set(parts))
-  return uniqueParts.length > 0 ? uniqueParts.join(' / ') : '资料来源'
+function isSourceExpanded(risk: BreedHealthRiskItem) {
+  return expandedSourceIds.value.includes(riskKey(risk))
+}
+
+function toggleSource(risk: BreedHealthRiskItem) {
+  const key = riskKey(risk)
+  if (!key) {
+    return
+  }
+
+  expandedSourceIds.value = isSourceExpanded(risk)
+    ? expandedSourceIds.value.filter((item) => item !== key)
+    : [...expandedSourceIds.value, key]
 }
 </script>
 
@@ -356,6 +409,33 @@ function sourcePublisherText(source: BreedHealthRiskSource) {
   margin-top: 24rpx;
   padding-top: 20rpx;
   border-top: 1rpx solid rgba(20, 47, 58, 0.08);
+}
+
+.breed-risk-sources__summary {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18rpx;
+}
+
+.breed-risk-sources__desc {
+  display: block;
+  margin-top: 6rpx;
+  font-size: 22rpx;
+  line-height: 1.5;
+  color: #7b8d96;
+}
+
+.breed-risk-sources__toggle {
+  flex-shrink: 0;
+  padding-top: 2rpx;
+  font-size: 23rpx;
+  font-weight: 700;
+  color: #0d6b43;
+}
+
+.breed-risk-source-list {
+  margin-top: 14rpx;
 }
 
 .breed-risk-source {

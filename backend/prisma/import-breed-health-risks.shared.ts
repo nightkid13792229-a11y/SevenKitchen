@@ -248,7 +248,7 @@ export const BREED_HEALTH_RISK_FIXTURE_SET: BreedHealthRiskFixtureSet = {
     {
       key: 'cardiac-disease',
       id: 'breed-health-condition-cardiac-disease',
-      nameCn: '心脏疾病筛查关注',
+      nameCn: '心脏健康筛查',
       nameEn: 'Cardiac Disease Screening',
       aliases: ['心脏筛查', 'Cardiac Evaluation'],
       category: '心血管',

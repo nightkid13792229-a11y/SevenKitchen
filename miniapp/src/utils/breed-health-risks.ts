@@ -6,8 +6,19 @@ const ATTENTION_LABELS: Record<string, string> = {
   SUPPLEMENTAL_AWARENESS: '补充了解',
 }
 
+const SOURCE_TYPE_LABELS: Record<string, string> = {
+  CIDD: '犬遗传疾病数据库资料',
+  OFA_CHIC: 'OFA/CHIC 健康筛查资料',
+  OMIA: '动物遗传资料库资料',
+  WSAVA: 'WSAVA 指南资料',
+  VETERINARY_LITERATURE: '兽医/研究机构资料',
+  BREED_CLUB: '犬种俱乐部资料',
+  OTHER: '其他资料',
+}
+
 export interface BreedHealthRiskSource {
   sourceType: string
+  sourceTypeLabel: string
   sourceName: string
   publisher?: string | null
   title: string
@@ -50,7 +61,7 @@ function readString(value: unknown) {
 
 function readStringArray(value: unknown) {
   return Array.isArray(value)
-    ? value.map(item => readString(item)).filter(Boolean)
+    ? value.map((item) => readString(item)).filter(Boolean)
     : []
 }
 
@@ -58,15 +69,25 @@ export function getBreedHealthAttentionLabel(priority: string) {
   return ATTENTION_LABELS[priority] || ATTENTION_LABELS.SUPPLEMENTAL_AWARENESS
 }
 
+export function getBreedHealthSourceTypeLabel(sourceType: string) {
+  return SOURCE_TYPE_LABELS[sourceType] || SOURCE_TYPE_LABELS.OTHER
+}
+
 export function canRequestBreedHealthRisks(profile: {
   breedId?: string | null
   customBreedName?: string | null
 }) {
   const breedId = readString(profile.breedId)
-  return Boolean(breedId && breedId !== MIXED_BREED_VIRTUAL_ID && !readString(profile.customBreedName))
+  return Boolean(
+    breedId &&
+    breedId !== MIXED_BREED_VIRTUAL_ID &&
+    !readString(profile.customBreedName),
+  )
 }
 
-export function resolveBreedHealthRiskEmptyText(reason: BreedHealthRiskEmptyReason) {
+export function resolveBreedHealthRiskEmptyText(
+  reason: BreedHealthRiskEmptyReason,
+) {
   if (reason === 'mixed') {
     return '混血/手动填写品种暂不展示品种专属资料，可使用品种查询页查看相近标准品种。'
   }
@@ -82,14 +103,17 @@ export function isBreedHealthRiskEndpointUnavailable(error: unknown) {
   const message = error instanceof Error ? error.message : String(error || '')
   const normalized = message.toLowerCase()
 
-  return normalized.includes('health-risks') && (
-    normalized.includes('cannot get') ||
-    normalized.includes('404') ||
-    normalized.includes('not found')
+  return (
+    normalized.includes('health-risks') &&
+    (normalized.includes('cannot get') ||
+      normalized.includes('404') ||
+      normalized.includes('not found'))
   )
 }
 
-export function normalizeBreedHealthRiskResponse(response: any): BreedHealthRiskLookup {
+export function normalizeBreedHealthRiskResponse(
+  response: any,
+): BreedHealthRiskLookup {
   const data = readData(response) || {}
   const breed = data.breed || {}
   const risks = Array.isArray(data.risks) ? data.risks : []
@@ -98,7 +122,8 @@ export function normalizeBreedHealthRiskResponse(response: any): BreedHealthRisk
     breedId: readString(breed.id),
     breedName: readString(breed.name),
     risks: risks.map((risk: any): BreedHealthRiskItem => {
-      const attentionPriority = readString(risk.attentionPriority) || 'SUPPLEMENTAL_AWARENESS'
+      const attentionPriority =
+        readString(risk.attentionPriority) || 'SUPPLEMENTAL_AWARENESS'
       const sources = Array.isArray(risk.sources) ? risk.sources : []
 
       return {
@@ -107,22 +132,29 @@ export function normalizeBreedHealthRiskResponse(response: any): BreedHealthRisk
         conditionName: readString(risk.conditionName),
         category: readString(risk.category),
         attentionPriority,
-        attentionLabel: readString(risk.attentionLabel) || getBreedHealthAttentionLabel(attentionPriority),
+        attentionLabel:
+          readString(risk.attentionLabel) ||
+          getBreedHealthAttentionLabel(attentionPriority),
         oneLineSummary: readString(risk.oneLineSummary),
         breedSpecificReason: readString(risk.breedSpecificReason),
         commonSigns: readStringArray(risk.commonSigns),
         screeningAdvice: readString(risk.screeningAdvice),
         careAdvice: readString(risk.careAdvice),
         sourceCount: Number(risk.sourceCount) || sources.length,
-        sources: sources.map((source: any) => ({
-          sourceType: readString(source.sourceType),
-          sourceName: readString(source.sourceName),
-          publisher: readString(source.publisher) || null,
-          title: readString(source.title),
-          url: readString(source.url),
-          accessedAt: readString(source.accessedAt),
-          note: readString(source.note) || null,
-        })),
+        sources: sources.map((source: any) => {
+          const sourceType = readString(source.sourceType)
+
+          return {
+            sourceType,
+            sourceTypeLabel: getBreedHealthSourceTypeLabel(sourceType),
+            sourceName: readString(source.sourceName),
+            publisher: readString(source.publisher) || null,
+            title: readString(source.title),
+            url: readString(source.url),
+            accessedAt: readString(source.accessedAt),
+            note: readString(source.note) || null,
+          }
+        }),
       }
     }),
   }

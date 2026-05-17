@@ -5,8 +5,10 @@ import {
   Equals,
   IsArray,
   IsBoolean,
+  IsDefined,
   IsIn,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   Min,
@@ -90,6 +92,8 @@ export class RecipeNutritionCalculationRequestDto {
   standardVersionCode!: 'FEDIAF_2025_DOG';
 
   @ApiProperty({ type: RecipeTargetProfileDto })
+  @IsDefined()
+  @IsObject()
   @ValidateNested()
   @Type(() => RecipeTargetProfileDto)
   targetProfile!: RecipeTargetProfileDto;
@@ -102,6 +106,8 @@ export class RecipeNutritionCalculationRequestDto {
   items!: RecipeCalculationItemDto[];
 
   @ApiProperty({ type: RecipeCalculationOptionsDto })
+  @IsDefined()
+  @IsObject()
   @ValidateNested()
   @Type(() => RecipeCalculationOptionsDto)
   options!: RecipeCalculationOptionsDto;
@@ -135,6 +141,8 @@ export class AgentRecipeConstraintDto {
   excludedIngredientIds!: string[];
 
   @ApiProperty({ type: SupplementStrategyDto })
+  @IsDefined()
+  @IsObject()
   @ValidateNested()
   @Type(() => SupplementStrategyDto)
   supplementStrategy!: SupplementStrategyDto;

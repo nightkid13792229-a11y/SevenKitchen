@@ -82,6 +82,48 @@ describe('nutrition calculation DTO contracts', () => {
     expect(findValidationError(validateSync(dto), 'items')).toBeDefined();
   });
 
+  it('rejects calculator requests missing targetProfile', () => {
+    const dto = plainToInstance(RecipeNutritionCalculationRequestDto, {
+      species: 'DOG',
+      standardVersionCode: 'FEDIAF_2025_DOG',
+      items: [
+        {
+          ingredientId: 'ingredient-1',
+          amountG: 100,
+          asFed: true,
+          processingYield: 1,
+        },
+      ],
+      options: {
+        includeIncompleteNutrients: true,
+        basis: ['PER_100G_DRY_MATTER'],
+      },
+    });
+
+    expect(
+      findValidationError(validateSync(dto), 'targetProfile'),
+    ).toBeDefined();
+  });
+
+  it('rejects array-valued calculator options', () => {
+    const dto = plainToInstance(RecipeNutritionCalculationRequestDto, {
+      species: 'DOG',
+      standardVersionCode: 'FEDIAF_2025_DOG',
+      targetProfile: { lifeStage: 'ADULT_MER_110' },
+      items: [
+        {
+          ingredientId: 'ingredient-1',
+          amountG: 100,
+          asFed: true,
+          processingYield: 1,
+        },
+      ],
+      options: [],
+    });
+
+    expect(findValidationError(validateSync(dto), 'options')).toBeDefined();
+  });
+
   it('rejects unsupported calculation bases in nested request options', () => {
     const dto = plainToInstance(RecipeNutritionCalculationRequestDto, {
       species: 'DOG',
@@ -131,6 +173,35 @@ describe('nutrition calculation DTO contracts', () => {
 
     expect(
       findValidationError(validateSync(dto), 'requireHumanReview'),
+    ).toBeDefined();
+  });
+
+  it('rejects Agent constraints missing supplementStrategy', () => {
+    const dto = plainToInstance(AgentRecipeConstraintDto, {
+      standardVersionCode: 'FEDIAF_2025_DOG',
+      targetLifeStage: 'ADULT_MER_110',
+      allowedIngredientIds: ['ingredient-1'],
+      excludedIngredientIds: [],
+      requireHumanReview: true,
+    });
+
+    expect(
+      findValidationError(validateSync(dto), 'supplementStrategy'),
+    ).toBeDefined();
+  });
+
+  it('rejects array-valued Agent supplementStrategy', () => {
+    const dto = plainToInstance(AgentRecipeConstraintDto, {
+      standardVersionCode: 'FEDIAF_2025_DOG',
+      targetLifeStage: 'ADULT_MER_110',
+      allowedIngredientIds: ['ingredient-1'],
+      excludedIngredientIds: [],
+      supplementStrategy: [],
+      requireHumanReview: true,
+    });
+
+    expect(
+      findValidationError(validateSync(dto), 'supplementStrategy'),
     ).toBeDefined();
   });
 

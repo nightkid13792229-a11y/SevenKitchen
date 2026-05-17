@@ -52,25 +52,37 @@ export type IngredientReadinessLevel =
   | 'PARTIAL'
   | 'NOT_READY';
 
-export interface IngredientReadinessItem {
-  nutrientCode: string;
-  status: UnitNormalizationStatus;
-  sourceFieldPaths: string[];
-  value: number | null;
+export interface IngredientReadinessSummary {
+  totalIngredients: number;
+  readyFull: number;
+  readyBasic: number;
+  partial: number;
+  notReady: number;
 }
 
-export interface IngredientReadinessSummary {
-  totalNutrients: number;
-  resolvedNutrients: number;
-  missingNutrients: number;
-  unsupportedNutrients: number;
+export interface IngredientReadinessItem {
+  ingredientId: string;
+  ingredientName: string;
+  ingredientType: string;
   readinessLevel: IngredientReadinessLevel;
+  coverageRatio: number;
+  hasEnergy: boolean;
+  hasMoisture: boolean;
+  hasNutritionFoodMapping: boolean;
+  resolvedNutrients: string[];
+  missingNutrients: string[];
+}
+
+export interface MissingNutrientRankingItem {
+  nutrientCode: string;
+  count: number;
 }
 
 export interface IngredientReadinessResult {
-  ingredientId: string;
+  versionCode: 'FEDIAF_2025_DOG';
   summary: IngredientReadinessSummary;
   items: IngredientReadinessItem[];
+  missingNutrientRanking: MissingNutrientRankingItem[];
 }
 
 export type FediafTargetLifeStage =

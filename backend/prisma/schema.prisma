@@ -1646,28 +1646,132 @@ model DesignRecipeAIGenerationLog {
   @@map("design_recipe_ai_generation_log")
 }
 
-/// FEDIAF营养标准数据
-model NutritionStandardFediaf {
-  id             String   @id @default(uuid()) @map("id")
-  nutrientKey    String   @unique @map("nutrient_key") @db.VarChar(50)
-  nutrientName   String   @map("nutrient_name") @db.VarChar(100)
-  nutrientNameEn String   @map("nutrient_name_en") @db.VarChar(100)
-  unit           String   @map("unit") @db.VarChar(20)
-  category       String   @map("category") @db.VarChar(50)
-  minValueAdult  Float?   @map("min_value_adult")
-  maxValueAdult  Float?   @map("max_value_adult")
-  minValuePuppy  Float?   @map("min_value_puppy")
-  maxValuePuppy  Float?   @map("max_value_puppy")
-  basis          String   @map("basis") @db.VarChar(20)
-  notes          String?  @map("notes")
-  sortOrder      Int      @default(0) @map("sort_order")
-  isActive       Boolean  @default(true) @map("is_active")
-  createdAt      DateTime @default(now()) @map("created_at")
-  updatedAt      DateTime @updatedAt @map("updated_at")
+enum NutritionStandardSpecies {
+  DOG
+  CAT
+}
+
+enum NutritionStandardEntrySourceType {
+  CORE_RECOMMENDATION
+  ANNEX_7_8
+}
+
+enum NutritionStandardBasis {
+  PER_100G_DRY_MATTER
+  PER_1000_KCAL_ME
+  PER_MJ_ME
+  RATIO
+}
+
+enum NutritionStandardMaxType {
+  LEGAL_MAX
+  NUTRITIONAL_MAX
+  UNSPECIFIED
+}
+
+enum NutritionStandardReviewStatus {
+  UNREVIEWED
+  REVIEWED
+  QUESTION
+  NEEDS_FIX
+}
+
+model NutritionStandardVersion {
+  id               String                    @id @default(uuid()) @map("id")
+  code             String                    @unique @map("code") @db.VarChar(80)
+  standardCode     String                    @map("standard_code") @db.VarChar(50)
+  name             String                    @map("name") @db.VarChar(120)
+  species          NutritionStandardSpecies  @map("species")
+  publicationMonth String                    @map("publication_month") @db.VarChar(7)
+  sourceTitle      String                    @map("source_title") @db.VarChar(300)
+  sourceUrl        String                    @map("source_url") @db.VarChar(500)
+  pdfUrl           String                    @map("pdf_url") @db.VarChar(500)
+  importBatch      String                    @map("import_batch") @db.VarChar(80)
+  importStatus     String                    @default("IMPORTED") @map("import_status") @db.VarChar(40)
+  isActive         Boolean                   @default(true) @map("is_active")
+  importedAt       DateTime                  @default(now()) @map("imported_at")
+  createdAt        DateTime                  @default(now()) @map("created_at")
+  updatedAt        DateTime                  @updatedAt @map("updated_at")
+  entries          NutritionStandardEntry[]
+
+  @@unique([id, species])
+  @@index([standardCode, species])
+  @@index([isActive])
+  @@map("nutrition_standard_version")
+}
+
+model NutritionNutrientDefinition {
+  id                    String                    @id @default(uuid()) @map("id")
+  code                  String                    @unique @map("code") @db.VarChar(80)
+  fieldPath             String?                   @map("field_path") @db.VarChar(120)
+  name                  String                    @map("name") @db.VarChar(120)
+  nameEn                String                    @map("name_en") @db.VarChar(160)
+  category              String                    @map("category") @db.VarChar(60)
+  defaultIngredientUnit String?                   @map("default_ingredient_unit") @db.VarChar(20)
+  defaultStandardUnit   String                    @map("default_standard_unit") @db.VarChar(30)
+  isDirect              Boolean                   @default(true) @map("is_direct")
+  isDerived             Boolean                   @default(false) @map("is_derived")
+  expression            Json?                     @map("expression")
+  sortOrder             Int                       @default(0) @map("sort_order")
+  isActive              Boolean                   @default(true) @map("is_active")
+  createdAt             DateTime                  @default(now()) @map("created_at")
+  updatedAt             DateTime                  @updatedAt @map("updated_at")
+  standardEntries       NutritionStandardEntry[]
 
   @@index([category])
   @@index([isActive])
-  @@map("nutrition_standard_fediaf")
+  @@map("nutrition_nutrient_definition")
+}
+
+model NutritionStandardEntry {
+  id                 String                           @id @default(uuid()) @map("id")
+  versionId          String                           @map("version_id")
+  nutrientId         String                           @map("nutrient_id")
+  fediafName         String                           @map("fediaf_name") @db.VarChar(160)
+  category           String                           @map("category") @db.VarChar(60)
+  sourceTable        String                           @map("source_table") @db.VarChar(20)
+  sourceType         NutritionStandardEntrySourceType @map("source_type")
+  pdfPage            Int                              @map("pdf_page")
+  species            NutritionStandardSpecies         @map("species")
+  lifeStage          String                           @map("life_stage") @db.VarChar(80)
+  basis              NutritionStandardBasis           @map("basis")
+  unit               String                           @map("unit") @db.VarChar(30)
+  minValue           Float?                           @map("min_value")
+  maxValue           Float?                           @map("max_value")
+  recommendedValue   Float?                           @map("recommended_value")
+  maxType            NutritionStandardMaxType         @default(UNSPECIFIED) @map("max_type")
+  footnoteRefs       String[]                         @default([]) @map("footnote_refs")
+  notes              String?                          @map("notes")
+  sortOrder          Int                              @default(0) @map("sort_order")
+  createdAt          DateTime                         @default(now()) @map("created_at")
+  updatedAt          DateTime                         @updatedAt @map("updated_at")
+  version            NutritionStandardVersion         @relation(fields: [versionId, species], references: [id, species], onDelete: Cascade)
+  nutrient           NutritionNutrientDefinition      @relation(fields: [nutrientId], references: [id])
+  reviewEvents       NutritionStandardReviewEvent[]
+
+  @@unique([versionId, nutrientId, sourceTable, lifeStage, basis, unit])
+  @@index([versionId])
+  @@index([nutrientId])
+  @@index([sourceTable])
+  @@index([sourceType])
+  @@index([lifeStage])
+  @@index([category])
+  @@map("nutrition_standard_entry")
+}
+
+model NutritionStandardReviewEvent {
+  id         String                        @id @default(uuid()) @map("id")
+  entryId    String                        @map("entry_id")
+  status     NutritionStandardReviewStatus @map("status")
+  note       String?                       @map("note")
+  reviewedBy String?                       @map("reviewed_by")
+  reviewedAt DateTime                      @default(now()) @map("reviewed_at")
+  createdAt  DateTime                      @default(now()) @map("created_at")
+  entry      NutritionStandardEntry        @relation(fields: [entryId], references: [id], onDelete: Cascade)
+
+  @@index([entryId, reviewedAt])
+  @@index([status])
+  @@map("nutrition_standard_review_event")
 }
 
 model Feedback {

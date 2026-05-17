@@ -93,3 +93,24 @@ export interface FediafTargetResult {
   lifeStage: FediafTargetLifeStage;
   targets: FediafTargetValue[];
 }
+
+export interface FediafTargetEntry {
+  nutrientCode: string;
+  nutrientName: string;
+  sourceTable: string;
+  pdfPage: number;
+  lifeStage: FediafTargetLifeStage;
+  basis: string;
+  unit: string;
+  minValue: number | null;
+  maxValue: number | null;
+  recommendedValue: number | null;
+  reviewStatus: NutritionStandardReviewStatus | 'UNREVIEWED';
+}
+
+export interface FediafTargetSelectionResult {
+  versionCode: 'FEDIAF_2025_DOG';
+  lifeStage: FediafTargetLifeStage;
+  sourceType: 'ANNEX_7_8';
+  entries: FediafTargetEntry[];
+}

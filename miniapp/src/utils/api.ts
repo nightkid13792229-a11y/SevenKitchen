@@ -54,7 +54,7 @@ interface ApiResponse<T = any> {
 
 interface RequestOptions {
   url: string
-  method?: 'GET' | 'POST' | 'PUT' | 'DELETE'
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'
   data?: any
   header?: Record<string, string>
   retryOn401?: boolean // Internal flag to prevent infinite retry loops

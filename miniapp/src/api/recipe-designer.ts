@@ -30,6 +30,14 @@ export interface DesignRecipeItemPayload {
   sortOrder?: number
 }
 
+export interface UpdateDesignRecipeItemPayload {
+  weightG?: number
+  preparationMethod?: string | null
+  nutrientTargetKey?: string | null
+  nutrientTargetValue?: number | null
+  sortOrder?: number
+}
+
 export interface PublishDesignRecipePayload {
   reviewNote?: string
 }
@@ -42,12 +50,16 @@ export const recipeDesignerApi = {
     request({ url: `/recipe-designer/drafts/${draftId}`, method: 'PATCH', data }),
   addItem: (draftId: string, data: DesignRecipeItemPayload) =>
     request({ url: `/recipe-designer/drafts/${draftId}/items`, method: 'POST', data }),
-  updateItem: (itemId: string, data: Partial<DesignRecipeItemPayload>) =>
+  updateItem: (itemId: string, data: UpdateDesignRecipeItemPayload) =>
     request({ url: `/recipe-designer/items/${itemId}`, method: 'PATCH', data }),
   removeItem: (itemId: string) =>
     request({ url: `/recipe-designer/items/${itemId}`, method: 'DELETE' }),
   assessDraft: (draftId: string) =>
     request({ url: `/recipe-designer/drafts/${draftId}/assess`, method: 'POST' }),
-  publishDraft: (draftId: string, data: PublishDesignRecipePayload) =>
-    request({ url: `/recipe-designer/drafts/${draftId}/publish`, method: 'POST', data }),
+  publishDraft: (draftId: string, data?: PublishDesignRecipePayload) =>
+    request({
+      url: `/recipe-designer/drafts/${draftId}/publish`,
+      method: 'POST',
+      ...(data !== undefined ? { data } : {}),
+    }),
 }

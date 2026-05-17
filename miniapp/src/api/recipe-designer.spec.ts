@@ -119,4 +119,27 @@ describe('recipeDesignerApi', () => {
     expect(mockedRequest.mock.calls[0][0].data).toHaveProperty('scenario', 'ADULT_MER_95')
     expect(mockedRequest.mock.calls[0][0].data).not.toHaveProperty('fediafDogScenario')
   })
+
+  it('keeps update and publish helper contracts aligned with backend DTOs', () => {
+    recipeDesignerApi.updateItem('item-1', {
+      preparationMethod: null,
+      nutrientTargetKey: null,
+      nutrientTargetValue: null,
+    })
+    recipeDesignerApi.publishDraft('draft-1')
+
+    expect(mockedRequest).toHaveBeenNthCalledWith(1, {
+      url: '/recipe-designer/items/item-1',
+      method: 'PATCH',
+      data: {
+        preparationMethod: null,
+        nutrientTargetKey: null,
+        nutrientTargetValue: null,
+      },
+    })
+    expect(mockedRequest).toHaveBeenNthCalledWith(2, {
+      url: '/recipe-designer/drafts/draft-1/publish',
+      method: 'POST',
+    })
+  })
 })

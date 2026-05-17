@@ -134,6 +134,24 @@
       }
     },
     {
+      "path": "pages/recipe-designer/list",
+      "style": {
+        "navigationBarTitleText": "食谱设计器"
+      }
+    },
+    {
+      "path": "pages/recipe-designer/editor",
+      "style": {
+        "navigationBarTitleText": "配方编辑"
+      }
+    },
+    {
+      "path": "pages/recipe-designer/publish",
+      "style": {
+        "navigationBarTitleText": "发布配方"
+      }
+    },
+    {
       "path": "pages/shared-photos/index",
       "style": {
         "navigationBarTitleText": "原料照片"

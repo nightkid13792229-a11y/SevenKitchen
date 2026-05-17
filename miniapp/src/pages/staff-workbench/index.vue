@@ -89,6 +89,18 @@
           </view>
           <text class="module-arrow">›</text>
         </view>
+
+        <!-- 食谱设计器 -->
+        <view class="module" @tap="goToRecipeDesigner">
+          <view class="module-icon recipe-designer">
+            <text class="module-icon-symbol">配</text>
+          </view>
+          <view class="module-content">
+            <text class="module-title">食谱设计器</text>
+            <text class="module-desc">维护草稿配方与营养评估</text>
+          </view>
+          <text class="module-arrow">›</text>
+        </view>
       </view>
 
       <!-- 快捷统计（UI框架，待对接API） -->
@@ -270,6 +282,10 @@ const goToInventory = () => {
 const goToStaffRecipes = () => {
   uni.navigateTo({ url: '/pages/staff-recipes/index' });
 };
+
+const goToRecipeDesigner = () => {
+  uni.navigateTo({ url: '/pages/recipe-designer/list' });
+};
 </script>
 
 <style scoped lang="scss">
@@ -396,6 +412,11 @@ const goToStaffRecipes = () => {
 
   &.recipes {
     background: linear-gradient(135deg, #c3cfe2 0%, #f5f7fa 100%);
+  }
+
+  &.recipe-designer {
+    background: linear-gradient(135deg, #e6f4ff 0%, #bae0ff 100%);
+    color: #1677ff;
   }
 }
 

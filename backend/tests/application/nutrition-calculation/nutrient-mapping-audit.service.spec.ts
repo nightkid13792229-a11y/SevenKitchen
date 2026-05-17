@@ -1,0 +1,124 @@
+import { NutrientMappingAuditService } from '../../../src/application/nutrition-calculation/nutrient-mapping-audit.service';
+
+describe('NutrientMappingAuditService', () => {
+  const prisma = {
+    nutritionStandardVersion: {
+      findUnique: jest.fn(),
+    },
+  } as any;
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('audits FEDIAF nutrient mappings and reports reviewed coverage', async () => {
+    prisma.nutritionStandardVersion.findUnique.mockResolvedValue({
+      id: 'version-1',
+      code: 'FEDIAF_2025_DOG',
+      entries: [
+        {
+          id: 'entry-calcium',
+          nutrient: {
+            code: 'calcium',
+            fieldPath: 'minerals.calcium',
+            defaultStandardUnit: 'g',
+            isDirect: true,
+            isDerived: false,
+            expression: null,
+          },
+          reviewEvents: [
+            {
+              id: 'review-1',
+              status: 'REVIEWED',
+              reviewedAt: new Date('2026-05-17T00:00:00.000Z'),
+            },
+          ],
+        },
+        {
+          id: 'entry-epa-dha',
+          nutrient: {
+            code: 'epaDha',
+            fieldPath: null,
+            defaultStandardUnit: 'g',
+            isDirect: false,
+            isDerived: true,
+            expression: {
+              op: 'sum',
+              fields: ['fattyAcids.epa', 'fattyAcids.dha'],
+            },
+          },
+          reviewEvents: [
+            {
+              id: 'review-2',
+              status: 'REVIEWED',
+              reviewedAt: new Date('2026-05-17T00:00:00.000Z'),
+            },
+          ],
+        },
+      ],
+    });
+
+    const service = new NutrientMappingAuditService(prisma);
+    const result = await service.auditFediaf2025DogMappings();
+
+    expect(result.summary).toEqual({
+      totalNutrients: 2,
+      reviewedNutrients: 2,
+      resolvedMappings: 2,
+      missingMappings: 0,
+      unsupportedMappings: 0,
+    });
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        nutrientCode: 'calcium',
+        mappingStatus: 'RESOLVED',
+        mappingType: 'DIRECT',
+        sourceFieldPaths: ['minerals.calcium'],
+      }),
+      expect.objectContaining({
+        nutrientCode: 'epaDha',
+        mappingStatus: 'RESOLVED',
+        mappingType: 'COMBINATION',
+        sourceFieldPaths: ['fattyAcids.epa', 'fattyAcids.dha'],
+      }),
+    ]);
+  });
+
+  it('marks unreviewed nutrients and missing field paths explicitly', async () => {
+    prisma.nutritionStandardVersion.findUnique.mockResolvedValue({
+      id: 'version-1',
+      code: 'FEDIAF_2025_DOG',
+      entries: [
+        {
+          id: 'entry-unknown',
+          nutrient: {
+            code: 'unknownNutrient',
+            fieldPath: null,
+            defaultStandardUnit: 'mg',
+            isDirect: true,
+            isDerived: false,
+            expression: null,
+          },
+          reviewEvents: [],
+        },
+      ],
+    });
+
+    const service = new NutrientMappingAuditService(prisma);
+    const result = await service.auditFediaf2025DogMappings();
+
+    expect(result.summary).toEqual({
+      totalNutrients: 1,
+      reviewedNutrients: 0,
+      resolvedMappings: 0,
+      missingMappings: 1,
+      unsupportedMappings: 0,
+    });
+    expect(result.items[0]).toMatchObject({
+      nutrientCode: 'unknownNutrient',
+      reviewStatus: 'UNREVIEWED',
+      mappingStatus: 'MISSING_MAPPING',
+      sourceFieldPaths: [],
+    });
+  });
+});

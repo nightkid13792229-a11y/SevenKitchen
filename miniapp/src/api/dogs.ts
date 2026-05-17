@@ -85,6 +85,8 @@ export const dogApi = {
   detail: (dogId: string) => request({ url: `/dogs/${dogId}`, method: 'GET' }),
   breeds: () => request({ url: '/dogs/breeds', method: 'GET' }),
   hotBreeds: () => request({ url: '/dogs/breeds/hot', method: 'GET' }),
+  breedHealthRisks: (breedId: string) =>
+    request({ url: `/dogs/breeds/${breedId}/health-risks`, method: 'GET' }),
   preview: (data: Record<string, any>) =>
     request({ url: '/dogs/calc-preview', method: 'POST', data }),
   create: (data: Record<string, any>) => request({ url: '/dogs', method: 'POST', data }),

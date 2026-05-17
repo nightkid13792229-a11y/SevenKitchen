@@ -135,3 +135,18 @@ describe('dogApi healthRecords', () => {
     })
   })
 })
+
+describe('dogApi breedHealthRisks', () => {
+  beforeEach(() => {
+    mockedRequest.mockReset()
+  })
+
+  it('loads breed health risks by breed id', () => {
+    dogApi.breedHealthRisks('breed-1')
+
+    expect(mockedRequest).toHaveBeenCalledWith({
+      url: '/dogs/breeds/breed-1/health-risks',
+      method: 'GET',
+    })
+  })
+})

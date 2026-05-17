@@ -100,7 +100,7 @@ export class NutritionUnitNormalizerService {
   toBasis(input: BasisNormalizationInput): BasisNormalizationResult {
     switch (input.basis) {
       case 'PER_100G_AS_FED':
-        if (input.totalWeightG <= 0) {
+        if (!this.isPositiveFiniteNumber(input.totalWeightG)) {
           return this.missingBasis(
             input,
             'totalWeightG must be greater than 0',
@@ -113,7 +113,7 @@ export class NutritionUnitNormalizerService {
         );
 
       case 'PER_100G_DRY_MATTER':
-        if (input.dryMatterG <= 0) {
+        if (!this.isPositiveFiniteNumber(input.dryMatterG)) {
           return this.missingBasis(input, 'dryMatterG must be greater than 0');
         }
 
@@ -123,7 +123,7 @@ export class NutritionUnitNormalizerService {
         );
 
       case 'PER_1000_KCAL_ME':
-        if (input.totalEnergyKcal <= 0) {
+        if (!this.isPositiveFiniteNumber(input.totalEnergyKcal)) {
           return this.missingBasis(
             input,
             'totalEnergyKcal must be greater than 0',
@@ -136,7 +136,7 @@ export class NutritionUnitNormalizerService {
         );
 
       case 'PER_MJ_ME':
-        if (input.totalEnergyKcal <= 0) {
+        if (!this.isPositiveFiniteNumber(input.totalEnergyKcal)) {
           return this.missingBasis(
             input,
             'totalEnergyKcal must be greater than 0',
@@ -167,6 +167,10 @@ export class NutritionUnitNormalizerService {
     }
 
     return lowerUnit;
+  }
+
+  private isPositiveFiniteNumber(value: unknown): value is number {
+    return typeof value === 'number' && Number.isFinite(value) && value > 0;
   }
 
   private convertByFactor(

@@ -40,6 +40,15 @@
       </view>
 
       <template v-else-if="dogId">
+        <BreedHealthRiskSection
+          :breed-name="breedHealthRiskLookup.breedName || form.breedName || form.customBreedName"
+          :risks="breedHealthRiskLookup.risks"
+          :loading="isBreedHealthRiskLoading"
+          :error="breedHealthRiskError"
+          :empty-text="breedHealthRiskEmptyText"
+          @retry="loadBreedHealthRisksForProfile(latestRequestedDogId || dogId)"
+        />
+
         <HealthRecordsSection
           :dog-id="dogId"
           :active-type="activeRecordType"
@@ -89,6 +98,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
+import BreedHealthRiskSection from '../../components/dog-profile/BreedHealthRiskSection.vue'
 import HealthRecordsSection from '../../components/dog-profile/HealthRecordsSection.vue'
 import StickyActionBar from '../../components/dog-profile/StickyActionBar.vue'
 import { dogApi } from '../../api/dogs'
@@ -110,6 +120,12 @@ import {
   writeHealthRecordAttachmentCache,
 } from '../../utils/health-records'
 import { resolveDogProfileEntryRoute } from '../../utils/dog-profile-form'
+import {
+  canRequestBreedHealthRisks,
+  normalizeBreedHealthRiskResponse,
+  resolveBreedHealthRiskEmptyText,
+  type BreedHealthRiskLookup,
+} from '../../utils/breed-health-risks'
 
 interface DogProfileSummary {
   id: string
@@ -144,6 +160,13 @@ const healthRecordFocusIdentity = reactive<Record<HealthRecordType, string>>({
   allergy: '',
 })
 const savedPickyFoods = ref('')
+const breedHealthRiskLookup = reactive<BreedHealthRiskLookup>({
+  breedId: '',
+  breedName: '',
+  risks: [],
+})
+const isBreedHealthRiskLoading = ref(false)
+const breedHealthRiskError = ref('')
 const isHealthRecordSaving = computed(() => Boolean(savingRecordKey.value))
 const isDietReminderActionDisabled = computed(() =>
   !dogId.value || isProfileLoading.value || isSaving.value || isHealthRecordSaving.value,
@@ -191,6 +214,11 @@ const dietReminderStatusText = computed(() => {
 
   return ''
 })
+const breedHealthRiskEmptyText = computed(() =>
+  canRequestBreedHealthRisks(form)
+    ? resolveBreedHealthRiskEmptyText('no-data')
+    : resolveBreedHealthRiskEmptyText('mixed'),
+)
 
 onLoad((options: any) => {
   const value = Array.isArray(options?.dogId) ? options.dogId[0] : options?.dogId
@@ -344,6 +372,11 @@ function resetHealthForm() {
   form.manualTreatKcal = ''
   form.pickyFoods = ''
   savedPickyFoods.value = ''
+  breedHealthRiskLookup.breedId = ''
+  breedHealthRiskLookup.breedName = ''
+  breedHealthRiskLookup.risks = []
+  isBreedHealthRiskLoading.value = false
+  breedHealthRiskError.value = ''
   savingRecordKey.value = ''
   hasUnsavedRecordDraft.value = false
   for (const type of HEALTH_RECORD_TYPES) {
@@ -377,6 +410,7 @@ async function loadDogProfile(requestedDogId: string) {
 
     dogId.value = requestedDogId
     populateForm(res.data.profile)
+    void loadBreedHealthRisksForProfile(requestedDogId)
   } catch (error: any) {
     if (shouldDiscardDogHealthProfileResponse({
       requestedDogId,
@@ -418,6 +452,66 @@ function populateForm(profile: Record<string, any>) {
   form.manualTreatKcal = profile.manualTreatKcal?.toString() || ''
   form.pickyFoods = typeof profile.pickyFoods === 'string' ? profile.pickyFoods : ''
   savedPickyFoods.value = form.pickyFoods
+}
+
+async function loadBreedHealthRisksForProfile(requestedDogId: string) {
+  if (!requestedDogId || shouldDiscardDogHealthProfileResponse({
+    requestedDogId,
+    latestRequestedDogId: latestRequestedDogId.value,
+  })) {
+    return
+  }
+
+  if (!canRequestBreedHealthRisks(form)) {
+    breedHealthRiskLookup.breedId = ''
+    breedHealthRiskLookup.breedName = form.customBreedName || form.breedName || ''
+    breedHealthRiskLookup.risks = []
+    breedHealthRiskError.value = ''
+    isBreedHealthRiskLoading.value = false
+    return
+  }
+
+  const targetBreedId = String(form.breedId || '')
+  isBreedHealthRiskLoading.value = true
+  breedHealthRiskError.value = ''
+
+  try {
+    const res: any = await dogApi.breedHealthRisks(targetBreedId)
+    if (shouldDiscardDogHealthProfileResponse({
+      requestedDogId,
+      latestRequestedDogId: latestRequestedDogId.value,
+    })) {
+      return
+    }
+
+    if (res.code !== 0) {
+      throw new Error(res.message || '加载本品种健康关注项失败')
+    }
+
+    const normalized = normalizeBreedHealthRiskResponse(res)
+    breedHealthRiskLookup.breedId = normalized.breedId
+    breedHealthRiskLookup.breedName = normalized.breedName
+    breedHealthRiskLookup.risks = normalized.risks
+  } catch (error: any) {
+    if (shouldDiscardDogHealthProfileResponse({
+      requestedDogId,
+      latestRequestedDogId: latestRequestedDogId.value,
+    })) {
+      return
+    }
+
+    breedHealthRiskLookup.breedId = targetBreedId
+    breedHealthRiskLookup.breedName = form.breedName || ''
+    breedHealthRiskLookup.risks = []
+    breedHealthRiskError.value = error?.message || '加载本品种健康关注项失败'
+  } finally {
+    if (!shouldDiscardDogHealthProfileResponse({
+      requestedDogId,
+      latestRequestedDogId: latestRequestedDogId.value,
+    })) {
+      isBreedHealthRiskLoading.value = false
+    }
+  }
 }
 
 function recordApiForType(type: HealthRecordType) {

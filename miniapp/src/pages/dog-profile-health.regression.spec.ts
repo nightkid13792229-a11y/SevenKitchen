@@ -146,4 +146,18 @@ describe('dog profile health page regressions', () => {
     expect(source).toContain('dogApi.updateDietReminders')
     expect(source).not.toContain('dogApi.updateHealthRecords')
   })
+
+  it('loads and renders source-backed breed health risks for standard breeds', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/dog-profile-health/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('BreedHealthRiskSection')
+    expect(source).toContain('dogApi.breedHealthRisks')
+    expect(source).toContain('normalizeBreedHealthRiskResponse')
+    expect(source).toContain('canRequestBreedHealthRisks')
+    expect(source).toContain('breedHealthRiskLookup.risks')
+    expect(source).toContain('loadBreedHealthRisksForProfile')
+  })
 })

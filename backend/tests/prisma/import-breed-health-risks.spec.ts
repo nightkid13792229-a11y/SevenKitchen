@@ -40,6 +40,28 @@ describe('breed health risk import fixtures', () => {
     ).toBe('心脏健康筛查');
   });
 
+  it('includes source-backed cancer awareness for golden retrievers', () => {
+    const cancerCondition = BREED_HEALTH_RISK_FIXTURE_SET.conditions.find(
+      (condition) => condition.key === 'cancer-awareness',
+    );
+    const goldenCancerRisk = BREED_HEALTH_RISK_FIXTURE_SET.risks.find(
+      (risk) =>
+        risk.breedKey === 'golden-retriever' &&
+        risk.conditionKey === 'cancer-awareness',
+    );
+
+    expect(cancerCondition?.nameCn).toBe('肿瘤相关关注');
+    expect(goldenCancerRisk?.attentionPriority).toBe('KEY_ATTENTION');
+    expect(
+      goldenCancerRisk?.sources.map((source) => source.sourceName),
+    ).toEqual(
+      expect.arrayContaining([
+        'Morris Golden Retriever Lifetime Study',
+        'AKC Canine Health Foundation',
+      ]),
+    );
+  });
+
   it('resolves local dog breed rows by name or alias before importing risks', () => {
     const plan = buildBreedHealthRiskImportPlan(
       BREED_HEALTH_RISK_FIXTURE_SET,

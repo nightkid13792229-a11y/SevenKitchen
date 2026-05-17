@@ -19,6 +19,21 @@ describe('BreedHealthRiskSection regressions', () => {
     expect(source).not.toContain('sourcePublisherText(source)')
   })
 
+  it('uses distinct visual styles for attention priority labels', () => {
+    const source = readFileSync(
+      resolve(
+        process.cwd(),
+        'src/components/dog-profile/BreedHealthRiskSection.vue',
+      ),
+      'utf-8',
+    )
+
+    expect(source).toContain('attentionLabelClass(risk)')
+    expect(source).toContain('breed-risk-card__label--key')
+    expect(source).toContain('breed-risk-card__label--recommended')
+    expect(source).toContain('breed-risk-card__label--supplemental')
+  })
+
   it('renders source urls only in the expanded source metadata', () => {
     const source = readFileSync(
       resolve(

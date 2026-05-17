@@ -106,6 +106,52 @@ const grcaHealthScreeningSource = source({
   note: '金毛犬种俱乐部资料，列出髋、肘、眼、心脏等繁育前筛查重点。',
 });
 
+const grcaGoldenCancerSource = source({
+  sourceType: BreedHealthRiskSourceType.BREED_CLUB,
+  sourceName: 'GRCA Understanding Cancer',
+  publisher: 'Golden Retriever Club of America',
+  title: 'Understanding Cancer in Golden Retrievers',
+  url: 'https://grca.org/about-the-breed/health-research/understanding-cancer-in-golden-retrievers/',
+  note: '金毛犬种俱乐部面向繁育者和主人整理的犬种肿瘤科普资料。',
+});
+
+const morrisGoldenLifetimeStudySource = source({
+  sourceType: BreedHealthRiskSourceType.VETERINARY_LITERATURE,
+  sourceName: 'Morris Golden Retriever Lifetime Study',
+  publisher: 'Morris Animal Foundation',
+  title: 'Golden Retriever Lifetime Study',
+  url: 'https://www.morrisanimalfoundation.org/study/golden-retriever-lifetime-study',
+  note: 'Morris Animal Foundation 的金毛终身研究，研究类别包含 Cancer，并跟踪 3000 多只纯种金毛。',
+});
+
+const morrisGoldenCancerUpdateSource = source({
+  sourceType: BreedHealthRiskSourceType.VETERINARY_LITERATURE,
+  sourceName: 'Morris GRLS 2026 Update',
+  publisher: 'Morris Animal Foundation',
+  title: 'What the Golden Retriever Lifetime Study tells us about dog health',
+  url: 'https://www.morrisanimalfoundation.org/article/golden-retriever-lifetime-study-2026-update',
+  note: 'Morris Animal Foundation 2026 年资料，说明金毛终身研究已积累大量肿瘤诊断数据。',
+});
+
+const akcChfGoldenCancerSource = source({
+  sourceType: BreedHealthRiskSourceType.VETERINARY_LITERATURE,
+  sourceName: 'AKC Canine Health Foundation',
+  publisher: 'AKC Canine Health Foundation',
+  title: 'Golden Retriever Cancer Research',
+  url: 'https://www.akcchf.org/educational-resources/library/articles/breed/golden-retriever/',
+  note: 'AKC 犬健康基金会资料，提到淋巴瘤和血管肉瘤是金毛的重要健康问题。',
+});
+
+const plosGoldenCancerMortalitySource = source({
+  sourceType: BreedHealthRiskSourceType.VETERINARY_LITERATURE,
+  sourceName: 'PLOS One Golden Retriever Cancer Mortality',
+  publisher: 'PLOS One',
+  title:
+    'Association of cancer-related mortality, age and gonadectomy in golden retriever dogs at a veterinary academic center (1989-2016)',
+  url: 'https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0192578',
+  note: '同行评议论文，讨论金毛犬较高的肿瘤相关死亡风险和常见肿瘤类型。',
+});
+
 const labradorHealthStatementSource = source({
   sourceType: BreedHealthRiskSourceType.BREED_CLUB,
   sourceName: 'LRC Health Statement',
@@ -276,6 +322,27 @@ export const BREED_HEALTH_RISK_FIXTURE_SET: BreedHealthRiskFixtureSet = {
       isActive: true,
     },
     {
+      key: 'cancer-awareness',
+      id: 'breed-health-condition-cancer-awareness',
+      nameCn: '肿瘤相关关注',
+      nameEn: 'Cancer Awareness',
+      aliases: ['癌症关注', '肿瘤风险', '血管肉瘤', '淋巴瘤'],
+      category: '肿瘤',
+      summary:
+        '金毛相关研究和犬种资料中多次提到肿瘤健康问题，尤其需要关注血管肉瘤、淋巴瘤等常见恶性肿瘤线索。',
+      commonSigns: [
+        '不明原因肿块',
+        '体重下降或食欲变化',
+        '虚弱或运动耐受下降',
+        '腹围突然增大或晕厥',
+      ],
+      screeningAdvice:
+        '目前没有一个适用于所有金毛的单一肿瘤筛查方案；建议定期体检，发现肿块、虚弱、消瘦或突然状态变化时及时就医。',
+      careAdvice:
+        '保持规律体检和体重记录，留意皮肤肿块、精神食欲、牙龈颜色和运动耐受变化；不要把资料当作诊断结论。',
+      isActive: true,
+    },
+    {
       key: 'myotonia-congenita',
       id: 'breed-health-condition-myotonia-congenita',
       nameCn: '先天性肌强直',
@@ -418,6 +485,25 @@ export const BREED_HEALTH_RISK_FIXTURE_SET: BreedHealthRiskFixtureSet = {
       displayOrder: 40,
       isPublished: true,
       sources: [grcaHealthScreeningSource, ofaCardiacDiseaseSource],
+    },
+    {
+      breedKey: 'golden-retriever',
+      breedNames: ['金毛', '金毛犬', '金毛巡回猎犬', 'Golden Retriever'],
+      conditionKey: 'cancer-awareness',
+      attentionPriority: BreedHealthAttentionPriority.KEY_ATTENTION,
+      oneLineSummary:
+        'Morris 金毛终身研究、AKC 犬健康基金会和相关论文均将肿瘤列为金毛的重要健康问题。',
+      breedSpecificReason:
+        '公开研究资料显示金毛在肿瘤相关死亡和血管肉瘤、淋巴瘤等方向上有明确关注价值，因此应作为重点阅读项。',
+      displayOrder: 50,
+      isPublished: true,
+      sources: [
+        morrisGoldenLifetimeStudySource,
+        morrisGoldenCancerUpdateSource,
+        akcChfGoldenCancerSource,
+        plosGoldenCancerMortalitySource,
+        grcaGoldenCancerSource,
+      ],
     },
     {
       breedKey: 'miniature-schnauzer',

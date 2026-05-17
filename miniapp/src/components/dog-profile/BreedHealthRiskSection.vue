@@ -42,9 +42,10 @@
         <view class="breed-risk-card__summary" @tap="toggleRisk(risk)">
           <view class="breed-risk-card__summary-main">
             <view class="breed-risk-card__meta">
-              <text class="breed-risk-card__label">{{
-                risk.attentionLabel
-              }}</text>
+              <text
+                :class="['breed-risk-card__label', attentionLabelClass(risk)]"
+                >{{ risk.attentionLabel }}</text
+              >
               <text class="breed-risk-card__sources"
                 >{{ risk.sourceCount }} 个来源</text
               >
@@ -208,6 +209,18 @@ function toggleSource(risk: BreedHealthRiskItem) {
     ? expandedSourceIds.value.filter((item) => item !== key)
     : [...expandedSourceIds.value, key]
 }
+
+function attentionLabelClass(risk: BreedHealthRiskItem) {
+  if (risk.attentionPriority === 'KEY_ATTENTION') {
+    return 'breed-risk-card__label--key'
+  }
+
+  if (risk.attentionPriority === 'RECOMMENDED_AWARENESS') {
+    return 'breed-risk-card__label--recommended'
+  }
+
+  return 'breed-risk-card__label--supplemental'
+}
 </script>
 
 <style scoped>
@@ -329,8 +342,25 @@ function toggleSource(risk: BreedHealthRiskItem) {
 }
 
 .breed-risk-card__label {
-  color: #7a4b10;
-  background: rgba(238, 174, 72, 0.18);
+  border: 1rpx solid transparent;
+}
+
+.breed-risk-card__label--key {
+  color: #a34018;
+  background: #fff0e8;
+  border-color: rgba(196, 85, 32, 0.18);
+}
+
+.breed-risk-card__label--recommended {
+  color: #0c5c78;
+  background: #e8f5fb;
+  border-color: rgba(21, 113, 145, 0.16);
+}
+
+.breed-risk-card__label--supplemental {
+  color: #526977;
+  background: #eef4f2;
+  border-color: rgba(82, 105, 119, 0.12);
 }
 
 .breed-risk-card__sources {

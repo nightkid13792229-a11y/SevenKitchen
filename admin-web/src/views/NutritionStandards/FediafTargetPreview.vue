@@ -129,6 +129,7 @@ const lifeStageOptions: Array<{
 const lifeStage = ref<FediafTargetLifeStage>("ADULT_MER_110");
 const target = ref<FediafTargetSelectionResult | null>(null);
 const loading = ref(false);
+let targetRequestSequence = 0;
 
 function formatValue(value: number | null): string {
   return value === null || value === undefined ? "-" : String(value);
@@ -152,15 +153,25 @@ function reviewTagType(status: ReviewStatus) {
 }
 
 async function loadTarget() {
+  const requestSequence = ++targetRequestSequence;
+  const requestedLifeStage = lifeStage.value;
   loading.value = true;
   try {
-    target.value = await nutritionCalculationApi.previewFediafTarget(
-      lifeStage.value,
+    const nextTarget = await nutritionCalculationApi.previewFediafTarget(
+      requestedLifeStage,
     );
+    if (requestSequence === targetRequestSequence) {
+      target.value = nextTarget;
+    }
   } catch {
+    if (requestSequence === targetRequestSequence) {
+      target.value = null;
+    }
     // The shared API interceptor shows the request error message.
   } finally {
-    loading.value = false;
+    if (requestSequence === targetRequestSequence) {
+      loading.value = false;
+    }
   }
 }
 

@@ -6,10 +6,12 @@
 
 状态：待业务确认。本文档用于确认第一版知识库内容边界；确认后再更新本地导入数据，并重新执行本地导入、接口验证和小程序手动验证。
 
+数据源规则：本审核表按 [Breed Health Risk Source Governance](../runbooks/breed-health-risk-source-governance.md) 执行。OMIA、IPFD HGTD、OFA/CHIC、IPFD HSDD 作为优先核对来源；犬种俱乐部、兽医教材、大学兽医学院、AKC CHF、Morris Animal Foundation 和同行评议论文作为品种语境与主人日常管理风险补充。
+
 ## 审核原则
 
 1. 只展示有明确来源支撑的内容，不使用未标注来源的经验判断。
-2. 优先收录犬种俱乐部、OFA/CHIC、AKC Canine Health Foundation、兽医教材、大学兽医学院或同行评议论文。
+2. 优先收录治理规范中的 Tier A、Tier B、Tier C 来源；Tier D 只能用于发现候选主题，不能单独支撑发布。
 3. 将“繁育筛查项”和“普通主人日常管理风险”分开理解。筛查项可以提示用户阅读，但文案不能暗示该犬一定会患病。
 4. 分级是产品展示分级，不是权威数据库统一给出的医学风险等级：
    - 重点关注：来源强、犬种特异性明确，且对日常健康管理或早期就医判断有明显价值。

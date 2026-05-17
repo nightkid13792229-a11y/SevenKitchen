@@ -2,6 +2,8 @@
 
 This runbook keeps breed health risk content in a local review loop first. The miniapp only reads the backend API; reviewed knowledge-base rows are imported into backend tables after schema migration.
 
+Before adding or changing breed health content, review the source hierarchy and inclusion rules in [Breed Health Risk Source Governance](./breed-health-risk-source-governance.md). Content should be approved in an audit table before import fixture data is changed.
+
 ## Local Review Flow
 
 Use a local PostgreSQL `DATABASE_URL` before applying data.
@@ -37,8 +39,9 @@ Open `miniapp/dist/dev/mp-weixin` in WeChat DevTools and check:
 
 ## Data Review Checklist
 
+- Candidate concerns were reviewed against the source hierarchy in [Breed Health Risk Source Governance](./breed-health-risk-source-governance.md).
 - Every published risk has source name, source title, URL, and accessed date.
-- Source URLs are public and from OFA/CHIC, breed clubs, or veterinary/research institutions.
+- Source URLs are public and from approved Tier A, Tier B, or Tier C sources.
 - Wording uses attention priority, not a guaranteed diagnostic risk level.
 - Medical advice remains educational and asks users to consult a veterinarian for symptoms.
 - Screenshots from WeChat DevTools are reviewed before production deployment.

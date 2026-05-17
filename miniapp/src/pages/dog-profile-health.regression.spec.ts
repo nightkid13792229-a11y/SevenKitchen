@@ -157,6 +157,8 @@ describe('dog profile health page regressions', () => {
     expect(source).toContain('dogApi.breedHealthRisks')
     expect(source).toContain('normalizeBreedHealthRiskResponse')
     expect(source).toContain('canRequestBreedHealthRisks')
+    expect(source).toContain('isBreedHealthRiskEndpointUnavailable')
+    expect(source).toContain("resolveBreedHealthRiskEmptyText('unavailable')")
     expect(source).toContain('breedHealthRiskLookup.risks')
     expect(source).toContain('loadBreedHealthRisksForProfile')
   })

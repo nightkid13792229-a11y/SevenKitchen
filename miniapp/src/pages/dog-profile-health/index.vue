@@ -122,6 +122,7 @@ import {
 import { resolveDogProfileEntryRoute } from '../../utils/dog-profile-form'
 import {
   canRequestBreedHealthRisks,
+  isBreedHealthRiskEndpointUnavailable,
   normalizeBreedHealthRiskResponse,
   resolveBreedHealthRiskEmptyText,
   type BreedHealthRiskLookup,
@@ -167,6 +168,7 @@ const breedHealthRiskLookup = reactive<BreedHealthRiskLookup>({
 })
 const isBreedHealthRiskLoading = ref(false)
 const breedHealthRiskError = ref('')
+const breedHealthRiskEndpointUnavailable = ref(false)
 const isHealthRecordSaving = computed(() => Boolean(savingRecordKey.value))
 const isDietReminderActionDisabled = computed(() =>
   !dogId.value || isProfileLoading.value || isSaving.value || isHealthRecordSaving.value,
@@ -215,9 +217,11 @@ const dietReminderStatusText = computed(() => {
   return ''
 })
 const breedHealthRiskEmptyText = computed(() =>
-  canRequestBreedHealthRisks(form)
-    ? resolveBreedHealthRiskEmptyText('no-data')
-    : resolveBreedHealthRiskEmptyText('mixed'),
+  breedHealthRiskEndpointUnavailable.value
+    ? resolveBreedHealthRiskEmptyText('unavailable')
+    : canRequestBreedHealthRisks(form)
+      ? resolveBreedHealthRiskEmptyText('no-data')
+      : resolveBreedHealthRiskEmptyText('mixed'),
 )
 
 onLoad((options: any) => {
@@ -377,6 +381,7 @@ function resetHealthForm() {
   breedHealthRiskLookup.risks = []
   isBreedHealthRiskLoading.value = false
   breedHealthRiskError.value = ''
+  breedHealthRiskEndpointUnavailable.value = false
   savingRecordKey.value = ''
   hasUnsavedRecordDraft.value = false
   for (const type of HEALTH_RECORD_TYPES) {
@@ -467,6 +472,7 @@ async function loadBreedHealthRisksForProfile(requestedDogId: string) {
     breedHealthRiskLookup.breedName = form.customBreedName || form.breedName || ''
     breedHealthRiskLookup.risks = []
     breedHealthRiskError.value = ''
+    breedHealthRiskEndpointUnavailable.value = false
     isBreedHealthRiskLoading.value = false
     return
   }
@@ -474,6 +480,7 @@ async function loadBreedHealthRisksForProfile(requestedDogId: string) {
   const targetBreedId = String(form.breedId || '')
   isBreedHealthRiskLoading.value = true
   breedHealthRiskError.value = ''
+  breedHealthRiskEndpointUnavailable.value = false
 
   try {
     const res: any = await dogApi.breedHealthRisks(targetBreedId)
@@ -503,6 +510,12 @@ async function loadBreedHealthRisksForProfile(requestedDogId: string) {
     breedHealthRiskLookup.breedId = targetBreedId
     breedHealthRiskLookup.breedName = form.breedName || ''
     breedHealthRiskLookup.risks = []
+    if (isBreedHealthRiskEndpointUnavailable(error)) {
+      breedHealthRiskError.value = ''
+      breedHealthRiskEndpointUnavailable.value = true
+      return
+    }
+
     breedHealthRiskError.value = error?.message || '加载本品种健康关注项失败'
   } finally {
     if (!shouldDiscardDogHealthProfileResponse({

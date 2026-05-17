@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   canRequestBreedHealthRisks,
   getBreedHealthAttentionLabel,
+  isBreedHealthRiskEndpointUnavailable,
   normalizeBreedHealthRiskResponse,
   resolveBreedHealthRiskEmptyText,
 } from './breed-health-risks'
@@ -56,5 +57,16 @@ describe('breed-health-risks helpers', () => {
   it('uses cautious empty-state copy', () => {
     expect(resolveBreedHealthRiskEmptyText('mixed')).toContain('混血/手动填写品种')
     expect(resolveBreedHealthRiskEmptyText('no-data')).toContain('暂未收录')
+    expect(resolveBreedHealthRiskEmptyText('unavailable')).toContain('资料库正在同步')
+  })
+
+  it('detects backend versions that do not expose the health risk endpoint yet', () => {
+    expect(isBreedHealthRiskEndpointUnavailable(
+      new Error('Cannot GET /api/v1/dogs/breeds/breed-1/health-risks'),
+    )).toBe(true)
+    expect(isBreedHealthRiskEndpointUnavailable(
+      new Error('GET /api/v1/dogs/breeds/breed-1/health-risks 404'),
+    )).toBe(true)
+    expect(isBreedHealthRiskEndpointUnavailable(new Error('未找到该品种'))).toBe(false)
   })
 })

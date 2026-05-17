@@ -79,6 +79,7 @@ import BreedHealthRiskSection from '../../components/dog-profile/BreedHealthRisk
 import { dogApi } from '../../api/dogs'
 import { filterBreedsByKeyword } from '../../utils/dog-breed-search'
 import {
+  isBreedHealthRiskEndpointUnavailable,
   normalizeBreedHealthRiskResponse,
   resolveBreedHealthRiskEmptyText,
   type BreedHealthRiskLookup,
@@ -100,6 +101,7 @@ const isBreedListLoading = ref(false)
 const breedListError = ref('')
 const isBreedHealthRiskLoading = ref(false)
 const breedHealthRiskError = ref('')
+const breedHealthRiskEndpointUnavailable = ref(false)
 const latestRequestedBreedId = ref('')
 const breedHealthRiskLookup = reactive<BreedHealthRiskLookup>({
   breedId: '',
@@ -114,7 +116,9 @@ const displayedBreeds = computed(() => (
     : []
 ))
 const breedHealthRiskEmptyText = computed(() => (
-  selectedBreed.value
+  breedHealthRiskEndpointUnavailable.value
+    ? resolveBreedHealthRiskEmptyText('unavailable')
+    : selectedBreed.value
     ? resolveBreedHealthRiskEmptyText('no-data')
     : '请选择一个标准品种后查看健康关注项。'
 ))
@@ -156,6 +160,7 @@ async function loadBreedHealthRisks(breed: BreedOption) {
   latestRequestedBreedId.value = targetBreedId
   isBreedHealthRiskLoading.value = true
   breedHealthRiskError.value = ''
+  breedHealthRiskEndpointUnavailable.value = false
 
   try {
     const res: any = await dogApi.breedHealthRisks(targetBreedId)
@@ -179,6 +184,12 @@ async function loadBreedHealthRisks(breed: BreedOption) {
     breedHealthRiskLookup.breedId = breed.id
     breedHealthRiskLookup.breedName = breed.name
     breedHealthRiskLookup.risks = []
+    if (isBreedHealthRiskEndpointUnavailable(error)) {
+      breedHealthRiskError.value = ''
+      breedHealthRiskEndpointUnavailable.value = true
+      return
+    }
+
     breedHealthRiskError.value = error?.message || '加载品种健康关注项失败'
   } finally {
     if (latestRequestedBreedId.value === targetBreedId) {

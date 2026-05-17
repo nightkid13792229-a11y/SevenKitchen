@@ -38,6 +38,8 @@ export interface BreedHealthRiskLookup {
   risks: BreedHealthRiskItem[]
 }
 
+type BreedHealthRiskEmptyReason = 'mixed' | 'no-data' | 'unavailable'
+
 function readData(response: any) {
   return response?.data && response.data.breed ? response.data : response
 }
@@ -64,12 +66,27 @@ export function canRequestBreedHealthRisks(profile: {
   return Boolean(breedId && breedId !== MIXED_BREED_VIRTUAL_ID && !readString(profile.customBreedName))
 }
 
-export function resolveBreedHealthRiskEmptyText(reason: 'mixed' | 'no-data') {
+export function resolveBreedHealthRiskEmptyText(reason: BreedHealthRiskEmptyReason) {
   if (reason === 'mixed') {
     return '混血/手动填写品种暂不展示品种专属资料，可使用品种查询页查看相近标准品种。'
   }
 
+  if (reason === 'unavailable') {
+    return '品种健康资料库正在同步，暂时无法读取来源数据。'
+  }
+
   return '暂未收录该品种的健康关注项，后续会逐步补充。'
+}
+
+export function isBreedHealthRiskEndpointUnavailable(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || '')
+  const normalized = message.toLowerCase()
+
+  return normalized.includes('health-risks') && (
+    normalized.includes('cannot get') ||
+    normalized.includes('404') ||
+    normalized.includes('not found')
+  )
 }
 
 export function normalizeBreedHealthRiskResponse(response: any): BreedHealthRiskLookup {

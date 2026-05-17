@@ -87,6 +87,9 @@
               <text class="breed-risk-source__meta">
                 {{ sourcePublisherText(source) }}
               </text>
+              <text v-if="source.url" class="breed-risk-source__url">
+                {{ source.url }}
+              </text>
               <text v-if="source.accessedAt" class="breed-risk-source__date">
                 访问日期：{{ source.accessedAt }}
               </text>
@@ -365,6 +368,7 @@ function sourcePublisherText(source: BreedHealthRiskSource) {
 .breed-risk-source__name,
 .breed-risk-source__title,
 .breed-risk-source__meta,
+.breed-risk-source__url,
 .breed-risk-source__date {
   display: block;
 }
@@ -383,12 +387,17 @@ function sourcePublisherText(source: BreedHealthRiskSource) {
 }
 
 .breed-risk-source__meta,
+.breed-risk-source__url,
 .breed-risk-source__date,
 .breed-risk-sources__empty {
   margin-top: 4rpx;
   font-size: 21rpx;
   line-height: 1.5;
   color: #7b8d96;
+}
+
+.breed-risk-source__url {
+  word-break: break-all;
 }
 
 .breed-risk-sources__empty {

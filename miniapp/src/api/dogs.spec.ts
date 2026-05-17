@@ -147,6 +147,8 @@ describe('dogApi breedHealthRisks', () => {
     expect(mockedRequest).toHaveBeenCalledWith({
       url: '/dogs/breeds/breed-1/health-risks',
       method: 'GET',
+      quiet: true,
+      suppressErrorToast: true,
     })
   })
 })

@@ -30,6 +30,7 @@ export enum NutritionStandard {
   NRC_2006 = 'NRC_2006',
   FEDIAF_2021 = 'FEDIAF_2021',
   FEDIAF_2024 = 'FEDIAF_2024',
+  FEDIAF_2025 = 'FEDIAF_2025',
   AAFCO_2022 = 'AAFCO_2022',
 }
 

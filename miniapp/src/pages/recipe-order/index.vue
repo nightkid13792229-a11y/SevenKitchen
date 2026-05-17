@@ -1301,6 +1301,7 @@ function getInitials(value: string): string {
 function getNutritionStandardLabel(standard: string): string {
   const map: Record<string, string> = {
     'FEDIAF_2021': 'FEDIAF 2021',
+    'FEDIAF_2025': 'FEDIAF 2025',
     'AAFCO_2019': 'AAFCO 2019',
     'AAFCO_2021': 'AAFCO 2021',
     'AAFCO_2022': 'AAFCO 2022',

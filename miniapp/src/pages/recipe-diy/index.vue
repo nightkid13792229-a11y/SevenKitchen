@@ -858,6 +858,7 @@ function getHealthTagLabel(tagOrUuid: string): string {
 function getNutritionStandardLabel(standard: string): string {
   const map: Record<string, string> = {
     'FEDIAF_2021': 'FEDIAF 2021',
+    'FEDIAF_2025': 'FEDIAF 2025',
     'AAFCO_2021': 'AAFCO 2021',
   }
   return map[standard] || standard

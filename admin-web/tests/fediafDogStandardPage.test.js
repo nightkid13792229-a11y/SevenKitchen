@@ -45,3 +45,17 @@ test("FEDIAF 2025 dog standard page is read-only and supports review markers", (
   assert.doesNotMatch(pageSource, /v-model="scope\.row\.basis"/);
   assert.doesNotMatch(pageSource, /v-model="scope\.row\.lifeStage"/);
 });
+
+test("FEDIAF 2025 label is available in admin recipe form", () => {
+  const adminRecipeTypes = readFileSync(
+    new URL("../src/types/recipe.ts", import.meta.url),
+    "utf8",
+  );
+  const recipeForm = readFileSync(
+    new URL("../src/views/Recipes/RecipeForm.vue", import.meta.url),
+    "utf8",
+  );
+
+  assert.match(adminRecipeTypes, /FEDIAF_2025/);
+  assert.match(recipeForm, /FEDIAF 2025/);
+});

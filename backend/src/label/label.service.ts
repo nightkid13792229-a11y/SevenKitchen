@@ -84,6 +84,7 @@ const HEALTH_TAG_LABELS: Record<string, string> = {
  */
 const NUTRITION_STANDARD_LABELS: Record<string, string> = {
   FEDIAF_2021: 'FEDIAF 2021',
+  FEDIAF_2025: 'FEDIAF 2025',
   AAFCO_2023: 'AAFCO 2023',
   NRC_2006: 'NRC 2006',
 };

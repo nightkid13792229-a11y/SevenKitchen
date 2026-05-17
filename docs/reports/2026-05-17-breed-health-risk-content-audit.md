@@ -24,9 +24,9 @@
 
 金毛：现有 5 项可以作为第一版本地审核样例，其中“肿瘤相关关注”应保留为重点关注。之前没有展示肿瘤，是因为最小样例数据第一版只覆盖了 CHIC/犬种俱乐部的繁育筛查项，遗漏了研究与犬种俱乐部资料中对金毛肿瘤的长期关注。
 
-拉布拉多：当前 4 项筛查类内容可以保留；建议第一版新增“体重管理/肥胖倾向关注”为重点关注，并将 CNM 作为补充了解候选项。
+拉布拉多：原 4 项筛查类内容可以保留；已按审核结论在本地导入数据中新增“体重管理/肥胖倾向关注”为重点关注，并新增 CNM 为补充了解。
 
-雪纳瑞(小型)：当前 4 项筛查/遗传检测内容可以保留；建议第一版新增“胰腺炎/高脂血症相关关注”为重点关注，新增“泌尿结石相关关注”为建议了解。
+雪纳瑞(小型)：原 4 项筛查/遗传检测内容可以保留；已按审核结论在本地导入数据中新增“胰腺炎/高脂血症相关关注”为重点关注，新增“泌尿结石相关关注”为建议了解。
 
 ## 金毛 Golden Retriever
 
@@ -48,8 +48,8 @@
 | 肘关节发育不良 | 已收录 | 重点关注 | 保留 | Labrador Retriever Club 健康声明；AKC Sporting Group 健康测试要求；OFA Elbow Dysplasia | 与髋关节一起作为核心关节项展示。 |
 | 运动诱发性虚脱 EIC | 已收录 | 重点关注 | 保留 | Labrador Retriever Club 健康声明；AKC 健康测试要求；OFA EIC | 强调高兴奋/高强度运动后的异常需停运动并就医。 |
 | 遗传性眼部疾病 / PRA | 已收录 | 建议了解 | 保留，详情可补充 prcd-PRA | Labrador Retriever Club 健康声明；LRC 健康术语；AKC 健康测试要求；OFA Eye Disease | 不把所有眼病混成 PRA；PRA 作为其中一个可检测方向。 |
-| 体重管理/肥胖倾向关注 | 未收录 | 重点关注 | 建议新增第一版 | Cell Metabolism POMC 研究；Broad Institute 论文摘要 | 不是“疾病诊断”，应表述为体重管理关注；强调食量、体况评分、运动和兽医营养建议。 |
-| 中心核肌病 CNM | 未收录 | 补充了解 | 建议新增为补充了解，或与 EIC 同属遗传肌肉/运动异常组 | Labrador Retriever Club 健康声明；LRC 新犬主资料；AKC 健康测试要求 | 偏遗传检测和繁育沟通，避免让普通主人误解为常见症状。 |
+| 体重管理/肥胖倾向关注 | 已收录 | 重点关注 | 已加入本地导入 fixture | Cell Metabolism POMC 研究；Broad Institute 论文摘要 | 不是“疾病诊断”，应表述为体重管理关注；强调食量、体况评分、运动和兽医营养建议。 |
+| 中心核肌病 CNM | 已收录 | 补充了解 | 已加入本地导入 fixture | OMIA；Labrador Retriever Club 健康声明；The Kennel Club CNM DNA test | 偏遗传检测和繁育沟通，避免让普通主人误解为常见症状。 |
 | 心脏筛查 | 未收录 | 建议了解 | 第一版可暂缓，后续扩展 | LRC 健康声明提到许多成员选择心脏检查；LRC 新犬主资料提到 cardiac examination | 不是当前核心 CHIC 项，先不放进最小样例。 |
 | 肿瘤、胃扩张扭转、耳部感染 | 未收录 | 暂不第一版展示 | 后续单独审 | 需进一步限定来源和犬种特异性 | 容易变成泛犬种常见病列表，第一版先不展示。 |
 
@@ -61,16 +61,16 @@
 | 心脏健康筛查 | 已收录 | 建议了解 | 保留 | AMSC 2024 健康声明；AKC Terrier Group 健康测试要求；OFA Cardiac Disease | 表述为推荐筛查项，不暗示每只犬存在心脏病。 |
 | 先天性肌强直 | 已收录 | 补充了解 | 保留 | AMSC 2024 健康声明；University of Minnesota Miniature Schnauzer Health Panel | 偏遗传检测，详情页展示即可，不做默认强提醒。 |
 | 鸟分枝杆菌复合体 MAC 易感 | 已收录 | 补充了解 | 保留 | AMSC 2024 健康声明；University of Minnesota Miniature Schnauzer Health Panel；The Kennel Club DNA testing scheme | 说明是特定遗传易感，不把感染风险泛化。 |
-| 胰腺炎/高脂血症相关关注 | 未收录 | 重点关注 | 建议新增第一版 | Merck Veterinary Manual Pancreatitis；AKC CHF Miniature Schnauzer；University of Minnesota hyperlipidemia 研究资料 | 适合用户日常管理，尤其饮食脂肪、呕吐腹痛、精神食欲异常等就医提示；不替代兽医诊断。 |
-| 泌尿结石/草酸钙尿石关注 | 未收录 | 建议了解 | 建议新增第一版 | AKC CHF Miniature Schnauzer grant；Morris Animal Foundation Miniature Schnauzer bladder stones；American Journal of Veterinary Research 摘要 | 提示血尿、排尿困难、频繁排尿需就医；避免自行调整处方饮食。 |
+| 胰腺炎/高脂血症相关关注 | 已收录 | 重点关注 | 已加入本地导入 fixture | Merck Veterinary Manual Pancreatitis；AKC CHF Miniature Schnauzer；University of Minnesota hyperlipidemia 研究资料 | 适合用户日常管理，尤其饮食脂肪、呕吐腹痛、精神食欲异常等就医提示；不替代兽医诊断。 |
+| 泌尿结石/草酸钙尿石关注 | 已收录 | 建议了解 | 已加入本地导入 fixture | AMSC Urolithiasis；Morris Animal Foundation Miniature Schnauzer bladder stones；American Journal of Veterinary Research 摘要 | 提示血尿、排尿困难、频繁排尿需就医；避免自行调整处方饮食。 |
 | 糖尿病 | 未收录 | 建议了解或后续扩展 | 第一版可暂缓，作为胰腺炎/高脂血症条目的关联风险补充 | Hill's Vet Diabetes Mellitus 客户资料；AKC CHF Miniature Schnauzer | 证据支持品种倾向，但用户展示中若单列可能过多，建议第二批扩展。 |
 | 皮肤粉刺综合征、牙周问题、其他常见小型犬问题 | 未收录 | 暂不第一版展示 | 后续再审 | 需更多权威来源和犬种特异性确认 | 第一版避免扩展成泛健康百科。 |
 
 ## 建议进入下一轮本地数据更新的变更
 
 1. 金毛：保持当前 5 项；不再回退肿瘤相关关注。
-2. 拉布拉多：新增“体重管理/肥胖倾向关注”为重点关注；新增 CNM 为补充了解候选。
-3. 雪纳瑞(小型)：新增“胰腺炎/高脂血症相关关注”为重点关注；新增“泌尿结石相关关注”为建议了解。
+2. 拉布拉多：已新增“体重管理/肥胖倾向关注”为重点关注；已新增 CNM 为补充了解。
+3. 雪纳瑞(小型)：已新增“胰腺炎/高脂血症相关关注”为重点关注；已新增“泌尿结石相关关注”为建议了解。
 4. 小程序标签颜色建议：
    - 重点关注：暖橙/红橙，强调优先阅读。
    - 建议了解：蓝绿色或绿色，表示建议阅读但不制造紧张感。
@@ -83,6 +83,7 @@
 - AKC Sporting Group Health Testing Requirements: https://www.akc.org/breeder-programs/breed-health-testing-requirements/sporting-group-health-testing-requirements/
 - AKC Terrier Group Health Testing Requirements: https://www.akc.org/breeder-programs/breed-health-testing-requirements/terrier-group-health-testing-requirements/
 - American Miniature Schnauzer Club 2024 Health Statement: https://s3.amazonaws.com/cdn-origin-etr.akc.org/wp-content/uploads/2024/07/18134123/American-Miniature-Schnauzer-Club-Inc.-Health-Statement-7-24-Final.pdf
+- American Miniature Schnauzer Club: Urolithiasis: https://amsc.us/general-health/urolithiasis/
 - Broad Institute / Cell Metabolism: A Deletion in the Canine POMC Gene Is Associated with Weight and Appetite in Obesity-Prone Labrador Retriever Dogs: https://www.broadinstitute.org/publications/broad8179
 - Golden Retriever Club of America: Health Screenings for the Parents of a Litter: https://grca.org/about-the-breed/health-research/health-screenings-for-the-parents-of-a-litter/
 - Golden Retriever Club of America: Understanding Cancer in Golden Retrievers: https://grca.org/about-the-breed/health-research/understanding-cancer-in-golden-retrievers/
@@ -93,7 +94,9 @@
 - Morris Animal Foundation: Detecting and Preventing Bladder Stones in Miniature Schnauzers: https://www.morrisanimalfoundation.org/study/detecting-and-preventing-bladder-stones-miniature-schnauzers
 - Morris Animal Foundation: Golden Retriever Lifetime Study: https://www.morrisanimalfoundation.org/study/golden-retriever-lifetime-study
 - OFA CHIC Program: https://ofa.org/chic-programs/
+- OMIA: Centronuclear myopathy, HACD1-related in Canis lupus familiaris: https://omia.org/OMIA001374/9615/
 - PLOS One: Association of cancer-related mortality, age and gonadectomy in golden retriever dogs at a veterinary academic center (1989-2016): https://journals.plos.org/plosone/article?id=10.1371/journal.pone.0192578
+- The Kennel Club: DNA test - CNM (Centronuclear myopathy): https://www.royalkennelclub.com/health-and-dog-care/health-dog-care/health/getting-started-with-health-testing-and-screening/dna-testing/dna-test-cnm/
 - University of Minnesota: Miniature Schnauzer Health Panel: https://vetmed.umn.edu/research/research-labs/canine-genetics-lab/canine-genetics-testing/miniature-schnauzer-health-panel
 - University of Minnesota: Prevalence of calcium oxalate uroliths in miniature schnauzers: https://experts.umn.edu/en/publications/prevalence-of-calcium-oxalate-uroliths-in-miniature-schnauzers/
 - University of Minnesota: Resolving the major dyslipidemia phenotypes and genetic risk factors for familial hyperlipidemia in Miniature Schnauzers: https://conservancy.umn.edu/items/80d090de-9f17-4990-8e5d-8754f536575f

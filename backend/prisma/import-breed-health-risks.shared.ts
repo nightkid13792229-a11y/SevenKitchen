@@ -161,6 +161,35 @@ const labradorHealthStatementSource = source({
   note: '拉布拉多 AKC 父俱乐部健康声明，列出 CHIC 相关筛查项目。',
 });
 
+const broadPOMCWeightSource = source({
+  sourceType: BreedHealthRiskSourceType.VETERINARY_LITERATURE,
+  sourceName: 'Broad Institute POMC Study',
+  publisher: 'Broad Institute',
+  title:
+    'A Deletion in the Canine POMC Gene Is Associated with Weight and Appetite in Obesity-Prone Labrador Retriever Dogs',
+  url: 'https://www.broadinstitute.org/publications/broad8179',
+  note: '同行评议研究摘要，说明拉布拉多 POMC 缺失与体重、脂肪量和食物动机相关。',
+});
+
+const omiaCnmSource = source({
+  sourceType: BreedHealthRiskSourceType.OMIA,
+  sourceName: 'OMIA Centronuclear Myopathy',
+  publisher: 'Online Mendelian Inheritance in Animals',
+  title:
+    'Centronuclear myopathy, HACD1-related in Canis lupus familiaris (dog)',
+  url: 'https://omia.org/OMIA001374/9615/',
+  note: 'OMIA 遗传病条目，记录拉布拉多中心核肌病的遗传方式、基因和变异证据。',
+});
+
+const kennelClubCnmSource = source({
+  sourceType: BreedHealthRiskSourceType.BREED_CLUB,
+  sourceName: 'The Kennel Club CNM',
+  publisher: 'The Kennel Club',
+  title: 'DNA test - CNM (Centronuclear myopathy)',
+  url: 'https://www.royalkennelclub.com/health-and-dog-care/health-dog-care/health/getting-started-with-health-testing-and-screening/dna-testing/dna-test-cnm/',
+  note: '英国犬业协会资料，说明 CNM 临床表现、常染色体隐性遗传和拉布拉多相关检测。',
+});
+
 const miniatureSchnauzerHealthStatementSource = source({
   sourceType: BreedHealthRiskSourceType.BREED_CLUB,
   sourceName: 'AMSC Health Statement',
@@ -195,6 +224,61 @@ const kennelClubMacSource = source({
   title: 'New DNA Testing Scheme for the Miniature Schnauzer',
   url: 'https://www.royalkennelclub.com/about-us/resources/media-centre/2017/january/new-dna-testing-scheme-for-the-miniature-schnauzer/',
   note: '说明迷你雪纳瑞 MAC DNA 检测计划。',
+});
+
+const merckPancreatitisSource = source({
+  sourceType: BreedHealthRiskSourceType.VETERINARY_LITERATURE,
+  sourceName: 'Merck Veterinary Manual',
+  publisher: 'Merck Veterinary Manual',
+  title: 'Pancreatitis and Other Disorders of the Pancreas in Dogs',
+  url: 'https://www.merckvetmanual.com/dog-owners/digestive-disorders-of-dogs/pancreatitis-and-other-disorders-of-the-pancreas-in-dogs',
+  note: '兽医参考资料，说明犬胰腺炎风险因素，并列出迷你雪纳瑞等犬种具有较高发生率。',
+});
+
+const akcChfMiniatureSchnauzerSource = source({
+  sourceType: BreedHealthRiskSourceType.VETERINARY_LITERATURE,
+  sourceName: 'AKC Canine Health Foundation',
+  publisher: 'AKC Canine Health Foundation',
+  title: 'Miniature Schnauzer Research',
+  url: 'https://www.akcchf.org/educational-resources/library/articles/breed/miniature-schnauzer/',
+  note: 'AKC 犬健康基金会资料，列出迷你雪纳瑞高脂血症和草酸钙尿石相关研究项目。',
+});
+
+const umnMiniatureSchnauzerHyperlipidemiaSource = source({
+  sourceType: BreedHealthRiskSourceType.VETERINARY_LITERATURE,
+  sourceName: 'UMN Miniature Schnauzer Hyperlipidemia',
+  publisher: 'University of Minnesota',
+  title:
+    'Resolving the major dyslipidemia phenotypes and genetic risk factors for familial hyperlipidemia in Miniature Schnauzers',
+  url: 'https://conservancy.umn.edu/items/80d090de-9f17-4990-8e5d-8754f536575f',
+  note: '明尼苏达大学兽医博士论文资料，说明迷你雪纳瑞高脂血症常见并可能与胰腺炎等问题相关。',
+});
+
+const amscUrolithiasisSource = source({
+  sourceType: BreedHealthRiskSourceType.BREED_CLUB,
+  sourceName: 'AMSC Urolithiasis',
+  publisher: 'American Miniature Schnauzer Club',
+  title: 'Urolithiasis',
+  url: 'https://amsc.us/general-health/urolithiasis/',
+  note: '迷你雪纳瑞犬种俱乐部资料，面向犬主说明尿路结石可能见于该犬种。',
+});
+
+const umnMiniatureSchnauzerCalciumOxalateSource = source({
+  sourceType: BreedHealthRiskSourceType.VETERINARY_LITERATURE,
+  sourceName: 'UMN Calcium Oxalate Uroliths',
+  publisher: 'University of Minnesota',
+  title: 'Prevalence of calcium oxalate uroliths in miniature schnauzers',
+  url: 'https://experts.umn.edu/en/publications/prevalence-of-calcium-oxalate-uroliths-in-miniature-schnauzers/',
+  note: '同行评议论文摘要，报告迷你雪纳瑞草酸钙尿石相对其他犬种更常见。',
+});
+
+const morrisMiniatureSchnauzerBladderStoneSource = source({
+  sourceType: BreedHealthRiskSourceType.VETERINARY_LITERATURE,
+  sourceName: 'Morris Miniature Schnauzer Bladder Stones',
+  publisher: 'Morris Animal Foundation',
+  title: 'Detecting and Preventing Bladder Stones in Miniature Schnauzers',
+  url: 'https://www.morrisanimalfoundation.org/study/detecting-and-preventing-bladder-stones-miniature-schnauzers',
+  note: 'Morris Animal Foundation 研究项目资料，说明迷你雪纳瑞草酸钙膀胱结石风险和复发关注。',
 });
 
 const ofaHipDysplasiaSource = source({
@@ -343,6 +427,70 @@ export const BREED_HEALTH_RISK_FIXTURE_SET: BreedHealthRiskFixtureSet = {
       isActive: true,
     },
     {
+      key: 'weight-management-awareness',
+      id: 'breed-health-condition-weight-management-awareness',
+      nameCn: '体重管理关注',
+      nameEn: 'Weight Management Awareness',
+      aliases: ['肥胖倾向', '体况管理', '食欲管理', 'POMC'],
+      category: '体况与代谢',
+      summary:
+        '部分拉布拉多相关研究提示，体重和食物动机值得作为日常健康管理重点关注。',
+      commonSigns: ['体重持续增加', '体况评分偏高', '强烈讨食或容易过量进食'],
+      screeningAdvice:
+        '可定期记录体重和体况评分；如体重变化明显，应咨询兽医或营养专业建议。',
+      careAdvice:
+        '按阶段和活动量管理能量摄入，避免高热量零食叠加；不要把遗传倾向理解为无法管理。',
+      isActive: true,
+    },
+    {
+      key: 'centronuclear-myopathy',
+      id: 'breed-health-condition-centronuclear-myopathy',
+      nameCn: '中心核肌病',
+      nameEn: 'Centronuclear Myopathy',
+      aliases: ['CNM', 'HMLR', '拉布拉多遗传性肌病'],
+      category: '神经肌肉',
+      summary:
+        '中心核肌病是拉布拉多已知的常染色体隐性遗传性肌肉疾病，可通过相关 DNA 检测用于繁育和风险沟通。',
+      commonSigns: ['幼犬期步态僵硬', '肌肉无力', '运动耐受下降或受冷后虚弱'],
+      screeningAdvice:
+        '拉布拉多可与兽医或繁育者讨论 CNM DNA 检测，尤其是繁育或来源评估场景。',
+      careAdvice:
+        '如幼犬出现持续步态僵硬、无力或运动异常，应由兽医排查神经肌肉疾病。',
+      isActive: true,
+    },
+    {
+      key: 'pancreatitis-hyperlipidemia-awareness',
+      id: 'breed-health-condition-pancreatitis-hyperlipidemia-awareness',
+      nameCn: '胰腺炎/高脂血症相关关注',
+      nameEn: 'Pancreatitis and Hyperlipidemia Awareness',
+      aliases: ['胰腺炎', '高脂血症', '高甘油三酯', '低脂饮食关注'],
+      category: '消化与代谢',
+      summary:
+        '迷你雪纳瑞资料中多次提到高脂血症和胰腺炎相关健康关注，适合在饮食和症状识别上提前了解。',
+      commonSigns: ['呕吐或食欲下降', '腹痛或弓背', '精神沉郁', '腹泻或虚弱'],
+      screeningAdvice:
+        '可与兽医讨论体检时是否需要血脂或胰腺相关检查，尤其是有呕吐、腹痛或高脂饮食暴露时。',
+      careAdvice:
+        '避免突然摄入高脂食物；出现持续呕吐、腹痛或精神差时应及时就医。',
+      isActive: true,
+    },
+    {
+      key: 'urinary-stone-awareness',
+      id: 'breed-health-condition-urinary-stone-awareness',
+      nameCn: '泌尿结石相关关注',
+      nameEn: 'Urinary Stone Awareness',
+      aliases: ['尿路结石', '膀胱结石', '草酸钙尿石', 'urolithiasis'],
+      category: '泌尿系统',
+      summary:
+        '迷你雪纳瑞相关研究和犬种资料提示，尿路结石尤其草酸钙结石值得作为品种健康资料了解。',
+      commonSigns: ['频繁排尿', '排尿困难', '血尿', '排尿疼痛或舔舐尿道口'],
+      screeningAdvice:
+        '如出现尿频、血尿或排尿困难，应尽快就医；是否需要尿检、影像或饮食方案应由兽医判断。',
+      careAdvice:
+        '不要自行使用处方泌尿饮食或补充剂；结石类型不同，处理方式可能完全不同。',
+      isActive: true,
+    },
+    {
       key: 'myotonia-congenita',
       id: 'breed-health-condition-myotonia-congenita',
       nameCn: '先天性肌强直',
@@ -430,6 +578,36 @@ export const BREED_HEALTH_RISK_FIXTURE_SET: BreedHealthRiskFixtureSet = {
       displayOrder: 40,
       isPublished: true,
       sources: [labradorHealthStatementSource, ofaEyeDiseaseSource],
+    },
+    {
+      breedKey: 'labrador-retriever',
+      breedNames: ['拉布拉多', '拉拉', '拉布拉多犬', 'Labrador Retriever'],
+      conditionKey: 'weight-management-awareness',
+      attentionPriority: BreedHealthAttentionPriority.KEY_ATTENTION,
+      oneLineSummary:
+        '拉布拉多相关研究提示，体重、脂肪量和食物动机适合作为日常管理重点。',
+      breedSpecificReason:
+        '公开研究将拉布拉多 POMC 缺失与体重和食物动机联系起来；对鲜食喂养场景，体况监测和能量管理尤其有实际价值。',
+      displayOrder: 50,
+      isPublished: true,
+      sources: [broadPOMCWeightSource],
+    },
+    {
+      breedKey: 'labrador-retriever',
+      breedNames: ['拉布拉多', '拉拉', '拉布拉多犬', 'Labrador Retriever'],
+      conditionKey: 'centronuclear-myopathy',
+      attentionPriority: BreedHealthAttentionPriority.SUPPLEMENTAL_AWARENESS,
+      oneLineSummary:
+        '拉布拉多健康声明将 CNM 列为推荐附加检测，OMIA 也记录了该遗传病证据。',
+      breedSpecificReason:
+        'CNM 更偏遗传检测和繁育沟通，但对幼犬步态僵硬、肌肉无力等异常识别也有补充阅读价值。',
+      displayOrder: 60,
+      isPublished: true,
+      sources: [
+        omiaCnmSource,
+        labradorHealthStatementSource,
+        kennelClubCnmSource,
+      ],
     },
     {
       breedKey: 'golden-retriever',
@@ -585,6 +763,52 @@ export const BREED_HEALTH_RISK_FIXTURE_SET: BreedHealthRiskFixtureSet = {
       displayOrder: 40,
       isPublished: true,
       sources: [miniatureSchnauzerHealthStatementSource, kennelClubMacSource],
+    },
+    {
+      breedKey: 'miniature-schnauzer',
+      breedNames: [
+        '雪纳瑞(小型)',
+        '雪纳瑞（迷你）',
+        '迷你雪纳瑞',
+        '小型雪纳瑞',
+        'Miniature Schnauzer',
+      ],
+      conditionKey: 'pancreatitis-hyperlipidemia-awareness',
+      attentionPriority: BreedHealthAttentionPriority.KEY_ATTENTION,
+      oneLineSummary:
+        '兽医资料和研究资料均提示迷你雪纳瑞需要关注胰腺炎与高脂血症相关风险。',
+      breedSpecificReason:
+        '该关注项与饮食脂肪、体况、呕吐腹痛等日常管理和就医判断有关，适合作为第一版重点阅读项。',
+      displayOrder: 50,
+      isPublished: true,
+      sources: [
+        merckPancreatitisSource,
+        akcChfMiniatureSchnauzerSource,
+        umnMiniatureSchnauzerHyperlipidemiaSource,
+      ],
+    },
+    {
+      breedKey: 'miniature-schnauzer',
+      breedNames: [
+        '雪纳瑞(小型)',
+        '雪纳瑞（迷你）',
+        '迷你雪纳瑞',
+        '小型雪纳瑞',
+        'Miniature Schnauzer',
+      ],
+      conditionKey: 'urinary-stone-awareness',
+      attentionPriority: BreedHealthAttentionPriority.RECOMMENDED_AWARENESS,
+      oneLineSummary:
+        '迷你雪纳瑞犬种资料和研究资料提示，尿路结石尤其草酸钙结石值得了解。',
+      breedSpecificReason:
+        '泌尿结石与血尿、尿频、排尿困难等症状相关；处理方式依结石类型而异，应避免自行用药或自行更换处方饮食。',
+      displayOrder: 60,
+      isPublished: true,
+      sources: [
+        amscUrolithiasisSource,
+        umnMiniatureSchnauzerCalciumOxalateSource,
+        morrisMiniatureSchnauzerBladderStoneSource,
+      ],
     },
   ],
 };

@@ -62,6 +62,69 @@ describe('breed health risk import fixtures', () => {
     );
   });
 
+  it('includes source-backed owner-management and CNM awareness for labrador retrievers', () => {
+    const labradorRisks = BREED_HEALTH_RISK_FIXTURE_SET.risks.filter(
+      (risk) => risk.breedKey === 'labrador-retriever',
+    );
+    const weightCondition = BREED_HEALTH_RISK_FIXTURE_SET.conditions.find(
+      (condition) => condition.key === 'weight-management-awareness',
+    );
+    const cnmCondition = BREED_HEALTH_RISK_FIXTURE_SET.conditions.find(
+      (condition) => condition.key === 'centronuclear-myopathy',
+    );
+
+    expect(weightCondition?.nameCn).toBe('体重管理关注');
+    expect(cnmCondition?.nameCn).toBe('中心核肌病');
+    expect(
+      labradorRisks.find(
+        (risk) => risk.conditionKey === 'weight-management-awareness',
+      )?.attentionPriority,
+    ).toBe('KEY_ATTENTION');
+    expect(
+      labradorRisks.find(
+        (risk) => risk.conditionKey === 'centronuclear-myopathy',
+      )?.attentionPriority,
+    ).toBe('SUPPLEMENTAL_AWARENESS');
+    expect(
+      labradorRisks
+        .find((risk) => risk.conditionKey === 'centronuclear-myopathy')
+        ?.sources.map((source) => source.sourceType),
+    ).toContain('OMIA');
+  });
+
+  it('includes source-backed pancreatitis and urinary stone awareness for miniature schnauzers', () => {
+    const miniatureSchnauzerRisks = BREED_HEALTH_RISK_FIXTURE_SET.risks.filter(
+      (risk) => risk.breedKey === 'miniature-schnauzer',
+    );
+    const pancreatitisCondition = BREED_HEALTH_RISK_FIXTURE_SET.conditions.find(
+      (condition) => condition.key === 'pancreatitis-hyperlipidemia-awareness',
+    );
+    const urinaryStoneCondition = BREED_HEALTH_RISK_FIXTURE_SET.conditions.find(
+      (condition) => condition.key === 'urinary-stone-awareness',
+    );
+
+    expect(pancreatitisCondition?.nameCn).toBe('胰腺炎/高脂血症相关关注');
+    expect(urinaryStoneCondition?.nameCn).toBe('泌尿结石相关关注');
+    expect(
+      miniatureSchnauzerRisks.find(
+        (risk) => risk.conditionKey === 'pancreatitis-hyperlipidemia-awareness',
+      )?.attentionPriority,
+    ).toBe('KEY_ATTENTION');
+    expect(
+      miniatureSchnauzerRisks.find(
+        (risk) => risk.conditionKey === 'urinary-stone-awareness',
+      )?.attentionPriority,
+    ).toBe('RECOMMENDED_AWARENESS');
+    expect(
+      miniatureSchnauzerRisks
+        .find(
+          (risk) =>
+            risk.conditionKey === 'pancreatitis-hyperlipidemia-awareness',
+        )
+        ?.sources.map((source) => source.sourceName),
+    ).toEqual(expect.arrayContaining(['Merck Veterinary Manual']));
+  });
+
   it('resolves local dog breed rows by name or alias before importing risks', () => {
     const plan = buildBreedHealthRiskImportPlan(
       BREED_HEALTH_RISK_FIXTURE_SET,

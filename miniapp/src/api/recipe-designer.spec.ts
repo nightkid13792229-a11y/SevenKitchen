@@ -56,7 +56,7 @@ describe('recipeDesignerApi', () => {
     })
     expect(mockedRequest).toHaveBeenNthCalledWith(3, {
       url: `/recipe-designer/drafts/${draftId}`,
-      method: 'PUT',
+      method: 'PATCH',
       data: draftPayload,
     })
     expect(mockedRequest).toHaveBeenNthCalledWith(4, {
@@ -66,7 +66,7 @@ describe('recipeDesignerApi', () => {
     })
     expect(mockedRequest).toHaveBeenNthCalledWith(5, {
       url: `/recipe-designer/items/${itemId}`,
-      method: 'PUT',
+      method: 'PATCH',
       data: itemPayload,
     })
     expect(mockedRequest).toHaveBeenNthCalledWith(6, {

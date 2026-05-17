@@ -38,12 +38,12 @@ export const recipeDesignerApi = {
   listDrafts: () => request({ url: '/recipe-designer/drafts', method: 'GET' }),
   createDraft: (data: DesignRecipeDraftPayload) =>
     request({ url: '/recipe-designer/drafts', method: 'POST', data }),
-  updateDraft: (draftId: string, data: DesignRecipeDraftPayload) =>
-    request({ url: `/recipe-designer/drafts/${draftId}`, method: 'PUT', data }),
+  updateDraft: (draftId: string, data: Partial<DesignRecipeDraftPayload>) =>
+    request({ url: `/recipe-designer/drafts/${draftId}`, method: 'PATCH', data }),
   addItem: (draftId: string, data: DesignRecipeItemPayload) =>
     request({ url: `/recipe-designer/drafts/${draftId}/items`, method: 'POST', data }),
-  updateItem: (itemId: string, data: DesignRecipeItemPayload) =>
-    request({ url: `/recipe-designer/items/${itemId}`, method: 'PUT', data }),
+  updateItem: (itemId: string, data: Partial<DesignRecipeItemPayload>) =>
+    request({ url: `/recipe-designer/items/${itemId}`, method: 'PATCH', data }),
   removeItem: (itemId: string) =>
     request({ url: `/recipe-designer/items/${itemId}`, method: 'DELETE' }),
   assessDraft: (draftId: string) =>

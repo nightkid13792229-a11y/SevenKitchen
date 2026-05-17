@@ -207,10 +207,87 @@ model DogBreed {
   isCommon             Boolean         @default(false) @map("is_common")
   createdAt            DateTime        @default(now()) @map("created_at")
   updatedAt            DateTime        @updatedAt @map("updated_at")
+  healthRisks          BreedHealthRisk[]
 
   @@index([sizeCategory])
   @@index([isCommon])
   @@map("dog_breed")
+}
+
+enum BreedHealthAttentionPriority {
+  KEY_ATTENTION
+  RECOMMENDED_AWARENESS
+  SUPPLEMENTAL_AWARENESS
+}
+
+enum BreedHealthRiskSourceType {
+  CIDD
+  OFA_CHIC
+  OMIA
+  WSAVA
+  VETERINARY_LITERATURE
+  BREED_CLUB
+  OTHER
+}
+
+model BreedHealthCondition {
+  id              String             @id @default(uuid()) @map("id")
+  nameCn          String             @map("name_cn") @db.VarChar(120)
+  nameEn          String?            @map("name_en") @db.VarChar(160)
+  aliases         String[]           @default([]) @map("aliases")
+  category        String             @map("category") @db.VarChar(80)
+  summary         String             @map("summary")
+  commonSigns     String[]           @default([]) @map("common_signs")
+  screeningAdvice String?            @map("screening_advice")
+  careAdvice      String?            @map("care_advice")
+  isActive        Boolean            @default(true) @map("is_active")
+  createdAt       DateTime           @default(now()) @map("created_at")
+  updatedAt       DateTime           @updatedAt @map("updated_at")
+  risks           BreedHealthRisk[]
+
+  @@index([category])
+  @@index([isActive])
+  @@map("breed_health_condition")
+}
+
+model BreedHealthRisk {
+  id                   String                       @id @default(uuid()) @map("id")
+  breedId              String                       @map("breed_id")
+  conditionId          String                       @map("condition_id")
+  attentionPriority    BreedHealthAttentionPriority @map("attention_priority")
+  oneLineSummary       String                       @map("one_line_summary")
+  breedSpecificReason  String?                      @map("breed_specific_reason")
+  displayOrder         Int                          @default(0) @map("display_order")
+  isPublished          Boolean                      @default(false) @map("is_published")
+  createdAt            DateTime                     @default(now()) @map("created_at")
+  updatedAt            DateTime                     @updatedAt @map("updated_at")
+  breed                DogBreed                     @relation(fields: [breedId], references: [id], onDelete: Cascade)
+  condition            BreedHealthCondition         @relation(fields: [conditionId], references: [id], onDelete: Cascade)
+  sources              BreedHealthRiskSource[]
+
+  @@unique([breedId, conditionId])
+  @@index([breedId, isPublished, displayOrder])
+  @@index([conditionId])
+  @@map("breed_health_risk")
+}
+
+model BreedHealthRiskSource {
+  id          String                    @id @default(uuid()) @map("id")
+  riskId      String                    @map("risk_id")
+  sourceType  BreedHealthRiskSourceType @map("source_type")
+  sourceName  String                    @map("source_name") @db.VarChar(120)
+  publisher   String?                   @map("publisher") @db.VarChar(160)
+  title       String                    @map("title") @db.VarChar(240)
+  url         String                    @map("url")
+  accessedAt  DateTime                  @map("accessed_at")
+  note        String?                   @map("note")
+  createdAt   DateTime                  @default(now()) @map("created_at")
+  updatedAt   DateTime                  @updatedAt @map("updated_at")
+  risk        BreedHealthRisk           @relation(fields: [riskId], references: [id], onDelete: Cascade)
+
+  @@index([riskId])
+  @@index([sourceType])
+  @@map("breed_health_risk_source")
 }
 
 model Dog {

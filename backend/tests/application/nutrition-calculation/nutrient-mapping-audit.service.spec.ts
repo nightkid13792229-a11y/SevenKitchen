@@ -117,6 +117,7 @@ describe('NutrientMappingAuditService', () => {
     expect(result.items[0]).toMatchObject({
       nutrientCode: 'unknownNutrient',
       reviewStatus: 'UNREVIEWED',
+      mappingType: 'UNSUPPORTED',
       mappingStatus: 'MISSING_MAPPING',
       sourceFieldPaths: [],
     });

@@ -165,7 +165,7 @@ export class NutrientMappingAuditService {
       return 'UNSUPPORTED';
     }
 
-    return 'DIRECT';
+    return 'UNSUPPORTED';
   }
 
   private getSourceFieldPaths(
@@ -196,12 +196,12 @@ export class NutrientMappingAuditService {
     sourceFieldPaths: string[],
     missingFieldPaths: string[],
   ): MappingStatus {
-    if (mappingType === 'UNSUPPORTED') {
-      return 'UNSUPPORTED_EXPRESSION';
-    }
-
     if (sourceFieldPaths.length === 0 || missingFieldPaths.length > 0) {
       return 'MISSING_MAPPING';
+    }
+
+    if (mappingType === 'UNSUPPORTED') {
+      return 'UNSUPPORTED_EXPRESSION';
     }
 
     return 'RESOLVED';

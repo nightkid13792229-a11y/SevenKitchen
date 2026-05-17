@@ -41,7 +41,7 @@ describe('RecipeDesignerService', () => {
     }).compile();
 
     service = moduleRef.get(RecipeDesignerService);
-    jest.clearAllMocks();
+    jest.resetAllMocks();
     prisma.$transaction.mockImplementation(async (callback: any) =>
       callback(prisma),
     );
@@ -400,6 +400,114 @@ describe('RecipeDesignerService', () => {
     expect(prisma.recipe.create.mock.calls[0][0].data.items.create[0]).not.toEqual(
       expect.objectContaining({ ingredientId: 'food-1' }),
     );
+  });
+
+  it('records review approval when publishing a non-compliant draft with a review note', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        items: [item()],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue([
+      {
+        nutrientKey: 'calcium',
+        label: '钙',
+        category: 'MINERAL',
+        expressionBasis: 'PER_1000_KCAL_ME',
+        unit: 'mg',
+        minValue: 10000,
+        maxValue: null,
+        fieldPaths: ['minerals.calcium'],
+      },
+    ]);
+    prisma.designRecipe.update.mockResolvedValue(draft({ status: 'PUBLISHED' }));
+    prisma.recipe.create.mockResolvedValue({
+      id: 'recipe-row-1',
+      recipeId: 'design-1',
+      version: 1,
+    });
+    prisma.designRecipePublishSnapshot.create.mockResolvedValue({
+      id: 'snapshot-1',
+    });
+
+    await service.publishDraft(
+      'design-1',
+      { reviewNote: '人工确认钙不足但允许第一版发布' },
+      'staff-2',
+    );
+
+    expect(prisma.recipe.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        status: 'PUBLIC',
+      }),
+    });
+    expect(prisma.designRecipePublishSnapshot.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        reviewStatus: 'APPROVED',
+        reviewNote: '人工确认钙不足但允许第一版发布',
+        publishedBy: 'staff-2',
+      }),
+    });
+    expect(prisma.designRecipe.update).toHaveBeenLastCalledWith({
+      where: { id: 'design-1' },
+      data: expect.objectContaining({
+        status: 'PUBLISHED',
+        reviewStatus: 'APPROVED',
+        reviewedBy: 'staff-2',
+        reviewedAt: expect.any(Date),
+      }),
+      include: expect.any(Object),
+    });
+  });
+
+  it('publishes using the same loaded draft that was assessed', async () => {
+    const firstLoadedItem = item({
+      id: 'item-loaded-for-publish',
+      weightG: 100,
+      nutritionFood: {
+        ...item().nutritionFood,
+        id: 'food-loaded-for-publish',
+        mappings: [{ ingredientId: 'ingredient-loaded', isPrimary: true }],
+      },
+    });
+    const staleSecondLoadItem = item({
+      id: 'item-stale-second-load',
+      weightG: 200,
+      nutritionFood: {
+        ...item().nutritionFood,
+        id: 'food-stale-second-load',
+        mappings: [{ ingredientId: 'ingredient-stale', isPrimary: true }],
+      },
+    });
+    prisma.designRecipe.findUnique
+      .mockResolvedValueOnce(draft({ items: [firstLoadedItem] }))
+      .mockResolvedValueOnce(draft({ items: [staleSecondLoadItem] }));
+    targetProvider.getTargets.mockResolvedValue(compliantTargets());
+    prisma.designRecipe.update.mockResolvedValue(draft({ status: 'PUBLISHED' }));
+    prisma.recipe.create.mockResolvedValue({
+      id: 'recipe-row-1',
+      recipeId: 'design-1',
+      version: 1,
+    });
+    prisma.designRecipePublishSnapshot.create.mockResolvedValue({
+      id: 'snapshot-1',
+    });
+
+    await service.publishDraft('design-1', {}, 'staff-2');
+
+    expect(prisma.designRecipe.findUnique).toHaveBeenCalledTimes(1);
+    expect(prisma.recipe.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        items: {
+          create: [
+            expect.objectContaining({
+              ingredientId: 'ingredient-loaded',
+              ratioPercent: 100,
+            }),
+          ],
+        },
+      }),
+    });
   });
 
   it('rejects publishing when a nutrition food has no ingredient mapping', async () => {

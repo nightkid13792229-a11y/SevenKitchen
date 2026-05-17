@@ -112,6 +112,10 @@ export class PrismaFediafTargetProvider implements FediafTargetProvider {
   }
 
   private mapEntry(entry: StandardEntryLike): FediafAssessmentTarget | null {
+    if (entry.minValue === null && entry.maxValue === null) {
+      return null;
+    }
+
     const expressionBasis = this.mapBasis(entry.basis);
     if (!expressionBasis) {
       return null;

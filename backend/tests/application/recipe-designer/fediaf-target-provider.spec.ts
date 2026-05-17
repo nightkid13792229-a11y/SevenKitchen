@@ -177,6 +177,29 @@ describe('PrismaFediafTargetProvider', () => {
     expect(targets.map((target) => target.nutrientKey)).toEqual(['calcium']);
   });
 
+  it('skips Annex entries with no min or max recommendation bounds', async () => {
+    prisma.nutritionStandardEntry.findMany.mockResolvedValue([
+      entry({
+        id: 'entry-vitamin-k-no-recommendation',
+        minValue: null,
+        maxValue: null,
+        nutrient: {
+          code: 'vitaminK',
+          name: '维生素 K',
+          category: 'VITAMIN',
+          fieldPath: 'vitamins.vitaminK',
+          expression: null,
+        },
+      }),
+      entry(),
+    ]);
+
+    const provider = new PrismaFediafTargetProvider(prisma);
+    const targets = await provider.getTargets('ADULT_MER_110');
+
+    expect(targets.map((target) => target.nutrientKey)).toEqual(['calcium']);
+  });
+
   it('rejects unsupported scenarios and missing target rows', async () => {
     const provider = new PrismaFediafTargetProvider(prisma);
 

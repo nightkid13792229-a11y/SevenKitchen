@@ -184,21 +184,11 @@ export class RecipeDesignerService {
 
   async assessDraft(id: string): Promise<DesignRecipeAssessmentResult> {
     const draft = await this.loadDraft(id);
-    const targets = await this.targetProvider.getTargets(draft.fediafDogScenario);
-    const result = assessRecipeDraft({
-      scenario: draft.fediafDogScenario,
-      targets,
-      items: draft.items.map((item) => ({
-        id: item.id,
-        name: item.nutritionFood.name,
-        weightG: item.weightG,
-        nutritionProfile: this.toNutritionProfile(item.nutritionFood.nutritionData),
-      })),
-    });
+    const result = await this.assessLoadedDraft(draft);
 
     await this.prisma.designRecipe.update({
       where: { id },
-      data: this.toAssessmentUpdateData(result),
+      data: this.buildAssessmentUpdateData(result),
     });
 
     return result;
@@ -210,7 +200,7 @@ export class RecipeDesignerService {
     userId: string,
   ) {
     const draft = await this.loadDraft(id);
-    const assessment = await this.assessDraft(id);
+    const assessment = await this.assessLoadedDraft(draft);
     const reviewNote = dto.reviewNote?.trim() || null;
 
     if (assessment.energyDensityKcalPerKg === null) {
@@ -260,12 +250,12 @@ export class RecipeDesignerService {
       const reviewStatus =
         assessment.overallStatus === 'COMPLIANT'
           ? DesignRecipeReviewStatus.NONE
-          : DesignRecipeReviewStatus.REQUIRED;
+          : DesignRecipeReviewStatus.APPROVED;
       const {
         status: _assessedStatus,
         reviewStatus: _assessedReviewStatus,
         ...assessmentUpdateData
-      } = this.toAssessmentUpdateData(assessment);
+      } = this.buildAssessmentUpdateData(assessment);
 
       await tx.designRecipePublishSnapshot.create({
         data: {
@@ -292,9 +282,9 @@ export class RecipeDesignerService {
           reviewStatus,
           reviewNote,
           reviewedBy:
-            reviewStatus === DesignRecipeReviewStatus.REQUIRED ? userId : null,
+            reviewStatus === DesignRecipeReviewStatus.APPROVED ? userId : null,
           reviewedAt:
-            reviewStatus === DesignRecipeReviewStatus.REQUIRED
+            reviewStatus === DesignRecipeReviewStatus.APPROVED
               ? new Date()
               : null,
         },
@@ -314,6 +304,23 @@ export class RecipeDesignerService {
     }
 
     return draft as DesignRecipeWithItems;
+  }
+
+  private async assessLoadedDraft(
+    draft: DesignRecipeWithItems,
+  ): Promise<DesignRecipeAssessmentResult> {
+    const targets = await this.targetProvider.getTargets(draft.fediafDogScenario);
+
+    return assessRecipeDraft({
+      scenario: draft.fediafDogScenario,
+      targets,
+      items: draft.items.map((item) => ({
+        id: item.id,
+        name: item.nutritionFood.name,
+        weightG: item.weightG,
+        nutritionProfile: this.toNutritionProfile(item.nutritionFood.nutritionData),
+      })),
+    });
   }
 
   private toNutritionProfile(nutritionData: unknown): NutritionProfile | null {
@@ -342,7 +349,7 @@ export class RecipeDesignerService {
     );
   }
 
-  private toAssessmentUpdateData(result: DesignRecipeAssessmentResult) {
+  private buildAssessmentUpdateData(result: DesignRecipeAssessmentResult) {
     const missingDataReport = result.entries
       .filter((entry) => entry.status === 'MISSING_DATA')
       .map((entry) => ({
@@ -390,9 +397,15 @@ export class RecipeDesignerService {
     assessment: DesignRecipeAssessmentResult,
     itemId: string,
   ): number {
-    return (
-      assessment.items.find((item) => item.id === itemId)?.ratioPercent ?? 0
-    );
+    const item = assessment.items.find((candidate) => candidate.id === itemId);
+
+    if (!item) {
+      throw new BadRequestException(
+        `配方明细 ${itemId} 未出现在评估结果中，无法发布正式食谱`,
+      );
+    }
+
+    return item.ratioPercent;
   }
 
   private toJsonValue(value: unknown): Prisma.InputJsonValue {

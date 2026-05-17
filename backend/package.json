@@ -30,6 +30,7 @@
     "backfill:recipe-supplement-targets-v2:apply": "ts-node -r tsconfig-paths/register prisma/backfill-recipe-supplement-targets-v2.ts --apply",
     "audit:missing-supplement-concentrations": "ts-node -r tsconfig-paths/register scripts/audit-missing-supplement-concentrations.ts",
     "audit:recipe-stats": "ts-node scripts/audit-recipe-stats.ts",
+    "validate:breed-health-risk-sources": "ts-node -r tsconfig-paths/register scripts/validate-breed-health-risk-sources.ts",
     "repair:favorite-counts": "ts-node scripts/repair-favorite-counts.ts",
     "smoke:pricing-purchase": "node scripts/smoke_pricing_purchase_flow.js",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",

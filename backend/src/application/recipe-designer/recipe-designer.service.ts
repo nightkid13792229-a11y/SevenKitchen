@@ -50,7 +50,7 @@ type DesignRecipeWithItems = {
   version: number;
   status: string;
   fediafDogScenario: FediafDogScenarioCode;
-  energyDensityKcalPerKg: number;
+  energyDensityKcalPerKg: number | null;
   totalWeightG: number;
   targetHealthTags: string[];
   applicableLifeStages: string[];
@@ -213,6 +213,11 @@ export class RecipeDesignerService {
     const assessment = await this.assessDraft(id);
     const reviewNote = dto.reviewNote?.trim() || null;
 
+    if (assessment.energyDensityKcalPerKg === null) {
+      throw new BadRequestException('缺少能量数据，无法发布正式食谱');
+    }
+    const energyDensityKcalPerKg = assessment.energyDensityKcalPerKg;
+
     if (assessment.overallStatus !== 'COMPLIANT' && !reviewNote) {
       throw new BadRequestException('需审核配方必须填写审核说明');
     }
@@ -229,7 +234,7 @@ export class RecipeDesignerService {
           version: draft.version,
           name: draft.name,
           status: RecipeStatus.PUBLIC,
-          energyDensityKcalPerKg: assessment.energyDensityKcalPerKg ?? 0,
+          energyDensityKcalPerKg,
           productionLossRate: 1,
           applicableLifeStages: draft.applicableLifeStages,
           targetHealthTags: draft.targetHealthTags,
@@ -349,7 +354,7 @@ export class RecipeDesignerService {
 
     return {
       totalWeightG: result.totalWeightG,
-      energyDensityKcalPerKg: result.energyDensityKcalPerKg ?? 0,
+      energyDensityKcalPerKg: result.energyDensityKcalPerKg,
       calculatedNutrition: this.toJsonValue(result.nutrients),
       complianceStatus: this.toJsonValue(result.entries),
       assessmentSummary: this.toJsonValue({

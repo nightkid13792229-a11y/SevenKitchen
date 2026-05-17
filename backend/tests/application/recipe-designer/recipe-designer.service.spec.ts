@@ -211,6 +211,64 @@ describe('RecipeDesignerService', () => {
     });
   });
 
+  it('persists null energy density and incomplete summary when energy data is missing', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        items: [
+          item({
+            nutritionFood: {
+              id: 'food-1',
+              name: '鸡胸肉',
+              nutritionData: {
+                meta: { rawBasisType: 'PER_100_G' },
+                macros: {
+                  moisture: 70,
+                  crudeProtein: 20,
+                  crudeFat: 3,
+                  ash: 1,
+                },
+                minerals: { calcium: 600, phosphorus: 500 },
+                vitamins: {},
+                fattyAcids: {},
+                aminoAcids: {},
+                customItems: [],
+              },
+              mappings: [{ ingredientId: 'ingredient-1', isPrimary: true }],
+            },
+          }),
+        ],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue([
+      {
+        nutrientKey: 'calcium',
+        label: '钙',
+        category: 'MINERAL',
+        expressionBasis: 'PER_1000_KCAL_ME',
+        unit: 'mg',
+        minValue: 500,
+        maxValue: null,
+        fieldPaths: ['minerals.calcium'],
+      },
+    ]);
+    prisma.designRecipe.update.mockResolvedValue(draft());
+
+    const assessment = await service.assessDraft('design-1');
+
+    expect(assessment.energyDensityKcalPerKg).toBeNull();
+    expect(assessment.overallStatus).toBe('INCOMPLETE');
+    expect(prisma.designRecipe.update).toHaveBeenCalledWith({
+      where: { id: 'design-1' },
+      data: expect.objectContaining({
+        energyDensityKcalPerKg: null,
+        assessmentSummary: expect.objectContaining({
+          overallStatus: 'INCOMPLETE',
+          summary: expect.any(Object),
+        }),
+      }),
+    });
+  });
+
   it('rejects publishing incomplete drafts without a review note', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({
@@ -245,6 +303,65 @@ describe('RecipeDesignerService', () => {
     ).rejects.toThrow(
       new BadRequestException('需审核配方必须填写审核说明'),
     );
+  });
+
+  it('rejects publishing drafts without energy density even with a review note', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        items: [
+          item({
+            nutritionFood: {
+              id: 'food-1',
+              name: '鸡胸肉',
+              nutritionData: {
+                meta: { rawBasisType: 'PER_100_G' },
+                macros: {
+                  moisture: 70,
+                  crudeProtein: 20,
+                  crudeFat: 3,
+                  ash: 1,
+                },
+                minerals: { calcium: 600, phosphorus: 500 },
+                vitamins: {},
+                fattyAcids: {},
+                aminoAcids: {},
+                customItems: [],
+              },
+              mappings: [{ ingredientId: 'ingredient-1', isPrimary: true }],
+            },
+          }),
+        ],
+      }),
+    );
+    targetProvider.getTargets.mockResolvedValue([
+      {
+        nutrientKey: 'calcium',
+        label: '钙',
+        category: 'MINERAL',
+        expressionBasis: 'PER_1000_KCAL_ME',
+        unit: 'mg',
+        minValue: 500,
+        maxValue: null,
+        fieldPaths: ['minerals.calcium'],
+      },
+    ]);
+    prisma.designRecipe.update.mockResolvedValue(draft());
+    prisma.recipe.create.mockResolvedValue({
+      id: 'recipe-row-1',
+      recipeId: 'design-1',
+      version: 1,
+    });
+
+    await expect(
+      service.publishDraft(
+        'design-1',
+        { reviewNote: '人工审核钙数据，但能量缺失' },
+        'staff-2',
+      ),
+    ).rejects.toThrow(
+      new BadRequestException('缺少能量数据，无法发布正式食谱'),
+    );
+    expect(prisma.recipe.create).not.toHaveBeenCalled();
   });
 
   it('publishes recipe items using mapped ingredient ids instead of nutrition food ids', async () => {

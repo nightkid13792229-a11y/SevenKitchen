@@ -1597,7 +1597,7 @@ model DesignRecipe {
   version                Int                           @default(1) @map("version")
   status                 DesignRecipeStatus            @default(DRAFT) @map("status")
   fediafDogScenario      FediafDogScenario             @default(ADULT_MER_110) @map("fediaf_dog_scenario")
-  energyDensityKcalPerKg Float                         @default(0) @map("energy_density_kcal_per_kg")
+  energyDensityKcalPerKg Float?                        @map("energy_density_kcal_per_kg")
   totalWeightG           Float                         @default(0) @map("total_weight_g")
   nutritionStandard      String                        @default("FEDIAF_2025") @map("nutrition_standard")
   calculatedNutrition    Json                          @default("{}") @map("calculated_nutrition")

@@ -21,6 +21,9 @@ describe('mobile recipe designer schema', () => {
     expect(schema).toContain('@default(ADULT_MER_110)');
     expect(schema).toContain('totalWeightG');
     expect(schema).toContain('@map("total_weight_g")');
+    expect(schema).toContain(
+      'energyDensityKcalPerKg Float?                        @map("energy_density_kcal_per_kg")',
+    );
     expect(schema).toContain('assessmentSummary');
     expect(schema).toContain('@map("assessment_summary")');
     expect(schema).toContain(

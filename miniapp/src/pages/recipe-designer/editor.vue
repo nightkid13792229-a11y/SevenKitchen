@@ -103,7 +103,7 @@
         </view>
         <view v-for="entry in assessmentEntries" :key="entry.key || entry.nutrientKey" class="assessment-entry">
           <view>
-            <text class="entry-name">{{ entry.name || entry.nutrientName || entry.key || entry.nutrientKey }}</text>
+            <text class="entry-name">{{ entry.label || entry.name || entry.nutrientName || entry.key || entry.nutrientKey }}</text>
             <text class="entry-detail">{{ formatAssessmentDetail(entry) }}</text>
           </view>
           <text class="entry-status" :class="getAssessmentStatusClass(entry.status)">
@@ -131,7 +131,11 @@ interface DesignerItem {
   name?: string
   ingredientName?: string
   nutritionFoodName?: string
+  nutritionFood?: {
+    name?: string
+  }
   weightG?: number
+  ratioPercent?: number
   preparationMethod?: string
 }
 
@@ -194,7 +198,7 @@ async function loadDraft() {
     const draft = drafts.find((item: any) => item.id === draftId.value)
     if (draft) {
       draftName.value = draft.name || '未命名配方'
-      scenario.value = draft.scenario || 'ADULT_MER_110'
+      scenario.value = getDraftScenario(draft)
       items.value = draft.items || []
     }
     await refreshAssessment()
@@ -212,7 +216,7 @@ async function refreshAssessment() {
   assessment.value = data
   const assessedItems = data?.items || data?.draft?.items
   if (Array.isArray(assessedItems)) {
-    items.value = assessedItems
+    items.value = mergeAssessedItems(items.value, assessedItems)
   }
 }
 
@@ -255,7 +259,7 @@ function goToPublish() {
 }
 
 function getItemName(item: DesignerItem) {
-  return item.name || item.ingredientName || item.nutritionFoodName || '未命名原料'
+  return item.name || item.ingredientName || item.nutritionFoodName || item.nutritionFood?.name || '未命名原料'
 }
 
 function formatItemWeightInput(value?: number) {
@@ -263,16 +267,40 @@ function formatItemWeightInput(value?: number) {
 }
 
 function formatAssessmentDetail(entry: any) {
-  const current = entry.current ?? entry.actual ?? entry.value
-  const targetMin = entry.targetMin ?? entry.min
-  const targetMax = entry.targetMax ?? entry.max
+  const current = entry.currentValue ?? entry.current ?? entry.actual ?? entry.value
+  const targetMin = entry.minValue ?? entry.targetMin ?? entry.min
+  const targetMax = entry.maxValue ?? entry.targetMax ?? entry.max
   const unit = entry.unit || ''
   const parts = []
-  if (current !== undefined) parts.push(`当前 ${current}${unit}`)
-  if (targetMin !== undefined || targetMax !== undefined) {
-    parts.push(`目标 ${targetMin ?? '-'}-${targetMax ?? '-'}${unit}`)
+  if (current !== undefined && current !== null) parts.push(`当前 ${formatAssessmentNumber(current)}${unit}`)
+  if ((targetMin !== undefined && targetMin !== null) || (targetMax !== undefined && targetMax !== null)) {
+    parts.push(`目标 ${formatAssessmentNumber(targetMin) ?? '-'}-${formatAssessmentNumber(targetMax) ?? '-'}${unit}`)
   }
   return parts.join(' / ') || '暂无数值'
+}
+
+function getDraftScenario(draft: any): FediafDogScenario {
+  return (draft?.scenario || draft?.fediafDogScenario || 'ADULT_MER_110') as FediafDogScenario
+}
+
+function mergeAssessedItems(currentItems: DesignerItem[], assessedItems: DesignerItem[]) {
+  const currentById = new Map(currentItems.map((item) => [item.id, item]))
+  return assessedItems.map((item) => {
+    const current = currentById.get(item.id)
+    return {
+      ...current,
+      ...item,
+      preparationMethod: item.preparationMethod ?? current?.preparationMethod,
+      nutritionFood: item.nutritionFood ?? current?.nutritionFood,
+    }
+  })
+}
+
+function formatAssessmentNumber(value: unknown) {
+  if (value === undefined || value === null) return undefined
+  const numericValue = Number(value)
+  if (!Number.isFinite(numericValue)) return String(value)
+  return Number.isInteger(numericValue) ? String(numericValue) : numericValue.toFixed(2)
 }
 </script>
 

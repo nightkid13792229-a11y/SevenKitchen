@@ -3,7 +3,9 @@ import {
   type FediafDogScenario,
 } from '../../api/recipe-designer'
 
-export type AssessmentStatus = 'MISSING_DATA' | 'DEFICIENT' | 'EXCESS' | 'COMPLIANT'
+export type AssessmentEntryStatus = 'MISSING_DATA' | 'DEFICIENT' | 'EXCESS' | 'COMPLIANT'
+export type AssessmentOverallStatus = 'INCOMPLETE' | 'NON_COMPLIANT' | 'COMPLIANT'
+export type AssessmentStatus = AssessmentEntryStatus | AssessmentOverallStatus
 
 export interface AssessmentSummaryLike {
   compliant?: number
@@ -16,30 +18,31 @@ export interface AssessmentSummaryLike {
   missingDataCount?: number
 }
 
-export const ASSESSMENT_STATUS_LABELS: Record<AssessmentStatus, string> = {
+export const ASSESSMENT_STATUS_LABELS: Record<AssessmentEntryStatus, string> = {
   MISSING_DATA: '缺数据',
   DEFICIENT: '缺口',
   EXCESS: '超标',
   COMPLIANT: '达标',
 }
 
-export const OVERALL_STATUS_LABELS: Record<AssessmentStatus, string> = {
-  MISSING_DATA: '资料不完整',
-  DEFICIENT: '存在缺口',
-  EXCESS: '存在超标',
+export const OVERALL_STATUS_LABELS: Record<AssessmentOverallStatus, string> = {
+  INCOMPLETE: '资料不完整',
+  NON_COMPLIANT: '未达标/需审核',
   COMPLIANT: '已达标',
 }
 
 export function getAssessmentStatusLabel(status?: string) {
-  return ASSESSMENT_STATUS_LABELS[status as AssessmentStatus] || '待评估'
+  return ASSESSMENT_STATUS_LABELS[status as AssessmentEntryStatus] || '待评估'
 }
 
 export function getOverallStatusLabel(status?: string) {
-  return OVERALL_STATUS_LABELS[status as AssessmentStatus] || '待评估'
+  return OVERALL_STATUS_LABELS[status as AssessmentOverallStatus] || '待评估'
 }
 
 export function getAssessmentStatusClass(status?: string) {
   const map: Record<AssessmentStatus, string> = {
+    INCOMPLETE: 'status-missing',
+    NON_COMPLIANT: 'status-deficient',
     MISSING_DATA: 'status-missing',
     DEFICIENT: 'status-deficient',
     EXCESS: 'status-excess',

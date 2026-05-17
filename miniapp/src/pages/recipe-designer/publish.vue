@@ -1,6 +1,10 @@
 <template>
   <view class="recipe-designer-publish-page">
-    <view class="section">
+    <view v-if="loading" class="section state-block">
+      <text>评估中...</text>
+    </view>
+
+    <view v-else class="section">
       <view class="status-line">
         <text class="status-label">评估结果</text>
         <text class="status-badge" :class="getAssessmentStatusClass(overallStatus)">
@@ -40,7 +44,7 @@
 
     <view class="footer-actions">
       <button class="secondary-btn" @tap="goBack">返回编辑</button>
-      <button class="primary-btn" :disabled="publishing" @tap="submitPublish">
+      <button class="primary-btn" :disabled="publishing || loading || !overallStatus" @tap="submitPublish">
         {{ publishing ? '发布中' : '确认发布' }}
       </button>
     </view>
@@ -61,13 +65,14 @@ const draftId = ref('')
 const assessment = ref<any>(null)
 const reviewNote = ref('')
 const publishing = ref(false)
+const loading = ref(false)
 
 const overallStatus = computed(() => {
   return assessment.value?.overallStatus || assessment.value?.status
 })
 
 const requiresReviewNote = computed(() => {
-  return overallStatus.value !== 'COMPLIANT'
+  return !!overallStatus.value && overallStatus.value !== 'COMPLIANT'
 })
 
 const summaryCounts = computed(() => {
@@ -84,17 +89,24 @@ onLoad((options: any) => {
 })
 
 async function loadAssessment() {
+  loading.value = true
   try {
     const res: any = await recipeDesignerApi.assessDraft(draftId.value)
     assessment.value = res?.data ?? res
   } catch (error) {
     console.error('[RecipeDesignerPublish] Failed to assess draft:', error)
     uni.showToast({ title: '评估失败', icon: 'none' })
+  } finally {
+    loading.value = false
   }
 }
 
 async function submitPublish() {
   if (publishing.value) return
+  if (!overallStatus.value) {
+    uni.showToast({ title: '请等待评估完成', icon: 'none' })
+    return
+  }
   if (requiresReviewNote.value && !reviewNote.value.trim()) {
     uni.showToast({ title: '需审核配方必须填写审核说明', icon: 'none' })
     return
@@ -137,6 +149,12 @@ function goBack() {
   padding: 28rpx;
   margin-bottom: 20rpx;
   box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
+}
+
+.state-block {
+  text-align: center;
+  color: #888;
+  font-size: 28rpx;
 }
 
 .status-line {

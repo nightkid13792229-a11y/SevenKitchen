@@ -31,11 +31,11 @@
           <text class="status-badge">{{ getDraftStatusLabel(draft.status) }}</text>
         </view>
         <view class="meta-row">
-          <text>{{ getScenarioLabel(draft.scenario) }}</text>
+          <text>{{ getScenarioLabel(getDraftScenario(draft)) }}</text>
           <text>{{ formatWeight(draft.totalWeightG) }}</text>
         </view>
         <view class="meta-row">
-          <text>能量密度 {{ formatEnergyDensity(draft.energyDensityKcalPer100g) }}</text>
+          <text>能量密度 {{ formatEnergyDensity(draft.energyDensityKcalPerKg) }}</text>
           <text>{{ formatDateTime(draft.updatedAt) }}</text>
         </view>
       </view>
@@ -45,16 +45,17 @@
 
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
-import { recipeDesignerApi } from '../../api/recipe-designer'
+import { recipeDesignerApi, type FediafDogScenario } from '../../api/recipe-designer'
 import { getScenarioLabel } from './assessment'
 
 interface DesignerDraft {
   id: string
   name?: string
   scenario?: string
+  fediafDogScenario?: string
   status?: string
   totalWeightG?: number
-  energyDensityKcalPer100g?: number
+  energyDensityKcalPerKg?: number | null
   updatedAt?: string
 }
 
@@ -111,19 +112,24 @@ function getDraftStatusLabel(status?: string) {
   const map: Record<string, string> = {
     DRAFT: '草稿',
     ASSESSING: '评估中',
+    COMPLIANT: '已达标',
     NEEDS_REVIEW: '需审核',
     PUBLISHED: '已发布',
   }
   return map[status || ''] || status || '草稿'
 }
 
+function getDraftScenario(draft: DesignerDraft): FediafDogScenario | undefined {
+  return (draft.scenario || draft.fediafDogScenario) as FediafDogScenario | undefined
+}
+
 function formatWeight(value?: number) {
   return `总量 ${Number(value || 0).toFixed(0)}g`
 }
 
-function formatEnergyDensity(value?: number) {
+function formatEnergyDensity(value?: number | null) {
   if (value === null || value === undefined) return '-'
-  return `${Number(value).toFixed(1)} kcal/100g`
+  return `${Number(value).toFixed(0)} kcal/kg`
 }
 
 function formatDateTime(value?: string) {

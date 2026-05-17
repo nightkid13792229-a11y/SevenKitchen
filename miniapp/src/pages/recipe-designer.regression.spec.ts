@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import { existsSync, readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
+import {
+  getAssessmentStatusClass,
+  getOverallStatusLabel,
+} from './recipe-designer/assessment'
 
 const readSource = (path: string) => {
   const absolutePath = resolve(process.cwd(), path)
@@ -10,6 +14,7 @@ const readSource = (path: string) => {
 const staffWorkbenchSource = readSource('src/pages/staff-workbench/index.vue')
 const pagesJsonSource = readSource('src/pages.json')
 const editorSource = readSource('src/pages/recipe-designer/editor.vue')
+const listSource = readSource('src/pages/recipe-designer/list.vue')
 const assessmentSource = readSource('src/pages/recipe-designer/assessment.ts')
 const publishSource = readSource('src/pages/recipe-designer/publish.vue')
 
@@ -45,12 +50,31 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).not.toContain('1kg')
   })
 
+  it('reads persisted backend draft fields without changing the write payload contract', () => {
+    expect(listSource).toContain('fediafDogScenario')
+    expect(listSource).toContain('energyDensityKcalPerKg')
+    expect(editorSource).toContain('fediafDogScenario')
+    expect(editorSource).toContain('getDraftScenario')
+  })
+
   it('shows assessment drawer and supports backend assessment statuses', () => {
     expect(editorSource).toContain('assessment-drawer')
+    expect(editorSource).toContain('currentValue')
+    expect(editorSource).toContain('minValue')
+    expect(editorSource).toContain('maxValue')
+    expect(editorSource).toContain('entry.label')
     expect(assessmentSource).toContain('MISSING_DATA')
     expect(assessmentSource).toContain('DEFICIENT')
     expect(assessmentSource).toContain('EXCESS')
     expect(assessmentSource).toContain('COMPLIANT')
+  })
+
+  it('maps backend overall assessment statuses used by publish and drawer badges', () => {
+    expect(getOverallStatusLabel('COMPLIANT')).toBe('已达标')
+    expect(getOverallStatusLabel('NON_COMPLIANT')).toBe('未达标/需审核')
+    expect(getOverallStatusLabel('INCOMPLETE')).toBe('资料不完整')
+    expect(getAssessmentStatusClass('NON_COMPLIANT')).toBe('status-deficient')
+    expect(getAssessmentStatusClass('INCOMPLETE')).toBe('status-missing')
   })
 
   it('uses scenario for draft updates and never sends legacy scenario or nutrition ids while changing weight', () => {
@@ -58,7 +82,7 @@ describe('recipe designer editor guardrails', () => {
     const updateWeightBlock = editorSource.match(/(?:async\s+)?function updateWeight[\s\S]*?\n}/)?.[0] || ''
 
     expect(updateDraftCall).toContain('scenario')
-    expect(editorSource).not.toContain('fediafDogScenario')
+    expect(updateDraftCall).not.toContain('fediafDogScenario')
     expect(updateWeightBlock).toContain('recipeDesignerApi.updateItem')
     expect(updateWeightBlock).toContain('weightG')
     expect(updateWeightBlock).not.toContain('nutritionFoodId')

@@ -253,4 +253,72 @@ describe('NutrientMappingAuditService', () => {
       sourceFieldPaths: ['minerals.calcium', 'minerals.phosphorus'],
     });
   });
+
+  it('deduplicates nutrients using the first ordered standard entry as canonical', async () => {
+    prisma.nutritionStandardVersion.findUnique.mockResolvedValue({
+      id: 'version-1',
+      code: 'FEDIAF_2025_DOG',
+      entries: [
+        {
+          id: 'entry-calcium-canonical',
+          sourceTable: 'III-3b',
+          sortOrder: 1,
+          nutrient: {
+            code: 'calcium',
+            fieldPath: 'minerals.calcium',
+            defaultStandardUnit: 'g',
+            isDirect: true,
+            isDerived: false,
+            expression: null,
+          },
+          reviewEvents: [
+            {
+              id: 'review-canonical',
+              status: 'QUESTION',
+              reviewedAt: new Date('2026-05-17T00:00:00.000Z'),
+            },
+          ],
+        },
+        {
+          id: 'entry-calcium-duplicate',
+          sourceTable: 'VII-17c',
+          sortOrder: 2,
+          nutrient: {
+            code: 'calcium',
+            fieldPath: 'minerals.phosphorus',
+            defaultStandardUnit: 'mg',
+            isDirect: true,
+            isDerived: false,
+            expression: null,
+          },
+          reviewEvents: [
+            {
+              id: 'review-duplicate',
+              status: 'REVIEWED',
+              reviewedAt: new Date('2026-05-17T00:01:00.000Z'),
+            },
+          ],
+        },
+      ],
+    });
+
+    const service = new NutrientMappingAuditService(prisma);
+    const result = await service.auditFediaf2025DogMappings();
+
+    expect(result.summary).toEqual({
+      totalNutrients: 1,
+      reviewedNutrients: 0,
+      resolvedMappings: 1,
+      missingMappings: 0,
+      unsupportedMappings: 0,
+    });
+    expect(result.items).toEqual([
+      expect.objectContaining({
+        nutrientCode: 'calcium',
+        defaultStandardUnit: 'g',
+        reviewStatus: 'QUESTION',
+        sourceFieldPaths: ['minerals.calcium'],
+      }),
+    ]);
+  });
 });

@@ -40,6 +40,7 @@ import {
   DOG_BREED_REPOSITORY,
   RECIPE_REPOSITORY,
 } from '../../application/dog/dog.service';
+import { BreedHealthRiskService } from '../../application/dog/breed-health-risk.service';
 import type { DogRepository } from '../../domain/dog/dog.repository';
 import type { DogBreedRepository } from '../../domain/dog/dog-breed.repository';
 import type { RecipeRepository } from '../../domain/recipe/recipe.repository';
@@ -59,6 +60,7 @@ import { CreateDogDto } from '../dto/dogs/create-dog.dto';
 import { UpdateDogDto } from '../dto/dogs/update-dog.dto';
 import { CalcPreviewDto } from '../dto/dogs/calc-preview.dto';
 import { CalcDogForRecipeDto } from '../dto/dogs/calc-for-recipe.dto';
+import { BreedHealthRiskResponseDto } from '../dto/dogs/breed-health-risk-response.dto';
 import {
   DogDetailResponseDto,
   DogProfileDto,
@@ -101,6 +103,7 @@ export class DogsController {
     @Inject(ALLERGY_RECORD_REPOSITORY)
     private readonly allergyRecordRepository: AllergyRecordRepository,
     private readonly dogService: DogService,
+    private readonly breedHealthRiskService: BreedHealthRiskService,
     private readonly weightRecordService: WeightRecordService,
     private readonly prisma: PrismaService,
     private readonly cosService: TencentCosService,
@@ -325,7 +328,8 @@ export class DogsController {
     dogId: string,
     medicalRecords: UpdateDogDto['medicalRecords'],
   ): Promise<void> {
-    const existingRecords = await this.medicalRecordRepository.findByDogId(dogId);
+    const existingRecords =
+      await this.medicalRecordRepository.findByDogId(dogId);
     const removedAttachmentKeys = this.collectRemovedAttachmentKeys(
       existingRecords,
       medicalRecords,
@@ -355,7 +359,9 @@ export class DogsController {
         `[DogsController] Updated ${medicalRecords.length} medical records for dog ${dogId}`,
       );
     } else {
-      console.log(`[DogsController] Cleared all medical records for dog ${dogId}`);
+      console.log(
+        `[DogsController] Cleared all medical records for dog ${dogId}`,
+      );
     }
 
     for (const record of existingRecords) {
@@ -368,7 +374,8 @@ export class DogsController {
     dogId: string,
     checkupRecords: UpdateDogDto['checkupRecords'],
   ): Promise<void> {
-    const existingCheckups = await this.checkupRecordRepository.findByDogId(dogId);
+    const existingCheckups =
+      await this.checkupRecordRepository.findByDogId(dogId);
     const removedAttachmentKeys = this.collectRemovedAttachmentKeys(
       existingCheckups,
       checkupRecords,
@@ -393,7 +400,9 @@ export class DogsController {
         `[DogsController] Updated ${checkupRecords.length} checkup records for dog ${dogId}`,
       );
     } else {
-      console.log(`[DogsController] Cleared all checkup records for dog ${dogId}`);
+      console.log(
+        `[DogsController] Cleared all checkup records for dog ${dogId}`,
+      );
     }
 
     for (const checkup of existingCheckups) {
@@ -406,7 +415,8 @@ export class DogsController {
     dogId: string,
     allergyRecords: UpdateDogDto['allergyRecords'],
   ): Promise<void> {
-    const existingAllergies = await this.allergyRecordRepository.findByDogId(dogId);
+    const existingAllergies =
+      await this.allergyRecordRepository.findByDogId(dogId);
     const removedAttachmentKeys = this.collectRemovedAttachmentKeys(
       existingAllergies,
       allergyRecords,
@@ -425,7 +435,9 @@ export class DogsController {
         `[DogsController] Updated ${allergyRecords.length} allergy records for dog ${dogId}`,
       );
     } else {
-      console.log(`[DogsController] Cleared all allergy records for dog ${dogId}`);
+      console.log(
+        `[DogsController] Cleared all allergy records for dog ${dogId}`,
+      );
     }
 
     for (const allergy of existingAllergies) {
@@ -439,43 +451,43 @@ export class DogsController {
     checkupRecords: any[];
     allergyRecords: any[];
   }> {
-    const medicalRecords = (await this.medicalRecordRepository.findByDogId(id)).map(
-      (record: any) => ({
-        id: record.id,
-        chiefComplaint: record.chiefComplaint,
-        visitDate: record.visitDate
-          ? record.visitDate.toISOString().split('T')[0]
-          : null,
-        diagnosis: record.diagnosis || null,
-        notes: record.notes || null,
-        attachments: record.attachments || [],
-      }),
-    );
+    const medicalRecords = (
+      await this.medicalRecordRepository.findByDogId(id)
+    ).map((record: any) => ({
+      id: record.id,
+      chiefComplaint: record.chiefComplaint,
+      visitDate: record.visitDate
+        ? record.visitDate.toISOString().split('T')[0]
+        : null,
+      diagnosis: record.diagnosis || null,
+      notes: record.notes || null,
+      attachments: record.attachments || [],
+    }));
     console.log(
       `[DogsController] Loaded ${medicalRecords.length} medical records for dog ${id}`,
     );
 
-    const checkupRecords = (await this.checkupRecordRepository.findByDogId(id)).map(
-      (record: any) => ({
-        id: record.id,
-        checkupDate: record.checkupDate.toISOString().split('T')[0],
-        checkupType: record.checkupType,
-        notes: record.findings || null,
-        attachments: record.attachments || [],
-      }),
-    );
+    const checkupRecords = (
+      await this.checkupRecordRepository.findByDogId(id)
+    ).map((record: any) => ({
+      id: record.id,
+      checkupDate: record.checkupDate.toISOString().split('T')[0],
+      checkupType: record.checkupType,
+      notes: record.findings || null,
+      attachments: record.attachments || [],
+    }));
     console.log(
       `[DogsController] Loaded ${checkupRecords.length} checkup records for dog ${id}`,
     );
 
-    const allergyRecords = (await this.allergyRecordRepository.findByDogId(id)).map(
-      (record: any) => ({
-        id: record.id,
-        allergen: record.allergen,
-        notes: record.notes || null,
-        attachments: record.attachments || [],
-      }),
-    );
+    const allergyRecords = (
+      await this.allergyRecordRepository.findByDogId(id)
+    ).map((record: any) => ({
+      id: record.id,
+      allergen: record.allergen,
+      notes: record.notes || null,
+      attachments: record.attachments || [],
+    }));
     console.log(
       `[DogsController] Loaded ${allergyRecords.length} allergy records for dog ${id}`,
     );
@@ -649,6 +661,30 @@ export class DogsController {
     const breeds = await this.dogBreedRepository.findHotBreeds(10);
     const breedDtos = breeds.map((breed) => this.mapBreedToDto(breed));
     return ApiResponseDto.success(breedDtos);
+  }
+
+  @Get('breeds/:breedId/health-risks')
+  @ApiOperation({
+    summary: 'Get published breed health risk knowledge for one breed',
+  })
+  @ApiParam({ name: 'breedId', description: 'Dog breed ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Published breed health risk knowledge',
+    type: BreedHealthRiskResponseDto,
+  })
+  async getBreedHealthRisks(
+    @Param('breedId') breedId: string,
+  ): Promise<
+    ApiResponseDto<BreedHealthRiskResponseDto> | ApiResponseDto<null>
+  > {
+    const result =
+      await this.breedHealthRiskService.findPublishedByBreedId(breedId);
+    if (!result) {
+      return ApiResponseDto.error(404, '未找到该品种');
+    }
+
+    return ApiResponseDto.success(result);
   }
 
   @Get()

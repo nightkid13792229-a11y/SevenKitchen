@@ -23,6 +23,10 @@ import {
   PRISMA_SERVICE,
   RECIPE_REPOSITORY,
 } from 'src/application/dog/dog.service';
+import {
+  BREED_HEALTH_RISK_REPOSITORY,
+  BreedHealthRiskService,
+} from 'src/application/dog/breed-health-risk.service';
 import { InMemoryDogRepository } from 'src/infrastructure/repositories/in-memory-dog.repository';
 import { InMemoryRecipeRepository } from 'src/infrastructure/repositories/in-memory-recipe.repository';
 import {
@@ -35,6 +39,10 @@ import {
 } from 'src/domain';
 import { Dog } from 'src/domain/dog/dog.entity';
 import { DogBreed } from 'src/domain/dog/dog-breed.entity';
+import {
+  BreedHealthAttentionPriority,
+  BreedHealthRiskSourceType,
+} from 'src/domain/dog/breed-health-risk.entity';
 import { GrowthCurveType } from 'src/domain/dog/enums';
 import { JwtAuthService } from 'src/auth/jwt.service';
 import { AuthGuard } from 'src/auth/auth.guard';
@@ -99,6 +107,10 @@ describe('DogsController (e2e)', () => {
     findUsage: jest.fn(),
   };
 
+  const mockBreedHealthRiskRepository = {
+    findPublishedByBreedId: jest.fn(),
+  };
+
   const mockMedicalRecordRepository = {
     findById: jest.fn(),
     findByDogId: jest.fn().mockResolvedValue([]),
@@ -147,6 +159,7 @@ describe('DogsController (e2e)', () => {
       controllers: [DogsController],
       providers: [
         DogService,
+        BreedHealthRiskService,
         {
           provide: DOG_REPOSITORY,
           useClass: InMemoryDogRepository,
@@ -154,6 +167,10 @@ describe('DogsController (e2e)', () => {
         {
           provide: DOG_BREED_REPOSITORY,
           useValue: mockDogBreedRepository,
+        },
+        {
+          provide: BREED_HEALTH_RISK_REPOSITORY,
+          useValue: mockBreedHealthRiskRepository,
         },
         {
           provide: RECIPE_REPOSITORY,
@@ -234,6 +251,7 @@ describe('DogsController (e2e)', () => {
     mockDogBreedRepository.findById.mockResolvedValue(mockBreed);
     mockDogBreedRepository.findAll.mockResolvedValue([mockBreed]);
     mockDogBreedRepository.findHotBreeds.mockResolvedValue(mockHotBreeds);
+    mockBreedHealthRiskRepository.findPublishedByBreedId.mockResolvedValue([]);
     mockMedicalRecordRepository.findByDogId.mockResolvedValue([]);
     mockCheckupRecordRepository.findByDogId.mockResolvedValue([]);
     mockAllergyRecordRepository.findByDogId.mockResolvedValue([]);
@@ -423,6 +441,114 @@ describe('DogsController (e2e)', () => {
         sizeCategory: DogSizeCategory.LARGE,
       });
       expect(mockDogBreedRepository.findHotBreeds).toHaveBeenCalledWith(10);
+    });
+  });
+
+  describe('GET /api/v1/dogs/breeds/:breedId/health-risks', () => {
+    it('returns published breed health risks with visible source metadata', async () => {
+      mockDogBreedRepository.findById.mockResolvedValue(mockBreed);
+      mockBreedHealthRiskRepository.findPublishedByBreedId.mockResolvedValue([
+        {
+          id: 'risk-1',
+          breedId: mockBreed.id,
+          conditionId: 'condition-1',
+          attentionPriority: BreedHealthAttentionPriority.KEY_ATTENTION,
+          oneLineSummary: '该品种资料中较常被提及的骨骼关节关注项。',
+          breedSpecificReason: '该品种体型和遗传资料中较常被提及。',
+          displayOrder: 1,
+          isPublished: true,
+          condition: {
+            id: 'condition-1',
+            nameCn: '髋关节发育不良',
+            nameEn: 'Hip Dysplasia',
+            aliases: ['CHD'],
+            category: '骨骼关节',
+            summary: '髋关节相关疾病。',
+            commonSigns: ['后肢跛行', '运动不愿意'],
+            screeningAdvice: '可与兽医讨论髋关节相关检查。',
+            careAdvice: '如出现疼痛或跛行表现，请咨询兽医。',
+            isActive: true,
+          },
+          sources: [
+            {
+              id: 'source-1',
+              riskId: 'risk-1',
+              sourceType: BreedHealthRiskSourceType.OFA_CHIC,
+              sourceName: 'OFA CHIC',
+              publisher: 'Orthopedic Foundation for Animals',
+              title: 'Breed screening recommendation',
+              url: 'https://ofa.org/diseases/',
+              accessedAt: new Date('2026-05-17T00:00:00.000Z'),
+              note: null,
+            },
+          ],
+        },
+      ]);
+
+      const response = await request(app.getHttpAdapter().getInstance())
+        .get(`/api/v1/dogs/breeds/${mockBreed.id}/health-risks`)
+        .expect(200);
+
+      expect(response.body.code).toBe(0);
+      expect(response.body.data.breed).toEqual({
+        id: mockBreed.id,
+        name: mockBreed.name,
+      });
+      expect(response.body.data.risks).toHaveLength(1);
+      expect(response.body.data.risks[0]).toMatchObject({
+        id: 'risk-1',
+        conditionId: 'condition-1',
+        conditionName: '髋关节发育不良',
+        category: '骨骼关节',
+        attentionPriority: 'KEY_ATTENTION',
+        attentionLabel: '重点关注',
+        sourceCount: 1,
+      });
+      expect(response.body.data.risks[0].sources[0]).toMatchObject({
+        sourceType: 'OFA_CHIC',
+        sourceName: 'OFA CHIC',
+        accessedAt: '2026-05-17',
+      });
+      expect(
+        mockBreedHealthRiskRepository.findPublishedByBreedId,
+      ).toHaveBeenCalledWith(mockBreed.id);
+    });
+
+    it('returns an empty risk list for a known breed with no published risk content', async () => {
+      mockDogBreedRepository.findById.mockResolvedValue(mockBreed);
+      mockBreedHealthRiskRepository.findPublishedByBreedId.mockResolvedValue(
+        [],
+      );
+
+      const response = await request(app.getHttpAdapter().getInstance())
+        .get(`/api/v1/dogs/breeds/${mockBreed.id}/health-risks`)
+        .expect(200);
+
+      expect(response.body.code).toBe(0);
+      expect(response.body.data).toEqual({
+        breed: {
+          id: mockBreed.id,
+          name: mockBreed.name,
+        },
+        risks: [],
+      });
+    });
+
+    it('returns a friendly 404 envelope for an unknown breed', async () => {
+      mockDogBreedRepository.findById.mockResolvedValue(null);
+
+      const response = await request(app.getHttpAdapter().getInstance())
+        .get('/api/v1/dogs/breeds/missing-breed/health-risks')
+        .expect(200);
+
+      expect(response.body).toEqual({
+        code: 404,
+        message: '未找到该品种',
+        data: null,
+      });
+      expect(
+        mockBreedHealthRiskRepository.findPublishedByBreedId,
+      ).not.toHaveBeenCalled();
     });
   });
 

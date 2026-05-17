@@ -51,6 +51,10 @@ import {
   RECIPE_REPOSITORY,
   PRISMA_SERVICE,
 } from './application/dog/dog.service';
+import {
+  BreedHealthRiskService,
+  BREED_HEALTH_RISK_REPOSITORY,
+} from './application/dog/breed-health-risk.service';
 import { InMemoryDogRepository } from './infrastructure/repositories/in-memory-dog.repository';
 import { PrismaDogRepository } from './infrastructure/repositories/prisma-dog.repository';
 import { InMemoryRecipeRepository } from './infrastructure/repositories/in-memory-recipe.repository';
@@ -112,6 +116,7 @@ import { PrismaInventoryRepository } from './infrastructure/repositories/prisma-
 import { PrismaOrderStatusHistoryRepository } from './infrastructure/repositories/prisma-order-status-history.repository';
 import { ORDER_STATUS_HISTORY_REPOSITORY } from './application/order/order.service.tokens';
 import { PrismaDogBreedRepository } from './infrastructure/repositories/prisma-dog-breed.repository';
+import { PrismaBreedHealthRiskRepository } from './infrastructure/repositories/prisma-breed-health-risk.repository';
 import { DOG_BREED_REPOSITORY } from './application/dog/dog.service';
 import {
   IngredientTagService,
@@ -263,7 +268,8 @@ validatePrismaConfig();
     {
       provide: DOG_REPOSITORY,
       useFactory: (prismaService?: PrismaService) => {
-        const mode = process.env.DOG_REPO ?? (isPrismaEnabled() ? 'prisma' : 'memory');
+        const mode =
+          process.env.DOG_REPO ?? (isPrismaEnabled() ? 'prisma' : 'memory');
         if (mode === 'prisma') {
           if (!prismaService) {
             throw new Error(
@@ -463,6 +469,19 @@ validatePrismaConfig();
           );
         }
         return new PrismaDogBreedRepository(prismaService);
+      },
+      inject: isPrismaEnabled() ? [PrismaService] : [],
+    },
+    BreedHealthRiskService,
+    {
+      provide: BREED_HEALTH_RISK_REPOSITORY,
+      useFactory: (prismaService?: PrismaService) => {
+        if (!prismaService) {
+          throw new Error(
+            'PrismaService is not available. Ensure Prisma is enabled via repo switches.',
+          );
+        }
+        return new PrismaBreedHealthRiskRepository(prismaService);
       },
       inject: isPrismaEnabled() ? [PrismaService] : [],
     },

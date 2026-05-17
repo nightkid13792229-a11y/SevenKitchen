@@ -166,11 +166,17 @@ import { ProcurementSkuService } from './application/ingredient/procurement-sku.
 import { IngredientSuggestionsController } from './interfaces/controllers/ingredient-suggestions.controller';
 import { NutritionCalculationController } from './interfaces/controllers/nutrition-calculation.controller';
 import { NutritionStandardController } from './interfaces/controllers/nutrition-standard.controller';
+import { RecipeDesignerController } from './interfaces/controllers/recipe-designer.controller';
 import { FediafTargetSelectorService } from './application/nutrition-calculation/fediaf-target-selector.service';
 import { IngredientReadinessService } from './application/nutrition-calculation/ingredient-readiness.service';
 import { NutrientMappingAuditService } from './application/nutrition-calculation/nutrient-mapping-audit.service';
 import { NutritionUnitNormalizerService } from './application/nutrition-calculation/nutrition-unit-normalizer.service';
 import { NutritionStandardService } from './application/nutrition-standard/nutrition-standard.service';
+import { RecipeDesignerService } from './application/recipe-designer/recipe-designer.service';
+import {
+  FEDIAF_TARGET_PROVIDER,
+  PrismaFediafTargetProvider,
+} from './application/recipe-designer/fediaf-target-provider';
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -263,6 +269,7 @@ validatePrismaConfig();
     IngredientSuggestionsController,
     NutritionCalculationController,
     NutritionStandardController,
+    RecipeDesignerController,
     ...(isPrismaEnabled()
       ? [DogProfileAnalyticsController, AdminDogProfileAnalyticsController]
       : []),
@@ -630,6 +637,11 @@ validatePrismaConfig();
     FediafTargetSelectorService,
     NutritionUnitNormalizerService,
     NutritionStandardService,
+    RecipeDesignerService,
+    {
+      provide: FEDIAF_TARGET_PROVIDER,
+      useClass: PrismaFediafTargetProvider,
+    },
   ],
 })
 export class AppModule implements OnModuleInit {

@@ -1,2 +1,7 @@
-ALTER TABLE "global_config"
-ADD COLUMN "diy_sheet_header_bg_image_url" TEXT;
+DO $$
+BEGIN
+    IF to_regclass('public.global_config') IS NOT NULL THEN
+        ALTER TABLE "global_config"
+            ADD COLUMN IF NOT EXISTS "diy_sheet_header_bg_image_url" TEXT;
+    END IF;
+END $$;

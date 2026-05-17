@@ -254,6 +254,7 @@
                   <el-option label="NRC 2006" :value="NutritionStandard.NRC_2006" />
                   <el-option label="FEDIAF 2021" :value="NutritionStandard.FEDIAF_2021" />
                   <el-option label="FEDIAF 2024" :value="NutritionStandard.FEDIAF_2024" />
+                  <el-option label="FEDIAF 2025" :value="NutritionStandard.FEDIAF_2025" />
                   <el-option label="AAFCO 2022" :value="NutritionStandard.AAFCO_2022" />
                 </el-select>
               </el-form-item>

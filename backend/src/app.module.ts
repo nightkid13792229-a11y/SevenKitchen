@@ -164,6 +164,13 @@ import { DogProfileAnalyticsController } from './interfaces/controllers/dog-prof
 import { AdminDogProfileAnalyticsController } from './interfaces/controllers/admin-dog-profile-analytics.controller';
 import { ProcurementSkuService } from './application/ingredient/procurement-sku.service';
 import { IngredientSuggestionsController } from './interfaces/controllers/ingredient-suggestions.controller';
+import { NutritionCalculationController } from './interfaces/controllers/nutrition-calculation.controller';
+import { NutritionStandardController } from './interfaces/controllers/nutrition-standard.controller';
+import { FediafTargetSelectorService } from './application/nutrition-calculation/fediaf-target-selector.service';
+import { IngredientReadinessService } from './application/nutrition-calculation/ingredient-readiness.service';
+import { NutrientMappingAuditService } from './application/nutrition-calculation/nutrient-mapping-audit.service';
+import { NutritionUnitNormalizerService } from './application/nutrition-calculation/nutrition-unit-normalizer.service';
+import { NutritionStandardService } from './application/nutrition-standard/nutrition-standard.service';
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -254,6 +261,8 @@ validatePrismaConfig();
     FeedbackController,
     ProcurementSkuController,
     IngredientSuggestionsController,
+    NutritionCalculationController,
+    NutritionStandardController,
     ...(isPrismaEnabled()
       ? [DogProfileAnalyticsController, AdminDogProfileAnalyticsController]
       : []),
@@ -263,7 +272,8 @@ validatePrismaConfig();
     {
       provide: DOG_REPOSITORY,
       useFactory: (prismaService?: PrismaService) => {
-        const mode = process.env.DOG_REPO ?? (isPrismaEnabled() ? 'prisma' : 'memory');
+        const mode =
+          process.env.DOG_REPO ?? (isPrismaEnabled() ? 'prisma' : 'memory');
         if (mode === 'prisma') {
           if (!prismaService) {
             throw new Error(
@@ -615,6 +625,11 @@ validatePrismaConfig();
     RecommendedProductService,
     DogProfileAnalyticsService,
     ProcurementSkuService,
+    NutrientMappingAuditService,
+    IngredientReadinessService,
+    FediafTargetSelectorService,
+    NutritionUnitNormalizerService,
+    NutritionStandardService,
   ],
 })
 export class AppModule implements OnModuleInit {

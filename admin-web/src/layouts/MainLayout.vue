@@ -37,6 +37,21 @@
           <el-icon><Food /></el-icon>
           <span>食谱管理</span>
         </el-menu-item>
+        <el-sub-menu index="nutrition-standards">
+          <template #title>
+            <el-icon><DocumentChecked /></el-icon>
+            <span>营养标准</span>
+          </template>
+          <el-menu-item index="/nutrition-standards/fediaf-2025-dog"
+            >FEDIAF 2025 犬标准</el-menu-item
+          >
+          <el-menu-item index="/nutrition-standards/ingredient-readiness"
+            >原料计算就绪度</el-menu-item
+          >
+          <el-menu-item index="/nutrition-standards/fediaf-target-preview"
+            >FEDIAF 目标预览</el-menu-item
+          >
+        </el-sub-menu>
         <el-menu-item index="/orders">
           <el-icon><List /></el-icon>
           <span>订单管理</span>
@@ -66,7 +81,9 @@
             <el-icon><List /></el-icon>
             <span>采购管理</span>
           </template>
-          <el-menu-item index="/purchasing/reimbursements">报销管理</el-menu-item>
+          <el-menu-item index="/purchasing/reimbursements"
+            >报销管理</el-menu-item
+          >
           <el-menu-item index="/purchasing/history">采购历史</el-menu-item>
         </el-sub-menu>
         <el-sub-menu index="finance">
@@ -75,9 +92,15 @@
             <span>财务中心</span>
           </template>
           <el-menu-item index="/finance/overview">财务总览</el-menu-item>
-          <el-menu-item index="/finance/expense-bills">费用与待支付</el-menu-item>
-          <el-menu-item index="/finance/expense-analysis">费用分析</el-menu-item>
-          <el-menu-item index="/finance/contribution-analysis">经营贡献分析</el-menu-item>
+          <el-menu-item index="/finance/expense-bills"
+            >费用与待支付</el-menu-item
+          >
+          <el-menu-item index="/finance/expense-analysis"
+            >费用分析</el-menu-item
+          >
+          <el-menu-item index="/finance/contribution-analysis"
+            >经营贡献分析</el-menu-item
+          >
         </el-sub-menu>
       </el-menu>
     </el-aside>
@@ -111,10 +134,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { useUserStore } from '@/store/user'
+import { computed } from "vue";
+import { useRoute, useRouter } from "vue-router";
+import { ElMessage, ElMessageBox } from "element-plus";
+import { useUserStore } from "@/store/user";
 import {
   DataBoard,
   Food,
@@ -128,30 +151,33 @@ import {
   Star,
   Setting,
   EditPen,
-  Money
-} from '@element-plus/icons-vue'
+  Money,
+  DocumentChecked,
+} from "@element-plus/icons-vue";
 
-const route = useRoute()
-const router = useRouter()
-const userStore = useUserStore()
+const route = useRoute();
+const router = useRouter();
+const userStore = useUserStore();
 
-const activeMenu = computed(() => route.path)
-const currentPageTitle = computed(() => route.meta.title as string || '后台管理')
+const activeMenu = computed(() => route.path);
+const currentPageTitle = computed(
+  () => (route.meta.title as string) || "后台管理",
+);
 
 const handleCommand = async (command: string) => {
-  if (command === 'logout') {
+  if (command === "logout") {
     try {
-      await ElMessageBox.confirm('确定要退出登录吗？', '提示', {
-        type: 'warning'
-      })
-      userStore.clearToken()
-      ElMessage.success('已退出登录')
-      router.push('/login')
+      await ElMessageBox.confirm("确定要退出登录吗？", "提示", {
+        type: "warning",
+      });
+      userStore.clearToken();
+      ElMessage.success("已退出登录");
+      router.push("/login");
     } catch {
       // User cancelled
     }
   }
-}
+};
 </script>
 
 <style scoped>

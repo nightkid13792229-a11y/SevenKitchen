@@ -1,10 +1,7 @@
 -- Migration: Add Reimbursement Table
 -- Date: 2026-02-03
--- Description: Create the reimbursement table that was missing in production
-
--- =====================================================
--- Step 1: Create ReimbursementStatus Enum
--- =====================================================
+-- Description: Ensure reimbursement indexes and relations exist without
+-- duplicating objects already created by earlier backfill migrations.
 
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_type WHERE typname = 'ReimbursementStatus') THEN
@@ -16,10 +13,6 @@ DO $$ BEGIN
         );
     END IF;
 END $$;
-
--- =====================================================
--- Step 2: Create Reimbursement Table
--- =====================================================
 
 CREATE TABLE IF NOT EXISTS "reimbursement" (
     "id" text NOT NULL,
@@ -39,55 +32,45 @@ CREATE TABLE IF NOT EXISTS "reimbursement" (
     "payment_proof_urls" text[] DEFAULT ARRAY[]::text[],
     "payment_proof_keys" text[] DEFAULT ARRAY[]::text[],
     "created_at" timestamp(3) without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
-    "updated_at" timestamp(3) without time zone NOT NULL
+    "updated_at" timestamp(3) without time zone NOT NULL,
+    CONSTRAINT "reimbursement_pkey" PRIMARY KEY ("id")
 );
 
--- =====================================================
--- Step 3: Create Primary Key
--- =====================================================
-
-ALTER TABLE ONLY "reimbursement"
-    ADD CONSTRAINT "reimbursement_pkey" PRIMARY KEY ("id");
-
--- =====================================================
--- Step 4: Create Unique Constraint
--- =====================================================
-
-ALTER TABLE ONLY "reimbursement"
-    ADD CONSTRAINT "reimbursement_claim_number_key" UNIQUE ("claim_number");
-
--- =====================================================
--- Step 5: Create Indexes
--- =====================================================
-
+CREATE UNIQUE INDEX IF NOT EXISTS "reimbursement_claim_number_key"
+    ON "reimbursement" ("claim_number");
 CREATE INDEX IF NOT EXISTS "reimbursement_status_idx" ON "reimbursement" ("status");
 CREATE INDEX IF NOT EXISTS "reimbursement_submitted_by_id_idx" ON "reimbursement" ("submitted_by_id");
 CREATE INDEX IF NOT EXISTS "reimbursement_submitted_at_idx" ON "reimbursement" ("submitted_at");
 CREATE INDEX IF NOT EXISTS "reimbursement_reviewed_by_id_idx" ON "reimbursement" ("reviewed_by_id");
 
--- =====================================================
--- Step 6: Create Foreign Keys
--- =====================================================
+DO $$ BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'reimbursement_submitted_by_id_fkey'
+    ) THEN
+        ALTER TABLE ONLY "reimbursement"
+            ADD CONSTRAINT "reimbursement_submitted_by_id_fkey"
+            FOREIGN KEY ("submitted_by_id") REFERENCES "user"("id")
+            ON UPDATE CASCADE ON DELETE RESTRICT;
+    END IF;
 
-ALTER TABLE ONLY "reimbursement"
-    ADD CONSTRAINT "reimbursement_submitted_by_id_fkey"
-    FOREIGN KEY ("submitted_by_id") REFERENCES "user"("id")
-    ON UPDATE CASCADE ON DELETE RESTRICT;
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'reimbursement_reviewed_by_id_fkey'
+    ) THEN
+        ALTER TABLE ONLY "reimbursement"
+            ADD CONSTRAINT "reimbursement_reviewed_by_id_fkey"
+            FOREIGN KEY ("reviewed_by_id") REFERENCES "user"("id")
+            ON UPDATE CASCADE ON DELETE SET NULL;
+    END IF;
 
-ALTER TABLE ONLY "reimbursement"
-    ADD CONSTRAINT "reimbursement_reviewed_by_id_fkey"
-    FOREIGN KEY ("reviewed_by_id") REFERENCES "user"("id")
-    ON UPDATE CASCADE ON DELETE SET NULL;
-
--- =====================================================
--- Step 7: Add foreign key from purchase_list to reimbursement
--- =====================================================
-
-ALTER TABLE ONLY "purchase_list"
-    ADD CONSTRAINT "purchase_list_reimbursement_id_fkey"
-    FOREIGN KEY ("reimbursement_id") REFERENCES "reimbursement"("id")
-    ON UPDATE CASCADE ON DELETE SET NULL;
-
--- =====================================================
--- End of Migration
--- =====================================================
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint
+        WHERE conname = 'purchase_list_reimbursement_id_fkey'
+    ) THEN
+        ALTER TABLE ONLY "purchase_list"
+            ADD CONSTRAINT "purchase_list_reimbursement_id_fkey"
+            FOREIGN KEY ("reimbursement_id") REFERENCES "reimbursement"("id")
+            ON UPDATE CASCADE ON DELETE SET NULL;
+    END IF;
+END $$;

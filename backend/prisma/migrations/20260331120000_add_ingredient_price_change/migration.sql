@@ -5,8 +5,12 @@ ALTER TABLE "ingredient"
     ADD COLUMN IF NOT EXISTS "pricing_group_code" VARCHAR(100),
     ADD COLUMN IF NOT EXISTS "effective_price_per_purchase_unit" DECIMAL(10,2);
 
-ALTER TABLE "global_config"
-    ADD COLUMN IF NOT EXISTS "ingredient_price_auto_approve_threshold" DECIMAL(5,4) DEFAULT 0.08;
+DO $$ BEGIN
+    IF to_regclass('public.global_config') IS NOT NULL THEN
+        ALTER TABLE "global_config"
+            ADD COLUMN IF NOT EXISTS "ingredient_price_auto_approve_threshold" DECIMAL(5,4) DEFAULT 0.08;
+    END IF;
+END $$;
 
 UPDATE "ingredient"
 SET "effective_price_per_purchase_unit" = "current_price_per_purchase_unit"

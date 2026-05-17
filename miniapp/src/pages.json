@@ -38,6 +38,12 @@
       }
     },
     {
+      "path": "pages/breed-health-risk-lookup/index",
+      "style": {
+        "navigationBarTitleText": "品种疾病风险查询"
+      }
+    },
+    {
       "path": "pages/recipe-detail/index",
       "style": {
         "navigationBarTitleText": "食谱详情"

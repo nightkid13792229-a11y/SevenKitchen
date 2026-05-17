@@ -9,6 +9,7 @@ import {
   FEDIAF_DOG_SCENARIO_LABELS,
   recipeDesignerApi,
   type DesignRecipeDraftPayload,
+  type UpdateDesignRecipeItemPayload,
   type FediafDogScenario,
 } from './recipe-designer'
 
@@ -35,12 +36,19 @@ describe('recipeDesignerApi', () => {
       nutrientTargetValue: 1.2,
       sortOrder: 1,
     }
+    const updateItemPayload = {
+      weightG: 150,
+      preparationMethod: 'steamed',
+      nutrientTargetKey: 'CA',
+      nutrientTargetValue: 1.4,
+      sortOrder: 2,
+    } satisfies UpdateDesignRecipeItemPayload
 
     recipeDesignerApi.listDrafts()
     recipeDesignerApi.createDraft(draftPayload)
     recipeDesignerApi.updateDraft(draftId, draftPayload)
     recipeDesignerApi.addItem(draftId, itemPayload)
-    recipeDesignerApi.updateItem(itemId, itemPayload)
+    recipeDesignerApi.updateItem(itemId, updateItemPayload)
     recipeDesignerApi.removeItem(itemId)
     recipeDesignerApi.assessDraft(draftId)
     recipeDesignerApi.publishDraft(draftId, { reviewNote: 'ready' })
@@ -67,7 +75,7 @@ describe('recipeDesignerApi', () => {
     expect(mockedRequest).toHaveBeenNthCalledWith(5, {
       url: `/recipe-designer/items/${itemId}`,
       method: 'PATCH',
-      data: itemPayload,
+      data: updateItemPayload,
     })
     expect(mockedRequest).toHaveBeenNthCalledWith(6, {
       url: `/recipe-designer/items/${itemId}`,

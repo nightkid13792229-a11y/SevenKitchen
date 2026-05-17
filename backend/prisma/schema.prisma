@@ -1512,10 +1512,24 @@ enum NutritionFoodStatus {
 }
 
 enum DesignRecipeStatus {
-  DRAFT // 草稿
-  COMPLIANT // 已达标
-  PUBLISHED // 已发布
-  ARCHIVED // 已归档
+  DRAFT
+  COMPLIANT
+  NEEDS_REVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+enum DesignRecipeReviewStatus {
+  NONE
+  REQUIRED
+  APPROVED
+}
+
+enum FediafDogScenario {
+  EARLY_GROWTH_REPRODUCTION
+  LATE_GROWTH
+  ADULT_MER_95
+  ADULT_MER_110
 }
 
 enum FeedbackType {
@@ -1578,31 +1592,41 @@ model NutritionFoodMapping {
 
 /// 设计配方 - 配方设计工作台
 model DesignRecipe {
-  id                     String                       @id @default(uuid()) @map("id")
-  name                   String                       @map("name") @db.VarChar(200)
-  version                Int                          @default(1) @map("version")
-  status                 DesignRecipeStatus           @default(DRAFT) @map("status")
-  energyDensityKcalPerKg Float                        @map("energy_density_kcal_per_kg")
-  nutritionStandard      String                       @default("FEDIAF_2024") @map("nutrition_standard")
-  calculatedNutrition    Json                         @map("calculated_nutrition")
-  complianceStatus       Json                         @map("compliance_status")
-  complianceScore        Float                        @default(0) @map("compliance_score")
-  isCompliant            Boolean                      @default(false) @map("is_compliant")
-  targetHealthTags       String[]                     @default([]) @map("target_health_tags")
-  applicableLifeStages   String[]                     @default([]) @map("applicable_life_stages")
-  notes                  String?                      @map("notes")
-  createdBy              String                       @map("created_by")
-  publishedAt            DateTime?                    @map("published_at")
-  publishedRecipeId      String?                      @map("published_recipe_id")
-  createdAt              DateTime                     @default(now()) @map("created_at")
-  updatedAt              DateTime                     @updatedAt @map("updated_at")
+  id                     String                        @id @default(uuid()) @map("id")
+  name                   String                        @map("name") @db.VarChar(200)
+  version                Int                           @default(1) @map("version")
+  status                 DesignRecipeStatus            @default(DRAFT) @map("status")
+  fediafDogScenario      FediafDogScenario             @default(ADULT_MER_110) @map("fediaf_dog_scenario")
+  energyDensityKcalPerKg Float                         @default(0) @map("energy_density_kcal_per_kg")
+  totalWeightG           Float                         @default(0) @map("total_weight_g")
+  nutritionStandard      String                        @default("FEDIAF_2025") @map("nutrition_standard")
+  calculatedNutrition    Json                          @default("{}") @map("calculated_nutrition")
+  complianceStatus       Json                          @default("{}") @map("compliance_status")
+  assessmentSummary      Json                          @default("{}") @map("assessment_summary")
+  missingDataReport      Json                          @default("[]") @map("missing_data_report")
+  complianceScore        Float                         @default(0) @map("compliance_score")
+  isCompliant            Boolean                       @default(false) @map("is_compliant")
+  reviewStatus           DesignRecipeReviewStatus      @default(NONE) @map("review_status")
+  reviewNote             String?                       @map("review_note")
+  reviewedBy             String?                       @map("reviewed_by")
+  reviewedAt             DateTime?                     @map("reviewed_at")
+  targetHealthTags       String[]                      @default([]) @map("target_health_tags")
+  applicableLifeStages   String[]                      @default([]) @map("applicable_life_stages")
+  notes                  String?                       @map("notes")
+  createdBy              String                        @map("created_by")
+  publishedAt            DateTime?                     @map("published_at")
+  publishedRecipeId      String?                       @map("published_recipe_id")
+  createdAt              DateTime                      @default(now()) @map("created_at")
+  updatedAt              DateTime                      @updatedAt @map("updated_at")
   items                  DesignRecipeItem[]
   aiGenerationLog        DesignRecipeAIGenerationLog?
+  publishSnapshots       DesignRecipePublishSnapshot[]
 
   @@unique([name, version])
   @@index([status])
   @@index([createdBy])
   @@index([isCompliant])
+  @@index([fediafDogScenario])
   @@map("design_recipe")
 }
 
@@ -1611,8 +1635,8 @@ model DesignRecipeItem {
   id                  String        @id @default(uuid()) @map("id")
   designRecipeId      String        @map("design_recipe_id")
   nutritionFoodId     String        @map("nutrition_food_id")
-  ratioPercent        Float         @map("ratio_percent")
-  weightPerKgG        Float         @map("weight_per_kg_g")
+  weightG             Float         @map("weight_g")
+  ratioPercent        Float?        @map("ratio_percent")
   preparationMethod   String?       @map("preparation_method") @db.VarChar(100)
   nutrientTargetKey   String?       @map("nutrient_target_key")
   nutrientTargetValue Float?        @map("nutrient_target_value")
@@ -1644,6 +1668,22 @@ model DesignRecipeAIGenerationLog {
   @@index([generationModel])
   @@index([finalAttemptResult])
   @@map("design_recipe_ai_generation_log")
+}
+
+model DesignRecipePublishSnapshot {
+  id             String                   @id @default(uuid()) @map("id")
+  designRecipeId String                   @map("design_recipe_id")
+  recipeId       String                   @map("recipe_id")
+  snapshotData   Json                     @map("snapshot_data")
+  reviewStatus   DesignRecipeReviewStatus @map("review_status")
+  reviewNote     String?                  @map("review_note")
+  publishedBy    String                   @map("published_by")
+  publishedAt    DateTime                 @default(now()) @map("published_at")
+  designRecipe   DesignRecipe             @relation(fields: [designRecipeId], references: [id], onDelete: Cascade)
+
+  @@index([designRecipeId])
+  @@index([recipeId])
+  @@map("design_recipe_publish_snapshot")
 }
 
 /// FEDIAF营养标准数据

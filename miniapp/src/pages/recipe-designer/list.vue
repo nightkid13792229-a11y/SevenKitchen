@@ -28,7 +28,17 @@
       >
         <view class="draft-header">
           <text class="draft-name">{{ draft.name || '未命名草稿' }}</text>
-          <text class="status-badge">{{ getDraftStatusLabel(draft.status) }}</text>
+          <view class="draft-actions">
+            <text class="status-badge">{{ getDraftStatusLabel(draft.status) }}</text>
+            <button
+              v-if="canDeleteDraft(draft)"
+              class="delete-btn"
+              :disabled="deletingDraftId === draft.id"
+              @tap.stop="deleteDraft(draft)"
+            >
+              {{ deletingDraftId === draft.id ? '删除中' : '删除' }}
+            </button>
+          </view>
         </view>
         <view class="meta-row">
           <text>{{ getScenarioLabel(getDraftScenario(draft)) }}</text>
@@ -56,12 +66,15 @@ interface DesignerDraft {
   status?: string
   totalWeightG?: number
   energyDensityKcalPerKg?: number | null
+  publishedRecipeId?: string | null
+  publishedAt?: string | null
   updatedAt?: string
 }
 
 const drafts = ref<DesignerDraft[]>([])
 const loading = ref(false)
 const creating = ref(false)
+const deletingDraftId = ref('')
 
 onMounted(() => {
   loadDrafts()
@@ -106,6 +119,37 @@ async function createDraft() {
 
 function openEditor(id: string) {
   uni.navigateTo({ url: `/pages/recipe-designer/editor?id=${id}` })
+}
+
+function canDeleteDraft(draft: DesignerDraft) {
+  return draft.status !== 'PUBLISHED' && !draft.publishedRecipeId && !draft.publishedAt
+}
+
+function deleteDraft(draft: DesignerDraft) {
+  if (!canDeleteDraft(draft) || deletingDraftId.value) return
+
+  const draftName = draft.name || '未命名草稿'
+  uni.showModal({
+    title: '删除草稿',
+    content: `确认删除「${draftName}」吗？删除后不可恢复。`,
+    confirmText: '删除',
+    confirmColor: '#cf1322',
+    success: async (result: any) => {
+      if (!result.confirm) return
+
+      deletingDraftId.value = draft.id
+      try {
+        await recipeDesignerApi.deleteDraft(draft.id)
+        drafts.value = drafts.value.filter((candidate) => candidate.id !== draft.id)
+        uni.showToast({ title: '已删除', icon: 'success' })
+      } catch (error) {
+        console.error('[RecipeDesignerList] Failed to delete draft:', error)
+        uni.showToast({ title: '删除草稿失败', icon: 'none' })
+      } finally {
+        deletingDraftId.value = ''
+      }
+    },
+  })
 }
 
 function getDraftStatusLabel(status?: string) {
@@ -219,6 +263,7 @@ function formatDateTime(value?: string) {
 }
 
 .draft-header,
+.draft-actions,
 .meta-row {
   display: flex;
   align-items: center;
@@ -238,6 +283,12 @@ function formatDateTime(value?: string) {
   color: #222;
 }
 
+.draft-actions {
+  flex-shrink: 0;
+  justify-content: flex-end;
+  gap: 12rpx;
+}
+
 .status-badge {
   flex-shrink: 0;
   padding: 6rpx 14rpx;
@@ -245,6 +296,18 @@ function formatDateTime(value?: string) {
   background: #edf4ff;
   color: #1677ff;
   font-size: 22rpx;
+}
+
+.delete-btn {
+  flex-shrink: 0;
+  height: 52rpx;
+  margin: 0;
+  padding: 0 16rpx;
+  border-radius: 8rpx;
+  background: #fff1f0;
+  color: #cf1322;
+  font-size: 22rpx;
+  line-height: 52rpx;
 }
 
 .meta-row {

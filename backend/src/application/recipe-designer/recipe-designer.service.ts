@@ -145,6 +145,35 @@ export class RecipeDesignerService {
     });
   }
 
+  async deleteDraft(id: string, userId: string) {
+    const draft = await this.prisma.designRecipe.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        createdBy: true,
+        status: true,
+        publishedRecipeId: true,
+        publishedAt: true,
+      },
+    });
+
+    if (!draft || draft.createdBy !== userId) {
+      throw new NotFoundException(`Design recipe ${id} not found`);
+    }
+
+    if (
+      draft.status === DesignRecipeStatus.PUBLISHED ||
+      draft.publishedRecipeId ||
+      draft.publishedAt
+    ) {
+      throw new BadRequestException('已发布草稿不能删除');
+    }
+
+    return this.prisma.designRecipe.delete({
+      where: { id },
+    });
+  }
+
   async addItem(designRecipeId: string, dto: AddRecipeDesignItemDto) {
     return this.prisma.designRecipeItem.create({
       data: {

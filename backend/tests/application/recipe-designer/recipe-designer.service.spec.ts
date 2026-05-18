@@ -1,4 +1,4 @@
-import { BadRequestException } from '@nestjs/common';
+import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { RecipeDesignerService } from '../../../src/application/recipe-designer/recipe-designer.service';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
@@ -13,6 +13,7 @@ describe('RecipeDesignerService', () => {
       aggregate: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
+      delete: jest.fn(),
     },
     designRecipeItem: {
       create: jest.fn(),
@@ -188,6 +189,71 @@ describe('RecipeDesignerService', () => {
       }),
       include: expect.any(Object),
     });
+  });
+
+  it('hard deletes an unpublished draft created by the current staff user', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        id: 'design-delete',
+        createdBy: 'staff-1',
+        status: 'DRAFT',
+        publishedRecipeId: null,
+        publishedAt: null,
+      }),
+    );
+    prisma.designRecipe.delete.mockResolvedValue(draft({ id: 'design-delete' }));
+
+    await expect(
+      service.deleteDraft('design-delete', 'staff-1'),
+    ).resolves.toEqual(expect.objectContaining({ id: 'design-delete' }));
+
+    expect(prisma.designRecipe.findUnique).toHaveBeenCalledWith({
+      where: { id: 'design-delete' },
+      select: {
+        id: true,
+        createdBy: true,
+        status: true,
+        publishedRecipeId: true,
+        publishedAt: true,
+      },
+    });
+    expect(prisma.designRecipe.delete).toHaveBeenCalledWith({
+      where: { id: 'design-delete' },
+    });
+  });
+
+  it('rejects hard deletion after a draft has been published', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        id: 'design-published',
+        createdBy: 'staff-1',
+        status: 'PUBLISHED',
+        publishedRecipeId: 'recipe-1',
+        publishedAt: new Date('2026-05-18T00:00:00.000Z'),
+      }),
+    );
+
+    await expect(
+      service.deleteDraft('design-published', 'staff-1'),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(prisma.designRecipe.delete).not.toHaveBeenCalled();
+  });
+
+  it('does not reveal or delete drafts owned by another staff user', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        id: 'design-other',
+        createdBy: 'staff-2',
+        status: 'DRAFT',
+      }),
+    );
+
+    await expect(
+      service.deleteDraft('design-other', 'staff-1'),
+    ).rejects.toThrow(NotFoundException);
+
+    expect(prisma.designRecipe.delete).not.toHaveBeenCalled();
   });
 
   it('assesses free-total weights and persists draft assessment fields', async () => {

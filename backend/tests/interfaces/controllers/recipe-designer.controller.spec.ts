@@ -20,6 +20,7 @@ describe('RecipeDesignerController', () => {
     listDrafts: jest.fn(),
     createDraft: jest.fn(),
     updateDraft: jest.fn(),
+    deleteDraft: jest.fn(),
     addItem: jest.fn(),
     updateItem: jest.fn(),
     removeItem: jest.fn(),
@@ -61,6 +62,7 @@ describe('RecipeDesignerController', () => {
     service.listDrafts.mockResolvedValue([{ id: 'design-1' }]);
     service.createDraft.mockResolvedValue({ id: 'design-2' });
     service.updateDraft.mockResolvedValue({ id: 'design-1', name: 'new' });
+    service.deleteDraft.mockResolvedValue({ id: 'design-1' });
 
     await expect(controller.listDrafts(currentUser)).resolves.toEqual(
       expect.objectContaining({ code: 0, data: [{ id: 'design-1' }] }),
@@ -74,6 +76,9 @@ describe('RecipeDesignerController', () => {
     await expect(
       controller.updateDraft('design-1', { name: 'new' }),
     ).resolves.toEqual(expect.objectContaining({ code: 0 }));
+    await expect(
+      controller.deleteDraft('design-1', currentUser),
+    ).resolves.toEqual(expect.objectContaining({ code: 0 }));
 
     expect(service.listDrafts).toHaveBeenCalledWith('staff-1');
     expect(service.createDraft).toHaveBeenCalledWith(
@@ -83,6 +88,7 @@ describe('RecipeDesignerController', () => {
     expect(service.updateDraft).toHaveBeenCalledWith('design-1', {
       name: 'new',
     });
+    expect(service.deleteDraft).toHaveBeenCalledWith('design-1', 'staff-1');
   });
 
   it('delegates item mutations, assessment, and publish with CurrentUser ids', async () => {

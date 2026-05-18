@@ -89,6 +89,8 @@ export const recipeDesignerApi = {
     request({ url: '/recipe-designer/drafts', method: 'POST', data }),
   updateDraft: (draftId: string, data: Partial<DesignRecipeDraftPayload>) =>
     request({ url: `/recipe-designer/drafts/${draftId}`, method: 'PATCH', data }),
+  deleteDraft: (draftId: string) =>
+    request({ url: `/recipe-designer/drafts/${draftId}`, method: 'DELETE' }),
   addItem: (draftId: string, data: DesignRecipeItemPayload) =>
     request({ url: `/recipe-designer/drafts/${draftId}/items`, method: 'POST', data }),
   updateItem: (itemId: string, data: UpdateDesignRecipeItemPayload) =>

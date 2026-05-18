@@ -152,6 +152,15 @@ describe('recipeDesignerApi', () => {
     })
   })
 
+  it('deletes unpublished design drafts through the draft endpoint', () => {
+    recipeDesignerApi.deleteDraft('draft-1')
+
+    expect(mockedRequest).toHaveBeenCalledWith({
+      url: '/recipe-designer/drafts/draft-1',
+      method: 'DELETE',
+    })
+  })
+
   it('lists verified nutrition foods for the ingredient picker', () => {
     const query = {
       status: 'VERIFIED',

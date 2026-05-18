@@ -66,6 +66,16 @@ export class RecipeDesignerController {
     return ApiResponseDto.success(draft);
   }
 
+  @Delete('drafts/:id')
+  @ApiOperation({ summary: 'Delete an unpublished recipe design draft' })
+  async deleteDraft(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const draft = await this.recipeDesignerService.deleteDraft(id, user.userId);
+    return ApiResponseDto.success(draft);
+  }
+
   @Post('drafts/:id/items')
   @ApiOperation({ summary: 'Add a nutrition food item to a design draft' })
   async addItem(

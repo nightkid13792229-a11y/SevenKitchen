@@ -30,6 +30,15 @@ describe('recipe designer mobile entry', () => {
     expect(pagesJsonSource).toContain('pages/recipe-designer/editor')
     expect(pagesJsonSource).toContain('pages/recipe-designer/publish')
   })
+
+  it('lets staff delete unpublished drafts from the draft list with confirmation', () => {
+    expect(listSource).toContain('deleteDraft')
+    expect(listSource).toContain('recipeDesignerApi.deleteDraft')
+    expect(listSource).toContain('canDeleteDraft')
+    expect(listSource).toContain('uni.showModal')
+    expect(listSource).toContain('@tap.stop')
+    expect(listSource).toContain('PUBLISHED')
+  })
 })
 
 describe('recipe designer editor guardrails', () => {

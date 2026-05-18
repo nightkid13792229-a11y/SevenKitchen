@@ -10,6 +10,7 @@ describe('RecipeDesignerService', () => {
     designRecipe: {
       findMany: jest.fn(),
       findUnique: jest.fn(),
+      aggregate: jest.fn(),
       create: jest.fn(),
       update: jest.fn(),
     },
@@ -42,6 +43,7 @@ describe('RecipeDesignerService', () => {
 
     service = moduleRef.get(RecipeDesignerService);
     jest.resetAllMocks();
+    prisma.designRecipe.aggregate.mockResolvedValue({ _max: { version: null } });
     prisma.$transaction.mockImplementation(async (callback: any) =>
       callback(prisma),
     );
@@ -154,6 +156,35 @@ describe('RecipeDesignerService', () => {
         fediafDogScenario: 'LATE_GROWTH',
         nutritionStandard: 'FEDIAF_2025',
         createdBy: 'staff-1',
+      }),
+      include: expect.any(Object),
+    });
+  });
+
+  it('assigns the next version when a draft name already exists', async () => {
+    prisma.designRecipe.aggregate.mockResolvedValue({ _max: { version: 3 } });
+    prisma.designRecipe.create.mockResolvedValue(
+      draft({ name: '未命名配方', version: 4 }),
+    );
+
+    await expect(
+      service.createDraft(
+        {
+          name: '未命名配方',
+          scenario: 'ADULT_MER_110',
+        },
+        'staff-1',
+      ),
+    ).resolves.toEqual(expect.objectContaining({ version: 4 }));
+
+    expect(prisma.designRecipe.aggregate).toHaveBeenCalledWith({
+      where: { name: '未命名配方' },
+      _max: { version: true },
+    });
+    expect(prisma.designRecipe.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        name: '未命名配方',
+        version: 4,
       }),
       include: expect.any(Object),
     });

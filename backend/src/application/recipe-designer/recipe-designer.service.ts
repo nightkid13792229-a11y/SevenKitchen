@@ -103,17 +103,25 @@ export class RecipeDesignerService {
   }
 
   async createDraft(dto: CreateRecipeDesignDraftDto, userId: string) {
-    return this.prisma.designRecipe.create({
-      data: {
-        name: dto.name,
-        fediafDogScenario: dto.scenario,
-        nutritionStandard: 'FEDIAF_2025',
-        targetHealthTags: dto.targetHealthTags ?? [],
-        applicableLifeStages: dto.applicableLifeStages ?? [],
-        notes: dto.notes ?? null,
-        createdBy: userId,
-      },
-      include: DESIGN_RECIPE_INCLUDE,
+    return this.prisma.$transaction(async (tx) => {
+      const latestVersion = await tx.designRecipe.aggregate({
+        where: { name: dto.name },
+        _max: { version: true },
+      });
+
+      return tx.designRecipe.create({
+        data: {
+          name: dto.name,
+          version: (latestVersion._max.version ?? 0) + 1,
+          fediafDogScenario: dto.scenario,
+          nutritionStandard: 'FEDIAF_2025',
+          targetHealthTags: dto.targetHealthTags ?? [],
+          applicableLifeStages: dto.applicableLifeStages ?? [],
+          notes: dto.notes ?? null,
+          createdBy: userId,
+        },
+        include: DESIGN_RECIPE_INCLUDE,
+      });
     });
   }
 

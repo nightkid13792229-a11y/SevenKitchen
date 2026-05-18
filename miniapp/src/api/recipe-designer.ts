@@ -22,6 +22,7 @@ export interface DesignRecipeDraftPayload {
 }
 
 export interface DesignRecipeItemPayload {
+  ingredientId?: string
   nutritionFoodId: string
   weightG: number
   preparationMethod?: string
@@ -81,8 +82,48 @@ export interface NutritionFoodListResponse {
   hasMore: boolean
 }
 
+export interface IngredientOptionListQuery {
+  search?: string
+  page?: number
+  pageSize?: number
+}
+
+export interface IngredientNutritionProfileOption {
+  mappingId: string
+  nutritionFoodId: string
+  name: string
+  nameEn?: string | null
+  category?: string
+  dataSource?: string
+  status?: NutritionFoodStatus
+  yieldRate?: number
+  isPrimary?: boolean
+  notes?: string | null
+}
+
+export interface RecipeDesignerIngredientOption {
+  id: string
+  name: string
+  type?: string
+  purchaseUnit?: string
+  brand?: string | null
+  productModel?: string | null
+  defaultNutritionFoodId?: string | null
+  nutritionProfiles: IngredientNutritionProfileOption[]
+}
+
+export interface IngredientOptionListResponse {
+  data: RecipeDesignerIngredientOption[]
+  total: number
+  page: number
+  pageSize: number
+  hasMore: boolean
+}
+
 export const recipeDesignerApi = {
   listDrafts: () => request({ url: '/recipe-designer/drafts', method: 'GET' }),
+  listIngredientOptions: (data: IngredientOptionListQuery = {}) =>
+    request({ url: '/recipe-designer/ingredient-options', method: 'GET', data }),
   listNutritionFoods: (data: NutritionFoodListQuery = {}) =>
     request({ url: '/nutrition-foods', method: 'GET', data }),
   createDraft: (data: DesignRecipeDraftPayload) =>

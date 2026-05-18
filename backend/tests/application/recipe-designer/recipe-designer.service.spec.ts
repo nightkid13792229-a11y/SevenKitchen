@@ -20,6 +20,13 @@ describe('RecipeDesignerService', () => {
       update: jest.fn(),
       delete: jest.fn(),
     },
+    nutritionFoodMapping: {
+      findFirst: jest.fn(),
+    },
+    ingredient: {
+      count: jest.fn(),
+      findMany: jest.fn(),
+    },
     recipe: {
       create: jest.fn(),
     },
@@ -189,6 +196,174 @@ describe('RecipeDesignerService', () => {
       }),
       include: expect.any(Object),
     });
+  });
+
+  it('lists standard ingredient options with verified nutrition profiles and primary defaults', async () => {
+    prisma.ingredient.count.mockResolvedValue(1);
+    prisma.ingredient.findMany.mockResolvedValue([
+      {
+        id: 'ingredient-mussel',
+        name: '青口贝肉',
+        type: 'FOOD',
+        purchaseUnit: 'g',
+        brand: null,
+        productModel: null,
+        nutritionFoodMappings: [
+          {
+            id: 'mapping-secondary',
+            nutritionFoodId: 'food-cooked',
+            ingredientId: 'ingredient-mussel',
+            yieldRate: 0.82,
+            isPrimary: false,
+            notes: 'boiled profile',
+            nutritionFood: {
+              id: 'food-cooked',
+              name: 'Mussel, green, meat, boiled',
+              nameEn: 'Green mussel boiled',
+              category: 'OTHER',
+              dataSource: 'NZFCD',
+              status: 'VERIFIED',
+            },
+          },
+          {
+            id: 'mapping-primary',
+            nutritionFoodId: 'food-raw',
+            ingredientId: 'ingredient-mussel',
+            yieldRate: 1,
+            isPrimary: true,
+            notes: null,
+            nutritionFood: {
+              id: 'food-raw',
+              name: 'Mussel, green, meat, fresh, raw',
+              nameEn: 'Green mussel raw',
+              category: 'OTHER',
+              dataSource: 'NZFCD',
+              status: 'VERIFIED',
+            },
+          },
+        ],
+      },
+    ]);
+
+    await expect(
+      service.listIngredientOptions({
+        search: 'mussel',
+        page: 1,
+        pageSize: 20,
+      }),
+    ).resolves.toEqual({
+      data: [
+        {
+          id: 'ingredient-mussel',
+          name: '青口贝肉',
+          type: 'FOOD',
+          purchaseUnit: 'g',
+          brand: null,
+          productModel: null,
+          defaultNutritionFoodId: 'food-raw',
+          nutritionProfiles: [
+            expect.objectContaining({
+              mappingId: 'mapping-primary',
+              nutritionFoodId: 'food-raw',
+              name: 'Mussel, green, meat, fresh, raw',
+              dataSource: 'NZFCD',
+              isPrimary: true,
+            }),
+            expect.objectContaining({
+              mappingId: 'mapping-secondary',
+              nutritionFoodId: 'food-cooked',
+              name: 'Mussel, green, meat, boiled',
+              isPrimary: false,
+            }),
+          ],
+        },
+      ],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+      hasMore: false,
+    });
+
+    const expectedWhere = expect.objectContaining({
+      type: 'FOOD',
+      nutritionFoodMappings: {
+        some: { nutritionFood: { status: 'VERIFIED' } },
+      },
+      OR: expect.arrayContaining([
+        { name: { contains: 'mussel', mode: 'insensitive' } },
+        {
+          nutritionFoodMappings: {
+            some: {
+              nutritionFood: {
+                name: { contains: 'mussel', mode: 'insensitive' },
+              },
+            },
+          },
+        },
+      ]),
+    });
+    expect(prisma.ingredient.count).toHaveBeenCalledWith({
+      where: expectedWhere,
+    });
+    expect(prisma.ingredient.findMany).toHaveBeenCalledWith({
+      where: expectedWhere,
+      skip: 0,
+      take: 20,
+      orderBy: { name: 'asc' },
+      select: expect.objectContaining({
+        nutritionFoodMappings: expect.objectContaining({
+          where: { nutritionFood: { status: 'VERIFIED' } },
+        }),
+      }),
+    });
+  });
+
+  it('adds design items with both the selected standard ingredient and nutrition profile', async () => {
+    prisma.nutritionFoodMapping.findFirst.mockResolvedValue({ id: 'mapping-1' });
+    prisma.designRecipeItem.create.mockResolvedValue(
+      item({
+        ingredientId: 'ingredient-mussel',
+        nutritionFoodId: 'food-raw',
+      }),
+    );
+
+    await service.addItem('design-1', {
+      ingredientId: 'ingredient-mussel',
+      nutritionFoodId: 'food-raw',
+      weightG: 100,
+      sortOrder: 0,
+    } as any);
+
+    expect(prisma.nutritionFoodMapping.findFirst).toHaveBeenCalledWith({
+      where: {
+        ingredientId: 'ingredient-mussel',
+        nutritionFoodId: 'food-raw',
+      },
+      select: { id: true },
+    });
+    expect(prisma.designRecipeItem.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        designRecipeId: 'design-1',
+        ingredientId: 'ingredient-mussel',
+        nutritionFoodId: 'food-raw',
+        weightG: 100,
+      }),
+      include: expect.any(Object),
+    });
+  });
+
+  it('rejects design items when the selected ingredient is not mapped to the nutrition profile', async () => {
+    prisma.nutritionFoodMapping.findFirst.mockResolvedValue(null);
+
+    await expect(
+      service.addItem('design-1', {
+        ingredientId: 'ingredient-oyster',
+        nutritionFoodId: 'food-mussel',
+        weightG: 100,
+      } as any),
+    ).rejects.toThrow(BadRequestException);
+
+    expect(prisma.designRecipeItem.create).not.toHaveBeenCalled();
   });
 
   it('hard deletes an unpublished draft created by the current staff user', async () => {

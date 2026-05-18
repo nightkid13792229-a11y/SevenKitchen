@@ -7,6 +7,8 @@ import {
 import {
   DesignRecipeReviewStatus,
   DesignRecipeStatus,
+  IngredientType,
+  NutritionFoodStatus,
   Prisma,
   RecipeStatus,
 } from '@prisma/client';
@@ -22,6 +24,7 @@ import { PrismaService } from '../../infrastructure/prisma.service';
 import type {
   AddRecipeDesignItemDto,
   CreateRecipeDesignDraftDto,
+  ListRecipeDesignerIngredientOptionsDto,
   PublishRecipeDesignDraftDto,
   UpdateRecipeDesignDraftDto,
   UpdateRecipeDesignItemDto,
@@ -34,9 +37,28 @@ import {
 const DESIGN_RECIPE_INCLUDE = {
   items: {
     include: {
+      ingredient: {
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          purchaseUnit: true,
+        },
+      },
       nutritionFood: {
         include: {
-          mappings: true,
+          mappings: {
+            include: {
+              ingredient: {
+                select: {
+                  id: true,
+                  name: true,
+                  type: true,
+                  purchaseUnit: true,
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -68,6 +90,7 @@ type DesignRecipeWithItems = {
 
 type DesignRecipeItemWithFood = {
   id: string;
+  ingredientId: string | null;
   nutritionFoodId: string;
   weightG: number;
   ratioPercent: number | null;
@@ -75,6 +98,10 @@ type DesignRecipeItemWithFood = {
   nutrientTargetKey: string | null;
   nutrientTargetValue: number | null;
   sortOrder: number;
+  ingredient?: {
+    id: string;
+    name: string;
+  } | null;
   nutritionFood: {
     id: string;
     name: string;
@@ -82,8 +109,36 @@ type DesignRecipeItemWithFood = {
     mappings?: Array<{
       ingredientId: string;
       isPrimary: boolean;
+      ingredient?: {
+        id: string;
+        name: string;
+      } | null;
     }>;
   };
+};
+
+type IngredientOptionRecord = {
+  id: string;
+  name: string;
+  type: string;
+  purchaseUnit: string;
+  brand: string | null;
+  productModel: string | null;
+  nutritionFoodMappings: Array<{
+    id: string;
+    nutritionFoodId: string;
+    yieldRate: number;
+    isPrimary: boolean;
+    notes: string | null;
+    nutritionFood: {
+      id: string;
+      name: string;
+      nameEn: string | null;
+      category: string;
+      dataSource: string;
+      status: string;
+    };
+  }>;
 };
 
 @Injectable()
@@ -93,6 +148,96 @@ export class RecipeDesignerService {
     @Inject(FEDIAF_TARGET_PROVIDER)
     private readonly targetProvider: FediafTargetProvider,
   ) {}
+
+  async listIngredientOptions(dto: ListRecipeDesignerIngredientOptionsDto = {}) {
+    const page = Math.max(1, Number(dto.page ?? 1));
+    const pageSize = Math.min(50, Math.max(1, Number(dto.pageSize ?? 20)));
+    const skip = (page - 1) * pageSize;
+    const search = dto.search?.trim();
+    const verifiedMappingWhere = {
+      nutritionFood: { status: NutritionFoodStatus.VERIFIED },
+    };
+    const searchFilter: Prisma.IngredientWhereInput | undefined = search
+      ? {
+          OR: [
+            { name: { contains: search, mode: 'insensitive' } },
+            { brand: { contains: search, mode: 'insensitive' } },
+            { productModel: { contains: search, mode: 'insensitive' } },
+            {
+              nutritionFoodMappings: {
+                some: {
+                  nutritionFood: {
+                    name: { contains: search, mode: 'insensitive' },
+                  },
+                },
+              },
+            },
+            {
+              nutritionFoodMappings: {
+                some: {
+                  nutritionFood: {
+                    nameEn: { contains: search, mode: 'insensitive' },
+                  },
+                },
+              },
+            },
+          ],
+        }
+      : undefined;
+    const where: Prisma.IngredientWhereInput = {
+      type: IngredientType.FOOD,
+      nutritionFoodMappings: { some: verifiedMappingWhere },
+      ...(searchFilter ?? {}),
+    };
+
+    const [total, ingredients] = await Promise.all([
+      this.prisma.ingredient.count({ where }),
+      this.prisma.ingredient.findMany({
+        where,
+        skip,
+        take: pageSize,
+        orderBy: { name: 'asc' },
+        select: {
+          id: true,
+          name: true,
+          type: true,
+          purchaseUnit: true,
+          brand: true,
+          productModel: true,
+          nutritionFoodMappings: {
+            where: verifiedMappingWhere,
+            select: {
+              id: true,
+              nutritionFoodId: true,
+              yieldRate: true,
+              isPrimary: true,
+              notes: true,
+              nutritionFood: {
+                select: {
+                  id: true,
+                  name: true,
+                  nameEn: true,
+                  category: true,
+                  dataSource: true,
+                  status: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      data: ingredients.map((ingredient) =>
+        this.toIngredientOption(ingredient as IngredientOptionRecord),
+      ),
+      total,
+      page,
+      pageSize,
+      hasMore: skip + pageSize < total,
+    };
+  }
 
   async listDrafts(createdBy: string) {
     return this.prisma.designRecipe.findMany({
@@ -175,9 +320,12 @@ export class RecipeDesignerService {
   }
 
   async addItem(designRecipeId: string, dto: AddRecipeDesignItemDto) {
+    const ingredientId = await this.resolveDesignItemIngredientId(dto);
+
     return this.prisma.designRecipeItem.create({
       data: {
         designRecipeId,
+        ingredientId,
         nutritionFoodId: dto.nutritionFoodId,
         weightG: dto.weightG,
         preparationMethod: dto.preparationMethod ?? null,
@@ -186,7 +334,12 @@ export class RecipeDesignerService {
         sortOrder: dto.sortOrder ?? 0,
       },
       include: {
-        nutritionFood: true,
+        ingredient: true,
+        nutritionFood: {
+          include: {
+            mappings: true,
+          },
+        },
       },
     });
   }
@@ -353,7 +506,7 @@ export class RecipeDesignerService {
       targets,
       items: draft.items.map((item) => ({
         id: item.id,
-        name: item.nutritionFood.name,
+        name: this.resolveIngredientDisplayName(item),
         weightG: item.weightG,
         nutritionProfile: this.toNutritionProfile(item.nutritionFood.nutritionData),
       })),
@@ -417,6 +570,10 @@ export class RecipeDesignerService {
   }
 
   private resolveIngredientId(item: DesignRecipeItemWithFood): string {
+    if (item.ingredientId) {
+      return item.ingredientId;
+    }
+
     const mappings = item.nutritionFood.mappings ?? [];
     const mapping =
       mappings.find((candidate) => candidate.isPrimary) ?? mappings[0];
@@ -428,6 +585,77 @@ export class RecipeDesignerService {
     }
 
     return mapping.ingredientId;
+  }
+
+  private async resolveDesignItemIngredientId(dto: AddRecipeDesignItemDto) {
+    if (!dto.ingredientId) {
+      return null;
+    }
+
+    const mapping = await this.prisma.nutritionFoodMapping.findFirst({
+      where: {
+        ingredientId: dto.ingredientId,
+        nutritionFoodId: dto.nutritionFoodId,
+      },
+      select: { id: true },
+    });
+
+    if (!mapping) {
+      throw new BadRequestException('所选标准原料和营养档案未建立映射');
+    }
+
+    return dto.ingredientId;
+  }
+
+  private resolveIngredientDisplayName(item: DesignRecipeItemWithFood) {
+    if (item.ingredient?.name) {
+      return item.ingredient.name;
+    }
+
+    const mappings = item.nutritionFood.mappings ?? [];
+    const mapping =
+      mappings.find((candidate) => candidate.ingredientId === item.ingredientId) ??
+      mappings.find((candidate) => candidate.isPrimary) ??
+      mappings[0];
+
+    return mapping?.ingredient?.name ?? item.nutritionFood.name;
+  }
+
+  private toIngredientOption(ingredient: IngredientOptionRecord) {
+    const nutritionProfiles = ingredient.nutritionFoodMappings
+      .map((mapping) => ({
+        mappingId: mapping.id,
+        nutritionFoodId: mapping.nutritionFoodId,
+        name: mapping.nutritionFood.name,
+        nameEn: mapping.nutritionFood.nameEn,
+        category: mapping.nutritionFood.category,
+        dataSource: mapping.nutritionFood.dataSource,
+        status: mapping.nutritionFood.status,
+        yieldRate: mapping.yieldRate,
+        isPrimary: mapping.isPrimary,
+        notes: mapping.notes,
+      }))
+      .sort((left, right) => {
+        if (left.isPrimary !== right.isPrimary) {
+          return left.isPrimary ? -1 : 1;
+        }
+        return left.name.localeCompare(right.name);
+      });
+    const defaultProfile =
+      nutritionProfiles.find((profile) => profile.isPrimary) ??
+      nutritionProfiles[0] ??
+      null;
+
+    return {
+      id: ingredient.id,
+      name: ingredient.name,
+      type: ingredient.type,
+      purchaseUnit: ingredient.purchaseUnit,
+      brand: ingredient.brand,
+      productModel: ingredient.productModel,
+      defaultNutritionFoodId: defaultProfile?.nutritionFoodId ?? null,
+      nutritionProfiles,
+    };
   }
 
   private findAssessedRatio(

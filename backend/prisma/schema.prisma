@@ -486,6 +486,7 @@ model Ingredient {
   purchaseItems                 PurchaseItem[]
   recipeItems                   RecipeItem[]
   recipeSupplementAlternatives  RecipeSupplementAlternative[]
+  designRecipeItems             DesignRecipeItem[]
   nutritionFoodMappings         NutritionFoodMapping[]
   recommendedProducts           RecommendedProduct[]
   inventoryAdjustments          InventoryAdjustment[]
@@ -1634,6 +1635,7 @@ model DesignRecipe {
 model DesignRecipeItem {
   id                  String        @id @default(uuid()) @map("id")
   designRecipeId      String        @map("design_recipe_id")
+  ingredientId        String?       @map("ingredient_id")
   nutritionFoodId     String        @map("nutrition_food_id")
   weightG             Float         @map("weight_g")
   ratioPercent        Float?        @map("ratio_percent")
@@ -1644,9 +1646,11 @@ model DesignRecipeItem {
   createdAt           DateTime      @default(now()) @map("created_at")
   updatedAt           DateTime      @updatedAt @map("updated_at")
   designRecipe        DesignRecipe  @relation(fields: [designRecipeId], references: [id], onDelete: Cascade)
+  ingredient          Ingredient?   @relation(fields: [ingredientId], references: [id])
   nutritionFood       NutritionFood @relation(fields: [nutritionFoodId], references: [id])
 
   @@index([designRecipeId])
+  @@index([ingredientId])
   @@index([nutritionFoodId])
   @@map("design_recipe_item")
 }

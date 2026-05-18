@@ -73,7 +73,7 @@
         <view class="picker-header">
           <view>
             <text class="picker-title">添加原料</text>
-            <text class="picker-subtitle">选择营养原料并填写本配方用量</text>
+            <text class="picker-subtitle">选择标准原料，必要时切换营养档案</text>
           </view>
           <button class="picker-close" @tap="closeIngredientPicker">×</button>
         </view>
@@ -84,43 +84,61 @@
             v-model="ingredientSearchKeyword"
             confirm-type="search"
             placeholder="搜索原料名称"
-            @confirm="searchNutritionFoods"
+            @confirm="searchIngredientOptions"
           />
-          <button class="search-btn" :disabled="ingredientLoading" @tap="searchNutritionFoods">
+          <button class="search-btn" :disabled="ingredientLoading" @tap="searchIngredientOptions">
             搜索
           </button>
         </view>
 
         <scroll-view scroll-y class="ingredient-list">
-          <view v-if="ingredientLoading && nutritionFoods.length === 0" class="picker-state">
+          <view v-if="ingredientLoading && ingredientOptions.length === 0" class="picker-state">
             <text>加载原料中...</text>
           </view>
 
-          <view v-else-if="nutritionFoods.length === 0" class="picker-state">
+          <view v-else-if="ingredientOptions.length === 0" class="picker-state">
             <text>暂无可用原料</text>
           </view>
 
           <view
-            v-for="food in nutritionFoods"
-            :key="food.id"
+            v-for="option in ingredientOptions"
+            :key="option.id"
             class="food-option"
-            :class="{ selected: selectedNutritionFood?.id === food.id }"
-            @tap="selectNutritionFood(food)"
+            :class="{ selected: selectedIngredientOption?.id === option.id }"
+            @tap="selectIngredientOption(option)"
           >
-            <view class="food-main">
-              <text class="food-name">{{ food.name }}</text>
-              <text class="food-meta">{{ getNutritionFoodMeta(food) }}</text>
+            <view class="food-option-mainline">
+              <view class="food-main">
+                <text class="food-name">{{ option.name }}</text>
+                <text class="food-meta">{{ getIngredientOptionMeta(option) }}</text>
+              </view>
+              <text class="food-badge" :class="{ mapped: option.nutritionProfiles.length > 0 }">
+                {{ option.nutritionProfiles.length > 1 ? '多档案' : '主档案' }}
+              </text>
             </view>
-            <text class="food-badge" :class="{ mapped: hasPrimaryMapping(food) }">
-              {{ hasPrimaryMapping(food) ? '已映射' : '未映射' }}
-            </text>
+
+            <view
+              v-if="selectedIngredientOption?.id === option.id && option.nutritionProfiles.length > 1"
+              class="profile-options"
+            >
+              <view
+                v-for="profile in option.nutritionProfiles"
+                :key="profile.nutritionFoodId"
+                class="profile-option"
+                :class="{ active: selectedNutritionProfile?.nutritionFoodId === profile.nutritionFoodId }"
+                @tap.stop="selectNutritionProfile(profile)"
+              >
+                <text class="profile-name">{{ profile.name }}</text>
+                <text class="profile-meta">{{ getNutritionProfileMeta(profile) }}</text>
+              </view>
+            </view>
           </view>
 
           <button
-            v-if="nutritionFoodHasMore"
+            v-if="ingredientOptionHasMore"
             class="load-more-btn"
             :disabled="ingredientLoading"
-            @tap="loadMoreNutritionFoods"
+            @tap="loadMoreIngredientOptions"
           >
             {{ ingredientLoading ? '加载中' : '加载更多' }}
           </button>
@@ -129,7 +147,10 @@
         <view class="picker-footer">
           <view class="selected-info">
             <text class="selected-label">已选原料</text>
-            <text class="selected-name">{{ selectedNutritionFood?.name || '请选择' }}</text>
+            <text class="selected-name">{{ selectedIngredientOption?.name || '请选择' }}</text>
+            <text class="selected-profile">
+              营养档案：{{ selectedNutritionProfile?.name || '请选择' }}
+            </text>
           </view>
           <view class="add-weight-row">
             <input
@@ -139,7 +160,11 @@
               placeholder="克重"
             />
             <text class="weight-unit">g</text>
-            <button class="primary-btn add-btn" :disabled="addingItem" @tap="confirmAddIngredient">
+            <button
+              class="primary-btn add-btn"
+              :disabled="addingItem || !selectedNutritionProfile"
+              @tap="confirmAddIngredient"
+            >
               {{ addingItem ? '加入中' : '加入' }}
             </button>
           </view>
@@ -201,8 +226,9 @@ import { onLoad } from '@dcloudio/uni-app'
 import {
   recipeDesignerApi,
   type FediafDogScenario,
-  type NutritionFoodListResponse,
-  type NutritionFoodSummary,
+  type IngredientNutritionProfileOption,
+  type IngredientOptionListResponse,
+  type RecipeDesignerIngredientOption,
 } from '../../api/recipe-designer'
 import {
   getAssessmentStatusClass,
@@ -215,6 +241,9 @@ interface DesignerItem {
   id: string
   name?: string
   ingredientName?: string
+  ingredient?: {
+    name?: string
+  }
   nutritionFoodName?: string
   nutritionFood?: {
     name?: string
@@ -243,12 +272,13 @@ const ingredientPickerVisible = ref(false)
 const ingredientLoading = ref(false)
 const addingItem = ref(false)
 const ingredientSearchKeyword = ref('')
-const nutritionFoods = ref<NutritionFoodSummary[]>([])
-const selectedNutritionFood = ref<NutritionFoodSummary | null>(null)
+const ingredientOptions = ref<RecipeDesignerIngredientOption[]>([])
+const selectedIngredientOption = ref<RecipeDesignerIngredientOption | null>(null)
+const selectedNutritionProfile = ref<IngredientNutritionProfileOption | null>(null)
 const newItemWeightInput = ref('100')
-const nutritionFoodPage = ref(1)
-const nutritionFoodHasMore = ref(false)
-const nutritionFoodPageSize = 20
+const ingredientOptionPage = ref(1)
+const ingredientOptionHasMore = ref(false)
+const ingredientOptionPageSize = 20
 
 const selectedScenarioIndex = computed(() => {
   const index = scenarioOptions.findIndex((option) => option.value === scenario.value)
@@ -357,10 +387,11 @@ async function updateWeight(item: DesignerItem) {
 
 async function openIngredientPicker() {
   ingredientPickerVisible.value = true
-  selectedNutritionFood.value = null
+  selectedIngredientOption.value = null
+  selectedNutritionProfile.value = null
   newItemWeightInput.value = '100'
-  if (nutritionFoods.value.length === 0) {
-    await loadNutritionFoods(true)
+  if (ingredientOptions.value.length === 0) {
+    await loadIngredientOptions(true)
   }
 }
 
@@ -369,45 +400,49 @@ function closeIngredientPicker() {
   ingredientPickerVisible.value = false
 }
 
-async function searchNutritionFoods() {
-  await loadNutritionFoods(true)
+async function searchIngredientOptions() {
+  await loadIngredientOptions(true)
 }
 
-async function loadMoreNutritionFoods() {
-  if (!nutritionFoodHasMore.value || ingredientLoading.value) return
-  await loadNutritionFoods(false)
+async function loadMoreIngredientOptions() {
+  if (!ingredientOptionHasMore.value || ingredientLoading.value) return
+  await loadIngredientOptions(false)
 }
 
-async function loadNutritionFoods(reset: boolean) {
+async function loadIngredientOptions(reset: boolean) {
   if (ingredientLoading.value) return
   ingredientLoading.value = true
   try {
-    const nextPage = reset ? 1 : nutritionFoodPage.value + 1
-    const res: any = await recipeDesignerApi.listNutritionFoods({
-      status: 'VERIFIED',
+    const nextPage = reset ? 1 : ingredientOptionPage.value + 1
+    const res: any = await recipeDesignerApi.listIngredientOptions({
       search: ingredientSearchKeyword.value.trim(),
       page: nextPage,
-      pageSize: nutritionFoodPageSize,
+      pageSize: ingredientOptionPageSize,
     })
-    const data = (res?.data ?? res) as NutritionFoodListResponse
-    const foods = Array.isArray(data?.data) ? data.data : []
-    nutritionFoods.value = reset ? foods : [...nutritionFoods.value, ...foods]
-    nutritionFoodPage.value = data?.page || nextPage
-    nutritionFoodHasMore.value = Boolean(data?.hasMore)
+    const data = (res?.data ?? res) as IngredientOptionListResponse
+    const options = Array.isArray(data?.data) ? data.data : []
+    ingredientOptions.value = reset ? options : [...ingredientOptions.value, ...options]
+    ingredientOptionPage.value = data?.page || nextPage
+    ingredientOptionHasMore.value = Boolean(data?.hasMore)
   } catch (error) {
-    console.error('[RecipeDesignerEditor] Failed to load nutrition foods:', error)
+    console.error('[RecipeDesignerEditor] Failed to load ingredient options:', error)
     uni.showToast({ title: '加载原料失败', icon: 'none' })
   } finally {
     ingredientLoading.value = false
   }
 }
 
-function selectNutritionFood(food: NutritionFoodSummary) {
-  selectedNutritionFood.value = food
+function selectIngredientOption(option: RecipeDesignerIngredientOption) {
+  selectedIngredientOption.value = option
+  selectedNutritionProfile.value = getDefaultNutritionProfile(option)
+}
+
+function selectNutritionProfile(profile: IngredientNutritionProfileOption) {
+  selectedNutritionProfile.value = profile
 }
 
 async function confirmAddIngredient() {
-  if (!selectedNutritionFood.value) {
+  if (!selectedIngredientOption.value || !selectedNutritionProfile.value) {
     uni.showToast({ title: '请选择原料', icon: 'none' })
     return
   }
@@ -421,7 +456,8 @@ async function confirmAddIngredient() {
   addingItem.value = true
   try {
     const res: any = await recipeDesignerApi.addItem(draftId.value, {
-      nutritionFoodId: selectedNutritionFood.value.id,
+      ingredientId: selectedIngredientOption.value.id,
+      nutritionFoodId: selectedNutritionProfile.value.nutritionFoodId,
       weightG,
       sortOrder: items.value.length,
     })
@@ -430,7 +466,8 @@ async function confirmAddIngredient() {
       items.value = [...items.value, item]
     }
     ingredientPickerVisible.value = false
-    selectedNutritionFood.value = null
+    selectedIngredientOption.value = null
+    selectedNutritionProfile.value = null
     await refreshAssessment()
     uni.showToast({ title: '已加入配方', icon: 'success' })
   } catch (error) {
@@ -467,16 +504,38 @@ function goToPublish() {
 }
 
 function getItemName(item: DesignerItem) {
-  return item.name || item.ingredientName || item.nutritionFoodName || item.nutritionFood?.name || '未命名原料'
+  return (
+    item.name ||
+    item.ingredientName ||
+    item.ingredient?.name ||
+    item.nutritionFoodName ||
+    item.nutritionFood?.name ||
+    '未命名原料'
+  )
 }
 
-function getNutritionFoodMeta(food: NutritionFoodSummary) {
-  const parts = [food.dataSource, food.category].filter(Boolean)
-  return parts.join(' / ') || '标准营养原料'
+function getIngredientOptionMeta(option: RecipeDesignerIngredientOption) {
+  const defaultProfile = getDefaultNutritionProfile(option)
+  const profileCount = option.nutritionProfiles.length
+  if (!defaultProfile) return '尚未配置营养档案'
+  const suffix = profileCount > 1 ? ` · 共${profileCount}个档案` : ''
+  return `默认：${defaultProfile.name}${suffix}`
 }
 
-function hasPrimaryMapping(food: NutritionFoodSummary) {
-  return Boolean(food.mappings?.some((mapping) => mapping.isPrimary))
+function getDefaultNutritionProfile(option: RecipeDesignerIngredientOption) {
+  return (
+    option.nutritionProfiles.find(
+      (profile) => profile.nutritionFoodId === option.defaultNutritionFoodId,
+    ) ||
+    option.nutritionProfiles.find((profile) => profile.isPrimary) ||
+    option.nutritionProfiles[0] ||
+    null
+  )
+}
+
+function getNutritionProfileMeta(profile: IngredientNutritionProfileOption) {
+  const parts = [profile.dataSource, profile.category, profile.isPrimary ? '主档案' : '次级档案']
+  return parts.filter(Boolean).join(' / ')
 }
 
 function formatItemWeightInput(value?: number) {
@@ -735,7 +794,7 @@ function formatAssessmentNumber(value: unknown) {
 
 .picker-header,
 .search-row,
-.food-option,
+.food-option-mainline,
 .picker-footer,
 .add-weight-row {
   display: flex;
@@ -743,7 +802,7 @@ function formatAssessmentNumber(value: unknown) {
 }
 
 .picker-header,
-.food-option,
+.food-option-mainline,
 .picker-footer {
   justify-content: space-between;
   gap: 20rpx;
@@ -816,6 +875,10 @@ function formatAssessmentNumber(value: unknown) {
   border-bottom: 1rpx solid #f5f5f5;
 }
 
+.food-option-mainline {
+  width: 100%;
+}
+
 .food-option.selected .food-name {
   color: #1677ff;
 }
@@ -854,6 +917,47 @@ function formatAssessmentNumber(value: unknown) {
   color: #389e0d;
 }
 
+.profile-options {
+  display: flex;
+  flex-direction: column;
+  gap: 10rpx;
+  margin-top: 16rpx;
+  padding: 12rpx;
+  border-radius: 10rpx;
+  background: #f7f8fa;
+}
+
+.profile-option {
+  padding: 14rpx 16rpx;
+  border: 1rpx solid #e8e8e8;
+  border-radius: 8rpx;
+  background: #fff;
+}
+
+.profile-option.active {
+  border-color: #1677ff;
+  background: #edf4ff;
+}
+
+.profile-name,
+.profile-meta,
+.selected-profile {
+  display: block;
+}
+
+.profile-name {
+  color: #222;
+  font-size: 24rpx;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.profile-meta {
+  margin-top: 6rpx;
+  color: #777;
+  font-size: 21rpx;
+}
+
 .load-more-btn {
   width: 100%;
   margin: 18rpx 0;
@@ -882,6 +986,15 @@ function formatAssessmentNumber(value: unknown) {
   color: #222;
   font-size: 26rpx;
   font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.selected-profile {
+  margin-top: 6rpx;
+  color: #777;
+  font-size: 22rpx;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

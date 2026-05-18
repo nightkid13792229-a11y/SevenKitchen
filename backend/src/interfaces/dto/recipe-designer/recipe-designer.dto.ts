@@ -17,6 +17,24 @@ export const RECIPE_DESIGNER_SCENARIOS = [
 
 export type RecipeDesignerScenario = (typeof RECIPE_DESIGNER_SCENARIOS)[number];
 
+export class ListRecipeDesignerIngredientOptionsDto {
+  @IsOptional()
+  @IsString()
+  search?: string;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  page?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(1)
+  pageSize?: number;
+}
+
 export class CreateRecipeDesignDraftDto {
   @IsString()
   name!: string;
@@ -64,6 +82,10 @@ export class UpdateRecipeDesignDraftDto {
 }
 
 export class AddRecipeDesignItemDto {
+  @IsOptional()
+  @IsString()
+  ingredientId?: string;
+
   @IsString()
   nutritionFoodId!: string;
 

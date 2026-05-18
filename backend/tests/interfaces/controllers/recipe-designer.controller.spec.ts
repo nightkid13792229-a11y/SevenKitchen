@@ -17,6 +17,7 @@ describe('RecipeDesignerController', () => {
   let controller: RecipeDesignerController;
 
   const service = {
+    listIngredientOptions: jest.fn(),
     listDrafts: jest.fn(),
     createDraft: jest.fn(),
     updateDraft: jest.fn(),
@@ -91,6 +92,37 @@ describe('RecipeDesignerController', () => {
     expect(service.deleteDraft).toHaveBeenCalledWith('design-1', 'staff-1');
   });
 
+  it('delegates ingredient option listing for the mobile picker', async () => {
+    service.listIngredientOptions.mockResolvedValue({
+      data: [{ id: 'ingredient-1', defaultNutritionFoodId: 'food-1' }],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+      hasMore: false,
+    });
+
+    await expect(
+      controller.listIngredientOptions({
+        search: 'mussel',
+        page: 1,
+        pageSize: 20,
+      }),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        code: 0,
+        data: expect.objectContaining({
+          data: [{ id: 'ingredient-1', defaultNutritionFoodId: 'food-1' }],
+        }),
+      }),
+    );
+
+    expect(service.listIngredientOptions).toHaveBeenCalledWith({
+      search: 'mussel',
+      page: 1,
+      pageSize: 20,
+    });
+  });
+
   it('delegates item mutations, assessment, and publish with CurrentUser ids', async () => {
     service.addItem.mockResolvedValue({ id: 'item-1' });
     service.updateItem.mockResolvedValue({ id: 'item-1', weightG: 120 });
@@ -99,15 +131,17 @@ describe('RecipeDesignerController', () => {
     service.publishDraft.mockResolvedValue({ status: 'PUBLISHED' });
 
     await controller.addItem('design-1', {
+      ingredientId: 'ingredient-1',
       nutritionFoodId: 'food-1',
       weightG: 100,
-    });
+    } as any);
     await controller.updateItem('item-1', { weightG: 120 });
     await controller.removeItem('item-1');
     await controller.assessDraft('design-1');
     await controller.publishDraft('design-1', { reviewNote: 'ok' }, currentUser);
 
     expect(service.addItem).toHaveBeenCalledWith('design-1', {
+      ingredientId: 'ingredient-1',
       nutritionFoodId: 'food-1',
       weightG: 100,
     });

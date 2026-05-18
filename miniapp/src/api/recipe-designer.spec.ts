@@ -9,7 +9,7 @@ import {
   FEDIAF_DOG_SCENARIO_LABELS,
   recipeDesignerApi,
   type DesignRecipeDraftPayload,
-  type NutritionFoodListQuery,
+  type IngredientOptionListQuery,
   type UpdateDesignRecipeItemPayload,
   type FediafDogScenario,
 } from './recipe-designer'
@@ -30,13 +30,14 @@ describe('recipeDesignerApi', () => {
       notes: 'calcium check',
     }
     const itemPayload = {
+      ingredientId: 'ingredient-1',
       nutritionFoodId: 'food-1',
       weightG: 120,
       preparationMethod: 'cooked',
       nutrientTargetKey: 'CA',
       nutrientTargetValue: 1.2,
       sortOrder: 1,
-    }
+    } satisfies Parameters<typeof recipeDesignerApi.addItem>[1]
     const updateItemPayload = {
       weightG: 150,
       preparationMethod: 'steamed',
@@ -161,18 +162,17 @@ describe('recipeDesignerApi', () => {
     })
   })
 
-  it('lists verified nutrition foods for the ingredient picker', () => {
+  it('lists standard ingredient options for the ingredient picker', () => {
     const query = {
-      status: 'VERIFIED',
       search: 'chicken',
       page: 2,
       pageSize: 20,
-    } satisfies NutritionFoodListQuery
+    } satisfies IngredientOptionListQuery
 
-    recipeDesignerApi.listNutritionFoods(query)
+    recipeDesignerApi.listIngredientOptions(query)
 
     expect(mockedRequest).toHaveBeenCalledWith({
-      url: '/nutrition-foods',
+      url: '/recipe-designer/ingredient-options',
       method: 'GET',
       data: query,
     })

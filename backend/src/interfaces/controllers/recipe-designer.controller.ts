@@ -6,6 +6,7 @@ import {
   Param,
   Patch,
   Post,
+  Query,
   UseGuards,
   UsePipes,
   ValidationPipe,
@@ -22,6 +23,7 @@ import { ApiResponseDto } from '../dto/common/response.dto';
 import {
   AddRecipeDesignItemDto,
   CreateRecipeDesignDraftDto,
+  ListRecipeDesignerIngredientOptionsDto,
   PublishRecipeDesignDraftDto,
   UpdateRecipeDesignDraftDto,
   UpdateRecipeDesignItemDto,
@@ -36,6 +38,15 @@ import { StaffGuard } from '../guards/role.guard';
 @UsePipes(new ValidationPipe({ transform: true, whitelist: true }))
 export class RecipeDesignerController {
   constructor(private readonly recipeDesignerService: RecipeDesignerService) {}
+
+  @Get('ingredient-options')
+  @ApiOperation({ summary: 'List standard ingredient options for recipe design' })
+  async listIngredientOptions(
+    @Query() query: ListRecipeDesignerIngredientOptionsDto,
+  ): Promise<ApiResponseDto<any>> {
+    const options = await this.recipeDesignerService.listIngredientOptions(query);
+    return ApiResponseDto.success(options);
+  }
 
   @Get('drafts')
   @ApiOperation({ summary: 'List recipe design drafts for current staff user' })

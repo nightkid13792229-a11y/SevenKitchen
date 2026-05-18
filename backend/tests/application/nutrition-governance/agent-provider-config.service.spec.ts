@@ -75,6 +75,7 @@ describe('AgentProviderConfigService', () => {
       enabled: false,
       baseUrl: 'https://api.deepseek.com',
       model: 'deepseek-v4-flash',
+      reviewModel: 'deepseek-v4-pro',
       apiKeyEncrypted: 'encrypted-existing',
       apiKeyLast4: '9999',
       maxConcurrency: 1,
@@ -88,6 +89,7 @@ describe('AgentProviderConfigService', () => {
       enabled: update.enabled,
       baseUrl: update.baseUrl,
       model: update.model,
+      reviewModel: update.reviewModel,
       apiKeyEncrypted: 'encrypted-existing',
       apiKeyLast4: '9999',
       maxConcurrency: update.maxConcurrency,
@@ -102,6 +104,64 @@ describe('AgentProviderConfigService', () => {
     expect(update).not.toHaveProperty('apiKeyLast4');
   });
 
+  it('saves a separate review model for higher-risk Agent tasks', async () => {
+    mockPrisma.agentProviderConfig.findUnique.mockResolvedValue(null);
+    mockPrisma.agentProviderConfig.upsert.mockImplementation(async ({ create }) => ({
+      ...create,
+      id: 'config-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }));
+
+    const settings = await service.updateSettings(
+      {
+        enabled: true,
+        apiKey: 'sk-deepseek-secret-1234',
+        model: 'deepseek-v4-flash',
+        reviewModel: 'deepseek-v4-pro',
+      },
+      'admin-1',
+    );
+
+    expect(settings.model).toBe('deepseek-v4-flash');
+    expect(settings.reviewModel).toBe('deepseek-v4-pro');
+    expect(mockPrisma.agentProviderConfig.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          model: 'deepseek-v4-flash',
+          reviewModel: 'deepseek-v4-pro',
+        }),
+      }),
+    );
+  });
+
+  it('returns runtime config with the review model when requested', async () => {
+    mockPrisma.agentProviderConfig.findUnique.mockResolvedValue(null);
+    mockPrisma.agentProviderConfig.upsert.mockImplementation(async ({ create }) => ({
+      ...create,
+      id: 'config-1',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }));
+    await service.updateSettings(
+      {
+        enabled: true,
+        apiKey: 'sk-deepseek-secret-1234',
+        model: 'deepseek-v4-flash',
+        reviewModel: 'deepseek-v4-pro',
+      },
+      'admin-1',
+    );
+    const saved = mockPrisma.agentProviderConfig.upsert.mock.calls[0][0].create;
+    mockPrisma.agentProviderConfig.findUnique.mockResolvedValue(saved);
+
+    const runtime = await service.getEnabledDeepSeekRuntimeConfig({
+      purpose: 'REVIEW',
+    });
+
+    expect(runtime.model).toBe('deepseek-v4-pro');
+  });
+
   it('clears an API key when clearApiKey is true', async () => {
     mockPrisma.agentProviderConfig.findUnique.mockResolvedValue({
       id: 'config-1',
@@ -110,6 +170,7 @@ describe('AgentProviderConfigService', () => {
       enabled: false,
       baseUrl: 'https://api.deepseek.com',
       model: 'deepseek-v4-flash',
+      reviewModel: 'deepseek-v4-pro',
       apiKeyEncrypted: 'encrypted-existing',
       apiKeyLast4: '9999',
       maxConcurrency: 1,
@@ -123,6 +184,7 @@ describe('AgentProviderConfigService', () => {
       enabled: update.enabled,
       baseUrl: update.baseUrl,
       model: update.model,
+      reviewModel: update.reviewModel,
       apiKeyEncrypted: update.apiKeyEncrypted,
       apiKeyLast4: update.apiKeyLast4,
       maxConcurrency: update.maxConcurrency,

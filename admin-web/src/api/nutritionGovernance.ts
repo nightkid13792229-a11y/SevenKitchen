@@ -2,8 +2,14 @@ import api from './index'
 import type {
   AgentProviderSettings,
   AgentSettingsTestResult,
+  ApplyIngredientCandidateConfigurationPayload,
   BatchAgentReviewPayload,
+  CandidateNutritionValidationWithAgentResult,
+  CfctLocalStructuredLibrary,
+  CfctLocalStructuredLibraryQueue,
   ConfirmNutritionCandidatePayload,
+  ImportCfctReviewedSourceRowsPayload,
+  ImportCfctReviewedSourceRowsResult,
   IngredientNutritionCandidate,
   IngredientNutritionCandidateListItem,
   ListNutritionCandidatesParams,
@@ -11,6 +17,7 @@ import type {
   NutritionAgentReviewJob,
   NutritionGovernanceOverview,
   NutritionSourceRecord,
+  RankFoodCandidatesWithAgentPayload,
   SupplementNutritionDraft,
   UpdateAgentProviderSettingsPayload
 } from '@/types/nutritionGovernance'
@@ -40,6 +47,18 @@ export const nutritionGovernanceApi = {
       ingredientId
     }),
 
+  importReviewedCfctRows: (
+    data: ImportCfctReviewedSourceRowsPayload
+  ): Promise<ImportCfctReviewedSourceRowsResult> =>
+    api.post('/admin/nutrition-governance/sources/cfct/import-reviewed', data),
+
+  getLocalCfctStructuredLibrary: (
+    queue: CfctLocalStructuredLibraryQueue = 'auto-ready'
+  ): Promise<CfctLocalStructuredLibrary> =>
+    api.get('/admin/nutrition-governance/sources/cfct/local-library', {
+      params: { queue }
+    }),
+
   getAgentSettings: (): Promise<AgentProviderSettings> =>
     api.get('/admin/nutrition-governance/agent-settings'),
 
@@ -65,6 +84,20 @@ export const nutritionGovernanceApi = {
   reviewCandidateWithAgent: (id: string): Promise<IngredientNutritionCandidate> =>
     api.post(`/admin/nutrition-governance/candidates/${id}/agent-review`),
 
+  rankFoodCandidatesWithAgent: (
+    data: RankFoodCandidatesWithAgentPayload
+  ): Promise<IngredientNutritionCandidateListItem[]> =>
+    api.post('/admin/nutrition-governance/candidates/rank-with-agent', data, {
+      timeout: 180000
+    }),
+
+  validateCandidateNutritionWithAgent: (
+    id: string
+  ): Promise<CandidateNutritionValidationWithAgentResult> =>
+    api.post(`/admin/nutrition-governance/candidates/${id}/nutrition-validation`, undefined, {
+      timeout: 180000
+    }),
+
   confirmCandidate: (
     id: string,
     data?: ConfirmNutritionCandidatePayload
@@ -75,6 +108,11 @@ export const nutritionGovernanceApi = {
     candidateIds: string[]
   ): Promise<IngredientNutritionCandidate[]> =>
     api.post('/admin/nutrition-governance/candidates/batch-confirm', { candidateIds }),
+
+  applyIngredientCandidateConfiguration: (
+    data: ApplyIngredientCandidateConfigurationPayload
+  ): Promise<IngredientNutritionCandidate[]> =>
+    api.post('/admin/nutrition-governance/candidates/apply-ingredient-config', data),
 
   rejectCandidate: (id: string): Promise<IngredientNutritionCandidate> =>
     api.post(`/admin/nutrition-governance/candidates/${id}/reject`),

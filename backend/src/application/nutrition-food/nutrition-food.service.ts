@@ -19,6 +19,7 @@ import {
   CreateNutritionFoodDto,
   UpdateNutritionFoodDto,
   CreateNutritionFoodMappingDto,
+  UpdateNutritionFoodMappingDto,
   NutritionFoodResponseDto,
   NutritionFoodMappingResponseDto,
   USDAFoodSearchResultDto,
@@ -151,6 +152,8 @@ export class NutritionFoodService {
         externalId: dto.externalId,
         preparationState: dto.preparationState,
         preparationStateLabel: dto.preparationStateLabel,
+        ediblePortionLabel: dto.ediblePortionLabel,
+        processingLabel: dto.processingLabel,
         nutritionData: dto.nutritionData as any,
         notes: dto.notes,
         createdBy: userId,
@@ -190,6 +193,12 @@ export class NutritionFoodService {
         ...(dto.preparationStateLabel !== undefined && {
           preparationStateLabel: dto.preparationStateLabel,
         }),
+        ...(dto.ediblePortionLabel !== undefined && {
+          ediblePortionLabel: dto.ediblePortionLabel,
+        }),
+        ...(dto.processingLabel !== undefined && {
+          processingLabel: dto.processingLabel,
+        }),
         ...(dto.nutritionData !== undefined && {
           nutritionData: dto.nutritionData as any,
         }),
@@ -210,6 +219,19 @@ export class NutritionFoodService {
         },
       },
     });
+
+    if (dto.nutritionData !== undefined) {
+      const primaryIngredientIds = (item.mappings || [])
+        .filter((mapping: any) => mapping.isPrimary)
+        .map((mapping: any) => mapping.ingredientId);
+
+      if (primaryIngredientIds.length > 0) {
+        await this.prisma.ingredient.updateMany({
+          where: { id: { in: primaryIngredientIds } },
+          data: { nutritionProfile: item.nutritionData as any },
+        });
+      }
+    }
 
     return this.toResponseDto(item);
   }
@@ -350,6 +372,13 @@ export class NutritionFoodService {
       },
     });
 
+    if (dto.isPrimary) {
+      await this.prisma.ingredient.update({
+        where: { id: dto.ingredientId },
+        data: { nutritionProfile: nutritionFood.nutritionData as any },
+      });
+    }
+
     return {
       id: mapping.id,
       nutritionFoodId: mapping.nutritionFoodId,
@@ -368,13 +397,157 @@ export class NutritionFoodService {
     nutritionFoodId: string,
     ingredientId: string,
   ): Promise<void> {
-    await this.prisma.nutritionFoodMapping.delete({
+    await this.prisma.$transaction(async (tx) => {
+      const existingMapping = await tx.nutritionFoodMapping.findUnique({
+        where: {
+          nutritionFoodId_ingredientId: {
+            nutritionFoodId,
+            ingredientId,
+          },
+        },
+      });
+
+      if (!existingMapping) {
+        throw new NotFoundException('营养档案映射不存在');
+      }
+
+      let fallbackMapping:
+        | {
+            id: string;
+            nutritionFood: { nutritionData: Prisma.JsonValue };
+          }
+        | undefined;
+
+      if (existingMapping.isPrimary) {
+        const fallbackMappings = await tx.nutritionFoodMapping.findMany({
+          where: {
+            ingredientId,
+            NOT: { nutritionFoodId },
+          },
+          include: {
+            nutritionFood: true,
+          },
+          orderBy: [{ createdAt: 'asc' }],
+          take: 1,
+        });
+        fallbackMapping = fallbackMappings[0];
+
+        if (!fallbackMapping) {
+          throw new BadRequestException(
+            '不能删除唯一营养档案，请先新增其他档案或保留当前档案',
+          );
+        }
+      }
+
+      await tx.nutritionFoodMapping.delete({
+        where: {
+          nutritionFoodId_ingredientId: {
+            nutritionFoodId,
+            ingredientId,
+          },
+        },
+      });
+
+      if (fallbackMapping) {
+        await tx.nutritionFoodMapping.update({
+          where: { id: fallbackMapping.id },
+          data: { isPrimary: true },
+        });
+        await tx.ingredient.update({
+          where: { id: ingredientId },
+          data: {
+            nutritionProfile: fallbackMapping.nutritionFood
+              .nutritionData as any,
+          },
+        });
+      }
+    });
+  }
+
+  async updateMapping(
+    nutritionFoodId: string,
+    ingredientId: string,
+    dto: UpdateNutritionFoodMappingDto,
+  ): Promise<NutritionFoodMappingResponseDto> {
+    const existingMapping = await this.prisma.nutritionFoodMapping.findUnique({
       where: {
         nutritionFoodId_ingredientId: {
           nutritionFoodId,
           ingredientId,
         },
       },
+      include: {
+        nutritionFood: true,
+        ingredient: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            purchaseUnit: true,
+          },
+        },
+      },
+    });
+
+    if (!existingMapping) {
+      throw new NotFoundException('营养档案映射不存在');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      if (dto.isPrimary) {
+        await tx.nutritionFoodMapping.updateMany({
+          where: {
+            ingredientId,
+            isPrimary: true,
+            NOT: { nutritionFoodId },
+          },
+          data: { isPrimary: false },
+        });
+      }
+
+      const mapping = await tx.nutritionFoodMapping.update({
+        where: {
+          nutritionFoodId_ingredientId: {
+            nutritionFoodId,
+            ingredientId,
+          },
+        },
+        data: {
+          ...(dto.yieldRate !== undefined && { yieldRate: dto.yieldRate }),
+          ...(dto.isPrimary !== undefined && { isPrimary: dto.isPrimary }),
+          ...(dto.notes !== undefined && { notes: dto.notes }),
+        },
+        include: {
+          ingredient: {
+            select: {
+              id: true,
+              name: true,
+              type: true,
+              purchaseUnit: true,
+            },
+          },
+        },
+      });
+
+      if (dto.isPrimary) {
+        await tx.ingredient.update({
+          where: { id: ingredientId },
+          data: {
+            nutritionProfile: existingMapping.nutritionFood
+              .nutritionData as any,
+          },
+        });
+      }
+
+      return {
+        id: mapping.id,
+        nutritionFoodId: mapping.nutritionFoodId,
+        ingredientId: mapping.ingredientId,
+        yieldRate: mapping.yieldRate,
+        isPrimary: mapping.isPrimary,
+        notes: mapping.notes ?? undefined,
+        ingredient: mapping.ingredient,
+      };
     });
   }
 
@@ -553,6 +726,8 @@ export class NutritionFoodService {
       dataSource: item.dataSource,
       preparationState: item.preparationState ?? undefined,
       preparationStateLabel: item.preparationStateLabel ?? undefined,
+      ediblePortionLabel: item.ediblePortionLabel ?? undefined,
+      processingLabel: item.processingLabel ?? undefined,
       externalId: item.externalId ?? undefined,
       version: item.version,
       status: item.status,

@@ -21,6 +21,7 @@ import { NutritionFoodCategory, NutritionFoodStatus } from '@prisma/client';
 
 export class CreateNutritionFoodDto {
   @ApiProperty({ description: '食材名称' })
+  @IsString()
   name!: string;
 
   @ApiPropertyOptional({ description: '英文名称' })
@@ -45,6 +46,16 @@ export class CreateNutritionFoodDto {
   @IsOptional()
   @IsString()
   preparationStateLabel?: string;
+
+  @ApiPropertyOptional({ description: '可食部/规格', example: '带皮' })
+  @IsOptional()
+  @IsString()
+  ediblePortionLabel?: string;
+
+  @ApiPropertyOptional({ description: '加工标记', example: '未加工' })
+  @IsOptional()
+  @IsString()
+  processingLabel?: string;
 
   @ApiPropertyOptional({ description: '外部ID（如USDA FDC ID）' })
   @IsOptional()
@@ -84,10 +95,39 @@ export class UpdateNutritionFoodDto {
   @IsString()
   preparationStateLabel?: string;
 
+  @ApiPropertyOptional({ description: '可食部/规格', example: '带皮' })
+  @IsOptional()
+  @IsString()
+  ediblePortionLabel?: string;
+
+  @ApiPropertyOptional({ description: '加工标记', example: '未加工' })
+  @IsOptional()
+  @IsString()
+  processingLabel?: string;
+
   @ApiPropertyOptional({ description: '营养数据（每100g）' })
   @IsOptional()
   @IsObject()
   nutritionData?: Record<string, number>;
+
+  @ApiPropertyOptional({ description: '备注' })
+  @IsOptional()
+  @IsString()
+  notes?: string;
+}
+
+export class UpdateNutritionFoodMappingDto {
+  @ApiPropertyOptional({ description: '出肉率', default: 1.0 })
+  @IsOptional()
+  @IsNumber()
+  @Min(0)
+  @Max(2)
+  yieldRate?: number;
+
+  @ApiPropertyOptional({ description: '是否为主要映射' })
+  @IsOptional()
+  @IsBoolean()
+  isPrimary?: boolean;
 
   @ApiPropertyOptional({ description: '备注' })
   @IsOptional()
@@ -171,6 +211,12 @@ export class NutritionFoodResponseDto {
 
   @ApiPropertyOptional()
   preparationStateLabel?: string;
+
+  @ApiPropertyOptional()
+  ediblePortionLabel?: string;
+
+  @ApiPropertyOptional()
+  processingLabel?: string;
 
   @ApiPropertyOptional()
   externalId?: string;

@@ -103,6 +103,170 @@ describe('nutrition profile contract', () => {
     expect(missingEvidenceFields).not.toContain('vitamins.vitaminD');
   });
 
+  it('requires a specific vitamin E source form when product labels provide mg values', () => {
+    const profile = createEmptyNutritionProfile();
+    profile.meta.sourceKind = 'PRODUCT_LABEL';
+    profile.vitamins.vitaminE = 10;
+    profile.meta.sourceForms = {
+      'vitamins.vitaminE': {
+        originalValue: 10,
+        originalUnit: 'mg',
+        canonicalValue: 10,
+        canonicalUnit: 'IU',
+      },
+    };
+
+    const issues = validateNutritionProfileContract(profile);
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          severity: 'ERROR',
+          code: 'VITAMIN_E_FORM_REQUIRED',
+          fieldPath: 'vitamins.vitaminE',
+        }),
+      ]),
+    );
+  });
+
+  it('accepts product-label vitamin E mg values when source form and conversion factor are recorded', () => {
+    const profile = createEmptyNutritionProfile();
+    profile.meta.sourceKind = 'PRODUCT_LABEL';
+    profile.vitamins.vitaminE = 100;
+    profile.meta.sourceForms = {
+      'vitamins.vitaminE': {
+        originalValue: 100,
+        originalUnit: 'mg',
+        canonicalValue: 100,
+        canonicalUnit: 'IU',
+        vitaminEForm: 'DL_ALPHA_TOCOPHERYL_ACETATE',
+        conversionFactor: 1,
+        conversionFactorUnit: 'IU_PER_MG',
+      },
+    };
+
+    const issues = validateNutritionProfileContract(profile);
+
+    expect(issues).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'VITAMIN_E_FORM_REQUIRED',
+          fieldPath: 'vitamins.vitaminE',
+        }),
+      ]),
+    );
+  });
+
+  it('requires source-form conversion evidence for product-label vitamin A and D mass values', () => {
+    const profile = createEmptyNutritionProfile();
+    profile.meta.sourceKind = 'PRODUCT_LABEL';
+    profile.vitamins.vitaminA = 3333;
+    profile.vitamins.vitaminD = 400;
+    profile.meta.sourceForms = {
+      'vitamins.vitaminA': {
+        originalValue: 1,
+        originalUnit: 'mg',
+        canonicalValue: 3333,
+        canonicalUnit: 'IU',
+      },
+      'vitamins.vitaminD': {
+        originalValue: 10,
+        originalUnit: 'µg',
+        canonicalValue: 400,
+        canonicalUnit: 'IU',
+      },
+    };
+
+    const issues = validateNutritionProfileContract(profile);
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          severity: 'ERROR',
+          code: 'VITAMIN_A_FORM_REQUIRED',
+          fieldPath: 'vitamins.vitaminA',
+        }),
+        expect.objectContaining({
+          severity: 'ERROR',
+          code: 'VITAMIN_D_FORM_REQUIRED',
+          fieldPath: 'vitamins.vitaminD',
+        }),
+      ]),
+    );
+  });
+
+  it('accepts product-label vitamin A and D mass values when source form factors are recorded', () => {
+    const profile = createEmptyNutritionProfile();
+    profile.meta.sourceKind = 'PRODUCT_LABEL';
+    profile.vitamins.vitaminA = 3333;
+    profile.vitamins.vitaminD = 400;
+    profile.meta.sourceForms = {
+      'vitamins.vitaminA': {
+        originalValue: 1,
+        originalUnit: 'mg',
+        canonicalValue: 3333,
+        canonicalUnit: 'IU',
+        vitaminAForm: 'RETINOL',
+        conversionFactor: 3333,
+        conversionFactorUnit: 'IU_PER_MG',
+      },
+      'vitamins.vitaminD': {
+        originalValue: 10,
+        originalUnit: 'µg',
+        canonicalValue: 400,
+        canonicalUnit: 'IU',
+        vitaminDForm: 'D3_CHOLECALCIFEROL',
+        conversionFactor: 40,
+        conversionFactorUnit: 'IU_PER_UG',
+      },
+    };
+
+    const issues = validateNutritionProfileContract(profile);
+
+    expect(issues).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'VITAMIN_A_FORM_REQUIRED' }),
+        expect.objectContaining({ code: 'VITAMIN_D_FORM_REQUIRED' }),
+      ]),
+    );
+  });
+
+  it('requires elemental conversion evidence when product-label minerals are recorded from compounds', () => {
+    const profile = createEmptyNutritionProfile();
+    profile.meta.sourceKind = 'PRODUCT_LABEL';
+    profile.minerals.calcium = 400;
+    profile.meta.sourceForms = {
+      'minerals.calcium': {
+        originalValue: 1000,
+        originalUnit: 'mg',
+        canonicalValue: 400,
+        canonicalUnit: 'mg',
+        sourceCompound: 'calcium carbonate',
+      },
+    };
+
+    const issues = validateNutritionProfileContract(profile);
+
+    expect(issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          severity: 'ERROR',
+          code: 'MINERAL_ELEMENTAL_FRACTION_REQUIRED',
+          fieldPath: 'minerals.calcium',
+        }),
+      ]),
+    );
+
+    profile.meta.sourceForms['minerals.calcium'].elementalFraction = 0.4;
+    expect(validateNutritionProfileContract(profile)).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'MINERAL_ELEMENTAL_FRACTION_REQUIRED',
+        }),
+      ]),
+    );
+  });
+
   it('rejects legacy items arrays before confirmation', () => {
     const issues = validateNutritionProfileContract({
       items: [

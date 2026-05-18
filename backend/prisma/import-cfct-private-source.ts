@@ -38,12 +38,79 @@ const CFCT_MINERAL_NUTRIENTS = [
   'iodine',
 ] as const satisfies readonly (keyof NutritionProfileV2['minerals'])[];
 
+const CFCT_VITAMIN_NUTRIENTS = [
+  'vitaminA',
+  'vitaminD',
+  'vitaminE',
+  'vitaminK',
+  'vitaminB1',
+  'vitaminB2',
+  'vitaminB3',
+  'vitaminB5',
+  'vitaminB6',
+  'vitaminB7',
+  'vitaminB9',
+  'vitaminB12',
+  'choline',
+  'vitaminC',
+] as const satisfies readonly (keyof NutritionProfileV2['vitamins'])[];
+
+const CFCT_FATTY_ACID_NUTRIENTS = [
+  'saturatedFattyAcids',
+  'monounsaturatedFattyAcids',
+  'polyunsaturatedFattyAcids',
+  'linoleicAcid',
+  'alphaLinolenicAcid',
+  'arachidonicAcid',
+  'epa',
+  'dpa',
+  'dha',
+] as const satisfies readonly (keyof NutritionProfileV2['fattyAcids'])[];
+
+const CFCT_AMINO_ACID_NUTRIENTS = [
+  'arginine',
+  'lysine',
+  'methionine',
+  'cystine',
+  'taurine',
+  'tryptophan',
+  'threonine',
+  'leucine',
+  'isoleucine',
+  'valine',
+  'phenylalanine',
+  'tyrosine',
+  'histidine',
+  'glutamicAcid',
+  'glycine',
+  'proline',
+] as const satisfies readonly (keyof NutritionProfileV2['aminoAcids'])[];
+
 type CfctMacroNutrient = (typeof CFCT_MACRO_NUTRIENTS)[number];
 type CfctMineralNutrient = (typeof CFCT_MINERAL_NUTRIENTS)[number];
+type CfctVitaminNutrient = (typeof CFCT_VITAMIN_NUTRIENTS)[number];
+type CfctFattyAcidNutrient = (typeof CFCT_FATTY_ACID_NUTRIENTS)[number];
+type CfctAminoAcidNutrient = (typeof CFCT_AMINO_ACID_NUTRIENTS)[number];
 
 export type ReviewedCfctNutrients = Partial<
-  Record<CfctMacroNutrient | CfctMineralNutrient, number | null | undefined>
+  Record<
+    | CfctMacroNutrient
+    | CfctMineralNutrient
+    | CfctVitaminNutrient
+    | CfctFattyAcidNutrient
+    | CfctAminoAcidNutrient,
+    number | null | undefined
+  >
 >;
+
+export interface ReviewedCfctSourceSegment {
+  kind: 'PRIMARY' | 'CONTINUATION';
+  page: string | number;
+  row: string | number;
+  rawOcrText: string;
+  ocrConfidence?: number | null;
+  nutrientKeys?: string[];
+}
 
 export interface ReviewedCfctRow {
   volume: string;
@@ -51,7 +118,14 @@ export interface ReviewedCfctRow {
   row: string | number;
   foodName: string;
   category?: string | null;
+  foodCode?: string | null;
+  ediblePortionPercent?: number | null;
+  energyKj?: number | null;
   nutrients: ReviewedCfctNutrients;
+  sourceSegments?: ReviewedCfctSourceSegment[];
+  unmappedNutrients?: Record<string, number | null | undefined>;
+  qualityFlags?: string[];
+  reviewStatus?: string | null;
 }
 
 type ImportLogger = {
@@ -81,6 +155,27 @@ function assignNumericNutrients(profile: NutritionProfileV2, row: ReviewedCfctRo
       profile.minerals[key] = value;
     }
   }
+
+  for (const key of CFCT_VITAMIN_NUTRIENTS) {
+    const value = nutrients[key];
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      profile.vitamins[key] = value;
+    }
+  }
+
+  for (const key of CFCT_FATTY_ACID_NUTRIENTS) {
+    const value = nutrients[key];
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      profile.fattyAcids[key] = value;
+    }
+  }
+
+  for (const key of CFCT_AMINO_ACID_NUTRIENTS) {
+    const value = nutrients[key];
+    if (typeof value === 'number' && Number.isFinite(value)) {
+      profile.aminoAcids[key] = value;
+    }
+  }
 }
 
 export function mapCfctRowToSourceInput(
@@ -106,6 +201,11 @@ export function mapCfctRowToSourceInput(
       volume: row.volume,
       page: row.page,
       row: row.row,
+      foodCode: row.foodCode ?? null,
+      ediblePortionPercent: row.ediblePortionPercent ?? null,
+      energyKj: row.energyKj ?? null,
+      sourceSegments: row.sourceSegments ?? null,
+      unmappedNutrients: row.unmappedNutrients ?? null,
       privateLocalSource: true,
       provider: CFCT_SOURCE_PROVIDER,
       sourceProvider: CFCT_SOURCE_PROVIDER,
@@ -184,10 +284,19 @@ export function validateReviewedCfctRows(rows: ReviewedCfctRow[]): void {
     if (!row.nutrients || typeof row.nutrients !== 'object') {
       throw new Error(`${label} nutrients is required`);
     }
+    if (row.reviewStatus === 'NEEDS_REVIEW') {
+      throw new Error(`${label} must be reviewed before import`);
+    }
+    if (Array.isArray(row.qualityFlags) && row.qualityFlags.length > 0) {
+      throw new Error(`${label} must be reviewed before import`);
+    }
 
     const hasMappedNutrient = [
       ...CFCT_MACRO_NUTRIENTS,
       ...CFCT_MINERAL_NUTRIENTS,
+      ...CFCT_VITAMIN_NUTRIENTS,
+      ...CFCT_FATTY_ACID_NUTRIENTS,
+      ...CFCT_AMINO_ACID_NUTRIENTS,
     ].some((key) => {
       const value = row.nutrients[key];
       return typeof value === 'number' && Number.isFinite(value);

@@ -5,6 +5,7 @@ import api from './index'
 import type {
   Ingredient,
   IngredientForm,
+  NutritionProfile,
   ProcurementSku,
   ProcurementSkuForm,
   ProcurementSkuPriceHistory,
@@ -153,4 +154,64 @@ export const ingredientApi = {
    */
   deleteProcurementSku: (ingredientId: string, id: string): Promise<void> =>
     api.delete(`/admin/ingredients/${ingredientId}/procurement-skus/${id}`)
+}
+
+export const nutritionFoodApi = {
+  create: (
+    data: {
+      name: string
+      nameEn?: string | null
+      category: string
+      dataSource: string
+      preparationState?: string | null
+      preparationStateLabel?: string | null
+      ediblePortionLabel?: string | null
+      processingLabel?: string | null
+      externalId?: string | null
+      nutritionData: NutritionProfile
+      notes?: string | null
+    }
+  ): Promise<any> =>
+    api.post('/nutrition-foods', data),
+
+  update: (
+    id: string,
+    data: {
+      nutritionData?: NutritionProfile | null
+      notes?: string | null
+      preparationState?: string | null
+      preparationStateLabel?: string | null
+      ediblePortionLabel?: string | null
+      processingLabel?: string | null
+    }
+  ): Promise<any> =>
+    api.patch(`/nutrition-foods/${id}`, data),
+
+  updateMapping: (
+    nutritionFoodId: string,
+    ingredientId: string,
+    data: {
+      isPrimary?: boolean
+      yieldRate?: number
+      notes?: string | null
+    }
+  ): Promise<any> =>
+    api.patch(`/nutrition-foods/${nutritionFoodId}/mappings/${ingredientId}`, data),
+
+  createMapping: (
+    nutritionFoodId: string,
+    data: {
+      ingredientId: string
+      isPrimary?: boolean
+      yieldRate?: number
+      notes?: string | null
+    }
+  ): Promise<any> =>
+    api.post(`/nutrition-foods/${nutritionFoodId}/mappings`, data),
+
+  removeMapping: (
+    nutritionFoodId: string,
+    ingredientId: string
+  ): Promise<void> =>
+    api.delete(`/nutrition-foods/${nutritionFoodId}/mappings/${ingredientId}`)
 }

@@ -4,6 +4,9 @@ import {
   Prisma,
   SupplementNutritionDraftStatus,
 } from '@prisma/client';
+import { mkdtemp, writeFile } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
 import type { LabelRecognitionProvider } from '../../../src/application/nutrition-governance/label-recognition.provider';
 import { NutritionGovernanceService } from '../../../src/application/nutrition-governance/nutrition-governance.service';
 import { createEmptyNutritionProfile } from '../../../src/domain/ingredient/nutrition-profile.utils';
@@ -13,6 +16,8 @@ import { PrismaService } from '../../../src/infrastructure/prisma.service';
 describe('NutritionGovernanceService', () => {
   let service: NutritionGovernanceService;
   const originalUsdaApiKey = process.env.USDA_API_KEY;
+  const originalUsdaLocalDataDir = process.env.USDA_LOCAL_DATA_DIR;
+  const originalCfctFullReportDir = process.env.CFCT_FULL_REPORT_DIR;
   const originalFetch = global.fetch;
 
   const mockPrismaService = {
@@ -24,6 +29,7 @@ describe('NutritionGovernanceService', () => {
     ingredientNutritionCandidate: {
       count: jest.fn(),
       findUnique: jest.fn(),
+      findMany: jest.fn(),
       upsert: jest.fn(),
       update: jest.fn(),
     },
@@ -36,7 +42,9 @@ describe('NutritionGovernanceService', () => {
     },
     nutritionSourceRecord: {
       upsert: jest.fn(),
+      findUnique: jest.fn(),
       findMany: jest.fn(),
+      update: jest.fn(),
     },
     supplementNutritionDraft: {
       count: jest.fn(),
@@ -61,6 +69,7 @@ describe('NutritionGovernanceService', () => {
 
     service = module.get(NutritionGovernanceService);
     jest.clearAllMocks();
+    mockPrismaService.nutritionSourceRecord.findUnique.mockResolvedValue(null);
     mockPrismaService.$transaction.mockImplementation(async (callback: any) =>
       callback(mockPrismaService),
     );
@@ -71,6 +80,16 @@ describe('NutritionGovernanceService', () => {
       delete process.env.USDA_API_KEY;
     } else {
       process.env.USDA_API_KEY = originalUsdaApiKey;
+    }
+    if (originalUsdaLocalDataDir === undefined) {
+      delete process.env.USDA_LOCAL_DATA_DIR;
+    } else {
+      process.env.USDA_LOCAL_DATA_DIR = originalUsdaLocalDataDir;
+    }
+    if (originalCfctFullReportDir === undefined) {
+      delete process.env.CFCT_FULL_REPORT_DIR;
+    } else {
+      process.env.CFCT_FULL_REPORT_DIR = originalCfctFullReportDir;
     }
     global.fetch = originalFetch;
   });
@@ -167,6 +186,7 @@ describe('NutritionGovernanceService', () => {
 
   it('imports a USDA source record by FDC id', async () => {
     process.env.USDA_API_KEY = 'test-usda-key';
+    process.env.USDA_LOCAL_DATA_DIR = join(tmpdir(), 'missing-usda-local-dir');
     const food = {
       fdcId: 171077,
       description: 'Chicken breast, cooked, roasted',
@@ -261,8 +281,143 @@ describe('NutritionGovernanceService', () => {
     ).toEqual([]);
   });
 
+  it('imports reviewed CFCT OCR rows into nutrition source records', async () => {
+    const importedRecord = {
+      id: 'cfct-source-1',
+      sourceType: 'CFCT',
+      sourceKey: 'CFCT:第六版 第一册:p120:r7',
+      foodName: '苹果（代表值）',
+    };
+    mockPrismaService.nutritionSourceRecord.upsert.mockResolvedValue(
+      importedRecord,
+    );
+
+    await expect(
+      service.importReviewedCfctSourceRows({
+        rows: [
+          {
+            volume: '第六版 第一册',
+            page: 120,
+            row: 7,
+            foodName: '苹果（代表值）',
+            foodCode: '061101x',
+            ediblePortionPercent: 85,
+            energyKj: 227,
+            nutrients: {
+              moisture: 86.1,
+              energyKcal: 53,
+              crudeProtein: 0.4,
+              crudeFat: 0.2,
+              carbohydrate: 13.7,
+              insolubleFiber: 1.7,
+            },
+          },
+        ],
+      }),
+    ).resolves.toEqual({
+      importedCount: 1,
+      records: [importedRecord],
+    });
+
+    expect(mockPrismaService.nutritionSourceRecord.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          sourceType_sourceKey: {
+            sourceType: 'CFCT',
+            sourceKey: 'CFCT:第六版 第一册:p120:r7',
+          },
+        },
+        create: expect.objectContaining({
+          sourceType: 'CFCT',
+          foodName: '苹果（代表值）',
+          sourceDetail: expect.objectContaining({
+            volume: '第六版 第一册',
+            page: 120,
+            row: 7,
+            foodCode: '061101x',
+            ediblePortionPercent: 85,
+            energyKj: 227,
+          }),
+          normalizedNutrition: expect.objectContaining({
+            meta: expect.objectContaining({
+              sourceType: 'CFCT',
+              sourceProvider: '中国食物成分表',
+            }),
+            macros: expect.objectContaining({
+              energyKcal: 53,
+              moisture: 86.1,
+              insolubleFiber: 1.7,
+            }),
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('loads the generated local CFCT structured library queue for admin review', async () => {
+    const reportDir = await mkdtemp(join(tmpdir(), 'cfct-full-'));
+    process.env.CFCT_FULL_REPORT_DIR = reportDir;
+    await writeFile(
+      join(reportDir, 'cfct-v6-full-review-summary.json'),
+      JSON.stringify({
+        generatedAt: '2026-05-17T09:23:38.184Z',
+        totalRows: 2,
+        autoReadyRows: 1,
+        needsReviewRows: 1,
+      }),
+      'utf8',
+    );
+    await writeFile(
+      join(reportDir, 'cfct-v6-full-auto-ready.json'),
+      JSON.stringify({
+        generatedAt: '2026-05-17T09:23:38.184Z',
+        rows: [
+          {
+            volume: '第六版 第一册',
+            page: 88,
+            row: 16,
+            foodName: '黄瓜（鲜）［胡瓜］',
+            foodCode: '043208',
+            nutrients: { energyKcal: 16, moisture: 95.8 },
+            qualityFlags: [],
+            reviewStatus: 'AUTO_STRUCTURED',
+          },
+        ],
+      }),
+      'utf8',
+    );
+
+    await expect(
+      service.getLocalCfctStructuredLibrary({ queue: 'auto-ready' }),
+    ).resolves.toMatchObject({
+      queue: 'auto-ready',
+      rowCount: 1,
+      summary: {
+        totalRows: 2,
+        autoReadyRows: 1,
+        needsReviewRows: 1,
+      },
+      rows: [
+        expect.objectContaining({
+          foodName: '黄瓜（鲜）［胡瓜］',
+          foodCode: '043208',
+        }),
+      ],
+    });
+  });
+
+  it('reports a clear error when the local CFCT structured library is missing', async () => {
+    const reportDir = await mkdtemp(join(tmpdir(), 'missing-cfct-full-'));
+    process.env.CFCT_FULL_REPORT_DIR = reportDir;
+
+    await expect(
+      service.getLocalCfctStructuredLibrary({ queue: 'needs-review' }),
+    ).rejects.toThrow('CFCT 全量中间库尚未生成');
+  });
+
   it('creates a candidate for a selected Chinese ingredient during USDA import', async () => {
     process.env.USDA_API_KEY = 'test-usda-key';
+    process.env.USDA_LOCAL_DATA_DIR = join(tmpdir(), 'missing-usda-local-dir');
     const normalizedNutrition = createEmptyNutritionProfile();
     normalizedNutrition.macros.energyKcal = 165;
     const food = {
@@ -345,12 +500,202 @@ describe('NutritionGovernanceService', () => {
     );
   });
 
+  it('imports a USDA source record from local CSV files when the API key is missing', async () => {
+    delete process.env.USDA_API_KEY;
+    const localDir = await mkdtemp(join(tmpdir(), 'usda-local-'));
+    process.env.USDA_LOCAL_DATA_DIR = localDir;
+    await writeFile(
+      join(localDir, 'food.csv'),
+      [
+        '"fdc_id","data_type","description","food_category_id","publication_date"',
+        '"169934","sr_legacy_food","Peaches, dried, sulfured, uncooked","9","2019-04-01"',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      join(localDir, 'nutrient.csv'),
+      [
+        '"id","name","unit_name","nutrient_nbr","rank"',
+        '"1008","Energy","KCAL","208","300.0"',
+        '"1003","Protein","G","203","600.0"',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      join(localDir, 'food_nutrient.csv'),
+      [
+        '"id","fdc_id","nutrient_id","amount","data_points","derivation_id","min","max","median","footnote","min_year_acquired"',
+        '"1","169934","1008","239","1","46","","","","",""',
+        '"2","169934","1003","3.61","1","46","","","","",""',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const importedRecord = {
+      id: 'source-record-local',
+      sourceType: 'USDA',
+      sourceKey: 'USDA:169934',
+    };
+    const fetchMock = jest.fn();
+    global.fetch = fetchMock as unknown as typeof global.fetch;
+    mockPrismaService.nutritionSourceRecord.upsert.mockResolvedValueOnce(
+      importedRecord,
+    );
+
+    await expect(service.importUsdaSourceRecord('169934')).resolves.toBe(
+      importedRecord,
+    );
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(mockPrismaService.nutritionSourceRecord.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          sourceKey: 'USDA:169934',
+          foodName: 'Peaches, dried, sulfured, uncooked',
+          rawData: expect.objectContaining({
+            fdcId: '169934',
+            dataType: 'sr_legacy_food',
+            foodNutrients: expect.arrayContaining([
+              expect.objectContaining({
+                nutrient: expect.objectContaining({
+                  id: 1008,
+                  name: 'Energy',
+                  unitName: 'KCAL',
+                }),
+                amount: 239,
+              }),
+            ]),
+          }),
+          normalizedNutrition: expect.objectContaining({
+            macros: expect.objectContaining({
+              energyKcal: 239,
+              crudeProtein: 3.61,
+            }),
+          }),
+        }),
+      }),
+    );
+  });
+
+  it('refreshes generated USDA candidates from local CSV detail rows before storing nutrition', async () => {
+    const localDir = await mkdtemp(join(tmpdir(), 'usda-local-candidate-'));
+    process.env.USDA_LOCAL_DATA_DIR = localDir;
+    await writeFile(
+      join(localDir, 'food.csv'),
+      [
+        '"fdc_id","data_type","description","food_category_id","publication_date"',
+        '"169934","sr_legacy_food","Peaches, dried, sulfured, uncooked","9","2019-04-01"',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      join(localDir, 'nutrient.csv'),
+      [
+        '"id","name","unit_name","nutrient_nbr","rank"',
+        '"1008","Energy","KCAL","208","300.0"',
+        '"1051","Water","G","255","100.0"',
+        '"1109","Vitamin E (alpha-tocopherol)","MG","323","7905.0"',
+      ].join('\n'),
+      'utf8',
+    );
+    await writeFile(
+      join(localDir, 'food_nutrient.csv'),
+      [
+        '"id","fdc_id","nutrient_id","amount","data_points","derivation_id","min","max","median","footnote","min_year_acquired"',
+        '"1","169934","1008","239","1","46","","","","",""',
+        '"2","169934","1051","8.87","1","46","","","","",""',
+        '"3","169934","1109","0.15","1","46","","","","",""',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const staleSourceRecord = {
+      id: 'source-record-search',
+      sourceType: 'USDA',
+      sourceKey: 'USDA:169934',
+      sourceTitle: 'USDA FoodData Central',
+      sourceDetail: {
+        fdcId: '169934',
+        importMode: 'bulk-usda-food-candidates',
+      },
+      foodName: 'Peaches, dried, sulfured, uncooked',
+      foodNameEn: 'Peaches, dried, sulfured, uncooked',
+      dataType: 'SR Legacy',
+      category: null,
+      rawData: { fdcId: 169934 },
+      normalizedNutrition: {
+        macros: { energyKcal: 239, moisture: 8.9 },
+        vitamins: { vitaminE: null },
+      },
+    };
+
+    mockPrismaService.ingredient.findUnique.mockResolvedValue({
+      id: 'ingredient-1',
+      name: 'Peaches dried',
+      type: 'FOOD',
+    });
+    mockPrismaService.nutritionSourceRecord.findMany.mockResolvedValue([
+      staleSourceRecord,
+    ]);
+    mockPrismaService.nutritionSourceRecord.update.mockImplementation(
+      async (args: any) => ({
+        ...staleSourceRecord,
+        ...args.data,
+      }),
+    );
+    mockPrismaService.ingredientNutritionCandidate.findUnique.mockResolvedValue(
+      null,
+    );
+    mockPrismaService.ingredientNutritionCandidate.upsert.mockResolvedValue({
+      id: 'candidate-1',
+    });
+
+    await service.generateFoodCandidatesForIngredient('ingredient-1');
+
+    expect(mockPrismaService.nutritionSourceRecord.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: 'source-record-search' },
+        data: expect.objectContaining({
+          foodName: 'Peaches, dried, sulfured, uncooked',
+          sourceDetail: expect.objectContaining({
+            importMode: 'local-usda-csv',
+          }),
+          normalizedNutrition: expect.objectContaining({
+            macros: expect.objectContaining({
+              moisture: 8.87,
+            }),
+            vitamins: expect.objectContaining({
+              vitaminE: 0.2235,
+            }),
+          }),
+        }),
+      }),
+    );
+    expect(
+      mockPrismaService.ingredientNutritionCandidate.upsert,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({
+          normalizedNutrition: expect.objectContaining({
+            macros: expect.objectContaining({
+              moisture: 8.87,
+            }),
+            vitamins: expect.objectContaining({
+              vitaminE: 0.2235,
+            }),
+          }),
+        }),
+      }),
+    );
+  });
+
   it('rejects USDA import when the API key is missing', async () => {
     delete process.env.USDA_API_KEY;
+    process.env.USDA_LOCAL_DATA_DIR = join(tmpdir(), 'missing-usda-local-dir');
     const fetchMock = jest.fn();
     global.fetch = fetchMock as unknown as typeof global.fetch;
 
-    await expect(service.importUsdaSourceRecord('171077')).rejects.toThrow(
+    await expect(service.importUsdaSourceRecord('999999999')).rejects.toThrow(
       'USDA API密钥未配置',
     );
 
@@ -358,8 +703,57 @@ describe('NutritionGovernanceService', () => {
     expect(mockPrismaService.nutritionSourceRecord.upsert).not.toHaveBeenCalled();
   });
 
+  it('lists candidates in a stable ingredient-grouped review order', async () => {
+    mockPrismaService.ingredientNutritionCandidate.findMany.mockResolvedValue(
+      [],
+    );
+
+    await expect(
+      service.listCandidates({
+        status: NutritionCandidateStatus.CANDIDATE,
+      }),
+    ).resolves.toEqual([]);
+
+    expect(
+      mockPrismaService.ingredientNutritionCandidate.findMany,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        orderBy: [
+          { sourcePriority: 'asc' },
+          { score: 'desc' },
+          { ingredient: { name: 'asc' } },
+          { sourceRecord: { foodName: 'asc' } },
+          { id: 'asc' },
+        ],
+      }),
+    );
+  });
+
+  it('can list all candidate records for one ingredient so confirmed profiles remain visible', async () => {
+    mockPrismaService.ingredientNutritionCandidate.findMany.mockResolvedValue(
+      [],
+    );
+
+    await expect(
+      service.listCandidates({
+        ingredientId: 'ingredient-cucumber',
+      } as any),
+    ).resolves.toEqual([]);
+
+    expect(
+      mockPrismaService.ingredientNutritionCandidate.findMany,
+    ).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: {
+          ingredientId: 'ingredient-cucumber',
+        },
+      }),
+    );
+  });
+
   it('rejects USDA import when the response has no mappable nutrients', async () => {
     process.env.USDA_API_KEY = 'test-usda-key';
+    process.env.USDA_LOCAL_DATA_DIR = join(tmpdir(), 'missing-usda-local-dir');
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       json: jest.fn().mockResolvedValue({
@@ -378,6 +772,7 @@ describe('NutritionGovernanceService', () => {
 
   it('wraps USDA fetch and JSON parsing failures', async () => {
     process.env.USDA_API_KEY = 'test-usda-key';
+    process.env.USDA_LOCAL_DATA_DIR = join(tmpdir(), 'missing-usda-local-dir');
     global.fetch = jest
       .fn()
       .mockRejectedValue(new Error('network down')) as unknown as typeof global.fetch;
@@ -400,6 +795,7 @@ describe('NutritionGovernanceService', () => {
 
   it('rejects USDA import when the API response fails', async () => {
     process.env.USDA_API_KEY = 'test-usda-key';
+    process.env.USDA_LOCAL_DATA_DIR = join(tmpdir(), 'missing-usda-local-dir');
     const fetchMock = jest.fn().mockResolvedValue({
       ok: false,
       json: jest.fn(),

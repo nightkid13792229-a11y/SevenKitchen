@@ -975,6 +975,7 @@ model AgentProviderConfig {
   enabled          Boolean  @default(false)
   baseUrl          String   @map("base_url")
   model            String   @db.VarChar(120)
+  reviewModel      String?  @map("review_model") @db.VarChar(120)
   apiKeyEncrypted  String?  @map("api_key_encrypted")
   apiKeyLast4      String?  @map("api_key_last4") @db.VarChar(12)
   maxConcurrency   Int      @default(1) @map("max_concurrency")
@@ -1564,6 +1565,7 @@ enum NutritionFoodStatus {
 
 enum NutritionGovernanceSourceType {
   USDA
+  NZFCD
   CFCT
   SUPPLEMENT_LABEL
   MANUAL

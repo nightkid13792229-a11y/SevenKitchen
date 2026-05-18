@@ -21,6 +21,11 @@ describe('nutrition source contract', () => {
   });
 
   it('registers future food database codes without requiring a Prisma enum change', () => {
+    expect(getNutritionSourceDefinition('NZFCD_FOODFILES')).toMatchObject({
+      sourceKind: 'FOOD_DATABASE',
+      sourceCode: 'NZFCD_FOODFILES',
+      sourceProvider: 'New Zealand Food Composition Database',
+    });
     expect(getNutritionSourceDefinition('CNF')).toMatchObject({
       sourceKind: 'FOOD_DATABASE',
       sourceCode: 'CNF',
@@ -58,6 +63,11 @@ describe('nutrition source contract', () => {
       sourceKind: 'FOOD_DATABASE',
       sourceCode: 'USDA_FDC',
       sourceProvider: 'USDA FoodData Central',
+    });
+    expect(normalizeLegacyNutritionSourceType('NZFCD')).toEqual({
+      sourceKind: 'FOOD_DATABASE',
+      sourceCode: 'NZFCD_FOODFILES',
+      sourceProvider: 'New Zealand Food Composition Database',
     });
   });
 });

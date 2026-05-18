@@ -75,7 +75,7 @@ describe('DeepSeekNutritionCandidateReviewProvider', () => {
         provider: 'deepseek',
         model: 'deepseek-v4-flash',
         recommendedAction: 'CONFIRM_PRIMARY',
-        preparationStateLabel: '生重',
+        preparationStateLabel: '生',
         confidence: 'HIGH',
       }),
     );
@@ -104,5 +104,50 @@ describe('DeepSeekNutritionCandidateReviewProvider', () => {
       status: 429,
       message: expect.stringContaining('DeepSeek candidate review failed'),
     });
+  });
+
+  it('accepts DeepSeek decision as an alias for recommendedAction', async () => {
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify({
+                decision: 'CONFIRM_PRIMARY',
+                rationale: '普通卷心菜来源匹配。',
+                preparationState: 'RAW',
+                preparationStateLabel: '生',
+                ediblePortionLabel: '标准可食部',
+                processingLabel: '未加工',
+              }),
+            },
+          },
+        ],
+      }),
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    const provider = new DeepSeekNutritionCandidateReviewProvider({
+      apiKey: 'deepseek-key',
+      baseUrl: 'https://api.deepseek.com',
+      model: 'deepseek-v4-flash',
+    });
+
+    const review = await provider.reviewFoodCandidate({
+      ingredient: { id: 'ingredient-cabbage', name: '卷心菜', type: 'FOOD' },
+      sourceRecord: {
+        id: 'source-cabbage',
+        sourceType: 'USDA',
+        sourceKey: 'USDA:169335',
+        foodName: 'Cabbage, common (danish, domestic, and pointed types), raw',
+      },
+      normalizedNutrition: {
+        macros: { energyKcal: 25, crudeProtein: 1.28, crudeFat: 0.1 },
+      },
+    });
+
+    expect(review.recommendedAction).toBe('CONFIRM_PRIMARY');
+    expect(review.rationale).toBe('普通卷心菜来源匹配。');
   });
 });

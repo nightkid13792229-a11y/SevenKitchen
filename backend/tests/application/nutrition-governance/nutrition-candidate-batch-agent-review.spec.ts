@@ -3,7 +3,8 @@ import { NutritionGovernanceService } from 'src/application/nutrition-governance
 import { NutritionCandidateReviewProviderError } from 'src/application/nutrition-governance/nutrition-candidate-review.provider';
 
 const nutritionProfile = {
-  macros: { energyKcal: 120, crudeProtein: 20, crudeFat: 5 },
+  macros: { energyKcal: 120, moisture: 70, crudeProtein: 20, crudeFat: 5 },
+  minerals: { calcium: 12, phosphorus: 180 },
   meta: { rawBasisType: 'PER_100_G' },
 };
 
@@ -106,7 +107,7 @@ describe('NutritionGovernanceService batch Agent review', () => {
         data: expect.objectContaining({
           agentReviewStatus: 'COMPLETED',
           reviewGroup: 'AUTO_REVIEWABLE',
-          preparationStateLabel: '生重',
+          preparationStateLabel: '生',
           ediblePortionLabel: '去皮去骨',
           hardGateResults: expect.objectContaining({
             canBatchConfirm: true,

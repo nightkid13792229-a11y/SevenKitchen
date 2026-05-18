@@ -153,6 +153,7 @@ import { NutritionFoodService } from './application/nutrition-food/nutrition-foo
 import { NutritionGovernanceController } from './interfaces/controllers/nutrition-governance.controller';
 import { NutritionGovernanceService } from './application/nutrition-governance/nutrition-governance.service';
 import { AgentProviderConfigService } from './application/nutrition-governance/agent-provider-config.service';
+import { TrustedNutritionWebSearchService } from './application/nutrition-governance/trusted-nutrition-web-search.service';
 import {
   DisabledLabelRecognitionProvider,
   LABEL_RECOGNITION_PROVIDER,
@@ -625,6 +626,7 @@ validatePrismaConfig();
     // Nutrition Food Service (Recipe Designer)
     NutritionFoodService,
     AgentProviderConfigService,
+    TrustedNutritionWebSearchService,
     NutritionGovernanceService,
     {
       provide: LABEL_RECOGNITION_PROVIDER,

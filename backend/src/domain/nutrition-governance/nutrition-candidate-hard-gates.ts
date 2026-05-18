@@ -5,12 +5,9 @@ import type {
   CandidateReviewGroup,
   NutritionCandidateAgentReview,
 } from './agent-review.types';
+import { FOOD_CONFIRMATION_REQUIRED_FIELD_PATHS } from './nutrition-profile-contract';
 
-const CRITICAL_FIELDS = [
-  'macros.energyKcal',
-  'macros.crudeProtein',
-  'macros.crudeFat',
-] as const;
+const CRITICAL_FIELDS = FOOD_CONFIRMATION_REQUIRED_FIELD_PATHS;
 
 export interface NutritionCandidateHardGateInput {
   normalizedNutrition?: unknown;
@@ -61,6 +58,24 @@ export function evaluateNutritionCandidateHardGates(
       candidate.agentReview.recommendedAction === 'FIND_ALTERNATIVE_SOURCE'
     ) {
       blockingReasons.push('AGENT_RECOMMENDS_ALTERNATIVE');
+    }
+    if (candidate.agentReview.recommendedAction === 'NEEDS_HUMAN_REVIEW') {
+      blockingReasons.push('AGENT_NEEDS_HUMAN_REVIEW');
+    }
+    if (candidate.agentReview.recommendedAction === 'CONFIRM_SECONDARY') {
+      blockingReasons.push('AGENT_RECOMMENDS_SECONDARY');
+    }
+    if (
+      candidate.agentReview.recommendedAction &&
+      ![
+        'CONFIRM_PRIMARY',
+        'CONFIRM_SECONDARY',
+        'NEEDS_HUMAN_REVIEW',
+        'REJECT',
+        'FIND_ALTERNATIVE_SOURCE',
+      ].includes(candidate.agentReview.recommendedAction)
+    ) {
+      blockingReasons.push('AGENT_RECOMMENDATION_UNSUPPORTED');
     }
   }
 

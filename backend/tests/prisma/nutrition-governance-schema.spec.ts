@@ -21,7 +21,9 @@ const modelBlock = (schema: string, modelName: string) => {
 };
 
 const enumBlock = (schema: string, enumName: string) => {
-  const match = schema.match(new RegExp(`enum ${enumName} \\{[\\s\\S]*?\\n\\}`));
+  const match = schema.match(
+    new RegExp(`enum ${enumName} \\{[\\s\\S]*?\\n\\}`),
+  );
 
   expect(match).not.toBeNull();
 
@@ -33,7 +35,7 @@ describe('nutrition governance Prisma schema', () => {
 
   it('declares governance enums with the planned values', () => {
     expect(enumBlock(schema, 'NutritionGovernanceSourceType')).toMatch(
-      /USDA[\s\S]*CFCT[\s\S]*SUPPLEMENT_LABEL[\s\S]*MANUAL/,
+      /USDA[\s\S]*NZFCD[\s\S]*CFCT[\s\S]*SUPPLEMENT_LABEL[\s\S]*MANUAL/,
     );
     expect(enumBlock(schema, 'NutritionGovernanceRecordStatus')).toMatch(
       /ACTIVE[\s\S]*DEPRECATED/,
@@ -58,7 +60,9 @@ describe('nutrition governance Prisma schema', () => {
   it('declares nutrition source records with governance metadata and indexes', () => {
     const block = modelBlock(schema, 'NutritionSourceRecord');
 
-    expect(block).toMatch(/id\s+String\s+@id\s+@default\(uuid\(\)\)\s+@map\("id"\)/);
+    expect(block).toMatch(
+      /id\s+String\s+@id\s+@default\(uuid\(\)\)\s+@map\("id"\)/,
+    );
     expect(block).toMatch(
       /sourceType\s+NutritionGovernanceSourceType\s+@map\("source_type"\)/,
     );
@@ -78,7 +82,9 @@ describe('nutrition governance Prisma schema', () => {
     expect(block).toMatch(
       /dataType\s+String\?\s+@map\("data_type"\)\s+@db\.VarChar\(100\)/,
     );
-    expect(block).toMatch(/category\s+String\?\s+@map\("category"\)\s+@db\.VarChar\(100\)/);
+    expect(block).toMatch(
+      /category\s+String\?\s+@map\("category"\)\s+@db\.VarChar\(100\)/,
+    );
     expect(block).toMatch(/rawData\s+Json\s+@map\("raw_data"\)/);
     expect(block).toMatch(
       /normalizedNutrition\s+Json\?\s+@map\("normalized_nutrition"\)/,
@@ -99,7 +105,9 @@ describe('nutrition governance Prisma schema', () => {
     const block = modelBlock(schema, 'IngredientNutritionCandidate');
 
     expect(block).toMatch(/ingredientId\s+String\s+@map\("ingredient_id"\)/);
-    expect(block).toMatch(/sourceRecordId\s+String\s+@map\("source_record_id"\)/);
+    expect(block).toMatch(
+      /sourceRecordId\s+String\s+@map\("source_record_id"\)/,
+    );
     expect(block).toMatch(/sourcePriority\s+Int\s+@map\("source_priority"\)/);
     expect(block).toMatch(
       /confidence\s+NutritionMatchConfidence\s+@map\("confidence"\)/,
@@ -135,7 +143,9 @@ describe('nutrition governance Prisma schema', () => {
     const block = modelBlock(schema, 'SupplementNutritionDraft');
 
     expect(block).toMatch(/ingredientId\s+String\s+@map\("ingredient_id"\)/);
-    expect(block).toMatch(/sourceRecordId\s+String\?\s+@map\("source_record_id"\)/);
+    expect(block).toMatch(
+      /sourceRecordId\s+String\?\s+@map\("source_record_id"\)/,
+    );
     expect(block).toMatch(/imageUrl\s+String\s+@map\("image_url"\)/);
     expect(block).toMatch(
       /imageKey\s+String\s+@map\("image_key"\)\s+@db\.VarChar\(300\)/,
@@ -177,13 +187,19 @@ describe('nutrition governance Prisma schema', () => {
     expect(migration).toContain(
       'CREATE TYPE "NutritionGovernanceRecordStatus" AS ENUM',
     );
-    expect(migration).toContain('CREATE TYPE "NutritionCandidateStatus" AS ENUM');
-    expect(migration).toContain('CREATE TYPE "NutritionMatchConfidence" AS ENUM');
+    expect(migration).toContain(
+      'CREATE TYPE "NutritionCandidateStatus" AS ENUM',
+    );
+    expect(migration).toContain(
+      'CREATE TYPE "NutritionMatchConfidence" AS ENUM',
+    );
     expect(migration).toContain(
       'CREATE TYPE "SupplementNutritionDraftStatus" AS ENUM',
     );
     expect(migration).toContain('CREATE TABLE "nutrition_source_record"');
-    expect(migration).toContain('CREATE TABLE "ingredient_nutrition_candidate"');
+    expect(migration).toContain(
+      'CREATE TABLE "ingredient_nutrition_candidate"',
+    );
     expect(migration).toContain('CREATE TABLE "supplement_nutrition_draft"');
     expect(migration).toContain(
       'nutrition_source_record_source_type_source_key_key',

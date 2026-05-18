@@ -34,13 +34,17 @@ import { ApiResponseDto } from '../dto/common/response.dto';
 import { AdminGuard } from '../guards/role.guard';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import {
+  ApplyIngredientCandidateConfigurationDto,
   BatchConfirmNutritionCandidatesDto,
   BatchAgentReviewCandidatesDto,
   ConfirmNutritionCandidateDto,
+  GetLocalCfctStructuredLibraryQueryDto,
+  ImportCfctReviewedSourceRowsDto,
   GenerateFoodCandidatesDto,
   ImportUsdaSourceDto,
   ListNutritionCandidatesQueryDto,
   ListSupplementDraftsQueryDto,
+  RankFoodCandidatesWithAgentDto,
   ReviewCandidateWithAgentDto,
   UpdateAgentSettingsDto,
 } from '../dto/nutrition-governance/nutrition-governance.dto';
@@ -104,6 +108,11 @@ export class NutritionGovernanceController {
     required: false,
     description: '审核队列分组',
   })
+  @ApiQuery({
+    name: 'ingredientId',
+    required: false,
+    description: '按后台标准原料筛选候选',
+  })
   @ApiResponse({ status: 200, description: '营养候选列表' })
   async listCandidates(
     @Query() query: ListNutritionCandidatesQueryDto,
@@ -125,6 +134,17 @@ export class NutritionGovernanceController {
     return new ApiResponseDto(0, '生成候选成功', result);
   }
 
+  @Post('candidates/rank-with-agent')
+  @ApiOperation({ summary: '按人工要求让 Agent 对同原料候选排序' })
+  @ApiResponse({ status: 201, description: 'Agent 候选排序完成' })
+  async rankFoodCandidatesWithAgent(
+    @Body() dto: RankFoodCandidatesWithAgentDto,
+  ): Promise<ApiResponseDto<unknown>> {
+    const result =
+      await this.nutritionGovernanceService.rankFoodCandidatesWithAgent(dto);
+    return new ApiResponseDto(0, 'Agent 候选排序完成', result);
+  }
+
   @Post('sources/usda/import')
   @ApiOperation({ summary: '导入USDA来源营养记录' })
   @ApiResponse({ status: 201, description: 'USDA 来源导入成功' })
@@ -136,6 +156,34 @@ export class NutritionGovernanceController {
         ingredientId: dto.ingredientId,
       });
     return new ApiResponseDto(0, 'USDA 来源导入成功', result);
+  }
+
+  @Get('sources/cfct/local-library')
+  @ApiOperation({ summary: '读取本地 CFCT 全量结构化中间库' })
+  @ApiQuery({
+    name: 'queue',
+    required: false,
+    enum: ['full', 'auto-ready', 'needs-review'],
+    description: '本地中间库队列',
+  })
+  @ApiResponse({ status: 200, description: 'CFCT 本地中间库' })
+  async getLocalCfctStructuredLibrary(
+    @Query() query: GetLocalCfctStructuredLibraryQueryDto,
+  ): Promise<ApiResponseDto<unknown>> {
+    const result =
+      await this.nutritionGovernanceService.getLocalCfctStructuredLibrary(query);
+    return new ApiResponseDto(0, 'Success', result);
+  }
+
+  @Post('sources/cfct/import-reviewed')
+  @ApiOperation({ summary: '导入已审核 CFCT OCR 来源营养记录' })
+  @ApiResponse({ status: 201, description: 'CFCT 来源导入成功' })
+  async importReviewedCfctSourceRows(
+    @Body() dto: ImportCfctReviewedSourceRowsDto,
+  ): Promise<ApiResponseDto<unknown>> {
+    const result =
+      await this.nutritionGovernanceService.importReviewedCfctSourceRows(dto);
+    return new ApiResponseDto(0, 'CFCT 来源已导入', result);
   }
 
   @Get('agent-settings')
@@ -215,6 +263,20 @@ export class NutritionGovernanceController {
     return new ApiResponseDto(0, 'Agent 审核已完成', result);
   }
 
+  @Post('candidates/:id/nutrition-validation')
+  @ApiOperation({ summary: '校验候选营养数据并生成 Agent 风险总结' })
+  @ApiParam({ name: 'id', description: '营养候选ID' })
+  @ApiResponse({ status: 201, description: '营养数据校验完成' })
+  async validateCandidateNutritionWithAgent(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<unknown>> {
+    const result =
+      await this.nutritionGovernanceService.validateCandidateNutritionWithAgent(
+        id,
+      );
+    return new ApiResponseDto(0, '营养数据校验完成', result);
+  }
+
   @Get('supplement-drafts')
   @ApiOperation({ summary: '获取补剂标签草稿列表' })
   @ApiQuery({
@@ -287,6 +349,21 @@ export class NutritionGovernanceController {
         user.userId,
       );
     return new ApiResponseDto(0, '批量确认成功', result);
+  }
+
+  @Post('candidates/apply-ingredient-config')
+  @ApiOperation({ summary: '按原料一次保存主档案和次级营养档案' })
+  @ApiResponse({ status: 201, description: '原料营养配置已保存' })
+  async applyIngredientCandidateConfiguration(
+    @Body() dto: ApplyIngredientCandidateConfigurationDto,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<unknown>> {
+    const result =
+      await this.nutritionGovernanceService.applyIngredientCandidateConfiguration(
+        dto,
+        user.userId,
+      );
+    return new ApiResponseDto(0, '原料营养配置已保存', result);
   }
 
   @Post('candidates/:id/confirm')

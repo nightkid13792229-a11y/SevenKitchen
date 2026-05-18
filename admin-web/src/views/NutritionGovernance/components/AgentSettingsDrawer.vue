@@ -30,11 +30,24 @@
           />
         </el-form-item>
 
-        <el-form-item label="模型">
+        <el-form-item label="默认模型">
           <el-input
             v-model="form.model"
             placeholder="deepseek-v4-flash"
           />
+          <div class="form-tip">
+            用于批量搜索词生成和普通候选排序，建议 Flash。
+          </div>
+        </el-form-item>
+
+        <el-form-item label="复核模型">
+          <el-input
+            v-model="form.reviewModel"
+            placeholder="deepseek-v4-pro"
+          />
+          <div class="form-tip">
+            用于营养校验、复杂来源和人工升级复核，建议 Pro。
+          </div>
         </el-form-item>
 
         <el-form-item label="API Key">
@@ -93,7 +106,7 @@
         <el-button
           :loading="testing"
           :disabled="saving"
-          @click="$emit('test')"
+          @click="emitTest"
         >
           测试连接
         </el-button>
@@ -128,7 +141,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   (e: 'update:modelValue', value: boolean): void
   (e: 'save', payload: UpdateAgentProviderSettingsPayload): void
-  (e: 'test'): void
+  (e: 'test', payload: UpdateAgentProviderSettingsPayload): void
 }>()
 
 const visible = computed({
@@ -140,6 +153,7 @@ const form = reactive({
   enabled: false,
   baseUrl: 'https://api.deepseek.com',
   model: 'deepseek-v4-flash',
+  reviewModel: 'deepseek-v4-pro',
   apiKey: '',
   maxConcurrency: 1,
   requestTimeoutMs: 90000,
@@ -162,6 +176,7 @@ watch(
     form.enabled = settings?.enabled ?? false
     form.baseUrl = settings?.baseUrl ?? 'https://api.deepseek.com'
     form.model = settings?.model ?? 'deepseek-v4-flash'
+    form.reviewModel = settings?.reviewModel ?? 'deepseek-v4-pro'
     form.apiKey = ''
     form.maxConcurrency = settings?.maxConcurrency ?? 1
     form.requestTimeoutMs = settings?.requestTimeoutMs ?? 90000
@@ -175,6 +190,7 @@ function buildPayload(): UpdateAgentProviderSettingsPayload {
     enabled: form.enabled,
     baseUrl: form.baseUrl.trim(),
     model: form.model.trim(),
+    reviewModel: form.reviewModel.trim(),
     maxConcurrency: form.maxConcurrency,
     requestTimeoutMs: form.requestTimeoutMs,
     retryCount: form.retryCount
@@ -190,6 +206,10 @@ function buildPayload(): UpdateAgentProviderSettingsPayload {
 
 function emitSave() {
   emit('save', buildPayload())
+}
+
+function emitTest() {
+  emit('test', buildPayload())
 }
 
 function emitClearKey() {

@@ -6,8 +6,13 @@ import {
 const nutritionProfile = {
   macros: {
     energyKcal: 120,
+    moisture: 70,
     crudeProtein: 20,
     crudeFat: 5,
+  },
+  minerals: {
+    calcium: 12,
+    phosphorus: 180,
   },
   meta: {
     rawBasisType: 'PER_100_G',
@@ -65,7 +70,25 @@ describe('nutrition candidate hard gates', () => {
     );
   });
 
-  it('blocks missing critical nutrition data', () => {
+  it('blocks Agent recommendations that require human review from batch confirmation', () => {
+    const agentReview = {
+      ...baseAgentReview,
+      recommendedAction: 'NEEDS_HUMAN_REVIEW',
+      confidence: 'MEDIUM',
+    };
+    const result = evaluateNutritionCandidateHardGates({
+      ...baseCandidate,
+      agentReview,
+    });
+
+    expect(result.canBatchConfirm).toBe(false);
+    expect(result.blockingReasons).toContain('AGENT_NEEDS_HUMAN_REVIEW');
+    expect(resolveCandidateReviewGroup(result, agentReview)).toBe(
+      'NEEDS_REVIEW',
+    );
+  });
+
+  it('blocks missing critical nutrition data for food confirmation', () => {
     const result = evaluateNutritionCandidateHardGates({
       ...baseCandidate,
       normalizedNutrition: {

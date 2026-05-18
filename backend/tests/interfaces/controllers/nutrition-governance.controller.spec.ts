@@ -16,8 +16,10 @@ describe('NutritionGovernanceController', () => {
     listSupplementDrafts: jest.Mock;
     generateFoodCandidatesForIngredient: jest.Mock;
     importUsdaSourceRecord: jest.Mock;
+    getLocalCfctStructuredLibrary: jest.Mock;
+    importReviewedCfctSourceRows: jest.Mock;
     createSupplementDraftFromLabelImage: jest.Mock;
-    confirmCandidate: jest.Mock;
+    confirmCandidateFromWorkbench: jest.Mock;
     rejectCandidate: jest.Mock;
     confirmSupplementDraft: jest.Mock;
     rejectSupplementDraft: jest.Mock;
@@ -35,8 +37,10 @@ describe('NutritionGovernanceController', () => {
       listSupplementDrafts: jest.fn(),
       generateFoodCandidatesForIngredient: jest.fn(),
       importUsdaSourceRecord: jest.fn(),
+      getLocalCfctStructuredLibrary: jest.fn(),
+      importReviewedCfctSourceRows: jest.fn(),
       createSupplementDraftFromLabelImage: jest.fn(),
-      confirmCandidate: jest.fn(),
+      confirmCandidateFromWorkbench: jest.fn(),
       rejectCandidate: jest.fn(),
       confirmSupplementDraft: jest.fn(),
       rejectSupplementDraft: jest.fn(),
@@ -96,13 +100,18 @@ describe('NutritionGovernanceController', () => {
       status: 'CONFIRMED',
     };
     const user = { userId: 'admin-user-1' } as RequestUser;
-    service.confirmCandidate.mockResolvedValue(confirmedCandidate);
+    service.confirmCandidateFromWorkbench.mockResolvedValue(confirmedCandidate);
 
-    const result = await controller.confirmCandidate('candidate-1', user);
+    const result = await controller.confirmCandidate(
+      'candidate-1',
+      { mappingRole: 'PRIMARY' },
+      user,
+    );
 
-    expect(service.confirmCandidate).toHaveBeenCalledWith(
+    expect(service.confirmCandidateFromWorkbench).toHaveBeenCalledWith(
       'candidate-1',
       'admin-user-1',
+      { mappingRole: 'PRIMARY' },
     );
     expect(result).toEqual({
       code: 0,
@@ -131,6 +140,57 @@ describe('NutritionGovernanceController', () => {
       code: 0,
       message: 'USDA 来源导入成功',
       data: sourceRecord,
+    });
+  });
+
+  it('imports reviewed CFCT source rows and wraps the response', async () => {
+    const importResult = {
+      importedCount: 1,
+      records: [{ id: 'cfct-source-1', sourceType: 'CFCT' }],
+    };
+    const payload = {
+      rows: [
+        {
+          volume: '第六版 第一册',
+          page: 120,
+          row: 7,
+          foodName: '苹果（代表值）',
+          nutrients: { energyKcal: 53 },
+        },
+      ],
+    };
+    service.importReviewedCfctSourceRows.mockResolvedValue(importResult);
+
+    const result = await controller.importReviewedCfctSourceRows(payload);
+
+    expect(service.importReviewedCfctSourceRows).toHaveBeenCalledWith(payload);
+    expect(result).toEqual({
+      code: 0,
+      message: 'CFCT 来源已导入',
+      data: importResult,
+    });
+  });
+
+  it('loads local CFCT structured library rows and wraps the response', async () => {
+    const library = {
+      queue: 'needs-review',
+      rowCount: 1,
+      rows: [{ foodName: '鹅肝' }],
+      summary: { totalRows: 1937 },
+    };
+    service.getLocalCfctStructuredLibrary.mockResolvedValue(library);
+
+    const result = await controller.getLocalCfctStructuredLibrary({
+      queue: 'needs-review',
+    });
+
+    expect(service.getLocalCfctStructuredLibrary).toHaveBeenCalledWith({
+      queue: 'needs-review',
+    });
+    expect(result).toEqual({
+      code: 0,
+      message: 'Success',
+      data: library,
     });
   });
 

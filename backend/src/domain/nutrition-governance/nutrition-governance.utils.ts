@@ -42,9 +42,14 @@ const CHINESE_TO_ENGLISH_FOOD_ALIASES: ReadonlyArray<{
   { zh: '酸奶', aliases: ['yogurt', 'yoghurt'] },
   { zh: '奶酪', aliases: ['cheese'] },
   { zh: '南瓜', aliases: ['pumpkin'] },
+  { zh: '卷心菜', aliases: ['cabbage', 'cabbage common'] },
+  { zh: '圆白菜', aliases: ['cabbage', 'cabbage common'] },
+  { zh: '包菜', aliases: ['cabbage', 'cabbage common'] },
+  { zh: '紫甘蓝', aliases: ['red cabbage', 'cabbage red'] },
   { zh: '胡萝卜', aliases: ['carrot'] },
   { zh: '西兰花', aliases: ['broccoli'] },
   { zh: '菠菜', aliases: ['spinach'] },
+  { zh: '黄瓜', aliases: ['cucumber'] },
   { zh: '红薯', aliases: ['sweet potato'] },
   { zh: '土豆', aliases: ['potato'] },
   { zh: '马铃薯', aliases: ['potato'] },
@@ -57,6 +62,43 @@ const CHINESE_TO_ENGLISH_FOOD_ALIASES: ReadonlyArray<{
   { zh: '橄榄油', aliases: ['olive oil'] },
   { zh: '椰子油', aliases: ['coconut oil'] },
   { zh: '亚麻籽油', aliases: ['flaxseed oil', 'linseed oil'] },
+];
+
+const CHINESE_TO_ENGLISH_PORTION_REQUIREMENTS: ReadonlyArray<{
+  zh: readonly string[];
+  positive: readonly RegExp[];
+  negative: readonly RegExp[];
+  positiveLabel: string;
+  negativeLabel: string;
+}> = [
+  {
+    zh: ['去皮'],
+    positive: [/\bpeeled\b/u, /\bskinless\b/u],
+    negative: [/\bwith\s+peel\b/u, /\bunpeeled\b/u, /\bskin\s+on\b/u],
+    positiveLabel: '人工要求去皮，来源描述为去皮/无皮',
+    negativeLabel: '人工要求去皮，来源描述为带皮',
+  },
+  {
+    zh: ['带皮'],
+    positive: [/\bwith\s+peel\b/u, /\bunpeeled\b/u, /\bskin\s+on\b/u],
+    negative: [/\bpeeled\b/u, /\bskinless\b/u],
+    positiveLabel: '人工要求带皮，来源描述为带皮',
+    negativeLabel: '人工要求带皮，来源描述为去皮/无皮',
+  },
+  {
+    zh: ['去骨'],
+    positive: [/\bboneless\b/u],
+    negative: [/\bbone[-\s]?in\b/u, /\bwith\s+bone\b/u],
+    positiveLabel: '人工要求去骨，来源描述为去骨',
+    negativeLabel: '人工要求去骨，来源描述为带骨',
+  },
+  {
+    zh: ['带骨'],
+    positive: [/\bbone[-\s]?in\b/u, /\bwith\s+bone\b/u],
+    negative: [/\bboneless\b/u],
+    positiveLabel: '人工要求带骨，来源描述为带骨',
+    negativeLabel: '人工要求带骨，来源描述为去骨',
+  },
 ];
 
 export function buildNutritionSourceKey(
@@ -72,12 +114,14 @@ export function getSourcePriority(
   switch (sourceType) {
     case 'USDA':
       return 1;
-    case 'CFCT':
+    case 'NZFCD':
       return 2;
-    case 'MANUAL':
+    case 'CFCT':
       return 3;
-    case 'SUPPLEMENT_LABEL':
+    case 'MANUAL':
       return 4;
+    case 'SUPPLEMENT_LABEL':
+      return 5;
   }
 }
 
@@ -147,12 +191,33 @@ export function scoreIngredientSourceNameMatch(params: {
     });
   }
 
+  const portionScore = scoreEnglishPortionRequirementMatch(
+    ingredientName,
+    params.sourceFoodName,
+  );
+  score += portionScore.scoreDelta;
+  reasons.push(...portionScore.reasons);
+
+  const variantScore = scoreEnglishFoodVariantMatch(
+    ingredientName,
+    params.sourceFoodName,
+  );
+  score += variantScore.scoreDelta;
+  reasons.push(...variantScore.reasons);
+
   if (params.sourceType === 'USDA') {
     score += 0.15;
     reasons.push({
       code: 'SOURCE_PRIORITY',
       label: 'USDA 优先来源',
       scoreDelta: 0.15,
+    });
+  } else if (params.sourceType === 'NZFCD') {
+    score += 0.12;
+    reasons.push({
+      code: 'SOURCE_PRIORITY',
+      label: '新西兰食物成分数据库来源',
+      scoreDelta: 0.12,
     });
   } else if (params.sourceType === 'CFCT') {
     score += 0.1;
@@ -163,7 +228,105 @@ export function scoreIngredientSourceNameMatch(params: {
     });
   }
 
-  return { score: Math.min(score, 1), reasons };
+  return { score: Math.max(0, Math.min(score, 1)), reasons };
+}
+
+function scoreEnglishPortionRequirementMatch(
+  normalizedIngredientName: string,
+  sourceFoodName: string,
+): { scoreDelta: number; reasons: NutritionMatchReason[] } {
+  if (!normalizedIngredientName || !sourceFoodName) {
+    return { scoreDelta: 0, reasons: [] };
+  }
+
+  const sourceName = sourceFoodName.toLowerCase();
+  const reasons: NutritionMatchReason[] = [];
+  let scoreDelta = 0;
+
+  for (const requirement of CHINESE_TO_ENGLISH_PORTION_REQUIREMENTS) {
+    const hasRequirement = requirement.zh.some((keyword) =>
+      normalizedIngredientName.includes(normalizeNameForMatch(keyword)),
+    );
+    if (!hasRequirement) continue;
+
+    if (requirement.positive.some((pattern) => pattern.test(sourceName))) {
+      scoreDelta += 0.12;
+      reasons.push({
+        code: 'PORTION_MATCH',
+        label: requirement.positiveLabel,
+        scoreDelta: 0.12,
+      });
+      continue;
+    }
+
+    if (requirement.negative.some((pattern) => pattern.test(sourceName))) {
+      scoreDelta -= 0.14;
+      reasons.push({
+        code: 'PORTION_CONFLICT',
+        label: requirement.negativeLabel,
+        scoreDelta: -0.14,
+      });
+    }
+  }
+
+  return { scoreDelta, reasons };
+}
+
+function scoreEnglishFoodVariantMatch(
+  normalizedIngredientName: string,
+  sourceFoodName: string,
+): { scoreDelta: number; reasons: NutritionMatchReason[] } {
+  if (!normalizedIngredientName || !sourceFoodName) {
+    return { scoreDelta: 0, reasons: [] };
+  }
+
+  const sourceName = sourceFoodName.toLowerCase();
+  const reasons: NutritionMatchReason[] = [];
+  let scoreDelta = 0;
+
+  const isRegularCabbage = ['卷心菜', '圆白菜', '包菜'].some((keyword) =>
+    normalizedIngredientName.includes(normalizeNameForMatch(keyword)),
+  );
+  if (isRegularCabbage) {
+    if (/\b(chinese|pak[-\s]?choi|pe[-\s]?tsai|red)\b/u.test(sourceName)) {
+      reasons.push({
+        code: 'VARIANT_CONFLICT',
+        label: '普通卷心菜命中红甘蓝或中国白菜类易混淆来源，保留给 Agent 排序',
+        scoreDelta: 0,
+      });
+    } else if (/\bcommon\b/u.test(sourceName)) {
+      scoreDelta += 0.1;
+      reasons.push({
+        code: 'VARIANT_MATCH',
+        label: '普通卷心菜匹配 common cabbage 来源',
+        scoreDelta: 0.1,
+      });
+    }
+  }
+
+  const isRedCabbage = ['紫甘蓝'].some((keyword) =>
+    normalizedIngredientName.includes(normalizeNameForMatch(keyword)),
+  );
+  if (isRedCabbage) {
+    if (/\bred\b/u.test(sourceName)) {
+      scoreDelta += 0.1;
+      reasons.push({
+        code: 'VARIANT_MATCH',
+        label: '紫甘蓝匹配 red cabbage 来源',
+        scoreDelta: 0.1,
+      });
+    } else if (
+      /\b(common|chinese|pak[-\s]?choi|pe[-\s]?tsai)\b/u.test(sourceName)
+    ) {
+      reasons.push({
+        code: 'VARIANT_CONFLICT',
+        label: '紫甘蓝命中普通卷心菜或中国白菜类易混淆来源，保留给 Agent 排序',
+        scoreDelta: 0,
+      });
+    }
+  }
+
+  return { scoreDelta, reasons };
 }
 
 function findChineseEnglishAliasMatch(
@@ -218,6 +381,7 @@ export function mapUsdaNutrientsToNutritionProfile(
   profile.meta.sourceProvider = USDA_SOURCE_PROVIDER;
   profile.meta.sourceForms = {};
   profile.meta.conversionNotes = {};
+  const assignedFieldPriorities = new Map<string, number>();
 
   for (const nutrient of nutrients) {
     const nutrientId = nutrient.nutrient?.id;
@@ -233,11 +397,33 @@ export function mapUsdaNutrientsToNutritionProfile(
     const mapping = USDA_NUTRIENT_MAP.find(
       (item) => item.nutrientId === nutrientId,
     );
-    if (!mapping) continue;
+    if (!mapping) {
+      const reviewOnlyItem = buildUsdaReviewOnlyCustomItem({
+        nutrientId,
+        nutrientName: nutrient.nutrient?.name,
+        unitName: nutrient.nutrient?.unitName,
+        amount,
+        rawBasisType: profile.meta.rawBasisType,
+      });
+      if (reviewOnlyItem) {
+        profile.customItems.push(reviewOnlyItem);
+      }
+      continue;
+    }
+
+    const nextPriority = mapping.fieldPriority ?? 100;
+    const assignedPriority = assignedFieldPriorities.get(mapping.fieldPath);
+    if (
+      typeof assignedPriority === 'number' &&
+      assignedPriority <= nextPriority
+    ) {
+      continue;
+    }
 
     const canonicalValue = amount * (mapping.amountMultiplier ?? 1);
     const tab = profile[mapping.tabKey] as Record<string, number | null>;
     tab[mapping.fieldKey] = canonicalValue;
+    assignedFieldPriorities.set(mapping.fieldPath, nextPriority);
 
     const field = findNutritionField(mapping.fieldPath);
     profile.meta.sourceForms[mapping.fieldPath] = {
@@ -248,6 +434,7 @@ export function mapUsdaNutrientsToNutritionProfile(
       canonicalValue,
       canonicalUnit: field?.unit ?? null,
       basisType: profile.meta.rawBasisType,
+      ...(mapping.sourceFormMetadata ?? {}),
     };
     if (mapping.conversionNote) {
       profile.meta.conversionNotes[mapping.fieldPath] = mapping.conversionNote;
@@ -255,6 +442,167 @@ export function mapUsdaNutrientsToNutritionProfile(
   }
 
   return profile;
+}
+
+function buildUsdaReviewOnlyCustomItem(params: {
+  nutrientId: number;
+  nutrientName?: string | null;
+  unitName?: string | null;
+  amount: number;
+  rawBasisType: NutritionProfileV2['meta']['rawBasisType'];
+}): NutritionProfileV2['customItems'][number] | null {
+  const nutrientName = params.nutrientName?.trim();
+  const normalizedName = nutrientName?.toLowerCase() ?? '';
+  if (params.amount <= 0) {
+    return null;
+  }
+
+  if (!nutrientName) {
+    return null;
+  }
+
+  const reviewClass = classifyUsdaReviewOnlyNutrient(normalizedName);
+  if (!reviewClass) {
+    return null;
+  }
+
+  return {
+    name: nutrientName,
+    value: params.amount,
+    unit: params.unitName?.trim() || reviewClass.defaultUnit,
+    rawBasisType: params.rawBasisType,
+    note: reviewClass.noteBuilder(nutrientName),
+    sourceNutrientId: params.nutrientId,
+    sourceNutrientName: nutrientName,
+    canonicalFieldPath: reviewClass.canonicalFieldPath,
+    reviewCategory: reviewClass.reviewCategory,
+    reviewStatus: 'NOT_COUNTED',
+  };
+}
+
+function classifyUsdaReviewOnlyNutrient(normalizedName: string): {
+  canonicalFieldPath: string;
+  reviewCategory: string;
+  defaultUnit: string;
+  noteBuilder: (nutrientName: string) => string;
+} | null {
+  const isVitaminERelated =
+    normalizedName.includes('tocopherol') ||
+    normalizedName.includes('tocotrienol') ||
+    normalizedName === 'vitamin e, added';
+  if (isVitaminERelated) {
+    return {
+      canonicalFieldPath: 'vitamins.vitaminE',
+      reviewCategory: 'USDA_VITAMIN_E_RELATED',
+      defaultUnit: 'mg',
+      noteBuilder: buildUsdaVitaminEReviewOnlyNote,
+    };
+  }
+
+  const isVitaminARelated =
+    normalizedName === 'vitamin a, rae' ||
+    normalizedName === 'retinol' ||
+    normalizedName.includes('carotene') ||
+    normalizedName.includes('cryptoxanthin') ||
+    normalizedName === 'vitamin a';
+  if (isVitaminARelated) {
+    return {
+      canonicalFieldPath: 'vitamins.vitaminA',
+      reviewCategory: 'USDA_VITAMIN_A_RELATED',
+      defaultUnit: 'µg',
+      noteBuilder: buildUsdaVitaminAReviewOnlyNote,
+    };
+  }
+
+  const isVitaminDRelated =
+    normalizedName.includes('vitamin d2') ||
+    normalizedName.includes('vitamin d3') ||
+    normalizedName.includes('cholecalciferol') ||
+    normalizedName.includes('ergocalciferol') ||
+    normalizedName.includes('hydroxycholecalciferol');
+  if (isVitaminDRelated) {
+    return {
+      canonicalFieldPath: 'vitamins.vitaminD',
+      reviewCategory: 'USDA_VITAMIN_D_RELATED',
+      defaultUnit: 'µg',
+      noteBuilder: buildUsdaVitaminDReviewOnlyNote,
+    };
+  }
+
+  const isVitaminKRelated =
+    normalizedName.includes('menaquinone') ||
+    normalizedName.includes('dihydrophylloquinone');
+  if (isVitaminKRelated) {
+    return {
+      canonicalFieldPath: 'vitamins.vitaminK',
+      reviewCategory: 'USDA_VITAMIN_K_RELATED',
+      defaultUnit: 'µg',
+      noteBuilder: buildUsdaVitaminKReviewOnlyNote,
+    };
+  }
+
+  const isReviewablePufa =
+    normalizedName.startsWith('pufa ') &&
+    !normalizedName.includes('18:2') &&
+    !normalizedName.includes('18:3 n-3 c,c,c') &&
+    !normalizedName.includes('20:4 n-6') &&
+    !normalizedName.includes('20:5') &&
+    !normalizedName.includes('22:5') &&
+    !normalizedName.includes('22:6');
+  if (isReviewablePufa) {
+    return {
+      canonicalFieldPath: 'fattyAcids',
+      reviewCategory: 'USDA_FATTY_ACID_RELATED',
+      defaultUnit: 'g',
+      noteBuilder: buildUsdaFattyAcidReviewOnlyNote,
+    };
+  }
+
+  return null;
+}
+
+function buildUsdaVitaminEReviewOnlyNote(nutrientName: string): string {
+  const normalizedName = nutrientName.toLowerCase();
+  if (normalizedName.includes('tocotrienol')) {
+    return '未计入维生素 E 达标值：当前 FEDIAF/NRC 口径未提供犬猫生育三烯酚换算依据。';
+  }
+  if (normalizedName === 'vitamin e, added') {
+    return '未计入维生素 E 达标值：添加型维生素 E 需要确认产品标签中的具体来源形态后再换算。';
+  }
+  return '未计入维生素 E 达标值：当前一阶段仅自动计入 alpha-tocopherol，其他 tocopherol 形态先保留供人工审核。';
+}
+
+function buildUsdaVitaminAReviewOnlyNote(nutrientName: string): string {
+  const normalizedName = nutrientName.toLowerCase();
+  if (
+    normalizedName.includes('carotene') ||
+    normalizedName.includes('cryptoxanthin')
+  ) {
+    return '未计入维生素 A 主字段：类胡萝卜素需要按犬可利用活性另行确认，当前仅保留来源项供审核。';
+  }
+  return '未计入维生素 A 主字段：当前主字段采用 USDA Vitamin A, IU；RAE/视黄醇等来源项保留用于追溯和人工审核。';
+}
+
+function buildUsdaVitaminDReviewOnlyNote(nutrientName: string): string {
+  const normalizedName = nutrientName.toLowerCase();
+  if (
+    normalizedName.includes('vitamin d2') ||
+    normalizedName.includes('ergocalciferol')
+  ) {
+    return '未单独计入维生素 D 主字段：D2 形态先保留来源项，优先使用 USDA D2+D3 总量。';
+  }
+  if (normalizedName.includes('hydroxycholecalciferol')) {
+    return '未计入维生素 D 主字段：25-hydroxycholecalciferol 不直接按普通 D3 自动换算。';
+  }
+  return '未单独计入维生素 D 主字段：D3 形态保留用于审核，优先使用 USDA D2+D3 总量。';
+}
+
+function buildUsdaVitaminKReviewOnlyNote(): string {
+  return '未计入维生素 K 主字段：当前主字段采用 phylloquinone (K1)，其他 K 形态先保留供人工审核。';
+}
+
+function buildUsdaFattyAcidReviewOnlyNote(): string {
+  return '未计入脂肪酸主字段：当前配方主字段只自动计入 LA、ALA、AA、EPA、DPA、DHA 等目标脂肪酸，其他 PUFA 先保留供审核。';
 }
 
 export function buildUsdaFdcSourceVersion(
@@ -280,7 +628,8 @@ export function attachUsdaFdcProfileMetadata(
   profile.meta.externalId = String(options.externalId).trim();
   profile.meta.sourceVersion = options.sourceVersion?.trim() || 'USDA_FDC';
   profile.meta.confidenceLevel = options.confidenceLevel ?? 'MEDIUM';
-  profile.meta.sourceTitle = options.sourceTitle?.trim() || USDA_SOURCE_PROVIDER;
+  profile.meta.sourceTitle =
+    options.sourceTitle?.trim() || USDA_SOURCE_PROVIDER;
   return profile;
 }
 
@@ -320,8 +669,10 @@ export function attachSourceRecordProfileMetadata(
       sourceType:
         (options.sourceType as NutritionProfileV2['meta']['sourceType']) ??
         profile.meta.sourceType,
-      sourceKind: profile.meta.sourceKind ?? sourceDefinition?.sourceKind ?? null,
-      sourceCode: profile.meta.sourceCode ?? sourceDefinition?.sourceCode ?? null,
+      sourceKind:
+        profile.meta.sourceKind ?? sourceDefinition?.sourceKind ?? null,
+      sourceCode:
+        profile.meta.sourceCode ?? sourceDefinition?.sourceCode ?? null,
       sourceVersion,
       externalId,
       sourceTitle:
@@ -379,7 +730,9 @@ function getSourceVersionFromSourceRecord({
   }
 
   const detail =
-    sourceDetail && typeof sourceDetail === 'object' && !Array.isArray(sourceDetail)
+    sourceDetail &&
+    typeof sourceDetail === 'object' &&
+    !Array.isArray(sourceDetail)
       ? (sourceDetail as Record<string, unknown>)
       : {};
   const sourceDate = detail.publishedDate ?? detail.publicationDate;

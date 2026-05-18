@@ -45,7 +45,7 @@
         <el-alert
           :type="candidate.hardGateResults?.canBatchConfirm ? 'success' : 'warning'"
           :closable="false"
-          :title="candidate.hardGateResults?.canBatchConfirm ? '可批量确认' : '需要人工复核'"
+          :title="candidate.hardGateResults?.canBatchConfirm ? '可批量确认为主档案' : '需要人工复核'"
         />
         <div class="tag-list">
           <el-tag
@@ -55,7 +55,7 @@
             type="danger"
             effect="plain"
           >
-            {{ reason }}
+            {{ hardGateReasonLabel(reason) }}
           </el-tag>
           <el-tag
             v-for="reason in candidate.hardGateResults?.warningReasons || []"
@@ -64,7 +64,7 @@
             type="warning"
             effect="plain"
           >
-            {{ reason }}
+            {{ hardGateReasonLabel(reason) }}
           </el-tag>
         </div>
       </section>
@@ -73,16 +73,52 @@
         <h3>确认信息</h3>
         <el-form label-width="110px">
           <el-form-item label="营养状态">
-            <el-input v-model="form.preparationStateLabel" placeholder="如：生重、熟重、干重" />
+            <el-select
+              v-model="form.preparationState"
+              clearable
+              filterable
+              placeholder="选择营养状态"
+            >
+              <el-option
+                v-for="option in NUTRITION_PREPARATION_STATE_OPTIONS"
+                :key="option.value"
+                :label="option.label"
+                :value="option.value"
+              />
+            </el-select>
           </el-form-item>
           <el-form-item label="状态代码">
-            <el-input v-model="form.preparationState" placeholder="如：RAW、COOKED、DRIED" />
+            <el-input :model-value="form.preparationState || '-'" disabled />
           </el-form-item>
           <el-form-item label="可食部/规格">
-            <el-input v-model="form.ediblePortionLabel" placeholder="如：去皮去骨、带皮、沥干" />
+            <el-select
+              v-model="form.ediblePortionLabel"
+              clearable
+              filterable
+              placeholder="选择可食部/规格"
+            >
+              <el-option
+                v-for="option in NUTRITION_EDIBLE_PORTION_OPTIONS"
+                :key="option.value"
+                :label="option.label"
+                :value="option.label"
+              />
+            </el-select>
           </el-form-item>
           <el-form-item label="加工标记">
-            <el-input v-model="form.processingLabel" placeholder="如：强化、无盐、紫外线照射" />
+            <el-select
+              v-model="form.processingLabel"
+              clearable
+              filterable
+              placeholder="选择加工标记"
+            >
+              <el-option
+                v-for="option in NUTRITION_PROCESSING_OPTIONS"
+                :key="option.value"
+                :label="option.label"
+                :value="option.label"
+              />
+            </el-select>
           </el-form-item>
           <el-form-item label="审核备注">
             <el-input
@@ -124,6 +160,13 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue'
 import NutritionProfilePreview from './NutritionProfilePreview.vue'
+import {
+  NUTRITION_EDIBLE_PORTION_OPTIONS,
+  NUTRITION_PREPARATION_STATE_OPTIONS,
+  NUTRITION_PROCESSING_OPTIONS,
+  resolveReviewOptionLabel,
+  resolveReviewOptionValue
+} from '../nutritionReviewTaxonomy'
 import type {
   ConfirmNutritionCandidatePayload,
   IngredientNutritionCandidateListItem
@@ -150,19 +193,31 @@ const visible = computed({
 
 const form = reactive({
   preparationState: '',
-  preparationStateLabel: '',
   ediblePortionLabel: '',
   processingLabel: '',
   reviewNote: ''
 })
 
+const selectedPreparationStateLabel = computed(() =>
+  resolveReviewOptionLabel(NUTRITION_PREPARATION_STATE_OPTIONS, form.preparationState)
+)
+
 watch(
   () => props.candidate,
   (candidate) => {
-    form.preparationState = candidate?.preparationState || candidate?.agentReview?.preparationState || ''
-    form.preparationStateLabel = candidate?.preparationStateLabel || candidate?.agentReview?.preparationStateLabel || ''
-    form.ediblePortionLabel = candidate?.ediblePortionLabel || candidate?.agentReview?.ediblePortionLabel || ''
-    form.processingLabel = candidate?.processingLabel || candidate?.agentReview?.processingLabel || ''
+    form.preparationState = resolveReviewOptionValue(
+      NUTRITION_PREPARATION_STATE_OPTIONS,
+      candidate?.preparationState || candidate?.agentReview?.preparationState,
+      candidate?.preparationStateLabel || candidate?.agentReview?.preparationStateLabel
+    )
+    form.ediblePortionLabel = resolveReviewOptionLabel(
+      NUTRITION_EDIBLE_PORTION_OPTIONS,
+      candidate?.ediblePortionLabel || candidate?.agentReview?.ediblePortionLabel
+    )
+    form.processingLabel = resolveReviewOptionLabel(
+      NUTRITION_PROCESSING_OPTIONS,
+      candidate?.processingLabel || candidate?.agentReview?.processingLabel
+    )
     form.reviewNote = candidate?.reviewNote || ''
   },
   { immediate: true }
@@ -172,7 +227,7 @@ function emitConfirm(mappingRole: 'PRIMARY' | 'SECONDARY') {
   const payload: ConfirmNutritionCandidatePayload = {
     mappingRole,
     preparationState: form.preparationState || null,
-    preparationStateLabel: form.preparationStateLabel || null,
+    preparationStateLabel: selectedPreparationStateLabel.value || null,
     ediblePortionLabel: form.ediblePortionLabel || null,
     processingLabel: form.processingLabel || null,
     reviewNote: form.reviewNote || null
@@ -184,6 +239,25 @@ function emitConfirm(mappingRole: 'PRIMARY' | 'SECONDARY') {
   }
 
   emit('confirm-secondary', payload)
+}
+
+function hardGateReasonLabel(reason: string): string {
+  const labels: Record<string, string> = {
+    MISSING_SOURCE_RECORD: '缺少来源记录',
+    MISSING_NORMALIZED_NUTRITION: '缺少标准化营养数据',
+    MISSING_CRITICAL_NUTRIENTS: '缺少核心营养字段',
+    MISSING_RAW_BASIS: '缺少每 100g/每份等基准',
+    MISSING_AGENT_REVIEW: '尚未运行 Agent 审核',
+    LOW_AGENT_CONFIDENCE: 'Agent 置信度低',
+    AGENT_RECOMMENDS_REJECT: 'Agent 建议拒绝',
+    AGENT_RECOMMENDS_ALTERNATIVE: 'Agent 建议寻找其他来源',
+    AGENT_NEEDS_HUMAN_REVIEW: 'Agent 要求人工复核',
+    AGENT_RECOMMENDS_SECONDARY: 'Agent 建议作为次级档案',
+    AGENT_RECOMMENDATION_UNSUPPORTED: 'Agent 建议类型暂不支持批量确认',
+    AGENT_REVIEW_FAILED: 'Agent 审核失败'
+  }
+
+  return labels[reason] || reason
 }
 </script>
 

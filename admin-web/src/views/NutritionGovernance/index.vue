@@ -45,6 +45,14 @@
             <el-option label="缺来源" value="MISSING_SOURCE" />
           </el-select>
 
+          <el-input
+            v-model="candidateKeywordFilter"
+            clearable
+            :prefix-icon="Search"
+            placeholder="搜索原料/候选词条"
+            class="candidate-search-input"
+          />
+
           <el-select
             v-model="selectedFoodIngredientId"
             filterable
@@ -101,24 +109,59 @@
           @refresh="loadLatestAgentJob"
         />
 
+        <el-alert
+          v-if="matchedIngredientsWithoutVisibleCandidates.length"
+          class="search-fallback-alert"
+          title="没有待确认候选，但找到标准原料"
+          type="info"
+          :closable="false"
+        >
+          <div class="search-fallback-list">
+            <div
+              v-for="ingredient in matchedIngredientsWithoutVisibleCandidates"
+              :key="ingredient.id"
+              class="search-fallback-item"
+            >
+              <div>
+                <strong>{{ ingredient.name }}</strong>
+                <span>已有已确认营养档案，可直接打开查看或重新匹配。</span>
+              </div>
+              <el-button
+                link
+                type="primary"
+                @click="handleOpenIngredientWorkbenchByIngredient(ingredient)"
+              >
+                打开营养档案
+              </el-button>
+            </div>
+          </div>
+        </el-alert>
+
         <FoodCandidatesTable
-          :candidates="candidates"
+          :candidates="visibleCandidates"
           :loading="candidatesLoading"
           :busy-id="candidateBusyId"
-          @confirm="handleConfirmCandidate"
-          @review-agent="handleRunAgentReview"
-          @reject="handleRejectCandidate"
+          @confirm="handleOpenIngredientWorkbench"
           @selection-change="handleCandidateSelectionChange"
         />
 
-        <CandidateReviewDrawer
-          v-model="candidateDrawerVisible"
-          :candidate="selectedCandidate"
-          :busy="!!candidateBusyId"
-          @review-agent="handleRunAgentReview"
-          @confirm-primary="handleConfirmCandidateFromDrawer"
-          @confirm-secondary="handleConfirmCandidateFromDrawer"
-          @reject="handleRejectCandidateFromDrawer"
+        <IngredientNutritionWorkbenchDrawer
+          v-model="ingredientWorkbenchVisible"
+          :ingredient="selectedIngredientForWorkbench"
+          :candidates="ingredientWorkbenchCandidates"
+          :busy="ingredientWorkbenchSaving || ingredientWorkbenchLoading"
+          :rematching="ingredientWorkbenchRematching"
+          :importing="ingredientWorkbenchImporting"
+          :ranking-with-agent="ingredientWorkbenchRanking"
+          :rejecting-candidate-id="ingredientWorkbenchRejectingId"
+          :validating-candidate-id="ingredientWorkbenchValidatingId"
+          :validation-results="candidateNutritionValidationResults"
+          @rematch="handleRematchIngredientCandidates"
+          @import-usda="handleImportUsdaCandidateFromWorkbench"
+          @reject-candidate="handleRejectCandidateFromWorkbench"
+          @rank-with-agent="handleRankIngredientCandidatesWithAgent"
+          @validate-nutrition="handleValidateCandidateNutrition"
+          @save="handleSaveIngredientWorkbench"
         />
       </el-tab-pane>
 
@@ -181,17 +224,19 @@
 import { computed, onMounted, ref } from 'vue'
 import type { UploadFile } from 'element-plus'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Refresh, Setting } from '@element-plus/icons-vue'
+import { Refresh, Search, Setting } from '@element-plus/icons-vue'
 import { ingredientApi } from '@/api/ingredients'
 import { nutritionGovernanceApi } from '@/api/nutritionGovernance'
 import { IngredientType, type Ingredient } from '@/types/ingredient'
 import type {
   AgentProviderSettings,
+  ApplyIngredientCandidateConfigurationPayload,
   BatchAgentReviewPayload,
-  ConfirmNutritionCandidatePayload,
+  CandidateNutritionValidationWithAgentResult,
   IngredientNutritionCandidateListItem,
   NutritionAgentReviewJob,
   NutritionCandidateReviewGroup,
+  NutritionGovernanceIngredientSummary,
   NutritionGovernanceOverview,
   NutritionMatchConfidence,
   SupplementNutritionDraft,
@@ -199,7 +244,7 @@ import type {
 } from '@/types/nutritionGovernance'
 import OverviewCards from './components/OverviewCards.vue'
 import FoodCandidatesTable from './components/FoodCandidatesTable.vue'
-import CandidateReviewDrawer from './components/CandidateReviewDrawer.vue'
+import IngredientNutritionWorkbenchDrawer from './components/IngredientNutritionWorkbenchDrawer.vue'
 import SupplementDraftsTable from './components/SupplementDraftsTable.vue'
 import AgentBatchReviewPanel from './components/AgentBatchReviewPanel.vue'
 import AgentSettingsDrawer from './components/AgentSettingsDrawer.vue'
@@ -214,12 +259,14 @@ const latestAgentJob = ref<NutritionAgentReviewJob | null>(null)
 const activeTab = ref<'food' | 'supplement'>('food')
 const confidenceFilter = ref<NutritionMatchConfidence | ''>('')
 const reviewGroupFilter = ref<NutritionCandidateReviewGroup | ''>('')
+const candidateKeywordFilter = ref('')
 const selectedFoodIngredientId = ref('')
 const selectedSupplementIngredientId = ref('')
 const fdcId = ref('')
 const selectedCandidates = ref<IngredientNutritionCandidateListItem[]>([])
-const selectedCandidate = ref<IngredientNutritionCandidateListItem | null>(null)
-const candidateDrawerVisible = ref(false)
+const selectedIngredientWorkbenchId = ref('')
+const ingredientWorkbenchCandidatePool = ref<IngredientNutritionCandidateListItem[]>([])
+const ingredientWorkbenchVisible = ref(false)
 const agentSettingsVisible = ref(false)
 
 const refreshing = ref(false)
@@ -230,6 +277,14 @@ const generating = ref(false)
 const importing = ref(false)
 const uploading = ref(false)
 const candidateBusyId = ref('')
+const ingredientWorkbenchLoading = ref(false)
+const ingredientWorkbenchSaving = ref(false)
+const ingredientWorkbenchRematching = ref(false)
+const ingredientWorkbenchImporting = ref(false)
+const ingredientWorkbenchRanking = ref(false)
+const ingredientWorkbenchRejectingId = ref('')
+const ingredientWorkbenchValidatingId = ref('')
+const candidateNutritionValidationResults = ref<Record<string, CandidateNutritionValidationWithAgentResult>>({})
 const batchConfirming = ref(false)
 const draftsLoading = ref(false)
 const draftBusyId = ref('')
@@ -246,6 +301,76 @@ const foodIngredients = computed(() => (
 const supplementIngredients = computed(() => (
   ingredients.value.filter((ingredient) => ingredient.type === IngredientType.SUPPLEMENT)
 ))
+
+const normalizedCandidateKeyword = computed(() => candidateKeywordFilter.value.trim().toLowerCase())
+
+const visibleCandidates = computed(() => {
+  const keyword = normalizedCandidateKeyword.value
+  if (!keyword) return candidates.value
+
+  return candidates.value.filter((candidate) => {
+    const searchableText = [
+      candidate.ingredient?.name,
+      candidate.ingredientId,
+      candidate.sourceRecord?.foodName,
+      candidate.sourceRecord?.foodNameEn,
+      candidate.sourceRecord?.sourceKey,
+      candidate.sourceRecord?.sourceTitle,
+      candidate.sourceRecord?.category
+    ]
+      .filter(Boolean)
+      .map((value) => String(value).toLowerCase())
+      .join(' ')
+
+    return searchableText.includes(keyword)
+  })
+})
+
+const matchedIngredientsWithoutVisibleCandidates = computed(() => {
+  const keyword = normalizedCandidateKeyword.value
+  if (!keyword || visibleCandidates.value.length) return []
+
+  return foodIngredients.value.filter((ingredient) => (
+    Boolean(ingredient.nutritionProfile) &&
+    buildIngredientSearchText(ingredient).includes(keyword)
+  ))
+})
+
+const ingredientWorkbenchCandidates = computed(() => (
+  ingredientWorkbenchCandidatePool.value.filter(
+    (candidate) => candidate.ingredientId === selectedIngredientWorkbenchId.value
+  )
+))
+
+const selectedIngredientForWorkbench = computed<NutritionGovernanceIngredientSummary | null>(() => {
+  const candidateIngredient = ingredientWorkbenchCandidates.value[0]?.ingredient
+  if (candidateIngredient) return candidateIngredient
+
+  const ingredient = ingredients.value.find(
+    (item) => item.id === selectedIngredientWorkbenchId.value
+  )
+  if (!ingredient) return null
+
+  return {
+    id: ingredient.id,
+    name: ingredient.name,
+    type: ingredient.type,
+    nutritionProfile: ingredient.nutritionProfile
+  }
+})
+
+function buildIngredientSearchText(ingredient: Ingredient): string {
+  return [
+    ingredient.name,
+    ingredient.id,
+    ingredient.brand,
+    ingredient.productModel,
+    ingredient.purchaseChannel
+  ]
+    .filter(Boolean)
+    .map((value) => String(value).toLowerCase())
+    .join(' ')
+}
 
 onMounted(() => {
   refreshAll()
@@ -344,9 +469,14 @@ async function handleSaveAgentSettings(payload: UpdateAgentProviderSettingsPaylo
   }
 }
 
-async function handleTestAgentSettings() {
+async function handleTestAgentSettings(payload?: UpdateAgentProviderSettingsPayload) {
   agentSettingsTesting.value = true
   try {
+    if (payload) {
+      agentSettingsSaving.value = true
+      agentSettings.value = await nutritionGovernanceApi.updateAgentSettings(payload)
+    }
+
     const result = await nutritionGovernanceApi.testAgentSettings()
     ElMessage.success(
       result.recommendedAction
@@ -354,8 +484,9 @@ async function handleTestAgentSettings() {
         : 'DeepSeek 连接正常'
     )
   } catch (error) {
-    ElMessage.error('DeepSeek 连接测试失败')
+    ElMessage.error('DeepSeek 设置保存或连接测试失败')
   } finally {
+    agentSettingsSaving.value = false
     agentSettingsTesting.value = false
   }
 }
@@ -445,71 +576,183 @@ async function handleImportUsda() {
   }
 }
 
-async function handleConfirmCandidate(candidate: IngredientNutritionCandidateListItem) {
-  handleOpenCandidate(candidate)
-}
+async function handleOpenIngredientWorkbench(candidate: IngredientNutritionCandidateListItem) {
+  selectedIngredientWorkbenchId.value = candidate.ingredientId
+  candidateNutritionValidationResults.value = {}
+  ingredientWorkbenchCandidatePool.value = candidates.value.filter(
+    (item) => item.ingredientId === candidate.ingredientId
+  )
+  ingredientWorkbenchVisible.value = true
 
-function handleOpenCandidate(candidate: IngredientNutritionCandidateListItem) {
-  selectedCandidate.value = candidate
-  candidateDrawerVisible.value = true
-}
-
-function handleCandidateSelectionChange(selection: IngredientNutritionCandidateListItem[]) {
-  selectedCandidates.value = selection
-}
-
-async function handleRunAgentReview(candidate: IngredientNutritionCandidateListItem | null) {
-  if (!candidate || candidateBusyId.value) return
-
-  candidateBusyId.value = candidate.id
+  ingredientWorkbenchLoading.value = true
   try {
-    const reviewed = await nutritionGovernanceApi.reviewCandidateWithAgent(candidate.id)
-    ElMessage.success('Agent 审核已完成')
-    await loadCandidates()
-    if (selectedCandidate.value?.id === candidate.id) {
-      selectedCandidate.value = {
-        ...selectedCandidate.value,
-        ...reviewed
-      } as IngredientNutritionCandidateListItem
-    }
+    await reloadIngredientWorkbenchCandidates(candidate.ingredientId, {
+      includeAllStatuses: true
+    })
   } catch (error) {
-    ElMessage.error('Agent 审核失败')
+    ElMessage.warning('同原料候选加载失败，已显示当前列表中的候选')
   } finally {
-    candidateBusyId.value = ''
+    ingredientWorkbenchLoading.value = false
   }
 }
 
-async function handleConfirmCandidateFromDrawer(payload: ConfirmNutritionCandidatePayload) {
-  const candidate = selectedCandidate.value
-  if (!candidate || candidateBusyId.value) return
+async function handleOpenIngredientWorkbenchByIngredient(ingredient: Ingredient) {
+  selectedIngredientWorkbenchId.value = ingredient.id
+  candidateNutritionValidationResults.value = {}
+  ingredientWorkbenchCandidatePool.value = []
+  ingredientWorkbenchVisible.value = true
 
-  candidateBusyId.value = candidate.id
+  ingredientWorkbenchLoading.value = true
+  try {
+    await reloadIngredientWorkbenchCandidates(ingredient.id, {
+      includeAllStatuses: true
+    })
+  } catch (error) {
+    ElMessage.warning('该原料营养档案加载失败，可在抽屉中重新匹配候选')
+  } finally {
+    ingredientWorkbenchLoading.value = false
+  }
+}
+
+async function reloadIngredientWorkbenchCandidates(
+  ingredientId = selectedIngredientWorkbenchId.value,
+  options: { includeAllStatuses?: boolean } = {}
+) {
+  if (!ingredientId) return
+
+  const allCandidates = await nutritionGovernanceApi.listCandidates({
+    ingredientId,
+    status: options.includeAllStatuses ? undefined : 'CANDIDATE'
+  })
+  ingredientWorkbenchCandidatePool.value = allCandidates.filter(
+    (item) => item.ingredientId === ingredientId
+  )
+}
+
+async function handleRematchIngredientCandidates(ingredientId: string) {
+  if (!ingredientId || ingredientWorkbenchRematching.value) return
+
+  ingredientWorkbenchRematching.value = true
+  try {
+    const generated = await nutritionGovernanceApi.generateFoodCandidates(ingredientId)
+    await Promise.all([
+      loadOverview(),
+      loadCandidates(),
+      reloadIngredientWorkbenchCandidates(ingredientId, {
+        includeAllStatuses: true
+      })
+    ])
+    ElMessage.success(`已重新匹配 ${generated.length} 条候选`)
+  } catch (error) {
+    ElMessage.error('重新匹配失败')
+  } finally {
+    ingredientWorkbenchRematching.value = false
+  }
+}
+
+async function handleImportUsdaCandidateFromWorkbench(payload: { ingredientId: string; fdcId: string }) {
+  const nextFdcId = payload.fdcId.trim()
+  if (!payload.ingredientId || !nextFdcId || ingredientWorkbenchImporting.value) return
+
+  ingredientWorkbenchImporting.value = true
+  try {
+    await nutritionGovernanceApi.importUsdaSource(nextFdcId, payload.ingredientId)
+    await Promise.all([
+      loadOverview(),
+      loadCandidates(),
+      reloadIngredientWorkbenchCandidates(payload.ingredientId, {
+        includeAllStatuses: true
+      })
+    ])
+    ElMessage.success('USDA 候选已导入')
+  } catch (error) {
+    ElMessage.error('USDA 候选导入失败')
+  } finally {
+    ingredientWorkbenchImporting.value = false
+  }
+}
+
+async function handleRejectCandidateFromWorkbench(candidate: IngredientNutritionCandidateListItem) {
+  if (ingredientWorkbenchRejectingId.value) return
+
+  ingredientWorkbenchRejectingId.value = candidate.id
+  const foodName = candidate.sourceRecord?.foodName || candidate.sourceRecord?.sourceTitle || '该候选'
   try {
     await ElMessageBox.confirm(
-      `确认将「${candidate.sourceRecord?.foodName || '候选食物'}」写入「${candidate.ingredient?.name || '原料'}」的营养档案吗？`,
-      '确认营养档案',
+      `确认拒绝「${foodName}」吗？拒绝后不会写入该原料营养档案。`,
+      '拒绝候选档案',
       {
         type: 'warning',
-        confirmButtonText: '确认写入',
+        confirmButtonText: '确认拒绝',
         cancelButtonText: '取消'
       }
     )
   } catch {
-    candidateBusyId.value = ''
+    ingredientWorkbenchRejectingId.value = ''
     return
   }
 
   try {
-    await nutritionGovernanceApi.confirmCandidate(candidate.id, payload)
-    ElMessage.success('候选已确认')
-    candidateDrawerVisible.value = false
-    selectedCandidate.value = null
-    await Promise.all([loadOverview(), loadCandidates()])
+    await nutritionGovernanceApi.rejectCandidate(candidate.id)
+    await Promise.all([
+      loadOverview(),
+      loadCandidates(),
+      reloadIngredientWorkbenchCandidates(candidate.ingredientId, {
+        includeAllStatuses: true
+      })
+    ])
+    ElMessage.success('候选已拒绝')
   } catch (error) {
-    ElMessage.error('候选确认失败')
+    ElMessage.error('候选拒绝失败')
   } finally {
-    candidateBusyId.value = ''
+    ingredientWorkbenchRejectingId.value = ''
   }
+}
+
+async function handleRankIngredientCandidatesWithAgent(payload: {
+  ingredientId: string
+  reviewerRequirement: string
+  onlineWhitelistSearch?: boolean
+}) {
+  if (!payload.ingredientId || ingredientWorkbenchRanking.value) return
+
+  ingredientWorkbenchRanking.value = true
+  try {
+    const rankedCandidates = await nutritionGovernanceApi.rankFoodCandidatesWithAgent({
+      ingredientId: payload.ingredientId,
+      reviewerRequirement: payload.reviewerRequirement || null,
+      onlineWhitelistSearch: payload.onlineWhitelistSearch
+    })
+    ingredientWorkbenchCandidatePool.value = rankedCandidates
+    await Promise.all([loadOverview(), loadCandidates()])
+    ElMessage.success('已查找候选并完成 Agent 排序，结果包含待确认候选和已确认档案')
+  } catch (error) {
+    ElMessage.error('候选查找或 Agent 排序失败')
+  } finally {
+    ingredientWorkbenchRanking.value = false
+  }
+}
+
+async function handleValidateCandidateNutrition(candidate: IngredientNutritionCandidateListItem) {
+  if (ingredientWorkbenchValidatingId.value) return
+
+  ingredientWorkbenchValidatingId.value = candidate.id
+  try {
+    const result = await nutritionGovernanceApi.validateCandidateNutritionWithAgent(candidate.id)
+    candidateNutritionValidationResults.value = {
+      ...candidateNutritionValidationResults.value,
+      [candidate.id]: result
+    }
+    ElMessage.success('营养数据校验完成')
+  } catch (error) {
+    ElMessage.error('营养数据校验失败')
+  } finally {
+    ingredientWorkbenchValidatingId.value = ''
+  }
+}
+
+function handleCandidateSelectionChange(selection: IngredientNutritionCandidateListItem[]) {
+  selectedCandidates.value = selection
 }
 
 async function handleBatchConfirm() {
@@ -550,39 +793,43 @@ async function handleBatchConfirm() {
   }
 }
 
-async function handleRejectCandidateFromDrawer(candidate: IngredientNutritionCandidateListItem | null) {
-  if (!candidate) return
-  await handleRejectCandidate(candidate)
-  candidateDrawerVisible.value = false
-}
+async function handleSaveIngredientWorkbench(
+  payload: ApplyIngredientCandidateConfigurationPayload
+) {
+  if (ingredientWorkbenchSaving.value) return
 
-async function handleRejectCandidate(candidate: IngredientNutritionCandidateListItem) {
-  if (candidateBusyId.value) return
+  const primaryEntry = payload.entries.find((entry) => entry.mappingRole === 'PRIMARY')
+  const ingredientName = selectedIngredientForWorkbench.value?.name || '该原料'
 
-  candidateBusyId.value = candidate.id
+  ingredientWorkbenchSaving.value = true
   try {
     await ElMessageBox.confirm(
-      `确认拒绝「${candidate.sourceRecord?.foodName || '候选食物'}」吗？拒绝后该候选会从待确认流程中移除。`,
-      '拒绝候选',
+      `确认保存「${ingredientName}」的 ${payload.entries.length} 个营养档案吗？主档案会写入原料营养档案。`,
+      '保存原料营养配置',
       {
         type: 'warning',
-        confirmButtonText: '确认拒绝',
+        confirmButtonText: '确认保存',
         cancelButtonText: '取消'
       }
     )
   } catch {
-    candidateBusyId.value = ''
+    ingredientWorkbenchSaving.value = false
     return
   }
 
   try {
-    await nutritionGovernanceApi.rejectCandidate(candidate.id)
-    ElMessage.success('候选已拒绝')
+    await nutritionGovernanceApi.applyIngredientCandidateConfiguration(payload)
+    ElMessage.success(
+      primaryEntry ? '原料营养配置已保存' : '候选配置已保存'
+    )
+    ingredientWorkbenchVisible.value = false
+    ingredientWorkbenchCandidatePool.value = []
+    selectedIngredientWorkbenchId.value = ''
     await Promise.all([loadOverview(), loadCandidates()])
   } catch (error) {
-    ElMessage.error('候选拒绝失败')
+    ElMessage.error('原料营养配置保存失败')
   } finally {
-    candidateBusyId.value = ''
+    ingredientWorkbenchSaving.value = false
   }
 }
 
@@ -728,6 +975,37 @@ async function handleRejectSupplementDraft(draft: SupplementNutritionDraft) {
   width: 160px;
 }
 
+.candidate-search-input {
+  width: 220px;
+}
+
+.search-fallback-alert {
+  margin-bottom: 12px;
+}
+
+.search-fallback-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.search-fallback-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.search-fallback-item strong {
+  margin-right: 8px;
+  color: #303133;
+}
+
+.search-fallback-item span {
+  color: #606266;
+}
+
 @media (max-width: 720px) {
   .page-header {
     align-items: flex-start;
@@ -745,8 +1023,14 @@ async function handleRejectSupplementDraft(draft: SupplementNutritionDraft) {
   .toolbar :deep(.el-select),
   .toolbar :deep(.el-input),
   .toolbar :deep(.el-button),
+  .candidate-search-input,
   .fdc-input {
     width: 100% !important;
+  }
+
+  .search-fallback-item {
+    align-items: flex-start;
+    flex-direction: column;
   }
 }
 </style>

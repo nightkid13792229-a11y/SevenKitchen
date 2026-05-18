@@ -41,6 +41,36 @@ describe('nutrition field catalog', () => {
     });
   });
 
+  it('documents USDA aliases for imported vitamin and amino acid fields', () => {
+    expect(findNutritionField('vitamins.vitaminC')?.sourceAliases).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceCode: 'USDA_FDC',
+          sourceNutrientId: 1162,
+          sourceFieldName: 'Vitamin C, total ascorbic acid',
+        }),
+      ]),
+    );
+    expect(findNutritionField('vitamins.vitaminK')?.sourceAliases).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceCode: 'USDA_FDC',
+          sourceNutrientId: 1185,
+          sourceFieldName: 'Vitamin K (phylloquinone)',
+        }),
+      ]),
+    );
+    expect(findNutritionField('aminoAcids.arginine')?.sourceAliases).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          sourceCode: 'USDA_FDC',
+          sourceNutrientId: 1220,
+          sourceFieldName: 'Arginine',
+        }),
+      ]),
+    );
+  });
+
   it('lists selectable fixed supplement target fields without custom items', () => {
     const paths = listSupplementTargetFields().map((field) => field.fieldPath);
     expect(paths).toContain('minerals.iodine');
@@ -75,10 +105,14 @@ describe('nutrition field catalog', () => {
           sourceCode: 'USDA_FDC',
           sourceNutrientId: 1114,
         },
+        {
+          sourceCode: 'USDA_FDC',
+          sourceNutrientId: 1110,
+        },
       ],
     });
     expect(findNutritionField('vitamins.vitaminD')?.sourceAliases).toHaveLength(
-      1,
+      2,
     );
   });
 

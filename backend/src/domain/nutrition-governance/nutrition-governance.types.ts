@@ -5,6 +5,7 @@ import type {
 
 export type NutritionGovernanceSourceType =
   | 'USDA'
+  | 'NZFCD'
   | 'CFCT'
   | 'SUPPLEMENT_LABEL'
   | 'MANUAL';
@@ -17,16 +18,17 @@ export type NutritionCandidateStatus =
   | 'REJECTED'
   | 'SKIPPED';
 
-export type SupplementNutritionDraftStatus =
-  | 'DRAFT'
-  | 'CONFIRMED'
-  | 'REJECTED';
+export type SupplementNutritionDraftStatus = 'DRAFT' | 'CONFIRMED' | 'REJECTED';
 
 export type NutritionMatchReasonCode =
   | 'NAME_EXACT'
   | 'NAME_PARTIAL'
   | 'TYPE_MATCH'
   | 'STATE_MATCH'
+  | 'VARIANT_MATCH'
+  | 'VARIANT_CONFLICT'
+  | 'PORTION_MATCH'
+  | 'PORTION_CONFLICT'
   | 'SOURCE_PRIORITY'
   | 'MANUAL';
 

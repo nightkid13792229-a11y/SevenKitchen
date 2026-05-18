@@ -89,6 +89,62 @@ describe('nutrition governance utilities', () => {
     });
   });
 
+  it('keeps cabbage variants recallable while still preferring the requested variant', () => {
+    const common = scoreIngredientSourceNameMatch({
+      ingredientName: '卷心菜',
+      sourceFoodName: 'Cabbage, common (danish, domestic, and pointed types), stored, raw',
+      sourceType: 'USDA',
+    });
+    const chinese = scoreIngredientSourceNameMatch({
+      ingredientName: '卷心菜',
+      sourceFoodName: 'Cabbage, chinese (pak-choi), raw',
+      sourceType: 'USDA',
+    });
+    const red = scoreIngredientSourceNameMatch({
+      ingredientName: '卷心菜',
+      sourceFoodName: 'Cabbage, red, raw',
+      sourceType: 'USDA',
+    });
+    const purple = scoreIngredientSourceNameMatch({
+      ingredientName: '紫甘蓝',
+      sourceFoodName: 'Cabbage, red, raw',
+      sourceType: 'USDA',
+    });
+
+    expect(common.score).toBeGreaterThanOrEqual(0.85);
+    expect(chinese.score).toBeGreaterThanOrEqual(0.35);
+    expect(red.score).toBeGreaterThanOrEqual(0.35);
+    expect(common.score).toBeGreaterThan(chinese.score);
+    expect(common.score).toBeGreaterThan(red.score);
+    expect(purple.score).toBeGreaterThanOrEqual(0.85);
+  });
+
+  it('scores Chinese edible-portion requirements against USDA English descriptions', () => {
+    const peeled = scoreIngredientSourceNameMatch({
+      ingredientName: '去皮黄瓜',
+      sourceFoodName: 'Cucumber, peeled, raw',
+      sourceType: 'USDA',
+    });
+    const withPeel = scoreIngredientSourceNameMatch({
+      ingredientName: '去皮黄瓜',
+      sourceFoodName: 'Cucumber, with peel, raw',
+      sourceType: 'USDA',
+    });
+
+    expect(peeled.score).toBeGreaterThanOrEqual(0.85);
+    expect(peeled.score).toBeGreaterThan(withPeel.score);
+    expect(peeled.reasons).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'PORTION_MATCH' }),
+      ]),
+    );
+    expect(withPeel.reasons).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'PORTION_CONFLICT' }),
+      ]),
+    );
+  });
+
   it('does not match short English aliases inside unrelated USDA words', () => {
     expect(
       scoreIngredientSourceNameMatch({
@@ -165,6 +221,6 @@ describe('nutrition governance utilities', () => {
     ]);
 
     expect(profile.vitamins.vitaminD).toBe(80);
-    expect(profile.vitamins.vitaminE).toBeCloseTo(1.57, 2);
+    expect(profile.vitamins.vitaminE).toBeCloseTo(1.5645, 6);
   });
 });

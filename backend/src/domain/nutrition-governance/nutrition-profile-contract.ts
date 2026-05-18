@@ -24,6 +24,10 @@ export type NutritionProfileContractIssueCode =
   | 'MISSING_REQUIRED_FIELD'
   | 'MISSING_SOURCE_META'
   | 'MISSING_CONVERSION_EVIDENCE'
+  | 'VITAMIN_A_FORM_REQUIRED'
+  | 'VITAMIN_D_FORM_REQUIRED'
+  | 'VITAMIN_E_FORM_REQUIRED'
+  | 'MINERAL_ELEMENTAL_FRACTION_REQUIRED'
   | 'INVALID_CUSTOM_ITEMS';
 
 export interface NutritionProfileContractIssue {
@@ -343,6 +347,217 @@ function validateActiveVitaminConversionEvidence(
       ),
     );
   }
+
+  validateProductLabelVitaminAForm(profile, meta, issues);
+  validateProductLabelVitaminDForm(profile, meta, issues);
+  validateProductLabelVitaminEForm(profile, meta, issues);
+  validateProductLabelMineralCompoundEvidence(profile, meta, issues);
+}
+
+function validateProductLabelVitaminAForm(
+  profile: Record<string, unknown>,
+  meta: Record<string, unknown>,
+  issues: NutritionProfileContractIssue[],
+) {
+  if (meta.sourceKind !== 'PRODUCT_LABEL') {
+    return;
+  }
+  if (!hasFiniteNumber(readField(profile, 'vitamins.vitaminA'))) {
+    return;
+  }
+
+  const sourceForm = getSourceForm(meta, 'vitamins.vitaminA');
+  if (!isRecord(sourceForm)) {
+    return;
+  }
+
+  const originalUnit = normalizeUnit(sourceForm.originalUnit);
+  if (originalUnit === 'iu' || !isMassUnit(originalUnit)) {
+    return;
+  }
+
+  const vitaminAForm = sourceForm.vitaminAForm;
+  const conversionFactor = sourceForm.conversionFactor;
+  const conversionFactorUnit = sourceForm.conversionFactorUnit;
+  if (
+    typeof vitaminAForm === 'string' &&
+    vitaminAForm.trim() &&
+    hasFiniteNumber(conversionFactor) &&
+    typeof conversionFactorUnit === 'string' &&
+    conversionFactorUnit.startsWith('IU_PER_')
+  ) {
+    return;
+  }
+
+  issues.push(
+    issue(
+      'ERROR',
+      'VITAMIN_A_FORM_REQUIRED',
+      'vitamins.vitaminA',
+      'Product-label vitamin A mass values require a specific source form and IU conversion factor.',
+    ),
+  );
+}
+
+function validateProductLabelVitaminDForm(
+  profile: Record<string, unknown>,
+  meta: Record<string, unknown>,
+  issues: NutritionProfileContractIssue[],
+) {
+  if (meta.sourceKind !== 'PRODUCT_LABEL') {
+    return;
+  }
+  if (!hasFiniteNumber(readField(profile, 'vitamins.vitaminD'))) {
+    return;
+  }
+
+  const sourceForm = getSourceForm(meta, 'vitamins.vitaminD');
+  if (!isRecord(sourceForm)) {
+    return;
+  }
+
+  const originalUnit = normalizeUnit(sourceForm.originalUnit);
+  if (originalUnit === 'iu' || !isMassUnit(originalUnit)) {
+    return;
+  }
+
+  const vitaminDForm = sourceForm.vitaminDForm;
+  const conversionFactor = sourceForm.conversionFactor;
+  const conversionFactorUnit = sourceForm.conversionFactorUnit;
+  if (
+    typeof vitaminDForm === 'string' &&
+    vitaminDForm.trim() &&
+    hasFiniteNumber(conversionFactor) &&
+    (conversionFactorUnit === 'IU_PER_UG' ||
+      conversionFactorUnit === 'IU_PER_MG')
+  ) {
+    return;
+  }
+
+  issues.push(
+    issue(
+      'ERROR',
+      'VITAMIN_D_FORM_REQUIRED',
+      'vitamins.vitaminD',
+      'Product-label vitamin D mass values require D2/D3 source form and IU conversion factor.',
+    ),
+  );
+}
+
+function validateProductLabelVitaminEForm(
+  profile: Record<string, unknown>,
+  meta: Record<string, unknown>,
+  issues: NutritionProfileContractIssue[],
+) {
+  if (meta.sourceKind !== 'PRODUCT_LABEL') {
+    return;
+  }
+  if (!hasFiniteNumber(readField(profile, 'vitamins.vitaminE'))) {
+    return;
+  }
+
+  const sourceForm = getSourceForm(meta, 'vitamins.vitaminE');
+  if (!isRecord(sourceForm)) {
+    return;
+  }
+
+  const originalUnit = normalizeUnit(sourceForm.originalUnit);
+  if (originalUnit === 'iu') {
+    return;
+  }
+  if (originalUnit !== 'mg') {
+    return;
+  }
+
+  const vitaminEForm = sourceForm.vitaminEForm;
+  const conversionFactor = sourceForm.conversionFactor;
+  const conversionFactorUnit = sourceForm.conversionFactorUnit;
+  if (
+    typeof vitaminEForm === 'string' &&
+    vitaminEForm.trim() &&
+    hasFiniteNumber(conversionFactor) &&
+    conversionFactorUnit === 'IU_PER_MG'
+  ) {
+    return;
+  }
+
+  issues.push(
+    issue(
+      'ERROR',
+      'VITAMIN_E_FORM_REQUIRED',
+      'vitamins.vitaminE',
+      'Product-label vitamin E mg values require a specific source form and IU_PER_MG conversion factor.',
+    ),
+  );
+}
+
+function validateProductLabelMineralCompoundEvidence(
+  profile: Record<string, unknown>,
+  meta: Record<string, unknown>,
+  issues: NutritionProfileContractIssue[],
+) {
+  if (meta.sourceKind !== 'PRODUCT_LABEL') {
+    return;
+  }
+
+  for (const fieldKey of MINERAL_NUTRIENT_KEYS) {
+    const fieldPath = `minerals.${fieldKey}`;
+    if (!hasFiniteNumber(readField(profile, fieldPath))) {
+      continue;
+    }
+
+    const sourceForm = getSourceForm(meta, fieldPath);
+    if (!isRecord(sourceForm)) {
+      continue;
+    }
+
+    const sourceCompound = sourceForm.sourceCompound;
+    if (typeof sourceCompound !== 'string' || !sourceCompound.trim()) {
+      continue;
+    }
+
+    const elementalFraction = sourceForm.elementalFraction;
+    if (
+      hasFiniteNumber(elementalFraction) &&
+      elementalFraction > 0 &&
+      elementalFraction <= 1
+    ) {
+      continue;
+    }
+
+    issues.push(
+      issue(
+        'ERROR',
+        'MINERAL_ELEMENTAL_FRACTION_REQUIRED',
+        fieldPath,
+        'Product-label mineral compounds require elementalFraction evidence before storing elemental mineral amounts.',
+      ),
+    );
+  }
+}
+
+function getSourceForm(
+  meta: Record<string, unknown>,
+  fieldPath: string,
+): unknown {
+  const sourceForms = meta.sourceForms;
+  return isRecord(sourceForms) ? sourceForms[fieldPath] : undefined;
+}
+
+function normalizeUnit(value: unknown): string {
+  return typeof value === 'string'
+    ? value.trim().toLowerCase().replace(/[μµ]/g, 'u')
+    : '';
+}
+
+function isMassUnit(value: string): boolean {
+  return (
+    value === 'mg' ||
+    value === 'ug' ||
+    value === 'g' ||
+    value.startsWith('mg') ||
+    value.startsWith('ug')
+  );
 }
 
 function hasConversionEvidence(

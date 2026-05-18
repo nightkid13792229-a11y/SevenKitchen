@@ -42,6 +42,31 @@ export interface NutritionSourceForm {
   [key: string]: string | number | boolean | null | undefined;
 }
 
+export type NutritionFieldSourceCompatibility =
+  | 'EXACT_FOOD'
+  | 'SAME_SPECIES'
+  | 'APPROXIMATE_SPECIES'
+  | 'PRODUCT_OR_EXTRACT'
+  | 'REFERENCE_ONLY'
+  | 'LABEL'
+  | 'LAB_REPORT'
+  | 'MANUAL';
+
+export interface NutritionFieldSource extends NutritionSourceForm {
+  sourceRole?: 'PROFILE_PRIMARY' | 'FIELD_SUPPLEMENT' | string | null;
+  sourceType?: string | null;
+  sourceKind?: NutritionSourceKind | string | null;
+  sourceCode?: NutritionSourceCode | string | null;
+  sourceVersion?: string | null;
+  sourceKey?: string | null;
+  externalId?: string | null;
+  sourceTitle?: string | null;
+  sourceProvider?: string | null;
+  compatibility?: NutritionFieldSourceCompatibility | string | null;
+  confidenceLevel?: 'HIGH' | 'MEDIUM' | 'LOW' | string | null;
+  noteZh?: string | null;
+}
+
 export interface NutritionItem {
   nutrientCode?: string | null;
   nutrientName: string;
@@ -77,6 +102,7 @@ export interface NutritionMeta {
     | 'SUPPLIER'
     | 'MANUAL_ESTIMATE'
     | 'USDA'
+    | 'NZFCD'
     | 'CFCT'
     | 'SUPPLEMENT_LABEL'
     | 'MANUAL'
@@ -87,6 +113,7 @@ export interface NutritionMeta {
   externalId?: string | null;
   sourceRecordId?: string | null;
   sourceForms?: Record<string, NutritionSourceForm>;
+  fieldSources?: Record<string, NutritionFieldSource>;
   conversionNotes?: Record<string, string>;
   sourceTitle?: string | null;
   sourceProvider?: string | null;
@@ -135,6 +162,11 @@ export interface NutritionProfileV2 {
     unit: string;
     rawBasisType?: NutritionRawBasisType;
     note?: string | null;
+    sourceNutrientId?: string | number | null;
+    sourceNutrientName?: string | null;
+    canonicalFieldPath?: string | null;
+    reviewCategory?: string | null;
+    reviewStatus?: string | null;
   }>;
 }
 

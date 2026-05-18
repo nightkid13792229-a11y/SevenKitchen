@@ -65,13 +65,13 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'nutrition-governance',
         name: 'NutritionGovernance',
-        component: () => import('@/views/NutritionGovernance/index.vue'),
+        redirect: { path: '/ingredients', query: { tab: 'nutrition' } },
         meta: { title: '原料营养治理' }
       },
       {
         path: 'ingredient-tags',
         name: 'IngredientTags',
-        component: () => import('@/views/IngredientTags/index.vue'),
+        redirect: { path: '/ingredients', query: { tab: 'tags' } },
         meta: { title: '原料标签管理' }
       },
       {

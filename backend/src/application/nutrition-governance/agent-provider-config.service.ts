@@ -16,6 +16,7 @@ const DEFAULT_DEEPSEEK_SETTINGS = {
   enabled: false,
   baseUrl: 'https://api.deepseek.com',
   model: 'deepseek-v4-flash',
+  reviewModel: 'deepseek-v4-pro',
   maxConcurrency: 1,
   requestTimeoutMs: 90000,
   retryCount: 2,
@@ -26,6 +27,7 @@ export interface AgentProviderSettingsView {
   enabled: boolean;
   baseUrl: string;
   model: string;
+  reviewModel: string;
   apiKeyConfigured: boolean;
   apiKeyLast4: string | null;
   maxConcurrency: number;
@@ -37,6 +39,7 @@ export interface UpdateAgentProviderSettingsInput {
   enabled?: boolean;
   baseUrl?: string;
   model?: string;
+  reviewModel?: string;
   apiKey?: string;
   clearApiKey?: boolean;
   maxConcurrency?: number;
@@ -48,6 +51,7 @@ export interface DeepSeekRuntimeConfig {
   provider: 'deepseek';
   baseUrl: string;
   model: string;
+  reviewModel: string;
   apiKey: string;
   maxConcurrency: number;
   requestTimeoutMs: number;
@@ -74,6 +78,12 @@ export class AgentProviderConfigService {
     const model = normalizeRequiredText(
       input.model ?? current?.model ?? DEFAULT_DEEPSEEK_SETTINGS.model,
       '模型不能为空',
+    );
+    const reviewModel = normalizeRequiredText(
+      input.reviewModel ??
+        current?.reviewModel ??
+        DEFAULT_DEEPSEEK_SETTINGS.reviewModel,
+      '复核模型不能为空',
     );
     const enabled =
       input.enabled ?? current?.enabled ?? DEFAULT_DEEPSEEK_SETTINGS.enabled;
@@ -108,6 +118,7 @@ export class AgentProviderConfigService {
       enabled,
       baseUrl,
       model,
+      reviewModel,
       maxConcurrency,
       requestTimeoutMs,
       retryCount,
@@ -127,6 +138,7 @@ export class AgentProviderConfigService {
         enabled,
         baseUrl,
         model,
+        reviewModel,
         maxConcurrency,
         requestTimeoutMs,
         retryCount,
@@ -140,7 +152,9 @@ export class AgentProviderConfigService {
     return this.toSettingsView(saved);
   }
 
-  async getEnabledDeepSeekRuntimeConfig(): Promise<DeepSeekRuntimeConfig> {
+  async getEnabledDeepSeekRuntimeConfig(input: {
+    purpose?: 'DEFAULT' | 'REVIEW';
+  } = {}): Promise<DeepSeekRuntimeConfig> {
     const config = await this.findDeepSeekConfig();
 
     if (!config?.enabled) {
@@ -154,7 +168,11 @@ export class AgentProviderConfigService {
     return {
       provider: 'deepseek',
       baseUrl: config.baseUrl,
-      model: config.model,
+      model:
+        input.purpose === 'REVIEW'
+          ? config.reviewModel || config.model
+          : config.model,
+      reviewModel: config.reviewModel || config.model,
       apiKey: this.decryptApiKey(config.apiKeyEncrypted),
       maxConcurrency: config.maxConcurrency,
       requestTimeoutMs: config.requestTimeoutMs,
@@ -183,6 +201,10 @@ export class AgentProviderConfigService {
       enabled: config?.enabled ?? DEFAULT_DEEPSEEK_SETTINGS.enabled,
       baseUrl: config?.baseUrl ?? DEFAULT_DEEPSEEK_SETTINGS.baseUrl,
       model: config?.model ?? DEFAULT_DEEPSEEK_SETTINGS.model,
+      reviewModel:
+        config?.reviewModel ??
+        config?.model ??
+        DEFAULT_DEEPSEEK_SETTINGS.reviewModel,
       apiKeyConfigured: Boolean(config?.apiKeyEncrypted),
       apiKeyLast4: config?.apiKeyLast4 ?? null,
       maxConcurrency:

@@ -148,6 +148,11 @@ export class AdminController {
               mapping.nutritionFood.preparationState ?? undefined,
             preparationStateLabel:
               mapping.nutritionFood.preparationStateLabel ?? undefined,
+            ediblePortionLabel:
+              mapping.nutritionFood.ediblePortionLabel ?? undefined,
+            processingLabel:
+              mapping.nutritionFood.processingLabel ?? undefined,
+            nutritionData: mapping.nutritionFood.nutritionData,
           }
         : undefined,
     }));
@@ -191,6 +196,9 @@ export class AdminController {
                 externalId: true,
                 preparationState: true,
                 preparationStateLabel: true,
+                ediblePortionLabel: true,
+                processingLabel: true,
+                nutritionData: true,
               },
             },
           },
@@ -407,11 +415,14 @@ export class AdminController {
                 nameEn: true,
                 dataSource: true,
                 externalId: true,
-                preparationState: true,
-                preparationStateLabel: true,
-              },
+              preparationState: true,
+              preparationStateLabel: true,
+              ediblePortionLabel: true,
+              processingLabel: true,
+              nutritionData: true,
             },
           },
+        },
           orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
         },
         tags: {

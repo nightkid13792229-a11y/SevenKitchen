@@ -29,14 +29,6 @@
           <el-icon><Goods /></el-icon>
           <span>原料管理</span>
         </el-menu-item>
-        <el-menu-item index="/nutrition-governance">
-          <el-icon><DataAnalysis /></el-icon>
-          <span>原料营养治理</span>
-        </el-menu-item>
-        <el-menu-item index="/ingredient-tags">
-          <el-icon><PriceTag /></el-icon>
-          <span>原料标签管理</span>
-        </el-menu-item>
         <el-menu-item index="/recipes">
           <el-icon><Food /></el-icon>
           <span>食谱管理</span>
@@ -129,7 +121,6 @@ import {
   ArrowDown,
   PriceTag,
   Goods,
-  DataAnalysis,
   Star,
   Setting,
   EditPen,

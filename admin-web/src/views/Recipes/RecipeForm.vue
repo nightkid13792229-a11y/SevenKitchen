@@ -626,19 +626,19 @@
         <template v-if="ingredientForm.ingredientId && selectedIngredient && selectedIngredient.type === 'FOOD'">
           <el-form-item
             v-if="availableNutritionFoodMappings.length > 0"
-            label="营养状态"
+            label="营养档案"
             required
           >
             <el-select
               v-model="ingredientForm.nutritionFoodId"
-              placeholder="请选择用于计算的营养状态"
+              placeholder="请选择用于计算的营养档案"
               filterable
               style="width: 100%"
             >
               <el-option
                 v-for="mapping in availableNutritionFoodMappings"
                 :key="mapping.nutritionFoodId"
-                :label="formatNutritionStateOptionLabel(mapping)"
+                :label="formatNutritionProfileOptionLabel(mapping)"
                 :value="mapping.nutritionFoodId"
               >
                 <div style="display: flex; flex-direction: column; gap: 4px">
@@ -651,6 +651,7 @@
                 </div>
               </el-option>
             </el-select>
+            <div class="form-item-tip">未指定时默认使用该原料的主档案。</div>
           </el-form-item>
 
           <el-form-item label="示例重量" required>
@@ -1014,7 +1015,7 @@ const formatNutritionStateLabel = (value: any) => {
   );
 };
 
-const formatNutritionStateOptionLabel = (mapping: NutritionFoodMapping) => {
+const formatNutritionProfileOptionLabel = (mapping: NutritionFoodMapping) => {
   const stateLabel = formatNutritionStateLabel(mapping);
   const foodName =
     mapping.nutritionFood?.nameEn ||
@@ -1813,7 +1814,7 @@ const saveIngredient = () => {
       return;
     }
     if (availableNutritionFoodMappings.value.length > 0 && !ingredientForm.nutritionFoodId) {
-      ElMessage.warning('食材类型请选择营养状态');
+      ElMessage.warning('食材类型请选择营养档案');
       return;
     }
   }

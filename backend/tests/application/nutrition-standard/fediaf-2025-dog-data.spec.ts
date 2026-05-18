@@ -138,6 +138,40 @@ describe('FEDIAF 2025 dog structured standard data', () => {
     }
   });
 
+  it('keeps Annex 7.8 table-specific nutrient names aligned with source markers', () => {
+    const expectedNames = [
+      ['VII-17a', 'phosphorus', 'Phosphorus'],
+      ['VII-17b', 'phosphorus', 'Phosphorus'],
+      ['VII-17c', 'phosphorus', 'Phosphorus'],
+      ['VII-17d', 'phosphorus', 'Phosphorus'],
+      ['VII-17a', 'sodium', 'Sodium*'],
+      ['VII-17b', 'sodium', 'Sodium*'],
+      ['VII-17c', 'sodium', 'Sodium*'],
+      ['VII-17d', 'sodium', 'Sodium*'],
+      ['VII-17a', 'chloride', 'Chloride'],
+      ['VII-17b', 'chloride', 'Chloride'],
+      ['VII-17c', 'chloride', 'Chloride'],
+      ['VII-17d', 'chloride', 'Chloride*'],
+      ['VII-17a', 'choline', 'Choline*'],
+      ['VII-17b', 'choline', 'Choline'],
+      ['VII-17c', 'choline', 'Choline'],
+      ['VII-17d', 'choline', 'Choline'],
+    ] as const;
+
+    for (const [sourceTable, nutrientCode, expectedName] of expectedNames) {
+      const names = new Set(
+        FEDIAF_2025_DOG_STANDARD_ENTRIES.filter(
+          (entry) =>
+            entry.sourceType === 'ANNEX_7_8' &&
+            entry.sourceTable === sourceTable &&
+            entry.nutrientCode === nutrientCode,
+        ).map((entry) => entry.fediafName),
+      );
+
+      expect([...names]).toEqual([expectedName]);
+    }
+  });
+
   it('includes direct, combination, and ratio nutrient mappings', () => {
     expect(FEDIAF_2025_DOG_NUTRIENTS).toEqual(
       expect.arrayContaining([

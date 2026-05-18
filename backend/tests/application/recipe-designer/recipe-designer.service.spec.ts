@@ -198,7 +198,7 @@ describe('RecipeDesignerService', () => {
     });
   });
 
-  it('lists standard ingredient options with verified nutrition profiles and primary defaults', async () => {
+  it('lists standard ingredient options with verified nutrition profiles and localized profile labels', async () => {
     prisma.ingredient.count.mockResolvedValue(1);
     prisma.ingredient.findMany.mockResolvedValue([
       {
@@ -265,14 +265,16 @@ describe('RecipeDesignerService', () => {
             expect.objectContaining({
               mappingId: 'mapping-primary',
               nutritionFoodId: 'food-raw',
-              name: 'Mussel, green, meat, fresh, raw',
+              name: '青口贝肉（生）',
+              nameEn: 'Mussel, green, meat, fresh, raw',
               dataSource: 'NZFCD',
               isPrimary: true,
             }),
             expect.objectContaining({
               mappingId: 'mapping-secondary',
               nutritionFoodId: 'food-cooked',
-              name: 'Mussel, green, meat, boiled',
+              name: '青口贝肉（水煮）',
+              nameEn: 'Mussel, green, meat, boiled',
               isPrimary: false,
             }),
           ],
@@ -316,6 +318,26 @@ describe('RecipeDesignerService', () => {
         }),
       }),
     });
+  });
+
+  it('expands common ingredient search aliases such as 西蓝花 to 西兰花', async () => {
+    prisma.ingredient.count.mockResolvedValue(0);
+    prisma.ingredient.findMany.mockResolvedValue([]);
+
+    await service.listIngredientOptions({
+      search: '西蓝花',
+      page: 1,
+      pageSize: 20,
+    });
+
+    const where = prisma.ingredient.count.mock.calls[0][0].where;
+    expect(where.OR).toEqual(
+      expect.arrayContaining([
+        { name: { contains: '西蓝花', mode: 'insensitive' } },
+        { name: { contains: '西兰花', mode: 'insensitive' } },
+        { name: { contains: '青花菜', mode: 'insensitive' } },
+      ]),
+    );
   });
 
   it('adds design items with both the selected standard ingredient and nutrition profile', async () => {

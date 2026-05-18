@@ -86,9 +86,6 @@
             placeholder="搜索原料名称"
             @confirm="searchIngredientOptions"
           />
-          <button class="search-btn" :disabled="ingredientLoading" @tap="searchIngredientOptions">
-            搜索
-          </button>
         </view>
 
         <scroll-view scroll-y class="ingredient-list">
@@ -112,9 +109,6 @@
                 <text class="food-name">{{ option.name }}</text>
                 <text class="food-meta">{{ getIngredientOptionMeta(option) }}</text>
               </view>
-              <text class="food-badge" :class="{ mapped: option.nutritionProfiles.length > 0 }">
-                {{ option.nutritionProfiles.length > 1 ? '多档案' : '主档案' }}
-              </text>
             </view>
 
             <view
@@ -221,7 +215,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import {
   recipeDesignerApi,
@@ -279,6 +273,8 @@ const newItemWeightInput = ref('100')
 const ingredientOptionPage = ref(1)
 const ingredientOptionHasMore = ref(false)
 const ingredientOptionPageSize = 20
+let ingredientSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null
+let pendingIngredientOptionsReset = false
 
 const selectedScenarioIndex = computed(() => {
   const index = scenarioOptions.findIndex((option) => option.value === scenario.value)
@@ -312,6 +308,18 @@ onLoad((options: any) => {
     return
   }
   loadDraft()
+})
+
+watch(ingredientSearchKeyword, () => {
+  if (!ingredientPickerVisible.value) return
+  clearIngredientSearchDebounce()
+  ingredientSearchDebounceTimer = setTimeout(() => {
+    void loadIngredientOptions(true)
+  }, 300)
+})
+
+onUnmounted(() => {
+  clearIngredientSearchDebounce()
 })
 
 async function loadDraft() {
@@ -397,10 +405,12 @@ async function openIngredientPicker() {
 
 function closeIngredientPicker() {
   if (addingItem.value) return
+  clearIngredientSearchDebounce()
   ingredientPickerVisible.value = false
 }
 
 async function searchIngredientOptions() {
+  clearIngredientSearchDebounce()
   await loadIngredientOptions(true)
 }
 
@@ -410,7 +420,10 @@ async function loadMoreIngredientOptions() {
 }
 
 async function loadIngredientOptions(reset: boolean) {
-  if (ingredientLoading.value) return
+  if (ingredientLoading.value) {
+    if (reset) pendingIngredientOptionsReset = true
+    return
+  }
   ingredientLoading.value = true
   try {
     const nextPage = reset ? 1 : ingredientOptionPage.value + 1
@@ -429,7 +442,17 @@ async function loadIngredientOptions(reset: boolean) {
     uni.showToast({ title: '加载原料失败', icon: 'none' })
   } finally {
     ingredientLoading.value = false
+    if (pendingIngredientOptionsReset) {
+      pendingIngredientOptionsReset = false
+      await loadIngredientOptions(true)
+    }
   }
+}
+
+function clearIngredientSearchDebounce() {
+  if (!ingredientSearchDebounceTimer) return
+  clearTimeout(ingredientSearchDebounceTimer)
+  ingredientSearchDebounceTimer = null
 }
 
 function selectIngredientOption(option: RecipeDesignerIngredientOption) {
@@ -534,7 +557,7 @@ function getDefaultNutritionProfile(option: RecipeDesignerIngredientOption) {
 }
 
 function getNutritionProfileMeta(profile: IngredientNutritionProfileOption) {
-  const parts = [profile.dataSource, profile.category, profile.isPrimary ? '主档案' : '次级档案']
+  const parts = [profile.dataSource, profile.category]
   return parts.filter(Boolean).join(' / ')
 }
 
@@ -647,7 +670,6 @@ function formatAssessmentNumber(value: unknown) {
 .secondary-btn,
 .link-btn,
 .icon-text-btn,
-.search-btn,
 .picker-close,
 .load-more-btn {
   height: 68rpx;
@@ -832,7 +854,6 @@ function formatAssessmentNumber(value: unknown) {
 }
 
 .search-row {
-  gap: 16rpx;
   margin-top: 28rpx;
 }
 
@@ -846,14 +867,6 @@ function formatAssessmentNumber(value: unknown) {
   color: #222;
   font-size: 26rpx;
   box-sizing: border-box;
-}
-
-.search-btn {
-  flex-shrink: 0;
-  width: 112rpx;
-  padding: 0;
-  background: #1890ff;
-  color: #fff;
 }
 
 .ingredient-list {
@@ -901,20 +914,6 @@ function formatAssessmentNumber(value: unknown) {
   margin-top: 8rpx;
   color: #888;
   font-size: 22rpx;
-}
-
-.food-badge {
-  flex-shrink: 0;
-  padding: 6rpx 12rpx;
-  border-radius: 8rpx;
-  background: #fff7e6;
-  color: #d46b08;
-  font-size: 22rpx;
-}
-
-.food-badge.mapped {
-  background: #f6ffed;
-  color: #389e0d;
 }
 
 .profile-options {

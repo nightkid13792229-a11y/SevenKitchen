@@ -141,6 +141,139 @@ type IngredientOptionRecord = {
   }>;
 };
 
+const CJK_TEXT_PATTERN = /[\u3400-\u9fff]/;
+
+const INGREDIENT_SEARCH_ALIAS_GROUPS = [
+  ['西兰花', '西蓝花', '青花菜', '绿花椰菜', 'broccoli'],
+  ['三文鱼', '鲑鱼', '大西洋鲑', 'salmon'],
+  ['青口贝', '青口贝肉', '淡菜', '贻贝', 'mussel'],
+  ['牡蛎', '生蚝', '蚝', 'oyster'],
+] as const;
+
+function normalizeSearchText(value: string) {
+  return value.trim().toLocaleLowerCase();
+}
+
+function expandIngredientSearchTerms(search?: string) {
+  const trimmed = search?.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  const normalizedSearch = normalizeSearchText(trimmed);
+  const terms = new Set<string>([trimmed]);
+
+  for (const aliases of INGREDIENT_SEARCH_ALIAS_GROUPS) {
+    const matched = aliases.some((alias) => {
+      const normalizedAlias = normalizeSearchText(alias);
+      return (
+        normalizedSearch.includes(normalizedAlias) ||
+        normalizedAlias.includes(normalizedSearch)
+      );
+    });
+
+    if (matched) {
+      aliases.forEach((alias) => terms.add(alias));
+    }
+  }
+
+  return Array.from(terms);
+}
+
+function buildIngredientSearchConditions(searchTerms: string[]) {
+  return searchTerms.flatMap((term) => [
+    { name: { contains: term, mode: 'insensitive' as const } },
+    { brand: { contains: term, mode: 'insensitive' as const } },
+    { productModel: { contains: term, mode: 'insensitive' as const } },
+    {
+      nutritionFoodMappings: {
+        some: {
+          nutritionFood: {
+            name: { contains: term, mode: 'insensitive' as const },
+          },
+        },
+      },
+    },
+    {
+      nutritionFoodMappings: {
+        some: {
+          nutritionFood: {
+            nameEn: { contains: term, mode: 'insensitive' as const },
+          },
+        },
+      },
+    },
+  ]);
+}
+
+function getNutritionProfileSourceName(food: { name: string; nameEn: string | null }) {
+  if (CJK_TEXT_PATTERN.test(food.name)) {
+    return food.nameEn ?? food.name;
+  }
+
+  return food.name;
+}
+
+function describeNutritionProfilePreparation(sourceName: string) {
+  const normalized = sourceName.toLocaleLowerCase();
+
+  if (normalized.includes('raw')) {
+    return '生';
+  }
+
+  if (normalized.includes('boiled')) {
+    return '水煮';
+  }
+
+  if (normalized.includes('steamed')) {
+    return '蒸制';
+  }
+
+  if (normalized.includes('baked')) {
+    return '烘烤';
+  }
+
+  if (normalized.includes('roasted')) {
+    return '烤制';
+  }
+
+  if (normalized.includes('canned')) {
+    return '罐装';
+  }
+
+  if (normalized.includes('frozen')) {
+    return '冷冻';
+  }
+
+  const parts: string[] = [];
+  if (normalized.includes('cooked')) {
+    parts.push('熟制');
+  }
+  if (normalized.includes('dry heat')) {
+    parts.push('干热');
+  }
+  if (normalized.includes('fresh')) {
+    parts.push('新鲜');
+  }
+
+  return parts.join('，');
+}
+
+function buildNutritionProfileDisplayName(
+  ingredientName: string,
+  food: { name: string; nameEn: string | null; dataSource: string },
+) {
+  if (CJK_TEXT_PATTERN.test(food.name)) {
+    return food.name;
+  }
+
+  const sourceName = getNutritionProfileSourceName(food);
+  const descriptor = describeNutritionProfilePreparation(sourceName);
+  return descriptor
+    ? `${ingredientName}（${descriptor}）`
+    : `${ingredientName}（${food.dataSource}档案）`;
+}
+
 @Injectable()
 export class RecipeDesignerService {
   constructor(
@@ -153,35 +286,13 @@ export class RecipeDesignerService {
     const page = Math.max(1, Number(dto.page ?? 1));
     const pageSize = Math.min(50, Math.max(1, Number(dto.pageSize ?? 20)));
     const skip = (page - 1) * pageSize;
-    const search = dto.search?.trim();
+    const searchTerms = expandIngredientSearchTerms(dto.search);
     const verifiedMappingWhere = {
       nutritionFood: { status: NutritionFoodStatus.VERIFIED },
     };
-    const searchFilter: Prisma.IngredientWhereInput | undefined = search
+    const searchFilter: Prisma.IngredientWhereInput | undefined = searchTerms.length
       ? {
-          OR: [
-            { name: { contains: search, mode: 'insensitive' } },
-            { brand: { contains: search, mode: 'insensitive' } },
-            { productModel: { contains: search, mode: 'insensitive' } },
-            {
-              nutritionFoodMappings: {
-                some: {
-                  nutritionFood: {
-                    name: { contains: search, mode: 'insensitive' },
-                  },
-                },
-              },
-            },
-            {
-              nutritionFoodMappings: {
-                some: {
-                  nutritionFood: {
-                    nameEn: { contains: search, mode: 'insensitive' },
-                  },
-                },
-              },
-            },
-          ],
+          OR: buildIngredientSearchConditions(searchTerms),
         }
       : undefined;
     const where: Prisma.IngredientWhereInput = {
@@ -626,8 +737,11 @@ export class RecipeDesignerService {
       .map((mapping) => ({
         mappingId: mapping.id,
         nutritionFoodId: mapping.nutritionFoodId,
-        name: mapping.nutritionFood.name,
-        nameEn: mapping.nutritionFood.nameEn,
+        name: buildNutritionProfileDisplayName(
+          ingredient.name,
+          mapping.nutritionFood,
+        ),
+        nameEn: getNutritionProfileSourceName(mapping.nutritionFood),
         category: mapping.nutritionFood.category,
         dataSource: mapping.nutritionFood.dataSource,
         status: mapping.nutritionFood.status,

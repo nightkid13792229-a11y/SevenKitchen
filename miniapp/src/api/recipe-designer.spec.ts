@@ -9,6 +9,7 @@ import {
   FEDIAF_DOG_SCENARIO_LABELS,
   recipeDesignerApi,
   type DesignRecipeDraftPayload,
+  type NutritionFoodListQuery,
   type UpdateDesignRecipeItemPayload,
   type FediafDogScenario,
 } from './recipe-designer'
@@ -148,6 +149,23 @@ describe('recipeDesignerApi', () => {
     expect(mockedRequest).toHaveBeenNthCalledWith(2, {
       url: '/recipe-designer/drafts/draft-1/publish',
       method: 'POST',
+    })
+  })
+
+  it('lists verified nutrition foods for the ingredient picker', () => {
+    const query = {
+      status: 'VERIFIED',
+      search: 'chicken',
+      page: 2,
+      pageSize: 20,
+    } satisfies NutritionFoodListQuery
+
+    recipeDesignerApi.listNutritionFoods(query)
+
+    expect(mockedRequest).toHaveBeenCalledWith({
+      url: '/nutrition-foods',
+      method: 'GET',
+      data: query,
     })
   })
 })

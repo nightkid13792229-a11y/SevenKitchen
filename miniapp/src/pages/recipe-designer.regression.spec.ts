@@ -87,6 +87,17 @@ describe('recipe designer editor guardrails', () => {
     expect(updateWeightBlock).toContain('weightG')
     expect(updateWeightBlock).not.toContain('nutritionFoodId')
   })
+
+  it('replaces the ingredient placeholder with a mobile picker that can add and remove items', () => {
+    expect(editorSource).not.toContain('原料选择稍后接入')
+    expect(editorSource).toContain('ingredient-picker-panel')
+    expect(editorSource).toContain('openIngredientPicker')
+    expect(editorSource).toContain('listNutritionFoods')
+    expect(editorSource).toContain('confirmAddIngredient')
+    expect(editorSource).toContain('recipeDesignerApi.addItem')
+    expect(editorSource).toContain('removeIngredient')
+    expect(editorSource).toContain('recipeDesignerApi.removeItem')
+  })
 })
 
 describe('recipe designer publish guardrails', () => {

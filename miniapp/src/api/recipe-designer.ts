@@ -42,8 +42,49 @@ export interface PublishDesignRecipePayload {
   reviewNote?: string
 }
 
+export type NutritionFoodStatus = 'PENDING' | 'VERIFIED' | 'DEPRECATED'
+
+export interface NutritionFoodListQuery {
+  status?: NutritionFoodStatus
+  search?: string
+  page?: number
+  pageSize?: number
+}
+
+export interface NutritionFoodMappingSummary {
+  id: string
+  ingredientId: string
+  isPrimary: boolean
+  ingredient?: {
+    id: string
+    name: string
+    type?: string
+    purchaseUnit?: string
+  }
+}
+
+export interface NutritionFoodSummary {
+  id: string
+  name: string
+  nameEn?: string
+  category?: string
+  dataSource?: string
+  status?: NutritionFoodStatus
+  mappings?: NutritionFoodMappingSummary[]
+}
+
+export interface NutritionFoodListResponse {
+  data: NutritionFoodSummary[]
+  total: number
+  page: number
+  pageSize: number
+  hasMore: boolean
+}
+
 export const recipeDesignerApi = {
   listDrafts: () => request({ url: '/recipe-designer/drafts', method: 'GET' }),
+  listNutritionFoods: (data: NutritionFoodListQuery = {}) =>
+    request({ url: '/nutrition-foods', method: 'GET', data }),
   createDraft: (data: DesignRecipeDraftPayload) =>
     request({ url: '/recipe-designer/drafts', method: 'POST', data }),
   updateDraft: (draftId: string, data: Partial<DesignRecipeDraftPayload>) =>

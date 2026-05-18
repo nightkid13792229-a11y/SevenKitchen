@@ -35,7 +35,7 @@
     <view class="section">
       <view class="section-header">
         <text class="section-title">原料</text>
-        <button class="link-btn" @tap="showIngredientPlaceholder">添加原料</button>
+        <button class="link-btn" @tap="openIngredientPicker">添加原料</button>
       </view>
 
       <view v-if="loading" class="state-block">
@@ -62,6 +62,86 @@
               @confirm="updateWeight(item)"
             />
             <text class="weight-unit">g</text>
+          </view>
+          <button class="icon-text-btn" @tap="removeIngredient(item)">删除</button>
+        </view>
+      </view>
+    </view>
+
+    <view v-if="ingredientPickerVisible" class="ingredient-picker-mask" @tap="closeIngredientPicker">
+      <view class="ingredient-picker-panel" @tap.stop>
+        <view class="picker-header">
+          <view>
+            <text class="picker-title">添加原料</text>
+            <text class="picker-subtitle">选择营养原料并填写本配方用量</text>
+          </view>
+          <button class="picker-close" @tap="closeIngredientPicker">×</button>
+        </view>
+
+        <view class="search-row">
+          <input
+            class="search-input"
+            v-model="ingredientSearchKeyword"
+            confirm-type="search"
+            placeholder="搜索原料名称"
+            @confirm="searchNutritionFoods"
+          />
+          <button class="search-btn" :disabled="ingredientLoading" @tap="searchNutritionFoods">
+            搜索
+          </button>
+        </view>
+
+        <scroll-view scroll-y class="ingredient-list">
+          <view v-if="ingredientLoading && nutritionFoods.length === 0" class="picker-state">
+            <text>加载原料中...</text>
+          </view>
+
+          <view v-else-if="nutritionFoods.length === 0" class="picker-state">
+            <text>暂无可用原料</text>
+          </view>
+
+          <view
+            v-for="food in nutritionFoods"
+            :key="food.id"
+            class="food-option"
+            :class="{ selected: selectedNutritionFood?.id === food.id }"
+            @tap="selectNutritionFood(food)"
+          >
+            <view class="food-main">
+              <text class="food-name">{{ food.name }}</text>
+              <text class="food-meta">{{ getNutritionFoodMeta(food) }}</text>
+            </view>
+            <text class="food-badge" :class="{ mapped: hasPrimaryMapping(food) }">
+              {{ hasPrimaryMapping(food) ? '已映射' : '未映射' }}
+            </text>
+          </view>
+
+          <button
+            v-if="nutritionFoodHasMore"
+            class="load-more-btn"
+            :disabled="ingredientLoading"
+            @tap="loadMoreNutritionFoods"
+          >
+            {{ ingredientLoading ? '加载中' : '加载更多' }}
+          </button>
+        </scroll-view>
+
+        <view class="picker-footer">
+          <view class="selected-info">
+            <text class="selected-label">已选原料</text>
+            <text class="selected-name">{{ selectedNutritionFood?.name || '请选择' }}</text>
+          </view>
+          <view class="add-weight-row">
+            <input
+              class="add-weight-input"
+              type="digit"
+              v-model="newItemWeightInput"
+              placeholder="克重"
+            />
+            <text class="weight-unit">g</text>
+            <button class="primary-btn add-btn" :disabled="addingItem" @tap="confirmAddIngredient">
+              {{ addingItem ? '加入中' : '加入' }}
+            </button>
           </view>
         </view>
       </view>
@@ -118,7 +198,12 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
-import { recipeDesignerApi, type FediafDogScenario } from '../../api/recipe-designer'
+import {
+  recipeDesignerApi,
+  type FediafDogScenario,
+  type NutritionFoodListResponse,
+  type NutritionFoodSummary,
+} from '../../api/recipe-designer'
 import {
   getAssessmentStatusClass,
   getAssessmentStatusLabel,
@@ -154,6 +239,16 @@ const assessment = ref<any>(null)
 const loading = ref(false)
 const saving = ref(false)
 const assessmentExpanded = ref(false)
+const ingredientPickerVisible = ref(false)
+const ingredientLoading = ref(false)
+const addingItem = ref(false)
+const ingredientSearchKeyword = ref('')
+const nutritionFoods = ref<NutritionFoodSummary[]>([])
+const selectedNutritionFood = ref<NutritionFoodSummary | null>(null)
+const newItemWeightInput = ref('100')
+const nutritionFoodPage = ref(1)
+const nutritionFoodHasMore = ref(false)
+const nutritionFoodPageSize = 20
 
 const selectedScenarioIndex = computed(() => {
   const index = scenarioOptions.findIndex((option) => option.value === scenario.value)
@@ -246,12 +341,125 @@ function onWeightInput(item: DesignerItem, event: any) {
 
 async function updateWeight(item: DesignerItem) {
   const weightG = Number(item.weightG || 0)
-  await recipeDesignerApi.updateItem(item.id, { weightG })
-  await refreshAssessment()
+  if (weightG < 0) {
+    uni.showToast({ title: '克重不能小于0', icon: 'none' })
+    return
+  }
+
+  try {
+    await recipeDesignerApi.updateItem(item.id, { weightG })
+    await refreshAssessment()
+  } catch (error) {
+    console.error('[RecipeDesignerEditor] Failed to update item weight:', error)
+    uni.showToast({ title: '更新克重失败', icon: 'none' })
+  }
 }
 
-function showIngredientPlaceholder() {
-  uni.showToast({ title: '原料选择稍后接入', icon: 'none' })
+async function openIngredientPicker() {
+  ingredientPickerVisible.value = true
+  selectedNutritionFood.value = null
+  newItemWeightInput.value = '100'
+  if (nutritionFoods.value.length === 0) {
+    await loadNutritionFoods(true)
+  }
+}
+
+function closeIngredientPicker() {
+  if (addingItem.value) return
+  ingredientPickerVisible.value = false
+}
+
+async function searchNutritionFoods() {
+  await loadNutritionFoods(true)
+}
+
+async function loadMoreNutritionFoods() {
+  if (!nutritionFoodHasMore.value || ingredientLoading.value) return
+  await loadNutritionFoods(false)
+}
+
+async function loadNutritionFoods(reset: boolean) {
+  if (ingredientLoading.value) return
+  ingredientLoading.value = true
+  try {
+    const nextPage = reset ? 1 : nutritionFoodPage.value + 1
+    const res: any = await recipeDesignerApi.listNutritionFoods({
+      status: 'VERIFIED',
+      search: ingredientSearchKeyword.value.trim(),
+      page: nextPage,
+      pageSize: nutritionFoodPageSize,
+    })
+    const data = (res?.data ?? res) as NutritionFoodListResponse
+    const foods = Array.isArray(data?.data) ? data.data : []
+    nutritionFoods.value = reset ? foods : [...nutritionFoods.value, ...foods]
+    nutritionFoodPage.value = data?.page || nextPage
+    nutritionFoodHasMore.value = Boolean(data?.hasMore)
+  } catch (error) {
+    console.error('[RecipeDesignerEditor] Failed to load nutrition foods:', error)
+    uni.showToast({ title: '加载原料失败', icon: 'none' })
+  } finally {
+    ingredientLoading.value = false
+  }
+}
+
+function selectNutritionFood(food: NutritionFoodSummary) {
+  selectedNutritionFood.value = food
+}
+
+async function confirmAddIngredient() {
+  if (!selectedNutritionFood.value) {
+    uni.showToast({ title: '请选择原料', icon: 'none' })
+    return
+  }
+
+  const weightG = Number(newItemWeightInput.value || 0)
+  if (!Number.isFinite(weightG) || weightG <= 0) {
+    uni.showToast({ title: '请输入大于0的克重', icon: 'none' })
+    return
+  }
+
+  addingItem.value = true
+  try {
+    const res: any = await recipeDesignerApi.addItem(draftId.value, {
+      nutritionFoodId: selectedNutritionFood.value.id,
+      weightG,
+      sortOrder: items.value.length,
+    })
+    const item = res?.data ?? res
+    if (item?.id) {
+      items.value = [...items.value, item]
+    }
+    ingredientPickerVisible.value = false
+    selectedNutritionFood.value = null
+    await refreshAssessment()
+    uni.showToast({ title: '已加入配方', icon: 'success' })
+  } catch (error) {
+    console.error('[RecipeDesignerEditor] Failed to add ingredient:', error)
+    uni.showToast({ title: '添加原料失败', icon: 'none' })
+  } finally {
+    addingItem.value = false
+  }
+}
+
+function removeIngredient(item: DesignerItem) {
+  uni.showModal({
+    title: '删除原料',
+    content: `确认从配方中删除「${getItemName(item)}」吗？`,
+    confirmText: '删除',
+    confirmColor: '#cf1322',
+    success: async (result: any) => {
+      if (!result.confirm) return
+      try {
+        await recipeDesignerApi.removeItem(item.id)
+        items.value = items.value.filter((candidate) => candidate.id !== item.id)
+        await refreshAssessment()
+        uni.showToast({ title: '已删除', icon: 'success' })
+      } catch (error) {
+        console.error('[RecipeDesignerEditor] Failed to remove item:', error)
+        uni.showToast({ title: '删除失败', icon: 'none' })
+      }
+    },
+  })
 }
 
 function goToPublish() {
@@ -260,6 +468,15 @@ function goToPublish() {
 
 function getItemName(item: DesignerItem) {
   return item.name || item.ingredientName || item.nutritionFoodName || item.nutritionFood?.name || '未命名原料'
+}
+
+function getNutritionFoodMeta(food: NutritionFoodSummary) {
+  const parts = [food.dataSource, food.category].filter(Boolean)
+  return parts.join(' / ') || '标准营养原料'
+}
+
+function hasPrimaryMapping(food: NutritionFoodSummary) {
+  return Boolean(food.mappings?.some((mapping) => mapping.isPrimary))
 }
 
 function formatItemWeightInput(value?: number) {
@@ -369,7 +586,11 @@ function formatAssessmentNumber(value: unknown) {
 
 .primary-btn,
 .secondary-btn,
-.link-btn {
+.link-btn,
+.icon-text-btn,
+.search-btn,
+.picker-close,
+.load-more-btn {
   height: 68rpx;
   border-radius: 10rpx;
   font-size: 26rpx;
@@ -392,6 +613,15 @@ function formatAssessmentNumber(value: unknown) {
   background: #fff;
   border: 1rpx solid #d9d9d9;
   color: #333;
+}
+
+.icon-text-btn {
+  flex-shrink: 0;
+  width: 88rpx;
+  padding: 0;
+  background: #fff1f0;
+  color: #cf1322;
+  font-size: 24rpx;
 }
 
 .total-bar {
@@ -459,7 +689,7 @@ function formatAssessmentNumber(value: unknown) {
 
 .weight-editor {
   flex-shrink: 0;
-  width: 180rpx;
+  width: 160rpx;
   height: 64rpx;
   display: flex;
   align-items: center;
@@ -471,7 +701,7 @@ function formatAssessmentNumber(value: unknown) {
 }
 
 .weight-input {
-  width: 110rpx;
+  width: 92rpx;
   text-align: right;
   font-size: 28rpx;
   color: #222;
@@ -482,11 +712,209 @@ function formatAssessmentNumber(value: unknown) {
   font-size: 24rpx;
 }
 
+.ingredient-picker-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(0, 0, 0, 0.38);
+}
+
+.ingredient-picker-panel {
+  width: 100%;
+  max-height: 86vh;
+  padding: 28rpx 32rpx calc(32rpx + env(safe-area-inset-bottom));
+  border-radius: 24rpx 24rpx 0 0;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.picker-header,
+.search-row,
+.food-option,
+.picker-footer,
+.add-weight-row {
+  display: flex;
+  align-items: center;
+}
+
+.picker-header,
+.food-option,
+.picker-footer {
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.picker-title {
+  display: block;
+  color: #222;
+  font-size: 32rpx;
+  font-weight: 700;
+}
+
+.picker-subtitle {
+  display: block;
+  margin-top: 8rpx;
+  color: #888;
+  font-size: 24rpx;
+}
+
+.picker-close {
+  flex-shrink: 0;
+  width: 68rpx;
+  padding: 0;
+  background: #f5f5f5;
+  color: #555;
+  font-size: 34rpx;
+}
+
+.search-row {
+  gap: 16rpx;
+  margin-top: 28rpx;
+}
+
+.search-input {
+  flex: 1;
+  min-width: 0;
+  height: 72rpx;
+  padding: 0 20rpx;
+  border-radius: 10rpx;
+  background: #f7f8fa;
+  color: #222;
+  font-size: 26rpx;
+  box-sizing: border-box;
+}
+
+.search-btn {
+  flex-shrink: 0;
+  width: 112rpx;
+  padding: 0;
+  background: #1890ff;
+  color: #fff;
+}
+
+.ingredient-list {
+  height: 540rpx;
+  margin-top: 20rpx;
+  border-top: 1rpx solid #f0f0f0;
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.picker-state {
+  padding: 96rpx 0;
+  color: #999;
+  font-size: 26rpx;
+  text-align: center;
+}
+
+.food-option {
+  padding: 22rpx 0;
+  border-bottom: 1rpx solid #f5f5f5;
+}
+
+.food-option.selected .food-name {
+  color: #1677ff;
+}
+
+.food-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.food-name {
+  display: block;
+  color: #222;
+  font-size: 27rpx;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.food-meta {
+  display: block;
+  margin-top: 8rpx;
+  color: #888;
+  font-size: 22rpx;
+}
+
+.food-badge {
+  flex-shrink: 0;
+  padding: 6rpx 12rpx;
+  border-radius: 8rpx;
+  background: #fff7e6;
+  color: #d46b08;
+  font-size: 22rpx;
+}
+
+.food-badge.mapped {
+  background: #f6ffed;
+  color: #389e0d;
+}
+
+.load-more-btn {
+  width: 100%;
+  margin: 18rpx 0;
+  background: #f7f8fa;
+  color: #555;
+}
+
+.picker-footer {
+  padding-top: 22rpx;
+}
+
+.selected-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.selected-label {
+  display: block;
+  color: #888;
+  font-size: 22rpx;
+}
+
+.selected-name {
+  display: block;
+  margin-top: 6rpx;
+  color: #222;
+  font-size: 26rpx;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.add-weight-row {
+  flex-shrink: 0;
+  gap: 8rpx;
+}
+
+.add-weight-input {
+  width: 116rpx;
+  height: 68rpx;
+  padding: 0 14rpx;
+  border-radius: 10rpx;
+  background: #f7f8fa;
+  text-align: right;
+  color: #222;
+  font-size: 28rpx;
+  box-sizing: border-box;
+}
+
+.add-btn {
+  width: 104rpx;
+  padding: 0;
+}
+
 .assessment-drawer {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
+  z-index: 10;
   padding: 24rpx 32rpx 36rpx;
   background: #fff;
   box-shadow: 0 -4rpx 16rpx rgba(0, 0, 0, 0.08);

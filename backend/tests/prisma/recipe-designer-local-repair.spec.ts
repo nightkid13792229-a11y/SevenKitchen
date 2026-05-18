@@ -25,5 +25,20 @@ describe('recipe designer local schema repair', () => {
     expect(repairSql).toContain(
       'CREATE TABLE IF NOT EXISTS "design_recipe_publish_snapshot"',
     );
+    expect(repairSql).toContain(
+      'CREATE TABLE IF NOT EXISTS "nutrition_standard_version"',
+    );
+    expect(repairSql).toContain(
+      'CREATE TABLE IF NOT EXISTS "nutrition_nutrient_definition"',
+    );
+    expect(repairSql).toContain(
+      'CREATE TABLE IF NOT EXISTS "nutrition_standard_entry"',
+    );
+    expect(repairSql).toContain(
+      'CREATE TABLE IF NOT EXISTS "nutrition_standard_review_event"',
+    );
+    expect(packageJson.scripts['seed:fediaf-2025-dog-standard']).toContain(
+      'prisma/seed-fediaf-2025-dog-standards.ts',
+    );
   });
 });

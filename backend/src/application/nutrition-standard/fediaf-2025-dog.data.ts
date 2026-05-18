@@ -96,6 +96,7 @@ interface FediafNutrientRow {
   overrides: RowOverrides;
   core: boolean;
   annexLifeStages: LifeStage[];
+  fediafNameBySourceTable: Partial<Record<SourceTable, string>>;
 }
 
 export const FEDIAF_2025_DOG_STANDARD_VERSION: FediafStandardVersionSeed = {
@@ -844,6 +845,7 @@ const row = (
   options: {
     core?: boolean;
     annexLifeStages?: LifeStage[];
+    fediafNameBySourceTable?: Partial<Record<SourceTable, string>>;
   } = {},
 ): FediafNutrientRow => ({
   nutrientCode,
@@ -861,6 +863,7 @@ const row = (
   overrides,
   core: options.core ?? true,
   annexLifeStages: options.annexLifeStages ?? CORE_LIFE_STAGES,
+  fediafNameBySourceTable: options.fediafNameBySourceTable ?? {},
 });
 
 const allStages = (
@@ -1247,6 +1250,14 @@ const NUTRIENT_ROWS: FediafNutrientRow[] = [
         ),
       ),
     ),
+    {
+      fediafNameBySourceTable: {
+        'VII-17a': 'Phosphorus',
+        'VII-17b': 'Phosphorus',
+        'VII-17c': 'Phosphorus',
+        'VII-17d': 'Phosphorus',
+      },
+    },
   ),
   row(
     'calciumPhosphorusRatio',
@@ -1307,6 +1318,13 @@ const NUTRIENT_ROWS: FediafNutrientRow[] = [
         { footnoteRefs: ['c'], notes: safeSodiumChlorideNote },
       ),
     ),
+    {
+      fediafNameBySourceTable: {
+        'VII-17a': 'Chloride',
+        'VII-17b': 'Chloride',
+        'VII-17c': 'Chloride',
+      },
+    },
   ),
   row('magnesium', 'Magnesium', 'MINERAL', 'g', 250, {
     adult95: [0.08, 0.2, 0.05],
@@ -1533,12 +1551,27 @@ const NUTRIENT_ROWS: FediafNutrientRow[] = [
     },
     allStages(noRecommendation()),
   ),
-  row('choline', 'Choline*', 'VITAMIN', 'mg', 450, {
-    adult95: [189, 474, 113],
-    adult110: [164, 409, 97.8],
-    early: [170, 425, 102],
-    late: [170, 425, 102],
-  }),
+  row(
+    'choline',
+    'Choline*',
+    'VITAMIN',
+    'mg',
+    450,
+    {
+      adult95: [189, 474, 113],
+      adult110: [164, 409, 97.8],
+      early: [170, 425, 102],
+      late: [170, 425, 102],
+    },
+    {},
+    {
+      fediafNameBySourceTable: {
+        'VII-17b': 'Choline',
+        'VII-17c': 'Choline',
+        'VII-17d': 'Choline',
+      },
+    },
+  ),
   row(
     'vitaminK',
     'Vitamin K*',
@@ -1570,7 +1603,9 @@ const createEntry = (
   const minValue = nutrientRow.values[lifeStage][basis];
   return {
     nutrientCode: nutrientRow.nutrientCode,
-    fediafName: nutrientRow.fediafName,
+    fediafName:
+      nutrientRow.fediafNameBySourceTable[source.sourceTable] ??
+      nutrientRow.fediafName,
     category: nutrientRow.category,
     sourceTable: source.sourceTable,
     sourceType: source.sourceType,

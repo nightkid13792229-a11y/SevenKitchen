@@ -144,6 +144,71 @@ describe('recipe designer assessment', () => {
     });
   });
 
+  it('groups repeated FEDIAF expression bases into one mobile assessment row and summary count', () => {
+    const input = makeInput();
+    input.targets = [
+      {
+        nutrientKey: 'crudeProtein',
+        label: '粗蛋白',
+        category: 'MACRO',
+        expressionBasis: 'PER_1000_KCAL_ME',
+        unit: 'g',
+        minValue: 45,
+        maxValue: null,
+        fieldPaths: ['macros.crudeProtein'],
+      },
+      {
+        nutrientKey: 'crudeProtein',
+        label: '粗蛋白',
+        category: 'MACRO',
+        expressionBasis: 'PER_MJ_ME',
+        unit: 'g',
+        minValue: 20,
+        maxValue: null,
+        fieldPaths: ['macros.crudeProtein'],
+      },
+      {
+        nutrientKey: 'crudeProtein',
+        label: '粗蛋白',
+        category: 'MACRO',
+        expressionBasis: 'PER_100G_DRY_MATTER',
+        unit: 'g',
+        minValue: 18,
+        maxValue: null,
+        fieldPaths: ['macros.crudeProtein'],
+      },
+    ];
+
+    const result = assessRecipeDraft(input);
+
+    expect(result.entries).toHaveLength(3);
+    expect(result.rawSummary).toEqual({
+      compliant: 2,
+      deficient: 1,
+      excess: 0,
+      missingData: 0,
+    });
+    expect(result.groupedEntries).toHaveLength(1);
+    expect(result.groupedEntries[0]).toMatchObject({
+      nutrientKey: 'crudeProtein',
+      label: '粗蛋白',
+      status: 'DEFICIENT',
+      detailCount: 3,
+      expressionBasis: 'PER_MJ_ME',
+    });
+    expect(result.groupedEntries[0].details.map((entry) => entry.expressionBasis)).toEqual([
+      'PER_1000_KCAL_ME',
+      'PER_MJ_ME',
+      'PER_100G_DRY_MATTER',
+    ]);
+    expect(result.summary).toEqual({
+      compliant: 0,
+      deficient: 1,
+      excess: 0,
+      missingData: 0,
+    });
+  });
+
   it('calculates calcium phosphorus ratio as a ratio entry', () => {
     const input = makeInput();
     input.targets = [

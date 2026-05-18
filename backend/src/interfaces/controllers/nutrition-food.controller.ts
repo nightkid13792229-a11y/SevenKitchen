@@ -128,9 +128,14 @@ export class NutritionFoodController {
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateNutritionFoodDto,
+    @CurrentUser() user?: RequestUser,
   ): Promise<ApiResponseDto<NutritionFoodResponseDto | null>> {
     try {
-      const result = await this.nutritionFoodService.update(id, dto);
+      const result = await this.nutritionFoodService.update(
+        id,
+        dto,
+        user?.userId,
+      );
       return new ApiResponseDto(0, '更新成功', result);
     } catch (error) {
       const message = error instanceof Error ? error.message : '更新失败';

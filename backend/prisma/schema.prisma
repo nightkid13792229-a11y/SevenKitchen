@@ -1550,6 +1550,10 @@ model NutritionFood {
   id                String                 @id @default(uuid()) @map("id")
   name              String                 @map("name") @db.VarChar(200)
   nameEn            String?                @map("name_en") @db.VarChar(200)
+  displayNameZh           String?          @map("display_name_zh") @db.VarChar(200)
+  displayNameZhSource     String?          @map("display_name_zh_source") @db.VarChar(50)
+  displayNameZhReviewedAt DateTime?        @map("display_name_zh_reviewed_at")
+  displayNameZhReviewedBy String?          @map("display_name_zh_reviewed_by")
   category          NutritionFoodCategory  @map("category")
   dataSource        String                 @map("data_source") @db.VarChar(100)
   externalId        String?                @map("external_id") @db.VarChar(100)
@@ -1569,6 +1573,7 @@ model NutritionFood {
   @@index([category])
   @@index([status])
   @@index([dataSource])
+  @@index([displayNameZh])
   @@map("nutrition_food")
 }
 

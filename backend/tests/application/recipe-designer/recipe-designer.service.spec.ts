@@ -236,6 +236,7 @@ describe('RecipeDesignerService', () => {
               id: 'food-raw',
               name: 'Mussel, green, meat, fresh, raw',
               nameEn: 'Green mussel raw',
+              displayNameZh: '青口贝肉正式生食档案',
               category: 'OTHER',
               dataSource: 'NZFCD',
               status: 'VERIFIED',
@@ -265,7 +266,7 @@ describe('RecipeDesignerService', () => {
             expect.objectContaining({
               mappingId: 'mapping-primary',
               nutritionFoodId: 'food-raw',
-              name: '青口贝肉（生）',
+              name: '青口贝肉正式生食档案',
               nameEn: 'Mussel, green, meat, fresh, raw',
               dataSource: 'NZFCD',
               isPrimary: true,
@@ -297,7 +298,7 @@ describe('RecipeDesignerService', () => {
           nutritionFoodMappings: {
             some: {
               nutritionFood: {
-                name: { contains: 'mussel', mode: 'insensitive' },
+                displayNameZh: { contains: 'mussel', mode: 'insensitive' },
               },
             },
           },
@@ -336,6 +337,15 @@ describe('RecipeDesignerService', () => {
         { name: { contains: '西蓝花', mode: 'insensitive' } },
         { name: { contains: '西兰花', mode: 'insensitive' } },
         { name: { contains: '青花菜', mode: 'insensitive' } },
+        {
+          nutritionFoodMappings: {
+            some: {
+              nutritionFood: {
+                displayNameZh: { contains: '西兰花', mode: 'insensitive' },
+              },
+            },
+          },
+        },
       ]),
     );
   });
@@ -497,7 +507,7 @@ describe('RecipeDesignerService', () => {
         totalWeightG: 100,
         energyDensityKcalPerKg: 1200,
         calculatedNutrition: assessment.nutrients,
-        complianceStatus: assessment.entries,
+        complianceStatus: assessment.groupedEntries,
         status: 'COMPLIANT',
         reviewStatus: 'NONE',
         isCompliant: true,
@@ -558,6 +568,7 @@ describe('RecipeDesignerService', () => {
         assessmentSummary: expect.objectContaining({
           overallStatus: 'INCOMPLETE',
           summary: expect.any(Object),
+          rawSummary: expect.any(Object),
         }),
       }),
     });

@@ -24,6 +24,35 @@ import {
   USDAFoodSearchResultDto,
   PaginatedNutritionFoodResponseDto,
 } from '../../interfaces/dto/nutrition-food/nutrition-food.dto';
+import { normalizeChineseDisplayName } from './nutrition-food-display-name';
+
+const MANUAL_DISPLAY_NAME_SOURCE = 'MANUAL';
+
+function buildChineseDisplayNameWrite(
+  displayNameZh: string | undefined,
+  userId?: string,
+) {
+  if (displayNameZh === undefined) {
+    return {};
+  }
+
+  const normalized = normalizeChineseDisplayName(displayNameZh);
+  if (!normalized) {
+    return {
+      displayNameZh: null,
+      displayNameZhSource: null,
+      displayNameZhReviewedAt: null,
+      displayNameZhReviewedBy: null,
+    };
+  }
+
+  return {
+    displayNameZh: normalized,
+    displayNameZhSource: MANUAL_DISPLAY_NAME_SOURCE,
+    displayNameZhReviewedAt: new Date(),
+    displayNameZhReviewedBy: userId ?? null,
+  };
+}
 
 @Injectable()
 export class NutritionFoodService {
@@ -50,6 +79,12 @@ export class NutritionFoodService {
         OR: [
           { name: { contains: params.search, mode: 'insensitive' } },
           { nameEn: { contains: params.search, mode: 'insensitive' } },
+          {
+            displayNameZh: {
+              contains: params.search,
+              mode: 'insensitive',
+            },
+          },
         ],
       }),
     };
@@ -141,6 +176,7 @@ export class NutritionFoodService {
       data: {
         name: dto.name,
         nameEn: dto.nameEn,
+        ...buildChineseDisplayNameWrite(dto.displayNameZh, userId),
         category: dto.category,
         dataSource: dto.dataSource,
         externalId: dto.externalId,
@@ -163,6 +199,7 @@ export class NutritionFoodService {
   async update(
     id: string,
     dto: UpdateNutritionFoodDto,
+    userId?: string,
   ): Promise<NutritionFoodResponseDto> {
     const existing = await this.prisma.nutritionFood.findUnique({
       where: { id },
@@ -176,6 +213,7 @@ export class NutritionFoodService {
       where: { id },
       data: {
         ...(dto.nameEn !== undefined && { nameEn: dto.nameEn }),
+        ...buildChineseDisplayNameWrite(dto.displayNameZh, userId),
         ...(dto.category !== undefined && { category: dto.category }),
         ...(dto.nutritionData !== undefined && {
           nutritionData: dto.nutritionData as any,
@@ -526,6 +564,10 @@ export class NutritionFoodService {
       id: item.id,
       name: item.name,
       nameEn: item.nameEn ?? undefined,
+      displayNameZh: item.displayNameZh ?? undefined,
+      displayNameZhSource: item.displayNameZhSource ?? undefined,
+      displayNameZhReviewedAt: item.displayNameZhReviewedAt ?? undefined,
+      displayNameZhReviewedBy: item.displayNameZhReviewedBy ?? undefined,
       category: item.category,
       dataSource: item.dataSource,
       externalId: item.externalId ?? undefined,

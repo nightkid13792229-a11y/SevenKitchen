@@ -5,8 +5,8 @@
         <text class="page-title">食谱设计器</text>
         <text class="page-subtitle">草稿配方与评估状态</text>
       </view>
-      <button class="new-btn" :disabled="creating" @tap="createDraft">
-        {{ creating ? '创建中' : '新建草稿' }}
+      <button class="new-btn" :disabled="creating" @tap="openCreateDraftSheet">
+        新建食谱
       </button>
     </view>
 
@@ -50,12 +50,59 @@
         </view>
       </view>
     </view>
+
+    <view v-if="createSheetVisible" class="create-sheet-mask" @tap="closeCreateDraftSheet">
+      <view class="create-sheet-panel" @tap.stop>
+        <view class="sheet-header">
+          <view>
+            <text class="sheet-title">新建食谱</text>
+            <text class="sheet-subtitle">先填写名称和生命阶段，再开始添加原料</text>
+          </view>
+          <button class="sheet-close" :disabled="creating" @tap="closeCreateDraftSheet">×</button>
+        </view>
+
+        <view class="sheet-field">
+          <text class="sheet-label">配方名称</text>
+          <input
+            class="sheet-input"
+            v-model="newDraftName"
+            maxlength="40"
+            placeholder="例如：三文鱼成犬维护"
+            @confirm="createDraft"
+          />
+        </view>
+
+        <picker
+          mode="selector"
+          range-key="label"
+          :range="scenarioOptions"
+          :value="newDraftScenarioIndex"
+          @change="onNewDraftScenarioChange"
+        >
+          <view class="sheet-field sheet-picker">
+            <text class="sheet-label">生命阶段</text>
+            <text class="sheet-value">{{ getScenarioLabel(newDraftScenario) }}</text>
+          </view>
+        </picker>
+
+        <view class="sheet-actions">
+          <button class="cancel-btn" :disabled="creating" @tap="closeCreateDraftSheet">取消</button>
+          <button class="confirm-btn" :disabled="creating || !canSubmitNewDraft" @tap="createDraft">
+            {{ creating ? '创建中' : '创建并编辑' }}
+          </button>
+        </view>
+      </view>
+    </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { recipeDesignerApi, type FediafDogScenario } from '../../api/recipe-designer'
+import { computed, onMounted, ref } from 'vue'
+import {
+  FEDIAF_DOG_SCENARIO_LABELS,
+  recipeDesignerApi,
+  type FediafDogScenario,
+} from '../../api/recipe-designer'
 import { getScenarioLabel } from './assessment'
 
 interface DesignerDraft {
@@ -75,6 +122,23 @@ const drafts = ref<DesignerDraft[]>([])
 const loading = ref(false)
 const creating = ref(false)
 const deletingDraftId = ref('')
+const createSheetVisible = ref(false)
+const newDraftName = ref('')
+const newDraftScenario = ref<FediafDogScenario>('ADULT_MER_110')
+
+const scenarioOptions: Array<{ label: string; value: FediafDogScenario }> = [
+  { label: FEDIAF_DOG_SCENARIO_LABELS.EARLY_GROWTH_REPRODUCTION, value: 'EARLY_GROWTH_REPRODUCTION' },
+  { label: FEDIAF_DOG_SCENARIO_LABELS.LATE_GROWTH, value: 'LATE_GROWTH' },
+  { label: FEDIAF_DOG_SCENARIO_LABELS.ADULT_MER_95, value: 'ADULT_MER_95' },
+  { label: FEDIAF_DOG_SCENARIO_LABELS.ADULT_MER_110, value: 'ADULT_MER_110' },
+]
+
+const newDraftScenarioIndex = computed(() => {
+  const index = scenarioOptions.findIndex((option) => option.value === newDraftScenario.value)
+  return index >= 0 ? index : 0
+})
+
+const canSubmitNewDraft = computed(() => newDraftName.value.trim().length > 0)
 
 onMounted(() => {
   loadDrafts()
@@ -94,17 +158,41 @@ async function loadDrafts() {
   }
 }
 
+function openCreateDraftSheet() {
+  if (creating.value) return
+  createSheetVisible.value = true
+}
+
+function closeCreateDraftSheet() {
+  if (creating.value) return
+  createSheetVisible.value = false
+}
+
+function onNewDraftScenarioChange(event: any) {
+  const index = Number(event.detail.value || 0)
+  newDraftScenario.value = scenarioOptions[index]?.value || 'ADULT_MER_110'
+}
+
 async function createDraft() {
   if (creating.value) return
+  const draftName = newDraftName.value.trim()
+  if (!draftName) {
+    uni.showToast({ title: '请填写配方名称', icon: 'none' })
+    return
+  }
+
   creating.value = true
   try {
     const res: any = await recipeDesignerApi.createDraft({
-      name: '未命名配方',
-      scenario: 'ADULT_MER_110',
+      name: newDraftName.value.trim(),
+      scenario: newDraftScenario.value,
     })
     const draft = res?.data ?? res
     const draftId = draft?.id
     if (draftId) {
+      createSheetVisible.value = false
+      newDraftName.value = ''
+      newDraftScenario.value = 'ADULT_MER_110'
       uni.navigateTo({ url: `/pages/recipe-designer/editor?id=${draftId}` })
       return
     }
@@ -314,5 +402,118 @@ function formatDateTime(value?: string) {
   color: #666;
   font-size: 24rpx;
   line-height: 1.8;
+}
+
+.create-sheet-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(0, 0, 0, 0.38);
+}
+
+.create-sheet-panel {
+  width: 100%;
+  padding: 28rpx 32rpx calc(32rpx + env(safe-area-inset-bottom));
+  border-radius: 24rpx 24rpx 0 0;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.sheet-header,
+.sheet-field,
+.sheet-actions {
+  display: flex;
+  align-items: center;
+}
+
+.sheet-header,
+.sheet-field {
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.sheet-header {
+  margin-bottom: 28rpx;
+}
+
+.sheet-title {
+  display: block;
+  color: #222;
+  font-size: 34rpx;
+  font-weight: 700;
+}
+
+.sheet-subtitle {
+  display: block;
+  margin-top: 8rpx;
+  color: #888;
+  font-size: 24rpx;
+}
+
+.sheet-close {
+  flex-shrink: 0;
+  width: 68rpx;
+  height: 68rpx;
+  margin: 0;
+  padding: 0;
+  border-radius: 10rpx;
+  background: #f5f5f5;
+  color: #555;
+  font-size: 34rpx;
+  line-height: 68rpx;
+}
+
+.sheet-field {
+  min-height: 84rpx;
+  border-top: 1rpx solid #f0f0f0;
+}
+
+.sheet-label {
+  flex-shrink: 0;
+  color: #666;
+  font-size: 26rpx;
+}
+
+.sheet-input,
+.sheet-value {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  color: #222;
+  font-size: 28rpx;
+}
+
+.sheet-picker {
+  border-bottom: 1rpx solid #f0f0f0;
+}
+
+.sheet-actions {
+  gap: 16rpx;
+  margin-top: 28rpx;
+}
+
+.cancel-btn,
+.confirm-btn {
+  flex: 1;
+  height: 76rpx;
+  margin: 0;
+  border-radius: 10rpx;
+  font-size: 28rpx;
+  line-height: 76rpx;
+}
+
+.cancel-btn {
+  background: #f0f6ff;
+  color: #1677ff;
+}
+
+.confirm-btn {
+  background: #1890ff;
+  color: #fff;
 }
 </style>

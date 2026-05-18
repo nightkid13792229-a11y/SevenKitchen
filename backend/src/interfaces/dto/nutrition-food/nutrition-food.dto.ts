@@ -28,6 +28,11 @@ export class CreateNutritionFoodDto {
   @IsString()
   nameEn?: string;
 
+  @ApiPropertyOptional({ description: '正式中文展示名' })
+  @IsOptional()
+  @IsString()
+  displayNameZh?: string;
+
   @ApiProperty({ description: '分类', enum: NutritionFoodCategory })
   @IsEnum(NutritionFoodCategory)
   category!: NutritionFoodCategory;
@@ -58,6 +63,11 @@ export class UpdateNutritionFoodDto {
   @IsOptional()
   @IsString()
   nameEn?: string;
+
+  @ApiPropertyOptional({ description: '正式中文展示名，空字符串表示清空' })
+  @IsOptional()
+  @IsString()
+  displayNameZh?: string;
 
   @ApiPropertyOptional({ description: '分类', enum: NutritionFoodCategory })
   @IsOptional()
@@ -139,6 +149,18 @@ export class NutritionFoodResponseDto {
 
   @ApiPropertyOptional()
   nameEn?: string;
+
+  @ApiPropertyOptional()
+  displayNameZh?: string;
+
+  @ApiPropertyOptional()
+  displayNameZhSource?: string;
+
+  @ApiPropertyOptional()
+  displayNameZhReviewedAt?: Date;
+
+  @ApiPropertyOptional()
+  displayNameZhReviewedBy?: string;
 
   @ApiProperty({ enum: NutritionFoodCategory })
   category!: NutritionFoodCategory;

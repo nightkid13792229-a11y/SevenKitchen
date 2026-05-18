@@ -39,6 +39,17 @@ describe('recipe designer mobile entry', () => {
     expect(listSource).toContain('@tap.stop')
     expect(listSource).toContain('PUBLISHED')
   })
+
+  it('guides new draft creation with recipe name and life stage before navigating to the editor', () => {
+    expect(listSource).toContain('createSheetVisible')
+    expect(listSource).toContain('newDraftName')
+    expect(listSource).toContain('newDraftScenario')
+    expect(listSource).toContain('生命阶段')
+    expect(listSource).toContain('canSubmitNewDraft')
+    expect(listSource).toContain('openCreateDraftSheet')
+    expect(listSource).toContain('name: newDraftName.value.trim()')
+    expect(listSource).not.toContain("name: '未命名配方'")
+  })
 })
 
 describe('recipe designer editor guardrails', () => {
@@ -52,11 +63,23 @@ describe('recipe designer editor guardrails', () => {
   })
 
   it('keeps first version weight editing focused on current total and item weightG', () => {
-    expect(editorSource).toContain('当前总量')
+    expect(editorSource).toContain('总量 {{ currentTotalWeightG.toFixed(0) }}g')
     expect(editorSource).toContain('weightG')
+    expect(editorSource).not.toContain('class="total-bar"')
     expect(editorSource).not.toContain('一键归一')
     expect(editorSource).not.toContain('缩放到')
     expect(editorSource).not.toContain('1kg')
+  })
+
+  it('uses life-stage wording and autosaves draft metadata instead of showing a manual save button', () => {
+    expect(editorSource).toContain('生命阶段')
+    expect(editorSource).not.toContain('评估场景')
+    expect(editorSource).toContain('autoSaveDraftMetadata')
+    expect(editorSource).toContain('metadataSaveLabel')
+    expect(editorSource).toContain('flushMetadataAutosave')
+    expect(editorSource).toContain('watch([draftName, scenario]')
+    expect(editorSource).not.toContain("{{ saving ? '保存中' : '保存' }}")
+    expect(editorSource).not.toContain('saveDraftMetadata')
   })
 
   it('reads persisted backend draft fields without changing the write payload contract', () => {
@@ -68,6 +91,8 @@ describe('recipe designer editor guardrails', () => {
 
   it('shows assessment drawer and supports backend assessment statuses', () => {
     expect(editorSource).toContain('assessment-drawer')
+    expect(editorSource).toContain('groupedEntries')
+    expect(editorSource).toContain('detailCount')
     expect(editorSource).toContain('currentValue')
     expect(editorSource).toContain('minValue')
     expect(editorSource).toContain('maxValue')

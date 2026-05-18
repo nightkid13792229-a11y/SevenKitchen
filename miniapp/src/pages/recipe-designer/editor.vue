@@ -3,7 +3,14 @@
     <view class="section metadata-section">
       <view class="field-row">
         <text class="field-label">配方名称</text>
-        <input class="name-input" v-model="draftName" placeholder="输入配方名称" />
+        <input
+          class="name-input"
+          v-model="draftName"
+          maxlength="40"
+          placeholder="输入配方名称"
+          @blur="flushMetadataAutosave"
+          @confirm="flushMetadataAutosave"
+        />
       </view>
 
       <picker
@@ -14,27 +21,23 @@
         @change="onScenarioChange"
       >
         <view class="field-row picker-row">
-          <text class="field-label">评估场景</text>
+          <text class="field-label">生命阶段</text>
           <text class="field-value">{{ currentScenarioLabel }}</text>
         </view>
       </picker>
 
       <view class="action-row">
-        <button class="secondary-btn" :disabled="saving" @tap="saveDraftMetadata">
-          {{ saving ? '保存中' : '保存' }}
-        </button>
+        <text class="save-state" :class="metadataSaveClass">{{ metadataSaveLabel }}</text>
         <button class="primary-btn" @tap="goToPublish">发布</button>
       </view>
     </view>
 
-    <view class="total-bar">
-      <text>当前总量</text>
-      <text class="total-value">{{ currentTotalWeightG.toFixed(0) }}g</text>
-    </view>
-
     <view class="section">
       <view class="section-header">
-        <text class="section-title">原料</text>
+        <view class="section-heading">
+          <text class="section-title">原料</text>
+          <text class="section-total">总量 {{ currentTotalWeightG.toFixed(0) }}g</text>
+        </view>
         <button class="link-btn" @tap="openIngredientPicker">添加原料</button>
       </view>
 
@@ -215,7 +218,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onUnmounted, ref, watch } from 'vue'
+import { computed, nextTick, onUnmounted, ref, watch } from 'vue'
 import { onLoad } from '@dcloudio/uni-app'
 import {
   recipeDesignerApi,
@@ -261,6 +264,7 @@ const items = ref<DesignerItem[]>([])
 const assessment = ref<any>(null)
 const loading = ref(false)
 const saving = ref(false)
+const metadataSaveState = ref<'idle' | 'dirty' | 'saving' | 'saved' | 'failed'>('idle')
 const assessmentExpanded = ref(false)
 const ingredientPickerVisible = ref(false)
 const ingredientLoading = ref(false)
@@ -274,7 +278,10 @@ const ingredientOptionPage = ref(1)
 const ingredientOptionHasMore = ref(false)
 const ingredientOptionPageSize = 20
 let ingredientSearchDebounceTimer: ReturnType<typeof setTimeout> | null = null
+let metadataAutosaveTimer: ReturnType<typeof setTimeout> | null = null
 let pendingIngredientOptionsReset = false
+let metadataHydrated = false
+let pendingMetadataSave = false
 
 const selectedScenarioIndex = computed(() => {
   const index = scenarioOptions.findIndex((option) => option.value === scenario.value)
@@ -289,6 +296,19 @@ const currentTotalWeightG = computed(() => {
   return items.value.reduce((sum, item) => sum + Number(item.weightG || 0), 0)
 })
 
+const metadataSaveLabel = computed(() => {
+  const map = {
+    idle: '待编辑',
+    dirty: '待保存',
+    saving: '保存中',
+    saved: '已保存',
+    failed: '保存失败',
+  }
+  return map[metadataSaveState.value]
+})
+
+const metadataSaveClass = computed(() => `save-state-${metadataSaveState.value}`)
+
 const summaryCounts = computed(() => {
   return normalizeAssessmentSummary(assessment.value?.summary)
 })
@@ -298,7 +318,7 @@ const overallStatus = computed(() => {
 })
 
 const assessmentEntries = computed(() => {
-  return assessment.value?.entries || assessment.value?.nutrients || []
+  return assessment.value?.groupedEntries || assessment.value?.entries || assessment.value?.nutrients || []
 })
 
 onLoad((options: any) => {
@@ -318,12 +338,19 @@ watch(ingredientSearchKeyword, () => {
   }, 300)
 })
 
+watch([draftName, scenario], () => {
+  if (!metadataHydrated || loading.value) return
+  scheduleMetadataAutosave()
+})
+
 onUnmounted(() => {
   clearIngredientSearchDebounce()
+  clearMetadataAutosave()
 })
 
 async function loadDraft() {
   loading.value = true
+  metadataHydrated = false
   try {
     const res: any = await recipeDesignerApi.listDrafts()
     const data = res?.data ?? res
@@ -335,6 +362,9 @@ async function loadDraft() {
       items.value = draft.items || []
     }
     await refreshAssessment()
+    metadataSaveState.value = 'saved'
+    await nextTick()
+    metadataHydrated = true
   } catch (error) {
     console.error('[RecipeDesignerEditor] Failed to load draft:', error)
     uni.showToast({ title: '加载配方失败', icon: 'none' })
@@ -358,18 +388,53 @@ function onScenarioChange(event: any) {
   scenario.value = scenarioOptions[index]?.value || 'ADULT_MER_110'
 }
 
-async function saveDraftMetadata() {
-  if (!draftId.value || saving.value) return
+function scheduleMetadataAutosave() {
+  clearMetadataAutosave()
+  metadataSaveState.value = 'dirty'
+  metadataAutosaveTimer = setTimeout(() => {
+    void autoSaveDraftMetadata()
+  }, 600)
+}
+
+function clearMetadataAutosave() {
+  if (!metadataAutosaveTimer) return
+  clearTimeout(metadataAutosaveTimer)
+  metadataAutosaveTimer = null
+}
+
+function flushMetadataAutosave() {
+  if (!metadataHydrated) return
+  clearMetadataAutosave()
+  void autoSaveDraftMetadata()
+}
+
+async function autoSaveDraftMetadata() {
+  if (!draftId.value) return
+  if (saving.value) {
+    pendingMetadataSave = true
+    return
+  }
+  const name = draftName.value.trim()
+  if (!name) {
+    metadataSaveState.value = 'failed'
+    return
+  }
+
   saving.value = true
+  metadataSaveState.value = 'saving'
   try {
-    await recipeDesignerApi.updateDraft(draftId.value, { name: draftName.value, scenario: scenario.value })
-    uni.showToast({ title: '已保存', icon: 'success' })
+    await recipeDesignerApi.updateDraft(draftId.value, { name, scenario: scenario.value })
+    metadataSaveState.value = 'saved'
     await refreshAssessment()
   } catch (error) {
     console.error('[RecipeDesignerEditor] Failed to save draft:', error)
-    uni.showToast({ title: '保存失败', icon: 'none' })
+    metadataSaveState.value = 'failed'
   } finally {
     saving.value = false
+    if (pendingMetadataSave) {
+      pendingMetadataSave = false
+      scheduleMetadataAutosave()
+    }
   }
 }
 
@@ -570,12 +635,25 @@ function formatAssessmentDetail(entry: any) {
   const targetMin = entry.minValue ?? entry.targetMin ?? entry.min
   const targetMax = entry.maxValue ?? entry.targetMax ?? entry.max
   const unit = entry.unit || ''
+  const detailCount = Number(entry.detailCount || entry.details?.length || 0)
   const parts = []
+  if (entry.expressionBasis) parts.push(formatExpressionBasis(entry.expressionBasis))
   if (current !== undefined && current !== null) parts.push(`当前 ${formatAssessmentNumber(current)}${unit}`)
   if ((targetMin !== undefined && targetMin !== null) || (targetMax !== undefined && targetMax !== null)) {
     parts.push(`目标 ${formatAssessmentNumber(targetMin) ?? '-'}-${formatAssessmentNumber(targetMax) ?? '-'}${unit}`)
   }
+  if (detailCount > 1) parts.push(`含${detailCount}个基准`)
   return parts.join(' / ') || '暂无数值'
+}
+
+function formatExpressionBasis(value: string) {
+  const map: Record<string, string> = {
+    PER_1000_KCAL_ME: '每1000kcal',
+    PER_MJ_ME: '每MJ',
+    PER_100G_DRY_MATTER: '干物质',
+    RATIO: '比例',
+  }
+  return map[value] || value
 }
 
 function getDraftScenario(draft: any): FediafDogScenario {
@@ -628,7 +706,6 @@ function formatAssessmentNumber(value: unknown) {
 .picker-row,
 .section-header,
 .action-row,
-.total-bar,
 .item-row,
 .drawer-handle,
 .assessment-entry {
@@ -639,7 +716,6 @@ function formatAssessmentNumber(value: unknown) {
 .field-row,
 .picker-row,
 .section-header,
-.total-bar,
 .drawer-handle,
 .assessment-entry {
   justify-content: space-between;
@@ -664,6 +740,27 @@ function formatAssessmentNumber(value: unknown) {
 .action-row {
   justify-content: flex-end;
   gap: 16rpx;
+}
+
+.save-state {
+  flex: 1;
+  min-width: 0;
+  color: #888;
+  font-size: 24rpx;
+  text-align: right;
+}
+
+.save-state-saving,
+.save-state-dirty {
+  color: #d46b08;
+}
+
+.save-state-saved {
+  color: #389e0d;
+}
+
+.save-state-failed {
+  color: #cf1322;
 }
 
 .primary-btn,
@@ -705,27 +802,23 @@ function formatAssessmentNumber(value: unknown) {
   font-size: 24rpx;
 }
 
-.total-bar {
-  height: 92rpx;
-  padding: 0 28rpx;
-  border-radius: 12rpx;
-  background: #fff;
-  color: #555;
-  font-size: 28rpx;
-  margin-bottom: 20rpx;
-  box-shadow: 0 2rpx 8rpx rgba(0, 0, 0, 0.04);
-}
-
-.total-value {
-  color: #222;
-  font-size: 34rpx;
-  font-weight: 700;
-}
-
 .section-title {
   font-size: 30rpx;
   font-weight: 700;
   color: #222;
+}
+
+.section-heading {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: baseline;
+  gap: 16rpx;
+}
+
+.section-total {
+  color: #777;
+  font-size: 24rpx;
 }
 
 .state-block {

@@ -33,6 +33,10 @@ import {
   FEDIAF_TARGET_PROVIDER,
   type FediafTargetProvider,
 } from './fediaf-target-provider';
+import {
+  getNutritionProfileSourceName,
+  resolveNutritionProfileDisplayName,
+} from '../nutrition-food/nutrition-food-display-name';
 
 const DESIGN_RECIPE_INCLUDE = {
   items: {
@@ -134,14 +138,13 @@ type IngredientOptionRecord = {
       id: string;
       name: string;
       nameEn: string | null;
+      displayNameZh: string | null;
       category: string;
       dataSource: string;
       status: string;
     };
   }>;
 };
-
-const CJK_TEXT_PATTERN = /[\u3400-\u9fff]/;
 
 const INGREDIENT_SEARCH_ALIAS_GROUPS = [
   ['西兰花', '西蓝花', '青花菜', '绿花椰菜', 'broccoli'],
@@ -203,75 +206,16 @@ function buildIngredientSearchConditions(searchTerms: string[]) {
         },
       },
     },
+    {
+      nutritionFoodMappings: {
+        some: {
+          nutritionFood: {
+            displayNameZh: { contains: term, mode: 'insensitive' as const },
+          },
+        },
+      },
+    },
   ]);
-}
-
-function getNutritionProfileSourceName(food: { name: string; nameEn: string | null }) {
-  if (CJK_TEXT_PATTERN.test(food.name)) {
-    return food.nameEn ?? food.name;
-  }
-
-  return food.name;
-}
-
-function describeNutritionProfilePreparation(sourceName: string) {
-  const normalized = sourceName.toLocaleLowerCase();
-
-  if (normalized.includes('raw')) {
-    return '生';
-  }
-
-  if (normalized.includes('boiled')) {
-    return '水煮';
-  }
-
-  if (normalized.includes('steamed')) {
-    return '蒸制';
-  }
-
-  if (normalized.includes('baked')) {
-    return '烘烤';
-  }
-
-  if (normalized.includes('roasted')) {
-    return '烤制';
-  }
-
-  if (normalized.includes('canned')) {
-    return '罐装';
-  }
-
-  if (normalized.includes('frozen')) {
-    return '冷冻';
-  }
-
-  const parts: string[] = [];
-  if (normalized.includes('cooked')) {
-    parts.push('熟制');
-  }
-  if (normalized.includes('dry heat')) {
-    parts.push('干热');
-  }
-  if (normalized.includes('fresh')) {
-    parts.push('新鲜');
-  }
-
-  return parts.join('，');
-}
-
-function buildNutritionProfileDisplayName(
-  ingredientName: string,
-  food: { name: string; nameEn: string | null; dataSource: string },
-) {
-  if (CJK_TEXT_PATTERN.test(food.name)) {
-    return food.name;
-  }
-
-  const sourceName = getNutritionProfileSourceName(food);
-  const descriptor = describeNutritionProfilePreparation(sourceName);
-  return descriptor
-    ? `${ingredientName}（${descriptor}）`
-    : `${ingredientName}（${food.dataSource}档案）`;
 }
 
 @Injectable()
@@ -328,6 +272,7 @@ export class RecipeDesignerService {
                   id: true,
                   name: true,
                   nameEn: true,
+                  displayNameZh: true,
                   category: true,
                   dataSource: true,
                   status: true,
@@ -651,7 +596,7 @@ export class RecipeDesignerService {
   }
 
   private buildAssessmentUpdateData(result: DesignRecipeAssessmentResult) {
-    const missingDataReport = result.entries
+    const missingDataReport = result.groupedEntries
       .filter((entry) => entry.status === 'MISSING_DATA')
       .map((entry) => ({
         nutrientKey: entry.nutrientKey,
@@ -664,10 +609,12 @@ export class RecipeDesignerService {
       totalWeightG: result.totalWeightG,
       energyDensityKcalPerKg: result.energyDensityKcalPerKg,
       calculatedNutrition: this.toJsonValue(result.nutrients),
-      complianceStatus: this.toJsonValue(result.entries),
+      complianceStatus: this.toJsonValue(result.groupedEntries),
       assessmentSummary: this.toJsonValue({
         overallStatus: result.overallStatus,
         summary: result.summary,
+        rawSummary: result.rawSummary,
+        rawEntryCount: result.entries.length,
       }),
       missingDataReport: this.toJsonValue(missingDataReport),
       isCompliant,
@@ -737,7 +684,7 @@ export class RecipeDesignerService {
       .map((mapping) => ({
         mappingId: mapping.id,
         nutritionFoodId: mapping.nutritionFoodId,
-        name: buildNutritionProfileDisplayName(
+        name: resolveNutritionProfileDisplayName(
           ingredient.name,
           mapping.nutritionFood,
         ),

@@ -34,6 +34,11 @@ export interface DesignRecipeAssessmentSummary {
   missingData: number;
 }
 
+export interface GroupedAssessmentEntry extends AssessmentEntry {
+  details: AssessmentEntry[];
+  detailCount: number;
+}
+
 export interface DesignRecipeAssessmentResult {
   scenario: FediafDogScenarioCode;
   totalWeightG: number;
@@ -43,9 +48,11 @@ export interface DesignRecipeAssessmentResult {
   normalizedToKg: false;
   items: DesignRecipeAssessmentResultItem[];
   nutrients: Record<string, AssessedNutrientValue>;
+  groupedEntries: GroupedAssessmentEntry[];
   entries: AssessmentEntry[];
   overallStatus: AssessmentOverallStatus;
   summary: DesignRecipeAssessmentSummary;
+  rawSummary: DesignRecipeAssessmentSummary;
 }
 
 interface FieldTotal {
@@ -78,7 +85,9 @@ export function assessRecipeDraft(
   const entries = input.targets.map((target) =>
     assessTarget(target, input.items, energyTotal, moistureTotal, dryMatterG),
   );
-  const summary = summarizeEntries(entries);
+  const groupedEntries = groupAssessmentEntries(entries);
+  const summary = summarizeEntries(groupedEntries);
+  const rawSummary = summarizeEntries(entries);
 
   return {
     scenario: input.scenario,
@@ -94,9 +103,11 @@ export function assessRecipeDraft(
       ratioPercent: totalWeightG > 0 ? (item.weightG / totalWeightG) * 100 : 0,
     })),
     nutrients: buildNutrientTotals(input.targets, input.items, energyTotal),
+    groupedEntries,
     entries,
-    overallStatus: getOverallStatus(entries),
+    overallStatus: getOverallStatus(groupedEntries),
     summary,
+    rawSummary,
   };
 }
 
@@ -518,8 +529,59 @@ function sanitizeBound(value: unknown): number | null {
     : null;
 }
 
+function groupAssessmentEntries(entries: AssessmentEntry[]): GroupedAssessmentEntry[] {
+  const groups = new Map<string, AssessmentEntry[]>();
+
+  for (const entry of entries) {
+    const groupKey = entry.nutrientKey || entry.label;
+    const group = groups.get(groupKey);
+
+    if (group) {
+      group.push(entry);
+    } else {
+      groups.set(groupKey, [entry]);
+    }
+  }
+
+  return Array.from(groups.values()).map((details) => {
+    const representative = chooseRepresentativeEntry(details);
+
+    return {
+      ...representative,
+      details,
+      detailCount: details.length,
+    };
+  });
+}
+
+function chooseRepresentativeEntry(entries: AssessmentEntry[]): AssessmentEntry {
+  return entries.reduce((selected, candidate) => {
+    const selectedPriority = getStatusPriority(selected.status);
+    const candidatePriority = getStatusPriority(candidate.status);
+
+    if (candidatePriority > selectedPriority) {
+      return candidate;
+    }
+
+    return selected;
+  });
+}
+
+function getStatusPriority(status: AssessmentEntryStatus): number {
+  switch (status) {
+    case 'MISSING_DATA':
+      return 4;
+    case 'EXCESS':
+      return 3;
+    case 'DEFICIENT':
+      return 2;
+    case 'COMPLIANT':
+      return 1;
+  }
+}
+
 function summarizeEntries(
-  entries: AssessmentEntry[],
+  entries: Array<{ status: AssessmentEntryStatus }>,
 ): DesignRecipeAssessmentSummary {
   return entries.reduce<DesignRecipeAssessmentSummary>(
     (summary, entry) => {
@@ -545,7 +607,7 @@ function summarizeEntries(
 }
 
 function getOverallStatus(
-  entries: AssessmentEntry[],
+  entries: Array<{ status: AssessmentEntryStatus }>,
 ): AssessmentOverallStatus {
   if (entries.length === 0) {
     return 'INCOMPLETE';

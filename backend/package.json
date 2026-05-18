@@ -23,6 +23,8 @@
     "backfill:breed-aliases:apply": "ts-node -r tsconfig-paths/register prisma/backfill-breed-aliases.ts --apply",
     "backfill:ingredient-nutrition-profile-v2": "ts-node -r tsconfig-paths/register prisma/backfill-ingredient-nutrition-profile-v2.ts",
     "backfill:ingredient-nutrition-profile-v2:apply": "ts-node -r tsconfig-paths/register prisma/backfill-ingredient-nutrition-profile-v2.ts --apply",
+    "backfill:nutrition-food-display-names": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/backfill-nutrition-food-display-names.ts",
+    "backfill:nutrition-food-display-names:apply": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/backfill-nutrition-food-display-names.ts --apply",
     "backfill:procurement-sku-defaults": "ts-node -r tsconfig-paths/register prisma/backfill-procurement-sku-defaults.ts",
     "backfill:procurement-sku-defaults:apply": "ts-node -r tsconfig-paths/register prisma/backfill-procurement-sku-defaults.ts --apply",
     "backfill:supplement-packaging-single-layer": "ts-node -r tsconfig-paths/register prisma/backfill-supplement-packaging-single-layer.ts",

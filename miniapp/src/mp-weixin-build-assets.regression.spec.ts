@@ -21,7 +21,9 @@ describe('mp-weixin build asset regressions', () => {
     expect(fixScript).toContain("'tabbar'")
     expect(fixScript).toContain('syncStaticAssetDirectory')
     expect(fixScript).toContain('assertTabBarIconsExist')
-    expect(fixScript).toContain("projectConfig.miniprogramRoot = './'")
+    expect(fixScript).toContain('syncProjectConfig')
+    expect(fixScript).toContain("miniprogramRoot: './'")
+    expect(fixScript).toContain("'libVersion'")
     expect(fixScript).toContain('appJson.functionalPages = false')
     expect(fixScript).toContain('maxRetries')
     expect(previewScript).toContain('node scripts/fix-components-injection.js')
@@ -139,6 +141,46 @@ describe('mp-weixin build asset regressions', () => {
     expect(fixScript).toContain('removeCodeQualityNoDependencyFiles')
     expect(fixScript).toContain("'project.private.config.json'")
     expect(fixScript).toContain("'App.wxml'")
+  })
+
+  it('preserves source project config fields required by WeChat DevTools compiler', () => {
+    const { syncProjectConfig } = requireScript('../scripts/fix-components-injection.js')
+
+    const syncedConfig = syncProjectConfig(
+      {
+        miniprogramRoot: './',
+        libVersion: '',
+        appid: 'wx-generated',
+        projectname: 'Generated',
+        setting: {
+          minified: true,
+          ignoreDevUnusedFiles: true,
+        },
+      },
+      {
+        compileType: 'miniprogram',
+        libVersion: '3.13.0',
+        appid: 'wx2c1e8f1a2d7c2406',
+        projectname: 'SevenKitchen',
+      },
+      {
+        urlCheck: false,
+        ignoreDevUnusedFiles: false,
+      },
+    )
+
+    expect(syncedConfig).toMatchObject({
+      miniprogramRoot: './',
+      compileType: 'miniprogram',
+      libVersion: '3.13.0',
+      appid: 'wx2c1e8f1a2d7c2406',
+      projectname: 'SevenKitchen',
+      setting: {
+        minified: true,
+        urlCheck: false,
+        ignoreDevUnusedFiles: false,
+      },
+    })
   })
 
   it('localizes subpackage-only helper modules out of the main package', () => {

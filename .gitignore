@@ -17,6 +17,7 @@ dist/
 
 # Logs
 *.log
+backend/reports/
 
 # Prisma
 prisma/dev.db

@@ -57,6 +57,16 @@ export interface RecipeItem {
   ingredientId: string;
   ingredientName?: string;
   ingredientType?: string;
+  nutritionFoodId?: string;
+  nutritionState?: string;
+  nutritionStateLabel?: string;
+  nutritionFood?: {
+    id: string;
+    name: string;
+    nameEn?: string;
+    preparationState?: string;
+    preparationStateLabel?: string;
+  };
   preparationMethod?: string;
   exampleWeight?: number;
   ratioPercent?: number;

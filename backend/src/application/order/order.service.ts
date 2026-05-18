@@ -1000,6 +1000,15 @@ export class OrderService {
           ingredient_id: ingredient?.id || ri.ingredientId,
           name: ingredient?.name || 'Unknown',
           ratio: ri.ratioPercent ?? 0,
+          nutrition_food_id: ri.nutritionFoodId ?? undefined,
+          nutrition_food_name: ri.nutritionFood?.name ?? undefined,
+          nutrition_state:
+            ri.nutritionState ?? ri.nutritionFood?.preparationState ?? undefined,
+          nutrition_state_label:
+            ri.nutritionStateLabel ??
+            ri.nutritionFood?.preparationStateLabel ??
+            ri.nutritionFood?.preparationState ??
+            undefined,
           ingredient_type: ingredient?.type,
           nutrient_target_key: ri.nutrientTargetKey ?? undefined,
           nutrient_target_value: ri.nutrientTargetValue ?? undefined,
@@ -1447,6 +1456,17 @@ export class OrderService {
             ingredient_id: ingredient?.id || ri.ingredientId,
             name: ingredient?.name || 'Unknown',
             ratio: ri.ratioPercent ?? 0,
+            nutrition_food_id: ri.nutritionFoodId ?? undefined,
+            nutrition_food_name: ri.nutritionFood?.name ?? undefined,
+            nutrition_state:
+              ri.nutritionState ??
+              ri.nutritionFood?.preparationState ??
+              undefined,
+            nutrition_state_label:
+              ri.nutritionStateLabel ??
+              ri.nutritionFood?.preparationStateLabel ??
+              ri.nutritionFood?.preparationState ??
+              undefined,
             ingredient_type: ingredient?.type,
             nutrient_target_key: ri.nutrientTargetKey ?? undefined,
             nutrient_target_value: ri.nutrientTargetValue ?? undefined,

@@ -36,6 +36,8 @@ export interface RecipeItem {
   ingredient_id: string;
   name: string;
   ratio: number;
+  nutrition_state?: string;
+  nutrition_state_label?: string;
   ingredient_type: string;
   preparation_methods?: string[];
   nutrient_target_key?: string;
@@ -446,6 +448,7 @@ function parseIngredients(taskDetail: TaskDetail): ParsedIngredient[] {
       'PACKAGING': '包装',
     };
     const type = item.ingredient_type ? typeMap[item.ingredient_type] : '';
+    const nutritionStateLabel = item.nutrition_state_label || item.nutrition_state || '';
 
     const preparationMethods = item.preparation_methods && item.preparation_methods.length > 0
       ? item.preparation_methods.join('、')
@@ -462,7 +465,7 @@ function parseIngredients(taskDetail: TaskDetail): ParsedIngredient[] {
 
     return {
       id: item.ingredient_id,
-      name: item.name,
+      name: nutritionStateLabel ? `${item.name}（${nutritionStateLabel}）` : item.name,
       amount: formatDecimal(amount),
       unit,
       type,

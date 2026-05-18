@@ -19,9 +19,21 @@ export interface IngredientRef {
   nutritionProfile?: any;
 }
 
+export interface NutritionFoodRef {
+  id: string;
+  name: string;
+  nameEn?: string | null;
+  preparationState?: string | null;
+  preparationStateLabel?: string | null;
+}
+
 export interface RecipeItem {
   id: string;
   ingredientId: string;
+  nutritionFoodId?: string | null;
+  nutritionState?: string | null;
+  nutritionStateLabel?: string | null;
+  nutritionFood?: NutritionFoodRef | null;
   preparationMethod?: string | null;
   exampleWeight?: number | null;
   ratioPercent?: number | null;

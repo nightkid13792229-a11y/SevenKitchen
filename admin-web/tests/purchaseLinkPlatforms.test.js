@@ -15,8 +15,8 @@ test('family DIY recommendation purchase links expose iHerb across admin, backen
   const miniappCopy = read('miniapp/src/pages/diy-sheet/copy.ts')
 
   assert.equal((adminForm.match(/value="IHERB"/g) || []).length, 2)
-  assert.match(adminTypes, /platform: .*'IHERB'/)
-  assert.match(backendTypes, /platform: .*'IHERB'/)
+  assert.match(adminTypes, /platform: .*["']IHERB["']/)
+  assert.match(backendTypes, /platform: .*["']IHERB["']/)
   assert.match(miniappSheet, /iherb\.com/)
   assert.match(miniappSheet, /iherb\.cn/)
   assert.match(miniappCopy, /已复制 iHerb 购买链接/)

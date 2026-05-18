@@ -16,6 +16,7 @@ type RecipeWithItems = Prisma.RecipeGetPayload<{
     items: {
       include: {
         ingredient: true;
+        nutritionFood: true;
         supplementAlternatives: {
           include: {
             alternativeIngredient: true;
@@ -50,6 +51,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
         items: {
           include: {
             ingredient: true,
+            nutritionFood: true,
             supplementAlternatives: {
               include: {
                 alternativeIngredient: true,
@@ -88,6 +90,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
         items: {
           include: {
             ingredient: true,
+            nutritionFood: true,
             supplementAlternatives: {
               include: {
                 alternativeIngredient: true,
@@ -134,6 +137,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
                 tags: true,
               },
             },
+            nutritionFood: true,
             supplementAlternatives: {
               include: {
                 alternativeIngredient: true,
@@ -250,6 +254,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
                 tags: true,
               },
             },
+            nutritionFood: true,
             supplementAlternatives: {
               include: {
                 alternativeIngredient: true,
@@ -581,6 +586,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
             recipeId: recipe.id,
             recipeVersion: recipe.version,
             ingredientId: item.ingredientId,
+            nutritionFoodId: item.nutritionFoodId,
             preparationMethod: item.preparationMethod,
             exampleWeight: item.exampleWeight,
             ratioPercent: item.ratioPercent,
@@ -616,6 +622,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
             recipeId: recipe.id,
             recipeVersion: recipe.version,
             ingredientId: item.ingredientId,
+            nutritionFoodId: item.nutritionFoodId,
             preparationMethod: item.preparationMethod,
             exampleWeight: item.exampleWeight,
             ratioPercent: item.ratioPercent,
@@ -640,6 +647,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
         items: {
           include: {
             ingredient: true,
+            nutritionFood: true,
             supplementAlternatives: {
               include: {
                 alternativeIngredient: true,
@@ -688,6 +696,21 @@ export class PrismaRecipeRepository implements RecipeRepository {
         (item): RecipeItem => ({
           id: item.id,
           ingredientId: item.ingredientId,
+          nutritionFoodId: item.nutritionFoodId,
+          nutritionState: item.nutritionFood?.preparationState ?? null,
+          nutritionStateLabel:
+            item.nutritionFood?.preparationStateLabel ??
+            item.nutritionFood?.preparationState ??
+            null,
+          nutritionFood: item.nutritionFood
+            ? {
+                id: item.nutritionFood.id,
+                name: item.nutritionFood.name,
+                nameEn: item.nutritionFood.nameEn,
+                preparationState: item.nutritionFood.preparationState,
+                preparationStateLabel: item.nutritionFood.preparationStateLabel,
+              }
+            : null,
           preparationMethod: item.preparationMethod,
           exampleWeight: item.exampleWeight ? Number(item.exampleWeight) : null,
           ratioPercent: item.ratioPercent ? Number(item.ratioPercent) : null,

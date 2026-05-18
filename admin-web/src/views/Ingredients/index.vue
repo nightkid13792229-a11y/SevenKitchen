@@ -1,5 +1,11 @@
 <template>
   <div class="ingredients-page">
+    <el-tabs
+      v-model="activeCenterTab"
+      class="ingredient-center-tabs"
+      @tab-change="handleCenterTabChange"
+    >
+      <el-tab-pane label="标准原料" name="standard">
     <!-- Header -->
     <div class="page-header">
       <h2>原料管理</h2>
@@ -389,11 +395,22 @@
         <el-button @click="usageDialogVisible = false">关闭</el-button>
       </template>
     </el-dialog>
+      </el-tab-pane>
+
+      <el-tab-pane label="营养档案" name="nutrition" lazy>
+        <IngredientNutritionGovernancePanel />
+      </el-tab-pane>
+
+      <el-tab-pane label="标签体系" name="tags" lazy>
+        <IngredientTagsPanel />
+      </el-tab-pane>
+    </el-tabs>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, nextTick } from 'vue'
+import { ref, computed, onMounted, nextTick, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import type { ElTable } from 'element-plus'
 import { Plus, Search, Refresh } from '@element-plus/icons-vue'
@@ -409,9 +426,16 @@ import {
 } from '@/types/ingredient'
 import IngredientFormComponent from './IngredientForm.vue'
 import IngredientNutritionDialog from './components/IngredientNutritionDialog.vue'
+import IngredientNutritionGovernancePanel from './components/IngredientNutritionGovernancePanel.vue'
+import IngredientTagsPanel from './components/IngredientTagsPanel.vue'
 import { getIngredientTypeCapabilities } from '@/utils/ingredientTypeCapabilities'
 
 // Data
+type IngredientCenterTab = 'standard' | 'nutrition' | 'tags'
+
+const route = useRoute()
+const router = useRouter()
+const centerTabs: IngredientCenterTab[] = ['standard', 'nutrition', 'tags']
 const loading = ref(false)
 const ingredients = ref<Ingredient[]>([])
 const searchText = ref('')
@@ -429,6 +453,7 @@ const currentIngredientForUsage = ref<Ingredient | null>(null)
 const usageRecipes = ref<any[]>([])
 const nutritionDialogVisible = ref(false)
 const currentIngredientForNutrition = ref<Ingredient | null>(null)
+const activeCenterTab = ref<IngredientCenterTab>('standard')
 
 // Pagination
 const currentPage = ref(1)
@@ -442,6 +467,36 @@ const dialogTitle = computed(() => {
   }
   return currentIngredient.value?.id ? '编辑标准原料' : '新增标准原料'
 })
+
+const normalizeCenterTab = (value: unknown): IngredientCenterTab => {
+  if (value === 'agent') {
+    return 'nutrition'
+  }
+
+  return typeof value === 'string' && centerTabs.includes(value as IngredientCenterTab)
+    ? value as IngredientCenterTab
+    : 'standard'
+}
+
+watch(
+  () => route.query.tab,
+  (tab) => {
+    activeCenterTab.value = normalizeCenterTab(tab)
+  },
+  { immediate: true }
+)
+
+const handleCenterTabChange = async (tab: string | number) => {
+  const nextTab = normalizeCenterTab(String(tab))
+  if (route.query.tab === nextTab || (nextTab === 'standard' && !route.query.tab)) {
+    return
+  }
+
+  await router.replace({
+    path: '/ingredients',
+    query: nextTab === 'standard' ? {} : { ...route.query, tab: nextTab }
+  })
+}
 
 // 总数统计
 const totalCount = computed(() => ingredients.value.length)
@@ -881,6 +936,17 @@ onMounted(() => {
 <style scoped>
 .ingredients-page {
   padding: 20px;
+}
+
+.ingredient-center-tabs {
+  background: #fff;
+  border: 1px solid #ebeef5;
+  border-radius: 4px;
+  padding: 0 16px 16px;
+}
+
+.ingredient-center-tabs :deep(.el-tabs__header) {
+  margin-bottom: 16px;
 }
 
 .page-header {

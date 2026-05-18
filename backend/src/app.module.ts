@@ -1,7 +1,3 @@
-import * as dotenv from 'dotenv';
-// 加载.env文件（必须在所有其他导入之前）
-dotenv.config();
-
 import { Module, OnModuleInit, Inject } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
@@ -154,6 +150,18 @@ import { PrismaPurchaseRecordRepository } from './infrastructure/repositories/pr
 import { StaffProductionService } from './application/production/kitchen.service';
 import { NutritionFoodController } from './interfaces/controllers/nutrition-food.controller';
 import { NutritionFoodService } from './application/nutrition-food/nutrition-food.service';
+import { NutritionGovernanceController } from './interfaces/controllers/nutrition-governance.controller';
+import { NutritionGovernanceService } from './application/nutrition-governance/nutrition-governance.service';
+import { AgentProviderConfigService } from './application/nutrition-governance/agent-provider-config.service';
+import { TrustedNutritionWebSearchService } from './application/nutrition-governance/trusted-nutrition-web-search.service';
+import {
+  DisabledLabelRecognitionProvider,
+  LABEL_RECOGNITION_PROVIDER,
+} from './application/nutrition-governance/label-recognition.provider';
+import {
+  createNutritionCandidateReviewProvider,
+  NUTRITION_CANDIDATE_REVIEW_PROVIDER,
+} from './application/nutrition-governance/nutrition-candidate-review.provider';
 import { RecommendedProductController } from './interfaces/controllers/recommended-product.controller';
 import { ProcurementSkuController } from './interfaces/controllers/procurement-sku.controller';
 import { RecommendedProductService } from './application/ingredient/recommended-product.service';
@@ -177,6 +185,10 @@ import {
   FEDIAF_TARGET_PROVIDER,
   PrismaFediafTargetProvider,
 } from './application/recipe-designer/fediaf-target-provider';
+import { loadEnvConfig } from './utils/env-config';
+
+// Load environment variables before module-level Prisma validation runs.
+loadEnvConfig();
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -262,6 +274,7 @@ validatePrismaConfig();
     AdminCustomRecipeController,
     SharedPhotosController,
     NutritionFoodController,
+    NutritionGovernanceController,
     RecommendedProductController,
     ReviewsController,
     FeedbackController,
@@ -628,6 +641,17 @@ validatePrismaConfig();
     CustomRecipeService,
     // Nutrition Food Service (Recipe Designer)
     NutritionFoodService,
+    AgentProviderConfigService,
+    TrustedNutritionWebSearchService,
+    NutritionGovernanceService,
+    {
+      provide: LABEL_RECOGNITION_PROVIDER,
+      useClass: DisabledLabelRecognitionProvider,
+    },
+    {
+      provide: NUTRITION_CANDIDATE_REVIEW_PROVIDER,
+      useFactory: createNutritionCandidateReviewProvider,
+    },
     // Recommended Product Service
     RecommendedProductService,
     DogProfileAnalyticsService,

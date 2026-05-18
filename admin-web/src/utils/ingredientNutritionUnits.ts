@@ -30,6 +30,10 @@ type VitaminEBasis =
   | 'IU_GENERIC'
   | 'IU_NATURAL_D_ALPHA_TOCOPHEROL'
   | 'MG_NATURAL_D_ALPHA_TOCOPHEROL'
+  | 'IU_NATURAL_D_ALPHA_TOCOPHERYL_ACETATE'
+  | 'MG_NATURAL_D_ALPHA_TOCOPHERYL_ACETATE'
+  | 'IU_SYNTHETIC_DL_ALPHA_TOCOPHEROL'
+  | 'MG_SYNTHETIC_DL_ALPHA_TOCOPHEROL'
   | 'IU_SYNTHETIC_DL_ALPHA_TOCOPHERYL_ACETATE'
   | 'MG_SYNTHETIC_DL_ALPHA_TOCOPHERYL_ACETATE'
 
@@ -70,6 +74,14 @@ function parseVitaminEUnit(unit: string): VitaminEBasis | null {
       return 'IU_NATURAL_D_ALPHA_TOCOPHEROL'
     case 'mg（天然，d-α-tocopherol）':
       return 'MG_NATURAL_D_ALPHA_TOCOPHEROL'
+    case 'IU（天然，d-α-tocopheryl acetate）':
+      return 'IU_NATURAL_D_ALPHA_TOCOPHERYL_ACETATE'
+    case 'mg（天然，d-α-tocopheryl acetate）':
+      return 'MG_NATURAL_D_ALPHA_TOCOPHERYL_ACETATE'
+    case 'IU（合成，dl-α-tocopherol）':
+      return 'IU_SYNTHETIC_DL_ALPHA_TOCOPHEROL'
+    case 'mg（合成，dl-α-tocopherol）':
+      return 'MG_SYNTHETIC_DL_ALPHA_TOCOPHEROL'
     case 'IU（合成，dl-α-tocopheryl acetate）':
       return 'IU_SYNTHETIC_DL_ALPHA_TOCOPHERYL_ACETATE'
     case 'mg（合成，dl-α-tocopheryl acetate）':
@@ -194,10 +206,16 @@ export function convertIngredientNutritionVitaminValue(
       switch (basis) {
         case 'IU_GENERIC':
         case 'IU_NATURAL_D_ALPHA_TOCOPHEROL':
+        case 'IU_NATURAL_D_ALPHA_TOCOPHERYL_ACETATE':
+        case 'IU_SYNTHETIC_DL_ALPHA_TOCOPHEROL':
         case 'IU_SYNTHETIC_DL_ALPHA_TOCOPHERYL_ACETATE':
           return inputValue
         case 'MG_NATURAL_D_ALPHA_TOCOPHEROL':
           return inputValue * 1.49
+        case 'MG_NATURAL_D_ALPHA_TOCOPHERYL_ACETATE':
+          return inputValue * 1.36
+        case 'MG_SYNTHETIC_DL_ALPHA_TOCOPHEROL':
+          return inputValue * 1.1
         case 'MG_SYNTHETIC_DL_ALPHA_TOCOPHERYL_ACETATE':
           return inputValue
         default:
@@ -209,10 +227,16 @@ export function convertIngredientNutritionVitaminValue(
       switch (basis) {
         case 'IU_GENERIC':
         case 'IU_NATURAL_D_ALPHA_TOCOPHEROL':
+        case 'IU_NATURAL_D_ALPHA_TOCOPHERYL_ACETATE':
+        case 'IU_SYNTHETIC_DL_ALPHA_TOCOPHEROL':
         case 'IU_SYNTHETIC_DL_ALPHA_TOCOPHERYL_ACETATE':
           return inputValue
         case 'MG_NATURAL_D_ALPHA_TOCOPHEROL':
           return inputValue / 1.49
+        case 'MG_NATURAL_D_ALPHA_TOCOPHERYL_ACETATE':
+          return inputValue / 1.36
+        case 'MG_SYNTHETIC_DL_ALPHA_TOCOPHEROL':
+          return inputValue / 1.1
         case 'MG_SYNTHETIC_DL_ALPHA_TOCOPHERYL_ACETATE':
           return inputValue
         default:
@@ -252,6 +276,9 @@ export function convertIngredientNutritionFieldValue(
 export function getIngredientNutritionUnitStep(unit: string): number {
   const normalizedUnit = normalizeIngredientNutritionUnit(unit)
   const rawUnit = unit.trim()
+  if (rawUnit.startsWith('IU（')) {
+    return 0.001
+  }
   if (
     normalizedUnit === 'kcal' ||
     normalizedUnit === 'kJ' ||
@@ -271,6 +298,9 @@ export function getIngredientNutritionUnitStep(unit: string): number {
 export function getIngredientNutritionUnitPrecision(unit: string): number {
   const normalizedUnit = normalizeIngredientNutritionUnit(unit)
   const rawUnit = unit.trim()
+  if (rawUnit.startsWith('IU（')) {
+    return 3
+  }
   if (
     normalizedUnit === 'kcal' ||
     normalizedUnit === 'kJ' ||

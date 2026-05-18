@@ -5,7 +5,11 @@ import {
   getIngredientNutritionResolvedDisplayUnit,
   INGREDIENT_NUTRITION_FIELD_DEFINITION_MAP
 } from '../src/constants/ingredientNutrition.ts'
-import { convertIngredientNutritionFieldValue } from '../src/utils/ingredientNutritionUnits.ts'
+import {
+  convertIngredientNutritionFieldValue,
+  getIngredientNutritionUnitPrecision,
+  getIngredientNutritionUnitStep
+} from '../src/utils/ingredientNutritionUnits.ts'
 
 function almostEqual(actual: number, expected: number, epsilon = 1e-9) {
   assert.ok(Math.abs(actual - expected) < epsilon, `expected ${actual} to be within ${epsilon} of ${expected}`)
@@ -36,6 +40,14 @@ test('vitamin E follows canine FEDIAF natural and synthetic source factors', () 
   almostEqual(convertIngredientNutritionFieldValue('vitaminE', 1, 'mg（天然，d-α-tocopherol）', 'IU（天然，d-α-tocopherol）'), 1.49)
   almostEqual(convertIngredientNutritionFieldValue('vitaminE', 1.49, 'IU（天然，d-α-tocopherol）', 'mg（天然，d-α-tocopherol）'), 1)
   almostEqual(
+    convertIngredientNutritionFieldValue('vitaminE', 1, 'mg（天然，d-α-tocopheryl acetate）', 'IU（天然，d-α-tocopheryl acetate）'),
+    1.36
+  )
+  almostEqual(
+    convertIngredientNutritionFieldValue('vitaminE', 1, 'mg（合成，dl-α-tocopherol）', 'IU（合成，dl-α-tocopherol）'),
+    1.1
+  )
+  almostEqual(
     convertIngredientNutritionFieldValue('vitaminE', 1, 'mg（合成，dl-α-tocopheryl acetate）', 'IU（合成，dl-α-tocopheryl acetate）'),
     1
   )
@@ -52,12 +64,30 @@ test('vitamin A and E field defaults reflect the canine FEDIAF model', () => {
   assert.ok(vitaminA)
   assert.ok(vitaminE)
   assert.equal(vitaminA.unit, 'IU')
-  assert.equal(vitaminA.defaultDisplayUnit, 'IU（视黄醇）')
+  assert.equal(vitaminA.defaultDisplayUnit, 'IU')
+  assert.equal(vitaminA.unitOptions?.[0], 'IU')
   assert.equal(vitaminE.unit, 'IU')
   assert.equal(vitaminE.defaultDisplayUnit, 'IU（天然，d-α-tocopherol）')
+  assert.deepEqual(vitaminE.unitOptions, [
+    'IU（天然，d-α-tocopherol）',
+    'mg（天然，d-α-tocopherol）',
+    'IU（天然，d-α-tocopheryl acetate）',
+    'mg（天然，d-α-tocopheryl acetate）',
+    'IU（合成，dl-α-tocopherol）',
+    'mg（合成，dl-α-tocopherol）',
+    'IU（合成，dl-α-tocopheryl acetate）',
+    'mg（合成，dl-α-tocopheryl acetate）'
+  ])
+})
+
+test('vitamin E activity IU keeps enough precision for small food values', () => {
+  assert.equal(getIngredientNutritionUnitStep('IU（天然，d-α-tocopherol）'), 0.001)
+  assert.equal(getIngredientNutritionUnitPrecision('IU（天然，d-α-tocopherol）'), 3)
+  assert.equal(getIngredientNutritionUnitPrecision('IU'), 0)
 })
 
 test('legacy invalid vitamin E display unit does not override the new default', () => {
+  assert.equal(getIngredientNutritionResolvedDisplayUnit('vitaminA', null), 'IU')
   assert.equal(getIngredientNutritionResolvedDisplayUnit('vitaminA', 'IU（视黄醇）'), 'IU（视黄醇）')
   assert.equal(
     getIngredientNutritionResolvedDisplayUnit('vitaminE', 'μg'),

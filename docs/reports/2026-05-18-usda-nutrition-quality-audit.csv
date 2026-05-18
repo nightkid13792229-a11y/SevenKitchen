@@ -1,0 +1,115 @@
+原料ID,原料名称,审核结论,加工状态覆盖,问题代码,问题摘要,主档案 FDC ID,主档案 USDA 词条,主档案状态,次级 USDA 档案数,待审 USDA 候选数,营养数值差异数,营养数值差异示例,下一步动作
+7f3985db-ea12-49a1-8ff7-8d196e018b28,鹌鹑蛋,需要人工决策,只有生档案，建议补熟档案,MISSING_COOKED_PROFILE,缺少熟制档案,172191,"Egg, quail, whole, fresh, raw",生 / 整体 / 未加工,0,1,0,,确认是否需要补熟制次级档案
+7c2ca065-0f8e-4c80-88e7-949469cacdcb,豆腐,需要人工决策,只有生档案，建议补熟档案,MISSING_COOKED_PROFILE,缺少熟制档案,172475,"Tofu, raw, firm, prepared with calcium sulfate",生 / 标准可食部 / 未加工,0,2,0,,确认是否需要补熟制次级档案
+b79627c1-5242-41e4-8995-a3968a9873e7,鹅肝,需要人工决策,只有生档案，建议补熟档案,MISSING_COOKED_PROFILE,缺少熟制档案,172415,"Goose, liver, raw",生 / 标准可食部 / 未加工,0,2,0,,确认是否需要补熟制次级档案
+d72da578-0faa-4ed3-9e64-1665365904d0,黑木耳,需要人工决策,加工状态需判断,STATE_COVERAGE_NEEDS_DECISION,是否需要补加工状态档案待判断,169237,"Jew's ear, (pepeao), raw",生 / 标准可食部 / 未加工,0,0,0,,需要人工判断语义匹配或加工状态覆盖
+c047e345-1958-4eaf-865a-565360b0b097,金针菇,需要人工决策,加工状态需判断,STATE_COVERAGE_NEEDS_DECISION,是否需要补加工状态档案待判断,169382,"Mushrooms, enoki, raw",生 / 标准可食部 / 未加工,0,1,0,,需要人工判断语义匹配或加工状态覆盖
+122bd9c9-5fc3-408f-b807-a2cbe6b6011d,青口贝,需要人工决策,暂无 USDA 档案,NO_PRIMARY_USDA_PROFILE; NO_USDA_CANDIDATE,没有 USDA 主档案；没有待审 USDA 候选,,,,0,0,0,,查找 USDA 候选或决定转 CFCT/手工来源
+a096a894-c964-474e-99d0-65bfcc20e8ff,沙丁鱼,需要人工决策,暂无 USDA 档案,NO_PRIMARY_USDA_PROFILE; NO_USDA_CANDIDATE,没有 USDA 主档案；没有待审 USDA 候选,,,,0,0,0,,查找 USDA 候选或决定转 CFCT/手工来源
+d791410c-f603-436a-aea5-ea47dba3c2e2,舞茸,需要人工决策,加工状态需判断,STATE_COVERAGE_NEEDS_DECISION,是否需要补加工状态档案待判断,169403,"Mushrooms, maitake, raw",生 / 标准可食部 / 未加工,0,1,0,,需要人工判断语义匹配或加工状态覆盖
+ed8de0c2-0720-4e86-b5ba-b4b3be75a187,鸭蛋,需要人工决策,只有生档案，建议补熟档案,MISSING_COOKED_PROFILE,缺少熟制档案,172189,"Egg, duck, whole, fresh, raw",生 / 整体 / 未加工,0,1,0,,确认是否需要补熟制次级档案
+1bf47dc9-30f6-456b-8cb6-962636f74e14,鸭肝,需要人工决策,只有生档案，建议补熟档案,MISSING_COOKED_PROFILE,缺少熟制档案,174467,"Duck, domesticated, liver, raw",生 / 标准可食部 / 未加工,0,1,0,,确认是否需要补熟制次级档案
+d04a0466-bcff-4b76-bdf3-e0d95718f779,鸭心,需要人工决策,暂无 USDA 档案,NO_PRIMARY_USDA_PROFILE; NO_USDA_CANDIDATE,没有 USDA 主档案；没有待审 USDA 候选,,,,0,0,0,,查找 USDA 候选或决定转 CFCT/手工来源
+31ecac81-6ae6-4df3-af9b-1609fe58b6de,鸭胸,需要人工决策,只有生档案，建议补熟档案,MISSING_COOKED_PROFILE,缺少熟制档案,172410,"Duck, domesticated, meat only, raw",生 / 标准可食部 / 未加工,0,1,0,,确认是否需要补熟制次级档案
+ffef50ee-c786-4985-9ce1-a447d30415ec,鸭胗,需要人工决策,暂无 USDA 档案,NO_PRIMARY_USDA_PROFILE; NO_USDA_CANDIDATE,没有 USDA 主档案；没有待审 USDA 候选,,,,0,0,0,,查找 USDA 候选或决定转 CFCT/手工来源
+29c41b2f-f5f4-4930-9edc-4c70e8d8ebd2,羊肚菌（鲜）,需要人工决策,只有生档案，建议补熟档案,MISSING_COOKED_PROFILE,缺少熟制档案,168423,"Mushrooms, morel, raw",生 / 标准可食部 / 未加工,0,0,0,,确认是否需要补熟制次级档案
+95c363e3-8ec9-4507-97f3-7536eec36bd3,薏仁米,需要人工决策,暂无 USDA 档案,NO_PRIMARY_USDA_PROFILE; NO_USDA_CANDIDATE,没有 USDA 主档案；没有待审 USDA 候选,,,,0,0,0,,查找 USDA 候选或决定转 CFCT/手工来源
+150f1238-375a-40a4-a41a-46836a400759,巴旦木,通过,不适用生熟两档,,,170567,"Nuts, almonds",干 / 标准可食部 / 未加工,0,2,0,,可保留；无需逐条人工审核
+11b57ce1-1e24-432a-87a4-230bad0a453c,巴西坚果,通过,不适用生熟两档,,,170569,"Nuts, brazilnuts, dried, unblanched",干 / 标准可食部 / 未加工,0,1,0,,可保留；无需逐条人工审核
+65116a1d-b26d-4c4d-96b7-d01d0b72321f,白萝卜,通过,生熟两档齐全,,,168451,"Radishes, oriental, raw",生 / 标准可食部 / 未加工,1,1,0,,可保留；无需逐条人工审核
+2fe3160a-d025-4432-a43e-56f6198fe425,白蘑菇,通过,生熟两档齐全,,,169251,"Mushrooms, white, raw",生 / 标准可食部 / 未加工,1,0,0,,可保留；无需逐条人工审核
+0d74f165-d928-4b11-9ed0-d8ed36580e52,白芝麻,通过,不适用生熟两档,,,169412,"Seeds, sesame seed kernels, dried (decorticated)",干 / 标准可食部 / 未加工,0,2,0,,可保留；无需逐条人工审核
+8e16edd0-9463-4dfc-b28f-36cd6feca1e6,比目鱼,通过,生熟两档齐全,,,174196,"Fish, flatfish (flounder and sole species), raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+232f7522-78e2-4a4a-83e5-55feebddb618,菠菜,通过,生熟两档齐全,,,168462,"Spinach, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+74ab3c12-e25f-464e-a12b-b24e3e9ef2b8,菠萝,通过,不适用生熟两档,,,168193,"Pineapple, raw, traditional varieties",生 / 标准可食部 / 未加工,0,2,0,,可保留；无需逐条人工审核
+7dff8839-3134-48e4-b46f-f34792b7e13e,糙米,通过,生熟两档齐全,,,169703,"Rice, brown, long-grain, raw (Includes foods for USDA's Food Distribution Program)",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+403bc179-a556-450d-8138-482d5bfae1c6,大豆,通过,不适用生熟两档,,,174270,"Soybeans, mature seeds, raw",生 / 标准可食部 / 未加工,0,2,0,,可保留；无需逐条人工审核
+51077e61-6382-44cc-a949-1cab2b21f6ae,大米,通过,生熟两档齐全,,,169756,"Rice, white, long-grain, regular, raw, unenriched",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+3d23cb09-98a5-405a-831c-e6c555a0b6d5,丁香粉,通过,不适用生熟两档,,,171321,"Spices, cloves, ground",粉 / 标准可食部 / 粉碎,0,1,0,,可保留；无需逐条人工审核
+dd4d71d0-e080-4565-9667-79ba62457801,冬瓜,通过,生熟两档齐全,,,170069,"Waxgourd, (chinese preserving melon), raw",生 / 标准可食部 / 未加工,1,1,0,,可保留；无需逐条人工审核
+b3d7b819-0740-4f1e-9dd5-2686af3c0f42,鹅胸肉,通过,生熟两档齐全,,,172413,"Goose, domesticated, meat only, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+11109405-71c3-4aec-81f9-7fa57941c77f,橄榄油,通过,不适用生熟两档,,,171413,"Oil, olive, salad or cooking",油脂 / 标准可食部 / 未加工,0,2,0,,可保留；无需逐条人工审核
+b9ff898d-2ecc-41d1-8b46-df6986548386,核桃,通过,不适用生熟两档,,,170187,"Nuts, walnuts, english",干 / 标准可食部 / 未加工,0,2,0,,可保留；无需逐条人工审核
+f00e71ae-d647-409c-b012-d6cd992bf868,红薯,通过,生熟两档齐全,,,168482,"Sweet potato, raw, unprepared (Includes foods for USDA's Food Distribution Program)",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+55c55405-9c9a-41ec-8bd6-6a67eed92528,红甜椒,通过,生熟两档齐全,,,170108,"Peppers, sweet, red, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+91a7901b-4875-42a6-a4c2-e1180084a253,红小豆,通过,不适用生熟两档,,,173727,"Beans, adzuki, mature seeds, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+3342def2-9f87-4457-87b0-1095631d98e1,胡萝卜,通过,生熟两档齐全,,,170393,"Carrots, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+1c25509f-7a38-4885-afe2-f9e925e32819,花椰菜,通过,生熟两档齐全,,,169986,"Cauliflower, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+a8d6cb88-03d7-4bb2-a2d4-8a4ecf9960dc,黄瓜,通过,不适用生熟两档,,,168409,"Cucumber, with peel, raw",生 / 带皮 / 未加工,1,0,0,,可保留；无需逐条人工审核
+777d61fa-55cb-49e0-83f6-852e3c63e8f5,火鸡胸,通过,生熟两档齐全,,,171098,"Turkey, whole, breast, meat only, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+edb7d4b7-9fc3-4daa-ac3e-509d325a94a6,火麻籽,通过,不适用生熟两档,,,170148,"Seeds, hemp seed, hulled",干 / 标准可食部 / 未加工,0,1,0,,可保留；无需逐条人工审核
+59f0ca5c-5e6e-448b-baf0-8d7e82e92750,鸡蛋,通过,生熟两档齐全,,,171287,"Egg, whole, raw, fresh",生 / 整体 / 未加工,1,4,0,,可保留；无需逐条人工审核
+d4c3da92-2631-411c-8dde-fd6aff0f1955,鸡肝,通过,生熟两档齐全,,,171060,"Chicken, liver, all classes, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+4614cac9-7037-4a26-9bd6-b3d1157a11a7,鸡腿肉,通过,生熟两档齐全,,,173627,"Chicken, broilers or fryers, dark meat, thigh, meat only, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+f52e2b3a-619f-436b-a673-dd3f59511aeb,鸡心,通过,生熟两档齐全,,,171458,"Chicken, heart, all classes, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+4cdd7736-cc6b-47a0-93f2-bb97bb42a49f,鸡胸,通过,生熟两档齐全,,,171077,"Chicken, broiler or fryers, breast, skinless, boneless, meat only, raw",生 / 去皮 / 未加工,1,2,0,,可保留；无需逐条人工审核
+87843f88-c311-44a1-b9a9-726430b484e6,鸡胸【有机】,通过,生熟两档齐全,,,171077,"Chicken, broiler or fryers, breast, skinless, boneless, meat only, raw",生 / 去皮 / 未加工,1,2,0,,可保留；无需逐条人工审核
+657419c4-2dd3-4c73-ad59-5e939eecbb32,鸡胗,通过,生熟两档齐全,,,171456,"Chicken, gizzard, all classes, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+0e162e27-1eed-4d52-b776-52303902acd0,茄子,通过,生熟两档齐全,,,169228,"Eggplant, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+92e0314a-5a6d-44c5-a2f3-ed6ddfa6311d,姜粉,通过,不适用生熟两档,,,170926,"Spices, ginger, ground",粉 / 标准可食部 / 粉碎,0,1,0,,可保留；无需逐条人工审核
+a17130e6-fe75-4efc-88b6-4bfc325073a4,姜黄粉,通过,不适用生熟两档,,,172231,"Spices, turmeric, ground",粉 / 标准可食部 / 粉碎,0,1,0,,可保留；无需逐条人工审核
+6469b51f-0a73-4982-afea-1777170cdf6a,卷心菜,通过,生熟两档齐全,,,169335,"Cabbage, common (danish, domestic, and pointed types), freshly harvest, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+362af701-3985-4b4e-a692-9c0ec46262e5,咖喱粉,通过,不适用生熟两档,,,170924,"Spices, curry powder",粉 / 标准可食部 / 粉碎,0,1,0,,可保留；无需逐条人工审核
+640fa120-3110-4cfb-8e1a-f4b1e848d608,葵花籽油,通过,不适用生熟两档,,,171017,"Oil, sunflower, linoleic (less than 60%)",油脂 / 标准可食部 / 未加工,0,2,0,,可保留；无需逐条人工审核
+aad5895e-e7cd-4aab-aa1a-6d237c3e1131,蓝莓,通过,不适用生熟两档,,,171711,"Blueberries, raw",生 / 标准可食部 / 未加工,0,2,0,,可保留；无需逐条人工审核
+79cd6603-3d7a-439e-b0fa-8ee89f6c03c8,梨（鲜）,通过,不适用生熟两档,,,169118,"Pears, raw",生 / 标准可食部 / 未加工,0,2,0,,可保留；无需逐条人工审核
+1f095b44-dd15-4f2b-846a-c62c7668b786,藜麦,通过,生熟两档齐全,,,168874,"Quinoa, uncooked",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+c42b2e6b-f558-4038-b5eb-3605628290f2,芦笋,通过,生熟两档齐全,,,168389,"Asparagus, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+a88da3aa-0f5d-487f-aa46-8b0338fea689,鹿腿肉,通过,生熟两档齐全,,,173855,"Game meat, deer, raw",生 / 标准可食部 / 未加工,1,1,0,,可保留；无需逐条人工审核
+1c70d7d0-c674-41c6-95c2-ddd51319610e,绿豆,通过,不适用生熟两档,,,174256,"Mung beans, mature seeds, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+2b2d66a5-f276-443a-b898-7d5ec6a4efb2,绿豆芽,通过,不适用生熟两档,,,169957,"Mung beans, mature seeds, sprouted, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+d96db83b-aee2-438c-935c-d0f31f6a70db,罗非鱼,通过,生熟两档齐全,,,175176,"Fish, tilapia, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+0f4d72fe-f403-44af-83a6-7f12033eba35,马肉,通过,生熟两档齐全,,,175086,"Game meat, horse, raw",生 / 标准可食部 / 未加工,1,0,0,,可保留；无需逐条人工审核
+acfa60ff-e014-4289-92eb-7d38a6216ecc,木瓜,通过,不适用生熟两档,,,169926,"Papayas, raw",生 / 标准可食部 / 未加工,0,2,0,,可保留；无需逐条人工审核
+b337ed6b-629a-4c4c-b818-45fff49b46b4,南瓜,通过,生熟两档齐全,,,168448,"Pumpkin, raw",生 / 标准可食部 / 未加工,1,1,0,,可保留；无需逐条人工审核
+952cc178-8ce5-4bd6-b11b-b25a6b3ce604,牛肝,通过,生熟两档齐全,,,169451,"Beef, variety meats and by-products, liver, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+c0ca032c-7a96-49ba-bd6d-4bd7a15f95ee,牛里脊,通过,生熟两档齐全,,,171767,"Beef, loin, tenderloin steak, boneless, separable lean only, trimmed to 0"" fat, all grades, raw",生 / 标准可食部 / 未加工,1,0,0,,可保留；无需逐条人工审核
+e210a4ed-224d-4806-9f07-90ff34d0b271,牛霖,通过,生熟两档齐全,,,168646,"Beef, round, tip round, roast, separable lean and fat, trimmed to 0"" fat, choice, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+4c6faf75-9d21-4ed7-a90c-92b9d0893e81,牛脾,通过,生熟两档齐全,,,169454,"Beef, variety meats and by-products, spleen, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+8aadc685-7294-4395-98d2-a94d78dc7146,牛心,通过,生熟两档齐全,,,168625,"Beef, variety meats and by-products, heart, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+9214e1fe-dbb5-4f13-b461-4b2bcf115469,苹果,通过,不适用生熟两档,,,171688,"Apples, raw, with skin (Includes foods for USDA's Food Distribution Program)",生 / 带皮 / 未加工,0,3,0,,可保留；无需逐条人工审核
+4c727aaf-f83d-4524-84d2-7a31243866cf,奇亚籽,通过,不适用生熟两档,,,170554,"Seeds, chia seeds, dried",干 / 标准可食部 / 未加工,0,1,0,,可保留；无需逐条人工审核
+e10e4a17-1e37-4a8b-b7d2-0e565525f047,芹菜,通过,生熟两档齐全,,,169988,"Celery, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+f07026e6-0d3f-47c2-954a-917b0ac754f3,青花鱼,通过,生熟两档齐全,,,173672,"Fish, mackerel, Pacific and jack, mixed species, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+ef0b3c7a-5fdd-484b-8757-a8e562c53ed6,秋葵,通过,生熟两档齐全,,,169260,"Okra, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+5ac7843c-7671-485c-9738-30bfd9388e0b,肉桂粉,通过,不适用生熟两档,,,171320,"Spices, cinnamon, ground",粉 / 标准可食部 / 粉碎,0,1,0,,可保留；无需逐条人工审核
+7c48d4a1-7873-415f-9ce7-86a0f668dbd9,三文鱼,通过,生熟两档齐全,,,175167,"Fish, salmon, Atlantic, farmed, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+ee065214-a64a-40d9-8e20-d5bb1a212b05,山药,通过,生熟两档齐全,,,170071,"Yam, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+4433dd9b-ef94-4c7e-9a27-f91503bed31b,上海青,通过,生熟两档齐全,,,170390,"Cabbage, chinese (pak-choi), raw",生 / 标准可食部 / 未加工,1,0,0,,可保留；无需逐条人工审核
+21b3de6f-a95a-4131-a126-b442edc211d4,生菜,通过,不适用生熟两档,,,169249,"Lettuce, green leaf, raw",生 / 标准可食部 / 未加工,0,2,0,,可保留；无需逐条人工审核
+65829ba2-a3f1-4422-a903-0e630783cdd0,生蚝,通过,生熟两档齐全,,,175172,"Mollusks, oyster, eastern, farmed, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+ffce8ced-7875-4365-b2aa-7ba9aa84fc91,生葵花籽仁,通过,不适用生熟两档,,,170562,"Seeds, sunflower seed kernels, dried",干 / 标准可食部 / 未加工,0,2,0,,可保留；无需逐条人工审核
+50d65c4c-9a50-46d1-bb05-3e03e40ef6e0,生南瓜籽仁,通过,不适用生熟两档,,,170556,"Seeds, pumpkin and squash seed kernels, dried",干 / 标准可食部 / 未加工,0,2,0,,可保留；无需逐条人工审核
+99f266ff-eeee-4439-9386-ee076f509ed9,食用盐,通过,不适用生熟两档,,,173468,"Salt, table",干 / 标准可食部 / 未加工,0,2,0,,可保留；无需逐条人工审核
+6f2e375f-d0ee-472c-bbea-0705ea5577fc,树莓,通过,不适用生熟两档,,,167755,"Raspberries, raw",生 / 标准可食部 / 未加工,0,2,0,,可保留；无需逐条人工审核
+27f57c5f-894f-4736-99a8-3db905cf7de6,四季豆,通过,生熟两档齐全,,,169961,"Beans, snap, green, raw",生 / 标准可食部 / 未加工,1,0,0,,可保留；无需逐条人工审核
+ef9dc214-9f3d-4584-9ff3-25dbc3ea32ee,土豆,通过,生熟两档齐全,,,170026,"Potatoes, flesh and skin, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+2936be0f-6900-419d-b3a8-8c8b4fdafce4,兔里脊,通过,生熟两档齐全,,,172521,"Game meat, rabbit, domesticated, composite of cuts, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+2e605462-4045-4fdf-8773-8ec6209618d4,娃娃菜,通过,生熟两档齐全,,,169979,"Cabbage, chinese (pe-tsai), raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+985f75c4-81df-4b1b-a93f-486939ebe430,豌豆,通过,生熟两档齐全,,,170419,"Peas, green, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+a45c73c2-2479-4679-a0be-567a278b3ad3,西红柿,通过,生熟两档齐全,,,170457,"Tomatoes, red, ripe, raw, year round average",生 / 标准可食部 / 未加工,1,1,0,,可保留；无需逐条人工审核
+7a7b205f-4c0c-4480-a649-053bdc43ea91,西葫芦,通过,生熟两档齐全,,,168565,"Squash, zucchini, baby, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+60f75789-74f6-486b-9f41-c2b27f5f8a19,西兰花,通过,生熟两档齐全,,,170379,"Broccoli, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+da6ee1c6-7b10-4036-9a17-ff0e507f8689,西芹,通过,生熟两档齐全,,,169988,"Celery, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+9b95dff7-c838-4bbf-9fe9-fbd5b7b595ec,狭鳕鱼柳,通过,生熟两档齐全,,,173725,"Fish, pollock, Alaska, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+8c7f83f2-c197-4e54-b523-e94d82f4391b,鲜香菇,通过,生熟两档齐全,,,169242,"Mushrooms, shiitake, raw",生 / 标准可食部 / 未加工,1,1,0,,可保留；无需逐条人工审核
+7b905c5d-3b9b-452e-8c7d-4ff3dc77ede9,香菜,通过,不适用生熟两档,,,169997,"Coriander (cilantro) leaves, raw",生 / 标准可食部 / 未加工,0,1,0,,可保留；无需逐条人工审核
+4543eab0-f638-49f8-b4db-fdd08e78ae46,香蕉,通过,不适用生熟两档,,,173944,"Bananas, raw",生 / 标准可食部 / 未加工,0,2,0,,可保留；无需逐条人工审核
+3b899943-9565-4de5-a868-c582fcbd8e8f,小白菜,通过,生熟两档齐全,,,170390,"Cabbage, chinese (pak-choi), raw",生 / 标准可食部 / 未加工,1,0,0,,可保留；无需逐条人工审核
+96cc4fd8-4fc5-4070-8d34-b23a376b7bc8,小麦胚芽油,通过,不适用生熟两档,,,171014,"Oil, wheat germ",油脂 / 标准可食部 / 未加工,0,1,0,,可保留；无需逐条人工审核
+50d618e6-8163-4c84-ace0-f867e24846c3,小米,通过,生熟两档齐全,,,169702,"Millet, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+6d06ece2-37da-4c98-8738-9ec56f639fe1,鳕鱼颈背肉,通过,生熟两档齐全,,,171955,"Fish, cod, Atlantic, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+d478b1d9-a698-419e-a397-819756083a02,亚麻籽,通过,不适用生熟两档,,,169414,"Seeds, flaxseed",干 / 标准可食部 / 未加工,0,1,0,,可保留；无需逐条人工审核
+abf559c9-c7ce-40c7-8f67-736cc1816cf4,亚麻籽油,通过,不适用生熟两档,,,167702,"Oil, flaxseed, cold pressed",油脂 / 标准可食部 / 未加工,0,2,0,,可保留；无需逐条人工审核
+ee32dc1f-17cf-4d26-ad04-626d3077836b,燕麦,通过,不适用生熟两档,,,173904,"Cereals, oats, regular and quick, not fortified, dry",干 / 标准可食部 / 未加工,1,1,0,,可保留；无需逐条人工审核
+280b5e89-4435-4a90-bb43-1639db85e5d5,羊里脊,通过,生熟两档齐全,,,172491,"Lamb, loin, separable lean only, trimmed to 1/4"" fat, choice, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+8777c105-427e-4723-9445-41b1ef1ab625,羽衣甘蓝,通过,生熟两档齐全,,,168421,"Kale, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+badc249e-76a0-4e2d-89ea-11f9065a540e,玉米粒,通过,生熟两档齐全,,,169998,"Corn, sweet, yellow, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+78e94a25-4761-4079-884b-c7e1130eea39,玉米油,通过,不适用生熟两档,,,171029,"Oil, corn, industrial and retail, all purpose salad or cooking",油脂 / 标准可食部 / 未加工,0,0,0,,可保留；无需逐条人工审核
+ee6b0e4c-d5c6-4f54-bbfa-42f1c16b8d01,芋头,通过,生熟两档齐全,,,169308,"Taro, raw",生 / 标准可食部 / 未加工,1,0,0,,可保留；无需逐条人工审核
+138971bf-c599-4453-97d4-ae230193e813,猪肝,通过,生熟两档齐全,,,167862,"Pork, fresh, variety meats and by-products, liver, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+727dcc77-41b8-422c-be63-3df2f6f512c6,猪里脊,通过,生熟两档齐全,,,168249,"Pork, fresh, loin, tenderloin, separable lean only, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+4db096fd-60c3-438c-ba3d-d962b6c7112f,猪肾,通过,生熟两档齐全,,,168270,"Pork, fresh, variety meats and by-products, kidneys, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+8cf8b78c-ed17-44b6-a702-95a0179e9567,猪心,通过,生熟两档齐全,,,168267,"Pork, fresh, variety meats and by-products, heart, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+f913e6f4-48c5-409d-8a81-603344244cb1,紫甘蓝,通过,生熟两档齐全,,,169977,"Cabbage, red, raw",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核
+2f3ef88e-1f29-419d-bee7-636346fc097a,紫薯,通过,生熟两档齐全,,,168482,"Sweet potato, raw, unprepared (Includes foods for USDA's Food Distribution Program)",生 / 标准可食部 / 未加工,1,2,0,,可保留；无需逐条人工审核

@@ -429,6 +429,10 @@ export class RecipesController {
             ingredientId: item.ingredientId,
             ingredientName: item.ingredient?.name || 'Unknown',
             name: item.ingredient?.name || 'Unknown',
+            nutritionFoodId: item.nutritionFoodId || undefined,
+            nutritionState: item.nutritionState || undefined,
+            nutritionStateLabel: item.nutritionStateLabel || undefined,
+            nutritionFood: item.nutritionFood || undefined,
             preparationMethod:
               resolvePreparationMethodText(
                 item.preparationMethod,

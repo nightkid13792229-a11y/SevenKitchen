@@ -38,8 +38,64 @@ describe('supplement targets v2 dosing', () => {
     });
 
     expect(result.amount).toBeCloseTo(4.4, 6);
-    expect(result.unit).toBe('份');
+    expect(result.unit).toBe('serving');
     expect(result.limitingTarget.fieldPath).toBe('minerals.iodine');
+  });
+
+  it('converts per-100g supplement profiles to per-gram concentration', () => {
+    const result = calculateSupplementDose({
+      nutritionProfile: {
+        meta: { rawBasisType: 'PER_100_G' },
+        macros: {},
+        minerals: {},
+        vitamins: { vitaminE: 2000 },
+        fattyAcids: {},
+        aminoAcids: {},
+        customItems: [],
+      } as any,
+      targets: [
+        {
+          fieldPath: 'vitamins.vitaminE',
+          label: '维生素 E',
+          targetValuePerKg: 1000,
+          unit: 'IU',
+        },
+      ],
+      basisWeightG: 1000,
+      lossRate: 1,
+    });
+
+    expect(result.amount).toBeCloseTo(50, 6);
+    expect(result.unit).toBe('g');
+    expect(result.limitingTarget.concentration).toBe(20);
+  });
+
+  it('keeps per-1g supplement profiles as per-gram concentration', () => {
+    const result = calculateSupplementDose({
+      nutritionProfile: {
+        meta: { rawBasisType: 'PER_1_G' },
+        macros: {},
+        minerals: {},
+        vitamins: { vitaminE: 200 },
+        fattyAcids: {},
+        aminoAcids: {},
+        customItems: [],
+      } as any,
+      targets: [
+        {
+          fieldPath: 'vitamins.vitaminE',
+          label: '维生素 E',
+          targetValuePerKg: 1000,
+          unit: 'IU',
+        },
+      ],
+      basisWeightG: 1000,
+      lossRate: 1,
+    });
+
+    expect(result.amount).toBeCloseTo(5, 6);
+    expect(result.unit).toBe('g');
+    expect(result.limitingTarget.concentration).toBe(200);
   });
 
   it('uses the maximum amount required across multiple targets', () => {

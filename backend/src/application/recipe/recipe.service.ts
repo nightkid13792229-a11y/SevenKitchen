@@ -37,6 +37,7 @@ export class RecipeService {
     items: {
       include: {
         ingredient: true,
+        nutritionFood: true,
         supplementAlternatives: {
           include: {
             alternativeIngredient: true,
@@ -78,6 +79,97 @@ export class RecipeService {
     return [...new Set(ingredientIds.map((id) => id?.trim()).filter(Boolean))];
   }
 
+  private resolveNutritionStateLabel(nutritionFood?: Record<string, any> | null) {
+    return (
+      nutritionFood?.preparationStateLabel ||
+      nutritionFood?.preparationState ||
+      undefined
+    );
+  }
+
+  private mapNutritionFoodRef(nutritionFood?: Record<string, any> | null) {
+    if (!nutritionFood) {
+      return undefined;
+    }
+
+    return {
+      id: nutritionFood.id,
+      name: nutritionFood.name,
+      nameEn: nutritionFood.nameEn ?? undefined,
+      preparationState: nutritionFood.preparationState ?? undefined,
+      preparationStateLabel: nutritionFood.preparationStateLabel ?? undefined,
+    };
+  }
+
+  private async resolveRecipeItemNutritionFoodIds<
+    T extends { ingredientId: string; nutritionFoodId?: string | null },
+  >(items?: T[]): Promise<T[] | undefined> {
+    if (!items || items.length === 0) {
+      return items;
+    }
+
+    const ingredientIds = [
+      ...new Set(items.map((item) => item.ingredientId).filter(Boolean)),
+    ] as string[];
+
+    if (ingredientIds.length === 0) {
+      return items;
+    }
+
+    const nutritionFoodMappingClient = (this.prisma as any).nutritionFoodMapping;
+    if (!nutritionFoodMappingClient?.findMany) {
+      return items;
+    }
+
+    const mappings = await nutritionFoodMappingClient.findMany({
+      where: {
+        ingredientId: { in: ingredientIds },
+      },
+      include: {
+        nutritionFood: true,
+      },
+      orderBy: [{ isPrimary: 'desc' }, { createdAt: 'asc' }],
+    });
+
+    const mappingsByIngredientId = new Map<string, any[]>();
+    for (const mapping of mappings) {
+      const current = mappingsByIngredientId.get(mapping.ingredientId) || [];
+      current.push(mapping);
+      mappingsByIngredientId.set(mapping.ingredientId, current);
+    }
+
+    return items.map((item) => {
+      if (!item.ingredientId) {
+        return item;
+      }
+
+      const ingredientMappings =
+        mappingsByIngredientId.get(item.ingredientId) || [];
+
+      if (item.nutritionFoodId) {
+        const isMapped = ingredientMappings.some(
+          (mapping) => mapping.nutritionFoodId === item.nutritionFoodId,
+        );
+
+        if (!isMapped) {
+          throw new BadRequestException(
+            `营养档案 ${item.nutritionFoodId} 未映射到原料 ${item.ingredientId}`,
+          );
+        }
+
+        return item;
+      }
+
+      const defaultMapping =
+        ingredientMappings.find((mapping) => mapping.isPrimary) ||
+        (ingredientMappings.length === 1 ? ingredientMappings[0] : undefined);
+
+      return defaultMapping
+        ? { ...item, nutritionFoodId: defaultMapping.nutritionFoodId }
+        : item;
+    });
+  }
+
   private buildRecipeItemCreateData(item: Record<string, any>, index: number) {
     const supplementAlternativeIngredientIds =
       this.normalizeSupplementAlternativeIngredientIds(
@@ -90,6 +182,7 @@ export class RecipeService {
 
     return {
       ingredientId: item.ingredientId,
+      nutritionFoodId: item.nutritionFoodId || undefined,
       preparationMethod: item.preparationMethod,
       exampleWeight: item.exampleWeight,
       ratioPercent: item.ratioPercent,
@@ -199,6 +292,7 @@ export class RecipeService {
   private haveRecipeItemsChanged(
     existingItems: Array<{
       ingredientId: string;
+      nutritionFoodId?: string | null;
       preparationMethod: string | null;
       ratioPercent: number | null;
       nutrientTargetKey: string | null;
@@ -208,10 +302,11 @@ export class RecipeService {
     }>,
     newItems: Array<{
       ingredientId: string;
-      preparationMethod: string | null;
-      ratioPercent: number | null;
-      nutrientTargetKey: string | null;
-      nutrientTargetValue: number | null;
+      nutritionFoodId?: string | null;
+      preparationMethod?: string | null;
+      ratioPercent?: number | null;
+      nutrientTargetKey?: string | null;
+      nutrientTargetValue?: number | null;
       supplementTargets?: unknown;
     }>,
   ): boolean {
@@ -235,6 +330,10 @@ export class RecipeService {
 
       // Check if ingredient changed
       if (existing.ingredientId !== newItem.ingredientId) {
+        return true;
+      }
+
+      if ((existing.nutritionFoodId ?? null) !== (newItem.nutritionFoodId ?? null)) {
         return true;
       }
 
@@ -379,6 +478,9 @@ export class RecipeService {
     const targetHealthTags = dto.targetHealthTags || [];
 
     await this.validateSupplementAlternativeItems(dto.items);
+    const resolvedItems = await this.resolveRecipeItemNutritionFoodIds(
+      dto.items,
+    );
 
     // Create recipe with items
     const recipe = await this.prisma.recipe.create({
@@ -403,9 +505,9 @@ export class RecipeService {
         targetHealthTags: [] as any, // Keep empty for now, will be migrated
         applicableLifeStages: dto.applicableLifeStages || [],
         productionSteps: dto.productionSteps,
-        items: dto.items
+        items: resolvedItems
           ? {
-              create: dto.items.map((item: any, index: number) =>
+              create: resolvedItems.map((item: any, index: number) =>
                 this.buildRecipeItemCreateData(item, index),
               ),
             }
@@ -466,10 +568,13 @@ export class RecipeService {
     const targetHealthTags = dto.targetHealthTags ?? undefined;
 
     await this.validateSupplementAlternativeItems(dto.items);
+    const resolvedItems = await this.resolveRecipeItemNutritionFoodIds(
+      dto.items,
+    );
 
     // Check if recipe items have changed (ingredient name, ratio, or usage amount)
-    const itemsChanged = dto.items
-      ? this.haveRecipeItemsChanged(existing.items, dto.items)
+    const itemsChanged = resolvedItems
+      ? this.haveRecipeItemsChanged(existing.items, resolvedItems)
       : false;
 
     // Only create new version if ingredients changed
@@ -479,7 +584,7 @@ export class RecipeService {
       : existing.version;
 
     // Always delete old items if new items are provided (to handle updates like reordering)
-    if (dto.items) {
+    if (resolvedItems) {
       await this.prisma.recipeItem.deleteMany({
         where: { recipeId: existing.recipeId, recipeVersion: existing.version },
       });
@@ -513,9 +618,9 @@ export class RecipeService {
         targetHealthTags: [] as any, // Keep empty for now
         applicableLifeStages: dto.applicableLifeStages ?? undefined,
         productionSteps: dto.productionSteps,
-        items: dto.items
+        items: resolvedItems
           ? {
-              create: dto.items.map((item: any, index: number) =>
+              create: resolvedItems.map((item: any, index: number) =>
                 this.buildRecipeItemCreateData(item, index),
               ),
             }
@@ -881,6 +986,12 @@ export class RecipeService {
           ingredientId: item.ingredientId,
           ingredientName: item.ingredient?.name,
           ingredientType: item.ingredient?.type,
+          nutritionFoodId: item.nutritionFoodId || undefined,
+          nutritionState: item.nutritionFood?.preparationState || undefined,
+          nutritionStateLabel: this.resolveNutritionStateLabel(
+            item.nutritionFood,
+          ),
+          nutritionFood: this.mapNutritionFoodRef(item.nutritionFood),
           ingredient: item.ingredient
             ? {
                 id: item.ingredient.id,

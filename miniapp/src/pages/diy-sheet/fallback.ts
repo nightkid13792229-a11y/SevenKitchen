@@ -12,6 +12,14 @@ interface RecipeItemLike {
   ingredientType?: string
   ratioPercent?: number
   ratio?: number
+  nutritionState?: string
+  nutritionStateLabel?: string
+  nutrition_state?: string
+  nutrition_state_label?: string
+  nutritionFood?: {
+    preparationState?: string
+    preparationStateLabel?: string
+  }
   preparationMethod?: string
   name?: string
   ingredient?: {
@@ -28,6 +36,18 @@ interface RecipeItemLike {
 
 function isFoodRecipeItem(item: RecipeItemLike): boolean {
   return item.ingredientType === 'FOOD' || item.ingredient?.type === 'FOOD'
+}
+
+function getNutritionStateLabel(item: RecipeItemLike): string | null {
+  return (
+    item.nutritionStateLabel ||
+    item.nutrition_state_label ||
+    item.nutritionFood?.preparationStateLabel ||
+    item.nutritionState ||
+    item.nutrition_state ||
+    item.nutritionFood?.preparationState ||
+    null
+  )
 }
 
 function toUniqueIds(ids: Array<string | undefined>): string[] {
@@ -50,6 +70,7 @@ export function buildFallbackFoodIngredientItems(
         ingredientName,
         name: ingredientName,
         type: 'FOOD',
+        nutritionStateLabel: getNutritionStateLabel(item),
         preparationMethod: item.preparationMethod || null,
         netAmount: netAmountKg,
         displayUnit: item.ingredient?.displayUnit || 'g',

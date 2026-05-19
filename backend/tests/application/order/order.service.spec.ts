@@ -764,7 +764,7 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       expect(result.snapshotId).toBeUndefined();
     });
 
-    it('uses an active procurement-enabled supplement alternative for order pricing and production snapshots', async () => {
+    it('keeps the default supplement ingredient for order pricing and production snapshots even when a procurement alternative exists', async () => {
       const dog = createMockDog();
       const mainSupplement = createSupplementIngredient('supplement-diy', {
         diyEnabled: true,
@@ -849,18 +849,16 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
 
       const pricingInput = mockPricingService.calculateOrderPrice.mock
         .calls[0][0] as any;
-      expect(pricingInput.recipe.items[0].ingredient).toBe(
-        procurementSupplement,
-      );
+      expect(pricingInput.recipe.items[0].ingredient).toBe(mainSupplement);
       expect(pricingInput.recipe.items[0].ingredientId).toBe(
-        procurementSupplement.id,
+        mainSupplement.id,
       );
 
       const savedOrder = orderRepository.save.mock.calls[0][0] as Order;
       const snapshotItem = savedOrder.items[0].recipeSnapshot.items[0];
-      expect(snapshotItem.ingredient_id).toBe(procurementSupplement.id);
-      expect(snapshotItem.name).toBe(procurementSupplement.name);
-      expect(snapshotItem.properties).toBe(procurementSupplement.properties);
+      expect(snapshotItem.ingredient_id).toBe(mainSupplement.id);
+      expect(snapshotItem.name).toBe(mainSupplement.name);
+      expect(snapshotItem.properties).toBe(mainSupplement.properties);
     });
 
     it('keeps the original supplement ingredient for DIY sheet pricing previews even when a procurement alternative exists', async () => {
@@ -1267,6 +1265,114 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
       expect(savedOrder.items[0].packageSpecG).toBe(200);
       expect(savedOrder.items[0].packagePlan).toEqual(packagePlan);
       expect(savedOrder.items[0].ingredientSourcePlan).toBe('WHOLESALE');
+    });
+
+    it('keeps the default supplement ingredient when creating an order from a pricing snapshot that references a procurement alternative', async () => {
+      const dog = createMockDog();
+      const mainSupplement = createSupplementIngredient('supplement-default', {
+        name: '碳酸钙粉',
+        diyEnabled: true,
+        procurementEnabled: true,
+      });
+      const procurementSupplement = createSupplementIngredient(
+        'supplement-procurement',
+        {
+          name: '柠檬酸钙粉',
+          diyEnabled: true,
+          procurementEnabled: true,
+        },
+      );
+      const recipe = {
+        ...createMockRecipe(),
+        items: [
+          {
+            id: 'supplement-item-1',
+            ingredientId: mainSupplement.id,
+            ratioPercent: 0,
+            nutrientTargetKey: '钙',
+            nutrientTargetValue: 2500,
+            supplementTargets: [
+              {
+                label: '钙',
+                fieldPath: 'minerals.calcium',
+                unit: 'mg',
+                targetValuePerKg: 2500,
+              },
+            ],
+            supplementAlternatives: [
+              {
+                ingredientId: procurementSupplement.id,
+                ingredientName: procurementSupplement.name,
+                isActive: true,
+              },
+            ],
+          },
+        ],
+      };
+      const snapshot = new OrderPricingSnapshot(
+        'snapshot-supplement-alternative',
+        'owner-id-1',
+        {
+          dogId: dog.id,
+          items: [
+            {
+              recipeId: recipe.id,
+              quantityG: 1000,
+              packageCount: 5,
+              packageSpecG: 200,
+            },
+          ],
+        },
+        {
+          amountProduct: 180,
+          amountShipping: 20,
+          amountTotal: 200,
+          pricingBreakdown: {
+            costIngredients: 100,
+            costPackaging: 10,
+            costLabor: 20,
+            costOverhead: 5,
+            totalProductCost: 135,
+            productPrice: 180,
+            ingredientDetails: [
+              {
+                recipeItemId: 'supplement-item-1',
+                ingredientId: procurementSupplement.id,
+                name: procurementSupplement.name,
+                type: 'SUPPLEMENT',
+              },
+            ],
+            packagingDetails: {
+              perPackConsumables: { vacuumBagSpec: null },
+            },
+          },
+        },
+        new Date(Date.now() + 15 * 60 * 1000),
+        false,
+        new Date(),
+      );
+
+      mockPricingSnapshotRepository.findById.mockResolvedValue(snapshot);
+      dogRepository.findById.mockResolvedValue(dog);
+      recipeRepository.findById.mockResolvedValue(recipe);
+      mockIngredientRepository.findByIds.mockResolvedValue([
+        mainSupplement,
+        procurementSupplement,
+      ]);
+      orderRepository.save.mockImplementation(async (order: Order) => order);
+
+      await service.createOrderDraft({
+        customerId: 'owner-id-1',
+        type: OrderType.FRESH_FOOD,
+        snapshotId: 'snapshot-supplement-alternative',
+        targetProductionDate: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+      });
+
+      const savedOrder = orderRepository.save.mock.calls[0][0] as Order;
+      const snapshotItem = savedOrder.items[0].recipeSnapshot.items[0];
+
+      expect(snapshotItem.ingredient_id).toBe(mainSupplement.id);
+      expect(snapshotItem.name).toBe(mainSupplement.name);
     });
 
     it('should preserve item-level preparation and cooking methods from preview snapshot into the created order item', async () => {

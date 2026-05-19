@@ -310,10 +310,16 @@ export class OrderService {
       const pricedIngredientId = params.pricedIngredientIdsByRecipeItemId?.get(
         item.id,
       );
-      const pricedIngredient = pricedIngredientId
+      const rawPricedIngredient = pricedIngredientId
         ? catalogIngredientMap.get(pricedIngredientId)
         : undefined;
       const primaryIngredient = catalogIngredientMap.get(item.ingredientId);
+      const pricedIngredient =
+        primaryIngredient?.type === IngredientType.SUPPLEMENT &&
+        !params.useSupplementProcurementAlternatives &&
+        rawPricedIngredient?.id !== primaryIngredient.id
+          ? undefined
+          : rawPricedIngredient;
       const selectedIngredient =
         pricedIngredient ||
         (params.useSupplementProcurementAlternatives
@@ -962,7 +968,7 @@ export class OrderService {
     const ingredientMap = await this.resolveOrderRecipeIngredientMap({
       recipeItems,
       ingredientSourcePlan,
-      useSupplementProcurementAlternatives: true,
+      useSupplementProcurementAlternatives: false,
       pricedIngredientIdsByRecipeItemId:
         this.getPricedIngredientIdsByRecipeItemId(pricingResult),
     });
@@ -1292,7 +1298,7 @@ export class OrderService {
       const ingredientMap = await this.resolveOrderRecipeIngredientMap({
         recipeItems,
         ingredientSourcePlan,
-        useSupplementProcurementAlternatives: true,
+        useSupplementProcurementAlternatives: false,
       });
 
       const prepMethodMap = await this.loadPreparationMethodNameMap(
@@ -1801,7 +1807,7 @@ export class OrderService {
     const ingredientMap = await this.resolveOrderRecipeIngredientMap({
       recipeItems,
       ingredientSourcePlan,
-      useSupplementProcurementAlternatives: !isDiySheetPreview,
+      useSupplementProcurementAlternatives: false,
     });
 
     const prepMethodMap = await this.loadPreparationMethodNameMap(

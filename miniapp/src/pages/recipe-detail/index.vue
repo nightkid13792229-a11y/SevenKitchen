@@ -245,7 +245,7 @@
       </button>
 
       <button class="btn-order" @tap="goToOrder">
-        成品
+        订购成品
       </button>
     </view>
   </view>

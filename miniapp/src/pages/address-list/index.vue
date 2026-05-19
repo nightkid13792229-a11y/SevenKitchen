@@ -274,7 +274,11 @@ function deleteAddress(addressId: string) {
   border: none;
   outline: none;
   margin: 0;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  box-sizing: border-box;
   overflow: visible;
 }
 
@@ -319,7 +323,11 @@ function deleteAddress(addressId: string) {
 .btn-add {
   width: 100%;
   height: 88rpx;
-  line-height: 88rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   background-color: #07c160;
   color: #fff;
   border-radius: 8rpx;

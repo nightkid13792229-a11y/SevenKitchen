@@ -1154,7 +1154,15 @@ export class AdminController {
       const where: any = {};
 
       if (params.status) {
-        where.status = params.status;
+        const statusList = Array.isArray(params.status)
+          ? params.status
+          : String(params.status)
+              .split(',')
+              .map((status) => status.trim())
+              .filter(Boolean);
+
+        where.status =
+          statusList.length > 1 ? { in: statusList } : statusList[0];
       }
 
       if (params.type) {
@@ -2891,7 +2899,20 @@ export class AdminController {
   async updateUser(
     @Param('id') id: string,
     @Body() dto: UpdateStaffDto,
-  ): Promise<ApiResponseDto<StaffResponseDto>> {
+  ): Promise<ApiResponseDto<StaffResponseDto | null>> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { role: true },
+    });
+
+    if (!user) {
+      return ApiResponseDto.error(404, '用户不存在');
+    }
+
+    if (user.role === 'ADMIN') {
+      return ApiResponseDto.error(400, '管理员账号受保护，不能编辑');
+    }
+
     const updatedUser = await this.prisma.user.update({
       where: { id },
       data: dto,
@@ -2915,6 +2936,19 @@ export class AdminController {
   @ApiOperation({ summary: '删除用户账号' })
   @ApiResponse({ status: 200, description: '删除成功' })
   async deleteUser(@Param('id') id: string): Promise<ApiResponseDto<void>> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { role: true },
+    });
+
+    if (!user) {
+      return ApiResponseDto.error(404, '用户不存在');
+    }
+
+    if (user.role === 'ADMIN') {
+      return ApiResponseDto.error(400, '管理员账号受保护，不能删除');
+    }
+
     await this.prisma.user.delete({
       where: { id },
     });
@@ -2994,7 +3028,20 @@ export class AdminController {
   async updateStaff(
     @Param('id') id: string,
     @Body() dto: UpdateStaffDto,
-  ): Promise<ApiResponseDto<StaffResponseDto>> {
+  ): Promise<ApiResponseDto<StaffResponseDto | null>> {
+    const staff = await this.prisma.user.findUnique({
+      where: { id },
+      select: { role: true },
+    });
+
+    if (!staff) {
+      return ApiResponseDto.error(404, '用户不存在');
+    }
+
+    if (staff.role === 'ADMIN') {
+      return ApiResponseDto.error(400, '管理员账号受保护，不能编辑');
+    }
+
     const updatedStaff = await this.prisma.user.update({
       where: { id },
       data: dto,
@@ -3018,6 +3065,19 @@ export class AdminController {
   @ApiOperation({ summary: '删除员工账号' })
   @ApiResponse({ status: 200, description: '删除成功' })
   async deleteStaff(@Param('id') id: string): Promise<ApiResponseDto<void>> {
+    const staff = await this.prisma.user.findUnique({
+      where: { id },
+      select: { role: true },
+    });
+
+    if (!staff) {
+      return ApiResponseDto.error(404, '用户不存在');
+    }
+
+    if (staff.role === 'ADMIN') {
+      return ApiResponseDto.error(400, '管理员账号受保护，不能删除');
+    }
+
     await this.prisma.user.delete({
       where: { id },
     });

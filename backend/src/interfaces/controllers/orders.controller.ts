@@ -26,6 +26,7 @@ import {
   ApiHeader,
 } from '@nestjs/swagger';
 import { OrderService } from '../../application/order/order.service';
+import { WechatPaymentService } from '../../application/payment/wechat-payment.service';
 import { RecipeService } from '../../application/recipe/recipe.service';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { Inject } from '@nestjs/common';
@@ -37,7 +38,10 @@ import type { DogRepository } from '../../domain/dog/dog.repository';
 import type { ProductionBatchRepository } from '../../domain/production/production.repository';
 import { Order, OrderItem } from '../../domain/order';
 import { OrderStatus } from '../../domain';
-import { InvalidStateTransitionError } from '../../domain/common/errors';
+import {
+  InvalidStateTransitionError,
+  ValidationError,
+} from '../../domain/common/errors';
 import { CreateOrderDto } from '../dto/orders/create-order.dto';
 import {
   OrderDto,
@@ -57,6 +61,7 @@ import { SharePhotosResponseDto } from '../dto/orders/share-photos.dto';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import type { RecipeSnapshot } from '../../domain/recipe/types';
 import { AuthGuard, CurrentUser } from '../auth';
+import { AdminGuard } from '../guards/role.guard';
 import type { RequestUser } from '../auth';
 import { resolveOrderProductionPhotos } from './order-production-photos';
 
@@ -65,6 +70,7 @@ import { resolveOrderProductionPhotos } from './order-production-photos';
 export class OrdersController {
   constructor(
     private readonly orderService: OrderService,
+    private readonly wechatPaymentService: WechatPaymentService,
     private readonly recipeService: RecipeService,
     private readonly prisma: PrismaService,
     @Inject(ORDER_REPOSITORY)
@@ -227,6 +233,38 @@ export class OrdersController {
         return ApiResponseDto.error(404, error.message);
       }
       if (error instanceof InvalidStateTransitionError) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  @Post(':id/wechat-pay')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Create WeChat JSAPI payment params' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiHeader({
+    name: 'X-Customer-Id',
+    description: 'Customer ID for authentication',
+    required: true,
+  })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  async createWechatPayment(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    try {
+      const payment = await this.wechatPaymentService.createJsapiPayment(
+        id,
+        user.customerId,
+      );
+      return ApiResponseDto.success(payment);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
         return ApiResponseDto.error(400, error.message);
       }
       throw error;
@@ -688,6 +726,60 @@ export class OrdersController {
     }
   }
 
+  @Post(':id/complete')
+  @UseGuards(AuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Customer confirms receipt and completes order' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order completed successfully',
+    type: OrderDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid order status' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - X-Customer-Id header required',
+  })
+  async completeOrderByCustomer(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<OrderDto> | ApiResponseDto<null>> {
+    try {
+      const order = await this.orderService.getOrderById(id);
+      if (!order) {
+        return ApiResponseDto.error(404, 'Order not found');
+      }
+
+      if (order.customerId !== user.customerId) {
+        return ApiResponseDto.error(404, 'Order not found');
+      }
+
+      const completedOrder = await this.orderService.completeOrder(
+        id,
+        'customer',
+        user.customerId,
+        { source: 'miniapp_confirm_receipt' },
+      );
+      const response = await this.mapOrderToDto(completedOrder);
+      return ApiResponseDto.success(response);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (
+        error instanceof BadRequestException ||
+        error instanceof InvalidStateTransitionError ||
+        error instanceof ValidationError
+      ) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
   @Post('pricing/preview')
   @UseGuards(AuthGuard)
   @HttpCode(HttpStatus.OK)
@@ -874,6 +966,17 @@ export class OrdersController {
     }
 
     const productionPhotos = await this.getOrderProductionPhotos(order);
+    const paymentWindow =
+      order.status === OrderStatus.PENDING_PAYMENT
+        ? await this.wechatPaymentService.getPaymentWindowForOrder(
+            order.createdAt,
+          )
+        : {
+            paymentDeadline: null,
+            paymentRemainingSeconds: null,
+            paymentTimeoutMinutes: null,
+            paymentAutoCloseEnabled: null,
+          };
 
     return {
       id: order.id,
@@ -922,6 +1025,16 @@ export class OrdersController {
       transactionId: order.transactionId ?? null,
       paidAt: order.paidAt ? order.paidAt.toISOString() : null,
       paymentStatus: order.paymentStatus ?? null,
+      paymentDeadline: paymentWindow.paymentDeadline,
+      paymentRemainingSeconds: paymentWindow.paymentRemainingSeconds,
+      paymentTimeoutMinutes: paymentWindow.paymentTimeoutMinutes,
+      paymentAutoCloseEnabled: paymentWindow.paymentAutoCloseEnabled,
+      aftersaleType: order.aftersaleType ?? null,
+      aftersaleReason: order.aftersaleReason ?? null,
+      aftersaleSince: order.aftersaleSince
+        ? order.aftersaleSince.toISOString()
+        : null,
+      aftersalePhotos: order.aftersalePhotos ?? [],
       createdAt: order.createdAt.toISOString(),
     };
   }
@@ -1058,6 +1171,18 @@ export class OrdersController {
       // For now, we'll return undefined
     }
 
+    const paymentWindow =
+      order.status === OrderStatus.PENDING_PAYMENT
+        ? await this.wechatPaymentService.getPaymentWindowForOrder(
+            order.createdAt,
+          )
+        : {
+            paymentDeadline: null,
+            paymentRemainingSeconds: null,
+            paymentTimeoutMinutes: null,
+            paymentAutoCloseEnabled: null,
+          };
+
     return {
       id: order.id,
       status: order.status,
@@ -1065,6 +1190,10 @@ export class OrdersController {
       totalAmount: order.totalAmount ?? order.amountTotal,
       itemCount: order.items.length,
       createdAt: order.createdAt.toISOString(),
+      paymentDeadline: paymentWindow.paymentDeadline,
+      paymentRemainingSeconds: paymentWindow.paymentRemainingSeconds,
+      paymentTimeoutMinutes: paymentWindow.paymentTimeoutMinutes,
+      paymentAutoCloseEnabled: paymentWindow.paymentAutoCloseEnabled,
       firstItem,
       address,
     };
@@ -1112,14 +1241,28 @@ export class OrdersController {
     @Body() dto: CreateAftersaleDto,
     @CurrentUser() user: RequestUser,
   ) {
-    const order = await this.orderService.applyForAftersale(
-      orderId,
-      user.userId,
-      dto.type as any,
-      dto.reason,
-      dto.photos || [],
-    );
-    return this.mapOrderToDto(order);
+    try {
+      const order = await this.orderService.applyForAftersale(
+        orderId,
+        user.userId,
+        dto.type as any,
+        dto.reason,
+        dto.photos || [],
+      );
+      return ApiResponseDto.success(await this.mapOrderToDto(order));
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (
+        error instanceof BadRequestException ||
+        error instanceof InvalidStateTransitionError ||
+        error instanceof ValidationError
+      ) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -1127,7 +1270,7 @@ export class OrdersController {
    * Phase 9.1: Admin/Staff endpoint to resolve aftersale request
    */
   @Post(':id/aftersale/resolve')
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, AdminGuard)
   @ApiOperation({ summary: 'Resolve aftersale (解决售后)' })
   @ApiSecurity('X-Customer-Id')
   @ApiParam({ name: 'id', description: 'Order ID' })
@@ -1142,13 +1285,27 @@ export class OrdersController {
     @Body() dto: ResolveAftersaleDto,
     @CurrentUser() user: RequestUser,
   ) {
-    const order = await this.orderService.resolveAftersale(
-      orderId,
-      dto.resolutionType,
-      user.userId,
-      dto.adminNote,
-    );
-    return this.mapOrderToDto(order);
+    try {
+      const order = await this.orderService.resolveAftersale(
+        orderId,
+        dto.resolutionType,
+        user.userId,
+        dto.adminNote,
+      );
+      return ApiResponseDto.success(await this.mapOrderToDto(order));
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (
+        error instanceof BadRequestException ||
+        error instanceof InvalidStateTransitionError ||
+        error instanceof ValidationError
+      ) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -1156,7 +1313,7 @@ export class OrdersController {
    * Phase 9.1: Admin/Staff endpoint to get list of orders in AFTERSALE status
    */
   @Get('aftersale/pending')
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, AdminGuard)
   @ApiOperation({ summary: 'Get pending aftersale orders' })
   @ApiSecurity('X-Customer-Id')
   @ApiResponse({
@@ -1166,7 +1323,8 @@ export class OrdersController {
   })
   async getPendingAftersales(@CurrentUser() user: RequestUser) {
     const orders = await this.orderService.getPendingAftersales();
-    return Promise.all(orders.map((order) => this.mapOrderToDto(order)));
+    const data = await Promise.all(orders.map((order) => this.mapOrderToDto(order)));
+    return ApiResponseDto.success(data);
   }
 
   /**

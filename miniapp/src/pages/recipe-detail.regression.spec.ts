@@ -85,15 +85,24 @@ describe('recipe detail nutrition report regressions', () => {
     expect(snapshotModalSource).not.toContain('每kg添加')
   })
 
-  it('uses concise bottom action button labels', () => {
+  it('uses customer-facing bottom action button labels', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
       'utf-8',
     )
 
-    expect(source).toContain('自己做')
-    expect(source).toContain('成品')
+    expect(source).toContain('自己制作')
+    expect(source).toContain('现做成品')
+    expect(source).toContain('/static/icons/cart-orange.png')
+    expect(source).toContain('handleCartTap')
+    expect(source).toContain('isInCart')
+    expect(source).toContain('查看购物车')
+    expect(source).toContain('移出购物车')
+    expect(source).toContain('removeCartItem')
+    expect(source).not.toContain('cart-glyph')
+    expect(source).not.toContain('自己做')
     expect(source).not.toContain('我要自己做')
+    expect(source).not.toContain('>成品<')
     expect(source).not.toContain('订购成品')
   })
 })

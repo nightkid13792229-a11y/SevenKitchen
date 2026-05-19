@@ -69,7 +69,7 @@
         @tap="createOrder"
         :disabled="orderCreated || isDemo || addressLoading"
       >
-        {{ addressLoading ? '地址加载中...' : orderCreated ? '订单已创建' : isDemo ? 'Demo Mode: Order Creation Disabled' : '创建订单 -> 确认 -> 支付（测试）' }}
+        {{ addressLoading ? '地址加载中...' : orderCreated ? '订单已创建' : isDemo ? 'Demo Mode: Order Creation Disabled' : '提交订单并支付' }}
       </button>
       
       <!-- Demo Mode Modal -->
@@ -104,6 +104,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { request, normalizeToUuid } from '../../utils/api'
+import { createWechatPayment, type WechatPaymentResult } from '../../api/orders'
 
 const recipeId = ref('')
 const dogId = ref('')
@@ -352,6 +353,24 @@ function loadPricingPreview(requestSeq = previewRequestSeq) {
   })
 }
 
+function requestWechatPayment(payment: WechatPaymentResult): Promise<void> {
+  if (!payment.payParams) {
+    return Promise.resolve()
+  }
+
+  return new Promise((resolve, reject) => {
+    uni.requestPayment({
+      timeStamp: payment.payParams.timeStamp,
+      nonceStr: payment.payParams.nonceStr,
+      package: payment.payParams.package,
+      signType: payment.payParams.signType,
+      paySign: payment.payParams.paySign,
+      success: () => resolve(),
+      fail: (err: any) => reject(err),
+    } as any)
+  })
+}
+
 function createOrder() {
   // Block order creation in demo mode
   if (isDemo.value) {
@@ -426,7 +445,7 @@ function createOrder() {
     }
   }
 
-  uni.showLoading({ title: '创建订单中...' })
+  uni.showLoading({ title: '提交订单中...' })
 
   const payload = {
     type: 'FRESH_FOOD',
@@ -456,37 +475,53 @@ function createOrder() {
     }
   }).then((res: any) => {
     if (res.code === 0 && res.data) {
-      // Pay order (mock)
-      return request({
-        url: `/orders/${orderId.value}/pay`,
-        method: 'POST'
-      })
+      orderStatus.value = res.data.status
+      return createWechatPayment(orderId.value!)
     }
   }).then((res: any) => {
     if (res.code === 0 && res.data) {
-      orderStatus.value = res.data.status
+      uni.hideLoading()
+      return requestWechatPayment(res.data)
+    }
+  }).then(() => {
+    if (orderId.value) {
       orderCreated.value = true
       uni.showToast({
-        title: '订单创建成功',
+        title: '支付处理中',
         icon: 'success',
         duration: 2000
       })
       
-      // Navigate to orders list after a short delay
       setTimeout(() => {
         uni.navigateTo({
-          url: '/pages/orders-list/index'
+          url: `/pages/order-detail/index?id=${orderId.value}`
         })
       }, 2000)
     }
   }).catch((err: any) => {
     console.error('Create order error:', err)
-    const errorMsg = err?.message || String(err) || '订单创建失败'
-    uni.showToast({
-      title: errorMsg,
-      icon: 'none',
-      duration: 3000
-    })
+    const errorMsg = err?.errMsg?.includes('cancel')
+      ? '已取消支付'
+      : err?.message || String(err) || '订单创建失败'
+
+    if (orderId.value) {
+      uni.showModal({
+        title: '订单已保留',
+        content: `${errorMsg}，可稍后在订单详情继续支付。`,
+        showCancel: false,
+        success: () => {
+          uni.navigateTo({
+            url: `/pages/order-detail/index?id=${orderId.value}`
+          })
+        }
+      })
+    } else {
+      uni.showToast({
+        title: errorMsg,
+        icon: 'none',
+        duration: 3000
+      })
+    }
   }).finally(() => {
     uni.hideLoading()
   })

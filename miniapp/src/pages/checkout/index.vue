@@ -245,6 +245,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
+import { createWechatPayment, type WechatPaymentResult } from '../../api/orders'
 import {
   buildDefaultPackagePlan,
   estimateFeedDays,
@@ -403,6 +404,24 @@ const estimatedDeliveryDateRange = computed(() => {
 const totalAmount = computed(() => {
   return directBuyPrice.value.amountTotal
 })
+
+function requestWechatPayment(payment: WechatPaymentResult): Promise<void> {
+  if (!payment.payParams) {
+    return Promise.resolve()
+  }
+
+  return new Promise((resolve, reject) => {
+    uni.requestPayment({
+      timeStamp: payment.payParams.timeStamp,
+      nonceStr: payment.payParams.nonceStr,
+      package: payment.payParams.package,
+      signType: payment.payParams.signType,
+      paySign: payment.payParams.paySign,
+      success: () => resolve(),
+      fail: (err: any) => reject(err),
+    } as any)
+  })
+}
 
 const averagePricePerPackage = computed(() => {
   if (orderConfig.value.totalPackages <= 0) return 0
@@ -1012,6 +1031,8 @@ async function submitOrder(hasRefreshedSnapshot = false) {
     return
   }
 
+  let submittedOrderId = ''
+
   try {
     uni.showLoading({ title: '提交中...' })
 
@@ -1033,6 +1054,7 @@ async function submitOrder(hasRefreshedSnapshot = false) {
     }
 
     const orderId = createRes.data.id
+    submittedOrderId = orderId
 
     // 2. 确认订单
     const confirmRes = await request({
@@ -1044,8 +1066,20 @@ async function submitOrder(hasRefreshedSnapshot = false) {
       throw new Error(confirmRes.message || '确认订单失败')
     }
 
-    // 3. 跳转到订单详情页（不再调用支付接口）
+    const paymentRes = await createWechatPayment(orderId)
+    if (paymentRes.code !== 0 || !paymentRes.data) {
+      throw new Error(paymentRes.message || '支付失败')
+    }
+
     uni.hideLoading()
+    await requestWechatPayment(paymentRes.data)
+
+    uni.showToast({
+      title: '支付处理中',
+      icon: 'success',
+      duration: 1500,
+    })
+
     uni.redirectTo({
       url: `/pages/order-detail/index?orderId=${orderId}`
     })
@@ -1066,10 +1100,27 @@ async function submitOrder(hasRefreshedSnapshot = false) {
       return
     }
 
-    uni.showToast({
-      title: error.message || '提交失败',
-      icon: 'none'
-    })
+    const errorMsg = error?.errMsg?.includes('cancel')
+      ? '已取消支付'
+      : error.message || '提交失败'
+
+    if (submittedOrderId) {
+      uni.showModal({
+        title: '订单已保留',
+        content: `${errorMsg}，可稍后在订单详情继续支付。`,
+        showCancel: false,
+        success: () => {
+          uni.redirectTo({
+            url: `/pages/order-detail/index?orderId=${submittedOrderId}`
+          })
+        }
+      })
+    } else {
+      uni.showToast({
+        title: error.message || '提交失败',
+        icon: 'none'
+      })
+    }
   } finally {
     uni.hideLoading()
   }
@@ -1313,7 +1364,11 @@ function goToAddAddress() {
 .btn-manage-address {
   width: 100%;
   height: 88rpx;
-  line-height: 88rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   background-color: #fff;
   color: #1890ff;
   border: 2rpx solid #1890ff;
@@ -1765,7 +1820,7 @@ function goToAddAddress() {
   flex-shrink: 0;
   margin: 0;
   height: 84rpx;
-  line-height: 84rpx;
+  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1969,7 +2024,11 @@ function goToAddAddress() {
 .btn-pay-confirm {
   width: 100%;
   height: 88rpx;
-  line-height: 88rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   background-color: #1890ff;
   color: #fff;
   border-radius: 44rpx;

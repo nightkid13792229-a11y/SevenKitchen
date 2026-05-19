@@ -28,6 +28,50 @@
         <text class="edit-hint">点击编辑资料</text>
       </view>
 
+      <view class="mall-section">
+        <view class="mall-section-header">
+          <text class="mall-section-title">我的商城</text>
+          <text class="mall-section-link" @tap="goToOrders('ALL')">全部订单</text>
+        </view>
+        <view class="mall-shortcuts">
+          <view class="mall-shortcut mall-shortcut-cart" @tap="goToCart">
+            <text v-if="cartCount > 0" class="shortcut-badge">{{ cartCount }}</text>
+            <view class="shortcut-icon-shell">
+              <image class="shortcut-icon-image" src="/static/mall/cart.png" mode="aspectFit" />
+            </view>
+            <text class="shortcut-text">购物车</text>
+          </view>
+          <view class="mall-shortcut mall-shortcut-payment" @tap="goToOrders('PENDING_PAYMENT')">
+            <text v-if="orderCounts.pendingPayment > 0" class="shortcut-badge">{{ orderCounts.pendingPayment }}</text>
+            <view class="shortcut-icon-shell">
+              <image class="shortcut-icon-image" src="/static/mall/payment.png" mode="aspectFit" />
+            </view>
+            <text class="shortcut-text">待付款</text>
+          </view>
+          <view class="mall-shortcut mall-shortcut-shipping" @tap="goToOrders('WAIT_RECEIVE')">
+            <text v-if="orderCounts.waitReceive > 0" class="shortcut-badge">{{ orderCounts.waitReceive }}</text>
+            <view class="shortcut-icon-shell">
+              <image class="shortcut-icon-image" src="/static/mall/shipping.png" mode="aspectFit" />
+            </view>
+            <text class="shortcut-text">待收货</text>
+          </view>
+          <view class="mall-shortcut mall-shortcut-received" @tap="goToOrders('RECEIVED')">
+            <text v-if="orderCounts.received > 0" class="shortcut-badge">{{ orderCounts.received }}</text>
+            <view class="shortcut-icon-shell">
+              <image class="shortcut-icon-image" src="/static/mall/received.png" mode="aspectFit" />
+            </view>
+            <text class="shortcut-text">已收货</text>
+          </view>
+          <view class="mall-shortcut mall-shortcut-aftersale" @tap="goToOrders('AFTERSALE')">
+            <text v-if="orderCounts.aftersale > 0" class="shortcut-badge">{{ orderCounts.aftersale }}</text>
+            <view class="shortcut-icon-shell">
+              <image class="shortcut-icon-image" src="/static/mall/aftersale.png" mode="aspectFit" />
+            </view>
+            <text class="shortcut-text">售后中</text>
+          </view>
+        </view>
+      </view>
+
       <!-- 基本信息板块 -->
       <view class="info-section">
         <view class="section-header">基本信息</view>
@@ -93,6 +137,7 @@ import { onShow } from '@dcloudio/uni-app'
 import { getToken, clearToken, request } from '../../utils/api'
 import { resolveUserAvatarSrc } from '../../utils/user-profile'
 import { refreshCurrentTabBar } from '../../utils/tabbar'
+import { getCartItems } from '../../utils/cart'
 
 interface UserInfo {
   id: string
@@ -118,6 +163,14 @@ const userInfo = ref<UserInfo>({
   diySheetCount: 0,
   favoriteRecipeCount: 0
 })
+
+const orderCounts = ref({
+  pendingPayment: 0,
+  waitReceive: 0,
+  received: 0,
+  aftersale: 0,
+})
+const cartCount = ref(0)
 
 // 标志位：防止更新后立即重新加载
 let isJustUpdated = false
@@ -158,6 +211,31 @@ async function loadUserInfo() {
   }
 }
 
+async function loadOrderCounts() {
+  try {
+    const res = await request({
+      url: '/orders',
+      method: 'GET',
+      quiet: true,
+      suppressErrorToast: true,
+    } as any)
+
+    const orders = Array.isArray(res.data) ? res.data : []
+    orderCounts.value = {
+      pendingPayment: orders.filter((order: any) => order.status === 'PENDING_PAYMENT').length,
+      waitReceive: orders.filter((order: any) => order.status === 'SHIPPED').length,
+      received: orders.filter((order: any) => order.status === 'COMPLETED').length,
+      aftersale: orders.filter((order: any) => order.status === 'AFTERSALE').length,
+    }
+  } catch (error) {
+    console.warn('[Me Page] Load order counts failed:', error)
+  }
+}
+
+function loadCartCount() {
+  cartCount.value = getCartItems().length
+}
+
 // 跳转登录页
 function goToLogin() {
   uni.navigateTo({
@@ -183,6 +261,18 @@ function goToDiySheetList() {
 function goToFavoriteRecipes() {
   uni.navigateTo({
     url: '/pages/favorite-recipes/index'
+  })
+}
+
+function goToCart() {
+  uni.navigateTo({
+    url: '/pages/cart/index',
+  })
+}
+
+function goToOrders(status = 'ALL') {
+  uni.navigateTo({
+    url: `/pages/orders-list/index?status=${encodeURIComponent(status)}`,
   })
 }
 
@@ -331,8 +421,11 @@ onShow(() => {
   const token = getToken()
   if (token) {
     loadUserInfo()
+    loadOrderCounts()
+    loadCartCount()
   } else {
     isLoggedIn.value = false
+    cartCount.value = 0
   }
 })
 </script>
@@ -435,6 +528,105 @@ onShow(() => {
 .info-section {
   background: #fff;
   margin-top: 20rpx;
+}
+
+.mall-section {
+  background: #fff;
+  margin-top: 20rpx;
+  padding: 34rpx 24rpx 38rpx;
+}
+
+.mall-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 34rpx;
+}
+
+.mall-section-title {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #333;
+}
+
+.mall-section-link {
+  font-size: 24rpx;
+  color: #1890ff;
+}
+
+.mall-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8rpx;
+}
+
+.mall-shortcut {
+  position: relative;
+  min-height: 172rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14rpx;
+}
+
+.shortcut-icon-shell {
+  width: 96rpx;
+  height: 96rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 32rpx;
+  background: #f6f7f9;
+  box-shadow: 0 10rpx 22rpx rgba(31, 41, 51, 0.07);
+}
+
+.mall-shortcut-cart .shortcut-icon-shell {
+  background: #fff3e8;
+}
+
+.mall-shortcut-payment .shortcut-icon-shell {
+  background: #eaf4ff;
+}
+
+.mall-shortcut-shipping .shortcut-icon-shell {
+  background: #f1efff;
+}
+
+.mall-shortcut-received .shortcut-icon-shell {
+  background: #e9fff4;
+}
+
+.mall-shortcut-aftersale .shortcut-icon-shell {
+  background: #fff1e8;
+}
+
+.shortcut-icon-image {
+  width: 88rpx;
+  height: 88rpx;
+  display: block;
+}
+
+.shortcut-text {
+  font-size: 25rpx;
+  font-weight: 600;
+  color: #2f3640;
+  white-space: nowrap;
+}
+
+.shortcut-badge {
+  position: absolute;
+  top: 4rpx;
+  right: 4rpx;
+  min-width: 30rpx;
+  height: 30rpx;
+  padding: 0 8rpx;
+  border-radius: 18rpx;
+  background: #ff4d4f;
+  color: #fff;
+  font-size: 20rpx;
+  line-height: 30rpx;
+  text-align: center;
 }
 
 .section-header {

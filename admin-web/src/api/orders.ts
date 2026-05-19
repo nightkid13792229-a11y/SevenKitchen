@@ -99,6 +99,38 @@ export const orderApi = {
   },
 
   /**
+   * 发起微信线上退款
+   */
+  createWechatRefund: (
+    id: string,
+    data: { amount: number; reason: string; adminNote?: string }
+  ): Promise<{
+    outRefundNo: string
+    refundId: string | null
+    status: string | null
+    adjustmentId: string
+  }> => {
+    return api.post(`/admin/orders/${id}/wechat-refund`, data)
+  },
+
+  /**
+   * 获取待处理售后工单
+   */
+  listPendingAftersales: (): Promise<Order[]> => {
+    return api.get('/orders/aftersale/pending')
+  },
+
+  /**
+   * 处理售后工单
+   */
+  resolveAftersale: (
+    id: string,
+    data: { resolutionType: 'refunded' | 'remade' | 'resolved'; adminNote?: string }
+  ): Promise<Order> => {
+    return api.post(`/orders/${id}/aftersale/resolve`, data)
+  },
+
+  /**
    * 开始生产
    */
   startProduction: (id: string): Promise<void> => {

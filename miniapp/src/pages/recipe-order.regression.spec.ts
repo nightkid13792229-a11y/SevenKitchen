@@ -61,7 +61,7 @@ describe('recipe-order phase one UI contract', () => {
 
   it('invalidates stale preview state before debounced package row repricing', () => {
     const updatePackagePlanRowSource = source.match(
-      /function updatePackagePlanRow[\s\S]*?\n}\n\nfunction removePackagePlanRow/,
+      /function updatePackagePlanRow[\s\S]*?\r?\n}\r?\n\r?\nfunction removePackagePlanRow/,
     )?.[0] || '';
 
     expect(source).toContain('function invalidatePackagePlanPricingPreview');
@@ -103,7 +103,7 @@ describe('recipe-order phase one UI contract', () => {
     }
 
     expect(pagesJsonSource).toContain('"navigationBarTitleText": "成品配置页面"');
-    expect(templateSource).toContain('保存采购及分装配置');
+    expect(templateSource).toContain('立即支付');
     expect(templateSource).not.toContain('订购天数');
     expect(templateSource).not.toContain('原料采购来源');
     expect(templateSource).not.toContain('产品说明');
@@ -374,7 +374,7 @@ describe('recipe-order phase one UI contract', () => {
   });
 
   it('keeps the bottom pricing summary next to the confirmation button and right aligned', () => {
-    expect(templateSource).toContain('保存采购及分装配置');
+    expect(templateSource).toContain('立即支付');
     expect(templateSource).not.toContain('立即下单');
     expect(templateSource).not.toContain('确认订单');
 
@@ -423,9 +423,9 @@ describe('recipe-order phase one UI contract', () => {
     });
   });
 
-  it('submits the saved purchase and package configuration directly with contact details', () => {
+  it('submits the saved purchase and package configuration directly to WeChat Pay', () => {
     const continueBuyNowSource = source.match(
-      /async function continueBuyNow[\s\S]*?\n}\n\nfunction goToCreateDog/,
+      /async function continueBuyNow[\s\S]*?\r?\n}\r?\n\r?\nfunction goToCreateDog/,
     )?.[0] || '';
 
     expect(continueBuyNowSource).toContain("url: '/orders'");
@@ -435,27 +435,24 @@ describe('recipe-order phase one UI contract', () => {
     expect(continueBuyNowSource).not.toContain('addressId:');
     expect(continueBuyNowSource).not.toContain('targetProductionDate:');
     expect(continueBuyNowSource).toContain("url: `/orders/${orderId}/confirm`");
-    expect(continueBuyNowSource).toContain('showSaveSuccessDialog.value = true');
-    expect(continueBuyNowSource).not.toContain("title: '保存成功'");
-    expect(continueBuyNowSource).not.toContain('Seven爸爸的微信号：zhaochengccc');
+    expect(continueBuyNowSource).toContain('createWechatPayment(orderId)');
+    expect(continueBuyNowSource).toContain('requestOrderWechatPayment(paymentRes.data)');
+    expect(continueBuyNowSource).toContain("url: `/pages/order-detail/index?orderId=${orderId}`");
+    expect(continueBuyNowSource).not.toContain('showSaveSuccessDialog.value = true');
     expect(continueBuyNowSource).not.toContain('/pages/checkout/index');
     expect(source).not.toContain('uni.navigateTo({\n    url: `/pages/checkout/index');
   });
 
-  it('shows the saved configuration success copy with one-tap WeChat ID copying', () => {
-    expect(templateSource).toContain('v-if="showSaveSuccessDialog"');
-    expect(templateSource).toContain('保存成功');
-    expect(templateSource).toContain('成品配置方案已经保存。');
-    expect(templateSource).toContain('请联系Seven爸爸了解制作信息。');
-    expect(templateSource).toContain('微信号：{{ SEVEN_DAD_WECHAT_ID }}');
-    expect(templateSource).toContain('@tap="copySevenDadWechatId"');
-    expect(templateSource).toContain('复制微信号');
-    expect(templateSource).toContain('@tap="closeSaveSuccessDialog"');
-    expect(templateSource).toContain('知道了');
-    expect(source).toContain("const SEVEN_DAD_WECHAT_ID = 'zhaochengccc'");
-    expect(source).toContain('function copySevenDadWechatId()');
-    expect(source).toContain('uni.setClipboardData');
-    expect(source).toContain('data: SEVEN_DAD_WECHAT_ID');
-    expect(source).toContain("title: '微信号已复制'");
+  it('does not show the old add-friend WeChat contact payment path', () => {
+    expect(templateSource).not.toContain('v-if="showSaveSuccessDialog"');
+    expect(templateSource).not.toContain('请联系Seven爸爸了解制作信息。');
+    expect(templateSource).not.toContain('微信号：{{ SEVEN_DAD_WECHAT_ID }}');
+    expect(templateSource).not.toContain('@tap="copySevenDadWechatId"');
+    expect(templateSource).not.toContain('复制微信号');
+    expect(templateSource).not.toContain('@tap="closeSaveSuccessDialog"');
+    expect(source).not.toContain("const SEVEN_DAD_WECHAT_ID = 'zhaochengccc'");
+    expect(source).not.toContain('showSaveSuccessDialog');
+    expect(source).not.toContain('function copySevenDadWechatId()');
+    expect(source).not.toContain('data: SEVEN_DAD_WECHAT_ID');
   });
 });

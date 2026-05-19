@@ -431,29 +431,6 @@
       </view>
     </view>
 
-    <view
-      v-if="showSaveSuccessDialog"
-      class="save-success-overlay"
-      @tap="closeSaveSuccessDialog"
-    >
-      <view class="save-success-dialog" @tap.stop>
-        <text class="save-success-title">保存成功</text>
-        <view class="save-success-content">
-          <text class="save-success-line">成品配置方案已经保存。</text>
-          <text class="save-success-line">请联系Seven爸爸了解制作信息。</text>
-          <view class="save-success-wechat-row">
-            <text class="save-success-wechat">微信号：{{ SEVEN_DAD_WECHAT_ID }}</text>
-            <button class="btn-copy-wechat button-reset" @tap="copySevenDadWechatId">
-              复制微信号
-            </button>
-          </view>
-        </view>
-        <button class="btn-save-success-confirm button-reset" @tap="closeSaveSuccessDialog">
-          知道了
-        </button>
-      </view>
-    </view>
-
     <view class="bottom-bar">
       <view class="bottom-price">
         <text class="bottom-total">{{ bottomPriceTitle }}</text>
@@ -464,7 +441,7 @@
         :disabled="!canBuyNow"
         @tap="buyNow"
       >
-        保存采购及分装配置
+        立即支付
       </button>
     </view>
   </view>
@@ -473,6 +450,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { request } from '../../utils/api'
+import { createWechatPayment, type WechatPaymentResult } from '../../api/orders'
 import { normalizeImageUrl } from '../../utils/config'
 import {
   buildLifeStageReminderText,
@@ -678,7 +656,6 @@ interface OverheadCostDetail {
 type PreparationMethod = 'CHOPPED' | 'DICED'
 type CookingMethod = 'RAW' | 'COOKED'
 
-const SEVEN_DAD_WECHAT_ID = 'zhaochengccc'
 const recipeId = ref('')
 const recipe = ref<Recipe>({
   id: '',
@@ -710,7 +687,6 @@ const isPricePreviewLoading = ref(false)
 const pricePreviewError = ref('')
 const showPackageEditor = ref(false)
 const isCustomPackagePlan = ref(false)
-const showSaveSuccessDialog = ref(false)
 let pricingPreviewRequestSeq = 0
 let dogCalcRequestSeq = 0
 let sourcePlanPriceRequestSeq = 0
@@ -1760,25 +1736,21 @@ function buyNow() {
   void continueBuyNow()
 }
 
-function closeSaveSuccessDialog() {
-  showSaveSuccessDialog.value = false
-}
+function requestOrderWechatPayment(payment: WechatPaymentResult): Promise<void> {
+  if (!payment.payParams) {
+    return Promise.resolve()
+  }
 
-function copySevenDadWechatId() {
-  uni.setClipboardData({
-    data: SEVEN_DAD_WECHAT_ID,
-    success: () => {
-      uni.showToast({
-        title: '微信号已复制',
-        icon: 'success',
-      })
-    },
-    fail: () => {
-      uni.showToast({
-        title: '复制失败，请手动复制',
-        icon: 'none',
-      })
-    },
+  return new Promise((resolve, reject) => {
+    uni.requestPayment({
+      timeStamp: payment.payParams.timeStamp,
+      nonceStr: payment.payParams.nonceStr,
+      package: payment.payParams.package,
+      signType: payment.payParams.signType,
+      paySign: payment.payParams.paySign,
+      success: () => resolve(),
+      fail: (err: any) => reject(err),
+    } as any)
   })
 }
 
@@ -1846,13 +1818,32 @@ async function continueBuyNow() {
       throw new Error(confirmRes.message || '确认订单失败')
     }
 
+    const paymentRes = await createWechatPayment(orderId)
+    if (paymentRes.code !== 0 || !paymentRes.data) {
+      throw new Error(paymentRes.message || '支付失败')
+    }
+
     uni.hideLoading()
-    showSaveSuccessDialog.value = true
+    await requestOrderWechatPayment(paymentRes.data)
+
+    uni.showToast({
+      title: '支付处理中',
+      icon: 'success',
+      duration: 1500,
+    })
+
+    uni.navigateTo({
+      url: `/pages/order-detail/index?orderId=${orderId}`,
+    })
   } catch (error: any) {
     console.error('[RecipeOrder] Save purchase and package configuration failed:', error)
     uni.hideLoading()
+    const errorMsg = error?.errMsg?.includes('cancel')
+      ? '已取消支付'
+      : error.message || '下单失败'
+
     uni.showToast({
-      title: error.message || '保存失败',
+      title: errorMsg,
       icon: 'none',
     })
   }
@@ -2031,7 +2022,11 @@ function goToCreateDog() {
 .btn-create-dog {
   width: 240rpx;
   height: 70rpx;
-  line-height: 70rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   background-color: #1890ff;
   color: #fff;
   border-radius: 35rpx;
@@ -2417,7 +2412,11 @@ function goToCreateDog() {
 .btn-add-row {
   min-width: 112rpx;
   height: 56rpx;
-  line-height: 56rpx;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   padding: 0 20rpx;
   background-color: #1890ff;
   color: #fff;
@@ -2429,7 +2428,11 @@ function goToCreateDog() {
 .btn-remove-row {
   min-width: 96rpx;
   height: 56rpx;
-  line-height: 56rpx;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   padding: 0 16rpx;
   background-color: #fff;
   color: #ff4d4f;
@@ -3353,13 +3356,21 @@ function goToCreateDog() {
 .hero-dog-action {
   min-width: 104rpx;
   height: 60rpx;
-  line-height: 60rpx;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .section-action-button {
   min-width: 136rpx;
   height: 60rpx;
-  line-height: 60rpx;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   padding: 0 18rpx;
 }
 
@@ -3600,7 +3611,11 @@ function goToCreateDog() {
 .package-edit-button {
   min-width: 172rpx;
   height: 60rpx;
-  line-height: 60rpx;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   padding: 0 18rpx;
   border-radius: 8rpx;
   border: 2rpx solid #2f8f4e;
@@ -3690,7 +3705,11 @@ function goToCreateDog() {
 .btn-secondary-full {
   width: 100%;
   height: 76rpx;
-  line-height: 76rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   margin-top: 20rpx;
 }
 
@@ -3739,7 +3758,11 @@ function goToCreateDog() {
 .btn-remove-row {
   min-width: 118rpx;
   height: 60rpx;
-  line-height: 60rpx;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   padding: 0 16rpx;
   border-radius: 8rpx;
   font-size: 24rpx;
@@ -4430,7 +4453,11 @@ function goToCreateDog() {
 .btn-copy-wechat {
   min-width: 150rpx;
   height: 54rpx;
-  line-height: 54rpx;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   padding: 0 18rpx;
   border-radius: 8rpx;
   background-color: #eef6ff;
@@ -4442,7 +4469,11 @@ function goToCreateDog() {
 .btn-save-success-confirm {
   width: 100%;
   height: 92rpx;
-  line-height: 92rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   border-top: 1rpx solid #eef0f2;
   border-radius: 0;
   background-color: #fff;

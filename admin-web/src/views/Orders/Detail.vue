@@ -54,7 +54,7 @@
             {{ order.targetProductionDate ? formatDate(order.targetProductionDate) : '未设置' }}
           </el-descriptions-item>
           <el-descriptions-item label="支付方式">
-            {{ order.paymentMethod || '-' }}
+            {{ getPaymentMethodText(order.paymentMethod) }}
           </el-descriptions-item>
           <el-descriptions-item v-if="order.cancelledAt" label="取消时间" :span="2">
             {{ formatTime(order.cancelledAt) }}
@@ -105,17 +105,20 @@
       <!-- 客户和狗狗信息 -->
       <el-card class="info-card" shadow="never">
         <template #header>
-          <span class="card-title">客户和狗狗信息</span>
+          <span class="card-title">客户和收货信息</span>
         </template>
         <el-descriptions :column="2" border>
-          <el-descriptions-item label="客户ID">
-            {{ order.customerId }}
+          <el-descriptions-item label="客户">
+            {{ getCustomerName() }}
           </el-descriptions-item>
-          <el-descriptions-item label="狗狗ID">
-            {{ order.dogId || '-' }}
+          <el-descriptions-item label="联系电话">
+            {{ getCustomerPhone() }}
           </el-descriptions-item>
-          <el-descriptions-item label="收货地址ID">
-            {{ order.addressId || '-' }}
+          <el-descriptions-item label="狗狗">
+            {{ getDogSummary() }}
+          </el-descriptions-item>
+          <el-descriptions-item label="收货地址">
+            {{ getAddressText() }}
           </el-descriptions-item>
         </el-descriptions>
       </el-card>
@@ -127,7 +130,7 @@
         </template>
         <el-descriptions :column="2" border>
           <el-descriptions-item label="支付方式">
-            {{ order.paymentMethod || '-' }}
+            {{ getPaymentMethodText(order.paymentMethod) }}
           </el-descriptions-item>
           <el-descriptions-item label="支付状态">
             <el-tag
@@ -176,10 +179,15 @@
           <span class="card-title">商品信息</span>
         </template>
         <el-table :data="order.items" style="width: 100%">
+          <el-table-column label="狗狗" width="120">
+            <template #default="{ row }">
+              {{ row.dog?.name || '-' }}
+            </template>
+          </el-table-column>
           <el-table-column prop="recipeSnapshot.name" label="食谱名称" width="200" />
           <el-table-column label="版本号" width="80">
             <template #default="{ row }">
-              v{{ row.recipeSnapshot.version }}
+              {{ row.recipeSnapshot.version ? `v${row.recipeSnapshot.version}` : '-' }}
             </template>
           </el-table-column>
           <el-table-column prop="quantityG" label="总净重" width="100">
@@ -848,6 +856,51 @@ const getPaymentStatusText = (status?: PaymentStatus) => {
     [PaymentStatus.FAILED]: '支付失败'
   }
   return map[status] || status
+}
+
+const getPaymentMethodText = (method?: string | null) => {
+  if (!method) return '-'
+  const map: Record<string, string> = {
+    WECHAT_PAY: '微信支付',
+    WECHAT: '微信支付',
+    OFFLINE: '线下支付',
+    CASH: '现金',
+    BANK_TRANSFER: '银行转账'
+  }
+  return map[method] || method
+}
+
+const getCustomerName = () => {
+  return order.value?.address?.recipientName || '未记录'
+}
+
+const getCustomerPhone = () => {
+  return order.value?.address?.phone || '未记录'
+}
+
+const getAddressText = () => {
+  const address = order.value?.address
+  if (!address) return '未记录'
+
+  const region = address.regionText || [
+    address.region?.province,
+    address.region?.city,
+    address.region?.district
+  ].filter(Boolean).join(' ')
+
+  return [region, address.detailAddress].filter(Boolean).join(' ') || '未记录'
+}
+
+const getDogSummary = () => {
+  const dogNames = (order.value?.items || [])
+    .map((item) => item.dog?.name)
+    .filter(Boolean)
+
+  if (dogNames.length > 0) {
+    return Array.from(new Set(dogNames)).join('、')
+  }
+
+  return '未记录'
 }
 
 // 获取取消操作者文本

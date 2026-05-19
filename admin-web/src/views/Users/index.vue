@@ -73,7 +73,11 @@
         </el-table-column>
         <el-table-column label="操作" width="200" fixed="right">
           <template #default="{ row }">
+            <el-tag v-if="row.role === UserRole.ADMIN" type="info" effect="plain">
+              账号保护
+            </el-tag>
             <el-button
+              v-if="row.role !== UserRole.ADMIN"
               link
               type="primary"
               size="small"
@@ -82,6 +86,7 @@
               编辑
             </el-button>
             <el-button
+              v-if="row.role !== UserRole.ADMIN"
               link
               :type="row.status === UserStatus.ACTIVE ? 'warning' : 'success'"
               size="small"
@@ -91,6 +96,7 @@
             </el-button>
             <el-button
               link
+              v-if="row.role !== UserRole.ADMIN"
               type="danger"
               size="small"
               @click="handleDelete(row)"
@@ -104,7 +110,7 @@
 
     <!-- User Form Dialog -->
     <UserForm
-      v-model="formVisible"
+      v-model:visible="formVisible"
       :user="currentUser"
       @success="handleFormSuccess"
     />
@@ -160,12 +166,22 @@ const handleCreate = () => {
 
 // Handle edit user
 const handleEdit = (user: User) => {
+  if (user.role === UserRole.ADMIN) {
+    ElMessage.warning('管理员账号受保护，不能编辑')
+    return
+  }
+
   currentUser.value = user
   formVisible.value = true
 }
 
 // Handle toggle user status
 const handleToggleStatus = async (user: User) => {
+  if (user.role === UserRole.ADMIN) {
+    ElMessage.warning('管理员账号受保护，不能禁用')
+    return
+  }
+
   const action = user.status === UserStatus.ACTIVE ? '禁用' : '启用'
   try {
     await ElMessageBox.confirm(
@@ -191,6 +207,11 @@ const handleToggleStatus = async (user: User) => {
 
 // Handle delete user
 const handleDelete = async (user: User) => {
+  if (user.role === UserRole.ADMIN) {
+    ElMessage.warning('管理员账号受保护，不能删除')
+    return
+  }
+
   try {
     await ElMessageBox.confirm(
       `确认要删除用户 "${user.nickname}" 吗？此操作不可恢复！`,

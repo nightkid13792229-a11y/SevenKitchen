@@ -50,7 +50,7 @@ grep "appid" miniapp/project.config.json
 ```
 
 Expected output:
-- `manifest.json`: Should have `"appid": "wx2c1e8f1a2d7c2406"` (or your production AppID)
+- `manifest.json`: Should have `"appid": "wx92924e25093f8f18"` for this new Mini Program, or `touristappid` only for local testing
 - `project.config.json`: Should have the same AppID
 
 ⚠️ **If AppID is empty**, you must obtain it from WeChat MP Platform:
@@ -105,7 +105,7 @@ Edit `miniapp/src/manifest.json`:
 ```json
 {
   "name": "SevenKitchen",
-  "appid": "wx2c1e8f1a2d7c2406",
+  "appid": "wx92924e25093f8f18",
   "description": "专业鲜食套餐定制",
   "versionName": "1.0.0",
   "versionCode": "100"

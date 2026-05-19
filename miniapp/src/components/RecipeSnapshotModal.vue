@@ -330,7 +330,11 @@ defineExpose({
 .btn-close-footer {
   width: 100%;
   height: 88rpx;
-  line-height: 88rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   background-color: #f5f5f5;
   color: #333;
   border-radius: 44rpx;

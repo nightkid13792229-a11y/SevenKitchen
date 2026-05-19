@@ -80,7 +80,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { request } from '../../utils/api'
+import { getToken, request } from '../../utils/api'
 import { getBaseUrl } from '../../utils/config'
 
 const orderId = ref('')
@@ -158,7 +158,7 @@ async function submitAftersale() {
     for (const photo of photos.value) {
       try {
         // 使用后端API上传图片
-        const uploadRes = await uploadImage(photo, orderId.value, 'aftersale-photos')
+        const uploadRes = await uploadImage(photo, orderId.value)
         if (uploadRes && uploadRes.url) {
           uploadedPhotos.push(uploadRes.url)
         }
@@ -207,16 +207,16 @@ async function submitAftersale() {
  * @param orderId 订单ID
  * @param category 图片分类
  */
-async function uploadImage(filePath: string, orderId: string, category: string) {
+async function uploadImage(filePath: string, orderId: string) {
   return new Promise((resolve, reject) => {
-    const token = uni.getStorageSync('token') || ''
+    const token = getToken()
 
     uni.uploadFile({
       url: `${getBaseUrl()}/orders/${orderId}/aftersale-photos`,
       filePath: filePath,
       name: 'files',
       header: {
-        'X-Customer-Id': uni.getStorageSync('customerId') || '',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       success: (res) => {
         if (res.statusCode === 200) {
@@ -446,7 +446,11 @@ function getStatusText(status: string): string {
 .btn-submit {
   width: 100%;
   height: 88rpx;
-  line-height: 88rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   background-color: #1890ff;
   color: #fff;
   border-radius: 44rpx;

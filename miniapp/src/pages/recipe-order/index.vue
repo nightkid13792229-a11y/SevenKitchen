@@ -431,29 +431,6 @@
       </view>
     </view>
 
-    <view
-      v-if="showSaveSuccessDialog"
-      class="save-success-overlay"
-      @tap="closeSaveSuccessDialog"
-    >
-      <view class="save-success-dialog" @tap.stop>
-        <text class="save-success-title">保存成功</text>
-        <view class="save-success-content">
-          <text class="save-success-line">成品配置方案已经保存。</text>
-          <text class="save-success-line">请联系Seven爸爸了解制作信息。</text>
-          <view class="save-success-wechat-row">
-            <text class="save-success-wechat">微信号：{{ SEVEN_DAD_WECHAT_ID }}</text>
-            <button class="btn-copy-wechat button-reset" @tap="copySevenDadWechatId">
-              复制微信号
-            </button>
-          </view>
-        </view>
-        <button class="btn-save-success-confirm button-reset" @tap="closeSaveSuccessDialog">
-          知道了
-        </button>
-      </view>
-    </view>
-
     <view class="bottom-bar">
       <view class="bottom-price">
         <text class="bottom-total">{{ bottomPriceTitle }}</text>
@@ -464,7 +441,7 @@
         :disabled="!canBuyNow"
         @tap="buyNow"
       >
-        保存采购及分装配置
+        立即下单
       </button>
     </view>
   </view>
@@ -678,7 +655,6 @@ interface OverheadCostDetail {
 type PreparationMethod = 'CHOPPED' | 'DICED'
 type CookingMethod = 'RAW' | 'COOKED'
 
-const SEVEN_DAD_WECHAT_ID = 'zhaochengccc'
 const recipeId = ref('')
 const recipe = ref<Recipe>({
   id: '',
@@ -710,7 +686,6 @@ const isPricePreviewLoading = ref(false)
 const pricePreviewError = ref('')
 const showPackageEditor = ref(false)
 const isCustomPackagePlan = ref(false)
-const showSaveSuccessDialog = ref(false)
 let pricingPreviewRequestSeq = 0
 let dogCalcRequestSeq = 0
 let sourcePlanPriceRequestSeq = 0
@@ -1761,28 +1736,6 @@ function buyNow() {
   void continueBuyNow()
 }
 
-function closeSaveSuccessDialog() {
-  showSaveSuccessDialog.value = false
-}
-
-function copySevenDadWechatId() {
-  uni.setClipboardData({
-    data: SEVEN_DAD_WECHAT_ID,
-    success: () => {
-      uni.showToast({
-        title: '微信号已复制',
-        icon: 'success',
-      })
-    },
-    fail: () => {
-      uni.showToast({
-        title: '复制失败，请手动复制',
-        icon: 'none',
-      })
-    },
-  })
-}
-
 async function continueBuyNow() {
   // ✅ 安全改进：使用快照ID而不是传递所有参数（防止价格篡改）
   if (!pricingSnapshotId.value) {
@@ -1819,44 +1772,9 @@ async function continueBuyNow() {
 
   uni.setStorageSync('direct_buy_order_config', orderConfig)
 
-  try {
-    uni.showLoading({ title: '保存中...' })
-
-    const createRes = await request({
-      url: '/orders',
-      method: 'POST',
-      suppressErrorToast: true,
-      data: {
-        type: 'FRESH_FOOD',
-        snapshotId: pricingSnapshotId.value,
-      },
-    })
-
-    if (createRes.code !== 0 || !createRes.data?.id) {
-      throw new Error(createRes.message || '创建订单失败')
-    }
-
-    const orderId = createRes.data.id
-    const confirmRes = await request({
-      url: `/orders/${orderId}/confirm`,
-      method: 'POST',
-      suppressErrorToast: true,
-    })
-
-    if (confirmRes.code !== 0) {
-      throw new Error(confirmRes.message || '确认订单失败')
-    }
-
-    uni.hideLoading()
-    showSaveSuccessDialog.value = true
-  } catch (error: any) {
-    console.error('[RecipeOrder] Save purchase and package configuration failed:', error)
-    uni.hideLoading()
-    uni.showToast({
-      title: error.message || '保存失败',
-      icon: 'none',
-    })
-  }
+  uni.navigateTo({
+    url: `/pages/checkout/index?mode=directBuy&snapshotId=${encodeURIComponent(pricingSnapshotId.value)}`
+  })
 }
 
 function goToCreateDog() {
@@ -3097,7 +3015,7 @@ function goToCreateDog() {
 
 .bottom-price {
   min-width: 0;
-  max-width: calc(100% - 354rpx);
+  max-width: calc(100% - 258rpx);
   flex: 0 1 auto;
   display: flex;
   flex-direction: column;
@@ -3123,7 +3041,7 @@ function goToCreateDog() {
 
 .btn-buy-now {
   flex-shrink: 0;
-  width: 336rpx;
+  width: 240rpx;
   margin: 0;
   height: 88rpx;
   display: flex;
@@ -4369,94 +4287,6 @@ function goToCreateDog() {
   color: #e6543f;
 }
 
-.save-success-overlay {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 40rpx;
-  background-color: rgba(0, 0, 0, 0.45);
-  box-sizing: border-box;
-}
-
-.save-success-dialog {
-  width: 100%;
-  max-width: 620rpx;
-  overflow: hidden;
-  border-radius: 16rpx;
-  background-color: #fff;
-  box-shadow: 0 20rpx 56rpx rgba(18, 24, 31, 0.18);
-}
-
-.save-success-title {
-  display: block;
-  padding: 48rpx 40rpx 20rpx;
-  color: #1f2329;
-  font-size: 34rpx;
-  font-weight: 800;
-  line-height: 1.35;
-  text-align: center;
-}
-
-.save-success-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12rpx;
-  padding: 0 44rpx 42rpx;
-}
-
-.save-success-line,
-.save-success-wechat {
-  color: #5f6670;
-  font-size: 29rpx;
-  line-height: 1.55;
-  text-align: center;
-}
-
-.save-success-wechat-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 12rpx;
-  max-width: 100%;
-}
-
-.btn-copy-wechat {
-  min-width: 150rpx;
-  height: 54rpx;
-  line-height: 54rpx;
-  padding: 0 18rpx;
-  border-radius: 8rpx;
-  background-color: #eef6ff;
-  color: #1677d2;
-  font-size: 24rpx;
-  font-weight: 700;
-}
-
-.btn-save-success-confirm {
-  width: 100%;
-  height: 92rpx;
-  line-height: 92rpx;
-  border-top: 1rpx solid #eef0f2;
-  border-radius: 0;
-  background-color: #fff;
-  color: #4d6394;
-  font-size: 30rpx;
-  font-weight: 800;
-}
-
-.btn-copy-wechat::after,
-.btn-save-success-confirm::after {
-  border: none;
-}
-
 .bottom-bar {
   position: fixed;
   left: 0;
@@ -4474,7 +4304,7 @@ function goToCreateDog() {
 
 .bottom-price {
   min-width: 0;
-  max-width: calc(100% - 354rpx);
+  max-width: calc(100% - 258rpx);
   flex: 0 1 auto;
   display: flex;
   flex-direction: column;
@@ -4501,7 +4331,7 @@ function goToCreateDog() {
 }
 
 .btn-buy-now {
-  width: 336rpx;
+  width: 240rpx;
   flex-shrink: 0;
   margin: 0;
   height: 84rpx;

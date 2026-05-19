@@ -102,8 +102,9 @@ describe('recipe-order phase one UI contract', () => {
       ).toBeGreaterThan(positions[index - 1]);
     }
 
-    expect(pagesJsonSource).toContain('"navigationBarTitleText": "成品配置页面"');
-    expect(templateSource).toContain('保存采购及分装配置');
+    expect(pagesJsonSource).toContain('"navigationBarTitleText": "订购成品"');
+    expect(templateSource).toContain('立即下单');
+    expect(templateSource).not.toContain('保存采购及分装配置');
     expect(templateSource).not.toContain('订购天数');
     expect(templateSource).not.toContain('原料采购来源');
     expect(templateSource).not.toContain('产品说明');
@@ -374,8 +375,8 @@ describe('recipe-order phase one UI contract', () => {
   });
 
   it('keeps the bottom pricing summary next to the confirmation button and right aligned', () => {
-    expect(templateSource).toContain('保存采购及分装配置');
-    expect(templateSource).not.toContain('立即下单');
+    expect(templateSource).toContain('立即下单');
+    expect(templateSource).not.toContain('保存采购及分装配置');
     expect(templateSource).not.toContain('确认订单');
 
     const bottomBarBlocks = [...source.matchAll(/\.bottom-bar\s*\{([\s\S]*?)\}/g)]
@@ -405,57 +406,37 @@ describe('recipe-order phase one UI contract', () => {
     });
   });
 
-  it('keeps the long save configuration button label on one line', () => {
+  it('keeps the direct checkout button compact and one line', () => {
     const buyButtonBlocks = [...source.matchAll(/\.btn-buy-now\s*\{([\s\S]*?)\}/g)]
       .map((match) => match[1]);
 
     expect(buyButtonBlocks.length).toBeGreaterThan(0);
 
     buyButtonBlocks.forEach((block) => {
-      expect(block).toContain('width: 336rpx;');
+      expect(block).toContain('width: 240rpx;');
       expect(block).toContain('display: flex;');
       expect(block).toContain('align-items: center;');
       expect(block).toContain('justify-content: center;');
       expect(block).toContain('white-space: nowrap;');
       expect(block).toContain('line-height: 1;');
-      expect(block).not.toContain('width: 240rpx;');
+      expect(block).not.toContain('width: 336rpx;');
       expect(block).not.toContain('line-height: 84rpx;');
     });
   });
 
-  it('submits the saved purchase and package configuration directly with contact details', () => {
+  it('navigates to checkout with the pricing snapshot instead of saving purchase configuration', () => {
     const continueBuyNowSource = source.match(
       /async function continueBuyNow[\s\S]*?\n}\n\nfunction goToCreateDog/,
     )?.[0] || '';
 
-    expect(continueBuyNowSource).toContain("url: '/orders'");
-    expect(continueBuyNowSource).toContain("method: 'POST'");
-    expect(continueBuyNowSource).toContain("type: 'FRESH_FOOD'");
     expect(continueBuyNowSource).toContain('snapshotId: pricingSnapshotId.value');
-    expect(continueBuyNowSource).not.toContain('addressId:');
-    expect(continueBuyNowSource).not.toContain('targetProductionDate:');
-    expect(continueBuyNowSource).toContain("url: `/orders/${orderId}/confirm`");
-    expect(continueBuyNowSource).toContain('showSaveSuccessDialog.value = true');
-    expect(continueBuyNowSource).not.toContain("title: '保存成功'");
-    expect(continueBuyNowSource).not.toContain('Seven爸爸的微信号：zhaochengccc');
-    expect(continueBuyNowSource).not.toContain('/pages/checkout/index');
-    expect(source).not.toContain('uni.navigateTo({\n    url: `/pages/checkout/index');
-  });
-
-  it('shows the saved configuration success copy with one-tap WeChat ID copying', () => {
-    expect(templateSource).toContain('v-if="showSaveSuccessDialog"');
-    expect(templateSource).toContain('保存成功');
-    expect(templateSource).toContain('成品配置方案已经保存。');
-    expect(templateSource).toContain('请联系Seven爸爸了解制作信息。');
-    expect(templateSource).toContain('微信号：{{ SEVEN_DAD_WECHAT_ID }}');
-    expect(templateSource).toContain('@tap="copySevenDadWechatId"');
-    expect(templateSource).toContain('复制微信号');
-    expect(templateSource).toContain('@tap="closeSaveSuccessDialog"');
-    expect(templateSource).toContain('知道了');
-    expect(source).toContain("const SEVEN_DAD_WECHAT_ID = 'zhaochengccc'");
-    expect(source).toContain('function copySevenDadWechatId()');
-    expect(source).toContain('uni.setClipboardData');
-    expect(source).toContain('data: SEVEN_DAD_WECHAT_ID');
-    expect(source).toContain("title: '微信号已复制'");
+    expect(continueBuyNowSource).toContain("uni.setStorageSync('direct_buy_order_config', orderConfig)");
+    expect(continueBuyNowSource).toContain('uni.navigateTo({');
+    expect(continueBuyNowSource).toContain('/pages/checkout/index?mode=directBuy&snapshotId=');
+    expect(continueBuyNowSource).not.toContain("url: '/orders'");
+    expect(continueBuyNowSource).not.toContain("url: `/orders/${orderId}/confirm`");
+    expect(continueBuyNowSource).not.toContain('showSaveSuccessDialog.value = true');
+    expect(source).not.toContain('showSaveSuccessDialog');
+    expect(source).not.toContain('SEVEN_DAD_WECHAT_ID');
   });
 });

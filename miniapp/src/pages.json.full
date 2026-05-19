@@ -106,7 +106,7 @@
     {
       "path": "pages/recipe-order/index",
       "style": {
-        "navigationBarTitleText": "成品配置页面"
+        "navigationBarTitleText": "订购成品"
       }
     },
     {

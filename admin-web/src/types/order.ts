@@ -71,6 +71,14 @@ export interface OrderItem {
   dailyIntakeG: number
   productionBatchId?: string
   allocatedAt?: string
+  dog?: {
+    id: string
+    name: string
+    breedName?: string
+    weightKg?: number
+    gender?: string
+  }
+  totalPrice?: number
 }
 
 /**
@@ -161,6 +169,18 @@ export interface Order {
   pricingBreakdownSnapshot?: PricingBreakdown
   dogId?: string
   addressId?: string
+  address?: {
+    id: string
+    recipientName: string
+    phone: string
+    region?: {
+      province?: string
+      city?: string
+      district?: string
+    }
+    regionText?: string
+    detailAddress?: string
+  } | null
   trackingNumber?: string
   carrierCode?: string
   shippedAt?: string | null
@@ -173,6 +193,10 @@ export interface Order {
   paidAt?: string | null
   paymentStatus?: PaymentStatus
   adminRemark?: string | null
+  aftersaleType?: string
+  aftersaleReason?: string
+  aftersaleSince?: string | null
+  aftersalePhotos?: string[]
 }
 
 /**

@@ -5,7 +5,7 @@ import {
   ORDER_REPOSITORY,
   ORDER_STATUS_HISTORY_REPOSITORY,
 } from '../order/order.service';
-import { GlobalConfigService } from '../config/global-config.service';
+import { PlatformConfigService } from '../platform-config/platform-config.service';
 
 /**
  * Order Scheduler Service
@@ -23,7 +23,7 @@ export class OrderSchedulerService {
     @Inject(ORDER_STATUS_HISTORY_REPOSITORY)
     private readonly statusHistoryRepository: any,
     private readonly orderService: OrderService,
-    private readonly globalConfigService: GlobalConfigService,
+    private readonly platformConfigService: PlatformConfigService,
   ) {}
 
   /**
@@ -114,9 +114,14 @@ export class OrderSchedulerService {
     this.logger.debug('[OrderScheduler] Checking for expired unpaid orders...');
 
     try {
-      // Get payment timeout configuration
-      const globalConfig = await this.globalConfigService.getGlobalConfig();
-      const paymentTimeoutMinutes = globalConfig.paymentTimeoutMinutes ?? 30;
+      // Get payment timeout configuration from the admin payment settings.
+      const paymentConfig = await this.platformConfigService.getPaymentConfig();
+      if (!paymentConfig.autoCloseUnpaid) {
+        this.logger.debug('[OrderScheduler] Auto close unpaid orders disabled');
+        return;
+      }
+
+      const paymentTimeoutMinutes = paymentConfig.paymentTimeoutMinutes ?? 30;
 
       // Get all pending payment orders
       const pendingPaymentOrders =

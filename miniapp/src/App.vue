@@ -53,4 +53,18 @@ page {
   background-color: #f5f5f5;
   font-size: 14px;
 }
+
+button {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  padding: 0;
+  margin: 0;
+}
+
+button::after {
+  border: none;
+}
 </style>

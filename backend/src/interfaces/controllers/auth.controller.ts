@@ -3,7 +3,14 @@
  * Handles authentication endpoints
  */
 
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  HttpCode,
+  HttpStatus,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -24,6 +31,9 @@ import {
   SendSmsResponseDto,
 } from '../dto/auth/phone-login.dto';
 import * as bcrypt from 'bcrypt';
+import { AuthGuard, CurrentUser } from '../auth';
+import type { RequestUser } from '../auth';
+import { AdminGuard } from '../guards/role.guard';
 
 export class LoginRequestDto {
   @ApiProperty({
@@ -53,6 +63,22 @@ export class AdminLoginRequestDto {
   })
   @IsString()
   password!: string;
+}
+
+export class AdminChangePasswordRequestDto {
+  @ApiProperty({
+    description: 'Current admin password',
+    example: 'admin123',
+  })
+  @IsString()
+  currentPassword!: string;
+
+  @ApiProperty({
+    description: 'New admin password',
+    example: 'new-password-123',
+  })
+  @IsString()
+  newPassword!: string;
 }
 
 @ApiTags('Auth')
@@ -449,6 +475,76 @@ export class AuthController {
       });
     } catch (error: any) {
       return ApiResponseDto.error(500, error.message || '登录失败');
+    }
+  }
+
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiOperation({ summary: 'Change current admin password' })
+  @ApiResponse({
+    status: 200,
+    description: 'Password changed successfully',
+  })
+  async changeAdminPassword(
+    @CurrentUser() currentUser: RequestUser,
+    @Body() dto: AdminChangePasswordRequestDto,
+  ): Promise<any> {
+    try {
+      const currentPassword = dto.currentPassword?.trim();
+      const newPassword = dto.newPassword?.trim();
+
+      if (!currentPassword || !newPassword) {
+        return ApiResponseDto.error(400, '当前密码和新密码不能为空');
+      }
+
+      if (newPassword.length < 8 || newPassword.length > 64) {
+        return ApiResponseDto.error(400, '新密码长度需为8-64位');
+      }
+
+      const user = await this.prisma.user.findUnique({
+        where: { id: currentUser.userId },
+        select: {
+          id: true,
+          password: true,
+          status: true,
+        },
+      });
+
+      if (!user) {
+        return ApiResponseDto.error(404, '账号不存在');
+      }
+
+      if (user.status !== 'ACTIVE') {
+        return ApiResponseDto.error(403, '账号已被禁用');
+      }
+
+      if (!user.password) {
+        return ApiResponseDto.error(400, '当前账号未设置密码，请先联系管理员初始化密码');
+      }
+
+      const isCurrentPasswordValid = await bcrypt.compare(
+        currentPassword,
+        user.password,
+      );
+      if (!isCurrentPasswordValid) {
+        return ApiResponseDto.error(401, '当前密码错误');
+      }
+
+      const isSamePassword = await bcrypt.compare(newPassword, user.password);
+      if (isSamePassword) {
+        return ApiResponseDto.error(400, '新密码不能与当前密码相同');
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { password: hashedPassword },
+      });
+
+      return ApiResponseDto.success({ changed: true });
+    } catch (error: any) {
+      return ApiResponseDto.error(500, error.message || '修改密码失败');
     }
   }
 }

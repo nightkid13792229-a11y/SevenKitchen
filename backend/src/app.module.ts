@@ -164,6 +164,16 @@ import { DogProfileAnalyticsController } from './interfaces/controllers/dog-prof
 import { AdminDogProfileAnalyticsController } from './interfaces/controllers/admin-dog-profile-analytics.controller';
 import { ProcurementSkuService } from './application/ingredient/procurement-sku.service';
 import { IngredientSuggestionsController } from './interfaces/controllers/ingredient-suggestions.controller';
+import {
+  PlatformConfigController,
+  PublicPlatformConfigController,
+} from './interfaces/controllers/platform-config.controller';
+import { PlatformConfigService } from './application/platform-config/platform-config.service';
+import {
+  AdminWechatRefundController,
+  WechatPayController,
+} from './interfaces/controllers/payments/wechat-pay.controller';
+import { WechatPaymentService } from './application/payment/wechat-payment.service';
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -254,6 +264,10 @@ validatePrismaConfig();
     FeedbackController,
     ProcurementSkuController,
     IngredientSuggestionsController,
+    PlatformConfigController,
+    PublicPlatformConfigController,
+    WechatPayController,
+    AdminWechatRefundController,
     ...(isPrismaEnabled()
       ? [DogProfileAnalyticsController, AdminDogProfileAnalyticsController]
       : []),
@@ -615,6 +629,8 @@ validatePrismaConfig();
     RecommendedProductService,
     DogProfileAnalyticsService,
     ProcurementSkuService,
+    PlatformConfigService,
+    WechatPaymentService,
   ],
 })
 export class AppModule implements OnModuleInit {

@@ -186,42 +186,26 @@
         </view>
       </view>
 
-      <!-- 待付款状态下的支付引导 -->
+      <!-- 待付款状态下的在线支付 -->
       <view
         class="section payment-guide-section"
         v-if="order.status === 'PENDING_PAYMENT'"
       >
-        <view class="section-title">支付方式</view>
+        <view class="section-title">订单支付</view>
 
         <view class="payment-guide-card">
           <view class="guide-header">
-            <text class="guide-title">支持微信及支付宝支付</text>
+            <text class="guide-title">微信支付</text>
           </view>
 
-          <view class="guide-steps">
-            <view class="step-item">
-              <text class="step-number">1</text>
-              <text class="step-text">添加Seven爸爸的微信</text>
-            </view>
-            <view class="step-item">
-              <text class="step-number">2</text>
-              <text class="step-text">复制订单号发送给Seven爸爸, 以确认优惠及最终付款金额</text>
-            </view>
-            <view class="step-item">
-              <text class="step-number">3</text>
-              <text class="step-text">完成支付</text>
-            </view>
+          <view class="order-amount-info">
+            <text class="amount-label">待支付金额</text>
+            <text class="amount-value">¥{{ formatAmount(order.amountTotal || order.totalAmount) }}</text>
           </view>
 
-          <view class="wechat-contact">
-            <text class="contact-label">Seven爸爸微信号:</text>
-            <text class="contact-value">zhaochengccc</text>
-            <button
-              class="btn-copy-wechat"
-              @tap="copyWechatId"
-            >
-              复制微信号
-            </button>
+          <view class="payment-deadline-card" v-if="order.paymentAutoCloseEnabled">
+            <text class="deadline-label">剩余支付时间</text>
+            <text class="deadline-value">{{ paymentCountdownText }}</text>
           </view>
 
           <view class="order-id-copy">
@@ -236,10 +220,34 @@
           </view>
 
           <view class="payment-tip">
-            <text class="tip-icon">⏰</text>
-            <text class="tip-text">请尽快完成支付，订单长时间未付款可能会被取消</text>
+            <text class="tip-text">支付完成后订单会由微信支付回调确认，请稍后刷新查看状态。</text>
           </view>
+
+          <button
+            class="btn-online-pay"
+            :disabled="paying || paymentExpired"
+            @tap="payOrder"
+          >
+            {{ paymentExpired ? '支付已超时' : paying ? '调起支付中...' : '立即微信支付' }}
+          </button>
         </view>
+      </view>
+
+      <view class="section service-section">
+        <view class="section-title">客服</view>
+        <button
+          v-if="customerServiceConfig.enabled"
+          class="btn-service-contact"
+          open-type="contact"
+          show-message-card="true"
+          :send-message-title="customerServiceOrderTitle"
+          :send-message-path="customerServiceOrderPath"
+        >
+          联系客服
+        </button>
+        <button v-else class="btn-service-contact secondary" @tap="contactService">
+          联系客服
+        </button>
       </view>
 
       <!-- 商品信息 -->
@@ -392,8 +400,7 @@
       </view>
 
       <!-- 售后服务（FREEZING、SHIPPED或COMPLETED状态可申请） -->
-      <!-- 已关闭售后入口 -->
-      <!-- <view class="section aftersale-section" v-if="canApplyAftersale(order.status)">
+      <view class="section aftersale-section" v-if="canApplyAftersale(order.status)">
         <view class="section-title">售后服务</view>
         <view class="aftersale-buttons">
           <button class="btn-aftersale" @tap="applyAftersaleType('REFUND')">
@@ -404,13 +411,12 @@
           </button>
           <button class="btn-aftersale" @tap="applyAftersaleType('COMPLAINT')">
             <text class="btn-text">投诉建议</text>
-          </button>
+            </button>
+          </view>
         </view>
-      </view> -->
 
       <!-- 售后信息（AFTERSALE状态显示） -->
-      <!-- 已关闭售后信息展示 -->
-      <!-- <view class="section aftersale-info-section" v-if="order.status === 'AFTERSALE'">
+      <view class="section aftersale-info-section" v-if="order.status === 'AFTERSALE'">
         <view class="section-title">售后信息</view>
         <view class="aftersale-info">
           <view class="info-row">
@@ -437,9 +443,9 @@
                 @tap="previewAftersaleImage(idx)"
               />
             </view>
+            </view>
           </view>
         </view>
-      </view> -->
 
       <!-- 物流信息（仅在SHIPPED状态显示）-->
       <view class="section shipping-section" v-if="order.status === 'SHIPPED' && order.trackingNumber">
@@ -536,19 +542,28 @@
     <!-- Phase 9: Simplified action buttons aligned with e-commerce standards -->
     <!-- Phase 9.1: Added FREEZING and AFTERSALE status actions -->
     <view class="bottom-actions" v-if="order">
+      <!-- 待付款状态 -->
+      <view v-if="order.status === 'PENDING_PAYMENT'" class="action-buttons">
+        <button class="btn-action btn-cancel" @tap="cancelOrder">取消订单</button>
+        <button class="btn-action btn-primary" :disabled="paying || paymentExpired" @tap="payOrder">
+          {{ paymentExpired ? '已超时' : '付款' }}
+        </button>
+      </view>
+
       <!-- 生产中状态 (合并PAID和IN_PRODUCTION) -->
-      <view v-if="order.status === 'PAID' || order.status === 'IN_PRODUCTION'" class="action-buttons">
+      <view v-else-if="order.status === 'PAID' || order.status === 'IN_PRODUCTION'" class="action-buttons">
         <!-- 移除联系客服按钮 -->
       </view>
 
       <!-- 急冻中状态 -->
       <view v-else-if="order.status === 'FREEZING'" class="action-buttons">
-        <!-- 移除联系客服按钮 -->
+        <button class="btn-action btn-secondary" @tap="applyAftersale">申请售后</button>
       </view>
 
       <!-- 已发货状态 -->
       <view v-else-if="order.status === 'SHIPPED'" class="action-buttons">
         <button class="btn-action btn-secondary" @tap="viewLogistics">查看物流</button>
+        <button class="btn-action btn-secondary" @tap="applyAftersale">申请售后</button>
         <button class="btn-action btn-primary" @tap="confirmReceived">确认收货</button>
       </view>
 
@@ -572,12 +587,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { onShow, onShareAppMessage } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
 import {
   bindOrderCustomerAddress as bindExistingOrderAddress,
   createOrderCustomerAddress,
+  createWechatPayment,
   getAdminOrderDetail,
   getAdminOrderFinancialSummary,
   getOrderFinancialSummary,
@@ -585,7 +601,8 @@ import {
   updateAdminOrderRemark,
   updateOrderCustomerAddress,
   type CustomerOrderFinancialSummary,
-  type StaffOrderAddress
+  type StaffOrderAddress,
+  type WechatPaymentResult
 } from '../../api/orders'
 import OrderProgressBar from '../../components/OrderProgressBar.vue'
 import { normalizeImageUrl } from '../../utils/config'
@@ -675,6 +692,10 @@ interface Order {
   paymentMethod?: string
   transactionId?: string
   paidAt?: string
+  paymentDeadline?: string | null
+  paymentRemainingSeconds?: number | null
+  paymentTimeoutMinutes?: number | null
+  paymentAutoCloseEnabled?: boolean | null
   // Phase 9.1: Aftersale fields
   aftersaleType?: string
   aftersaleSince?: string
@@ -698,9 +719,29 @@ interface Order {
   }
 }
 
+interface CustomerServiceConfig {
+  enabled: boolean
+  provider: string
+  customerServiceUrl?: string | null
+  orderCardTitleTemplate: string
+  orderCardPathTemplate: string
+  welcomeMessage?: string | null
+}
+
 const order = ref<Order | null>(null)
 const orderId = ref('')
 const orderFinancialSummary = ref<CustomerOrderFinancialSummary | null>(null)
+const customerServiceConfig = ref<CustomerServiceConfig>({
+  enabled: false,
+  provider: 'WECHAT_CUSTOMER_SERVICE',
+  customerServiceUrl: null,
+  orderCardTitleTemplate: '订单 {orderNo}',
+  orderCardPathTemplate: '/pages/order-detail/index?id={orderId}',
+  welcomeMessage: null
+})
+const paying = ref(false)
+const paymentRemainingSeconds = ref<number | null>(null)
+let paymentTimer: ReturnType<typeof setInterval> | null = null
 const remarkDraft = ref('')
 const savingAdminRemark = ref(false)
 const customerAddresses = ref<StaffOrderAddress[]>([])
@@ -730,6 +771,79 @@ const userInfo = ref({
 const isStaffOrAdmin = computed(() => {
   return userInfo.value.role === 'STAFF' || userInfo.value.role === 'ADMIN'
 })
+
+const paymentExpired = computed(() => {
+  return (
+    order.value?.status === 'PENDING_PAYMENT' &&
+    order.value?.paymentAutoCloseEnabled === true &&
+    paymentRemainingSeconds.value !== null &&
+    paymentRemainingSeconds.value <= 0
+  )
+})
+
+const paymentCountdownText = computed(() => {
+  if (paymentRemainingSeconds.value === null) {
+    return '不限时'
+  }
+
+  if (paymentRemainingSeconds.value <= 0) {
+    return '已超时'
+  }
+
+  const minutes = Math.floor(paymentRemainingSeconds.value / 60)
+  const seconds = paymentRemainingSeconds.value % 60
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+})
+
+const customerServiceOrderTitle = computed(() => {
+  const orderNo = order.value?.id ? formatOrderId(order.value.id) : ''
+  return customerServiceConfig.value.orderCardTitleTemplate
+    .split('{orderNo}').join(orderNo)
+    .split('{orderId}').join(order.value?.id || '')
+})
+
+const customerServiceOrderPath = computed(() => {
+  return customerServiceConfig.value.orderCardPathTemplate
+    .split('{orderId}').join(order.value?.id || orderId.value)
+    .split('{orderNo}').join(order.value?.id ? formatOrderId(order.value.id) : '')
+})
+
+function syncPaymentTimer() {
+  if (paymentTimer) {
+    clearInterval(paymentTimer)
+    paymentTimer = null
+  }
+
+  if (!order.value || order.value.status !== 'PENDING_PAYMENT') {
+    paymentRemainingSeconds.value = null
+    return
+  }
+
+  if (!order.value.paymentAutoCloseEnabled) {
+    paymentRemainingSeconds.value = null
+    return
+  }
+
+  const computeRemaining = () => {
+    if (order.value?.paymentDeadline) {
+      return Math.max(
+        0,
+        Math.floor((new Date(order.value.paymentDeadline).getTime() - Date.now()) / 1000)
+      )
+    }
+
+    return Math.max(0, Number(order.value?.paymentRemainingSeconds ?? 0))
+  }
+
+  paymentRemainingSeconds.value = computeRemaining()
+  paymentTimer = setInterval(() => {
+    paymentRemainingSeconds.value = Math.max(0, (paymentRemainingSeconds.value ?? 0) - 1)
+    if (paymentRemainingSeconds.value <= 0 && paymentTimer) {
+      clearInterval(paymentTimer)
+      paymentTimer = null
+    }
+  }, 1000)
+}
 
 const normalizedRemarkDraft = computed(() => remarkDraft.value.trim())
 const currentAdminRemark = computed(() => (order.value?.adminRemark ?? '').trim())
@@ -1049,6 +1163,14 @@ onMounted(() => {
 
   if (orderId.value) {
     loadOrderDetail()
+    loadCustomerServiceConfig()
+  }
+})
+
+onUnmounted(() => {
+  if (paymentTimer) {
+    clearInterval(paymentTimer)
+    paymentTimer = null
   }
 })
 
@@ -1106,6 +1228,7 @@ async function loadOrderDetail() {
 
     if (res.code === 0 && res.data) {
       order.value = res.data
+      syncPaymentTimer()
       remarkDraft.value = res.data.adminRemark || ''
       console.log('[Order Detail] Order loaded:', {
         id: order.value.id,
@@ -1824,15 +1947,6 @@ function getCarrierName(code?: string): string {
   return carrierMap[code || ''] || code || '-'
 }
 
-function copyWechatId() {
-  uni.setClipboardData({
-    data: 'zhaochengccc',
-    success: () => {
-      uni.showToast({ title: '微信号已复制', icon: 'success' })
-    }
-  })
-}
-
 function copyOrderId() {
   uni.setClipboardData({
     data: order.value?.id || '',
@@ -1876,7 +1990,10 @@ async function cancelOrder() {
           uni.showLoading({ title: '取消中...' })
           const result = await request({
             url: `/orders/${orderId.value}/cancel`,
-            method: 'POST'
+            method: 'POST',
+            data: {
+              reason: '用户主动取消'
+            }
           })
           if (result.code === 0) {
             uni.showToast({
@@ -1899,60 +2016,97 @@ async function cancelOrder() {
   })
 }
 
-// 立即付款
-async function payOrder() {
+function requestWechatPayment(payment: WechatPaymentResult): Promise<void> {
+  if (!payment.payParams) {
+    return Promise.resolve()
+  }
+
+  return new Promise((resolve, reject) => {
+    uni.requestPayment({
+      timeStamp: payment.payParams.timeStamp,
+      nonceStr: payment.payParams.nonceStr,
+      package: payment.payParams.package,
+      signType: payment.payParams.signType,
+      paySign: payment.payParams.paySign,
+      success: () => resolve(),
+      fail: (err: any) => reject(err),
+    } as any)
+  })
+}
+
+async function loadCustomerServiceConfig() {
   try {
-    // 开发环境：显示模拟支付确认
-    const confirmed = await new Promise<boolean>((resolve) => {
-      uni.showModal({
-        title: '模拟支付',
-        content: '测试环境下使用模拟支付，确定继续吗？',
-        success: (res) => resolve(res.confirm),
-        fail: () => resolve(false)
-      })
-    })
-
-    if (!confirmed) {
-      return
-    }
-
-    uni.showLoading({ title: '正在处理支付...' })
-
-    // 调用后端支付API
-    const res = await request({
-      url: `/orders/${orderId.value}/pay`,
-      method: 'POST'
-    })
+    const res = await request<CustomerServiceConfig>({
+      url: '/platform-config/customer-service',
+      method: 'GET',
+      quiet: true,
+      suppressErrorToast: true,
+    } as any)
 
     if (res.code === 0 && res.data) {
-      uni.showToast({
-        title: '支付成功',
-        icon: 'success'
-      })
+      customerServiceConfig.value = {
+        ...customerServiceConfig.value,
+        ...res.data,
+      }
+    }
+  } catch (error) {
+    console.warn('[Order Detail] Load customer service config failed:', error)
+  }
+}
 
-      // 刷新订单详情
-      await loadOrderDetail()
-    } else {
+// 立即付款
+async function payOrder() {
+  if (paying.value || paymentExpired.value) {
+    return
+  }
+
+  try {
+    paying.value = true
+    uni.showLoading({ title: '调起支付中...' })
+
+    const res = await createWechatPayment(orderId.value)
+    if (res.code !== 0 || !res.data) {
       throw new Error(res.message || '支付失败')
     }
 
-  } catch (error) {
+    uni.hideLoading()
+    await requestWechatPayment(res.data)
+
+    uni.showToast({
+      title: '支付处理中',
+      icon: 'success'
+    })
+
+    await loadOrderDetail()
+  } catch (error: any) {
     console.error('Payment error:', error)
-    const errorMessage = error instanceof Error ? error.message : '支付失败，请重试'
+    const errorMessage = error?.errMsg?.includes('cancel')
+      ? '已取消支付'
+      : error instanceof Error
+        ? error.message
+        : '支付失败，请重试'
     uni.showToast({
       title: errorMessage,
       icon: 'none'
     })
   } finally {
+    paying.value = false
     uni.hideLoading()
   }
 }
 
 // 联系客服
 function contactService() {
+  if (customerServiceConfig.value.customerServiceUrl) {
+    uni.navigateTo({
+      url: `/pages/common/webview?url=${encodeURIComponent(customerServiceConfig.value.customerServiceUrl)}`
+    })
+    return
+  }
+
   uni.showModal({
     title: '联系客服',
-    content: '客服电话：400-123-4567\n工作时间：9:00-18:00',
+    content: '客服暂未启用，请稍后再试',
     showCancel: false
   })
 }
@@ -1976,7 +2130,7 @@ async function confirmReceived() {
         try {
           uni.showLoading({ title: '确认中...' })
           const result = await request({
-            url: `/orders/${orderId.value}/confirm`,
+            url: `/orders/${orderId.value}/complete`,
             method: 'POST'
           })
           if (result.code === 0) {
@@ -2159,26 +2313,6 @@ async function applyRefund() {
   })
 }
 
-// 联系Seven爸
-function contactSevenDad() {
-  uni.showModal({
-    title: '联系Seven爸',
-    content: '客服微信：zhaochengccc\n客服电话：400-123-4567\n工作时间：9:00-18:00',
-    confirmText: '复制微信号',
-    cancelText: '关闭',
-    success: (res) => {
-      if (res.confirm) {
-        uni.setClipboardData({
-          data: 'zhaochengccc',
-          success: () => {
-            uni.showToast({ title: '微信号已复制', icon: 'success' })
-          }
-        })
-      }
-    }
-  })
-}
-
 </script>
 
 <style scoped>
@@ -2213,7 +2347,11 @@ function contactSevenDad() {
 .btn-action {
   flex: 1;
   height: 88rpx;
-  line-height: 88rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   border-radius: 44rpx;
   font-size: 28rpx;
   border: none;
@@ -2275,6 +2413,33 @@ function contactSevenDad() {
   gap: 20rpx;
 }
 
+.service-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.btn-service-contact {
+  width: 100%;
+  height: 82rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border-radius: 12rpx;
+  border: none;
+  background-color: #07c160;
+  color: #fff;
+  font-size: 30rpx;
+}
+
+.btn-service-contact.secondary {
+  background-color: #fff;
+  color: #1890ff;
+  border: 1rpx solid #1890ff;
+}
+
 .remark-textarea {
   width: 100%;
   min-height: 180rpx;
@@ -2315,7 +2480,11 @@ function contactSevenDad() {
 .remark-btn {
   flex: 1;
   height: 80rpx;
-  line-height: 80rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   border-radius: 12rpx;
   font-size: 28rpx;
   border: none;
@@ -3202,7 +3371,11 @@ function contactSevenDad() {
 .btn-submit-review {
   width: 100%;
   height: 88rpx;
-  line-height: 88rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   background-color: #1890ff;
   color: #fff;
   border-radius: 44rpx;
@@ -3269,6 +3442,28 @@ function contactSevenDad() {
   font-size: 36rpx;
   font-weight: bold;
   color: #ff4d4f;
+}
+
+.payment-deadline-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16rpx;
+  background-color: #fff;
+  border-radius: 8rpx;
+  margin-bottom: 16rpx;
+}
+
+.deadline-label {
+  font-size: 26rpx;
+  color: #666;
+}
+
+.deadline-value {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #ff4d4f;
+  font-family: monospace;
 }
 
 .guide-steps {
@@ -3360,6 +3555,27 @@ function contactSevenDad() {
   font-size: 24rpx;
   color: #ff9800;
   line-height: 1.5;
+}
+
+.btn-online-pay {
+  width: 100%;
+  height: 86rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  margin-top: 20rpx;
+  border-radius: 12rpx;
+  border: none;
+  background-color: #07c160;
+  color: #fff;
+  font-size: 30rpx;
+}
+
+.btn-online-pay[disabled] {
+  background-color: #c8c9cc;
+  color: #fff;
 }
 
 /* 原料照片样式 */

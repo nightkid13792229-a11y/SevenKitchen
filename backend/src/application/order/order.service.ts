@@ -1608,6 +1608,7 @@ export class OrderService {
     paymentMethod: string = 'WECHAT',
     actor: 'customer' | 'staff' | 'admin' | 'system' = 'customer',
     actorId?: string | null,
+    transactionIdOverride?: string,
   ): Promise<Order> {
     const order = await this.orderRepository.findById(orderId);
     if (!order) {
@@ -1621,10 +1622,12 @@ export class OrderService {
 
     const fromStatus = order.status;
 
-    // Generate mock transaction ID: MOCK_<timestamp>_<random>
+    // Online payment callbacks provide the payment platform transaction ID.
+    // Legacy mock/manual calls keep the previous generated transaction format.
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(2, 9);
-    const transactionId = `MOCK_${timestamp}_${random}`;
+    const transactionId =
+      transactionIdOverride || `MOCK_${timestamp}_${random}`;
 
     // Record payment (sets paymentStatus, paidAt, transactionId, paymentMethod, and transitions to PAID)
     order.recordPayment(paymentMethod, transactionId);

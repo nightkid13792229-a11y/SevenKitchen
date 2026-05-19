@@ -121,7 +121,12 @@ const api = {
 // Note: Response interceptor already extracts data, so we don't need .then(res => res.data)
 export const authApi = {
   login: (username: string, password: string): Promise<{ token: string; username: string }> =>
-    api.post('/auth/login', { username, password })
+    api.post('/auth/login', { username, password }),
+  changePassword: (data: {
+    currentPassword: string
+    newPassword: string
+  }): Promise<{ changed: boolean }> =>
+    api.post('/auth/change-password', data)
 }
 
 export const dashboardApi = {
@@ -181,5 +186,8 @@ export { purchasingApi } from './purchasing'
 
 // Re-export finance API
 export { financeApi } from './finance'
+
+// Re-export platform configuration API
+export { platformConfigApi } from './platformConfig'
 
 export default api

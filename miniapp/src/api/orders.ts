@@ -5,6 +5,26 @@
 
 import { request } from '../utils/api';
 
+export interface WechatPaymentResult {
+  provider: 'WECHAT_PAY';
+  mode: string;
+  orderId: string;
+  status: string;
+  amountTotal: number;
+  paymentDeadline: string | null;
+  paymentRemainingSeconds: number | null;
+  paymentTimeoutMinutes: number;
+  autoCloseUnpaid: boolean;
+  payParams: {
+    appId: string;
+    timeStamp: string;
+    nonceStr: string;
+    package: string;
+    signType: 'RSA';
+    paySign: string;
+  } | null;
+}
+
 export interface CustomerOrderFinancialSummary {
   orderId: string;
   settlementStatus: 'PENDING' | 'SETTLED';
@@ -97,6 +117,16 @@ export function getOrderFinancialSummary(orderId: string) {
     method: 'GET',
     quiet: true,
     suppressErrorToast: true,
+  });
+}
+
+/**
+ * 创建微信小程序支付参数
+ */
+export function createWechatPayment(orderId: string) {
+  return request<WechatPaymentResult>({
+    url: `/orders/${orderId}/wechat-pay`,
+    method: 'POST',
   });
 }
 

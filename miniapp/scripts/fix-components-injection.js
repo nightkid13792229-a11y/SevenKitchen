@@ -64,6 +64,24 @@ const findStaticSourceDir = (assetDirName) => {
   return null;
 };
 
+const copyDirectoryRecursive = (sourceDir, targetDir) => {
+  fs.mkdirSync(targetDir, { recursive: true });
+
+  for (const entry of fs.readdirSync(sourceDir, { withFileTypes: true })) {
+    const sourcePath = path.join(sourceDir, entry.name);
+    const targetPath = path.join(targetDir, entry.name);
+
+    if (entry.isDirectory()) {
+      copyDirectoryRecursive(sourcePath, targetPath);
+      continue;
+    }
+
+    if (entry.isFile()) {
+      fs.copyFileSync(sourcePath, targetPath);
+    }
+  }
+};
+
 const syncStaticAssetDirectory = (distDir, assetDirName) => {
   const sourceDir = findStaticSourceDir(assetDirName);
 
@@ -75,7 +93,7 @@ const syncStaticAssetDirectory = (distDir, assetDirName) => {
   const targetDir = path.join(distDir, 'static', assetDirName);
   fs.rmSync(targetDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   fs.mkdirSync(path.dirname(targetDir), { recursive: true });
-  fs.cpSync(sourceDir, targetDir, { recursive: true });
+  copyDirectoryRecursive(sourceDir, targetDir);
   console.log(`✅ 已同步静态资源 ${assetDirName}: ${distDir}`);
 };
 

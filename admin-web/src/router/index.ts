@@ -105,6 +105,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '订单详情' }
       },
       {
+        path: 'aftersale',
+        name: 'AftersaleManagement',
+        component: () => import('@/views/Aftersale/AftersaleManagement.vue'),
+        meta: { title: '售后工单' }
+      },
+      {
         path: 'inventory',
         name: 'Inventory',
         component: () => import('@/views/Inventory.vue'),
@@ -121,6 +127,18 @@ const routes: RouteRecordRaw[] = [
         name: 'GlobalConfig',
         component: () => import('@/views/GlobalConfig.vue'),
         meta: { title: '全局配置' }
+      },
+      {
+        path: 'payment-config',
+        name: 'PaymentConfig',
+        component: () => import('@/views/PaymentConfig.vue'),
+        meta: { title: '支付配置' }
+      },
+      {
+        path: 'customer-service-config',
+        name: 'CustomerServiceConfig',
+        component: () => import('@/views/CustomerServiceConfig.vue'),
+        meta: { title: '客服配置' }
       },
       {
         path: 'purchasing',

@@ -68,6 +68,18 @@
       }
     },
     {
+      "path": "pages/cart/index",
+      "style": {
+        "navigationBarTitleText": "购物车"
+      }
+    },
+    {
+      "path": "pages/aftersale-apply/index",
+      "style": {
+        "navigationBarTitleText": "申请售后"
+      }
+    },
+    {
       "path": "pages/calculate-portion/index",
       "style": {
         "navigationBarTitleText": "饭量计算"

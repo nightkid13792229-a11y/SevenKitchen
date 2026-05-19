@@ -287,6 +287,59 @@ export class OrderDto {
   paymentStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | null;
 
   @ApiPropertyOptional({
+    description: 'Payment deadline for pending online payment orders',
+    example: '2025-01-20T11:00:00.000Z',
+    nullable: true,
+  })
+  paymentDeadline?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Remaining seconds before pending payment order is closed',
+    example: 1800,
+    nullable: true,
+  })
+  paymentRemainingSeconds?: number | null;
+
+  @ApiPropertyOptional({
+    description: 'Configured payment timeout in minutes',
+    example: 30,
+    nullable: true,
+  })
+  paymentTimeoutMinutes?: number | null;
+
+  @ApiPropertyOptional({
+    description: 'Whether unpaid orders are auto-closed by payment config',
+    example: true,
+    nullable: true,
+  })
+  paymentAutoCloseEnabled?: boolean | null;
+
+  @ApiPropertyOptional({
+    description: 'Aftersale type',
+    example: 'REFUND',
+    nullable: true,
+  })
+  aftersaleType?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Aftersale reason submitted by customer',
+    nullable: true,
+  })
+  aftersaleReason?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Aftersale application timestamp',
+    nullable: true,
+  })
+  aftersaleSince?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Aftersale evidence photo URLs',
+    type: [String],
+  })
+  aftersalePhotos?: string[];
+
+  @ApiPropertyOptional({
     description: 'Production photos (原料照片)',
     nullable: true,
   })
@@ -327,6 +380,11 @@ export class OrderSummaryDto {
     example: '2025-01-20T10:30:00.000Z',
   })
   createdAt!: string;
+
+  paymentDeadline?: string | null;
+  paymentRemainingSeconds?: number | null;
+  paymentTimeoutMinutes?: number | null;
+  paymentAutoCloseEnabled?: boolean | null;
 
   firstItem?: {
     dog?: {

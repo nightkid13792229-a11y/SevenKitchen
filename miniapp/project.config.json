@@ -1,5 +1,5 @@
 {
-  "appid": "wx2c1e8f1a2d7c2406",
+  "appid": "wx92924e25093f8f18",
   "projectname": "SevenKitchen",
   "description": "Seven的厨房小程序",
   "compileType": "miniprogram",
@@ -41,5 +41,5 @@
     "tabIndent": "insertSpaces",
     "tabSize": 2
   },
-  "libVersion": "3.13.0"
+  "libVersion": "3.15.2"
 }

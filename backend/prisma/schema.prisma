@@ -913,6 +913,50 @@ model GlobalConfig {
   @@map("global_config")
 }
 
+model PaymentConfig {
+  id                    String   @id @default("singleton") @map("id")
+  enabled               Boolean  @default(false) @map("enabled")
+  provider              String   @default("WECHAT_PAY") @map("provider") @db.VarChar(40)
+  mode                  String   @default("SANDBOX") @map("mode") @db.VarChar(20)
+  appId                 String?  @map("app_id") @db.VarChar(80)
+  mchId                 String?  @map("mch_id") @db.VarChar(64)
+  merchantSerialNumber  String?  @map("merchant_serial_number") @db.VarChar(128)
+  apiV3Key              String?  @map("api_v3_key") @db.VarChar(255)
+  privateKeyPem         String?  @map("private_key_pem")
+  notifyUrl             String?  @map("notify_url") @db.VarChar(500)
+  refundNotifyUrl       String?  @map("refund_notify_url") @db.VarChar(500)
+  paymentTimeoutMinutes Int      @default(30) @map("payment_timeout_minutes")
+  autoCloseUnpaid       Boolean  @default(true) @map("auto_close_unpaid")
+  allowRefund           Boolean  @default(false) @map("allow_refund")
+  requireRefundReview   Boolean  @default(true) @map("require_refund_review")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@map("payment_config")
+}
+
+model CustomerServiceConfig {
+  id                         String   @id @default("singleton") @map("id")
+  enabled                    Boolean  @default(false) @map("enabled")
+  provider                   String   @default("WECHAT_CUSTOMER_SERVICE") @map("provider") @db.VarChar(60)
+  corpId                     String?  @map("corp_id") @db.VarChar(80)
+  openKfid                   String?  @map("open_kfid") @db.VarChar(120)
+  customerServiceUrl         String?  @map("customer_service_url") @db.VarChar(500)
+  customerServiceSecret      String?  @map("customer_service_secret") @db.VarChar(255)
+  token                      String?  @map("token") @db.VarChar(255)
+  encodingAesKey             String?  @map("encoding_aes_key") @db.VarChar(255)
+  orderCardTitleTemplate     String   @default("订单 {orderNo}") @map("order_card_title_template") @db.VarChar(120)
+  orderCardPathTemplate      String   @default("/pages/orders/detail?id={orderId}") @map("order_card_path_template") @db.VarChar(300)
+  welcomeMessage             String?  @map("welcome_message") @db.VarChar(500)
+  autoAssignEnabled          Boolean  @default(true) @map("auto_assign_enabled")
+  sameCustomerPriority       Boolean  @default(true) @map("same_customer_priority")
+  serviceTimeoutMinutes      Int      @default(10) @map("service_timeout_minutes")
+  createdAt                  DateTime @default(now()) @map("created_at")
+  updatedAt                  DateTime @updatedAt @map("updated_at")
+
+  @@map("customer_service_config")
+}
+
 model DIYSheet {
   id              String   @id @default(uuid()) @map("id")
   userId          String   @map("user_id")

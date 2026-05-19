@@ -5,7 +5,7 @@
     <el-row :gutter="20" class="stats-row">
       <el-col :span="4">
         <order-stat-card
-          label="全部订单"
+          label="我的订单"
           :value="stats.total"
           type="primary"
           :icon="Document"
@@ -41,7 +41,7 @@
       </el-col>
       <el-col :span="4">
         <order-stat-card
-          label="已发货"
+          label="待收货"
           :value="stats.shipped"
           type="success"
           :icon="Van"
@@ -50,7 +50,7 @@
       </el-col>
       <el-col :span="4">
         <order-stat-card
-          label="已完成"
+          label="已收货"
           :value="stats.completed"
           type="success"
           :icon="CircleCheck"
@@ -71,6 +71,19 @@
           </div>
         </div>
       </template>
+
+      <div class="order-scope-tabs">
+        <el-radio-group v-model="activeOrderScope" size="large" @change="handleOrderScopeChange">
+          <el-radio-button
+            v-for="item in orderScopeOptions"
+            :key="item.key"
+            :label="item.key"
+          >
+            <span>{{ item.label }}</span>
+            <span class="scope-count">{{ item.count }}</span>
+          </el-radio-button>
+        </el-radio-group>
+      </div>
 
       <!-- 筛选和搜索区域 -->
       <el-form :inline="true" :model="filterForm" class="filter-form">
@@ -277,7 +290,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
@@ -335,6 +348,8 @@ const filterForm = reactive({
 })
 
 const dateRange = ref<[string, string] | null>(null)
+type OrderScopeKey = 'all' | 'pendingReceive' | 'received' | 'aftersale'
+const activeOrderScope = ref<OrderScopeKey>('all')
 
 // 分页
 const pagination = reactive({
@@ -352,19 +367,61 @@ const currentOrder = ref<OrderListItem | null>(null)
 // 状态选项（仅显示管理员需要关注的状态）
 // Phase 9: Simplified status options aligned with e-commerce standards
 const statusOptions = [
+  { label: '待付款', value: OrderStatusEnum.PENDING_PAYMENT },
   { label: '已付款', value: OrderStatusEnum.PAID },
   { label: '采购中', value: OrderStatusEnum.PURCHASING },
   { label: '生产中', value: OrderStatusEnum.IN_PRODUCTION },
   { label: '急冻中', value: OrderStatusEnum.FREEZING },
-  { label: '已发货', value: OrderStatusEnum.SHIPPED },
-  { label: '已完成', value: OrderStatusEnum.COMPLETED },
+  { label: '待收货', value: OrderStatusEnum.SHIPPED },
+  { label: '已收货', value: OrderStatusEnum.COMPLETED },
+  { label: '售后中', value: OrderStatusEnum.AFTERSALE },
   { label: '已取消', value: OrderStatusEnum.CANCELLED }
 ]
+
+const orderScopeOptions = computed(() => [
+  {
+    key: 'all' as const,
+    label: '我的订单',
+    count: stats.value.total,
+    statuses: [] as OrderStatus[]
+  },
+  {
+    key: 'pendingReceive' as const,
+    label: '待收货',
+    count: stats.value.shipped,
+    statuses: [OrderStatusEnum.SHIPPED]
+  },
+  {
+    key: 'received' as const,
+    label: '已收货',
+    count: stats.value.completed,
+    statuses: [OrderStatusEnum.COMPLETED]
+  },
+  {
+    key: 'aftersale' as const,
+    label: '售后中',
+    count: stats.value.aftersale,
+    statuses: [OrderStatusEnum.AFTERSALE]
+  }
+])
+
+const hasSameStatuses = (left: OrderStatus[], right: OrderStatus[]) => {
+  if (left.length !== right.length) return false
+  return left.every((status) => right.includes(status))
+}
+
+const syncActiveOrderScopeFromStatus = () => {
+  const match = orderScopeOptions.value.find((item) =>
+    hasSameStatuses(filterForm.status, item.statuses)
+  )
+  activeOrderScope.value = match?.key || 'all'
+}
 
 // 状态卡片点击筛选映射
 // Phase 9: Simplified status mapping aligned with e-commerce standards
 const statCardStatusMap: Record<string, OrderStatus[]> = {
   '全部订单': [],
+  '我的订单': [],
   '已付款': [OrderStatusEnum.PAID],
   '生产中': [
     OrderStatusEnum.PURCHASING,
@@ -372,7 +429,17 @@ const statCardStatusMap: Record<string, OrderStatus[]> = {
     OrderStatusEnum.FREEZING
   ],
   '已发货': [OrderStatusEnum.SHIPPED],
-  '已完成': [OrderStatusEnum.COMPLETED]
+  '待收货': [OrderStatusEnum.SHIPPED],
+  '已完成': [OrderStatusEnum.COMPLETED],
+  '已收货': [OrderStatusEnum.COMPLETED],
+  '售后中': [OrderStatusEnum.AFTERSALE]
+}
+
+const handleOrderScopeChange = (key: OrderScopeKey) => {
+  const option = orderScopeOptions.value.find((item) => item.key === key)
+  filterForm.status = option ? [...option.statuses] : []
+  pagination.page = 1
+  loadOrders()
 }
 
 // 加载订单列表
@@ -417,6 +484,7 @@ const handleSearch = () => {
 
 // 筛选
 const handleFilter = () => {
+  syncActiveOrderScopeFromStatus()
   pagination.page = 1
   loadOrders()
 }
@@ -441,6 +509,7 @@ const handleReset = () => {
   filterForm.startDate = ''
   filterForm.endDate = ''
   dateRange.value = null
+  activeOrderScope.value = 'all'
   pagination.page = 1
   loadOrders()
 }
@@ -450,6 +519,7 @@ const handleStatCardClick = (label: string) => {
   const statuses = statCardStatusMap[label]
   if (statuses) {
     filterForm.status = statuses
+    syncActiveOrderScopeFromStatus()
     pagination.page = 1
     loadOrders()
   }
@@ -600,8 +670,8 @@ const getStatusText = (status: OrderStatus) => {
     PURCHASING: '采购中',
     IN_PRODUCTION: '制作中',
     FREEZING: '急冻中',
-    SHIPPED: '已发货',
-    COMPLETED: '已完成',
+    SHIPPED: '待收货',
+    COMPLETED: '已收货',
     CANCELLED: '已取消',
     AFTERSALE: '售后中'
   }
@@ -617,6 +687,34 @@ onMounted(() => {
 <style scoped>
 .orders-page {
   padding: 0;
+}
+
+.order-scope-tabs {
+  margin-bottom: 16px;
+}
+
+.order-scope-tabs :deep(.el-radio-button__inner) {
+  min-width: 104px;
+}
+
+.scope-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  margin-left: 8px;
+  border-radius: 999px;
+  background: rgba(64, 158, 255, 0.12);
+  color: #409eff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+:deep(.el-radio-button.is-active .scope-count) {
+  background: rgba(255, 255, 255, 0.24);
+  color: #fff;
 }
 
 .stats-row {

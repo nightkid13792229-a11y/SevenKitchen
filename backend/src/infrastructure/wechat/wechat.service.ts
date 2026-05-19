@@ -59,7 +59,10 @@ export class WechatService {
     // Check if credentials are missing or are placeholder values
     const isPlaceholder =
       this.appId === 'your_wechat_app_id' ||
-      this.appSecret === 'your_wechat_app_secret';
+      this.appSecret === 'your_wechat_app_secret' ||
+      this.appId === 'local_wechat_app_id' ||
+      this.appSecret === 'local_wechat_app_secret' ||
+      this.appId === 'touristappid';
     const isMissing = !this.appId || !this.appSecret;
     return isMissing || isPlaceholder;
   }

@@ -48,6 +48,9 @@ export interface CustomerServiceConfigResponse {
   orderCardTitleTemplate: string;
   orderCardPathTemplate: string;
   welcomeMessage: string | null;
+  orderDetailDeliveryNote: string | null;
+  orderDetailAftersaleNote: string | null;
+  orderDetailMerchantNote: string | null;
   autoAssignEnabled: boolean;
   sameCustomerPriority: boolean;
   serviceTimeoutMinutes: number;
@@ -70,6 +73,9 @@ export interface UpdateCustomerServiceConfigInput {
   orderCardTitleTemplate?: string;
   orderCardPathTemplate?: string;
   welcomeMessage?: string | null;
+  orderDetailDeliveryNote?: string | null;
+  orderDetailAftersaleNote?: string | null;
+  orderDetailMerchantNote?: string | null;
   autoAssignEnabled?: boolean;
   sameCustomerPriority?: boolean;
   serviceTimeoutMinutes?: number;
@@ -176,6 +182,21 @@ export class PlatformConfigService {
       'welcomeMessage',
       this.normalizeNullable(input.welcomeMessage),
     );
+    this.assignIfDefined(
+      data,
+      'orderDetailDeliveryNote',
+      this.normalizeNullable(input.orderDetailDeliveryNote),
+    );
+    this.assignIfDefined(
+      data,
+      'orderDetailAftersaleNote',
+      this.normalizeNullable(input.orderDetailAftersaleNote),
+    );
+    this.assignIfDefined(
+      data,
+      'orderDetailMerchantNote',
+      this.normalizeNullable(input.orderDetailMerchantNote),
+    );
     this.assignIfDefined(data, 'autoAssignEnabled', input.autoAssignEnabled);
     this.assignIfDefined(
       data,
@@ -256,6 +277,9 @@ export class PlatformConfigService {
       orderCardTitleTemplate: config.orderCardTitleTemplate,
       orderCardPathTemplate: config.orderCardPathTemplate,
       welcomeMessage: config.welcomeMessage,
+      orderDetailDeliveryNote: config.orderDetailDeliveryNote,
+      orderDetailAftersaleNote: config.orderDetailAftersaleNote,
+      orderDetailMerchantNote: config.orderDetailMerchantNote,
       autoAssignEnabled: config.autoAssignEnabled,
       sameCustomerPriority: config.sameCustomerPriority,
       serviceTimeoutMinutes: config.serviceTimeoutMinutes,

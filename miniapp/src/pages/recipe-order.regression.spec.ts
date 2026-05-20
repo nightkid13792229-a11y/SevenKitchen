@@ -103,11 +103,10 @@ describe('recipe-order phase one UI contract', () => {
     }
 
     expect(pagesJsonSource).toContain('"navigationBarTitleText": "成品配置页面"');
-    expect(templateSource).toContain('立即支付');
+    expect(templateSource).toContain('去确认订单');
     expect(templateSource).not.toContain('订购天数');
     expect(templateSource).not.toContain('原料采购来源');
     expect(templateSource).not.toContain('产品说明');
-    expect(templateSource).not.toContain('确认订单');
   });
 
   it('renders all recipe life-stage tags in Chinese on the order page', () => {
@@ -374,9 +373,8 @@ describe('recipe-order phase one UI contract', () => {
   });
 
   it('keeps the bottom pricing summary next to the confirmation button and right aligned', () => {
-    expect(templateSource).toContain('立即支付');
+    expect(templateSource).toContain('去确认订单');
     expect(templateSource).not.toContain('立即下单');
-    expect(templateSource).not.toContain('确认订单');
 
     const bottomBarBlocks = [...source.matchAll(/\.bottom-bar\s*\{([\s\S]*?)\}/g)]
       .map((match) => match[1]);
@@ -423,24 +421,22 @@ describe('recipe-order phase one UI contract', () => {
     });
   });
 
-  it('submits the saved purchase and package configuration directly to WeChat Pay', () => {
+  it('saves the purchase configuration and continues to checkout before payment', () => {
     const continueBuyNowSource = source.match(
       /async function continueBuyNow[\s\S]*?\r?\n}\r?\n\r?\nfunction goToCreateDog/,
     )?.[0] || '';
 
-    expect(continueBuyNowSource).toContain("url: '/orders'");
-    expect(continueBuyNowSource).toContain("method: 'POST'");
-    expect(continueBuyNowSource).toContain("type: 'FRESH_FOOD'");
     expect(continueBuyNowSource).toContain('snapshotId: pricingSnapshotId.value');
+    expect(continueBuyNowSource).toContain("uni.setStorageSync('direct_buy_order_config', orderConfig)");
+    expect(continueBuyNowSource).toContain("url: '/pages/checkout/index'");
+    expect(continueBuyNowSource).not.toContain("url: '/orders'");
     expect(continueBuyNowSource).not.toContain('addressId:');
     expect(continueBuyNowSource).not.toContain('targetProductionDate:');
-    expect(continueBuyNowSource).toContain("url: `/orders/${orderId}/confirm`");
-    expect(continueBuyNowSource).toContain('createWechatPayment(orderId)');
-    expect(continueBuyNowSource).toContain('requestOrderWechatPayment(paymentRes.data)');
-    expect(continueBuyNowSource).toContain("url: `/pages/order-detail/index?orderId=${orderId}`");
+    expect(continueBuyNowSource).not.toContain("url: `/orders/${orderId}/confirm`");
+    expect(continueBuyNowSource).not.toContain('createWechatPayment(orderId)');
+    expect(continueBuyNowSource).not.toContain('requestOrderWechatPayment(paymentRes.data)');
+    expect(continueBuyNowSource).not.toContain("url: `/pages/order-detail/index?orderId=${orderId}`");
     expect(continueBuyNowSource).not.toContain('showSaveSuccessDialog.value = true');
-    expect(continueBuyNowSource).not.toContain('/pages/checkout/index');
-    expect(source).not.toContain('uni.navigateTo({\n    url: `/pages/checkout/index');
   });
 
   it('does not show the old add-friend WeChat contact payment path', () => {

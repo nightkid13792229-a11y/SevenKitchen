@@ -3,7 +3,7 @@
   "projectname": "SevenKitchen",
   "description": "Seven的厨房小程序",
   "compileType": "miniprogram",
-  "miniprogramRoot": "dist/dev/mp-weixin/",
+  "miniprogramRoot": "dist/build/mp-weixin/",
   "setting": {
     "es6": true,
     "postcss": true,

@@ -178,6 +178,47 @@
           <div class="field-help">后台自定义文案：由管理员填写，显示给进入客服会话的客户。</div>
         </el-form-item>
 
+        <el-divider content-position="left">订单详情页展示文案</el-divider>
+
+        <el-form-item label="配送说明">
+          <el-input
+            v-model="form.orderDetailDeliveryNote"
+            class="field-control"
+            type="textarea"
+            :rows="3"
+            placeholder="默认顺丰冷链/特快配送，制作完成急冻后发出。"
+            autocomplete="off"
+            name="sevenkitchen-order-delivery-note"
+          />
+          <div class="field-help">显示位置：小程序订单详情页 -> 商家说明 -> 配送说明。</div>
+        </el-form-item>
+
+        <el-form-item label="售后说明">
+          <el-input
+            v-model="form.orderDetailAftersaleNote"
+            class="field-control"
+            type="textarea"
+            :rows="3"
+            placeholder="如需退款、重做或反馈问题，可在订单详情页售后区域提交申请。"
+            autocomplete="off"
+            name="sevenkitchen-order-aftersale-note"
+          />
+          <div class="field-help">显示位置：小程序订单详情页 -> 商家说明 -> 售后说明。</div>
+        </el-form-item>
+
+        <el-form-item label="商家补充说明">
+          <el-input
+            v-model="form.orderDetailMerchantNote"
+            class="field-control"
+            type="textarea"
+            :rows="3"
+            placeholder="例如：现做鲜食会按排期制作，急单请先联系客服确认。"
+            autocomplete="off"
+            name="sevenkitchen-order-merchant-note"
+          />
+          <div class="field-help">选填；填写后会作为“商家补充”显示在订单详情页。</div>
+        </el-form-item>
+
         <el-form-item label="自动分配客服">
           <el-switch v-model="form.autoAssignEnabled" />
           <div class="field-help">后续接入会话分配接口时使用。</div>
@@ -234,8 +275,11 @@ const form = reactive({
   openKfid: '',
   customerServiceUrl: '',
   orderCardTitleTemplate: '订单 {orderNo}',
-  orderCardPathTemplate: '/pages/orders/detail?id={orderId}',
+  orderCardPathTemplate: '/pages/order-detail/index?id={orderId}',
   welcomeMessage: '',
+  orderDetailDeliveryNote: '',
+  orderDetailAftersaleNote: '',
+  orderDetailMerchantNote: '',
   autoAssignEnabled: true,
   sameCustomerPriority: true,
   serviceTimeoutMinutes: 10,
@@ -257,6 +301,9 @@ const applyConfig = (data: CustomerServiceConfig) => {
   form.orderCardTitleTemplate = data.orderCardTitleTemplate;
   form.orderCardPathTemplate = data.orderCardPathTemplate;
   form.welcomeMessage = data.welcomeMessage || '';
+  form.orderDetailDeliveryNote = data.orderDetailDeliveryNote || '';
+  form.orderDetailAftersaleNote = data.orderDetailAftersaleNote || '';
+  form.orderDetailMerchantNote = data.orderDetailMerchantNote || '';
   form.autoAssignEnabled = data.autoAssignEnabled;
   form.sameCustomerPriority = data.sameCustomerPriority;
   form.serviceTimeoutMinutes = data.serviceTimeoutMinutes;
@@ -285,6 +332,9 @@ const saveConfig = async () => {
       openKfid: form.openKfid || null,
       customerServiceUrl: form.customerServiceUrl || null,
       welcomeMessage: form.welcomeMessage || null,
+      orderDetailDeliveryNote: form.orderDetailDeliveryNote || null,
+      orderDetailAftersaleNote: form.orderDetailAftersaleNote || null,
+      orderDetailMerchantNote: form.orderDetailMerchantNote || null,
     };
 
     if (secretForm.customerServiceSecret.trim()) {

@@ -55,6 +55,9 @@ export class PublicPlatformConfigController {
       orderCardTitleTemplate: config.orderCardTitleTemplate,
       orderCardPathTemplate: config.orderCardPathTemplate,
       welcomeMessage: config.welcomeMessage,
+      orderDetailDeliveryNote: config.orderDetailDeliveryNote,
+      orderDetailAftersaleNote: config.orderDetailAftersaleNote,
+      orderDetailMerchantNote: config.orderDetailMerchantNote,
     });
   }
 }

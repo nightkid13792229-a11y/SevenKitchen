@@ -550,7 +550,7 @@ export class OrdersController {
     @Param('id') id: string,
     @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<OrderDto> | ApiResponseDto<null>> {
-    const order = await this.orderService.getOrderById(id);
+    const order = await this.orderService.getOrderById(this.normalizeOrderId(id));
     if (!order) {
       return ApiResponseDto.error(404, 'Order not found');
     }
@@ -563,6 +563,17 @@ export class OrdersController {
 
     const response = await this.mapOrderToDto(order);
     return ApiResponseDto.success(response);
+  }
+
+  private normalizeOrderId(id: string) {
+    const normalized = String(id || '').trim();
+    if (/^[0-9a-f]{32}$/i.test(normalized)) {
+      return normalized.replace(
+        /^(.{8})(.{4})(.{4})(.{4})(.{12})$/,
+        '$1-$2-$3-$4-$5',
+      );
+    }
+    return normalized;
   }
 
   @Get(':id/pricing-breakdown')
@@ -919,6 +930,16 @@ export class OrdersController {
   }
 
   private async mapOrderToDto(order: Order): Promise<OrderDto> {
+    const customer = await this.prisma.user.findUnique({
+      where: { id: order.customerId },
+      select: {
+        id: true,
+        nickname: true,
+        phone: true,
+        avatarUrl: true,
+      },
+    });
+
     // Map pricing breakdown snapshot if available
     const pricingBreakdown = order.pricingBreakdownSnapshot
       ? {
@@ -991,6 +1012,14 @@ export class OrdersController {
             region: order.address.region,
             regionText: `${order.address.region.province} ${order.address.region.city}${order.address.region.district ? ' ' + order.address.region.district : ''}`,
             detailAddress: order.address.detail,
+          }
+        : null,
+      customer: customer
+        ? {
+            id: customer.id,
+            nickname: customer.nickname,
+            phone: customer.phone,
+            avatarUrl: customer.avatarUrl,
           }
         : null,
       status: order.status,

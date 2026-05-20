@@ -131,6 +131,7 @@ import { onShow, onLoad } from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
 import { createWechatPayment, type WechatPaymentResult } from '../../api/orders'
 import { formatShortDateTime } from '../../utils/date'
+import { requestWechatOrderPayment } from '../../utils/wechat-payment'
 
 // DEBUG flag for development logging
 const DEBUG = true
@@ -350,21 +351,7 @@ function canApplyAftersale(status: string): boolean {
 }
 
 function requestWechatPayment(payment: WechatPaymentResult): Promise<void> {
-  if (!payment.payParams) {
-    return Promise.resolve()
-  }
-
-  return new Promise((resolve, reject) => {
-    uni.requestPayment({
-      timeStamp: payment.payParams.timeStamp,
-      nonceStr: payment.payParams.nonceStr,
-      package: payment.payParams.package,
-      signType: payment.payParams.signType,
-      paySign: payment.payParams.paySign,
-      success: () => resolve(),
-      fail: (err: any) => reject(err),
-    } as any)
-  })
+  return requestWechatOrderPayment(payment)
 }
 
 async function payOrderFromList(orderId: string) {

@@ -1,4 +1,4 @@
-﻿-- Add local/production configurable payment and customer service settings.
+-- Add local/production configurable payment and customer service settings.
 -- Secrets are stored server-side and are not returned in admin GET responses.
 
 CREATE TABLE IF NOT EXISTS "payment_config" (

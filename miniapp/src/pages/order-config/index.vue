@@ -105,6 +105,7 @@
 import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { request, normalizeToUuid } from '../../utils/api'
 import { createWechatPayment, type WechatPaymentResult } from '../../api/orders'
+import { requestWechatOrderPayment } from '../../utils/wechat-payment'
 
 const recipeId = ref('')
 const dogId = ref('')
@@ -354,21 +355,7 @@ function loadPricingPreview(requestSeq = previewRequestSeq) {
 }
 
 function requestWechatPayment(payment: WechatPaymentResult): Promise<void> {
-  if (!payment.payParams) {
-    return Promise.resolve()
-  }
-
-  return new Promise((resolve, reject) => {
-    uni.requestPayment({
-      timeStamp: payment.payParams.timeStamp,
-      nonceStr: payment.payParams.nonceStr,
-      package: payment.payParams.package,
-      signType: payment.payParams.signType,
-      paySign: payment.payParams.paySign,
-      success: () => resolve(),
-      fail: (err: any) => reject(err),
-    } as any)
-  })
+  return requestWechatOrderPayment(payment)
 }
 
 function createOrder() {

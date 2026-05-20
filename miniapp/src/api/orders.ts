@@ -23,6 +23,7 @@ export interface WechatPaymentResult {
     signType: 'RSA';
     paySign: string;
   } | null;
+  orderInfo?: Record<string, any> | null;
 }
 
 export interface CustomerOrderFinancialSummary {

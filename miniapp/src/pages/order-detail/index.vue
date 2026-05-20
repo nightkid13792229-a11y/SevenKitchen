@@ -720,6 +720,7 @@ import OrderProgressBar from '../../components/OrderProgressBar.vue'
 import { normalizeImageUrl } from '../../utils/config'
 import { formatDateTime } from '../../utils/date'
 import { getNutritionStandardLabel } from '../../utils/label-mapping'
+import { requestWechatOrderPayment } from '../../utils/wechat-payment'
 import {
   getSourcePlanLabel,
   type IngredientSourcePlanCode
@@ -2221,21 +2222,7 @@ async function cancelOrder() {
 }
 
 function requestWechatPayment(payment: WechatPaymentResult): Promise<void> {
-  if (!payment.payParams) {
-    return Promise.resolve()
-  }
-
-  return new Promise((resolve, reject) => {
-    uni.requestPayment({
-      timeStamp: payment.payParams.timeStamp,
-      nonceStr: payment.payParams.nonceStr,
-      package: payment.payParams.package,
-      signType: payment.payParams.signType,
-      paySign: payment.payParams.paySign,
-      success: () => resolve(),
-      fail: (err: any) => reject(err),
-    } as any)
-  })
+  return requestWechatOrderPayment(payment)
 }
 
 async function loadCustomerServiceConfig() {

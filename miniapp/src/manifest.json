@@ -18,6 +18,7 @@
       "minified": true
     },
     "usingComponents": true,
+    "usingShopPlugin": true,
     "optimization": {
       "subPackages": true
     },

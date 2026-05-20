@@ -47,7 +47,37 @@ export interface WechatPayParams {
     signType: 'RSA';
     paySign: string;
   } | null;
+  orderInfo?: WechatOrderInfo | null;
 }
+
+type WechatOrderInfo = {
+  create_time: string;
+  type: number;
+  out_order_id: string;
+  openid: string;
+  path: string;
+  out_user_id: string;
+  order_detail: {
+    product_infos: Array<{
+      out_product_id: string;
+      out_sku_id: string;
+      product_cnt: number;
+      sale_price: number;
+      path: string;
+      title: string;
+      head_img?: string;
+    }>;
+    pay_info: {
+      pay_method_type: number;
+      prepay_id: string;
+      prepay_time: string;
+    };
+    price_info: {
+      order_price: number;
+      freight: number;
+    };
+  };
+};
 
 @Injectable()
 export class WechatPaymentService {
@@ -90,6 +120,7 @@ export class WechatPaymentService {
         paymentTimeoutMinutes: config.paymentTimeoutMinutes,
         autoCloseUnpaid: config.autoCloseUnpaid,
         payParams: null,
+        orderInfo: null,
       };
     }
 
@@ -154,6 +185,12 @@ export class WechatPaymentService {
       throw new BadRequestException('微信支付预下单失败：未返回 prepay_id');
     }
 
+    const orderInfo = this.buildWechatOrderInfo(
+      order,
+      outTradeNo,
+      totalFen,
+      response.prepay_id,
+    );
     const timeStamp = Math.floor(Date.now() / 1000).toString();
     const nonceStr = this.createNonce();
     const packageValue = `prepay_id=${response.prepay_id}`;
@@ -171,6 +208,7 @@ export class WechatPaymentService {
       ...paymentWindow,
       paymentTimeoutMinutes: config.paymentTimeoutMinutes,
       autoCloseUnpaid: config.autoCloseUnpaid,
+      orderInfo,
       payParams: {
         appId: config.appId!,
         timeStamp,
@@ -594,6 +632,89 @@ export class WechatPaymentService {
     return normalized;
   }
 
+  private buildWechatOrderInfo(
+    order: {
+      id: string;
+      customerId: string;
+      createdAt: Date;
+      amountTotal: unknown;
+      amountShipping?: unknown;
+      customer: {
+        wechatOpenid?: string | null;
+      };
+      items?: Array<{
+        id: string;
+        recipeId?: string | null;
+        recipeSnapshot?: unknown;
+        packageCount?: number | null;
+        totalPrice?: unknown;
+      }>;
+    },
+    outTradeNo: string,
+    totalFen: number,
+    prepayId: string,
+  ): WechatOrderInfo {
+    const productInfos = (order.items || []).map((item, index) => {
+      const recipeId = item.recipeId || this.extractRecipeId(item.recipeSnapshot);
+      const title = this.extractRecipeName(item.recipeSnapshot) || 'SevenKitchen 鲜食';
+      const coverImageUrl = this.extractRecipeCoverImage(item.recipeSnapshot);
+      const path = recipeId
+        ? `pages/recipe-detail/index?id=${recipeId}`
+        : `pages/order-detail/index?id=${outTradeNo}`;
+
+      return {
+        out_product_id: recipeId || item.id || `${outTradeNo}-${index + 1}`,
+        out_sku_id: item.id || `${outTradeNo}-${index + 1}`,
+        product_cnt: 1,
+        sale_price: this.toFen(item.totalPrice ?? order.amountTotal),
+        path,
+        title: title.slice(0, 120),
+        ...(coverImageUrl ? { head_img: coverImageUrl } : {}),
+      };
+    });
+
+    return {
+      create_time: this.formatWechatOrderTime(order.createdAt),
+      type: 0,
+      out_order_id: outTradeNo,
+      openid: order.customer.wechatOpenid || '',
+      path: `pages/order-detail/index?id=${outTradeNo}`,
+      out_user_id: order.customerId,
+      order_detail: {
+        product_infos:
+          productInfos.length > 0
+            ? productInfos
+            : [
+                {
+                  out_product_id: outTradeNo,
+                  out_sku_id: outTradeNo,
+                  product_cnt: 1,
+                  sale_price: totalFen,
+                  path: `pages/order-detail/index?id=${outTradeNo}`,
+                  title: 'SevenKitchen 鲜食订单',
+                },
+              ],
+        pay_info: {
+          pay_method_type: 0,
+          prepay_id: prepayId,
+          prepay_time: this.formatWechatOrderTime(new Date()),
+        },
+        price_info: {
+          order_price: totalFen,
+          freight: this.toFen(order.amountShipping || 0),
+        },
+      },
+    };
+  }
+
+  private formatWechatOrderTime(value: Date) {
+    const pad = (part: number) => String(part).padStart(2, '0');
+    return (
+      [value.getFullYear(), pad(value.getMonth() + 1), pad(value.getDate())].join('-') +
+      ` ${pad(value.getHours())}:${pad(value.getMinutes())}:${pad(value.getSeconds())}`
+    );
+  }
+
   private shortOrderNo(orderId: string) {
     return this.toOutTradeNo(orderId).slice(-8).toUpperCase();
   }
@@ -634,6 +755,18 @@ export class WechatPaymentService {
   private extractRecipeName(snapshot: unknown): string {
     if (!snapshot || typeof snapshot !== 'object') return '';
     const value = (snapshot as { name?: unknown }).name;
+    return typeof value === 'string' ? value.trim() : '';
+  }
+
+  private extractRecipeId(snapshot: unknown): string {
+    if (!snapshot || typeof snapshot !== 'object') return '';
+    const value = (snapshot as { id?: unknown }).id;
+    return typeof value === 'string' ? value.trim() : '';
+  }
+
+  private extractRecipeCoverImage(snapshot: unknown): string {
+    if (!snapshot || typeof snapshot !== 'object') return '';
+    const value = (snapshot as { coverImageUrl?: unknown }).coverImageUrl;
     return typeof value === 'string' ? value.trim() : '';
   }
 

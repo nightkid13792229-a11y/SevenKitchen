@@ -21,6 +21,66 @@
         class="config-alert"
       />
 
+      <section class="callback-guide">
+        <div class="guide-header">
+          <div>
+            <h4>微信支付商户后台填写参考</h4>
+            <p>这些地址来自当前线上后端域名，复制到微信支付商户平台对应位置即可。</p>
+          </div>
+          <el-button type="primary" plain @click="fillRecommendedCallbacks">
+            填入推荐回调地址
+          </el-button>
+        </div>
+
+        <div class="guide-grid">
+          <div class="guide-item">
+            <span class="guide-label">服务器公网 IP</span>
+            <el-input :model-value="serverPublicIp" readonly>
+              <template #append>
+                <el-button @click="copyText(serverPublicIp)">复制</el-button>
+              </template>
+            </el-input>
+          </div>
+          <div class="guide-item">
+            <span class="guide-label">后端 API 域名</span>
+            <el-input :model-value="publicApiOrigin" readonly>
+              <template #append>
+                <el-button @click="copyText(publicApiOrigin)">复制</el-button>
+              </template>
+            </el-input>
+          </div>
+          <div class="guide-item guide-item-wide">
+            <span class="guide-label">支付结果通知 URL</span>
+            <el-input :model-value="recommendedNotifyUrl" readonly>
+              <template #append>
+                <el-button @click="copyText(recommendedNotifyUrl)">复制</el-button>
+              </template>
+            </el-input>
+            <p class="field-help">
+              微信支付商户平台 -> 产品中心/JSAPI 支付相关配置 -> 支付结果通知地址。
+            </p>
+          </div>
+          <div class="guide-item guide-item-wide">
+            <span class="guide-label">退款结果通知 URL</span>
+            <el-input :model-value="recommendedRefundNotifyUrl" readonly>
+              <template #append>
+                <el-button @click="copyText(recommendedRefundNotifyUrl)">复制</el-button>
+              </template>
+            </el-input>
+            <p class="field-help">
+              微信支付商户平台 -> 交易中心/退款通知配置。没有单独退款通知入口时，可先填到本页退款回调字段。
+            </p>
+          </div>
+        </div>
+
+        <el-alert
+          title="注意：微信支付只接受公网 HTTPS 回调。服务器 IP 用于安全白名单或排查，不要把 IP 当作回调 URL。"
+          type="info"
+          show-icon
+          :closable="false"
+        />
+      </section>
+
       <el-form
         v-loading="loading"
         :model="form"
@@ -216,6 +276,10 @@ import {
 const loading = ref(false);
 const saving = ref(false);
 const config = ref<PaymentConfig | null>(null);
+const serverPublicIp = '1.14.3.2';
+const publicApiOrigin = 'https://api.sevenkitchen.cloud';
+const recommendedNotifyUrl = `${publicApiOrigin}/api/v1/payments/wechat/notify`;
+const recommendedRefundNotifyUrl = `${publicApiOrigin}/api/v1/payments/wechat/refund-notify`;
 
 const form = reactive({
   enabled: false,
@@ -236,6 +300,21 @@ const secretForm = reactive({
   apiV3Key: '',
   privateKeyPem: '',
 });
+
+const copyText = async (text: string) => {
+  try {
+    await navigator.clipboard.writeText(text);
+    ElMessage.success('已复制');
+  } catch {
+    ElMessage.warning('复制失败，请手动选中复制');
+  }
+};
+
+const fillRecommendedCallbacks = () => {
+  form.notifyUrl = recommendedNotifyUrl;
+  form.refundNotifyUrl = recommendedRefundNotifyUrl;
+  ElMessage.success('已填入推荐回调地址，保存后生效');
+};
 
 const applyConfig = (data: PaymentConfig) => {
   config.value = data;
@@ -326,6 +405,58 @@ onMounted(loadConfig);
   margin-bottom: 20px;
 }
 
+.callback-guide {
+  margin-bottom: 22px;
+  padding: 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 8px;
+  background: #f8fbff;
+}
+
+.guide-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 14px;
+}
+
+.guide-header h4 {
+  margin: 0 0 6px;
+  color: #1f2937;
+  font-size: 16px;
+}
+
+.guide-header p {
+  margin: 0;
+  color: #6b7280;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.guide-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-bottom: 14px;
+}
+
+.guide-item {
+  min-width: 0;
+}
+
+.guide-item-wide {
+  grid-column: 1 / -1;
+}
+
+.guide-label {
+  display: block;
+  margin-bottom: 6px;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .config-form {
   max-width: 900px;
 }
@@ -392,6 +523,14 @@ onMounted(loadConfig);
 
   .inline-control {
     width: 100%;
+  }
+
+  .guide-header {
+    flex-direction: column;
+  }
+
+  .guide-grid {
+    grid-template-columns: 1fr;
   }
 }
 </style>

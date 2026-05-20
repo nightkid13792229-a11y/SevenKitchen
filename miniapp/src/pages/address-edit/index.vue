@@ -31,9 +31,16 @@
         <textarea class="textarea" placeholder="请输入详细地址" v-model="formData.detail" />
       </view>
 
-      <view class="form-item">
+      <view class="form-item default-address-row">
         <text class="label">设为默认地址</text>
-        <switch :checked="formData.isDefault" @change="onDefaultChange" />
+        <view class="compact-switch-wrap">
+          <switch
+            class="compact-switch"
+            color="#07c160"
+            :checked="formData.isDefault"
+            @change="onDefaultChange"
+          />
+        </view>
       </view>
 
       <!-- 隐私协议勾选 -->
@@ -286,6 +293,32 @@ function save() {
 
 .form-item {
   margin-bottom: 30rpx;
+}
+
+.default-address-row {
+  min-height: 76rpx;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4rpx 0;
+}
+
+.default-address-row .label {
+  margin-bottom: 0;
+}
+
+.compact-switch-wrap {
+  width: 88rpx;
+  height: 52rpx;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  overflow: visible;
+}
+
+.compact-switch {
+  transform: scale(0.72);
+  transform-origin: right center;
 }
 
 .label {

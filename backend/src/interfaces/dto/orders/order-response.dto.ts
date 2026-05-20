@@ -133,6 +133,17 @@ export class OrderDto {
     detailAddress: string;
   } | null;
 
+  @ApiPropertyOptional({
+    description: 'Customer information for order center display',
+    nullable: true,
+  })
+  customer?: {
+    id: string;
+    nickname: string | null;
+    phone: string | null;
+    avatarUrl: string | null;
+  } | null;
+
   @ApiProperty({ enum: OrderStatus })
   status!: OrderStatus;
 

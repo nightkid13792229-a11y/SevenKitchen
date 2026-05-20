@@ -441,7 +441,7 @@
         :disabled="!canBuyNow"
         @tap="buyNow"
       >
-        立即支付
+        去确认订单
       </button>
     </view>
   </view>
@@ -450,7 +450,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { request } from '../../utils/api'
-import { createWechatPayment, type WechatPaymentResult } from '../../api/orders'
 import { normalizeImageUrl } from '../../utils/config'
 import {
   buildLifeStageReminderText,
@@ -1736,24 +1735,6 @@ function buyNow() {
   void continueBuyNow()
 }
 
-function requestOrderWechatPayment(payment: WechatPaymentResult): Promise<void> {
-  if (!payment.payParams) {
-    return Promise.resolve()
-  }
-
-  return new Promise((resolve, reject) => {
-    uni.requestPayment({
-      timeStamp: payment.payParams.timeStamp,
-      nonceStr: payment.payParams.nonceStr,
-      package: payment.payParams.package,
-      signType: payment.payParams.signType,
-      paySign: payment.payParams.paySign,
-      success: () => resolve(),
-      fail: (err: any) => reject(err),
-    } as any)
-  })
-}
-
 async function continueBuyNow() {
   // ✅ 安全改进：使用快照ID而不是传递所有参数（防止价格篡改）
   if (!pricingSnapshotId.value) {
@@ -1789,64 +1770,9 @@ async function continueBuyNow() {
   }
 
   uni.setStorageSync('direct_buy_order_config', orderConfig)
-
-  try {
-    uni.showLoading({ title: '保存中...' })
-
-    const createRes = await request({
-      url: '/orders',
-      method: 'POST',
-      suppressErrorToast: true,
-      data: {
-        type: 'FRESH_FOOD',
-        snapshotId: pricingSnapshotId.value,
-      },
-    })
-
-    if (createRes.code !== 0 || !createRes.data?.id) {
-      throw new Error(createRes.message || '创建订单失败')
-    }
-
-    const orderId = createRes.data.id
-    const confirmRes = await request({
-      url: `/orders/${orderId}/confirm`,
-      method: 'POST',
-      suppressErrorToast: true,
-    })
-
-    if (confirmRes.code !== 0) {
-      throw new Error(confirmRes.message || '确认订单失败')
-    }
-
-    const paymentRes = await createWechatPayment(orderId)
-    if (paymentRes.code !== 0 || !paymentRes.data) {
-      throw new Error(paymentRes.message || '支付失败')
-    }
-
-    uni.hideLoading()
-    await requestOrderWechatPayment(paymentRes.data)
-
-    uni.showToast({
-      title: '支付处理中',
-      icon: 'success',
-      duration: 1500,
-    })
-
-    uni.navigateTo({
-      url: `/pages/order-detail/index?orderId=${orderId}`,
-    })
-  } catch (error: any) {
-    console.error('[RecipeOrder] Save purchase and package configuration failed:', error)
-    uni.hideLoading()
-    const errorMsg = error?.errMsg?.includes('cancel')
-      ? '已取消支付'
-      : error.message || '下单失败'
-
-    uni.showToast({
-      title: errorMsg,
-      icon: 'none',
-    })
-  }
+  uni.navigateTo({
+    url: '/pages/checkout/index',
+  })
 }
 
 function goToCreateDog() {

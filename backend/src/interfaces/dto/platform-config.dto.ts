@@ -106,6 +106,18 @@ export class UpdateCustomerServiceConfigDto {
   welcomeMessage?: string | null;
 
   @IsOptional()
+  @IsString()
+  orderDetailDeliveryNote?: string | null;
+
+  @IsOptional()
+  @IsString()
+  orderDetailAftersaleNote?: string | null;
+
+  @IsOptional()
+  @IsString()
+  orderDetailMerchantNote?: string | null;
+
+  @IsOptional()
   @IsBoolean()
   autoAssignEnabled?: boolean;
 

@@ -724,6 +724,13 @@ export class OrderService {
     return computed;
   }
 
+  private normalizeOrderNote(value: unknown): string | null {
+    if (value === null || value === undefined) return null;
+    const text =
+      typeof value === 'string' ? value.trim() : JSON.stringify(value).trim();
+    return text ? text.slice(0, 200) : null;
+  }
+
   private resolveOrderItemPackageInput(
     itemDto: CreateOrderItemDto,
   ): ResolvedOrderItemPackageInput {
@@ -1049,7 +1056,7 @@ export class OrderService {
       itemParams.quantityG,
       itemParams.packageCount,
       itemParams.packageSpecG,
-      null, // customRequirements
+      this.normalizeOrderNote(itemParams.customRequirements),
       dailyIntakeG,
       vacuumBagSpec, // vacuum bag specification
       null,

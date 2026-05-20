@@ -47,6 +47,9 @@ export interface CustomerServiceConfig {
   orderCardTitleTemplate: string;
   orderCardPathTemplate: string;
   welcomeMessage: string | null;
+  orderDetailDeliveryNote: string | null;
+  orderDetailAftersaleNote: string | null;
+  orderDetailMerchantNote: string | null;
   autoAssignEnabled: boolean;
   sameCustomerPriority: boolean;
   serviceTimeoutMinutes: number;
@@ -69,6 +72,9 @@ export interface CustomerServiceConfigUpdate {
   orderCardTitleTemplate?: string;
   orderCardPathTemplate?: string;
   welcomeMessage?: string | null;
+  orderDetailDeliveryNote?: string | null;
+  orderDetailAftersaleNote?: string | null;
+  orderDetailMerchantNote?: string | null;
   autoAssignEnabled?: boolean;
   sameCustomerPriority?: boolean;
   serviceTimeoutMinutes?: number;

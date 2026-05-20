@@ -65,7 +65,7 @@ export class WechatPaymentService {
   ): Promise<WechatPayParams> {
     const order = await this.prisma.order.findUnique({
       where: { id: orderId },
-      include: { customer: true },
+      include: { customer: true, items: true },
     });
 
     if (!order || order.customerId !== customerId) {
@@ -119,15 +119,26 @@ export class WechatPaymentService {
 
     const outTradeNo = this.toOutTradeNo(order.id);
     const totalFen = this.toFen(order.amountTotal);
+    const description = this.buildOrderDescription(order);
     const requestBody = {
       appid: config.appId,
       mchid: config.mchId,
-      description: `七号厨房订单 ${this.shortOrderNo(order.id)}`,
+      description,
       out_trade_no: outTradeNo,
       notify_url: config.notifyUrl,
       amount: {
         total: totalFen,
         currency: 'CNY',
+      },
+      detail: {
+        goods_detail: [
+          {
+            merchant_goods_id: outTradeNo,
+            goods_name: description,
+            quantity: 1,
+            unit_price: totalFen,
+          },
+        ],
       },
       payer: {
         openid: order.customer.wechatOpenid,
@@ -585,6 +596,45 @@ export class WechatPaymentService {
 
   private shortOrderNo(orderId: string) {
     return this.toOutTradeNo(orderId).slice(-8).toUpperCase();
+  }
+
+  private buildOrderDescription(order: {
+    id: string;
+    items?: Array<{
+      recipeSnapshot?: unknown;
+      packageCount?: number | null;
+      quantityG?: number | null;
+    }>;
+  }) {
+    const items = order.items || [];
+    const firstItem = items[0];
+    const recipeName = this.extractRecipeName(firstItem?.recipeSnapshot);
+    const itemCount = items.length || 1;
+    const packageCount = items.reduce(
+      (sum, item) => sum + Math.max(0, Number(item.packageCount || 0)),
+      0,
+    );
+    const quantityKg =
+      items.reduce(
+        (sum, item) => sum + Math.max(0, Number(item.quantityG || 0)),
+        0,
+      ) / 1000;
+
+    const parts = [
+      recipeName || '宠物鲜食',
+      itemCount > 1 ? `等${itemCount}件` : '',
+      packageCount > 0 ? `${packageCount}袋` : '',
+      quantityKg > 0 ? `${Number(quantityKg.toFixed(1))}kg` : '',
+    ].filter(Boolean);
+
+    const description = `SevenKitchen ${parts.join(' ')}`.trim();
+    return description.length > 127 ? description.slice(0, 127) : description;
+  }
+
+  private extractRecipeName(snapshot: unknown): string {
+    if (!snapshot || typeof snapshot !== 'object') return '';
+    const value = (snapshot as { name?: unknown }).name;
+    return typeof value === 'string' ? value.trim() : '';
   }
 
   private toFen(value: unknown) {

@@ -181,6 +181,23 @@
       </view>
     </view>
 
+    <view class="section order-note-section">
+      <view class="section-title">
+        <text class="title-text">订单备注</text>
+      </view>
+      <textarea
+        v-model="customerNote"
+        class="order-note-input"
+        maxlength="200"
+        auto-height
+        placeholder="可填写过敏提醒、分装标签、配送时间等特殊要求"
+      />
+      <view class="order-note-footer">
+        <text class="order-note-hint">备注会展示在订单详情页，便于客服和制作人员核对。</text>
+        <text class="order-note-count">{{ customerNote.length }}/200</text>
+      </view>
+    </view>
+
     <!-- 价格汇总（简化版） -->
     <view class="section price-section">
       <view class="section-title">
@@ -245,7 +262,6 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { onShow } from '@dcloudio/uni-app'
 import { request } from '../../utils/api'
-import { createWechatPayment, type WechatPaymentResult } from '../../api/orders'
 import {
   buildDefaultPackagePlan,
   estimateFeedDays,
@@ -344,6 +360,7 @@ const directBuyPrice = ref({
 // ========== 地址选择器相关 ==========
 const showAddressSelector = ref(false)
 const addressList = ref<Address[]>([])
+const customerNote = ref('')
 
 // ========== 制作日期相关 ==========
 const showProductionDatePicker = ref(false)
@@ -404,24 +421,6 @@ const estimatedDeliveryDateRange = computed(() => {
 const totalAmount = computed(() => {
   return directBuyPrice.value.amountTotal
 })
-
-function requestWechatPayment(payment: WechatPaymentResult): Promise<void> {
-  if (!payment.payParams) {
-    return Promise.resolve()
-  }
-
-  return new Promise((resolve, reject) => {
-    uni.requestPayment({
-      timeStamp: payment.payParams.timeStamp,
-      nonceStr: payment.payParams.nonceStr,
-      package: payment.payParams.package,
-      signType: payment.payParams.signType,
-      paySign: payment.payParams.paySign,
-      success: () => resolve(),
-      fail: (err: any) => reject(err),
-    } as any)
-  })
-}
 
 const averagePricePerPackage = computed(() => {
   if (orderConfig.value.totalPackages <= 0) return 0
@@ -938,6 +937,7 @@ function buildPricingPreviewItemFromOrderConfig() {
     dailyIntakeG: orderConfig.value.dailyIntakeG,
     preparationMethod: orderConfig.value.preparationMethod || undefined,
     cookingMethod: orderConfig.value.cookingMethod || undefined,
+    customRequirements: customerNote.value.trim() || undefined,
   }
 }
 
@@ -1011,7 +1011,7 @@ async function refreshDirectBuyPricingSnapshot(): Promise<{ success: boolean; pr
   }
 }
 
-// ========== 订单提交和支付 ==========
+// ========== 订单提交 ==========
 async function submitOrder(hasRefreshedSnapshot = false) {
   if (!canSubmitOrder.value) return
 
@@ -1066,16 +1066,9 @@ async function submitOrder(hasRefreshedSnapshot = false) {
       throw new Error(confirmRes.message || '确认订单失败')
     }
 
-    const paymentRes = await createWechatPayment(orderId)
-    if (paymentRes.code !== 0 || !paymentRes.data) {
-      throw new Error(paymentRes.message || '支付失败')
-    }
-
     uni.hideLoading()
-    await requestWechatPayment(paymentRes.data)
-
     uni.showToast({
-      title: '支付处理中',
+      title: '订单已生成',
       icon: 'success',
       duration: 1500,
     })
@@ -1100,14 +1093,10 @@ async function submitOrder(hasRefreshedSnapshot = false) {
       return
     }
 
-    const errorMsg = error?.errMsg?.includes('cancel')
-      ? '已取消支付'
-      : error.message || '提交失败'
-
     if (submittedOrderId) {
       uni.showModal({
-        title: '订单已保留',
-        content: `${errorMsg}，可稍后在订单详情继续支付。`,
+        title: '订单已生成',
+        content: `${error.message || '订单确认未完成'}，请前往订单详情核对后继续处理。`,
         showCancel: false,
         success: () => {
           uni.redirectTo({
@@ -1164,6 +1153,44 @@ function goToAddAddress() {
   font-size: 30rpx;
   font-weight: bold;
   color: #333;
+}
+
+.order-note-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.order-note-input {
+  width: 100%;
+  min-height: 150rpx;
+  padding: 20rpx;
+  box-sizing: border-box;
+  border-radius: 12rpx;
+  background-color: #f8fafc;
+  font-size: 28rpx;
+  line-height: 1.6;
+  color: #333;
+}
+
+.order-note-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20rpx;
+  margin-top: 14rpx;
+}
+
+.order-note-hint {
+  flex: 1;
+  font-size: 24rpx;
+  color: #8c8c8c;
+  line-height: 1.45;
+}
+
+.order-note-count {
+  flex-shrink: 0;
+  font-size: 24rpx;
+  color: #999;
 }
 
 /* 收货地址 */

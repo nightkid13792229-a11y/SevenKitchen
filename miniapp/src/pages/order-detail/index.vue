@@ -9,6 +9,59 @@
         <OrderProgressBar :status="order.status" />
       </view>
 
+      <view class="section order-center-section">
+        <view class="order-center-header">
+          <view class="order-center-title-block">
+            <text class="order-center-title">{{ orderCenterTitle }}</text>
+            <text class="order-center-subtitle">微信订单中心可查看的商品订单详情</text>
+          </view>
+          <text class="order-center-status" :style="{ color: getStatusColor(order.status) }">
+            {{ getStatusText(order.status) }}
+          </text>
+        </view>
+
+        <view class="order-center-goods">
+          <view class="goods-main">
+            <image
+              v-if="orderCenterCover"
+              class="goods-cover"
+              :src="orderCenterCover"
+              mode="aspectFill"
+            />
+            <view v-else class="goods-cover-placeholder">
+              <text>{{ orderCenterTitle.charAt(0) }}</text>
+            </view>
+            <view class="goods-text">
+              <text class="goods-name">{{ orderCenterTitle }}</text>
+              <text class="goods-desc">{{ orderCenterDescription }}</text>
+            </view>
+          </view>
+          <view class="goods-amount-row">
+            <text class="goods-amount-label">实付/应付金额</text>
+            <text class="goods-amount-value">¥{{ formatAmount(order.amountTotal || order.totalAmount) }}</text>
+          </view>
+        </view>
+
+        <view class="order-center-grid">
+          <view class="order-center-cell">
+            <text class="cell-label">订单编号</text>
+            <text class="cell-value">{{ order.id }}</text>
+          </view>
+          <view class="order-center-cell">
+            <text class="cell-label">下单时间</text>
+            <text class="cell-value">{{ formatDateTime(order.createdAt) }}</text>
+          </view>
+          <view class="order-center-cell">
+            <text class="cell-label">购买账号</text>
+            <text class="cell-value">{{ customerDisplayName }}</text>
+          </view>
+          <view class="order-center-cell">
+            <text class="cell-label">联系电话</text>
+            <text class="cell-value">{{ customerPhoneText }}</text>
+          </view>
+        </view>
+      </view>
+
       <!-- 订单基本信息 -->
       <view class="section info-section">
         <view class="section-title">基本信息</view>
@@ -103,6 +156,66 @@
         <view class="info-row">
           <text class="label">订单金额:</text>
           <text class="value amount">¥{{ formatAmount(order.amountTotal || order.totalAmount) }}</text>
+        </view>
+      </view>
+
+      <view class="section buyer-section">
+        <view class="section-title">购买人与配送</view>
+        <view class="buyer-card">
+          <view class="buyer-row">
+            <text class="buyer-label">购买人</text>
+            <text class="buyer-value">{{ customerDisplayName }}</text>
+          </view>
+          <view class="buyer-row">
+            <text class="buyer-label">联系方式</text>
+            <text class="buyer-value">{{ customerPhoneText }}</text>
+          </view>
+          <view class="buyer-row">
+            <text class="buyer-label">收货人</text>
+            <text class="buyer-value">{{ order.address?.recipientName || '-' }}</text>
+          </view>
+          <view class="buyer-row">
+            <text class="buyer-label">收货电话</text>
+            <text class="buyer-value">{{ order.address ? getOrderAddressPhone(order.address) : '-' }}</text>
+          </view>
+          <view class="buyer-row address-line">
+            <text class="buyer-label">收货地址</text>
+            <text class="buyer-value">{{ fullAddressText }}</text>
+          </view>
+          <view class="buyer-row">
+            <text class="buyer-label">预计制作</text>
+            <text class="buyer-value">{{ formatDate(order.targetProductionDate) }}</text>
+          </view>
+          <view class="buyer-row">
+            <text class="buyer-label">预计发货</text>
+            <text class="buyer-value">{{ formatDate(order.estimatedShippingDate) }}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="section merchant-note-section">
+        <view class="section-title">商家说明</view>
+        <view class="merchant-note-list">
+          <view class="merchant-note-item">
+            <text class="merchant-note-label">订单备注</text>
+            <text class="merchant-note-value">{{ customerRequirementText }}</text>
+          </view>
+          <view class="merchant-note-item">
+            <text class="merchant-note-label">配送说明</text>
+            <text class="merchant-note-value">{{ orderDetailDeliveryNote }}</text>
+          </view>
+          <view class="merchant-note-item">
+            <text class="merchant-note-label">售后说明</text>
+            <text class="merchant-note-value">{{ orderDetailAftersaleNote }}</text>
+          </view>
+          <view class="merchant-note-item" v-if="customerServiceConfig.orderDetailMerchantNote">
+            <text class="merchant-note-label">商家补充</text>
+            <text class="merchant-note-value">{{ customerServiceConfig.orderDetailMerchantNote }}</text>
+          </view>
+          <view class="merchant-note-item" v-if="customerServiceConfig.welcomeMessage">
+            <text class="merchant-note-label">客服提示</text>
+            <text class="merchant-note-value">{{ customerServiceConfig.welcomeMessage }}</text>
+          </view>
         </view>
       </view>
 
@@ -222,14 +335,6 @@
           <view class="payment-tip">
             <text class="tip-text">支付完成后订单会由微信支付回调确认，请稍后刷新查看状态。</text>
           </view>
-
-          <button
-            class="btn-online-pay"
-            :disabled="paying || paymentExpired"
-            @tap="payOrder"
-          >
-            {{ paymentExpired ? '支付已超时' : paying ? '调起支付中...' : '立即微信支付' }}
-          </button>
         </view>
       </view>
 
@@ -526,7 +631,14 @@
         </view>
         <view class="address-form-switch-row">
           <text class="address-form-label">设为默认地址</text>
-          <switch :checked="addressForm.isDefault" @change="onAddressDefaultChange" />
+          <view class="compact-switch-wrap">
+            <switch
+              class="compact-switch"
+              color="#07c160"
+              :checked="addressForm.isDefault"
+              @change="onAddressDefaultChange"
+            />
+          </view>
         </view>
         <button
           class="address-save-btn"
@@ -546,7 +658,7 @@
       <view v-if="order.status === 'PENDING_PAYMENT'" class="action-buttons">
         <button class="btn-action btn-cancel" @tap="cancelOrder">取消订单</button>
         <button class="btn-action btn-primary" :disabled="paying || paymentExpired" @tap="payOrder">
-          {{ paymentExpired ? '已超时' : '付款' }}
+          {{ paymentExpired ? '已超时' : '立即支付' }}
         </button>
       </view>
 
@@ -643,6 +755,7 @@ interface OrderItem {
     id: string
     version: number
     name: string
+    coverImageUrl?: string | null
     nutrition_standard: string
     energy_density_kcal_per_kg: number
     production_loss_rate: number
@@ -654,6 +767,7 @@ interface OrderItem {
   packageSpecG: number
   packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
   ingredientSourcePlan?: string | null
+  customRequirements?: string | null
   totalPrice?: number
 }
 
@@ -664,6 +778,7 @@ interface Order {
   status: string
   createdAt: string
   targetProductionDate?: string | null
+  estimatedShippingDate?: string | null
   amountTotal?: number
   totalAmount?: number
   amountProduct?: number
@@ -686,6 +801,12 @@ interface Order {
     detailAddress?: string
     isDefault?: boolean
   }
+  customer?: {
+    id: string
+    nickname?: string | null
+    phone?: string | null
+    avatarUrl?: string | null
+  } | null
   trackingNumber?: string
   carrierCode?: string
   shippedAt?: string
@@ -726,6 +847,9 @@ interface CustomerServiceConfig {
   orderCardTitleTemplate: string
   orderCardPathTemplate: string
   welcomeMessage?: string | null
+  orderDetailDeliveryNote?: string | null
+  orderDetailAftersaleNote?: string | null
+  orderDetailMerchantNote?: string | null
 }
 
 const order = ref<Order | null>(null)
@@ -737,7 +861,10 @@ const customerServiceConfig = ref<CustomerServiceConfig>({
   customerServiceUrl: null,
   orderCardTitleTemplate: '订单 {orderNo}',
   orderCardPathTemplate: '/pages/order-detail/index?id={orderId}',
-  welcomeMessage: null
+  welcomeMessage: null,
+  orderDetailDeliveryNote: null,
+  orderDetailAftersaleNote: null,
+  orderDetailMerchantNote: null
 })
 const paying = ref(false)
 const paymentRemainingSeconds = ref<number | null>(null)
@@ -936,6 +1063,82 @@ const groupedItems = computed(() => {
   })
 
   return Array.from(groups.values())
+})
+
+const orderCenterTitle = computed(() => {
+  const firstName = order.value?.items?.[0]?.recipeSnapshot?.name?.trim()
+  if (!firstName) return 'SevenKitchen 鲜食订单'
+  const itemCount = order.value?.items?.length || 1
+  return itemCount > 1 ? `${firstName}等${itemCount}件` : firstName
+})
+
+const orderCenterCover = computed(() => {
+  const raw = order.value?.items?.[0]?.recipeSnapshot?.coverImageUrl
+  return raw ? normalizeImageUrl(raw) : ''
+})
+
+const totalPackageCount = computed(() => {
+  return (order.value?.items || []).reduce((sum, item) => {
+    return sum + Math.max(0, Number(item.packageCount || 0))
+  }, 0)
+})
+
+const totalQuantityKg = computed(() => {
+  const grams = (order.value?.items || []).reduce((sum, item) => {
+    return sum + Math.max(0, Number(item.quantityG || 0))
+  }, 0)
+  return grams > 0 ? Number((grams / 1000).toFixed(1)) : 0
+})
+
+const orderCenterDescription = computed(() => {
+  const parts = [
+    `${order.value?.items?.length || 0}件商品`,
+    totalPackageCount.value > 0 ? `${totalPackageCount.value}袋` : '',
+    totalQuantityKg.value > 0 ? `约${totalQuantityKg.value}kg` : '',
+  ].filter(Boolean)
+  return parts.join(' · ') || '宠物鲜食定制商品'
+})
+
+const customerDisplayName = computed(() => {
+  return order.value?.customer?.nickname?.trim()
+    || order.value?.address?.recipientName
+    || '微信用户'
+})
+
+const customerPhoneText = computed(() => {
+  return order.value?.customer?.phone
+    || (order.value?.address ? getOrderAddressPhone(order.value.address) : '')
+    || '未填写'
+})
+
+const fullAddressText = computed(() => {
+  if (!order.value?.address) return '暂未录入收货地址'
+  return [
+    getOrderAddressRegionText(order.value.address),
+    getOrderAddressDetail(order.value.address),
+  ].filter(Boolean).join(' ')
+})
+
+const customerRequirementText = computed(() => {
+  const requirements = (order.value?.items || [])
+    .map((item) => item.customRequirements?.trim())
+    .filter(Boolean)
+
+  if (requirements.length > 0) {
+    return requirements.join('；')
+  }
+
+  return '无特殊备注'
+})
+
+const orderDetailDeliveryNote = computed(() => {
+  return customerServiceConfig.value.orderDetailDeliveryNote
+    || '默认顺丰冷链/特快配送，制作完成急冻后发出。'
+})
+
+const orderDetailAftersaleNote = computed(() => {
+  return customerServiceConfig.value.orderDetailAftersaleNote
+    || '如需退款、重做或反馈问题，可在订单详情页售后区域提交申请。'
 })
 
 // 判断是否有编辑权限（订单所有者或管理员，不包括员工）
@@ -1228,6 +1431,7 @@ async function loadOrderDetail() {
 
     if (res.code === 0 && res.data) {
       order.value = res.data
+      orderId.value = res.data.id || orderId.value
       syncPaymentTimer()
       remarkDraft.value = res.data.adminRemark || ''
       console.log('[Order Detail] Order loaded:', {
@@ -2407,6 +2611,171 @@ async function applyRefund() {
   margin-bottom: 20rpx;
 }
 
+.order-center-section {
+  display: flex;
+  flex-direction: column;
+  gap: 22rpx;
+}
+
+.order-center-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.order-center-title-block {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.order-center-title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #222;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.order-center-subtitle {
+  font-size: 24rpx;
+  color: #8c8c8c;
+  line-height: 1.4;
+}
+
+.order-center-status {
+  flex-shrink: 0;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.order-center-goods {
+  padding: 20rpx;
+  border-radius: 12rpx;
+  background-color: #f8fafc;
+}
+
+.goods-main {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+}
+
+.goods-cover,
+.goods-cover-placeholder {
+  width: 112rpx;
+  height: 112rpx;
+  border-radius: 10rpx;
+  flex-shrink: 0;
+}
+
+.goods-cover-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #e6f7ff;
+  color: #1890ff;
+  font-size: 36rpx;
+  font-weight: 700;
+}
+
+.goods-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.goods-name {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #333;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.goods-desc {
+  font-size: 25rpx;
+  color: #666;
+  line-height: 1.45;
+}
+
+.goods-amount-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20rpx;
+  margin-top: 20rpx;
+  padding-top: 18rpx;
+  border-top: 1rpx solid #e8edf3;
+}
+
+.goods-amount-label {
+  font-size: 25rpx;
+  color: #666;
+}
+
+.goods-amount-value {
+  font-size: 36rpx;
+  font-weight: 800;
+  color: #ff4d4f;
+}
+
+.order-center-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+}
+
+.order-center-cell,
+.buyer-row,
+.merchant-note-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.cell-label,
+.buyer-label,
+.merchant-note-label {
+  flex-shrink: 0;
+  min-width: 136rpx;
+  font-size: 25rpx;
+  color: #777;
+}
+
+.cell-value,
+.buyer-value,
+.merchant-note-value {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  font-size: 25rpx;
+  color: #333;
+  line-height: 1.5;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.buyer-card,
+.merchant-note-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  padding: 20rpx;
+  border-radius: 12rpx;
+  background-color: #fafafa;
+}
+
+.address-line .buyer-value {
+  text-align: right;
+}
+
 .remark-section {
   display: flex;
   flex-direction: column;
@@ -2947,6 +3316,20 @@ async function applyRefund() {
   justify-content: space-between;
   align-items: center;
   margin: 12rpx 0 28rpx;
+}
+
+.compact-switch-wrap {
+  width: 88rpx;
+  height: 52rpx;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  overflow: visible;
+}
+
+.compact-switch {
+  transform: scale(0.72);
+  transform-origin: right center;
 }
 
 .address-save-btn {
@@ -3555,27 +3938,6 @@ async function applyRefund() {
   font-size: 24rpx;
   color: #ff9800;
   line-height: 1.5;
-}
-
-.btn-online-pay {
-  width: 100%;
-  height: 86rpx;
-  line-height: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-sizing: border-box;
-  margin-top: 20rpx;
-  border-radius: 12rpx;
-  border: none;
-  background-color: #07c160;
-  color: #fff;
-  font-size: 30rpx;
-}
-
-.btn-online-pay[disabled] {
-  background-color: #c8c9cc;
-  color: #fff;
 }
 
 /* 原料照片样式 */

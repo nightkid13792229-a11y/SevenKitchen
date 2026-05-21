@@ -226,17 +226,23 @@ export class Order {
     const validTransitions: Record<OrderStatus, OrderStatus[]> = {
       [OrderStatus.INIT]: [OrderStatus.PENDING_PAYMENT, OrderStatus.CANCELLED],
       [OrderStatus.PENDING_PAYMENT]: [OrderStatus.PAID, OrderStatus.CANCELLED],
-      [OrderStatus.PAID]: [OrderStatus.PURCHASING, OrderStatus.CANCELLED],
+      [OrderStatus.PAID]: [
+        OrderStatus.PURCHASING,
+        OrderStatus.CANCELLED,
+        OrderStatus.AFTERSALE,
+      ],
       [OrderStatus.PURCHASING]: [
         OrderStatus.PAID,
         OrderStatus.IN_PRODUCTION,
         OrderStatus.CANCELLED,
+        OrderStatus.AFTERSALE,
       ],
       // Allow IN_PRODUCTION → PURCHASING for batch deletion (undo production)
       [OrderStatus.IN_PRODUCTION]: [
         OrderStatus.PURCHASING,
         OrderStatus.FREEZING,
         OrderStatus.CANCELLED,
+        OrderStatus.AFTERSALE,
       ],
       [OrderStatus.FREEZING]: [OrderStatus.SHIPPED, OrderStatus.AFTERSALE],
       [OrderStatus.SHIPPED]: [OrderStatus.COMPLETED, OrderStatus.AFTERSALE],
@@ -473,6 +479,9 @@ export class Order {
     photos: string[] = [],
   ): void {
     const allowedStatuses = [
+      OrderStatus.PAID,
+      OrderStatus.PURCHASING,
+      OrderStatus.IN_PRODUCTION,
       OrderStatus.FREEZING,
       OrderStatus.SHIPPED,
       OrderStatus.COMPLETED,
@@ -480,7 +489,7 @@ export class Order {
 
     if (!allowedStatuses.includes(this.status)) {
       throw new InvalidStateTransitionError(
-        `Cannot apply for aftersale from status: ${this.status}. Order must be in FREEZING, SHIPPED, or COMPLETED status.`,
+        `Cannot apply for aftersale from status: ${this.status}. Order must be paid or in fulfillment.`,
       );
     }
 

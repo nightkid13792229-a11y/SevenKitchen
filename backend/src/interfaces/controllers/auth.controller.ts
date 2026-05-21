@@ -348,10 +348,6 @@ export class AuthController {
         return ApiResponseDto.error(404, '当前用户不存在');
       }
 
-      if (currentUser.role !== 'CUSTOMER') {
-        return ApiResponseDto.error(400, '员工或管理员账号不参与客户资料合并');
-      }
-
       if (currentUser.phone === phone) {
         return ApiResponseDto.success(this.buildBoundResponse(currentUser));
       }
@@ -362,6 +358,13 @@ export class AuthController {
       });
 
       if (existingUser && existingUser.id !== currentUser.id) {
+        if (currentUser.role !== 'CUSTOMER') {
+          return ApiResponseDto.error(
+            400,
+            '该手机号已绑定其他账号，请更换手机号或联系管理员处理',
+          );
+        }
+
         if (existingUser.role !== 'CUSTOMER') {
           return ApiResponseDto.error(
             400,

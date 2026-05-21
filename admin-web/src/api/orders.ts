@@ -121,6 +121,13 @@ export const orderApi = {
   },
 
   /**
+   * 获取退款售后记录（含待审核与已退款）
+   */
+  listRefundAftersales: (): Promise<Order[]> => {
+    return api.get('/orders/aftersale/refunds')
+  },
+
+  /**
    * 处理售后工单
    */
   resolveAftersale: (

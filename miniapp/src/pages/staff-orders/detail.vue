@@ -10,7 +10,7 @@
       <!-- 顶部状态栏 -->
       <view class="status-header" :style="{ background: statusGradient }">
         <view class="status-info">
-          <text class="status-text">{{ getStatusText(order.status) }}</text>
+          <text class="status-text">{{ getStatusText(order) }}</text>
           <text class="order-id-text">订单 #{{ orderId.slice(-8) }}</text>
         </view>
       </view>
@@ -25,8 +25,8 @@
           </view>
           <view class="info-item">
             <text class="info-label">订单状态</text>
-            <text class="info-value" :style="{ color: getStatusColor(order.status) }">
-              {{ getStatusText(order.status) }}
+            <text class="info-value" :style="{ color: getStatusColor(order) }">
+              {{ getStatusText(order) }}
             </text>
           </view>
           <view class="info-item">
@@ -265,6 +265,7 @@ onMounted(() => {
 interface OrderDetail {
   id: string
   status: string
+  cancellationReason?: string | null
   totalAmount?: number
   amountTotal?: number
   createdAt?: string
@@ -453,7 +454,11 @@ function getOrderAddressDetail(address: NonNullable<OrderDetail['address']>): st
   return address.detailAddress || address.detail || ''
 }
 
-function getStatusText(status: string): string {
+function getStatusText(orderOrStatus: OrderDetail | string): string {
+  const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
+  if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) {
+    return '已退款（钱款原路退回）'
+  }
   const statusMap: Record<string, string> = {
     INIT: '待确认',
     PENDING_PAYMENT: '待付款',
@@ -469,7 +474,11 @@ function getStatusText(status: string): string {
   return statusMap[status] || status
 }
 
-function getStatusColor(status: string): string {
+function getStatusColor(orderOrStatus: OrderDetail | string): string {
+  const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
+  if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) {
+    return '#16a34a'
+  }
   const colorMap: Record<string, string> = {
     INIT: '#999',
     PENDING_PAYMENT: '#ff9800',
@@ -483,6 +492,10 @@ function getStatusColor(status: string): string {
     AFTERSALE: '#f5222d',
   }
   return colorMap[status] || '#999'
+}
+
+function isRefundedOrder(currentOrder: OrderDetail): boolean {
+  return currentOrder.status === 'CANCELLED' && (currentOrder.cancellationReason || '').includes('售后退款')
 }
 
 function getPaymentMethod(method?: string): string {

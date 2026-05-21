@@ -380,6 +380,9 @@ export class OrderSummaryDto {
   @ApiProperty({ enum: OrderType })
   type!: OrderType;
 
+  cancellationReason?: string | null;
+  aftersaleType?: string | null;
+
   @ApiProperty({ example: 299.99 })
   totalAmount!: number;
 

@@ -182,8 +182,8 @@
 
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)">
-              {{ getStatusText(row.status) }}
+            <el-tag :type="getStatusType(row)">
+              {{ getStatusText(row) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -378,7 +378,7 @@ const statusOptions = [
   { label: '待收货', value: OrderStatusEnum.SHIPPED },
   { label: '已收货', value: OrderStatusEnum.COMPLETED },
   { label: '售后中', value: OrderStatusEnum.AFTERSALE },
-  { label: '已取消', value: OrderStatusEnum.CANCELLED }
+  { label: '已取消/退款', value: OrderStatusEnum.CANCELLED }
 ]
 
 const orderScopeOptions = computed(() => [
@@ -693,7 +693,9 @@ const handleExport = async () => {
 
 // 获取状态类型
 // Phase 9: Simplified status types aligned with e-commerce standards
-const getStatusType = (status: OrderStatus) => {
+const getStatusType = (orderOrStatus: OrderListItem | OrderStatus) => {
+  const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
+  if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) return 'success'
   const typeMap: Record<string, any> = {
     INIT: 'info',
     PENDING_PAYMENT: 'warning',
@@ -711,7 +713,11 @@ const getStatusType = (status: OrderStatus) => {
 
 // 获取状态文本（仅显示管理员需要的状态）
 // Phase 9: Simplified status text aligned with e-commerce standards
-const getStatusText = (status: OrderStatus) => {
+const getStatusText = (orderOrStatus: OrderListItem | OrderStatus) => {
+  const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
+  if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) {
+    return '已退款（钱款原路退回）'
+  }
   const textMap: Record<string, string> = {
     INIT: '订单创建',
     PENDING_PAYMENT: '待付款',
@@ -725,6 +731,10 @@ const getStatusText = (status: OrderStatus) => {
     AFTERSALE: '售后中'
   }
   return textMap[status] || status
+}
+
+const isRefundedOrder = (order: OrderListItem) => {
+  return order.status === OrderStatusEnum.CANCELLED && (order.cancellationReason || '').includes('售后退款')
 }
 
 onMounted(() => {

@@ -43,8 +43,8 @@
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="订单状态">
-            <el-tag :type="getStatusType(order.status)">
-              {{ getStatusText(order.status) }}
+            <el-tag :type="getStatusType(order)">
+              {{ getStatusText(order) }}
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="创建时间" :span="2">
@@ -59,7 +59,7 @@
           <el-descriptions-item v-if="order.cancelledAt" label="取消时间" :span="2">
             {{ formatTime(order.cancelledAt) }}
           </el-descriptions-item>
-          <el-descriptions-item v-if="order.cancellationReason" label="取消原因" :span="2">
+          <el-descriptions-item v-if="order.cancellationReason" :label="isRefundedOrder(order) ? '退款说明' : '取消原因'" :span="2">
             {{ order.cancellationReason }}
           </el-descriptions-item>
           <el-descriptions-item v-if="order.cancelledBy" label="取消操作者">
@@ -814,7 +814,9 @@ const goBack = () => {
 const formatTime = (time: string | Date) => formatDateTime(time)
 
 // 获取状态类型
-const getStatusType = (status: OrderStatus) => {
+const getStatusType = (orderOrStatus: Order | OrderStatus) => {
+  const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
+  if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) return 'success'
   const typeMap: Record<string, any> = {
     INIT: 'info',
     PENDING_PAYMENT: 'warning',
@@ -831,7 +833,11 @@ const getStatusType = (status: OrderStatus) => {
 }
 
 // 获取状态文本
-const getStatusText = (status: OrderStatus) => {
+const getStatusText = (orderOrStatus: Order | OrderStatus) => {
+  const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
+  if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) {
+    return '已退款（钱款原路退回）'
+  }
   const textMap: Record<string, string> = {
     INIT: '订单创建',
     PENDING_PAYMENT: '待付款',
@@ -845,6 +851,10 @@ const getStatusText = (status: OrderStatus) => {
     AFTERSALE: '售后中'
   }
   return textMap[status] || status
+}
+
+const isRefundedOrder = (currentOrder: Order) => {
+  return currentOrder.status === OrderStatusEnum.CANCELLED && (currentOrder.cancellationReason || '').includes('售后退款')
 }
 
 // 获取支付状态文本

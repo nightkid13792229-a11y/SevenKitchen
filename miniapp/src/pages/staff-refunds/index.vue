@@ -7,7 +7,7 @@
 
     <view class="summary-card">
       <view class="summary-item">
-        <text class="summary-value">{{ refundOrders.length }}</text>
+        <text class="summary-value">{{ pendingRefundCount }}</text>
         <text class="summary-label">待审核</text>
       </view>
       <view class="summary-divider"></view>
@@ -69,7 +69,7 @@
           />
         </view>
 
-        <view class="action-row">
+        <view v-if="canReviewRefund(order)" class="action-row">
           <button class="action-btn secondary" @tap="rejectRefund(order)">驳回</button>
           <button class="action-btn primary" @tap="approveRefund(order)">审核通过</button>
         </view>
@@ -125,7 +125,14 @@ const loading = ref(false)
 const refundOrders = ref<RefundOrder[]>([])
 
 const totalRefundAmount = computed(() => {
-  return refundOrders.value.reduce((sum, order) => sum + getAmount(order), 0).toFixed(2)
+  return refundOrders.value
+    .filter((order) => canReviewRefund(order))
+    .reduce((sum, order) => sum + getAmount(order), 0)
+    .toFixed(2)
+})
+
+const pendingRefundCount = computed(() => {
+  return refundOrders.value.filter((order) => canReviewRefund(order)).length
 })
 
 onShow(() => {
@@ -164,14 +171,14 @@ async function loadRefunds() {
   loading.value = true
   try {
     const res = await request({
-      url: '/orders/aftersale/pending',
+      url: '/orders/aftersale/refunds',
       method: 'GET',
     })
     if (res.code !== 0) {
       throw new Error(res.message || '退款申请加载失败')
     }
     const list = Array.isArray(res.data) ? res.data : []
-    refundOrders.value = list.filter((order: RefundOrder) => order.aftersaleType === 'REFUND')
+    refundOrders.value = list
   } catch (error: any) {
     uni.showToast({
       title: error?.message || '退款申请加载失败',
@@ -283,6 +290,9 @@ function buildRefundReviewContent(order: RefundOrder, action: 'approve' | 'rejec
     `金额：¥${formatAmount(order.amountTotal || order.totalAmount)}`,
     `理由：${order.aftersaleReason || '未填写'}`,
   ]
+  if (action === 'approve') {
+    lines.push('通过后系统会自动发起微信原路退款。')
+  }
   if (action === 'reject') {
     lines.push('处理后订单会回到申请售后前的状态。')
   }
@@ -292,10 +302,14 @@ function buildRefundReviewContent(order: RefundOrder, action: 'approve' | 'rejec
 function getStatusText(status?: string): string {
   const statusMap: Record<string, string> = {
     AFTERSALE: '退款审核中',
-    CANCELLED: '已退款',
+    CANCELLED: '已退款（钱款原路退回）',
     COMPLETED: '已完成',
   }
   return statusMap[status || ''] || status || '-'
+}
+
+function canReviewRefund(order: RefundOrder): boolean {
+  return order.status === 'AFTERSALE' && order.aftersaleType === 'REFUND'
 }
 
 function getPaymentText(paymentMethod?: string | null): string {

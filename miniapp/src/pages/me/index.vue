@@ -4,7 +4,7 @@
     <view v-if="!isLoggedIn" class="not-logged-in">
       <view class="login-avatar">未登录</view>
       <text class="login-title">未登录</text>
-      <button class="login-btn" @tap="goToLogin">微信一键登录</button>
+      <button class="login-btn" @tap="goToLogin">立即登录</button>
 
       <view class="benefits-section">
         <text class="benefits-title">登录后可享受：</text>
@@ -38,7 +38,7 @@
           :src="resolveUserAvatarSrc(userInfo.avatarUrl)"
           mode="aspectFill"
         ></image>
-        <text class="user-nickname">{{ userInfo.nickname || '微信用户' }}</text>
+        <text class="user-nickname">{{ userInfo.nickname || "用户" }}</text>
         <text class="edit-hint">点击编辑资料</text>
       </view>
 
@@ -139,7 +139,7 @@
         <view class="info-row" @tap="editNickname">
           <view class="info-label">用户昵称</view>
           <view class="info-value-wrapper">
-            <text class="info-value">{{ userInfo.nickname || '未设置' }}</text>
+            <text class="info-value">{{ userInfo.nickname || "未设置" }}</text>
             <text class="arrow">›</text>
           </view>
         </view>
@@ -147,7 +147,7 @@
         <view class="info-row" @tap="editPhone">
           <view class="info-label">手机号</view>
           <view class="info-value-wrapper">
-            <text class="info-value">{{ userInfo.phone || '未设置' }}</text>
+            <text class="info-value">{{ userInfo.phone || "未设置" }}</text>
             <text class="arrow">›</text>
           </view>
         </view>
@@ -196,13 +196,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
-import { onShow } from '@dcloudio/uni-app';
-import { getToken, clearToken, request } from '../../utils/api';
-import { resolveUserAvatarSrc } from '../../utils/user-profile';
-import { refreshCurrentTabBar } from '../../utils/tabbar';
-import { getCartItems } from '../../utils/cart';
-import { ensurePhoneBound } from '../../utils/account';
+import { ref, computed } from "vue";
+import { onShow } from "@dcloudio/uni-app";
+import { getToken, clearToken, request } from "../../utils/api";
+import { resolveUserAvatarSrc } from "../../utils/user-profile";
+import { refreshCurrentTabBar } from "../../utils/tabbar";
+import { getCartItems } from "../../utils/cart";
+import { ensurePhoneBound } from "../../utils/account";
 
 interface UserInfo {
   id: string;
@@ -220,8 +220,8 @@ interface UserInfo {
 const isLoggedIn = ref(false);
 const isLoading = ref(false);
 const userInfo = ref<UserInfo>({
-  id: '',
-  role: 'CUSTOMER',
+  id: "",
+  role: "CUSTOMER",
   dogCount: 0,
   orderCount: 0,
   addressCount: 0,
@@ -251,25 +251,25 @@ async function loadUserInfo() {
   isLoading.value = true;
   try {
     const res = await request({
-      url: '/users/me',
-      method: 'GET',
+      url: "/users/me",
+      method: "GET",
     });
 
-    console.log('[Me Page] API Response:', res);
-    console.log('[Me Page] res.data:', res.data);
+    console.log("[Me Page] API Response:", res);
+    console.log("[Me Page] res.data:", res.data);
 
     if (res.code === 0 && res.data) {
       userInfo.value = res.data;
-      console.log('[Me Page] userInfo.value after update:', userInfo.value);
-      console.log('[Me Page] nickname:', userInfo.value.nickname);
-      console.log('[Me Page] avatarUrl:', userInfo.value.avatarUrl);
+      console.log("[Me Page] userInfo.value after update:", userInfo.value);
+      console.log("[Me Page] nickname:", userInfo.value.nickname);
+      console.log("[Me Page] avatarUrl:", userInfo.value.avatarUrl);
       isLoggedIn.value = true;
     } else {
       // 未登录或加载失败
       isLoggedIn.value = false;
     }
   } catch (error) {
-    console.error('加载用户信息失败:', error);
+    console.error("加载用户信息失败:", error);
     isLoggedIn.value = false;
   } finally {
     isLoading.value = false;
@@ -279,8 +279,8 @@ async function loadUserInfo() {
 async function loadOrderCounts() {
   try {
     const res = await request({
-      url: '/orders',
-      method: 'GET',
+      url: "/orders",
+      method: "GET",
       quiet: true,
       suppressErrorToast: true,
     } as any);
@@ -288,17 +288,17 @@ async function loadOrderCounts() {
     const orders = Array.isArray(res.data) ? res.data : [];
     orderCounts.value = {
       pendingPayment: orders.filter(
-        (order: any) => order.status === 'PENDING_PAYMENT',
+        (order: any) => order.status === "PENDING_PAYMENT",
       ).length,
-      waitReceive: orders.filter((order: any) => order.status === 'SHIPPED')
+      waitReceive: orders.filter((order: any) => order.status === "SHIPPED")
         .length,
-      received: orders.filter((order: any) => order.status === 'COMPLETED')
+      received: orders.filter((order: any) => order.status === "COMPLETED")
         .length,
-      aftersale: orders.filter((order: any) => order.status === 'AFTERSALE')
+      aftersale: orders.filter((order: any) => order.status === "AFTERSALE")
         .length,
     };
   } catch (error) {
-    console.warn('[Me Page] Load order counts failed:', error);
+    console.warn("[Me Page] Load order counts failed:", error);
   }
 }
 
@@ -309,7 +309,7 @@ function loadCartCount() {
 // 跳转登录页
 function goToLogin() {
   uni.navigateTo({
-    url: '/pages/login/index',
+    url: "/pages/login/index",
   });
 }
 
@@ -317,7 +317,7 @@ function goToLogin() {
 async function goToDogList() {
   if (!(await ensurePhoneBound())) return;
   uni.navigateTo({
-    url: '/pages/dog-profile-list/index',
+    url: "/pages/dog-profile-list/index",
   });
 }
 
@@ -325,7 +325,7 @@ async function goToDogList() {
 async function goToDiySheetList() {
   if (!(await ensurePhoneBound())) return;
   uni.navigateTo({
-    url: '/pages/diy-sheet-list/index',
+    url: "/pages/diy-sheet-list/index",
   });
 }
 
@@ -333,17 +333,17 @@ async function goToDiySheetList() {
 async function goToFavoriteRecipes() {
   if (!(await ensurePhoneBound())) return;
   uni.navigateTo({
-    url: '/pages/favorite-recipes/index',
+    url: "/pages/favorite-recipes/index",
   });
 }
 
 function goToCart() {
   uni.navigateTo({
-    url: '/pages/cart/index',
+    url: "/pages/cart/index",
   });
 }
 
-async function goToOrders(status = 'ALL') {
+async function goToOrders(status = "ALL") {
   if (!(await ensurePhoneBound())) return;
   uni.navigateTo({
     url: `/pages/orders-list/index?status=${encodeURIComponent(status)}`,
@@ -353,23 +353,23 @@ async function goToOrders(status = 'ALL') {
 // 编辑资料（头像和昵称）
 function editProfile() {
   uni.navigateTo({
-    url: '/pages/profile-setup/index',
+    url: "/pages/profile-setup/index",
   });
 }
 
 // 编辑昵称
 function editNickname() {
   uni.showModal({
-    title: '修改昵称',
+    title: "修改昵称",
     editable: true,
-    placeholderText: userInfo.value.nickname || '请输入昵称',
+    placeholderText: userInfo.value.nickname || "请输入昵称",
     success: async (res) => {
       if (res.confirm && res.content) {
         const nickname = res.content.trim();
         if (nickname.length < 1 || nickname.length > 20) {
           uni.showToast({
-            title: '昵称长度必须在1-20个字符之间',
-            icon: 'none',
+            title: "昵称长度必须在1-20个字符之间",
+            icon: "none",
           });
           return;
         }
@@ -387,7 +387,7 @@ function editPhone() {
 
 function goToPhoneBind() {
   uni.navigateTo({
-    url: '/pages/phone-bind/index?redirect=%2Fpages%2Fme%2Findex',
+    url: "/pages/phone-bind/index?redirect=%2Fpages%2Fme%2Findex",
   });
 }
 
@@ -396,8 +396,8 @@ async function updateUserInfo(data: { nickname?: string; phone?: string }) {
   isLoading.value = true;
   try {
     const res = await request({
-      url: '/users/me',
-      method: 'PUT',
+      url: "/users/me",
+      method: "PUT",
       data,
     });
 
@@ -420,20 +420,20 @@ async function updateUserInfo(data: { nickname?: string; phone?: string }) {
       }, 2000);
 
       uni.showToast({
-        title: '更新成功',
-        icon: 'success',
+        title: "更新成功",
+        icon: "success",
       });
     } else {
       uni.showToast({
-        title: res.message || '更新失败',
-        icon: 'none',
+        title: res.message || "更新失败",
+        icon: "none",
       });
     }
   } catch (error) {
-    console.error('更新用户信息失败:', error);
+    console.error("更新用户信息失败:", error);
     uni.showToast({
-      title: '网络错误',
-      icon: 'none',
+      title: "网络错误",
+      icon: "none",
     });
   } finally {
     isLoading.value = false;
@@ -443,15 +443,15 @@ async function updateUserInfo(data: { nickname?: string; phone?: string }) {
 // 退出登录
 function handleLogout() {
   uni.showModal({
-    title: '提示',
-    content: '确定要退出登录吗？',
+    title: "提示",
+    content: "确定要退出登录吗？",
     success: (res) => {
       if (res.confirm) {
         clearToken();
         isLoggedIn.value = false;
         userInfo.value = {
-          id: '',
-          role: 'CUSTOMER',
+          id: "",
+          role: "CUSTOMER",
           dogCount: 0,
           orderCount: 0,
           addressCount: 0,
@@ -459,14 +459,14 @@ function handleLogout() {
           favoriteRecipeCount: 0,
         };
         uni.showToast({
-          title: '已退出登录',
-          icon: 'success',
+          title: "已退出登录",
+          icon: "success",
         });
 
         // 退出登录后切换到首页tab
         setTimeout(() => {
           uni.switchTab({
-            url: '/pages/home/index',
+            url: "/pages/home/index",
           });
         }, 500);
       }

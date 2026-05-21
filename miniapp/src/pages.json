@@ -112,7 +112,7 @@
     {
       "path": "pages/login/index",
       "style": {
-        "navigationBarTitleText": "微信登录"
+        "navigationBarTitleText": "登录"
       }
     },
     {
@@ -130,7 +130,7 @@
     {
       "path": "pages/phone-bind/index",
       "style": {
-        "navigationBarTitleText": "绑定手机号"
+        "navigationBarTitleText": "手机号快捷登录"
       }
     },
     {

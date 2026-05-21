@@ -2,9 +2,9 @@
   <view class="phone-bind-page">
     <view class="panel">
       <view class="icon-shell">手机</view>
-      <text class="title">绑定手机号</text>
+      <text class="title">手机号快捷登录</text>
       <text class="desc">
-        手机号仅用于账号识别、历史资料同步、订单履约和售后服务。绑定后可同步旧小程序资料，并继续使用下单、支付、订单和售后功能。
+        手机号仅用于账号识别、历史资料同步、订单履约和售后服务。完成后可同步旧版资料，并继续使用下单、支付、订单和售后功能。
       </text>
 
       <view v-if="pendingMerge" class="history-card">
@@ -31,7 +31,7 @@
         :disabled="loading"
         @getphonenumber="handleGetPhoneNumber"
       >
-        {{ loading ? "绑定中..." : "微信授权手机号" }}
+        {{ loading ? "登录中..." : "手机号快捷登录" }}
       </button>
 
       <button
@@ -105,7 +105,7 @@ function goAfterBound() {
 async function handleGetPhoneNumber(event: any) {
   const code = event?.detail?.code;
   if (!code) {
-    uni.showToast({ title: "需要授权手机号后才能绑定", icon: "none" });
+    uni.showToast({ title: "请先完成手机号快捷登录", icon: "none" });
     return;
   }
 

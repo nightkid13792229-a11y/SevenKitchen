@@ -32,7 +32,7 @@
       <view class="section">
         <text class="section-title">二、用户账号</text>
         <text class="section-content"
-          >1. 您需要通过微信授权登录才能使用本服务的完整功能。</text
+          >1. 您需要完成登录后才能使用本服务的完整功能。</text
         >
         <text class="section-content"
           >2.

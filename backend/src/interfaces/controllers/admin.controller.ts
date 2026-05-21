@@ -1138,6 +1138,12 @@ export class AdminController {
       const orderId =
         typeof query.orderId === 'string' ? query.orderId.trim() : undefined;
 
+      const page = Math.max(1, parseInt(String(query.page || '1'), 10) || 1);
+      const pageSize = Math.min(
+        100,
+        Math.max(10, parseInt(String(query.pageSize || '20'), 10) || 20),
+      );
+
       // Parse query parameters
       const params = {
         keyword,
@@ -1146,8 +1152,8 @@ export class AdminController {
         type: query.type,
         startDate: query.startDate ? new Date(query.startDate) : undefined,
         endDate: query.endDate ? new Date(query.endDate) : undefined,
-        page: query.page ? parseInt(query.page, 10) : 1,
-        pageSize: query.pageSize ? parseInt(query.pageSize, 10) : 20,
+        page,
+        pageSize,
       };
 
       // Build Prisma where clause
@@ -1375,6 +1381,8 @@ export class AdminController {
       return ApiResponseDto.success({
         list,
         total,
+        page: params.page,
+        pageSize: params.pageSize,
       });
     } catch (error: any) {
       if (error instanceof BadRequestException) {

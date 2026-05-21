@@ -1000,6 +1000,7 @@ export class OrdersController {
             paymentTimeoutMinutes: null,
             paymentAutoCloseEnabled: null,
           };
+    const refundStatus = await this.getRefundStatusForResponse(order);
 
     return {
       id: order.id,
@@ -1066,6 +1067,7 @@ export class OrdersController {
         ? order.aftersaleSince.toISOString()
         : null,
       aftersalePhotos: order.aftersalePhotos ?? [],
+      refundStatus,
       createdAt: order.createdAt.toISOString(),
     };
   }
@@ -1213,6 +1215,7 @@ export class OrdersController {
             paymentTimeoutMinutes: null,
             paymentAutoCloseEnabled: null,
           };
+    const refundStatus = await this.getRefundStatusForResponse(order);
 
     return {
       id: order.id,
@@ -1227,9 +1230,27 @@ export class OrdersController {
       paymentRemainingSeconds: paymentWindow.paymentRemainingSeconds,
       paymentTimeoutMinutes: paymentWindow.paymentTimeoutMinutes,
       paymentAutoCloseEnabled: paymentWindow.paymentAutoCloseEnabled,
+      refundStatus,
       firstItem,
       address,
     };
+  }
+
+  private async getRefundStatusForResponse(order: Order) {
+    if (order.paymentMethod !== 'WECHAT_PAY') {
+      return null;
+    }
+
+    const looksLikeRefundFlow =
+      order.status === OrderStatus.AFTERSALE ||
+      order.status === OrderStatus.CANCELLED ||
+      (order.cancellationReason || '').includes('售后退款');
+
+    if (!looksLikeRefundFlow) {
+      return null;
+    }
+
+    return this.orderService.getOrderRefundStatus(order.id);
   }
 
   /**

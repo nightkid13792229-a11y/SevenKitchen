@@ -165,6 +165,9 @@ interface Order {
   status: string;
   cancellationReason?: string | null;
   aftersaleType?: string | null;
+  refundStatus?: {
+    success: boolean;
+  } | null;
   totalAmount?: number;
   itemCount?: number;
   createdAt?: string;
@@ -573,7 +576,7 @@ function getStatusColor(orderOrStatus: Order | string): string {
 }
 
 function isRefundedOrder(order: Order): boolean {
-  return order.status === 'CANCELLED' && (order.cancellationReason || '').includes('售后退款')
+  return order.status === 'CANCELLED' && order.refundStatus?.success === true
 }
 
 function getCarrierName(code?: string): string {

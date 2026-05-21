@@ -1055,6 +1055,9 @@ interface Order {
   paymentRemainingSeconds?: number | null;
   paymentTimeoutMinutes?: number | null;
   paymentAutoCloseEnabled?: boolean | null;
+  refundStatus?: {
+    success: boolean;
+  } | null;
   // Phase 9.1: Aftersale fields
   aftersaleType?: string;
   aftersaleSince?: string;
@@ -2524,7 +2527,10 @@ function getStatusColor(orderOrStatus: Order | string): string {
 }
 
 function isRefundedOrder(currentOrder: Order): boolean {
-  return currentOrder.status === 'CANCELLED' && (currentOrder.cancellationReason || '').includes('售后退款')
+  return currentOrder.status === 'CANCELLED' && (
+    orderFinancialSummary.value?.refundStatus?.success === true ||
+    currentOrder.refundStatus?.success === true
+  )
 }
 
 function getCarrierName(code?: string): string {

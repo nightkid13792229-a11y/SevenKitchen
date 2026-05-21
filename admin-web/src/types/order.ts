@@ -206,6 +206,7 @@ export interface Order {
   transactionId?: string
   paidAt?: string | null
   paymentStatus?: PaymentStatus
+  refundStatus?: OrderRefundStatus | null
   adminRemark?: string | null
   aftersaleType?: string
   aftersaleReason?: string

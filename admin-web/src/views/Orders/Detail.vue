@@ -872,7 +872,7 @@ const getStatusText = (orderOrStatus: Order | OrderStatus) => {
 }
 
 const isRefundedOrder = (currentOrder: Order) => {
-  return currentOrder.status === OrderStatusEnum.CANCELLED && (currentOrder.cancellationReason || '').includes('售后退款')
+  return currentOrder.status === OrderStatusEnum.CANCELLED && currentOrder.refundStatus?.success === true
 }
 
 // 获取支付状态文本

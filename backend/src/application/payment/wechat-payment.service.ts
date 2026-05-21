@@ -313,7 +313,14 @@ export class WechatPaymentService {
       };
     }
 
-    if (order.status !== OrderStatus.PAID && order.status !== OrderStatus.AFTERSALE) {
+    const isResolvedRefundOrder =
+      order.status === OrderStatus.CANCELLED &&
+      (order.cancellationReason || '').includes('售后退款');
+    if (
+      order.status !== OrderStatus.PAID &&
+      order.status !== OrderStatus.AFTERSALE &&
+      !isResolvedRefundOrder
+    ) {
       throw new BadRequestException('只有已支付或售后中的订单可以发起线上退款');
     }
 

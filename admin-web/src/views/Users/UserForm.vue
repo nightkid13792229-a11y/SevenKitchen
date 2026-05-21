@@ -76,14 +76,13 @@
             v-model="formData.role"
             placeholder="请选择角色"
             style="width: 100%"
-            :disabled="!canChangeRole"
           >
             <el-option label="客户" :value="UserRole.CUSTOMER" />
             <el-option label="员工" :value="UserRole.STAFF" />
             <el-option label="管理员" :value="UserRole.ADMIN" />
           </el-select>
-          <div v-if="!canChangeRole" class="form-tip">
-            💡 无法将管理员降级为其他角色
+          <div v-if="user?.role === UserRole.ADMIN" class="form-tip">
+            管理员不能直接删除；如需取消管理员权限，可将角色改为员工或客户。系统会至少保留一个可用管理员。
           </div>
         </el-form-item>
       </template>
@@ -126,12 +125,6 @@ const submitting = ref(false)
 
 // 是否为编辑模式
 const isEditMode = computed(() => !!props.user)
-
-// 是否可以修改角色（管理员不能降级）
-const canChangeRole = computed(() => {
-  if (!props.user) return true
-  return props.user.role !== UserRole.ADMIN
-})
 
 interface UserFormModel {
   phone: string

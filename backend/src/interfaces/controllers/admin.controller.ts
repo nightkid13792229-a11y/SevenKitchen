@@ -129,6 +129,41 @@ export class AdminController {
     private readonly cosService: TencentCosService,
   ) {}
 
+  private parseShanghaiDateStart(dateStr: string): Date {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+    if (!match) {
+      const parsed = new Date(dateStr);
+      if (Number.isNaN(parsed.getTime())) {
+        throw new BadRequestException(`Invalid date: ${dateStr}`);
+      }
+      return parsed;
+    }
+
+    const [, year, month, day] = match;
+    const utcTime =
+      Date.UTC(Number(year), Number(month) - 1, Number(day)) -
+      8 * 60 * 60 * 1000;
+    return new Date(utcTime);
+  }
+
+  private parseOrderCreatedAtRange(startDate?: string, endDate?: string) {
+    const start = startDate
+      ? this.parseShanghaiDateStart(startDate)
+      : undefined;
+    const endExclusive = endDate
+      ? new Date(
+          this.parseShanghaiDateStart(endDate).getTime() +
+            24 * 60 * 60 * 1000,
+        )
+      : undefined;
+
+    if (start && endExclusive && start >= endExclusive) {
+      throw new BadRequestException('Start date must be before end date');
+    }
+
+    return { start, endExclusive };
+  }
+
   private async buildIngredientDetailResponse(ingredient: Ingredient) {
     const prismaIngredient = await this.prisma.ingredient.findUnique({
       where: { id: ingredient.id },
@@ -1144,14 +1179,19 @@ export class AdminController {
         Math.max(10, parseInt(String(query.pageSize || '20'), 10) || 20),
       );
 
+      const createdAtRange = this.parseOrderCreatedAtRange(
+        typeof query.startDate === 'string' ? query.startDate : undefined,
+        typeof query.endDate === 'string' ? query.endDate : undefined,
+      );
+
       // Parse query parameters
       const params = {
         keyword,
         orderId,
         status: query.status,
         type: query.type,
-        startDate: query.startDate ? new Date(query.startDate) : undefined,
-        endDate: query.endDate ? new Date(query.endDate) : undefined,
+        startDate: createdAtRange.start,
+        endDateExclusive: createdAtRange.endExclusive,
         page,
         pageSize,
       };
@@ -1217,13 +1257,13 @@ export class AdminController {
         ];
       }
 
-      if (params.startDate || params.endDate) {
+      if (params.startDate || params.endDateExclusive) {
         where.createdAt = {};
         if (params.startDate) {
           where.createdAt.gte = params.startDate;
         }
-        if (params.endDate) {
-          where.createdAt.lte = params.endDate;
+        if (params.endDateExclusive) {
+          where.createdAt.lt = params.endDateExclusive;
         }
       }
 
@@ -2949,20 +2989,43 @@ export class AdminController {
   ): Promise<ApiResponseDto<StaffResponseDto | null>> {
     const user = await this.prisma.user.findUnique({
       where: { id },
-      select: { role: true },
+      select: { role: true, status: true },
     });
 
     if (!user) {
       return ApiResponseDto.error(404, '用户不存在');
     }
 
-    if (user.role === 'ADMIN') {
-      return ApiResponseDto.error(400, '管理员账号受保护，不能编辑');
+    const nextRole = dto.role ?? user.role;
+    const nextStatus = dto.status ?? user.status;
+    const willLoseUsableAdmin =
+      user.role === 'ADMIN' &&
+      (nextRole !== 'ADMIN' || nextStatus !== 'ACTIVE');
+
+    if (willLoseUsableAdmin) {
+      const otherActiveAdminCount = await this.prisma.user.count({
+        where: {
+          id: { not: id },
+          role: 'ADMIN',
+          status: 'ACTIVE',
+        },
+      });
+
+      if (otherActiveAdminCount === 0) {
+        return ApiResponseDto.error(
+          400,
+          '至少需要保留一个正常状态的管理员账号',
+        );
+      }
     }
 
     const updatedUser = await this.prisma.user.update({
       where: { id },
-      data: dto,
+      data: {
+        ...(dto.nickname !== undefined && { nickname: dto.nickname }),
+        ...(dto.status !== undefined && { status: dto.status }),
+        ...(dto.role !== undefined && { role: dto.role }),
+      },
     });
 
     const data: StaffResponseDto = {

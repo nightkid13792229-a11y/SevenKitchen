@@ -2558,6 +2558,38 @@ export class OrderService {
     return this.orderRepository.findByStatus(OrderStatus.AFTERSALE);
   }
 
+  async getRefundAftersaleRecords(): Promise<Order[]> {
+    const pending = (await this.orderRepository.findByStatus(OrderStatus.AFTERSALE)).filter(
+      (order) => order.aftersaleType === AftersaleType.REFUND,
+    );
+
+    const refundedRecords = await this.prisma.order.findMany({
+      where: {
+        status: OrderStatus.CANCELLED,
+        cancellationReason: {
+          contains: '售后退款',
+        },
+      },
+      select: { id: true },
+      orderBy: [{ cancelledAt: 'desc' }, { createdAt: 'desc' }],
+      take: 100,
+    });
+
+    const refunded = (
+      await Promise.all(
+        refundedRecords.map((record) => this.orderRepository.findById(record.id)),
+      )
+    ).filter((order): order is Order => Boolean(order));
+
+    const byId = new Map<string, Order>();
+    [...pending, ...refunded].forEach((order) => byId.set(order.id, order));
+    return Array.from(byId.values()).sort((a, b) => {
+      const aTime = (a.aftersaleSince || a.createdAt).getTime();
+      const bTime = (b.aftersaleSince || b.createdAt).getTime();
+      return bTime - aTime;
+    });
+  }
+
   async listOrderCustomerAddresses(orderId: string): Promise<Address[]> {
     const order = await this.getOrderForStaffAddress(orderId);
     return this.addressRepository.findByUserId(order.customerId);

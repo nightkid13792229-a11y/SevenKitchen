@@ -63,7 +63,7 @@
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="getStatusTagType(row.status)">
-              {{ getStatusText(row.status) }}
+              {{ getStatusText(row) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -156,25 +156,8 @@
             type="warning"
             :closable="false"
             show-icon
-            title="微信线上退款会调用微信支付接口；如果支付配置未开启退款，系统会阻止处理并提示需要补充配置。"
+            title="选择同意退款后，系统会自动发起微信原路退款；退款受理成功后才会将订单标记为已退款。"
           />
-          <el-form-item label="线上退款">
-            <el-checkbox
-              v-model="resolveForm.createWechatRefund"
-              :disabled="currentOrder?.paymentMethod !== 'WECHAT_PAY'"
-            >
-              同时发起微信线上退款
-            </el-checkbox>
-          </el-form-item>
-          <el-form-item v-if="resolveForm.createWechatRefund" label="退款金额" required>
-            <el-input-number
-              v-model="resolveForm.refundAmount"
-              :min="0.01"
-              :max="Number(currentOrder?.amountTotal || 0)"
-              :precision="2"
-              :step="1"
-            />
-          </el-form-item>
         </template>
 
         <el-form-item label="处理备注">
@@ -227,7 +210,6 @@ const stats = computed(() => ({
 const resolveForm = reactive({
   resolutionType: '' as '' | 'refunded' | 'remade' | 'resolved',
   adminNote: '',
-  createWechatRefund: false,
   refundAmount: 0
 })
 
@@ -254,14 +236,12 @@ function handleResolve(row: AftersaleOrder) {
   currentOrder.value = row
   resetResolveForm()
   resolveForm.refundAmount = Number(row.amountTotal || 0)
-  resolveForm.createWechatRefund = row.aftersaleType === 'REFUND' && row.paymentMethod === 'WECHAT_PAY'
   resolveDialogVisible.value = true
 }
 
 function resetResolveForm() {
   resolveForm.resolutionType = ''
   resolveForm.adminNote = ''
-  resolveForm.createWechatRefund = false
   resolveForm.refundAmount = 0
 }
 
@@ -279,7 +259,7 @@ function viewDetail(row: AftersaleOrder) {
       <p><strong>购买内容:</strong> ${escapeHtml(getOrderItemsSummary(row))}</p>
       <p><strong>狗狗:</strong> ${escapeHtml(getFirstDogName(row))}</p>
       <p><strong>收货地址:</strong> ${escapeHtml(getAddressText(row))}</p>
-      <p><strong>订单状态:</strong> ${getStatusText(row.status)}</p>
+      <p><strong>订单状态:</strong> ${getStatusText(row)}</p>
       <p><strong>售后类型:</strong> ${getAftersaleTypeText(row.aftersaleType)}</p>
       <p><strong>订单金额:</strong> ¥${formatAmount(row.amountTotal)}</p>
       <p><strong>支付方式:</strong> ${getPaymentMethodText(row.paymentMethod)}</p>
@@ -304,26 +284,11 @@ async function confirmResolve() {
     return
   }
 
-  if (resolveForm.createWechatRefund && resolveForm.refundAmount <= 0) {
-    ElMessage.warning('请输入正确的退款金额')
-    return
-  }
-
   submitting.value = true
   try {
-    const noteParts = [resolveForm.adminNote.trim()].filter(Boolean)
-
-    if (resolveForm.createWechatRefund) {
-      const refund = await orderApi.createWechatRefund(currentOrder.value.id, {
-        amount: resolveForm.refundAmount,
-        reason: resolveForm.adminNote.trim() || currentOrder.value.aftersaleReason || '售后退款'
-      })
-      noteParts.push(`微信退款单号：${refund.outRefundNo}`)
-    }
-
     await orderApi.resolveAftersale(currentOrder.value.id, {
       resolutionType: resolveForm.resolutionType,
-      adminNote: noteParts.join('\n')
+      adminNote: resolveForm.adminNote.trim()
     })
 
     ElMessage.success('售后工单已处理')
@@ -336,7 +301,11 @@ async function confirmResolve() {
   }
 }
 
-function getStatusText(status?: string): string {
+function getStatusText(orderOrStatus?: AftersaleOrder | string): string {
+  const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus?.status
+  if (orderOrStatus && typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) {
+    return '已退款（钱款原路退回）'
+  }
   const statusMap: Record<string, string> = {
     FREEZING: '急冻中',
     SHIPPED: '已发货',
@@ -345,6 +314,10 @@ function getStatusText(status?: string): string {
     CANCELLED: '已取消'
   }
   return statusMap[status || ''] || status || '-'
+}
+
+function isRefundedOrder(order: AftersaleOrder): boolean {
+  return order.status === 'CANCELLED' && (order.cancellationReason || '').includes('售后退款')
 }
 
 function getAftersaleTypeText(type?: string): string {

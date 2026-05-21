@@ -28,9 +28,9 @@
           }}</text>
           <text
             class="order-status"
-            :style="{ color: getStatusColor(order.status) }"
+            :style="{ color: getStatusColor(order) }"
           >
-            {{ getStatusText(order.status) }}
+            {{ getStatusText(order) }}
           </text>
         </view>
 
@@ -163,6 +163,8 @@ const DEBUG = true;
 interface Order {
   id: string;
   status: string;
+  cancellationReason?: string | null;
+  aftersaleType?: string | null;
   totalAmount?: number;
   itemCount?: number;
   createdAt?: string;
@@ -204,7 +206,7 @@ const statusTabs = ref<Array<{ label: string; value: string; count: number }>>([
   { label: '待收货', value: 'WAIT_RECEIVE', count: 0 },
   { label: '已收货', value: 'RECEIVED', count: 0 },
   { label: '售后中', value: 'AFTERSALE', count: 0 },
-  { label: '已取消', value: 'CANCELLED', count: 0 },
+  { label: '已取消/退款', value: 'CANCELLED', count: 0 },
 ]);
 
 const allOrders = ref<Order[]>([]);
@@ -526,7 +528,11 @@ function formatAmount(amount?: number): string {
   return amount.toFixed(2);
 }
 
-function getStatusText(status: string): string {
+function getStatusText(orderOrStatus: Order | string): string {
+  const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
+  if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) {
+    return '已退款（钱款原路退回）'
+  }
   // Phase 9: Simplified status text aligned with e-commerce standards
   // Phase 9.1: Added PURCHASING, FREEZING and AFTERSALE status text
   const statusMap: Record<string, string> = {
@@ -544,7 +550,11 @@ function getStatusText(status: string): string {
   return statusMap[status] || status;
 }
 
-function getStatusColor(status: string): string {
+function getStatusColor(orderOrStatus: Order | string): string {
+  const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
+  if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) {
+    return '#16a34a'
+  }
   // Phase 9: Simplified status colors aligned with e-commerce standards
   // Phase 9.1: Added PURCHASING, FREEZING and AFTERSALE status colors
   const colorMap: Record<string, string> = {
@@ -560,6 +570,10 @@ function getStatusColor(status: string): string {
     AFTERSALE: '#f5222d',
   };
   return colorMap[status] || '#999';
+}
+
+function isRefundedOrder(order: Order): boolean {
+  return order.status === 'CANCELLED' && (order.cancellationReason || '').includes('售后退款')
 }
 
 function getCarrierName(code?: string): string {

@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h2>退款管理</h2>
-        <p>集中审核客户退款申请，保留审核备注和处理人签名。</p>
+        <p>集中审核客户退款申请，并保留已退款记录。</p>
       </div>
       <el-button type="primary" :loading="loading" @click="loadRefunds">刷新</el-button>
     </div>
@@ -11,7 +11,7 @@
     <el-row :gutter="16" class="stats-row">
       <el-col :xs="12" :sm="6">
         <el-card class="stat-card" shadow="never">
-          <div class="stat-label">待审核退款</div>
+          <div class="stat-label">退款记录</div>
           <div class="stat-value">{{ refunds.length }}</div>
         </el-card>
       </el-col>
@@ -48,13 +48,23 @@
           <template #default="{ row }">¥{{ formatAmount(row.amountTotal) }}</template>
         </el-table-column>
         <el-table-column prop="aftersaleReason" label="退款理由" min-width="230" show-overflow-tooltip />
+        <el-table-column label="状态" width="150">
+          <template #default="{ row }">
+            <el-tag :type="canReviewRefund(row) ? 'warning' : 'success'">
+              {{ canReviewRefund(row) ? '待审核' : '已退款（钱款原路退回）' }}
+            </el-tag>
+          </template>
+        </el-table-column>
         <el-table-column label="申请时间" width="170">
           <template #default="{ row }">{{ formatTime(row.aftersaleSince) }}</template>
         </el-table-column>
         <el-table-column label="操作" width="190" fixed="right">
           <template #default="{ row }">
-            <el-button size="small" type="primary" @click="openReview(row, 'approve')">审核</el-button>
-            <el-button size="small" @click="openReview(row, 'reject')">驳回</el-button>
+            <template v-if="canReviewRefund(row)">
+              <el-button size="small" type="primary" @click="openReview(row, 'approve')">审核</el-button>
+              <el-button size="small" @click="openReview(row, 'reject')">驳回</el-button>
+            </template>
+            <span v-else class="muted-text">已处理</span>
           </template>
         </el-table-column>
       </el-table>
@@ -88,25 +98,8 @@
             type="warning"
             :closable="false"
             show-icon
-            title="审核通过会将售后处理为同意退款；勾选线上退款时会同步调用微信退款接口。"
+            title="确认通过后，系统会自动发起微信原路退款；退款受理成功后才会将订单标记为已退款。"
           />
-          <el-form-item label="线上退款">
-            <el-checkbox
-              v-model="reviewForm.createWechatRefund"
-              :disabled="currentOrder?.paymentMethod !== 'WECHAT_PAY'"
-            >
-              同时发起微信线上退款
-            </el-checkbox>
-          </el-form-item>
-          <el-form-item v-if="reviewForm.createWechatRefund" label="退款金额" required>
-            <el-input-number
-              v-model="reviewForm.refundAmount"
-              :min="0.01"
-              :max="Number(currentOrder?.amountTotal || 0)"
-              :precision="2"
-              :step="1"
-            />
-          </el-form-item>
         </template>
 
         <el-form-item label="审核备注">
@@ -156,7 +149,6 @@ const currentOrder = ref<RefundOrder | null>(null)
 
 const reviewForm = reactive({
   adminNote: '',
-  createWechatRefund: false,
   refundAmount: 0
 })
 
@@ -171,20 +163,23 @@ onMounted(() => {
 async function loadRefunds() {
   loading.value = true
   try {
-    const aftersales = await orderApi.listPendingAftersales()
-    refunds.value = aftersales.filter((order: RefundOrder) => order.aftersaleType === 'REFUND')
+    refunds.value = await orderApi.listRefundAftersales()
   } finally {
     loading.value = false
   }
 }
 
 function openReview(row: RefundOrder, mode: 'approve' | 'reject') {
+  if (!canReviewRefund(row)) return
   currentOrder.value = row
   reviewMode.value = mode
   reviewForm.adminNote = ''
   reviewForm.refundAmount = Number(row.amountTotal || 0)
-  reviewForm.createWechatRefund = mode === 'approve' && row.paymentMethod === 'WECHAT_PAY'
   reviewDialogVisible.value = true
+}
+
+function canReviewRefund(row: RefundOrder): boolean {
+  return row.status === 'AFTERSALE' && row.aftersaleType === 'REFUND'
 }
 
 async function submitReview() {
@@ -193,26 +188,11 @@ async function submitReview() {
     ElMessage.warning('请填写驳回原因')
     return
   }
-  if (reviewForm.createWechatRefund && reviewForm.refundAmount <= 0) {
-    ElMessage.warning('请输入正确的退款金额')
-    return
-  }
-
   submitting.value = true
   try {
-    const noteParts = [reviewForm.adminNote.trim()].filter(Boolean)
-
-    if (reviewMode.value === 'approve' && reviewForm.createWechatRefund) {
-      const refund = await orderApi.createWechatRefund(currentOrder.value.id, {
-        amount: reviewForm.refundAmount,
-        reason: reviewForm.adminNote.trim() || currentOrder.value.aftersaleReason || '售后退款'
-      })
-      noteParts.push(`微信退款单号：${refund.outRefundNo}`)
-    }
-
     await orderApi.resolveAftersale(currentOrder.value.id, {
       resolutionType: reviewMode.value === 'approve' ? 'refunded' : 'resolved',
-      adminNote: noteParts.join('\n') || (reviewMode.value === 'approve' ? '退款审核通过' : '退款申请已驳回')
+      adminNote: reviewForm.adminNote.trim() || (reviewMode.value === 'approve' ? '退款审核通过' : '退款申请已驳回')
     })
 
     ElMessage.success(reviewMode.value === 'approve' ? '退款审核已通过' : '退款申请已驳回')

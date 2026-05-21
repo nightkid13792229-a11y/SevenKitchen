@@ -73,8 +73,8 @@
         <!-- 订单头部：订单编号 + 状态 -->
         <view class="order-header">
           <text class="order-id">{{ order.id }}</text>
-          <text class="order-status" :style="{ color: getStatusColor(order.status) }">
-            {{ getStatusText(order.status) }}
+          <text class="order-status" :style="{ color: getStatusColor(order) }">
+            {{ getStatusText(order) }}
           </text>
         </view>
 
@@ -319,6 +319,7 @@ function isTodayOrder(dateStr?: string): boolean {
 interface Order {
   id: string
   status: string
+  cancellationReason?: string | null
   totalAmount?: number | string
   amountTotal?: number | string
   amountProduct?: number | string
@@ -910,7 +911,11 @@ function formatAddress(address?: { regionText?: string }): string {
   return regions[0] || address.regionText
 }
 
-function getStatusText(status: string): string {
+function getStatusText(orderOrStatus: Order | string): string {
+  const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
+  if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) {
+    return '已退款（钱款原路退回）'
+  }
   const statusMap: Record<string, string> = {
     INIT: '待确认',
     PENDING_PAYMENT: '待付款',
@@ -926,7 +931,11 @@ function getStatusText(status: string): string {
   return statusMap[status] || status
 }
 
-function getStatusColor(status: string): string {
+function getStatusColor(orderOrStatus: Order | string): string {
+  const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
+  if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) {
+    return '#16a34a'
+  }
   const colorMap: Record<string, string> = {
     INIT: '#999',
     PENDING_PAYMENT: '#ff9800',
@@ -940,6 +949,10 @@ function getStatusColor(status: string): string {
     AFTERSALE: '#f5222d',
   }
   return colorMap[status] || '#999'
+}
+
+function isRefundedOrder(order: Order): boolean {
+  return order.status === 'CANCELLED' && (order.cancellationReason || '').includes('售后退款')
 }
 
 // 操作权限判断

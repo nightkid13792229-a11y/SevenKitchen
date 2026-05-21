@@ -1217,6 +1217,8 @@ export class OrdersController {
       id: order.id,
       status: order.status,
       type: order.type,
+      cancellationReason: order.cancellationReason ?? null,
+      aftersaleType: order.aftersaleType ?? null,
       totalAmount: order.totalAmount ?? order.amountTotal,
       itemCount: order.items.length,
       createdAt: order.createdAt.toISOString(),
@@ -1316,11 +1318,30 @@ export class OrdersController {
     @CurrentUser() user: RequestUser,
   ) {
     try {
+      let adminNote = dto.adminNote;
+      if (dto.resolutionType === 'refunded') {
+        if (user.role !== 'ADMIN') {
+          return ApiResponseDto.error(403, '退款申请仅管理员可以审核');
+        }
+        const order = await this.orderRepository.findById(orderId);
+        if (!order) {
+          return ApiResponseDto.error(404, `Order not found: ${orderId}`);
+        }
+        const refund = await this.wechatPaymentService.createRefund({
+          orderId,
+          amount: order.amountTotal,
+          reason: dto.adminNote || order.aftersaleReason || '售后退款',
+          adminId: user.userId,
+        });
+        const refundNote = `微信原路退款已发起；退款单号：${refund.outRefundNo}`;
+        adminNote = [dto.adminNote, refundNote].filter(Boolean).join('\n');
+      }
+
       const order = await this.orderService.resolveAftersale(
         orderId,
         dto.resolutionType,
         user.userId,
-        dto.adminNote,
+        adminNote,
         user.role,
       );
       return ApiResponseDto.success(await this.mapOrderToDto(order));
@@ -1340,6 +1361,19 @@ export class OrdersController {
       }
       throw error;
     }
+  }
+
+  @Get('aftersale/refunds')
+  @UseGuards(AuthGuard, StaffGuard)
+  @ApiOperation({ summary: 'Get refund aftersale records including resolved refunds' })
+  @ApiSecurity('X-Customer-Id')
+  async getRefundAftersaleRecords(@CurrentUser() user: RequestUser) {
+    if (user.role !== 'ADMIN') {
+      return ApiResponseDto.success([]);
+    }
+    const orders = await this.orderService.getRefundAftersaleRecords();
+    const data = await Promise.all(orders.map((order) => this.mapOrderToDto(order)));
+    return ApiResponseDto.success(data);
   }
 
   /**

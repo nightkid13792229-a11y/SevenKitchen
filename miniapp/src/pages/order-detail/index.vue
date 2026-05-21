@@ -19,9 +19,9 @@
           </view>
           <text
             class="order-center-status"
-            :style="{ color: getStatusColor(order.status) }"
-          >
-            {{ getStatusText(order.status) }}
+              :style="{ color: getStatusColor(order) }"
+            >
+              {{ getStatusText(order) }}
           </text>
         </view>
 
@@ -83,9 +83,9 @@
           <text class="label">订单状态:</text>
           <text
             class="value status"
-            :style="{ color: getStatusColor(order.status) }"
+            :style="{ color: getStatusColor(order) }"
           >
-            {{ getStatusText(order.status) }}
+            {{ getStatusText(order) }}
           </text>
         </view>
         <view class="info-row">
@@ -998,6 +998,7 @@ interface Order {
   amountProduct?: number;
   amountShipping?: number;
   adminRemark?: string | null;
+  cancellationReason?: string | null;
   items?: OrderItem[];
   addressId?: string | null;
   address?: {
@@ -2435,7 +2436,11 @@ function formatPackagePlan(item: {
   return `${item.packageSpecG || 0}g×${item.packageCount || 0}袋`;
 }
 
-function getStatusText(status: string): string {
+function getStatusText(orderOrStatus: Order | string): string {
+  const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
+  if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) {
+    return '已退款（钱款原路退回）'
+  }
   // Phase 9: Simplified status text aligned with e-commerce standards
   const statusMap: Record<string, string> = {
     INIT: '待确认',
@@ -2469,7 +2474,11 @@ function getStatusIcon(status: string): string {
   return iconMap[status] || '';
 }
 
-function getStatusColor(status: string): string {
+function getStatusColor(orderOrStatus: Order | string): string {
+  const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
+  if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) {
+    return '#16a34a'
+  }
   // Phase 9: Simplified status colors aligned with e-commerce standards
   const colorMap: Record<string, string> = {
     INIT: '#999',
@@ -2484,6 +2493,10 @@ function getStatusColor(status: string): string {
     AFTERSALE: '#f5222d',
   };
   return colorMap[status] || '#999';
+}
+
+function isRefundedOrder(currentOrder: Order): boolean {
+  return currentOrder.status === 'CANCELLED' && (currentOrder.cancellationReason || '').includes('售后退款')
 }
 
 function getCarrierName(code?: string): string {
@@ -2841,7 +2854,7 @@ function getAftersaleTypeText(type?: string): string {
 function applyAftersaleType(type: 'REFUND' | 'REMAKE' | 'COMPLAINT') {
   if (type === 'REFUND') {
     const currentStatusText = order.value
-      ? getStatusText(order.value.status)
+      ? getStatusText(order.value)
       : '当前流程';
     uni.showModal({
       title: '申请退款前请确认',

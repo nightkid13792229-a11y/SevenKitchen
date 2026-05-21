@@ -294,6 +294,25 @@ export class WechatPaymentService {
       throw new NotFoundException('订单不存在');
     }
 
+    const existingRefund = await this.prisma.orderSettlementAdjustment.findFirst({
+      where: {
+        orderId: order.id,
+        sourceType: 'WECHAT_REFUND',
+        status: { not: 'CANCELLED' },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (existingRefund) {
+      const metadata = (existingRefund.metadata as Record<string, any> | null) ?? {};
+      return {
+        outRefundNo: String(existingRefund.sourceId || metadata.outRefundNo || ''),
+        refundId: metadata.refundId ?? null,
+        status: metadata.wechatStatus ?? metadata.refundStatus ?? existingRefund.status,
+        adjustmentId: existingRefund.id,
+        reused: true,
+      };
+    }
+
     if (order.status !== OrderStatus.PAID && order.status !== OrderStatus.AFTERSALE) {
       throw new BadRequestException('只有已支付或售后中的订单可以发起线上退款');
     }
@@ -618,7 +637,7 @@ export class WechatPaymentService {
   }
 
   private toOutRefundNo(orderId: string) {
-    return `RF${this.toOutTradeNo(orderId)}${Date.now()}`;
+    return `RF${this.toOutTradeNo(orderId)}`;
   }
 
   private fromOutTradeNo(outTradeNo: string) {

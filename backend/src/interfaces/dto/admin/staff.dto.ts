@@ -35,6 +35,15 @@ export class UpdateStaffDto {
   @IsEnum(['ACTIVE', 'INACTIVE', 'BANNED'])
   @IsOptional()
   status?: 'ACTIVE' | 'INACTIVE' | 'BANNED';
+
+  @ApiProperty({
+    description: '角色',
+    enum: ['CUSTOMER', 'STAFF', 'ADMIN'],
+    required: false,
+  })
+  @IsEnum(['CUSTOMER', 'STAFF', 'ADMIN'])
+  @IsOptional()
+  role?: 'CUSTOMER' | 'STAFF' | 'ADMIN';
 }
 
 export class StaffResponseDto {

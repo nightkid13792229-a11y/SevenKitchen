@@ -77,7 +77,6 @@
               账号保护
             </el-tag>
             <el-button
-              v-if="row.role !== UserRole.ADMIN"
               link
               type="primary"
               size="small"
@@ -201,11 +200,6 @@ const handleCreate = () => {
 
 // Handle edit user
 const handleEdit = (user: User) => {
-  if (user.role === UserRole.ADMIN) {
-    ElMessage.warning('管理员账号受保护，不能编辑')
-    return
-  }
-
   currentUser.value = user
   formVisible.value = true
 }

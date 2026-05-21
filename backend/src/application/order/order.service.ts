@@ -109,6 +109,7 @@ export interface OrderFinancialSummaryDto {
   actualMargin: number | null;
   shortageAdjustmentAmount: number;
   requiresCustomerPayment: boolean;
+  refundStatus: OrderRefundStatusDto | null;
   adjustmentSummary: OrderSettlementAdjustmentSummaryDto;
   adjustments: OrderSettlementAdjustmentDto[];
   settlementStatus: 'PENDING' | 'SETTLED';
@@ -122,6 +123,19 @@ export interface OrderFinancialSummaryDto {
     settledAt: string | null;
     createdAt: string | null;
   } | null;
+}
+
+export interface OrderRefundStatusDto {
+  exists: boolean;
+  success: boolean;
+  status: string;
+  statusText: string;
+  amount: number;
+  outRefundNo: string | null;
+  refundId: string | null;
+  successTime: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
 }
 
 export interface OrderSettlementAdjustmentDto {
@@ -423,6 +437,7 @@ export class OrderService {
       adjustments,
       revenue,
     );
+    const refundStatus = this.getWechatRefundStatus(adjustments);
 
     return {
       orderId: order.id,
@@ -441,6 +456,7 @@ export class OrderService {
       requiresCustomerPayment:
         (latestSettlement?.requiresCustomerPayment ?? false) ||
         adjustmentSummary.pendingExtraPaymentAmount > 0,
+      refundStatus,
       adjustmentSummary,
       adjustments: adjustments.map((adjustment: any) =>
         this.mapOrderSettlementAdjustment(adjustment),
@@ -724,6 +740,43 @@ export class OrderService {
     }
 
     return computed;
+  }
+
+  private getWechatRefundStatus(adjustments: any[]): OrderRefundStatusDto | null {
+    const adjustment = adjustments.find(
+      (item) => item.sourceType === 'WECHAT_REFUND' && item.status !== 'CANCELLED',
+    );
+    if (!adjustment) return null;
+
+    const metadata = (adjustment.metadata ?? {}) as Record<string, any>;
+    const status = String(
+      metadata.refundStatus || metadata.wechatStatus || adjustment.status || 'PENDING',
+    );
+    const success = adjustment.status === 'SETTLED' || status === 'SUCCESS';
+
+    return {
+      exists: true,
+      success,
+      status,
+      statusText: this.getRefundStatusText(status, success),
+      amount: Math.abs(this.roundMoney(this.toNumber(adjustment.amount))),
+      outRefundNo: adjustment.sourceId ?? metadata.outRefundNo ?? null,
+      refundId: metadata.refundId ?? null,
+      successTime: metadata.successTime ?? adjustment.settledAt?.toISOString() ?? null,
+      createdAt: adjustment.createdAt?.toISOString() ?? null,
+      updatedAt: adjustment.updatedAt?.toISOString() ?? null,
+    };
+  }
+
+  private getRefundStatusText(status: string, success: boolean): string {
+    if (success) return '退款成功，钱款已原路退回';
+    const statusMap: Record<string, string> = {
+      PENDING: '退款处理中，等待微信确认',
+      PROCESSING: '退款处理中，等待微信确认',
+      ABNORMAL: '退款异常，请管理员到微信商户平台核查',
+      CLOSED: '退款已关闭，请管理员核查',
+    };
+    return statusMap[status] || `退款状态：${status}`;
   }
 
   private async findStatusBeforeLatestAftersale(

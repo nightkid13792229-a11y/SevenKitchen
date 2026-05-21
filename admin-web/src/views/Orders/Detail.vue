@@ -301,6 +301,13 @@
             :closable="false"
             class="financial-alert"
           />
+          <el-alert
+            v-if="financialSummary.refundStatus"
+            :title="financialSummary.refundStatus.statusText"
+            :type="financialSummary.refundStatus.success ? 'success' : 'warning'"
+            :closable="false"
+            class="financial-alert"
+          />
 
           <el-descriptions :column="2" border>
             <el-descriptions-item label="结算状态">
@@ -322,6 +329,17 @@
             </el-descriptions-item>
             <el-descriptions-item label="实际毛利">
               {{ formatFinancialAmount(financialSummary.actualMargin) }}
+            </el-descriptions-item>
+            <el-descriptions-item v-if="financialSummary.refundStatus" label="退款状态" :span="2">
+              <el-tag :type="financialSummary.refundStatus.success ? 'success' : 'warning'">
+                {{ financialSummary.refundStatus.statusText }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item v-if="financialSummary.refundStatus" label="退款单号">
+              {{ financialSummary.refundStatus.outRefundNo || '-' }}
+            </el-descriptions-item>
+            <el-descriptions-item v-if="financialSummary.refundStatus" label="退款金额">
+              {{ formatFinancialAmount(financialSummary.refundStatus.amount) }}
             </el-descriptions-item>
             <el-descriptions-item label="差价建议">
               <el-tag :type="getAdjustmentTagType(financialSummary.shortageAdjustmentAmount)">

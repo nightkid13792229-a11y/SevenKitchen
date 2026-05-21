@@ -109,6 +109,7 @@ export interface OrderFinancialSummary {
   actualMargin: number | null
   shortageAdjustmentAmount: number
   requiresCustomerPayment: boolean
+  refundStatus: OrderRefundStatus | null
   adjustmentSummary: {
     totalIncreaseAmount: number
     totalDecreaseAmount: number
@@ -131,6 +132,19 @@ export interface OrderFinancialSummary {
     settledAt: string | null
     createdAt: string | null
   } | null
+}
+
+export interface OrderRefundStatus {
+  exists: boolean
+  success: boolean
+  status: string
+  statusText: string
+  amount: number
+  outRefundNo: string | null
+  refundId: string | null
+  successTime: string | null
+  createdAt: string | null
+  updatedAt: string | null
 }
 
 export interface OrderSettlementAdjustment {

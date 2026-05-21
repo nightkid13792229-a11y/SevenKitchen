@@ -450,6 +450,7 @@ export class OrdersController {
       shortageAdjustmentAmount: summary.shortageAdjustmentAmount,
       requiresCustomerPayment:
         customerAdjustmentSummary.pendingExtraPaymentAmount > 0,
+      refundStatus: summary.refundStatus,
       adjustmentSummary: customerAdjustmentSummary,
       adjustments: visibleAdjustments.map((adjustment) => ({
         id: adjustment.id,

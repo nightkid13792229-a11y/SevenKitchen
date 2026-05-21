@@ -4,7 +4,7 @@
       <view class="icon-shell">手机</view>
       <text class="title">绑定手机号</text>
       <text class="desc">
-        绑定后可用于同步历史订单、宠物资料和售后记录。下单、支付、查看订单等核心功能需要先完成绑定。
+        手机号仅用于账号识别、历史资料同步、订单履约和售后服务。绑定后可同步旧小程序资料，并继续使用下单、支付、订单和售后功能。
       </text>
 
       <view v-if="pendingMerge" class="history-card">
@@ -50,10 +50,6 @@
         @tap="cancelMerge"
       >
         暂不合并，重新选择
-      </button>
-
-      <button class="text-btn" :disabled="loading" @tap="goHome">
-        暂时浏览首页
       </button>
     </view>
   </view>
@@ -166,10 +162,6 @@ async function confirmMerge() {
 
 function cancelMerge() {
   pendingMerge.value = null;
-}
-
-function goHome() {
-  uni.switchTab({ url: "/pages/home/index" });
 }
 </script>
 

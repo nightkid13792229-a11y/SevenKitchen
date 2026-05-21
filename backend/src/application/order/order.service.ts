@@ -726,6 +726,28 @@ export class OrderService {
     return computed;
   }
 
+  private async findStatusBeforeLatestAftersale(
+    orderId: string,
+  ): Promise<OrderStatus | null> {
+    try {
+      const history = await this.statusHistoryRepository.findByOrderId(orderId);
+      for (let index = history.length - 1; index >= 0; index--) {
+        const record = history[index];
+        if (record.toStatus === OrderStatus.AFTERSALE) {
+          return record.fromStatus;
+        }
+      }
+    } catch (error) {
+      console.error(
+        `[History] ERROR: Failed to find original aftersale status for order ${orderId}:`,
+        error,
+      );
+      throw error;
+    }
+
+    return null;
+  }
+
   private normalizeOrderNote(value: unknown): string | null {
     if (value === null || value === undefined) return null;
     const text =
@@ -2425,11 +2447,8 @@ export class OrderService {
       throw new ForbiddenException('退款申请仅管理员可以审核');
     }
 
-    const fromStatus = order.status;
-    order.resolveAftersale(resolutionType);
-    const savedOrder = await this.orderRepository.save(order);
+    const aftersaleType = order.aftersaleType;
 
-    // Determine target status based on resolution type
     let targetStatus: OrderStatus;
     switch (resolutionType) {
       case 'refunded':
@@ -2439,9 +2458,15 @@ export class OrderService {
         targetStatus = OrderStatus.IN_PRODUCTION;
         break;
       case 'resolved':
-        targetStatus = OrderStatus.COMPLETED;
+        targetStatus =
+          (await this.findStatusBeforeLatestAftersale(orderId)) ??
+          OrderStatus.COMPLETED;
         break;
     }
+
+    const fromStatus = order.status;
+    order.resolveAftersale(resolutionType, targetStatus);
+    const savedOrder = await this.orderRepository.save(order);
 
     // Log status transition
     await this.logStatusTransition(

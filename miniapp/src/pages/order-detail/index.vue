@@ -508,13 +508,13 @@
       <view class="section aftersale-section" v-if="canApplyAftersale(order.status)">
         <view class="section-title">售后服务</view>
         <view class="aftersale-buttons">
-          <button class="btn-aftersale" @tap="applyAftersaleType('REFUND')">
+          <button v-if="canApplyRefund(order.status)" class="btn-aftersale" @tap="applyAftersaleType('REFUND')">
             <text class="btn-text">申请退款</text>
           </button>
-          <button class="btn-aftersale" @tap="applyAftersaleType('REMAKE')">
+          <button v-if="canApplyRemake(order.status)" class="btn-aftersale" @tap="applyAftersaleType('REMAKE')">
             <text class="btn-text">申请重做</text>
           </button>
-          <button class="btn-aftersale" @tap="applyAftersaleType('COMPLAINT')">
+          <button v-if="canApplyComplaint(order.status)" class="btn-aftersale" @tap="applyAftersaleType('COMPLAINT')">
             <text class="btn-text">投诉建议</text>
             </button>
           </view>
@@ -2441,6 +2441,18 @@ async function buyAgain() {
 // 判断是否可以申请售后
 // Phase 9.1: paid orders can apply for aftersale throughout the fulfillment flow.
 function canApplyAftersale(status: string): boolean {
+  return canApplyRefund(status) || canApplyRemake(status) || canApplyComplaint(status)
+}
+
+function canApplyRefund(status: string): boolean {
+  return ['PAID', 'PURCHASING', 'IN_PRODUCTION', 'FREEZING', 'SHIPPED', 'COMPLETED'].includes(status)
+}
+
+function canApplyRemake(status: string): boolean {
+  return ['FREEZING', 'SHIPPED', 'COMPLETED'].includes(status)
+}
+
+function canApplyComplaint(status: string): boolean {
   return ['PAID', 'PURCHASING', 'IN_PRODUCTION', 'FREEZING', 'SHIPPED', 'COMPLETED'].includes(status)
 }
 

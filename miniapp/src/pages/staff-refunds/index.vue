@@ -184,7 +184,7 @@ function approveRefund(order: RefundOrder) {
 function rejectRefund(order: RefundOrder) {
   uni.showModal({
     title: '驳回退款',
-    content: `确认驳回订单 #${shortOrderId(order.id)} 的退款申请？订单将回到已完成状态。`,
+    content: `确认驳回订单 #${shortOrderId(order.id)} 的退款申请？订单将回到申请售后前的状态。`,
     confirmText: '驳回',
     cancelText: '取消',
     success: async (res) => {
@@ -227,7 +227,7 @@ async function resolveRefund(order: RefundOrder, resolutionType: 'refunded' | 'r
 
 function getReviewerText(): string {
   const user = getStoredUser()
-  const name = user?.nickname || user?.name || user?.phone || '当前员工'
+  const name = user?.nickname || user?.name || user?.phone || '当前管理员'
   const id = user?.id || user?.userId
   return id ? `${name}(${id})` : name
 }

@@ -248,9 +248,12 @@ export class Order {
       [OrderStatus.SHIPPED]: [OrderStatus.COMPLETED, OrderStatus.AFTERSALE],
       [OrderStatus.COMPLETED]: [OrderStatus.AFTERSALE],
       [OrderStatus.AFTERSALE]: [
+        OrderStatus.PAID,
+        OrderStatus.PURCHASING,
+        OrderStatus.IN_PRODUCTION,
+        OrderStatus.FREEZING,
         OrderStatus.SHIPPED,
         OrderStatus.COMPLETED,
-        OrderStatus.IN_PRODUCTION,
         OrderStatus.CANCELLED,
       ],
       [OrderStatus.CANCELLED]: [],
@@ -478,7 +481,7 @@ export class Order {
     reason: string,
     photos: string[] = [],
   ): void {
-    const allowedStatuses = [
+    const refundStatuses = [
       OrderStatus.PAID,
       OrderStatus.PURCHASING,
       OrderStatus.IN_PRODUCTION,
@@ -486,10 +489,22 @@ export class Order {
       OrderStatus.SHIPPED,
       OrderStatus.COMPLETED,
     ];
+    const remakeStatuses = [
+      OrderStatus.FREEZING,
+      OrderStatus.SHIPPED,
+      OrderStatus.COMPLETED,
+    ];
+    const complaintStatuses = refundStatuses;
+    const allowedStatuses =
+      type === AftersaleType.REMAKE
+        ? remakeStatuses
+        : type === AftersaleType.COMPLAINT
+          ? complaintStatuses
+          : refundStatuses;
 
     if (!allowedStatuses.includes(this.status)) {
       throw new InvalidStateTransitionError(
-        `Cannot apply for aftersale from status: ${this.status}. Order must be paid or in fulfillment.`,
+        `Cannot apply for ${type} aftersale from status: ${this.status}.`,
       );
     }
 
@@ -510,7 +525,10 @@ export class Order {
    * @param resolutionType Type of resolution (refunded, remade, resolved)
    * @throws InvalidStateTransitionError if order is not in AFTERSALE status
    */
-  resolveAftersale(resolutionType: 'refunded' | 'remade' | 'resolved'): void {
+  resolveAftersale(
+    resolutionType: 'refunded' | 'remade' | 'resolved',
+    resolvedTargetStatus: OrderStatus = OrderStatus.COMPLETED,
+  ): void {
     if (this.status !== OrderStatus.AFTERSALE) {
       throw new InvalidStateTransitionError(
         `Cannot resolve aftersale from status: ${this.status}. Order must be in AFTERSALE status.`,
@@ -532,11 +550,15 @@ export class Order {
         this.transitionTo(OrderStatus.IN_PRODUCTION);
         break;
       case 'resolved':
-        // Mark as completed (complaint resolved)
-        if (!this.completedAt) {
+        if (resolvedTargetStatus === OrderStatus.CANCELLED) {
+          throw new InvalidStateTransitionError(
+            'Resolved aftersale cannot target CANCELLED status',
+          );
+        }
+        if (resolvedTargetStatus === OrderStatus.COMPLETED && !this.completedAt) {
           this.completedAt = new Date();
         }
-        this.transitionTo(OrderStatus.COMPLETED);
+        this.transitionTo(resolvedTargetStatus);
         break;
     }
   }

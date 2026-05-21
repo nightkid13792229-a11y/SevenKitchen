@@ -1,7 +1,7 @@
 <template>
   <view class="aftersale-apply-page">
     <view class="header">
-      <text class="page-title">申请售后</text>
+      <text class="page-title">{{ pageTitle }}</text>
     </view>
 
     <!-- 订单信息 -->
@@ -37,11 +37,11 @@
 
     <!-- 详细说明 -->
     <view class="section">
-      <text class="section-title">详细说明</text>
+      <text class="section-title">{{ reasonTitle }}</text>
       <textarea
         class="reason-input"
         v-model="reason"
-        placeholder="请详细描述您遇到的问题..."
+        :placeholder="reasonPlaceholder"
         maxlength="500"
       />
       <view class="char-count">{{ reason.length }}/500</view>
@@ -79,7 +79,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { getToken, request } from '../../utils/api'
 import { getBaseUrl } from '../../utils/config'
 
@@ -94,6 +94,14 @@ const aftersaleTypes = [
   { value: 'REMAKE', label: '申请重做', icon: '🔄' },
   { value: 'COMPLAINT', label: '投诉建议', icon: '📝' },
 ]
+
+const pageTitle = computed(() => selectedType.value === 'REFUND' ? '申请退款' : '申请售后')
+const reasonTitle = computed(() => selectedType.value === 'REFUND' ? '退款理由' : '详细说明')
+const reasonPlaceholder = computed(() =>
+  selectedType.value === 'REFUND'
+    ? '请填写退款理由，客服/管理员审核后处理。'
+    : '请详细描述您遇到的问题...'
+)
 
 onMounted(() => {
   const pages = getCurrentPages()

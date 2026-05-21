@@ -2105,10 +2105,13 @@ function getStatusText(status: string): string {
     INIT: '待确认',
     PENDING_PAYMENT: '待付款',
     PAID: '已付款',
-    IN_PRODUCTION: '制作中',
+    PURCHASING: '采购中',
+    IN_PRODUCTION: '生产中',
+    FREEZING: '急冻中',
     SHIPPED: '已发货',
     COMPLETED: '已完成',
-    CANCELLED: '已取消'
+    CANCELLED: '已取消',
+    AFTERSALE: '售后中'
   }
   return statusMap[status] || status
 }
@@ -2119,10 +2122,13 @@ function getStatusIcon(status: string): string {
     INIT: '📝',
     PENDING_PAYMENT: '💳',
     PAID: '✓',
+    PURCHASING: '🛒',
     IN_PRODUCTION: '👨‍🍳',
+    FREEZING: '❄️',
     SHIPPED: '🚚',
     COMPLETED: '✅',
-    CANCELLED: '✕'
+    CANCELLED: '✕',
+    AFTERSALE: '!'
   }
   return iconMap[status] || ''
 }
@@ -2133,10 +2139,13 @@ function getStatusColor(status: string): string {
     INIT: '#999',
     PENDING_PAYMENT: '#ff9800',
     PAID: '#1890ff',
+    PURCHASING: '#faad14',
     IN_PRODUCTION: '#1890ff',
+    FREEZING: '#722ed1',
     SHIPPED: '#52c41a',
     COMPLETED: '#52c41a',
-    CANCELLED: '#999'
+    CANCELLED: '#999',
+    AFTERSALE: '#f5222d'
   }
   return colorMap[status] || '#999'
 }
@@ -2461,6 +2470,28 @@ function getAftersaleTypeText(type?: string): string {
 
 // 申请售后（统一入口）
 function applyAftersaleType(type: 'REFUND' | 'REMAKE' | 'COMPLAINT') {
+  if (type === 'REFUND') {
+    const currentStatusText = order.value ? getStatusText(order.value.status) : '当前流程'
+    uni.showModal({
+      title: '申请退款前请确认',
+      content: `订单已进入【${currentStatusText}】。建议您先联系客服沟通处理；如仍需退款，可继续提交退款理由，客服/管理员审核后处理。`,
+      cancelText: '联系客服',
+      confirmText: '继续退款',
+      success: (res) => {
+        if (res.confirm) {
+          navigateToAftersaleApply(type)
+        } else if (res.cancel) {
+          contactService()
+        }
+      }
+    })
+    return
+  }
+
+  navigateToAftersaleApply(type)
+}
+
+function navigateToAftersaleApply(type: 'REFUND' | 'REMAKE' | 'COMPLAINT') {
   uni.navigateTo({
     url: `/pages/aftersale-apply/index?orderId=${orderId.value}&type=${type}`
   })
@@ -2492,16 +2523,12 @@ function previewProductionPhotos(index: number) {
 
 // 申请售后（旧函数，保留向后兼容）
 function applyAftersale() {
-  uni.navigateTo({
-    url: `/pages/aftersale-apply/index?orderId=${orderId.value}&type=COMPLAINT`
-  })
+  applyAftersaleType('COMPLAINT')
 }
 
 // 申请退款（旧函数，保留向后兼容）
 async function applyRefund() {
-  uni.navigateTo({
-    url: `/pages/aftersale-apply/index?orderId=${orderId.value}&type=REFUND`
-  })
+  applyAftersaleType('REFUND')
 }
 
 </script>

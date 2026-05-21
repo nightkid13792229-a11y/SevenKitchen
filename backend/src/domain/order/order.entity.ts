@@ -513,6 +513,9 @@ export class Order {
     switch (resolutionType) {
       case 'refunded':
         // Transition to CANCELLED status for refund
+        this.cancelledAt = new Date();
+        this.cancelledBy = 'admin';
+        this.cancellationReason = '售后退款审核通过';
         this.transitionTo(OrderStatus.CANCELLED);
         break;
       case 'remade':

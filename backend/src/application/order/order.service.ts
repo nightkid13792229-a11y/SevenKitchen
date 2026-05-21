@@ -8,6 +8,7 @@ import {
   Inject,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import type { OrderRepository } from '../../domain/order/order.repository';
@@ -31,6 +32,7 @@ import {
 import type { OrderPackagePlanItem } from '../../domain/order';
 import type { PriceExplanationDto } from '../../interfaces/dto/orders/pricing-preview.dto';
 import {
+  AftersaleType,
   OrderType,
   OrderStatus,
   calculateDogEnergy,
@@ -2412,10 +2414,15 @@ export class OrderService {
     resolutionType: 'refunded' | 'remade' | 'resolved',
     actorId: string,
     adminNote?: string,
+    actorRole?: string,
   ): Promise<Order> {
     const order = await this.orderRepository.findById(orderId);
     if (!order) {
       throw new NotFoundException(`Order not found: ${orderId}`);
+    }
+
+    if (order.aftersaleType === AftersaleType.REFUND && actorRole !== 'ADMIN') {
+      throw new ForbiddenException('退款申请仅管理员可以审核');
     }
 
     const fromStatus = order.status;

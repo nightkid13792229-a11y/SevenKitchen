@@ -45,6 +45,10 @@
           <el-icon><List /></el-icon>
           <span>售后工单</span>
         </el-menu-item>
+        <el-menu-item index="/refunds">
+          <el-icon><Money /></el-icon>
+          <span>退款管理</span>
+        </el-menu-item>
         <el-menu-item index="/custom-recipes">
           <el-icon><EditPen /></el-icon>
           <span>定制食谱订单</span>
@@ -78,6 +82,7 @@
             <el-icon><List /></el-icon>
             <span>采购管理</span>
           </template>
+          <el-menu-item index="/purchasing/lists">采购单管理</el-menu-item>
           <el-menu-item index="/purchasing/reimbursements">报销管理</el-menu-item>
           <el-menu-item index="/purchasing/history">采购历史</el-menu-item>
         </el-sub-menu>

@@ -152,34 +152,10 @@
           <view class="amount-row-top">
             <view class="amount-info">
               <text class="amount-label">订单金额:</text>
-              <!-- 可编辑状态 -->
-              <input
-                v-if="editingOrderId === order.id"
-                v-model="editingAmount"
-                class="amount-input"
-                type="digit"
-                @tap.stop
-                @confirm="confirmAmountChange(order)"
-              />
-              <text v-else class="amount-value">¥{{ formatAmount(order.totalAmount || order.amountTotal) }}</text>
+              <text class="amount-value">¥{{ formatAmount(order.totalAmount || order.amountTotal) }}</text>
             </view>
             <!-- 按钮组 -->
             <view class="button-group">
-              <!-- 修改金额/确认修改按钮（待支付状态不显示） -->
-              <button
-                v-if="editingOrderId === order.id && order.status !== 'PENDING_PAYMENT'"
-                class="edit-amount-btn confirm-btn"
-                @tap.stop="confirmAmountChange(order)"
-              >
-                确认修改
-              </button>
-              <button
-                v-if="editingOrderId !== order.id && order.status !== 'PENDING_PAYMENT'"
-                class="edit-amount-btn"
-                @tap.stop="startEditingAmount(order)"
-              >
-                修改金额
-              </button>
               <!-- 确认付款按钮（仅待支付状态显示） -->
               <button
                 v-if="order.status === 'PENDING_PAYMENT'"
@@ -465,10 +441,6 @@ const carriers = [
 const selectedCarrierIndex = ref(0)
 const trackingNumber = ref('')
 const isShipping = ref(false)
-
-// 金额编辑状态
-const editingOrderId = ref<string | null>(null)
-const editingAmount = ref<string>('')
 
 // 统计数据
 const stats = ref({
@@ -1020,12 +992,6 @@ async function confirmPayment(order: Order) {
   })
 }
 
-// 开始编辑金额
-function startEditingAmount(order: Order) {
-  editingOrderId.value = order.id
-  editingAmount.value = formatAmount(order.totalAmount || order.amountTotal)
-}
-
 // 确认订单付款
 async function confirmOrderPayment(order: Order) {
   uni.showModal({
@@ -1065,103 +1031,6 @@ async function confirmOrderPayment(order: Order) {
       }
     }
   })
-}
-
-// 取消编辑金额
-function cancelEditingAmount() {
-  editingOrderId.value = null
-  editingAmount.value = ''
-}
-
-// 确认修改金额
-async function confirmAmountChange(order: Order) {
-  const newAmount = parseFloat(editingAmount.value)
-
-  if (isNaN(newAmount) || newAmount < 0) {
-    uni.showToast({
-      title: '金额不能小于0',
-      icon: 'none'
-    })
-    return
-  }
-
-  const originalAmount = getOrderAmountNumber(order)
-
-  // 如果金额有变化，显示确认提示
-  if (Math.abs(newAmount - originalAmount) > 0.01) {
-    const diff = newAmount - originalAmount
-    const diffText = diff > 0 ? `增加 ¥${diff.toFixed(2)}` : `减少 ¥${Math.abs(diff).toFixed(2)}`
-
-    uni.showModal({
-      title: '确认修改金额',
-      content: `订单: ${order.id}\n原金额: ¥${originalAmount.toFixed(2)}\n新金额: ¥${newAmount.toFixed(2)}\n\n${diffText}\n\n确认修改?`,
-      success: async (res) => {
-        if (res.confirm) {
-          await submitAmountChange(order.id, newAmount)
-        }
-      }
-    })
-  } else {
-    // 金额没有变化，直接关闭编辑状态
-    cancelEditingAmount()
-  }
-}
-
-// 提交金额修改
-async function submitAmountChange(orderId: string, newAmount: number) {
-  uni.showLoading({ title: '修改中...' })
-
-  try {
-    await request({
-      url: `/admin/orders/${orderId}/amount`,
-      method: 'PUT',
-      data: { amount: newAmount }
-    })
-
-    uni.hideLoading()
-
-    uni.showToast({
-      title: '修改成功',
-      icon: 'success',
-      duration: 2000
-    })
-
-    // 关闭编辑状态
-    cancelEditingAmount()
-
-    const targetOrder =
-      allOrders.value.find(order => order.id === orderId) ||
-      orders.value.find(order => order.id === orderId) ||
-      null
-
-    const previousAmount = getOrderAmountNumber(targetOrder)
-
-    allOrders.value = allOrders.value.map(order =>
-      order.id === orderId
-        ? { ...order, totalAmount: newAmount, amountTotal: newAmount }
-        : order
-    )
-    orders.value = orders.value.map(order =>
-      order.id === orderId
-        ? { ...order, totalAmount: newAmount, amountTotal: newAmount }
-        : order
-    )
-
-    if (shouldCountTodayRevenue(targetOrder)) {
-      const currentRevenue = parseFloat(stats.value.todayRevenue || '0')
-      const nextRevenue = currentRevenue - previousAmount + newAmount
-      stats.value.todayRevenue = Math.max(nextRevenue, 0).toFixed(2)
-    }
-
-    await loadStats()
-  } catch (error: any) {
-    uni.hideLoading()
-    console.error('[StaffOrders] Update amount error:', error)
-    uni.showToast({
-      title: error.message || '修改失败',
-      icon: 'none'
-    })
-  }
 }
 
 function shipOrder(order: Order) {

@@ -310,6 +310,18 @@
       ]
     },
     {
+      "root": "pages/staff-refunds",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "退款管理",
+            "enablePullDownRefresh": true
+          }
+        }
+      ]
+    },
+    {
       "root": "pages/staff-shipping",
       "pages": [
         {

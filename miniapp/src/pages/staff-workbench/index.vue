@@ -54,6 +54,18 @@
           <text class="module-arrow">›</text>
         </view>
 
+        <!-- 退款管理 -->
+        <view v-if="isAdmin" class="module" @tap="goToRefunds">
+          <view class="module-icon refunds">
+            <text class="module-icon-symbol">审</text>
+          </view>
+          <view class="module-content">
+            <text class="module-title">退款管理</text>
+            <text class="module-desc">审核客户退款申请并保留审核人记录</text>
+          </view>
+          <text class="module-arrow">›</text>
+        </view>
+
         <!-- 报销管理 -->
         <view class="module" @tap="goToReimbursement">
           <view class="module-icon reimbursement">
@@ -259,6 +271,10 @@ const viewTodayOrders = () => {
   uni.navigateTo({ url: '/pages/staff-orders/index' });
 };
 
+const goToRefunds = () => {
+  uni.navigateTo({ url: '/pages/staff-refunds/index' });
+};
+
 const goToReimbursement = () => {
   uni.navigateTo({ url: '/pages/staff-purchasing/reimbursement/list' });
 };
@@ -384,6 +400,10 @@ const goToStaffRecipes = () => {
 
   &.shipping {
     background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
+  }
+
+  &.refunds {
+    background: linear-gradient(135deg, #dbeafe 0%, #93c5fd 100%);
   }
 
   &.reimbursement {

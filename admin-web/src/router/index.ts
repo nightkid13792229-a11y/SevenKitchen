@@ -111,6 +111,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '售后工单' }
       },
       {
+        path: 'refunds',
+        name: 'RefundManagement',
+        component: () => import('@/views/Aftersale/RefundManagement.vue'),
+        meta: { title: '退款管理' }
+      },
+      {
         path: 'inventory',
         name: 'Inventory',
         component: () => import('@/views/Inventory.vue'),
@@ -143,9 +149,15 @@ const routes: RouteRecordRaw[] = [
       {
         path: 'purchasing',
         name: 'Purchasing',
-        redirect: '/purchasing/reimbursements',
+        redirect: '/purchasing/lists',
         meta: { title: '采购管理' },
         children: [
+          {
+            path: 'lists',
+            name: 'PurchaseLists',
+            component: () => import('@/views/Purchasing/PurchaseLists.vue'),
+            meta: { title: '采购单管理' }
+          },
           {
             path: 'reimbursements',
             name: 'ReimbursementList',

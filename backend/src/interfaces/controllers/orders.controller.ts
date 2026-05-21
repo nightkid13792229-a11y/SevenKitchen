@@ -14,6 +14,7 @@ import {
   HttpStatus,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -61,7 +62,7 @@ import { SharePhotosResponseDto } from '../dto/orders/share-photos.dto';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import type { RecipeSnapshot } from '../../domain/recipe/types';
 import { AuthGuard, CurrentUser } from '../auth';
-import { AdminGuard } from '../guards/role.guard';
+import { StaffGuard } from '../guards/role.guard';
 import type { RequestUser } from '../auth';
 import { resolveOrderProductionPhotos } from './order-production-photos';
 
@@ -1299,7 +1300,7 @@ export class OrdersController {
    * Phase 9.1: Admin/Staff endpoint to resolve aftersale request
    */
   @Post(':id/aftersale/resolve')
-  @UseGuards(AuthGuard, AdminGuard)
+  @UseGuards(AuthGuard, StaffGuard)
   @ApiOperation({ summary: 'Resolve aftersale (解决售后)' })
   @ApiSecurity('X-Customer-Id')
   @ApiParam({ name: 'id', description: 'Order ID' })
@@ -1320,9 +1321,13 @@ export class OrdersController {
         dto.resolutionType,
         user.userId,
         dto.adminNote,
+        user.role,
       );
       return ApiResponseDto.success(await this.mapOrderToDto(order));
     } catch (error) {
+      if (error instanceof ForbiddenException) {
+        return ApiResponseDto.error(403, error.message);
+      }
       if (error instanceof NotFoundException) {
         return ApiResponseDto.error(404, error.message);
       }
@@ -1342,7 +1347,7 @@ export class OrdersController {
    * Phase 9.1: Admin/Staff endpoint to get list of orders in AFTERSALE status
    */
   @Get('aftersale/pending')
-  @UseGuards(AuthGuard, AdminGuard)
+  @UseGuards(AuthGuard, StaffGuard)
   @ApiOperation({ summary: 'Get pending aftersale orders' })
   @ApiSecurity('X-Customer-Id')
   @ApiResponse({
@@ -1352,7 +1357,13 @@ export class OrdersController {
   })
   async getPendingAftersales(@CurrentUser() user: RequestUser) {
     const orders = await this.orderService.getPendingAftersales();
-    const data = await Promise.all(orders.map((order) => this.mapOrderToDto(order)));
+    const visibleOrders =
+      user.role === 'ADMIN'
+        ? orders
+        : orders.filter((order) => order.aftersaleType !== 'REFUND');
+    const data = await Promise.all(
+      visibleOrders.map((order) => this.mapOrderToDto(order)),
+    );
     return ApiResponseDto.success(data);
   }
 

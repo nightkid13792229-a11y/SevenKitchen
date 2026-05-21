@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h2>退款管理</h2>
-        <p>集中审核客户退款申请，并保留已退款记录。</p>
+        <p>集中审核客户退款申请，并按微信退款成功记录确认钱款是否原路退回。</p>
       </div>
       <el-button type="primary" :loading="loading" @click="loadRefunds">刷新</el-button>
     </div>
@@ -19,6 +19,12 @@
         <el-card class="stat-card" shadow="never">
           <div class="stat-label">微信支付</div>
           <div class="stat-value accent">{{ wechatRefundCount }}</div>
+        </el-card>
+      </el-col>
+      <el-col :xs="12" :sm="6">
+        <el-card class="stat-card" shadow="never">
+          <div class="stat-label">待补发/待确认</div>
+          <div class="stat-value warning">{{ needsRefundAttentionCount }}</div>
         </el-card>
       </el-col>
     </el-row>
@@ -48,11 +54,14 @@
           <template #default="{ row }">¥{{ formatAmount(row.amountTotal) }}</template>
         </el-table-column>
         <el-table-column prop="aftersaleReason" label="退款理由" min-width="230" show-overflow-tooltip />
-        <el-table-column label="状态" width="150">
+        <el-table-column label="退款状态" width="210">
           <template #default="{ row }">
-            <el-tag :type="canReviewRefund(row) ? 'warning' : 'success'">
-              {{ canReviewRefund(row) ? '待审核' : '已退款（钱款原路退回）' }}
+            <el-tag :type="getRefundTagType(row)">
+              {{ getRefundStatusText(row) }}
             </el-tag>
+            <div v-if="row.refundStatus?.outRefundNo" class="refund-no">
+              {{ row.refundStatus.outRefundNo }}
+            </div>
           </template>
         </el-table-column>
         <el-table-column label="申请时间" width="170">
@@ -67,7 +76,7 @@
             <el-button v-else-if="canRetryWechatRefund(row)" size="small" type="warning" @click="retryWechatRefund(row)">
               补发退款
             </el-button>
-            <span v-else class="muted-text">已处理</span>
+            <span v-else class="muted-text">{{ getActionHint(row) }}</span>
           </template>
         </el-table-column>
       </el-table>
@@ -159,6 +168,10 @@ const wechatRefundCount = computed(() => {
   return refunds.value.filter((order) => order.paymentMethod === 'WECHAT_PAY').length
 })
 
+const needsRefundAttentionCount = computed(() => {
+  return refunds.value.filter((order) => needsRefundAttention(order)).length
+})
+
 onMounted(() => {
   loadRefunds()
 })
@@ -186,17 +199,26 @@ function canReviewRefund(row: RefundOrder): boolean {
 }
 
 function canRetryWechatRefund(row: RefundOrder): boolean {
-  return row.status === 'CANCELLED' && row.paymentMethod === 'WECHAT_PAY'
+  return isResolvedWechatRefundOrder(row) && !row.refundStatus
 }
 
 async function retryWechatRefund(row: RefundOrder) {
+  try {
+    await confirmRetryWechatRefund(row)
+  } catch {
+    return
+  }
+
   submitting.value = true
   try {
     const refund = await orderApi.createWechatRefund(row.id, {
       amount: Number(row.amountTotal || 0),
       reason: row.aftersaleReason || '售后退款补发'
     })
-    ElMessage.success(`微信原路退款已发起：${refund.outRefundNo}`)
+    const statusText = refund.status === 'SUCCESS'
+      ? '微信退款已成功'
+      : '微信退款已发起，等待微信确认'
+    ElMessage.success(`${statusText}：${refund.outRefundNo}`)
     await loadRefunds()
   } finally {
     submitting.value = false
@@ -248,6 +270,58 @@ async function confirmRefundIrreversible(order: RefundOrder) {
       distinguishCancelAndClose: true
     }
   )
+}
+
+async function confirmRetryWechatRefund(order: RefundOrder) {
+  await ElMessageBox.confirm(
+    [
+      '系统没有查询到该订单的微信退款成功记录。',
+      '确认后会补发微信原路退款；该操作不可撤销，请先核对订单、客户和金额。',
+      `订单：${order.id}`,
+      `客户：${getCustomerName(order)} / ${getCustomerPhone(order)}`,
+      `金额：¥${formatAmount(order.amountTotal)}`,
+    ].join('\n'),
+    '补发微信原路退款',
+    {
+      confirmButtonText: '确认补发',
+      cancelButtonText: '取消',
+      type: 'warning',
+      distinguishCancelAndClose: true
+    }
+  )
+}
+
+function getRefundStatusText(row: RefundOrder): string {
+  if (canReviewRefund(row)) return '待审核'
+  if (row.paymentMethod !== 'WECHAT_PAY') return '非微信支付，需人工核对'
+  if (!row.refundStatus) return '未发起微信退款'
+  return row.refundStatus.statusText
+}
+
+function getRefundTagType(row: RefundOrder): 'success' | 'warning' | 'info' | 'danger' {
+  if (canReviewRefund(row)) return 'warning'
+  if (row.refundStatus?.success) return 'success'
+  if (!row.refundStatus) return 'danger'
+  if (['ABNORMAL', 'CLOSED'].includes(row.refundStatus.status)) return 'danger'
+  return 'warning'
+}
+
+function getActionHint(row: RefundOrder): string {
+  if (row.refundStatus?.success) return '钱款已原路退回'
+  if (row.refundStatus) return '等待微信确认'
+  return '已处理'
+}
+
+function isResolvedWechatRefundOrder(row: RefundOrder): boolean {
+  return row.status === 'CANCELLED' &&
+    row.paymentMethod === 'WECHAT_PAY' &&
+    (row.cancellationReason || '').includes('售后退款')
+}
+
+function needsRefundAttention(row: RefundOrder): boolean {
+  if (canReviewRefund(row)) return true
+  if (!isResolvedWechatRefundOrder(row)) return false
+  return !row.refundStatus?.success
 }
 
 function getCustomerName(order?: RefundOrder | null): string {
@@ -343,6 +417,10 @@ function formatAmount(amount?: number | string | null): string {
     &.accent {
       color: #1677ff;
     }
+
+    &.warning {
+      color: #d97706;
+    }
   }
 
   .order-link {
@@ -370,6 +448,13 @@ function formatAmount(amount?: number | string | null): string {
   .muted-text {
     color: #667085;
     font-size: 12px;
+  }
+
+  .refund-no {
+    margin-top: 4px;
+    color: #667085;
+    font-size: 12px;
+    line-height: 1.3;
   }
 
   .reason-text {

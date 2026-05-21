@@ -307,7 +307,7 @@ export class WechatPaymentService {
       return {
         outRefundNo: String(existingRefund.sourceId || metadata.outRefundNo || ''),
         refundId: metadata.refundId ?? null,
-        status: metadata.wechatStatus ?? metadata.refundStatus ?? existingRefund.status,
+        status: metadata.refundStatus ?? metadata.wechatStatus ?? existingRefund.status,
         adjustmentId: existingRefund.id,
         reused: true,
       };

@@ -344,7 +344,7 @@ function getStatusText(orderOrStatus?: AftersaleOrder | string): string {
 }
 
 function isRefundedOrder(order: AftersaleOrder): boolean {
-  return order.status === 'CANCELLED' && (order.cancellationReason || '').includes('售后退款')
+  return order.status === 'CANCELLED' && order.refundStatus?.success === true
 }
 
 function getAftersaleTypeText(type?: string): string {

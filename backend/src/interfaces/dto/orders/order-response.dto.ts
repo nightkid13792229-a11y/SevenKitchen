@@ -103,6 +103,38 @@ export class OrderItemDto {
   totalPrice?: number;
 }
 
+export class OrderRefundStatusResponseDto {
+  @ApiProperty({ example: true })
+  exists!: boolean;
+
+  @ApiProperty({ example: true })
+  success!: boolean;
+
+  @ApiProperty({ example: 'SUCCESS' })
+  status!: string;
+
+  @ApiProperty({ example: '退款成功，钱款已原路退回' })
+  statusText!: string;
+
+  @ApiProperty({ example: 596.57 })
+  amount!: number;
+
+  @ApiPropertyOptional({ nullable: true })
+  outRefundNo?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  refundId?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  successTime?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  createdAt?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  updatedAt?: string | null;
+}
+
 export class OrderDto {
   @ApiProperty({ example: 'uuid' })
   id!: string;
@@ -351,6 +383,13 @@ export class OrderDto {
   aftersalePhotos?: string[];
 
   @ApiPropertyOptional({
+    description: 'Wechat refund status. Only success=true means money has been returned.',
+    nullable: true,
+    type: OrderRefundStatusResponseDto,
+  })
+  refundStatus?: OrderRefundStatusResponseDto | null;
+
+  @ApiPropertyOptional({
     description: 'Production photos (原料照片)',
     nullable: true,
   })
@@ -382,6 +421,7 @@ export class OrderSummaryDto {
 
   cancellationReason?: string | null;
   aftersaleType?: string | null;
+  refundStatus?: OrderRefundStatusResponseDto | null;
 
   @ApiProperty({ example: 299.99 })
   totalAmount!: number;

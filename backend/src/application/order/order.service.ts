@@ -481,6 +481,21 @@ export class OrderService {
     };
   }
 
+  async getOrderRefundStatus(
+    orderId: string,
+  ): Promise<OrderRefundStatusDto | null> {
+    const adjustments = await this.prisma.orderSettlementAdjustment.findMany({
+      where: {
+        orderId,
+        sourceType: 'WECHAT_REFUND',
+        status: { not: 'CANCELLED' },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return this.getWechatRefundStatus(adjustments);
+  }
+
   async createOrderSettlementAdjustment(
     input: CreateOrderSettlementAdjustmentInput,
   ): Promise<OrderSettlementAdjustmentDto> {

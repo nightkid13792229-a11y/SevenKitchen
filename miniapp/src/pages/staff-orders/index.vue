@@ -320,6 +320,9 @@ interface Order {
   id: string
   status: string
   cancellationReason?: string | null
+  refundStatus?: {
+    success: boolean
+  } | null
   totalAmount?: number | string
   amountTotal?: number | string
   amountProduct?: number | string
@@ -952,7 +955,7 @@ function getStatusColor(orderOrStatus: Order | string): string {
 }
 
 function isRefundedOrder(order: Order): boolean {
-  return order.status === 'CANCELLED' && (order.cancellationReason || '').includes('售后退款')
+  return order.status === 'CANCELLED' && order.refundStatus?.success === true
 }
 
 // 操作权限判断

@@ -266,6 +266,9 @@ interface OrderDetail {
   id: string
   status: string
   cancellationReason?: string | null
+  refundStatus?: {
+    success: boolean
+  } | null
   totalAmount?: number
   amountTotal?: number
   createdAt?: string
@@ -495,7 +498,7 @@ function getStatusColor(orderOrStatus: OrderDetail | string): string {
 }
 
 function isRefundedOrder(currentOrder: OrderDetail): boolean {
-  return currentOrder.status === 'CANCELLED' && (currentOrder.cancellationReason || '').includes('售后退款')
+  return currentOrder.status === 'CANCELLED' && currentOrder.refundStatus?.success === true
 }
 
 function getPaymentMethod(method?: string): string {

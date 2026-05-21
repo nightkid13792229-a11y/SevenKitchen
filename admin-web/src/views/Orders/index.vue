@@ -734,7 +734,7 @@ const getStatusText = (orderOrStatus: OrderListItem | OrderStatus) => {
 }
 
 const isRefundedOrder = (order: OrderListItem) => {
-  return order.status === OrderStatusEnum.CANCELLED && (order.cancellationReason || '').includes('售后退款')
+  return order.status === OrderStatusEnum.CANCELLED && order.refundStatus?.success === true
 }
 
 onMounted(() => {

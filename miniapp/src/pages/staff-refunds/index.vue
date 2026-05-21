@@ -33,7 +33,7 @@
             <text class="order-id">订单 #{{ shortOrderId(order.id) }}</text>
             <text class="order-time">{{ formatDateTime(order.aftersaleSince || order.createdAt) }}</text>
           </view>
-          <text class="status-pill">{{ getStatusText(order.status) }}</text>
+          <text class="status-pill">{{ getStatusText(order) }}</text>
         </view>
 
         <view class="info-row">
@@ -91,6 +91,10 @@ interface RefundOrder {
   amountTotal?: number
   totalAmount?: number
   paymentMethod?: string | null
+  refundStatus?: {
+    success: boolean
+    statusText?: string
+  } | null
   aftersaleType?: string | null
   aftersaleReason?: string | null
   aftersaleSince?: string | null
@@ -318,13 +322,19 @@ function buildRefundReviewContent(order: RefundOrder, action: 'approve' | 'rejec
   return lines.join('\n')
 }
 
-function getStatusText(status?: string): string {
+function getStatusText(order: RefundOrder): string {
+  if (order.status === 'CANCELLED' && order.refundStatus?.success) {
+    return '已退款（钱款原路退回）'
+  }
+  if (order.status === 'CANCELLED' && !order.refundStatus?.success) {
+    return order.refundStatus?.statusText || '退款待确认'
+  }
   const statusMap: Record<string, string> = {
     AFTERSALE: '退款审核中',
-    CANCELLED: '已退款（钱款原路退回）',
+    CANCELLED: '已取消',
     COMPLETED: '已完成',
   }
-  return statusMap[status || ''] || status || '-'
+  return statusMap[order.status || ''] || order.status || '-'
 }
 
 function canReviewRefund(order: RefundOrder): boolean {

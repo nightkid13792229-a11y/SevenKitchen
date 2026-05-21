@@ -67,4 +67,14 @@ export interface UserListParams {
   role?: UserRole;
   status?: UserStatus;
   keyword?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+// 用户分页列表
+export interface UserListResponse {
+  data: User[];
+  total: number;
+  page: number;
+  pageSize: number;
 }

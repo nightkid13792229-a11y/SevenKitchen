@@ -7,6 +7,7 @@ import type {
   CreateUserForm,
   UpdateUserForm,
   UserListParams,
+  UserListResponse,
 } from '@/types/user';
 
 export const userApi = {
@@ -14,7 +15,7 @@ export const userApi = {
    * 获取用户列表
    * @param params 查询参数（角色筛选、状态筛选、关键词搜索）
    */
-  list: (params?: UserListParams): Promise<User[]> =>
+  list: (params?: UserListParams): Promise<UserListResponse> =>
     api.get('/admin/users', { params }),
 
   /**

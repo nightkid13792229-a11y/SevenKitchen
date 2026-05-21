@@ -64,6 +64,9 @@
               <el-button size="small" type="primary" @click="openReview(row, 'approve')">审核</el-button>
               <el-button size="small" @click="openReview(row, 'reject')">驳回</el-button>
             </template>
+            <el-button v-else-if="canRetryWechatRefund(row)" size="small" type="warning" @click="retryWechatRefund(row)">
+              补发退款
+            </el-button>
             <span v-else class="muted-text">已处理</span>
           </template>
         </el-table-column>
@@ -180,6 +183,24 @@ function openReview(row: RefundOrder, mode: 'approve' | 'reject') {
 
 function canReviewRefund(row: RefundOrder): boolean {
   return row.status === 'AFTERSALE' && row.aftersaleType === 'REFUND'
+}
+
+function canRetryWechatRefund(row: RefundOrder): boolean {
+  return row.status === 'CANCELLED' && row.paymentMethod === 'WECHAT_PAY'
+}
+
+async function retryWechatRefund(row: RefundOrder) {
+  submitting.value = true
+  try {
+    const refund = await orderApi.createWechatRefund(row.id, {
+      amount: Number(row.amountTotal || 0),
+      reason: row.aftersaleReason || '售后退款补发'
+    })
+    ElMessage.success(`微信原路退款已发起：${refund.outRefundNo}`)
+    await loadRefunds()
+  } finally {
+    submitting.value = false
+  }
 }
 
 async function submitReview() {

@@ -70,6 +70,7 @@ export class UsersController {
     const response: UserResponseDto = {
       id: userData.id,
       phone: userData.phone ?? undefined,
+      phoneBound: !!userData.phone,
       nickname: userData.nickname ?? undefined,
       avatarUrl: userData.avatarUrl ?? undefined,
       role: userData.role,
@@ -144,6 +145,7 @@ export class UsersController {
     const response: UserResponseDto = {
       id: updatedUser.id,
       phone: updatedUser.phone ?? undefined,
+      phoneBound: !!updatedUser.phone,
       nickname: updatedUser.nickname ?? undefined,
       avatarUrl: updatedUser.avatarUrl ?? undefined,
       role: updatedUser.role,

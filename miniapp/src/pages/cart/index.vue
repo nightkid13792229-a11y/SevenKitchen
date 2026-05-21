@@ -2,10 +2,18 @@
   <view class="cart-page">
     <view class="cart-header">
       <view>
-        <text class="cart-title">购物车{{ cartItems.length > 0 ? `（${cartItems.length}）` : '' }}</text>
+        <text class="cart-title"
+          >购物车{{
+            cartItems.length > 0 ? `（${cartItems.length}）` : ''
+          }}</text
+        >
         <text class="cart-subtitle">先保存想买的食谱，确认后再配置下单</text>
       </view>
-      <button v-if="cartItems.length > 0" class="clear-btn button-reset" @tap="confirmClear">
+      <button
+        v-if="cartItems.length > 0"
+        class="clear-btn button-reset"
+        @tap="confirmClear"
+      >
         清空
       </button>
     </view>
@@ -35,15 +43,24 @@
 
         <view class="item-main">
           <text class="item-name">{{ item.name }}</text>
-          <text v-if="item.description" class="item-desc">{{ item.description }}</text>
+          <text v-if="item.description" class="item-desc">{{
+            item.description
+          }}</text>
           <text v-if="item.energyDensityKcalPerKg" class="item-meta">
             能量密度 {{ item.energyDensityKcalPerKg }} kcal/kg
           </text>
         </view>
 
         <view class="item-actions" @tap.stop>
-          <button class="buy-btn button-reset" @tap="buyItem(item.recipeId)">去配置</button>
-          <button class="remove-btn button-reset" @tap="removeItem(item.recipeId)">移除</button>
+          <button class="buy-btn button-reset" @tap="buyItem(item.recipeId)">
+            去配置
+          </button>
+          <button
+            class="remove-btn button-reset"
+            @tap="removeItem(item.recipeId)"
+          >
+            移除
+          </button>
         </view>
       </view>
     </view>
@@ -51,40 +68,49 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
-import { clearCartItems, getCartItems, removeCartItem, type CartItem } from '../../utils/cart'
+import { ref } from 'vue';
+import { onShow } from '@dcloudio/uni-app';
+import {
+  clearCartItems,
+  getCartItems,
+  removeCartItem,
+  type CartItem,
+} from '../../utils/cart';
+import { ensurePhoneBound } from '../../utils/account';
 
-const cartItems = ref<CartItem[]>([])
+const cartItems = ref<CartItem[]>([]);
 
 function loadCart() {
-  cartItems.value = getCartItems()
+  cartItems.value = getCartItems();
 }
 
 function goHome() {
   uni.switchTab({
     url: '/pages/home/index',
-  })
+  });
 }
 
 function viewRecipe(recipeId: string) {
   uni.navigateTo({
     url: `/pages/recipe-detail/index?recipeId=${encodeURIComponent(recipeId)}`,
-  })
+  });
 }
 
-function buyItem(recipeId: string) {
+async function buyItem(recipeId: string) {
+  if (!(await ensurePhoneBound())) {
+    return;
+  }
   uni.navigateTo({
     url: `/pages/recipe-order/index?recipeId=${encodeURIComponent(recipeId)}`,
-  })
+  });
 }
 
 function removeItem(recipeId: string) {
-  cartItems.value = removeCartItem(recipeId)
+  cartItems.value = removeCartItem(recipeId);
   uni.showToast({
     title: '已移除',
     icon: 'success',
-  })
+  });
 }
 
 function confirmClear() {
@@ -92,18 +118,18 @@ function confirmClear() {
     title: '清空购物车',
     content: '确定要移除购物车里的所有食谱吗？',
     success: (res) => {
-      if (!res.confirm) return
-      clearCartItems()
-      loadCart()
+      if (!res.confirm) return;
+      clearCartItems();
+      loadCart();
       uni.showToast({
         title: '已清空',
         icon: 'success',
-      })
+      });
     },
-  })
+  });
 }
 
-onShow(loadCart)
+onShow(loadCart);
 </script>
 
 <style scoped>

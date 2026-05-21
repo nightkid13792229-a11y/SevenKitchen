@@ -51,19 +51,11 @@
     <view class="section">
       <text class="section-title">上传图片(可选)</text>
       <view class="image-upload">
-        <view
-          v-for="(img, idx) in photos"
-          :key="idx"
-          class="image-item"
-        >
+        <view v-for="(img, idx) in photos" :key="idx" class="image-item">
           <image :src="img" mode="aspectFill" class="uploaded-image" />
           <view class="btn-remove" @tap="removePhoto(idx)">×</view>
         </view>
-        <view
-          v-if="photos.length < 6"
-          class="btn-add"
-          @tap="chooseImage"
-        >
+        <view v-if="photos.length < 6" class="btn-add" @tap="chooseImage">
           <text class="add-icon">+</text>
           <text class="add-text">添加图片</text>
         </view>
@@ -79,104 +71,113 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue'
-import { getToken, request } from '../../utils/api'
-import { getBaseUrl } from '../../utils/config'
+import { computed, ref, onMounted } from 'vue';
+import { getToken, request } from '../../utils/api';
+import { getBaseUrl } from '../../utils/config';
+import { ensurePhoneBound } from '../../utils/account';
 
-const orderId = ref('')
-const selectedType = ref<'REFUND' | 'REMAKE' | 'COMPLAINT'>('COMPLAINT')
-const reason = ref('')
-const photos = ref<string[]>([])
-const orderInfo = ref<any>(null)
+const orderId = ref('');
+const selectedType = ref<'REFUND' | 'REMAKE' | 'COMPLAINT'>('COMPLAINT');
+const reason = ref('');
+const photos = ref<string[]>([]);
+const orderInfo = ref<any>(null);
 
 const aftersaleTypes = [
   { value: 'REFUND', label: '申请退款', icon: '💰' },
   { value: 'REMAKE', label: '申请重做', icon: '🔄' },
   { value: 'COMPLAINT', label: '投诉建议', icon: '📝' },
-]
+];
 
-const pageTitle = computed(() => selectedType.value === 'REFUND' ? '申请退款' : '申请售后')
-const reasonTitle = computed(() => selectedType.value === 'REFUND' ? '退款理由' : '详细说明')
+const pageTitle = computed(() =>
+  selectedType.value === 'REFUND' ? '申请退款' : '申请售后',
+);
+const reasonTitle = computed(() =>
+  selectedType.value === 'REFUND' ? '退款理由' : '详细说明',
+);
 const reasonPlaceholder = computed(() =>
   selectedType.value === 'REFUND'
     ? '请填写退款理由，客服/管理员审核后处理。'
-    : '请详细描述您遇到的问题...'
-)
+    : '请详细描述您遇到的问题...',
+);
 
-onMounted(() => {
-  const pages = getCurrentPages()
-  const currentPage = pages[pages.length - 1] as any
-  orderId.value = currentPage.options?.orderId || ''
-  const type = currentPage.options?.type || 'COMPLAINT'
+onMounted(async () => {
+  if (!(await ensurePhoneBound())) {
+    return;
+  }
+
+  const pages = getCurrentPages();
+  const currentPage = pages[pages.length - 1] as any;
+  orderId.value = currentPage.options?.orderId || '';
+  const type = currentPage.options?.type || 'COMPLAINT';
 
   if (type) {
-    selectedType.value = type as 'REFUND' | 'REMAKE' | 'COMPLAINT'
+    selectedType.value = type as 'REFUND' | 'REMAKE' | 'COMPLAINT';
   }
 
   if (orderId.value) {
-    loadOrderInfo()
+    loadOrderInfo();
   }
-})
+});
 
 async function loadOrderInfo() {
   try {
-    uni.showLoading({ title: '加载中...' })
+    uni.showLoading({ title: '加载中...' });
     const res = await request({
       url: `/orders/${orderId.value}`,
-      method: 'GET'
-    })
+      method: 'GET',
+    });
     if (res.code === 0) {
-      orderInfo.value = res.data
+      orderInfo.value = res.data;
     }
   } catch (error) {
-    console.error('Load order info error:', error)
+    console.error('Load order info error:', error);
   } finally {
-    uni.hideLoading()
+    uni.hideLoading();
   }
 }
 
 function selectType(type: 'REFUND' | 'REMAKE' | 'COMPLAINT') {
-  selectedType.value = type
+  selectedType.value = type;
 }
 
 function chooseImage() {
   uni.chooseImage({
     count: 6 - photos.value.length,
     success: (res) => {
-      photos.value.push(...res.tempFilePaths)
-    }
-  })
+      photos.value.push(...res.tempFilePaths);
+    },
+  });
 }
 
 function removePhoto(index: number) {
-  photos.value.splice(index, 1)
+  photos.value.splice(index, 1);
 }
 
 async function submitAftersale() {
   if (!reason.value.trim()) {
-    uni.showToast({ title: '请填写售后原因', icon: 'none' })
-    return
+    uni.showToast({ title: '请填写售后原因', icon: 'none' });
+    return;
   }
 
   try {
-    uni.showLoading({ title: '提交中...' })
+    uni.showLoading({ title: '提交中...' });
 
     // 上传图片到服务器
-    const uploadedPhotos: string[] = []
+    const uploadedPhotos: string[] = [];
     for (const photo of photos.value) {
       try {
         // 使用后端API上传图片
-        const uploadRes = await uploadImage(photo, orderId.value)
+        const uploadRes = await uploadImage(photo, orderId.value);
         if (uploadRes && uploadRes.url) {
-          uploadedPhotos.push(uploadRes.url)
+          uploadedPhotos.push(uploadRes.url);
         }
       } catch (error) {
-        console.error('Upload photo error:', error)
+        console.error('Upload photo error:', error);
         uni.showToast({
           title: '图片上传失败',
-          icon: 'none'
-        })
-        return // 如果图片上传失败，停止提交
+          icon: 'none',
+        });
+        return; // 如果图片上传失败，停止提交
       }
     }
 
@@ -186,26 +187,26 @@ async function submitAftersale() {
       data: {
         type: selectedType.value,
         reason: reason.value,
-        photos: uploadedPhotos
-      }
-    })
+        photos: uploadedPhotos,
+      },
+    });
 
     if (res.code === 0) {
-      uni.showToast({ title: '提交成功', icon: 'success' })
+      uni.showToast({ title: '提交成功', icon: 'success' });
       setTimeout(() => {
-        uni.navigateBack()
-      }, 1500)
+        uni.navigateBack();
+      }, 1500);
     } else {
-      throw new Error(res.message || '提交失败')
+      throw new Error(res.message || '提交失败');
     }
   } catch (error: any) {
-    console.error('Submit aftersale error:', error)
+    console.error('Submit aftersale error:', error);
     uni.showToast({
       title: error.message || '提交失败',
-      icon: 'none'
-    })
+      icon: 'none',
+    });
   } finally {
-    uni.hideLoading()
+    uni.hideLoading();
   }
 }
 
@@ -217,7 +218,7 @@ async function submitAftersale() {
  */
 async function uploadImage(filePath: string, orderId: string) {
   return new Promise((resolve, reject) => {
-    const token = getToken()
+    const token = getToken();
 
     uni.uploadFile({
       url: `${getBaseUrl()}/orders/${orderId}/aftersale-photos`,
@@ -229,38 +230,43 @@ async function uploadImage(filePath: string, orderId: string) {
       success: (res) => {
         if (res.statusCode === 200) {
           try {
-            const data = JSON.parse(res.data)
-            if (data.code === 0 && data.data && data.data.photos && data.data.photos.length > 0) {
-              resolve(data.data.photos[0])
+            const data = JSON.parse(res.data);
+            if (
+              data.code === 0 &&
+              data.data &&
+              data.data.photos &&
+              data.data.photos.length > 0
+            ) {
+              resolve(data.data.photos[0]);
             } else {
-              reject(new Error(data.message || '上传失败'))
+              reject(new Error(data.message || '上传失败'));
             }
           } catch (e) {
-            reject(new Error('解析响应失败'))
+            reject(new Error('解析响应失败'));
           }
         } else {
-          reject(new Error(`上传失败: ${res.statusCode}`))
+          reject(new Error(`上传失败: ${res.statusCode}`));
         }
       },
       fail: (err) => {
-        reject(err)
-      }
-    })
-  })
+        reject(err);
+      },
+    });
+  });
 }
 
 function formatOrderId(id: string): string {
-  if (!id) return ''
-  return id.substring(0, 8) + '...'
+  if (!id) return '';
+  return id.substring(0, 8) + '...';
 }
 
 function getStatusText(status: string): string {
   const statusMap: Record<string, string> = {
-    'FREEZING': '急冻中',
-    'SHIPPED': '已发货',
-    'COMPLETED': '已完成',
-  }
-  return statusMap[status] || status
+    FREEZING: '急冻中',
+    SHIPPED: '已发货',
+    COMPLETED: '已完成',
+  };
+  return statusMap[status] || status;
 }
 </script>
 

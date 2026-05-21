@@ -23,8 +23,13 @@
       >
         <!-- 订单时间和状态 -->
         <view class="order-header">
-          <text class="order-time">{{ formatShortDateTime(order.createdAt) }}</text>
-          <text class="order-status" :style="{ color: getStatusColor(order.status) }">
+          <text class="order-time">{{
+            formatShortDateTime(order.createdAt)
+          }}</text>
+          <text
+            class="order-status"
+            :style="{ color: getStatusColor(order.status) }"
+          >
             {{ getStatusText(order.status) }}
           </text>
         </view>
@@ -55,10 +60,18 @@
             <view class="meal-info">
               <text class="meal-text">共{{ getTotalMeals(order) }}餐</text>
               <text class="meal-separator">·</text>
-              <text v-if="order.firstItem?.packagePlan && order.firstItem.packagePlan.length > 0" class="meal-text">
+              <text
+                v-if="
+                  order.firstItem?.packagePlan &&
+                  order.firstItem.packagePlan.length > 0
+                "
+                class="meal-text"
+              >
                 {{ formatPackagePlan(order.firstItem) }}
               </text>
-              <text v-else class="meal-text">每餐{{ getMealWeight(order) }}g</text>
+              <text v-else class="meal-text"
+                >每餐{{ getMealWeight(order) }}g</text
+              >
             </view>
           </view>
 
@@ -71,7 +84,9 @@
         <!-- 金额 -->
         <view class="order-amount">
           <text class="amount-label">订单金额:</text>
-          <text class="amount-value">¥{{ formatAmount(order.totalAmount) }}</text>
+          <text class="amount-value"
+            >¥{{ formatAmount(order.totalAmount) }}</text
+          >
         </view>
 
         <view v-if="hasQuickActions(order)" class="order-actions" @tap.stop>
@@ -113,89 +128,100 @@
             再次购买
           </button>
         </view>
-
       </view>
 
       <view v-if="orders.length === 0" class="empty-state">
         <text class="empty-title">{{ emptyTitle }}</text>
         <text class="empty-text">{{ emptyText }}</text>
-        <button v-if="selectedStatus === 'ALL'" class="empty-action" @tap="goHome">去选食谱</button>
+        <button
+          v-if="selectedStatus === 'ALL'"
+          class="empty-action"
+          @tap="goHome"
+        >
+          去选食谱
+        </button>
       </view>
     </view>
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { onShow, onLoad } from '@dcloudio/uni-app'
-import { request, getToken } from '../../utils/api'
-import { createWechatPayment, type WechatPaymentResult } from '../../api/orders'
-import { formatShortDateTime } from '../../utils/date'
-import { requestWechatOrderPayment } from '../../utils/wechat-payment'
+import { ref, computed, onMounted } from 'vue';
+import { onShow, onLoad } from '@dcloudio/uni-app';
+import { request, getToken } from '../../utils/api';
+import {
+  createWechatPayment,
+  type WechatPaymentResult,
+} from '../../api/orders';
+import { formatShortDateTime } from '../../utils/date';
+import { requestWechatOrderPayment } from '../../utils/wechat-payment';
+import { ensurePhoneBound } from '../../utils/account';
 
 // DEBUG flag for development logging
-const DEBUG = true
+const DEBUG = true;
 
 interface Order {
-  id: string
-  status: string
-  totalAmount?: number
-  itemCount?: number
-  createdAt?: string
-  trackingNumber?: string
-  carrierCode?: string
+  id: string;
+  status: string;
+  totalAmount?: number;
+  itemCount?: number;
+  createdAt?: string;
+  trackingNumber?: string;
+  carrierCode?: string;
   firstItem?: {
-    dogId?: string
+    dogId?: string;
     dog?: {
-      name?: string
-      breedName?: string
-      weightKg?: number
-      mealsPerDay?: number
-    }
+      name?: string;
+      breedName?: string;
+      weightKg?: number;
+      mealsPerDay?: number;
+    };
     recipeSnapshot?: {
-      id: string
-      name: string
-      coverImageUrl?: string | null
-    }
-    packageCount: number
-    packageSpecG: number
-    packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
-    ingredientSourcePlan?: string | null
-    dailyIntakeG?: number
-  }
+      id: string;
+      name: string;
+      coverImageUrl?: string | null;
+    };
+    packageCount: number;
+    packageSpecG: number;
+    packagePlan?: Array<{ packageSpecG: number; packageCount: number }>;
+    ingredientSourcePlan?: string | null;
+    dailyIntakeG?: number;
+  };
   address?: {
-    recipientName: string
-    regionText: string
-    detailAddress: string
-  }
+    recipientName: string;
+    regionText: string;
+    detailAddress: string;
+  };
 }
 
 // 状态筛选Tab
-const selectedStatus = ref<string>('ALL')
+const selectedStatus = ref<string>('ALL');
 
-const statusTabs = ref<Array<{label: string, value: string, count: number}>>([
+const statusTabs = ref<Array<{ label: string; value: string; count: number }>>([
   { label: '全部', value: 'ALL', count: 0 },
   { label: '待付款', value: 'PENDING_PAYMENT', count: 0 },
   { label: '制作中', value: 'IN_PROGRESS', count: 0 },
   { label: '待收货', value: 'WAIT_RECEIVE', count: 0 },
   { label: '已收货', value: 'RECEIVED', count: 0 },
   { label: '售后中', value: 'AFTERSALE', count: 0 },
-  { label: '已取消', value: 'CANCELLED', count: 0 }
-])
+  { label: '已取消', value: 'CANCELLED', count: 0 },
+]);
 
-const allOrders = ref<Order[]>([])
-const orders = ref<Order[]>([])
-const viewAllOrders = ref(false) // 是否查看所有订单（从工作台进入时为true）
-const payingOrderId = ref('')
-const receivingOrderId = ref('')
+const allOrders = ref<Order[]>([]);
+const orders = ref<Order[]>([]);
+const viewAllOrders = ref(false); // 是否查看所有订单（从工作台进入时为true）
+const payingOrderId = ref('');
+const receivingOrderId = ref('');
 
 const emptyTitle = computed(() => {
   if (selectedStatus.value === 'ALL') {
-    return '还没有订单'
+    return '还没有订单';
   }
-  const tab = statusTabs.value.find((item) => item.value === selectedStatus.value)
-  return `暂无${tab?.label || '相关'}订单`
-})
+  const tab = statusTabs.value.find(
+    (item) => item.value === selectedStatus.value,
+  );
+  return `暂无${tab?.label || '相关'}订单`;
+});
 
 const emptyText = computed(() => {
   const copyMap: Record<string, string> = {
@@ -206,76 +232,93 @@ const emptyText = computed(() => {
     RECEIVED: '没有已收货订单。',
     AFTERSALE: '没有售后中的订单。',
     CANCELLED: '没有已取消订单。',
-  }
-  return copyMap[selectedStatus.value] || '这里暂时没有订单。'
-})
+  };
+  return copyMap[selectedStatus.value] || '这里暂时没有订单。';
+});
 
-onMounted(() => {
-  loadOrders()
-})
+onMounted(async () => {
+  if (!(await ensurePhoneBound())) {
+    return;
+  }
+  loadOrders();
+});
 
 onLoad((options: any) => {
   // 获取页面参数，判断是否查看所有订单
   // 如果URL参数中有viewAll=true，则查看所有订单（管理员模式）
   if (options && options.viewAll === 'true') {
-    viewAllOrders.value = true
+    viewAllOrders.value = true;
   }
   if (options && typeof options.status === 'string') {
-    const matchedTab = statusTabs.value.find((tab) => tab.value === options.status)
+    const matchedTab = statusTabs.value.find(
+      (tab) => tab.value === options.status,
+    );
     if (matchedTab) {
-      selectedStatus.value = matchedTab.value
+      selectedStatus.value = matchedTab.value;
     }
   }
-})
+});
 
-onShow(() => {
+onShow(async () => {
+  if (!(await ensurePhoneBound())) {
+    return;
+  }
   // Refresh orders when page becomes visible (e.g., after creating new order)
-  loadOrders()
-})
+  loadOrders();
+});
 
 function loadOrders() {
   if (DEBUG) {
-    const token = getToken()
+    const token = getToken();
     console.log('[OrdersList] Loading orders', {
       token: token ? token.substring(0, 20) + '...' : 'none',
       viewAllOrders: viewAllOrders.value,
-    })
+    });
   }
 
-  uni.showLoading({ title: '加载中...' })
+  uni.showLoading({ title: '加载中...' });
 
   // 根据页面参数决定调用哪个API
   // viewAll=true 时调用管理员API查看所有订单，否则调用普通API只看自己的订单
-  const apiUrl = viewAllOrders.value ? '/admin/orders' : '/orders'
+  const apiUrl = viewAllOrders.value ? '/admin/orders' : '/orders';
 
   request({
     url: apiUrl,
-    method: 'GET'
-  }).then((res: any) => {
-    if (DEBUG) {
-      console.log('[OrdersList] Response:', {
-        code: res.code,
-        orderCount: res.data?.length || 0,
-        viewAllOrders: viewAllOrders.value,
-      })
-      console.log('[OrdersList] Orders Data:', JSON.stringify(res.data, null, 2))
-      if (res.data && res.data.length > 0) {
-        console.log('[OrdersList] First Order:', JSON.stringify(res.data[0], null, 2))
-        console.log('[OrdersList] First Order Items:', res.data[0].items)
-      }
-    }
-    if (res.code === 0 && res.data) {
-      // 管理员API返回的是 { list, total } 结构，普通用户API返回的是数组
-      const orders = Array.isArray(res.data) ? res.data : (res.data.list || [])
-      allOrders.value = orders
-      updateStatusCounts()
-      filterOrders()
-    }
-  }).catch((err: any) => {
-    console.error('Load orders error:', err)
-  }).finally(() => {
-    uni.hideLoading()
+    method: 'GET',
   })
+    .then((res: any) => {
+      if (DEBUG) {
+        console.log('[OrdersList] Response:', {
+          code: res.code,
+          orderCount: res.data?.length || 0,
+          viewAllOrders: viewAllOrders.value,
+        });
+        console.log(
+          '[OrdersList] Orders Data:',
+          JSON.stringify(res.data, null, 2),
+        );
+        if (res.data && res.data.length > 0) {
+          console.log(
+            '[OrdersList] First Order:',
+            JSON.stringify(res.data[0], null, 2),
+          );
+          console.log('[OrdersList] First Order Items:', res.data[0].items);
+        }
+      }
+      if (res.code === 0 && res.data) {
+        // 管理员API返回的是 { list, total } 结构，普通用户API返回的是数组
+        const orders = Array.isArray(res.data) ? res.data : res.data.list || [];
+        allOrders.value = orders;
+        updateStatusCounts();
+        filterOrders();
+      }
+    })
+    .catch((err: any) => {
+      console.error('Load orders error:', err);
+    })
+    .finally(() => {
+      uni.hideLoading();
+    });
 }
 
 // 更新各状态订单数量
@@ -283,14 +326,14 @@ function loadOrders() {
 // Phase 9.1: Added PURCHASING, FREEZING and AFTERSALE status counts
 function updateStatusCounts() {
   statusTabs.value.forEach((tab) => {
-    tab.count = getOrdersByTab(tab.value).length
-  })
+    tab.count = getOrdersByTab(tab.value).length;
+  });
 }
 
 // 根据选中状态筛选订单
 // Phase 9: Simplified filter logic
 function filterOrders() {
-  orders.value = getOrdersByTab(selectedStatus.value)
+  orders.value = getOrdersByTab(selectedStatus.value);
 }
 
 function getStatusesForTab(status: string): string[] | null {
@@ -301,39 +344,39 @@ function getStatusesForTab(status: string): string[] | null {
     RECEIVED: ['COMPLETED'],
     AFTERSALE: ['AFTERSALE'],
     CANCELLED: ['CANCELLED'],
-  }
-  return statusGroups[status] || null
+  };
+  return statusGroups[status] || null;
 }
 
 function getOrdersByTab(status: string): Order[] {
   if (status === 'ALL') {
-    return allOrders.value
+    return allOrders.value;
   }
 
-  const statuses = getStatusesForTab(status)
+  const statuses = getStatusesForTab(status);
   if (!statuses) {
-    return allOrders.value.filter((order) => order.status === status)
+    return allOrders.value.filter((order) => order.status === status);
   }
 
-  return allOrders.value.filter((order) => statuses.includes(order.status))
+  return allOrders.value.filter((order) => statuses.includes(order.status));
 }
 
 // 选择状态
 function selectStatus(status: string) {
-  selectedStatus.value = status
-  filterOrders()
+  selectedStatus.value = status;
+  filterOrders();
 }
 
 function viewOrder(orderId: string) {
   uni.navigateTo({
-    url: `/pages/order-detail/index?id=${orderId}`
-  })
+    url: `/pages/order-detail/index?id=${orderId}`,
+  });
 }
 
 function goHome() {
   uni.switchTab({
     url: '/pages/home/index',
-  })
+  });
 }
 
 function hasQuickActions(order: Order): boolean {
@@ -343,49 +386,49 @@ function hasQuickActions(order: Order): boolean {
     order.status === 'FREEZING' ||
     order.status === 'COMPLETED' ||
     order.status === 'CANCELLED'
-  )
+  );
 }
 
 function canApplyAftersale(status: string): boolean {
-  return ['FREEZING', 'SHIPPED', 'COMPLETED'].includes(status)
+  return ['FREEZING', 'SHIPPED', 'COMPLETED'].includes(status);
 }
 
 function requestWechatPayment(payment: WechatPaymentResult): Promise<void> {
-  return requestWechatOrderPayment(payment)
+  return requestWechatOrderPayment(payment);
 }
 
 async function payOrderFromList(orderId: string) {
-  if (payingOrderId.value) return
+  if (payingOrderId.value) return;
 
   try {
-    payingOrderId.value = orderId
-    uni.showLoading({ title: '调起支付中...' })
+    payingOrderId.value = orderId;
+    uni.showLoading({ title: '调起支付中...' });
 
-    const res = await createWechatPayment(orderId)
+    const res = await createWechatPayment(orderId);
     if (res.code !== 0 || !res.data) {
-      throw new Error(res.message || '支付失败')
+      throw new Error(res.message || '支付失败');
     }
 
-    uni.hideLoading()
-    await requestWechatPayment(res.data)
+    uni.hideLoading();
+    await requestWechatPayment(res.data);
     uni.showToast({
       title: '支付处理中',
       icon: 'success',
-    })
-    loadOrders()
+    });
+    loadOrders();
   } catch (error: any) {
     const errorMessage = error?.errMsg?.includes('cancel')
       ? '已取消支付'
       : error instanceof Error
         ? error.message
-        : '支付失败，请重试'
+        : '支付失败，请重试';
     uni.showToast({
       title: errorMessage,
       icon: 'none',
-    })
+    });
   } finally {
-    payingOrderId.value = ''
-    uni.hideLoading()
+    payingOrderId.value = '';
+    uni.hideLoading();
   }
 }
 
@@ -394,8 +437,8 @@ function viewLogistics(order: Order) {
     uni.showToast({
       title: '暂无物流信息',
       icon: 'none',
-    })
-    return
+    });
+    return;
   }
 
   uni.showModal({
@@ -404,83 +447,83 @@ function viewLogistics(order: Order) {
     confirmText: '复制单号',
     cancelText: '关闭',
     success: (res) => {
-      if (!res.confirm) return
+      if (!res.confirm) return;
       uni.setClipboardData({
         data: order.trackingNumber || '',
         success: () => {
-          uni.showToast({ title: '已复制', icon: 'success' })
+          uni.showToast({ title: '已复制', icon: 'success' });
         },
-      })
+      });
     },
-  })
+  });
 }
 
 async function confirmReceivedFromList(orderId: string) {
-  if (receivingOrderId.value) return
+  if (receivingOrderId.value) return;
 
   uni.showModal({
     title: '确认收货',
     content: '确认已经收到商品了吗？',
     success: async (res) => {
-      if (!res.confirm) return
+      if (!res.confirm) return;
 
       try {
-        receivingOrderId.value = orderId
-        uni.showLoading({ title: '确认中...' })
+        receivingOrderId.value = orderId;
+        uni.showLoading({ title: '确认中...' });
         const result = await request({
           url: `/orders/${orderId}/complete`,
           method: 'POST',
-        })
+        });
         if (result.code !== 0) {
-          throw new Error(result.message || '确认失败')
+          throw new Error(result.message || '确认失败');
         }
         uni.showToast({
           title: '已确认收货',
           icon: 'success',
-        })
-        loadOrders()
+        });
+        loadOrders();
       } catch (error: any) {
         uni.showToast({
           title: error?.message || '确认失败',
           icon: 'none',
-        })
+        });
       } finally {
-        receivingOrderId.value = ''
-        uni.hideLoading()
+        receivingOrderId.value = '';
+        uni.hideLoading();
       }
     },
-  })
+  });
 }
 
 function applyAftersale(orderId: string) {
   uni.navigateTo({
     url: `/pages/aftersale-apply/index?orderId=${orderId}&type=REFUND`,
-  })
+  });
 }
 
 function buyAgain(order: Order) {
-  const recipeId = order.firstItem?.recipeSnapshot?.id
+  const recipeId = order.firstItem?.recipeSnapshot?.id;
   if (!recipeId) {
     uni.showToast({
       title: '食谱信息不完整',
       icon: 'none',
-    })
-    return
+    });
+    return;
   }
 
-  const queryPairs = [`recipeId=${encodeURIComponent(recipeId)}`]
+  const queryPairs = [`recipeId=${encodeURIComponent(recipeId)}`];
   if (order.firstItem?.dogId) {
-    queryPairs.push(`dogId=${encodeURIComponent(order.firstItem.dogId)}`)
+    queryPairs.push(`dogId=${encodeURIComponent(order.firstItem.dogId)}`);
   }
 
   uni.navigateTo({
     url: `/pages/recipe-order/index?${queryPairs.join('&')}`,
-  })
+  });
 }
 
 function formatAmount(amount?: number): string {
-  if (!amount) return '0.00'
-  return amount.toFixed(2)
+  if (!amount) return '0.00';
+  return amount.toFixed(2);
 }
 
 function getStatusText(status: string): string {
@@ -496,9 +539,9 @@ function getStatusText(status: string): string {
     SHIPPED: '已发货',
     COMPLETED: '已完成',
     CANCELLED: '已取消',
-    AFTERSALE: '售后中'
-  }
-  return statusMap[status] || status
+    AFTERSALE: '售后中',
+  };
+  return statusMap[status] || status;
 }
 
 function getStatusColor(status: string): string {
@@ -514,9 +557,9 @@ function getStatusColor(status: string): string {
     SHIPPED: '#52c41a',
     COMPLETED: '#52c41a',
     CANCELLED: '#999',
-    AFTERSALE: '#f5222d'
-  }
-  return colorMap[status] || '#999'
+    AFTERSALE: '#f5222d',
+  };
+  return colorMap[status] || '#999';
 }
 
 function getCarrierName(code?: string): string {
@@ -526,91 +569,96 @@ function getCarrierName(code?: string): string {
     YTO: '圆通速递',
     ZTO: '中通快递',
     EMS: 'EMS',
-  }
-  return carrierMap[code || ''] || code || '-'
+  };
+  return carrierMap[code || ''] || code || '-';
 }
 
 function formatDogInfo(order: Order): string {
   if (!order.firstItem || !order.firstItem.dog) {
-    return ''
+    return '';
   }
 
-  const dog = order.firstItem.dog
-  const dogName = dog.name || ''
-  const breedName = dog.breedName || ''
-  const weightKg = dog.weightKg || 0
+  const dog = order.firstItem.dog;
+  const dogName = dog.name || '';
+  const breedName = dog.breedName || '';
+  const weightKg = dog.weightKg || 0;
 
-  const parts = [dogName]
-  if (breedName) parts.push(breedName)
-  if (weightKg > 0) parts.push(`${weightKg}kg`)
+  const parts = [dogName];
+  if (breedName) parts.push(breedName);
+  if (weightKg > 0) parts.push(`${weightKg}kg`);
 
-  return parts.join(' · ')
+  return parts.join(' · ');
 }
 
 function getRecipeName(order: Order): string {
   if (!order.firstItem || !order.firstItem.recipeSnapshot) {
-    return ''
+    return '';
   }
-  return order.firstItem.recipeSnapshot.name || ''
+  return order.firstItem.recipeSnapshot.name || '';
 }
 
 function getRecipeCoverImage(order: Order): string {
   if (!order.firstItem || !order.firstItem.recipeSnapshot) {
-    return ''
+    return '';
   }
-  return order.firstItem.recipeSnapshot.coverImageUrl || ''
+  return order.firstItem.recipeSnapshot.coverImageUrl || '';
 }
 
 function getTotalMeals(order: Order): number {
   if (!order.firstItem) {
-    return 0
+    return 0;
   }
-  return order.firstItem.packageCount || 0
+  return order.firstItem.packageCount || 0;
 }
 
 function getMealWeight(order: Order): number {
   if (!order.firstItem) {
-    return 0
+    return 0;
   }
 
-  const firstItem = order.firstItem
+  const firstItem = order.firstItem;
 
   // ✅ 修复：直接返回用户配置的包装规格（每袋重量 = 每餐饭量）
   // 这是用户下单时确认并支付的数据，而不是系统推荐值
-  return firstItem.packageSpecG || 0
+  return firstItem.packageSpecG || 0;
 }
 
 function formatPackagePlan(item: {
-  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
-  packageSpecG?: number
-  packageCount?: number
+  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>;
+  packageSpecG?: number;
+  packageCount?: number;
 }): string {
   const packagePlanRows = (item.packagePlan || [])
-    .map(row => {
-      const packageSpecG = Number(row?.packageSpecG)
-      const packageCount = Number(row?.packageCount)
-      if (!Number.isFinite(packageSpecG) || !Number.isFinite(packageCount) || packageSpecG <= 0 || packageCount <= 0) {
-        return ''
+    .map((row) => {
+      const packageSpecG = Number(row?.packageSpecG);
+      const packageCount = Number(row?.packageCount);
+      if (
+        !Number.isFinite(packageSpecG) ||
+        !Number.isFinite(packageCount) ||
+        packageSpecG <= 0 ||
+        packageCount <= 0
+      ) {
+        return '';
       }
-      return `${packageSpecG}g×${packageCount}袋`
+      return `${packageSpecG}g×${packageCount}袋`;
     })
-    .filter(Boolean)
+    .filter(Boolean);
 
   if (packagePlanRows.length > 0) {
-    return packagePlanRows.join('，')
+    return packagePlanRows.join('，');
   }
 
-  return `${item.packageSpecG || 0}g×${item.packageCount || 0}袋`
+  return `${item.packageSpecG || 0}g×${item.packageCount || 0}袋`;
 }
 
 function formatAddress(address?: { regionText?: string }): string {
   if (!address || !address.regionText) {
-    return ''
+    return '';
   }
 
   // 只显示第一个地区（市级）
-  const regions = address.regionText.split(/\s+/)
-  return regions[0] || address.regionText
+  const regions = address.regionText.split(/\s+/);
+  return regions[0] || address.regionText;
 }
 </script>
 

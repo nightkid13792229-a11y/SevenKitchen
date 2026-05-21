@@ -220,6 +220,8 @@ export interface OrderListItem extends Order {
  */
 export interface OrderStats {
   total: number
+  todayNew: number
+  paidRevenue: number
   pendingPayment: number
   paid: number
   purchasing: number

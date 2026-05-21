@@ -291,7 +291,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import {
   Document,
@@ -317,6 +317,7 @@ const OrderStatusEnum = OrderStatus
 const OrderTypeEnum = OrderType
 
 const router = useRouter()
+const route = useRoute()
 
 // 数据
 const loading = ref(false)
@@ -327,6 +328,8 @@ const selectedOrders = ref<OrderListItem[]>([])
 // Phase 9: Simplified statistics aligned with e-commerce standards
 const stats = ref<OrderStats>({
   total: 0,
+  todayNew: 0,
+  paidRevenue: 0,
   pendingPayment: 0,
   paid: 0,
   purchasing: 0,
@@ -440,6 +443,36 @@ const handleOrderScopeChange = (key: OrderScopeKey) => {
   filterForm.status = option ? [...option.statuses] : []
   pagination.page = 1
   loadOrders()
+}
+
+const normalizeQueryValue = (value: unknown): string => {
+  if (Array.isArray(value)) {
+    return String(value[0] || '')
+  }
+  return typeof value === 'string' ? value : ''
+}
+
+const applyRouteFilters = () => {
+  const statusParam = normalizeQueryValue(route.query.status)
+  const startDate = normalizeQueryValue(route.query.startDate)
+  const endDate = normalizeQueryValue(route.query.endDate)
+
+  if (statusParam) {
+    filterForm.status = statusParam
+      .split(',')
+      .map((status) => status.trim())
+      .filter((status): status is OrderStatus =>
+        Object.values(OrderStatusEnum).includes(status as OrderStatus)
+      )
+  }
+
+  if (startDate || endDate) {
+    filterForm.startDate = startDate
+    filterForm.endDate = endDate || startDate
+    dateRange.value = [filterForm.startDate, filterForm.endDate]
+  }
+
+  syncActiveOrderScopeFromStatus()
 }
 
 // 加载订单列表
@@ -679,6 +712,7 @@ const getStatusText = (status: OrderStatus) => {
 }
 
 onMounted(() => {
+  applyRouteFilters()
   loadOrders()
   loadStats()
 })

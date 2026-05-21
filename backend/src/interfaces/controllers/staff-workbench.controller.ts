@@ -86,15 +86,7 @@ export class StaffWorkbenchController {
       }),
       this.prisma.order.count({
         where: {
-          status: {
-            in: [
-              OrderStatus.PAID,
-              OrderStatus.PURCHASING,
-              OrderStatus.IN_PRODUCTION,
-              OrderStatus.FREEZING,
-              OrderStatus.SHIPPED,
-            ],
-          },
+          status: OrderStatus.FREEZING,
         },
       }),
       this.prisma.order.count({

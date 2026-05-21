@@ -504,7 +504,7 @@
         </view>
       </view>
 
-      <!-- 售后服务（FREEZING、SHIPPED或COMPLETED状态可申请） -->
+      <!-- 售后服务（付款后到完成前后均可申请） -->
       <view class="section aftersale-section" v-if="canApplyAftersale(order.status)">
         <view class="section-title">售后服务</view>
         <view class="aftersale-buttons">
@@ -2439,9 +2439,9 @@ async function buyAgain() {
 }
 
 // 判断是否可以申请售后
-// Phase 9.1: FREEZING, SHIPPED, COMPLETED status can apply for aftersale
+// Phase 9.1: paid orders can apply for aftersale throughout the fulfillment flow.
 function canApplyAftersale(status: string): boolean {
-  return ['FREEZING', 'SHIPPED', 'COMPLETED'].includes(status)
+  return ['PAID', 'PURCHASING', 'IN_PRODUCTION', 'FREEZING', 'SHIPPED', 'COMPLETED'].includes(status)
 }
 
 // 计算总袋数

@@ -2828,18 +2828,52 @@ export class AdminController {
   @ApiResponse({ status: 200, description: '用户列表' })
   async getUsers(
     @Query('role') role?: string,
-  ): Promise<ApiResponseDto<StaffResponseDto[]>> {
+    @Query('status') status?: string,
+    @Query('keyword') keyword?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ): Promise<
+    ApiResponseDto<{
+      data: StaffResponseDto[];
+      total: number;
+      page: number;
+      pageSize: number;
+    }>
+  > {
+    const pageNum = Math.max(1, Number.parseInt(page || '1', 10) || 1);
+    const pageSizeNum = Math.min(
+      100,
+      Math.max(10, Number.parseInt(pageSize || '20', 10) || 20),
+    );
+
     // 构建查询条件
-    const where: any = {};
+    const where: Prisma.UserWhereInput = {};
 
     if (role && ['CUSTOMER', 'STAFF', 'ADMIN'].includes(role)) {
-      where.role = role;
+      where.role = role as Prisma.EnumUserRoleFilter['equals'];
     }
 
-    const userList = await this.prisma.user.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-    });
+    if (status && ['ACTIVE', 'INACTIVE', 'BANNED'].includes(status)) {
+      where.status = status as Prisma.EnumUserStatusFilter['equals'];
+    }
+
+    const trimmedKeyword = keyword?.trim();
+    if (trimmedKeyword) {
+      where.OR = [
+        { phone: { contains: trimmedKeyword, mode: 'insensitive' } },
+        { nickname: { contains: trimmedKeyword, mode: 'insensitive' } },
+      ];
+    }
+
+    const [userList, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (pageNum - 1) * pageSizeNum,
+        take: pageSizeNum,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
 
     const data = userList.map((user) => ({
       id: user.id,
@@ -2851,7 +2885,12 @@ export class AdminController {
       createdAt: user.createdAt,
     }));
 
-    return ApiResponseDto.success(data);
+    return ApiResponseDto.success({
+      data,
+      total,
+      page: pageNum,
+      pageSize: pageSizeNum,
+    });
   }
 
   @Post('users')

@@ -24,14 +24,14 @@
           placeholder="搜索手机号或昵称"
           clearable
           style="width: 300px"
-          @clear="loadUsers"
-          @keyup.enter="loadUsers"
+          @clear="handleSearch"
+          @keyup.enter="handleSearch"
         >
           <template #prefix>
             <el-icon><Search /></el-icon>
           </template>
         </el-input>
-        <el-button type="primary" @click="loadUsers">搜索</el-button>
+        <el-button type="primary" @click="handleSearch">搜索</el-button>
       </div>
     </el-card>
 
@@ -106,6 +106,18 @@
           </template>
         </el-table-column>
       </el-table>
+
+      <div class="pagination-wrapper">
+        <el-pagination
+          v-model:current-page="currentPage"
+          v-model:page-size="pageSize"
+          :page-sizes="[10, 20, 50, 100]"
+          :total="total"
+          layout="total, sizes, prev, pager, next, jumper"
+          @size-change="handleSizeChange"
+          @current-change="handlePageChange"
+        />
+      </div>
     </el-card>
 
     <!-- User Form Dialog -->
@@ -130,6 +142,9 @@ import { formatDateTime } from '@/utils/date'
 const activeRole = ref<string>('')
 const searchKeyword = ref('')
 const users = ref<User[]>([])
+const total = ref(0)
+const currentPage = ref(1)
+const pageSize = ref(20)
 const loading = ref(false)
 const formVisible = ref(false)
 const currentUser = ref<User | undefined>(undefined)
@@ -138,14 +153,19 @@ const currentUser = ref<User | undefined>(undefined)
 const loadUsers = async () => {
   loading.value = true
   try {
-    const params: any = {}
+    const params: any = {
+      page: currentPage.value,
+      pageSize: pageSize.value
+    }
     if (activeRole.value) {
       params.role = activeRole.value
     }
     if (searchKeyword.value) {
       params.keyword = searchKeyword.value
     }
-    users.value = await userApi.list(params)
+    const response = await userApi.list(params)
+    users.value = response.data
+    total.value = response.total
   } catch (error: any) {
     ElMessage.error(error.message || '加载用户列表失败')
   } finally {
@@ -155,6 +175,21 @@ const loadUsers = async () => {
 
 // Handle role tab change
 const handleRoleChange = () => {
+  currentPage.value = 1
+  loadUsers()
+}
+
+const handleSearch = () => {
+  currentPage.value = 1
+  loadUsers()
+}
+
+const handlePageChange = () => {
+  loadUsers()
+}
+
+const handleSizeChange = () => {
+  currentPage.value = 1
   loadUsers()
 }
 
@@ -197,7 +232,7 @@ const handleToggleStatus = async (user: User) => {
     const newStatus = user.status === UserStatus.ACTIVE ? UserStatus.BANNED : UserStatus.ACTIVE
     await userApi.update(user.id, { status: newStatus })
     ElMessage.success(`${action}成功`)
-    loadUsers()
+    await loadUsers()
   } catch (error: any) {
     if (error !== 'cancel') {
       ElMessage.error(error.message || `${action}失败`)
@@ -225,7 +260,10 @@ const handleDelete = async (user: User) => {
 
     await userApi.delete(user.id)
     ElMessage.success('删除成功')
-    loadUsers()
+    if (users.value.length === 1 && currentPage.value > 1) {
+      currentPage.value -= 1
+    }
+    await loadUsers()
   } catch (error: any) {
     if (error !== 'cancel') {
       ElMessage.error(error.message || '删除失败')
@@ -236,6 +274,7 @@ const handleDelete = async (user: User) => {
 // Handle form success
 const handleFormSuccess = () => {
   formVisible.value = false
+  currentPage.value = 1
   loadUsers()
 }
 
@@ -275,5 +314,11 @@ onMounted(() => {
 
 .table-card {
   margin-bottom: 20px;
+}
+
+.pagination-wrapper {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
 }
 </style>

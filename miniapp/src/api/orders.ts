@@ -31,6 +31,18 @@ export interface CustomerOrderFinancialSummary {
   settlementStatus: 'PENDING' | 'SETTLED';
   shortageAdjustmentAmount: number;
   requiresCustomerPayment: boolean;
+  refundStatus: {
+    exists: boolean;
+    success: boolean;
+    status: string;
+    statusText: string;
+    amount: number;
+    outRefundNo: string | null;
+    refundId: string | null;
+    successTime: string | null;
+    createdAt: string | null;
+    updatedAt: string | null;
+  } | null;
   adjustmentSummary: {
     totalIncreaseAmount: number;
     totalDecreaseAmount: number;

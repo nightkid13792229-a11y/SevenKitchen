@@ -256,6 +256,29 @@
         </view>
       </view>
 
+      <view v-if="orderRefundStatus" class="section refund-status-section">
+        <view class="section-title">退款进度</view>
+        <view
+          class="refund-status-card"
+          :class="{ success: orderRefundStatus.success }"
+        >
+          <view class="refund-status-header">
+            <text class="refund-status-title">{{
+              orderRefundStatus.statusText
+            }}</text>
+            <text class="refund-status-amount"
+              >¥{{ formatAmount(orderRefundStatus.amount) }}</text
+            >
+          </view>
+          <text v-if="orderRefundStatus.outRefundNo" class="refund-status-row">
+            退款单号：{{ orderRefundStatus.outRefundNo }}
+          </text>
+          <text v-if="orderRefundStatus.successTime" class="refund-status-row">
+            成功时间：{{ formatDateTime(orderRefundStatus.successTime) }}
+          </text>
+        </view>
+      </view>
+
       <view
         v-if="shouldShowFinancialSummary"
         class="section settlement-section"
@@ -1221,6 +1244,10 @@ const shouldShowFinancialSummary = computed(() => {
   return orderFinancialSummary.value?.settlementStatus === 'SETTLED';
 });
 
+const orderRefundStatus = computed(() => {
+  return orderFinancialSummary.value?.refundStatus || null;
+});
+
 const visibleSettlementAdjustments = computed(() => {
   return orderFinancialSummary.value?.adjustments || [];
 });
@@ -1261,6 +1288,7 @@ function shouldFetchOrderFinancialSummary(status?: string | null): boolean {
     'SHIPPED',
     'COMPLETED',
     'AFTERSALE',
+    'CANCELLED',
   ].includes(status);
 }
 
@@ -3388,6 +3416,54 @@ async function applyRefund() {
 .settlement-card.extra-payment {
   border-left-color: #ff4d4f;
   background-color: #fff1f0;
+}
+
+.refund-status-section {
+  margin-bottom: 20rpx;
+}
+
+.refund-status-card {
+  padding: 22rpx;
+  border-radius: 12rpx;
+  border-left: 6rpx solid #52c41a;
+  background-color: #f6ffed;
+}
+
+.refund-status-card.success {
+  border-left-color: #16a34a;
+  background-color: #ecfdf3;
+}
+
+.refund-status-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  margin-bottom: 12rpx;
+}
+
+.refund-status-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #166534;
+  word-break: break-word;
+}
+
+.refund-status-amount {
+  flex-shrink: 0;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #16a34a;
+}
+
+.refund-status-row {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #365314;
+  word-break: break-word;
 }
 
 .settlement-header {

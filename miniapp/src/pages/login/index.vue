@@ -7,7 +7,7 @@
       <text class="app-slogan">新鲜健康，为爱定制</text>
     </view>
 
-    <!-- 微信授权登录 -->
+    <!-- 登录 -->
     <view class="login-section">
       <!-- 隐私协议勾选 -->
       <view class="agreement-section">
@@ -31,7 +31,7 @@
         :disabled="loading || !isAgreed"
         @agreeprivacyauthorization="handlePrivacyAgree"
       >
-        <text v-if="!loading">微信一键登录</text>
+        <text v-if="!loading">立即登录</text>
         <text v-else>登录中...</text>
       </button>
 
@@ -97,7 +97,7 @@ const getLoginErrorMessage = (error: any) => {
   const message = error?.message || "";
 
   if (message.includes("Failed to authenticate with WeChat")) {
-    return "微信登录失败，请检查新小程序密钥是否已配置到后端";
+    return "登录失败，请稍后重试";
   }
 
   if (message.includes("request:fail") || message.includes("timeout")) {
@@ -107,7 +107,7 @@ const getLoginErrorMessage = (error: any) => {
   return message || "登录失败，请重试";
 };
 
-// 微信授权登录
+// 登录
 const handleWechatLogin = async () => {
   loading.value = true;
   currentApiBaseUrl.value = getBaseUrl();
@@ -130,7 +130,7 @@ const handleWechatLogin = async () => {
 
     const code = res.code;
 
-    // 2. 调用后端微信登录接口（不再发送userInfo）
+    // 2. 调用后端登录接口（不再发送userInfo）
     const response = await request({
       url: "/auth/wechat-login",
       method: "POST",

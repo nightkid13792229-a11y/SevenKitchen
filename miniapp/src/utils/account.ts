@@ -141,11 +141,11 @@ export async function promptPhoneBindingIfNeeded(): Promise<boolean> {
   const redirect = encodeURIComponent(getCurrentPagePathWithQuery());
   phoneBindPrompting = true;
   uni.showModal({
-    title: "请授权手机号",
+    title: "手机号快捷登录",
     content:
-      "手机号仅用于账号识别、历史资料同步、订单履约和售后服务。授权后可同步旧小程序资料，并继续使用下单、支付、订单和售后功能。",
+      "手机号仅用于账号识别、历史资料同步、订单履约和售后服务。完成后可同步旧版资料，并继续使用下单、支付、订单和售后功能。",
     showCancel: false,
-    confirmText: "去授权",
+    confirmText: "继续",
     success: () => {
       uni.navigateTo({
         url: `/pages/phone-bind/index?redirect=${redirect}`,

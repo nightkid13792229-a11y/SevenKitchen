@@ -2307,6 +2307,8 @@ export class OrderService {
    */
   async getOrderStats(): Promise<{
     total: number;
+    todayNew: number;
+    paidRevenue: number;
     pendingPayment: number;
     paid: number;
     purchasing: number;

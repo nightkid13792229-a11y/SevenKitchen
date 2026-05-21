@@ -52,6 +52,7 @@ import { ref } from 'vue';
 import { onLoad } from '@dcloudio/uni-app';
 import { request, setToken, markTokenReady } from '../../utils/api';
 import { getBaseUrl } from '../../utils/config';
+import { getCurrentMiniProgramAppId } from '../../utils/account';
 
 const loading = ref(false);
 const isAgreed = ref(false);
@@ -118,7 +119,7 @@ const handleWechatLogin = async () => {
       uni.login({
         provider: 'weixin',
         success: (res) => resolve(res),
-        fail: (err) => reject(err)
+        fail: (err) => reject(err),
       });
     });
 
@@ -135,8 +136,9 @@ const handleWechatLogin = async () => {
       method: 'POST',
       data: {
         code,
-        userInfo: {} // 空对象，不再尝试获取用户信息
-      }
+        appId: getCurrentMiniProgramAppId(),
+        userInfo: {}, // 空对象，不再尝试获取用户信息
+      },
     });
 
     console.log('[Login] Backend response:', response);
@@ -159,7 +161,9 @@ const handleWechatLogin = async () => {
         // 继续执行，不阻塞登录流程
       }
       markTokenReady(); // 标记token已就绪
-      console.log('[Login] Token and user saved to storage, token marked as ready');
+      console.log(
+        '[Login] Token and user saved to storage, token marked as ready',
+      );
 
       // 3.5. 设置触发器，让TabBar的轮询监听能够检测到变化
       try {
@@ -172,36 +176,54 @@ const handleWechatLogin = async () => {
       // 3.6. 尝试直接刷新TabBar
       setTimeout(() => {
         try {
-          const pages = getCurrentPages()
-          const currentPage = pages[pages.length - 1]
+          const pages = getCurrentPages();
+          const currentPage = pages[pages.length - 1];
           if (currentPage && currentPage.$scope) {
-            const tabBar = currentPage.$scope.getTabBar()
+            const tabBar = currentPage.$scope.getTabBar();
             if (tabBar && typeof tabBar.refresh === 'function') {
-              console.log('[Login] Triggering TabBar refresh immediately via scope')
-              tabBar.refresh()
+              console.log(
+                '[Login] Triggering TabBar refresh immediately via scope',
+              );
+              tabBar.refresh();
             } else {
-              console.log('[Login] TabBar not found in scope, relying on polling')
+              console.log(
+                '[Login] TabBar not found in scope, relying on polling',
+              );
             }
           } else {
-            console.log('[Login] Current page scope not available, relying on polling')
+            console.log(
+              '[Login] Current page scope not available, relying on polling',
+            );
           }
         } catch (error) {
-          console.log('[Login] Failed to refresh TabBar:', error.message)
+          console.log('[Login] Failed to refresh TabBar:', error.message);
         }
       }, 200);
 
       // 4. 检查是否需要设置头像昵称
-      const needsProfileSetup = !user.avatarUrl || user.avatarUrl === '' ||
-                                !user.nickname || user.nickname === '' ||
-                                user.nickname === '微信用户';
+      const needsProfileSetup =
+        !user.avatarUrl ||
+        user.avatarUrl === '' ||
+        !user.nickname ||
+        user.nickname === '' ||
+        user.nickname === '微信用户';
 
       console.log('[Login] Needs profile setup:', needsProfileSetup);
+
+      if (role === 'CUSTOMER' && !user.phone && !user.phoneBound) {
+        setTimeout(() => {
+          uni.redirectTo({
+            url: '/pages/phone-bind/index?redirect=%2Fpages%2Fhome%2Findex',
+          });
+        }, 500);
+        return;
+      }
 
       if (needsProfileSetup) {
         // 新用户或未设置头像昵称，跳转到完善资料页面
         setTimeout(() => {
           uni.redirectTo({
-            url: '/pages/profile-setup/index'
+            url: '/pages/profile-setup/index',
           });
         }, 500);
       } else {
@@ -210,13 +232,13 @@ const handleWechatLogin = async () => {
           uni.showToast({
             title: '欢迎加入Seven的厨房！',
             icon: 'success',
-            duration: 2000
+            duration: 2000,
           });
         } else if (role === 'STAFF' || role === 'ADMIN') {
           uni.showToast({
             title: '欢迎回来，' + (role === 'ADMIN' ? '管理员' : '员工'),
             icon: 'success',
-            duration: 2000
+            duration: 2000,
           });
         }
 
@@ -237,7 +259,6 @@ const handleWechatLogin = async () => {
     loading.value = false;
   }
 };
-
 </script>
 
 <style scoped>

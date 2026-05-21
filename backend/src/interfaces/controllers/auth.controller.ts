@@ -19,12 +19,17 @@ import {
   ApiProperty,
 } from '@nestjs/swagger';
 import { IsString } from 'class-validator';
+import type { Prisma, User } from '@prisma/client';
 import { JwtAuthService } from '../auth/jwt.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { WechatService } from '../../infrastructure/wechat/wechat.service';
 import { SmsService } from '../../infrastructure/sms/sms.service';
-import { WechatLoginRequestDto } from '../dto/auth/wechat-login.dto';
+import {
+  BindWechatPhoneRequestDto,
+  ConfirmPhoneMergeRequestDto,
+  WechatLoginRequestDto,
+} from '../dto/auth/wechat-login.dto';
 import {
   PhoneLoginRequestDto,
   SendSmsRequestDto,
@@ -187,14 +192,21 @@ export class AuthController {
       console.log('[WeChat Login] Received userInfo:', dto.userInfo);
 
       // Get WeChat user info
-      const wechatUser = await this.wechatService.code2Session(dto.code);
+      const wechatUser = await this.wechatService.code2Session(
+        dto.code,
+        this.normalizeAppId(dto.appId),
+      );
+      const appId = wechatUser.appId || this.normalizeAppId(dto.appId) || '';
+      console.log('[WeChat Login] Resolved AppID:', appId);
       console.log('[WeChat Login] WeChat openid:', wechatUser.openid);
       console.log('[WeChat Login] WeChat unionid:', wechatUser.unionid);
 
       // Find or create user
-      let user = await this.prisma.user.findUnique({
-        where: { wechatOpenid: wechatUser.openid },
-      });
+      let user = await this.findUserByWechatIdentity(
+        appId,
+        wechatUser.openid,
+        wechatUser.unionid,
+      );
 
       console.log('[WeChat Login] Found existing user:', !!user);
       if (user) {
@@ -245,6 +257,13 @@ export class AuthController {
         console.log('[WeChat Login] Updated user avatarUrl:', user.avatarUrl);
       }
 
+      user = await this.attachWechatIdentity(user, {
+        appId,
+        openid: wechatUser.openid,
+        unionid: wechatUser.unionid,
+        sessionKey: wechatUser.sessionKey,
+      });
+
       // Verify user is actually in database
       const verifyUser = await this.prisma.user.findUnique({
         where: { id: user.id },
@@ -293,12 +312,129 @@ export class AuthController {
           nickname: user.nickname || '微信用户',
           avatarUrl: user.avatarUrl,
           role: user.role,
+          phone: user.phone,
+          phoneBound: !!user.phone,
         },
+        appId,
+        phoneBound: !!user.phone,
       });
     } catch (error: any) {
       console.log('[WeChat Login] ERROR:', error.message);
       console.log('[WeChat Login] ERROR stack:', error.stack);
       return ApiResponseDto.error(500, error.message || 'WeChat login failed');
+    }
+  }
+
+  @Post('bind-phone')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Bind WeChat authorized phone number' })
+  async bindWechatPhone(
+    @CurrentUser() requestUser: RequestUser,
+    @Body() dto: BindWechatPhoneRequestDto,
+  ): Promise<any> {
+    try {
+      const phoneInfo = await this.wechatService.getPhoneNumber(
+        dto.code,
+        this.normalizeAppId(dto.appId),
+      );
+      const phone = phoneInfo.phoneNumber;
+      const currentUser = await this.prisma.user.findUnique({
+        where: { id: requestUser.userId },
+        include: this.userSummaryInclude(),
+      });
+
+      if (!currentUser) {
+        return ApiResponseDto.error(404, '当前用户不存在');
+      }
+
+      if (currentUser.role !== 'CUSTOMER') {
+        return ApiResponseDto.error(400, '员工或管理员账号不参与客户资料合并');
+      }
+
+      if (currentUser.phone === phone) {
+        return ApiResponseDto.success(this.buildBoundResponse(currentUser));
+      }
+
+      const existingUser = await this.prisma.user.findUnique({
+        where: { phone },
+        include: this.userSummaryInclude(),
+      });
+
+      if (existingUser && existingUser.id !== currentUser.id) {
+        if (existingUser.role !== 'CUSTOMER') {
+          return ApiResponseDto.error(
+            400,
+            '该手机号已绑定员工或管理员账号，请联系管理员处理',
+          );
+        }
+
+        const mergeToken = this.jwtAuthService.generatePhoneMergeToken({
+          sourceUserId: currentUser.id,
+          targetUserId: existingUser.id,
+          phone,
+        });
+
+        return ApiResponseDto.success({
+          status: 'NEEDS_CONFIRMATION',
+          phone: this.maskPhone(phone),
+          mergeToken,
+          targetUser: this.buildUserSummary(existingUser),
+          message: '检测到该手机号已有历史资料，请确认是否同步到当前账号',
+        });
+      }
+
+      const updatedUser = await this.prisma.user.update({
+        where: { id: currentUser.id },
+        data: { phone },
+        include: this.userSummaryInclude(),
+      });
+
+      return ApiResponseDto.success(this.buildBoundResponse(updatedUser));
+    } catch (error: any) {
+      console.error('[Bind Phone] ERROR:', error);
+      return ApiResponseDto.error(500, error.message || '绑定手机号失败');
+    }
+  }
+
+  @Post('confirm-phone-merge')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Confirm phone-based historical data merge' })
+  async confirmPhoneMerge(
+    @CurrentUser() requestUser: RequestUser,
+    @Body() dto: ConfirmPhoneMergeRequestDto,
+  ): Promise<any> {
+    try {
+      const payload = this.jwtAuthService.validatePhoneMergeToken(
+        dto.mergeToken,
+      );
+
+      if (payload.sourceUserId !== requestUser.userId) {
+        return ApiResponseDto.error(403, '合并确认已失效，请重新绑定手机号');
+      }
+
+      const mergedUser = await this.mergeCustomerUsers(
+        payload.sourceUserId,
+        payload.targetUserId,
+        payload.phone,
+      );
+      const token = this.jwtAuthService.generateTokenForUser(
+        mergedUser.id,
+        mergedUser.role,
+      );
+
+      return ApiResponseDto.success({
+        status: 'MERGED',
+        token,
+        userId: mergedUser.id,
+        role: mergedUser.role,
+        phoneBound: true,
+        user: this.buildUserSummary(mergedUser),
+      });
+    } catch (error: any) {
+      console.error('[Confirm Phone Merge] ERROR:', error);
+      return ApiResponseDto.error(500, error.message || '同步历史资料失败');
     }
   }
 
@@ -520,7 +656,10 @@ export class AuthController {
       }
 
       if (!user.password) {
-        return ApiResponseDto.error(400, '当前账号未设置密码，请先联系管理员初始化密码');
+        return ApiResponseDto.error(
+          400,
+          '当前账号未设置密码，请先联系管理员初始化密码',
+        );
       }
 
       const isCurrentPasswordValid = await bcrypt.compare(
@@ -546,5 +685,260 @@ export class AuthController {
     } catch (error: any) {
       return ApiResponseDto.error(500, error.message || '修改密码失败');
     }
+  }
+
+  private normalizeAppId(appId?: string | null): string | undefined {
+    const normalized = appId?.trim();
+    return normalized || undefined;
+  }
+
+  private isPrimaryApp(appId: string): boolean {
+    return appId === this.wechatService.getPrimaryAppId();
+  }
+
+  private async findUserByWechatIdentity(
+    appId: string,
+    openid: string,
+    unionid?: string,
+  ): Promise<User | null> {
+    const identity = await this.prisma.userWechatIdentity.findUnique({
+      where: {
+        appId_openid: {
+          appId,
+          openid,
+        },
+      },
+      include: { user: true },
+    });
+
+    if (identity?.user) {
+      return identity.user;
+    }
+
+    const legacyOpenidUser = await this.prisma.user.findUnique({
+      where: { wechatOpenid: openid },
+    });
+    if (legacyOpenidUser) {
+      return legacyOpenidUser;
+    }
+
+    if (unionid) {
+      return this.prisma.user.findUnique({
+        where: { wechatUnionid: unionid },
+      });
+    }
+
+    return null;
+  }
+
+  private async attachWechatIdentity(
+    user: User,
+    input: {
+      appId: string;
+      openid: string;
+      unionid?: string;
+      sessionKey?: string;
+    },
+  ): Promise<User> {
+    await this.prisma.userWechatIdentity.upsert({
+      where: {
+        appId_openid: {
+          appId: input.appId,
+          openid: input.openid,
+        },
+      },
+      create: {
+        userId: user.id,
+        appId: input.appId,
+        openid: input.openid,
+        unionid: input.unionid,
+        sessionKey: input.sessionKey,
+        lastLoginAt: new Date(),
+      },
+      update: {
+        userId: user.id,
+        unionid: input.unionid,
+        sessionKey: input.sessionKey,
+        lastLoginAt: new Date(),
+      },
+    });
+
+    const shouldRefreshLegacyOpenid =
+      this.isPrimaryApp(input.appId) || !user.wechatOpenid;
+    return this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        ...(shouldRefreshLegacyOpenid && { wechatOpenid: input.openid }),
+        ...(!user.wechatUnionid &&
+          input.unionid && { wechatUnionid: input.unionid }),
+        lastLoginAt: new Date(),
+      },
+    });
+  }
+
+  private userSummaryInclude() {
+    return {
+      _count: {
+        select: {
+          dogs: true,
+          orders: true,
+          addresses: true,
+          diySheets: true,
+          favoriteRecipes: true,
+          customRecipeOrders: true,
+        },
+      },
+    } as const;
+  }
+
+  private buildUserSummary(user: any) {
+    return {
+      id: user.id,
+      nickname: user.nickname || '微信用户',
+      avatarUrl: user.avatarUrl,
+      role: user.role,
+      phone: user.phone,
+      phoneBound: !!user.phone,
+      dogCount: user._count?.dogs || 0,
+      orderCount: user._count?.orders || 0,
+      addressCount: user._count?.addresses || 0,
+      diySheetCount: user._count?.diySheets || 0,
+      favoriteRecipeCount: user._count?.favoriteRecipes || 0,
+      customRecipeOrderCount: user._count?.customRecipeOrders || 0,
+    };
+  }
+
+  private buildBoundResponse(user: any) {
+    const token = this.jwtAuthService.generateTokenForUser(user.id, user.role);
+    return {
+      status: 'BOUND',
+      token,
+      userId: user.id,
+      role: user.role,
+      phoneBound: true,
+      user: this.buildUserSummary(user),
+    };
+  }
+
+  private maskPhone(phone: string): string {
+    if (phone.length !== 11) return phone;
+    return phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2');
+  }
+
+  private async mergeCustomerUsers(
+    sourceUserId: string,
+    targetUserId: string,
+    phone: string,
+  ): Promise<any> {
+    if (sourceUserId === targetUserId) {
+      return this.prisma.user.update({
+        where: { id: targetUserId },
+        data: { phone },
+        include: this.userSummaryInclude(),
+      });
+    }
+
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const [sourceUser, targetUser] = await Promise.all([
+        tx.user.findUnique({ where: { id: sourceUserId } }),
+        tx.user.findUnique({ where: { id: targetUserId } }),
+      ]);
+
+      if (!sourceUser || !targetUser) {
+        throw new Error('待同步账号不存在，请重新登录后再试');
+      }
+      if (sourceUser.role !== 'CUSTOMER' || targetUser.role !== 'CUSTOMER') {
+        throw new Error('员工或管理员账号不参与客户资料合并');
+      }
+
+      const targetFavorites = await tx.favoriteRecipe.findMany({
+        where: { userId: targetUserId },
+        select: { recipeId: true },
+      });
+      const targetFavoriteIds = targetFavorites.map((item) => item.recipeId);
+      if (targetFavoriteIds.length > 0) {
+        await tx.favoriteRecipe.deleteMany({
+          where: {
+            userId: sourceUserId,
+            recipeId: { in: targetFavoriteIds },
+          },
+        });
+      }
+
+      await Promise.all([
+        tx.dog.updateMany({
+          where: { ownerId: sourceUserId },
+          data: { ownerId: targetUserId },
+        }),
+        tx.address.updateMany({
+          where: { userId: sourceUserId },
+          data: { userId: targetUserId },
+        }),
+        tx.order.updateMany({
+          where: { customerId: sourceUserId },
+          data: { customerId: targetUserId },
+        }),
+        tx.orderPricingSnapshot.updateMany({
+          where: { customerId: sourceUserId },
+          data: { customerId: targetUserId },
+        }),
+        tx.dIYSheet.updateMany({
+          where: { userId: sourceUserId },
+          data: { userId: targetUserId },
+        }),
+        tx.customRecipeOrder.updateMany({
+          where: { customerId: sourceUserId },
+          data: { customerId: targetUserId },
+        }),
+        tx.favoriteRecipe.updateMany({
+          where: { userId: sourceUserId },
+          data: { userId: targetUserId },
+        }),
+        tx.recipeReview.updateMany({
+          where: { userId: sourceUserId },
+          data: { userId: targetUserId },
+        }),
+        tx.feedback.updateMany({
+          where: { userId: sourceUserId },
+          data: { userId: targetUserId },
+        }),
+        tx.feedbackReply.updateMany({
+          where: { userId: sourceUserId },
+          data: { userId: targetUserId },
+        }),
+        tx.feedbackReply.updateMany({
+          where: { replyToUserId: sourceUserId },
+          data: { replyToUserId: targetUserId },
+        }),
+        tx.userWechatIdentity.updateMany({
+          where: { userId: sourceUserId },
+          data: { userId: targetUserId },
+        }),
+      ]);
+
+      await tx.user.update({
+        where: { id: sourceUserId },
+        data: {
+          phone: null,
+          wechatOpenid: null,
+          wechatUnionid: null,
+          status: 'INACTIVE',
+          nickname: sourceUser.nickname
+            ? `${sourceUser.nickname}(已合并)`
+            : '已合并账号',
+        },
+      });
+
+      return tx.user.update({
+        where: { id: targetUserId },
+        data: {
+          phone,
+          wechatOpenid: sourceUser.wechatOpenid || targetUser.wechatOpenid,
+          wechatUnionid: targetUser.wechatUnionid || sourceUser.wechatUnionid,
+          lastLoginAt: new Date(),
+        },
+        include: this.userSummaryInclude(),
+      });
+    });
   }
 }

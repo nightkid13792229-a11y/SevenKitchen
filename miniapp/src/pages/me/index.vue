@@ -17,6 +17,20 @@
 
     <!-- 已登录状态 -->
     <view v-else class="logged-in">
+      <view
+        v-if="!userInfo.phone"
+        class="phone-bind-alert"
+        @tap="goToPhoneBind"
+      >
+        <view>
+          <text class="phone-bind-title">请尽快绑定手机号</text>
+          <text class="phone-bind-desc"
+            >绑定后可同步历史订单、宠物资料和售后记录。</text
+          >
+        </view>
+        <text class="phone-bind-action">去绑定</text>
+      </view>
+
       <!-- 用户头像区域 -->
       <view class="user-profile-section" @tap="editProfile">
         <image
@@ -31,41 +45,87 @@
       <view class="mall-section">
         <view class="mall-section-header">
           <text class="mall-section-title">我的商城</text>
-          <text class="mall-section-link" @tap="goToOrders('ALL')">全部订单</text>
+          <text class="mall-section-link" @tap="goToOrders('ALL')"
+            >全部订单</text
+          >
         </view>
         <view class="mall-shortcuts">
           <view class="mall-shortcut mall-shortcut-cart" @tap="goToCart">
-            <text v-if="cartCount > 0" class="shortcut-badge">{{ cartCount }}</text>
+            <text v-if="cartCount > 0" class="shortcut-badge">{{
+              cartCount
+            }}</text>
             <view class="shortcut-icon-shell">
-              <image class="shortcut-icon-image" src="/static/mall/cart.png" mode="aspectFit" />
+              <image
+                class="shortcut-icon-image"
+                src="/static/mall/cart.png"
+                mode="aspectFit"
+              />
             </view>
             <text class="shortcut-text">购物车</text>
           </view>
-          <view class="mall-shortcut mall-shortcut-payment" @tap="goToOrders('PENDING_PAYMENT')">
-            <text v-if="orderCounts.pendingPayment > 0" class="shortcut-badge">{{ orderCounts.pendingPayment }}</text>
+          <view
+            class="mall-shortcut mall-shortcut-payment"
+            @tap="goToOrders('PENDING_PAYMENT')"
+          >
+            <text
+              v-if="orderCounts.pendingPayment > 0"
+              class="shortcut-badge"
+              >{{ orderCounts.pendingPayment }}</text
+            >
             <view class="shortcut-icon-shell">
-              <image class="shortcut-icon-image" src="/static/mall/payment.png" mode="aspectFit" />
+              <image
+                class="shortcut-icon-image"
+                src="/static/mall/payment.png"
+                mode="aspectFit"
+              />
             </view>
             <text class="shortcut-text">待付款</text>
           </view>
-          <view class="mall-shortcut mall-shortcut-shipping" @tap="goToOrders('WAIT_RECEIVE')">
-            <text v-if="orderCounts.waitReceive > 0" class="shortcut-badge">{{ orderCounts.waitReceive }}</text>
+          <view
+            class="mall-shortcut mall-shortcut-shipping"
+            @tap="goToOrders('WAIT_RECEIVE')"
+          >
+            <text v-if="orderCounts.waitReceive > 0" class="shortcut-badge">{{
+              orderCounts.waitReceive
+            }}</text>
             <view class="shortcut-icon-shell">
-              <image class="shortcut-icon-image" src="/static/mall/shipping.png" mode="aspectFit" />
+              <image
+                class="shortcut-icon-image"
+                src="/static/mall/shipping.png"
+                mode="aspectFit"
+              />
             </view>
             <text class="shortcut-text">待收货</text>
           </view>
-          <view class="mall-shortcut mall-shortcut-received" @tap="goToOrders('RECEIVED')">
-            <text v-if="orderCounts.received > 0" class="shortcut-badge">{{ orderCounts.received }}</text>
+          <view
+            class="mall-shortcut mall-shortcut-received"
+            @tap="goToOrders('RECEIVED')"
+          >
+            <text v-if="orderCounts.received > 0" class="shortcut-badge">{{
+              orderCounts.received
+            }}</text>
             <view class="shortcut-icon-shell">
-              <image class="shortcut-icon-image" src="/static/mall/received.png" mode="aspectFit" />
+              <image
+                class="shortcut-icon-image"
+                src="/static/mall/received.png"
+                mode="aspectFit"
+              />
             </view>
             <text class="shortcut-text">已收货</text>
           </view>
-          <view class="mall-shortcut mall-shortcut-aftersale" @tap="goToOrders('AFTERSALE')">
-            <text v-if="orderCounts.aftersale > 0" class="shortcut-badge">{{ orderCounts.aftersale }}</text>
+          <view
+            class="mall-shortcut mall-shortcut-aftersale"
+            @tap="goToOrders('AFTERSALE')"
+          >
+            <text v-if="orderCounts.aftersale > 0" class="shortcut-badge">{{
+              orderCounts.aftersale
+            }}</text>
             <view class="shortcut-icon-shell">
-              <image class="shortcut-icon-image" src="/static/mall/aftersale.png" mode="aspectFit" />
+              <image
+                class="shortcut-icon-image"
+                src="/static/mall/aftersale.png"
+                mode="aspectFit"
+              />
             </view>
             <text class="shortcut-text">售后中</text>
           </view>
@@ -109,12 +169,16 @@
 
         <view class="function-item" @tap="goToDiySheetList">
           <text class="function-text">我的制作单</text>
-          <text class="function-count">({{ userInfo.diySheetCount || 0 }}张)</text>
+          <text class="function-count"
+            >({{ userInfo.diySheetCount || 0 }}张)</text
+          >
         </view>
 
         <view class="function-item" @tap="goToFavoriteRecipes">
           <text class="function-text">收藏的食谱</text>
-          <text class="function-count">({{ userInfo.favoriteRecipeCount || 0 }}个)</text>
+          <text class="function-count"
+            >({{ userInfo.favoriteRecipeCount || 0 }}个)</text
+          >
         </view>
       </view>
 
@@ -132,28 +196,29 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
-import { getToken, clearToken, request } from '../../utils/api'
-import { resolveUserAvatarSrc } from '../../utils/user-profile'
-import { refreshCurrentTabBar } from '../../utils/tabbar'
-import { getCartItems } from '../../utils/cart'
+import { ref, computed } from 'vue';
+import { onShow } from '@dcloudio/uni-app';
+import { getToken, clearToken, request } from '../../utils/api';
+import { resolveUserAvatarSrc } from '../../utils/user-profile';
+import { refreshCurrentTabBar } from '../../utils/tabbar';
+import { getCartItems } from '../../utils/cart';
+import { ensurePhoneBound } from '../../utils/account';
 
 interface UserInfo {
-  id: string
-  phone?: string
-  nickname?: string
-  avatarUrl?: string
-  role: string
-  dogCount: number
-  orderCount: number
-  addressCount: number
-  diySheetCount: number
-  favoriteRecipeCount: number
+  id: string;
+  phone?: string;
+  nickname?: string;
+  avatarUrl?: string;
+  role: string;
+  dogCount: number;
+  orderCount: number;
+  addressCount: number;
+  diySheetCount: number;
+  favoriteRecipeCount: number;
 }
 
-const isLoggedIn = ref(false)
-const isLoading = ref(false)
+const isLoggedIn = ref(false);
+const isLoading = ref(false);
 const userInfo = ref<UserInfo>({
   id: '',
   role: 'CUSTOMER',
@@ -161,53 +226,53 @@ const userInfo = ref<UserInfo>({
   orderCount: 0,
   addressCount: 0,
   diySheetCount: 0,
-  favoriteRecipeCount: 0
-})
+  favoriteRecipeCount: 0,
+});
 
 const orderCounts = ref({
   pendingPayment: 0,
   waitReceive: 0,
   received: 0,
   aftersale: 0,
-})
-const cartCount = ref(0)
+});
+const cartCount = ref(0);
 
 // 标志位：防止更新后立即重新加载
-let isJustUpdated = false
-let updateTimer: NodeJS.Timeout | null = null
+let isJustUpdated = false;
+let updateTimer: NodeJS.Timeout | null = null;
 
 // 加载用户信息
 async function loadUserInfo() {
   // 如果刚刚更新过，跳过这次加载
   if (isJustUpdated) {
-    return
+    return;
   }
 
-  isLoading.value = true
+  isLoading.value = true;
   try {
     const res = await request({
       url: '/users/me',
-      method: 'GET'
-    })
+      method: 'GET',
+    });
 
-    console.log('[Me Page] API Response:', res)
-    console.log('[Me Page] res.data:', res.data)
+    console.log('[Me Page] API Response:', res);
+    console.log('[Me Page] res.data:', res.data);
 
     if (res.code === 0 && res.data) {
-      userInfo.value = res.data
-      console.log('[Me Page] userInfo.value after update:', userInfo.value)
-      console.log('[Me Page] nickname:', userInfo.value.nickname)
-      console.log('[Me Page] avatarUrl:', userInfo.value.avatarUrl)
-      isLoggedIn.value = true
+      userInfo.value = res.data;
+      console.log('[Me Page] userInfo.value after update:', userInfo.value);
+      console.log('[Me Page] nickname:', userInfo.value.nickname);
+      console.log('[Me Page] avatarUrl:', userInfo.value.avatarUrl);
+      isLoggedIn.value = true;
     } else {
       // 未登录或加载失败
-      isLoggedIn.value = false
+      isLoggedIn.value = false;
     }
   } catch (error) {
-    console.error('加载用户信息失败:', error)
-    isLoggedIn.value = false
+    console.error('加载用户信息失败:', error);
+    isLoggedIn.value = false;
   } finally {
-    isLoading.value = false
+    isLoading.value = false;
   }
 }
 
@@ -218,69 +283,78 @@ async function loadOrderCounts() {
       method: 'GET',
       quiet: true,
       suppressErrorToast: true,
-    } as any)
+    } as any);
 
-    const orders = Array.isArray(res.data) ? res.data : []
+    const orders = Array.isArray(res.data) ? res.data : [];
     orderCounts.value = {
-      pendingPayment: orders.filter((order: any) => order.status === 'PENDING_PAYMENT').length,
-      waitReceive: orders.filter((order: any) => order.status === 'SHIPPED').length,
-      received: orders.filter((order: any) => order.status === 'COMPLETED').length,
-      aftersale: orders.filter((order: any) => order.status === 'AFTERSALE').length,
-    }
+      pendingPayment: orders.filter(
+        (order: any) => order.status === 'PENDING_PAYMENT',
+      ).length,
+      waitReceive: orders.filter((order: any) => order.status === 'SHIPPED')
+        .length,
+      received: orders.filter((order: any) => order.status === 'COMPLETED')
+        .length,
+      aftersale: orders.filter((order: any) => order.status === 'AFTERSALE')
+        .length,
+    };
   } catch (error) {
-    console.warn('[Me Page] Load order counts failed:', error)
+    console.warn('[Me Page] Load order counts failed:', error);
   }
 }
 
 function loadCartCount() {
-  cartCount.value = getCartItems().length
+  cartCount.value = getCartItems().length;
 }
 
 // 跳转登录页
 function goToLogin() {
   uni.navigateTo({
-    url: '/pages/login/index'
-  })
+    url: '/pages/login/index',
+  });
 }
 
 // 跳转狗狗列表
-function goToDogList() {
+async function goToDogList() {
+  if (!(await ensurePhoneBound())) return;
   uni.navigateTo({
-    url: '/pages/dog-profile-list/index'
-  })
+    url: '/pages/dog-profile-list/index',
+  });
 }
 
 // 跳转我的制作单列表
-function goToDiySheetList() {
+async function goToDiySheetList() {
+  if (!(await ensurePhoneBound())) return;
   uni.navigateTo({
-    url: '/pages/diy-sheet-list/index'
-  })
+    url: '/pages/diy-sheet-list/index',
+  });
 }
 
 // 跳转收藏的食谱列表
-function goToFavoriteRecipes() {
+async function goToFavoriteRecipes() {
+  if (!(await ensurePhoneBound())) return;
   uni.navigateTo({
-    url: '/pages/favorite-recipes/index'
-  })
+    url: '/pages/favorite-recipes/index',
+  });
 }
 
 function goToCart() {
   uni.navigateTo({
     url: '/pages/cart/index',
-  })
+  });
 }
 
-function goToOrders(status = 'ALL') {
+async function goToOrders(status = 'ALL') {
+  if (!(await ensurePhoneBound())) return;
   uni.navigateTo({
     url: `/pages/orders-list/index?status=${encodeURIComponent(status)}`,
-  })
+  });
 }
 
 // 编辑资料（头像和昵称）
 function editProfile() {
   uni.navigateTo({
-    url: '/pages/profile-setup/index'
-  })
+    url: '/pages/profile-setup/index',
+  });
 }
 
 // 编辑昵称
@@ -291,92 +365,78 @@ function editNickname() {
     placeholderText: userInfo.value.nickname || '请输入昵称',
     success: async (res) => {
       if (res.confirm && res.content) {
-        const nickname = res.content.trim()
+        const nickname = res.content.trim();
         if (nickname.length < 1 || nickname.length > 20) {
           uni.showToast({
             title: '昵称长度必须在1-20个字符之间',
-            icon: 'none'
-          })
-          return
+            icon: 'none',
+          });
+          return;
         }
 
-        await updateUserInfo({ nickname })
+        await updateUserInfo({ nickname });
       }
-    }
-  })
+    },
+  });
 }
 
 // 编辑手机号
 function editPhone() {
-  uni.showModal({
-    title: '修改手机号',
-    editable: true,
-    placeholderText: userInfo.value.phone || '请输入手机号',
-    success: async (res) => {
-      if (res.confirm && res.content) {
-        const phone = res.content.trim()
-        const phoneRegex = /^1[3-9]\d{9}$/
+  goToPhoneBind();
+}
 
-        if (!phoneRegex.test(phone)) {
-          uni.showToast({
-            title: '手机号格式不正确',
-            icon: 'none'
-          })
-          return
-        }
-
-        await updateUserInfo({ phone })
-      }
-    }
-  })
+function goToPhoneBind() {
+  uni.navigateTo({
+    url: '/pages/phone-bind/index?redirect=%2Fpages%2Fme%2Findex',
+  });
 }
 
 // 更新用户信息
 async function updateUserInfo(data: { nickname?: string; phone?: string }) {
-  isLoading.value = true
+  isLoading.value = true;
   try {
     const res = await request({
       url: '/users/me',
       method: 'PUT',
-      data
-    })
+      data,
+    });
 
     if (res.code === 0) {
       // 使用后端返回的完整用户信息更新本地状态
-      userInfo.value = res.data
+      userInfo.value = res.data;
 
       // 设置标志位，防止 onShow 触发的 loadUserInfo 覆盖刚更新的数据
-      isJustUpdated = true
+      isJustUpdated = true;
 
       // 清除之前的定时器
       if (updateTimer) {
-        clearTimeout(updateTimer)
+        clearTimeout(updateTimer);
       }
 
       // 2秒后重置标志位，允许正常加载
       updateTimer = setTimeout(() => {
-        isJustUpdated = false
-        updateTimer = null
-      }, 2000)
+        isJustUpdated = false;
+        updateTimer = null;
+      }, 2000);
 
       uni.showToast({
         title: '更新成功',
-        icon: 'success'
-      })
+        icon: 'success',
+      });
     } else {
       uni.showToast({
         title: res.message || '更新失败',
-        icon: 'none'
-      })
+        icon: 'none',
+      });
     }
   } catch (error) {
-    console.error('更新用户信息失败:', error)
+    console.error('更新用户信息失败:', error);
     uni.showToast({
       title: '网络错误',
-      icon: 'none'
-    })
+      icon: 'none',
+    });
   } finally {
-    isLoading.value = false
+    isLoading.value = false;
   }
 }
 
@@ -387,8 +447,8 @@ function handleLogout() {
     content: '确定要退出登录吗？',
     success: (res) => {
       if (res.confirm) {
-        clearToken()
-        isLoggedIn.value = false
+        clearToken();
+        isLoggedIn.value = false;
         userInfo.value = {
           id: '',
           role: 'CUSTOMER',
@@ -396,38 +456,38 @@ function handleLogout() {
           orderCount: 0,
           addressCount: 0,
           diySheetCount: 0,
-          favoriteRecipeCount: 0
-        }
+          favoriteRecipeCount: 0,
+        };
         uni.showToast({
           title: '已退出登录',
-          icon: 'success'
-        })
+          icon: 'success',
+        });
 
         // 退出登录后切换到首页tab
         setTimeout(() => {
           uni.switchTab({
-            url: '/pages/home/index'
-          })
-        }, 500)
+            url: '/pages/home/index',
+          });
+        }, 500);
       }
-    }
-  })
+    },
+  });
 }
 
 onShow(() => {
-  refreshCurrentTabBar()
+  refreshCurrentTabBar();
 
   // 检查登录状态（每次显示页面时都会执行）
-  const token = getToken()
+  const token = getToken();
   if (token) {
-    loadUserInfo()
-    loadOrderCounts()
-    loadCartCount()
+    loadUserInfo();
+    loadOrderCounts();
+    loadCartCount();
   } else {
-    isLoggedIn.value = false
-    cartCount.value = 0
+    isLoggedIn.value = false;
+    cartCount.value = 0;
   }
-})
+});
 </script>
 
 <style scoped>
@@ -435,6 +495,43 @@ onShow(() => {
   min-height: 100vh;
   background: #f5f5f5;
   padding-bottom: 120rpx; /* 避开底部导航栏 */
+}
+
+.phone-bind-alert {
+  margin: 24rpx;
+  padding: 24rpx;
+  border-radius: 12rpx;
+  background: #fff7e6;
+  border: 1rpx solid #ffd591;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.phone-bind-title,
+.phone-bind-desc {
+  display: block;
+}
+
+.phone-bind-title {
+  color: #ad6800;
+  font-size: 30rpx;
+  font-weight: 700;
+  margin-bottom: 8rpx;
+}
+
+.phone-bind-desc {
+  color: #8c5a18;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.phone-bind-action {
+  flex-shrink: 0;
+  color: #1677ff;
+  font-size: 26rpx;
+  font-weight: 700;
 }
 
 /* 未登录状态 */

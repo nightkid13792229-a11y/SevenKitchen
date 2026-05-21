@@ -12,6 +12,13 @@ export interface JwtPayload {
   role: string;
 }
 
+export interface PhoneMergePayload {
+  purpose: 'PHONE_MERGE';
+  sourceUserId: string;
+  targetUserId: string;
+  phone: string;
+}
+
 @Injectable()
 export class JwtAuthService {
   constructor(private readonly jwtService: NestJwtService) {}
@@ -74,6 +81,42 @@ export class JwtAuthService {
         throw error;
       }
       throw new UnauthorizedException('Invalid token');
+    }
+  }
+
+  generatePhoneMergeToken(input: Omit<PhoneMergePayload, 'purpose'>): string {
+    const payload: PhoneMergePayload = {
+      purpose: 'PHONE_MERGE',
+      ...input,
+    };
+
+    return this.jwtService.sign(payload, {
+      secret: this.getSecret(),
+      expiresIn: '15m',
+    } as any);
+  }
+
+  validatePhoneMergeToken(token: string): PhoneMergePayload {
+    try {
+      const payload = this.jwtService.verify<PhoneMergePayload>(token, {
+        secret: this.getSecret(),
+      });
+
+      if (
+        payload.purpose !== 'PHONE_MERGE' ||
+        !payload.sourceUserId ||
+        !payload.targetUserId ||
+        !payload.phone
+      ) {
+        throw new UnauthorizedException('Invalid phone merge token');
+      }
+
+      return payload;
+    } catch (error) {
+      if (error instanceof UnauthorizedException) {
+        throw error;
+      }
+      throw new UnauthorizedException('Invalid phone merge token');
     }
   }
 

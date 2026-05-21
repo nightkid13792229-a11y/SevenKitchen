@@ -45,10 +45,38 @@ export class WechatLoginRequestDto {
   @IsString()
   code!: string;
 
+  @ApiProperty({
+    description:
+      'Mini Program AppID, used when multiple AppIDs share this backend',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  appId?: string;
+
   @ApiProperty({ description: 'User info from WeChat', required: false })
   @IsOptional()
   @IsObject()
   userInfo?: WechatUserInfo;
+}
+
+export class BindWechatPhoneRequestDto {
+  @ApiProperty({ description: 'Code from wx.getPhoneNumber' })
+  @IsString()
+  code!: string;
+
+  @ApiProperty({ description: 'Current Mini Program AppID', required: false })
+  @IsString()
+  @IsOptional()
+  appId?: string;
+}
+
+export class ConfirmPhoneMergeRequestDto {
+  @ApiProperty({
+    description: 'Merge confirmation token returned by bind-phone',
+  })
+  @IsString()
+  mergeToken!: string;
 }
 
 export class WechatLoginResponseDto {

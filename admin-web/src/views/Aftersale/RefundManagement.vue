@@ -133,7 +133,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { orderApi } from '@/api/orders'
 import type { Order } from '@/types/order'
 
@@ -209,6 +209,13 @@ async function submitReview() {
     ElMessage.warning('请填写驳回原因')
     return
   }
+  if (reviewMode.value === 'approve') {
+    try {
+      await confirmRefundIrreversible(currentOrder.value)
+    } catch {
+      return
+    }
+  }
   submitting.value = true
   try {
     await orderApi.resolveAftersale(currentOrder.value.id, {
@@ -222,6 +229,25 @@ async function submitReview() {
   } finally {
     submitting.value = false
   }
+}
+
+async function confirmRefundIrreversible(order: RefundOrder) {
+  await ElMessageBox.confirm(
+    [
+      '该退款操作不可撤销。',
+      '确认后系统将直接发起微信原路退款，钱款会退回客户原支付账户。',
+      `订单：${order.id}`,
+      `客户：${getCustomerName(order)} / ${getCustomerPhone(order)}`,
+      `金额：¥${formatAmount(order.amountTotal)}`,
+    ].join('\n'),
+    '二次确认退款',
+    {
+      confirmButtonText: '确认退款',
+      cancelButtonText: '再想想',
+      type: 'warning',
+      distinguishCancelAndClose: true
+    }
+  )
 }
 
 function getCustomerName(order?: RefundOrder | null): string {

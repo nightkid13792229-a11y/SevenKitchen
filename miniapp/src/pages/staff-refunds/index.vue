@@ -197,6 +197,25 @@ function approveRefund(order: RefundOrder) {
     cancelText: '取消',
     success: async (res) => {
       if (!res.confirm) return
+      confirmIrreversibleRefund(order)
+    },
+  })
+}
+
+function confirmIrreversibleRefund(order: RefundOrder) {
+  uni.showModal({
+    title: '二次确认',
+    content: [
+      '该退款操作不可撤销。',
+      '确认后将直接通过微信原路退回钱款。',
+      `订单：#${shortOrderId(order.id)}`,
+      `客户：${getCustomerText(order)}`,
+      `金额：¥${formatAmount(order.amountTotal || order.totalAmount)}`,
+    ].join('\n'),
+    confirmText: '确认退款',
+    cancelText: '再想想',
+    success: async (res) => {
+      if (!res.confirm) return
       await resolveRefund(order, 'refunded')
     },
   })

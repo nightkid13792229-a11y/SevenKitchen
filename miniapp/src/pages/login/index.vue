@@ -25,13 +25,13 @@
       </view>
 
       <button
-        class="wechat-login-btn"
+        class="primary-login-btn"
         :class="{ 'btn-disabled': !isAgreed }"
         @tap="handleWechatLogin"
         :disabled="loading || !isAgreed"
         @agreeprivacyauthorization="handlePrivacyAgree"
       >
-        <text v-if="!loading">立即登录</text>
+        <text v-if="!loading">手机号快捷登录</text>
         <text v-else>登录中...</text>
       </button>
 
@@ -96,7 +96,7 @@ const handlePrivacyAgree = () => {
 const getLoginErrorMessage = (error: any) => {
   const message = error?.message || "";
 
-  if (message.includes("Failed to authenticate with WeChat")) {
+  if (message.includes("authenticate")) {
     return "登录失败，请稍后重试";
   }
 
@@ -354,7 +354,7 @@ const handleWechatLogin = async () => {
   text-decoration: underline;
 }
 
-.wechat-login-btn {
+.primary-login-btn {
   width: 100%;
   height: 96rpx;
   background-color: #07c160;
@@ -368,7 +368,7 @@ const handleWechatLogin = async () => {
   border: none;
 }
 
-.wechat-login-btn:disabled {
+.primary-login-btn:disabled {
   opacity: 0.7;
 }
 

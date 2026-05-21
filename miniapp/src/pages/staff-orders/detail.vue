@@ -108,10 +108,12 @@
         <view class="address-card">
           <template v-if="order.address">
             <view class="address-header">
-            <text class="recipient-name">{{ order.address.recipientName }}</text>
+              <text class="recipient-name">{{ order.address.recipientName }}</text>
               <text class="recipient-phone">{{ formatPhone(getOrderAddressPhone(order.address)) }}</text>
             </view>
-            <text class="address-text">{{ getOrderAddressRegionText(order.address) }} {{ getOrderAddressDetail(order.address) }}</text>
+            <text class="address-text"
+              >{{ getOrderAddressRegionText(order.address) }} {{ getOrderAddressDetail(order.address) }}</text
+            >
           </template>
           <view v-else class="address-empty">
             <text class="address-empty-text">暂未录入收货地址</text>
@@ -120,14 +122,8 @@
             <button class="address-action-btn secondary" @tap="openAddressSelect">
               {{ order.address ? '更换地址' : '选择已有地址' }}
             </button>
-            <button class="address-action-btn primary" @tap="openCreateAddressForm">
-              录入新地址
-            </button>
-            <button
-              v-if="order.address"
-              class="address-action-btn secondary"
-              @tap="openEditAddressForm"
-            >
+            <button class="address-action-btn primary" @tap="openCreateAddressForm">录入新地址</button>
+            <button v-if="order.address" class="address-action-btn secondary" @tap="openEditAddressForm">
               编辑地址
             </button>
           </view>
@@ -156,27 +152,9 @@
 
       <!-- 操作按钮 -->
       <view class="action-section">
-        <button
-          v-if="canConfirmPayment"
-          class="action-btn primary"
-          @tap="confirmPayment"
-        >
-          确认收款
-        </button>
-        <button
-          v-if="canStartProduction"
-          class="action-btn orange"
-          @tap="startProduction"
-        >
-          开始制作
-        </button>
-        <button
-          v-if="canShip"
-          class="action-btn cyan"
-          @tap="shipOrder"
-        >
-          发货
-        </button>
+        <button v-if="canConfirmPayment" class="action-btn primary" @tap="confirmPayment">确认收款</button>
+        <button v-if="canStartProduction" class="action-btn orange" @tap="startProduction">开始制作</button>
+        <button v-if="canShip" class="action-btn cyan" @tap="shipOrder">发货</button>
       </view>
     </view>
 
@@ -249,11 +227,7 @@
           <text class="form-label">设为默认地址</text>
           <switch :checked="addressForm.isDefault" @change="onAddressDefaultChange" />
         </view>
-        <button
-          class="address-save-btn"
-          :disabled="savingAddress"
-          @tap="saveAddressForm"
-        >
+        <button class="address-save-btn" :disabled="savingAddress" @tap="saveAddressForm">
           {{ savingAddress ? '保存中...' : '保存地址' }}
         </button>
       </view>
@@ -362,7 +336,7 @@ const statusGradient = computed(() => {
     SHIPPED: 'linear-gradient(135deg, #13c2c2 0%, #08979c 100%)',
     COMPLETED: 'linear-gradient(135deg, #52c41a 0%, #389e0d 100%)',
     CANCELLED: 'linear-gradient(135deg, #999 0%, #666 100%)',
-    AFTERSALE: 'linear-gradient(135deg, #f5222d 0%, #cf1322 100%)'
+    AFTERSALE: 'linear-gradient(135deg, #f5222d 0%, #cf1322 100%)',
   }
   return colorMap[order.value.status] || '#999'
 })
@@ -386,9 +360,7 @@ const canEditAddress = computed(() => {
 })
 
 const addressRegionText = computed(() => {
-  return [addressForm.value.province, addressForm.value.city, addressForm.value.district]
-    .filter(Boolean)
-    .join(' ')
+  return [addressForm.value.province, addressForm.value.city, addressForm.value.district].filter(Boolean).join(' ')
 })
 
 // 加载订单详情
@@ -401,7 +373,7 @@ async function loadOrderDetail() {
   try {
     const response = await request({
       url: `/admin/orders/${orderId.value}`,
-      method: 'GET'
+      method: 'GET',
     })
 
     if (response.code === 0 && response.data) {
@@ -411,7 +383,7 @@ async function loadOrderDetail() {
     console.error('[OrderDetail] Load error:', error)
     uni.showToast({
       title: '加载失败',
-      icon: 'none'
+      icon: 'none',
     })
   } finally {
     loading.value = false
@@ -423,6 +395,35 @@ async function loadOrderDetail() {
 function formatAmount(amount?: number): string {
   if (!amount) return '0.00'
   return amount.toFixed(2)
+}
+
+function shortOrderId(orderId: string): string {
+  return orderId ? orderId.slice(-8).toUpperCase() : '-'
+}
+
+function getOrderConfirmContent(currentOrder: OrderDetail): string {
+  return [
+    '确认收到该订单款项？',
+    `订单：#${shortOrderId(currentOrder.id)}`,
+    `客户：${getOrderCustomerText(currentOrder)}`,
+    `商品：${getOrderProductText(currentOrder)}`,
+    `金额：¥${formatAmount(currentOrder.totalAmount || currentOrder.amountTotal)}`,
+  ].join('\n')
+}
+
+function getOrderCustomerText(currentOrder: OrderDetail): string {
+  const name = currentOrder.customerName || currentOrder.address?.recipientName || '未记录客户'
+  const phone = currentOrder.customerPhone || currentOrder.address?.phone || currentOrder.address?.recipientPhone || ''
+  return phone ? `${name} ${formatPhone(phone)}` : name
+}
+
+function getOrderProductText(currentOrder: OrderDetail): string {
+  const recipeName = currentOrder.firstItem?.recipeSnapshot?.name || '未记录商品'
+  const dogName = currentOrder.firstItem?.dog?.name ? `（${currentOrder.firstItem.dog.name}）` : ''
+  const packageCount = currentOrder.firstItem?.packageCount
+  const packageSpec = currentOrder.firstItem?.packageSpecG
+  const spec = packageCount && packageSpec ? ` ${packageCount}餐/${packageSpec}g` : ''
+  return `${recipeName}${dogName}${spec}`
 }
 
 function formatDateTime(dateStr?: string): string {
@@ -463,7 +464,7 @@ function getStatusText(status: string): string {
     SHIPPED: '已发货',
     COMPLETED: '已完成',
     CANCELLED: '已取消',
-    AFTERSALE: '售后中'
+    AFTERSALE: '售后中',
   }
   return statusMap[status] || status
 }
@@ -479,7 +480,7 @@ function getStatusColor(status: string): string {
     SHIPPED: '#13c2c2',
     COMPLETED: '#52c41a',
     CANCELLED: '#999',
-    AFTERSALE: '#f5222d'
+    AFTERSALE: '#f5222d',
   }
   return colorMap[status] || '#999'
 }
@@ -488,9 +489,9 @@ function getPaymentMethod(method?: string): string {
   const methodMap: Record<string, string> = {
     WECHAT: '微信支付',
     ALIPAY: '支付宝',
-    OFFLINE: '线下支付'
+    OFFLINE: '线下支付',
   }
-  return method ? (methodMap[method] || method) : '未支付'
+  return method ? methodMap[method] || method : '未支付'
 }
 
 // 操作
@@ -501,9 +502,9 @@ function copyPhone() {
     success: () => {
       uni.showToast({
         title: '已复制',
-        icon: 'success'
+        icon: 'success',
       })
-    }
+    },
   })
 }
 
@@ -512,21 +513,21 @@ async function confirmPayment() {
 
   uni.showModal({
     title: '确认收款',
-    content: `确认收到订单 #${order.value.id.slice(-8)} 的款项？`,
+    content: getOrderConfirmContent(order.value),
     success: async (res) => {
       if (res.confirm) {
         try {
           await confirmOfflinePayment(order.value.id, order.value.totalAmount || order.value.amountTotal || 0)
           uni.showToast({
             title: '收款成功',
-            icon: 'success'
+            icon: 'success',
           })
           loadOrderDetail()
         } catch (error) {
           console.error('[OrderDetail] Confirm payment error:', error)
         }
       }
-    }
+    },
   })
 }
 
@@ -541,25 +542,25 @@ async function startProduction() {
         try {
           await request({
             url: `/admin/orders/${order.value.id}/start-production`,
-            method: 'POST'
+            method: 'POST',
           })
           uni.showToast({
             title: '已开始制作',
-            icon: 'success'
+            icon: 'success',
           })
           loadOrderDetail()
         } catch (error) {
           console.error('[OrderDetail] Start production error:', error)
         }
       }
-    }
+    },
   })
 }
 
 async function shipOrder() {
   uni.showToast({
     title: '请在电脑端操作发货',
-    icon: 'none'
+    icon: 'none',
   })
 }
 
@@ -648,11 +649,9 @@ function openEditAddressForm() {
     detail: getOrderAddressDetail(address),
     isDefault: false,
   }
-  addressRegionValue.value = [
-    addressForm.value.province,
-    addressForm.value.city,
-    addressForm.value.district,
-  ].filter(Boolean)
+  addressRegionValue.value = [addressForm.value.province, addressForm.value.city, addressForm.value.district].filter(
+    Boolean,
+  )
   addressFormVisible.value = true
 }
 

@@ -27,19 +27,19 @@
     </view>
 
     <view v-else class="refund-list">
-      <view
-        v-for="order in refundOrders"
-        :key="order.id"
-        class="refund-card"
-      >
+      <view v-for="order in refundOrders" :key="order.id" class="refund-card">
         <view class="card-header">
           <view class="order-main">
-            <text class="order-id">#{{ shortOrderId(order.id) }}</text>
+            <text class="order-id">订单 #{{ shortOrderId(order.id) }}</text>
             <text class="order-time">{{ formatDateTime(order.aftersaleSince || order.createdAt) }}</text>
           </view>
           <text class="status-pill">{{ getStatusText(order.status) }}</text>
         </view>
 
+        <view class="info-row">
+          <text class="info-label">订单内容</text>
+          <text class="info-value">{{ getOrderItemsText(order) }}</text>
+        </view>
         <view class="amount-row">
           <text class="amount-label">订单金额</text>
           <text class="amount-value">¥{{ formatAmount(order.amountTotal || order.totalAmount) }}</text>
@@ -95,23 +95,37 @@ interface RefundOrder {
   aftersaleReason?: string | null
   aftersaleSince?: string | null
   aftersalePhotos?: string[]
+  items?: RefundOrderItem[]
+  firstItem?: RefundOrderItem | null
   customer?: {
     nickname?: string | null
     phone?: string | null
   } | null
+  customerName?: string | null
+  customerPhone?: string | null
   address?: {
     recipientName?: string
     phone?: string
   } | null
 }
 
+interface RefundOrderItem {
+  recipeSnapshot?: {
+    name?: string | null
+  } | null
+  dog?: {
+    name?: string | null
+  } | null
+  packageCount?: number | string | null
+  packageSpecG?: number | string | null
+  quantityG?: number | string | null
+}
+
 const loading = ref(false)
 const refundOrders = ref<RefundOrder[]>([])
 
 const totalRefundAmount = computed(() => {
-  return refundOrders.value
-    .reduce((sum, order) => sum + getAmount(order), 0)
-    .toFixed(2)
+  return refundOrders.value.reduce((sum, order) => sum + getAmount(order), 0).toFixed(2)
 })
 
 onShow(() => {
@@ -171,7 +185,7 @@ async function loadRefunds() {
 function approveRefund(order: RefundOrder) {
   uni.showModal({
     title: '审核通过',
-    content: `确认通过订单 #${shortOrderId(order.id)} 的退款申请？`,
+    content: buildRefundReviewContent(order, 'approve'),
     confirmText: '通过',
     cancelText: '取消',
     success: async (res) => {
@@ -184,7 +198,7 @@ function approveRefund(order: RefundOrder) {
 function rejectRefund(order: RefundOrder) {
   uni.showModal({
     title: '驳回退款',
-    content: `确认驳回订单 #${shortOrderId(order.id)} 的退款申请？订单将回到申请售后前的状态。`,
+    content: buildRefundReviewContent(order, 'reject'),
     confirmText: '驳回',
     cancelText: '取消',
     success: async (res) => {
@@ -259,6 +273,22 @@ function shortOrderId(orderId: string): string {
   return orderId ? orderId.slice(-8).toUpperCase() : '-'
 }
 
+function buildRefundReviewContent(order: RefundOrder, action: 'approve' | 'reject'): string {
+  const title = action === 'approve' ? '确认通过该退款申请？' : '确认驳回该退款申请？'
+  const lines = [
+    title,
+    `订单：#${shortOrderId(order.id)}`,
+    `客户：${getCustomerText(order)}`,
+    `商品：${getOrderItemsText(order)}`,
+    `金额：¥${formatAmount(order.amountTotal || order.totalAmount)}`,
+    `理由：${order.aftersaleReason || '未填写'}`,
+  ]
+  if (action === 'reject') {
+    lines.push('处理后订单会回到申请售后前的状态。')
+  }
+  return lines.join('\n')
+}
+
 function getStatusText(status?: string): string {
   const statusMap: Record<string, string> = {
     AFTERSALE: '退款审核中',
@@ -278,9 +308,25 @@ function getPaymentText(paymentMethod?: string | null): string {
 }
 
 function getCustomerText(order: RefundOrder): string {
-  const name = order.customer?.nickname || order.address?.recipientName || '未记录客户'
-  const phone = order.customer?.phone || order.address?.phone || ''
+  const name = order.customer?.nickname || order.customerName || order.address?.recipientName || '未记录客户'
+  const phone = order.customer?.phone || order.customerPhone || order.address?.phone || ''
   return phone ? `${name} ${phone}` : name
+}
+
+function getOrderItemsText(order: RefundOrder): string {
+  const items = Array.isArray(order.items) ? order.items : []
+  const item = order.firstItem || items[0]
+  if (!item) return '未记录商品'
+
+  const recipeName = item.recipeSnapshot?.name || '未命名食谱'
+  const dogName = item.dog?.name ? `（${item.dog.name}）` : ''
+  const packageCount = item.packageCount ? `${item.packageCount}份` : ''
+  const packageSpec = item.packageSpecG ? `${item.packageSpecG}g` : ''
+  const quantity = !packageCount && item.quantityG ? `${item.quantityG}g` : ''
+  const spec = [packageCount, packageSpec || quantity].filter(Boolean).join('/')
+  const more = items.length > 1 ? ` 等${items.length}项` : ''
+
+  return `${recipeName}${dogName}${spec ? ` ${spec}` : ''}${more}`
 }
 
 function previewPhotos(photos: string[], current: number) {

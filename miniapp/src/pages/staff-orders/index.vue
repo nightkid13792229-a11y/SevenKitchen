@@ -17,7 +17,7 @@
     </view>
 
     <!-- 占位元素，防止内容被header遮挡 -->
-    <view class="header-placeholder" :style="{ height: (statusBarHeight + 88) + 'px' }"></view>
+    <view class="header-placeholder" :style="{ height: statusBarHeight + 88 + 'px' }"></view>
 
     <!-- 今日统计卡片 -->
     <view class="stats-card">
@@ -62,25 +62,14 @@
           confirm-type="search"
           @confirm="performSearch"
         />
-        <text
-          v-if="searchKeyword"
-          class="quick-search-clear"
-          @tap.stop="clearSearchKeyword"
-        >
-          ×
-        </text>
+        <text v-if="searchKeyword" class="quick-search-clear" @tap.stop="clearSearchKeyword"> × </text>
       </view>
       <button class="quick-search-btn" @tap="performSearch">搜索</button>
     </view>
 
     <!-- 订单列表 -->
     <view class="order-list">
-      <view
-        v-for="order in orders"
-        :key="order.id"
-        class="order-card"
-        @tap="viewOrderDetail(order.id)"
-      >
+      <view v-for="order in orders" :key="order.id" class="order-card" @tap="viewOrderDetail(order.id)">
         <!-- 订单头部：订单编号 + 状态 -->
         <view class="order-header">
           <text class="order-id">{{ order.id }}</text>
@@ -126,22 +115,11 @@
             </view>
           </view>
 
-          <view
-            v-if="hasDogProfile(order) || hasRecipeDetail(order)"
-            class="quick-entry-row"
-          >
-            <view
-              v-if="hasDogProfile(order)"
-              class="quick-entry-chip pet"
-              @tap.stop="openDogProfile(order)"
-            >
+          <view v-if="hasDogProfile(order) || hasRecipeDetail(order)" class="quick-entry-row">
+            <view v-if="hasDogProfile(order)" class="quick-entry-chip pet" @tap.stop="openDogProfile(order)">
               宠物档案
             </view>
-            <view
-              v-if="hasRecipeDetail(order)"
-              class="quick-entry-chip recipe"
-              @tap.stop="openRecipeDetail(order)"
-            >
+            <view v-if="hasRecipeDetail(order)" class="quick-entry-chip recipe" @tap.stop="openRecipeDetail(order)">
               食谱详情
             </view>
           </view>
@@ -175,24 +153,13 @@
 
         <!-- 操作按钮 -->
         <view class="order-actions">
-          <button
-            v-if="canShip(order)"
-            class="action-btn cyan"
-            @tap.stop="shipOrder(order)"
-          >
-            发货
-          </button>
+          <button v-if="canShip(order)" class="action-btn cyan" @tap.stop="shipOrder(order)">发货</button>
         </view>
       </view>
 
       <view v-if="orders.length > 0" class="pagination-section">
         <text class="pagination-text">已显示 {{ orders.length }} / {{ totalOrders }} 条订单</text>
-        <view
-          v-if="hasMore"
-          class="load-more"
-          :class="{ disabled: loadingMore }"
-          @tap="loadMoreOrders"
-        >
+        <view v-if="hasMore" class="load-more" :class="{ disabled: loadingMore }" @tap="loadMoreOrders">
           <text class="load-more-text">{{ loadingMore ? '加载中...' : '加载更多' }}</text>
         </view>
         <view v-else class="no-more">
@@ -298,12 +265,7 @@
           <!-- 物流单号输入 -->
           <view class="form-item">
             <text class="form-label">物流单号</text>
-            <input
-              v-model="trackingNumber"
-              class="form-input"
-              placeholder="请输入物流单号"
-              :maxlength="50"
-            />
+            <input v-model="trackingNumber" class="form-input" placeholder="请输入物流单号" :maxlength="50" />
           </view>
         </view>
 
@@ -331,7 +293,7 @@ const DEBUG = true
 const statusBarHeight = ref(0)
 
 function getOrderListFromResponse(data: any): any[] {
-  return Array.isArray(data) ? data : (data?.list || [])
+  return Array.isArray(data) ? data : data?.list || []
 }
 
 function getOrderAmountNumber(order?: Partial<Order> | null): number {
@@ -401,7 +363,7 @@ const statusOptions = ref([
   { label: '急冻中', value: 'FREEZING', count: 0 },
   { label: '已发货', value: 'SHIPPED', count: 0 },
   { label: '已完成', value: 'COMPLETED', count: 0 },
-  { label: '售后中', value: 'AFTERSALE', count: 0 }
+  { label: '售后中', value: 'AFTERSALE', count: 0 },
 ])
 
 // 日期筛选选项
@@ -409,7 +371,7 @@ const dateOptions = ref([
   { label: '全部时间', value: 'all' },
   { label: '今天', value: 'today' },
   { label: '最近7天', value: 'week' },
-  { label: '最近30天', value: 'month' }
+  { label: '最近30天', value: 'month' },
 ])
 
 // 数据
@@ -436,7 +398,7 @@ const showShippingModal = ref(false)
 const currentShippingOrder = ref<Order | null>(null)
 const carriers = [
   { name: '顺丰速运', code: 'SF' },
-  { name: '京东物流', code: 'JD' }
+  { name: '京东物流', code: 'JD' },
 ]
 const selectedCarrierIndex = ref(0)
 const trackingNumber = ref('')
@@ -446,24 +408,22 @@ const isShipping = ref(false)
 const stats = ref({
   todayOrders: 0,
   pendingOrders: 0,
-  todayRevenue: '0.00'
+  todayRevenue: '0.00',
 })
 
 // 计算属性
 const statusFilterText = computed(() => {
-  const option = statusOptions.value.find(s => s.value === selectedStatus.value)
+  const option = statusOptions.value.find((s) => s.value === selectedStatus.value)
   return option ? option.label : '状态'
 })
 
 const dateFilterText = computed(() => {
-  const option = dateOptions.value.find(d => d.value === selectedDate.value)
+  const option = dateOptions.value.find((d) => d.value === selectedDate.value)
   return option ? option.label : '日期'
 })
 
 const hasActiveFilters = computed(() => {
-  return selectedStatus.value !== 'ALL' ||
-         selectedDate.value !== 'all' ||
-         searchKeyword.value.trim() !== ''
+  return selectedStatus.value !== 'ALL' || selectedDate.value !== 'all' || searchKeyword.value.trim() !== ''
 })
 
 const hasMore = computed(() => {
@@ -505,8 +465,8 @@ async function fetchAllAdminOrders(params: Record<string, any>): Promise<any[]> 
       data: {
         ...params,
         page,
-        pageSize
-      }
+        pageSize,
+      },
     })
 
     if (response.code !== 0) {
@@ -514,9 +474,7 @@ async function fetchAllAdminOrders(params: Record<string, any>): Promise<any[]> 
     }
 
     const list = getOrderListFromResponse(response.data)
-    total = Array.isArray(response.data)
-      ? list.length
-      : Number(response.data?.total || 0)
+    total = Array.isArray(response.data) ? list.length : Number(response.data?.total || 0)
 
     collected.push(...list)
 
@@ -547,7 +505,7 @@ async function loadOrders(reset = true) {
       date: selectedDate.value,
       keyword,
       page: targetPage,
-      pageSize
+      pageSize,
     })
   }
 
@@ -593,7 +551,7 @@ async function loadOrders(reset = true) {
     const response = await request({
       url: '/admin/orders',
       method: 'GET',
-      data: params
+      data: params,
     })
 
     if (DEBUG) {
@@ -607,9 +565,7 @@ async function loadOrders(reset = true) {
     }
 
     const orderList = getOrderListFromResponse(response.data)
-    totalOrders.value = Array.isArray(response.data)
-      ? orderList.length
-      : Number(response.data.total || 0)
+    totalOrders.value = Array.isArray(response.data) ? orderList.length : Number(response.data.total || 0)
 
     if (DEBUG) {
       console.log('[StaffOrders] Parsed order list:', orderList)
@@ -623,23 +579,21 @@ async function loadOrders(reset = true) {
       ...order,
       totalAmount: getOrderAmountNumber({
         totalAmount: order.totalAmount,
-        amountTotal: order.amountTotal
+        amountTotal: order.amountTotal,
       }),
       amountTotal: getOrderAmountNumber({
         totalAmount: order.amountTotal,
-        amountTotal: order.totalAmount
+        amountTotal: order.totalAmount,
       }),
       amountProduct: getOrderAmountNumber({
-        totalAmount: order.amountProduct
+        totalAmount: order.amountProduct,
       }),
       amountShipping: getOrderAmountNumber({
-        totalAmount: order.amountShipping
-      })
+        totalAmount: order.amountShipping,
+      }),
     }))
 
-    allOrders.value = reset
-      ? processedOrders
-      : [...allOrders.value, ...processedOrders]
+    allOrders.value = reset ? processedOrders : [...allOrders.value, ...processedOrders]
     currentPage.value = targetPage
     filterOrders()
 
@@ -651,11 +605,11 @@ async function loadOrders(reset = true) {
     console.error('[StaffOrders] Load orders error:', error)
     console.error('[StaffOrders] Error details:', {
       message: error.message,
-      stack: error.stack
+      stack: error.stack,
     })
     uni.showToast({
       title: error.message || '加载失败',
-      icon: 'none'
+      icon: 'none',
     })
   } finally {
     if (reset) {
@@ -671,7 +625,7 @@ async function loadStatusCounts() {
   try {
     const response = await request({
       url: '/admin/orders/stats',
-      method: 'GET'
+      method: 'GET',
     })
 
     if (response.code !== 0 || !response.data) return
@@ -705,7 +659,7 @@ async function loadStats() {
 
     const orderList = await fetchAllAdminOrders({
       startDate: todayStart,
-      endDate: todayEnd
+      endDate: todayEnd,
     })
 
     if (DEBUG) {
@@ -713,8 +667,8 @@ async function loadStats() {
     }
 
     stats.value.todayOrders = orderList.length
-    stats.value.pendingOrders = orderList.filter((o: any) =>
-      o.status === 'PENDING_PAYMENT' || o.status === 'PAID'
+    stats.value.pendingOrders = orderList.filter(
+      (o: any) => o.status === 'PENDING_PAYMENT' || o.status === 'PAID',
     ).length
 
     const revenue = orderList
@@ -804,13 +758,42 @@ function loadMoreOrders() {
 // 查看订单详情
 function viewOrderDetail(orderId: string) {
   uni.navigateTo({
-    url: `/pages/order-detail/index?id=${orderId}`
+    url: `/pages/order-detail/index?id=${orderId}`,
   })
 }
 
 // 格式化函数
 function formatAmount(amount?: number | string): string {
   return getOrderAmountNumber({ totalAmount: amount }).toFixed(2)
+}
+
+function shortOrderId(orderId: string): string {
+  return orderId ? orderId.slice(-8).toUpperCase() : '-'
+}
+
+function getOrderConfirmContent(order: Order, actionText: string): string {
+  return [
+    actionText,
+    `订单：#${shortOrderId(order.id)}`,
+    `客户：${getOrderCustomerText(order)}`,
+    `商品：${getOrderProductText(order)}`,
+    `金额：¥${formatAmount(order.totalAmount || order.amountTotal)}`,
+  ].join('\n')
+}
+
+function getOrderCustomerText(order: Order): string {
+  const name = order.customerName || order.address?.recipientName || '未记录客户'
+  const phone = order.customerPhone || ''
+  return phone ? `${name} ${formatPhone(phone)}` : name
+}
+
+function getOrderProductText(order: Order): string {
+  const recipeName = getRecipeName(order) || '未记录商品'
+  const dogName = order.firstItem?.dog?.name ? `（${order.firstItem.dog.name}）` : ''
+  const packageCount = getTotalMeals(order)
+  const mealWeight = getMealWeight(order)
+  const spec = packageCount && mealWeight ? ` ${packageCount}餐/${mealWeight}g` : ''
+  return `${recipeName}${dogName}${spec}`
 }
 
 function formatPhone(phone?: string): string {
@@ -896,13 +879,13 @@ function openDogProfile(order: Order) {
   if (!dogId) {
     uni.showToast({
       title: '宠物档案不存在',
-      icon: 'none'
+      icon: 'none',
     })
     return
   }
 
   uni.navigateTo({
-    url: `/pages/dog-create/index?dogId=${dogId}`
+    url: `/pages/dog-create/index?dogId=${dogId}`,
   })
 }
 
@@ -911,13 +894,13 @@ function openRecipeDetail(order: Order) {
   if (!recipeId) {
     uni.showToast({
       title: '食谱信息不完整',
-      icon: 'none'
+      icon: 'none',
     })
     return
   }
 
   uni.navigateTo({
-    url: `/pages/recipe-detail/index?recipeId=${recipeId}`
+    url: `/pages/recipe-detail/index?recipeId=${recipeId}`,
   })
 }
 
@@ -938,7 +921,7 @@ function getStatusText(status: string): string {
     SHIPPED: '已发货',
     COMPLETED: '已完成',
     CANCELLED: '已取消',
-    AFTERSALE: '售后中'
+    AFTERSALE: '售后中',
   }
   return statusMap[status] || status
 }
@@ -954,7 +937,7 @@ function getStatusColor(status: string): string {
     SHIPPED: '#52c41a',
     COMPLETED: '#52c41a',
     CANCELLED: '#999',
-    AFTERSALE: '#f5222d'
+    AFTERSALE: '#f5222d',
   }
   return colorMap[status] || '#999'
 }
@@ -972,14 +955,14 @@ function canShip(order: Order): boolean {
 async function confirmPayment(order: Order) {
   uni.showModal({
     title: '确认收款',
-    content: `确认收到订单 #${order.id.slice(-8)} 的款项？`,
+    content: getOrderConfirmContent(order, '确认收到该订单款项？'),
     success: async (res) => {
       if (res.confirm) {
         try {
           await confirmOfflinePayment(order.id, order.totalAmount || order.amountTotal || 0)
           uni.showToast({
             title: '收款成功',
-            icon: 'success'
+            icon: 'success',
           })
           loadOrders(true)
           loadStats()
@@ -988,7 +971,7 @@ async function confirmPayment(order: Order) {
           console.error('[StaffOrders] Confirm payment error:', error)
         }
       }
-    }
+    },
   })
 }
 
@@ -996,7 +979,7 @@ async function confirmPayment(order: Order) {
 async function confirmOrderPayment(order: Order) {
   uni.showModal({
     title: '确认付款',
-    content: `确认订单 #${order.id.slice(-8)} 已付款？\n订单金额: ¥${formatAmount(order.totalAmount || order.amountTotal)}`,
+    content: getOrderConfirmContent(order, '确认将该订单标记为已付款？'),
     confirmText: '确认',
     cancelText: '取消',
     success: async (res) => {
@@ -1011,7 +994,7 @@ async function confirmOrderPayment(order: Order) {
           uni.showToast({
             title: '付款确认成功',
             icon: 'success',
-            duration: 2000
+            duration: 2000,
           })
 
           // 刷新订单列表
@@ -1025,11 +1008,11 @@ async function confirmOrderPayment(order: Order) {
           console.error('[StaffOrders] Confirm payment error:', error)
           uni.showToast({
             title: error.message || '确认失败',
-            icon: 'none'
+            icon: 'none',
           })
         }
       }
-    }
+    },
   })
 }
 
@@ -1060,7 +1043,7 @@ async function confirmShipping() {
   if (!trackingNumber.value || trackingNumber.value.trim().length < 5) {
     uni.showToast({
       title: '请输入有效的物流单号',
-      icon: 'none'
+      icon: 'none',
     })
     return
   }
@@ -1074,13 +1057,13 @@ async function confirmShipping() {
       method: 'POST',
       data: {
         carrierCode: carriers[selectedCarrierIndex.value].code,
-        trackingNumber: trackingNumber.value.trim()
-      }
+        trackingNumber: trackingNumber.value.trim(),
+      },
     })
 
     uni.showToast({
       title: '发货成功',
-      icon: 'success'
+      icon: 'success',
     })
 
     closeShippingModal()
@@ -1090,7 +1073,7 @@ async function confirmShipping() {
   } catch (error: any) {
     uni.showToast({
       title: error.message || '发货失败',
-      icon: 'none'
+      icon: 'none',
     })
   } finally {
     isShipping.value = false

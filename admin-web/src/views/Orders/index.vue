@@ -261,8 +261,8 @@
         :total="pagination.total"
         layout="total, sizes, prev, pager, next, jumper"
         style="margin-top: 20px; justify-content: flex-end"
-        @size-change="loadOrders"
-        @current-change="loadOrders"
+        @size-change="handlePageSizeChange"
+        @current-change="handlePageChange"
       />
     </el-card>
 
@@ -492,6 +492,13 @@ const loadOrders = async () => {
     const response = await orderApi.list(params)
     orderList.value = response.list
     pagination.total = response.total
+    pagination.page = response.page || pagination.page
+    pagination.pageSize = response.pageSize || pagination.pageSize
+
+    if (orderList.value.length === 0 && pagination.total > 0 && pagination.page > 1) {
+      pagination.page = Math.max(1, Math.ceil(pagination.total / pagination.pageSize))
+      await loadOrders()
+    }
   } catch (error) {
     ElMessage.error('加载订单列表失败')
   } finally {
@@ -511,6 +518,15 @@ const loadStats = async () => {
 
 // 搜索
 const handleSearch = () => {
+  pagination.page = 1
+  loadOrders()
+}
+
+const handlePageChange = () => {
+  loadOrders()
+}
+
+const handlePageSizeChange = () => {
   pagination.page = 1
   loadOrders()
 }

@@ -30,6 +30,7 @@ import { DIYSheetsController } from './interfaces/controllers/diy-sheets.control
 import { StaffProductionPhotosController } from './interfaces/controllers/staff-production-photos.controller';
 import { AftersalePhotosController } from './interfaces/controllers/aftersale-photos.controller';
 import { FavoritesController } from './interfaces/controllers/favorites.controller';
+import { StaffWorkbenchController } from './interfaces/controllers/staff-workbench.controller';
 import { StaffPurchasingController } from './interfaces/controllers/staff-purchasing.controller';
 import { StaffInventoryController } from './interfaces/controllers/staff-inventory.controller';
 import { AdminPurchasingController } from './interfaces/controllers/admin-purchasing.controller';
@@ -254,6 +255,7 @@ validatePrismaConfig();
     StaffProductionPhotosController,
     AftersalePhotosController,
     FavoritesController,
+    StaffWorkbenchController,
     StaffProductionController,
     CustomRecipeController,
     AdminCustomRecipeController,

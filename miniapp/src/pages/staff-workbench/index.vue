@@ -7,11 +7,11 @@
       <text class="hint">即将返回首页...</text>
     </view>
 
-    <!-- 员工工作台 -->
+    <!-- 工作台 -->
     <view v-else class="workbench-container">
       <!-- 顶部信息 -->
       <view class="header">
-        <text class="title">员工工作台</text>
+        <text class="title">{{ workbenchTitle }}</text>
         <text class="welcome">欢迎，{{ user?.nickname || '员工' }}</text>
         <view class="role-badge">{{ roleText }}</view>
       </view>
@@ -27,6 +27,9 @@
             <text class="module-title">采购管理</text>
             <text class="module-desc">查看采购清单与原料需求</text>
           </view>
+          <text v-if="badgeCount('purchasing') > 0" class="module-badge">{{
+            formatBadge(badgeCount('purchasing'))
+          }}</text>
           <text class="module-arrow">›</text>
         </view>
 
@@ -39,6 +42,9 @@
             <text class="module-title">生产管理</text>
             <text class="module-desc">查看生产任务与分锅清单</text>
           </view>
+          <text v-if="badgeCount('production') > 0" class="module-badge">{{
+            formatBadge(badgeCount('production'))
+          }}</text>
           <text class="module-arrow">›</text>
         </view>
 
@@ -51,6 +57,9 @@
             <text class="module-title">订单管理</text>
             <text class="module-desc">查看后台订单与订单状态</text>
           </view>
+          <text v-if="badgeCount('orders') > 0" class="module-badge">{{
+            formatBadge(badgeCount('orders'))
+          }}</text>
           <text class="module-arrow">›</text>
         </view>
 
@@ -63,6 +72,9 @@
             <text class="module-title">退款管理</text>
             <text class="module-desc">审核客户退款申请并保留审核人记录</text>
           </view>
+          <text v-if="badgeCount('refunds') > 0" class="module-badge">{{
+            formatBadge(badgeCount('refunds'))
+          }}</text>
           <text class="module-arrow">›</text>
         </view>
 
@@ -75,6 +87,9 @@
             <text class="module-title">报销管理</text>
             <text class="module-desc">采购报销、行政杂费与工资登记</text>
           </view>
+          <text v-if="badgeCount('reimbursement') > 0" class="module-badge">{{
+            formatBadge(badgeCount('reimbursement'))
+          }}</text>
           <text class="module-arrow">›</text>
         </view>
 
@@ -87,13 +102,16 @@
             <text class="module-title">库存管理</text>
             <text class="module-desc">查看库存预警、补货建议和盘点记录</text>
           </view>
+          <text v-if="badgeCount('inventory') > 0" class="module-badge">{{
+            formatBadge(badgeCount('inventory'))
+          }}</text>
           <text class="module-arrow">›</text>
         </view>
 
         <!-- 食谱管理 -->
         <view class="module" @tap="goToStaffRecipes">
           <view class="module-icon recipes">
-            <text style="font-size: 48rpx;">📋</text>
+            <text style="font-size: 48rpx">📋</text>
           </view>
           <view class="module-content">
             <text class="module-title">食谱管理</text>
@@ -136,10 +154,27 @@ const isStaff = ref(false);
 
 console.log('[StaffWorkbench] Component initializing...');
 
-// UI 框架数据（待对接后端 API）
 const todayOrders = ref(0);
 const pendingTasks = ref(0);
 const shippingCount = ref(0);
+
+type WorkbenchBadgeKey =
+  | 'purchasing'
+  | 'production'
+  | 'orders'
+  | 'refunds'
+  | 'reimbursement'
+  | 'inventory';
+type WorkbenchBadges = Record<WorkbenchBadgeKey, number>;
+
+interface WorkbenchSummary {
+  todayOrders: number;
+  pendingTasks: number;
+  shippingCount: number;
+  badges?: Partial<WorkbenchBadges>;
+}
+
+const todoCounts = ref<Partial<WorkbenchBadges>>({});
 
 const roleText = computed(() => {
   if (!user.value) return '';
@@ -150,18 +185,20 @@ const isAdmin = computed(() => {
   return user.value?.role === 'ADMIN';
 });
 
+const workbenchTitle = computed(() => {
+  return isAdmin.value ? '管理员工作台' : '员工工作台';
+});
+
 onMounted(() => {
   console.log('[StaffWorkbench] onMounted - checking permission...');
   checkPermission();
-  // TODO: 后续对接后端 API
-  // loadStats();
 });
 
 onShow(() => {
   console.log('[StaffWorkbench] onShow - checking permission...');
-  refreshCurrentTabBar()
+  refreshCurrentTabBar();
 
-  checkPermission()
+  checkPermission();
 });
 
 const checkPermission = () => {
@@ -190,13 +227,19 @@ const checkPermission = () => {
   }
 
   // 验证用户角色
-  if (!userData || !userData.role || (userData.role !== 'STAFF' && userData.role !== 'ADMIN')) {
+  if (
+    !userData ||
+    !userData.role ||
+    (userData.role !== 'STAFF' && userData.role !== 'ADMIN')
+  ) {
     console.log('[StaffWorkbench] Permission denied - user:', userData);
 
     // 如果有token但用户信息无效，尝试从API重新加载
     const token = uni.getStorageSync('token');
     if (token && (!userData || !userData.role)) {
-      console.log('[StaffWorkbench] Has token but no user data, fetching from API');
+      console.log(
+        '[StaffWorkbench] Has token but no user data, fetching from API'
+      );
       loadUserInfoFromApi();
       return;
     }
@@ -204,7 +247,7 @@ const checkPermission = () => {
     isStaff.value = false;
     uni.showToast({
       title: '权限不足',
-      icon: 'none'
+      icon: 'none',
     });
     setTimeout(() => {
       uni.switchTab({ url: '/pages/home/index' });
@@ -215,20 +258,21 @@ const checkPermission = () => {
   console.log('[StaffWorkbench] Permission granted - user:', userData);
   user.value = userData;
   isStaff.value = true;
+  loadStats();
 };
 
 const loadUserInfoFromApi = async () => {
   try {
     const res = await request({
       url: '/users/me',
-      method: 'GET'
+      method: 'GET',
     });
 
     if (res.code === 0 && res.data) {
       console.log('[StaffWorkbench] User info loaded from API:', res.data);
       // 更新storage
       uni.setStorageSync('user', res.data);
-      refreshCurrentTabBar()
+      refreshCurrentTabBar();
 
       // 重新检查权限
       checkPermission();
@@ -239,7 +283,7 @@ const loadUserInfoFromApi = async () => {
     console.error('[StaffWorkbench] Failed to load user info from API:', error);
     uni.showToast({
       title: '加载用户信息失败',
-      icon: 'none'
+      icon: 'none',
     });
     setTimeout(() => {
       uni.switchTab({ url: '/pages/home/index' });
@@ -249,14 +293,28 @@ const loadUserInfoFromApi = async () => {
 
 const loadStats = async () => {
   try {
-    // TODO: 调用后端 API 获取统计数据
-    // const response = await request({ url: '/staff/stats' });
-    // todayOrders.value = response.data.todayOrders;
-    // pendingTasks.value = response.data.pendingTasks;
-    // shippingCount.value = response.data.shippingCount;
+    const response = await request<WorkbenchSummary>({
+      url: '/staff/workbench/summary',
+      method: 'GET',
+      quiet: true,
+      suppressErrorToast: true,
+    });
+
+    todayOrders.value = response.data?.todayOrders || 0;
+    pendingTasks.value = response.data?.pendingTasks || 0;
+    shippingCount.value = response.data?.shippingCount || 0;
+    todoCounts.value = response.data?.badges || {};
   } catch (error) {
     console.error('[StaffWorkbench] Failed to load stats:', error);
   }
+};
+
+const badgeCount = (key: WorkbenchBadgeKey) => {
+  return Number(todoCounts.value[key] || 0);
+};
+
+const formatBadge = (count: number) => {
+  return count > 99 ? '99+' : String(count);
 };
 
 const goToPurchasing = () => {
@@ -366,8 +424,9 @@ const goToStaffRecipes = () => {
 }
 
 .module {
+  position: relative;
   background-color: #fff;
-  padding: 32rpx;
+  padding: 32rpx 88rpx 32rpx 32rpx;
   border-radius: 16rpx;
   display: flex;
   align-items: center;
@@ -445,9 +504,28 @@ const goToStaffRecipes = () => {
 }
 
 .module-arrow {
+  position: absolute;
+  right: 32rpx;
   font-size: 48rpx;
   color: #ccc;
   font-weight: 300;
+}
+
+.module-badge {
+  position: absolute;
+  top: 22rpx;
+  right: 54rpx;
+  min-width: 34rpx;
+  height: 34rpx;
+  padding: 0 10rpx;
+  border-radius: 999rpx;
+  background: #ff4d4f;
+  color: #fff;
+  font-size: 22rpx;
+  font-weight: 700;
+  line-height: 34rpx;
+  text-align: center;
+  box-shadow: 0 4rpx 10rpx rgba(255, 77, 79, 0.28);
 }
 
 .stats-section {

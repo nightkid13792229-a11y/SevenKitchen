@@ -32,9 +32,8 @@ export function isStoredPhoneBound(): boolean {
   return !!user?.phone || user?.phoneBound === true;
 }
 
-function isCustomerMissingPhone(user: any): boolean {
+function isAccountMissingPhone(user: any): boolean {
   if (!user) return false;
-  if (user.role && user.role !== "CUSTOMER") return false;
   return !user.phone && user.phoneBound !== true;
 }
 
@@ -112,7 +111,7 @@ export async function promptPhoneBindingIfNeeded(): Promise<boolean> {
   }
 
   let user = getStoredUser();
-  if (user && !isCustomerMissingPhone(user)) {
+  if (user && !isAccountMissingPhone(user)) {
     return false;
   }
 
@@ -135,7 +134,7 @@ export async function promptPhoneBindingIfNeeded(): Promise<boolean> {
     return false;
   }
 
-  if (!isCustomerMissingPhone(user)) {
+  if (!isAccountMissingPhone(user)) {
     return false;
   }
 

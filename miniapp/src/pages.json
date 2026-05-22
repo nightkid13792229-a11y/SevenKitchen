@@ -134,6 +134,12 @@
       }
     },
     {
+      "path": "pages/migration/index",
+      "style": {
+        "navigationBarTitleText": "旧版资料迁移"
+      }
+    },
+    {
       "path": "pages/recipe-diy/index",
       "style": {
         "navigationBarTitleText": "DIY食谱配置"

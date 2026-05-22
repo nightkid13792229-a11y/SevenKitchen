@@ -178,6 +178,29 @@ model UserWechatIdentity {
   @@map("user_wechat_identity")
 }
 
+model AccountMigration {
+  id             String                 @id @default(uuid()) @map("id")
+  token          String                 @unique @map("token") @db.VarChar(80)
+  sourceUserId   String                 @map("source_user_id")
+  verifiedUserId String?                @map("verified_user_id")
+  targetUserId   String?                @map("target_user_id")
+  phone          String?                @map("phone") @db.VarChar(20)
+  status         AccountMigrationStatus @default(PENDING) @map("status")
+  metadata       Json?                  @map("metadata")
+  createdAt      DateTime               @default(now()) @map("created_at")
+  updatedAt      DateTime               @updatedAt @map("updated_at")
+  expiresAt      DateTime               @map("expires_at")
+  verifiedAt     DateTime?              @map("verified_at")
+  confirmedAt    DateTime?              @map("confirmed_at")
+  cancelledAt    DateTime?              @map("cancelled_at")
+
+  @@index([sourceUserId, status])
+  @@index([verifiedUserId])
+  @@index([targetUserId])
+  @@index([expiresAt])
+  @@map("account_migration")
+}
+
 model DogProfileEvent {
   id           String   @id @default(uuid())
   customerId   String   @map("customer_id")
@@ -1361,6 +1384,14 @@ enum UserStatus {
   ACTIVE
   INACTIVE
   BANNED
+}
+
+enum AccountMigrationStatus {
+  PENDING
+  PHONE_VERIFIED
+  CONFIRMED
+  EXPIRED
+  CANCELLED
 }
 
 enum LifeStageOverride {

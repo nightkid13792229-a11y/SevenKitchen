@@ -6,7 +6,9 @@
 import {
   Controller,
   Post,
+  Get,
   Body,
+  Query,
   HttpCode,
   HttpStatus,
   UseGuards,
@@ -19,7 +21,7 @@ import {
   ApiProperty,
 } from '@nestjs/swagger';
 import { IsString } from 'class-validator';
-import type { Prisma, User } from '@prisma/client';
+import type { AccountMigration, AccountMigrationStatus, Prisma, User } from '@prisma/client';
 import { JwtAuthService } from '../auth/jwt.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { PrismaService } from '../../infrastructure/prisma.service';
@@ -27,7 +29,10 @@ import { WechatService } from '../../infrastructure/wechat/wechat.service';
 import { SmsService } from '../../infrastructure/sms/sms.service';
 import {
   BindWechatPhoneRequestDto,
+  ConfirmAccountMigrationRequestDto,
   ConfirmPhoneMergeRequestDto,
+  StartAccountMigrationRequestDto,
+  VerifyMigrationPhoneRequestDto,
   WechatLoginRequestDto,
 } from '../dto/auth/wechat-login.dto';
 import {
@@ -39,6 +44,7 @@ import * as bcrypt from 'bcrypt';
 import { AuthGuard, CurrentUser } from '../auth';
 import type { RequestUser } from '../auth';
 import { AdminGuard } from '../guards/role.guard';
+import { randomBytes } from 'crypto';
 
 export class LoginRequestDto {
   @ApiProperty({
@@ -89,6 +95,8 @@ export class AdminChangePasswordRequestDto {
 @ApiTags('Auth')
 @Controller('api/v1/auth')
 export class AuthController {
+  private readonly migrationTokenTtlMs = 15 * 60 * 1000;
+
   constructor(
     private readonly jwtAuthService: JwtAuthService,
     private readonly prisma: PrismaService,
@@ -441,6 +449,294 @@ export class AuthController {
     }
   }
 
+  @Post('migration/start')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Create a short-lived account migration token' })
+  async startAccountMigration(
+    @CurrentUser() requestUser: RequestUser,
+    @Body() dto: StartAccountMigrationRequestDto,
+  ): Promise<any> {
+    try {
+      if (requestUser.role !== 'CUSTOMER') {
+        return ApiResponseDto.error(403, '只有客户账号可以发起资料迁移');
+      }
+
+      const sourceUser = await this.prisma.user.findUnique({
+        where: { id: requestUser.userId },
+        include: this.userSummaryInclude(),
+      });
+      if (!sourceUser || sourceUser.status !== 'ACTIVE') {
+        return ApiResponseDto.error(403, '旧版账号不可用，请重新登录后再试');
+      }
+
+      const now = new Date();
+      await this.prisma.accountMigration.updateMany({
+        where: {
+          sourceUserId: requestUser.userId,
+          status: { in: ['PENDING', 'PHONE_VERIFIED'] },
+        },
+        data: {
+          status: 'CANCELLED',
+          cancelledAt: now,
+        },
+      });
+
+      const token = randomBytes(24).toString('hex');
+      const expiresAt = new Date(now.getTime() + this.migrationTokenTtlMs);
+      const migration = await this.prisma.accountMigration.create({
+        data: {
+          token,
+          sourceUserId: requestUser.userId,
+          status: 'PENDING',
+          expiresAt,
+          metadata: {
+            sourceAppId: this.normalizeAppId(dto.appId) || null,
+          },
+        },
+      });
+
+      return ApiResponseDto.success({
+        status: migration.status,
+        migrationToken: migration.token,
+        expiresAt: migration.expiresAt,
+        sourceUser: this.buildUserSummary(sourceUser),
+      });
+    } catch (error: any) {
+      console.error('[Account Migration Start] ERROR:', error);
+      return ApiResponseDto.error(500, error.message || '创建迁移凭证失败');
+    }
+  }
+
+  @Post('migration/verify-phone')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  @ApiOperation({
+    summary:
+      'Verify phone in the new miniapp and prepare account migration confirmation',
+  })
+  async verifyAccountMigrationPhone(
+    @CurrentUser() requestUser: RequestUser,
+    @Body() dto: VerifyMigrationPhoneRequestDto,
+  ): Promise<any> {
+    try {
+      if (requestUser.role !== 'CUSTOMER') {
+        return ApiResponseDto.error(403, '员工或管理员账号不参与客户资料迁移');
+      }
+
+      const migration = await this.getUsableMigration(dto.migrationToken);
+      if (!migration) {
+        return ApiResponseDto.error(404, '迁移凭证不存在或已失效，请从旧版小程序重新进入');
+      }
+
+      const [sourceUser, verifiedUser] = await Promise.all([
+        this.prisma.user.findUnique({
+          where: { id: migration.sourceUserId },
+          include: this.userSummaryInclude(),
+        }),
+        this.prisma.user.findUnique({
+          where: { id: requestUser.userId },
+          include: this.userSummaryInclude(),
+        }),
+      ]);
+
+      if (!sourceUser || sourceUser.role !== 'CUSTOMER') {
+        return ApiResponseDto.error(400, '旧版客户资料不存在，请重新从旧版小程序进入');
+      }
+      if (!verifiedUser || verifiedUser.role !== 'CUSTOMER') {
+        return ApiResponseDto.error(400, '新版客户账号不存在，请重新登录新版小程序');
+      }
+
+      const phoneInfo = await this.wechatService.getPhoneNumber(
+        dto.code,
+        this.normalizeAppId(dto.appId),
+      );
+      const phone = phoneInfo.phoneNumber;
+
+      const existingPhoneUser = await this.prisma.user.findUnique({
+        where: { phone },
+        include: this.userSummaryInclude(),
+      });
+
+      if (
+        existingPhoneUser &&
+        existingPhoneUser.id !== requestUser.userId &&
+        existingPhoneUser.role !== 'CUSTOMER'
+      ) {
+        return ApiResponseDto.error(
+          400,
+          '该手机号已绑定员工或管理员账号，请联系管理员处理',
+        );
+      }
+
+      const finalTargetUser =
+        existingPhoneUser && existingPhoneUser.role === 'CUSTOMER'
+          ? existingPhoneUser
+          : verifiedUser;
+
+      const updatedMigration = await this.prisma.accountMigration.update({
+        where: { id: migration.id },
+        data: {
+          status: 'PHONE_VERIFIED',
+          phone,
+          verifiedUserId: requestUser.userId,
+          targetUserId: finalTargetUser.id,
+          verifiedAt: new Date(),
+          metadata: {
+            ...((migration.metadata as Record<string, unknown>) || {}),
+            verifiedAppId: this.normalizeAppId(dto.appId) || null,
+            phoneMasked: this.maskPhone(phone),
+          },
+        },
+      });
+
+      return ApiResponseDto.success({
+        status: updatedMigration.status,
+        migrationToken: updatedMigration.token,
+        phone: this.maskPhone(phone),
+        sourceUser: this.buildUserSummary(sourceUser),
+        verifiedUser: this.buildUserSummary(verifiedUser),
+        targetUser: this.buildUserSummary(finalTargetUser),
+        needsConfirmation: true,
+        willMergeVerifiedAccount:
+          finalTargetUser.id !== verifiedUser.id &&
+          finalTargetUser.role === 'CUSTOMER',
+      });
+    } catch (error: any) {
+      console.error('[Account Migration Verify Phone] ERROR:', error);
+      return ApiResponseDto.error(500, error.message || '验证手机号失败');
+    }
+  }
+
+  @Post('migration/confirm')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Confirm account migration after phone verification' })
+  async confirmAccountMigration(
+    @CurrentUser() requestUser: RequestUser,
+    @Body() dto: ConfirmAccountMigrationRequestDto,
+  ): Promise<any> {
+    try {
+      const migration = await this.getUsableMigration(dto.migrationToken, [
+        'PHONE_VERIFIED',
+      ]);
+      if (!migration) {
+        return ApiResponseDto.error(404, '迁移凭证不存在或已失效，请重新进入迁移流程');
+      }
+      if (!migration.phone || !migration.targetUserId) {
+        return ApiResponseDto.error(400, '请先完成新版小程序手机号授权');
+      }
+      if (
+        migration.verifiedUserId !== requestUser.userId &&
+        migration.targetUserId !== requestUser.userId
+      ) {
+        return ApiResponseDto.error(403, '当前账号不能确认这次迁移');
+      }
+
+      const targetUser = await this.prisma.user.findUnique({
+        where: { id: migration.targetUserId },
+      });
+      if (!targetUser || targetUser.role !== 'CUSTOMER') {
+        return ApiResponseDto.error(400, '目标客户账号不存在，请重新进入迁移流程');
+      }
+
+      const sourceIds = [
+        migration.sourceUserId,
+        migration.verifiedUserId,
+      ].filter((id): id is string => !!id && id !== migration.targetUserId);
+      const uniqueSourceIds = [...new Set(sourceIds)];
+
+      let mergedUser: any = await this.prisma.user.findUnique({
+        where: { id: migration.targetUserId },
+        include: this.userSummaryInclude(),
+      });
+
+      for (const sourceUserId of uniqueSourceIds) {
+        mergedUser = await this.mergeCustomerUsers(
+          sourceUserId,
+          migration.targetUserId,
+          migration.phone,
+        );
+      }
+
+      if (uniqueSourceIds.length === 0) {
+        mergedUser = await this.prisma.user.update({
+          where: { id: migration.targetUserId },
+          data: { phone: migration.phone, lastLoginAt: new Date() },
+          include: this.userSummaryInclude(),
+        });
+      }
+
+      await this.prisma.accountMigration.update({
+        where: { id: migration.id },
+        data: {
+          status: 'CONFIRMED',
+          confirmedAt: new Date(),
+        },
+      });
+
+      const token = this.jwtAuthService.generateTokenForUser(
+        mergedUser.id,
+        mergedUser.role,
+      );
+
+      return ApiResponseDto.success({
+        status: 'CONFIRMED',
+        token,
+        userId: mergedUser.id,
+        role: mergedUser.role,
+        phoneBound: true,
+        mergedSourceCount: uniqueSourceIds.length,
+        user: this.buildUserSummary(mergedUser),
+      });
+    } catch (error: any) {
+      console.error('[Account Migration Confirm] ERROR:', error);
+      return ApiResponseDto.error(500, error.message || '确认迁移失败');
+    }
+  }
+
+  @Get('migration/status')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Get current account migration status' })
+  async getAccountMigrationStatus(
+    @CurrentUser() requestUser: RequestUser,
+    @Query('migrationToken') migrationToken?: string,
+  ): Promise<any> {
+    try {
+      if (!migrationToken) {
+        return ApiResponseDto.error(400, 'migrationToken is required');
+      }
+
+      const migration = await this.prisma.accountMigration.findUnique({
+        where: { token: migrationToken },
+      });
+      if (!migration) {
+        return ApiResponseDto.error(404, '迁移凭证不存在');
+      }
+      const currentMigration = await this.expireMigrationIfNeeded(migration);
+
+      if (
+        ![
+          currentMigration.sourceUserId,
+          currentMigration.verifiedUserId,
+          currentMigration.targetUserId,
+        ].includes(requestUser.userId)
+      ) {
+        return ApiResponseDto.error(403, '当前账号不能查看这次迁移');
+      }
+
+      return ApiResponseDto.success({
+        status: currentMigration.status,
+        migrationToken: currentMigration.token,
+        expiresAt: currentMigration.expiresAt,
+        phone: currentMigration.phone ? this.maskPhone(currentMigration.phone) : null,
+      });
+    } catch (error: any) {
+      console.error('[Account Migration Status] ERROR:', error);
+      return ApiResponseDto.error(500, error.message || '查询迁移状态失败');
+    }
+  }
+
   @Post('send-sms')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Send SMS verification code' })
@@ -697,6 +993,46 @@ export class AuthController {
 
   private isPrimaryApp(appId: string): boolean {
     return appId === this.wechatService.getPrimaryAppId();
+  }
+
+  private async expireMigrationIfNeeded(
+    migration: AccountMigration,
+  ): Promise<AccountMigration> {
+    if (
+      ['PENDING', 'PHONE_VERIFIED'].includes(migration.status) &&
+      migration.expiresAt.getTime() <= Date.now()
+    ) {
+      return this.prisma.accountMigration.update({
+        where: { id: migration.id },
+        data: { status: 'EXPIRED' },
+      });
+    }
+
+    return migration;
+  }
+
+  private async getUsableMigration(
+    migrationToken: string,
+    allowedStatuses: AccountMigrationStatus[] = ['PENDING', 'PHONE_VERIFIED'],
+  ): Promise<AccountMigration | null> {
+    const token = migrationToken?.trim();
+    if (!token) {
+      return null;
+    }
+
+    const migration = await this.prisma.accountMigration.findUnique({
+      where: { token },
+    });
+    if (!migration) {
+      return null;
+    }
+
+    const normalized = await this.expireMigrationIfNeeded(migration);
+    if (!allowedStatuses.includes(normalized.status)) {
+      return null;
+    }
+
+    return normalized;
   }
 
   private async findUserByWechatIdentity(

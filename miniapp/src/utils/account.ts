@@ -3,6 +3,7 @@ import { request } from "./api";
 const CURRENT_APP_ID_FALLBACK = "wx92924e25093f8f18";
 const PHONE_BIND_SKIP_ROUTES = new Set([
   "pages/login/index",
+  "pages/migration/index",
   "pages/phone-bind/index",
   "pages/profile-setup/index",
 ]);

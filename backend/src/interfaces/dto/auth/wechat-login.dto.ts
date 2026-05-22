@@ -79,6 +79,37 @@ export class ConfirmPhoneMergeRequestDto {
   mergeToken!: string;
 }
 
+export class StartAccountMigrationRequestDto {
+  @ApiProperty({
+    description: 'Mini Program AppID that starts migration',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  appId?: string;
+}
+
+export class VerifyMigrationPhoneRequestDto {
+  @ApiProperty({ description: 'Migration token created by the legacy miniapp' })
+  @IsString()
+  migrationToken!: string;
+
+  @ApiProperty({ description: 'Code from wx.getPhoneNumber in the new miniapp' })
+  @IsString()
+  code!: string;
+
+  @ApiProperty({ description: 'Current Mini Program AppID', required: false })
+  @IsString()
+  @IsOptional()
+  appId?: string;
+}
+
+export class ConfirmAccountMigrationRequestDto {
+  @ApiProperty({ description: 'Migration token created by the legacy miniapp' })
+  @IsString()
+  migrationToken!: string;
+}
+
 export class WechatLoginResponseDto {
   @ApiProperty({ description: 'JWT token' })
   token!: string;

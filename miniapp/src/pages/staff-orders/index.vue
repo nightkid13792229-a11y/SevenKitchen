@@ -58,7 +58,7 @@
         <input
           class="quick-search-input"
           v-model="searchKeyword"
-          placeholder="按订单号/狗狗名称快速搜索，支持模糊匹配"
+          placeholder="按订单号/狗狗名/手机号后四位/状态搜索"
           confirm-type="search"
           @confirm="performSearch"
         />

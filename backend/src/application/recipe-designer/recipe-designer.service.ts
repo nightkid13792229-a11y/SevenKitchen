@@ -2,7 +2,9 @@ import {
   BadRequestException,
   Inject,
   Injectable,
+  Logger,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import {
   DesignRecipeReviewStatus,
@@ -37,6 +39,7 @@ import {
   getNutritionProfileSourceName,
   resolveNutritionProfileDisplayName,
 } from '../nutrition-food/nutrition-food-display-name';
+import { SearchGovernanceService } from '../search-governance/search-governance.service';
 
 const DESIGN_RECIPE_INCLUDE = {
   items: {
@@ -146,42 +149,7 @@ type IngredientOptionRecord = {
   }>;
 };
 
-const INGREDIENT_SEARCH_ALIAS_GROUPS = [
-  ['西兰花', '西蓝花', '青花菜', '绿花椰菜', 'broccoli'],
-  ['三文鱼', '鲑鱼', '大西洋鲑', 'salmon'],
-  ['青口贝', '青口贝肉', '淡菜', '贻贝', 'mussel'],
-  ['牡蛎', '生蚝', '蚝', 'oyster'],
-] as const;
-
-function normalizeSearchText(value: string) {
-  return value.trim().toLocaleLowerCase();
-}
-
-function expandIngredientSearchTerms(search?: string) {
-  const trimmed = search?.trim();
-  if (!trimmed) {
-    return [];
-  }
-
-  const normalizedSearch = normalizeSearchText(trimmed);
-  const terms = new Set<string>([trimmed]);
-
-  for (const aliases of INGREDIENT_SEARCH_ALIAS_GROUPS) {
-    const matched = aliases.some((alias) => {
-      const normalizedAlias = normalizeSearchText(alias);
-      return (
-        normalizedSearch.includes(normalizedAlias) ||
-        normalizedAlias.includes(normalizedSearch)
-      );
-    });
-
-    if (matched) {
-      aliases.forEach((alias) => terms.add(alias));
-    }
-  }
-
-  return Array.from(terms);
-}
+const MAX_SEARCH_EXPANSION_TERMS = 8;
 
 function buildIngredientSearchConditions(searchTerms: string[]) {
   return searchTerms.flatMap((term) => [
@@ -220,17 +188,76 @@ function buildIngredientSearchConditions(searchTerms: string[]) {
 
 @Injectable()
 export class RecipeDesignerService {
+  private readonly logger = new Logger(RecipeDesignerService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     @Inject(FEDIAF_TARGET_PROVIDER)
     private readonly targetProvider: FediafTargetProvider,
+    @Optional()
+    private readonly searchGovernanceService?: SearchGovernanceService,
   ) {}
+
+  private async expandIngredientSearchTerms(search?: string) {
+    const trimmed = search?.trim();
+    if (!trimmed) {
+      return [];
+    }
+
+    let expanded: string[] = [];
+    try {
+      expanded =
+        (await this.searchGovernanceService?.expandQuery(
+          'INGREDIENT',
+          trimmed,
+        )) ?? [];
+    } catch {
+      this.logger.warn(
+        'Ingredient search governance expansion failed; falling back to original query',
+      );
+    }
+    const terms = [trimmed, ...expanded];
+    const seen = new Set<string>();
+
+    return terms
+      .map((term) => term.trim())
+      .filter((term) => {
+        const normalized = term.toLocaleLowerCase();
+        if (!normalized || seen.has(normalized)) {
+          return false;
+        }
+        seen.add(normalized);
+        return true;
+      })
+      .slice(0, MAX_SEARCH_EXPANSION_TERMS);
+  }
+
+  private async recordIngredientOptionSearch(
+    search: string | undefined,
+    resultCount: number,
+  ) {
+    const rawQuery = search?.trim();
+    if (!rawQuery) {
+      return;
+    }
+
+    try {
+      await this.searchGovernanceService?.recordSearchEvent({
+        domain: 'INGREDIENT',
+        source: 'RECIPE_DESIGNER_INGREDIENT_OPTIONS',
+        rawQuery,
+        resultCount,
+      });
+    } catch {
+      this.logger.warn('Ingredient option search logging failed');
+    }
+  }
 
   async listIngredientOptions(dto: ListRecipeDesignerIngredientOptionsDto = {}) {
     const page = Math.max(1, Number(dto.page ?? 1));
     const pageSize = Math.min(50, Math.max(1, Number(dto.pageSize ?? 20)));
     const skip = (page - 1) * pageSize;
-    const searchTerms = expandIngredientSearchTerms(dto.search);
+    const searchTerms = await this.expandIngredientSearchTerms(dto.search);
     const verifiedMappingWhere = {
       nutritionFood: { status: NutritionFoodStatus.VERIFIED },
     };
@@ -283,6 +310,7 @@ export class RecipeDesignerService {
         },
       }),
     ]);
+    await this.recordIngredientOptionSearch(dto.search, total);
 
     return {
       data: ingredients.map((ingredient) =>

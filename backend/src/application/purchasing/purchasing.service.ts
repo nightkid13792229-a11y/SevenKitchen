@@ -10,6 +10,7 @@ import {
   Logger,
   BadRequestException,
   ConflictException,
+  Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { OrderStatus, Order } from '../../domain';
@@ -50,6 +51,9 @@ import {
 } from '../ingredient/recommended-product.service';
 import { InventoryService } from '../inventory/inventory.service';
 import { resolvePreparationMethodTokens } from '../recipe/preparation-method-text.util';
+import { SearchGovernanceService } from '../search-governance/search-governance.service';
+
+const MAX_SEARCH_EXPANSION_TERMS = 8;
 
 export interface GeneratePurchaseListDto {
   startDate: string; // YYYY-MM-DD format
@@ -223,7 +227,63 @@ export class PurchasingService {
     private readonly purchaseListRepository: PurchaseListRepository,
     @Inject(PURCHASE_RECORD_REPOSITORY)
     private readonly purchaseRecordRepository: PurchaseRecordRepository,
+    @Optional()
+    private readonly searchGovernanceService?: SearchGovernanceService,
   ) {}
+
+  private async expandIngredientSearchTerms(keyword?: string) {
+    const trimmed = keyword?.trim();
+    if (!trimmed) {
+      return [];
+    }
+
+    let expanded: string[] = [];
+    try {
+      expanded =
+        (await this.searchGovernanceService?.expandQuery(
+          'INGREDIENT',
+          trimmed,
+        )) ?? [];
+    } catch {
+      this.logger.warn(
+        'Ingredient search governance expansion failed; falling back to original query',
+      );
+    }
+    const terms = [trimmed, ...expanded];
+    const seen = new Set<string>();
+
+    return terms
+      .map((term) => this.normalizeComparableText(term))
+      .filter((term): term is string => {
+        if (!term || seen.has(term)) {
+          return false;
+        }
+        seen.add(term);
+        return true;
+      })
+      .slice(0, MAX_SEARCH_EXPANSION_TERMS);
+  }
+
+  private async recordStockReplenishmentSearch(
+    keyword: string | undefined,
+    resultCount: number,
+  ) {
+    const rawQuery = keyword?.trim();
+    if (!rawQuery) {
+      return;
+    }
+
+    try {
+      await this.searchGovernanceService?.recordSearchEvent({
+        domain: 'INGREDIENT',
+        source: 'PURCHASING_STOCK_REPLENISHMENT',
+        rawQuery,
+        resultCount,
+      });
+    } catch {
+      this.logger.warn('Stock replenishment search logging failed');
+    }
+  }
 
   private async appendOrderStatusHistory(params: {
     orderId: string;
@@ -1475,7 +1535,9 @@ export class PurchasingService {
     onlyNeedsReplenishment?: boolean;
     includeDaily?: boolean;
   }): Promise<StockReplenishmentInsight[]> {
-    const keyword = (params?.keyword || '').trim().toLowerCase();
+    const keywordTerms = await this.expandIngredientSearchTerms(
+      params?.keyword,
+    );
     const ingredients = await this.ingredientRepository.findAll();
     const procurementSkuMap = await this.procurementSkuService.batchFindActive(
       ingredients.map((ingredient) => ingredient.id),
@@ -1489,7 +1551,7 @@ export class PurchasingService {
       )
       .filter((ingredient) => !params?.type || ingredient.type === params.type)
       .filter((ingredient) => {
-        if (!keyword) {
+        if (!keywordTerms.length) {
           return true;
         }
 
@@ -1506,7 +1568,13 @@ export class PurchasingService {
             ]),
           )
           .filter(Boolean)
-          .some((value) => value!.toLowerCase().includes(keyword));
+          .some((value) => {
+            const normalizedValue = this.normalizeComparableText(value);
+            return (
+              !!normalizedValue &&
+              keywordTerms.some((term) => normalizedValue.includes(term))
+            );
+          });
       });
 
     const currentStocks = await Promise.all(
@@ -1664,6 +1732,8 @@ export class PurchasingService {
         }
         return left.name.localeCompare(right.name, 'zh-CN');
       });
+
+    await this.recordStockReplenishmentSearch(params?.keyword, insights.length);
 
     return insights;
   }

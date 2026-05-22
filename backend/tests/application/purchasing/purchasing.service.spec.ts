@@ -12,6 +12,7 @@ import {
   PURCHASE_LIST_REPOSITORY,
   PURCHASE_RECORD_REPOSITORY,
 } from 'src/application/purchasing/purchasing.service.tokens';
+import { SearchGovernanceService } from 'src/application/search-governance/search-governance.service';
 import {
   PurchaseList,
   PurchaseListStatus,
@@ -25,6 +26,69 @@ jest.mock('uuid', () => ({
 }));
 
 describe('PurchasingService procurement sku separation', () => {
+  async function createPurchasingServiceForStockSearch(params: {
+    ingredients: any[];
+    searchGovernance: any;
+    procurementSkuMap?: Record<string, any[]>;
+  }) {
+    const ingredientRepository = {
+      findByIds: jest.fn().mockResolvedValue([]),
+      findAll: jest.fn().mockResolvedValue(params.ingredients),
+    } as any;
+    const procurementSkuService = {
+      batchFindActive: jest.fn().mockResolvedValue(params.procurementSkuMap ?? {}),
+      listActivePurchaseChannels: jest.fn().mockResolvedValue([]),
+    } as any;
+    const inventoryService = {
+      getBalanceByIngredient: jest.fn().mockResolvedValue(0),
+      inboundFromPurchaseRecords: jest.fn(),
+    } as any;
+
+    const moduleRef = await Test.createTestingModule({
+      providers: [
+        PurchasingService,
+        {
+          provide: ORDER_REPOSITORY,
+          useValue: { findByTargetProductionDateRange: jest.fn() },
+        },
+        {
+          provide: ORDER_STATUS_HISTORY_REPOSITORY,
+          useValue: { append: jest.fn() },
+        },
+        { provide: INGREDIENT_REPOSITORY, useValue: ingredientRepository },
+        { provide: InventoryService, useValue: inventoryService },
+        { provide: ProcurementSkuService, useValue: procurementSkuService },
+        {
+          provide: RecommendedProductService,
+          useValue: { batchFindActive: jest.fn().mockResolvedValue({}) },
+        },
+        { provide: PURCHASE_LIST_REPOSITORY, useValue: {} },
+        { provide: PURCHASE_RECORD_REPOSITORY, useValue: {} },
+        { provide: SearchGovernanceService, useValue: params.searchGovernance },
+      ],
+    }).compile();
+
+    return moduleRef.get(PurchasingService);
+  }
+
+  function stockIngredient(overrides: Record<string, unknown> = {}) {
+    return {
+      id: 'ingredient-chicken',
+      name: '鸡胸',
+      type: 'FOOD',
+      procurementStrategy: 'STOCK_REPLENISHMENT',
+      baseUnit: 'G',
+      unitDisplayLabel: 'g',
+      purchaseUnit: 'kg',
+      purchaseToBaseRatio: 1000,
+      currentPricePerPurchaseUnit: 40,
+      safetyStock: 500,
+      reorderPoint: 800,
+      targetStock: 2000,
+      ...overrides,
+    };
+  }
+
   it('uses procurement skus for purchase suggestions and does not call RecommendedProductService', async () => {
     const orderRepository = {
       findByTargetProductionDateRange: jest
@@ -216,6 +280,116 @@ describe('PurchasingService procurement sku separation', () => {
         displayUnit: '平勺',
       }),
     );
+  });
+
+  it('uses search governance expansion when filtering stock replenishment ingredients', async () => {
+    const searchGovernance = {
+      expandQuery: jest
+        .fn()
+        .mockResolvedValue(['鸡胸肉', '鸡胸', 'chicken breast']),
+      recordSearchEvent: jest.fn().mockResolvedValue({ id: 'query-log-1' }),
+    } as any;
+
+    const service = await createPurchasingServiceForStockSearch({
+      ingredients: [stockIngredient()],
+      searchGovernance,
+    });
+
+    const result = await service.getStockReplenishmentIngredients({
+      keyword: '鸡胸肉',
+      includeDaily: true,
+    });
+
+    expect(searchGovernance.expandQuery).toHaveBeenCalledWith(
+      'INGREDIENT',
+      '鸡胸肉',
+    );
+    expect(result).toEqual([
+      expect.objectContaining({ id: 'ingredient-chicken', name: '鸡胸' }),
+    ]);
+  });
+
+  it('records stock replenishment searches with the final insight count', async () => {
+    const searchGovernance = {
+      expandQuery: jest.fn(async (_domain, rawQuery) =>
+        rawQuery ? [rawQuery] : [],
+      ),
+      recordSearchEvent: jest.fn().mockResolvedValue({ id: 'query-log-1' }),
+    } as any;
+
+    const service = await createPurchasingServiceForStockSearch({
+      ingredients: [stockIngredient()],
+      searchGovernance,
+    });
+
+    await service.getStockReplenishmentIngredients({
+      keyword: ' 鸡胸 ',
+      includeDaily: true,
+    });
+
+    expect(searchGovernance.recordSearchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        domain: 'INGREDIENT',
+        source: 'PURCHASING_STOCK_REPLENISHMENT',
+        rawQuery: '鸡胸',
+        resultCount: 1,
+      }),
+    );
+  });
+
+  it('falls back to the original stock replenishment keyword when search governance fails', async () => {
+    const searchGovernance = {
+      expandQuery: jest.fn().mockRejectedValue(new Error('alias unavailable')),
+      recordSearchEvent: jest.fn().mockResolvedValue({ id: 'query-log-1' }),
+    } as any;
+    const service = await createPurchasingServiceForStockSearch({
+      ingredients: [stockIngredient({ name: '鸡胸肉' })],
+      searchGovernance,
+    });
+
+    const result = await service.getStockReplenishmentIngredients({
+      keyword: '鸡胸肉',
+      includeDaily: true,
+    });
+
+    expect(searchGovernance.expandQuery).toHaveBeenCalledWith(
+      'INGREDIENT',
+      '鸡胸肉',
+    );
+    expect(result).toEqual([
+      expect.objectContaining({ id: 'ingredient-chicken', name: '鸡胸肉' }),
+    ]);
+  });
+
+  it('limits stock replenishment keyword expansion terms while keeping the original keyword first', async () => {
+    const searchGovernance = {
+      expandQuery: jest.fn().mockResolvedValue([
+        'alias-1',
+        'alias-2',
+        'alias-3',
+        'alias-4',
+        'alias-5',
+        'alias-6',
+        'alias-7',
+        'alias-8',
+        'alias-9',
+      ]),
+      recordSearchEvent: jest.fn().mockResolvedValue({ id: 'query-log-1' }),
+    } as any;
+    const service = await createPurchasingServiceForStockSearch({
+      ingredients: [
+        stockIngredient({ id: 'ingredient-alias-7', name: 'alias-7' }),
+        stockIngredient({ id: 'ingredient-alias-8', name: 'alias-8' }),
+      ],
+      searchGovernance,
+    });
+
+    const result = await service.getStockReplenishmentIngredients({
+      keyword: '鸡胸肉',
+      includeDaily: true,
+    });
+
+    expect(result.map((item) => item.id)).toEqual(['ingredient-alias-7']);
   });
 
   it('normalizes purchase list date filters to noon-based ranges', async () => {

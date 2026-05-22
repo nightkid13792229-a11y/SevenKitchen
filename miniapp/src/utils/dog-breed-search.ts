@@ -73,7 +73,10 @@ function getBreedSearchTokens(breed: SearchableBreed): BreedSearchToken[] {
   addTokens(buildBreedTokenVariants(breed.name), 'name')
   addTokens(buildBreedTokenVariants(breed.name.split(/[（(]/)[0] || ''), 'derived')
 
-  ;[...(breed.aliases || []), ...(BUILTIN_BREED_SEARCH_ALIASES[breed.name] || [])].forEach((alias) => {
+  ;[
+    ...(breed.aliases || []),
+    ...(BUILTIN_BREED_SEARCH_ALIASES[breed.name] || []),
+  ].forEach((alias) => {
     addTokens(buildBreedTokenVariants(alias), 'alias')
   })
 

@@ -62,6 +62,25 @@ describe('dog-breed-search', () => {
     ).toEqual(['labrador'])
   })
 
+  it('matches governed common breed variants against formal breed names', () => {
+    const formalBreeds = [
+      {
+        id: 'labrador',
+        name: '拉布拉多寻回犬',
+        aliases: [],
+      },
+      {
+        id: 'golden',
+        name: '金毛寻回犬',
+        aliases: [],
+      },
+    ]
+
+    expect(filterBreedsByKeyword(formalBreeds, 'labrador')[0].name).toBe('拉布拉多寻回犬')
+    expect(filterBreedsByKeyword(formalBreeds, '拉布拉多犬')[0].name).toBe('拉布拉多寻回犬')
+    expect(filterBreedsByKeyword(formalBreeds, '金毛犬')[0].name).toBe('金毛寻回犬')
+  })
+
   it('matches chinese aliases as well as primary breed names', () => {
     expect(filterBreedsByKeyword(breeds, '拉拉').map(breed => breed.id)).toEqual(['labrador'])
     expect(filterBreedsByKeyword(breeds, '金毛').map(breed => breed.id)).toEqual(['golden'])

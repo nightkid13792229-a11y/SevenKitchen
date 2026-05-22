@@ -7,6 +7,8 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import {
@@ -31,8 +33,10 @@ import {
   buildUsdaFdcSourceVersion,
   mapUsdaNutrientsToNutritionProfile,
 } from '../../domain/nutrition-governance/nutrition-governance.utils';
+import { SearchGovernanceService } from '../search-governance/search-governance.service';
 
 const MANUAL_DISPLAY_NAME_SOURCE = 'MANUAL';
+const MAX_SEARCH_EXPANSION_TERMS = 8;
 
 function buildChineseDisplayNameWrite(
   displayNameZh: string | undefined,
@@ -62,7 +66,68 @@ function buildChineseDisplayNameWrite(
 
 @Injectable()
 export class NutritionFoodService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(NutritionFoodService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional()
+    private readonly searchGovernanceService?: SearchGovernanceService,
+  ) {}
+
+  private async expandSearchTerms(search?: string) {
+    const trimmed = search?.trim();
+    if (!trimmed) {
+      return [];
+    }
+
+    let expanded: string[] = [];
+    try {
+      expanded =
+        (await this.searchGovernanceService?.expandQuery(
+          'NUTRITION_FOOD',
+          trimmed,
+        )) ?? [];
+    } catch {
+      this.logger.warn(
+        'Nutrition food search governance expansion failed; falling back to original query',
+      );
+    }
+    const terms = [trimmed, ...expanded];
+    const seen = new Set<string>();
+
+    return terms
+      .map((term) => term.trim())
+      .filter((term) => {
+        const normalized = term.toLocaleLowerCase();
+        if (!normalized || seen.has(normalized)) {
+          return false;
+        }
+        seen.add(normalized);
+        return true;
+      })
+      .slice(0, MAX_SEARCH_EXPANSION_TERMS);
+  }
+
+  private async recordNutritionFoodSearch(
+    search: string | undefined,
+    resultCount: number,
+  ) {
+    const rawQuery = search?.trim();
+    if (!rawQuery) {
+      return;
+    }
+
+    try {
+      await this.searchGovernanceService?.recordSearchEvent({
+        domain: 'NUTRITION_FOOD',
+        source: 'ADMIN_NUTRITION_FOOD_LIST',
+        rawQuery,
+        resultCount,
+      });
+    } catch {
+      this.logger.warn('Nutrition food search logging failed');
+    }
+  }
 
   /**
    * 获取营养原料列表（分页）
@@ -77,21 +142,17 @@ export class NutritionFoodService {
     const page = params.page || 1;
     const pageSize = params.pageSize || 20;
     const skip = (page - 1) * pageSize;
+    const searchTerms = await this.expandSearchTerms(params.search);
 
     const where: Prisma.NutritionFoodWhereInput = {
       ...(params.category && { category: params.category }),
       ...(params.status && { status: params.status }),
-      ...(params.search && {
-        OR: [
-          { name: { contains: params.search, mode: 'insensitive' } },
-          { nameEn: { contains: params.search, mode: 'insensitive' } },
-          {
-            displayNameZh: {
-              contains: params.search,
-              mode: 'insensitive',
-            },
-          },
-        ],
+      ...(searchTerms.length && {
+        OR: searchTerms.flatMap((term) => [
+          { name: { contains: term, mode: 'insensitive' as const } },
+          { nameEn: { contains: term, mode: 'insensitive' as const } },
+          { displayNameZh: { contains: term, mode: 'insensitive' as const } },
+        ]),
       }),
     };
 
@@ -118,6 +179,7 @@ export class NutritionFoodService {
         },
       }),
     ]);
+    await this.recordNutritionFoodSearch(params.search, total);
 
     return {
       data: items.map(this.toResponseDto),

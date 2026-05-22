@@ -1212,13 +1212,10 @@ export class AdminController {
     try {
       const keyword =
         typeof query.keyword === 'string' ? query.keyword.trim() : undefined;
-      const orderId =
-        typeof query.orderId === 'string' ? query.orderId.trim() : undefined;
 
       // Parse query parameters
       const params = {
         keyword,
-        orderId,
         status: query.status,
         type: query.type,
         startDate: query.startDate ? new Date(query.startDate) : undefined,
@@ -1227,93 +1224,9 @@ export class AdminController {
         pageSize: query.pageSize ? parseInt(query.pageSize, 10) : 20,
       };
 
-      // Build Prisma where clause
-      const where: any = {};
-
-      if (params.status) {
-        where.status = params.status;
-      }
-
-      if (params.type) {
-        where.type = params.type;
-      }
-
-      if (params.orderId) {
-        where.id = {
-          contains: params.orderId,
-          mode: 'insensitive',
-        };
-      }
-
-      if (params.keyword) {
-        where.OR = [
-          {
-            id: {
-              contains: params.keyword,
-              mode: 'insensitive',
-            },
-          },
-          {
-            customer: {
-              nickname: {
-                contains: params.keyword,
-                mode: 'insensitive',
-              },
-            },
-          },
-          {
-            customer: {
-              phone: {
-                contains: params.keyword,
-                mode: 'insensitive',
-              },
-            },
-          },
-          {
-            dog: {
-              name: {
-                contains: params.keyword,
-                mode: 'insensitive',
-              },
-            },
-          },
-        ];
-      }
-
-      if (params.startDate || params.endDate) {
-        where.createdAt = {};
-        if (params.startDate) {
-          where.createdAt.gte = params.startDate;
-        }
-        if (params.endDate) {
-          where.createdAt.lte = params.endDate;
-        }
-      }
-
-      // Get total count
-      const total = await this.prisma.order.count({ where });
-
-      // Fetch orders with pagination
-      const skip = ((params.page || 1) - 1) * (params.pageSize || 20);
-      const orders = await this.prisma.order.findMany({
-        where,
-        include: {
-          items: true,
-          customer: {
-            select: {
-              nickname: true,
-              phone: true,
-            },
-          },
-          address: true,
-          dog: true,
-        },
-        orderBy: {
-          createdAt: 'desc',
-        },
-        skip,
-        take: params.pageSize || 20,
-      });
+      const { list: orders, total } = await this.orderService.listAllOrders(
+        params,
+      );
 
       // Map orders to summary DTOs with full details
       const list = await Promise.all(

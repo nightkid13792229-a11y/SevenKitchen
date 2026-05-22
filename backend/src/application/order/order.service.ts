@@ -8,6 +8,8 @@ import {
   Inject,
   NotFoundException,
   BadRequestException,
+  Optional,
+  Logger,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import type { OrderRepository } from '../../domain/order/order.repository';
@@ -57,6 +59,8 @@ import { ValidationError } from '../../domain/common/errors';
 // import type { CartRepository } from '../../domain/cart';  // Cart功能已移除
 import type { IOrderPricingSnapshotRepository } from '../../domain/order-pricing-snapshot/order-pricing-snapshot.repository.interface';
 import { PrismaService } from '../../infrastructure/prisma.service';
+import { SearchGovernanceService } from '../search-governance/search-governance.service';
+import { normalizeSearchText } from '../../domain/search-governance/search-text';
 import { TimezoneUtil } from '../../utils/timezone.util';
 import {
   extractLegacyPreparationMethodIds,
@@ -69,6 +73,25 @@ import type { IngredientSourcePlanCode } from '../../domain/order/ingredient-sou
 // Re-export for convenience
 export { ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY };
 import { RECIPE_REPOSITORY } from '../dog/dog.service';
+
+const MAX_ORDER_SEARCH_EXPANSION_TERMS = 8;
+
+const ORDER_STATUS_SEARCH_LABELS: Record<OrderStatus, string[]> = {
+  [OrderStatus.INIT]: ['INIT', '待确认'],
+  [OrderStatus.PENDING_PAYMENT]: [
+    'PENDING_PAYMENT',
+    '待付款',
+    '待支付',
+  ],
+  [OrderStatus.PAID]: ['PAID', '已支付'],
+  [OrderStatus.PURCHASING]: ['PURCHASING', '采购中'],
+  [OrderStatus.IN_PRODUCTION]: ['IN_PRODUCTION', '制作中', '生产中'],
+  [OrderStatus.FREEZING]: ['FREEZING', '急冻中'],
+  [OrderStatus.SHIPPED]: ['SHIPPED', '已发货'],
+  [OrderStatus.COMPLETED]: ['COMPLETED', '已完成'],
+  [OrderStatus.CANCELLED]: ['CANCELLED', '已取消'],
+  [OrderStatus.AFTERSALE]: ['AFTERSALE', '售后中'],
+};
 
 export interface CreateOrderDraftDto {
   customerId: string;
@@ -187,6 +210,8 @@ interface ResolvedOrderItemPackageInput {
 
 @Injectable()
 export class OrderService {
+  private readonly logger = new Logger(OrderService.name);
+
   constructor(
     @Inject(ORDER_REPOSITORY)
     private readonly orderRepository: OrderRepository,
@@ -209,6 +234,8 @@ export class OrderService {
     @Inject('IOrderPricingSnapshotRepository')
     private readonly pricingSnapshotRepository: IOrderPricingSnapshotRepository,
     private readonly prisma: PrismaService,
+    @Optional()
+    private readonly searchGovernanceService?: SearchGovernanceService,
   ) {}
 
   private async loadPreparationMethodNameMap(
@@ -2132,21 +2159,176 @@ export class OrderService {
   // Admin-only methods for order management
   // ==========================================
 
+  private async expandOrderSearchTerms(keyword?: string): Promise<string[]> {
+    const trimmed = keyword?.trim();
+    if (!trimmed) {
+      return [];
+    }
+
+    let expanded: string[] = [];
+    try {
+      expanded =
+        (await this.searchGovernanceService?.expandQuery('ORDER', trimmed)) ??
+        [];
+    } catch {
+      this.logger.warn(
+        'Order search governance expansion failed; falling back to original query',
+      );
+    }
+
+    const seen = new Set<string>();
+    return [trimmed, ...expanded]
+      .map((term) => term.trim())
+      .filter((term) => {
+        const normalized = normalizeSearchText(term);
+        if (!normalized || seen.has(normalized)) {
+          return false;
+        }
+        seen.add(normalized);
+        return true;
+      })
+      .slice(0, MAX_ORDER_SEARCH_EXPANSION_TERMS);
+  }
+
+  private async recordAdminOrderListSearch(
+    keyword: string | undefined,
+    resultCount: number,
+  ) {
+    const rawQuery = keyword?.trim();
+    if (!rawQuery) {
+      return;
+    }
+
+    try {
+      await this.searchGovernanceService?.recordSearchEvent({
+        domain: 'ORDER',
+        source: 'ADMIN_ORDER_LIST',
+        rawQuery,
+        resultCount,
+      });
+    } catch {
+      this.logger.warn('Admin order list search logging failed');
+    }
+  }
+
+  private getStatusMatchesForOrderSearchTerm(term: string): OrderStatus[] {
+    const normalizedTerm = normalizeSearchText(term);
+    if (!normalizedTerm) {
+      return [];
+    }
+
+    return Object.entries(ORDER_STATUS_SEARCH_LABELS)
+      .filter(([, labels]) =>
+        labels.some((label) => normalizeSearchText(label) === normalizedTerm),
+      )
+      .map(([status]) => status as OrderStatus);
+  }
+
+  private buildOrderKeywordSearchClauses(keywordTerms: string[]) {
+    return keywordTerms.flatMap((term) => {
+      const clauses: any[] = [
+        { id: { contains: term, mode: 'insensitive' } },
+        {
+          customer: {
+            nickname: { contains: term, mode: 'insensitive' },
+          },
+        },
+        {
+          customer: {
+            phone: { contains: term, mode: 'insensitive' },
+          },
+        },
+        {
+          dog: {
+            name: { contains: term, mode: 'insensitive' },
+          },
+        },
+      ];
+
+      for (const status of this.getStatusMatchesForOrderSearchTerm(term)) {
+        clauses.push({ status });
+      }
+
+      return clauses;
+    });
+  }
+
   /**
    * List all orders with filtering, pagination, and search
    * Admin-only method for cross-customer order management
    */
   async listAllOrders(params?: {
     customerId?: string;
-    status?: OrderStatus;
+    status?: OrderStatus | OrderStatus[];
     type?: OrderType;
     keyword?: string;
     startDate?: Date;
     endDate?: Date;
     page?: number;
     pageSize?: number;
-  }): Promise<{ list: Order[]; total: number }> {
-    return this.orderRepository.findAll(params);
+  }): Promise<{ list: any[]; total: number }> {
+    const page = params?.page ?? 1;
+    const pageSize = params?.pageSize ?? 20;
+    const skip = (page - 1) * pageSize;
+
+    const where: any = {};
+
+    if (params?.customerId) {
+      where.customerId = params.customerId;
+    }
+
+    if (params?.status) {
+      where.status = Array.isArray(params.status)
+        ? { in: params.status }
+        : params.status;
+    }
+
+    if (params?.type) {
+      where.type = params.type;
+    }
+
+    if (params?.startDate || params?.endDate) {
+      where.createdAt = {};
+      if (params.startDate) {
+        where.createdAt.gte = params.startDate;
+      }
+      if (params.endDate) {
+        where.createdAt.lte = params.endDate;
+      }
+    }
+
+    const keywordTerms = await this.expandOrderSearchTerms(params?.keyword);
+    const keywordClauses = this.buildOrderKeywordSearchClauses(keywordTerms);
+    if (keywordClauses.length > 0) {
+      where.OR = keywordClauses;
+    }
+
+    const [total, list] = await Promise.all([
+      this.prisma.order.count({ where }),
+      this.prisma.order.findMany({
+        where,
+        include: {
+          items: true,
+          customer: {
+            select: {
+              id: true,
+              nickname: true,
+              phone: true,
+            },
+          },
+          address: true,
+          dog: true,
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        skip,
+        take: pageSize,
+      }),
+    ]);
+    await this.recordAdminOrderListSearch(params?.keyword, total);
+
+    return { list, total };
   }
 
   /**

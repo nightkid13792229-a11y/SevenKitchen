@@ -6,9 +6,11 @@
 import {
   Injectable,
   Inject,
+  Logger,
   NotFoundException,
   ForbiddenException,
   BadRequestException,
+  Optional,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import type { DogRepository } from '../../domain/dog/dog.repository';
@@ -27,6 +29,7 @@ import {
 } from '../../domain';
 import { DogBreed } from '../../domain/dog/dog-breed.entity';
 import { GrowthCurveType } from '../../domain/dog/enums';
+import { SearchGovernanceService } from '../search-governance/search-governance.service';
 
 export interface CreateDogProfileDto {
   ownerId: string;
@@ -96,9 +99,19 @@ export const DOG_REPOSITORY = Symbol('DogRepository');
 export const RECIPE_REPOSITORY = Symbol('RecipeRepository');
 export const DOG_BREED_REPOSITORY = Symbol('DogBreedRepository');
 export const PRISMA_SERVICE = Symbol('PrismaService');
+const MAX_BREED_SEARCH_EXPANSION_TERMS = 8;
+const BREED_DESCRIPTOR_PATTERN = /(小型|中型|大型|巨型|标准|迷你|玩具|微型)/g;
+type BreedTokenSource = 'name' | 'derived' | 'alias';
+
+interface BreedSearchToken {
+  value: string;
+  source: BreedTokenSource;
+}
 
 @Injectable()
 export class DogService {
+  private readonly logger = new Logger(DogService.name);
+
   constructor(
     @Inject(DOG_REPOSITORY)
     private readonly dogRepository: DogRepository,
@@ -108,9 +121,218 @@ export class DogService {
     private readonly recipeRepository: RecipeRepository, // TODO: Will be used for recipe-based calculations
     @Inject(PRISMA_SERVICE)
     private readonly prisma: PrismaService,
+    @Optional()
+    private readonly searchGovernanceService?: SearchGovernanceService,
   ) {
     // Suppress unused warning - will be used in future implementations
     void this.recipeRepository;
+  }
+
+  async searchBreeds(keyword?: string | null): Promise<DogBreed[]> {
+    const trimmed = keyword?.trim() ?? '';
+    const breeds = await this.dogBreedRepository.findAll();
+    if (!trimmed) {
+      return breeds;
+    }
+
+    const searchTerms = await this.expandBreedSearchTerms(trimmed);
+
+    const results = breeds
+      .map((breed) => ({
+        breed,
+        score: this.getBreedSearchScore(breed, searchTerms),
+      }))
+      .filter((item) => item.score > 0)
+      .sort((left, right) => {
+        const scoreDiff = right.score - left.score;
+        if (scoreDiff !== 0) {
+          return scoreDiff;
+        }
+
+        if (Boolean(right.breed.isCommon) !== Boolean(left.breed.isCommon)) {
+          return Number(Boolean(right.breed.isCommon)) - Number(Boolean(left.breed.isCommon));
+        }
+
+        if (left.breed.name.length !== right.breed.name.length) {
+          return left.breed.name.length - right.breed.name.length;
+        }
+
+        return left.breed.name.localeCompare(right.breed.name, 'zh-Hans-CN');
+      })
+      .map((item) => item.breed);
+
+    await this.recordBreedSearch(trimmed, results.length);
+
+    return results;
+  }
+
+  private async recordBreedSearch(rawQuery: string, resultCount: number) {
+    if (!rawQuery.trim()) {
+      return;
+    }
+
+    try {
+      await this.searchGovernanceService?.recordSearchEvent({
+        domain: 'BREED',
+        source: 'DOG_BREED_SEARCH',
+        rawQuery,
+        resultCount,
+      });
+    } catch {
+      this.logger.warn('Breed search logging failed');
+    }
+  }
+
+  private async expandBreedSearchTerms(keyword: string): Promise<string[]> {
+    let expanded: string[] = [];
+    try {
+      expanded =
+        (await this.searchGovernanceService?.expandQuery('BREED', keyword)) ?? [];
+    } catch {
+      this.logger.warn(
+        'Breed search governance expansion failed; falling back to original query',
+      );
+    }
+
+    const seen = new Set<string>();
+    return [keyword, ...expanded]
+      .map((term) => term.trim())
+      .filter((term) => {
+        const normalized = this.normalizeBreedSearchText(term);
+        if (!normalized || seen.has(normalized)) {
+          return false;
+        }
+        seen.add(normalized);
+        return true;
+      })
+      .slice(0, MAX_BREED_SEARCH_EXPANSION_TERMS);
+  }
+
+  private getBreedSearchScore(breed: DogBreed, searchTerms: string[]): number {
+    const breedTokens = this.getBreedSearchTokens(breed);
+
+    return searchTerms.reduce((bestScore, term, termIndex) => {
+      const termScore = this.getTermSearchScore(breedTokens, term);
+      if (termScore <= 0) {
+        return bestScore;
+      }
+
+      return Math.max(
+        bestScore,
+        (MAX_BREED_SEARCH_EXPANSION_TERMS - termIndex) * 1000 + termScore,
+      );
+    }, 0);
+  }
+
+  private getTermSearchScore(breedTokens: BreedSearchToken[], term: string): number {
+    const termVariants = this.buildBreedTokenVariants(term);
+    return breedTokens.reduce((bestScore, token) => {
+      const tokenScore = termVariants.reduce((bestVariantScore, variant) => {
+        if (token.value === variant) {
+          return Math.max(bestVariantScore, this.getExactBreedTokenScore(token.source));
+        }
+
+        if (token.value.startsWith(variant) || variant.startsWith(token.value)) {
+          return Math.max(bestVariantScore, this.getPrefixBreedTokenScore(token.source));
+        }
+
+        if (token.value.includes(variant) || variant.includes(token.value)) {
+          return Math.max(bestVariantScore, this.getContainsBreedTokenScore(token.source));
+        }
+
+        return bestVariantScore;
+      }, 0);
+
+      return Math.max(bestScore, tokenScore);
+    }, 0);
+  }
+
+  private getExactBreedTokenScore(source: BreedTokenSource): number {
+    if (source === 'name') {
+      return 120;
+    }
+
+    if (source === 'derived') {
+      return 115;
+    }
+
+    return 110;
+  }
+
+  private getPrefixBreedTokenScore(source: BreedTokenSource): number {
+    if (source === 'alias') {
+      return 95;
+    }
+
+    return source === 'name' ? 100 : 98;
+  }
+
+  private getContainsBreedTokenScore(source: BreedTokenSource): number {
+    if (source === 'alias') {
+      return 85;
+    }
+
+    return source === 'name' ? 90 : 88;
+  }
+
+  private getBreedSearchTokens(breed: DogBreed): BreedSearchToken[] {
+    const seen = new Set<string>();
+    const tokens: BreedSearchToken[] = [];
+    const addTokens = (values: string[], source: BreedTokenSource) => {
+      values.forEach((value) => {
+        if (!value) {
+          return;
+        }
+
+        const dedupeKey = `${source}:${value}`;
+        if (seen.has(dedupeKey)) {
+          return;
+        }
+
+        seen.add(dedupeKey);
+        tokens.push({ value, source });
+      });
+    };
+
+    addTokens(this.buildBreedTokenVariants(breed.name), 'name');
+    addTokens(
+      this.buildBreedTokenVariants(breed.name.split(/[（(]/)[0] || ''),
+      'derived',
+    );
+    (breed.aliases ?? []).forEach((alias) => {
+      addTokens(this.buildBreedTokenVariants(alias), 'alias');
+    });
+
+    return tokens;
+  }
+
+  private buildBreedTokenVariants(value: string): string[] {
+    const normalized = this.normalizeBreedSearchText(value);
+    if (!normalized) {
+      return [];
+    }
+
+    const withoutDescriptors = normalized.replace(BREED_DESCRIPTOR_PATTERN, '');
+    const withoutSuffix = normalized.replace(/[犬狗]/g, '');
+    const withoutDescriptorsAndSuffix = withoutDescriptors.replace(/[犬狗]/g, '');
+
+    return Array.from(
+      new Set([
+        normalized,
+        withoutDescriptors,
+        withoutSuffix,
+        withoutDescriptorsAndSuffix,
+      ]),
+    ).filter((token) => token.length > 0);
+  }
+
+  private normalizeBreedSearchText(value: string): string {
+    return value
+      .normalize('NFKC')
+      .trim()
+      .toLocaleLowerCase()
+      .replace(/\s+/g, '')
+      .replace(/[()（）【】[\]{}_\-\\/·•.,，。:：;；'"`]/g, '');
   }
 
   /**

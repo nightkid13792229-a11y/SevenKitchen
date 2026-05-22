@@ -505,6 +505,48 @@ describe('AdminController', () => {
   });
 
   describe('getOrderDetail', () => {
+    it('delegates admin order keyword search directly to the order service', async () => {
+      const mockOrderService = {
+        listAllOrders: jest.fn().mockResolvedValue({ list: [], total: 0 }),
+      };
+      const controller = new AdminController(
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        mockOrderService as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+        {} as any,
+      );
+
+      const result = await controller.listOrders({
+        keyword: '  未付款  ',
+        orderId: 'legacy-order-id-field',
+        status: 'PAID',
+        page: '2',
+        pageSize: '5',
+      });
+
+      const params = mockOrderService.listAllOrders.mock.calls[0][0];
+      expect(params.keyword).toBe('未付款');
+      expect(params).not.toHaveProperty('orderId');
+      expect(params).toEqual(
+        expect.objectContaining({
+          status: 'PAID',
+          page: 2,
+          pageSize: 5,
+        }),
+      );
+      expect(result.code).toBe(0);
+    });
+
     it('returns an order financial summary for admins', async () => {
       const financialSummary = {
         orderId: 'order-1',

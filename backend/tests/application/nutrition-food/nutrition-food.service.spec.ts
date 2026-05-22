@@ -1,5 +1,6 @@
 import { NutritionFoodCategory, NutritionFoodStatus } from '@prisma/client';
 import { NutritionFoodService } from '../../../src/application/nutrition-food/nutrition-food.service';
+import { SearchGovernanceService } from '../../../src/application/search-governance/search-governance.service';
 import { validateNutritionProfileContract } from '../../../src/domain/nutrition-governance/nutrition-profile-contract';
 
 describe('NutritionFoodService', () => {
@@ -13,12 +14,22 @@ describe('NutritionFoodService', () => {
       update: jest.fn(),
     },
   } as any;
+  const searchGovernance = {
+    expandQuery: jest.fn(),
+    recordSearchEvent: jest.fn(),
+  } as jest.Mocked<
+    Pick<SearchGovernanceService, 'expandQuery' | 'recordSearchEvent'>
+  >;
 
   let service: NutritionFoodService;
 
   beforeEach(() => {
     jest.clearAllMocks();
-    service = new NutritionFoodService(prisma);
+    searchGovernance.expandQuery.mockImplementation(async (_domain, rawQuery) =>
+      rawQuery ? [rawQuery] : [],
+    );
+    searchGovernance.recordSearchEvent.mockResolvedValue({ id: 'query-log-1' });
+    service = new NutritionFoodService(prisma, searchGovernance as any);
   });
 
   it('searches by the formal Chinese display name', async () => {
@@ -34,6 +45,122 @@ describe('NutritionFoodService', () => {
         ]),
       },
     });
+  });
+
+  it('expands nutrition food search terms through search governance', async () => {
+    searchGovernance.expandQuery.mockResolvedValue(['西蓝花', '西兰花']);
+    prisma.nutritionFood.count.mockResolvedValue(0);
+    prisma.nutritionFood.findMany.mockResolvedValue([]);
+
+    await service.findAll({ search: '西蓝花', page: 1, pageSize: 20 });
+
+    expect(searchGovernance.expandQuery).toHaveBeenCalledWith(
+      'NUTRITION_FOOD',
+      '西蓝花',
+    );
+    expect(prisma.nutritionFood.count).toHaveBeenCalledWith({
+      where: {
+        OR: expect.arrayContaining([
+          { name: { contains: '西兰花', mode: 'insensitive' } },
+          { nameEn: { contains: '西兰花', mode: 'insensitive' } },
+          { displayNameZh: { contains: '西兰花', mode: 'insensitive' } },
+        ]),
+      },
+    });
+  });
+
+  it('falls back to the original nutrition food search when search governance fails', async () => {
+    searchGovernance.expandQuery.mockRejectedValue(new Error('alias unavailable'));
+    prisma.nutritionFood.count.mockResolvedValue(0);
+    prisma.nutritionFood.findMany.mockResolvedValue([]);
+
+    await service.findAll({ search: '西蓝花', page: 1, pageSize: 20 });
+
+    expect(prisma.nutritionFood.count).toHaveBeenCalledWith({
+      where: {
+        OR: expect.arrayContaining([
+          { name: { contains: '西蓝花', mode: 'insensitive' } },
+          { nameEn: { contains: '西蓝花', mode: 'insensitive' } },
+          { displayNameZh: { contains: '西蓝花', mode: 'insensitive' } },
+        ]),
+      },
+    });
+  });
+
+  it('limits nutrition food search expansion terms while keeping the original keyword first', async () => {
+    searchGovernance.expandQuery.mockResolvedValue([
+      'alias-1',
+      'alias-2',
+      'alias-3',
+      'alias-4',
+      'alias-5',
+      'alias-6',
+      'alias-7',
+      'alias-8',
+      'alias-9',
+    ]);
+    prisma.nutritionFood.count.mockResolvedValue(0);
+    prisma.nutritionFood.findMany.mockResolvedValue([]);
+
+    await service.findAll({ search: '西蓝花', page: 1, pageSize: 20 });
+
+    const where = prisma.nutritionFood.count.mock.calls[0][0].where;
+    const searchedNames = where.OR.filter((condition: any) => condition.name)
+      .map((condition: any) => condition.name.contains);
+    expect(searchedNames).toEqual([
+      '西蓝花',
+      'alias-1',
+      'alias-2',
+      'alias-3',
+      'alias-4',
+      'alias-5',
+      'alias-6',
+      'alias-7',
+    ]);
+    expect(searchedNames).not.toContain('alias-8');
+  });
+
+  it('records nutrition food list searches with the total result count', async () => {
+    prisma.nutritionFood.count.mockResolvedValue(4);
+    prisma.nutritionFood.findMany.mockResolvedValue([]);
+
+    await service.findAll({ search: ' 西蓝花 ', page: 1, pageSize: 20 });
+
+    expect(searchGovernance.recordSearchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        domain: 'NUTRITION_FOOD',
+        source: 'ADMIN_NUTRITION_FOOD_LIST',
+        rawQuery: '西蓝花',
+        resultCount: 4,
+      }),
+    );
+  });
+
+  it('keeps returning nutrition food results when search event logging fails', async () => {
+    searchGovernance.recordSearchEvent.mockRejectedValue(
+      new Error('log unavailable'),
+    );
+    prisma.nutritionFood.count.mockResolvedValue(0);
+    prisma.nutritionFood.findMany.mockResolvedValue([]);
+
+    await expect(
+      service.findAll({ search: '西蓝花', page: 1, pageSize: 20 }),
+    ).resolves.toEqual({
+      data: [],
+      total: 0,
+      page: 1,
+      pageSize: 20,
+      hasMore: false,
+    });
+
+    expect(searchGovernance.recordSearchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        domain: 'NUTRITION_FOOD',
+        source: 'ADMIN_NUTRITION_FOOD_LIST',
+        rawQuery: '西蓝花',
+        resultCount: 0,
+      }),
+    );
   });
 
   it('stores manual Chinese display name metadata when creating a nutrition food', async () => {

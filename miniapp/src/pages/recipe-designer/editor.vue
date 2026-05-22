@@ -94,10 +94,12 @@
         <scroll-view scroll-y class="ingredient-list">
           <view v-if="ingredientLoading && ingredientOptions.length === 0" class="picker-state">
             <text>加载原料中...</text>
+            <text class="picker-state-note">仅显示已维护并验证营养档案的原料，可尝试缩短关键词或近义词</text>
           </view>
 
           <view v-else-if="ingredientOptions.length === 0" class="picker-state">
             <text>暂无可用原料</text>
+            <text class="picker-state-note">仅显示已维护并验证营养档案的原料，可尝试缩短关键词或近义词</text>
           </view>
 
           <view
@@ -974,6 +976,13 @@ function formatAssessmentNumber(value: unknown) {
   color: #999;
   font-size: 26rpx;
   text-align: center;
+}
+
+.picker-state-note {
+  display: block;
+  margin-top: 12rpx;
+  color: #777;
+  font-size: 22rpx;
 }
 
 .food-option {

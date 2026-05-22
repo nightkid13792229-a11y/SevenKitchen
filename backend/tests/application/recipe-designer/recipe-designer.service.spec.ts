@@ -1,6 +1,7 @@
 import { BadRequestException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { RecipeDesignerService } from '../../../src/application/recipe-designer/recipe-designer.service';
+import { SearchGovernanceService } from '../../../src/application/search-governance/search-governance.service';
 import { PrismaService } from '../../../src/infrastructure/prisma.service';
 
 describe('RecipeDesignerService', () => {
@@ -39,6 +40,10 @@ describe('RecipeDesignerService', () => {
   const targetProvider = {
     getTargets: jest.fn(),
   };
+  const searchGovernance = {
+    expandQuery: jest.fn(),
+    recordSearchEvent: jest.fn(),
+  };
 
   beforeEach(async () => {
     const moduleRef = await Test.createTestingModule({
@@ -46,11 +51,16 @@ describe('RecipeDesignerService', () => {
         RecipeDesignerService,
         { provide: PrismaService, useValue: prisma },
         { provide: 'FediafTargetProvider', useValue: targetProvider },
+        { provide: SearchGovernanceService, useValue: searchGovernance },
       ],
     }).compile();
 
     service = moduleRef.get(RecipeDesignerService);
     jest.resetAllMocks();
+    searchGovernance.expandQuery.mockImplementation(async (_domain, rawQuery) =>
+      rawQuery ? [rawQuery] : [],
+    );
+    searchGovernance.recordSearchEvent.mockResolvedValue({ id: 'query-log-1' });
     prisma.designRecipe.aggregate.mockResolvedValue({ _max: { version: null } });
     prisma.$transaction.mockImplementation(async (callback: any) =>
       callback(prisma),
@@ -322,6 +332,7 @@ describe('RecipeDesignerService', () => {
   });
 
   it('expands common ingredient search aliases such as 西蓝花 to 西兰花', async () => {
+    searchGovernance.expandQuery.mockResolvedValue(['西蓝花', '西兰花']);
     prisma.ingredient.count.mockResolvedValue(0);
     prisma.ingredient.findMany.mockResolvedValue([]);
 
@@ -331,12 +342,15 @@ describe('RecipeDesignerService', () => {
       pageSize: 20,
     });
 
+    expect(searchGovernance.expandQuery).toHaveBeenCalledWith(
+      'INGREDIENT',
+      '西蓝花',
+    );
     const where = prisma.ingredient.count.mock.calls[0][0].where;
     expect(where.OR).toEqual(
       expect.arrayContaining([
         { name: { contains: '西蓝花', mode: 'insensitive' } },
         { name: { contains: '西兰花', mode: 'insensitive' } },
-        { name: { contains: '青花菜', mode: 'insensitive' } },
         {
           nutritionFoodMappings: {
             some: {
@@ -348,6 +362,118 @@ describe('RecipeDesignerService', () => {
         },
       ]),
     );
+  });
+
+  it('uses search governance expansion for ingredient option search terms', async () => {
+    searchGovernance.expandQuery.mockResolvedValue([
+      '鸡胸肉',
+      '鸡胸',
+      'chicken breast',
+    ]);
+    prisma.ingredient.count.mockResolvedValue(0);
+    prisma.ingredient.findMany.mockResolvedValue([]);
+
+    await service.listIngredientOptions({
+      search: '鸡胸肉',
+      page: 1,
+      pageSize: 20,
+    });
+
+    expect(searchGovernance.expandQuery).toHaveBeenCalledWith(
+      'INGREDIENT',
+      '鸡胸肉',
+    );
+    const where = prisma.ingredient.count.mock.calls[0][0].where;
+    expect(where).toEqual(
+      expect.objectContaining({
+        type: 'FOOD',
+        nutritionFoodMappings: {
+          some: { nutritionFood: { status: 'VERIFIED' } },
+        },
+      }),
+    );
+    expect(where.OR).toEqual(
+      expect.arrayContaining([
+        { name: { contains: '鸡胸', mode: 'insensitive' } },
+        { name: { contains: 'chicken breast', mode: 'insensitive' } },
+      ]),
+    );
+  });
+
+  it('records ingredient option searches with the final total result count', async () => {
+    prisma.ingredient.count.mockResolvedValue(2);
+    prisma.ingredient.findMany.mockResolvedValue([]);
+
+    await service.listIngredientOptions({
+      search: ' 鸡胸肉 ',
+      page: 1,
+      pageSize: 20,
+    });
+
+    expect(searchGovernance.recordSearchEvent).toHaveBeenCalledWith(
+      expect.objectContaining({
+        domain: 'INGREDIENT',
+        source: 'RECIPE_DESIGNER_INGREDIENT_OPTIONS',
+        rawQuery: '鸡胸肉',
+        resultCount: 2,
+      }),
+    );
+  });
+
+  it('falls back to the original ingredient search when search governance fails', async () => {
+    searchGovernance.expandQuery.mockRejectedValue(new Error('alias unavailable'));
+    prisma.ingredient.count.mockResolvedValue(0);
+    prisma.ingredient.findMany.mockResolvedValue([]);
+
+    await service.listIngredientOptions({
+      search: '鸡胸肉',
+      page: 1,
+      pageSize: 20,
+    });
+
+    const where = prisma.ingredient.count.mock.calls[0][0].where;
+    expect(where.OR).toEqual(
+      expect.arrayContaining([
+        { name: { contains: '鸡胸肉', mode: 'insensitive' } },
+      ]),
+    );
+  });
+
+  it('limits ingredient search expansion terms while keeping the original keyword first', async () => {
+    searchGovernance.expandQuery.mockResolvedValue([
+      'alias-1',
+      'alias-2',
+      'alias-3',
+      'alias-4',
+      'alias-5',
+      'alias-6',
+      'alias-7',
+      'alias-8',
+      'alias-9',
+    ]);
+    prisma.ingredient.count.mockResolvedValue(0);
+    prisma.ingredient.findMany.mockResolvedValue([]);
+
+    await service.listIngredientOptions({
+      search: '鸡胸肉',
+      page: 1,
+      pageSize: 20,
+    });
+
+    const where = prisma.ingredient.count.mock.calls[0][0].where;
+    const searchedNames = where.OR.filter((condition: any) => condition.name)
+      .map((condition: any) => condition.name.contains);
+    expect(searchedNames).toEqual([
+      '鸡胸肉',
+      'alias-1',
+      'alias-2',
+      'alias-3',
+      'alias-4',
+      'alias-5',
+      'alias-6',
+      'alias-7',
+    ]);
+    expect(searchedNames).not.toContain('alias-8');
   });
 
   it('adds design items with both the selected standard ingredient and nutrition profile', async () => {

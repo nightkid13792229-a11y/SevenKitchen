@@ -152,6 +152,8 @@ import { NutritionFoodController } from './interfaces/controllers/nutrition-food
 import { NutritionFoodService } from './application/nutrition-food/nutrition-food.service';
 import { NutritionGovernanceController } from './interfaces/controllers/nutrition-governance.controller';
 import { NutritionGovernanceService } from './application/nutrition-governance/nutrition-governance.service';
+import { SearchGovernanceController } from './interfaces/controllers/search-governance.controller';
+import { SearchGovernanceService } from './application/search-governance/search-governance.service';
 import { AgentProviderConfigService } from './application/nutrition-governance/agent-provider-config.service';
 import { TrustedNutritionWebSearchService } from './application/nutrition-governance/trusted-nutrition-web-search.service';
 import {
@@ -275,6 +277,7 @@ validatePrismaConfig();
     SharedPhotosController,
     NutritionFoodController,
     NutritionGovernanceController,
+    SearchGovernanceController,
     RecommendedProductController,
     ReviewsController,
     FeedbackController,
@@ -644,6 +647,7 @@ validatePrismaConfig();
     AgentProviderConfigService,
     TrustedNutritionWebSearchService,
     NutritionGovernanceService,
+    SearchGovernanceService,
     {
       provide: LABEL_RECOGNITION_PROVIDER,
       useClass: DisabledLabelRecognitionProvider,

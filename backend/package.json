@@ -19,6 +19,7 @@
     "start:check": "ts-node -r tsconfig-paths/register scripts/start-check.ts",
     "start:check:miniapp": "PORT=${PORT:-3011} DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} NODE_ENV=development npm run start:check",
     "seed:fediaf-2025-dog-standard": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/seed-fediaf-2025-dog-standards.ts",
+    "seed:search-governance-aliases": "DATABASE_URL=${DATABASE_URL:-postgresql://postgres:postgres@localhost:5432/sevenkitchen} ts-node -r tsconfig-paths/register prisma/seed-search-governance-aliases.ts",
     "backfill:breed-aliases": "ts-node -r tsconfig-paths/register prisma/backfill-breed-aliases.ts",
     "backfill:breed-aliases:apply": "ts-node -r tsconfig-paths/register prisma/backfill-breed-aliases.ts --apply",
     "backfill:ingredient-nutrition-profile-v2": "ts-node -r tsconfig-paths/register prisma/backfill-ingredient-nutrition-profile-v2.ts",

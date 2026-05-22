@@ -1596,6 +1596,40 @@ enum SupplementNutritionDraftStatus {
   REJECTED
 }
 
+enum SearchGovernanceDomain {
+  INGREDIENT
+  NUTRITION_FOOD
+  BREED
+  ORDER
+}
+
+enum SearchAliasGroupStatus {
+  ACTIVE
+  DISABLED
+}
+
+enum SearchAliasRiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum SearchAliasSuggestionAction {
+  CREATE_GROUP
+  ADD_ALIAS
+  MERGE_GROUPS
+  DISABLE_ALIAS
+  UPDATE_CANONICAL
+}
+
+enum SearchAliasSuggestionStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  APPLIED
+  FAILED
+}
+
 enum DesignRecipeStatus {
   DRAFT
   COMPLIANT
@@ -1627,6 +1661,77 @@ enum FeedbackStatus {
   PENDING
   REPLIED
   CLOSED
+}
+
+model SearchAliasGroup {
+  id            String                 @id @default(uuid()) @map("id")
+  domain        SearchGovernanceDomain @map("domain")
+  canonicalTerm String                 @map("canonical_term") @db.VarChar(200)
+  aliases       String[]               @default([]) @map("aliases")
+  status        SearchAliasGroupStatus @default(ACTIVE) @map("status")
+  riskLevel     SearchAliasRiskLevel   @default(LOW) @map("risk_level")
+  notes         String?                @map("notes")
+  createdBy     String?                @map("created_by")
+  updatedBy     String?                @map("updated_by")
+  createdAt     DateTime               @default(now()) @map("created_at")
+  updatedAt     DateTime               @updatedAt @map("updated_at")
+
+  @@unique([domain, canonicalTerm])
+  @@index([domain, status])
+  @@map("search_alias_group")
+}
+
+model SearchQueryLog {
+  id                 String                 @id @default(uuid()) @map("id")
+  domain             SearchGovernanceDomain @map("domain")
+  source             String                 @map("source") @db.VarChar(120)
+  rawQuery           String                 @map("raw_query") @db.VarChar(300)
+  normalizedQuery    String                 @map("normalized_query") @db.VarChar(300)
+  resultCount        Int                    @default(0) @map("result_count")
+  selectedEntityType String?                @map("selected_entity_type") @db.VarChar(80)
+  selectedEntityId   String?                @map("selected_entity_id") @db.VarChar(120)
+  selectedEntityName String?                @map("selected_entity_name") @db.VarChar(300)
+  userId             String?                @map("user_id") @db.VarChar(120)
+  createdAt          DateTime               @default(now()) @map("created_at")
+
+  @@index([domain, createdAt])
+  @@index([domain, normalizedQuery])
+  @@map("search_query_log")
+}
+
+model SearchAliasSuggestion {
+  id             String                      @id @default(uuid()) @map("id")
+  domain         SearchGovernanceDomain      @map("domain")
+  action         SearchAliasSuggestionAction @map("action")
+  status         SearchAliasSuggestionStatus @default(PENDING) @map("status")
+  payload        Json                        @map("payload")
+  evidence       Json                        @default("{}") @map("evidence")
+  riskLevel      SearchAliasRiskLevel        @default(LOW) @map("risk_level")
+  agentRationale String?                     @map("agent_rationale")
+  errorMessage   String?                     @map("error_message")
+  reviewerId     String?                     @map("reviewer_id")
+  reviewedAt     DateTime?                   @map("reviewed_at")
+  appliedAt      DateTime?                   @map("applied_at")
+  createdAt      DateTime                    @default(now()) @map("created_at")
+  updatedAt      DateTime                    @updatedAt @map("updated_at")
+
+  @@index([domain, status, createdAt])
+  @@map("search_alias_suggestion")
+}
+
+model SearchAliasAuditLog {
+  id           String                 @id @default(uuid()) @map("id")
+  domain       SearchGovernanceDomain @map("domain")
+  action       String                 @map("action") @db.VarChar(80)
+  before       Json?                  @map("before")
+  after        Json?                  @map("after")
+  suggestionId String?                @map("suggestion_id")
+  operatorId   String?                @map("operator_id")
+  createdAt    DateTime               @default(now()) @map("created_at")
+
+  @@index([domain, createdAt])
+  @@index([suggestionId])
+  @@map("search_alias_audit_log")
 }
 
 /// 营养原料库 - 独立于采购库的完整营养数据

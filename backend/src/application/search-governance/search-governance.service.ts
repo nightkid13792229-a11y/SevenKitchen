@@ -701,8 +701,13 @@ export class SearchGovernanceService {
     tx: Pick<SearchGovernanceTransaction, '$queryRaw'>,
     domain: SearchGovernanceDomain,
   ): Promise<void> {
-    await tx.$queryRaw(
-      Prisma.sql`SELECT pg_advisory_xact_lock(hashtext(${`search-governance:${domain}`}))`,
+    await tx.$queryRaw<{ locked: boolean }[]>(
+      Prisma.sql`
+        WITH lock AS (
+          SELECT pg_advisory_xact_lock(hashtext(${`search-governance:${domain}`}))
+        )
+        SELECT true AS "locked" FROM lock
+      `,
     );
   }
 

@@ -166,6 +166,36 @@ describe('SearchGovernanceService', () => {
     });
   });
 
+  it('uses an advisory lock query that does not return a PostgreSQL void column', async () => {
+    const createdAt = new Date('2026-05-22T08:00:00.000Z');
+    prisma.searchAliasGroup.findMany.mockResolvedValue([]);
+    prisma.searchAliasGroup.create.mockResolvedValue({
+      id: 'group-lock',
+      domain: 'INGREDIENT',
+      canonicalTerm: '胡萝卜',
+      aliases: ['红萝卜', 'carrot'],
+      status: 'ACTIVE',
+      riskLevel: 'LOW',
+      notes: null,
+      createdAt,
+      updatedAt: createdAt,
+    });
+
+    await service.createAliasGroup(
+      {
+        domain: 'INGREDIENT',
+        canonicalTerm: '胡萝卜',
+        aliases: ['红萝卜', 'carrot'],
+      },
+      'admin-1',
+    );
+
+    const lockQuery = prisma.$queryRaw.mock.calls[0]?.[0];
+    expect(lockQuery?.text).toContain('WITH lock AS');
+    expect(lockQuery?.text).toContain('SELECT true AS "locked" FROM lock');
+    expect(lockQuery?.text).not.toMatch(/^SELECT pg_advisory_xact_lock/);
+  });
+
   it('rejects canonical terms already used by disabled groups before create hits the unique constraint', async () => {
     prisma.searchAliasGroup.findMany.mockImplementation(async (args: any) => {
       if (args.where.status === undefined) {

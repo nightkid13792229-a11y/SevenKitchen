@@ -109,6 +109,8 @@ export const orderApi = {
     refundId: string | null
     status: string | null
     adjustmentId: string
+    recordId: string | null
+    reused?: boolean
   }> => {
     return api.post(`/admin/orders/${id}/wechat-refund`, data)
   },

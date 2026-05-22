@@ -1001,6 +1001,9 @@ export class OrdersController {
             paymentAutoCloseEnabled: null,
           };
     const refundStatus = await this.getRefundStatusForResponse(order);
+    const refundRecords = refundStatus
+      ? await this.orderService.getOrderRefundRecords(order.id)
+      : [];
 
     return {
       id: order.id,
@@ -1068,6 +1071,7 @@ export class OrdersController {
         : null,
       aftersalePhotos: order.aftersalePhotos ?? [],
       refundStatus,
+      refundRecords,
       createdAt: order.createdAt.toISOString(),
     };
   }
@@ -1354,6 +1358,7 @@ export class OrdersController {
           amount: order.amountTotal,
           reason: dto.adminNote || order.aftersaleReason || '售后退款',
           adminId: user.userId,
+          source: 'AFTERSALE_APPROVE',
         });
         const refundNote = `微信原路退款已发起；退款单号：${refund.outRefundNo}`;
         adminNote = [dto.adminNote, refundNote].filter(Boolean).join('\n');

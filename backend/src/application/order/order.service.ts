@@ -138,6 +138,31 @@ export interface OrderRefundStatusDto {
   updatedAt: string | null;
 }
 
+export interface OrderRefundRecordDto {
+  id: string;
+  orderId: string;
+  outRefundNo: string;
+  refundId: string | null;
+  amount: number;
+  totalAmount: number;
+  reason: string;
+  source: string;
+  status: string;
+  statusText: string;
+  success: boolean;
+  operatorId: string | null;
+  operatorName: string | null;
+  operatorPhone: string | null;
+  operatorRole: string | null;
+  adjustmentId: string | null;
+  errorMessage: string | null;
+  requestedAt: string | null;
+  notifiedAt: string | null;
+  successTime: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
 export interface OrderSettlementAdjustmentDto {
   id: string;
   orderId: string;
@@ -484,6 +509,16 @@ export class OrderService {
   async getOrderRefundStatus(
     orderId: string,
   ): Promise<OrderRefundStatusDto | null> {
+    const records = await this.prisma.orderRefundRecord.findMany({
+      where: { orderId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const recordStatus = this.getWechatRefundStatusFromRecords(records);
+    if (recordStatus) {
+      return recordStatus;
+    }
+
     const adjustments = await this.prisma.orderSettlementAdjustment.findMany({
       where: {
         orderId,
@@ -494,6 +529,24 @@ export class OrderService {
     });
 
     return this.getWechatRefundStatus(adjustments);
+  }
+
+  async getOrderRefundRecords(orderId: string): Promise<OrderRefundRecordDto[]> {
+    const records = await this.prisma.orderRefundRecord.findMany({
+      where: { orderId },
+      include: {
+        operator: {
+          select: {
+            nickname: true,
+            phone: true,
+            role: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return records.map((record) => this.mapOrderRefundRecord(record));
   }
 
   async createOrderSettlementAdjustment(
@@ -783,6 +836,57 @@ export class OrderService {
     };
   }
 
+  private getWechatRefundStatusFromRecords(records: any[]): OrderRefundStatusDto | null {
+    if (records.length === 0) return null;
+
+    const record = records.find((item) => item.success) ?? records[0];
+    const status = String(record.status || 'PENDING');
+    const success = record.success === true || status === 'SUCCESS';
+
+    return {
+      exists: true,
+      success,
+      status,
+      statusText: record.statusText || this.getRefundStatusText(status, success),
+      amount: Math.abs(this.roundMoney(this.toNumber(record.amount))),
+      outRefundNo: record.outRefundNo ?? null,
+      refundId: record.refundId ?? null,
+      successTime: record.successTime?.toISOString() ?? null,
+      createdAt: record.createdAt?.toISOString() ?? null,
+      updatedAt: record.updatedAt?.toISOString() ?? null,
+    };
+  }
+
+  private mapOrderRefundRecord(record: any): OrderRefundRecordDto {
+    return {
+      id: record.id,
+      orderId: record.orderId,
+      outRefundNo: record.outRefundNo,
+      refundId: record.refundId ?? null,
+      amount: Math.abs(this.roundMoney(this.toNumber(record.amount))),
+      totalAmount: this.roundMoney(this.toNumber(record.totalAmount)),
+      reason: record.reason,
+      source: record.source,
+      status: record.status,
+      statusText:
+        record.statusText ||
+        this.getRefundStatusText(record.status, record.success === true),
+      success: record.success === true,
+      operatorId: record.operatorId ?? null,
+      operatorName:
+        record.operator?.nickname || record.operatorNameSnapshot || null,
+      operatorPhone: record.operator?.phone ?? null,
+      operatorRole: record.operator?.role ?? null,
+      adjustmentId: record.adjustmentId ?? null,
+      errorMessage: record.errorMessage ?? null,
+      requestedAt: record.requestedAt?.toISOString() ?? null,
+      notifiedAt: record.notifiedAt?.toISOString() ?? null,
+      successTime: record.successTime?.toISOString() ?? null,
+      createdAt: record.createdAt?.toISOString() ?? null,
+      updatedAt: record.updatedAt?.toISOString() ?? null,
+    };
+  }
+
   private getRefundStatusText(status: string, success: boolean): string {
     if (success) return '退款成功，钱款已原路退回';
     const statusMap: Record<string, string> = {
@@ -790,6 +894,7 @@ export class OrderService {
       PROCESSING: '退款处理中，等待微信确认',
       ABNORMAL: '退款异常，请管理员到微信商户平台核查',
       CLOSED: '退款已关闭，请管理员核查',
+      FAILED: '退款发起失败，未确认钱款退回',
     };
     return statusMap[status] || `退款状态：${status}`;
   }
@@ -2643,9 +2748,16 @@ export class OrderService {
       take: 100,
     });
 
+    const refundRecordOrders = await this.prisma.orderRefundRecord.findMany({
+      select: { orderId: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+
     const refunded = (
       await Promise.all(
-        refundedRecords.map((record) => this.orderRepository.findById(record.id)),
+        [...refundedRecords.map((record) => record.id), ...refundRecordOrders.map((record) => record.orderId)]
+          .map((orderId) => this.orderRepository.findById(orderId)),
       )
     ).filter((order): order is Order => Boolean(order));
 

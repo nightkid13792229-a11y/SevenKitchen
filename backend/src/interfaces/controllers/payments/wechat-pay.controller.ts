@@ -68,6 +68,7 @@ export class AdminWechatRefundController {
         amount: dto.amount,
         reason: dto.reason,
         adminId: user.userId,
+        source: 'ADMIN_RETRY',
       });
       return ApiResponseDto.success(refund);
     } catch (error) {

@@ -3,7 +3,7 @@
     <div class="page-header">
       <div>
         <h2>退款管理</h2>
-        <p>集中审核客户退款申请，并按微信退款成功记录确认钱款是否原路退回。</p>
+        <p>保存每次微信退款尝试，按微信成功记录确认钱款是否已原路退回。</p>
       </div>
       <el-button type="primary" :loading="loading" @click="loadRefunds">刷新</el-button>
     </div>
@@ -11,7 +11,7 @@
     <el-row :gutter="16" class="stats-row">
       <el-col :xs="12" :sm="6">
         <el-card class="stat-card" shadow="never">
-          <div class="stat-label">退款记录</div>
+          <div class="stat-label">退款工单</div>
           <div class="stat-value">{{ refunds.length }}</div>
         </el-card>
       </el-col>
@@ -23,8 +23,14 @@
       </el-col>
       <el-col :xs="12" :sm="6">
         <el-card class="stat-card" shadow="never">
-          <div class="stat-label">待补发/待确认</div>
+          <div class="stat-label">待处理/待确认</div>
           <div class="stat-value warning">{{ needsRefundAttentionCount }}</div>
+        </el-card>
+      </el-col>
+      <el-col :xs="12" :sm="6">
+        <el-card class="stat-card" shadow="never">
+          <div class="stat-label">退款成功</div>
+          <div class="stat-value success">{{ successRefundCount }}</div>
         </el-card>
       </el-col>
     </el-row>
@@ -47,36 +53,45 @@
         <el-table-column label="订单内容" min-width="240" show-overflow-tooltip>
           <template #default="{ row }">{{ getOrderItemsSummary(row) }}</template>
         </el-table-column>
-        <el-table-column label="支付方式" width="110">
-          <template #default="{ row }">{{ getPaymentMethodText(row.paymentMethod) }}</template>
-        </el-table-column>
         <el-table-column label="订单金额" width="120" align="right">
           <template #default="{ row }">¥{{ formatAmount(row.amountTotal) }}</template>
         </el-table-column>
-        <el-table-column prop="aftersaleReason" label="退款理由" min-width="230" show-overflow-tooltip />
-        <el-table-column label="退款状态" width="210">
+        <el-table-column prop="aftersaleReason" label="退款理由" min-width="210" show-overflow-tooltip />
+        <el-table-column label="退款状态" width="220">
           <template #default="{ row }">
             <el-tag :type="getRefundTagType(row)">
               {{ getRefundStatusText(row) }}
             </el-tag>
-            <div v-if="row.refundStatus?.outRefundNo" class="refund-no">
-              {{ row.refundStatus.outRefundNo }}
+            <div v-if="latestRefundRecord(row)" class="refund-no">
+              {{ latestRefundRecord(row)?.outRefundNo }}
             </div>
+          </template>
+        </el-table-column>
+        <el-table-column label="最近处理人" width="150">
+          <template #default="{ row }">
+            <span>{{ getLatestOperatorText(row) }}</span>
           </template>
         </el-table-column>
         <el-table-column label="申请时间" width="170">
           <template #default="{ row }">{{ formatTime(row.aftersaleSince) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="190" fixed="right">
+        <el-table-column label="操作" width="260" fixed="right">
           <template #default="{ row }">
-            <template v-if="canReviewRefund(row)">
-              <el-button size="small" type="primary" @click="openReview(row, 'approve')">审核</el-button>
-              <el-button size="small" @click="openReview(row, 'reject')">驳回</el-button>
-            </template>
-            <el-button v-else-if="canRetryWechatRefund(row)" size="small" type="warning" @click="retryWechatRefund(row)">
-              补发退款
-            </el-button>
-            <span v-else class="muted-text">{{ getActionHint(row) }}</span>
+            <div class="action-buttons">
+              <template v-if="canReviewRefund(row)">
+                <el-button size="small" type="primary" @click="openReview(row, 'approve')">审核</el-button>
+                <el-button size="small" @click="openReview(row, 'reject')">驳回</el-button>
+              </template>
+              <el-button size="small" @click="openRefundDetail(row)">查看记录</el-button>
+              <el-button
+                v-if="canRetryWechatRefund(row)"
+                size="small"
+                type="warning"
+                @click="retryWechatRefund(row)"
+              >
+                补发退款
+              </el-button>
+            </div>
           </template>
         </el-table-column>
       </el-table>
@@ -110,7 +125,7 @@
             type="warning"
             :closable="false"
             show-icon
-            title="确认通过后，系统会自动发起微信原路退款；退款受理成功后才会将订单标记为已退款。"
+            title="确认通过后，系统会直接发起微信原路退款；只有微信返回成功记录时，系统才会显示钱款已退回。"
           />
         </template>
 
@@ -137,6 +152,84 @@
         </el-button>
       </template>
     </el-dialog>
+
+    <el-drawer
+      v-model="detailDrawerVisible"
+      title="退款记录详情"
+      size="720px"
+      :destroy-on-close="true"
+    >
+      <template v-if="detailOrder">
+        <div class="detail-section">
+          <div class="section-title">订单信息</div>
+          <el-descriptions :column="2" border>
+            <el-descriptions-item label="订单号">
+              <router-link class="order-link" :to="`/orders/${detailOrder.id}`">{{ detailOrder.id }}</router-link>
+            </el-descriptions-item>
+            <el-descriptions-item label="客户">
+              {{ getCustomerName(detailOrder) }} / {{ getCustomerPhone(detailOrder) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="商品" :span="2">
+              {{ getOrderItemsSummary(detailOrder) }}
+            </el-descriptions-item>
+            <el-descriptions-item label="订单金额">¥{{ formatAmount(detailOrder.amountTotal) }}</el-descriptions-item>
+            <el-descriptions-item label="退款理由">{{ detailOrder.aftersaleReason || '-' }}</el-descriptions-item>
+            <el-descriptions-item label="当前状态" :span="2">
+              <el-tag :type="getRefundTagType(detailOrder)">{{ getRefundStatusText(detailOrder) }}</el-tag>
+            </el-descriptions-item>
+          </el-descriptions>
+        </div>
+
+        <div class="detail-section">
+          <div class="section-title">微信退款记录</div>
+          <el-empty v-if="detailRefundRecords.length === 0" description="暂无微信退款记录" />
+          <el-table v-else :data="detailRefundRecords" border>
+            <el-table-column label="状态" width="150">
+              <template #default="{ row }">
+                <el-tag :type="row.success ? 'success' : getRecordTagType(row.status)">
+                  {{ row.statusText || row.status }}
+                </el-tag>
+              </template>
+            </el-table-column>
+            <el-table-column prop="amount" label="退款金额" width="110" align="right">
+              <template #default="{ row }">¥{{ formatAmount(row.amount) }}</template>
+            </el-table-column>
+            <el-table-column label="处理人" width="140">
+              <template #default="{ row }">{{ getRecordOperatorText(row) }}</template>
+            </el-table-column>
+            <el-table-column prop="outRefundNo" label="商户退款单号" min-width="210" show-overflow-tooltip />
+            <el-table-column label="发起时间" width="170">
+              <template #default="{ row }">{{ formatTime(row.requestedAt || row.createdAt) }}</template>
+            </el-table-column>
+          </el-table>
+
+          <div v-for="record in detailRefundRecords" :key="record.id" class="record-detail">
+            <div class="record-title">
+              {{ record.outRefundNo }}
+              <el-tag size="small" :type="record.success ? 'success' : getRecordTagType(record.status)">
+                {{ record.statusText || record.status }}
+              </el-tag>
+            </div>
+            <div class="record-grid">
+              <span>微信退款单号</span><strong>{{ record.refundId || '微信暂未返回' }}</strong>
+              <span>处理人</span><strong>{{ getRecordOperatorText(record) }}</strong>
+              <span>来源</span><strong>{{ getRecordSourceText(record.source) }}</strong>
+              <span>退款金额</span><strong>¥{{ formatAmount(record.amount) }}</strong>
+              <span>发起时间</span><strong>{{ formatTime(record.requestedAt || record.createdAt) }}</strong>
+              <span>微信通知时间</span><strong>{{ formatTime(record.notifiedAt) }}</strong>
+              <span>到账时间</span><strong>{{ formatTime(record.successTime) }}</strong>
+              <span>失败原因</span><strong>{{ record.errorMessage || '-' }}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="canRetryWechatRefund(detailOrder)" class="drawer-footer">
+          <el-button type="warning" :loading="submitting" @click="retryWechatRefund(detailOrder)">
+            补发微信原路退款
+          </el-button>
+        </div>
+      </template>
+    </el-drawer>
   </div>
 </template>
 
@@ -144,7 +237,7 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { orderApi } from '@/api/orders'
-import type { Order } from '@/types/order'
+import type { Order, OrderRefundRecord } from '@/types/order'
 
 type RefundOrder = Order & {
   aftersaleType?: string
@@ -156,8 +249,10 @@ const loading = ref(false)
 const submitting = ref(false)
 const refunds = ref<RefundOrder[]>([])
 const reviewDialogVisible = ref(false)
+const detailDrawerVisible = ref(false)
 const reviewMode = ref<'approve' | 'reject'>('approve')
 const currentOrder = ref<RefundOrder | null>(null)
+const detailOrder = ref<RefundOrder | null>(null)
 
 const reviewForm = reactive({
   adminNote: '',
@@ -172,6 +267,14 @@ const needsRefundAttentionCount = computed(() => {
   return refunds.value.filter((order) => needsRefundAttention(order)).length
 })
 
+const successRefundCount = computed(() => {
+  return refunds.value.filter((order) => order.refundStatus?.success).length
+})
+
+const detailRefundRecords = computed(() => {
+  return detailOrder.value?.refundRecords || []
+})
+
 onMounted(() => {
   loadRefunds()
 })
@@ -180,6 +283,9 @@ async function loadRefunds() {
   loading.value = true
   try {
     refunds.value = await orderApi.listRefundAftersales()
+    if (detailOrder.value) {
+      detailOrder.value = refunds.value.find((order) => order.id === detailOrder.value?.id) || detailOrder.value
+    }
   } finally {
     loading.value = false
   }
@@ -194,12 +300,21 @@ function openReview(row: RefundOrder, mode: 'approve' | 'reject') {
   reviewDialogVisible.value = true
 }
 
+function openRefundDetail(row: RefundOrder) {
+  detailOrder.value = row
+  detailDrawerVisible.value = true
+}
+
 function canReviewRefund(row: RefundOrder): boolean {
   return row.status === 'AFTERSALE' && row.aftersaleType === 'REFUND'
 }
 
 function canRetryWechatRefund(row: RefundOrder): boolean {
-  return isResolvedWechatRefundOrder(row) && !row.refundStatus
+  if (!isResolvedWechatRefundOrder(row)) return false
+  if (row.refundStatus?.success) return false
+  if (hasInFlightRefund(row)) return false
+  const latest = latestRefundRecord(row)
+  return !latest || ['FAILED', 'ABNORMAL', 'CLOSED'].includes(latest.status)
 }
 
 async function retryWechatRefund(row: RefundOrder) {
@@ -217,7 +332,9 @@ async function retryWechatRefund(row: RefundOrder) {
     })
     const statusText = refund.status === 'SUCCESS'
       ? '微信退款已成功'
-      : '微信退款已发起，等待微信确认'
+      : refund.reused
+        ? '已有退款正在处理'
+        : '微信退款已发起，等待微信确认'
     ElMessage.success(`${statusText}：${refund.outRefundNo}`)
     await loadRefunds()
   } finally {
@@ -258,9 +375,10 @@ async function confirmRefundIrreversible(order: RefundOrder) {
     [
       '该退款操作不可撤销。',
       '确认后系统将直接发起微信原路退款，钱款会退回客户原支付账户。',
+      '只有微信返回成功通知后，系统才会显示已退款到账。',
       `订单：${order.id}`,
       `客户：${getCustomerName(order)} / ${getCustomerPhone(order)}`,
-      `金额：¥${formatAmount(order.amountTotal)}`,
+      `金额：¥${formatAmount(order.amountTotal)}`
     ].join('\n'),
     '二次确认退款',
     {
@@ -279,7 +397,7 @@ async function confirmRetryWechatRefund(order: RefundOrder) {
       '确认后会补发微信原路退款；该操作不可撤销，请先核对订单、客户和金额。',
       `订单：${order.id}`,
       `客户：${getCustomerName(order)} / ${getCustomerPhone(order)}`,
-      `金额：¥${formatAmount(order.amountTotal)}`,
+      `金额：¥${formatAmount(order.amountTotal)}`
     ].join('\n'),
     '补发微信原路退款',
     {
@@ -302,14 +420,15 @@ function getRefundTagType(row: RefundOrder): 'success' | 'warning' | 'info' | 'd
   if (canReviewRefund(row)) return 'warning'
   if (row.refundStatus?.success) return 'success'
   if (!row.refundStatus) return 'danger'
-  if (['ABNORMAL', 'CLOSED'].includes(row.refundStatus.status)) return 'danger'
+  if (['ABNORMAL', 'CLOSED', 'FAILED'].includes(row.refundStatus.status)) return 'danger'
   return 'warning'
 }
 
-function getActionHint(row: RefundOrder): string {
-  if (row.refundStatus?.success) return '钱款已原路退回'
-  if (row.refundStatus) return '等待微信确认'
-  return '已处理'
+function getRecordTagType(status: string): 'success' | 'warning' | 'info' | 'danger' {
+  if (status === 'SUCCESS') return 'success'
+  if (['ABNORMAL', 'CLOSED', 'FAILED'].includes(status)) return 'danger'
+  if (['PENDING', 'PROCESSING'].includes(status)) return 'warning'
+  return 'info'
 }
 
 function isResolvedWechatRefundOrder(row: RefundOrder): boolean {
@@ -318,18 +437,45 @@ function isResolvedWechatRefundOrder(row: RefundOrder): boolean {
     (row.cancellationReason || '').includes('售后退款')
 }
 
+function hasInFlightRefund(row: RefundOrder): boolean {
+  return (row.refundRecords || []).some((record) => ['PENDING', 'PROCESSING'].includes(record.status))
+}
+
 function needsRefundAttention(row: RefundOrder): boolean {
   if (canReviewRefund(row)) return true
   if (!isResolvedWechatRefundOrder(row)) return false
   return !row.refundStatus?.success
 }
 
+function latestRefundRecord(order?: RefundOrder | null): OrderRefundRecord | null {
+  return order?.refundRecords?.[0] || null
+}
+
+function getLatestOperatorText(row: RefundOrder): string {
+  const latest = latestRefundRecord(row)
+  if (!latest) return '-'
+  return getRecordOperatorText(latest)
+}
+
+function getRecordOperatorText(record: OrderRefundRecord): string {
+  return record.operatorName || record.operatorPhone || record.operatorRole || record.operatorId || '系统记录'
+}
+
+function getRecordSourceText(source: string): string {
+  const sourceMap: Record<string, string> = {
+    AFTERSALE_APPROVE: '售后审核通过',
+    ADMIN_RETRY: '管理员补发',
+    LEGACY_ADJUSTMENT: '历史退款记录'
+  }
+  return sourceMap[source] || source
+}
+
 function getCustomerName(order?: RefundOrder | null): string {
-  return order?.address?.recipientName || '未记录客户'
+  return order?.address?.recipientName || order?.customer?.nickname || '未记录客户'
 }
 
 function getCustomerPhone(order?: RefundOrder | null): string {
-  return order?.address?.phone || '未记录电话'
+  return order?.address?.phone || order?.customer?.phone || '未记录电话'
 }
 
 function getOrderItemsSummary(order?: RefundOrder | null): string {
@@ -341,18 +487,9 @@ function getOrderItemsSummary(order?: RefundOrder | null): string {
       const packageText = item.packageCount && item.packageSpecG
         ? `${item.packageCount}袋 x ${item.packageSpecG}g`
         : `${item.quantityG || 0}g`
-      return `${recipeName}（${packageText}）`
+      return `${recipeName}：${packageText}`
     })
     .join('；')
-}
-
-function getPaymentMethodText(method?: string): string {
-  const methodMap: Record<string, string> = {
-    WECHAT_PAY: '微信支付',
-    WECHAT: '微信支付',
-    OFFLINE: '线下支付'
-  }
-  return methodMap[method || ''] || method || '未记录'
 }
 
 function formatTime(timeStr?: string | null): string {
@@ -421,6 +558,10 @@ function formatAmount(amount?: number | string | null): string {
     &.warning {
       color: #d97706;
     }
+
+    &.success {
+      color: #059669;
+    }
   }
 
   .order-link {
@@ -457,6 +598,12 @@ function formatAmount(amount?: number | string | null): string {
     line-height: 1.3;
   }
 
+  .action-buttons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+
   .reason-text {
     line-height: 1.6;
     white-space: pre-wrap;
@@ -465,6 +612,58 @@ function formatAmount(amount?: number | string | null): string {
 
   .refund-alert {
     margin-bottom: 18px;
+  }
+
+  .detail-section {
+    margin-bottom: 22px;
+  }
+
+  .section-title {
+    margin-bottom: 10px;
+    color: #1f2937;
+    font-size: 15px;
+    font-weight: 700;
+  }
+
+  .record-detail {
+    margin-top: 14px;
+    padding: 14px;
+    border: 1px solid #e5e7eb;
+    border-radius: 8px;
+    background: #fafafa;
+  }
+
+  .record-title {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 12px;
+    color: #1f2937;
+    font-weight: 700;
+  }
+
+  .record-grid {
+    display: grid;
+    grid-template-columns: 100px minmax(0, 1fr);
+    gap: 8px 12px;
+    color: #667085;
+    font-size: 13px;
+
+    strong {
+      color: #1f2937;
+      font-weight: 500;
+      word-break: break-word;
+    }
+  }
+
+  .drawer-footer {
+    position: sticky;
+    bottom: 0;
+    display: flex;
+    justify-content: flex-end;
+    padding: 14px 0 0;
+    background: #fff;
   }
 }
 </style>

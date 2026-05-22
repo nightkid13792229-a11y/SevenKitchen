@@ -47,6 +47,7 @@ model Order {
   statusHistory                OrderStatusHistory[]
   costSettlements              OrderCostSettlement[]
   settlementAdjustments        OrderSettlementAdjustment[]
+  refundRecords                OrderRefundRecord[]
 
   photoShareTokens PhotoShareToken[]
 
@@ -151,6 +152,7 @@ model User {
   paidReimbursements      Reimbursement[]      @relation("ReimbursementPayer")
   reviewedReimbursements  Reimbursement[]      @relation("ReimbursementReviewer")
   submittedReimbursements Reimbursement[]      @relation("ReimbursementSubmitter")
+  operatedRefundRecords   OrderRefundRecord[]  @relation("OrderRefundRecordOperator")
   feedbacks               Feedback[]
   feedbackReplies         FeedbackReply[]
   wechatIdentities        UserWechatIdentity[]
@@ -743,6 +745,41 @@ model OrderSettlementAdjustment {
   @@index([orderId, status])
   @@index([createdAt])
   @@map("order_settlement_adjustment")
+}
+
+model OrderRefundRecord {
+  id                   String    @id @default(uuid()) @map("id") @db.VarChar(36)
+  orderId              String    @map("order_id")
+  outTradeNo           String    @map("out_trade_no") @db.VarChar(80)
+  outRefundNo          String    @unique @map("out_refund_no") @db.VarChar(80)
+  refundId             String?   @map("refund_id") @db.VarChar(120)
+  amount               Decimal   @map("amount") @db.Decimal(10, 2)
+  totalAmount          Decimal   @map("total_amount") @db.Decimal(10, 2)
+  reason               String    @map("reason") @db.VarChar(200)
+  source               String    @default("ADMIN_RETRY") @map("source") @db.VarChar(40)
+  status               String    @default("PENDING") @map("status") @db.VarChar(30)
+  statusText           String?   @map("status_text") @db.VarChar(200)
+  success              Boolean   @default(false) @map("success")
+  operatorId           String?   @map("operator_id") @db.VarChar(36)
+  operatorNameSnapshot String?   @map("operator_name_snapshot") @db.VarChar(120)
+  adjustmentId         String?   @map("adjustment_id") @db.VarChar(36)
+  requestPayload       Json?     @map("request_payload")
+  responsePayload      Json?     @map("response_payload")
+  notifyPayload        Json?     @map("notify_payload")
+  errorMessage         String?   @map("error_message")
+  requestedAt          DateTime  @default(now()) @map("requested_at")
+  notifiedAt           DateTime? @map("notified_at")
+  successTime          DateTime? @map("success_time")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  order                Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  operator             User?     @relation("OrderRefundRecordOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+
+  @@index([orderId, createdAt])
+  @@index([orderId, success])
+  @@index([status])
+  @@index([operatorId])
+  @@map("order_refund_record")
 }
 
 model InventoryAllocation {

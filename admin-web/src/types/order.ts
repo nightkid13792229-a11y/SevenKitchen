@@ -147,6 +147,31 @@ export interface OrderRefundStatus {
   updatedAt: string | null
 }
 
+export interface OrderRefundRecord {
+  id: string
+  orderId: string
+  outRefundNo: string
+  refundId: string | null
+  amount: number
+  totalAmount: number
+  reason: string
+  source: string
+  status: string
+  statusText: string
+  success: boolean
+  operatorId: string | null
+  operatorName: string | null
+  operatorPhone: string | null
+  operatorRole: string | null
+  adjustmentId: string | null
+  errorMessage: string | null
+  requestedAt: string | null
+  notifiedAt: string | null
+  successTime: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
 export interface OrderSettlementAdjustment {
   id: string
   orderId: string
@@ -195,6 +220,12 @@ export interface Order {
     regionText?: string
     detailAddress?: string
   } | null
+  customer?: {
+    id: string
+    nickname?: string | null
+    phone?: string | null
+    avatarUrl?: string | null
+  } | null
   trackingNumber?: string
   carrierCode?: string
   shippedAt?: string | null
@@ -207,6 +238,7 @@ export interface Order {
   paidAt?: string | null
   paymentStatus?: PaymentStatus
   refundStatus?: OrderRefundStatus | null
+  refundRecords?: OrderRefundRecord[]
   adminRemark?: string | null
   aftersaleType?: string
   aftersaleReason?: string

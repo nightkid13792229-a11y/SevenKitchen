@@ -285,6 +285,7 @@ export class WechatPaymentService {
     amount: number;
     reason: string;
     adminId?: string | null;
+    source?: 'AFTERSALE_APPROVE' | 'ADMIN_RETRY';
   }) {
     const order = await this.prisma.order.findUnique({
       where: { id: input.orderId },
@@ -294,21 +295,38 @@ export class WechatPaymentService {
       throw new NotFoundException('订单不存在');
     }
 
-    const existingRefund = await this.prisma.orderSettlementAdjustment.findFirst({
+    const existingSuccess = await this.prisma.orderRefundRecord.findFirst({
+      where: { orderId: order.id, success: true },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (existingSuccess) {
+      return this.mapRefundRecordResult(existingSuccess, true);
+    }
+
+    const latestRecord = await this.prisma.orderRefundRecord.findFirst({
+      where: { orderId: order.id },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (latestRecord && this.isRefundInFlight(latestRecord.status)) {
+      return this.mapRefundRecordResult(latestRecord, true);
+    }
+
+    const legacySuccess = await this.prisma.orderSettlementAdjustment.findFirst({
       where: {
         orderId: order.id,
         sourceType: 'WECHAT_REFUND',
-        status: { not: 'CANCELLED' },
+        status: 'SETTLED',
       },
       orderBy: { createdAt: 'desc' },
     });
-    if (existingRefund) {
-      const metadata = (existingRefund.metadata as Record<string, any> | null) ?? {};
+    if (legacySuccess) {
+      const metadata = (legacySuccess.metadata as Record<string, any> | null) ?? {};
       return {
-        outRefundNo: String(existingRefund.sourceId || metadata.outRefundNo || ''),
+        outRefundNo: String(legacySuccess.sourceId || metadata.outRefundNo || ''),
         refundId: metadata.refundId ?? null,
-        status: metadata.refundStatus ?? metadata.wechatStatus ?? existingRefund.status,
-        adjustmentId: existingRefund.id,
+        status: metadata.refundStatus ?? metadata.wechatStatus ?? legacySuccess.status,
+        adjustmentId: legacySuccess.id,
+        recordId: null,
         reused: true,
       };
     }
@@ -344,9 +362,19 @@ export class WechatPaymentService {
       throw new BadRequestException('退款金额不能超过订单金额');
     }
 
+    const operator = input.adminId
+      ? await this.prisma.user.findUnique({
+          where: { id: input.adminId },
+          select: { nickname: true, phone: true, role: true },
+        })
+      : null;
+    const operatorNameSnapshot =
+      operator?.nickname || operator?.phone || operator?.role || null;
+
+    const outTradeNo = this.toOutTradeNo(order.id);
     const outRefundNo = this.toOutRefundNo(order.id);
     const requestBody = {
-      out_trade_no: this.toOutTradeNo(order.id),
+      out_trade_no: outTradeNo,
       out_refund_no: outRefundNo,
       reason: input.reason.slice(0, 80),
       notify_url: config.refundNotifyUrl || config.notifyUrl,
@@ -357,54 +385,106 @@ export class WechatPaymentService {
       },
     };
 
-    const response = await this.callWechatPay<any>(
-      'POST',
-      '/v3/refund/domestic/refunds',
-      requestBody,
-      config,
-    );
-
-    const adjustment = await this.prisma.orderSettlementAdjustment.upsert({
-      where: {
-        orderId_sourceType_sourceId: {
-          orderId: order.id,
-          sourceType: 'WECHAT_REFUND',
-          sourceId: outRefundNo,
-        },
-      },
-      create: {
+    const record = await this.prisma.orderRefundRecord.create({
+      data: {
         orderId: order.id,
-        sourceType: 'WECHAT_REFUND',
-        sourceId: outRefundNo,
-        adjustmentType: 'REFUND',
-        amount: -refundAmount,
+        outTradeNo,
+        outRefundNo,
+        amount: refundAmount,
+        totalAmount: orderAmount,
         reason: input.reason,
+        source: input.source ?? 'ADMIN_RETRY',
         status: 'PENDING',
-        requiresCustomerPayment: false,
-        visibleToCustomer: true,
-        createdBy: 'admin',
-        createdById: input.adminId ?? null,
-        metadata: {
-          outRefundNo,
-          refundId: response.refund_id ?? null,
-          wechatStatus: response.status ?? null,
-        },
-      },
-      update: {
-        metadata: {
-          outRefundNo,
-          refundId: response.refund_id ?? null,
-          wechatStatus: response.status ?? null,
-        },
+        statusText: this.getRefundStatusText('PENDING', false),
+        operatorId: operator ? input.adminId ?? null : null,
+        operatorNameSnapshot,
+        requestPayload: requestBody,
       },
     });
 
-    return {
-      outRefundNo,
-      refundId: response.refund_id ?? null,
-      status: response.status ?? null,
-      adjustmentId: adjustment.id,
-    };
+    try {
+      const response = await this.callWechatPay<any>(
+        'POST',
+        '/v3/refund/domestic/refunds',
+        requestBody,
+        config,
+      );
+
+      const responseStatus = String(response.status || 'PROCESSING');
+      const success = responseStatus === 'SUCCESS';
+      const successTime = this.parseWechatTime(response.success_time);
+
+      const adjustment = await this.prisma.orderSettlementAdjustment.upsert({
+        where: {
+          orderId_sourceType_sourceId: {
+            orderId: order.id,
+            sourceType: 'WECHAT_REFUND',
+            sourceId: outRefundNo,
+          },
+        },
+        create: {
+          orderId: order.id,
+          sourceType: 'WECHAT_REFUND',
+          sourceId: outRefundNo,
+          adjustmentType: 'REFUND',
+          amount: -refundAmount,
+          reason: input.reason,
+          status: success ? 'SETTLED' : 'PENDING',
+          requiresCustomerPayment: false,
+          visibleToCustomer: true,
+          createdBy: 'admin',
+          createdById: input.adminId ?? null,
+          metadata: {
+            outRefundNo,
+            refundId: response.refund_id ?? null,
+            wechatStatus: responseStatus,
+            refundStatus: responseStatus,
+            refundRecordId: record.id,
+            successTime: successTime?.toISOString() ?? null,
+          },
+          settledAt: success ? successTime ?? new Date() : null,
+        },
+        update: {
+          status: success ? 'SETTLED' : 'PENDING',
+          metadata: {
+            outRefundNo,
+            refundId: response.refund_id ?? null,
+            wechatStatus: responseStatus,
+            refundStatus: responseStatus,
+            refundRecordId: record.id,
+            successTime: successTime?.toISOString() ?? null,
+          },
+          settledAt: success ? successTime ?? new Date() : undefined,
+        },
+      });
+
+      const updatedRecord = await this.prisma.orderRefundRecord.update({
+        where: { id: record.id },
+        data: {
+          refundId: response.refund_id ?? null,
+          status: responseStatus,
+          statusText: this.getRefundStatusText(responseStatus, success),
+          success,
+          responsePayload: response,
+          adjustmentId: adjustment.id,
+          successTime: success ? successTime ?? new Date() : null,
+        },
+      });
+
+      return this.mapRefundRecordResult(updatedRecord, false);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : '微信退款发起失败，请稍后重试';
+      await this.prisma.orderRefundRecord.update({
+        where: { id: record.id },
+        data: {
+          status: 'FAILED',
+          statusText: '退款发起失败，未确认钱款退回',
+          errorMessage: message,
+        },
+      });
+      throw error;
+    }
   }
 
   async handleWechatRefundNotify(payload: any) {
@@ -432,6 +512,10 @@ export class WechatPaymentService {
     const refundStatus = String(decrypted.refund_status || decrypted.status || '');
     const orderId = this.fromOutTradeNo(outTradeNo);
 
+    const record = await this.prisma.orderRefundRecord.findUnique({
+      where: { outRefundNo },
+    });
+
     const adjustment = await this.prisma.orderSettlementAdjustment.findFirst({
       where: {
         orderId,
@@ -440,38 +524,75 @@ export class WechatPaymentService {
       },
     });
 
-    if (!adjustment) {
+    if (!adjustment && !record) {
       this.logger.warn(
-        `Wechat refund notify ignored: adjustment not found, outRefundNo=${outRefundNo}`,
+        `Wechat refund notify ignored: refund record not found, outRefundNo=${outRefundNo}`,
       );
       return { handled: false, refundStatus };
     }
 
+    const successTime = this.parseWechatTime(decrypted.success_time);
+
     if (refundStatus === 'SUCCESS') {
-      await this.prisma.orderSettlementAdjustment.update({
-        where: { id: adjustment.id },
-        data: {
-          status: 'SETTLED',
-          settledAt: new Date(),
-          metadata: {
-            ...(adjustment.metadata as Record<string, unknown> | null),
-            refundStatus,
-            successTime: decrypted.success_time ?? null,
+      if (adjustment) {
+        await this.prisma.orderSettlementAdjustment.update({
+          where: { id: adjustment.id },
+          data: {
+            status: 'SETTLED',
+            settledAt: successTime ?? new Date(),
+            metadata: {
+              ...(adjustment.metadata as Record<string, unknown> | null),
+              refundStatus,
+              successTime: decrypted.success_time ?? null,
+              refundRecordId: record?.id ?? null,
+            },
           },
-        },
-      });
+        });
+      }
+      if (record) {
+        await this.prisma.orderRefundRecord.update({
+          where: { id: record.id },
+          data: {
+            refundId: decrypted.refund_id ?? record.refundId,
+            status: refundStatus,
+            statusText: this.getRefundStatusText(refundStatus, true),
+            success: true,
+            notifyPayload: decrypted,
+            notifiedAt: new Date(),
+            successTime: successTime ?? new Date(),
+            adjustmentId: adjustment?.id ?? record.adjustmentId,
+          },
+        });
+      }
       return { handled: true, refundStatus };
     }
 
-    await this.prisma.orderSettlementAdjustment.update({
-      where: { id: adjustment.id },
-      data: {
-        metadata: {
-          ...(adjustment.metadata as Record<string, unknown> | null),
-          refundStatus,
+    if (adjustment) {
+      await this.prisma.orderSettlementAdjustment.update({
+        where: { id: adjustment.id },
+        data: {
+          metadata: {
+            ...(adjustment.metadata as Record<string, unknown> | null),
+            refundStatus,
+            refundRecordId: record?.id ?? null,
+          },
         },
-      },
-    });
+      });
+    }
+
+    if (record) {
+      await this.prisma.orderRefundRecord.update({
+        where: { id: record.id },
+        data: {
+          refundId: decrypted.refund_id ?? record.refundId,
+          status: refundStatus || record.status,
+          statusText: this.getRefundStatusText(refundStatus || record.status, false),
+          notifyPayload: decrypted,
+          notifiedAt: new Date(),
+          adjustmentId: adjustment?.id ?? record.adjustmentId,
+        },
+      });
+    }
 
     return { handled: false, refundStatus };
   }
@@ -601,7 +722,7 @@ export class WechatPaymentService {
         `Wechat Pay API error ${response.status}: ${this.maskWechatError(data)}`,
       );
       throw new BadRequestException(
-        `微信支付下单失败：${data?.message || data?.code || response.status}`,
+        `微信支付接口失败：${data?.message || data?.code || response.status}`,
       );
     }
 
@@ -644,7 +765,12 @@ export class WechatPaymentService {
   }
 
   private toOutRefundNo(orderId: string) {
-    return `RF${this.toOutTradeNo(orderId)}`;
+    const suffix = new Date()
+      .toISOString()
+      .replace(/\D/g, '')
+      .slice(0, 14);
+    const random = randomBytes(2).toString('hex').toUpperCase();
+    return `RF${this.toOutTradeNo(orderId)}${suffix}${random}`;
   }
 
   private fromOutTradeNo(outTradeNo: string) {
@@ -806,6 +932,45 @@ export class WechatPaymentService {
       return Number((value as { toNumber: () => number }).toNumber().toFixed(2));
     }
     return Number(Number(value || 0).toFixed(2));
+  }
+
+  private isRefundInFlight(status: string | null | undefined) {
+    return ['PENDING', 'PROCESSING'].includes(String(status || '').toUpperCase());
+  }
+
+  private getRefundStatusText(status: string, success: boolean): string {
+    if (success) return '退款成功，钱款已原路退回';
+    const statusMap: Record<string, string> = {
+      PENDING: '退款处理中，等待微信确认',
+      PROCESSING: '退款处理中，等待微信确认',
+      ABNORMAL: '退款异常，请管理员到微信商户平台核查',
+      CLOSED: '退款已关闭，请管理员核查',
+      FAILED: '退款发起失败，未确认钱款退回',
+    };
+    return statusMap[status] || `退款状态：${status}`;
+  }
+
+  private parseWechatTime(value: unknown): Date | null {
+    if (!value || typeof value !== 'string') return null;
+    const parsed = new Date(value);
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  private mapRefundRecordResult(record: {
+    id: string;
+    outRefundNo: string;
+    refundId: string | null;
+    status: string;
+    adjustmentId: string | null;
+  }, reused: boolean) {
+    return {
+      outRefundNo: record.outRefundNo,
+      refundId: record.refundId ?? null,
+      status: record.status,
+      adjustmentId: record.adjustmentId,
+      recordId: record.id,
+      reused,
+    };
   }
 
   private maskWechatError(data: any) {

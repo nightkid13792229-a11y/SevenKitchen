@@ -135,6 +135,74 @@ export class OrderRefundStatusResponseDto {
   updatedAt?: string | null;
 }
 
+export class OrderRefundRecordResponseDto {
+  @ApiProperty({ example: 'uuid' })
+  id!: string;
+
+  @ApiProperty({ example: 'uuid' })
+  orderId!: string;
+
+  @ApiProperty({ example: 'RF1234567890' })
+  outRefundNo!: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  refundId?: string | null;
+
+  @ApiProperty({ example: 596.57 })
+  amount!: number;
+
+  @ApiProperty({ example: 596.57 })
+  totalAmount!: number;
+
+  @ApiProperty({ example: '客户申请售后退款' })
+  reason!: string;
+
+  @ApiProperty({ example: 'AFTERSALE_APPROVE' })
+  source!: string;
+
+  @ApiProperty({ example: 'PROCESSING' })
+  status!: string;
+
+  @ApiProperty({ example: '退款处理中，等待微信确认' })
+  statusText!: string;
+
+  @ApiProperty({ example: false })
+  success!: boolean;
+
+  @ApiPropertyOptional({ nullable: true })
+  operatorId?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  operatorName?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  operatorPhone?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  operatorRole?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  adjustmentId?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  errorMessage?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  requestedAt?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  notifiedAt?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  successTime?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  createdAt?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  updatedAt?: string | null;
+}
+
 export class OrderDto {
   @ApiProperty({ example: 'uuid' })
   id!: string;
@@ -388,6 +456,12 @@ export class OrderDto {
     type: OrderRefundStatusResponseDto,
   })
   refundStatus?: OrderRefundStatusResponseDto | null;
+
+  @ApiPropertyOptional({
+    description: 'Wechat refund attempt records for audit and retry.',
+    type: [OrderRefundRecordResponseDto],
+  })
+  refundRecords?: OrderRefundRecordResponseDto[];
 
   @ApiPropertyOptional({
     description: 'Production photos (原料照片)',

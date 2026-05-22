@@ -29,6 +29,10 @@
           <el-icon><Goods /></el-icon>
           <span>原料管理</span>
         </el-menu-item>
+        <el-menu-item index="/search-governance">
+          <el-icon><Search /></el-icon>
+          <span>搜索治理</span>
+        </el-menu-item>
         <el-menu-item index="/recipes">
           <el-icon><Food /></el-icon>
           <span>食谱管理</span>
@@ -149,6 +153,7 @@ import {
   EditPen,
   Money,
   DocumentChecked,
+  Search,
 } from "@element-plus/icons-vue";
 
 const route = useRoute();

@@ -185,4 +185,7 @@ export { financeApi } from './finance'
 // Re-export nutrition governance API
 export { nutritionGovernanceApi } from './nutritionGovernance'
 
+// Re-export search governance API
+export { searchGovernanceApi } from './searchGovernance'
+
 export default api

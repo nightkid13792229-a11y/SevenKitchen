@@ -75,6 +75,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "原料标签管理" },
       },
       {
+        path: "search-governance",
+        name: "SearchGovernance",
+        component: () => import("@/views/SearchGovernance/index.vue"),
+        meta: { title: "搜索治理" },
+      },
+      {
         path: "recipes",
         name: "Recipes",
         component: () => import("@/views/Recipes/index.vue"),

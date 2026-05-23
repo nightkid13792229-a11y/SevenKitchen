@@ -20,6 +20,22 @@
         :closable="false"
         class="config-alert"
       />
+      <el-alert
+        v-if="form.enabled && !customerServiceReady"
+        :title="`客服还不能上线：${missingRequiredLabels.join('、') || '配置未完整'}`"
+        type="warning"
+        show-icon
+        :closable="false"
+        class="config-alert"
+      />
+      <el-alert
+        v-else-if="form.enabled"
+        title="客服参数已填写完整。部署后请到企业微信后台验证回调 URL，并用真实小程序发起一次咨询。"
+        type="success"
+        show-icon
+        :closable="false"
+        class="config-alert"
+      />
 
       <el-form
         v-loading="loading"
@@ -65,8 +81,25 @@
         </el-form-item>
 
         <el-form-item label="回调 URL">
-          <el-input class="field-control" :model-value="recommendedCallbackUrl" readonly />
+          <div class="field-row">
+            <el-input class="field-control" :model-value="recommendedCallbackUrl" readonly />
+            <el-button @click="copyCallbackUrl">复制</el-button>
+          </div>
           <div class="field-help">第二阶段回调接口上线后，将这个地址复制到企业微信微信客服的接收事件服务器配置中。</div>
+        </el-form-item>
+
+        <el-form-item label="上线检查">
+          <div class="checklist">
+            <el-tag
+              v-for="item in readinessItems"
+              :key="item.key"
+              :type="item.ready ? 'success' : 'warning'"
+              effect="plain"
+            >
+              {{ item.ready ? '已填' : '缺少' }}：{{ item.label }}
+            </el-tag>
+          </div>
+          <div class="field-help">全部显示“已填”后，客服代码侧才算可以进入真实联调。</div>
         </el-form-item>
 
         <el-divider content-position="left">回调安全参数</el-divider>
@@ -278,6 +311,40 @@ const recommendedCallbackUrl = computed(() => {
   return `${window.location.origin}/api/v1/customer-service/wechat/callback`;
 });
 
+const readinessItems = computed(() => [
+  {
+    key: 'corpId',
+    label: '企业 ID / CorpID',
+    ready: Boolean(form.corpId.trim()),
+  },
+  {
+    key: 'openKfid',
+    label: '客服账号 open_kfid',
+    ready: Boolean(form.openKfid.trim()),
+  },
+  {
+    key: 'token',
+    label: '回调 Token',
+    ready: Boolean(config.value?.tokenConfigured || secretForm.token.trim()),
+  },
+  {
+    key: 'encodingAesKey',
+    label: 'EncodingAESKey',
+    ready: Boolean(
+      config.value?.encodingAesKeyConfigured ||
+        secretForm.encodingAesKey.trim(),
+    ),
+  },
+]);
+
+const missingRequiredLabels = computed(() =>
+  readinessItems.value.filter((item) => !item.ready).map((item) => item.label),
+);
+
+const customerServiceReady = computed(() =>
+  readinessItems.value.every((item) => item.ready),
+);
+
 const applyConfig = (data: CustomerServiceConfig) => {
   config.value = data;
   form.enabled = data.enabled;
@@ -348,11 +415,24 @@ const saveConfig = async () => {
     }
 
     applyConfig(await platformConfigApi.updateCustomerService(payload));
-    ElMessage.success('客服配置已保存');
+    ElMessage.success(
+      customerServiceReady.value
+        ? '客服配置已保存，参数已完整'
+        : '客服配置已保存，请继续补齐上线检查项',
+    );
   } catch (error: any) {
     ElMessage.error(error.message || '保存客服配置失败');
   } finally {
     saving.value = false;
+  }
+};
+
+const copyCallbackUrl = async () => {
+  try {
+    await navigator.clipboard.writeText(recommendedCallbackUrl.value);
+    ElMessage.success('回调 URL 已复制');
+  } catch {
+    ElMessage.warning('复制失败，请手动选中回调 URL');
   }
 };
 
@@ -413,6 +493,19 @@ onMounted(loadConfig);
 .inline-control {
   display: inline-flex;
   align-items: center;
+  gap: 8px;
+}
+
+.field-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 100%;
+}
+
+.checklist {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 

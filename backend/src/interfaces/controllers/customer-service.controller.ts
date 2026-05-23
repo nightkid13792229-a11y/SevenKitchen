@@ -16,6 +16,8 @@ import type { Request, Response } from 'express';
 import { CustomerServiceService } from '../../application/customer-service/customer-service.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { AuthGuard } from '../auth/auth.guard';
+import { CurrentUser } from '../auth/current-user.decorator';
+import type { RequestUser } from '../auth/request-user.interface';
 import { AdminGuard } from '../guards/role.guard';
 
 @ApiTags('customer-service')
@@ -96,11 +98,13 @@ export class AdminCustomerServiceController {
   async updateConversationStatus(
     @Param('id') id: string,
     @Body('status') status: string,
+    @CurrentUser() user: RequestUser,
   ) {
     try {
       const data = await this.customerServiceService.updateConversationStatus(
         id,
         status,
+        user.userId,
       );
       return ApiResponseDto.success(data);
     } catch (error: any) {

@@ -201,9 +201,9 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import axios from 'axios';
+import { api } from '@/api';
 
-const API_BASE = '/api/v1/admin/custom-recipe';
+const API_BASE = '/admin/custom-recipe';
 
 // 状态
 const loading = ref(false);
@@ -253,12 +253,9 @@ const loadOrders = async () => {
       params.dateTo = dateRange.value[1];
     }
 
-    const response = await axios.get(`${API_BASE}/orders`, { params });
-
-    if (response.data.code === 200) {
-      orders.value = response.data.data.orders;
-      pagination.total = response.data.data.total;
-    }
+    const data: any = await api.get(`${API_BASE}/orders`, { params });
+    orders.value = data.orders || [];
+    pagination.total = data.total || 0;
   } catch (error) {
     ElMessage.error('加载订单失败');
     console.error(error);
@@ -275,11 +272,7 @@ const loadStatistics = async () => {
       params.dateTo = dateRange.value[1];
     }
 
-    const response = await axios.get(`${API_BASE}/statistics`, { params });
-
-    if (response.data.code === 200) {
-      statistics.value = response.data.data;
-    }
+    statistics.value = await api.get(`${API_BASE}/statistics`, { params });
   } catch (error) {
     console.error('加载统计失败', error);
   }
@@ -309,13 +302,10 @@ const confirmPayment = async (order: any) => {
   try {
     await ElMessageBox.confirm(`确认订单 ${order.orderId} 已付款？`, '确认付款');
 
-    const response = await axios.patch(`${API_BASE}/orders/${order.orderId}/confirm-payment`);
-
-    if (response.data.code === 200) {
-      ElMessage.success('付款已确认');
-      loadOrders();
-      loadStatistics();
-    }
+    await api.patch(`${API_BASE}/orders/${order.orderId}/confirm-payment`);
+    ElMessage.success('付款已确认');
+    loadOrders();
+    loadStatistics();
   } catch (error) {
     if (error !== 'cancel') {
       ElMessage.error('操作失败');
@@ -327,15 +317,12 @@ const startProcessing = async (order: any) => {
   try {
     await ElMessageBox.confirm(`开始制作订单 ${order.orderId}？`, '开始制作');
 
-    const response = await axios.patch(`${API_BASE}/orders/${order.orderId}/status`, {
+    await api.patch(`${API_BASE}/orders/${order.orderId}/status`, {
       status: 'IN_PROGRESS',
     });
-
-    if (response.data.code === 200) {
-      ElMessage.success('已开始制作');
-      loadOrders();
-      loadStatistics();
-    }
+    ElMessage.success('已开始制作');
+    loadOrders();
+    loadStatistics();
   } catch (error) {
     if (error !== 'cancel') {
       ElMessage.error('操作失败');

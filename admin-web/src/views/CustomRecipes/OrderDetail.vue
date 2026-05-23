@@ -230,6 +230,7 @@
             <el-upload
               class="cover-uploader"
               action="/api/v1/admin/upload"
+              :headers="uploadHeaders"
               :show-file-list="false"
               :on-success="handleCoverSuccess"
             >
@@ -324,6 +325,7 @@
           <el-form-item label="营养报告">
             <el-upload
               action="/api/v1/admin/upload"
+              :headers="uploadHeaders"
               :show-file-list="false"
               :on-success="handleReportSuccess"
             >
@@ -375,7 +377,7 @@
 import { ref, reactive, onMounted, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Document, Plus } from '@element-plus/icons-vue';
-import axios from 'axios';
+import { api } from '@/api';
 
 const props = defineProps<{
   orderId: string;
@@ -383,7 +385,11 @@ const props = defineProps<{
 
 const emit = defineEmits(['refresh', 'close']);
 
-const API_BASE = '/api/v1/admin/custom-recipe';
+const API_BASE = '/admin/custom-recipe';
+const uploadHeaders = (() => {
+  const token = localStorage.getItem('admin_token');
+  return token ? { Authorization: `Bearer ${token}` } : { 'X-Customer-Id': 'admin-system' };
+})();
 
 // 状态
 const loading = ref(false);
@@ -417,11 +423,7 @@ watch(() => props.orderId, () => {
 const loadOrderDetail = async () => {
   loading.value = true;
   try {
-    const response = await axios.get(`${API_BASE}/orders/${props.orderId}`);
-
-    if (response.data.code === 200) {
-      order.value = response.data.data;
-    }
+    order.value = await api.get(`${API_BASE}/orders/${props.orderId}`);
   } catch (error) {
     ElMessage.error('加载订单详情失败');
     console.error(error);
@@ -434,13 +436,10 @@ const confirmPayment = async () => {
   try {
     await ElMessageBox.confirm('确认该订单已付款？', '确认付款');
 
-    const response = await axios.patch(`${API_BASE}/orders/${order.value.orderId}/confirm-payment`);
-
-    if (response.data.code === 200) {
-      ElMessage.success('付款已确认');
-      emit('refresh');
-      loadOrderDetail();
-    }
+    await api.patch(`${API_BASE}/orders/${order.value.orderId}/confirm-payment`);
+    ElMessage.success('付款已确认');
+    emit('refresh');
+    loadOrderDetail();
   } catch (error) {
     if (error !== 'cancel') {
       ElMessage.error('操作失败');
@@ -452,15 +451,12 @@ const startProcessing = async () => {
   try {
     await ElMessageBox.confirm('开始制作该订单？', '开始制作');
 
-    const response = await axios.patch(`${API_BASE}/orders/${order.value.orderId}/status`, {
+    await api.patch(`${API_BASE}/orders/${order.value.orderId}/status`, {
       status: 'IN_PROGRESS',
     });
-
-    if (response.data.code === 200) {
-      ElMessage.success('已开始制作');
-      emit('refresh');
-      loadOrderDetail();
-    }
+    ElMessage.success('已开始制作');
+    emit('refresh');
+    loadOrderDetail();
   } catch (error) {
     if (error !== 'cancel') {
       ElMessage.error('操作失败');
@@ -525,16 +521,13 @@ const submitRecipe = async () => {
       nutritionReportUrl: recipeForm.nutritionReportUrl,
     };
 
-    const response = await axios.post(
+    await api.post(
       `${API_BASE}/orders/${order.value.orderId}/create-recipe`,
       data
     );
-
-    if (response.data.code === 200) {
-      ElMessage.success('食谱已创建并交付');
-      emit('refresh');
-      emit('close');
-    }
+    ElMessage.success('食谱已创建并交付');
+    emit('refresh');
+    emit('close');
   } catch (error) {
     if (error !== 'cancel') {
       ElMessage.error('提交失败');
@@ -573,12 +566,9 @@ const deleteAttachment = async (attachmentId: string) => {
   try {
     await ElMessageBox.confirm('确认删除该附件？', '确认删除');
 
-    const response = await axios.delete(`${API_BASE}/attachments/${attachmentId}`);
-
-    if (response.data.code === 200) {
-      ElMessage.success('附件已删除');
-      loadOrderDetail();
-    }
+    await api.delete(`${API_BASE}/attachments/${attachmentId}`);
+    ElMessage.success('附件已删除');
+    loadOrderDetail();
   } catch (error) {
     if (error !== 'cancel') {
       ElMessage.error('删除失败');

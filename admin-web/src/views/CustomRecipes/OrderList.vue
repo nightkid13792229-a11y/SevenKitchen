@@ -201,7 +201,7 @@
 <script setup lang="ts">
 import { ref, reactive, onMounted } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
-import { api } from '@/api';
+import { legacyApi } from '@/api';
 
 const API_BASE = '/admin/custom-recipe';
 
@@ -253,7 +253,7 @@ const loadOrders = async () => {
       params.dateTo = dateRange.value[1];
     }
 
-    const data: any = await api.get(`${API_BASE}/orders`, { params });
+    const data: any = await legacyApi.get(`${API_BASE}/orders`, { params });
     orders.value = data.orders || [];
     pagination.total = data.total || 0;
   } catch (error) {
@@ -272,7 +272,7 @@ const loadStatistics = async () => {
       params.dateTo = dateRange.value[1];
     }
 
-    statistics.value = await api.get(`${API_BASE}/statistics`, { params });
+    statistics.value = await legacyApi.get(`${API_BASE}/statistics`, { params });
   } catch (error) {
     console.error('加载统计失败', error);
   }
@@ -302,7 +302,7 @@ const confirmPayment = async (order: any) => {
   try {
     await ElMessageBox.confirm(`确认订单 ${order.orderId} 已付款？`, '确认付款');
 
-    await api.patch(`${API_BASE}/orders/${order.orderId}/confirm-payment`);
+    await legacyApi.patch(`${API_BASE}/orders/${order.orderId}/confirm-payment`);
     ElMessage.success('付款已确认');
     loadOrders();
     loadStatistics();
@@ -317,9 +317,10 @@ const startProcessing = async (order: any) => {
   try {
     await ElMessageBox.confirm(`开始制作订单 ${order.orderId}？`, '开始制作');
 
-    await api.patch(`${API_BASE}/orders/${order.orderId}/status`, {
-      status: 'IN_PROGRESS',
-    });
+    await legacyApi.patch(
+      `${API_BASE}/orders/${order.orderId}/status`,
+      { status: 'IN_PROGRESS' },
+    );
     ElMessage.success('已开始制作');
     loadOrders();
     loadStatistics();

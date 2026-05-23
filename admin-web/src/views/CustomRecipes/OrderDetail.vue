@@ -377,7 +377,7 @@
 import { ref, reactive, onMounted, watch } from 'vue';
 import { ElMessage, ElMessageBox } from 'element-plus';
 import { Document, Plus } from '@element-plus/icons-vue';
-import { api } from '@/api';
+import { legacyApi } from '@/api';
 
 const props = defineProps<{
   orderId: string;
@@ -423,7 +423,7 @@ watch(() => props.orderId, () => {
 const loadOrderDetail = async () => {
   loading.value = true;
   try {
-    order.value = await api.get(`${API_BASE}/orders/${props.orderId}`);
+    order.value = await legacyApi.get(`${API_BASE}/orders/${props.orderId}`);
   } catch (error) {
     ElMessage.error('加载订单详情失败');
     console.error(error);
@@ -436,7 +436,7 @@ const confirmPayment = async () => {
   try {
     await ElMessageBox.confirm('确认该订单已付款？', '确认付款');
 
-    await api.patch(`${API_BASE}/orders/${order.value.orderId}/confirm-payment`);
+    await legacyApi.patch(`${API_BASE}/orders/${order.value.orderId}/confirm-payment`);
     ElMessage.success('付款已确认');
     emit('refresh');
     loadOrderDetail();
@@ -451,9 +451,10 @@ const startProcessing = async () => {
   try {
     await ElMessageBox.confirm('开始制作该订单？', '开始制作');
 
-    await api.patch(`${API_BASE}/orders/${order.value.orderId}/status`, {
-      status: 'IN_PROGRESS',
-    });
+    await legacyApi.patch(
+      `${API_BASE}/orders/${order.value.orderId}/status`,
+      { status: 'IN_PROGRESS' },
+    );
     ElMessage.success('已开始制作');
     emit('refresh');
     loadOrderDetail();
@@ -521,9 +522,9 @@ const submitRecipe = async () => {
       nutritionReportUrl: recipeForm.nutritionReportUrl,
     };
 
-    await api.post(
+    await legacyApi.post(
       `${API_BASE}/orders/${order.value.orderId}/create-recipe`,
-      data
+      data,
     );
     ElMessage.success('食谱已创建并交付');
     emit('refresh');
@@ -566,7 +567,7 @@ const deleteAttachment = async (attachmentId: string) => {
   try {
     await ElMessageBox.confirm('确认删除该附件？', '确认删除');
 
-    await api.delete(`${API_BASE}/attachments/${attachmentId}`);
+    await legacyApi.delete(`${API_BASE}/attachments/${attachmentId}`);
     ElMessage.success('附件已删除');
     loadOrderDetail();
   } catch (error) {

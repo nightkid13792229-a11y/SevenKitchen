@@ -96,7 +96,7 @@ http.interceptors.response.use(
 
 type RequestConfig = AxiosRequestConfig
 
-const api = {
+export const api = {
   request<T = any>(config: RequestConfig): Promise<T> {
     return http.request<any, T>(config)
   },

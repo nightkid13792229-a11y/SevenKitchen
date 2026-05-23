@@ -96,6 +96,7 @@ export class AdminChangePasswordRequestDto {
 @Controller('api/v1/auth')
 export class AuthController {
   private readonly migrationTokenTtlMs = 15 * 60 * 1000;
+  private readonly manualPhoneMigrationTtlMs = 7 * 24 * 60 * 60 * 1000;
 
   constructor(
     private readonly jwtAuthService: JwtAuthService,
@@ -362,6 +363,55 @@ export class AuthController {
         return ApiResponseDto.error(404, '当前用户不存在');
       }
 
+      const pendingLegacyMigration =
+        await this.findLatestPendingMigrationByPhone(phone);
+      if (
+        pendingLegacyMigration &&
+        pendingLegacyMigration.sourceUserId !== currentUser.id
+      ) {
+        const sourceUser = await this.prisma.user.findUnique({
+          where: { id: pendingLegacyMigration.sourceUserId },
+          include: this.userSummaryInclude(),
+        });
+        if (sourceUser) {
+          const sourceSummary = this.buildUserSummary(sourceUser);
+          const sourceDataCount = this.getSyncableUserDataCount(sourceSummary);
+          if (sourceDataCount > 0) {
+            const updatedMigration = await this.prisma.accountMigration.update({
+              where: { id: pendingLegacyMigration.id },
+              data: {
+                status: 'PHONE_VERIFIED',
+                phone,
+                verifiedUserId: currentUser.id,
+                targetUserId: currentUser.id,
+                verifiedAt: new Date(),
+                metadata: {
+                  ...((pendingLegacyMigration.metadata as Record<
+                    string,
+                    unknown
+                  >) || {}),
+                  verifiedAppId: this.normalizeAppId(dto.appId) || null,
+                  phoneMasked: this.maskPhone(phone),
+                  sourceDataCount,
+                  matchedByBoundPhone: true,
+                },
+              },
+            });
+
+            return ApiResponseDto.success({
+              status: 'NEEDS_LEGACY_MIGRATION',
+              migrationToken: updatedMigration.token,
+              phone: this.maskPhone(phone),
+              sourceUser: sourceSummary,
+              sourceDataCount,
+              syncableSourceData: true,
+              needsConfirmation: true,
+              message: '发现旧版待同步资料，请确认是否同步到当前账号',
+            });
+          }
+        }
+      }
+
       if (currentUser.phone === phone) {
         return ApiResponseDto.success(this.buildBoundResponse(currentUser));
       }
@@ -450,6 +500,11 @@ export class AuthController {
     @Body() dto: StartAccountMigrationRequestDto,
   ): Promise<any> {
     try {
+      const submittedPhone = this.normalizePhone(dto.phone);
+      if (dto.phone && !submittedPhone) {
+        return ApiResponseDto.error(400, '请输入正确的手机号');
+      }
+
       const sourceUser = await this.prisma.user.findUnique({
         where: { id: requestUser.userId },
         include: this.userSummaryInclude(),
@@ -494,15 +549,31 @@ export class AuthController {
         orderBy: { updatedAt: 'desc' },
       });
       if (reusableMigration) {
+        const migration = submittedPhone
+          ? await this.prisma.accountMigration.update({
+              where: { id: reusableMigration.id },
+              data: {
+                phone: submittedPhone,
+                metadata: {
+                  ...((reusableMigration.metadata as Record<string, unknown>) ||
+                    {}),
+                  sourceAppId: this.normalizeAppId(dto.appId) || null,
+                  sourcePhoneSubmitted: true,
+                  sourcePhoneSubmittedAt: now.toISOString(),
+                },
+              },
+            })
+          : reusableMigration;
+
         return ApiResponseDto.success({
-          status: reusableMigration.status,
-          migrationToken: reusableMigration.token,
-          expiresAt: reusableMigration.expiresAt,
-          phone: reusableMigration.phone
-            ? this.maskPhone(reusableMigration.phone)
+          status: migration.status,
+          migrationToken: migration.token,
+          expiresAt: migration.expiresAt,
+          phone: migration.phone
+            ? this.maskPhone(migration.phone)
             : null,
-          phoneVerified: reusableMigration.status === 'PHONE_VERIFIED',
-          needsConfirmation: reusableMigration.status === 'PHONE_VERIFIED',
+          phoneVerified: migration.status === 'PHONE_VERIFIED',
+          needsConfirmation: migration.status === 'PHONE_VERIFIED',
           sourceUser: this.buildUserSummary(sourceUser),
         });
       }
@@ -519,15 +590,23 @@ export class AuthController {
       });
 
       const token = randomBytes(24).toString('hex');
-      const expiresAt = new Date(now.getTime() + this.migrationTokenTtlMs);
+      const expiresAt = new Date(
+        now.getTime() +
+          (submittedPhone
+            ? this.manualPhoneMigrationTtlMs
+            : this.migrationTokenTtlMs),
+      );
       const migration = await this.prisma.accountMigration.create({
         data: {
           token,
           sourceUserId: requestUser.userId,
+          phone: submittedPhone,
           status: 'PENDING',
           expiresAt,
           metadata: {
             sourceAppId: this.normalizeAppId(dto.appId) || null,
+            sourcePhoneSubmitted: !!submittedPhone,
+            sourcePhoneSubmittedAt: submittedPhone ? now.toISOString() : null,
           },
         },
       });
@@ -536,6 +615,7 @@ export class AuthController {
         status: migration.status,
         migrationToken: migration.token,
         expiresAt: migration.expiresAt,
+        phone: migration.phone ? this.maskPhone(migration.phone) : null,
         sourceUser: this.buildUserSummary(sourceUser),
       });
     } catch (error: any) {
@@ -556,9 +636,26 @@ export class AuthController {
     @Body() dto: VerifyMigrationPhoneRequestDto,
   ): Promise<any> {
     try {
-      const migration = await this.getUsableMigration(dto.migrationToken);
+      const phoneInfo = await this.wechatService.getPhoneNumber(
+        dto.code,
+        this.normalizeAppId(dto.appId),
+      );
+      const phone = phoneInfo.phoneNumber;
+
+      const migration = dto.migrationToken
+        ? await this.getUsableMigration(dto.migrationToken)
+        : await this.findLatestPendingMigrationByPhone(phone);
       if (!migration) {
-        return ApiResponseDto.error(404, '迁移凭证不存在或已失效，请从旧版小程序重新进入');
+        return ApiResponseDto.error(
+          404,
+          '没有找到旧版待迁移资料，请先在旧版小程序填写同一个手机号',
+        );
+      }
+      if (migration.phone && migration.phone !== phone) {
+        return ApiResponseDto.error(
+          400,
+          '新版授权手机号与旧版填写手机号不一致，请返回旧版重新填写',
+        );
       }
 
       const [sourceUser, verifiedUser] = await Promise.all([
@@ -578,12 +675,6 @@ export class AuthController {
       if (!verifiedUser) {
         return ApiResponseDto.error(400, '新版客户账号不存在，请重新登录新版小程序');
       }
-
-      const phoneInfo = await this.wechatService.getPhoneNumber(
-        dto.code,
-        this.normalizeAppId(dto.appId),
-      );
-      const phone = phoneInfo.phoneNumber;
 
       const existingPhoneUser = await this.prisma.user.findUnique({
         where: { phone },
@@ -1178,6 +1269,21 @@ export class AuthController {
     return normalized;
   }
 
+  private async findLatestPendingMigrationByPhone(
+    phone: string,
+  ): Promise<AccountMigration | null> {
+    const migration = await this.prisma.accountMigration.findFirst({
+      where: {
+        phone,
+        status: { in: ['PENDING', 'PHONE_VERIFIED'] },
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    return migration ? this.expireMigrationIfNeeded(migration) : null;
+  }
+
   private async findLatestMigrationForUser(
     userId: string,
   ): Promise<AccountMigration | null> {
@@ -1372,6 +1478,12 @@ export class AuthController {
   private maskPhone(phone: string): string {
     if (phone.length !== 11) return phone;
     return phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2');
+  }
+
+  private normalizePhone(phone?: string | null): string | null {
+    const normalized = phone?.replace(/\s+/g, '').trim();
+    if (!normalized) return null;
+    return /^1[3-9]\d{9}$/.test(normalized) ? normalized : null;
   }
 
   private resolveMergedRole(

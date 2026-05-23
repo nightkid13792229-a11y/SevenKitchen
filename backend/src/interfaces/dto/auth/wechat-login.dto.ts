@@ -87,12 +87,26 @@ export class StartAccountMigrationRequestDto {
   @IsString()
   @IsOptional()
   appId?: string;
+
+  @ApiProperty({
+    description:
+      'Phone number voluntarily entered in the legacy miniapp for migration matching',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  phone?: string;
 }
 
 export class VerifyMigrationPhoneRequestDto {
-  @ApiProperty({ description: 'Migration token created by the legacy miniapp' })
+  @ApiProperty({
+    description:
+      'Migration token created by the legacy miniapp. Optional when matching by phone.',
+    required: false,
+  })
   @IsString()
-  migrationToken!: string;
+  @IsOptional()
+  migrationToken?: string;
 
   @ApiProperty({ description: 'Code from wx.getPhoneNumber in the new miniapp' })
   @IsString()

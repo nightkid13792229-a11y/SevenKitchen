@@ -4,7 +4,7 @@
       <view class="icon-shell">迁移</view>
       <text class="title">同步旧版资料</text>
       <text class="desc">
-        请在新版小程序授权手机号。系统会根据旧版迁移凭证和手机号识别历史资料，确认前不会自动同步。
+        如果你已经在旧版小程序填写手机号，请在这里授权同一个手机号。系统会展示可同步资料摘要，确认前不会自动合并。
       </text>
 
       <view v-if="errorMessage" class="notice-card error">
@@ -15,7 +15,9 @@
       <view v-else-if="terminalMigration" class="notice-card success">
         <text class="notice-title">{{ terminalMigrationTitle }}</text>
         <text class="notice-copy">{{ terminalMigrationMessage }}</text>
-        <text class="notice-copy">手机号：{{ terminalMigration.phone }}</text>
+        <text v-if="terminalMigration.phone" class="notice-copy"
+          >手机号：{{ terminalMigration.phone }}</text
+        >
       </view>
 
       <view v-else-if="verifiedMigration" class="history-card">
@@ -25,20 +27,20 @@
           历史订单：{{ verifiedMigration.sourceUser?.orderCount || 0 }} 个
         </text>
         <text class="history-line">
-          狗狗资料：{{ verifiedMigration.sourceUser?.dogCount || 0 }} 只
+          宠物资料：{{ verifiedMigration.sourceUser?.dogCount || 0 }} 只
         </text>
         <text class="history-line">
           收货地址：{{ verifiedMigration.sourceUser?.addressCount || 0 }} 个
         </text>
         <text class="history-tip">
-          点击确认后，旧版资料会同步到新版账号。该操作需要你主动确认，不会静默合并。
+          点击确认后，旧版资料会同步到当前新版账号。该操作需要你主动确认，不会静默合并。
         </text>
       </view>
 
       <view v-else class="steps-card">
         <text class="steps-title">需要你完成</text>
-        <text class="step-line">1. 新版小程序登录当前微信</text>
-        <text class="step-line">2. 授权手机号用于账号识别</text>
+        <text class="step-line">1. 先在旧版小程序填写手机号</text>
+        <text class="step-line">2. 在新版小程序授权同一个手机号</text>
         <text class="step-line">3. 查看历史资料摘要并确认同步</text>
       </view>
 
@@ -46,7 +48,7 @@
         v-if="!verifiedMigration && !terminalMigration && !errorMessage"
         class="primary-btn"
         open-type="getPhoneNumber"
-        :disabled="loading || !migrationToken"
+        :disabled="loading"
         @getphonenumber="handleGetPhoneNumber"
       >
         {{ loading ? "处理中..." : "授权手机号并查看资料" }}
@@ -84,11 +86,9 @@ const terminalMigrationMessage = ref("");
 
 onLoad((options: any) => {
   migrationToken.value = decodeURIComponent(options?.token || "");
-  if (!migrationToken.value) {
-    errorMessage.value = "缺少迁移凭证，请从旧版小程序重新进入。";
-    return;
+  if (migrationToken.value) {
+    void hydrateMigrationStatus();
   }
-  void hydrateMigrationStatus();
 });
 
 function saveLoginState(data: any) {
@@ -123,7 +123,7 @@ function setTerminalMigration(data: any) {
   if (data?.migrationOutcome === "NO_LEGACY_DATA" || data?.noSyncableSourceData) {
     terminalMigrationTitle.value = "未发现旧版资料";
     terminalMigrationMessage.value =
-      "系统没有在旧版账号中发现可同步的订单、狗狗资料或收货地址。你可以直接使用新版小程序。";
+      "系统没有在旧版账号中发现可同步的订单、宠物资料或收货地址。你可以直接使用新版小程序。";
     return;
   }
 
@@ -180,7 +180,7 @@ async function hydrateMigrationStatus() {
 
     if (!data) return;
     if (data.status === "EXPIRED") {
-      errorMessage.value = "迁移凭证已过期，请从旧版小程序重新进入。";
+      errorMessage.value = "迁移凭证已过期，请从旧版小程序重新开始。";
       return;
     }
     if (data.status === "CANCELLED") {
@@ -215,11 +215,6 @@ async function hydrateMigrationStatus() {
 }
 
 async function handleGetPhoneNumber(event: any) {
-  if (!migrationToken.value) {
-    errorMessage.value = "缺少迁移凭证，请从旧版小程序重新进入。";
-    return;
-  }
-
   const detail = event?.detail || {};
   const code = detail.code;
   if (!code) {
@@ -235,15 +230,18 @@ async function handleGetPhoneNumber(event: any) {
   loading.value = true;
   try {
     await ensureNewMiniappLogin();
-    await hydrateMigrationStatus();
-    if (verifiedMigration.value || terminalMigration.value || errorMessage.value) {
-      return;
+    if (migrationToken.value) {
+      await hydrateMigrationStatus();
+      if (verifiedMigration.value || terminalMigration.value || errorMessage.value) {
+        return;
+      }
     }
+
     const response = await request({
       url: "/auth/migration/verify-phone",
       method: "POST",
       data: {
-        migrationToken: migrationToken.value,
+        ...(migrationToken.value ? { migrationToken: migrationToken.value } : {}),
         code,
         appId: getCurrentMiniProgramAppId(),
       },
@@ -263,11 +261,12 @@ async function handleGetPhoneNumber(event: any) {
     }
 
     verifiedMigration.value = response.data;
+    migrationToken.value = response.data?.migrationToken || migrationToken.value;
     terminalMigration.value = null;
     uni.showToast({ title: "请确认同步资料", icon: "none" });
   } catch (error: any) {
     errorMessage.value =
-      error?.message || "迁移凭证已失效，请从旧版小程序重新进入。";
+      error?.message || "未找到旧版待迁移资料，请确认旧版已填写同一个手机号。";
   } finally {
     loading.value = false;
   }

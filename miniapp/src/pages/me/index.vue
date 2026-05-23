@@ -32,6 +32,15 @@
       </view>
 
       <!-- 用户头像区域 -->
+      <view class="legacy-migration-entry" @tap="goToLegacyMigration">
+        <view>
+          <text class="legacy-migration-title">旧版资料迁移</text>
+          <text class="legacy-migration-desc"
+            >已在旧版填写手机号后，可在这里授权同一手机号并同步历史资料。</text
+          >
+        </view>
+        <text class="legacy-migration-action">去同步</text>
+      </view>
       <view class="user-profile-section" @tap="editProfile">
         <image
           class="user-avatar"
@@ -391,6 +400,12 @@ function goToPhoneBind() {
   });
 }
 
+function goToLegacyMigration() {
+  uni.navigateTo({
+    url: "/pages/migration/index",
+  });
+}
+
 // 更新用户信息
 async function updateUserInfo(data: { nickname?: string; phone?: string }) {
   isLoading.value = true;
@@ -528,6 +543,43 @@ onShow(() => {
 }
 
 .phone-bind-action {
+  flex-shrink: 0;
+  color: #1677ff;
+  font-size: 26rpx;
+  font-weight: 700;
+}
+
+.legacy-migration-entry {
+  margin: 0 24rpx 24rpx;
+  padding: 24rpx;
+  border-radius: 12rpx;
+  background: #eef6ff;
+  border: 1rpx solid #b7d7ff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.legacy-migration-title,
+.legacy-migration-desc {
+  display: block;
+}
+
+.legacy-migration-title {
+  color: #155eef;
+  font-size: 30rpx;
+  font-weight: 700;
+  margin-bottom: 8rpx;
+}
+
+.legacy-migration-desc {
+  color: #344054;
+  font-size: 24rpx;
+  line-height: 1.5;
+}
+
+.legacy-migration-action {
   flex-shrink: 0;
   color: #1677ff;
   font-size: 26rpx;

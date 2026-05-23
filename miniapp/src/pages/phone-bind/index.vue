@@ -7,31 +7,57 @@
         手机号仅用于账号识别、历史资料同步、订单履约和售后服务。完成后可同步旧版资料，并继续使用下单、支付、订单和售后功能。
       </text>
 
-      <view v-if="pendingMerge" class="history-card">
+      <view v-if="pendingLegacyMigration" class="history-card">
+        <text class="history-title">发现旧版待同步资料</text>
+        <text class="history-line">手机号：{{ pendingLegacyMigration.phone }}</text>
+        <text class="history-line">
+          历史订单：{{ pendingLegacyMigration.sourceUser?.orderCount || 0 }} 个
+        </text>
+        <text class="history-line">
+          宠物资料：{{ pendingLegacyMigration.sourceUser?.dogCount || 0 }} 只
+        </text>
+        <text class="history-line">
+          收货地址：{{ pendingLegacyMigration.sourceUser?.addressCount || 0 }} 个
+        </text>
+        <text class="history-tip">
+          确认后会把旧版资料同步到当前新版账号。该操作需要你主动确认。
+        </text>
+      </view>
+
+      <view v-else-if="pendingMerge" class="history-card">
         <text class="history-title">发现历史资料</text>
         <text class="history-line">手机号：{{ pendingMerge.phone }}</text>
-        <text class="history-line"
-          >历史订单：{{ pendingMerge.targetUser.orderCount || 0 }} 个</text
-        >
-        <text class="history-line"
-          >狗狗资料：{{ pendingMerge.targetUser.dogCount || 0 }} 只</text
-        >
-        <text class="history-line"
-          >收货地址：{{ pendingMerge.targetUser.addressCount || 0 }} 个</text
-        >
-        <text class="history-tip"
-          >确认后会把当前登录身份绑定到这份历史资料上。</text
-        >
+        <text class="history-line">
+          历史订单：{{ pendingMerge.targetUser.orderCount || 0 }} 个
+        </text>
+        <text class="history-line">
+          宠物资料：{{ pendingMerge.targetUser.dogCount || 0 }} 只
+        </text>
+        <text class="history-line">
+          收货地址：{{ pendingMerge.targetUser.addressCount || 0 }} 个
+        </text>
+        <text class="history-tip">
+          确认后会把当前登录身份绑定到这份历史资料中。
+        </text>
       </view>
 
       <button
-        v-if="!pendingMerge"
+        v-if="!pendingMerge && !pendingLegacyMigration"
         class="primary-btn"
         open-type="getPhoneNumber"
         :disabled="loading"
         @getphonenumber="handleGetPhoneNumber"
       >
         {{ loading ? "登录中..." : "手机号快捷登录" }}
+      </button>
+
+      <button
+        v-if="pendingLegacyMigration"
+        class="primary-btn"
+        :disabled="loading"
+        @tap="confirmLegacyMigration"
+      >
+        {{ loading ? "同步中..." : "确认同步旧版资料" }}
       </button>
 
       <button
@@ -44,12 +70,12 @@
       </button>
 
       <button
-        v-if="pendingMerge"
+        v-if="pendingMerge || pendingLegacyMigration"
         class="ghost-btn"
         :disabled="loading"
         @tap="cancelMerge"
       >
-        暂不合并，重新选择
+        暂不同步，重新选择
       </button>
     </view>
   </view>
@@ -64,6 +90,7 @@ import { getCurrentMiniProgramAppId } from "../../utils/account";
 const loading = ref(false);
 const redirectUrl = ref("/pages/home/index");
 const pendingMerge = ref<any | null>(null);
+const pendingLegacyMigration = ref<any | null>(null);
 
 onLoad((options: any) => {
   if (options?.redirect) {
@@ -102,10 +129,19 @@ function goAfterBound() {
   });
 }
 
+function getPhoneAuthFailMessage(detail: any): string {
+  const errMsg = String(detail?.errMsg || "");
+  if (errMsg.includes("deny") || errMsg.includes("cancel")) {
+    return "你已取消手机号授权，请重新点击按钮并同意授权。";
+  }
+  return "请先完成手机号快捷登录。";
+}
+
 async function handleGetPhoneNumber(event: any) {
-  const code = event?.detail?.code;
+  const detail = event?.detail || {};
+  const code = detail.code;
   if (!code) {
-    uni.showToast({ title: "请先完成手机号快捷登录", icon: "none" });
+    uni.showToast({ title: getPhoneAuthFailMessage(detail), icon: "none" });
     return;
   }
 
@@ -120,8 +156,16 @@ async function handleGetPhoneNumber(event: any) {
       },
     });
 
+    if (response.data?.status === "NEEDS_LEGACY_MIGRATION") {
+      pendingLegacyMigration.value = response.data;
+      pendingMerge.value = null;
+      uni.showToast({ title: "发现旧版资料，请确认", icon: "none" });
+      return;
+    }
+
     if (response.data?.status === "NEEDS_CONFIRMATION") {
       pendingMerge.value = response.data;
+      pendingLegacyMigration.value = null;
       uni.showToast({ title: "发现历史资料，请确认", icon: "none" });
       return;
     }
@@ -131,6 +175,31 @@ async function handleGetPhoneNumber(event: any) {
     setTimeout(goAfterBound, 500);
   } catch (error: any) {
     uni.showToast({ title: error?.message || "绑定失败", icon: "none" });
+  } finally {
+    loading.value = false;
+  }
+}
+
+async function confirmLegacyMigration() {
+  if (!pendingLegacyMigration.value?.migrationToken) return;
+
+  loading.value = true;
+  try {
+    const response = await request({
+      url: "/auth/migration/confirm",
+      method: "POST",
+      data: {
+        migrationToken: pendingLegacyMigration.value.migrationToken,
+      },
+      suppressErrorToast: true,
+    });
+
+    saveLoginState(response.data);
+    pendingLegacyMigration.value = null;
+    uni.showToast({ title: "旧版资料已同步", icon: "success" });
+    setTimeout(goAfterBound, 600);
+  } catch (error: any) {
+    uni.showToast({ title: error?.message || "同步失败", icon: "none" });
   } finally {
     loading.value = false;
   }
@@ -162,6 +231,7 @@ async function confirmMerge() {
 
 function cancelMerge() {
   pendingMerge.value = null;
+  pendingLegacyMigration.value = null;
 }
 </script>
 
@@ -246,8 +316,7 @@ function cancelMerge() {
 }
 
 .primary-btn,
-.ghost-btn,
-.text-btn {
+.ghost-btn {
   width: 100%;
   height: 88rpx;
   border-radius: 10rpx;
@@ -264,10 +333,5 @@ function cancelMerge() {
   background: #fff;
   color: #1677ff;
   border: 2rpx solid #1677ff;
-}
-
-.text-btn {
-  background: transparent;
-  color: #667085;
 }
 </style>

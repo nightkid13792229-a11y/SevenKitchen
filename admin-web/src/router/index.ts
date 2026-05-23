@@ -147,6 +147,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '客服配置' }
       },
       {
+        path: 'customer-service',
+        name: 'CustomerServiceConversations',
+        component: () => import('@/views/CustomerServiceConversations.vue'),
+        meta: { title: '客服会话' }
+      },
+      {
         path: 'purchasing',
         name: 'Purchasing',
         redirect: '/purchasing/lists',

@@ -129,6 +129,12 @@
         </view>
       </view>
     </view>
+
+    <CustomerServiceFloatButton
+      source-type="PRODUCT"
+      :product-id="recipeId"
+      title="订单配置咨询"
+    />
   </view>
 </template>
 
@@ -141,6 +147,7 @@ import {
 } from '../../api/orders';
 import { requestWechatOrderPayment } from '../../utils/wechat-payment';
 import { ensurePhoneBound } from '../../utils/account';
+import CustomerServiceFloatButton from '../../components/CustomerServiceFloatButton.vue';
 
 const recipeId = ref('');
 const dogId = ref('');

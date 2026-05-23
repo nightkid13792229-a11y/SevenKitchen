@@ -267,6 +267,12 @@
         </button>
       </view>
     </view>
+
+    <CustomerServiceFloatButton
+      source-type="PRODUCT"
+      :product-id="recipeId"
+      :product-name="recipe.name"
+    />
   </view>
 </template>
 
@@ -340,6 +346,7 @@ import { addCartItem, getCartItems, removeCartItem } from '../../utils/cart'
 import { formatSupplementTargets } from '../../utils/supplement-nutrients'
 import ReviewList from '../../components/ReviewList.vue'
 import ReviewForm from '../../components/ReviewForm.vue'
+import CustomerServiceFloatButton from '../../components/CustomerServiceFloatButton.vue'
 
 interface RecipeItem {
   ingredientId: string

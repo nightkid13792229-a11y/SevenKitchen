@@ -54,10 +54,22 @@ export class PublicPlatformConfigController {
       customerServiceUrl: config.customerServiceUrl,
       orderCardTitleTemplate: config.orderCardTitleTemplate,
       orderCardPathTemplate: config.orderCardPathTemplate,
+      productCardTitleTemplate: config.productCardTitleTemplate,
+      productCardPathTemplate: config.productCardPathTemplate,
+      defaultCardTitleTemplate: config.defaultCardTitleTemplate,
+      defaultCardPathTemplate: config.defaultCardPathTemplate,
       welcomeMessage: config.welcomeMessage,
       orderDetailDeliveryNote: config.orderDetailDeliveryNote,
       orderDetailAftersaleNote: config.orderDetailAftersaleNote,
       orderDetailMerchantNote: config.orderDetailMerchantNote,
+      floatingButtonEnabled: config.floatingButtonEnabled,
+      floatingButtonText: config.floatingButtonText,
+      floatingButtonIconUrl: config.floatingButtonIconUrl,
+      floatingButtonSize: config.floatingButtonSize,
+      floatingButtonPosition: config.floatingButtonPosition,
+      floatingButtonBottom: config.floatingButtonBottom,
+      floatingButtonRight: config.floatingButtonRight,
+      floatingButtonStyle: config.floatingButtonStyle,
     });
   }
 }

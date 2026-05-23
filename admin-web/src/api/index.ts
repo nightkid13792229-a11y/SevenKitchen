@@ -190,4 +190,7 @@ export { financeApi } from './finance'
 // Re-export platform configuration API
 export { platformConfigApi } from './platformConfig'
 
+// Re-export customer service API
+export { customerServiceApi } from './customerService'
+
 export default api

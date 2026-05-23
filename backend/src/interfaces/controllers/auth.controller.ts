@@ -485,6 +485,28 @@ export class AuthController {
       }
 
       const now = new Date();
+      const reusableMigration = await this.prisma.accountMigration.findFirst({
+        where: {
+          sourceUserId: requestUser.userId,
+          status: { in: ['PENDING', 'PHONE_VERIFIED'] },
+          expiresAt: { gt: now },
+        },
+        orderBy: { updatedAt: 'desc' },
+      });
+      if (reusableMigration) {
+        return ApiResponseDto.success({
+          status: reusableMigration.status,
+          migrationToken: reusableMigration.token,
+          expiresAt: reusableMigration.expiresAt,
+          phone: reusableMigration.phone
+            ? this.maskPhone(reusableMigration.phone)
+            : null,
+          phoneVerified: reusableMigration.status === 'PHONE_VERIFIED',
+          needsConfirmation: reusableMigration.status === 'PHONE_VERIFIED',
+          sourceUser: this.buildUserSummary(sourceUser),
+        });
+      }
+
       await this.prisma.accountMigration.updateMany({
         where: {
           sourceUserId: requestUser.userId,
@@ -784,6 +806,7 @@ export class AuthController {
       const currentMigration = await this.expireMigrationIfNeeded(migration);
 
       if (
+        currentMigration.status !== 'PENDING' &&
         ![
           currentMigration.sourceUserId,
           currentMigration.verifiedUserId,
@@ -793,11 +816,48 @@ export class AuthController {
         return ApiResponseDto.error(403, '当前账号不能查看这次迁移');
       }
 
+      const [sourceUser, verifiedUser, targetUser] = await Promise.all([
+        this.prisma.user.findUnique({
+          where: { id: currentMigration.sourceUserId },
+          include: this.userSummaryInclude(),
+        }),
+        currentMigration.verifiedUserId
+          ? this.prisma.user.findUnique({
+              where: { id: currentMigration.verifiedUserId },
+              include: this.userSummaryInclude(),
+            })
+          : Promise.resolve(null),
+        currentMigration.targetUserId
+          ? this.prisma.user.findUnique({
+              where: { id: currentMigration.targetUserId },
+              include: this.userSummaryInclude(),
+            })
+          : Promise.resolve(null),
+      ]);
+      const sourceSummary = sourceUser ? this.buildUserSummary(sourceUser) : null;
+      const metadata = (currentMigration.metadata as Record<string, unknown> | null) || {};
+
       return ApiResponseDto.success({
         status: currentMigration.status,
         migrationToken: currentMigration.token,
         expiresAt: currentMigration.expiresAt,
         phone: currentMigration.phone ? this.maskPhone(currentMigration.phone) : null,
+        sourceUser: sourceSummary,
+        verifiedUser: verifiedUser ? this.buildUserSummary(verifiedUser) : null,
+        targetUser: targetUser ? this.buildUserSummary(targetUser) : null,
+        sourceDataCount: sourceSummary
+          ? this.getSyncableUserDataCount(sourceSummary)
+          : Number(metadata.sourceDataCount || 0),
+        syncableSourceData:
+          currentMigration.status === 'PHONE_VERIFIED' ||
+          (sourceSummary ? this.getSyncableUserDataCount(sourceSummary) > 0 : false),
+        noSyncableSourceData: metadata.migrationOutcome === 'NO_LEGACY_DATA',
+        alreadyLinked: metadata.migrationOutcome === 'ALREADY_LINKED',
+        migrationOutcome:
+          typeof metadata.migrationOutcome === 'string'
+            ? metadata.migrationOutcome
+            : undefined,
+        needsConfirmation: currentMigration.status === 'PHONE_VERIFIED',
       });
     } catch (error: any) {
       console.error('[Account Migration Status] ERROR:', error);

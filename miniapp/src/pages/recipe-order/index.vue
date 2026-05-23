@@ -444,6 +444,13 @@
         去确认订单
       </button>
     </view>
+
+    <CustomerServiceFloatButton
+      source-type="PRODUCT"
+      :product-id="recipeId"
+      :product-name="recipe.name"
+      title="下单配置咨询"
+    />
   </view>
 </template>
 
@@ -475,6 +482,7 @@ import {
   buildIngredientDisplayName,
   buildIngredientPurchaseChannelText,
 } from './ingredientDisplay'
+import CustomerServiceFloatButton from '../../components/CustomerServiceFloatButton.vue'
 
 interface Dog {
   id: string

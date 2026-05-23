@@ -171,6 +171,11 @@ import {
 } from './interfaces/controllers/platform-config.controller';
 import { PlatformConfigService } from './application/platform-config/platform-config.service';
 import {
+  AdminCustomerServiceController,
+  CustomerServiceController,
+} from './interfaces/controllers/customer-service.controller';
+import { CustomerServiceService } from './application/customer-service/customer-service.service';
+import {
   AdminWechatRefundController,
   WechatPayController,
 } from './interfaces/controllers/payments/wechat-pay.controller';
@@ -268,6 +273,8 @@ validatePrismaConfig();
     IngredientSuggestionsController,
     PlatformConfigController,
     PublicPlatformConfigController,
+    CustomerServiceController,
+    AdminCustomerServiceController,
     WechatPayController,
     AdminWechatRefundController,
     ...(isPrismaEnabled()
@@ -632,6 +639,7 @@ validatePrismaConfig();
     DogProfileAnalyticsService,
     ProcurementSkuService,
     PlatformConfigService,
+    CustomerServiceService,
     WechatPaymentService,
   ],
 })

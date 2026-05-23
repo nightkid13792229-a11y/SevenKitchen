@@ -2769,8 +2769,8 @@ async function buyAgain() {
     if (res.code === 0 && res.data) {
       const recipe = res.data;
 
-      // 检查食谱是否已下架
-      if (recipe.status !== 'ACTIVE') {
+      // 后端食谱上架状态使用 PUBLIC；ACTIVE 仅作为旧数据兼容。
+      if (!['PUBLIC', 'ACTIVE'].includes(recipe.status)) {
         uni.showModal({
           title: '提示',
           content: '该食谱已下架，无法再次购买',

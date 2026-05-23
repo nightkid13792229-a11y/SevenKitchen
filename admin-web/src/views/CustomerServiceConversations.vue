@@ -73,6 +73,11 @@
             </div>
           </template>
         </el-table-column>
+        <el-table-column label="处理人" min-width="150" show-overflow-tooltip>
+          <template #default="{ row }">
+            <span>{{ row.assignedStaffId || '未接手' }}</span>
+          </template>
+        </el-table-column>
         <el-table-column label="状态" width="100">
           <template #default="{ row }">
             <el-tag :type="getStatusTagType(row.status)">
@@ -183,6 +188,9 @@
             </el-descriptions-item>
             <el-descriptions-item label="客户标识" :span="2">
               {{ currentConversation.externalUserId || currentConversation.customerId || '-' }}
+            </el-descriptions-item>
+            <el-descriptions-item label="处理人" :span="2">
+              {{ currentConversation.assignedStaffId || '未接手' }}
             </el-descriptions-item>
           </el-descriptions>
         </div>

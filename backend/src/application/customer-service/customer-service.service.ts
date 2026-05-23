@@ -162,15 +162,25 @@ export class CustomerServiceService {
     return { ok: true, conversation, message };
   }
 
-  async updateConversationStatus(id: string, status: string) {
+  async updateConversationStatus(id: string, status: string, staffId?: string) {
     const normalized = status?.trim().toUpperCase();
     if (!['OPEN', 'IN_PROGRESS', 'CLOSED'].includes(normalized)) {
       throw new Error('客服会话状态不正确');
     }
 
+    const data: Prisma.CustomerServiceConversationUpdateInput = {
+      status: normalized,
+    };
+    if (normalized === 'IN_PROGRESS' && staffId) {
+      data.assignedStaffId = staffId;
+    }
+    if (normalized === 'OPEN') {
+      data.assignedStaffId = null;
+    }
+
     return this.prisma.customerServiceConversation.update({
       where: { id },
-      data: { status: normalized },
+      data,
       include: {
         messages: {
           orderBy: { createdAt: 'asc' },

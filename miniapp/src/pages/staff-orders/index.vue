@@ -762,7 +762,7 @@ function loadMoreOrders() {
 // 查看订单详情
 function viewOrderDetail(orderId: string) {
   uni.navigateTo({
-    url: `/pages/order-detail/index?id=${orderId}`,
+    url: `/pages/staff-orders/detail?id=${orderId}`,
   })
 }
 

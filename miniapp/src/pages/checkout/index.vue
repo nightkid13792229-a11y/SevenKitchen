@@ -254,6 +254,14 @@
       </button>
     </view>
 
+    <CustomerServiceFloatButton
+      source-type="PRODUCT"
+      :product-id="orderConfig.recipeId"
+      :product-name="orderConfig.recipeName"
+      title="确认订单咨询"
+      path="/pages/checkout/index"
+    />
+
     <!-- 地址选择器弹窗 -->
     <view
       v-if="showAddressSelector"
@@ -304,6 +312,7 @@ import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { onShow } from '@dcloudio/uni-app';
 import { request } from '../../utils/api';
 import { ensurePhoneBound } from '../../utils/account';
+import CustomerServiceFloatButton from '../../components/CustomerServiceFloatButton.vue';
 import {
   buildDefaultPackagePlan,
   estimateFeedDays,

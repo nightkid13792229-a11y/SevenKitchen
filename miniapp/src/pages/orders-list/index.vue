@@ -142,6 +142,12 @@
         </button>
       </view>
     </view>
+
+    <CustomerServiceFloatButton
+      source-type="GENERAL"
+      title="订单列表咨询"
+      path="/pages/orders-list/index"
+    />
   </view>
 </template>
 
@@ -156,6 +162,7 @@ import {
 import { formatShortDateTime } from '../../utils/date';
 import { requestWechatOrderPayment } from '../../utils/wechat-payment';
 import { ensurePhoneBound } from '../../utils/account';
+import CustomerServiceFloatButton from '../../components/CustomerServiceFloatButton.vue';
 
 // DEBUG flag for development logging
 const DEBUG = true;

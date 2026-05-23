@@ -12,6 +12,12 @@
         <text class="notice-copy">{{ errorMessage }}</text>
       </view>
 
+      <view v-else-if="terminalMigration" class="notice-card success">
+        <text class="notice-title">{{ terminalMigrationTitle }}</text>
+        <text class="notice-copy">{{ terminalMigrationMessage }}</text>
+        <text class="notice-copy">手机号：{{ terminalMigration.phone }}</text>
+      </view>
+
       <view v-else-if="verifiedMigration" class="history-card">
         <text class="history-title">发现可同步资料</text>
         <text class="history-line">手机号：{{ verifiedMigration.phone }}</text>
@@ -37,7 +43,7 @@
       </view>
 
       <button
-        v-if="!verifiedMigration && !errorMessage"
+        v-if="!verifiedMigration && !terminalMigration && !errorMessage"
         class="primary-btn"
         open-type="getPhoneNumber"
         :disabled="loading || !migrationToken"
@@ -47,7 +53,7 @@
       </button>
 
       <button
-        v-if="verifiedMigration"
+        v-if="verifiedMigration && !terminalMigration"
         class="primary-btn"
         :disabled="loading"
         @tap="confirmMigration"
@@ -72,12 +78,17 @@ const loading = ref(false);
 const migrationToken = ref("");
 const errorMessage = ref("");
 const verifiedMigration = ref<any | null>(null);
+const terminalMigration = ref<any | null>(null);
+const terminalMigrationTitle = ref("");
+const terminalMigrationMessage = ref("");
 
 onLoad((options: any) => {
   migrationToken.value = decodeURIComponent(options?.token || "");
   if (!migrationToken.value) {
     errorMessage.value = "缺少迁移凭证，请从旧版小程序重新进入。";
+    return;
   }
+  void hydrateMigrationStatus();
 });
 
 function saveLoginState(data: any) {
@@ -104,6 +115,21 @@ function getPhoneAuthFailMessage(detail: any): string {
     return "当前微信版本不支持手机号授权，请升级微信后重试。";
   }
   return "没有拿到微信返回的手机号授权码。请用真机预览或体验版测试。";
+}
+
+function setTerminalMigration(data: any) {
+  terminalMigration.value = data;
+  verifiedMigration.value = null;
+  if (data?.migrationOutcome === "NO_LEGACY_DATA" || data?.noSyncableSourceData) {
+    terminalMigrationTitle.value = "未发现旧版资料";
+    terminalMigrationMessage.value =
+      "系统没有在旧版账号中发现可同步的订单、狗狗资料或收货地址。你可以直接使用新版小程序。";
+    return;
+  }
+
+  terminalMigrationTitle.value = "资料已在当前账号";
+  terminalMigrationMessage.value =
+    "旧版资料已经在当前新版账号中，无需重复同步。你可以继续查看订单、资料和售后。";
 }
 
 async function ensureNewMiniappLogin() {
@@ -137,6 +163,57 @@ async function ensureNewMiniappLogin() {
   saveLoginState(response.data);
 }
 
+async function hydrateMigrationStatus() {
+  if (!migrationToken.value) return;
+
+  loading.value = true;
+  try {
+    await ensureNewMiniappLogin();
+    const response = await request({
+      url: `/auth/migration/status?migrationToken=${encodeURIComponent(
+        migrationToken.value,
+      )}`,
+      method: "GET",
+      suppressErrorToast: true,
+    });
+    const data = response.data;
+
+    if (!data) return;
+    if (data.status === "EXPIRED") {
+      errorMessage.value = "迁移凭证已过期，请从旧版小程序重新进入。";
+      return;
+    }
+    if (data.status === "CANCELLED") {
+      errorMessage.value = "这次迁移已取消，请从旧版小程序重新开始。";
+      return;
+    }
+    if (
+      data.status === "CONFIRMED" ||
+      data.alreadyLinked ||
+      data.noSyncableSourceData
+    ) {
+      setTerminalMigration(data);
+      return;
+    }
+    if (data.status === "PHONE_VERIFIED") {
+      verifiedMigration.value = data;
+      terminalMigration.value = null;
+    }
+  } catch (error: any) {
+    const message = String(error?.message || "");
+    if (
+      message.includes("403") ||
+      message.includes("不能查看") ||
+      message.includes("PENDING")
+    ) {
+      return;
+    }
+    console.warn("[Migration] Failed to hydrate migration status:", error);
+  } finally {
+    loading.value = false;
+  }
+}
+
 async function handleGetPhoneNumber(event: any) {
   if (!migrationToken.value) {
     errorMessage.value = "缺少迁移凭证，请从旧版小程序重新进入。";
@@ -158,6 +235,10 @@ async function handleGetPhoneNumber(event: any) {
   loading.value = true;
   try {
     await ensureNewMiniappLogin();
+    await hydrateMigrationStatus();
+    if (verifiedMigration.value || terminalMigration.value || errorMessage.value) {
+      return;
+    }
     const response = await request({
       url: "/auth/migration/verify-phone",
       method: "POST",
@@ -169,7 +250,20 @@ async function handleGetPhoneNumber(event: any) {
       suppressErrorToast: true,
     });
 
+    if (
+      response.data?.needsConfirmation === false ||
+      response.data?.syncableSourceData === false
+    ) {
+      setTerminalMigration(response.data);
+      uni.showToast({
+        title: response.data?.noSyncableSourceData ? "未发现旧版资料" : "无需重复同步",
+        icon: "none",
+      });
+      return;
+    }
+
     verifiedMigration.value = response.data;
+    terminalMigration.value = null;
     uni.showToast({ title: "请确认同步资料", icon: "none" });
   } catch (error: any) {
     errorMessage.value =
@@ -278,6 +372,11 @@ async function confirmMigration() {
   border: 1rpx solid #ffa39e;
 }
 
+.notice-card.success {
+  background: #f6ffed;
+  border: 1rpx solid #b7eb8f;
+}
+
 .steps-title,
 .step-line,
 .history-title,
@@ -322,6 +421,10 @@ async function confirmMigration() {
   font-weight: 700;
   font-size: 30rpx;
   margin-bottom: 12rpx;
+}
+
+.notice-card.success .notice-title {
+  color: #237804;
 }
 
 .primary-btn,

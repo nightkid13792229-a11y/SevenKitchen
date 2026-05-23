@@ -67,6 +67,13 @@
     <view class="submit-section">
       <button class="btn-submit" @tap="submitAftersale">提交申请</button>
     </view>
+
+    <CustomerServiceFloatButton
+      source-type="AFTERSALE"
+      :order-id="orderId"
+      :order-no="formatOrderId(orderId)"
+      title="售后申请咨询"
+    />
   </view>
 </template>
 
@@ -75,6 +82,7 @@ import { computed, ref, onMounted } from 'vue';
 import { getToken, request } from '../../utils/api';
 import { getBaseUrl } from '../../utils/config';
 import { ensurePhoneBound } from '../../utils/account';
+import CustomerServiceFloatButton from '../../components/CustomerServiceFloatButton.vue';
 
 const orderId = ref('');
 const selectedType = ref<'REFUND' | 'REMAKE' | 'COMPLAINT'>('COMPLAINT');

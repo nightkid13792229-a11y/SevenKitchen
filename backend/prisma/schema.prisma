@@ -1026,10 +1026,22 @@ model CustomerServiceConfig {
   encodingAesKey           String?  @map("encoding_aes_key") @db.VarChar(255)
   orderCardTitleTemplate   String   @default("订单 {orderNo}") @map("order_card_title_template") @db.VarChar(120)
   orderCardPathTemplate    String   @default("/pages/order-detail/index?id={orderId}") @map("order_card_path_template") @db.VarChar(300)
+  productCardTitleTemplate String   @default("咨询商品 {productName}") @map("product_card_title_template") @db.VarChar(120)
+  productCardPathTemplate  String   @default("/pages/recipe-detail/index?recipeId={productId}") @map("product_card_path_template") @db.VarChar(300)
+  defaultCardTitleTemplate String   @default("SevenKitchen 客服咨询") @map("default_card_title_template") @db.VarChar(120)
+  defaultCardPathTemplate  String   @default("/pages/home/index") @map("default_card_path_template") @db.VarChar(300)
   welcomeMessage           String?  @map("welcome_message") @db.VarChar(500)
   orderDetailDeliveryNote  String?  @map("order_detail_delivery_note") @db.VarChar(500)
   orderDetailAftersaleNote String?  @map("order_detail_aftersale_note") @db.VarChar(500)
   orderDetailMerchantNote  String?  @map("order_detail_merchant_note") @db.VarChar(500)
+  floatingButtonEnabled    Boolean  @default(true) @map("floating_button_enabled")
+  floatingButtonText       String   @default("客服") @map("floating_button_text") @db.VarChar(20)
+  floatingButtonIconUrl    String?  @map("floating_button_icon_url") @db.VarChar(500)
+  floatingButtonSize       Int      @default(56) @map("floating_button_size")
+  floatingButtonPosition   String   @default("RIGHT_BOTTOM") @map("floating_button_position") @db.VarChar(30)
+  floatingButtonBottom     Int      @default(128) @map("floating_button_bottom")
+  floatingButtonRight      Int      @default(18) @map("floating_button_right")
+  floatingButtonStyle      String   @default("LIGHT") @map("floating_button_style") @db.VarChar(30)
   autoAssignEnabled        Boolean  @default(true) @map("auto_assign_enabled")
   sameCustomerPriority     Boolean  @default(true) @map("same_customer_priority")
   serviceTimeoutMinutes    Int      @default(10) @map("service_timeout_minutes")
@@ -1037,6 +1049,54 @@ model CustomerServiceConfig {
   updatedAt                DateTime @updatedAt @map("updated_at")
 
   @@map("customer_service_config")
+}
+
+model CustomerServiceConversation {
+  id                     String                   @id @default(uuid()) @map("id")
+  provider               String                   @default("WECHAT_CUSTOMER_SERVICE") @map("provider") @db.VarChar(60)
+  externalConversationId String?                  @map("external_conversation_id") @db.VarChar(180)
+  openKfid               String?                  @map("open_kfid") @db.VarChar(120)
+  externalUserId         String?                  @map("external_user_id") @db.VarChar(180)
+  customerId             String?                  @map("customer_id")
+  orderId                String?                  @map("order_id")
+  productId              String?                  @map("product_id")
+  sourceType             String                   @default("GENERAL") @map("source_type") @db.VarChar(40)
+  sourceTitle            String?                  @map("source_title") @db.VarChar(200)
+  sourcePath             String?                  @map("source_path") @db.VarChar(500)
+  status                 String                   @default("OPEN") @map("status") @db.VarChar(40)
+  assignedStaffId        String?                  @map("assigned_staff_id")
+  lastMessageAt          DateTime?                @map("last_message_at")
+  metadata               Json?                    @map("metadata")
+  createdAt              DateTime                 @default(now()) @map("created_at")
+  updatedAt              DateTime                 @updatedAt @map("updated_at")
+  messages               CustomerServiceMessage[]
+
+  @@unique([provider, externalConversationId])
+  @@index([customerId])
+  @@index([orderId])
+  @@index([productId])
+  @@index([status, lastMessageAt])
+  @@index([externalUserId])
+  @@map("customer_service_conversation")
+}
+
+model CustomerServiceMessage {
+  id                String                      @id @default(uuid()) @map("id")
+  conversationId    String                      @map("conversation_id")
+  provider          String                      @default("WECHAT_CUSTOMER_SERVICE") @map("provider") @db.VarChar(60)
+  providerMessageId String?                     @map("provider_message_id") @db.VarChar(180)
+  direction         String                      @default("INBOUND") @map("direction") @db.VarChar(20)
+  eventType         String?                     @map("event_type") @db.VarChar(80)
+  messageType       String?                     @map("message_type") @db.VarChar(80)
+  content           String?                     @map("content")
+  rawPayload        Json?                       @map("raw_payload")
+  createdAt         DateTime                    @default(now()) @map("created_at")
+  conversation      CustomerServiceConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([providerMessageId])
+  @@index([eventType])
+  @@map("customer_service_message")
 }
 
 model DIYSheet {

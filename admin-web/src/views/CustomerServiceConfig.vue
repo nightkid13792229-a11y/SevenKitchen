@@ -5,7 +5,7 @@
         <div class="card-header">
           <div>
             <h3>客服配置</h3>
-            <p>配置微信客服与企业微信接待参数，用于订单卡片和客服会话关联。</p>
+            <p>配置微信客服、企业微信接待、订单卡片和小程序悬浮客服入口。</p>
           </div>
           <el-tag :type="form.enabled ? 'success' : 'info'">
             {{ form.enabled ? '已启用' : '未启用' }}
@@ -14,7 +14,7 @@
       </template>
 
       <el-alert
-        title="建议使用微信客服并交给企业微信接待；本系统负责保存订单与会话的关联参数。"
+        title="建议使用微信客服 + 企业微信接待。客服人员在企业微信回复客户，SevenKitchen 后台负责订单、售后、退款和差价处理。"
         type="info"
         show-icon
         :closable="false"
@@ -24,7 +24,7 @@
       <el-form
         v-loading="loading"
         :model="form"
-        label-width="170px"
+        label-width="180px"
         label-position="left"
         class="config-form"
         autocomplete="off"
@@ -38,216 +38,187 @@
 
         <el-form-item label="启用客服能力">
           <el-switch v-model="form.enabled" />
-          <div class="field-help">后台运营开关：正式接入微信客服前保持关闭，配置验证通过后再启用。</div>
+          <div class="field-help">启用后，新版小程序会使用微信客服原生入口；关闭时只显示未启用提示或备用客服链接。</div>
         </el-form-item>
 
         <el-form-item label="客服承载方式">
           <el-select v-model="form.provider" class="field-control">
             <el-option label="微信客服 + 企业微信接待" value="WECHAT_CUSTOMER_SERVICE" />
-            <el-option label="仅预留自建客服接口" value="CUSTOM" />
+            <el-option label="自建客服接口预留" value="CUSTOM" />
           </el-select>
-          <div class="field-help">推荐第一项：客服人员在企业微信电脑端或手机端回复客户。</div>
+          <div class="field-help">推荐第一项：客户在小程序发起咨询，客服人员在企业微信电脑端或手机端回复。</div>
         </el-form-item>
 
         <el-form-item label="企业 ID / CorpID">
-          <el-input
-            v-model="form.corpId"
-            class="field-control"
-            placeholder="ww..."
-            clearable
-            autocomplete="off"
-            name="sevenkitchen-cs-corp-id"
-          />
-          <div class="field-help">
-            获取位置：企业微信管理后台 -> 我的企业 -> 企业信息 -> 企业 ID。
-          </div>
+          <el-input v-model="form.corpId" class="field-control" placeholder="ww..." clearable autocomplete="off" />
+          <div class="field-help">获取位置：企业微信管理后台 -> 我的企业 -> 企业信息 -> 企业 ID。</div>
         </el-form-item>
 
         <el-form-item label="客服账号 open_kfid">
-          <el-input
-            v-model="form.openKfid"
-            class="field-control"
-            placeholder="例如 wkxxxxxxxx"
-            clearable
-            autocomplete="off"
-            name="sevenkitchen-cs-open-kfid"
-          />
-          <div class="field-help">
-            获取位置：企业微信管理后台 -> 应用管理 -> 微信客服 -> 客服账号，或通过微信客服 API 查询。
-          </div>
+          <el-input v-model="form.openKfid" class="field-control" placeholder="例如 wkxxxxxxxx" clearable autocomplete="off" />
+          <div class="field-help">获取位置：企业微信管理后台 -> 应用管理 -> 微信客服 -> 客服账号，也可通过微信客服 API 查询。</div>
         </el-form-item>
 
         <el-form-item label="客服入口 URL">
-          <el-input
-            v-model="form.customerServiceUrl"
-            class="field-control"
-            placeholder="微信客服入口链接"
-            clearable
-            autocomplete="off"
-            name="sevenkitchen-cs-url"
-          />
-          <div class="field-help">
-            获取位置：企业微信管理后台 -> 应用管理 -> 微信客服 -> 客服账号 -> 接入链接。
-          </div>
+          <el-input v-model="form.customerServiceUrl" class="field-control" placeholder="微信客服接入链接，备用入口" clearable autocomplete="off" />
+          <div class="field-help">获取位置：企业微信管理后台 -> 应用管理 -> 微信客服 -> 客服账号 -> 接入链接。微信原生客服正常时，小程序优先使用 open-type=contact。</div>
+        </el-form-item>
+
+        <el-form-item label="回调 URL">
+          <el-input class="field-control" :model-value="recommendedCallbackUrl" readonly />
+          <div class="field-help">第二阶段回调接口上线后，将这个地址复制到企业微信微信客服的接收事件服务器配置中。</div>
         </el-form-item>
 
         <el-divider content-position="left">回调安全参数</el-divider>
 
         <el-form-item label="客服 Secret">
-          <el-input
-            v-model="secretForm.customerServiceSecret"
-            class="field-control"
-            type="password"
-            show-password
-            placeholder="留空表示不修改"
-            autocomplete="new-password"
-            name="sevenkitchen-cs-secret"
-          />
-          <div class="field-help">
-            获取位置：企业微信管理后台 -> 应用管理 -> 微信客服 -> API 接口配置。
-            当前状态：{{ config?.customerServiceSecretConfigured ? '已配置' : '未配置' }}。
-          </div>
+          <el-input v-model="secretForm.customerServiceSecret" class="field-control" type="password" show-password placeholder="留空表示不修改" autocomplete="new-password" />
+          <div class="field-help">获取位置：企业微信管理后台 -> 应用管理 -> 微信客服 -> API 接口配置。当前状态：{{ config?.customerServiceSecretConfigured ? '已配置' : '未配置' }}。</div>
         </el-form-item>
 
         <el-form-item label="回调 Token">
-          <el-input
-            v-model="secretForm.token"
-            class="field-control"
-            type="password"
-            show-password
-            placeholder="留空表示不修改"
-            autocomplete="new-password"
-            name="sevenkitchen-cs-token"
-          />
-          <div class="field-help">
-            获取位置：企业微信管理后台 -> 应用管理 -> 微信客服 -> 接收事件服务器配置。
-            当前状态：{{ config?.tokenConfigured ? '已配置' : '未配置' }}。
-          </div>
+          <el-input v-model="secretForm.token" class="field-control" type="password" show-password placeholder="留空表示不修改" autocomplete="new-password" />
+          <div class="field-help">获取位置：企业微信管理后台 -> 应用管理 -> 微信客服 -> 接收事件服务器配置。当前状态：{{ config?.tokenConfigured ? '已配置' : '未配置' }}。</div>
         </el-form-item>
 
         <el-form-item label="EncodingAESKey">
-          <el-input
-            v-model="secretForm.encodingAesKey"
-            class="field-control"
-            type="password"
-            show-password
-            placeholder="留空表示不修改"
-            autocomplete="new-password"
-            name="sevenkitchen-cs-aes-key"
-          />
-          <div class="field-help">
-            获取位置：企业微信管理后台 -> 应用管理 -> 微信客服 -> 接收事件服务器配置。
-            当前状态：{{ config?.encodingAesKeyConfigured ? '已配置' : '未配置' }}。
-          </div>
+          <el-input v-model="secretForm.encodingAesKey" class="field-control" type="password" show-password placeholder="留空表示不修改" autocomplete="new-password" />
+          <div class="field-help">获取位置：企业微信管理后台 -> 应用管理 -> 微信客服 -> 接收事件服务器配置。当前状态：{{ config?.encodingAesKeyConfigured ? '已配置' : '未配置' }}。</div>
         </el-form-item>
 
-        <el-divider content-position="left">订单卡片与分配规则</el-divider>
+        <el-divider content-position="left">小程序卡片</el-divider>
 
         <el-form-item label="订单卡片标题">
-          <el-input
-            v-model="form.orderCardTitleTemplate"
-            class="field-control"
-            placeholder="订单 {orderNo}"
-            autocomplete="off"
-            name="sevenkitchen-cs-card-title"
-          />
-          <div class="field-help">可用变量：{orderNo}、{customerName}、{dogName}。</div>
+          <el-input v-model="form.orderCardTitleTemplate" class="field-control" placeholder="订单 {orderNo}" autocomplete="off" />
+          <div class="field-help">客户从订单详情联系客服时使用。可用变量：{orderNo}、{orderId}。</div>
         </el-form-item>
 
         <el-form-item label="订单卡片路径">
-          <el-input
-            v-model="form.orderCardPathTemplate"
-            class="field-control"
-            placeholder="/pages/orders/detail?id={orderId}"
-            autocomplete="off"
-            name="sevenkitchen-cs-card-path"
-          />
-          <div class="field-help">小程序订单详情页路径；客服会话用这个参数关联订单。</div>
+          <el-input v-model="form.orderCardPathTemplate" class="field-control" placeholder="/pages/order-detail/index?id={orderId}" autocomplete="off" />
+          <div class="field-help">必须是新版小程序订单详情路径。用于让客服识别客户咨询的是哪一单。</div>
         </el-form-item>
 
-        <el-form-item label="欢迎语">
-          <el-input
-            v-model="form.welcomeMessage"
-            class="field-control"
-            type="textarea"
-            :rows="3"
-            placeholder="您好，客服已收到您的咨询，请稍等。"
-            autocomplete="off"
-            name="sevenkitchen-cs-welcome"
-          />
-          <div class="field-help">后台自定义文案：由管理员填写，显示给进入客服会话的客户。</div>
+        <el-form-item label="商品卡片标题">
+          <el-input v-model="form.productCardTitleTemplate" class="field-control" placeholder="咨询商品 {productName}" autocomplete="off" />
+          <div class="field-help">客户从食谱/商品详情联系客服时使用。可用变量：{productName}、{productId}。</div>
         </el-form-item>
 
-        <el-divider content-position="left">订单详情页展示文案</el-divider>
+        <el-form-item label="商品卡片路径">
+          <el-input v-model="form.productCardPathTemplate" class="field-control" placeholder="/pages/recipe-detail/index?recipeId={productId}" autocomplete="off" />
+          <div class="field-help">用于商品咨询，客服可通过小程序卡片回到对应商品详情。</div>
+        </el-form-item>
+
+        <el-form-item label="普通咨询标题">
+          <el-input v-model="form.defaultCardTitleTemplate" class="field-control" placeholder="SevenKitchen 客服咨询" autocomplete="off" />
+          <div class="field-help">客户从非订单、非商品页面联系客服时使用。</div>
+        </el-form-item>
+
+        <el-form-item label="普通咨询路径">
+          <el-input v-model="form.defaultCardPathTemplate" class="field-control" placeholder="/pages/home/index" autocomplete="off" />
+          <div class="field-help">普通咨询默认打开的小程序页面。</div>
+        </el-form-item>
+
+        <el-divider content-position="left">悬浮按钮</el-divider>
+
+        <el-form-item label="启用悬浮按钮">
+          <el-switch v-model="form.floatingButtonEnabled" />
+          <div class="field-help">启用后，新版小程序已接入页面会显示悬浮客服按钮。订单页带订单信息，商品页带商品信息。</div>
+        </el-form-item>
+
+        <el-form-item label="按钮文字">
+          <el-input v-model="form.floatingButtonText" class="field-control short" maxlength="6" show-word-limit placeholder="客服" />
+          <div class="field-help">显示在悬浮按钮下方，建议 2 到 4 个字。</div>
+        </el-form-item>
+
+        <el-form-item label="按钮图片 URL">
+          <el-input v-model="form.floatingButtonIconUrl" class="field-control" placeholder="https://.../customer-service.png" clearable />
+          <div class="field-help">可选。建议使用正方形透明 PNG；不填时使用默认 CS 标记。</div>
+        </el-form-item>
+
+        <el-form-item label="按钮大小">
+          <div class="inline-control">
+            <el-input-number v-model="form.floatingButtonSize" :min="44" :max="88" :step="2" controls-position="right" />
+            <span class="unit">px</span>
+          </div>
+          <div class="field-help">控制悬浮按钮直径，建议 52 到 64。</div>
+        </el-form-item>
+
+        <el-form-item label="按钮位置">
+          <el-select v-model="form.floatingButtonPosition" class="field-control short">
+            <el-option label="右下角" value="RIGHT_BOTTOM" />
+            <el-option label="左下角" value="LEFT_BOTTOM" />
+          </el-select>
+          <div class="field-help">默认右下角，避免遮挡底部主要支付/下单按钮时可切换到左下角。</div>
+        </el-form-item>
+
+        <el-form-item label="底部距离">
+          <div class="inline-control">
+            <el-input-number v-model="form.floatingButtonBottom" :min="0" :max="360" :step="4" controls-position="right" />
+            <span class="unit">px</span>
+          </div>
+          <div class="field-help">距离屏幕底部的像素。订单页底部有操作栏，建议保持 120 以上。</div>
+        </el-form-item>
+
+        <el-form-item label="侧边距离">
+          <div class="inline-control">
+            <el-input-number v-model="form.floatingButtonRight" :min="0" :max="120" :step="2" controls-position="right" />
+            <span class="unit">px</span>
+          </div>
+          <div class="field-help">距离左侧或右侧的像素，取决于按钮位置。</div>
+        </el-form-item>
+
+        <el-form-item label="按钮风格">
+          <el-select v-model="form.floatingButtonStyle" class="field-control short">
+            <el-option label="浅色" value="LIGHT" />
+            <el-option label="深色" value="DARK" />
+          </el-select>
+          <div class="field-help">浅色更适合商城页面，深色用于图片背景较复杂的页面。</div>
+        </el-form-item>
+
+        <el-divider content-position="left">订单详情展示文案</el-divider>
+
+        <el-form-item label="欢迎语/客服提示">
+          <el-input v-model="form.welcomeMessage" class="field-control" type="textarea" :rows="3" placeholder="您好，客服已收到您的咨询，请稍等。" />
+          <div class="field-help">显示在新版小程序订单详情页的客服提示区域。</div>
+        </el-form-item>
 
         <el-form-item label="配送说明">
-          <el-input
-            v-model="form.orderDetailDeliveryNote"
-            class="field-control"
-            type="textarea"
-            :rows="3"
-            placeholder="默认顺丰冷链/特快配送，制作完成急冻后发出。"
-            autocomplete="off"
-            name="sevenkitchen-order-delivery-note"
-          />
-          <div class="field-help">显示位置：小程序订单详情页 -> 商家说明 -> 配送说明。</div>
+          <el-input v-model="form.orderDetailDeliveryNote" class="field-control" type="textarea" :rows="3" placeholder="默认顺丰冷链/特快配送，制作完成急冻后发出。" />
+          <div class="field-help">显示位置：新版小程序订单详情 -> 商家说明 -> 配送说明。</div>
         </el-form-item>
 
         <el-form-item label="售后说明">
-          <el-input
-            v-model="form.orderDetailAftersaleNote"
-            class="field-control"
-            type="textarea"
-            :rows="3"
-            placeholder="如需退款、重做或反馈问题，可在订单详情页售后区域提交申请。"
-            autocomplete="off"
-            name="sevenkitchen-order-aftersale-note"
-          />
-          <div class="field-help">显示位置：小程序订单详情页 -> 商家说明 -> 售后说明。</div>
+          <el-input v-model="form.orderDetailAftersaleNote" class="field-control" type="textarea" :rows="3" placeholder="如需退款、重做或反馈问题，可在订单详情页售后区域提交申请。" />
+          <div class="field-help">显示位置：新版小程序订单详情 -> 商家说明 -> 售后说明。</div>
         </el-form-item>
 
         <el-form-item label="商家补充说明">
-          <el-input
-            v-model="form.orderDetailMerchantNote"
-            class="field-control"
-            type="textarea"
-            :rows="3"
-            placeholder="例如：现做鲜食会按排期制作，急单请先联系客服确认。"
-            autocomplete="off"
-            name="sevenkitchen-order-merchant-note"
-          />
-          <div class="field-help">选填；填写后会作为“商家补充”显示在订单详情页。</div>
+          <el-input v-model="form.orderDetailMerchantNote" class="field-control" type="textarea" :rows="3" placeholder="例如：现做鲜食会按排期制作，急单请先联系客服确认。" />
+          <div class="field-help">选填。填写后显示在订单详情页。</div>
         </el-form-item>
+
+        <el-divider content-position="left">后续分配策略</el-divider>
 
         <el-form-item label="自动分配客服">
           <el-switch v-model="form.autoAssignEnabled" />
-          <div class="field-help">后续接入会话分配接口时使用。</div>
+          <div class="field-help">预留配置。真正分配逻辑将在客服回调和会话工作台阶段实现。</div>
         </el-form-item>
 
         <el-form-item label="同客户优先原客服">
           <el-switch v-model="form.sameCustomerPriority" />
-          <div class="field-help">客户重复咨询时优先分配给上一次接待人员。</div>
+          <div class="field-help">预留配置。客户重复咨询时优先提示原接待人。</div>
         </el-form-item>
 
         <el-form-item label="客服响应超时">
           <div class="inline-control">
-            <el-input-number
-              v-model="form.serviceTimeoutMinutes"
-              class="number-control"
-              :min="1"
-              :max="1440"
-              :step="1"
-              controls-position="right"
-            />
+            <el-input-number v-model="form.serviceTimeoutMinutes" :min="1" :max="1440" :step="1" controls-position="right" />
             <span class="unit">分钟</span>
           </div>
-          <div class="field-help">超过该时间未响应，后续可提醒主管或重新分配。</div>
+          <div class="field-help">预留配置。超过该时间未处理时，后续可在客服工作台显示超时标记。</div>
         </el-form-item>
 
         <el-form-item>
-          <el-button type="primary" :loading="saving" @click="saveConfig">
-            保存配置
-          </el-button>
+          <el-button type="primary" :loading="saving" @click="saveConfig">保存配置</el-button>
           <el-button @click="loadConfig">重置</el-button>
         </el-form-item>
       </el-form>
@@ -256,7 +227,7 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue';
+import { computed, onMounted, reactive, ref } from 'vue';
 import { ElMessage } from 'element-plus';
 import {
   platformConfigApi,
@@ -276,10 +247,22 @@ const form = reactive({
   customerServiceUrl: '',
   orderCardTitleTemplate: '订单 {orderNo}',
   orderCardPathTemplate: '/pages/order-detail/index?id={orderId}',
+  productCardTitleTemplate: '咨询商品 {productName}',
+  productCardPathTemplate: '/pages/recipe-detail/index?recipeId={productId}',
+  defaultCardTitleTemplate: 'SevenKitchen 客服咨询',
+  defaultCardPathTemplate: '/pages/home/index',
   welcomeMessage: '',
   orderDetailDeliveryNote: '',
   orderDetailAftersaleNote: '',
   orderDetailMerchantNote: '',
+  floatingButtonEnabled: true,
+  floatingButtonText: '客服',
+  floatingButtonIconUrl: '',
+  floatingButtonSize: 56,
+  floatingButtonPosition: 'RIGHT_BOTTOM',
+  floatingButtonBottom: 128,
+  floatingButtonRight: 18,
+  floatingButtonStyle: 'LIGHT',
   autoAssignEnabled: true,
   sameCustomerPriority: true,
   serviceTimeoutMinutes: 10,
@@ -291,6 +274,10 @@ const secretForm = reactive({
   encodingAesKey: '',
 });
 
+const recommendedCallbackUrl = computed(() => {
+  return `${window.location.origin}/api/v1/customer-service/wechat/callback`;
+});
+
 const applyConfig = (data: CustomerServiceConfig) => {
   config.value = data;
   form.enabled = data.enabled;
@@ -298,12 +285,24 @@ const applyConfig = (data: CustomerServiceConfig) => {
   form.corpId = data.corpId || '';
   form.openKfid = data.openKfid || '';
   form.customerServiceUrl = data.customerServiceUrl || '';
-  form.orderCardTitleTemplate = data.orderCardTitleTemplate;
-  form.orderCardPathTemplate = data.orderCardPathTemplate;
+  form.orderCardTitleTemplate = data.orderCardTitleTemplate || '订单 {orderNo}';
+  form.orderCardPathTemplate = data.orderCardPathTemplate || '/pages/order-detail/index?id={orderId}';
+  form.productCardTitleTemplate = data.productCardTitleTemplate || '咨询商品 {productName}';
+  form.productCardPathTemplate = data.productCardPathTemplate || '/pages/recipe-detail/index?recipeId={productId}';
+  form.defaultCardTitleTemplate = data.defaultCardTitleTemplate || 'SevenKitchen 客服咨询';
+  form.defaultCardPathTemplate = data.defaultCardPathTemplate || '/pages/home/index';
   form.welcomeMessage = data.welcomeMessage || '';
   form.orderDetailDeliveryNote = data.orderDetailDeliveryNote || '';
   form.orderDetailAftersaleNote = data.orderDetailAftersaleNote || '';
   form.orderDetailMerchantNote = data.orderDetailMerchantNote || '';
+  form.floatingButtonEnabled = data.floatingButtonEnabled;
+  form.floatingButtonText = data.floatingButtonText || '客服';
+  form.floatingButtonIconUrl = data.floatingButtonIconUrl || '';
+  form.floatingButtonSize = data.floatingButtonSize || 56;
+  form.floatingButtonPosition = data.floatingButtonPosition || 'RIGHT_BOTTOM';
+  form.floatingButtonBottom = data.floatingButtonBottom ?? 128;
+  form.floatingButtonRight = data.floatingButtonRight ?? 18;
+  form.floatingButtonStyle = data.floatingButtonStyle || 'LIGHT';
   form.autoAssignEnabled = data.autoAssignEnabled;
   form.sameCustomerPriority = data.sameCustomerPriority;
   form.serviceTimeoutMinutes = data.serviceTimeoutMinutes;
@@ -331,6 +330,7 @@ const saveConfig = async () => {
       corpId: form.corpId || null,
       openKfid: form.openKfid || null,
       customerServiceUrl: form.customerServiceUrl || null,
+      floatingButtonIconUrl: form.floatingButtonIconUrl || null,
       welcomeMessage: form.welcomeMessage || null,
       orderDetailDeliveryNote: form.orderDetailDeliveryNote || null,
       orderDetailAftersaleNote: form.orderDetailAftersaleNote || null,
@@ -401,6 +401,10 @@ onMounted(loadConfig);
   max-width: 100%;
 }
 
+.field-control.short {
+  width: 260px;
+}
+
 .field-help {
   flex: 0 0 100%;
   margin-top: 6px;
@@ -410,10 +414,6 @@ onMounted(loadConfig);
   display: inline-flex;
   align-items: center;
   gap: 8px;
-}
-
-.number-control {
-  width: 180px;
 }
 
 .unit {
@@ -430,19 +430,13 @@ onMounted(loadConfig);
 }
 
 @media (max-width: 768px) {
-  .platform-config-page {
-    max-width: none;
-  }
-
+  .platform-config-page,
   .config-form {
     max-width: none;
   }
 
   .field-control,
-  .number-control {
-    width: 100%;
-  }
-
+  .field-control.short,
   .inline-control {
     width: 100%;
   }

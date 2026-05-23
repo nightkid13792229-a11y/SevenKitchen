@@ -77,6 +77,10 @@
           <el-icon><User /></el-icon>
           <span>客服配置</span>
         </el-menu-item>
+        <el-menu-item index="/customer-service">
+          <el-icon><User /></el-icon>
+          <span>客服会话</span>
+        </el-menu-item>
         <el-sub-menu index="purchasing">
           <template #title>
             <el-icon><List /></el-icon>

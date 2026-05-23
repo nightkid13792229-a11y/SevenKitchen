@@ -64,6 +64,12 @@
         </view>
       </view>
     </view>
+
+    <CustomerServiceFloatButton
+      source-type="GENERAL"
+      title="购物车咨询"
+      path="/pages/cart/index"
+    />
   </view>
 </template>
 
@@ -77,6 +83,7 @@ import {
   type CartItem,
 } from '../../utils/cart';
 import { ensurePhoneBound } from '../../utils/account';
+import CustomerServiceFloatButton from '../../components/CustomerServiceFloatButton.vue';
 
 const cartItems = ref<CartItem[]>([]);
 

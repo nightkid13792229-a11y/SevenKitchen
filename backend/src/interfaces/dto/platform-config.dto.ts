@@ -103,6 +103,22 @@ export class UpdateCustomerServiceConfigDto {
 
   @IsOptional()
   @IsString()
+  productCardTitleTemplate?: string;
+
+  @IsOptional()
+  @IsString()
+  productCardPathTemplate?: string;
+
+  @IsOptional()
+  @IsString()
+  defaultCardTitleTemplate?: string;
+
+  @IsOptional()
+  @IsString()
+  defaultCardPathTemplate?: string;
+
+  @IsOptional()
+  @IsString()
   welcomeMessage?: string | null;
 
   @IsOptional()
@@ -116,6 +132,44 @@ export class UpdateCustomerServiceConfigDto {
   @IsOptional()
   @IsString()
   orderDetailMerchantNote?: string | null;
+
+  @IsOptional()
+  @IsBoolean()
+  floatingButtonEnabled?: boolean;
+
+  @IsOptional()
+  @IsString()
+  floatingButtonText?: string;
+
+  @IsOptional()
+  @IsString()
+  floatingButtonIconUrl?: string | null;
+
+  @IsOptional()
+  @IsInt()
+  @Min(44)
+  @Max(88)
+  floatingButtonSize?: number;
+
+  @IsOptional()
+  @IsString()
+  floatingButtonPosition?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(360)
+  floatingButtonBottom?: number;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  @Max(120)
+  floatingButtonRight?: number;
+
+  @IsOptional()
+  @IsString()
+  floatingButtonStyle?: string;
 
   @IsOptional()
   @IsBoolean()

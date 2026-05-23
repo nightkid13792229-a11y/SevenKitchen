@@ -47,10 +47,22 @@ export interface CustomerServiceConfigResponse {
   customerServiceUrl: string | null;
   orderCardTitleTemplate: string;
   orderCardPathTemplate: string;
+  productCardTitleTemplate: string;
+  productCardPathTemplate: string;
+  defaultCardTitleTemplate: string;
+  defaultCardPathTemplate: string;
   welcomeMessage: string | null;
   orderDetailDeliveryNote: string | null;
   orderDetailAftersaleNote: string | null;
   orderDetailMerchantNote: string | null;
+  floatingButtonEnabled: boolean;
+  floatingButtonText: string;
+  floatingButtonIconUrl: string | null;
+  floatingButtonSize: number;
+  floatingButtonPosition: string;
+  floatingButtonBottom: number;
+  floatingButtonRight: number;
+  floatingButtonStyle: string;
   autoAssignEnabled: boolean;
   sameCustomerPriority: boolean;
   serviceTimeoutMinutes: number;
@@ -72,10 +84,22 @@ export interface UpdateCustomerServiceConfigInput {
   encodingAesKey?: string | null;
   orderCardTitleTemplate?: string;
   orderCardPathTemplate?: string;
+  productCardTitleTemplate?: string;
+  productCardPathTemplate?: string;
+  defaultCardTitleTemplate?: string;
+  defaultCardPathTemplate?: string;
   welcomeMessage?: string | null;
   orderDetailDeliveryNote?: string | null;
   orderDetailAftersaleNote?: string | null;
   orderDetailMerchantNote?: string | null;
+  floatingButtonEnabled?: boolean;
+  floatingButtonText?: string;
+  floatingButtonIconUrl?: string | null;
+  floatingButtonSize?: number;
+  floatingButtonPosition?: string;
+  floatingButtonBottom?: number;
+  floatingButtonRight?: number;
+  floatingButtonStyle?: string;
   autoAssignEnabled?: boolean;
   sameCustomerPriority?: boolean;
   serviceTimeoutMinutes?: number;
@@ -179,6 +203,26 @@ export class PlatformConfigService {
     );
     this.assignIfDefined(
       data,
+      'productCardTitleTemplate',
+      input.productCardTitleTemplate,
+    );
+    this.assignIfDefined(
+      data,
+      'productCardPathTemplate',
+      input.productCardPathTemplate,
+    );
+    this.assignIfDefined(
+      data,
+      'defaultCardTitleTemplate',
+      input.defaultCardTitleTemplate,
+    );
+    this.assignIfDefined(
+      data,
+      'defaultCardPathTemplate',
+      input.defaultCardPathTemplate,
+    );
+    this.assignIfDefined(
+      data,
       'welcomeMessage',
       this.normalizeNullable(input.welcomeMessage),
     );
@@ -196,6 +240,38 @@ export class PlatformConfigService {
       data,
       'orderDetailMerchantNote',
       this.normalizeNullable(input.orderDetailMerchantNote),
+    );
+    this.assignIfDefined(
+      data,
+      'floatingButtonEnabled',
+      input.floatingButtonEnabled,
+    );
+    this.assignIfDefined(data, 'floatingButtonText', input.floatingButtonText);
+    this.assignIfDefined(
+      data,
+      'floatingButtonIconUrl',
+      this.normalizeNullable(input.floatingButtonIconUrl),
+    );
+    this.assignIfDefined(data, 'floatingButtonSize', input.floatingButtonSize);
+    this.assignIfDefined(
+      data,
+      'floatingButtonPosition',
+      input.floatingButtonPosition,
+    );
+    this.assignIfDefined(
+      data,
+      'floatingButtonBottom',
+      input.floatingButtonBottom,
+    );
+    this.assignIfDefined(
+      data,
+      'floatingButtonRight',
+      input.floatingButtonRight,
+    );
+    this.assignIfDefined(
+      data,
+      'floatingButtonStyle',
+      input.floatingButtonStyle,
     );
     this.assignIfDefined(data, 'autoAssignEnabled', input.autoAssignEnabled);
     this.assignIfDefined(
@@ -276,10 +352,22 @@ export class PlatformConfigService {
       customerServiceUrl: config.customerServiceUrl,
       orderCardTitleTemplate: config.orderCardTitleTemplate,
       orderCardPathTemplate: config.orderCardPathTemplate,
+      productCardTitleTemplate: config.productCardTitleTemplate,
+      productCardPathTemplate: config.productCardPathTemplate,
+      defaultCardTitleTemplate: config.defaultCardTitleTemplate,
+      defaultCardPathTemplate: config.defaultCardPathTemplate,
       welcomeMessage: config.welcomeMessage,
       orderDetailDeliveryNote: config.orderDetailDeliveryNote,
       orderDetailAftersaleNote: config.orderDetailAftersaleNote,
       orderDetailMerchantNote: config.orderDetailMerchantNote,
+      floatingButtonEnabled: config.floatingButtonEnabled,
+      floatingButtonText: config.floatingButtonText,
+      floatingButtonIconUrl: config.floatingButtonIconUrl,
+      floatingButtonSize: config.floatingButtonSize,
+      floatingButtonPosition: config.floatingButtonPosition,
+      floatingButtonBottom: config.floatingButtonBottom,
+      floatingButtonRight: config.floatingButtonRight,
+      floatingButtonStyle: config.floatingButtonStyle,
       autoAssignEnabled: config.autoAssignEnabled,
       sameCustomerPriority: config.sameCustomerPriority,
       serviceTimeoutMinutes: config.serviceTimeoutMinutes,

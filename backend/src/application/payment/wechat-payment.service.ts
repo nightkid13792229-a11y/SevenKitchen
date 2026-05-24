@@ -147,6 +147,7 @@ export class WechatPaymentService {
     const payerOpenid = await this.resolvePayerOpenid(
       order.customerId,
       config.appId!,
+      order.customer.phone,
     );
     if (!payerOpenid) {
       throw new BadRequestException(
@@ -668,6 +669,7 @@ export class WechatPaymentService {
   private async resolvePayerOpenid(
     customerId: string,
     appId: string,
+    phone?: string | null,
   ): Promise<string | null> {
     const identity = await this.prisma.userWechatIdentity.findFirst({
       where: {
@@ -682,7 +684,47 @@ export class WechatPaymentService {
       },
     });
 
-    return identity?.openid || null;
+    if (identity?.openid) {
+      return identity.openid;
+    }
+
+    const normalizedPhone = phone?.trim();
+    if (!normalizedPhone) {
+      return null;
+    }
+
+    const phoneIdentity = await this.prisma.userWechatIdentity.findFirst({
+      where: {
+        appId,
+        user: {
+          phone: normalizedPhone,
+        },
+      },
+      orderBy: {
+        lastLoginAt: 'desc',
+      },
+      select: {
+        id: true,
+        openid: true,
+        userId: true,
+      },
+    });
+
+    if (!phoneIdentity?.openid) {
+      return null;
+    }
+
+    if (phoneIdentity.userId !== customerId) {
+      await this.prisma.userWechatIdentity.update({
+        where: { id: phoneIdentity.id },
+        data: {
+          userId: customerId,
+          lastLoginAt: new Date(),
+        },
+      });
+    }
+
+    return phoneIdentity.openid;
   }
 
   private assertConfigReady(config: RuntimePaymentConfig) {

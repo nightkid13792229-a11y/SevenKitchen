@@ -6,22 +6,6 @@ export function requestWechatOrderPayment(payment: WechatPaymentResult): Promise
   }
 
   const payParams = payment.payParams
-  const wxApi = (globalThis as any).wx
-
-  if (payment.orderInfo && wxApi?.requestOrderPayment) {
-    return new Promise((resolve, reject) => {
-      wxApi.requestOrderPayment({
-        timeStamp: payParams.timeStamp,
-        nonceStr: payParams.nonceStr,
-        package: payParams.package,
-        signType: payParams.signType,
-        paySign: payParams.paySign,
-        orderInfo: payment.orderInfo,
-        success: () => resolve(),
-        fail: (err: any) => reject(err),
-      })
-    })
-  }
 
   return new Promise((resolve, reject) => {
     uni.requestPayment({

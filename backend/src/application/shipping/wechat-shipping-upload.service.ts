@@ -12,6 +12,41 @@ export interface WechatShippingUploadResult {
   response?: unknown;
 }
 
+export interface WechatShippingUploadCandidate {
+  orderId: string;
+  status: string;
+  paymentStatus: string | null;
+  transactionId: string | null;
+  trackingNumber: string | null;
+  carrierCode: string | null;
+  shippedAt: string | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  lastUploadAt: string | null;
+  lastSuccess: boolean | null;
+  lastSkipped: boolean | null;
+  lastMessage: string | null;
+  reason: 'NO_UPLOAD_RECORD' | 'UPLOAD_FAILED' | 'UPLOAD_SKIPPED';
+}
+
+export interface WechatShippingUploadPendingSummary {
+  pendingCount: number;
+  candidates: WechatShippingUploadCandidate[];
+}
+
+export interface WechatShippingBatchUploadResult {
+  total: number;
+  success: number;
+  failed: number;
+  skipped: number;
+  results: Array<{
+    orderId: string;
+    success: boolean;
+    skipped?: boolean;
+    message: string;
+  }>;
+}
+
 @Injectable()
 export class WechatShippingUploadService {
   private readonly logger = new Logger(WechatShippingUploadService.name);
@@ -124,6 +159,117 @@ export class WechatShippingUploadService {
       success: true,
       message: '微信发货信息已上传',
       response,
+    };
+  }
+
+  async listPendingUploads(limit = 100): Promise<WechatShippingUploadPendingSummary> {
+    const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
+    const orders = await this.prisma.order.findMany({
+      where: {
+        status: 'SHIPPED',
+        paymentMethod: 'WECHAT_PAY',
+        trackingNumber: { not: null },
+        carrierCode: { not: null },
+      },
+      orderBy: { shippedAt: 'desc' },
+      take: safeLimit,
+      select: {
+        id: true,
+        status: true,
+        paymentStatus: true,
+        transactionId: true,
+        trackingNumber: true,
+        carrierCode: true,
+        shippedAt: true,
+        customer: {
+          select: {
+            nickname: true,
+            phone: true,
+          },
+        },
+        statusHistory: {
+          where: {
+            metadata: { path: ['event'], equals: 'WECHAT_SHIPPING_UPLOAD' },
+          },
+          orderBy: { timestamp: 'desc' },
+          take: 1,
+          select: {
+            timestamp: true,
+            metadata: true,
+          },
+        },
+      },
+    });
+
+    const candidates = orders
+      .map((order): WechatShippingUploadCandidate | null => {
+        const latest = order.statusHistory[0];
+        const metadata =
+          latest?.metadata && typeof latest.metadata === 'object'
+            ? (latest.metadata as Record<string, unknown>)
+            : null;
+        const lastSuccess =
+          typeof metadata?.success === 'boolean' ? metadata.success : null;
+        const lastSkipped =
+          typeof metadata?.skipped === 'boolean' ? metadata.skipped : null;
+        const lastMessage =
+          typeof metadata?.message === 'string' ? metadata.message : null;
+
+        if (lastSuccess === true && lastSkipped !== true) {
+          return null;
+        }
+
+        const reason: WechatShippingUploadCandidate['reason'] = !latest
+          ? 'NO_UPLOAD_RECORD'
+          : lastSkipped === true
+            ? 'UPLOAD_SKIPPED'
+            : 'UPLOAD_FAILED';
+
+        return {
+          orderId: order.id,
+          status: order.status,
+          paymentStatus: order.paymentStatus,
+          transactionId: order.transactionId,
+          trackingNumber: order.trackingNumber,
+          carrierCode: order.carrierCode,
+          shippedAt: order.shippedAt?.toISOString() ?? null,
+          customerName: order.customer?.nickname ?? null,
+          customerPhone: order.customer?.phone ?? null,
+          lastUploadAt: latest?.timestamp.toISOString() ?? null,
+          lastSuccess,
+          lastSkipped,
+          lastMessage,
+          reason,
+        };
+      })
+      .filter((item): item is WechatShippingUploadCandidate => Boolean(item));
+
+    return {
+      pendingCount: candidates.length,
+      candidates,
+    };
+  }
+
+  async uploadPending(limit = 100): Promise<WechatShippingBatchUploadResult> {
+    const pending = await this.listPendingUploads(limit);
+    const results: WechatShippingBatchUploadResult['results'] = [];
+
+    for (const candidate of pending.candidates) {
+      const result = await this.uploadForOrder(candidate.orderId);
+      results.push({
+        orderId: candidate.orderId,
+        success: result.success,
+        skipped: result.skipped,
+        message: result.message,
+      });
+    }
+
+    return {
+      total: results.length,
+      success: results.filter((item) => item.success && !item.skipped).length,
+      failed: results.filter((item) => !item.success).length,
+      skipped: results.filter((item) => item.skipped).length,
+      results,
     };
   }
 

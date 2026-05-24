@@ -353,6 +353,41 @@ export interface WechatShippingUploadResult {
   response?: unknown
 }
 
+export interface WechatShippingUploadCandidate {
+  orderId: string
+  status: string
+  paymentStatus: string | null
+  transactionId: string | null
+  trackingNumber: string | null
+  carrierCode: string | null
+  shippedAt: string | null
+  customerName: string | null
+  customerPhone: string | null
+  lastUploadAt: string | null
+  lastSuccess: boolean | null
+  lastSkipped: boolean | null
+  lastMessage: string | null
+  reason: 'NO_UPLOAD_RECORD' | 'UPLOAD_FAILED' | 'UPLOAD_SKIPPED'
+}
+
+export interface WechatShippingUploadPendingSummary {
+  pendingCount: number
+  candidates: WechatShippingUploadCandidate[]
+}
+
+export interface WechatShippingBatchUploadResult {
+  total: number
+  success: number
+  failed: number
+  skipped: number
+  results: Array<{
+    orderId: string
+    success: boolean
+    skipped?: boolean
+    message: string
+  }>
+}
+
 /**
  * 取消订单请求数据
  */

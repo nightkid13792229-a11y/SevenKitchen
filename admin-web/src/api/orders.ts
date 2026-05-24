@@ -7,6 +7,8 @@ import type {
   OrderStats,
   OrderHistory,
   OrderFinancialSummary,
+  WechatShippingBatchUploadResult,
+  WechatShippingUploadPendingSummary,
   WechatShippingUploadResult,
   ShipRequest,
   CancelRequest
@@ -90,6 +92,14 @@ export const orderApi = {
    */
   uploadWechatShippingInfo: (id: string): Promise<WechatShippingUploadResult> => {
     return api.post(`/staff/shipping/orders/${id}/wechat-shipping-upload`)
+  },
+
+  getWechatShippingUploadPending: (): Promise<WechatShippingUploadPendingSummary> => {
+    return api.get('/staff/shipping/wechat-shipping-uploads/pending')
+  },
+
+  retryPendingWechatShippingUploads: (): Promise<WechatShippingBatchUploadResult> => {
+    return api.post('/staff/shipping/wechat-shipping-uploads/retry-all')
   },
 
   /**

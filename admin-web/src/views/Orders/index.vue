@@ -65,6 +65,29 @@
         <div class="card-header">
           <span class="title">订单列表</span>
           <div class="header-actions">
+            <el-badge
+              v-if="wechatShippingPending.pendingCount > 0"
+              :value="wechatShippingPending.pendingCount > 99 ? '99+' : wechatShippingPending.pendingCount"
+            >
+              <el-button
+                type="warning"
+                :icon="RefreshRight"
+                :loading="wechatShippingRetrying"
+                @click="handleRetryPendingWechatShipping"
+              >
+                一键重试微信发货同步
+              </el-button>
+            </el-badge>
+            <el-button
+              v-else
+              type="success"
+              plain
+              :icon="CircleCheck"
+              :loading="wechatShippingLoading"
+              @click="loadWechatShippingPending"
+            >
+              微信发货同步正常
+            </el-button>
             <el-button type="primary" :icon="Download" @click="handleExport">
               导出Excel
             </el-button>
@@ -84,6 +107,21 @@
           </el-radio-button>
         </el-radio-group>
       </div>
+
+      <el-alert
+        v-if="wechatShippingPending.pendingCount > 0"
+        class="wechat-shipping-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+      >
+        <template #title>
+          有 {{ wechatShippingPending.pendingCount }} 笔微信支付已发货订单需要同步或重试发货信息
+        </template>
+        <template #default>
+          系统发货时会自动上传；这里仅处理自动上传失败、历史订单未记录等异常情况。
+        </template>
+      </el-alert>
 
       <!-- 筛选和搜索区域 -->
       <el-form :inline="true" :model="filterForm" class="filter-form">
@@ -249,6 +287,16 @@
             >
               发货
             </el-button>
+            <el-button
+              v-if="isWechatShippingPending(row.id)"
+              type="warning"
+              size="small"
+              plain
+              :loading="wechatShippingRetrying"
+              @click="handleRetrySingleWechatShipping(row)"
+            >
+              重试同步
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -292,7 +340,7 @@
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Document,
   Clock,
@@ -301,6 +349,7 @@ import {
   Van,
   CircleCheck,
   Download,
+  RefreshRight,
   Search
 } from '@element-plus/icons-vue'
 import OrderStatCard from './components/OrderStatCard.vue'
@@ -309,7 +358,11 @@ import ShippingDialog from './components/ShippingDialog.vue'
 import ConfirmPaymentDialog from './components/ConfirmPaymentDialog.vue'
 import { orderApi } from '@/api/orders'
 import { OrderStatus, OrderType } from '@/types/order'
-import type { OrderListItem, OrderStats } from '@/types/order'
+import type {
+  OrderListItem,
+  OrderStats,
+  WechatShippingUploadPendingSummary
+} from '@/types/order'
 import { formatDateTime, formatDate } from '@/utils/date'
 
 // 使枚举在模板中可用
@@ -366,6 +419,12 @@ const cancelDialogVisible = ref(false)
 const shippingDialogVisible = ref(false)
 const confirmPaymentDialogVisible = ref(false)
 const currentOrder = ref<OrderListItem | null>(null)
+const wechatShippingLoading = ref(false)
+const wechatShippingRetrying = ref(false)
+const wechatShippingPending = ref<WechatShippingUploadPendingSummary>({
+  pendingCount: 0,
+  candidates: []
+})
 
 // 状态选项（仅显示管理员需要关注的状态）
 // Phase 9: Simplified status options aligned with e-commerce standards
@@ -517,6 +576,75 @@ const loadStats = async () => {
 }
 
 // 搜索
+const loadWechatShippingPending = async () => {
+  wechatShippingLoading.value = true
+  try {
+    wechatShippingPending.value = await orderApi.getWechatShippingUploadPending()
+  } catch (error) {
+    console.error('加载微信发货同步状态失败:', error)
+  } finally {
+    wechatShippingLoading.value = false
+  }
+}
+
+const isWechatShippingPending = (orderId: string) => {
+  return wechatShippingPending.value.candidates.some((item) => item.orderId === orderId)
+}
+
+const handleRetryPendingWechatShipping = async () => {
+  if (wechatShippingPending.value.pendingCount <= 0) {
+    await loadWechatShippingPending()
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `系统会重新上传 ${wechatShippingPending.value.pendingCount} 笔微信支付已发货订单的发货信息。正常发货会自动上传，这里只处理异常或历史漏传记录。确认继续吗？`,
+      '一键重试微信发货同步',
+      {
+        type: 'warning',
+        confirmButtonText: '确认重试',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch (error) {
+    return
+  }
+
+  wechatShippingRetrying.value = true
+  try {
+    const result = await orderApi.retryPendingWechatShippingUploads()
+    if (result.failed > 0) {
+      ElMessage.warning(`已处理 ${result.total} 笔，成功 ${result.success} 笔，失败 ${result.failed} 笔`)
+    } else {
+      ElMessage.success(`微信发货同步完成，成功 ${result.success} 笔`)
+    }
+    await loadWechatShippingPending()
+    loadOrders()
+  } catch (error: any) {
+    ElMessage.error(error?.message || '微信发货同步重试失败')
+  } finally {
+    wechatShippingRetrying.value = false
+  }
+}
+
+const handleRetrySingleWechatShipping = async (order: OrderListItem) => {
+  wechatShippingRetrying.value = true
+  try {
+    const result = await orderApi.uploadWechatShippingInfo(order.id)
+    if (result.success && !result.skipped) {
+      ElMessage.success(result.message || '微信发货信息已同步')
+    } else {
+      ElMessage.warning(result.message || '微信发货信息未同步成功')
+    }
+    await loadWechatShippingPending()
+  } catch (error: any) {
+    ElMessage.error(error?.message || '微信发货同步失败')
+  } finally {
+    wechatShippingRetrying.value = false
+  }
+}
+
 const handleSearch = () => {
   pagination.page = 1
   loadOrders()
@@ -616,6 +744,7 @@ const handleCancelSubmit = async (reason: string) => {
     ElMessage.success('订单已取消')
     loadOrders()
     loadStats()
+    loadWechatShippingPending()
   } catch (error) {
     ElMessage.error('取消订单失败')
   }
@@ -636,6 +765,7 @@ const handleShippingSubmit = async (data: { carrierCode: string; trackingNumber:
     ElMessage.success('发货成功')
     loadOrders()
     loadStats()
+    loadWechatShippingPending()
   } catch (error) {
     ElMessage.error('发货失败')
   }
@@ -741,6 +871,7 @@ onMounted(() => {
   applyRouteFilters()
   loadOrders()
   loadStats()
+  loadWechatShippingPending()
 })
 </script>
 
@@ -799,7 +930,12 @@ onMounted(() => {
 
 .header-actions {
   display: flex;
+  align-items: center;
   gap: 10px;
+}
+
+.wechat-shipping-alert {
+  margin-bottom: 16px;
 }
 
 .filter-form {

@@ -9,6 +9,7 @@ import {
   Post,
   Param,
   Body,
+  Query,
   HttpCode,
   HttpStatus,
   UsePipes,
@@ -163,5 +164,63 @@ export class StaffShippingController {
         null,
       );
     return ApiResponseDto.success(result);
+  }
+
+  @Get('wechat-shipping-uploads/pending')
+  @ApiOperation({ summary: 'List WeChat shipping upload pending or failed orders' })
+  async listPendingWechatShippingUploads(
+    @Query('limit') limit?: string,
+  ): Promise<
+    ApiResponseDto<{
+      pendingCount: number;
+      candidates: Array<{
+        orderId: string;
+        status: string;
+        paymentStatus: string | null;
+        transactionId: string | null;
+        trackingNumber: string | null;
+        carrierCode: string | null;
+        shippedAt: string | null;
+        customerName: string | null;
+        customerPhone: string | null;
+        lastUploadAt: string | null;
+        lastSuccess: boolean | null;
+        lastSkipped: boolean | null;
+        lastMessage: string | null;
+        reason: string;
+      }>;
+    }>
+  > {
+    const data =
+      await this.shippingFulfillmentService.listPendingWechatShippingUploads(
+        Number(limit) || 100,
+      );
+    return ApiResponseDto.success(data);
+  }
+
+  @Post('wechat-shipping-uploads/retry-all')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Retry all pending WeChat shipping uploads' })
+  async retryPendingWechatShippingUploads(
+    @Query('limit') limit?: string,
+  ): Promise<
+    ApiResponseDto<{
+      total: number;
+      success: number;
+      failed: number;
+      skipped: number;
+      results: Array<{
+        orderId: string;
+        success: boolean;
+        skipped?: boolean;
+        message: string;
+      }>;
+    }>
+  > {
+    const data =
+      await this.shippingFulfillmentService.uploadPendingWechatShippingInfo(
+        Number(limit) || 100,
+      );
+    return ApiResponseDto.success(data);
   }
 }

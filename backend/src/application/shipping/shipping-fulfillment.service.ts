@@ -19,6 +19,8 @@ import {
   ORDER_STATUS_HISTORY_REPOSITORY,
 } from '../order/order.service';
 import {
+  WechatShippingBatchUploadResult,
+  WechatShippingUploadPendingSummary,
   WechatShippingUploadResult,
   WechatShippingUploadService,
 } from './wechat-shipping-upload.service';
@@ -186,6 +188,42 @@ export class ShippingFulfillmentService {
     actorId?: string | null,
   ): Promise<WechatShippingUploadResult> {
     return this.uploadWechatShippingInfoSafely(orderId, actor, actorId);
+  }
+
+  async listPendingWechatShippingUploads(
+    limit = 100,
+  ): Promise<WechatShippingUploadPendingSummary> {
+    return this.wechatShippingUploadService.listPendingUploads(limit);
+  }
+
+  async uploadPendingWechatShippingInfo(
+    limit = 100,
+  ): Promise<WechatShippingBatchUploadResult> {
+    const pending =
+      await this.wechatShippingUploadService.listPendingUploads(limit);
+    const results: WechatShippingBatchUploadResult['results'] = [];
+
+    for (const candidate of pending.candidates) {
+      const result = await this.uploadWechatShippingInfoSafely(
+        candidate.orderId,
+        'admin',
+        null,
+      );
+      results.push({
+        orderId: candidate.orderId,
+        success: result.success,
+        skipped: result.skipped,
+        message: result.message,
+      });
+    }
+
+    return {
+      total: results.length,
+      success: results.filter((item) => item.success && !item.skipped).length,
+      failed: results.filter((item) => !item.success).length,
+      skipped: results.filter((item) => item.skipped).length,
+      results,
+    };
   }
 
   private async uploadWechatShippingInfoSafely(

@@ -165,7 +165,7 @@
               :loading="wechatShippingUploading"
               @click="handleUploadWechatShipping"
             >
-              补传微信发货信息
+              微信发货异常重试
             </el-button>
           </div>
         </template>
@@ -506,14 +506,6 @@
 
           <!-- SHIPPED状态：确认收货 -->
           <template v-else-if="order.status === OrderStatusEnum.SHIPPED">
-            <el-button
-              v-if="canUploadWechatShipping"
-              type="warning"
-              :loading="wechatShippingUploading"
-              @click="handleUploadWechatShipping"
-            >
-              补传微信发货信息
-            </el-button>
             <el-button type="success" @click="handleComplete">确认收货</el-button>
           </template>
 
@@ -1017,11 +1009,11 @@ const handleUploadWechatShipping = async () => {
 
   try {
     await ElMessageBox.confirm(
-      '将把该订单的物流公司、运单号、收货手机号等发货信息补传给微信公众平台，用于微信订单结算校验。确认补传吗？',
-      '补传微信发货信息',
+      '系统发货时会自动上传微信发货信息。只有当微信后台提示未收到、自动上传失败，或历史订单需要修复时，才需要在这里重试上传。确认现在重试吗？',
+      '微信发货异常重试',
       {
         type: 'warning',
-        confirmButtonText: '确认补传',
+        confirmButtonText: '确认重试',
         cancelButtonText: '取消'
       }
     )
@@ -1033,13 +1025,13 @@ const handleUploadWechatShipping = async () => {
   try {
     const result = await orderApi.uploadWechatShippingInfo(order.value.id)
     if (result.success) {
-      ElMessage.success(result.message || '微信发货信息已补传')
+      ElMessage.success(result.message || '微信发货信息已上传')
     } else {
-      ElMessage.warning(result.message || '微信发货信息补传未成功，请检查订单和支付配置')
+      ElMessage.warning(result.message || '微信发货信息上传未成功，请检查订单和支付配置')
     }
     loadHistory()
   } catch (error: any) {
-    ElMessage.error(error?.message || '补传失败')
+    ElMessage.error(error?.message || '上传失败')
   } finally {
     wechatShippingUploading.value = false
   }

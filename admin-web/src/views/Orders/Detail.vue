@@ -158,6 +158,15 @@
             >
               修改物流信息
             </el-button>
+            <el-button
+              v-if="canUploadWechatShipping"
+              type="warning"
+              size="small"
+              :loading="wechatShippingUploading"
+              @click="handleUploadWechatShipping"
+            >
+              补传微信发货信息
+            </el-button>
           </div>
         </template>
         <el-descriptions :column="2" border>
@@ -497,6 +506,14 @@
 
           <!-- SHIPPED状态：确认收货 -->
           <template v-else-if="order.status === OrderStatusEnum.SHIPPED">
+            <el-button
+              v-if="canUploadWechatShipping"
+              type="warning"
+              :loading="wechatShippingUploading"
+              @click="handleUploadWechatShipping"
+            >
+              补传微信发货信息
+            </el-button>
             <el-button type="success" @click="handleComplete">确认收货</el-button>
           </template>
 
@@ -636,6 +653,7 @@ const financialSummary = ref<OrderFinancialSummary | null>(null)
 const financialLoading = ref(false)
 const remarkDraft = ref('')
 const savingRemark = ref(false)
+const wechatShippingUploading = ref(false)
 const adjustmentDialogVisible = ref(false)
 const savingAdjustment = ref(false)
 const adjustmentForm = reactive({
@@ -953,6 +971,16 @@ const canEditShipping = computed(() => {
   return order.value?.status === OrderStatusEnum.SHIPPED
 })
 
+const canUploadWechatShipping = computed(() => {
+  return Boolean(
+    order.value &&
+      order.value.status === OrderStatusEnum.SHIPPED &&
+      order.value.trackingNumber &&
+      order.value.carrierCode &&
+      order.value.paymentMethod === 'WECHAT_PAY'
+  )
+})
+
 // 发货
 const handleShip = () => {
   shippingDialogVisible.value = true
@@ -962,7 +990,16 @@ const handleShip = () => {
 const handleShippingSubmit = async (data: { carrierCode: string; trackingNumber: string }) => {
   try {
     await orderApi.ship(orderId.value, data)
-    ElMessage.success('发货成功')
+    try {
+      const result = await orderApi.uploadWechatShippingInfo(orderId.value)
+      if (result.success) {
+        ElMessage.success('发货成功，微信发货信息已上传')
+      } else {
+        ElMessage.warning(`发货成功，但微信发货信息未上传：${result.message}`)
+      }
+    } catch (uploadError: any) {
+      ElMessage.warning(uploadError?.message || '发货成功，但微信发货信息上传失败')
+    }
     loadOrder()
     loadHistory()
   } catch (error) {
@@ -973,6 +1010,39 @@ const handleShippingSubmit = async (data: { carrierCode: string; trackingNumber:
 // 编辑物流信息
 const handleEditShipping = () => {
   shippingDialogVisible.value = true
+}
+
+const handleUploadWechatShipping = async () => {
+  if (!order.value) return
+
+  try {
+    await ElMessageBox.confirm(
+      '将把该订单的物流公司、运单号、收货手机号等发货信息补传给微信公众平台，用于微信订单结算校验。确认补传吗？',
+      '补传微信发货信息',
+      {
+        type: 'warning',
+        confirmButtonText: '确认补传',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch (error) {
+    return
+  }
+
+  wechatShippingUploading.value = true
+  try {
+    const result = await orderApi.uploadWechatShippingInfo(order.value.id)
+    if (result.success) {
+      ElMessage.success(result.message || '微信发货信息已补传')
+    } else {
+      ElMessage.warning(result.message || '微信发货信息补传未成功，请检查订单和支付配置')
+    }
+    loadHistory()
+  } catch (error: any) {
+    ElMessage.error(error?.message || '补传失败')
+  } finally {
+    wechatShippingUploading.value = false
+  }
 }
 
 // 完成订单

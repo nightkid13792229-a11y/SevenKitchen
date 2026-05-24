@@ -93,6 +93,7 @@ import { PricingService } from './domain/pricing/pricing.service';
 import { ShippingFeeService } from './domain/shipping/shipping-fee.service';
 import { ShippingService } from './application/shipping/shipping.service';
 import { ShippingFulfillmentService } from './application/shipping/shipping-fulfillment.service';
+import { WechatShippingUploadService } from './application/shipping/wechat-shipping-upload.service';
 import { InMemoryShippingTemplateRepository } from './infrastructure/repositories/in-memory-shipping-template.repository';
 import { PrismaShippingTemplateRepository } from './infrastructure/repositories/prisma-shipping-template.repository';
 import { SHIPPING_TEMPLATE_REPOSITORY } from './application/shipping/shipping.service.tokens';
@@ -424,6 +425,7 @@ validatePrismaConfig();
     InventoryService,
     // Phase 8.14: Shipping Fulfillment Service
     ShippingFulfillmentService,
+    WechatShippingUploadService,
     {
       provide: PRODUCTION_BATCH_REPOSITORY,
       useFactory: (prismaService?: PrismaService) => {

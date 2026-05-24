@@ -106,15 +106,21 @@ export class StaffShippingController {
       trackingNumber: string;
       carrierCode: string;
       shippedAt: string;
+      wechatShippingUpload: {
+        success: boolean;
+        skipped?: boolean;
+        message: string;
+      };
     }>
   > {
     try {
-      const order = await this.shippingFulfillmentService.markOrderAsShipped(
+      const result = await this.shippingFulfillmentService.markOrderAsShipped(
         orderId,
         dto,
         'staff', // Phase 8.18: Actor attribution
         null, // Staff ID not available in current implementation
       );
+      const order = result.order;
 
       return ApiResponseDto.success({
         id: order.id,
@@ -122,6 +128,11 @@ export class StaffShippingController {
         trackingNumber: order.trackingNumber ?? '',
         carrierCode: order.carrierCode ?? '',
         shippedAt: order.shippedAt?.toISOString() ?? '',
+        wechatShippingUpload: {
+          success: result.wechatShippingUpload.success,
+          skipped: result.wechatShippingUpload.skipped,
+          message: result.wechatShippingUpload.message,
+        },
       });
     } catch (error: any) {
       if (error instanceof BadRequestException) {
@@ -129,5 +140,28 @@ export class StaffShippingController {
       }
       throw error;
     }
+  }
+
+  @Post('orders/:orderId/wechat-shipping-upload')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Upload or retry WeChat shipping info for an order' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  async uploadWechatShippingInfo(
+    @Param('orderId') orderId: string,
+  ): Promise<
+    ApiResponseDto<{
+      success: boolean;
+      skipped?: boolean;
+      message: string;
+      response?: unknown;
+    }>
+  > {
+    const result =
+      await this.shippingFulfillmentService.uploadWechatShippingInfo(
+        orderId,
+        'staff',
+        null,
+      );
+    return ApiResponseDto.success(result);
   }
 }

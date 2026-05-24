@@ -50,6 +50,36 @@ interface SendSubscriptionMessageResponse {
   msgid: string;
 }
 
+export interface WechatShippingInfoPayload {
+  order_key: {
+    order_number_type: 1 | 2;
+    mchid: string;
+    out_trade_no?: string;
+    transaction_id?: string;
+  };
+  logistics_type: 1 | 2 | 3 | 4;
+  delivery_mode: 1 | 2;
+  is_all_delivered: boolean;
+  shipping_list: Array<{
+    tracking_no?: string;
+    express_company?: string;
+    item_desc: string;
+    contact?: {
+      consignor_contact?: string;
+      receiver_contact?: string;
+    };
+  }>;
+  upload_time: string;
+  payer: {
+    openid: string;
+  };
+}
+
+interface WechatShippingInfoResponse {
+  errcode: number;
+  errmsg: string;
+}
+
 @Injectable()
 export class WechatService {
   private readonly logger = new Logger(WechatService.name);
@@ -399,6 +429,30 @@ export class WechatService {
         error: error instanceof Error ? error.message : 'Unknown error',
       };
     }
+  }
+
+  async uploadShippingInfo(
+    payload: WechatShippingInfoPayload,
+    appId?: string,
+  ): Promise<WechatShippingInfoResponse> {
+    if (this.isMockMode()) {
+      this.logger.log('===== MOCK MODE - Uploading WeChat Shipping Info =====');
+      this.logger.log(JSON.stringify(payload, null, 2));
+      return { errcode: 0, errmsg: 'ok' };
+    }
+
+    const accessToken = await this.getAccessToken(appId);
+    const url = `https://api.weixin.qq.com/wxa/sec/order/upload_shipping_info?access_token=${accessToken}`;
+    const response = await axios.post<WechatShippingInfoResponse>(url, payload);
+    const data = response.data;
+
+    if (data.errcode !== 0) {
+      throw new Error(
+        `WeChat shipping upload failed: ${data.errcode} - ${data.errmsg}`,
+      );
+    }
+
+    return data;
   }
 
   /**

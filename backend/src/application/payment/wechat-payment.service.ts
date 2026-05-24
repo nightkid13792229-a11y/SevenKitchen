@@ -144,8 +144,14 @@ export class WechatPaymentService {
 
     this.assertConfigReady(config);
 
-    if (!order.customer.wechatOpenid) {
-      throw new BadRequestException('当前用户缺少微信 openid，请重新微信登录后再支付');
+    const payerOpenid = await this.resolvePayerOpenid(
+      order.customerId,
+      config.appId!,
+    );
+    if (!payerOpenid) {
+      throw new BadRequestException(
+        '当前账号缺少当前小程序的微信身份，请先在新版小程序重新登录后再支付',
+      );
     }
 
     const outTradeNo = this.toOutTradeNo(order.id);
@@ -172,7 +178,7 @@ export class WechatPaymentService {
         ],
       },
       payer: {
-        openid: order.customer.wechatOpenid,
+        openid: payerOpenid,
       },
     };
 
@@ -190,6 +196,7 @@ export class WechatPaymentService {
       outTradeNo,
       totalFen,
       response.prepay_id,
+      payerOpenid,
     );
     const timeStamp = Math.floor(Date.now() / 1000).toString();
     const nonceStr = this.createNonce();
@@ -658,6 +665,26 @@ export class WechatPaymentService {
     });
   }
 
+  private async resolvePayerOpenid(
+    customerId: string,
+    appId: string,
+  ): Promise<string | null> {
+    const identity = await this.prisma.userWechatIdentity.findFirst({
+      where: {
+        userId: customerId,
+        appId,
+      },
+      orderBy: {
+        lastLoginAt: 'desc',
+      },
+      select: {
+        openid: true,
+      },
+    });
+
+    return identity?.openid || null;
+  }
+
   private assertConfigReady(config: RuntimePaymentConfig) {
     if (!config.enabled) {
       throw new BadRequestException('支付配置未启用，请先在后台支付配置中开启');
@@ -805,6 +832,7 @@ export class WechatPaymentService {
     outTradeNo: string,
     totalFen: number,
     prepayId: string,
+    payerOpenid: string,
   ): WechatOrderInfo {
     const productInfos = (order.items || []).map((item, index) => {
       const recipeId = item.recipeId || this.extractRecipeId(item.recipeSnapshot);
@@ -829,7 +857,7 @@ export class WechatPaymentService {
       create_time: this.formatWechatOrderTime(order.createdAt),
       type: 0,
       out_order_id: outTradeNo,
-      openid: order.customer.wechatOpenid || '',
+      openid: payerOpenid,
       path: `pages/order-detail/index?id=${outTradeNo}`,
       out_user_id: order.customerId,
       order_detail: {

@@ -7,6 +7,7 @@ import type {
   OrderStats,
   OrderHistory,
   OrderFinancialSummary,
+  WechatShippingUploadResult,
   ShipRequest,
   CancelRequest
 } from '@/types/order'
@@ -82,6 +83,13 @@ export const orderApi = {
    */
   ship: (id: string, data: ShipRequest): Promise<void> => {
     return api.post(`/admin/orders/${id}/ship`, data)
+  },
+
+  /**
+   * 补传微信发货信息
+   */
+  uploadWechatShippingInfo: (id: string): Promise<WechatShippingUploadResult> => {
+    return api.post(`/staff/shipping/orders/${id}/wechat-shipping-upload`)
   },
 
   /**

@@ -344,6 +344,16 @@ export interface ShipRequest {
 }
 
 /**
+ * 微信发货信息上传结果
+ */
+export interface WechatShippingUploadResult {
+  success: boolean
+  skipped?: boolean
+  message: string
+  response?: unknown
+}
+
+/**
  * 取消订单请求数据
  */
 export interface CancelRequest {

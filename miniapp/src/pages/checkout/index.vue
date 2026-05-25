@@ -258,6 +258,7 @@
       source-type="PRODUCT"
       :product-id="orderConfig.recipeId"
       :product-name="orderConfig.recipeName"
+      :image-url="orderConfig.recipeCoverImage"
       title="确认订单咨询"
       path="/pages/checkout/index"
     />

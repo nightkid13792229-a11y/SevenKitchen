@@ -32,14 +32,24 @@
       </view>
 
       <!-- 用户头像区域 -->
-      <view class="legacy-migration-entry" @tap="goToLegacyMigration">
-        <view>
+      <view v-if="showLegacyMigrationEntry" class="legacy-migration-entry">
+        <view class="legacy-migration-main">
           <text class="legacy-migration-title">旧版资料迁移</text>
           <text class="legacy-migration-desc"
             >已在旧版填写手机号后，可在这里授权同一手机号并同步历史资料。</text
           >
         </view>
-        <text class="legacy-migration-action">去同步</text>
+        <view class="legacy-migration-actions">
+          <button class="legacy-migration-action" @tap="goToLegacyMigration">
+            去同步
+          </button>
+          <button
+            class="legacy-migration-dismiss"
+            @tap.stop="dismissLegacyMigrationPrompt"
+          >
+            不再提示
+          </button>
+        </view>
       </view>
       <view class="user-profile-section" @tap="editProfile">
         <image
@@ -189,6 +199,7 @@
             >({{ userInfo.favoriteRecipeCount || 0 }}个)</text
           >
         </view>
+
       </view>
 
       <!-- 退出登录 -->
@@ -245,6 +256,20 @@ const orderCounts = ref({
   aftersale: 0,
 });
 const cartCount = ref(0);
+const legacyMigrationPromptHidden = ref(false);
+const LEGACY_MIGRATION_PROMPT_VERSION = "20260523-2";
+
+const getLegacyMigrationPromptStorageKey = () =>
+  userInfo.value.id
+    ? `legacy_migration_prompt_hidden:${LEGACY_MIGRATION_PROMPT_VERSION}:${userInfo.value.id}`
+    : `legacy_migration_prompt_hidden:${LEGACY_MIGRATION_PROMPT_VERSION}`;
+
+const showLegacyMigrationEntry = computed(
+  () =>
+    isLoggedIn.value &&
+    Boolean(userInfo.value.phone) &&
+    !legacyMigrationPromptHidden.value,
+);
 
 // 标志位：防止更新后立即重新加载
 let isJustUpdated = false;
@@ -269,6 +294,8 @@ async function loadUserInfo() {
 
     if (res.code === 0 && res.data) {
       userInfo.value = res.data;
+      legacyMigrationPromptHidden.value =
+        uni.getStorageSync(getLegacyMigrationPromptStorageKey()) === true;
       console.log("[Me Page] userInfo.value after update:", userInfo.value);
       console.log("[Me Page] nickname:", userInfo.value.nickname);
       console.log("[Me Page] avatarUrl:", userInfo.value.avatarUrl);
@@ -403,6 +430,26 @@ function goToPhoneBind() {
 function goToLegacyMigration() {
   uni.navigateTo({
     url: "/pages/migration/index",
+  });
+}
+
+function dismissLegacyMigrationPrompt() {
+  uni.showModal({
+    title: "请慎重选择",
+    content:
+      "您正在关闭旧版资料同步迁移提示。这意味着本账号以后不会再主动提醒您同步旧版资料；如果后续发现历史资料没有同步，可以在客服协助下处理。若您已经知晓，请轻点“不再提示”永久关闭该提示。",
+    confirmText: "不再提示",
+    cancelText: "先保留",
+    confirmColor: "#d92d20",
+    success: (res) => {
+      if (!res.confirm) return;
+      legacyMigrationPromptHidden.value = true;
+      uni.setStorageSync(getLegacyMigrationPromptStorageKey(), true);
+      uni.showToast({
+        title: "已关闭提示",
+        icon: "success",
+      });
+    },
   });
 }
 
@@ -551,14 +598,14 @@ onShow(() => {
 
 .legacy-migration-entry {
   margin: 0 24rpx 24rpx;
-  padding: 24rpx;
+  padding: 24rpx 26rpx;
   border-radius: 12rpx;
-  background: #eef6ff;
+  background: #f7fbff;
   border: 1rpx solid #b7d7ff;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 20rpx;
+}
+
+.legacy-migration-main {
+  margin-bottom: 22rpx;
 }
 
 .legacy-migration-title,
@@ -579,11 +626,32 @@ onShow(() => {
   line-height: 1.5;
 }
 
-.legacy-migration-action {
-  flex-shrink: 0;
-  color: #1677ff;
-  font-size: 26rpx;
+.legacy-migration-actions {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+}
+
+.legacy-migration-action,
+.legacy-migration-dismiss {
+  height: 58rpx;
+  min-width: 144rpx;
+  padding: 0 24rpx;
+  border-radius: 29rpx;
+  font-size: 25rpx;
   font-weight: 700;
+  line-height: 58rpx;
+}
+
+.legacy-migration-action {
+  background: #1677ff;
+  color: #fff;
+}
+
+.legacy-migration-dismiss {
+  background: #fff;
+  color: #667085;
+  border: 1rpx solid #d0d5dd;
 }
 
 /* 未登录状态 */

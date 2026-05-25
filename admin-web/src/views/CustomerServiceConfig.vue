@@ -163,9 +163,53 @@
           <div class="field-help">显示在悬浮按钮下方，建议 2 到 4 个字。</div>
         </el-form-item>
 
-        <el-form-item label="按钮图片 URL">
+        <el-form-item label="按钮图片 URL（可手填）">
           <el-input v-model="form.floatingButtonIconUrl" class="field-control" placeholder="https://.../customer-service.png" clearable />
-          <div class="field-help">可选。建议使用正方形透明 PNG；不填时使用默认 CS 标记。</div>
+          <div class="field-help">可直接粘贴图片链接；更推荐使用下方上传入口，上传后会自动保存。未填写时使用默认 CS 标记。</div>
+        </el-form-item>
+
+        <el-form-item label="客服按钮图片上传">
+          <div class="icon-upload-panel">
+            <div v-if="form.floatingButtonIconUrl" class="icon-preview-card">
+              <el-image
+                class="icon-preview-image"
+                :src="form.floatingButtonIconUrl"
+                fit="cover"
+                :preview-src-list="[form.floatingButtonIconUrl]"
+              />
+              <div class="icon-preview-meta">
+                <div class="icon-preview-title">当前客服按钮图片</div>
+                <div class="icon-url-text">{{ form.floatingButtonIconUrl }}</div>
+                <div class="icon-preview-actions">
+                  <el-button type="primary" :loading="iconUploading" @click="openCustomerServiceIconPicker">
+                    重新上传
+                  </el-button>
+                  <el-button :disabled="iconUploading" @click="clearCustomerServiceIcon">
+                    清除图片
+                  </el-button>
+                </div>
+              </div>
+            </div>
+            <div v-else class="icon-empty-card">
+              <div class="icon-empty-symbol">CS</div>
+              <div>
+                <div class="icon-preview-title">未上传图片时，小程序显示默认客服文字按钮</div>
+                <el-button type="primary" :loading="iconUploading" @click="openCustomerServiceIconPicker">
+                  上传图片
+                </el-button>
+              </div>
+            </div>
+            <input
+              ref="customerServiceIconInput"
+              class="hidden-file-input"
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              @change="handleCustomerServiceIconSelected"
+            />
+          </div>
+          <div class="field-help">
+            建议上传正方形透明 PNG，推荐 96×96 或 128×128 px；最大 1MB。也支持 JPG、WebP。上传成功后会自动保存到客服配置。
+          </div>
         </el-form-item>
 
         <el-form-item label="按钮大小">
@@ -261,7 +305,7 @@
 
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue';
-import { ElMessage } from 'element-plus';
+import { ElMessage, ElMessageBox } from 'element-plus';
 import {
   platformConfigApi,
   type CustomerServiceConfig,
@@ -270,7 +314,9 @@ import {
 
 const loading = ref(false);
 const saving = ref(false);
+const iconUploading = ref(false);
 const config = ref<CustomerServiceConfig | null>(null);
+const customerServiceIconInput = ref<HTMLInputElement | null>(null);
 
 const form = reactive({
   enabled: false,
@@ -323,17 +369,9 @@ const readinessItems = computed(() => [
     ready: Boolean(form.openKfid.trim()),
   },
   {
-    key: 'token',
-    label: '回调 Token',
-    ready: Boolean(config.value?.tokenConfigured || secretForm.token.trim()),
-  },
-  {
-    key: 'encodingAesKey',
-    label: 'EncodingAESKey',
-    ready: Boolean(
-      config.value?.encodingAesKeyConfigured ||
-        secretForm.encodingAesKey.trim(),
-    ),
+    key: 'customerServiceUrl',
+    label: '客服入口 URL',
+    ready: Boolean(form.customerServiceUrl.trim()),
   },
 ]);
 
@@ -424,6 +462,78 @@ const saveConfig = async () => {
     ElMessage.error(error.message || '保存客服配置失败');
   } finally {
     saving.value = false;
+  }
+};
+
+const validateCustomerServiceIcon = (file: File) => {
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+    ElMessage.error('仅支持 PNG、JPG、WebP 格式图片');
+    return false;
+  }
+
+  if (file.size > 1 * 1024 * 1024) {
+    ElMessage.error('客服按钮图片不能超过 1MB');
+    return false;
+  }
+
+  return true;
+};
+
+const openCustomerServiceIconPicker = () => {
+  customerServiceIconInput.value?.click();
+};
+
+const handleCustomerServiceIconSelected = async (event: Event) => {
+  const input = event.target as HTMLInputElement;
+  const file = input.files?.[0];
+  input.value = '';
+  if (!file || !validateCustomerServiceIcon(file)) return;
+
+  iconUploading.value = true;
+  try {
+    const result = await platformConfigApi.uploadCustomerServiceIcon(file);
+    form.floatingButtonIconUrl = result.url;
+    applyConfig(
+      await platformConfigApi.updateCustomerService({
+        floatingButtonIconUrl: result.url,
+      }),
+    );
+    ElMessage.success('客服按钮图片已上传并保存');
+  } catch (error: any) {
+    ElMessage.error(error.message || '客服按钮图片上传失败');
+  } finally {
+    iconUploading.value = false;
+  }
+};
+
+const clearCustomerServiceIcon = async () => {
+  try {
+    await ElMessageBox.confirm(
+      '清除后小程序将显示默认客服文字按钮，确定继续吗？',
+      '清除客服按钮图片',
+      {
+        confirmButtonText: '清除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    );
+  } catch {
+    return;
+  }
+
+  iconUploading.value = true;
+  try {
+    form.floatingButtonIconUrl = '';
+    applyConfig(
+      await platformConfigApi.updateCustomerService({
+        floatingButtonIconUrl: null,
+      }),
+    );
+    ElMessage.success('客服按钮图片已清除');
+  } catch (error: any) {
+    ElMessage.error(error.message || '清除客服按钮图片失败');
+  } finally {
+    iconUploading.value = false;
   }
 };
 
@@ -520,6 +630,74 @@ onMounted(loadConfig);
   overflow: hidden;
   opacity: 0;
   pointer-events: none;
+}
+
+.icon-upload-panel {
+  width: 620px;
+  max-width: 100%;
+}
+
+.icon-preview-card,
+.icon-empty-card {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  width: 100%;
+  padding: 14px;
+  border: 1px solid #dcdfe6;
+  border-radius: 8px;
+  background: #fafafa;
+}
+
+.icon-preview-image,
+.icon-empty-symbol {
+  flex: 0 0 auto;
+  width: 88px;
+  height: 88px;
+  border-radius: 50%;
+  border: 3px solid #ffffff;
+  background: #ffffff;
+  box-shadow: 0 8px 22px rgba(31, 41, 55, 0.18);
+  overflow: hidden;
+}
+
+.icon-empty-symbol {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #9a4f12;
+  font-weight: 800;
+  box-shadow: 0 8px 22px rgba(31, 41, 55, 0.12);
+}
+
+.icon-preview-meta {
+  min-width: 0;
+  flex: 1;
+}
+
+.icon-preview-title {
+  margin-bottom: 8px;
+  color: #1f2937;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.icon-url-text {
+  margin-bottom: 10px;
+  color: #6b7280;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+.icon-preview-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hidden-file-input {
+  display: none;
 }
 
 @media (max-width: 768px) {

@@ -5,36 +5,27 @@
     :style="floatStyle"
   >
     <button
-      v-if="config.enabled"
       class="customer-service-float-button"
-      open-type="contact"
-      show-message-card="true"
-      :send-message-title="messageCard.title"
-      :send-message-path="messageCard.path"
+      @tap="handleCustomerServiceTap"
     >
-      <image
-        v-if="config.floatingButtonIconUrl"
-        class="customer-service-float-icon"
-        :src="config.floatingButtonIconUrl"
-        mode="aspectFit"
-      />
-      <text v-else class="customer-service-float-symbol">CS</text>
-      <text class="customer-service-float-text">{{ config.floatingButtonText }}</text>
+      <template v-if="config.floatingButtonIconUrl">
+        <image
+          class="customer-service-float-avatar"
+          :src="config.floatingButtonIconUrl"
+          mode="aspectFit"
+        />
+      </template>
+      <template v-else>
+        <text class="customer-service-float-symbol">CS</text>
+        <text class="customer-service-float-text">{{ config.floatingButtonText }}</text>
+      </template>
     </button>
-    <button
-      v-else
-      class="customer-service-float-button"
-      @tap="handleFallbackTap"
+    <text
+      v-if="config.floatingButtonIconUrl"
+      class="customer-service-float-label"
     >
-      <image
-        v-if="config.floatingButtonIconUrl"
-        class="customer-service-float-icon"
-        :src="config.floatingButtonIconUrl"
-        mode="aspectFit"
-      />
-      <text v-else class="customer-service-float-symbol">CS</text>
-      <text class="customer-service-float-text">{{ config.floatingButtonText }}</text>
-    </button>
+      {{ config.floatingButtonText }}
+    </text>
   </view>
 </template>
 
@@ -45,6 +36,7 @@ import {
   defaultCustomerServiceConfig,
   getCustomerServiceConfig,
   getFloatingButtonClass,
+  openCustomerServiceChat,
   type CustomerServiceConfig,
   type CustomerServiceSourceType,
 } from '../utils/customer-service'
@@ -58,6 +50,7 @@ const props = withDefaults(
     productName?: string
     title?: string
     path?: string
+    imageUrl?: string
   }>(),
   {
     sourceType: 'GENERAL',
@@ -67,13 +60,15 @@ const props = withDefaults(
     productName: '',
     title: '',
     path: '',
+    imageUrl: '',
   },
 )
 
 const config = ref<CustomerServiceConfig>({ ...defaultCustomerServiceConfig })
+const loading = ref(true)
 
 const visible = computed(() => {
-  return Boolean(config.value.floatingButtonEnabled)
+  return !loading.value && Boolean(config.value.floatingButtonEnabled)
 })
 
 const messageCard = computed(() => {
@@ -85,6 +80,7 @@ const messageCard = computed(() => {
     productName: props.productName,
     title: props.title,
     path: props.path,
+    imageUrl: props.imageUrl,
   })
 })
 
@@ -97,30 +93,32 @@ const floatStyle = computed(() => {
   const side = config.value.floatingButtonPosition === 'LEFT_BOTTOM' ? 'left' : 'right'
 
   return {
-    width: `${size}px`,
-    height: `${size}px`,
+    width: `${size + 10}px`,
+    '--customer-service-size': `${size}px`,
     bottom: `${bottom}px`,
     [side]: `${right}px`,
   }
 })
 
-function handleFallbackTap() {
-  if (config.value.customerServiceUrl) {
-    uni.navigateTo({
-      url: `/pages/common/webview?url=${encodeURIComponent(config.value.customerServiceUrl)}`,
-    })
-    return
-  }
-
-  uni.showModal({
-    title: '联系客服',
-    content: '客服暂未启用，请稍后再试',
-    showCancel: false,
+function handleCustomerServiceTap() {
+  openCustomerServiceChat(config.value, {
+    sourceType: props.sourceType,
+    orderId: props.orderId,
+    orderNo: props.orderNo,
+    productId: props.productId,
+    productName: props.productName,
+    title: props.title || messageCard.value.title,
+    path: props.path || messageCard.value.path,
+    imageUrl: props.imageUrl,
   })
 }
 
 onMounted(async () => {
-  config.value = await getCustomerServiceConfig()
+  try {
+    config.value = await getCustomerServiceConfig()
+  } finally {
+    loading.value = false
+  }
 })
 </script>
 
@@ -129,15 +127,19 @@ onMounted(async () => {
   position: fixed;
   z-index: 900;
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
 
 .customer-service-float-button {
-  width: 100%;
-  height: 100%;
+  width: var(--customer-service-size);
+  height: var(--customer-service-size);
   padding: 0;
-  border: 0;
+  border: 3px solid rgba(255, 255, 255, 0.96);
   border-radius: 999px;
-  box-shadow: 0 8px 22px rgba(31, 41, 55, 0.18);
+  box-shadow: 0 8px 22px rgba(31, 41, 55, 0.22);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -161,9 +163,36 @@ onMounted(async () => {
   color: #ffffff;
 }
 
-.customer-service-float-icon {
-  width: 46%;
-  height: 46%;
+.customer-service-float-label {
+  display: block;
+  max-width: 100%;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.94);
+  color: #9a4f12;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 15px;
+  text-align: center;
+  box-shadow: 0 3px 10px rgba(31, 41, 55, 0.12);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.customer-service-float.dark .customer-service-float-label {
+  background: rgba(17, 24, 39, 0.9);
+  color: #ffffff;
+}
+
+.customer-service-float-avatar {
+  position: absolute;
+  left: 7%;
+  top: 7%;
+  width: 86%;
+  height: 86%;
+  display: block;
+  border-radius: 999px;
 }
 
 .customer-service-float-symbol {

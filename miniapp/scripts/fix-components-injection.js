@@ -402,6 +402,12 @@ const run = () => {
         console.log(`✅ 已移除无效的 component2Dir 配置: ${distDir}`);
       }
 
+      if (appJson && Object.prototype.hasOwnProperty.call(appJson, 'usingShopPlugin')) {
+        delete appJson.usingShopPlugin;
+        appJsonChanged = true;
+        console.log(`✅ 已移除无效的 usingShopPlugin 配置: ${distDir}`);
+      }
+
       if (appJson && !Object.prototype.hasOwnProperty.call(appJson, 'functionalPages')) {
         appJson.functionalPages = false;
         appJsonChanged = true;
@@ -422,6 +428,7 @@ const run = () => {
     if (fs.existsSync(projectConfigPath)) {
       const projectConfig = safeReadJson(projectConfigPath) || {};
       projectConfig.miniprogramRoot = './';
+      projectConfig.libVersion = rootProjectConfig.libVersion || '3.13.0';
       projectConfig.setting = {
         ...(projectConfig.setting || {}),
         ...normalizedProjectSetting,

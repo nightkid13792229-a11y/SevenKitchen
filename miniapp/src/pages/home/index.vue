@@ -338,7 +338,7 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
+import { onLoad, onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
 import { request, getToken } from '../../utils/api'
 import { getRecipeCoverImageUrl, isKnownStaleRecipeCoverUrl, normalizeImageUrl } from '../../utils/config'
 import { resolveDogProfileEntryRoute } from '../../utils/dog-profile-form'
@@ -421,6 +421,7 @@ const hasMountedHome = ref(false)
 const visibleRecipesCount = ref(pageSize)
 let recipeRenderRevealTimer: ReturnType<typeof setTimeout> | null = null
 let staleRecipeCoverRevealTimer: ReturnType<typeof setTimeout> | null = null
+let customerServiceRouteHandled = false
 
 // 筛选相关
 const showLifeStageDrawer = ref(false)
@@ -491,6 +492,42 @@ const checkLoginStatus = () => {
 }
 
 // 页面加载
+function getQueryStringValue(value: unknown) {
+  if (Array.isArray(value)) return String(value[0] || '')
+  return String(value || '')
+}
+
+function handleCustomerServiceEntry(options: Record<string, unknown> = {}) {
+  if (customerServiceRouteHandled) return
+
+  const csType = getQueryStringValue(options.csType)
+  const csProductId = getQueryStringValue(options.csProductId)
+  const csOrderId = getQueryStringValue(options.csOrderId)
+
+  let targetUrl = ''
+  if (csType === 'PRODUCT' && csProductId) {
+    targetUrl = `/pages/recipe-detail/index?recipeId=${encodeURIComponent(csProductId)}`
+  } else if ((csType === 'ORDER' || csType === 'AFTERSALE' || csType === 'REFUND') && csOrderId) {
+    targetUrl = `/pages/order-detail/index?id=${encodeURIComponent(csOrderId)}`
+  }
+
+  if (!targetUrl) return
+
+  customerServiceRouteHandled = true
+  setTimeout(() => {
+    uni.navigateTo({
+      url: targetUrl,
+      fail: (error) => {
+        console.warn('[Home] customer service card navigation failed:', error)
+      },
+    })
+  }, 200)
+}
+
+onLoad((options = {}) => {
+  handleCustomerServiceEntry(options as Record<string, unknown>)
+})
+
 onMounted(() => {
   hasMountedHome.value = true
   checkLoginStatus()

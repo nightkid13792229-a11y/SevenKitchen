@@ -25,6 +25,28 @@ import { AdminGuard } from '../guards/role.guard';
 export class CustomerServiceController {
   constructor(private readonly customerServiceService: CustomerServiceService) {}
 
+  @Post('context')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Record miniapp customer service context' })
+  async recordContext(
+    @Body()
+    body: {
+      sourceType?: string;
+      sourceTitle?: string;
+      sourcePath?: string;
+      orderId?: string;
+      productId?: string;
+      metadata?: Record<string, unknown>;
+    },
+    @CurrentUser() user: RequestUser,
+  ) {
+    const data = await this.customerServiceService.recordCustomerContext(
+      body || {},
+      user.userId || user.customerId,
+    );
+    return ApiResponseDto.success(data);
+  }
+
   @Get('wechat/callback')
   @ApiOperation({ summary: 'WeChat customer service callback verification' })
   async verifyWechatCallback(

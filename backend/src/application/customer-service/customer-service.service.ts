@@ -33,6 +33,15 @@ interface RawCustomerServiceConfig {
   corpId: string | null;
 }
 
+interface CustomerServiceContextInput {
+  sourceType?: string;
+  sourceTitle?: string;
+  sourcePath?: string;
+  orderId?: string;
+  productId?: string;
+  metadata?: Record<string, unknown>;
+}
+
 @Injectable()
 export class CustomerServiceService {
   constructor(
@@ -189,6 +198,67 @@ export class CustomerServiceService {
     });
   }
 
+  async recordCustomerContext(input: CustomerServiceContextInput, customerId: string) {
+    const now = new Date();
+    const sourceType = this.normalizeSourceType(input.sourceType);
+    const orderId = this.normalize(input.orderId);
+    const productId = this.normalize(input.productId);
+    const [orderSnapshot, productSnapshot] = await Promise.all([
+      orderId ? this.buildOrderSnapshot(orderId) : Promise.resolve(null),
+      productId ? this.buildProductSnapshot(productId) : Promise.resolve(null),
+    ]);
+    const sourceTitle =
+      this.normalize(input.sourceTitle) ||
+      productSnapshot?.name ||
+      orderSnapshot?.title ||
+      this.getDefaultSourceTitle(sourceType);
+    const sourcePath =
+      this.normalize(input.sourcePath) ||
+      this.buildSourcePath(sourceType, orderId, productId);
+    const metadata = this.toJsonObject({
+      ...(input.metadata || {}),
+      recordedBy: 'miniapp',
+      adminPath: this.buildAdminPath(sourceType, orderId, productId),
+      order: orderSnapshot,
+      product: productSnapshot,
+    });
+
+    const conversation = await this.prisma.customerServiceConversation.create({
+      data: {
+        provider: 'WECHAT_CUSTOMER_SERVICE',
+        externalConversationId: `miniapp-context:${customerId}:${now.getTime()}`,
+        customerId,
+        sourceType,
+        sourceTitle,
+        sourcePath,
+        orderId: orderId || null,
+        productId: productId || null,
+        status: 'OPEN',
+        lastMessageAt: now,
+        metadata,
+      },
+      include: {
+        messages: {
+          orderBy: { createdAt: 'asc' },
+        },
+      },
+    });
+
+    await this.prisma.customerServiceMessage.create({
+      data: {
+        conversationId: conversation.id,
+        provider: 'WECHAT_CUSTOMER_SERVICE',
+        direction: 'SYSTEM',
+        eventType: 'MINIAPP_CONTEXT',
+        messageType: 'CONTEXT',
+        content: this.buildContextMessage(sourceType, sourceTitle),
+        rawPayload: metadata,
+      },
+    });
+
+    return this.getConversation(conversation.id);
+  }
+
   async listConversations(query: {
     status?: string;
     orderId?: string;
@@ -243,6 +313,102 @@ export class CustomerServiceService {
       token: config.token || null,
       encodingAesKey: config.encodingAesKey || null,
       corpId: config.corpId || null,
+    };
+  }
+
+  private normalizeSourceType(sourceType?: string) {
+    const normalized = this.normalize(sourceType).toUpperCase();
+    if (['ORDER', 'PRODUCT', 'AFTERSALE', 'REFUND', 'GENERAL'].includes(normalized)) {
+      return normalized;
+    }
+    return 'GENERAL';
+  }
+
+  private getDefaultSourceTitle(sourceType: string) {
+    if (sourceType === 'PRODUCT') return '商品咨询';
+    if (sourceType === 'ORDER') return '订单咨询';
+    if (sourceType === 'AFTERSALE' || sourceType === 'REFUND') return '售后咨询';
+    return '普通咨询';
+  }
+
+  private buildSourcePath(sourceType: string, orderId?: string, productId?: string) {
+    if (sourceType === 'PRODUCT' && productId) {
+      return `/pages/recipe-detail/index?recipeId=${productId}`;
+    }
+    if ((sourceType === 'ORDER' || sourceType === 'AFTERSALE' || sourceType === 'REFUND') && orderId) {
+      return `/pages/order-detail/index?id=${orderId}`;
+    }
+    return '/pages/home/index';
+  }
+
+  private buildAdminPath(sourceType: string, orderId?: string, productId?: string) {
+    if (sourceType === 'PRODUCT' && productId) return `/recipes/${productId}`;
+    if ((sourceType === 'ORDER' || sourceType === 'AFTERSALE' || sourceType === 'REFUND') && orderId) {
+      return `/orders/${orderId}`;
+    }
+    return null;
+  }
+
+  private buildContextMessage(sourceType: string, sourceTitle: string) {
+    if (sourceType === 'PRODUCT') return `客户从商品页发起咨询：${sourceTitle}`;
+    if (sourceType === 'ORDER') return `客户从订单页发起咨询：${sourceTitle}`;
+    if (sourceType === 'AFTERSALE' || sourceType === 'REFUND') {
+      return `客户从售后页发起咨询：${sourceTitle}`;
+    }
+    return `客户发起客服咨询：${sourceTitle}`;
+  }
+
+  private async buildProductSnapshot(productId: string) {
+    const recipe = await this.prisma.recipe.findUnique({
+      where: { id: productId },
+      select: {
+        id: true,
+        recipeId: true,
+        version: true,
+        name: true,
+        status: true,
+        coverImageUrl: true,
+      },
+    });
+    if (!recipe) return null;
+    return recipe;
+  }
+
+  private async buildOrderSnapshot(orderId: string) {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      select: {
+        id: true,
+        status: true,
+        amountTotal: true,
+        customerId: true,
+        aftersaleType: true,
+        aftersaleReason: true,
+        items: {
+          take: 1,
+          select: {
+            recipeSnapshot: true,
+          },
+        },
+      },
+    });
+    if (!order) return null;
+    const firstRecipeSnapshot = order.items?.[0]?.recipeSnapshot as
+      | { name?: string }
+      | null
+      | undefined;
+    const title = firstRecipeSnapshot?.name
+      ? `订单 ${order.id.slice(0, 8)} ${firstRecipeSnapshot.name}`
+      : `订单 ${order.id.slice(0, 8)}`;
+    return {
+      id: order.id,
+      status: order.status,
+      amountTotal: order.amountTotal?.toString(),
+      customerId: order.customerId,
+      aftersaleType: order.aftersaleType,
+      aftersaleReason: order.aftersaleReason,
+      title,
+      firstRecipeName: firstRecipeSnapshot?.name || null,
     };
   }
 

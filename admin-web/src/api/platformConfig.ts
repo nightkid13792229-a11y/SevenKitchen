@@ -118,4 +118,21 @@ export const platformConfigApi = {
     data: CustomerServiceConfigUpdate,
   ): Promise<CustomerServiceConfig> =>
     api.put('/admin/platform-config/customer-service', data),
+
+  uploadCustomerServiceIcon: async (
+    file: File,
+  ): Promise<{ url: string; key: string }> => {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    return api.post<{ url: string; key: string }>(
+      '/admin/upload-customer-service-icon',
+      formData,
+      {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+        },
+      },
+    );
+  },
 };

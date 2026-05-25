@@ -449,6 +449,7 @@
       source-type="PRODUCT"
       :product-id="recipeId"
       :product-name="recipe.name"
+      :image-url="normalizeImageUrl(recipe.coverImageUrl || '')"
       title="下单配置咨询"
     />
   </view>

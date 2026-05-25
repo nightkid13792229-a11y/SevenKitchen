@@ -44,6 +44,12 @@
       }
     },
     {
+      "path": "pages/customer-service-entry/index",
+      "style": {
+        "navigationBarTitleText": "客服咨询"
+      }
+    },
+    {
       "path": "pages/address-list/index",
       "style": {
         "navigationBarTitleText": "收货地址"

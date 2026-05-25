@@ -11,6 +11,62 @@ import { promptPhoneBindingIfNeeded } from "./utils/account";
 import { setBaseUrl } from "./utils/config";
 import { migrateLegacyDevBaseUrl } from "./utils/runtime-base-url";
 
+const CUSTOMER_SERVICE_PENDING_TARGET_KEY = "customer_service_pending_target";
+const CUSTOMER_SERVICE_PENDING_TARGET_MAX_AGE_MS = 10 * 60 * 1000;
+const CUSTOMER_SERVICE_PENDING_TARGET_COOLDOWN_MS = 8 * 1000;
+
+function getCurrentRouteWithQuery(): string {
+  try {
+    const pages = getCurrentPages();
+    const current = pages[pages.length - 1] as any;
+    if (!current?.route) return "";
+    const options = current.options || {};
+    const query = Object.keys(options)
+      .filter((key) => options[key] !== undefined && options[key] !== null && options[key] !== "")
+      .map((key) => `${encodeURIComponent(key)}=${encodeURIComponent(String(options[key]))}`)
+      .join("&");
+    return `/${current.route}${query ? `?${query}` : ""}`;
+  } catch (error) {
+    return "";
+  }
+}
+
+function navigateCustomerServicePendingTarget() {
+  try {
+    const pending = uni.getStorageSync(CUSTOMER_SERVICE_PENDING_TARGET_KEY);
+    if (!pending?.url || !pending?.createdAt) return;
+
+    const now = Date.now();
+    if (now - Number(pending.createdAt) > CUSTOMER_SERVICE_PENDING_TARGET_MAX_AGE_MS) {
+      uni.removeStorageSync(CUSTOMER_SERVICE_PENDING_TARGET_KEY);
+      return;
+    }
+
+    if (now - Number(pending.lastHandledAt || 0) < CUSTOMER_SERVICE_PENDING_TARGET_COOLDOWN_MS) {
+      return;
+    }
+
+    const targetUrl = String(pending.url || "");
+    if (!targetUrl || getCurrentRouteWithQuery() === targetUrl) return;
+
+    uni.setStorageSync(CUSTOMER_SERVICE_PENDING_TARGET_KEY, {
+      ...pending,
+      lastHandledAt: now,
+    });
+
+    setTimeout(() => {
+      uni.navigateTo({
+        url: targetUrl,
+        fail: (error) => {
+          console.warn("[App] customer service pending target navigation failed:", error);
+        },
+      });
+    }, 350);
+  } catch (error) {
+    console.warn("[App] customer service pending target check failed:", error);
+  }
+}
+
 onLaunch(() => {
   try {
     const deviceInfo = uni.getDeviceInfo();
@@ -48,6 +104,8 @@ onLaunch(() => {
 });
 
 onShow(() => {
+  navigateCustomerServicePendingTarget();
+
   setTimeout(() => {
     promptPhoneBindingIfNeeded();
   }, 500);

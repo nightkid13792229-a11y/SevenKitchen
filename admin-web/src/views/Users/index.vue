@@ -71,11 +71,21 @@
             {{ formatDateTime(row.createdAt) }}
           </template>
         </el-table-column>
-        <el-table-column label="操作" width="200" fixed="right">
+        <el-table-column label="操作" width="280" fixed="right">
           <template #default="{ row }">
             <el-tag v-if="row.role === UserRole.ADMIN" type="info" effect="plain">
               账号保护
             </el-tag>
+            <el-button
+              link
+              type="success"
+              size="small"
+              :loading="syncingUserId === row.id"
+              :disabled="!row.phone"
+              @click="handleManualLegacySync(row)"
+            >
+              同步旧版
+            </el-button>
             <el-button
               link
               type="primary"
@@ -147,6 +157,7 @@ const pageSize = ref(20)
 const loading = ref(false)
 const formVisible = ref(false)
 const currentUser = ref<User | undefined>(undefined)
+const syncingUserId = ref('')
 
 // Load users list
 const loadUsers = async () => {
@@ -202,6 +213,61 @@ const handleCreate = () => {
 const handleEdit = (user: User) => {
   currentUser.value = user
   formVisible.value = true
+}
+
+const escapeHtml = (value: unknown) =>
+  String(value ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+
+const buildMigrationCountText = (user: any) => [
+  `订单 ${user.orderCount || 0}`,
+  `宠物资料 ${user.dogCount || 0}`,
+  `地址 ${user.addressCount || 0}`,
+  `制作单 ${user.diySheetCount || 0}`,
+  `收藏 ${user.favoriteRecipeCount || 0}`,
+  `定制订单 ${user.customRecipeOrderCount || 0}`,
+].join(' / ')
+
+const handleManualLegacySync = async (user: User) => {
+  if (!user.phone) {
+    ElMessage.warning('该用户还没有手机号，无法匹配旧版资料')
+    return
+  }
+
+  syncingUserId.value = user.id
+  try {
+    const candidate = await userApi.legacyMigrationCandidate(user.id)
+    const content = `
+      <div style="line-height: 1.8; text-align: left;">
+        <div>将把旧版账号资料同步到当前账号，操作完成后旧版来源账号会被标记为已合并。</div>
+        <div style="margin-top: 10px;"><strong>当前账号：</strong>${escapeHtml(candidate.targetUser.nickname)} / ${escapeHtml(candidate.phone || user.phone)}</div>
+        <div><strong>旧版来源：</strong>${escapeHtml(candidate.sourceUser.nickname)} / ${escapeHtml(candidate.sourceUser.phone || '未绑定手机号')}</div>
+        <div><strong>可同步资料：</strong>${escapeHtml(buildMigrationCountText(candidate.sourceUser))}</div>
+        <div style="margin-top: 10px; color: #d92d20;">该操作会移动历史资料，确认前请核对手机号和客户身份。</div>
+      </div>
+    `
+
+    await ElMessageBox.confirm(content, '手动同步旧版资料', {
+      confirmButtonText: '确认同步',
+      cancelButtonText: '取消',
+      type: 'warning',
+      dangerouslyUseHTMLString: true,
+    })
+
+    const result = await userApi.syncLegacyMigration(user.id, candidate.migrationId)
+    ElMessage.success(`同步完成，已迁移 ${result.sourceDataCount || 0} 项旧版资料`)
+    await loadUsers()
+  } catch (error: any) {
+    if (error !== 'cancel' && error !== 'close') {
+      console.error('[Users] Manual legacy sync failed:', error)
+    }
+  } finally {
+    syncingUserId.value = ''
+  }
 }
 
 // Handle toggle user status

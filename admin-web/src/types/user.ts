@@ -78,3 +78,32 @@ export interface UserListResponse {
   page: number;
   pageSize: number;
 }
+
+export interface LegacyMigrationUserSummary {
+  id: string;
+  nickname: string;
+  phone?: string | null;
+  role: UserRole;
+  dogCount: number;
+  orderCount: number;
+  addressCount: number;
+  diySheetCount: number;
+  favoriteRecipeCount: number;
+  customRecipeOrderCount: number;
+}
+
+export interface LegacyMigrationCandidate {
+  migrationId: string;
+  migrationStatus: string;
+  phone: string | null;
+  sourceUser: LegacyMigrationUserSummary;
+  targetUser: LegacyMigrationUserSummary;
+  sourceDataCount: number;
+}
+
+export interface LegacyMigrationSyncResult {
+  status: string;
+  mergedSourceCount: number;
+  sourceDataCount: number;
+  user: LegacyMigrationUserSummary;
+}

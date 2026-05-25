@@ -60,7 +60,9 @@
               <router-link v-if="row.orderId" class="link" :to="`/orders/${row.orderId}`">
                 订单：{{ row.orderId }}
               </router-link>
-              <span v-if="row.productId" class="primary-text">商品：{{ row.productId }}</span>
+              <router-link v-if="row.productId" class="link" :to="`/recipes/${row.productId}`">
+                商品：{{ row.sourceType === 'PRODUCT' && row.sourceTitle ? row.sourceTitle : row.productId }}
+              </router-link>
               <span v-if="!row.orderId && !row.productId" class="muted-text">未关联订单/商品</span>
             </div>
           </template>
@@ -111,6 +113,9 @@
             </el-button>
             <el-button v-if="row.orderId" size="small" type="primary" @click="goOrder(row.orderId)">
               订单
+            </el-button>
+            <el-button v-if="row.productId" size="small" type="primary" @click="goRecipe(row.productId)">
+              商品
             </el-button>
           </template>
         </el-table-column>
@@ -180,8 +185,17 @@
               </router-link>
               <span v-else>-</span>
             </el-descriptions-item>
-            <el-descriptions-item label="商品ID">
-              {{ currentConversation.productId || '-' }}
+            <el-descriptions-item label="商品">
+              <router-link
+                v-if="currentConversation.productId"
+                class="link"
+                :to="`/recipes/${currentConversation.productId}`"
+              >
+                {{ currentConversation.sourceType === 'PRODUCT' && currentConversation.sourceTitle
+                  ? currentConversation.sourceTitle
+                  : currentConversation.productId }}
+              </router-link>
+              <span v-else>-</span>
             </el-descriptions-item>
             <el-descriptions-item label="页面路径" :span="2">
               {{ currentConversation.sourcePath || '-' }}
@@ -300,6 +314,10 @@ async function openDetail(id: string) {
 
 function goOrder(orderId: string) {
   router.push(`/orders/${orderId}`)
+}
+
+function goRecipe(productId: string) {
+  router.push(`/recipes/${productId}`)
 }
 
 async function updateStatus(

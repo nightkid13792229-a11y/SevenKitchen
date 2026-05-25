@@ -437,18 +437,8 @@
       <view class="section service-section">
         <view class="section-title">客服</view>
         <button
-          v-if="customerServiceConfig.enabled"
           class="btn-service-contact"
-          open-type="contact"
-          show-message-card="true"
-          :send-message-title="customerServiceOrderTitle"
-          :send-message-path="customerServiceOrderPath"
-        >
-          联系客服
-        </button>
-        <button
-          v-else
-          class="btn-service-contact secondary"
+          :class="{ secondary: !customerServiceConfig.enabled }"
           @tap="contactService"
         >
           联系客服
@@ -957,6 +947,7 @@ import { formatDateTime } from '../../utils/date';
 import { getNutritionStandardLabel } from '../../utils/label-mapping';
 import { requestWechatOrderPayment } from '../../utils/wechat-payment';
 import { ensurePhoneBound } from '../../utils/account';
+import { openCustomerServiceChat } from '../../utils/customer-service';
 import {
   getSourcePlanLabel,
   type IngredientSourcePlanCode,
@@ -1084,6 +1075,8 @@ interface Order {
 interface CustomerServiceConfig {
   enabled: boolean;
   provider: string;
+  corpId?: string | null;
+  openKfid?: string | null;
   customerServiceUrl?: string | null;
   orderCardTitleTemplate: string;
   orderCardPathTemplate: string;
@@ -2680,21 +2673,16 @@ async function payOrder() {
 
 // 联系客服
 function contactService() {
-  if (customerServiceConfig.value.customerServiceUrl) {
-    uni.navigateTo({
-      url: `/pages/common/webview?url=${encodeURIComponent(customerServiceConfig.value.customerServiceUrl)}`,
-    });
-    return;
-  }
-
-  uni.showModal({
-    title: '联系客服',
-    content: '客服暂未启用，请稍后再试',
-    showCancel: false,
+  openCustomerServiceChat(customerServiceConfig.value as any, {
+    sourceType: 'ORDER',
+    orderId: orderId.value,
+    orderNo: order.value?.orderNo || order.value?.id,
+    title: customerServiceOrderTitle.value,
+    path: customerServiceOrderPath.value,
+    imageUrl: orderCenterCover.value,
   });
 }
 
-// 查看物流
 function viewLogistics() {
   uni.showToast({
     title: '查看物流...',

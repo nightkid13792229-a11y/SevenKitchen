@@ -272,6 +272,7 @@
       source-type="PRODUCT"
       :product-id="recipeId"
       :product-name="recipe.name"
+      :image-url="normalizeImageUrl(recipe.coverImageUrl || '')"
     />
   </view>
 </template>
@@ -428,7 +429,7 @@ const sortedItems = computed(() => {
 onMounted(async () => {
   const pages = getCurrentPages()
   const currentPage = pages[pages.length - 1] as any
-  recipeId.value = currentPage.options?.recipeId || ''
+  recipeId.value = currentPage.options?.recipeId || currentPage.options?.id || ''
   shareToken.value = currentPage.options?.shareToken || ''
 
   dogId.value = uni.getStorageSync('dogId') || null
@@ -1396,7 +1397,7 @@ function onReviewSubmitted() {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 48rpx;
+  font-size: 40rpx;
   color: #999;
   line-height: 1;
 }

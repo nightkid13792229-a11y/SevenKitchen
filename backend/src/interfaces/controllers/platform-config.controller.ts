@@ -51,6 +51,7 @@ export class PublicPlatformConfigController {
     return ApiResponseDto.success({
       enabled: config.enabled,
       provider: config.provider,
+      corpId: config.corpId,
       customerServiceUrl: config.customerServiceUrl,
       orderCardTitleTemplate: config.orderCardTitleTemplate,
       orderCardPathTemplate: config.orderCardPathTemplate,

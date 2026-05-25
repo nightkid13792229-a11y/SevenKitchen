@@ -8,6 +8,8 @@ import type {
   UpdateUserForm,
   UserListParams,
   UserListResponse,
+  LegacyMigrationCandidate,
+  LegacyMigrationSyncResult,
 } from '@/types/user';
 
 export const userApi = {
@@ -39,4 +41,13 @@ export const userApi = {
    */
   delete: (id: string): Promise<void> =>
     api.delete(`/admin/users/${id}`),
+
+  legacyMigrationCandidate: (id: string): Promise<LegacyMigrationCandidate> =>
+    api.get(`/admin/users/${id}/legacy-migration-candidate`),
+
+  syncLegacyMigration: (
+    id: string,
+    migrationId: string
+  ): Promise<LegacyMigrationSyncResult> =>
+    api.post(`/admin/users/${id}/legacy-migration-sync`, { migrationId }),
 };

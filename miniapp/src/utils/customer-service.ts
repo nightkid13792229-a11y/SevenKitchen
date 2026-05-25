@@ -1,10 +1,14 @@
 import { request } from './api'
 
+declare const wx: any
+
 export type CustomerServiceSourceType = 'ORDER' | 'PRODUCT' | 'AFTERSALE' | 'REFUND' | 'GENERAL'
 
 export interface CustomerServiceConfig {
   enabled: boolean
   provider: string
+  corpId?: string | null
+  openKfid?: string | null
   customerServiceUrl?: string | null
   orderCardTitleTemplate: string
   orderCardPathTemplate: string
@@ -34,11 +38,14 @@ export interface CustomerServiceContext {
   productName?: string
   title?: string
   path?: string
+  imageUrl?: string
 }
 
 export const defaultCustomerServiceConfig: CustomerServiceConfig = {
   enabled: false,
   provider: 'WECHAT_CUSTOMER_SERVICE',
+  corpId: null,
+  openKfid: null,
   customerServiceUrl: null,
   orderCardTitleTemplate: '订单 {orderNo}',
   orderCardPathTemplate: '/pages/order-detail/index?id={orderId}',
@@ -62,6 +69,7 @@ export const defaultCustomerServiceConfig: CustomerServiceConfig = {
 
 let configCache: CustomerServiceConfig | null = null
 let configLoading: Promise<CustomerServiceConfig> | null = null
+const CUSTOMER_SERVICE_PENDING_TARGET_KEY = 'customer_service_pending_target'
 
 function applyTemplate(template: string, values: Record<string, string | undefined>) {
   return Object.entries(values).reduce((result, [key, value]) => {
@@ -81,6 +89,94 @@ function getCurrentPagePath() {
     .join('&')
 
   return `/${page.route}${query ? `?${query}` : ''}`
+}
+
+function normalizeCustomerServiceCardPath(path?: string) {
+  const value = String(path || '').trim()
+  if (!value) return ''
+  return value.replace(/^\/+/, '')
+}
+
+function buildCustomerServiceEntryPath(context: CustomerServiceContext) {
+  const sourceType = context.sourceType || 'GENERAL'
+  const params: Record<string, string | undefined> = {
+    csType: sourceType,
+    csOrderId: context.orderId,
+    csProductId: context.productId,
+  }
+
+  const query = Object.entries(params)
+    .filter(([, value]) => value !== undefined && value !== null && value !== '')
+    .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
+    .join('&')
+
+  return `pages/home/index${query ? `?${query}` : ''}`
+}
+
+function buildCustomerServiceTargetUrl(context: CustomerServiceContext, fallbackPath: string) {
+  if (context.sourceType === 'PRODUCT' && context.productId) {
+    return `/pages/recipe-detail/index?recipeId=${encodeURIComponent(context.productId)}`
+  }
+
+  if (
+    (context.sourceType === 'ORDER' || context.sourceType === 'AFTERSALE' || context.sourceType === 'REFUND') &&
+    context.orderId
+  ) {
+    return `/pages/order-detail/index?id=${encodeURIComponent(context.orderId)}`
+  }
+
+  return fallbackPath ? `/${fallbackPath}` : '/pages/home/index'
+}
+
+function rememberCustomerServiceTarget(url: string) {
+  try {
+    uni.setStorageSync(CUSTOMER_SERVICE_PENDING_TARGET_KEY, {
+      url,
+      createdAt: Date.now(),
+      lastHandledAt: 0,
+    })
+  } catch (error) {
+    console.warn('[CustomerService] remember target failed:', error)
+  }
+}
+
+function hasLoginToken() {
+  try {
+    return Boolean(uni.getStorageSync('token'))
+  } catch (error) {
+    return false
+  }
+}
+
+function recordCustomerServiceContext(
+  context: CustomerServiceContext,
+  card: { title: string; path: string; imageUrl?: string },
+  targetUrl: string,
+) {
+  if (!hasLoginToken()) return
+
+  request({
+    url: '/customer-service/context',
+    method: 'POST',
+    quiet: true,
+    suppressErrorToast: true,
+    data: {
+      sourceType: context.sourceType || 'GENERAL',
+      sourceTitle: card.title,
+      sourcePath: card.path,
+      orderId: context.orderId || undefined,
+      productId: context.productId || undefined,
+      metadata: {
+        productName: context.productName || undefined,
+        orderNo: context.orderNo || undefined,
+        cardPath: card.path,
+        cardImageUrl: card.imageUrl || undefined,
+        targetUrl,
+      },
+    },
+  } as any).catch((error) => {
+    console.warn('[CustomerService] record context failed:', error)
+  })
 }
 
 export async function getCustomerServiceConfig(force = false): Promise<CustomerServiceConfig> {
@@ -121,6 +217,7 @@ export function buildCustomerServiceCard(
     return {
       title: context.title,
       path: context.path,
+      imageUrl: context.imageUrl,
     }
   }
 
@@ -135,6 +232,7 @@ export function buildCustomerServiceCard(
     return {
       title: applyTemplate(config.orderCardTitleTemplate, values),
       path: applyTemplate(config.orderCardPathTemplate, values),
+      imageUrl: context.imageUrl,
     }
   }
 
@@ -142,12 +240,14 @@ export function buildCustomerServiceCard(
     return {
       title: applyTemplate(config.productCardTitleTemplate, values),
       path: applyTemplate(config.productCardPathTemplate, values),
+      imageUrl: context.imageUrl,
     }
   }
 
   return {
     title: applyTemplate(config.defaultCardTitleTemplate, values),
     path: applyTemplate(config.defaultCardPathTemplate || getCurrentPagePath(), values),
+    imageUrl: context.imageUrl,
   }
 }
 
@@ -157,4 +257,73 @@ export function getFloatingButtonClass(config: CustomerServiceConfig) {
     config.floatingButtonPosition === 'LEFT_BOTTOM' ? 'left' : 'right',
     config.floatingButtonStyle === 'DARK' ? 'dark' : 'light',
   ].join(' ')
+}
+
+export function openCustomerServiceChat(
+  config: CustomerServiceConfig,
+  context: CustomerServiceContext = {},
+) {
+  const card = buildCustomerServiceCard(config, context)
+  const cardTargetPath = normalizeCustomerServiceCardPath(card.path)
+  const targetUrl = buildCustomerServiceTargetUrl(context, cardTargetPath)
+  const sendMessagePath = buildCustomerServiceEntryPath(context) || cardTargetPath
+
+  if (!config.enabled) {
+    uni.showModal({
+      title: '联系客服',
+      content: '客服暂未启用，请稍后再试',
+      showCancel: false,
+    })
+    return
+  }
+
+  if (
+    config.provider === 'WECHAT_CUSTOMER_SERVICE' &&
+    config.corpId &&
+    config.customerServiceUrl &&
+    typeof wx !== 'undefined' &&
+    typeof wx.openCustomerServiceChat === 'function'
+  ) {
+    rememberCustomerServiceTarget(targetUrl)
+    recordCustomerServiceContext(context, card, targetUrl)
+
+    const chatOptions: any = {
+      extInfo: {
+        url: config.customerServiceUrl,
+      },
+      corpId: config.corpId,
+      showMessageCard: Boolean(card.title && sendMessagePath),
+      sendMessageTitle: card.title,
+      sendMessagePath,
+      success: () => {},
+      fail: (error: any) => {
+        console.warn('[CustomerService] openCustomerServiceChat failed:', error)
+        uni.showModal({
+          title: '联系客服失败',
+          content: '客服入口暂时无法打开，请稍后再试',
+          showCancel: false,
+        })
+      },
+    }
+
+    if (card.imageUrl) {
+      chatOptions.sendMessageImg = card.imageUrl
+    }
+
+    wx.openCustomerServiceChat(chatOptions)
+    return
+  }
+
+  if (config.customerServiceUrl) {
+    uni.navigateTo({
+      url: `/pages/common/webview?url=${encodeURIComponent(config.customerServiceUrl)}&title=${encodeURIComponent(card.title)}`,
+    })
+    return
+  }
+
+  uni.showModal({
+    title: '联系客服',
+    content: '客服入口未配置，请联系管理员',
+    showCancel: false,
+  })
 }

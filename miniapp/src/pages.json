@@ -328,6 +328,25 @@
       ]
     },
     {
+      "root": "pages/staff-customer-service",
+      "pages": [
+        {
+          "path": "order",
+          "style": {
+            "navigationBarTitleText": "客服订单处理",
+            "enablePullDownRefresh": true
+          }
+        },
+        {
+          "path": "product",
+          "style": {
+            "navigationBarTitleText": "客服商品咨询",
+            "enablePullDownRefresh": true
+          }
+        }
+      ]
+    },
+    {
       "root": "pages/staff-refunds",
       "pages": [
         {

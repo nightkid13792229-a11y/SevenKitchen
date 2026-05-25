@@ -212,3 +212,70 @@ export function updateOrderCustomerAddress(
     data,
   });
 }
+
+export function getStaffCustomerServiceOrder(orderId: string) {
+  return request({
+    url: `/staff/customer-service/orders/${orderId}`,
+    method: 'GET',
+    quiet: true,
+    suppressErrorToast: true,
+  });
+}
+
+export function updateStaffCustomerServiceRemark(
+  orderId: string,
+  adminRemark?: string | null,
+) {
+  return request({
+    url: `/staff/customer-service/orders/${orderId}/remark`,
+    method: 'PUT',
+    data: {
+      adminRemark: adminRemark ?? null,
+    },
+  });
+}
+
+export function updateStaffCustomerServiceAmount(
+  orderId: string,
+  amount: number,
+  reason?: string,
+) {
+  return request({
+    url: `/staff/customer-service/orders/${orderId}/amount`,
+    method: 'PUT',
+    data: {
+      amount,
+      reason,
+    },
+  });
+}
+
+export function resolveOrderAftersale(
+  orderId: string,
+  resolutionType: 'refunded' | 'remade' | 'resolved',
+  adminNote?: string,
+) {
+  return request({
+    url: `/orders/${orderId}/aftersale/resolve`,
+    method: 'POST',
+    data: {
+      resolutionType,
+      adminNote,
+    },
+  });
+}
+
+export function retryWechatRefund(
+  orderId: string,
+  amount: number,
+  reason: string,
+) {
+  return request({
+    url: `/admin/orders/${orderId}/wechat-refund`,
+    method: 'POST',
+    data: {
+      amount,
+      reason,
+    },
+  });
+}

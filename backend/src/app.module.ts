@@ -175,6 +175,7 @@ import {
   AdminCustomerServiceController,
   CustomerServiceController,
 } from './interfaces/controllers/customer-service.controller';
+import { StaffCustomerServiceController } from './interfaces/controllers/staff-customer-service.controller';
 import { CustomerServiceService } from './application/customer-service/customer-service.service';
 import {
   AdminWechatRefundController,
@@ -276,6 +277,7 @@ validatePrismaConfig();
     PublicPlatformConfigController,
     CustomerServiceController,
     AdminCustomerServiceController,
+    StaffCustomerServiceController,
     WechatPayController,
     AdminWechatRefundController,
     ...(isPrismaEnabled()

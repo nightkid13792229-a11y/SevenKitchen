@@ -101,12 +101,12 @@ function buildCustomerServiceEntryPath(context: CustomerServiceContext) {
   const sourceType = context.sourceType || 'GENERAL'
   let target = ''
   if (sourceType === 'PRODUCT' && context.productId) {
-    target = `pages/recipe-detail/index?recipeId=${context.productId}`
+    target = `pages/staff-customer-service/product?productId=${context.productId}`
   } else if (
     (sourceType === 'ORDER' || sourceType === 'AFTERSALE' || sourceType === 'REFUND') &&
     context.orderId
   ) {
-    target = `pages/order-detail/index?id=${context.orderId}`
+    target = `pages/staff-customer-service/order?orderId=${context.orderId}&scene=${sourceType}`
   } else if (context.path) {
     target = normalizeCustomerServiceCardPath(context.path)
   }

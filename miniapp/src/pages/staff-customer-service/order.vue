@@ -47,12 +47,28 @@
       <view class="section">
         <view class="section-head">
           <text class="section-title">订单概览</text>
-          <button class="mini-btn" @tap="copyOrderId">复制订单号</button>
+          <view class="section-actions">
+            <button
+              v-if="workspace.actionFlags.canAdjustPrice"
+              class="mini-btn price-btn"
+              @tap="openAmountPanel"
+            >
+              待支付改价
+            </button>
+            <button class="mini-btn" @tap="copyOrderId">复制订单号</button>
+          </view>
         </view>
         <view class="info-grid">
           <view class="info-item">
             <text class="label">金额</text>
             <text class="amount">¥{{ money(order.amountTotal || order.totalAmount) }}</text>
+            <text
+              v-if="workspace.actionFlags.canAdjustPrice"
+              class="amount-hint"
+              @tap="openAmountPanel"
+            >
+              当前订单未支付，可由客服改价
+            </text>
           </view>
           <view class="info-item">
             <text class="label">支付状态</text>
@@ -718,6 +734,14 @@ function sourceText(type?: string) {
   margin-bottom: 18rpx;
 }
 
+.section-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12rpx;
+  flex-shrink: 0;
+}
+
 .section-title,
 .modal-title,
 .state-title {
@@ -786,6 +810,19 @@ function sourceText(type?: string) {
 .mini-btn {
   background: #eef4ff;
   color: #1d4ed8;
+}
+
+.price-btn {
+  background: #fff4e5;
+  color: #b54708;
+}
+
+.amount-hint {
+  display: block;
+  margin-top: 6rpx;
+  color: #b54708;
+  font-size: 22rpx;
+  line-height: 1.4;
 }
 
 .primary-btn {

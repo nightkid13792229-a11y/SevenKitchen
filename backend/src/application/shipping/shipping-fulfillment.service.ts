@@ -23,6 +23,7 @@ import {
   WechatShippingUploadPendingSummary,
   WechatShippingUploadResult,
   WechatShippingUploadService,
+  WechatSpecialShippingReportResult,
 } from './wechat-shipping-upload.service';
 
 export interface OrderReadyForShipmentDto {
@@ -224,6 +225,76 @@ export class ShippingFulfillmentService {
       skipped: results.filter((item) => item.skipped).length,
       results,
     };
+  }
+
+  async reportWechatSpecialShippingOrder(
+    orderId: string,
+    actor: 'customer' | 'staff' | 'admin' | 'system' = 'system',
+    actorId?: string | null,
+  ): Promise<WechatSpecialShippingReportResult> {
+    return this.reportWechatSpecialShippingOrderSafely(orderId, actor, actorId);
+  }
+
+  async reportPendingWechatSpecialShippingOrders(
+    limit = 100,
+  ): Promise<WechatShippingBatchUploadResult> {
+    const summary = await this.wechatShippingUploadService.reportPendingSpecialOrders(
+      limit,
+    );
+    return summary;
+  }
+
+  private async reportWechatSpecialShippingOrderSafely(
+    orderId: string,
+    actor: 'customer' | 'staff' | 'admin' | 'system',
+    actorId?: string | null,
+  ): Promise<WechatSpecialShippingReportResult> {
+    let result: WechatSpecialShippingReportResult;
+    try {
+      result = await this.wechatShippingUploadService.reportSpecialOrderForOrder(
+        orderId,
+        actor,
+        actorId,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      result = {
+        success: false,
+        message,
+      };
+      this.logger.error(
+        `[WeChatShipping] Failed to report special shipping order ${orderId}: ${message}`,
+      );
+
+      try {
+        const currentOrder = await this.orderRepository.findById(orderId);
+        if (currentOrder) {
+          await this.statusHistoryRepository.append(
+            orderId,
+            currentOrder.status,
+            currentOrder.status,
+            actor,
+            actorId,
+            {
+              event: 'WECHAT_SPECIAL_SHIPPING_REPORT',
+              success: false,
+              skipped: false,
+              message,
+            },
+          );
+        }
+      } catch (historyError) {
+        this.logger.warn(
+          `[WeChatShipping] Failed to append special report failure history for order ${orderId}: ${
+            historyError instanceof Error
+              ? historyError.message
+              : String(historyError)
+          }`,
+        );
+      }
+    }
+
+    return result;
   }
 
   private async uploadWechatShippingInfoSafely(

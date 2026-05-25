@@ -12,6 +12,13 @@ export interface WechatShippingUploadResult {
   response?: unknown;
 }
 
+export interface WechatSpecialShippingReportResult {
+  success: boolean;
+  skipped?: boolean;
+  message: string;
+  response?: unknown;
+}
+
 export interface WechatShippingUploadCandidate {
   orderId: string;
   status: string;
@@ -162,6 +169,112 @@ export class WechatShippingUploadService {
     };
   }
 
+  async reportSpecialOrderForOrder(
+    orderId: string,
+    actor: 'customer' | 'staff' | 'admin' | 'system' = 'system',
+    actorId?: string | null,
+  ): Promise<WechatSpecialShippingReportResult> {
+    const order = await this.prisma.order.findUnique({
+      where: { id: orderId },
+      include: {
+        customer: true,
+      },
+    });
+
+    if (!order) {
+      return {
+        success: false,
+        skipped: true,
+        message: `订单不存在：${orderId}`,
+      };
+    }
+
+    if (order.paymentMethod !== 'WECHAT_PAY') {
+      return {
+        success: true,
+        skipped: true,
+        message: '非微信支付订单，无需报备微信未发货信息',
+      };
+    }
+
+    if (order.paymentStatus !== 'SUCCESS' || !order.paidAt) {
+      return {
+        success: true,
+        skipped: true,
+        message: '订单尚未完成微信支付，无需报备微信未发货信息',
+      };
+    }
+
+    if (['SHIPPED', 'COMPLETED', 'CANCELLED'].includes(order.status)) {
+      return {
+        success: true,
+        skipped: true,
+        message: '订单已发货、已完成或已取消，无需报备未发货信息',
+      };
+    }
+
+    const latestSuccess = await this.prisma.orderStatusHistory.findFirst({
+      where: {
+        orderId: order.id,
+        metadata: { path: ['event'], equals: 'WECHAT_SPECIAL_SHIPPING_REPORT' },
+      },
+      orderBy: { timestamp: 'desc' },
+      select: { metadata: true },
+    });
+    const latestMetadata =
+      latestSuccess?.metadata && typeof latestSuccess.metadata === 'object'
+        ? (latestSuccess.metadata as Record<string, unknown>)
+        : null;
+    if (latestMetadata?.success === true && latestMetadata?.skipped !== true) {
+      return {
+        success: true,
+        skipped: true,
+        message: '微信未发货报备已完成，无需重复报备',
+      };
+    }
+
+    const paymentConfig = await this.prisma.paymentConfig.upsert({
+      where: { id: 'singleton' },
+      create: {},
+      update: {},
+      select: {
+        appId: true,
+      },
+    });
+
+    const delayTo = this.resolveSpecialShippingDelayTo(order.paidAt);
+    const payload = {
+      order_id: order.transactionId || this.toOutTradeNo(order.id),
+      type: 1 as const,
+      delay_to: delayTo,
+    };
+
+    const response = await this.wechatService.reportSpecialShippingOrder(
+      payload,
+      paymentConfig.appId || undefined,
+    );
+
+    this.logger.log(
+      `Reported WeChat special shipping order ${order.id}, delayTo=${delayTo}`,
+    );
+
+    await this.appendSpecialShippingReportHistory(order.id, order.status, actor, actorId, {
+      event: 'WECHAT_SPECIAL_SHIPPING_REPORT',
+      success: true,
+      skipped: false,
+      message: '微信未发货预计发货时间已报备',
+      delayTo,
+      payload,
+      response,
+    });
+
+    return {
+      success: true,
+      message: '微信未发货预计发货时间已报备',
+      response,
+    };
+  }
+
   async listPendingUploads(limit = 100): Promise<WechatShippingUploadPendingSummary> {
     const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
     const orders = await this.prisma.order.findMany({
@@ -273,8 +386,74 @@ export class WechatShippingUploadService {
     };
   }
 
+  async reportPendingSpecialOrders(limit = 100): Promise<WechatShippingBatchUploadResult> {
+    const safeLimit = Math.min(Math.max(Number(limit) || 100, 1), 500);
+    const orders = await this.prisma.order.findMany({
+      where: {
+        paymentMethod: 'WECHAT_PAY',
+        paymentStatus: 'SUCCESS',
+        status: { in: ['PAID', 'PURCHASING', 'IN_PRODUCTION', 'FREEZING'] as any },
+      },
+      orderBy: { paidAt: 'desc' },
+      take: safeLimit,
+      select: { id: true },
+    });
+
+    const results: WechatShippingBatchUploadResult['results'] = [];
+    for (const order of orders) {
+      const result = await this.reportSpecialOrderForOrder(order.id, 'admin', null);
+      results.push({
+        orderId: order.id,
+        success: result.success,
+        skipped: result.skipped,
+        message: result.message,
+      });
+    }
+
+    return {
+      total: results.length,
+      success: results.filter((item) => item.success && !item.skipped).length,
+      failed: results.filter((item) => !item.success).length,
+      skipped: results.filter((item) => item.skipped).length,
+      results,
+    };
+  }
+
   private toOutTradeNo(orderId: string) {
     return orderId.replace(/-/g, '');
+  }
+
+  private resolveSpecialShippingDelayTo(paidAt: Date) {
+    const minimumDelayMs = 15 * 24 * 60 * 60 * 1000;
+    const bufferMs = 60 * 60 * 1000;
+    return Math.floor((paidAt.getTime() + minimumDelayMs + bufferMs) / 1000);
+  }
+
+  private async appendSpecialShippingReportHistory(
+    orderId: string,
+    status: string,
+    actor: 'customer' | 'staff' | 'admin' | 'system',
+    actorId: string | null | undefined,
+    metadata: Record<string, unknown>,
+  ) {
+    try {
+      await this.prisma.orderStatusHistory.create({
+        data: {
+          orderId,
+          fromStatus: status as any,
+          toStatus: status as any,
+          actor,
+          actorId: actorId ?? null,
+          metadata: metadata as any,
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `[WeChatShipping] Failed to append special report history for order ${orderId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   private buildItemDesc(items: Array<{ recipeSnapshot: unknown }>) {

@@ -12,6 +12,7 @@ import {
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { OrderService } from '../order/order.service';
 import { OrderStatus } from '../../domain';
+import { WechatShippingUploadService } from '../shipping/wechat-shipping-upload.service';
 
 type RuntimePaymentConfig = {
   enabled: boolean;
@@ -87,6 +88,7 @@ export class WechatPaymentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orderService: OrderService,
+    private readonly wechatShippingUploadService: WechatShippingUploadService,
   ) {}
 
   async createJsapiPayment(
@@ -285,7 +287,21 @@ export class WechatPaymentService {
       transactionId || undefined,
     );
 
+    this.reportSpecialShippingOrderAfterPayment(order.id);
+
     return { handled: true, tradeState };
+  }
+
+  private reportSpecialShippingOrderAfterPayment(orderId: string) {
+    this.wechatShippingUploadService
+      .reportSpecialOrderForOrder(orderId, 'system', null)
+      .catch((error) => {
+        this.logger.error(
+          `Failed to report WeChat special shipping order after payment for ${orderId}: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        );
+      });
   }
 
   async createRefund(input: {

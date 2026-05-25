@@ -99,10 +99,23 @@ function normalizeCustomerServiceCardPath(path?: string) {
 
 function buildCustomerServiceEntryPath(context: CustomerServiceContext) {
   const sourceType = context.sourceType || 'GENERAL'
+  let target = ''
+  if (sourceType === 'PRODUCT' && context.productId) {
+    target = `pages/recipe-detail/index?recipeId=${context.productId}`
+  } else if (
+    (sourceType === 'ORDER' || sourceType === 'AFTERSALE' || sourceType === 'REFUND') &&
+    context.orderId
+  ) {
+    target = `pages/order-detail/index?id=${context.orderId}`
+  } else if (context.path) {
+    target = normalizeCustomerServiceCardPath(context.path)
+  }
+
   const params: Record<string, string | undefined> = {
-    csType: sourceType,
-    csOrderId: context.orderId,
-    csProductId: context.productId,
+    type: sourceType,
+    orderId: context.orderId,
+    productId: context.productId,
+    target,
   }
 
   const query = Object.entries(params)
@@ -110,7 +123,7 @@ function buildCustomerServiceEntryPath(context: CustomerServiceContext) {
     .map(([key, value]) => `${encodeURIComponent(key)}=${encodeURIComponent(String(value))}`)
     .join('&')
 
-  return `pages/home/index${query ? `?${query}` : ''}`
+  return `pages/customer-service-entry/index${query ? `?${query}` : ''}`
 }
 
 function buildCustomerServiceTargetUrl(context: CustomerServiceContext, fallbackPath: string) {

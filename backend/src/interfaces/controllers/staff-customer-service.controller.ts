@@ -142,6 +142,8 @@ export class StaffCustomerServiceController {
       const alreadyRefunded = order.refundRecords.some((record) => record.success);
       const isUnpaid = !paid && ['INIT', 'PENDING_PAYMENT'].includes(order.status);
       const canEditAddress = !LOCKED_ADDRESS_STATUSES.has(order.status);
+      const hasRefundRequest =
+        order.status === 'AFTERSALE' && order.aftersaleType === 'REFUND';
 
       return ApiResponseDto.success({
         staff: {
@@ -214,15 +216,16 @@ export class StaffCustomerServiceController {
           canEditRemark: true,
           canEditAddress,
           canAdjustPrice: isUnpaid,
+          hasRefundRequest,
           canRejectAftersale: order.status === 'AFTERSALE',
           canApproveRefund:
             isAdmin &&
-            order.status === 'AFTERSALE' &&
-            order.aftersaleType === 'REFUND' &&
+            hasRefundRequest &&
             paid &&
             !alreadyRefunded,
           canRetryRefund:
             isAdmin &&
+            hasRefundRequest &&
             paid &&
             !alreadyRefunded &&
             Boolean(

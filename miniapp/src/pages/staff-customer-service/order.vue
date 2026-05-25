@@ -395,7 +395,7 @@ async function saveRemark() {
 }
 
 function openAmountPanel() {
-  amountDraft.value = String(order.value.amountTotal || order.value.totalAmount || '')
+  amountDraft.value = money(order.value.amountTotal || order.value.totalAmount)
   amountReason.value = ''
   amountVisible.value = true
 }
@@ -405,7 +405,7 @@ function closeAmountPanel() {
 }
 
 async function saveAmount() {
-  const amount = Number(amountDraft.value)
+  const amount = Math.round(Number(amountDraft.value) * 100) / 100
   if (!Number.isFinite(amount) || amount < 0) {
     toast('请输入正确金额')
     return
@@ -982,7 +982,7 @@ button[disabled] {
 .picker-box {
   width: 100%;
   margin-top: 18rpx;
-  padding: 18rpx;
+  padding: 0 18rpx;
   border: 1rpx solid #d0d5dd;
   border-radius: 10rpx;
   background: #ffffff;
@@ -991,8 +991,17 @@ button[disabled] {
   font-size: 27rpx;
 }
 
+.modal-input,
+.picker-box {
+  height: 72rpx;
+  min-height: 72rpx;
+  line-height: 72rpx;
+}
+
 .modal-textarea {
   min-height: 210rpx;
+  padding: 18rpx;
+  line-height: 1.5;
 }
 
 .modal-textarea.small {

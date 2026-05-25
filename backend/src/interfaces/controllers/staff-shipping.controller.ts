@@ -223,4 +223,53 @@ export class StaffShippingController {
       );
     return ApiResponseDto.success(data);
   }
+
+  @Post('orders/:orderId/wechat-special-shipping-report')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Report delayed/unshipped WeChat order to platform' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  async reportWechatSpecialShippingOrder(
+    @Param('orderId') orderId: string,
+  ): Promise<
+    ApiResponseDto<{
+      success: boolean;
+      skipped?: boolean;
+      message: string;
+      response?: unknown;
+    }>
+  > {
+    const result =
+      await this.shippingFulfillmentService.reportWechatSpecialShippingOrder(
+        orderId,
+        'staff',
+        null,
+      );
+    return ApiResponseDto.success(result);
+  }
+
+  @Post('wechat-special-shipping-reports/retry-all')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Report all paid but unshipped WeChat orders' })
+  async reportPendingWechatSpecialShippingOrders(
+    @Query('limit') limit?: string,
+  ): Promise<
+    ApiResponseDto<{
+      total: number;
+      success: number;
+      failed: number;
+      skipped: number;
+      results: Array<{
+        orderId: string;
+        success: boolean;
+        skipped?: boolean;
+        message: string;
+      }>;
+    }>
+  > {
+    const data =
+      await this.shippingFulfillmentService.reportPendingWechatSpecialShippingOrders(
+        Number(limit) || 100,
+      );
+    return ApiResponseDto.success(data);
+  }
 }

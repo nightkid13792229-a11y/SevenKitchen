@@ -80,6 +80,11 @@ interface WechatShippingInfoResponse {
   errmsg: string;
 }
 
+interface WechatSpecialShippingOrderResponse {
+  errcode: number;
+  errmsg: string;
+}
+
 @Injectable()
 export class WechatService {
   private readonly logger = new Logger(WechatService.name);
@@ -449,6 +454,37 @@ export class WechatService {
     if (data.errcode !== 0) {
       throw new Error(
         `WeChat shipping upload failed: ${data.errcode} - ${data.errmsg}`,
+      );
+    }
+
+    return data;
+  }
+
+  async reportSpecialShippingOrder(
+    payload: {
+      order_id: string;
+      type: 1 | 2;
+      delay_to?: number;
+    },
+    appId?: string,
+  ): Promise<WechatSpecialShippingOrderResponse> {
+    if (this.isMockMode()) {
+      this.logger.log('===== MOCK MODE - Reporting WeChat Special Shipping Order =====');
+      this.logger.log(JSON.stringify(payload, null, 2));
+      return { errcode: 0, errmsg: 'ok' };
+    }
+
+    const accessToken = await this.getAccessToken(appId);
+    const url = `https://api.weixin.qq.com/wxa/sec/order/opspecialorder?access_token=${accessToken}`;
+    const response = await axios.post<WechatSpecialShippingOrderResponse>(
+      url,
+      payload,
+    );
+    const data = response.data;
+
+    if (data.errcode !== 0) {
+      throw new Error(
+        `WeChat special shipping report failed: ${data.errcode} - ${data.errmsg}`,
       );
     }
 

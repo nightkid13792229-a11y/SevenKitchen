@@ -220,13 +220,13 @@ export class StaffCustomerServiceController {
           canRejectAftersale: order.status === 'AFTERSALE',
           canApproveRefund:
             isAdmin &&
-            hasRefundRequest &&
             paid &&
+            order.paymentMethod === 'WECHAT_PAY' &&
             !alreadyRefunded,
           canRetryRefund:
             isAdmin &&
-            hasRefundRequest &&
             paid &&
+            order.paymentMethod === 'WECHAT_PAY' &&
             !alreadyRefunded &&
             Boolean(
               latestRefund &&

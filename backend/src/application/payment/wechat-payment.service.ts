@@ -335,13 +335,6 @@ export class WechatPaymentService {
       return this.mapRefundRecordResult(latestRecord, true);
     }
 
-    const hasCustomerRefundRequest =
-      order.status === OrderStatus.AFTERSALE &&
-      order.aftersaleType === 'REFUND';
-    const hasRefundRetryContext =
-      latestRecord &&
-      ['AFTERSALE_APPROVE', 'ADMIN_RETRY'].includes(latestRecord.source);
-
     const legacySuccess = await this.prisma.orderSettlementAdjustment.findFirst({
       where: {
         orderId: order.id,
@@ -365,22 +358,10 @@ export class WechatPaymentService {
     const isResolvedRefundOrder =
       order.status === OrderStatus.CANCELLED &&
       (order.cancellationReason || '').includes('售后退款');
-    if (
-      input.source === 'ADMIN_RETRY' &&
-      !hasCustomerRefundRequest &&
-      !hasRefundRetryContext &&
-      !isResolvedRefundOrder
-    ) {
-      throw new BadRequestException(
-        '客户未提交退款申请，管理员不能直接发起微信退款',
-      );
-    }
+    const isPaidOrder =
+      order.paymentStatus === 'SUCCESS' || Boolean(order.paidAt);
 
-    if (
-      order.status !== OrderStatus.PAID &&
-      order.status !== OrderStatus.AFTERSALE &&
-      !isResolvedRefundOrder
-    ) {
+    if (!isPaidOrder && !isResolvedRefundOrder) {
       throw new BadRequestException('只有已支付或售后中的订单可以发起线上退款');
     }
 

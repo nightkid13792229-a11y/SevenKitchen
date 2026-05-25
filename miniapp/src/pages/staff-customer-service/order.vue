@@ -198,12 +198,11 @@
             待支付改价
           </button>
           <button
-            v-if="workspace.actionFlags.hasRefundRequest"
             class="action-btn danger"
             :disabled="!workspace.actionFlags.canApproveRefund"
             @tap="approveRefund"
           >
-            同意并退款
+            {{ workspace.actionFlags.hasRefundRequest ? '同意并退款' : '管理员退款' }}
           </button>
           <button
             class="action-btn"
@@ -213,7 +212,6 @@
             驳回售后
           </button>
           <button
-            v-if="workspace.actionFlags.hasRefundRequest"
             class="action-btn danger-outline"
             :disabled="!workspace.actionFlags.canRetryRefund"
             @tap="retryRefund"
@@ -221,8 +219,7 @@
             补发退款
           </button>
         </view>
-        <text v-if="workspace.actionFlags.hasRefundRequest" class="hint">退款相关操作仅管理员可执行；同意后会直接调用微信原路退款。</text>
-        <text v-else class="hint">客户未申请售后退款，本页不开放管理员主动退款。</text>
+        <text class="hint">退款相关操作仅管理员可执行；确认后会直接调用微信原路退款。</text>
       </view>
 
       <view class="section" v-if="workspace.conversations.length">
@@ -488,7 +485,12 @@ function approveRefund() {
     success: async (res) => {
       if (!res.confirm) return
       await runSaving(async () => {
-        await resolveOrderAftersale(orderId.value, 'refunded', '客服处理页同意退款')
+        const amount = Number(order.value.amountTotal || order.value.totalAmount || 0)
+        if (workspace.value?.actionFlags.hasRefundRequest) {
+          await resolveOrderAftersale(orderId.value, 'refunded', '客服处理页同意退款')
+        } else {
+          await retryWechatRefund(orderId.value, amount, '管理员客服处理页主动退款')
+        }
         await loadWorkspace()
         toast('退款已发起')
       })

@@ -155,6 +155,7 @@
         <button v-if="canConfirmPayment" class="action-btn primary" @tap="confirmPayment">确认收款</button>
         <button v-if="canStartProduction" class="action-btn orange" @tap="startProduction">开始制作</button>
         <button v-if="canShip" class="action-btn cyan" @tap="shipOrder">发货</button>
+        <button v-if="canAdminRefund" class="action-btn red" @tap="adminRefundOrder">管理员退款</button>
       </view>
     </view>
 
@@ -243,6 +244,7 @@ import {
   confirmOfflinePayment,
   createOrderCustomerAddress,
   listOrderCustomerAddresses,
+  retryWechatRefund,
   updateOrderCustomerAddress,
   type StaffOrderAddress,
 } from '../../api/orders'
@@ -273,6 +275,8 @@ interface OrderDetail {
   amountTotal?: number
   createdAt?: string
   paymentMethod?: string
+  paymentStatus?: string | null
+  paidAt?: string | null
   customerName?: string
   customerPhone?: string
   addressId?: string | null
@@ -362,6 +366,22 @@ const canEditAddress = computed(() => {
   if (!order.value) return false
   return !['SHIPPED', 'COMPLETED', 'CANCELLED'].includes(order.value.status)
 })
+
+const canAdminRefund = computed(() => {
+  if (!order.value) return false
+  const user = getStoredUser()
+  const paid = order.value.paymentStatus === 'SUCCESS' || Boolean(order.value.paidAt)
+  const refunded = order.value.refundStatus?.success === true
+  return user?.role === 'ADMIN' && paid && order.value.paymentMethod === 'WECHAT_PAY' && !refunded
+})
+
+function getStoredUser() {
+  try {
+    return uni.getStorageSync('userInfo') || uni.getStorageSync('user') || null
+  } catch (error) {
+    return null
+  }
+}
 
 const addressRegionText = computed(() => {
   return [addressForm.value.province, addressForm.value.city, addressForm.value.district].filter(Boolean).join(' ')
@@ -577,6 +597,38 @@ async function shipOrder() {
   uni.showToast({
     title: '请在电脑端操作发货',
     icon: 'none',
+  })
+}
+
+async function adminRefundOrder() {
+  if (!order.value || !canAdminRefund.value) return
+  const amount = Number(order.value.amountTotal || order.value.totalAmount || 0)
+  uni.showModal({
+    title: '管理员退款',
+    content: [
+      '该操作不可撤销。',
+      '确认后会直接调用微信原路退款。',
+      `订单：${order.value.id.slice(-8)}`,
+      `金额：¥${formatAmount(amount)}`,
+    ].join('\n'),
+    confirmText: '确认退款',
+    confirmColor: '#d93026',
+    success: async (res) => {
+      if (!res.confirm) return
+      try {
+        await retryWechatRefund(order.value!.id, amount, '管理员手机工作台主动退款')
+        uni.showToast({
+          title: '退款已发起',
+          icon: 'none',
+        })
+        loadOrderDetail()
+      } catch (error: any) {
+        uni.showToast({
+          title: error?.message || '退款失败',
+          icon: 'none',
+        })
+      }
+    },
   })
 }
 
@@ -1179,6 +1231,11 @@ async function saveAddressForm() {
 
   &.green {
     background-color: #52c41a;
+    color: #fff;
+  }
+
+  &.red {
+    background-color: #d93026;
     color: #fff;
   }
 

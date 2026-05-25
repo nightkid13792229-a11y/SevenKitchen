@@ -198,6 +198,7 @@
             待支付改价
           </button>
           <button
+            v-if="workspace.actionFlags.hasRefundRequest"
             class="action-btn danger"
             :disabled="!workspace.actionFlags.canApproveRefund"
             @tap="approveRefund"
@@ -212,6 +213,7 @@
             驳回售后
           </button>
           <button
+            v-if="workspace.actionFlags.hasRefundRequest"
             class="action-btn danger-outline"
             :disabled="!workspace.actionFlags.canRetryRefund"
             @tap="retryRefund"
@@ -219,7 +221,8 @@
             补发退款
           </button>
         </view>
-        <text class="hint">退款相关操作仅管理员可执行；同意后会直接调用微信原路退款。</text>
+        <text v-if="workspace.actionFlags.hasRefundRequest" class="hint">退款相关操作仅管理员可执行；同意后会直接调用微信原路退款。</text>
+        <text v-else class="hint">客户未申请售后退款，本页不开放管理员主动退款。</text>
       </view>
 
       <view class="section" v-if="workspace.conversations.length">

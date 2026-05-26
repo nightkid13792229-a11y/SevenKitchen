@@ -728,11 +728,14 @@
       v-if="addressSelectVisible"
       class="address-modal-mask"
       @tap="closeAddressSelect"
+      @touchmove.stop.prevent
     >
       <view class="address-modal-panel" @tap.stop>
         <view class="address-modal-header">
           <text class="address-modal-title">选择已有地址</text>
-          <text class="address-modal-close" @tap="closeAddressSelect">×</text>
+          <text class="address-modal-close" @tap.stop="closeAddressSelect"
+            >×</text
+          >
         </view>
         <view v-if="addressLoading" class="address-modal-loading"
           >加载中...</view
@@ -744,7 +747,7 @@
           <text>该客户暂无地址</text>
           <button
             class="address-action-btn primary"
-            @tap="openCreateAddressFormFromSelect"
+            @tap.stop="openCreateAddressFormFromSelect"
           >
             录入新地址
           </button>
@@ -754,14 +757,14 @@
             v-for="address in customerAddresses"
             :key="address.id"
             class="address-select-item"
-            @tap="selectCustomerAddress(address)"
+            @tap.stop="selectCustomerAddress(address)"
           >
             <view class="address-select-header">
               <text class="address-recipient-name">{{
                 address.recipientName
               }}</text>
               <text class="address-recipient-phone">{{
-                formatPhone(address.phone)
+                formatPhoneForOrderStaff(address.phone)
               }}</text>
               <text v-if="address.isDefault" class="address-default-tag"
                 >默认</text
@@ -773,7 +776,7 @@
           </view>
           <button
             class="address-action-btn primary full"
-            @tap="openCreateAddressFormFromSelect"
+            @tap.stop="openCreateAddressFormFromSelect"
           >
             录入新地址
           </button>
@@ -785,13 +788,16 @@
       v-if="addressFormVisible"
       class="address-modal-mask"
       @tap="closeAddressForm"
+      @touchmove.stop.prevent
     >
       <view class="address-modal-panel address-form-panel" @tap.stop>
         <view class="address-modal-header">
           <text class="address-modal-title">{{
             addressFormMode === 'edit' ? '编辑地址' : '录入新地址'
           }}</text>
-          <text class="address-modal-close" @tap="closeAddressForm">×</text>
+          <text class="address-modal-close" @tap.stop="closeAddressForm"
+            >×</text
+          >
         </view>
         <view class="address-form-item">
           <text class="address-form-label">收货人姓名</text>
@@ -848,7 +854,7 @@
         <button
           class="address-save-btn"
           :disabled="savingAddress"
-          @tap="saveAddressForm"
+          @tap.stop="saveAddressForm"
         >
           {{ savingAddress ? '保存中...' : '保存地址' }}
         </button>
@@ -1103,6 +1109,7 @@ const customerServiceConfig = ref<CustomerServiceConfig>({
 const paying = ref(false);
 const paymentRemainingSeconds = ref<number | null>(null);
 let paymentTimer: ReturnType<typeof setInterval> | null = null;
+let addressModalClosingTimer: ReturnType<typeof setTimeout> | null = null;
 const remarkDraft = ref('');
 const savingAdminRemark = ref(false);
 const customerAddresses = ref<StaffOrderAddress[]>([]);
@@ -1110,6 +1117,7 @@ const addressSelectVisible = ref(false);
 const addressFormVisible = ref(false);
 const addressLoading = ref(false);
 const savingAddress = ref(false);
+const addressModalClosing = ref(false);
 const addressFormMode = ref<'create' | 'edit'>('create');
 const editingAddressId = ref('');
 const addressRegionValue = ref<string[]>([]);
@@ -1675,6 +1683,10 @@ onUnmounted(() => {
     clearInterval(paymentTimer);
     paymentTimer = null;
   }
+  if (addressModalClosingTimer) {
+    clearTimeout(addressModalClosingTimer);
+    addressModalClosingTimer = null;
+  }
 });
 
 async function loadUserInfoFromApi() {
@@ -1921,14 +1933,34 @@ async function loadCustomerAddresses() {
 }
 
 async function openAddressSelect() {
-  if (!canEditAddress.value || !isStaffOrAdmin.value) return;
+  if (
+    !canEditAddress.value ||
+    !isStaffOrAdmin.value ||
+    addressModalClosing.value
+  )
+    return;
 
+  addressFormVisible.value = false;
   addressSelectVisible.value = true;
   await loadCustomerAddresses();
 }
 
-function closeAddressSelect() {
+function markAddressModalClosing() {
+  addressModalClosing.value = true;
+  if (addressModalClosingTimer) {
+    clearTimeout(addressModalClosingTimer);
+  }
+  addressModalClosingTimer = setTimeout(() => {
+    addressModalClosing.value = false;
+    addressModalClosingTimer = null;
+  }, 350);
+}
+
+function closeAddressSelect(markClosing = true) {
   addressSelectVisible.value = false;
+  if (markClosing) {
+    markAddressModalClosing();
+  }
 }
 
 async function selectCustomerAddress(address: StaffOrderAddress) {
@@ -1968,23 +2000,31 @@ function resetAddressForm() {
   editingAddressId.value = '';
 }
 
-function openCreateAddressForm() {
+function openCreateAddressForm(options?: { allowDuringModalSwitch?: boolean }) {
   if (!canEditAddress.value || !isStaffOrAdmin.value) return;
+  if (addressModalClosing.value && !options?.allowDuringModalSwitch) return;
 
   addressFormMode.value = 'create';
   resetAddressForm();
+  addressSelectVisible.value = false;
   addressFormVisible.value = true;
 }
 
 function openCreateAddressFormFromSelect() {
-  closeAddressSelect();
-  openCreateAddressForm();
+  closeAddressSelect(false);
+  openCreateAddressForm({ allowDuringModalSwitch: true });
 }
 
 function openEditAddressForm() {
-  if (!canEditAddress.value || !isStaffOrAdmin.value || !order.value?.address)
+  if (
+    !canEditAddress.value ||
+    !isStaffOrAdmin.value ||
+    !order.value?.address ||
+    addressModalClosing.value
+  )
     return;
 
+  addressSelectVisible.value = false;
   const address = order.value.address;
   addressFormMode.value = 'edit';
   editingAddressId.value = address.id || order.value.addressId || '';
@@ -2008,6 +2048,7 @@ function openEditAddressForm() {
 function closeAddressForm() {
   if (savingAddress.value) return;
   addressFormVisible.value = false;
+  markAddressModalClosing();
 }
 
 function onAddressRegionChange(event: any) {
@@ -2358,6 +2399,11 @@ function formatPhone(phone?: string): string {
   if (!phone) return '';
   if (phone.length !== 11) return phone;
   return phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2');
+}
+
+function formatPhoneForOrderStaff(phone?: string): string {
+  if (!phone) return '';
+  return isStaffOrAdmin.value ? phone : formatPhone(phone);
 }
 
 function formatRegionText(region?: {

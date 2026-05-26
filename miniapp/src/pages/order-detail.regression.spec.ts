@@ -31,6 +31,10 @@ describe('order detail runtime regressions', () => {
     expect(source).toContain('addressFormVisible')
     expect(source).toContain('addressForm.value.isDefault')
     expect(source).toContain('isStaffOrAdmin.value || canEditOrder.value')
+    expect(source).toContain('addressModalClosing')
+    expect(source).toContain('@tap.stop="closeAddressSelect"')
+    expect(source).toContain('@tap.stop="closeAddressForm"')
+    expect(source).toContain('formatPhoneForOrderStaff(address.phone)')
   })
 
   it('supports packagePlan and ingredientSourcePlan on order items', () => {

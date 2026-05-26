@@ -2173,15 +2173,31 @@ export class AdminController {
 
   private async mapOrderToAdminDto(order: any): Promise<AdminOrderDto> {
     const addressSource = order.shippingAddressSnapshot ?? order.address;
+    const currentAddress = order.address;
+    const addressPhone =
+      addressSource?.phone && !this.isMaskedPhone(addressSource.phone)
+        ? addressSource.phone
+        : currentAddress?.phone;
     const address = addressSource
       ? {
           id: addressSource.id ?? order.addressId,
           recipientName: addressSource.recipientName,
-          phone: addressSource.phone,
+          phone: addressPhone ?? addressSource.phone,
           region: addressSource.region,
           regionText: this.formatAddressRegionText(addressSource.region),
           detailAddress: addressSource.detail,
         }
+      : null;
+    const customer = order.customerId
+      ? await this.prisma.user.findUnique({
+          where: { id: order.customerId },
+          select: {
+            id: true,
+            nickname: true,
+            phone: true,
+            avatarUrl: true,
+          },
+        })
       : null;
 
     const productionPhotos = await this.getOrderProductionPhotos(order);
@@ -2189,6 +2205,7 @@ export class AdminController {
     return {
       id: order.id,
       customerId: order.customerId,
+      customer,
       dogId: order.dogId,
       addressId: order.addressId,
       address,
@@ -2243,6 +2260,10 @@ export class AdminController {
       detail: address.detail,
       isDefault: address.isDefault ?? false,
     };
+  }
+
+  private isMaskedPhone(phone?: string | null): boolean {
+    return !!phone && phone.includes('*');
   }
 
   private formatAddressRegionText(region: any): string {

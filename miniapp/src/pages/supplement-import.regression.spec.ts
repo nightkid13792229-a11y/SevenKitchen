@@ -25,6 +25,22 @@ describe('supplement import page regressions', () => {
     expect(source).toContain('拍照识别新增')
   })
 
+  it('keeps the supplement import confirmation page wired for editable review', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-diy/supplement-import-confirm.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('原料名称')
+    expect(source).toContain('产品品牌')
+    expect(source).toContain('产品规格')
+    expect(source).toContain('营养档案')
+    expect(source).toContain('validationErrors')
+    expect(source).toContain(':disabled="!canConfirm')
+    expect(source).toContain('confirmDraft')
+    expect(source).toMatch(/riskFlags|照片模糊/)
+  })
+
   it('suppresses shared request toasts where pages show contextual errors', () => {
     const librarySource = readFileSync(
       resolve(process.cwd(), 'src/pages/recipe-diy/supplement-library.vue'),

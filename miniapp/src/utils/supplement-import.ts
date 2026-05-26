@@ -107,6 +107,7 @@ export const supplementImportApi = {
       url: SUPPLEMENT_IMPORT_DRAFTS_PATH,
       method: 'POST',
       data: { imageUrls },
+      suppressErrorToast: true,
     })
   },
 

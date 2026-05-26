@@ -133,6 +133,7 @@ async function loadSupplements() {
     const res: any = await request({
       url: '/admin/ingredients',
       method: 'GET',
+      suppressErrorToast: true,
     })
     supplements.value = normalizeIngredientList(res.data)
       .filter((item) => item.type === 'SUPPLEMENT')

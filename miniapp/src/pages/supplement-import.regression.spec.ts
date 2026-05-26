@@ -24,4 +24,18 @@ describe('supplement import page regressions', () => {
     expect(source).toContain('/pages/recipe-diy/supplement-import')
     expect(source).toContain('拍照识别新增')
   })
+
+  it('suppresses shared request toasts where pages show contextual errors', () => {
+    const librarySource = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-diy/supplement-library.vue'),
+      'utf-8',
+    )
+    const importApiSource = readFileSync(
+      resolve(process.cwd(), 'src/utils/supplement-import.ts'),
+      'utf-8',
+    )
+
+    expect(librarySource).toMatch(/url: '\/admin\/ingredients'[\s\S]*suppressErrorToast: true/)
+    expect(importApiSource).toMatch(/url: SUPPLEMENT_IMPORT_DRAFTS_PATH[\s\S]*data: \{ imageUrls \}[\s\S]*suppressErrorToast: true/)
+  })
 })

@@ -122,6 +122,24 @@
       }
     },
     {
+      "path": "pages/recipe-diy/supplement-library",
+      "style": {
+        "navigationBarTitleText": "补剂库"
+      }
+    },
+    {
+      "path": "pages/recipe-diy/supplement-import",
+      "style": {
+        "navigationBarTitleText": "拍照识别补剂"
+      }
+    },
+    {
+      "path": "pages/recipe-diy/supplement-import-confirm",
+      "style": {
+        "navigationBarTitleText": "确认补剂档案"
+      }
+    },
+    {
       "path": "pages/diy-sheet-list/index",
       "style": {
         "navigationBarTitleText": "我的制作单"

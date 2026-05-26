@@ -14,4 +14,15 @@ describe('recipe diy regressions', () => {
     expect(source).toContain('fail: () => {}')
     expect(source).not.toContain('finally {\n    uni.hideLoading()')
   })
+
+  it('keeps the admin supplement library entry inside recipe diy only', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-diy/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain('goToSupplementLibrary')
+    expect(source).toContain('/pages/recipe-diy/supplement-library')
+    expect(source).not.toContain('/pages/staff-workbench')
+  })
 })

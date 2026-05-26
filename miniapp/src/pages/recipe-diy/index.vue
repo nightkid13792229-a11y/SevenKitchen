@@ -36,6 +36,18 @@
           <text class="value">{{ getNutritionStandardLabel(recipe.nutritionStandard) }}</text>
         </view>
       </view>
+
+      <view
+        v-if="showSupplementLibraryEntry"
+        class="supplement-library-entry"
+        @tap="goToSupplementLibrary"
+      >
+        <view class="supplement-library-copy">
+          <text class="supplement-library-title">补剂库</text>
+          <text class="supplement-library-desc">搜索补剂或拍照识别新增</text>
+        </view>
+        <text class="supplement-library-arrow">›</text>
+      </view>
     </view>
 
     <!-- 选择狗狗 -->
@@ -286,6 +298,7 @@ import {
   isRecipeLifeStageMatch,
   resolveDogLifeStage,
 } from '../../utils/life-stage-match'
+import { canShowSupplementImportEntry } from '../../utils/supplement-import'
 
 interface Dog {
   id: string
@@ -343,6 +356,8 @@ const dogPickerOptions = computed(() => {
     label: `${dog.name} | ${dog.breedName} | ${dog.currentWeightKg}kg | ${dog.mealsPerDay}餐/天`
   }))
 })
+
+const showSupplementLibraryEntry = computed(() => canShowSupplementImportEntry())
 
 // 生命阶段校验
 const isLifeStageMatch = ref(true)
@@ -832,6 +847,12 @@ function goToCreateDog() {
   })
 }
 
+function goToSupplementLibrary() {
+  uni.navigateTo({
+    url: `/pages/recipe-diy/supplement-library?recipeId=${encodeURIComponent(recipeId.value)}`
+  })
+}
+
 function getHealthTagLabel(tagOrUuid: string): string {
   // 优先使用动态映射（UUID -> label）
   if (healthTagUuidLabelMap.value[tagOrUuid]) {
@@ -971,6 +992,40 @@ function getNutritionStandardLabel(standard: string): string {
   font-size: 28rpx;
   color: #333;
   font-weight: 500;
+}
+
+.supplement-library-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 20rpx;
+  padding: 20rpx;
+  background-color: #f6ffed;
+  border: 1rpx solid #b7eb8f;
+  border-radius: 8rpx;
+}
+
+.supplement-library-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6rpx;
+}
+
+.supplement-library-title {
+  font-size: 28rpx;
+  font-weight: 600;
+  color: #237804;
+}
+
+.supplement-library-desc {
+  font-size: 24rpx;
+  color: #52c41a;
+}
+
+.supplement-library-arrow {
+  font-size: 40rpx;
+  color: #52c41a;
+  line-height: 1;
 }
 
 /* 狗狗选择 */

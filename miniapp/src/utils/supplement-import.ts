@@ -115,6 +115,7 @@ export const supplementImportApi = {
     return request({
       url: `${SUPPLEMENT_IMPORT_DRAFTS_PATH}/${draftId}`,
       method: 'GET',
+      suppressErrorToast: true,
     })
   },
 
@@ -123,6 +124,7 @@ export const supplementImportApi = {
       url: `${SUPPLEMENT_IMPORT_DRAFTS_PATH}/${draftId}`,
       method: 'PUT',
       data: { normalizedDraft },
+      suppressErrorToast: true,
     })
   },
 
@@ -130,6 +132,7 @@ export const supplementImportApi = {
     return request({
       url: `${SUPPLEMENT_IMPORT_DRAFTS_PATH}/${draftId}/confirm`,
       method: 'POST',
+      suppressErrorToast: true,
     })
   },
 }

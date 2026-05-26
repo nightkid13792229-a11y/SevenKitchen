@@ -45,6 +45,17 @@ describe('supplement import helpers', () => {
       url: '/recipe-designer/supplement-import-drafts',
       method: 'POST',
       data: { imageUrls },
+      suppressErrorToast: true,
+    })
+  })
+
+  it('suppresses shared request toasts when reading a supplement import draft', () => {
+    supplementImportApi.getDraft('draft-1')
+
+    expect(requestMock).toHaveBeenCalledWith({
+      url: '/recipe-designer/supplement-import-drafts/draft-1',
+      method: 'GET',
+      suppressErrorToast: true,
     })
   })
 
@@ -60,6 +71,17 @@ describe('supplement import helpers', () => {
       url: '/recipe-designer/supplement-import-drafts/draft-1',
       method: 'PUT',
       data: { normalizedDraft },
+      suppressErrorToast: true,
+    })
+  })
+
+  it('suppresses shared request toasts when confirming a supplement import draft', () => {
+    supplementImportApi.confirmDraft('draft-1')
+
+    expect(requestMock).toHaveBeenCalledWith({
+      url: '/recipe-designer/supplement-import-drafts/draft-1/confirm',
+      method: 'POST',
+      suppressErrorToast: true,
     })
   })
 })

@@ -67,7 +67,7 @@
           <view class="form-item">
             <text class="form-label">单个重量</text>
             <input
-              v-model="normalizedDraft.ingredient.singleWeight"
+              v-model="normalizedDraft.ingredient.weightG"
               class="form-input"
               type="digit"
               placeholder="例如 0.5"
@@ -79,7 +79,7 @@
           </view>
           <view class="form-item">
             <text class="form-label">产品规格</text>
-            <input v-model="normalizedDraft.ingredient.productModel" class="form-input" placeholder="规格、型号或净含量" />
+            <input v-model="normalizedDraft.ingredient.productSpec" class="form-input" placeholder="规格、型号或净含量" />
           </view>
           <view class="form-item">
             <text class="form-label">添加时机</text>
@@ -125,7 +125,7 @@
           >
             <text class="candidate-name">{{ candidate.name || candidate.ingredientName || '未命名补剂' }}</text>
             <text class="candidate-meta">
-              {{ [candidate.brand, candidate.productModel, candidate.matchReason].filter(Boolean).join(' · ') || '点击选择此候选' }}
+              {{ [candidate.brand, candidate.productSpec, candidate.matchReason].filter(Boolean).join(' · ') || '点击选择此候选' }}
             </text>
           </view>
         </view>
@@ -207,13 +207,32 @@ const allValidationErrors = computed(() => normalizeList(
   draft.value?.normalizedDraft?.validationErrors,
 ))
 
-const validationErrors = computed(() => allValidationErrors.value.filter(isBlockingValidationError))
-
 const duplicateCandidates = computed(() => normalizeList(
   normalizedDraft.value?.duplicateCandidates ||
   draft.value?.duplicateCandidates ||
   draft.value?.normalizedDraft?.duplicateCandidates,
 ))
+
+const hasValidDuplicateResolution = computed(() => {
+  return hasValidDuplicateResolutionFor(normalizedDraft.value, duplicateCandidates.value)
+})
+
+function hasValidDuplicateResolutionFor(source: any, candidates: any[]) {
+  if (candidates.length === 0) {
+    return true
+  }
+
+  const resolution = source?.duplicateResolution
+  if (resolution?.action === 'CREATE_NEW') {
+    return true
+  }
+
+  if (resolution?.action === 'UPDATE_EXISTING') {
+    return Boolean(resolution.candidateId || resolution.ingredientId)
+  }
+
+  return false
+}
 
 const nutritionProfile = computed(() => normalizedDraft.value?.nutritionProfile || {})
 
@@ -228,7 +247,9 @@ const nutritionRows = computed(() => nutritionGroups.value.flatMap(group => grou
 
 const canConfirm = computed(() => {
   return draft.value?.status === 'READY_TO_CONFIRM' &&
-    validationErrors.value.length === 0 &&
+    allValidationErrors.value.length === 0 &&
+    hasValidDuplicateResolution.value &&
+    !saving.value &&
     !confirming.value
 })
 
@@ -259,15 +280,13 @@ function createEmptyNormalizedDraft() {
       notes: '',
       baseUnit: '',
       unitDisplayLabel: '',
-      singleWeight: '',
+      weightG: '',
       brand: '',
-      productModel: '',
+      productSpec: '',
       addTiming: '',
       productionLossRate: '',
     },
-    duplicateResolution: {
-      action: 'CREATE_NEW',
-    },
+    duplicateResolution: null,
     nutritionProfile: {
       macros: {},
       minerals: {},
@@ -350,7 +369,7 @@ function normalizeDraftBeforeSave(source: any) {
     },
   }
 
-  next.ingredient.singleWeight = toOptionalNumber(next.ingredient.singleWeight)
+  next.ingredient.weightG = toOptionalNumber(next.ingredient.weightG)
   next.ingredient.productionLossRate = toOptionalNumber(next.ingredient.productionLossRate)
   next.ingredient.properties = {
     ...(next.ingredient.properties || {}),
@@ -365,7 +384,7 @@ function normalizeDraftBeforeSave(source: any) {
 
 async function saveDraftChanges(options: { showSuccessToast?: boolean } = {}) {
   if (!draftId.value || saving.value) {
-    return
+    return null
   }
 
   const showSuccessToast = options.showSuccessToast !== false
@@ -380,6 +399,7 @@ async function saveDraftChanges(options: { showSuccessToast?: boolean } = {}) {
     if (showSuccessToast) {
       uni.showToast({ title: '已保存', icon: 'success' })
     }
+    return draft.value
   } catch (error: any) {
     uni.showToast({ title: error?.message || '保存识别草稿失败', icon: 'none' })
     throw error
@@ -396,8 +416,13 @@ async function confirmDraft() {
   confirming.value = true
   let saved = false
   try {
-    await saveDraftChanges({ showSuccessToast: false })
+    const savedDraft = await saveDraftChanges({ showSuccessToast: false })
     saved = true
+    if (!canConfirmSavedDraft(savedDraft)) {
+      uni.showToast({ title: '请先处理校验问题', icon: 'none' })
+      return
+    }
+
     const response: any = await supplementImportApi.confirmDraft(draftId.value)
     const confirmedIngredientId = response.data?.confirmedIngredientId || ''
     uni.showToast({ title: '已入库', icon: 'success' })
@@ -411,6 +436,16 @@ async function confirmDraft() {
   } finally {
     confirming.value = false
   }
+}
+
+function canConfirmSavedDraft(savedDraft: any): boolean {
+  const savedNormalizedDraft = savedDraft?.normalizedDraft || {}
+  return savedDraft?.status === 'READY_TO_CONFIRM' &&
+    normalizeList(savedDraft?.validationErrors || savedNormalizedDraft.validationErrors).length === 0 &&
+    hasValidDuplicateResolutionFor(
+      savedNormalizedDraft,
+      normalizeList(savedNormalizedDraft.duplicateCandidates || savedDraft?.duplicateCandidates),
+    )
 }
 
 function setDuplicateResolution(action: DuplicateResolutionAction) {

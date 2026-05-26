@@ -46,7 +46,7 @@ import {
 } from '../dto/recipes/diy-sheet.dto';
 import { FilterOptionsDto } from '../dto/recipes/filter-options.dto';
 import { PrismaService } from '../../infrastructure/prisma.service';
-import { AuthGuard } from '../auth';
+import { AuthGuard, CurrentUser } from '../auth';
 import { StaffGuard } from '../guards/role.guard';
 import type { RequestUser } from '../auth/request-user.interface';
 import { JwtAuthService } from '../auth/jwt.service';
@@ -80,6 +80,151 @@ export class RecipesController {
     private readonly prisma: PrismaService,
     private readonly jwtAuthService: JwtAuthService,
   ) {}
+
+  private normalizeKeywordList(value?: string | null): string[] {
+    if (!value) return [];
+    return value
+      .split(/[,，、;；\n\r]/)
+      .map((item) => item.trim().toLowerCase())
+      .filter(Boolean);
+  }
+
+  private resolveDogLifeStage(dog: {
+    birthday: Date;
+    lifeStageOverride?: string | null;
+  }): string {
+    if (dog.lifeStageOverride && dog.lifeStageOverride !== 'NONE') {
+      return dog.lifeStageOverride;
+    }
+
+    const ageMonths =
+      (Date.now() - new Date(dog.birthday).getTime()) /
+      (1000 * 60 * 60 * 24 * 30.4375);
+    if (ageMonths < 12) return 'PUPPY';
+    if (ageMonths >= 84) return 'SENIOR';
+    return 'ADULT';
+  }
+
+  private scoreRecipeForDog(
+    recipe: any,
+    dog: any,
+  ): {
+    matchScore: number;
+    matchStars: number;
+    matchReasons: string[];
+    dailyIntakeG: number | null;
+    section: 'exclusive' | 'general';
+  } {
+    const dogLifeStage = this.resolveDogLifeStage(dog);
+    const recipeLifeStages = Array.isArray(recipe.applicableLifeStages)
+      ? recipe.applicableLifeStages
+      : [];
+    const allergyFoods = this.normalizeKeywordList(dog.allergyFoods);
+    const pickyFoods = this.normalizeKeywordList(dog.pickyFoods);
+    const ingredientNames = (recipe.items || [])
+      .map((item: any) => item.ingredient?.name || item.ingredient?.nameEn || '')
+      .filter(Boolean);
+    const ingredientSearchText = ingredientNames.join(' ').toLowerCase();
+
+    let score = 50;
+    const matchReasons: string[] = [];
+
+    if (recipeLifeStages.includes(dogLifeStage)) {
+      score += 25;
+      matchReasons.push('生命阶段匹配');
+    } else if (recipeLifeStages.length === 0) {
+      score += 8;
+      matchReasons.push('通用阶段食谱');
+    } else {
+      score -= 10;
+    }
+
+    if (dog.cachedTargetFoodKcal && recipe.energyDensityKcalPerKg) {
+      const dailyIntakeG =
+        (Number(dog.cachedTargetFoodKcal) / Number(recipe.energyDensityKcalPerKg)) *
+        1000;
+      if (dailyIntakeG >= 80 && dailyIntakeG <= 900) {
+        score += 10;
+        matchReasons.push('热量密度适合日常喂食');
+      }
+    }
+
+    const allergyHits = allergyFoods.filter((keyword) =>
+      ingredientSearchText.includes(keyword),
+    );
+    if (allergyHits.length > 0) {
+      score -= 40;
+      matchReasons.push(`含需谨慎原料：${allergyHits.slice(0, 2).join('、')}`);
+    }
+
+    const pickyHits = pickyFoods.filter((keyword) =>
+      ingredientSearchText.includes(keyword),
+    );
+    if (pickyHits.length > 0) {
+      score -= 12;
+      matchReasons.push(`可能不是最偏好的口味：${pickyHits.slice(0, 2).join('、')}`);
+    }
+
+    if (recipe.favoriteCount > 0 || recipe.diyGenCount > 0) {
+      score += Math.min(10, Math.floor((recipe.favoriteCount + recipe.diyGenCount) / 5));
+      matchReasons.push('用户反馈较稳定');
+    }
+
+    const boundedScore = Math.max(0, Math.min(100, Math.round(score)));
+    const matchStars = Math.max(3, Math.min(5, Math.round(boundedScore / 22)));
+    const dailyIntakeG =
+      dog.cachedTargetFoodKcal && recipe.energyDensityKcalPerKg
+        ? Math.round(
+            (Number(dog.cachedTargetFoodKcal) /
+              Number(recipe.energyDensityKcalPerKg)) *
+              1000,
+          )
+        : null;
+
+    return {
+      matchScore: boundedScore,
+      matchStars,
+      matchReasons: matchReasons.length
+        ? matchReasons.slice(0, 3)
+        : ['适合作为日常鲜食候选'],
+      dailyIntakeG,
+      section: boundedScore >= 70 ? 'exclusive' : 'general',
+    };
+  }
+
+  private mapRecommendedRecipe(recipe: any, dog: any) {
+    const score = this.scoreRecipeForDog(recipe, dog);
+    const topIngredients = (recipe.items || [])
+      .filter(
+        (item: any) =>
+          item.ingredient?.type === 'FOOD' && item.ratioPercent != null,
+      )
+      .sort((a: any, b: any) => (b.ratioPercent || 0) - (a.ratioPercent || 0))
+      .slice(0, 6)
+      .map((item: any) => ({
+        ingredientId: item.ingredientId,
+        name: item.ingredient?.name || item.ingredient?.nameEn || 'Unknown',
+        nameEn: item.ingredient?.nameEn,
+        ratio: item.ratioPercent || 0,
+      }));
+
+    return {
+      id: recipe.id,
+      version: recipe.version,
+      name: recipe.name,
+      status: recipe.status,
+      energyDensityKcalPerKg: recipe.energyDensityKcalPerKg,
+      coverImageUrl: recipe.coverImageUrl?.replace('http://', 'https://'),
+      coverTitle: recipe.coverTitle || undefined,
+      targetHealthTags: recipe.targetHealthTags || [],
+      applicableLifeStages: recipe.applicableLifeStages || [],
+      items: topIngredients,
+      viewCount: recipe.viewCount ?? 0,
+      favoriteCount: recipe.favoriteCount ?? 0,
+      diyGenCount: recipe.diyGenCount ?? 0,
+      ...score,
+    };
+  }
 
   private async getAccessibleRecipe(
     id: string,
@@ -348,6 +493,85 @@ export class RecipesController {
       page: paginatedResult.page,
       pageSize: paginatedResult.pageSize,
       hasMore: paginatedResult.hasMore,
+    });
+  }
+
+  @Get('recommendations/:dogId')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'List personalized recipe recommendations for a dog' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiParam({ name: 'dogId', description: 'Dog ID' })
+  async listRecommendationsForDog(
+    @Param('dogId') dogId: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const dog = await this.prisma.dog.findFirst({
+      where: {
+        id: dogId,
+        ownerId: user.customerId,
+      },
+      select: {
+        id: true,
+        name: true,
+        birthday: true,
+        currentWeightKg: true,
+        mealsPerDay: true,
+        lifeStageOverride: true,
+        cachedTargetFoodKcal: true,
+        allergyFoods: true,
+        pickyFoods: true,
+        avatarUrl: true,
+      },
+    });
+
+    if (!dog) {
+      return ApiResponseDto.error(404, 'Dog not found');
+    }
+
+    const recipes = await this.prisma.recipe.findMany({
+      where: { status: 'PUBLIC' },
+      include: {
+        items: {
+          include: { ingredient: true },
+        },
+      },
+      orderBy: [
+        { favoriteCount: 'desc' },
+        { diyGenCount: 'desc' },
+        { createdAt: 'desc' },
+      ],
+      take: 60,
+    });
+
+    const recommended = recipes
+      .map((recipe) => this.mapRecommendedRecipe(recipe, dog))
+      .sort((left, right) => {
+        return (
+          right.matchScore - left.matchScore ||
+          (right.favoriteCount || 0) - (left.favoriteCount || 0)
+        );
+      });
+
+    const exclusive = recommended
+      .filter((recipe) => recipe.section === 'exclusive')
+      .slice(0, 12);
+    const exclusiveIds = new Set(exclusive.map((recipe) => recipe.id));
+    const general = recommended
+      .filter((recipe) => !exclusiveIds.has(recipe.id))
+      .slice(0, 12);
+
+    return ApiResponseDto.success({
+      dog: {
+        id: dog.id,
+        name: dog.name,
+        avatarUrl: dog.avatarUrl,
+        currentWeightKg: dog.currentWeightKg,
+        mealsPerDay: dog.mealsPerDay,
+        lifeStage: this.resolveDogLifeStage(dog),
+        targetFoodKcal: dog.cachedTargetFoodKcal || null,
+      },
+      exclusive,
+      general,
     });
   }
 

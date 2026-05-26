@@ -148,6 +148,12 @@ export function validateSupplementImportForConfirm(
     (candidate) => candidate.matchType === 'LIKELY',
   );
   const resolution = draft.duplicateResolution;
+  const updateTargetIsCandidate =
+    resolution?.action === 'UPDATE_EXISTING' &&
+    hasText(resolution.ingredientId) &&
+    draft.duplicateCandidates.some(
+      (candidate) => candidate.ingredientId === resolution.ingredientId,
+    );
 
   addBlockingIf(
     exactCandidates.length > 0 &&
@@ -161,7 +167,9 @@ export function validateSupplementImportForConfirm(
     '精确重复项必须选择更新已有补剂',
   );
   addBlockingIf(
-    likelyCandidates.length > 0 && !resolution,
+    likelyCandidates.length > 0 &&
+      (!resolution ||
+        (resolution.action === 'UPDATE_EXISTING' && !updateTargetIsCandidate)),
     errors,
     'DUPLICATE_RESOLUTION_REQUIRED',
     '疑似重复项必须先选择处理方式',
@@ -204,13 +212,30 @@ export function classifySupplementImportDuplicates(
   const brand = normalizeComparableText(draftIngredient.brand);
   const productSpec = normalizeComparableText(draftIngredient.productSpec);
 
+  if (!hasText(name)) {
+    return [];
+  }
+
   return existing
     .map((item): SupplementDuplicateCandidate | null => {
       const existingName = normalizeComparableText(item.name);
       const existingBrand = normalizeComparableText(item.brand);
       const existingProductSpec = normalizeComparableText(item.productModel);
+      const hasExactKeys =
+        hasText(name) &&
+        hasText(brand) &&
+        hasText(productSpec) &&
+        hasText(existingName) &&
+        hasText(existingBrand) &&
+        hasText(existingProductSpec);
+      const hasLikelyKeys =
+        hasText(name) &&
+        hasText(brand) &&
+        hasText(existingName) &&
+        hasText(existingBrand);
 
       if (
+        hasExactKeys &&
         name === existingName &&
         brand === existingBrand &&
         productSpec === existingProductSpec
@@ -224,7 +249,7 @@ export function classifySupplementImportDuplicates(
         };
       }
 
-      if (name === existingName && brand === existingBrand) {
+      if (hasLikelyKeys && name === existingName && brand === existingBrand) {
         return {
           ingredientId: item.id,
           matchType: 'LIKELY',
@@ -395,16 +420,17 @@ function toAliasKey(value: string | null | undefined): string {
 
 function normalizeUnit(unit: string | null | undefined): string {
   const cleaned = cleanText(unit);
-  if (cleaned === 'ug' || cleaned === 'mcg') {
+  const lower = cleaned.toLowerCase();
+  if (lower === 'ug' || lower === 'mcg') {
     return 'μg';
   }
-  if (cleaned.toLowerCase() === 'kj') {
+  if (lower === 'kj') {
     return 'kJ';
   }
-  if (cleaned.toLowerCase() === 'iu') {
+  if (lower === 'iu') {
     return 'IU';
   }
-  return cleaned.toLowerCase();
+  return lower;
 }
 
 function addBlockingIf(

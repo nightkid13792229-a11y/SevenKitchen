@@ -66,6 +66,87 @@ describe('supplement import normalizer', () => {
     );
   });
 
+  it('handles uppercase microgram aliases when converting into catalog units', () => {
+    const result = normalizeExtractedSupplementImport(
+      {
+        ingredient: {
+          name: '海藻碘片',
+          brand: 'Ocean',
+          productSpec: '90片',
+          baseUnit: 'PCS',
+          unitDisplayLabel: '片',
+          addTiming: 'BEFORE_MEAL',
+          productionLossRate: 1.05,
+          categoryType: 'MINERAL',
+        },
+        nutrition: {
+          rawBasisType: 'PER_SERVING',
+          items: [
+            { name: 'Iodine', value: 150, unit: 'MCG', confidence: 0.99 },
+          ],
+        },
+      } as any,
+      [],
+    );
+
+    expect(result.nutritionProfile.minerals.iodine).toBe(150);
+    expect(result.rejectedNutritionItems).toEqual([]);
+  });
+
+  it('accepts IU values when the catalog unit is IU', () => {
+    const result = normalizeExtractedSupplementImport(
+      {
+        ingredient: {
+          name: '维生素D滴剂',
+          brand: 'Sun',
+          productSpec: '30ml',
+          baseUnit: 'ML',
+          unitDisplayLabel: 'ml',
+          addTiming: 'BEFORE_MEAL',
+          productionLossRate: 1.05,
+          categoryType: 'VITAMIN',
+        },
+        nutrition: {
+          rawBasisType: 'PER_SERVING',
+          items: [
+            { name: 'vitamin_d3', value: 400, unit: 'IU', confidence: 0.99 },
+          ],
+        },
+      } as any,
+      [],
+    );
+
+    expect(result.nutritionProfile.vitamins.vitaminD).toBe(400);
+    expect(result.rejectedNutritionItems).toEqual([]);
+  });
+
+  it('rejects IU values for mass-based catalog fields', () => {
+    const result = normalizeExtractedSupplementImport(
+      {
+        ingredient: {
+          name: '海藻碘片',
+          brand: 'Ocean',
+          productSpec: '90片',
+          baseUnit: 'PCS',
+          unitDisplayLabel: '片',
+          addTiming: 'BEFORE_MEAL',
+          productionLossRate: 1.05,
+          categoryType: 'MINERAL',
+        },
+        nutrition: {
+          rawBasisType: 'PER_SERVING',
+          items: [{ name: 'Iodine', value: 400, unit: 'IU', confidence: 0.99 }],
+        },
+      } as any,
+      [],
+    );
+
+    expect(result.nutritionProfile.minerals.iodine).toBeUndefined();
+    expect(result.rejectedNutritionItems[0].reason).toContain(
+      '无法匹配系统营养字段',
+    );
+  });
+
   it('blocks confirmation when key fields or duplicate resolution are missing', () => {
     const validation = validateSupplementImportForConfirm({
       ingredient: {
@@ -101,6 +182,42 @@ describe('supplement import normalizer', () => {
     );
   });
 
+  it('blocks update resolution when likely duplicate target is missing or not a candidate', () => {
+    const missingTarget = validateSupplementImportForConfirm({
+      ...validDraft(),
+      duplicateResolution: { action: 'UPDATE_EXISTING' },
+      duplicateCandidates: [{ ingredientId: 'ing-1', matchType: 'LIKELY' }],
+    } as any);
+    const nonCandidateTarget = validateSupplementImportForConfirm({
+      ...validDraft(),
+      duplicateResolution: {
+        action: 'UPDATE_EXISTING',
+        ingredientId: 'ing-2',
+      },
+      duplicateCandidates: [{ ingredientId: 'ing-1', matchType: 'LIKELY' }],
+    } as any);
+
+    expect(missingTarget.canConfirm).toBe(false);
+    expect(nonCandidateTarget.canConfirm).toBe(false);
+    expect(missingTarget.errors.map((item) => item.code)).toContain(
+      'DUPLICATE_RESOLUTION_REQUIRED',
+    );
+    expect(nonCandidateTarget.errors.map((item) => item.code)).toContain(
+      'DUPLICATE_RESOLUTION_REQUIRED',
+    );
+  });
+
+  it('allows create-new resolution for likely duplicates', () => {
+    const validation = validateSupplementImportForConfirm({
+      ...validDraft(),
+      duplicateResolution: { action: 'CREATE_NEW' },
+      duplicateCandidates: [{ ingredientId: 'ing-1', matchType: 'LIKELY' }],
+    } as any);
+
+    expect(validation.canConfirm).toBe(true);
+    expect(validation.errors).toEqual([]);
+  });
+
   it('classifies exact duplicate by name brand and product spec', () => {
     const candidates = classifySupplementImportDuplicates(
       {
@@ -123,4 +240,55 @@ describe('supplement import normalizer', () => {
       matchType: 'EXACT',
     });
   });
+
+  it('does not classify exact duplicates without brand and product spec', () => {
+    const candidates = classifySupplementImportDuplicates(
+      {
+        name: '海藻碘片',
+        brand: null,
+        productSpec: null,
+      },
+      [
+        {
+          id: 'ing-1',
+          name: ' 海藻碘片 ',
+          brand: null,
+          productModel: null,
+        },
+      ] as any,
+    );
+
+    expect(candidates[0]).toMatchObject({
+      ingredientId: 'ing-1',
+      matchType: 'POSSIBLE',
+    });
+  });
 });
+
+function validDraft() {
+  return {
+    ingredient: {
+      name: '海藻碘片',
+      type: 'SUPPLEMENT',
+      brand: 'Ocean',
+      productSpec: '90片',
+      baseUnit: 'PCS',
+      unitDisplayLabel: '片',
+      addTiming: 'BEFORE_MEAL',
+      productionLossRate: 1.05,
+      categoryType: 'MINERAL',
+    },
+    nutritionProfile: {
+      meta: { rawBasisType: 'PER_SERVING', sourceType: 'LABEL' },
+      macros: {},
+      minerals: { iodine: 150 },
+      vitamins: {},
+      fattyAcids: {},
+      aminoAcids: {},
+      customItems: [],
+    },
+    duplicateResolution: null,
+    duplicateCandidates: [],
+    riskFlags: [],
+  };
+}

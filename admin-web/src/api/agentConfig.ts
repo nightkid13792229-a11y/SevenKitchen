@@ -36,6 +36,11 @@ export interface UpdateSupplementImportAgentConfig {
   schemaVersion?: string
 }
 
+export interface SupplementImportAgentConfigTestResult {
+  ok: boolean
+  message: string
+}
+
 const supplementImportPath = '/admin/agent-configs/supplement-import'
 
 export const agentConfigApi = {
@@ -47,6 +52,6 @@ export const agentConfigApi = {
   ): Promise<SupplementImportAgentConfig> =>
     api.put(supplementImportPath, data),
 
-  testSupplementImport: (): Promise<SupplementImportAgentConfig> =>
+  testSupplementImport: (): Promise<SupplementImportAgentConfigTestResult> =>
     api.post(`${supplementImportPath}/test`)
 }

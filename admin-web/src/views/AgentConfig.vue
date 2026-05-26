@@ -283,13 +283,14 @@ const handleSave = async () => {
 const handleTest = async () => {
   testing.value = true
   try {
-    const data = await agentConfigApi.testSupplementImport()
-    applyConfig(data)
-    ElMessage.success('测试连接完成')
+    const result = await agentConfigApi.testSupplementImport()
+    form.value.lastTestStatus = result.ok ? 'SUCCESS' : 'FAILED'
+    form.value.lastTestMessage = result.message
+    ElMessage[result.ok ? 'success' : 'warning'](result.message || '测试连接完成')
+    await loadConfig()
   } catch (error) {
     ElMessage.error('测试连接失败')
     console.error(error)
-    await loadConfig()
   } finally {
     testing.value = false
   }

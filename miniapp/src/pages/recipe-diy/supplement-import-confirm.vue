@@ -91,7 +91,7 @@
               v-model="normalizedDraft.ingredient.productionLossRate"
               class="form-input"
               type="digit"
-              placeholder="例如 0.03"
+              placeholder="例如 1.05"
             />
           </view>
         </view>

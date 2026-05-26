@@ -61,7 +61,7 @@
           <el-icon><Setting /></el-icon>
           <span>全局配置</span>
         </el-menu-item>
-        <el-menu-item index="/agent-config">
+        <el-menu-item v-if="isAdminUser" index="/agent-config">
           <el-icon><Connection /></el-icon>
           <span>Agent 配置</span>
         </el-menu-item>
@@ -142,6 +142,7 @@ const userStore = useUserStore()
 
 const activeMenu = computed(() => route.path)
 const currentPageTitle = computed(() => route.meta.title as string || '后台管理')
+const isAdminUser = computed(() => userStore.userInfo?.role === 'ADMIN')
 
 const handleCommand = async (command: string) => {
   if (command === 'logout') {

@@ -409,6 +409,58 @@ describe('SupplementImportService', () => {
     expect(prisma.ingredient.update).not.toHaveBeenCalled();
   });
 
+  it('rejects update-existing targets when the server draft has no duplicate candidates', async () => {
+    const forgedDraft = {
+      ...readyRecordForCreate,
+      duplicateCandidates: [],
+      normalizedDraft: {
+        ...normalizedReadyDraft,
+        duplicateResolution: {
+          action: 'UPDATE_EXISTING',
+          ingredientId: 'forged-supplement-id',
+        },
+        duplicateCandidates: [
+          { ingredientId: 'forged-supplement-id', matchType: 'POSSIBLE' },
+        ],
+      },
+    };
+    prisma.supplementImportDraft.findUnique.mockResolvedValue(forgedDraft);
+
+    await expect(service.confirmDraft('draft-1', adminUser)).rejects.toThrow(
+      BadRequestException,
+    );
+
+    expect(prisma.supplementImportDraft.updateMany).not.toHaveBeenCalled();
+    expect(prisma.ingredient.updateMany).not.toHaveBeenCalled();
+    expect(prisma.ingredient.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects update-existing targets that are not in possible server duplicate candidates', async () => {
+    const forgedDraft = {
+      ...readyRecordForCreate,
+      duplicateCandidates: [{ ingredientId: 'ing-1', matchType: 'POSSIBLE' }],
+      normalizedDraft: {
+        ...normalizedReadyDraft,
+        duplicateResolution: {
+          action: 'UPDATE_EXISTING',
+          ingredientId: 'forged-supplement-id',
+        },
+        duplicateCandidates: [
+          { ingredientId: 'forged-supplement-id', matchType: 'POSSIBLE' },
+        ],
+      },
+    };
+    prisma.supplementImportDraft.findUnique.mockResolvedValue(forgedDraft);
+
+    await expect(service.confirmDraft('draft-1', adminUser)).rejects.toThrow(
+      BadRequestException,
+    );
+
+    expect(prisma.supplementImportDraft.updateMany).not.toHaveBeenCalled();
+    expect(prisma.ingredient.updateMany).not.toHaveBeenCalled();
+    expect(prisma.ingredient.create).not.toHaveBeenCalled();
+  });
+
   it('rejects update-existing confirmation when the target is not a supplement ingredient', async () => {
     const updateDraft = {
       ...readyRecordForCreate,

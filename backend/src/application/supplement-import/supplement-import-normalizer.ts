@@ -150,10 +150,11 @@ export function validateSupplementImportForConfirm(
   );
   addBlockingIf(
     typeof ingredient.productionLossRate !== 'number' ||
-      ingredient.productionLossRate <= 0,
+      ingredient.productionLossRate < 1 ||
+      ingredient.productionLossRate > 2,
     errors,
     'PRODUCTION_LOSS_RATE_REQUIRED',
-    '生产损耗率必须大于 0',
+    '生产损耗率必须是 1.0 到 2.0 的倍率',
   );
 
   const exactCandidates = draft.duplicateCandidates.filter(
@@ -169,6 +170,16 @@ export function validateSupplementImportForConfirm(
     draft.duplicateCandidates.some(
       (candidate) => candidate.ingredientId === resolution.ingredientId,
     );
+  const updateResolutionInvalid =
+    resolution?.action === 'UPDATE_EXISTING' &&
+    (!hasText(resolution.ingredientId) || !updateTargetIsCandidate);
+
+  addBlockingIf(
+    updateResolutionInvalid,
+    errors,
+    'DUPLICATE_RESOLUTION_REQUIRED',
+    '更新已有补剂时必须选择服务端识别出的重复候选',
+  );
 
   addBlockingIf(
     exactCandidates.length > 0 &&
@@ -183,8 +194,7 @@ export function validateSupplementImportForConfirm(
   );
   addBlockingIf(
     likelyCandidates.length > 0 &&
-      (!resolution ||
-        (resolution.action === 'UPDATE_EXISTING' && !updateTargetIsCandidate)),
+      !resolution,
     errors,
     'DUPLICATE_RESOLUTION_REQUIRED',
     '疑似重复项必须先选择处理方式',

@@ -207,6 +207,49 @@ describe('supplement import normalizer', () => {
     );
   });
 
+  it('blocks update-existing resolution when no server duplicate candidate authorizes the target', () => {
+    const noCandidates = validateSupplementImportForConfirm({
+      ...validDraft(),
+      duplicateResolution: {
+        action: 'UPDATE_EXISTING',
+        ingredientId: 'forged-supplement-id',
+      },
+      duplicateCandidates: [],
+    } as any);
+    const possibleNonCandidate = validateSupplementImportForConfirm({
+      ...validDraft(),
+      duplicateResolution: {
+        action: 'UPDATE_EXISTING',
+        ingredientId: 'forged-supplement-id',
+      },
+      duplicateCandidates: [{ ingredientId: 'ing-1', matchType: 'POSSIBLE' }],
+    } as any);
+
+    expect(noCandidates.canConfirm).toBe(false);
+    expect(possibleNonCandidate.canConfirm).toBe(false);
+    expect(noCandidates.errors.map((item) => item.code)).toContain(
+      'DUPLICATE_RESOLUTION_REQUIRED',
+    );
+    expect(possibleNonCandidate.errors.map((item) => item.code)).toContain(
+      'DUPLICATE_RESOLUTION_REQUIRED',
+    );
+  });
+
+  it('requires production loss rate to be a multiplier of at least one', () => {
+    const validation = validateSupplementImportForConfirm({
+      ...validDraft(),
+      ingredient: {
+        ...validDraft().ingredient,
+        productionLossRate: 0.03,
+      },
+    } as any);
+
+    expect(validation.canConfirm).toBe(false);
+    expect(validation.errors.map((item) => item.code)).toContain(
+      'PRODUCTION_LOSS_RATE_REQUIRED',
+    );
+  });
+
   it('allows create-new resolution for likely duplicates', () => {
     const validation = validateSupplementImportForConfirm({
       ...validDraft(),

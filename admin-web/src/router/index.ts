@@ -126,7 +126,7 @@ const routes: RouteRecordRaw[] = [
         path: 'agent-config',
         name: 'AgentConfig',
         component: () => import('@/views/AgentConfig.vue'),
-        meta: { title: 'Agent 配置' }
+        meta: { title: 'Agent 配置', requiresRole: 'ADMIN' }
       },
       {
         path: 'purchasing',
@@ -207,14 +207,31 @@ const router = createRouter({
   routes
 })
 
+function getStoredAdminRole(): string {
+  const raw = localStorage.getItem('admin_user')
+  if (!raw) {
+    return ''
+  }
+
+  try {
+    return JSON.parse(raw)?.role || ''
+  } catch {
+    localStorage.removeItem('admin_user')
+    return ''
+  }
+}
+
 // Navigation guard for authentication
 router.beforeEach((to, _from, next) => {
   const token = localStorage.getItem('admin_token')
   const requiresAuth = to.meta.requiresAuth !== false
+  const requiredRole = to.meta.requiresRole as string | undefined
 
   if (requiresAuth && !token) {
     next('/login')
   } else if (to.path === '/login' && token) {
+    next('/dashboard')
+  } else if (requiredRole && getStoredAdminRole() !== requiredRole) {
     next('/dashboard')
   } else {
     next()

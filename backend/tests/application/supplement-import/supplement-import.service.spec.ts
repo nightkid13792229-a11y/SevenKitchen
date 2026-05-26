@@ -12,6 +12,7 @@ describe('SupplementImportService', () => {
       create: jest.fn(),
       findMany: jest.fn(),
       update: jest.fn(),
+      updateMany: jest.fn(),
     },
     supplementImportDraft: {
       create: jest.fn(),
@@ -167,7 +168,7 @@ describe('SupplementImportService', () => {
   };
 
   beforeEach(() => {
-    jest.clearAllMocks();
+    jest.resetAllMocks();
     prisma.$transaction.mockImplementation((callback) => callback(prisma));
     service = new SupplementImportService(
       prisma as any,
@@ -340,7 +341,7 @@ describe('SupplementImportService', () => {
     };
     prisma.supplementImportDraft.findUnique.mockResolvedValue(updateDraft);
     prisma.supplementImportDraft.updateMany.mockResolvedValue({ count: 1 });
-    prisma.ingredient.update.mockResolvedValue({ id: 'ing-1' });
+    prisma.ingredient.updateMany.mockResolvedValue({ count: 1 });
     prisma.supplementImportDraft.update.mockResolvedValue({
       ...updateDraft,
       status: 'CONFIRMED',
@@ -349,8 +350,8 @@ describe('SupplementImportService', () => {
 
     await service.confirmDraft('draft-1', adminUser);
 
-    expect(prisma.ingredient.update).toHaveBeenCalledWith({
-      where: { id: 'ing-1' },
+    expect(prisma.ingredient.updateMany).toHaveBeenCalledWith({
+      where: { id: 'ing-1', type: 'SUPPLEMENT' },
       data: expect.objectContaining({
         name: '海藻碘片',
         brand: 'Ocean',
@@ -366,7 +367,7 @@ describe('SupplementImportService', () => {
         nutritionProfile: expect.any(Object),
       }),
     });
-    expect(prisma.ingredient.update).toHaveBeenCalledWith(
+    expect(prisma.ingredient.updateMany).toHaveBeenCalledWith(
       expect.not.objectContaining({
         data: expect.objectContaining({
           procurementStrategy: expect.anything(),
@@ -378,6 +379,31 @@ describe('SupplementImportService', () => {
         }),
       }),
     );
+    expect(prisma.ingredient.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects update-existing confirmation when the target is not a supplement ingredient', async () => {
+    const updateDraft = {
+      ...readyRecordForCreate,
+      normalizedDraft: {
+        ...normalizedReadyDraft,
+        duplicateResolution: {
+          action: 'UPDATE_EXISTING',
+          ingredientId: 'food-1',
+        },
+        duplicateCandidates: [{ ingredientId: 'food-1', matchType: 'EXACT' }],
+      },
+    };
+    prisma.supplementImportDraft.findUnique.mockResolvedValue(updateDraft);
+    prisma.supplementImportDraft.updateMany.mockResolvedValue({ count: 1 });
+    prisma.ingredient.updateMany.mockResolvedValue({ count: 0 });
+
+    await expect(service.confirmDraft('draft-1', adminUser)).rejects.toThrow(
+      '目标补剂原料不存在',
+    );
+
+    expect(prisma.ingredient.update).not.toHaveBeenCalled();
+    expect(prisma.ingredient.create).not.toHaveBeenCalled();
   });
 
   it('rejects malformed normalized drafts during update with BadRequestException', async () => {
@@ -394,4 +420,34 @@ describe('SupplementImportService', () => {
     ).rejects.toThrow(BadRequestException);
     expect(prisma.supplementImportDraft.update).not.toHaveBeenCalled();
   });
+
+  it.each([
+    ['duplicateCandidates', { duplicateCandidates: [null] }],
+    ['riskFlags', { riskFlags: [null] }],
+    [
+      'duplicateResolution',
+      { duplicateResolution: { action: 'UPDATE_EXISTING', ingredientId: 123 } },
+    ],
+  ])(
+    'rejects malformed normalized draft %s fields before validation',
+    async (_field, patch) => {
+      prisma.supplementImportDraft.findUnique.mockResolvedValue(
+        readyRecordForCreate,
+      );
+
+      await expect(
+        service.updateDraft(
+          'draft-1',
+          {
+            normalizedDraft: {
+              ...normalizedReadyDraft,
+              ...patch,
+            } as any,
+          },
+          adminUser,
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.supplementImportDraft.update).not.toHaveBeenCalled();
+    },
+  );
 });

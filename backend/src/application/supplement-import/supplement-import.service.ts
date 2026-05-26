@@ -205,10 +205,14 @@ export class SupplementImportService {
       }
 
       if (resolution?.action === 'UPDATE_EXISTING' && resolution.ingredientId) {
-        await tx.ingredient.update({
-          where: { id: targetIngredientId },
+        const updated = await tx.ingredient.updateMany({
+          where: { id: targetIngredientId, type: IngredientType.SUPPLEMENT },
           data: this.toIngredientUpdateData(normalized),
         });
+
+        if (updated.count !== 1) {
+          throw new BadRequestException('目标补剂原料不存在或类型不匹配');
+        }
       } else {
         await tx.ingredient.create({
           data: {
@@ -368,8 +372,31 @@ export class SupplementImportService {
         'normalizedDraft.duplicateCandidates 必须是数组',
       );
     }
+    for (const candidate of input.duplicateCandidates) {
+      if (
+        !isRecord(candidate) ||
+        typeof candidate.ingredientId !== 'string' ||
+        !['EXACT', 'LIKELY', 'POSSIBLE'].includes(
+          String(candidate.matchType ?? ''),
+        )
+      ) {
+        throw new BadRequestException(
+          'normalizedDraft.duplicateCandidates 包含无效项',
+        );
+      }
+    }
     if (!Array.isArray(input.riskFlags)) {
       throw new BadRequestException('normalizedDraft.riskFlags 必须是数组');
+    }
+    for (const flag of input.riskFlags) {
+      if (
+        !isRecord(flag) ||
+        typeof flag.code !== 'string' ||
+        typeof flag.message !== 'string' ||
+        !['INFO', 'WARNING', 'BLOCKING'].includes(String(flag.level ?? ''))
+      ) {
+        throw new BadRequestException('normalizedDraft.riskFlags 包含无效项');
+      }
     }
     if (
       input.duplicateResolution !== null &&
@@ -379,6 +406,22 @@ export class SupplementImportService {
       throw new BadRequestException(
         'normalizedDraft.duplicateResolution 必须是对象或 null',
       );
+    }
+    if (isRecord(input.duplicateResolution)) {
+      const action = input.duplicateResolution.action;
+      if (!['CREATE_NEW', 'UPDATE_EXISTING'].includes(String(action ?? ''))) {
+        throw new BadRequestException(
+          'normalizedDraft.duplicateResolution.action 无效',
+        );
+      }
+      if (
+        action === 'UPDATE_EXISTING' &&
+        typeof input.duplicateResolution.ingredientId !== 'string'
+      ) {
+        throw new BadRequestException(
+          'normalizedDraft.duplicateResolution.ingredientId 必须是字符串',
+        );
+      }
     }
 
     return input as unknown as NormalizedSupplementImportDraft;

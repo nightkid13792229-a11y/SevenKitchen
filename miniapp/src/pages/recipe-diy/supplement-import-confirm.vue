@@ -339,10 +339,7 @@ function normalizeDraftForEditing(source: any) {
       ...empty.ingredient,
       ...(source?.ingredient || {}),
     },
-    duplicateResolution: {
-      ...empty.duplicateResolution,
-      ...(source?.duplicateResolution || {}),
-    },
+    duplicateResolution: normalizeDuplicateResolutionForEditing(source?.duplicateResolution),
     nutritionProfile: {
       ...empty.nutritionProfile,
       ...(source?.nutritionProfile || {}),
@@ -371,6 +368,7 @@ function normalizeDraftBeforeSave(source: any) {
 
   next.ingredient.weightG = toOptionalNumber(next.ingredient.weightG)
   next.ingredient.productionLossRate = toOptionalNumber(next.ingredient.productionLossRate)
+  next.duplicateResolution = normalizeDuplicateResolutionBeforeSave(next.duplicateResolution)
   next.ingredient.properties = {
     ...(next.ingredient.properties || {}),
     addTiming: next.ingredient.addTiming || '',
@@ -380,6 +378,30 @@ function normalizeDraftBeforeSave(source: any) {
   }
 
   return next
+}
+
+function normalizeDuplicateResolutionForEditing(duplicateResolution: any) {
+  if (isEmptyDuplicateResolution(duplicateResolution)) {
+    return null
+  }
+
+  return { ...duplicateResolution }
+}
+
+function normalizeDuplicateResolutionBeforeSave(duplicateResolution: any) {
+  if (isEmptyDuplicateResolution(duplicateResolution)) {
+    return null
+  }
+
+  return { ...duplicateResolution }
+}
+
+function isEmptyDuplicateResolution(duplicateResolution: any): boolean {
+  if (!duplicateResolution || typeof duplicateResolution !== 'object') {
+    return true
+  }
+
+  return !duplicateResolution.action || Object.keys(duplicateResolution).length === 0
 }
 
 async function saveDraftChanges(options: { showSuccessToast?: boolean } = {}) {

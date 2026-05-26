@@ -57,6 +57,9 @@ describe('supplement import page regressions', () => {
     expect(source).toContain('hasValidDuplicateResolution.value')
     expect(source).toContain('const savedDraft = await saveDraftChanges')
     expect(source).toContain('canConfirmSavedDraft(savedDraft)')
+    expect(source).toContain('normalizeDuplicateResolutionForEditing(source?.duplicateResolution)')
+    expect(source).toContain('normalizeDuplicateResolutionBeforeSave(next.duplicateResolution)')
+    expect(source).toContain('isEmptyDuplicateResolution')
     expect(source).toMatch(/riskFlags|照片模糊/)
   })
 

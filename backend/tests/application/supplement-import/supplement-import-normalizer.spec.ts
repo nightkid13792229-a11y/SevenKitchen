@@ -141,7 +141,7 @@ describe('supplement import normalizer', () => {
       [],
     );
 
-    expect(result.nutritionProfile.minerals.iodine).toBeUndefined();
+    expect(result.nutritionProfile.minerals.iodine).toBeNull();
     expect(result.rejectedNutritionItems[0].reason).toContain(
       '无法匹配系统营养字段',
     );

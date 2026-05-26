@@ -1,5 +1,12 @@
 import { NUTRITION_FIELD_CATALOG } from '../../domain/ingredient/nutrition-field-catalog';
 import type { NutritionFieldDefinition } from '../../domain/ingredient/nutrition-field-catalog';
+import {
+  AMINO_ACID_NUTRIENT_KEYS,
+  FATTY_ACID_NUTRIENT_KEYS,
+  MACRO_NUTRIENT_KEYS,
+  MINERAL_NUTRIENT_KEYS,
+  VITAMIN_NUTRIENT_KEYS,
+} from '../../domain/ingredient/nutrition-profile.constants';
 import type { NutritionProfileV2 } from '../../domain/ingredient/types';
 import type {
   ExtractedSupplementImportPayload,
@@ -12,7 +19,9 @@ import type {
   SupplementImportValidationResult,
 } from './supplement-import.types';
 
-const NUTRIENT_ALIASES: Record<string, string> = {
+type NutritionFieldPath = NutritionFieldDefinition['fieldPath'];
+
+const NUTRIENT_ALIASES: Record<string, NutritionFieldPath> = {
   ca: 'minerals.calcium',
   calcium: 'minerals.calcium',
   钙: 'minerals.calcium',
@@ -43,9 +52,15 @@ const VALID_CATEGORY_TYPES = new Set([
   'OTHER',
 ]);
 
-const catalogByPath = new Map(
-  NUTRITION_FIELD_CATALOG.map((field) => [field.fieldPath, field]),
-);
+const catalogByPath: ReadonlyMap<NutritionFieldPath, NutritionFieldDefinition> =
+  new Map(
+    NUTRITION_FIELD_CATALOG.map(
+      (field): [NutritionFieldPath, NutritionFieldDefinition] => [
+        field.fieldPath,
+        field,
+      ],
+    ),
+  );
 
 export function normalizeExtractedSupplementImport(
   input: ExtractedSupplementImportPayload,
@@ -292,13 +307,21 @@ function createEmptyNutritionProfile(
       attachments: imageUrls,
       confidenceLevel: null,
     },
-    macros: {},
-    minerals: {},
-    vitamins: {},
-    fattyAcids: {},
-    aminoAcids: {},
+    macros: createEmptyNutritionTab(MACRO_NUTRIENT_KEYS),
+    minerals: createEmptyNutritionTab(MINERAL_NUTRIENT_KEYS),
+    vitamins: createEmptyNutritionTab(VITAMIN_NUTRIENT_KEYS),
+    fattyAcids: createEmptyNutritionTab(FATTY_ACID_NUTRIENT_KEYS),
+    aminoAcids: createEmptyNutritionTab(AMINO_ACID_NUTRIENT_KEYS),
     customItems: [],
-  } as NutritionProfileV2;
+  };
+}
+
+function createEmptyNutritionTab<const TKeys extends readonly string[]>(
+  keys: TKeys,
+): { [K in TKeys[number]]: null } {
+  return Object.fromEntries(keys.map((key) => [key, null])) as {
+    [K in TKeys[number]]: null;
+  };
 }
 
 function normalizeIngredient(

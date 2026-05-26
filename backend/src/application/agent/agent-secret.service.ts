@@ -5,9 +5,24 @@ import * as crypto from 'crypto';
 export class AgentSecretService {
   private key(): Buffer {
     const source =
-      process.env.AGENT_CONFIG_ENCRYPTION_KEY ||
-      process.env.JWT_SECRET ||
-      'dev-agent-config-encryption-key';
+      process.env.AGENT_CONFIG_ENCRYPTION_KEY || process.env.JWT_SECRET;
+
+    if (!source) {
+      if (
+        process.env.NODE_ENV === 'test' ||
+        process.env.NODE_ENV === 'development'
+      ) {
+        return crypto
+          .createHash('sha256')
+          .update('dev-agent-config-encryption-key')
+          .digest();
+      }
+
+      throw new Error(
+        'AGENT_CONFIG_ENCRYPTION_KEY or JWT_SECRET is required to encrypt agent config secrets',
+      );
+    }
+
     return crypto.createHash('sha256').update(source).digest();
   }
 

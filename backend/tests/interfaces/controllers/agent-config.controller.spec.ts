@@ -1,7 +1,8 @@
 import { Test } from '@nestjs/testing';
 import { AgentConfigService } from '../../../src/application/agent/agent-config.service';
-import { JwtAuthService } from '../../../src/interfaces/auth';
+import { AuthGuard, JwtAuthService } from '../../../src/interfaces/auth';
 import { AgentConfigController } from '../../../src/interfaces/controllers/agent-config.controller';
+import { AdminGuard } from '../../../src/interfaces/guards/role.guard';
 
 describe('AgentConfigController', () => {
   let controller: AgentConfigController;
@@ -52,9 +53,9 @@ describe('AgentConfigController', () => {
   });
 
   it('uses auth and admin guards', () => {
-    expect(Reflect.getMetadata('__guards__', AgentConfigController)).toEqual(
-      expect.arrayContaining([expect.any(Function), expect.any(Function)]),
-    );
+    const guards = Reflect.getMetadata('__guards__', AgentConfigController);
+
+    expect(guards).toEqual(expect.arrayContaining([AuthGuard, AdminGuard]));
   });
 
   it('delegates get and returns success response', async () => {

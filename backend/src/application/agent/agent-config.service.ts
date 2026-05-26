@@ -152,7 +152,15 @@ export class AgentConfigService {
       );
     }
 
-    const apiKey = this.secretService.decrypt(apiKeyEncrypted);
+    let apiKey: string;
+    try {
+      apiKey = this.secretService.decrypt(apiKeyEncrypted);
+    } catch {
+      throw new ServiceUnavailableException(
+        '补剂识别 Agent 密钥无法解密，请重新保存 API Key',
+      );
+    }
+
     const snapshot = this.toView(record) as unknown as Record<string, unknown>;
 
     return {

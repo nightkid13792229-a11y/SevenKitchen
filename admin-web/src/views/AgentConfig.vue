@@ -232,9 +232,9 @@ const buildPayload = (): UpdateSupplementImportAgentConfig => {
   const payload: UpdateSupplementImportAgentConfig = {
     enabled: form.value.enabled,
     provider: form.value.provider,
-    baseUrl: form.value.baseUrl,
-    visionModel: form.value.visionModel,
-    textModel: form.value.textModel,
+    baseUrl: form.value.baseUrl?.trim() || null,
+    visionModel: form.value.visionModel?.trim(),
+    textModel: form.value.textModel?.trim(),
     temperature: form.value.temperature,
     timeoutMs: form.value.timeoutMs,
     maxRetries: form.value.maxRetries,

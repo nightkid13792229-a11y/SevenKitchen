@@ -25,10 +25,10 @@ export interface SupplementImportAgentConfig {
 export interface UpdateSupplementImportAgentConfig {
   enabled?: boolean
   provider?: AgentProvider
-  baseUrl?: string
+  baseUrl?: string | null
   apiKey?: string | null
-  visionModel?: string
-  textModel?: string
+  visionModel?: string | null
+  textModel?: string | null
   temperature?: number
   timeoutMs?: number
   maxRetries?: number

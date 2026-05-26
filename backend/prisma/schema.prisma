@@ -913,6 +913,56 @@ model GlobalConfig {
   @@map("global_config")
 }
 
+model AgentConfig {
+  id                String        @id @default(uuid())
+  agentType         AgentType     @map("agent_type")
+  enabled           Boolean       @default(false)
+  provider          AgentProvider @default(OPENAI_COMPATIBLE)
+  baseUrl           String?       @map("base_url") @db.VarChar(500)
+  apiKeyEncrypted   String?       @map("api_key_encrypted")
+  visionModel       String?       @map("vision_model") @db.VarChar(120)
+  textModel         String?       @map("text_model") @db.VarChar(120)
+  temperature       Float         @default(0.1)
+  timeoutMs         Int           @default(30000) @map("timeout_ms")
+  maxRetries        Int           @default(1) @map("max_retries")
+  promptVersion     String        @default("supplement-import-v1") @map("prompt_version") @db.VarChar(80)
+  schemaVersion     String        @default("supplement-import-schema-v1") @map("schema_version") @db.VarChar(80)
+  lastTestStatus    String?       @map("last_test_status") @db.VarChar(20)
+  lastTestMessage   String?       @map("last_test_message")
+  updatedBy         String?       @map("updated_by")
+  createdAt         DateTime      @default(now()) @map("created_at")
+  updatedAt         DateTime      @updatedAt @map("updated_at")
+
+  @@unique([agentType])
+  @@map("agent_config")
+}
+
+model SupplementImportDraft {
+  id                    String                      @id @default(uuid())
+  status                SupplementImportDraftStatus @default(CREATED)
+  imageUrls             String[]                    @default([]) @map("image_urls")
+  riskFlags             Json                        @default("[]") @map("risk_flags")
+  rawOcrText            String?                     @map("raw_ocr_text")
+  aiExtractedData       Json?                       @map("ai_extracted_data")
+  normalizedDraft       Json?                       @map("normalized_draft")
+  duplicateCandidates   Json                        @default("[]") @map("duplicate_candidates")
+  validationErrors      Json                        @default("[]") @map("validation_errors")
+  agentConfigSnapshot   Json?                       @map("agent_config_snapshot")
+  modelUsage            Json?                       @map("model_usage")
+  confirmedIngredientId String?                     @map("confirmed_ingredient_id")
+  confirmedBy           String?                     @map("confirmed_by")
+  confirmedAt           DateTime?                   @map("confirmed_at")
+  createdBy             String                      @map("created_by")
+  createdAt             DateTime                    @default(now()) @map("created_at")
+  updatedAt             DateTime                    @updatedAt @map("updated_at")
+
+  @@index([status])
+  @@index([createdBy])
+  @@index([confirmedIngredientId])
+  @@index([createdAt])
+  @@map("supplement_import_draft")
+}
+
 model DIYSheet {
   id              String   @id @default(uuid()) @map("id")
   userId          String   @map("user_id")
@@ -1485,6 +1535,25 @@ enum CustomAttachmentType {
   LAB_RESULT
   IMAGE
   OTHER
+}
+
+enum AgentType {
+  SUPPLEMENT_IMPORT
+}
+
+enum AgentProvider {
+  OPENAI_COMPATIBLE
+}
+
+enum SupplementImportDraftStatus {
+  CREATED
+  IMAGE_RISK_DETECTED
+  RECOGNIZING
+  NEEDS_REVIEW
+  READY_TO_CONFIRM
+  CONFIRMED
+  FAILED
+  CANCELLED
 }
 
 // ============================================

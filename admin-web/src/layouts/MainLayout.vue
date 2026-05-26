@@ -37,6 +37,10 @@
           <el-icon><Food /></el-icon>
           <span>食谱管理</span>
         </el-menu-item>
+        <el-menu-item index="/reviews">
+          <el-icon><Star /></el-icon>
+          <span>评价管理</span>
+        </el-menu-item>
         <el-menu-item index="/orders">
           <el-icon><List /></el-icon>
           <span>订单管理</span>

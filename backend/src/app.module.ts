@@ -165,8 +165,11 @@ import { AdminDogProfileAnalyticsController } from './interfaces/controllers/adm
 import { ProcurementSkuService } from './application/ingredient/procurement-sku.service';
 import { IngredientSuggestionsController } from './interfaces/controllers/ingredient-suggestions.controller';
 import { AgentConfigController } from './interfaces/controllers/agent-config.controller';
+import { RecipeDesignerSupplementImportController } from './interfaces/controllers/recipe-designer-supplement-import.controller';
 import { AgentConfigService } from './application/agent/agent-config.service';
 import { AgentSecretService } from './application/agent/agent-secret.service';
+import { SupplementImportAgentClient } from './application/supplement-import/supplement-import-agent.client';
+import { SupplementImportService } from './application/supplement-import/supplement-import.service';
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -258,6 +261,7 @@ validatePrismaConfig();
     ProcurementSkuController,
     IngredientSuggestionsController,
     AgentConfigController,
+    RecipeDesignerSupplementImportController,
     ...(isPrismaEnabled()
       ? [DogProfileAnalyticsController, AdminDogProfileAnalyticsController]
       : []),
@@ -622,6 +626,8 @@ validatePrismaConfig();
     ProcurementSkuService,
     AgentConfigService,
     AgentSecretService,
+    SupplementImportAgentClient,
+    SupplementImportService,
   ],
 })
 export class AppModule implements OnModuleInit {

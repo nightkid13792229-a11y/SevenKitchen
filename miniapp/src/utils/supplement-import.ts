@@ -33,7 +33,7 @@ function parseStoredUser(value: unknown): MiniappUser {
 }
 
 function getUserRole(user: MiniappUser): string {
-  return String(user?.role || user?.user?.role || '').toUpperCase()
+  return String(user?.role || user?.user?.role || '')
 }
 
 export function isAdminUser(user: MiniappUser): boolean {
@@ -102,11 +102,11 @@ export function uploadSupplementImportImage<T = any>(filePath: string): Promise<
 }
 
 export const supplementImportApi = {
-  createDraft(data: any) {
+  createDraft(imageUrls: string[]) {
     return request({
       url: SUPPLEMENT_IMPORT_DRAFTS_PATH,
       method: 'POST',
-      data,
+      data: { imageUrls },
     })
   },
 
@@ -117,11 +117,11 @@ export const supplementImportApi = {
     })
   },
 
-  updateDraft(draftId: string, data: any) {
+  updateDraft(draftId: string, normalizedDraft: any) {
     return request({
       url: `${SUPPLEMENT_IMPORT_DRAFTS_PATH}/${draftId}`,
       method: 'PUT',
-      data,
+      data: { normalizedDraft },
     })
   },
 

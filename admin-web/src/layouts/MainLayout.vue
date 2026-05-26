@@ -61,6 +61,10 @@
           <el-icon><Setting /></el-icon>
           <span>全局配置</span>
         </el-menu-item>
+        <el-menu-item index="/agent-config">
+          <el-icon><Connection /></el-icon>
+          <span>Agent 配置</span>
+        </el-menu-item>
         <el-sub-menu index="purchasing">
           <template #title>
             <el-icon><List /></el-icon>
@@ -128,7 +132,8 @@ import {
   Star,
   Setting,
   EditPen,
-  Money
+  Money,
+  Connection
 } from '@element-plus/icons-vue'
 
 const route = useRoute()

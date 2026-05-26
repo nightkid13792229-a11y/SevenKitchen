@@ -123,6 +123,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '全局配置' }
       },
       {
+        path: 'agent-config',
+        name: 'AgentConfig',
+        component: () => import('@/views/AgentConfig.vue'),
+        meta: { title: 'Agent 配置' }
+      },
+      {
         path: 'purchasing',
         name: 'Purchasing',
         redirect: '/purchasing/reimbursements',

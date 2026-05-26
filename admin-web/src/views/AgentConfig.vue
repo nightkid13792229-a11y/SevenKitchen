@@ -221,6 +221,9 @@ const applyConfig = (config: SupplementImportAgentConfig) => {
   form.value = {
     ...defaultForm(),
     ...config,
+    baseUrl: config.baseUrl ?? '',
+    visionModel: config.visionModel ?? '',
+    textModel: config.textModel ?? '',
     apiKey: ''
   }
 }
@@ -253,7 +256,6 @@ const loadConfig = async () => {
     const data = await agentConfigApi.getSupplementImport()
     applyConfig(data)
   } catch (error) {
-    ElMessage.error('加载 Agent 配置失败')
     console.error(error)
   } finally {
     loading.value = false
@@ -272,7 +274,6 @@ const handleSave = async () => {
       applyConfig(data)
       ElMessage.success('Agent 配置保存成功')
     } catch (error) {
-      ElMessage.error('保存 Agent 配置失败')
       console.error(error)
     } finally {
       saving.value = false
@@ -289,7 +290,6 @@ const handleTest = async () => {
     ElMessage[result.ok ? 'success' : 'warning'](result.message || '测试连接完成')
     await loadConfig()
   } catch (error) {
-    ElMessage.error('测试连接失败')
     console.error(error)
   } finally {
     testing.value = false

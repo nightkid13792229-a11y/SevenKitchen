@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { IsArray, ValidateNested } from 'class-validator';
+import { IsArray, IsObject } from 'class-validator';
 import type { NormalizedSupplementImportDraft } from '../../application/supplement-import/supplement-import.types';
 
 export class CreateSupplementImportDraftDto {
@@ -10,6 +10,6 @@ export class CreateSupplementImportDraftDto {
 
 export class UpdateSupplementImportDraftDto {
   @ApiProperty({ description: 'Normalized supplement import draft' })
-  @ValidateNested()
+  @IsObject()
   normalizedDraft!: NormalizedSupplementImportDraft;
 }

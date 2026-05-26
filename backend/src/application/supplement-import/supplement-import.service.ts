@@ -3,12 +3,13 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { AgentConfigService } from '../agent/agent-config.service';
-import { IngredientService } from '../ingredient/ingredient.service';
 import {
   IngredientProcurementStrategy,
   IngredientType,
 } from '../../domain/ingredient/enums';
+import { denormalizeNutritionProfileForPersistence } from '../../domain/ingredient/nutrition-profile.utils';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { TencentCosService } from '../../infrastructure/services/tencent-cos.service';
 import type { RequestUser } from '../../interfaces/auth/request-user.interface';
@@ -42,13 +43,19 @@ type DraftRecord = {
   updatedAt?: Date;
 };
 
+type NormalizedSupplementImportDraftWithNotes =
+  NormalizedSupplementImportDraft & {
+    ingredient: NormalizedSupplementImportDraft['ingredient'] & {
+      notes?: string | null;
+    };
+  };
+
 @Injectable()
 export class SupplementImportService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly agentConfigService: AgentConfigService,
     private readonly agentClient: SupplementImportAgentClient,
-    private readonly ingredientService: IngredientService,
     private readonly cosService: TencentCosService,
   ) {}
 
@@ -144,7 +151,7 @@ export class SupplementImportService {
     _user: RequestUser,
   ): Promise<any> {
     await this.findDraftOrThrow(id);
-    const normalized = input.normalizedDraft;
+    const normalized = this.assertNormalizedDraft(input.normalizedDraft);
     const validation = validateSupplementImportForConfirm(normalized);
 
     return this.prisma.supplementImportDraft.update({
@@ -161,6 +168,13 @@ export class SupplementImportService {
 
   async confirmDraft(id: string, user: RequestUser): Promise<any> {
     const record = await this.findDraftOrThrow(id);
+    if (record.status === 'CONFIRMED' && record.confirmedIngredientId) {
+      return record;
+    }
+    if (record.status !== 'READY_TO_CONFIRM') {
+      throw new BadRequestException(`当前草稿状态不可确认：${record.status}`);
+    }
+
     const normalized = this.getNormalizedDraft(record);
     const validation = validateSupplementImportForConfirm(normalized);
 
@@ -168,24 +182,48 @@ export class SupplementImportService {
       throw new BadRequestException('补剂草稿仍有校验错误，无法确认');
     }
 
-    const payload = this.toIngredientPayload(normalized);
     const resolution = normalized.duplicateResolution;
-    const ingredient =
+    const targetIngredientId =
       resolution?.action === 'UPDATE_EXISTING' && resolution.ingredientId
-        ? await this.ingredientService.updateIngredient(
-            resolution.ingredientId,
-            payload as any,
-          )
-        : await this.ingredientService.createIngredient(payload);
+        ? resolution.ingredientId
+        : randomUUID();
+    const confirmedAt = new Date();
 
-    return this.prisma.supplementImportDraft.update({
-      where: { id },
-      data: {
-        status: 'CONFIRMED',
-        confirmedIngredientId: ingredient.id,
-        confirmedBy: user.userId,
-        confirmedAt: new Date(),
-      },
+    return this.prisma.$transaction(async (tx) => {
+      const claimed = await tx.supplementImportDraft.updateMany({
+        where: { id, status: 'READY_TO_CONFIRM' },
+        data: {
+          status: 'CONFIRMED',
+          confirmedIngredientId: targetIngredientId,
+          confirmedBy: user.userId,
+          confirmedAt,
+        },
+      });
+
+      if (claimed.count !== 1) {
+        throw new BadRequestException('草稿状态已变化，请刷新后重试');
+      }
+
+      if (resolution?.action === 'UPDATE_EXISTING' && resolution.ingredientId) {
+        await tx.ingredient.update({
+          where: { id: targetIngredientId },
+          data: this.toIngredientUpdateData(normalized),
+        });
+      } else {
+        await tx.ingredient.create({
+          data: {
+            id: targetIngredientId,
+            ...this.toIngredientCreateData(normalized),
+          },
+        });
+      }
+
+      return tx.supplementImportDraft.update({
+        where: { id },
+        data: {
+          confirmedIngredientId: targetIngredientId,
+        },
+      });
     });
   }
 
@@ -232,31 +270,49 @@ export class SupplementImportService {
       }));
   }
 
-  private toIngredientPayload(normalized: NormalizedSupplementImportDraft) {
-    const ingredient = normalized.ingredient;
-    const notes = (ingredient as any).notes ?? null;
-
+  private toIngredientCreateData(normalized: NormalizedSupplementImportDraft) {
     return {
-      name: ingredient.name,
+      ...this.toIngredientLabelData(normalized),
       type: IngredientType.SUPPLEMENT,
       procurementStrategy: IngredientProcurementStrategy.DAILY_PURCHASE,
       diyEnabled: true,
       procurementEnabled: false,
+      purchaseUnit:
+        normalized.ingredient.unitDisplayLabel ??
+        normalized.ingredient.baseUnit ??
+        'PCS',
+      purchaseToBaseRatio: 1,
+      currentPricePerPurchaseUnit: 0,
+      effectivePricePerPurchaseUnit: 0,
+    };
+  }
+
+  private toIngredientUpdateData(normalized: NormalizedSupplementImportDraft) {
+    return this.toIngredientLabelData(normalized);
+  }
+
+  private toIngredientLabelData(normalized: NormalizedSupplementImportDraft) {
+    const ingredient = normalized.ingredient;
+    const notes =
+      (normalized as NormalizedSupplementImportDraftWithNotes).ingredient
+        .notes ?? null;
+
+    return {
+      name: ingredient.name,
       brand: ingredient.brand,
       productModel: ingredient.productSpec,
       notes,
       baseUnit: (ingredient.baseUnit ?? 'PCS') as any,
       unitDisplayLabel: ingredient.unitDisplayLabel,
-      purchaseUnit: ingredient.unitDisplayLabel,
-      purchaseToBaseRatio: 1,
-      currentPricePerPurchaseUnit: 0,
       weightG: ingredient.weightG,
       properties: {
         category_type: ingredient.categoryType,
         add_timing: ingredient.addTiming,
         production_loss_rate: ingredient.productionLossRate,
       },
-      nutritionProfile: normalized.nutritionProfile,
+      nutritionProfile: denormalizeNutritionProfileForPersistence(
+        normalized.nutritionProfile as any,
+      ) as any,
     };
   }
 
@@ -279,7 +335,7 @@ export class SupplementImportService {
       throw new BadRequestException('补剂导入草稿尚未完成识别');
     }
 
-    return record.normalizedDraft as NormalizedSupplementImportDraft;
+    return this.assertNormalizedDraft(record.normalizedDraft);
   }
 
   private assertImageUrls(imageUrls: string[] | undefined): void {
@@ -287,4 +343,48 @@ export class SupplementImportService {
       throw new BadRequestException('请至少上传一张补剂标签图片');
     }
   }
+
+  private assertNormalizedDraft(
+    input: unknown,
+  ): NormalizedSupplementImportDraft {
+    if (!isRecord(input)) {
+      throw new BadRequestException('normalizedDraft 必须是对象');
+    }
+    if (!isRecord(input.ingredient)) {
+      throw new BadRequestException('normalizedDraft.ingredient 必须是对象');
+    }
+    if (!isRecord(input.nutritionProfile)) {
+      throw new BadRequestException(
+        'normalizedDraft.nutritionProfile 必须是对象',
+      );
+    }
+    if (!Array.isArray(input.rejectedNutritionItems)) {
+      throw new BadRequestException(
+        'normalizedDraft.rejectedNutritionItems 必须是数组',
+      );
+    }
+    if (!Array.isArray(input.duplicateCandidates)) {
+      throw new BadRequestException(
+        'normalizedDraft.duplicateCandidates 必须是数组',
+      );
+    }
+    if (!Array.isArray(input.riskFlags)) {
+      throw new BadRequestException('normalizedDraft.riskFlags 必须是数组');
+    }
+    if (
+      input.duplicateResolution !== null &&
+      input.duplicateResolution !== undefined &&
+      !isRecord(input.duplicateResolution)
+    ) {
+      throw new BadRequestException(
+        'normalizedDraft.duplicateResolution 必须是对象或 null',
+      );
+    }
+
+    return input as unknown as NormalizedSupplementImportDraft;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }

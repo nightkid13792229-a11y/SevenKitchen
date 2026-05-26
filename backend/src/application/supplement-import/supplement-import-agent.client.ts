@@ -1,6 +1,8 @@
 import { BadRequestException, Injectable } from '@nestjs/common';
 import type { ExtractedSupplementImportPayload } from './supplement-import.types';
 
+const MAX_AGENT_JSON_CONTENT_LENGTH = 200_000;
+
 export interface SupplementImportAgentUseConfig {
   baseUrl: string;
   apiKey: string;
@@ -101,7 +103,15 @@ export class SupplementImportAgentClient {
   }
 
   private parseJsonContent(content: string): ExtractedSupplementImportPayload {
+    if (content.length > MAX_AGENT_JSON_CONTENT_LENGTH) {
+      throw new BadRequestException('补剂识别 Agent 返回内容过大');
+    }
+
     const trimmed = content.trim();
+    if (!trimmed) {
+      throw new BadRequestException('补剂识别 Agent 返回内容为空');
+    }
+
     const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
     const jsonText = fenced ? fenced[1].trim() : trimmed;
 

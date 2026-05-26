@@ -28,6 +28,7 @@ import type {
   NormalizedSupplementImportDraft,
   SupplementImportRiskFlag,
   SupplementImportValidationIssue,
+  SupplementDuplicateCandidate,
 } from './supplement-import.types';
 
 type DraftRecord = {
@@ -150,16 +151,24 @@ export class SupplementImportService {
     input: UpdateSupplementImportDraftDto,
     _user: RequestUser,
   ): Promise<any> {
-    await this.findDraftOrThrow(id);
+    const record = await this.findDraftOrThrow(id);
     const normalized = this.assertNormalizedDraft(input.normalizedDraft);
-    const validation = validateSupplementImportForConfirm(normalized);
+    const trustedDuplicateCandidates = this.assertDuplicateCandidates(
+      record.duplicateCandidates ?? [],
+      'duplicateCandidates',
+    );
+    const normalizedForSave = {
+      ...normalized,
+      duplicateCandidates: trustedDuplicateCandidates,
+    };
+    const validation = validateSupplementImportForConfirm(normalizedForSave);
 
     return this.prisma.supplementImportDraft.update({
       where: { id },
       data: {
         status: validation.canConfirm ? 'READY_TO_CONFIRM' : 'NEEDS_REVIEW',
-        normalizedDraft: normalized as any,
-        duplicateCandidates: normalized.duplicateCandidates as any,
+        normalizedDraft: normalizedForSave as any,
+        duplicateCandidates: trustedDuplicateCandidates as any,
         riskFlags: normalized.riskFlags as any,
         validationErrors: validation.errors as any,
       },
@@ -176,13 +185,21 @@ export class SupplementImportService {
     }
 
     const normalized = this.getNormalizedDraft(record);
-    const validation = validateSupplementImportForConfirm(normalized);
+    const trustedDuplicateCandidates = this.assertDuplicateCandidates(
+      record.duplicateCandidates ?? [],
+      'duplicateCandidates',
+    );
+    const normalizedForConfirm = {
+      ...normalized,
+      duplicateCandidates: trustedDuplicateCandidates,
+    };
+    const validation = validateSupplementImportForConfirm(normalizedForConfirm);
 
     if (!validation.canConfirm) {
       throw new BadRequestException('补剂草稿仍有校验错误，无法确认');
     }
 
-    const resolution = normalized.duplicateResolution;
+    const resolution = normalizedForConfirm.duplicateResolution;
     const targetIngredientId =
       resolution?.action === 'UPDATE_EXISTING' && resolution.ingredientId
         ? resolution.ingredientId
@@ -207,7 +224,7 @@ export class SupplementImportService {
       if (resolution?.action === 'UPDATE_EXISTING' && resolution.ingredientId) {
         const updated = await tx.ingredient.updateMany({
           where: { id: targetIngredientId, type: IngredientType.SUPPLEMENT },
-          data: this.toIngredientUpdateData(normalized),
+          data: this.toIngredientUpdateData(normalizedForConfirm),
         });
 
         if (updated.count !== 1) {
@@ -217,7 +234,7 @@ export class SupplementImportService {
         await tx.ingredient.create({
           data: {
             id: targetIngredientId,
-            ...this.toIngredientCreateData(normalized),
+            ...this.toIngredientCreateData(normalizedForConfirm),
           },
         });
       }
@@ -372,19 +389,10 @@ export class SupplementImportService {
         'normalizedDraft.duplicateCandidates 必须是数组',
       );
     }
-    for (const candidate of input.duplicateCandidates) {
-      if (
-        !isRecord(candidate) ||
-        typeof candidate.ingredientId !== 'string' ||
-        !['EXACT', 'LIKELY', 'POSSIBLE'].includes(
-          String(candidate.matchType ?? ''),
-        )
-      ) {
-        throw new BadRequestException(
-          'normalizedDraft.duplicateCandidates 包含无效项',
-        );
-      }
-    }
+    this.assertDuplicateCandidates(
+      input.duplicateCandidates,
+      'normalizedDraft.duplicateCandidates',
+    );
     if (!Array.isArray(input.riskFlags)) {
       throw new BadRequestException('normalizedDraft.riskFlags 必须是数组');
     }
@@ -425,6 +433,29 @@ export class SupplementImportService {
     }
 
     return input as unknown as NormalizedSupplementImportDraft;
+  }
+
+  private assertDuplicateCandidates(
+    input: unknown,
+    fieldName: string,
+  ): SupplementDuplicateCandidate[] {
+    if (!Array.isArray(input)) {
+      throw new BadRequestException(`${fieldName} 必须是数组`);
+    }
+
+    for (const candidate of input) {
+      if (
+        !isRecord(candidate) ||
+        typeof candidate.ingredientId !== 'string' ||
+        !['EXACT', 'LIKELY', 'POSSIBLE'].includes(
+          String(candidate.matchType ?? ''),
+        )
+      ) {
+        throw new BadRequestException(`${fieldName} 包含无效项`);
+      }
+    }
+
+    return input as SupplementDuplicateCandidate[];
   }
 }
 

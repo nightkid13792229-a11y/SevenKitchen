@@ -330,6 +330,7 @@ describe('SupplementImportService', () => {
   it('updates existing ingredients with label-owned fields only', async () => {
     const updateDraft = {
       ...readyRecordForCreate,
+      duplicateCandidates: [{ ingredientId: 'ing-1', matchType: 'EXACT' }],
       normalizedDraft: {
         ...normalizedReadyDraft,
         duplicateResolution: {
@@ -382,9 +383,36 @@ describe('SupplementImportService', () => {
     expect(prisma.ingredient.update).not.toHaveBeenCalled();
   });
 
+  it('rejects forged update-existing targets that are not in server duplicate candidates', async () => {
+    const forgedDraft = {
+      ...readyRecordForCreate,
+      duplicateCandidates: [{ ingredientId: 'ing-1', matchType: 'EXACT' }],
+      normalizedDraft: {
+        ...normalizedReadyDraft,
+        duplicateResolution: {
+          action: 'UPDATE_EXISTING',
+          ingredientId: 'unrelated-supplement-id',
+        },
+        duplicateCandidates: [
+          { ingredientId: 'unrelated-supplement-id', matchType: 'EXACT' },
+        ],
+      },
+    };
+    prisma.supplementImportDraft.findUnique.mockResolvedValue(forgedDraft);
+
+    await expect(service.confirmDraft('draft-1', adminUser)).rejects.toThrow(
+      BadRequestException,
+    );
+
+    expect(prisma.supplementImportDraft.updateMany).not.toHaveBeenCalled();
+    expect(prisma.ingredient.updateMany).not.toHaveBeenCalled();
+    expect(prisma.ingredient.update).not.toHaveBeenCalled();
+  });
+
   it('rejects update-existing confirmation when the target is not a supplement ingredient', async () => {
     const updateDraft = {
       ...readyRecordForCreate,
+      duplicateCandidates: [{ ingredientId: 'food-1', matchType: 'EXACT' }],
       normalizedDraft: {
         ...normalizedReadyDraft,
         duplicateResolution: {

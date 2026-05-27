@@ -50,7 +50,7 @@
       </view>
 
       <view v-if="job.status === 'WAITING_USER'" class="section waiting-section">
-        <text class="section-title">WAITING_USER 回答</text>
+        <text class="section-title">待补充信息</text>
         <text v-if="job.waitingQuestion" class="section-note">{{ job.waitingQuestion }}</text>
         <textarea
           v-model="answerText"
@@ -86,7 +86,7 @@
 
       <view class="section">
         <view class="section-header">
-          <text class="section-title">messages</text>
+          <text class="section-title">对话记录</text>
           <text class="message-count">{{ messages.length }} 条</text>
         </view>
         <view v-if="messages.length === 0" class="empty-message">
@@ -131,6 +131,7 @@ const answering = ref(false)
 const sendingMessage = ref(false)
 const answerText = ref('')
 const messageText = ref('')
+const hasLoadedOnce = ref(false)
 
 const messages = computed(() => job.value?.messages || [])
 const canAnswer = computed(() => answerText.value.trim().length > 0)
@@ -146,7 +147,7 @@ onLoad((options: RouteOptions) => {
 })
 
 onShow(() => {
-  if (jobId.value) {
+  if (jobId.value && hasLoadedOnce.value) {
     void loadJob()
   }
 })
@@ -160,6 +161,7 @@ async function loadJob() {
     console.error('[IngredientCreationDetail] Failed to load job:', error)
     uni.showToast({ title: '加载任务失败', icon: 'none' })
   } finally {
+    hasLoadedOnce.value = true
     loading.value = false
   }
 }

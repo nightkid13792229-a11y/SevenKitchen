@@ -45,8 +45,12 @@ describe('ingredient creation detail page', () => {
     expect(detailSource).toContain('ingredientCreationApi.answerQuestion')
     expect(detailSource).toContain('ingredientCreationApi.addMessage')
     expect(detailSource).toContain('WAITING_USER')
-    expect(detailSource).toContain('messages')
+    expect(detailSource).toContain('对话记录')
     expect(detailSource).toContain('查看草稿')
+    expect(detailSource).toContain('&jobId=${job.value.id}')
+    expect(detailSource).not.toContain('WAITING_USER 回答')
+    expect(detailSource).not.toContain('>messages<')
+    expect(detailSource).toContain('hasLoadedOnce')
   })
 })
 
@@ -62,5 +66,34 @@ describe('ingredient creation draft page', () => {
     expect(draftSource).toContain('非零')
     expect(draftSource).toContain('零值')
     expect(draftSource).toContain('空值')
+  })
+
+  it('loads draft review from a job id instead of scanning all jobs', () => {
+    expect(draftSource).toContain('jobId')
+    expect(draftSource).toContain('请从任务详情页进入草稿审核')
+    expect(draftSource).toContain('ingredientCreationApi.getJob(jobId.value)')
+    expect(draftSource).not.toContain('ingredientCreationApi.listJobs')
+  })
+
+  it('keeps draft edit, update, and confirm actions admin-only while staff can review read-only data', () => {
+    expect(draftSource).toContain('class="readonly-note"')
+    expect(draftSource).toContain('仅管理员可编辑草稿信息')
+    expect(draftSource).toContain('v-if="isAdmin" class="admin-edit-section"')
+    expect(draftSource).toContain('v-if="isAdmin" class="profile-edit-section"')
+    expect(draftSource).toContain('if (!isAdmin.value')
+    expect(draftSource).toContain('ingredientCreationApi.updateDraft')
+    expect(draftSource).toContain('ingredientCreationApi.updateDraftProfile')
+  })
+
+  it('resolves admin role from current user first and refreshes uncertain local storage from the API', () => {
+    const userStorageIndex = draftSource.indexOf("uni.getStorageSync('user')")
+    const userInfoStorageIndex = draftSource.indexOf("uni.getStorageSync('userInfo')")
+
+    expect(draftSource).toContain("import { request } from '../../utils/api'")
+    expect(draftSource).toContain('/users/me')
+    expect(draftSource).toContain("uni.getStorageSync('token')")
+    expect(userStorageIndex).toBeGreaterThanOrEqual(0)
+    expect(userInfoStorageIndex).toBeGreaterThan(userStorageIndex)
+    expect(draftSource).toContain('refreshCurrentUserRole')
   })
 })

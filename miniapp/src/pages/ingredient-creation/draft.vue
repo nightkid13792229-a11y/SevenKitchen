@@ -1,6 +1,11 @@
 <template>
   <view class="ingredient-creation-draft-page">
-    <view v-if="loading && !draft" class="state-block">
+    <view v-if="entryError" class="state-block">
+      <text class="empty-title">{{ entryError }}</text>
+      <button class="secondary-btn" @tap="goToJobList">返回任务列表</button>
+    </view>
+
+    <view v-else-if="loading && !draft" class="state-block">
       <text>加载中...</text>
     </view>
 
@@ -54,72 +59,93 @@
 
       <view class="section">
         <text class="section-title">草稿信息</text>
-        <view class="field-row">
-          <text class="field-label">食材名称</text>
-          <input
-            v-model="draftForm.suggestedName"
-            class="text-input"
-            maxlength="50"
-            placeholder="输入正式食材名称"
-          />
+        <text v-if="!isAdmin" class="readonly-note">仅管理员可编辑草稿信息，员工可查看完整性和档案。</text>
+        <view v-if="isAdmin" class="admin-edit-section">
+          <view class="field-row">
+            <text class="field-label">食材名称</text>
+            <input
+              v-model="draftForm.suggestedName"
+              class="text-input"
+              maxlength="50"
+              placeholder="输入正式食材名称"
+            />
+          </view>
+          <view class="field-row">
+            <text class="field-label">显示单位</text>
+            <input
+              v-model="draftForm.unitDisplayLabel"
+              class="text-input"
+              maxlength="20"
+              placeholder="例如 g、ml、个"
+            />
+          </view>
+          <view class="field-row stacked">
+            <text class="field-label">采购策略</text>
+            <view class="choice-row">
+              <button
+                v-for="option in procurementStrategyOptions"
+                :key="option.value"
+                class="choice-btn"
+                :class="{ active: draftForm.procurementStrategy === option.value }"
+                @tap="selectProcurementStrategy(option.value)"
+              >
+                {{ option.label }}
+              </button>
+            </view>
+          </view>
+          <view class="switch-row">
+            <label class="switch-item">
+              <switch
+                :checked="draftForm.diyEnabled"
+                color="#1890ff"
+                @change="setDraftBoolean('diyEnabled', $event)"
+              />
+              <text>DIY 可用</text>
+            </label>
+            <label class="switch-item">
+              <switch
+                :checked="draftForm.procurementEnabled"
+                color="#1890ff"
+                @change="setDraftBoolean('procurementEnabled', $event)"
+              />
+              <text>采购可用</text>
+            </label>
+          </view>
+          <view class="field-row stacked">
+            <text class="field-label">审核备注</text>
+            <textarea
+              v-model="draftForm.notes"
+              class="textarea-input"
+              maxlength="300"
+              placeholder="记录人工审核结论或后续处理要求"
+            />
+          </view>
+          <button
+            class="secondary-btn full-btn"
+            :disabled="savingDraft"
+            @tap="saveDraft"
+          >
+            {{ savingDraft ? '保存中' : '保存草稿信息' }}
+          </button>
         </view>
-        <view class="field-row">
-          <text class="field-label">显示单位</text>
-          <input
-            v-model="draftForm.unitDisplayLabel"
-            class="text-input"
-            maxlength="20"
-            placeholder="例如 g、ml、个"
-          />
-        </view>
-        <view class="field-row stacked">
-          <text class="field-label">采购策略</text>
-          <view class="choice-row">
-            <button
-              v-for="option in procurementStrategyOptions"
-              :key="option.value"
-              class="choice-btn"
-              :class="{ active: draftForm.procurementStrategy === option.value }"
-              @tap="selectProcurementStrategy(option.value)"
-            >
-              {{ option.label }}
-            </button>
+        <view v-else class="readonly-field-list">
+          <view class="readonly-row">
+            <text class="readonly-label">显示单位</text>
+            <text class="readonly-value">{{ draft.unitDisplayLabel || '-' }}</text>
+          </view>
+          <view class="readonly-row">
+            <text class="readonly-label">采购策略</text>
+            <text class="readonly-value">{{ getProcurementStrategyLabel(draft.procurementStrategy) }}</text>
+          </view>
+          <view class="readonly-row">
+            <text class="readonly-label">DIY 可用</text>
+            <text class="readonly-value">{{ draft.diyEnabled ? '是' : '否' }}</text>
+          </view>
+          <view class="readonly-row">
+            <text class="readonly-label">采购可用</text>
+            <text class="readonly-value">{{ draft.procurementEnabled ? '是' : '否' }}</text>
           </view>
         </view>
-        <view class="switch-row">
-          <label class="switch-item">
-            <switch
-              :checked="draftForm.diyEnabled"
-              color="#1890ff"
-              @change="setDraftBoolean('diyEnabled', $event)"
-            />
-            <text>DIY 可用</text>
-          </label>
-          <label class="switch-item">
-            <switch
-              :checked="draftForm.procurementEnabled"
-              color="#1890ff"
-              @change="setDraftBoolean('procurementEnabled', $event)"
-            />
-            <text>采购可用</text>
-          </label>
-        </view>
-        <view class="field-row stacked">
-          <text class="field-label">审核备注</text>
-          <textarea
-            v-model="draftForm.notes"
-            class="textarea-input"
-            maxlength="300"
-            placeholder="记录人工审核结论或后续处理要求"
-          />
-        </view>
-        <button
-          class="secondary-btn full-btn"
-          :disabled="savingDraft"
-          @tap="saveDraft"
-        >
-          {{ savingDraft ? '保存中' : '保存草稿信息' }}
-        </button>
       </view>
 
       <view class="section">
@@ -163,44 +189,46 @@
               </view>
             </view>
 
-            <view class="choice-row profile-choice-row">
-              <button
-                v-for="option in profileRoleOptions"
-                :key="option.value"
-                class="choice-btn"
-                :class="{ active: profileForms[profile.id]?.role === option.value }"
-                @tap="selectProfileRole(profile.id, option.value)"
-              >
-                {{ option.label }}
-              </button>
-            </view>
+            <view v-if="isAdmin" class="profile-edit-section">
+              <view class="choice-row profile-choice-row">
+                <button
+                  v-for="option in profileRoleOptions"
+                  :key="option.value"
+                  class="choice-btn"
+                  :class="{ active: profileForms[profile.id]?.role === option.value }"
+                  @tap="selectProfileRole(profile.id, option.value)"
+                >
+                  {{ option.label }}
+                </button>
+              </view>
 
-            <view class="field-row">
-              <text class="field-label">展示名</text>
-              <input
-                v-model="profileForms[profile.id].suggestedDisplayNameZh"
-                class="text-input"
-                maxlength="60"
-                placeholder="例如 鸭胸肉 生"
-              />
-            </view>
-            <view class="field-row">
-              <text class="field-label">处理方式</text>
-              <input
-                v-model="profileForms[profile.id].preparationStateLabel"
-                class="text-input"
-                maxlength="40"
-                placeholder="例如 生、熟、去皮"
-              />
-            </view>
-            <view class="field-row stacked">
-              <text class="field-label">审核理由</text>
-              <textarea
-                v-model="profileForms[profile.id].agentRationale"
-                class="textarea-input compact"
-                maxlength="300"
-                placeholder="补充档案选择或调整原因"
-              />
+              <view class="field-row">
+                <text class="field-label">展示名</text>
+                <input
+                  v-model="profileForms[profile.id].suggestedDisplayNameZh"
+                  class="text-input"
+                  maxlength="60"
+                  placeholder="例如 鸭胸肉 生"
+                />
+              </view>
+              <view class="field-row">
+                <text class="field-label">处理方式</text>
+                <input
+                  v-model="profileForms[profile.id].preparationStateLabel"
+                  class="text-input"
+                  maxlength="40"
+                  placeholder="例如 生、熟、去皮"
+                />
+              </view>
+              <view class="field-row stacked">
+                <text class="field-label">审核理由</text>
+                <textarea
+                  v-model="profileForms[profile.id].agentRationale"
+                  class="textarea-input compact"
+                  maxlength="300"
+                  placeholder="补充档案选择或调整原因"
+                />
+              </view>
             </view>
 
             <view v-if="getMissingFieldLabels(profile).length" class="missing-block">
@@ -209,6 +237,7 @@
             </view>
 
             <button
+              v-if="isAdmin"
               class="secondary-btn full-btn"
               :disabled="savingProfileId === profile.id"
               @tap="saveProfile(profile)"
@@ -225,6 +254,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { onLoad, onShow } from '@dcloudio/uni-app'
+import { request } from '../../utils/api'
 import {
   ingredientCreationApi,
   type IngredientCreationDraft,
@@ -260,11 +290,13 @@ type ProfileFormState = {
 const draftId = ref('')
 const jobId = ref('')
 const currentUserRole = ref('')
+const entryError = ref('')
 const draft = ref<IngredientCreationDraft | null>(null)
 const loading = ref(false)
 const savingDraft = ref(false)
 const savingProfileId = ref('')
 const confirming = ref(false)
+const hasLoadedOnce = ref(false)
 const profileForms = ref<Record<string, ProfileFormState>>({})
 const draftForm = ref<DraftFormState>({
   suggestedName: '',
@@ -315,31 +347,44 @@ onLoad((options: RouteOptions) => {
   draftId.value = String(options?.id || '')
   jobId.value = String(options?.jobId || '')
   currentUserRole.value = getCurrentUserRole()
-  if (!draftId.value && !jobId.value) {
-    uni.showToast({ title: '缺少草稿ID', icon: 'none' })
+  void refreshCurrentUserRole()
+  if (!jobId.value) {
+    entryError.value = '请从任务详情页进入草稿审核'
+    uni.showToast({ title: '请从任务详情页进入草稿审核', icon: 'none' })
     return
   }
   void loadDraft()
 })
 
 onShow(() => {
-  currentUserRole.value = getCurrentUserRole()
-  if (draftId.value || jobId.value) {
+  void refreshCurrentUserRole()
+  if (jobId.value && hasLoadedOnce.value) {
     void loadDraft()
   }
 })
 
 async function loadDraft() {
+  if (!jobId.value) {
+    entryError.value = '请从任务详情页进入草稿审核'
+    return
+  }
+
   loading.value = true
   try {
-    if (jobId.value) {
-      const res = await ingredientCreationApi.getJob(jobId.value)
-      draft.value = res.data?.draft || null
-    } else {
-      const res = await ingredientCreationApi.listJobs()
-      const jobs = Array.isArray(res.data) ? res.data : []
-      draft.value = jobs.map((job) => job.draft || null).find((item) => item?.id === draftId.value) || null
+    const res = await ingredientCreationApi.getJob(jobId.value)
+    const loadedDraft = res.data?.draft || null
+    if (!loadedDraft) {
+      draft.value = null
+      entryError.value = '任务尚未生成食材草稿'
+      return
     }
+    if (draftId.value && loadedDraft.id !== draftId.value) {
+      draft.value = null
+      entryError.value = '草稿与任务不匹配，请从任务详情页进入草稿审核'
+      return
+    }
+    entryError.value = ''
+    draft.value = loadedDraft
     if (draft.value?.id) {
       draftId.value = draft.value.id
       syncDraftForm(draft.value)
@@ -349,12 +394,13 @@ async function loadDraft() {
     console.error('[IngredientCreationDraft] Failed to load draft:', error)
     uni.showToast({ title: '加载草稿失败', icon: 'none' })
   } finally {
+    hasLoadedOnce.value = true
     loading.value = false
   }
 }
 
 async function saveDraft() {
-  if (!draft.value || savingDraft.value) return
+  if (!isAdmin.value || !draft.value || savingDraft.value) return
 
   savingDraft.value = true
   try {
@@ -384,7 +430,7 @@ async function saveDraft() {
 
 async function saveProfile(profile: IngredientCreationDraftProfile) {
   const form = profileForms.value[profile.id]
-  if (!draft.value || !form || savingProfileId.value) return
+  if (!isAdmin.value || !draft.value || !form || savingProfileId.value) return
 
   savingProfileId.value = profile.id
   try {
@@ -456,15 +502,17 @@ function syncProfileForms(sourceProfiles: IngredientCreationDraftProfile[]) {
 }
 
 function selectProcurementStrategy(value: IngredientCreationProcurementStrategy) {
+  if (!isAdmin.value) return
   draftForm.value.procurementStrategy = value
 }
 
 function selectProfileRole(profileId: string, value: IngredientCreationDraftProfileRole) {
-  if (!profileForms.value[profileId]) return
+  if (!isAdmin.value || !profileForms.value[profileId]) return
   profileForms.value[profileId].role = value
 }
 
 function setDraftBoolean(field: 'diyEnabled' | 'procurementEnabled', event: { detail?: { value?: boolean } }) {
+  if (!isAdmin.value) return
   draftForm.value[field] = Boolean(event.detail?.value)
 }
 
@@ -502,25 +550,69 @@ function getMissingFieldLabels(profile: IngredientCreationDraftProfile) {
   return (profile.completenessSummary?.missingFields || []).map((field) => field.label).slice(0, 8)
 }
 
+async function refreshCurrentUserRole() {
+  const localRole = getCurrentUserRole()
+  currentUserRole.value = localRole
+
+  const token = uni.getStorageSync('token')
+  if (!token && localRole) return
+
+  try {
+    const res = await request({
+      url: '/users/me',
+      method: 'GET',
+      suppressErrorToast: true,
+    })
+    if (res.code === 0 && res.data) {
+      uni.setStorageSync('user', res.data)
+      currentUserRole.value = normalizeUserRole(res.data) || localRole
+    }
+  } catch (error) {
+    console.warn('[IngredientCreationDraft] Failed to refresh current user role:', error)
+  }
+}
+
 function getCurrentUserRole() {
   try {
-    const rawUserInfo = uni.getStorageSync('userInfo') || uni.getStorageSync('user')
-    const userInfo =
-      typeof rawUserInfo === 'string'
-        ? rawUserInfo
-          ? JSON.parse(rawUserInfo)
-          : null
-        : rawUserInfo
-    return String(userInfo?.role || userInfo?.user?.role || '').toUpperCase()
+    return normalizeUserRole(readStoredUserInfo())
   } catch (error) {
     console.warn('[IngredientCreationDraft] Failed to read current user role:', error)
     return ''
   }
 }
 
+function readStoredUserInfo() {
+  const user = parseStoredUserInfo(uni.getStorageSync('user'))
+  if (user) return user
+  return parseStoredUserInfo(uni.getStorageSync('userInfo'))
+}
+
+function parseStoredUserInfo(rawUserInfo: unknown) {
+  if (!rawUserInfo || rawUserInfo === '{}' || rawUserInfo === '') return null
+  if (typeof rawUserInfo !== 'string') return rawUserInfo as Record<string, unknown>
+  try {
+    return JSON.parse(rawUserInfo)
+  } catch (error) {
+    console.warn('[IngredientCreationDraft] Failed to parse stored user info:', error)
+    return null
+  }
+}
+
+function normalizeUserRole(userInfo: any) {
+  return String(userInfo?.role || userInfo?.user?.role || '').toUpperCase()
+}
+
+function getProcurementStrategyLabel(value?: IngredientCreationProcurementStrategy) {
+  return procurementStrategyOptions.find((option) => option.value === value)?.label || '-'
+}
+
 function emptyToNull(value: string) {
   const trimmed = value.trim()
   return trimmed ? trimmed : null
+}
+
+function goToJobList() {
+  uni.redirectTo({ url: '/pages/ingredient-creation/list' })
 }
 
 function goBack() {
@@ -677,6 +769,46 @@ function goBack() {
 .field-row {
   min-height: 84rpx;
   margin-top: 18rpx;
+}
+
+.readonly-note {
+  display: block;
+  margin-top: 16rpx;
+  padding: 16rpx;
+  border-radius: 10rpx;
+  background: #f8fafc;
+  color: #555;
+  font-size: 24rpx;
+  line-height: 1.45;
+}
+
+.readonly-field-list {
+  margin-top: 16rpx;
+}
+
+.readonly-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+  min-height: 64rpx;
+  border-top: 1rpx solid #f0f0f0;
+}
+
+.readonly-label {
+  flex-shrink: 0;
+  color: #777;
+  font-size: 24rpx;
+}
+
+.readonly-value {
+  flex: 1;
+  min-width: 0;
+  color: #222;
+  font-size: 25rpx;
+  font-weight: 600;
+  text-align: right;
+  word-break: break-all;
 }
 
 .field-row.stacked {

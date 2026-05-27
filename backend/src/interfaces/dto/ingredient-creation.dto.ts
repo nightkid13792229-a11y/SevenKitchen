@@ -1,4 +1,4 @@
-import { Type } from 'class-transformer';
+import { Transform, Type } from 'class-transformer';
 import {
   IsBoolean,
   IsIn,
@@ -6,6 +6,7 @@ import {
   IsOptional,
   IsString,
   Min,
+  ValidateIf,
 } from 'class-validator';
 
 export class CreateIngredientCreationJobDto {
@@ -73,7 +74,10 @@ export class UpdateIngredientCreationDraftProfileDto {
   @IsString()
   agentRationale?: string | null;
 
-  @IsOptional()
+  @ValidateIf((_, value) => value !== undefined)
+  @Transform(({ value, obj }) =>
+    value === '' || obj?.sortOrder === '' ? Number.NaN : value,
+  )
   @Type(() => Number)
   @IsInt()
   @Min(0)

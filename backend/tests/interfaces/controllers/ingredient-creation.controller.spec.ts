@@ -1,10 +1,12 @@
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { ValidationPipe } from '@nestjs/common';
 import { GUARDS_METADATA, PATH_METADATA } from '@nestjs/common/constants';
 import { IngredientCreationService } from '../../../src/application/ingredient-creation/ingredient-creation.service';
 import { IngredientCreationAgentService } from '../../../src/application/ingredient-creation/ingredient-creation-agent.service';
 import { AuthGuard } from '../../../src/interfaces/auth';
 import { IngredientCreationController } from '../../../src/interfaces/controllers/ingredient-creation.controller';
+import { UpdateIngredientCreationDraftProfileDto } from '../../../src/interfaces/dto/ingredient-creation.dto';
 import { StaffGuard } from '../../../src/interfaces/guards/role.guard';
 
 describe('IngredientCreationController metadata', () => {
@@ -15,6 +17,35 @@ describe('IngredientCreationController metadata', () => {
     expect(
       Reflect.getMetadata(GUARDS_METADATA, IngredientCreationController),
     ).toEqual([AuthGuard, StaffGuard]);
+  });
+});
+
+describe('UpdateIngredientCreationDraftProfileDto validation', () => {
+  const pipe = new ValidationPipe({ transform: true, whitelist: true });
+  const transformProfile = (payload: Record<string, unknown>) =>
+    pipe.transform(payload, {
+      type: 'body',
+      metatype: UpdateIngredientCreationDraftProfileDto,
+    });
+
+  it('accepts a non-negative integer sortOrder as a number', async () => {
+    const result = await transformProfile({ sortOrder: 2 });
+
+    expect(result).toBeInstanceOf(UpdateIngredientCreationDraftProfileDto);
+    expect(result.sortOrder).toBe(2);
+    expect(typeof result.sortOrder).toBe('number');
+  });
+
+  it('rejects nullable sortOrder values', async () => {
+    await expect(transformProfile({ sortOrder: null })).rejects.toThrow();
+  });
+
+  it('rejects empty string sortOrder values', async () => {
+    await expect(transformProfile({ sortOrder: '' })).rejects.toThrow();
+  });
+
+  it('rejects negative sortOrder values', async () => {
+    await expect(transformProfile({ sortOrder: -1 })).rejects.toThrow();
   });
 });
 

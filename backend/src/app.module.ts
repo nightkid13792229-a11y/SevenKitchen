@@ -166,6 +166,7 @@ import { ProcurementSkuService } from './application/ingredient/procurement-sku.
 import { IngredientSuggestionsController } from './interfaces/controllers/ingredient-suggestions.controller';
 import { AiRecipeController } from './interfaces/controllers/ai-recipe.controller';
 import { KnowledgeBaseService } from './application/ai-recipe/knowledge-base.service';
+import { RecipeDesignSessionService } from './application/ai-recipe/recipe-design-session.service';
 import { EvidenceService } from './application/ai-recipe/evidence.service';
 import { NutritionAssessmentService } from './application/ai-recipe/nutrition-assessment.service';
 import { ConstraintSynthesisService } from './application/ai-recipe/constraint-synthesis.service';
@@ -629,7 +630,9 @@ validatePrismaConfig();
     EvidenceService,
     NutritionAssessmentService,
     ConstraintSynthesisService,
-    ...(isPrismaEnabled() ? [KnowledgeBaseService] : []),
+    ...(isPrismaEnabled()
+      ? [KnowledgeBaseService, RecipeDesignSessionService]
+      : []),
   ],
 })
 export class AppModule implements OnModuleInit {

@@ -440,4 +440,72 @@ describe('IngredientCreationService', () => {
     ).rejects.toThrow(BadRequestException);
     expect(prisma.ingredientCreationDraftProfile.update).not.toHaveBeenCalled();
   });
+
+  it('rejects reruns after the ingredient creation job is confirmed', async () => {
+    const prisma = createPrismaMock();
+    prisma.ingredientCreationJob.findUnique.mockResolvedValue({
+      id: 'job-1',
+      status: 'CONFIRMED',
+      createdBy: 'staff-1',
+      messages: [],
+      draft: null,
+    });
+    const agentService = {
+      runJob: jest.fn(),
+    };
+    const service = new IngredientCreationService(
+      prisma as any,
+      agentService as any,
+    );
+
+    await expect(
+      service.rerunDraft('job-1', { userId: 'admin-1', role: 'ADMIN' }),
+    ).rejects.toThrow(BadRequestException);
+    await expect(
+      service.rerunDraft('job-1', { userId: 'admin-1', role: 'ADMIN' }),
+    ).rejects.toThrow('已确认任务不能重新运行');
+    expect(agentService.runJob).not.toHaveBeenCalled();
+  });
+
+  it('rejects reruns with a clear error when the agent service is not registered', async () => {
+    const prisma = createPrismaMock();
+    prisma.ingredientCreationJob.findUnique.mockResolvedValue({
+      id: 'job-1',
+      status: 'DRAFTING',
+      createdBy: 'staff-1',
+      messages: [],
+      draft: null,
+    });
+    const service = new IngredientCreationService(prisma as any);
+
+    await expect(
+      service.rerunDraft('job-1', { userId: 'staff-1', role: 'STAFF' }),
+    ).rejects.toThrow('AI 新增食材 Agent 服务未注册');
+  });
+
+  it('reruns the draft through the registered agent service after permission checks', async () => {
+    const prisma = createPrismaMock();
+    prisma.ingredientCreationJob.findUnique.mockResolvedValue({
+      id: 'job-1',
+      status: 'DRAFTING',
+      createdBy: 'staff-1',
+      messages: [],
+      draft: null,
+    });
+    const agentService = {
+      runJob: jest.fn().mockResolvedValue({ id: 'draft-1' }),
+    };
+    const service = new IngredientCreationService(
+      prisma as any,
+      agentService as any,
+    );
+
+    const result = await service.rerunDraft('job-1', {
+      userId: 'staff-1',
+      role: 'STAFF',
+    });
+
+    expect(agentService.runJob).toHaveBeenCalledWith('job-1');
+    expect(result).toEqual({ id: 'draft-1' });
+  });
 });

@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
@@ -13,6 +14,7 @@ import type {
   UpdateIngredientCreationDraftInput,
   UpdateIngredientCreationDraftProfileInput,
 } from './ingredient-creation.types';
+import { IngredientCreationAgentService } from './ingredient-creation-agent.service';
 
 const PROFILE_ORDER_BY = [
   { role: 'asc' as const },
@@ -92,7 +94,11 @@ function assertHasPatch(data: object, message: string): void {
 
 @Injectable()
 export class IngredientCreationService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional()
+    private readonly agentService?: IngredientCreationAgentService,
+  ) {}
 
   async createJob(input: CreateIngredientCreationJobInput) {
     const requestText = trimRequired(input.requestText, '新增食材需求不能为空');
@@ -194,6 +200,18 @@ export class IngredientCreationService {
     });
 
     return this.getJobDetail(jobId, user);
+  }
+
+  async rerunDraft(jobId: string, user: IngredientCreationUserContext) {
+    const job = await this.getJobDetail(jobId, user);
+    if (job.status === 'CONFIRMED') {
+      throw new BadRequestException('已确认任务不能重新运行');
+    }
+    if (!this.agentService) {
+      throw new BadRequestException('AI 新增食材 Agent 服务未注册');
+    }
+
+    return this.agentService.runJob(jobId);
   }
 
   async updateDraft(

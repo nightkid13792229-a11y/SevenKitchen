@@ -32,9 +32,10 @@ describe('KnowledgeBaseService', () => {
   });
 
   it('returns active rule packages with active versions', async () => {
-    prisma.nutritionRulePackage.findMany.mockResolvedValue([
+    const mockPackages = [
       { code: 'WEIGHT_MANAGEMENT', versions: [{ version: 1 }] },
-    ]);
+    ];
+    prisma.nutritionRulePackage.findMany.mockResolvedValue(mockPackages);
     const service = new KnowledgeBaseService(prisma);
 
     const result = await service.listActiveRulePackages();
@@ -47,6 +48,6 @@ describe('KnowledgeBaseService', () => {
       },
       orderBy: { name: 'asc' },
     });
-    expect(result[0].code).toBe('WEIGHT_MANAGEMENT');
+    expect(result).toEqual(mockPackages);
   });
 });

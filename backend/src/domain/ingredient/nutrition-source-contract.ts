@@ -9,6 +9,7 @@ export type NutritionSourceKind =
 export type NutritionSourceCode =
   | 'USDA_FDC'
   | 'NZFCD_FOODFILES'
+  | 'TFDA_FOOD_NUTRITION_DATABASE'
   | 'CFCT'
   | 'CNF'
   | 'AUSNUT'
@@ -36,6 +37,12 @@ export const NUTRITION_SOURCE_DEFINITIONS = [
     sourceKind: 'FOOD_DATABASE',
     sourceCode: 'NZFCD_FOODFILES',
     sourceProvider: 'New Zealand Food Composition Database',
+  },
+  {
+    sourceKind: 'FOOD_DATABASE',
+    sourceCode: 'TFDA_FOOD_NUTRITION_DATABASE',
+    sourceProvider:
+      'Taiwan Food and Drug Administration Food Nutrition Database',
   },
   {
     sourceKind: 'FOOD_DATABASE',
@@ -121,6 +128,7 @@ export function normalizeLegacyNutritionSourceType(
   const sourceCodeByLegacyType: Record<string, NutritionSourceCode> = {
     USDA: 'USDA_FDC',
     NZFCD: 'NZFCD_FOODFILES',
+    TFDA: 'TFDA_FOOD_NUTRITION_DATABASE',
     CFCT: 'CFCT',
     SUPPLEMENT_LABEL: 'SUPPLEMENT_LABEL',
     LABEL: 'SUPPLEMENT_LABEL',

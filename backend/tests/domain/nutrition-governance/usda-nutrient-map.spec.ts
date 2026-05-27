@@ -79,7 +79,7 @@ describe('USDA nutrient mapping', () => {
     );
   });
 
-  it('keeps non-primary USDA vitamin E compounds as review-only source items', () => {
+  it('combines USDA tocopherol components into vitamin E activity when component rows are present', () => {
     const profile = mapUsdaNutrientsToNutritionProfile([
       {
         nutrient: {
@@ -98,6 +98,46 @@ describe('USDA nutrient mapping', () => {
         amount: 0.3,
       },
       {
+        nutrient: { id: 1127, name: 'Tocopherol, delta', unitName: 'mg' },
+        amount: 0.4,
+      },
+    ]);
+
+    expect(profile.vitamins.vitaminE).toBeCloseTo(1.659, 6);
+    expect(profile.meta.sourceForms?.['vitamins.vitaminE']).toMatchObject({
+      vitaminEForm: 'FEDIAF_TOCOPHEROL_ACTIVITY',
+      sourceCompound: 'tocopherol component activity',
+      originalUnit: 'mg',
+      canonicalUnit: 'IU',
+      alphaTocopherolMg: 1,
+      betaTocopherolMg: 0.2,
+      gammaTocopherolMg: 0.3,
+      deltaTocopherolMg: 0.4,
+      conversionFactorSource: 'FEDIAF_2025',
+    });
+    expect(profile.meta.conversionNotes?.['vitamins.vitaminE']).toContain(
+      'β/γ/δ 生育酚已按 FEDIAF 活性系数计入',
+    );
+    expect(profile.customItems.map((item) => item.name)).not.toEqual(
+      expect.arrayContaining([
+        'Tocopherol, beta',
+        'Tocopherol, gamma',
+        'Tocopherol, delta',
+      ]),
+    );
+  });
+
+  it('keeps non-tocopherol USDA vitamin E compounds as review-only source items', () => {
+    const profile = mapUsdaNutrientsToNutritionProfile([
+      {
+        nutrient: {
+          id: 1109,
+          name: 'Vitamin E (alpha-tocopherol)',
+          unitName: 'mg',
+        },
+        amount: 1,
+      },
+      {
         nutrient: { id: 1128, name: 'Tocotrienol, alpha', unitName: 'mg' },
         amount: 0.4,
       },
@@ -114,14 +154,6 @@ describe('USDA nutrient mapping', () => {
     expect(profile.vitamins.vitaminE).toBeCloseTo(1.49, 6);
     expect(profile.customItems).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          name: 'Tocopherol, beta',
-          value: 0.2,
-          unit: 'mg',
-          sourceNutrientId: 1125,
-          reviewCategory: 'USDA_VITAMIN_E_RELATED',
-          reviewStatus: 'NOT_COUNTED',
-        }),
         expect.objectContaining({
           name: 'Tocotrienol, alpha',
           value: 0.4,
@@ -205,11 +237,37 @@ describe('USDA nutrient mapping', () => {
     });
   });
 
-  it('keeps USDA vitamin A, D and K related forms visible without double-counting them', () => {
+  it('marks USDA vitamin A IU as a source-declared fallback when component rows are absent', () => {
     const profile = mapUsdaNutrientsToNutritionProfile([
       {
         nutrient: { id: 1104, name: 'Vitamin A, IU', unitName: 'IU' },
         amount: 1120,
+      },
+    ]);
+
+    expect(profile.vitamins.vitaminA).toBe(1120);
+    expect(profile.meta.sourceForms?.['vitamins.vitaminA']).toMatchObject({
+      sourceNutrientId: 1104,
+      sourceNutrientName: 'Vitamin A, IU',
+      originalValue: 1120,
+      originalUnit: 'IU',
+      canonicalValue: 1120,
+      canonicalUnit: 'IU',
+      vitaminAForm: 'SOURCE_DECLARED_IU',
+      sourceCompound: 'source-declared vitamin A activity',
+      conversionStatus: 'SOURCE_DECLARED_IU_FALLBACK',
+    });
+  });
+
+  it('uses FEDIAF dog vitamin A activity factors for USDA retinol and beta-carotene rows', () => {
+    const profile = mapUsdaNutrientsToNutritionProfile([
+      {
+        nutrient: { id: 1104, name: 'Vitamin A, IU', unitName: 'IU' },
+        amount: 1120,
+      },
+      {
+        nutrient: { id: 1105, name: 'Retinol', unitName: 'µg' },
+        amount: 30,
       },
       {
         nutrient: { id: 1106, name: 'Vitamin A, RAE', unitName: 'µg' },
@@ -237,14 +295,19 @@ describe('USDA nutrient mapping', () => {
       },
     ]);
 
-    expect(profile.vitamins.vitaminA).toBe(1120);
+    expect(profile.vitamins.vitaminA).toBeCloseTo(474.017, 3);
     expect(profile.vitamins.vitaminD).toBe(100);
     expect(profile.vitamins.vitaminK).toBe(41.6);
     expect(profile.meta.sourceForms?.['vitamins.vitaminA']).toMatchObject({
-      sourceNutrientName: 'Vitamin A, IU',
-      sourceCompound: 'USDA vitamin A activity',
-      originalUnit: 'IU',
+      sourceNutrientId: 'USDA:1105+1107',
+      sourceNutrientName: 'Vitamin A activity from retinol and beta-carotene',
+      sourceCompound: 'retinol + beta-carotene',
+      vitaminAForm: 'FEDIAF_DOG_RETINOL_BETA_CAROTENE_ACTIVITY',
+      originalUnit: 'µg',
       canonicalUnit: 'IU',
+      conversionFactorSource: 'FEDIAF_2025_TABLE_VII_14',
+      retinolUgPerIu: 0.3,
+      betaCaroteneIuPerMg: 833,
     });
     expect(profile.meta.sourceForms?.['vitamins.vitaminD']).toMatchObject({
       sourceNutrientName: 'Vitamin D (D2 + D3)',
@@ -261,12 +324,6 @@ describe('USDA nutrient mapping', () => {
           reviewStatus: 'NOT_COUNTED',
         }),
         expect.objectContaining({
-          name: 'Carotene, beta',
-          canonicalFieldPath: 'vitamins.vitaminA',
-          reviewCategory: 'USDA_VITAMIN_A_RELATED',
-          reviewStatus: 'NOT_COUNTED',
-        }),
-        expect.objectContaining({
           name: 'Vitamin D3 (cholecalciferol)',
           canonicalFieldPath: 'vitamins.vitaminD',
           reviewCategory: 'USDA_VITAMIN_D_RELATED',
@@ -277,6 +334,18 @@ describe('USDA nutrient mapping', () => {
           canonicalFieldPath: 'vitamins.vitaminK',
           reviewCategory: 'USDA_VITAMIN_K_RELATED',
           reviewStatus: 'NOT_COUNTED',
+        }),
+      ]),
+    );
+    expect(profile.customItems).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'Retinol',
+          canonicalFieldPath: 'vitamins.vitaminA',
+        }),
+        expect.objectContaining({
+          name: 'Carotene, beta',
+          canonicalFieldPath: 'vitamins.vitaminA',
         }),
       ]),
     );

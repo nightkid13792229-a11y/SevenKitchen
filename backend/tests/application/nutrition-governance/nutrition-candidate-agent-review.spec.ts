@@ -1,6 +1,8 @@
 import { NutritionGovernanceService } from 'src/application/nutrition-governance/nutrition-governance.service';
 
 describe('NutritionGovernanceService Agent review', () => {
+  const originalUsdaLocalDataDir = process.env.USDA_LOCAL_DATA_DIR;
+
   const mockPrisma = {
     ingredient: {
       findUnique: jest.fn(),
@@ -29,6 +31,8 @@ describe('NutritionGovernanceService Agent review', () => {
 
   beforeEach(() => {
     jest.resetAllMocks();
+    process.env.USDA_LOCAL_DATA_DIR =
+      '/tmp/sevenkitchen-missing-usda-local-data-for-agent-review-tests';
     mockPrisma.nutritionSourceRecord.findUnique.mockResolvedValue(null);
     mockPrisma.nutritionSourceRecord.update.mockImplementation(
       async ({ where, data }) => ({ id: where.id, ...data }),
@@ -38,6 +42,14 @@ describe('NutritionGovernanceService Agent review', () => {
       undefined,
       reviewProvider as any,
     );
+  });
+
+  afterEach(() => {
+    if (originalUsdaLocalDataDir === undefined) {
+      delete process.env.USDA_LOCAL_DATA_DIR;
+    } else {
+      process.env.USDA_LOCAL_DATA_DIR = originalUsdaLocalDataDir;
+    }
   });
 
   it('runs Agent review, evaluates hard gates, and caches review metadata', async () => {

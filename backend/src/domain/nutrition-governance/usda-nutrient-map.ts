@@ -59,10 +59,11 @@ export const USDA_NUTRIENT_MAP: readonly UsdaNutrientMapping[] = [
   usdaField(1104, 'vitamins', 'vitaminA', {
     sourceUnit: 'IU',
     conversionNote:
-      'USDA Vitamin A, IU is already stored as vitamin A activity; related RAE/retinoid/carotenoid rows are retained for review.',
+      'USDA Vitamin A, IU is kept as a fallback source value; when USDA retinol or beta-carotene component rows are available, the field is recalculated with FEDIAF 2025 dog vitamin A activity factors.',
     sourceFormMetadata: {
-      sourceCompound: 'USDA vitamin A activity',
-      vitaminAForm: 'USDA_VITAMIN_A_IU',
+      sourceCompound: 'source-declared vitamin A activity',
+      vitaminAForm: 'SOURCE_DECLARED_IU',
+      conversionStatus: 'SOURCE_DECLARED_IU_FALLBACK',
     },
   }),
   usdaField(1110, 'vitamins', 'vitaminD', {

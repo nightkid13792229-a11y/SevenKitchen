@@ -300,9 +300,9 @@ const EXACT_SEARCH_PLANS: ReadonlyArray<{
   },
   { names: ['紫甘蓝'], raw: ['cabbage red raw'], cooked: ['cabbage red cooked'] },
   {
-    names: ['紫薯', '红薯'],
+    names: ['红薯'],
     raw: ['sweet potato raw'],
-    cooked: ['sweet potato cooked'],
+    cooked: ['sweet potato cooked boiled without skin'],
   },
   {
     names: ['红小豆'],
@@ -452,15 +452,14 @@ const EXACT_SEARCH_PLANS: ReadonlyArray<{
   { names: ['鸭蛋'], raw: ['egg duck whole raw'], cooked: ['egg duck whole cooked'] },
   { names: ['鹅肝'], raw: ['goose liver raw'], cooked: ['goose liver cooked'] },
   {
-    names: ['鹅胸肉'],
+    names: ['鹅肉'],
     raw: ['goose domesticated meat only raw'],
-    cooked: ['goose domesticated meat only cooked'],
   },
   { names: ['鹌鹑蛋'], raw: ['egg quail whole raw'], cooked: ['egg quail whole cooked'] },
   {
-    names: ['鹿腿肉'],
+    names: ['鹿肉'],
     raw: ['game meat deer raw'],
-    cooked: ['game meat deer cooked'],
+    cooked: ['game meat deer shoulder clod cooked braised'],
   },
   {
     names: ['黄瓜'],
@@ -1043,6 +1042,19 @@ function getRejectReason({
   if (['红薯', '紫薯'].includes(normalizedName)) {
     if (!description.includes('sweet potato') || description.includes('leaves')) {
       return 'SWEET_POTATO_REQUIRED';
+    }
+  }
+
+  if (
+    normalizedName === '红薯' &&
+    plan.state === 'COOKED' &&
+    searchTerm.includes('boiled without skin')
+  ) {
+    if (!description.includes('boiled') || !description.includes('without skin')) {
+      return 'BOILED_SKINLESS_SWEET_POTATO_REQUIRED';
+    }
+    if (/\b(baked|roasted)\b/u.test(description)) {
+      return 'BAKED_SWEET_POTATO_NOT_DEFAULT_LIGHT_COOKED';
     }
   }
 

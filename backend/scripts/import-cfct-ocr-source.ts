@@ -21,6 +21,7 @@ type CfctQualityFlag =
   | 'MISSING_FOOD_CODE'
   | 'NOT_ENOUGH_NUMERIC_CELLS'
   | 'CONTINUATION_INCOMPLETE'
+  | 'INFERRED_CONTINUATION_HEADER'
   | 'MISSING_PRIMARY_ROW'
   | 'WATER_OUT_OF_RANGE'
   | 'NEGATIVE_NUTRIENT'
@@ -273,7 +274,14 @@ export function parseCfctContinuationOcrLine({
     return null;
   }
 
-  if (looksLikeCfctContinuationPage(page.fullText)) {
+  const hasStandardContinuationHeader = looksLikeCfctContinuationPage(
+    page.fullText,
+  );
+  const hasInferredContinuationHeader =
+    !hasStandardContinuationHeader &&
+    looksLikeCfctInferredContinuationPage(page.fullText);
+
+  if (hasStandardContinuationHeader || hasInferredContinuationHeader) {
     const parsedLine = parseCodeNamedNutrientLine(normalizedLine, {
       allowLeadingText: true,
     });
@@ -311,6 +319,9 @@ export function parseCfctContinuationOcrLine({
       numericCellCount: numericValues.length,
       ocrConfidence: confidence,
     });
+    if (hasInferredContinuationHeader) {
+      qualityFlags.push('INFERRED_CONTINUATION_HEADER');
+    }
 
     return createContinuationRow({
       parsedLine,
@@ -412,6 +423,24 @@ function parseCfctSpecialContinuationOcrLine({
       qualityFlags: validateSpecialCfctRow({
         foodName: parsedLine.foodName,
         nutrients,
+        numericCellCount: parsedLine.numericValues.length,
+        ocrConfidence: confidence,
+        minNumericCells: 10,
+      }),
+    });
+  }
+
+  if (looksLikeCfctFattyAcidDetailPage(page.fullText)) {
+    return createContinuationRow({
+      parsedLine,
+      page,
+      line,
+      lineIndex,
+      confidence,
+      nutrients: {},
+      qualityFlags: validateSpecialCfctRow({
+        foodName: parsedLine.foodName,
+        nutrients: {},
         numericCellCount: parsedLine.numericValues.length,
         ocrConfidence: confidence,
         minNumericCells: 10,
@@ -1598,6 +1627,18 @@ function looksLikeCfctContinuationPage(fullText: string): boolean {
   );
 }
 
+function looksLikeCfctInferredContinuationPage(fullText: string): boolean {
+  const text = normalizeOcrLine(fullText);
+  return (
+    /食物[编編繃]?码|Food code/iu.test(text) &&
+    /食物名称|Food name/iu.test(text) &&
+    /(?:^|\s)(?:铜|Cu)(?:\s|$)/iu.test(text) &&
+    /(?:^|\s)(?:锰|Mn)(?:\s|$)/iu.test(text) &&
+    /(?:备注|Remark)/iu.test(text) &&
+    !looksLikeCfctMacroVitaminPage(text)
+  );
+}
+
 function looksLikeCfctAminoAcidFirstPage(fullText: string): boolean {
   const text = normalizeOcrLine(fullText);
   return (
@@ -1622,9 +1663,26 @@ function looksLikeCfctFattyAcidTotalsPage(fullText: string): boolean {
   const text = normalizeOcrLine(fullText);
   return (
     /脂肪酸|Fatty acid/iu.test(text) &&
+    /脂肪|(?:\bFat\b)/iu.test(text) &&
+    /(?:脂肪酸\s*(?:Fatty acid|Total)|\bTotal\b)/iu.test(text) &&
     /饱和|Saturated/iu.test(text) &&
-    /单不饱和|Monounsaturated/iu.test(text) &&
-    /多不饱和|Polyunsaturated/iu.test(text)
+    /(?:单不饱和|MUFA|Monounsaturated)/iu.test(text) &&
+    /(?:多不饱和|PUFA|Polyunsaturated)/iu.test(text) &&
+    /(?:未知|Un[_\s-]?k|Unknown)/iu.test(text) &&
+    !looksLikeCfctFattyAcidDetailPage(text)
+  );
+}
+
+function looksLikeCfctFattyAcidDetailPage(fullText: string): boolean {
+  const text = normalizeOcrLine(fullText);
+  return (
+    /脂肪酸|Fatty acid/iu.test(text) &&
+    /(?:单不饱和脂肪酸\s*\/\s*总脂肪酸|Monounsaturated)/iu.test(text) &&
+    /(?:多不饱和脂肪酸\s*\/\s*总脂肪酸|Polyunsaturated)/iu.test(text) &&
+    /\b14:1\b/iu.test(text) &&
+    /\b18:1\b/iu.test(text) &&
+    /\b18:2\b/iu.test(text) &&
+    /\b18:3\b/iu.test(text)
   );
 }
 
@@ -1907,16 +1965,22 @@ function gToMg(value: number | undefined): number | undefined {
   return roundNumber(value * 1000, 4);
 }
 
+function normalizeCfctNumericToken(token: string): string {
+  return token.replace(/[|｜]/gu, '').trim();
+}
+
 function isCfctNumericToken(token: string): boolean {
-  return /^[-+]?\d+(?:[.,]\d+)?$/u.test(token) || /^Tr$/iu.test(token);
+  const normalized = normalizeCfctNumericToken(token);
+  return /^[-+]?\d+(?:[.,]\d+)?$/u.test(normalized) || /^(?:Tr|T)$/iu.test(normalized);
 }
 
 function parseCfctNumericToken(token: string): number | null {
-  if (/^Tr$/iu.test(token)) {
+  const normalized = normalizeCfctNumericToken(token);
+  if (/^(?:Tr|T)$/iu.test(normalized)) {
     return 0;
   }
 
-  const value = Number(token.replace(',', '.'));
+  const value = Number(normalized.replace(',', '.'));
   return Number.isFinite(value) ? value : null;
 }
 

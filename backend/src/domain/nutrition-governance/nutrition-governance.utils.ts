@@ -8,8 +8,32 @@ import type {
   NutritionMatchReason,
 } from './nutrition-governance.types';
 import { USDA_NUTRIENT_MAP } from './usda-nutrient-map';
+import {
+  buildVitaminASourceFormMetadata,
+  calculateVitaminAActivityIu,
+} from '../ingredient/vitamin-a-conversion';
+import {
+  buildVitaminESourceFormMetadata,
+  calculateVitaminEActivityIu,
+} from '../ingredient/vitamin-e-conversion';
 
 const USDA_SOURCE_PROVIDER = 'USDA FoodData Central';
+const USDA_VITAMIN_A_RETINOL_ID = 1105;
+const USDA_VITAMIN_A_BETA_CAROTENE_ID = 1107;
+const USDA_VITAMIN_A_COMPONENT_IDS = new Set([
+  USDA_VITAMIN_A_RETINOL_ID,
+  USDA_VITAMIN_A_BETA_CAROTENE_ID,
+]);
+const USDA_VITAMIN_E_ALPHA_TOCOPHEROL_ID = 1109;
+const USDA_VITAMIN_E_BETA_TOCOPHEROL_ID = 1125;
+const USDA_VITAMIN_E_GAMMA_TOCOPHEROL_ID = 1126;
+const USDA_VITAMIN_E_DELTA_TOCOPHEROL_ID = 1127;
+const USDA_VITAMIN_E_TOCOPHEROL_IDS = new Set([
+  USDA_VITAMIN_E_ALPHA_TOCOPHEROL_ID,
+  USDA_VITAMIN_E_BETA_TOCOPHEROL_ID,
+  USDA_VITAMIN_E_GAMMA_TOCOPHEROL_ID,
+  USDA_VITAMIN_E_DELTA_TOCOPHEROL_ID,
+]);
 
 const CHINESE_TO_ENGLISH_FOOD_ALIASES: ReadonlyArray<{
   zh: string;
@@ -116,6 +140,10 @@ export function getSourcePriority(
       return 1;
     case 'NZFCD':
       return 2;
+    case 'NEVO':
+      return 3;
+    case 'TFDA':
+      return 3;
     case 'CFCT':
       return 3;
     case 'MANUAL':
@@ -218,6 +246,13 @@ export function scoreIngredientSourceNameMatch(params: {
       code: 'SOURCE_PRIORITY',
       label: '新西兰食物成分数据库来源',
       scoreDelta: 0.12,
+    });
+  } else if (params.sourceType === 'TFDA') {
+    score += 0.1;
+    reasons.push({
+      code: 'SOURCE_PRIORITY',
+      label: '台湾食品营养成分资料库来源',
+      scoreDelta: 0.1,
     });
   } else if (params.sourceType === 'CFCT') {
     score += 0.1;
@@ -405,7 +440,11 @@ export function mapUsdaNutrientsToNutritionProfile(
         amount,
         rawBasisType: profile.meta.rawBasisType,
       });
-      if (reviewOnlyItem) {
+      if (
+        reviewOnlyItem &&
+        !USDA_VITAMIN_E_TOCOPHEROL_IDS.has(nutrientId) &&
+        !USDA_VITAMIN_A_COMPONENT_IDS.has(nutrientId)
+      ) {
         profile.customItems.push(reviewOnlyItem);
       }
       continue;
@@ -441,7 +480,130 @@ export function mapUsdaNutrientsToNutritionProfile(
     }
   }
 
+  applyUsdaVitaminAActivity(profile, nutrients);
+  applyUsdaVitaminEActivity(profile, nutrients);
+
   return profile;
+}
+
+function findUsdaAmount(
+  nutrients: Array<{
+    nutrient?: { id?: number; name?: string; unitName?: string };
+    amount?: number;
+  }>,
+  nutrientId: number,
+): number | null {
+  const nutrient = nutrients.find((item) => item.nutrient?.id === nutrientId);
+  const amount = nutrient?.amount;
+  return typeof amount === 'number' && Number.isFinite(amount) ? amount : null;
+}
+
+function applyUsdaVitaminAActivity(
+  profile: NutritionProfileV2,
+  nutrients: Array<{
+    nutrient?: { id?: number; name?: string; unitName?: string };
+    amount?: number;
+  }>,
+) {
+  const retinolUg = findUsdaAmount(nutrients, USDA_VITAMIN_A_RETINOL_ID);
+  const betaCaroteneUg = findUsdaAmount(
+    nutrients,
+    USDA_VITAMIN_A_BETA_CAROTENE_ID,
+  );
+  const calculation = calculateVitaminAActivityIu({
+    retinolUg,
+    betaCaroteneUg,
+  });
+  if (!calculation) {
+    return;
+  }
+  const hasRetinol = retinolUg !== null;
+  const hasBetaCarotene = betaCaroteneUg !== null;
+
+  profile.vitamins.vitaminA = calculation.valueIu;
+  profile.meta.sourceForms ??= {};
+  profile.meta.conversionNotes ??= {};
+  profile.meta.sourceForms['vitamins.vitaminA'] = {
+    sourceNutrientId:
+      hasRetinol && hasBetaCarotene
+        ? 'USDA:1105+1107'
+        : hasRetinol
+          ? USDA_VITAMIN_A_RETINOL_ID
+          : USDA_VITAMIN_A_BETA_CAROTENE_ID,
+    sourceNutrientName:
+      hasRetinol && hasBetaCarotene
+        ? 'Vitamin A activity from retinol and beta-carotene'
+        : hasRetinol
+          ? 'Retinol'
+          : 'Carotene, beta',
+    originalValue:
+      hasRetinol && hasBetaCarotene
+        ? null
+        : hasRetinol
+          ? retinolUg
+          : betaCaroteneUg,
+    originalUnit: 'µg',
+    canonicalValue: calculation.valueIu,
+    canonicalUnit: 'IU',
+    basisType: profile.meta.rawBasisType,
+    ...buildVitaminASourceFormMetadata(calculation),
+  };
+  profile.meta.conversionNotes['vitamins.vitaminA'] =
+    `${calculation.note} USDA Vitamin A, IU is used only when component rows are unavailable.`;
+}
+
+function applyUsdaVitaminEActivity(
+  profile: NutritionProfileV2,
+  nutrients: Array<{
+    nutrient?: { id?: number; name?: string; unitName?: string };
+    amount?: number;
+  }>,
+) {
+  const calculation = calculateVitaminEActivityIu({
+    alphaTocopherolMg: findUsdaAmount(
+      nutrients,
+      USDA_VITAMIN_E_ALPHA_TOCOPHEROL_ID,
+    ),
+    betaTocopherolMg: findUsdaAmount(
+      nutrients,
+      USDA_VITAMIN_E_BETA_TOCOPHEROL_ID,
+    ),
+    gammaTocopherolMg: findUsdaAmount(
+      nutrients,
+      USDA_VITAMIN_E_GAMMA_TOCOPHEROL_ID,
+    ),
+    deltaTocopherolMg: findUsdaAmount(
+      nutrients,
+      USDA_VITAMIN_E_DELTA_TOCOPHEROL_ID,
+    ),
+  });
+  if (!calculation) {
+    return;
+  }
+
+  profile.vitamins.vitaminE = calculation.valueIu;
+  profile.meta.sourceForms ??= {};
+  profile.meta.conversionNotes ??= {};
+  profile.meta.sourceForms['vitamins.vitaminE'] = {
+    sourceNutrientId:
+      calculation.status === 'ALPHA_ONLY_LOWER_BOUND'
+        ? USDA_VITAMIN_E_ALPHA_TOCOPHEROL_ID
+        : 'USDA:1109+1125+1126+1127',
+    sourceNutrientName:
+      calculation.status === 'ALPHA_ONLY_LOWER_BOUND'
+        ? 'Vitamin E (alpha-tocopherol)'
+        : 'Vitamin E tocopherol component activity',
+    originalValue:
+      calculation.status === 'ALPHA_ONLY_LOWER_BOUND'
+        ? findUsdaAmount(nutrients, USDA_VITAMIN_E_ALPHA_TOCOPHEROL_ID)
+        : null,
+    originalUnit: 'mg',
+    canonicalValue: calculation.valueIu,
+    canonicalUnit: 'IU',
+    basisType: profile.meta.rawBasisType,
+    ...buildVitaminESourceFormMetadata(calculation),
+  };
+  profile.meta.conversionNotes['vitamins.vitaminE'] = calculation.note;
 }
 
 function buildUsdaReviewOnlyCustomItem(params: {
@@ -569,7 +731,7 @@ function buildUsdaVitaminEReviewOnlyNote(nutrientName: string): string {
   if (normalizedName === 'vitamin e, added') {
     return '未计入维生素 E 达标值：添加型维生素 E 需要确认产品标签中的具体来源形态后再换算。';
   }
-  return '未计入维生素 E 达标值：当前一阶段仅自动计入 alpha-tocopherol，其他 tocopherol 形态先保留供人工审核。';
+  return '未计入维生素 E 达标值：当前仅自动计入来源明确且有 FEDIAF 换算依据的生育酚形态；无法识别的形态先保留供人工审核。';
 }
 
 function buildUsdaVitaminAReviewOnlyNote(nutrientName: string): string {
@@ -578,9 +740,9 @@ function buildUsdaVitaminAReviewOnlyNote(nutrientName: string): string {
     normalizedName.includes('carotene') ||
     normalizedName.includes('cryptoxanthin')
   ) {
-    return '未计入维生素 A 主字段：类胡萝卜素需要按犬可利用活性另行确认，当前仅保留来源项供审核。';
+    return '未计入维生素 A 主字段：当前仅自动计入视黄醇与 β-胡萝卜素；其他类胡萝卜素尚无本系统确认的犬用活性换算依据，先保留来源项供审核。';
   }
-  return '未计入维生素 A 主字段：当前主字段采用 USDA Vitamin A, IU；RAE/视黄醇等来源项保留用于追溯和人工审核。';
+  return '未计入维生素 A 主字段：主字段优先采用视黄醇与 β-胡萝卜素按 FEDIAF 2025 犬用活性换算；不可拆分的 RAE/RE 来源项仅保留用于追溯和人工审核。';
 }
 
 function buildUsdaVitaminDReviewOnlyNote(nutrientName: string): string {

@@ -6,6 +6,8 @@ import type {
 export type NutritionGovernanceSourceType =
   | 'USDA'
   | 'NZFCD'
+  | 'NEVO'
+  | 'TFDA'
   | 'CFCT'
   | 'SUPPLEMENT_LABEL'
   | 'MANUAL';

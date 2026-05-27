@@ -5,6 +5,19 @@ import { Prisma, PrismaClient } from '@prisma/client';
 
 import { createEmptyNutritionProfile } from '../src/domain/ingredient/nutrition-profile.utils';
 import type { NutritionProfileV2 } from '../src/domain/ingredient/types';
+import {
+  buildVitaminASourceFormMetadata,
+  calculateVitaminAActivityIu,
+} from '../src/domain/ingredient/vitamin-a-conversion';
+import {
+  buildVitaminESourceFormMetadata,
+  calculateVitaminEActivityIu,
+} from '../src/domain/ingredient/vitamin-e-conversion';
+import {
+  buildCfctFattyAcidPercentMetadata,
+  calculateCfctFattyAcidValueFromPercent,
+  type CfctFattyAcidCanonicalUnit,
+} from '../src/domain/nutrition-governance/cfct-fatty-acid-conversion';
 import type { NutritionSourceInput } from '../src/domain/nutrition-governance/nutrition-governance.types';
 import { buildNutritionSourceKey } from '../src/domain/nutrition-governance/nutrition-governance.utils';
 
@@ -178,6 +191,206 @@ function assignNumericNutrients(profile: NutritionProfileV2, row: ReviewedCfctRo
   }
 }
 
+function finiteUnmappedValue(
+  unmappedNutrients: ReviewedCfctRow['unmappedNutrients'],
+  key: string,
+): number | null {
+  const value = unmappedNutrients?.[key];
+  return typeof value === 'number' && Number.isFinite(value) ? value : null;
+}
+
+function assignCfctVitaminAActivity(
+  profile: NutritionProfileV2,
+  row: ReviewedCfctRow,
+) {
+  const retinolUg =
+    finiteUnmappedValue(row.unmappedNutrients, 'cfctVitaminARetinolUg') ??
+    finiteUnmappedValue(row.unmappedNutrients, 'cfctRetinolUg');
+  const betaCaroteneUg =
+    finiteUnmappedValue(row.unmappedNutrients, 'cfctVitaminABetaCaroteneUg') ??
+    finiteUnmappedValue(row.unmappedNutrients, 'cfctCaroteneUg');
+  const calculation = calculateVitaminAActivityIu({
+    retinolUg,
+    betaCaroteneUg,
+  });
+  if (!calculation) {
+    return;
+  }
+
+  profile.vitamins.vitaminA = calculation.valueIu;
+  profile.meta.sourceForms ??= {};
+  profile.meta.conversionNotes ??= {};
+  profile.meta.sourceForms['vitamins.vitaminA'] = {
+    sourceNutrientId: 'CFCT_VITAMIN_A_COMPONENTS',
+    sourceNutrientName:
+      retinolUg !== null && betaCaroteneUg !== null
+        ? '视黄醇 / 胡萝卜素'
+        : retinolUg !== null
+          ? '视黄醇'
+          : '胡萝卜素',
+    originalValue: null,
+    originalUnit: 'µg/100g',
+    canonicalValue: calculation.valueIu,
+    canonicalUnit: 'IU',
+    basisType: profile.meta.rawBasisType,
+    ...buildVitaminASourceFormMetadata(calculation),
+    cfctCaroteneInterpretedAsBetaCarotene: betaCaroteneUg !== null,
+  };
+  profile.meta.conversionNotes['vitamins.vitaminA'] =
+    `${calculation.note} CFCT 胡萝卜素列按 β-胡萝卜素活性处理；如后续来源拆分 α/β 胡萝卜素，应优先使用 β-胡萝卜素分项。`;
+}
+
+function assignCfctVitaminEActivity(
+  profile: NutritionProfileV2,
+  row: ReviewedCfctRow,
+) {
+  const alphaMg = finiteUnmappedValue(
+    row.unmappedNutrients,
+    'cfctVitaminEAlphaTocopherolMg',
+  );
+  const betaGammaMg = finiteUnmappedValue(
+    row.unmappedNutrients,
+    'cfctVitaminEBetaGammaTocopherolMg',
+  );
+  const deltaMg = finiteUnmappedValue(
+    row.unmappedNutrients,
+    'cfctVitaminEDeltaTocopherolMg',
+  );
+  const totalAlphaEquivalentMg = finiteUnmappedValue(
+    row.unmappedNutrients,
+    'cfctVitaminETotalAlphaEquivalentMg',
+  );
+  const hasComponentRows =
+    alphaMg !== null || betaGammaMg !== null || deltaMg !== null;
+  const calculation = calculateVitaminEActivityIu(
+    hasComponentRows
+      ? {
+          alphaTocopherolMg: alphaMg,
+          betaGammaTocopherolMg: betaGammaMg,
+          deltaTocopherolMg: deltaMg,
+        }
+      : {
+          alphaTocopherolEquivalentMg: totalAlphaEquivalentMg,
+        },
+  );
+  if (!calculation) {
+    return;
+  }
+
+  profile.vitamins.vitaminE = calculation.valueIu;
+  profile.meta.sourceForms ??= {};
+  profile.meta.conversionNotes ??= {};
+  profile.meta.sourceForms['vitamins.vitaminE'] = {
+    sourceNutrientId: 'CFCT_VITAMIN_E_COMPONENTS',
+    sourceNutrientName: hasComponentRows
+      ? '维生素E / α-生育酚 / β+γ-生育酚 / δ-生育酚'
+      : '维生素E（α-生育酚当量）',
+    originalValue: totalAlphaEquivalentMg,
+    originalUnit: 'mg/100g',
+    canonicalValue: calculation.valueIu,
+    canonicalUnit: 'IU',
+    basisType: profile.meta.rawBasisType,
+    ...buildVitaminESourceFormMetadata(calculation),
+  };
+  profile.meta.conversionNotes['vitamins.vitaminE'] = calculation.note;
+}
+
+const CFCT_FATTY_ACID_PERCENT_FIELDS = [
+  {
+    profileKey: 'linoleicAcid',
+    unmappedKey: 'cfctLinoleicAcidPercent',
+    sourceNutrientId: 'CFCT_FA_18_2_PERCENT',
+    sourceNutrientName: '18:2 / 总脂肪酸',
+    canonicalUnit: 'g',
+  },
+  {
+    profileKey: 'alphaLinolenicAcid',
+    unmappedKey: 'cfctAlphaLinolenicAcidPercent',
+    sourceNutrientId: 'CFCT_FA_18_3_PERCENT',
+    sourceNutrientName: '18:3 / 总脂肪酸',
+    canonicalUnit: 'g',
+  },
+  {
+    profileKey: 'arachidonicAcid',
+    unmappedKey: 'cfctArachidonicAcidPercent',
+    sourceNutrientId: 'CFCT_FA_20_4_PERCENT',
+    sourceNutrientName: '20:4 / 总脂肪酸',
+    canonicalUnit: 'g',
+  },
+  {
+    profileKey: 'epa',
+    unmappedKey: 'cfctEpaPercent',
+    sourceNutrientId: 'CFCT_FA_20_5_PERCENT',
+    sourceNutrientName: '20:5 / 总脂肪酸',
+    canonicalUnit: 'mg',
+  },
+  {
+    profileKey: 'dpa',
+    unmappedKey: 'cfctDpaPercent',
+    sourceNutrientId: 'CFCT_FA_22_5_PERCENT',
+    sourceNutrientName: '22:5 / 总脂肪酸',
+    canonicalUnit: 'mg',
+  },
+  {
+    profileKey: 'dha',
+    unmappedKey: 'cfctDhaPercent',
+    sourceNutrientId: 'CFCT_FA_22_6_PERCENT',
+    sourceNutrientName: '22:6 / 总脂肪酸',
+    canonicalUnit: 'mg',
+  },
+] as const satisfies readonly {
+  profileKey: keyof NutritionProfileV2['fattyAcids'];
+  unmappedKey: string;
+  sourceNutrientId: string;
+  sourceNutrientName: string;
+  canonicalUnit: CfctFattyAcidCanonicalUnit;
+}[];
+
+function assignCfctFattyAcidPercentRows(
+  profile: NutritionProfileV2,
+  row: ReviewedCfctRow,
+) {
+  const totalFattyAcidsG = finiteUnmappedValue(
+    row.unmappedNutrients,
+    'cfctFattyAcidTotalG',
+  );
+  if (totalFattyAcidsG === null) {
+    return;
+  }
+
+  for (const field of CFCT_FATTY_ACID_PERCENT_FIELDS) {
+    const percent = finiteUnmappedValue(row.unmappedNutrients, field.unmappedKey);
+    if (percent === null) {
+      continue;
+    }
+    const value = calculateCfctFattyAcidValueFromPercent({
+      totalFattyAcidsG,
+      percentOfTotalFattyAcids: percent,
+      targetUnit: field.canonicalUnit,
+    });
+    if (value === null) {
+      continue;
+    }
+
+    const fieldPath = `fattyAcids.${field.profileKey}`;
+    profile.fattyAcids[field.profileKey] = value;
+    profile.meta.sourceForms ??= {};
+    profile.meta.conversionNotes ??= {};
+    profile.meta.sourceForms[fieldPath] = buildCfctFattyAcidPercentMetadata({
+      sourceNutrientId: field.sourceNutrientId,
+      sourceNutrientName: field.sourceNutrientName,
+      totalFattyAcidsG,
+      percentOfTotalFattyAcids: percent,
+      canonicalValue: value,
+      canonicalUnit: field.canonicalUnit,
+    });
+    profile.meta.conversionNotes[fieldPath] =
+      field.canonicalUnit === 'mg'
+        ? 'CFCT 脂肪酸组成表给出单项脂肪酸占总脂肪酸百分比；按 总脂肪酸 × 百分比 ÷ 100 × 1000 换算为 mg/100g 可食部。'
+        : 'CFCT 脂肪酸组成表给出单项脂肪酸占总脂肪酸百分比；按 总脂肪酸 × 百分比 ÷ 100 换算为 g/100g 可食部。';
+  }
+}
+
 export function mapCfctRowToSourceInput(
   row: ReviewedCfctRow,
 ): NutritionSourceInput {
@@ -190,6 +403,9 @@ export function mapCfctRowToSourceInput(
   profile.meta.sourceProvider = CFCT_SOURCE_PROVIDER;
   profile.meta.confidenceLevel = 'MEDIUM';
   assignNumericNutrients(profile, row);
+  assignCfctVitaminAActivity(profile, row);
+  assignCfctVitaminEActivity(profile, row);
+  assignCfctFattyAcidPercentRows(profile, row);
 
   return {
     sourceType: CFCT_SOURCE_TYPE,

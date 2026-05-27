@@ -232,7 +232,7 @@ describe('USDA raw/cooked nutrition profile importer matching', () => {
     expect(selected.map((item) => item.food.fdcId)).toEqual(['169118']);
   });
 
-  it('does not let food distribution notes push raw sweet potato below threshold', () => {
+  it('selects raw and boiled skinless sweet potato for red sweet potato', () => {
     const selected = selectUsdaProfileTargetsForIngredient({
       ingredientName: '红薯',
       foods: [
@@ -241,12 +241,13 @@ describe('USDA raw/cooked nutrition profile importer matching', () => {
           "Sweet potato, raw, unprepared (Includes foods for USDA's Food Distribution Program)",
         ),
         food('168483', 'Sweet potato, cooked, baked in skin, flesh, without salt'),
+        food('168484', 'Sweet potato, cooked, boiled, without skin'),
       ],
     });
 
     expect(selected.map((item) => item.food.fdcId)).toEqual([
       '168482',
-      '168483',
+      '168484',
     ]);
   });
 

@@ -198,9 +198,9 @@ const USDA_SEARCH_TERM_ALIASES: ReadonlyArray<{
   { names: ['鸭胸'], terms: ['duck domesticated meat only raw'] },
   { names: ['鸭蛋'], terms: ['duck egg'] },
   { names: ['鹅肝'], terms: ['goose liver raw'] },
-  { names: ['鹅胸肉'], terms: ['goose meat raw'] },
+  { names: ['鹅肉'], terms: ['goose meat raw'] },
   { names: ['鹌鹑蛋'], terms: ['quail egg'] },
-  { names: ['鹿腿肉'], terms: ['venison raw'] },
+  { names: ['鹿肉'], terms: ['venison raw'] },
   { names: ['黄瓜'], terms: ['cucumber raw'] },
   { names: ['黑木耳'], terms: ['cloud ears'] },
 ];

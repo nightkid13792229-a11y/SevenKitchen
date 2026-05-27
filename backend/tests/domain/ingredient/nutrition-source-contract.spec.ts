@@ -26,6 +26,14 @@ describe('nutrition source contract', () => {
       sourceCode: 'NZFCD_FOODFILES',
       sourceProvider: 'New Zealand Food Composition Database',
     });
+    expect(
+      getNutritionSourceDefinition('TFDA_FOOD_NUTRITION_DATABASE'),
+    ).toMatchObject({
+      sourceKind: 'FOOD_DATABASE',
+      sourceCode: 'TFDA_FOOD_NUTRITION_DATABASE',
+      sourceProvider:
+        'Taiwan Food and Drug Administration Food Nutrition Database',
+    });
     expect(getNutritionSourceDefinition('CNF')).toMatchObject({
       sourceKind: 'FOOD_DATABASE',
       sourceCode: 'CNF',
@@ -68,6 +76,12 @@ describe('nutrition source contract', () => {
       sourceKind: 'FOOD_DATABASE',
       sourceCode: 'NZFCD_FOODFILES',
       sourceProvider: 'New Zealand Food Composition Database',
+    });
+    expect(normalizeLegacyNutritionSourceType('TFDA')).toEqual({
+      sourceKind: 'FOOD_DATABASE',
+      sourceCode: 'TFDA_FOOD_NUTRITION_DATABASE',
+      sourceProvider:
+        'Taiwan Food and Drug Administration Food Nutrition Database',
     });
   });
 });

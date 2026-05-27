@@ -2,7 +2,6 @@ import { mkdir, writeFile } from 'fs/promises';
 import { dirname, resolve } from 'path';
 import {
   IngredientType,
-  NutritionGovernanceSourceType,
   PrismaClient,
 } from '@prisma/client';
 import { config as loadEnv } from 'dotenv';
@@ -55,8 +54,11 @@ interface ParsedArgs {
   summaryPath: string;
 }
 
-const FOOD_SOURCE_TYPES = new Set<NutritionGovernanceSourceType>([
+const FOOD_SOURCE_TYPES = new Set<string>([
   'USDA',
+  'NZFCD',
+  'NEVO',
+  'TFDA',
   'CFCT',
 ]);
 
@@ -244,7 +246,7 @@ function getContractOptions(
   const isFoodIngredient = input.ingredientType === IngredientType.FOOD;
   const isFoodSource =
     input.sourceType &&
-    FOOD_SOURCE_TYPES.has(input.sourceType as NutritionGovernanceSourceType);
+    FOOD_SOURCE_TYPES.has(input.sourceType);
 
   if (isFoodIngredient || isFoodSource) {
     return {

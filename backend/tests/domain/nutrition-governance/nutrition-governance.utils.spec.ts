@@ -15,9 +15,10 @@ describe('nutrition governance utilities', () => {
     );
   });
 
-  it('prioritizes USDA before NZFCD before CFCT before manual sources', () => {
+  it('prioritizes official food databases before manual sources', () => {
     expect(getSourcePriority('USDA')).toBe(1);
     expect(getSourcePriority('NZFCD')).toBe(2);
+    expect(getSourcePriority('TFDA')).toBe(3);
     expect(getSourcePriority('CFCT')).toBe(3);
     expect(getSourcePriority('MANUAL')).toBe(4);
     expect(getSourcePriority('SUPPLEMENT_LABEL')).toBe(5);
@@ -93,7 +94,8 @@ describe('nutrition governance utilities', () => {
   it('keeps cabbage variants recallable while still preferring the requested variant', () => {
     const common = scoreIngredientSourceNameMatch({
       ingredientName: '卷心菜',
-      sourceFoodName: 'Cabbage, common (danish, domestic, and pointed types), stored, raw',
+      sourceFoodName:
+        'Cabbage, common (danish, domestic, and pointed types), stored, raw',
       sourceType: 'USDA',
     });
     const chinese = scoreIngredientSourceNameMatch({
@@ -195,14 +197,21 @@ describe('nutrition governance utilities', () => {
 
   it('keeps USDA folate, leucine, and saturated fat ids in their correct fields', () => {
     const profile = mapUsdaNutrientsToNutritionProfile([
-      { nutrient: { id: 1177, name: 'Folate, total', unitName: 'UG' }, amount: 47 },
+      {
+        nutrient: { id: 1177, name: 'Folate, total', unitName: 'UG' },
+        amount: 47,
+      },
       { nutrient: { id: 1213, name: 'Leucine', unitName: 'G' }, amount: 1.09 },
       {
         nutrient: { id: 1257, name: 'Fatty acids, total trans', unitName: 'G' },
         amount: 0.038,
       },
       {
-        nutrient: { id: 1258, name: 'Fatty acids, total saturated', unitName: 'G' },
+        nutrient: {
+          id: 1258,
+          name: 'Fatty acids, total saturated',
+          unitName: 'G',
+        },
         amount: 3.13,
       },
     ]);
@@ -214,9 +223,16 @@ describe('nutrition governance utilities', () => {
 
   it('converts USDA vitamin D and E source units into local IU fields', () => {
     const profile = mapUsdaNutrientsToNutritionProfile([
-      { nutrient: { id: 1114, name: 'Vitamin D (D2 + D3)', unitName: 'UG' }, amount: 2 },
       {
-        nutrient: { id: 1109, name: 'Vitamin E (alpha-tocopherol)', unitName: 'MG' },
+        nutrient: { id: 1114, name: 'Vitamin D (D2 + D3)', unitName: 'UG' },
+        amount: 2,
+      },
+      {
+        nutrient: {
+          id: 1109,
+          name: 'Vitamin E (alpha-tocopherol)',
+          unitName: 'MG',
+        },
         amount: 1.05,
       },
     ]);

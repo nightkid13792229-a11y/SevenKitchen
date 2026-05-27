@@ -1,7 +1,16 @@
 import type { NutritionFieldTab } from '../ingredient/nutrition-field-catalog';
 import { findNutritionField } from '../ingredient/nutrition-field-catalog';
 import { createEmptyNutritionProfile } from '../ingredient/nutrition-profile.utils';
-import { getVitaminEConversion } from '../ingredient/vitamin-e-conversion';
+import {
+  buildVitaminASourceFormMetadata,
+  calculateVitaminAActivityIu,
+  getVitaminAConversion,
+} from '../ingredient/vitamin-a-conversion';
+import {
+  buildVitaminESourceFormMetadata,
+  calculateVitaminEActivityIu,
+  getVitaminEConversion,
+} from '../ingredient/vitamin-e-conversion';
 import type { NutritionProfileV2 } from '../ingredient/types';
 
 export const NZFCD_SOURCE_PROVIDER = 'New Zealand Food Composition Database';
@@ -31,6 +40,10 @@ interface NzfcdNutrientMapping {
 }
 
 const NZFCD_VITAMIN_E_CONVERSION = getVitaminEConversion('D_ALPHA_TOCOPHEROL');
+const NZFCD_VITAMIN_A_EQUIVALENT_CONVERSION = getVitaminAConversion(
+  'SOURCE_RETINOL_ACTIVITY_EQUIVALENTS',
+);
+const NZFCD_COUNTED_VITAMIN_A_COMPONENT_CODES = new Set(['RETOL', 'CARTB']);
 
 const nzfcdField = (
   componentCode: string,
@@ -68,8 +81,18 @@ export const NZFCD_NUTRIENT_MAP: readonly NzfcdNutrientMapping[] = [
     fieldPriority: 20,
   }),
   nzfcdField('FIBTG', 'macros', 'fiber'),
-  nzfcdField('PSACNSS', 'macros', 'solubleFiber'),
-  nzfcdField('PSACNSI', 'macros', 'insolubleFiber'),
+  nzfcdField('FIBSOL', 'macros', 'solubleFiber', {
+    fieldPriority: 10,
+  }),
+  nzfcdField('PSACNSS', 'macros', 'solubleFiber', {
+    fieldPriority: 20,
+  }),
+  nzfcdField('FIBINS', 'macros', 'insolubleFiber', {
+    fieldPriority: 10,
+  }),
+  nzfcdField('PSACNSI', 'macros', 'insolubleFiber', {
+    fieldPriority: 20,
+  }),
   nzfcdField('CA', 'minerals', 'calcium'),
   nzfcdField('P', 'minerals', 'phosphorus'),
   nzfcdField('K', 'minerals', 'potassium'),
@@ -90,27 +113,43 @@ export const NZFCD_NUTRIENT_MAP: readonly NzfcdNutrientMapping[] = [
   nzfcdField('SE', 'minerals', 'selenium'),
   nzfcdField('ID', 'minerals', 'iodine'),
   nzfcdField('VITA_RAE', 'vitamins', 'vitaminA', {
-    amountMultiplier: 10 / 3,
+    amountMultiplier:
+      NZFCD_VITAMIN_A_EQUIVALENT_CONVERSION?.ugPerIu === undefined
+        ? 10 / 3
+        : 1 / NZFCD_VITAMIN_A_EQUIVALENT_CONVERSION.ugPerIu,
     fieldPriority: 10,
     conversionNote:
-      'NZFCD vitamin A RAE is stored as vitamin A activity; 1 µg RAE = 3.333 IU retinol activity for internal comparison.',
+      'NZFCD vitamin A RAE is used as a fallback only when retinol and beta-carotene component rows are absent; 1 µg retinol activity equivalent = 3.333 IU retinol activity.',
     sourceFormMetadata: {
       sourceCompound: 'Vitamin A, retinol activity equivalents',
-      vitaminAForm: 'RAE',
-      conversionFactor: 10 / 3,
+      vitaminAForm: 'SOURCE_RETINOL_ACTIVITY_EQUIVALENTS',
+      conversionStatus: 'SOURCE_EQUIVALENT_FALLBACK',
+      conversionFactor:
+        NZFCD_VITAMIN_A_EQUIVALENT_CONVERSION?.ugPerIu === undefined
+          ? 10 / 3
+          : 1 / NZFCD_VITAMIN_A_EQUIVALENT_CONVERSION.ugPerIu,
       conversionFactorUnit: 'IU_PER_UG_RAE',
+      conversionFactorSource: 'FEDIAF_2025_TABLE_VII_14',
     },
   }),
   nzfcdField('VITA', 'vitamins', 'vitaminA', {
-    amountMultiplier: 10 / 3,
+    amountMultiplier:
+      NZFCD_VITAMIN_A_EQUIVALENT_CONVERSION?.ugPerIu === undefined
+        ? 10 / 3
+        : 1 / NZFCD_VITAMIN_A_EQUIVALENT_CONVERSION.ugPerIu,
     fieldPriority: 20,
     conversionNote:
-      'NZFCD vitamin A retinol equivalents are used only when RAE is absent; 1 µg RE = 3.333 IU retinol activity.',
+      'NZFCD vitamin A retinol equivalents are used only when component rows and RAE are absent; 1 µg RE = 3.333 IU retinol activity.',
     sourceFormMetadata: {
       sourceCompound: 'Vitamin A, retinol equivalents',
-      vitaminAForm: 'RETINOL_EQUIVALENTS',
-      conversionFactor: 10 / 3,
+      vitaminAForm: 'SOURCE_RETINOL_ACTIVITY_EQUIVALENTS',
+      conversionStatus: 'SOURCE_EQUIVALENT_FALLBACK',
+      conversionFactor:
+        NZFCD_VITAMIN_A_EQUIVALENT_CONVERSION?.ugPerIu === undefined
+          ? 10 / 3
+          : 1 / NZFCD_VITAMIN_A_EQUIVALENT_CONVERSION.ugPerIu,
       conversionFactorUnit: 'IU_PER_UG_RE',
+      conversionFactorSource: 'FEDIAF_2025_TABLE_VII_14',
     },
   }),
   nzfcdField('VITD', 'vitamins', 'vitaminD', {
@@ -138,8 +177,9 @@ export const NZFCD_NUTRIENT_MAP: readonly NzfcdNutrientMapping[] = [
   }),
   nzfcdField('TOCPHA', 'vitamins', 'vitaminE', {
     amountMultiplier: NZFCD_VITAMIN_E_CONVERSION?.iuPerMg,
+    fieldPriority: 10,
     conversionNote:
-      'FEDIAF 2025 vitamin E activity: d-α-tocopherol 1 mg = 1.49 IU',
+      'FEDIAF 2025 vitamin E activity: d-α-tocopherol 1 mg = 1.49 IU；来源只给出 α-生育酚时作为保守下限，其他生育酚形态未计入。',
     sourceFormMetadata: NZFCD_VITAMIN_E_CONVERSION
       ? {
           vitaminEForm: NZFCD_VITAMIN_E_CONVERSION.form,
@@ -149,6 +189,20 @@ export const NZFCD_NUTRIENT_MAP: readonly NzfcdNutrientMapping[] = [
           conversionFactorSource: NZFCD_VITAMIN_E_CONVERSION.source,
         }
       : undefined,
+  }),
+  nzfcdField('VITE', 'vitamins', 'vitaminE', {
+    amountMultiplier: NZFCD_VITAMIN_E_CONVERSION?.iuPerMg,
+    fieldPriority: 20,
+    conversionNote:
+      '来源给出 α-生育酚当量，按活性当量换算为 IU；不额外估算或叠加其他生育酚形态。',
+    sourceFormMetadata: {
+      vitaminEForm: 'SOURCE_ALPHA_TOCOPHEROL_EQUIVALENT',
+      sourceCompound: 'source alpha-tocopherol equivalents',
+      conversionStatus: 'SOURCE_ALPHA_TOCOPHEROL_EQUIVALENT',
+      conversionFactor: NZFCD_VITAMIN_E_CONVERSION?.iuPerMg ?? 1.49,
+      conversionFactorUnit: 'IU_PER_MG',
+      conversionFactorSource: 'FEDIAF_2025',
+    },
   }),
   nzfcdField('THIA', 'vitamins', 'vitaminB1'),
   nzfcdField('RIBF', 'vitamins', 'vitaminB2'),
@@ -160,20 +214,9 @@ export const NZFCD_NUTRIENT_MAP: readonly NzfcdNutrientMapping[] = [
   nzfcdField('FASAT', 'fattyAcids', 'saturatedFattyAcids'),
   nzfcdField('FAMS', 'fattyAcids', 'monounsaturatedFattyAcids'),
   nzfcdField('FAPU', 'fattyAcids', 'polyunsaturatedFattyAcids'),
-  nzfcdField('F18D2N6', 'fattyAcids', 'linoleicAcid', {
-    amountMultiplier: 1000,
-    conversionNote:
-      'NZFCD linoleic acid is reported in g; internal LA is stored in mg.',
-  }),
-  nzfcdField('F18D3N3', 'fattyAcids', 'alphaLinolenicAcid', {
-    amountMultiplier: 1000,
-    conversionNote: 'NZFCD ALA is reported in g; internal ALA is stored in mg.',
-  }),
-  nzfcdField('F20D4N6', 'fattyAcids', 'arachidonicAcid', {
-    amountMultiplier: 1000,
-    conversionNote:
-      'NZFCD arachidonic acid is reported in g; internal AA is stored in mg.',
-  }),
+  nzfcdField('F18D2N6', 'fattyAcids', 'linoleicAcid'),
+  nzfcdField('F18D3N3', 'fattyAcids', 'alphaLinolenicAcid'),
+  nzfcdField('F20D4N6', 'fattyAcids', 'arachidonicAcid'),
   nzfcdField('F20D5N3', 'fattyAcids', 'epa', {
     amountMultiplier: 1000,
     conversionNote: 'NZFCD EPA is reported in g; internal EPA is stored in mg.',
@@ -235,7 +278,7 @@ const NZFCD_REVIEW_ONLY_CATEGORIES: Record<
   VITE: {
     canonicalFieldPath: 'vitamins.vitaminE',
     reviewCategory: 'NZFCD_VITAMIN_E_RELATED',
-    note: '维生素 E alpha-tocopherol equivalents 来源项保留供追溯；主字段优先采用 alpha-tocopherol。',
+    note: '维生素 E alpha-tocopherol equivalents 来源项保留供追溯；有 alpha-tocopherol 分项时优先采用分项，缺失时可作为活性当量 fallback。',
   },
 };
 
@@ -314,7 +357,130 @@ export function mapNzfcdComponentsToNutritionProfile(
     }
   }
 
+  applyNzfcdVitaminAActivity(profile, components);
+  applyNzfcdVitaminEActivity(profile, components);
+
   return profile;
+}
+
+function findNzfcdAmount(
+  components: NzfcdComponent[],
+  componentCode: string,
+): number | null {
+  const component = components.find(
+    (item) => item.component_code?.trim() === componentCode,
+  );
+  const amount = component?.num_value;
+  return typeof amount === 'number' && Number.isFinite(amount) ? amount : null;
+}
+
+function applyNzfcdVitaminAActivity(
+  profile: NutritionProfileV2,
+  components: NzfcdComponent[],
+) {
+  const retinolUg = findNzfcdAmount(components, 'RETOL');
+  const betaCaroteneUg = findNzfcdAmount(components, 'CARTB');
+  const calculation = calculateVitaminAActivityIu({
+    retinolUg,
+    betaCaroteneUg,
+  });
+  if (!calculation) {
+    return;
+  }
+
+  const hasRetinol = retinolUg !== null;
+  const hasBetaCarotene = betaCaroteneUg !== null;
+
+  profile.vitamins.vitaminA = calculation.valueIu;
+  profile.meta.sourceForms ??= {};
+  profile.meta.conversionNotes ??= {};
+  profile.meta.sourceForms['vitamins.vitaminA'] = {
+    sourceNutrientId:
+      hasRetinol && hasBetaCarotene
+        ? 'NZFCD:RETOL+CARTB'
+        : hasRetinol
+          ? 'RETOL'
+          : 'CARTB',
+    sourceNutrientName:
+      hasRetinol && hasBetaCarotene
+        ? 'Vitamin A activity from retinol and beta-carotene'
+        : hasRetinol
+          ? 'Retinol'
+          : 'Beta-carotene',
+    originalValue:
+      hasRetinol && hasBetaCarotene
+        ? null
+        : hasRetinol
+          ? retinolUg
+          : betaCaroteneUg,
+    originalUnit: 'µg/100g',
+    canonicalValue: calculation.valueIu,
+    canonicalUnit: findNutritionField('vitamins.vitaminA')?.unit ?? null,
+    basisType: profile.meta.rawBasisType,
+    ...buildVitaminASourceFormMetadata(calculation),
+  };
+  profile.meta.conversionNotes['vitamins.vitaminA'] =
+    `${calculation.note} NZFCD RAE/RE is used only when component rows are unavailable.`;
+}
+
+function applyNzfcdVitaminEActivity(
+  profile: NutritionProfileV2,
+  components: NzfcdComponent[],
+) {
+  const alphaTocopherolMg = findNzfcdAmount(components, 'TOCPHA');
+  const betaTocopherolMg = findNzfcdAmount(components, 'TOCPHB');
+  const gammaTocopherolMg = findNzfcdAmount(components, 'TOCPHG');
+  const deltaTocopherolMg = findNzfcdAmount(components, 'TOCPHD');
+  const hasSplitComponents =
+    alphaTocopherolMg !== null ||
+    betaTocopherolMg !== null ||
+    gammaTocopherolMg !== null ||
+    deltaTocopherolMg !== null;
+
+  const calculation = hasSplitComponents
+    ? calculateVitaminEActivityIu({
+        alphaTocopherolMg,
+        betaTocopherolMg,
+        gammaTocopherolMg,
+        deltaTocopherolMg,
+      })
+    : calculateVitaminEActivityIu({
+        alphaTocopherolEquivalentMg: findNzfcdAmount(components, 'VITE'),
+      });
+
+  if (!calculation) {
+    return;
+  }
+
+  profile.vitamins.vitaminE = calculation.valueIu;
+  profile.meta.sourceForms ??= {};
+  profile.meta.conversionNotes ??= {};
+  profile.meta.sourceForms['vitamins.vitaminE'] = {
+    sourceNutrientId:
+      calculation.status === 'SOURCE_ALPHA_TOCOPHEROL_EQUIVALENT'
+        ? 'VITE'
+        : calculation.status === 'ALPHA_ONLY_LOWER_BOUND'
+          ? 'TOCPHA'
+          : 'NZFCD:TOCPHA+TOCPHB+TOCPHG+TOCPHD',
+    sourceNutrientName:
+      calculation.status === 'SOURCE_ALPHA_TOCOPHEROL_EQUIVALENT'
+        ? 'Vitamin E, alpha-tocopherol equivalents'
+        : calculation.status === 'ALPHA_ONLY_LOWER_BOUND'
+          ? 'Alpha-tocopherol'
+          : 'Vitamin E tocopherol component activity',
+    originalValue:
+      calculation.status === 'SOURCE_ALPHA_TOCOPHEROL_EQUIVALENT'
+        ? findNzfcdAmount(components, 'VITE')
+        : calculation.status === 'ALPHA_ONLY_LOWER_BOUND'
+          ? alphaTocopherolMg
+          : null,
+    originalUnit: 'mg/100g',
+    canonicalValue: calculation.valueIu,
+    canonicalUnit: findNutritionField('vitamins.vitaminE')?.unit ?? null,
+    basisType: profile.meta.rawBasisType,
+    ...buildVitaminESourceFormMetadata(calculation),
+  };
+  profile.meta.conversionNotes['vitamins.vitaminE'] = calculation.note;
 }
 
 function buildNzfcdReviewOnlyCustomItem(params: {
@@ -328,6 +494,9 @@ function buildNzfcdReviewOnlyCustomItem(params: {
 
   const componentCode = params.component.component_code?.trim();
   if (!componentCode) {
+    return null;
+  }
+  if (NZFCD_COUNTED_VITAMIN_A_COMPONENT_CODES.has(componentCode)) {
     return null;
   }
 

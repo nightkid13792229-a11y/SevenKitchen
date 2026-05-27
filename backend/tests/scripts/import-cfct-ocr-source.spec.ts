@@ -300,6 +300,43 @@ describe('CFCT OCR source structuring', () => {
     );
   });
 
+  it('keeps mineral/vitamin continuation rows when OCR drops most continuation headers', () => {
+    const rows = buildCfctRowsFromOcrPages([
+      {
+        ...basePage,
+        page: 60,
+        fullText:
+          '食物编码 食物名称 食部 水分 能量 蛋白质 脂肪 碳水化合物 不溶性膳食纤维\n019008 薏米［薏仁米,苡米］ 100 11.2 361 1512 12.8 3.3 71.1 2.0 0 1.6 0 0.22 0.15',
+      },
+      {
+        ...basePage,
+        page: 61,
+        fullText:
+          '食物编码 食物名称 铜 锰 备注 Food code Food name Cu Mn Remark\n019010 019008 薏米［薏仁米,苡米］ 200 0 2.08 1.48 0.60 Tr 42 217 238 3.6 88 3.6 1.68 3.07 0.29 1.37',
+      },
+    ]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      foodCode: '019008',
+      foodName: '薏米［薏仁米,苡米］',
+      nutrients: {
+        calcium: 42,
+        phosphorus: 217,
+        potassium: 238,
+        sodium: 3.6,
+        magnesium: 88,
+        iron: 3.6,
+        zinc: 1.68,
+        selenium: 3.07,
+        copper: 0.29,
+        manganese: 1.37,
+      },
+      qualityFlags: ['INFERRED_CONTINUATION_HEADER'],
+      reviewStatus: 'NEEDS_REVIEW',
+    });
+  });
+
   it('merges CFCT amino acid table nutrients into the matching food code', () => {
     const rows = buildCfctRowsFromOcrPages([
       {
@@ -373,6 +410,87 @@ describe('CFCT OCR source structuring', () => {
         cfctFattyAcidTotalG: 1.1,
       },
     });
+  });
+
+  it('keeps CFCT fatty acid total columns aligned when OCR adds a trailing bar', () => {
+    const rows = buildCfctRowsFromOcrPages([
+      {
+        ...basePage,
+        page: 198,
+        fullText:
+          '食物脂肪酸含量 Fatty acid content of foods\nFood code Food name Fat 饱和 单不饱和 多不饱和 来知 SFA MUFA PUFA Un_k Total\n031304 豆腐（内酯） 1.9 1.8| 0.3 0.4 1.1 0.0 16.5',
+      },
+    ]);
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      foodCode: '031304',
+      nutrients: {
+        saturatedFattyAcids: 0.3,
+        monounsaturatedFattyAcids: 0.4,
+        polyunsaturatedFattyAcids: 1.1,
+      },
+      unmappedNutrients: {
+        cfctFatG: 1.9,
+        cfctFattyAcidTotalG: 1.8,
+        cfctUnknownFattyAcidsG: 0,
+      },
+    });
+  });
+
+  it('keeps CFCT fatty acid detail pages as review-only evidence without overwriting total grams', () => {
+    const rows = buildCfctRowsFromOcrPages([
+      {
+        ...basePage,
+        page: 72,
+        fullText:
+          '食物编码 食物名称 食部 水分 能量 蛋白质 脂肪 碳水化合物 不溶性膳食纤维\n031306 豆腐（北豆腐） 100 82.8 116 486 9.2 8.1 0 0 0 1.1 0 0.06 0.03',
+      },
+      {
+        ...basePage,
+        page: 198,
+        fullText:
+          '食物脂肪酸含量 Fatty acid content of foods\n食物编码 食物名称 脂肪 Fat 脂肪酸 Total 饱和 SFA 单不饱和 MUFA 多不饱和 PUFA 未知 Un_k\n031306 豆腐（北豆腐） 8.1 7.5 3.8 2.9 0.6 0.0 50.6',
+      },
+      {
+        ...basePage,
+        page: 199,
+        fullText:
+          '单不饱和脂肪酸 /总脂肪酸（%） 多不饱和脂肪酸/总脂肪酸 Fatty acid content of foods\nFood code Food name 14:1 15:1 16:1 17:1 18:1 20:1 22:1 24:1 Total 16:2 18:2 18:3 18:4 20:2 20:3 20:4 20:5 22:3 22:4\n031306 豆腐（北豆腐） 38.5 Tr Tr 0.8 Tr 35.4 Tr 2.3 Tr 7.4 Tr 7.3 0.1 T T Tr Tr Tr Tr Tr Tr 0.3 北京',
+      },
+    ]);
+
+    expect(rows).toHaveLength(1);
+    const row = rows[0];
+    expect(row).toMatchObject({
+      foodCode: '031306',
+      nutrients: {
+        crudeFat: 8.1,
+        saturatedFattyAcids: 3.8,
+        monounsaturatedFattyAcids: 2.9,
+        polyunsaturatedFattyAcids: 0.6,
+      },
+      unmappedNutrients: {
+        cfctFatG: 8.1,
+        cfctFattyAcidTotalG: 7.5,
+        cfctUnknownFattyAcidsG: 0,
+      },
+    });
+    expect(row.unmappedNutrients).not.toHaveProperty(
+      'cfctMonounsaturatedFattyAcidsPercentOfTotal',
+    );
+    expect(row.unmappedNutrients).not.toHaveProperty(
+      'cfctLinoleicAcidPercentOfTotalFattyAcids',
+    );
+    expect(row.sourceSegments).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          page: 199,
+          rawOcrText: expect.stringContaining('031306 豆腐（北豆腐）'),
+          nutrientKeys: [],
+        }),
+      ]),
+    );
   });
 
   it('parses CFCT code-column vitamin table rows by aligning codes names and nutrient columns', () => {

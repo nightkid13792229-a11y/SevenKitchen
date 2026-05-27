@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { MODULE_METADATA } from '@nestjs/common/constants';
 
-describe('AppModule AI recipe registration', () => {
+describe('AppModule AI recipe conditional metadata registration', () => {
   const originalEnv = { ...process.env };
 
   afterEach(() => {
@@ -60,7 +60,9 @@ describe('AppModule AI recipe registration', () => {
     };
   }
 
-  it('registers admin guard and pure AI recipe providers without Prisma', () => {
+  // Metadata-level coverage only: full non-Prisma AppModule bootstrap is
+  // affected by unrelated production/inventory providers.
+  it('omits Prisma-backed AI recipe metadata and keeps pure providers when Prisma is disabled', () => {
     const {
       AppModule,
       AiRecipeController,
@@ -89,7 +91,7 @@ describe('AppModule AI recipe registration', () => {
     );
   });
 
-  it('registers the AI recipe controller and knowledge base service with Prisma', () => {
+  it('includes Prisma-backed AI recipe metadata when Prisma is enabled', () => {
     const { AppModule, AiRecipeController, KnowledgeBaseService } =
       loadAppModuleWithRepoModes('prisma');
 

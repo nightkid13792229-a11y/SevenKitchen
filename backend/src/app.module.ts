@@ -166,6 +166,7 @@ import { ProcurementSkuService } from './application/ingredient/procurement-sku.
 import { IngredientSuggestionsController } from './interfaces/controllers/ingredient-suggestions.controller';
 import { AiRecipeController } from './interfaces/controllers/ai-recipe.controller';
 import { KnowledgeBaseService } from './application/ai-recipe/knowledge-base.service';
+import { NutritionAssessmentRecordService } from './application/ai-recipe/nutrition-assessment-record.service';
 import { RecipeDesignSessionService } from './application/ai-recipe/recipe-design-session.service';
 import { EvidenceService } from './application/ai-recipe/evidence.service';
 import { NutritionAssessmentService } from './application/ai-recipe/nutrition-assessment.service';
@@ -274,7 +275,8 @@ validatePrismaConfig();
     {
       provide: DOG_REPOSITORY,
       useFactory: (prismaService?: PrismaService) => {
-        const mode = process.env.DOG_REPO ?? (isPrismaEnabled() ? 'prisma' : 'memory');
+        const mode =
+          process.env.DOG_REPO ?? (isPrismaEnabled() ? 'prisma' : 'memory');
         if (mode === 'prisma') {
           if (!prismaService) {
             throw new Error(
@@ -631,7 +633,11 @@ validatePrismaConfig();
     NutritionAssessmentService,
     ConstraintSynthesisService,
     ...(isPrismaEnabled()
-      ? [KnowledgeBaseService, RecipeDesignSessionService]
+      ? [
+          KnowledgeBaseService,
+          NutritionAssessmentRecordService,
+          RecipeDesignSessionService,
+        ]
       : []),
   ],
 })

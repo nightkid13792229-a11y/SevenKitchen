@@ -13,7 +13,7 @@ All focused tests and builds pass.
 
 Notes:
 
-- Backend AI recipe tests: 9 suites, 46 tests passed.
+- Backend AI recipe tests: 11 suites, 52 tests passed.
 - Miniapp AI recipe designer test: 1 suite, 4 tests passed.
 - Backend build passed after Prisma client generation.
 - Admin web build passed with the existing Vite chunk size warning.
@@ -22,8 +22,10 @@ Notes:
 ## Scope Verified
 
 - Knowledge source foundation
+- Non-destructive knowledge seed reruns
 - Evidence grading
 - Nutrition assessment plan status
+- Persisted nutrition assessment create/get API
 - Constraint conflict detection
 - Agent design session records
 - Admin knowledge source views

@@ -40,6 +40,9 @@ describe('AppModule AI recipe conditional metadata registration', () => {
       RecipeDesignSessionService,
     } = require('../../src/application/ai-recipe/recipe-design-session.service');
     const {
+      NutritionAssessmentRecordService,
+    } = require('../../src/application/ai-recipe/nutrition-assessment-record.service');
+    const {
       EvidenceService,
     } = require('../../src/application/ai-recipe/evidence.service');
     const {
@@ -48,15 +51,14 @@ describe('AppModule AI recipe conditional metadata registration', () => {
     const {
       ConstraintSynthesisService,
     } = require('../../src/application/ai-recipe/constraint-synthesis.service');
-    const {
-      AdminGuard,
-    } = require('../../src/interfaces/guards/role.guard');
+    const { AdminGuard } = require('../../src/interfaces/guards/role.guard');
 
     return {
       AppModule,
       AiRecipeController,
       KnowledgeBaseService,
       RecipeDesignSessionService,
+      NutritionAssessmentRecordService,
       EvidenceService,
       NutritionAssessmentService,
       ConstraintSynthesisService,
@@ -72,6 +74,7 @@ describe('AppModule AI recipe conditional metadata registration', () => {
       AiRecipeController,
       KnowledgeBaseService,
       RecipeDesignSessionService,
+      NutritionAssessmentRecordService,
       EvidenceService,
       NutritionAssessmentService,
       ConstraintSynthesisService,
@@ -86,6 +89,7 @@ describe('AppModule AI recipe conditional metadata registration', () => {
 
     expect(controllers).not.toContain(AiRecipeController);
     expect(providers).not.toContain(KnowledgeBaseService);
+    expect(providers).not.toContain(NutritionAssessmentRecordService);
     expect(providers).not.toContain(RecipeDesignSessionService);
     expect(providers).toEqual(
       expect.arrayContaining([
@@ -102,6 +106,7 @@ describe('AppModule AI recipe conditional metadata registration', () => {
       AppModule,
       AiRecipeController,
       KnowledgeBaseService,
+      NutritionAssessmentRecordService,
       RecipeDesignSessionService,
     } = loadAppModuleWithRepoModes('prisma');
 
@@ -113,6 +118,7 @@ describe('AppModule AI recipe conditional metadata registration', () => {
 
     expect(controllers).toContain(AiRecipeController);
     expect(providers).toContain(KnowledgeBaseService);
+    expect(providers).toContain(NutritionAssessmentRecordService);
     expect(providers).toContain(RecipeDesignSessionService);
   });
 });

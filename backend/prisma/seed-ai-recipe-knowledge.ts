@@ -6,7 +6,10 @@ import {
   PrismaClient,
 } from '@prisma/client';
 
-const prisma = new PrismaClient();
+type AiRecipeKnowledgeSeedPrisma = Pick<
+  PrismaClient,
+  'knowledgeSource' | 'nutritionRulePackage' | 'nutritionRuleVersion'
+>;
 
 const knowledgeSources = [
   {
@@ -88,24 +91,22 @@ const rulePackages = [
   },
 ];
 
-async function main() {
+export async function seedAiRecipeKnowledge(
+  prisma: AiRecipeKnowledgeSeedPrisma,
+) {
   for (const source of knowledgeSources) {
-    await prisma.knowledgeSource.upsert({
+    const existingSource = await prisma.knowledgeSource.findUnique({
       where: { code: source.code },
-      create: {
-        ...source,
-        status: KnowledgeSourceStatus.ACTIVE,
-      },
-      update: {
-        name: source.name,
-        versionLabel: source.versionLabel,
-        sourceUrl: source.sourceUrl,
-        scope: source.scope,
-        authorityLevel: source.authorityLevel,
-        copyrightNote: source.copyrightNote,
-        status: KnowledgeSourceStatus.ACTIVE,
-      },
     });
+
+    if (!existingSource) {
+      await prisma.knowledgeSource.create({
+        data: {
+          ...source,
+          status: KnowledgeSourceStatus.ACTIVE,
+        },
+      });
+    }
   }
 
   for (const rulePackage of rulePackages) {
@@ -151,14 +152,18 @@ async function main() {
   }
 }
 
-main()
-  .catch((error) => {
-    console.error('Failed to seed AI recipe knowledge:', error);
-    process.exitCode = 1;
-  })
-  .finally(async () => {
+async function main() {
+  const prisma = new PrismaClient();
+  try {
+    await seedAiRecipeKnowledge(prisma);
+  } finally {
     await prisma.$disconnect();
-    if (process.exitCode) {
-      process.exit(process.exitCode);
-    }
+  }
+}
+
+if (require.main === module) {
+  main().catch((error) => {
+    console.error('Failed to seed AI recipe knowledge:', error);
+    process.exit(1);
   });
+}

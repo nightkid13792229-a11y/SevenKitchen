@@ -243,6 +243,7 @@ model Dog {
   owner                User                @relation(fields: [ownerId], references: [id], onDelete: Cascade)
   medicalRecords       MedicalRecord[]
   orders               Order[]
+  nutritionAssessments DogNutritionAssessment[]
   vaccineRecords       VaccineRecord[]
   weightRecords        WeightRecord[]
 
@@ -1530,6 +1531,61 @@ enum FeedbackStatus {
   CLOSED
 }
 
+enum KnowledgeSourceStatus {
+  DRAFT
+  ACTIVE
+  RETIRED
+}
+
+enum KnowledgeAuthorityLevel {
+  FOUNDATIONAL
+  HIGH
+  SUPPORTING
+}
+
+enum KnowledgeEntryStatus {
+  DRAFT
+  REVIEWED
+  ACTIVE
+  RETIRED
+}
+
+enum NutritionRulePackageStatus {
+  DRAFT
+  ACTIVE
+  RETIRED
+}
+
+enum NutritionEvidenceLevel {
+  A_CONFIRMED_DIAGNOSIS
+  B_TEST_INDICATED
+  C_OWNER_REPORTED
+  D_ATTACHMENT_OBSERVATION
+}
+
+enum NutritionAssessmentStatus {
+  DRAFT
+  NEEDS_MORE_INFO
+  PLAN_READY
+  BLOCKED
+}
+
+enum AgentRecipeResultStatus {
+  REVIEWABLE
+  NEEDS_MANUAL_REVIEW
+  LIMITED_DRAFT
+  UNABLE_TO_COMPLETE
+}
+
+enum AgentRecipeSessionStatus {
+  OPEN
+  ASSESSING
+  PLAN_READY
+  DESIGNING
+  COMPLETED
+  ARCHIVED
+}
+
 /// 营养原料库 - 独立于采购库的完整营养数据
 model NutritionFood {
   id                String                 @id @default(uuid()) @map("id")
@@ -1644,6 +1700,211 @@ model DesignRecipeAIGenerationLog {
   @@index([generationModel])
   @@index([finalAttemptResult])
   @@map("design_recipe_ai_generation_log")
+}
+
+model KnowledgeSource {
+  id                 String                       @id @default(uuid()) @map("id")
+  code               String                       @unique @map("code") @db.VarChar(80)
+  name               String                       @map("name") @db.VarChar(200)
+  versionLabel       String                       @map("version_label") @db.VarChar(100)
+  sourceUrl          String                       @map("source_url") @db.VarChar(500)
+  scope              String[]                     @default([]) @map("scope")
+  authorityLevel     KnowledgeAuthorityLevel      @map("authority_level")
+  status             KnowledgeSourceStatus        @default(DRAFT) @map("status")
+  copyrightNote      String?                      @map("copyright_note")
+  reviewedBy         String?                      @map("reviewed_by")
+  reviewedAt         DateTime?                    @map("reviewed_at")
+  createdAt          DateTime                     @default(now()) @map("created_at")
+  updatedAt          DateTime                     @updatedAt @map("updated_at")
+  entries            KnowledgeEntry[]
+  rulePackageSources NutritionRulePackageSource[]
+
+  @@index([status])
+  @@index([authorityLevel])
+  @@map("knowledge_source")
+}
+
+model KnowledgeEntry {
+  id             String               @id @default(uuid()) @map("id")
+  sourceId       String               @map("source_id")
+  title          String               @map("title") @db.VarChar(200)
+  species        String               @default("DOG") @map("species") @db.VarChar(40)
+  category       String               @map("category") @db.VarChar(80)
+  summary        String               @map("summary")
+  structuredData Json                 @default("{}") @map("structured_data")
+  citation       String?              @map("citation")
+  status         KnowledgeEntryStatus @default(DRAFT) @map("status")
+  reviewedBy     String?              @map("reviewed_by")
+  reviewedAt     DateTime?            @map("reviewed_at")
+  createdAt      DateTime             @default(now()) @map("created_at")
+  updatedAt      DateTime             @updatedAt @map("updated_at")
+  source         KnowledgeSource      @relation(fields: [sourceId], references: [id], onDelete: Cascade)
+
+  @@index([sourceId])
+  @@index([category])
+  @@index([status])
+  @@map("knowledge_entry")
+}
+
+model NutritionRulePackage {
+  id             String                       @id @default(uuid()) @map("id")
+  code           String                       @unique @map("code") @db.VarChar(80)
+  name           String                       @map("name") @db.VarChar(200)
+  status         NutritionRulePackageStatus   @default(DRAFT) @map("status")
+  currentVersion Int                          @default(1) @map("current_version")
+  createdAt      DateTime                     @default(now()) @map("created_at")
+  updatedAt      DateTime                     @updatedAt @map("updated_at")
+  versions       NutritionRuleVersion[]
+  sources        NutritionRulePackageSource[]
+
+  @@index([status])
+  @@map("nutrition_rule_package")
+}
+
+model NutritionRuleVersion {
+  id                 String                 @id @default(uuid()) @map("id")
+  packageId          String                 @map("package_id")
+  version            Int                    @map("version")
+  requiredEvidence   NutritionEvidenceLevel @map("required_evidence")
+  activationCriteria Json                   @default("{}") @map("activation_criteria")
+  contraindications  Json                   @default("{}") @map("contraindications")
+  requiredFields     String[]               @default([]) @map("required_fields")
+  nutrientTargets    Json                   @default("{}") @map("nutrient_targets")
+  ingredientPolicy   Json                   @default("{}") @map("ingredient_policy")
+  conflictPolicy     Json                   @default("{}") @map("conflict_policy")
+  reviewPolicy       Json                   @default("{}") @map("review_policy")
+  displayBoundaries  Json                   @default("{}") @map("display_boundaries")
+  isActive           Boolean                @default(false) @map("is_active")
+  reviewedBy         String?                @map("reviewed_by")
+  reviewedAt         DateTime?              @map("reviewed_at")
+  createdAt          DateTime               @default(now()) @map("created_at")
+  updatedAt          DateTime               @updatedAt @map("updated_at")
+  package            NutritionRulePackage   @relation(fields: [packageId], references: [id], onDelete: Cascade)
+
+  @@unique([packageId, version])
+  @@index([packageId])
+  @@index([isActive])
+  @@map("nutrition_rule_version")
+}
+
+model NutritionRulePackageSource {
+  id                String               @id @default(uuid()) @map("id")
+  packageId         String               @map("package_id")
+  knowledgeSourceId String               @map("knowledge_source_id")
+  note              String?              @map("note")
+  package           NutritionRulePackage @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  knowledgeSource   KnowledgeSource      @relation(fields: [knowledgeSourceId], references: [id], onDelete: Cascade)
+
+  @@unique([packageId, knowledgeSourceId])
+  @@index([packageId])
+  @@index([knowledgeSourceId])
+  @@map("nutrition_rule_package_source")
+}
+
+model DogNutritionAssessment {
+  id             String                           @id @default(uuid()) @map("id")
+  dogId          String                           @map("dog_id")
+  createdBy      String                           @map("created_by")
+  status         NutritionAssessmentStatus        @default(DRAFT) @map("status")
+  inputSummary   Json                             @default("{}") @map("input_summary")
+  completeness   Json                             @default("{}") @map("completeness")
+  managementPlan Json                             @default("{}") @map("management_plan")
+  constraintSet  Json                             @default("{}") @map("constraint_set")
+  resultStatus   AgentRecipeResultStatus?         @map("result_status")
+  createdAt      DateTime                         @default(now()) @map("created_at")
+  updatedAt      DateTime                         @updatedAt @map("updated_at")
+  dog            Dog                              @relation(fields: [dogId], references: [id], onDelete: Cascade)
+  evidenceItems  DogNutritionAssessmentEvidence[]
+  sessions       AgentRecipeDesignSession[]
+
+  @@index([dogId])
+  @@index([createdBy])
+  @@index([status])
+  @@map("dog_nutrition_assessment")
+}
+
+model DogNutritionAssessmentEvidence {
+  id             String                 @id @default(uuid()) @map("id")
+  assessmentId   String                 @map("assessment_id")
+  sourceType     String                 @map("source_type") @db.VarChar(60)
+  evidenceLevel  NutritionEvidenceLevel @map("evidence_level")
+  title          String                 @map("title") @db.VarChar(200)
+  extractedData  Json                   @default("{}") @map("extracted_data")
+  confirmedData  Json                   @default("{}") @map("confirmed_data")
+  isConfirmed    Boolean                @default(false) @map("is_confirmed")
+  attachmentUrls String[]               @default([]) @map("attachment_urls")
+  confirmedBy    String?                @map("confirmed_by")
+  confirmedAt    DateTime?              @map("confirmed_at")
+  createdAt      DateTime               @default(now()) @map("created_at")
+  updatedAt      DateTime               @updatedAt @map("updated_at")
+  assessment     DogNutritionAssessment @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+
+  @@index([assessmentId])
+  @@index([evidenceLevel])
+  @@index([isConfirmed])
+  @@map("dog_nutrition_assessment_evidence")
+}
+
+model AgentRecipeDesignSession {
+  id             String                       @id @default(uuid()) @map("id")
+  assessmentId   String                       @map("assessment_id")
+  designRecipeId String?                      @map("design_recipe_id")
+  status         AgentRecipeSessionStatus     @default(OPEN) @map("status")
+  resultStatus   AgentRecipeResultStatus?     @map("result_status")
+  createdBy      String                       @map("created_by")
+  createdAt      DateTime                     @default(now()) @map("created_at")
+  updatedAt      DateTime                     @updatedAt @map("updated_at")
+  assessment     DogNutritionAssessment       @relation(fields: [assessmentId], references: [id], onDelete: Cascade)
+  messages       AgentRecipeDesignMessage[]
+  candidates     AgentRecipeDesignCandidate[]
+  auditSnapshots AgentRecipeAuditSnapshot[]
+
+  @@index([assessmentId])
+  @@index([createdBy])
+  @@index([status])
+  @@map("agent_recipe_design_session")
+}
+
+model AgentRecipeDesignMessage {
+  id        String                   @id @default(uuid()) @map("id")
+  sessionId String                   @map("session_id")
+  role      String                   @map("role") @db.VarChar(40)
+  content   String                   @map("content")
+  metadata  Json                     @default("{}") @map("metadata")
+  createdAt DateTime                 @default(now()) @map("created_at")
+  session   AgentRecipeDesignSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("agent_recipe_design_message")
+}
+
+model AgentRecipeDesignCandidate {
+  id            String                   @id @default(uuid()) @map("id")
+  sessionId     String                   @map("session_id")
+  label         String                   @map("label") @db.VarChar(120)
+  recipeDraft   Json                     @default("{}") @map("recipe_draft")
+  calculation   Json                     @default("{}") @map("calculation")
+  resultStatus  AgentRecipeResultStatus  @map("result_status")
+  changeSummary Json                     @default("{}") @map("change_summary")
+  isAdopted     Boolean                  @default(false) @map("is_adopted")
+  createdAt     DateTime                 @default(now()) @map("created_at")
+  session       AgentRecipeDesignSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@index([resultStatus])
+  @@map("agent_recipe_design_candidate")
+}
+
+model AgentRecipeAuditSnapshot {
+  id        String                   @id @default(uuid()) @map("id")
+  sessionId String                   @map("session_id")
+  snapshot  Json                     @default("{}") @map("snapshot")
+  createdBy String                   @map("created_by")
+  createdAt DateTime                 @default(now()) @map("created_at")
+  session   AgentRecipeDesignSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([sessionId])
+  @@map("agent_recipe_audit_snapshot")
 }
 
 /// FEDIAF营养标准数据

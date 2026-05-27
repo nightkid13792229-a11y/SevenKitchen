@@ -37,6 +37,14 @@
           <el-icon><Food /></el-icon>
           <span>食谱管理</span>
         </el-menu-item>
+        <el-sub-menu index="ai-recipe">
+          <template #title>
+            <el-icon><Connection /></el-icon>
+            <span>AI 食谱设计</span>
+          </template>
+          <el-menu-item index="/ai-recipe/knowledge-sources">知识源</el-menu-item>
+          <el-menu-item index="/ai-recipe/rule-packages">规则包</el-menu-item>
+        </el-sub-menu>
         <el-menu-item index="/orders">
           <el-icon><List /></el-icon>
           <span>订单管理</span>
@@ -128,7 +136,8 @@ import {
   Star,
   Setting,
   EditPen,
-  Money
+  Money,
+  Connection
 } from '@element-plus/icons-vue'
 
 const route = useRoute()

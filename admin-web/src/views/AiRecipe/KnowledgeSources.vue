@@ -30,3 +30,23 @@ onMounted(async () => {
   }
 })
 </script>
+
+<style scoped>
+.ai-recipe-page {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.page-header h2 {
+  margin: 0 0 4px;
+  font-size: 20px;
+  color: #303133;
+}
+
+.page-header p {
+  margin: 0;
+  font-size: 14px;
+  color: #606266;
+}
+</style>

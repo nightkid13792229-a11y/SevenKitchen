@@ -112,6 +112,34 @@ function defaultPurchaseUnit(baseUnit: string): string {
   return 'g';
 }
 
+function getSinglePrimaryProfile<T extends { role: string }>(
+  profiles: T[],
+): T {
+  const primaryProfiles = profiles.filter(
+    (profile) => profile.role === 'PRIMARY',
+  );
+  if (primaryProfiles.length !== 1) {
+    throw new BadRequestException('确认入库必须且只能包含一个主营养档案');
+  }
+  return primaryProfiles[0]!;
+}
+
+function assertUniqueNutritionFoodIdentities(
+  profiles: Array<{ sourceFoodName: string; sourceType: string | null }>,
+): void {
+  const identities = new Set<string>();
+  for (const profile of profiles) {
+    const dataSource = profile.sourceType ?? 'MANUAL';
+    const identity = `${profile.sourceFoodName}|${dataSource}|1`;
+    if (identities.has(identity)) {
+      throw new BadRequestException(
+        '草稿包含重复营养档案，请先合并或删除重复档案',
+      );
+    }
+    identities.add(identity);
+  }
+}
+
 @Injectable()
 export class IngredientCreationService {
   constructor(
@@ -314,26 +342,31 @@ export class IngredientCreationService {
   async confirmDraft(draftId: string, user: IngredientCreationUserContext) {
     assertAdmin(user);
 
-    const draft = await this.prisma.ingredientCreationDraft.findUnique({
-      where: { id: draftId },
-      include: CONFIRM_DRAFT_INCLUDE,
-    });
-    if (!draft) {
-      throw new NotFoundException('新增食材草稿不存在');
-    }
-    if (draft.status !== 'READY_FOR_REVIEW') {
-      throw new BadRequestException('只有待审核草稿可以确认入库');
-    }
-
-    const primaryProfile = draft.profiles.find(
-      (profile) => profile.role === 'PRIMARY',
-    );
-    if (!primaryProfile) {
-      throw new BadRequestException('确认入库必须包含一个主营养档案');
-    }
-
     const confirmedAt = new Date();
     return this.prisma.$transaction(async (tx) => {
+      const draft = await tx.ingredientCreationDraft.findUnique({
+        where: { id: draftId },
+        include: CONFIRM_DRAFT_INCLUDE,
+      });
+      if (!draft) {
+        throw new NotFoundException('新增食材草稿不存在');
+      }
+
+      const primaryProfile = getSinglePrimaryProfile(draft.profiles);
+      assertUniqueNutritionFoodIdentities(draft.profiles);
+
+      const claim = await tx.ingredientCreationDraft.updateMany({
+        where: { id: draftId, status: 'READY_FOR_REVIEW' },
+        data: {
+          status: 'CONFIRMED',
+          confirmedBy: user.userId,
+          confirmedAt,
+        },
+      });
+      if (claim.count !== 1) {
+        throw new BadRequestException('只有待审核草稿可以确认入库');
+      }
+
       const existingIngredient = await tx.ingredient.findFirst({
         where: {
           name: draft.suggestedName,
@@ -444,10 +477,7 @@ export class IngredientCreationService {
       return tx.ingredientCreationDraft.update({
         where: { id: draft.id },
         data: {
-          status: 'CONFIRMED',
           confirmedIngredientId: ingredient.id,
-          confirmedBy: user.userId,
-          confirmedAt,
         },
       });
     });

@@ -28,6 +28,7 @@ function createPrismaMock() {
     },
     ingredientCreationDraft: {
       findUnique: jest.fn(),
+      updateMany: jest.fn(),
       update: jest.fn(),
     },
     ingredientCreationDraftProfile: {
@@ -94,6 +95,8 @@ function createConfirmTransactionMock() {
       create: jest.fn().mockResolvedValue({ id: 'mapping-1' }),
     },
     ingredientCreationDraft: {
+      findUnique: jest.fn().mockResolvedValue(createReadyDraft()),
+      updateMany: jest.fn().mockResolvedValue({ count: 1 }),
       update: jest.fn().mockResolvedValue({
         id: 'draft-1',
         status: 'CONFIRMED',
@@ -616,7 +619,6 @@ describe('IngredientCreationService', () => {
   it('confirms a ready draft into a formal ingredient and nutrition mappings', async () => {
     const prisma = createPrismaMock();
     const tx = createConfirmTransactionMock();
-    prisma.ingredientCreationDraft.findUnique.mockResolvedValue(createReadyDraft());
     prisma.$transaction.mockImplementation(async (callback) => callback(tx));
     const service = new IngredientCreationService(prisma as any);
 
@@ -625,11 +627,19 @@ describe('IngredientCreationService', () => {
       role: 'ADMIN',
     });
 
-    expect(prisma.ingredientCreationDraft.findUnique).toHaveBeenCalledWith({
+    expect(tx.ingredientCreationDraft.findUnique).toHaveBeenCalledWith({
       where: { id: 'draft-1' },
       include: {
         job: true,
         profiles: { orderBy: [{ role: 'asc' }, { sortOrder: 'asc' }] },
+      },
+    });
+    expect(tx.ingredientCreationDraft.updateMany).toHaveBeenCalledWith({
+      where: { id: 'draft-1', status: 'READY_FOR_REVIEW' },
+      data: {
+        status: 'CONFIRMED',
+        confirmedBy: 'admin-1',
+        confirmedAt: expect.any(Date),
       },
     });
     expect(tx.ingredient.findFirst).toHaveBeenCalledWith({
@@ -726,10 +736,7 @@ describe('IngredientCreationService', () => {
     expect(tx.ingredientCreationDraft.update).toHaveBeenCalledWith({
       where: { id: 'draft-1' },
       data: {
-        status: 'CONFIRMED',
         confirmedIngredientId: 'ingredient-1',
-        confirmedBy: 'admin-1',
-        confirmedAt: expect.any(Date),
       },
     });
     expect(result.status).toBe('CONFIRMED');
@@ -748,7 +755,9 @@ describe('IngredientCreationService', () => {
 
   it('throws not found when confirming a missing draft', async () => {
     const prisma = createPrismaMock();
-    prisma.ingredientCreationDraft.findUnique.mockResolvedValue(null);
+    const tx = createConfirmTransactionMock();
+    tx.ingredientCreationDraft.findUnique.mockResolvedValue(null);
+    prisma.$transaction.mockImplementation(async (callback) => callback(tx));
     const service = new IngredientCreationService(prisma as any);
 
     await expect(
@@ -763,48 +772,64 @@ describe('IngredientCreationService', () => {
         role: 'ADMIN',
       }),
     ).rejects.toThrow('新增食材草稿不存在');
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(tx.ingredientCreationDraft.updateMany).not.toHaveBeenCalled();
   });
 
   it('rejects confirmation unless the draft is ready for review', async () => {
     const prisma = createPrismaMock();
-    prisma.ingredientCreationDraft.findUnique.mockResolvedValue(
+    const tx = createConfirmTransactionMock();
+    tx.ingredientCreationDraft.findUnique.mockResolvedValue(
       createReadyDraft({ status: 'DRAFT' }),
     );
+    tx.ingredientCreationDraft.updateMany.mockResolvedValue({ count: 0 });
+    prisma.$transaction.mockImplementation(async (callback) => callback(tx));
     const service = new IngredientCreationService(prisma as any);
 
     await expect(
       service.confirmDraft('draft-1', { userId: 'admin-1', role: 'ADMIN' }),
     ).rejects.toThrow('只有待审核草稿可以确认入库');
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    expect(tx.ingredient.create).not.toHaveBeenCalled();
   });
 
   it('rejects confirmation when the draft has no primary profile', async () => {
     const prisma = createPrismaMock();
-    prisma.ingredientCreationDraft.findUnique.mockResolvedValue(
+    const tx = createConfirmTransactionMock();
+    tx.ingredientCreationDraft.findUnique.mockResolvedValue(
       createReadyDraft({
         profiles: [createDraftProfile({ id: 'profile-2', role: 'SECONDARY' })],
       }),
     );
+    prisma.$transaction.mockImplementation(async (callback) => callback(tx));
     const service = new IngredientCreationService(prisma as any);
 
     await expect(
       service.confirmDraft('draft-1', { userId: 'admin-1', role: 'ADMIN' }),
     ).rejects.toThrow(BadRequestException);
-    expect(prisma.$transaction).not.toHaveBeenCalled();
+    await expect(
+      service.confirmDraft('draft-1', { userId: 'admin-1', role: 'ADMIN' }),
+    ).rejects.toThrow('确认入库必须且只能包含一个主营养档案');
+    expect(tx.ingredientCreationDraft.updateMany).not.toHaveBeenCalled();
+    expect(tx.ingredient.create).not.toHaveBeenCalled();
   });
 
   it('prevents confirmation when a standard ingredient already exists', async () => {
     const prisma = createPrismaMock();
     const tx = createConfirmTransactionMock();
     tx.ingredient.findFirst.mockResolvedValue({ id: 'ingredient-existing' });
-    prisma.ingredientCreationDraft.findUnique.mockResolvedValue(createReadyDraft());
     prisma.$transaction.mockImplementation(async (callback) => callback(tx));
     const service = new IngredientCreationService(prisma as any);
 
     await expect(
       service.confirmDraft('draft-1', { userId: 'admin-1', role: 'ADMIN' }),
     ).rejects.toThrow('标准原料已存在：鸭胸肉');
+    expect(tx.ingredientCreationDraft.updateMany).toHaveBeenCalledWith({
+      where: { id: 'draft-1', status: 'READY_FOR_REVIEW' },
+      data: {
+        status: 'CONFIRMED',
+        confirmedBy: 'admin-1',
+        confirmedAt: expect.any(Date),
+      },
+    });
     expect(tx.ingredient.create).not.toHaveBeenCalled();
     expect(tx.nutritionFood.upsert).not.toHaveBeenCalled();
     expect(tx.nutritionFoodMapping.create).not.toHaveBeenCalled();
@@ -818,7 +843,7 @@ describe('IngredientCreationService', () => {
     tx.nutritionFood.upsert
       .mockResolvedValueOnce({ id: 'food-primary' })
       .mockResolvedValueOnce({ id: 'food-secondary' });
-    prisma.ingredientCreationDraft.findUnique.mockResolvedValue(
+    tx.ingredientCreationDraft.findUnique.mockResolvedValue(
       createReadyDraft({
         profiles: [
           createDraftProfile(),
@@ -867,5 +892,74 @@ describe('IngredientCreationService', () => {
         notes: 'AI 新增食材草稿确认',
       },
     });
+  });
+
+  it('rejects confirmation when the atomic draft claim loses the race', async () => {
+    const prisma = createPrismaMock();
+    const tx = createConfirmTransactionMock();
+    tx.ingredientCreationDraft.updateMany.mockResolvedValue({ count: 0 });
+    prisma.$transaction.mockImplementation(async (callback) => callback(tx));
+    const service = new IngredientCreationService(prisma as any);
+
+    await expect(
+      service.confirmDraft('draft-1', { userId: 'admin-1', role: 'ADMIN' }),
+    ).rejects.toThrow('只有待审核草稿可以确认入库');
+    expect(tx.ingredient.create).not.toHaveBeenCalled();
+    expect(tx.nutritionFoodMapping.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects confirmation when the draft has multiple primary profiles', async () => {
+    const prisma = createPrismaMock();
+    const tx = createConfirmTransactionMock();
+    tx.ingredientCreationDraft.findUnique.mockResolvedValue(
+      createReadyDraft({
+        profiles: [
+          createDraftProfile({ id: 'profile-1' }),
+          createDraftProfile({
+            id: 'profile-2',
+            sourceFoodName: 'Duck, breast, cooked',
+            sourceFoodNameEn: 'Duck, breast, cooked',
+            suggestedDisplayNameZh: '鸭胸肉（熟）',
+          }),
+        ],
+      }),
+    );
+    prisma.$transaction.mockImplementation(async (callback) => callback(tx));
+    const service = new IngredientCreationService(prisma as any);
+
+    await expect(
+      service.confirmDraft('draft-1', { userId: 'admin-1', role: 'ADMIN' }),
+    ).rejects.toThrow('确认入库必须且只能包含一个主营养档案');
+    expect(tx.ingredientCreationDraft.updateMany).not.toHaveBeenCalled();
+    expect(tx.ingredient.create).not.toHaveBeenCalled();
+  });
+
+  it('rejects confirmation when draft profiles target the same nutrition food identity', async () => {
+    const prisma = createPrismaMock();
+    const tx = createConfirmTransactionMock();
+    tx.ingredientCreationDraft.findUnique.mockResolvedValue(
+      createReadyDraft({
+        profiles: [
+          createDraftProfile(),
+          createDraftProfile({
+            id: 'profile-2',
+            role: 'SECONDARY',
+            sourceFoodName: 'Duck, breast, raw',
+            sourceType: 'USDA',
+            sourceKey: 'USDA:456',
+            suggestedDisplayNameZh: '鸭胸肉重复档案',
+          }),
+        ],
+      }),
+    );
+    prisma.$transaction.mockImplementation(async (callback) => callback(tx));
+    const service = new IngredientCreationService(prisma as any);
+
+    await expect(
+      service.confirmDraft('draft-1', { userId: 'admin-1', role: 'ADMIN' }),
+    ).rejects.toThrow('草稿包含重复营养档案，请先合并或删除重复档案');
+    expect(tx.ingredientCreationDraft.updateMany).not.toHaveBeenCalled();
+    expect(tx.ingredient.create).not.toHaveBeenCalled();
+    expect(tx.nutritionFoodMapping.create).not.toHaveBeenCalled();
   });
 });

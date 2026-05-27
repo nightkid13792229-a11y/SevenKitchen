@@ -1596,6 +1596,37 @@ enum SupplementNutritionDraftStatus {
   REJECTED
 }
 
+enum IngredientCreationJobStatus {
+  DRAFTING
+  SEARCHING_SOURCES
+  WAITING_USER
+  BUILDING_REPORT
+  READY_FOR_REVIEW
+  CONFIRMED
+  FAILED
+  CANCELED
+}
+
+enum IngredientCreationMessageRole {
+  USER
+  AGENT
+  PROGRESS
+  QUESTION
+  SYSTEM
+}
+
+enum IngredientCreationDraftStatus {
+  DRAFT
+  READY_FOR_REVIEW
+  CONFIRMED
+  REJECTED
+}
+
+enum IngredientCreationDraftProfileRole {
+  PRIMARY
+  SECONDARY
+}
+
 enum SearchGovernanceDomain {
   INGREDIENT
   NUTRITION_FOOD
@@ -1807,6 +1838,7 @@ model NutritionSourceRecord {
   updatedAt           DateTime                         @updatedAt @map("updated_at")
   candidates          IngredientNutritionCandidate[]
   supplementDrafts    SupplementNutritionDraft[]
+  ingredientCreationDraftProfiles IngredientCreationDraftProfile[]
 
   @@unique([sourceType, sourceKey])
   @@index([sourceType])
@@ -1850,6 +1882,105 @@ model IngredientNutritionCandidate {
   @@index([reviewGroup])
   @@index([agentReviewStatus])
   @@map("ingredient_nutrition_candidate")
+}
+
+model IngredientCreationJob {
+  id              String                         @id @default(uuid()) @map("id")
+  createdBy                     String           @map("created_by")
+  status          IngredientCreationJobStatus    @default(DRAFTING) @map("status")
+  requestText     String                         @map("request_text")
+  currentStage    String?                        @map("current_stage") @db.VarChar(100)
+  progress        Int                            @default(0) @map("progress")
+  waitingQuestion String?                        @map("waiting_question")
+  errorMessage    String?                        @map("error_message")
+  agentProvider   String?                        @map("agent_provider") @db.VarChar(80)
+  agentModel      String?                        @map("agent_model") @db.VarChar(120)
+  createdAt       DateTime                       @default(now()) @map("created_at")
+  updatedAt       DateTime                       @updatedAt @map("updated_at")
+  completedAt     DateTime?                      @map("completed_at")
+  messages        IngredientCreationMessage[]
+  draft           IngredientCreationDraft?
+
+  @@index([createdBy])
+  @@index([status])
+  @@index([createdAt])
+  @@map("ingredient_creation_job")
+}
+
+model IngredientCreationMessage {
+  id        String                        @id @default(uuid()) @map("id")
+  jobId     String                        @map("job_id")
+  role      IngredientCreationMessageRole @map("role")
+  content   String                        @map("content")
+  payload   Json?                         @map("payload")
+  createdAt DateTime                      @default(now()) @map("created_at")
+  job       IngredientCreationJob         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([jobId])
+  @@index([role])
+  @@index([createdAt])
+  @@map("ingredient_creation_message")
+}
+
+model IngredientCreationDraft {
+  id                    String                         @id @default(uuid()) @map("id")
+  jobId                 String                         @unique @map("job_id")
+  status                IngredientCreationDraftStatus  @default(DRAFT) @map("status")
+  suggestedName         String                         @map("suggested_name") @db.VarChar(120)
+  aliases               String[]                       @default([]) @map("aliases")
+  type                  IngredientType                 @default(FOOD) @map("type")
+  baseUnit              BaseUnit                       @default(G) @map("base_unit")
+  unitDisplayLabel      String?                        @map("unit_display_label") @db.VarChar(50)
+  procurementStrategy   IngredientProcurementStrategy  @default(DAILY_PURCHASE) @map("procurement_strategy")
+  diyEnabled            Boolean                        @default(true) @map("diy_enabled")
+  procurementEnabled    Boolean                        @default(false) @map("procurement_enabled")
+  notes                 String?                        @map("notes")
+  agentSummary          String?                        @map("agent_summary")
+  reviewReport          Json?                          @map("review_report")
+  confirmedIngredientId         String?                 @map("confirmed_ingredient_id")
+  confirmedBy           String?                        @map("confirmed_by")
+  confirmedAt           DateTime?                      @map("confirmed_at")
+  createdAt             DateTime                       @default(now()) @map("created_at")
+  updatedAt             DateTime                       @updatedAt @map("updated_at")
+  job                   IngredientCreationJob          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  profiles              IngredientCreationDraftProfile[]
+
+  @@index([status])
+  @@index([suggestedName])
+  @@index([confirmedIngredientId])
+  @@map("ingredient_creation_draft")
+}
+
+model IngredientCreationDraftProfile {
+  id                      String                             @id @default(uuid()) @map("id")
+  draftId                 String                             @map("draft_id")
+  role                    IngredientCreationDraftProfileRole @map("role")
+  sourceRecordId          String?                            @map("source_record_id")
+  sourceType              NutritionGovernanceSourceType?     @map("source_type")
+  sourceKey               String?                            @map("source_key") @db.VarChar(200)
+  sourceFoodName          String                             @map("source_food_name") @db.VarChar(300)
+  sourceFoodNameEn        String?                            @map("source_food_name_en") @db.VarChar(300)
+  suggestedDisplayNameZh  String?                            @map("suggested_display_name_zh") @db.VarChar(200)
+  preparationState        String?                            @map("preparation_state") @db.VarChar(50)
+  preparationStateLabel   String?                            @map("preparation_state_label") @db.VarChar(100)
+  ediblePortionLabel      String?                            @map("edible_portion_label") @db.VarChar(100)
+  processingLabel         String?                            @map("processing_label") @db.VarChar(100)
+  nutritionData           Json                               @map("nutrition_data")
+  completenessSummary     Json                               @map("completeness_summary")
+  fieldSourceSummary      Json?                              @map("field_source_summary")
+  supplementRiskSummary   Json?                              @map("supplement_risk_summary")
+  agentRationale          String?                            @map("agent_rationale")
+  sortOrder               Int                                @default(0) @map("sort_order")
+  createdAt               DateTime                           @default(now()) @map("created_at")
+  updatedAt               DateTime                           @updatedAt @map("updated_at")
+  draft                   IngredientCreationDraft            @relation(fields: [draftId], references: [id], onDelete: Cascade)
+  sourceRecord            NutritionSourceRecord?             @relation(fields: [sourceRecordId], references: [id], onDelete: SetNull)
+
+  @@index([draftId])
+  @@index([sourceRecordId])
+  @@index([sourceType])
+  @@index([role])
+  @@map("ingredient_creation_draft_profile")
 }
 
 model SupplementNutritionDraft {

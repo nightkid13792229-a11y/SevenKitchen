@@ -84,6 +84,7 @@ function createReadyDraft(overrides: Record<string, any> = {}) {
 
 function createConfirmTransactionMock() {
   return {
+    $executeRaw: jest.fn().mockResolvedValue(0),
     ingredient: {
       findFirst: jest.fn().mockResolvedValue(null),
       create: jest.fn().mockResolvedValue({ id: 'ingredient-1' }),
@@ -642,6 +643,17 @@ describe('IngredientCreationService', () => {
         confirmedAt: expect.any(Date),
       },
     });
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(Array.from(tx.$executeRaw.mock.calls[0][0])).toEqual([
+      'SELECT pg_advisory_xact_lock(hashtext(',
+      '))',
+    ]);
+    expect(tx.$executeRaw.mock.calls[0][1]).toBe(
+      'ingredient_creation_confirm:鸭胸肉',
+    );
+    expect(tx.$executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.ingredient.findFirst.mock.invocationCallOrder[0],
+    );
     expect(tx.ingredient.findFirst).toHaveBeenCalledWith({
       where: {
         name: '鸭胸肉',
@@ -822,6 +834,10 @@ describe('IngredientCreationService', () => {
     await expect(
       service.confirmDraft('draft-1', { userId: 'admin-1', role: 'ADMIN' }),
     ).rejects.toThrow('标准原料已存在：鸭胸肉');
+    expect(tx.$executeRaw).toHaveBeenCalledTimes(1);
+    expect(tx.$executeRaw.mock.invocationCallOrder[0]).toBeLessThan(
+      tx.ingredient.findFirst.mock.invocationCallOrder[0],
+    );
     expect(tx.ingredientCreationDraft.updateMany).toHaveBeenCalledWith({
       where: { id: 'draft-1', status: 'READY_FOR_REVIEW' },
       data: {

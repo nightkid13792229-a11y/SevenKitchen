@@ -140,6 +140,10 @@ function assertUniqueNutritionFoodIdentities(
   }
 }
 
+function ingredientConfirmationLockKey(name: string): string {
+  return `ingredient_creation_confirm:${name.trim().toLowerCase()}`;
+}
+
 @Injectable()
 export class IngredientCreationService {
   constructor(
@@ -366,6 +370,9 @@ export class IngredientCreationService {
       if (claim.count !== 1) {
         throw new BadRequestException('只有待审核草稿可以确认入库');
       }
+
+      const lockKey = ingredientConfirmationLockKey(draft.suggestedName);
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${lockKey}))`;
 
       const existingIngredient = await tx.ingredient.findFirst({
         where: {

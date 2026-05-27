@@ -10,6 +10,7 @@ describe('mobile recipe designer schema', () => {
   it('keeps FEDIAF 2025 dog scenarios explicit', () => {
     expect(schema).toContain('enum FediafDogScenario');
     expect(schema).toContain('EARLY_GROWTH_REPRODUCTION');
+    expect(schema).toContain('REPRODUCTION');
     expect(schema).toContain('LATE_GROWTH');
     expect(schema).toContain('ADULT_MER_95');
     expect(schema).toContain('ADULT_MER_110');
@@ -37,6 +38,9 @@ describe('mobile recipe designer schema', () => {
     expect(schema).toContain('@default("FEDIAF_2025")');
     expect(schema).toContain('weightG');
     expect(schema).toContain('@map("weight_g")');
+    expect(schema).toContain('includeInAssessment');
+    expect(schema).toContain('@map("include_in_assessment")');
+    expect(schema).toContain('@default(true)');
     expect(schema).toContain('ratioPercent        Float?');
     expect(schema).not.toContain('weightPerKgG');
     expect(schema).not.toContain('@map("weight_per_kg_g")');
@@ -53,5 +57,13 @@ describe('mobile recipe designer schema', () => {
     expect(schema).toContain('@map("review_status")');
     expect(schema).toContain('snapshotData');
     expect(schema).toContain('@map("snapshot_data")');
+    expect(schema).toContain('publishedRecipeVersion');
+    expect(schema).toContain('@map("published_recipe_version")');
+    expect(schema).toContain('revisionOfDesignRecipeId');
+    expect(schema).toContain('@map("revision_of_design_recipe_id")');
+    expect(schema).toContain('revisionBaseRecipeId');
+    expect(schema).toContain('@map("revision_base_recipe_id")');
+    expect(schema).toContain('recipeVersion');
+    expect(schema).toContain('@map("recipe_version")');
   });
 });

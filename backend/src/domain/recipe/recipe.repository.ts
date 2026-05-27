@@ -67,7 +67,6 @@ export interface Recipe {
   designSource?: string | null;
   nutritionStandard?: string;
   nutritionDetailedData?: any;
-  nutritionReportUrl?: string | null;
   description?: string | null;
   viewCount?: number;
   favoriteCount?: number;

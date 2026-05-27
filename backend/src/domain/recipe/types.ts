@@ -46,12 +46,38 @@ export interface RecipeSnapshotItem {
  * All macronutrients use Dry Matter Basis (DM) with _dm_pct suffix.
  */
 export interface NutritionDetailedData {
-  moisture_pct: number; // 含水量 (As Fed basis)
-  protein_dm_pct: number; // 蛋白质 (Dry Matter Basis)
-  fat_dm_pct: number; // 脂肪 (Dry Matter Basis)
-  fiber_dm_pct: number; // 纤维 (Dry Matter Basis)
-  ash_dm_pct: number; // 灰分 (Dry Matter Basis)
-  carbs_dm_pct: number; // 碳水 (Dry Matter Basis)
-  ca_p_ratio: number; // 钙磷比 (Decimal, 2 places)
-  energy_density_kcal_per_kg: number; // 热量密度 (As Fed, matching column)
+  moisture_pct?: number | null; // 含水量 (As Fed basis)
+  protein_dm_pct?: number | null; // 蛋白质 (Dry Matter Basis)
+  fat_dm_pct?: number | null; // 脂肪 (Dry Matter Basis)
+  fiber_dm_pct?: number | null; // 纤维 (Dry Matter Basis)
+  ash_dm_pct?: number | null; // 灰分 (Dry Matter Basis)
+  carbs_dm_pct?: number | null; // 碳水 (Dry Matter Basis)
+  ca_p_ratio?: number | null; // 钙磷比 (Decimal, 2 places)
+  energy_density_kcal_per_kg?: number | null; // 热量密度 (As Fed, matching column)
+  source?: string;
+  schemaVersion?: number;
+  standard?: string;
+  scenario?: string;
+  generatedAt?: string;
+  summary?: NutritionDetailedSummary;
+  report?: SetarNutritionReport;
+}
+
+export type NutritionDetailedSummary = Pick<
+  NutritionDetailedData,
+  | 'moisture_pct'
+  | 'protein_dm_pct'
+  | 'fat_dm_pct'
+  | 'fiber_dm_pct'
+  | 'ash_dm_pct'
+  | 'carbs_dm_pct'
+  | 'ca_p_ratio'
+  | 'energy_density_kcal_per_kg'
+>;
+
+export interface SetarNutritionReport {
+  ingredientRows?: Array<Record<string, unknown>>;
+  macroRows?: Array<Record<string, unknown>>;
+  energyDensityRows?: Array<Record<string, unknown>>;
+  nutrientSections?: Record<string, unknown>;
 }

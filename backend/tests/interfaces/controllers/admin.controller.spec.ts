@@ -33,77 +33,30 @@ describe('AdminController', () => {
       {} as any,
     );
 
-  describe('uploadRecipeNutritionReport', () => {
-    it('rejects non-PDF files before uploading to COS', async () => {
-      const mockCosService = {
-        uploadFile: jest.fn(),
-      };
-      const controller = new AdminController(
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        mockCosService as any,
-      );
+  describe('recipe life stage metadata', () => {
+    it('returns the five precise recipe life stages used by the designer', async () => {
+      const controller = buildController();
 
-      const result = await (controller as any).uploadRecipeNutritionReport({
-        originalname: 'report.png',
-        mimetype: 'image/png',
-      } as Express.Multer.File);
+      const result = await controller.getLifeStages();
 
-      expect(result.code).toBe(400);
-      expect(result.message).toContain('PDF');
-      expect(mockCosService.uploadFile).not.toHaveBeenCalled();
+      expect(result.data).toEqual([
+        { value: 'PUPPY_UNDER_14_WEEKS', label: '小于14周幼犬' },
+        { value: 'PUPPY_14_WEEKS_PLUS', label: '大于等于14周幼犬' },
+        {
+          value: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          label: '低运动量成犬或老年犬',
+        },
+        { value: 'HIGH_ACTIVITY_ADULT', label: '普通或高运动量成犬' },
+        { value: 'REPRODUCTION', label: '繁殖期' },
+      ]);
     });
+  });
 
-    it('uploads PDF reports to the recipe nutrition report folder', async () => {
-      const mockCosService = {
-        uploadFile: jest.fn().mockResolvedValue({
-          url: 'https://cdn.example.com/recipe-nutrition-reports/report.pdf',
-          key: 'recipe-nutrition-reports/report.pdf',
-        }),
-      };
-      const controller = new AdminController(
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        {} as any,
-        mockCosService as any,
-      );
-      const file = {
-        originalname: 'report.pdf',
-        mimetype: 'application/pdf',
-      } as Express.Multer.File;
+  describe('recipe nutrition reports', () => {
+    it('does not expose the legacy PDF nutrition report upload endpoint', () => {
+      const controller = buildController();
 
-      const result = await (controller as any).uploadRecipeNutritionReport(file);
-
-      expect(mockCosService.uploadFile).toHaveBeenCalledWith(
-        file,
-        'report.pdf',
-        'recipe-nutrition-reports',
-      );
-      expect(result.data).toEqual({
-        url: 'https://cdn.example.com/recipe-nutrition-reports/report.pdf',
-        key: 'recipe-nutrition-reports/report.pdf',
-      });
+      expect((controller as any).uploadRecipeNutritionReport).toBeUndefined();
     });
   });
 
@@ -135,7 +88,7 @@ describe('AdminController', () => {
         status: 'PUBLIC',
         coverImageUrl: cleanCoverUrl,
         coverTitle: '肿瘤预防',
-        applicableLifeStages: ['ADULT'],
+        applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
         targetHealthTags: [],
       });
 
@@ -170,7 +123,7 @@ describe('AdminController', () => {
         status: 'PUBLIC',
         coverImageUrl: cleanCoverUrl,
         coverTitle: '肿瘤预防',
-        applicableLifeStages: ['ADULT'],
+        applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
         targetHealthTags: [],
       });
 
@@ -180,6 +133,31 @@ describe('AdminController', () => {
         expect.objectContaining({
           coverImageUrl: cleanCoverUrl,
           coverTitle: '肿瘤预防',
+        }),
+      );
+      expect(result.code).toBe(0);
+    });
+
+    it('preserves existing recipe health tags when updating only cover metadata', async () => {
+      const recipeService = {
+        updateRecipe: jest.fn().mockResolvedValue({
+          id: 'recipe-row-1',
+          coverImageUrl: cleanCoverUrl,
+          coverTitle: '营养封面',
+        }),
+      };
+      const controller = buildController({ recipeService });
+
+      const result = await controller.updateRecipe('recipe-row-1', {
+        coverImageUrl: cleanCoverUrl,
+        coverTitle: '营养封面',
+        description: '后台补充运营文案',
+      });
+
+      expect(recipeService.updateRecipe).toHaveBeenCalledWith(
+        'recipe-row-1',
+        expect.not.objectContaining({
+          targetHealthTags: [],
         }),
       );
       expect(result.code).toBe(0);

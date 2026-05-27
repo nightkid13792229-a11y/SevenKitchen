@@ -6,10 +6,13 @@ describe('RecipeService', () => {
     recipe: {
       findUnique: jest.fn(),
       findFirst: jest.fn(),
+      findMany: jest.fn(),
       create: jest.fn(),
+      update: jest.fn(),
     },
     recipeHealthTagAssignment: {
       createMany: jest.fn(),
+      deleteMany: jest.fn(),
     },
   };
 
@@ -20,6 +23,100 @@ describe('RecipeService', () => {
     service = new RecipeService(mockPrismaService as any);
     mockPrismaService.recipeHealthTagAssignment.createMany.mockResolvedValue({
       count: 0,
+    });
+  });
+
+  describe('getAllRecipes', () => {
+    it('groups recipe versions into one admin list row with current public and pending draft summaries', async () => {
+      const publicVersion = {
+        id: 'recipe-row-v1',
+        recipeId: 'recipe-series-1',
+        version: 1,
+        name: '萝卜绿豆鸭胸猪里脊',
+        status: RecipeStatus.PUBLIC,
+        energyDensityKcalPerKg: 1373,
+        coverImageUrl: null,
+        coverTitle: null,
+        applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+        salesCount: 0,
+        diyGenCount: 0,
+        likeCount: 0,
+        favoriteCount: 0,
+        healthTagAssignments: [],
+        createdAt: new Date('2026-05-27T08:58:00.000Z'),
+        updatedAt: new Date('2026-05-27T08:58:00.000Z'),
+      };
+      const firstDraftVersion = {
+        ...publicVersion,
+        id: 'recipe-row-v2',
+        version: 2,
+        name: '萝卜绿豆鸭胸猪里脊 修订',
+        status: RecipeStatus.DRAFT,
+        energyDensityKcalPerKg: 1374,
+        createdAt: new Date('2026-05-27T10:30:00.000Z'),
+        updatedAt: new Date('2026-05-27T10:30:00.000Z'),
+      };
+      const latestDraftVersion = {
+        ...publicVersion,
+        id: 'recipe-row-v3',
+        version: 3,
+        name: '萝卜绿豆鸭胸猪里脊 修订 修订',
+        status: RecipeStatus.DRAFT,
+        createdAt: new Date('2026-05-27T10:48:00.000Z'),
+        updatedAt: new Date('2026-05-27T10:48:00.000Z'),
+      };
+      const otherRecipe = {
+        ...publicVersion,
+        id: 'recipe-row-other',
+        recipeId: 'recipe-series-2',
+        version: 1,
+        name: '燕麦鳕鱼猪肉',
+        status: RecipeStatus.PUBLIC,
+        createdAt: new Date('2026-01-23T15:26:00.000Z'),
+        updatedAt: new Date('2026-01-23T15:26:00.000Z'),
+      };
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        latestDraftVersion,
+        firstDraftVersion,
+        publicVersion,
+        otherRecipe,
+      ]);
+
+      const result = await service.getAllRecipes({ page: 1, pageSize: 20 });
+
+      expect(result.total).toBe(2);
+      expect(result.data).toEqual([
+        expect.objectContaining({
+          id: 'recipe-row-v3',
+          name: '萝卜绿豆鸭胸猪里脊 修订 修订',
+          version: 3,
+          status: RecipeStatus.DRAFT,
+          currentPublicVersion: expect.objectContaining({
+            id: 'recipe-row-v1',
+            version: 1,
+            status: RecipeStatus.PUBLIC,
+          }),
+          pendingDraftVersion: expect.objectContaining({
+            id: 'recipe-row-v3',
+            version: 3,
+            status: RecipeStatus.DRAFT,
+          }),
+          versionHistory: [
+            expect.objectContaining({ id: 'recipe-row-v3', version: 3 }),
+            expect.objectContaining({ id: 'recipe-row-v2', version: 2 }),
+            expect.objectContaining({ id: 'recipe-row-v1', version: 1 }),
+          ],
+        }),
+        expect.objectContaining({
+          id: 'recipe-row-other',
+          version: 1,
+          currentPublicVersion: expect.objectContaining({
+            id: 'recipe-row-other',
+            version: 1,
+          }),
+          pendingDraftVersion: undefined,
+        }),
+      ]);
     });
   });
 
@@ -156,9 +253,7 @@ describe('RecipeService', () => {
   });
 
   describe('createRecipe', () => {
-    it('persists and returns the nutrition report url for the current recipe record', async () => {
-      const reportUrl =
-        'https://cdn.example.com/recipe-nutrition-reports/report.pdf';
+    it('does not persist legacy nutrition report PDF urls on recipe records', async () => {
       const createdRecipe = {
         id: 'recipe-created-id',
         recipeId: 'recipe-created',
@@ -178,7 +273,6 @@ describe('RecipeService', () => {
         nutritionDetailedData: null,
         applicableLifeStages: [],
         productionSteps: null,
-        nutritionReportUrl: reportUrl,
         salesCount: 0,
         diyGenCount: 0,
         likeCount: 0,
@@ -199,17 +293,95 @@ describe('RecipeService', () => {
         name: '营养报告食谱',
         nutritionStandard: 'FEDIAF_2021',
         energyDensityKcalPerKg: 1320,
-        nutritionReportUrl: reportUrl,
+        nutritionReportUrl:
+          'https://cdn.example.com/recipe-nutrition-reports/report.pdf',
       });
 
       expect(mockPrismaService.recipe.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({
-            nutritionReportUrl: reportUrl,
+          data: expect.not.objectContaining({
+            nutritionReportUrl: expect.anything(),
           }),
         }),
       );
-      expect(result.nutritionReportUrl).toBe(reportUrl);
+      expect(result).not.toHaveProperty('nutritionReportUrl');
+    });
+  });
+
+  describe('updateRecipe', () => {
+    it('preserves existing nutrition summary even when admin update payload includes nutrition data', async () => {
+      const nutritionDetailedData = {
+        protein_dm_pct: 58.2,
+        fat_dm_pct: 38.2,
+        energy_density_kcal_per_kg: 2080,
+      };
+      const existingRecipe = {
+        id: 'recipe-row-id',
+        recipeId: 'recipe-designer-id',
+        version: 1,
+        name: '设计器发布食谱',
+        status: RecipeStatus.PUBLIC,
+        energyDensityKcalPerKg: 2080,
+        productionLossRate: 1,
+        batchLaborHours: null,
+        coverImageUrl: null,
+        coverTitle: null,
+        detailImages: [],
+        videoUrl: null,
+        description: null,
+        designSource: 'Setar',
+        nutritionStandard: 'FEDIAF_2025',
+        nutritionDetailedData,
+        applicableLifeStages: ['HIGH_ACTIVITY_ADULT'],
+        productionSteps: null,
+        healthTagAssignments: [{ healthTagId: 'health-tag-1' }],
+        items: [],
+      };
+      const updatedRecipe = {
+        ...existingRecipe,
+        coverImageUrl: 'https://static.example.com/cover.jpg',
+        coverTitle: '封面标题',
+        description: '后台补充描述',
+        productionSteps: '1. 处理原料',
+        salesCount: 0,
+        diyGenCount: 0,
+        likeCount: 0,
+        favoriteCount: 0,
+        createdAt: new Date('2026-05-22T10:00:00.000Z'),
+        updatedAt: new Date('2026-05-22T10:10:00.000Z'),
+      };
+
+      mockPrismaService.recipe.findUnique
+        .mockResolvedValueOnce(existingRecipe)
+        .mockResolvedValueOnce(updatedRecipe);
+      mockPrismaService.recipe.update.mockResolvedValue({
+        id: 'recipe-row-id',
+      });
+
+      const result = await service.updateRecipe('recipe-row-id', {
+        coverImageUrl: 'https://static.example.com/cover.jpg',
+        coverTitle: '封面标题',
+        description: '后台补充描述',
+        productionSteps: '1. 处理原料',
+        nutritionDetailedData: {
+          protein_dm_pct: 1,
+          fat_dm_pct: 1,
+        },
+      });
+
+      expect(mockPrismaService.recipe.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            coverImageUrl: 'https://static.example.com/cover.jpg',
+            coverTitle: '封面标题',
+          }),
+        }),
+      );
+      expect(
+        mockPrismaService.recipe.update.mock.calls[0][0].data
+          .nutritionDetailedData,
+      ).toBeUndefined();
+      expect(result.nutritionDetailedData).toEqual(nutritionDetailedData);
     });
   });
 });

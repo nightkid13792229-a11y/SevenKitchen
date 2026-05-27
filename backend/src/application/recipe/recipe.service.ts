@@ -25,6 +25,7 @@ import type { RecipeQueryDto } from '../../interfaces/dto/recipes/admin-recipe.d
 import type {
   IngredientPreparationMethodHistoryDto,
   RecipeSummaryResponseDto,
+  RecipeVersionSummaryDto,
   RecipeDetailResponseDto,
   RecipeListResponseDto,
 } from '../../interfaces/dto/recipes/admin-recipe.dto';
@@ -57,17 +58,6 @@ export class RecipeService {
       },
     },
   };
-
-  private resolveNutritionReportUrlForUpdate(
-    dto: Record<string, any>,
-    existingUrl?: string | null,
-  ): string | null | undefined {
-    if (Object.prototype.hasOwnProperty.call(dto, 'nutritionReportUrl')) {
-      return dto.nutritionReportUrl || null;
-    }
-
-    return existingUrl;
-  }
 
   private normalizeSupplementAlternativeIngredientIds(
     ingredientIds?: string[] | null,
@@ -410,25 +400,23 @@ export class RecipeService {
       };
     }
 
-    const [recipes, total] = await Promise.all([
-      this.prisma.recipe.findMany({
-        where,
-        include: {
-          healthTagAssignments: {
-            include: {
-              healthTag: true,
-            },
+    const recipes = await this.prisma.recipe.findMany({
+      where,
+      include: {
+        healthTagAssignments: {
+          include: {
+            healthTag: true,
           },
         },
-        orderBy: { createdAt: 'desc' },
-        skip: (page - 1) * pageSize,
-        take: pageSize,
-      }),
-      this.prisma.recipe.count({ where }),
-    ]);
+      },
+      orderBy: { createdAt: 'desc' },
+    });
 
-    const data: RecipeSummaryResponseDto[] = recipes.map((recipe: any) =>
-      this.mapToSummaryDto(recipe),
+    const groupedRecipes = this.buildRecipeSeriesListRows(recipes);
+    const total = groupedRecipes.length;
+    const data = groupedRecipes.slice(
+      (page - 1) * pageSize,
+      (page - 1) * pageSize + pageSize,
     );
 
     return {
@@ -436,6 +424,53 @@ export class RecipeService {
       total,
       page,
       pageSize,
+    };
+  }
+
+  private buildRecipeSeriesListRows(
+    recipes: any[],
+  ): RecipeSummaryResponseDto[] {
+    const groups = new Map<string, any[]>();
+
+    for (const recipe of recipes) {
+      const key = recipe.recipeId || recipe.id;
+      groups.set(key, [...(groups.get(key) ?? []), recipe]);
+    }
+
+    return [...groups.values()]
+      .map((group) => this.buildRecipeSeriesListRow(group))
+      .sort((left, right) => {
+        const leftTime = new Date(left.createdAt).getTime();
+        const rightTime = new Date(right.createdAt).getTime();
+        return rightTime - leftTime;
+      });
+  }
+
+  private buildRecipeSeriesListRow(group: any[]): RecipeSummaryResponseDto {
+    const sortedByVersion = [...group].sort(
+      (left, right) => (right.version ?? 0) - (left.version ?? 0),
+    );
+    const pendingDraft =
+      sortedByVersion.find((recipe) => recipe.status === RecipeStatus.DRAFT) ??
+      null;
+    const currentPublic =
+      sortedByVersion.find((recipe) => recipe.status === RecipeStatus.PUBLIC) ??
+      null;
+    const current = pendingDraft ?? currentPublic ?? sortedByVersion[0];
+    const summary = this.mapToSummaryDto(current);
+    const versionHistory = sortedByVersion.map((recipe) =>
+      this.mapToVersionSummaryDto(recipe),
+    );
+
+    return {
+      ...summary,
+      currentPublicVersion: currentPublic
+        ? this.mapToVersionSummaryDto(currentPublic)
+        : undefined,
+      pendingDraftVersion: pendingDraft
+        ? this.mapToVersionSummaryDto(pendingDraft)
+        : undefined,
+      versionHistory,
     };
   }
 
@@ -498,10 +533,8 @@ export class RecipeService {
         videoUrl: dto.videoUrl,
         description: dto.description,
         designSource: dto.designSource,
-        nutritionReportUrl: dto.nutritionReportUrl || null,
         nutritionStandard: dto.nutritionStandard,
-        nutritionDetailedData: (dto.nutritionDetailedData ||
-          Prisma.JsonNull) as unknown as Prisma.InputJsonValue,
+        nutritionDetailedData: Prisma.JsonNull,
         targetHealthTags: [] as any, // Keep empty for now, will be migrated
         applicableLifeStages: dto.applicableLifeStages || [],
         productionSteps: dto.productionSteps,
@@ -608,13 +641,8 @@ export class RecipeService {
         videoUrl: dto.videoUrl,
         description: dto.description,
         designSource: dto.designSource,
-        nutritionReportUrl: this.resolveNutritionReportUrlForUpdate(
-          dto,
-          existing.nutritionReportUrl,
-        ),
         nutritionStandard: dto.nutritionStandard,
-        nutritionDetailedData: (dto.nutritionDetailedData ??
-          Prisma.JsonNull) as unknown as Prisma.InputJsonValue,
+        nutritionDetailedData: undefined,
         targetHealthTags: [] as any, // Keep empty for now
         applicableLifeStages: dto.applicableLifeStages ?? undefined,
         productionSteps: dto.productionSteps,
@@ -786,7 +814,6 @@ export class RecipeService {
         videoUrl: recipe.videoUrl,
         description: recipe.description,
         designSource: recipe.designSource,
-        nutritionReportUrl: recipe.nutritionReportUrl,
         nutritionStandard: recipe.nutritionStandard,
         nutritionDetailedData:
           recipe.nutritionDetailedData as Prisma.InputJsonValue,
@@ -942,6 +969,7 @@ export class RecipeService {
   private mapToSummaryDto(recipe: any): RecipeSummaryResponseDto {
     return {
       id: recipe.id,
+      recipeId: recipe.recipeId,
       name: recipe.name,
       version: recipe.version,
       status: recipe.status as RecipeStatus,
@@ -955,6 +983,17 @@ export class RecipeService {
       diyGenCount: recipe.diyGenCount,
       likeCount: recipe.likeCount,
       favoriteCount: recipe.favoriteCount,
+      createdAt: recipe.createdAt.toISOString(),
+      updatedAt: recipe.updatedAt.toISOString(),
+    };
+  }
+
+  private mapToVersionSummaryDto(recipe: any): RecipeVersionSummaryDto {
+    return {
+      id: recipe.id,
+      name: recipe.name,
+      version: recipe.version,
+      status: recipe.status as RecipeStatus,
       createdAt: recipe.createdAt.toISOString(),
       updatedAt: recipe.updatedAt.toISOString(),
     };
@@ -976,7 +1015,6 @@ export class RecipeService {
       designSource: recipe.designSource || undefined,
       nutritionStandard: recipe.nutritionStandard as NutritionStandard,
       nutritionDetailedData: recipe.nutritionDetailedData || undefined,
-      nutritionReportUrl: recipe.nutritionReportUrl || undefined,
       productionSteps: recipe.productionSteps || undefined,
       productionLossRate: recipe.productionLossRate,
       batchLaborHours: recipe.batchLaborHours || undefined,

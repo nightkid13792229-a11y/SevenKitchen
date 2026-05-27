@@ -172,6 +172,82 @@ describe('FEDIAF 2025 dog structured standard data', () => {
     }
   });
 
+  it('keeps reproduction separate from puppy-only nutritional maximums', () => {
+    const maxByNutrient = (lifeStage: string, nutrientCode: string) =>
+      FEDIAF_2025_DOG_STANDARD_ENTRIES.filter(
+        (entry) =>
+          entry.sourceType === 'ANNEX_7_8' &&
+          entry.sourceTable === 'VII-17a' &&
+          entry.basis === 'PER_1000_KCAL_ME' &&
+          entry.lifeStage === lifeStage &&
+          entry.nutrientCode === nutrientCode,
+      ).map((entry) => entry.maxValue);
+
+    expect(
+      maxByNutrient('EARLY_GROWTH_UNDER_14_WEEKS', 'lysine'),
+    ).toEqual([7]);
+    expect(maxByNutrient('REPRODUCTION', 'lysine')).toEqual([null]);
+
+    expect(
+      maxByNutrient('EARLY_GROWTH_UNDER_14_WEEKS', 'linoleicAcid'),
+    ).toEqual([16.25]);
+    expect(maxByNutrient('REPRODUCTION', 'linoleicAcid')).toEqual([null]);
+
+    expect(
+      maxByNutrient('EARLY_GROWTH_UNDER_14_WEEKS', 'calcium'),
+    ).toEqual([4]);
+    expect(maxByNutrient('REPRODUCTION', 'calcium')).toEqual([null]);
+
+    expect(
+      maxByNutrient('REPRODUCTION', 'calciumPhosphorusRatio'),
+    ).toEqual([1.6]);
+    expect(maxByNutrient('REPRODUCTION', 'vitaminA')).toEqual([100000]);
+  });
+
+  it.each([
+    ['VII-17a', 'EARLY_GROWTH_UNDER_14_WEEKS'],
+    ['VII-17a', 'REPRODUCTION'],
+    ['VII-17b', 'LATE_GROWTH_FROM_14_WEEKS'],
+    ['VII-17c', 'ADULT_MER_110'],
+    ['VII-17d', 'ADULT_MER_95'],
+  ] as const)(
+    'uses the fixed FEDIAF 400 kcal per 100g DM conversion for %s %s vitamin D legal maximum',
+    (sourceTable, lifeStage) => {
+      const vitaminDPer1000 = FEDIAF_2025_DOG_STANDARD_ENTRIES.find(
+        (entry) =>
+          entry.sourceType === 'ANNEX_7_8' &&
+          entry.sourceTable === sourceTable &&
+          entry.lifeStage === lifeStage &&
+          entry.basis === 'PER_1000_KCAL_ME' &&
+          entry.nutrientCode === 'vitaminD',
+      );
+      const vitaminDPerMj = FEDIAF_2025_DOG_STANDARD_ENTRIES.find(
+        (entry) =>
+          entry.sourceType === 'ANNEX_7_8' &&
+          entry.sourceTable === sourceTable &&
+          entry.lifeStage === lifeStage &&
+          entry.basis === 'PER_MJ_ME' &&
+          entry.nutrientCode === 'vitaminD',
+      );
+
+      expect(vitaminDPer1000).toMatchObject({
+        maxValue: 568,
+        maxType: 'LEGAL_MAX',
+        recommendedValue: 800,
+      });
+      expect(vitaminDPer1000?.notes).toContain('227 IU/100 g DM');
+      expect(vitaminDPer1000?.notes).toContain('400 kcal/100 g DM');
+
+      expect(vitaminDPerMj).toMatchObject({
+        maxType: 'LEGAL_MAX',
+        recommendedValue: 191,
+      });
+      expect(vitaminDPerMj?.maxValue).toBeCloseTo(135.76, 2);
+      expect(vitaminDPerMj?.notes).toContain('227 IU/100 g DM');
+      expect(vitaminDPerMj?.notes).toContain('400 kcal/100 g DM');
+    },
+  );
+
   it('includes direct, combination, and ratio nutrient mappings', () => {
     expect(FEDIAF_2025_DOG_NUTRIENTS).toEqual(
       expect.arrayContaining([

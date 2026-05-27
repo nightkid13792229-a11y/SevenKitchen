@@ -116,10 +116,6 @@ export class CreateRecipeDto {
   @IsString()
   designSource?: string;
 
-  @IsOptional()
-  @IsString()
-  nutritionReportUrl?: string;
-
   @IsString()
   nutritionStandard!: string;
 
@@ -197,10 +193,6 @@ export class UpdateRecipeDto {
   @IsOptional()
   @IsString()
   designSource?: string;
-
-  @IsOptional()
-  @IsString()
-  nutritionReportUrl?: string | null;
 
   @IsOptional()
   @IsString()
@@ -284,8 +276,18 @@ export class RecipeQueryDto {
 /**
  * Recipe Summary Response DTO
  */
+export interface RecipeVersionSummaryDto {
+  id: string;
+  name: string;
+  version: number;
+  status: RecipeStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface RecipeSummaryResponseDto {
   id: string;
+  recipeId?: string;
   name: string;
   version: number;
   status: RecipeStatus;
@@ -301,6 +303,9 @@ export interface RecipeSummaryResponseDto {
   designSource?: string;
   createdAt: string;
   updatedAt: string;
+  currentPublicVersion?: RecipeVersionSummaryDto;
+  pendingDraftVersion?: RecipeVersionSummaryDto;
+  versionHistory?: RecipeVersionSummaryDto[];
 }
 
 /**
@@ -311,7 +316,6 @@ export interface RecipeDetailResponseDto extends RecipeSummaryResponseDto {
   videoUrl?: string;
   description?: string;
   designSource?: string;
-  nutritionReportUrl?: string;
   nutritionStandard: NutritionStandard;
   nutritionDetailedData?: NutritionDetailedData;
   productionSteps?: string;

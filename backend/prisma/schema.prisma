@@ -280,7 +280,6 @@ model Recipe {
   designSource           String?                     @map("design_source")
   customOrderId          String?                     @map("custom_order_id")
   isCustomRecipe         Boolean                     @default(false) @map("is_custom_recipe")
-  nutritionReportUrl     String?                     @map("nutrition_report_url")
   customOrder            CustomRecipeOrder?          @relation("CustomRecipeOrders")
   healthTagAssignments   RecipeHealthTagAssignment[]
   items                  RecipeItem[]
@@ -1567,6 +1566,8 @@ enum NutritionFoodStatus {
 enum NutritionGovernanceSourceType {
   USDA
   NZFCD
+  NEVO
+  TFDA
   CFCT
   SUPPLEMENT_LABEL
   MANUAL
@@ -1677,6 +1678,7 @@ enum DesignRecipeReviewStatus {
 
 enum FediafDogScenario {
   EARLY_GROWTH_REPRODUCTION
+  REPRODUCTION
   LATE_GROWTH
   ADULT_MER_95
   ADULT_MER_110
@@ -2034,6 +2036,9 @@ model DesignRecipe {
   createdBy              String                        @map("created_by")
   publishedAt            DateTime?                     @map("published_at")
   publishedRecipeId      String?                       @map("published_recipe_id")
+  publishedRecipeVersion Int?                          @map("published_recipe_version")
+  revisionOfDesignRecipeId String?                     @map("revision_of_design_recipe_id")
+  revisionBaseRecipeId   String?                       @map("revision_base_recipe_id")
   createdAt              DateTime                      @default(now()) @map("created_at")
   updatedAt              DateTime                      @updatedAt @map("updated_at")
   items                  DesignRecipeItem[]
@@ -2045,6 +2050,8 @@ model DesignRecipe {
   @@index([createdBy])
   @@index([isCompliant])
   @@index([fediafDogScenario])
+  @@index([revisionOfDesignRecipeId])
+  @@index([revisionBaseRecipeId])
   @@map("design_recipe")
 }
 
@@ -2055,6 +2062,7 @@ model DesignRecipeItem {
   ingredientId        String?       @map("ingredient_id")
   nutritionFoodId     String        @map("nutrition_food_id")
   weightG             Float         @map("weight_g")
+  includeInAssessment Boolean       @default(true) @map("include_in_assessment")
   ratioPercent        Float?        @map("ratio_percent")
   preparationMethod   String?       @map("preparation_method") @db.VarChar(100)
   nutrientTargetKey   String?       @map("nutrient_target_key")
@@ -2095,6 +2103,7 @@ model DesignRecipePublishSnapshot {
   id             String                   @id @default(uuid()) @map("id")
   designRecipeId String                   @map("design_recipe_id")
   recipeId       String                   @map("recipe_id")
+  recipeVersion  Int?                     @map("recipe_version")
   snapshotData   Json                     @map("snapshot_data")
   reviewStatus   DesignRecipeReviewStatus @map("review_status")
   reviewNote     String?                  @map("review_note")
@@ -2104,6 +2113,7 @@ model DesignRecipePublishSnapshot {
 
   @@index([designRecipeId])
   @@index([recipeId])
+  @@index([recipeId, recipeVersion])
   @@map("design_recipe_publish_snapshot")
 }
 

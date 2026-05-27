@@ -187,6 +187,11 @@ import { RecipeDesignerService } from './application/recipe-designer/recipe-desi
 import { IngredientCreationService } from './application/ingredient-creation/ingredient-creation.service';
 import { IngredientCreationAgentService } from './application/ingredient-creation/ingredient-creation-agent.service';
 import {
+  SupplementLabelExtractionService,
+  SUPPLEMENT_LABEL_OCR_PROVIDER,
+  TencentCloudSupplementLabelOcrProvider,
+} from './application/recipe-designer/supplement-label-extraction.service';
+import {
   FEDIAF_TARGET_PROVIDER,
   PrismaFediafTargetProvider,
 } from './application/recipe-designer/fediaf-target-provider';
@@ -648,6 +653,11 @@ validatePrismaConfig();
     CustomRecipeService,
     // Nutrition Food Service (Recipe Designer)
     NutritionFoodService,
+    SupplementLabelExtractionService,
+    {
+      provide: SUPPLEMENT_LABEL_OCR_PROVIDER,
+      useClass: TencentCloudSupplementLabelOcrProvider,
+    },
     AgentProviderConfigService,
     TrustedNutritionWebSearchService,
     NutritionGovernanceService,

@@ -1,8 +1,10 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
   IsIn,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
   Min,
@@ -10,17 +12,62 @@ import {
 
 export const RECIPE_DESIGNER_SCENARIOS = [
   'EARLY_GROWTH_REPRODUCTION',
+  'REPRODUCTION',
   'LATE_GROWTH',
   'ADULT_MER_110',
   'ADULT_MER_95',
 ] as const;
 
+export const ASSESSMENT_EXPRESSION_BASES = [
+  'PER_1000_KCAL_ME',
+  'PER_MJ_ME',
+  'PER_100G_DRY_MATTER',
+  'RATIO',
+] as const;
+
 export type RecipeDesignerScenario = (typeof RECIPE_DESIGNER_SCENARIOS)[number];
+export type AssessmentExpressionBasisDto =
+  (typeof ASSESSMENT_EXPRESSION_BASES)[number];
+
+export const SUPPLEMENT_NUTRITION_BASIS_TYPES = [
+  'PER_1_G',
+  'PER_100_G',
+  'PER_1_ML',
+  'PER_100_ML',
+  'PER_SERVING',
+] as const;
+
+export type SupplementNutritionBasisType =
+  (typeof SUPPLEMENT_NUTRITION_BASIS_TYPES)[number];
+
+export const SUPPLEMENT_USAGE_UNITS = [
+  'g',
+  'ml',
+  '粒',
+  '片',
+  '胶囊',
+  '平勺',
+  '份',
+] as const;
+
+export type SupplementUsageUnit = (typeof SUPPLEMENT_USAGE_UNITS)[number];
 
 export class ListRecipeDesignerIngredientOptionsDto {
   @IsOptional()
   @IsString()
   search?: string;
+
+  @IsOptional()
+  @IsString()
+  nutrientKey?: string;
+
+  @IsOptional()
+  @IsIn(RECIPE_DESIGNER_SCENARIOS)
+  scenario?: RecipeDesignerScenario;
+
+  @IsOptional()
+  @IsIn(ASSESSMENT_EXPRESSION_BASES)
+  expressionBasis?: AssessmentExpressionBasisDto;
 
   @IsOptional()
   @Type(() => Number)
@@ -55,6 +102,38 @@ export class CreateRecipeDesignDraftDto {
   @IsOptional()
   @IsString()
   notes?: string;
+}
+
+export class CreateRecipeDesignerSupplementOptionDto {
+  @IsString()
+  name!: string;
+
+  @IsOptional()
+  @IsString()
+  profileName?: string;
+
+  @IsOptional()
+  @IsIn(SUPPLEMENT_NUTRITION_BASIS_TYPES)
+  basisType?: SupplementNutritionBasisType;
+
+  @IsOptional()
+  @IsIn(SUPPLEMENT_USAGE_UNITS)
+  usageUnit?: SupplementUsageUnit;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  servingWeightG?: number;
+
+  @IsOptional()
+  @Type(() => Number)
+  @IsNumber()
+  @Min(0)
+  densityGPerMl?: number;
+
+  @IsObject()
+  nutrients!: Record<string, number | string | null | undefined>;
 }
 
 export class UpdateRecipeDesignDraftDto {
@@ -111,6 +190,10 @@ export class AddRecipeDesignItemDto {
   @Type(() => Number)
   @IsNumber()
   sortOrder?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  includeInAssessment?: boolean;
 }
 
 export class UpdateRecipeDesignItemDto {
@@ -137,9 +220,17 @@ export class UpdateRecipeDesignItemDto {
   @Type(() => Number)
   @IsNumber()
   sortOrder?: number;
+
+  @IsOptional()
+  @IsBoolean()
+  includeInAssessment?: boolean;
 }
 
 export class PublishRecipeDesignDraftDto {
+  @IsOptional()
+  @IsString()
+  name?: string;
+
   @IsOptional()
   @IsString()
   reviewNote?: string;

@@ -101,6 +101,7 @@ import {
   RecipeStatus,
   RecipeHealthTag,
   LifeStage,
+  RECIPE_LIFE_STAGE_OPTIONS,
 } from '../../domain/recipe/enums';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { UseInterceptors } from '@nestjs/common';
@@ -142,6 +143,7 @@ export class AdminController {
             id: mapping.nutritionFood.id,
             name: mapping.nutritionFood.name,
             nameEn: mapping.nutritionFood.nameEn ?? undefined,
+            displayNameZh: mapping.nutritionFood.displayNameZh ?? undefined,
             dataSource: mapping.nutritionFood.dataSource,
             externalId: mapping.nutritionFood.externalId ?? undefined,
             preparationState:
@@ -192,6 +194,7 @@ export class AdminController {
                 id: true,
                 name: true,
                 nameEn: true,
+                displayNameZh: true,
                 dataSource: true,
                 externalId: true,
                 preparationState: true,
@@ -413,6 +416,7 @@ export class AdminController {
                 id: true,
                 name: true,
                 nameEn: true,
+                displayNameZh: true,
                 dataSource: true,
                 externalId: true,
               preparationState: true,
@@ -3045,41 +3049,6 @@ export class AdminController {
     }
   }
 
-  @Post('recipes/upload-nutrition-report')
-  @UseGuards(AuthGuard, AdminGuard)
-  @UseInterceptors(FileInterceptor('file'))
-  @ApiOperation({ summary: 'Upload recipe nutrition report PDF to Tencent COS' })
-  @ApiResponse({ status: 201, description: 'Nutrition report uploaded' })
-  @ApiResponse({ status: 400, description: 'Upload failed' })
-  async uploadRecipeNutritionReport(
-    @UploadedFile() file: Express.Multer.File,
-  ): Promise<ApiResponseDto<any>> {
-    if (!file) {
-      return ApiResponseDto.error(400, '请上传营养报告 PDF 文件');
-    }
-
-    const isPdf =
-      file.mimetype === 'application/pdf' ||
-      file.originalname?.toLowerCase().endsWith('.pdf');
-    if (!isPdf) {
-      return ApiResponseDto.error(400, '只支持 PDF 格式的营养报告');
-    }
-
-    try {
-      const result = await this.cosService.uploadFile(
-        file,
-        file.originalname,
-        'recipe-nutrition-reports',
-      );
-      return ApiResponseDto.success(result);
-    } catch (error) {
-      if (error instanceof BadRequestException) {
-        return ApiResponseDto.error(400, error.message);
-      }
-      throw error;
-    }
-  }
-
   @Post('ingredients/upload-diy-image')
   @UseGuards(AuthGuard, AdminGuard)
   @UseInterceptors(FileInterceptor('file'))
@@ -3275,14 +3244,7 @@ export class AdminController {
   @ApiOperation({ summary: 'Get life stage enum options' })
   @ApiResponse({ status: 200, description: 'Life stage options' })
   async getLifeStages(): Promise<ApiResponseDto<any>> {
-    const data = [
-      { value: LifeStage.PUPPY, label: '幼犬' },
-      { value: LifeStage.ADULT, label: '成犬' },
-      { value: LifeStage.SENIOR, label: '老年' },
-      { value: LifeStage.PREGNANCY, label: '妊娠期' },
-      { value: LifeStage.LACTATION, label: '哺乳期' },
-    ];
-    return ApiResponseDto.success(data);
+    return ApiResponseDto.success(RECIPE_LIFE_STAGE_OPTIONS);
   }
 
   @Get('recipes/metadata/health-tags')
@@ -3886,9 +3848,11 @@ export class AdminController {
         ...dto,
         nutritionStandard: dto.nutritionStandard,
         status: dto.status,
-        targetHealthTags: dto.targetHealthTags || [], // Keep as UUID array
         applicableLifeStages: dto.applicableLifeStages,
       };
+      if (Object.prototype.hasOwnProperty.call(dto, 'targetHealthTags')) {
+        transformedDto.targetHealthTags = dto.targetHealthTags || [];
+      }
 
       const recipe = await this.recipeService.updateRecipe(id, transformedDto);
       return ApiResponseDto.success(recipe);

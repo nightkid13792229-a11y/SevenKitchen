@@ -379,16 +379,24 @@ export class RecipesController {
    */
   private mapNutritionDetailedData(dbData: any): any {
     if (!dbData) return undefined;
+    const summary = dbData.summary ?? dbData;
 
     return {
-      energyDensityKcalPerKg: dbData.energy_density_kcal_per_kg,
-      proteinPercent: dbData.protein_dm_pct,
-      fatPercent: dbData.fat_dm_pct,
-      ashPercent: dbData.ash_dm_pct,
-      moisturePercent: dbData.moisture_pct,
-      crudeFiberPercent: dbData.fiber_dm_pct,
-      carbohydratePercent: dbData.carbs_dm_pct,
-      calciumPhosphorusRatio: dbData.ca_p_ratio,
+      source: dbData.source,
+      schemaVersion: dbData.schemaVersion,
+      standard: dbData.standard,
+      scenario: dbData.scenario,
+      generatedAt: dbData.generatedAt,
+      report: dbData.report,
+      summary: dbData.summary,
+      energyDensityKcalPerKg: summary.energy_density_kcal_per_kg,
+      proteinPercent: summary.protein_dm_pct,
+      fatPercent: summary.fat_dm_pct,
+      ashPercent: summary.ash_dm_pct,
+      moisturePercent: summary.moisture_pct,
+      crudeFiberPercent: summary.fiber_dm_pct,
+      carbohydratePercent: summary.carbs_dm_pct,
+      calciumPhosphorusRatio: summary.ca_p_ratio,
     };
   }
 
@@ -490,7 +498,6 @@ export class RecipesController {
       targetHealthTags: (recipe as any).targetHealthTags || [],
       applicableLifeStages: (recipe as any).applicableLifeStages || [],
       nutritionDetailedData,
-      nutritionReportUrl: (recipe as any).nutritionReportUrl || undefined,
       items: allIngredients,
       description: (recipe as any).description,
     };

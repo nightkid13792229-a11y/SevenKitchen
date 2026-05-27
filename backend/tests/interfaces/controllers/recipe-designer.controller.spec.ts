@@ -3,13 +3,18 @@ import { GUARDS_METADATA } from '@nestjs/common/constants';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { RecipeDesignerService } from '../../../src/application/recipe-designer/recipe-designer.service';
+import { SupplementLabelExtractionService } from '../../../src/application/recipe-designer/supplement-label-extraction.service';
+import { TencentCosService } from '../../../src/infrastructure/services/tencent-cos.service';
 import { AuthGuard, JwtAuthService } from '../../../src/interfaces/auth';
 import { RecipeDesignerController } from '../../../src/interfaces/controllers/recipe-designer.controller';
 import { StaffGuard } from '../../../src/interfaces/guards/role.guard';
 
 describe('RecipeDesignerController authorization', () => {
   it('requires authentication and staff guards', () => {
-    const guards = Reflect.getMetadata(GUARDS_METADATA, RecipeDesignerController);
+    const guards = Reflect.getMetadata(
+      GUARDS_METADATA,
+      RecipeDesignerController,
+    );
 
     expect(guards).toEqual([AuthGuard, StaffGuard]);
   });
@@ -43,6 +48,14 @@ describe('RecipeDesignerController', () => {
     removeItem: jest.fn(),
     assessDraft: jest.fn(),
     publishDraft: jest.fn(),
+    createRevisionDraft: jest.fn(),
+    createSupplementOption: jest.fn(),
+  };
+  const cosService = {
+    uploadImage: jest.fn(),
+  };
+  const supplementLabelExtractionService = {
+    extractFromImage: jest.fn(),
   };
 
   const currentUser = {
@@ -56,6 +69,11 @@ describe('RecipeDesignerController', () => {
       controllers: [RecipeDesignerController],
       providers: [
         { provide: RecipeDesignerService, useValue: service },
+        { provide: TencentCosService, useValue: cosService },
+        {
+          provide: SupplementLabelExtractionService,
+          useValue: supplementLabelExtractionService,
+        },
         {
           provide: AuthGuard,
           useValue: { canActivate: jest.fn().mockReturnValue(true) },
@@ -91,7 +109,7 @@ describe('RecipeDesignerController', () => {
       ),
     ).resolves.toEqual(expect.objectContaining({ code: 0 }));
     await expect(
-      controller.updateDraft('design-1', { name: 'new' }),
+      controller.updateDraft('design-1', { name: 'new' }, currentUser),
     ).resolves.toEqual(expect.objectContaining({ code: 0 }));
     await expect(
       controller.deleteDraft('design-1', currentUser),
@@ -102,10 +120,37 @@ describe('RecipeDesignerController', () => {
       { name: 'new', scenario: 'ADULT_MER_110' },
       'staff-1',
     );
-    expect(service.updateDraft).toHaveBeenCalledWith('design-1', {
-      name: 'new',
-    });
+    expect(service.updateDraft).toHaveBeenCalledWith(
+      'design-1',
+      { name: 'new' },
+      'staff-1',
+    );
     expect(service.deleteDraft).toHaveBeenCalledWith('design-1', 'staff-1');
+  });
+
+  it('delegates published recipe revision creation with CurrentUser ids', async () => {
+    service.createRevisionDraft.mockResolvedValue({
+      id: 'design-revision',
+      status: 'DRAFT',
+      revisionBaseRecipeId: 'recipe-series-1',
+    });
+
+    await expect(
+      controller.createRevisionDraft('design-published', currentUser),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        code: 0,
+        data: expect.objectContaining({
+          id: 'design-revision',
+          revisionBaseRecipeId: 'recipe-series-1',
+        }),
+      }),
+    );
+
+    expect(service.createRevisionDraft).toHaveBeenCalledWith(
+      'design-published',
+      'staff-1',
+    );
   });
 
   it('delegates ingredient option listing for the mobile picker', async () => {
@@ -139,6 +184,126 @@ describe('RecipeDesignerController', () => {
     });
   });
 
+  it('delegates supplement option creation with CurrentUser ids', async () => {
+    service.createSupplementOption.mockResolvedValue({
+      id: 'ingredient-calcium',
+      defaultNutritionFoodId: 'food-calcium',
+    });
+
+    await expect(
+      controller.createSupplementOption(
+        {
+          name: '柠檬酸钙',
+          basisType: 'PER_1_G',
+          nutrients: { 'minerals.calcium': 210 },
+        } as any,
+        currentUser,
+      ),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        code: 0,
+        data: {
+          id: 'ingredient-calcium',
+          defaultNutritionFoodId: 'food-calcium',
+        },
+      }),
+    );
+
+    expect(service.createSupplementOption).toHaveBeenCalledWith(
+      {
+        name: '柠檬酸钙',
+        basisType: 'PER_1_G',
+        nutrients: { 'minerals.calcium': 210 },
+      },
+      'staff-1',
+    );
+  });
+
+  it('uploads a supplement label image and returns an OCR plus DeepSeek draft', async () => {
+    const file = {
+      originalname: 'label.jpg',
+      mimetype: 'image/jpeg',
+      buffer: Buffer.from('image'),
+      size: 123,
+    } as Express.Multer.File;
+    cosService.uploadImage.mockResolvedValue({
+      url: 'https://cdn.example.com/supplement-labels/label.jpg',
+      key: 'recipe-designer-supplement-labels/label.jpg',
+    });
+    supplementLabelExtractionService.extractFromImage.mockResolvedValue({
+      ingredientName: '柠檬酸钙',
+      profileName: '柠檬酸钙 包装识别档案',
+      usageUnit: '粒',
+      basisType: 'PER_SERVING',
+      nutrients: { 'minerals.calcium': 200 },
+      ocrText: '每粒含钙 200mg',
+      warnings: [],
+      confidence: 'HIGH',
+    });
+
+    await expect(
+      controller.extractSupplementLabel(file, currentUser),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        code: 0,
+        data: expect.objectContaining({
+          ingredientName: '柠檬酸钙',
+          imageUrl: 'https://cdn.example.com/supplement-labels/label.jpg',
+          imageKey: 'recipe-designer-supplement-labels/label.jpg',
+          ocrText: '每粒含钙 200mg',
+        }),
+      }),
+    );
+
+    expect(cosService.uploadImage).toHaveBeenCalledWith(
+      file,
+      'label.jpg',
+      'recipe-designer-supplement-labels',
+    );
+    expect(supplementLabelExtractionService.extractFromImage).toHaveBeenCalledWith(
+      {
+        imageUrl: 'https://cdn.example.com/supplement-labels/label.jpg',
+        originalFilename: 'label.jpg',
+        requestedBy: 'staff-1',
+      },
+    );
+  });
+
+  it('accepts WeChat image uploads that arrive as octet-stream with an image filename', async () => {
+    const file = {
+      originalname: 'wx-temp-label.jpg',
+      mimetype: 'application/octet-stream',
+      buffer: Buffer.from('image'),
+      size: 123,
+    } as Express.Multer.File;
+    cosService.uploadImage.mockResolvedValue({
+      url: 'https://cdn.example.com/supplement-labels/wx-temp-label.jpg',
+      key: 'recipe-designer-supplement-labels/wx-temp-label.jpg',
+    });
+    supplementLabelExtractionService.extractFromImage.mockResolvedValue({
+      ingredientName: '鱼油',
+      profileName: '鱼油 包装识别档案',
+      usageUnit: '粒',
+      basisType: 'PER_SERVING',
+      nutrients: { 'fattyAcids.epa': 180 },
+      ocrText: '每粒 EPA 180mg',
+      warnings: [],
+      confidence: 'HIGH',
+    });
+
+    await expect(
+      controller.extractSupplementLabel(file, currentUser),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        code: 0,
+        data: expect.objectContaining({
+          ingredientName: '鱼油',
+          imageUrl: 'https://cdn.example.com/supplement-labels/wx-temp-label.jpg',
+        }),
+      }),
+    );
+  });
+
   it('delegates item mutations, assessment, and publish with CurrentUser ids', async () => {
     service.addItem.mockResolvedValue({ id: 'item-1' });
     service.updateItem.mockResolvedValue({ id: 'item-1', weightG: 120 });
@@ -146,23 +311,39 @@ describe('RecipeDesignerController', () => {
     service.assessDraft.mockResolvedValue({ overallStatus: 'COMPLIANT' });
     service.publishDraft.mockResolvedValue({ status: 'PUBLISHED' });
 
-    await controller.addItem('design-1', {
-      ingredientId: 'ingredient-1',
-      nutritionFoodId: 'food-1',
-      weightG: 100,
-    } as any);
-    await controller.updateItem('item-1', { weightG: 120 });
-    await controller.removeItem('item-1');
+    await controller.addItem(
+      'design-1',
+      {
+        ingredientId: 'ingredient-1',
+        nutritionFoodId: 'food-1',
+        weightG: 100,
+      } as any,
+      currentUser,
+    );
+    await controller.updateItem('item-1', { weightG: 120 }, currentUser);
+    await controller.removeItem('item-1', currentUser);
     await controller.assessDraft('design-1');
-    await controller.publishDraft('design-1', { reviewNote: 'ok' }, currentUser);
+    await controller.publishDraft(
+      'design-1',
+      { reviewNote: 'ok' },
+      currentUser,
+    );
 
-    expect(service.addItem).toHaveBeenCalledWith('design-1', {
-      ingredientId: 'ingredient-1',
-      nutritionFoodId: 'food-1',
-      weightG: 100,
-    });
-    expect(service.updateItem).toHaveBeenCalledWith('item-1', { weightG: 120 });
-    expect(service.removeItem).toHaveBeenCalledWith('item-1');
+    expect(service.addItem).toHaveBeenCalledWith(
+      'design-1',
+      {
+        ingredientId: 'ingredient-1',
+        nutritionFoodId: 'food-1',
+        weightG: 100,
+      },
+      'staff-1',
+    );
+    expect(service.updateItem).toHaveBeenCalledWith(
+      'item-1',
+      { weightG: 120 },
+      'staff-1',
+    );
+    expect(service.removeItem).toHaveBeenCalledWith('item-1', 'staff-1');
     expect(service.assessDraft).toHaveBeenCalledWith('design-1');
     expect(service.publishDraft).toHaveBeenCalledWith(
       'design-1',

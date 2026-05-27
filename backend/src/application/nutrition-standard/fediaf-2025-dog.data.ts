@@ -882,9 +882,21 @@ const growthStages = (
     overrides,
   );
 
+const growthOnlyStages = (
+  overrides: Partial<Record<NutritionStandardBasis, CellOverride>>,
+) =>
+  stageOverrides(
+    ['EARLY_GROWTH_UNDER_14_WEEKS', 'LATE_GROWTH_FROM_14_WEEKS'],
+    overrides,
+  );
+
 const earlyStages = (
   overrides: Partial<Record<NutritionStandardBasis, CellOverride>>,
 ) => stageOverrides(['EARLY_GROWTH_UNDER_14_WEEKS', 'REPRODUCTION'], overrides);
+
+const earlyGrowthOnlyStage = (
+  overrides: Partial<Record<NutritionStandardBasis, CellOverride>>,
+) => stageOverrides(['EARLY_GROWTH_UNDER_14_WEEKS'], overrides);
 
 const adultStages = (
   overrides: Partial<Record<NutritionStandardBasis, CellOverride>>,
@@ -941,16 +953,18 @@ const vitaminDMax: Partial<Record<NutritionStandardBasis, CellOverride>> =
       notes: 'The table also lists a nutritional maximum of 320 IU/100 g DM.',
     },
     {
-      maxValue: 800,
-      maxType: 'NUTRITIONAL_MAX',
+      maxValue: 568,
+      recommendedValue: 800,
+      maxType: 'LEGAL_MAX',
       notes:
-        'EU legal maximum is specified only on a dry-matter basis in the source table.',
+        'EU legal maximum 227 IU/100 g DM is converted with the FEDIAF default energy density 400 kcal/100 g DM to 568 IU/1000 kcal ME. The table also lists a nutritional maximum of 800 IU/1000 kcal ME.',
     },
     {
-      maxValue: 191,
-      maxType: 'NUTRITIONAL_MAX',
+      maxValue: 135.76,
+      recommendedValue: 191,
+      maxType: 'LEGAL_MAX',
       notes:
-        'EU legal maximum is specified only on a dry-matter basis in the source table.',
+        'EU legal maximum 227 IU/100 g DM is converted with the FEDIAF default energy density 400 kcal/100 g DM to about 135.76 IU/MJ ME. The table also lists a nutritional maximum of 191 IU/MJ ME.',
     },
   );
 
@@ -1079,7 +1093,7 @@ const NUTRIENT_ROWS: FediafNutrientRow[] = [
       early: [0.88, 2.2, 0.53],
       late: [0.7, 1.75, 0.42],
     },
-    growthStages(nutritionalMax([2.8, 7, 1.67])),
+    growthOnlyStages(nutritionalMax([2.8, 7, 1.67])),
   ),
   row('methionine', 'Methionine*', 'AMINO_ACID', 'g', 70, {
     adult95: [0.46, 1.16, 0.28],
@@ -1148,7 +1162,7 @@ const NUTRIENT_ROWS: FediafNutrientRow[] = [
       early: [1.3, 3.25, 0.78],
       late: [1.3, 3.25, 0.78],
     },
-    earlyStages(nutritionalMax([6.5, 16.25, 3.88])),
+    earlyGrowthOnlyStage(nutritionalMax([6.5, 16.25, 3.88])),
   ),
   row(
     'arachidonicAcid',
@@ -1206,7 +1220,7 @@ const NUTRIENT_ROWS: FediafNutrientRow[] = [
     },
     mergeOverrides(
       adultStages(nutritionalMax([2.5, 6.25, 1.49])),
-      earlyStages(nutritionalMax([1.6, 4, 0.96])),
+      earlyGrowthOnlyStage(nutritionalMax([1.6, 4, 0.96])),
       stageOverrides(['LATE_GROWTH_FROM_14_WEEKS'], lateCalciumAlternative),
     ),
   ),

@@ -287,7 +287,7 @@ describe('RecipesController (e2e)', () => {
       );
     });
 
-    it('returns nutrition report url when the recipe has an uploaded PDF report', async () => {
+    it('does not expose uploaded PDF report urls on public recipe detail', async () => {
       const recipe: Recipe = {
         id: '550e8400-e29b-41d4-a716-446655440014',
         version: 1,
@@ -306,9 +306,7 @@ describe('RecipesController (e2e)', () => {
         .expect(200);
 
       expect(response.body.code).toBe(0);
-      expect(response.body.data.nutritionReportUrl).toBe(
-        'https://cdn.example.com/recipe-nutrition-reports/report.pdf',
-      );
+      expect(response.body.data).not.toHaveProperty('nutritionReportUrl');
     });
 
     it('returns supplement alternatives with product fields and resolved active nutrients', async () => {

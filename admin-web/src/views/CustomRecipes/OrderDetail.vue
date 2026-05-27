@@ -319,21 +319,6 @@
             />
           </el-form-item>
 
-          <el-divider content-position="left">营养报告</el-divider>
-
-          <el-form-item label="营养报告">
-            <el-upload
-              action="/api/v1/admin/upload"
-              :show-file-list="false"
-              :on-success="handleReportSuccess"
-            >
-              <el-button type="primary" link>上传营养报告PDF</el-button>
-            </el-upload>
-            <span v-if="recipeForm.nutritionReportUrl" style="margin-left: 10px">
-              已上传
-            </span>
-          </el-form-item>
-
           <el-form-item>
             <el-button type="primary" @click="submitRecipe" :loading="submitting">
               提交食谱并交付
@@ -401,7 +386,6 @@ const recipeForm = reactive({
   energyDensityKcalPerKg: 3200,
   items: [] as any[],
   productionSteps: '',
-  nutritionReportUrl: '',
 });
 
 // 生命周期
@@ -497,13 +481,6 @@ const handleCoverSuccess = (response: any) => {
   }
 };
 
-const handleReportSuccess = (response: any) => {
-  if (response.code === 200) {
-    recipeForm.nutritionReportUrl = response.data.url;
-    ElMessage.success('营养报告上传成功');
-  }
-};
-
 const submitRecipe = async () => {
   try {
     await ElMessageBox.confirm('确认提交食谱并标记为已交付？', '提交确认');
@@ -522,7 +499,6 @@ const submitRecipe = async () => {
       },
       items: recipeForm.items,
       productionSteps: recipeForm.productionSteps,
-      nutritionReportUrl: recipeForm.nutritionReportUrl,
     };
 
     const response = await axios.post(
@@ -557,7 +533,6 @@ const resetRecipeForm = () => {
     energyDensityKcalPerKg: 3200,
     items: [],
     productionSteps: '',
-    nutritionReportUrl: '',
   });
 };
 

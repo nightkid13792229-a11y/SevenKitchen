@@ -113,9 +113,11 @@
                   <el-tag v-else type="info" effect="plain">次级档案</el-tag>
                 </template>
               </el-table-column>
-              <el-table-column label="状态 / 可食部 / 加工" min-width="210">
+              <el-table-column label="档案中文名" min-width="210">
                 <template #default="{ row }">
-                  <div class="table-title">{{ formatProfileTitle(row) }}</div>
+                  <div class="table-title">
+                    {{ formatProfileDisplayName(row) }}
+                  </div>
                 </template>
               </el-table-column>
               <el-table-column label="营养来源词条" min-width="260">
@@ -293,7 +295,7 @@
           <el-input
             v-model="newProfileForm.versionNote"
             type="textarea"
-            maxlength="200"
+            maxlength="1000"
             show-word-limit
             :rows="3"
             placeholder="说明该空白档案的用途和后续补数依据"
@@ -555,6 +557,13 @@ function formatProfileTitle(mapping: NutritionFoodMapping) {
   ].filter(Boolean);
 
   return parts.length ? parts.join(" / ") : nutritionFood?.name || "未命名档案";
+}
+
+function formatProfileDisplayName(mapping: NutritionFoodMapping) {
+  return (
+    mapping.nutritionFood?.displayNameZh ||
+    formatProfileTitle(mapping)
+  );
 }
 
 function formatFoodName(mapping: NutritionFoodMapping) {

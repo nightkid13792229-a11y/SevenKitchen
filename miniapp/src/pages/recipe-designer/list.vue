@@ -1,13 +1,16 @@
 <template>
   <view class="recipe-designer-list-page">
     <view class="toolbar">
-      <view>
+      <view class="toolbar-title-block">
         <text class="page-title">食谱设计器</text>
-        <text class="page-subtitle">草稿配方与评估状态</text>
+        <text class="page-subtitle">草稿食谱与评估状态</text>
       </view>
-      <button class="new-btn" :disabled="creating" @tap="openCreateDraftSheet">
-        新建食谱
-      </button>
+      <view class="toolbar-actions">
+        <button class="library-btn" @tap="goToSupplementLibrary">补剂库</button>
+        <button class="new-btn" :disabled="creating" @tap="openCreateDraftSheet">
+          新建食谱
+        </button>
+      </view>
     </view>
 
     <view v-if="loading" class="state-block">
@@ -24,12 +27,37 @@
         v-for="draft in drafts"
         :key="draft.id"
         class="draft-card"
-        @tap="openEditor(draft.id)"
+        @tap="openDraft(draft)"
       >
         <view class="draft-header">
-          <text class="draft-name">{{ draft.name || '未命名草稿' }}</text>
+          <view class="draft-title-row">
+            <text class="draft-name">{{ draft.name || '未命名食谱' }}</text>
+            <button
+              v-if="canEditDraft(draft)"
+              class="rename-draft-btn"
+              :disabled="renamingDraftId === draft.id"
+              @tap.stop="renameDraft(draft)"
+            >
+              {{ renamingDraftId === draft.id ? '...' : '改名' }}
+            </button>
+          </view>
           <view class="draft-actions">
-            <text class="status-badge">{{ getDraftStatusLabel(draft.status) }}</text>
+            <text class="status-badge">{{ getDraftStatusLabel(draft) }}</text>
+            <button
+              v-if="hasVersionHistory(draft)"
+              class="version-history-btn"
+              @tap.stop="openVersionHistory(draft)"
+            >
+              版本
+            </button>
+            <button
+              v-if="isPublishedDraft(draft)"
+              class="revision-draft-btn"
+              :disabled="revisingDraftId === draft.id"
+              @tap.stop="reviseDraft(draft)"
+            >
+              {{ revisingDraftId === draft.id ? '创建中' : '修订' }}
+            </button>
             <button
               v-if="canDeleteDraft(draft)"
               class="delete-btn"
@@ -51,44 +79,63 @@
       </view>
     </view>
 
+    <view v-if="historyDraft" class="history-sheet-mask" @tap="closeVersionHistory">
+      <view class="history-sheet-panel" @tap.stop>
+        <view class="history-sheet-header">
+          <text class="sheet-title">版本历史</text>
+          <button class="history-close-btn" @tap="closeVersionHistory">关闭</button>
+        </view>
+        <view class="history-list">
+          <view
+            v-for="item in getVersionHistory(historyDraft)"
+            :key="item.id"
+            class="history-item"
+            @tap="openHistoryDraft(item)"
+          >
+            <view class="history-main-row">
+              <text class="history-name">{{ item.name || '未命名食谱' }}</text>
+              <text class="status-badge">{{ getDraftStatusLabel(item) }}</text>
+            </view>
+            <view class="history-meta-row">
+              <text>{{ getScenarioLabel(getDraftScenario(item)) }}</text>
+              <text>{{ formatDateTime(item.updatedAt) }}</text>
+            </view>
+          </view>
+        </view>
+      </view>
+    </view>
+
     <view v-if="createSheetVisible" class="create-sheet-mask" @tap="closeCreateDraftSheet">
       <view class="create-sheet-panel" @tap.stop>
         <view class="sheet-header">
-          <view>
-            <text class="sheet-title">新建食谱</text>
-            <text class="sheet-subtitle">先填写名称和生命阶段，再开始添加原料</text>
-          </view>
-          <button class="sheet-close" :disabled="creating" @tap="closeCreateDraftSheet">×</button>
+          <text class="sheet-title">新建食谱</text>
         </view>
 
-        <view class="sheet-field">
-          <text class="sheet-label">配方名称</text>
-          <input
-            class="sheet-input"
-            v-model="newDraftName"
-            maxlength="40"
-            placeholder="例如：三文鱼成犬维护"
-            @confirm="createDraft"
-          />
-        </view>
-
-        <picker
-          mode="selector"
-          range-key="label"
-          :range="scenarioOptions"
-          :value="newDraftScenarioIndex"
-          @change="onNewDraftScenarioChange"
-        >
-          <view class="sheet-field sheet-picker">
-            <text class="sheet-label">生命阶段</text>
-            <text class="sheet-value">{{ getScenarioLabel(newDraftScenario) }}</text>
+        <view class="scenario-section">
+          <text class="sheet-label scenario-section-label">生命阶段</text>
+          <view class="scenario-option-list">
+            <view
+              v-for="option in scenarioOptions"
+              :key="option.value"
+              class="scenario-option"
+              :class="{ 'scenario-option-active': option.value === newDraftScenario }"
+              @tap="selectScenarioOption(option.value)"
+            >
+              <view class="scenario-option-main">
+                <text class="scenario-option-title">{{ option.label }}</text>
+                <text v-if="option.value === newDraftScenario" class="scenario-option-check">✓</text>
+              </view>
+              <text v-if="getScenarioDescription(option.value)" class="scenario-option-desc">
+                {{ getScenarioDescription(option.value) }}
+              </text>
+            </view>
           </view>
-        </picker>
+        </view>
 
         <view class="sheet-actions">
           <button class="cancel-btn" :disabled="creating" @tap="closeCreateDraftSheet">取消</button>
-          <button class="confirm-btn" :disabled="creating || !canSubmitNewDraft" @tap="createDraft">
-            {{ creating ? '创建中' : '创建并编辑' }}
+          <button class="confirm-btn" :disabled="creating" @tap="createDraft">
+            {{ creating ? '创建中' : '开始设计' }}
           </button>
         </view>
       </view>
@@ -97,8 +144,10 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { ref } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import {
+  FEDIAF_DOG_SCENARIO_DESCRIPTIONS,
   FEDIAF_DOG_SCENARIO_LABELS,
   recipeDesignerApi,
   type FediafDogScenario,
@@ -114,16 +163,23 @@ interface DesignerDraft {
   totalWeightG?: number
   energyDensityKcalPerKg?: number | null
   publishedRecipeId?: string | null
+  publishedRecipeVersion?: number | null
   publishedAt?: string | null
+  revisionOfDesignRecipeId?: string | null
+  revisionBaseRecipeId?: string | null
+  revisionChangeState?: 'NOT_REVISION' | 'UNCHANGED' | 'CHANGED'
   updatedAt?: string
+  versionHistory?: DesignerDraft[]
 }
 
 const drafts = ref<DesignerDraft[]>([])
 const loading = ref(false)
 const creating = ref(false)
 const deletingDraftId = ref('')
+const renamingDraftId = ref('')
+const revisingDraftId = ref('')
+const historyDraft = ref<DesignerDraft | null>(null)
 const createSheetVisible = ref(false)
-const newDraftName = ref('')
 const newDraftScenario = ref<FediafDogScenario>('ADULT_MER_110')
 
 const scenarioOptions: Array<{ label: string; value: FediafDogScenario }> = [
@@ -131,16 +187,10 @@ const scenarioOptions: Array<{ label: string; value: FediafDogScenario }> = [
   { label: FEDIAF_DOG_SCENARIO_LABELS.LATE_GROWTH, value: 'LATE_GROWTH' },
   { label: FEDIAF_DOG_SCENARIO_LABELS.ADULT_MER_95, value: 'ADULT_MER_95' },
   { label: FEDIAF_DOG_SCENARIO_LABELS.ADULT_MER_110, value: 'ADULT_MER_110' },
+  { label: FEDIAF_DOG_SCENARIO_LABELS.REPRODUCTION, value: 'REPRODUCTION' },
 ]
 
-const newDraftScenarioIndex = computed(() => {
-  const index = scenarioOptions.findIndex((option) => option.value === newDraftScenario.value)
-  return index >= 0 ? index : 0
-})
-
-const canSubmitNewDraft = computed(() => newDraftName.value.trim().length > 0)
-
-onMounted(() => {
+onShow(() => {
   loadDrafts()
 })
 
@@ -168,30 +218,28 @@ function closeCreateDraftSheet() {
   createSheetVisible.value = false
 }
 
-function onNewDraftScenarioChange(event: any) {
-  const index = Number(event.detail.value || 0)
-  newDraftScenario.value = scenarioOptions[index]?.value || 'ADULT_MER_110'
+function selectScenarioOption(value: FediafDogScenario) {
+  if (creating.value) return
+  newDraftScenario.value = value
+}
+
+function getScenarioDescription(value: FediafDogScenario) {
+  return FEDIAF_DOG_SCENARIO_DESCRIPTIONS[value] || ''
 }
 
 async function createDraft() {
   if (creating.value) return
-  const draftName = newDraftName.value.trim()
-  if (!draftName) {
-    uni.showToast({ title: '请填写配方名称', icon: 'none' })
-    return
-  }
 
   creating.value = true
   try {
     const res: any = await recipeDesignerApi.createDraft({
-      name: newDraftName.value.trim(),
+      name: '未命名食谱',
       scenario: newDraftScenario.value,
     })
     const draft = res?.data ?? res
     const draftId = draft?.id
     if (draftId) {
       createSheetVisible.value = false
-      newDraftName.value = ''
       newDraftScenario.value = 'ADULT_MER_110'
       uni.navigateTo({ url: `/pages/recipe-designer/editor?id=${draftId}` })
       return
@@ -205,18 +253,118 @@ async function createDraft() {
   }
 }
 
-function openEditor(id: string) {
-  uni.navigateTo({ url: `/pages/recipe-designer/editor?id=${id}` })
+function openDraft(draft: DesignerDraft) {
+  uni.navigateTo({ url: `/pages/recipe-designer/editor?id=${draft.id}` })
+}
+
+function hasVersionHistory(draft: DesignerDraft) {
+  return getVersionHistory(draft).length > 1
+}
+
+function getVersionHistory(draft: DesignerDraft | null) {
+  if (!draft?.versionHistory || !Array.isArray(draft.versionHistory)) return []
+  return draft.versionHistory
+}
+
+function openVersionHistory(draft: DesignerDraft) {
+  if (!hasVersionHistory(draft)) return
+  historyDraft.value = draft
+}
+
+function closeVersionHistory() {
+  historyDraft.value = null
+}
+
+function openHistoryDraft(draft: DesignerDraft) {
+  closeVersionHistory()
+  openDraft(draft)
+}
+
+function goToSupplementLibrary() {
+  uni.navigateTo({ url: '/pages/recipe-designer/supplement-library' })
+}
+
+function isPublishedDraft(draft: DesignerDraft) {
+  return draft.status === 'PUBLISHED' || Boolean(draft.publishedRecipeId || draft.publishedAt)
+}
+
+function isRevisionDraft(draft: DesignerDraft) {
+  return !isPublishedDraft(draft) && Boolean(draft.revisionBaseRecipeId || draft.revisionOfDesignRecipeId)
+}
+
+function canEditDraft(draft: DesignerDraft) {
+  return !isPublishedDraft(draft)
 }
 
 function canDeleteDraft(draft: DesignerDraft) {
-  return draft.status !== 'PUBLISHED' && !draft.publishedRecipeId && !draft.publishedAt
+  return !isPublishedDraft(draft)
+}
+
+function renameDraft(draft: DesignerDraft) {
+  if (!canEditDraft(draft) || renamingDraftId.value) return
+
+  const currentName = draft.name || '未命名食谱'
+  uni.showModal({
+    title: '重命名食谱',
+    content: `当前名称：${currentName}`,
+    editable: true,
+    placeholderText: '请输入食谱名称',
+    confirmText: '保存',
+    cancelText: '取消',
+    success: async (result: any) => {
+      if (!result.confirm) return
+
+      const nextName = String(result.content || '').trim()
+      if (!nextName) {
+        uni.showToast({ title: '请输入食谱名称', icon: 'none' })
+        return
+      }
+      if (nextName === currentName) return
+
+      renamingDraftId.value = draft.id
+      try {
+        await recipeDesignerApi.updateDraft(draft.id, { name: nextName })
+        drafts.value = drafts.value.map((candidate) =>
+          candidate.id === draft.id
+            ? { ...candidate, name: nextName, updatedAt: new Date().toISOString() }
+            : candidate,
+        )
+        uni.showToast({ title: '已重命名', icon: 'success' })
+      } catch (error) {
+        console.error('[RecipeDesignerList] Failed to rename draft:', error)
+        uni.showToast({ title: '重命名失败', icon: 'none' })
+      } finally {
+        renamingDraftId.value = ''
+      }
+    },
+  })
+}
+
+async function reviseDraft(draft: DesignerDraft) {
+  if (!isPublishedDraft(draft) || revisingDraftId.value) return
+
+  revisingDraftId.value = draft.id
+  try {
+    const res: any = await recipeDesignerApi.createRevisionDraft(draft.id)
+    const revision = res?.data ?? res
+    const revisionId = revision?.id
+    if (revisionId) {
+      uni.navigateTo({ url: `/pages/recipe-designer/editor?id=${revisionId}` })
+      return
+    }
+    await loadDrafts()
+  } catch (error) {
+    console.error('[RecipeDesignerList] Failed to create revision draft:', error)
+    uni.showToast({ title: '创建修订草稿失败', icon: 'none' })
+  } finally {
+    revisingDraftId.value = ''
+  }
 }
 
 function deleteDraft(draft: DesignerDraft) {
   if (!canDeleteDraft(draft) || deletingDraftId.value) return
 
-  const draftName = draft.name || '未命名草稿'
+  const draftName = draft.name || '未命名食谱'
   uni.showModal({
     title: '删除草稿',
     content: `确认删除「${draftName}」吗？删除后不可恢复。`,
@@ -228,7 +376,7 @@ function deleteDraft(draft: DesignerDraft) {
       deletingDraftId.value = draft.id
       try {
         await recipeDesignerApi.deleteDraft(draft.id)
-        drafts.value = drafts.value.filter((candidate) => candidate.id !== draft.id)
+        await loadDrafts()
         uni.showToast({ title: '已删除', icon: 'success' })
       } catch (error) {
         console.error('[RecipeDesignerList] Failed to delete draft:', error)
@@ -240,7 +388,17 @@ function deleteDraft(draft: DesignerDraft) {
   })
 }
 
-function getDraftStatusLabel(status?: string) {
+function getDraftStatusLabel(draft: DesignerDraft) {
+  if (isRevisionDraft(draft)) {
+    if (draft.revisionChangeState === 'UNCHANGED') {
+      return '无改动'
+    }
+    return '修订中'
+  }
+  if (isPublishedDraft(draft) && draft.publishedRecipeVersion) {
+    return `已发布 v${draft.publishedRecipeVersion}`
+  }
+
   const map: Record<string, string> = {
     DRAFT: '草稿',
     ASSESSING: '评估中',
@@ -248,6 +406,7 @@ function getDraftStatusLabel(status?: string) {
     NEEDS_REVIEW: '需审核',
     PUBLISHED: '已发布',
   }
+  const status = draft.status
   return map[status || ''] || status || '草稿'
 }
 
@@ -256,7 +415,7 @@ function getDraftScenario(draft: DesignerDraft): FediafDogScenario | undefined {
 }
 
 function formatWeight(value?: number) {
-  return `总量 ${Number(value || 0).toFixed(0)}g`
+  return `总重量 ${Number(value || 0).toFixed(0)}g`
 }
 
 function formatEnergyDensity(value?: number | null) {
@@ -291,6 +450,18 @@ function formatDateTime(value?: string) {
   margin-bottom: 24rpx;
 }
 
+.toolbar-title-block {
+  flex: 1;
+  min-width: 0;
+}
+
+.toolbar-actions {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
 .page-title {
   display: block;
   font-size: 40rpx;
@@ -305,15 +476,26 @@ function formatDateTime(value?: string) {
   color: #777;
 }
 
-.new-btn {
+.new-btn,
+.library-btn {
   flex-shrink: 0;
   height: 72rpx;
-  padding: 0 28rpx;
+  margin: 0;
+  padding: 0 24rpx;
   border-radius: 12rpx;
-  background: #1890ff;
-  color: #fff;
   font-size: 26rpx;
   line-height: 72rpx;
+}
+
+.new-btn {
+  background: #1890ff;
+  color: #fff;
+}
+
+.library-btn {
+  background: #fff;
+  color: #1677ff;
+  border: 1rpx solid #b7d9ff;
 }
 
 .state-block {
@@ -363,12 +545,48 @@ function formatDateTime(value?: string) {
   margin-bottom: 18rpx;
 }
 
-.draft-name {
+.draft-title-row {
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12rpx;
+}
+
+.draft-name {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
   font-size: 32rpx;
   font-weight: 700;
   color: #222;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rename-draft-btn,
+.revision-draft-btn,
+.version-history-btn {
+  flex-shrink: 0;
+  height: 48rpx;
+  margin: 0;
+  padding: 0 14rpx;
+  border-radius: 8rpx;
+  background: #f0f6ff;
+  color: #1677ff;
+  font-size: 22rpx;
+  line-height: 48rpx;
+}
+
+.revision-draft-btn {
+  background: #f6ffed;
+  color: #389e0d;
+}
+
+.version-history-btn {
+  background: #f7f7f7;
+  color: #555;
 }
 
 .draft-actions {
@@ -404,6 +622,83 @@ function formatDateTime(value?: string) {
   line-height: 1.8;
 }
 
+.history-sheet-mask {
+  position: fixed;
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  z-index: 22;
+  display: flex;
+  align-items: flex-end;
+  background: rgba(0, 0, 0, 0.38);
+}
+
+.history-sheet-panel {
+  width: 100%;
+  max-height: 70vh;
+  overflow-y: auto;
+  padding: 28rpx 32rpx calc(32rpx + env(safe-area-inset-bottom));
+  border-radius: 24rpx 24rpx 0 0;
+  background: #fff;
+  box-sizing: border-box;
+}
+
+.history-sheet-header,
+.history-main-row,
+.history-meta-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18rpx;
+}
+
+.history-sheet-header {
+  margin-bottom: 20rpx;
+}
+
+.history-close-btn {
+  flex-shrink: 0;
+  height: 52rpx;
+  margin: 0;
+  padding: 0 18rpx;
+  border-radius: 8rpx;
+  background: #f5f5f5;
+  color: #555;
+  font-size: 24rpx;
+  line-height: 52rpx;
+}
+
+.history-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.history-item {
+  padding: 18rpx;
+  border: 1rpx solid #f0f0f0;
+  border-radius: 10rpx;
+  background: #fbfbfb;
+}
+
+.history-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: #222;
+  font-size: 28rpx;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-meta-row {
+  margin-top: 10rpx;
+  color: #777;
+  font-size: 23rpx;
+}
+
 .create-sheet-mask {
   position: fixed;
   left: 0;
@@ -418,6 +713,8 @@ function formatDateTime(value?: string) {
 
 .create-sheet-panel {
   width: 100%;
+  max-height: 86vh;
+  overflow-y: auto;
   padding: 28rpx 32rpx calc(32rpx + env(safe-area-inset-bottom));
   border-radius: 24rpx 24rpx 0 0;
   background: #fff;
@@ -448,26 +745,6 @@ function formatDateTime(value?: string) {
   font-weight: 700;
 }
 
-.sheet-subtitle {
-  display: block;
-  margin-top: 8rpx;
-  color: #888;
-  font-size: 24rpx;
-}
-
-.sheet-close {
-  flex-shrink: 0;
-  width: 68rpx;
-  height: 68rpx;
-  margin: 0;
-  padding: 0;
-  border-radius: 10rpx;
-  background: #f5f5f5;
-  color: #555;
-  font-size: 34rpx;
-  line-height: 68rpx;
-}
-
 .sheet-field {
   min-height: 84rpx;
   border-top: 1rpx solid #f0f0f0;
@@ -479,17 +756,65 @@ function formatDateTime(value?: string) {
   font-size: 26rpx;
 }
 
-.sheet-input,
-.sheet-value {
-  flex: 1;
-  min-width: 0;
-  text-align: right;
-  color: #222;
-  font-size: 28rpx;
+.scenario-section {
+  padding-top: 24rpx;
+  border-top: 1rpx solid #f0f0f0;
 }
 
-.sheet-picker {
-  border-bottom: 1rpx solid #f0f0f0;
+.scenario-section-label {
+  display: block;
+  margin-bottom: 16rpx;
+}
+
+.scenario-option-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.scenario-option {
+  padding: 18rpx 20rpx;
+  border: 1rpx solid #edf0f5;
+  border-radius: 12rpx;
+  background: #fbfcfe;
+  box-sizing: border-box;
+}
+
+.scenario-option-active {
+  border-color: #91caff;
+  background: #eef8ff;
+}
+
+.scenario-option-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16rpx;
+}
+
+.scenario-option-title {
+  flex: 1;
+  min-width: 0;
+  color: #222;
+  font-size: 28rpx;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.scenario-option-check {
+  flex-shrink: 0;
+  color: #1677ff;
+  font-size: 28rpx;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.scenario-option-desc {
+  display: block;
+  margin-top: 8rpx;
+  color: #777;
+  font-size: 23rpx;
+  line-height: 1.45;
 }
 
 .sheet-actions {

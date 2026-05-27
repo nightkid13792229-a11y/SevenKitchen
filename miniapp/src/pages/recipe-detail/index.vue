@@ -182,7 +182,7 @@
           <text class="nutrition-label">能量密度</text>
           <view class="nutrition-value-with-unit">
             <text class="nutrition-value">
-              {{ recipe.energyDensityKcalPerKg || recipe.nutritionDetailedData?.energyDensityKcalPerKg }}
+              {{ formatEnergyDensity(recipe.energyDensityKcalPerKg || recipe.nutritionDetailedData?.energyDensityKcalPerKg) }}
             </text>
             <text class="nutrition-unit">kcal/kg</text>
           </view>
@@ -199,18 +199,18 @@
       </view>
     </view>
 
-    <!-- 详细营养报告下载 -->
+    <!-- 详细营养报告入口 -->
     <view
-      v-if="recipe.nutritionReportUrl"
+      v-if="hasStructuredNutritionReport"
       class="nutrition-report-card"
-      @tap="openNutritionReport"
+      @tap="openNutritionReportPage"
     >
-      <view class="report-icon">PDF</view>
+      <view class="report-icon">营养</view>
       <view class="report-copy">
         <text class="report-title">详细营养报告</text>
-        <text class="report-subtitle">查看PDF格式报告</text>
+        <text class="report-subtitle">查看 Setar 生成的完整营养评估</text>
       </view>
-      <text class="report-action">下载</text>
+      <text class="report-action">查看完整报告</text>
     </view>
 
     <!-- 用户评价板块 -->
@@ -345,6 +345,25 @@ interface NutritionDetailedData {
   crudeFiberPercent?: number
   carbohydratePercent?: number
   calciumPhosphorusRatio?: string
+  source?: string
+  schemaVersion?: number
+  standard?: string
+  scenario?: string
+  report?: SetarNutritionReport
+}
+
+interface SetarNutritionReport {
+  ingredientRows?: Array<Record<string, any>>
+  macroRows?: Array<Record<string, any>>
+  energyDensityRows?: Array<Record<string, any>>
+  nutrientSections?: Record<string, SetarNutrientSection>
+}
+
+interface SetarNutrientSection {
+  key: string
+  title: string
+  dryMatterHeader: string
+  rows: Array<Record<string, any>>
 }
 
 interface RecipeDetail {
@@ -361,7 +380,6 @@ interface RecipeDetail {
   targetHealthTags: string[]
   applicableLifeStages: string[]
   nutritionDetailedData?: NutritionDetailedData
-  nutritionReportUrl?: string
   items: RecipeItem[]
 }
 
@@ -379,7 +397,6 @@ const recipe = ref<RecipeDetail>({
   targetHealthTags: [],
   applicableLifeStages: [],
   nutritionDetailedData: undefined,
-  nutritionReportUrl: undefined,
   items: []
 })
 
@@ -397,6 +414,17 @@ const healthTagUuidLabelMap = ref<Record<string, string>>({})
 // 原料排序（按sortOrder升序）
 const sortedItems = computed(() => {
   return [...recipe.value.items].sort((a, b) => a.sortOrder - b.sortOrder)
+})
+
+const hasStructuredNutritionReport = computed(() => {
+  const report = recipe.value.nutritionDetailedData?.report
+  return Boolean(
+    report &&
+      ((report.macroRows && report.macroRows.length > 0) ||
+        Object.values(report.nutrientSections || {}).some(
+          (section: any) => Array.isArray(section?.rows) && section.rows.length > 0,
+        )),
+  )
 })
 
 onMounted(async () => {
@@ -589,44 +617,13 @@ function previewImage() {
   })
 }
 
-function openNutritionReport() {
-  const reportUrl = recipe.value.nutritionReportUrl
-  if (!reportUrl) return
-
-  uni.showLoading({ title: '下载中...' })
-  uni.downloadFile({
-    url: reportUrl,
-    success: (downloadRes: any) => {
-      if (downloadRes.statusCode !== 200 || !downloadRes.tempFilePath) {
-        uni.showToast({
-          title: '报告打开失败',
-          icon: 'none'
-        })
-        return
-      }
-
-      uni.openDocument({
-        filePath: downloadRes.tempFilePath,
-        fileType: 'pdf',
-        fail: (err: any) => {
-          console.error('[RecipeDetail] Open nutrition report failed:', err)
-          uni.showToast({
-            title: '报告打开失败',
-            icon: 'none'
-          })
-        }
-      })
-    },
-    fail: (err: any) => {
-      console.error('[RecipeDetail] Download nutrition report failed:', err)
-      uni.showToast({
-        title: '报告打开失败',
-        icon: 'none'
-      })
-    },
-    complete: () => {
-      uni.hideLoading()
-    }
+function openNutritionReportPage() {
+  const query = [`recipeId=${encodeURIComponent(recipeId.value)}`]
+  if (shareToken.value) {
+    query.push(`shareToken=${encodeURIComponent(shareToken.value)}`)
+  }
+  uni.navigateTo({
+    url: `/pages/recipe-nutrition-report/index?${query.join('&')}`
   })
 }
 
@@ -678,6 +675,11 @@ function goToOrder() {
 
 function getLifeStageLabel(stage: string): string {
   const map: Record<string, string> = {
+    'PUPPY_UNDER_14_WEEKS': '小于14周幼犬',
+    'PUPPY_14_WEEKS_PLUS': '大于等于14周幼犬',
+    'LOW_ACTIVITY_ADULT_OR_SENIOR': '低运动量成犬或老年犬',
+    'HIGH_ACTIVITY_ADULT': '普通或高运动量成犬',
+    'REPRODUCTION': '繁殖期',
     'PUPPY': '幼犬',
     'ADULT': '成犬',
     'SENIOR': '老年犬',
@@ -754,6 +756,11 @@ function getNutrientTargetText(item: RecipeItem): string {
 function formatNumber(value: number | undefined | null): string {
   if (value === null || value === undefined) return '-'
   return value.toFixed(1)
+}
+
+function formatEnergyDensity(value: number | undefined | null): string {
+  if (value === null || value === undefined) return '-'
+  return String(Math.round(Number(value)))
 }
 
 function formatRatio(value: number | undefined | null): string {

@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('../utils/api', () => ({
   request: vi.fn(),
+  getToken: () => 'token-123',
+}))
+
+vi.mock('../utils/config', () => ({
+  getBaseUrl: () => 'https://api.example.com/api/v1',
 }))
 
 import { request } from '../utils/api'
@@ -10,15 +15,25 @@ import {
   recipeDesignerApi,
   type DesignRecipeDraftPayload,
   type IngredientOptionListQuery,
+  type CreateSupplementOptionPayload,
   type UpdateDesignRecipeItemPayload,
   type FediafDogScenario,
 } from './recipe-designer'
 
 const mockedRequest = vi.mocked(request)
+const uploadFile = vi.fn()
+const getStorageSync = vi.fn(() => 'staff-1')
+
+vi.stubGlobal('uni', {
+  uploadFile,
+  getStorageSync,
+})
 
 describe('recipeDesignerApi', () => {
   beforeEach(() => {
     mockedRequest.mockReset()
+    uploadFile.mockReset()
+    getStorageSync.mockClear()
   })
 
   it('uses recipe designer draft and item endpoint paths', () => {
@@ -44,6 +59,7 @@ describe('recipeDesignerApi', () => {
       nutrientTargetKey: 'CA',
       nutrientTargetValue: 1.4,
       sortOrder: 2,
+      includeInAssessment: false,
     } satisfies UpdateDesignRecipeItemPayload
 
     recipeDesignerApi.listDrafts()
@@ -97,15 +113,17 @@ describe('recipeDesignerApi', () => {
   it('exports the supported FEDIAF dog scenarios without legacy scenario aliases', () => {
     expect(Object.keys(FEDIAF_DOG_SCENARIO_LABELS)).toEqual([
       'EARLY_GROWTH_REPRODUCTION',
+      'REPRODUCTION',
       'LATE_GROWTH',
       'ADULT_MER_95',
       'ADULT_MER_110',
     ])
     expect(FEDIAF_DOG_SCENARIO_LABELS).toEqual({
-      EARLY_GROWTH_REPRODUCTION: '<14周幼犬 / 繁殖期',
-      LATE_GROWTH: '>=14周幼犬',
-      ADULT_MER_95: '成年犬 MER 95',
-      ADULT_MER_110: '成年犬 MER 110',
+      EARLY_GROWTH_REPRODUCTION: '小于14周龄幼犬',
+      REPRODUCTION: '繁殖期母犬',
+      LATE_GROWTH: '大于等于14周龄幼犬',
+      ADULT_MER_95: '低能量需求成年犬（95ME）',
+      ADULT_MER_110: '普通成年犬（110ME）',
     } satisfies Record<FediafDogScenario, string>)
     expect(FEDIAF_DOG_SCENARIO_LABELS).not.toHaveProperty('PUPPY_ONLY')
     expect(FEDIAF_DOG_SCENARIO_LABELS).not.toHaveProperty('ADULT_ONLY')
@@ -136,7 +154,7 @@ describe('recipeDesignerApi', () => {
       nutrientTargetKey: null,
       nutrientTargetValue: null,
     })
-    recipeDesignerApi.publishDraft('draft-1')
+    recipeDesignerApi.publishDraft('draft-1', { name: '三文鱼成犬维护' })
 
     expect(mockedRequest).toHaveBeenNthCalledWith(1, {
       url: '/recipe-designer/items/item-1',
@@ -150,6 +168,7 @@ describe('recipeDesignerApi', () => {
     expect(mockedRequest).toHaveBeenNthCalledWith(2, {
       url: '/recipe-designer/drafts/draft-1/publish',
       method: 'POST',
+      data: { name: '三文鱼成犬维护' },
     })
   })
 
@@ -162,11 +181,23 @@ describe('recipeDesignerApi', () => {
     })
   })
 
+  it('creates editable revision drafts from published recipe designer drafts', () => {
+    recipeDesignerApi.createRevisionDraft('draft-1')
+
+    expect(mockedRequest).toHaveBeenCalledWith({
+      url: '/recipe-designer/drafts/draft-1/revisions',
+      method: 'POST',
+    })
+  })
+
   it('lists standard ingredient options for the ingredient picker', () => {
     const query = {
       search: 'chicken',
       page: 2,
       pageSize: 20,
+      nutrientKey: 'calcium',
+      scenario: 'ADULT_MER_110',
+      expressionBasis: 'PER_1000_KCAL_ME',
     } satisfies IngredientOptionListQuery
 
     recipeDesignerApi.listIngredientOptions(query)
@@ -176,5 +207,76 @@ describe('recipeDesignerApi', () => {
       method: 'GET',
       data: query,
     })
+  })
+
+  it('creates internal supplement ingredient options from the recipe designer picker', () => {
+    const payload = {
+      name: '柠檬酸钙',
+      profileName: '柠檬酸钙 手工补剂档案',
+      basisType: 'PER_1_G',
+      usageUnit: 'g',
+      nutrients: {
+        'minerals.calcium': 210,
+        'vitamins.vitaminD': '',
+      },
+    } satisfies CreateSupplementOptionPayload
+
+    recipeDesignerApi.createSupplementOption(payload)
+
+    expect(mockedRequest).toHaveBeenCalledWith({
+      url: '/recipe-designer/supplement-options',
+      method: 'POST',
+      data: payload,
+    })
+  })
+
+  it('uploads a supplement label image for OCR plus DeepSeek prefill', async () => {
+    uploadFile.mockImplementation((options: any) => {
+      options.success({
+        statusCode: 201,
+        data: JSON.stringify({
+          code: 0,
+          data: {
+            ingredientName: '柠檬酸钙',
+            profileName: '柠檬酸钙 包装识别档案',
+            usageUnit: '粒',
+            basisType: 'PER_SERVING',
+            nutrients: { 'minerals.calcium': 200 },
+            warnings: [],
+            confidence: 'HIGH',
+            ocrText: '每粒含钙 200mg',
+            imageUrl: 'https://cdn.example.com/label.jpg',
+            imageKey: 'recipe-designer-supplement-labels/label.jpg',
+          },
+        }),
+      })
+    })
+
+    await expect(
+      recipeDesignerApi.extractSupplementLabel('/tmp/label.jpg'),
+    ).resolves.toEqual({
+      ingredientName: '柠檬酸钙',
+      profileName: '柠檬酸钙 包装识别档案',
+      usageUnit: '粒',
+      basisType: 'PER_SERVING',
+      nutrients: { 'minerals.calcium': 200 },
+      warnings: [],
+      confidence: 'HIGH',
+      ocrText: '每粒含钙 200mg',
+      imageUrl: 'https://cdn.example.com/label.jpg',
+      imageKey: 'recipe-designer-supplement-labels/label.jpg',
+    })
+
+    expect(uploadFile).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: 'https://api.example.com/api/v1/recipe-designer/supplement-label/extract',
+        filePath: '/tmp/label.jpg',
+        name: 'file',
+        header: expect.objectContaining({
+          Authorization: 'Bearer token-123',
+          'X-Customer-Id': 'staff-1',
+        }),
+      }),
+    )
   })
 })

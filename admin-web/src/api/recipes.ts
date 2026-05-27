@@ -119,23 +119,6 @@ export const recipeApi = {
   },
 
   /**
-   * Upload recipe nutrition report PDF to Tencent COS
-   */
-  uploadNutritionReport: async (file: File) => {
-    const formData = new FormData();
-    formData.append('file', file);
-
-    return request.post<{
-      url: string;
-      key: string;
-    }>('/admin/recipes/upload-nutrition-report', formData, {
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-    });
-  },
-
-  /**
    * Delete recipe image from Tencent COS
    */
   deleteImage: async (key: string) => {

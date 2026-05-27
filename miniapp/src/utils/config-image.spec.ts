@@ -4,6 +4,7 @@ import {
   getOptimizedProductImageUrl,
   getRecipeCoverImageUrl,
   isKnownStaleRecipeCoverUrl,
+  normalizeImageUrl,
 } from './config'
 
 describe('config image helpers', () => {
@@ -50,6 +51,13 @@ describe('config image helpers', () => {
         { skipOptimization: true },
       ),
     ).toBe('https://img.sevenkitchen.cloud/recipes/covers/demo-cover.png')
+  })
+
+  it('drops unresolved local e2e recipe covers before image components request them', () => {
+    const localE2eCoverUrl = 'https://static.sevenkitchen.local/e2e-cover-20260522154915.jpg'
+
+    expect(normalizeImageUrl(localE2eCoverUrl)).toBe('')
+    expect(getRecipeCoverImageUrl(localE2eCoverUrl)).toBe('')
   })
 
   it('recognizes known stale recipe cover URLs that should avoid list rendering', () => {

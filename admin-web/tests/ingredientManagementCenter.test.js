@@ -140,6 +140,10 @@ test('ingredient nutrition dialog manages mapped nutrition profiles instead of a
   assert.match(dialog, /当前编辑档案/)
   assert.match(dialog, /档案列表/)
   assert.match(dialog, /<el-table/)
+  assert.match(dialog, /label="档案中文名"/)
+  assert.match(dialog, /formatProfileDisplayName/)
+  assert.doesNotMatch(dialog, /label="状态 \/ 可食部 \/ 加工"/)
+  assert.match(dialog, /maxlength="1000"/)
   assert.match(dialog, /设为主档案/)
   assert.match(dialog, /编辑档案数据/)
   assert.doesNotMatch(dialog, /profile-card/)
@@ -153,10 +157,12 @@ test('ingredient nutrition dialog manages mapped nutrition profiles instead of a
   assert.match(ingredientApi, /patch\(`\/nutrition-foods\/\$\{nutritionFoodId\}\/mappings\/\$\{ingredientId\}`/)
 
   assert.match(ingredientTypes, /nutritionData\?: NutritionProfile/)
+  assert.match(ingredientTypes, /displayNameZh\?: string/)
   assert.match(ingredientTypes, /ediblePortionLabel\?: string/)
   assert.match(ingredientTypes, /processingLabel\?: string/)
 
   assert.match(adminController, /nutritionData:\s*mapping\.nutritionFood\.nutritionData/)
+  assert.match(adminController, /displayNameZh:\s*mapping\.nutritionFood\.displayNameZh/)
   assert.match(adminController, /ediblePortionLabel:\s*mapping\.nutritionFood\.ediblePortionLabel/)
   assert.match(adminController, /processingLabel:\s*mapping\.nutritionFood\.processingLabel/)
 })
@@ -172,6 +178,7 @@ test('mapped food nutrition profiles do not duplicate sample state in the nutrie
 
   assert.match(editor, /showSampleState\?: boolean/)
   assert.match(editor, /v-if="showSampleState"/)
+  assert.match(editor, /maxlength="1000"/)
 })
 
 test('ingredient nutrition dialog can ask Agent to draft a food nutrition profile', () => {

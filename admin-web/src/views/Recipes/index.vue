@@ -98,17 +98,23 @@
         <el-table-column prop="name" label="食谱名称" min-width="180">
           <template #default="{ row }">
             <div class="recipe-name">
-              <span class="name">{{ row.name }}</span>
+              <span class="name">{{ getRecipeSeriesDisplayName(row) }}</span>
               <el-tag size="small" class="version-tag">v{{ row.version }}</el-tag>
+            </div>
+            <div v-if="row.currentPublicVersion && row.pendingDraftVersion" class="recipe-version-note">
+              当前公开 v{{ row.currentPublicVersion.version }}
             </div>
           </template>
         </el-table-column>
 
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="RecipeStatusTagTypes[row.status as RecipeStatus]">
-              {{ RecipeStatusLabels[row.status as RecipeStatus] }}
+            <el-tag :type="getRecipeSeriesStatusType(row)">
+              {{ getRecipeSeriesStatusLabel(row) }}
             </el-tag>
+            <div v-if="row.pendingDraftVersion" class="pending-version-note">
+              待发布修订 v{{ row.pendingDraftVersion.version }}
+            </div>
           </template>
         </el-table-column>
 
@@ -171,11 +177,11 @@
               查看
             </el-button>
             <el-button
-              v-if="row.status === RecipeStatus.DRAFT"
+              v-if="row.pendingDraftVersion || row.status === RecipeStatus.DRAFT"
               link
               type="success"
               size="small"
-              @click="handlePublish(row)"
+              @click="handlePublish(row.pendingDraftVersion || row)"
             >
               发布
             </el-button>
@@ -291,6 +297,24 @@ const getHealthTagLabel = (value: string) => {
   return option?.label || value;
 };
 
+const getRecipeSeriesStatusLabel = (row: RecipeSummary) => {
+  if (row.pendingDraftVersion) {
+    return '待发布修订';
+  }
+  return RecipeStatusLabels[row.status as RecipeStatus];
+};
+
+const getRecipeSeriesStatusType = (row: RecipeSummary) => {
+  if (row.pendingDraftVersion) {
+    return 'warning';
+  }
+  return RecipeStatusTagTypes[row.status as RecipeStatus];
+};
+
+const getRecipeSeriesDisplayName = (row: RecipeSummary) => {
+  return row.currentPublicVersion?.name || row.name;
+};
+
 // Methods
 const loadMetadata = async () => {
   try {
@@ -355,7 +379,7 @@ const handleEdit = (row: RecipeSummary) => {
   router.push(`/recipes/${row.id}/edit`);
 };
 
-const handlePublish = async (row: RecipeSummary) => {
+const handlePublish = async (row: RecipeSummary | NonNullable<RecipeSummary['pendingDraftVersion']>) => {
   try {
     await ElMessageBox.confirm('确认发布该食谱？', '提示', {
       type: 'warning',
@@ -490,6 +514,18 @@ onMounted(() => {
 
 .version-tag {
   font-size: 12px;
+}
+
+.recipe-version-note,
+.pending-version-note {
+  margin-top: 4px;
+  color: #8c8c8c;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.pending-version-note {
+  color: #d48806;
 }
 
 .tag-item {

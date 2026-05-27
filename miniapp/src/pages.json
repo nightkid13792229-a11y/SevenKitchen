@@ -44,6 +44,12 @@
       }
     },
     {
+      "path": "pages/recipe-nutrition-report/index",
+      "style": {
+        "navigationBarTitleText": "完整营养报告"
+      }
+    },
+    {
       "path": "pages/address-list/index",
       "style": {
         "navigationBarTitleText": "收货地址"
@@ -142,13 +148,19 @@
     {
       "path": "pages/recipe-designer/editor",
       "style": {
-        "navigationBarTitleText": "配方编辑"
+        "navigationBarTitleText": "食谱编辑"
       }
     },
     {
       "path": "pages/recipe-designer/publish",
       "style": {
-        "navigationBarTitleText": "发布配方"
+        "navigationBarTitleText": "发布食谱"
+      }
+    },
+    {
+      "path": "pages/recipe-designer/supplement-library",
+      "style": {
+        "navigationBarTitleText": "补剂库"
       }
     },
     {

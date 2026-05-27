@@ -414,6 +414,7 @@ export interface NutritionFoodReference {
   id: string;
   name: string;
   nameEn?: string;
+  displayNameZh?: string;
   dataSource?: string;
   externalId?: string;
   preparationState?: string;

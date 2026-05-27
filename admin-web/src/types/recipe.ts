@@ -10,11 +10,11 @@ export enum RecipeStatus {
 }
 
 export enum LifeStage {
-  PUPPY = 'PUPPY',
-  ADULT = 'ADULT',
-  SENIOR = 'SENIOR',
-  PREGNANCY = 'PREGNANCY',
-  LACTATION = 'LACTATION',
+  PUPPY_UNDER_14_WEEKS = 'PUPPY_UNDER_14_WEEKS',
+  PUPPY_14_WEEKS_PLUS = 'PUPPY_14_WEEKS_PLUS',
+  LOW_ACTIVITY_ADULT_OR_SENIOR = 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+  HIGH_ACTIVITY_ADULT = 'HIGH_ACTIVITY_ADULT',
+  REPRODUCTION = 'REPRODUCTION',
 }
 
 export enum RecipeHealthTag {
@@ -35,14 +35,76 @@ export enum NutritionStandard {
 }
 
 export interface NutritionDetailedData {
-  moisture_pct: number;
-  protein_dm_pct: number;
-  fat_dm_pct: number;
-  fiber_dm_pct: number;
-  ash_dm_pct: number;
-  carbs_dm_pct: number;
-  ca_p_ratio: number;
-  energy_density_kcal_per_kg: number;
+  moisture_pct?: number | null;
+  protein_dm_pct?: number | null;
+  fat_dm_pct?: number | null;
+  fiber_dm_pct?: number | null;
+  ash_dm_pct?: number | null;
+  carbs_dm_pct?: number | null;
+  ca_p_ratio?: number | null;
+  energy_density_kcal_per_kg?: number | null;
+  source?: string;
+  schemaVersion?: number;
+  standard?: string;
+  scenario?: string;
+  generatedAt?: string;
+  summary?: NutritionSummaryData;
+  report?: SetarNutritionReport;
+}
+
+export interface NutritionSummaryData {
+  moisture_pct?: number | null;
+  protein_dm_pct?: number | null;
+  fat_dm_pct?: number | null;
+  fiber_dm_pct?: number | null;
+  ash_dm_pct?: number | null;
+  carbs_dm_pct?: number | null;
+  ca_p_ratio?: number | null;
+  energy_density_kcal_per_kg?: number | null;
+}
+
+export interface SetarNutritionReport {
+  ingredientRows?: SetarIngredientReportRow[];
+  macroRows?: SetarMacroReportRow[];
+  energyDensityRows?: SetarEnergyDensityRow[];
+  nutrientSections?: Record<string, SetarNutrientSection>;
+}
+
+export interface SetarIngredientReportRow {
+  ingredientName: string;
+  amountLabel: string;
+  weightPercentLabel: string;
+}
+
+export interface SetarMacroReportRow {
+  key: string;
+  name: string;
+  weightPercentLabel: string;
+  dryMatterLabel: string;
+  energyPercentLabel: string;
+}
+
+export interface SetarEnergyDensityRow {
+  label: string;
+  value: string;
+}
+
+export interface SetarNutrientSection {
+  key: string;
+  title: string;
+  dryMatterHeader: string;
+  rows: SetarNutrientReportRow[];
+}
+
+export interface SetarNutrientReportRow {
+  key: string;
+  name: string;
+  unit: string;
+  minLabel: string;
+  maxLabel: string;
+  currentLabel: string;
+  dryMatterLabel: string;
+  status: string;
 }
 
 export interface SupplementTarget {
@@ -92,14 +154,23 @@ export interface IngredientPreparationMethodHistoryItem {
   lastUsedAt: string;
 }
 
+export interface RecipeVersionSummary {
+  id: string;
+  name: string;
+  version: number;
+  status: RecipeStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface RecipeSummary {
   id: string;
+  recipeId?: string;
   name: string;
   version: number;
   status: RecipeStatus;
   coverImageUrl?: string;
   coverTitle?: string;
-  nutritionReportUrl?: string | null;
   energyDensityKcalPerKg: number;
   applicableLifeStages: LifeStage[];
   targetHealthTags: string[]; // Now using UUIDs instead of enum
@@ -110,6 +181,9 @@ export interface RecipeSummary {
   designSource?: string;
   createdAt: string;
   updatedAt: string;
+  currentPublicVersion?: RecipeVersionSummary;
+  pendingDraftVersion?: RecipeVersionSummary;
+  versionHistory?: RecipeVersionSummary[];
 }
 
 export interface RecipeDetail extends RecipeSummary {
@@ -117,7 +191,6 @@ export interface RecipeDetail extends RecipeSummary {
   videoUrl?: string;
   description?: string;
   designSource?: string;
-  nutritionReportUrl?: string | null;
   nutritionStandard: NutritionStandard;
   nutritionDetailedData?: NutritionDetailedData;
   productionSteps?: string;
@@ -134,7 +207,6 @@ export interface RecipeForm {
   videoUrl?: string;
   description?: string;
   designSource?: string;
-  nutritionReportUrl?: string | null;
   nutritionStandard: NutritionStandard;
   energyDensityKcalPerKg: number;
   items?: RecipeItem[];

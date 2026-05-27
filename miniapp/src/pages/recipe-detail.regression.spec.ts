@@ -3,29 +3,29 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 
 describe('recipe detail nutrition report regressions', () => {
-  it('only renders the nutrition report entry when a report URL exists', () => {
+  it('renders the structured nutrition report entry when Setar report data exists', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
       'utf-8',
     )
 
-    expect(source).toContain('nutritionReportUrl?: string')
-    expect(source).toContain('v-if="recipe.nutritionReportUrl"')
-    expect(source).toContain('@tap="openNutritionReport"')
+    expect(source).toContain('hasStructuredNutritionReport')
+    expect(source).toContain('@tap="openNutritionReportPage"')
+    expect(source).toContain('/pages/recipe-nutrition-report/index')
+    expect(source).not.toContain('nutritionReportUrl?: string')
+    expect(source).not.toContain('v-if="recipe.nutritionReportUrl"')
   })
 
-  it('downloads and opens uploaded PDF reports through the miniapp document viewer', () => {
+  it('does not download uploaded PDF nutrition reports from recipe detail', () => {
     const source = readFileSync(
       resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
       'utf-8',
     )
 
-    expect(source).toContain('function openNutritionReport()')
-    expect(source).toContain('uni.downloadFile')
-    expect(source).toContain('recipe.value.nutritionReportUrl')
-    expect(source).toContain('uni.openDocument')
-    expect(source).toContain("fileType: 'pdf'")
-    expect(source).toContain("title: '报告打开失败'")
+    expect(source).not.toContain('function openNutritionReport()')
+    expect(source).not.toContain('uni.downloadFile')
+    expect(source).not.toContain('uni.openDocument')
+    expect(source).not.toContain("fileType: 'pdf'")
   })
 
   it('places the nutrition report entry below the nutrition analysis section', () => {
@@ -65,8 +65,43 @@ describe('recipe detail nutrition report regressions', () => {
 
     expect(source).toContain('核心营养成分')
     expect(source).toContain('详细营养报告')
+    expect(source).toContain('查看完整报告')
     expect(source).not.toContain('<text class="card-title">营养成分分析</text>')
     expect(source).not.toContain('<text class="report-title">营养报告</text>')
+  })
+
+  it('registers the standalone nutrition report page', () => {
+    const pagesJson = readFileSync(resolve(process.cwd(), 'src/pages.json'), 'utf-8')
+    const reportPage = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-nutrition-report/index.vue'),
+      'utf-8',
+    )
+
+    expect(pagesJson).toContain('pages/recipe-nutrition-report/index')
+    expect(reportPage).toContain('完整营养报告')
+    expect(reportPage).toContain('nutrientSections')
+    expect(reportPage).toContain('macroRows')
+  })
+
+  it('keeps the standalone nutrition report aligned with the Setar publish report layout', () => {
+    const reportPage = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-nutrition-report/index.vue'),
+      'utf-8',
+    )
+
+    expect(reportPage).toContain('基础信息')
+    expect(reportPage).toContain('食谱原料清单')
+    expect(reportPage).toContain('ingredientRows')
+    expect(reportPage).toContain('单位')
+    expect(reportPage).toContain('下限')
+    expect(reportPage).toContain('/1,000kcal')
+    expect(reportPage).toContain('上限')
+    expect(reportPage).toContain('食谱含量')
+    expect(reportPage).toContain('干物质/100g')
+    expect(reportPage).toContain('unit-cell')
+    expect(reportPage).toContain('stacked-head')
+    expect(reportPage).not.toContain('getStatusLabel')
+    expect(reportPage).not.toContain('status-cell')
   })
 
   it('clarifies supplement nutrient targets as per kg food ingredient basis', () => {
@@ -107,5 +142,18 @@ describe('recipe detail nutrition report regressions', () => {
     expect(source).toContain('v-if="item.nutritionStateLabel"')
     expect(source).toContain('class="nutrition-state-tag"')
     expect(source).toContain('{{ item.nutritionStateLabel }}')
+  })
+
+  it('recognizes the precise recipe designer life stage labels in recipe detail', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    )
+
+    expect(source).toContain("'PUPPY_UNDER_14_WEEKS': '小于14周幼犬'")
+    expect(source).toContain("'PUPPY_14_WEEKS_PLUS': '大于等于14周幼犬'")
+    expect(source).toContain("'LOW_ACTIVITY_ADULT_OR_SENIOR': '低运动量成犬或老年犬'")
+    expect(source).toContain("'HIGH_ACTIVITY_ADULT': '普通或高运动量成犬'")
+    expect(source).toContain("'REPRODUCTION': '繁殖期'")
   })
 })

@@ -204,6 +204,8 @@ describe('diy sheet layout regressions', () => {
     expect(source).toContain('生命阶段提醒')
     expect(source).toContain('{{ lifeStageReminderText }}')
     expect(source).toContain('../../utils/life-stage-match')
+    expect(source).toContain('resolveDogRecipeLifeStage')
+    expect(source).toContain('selectedDogRecipeLifeStage')
     expect(source).toContain('isRecipeLifeStageMatch(')
   })
 

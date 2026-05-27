@@ -1167,6 +1167,11 @@ function formatStatNum(num: number | undefined): string {
 
 function getLifeStageLabel(stage: string): string {
   const map: Record<string, string> = {
+    'PUPPY_UNDER_14_WEEKS': '小于14周幼犬',
+    'PUPPY_14_WEEKS_PLUS': '大于等于14周幼犬',
+    'LOW_ACTIVITY_ADULT_OR_SENIOR': '低运动量成犬或老年犬',
+    'HIGH_ACTIVITY_ADULT': '普通或高运动量成犬',
+    'REPRODUCTION': '繁殖期',
     'PUPPY': '幼犬',
     'ADULT': '成犬',
     'SENIOR': '老年犬',

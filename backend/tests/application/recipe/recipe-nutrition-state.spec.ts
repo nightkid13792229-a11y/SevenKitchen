@@ -46,7 +46,6 @@ describe('recipe nutrition state selection', () => {
     nutritionDetailedData: null,
     applicableLifeStages: [],
     productionSteps: null,
-    nutritionReportUrl: null,
     salesCount: 0,
     diyGenCount: 0,
     likeCount: 0,

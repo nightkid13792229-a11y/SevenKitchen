@@ -517,7 +517,7 @@ import {
   buildLifeStageReminderText,
   getLifeStageLabel,
   isRecipeLifeStageMatch,
-  resolveDogLifeStage
+  resolveDogRecipeLifeStage
 } from '../../utils/life-stage-match'
 import ShareButton from '../../components/ShareButton.vue'
 import ImagePreviewModal from '../../components/ImagePreviewModal.vue'
@@ -676,15 +676,17 @@ const supplementNutrientBaseWeightG = computed(() => {
   return foodItemsTotal.value.theoreticalAmount || totalFoodNetWeightG.value
 })
 
-const selectedDogLifeStage = computed(() => resolveDogLifeStage(dog.value, breeds.value))
+const selectedDogRecipeLifeStage = computed(() =>
+  resolveDogRecipeLifeStage(dog.value, breeds.value),
+)
 
 const isLifeStageMatch = computed(() => {
-  return isRecipeLifeStageMatch(recipe.value.applicableLifeStages || [], selectedDogLifeStage.value)
+  return isRecipeLifeStageMatch(recipe.value.applicableLifeStages || [], selectedDogRecipeLifeStage.value)
 })
 
 const lifeStageReminderText = computed(() => buildLifeStageReminderText({
   applicableStages: recipe.value.applicableLifeStages || [],
-  dogLifeStage: selectedDogLifeStage.value,
+  dogLifeStage: selectedDogRecipeLifeStage.value,
   dogName: dog.value?.name,
 }))
 

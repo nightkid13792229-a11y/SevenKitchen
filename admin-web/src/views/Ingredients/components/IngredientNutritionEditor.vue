@@ -94,7 +94,7 @@
             v-model="formValue.meta.versionNote"
             type="textarea"
             :rows="2"
-            maxlength="200"
+            maxlength="1000"
             placeholder="记录换算说明、异常口径、核对结论等"
             show-word-limit
           />

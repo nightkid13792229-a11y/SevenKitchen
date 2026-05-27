@@ -456,6 +456,7 @@ import {
   getLifeStageLabel,
   isRecipeLifeStageMatch,
   resolveDogLifeStage,
+  resolveDogRecipeLifeStage,
 } from '../../utils/life-stage-match'
 import {
   DEFAULT_ORDER_CYCLE_DAYS,
@@ -486,6 +487,7 @@ interface Dog {
   birthday?: string
   ageText?: string
   gender?: string
+  activityLevel?: string
   lifeStageOverride?: string
 }
 
@@ -788,9 +790,12 @@ const selectedDog = computed(() => {
   return dogs.value.find(d => d.id === selectedDogId.value)
 })
 const selectedDogLifeStage = computed(() => resolveDogLifeStage(selectedDog.value, breeds.value))
+const selectedDogRecipeLifeStage = computed(() =>
+  resolveDogRecipeLifeStage(selectedDog.value, breeds.value),
+)
 const lifeStageReminderText = computed(() => buildLifeStageReminderText({
   applicableStages: recipe.value.applicableLifeStages || [],
-  dogLifeStage: selectedDogLifeStage.value,
+  dogLifeStage: selectedDogRecipeLifeStage.value,
   dogName: selectedDog.value?.name,
 }))
 
@@ -1204,6 +1209,7 @@ function checkLifeStageMatch() {
   }
 
   const dogLifeStage = selectedDogLifeStage.value
+  const dogRecipeLifeStage = selectedDogRecipeLifeStage.value
   const applicableStages = recipe.value.applicableLifeStages || []
 
   // 详细调试日志
@@ -1213,14 +1219,15 @@ function checkLifeStageMatch() {
     '狗狗品种ID': selectedDog.value.breedId,
     '生命阶段覆盖值': selectedDog.value.lifeStageOverride,
     '计算的狗狗生命阶段': dogLifeStage,
+    '食谱匹配生命阶段': dogRecipeLifeStage,
     '食谱适用生命阶段': applicableStages,
     '食谱名称': recipe.value.name,
-    '检查结果': isRecipeLifeStageMatch(applicableStages, dogLifeStage),
+    '检查结果': isRecipeLifeStageMatch(applicableStages, dogRecipeLifeStage),
     'breeds列表长度': breeds.value.length,
     'breeds列表': breeds.value.map(b => ({ id: b.id, name: b.name, adultAgeMonths: b.adultAgeMonths }))
   })
 
-  isLifeStageMatch.value = isRecipeLifeStageMatch(applicableStages, dogLifeStage)
+  isLifeStageMatch.value = isRecipeLifeStageMatch(applicableStages, dogRecipeLifeStage)
   console.log('[RecipeOrder] 校验结果:', isLifeStageMatch.value ? '匹配' : '不匹配')
 
   // 每次切换狗狗时重置警告状态

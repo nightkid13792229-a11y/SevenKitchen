@@ -5,6 +5,7 @@ import {
 } from '@nestjs/common';
 import { Prisma, type NutritionSourceRecord } from '@prisma/client';
 import type { NutritionProfileV2 } from '../../domain/ingredient/types';
+import { normalizeNutritionProfile } from '../../domain/ingredient/nutrition-profile.utils';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { summarizeIngredientCreationProfileCompleteness } from './ingredient-creation-completeness';
 
@@ -16,6 +17,25 @@ const DRAFT_INCLUDE = {
 
 const REQUEST_PREFIX_PATTERN = /^(新增|添加|创建|新建|录入)\s*/u;
 const REQUEST_SPLIT_PATTERN = /[，,。；;、\n]/u;
+const EXISTING_DRAFT_MESSAGE = '已有草稿，请编辑或拒绝后重新创建任务';
+const LOW_SIGNAL_RECALL_WORDS = new Set([
+  'meat',
+  'fish',
+  'egg',
+  'raw',
+  'boiled',
+  'steamed',
+  'cooked',
+  'light cooked',
+  '肉',
+  '鱼',
+  '蛋',
+  '生',
+  '熟',
+  '水煮',
+  '蒸',
+  '轻烹饪',
+]);
 
 const TRANSLATED_KEYWORDS: ReadonlyArray<[RegExp, readonly string[]]> = [
   [/鸭胸肉|鸭胸/u, ['duck', 'breast', 'meat']],
@@ -91,6 +111,18 @@ type PreparationLabels = {
   displayLabel: string;
 };
 
+type SearchTerms = {
+  all: string[];
+  recall: string[];
+};
+
+type RankedCandidate = {
+  record: NutritionSourceRecord;
+  score: number;
+  labels: PreparationLabels;
+  nutritionData: NutritionProfileV2;
+};
+
 function uniqueWords(words: string[]): string[] {
   const seen = new Set<string>();
   const result: string[] = [];
@@ -124,27 +156,42 @@ function translateKeywords(text: string): string[] {
   return words;
 }
 
-function buildSearchWords(requestText: string, suggestedName: string): string[] {
-  const textWords = requestText
+function normalizeFreeTextWords(text: string): string[] {
+  return text
     .replace(/[，,。；;、（）()]/gu, ' ')
     .split(/\s+/u)
-    .map((word) => word.trim())
+    .map((word) => word.trim().replace(REQUEST_PREFIX_PATTERN, ''))
     .filter((word) => word.length >= 2);
+}
 
-  return uniqueWords([
-    suggestedName,
-    ...textWords,
-    ...translateKeywords(`${requestText} ${suggestedName}`),
-  ]);
+function isHighSignalRecallWord(word: string): boolean {
+  const normalized = word.toLowerCase();
+  return !LOW_SIGNAL_RECALL_WORDS.has(normalized);
+}
+
+function buildSearchTerms(
+  suggestedName: string,
+  searchContext: string,
+): SearchTerms {
+  const contextWords = normalizeFreeTextWords(searchContext);
+  const translatedWords = translateKeywords(`${searchContext} ${suggestedName}`);
+  const all = uniqueWords([suggestedName, ...contextWords, ...translatedWords]);
+  const recall = uniqueWords(
+    [suggestedName, ...contextWords, ...translatedWords].filter(
+      isHighSignalRecallWord,
+    ),
+  );
+
+  return {
+    all,
+    recall: recall.length > 0 ? recall : all,
+  };
 }
 
 function buildRecallFilters(
-  suggestedName: string,
-  searchWords: string[],
+  searchTerms: SearchTerms,
 ): Prisma.NutritionSourceRecordWhereInput[] {
-  const recalledWords = uniqueWords([suggestedName, ...searchWords]).filter(
-    (word) => word.length >= 2,
-  );
+  const recalledWords = searchTerms.recall.filter((word) => word.length >= 2);
 
   return recalledWords.flatMap((word) => [
     { foodName: { contains: word, mode: 'insensitive' as const } },
@@ -226,6 +273,71 @@ function suggestDisplayNameZh(
   return `${suggestedName}（${labels.displayLabel}）`;
 }
 
+function isPrismaNullJson(value: unknown): boolean {
+  return (
+    value === null || value === Prisma.JsonNull || value === Prisma.DbNull
+  );
+}
+
+function hasNutritionValue(profile: NutritionProfileV2): boolean {
+  const tabs = [
+    profile.macros,
+    profile.minerals,
+    profile.vitamins,
+    profile.fattyAcids,
+    profile.aminoAcids,
+  ];
+
+  return (
+    tabs.some((tab) =>
+      Object.values(tab).some(
+        (value) => typeof value === 'number' && Number.isFinite(value),
+      ),
+    ) ||
+    profile.customItems.some(
+      (item) => typeof item.value === 'number' && Number.isFinite(item.value),
+    )
+  );
+}
+
+function normalizeSourceNutrition(value: unknown): NutritionProfileV2 | null {
+  if (
+    isPrismaNullJson(value) ||
+    typeof value !== 'object' ||
+    Array.isArray(value)
+  ) {
+    return null;
+  }
+
+  try {
+    const profile = normalizeNutritionProfile(value as any);
+    if (!profile || !hasNutritionValue(profile)) {
+      return null;
+    }
+    return profile;
+  } catch {
+    return null;
+  }
+}
+
+function selectProfileCandidates(
+  ranked: RankedCandidate[],
+): RankedCandidate[] {
+  const primary = ranked[0];
+  if (!primary || ranked.length <= 2) {
+    return ranked;
+  }
+
+  const secondary =
+    ranked.find(
+      (entry) =>
+        entry.record.id !== primary.record.id &&
+        entry.labels.preparationState !== primary.labels.preparationState,
+    ) ?? ranked[1];
+
+  return [primary, secondary];
+}
+
 function toJsonInput(value: unknown): Prisma.InputJsonValue {
   return value as Prisma.InputJsonValue;
 }
@@ -246,9 +358,20 @@ export class IngredientCreationAgentService {
   async runJob(jobId: string) {
     const job = await this.prisma.ingredientCreationJob.findUnique({
       where: { id: jobId },
+      include: {
+        draft: { select: { id: true, status: true } },
+        messages: {
+          where: { role: 'USER' },
+          orderBy: { createdAt: 'asc' },
+          select: { role: true, content: true },
+        },
+      },
     });
     if (!job) {
       throw new NotFoundException('AI 新增食材任务不存在');
+    }
+    if (job.draft) {
+      throw new BadRequestException(EXISTING_DRAFT_MESSAGE);
     }
 
     await this.prisma.ingredientCreationJob.update({
@@ -268,8 +391,14 @@ export class IngredientCreationAgentService {
     });
 
     const suggestedName = resolveSuggestedName(job.requestText);
-    const searchWords = buildSearchWords(job.requestText, suggestedName);
-    const recallFilters = buildRecallFilters(suggestedName, searchWords);
+    const userMessageContext = (job.messages ?? [])
+      .map((message) => message.content)
+      .join(' ');
+    const searchContext = [job.requestText, userMessageContext]
+      .filter(Boolean)
+      .join(' ');
+    const searchTerms = buildSearchTerms(suggestedName, searchContext);
+    const recallFilters = buildRecallFilters(searchTerms);
     const sourceRecords = await this.prisma.nutritionSourceRecord.findMany({
       where: {
         status: 'ACTIVE',
@@ -281,15 +410,27 @@ export class IngredientCreationAgentService {
     });
 
     const ranked = sourceRecords
+      .map((record): RankedCandidate | null => {
+        if (record.status !== 'ACTIVE') {
+          return null;
+        }
+        const nutritionData = normalizeSourceNutrition(
+          record.normalizedNutrition,
+        );
+        if (!nutritionData) {
+          return null;
+        }
+        return {
+          record,
+          score: scoreSourceRecord(record, searchTerms.all),
+          labels: inferPreparationLabels(record.foodName),
+          nutritionData,
+        };
+      })
       .filter(
-        (record) =>
-          record.status === 'ACTIVE' && record.normalizedNutrition !== null,
+        (entry): entry is RankedCandidate =>
+          entry !== null && entry.score > 0,
       )
-      .map((record) => ({
-        record,
-        score: scoreSourceRecord(record, searchWords),
-      }))
-      .filter((entry) => entry.score > 0)
       .sort((a, b) => b.score - a.score);
 
     if (ranked.length === 0) {
@@ -313,46 +454,45 @@ export class IngredientCreationAgentService {
       throw new BadRequestException(waitingQuestion);
     }
 
-    const selected = ranked.slice(0, 2);
-    const profiles = selected.map(({ record, score }, index) => {
-      const labels = inferPreparationLabels(record.foodName);
-      const nutritionData =
-        record.normalizedNutrition as unknown as NutritionProfileV2;
-      const completenessSummary =
-        summarizeIngredientCreationProfileCompleteness(nutritionData);
+    const selected = selectProfileCandidates(ranked);
+    const profiles = selected.map(
+      ({ record, score, labels, nutritionData }, index) => {
+        const completenessSummary =
+          summarizeIngredientCreationProfileCompleteness(nutritionData);
 
-      return {
-        role: index === 0 ? 'PRIMARY' : 'SECONDARY',
-        sourceRecordId: record.id,
-        sourceType: record.sourceType,
-        sourceKey: record.sourceKey,
-        sourceFoodName: record.foodName,
-        sourceFoodNameEn: record.foodNameEn,
-        suggestedDisplayNameZh: suggestDisplayNameZh(suggestedName, labels),
-        preparationState: labels.preparationState,
-        preparationStateLabel: labels.preparationStateLabel,
-        ediblePortionLabel: '可食部',
-        processingLabel: labels.processingLabel,
-        nutritionData: toJsonInput(nutritionData),
-        completenessSummary: toJsonInput(completenessSummary),
-        fieldSourceSummary: toNullableJsonInput({
+        return {
+          role: index === 0 ? 'PRIMARY' : 'SECONDARY',
+          sourceRecordId: record.id,
           sourceType: record.sourceType,
           sourceKey: record.sourceKey,
-          sourceTitle: record.sourceTitle,
           sourceFoodName: record.foodName,
-          fieldSources: completenessSummary.fieldSources,
-        }),
-        supplementRiskSummary: toNullableJsonInput({
-          level: 'LOW',
-          noteZh:
-            '第一版按本地可信来源生成草稿；正式确认前仍需人工审核语义和字段来源。',
-        }),
-        agentRationale: `按来源名称与用户需求的语义匹配排序生成，匹配分 ${score.toFixed(
-          1,
-        )}。`,
-        sortOrder: index,
-      };
-    });
+          sourceFoodNameEn: record.foodNameEn,
+          suggestedDisplayNameZh: suggestDisplayNameZh(suggestedName, labels),
+          preparationState: labels.preparationState,
+          preparationStateLabel: labels.preparationStateLabel,
+          ediblePortionLabel: '可食部',
+          processingLabel: labels.processingLabel,
+          nutritionData: toJsonInput(nutritionData),
+          completenessSummary: toJsonInput(completenessSummary),
+          fieldSourceSummary: toNullableJsonInput({
+            sourceType: record.sourceType,
+            sourceKey: record.sourceKey,
+            sourceTitle: record.sourceTitle,
+            sourceFoodName: record.foodName,
+            fieldSources: completenessSummary.fieldSources,
+          }),
+          supplementRiskSummary: toNullableJsonInput({
+            level: 'LOW',
+            noteZh:
+              '第一版按本地可信来源生成草稿；正式确认前仍需人工审核语义和字段来源。',
+          }),
+          agentRationale: `按来源名称与用户需求的语义匹配排序生成，匹配分 ${score.toFixed(
+            1,
+          )}。`,
+          sortOrder: index,
+        };
+      },
+    );
 
     await this.prisma.ingredientCreationJob.update({
       where: { id: job.id },
@@ -368,7 +508,7 @@ export class IngredientCreationAgentService {
         jobId: job.id,
         status: 'READY_FOR_REVIEW',
         suggestedName,
-        aliases: searchWords.filter((word) => word !== suggestedName),
+        aliases: searchTerms.all.filter((word) => word !== suggestedName),
         type: 'FOOD',
         baseUnit: 'G',
         unitDisplayLabel: 'g',

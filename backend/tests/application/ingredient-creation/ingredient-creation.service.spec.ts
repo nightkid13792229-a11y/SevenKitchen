@@ -483,6 +483,32 @@ describe('IngredientCreationService', () => {
     ).rejects.toThrow('AI 新增食材 Agent 服务未注册');
   });
 
+  it('rejects reruns when a review draft already exists without calling the agent', async () => {
+    const prisma = createPrismaMock();
+    prisma.ingredientCreationJob.findUnique.mockResolvedValue({
+      id: 'job-1',
+      status: 'READY_FOR_REVIEW',
+      createdBy: 'staff-1',
+      messages: [],
+      draft: {
+        id: 'draft-1',
+        status: 'READY_FOR_REVIEW',
+      },
+    });
+    const agentService = {
+      runJob: jest.fn(),
+    };
+    const service = new IngredientCreationService(
+      prisma as any,
+      agentService as any,
+    );
+
+    await expect(
+      service.rerunDraft('job-1', { userId: 'staff-1', role: 'STAFF' }),
+    ).rejects.toThrow('已有草稿，请编辑或拒绝后重新创建任务');
+    expect(agentService.runJob).not.toHaveBeenCalled();
+  });
+
   it('reruns the draft through the registered agent service after permission checks', async () => {
     const prisma = createPrismaMock();
     prisma.ingredientCreationJob.findUnique.mockResolvedValue({

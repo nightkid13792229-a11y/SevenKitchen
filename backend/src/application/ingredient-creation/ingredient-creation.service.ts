@@ -43,6 +43,7 @@ const PROFILE_WITH_DRAFT_INCLUDE = {
 } satisfies Prisma.IngredientCreationDraftProfileInclude;
 
 const EDITABLE_DRAFT_STATUSES = new Set(['DRAFT', 'READY_FOR_REVIEW']);
+const EXISTING_DRAFT_MESSAGE = '已有草稿，请编辑或拒绝后重新创建任务';
 
 function trimRequired(value: string, message: string): string {
   const next = value.trim();
@@ -206,6 +207,9 @@ export class IngredientCreationService {
     const job = await this.getJobDetail(jobId, user);
     if (job.status === 'CONFIRMED') {
       throw new BadRequestException('已确认任务不能重新运行');
+    }
+    if (job.draft) {
+      throw new BadRequestException(EXISTING_DRAFT_MESSAGE);
     }
     if (!this.agentService) {
       throw new BadRequestException('AI 新增食材 Agent 服务未注册');

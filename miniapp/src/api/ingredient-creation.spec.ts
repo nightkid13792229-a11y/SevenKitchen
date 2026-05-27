@@ -6,9 +6,9 @@ vi.mock('../utils/api', () => ({
 
 import { request } from '../utils/api'
 import {
+  INGREDIENT_CREATION_JOB_STATUSES,
   ingredientCreationApi,
   type CreateIngredientCreationJobPayload,
-  type IngredientCreationJobStatus,
   type IngredientCreationMessagePayload,
   type UpdateIngredientCreationDraftPayload,
   type UpdateIngredientCreationDraftProfilePayload,
@@ -22,18 +22,7 @@ describe('ingredientCreationApi', () => {
   })
 
   it('exports the ingredient creation job statuses used by the backend workflow', () => {
-    const statuses = [
-      'DRAFTING',
-      'SEARCHING_SOURCES',
-      'WAITING_USER',
-      'BUILDING_REPORT',
-      'READY_FOR_REVIEW',
-      'CONFIRMED',
-      'FAILED',
-      'CANCELED',
-    ] satisfies IngredientCreationJobStatus[]
-
-    expect(statuses).toEqual([
+    expect(INGREDIENT_CREATION_JOB_STATUSES).toEqual([
       'DRAFTING',
       'SEARCHING_SOURCES',
       'WAITING_USER',

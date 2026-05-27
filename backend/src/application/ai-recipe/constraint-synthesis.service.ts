@@ -19,16 +19,16 @@ type SynthesisInput = {
 @Injectable()
 export class ConstraintSynthesisService {
   synthesize(input: SynthesisInput): RecipeConstraintSet {
-    const hasFatConflict = this.hasFatBoundsConflict(input.hardConstraints);
+    const fatConflict = this.getFatBoundsConflict(input.hardConstraints);
 
-    if (hasFatConflict) {
+    if (fatConflict) {
       return {
         dogId: input.dogId,
         assessmentId: input.assessmentId,
         rulePackages: input.rulePackages,
         hardConstraints: {
           items: input.hardConstraints,
-          conflicts: ['fat bounds conflict'],
+          conflicts: [fatConflict],
         },
         softConstraints: { items: input.softConstraints },
         reviewRequired: true,
@@ -50,18 +50,39 @@ export class ConstraintSynthesisService {
     };
   }
 
-  private hasFatBoundsConflict(constraints: ConstraintInput[]): boolean {
-    const max = constraints.find(
-      (item) => item.key === 'fat.maxPercentCalories',
-    );
-    const min = constraints.find(
-      (item) => item.key === 'fat.minPercentCalories',
-    );
+  private getFatBoundsConflict(constraints: ConstraintInput[]): string | null {
+    const mins: number[] = [];
+    const maxes: number[] = [];
 
-    if (!max || !min) {
-      return false;
+    for (const constraint of constraints) {
+      if (
+        constraint.key !== 'fat.minPercentCalories' &&
+        constraint.key !== 'fat.maxPercentCalories'
+      ) {
+        continue;
+      }
+
+      if (
+        typeof constraint.value !== 'number' ||
+        !Number.isFinite(constraint.value)
+      ) {
+        return 'invalid fat bound value';
+      }
+
+      if (constraint.key === 'fat.minPercentCalories') {
+        mins.push(constraint.value);
+      } else {
+        maxes.push(constraint.value);
+      }
     }
 
-    return Number(min.value) > Number(max.value);
+    if (mins.length === 0 || maxes.length === 0) {
+      return null;
+    }
+
+    const highestMin = Math.max(...mins);
+    const lowestMax = Math.min(...maxes);
+
+    return highestMin > lowestMax ? 'fat bounds conflict' : null;
   }
 }

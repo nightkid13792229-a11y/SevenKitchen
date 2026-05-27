@@ -1,3 +1,7 @@
+import {
+  KnowledgeSourceStatus,
+  NutritionRulePackageStatus,
+} from '@prisma/client';
 import { KnowledgeBaseService } from '../../src/application/ai-recipe/knowledge-base.service';
 
 describe('KnowledgeBaseService', () => {
@@ -23,8 +27,8 @@ describe('KnowledgeBaseService', () => {
     const result = await service.listActiveSources();
 
     expect(prisma.knowledgeSource.findMany).toHaveBeenCalledWith({
-      where: { status: 'ACTIVE' },
-      orderBy: { name: 'asc' },
+      where: { status: KnowledgeSourceStatus.ACTIVE },
+      orderBy: [{ name: 'asc' }, { code: 'asc' }],
     });
     expect(result).toEqual([
       { code: 'FEDIAF_2025', name: 'FEDIAF Nutritional Guidelines' },
@@ -41,12 +45,18 @@ describe('KnowledgeBaseService', () => {
     const result = await service.listActiveRulePackages();
 
     expect(prisma.nutritionRulePackage.findMany).toHaveBeenCalledWith({
-      where: { status: 'ACTIVE' },
+      where: {
+        status: NutritionRulePackageStatus.ACTIVE,
+        versions: { some: { isActive: true } },
+      },
       include: {
-        versions: { where: { isActive: true } },
+        versions: {
+          where: { isActive: true },
+          orderBy: { version: 'desc' },
+        },
         sources: { include: { knowledgeSource: true } },
       },
-      orderBy: { name: 'asc' },
+      orderBy: [{ name: 'asc' }, { code: 'asc' }],
     });
     expect(result).toEqual(mockPackages);
   });

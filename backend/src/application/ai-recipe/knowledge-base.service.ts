@@ -1,4 +1,8 @@
 import { Injectable } from '@nestjs/common';
+import {
+  KnowledgeSourceStatus,
+  NutritionRulePackageStatus,
+} from '@prisma/client';
 import { PrismaService } from '../../infrastructure/prisma.service';
 
 @Injectable()
@@ -7,19 +11,25 @@ export class KnowledgeBaseService {
 
   async listActiveSources() {
     return this.prisma.knowledgeSource.findMany({
-      where: { status: 'ACTIVE' },
-      orderBy: { name: 'asc' },
+      where: { status: KnowledgeSourceStatus.ACTIVE },
+      orderBy: [{ name: 'asc' }, { code: 'asc' }],
     });
   }
 
   async listActiveRulePackages() {
     return this.prisma.nutritionRulePackage.findMany({
-      where: { status: 'ACTIVE' },
+      where: {
+        status: NutritionRulePackageStatus.ACTIVE,
+        versions: { some: { isActive: true } },
+      },
       include: {
-        versions: { where: { isActive: true } },
+        versions: {
+          where: { isActive: true },
+          orderBy: { version: 'desc' },
+        },
         sources: { include: { knowledgeSource: true } },
       },
-      orderBy: { name: 'asc' },
+      orderBy: [{ name: 'asc' }, { code: 'asc' }],
     });
   }
 }

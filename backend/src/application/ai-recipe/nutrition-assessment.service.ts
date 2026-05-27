@@ -37,7 +37,13 @@ export class NutritionAssessmentService {
       )
       .map((rulePackage) => rulePackage.code);
 
-    const missingInfo = this.resolveMissingInfo(input);
+    const enabledRulePackageInputs = input.activeRulePackages.filter(
+      (rulePackage) => enabledRulePackages.includes(rulePackage.code),
+    );
+    const missingInfo = this.resolveMissingInfo(
+      enabledRulePackageInputs,
+      input.confirmedInputs,
+    );
     const resultStatus = this.resolveResultStatus(
       enabledRulePackages,
       missingInfo,
@@ -115,21 +121,36 @@ export class NutritionAssessmentService {
     );
   }
 
-  private resolveMissingInfo(input: BuildPlanInput): MissingInfoCode[] {
+  private resolveMissingInfo(
+    rulePackages: RulePackageInput[],
+    confirmedInputs: Record<string, unknown>,
+  ): MissingInfoCode[] {
     const missing = new Set<MissingInfoCode>();
 
-    for (const rulePackage of input.activeRulePackages) {
+    for (const rulePackage of rulePackages) {
       if (
         rulePackage.requiredFields.includes('targetWeightKg') &&
-        this.isMissingValue(input.confirmedInputs.targetWeightKg)
+        this.isMissingValue(confirmedInputs.targetWeightKg)
       ) {
         missing.add(MissingInfoCode.TARGET_WEIGHT);
       }
       if (
         rulePackage.requiredFields.includes('dietHistory') &&
-        this.isMissingValue(input.confirmedInputs.dietHistory)
+        this.isMissingValue(confirmedInputs.dietHistory)
       ) {
         missing.add(MissingInfoCode.DIET_HISTORY);
+      }
+      if (
+        rulePackage.requiredFields.includes('treats') &&
+        this.isMissingValue(confirmedInputs.treats)
+      ) {
+        missing.add(MissingInfoCode.TREAT_INTAKE);
+      }
+      if (
+        rulePackage.requiredFields.includes('medicalRecords') &&
+        this.isMissingValue(confirmedInputs.medicalRecords)
+      ) {
+        missing.add(MissingInfoCode.CONFIRMED_REPORT);
       }
     }
 

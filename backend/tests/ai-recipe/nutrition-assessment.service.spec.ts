@@ -88,6 +88,32 @@ describe('NutritionAssessmentService', () => {
     expect(plan.resultStatus).toBe(AiRecipeResultStatus.REVIEWABLE);
   });
 
+  it('does not report missing weight fields for disabled weight management package', () => {
+    const service = new NutritionAssessmentService();
+
+    const plan = service.buildPlan({
+      dog: {
+        id: 'dog-1',
+        currentWeightKg: 8,
+        bcsScore: 5,
+        activityLevel: 'NORMAL',
+      },
+      evidence: [],
+      confirmedInputs: {},
+      activeRulePackages: [
+        {
+          code: 'WEIGHT_MANAGEMENT',
+          requiredFields: ['targetWeightKg', 'dietHistory'],
+        },
+      ],
+    });
+
+    expect(plan.enabledRulePackages).not.toContain('WEIGHT_MANAGEMENT');
+    expect(plan.missingInfo).not.toContain(MissingInfoCode.TARGET_WEIGHT);
+    expect(plan.missingInfo).not.toContain(MissingInfoCode.DIET_HISTORY);
+    expect(plan.resultStatus).toBe(AiRecipeResultStatus.REVIEWABLE);
+  });
+
   it('enables weight management when target weight is lower than current weight', () => {
     const service = new NutritionAssessmentService();
 
@@ -186,6 +212,64 @@ describe('NutritionAssessmentService', () => {
 
     expect(plan.missingInfo).toContain(MissingInfoCode.DIET_HISTORY);
     expect(plan.missingInfo).not.toContain(MissingInfoCode.TARGET_WEIGHT);
+    expect(plan.resultStatus).toBe(AiRecipeResultStatus.LIMITED_DRAFT);
+  });
+
+  it('maps missing treats field to treat intake for enabled weight management', () => {
+    const service = new NutritionAssessmentService();
+
+    const plan = service.buildPlan({
+      dog: {
+        id: 'dog-1',
+        currentWeightKg: 12,
+        bcsScore: 8,
+        activityLevel: 'LOW',
+      },
+      evidence: [],
+      confirmedInputs: { targetWeightKg: 10, dietHistory: '鸡肉鲜食' },
+      activeRulePackages: [
+        {
+          code: 'WEIGHT_MANAGEMENT',
+          requiredFields: ['treats'],
+        },
+      ],
+    });
+
+    expect(plan.enabledRulePackages).toContain('WEIGHT_MANAGEMENT');
+    expect(plan.missingInfo).toContain(MissingInfoCode.TREAT_INTAKE);
+    expect(plan.resultStatus).toBe(AiRecipeResultStatus.LIMITED_DRAFT);
+  });
+
+  it('maps missing medical records field to confirmed report for enabled pancreas package', () => {
+    const service = new NutritionAssessmentService();
+
+    const plan = service.buildPlan({
+      dog: {
+        id: 'dog-1',
+        currentWeightKg: 8,
+        bcsScore: 5,
+        activityLevel: 'NORMAL',
+      },
+      evidence: [
+        {
+          level: EvidenceLevel.A_CONFIRMED_DIAGNOSIS,
+          sourceType: 'MEDICAL_REPORT',
+          title: '胰腺炎报告',
+          isConfirmed: true,
+          confirmedData: { diagnosis: 'chronic pancreatitis' },
+        },
+      ],
+      confirmedInputs: { dietHistory: '鸡肉鲜食' },
+      activeRulePackages: [
+        {
+          code: 'PANCREAS_LOW_FAT',
+          requiredFields: ['medicalRecords'],
+        },
+      ],
+    });
+
+    expect(plan.enabledRulePackages).toContain('PANCREAS_LOW_FAT');
+    expect(plan.missingInfo).toContain(MissingInfoCode.CONFIRMED_REPORT);
     expect(plan.resultStatus).toBe(AiRecipeResultStatus.LIMITED_DRAFT);
   });
 });

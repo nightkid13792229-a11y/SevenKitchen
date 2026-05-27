@@ -30,7 +30,10 @@ export class EvidenceService {
       input.confirmedData.clinicName.trim().length > 0;
     const hasIndicators =
       Array.isArray(input.confirmedData.testIndicators) &&
-      input.confirmedData.testIndicators.length > 0;
+      input.confirmedData.testIndicators.some(
+        (indicator) =>
+          typeof indicator === 'string' && indicator.trim().length > 0,
+      );
 
     if (hasDiagnosis && hasReportDate && hasClinicName && hasIndicators) {
       return EvidenceLevel.A_CONFIRMED_DIAGNOSIS;

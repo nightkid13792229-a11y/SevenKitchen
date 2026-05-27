@@ -41,4 +41,46 @@ describe('EvidenceService', () => {
 
     expect(result).toBe(EvidenceLevel.D_ATTACHMENT_OBSERVATION);
   });
+
+  it('grades confirmed reports with meaningful indicators as B level when A metadata is incomplete', () => {
+    const result = service.gradeEvidence({
+      sourceType: 'MEDICAL_REPORT',
+      isConfirmed: true,
+      confirmedData: {
+        testIndicators: [' cPLI '],
+      },
+      attachmentUrls: ['https://cdn.test/report.pdf'],
+    });
+
+    expect(result).toBe(EvidenceLevel.B_TEST_INDICATED);
+  });
+
+  it('grades confirmed stool photos with extra metadata as D level', () => {
+    const result = service.gradeEvidence({
+      sourceType: 'STOOL_PHOTO',
+      isConfirmed: true,
+      confirmedData: {
+        diagnosis: '慢性胰腺炎',
+        testIndicators: ['cPLI'],
+        reportDate: '2026-05-01',
+        clinicName: 'Test Clinic',
+      },
+      attachmentUrls: ['https://cdn.test/stool.jpg'],
+    });
+
+    expect(result).toBe(EvidenceLevel.D_ATTACHMENT_OBSERVATION);
+  });
+
+  it('does not promote confirmed reports with invalid or empty indicators', () => {
+    const result = service.gradeEvidence({
+      sourceType: 'MEDICAL_REPORT',
+      isConfirmed: true,
+      confirmedData: {
+        testIndicators: ['', '   ', null, {}],
+      },
+      attachmentUrls: ['https://cdn.test/report.pdf'],
+    });
+
+    expect(result).toBe(EvidenceLevel.C_OWNER_REPORTED);
+  });
 });

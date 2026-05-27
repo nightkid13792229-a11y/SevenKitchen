@@ -138,11 +138,14 @@ function buildFieldDefinitions<TKey extends readonly string[]>(
   fieldKeys: TKey,
   labels: NutrientLabelMap<TKey>,
 ): IngredientCreationProfileFieldDefinition[] {
-  return fieldKeys.map((fieldKey) => ({
-    fieldPath:
-      `${tabKey}.${fieldKey}` as IngredientCreationProfileFieldPath,
-    label: labels[fieldKey],
-  }));
+  return fieldKeys.map((fieldKey) => {
+    const typedFieldKey = fieldKey as TKey[number];
+    return {
+      fieldPath:
+        `${tabKey}.${typedFieldKey}` as IngredientCreationProfileFieldPath,
+      label: labels[typedFieldKey],
+    };
+  });
 }
 
 export const INGREDIENT_CREATION_PROFILE_FIELD_DEFINITIONS: readonly IngredientCreationProfileFieldDefinition[] =

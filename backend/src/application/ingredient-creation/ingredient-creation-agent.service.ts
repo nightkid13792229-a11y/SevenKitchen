@@ -3,7 +3,11 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import { Prisma, type NutritionSourceRecord } from '@prisma/client';
+import {
+  IngredientCreationDraftProfileRole,
+  Prisma,
+  type NutritionSourceRecord,
+} from '@prisma/client';
 import type { NutritionProfileV2 } from '../../domain/ingredient/types';
 import { normalizeNutritionProfile } from '../../domain/ingredient/nutrition-profile.utils';
 import { PrismaService } from '../../infrastructure/prisma.service';
@@ -463,7 +467,10 @@ export class IngredientCreationAgentService {
           summarizeIngredientCreationProfileCompleteness(nutritionData);
 
         return {
-          role: index === 0 ? 'PRIMARY' : 'SECONDARY',
+          role:
+            index === 0
+              ? IngredientCreationDraftProfileRole.PRIMARY
+              : IngredientCreationDraftProfileRole.SECONDARY,
           sourceRecordId: record.id,
           sourceType: record.sourceType,
           sourceKey: record.sourceKey,

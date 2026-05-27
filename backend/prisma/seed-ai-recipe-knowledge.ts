@@ -109,53 +109,45 @@ async function main() {
   }
 
   for (const rulePackage of rulePackages) {
-    const nutritionRulePackage = await prisma.nutritionRulePackage.upsert({
-      where: { code: rulePackage.code },
-      create: {
-        code: rulePackage.code,
-        name: rulePackage.name,
-        status: NutritionRulePackageStatus.DRAFT,
-      },
-      update: {
-        name: rulePackage.name,
-        status: NutritionRulePackageStatus.DRAFT,
-      },
-    });
+    const nutritionRulePackage =
+      (await prisma.nutritionRulePackage.findUnique({
+        where: { code: rulePackage.code },
+      })) ??
+      (await prisma.nutritionRulePackage.create({
+        data: {
+          code: rulePackage.code,
+          name: rulePackage.name,
+          status: NutritionRulePackageStatus.DRAFT,
+        },
+      }));
 
-    await prisma.nutritionRuleVersion.upsert({
+    const existingRuleVersion = await prisma.nutritionRuleVersion.findUnique({
       where: {
         packageId_version: {
           packageId: nutritionRulePackage.id,
           version: 1,
         },
       },
-      create: {
-        packageId: nutritionRulePackage.id,
-        version: 1,
-        requiredEvidence: rulePackage.requiredEvidence,
-        activationCriteria: {},
-        contraindications: {},
-        requiredFields: rulePackage.requiredFields,
-        nutrientTargets: {},
-        ingredientPolicy: {},
-        conflictPolicy: {},
-        reviewPolicy: { forceManualReview: true },
-        displayBoundaries: { noDiagnosis: true, noTreatmentClaim: true },
-        isActive: false,
-      },
-      update: {
-        requiredEvidence: rulePackage.requiredEvidence,
-        activationCriteria: {},
-        contraindications: {},
-        requiredFields: rulePackage.requiredFields,
-        nutrientTargets: {},
-        ingredientPolicy: {},
-        conflictPolicy: {},
-        reviewPolicy: { forceManualReview: true },
-        displayBoundaries: { noDiagnosis: true, noTreatmentClaim: true },
-        isActive: false,
-      },
     });
+
+    if (!existingRuleVersion) {
+      await prisma.nutritionRuleVersion.create({
+        data: {
+          packageId: nutritionRulePackage.id,
+          version: 1,
+          requiredEvidence: rulePackage.requiredEvidence,
+          activationCriteria: {},
+          contraindications: {},
+          requiredFields: rulePackage.requiredFields,
+          nutrientTargets: {},
+          ingredientPolicy: {},
+          conflictPolicy: {},
+          reviewPolicy: { forceManualReview: true },
+          displayBoundaries: { noDiagnosis: true, noTreatmentClaim: true },
+          isActive: false,
+        },
+      });
+    }
   }
 }
 

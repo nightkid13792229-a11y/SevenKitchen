@@ -134,6 +134,12 @@
       }
     },
     {
+      "path": "pages/ai-recipe-designer/index",
+      "style": {
+        "navigationBarTitleText": "AI食谱设计"
+      }
+    },
+    {
       "path": "pages/shared-photos/index",
       "style": {
         "navigationBarTitleText": "原料照片"

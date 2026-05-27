@@ -89,6 +89,18 @@
           </view>
           <text class="module-arrow">›</text>
         </view>
+
+        <!-- AI食谱设计 -->
+        <view v-if="isAdmin" class="module" @tap="goToAiRecipeDesigner">
+          <view class="module-icon recipes">
+            <text style="font-size: 48rpx;">AI</text>
+          </view>
+          <view class="module-content">
+            <text class="module-title">AI食谱设计</text>
+            <text class="module-desc">根据狗狗档案生成营养管理方案与食谱草稿</text>
+          </view>
+          <text class="module-arrow">›</text>
+        </view>
       </view>
 
       <!-- 快捷统计（UI框架，待对接API） -->
@@ -269,6 +281,10 @@ const goToInventory = () => {
 
 const goToStaffRecipes = () => {
   uni.navigateTo({ url: '/pages/staff-recipes/index' });
+};
+
+const goToAiRecipeDesigner = () => {
+  uni.navigateTo({ url: '/pages/ai-recipe-designer/index' });
 };
 </script>
 

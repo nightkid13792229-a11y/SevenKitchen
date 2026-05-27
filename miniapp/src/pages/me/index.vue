@@ -230,7 +230,7 @@ import { ref, computed } from "vue";
 import { onShow } from "@dcloudio/uni-app";
 import { getToken, clearToken, request } from "../../utils/api";
 import { resolveUserAvatarSrc } from "../../utils/user-profile";
-import { refreshCurrentTabBar } from "../../utils/tabbar";
+import { refreshCurrentTabBar } from '../../utils/tabbar';
 import { getCartItems } from "../../utils/cart";
 import { ensurePhoneBound } from "../../utils/account";
 

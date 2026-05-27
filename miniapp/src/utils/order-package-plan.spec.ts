@@ -95,8 +95,8 @@ describe('order-package-plan miniapp helper', () => {
   })
 
   it('returns customer-facing source plan labels', () => {
-    expect(getSourcePlanLabel('ORGANIC')).toBe('有机优先')
-    expect(getSourcePlanLabel('MARKET_PREMIUM')).toBe('超市优先')
-    expect(getSourcePlanLabel('WHOLESALE')).toBe('批发市场优先')
+    expect(getSourcePlanLabel('ORGANIC')).toBe('溯源优选')
+    expect(getSourcePlanLabel('MARKET_PREMIUM')).toBe('精选日常')
+    expect(getSourcePlanLabel('WHOLESALE')).toBe('安心基础')
   })
 })

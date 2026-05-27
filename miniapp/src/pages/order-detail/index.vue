@@ -346,12 +346,7 @@
                 class="adjustment-amount"
                 :class="adjustment.amount > 0 ? 'positive' : 'negative'"
               >
-                {{
-                  formatSettlementAdjustmentAmount(
-                    adjustment.amount,
-                    adjustment.status,
-                  )
-                }}
+                {{ formatSettlementAdjustmentAmount(adjustment.amount, adjustment.status) }}
               </text>
             </view>
           </view>
@@ -485,9 +480,7 @@
                 >v{{ item.recipeSnapshot?.version }}</text
               >
               <text class="nutrition-standard">{{
-                getNutritionStandardLabel(
-                  item.recipeSnapshot?.nutrition_standard || '',
-                )
+                getNutritionStandardLabel(item.recipeSnapshot?.nutrition_standard || '')
               }}</text>
             </view>
 
@@ -1259,10 +1252,7 @@ const visibleSettlementAdjustments = computed(() => {
 const displayAdjustmentAmount = computed(() => {
   const adjustmentSummary = orderFinancialSummary.value?.adjustmentSummary;
   if (adjustmentSummary) {
-    return (
-      adjustmentSummary.pendingExtraPaymentAmount -
-      adjustmentSummary.pendingRefundAmount
-    );
+    return adjustmentSummary.pendingExtraPaymentAmount - adjustmentSummary.pendingRefundAmount;
   }
   return orderFinancialSummary.value?.shortageAdjustmentAmount || 0;
 });
@@ -1286,14 +1276,7 @@ const settlementDescription = computed(() => {
 });
 
 function shouldFetchOrderFinancialSummary(status?: string | null): boolean {
-  return [
-    'IN_PRODUCTION',
-    'FREEZING',
-    'SHIPPED',
-    'COMPLETED',
-    'AFTERSALE',
-    'CANCELLED',
-  ].includes(status);
+  return ['IN_PRODUCTION', 'FREEZING', 'SHIPPED', 'COMPLETED', 'AFTERSALE'].includes(status);
 }
 
 function formatIngredientSourcePlan(plan?: string | null): string {
@@ -2440,10 +2423,7 @@ function formatAdjustmentText(): string {
   return '无需调整';
 }
 
-function formatSettlementAdjustmentAmount(
-  amount: number,
-  status: string,
-): string {
+function formatSettlementAdjustmentAmount(amount: number, status: string): string {
   const absAmount = Math.abs(Number(amount || 0)).toFixed(2);
   const prefix = getSettlementAdjustmentAmountPrefix(amount, status);
   if (prefix) return `${prefix} ¥${absAmount}`;

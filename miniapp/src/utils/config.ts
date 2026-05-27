@@ -216,6 +216,10 @@ export function normalizeImageUrl(imageUrl: string | undefined | null): string {
     return imageUrl.replace('http://img.sevenkitchen.cloud', 'https://img.sevenkitchen.cloud')
   }
 
+  if (imageUrl.includes('static.sevenkitchen.local')) {
+    return ''
+  }
+
   // If URL is not from localhost, return as-is
   if (!imageUrl.includes('localhost') && !imageUrl.includes('127.0.0.1')) {
     return imageUrl

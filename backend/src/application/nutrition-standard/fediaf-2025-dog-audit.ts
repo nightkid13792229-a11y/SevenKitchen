@@ -140,9 +140,9 @@ export const FEDIAF_2025_DOG_AUDIT_SPOT_CHECKS: SpotCheck[] = [
     basis: 'PER_1000_KCAL_ME',
     unit: 'IU',
     minValue: 159,
-    maxValue: 800,
-    recommendedValue: null,
-    maxType: 'NUTRITIONAL_MAX',
+    maxValue: 568,
+    recommendedValue: 800,
+    maxType: 'LEGAL_MAX',
   },
   {
     nutrientCode: 'iodine',

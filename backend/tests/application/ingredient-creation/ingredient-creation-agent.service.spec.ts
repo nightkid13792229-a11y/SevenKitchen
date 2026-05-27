@@ -280,6 +280,123 @@ describe('IngredientCreationAgentService', () => {
     );
   });
 
+  it('recalls egg sources for chicken egg requests without recalling chicken meat terms', async () => {
+    const eggProfile = createEmptyNutritionProfile();
+    eggProfile.macros.energyKcal = 143;
+    const chickenProfile = createEmptyNutritionProfile();
+    chickenProfile.macros.energyKcal = 120;
+
+    const prisma = createPrismaMock();
+    prisma.ingredientCreationJob.findUnique.mockResolvedValue({
+      id: 'job-1',
+      requestText: '新增鸡蛋',
+      status: 'DRAFTING',
+      createdBy: 'staff-1',
+      draft: null,
+      messages: [],
+    });
+    prisma.nutritionSourceRecord.findMany.mockResolvedValue([
+      {
+        id: 'source-chicken-meat',
+        sourceType: 'USDA',
+        sourceKey: 'USDA:chicken-meat',
+        sourceTitle: 'USDA FoodData Central',
+        foodName: 'Chicken, broilers or fryers, meat, raw',
+        foodNameEn: 'Chicken, broilers or fryers, meat, raw',
+        normalizedNutrition: chickenProfile,
+        status: 'ACTIVE',
+      },
+      {
+        id: 'source-egg',
+        sourceType: 'USDA',
+        sourceKey: 'USDA:egg',
+        sourceTitle: 'USDA FoodData Central',
+        foodName: 'Egg, whole, fresh, raw',
+        foodNameEn: 'Egg, whole, fresh, raw',
+        normalizedNutrition: eggProfile,
+        status: 'ACTIVE',
+      },
+    ]);
+    prisma.ingredientCreationDraft.create.mockResolvedValue({ id: 'draft-1' });
+    const service = new IngredientCreationAgentService(prisma as any);
+
+    await service.runJob('job-1');
+
+    const recallFilters =
+      prisma.nutritionSourceRecord.findMany.mock.calls[0][0].where.OR;
+    expect(recallFilters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          foodNameEn: { contains: 'egg', mode: 'insensitive' },
+        }),
+      ]),
+    );
+    expect(recallFilters).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          foodNameEn: { contains: 'chicken', mode: 'insensitive' },
+        }),
+      ]),
+    );
+    expect(
+      prisma.ingredientCreationDraft.create.mock.calls[0][0].data.profiles
+        .create[0],
+    ).toEqual(
+      expect.objectContaining({
+        sourceRecordId: 'source-egg',
+        sourceFoodName: 'Egg, whole, fresh, raw',
+      }),
+    );
+  });
+
+  it('recalls duck egg sources without adding duck meat-only recall terms', async () => {
+    const profile = createEmptyNutritionProfile();
+    profile.macros.energyKcal = 185;
+
+    const prisma = createPrismaMock();
+    prisma.ingredientCreationJob.findUnique.mockResolvedValue({
+      id: 'job-1',
+      requestText: '新增鸭蛋',
+      status: 'DRAFTING',
+      createdBy: 'staff-1',
+      draft: null,
+      messages: [],
+    });
+    prisma.nutritionSourceRecord.findMany.mockResolvedValue([
+      {
+        id: 'source-duck-egg',
+        sourceType: 'USDA',
+        sourceKey: 'USDA:duck-egg',
+        sourceTitle: 'USDA FoodData Central',
+        foodName: 'Egg, duck, whole, fresh, raw',
+        foodNameEn: 'Egg, duck, whole, fresh, raw',
+        normalizedNutrition: profile,
+        status: 'ACTIVE',
+      },
+    ]);
+    prisma.ingredientCreationDraft.create.mockResolvedValue({ id: 'draft-1' });
+    const service = new IngredientCreationAgentService(prisma as any);
+
+    await service.runJob('job-1');
+
+    const recallFilters =
+      prisma.nutritionSourceRecord.findMany.mock.calls[0][0].where.OR;
+    expect(recallFilters).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          foodNameEn: { contains: 'egg', mode: 'insensitive' },
+        }),
+      ]),
+    );
+    expect(recallFilters).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          foodNameEn: { contains: 'meat', mode: 'insensitive' },
+        }),
+      ]),
+    );
+  });
+
   it('skips invalid normalized nutrition records and builds from the next valid candidate', async () => {
     const validProfile = createEmptyNutritionProfile();
     validProfile.macros.energyKcal = 165;

@@ -21,7 +21,6 @@ const EXISTING_DRAFT_MESSAGE = '已有草稿，请编辑或拒绝后重新创建
 const LOW_SIGNAL_RECALL_WORDS = new Set([
   'meat',
   'fish',
-  'egg',
   'raw',
   'boiled',
   'steamed',
@@ -38,6 +37,9 @@ const LOW_SIGNAL_RECALL_WORDS = new Set([
 ]);
 
 const TRANSLATED_KEYWORDS: ReadonlyArray<[RegExp, readonly string[]]> = [
+  [/鸡蛋/u, ['egg']],
+  [/鸭蛋/u, ['duck egg', 'egg']],
+  [/鹌鹑蛋/u, ['quail egg', 'egg']],
   [/鸭胸肉|鸭胸/u, ['duck', 'breast', 'meat']],
   [/鸡胸肉|鸡胸/u, ['chicken', 'breast', 'meat']],
   [/牛肉/u, ['beef', 'meat']],
@@ -46,8 +48,8 @@ const TRANSLATED_KEYWORDS: ReadonlyArray<[RegExp, readonly string[]]> = [
   [/兔肉/u, ['rabbit', 'meat']],
   [/三文鱼|鲑鱼/u, ['salmon']],
   [/鳕鱼/u, ['cod']],
-  [/鸭/u, ['duck']],
-  [/鸡/u, ['chicken']],
+  [/鸭(?!蛋)/u, ['duck']],
+  [/鸡(?!蛋)/u, ['chicken']],
   [/牛/u, ['beef']],
   [/羊/u, ['lamb', 'mutton']],
   [/猪/u, ['pork']],

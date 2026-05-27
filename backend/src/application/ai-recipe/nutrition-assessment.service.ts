@@ -33,7 +33,7 @@ export class NutritionAssessmentService {
   buildPlan(input: BuildPlanInput): NutritionManagementPlan {
     const enabledRulePackages = input.activeRulePackages
       .filter((rulePackage) =>
-        this.canEnableRulePackage(rulePackage.code, input.evidence),
+        this.canEnableRulePackage(rulePackage.code, input),
       )
       .map((rulePackage) => rulePackage.code);
 
@@ -71,23 +71,48 @@ export class NutritionAssessmentService {
     };
   }
 
-  private canEnableRulePackage(
-    code: string,
-    evidence: EvidenceSummary[],
-  ): boolean {
+  private canEnableRulePackage(code: string, input: BuildPlanInput): boolean {
     if (code === 'PANCREAS_LOW_FAT') {
-      return evidence.some(
+      return input.evidence.some(
         (item) =>
           item.level === EvidenceLevel.A_CONFIRMED_DIAGNOSIS &&
-          item.isConfirmed,
+          item.isConfirmed &&
+          this.hasPancreasDiagnosis(item),
       );
     }
 
     if (code === 'WEIGHT_MANAGEMENT') {
-      return true;
+      return this.hasWeightManagementContext(input);
     }
 
     return false;
+  }
+
+  private hasPancreasDiagnosis(evidence: EvidenceSummary): boolean {
+    const diagnosis = evidence.confirmedData.diagnosis;
+
+    if (typeof diagnosis !== 'string') {
+      return false;
+    }
+
+    const normalizedDiagnosis = diagnosis.toLowerCase();
+    return (
+      diagnosis.includes('胰腺') ||
+      normalizedDiagnosis.includes('pancreatitis') ||
+      normalizedDiagnosis.includes('pancreas') ||
+      normalizedDiagnosis.includes('pancreatic')
+    );
+  }
+
+  private hasWeightManagementContext(input: BuildPlanInput): boolean {
+    const targetWeightKg = input.confirmedInputs.targetWeightKg;
+
+    return (
+      input.dog.bcsScore >= 7 ||
+      Boolean(input.confirmedInputs.weightManagementGoal) ||
+      (typeof targetWeightKg === 'number' &&
+        targetWeightKg < input.dog.currentWeightKg)
+    );
   }
 
   private resolveMissingInfo(input: BuildPlanInput): MissingInfoCode[] {
@@ -96,19 +121,27 @@ export class NutritionAssessmentService {
     for (const rulePackage of input.activeRulePackages) {
       if (
         rulePackage.requiredFields.includes('targetWeightKg') &&
-        input.confirmedInputs.targetWeightKg === undefined
+        this.isMissingValue(input.confirmedInputs.targetWeightKg)
       ) {
         missing.add(MissingInfoCode.TARGET_WEIGHT);
       }
       if (
         rulePackage.requiredFields.includes('dietHistory') &&
-        input.confirmedInputs.dietHistory === undefined
+        this.isMissingValue(input.confirmedInputs.dietHistory)
       ) {
         missing.add(MissingInfoCode.DIET_HISTORY);
       }
     }
 
     return Array.from(missing);
+  }
+
+  private isMissingValue(value: unknown): boolean {
+    return (
+      value === undefined ||
+      value === null ||
+      (typeof value === 'string' && value.trim().length === 0)
+    );
   }
 
   private resolveResultStatus(

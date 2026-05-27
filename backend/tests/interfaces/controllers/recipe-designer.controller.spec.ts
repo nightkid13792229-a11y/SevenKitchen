@@ -1,5 +1,7 @@
 import { Test } from '@nestjs/testing';
 import { GUARDS_METADATA } from '@nestjs/common/constants';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { RecipeDesignerService } from '../../../src/application/recipe-designer/recipe-designer.service';
 import { AuthGuard, JwtAuthService } from '../../../src/interfaces/auth';
 import { RecipeDesignerController } from '../../../src/interfaces/controllers/recipe-designer.controller';
@@ -10,6 +12,20 @@ describe('RecipeDesignerController authorization', () => {
     const guards = Reflect.getMetadata(GUARDS_METADATA, RecipeDesignerController);
 
     expect(guards).toEqual([AuthGuard, StaffGuard]);
+  });
+
+  it('requires admin role before publishing a design recipe', () => {
+    const source = readFileSync(
+      resolve(
+        process.cwd(),
+        'src/interfaces/controllers/recipe-designer.controller.ts',
+      ),
+      'utf8',
+    );
+
+    expect(source).toMatch(
+      /@Post\('drafts\/:id\/publish'\)\s+@Roles\('ADMIN'\)/,
+    );
   });
 });
 

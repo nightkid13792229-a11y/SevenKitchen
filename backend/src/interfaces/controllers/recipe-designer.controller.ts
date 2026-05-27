@@ -28,7 +28,7 @@ import {
   UpdateRecipeDesignDraftDto,
   UpdateRecipeDesignItemDto,
 } from '../dto/recipe-designer/recipe-designer.dto';
-import { StaffGuard } from '../guards/role.guard';
+import { Roles, StaffGuard } from '../guards/role.guard';
 
 @ApiTags('Recipe Designer')
 @ApiBearerAuth()
@@ -126,6 +126,7 @@ export class RecipeDesignerController {
   }
 
   @Post('drafts/:id/publish')
+  @Roles('ADMIN')
   @ApiOperation({ summary: 'Publish a recipe design draft as a recipe' })
   async publishDraft(
     @Param('id') id: string,

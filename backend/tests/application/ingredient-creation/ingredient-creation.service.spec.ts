@@ -8,6 +8,13 @@ import { IngredientCreationService } from '../../../src/application/ingredient-c
 function createPrismaMock() {
   return {
     ingredient: {
+      findFirst: jest.fn(),
+      create: jest.fn(),
+    },
+    nutritionFood: {
+      upsert: jest.fn(),
+    },
+    nutritionFoodMapping: {
       create: jest.fn(),
     },
     ingredientCreationJob: {
@@ -26,6 +33,75 @@ function createPrismaMock() {
     ingredientCreationDraftProfile: {
       findUnique: jest.fn(),
       update: jest.fn(),
+    },
+    $transaction: jest.fn(),
+  };
+}
+
+const primaryNutritionProfile = {
+  macros: { energyKcal: 120 },
+  meta: { rawBasisType: 'PER_100_G' },
+};
+
+function createDraftProfile(overrides: Record<string, any> = {}) {
+  return {
+    id: 'profile-1',
+    role: 'PRIMARY',
+    sourceFoodName: 'Duck, breast, raw',
+    sourceFoodNameEn: 'Duck, breast, raw',
+    sourceType: 'USDA',
+    sourceKey: 'USDA:123',
+    suggestedDisplayNameZh: '鸭胸肉（生）',
+    nutritionData: primaryNutritionProfile,
+    preparationState: 'RAW',
+    preparationStateLabel: '生',
+    ediblePortionLabel: '可食部',
+    processingLabel: '未加工',
+    sortOrder: 0,
+    agentRationale: '主档案',
+    ...overrides,
+  };
+}
+
+function createReadyDraft(overrides: Record<string, any> = {}) {
+  return {
+    id: 'draft-1',
+    jobId: 'job-1',
+    status: 'READY_FOR_REVIEW',
+    suggestedName: '鸭胸肉',
+    baseUnit: 'G',
+    unitDisplayLabel: 'g',
+    procurementStrategy: 'DAILY_PURCHASE',
+    diyEnabled: true,
+    procurementEnabled: false,
+    notes: 'Agent 草稿',
+    job: { id: 'job-1', createdBy: 'staff-1' },
+    profiles: [createDraftProfile()],
+    ...overrides,
+  };
+}
+
+function createConfirmTransactionMock() {
+  return {
+    ingredient: {
+      findFirst: jest.fn().mockResolvedValue(null),
+      create: jest.fn().mockResolvedValue({ id: 'ingredient-1' }),
+    },
+    nutritionFood: {
+      upsert: jest.fn().mockResolvedValue({ id: 'food-1' }),
+    },
+    nutritionFoodMapping: {
+      create: jest.fn().mockResolvedValue({ id: 'mapping-1' }),
+    },
+    ingredientCreationDraft: {
+      update: jest.fn().mockResolvedValue({
+        id: 'draft-1',
+        status: 'CONFIRMED',
+        confirmedIngredientId: 'ingredient-1',
+      }),
+    },
+    ingredientCreationJob: {
+      update: jest.fn().mockResolvedValue({ id: 'job-1', status: 'CONFIRMED' }),
     },
   };
 }
@@ -81,6 +157,8 @@ describe('IngredientCreationService', () => {
       }),
     });
     expect(prisma.ingredient.create).not.toHaveBeenCalled();
+    expect(prisma.nutritionFood.upsert).not.toHaveBeenCalled();
+    expect(prisma.nutritionFoodMapping.create).not.toHaveBeenCalled();
     expect(result.id).toBe('job-1');
   });
 
@@ -533,5 +611,261 @@ describe('IngredientCreationService', () => {
 
     expect(agentService.runJob).toHaveBeenCalledWith('job-1');
     expect(result).toEqual({ id: 'draft-1' });
+  });
+
+  it('confirms a ready draft into a formal ingredient and nutrition mappings', async () => {
+    const prisma = createPrismaMock();
+    const tx = createConfirmTransactionMock();
+    prisma.ingredientCreationDraft.findUnique.mockResolvedValue(createReadyDraft());
+    prisma.$transaction.mockImplementation(async (callback) => callback(tx));
+    const service = new IngredientCreationService(prisma as any);
+
+    const result = await service.confirmDraft('draft-1', {
+      userId: 'admin-1',
+      role: 'ADMIN',
+    });
+
+    expect(prisma.ingredientCreationDraft.findUnique).toHaveBeenCalledWith({
+      where: { id: 'draft-1' },
+      include: {
+        job: true,
+        profiles: { orderBy: [{ role: 'asc' }, { sortOrder: 'asc' }] },
+      },
+    });
+    expect(tx.ingredient.findFirst).toHaveBeenCalledWith({
+      where: {
+        name: '鸭胸肉',
+        brand: null,
+        productModel: null,
+      },
+      select: { id: true },
+    });
+    expect(tx.ingredient.create).toHaveBeenCalledWith({
+      data: expect.objectContaining({
+        name: '鸭胸肉',
+        type: 'FOOD',
+        procurementStrategy: 'DAILY_PURCHASE',
+        diyEnabled: true,
+        procurementEnabled: false,
+        brand: null,
+        productModel: null,
+        purchaseChannel: null,
+        notes: 'Agent 草稿',
+        baseUnit: 'G',
+        unitDisplayLabel: 'g',
+        nutritionProfile: primaryNutritionProfile,
+        purchaseUnit: 'g',
+        purchaseToBaseRatio: 1,
+        currentPricePerPurchaseUnit: 0,
+        effectivePricePerPurchaseUnit: 0,
+        properties: {},
+      }),
+    });
+    expect(tx.nutritionFood.upsert).toHaveBeenCalledWith({
+      where: {
+        name_dataSource_version: {
+          name: 'Duck, breast, raw',
+          dataSource: 'USDA',
+          version: 1,
+        },
+      },
+      create: expect.objectContaining({
+        name: 'Duck, breast, raw',
+        nameEn: 'Duck, breast, raw',
+        displayNameZh: '鸭胸肉（生）',
+        displayNameZhSource: 'AI_DRAFT_REVIEWED',
+        displayNameZhReviewedAt: expect.any(Date),
+        displayNameZhReviewedBy: 'admin-1',
+        category: 'OTHER',
+        dataSource: 'USDA',
+        externalId: 'USDA:123',
+        version: 1,
+        status: 'VERIFIED',
+        preparationState: 'RAW',
+        preparationStateLabel: '生',
+        ediblePortionLabel: '可食部',
+        processingLabel: '未加工',
+        nutritionData: primaryNutritionProfile,
+        notes: 'AI 新增食材草稿确认',
+        verifiedBy: 'admin-1',
+        verifiedAt: expect.any(Date),
+      }),
+      update: expect.objectContaining({
+        displayNameZh: '鸭胸肉（生）',
+        displayNameZhSource: 'AI_DRAFT_REVIEWED',
+        displayNameZhReviewedAt: expect.any(Date),
+        displayNameZhReviewedBy: 'admin-1',
+        status: 'VERIFIED',
+        preparationState: 'RAW',
+        preparationStateLabel: '生',
+        ediblePortionLabel: '可食部',
+        processingLabel: '未加工',
+        nutritionData: primaryNutritionProfile,
+        verifiedBy: 'admin-1',
+        verifiedAt: expect.any(Date),
+      }),
+    });
+    expect(tx.nutritionFoodMapping.create).toHaveBeenCalledWith({
+      data: {
+        ingredientId: 'ingredient-1',
+        nutritionFoodId: 'food-1',
+        isPrimary: true,
+        yieldRate: 1,
+        notes: 'AI 新增食材草稿确认',
+      },
+    });
+    expect(tx.ingredientCreationJob.update).toHaveBeenCalledWith({
+      where: { id: 'job-1' },
+      data: {
+        status: 'CONFIRMED',
+        currentStage: '已确认创建正式标准原料',
+        progress: 100,
+        completedAt: expect.any(Date),
+      },
+    });
+    expect(tx.ingredientCreationDraft.update).toHaveBeenCalledWith({
+      where: { id: 'draft-1' },
+      data: {
+        status: 'CONFIRMED',
+        confirmedIngredientId: 'ingredient-1',
+        confirmedBy: 'admin-1',
+        confirmedAt: expect.any(Date),
+      },
+    });
+    expect(result.status).toBe('CONFIRMED');
+  });
+
+  it('prevents non-admin confirmation', async () => {
+    const prisma = createPrismaMock();
+    const service = new IngredientCreationService(prisma as any);
+
+    await expect(
+      service.confirmDraft('draft-1', { userId: 'staff-1', role: 'STAFF' }),
+    ).rejects.toThrow(ForbiddenException);
+    expect(prisma.ingredientCreationDraft.findUnique).not.toHaveBeenCalled();
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('throws not found when confirming a missing draft', async () => {
+    const prisma = createPrismaMock();
+    prisma.ingredientCreationDraft.findUnique.mockResolvedValue(null);
+    const service = new IngredientCreationService(prisma as any);
+
+    await expect(
+      service.confirmDraft('missing-draft', {
+        userId: 'admin-1',
+        role: 'ADMIN',
+      }),
+    ).rejects.toThrow(NotFoundException);
+    await expect(
+      service.confirmDraft('missing-draft', {
+        userId: 'admin-1',
+        role: 'ADMIN',
+      }),
+    ).rejects.toThrow('新增食材草稿不存在');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects confirmation unless the draft is ready for review', async () => {
+    const prisma = createPrismaMock();
+    prisma.ingredientCreationDraft.findUnique.mockResolvedValue(
+      createReadyDraft({ status: 'DRAFT' }),
+    );
+    const service = new IngredientCreationService(prisma as any);
+
+    await expect(
+      service.confirmDraft('draft-1', { userId: 'admin-1', role: 'ADMIN' }),
+    ).rejects.toThrow('只有待审核草稿可以确认入库');
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('rejects confirmation when the draft has no primary profile', async () => {
+    const prisma = createPrismaMock();
+    prisma.ingredientCreationDraft.findUnique.mockResolvedValue(
+      createReadyDraft({
+        profiles: [createDraftProfile({ id: 'profile-2', role: 'SECONDARY' })],
+      }),
+    );
+    const service = new IngredientCreationService(prisma as any);
+
+    await expect(
+      service.confirmDraft('draft-1', { userId: 'admin-1', role: 'ADMIN' }),
+    ).rejects.toThrow(BadRequestException);
+    expect(prisma.$transaction).not.toHaveBeenCalled();
+  });
+
+  it('prevents confirmation when a standard ingredient already exists', async () => {
+    const prisma = createPrismaMock();
+    const tx = createConfirmTransactionMock();
+    tx.ingredient.findFirst.mockResolvedValue({ id: 'ingredient-existing' });
+    prisma.ingredientCreationDraft.findUnique.mockResolvedValue(createReadyDraft());
+    prisma.$transaction.mockImplementation(async (callback) => callback(tx));
+    const service = new IngredientCreationService(prisma as any);
+
+    await expect(
+      service.confirmDraft('draft-1', { userId: 'admin-1', role: 'ADMIN' }),
+    ).rejects.toThrow('标准原料已存在：鸭胸肉');
+    expect(tx.ingredient.create).not.toHaveBeenCalled();
+    expect(tx.nutritionFood.upsert).not.toHaveBeenCalled();
+    expect(tx.nutritionFoodMapping.create).not.toHaveBeenCalled();
+    expect(tx.ingredientCreationJob.update).not.toHaveBeenCalled();
+    expect(tx.ingredientCreationDraft.update).not.toHaveBeenCalled();
+  });
+
+  it('marks secondary profile mappings as non-primary', async () => {
+    const prisma = createPrismaMock();
+    const tx = createConfirmTransactionMock();
+    tx.nutritionFood.upsert
+      .mockResolvedValueOnce({ id: 'food-primary' })
+      .mockResolvedValueOnce({ id: 'food-secondary' });
+    prisma.ingredientCreationDraft.findUnique.mockResolvedValue(
+      createReadyDraft({
+        profiles: [
+          createDraftProfile(),
+          createDraftProfile({
+            id: 'profile-2',
+            role: 'SECONDARY',
+            sourceFoodName: 'Duck, breast, cooked',
+            sourceFoodNameEn: 'Duck, breast, cooked',
+            sourceType: null,
+            sourceKey: null,
+            suggestedDisplayNameZh: '鸭胸肉（熟）',
+            preparationState: 'COOKED',
+            preparationStateLabel: '熟',
+            processingLabel: '水煮',
+            sortOrder: 1,
+          }),
+        ],
+      }),
+    );
+    prisma.$transaction.mockImplementation(async (callback) => callback(tx));
+    const service = new IngredientCreationService(prisma as any);
+
+    await service.confirmDraft('draft-1', {
+      userId: 'admin-1',
+      role: 'ADMIN',
+    });
+
+    expect(tx.nutritionFood.upsert).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        where: {
+          name_dataSource_version: {
+            name: 'Duck, breast, cooked',
+            dataSource: 'MANUAL',
+            version: 1,
+          },
+        },
+      }),
+    );
+    expect(tx.nutritionFoodMapping.create).toHaveBeenNthCalledWith(2, {
+      data: {
+        ingredientId: 'ingredient-1',
+        nutritionFoodId: 'food-secondary',
+        isPrimary: false,
+        yieldRate: 1,
+        notes: 'AI 新增食材草稿确认',
+      },
+    });
   });
 });

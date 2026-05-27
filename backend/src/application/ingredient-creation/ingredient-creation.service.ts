@@ -34,6 +34,11 @@ const DRAFT_INCLUDE = {
   profiles: { orderBy: PROFILE_ORDER_BY },
 } satisfies Prisma.IngredientCreationDraftInclude;
 
+const CONFIRM_DRAFT_INCLUDE = {
+  job: true,
+  profiles: { orderBy: PROFILE_ORDER_BY },
+} satisfies Prisma.IngredientCreationDraftInclude;
+
 const PROFILE_WITH_DRAFT_INCLUDE = {
   draft: {
     select: {
@@ -91,6 +96,20 @@ function assertHasPatch(data: object, message: string): void {
   if (Object.keys(data).length === 0) {
     throw new BadRequestException(message);
   }
+}
+
+function toJsonInput(value: unknown): Prisma.InputJsonValue {
+  return value as Prisma.InputJsonValue;
+}
+
+function defaultPurchaseUnit(baseUnit: string): string {
+  if (baseUnit === 'ML') {
+    return 'ml';
+  }
+  if (baseUnit === 'PCS') {
+    return 'pcs';
+  }
+  return 'g';
 }
 
 @Injectable()
@@ -289,6 +308,148 @@ export class IngredientCreationService {
     return this.prisma.ingredientCreationDraftProfile.update({
       where: { id: profileId },
       data,
+    });
+  }
+
+  async confirmDraft(draftId: string, user: IngredientCreationUserContext) {
+    assertAdmin(user);
+
+    const draft = await this.prisma.ingredientCreationDraft.findUnique({
+      where: { id: draftId },
+      include: CONFIRM_DRAFT_INCLUDE,
+    });
+    if (!draft) {
+      throw new NotFoundException('新增食材草稿不存在');
+    }
+    if (draft.status !== 'READY_FOR_REVIEW') {
+      throw new BadRequestException('只有待审核草稿可以确认入库');
+    }
+
+    const primaryProfile = draft.profiles.find(
+      (profile) => profile.role === 'PRIMARY',
+    );
+    if (!primaryProfile) {
+      throw new BadRequestException('确认入库必须包含一个主营养档案');
+    }
+
+    const confirmedAt = new Date();
+    return this.prisma.$transaction(async (tx) => {
+      const existingIngredient = await tx.ingredient.findFirst({
+        where: {
+          name: draft.suggestedName,
+          brand: null,
+          productModel: null,
+        },
+        select: { id: true },
+      });
+      if (existingIngredient) {
+        throw new BadRequestException(`标准原料已存在：${draft.suggestedName}`);
+      }
+
+      const ingredient = await tx.ingredient.create({
+        data: {
+          name: draft.suggestedName,
+          type: 'FOOD',
+          procurementStrategy: draft.procurementStrategy,
+          diyEnabled: draft.diyEnabled,
+          procurementEnabled: draft.procurementEnabled,
+          brand: null,
+          productModel: null,
+          purchaseChannel: null,
+          notes: draft.notes,
+          baseUnit: draft.baseUnit,
+          unitDisplayLabel: draft.unitDisplayLabel,
+          nutritionProfile: toJsonInput(primaryProfile.nutritionData),
+          purchaseUnit:
+            draft.unitDisplayLabel ?? defaultPurchaseUnit(draft.baseUnit),
+          purchaseToBaseRatio: 1,
+          currentPricePerPurchaseUnit: 0,
+          effectivePricePerPurchaseUnit: 0,
+          properties: toJsonInput({}),
+        },
+      });
+
+      for (const draftProfile of draft.profiles) {
+        const dataSource = draftProfile.sourceType ?? 'MANUAL';
+        const nutritionFood = await tx.nutritionFood.upsert({
+          where: {
+            name_dataSource_version: {
+              name: draftProfile.sourceFoodName,
+              dataSource,
+              version: 1,
+            },
+          },
+          create: {
+            name: draftProfile.sourceFoodName,
+            nameEn: draftProfile.sourceFoodNameEn,
+            displayNameZh: draftProfile.suggestedDisplayNameZh,
+            displayNameZhSource: 'AI_DRAFT_REVIEWED',
+            displayNameZhReviewedAt: confirmedAt,
+            displayNameZhReviewedBy: user.userId,
+            category: 'OTHER',
+            dataSource,
+            externalId: draftProfile.sourceKey,
+            version: 1,
+            status: 'VERIFIED',
+            preparationState: draftProfile.preparationState,
+            preparationStateLabel: draftProfile.preparationStateLabel,
+            ediblePortionLabel: draftProfile.ediblePortionLabel,
+            processingLabel: draftProfile.processingLabel,
+            nutritionData: toJsonInput(draftProfile.nutritionData),
+            notes: 'AI 新增食材草稿确认',
+            verifiedBy: user.userId,
+            verifiedAt: confirmedAt,
+          },
+          update: {
+            nameEn: draftProfile.sourceFoodNameEn,
+            displayNameZh: draftProfile.suggestedDisplayNameZh,
+            displayNameZhSource: 'AI_DRAFT_REVIEWED',
+            displayNameZhReviewedAt: confirmedAt,
+            displayNameZhReviewedBy: user.userId,
+            category: 'OTHER',
+            externalId: draftProfile.sourceKey,
+            status: 'VERIFIED',
+            preparationState: draftProfile.preparationState,
+            preparationStateLabel: draftProfile.preparationStateLabel,
+            ediblePortionLabel: draftProfile.ediblePortionLabel,
+            processingLabel: draftProfile.processingLabel,
+            nutritionData: toJsonInput(draftProfile.nutritionData),
+            notes: 'AI 新增食材草稿确认',
+            verifiedBy: user.userId,
+            verifiedAt: confirmedAt,
+          },
+        });
+
+        await tx.nutritionFoodMapping.create({
+          data: {
+            ingredientId: ingredient.id,
+            nutritionFoodId: nutritionFood.id,
+            isPrimary: draftProfile.role === 'PRIMARY',
+            yieldRate: 1,
+            notes: 'AI 新增食材草稿确认',
+          },
+        });
+      }
+
+      await tx.ingredientCreationJob.update({
+        where: { id: draft.job.id },
+        data: {
+          status: 'CONFIRMED',
+          currentStage: '已确认创建正式标准原料',
+          progress: 100,
+          completedAt: confirmedAt,
+        },
+      });
+
+      return tx.ingredientCreationDraft.update({
+        where: { id: draft.id },
+        data: {
+          status: 'CONFIRMED',
+          confirmedIngredientId: ingredient.id,
+          confirmedBy: user.userId,
+          confirmedAt,
+        },
+      });
     });
   }
 }

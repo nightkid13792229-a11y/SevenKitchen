@@ -32,6 +32,16 @@ const DRAFT_INCLUDE = {
   profiles: { orderBy: PROFILE_ORDER_BY },
 } satisfies Prisma.IngredientCreationDraftInclude;
 
+const PROFILE_WITH_DRAFT_INCLUDE = {
+  draft: {
+    select: {
+      status: true,
+    },
+  },
+} satisfies Prisma.IngredientCreationDraftProfileInclude;
+
+const EDITABLE_DRAFT_STATUSES = new Set(['DRAFT', 'READY_FOR_REVIEW']);
+
 function trimRequired(value: string, message: string): string {
   const next = value.trim();
   if (!next) {
@@ -58,6 +68,12 @@ function assertCanReadJob(
   }
 }
 
+function assertEditableDraftStatus(status: string): void {
+  if (!EDITABLE_DRAFT_STATUSES.has(status)) {
+    throw new BadRequestException('当前草稿状态不能继续编辑');
+  }
+}
+
 function setIfDefined<T extends Record<string, unknown>, K extends keyof T>(
   data: T,
   key: K,
@@ -65,6 +81,12 @@ function setIfDefined<T extends Record<string, unknown>, K extends keyof T>(
 ): void {
   if (value !== undefined) {
     data[key] = value;
+  }
+}
+
+function assertHasPatch(data: object, message: string): void {
+  if (Object.keys(data).length === 0) {
+    throw new BadRequestException(message);
   }
 }
 
@@ -188,9 +210,7 @@ export class IngredientCreationService {
     if (!draft) {
       throw new NotFoundException('新增食材草稿不存在');
     }
-    if (draft.status === 'CONFIRMED') {
-      throw new BadRequestException('已确认草稿不能继续编辑');
-    }
+    assertEditableDraftStatus(draft.status);
 
     const data: Prisma.IngredientCreationDraftUpdateInput = {};
     if (input.suggestedName !== undefined) {
@@ -204,6 +224,7 @@ export class IngredientCreationService {
     setIfDefined(data, 'diyEnabled', input.diyEnabled);
     setIfDefined(data, 'procurementEnabled', input.procurementEnabled);
     setIfDefined(data, 'notes', input.notes);
+    assertHasPatch(data, '没有可更新的草稿字段');
 
     return this.prisma.ingredientCreationDraft.update({
       where: { id: draftId },
@@ -219,6 +240,15 @@ export class IngredientCreationService {
   ) {
     assertAdmin(user);
 
+    const profile = await this.prisma.ingredientCreationDraftProfile.findUnique({
+      where: { id: profileId },
+      include: PROFILE_WITH_DRAFT_INCLUDE,
+    });
+    if (!profile) {
+      throw new NotFoundException('新增食材草稿档案不存在');
+    }
+    assertEditableDraftStatus(profile.draft.status);
+
     const data: Prisma.IngredientCreationDraftProfileUpdateInput = {};
     setIfDefined(data, 'role', input.role);
     setIfDefined(
@@ -232,6 +262,7 @@ export class IngredientCreationService {
     setIfDefined(data, 'processingLabel', input.processingLabel);
     setIfDefined(data, 'agentRationale', input.agentRationale);
     setIfDefined(data, 'sortOrder', input.sortOrder);
+    assertHasPatch(data, '没有可更新的草稿档案字段');
 
     return this.prisma.ingredientCreationDraftProfile.update({
       where: { id: profileId },

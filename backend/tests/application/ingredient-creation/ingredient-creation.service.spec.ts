@@ -24,6 +24,7 @@ function createPrismaMock() {
       update: jest.fn(),
     },
     ingredientCreationDraftProfile: {
+      findUnique: jest.fn(),
       update: jest.fn(),
     },
   };
@@ -198,6 +199,44 @@ describe('IngredientCreationService', () => {
     expect(prisma.ingredientCreationDraft.update).not.toHaveBeenCalled();
   });
 
+  it('rejects edits to rejected drafts', async () => {
+    const prisma = createPrismaMock();
+    prisma.ingredientCreationDraft.findUnique.mockResolvedValue({
+      id: 'draft-1',
+      status: 'REJECTED',
+      job: { id: 'job-1', createdBy: 'staff-1' },
+    });
+    const service = new IngredientCreationService(prisma as any);
+
+    await expect(
+      service.updateDraft(
+        'draft-1',
+        { notes: '调整备注' },
+        { userId: 'admin-1', role: 'ADMIN' },
+      ),
+    ).rejects.toThrow(BadRequestException);
+    expect(prisma.ingredientCreationDraft.update).not.toHaveBeenCalled();
+  });
+
+  it('rejects empty draft metadata patches', async () => {
+    const prisma = createPrismaMock();
+    prisma.ingredientCreationDraft.findUnique.mockResolvedValue({
+      id: 'draft-1',
+      status: 'DRAFT',
+      job: { id: 'job-1', createdBy: 'staff-1' },
+    });
+    const service = new IngredientCreationService(prisma as any);
+
+    await expect(
+      service.updateDraft(
+        'draft-1',
+        {},
+        { userId: 'admin-1', role: 'ADMIN' },
+      ),
+    ).rejects.toThrow(BadRequestException);
+    expect(prisma.ingredientCreationDraft.update).not.toHaveBeenCalled();
+  });
+
   it('rejects empty user messages', async () => {
     const prisma = createPrismaMock();
     prisma.ingredientCreationJob.findUnique.mockResolvedValue({
@@ -285,5 +324,120 @@ describe('IngredientCreationService', () => {
     ).rejects.toThrow(BadRequestException);
     expect(prisma.ingredientCreationMessage.create).not.toHaveBeenCalled();
     expect(prisma.ingredientCreationJob.update).not.toHaveBeenCalled();
+  });
+
+  it('allows admins to edit draft profile metadata and omits undefined fields', async () => {
+    const prisma = createPrismaMock();
+    prisma.ingredientCreationDraftProfile.findUnique.mockResolvedValue({
+      id: 'profile-1',
+      draft: {
+        status: 'READY_FOR_REVIEW',
+      },
+    });
+    prisma.ingredientCreationDraftProfile.update.mockResolvedValue({
+      id: 'profile-1',
+      role: 'SECONDARY',
+      preparationState: null,
+      sortOrder: 2,
+    });
+    const service = new IngredientCreationService(prisma as any);
+
+    const result = await service.updateDraftProfile(
+      'profile-1',
+      {
+        role: 'SECONDARY',
+        suggestedDisplayNameZh: undefined,
+        preparationState: null,
+        sortOrder: 2,
+      },
+      { userId: 'admin-1', role: 'ADMIN' },
+    );
+
+    expect(prisma.ingredientCreationDraftProfile.findUnique).toHaveBeenCalledWith({
+      where: { id: 'profile-1' },
+      include: expect.objectContaining({
+        draft: expect.any(Object),
+      }),
+    });
+    expect(prisma.ingredientCreationDraftProfile.update).toHaveBeenCalledWith({
+      where: { id: 'profile-1' },
+      data: {
+        role: 'SECONDARY',
+        preparationState: null,
+        sortOrder: 2,
+      },
+    });
+    expect(result.role).toBe('SECONDARY');
+  });
+
+  it('rejects draft profile edits from non-admin users', async () => {
+    const prisma = createPrismaMock();
+    const service = new IngredientCreationService(prisma as any);
+
+    await expect(
+      service.updateDraftProfile(
+        'profile-1',
+        { sortOrder: 2 },
+        { userId: 'staff-1', role: 'STAFF' },
+      ),
+    ).rejects.toThrow(ForbiddenException);
+    expect(prisma.ingredientCreationDraftProfile.findUnique).not.toHaveBeenCalled();
+    expect(prisma.ingredientCreationDraftProfile.update).not.toHaveBeenCalled();
+  });
+
+  it('throws not found when draft profile is missing', async () => {
+    const prisma = createPrismaMock();
+    prisma.ingredientCreationDraftProfile.findUnique.mockResolvedValue(null);
+    const service = new IngredientCreationService(prisma as any);
+
+    await expect(
+      service.updateDraftProfile(
+        'missing-profile',
+        { sortOrder: 2 },
+        { userId: 'admin-1', role: 'ADMIN' },
+      ),
+    ).rejects.toThrow(NotFoundException);
+    expect(prisma.ingredientCreationDraftProfile.update).not.toHaveBeenCalled();
+  });
+
+  it.each(['CONFIRMED', 'REJECTED'])(
+    'rejects draft profile edits when the draft is %s',
+    async (status) => {
+      const prisma = createPrismaMock();
+      prisma.ingredientCreationDraftProfile.findUnique.mockResolvedValue({
+        id: 'profile-1',
+        draft: { status },
+      });
+      const service = new IngredientCreationService(prisma as any);
+
+      await expect(
+        service.updateDraftProfile(
+          'profile-1',
+          { sortOrder: 2 },
+          { userId: 'admin-1', role: 'ADMIN' },
+        ),
+      ).rejects.toThrow(BadRequestException);
+      expect(prisma.ingredientCreationDraftProfile.update).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects empty draft profile patches', async () => {
+    const prisma = createPrismaMock();
+    prisma.ingredientCreationDraftProfile.findUnique.mockResolvedValue({
+      id: 'profile-1',
+      draft: {
+        status: 'DRAFT',
+      },
+    });
+    const service = new IngredientCreationService(prisma as any);
+
+    await expect(
+      service.updateDraftProfile(
+        'profile-1',
+        {},
+        { userId: 'admin-1', role: 'ADMIN' },
+      ),
+    ).rejects.toThrow(BadRequestException);
+    expect(prisma.ingredientCreationDraftProfile.update).not.toHaveBeenCalled();
   });
 });

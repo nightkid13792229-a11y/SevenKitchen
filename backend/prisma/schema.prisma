@@ -8,45 +8,46 @@ datasource db {
 }
 
 model Order {
-  id                           String               @id @default(uuid()) @map("id")
-  customerId                   String               @map("customer_id")
+  id                           String                      @id @default(uuid()) @map("id")
+  customerId                   String                      @map("customer_id")
   status                       OrderStatus
   type                         OrderType
-  targetProductionDate         DateTime?            @map("target_production_date")
-  amountProduct                Decimal              @map("amount_product")
-  amountShipping               Decimal              @map("amount_shipping")
-  amountTotal                  Decimal              @map("amount_total")
-  totalAmount                  Decimal?             @map("total_amount")
-  pricingBreakdownSnapshot     Json?                @map("pricing_breakdown_snapshot")
-  shippingAddressSnapshot      Json?                @map("shipping_address_snapshot")
-  addressId                    String?              @map("address_id")
-  dogId                        String?              @map("dog_id")
-  cancelledAt                  DateTime?            @map("cancelled_at")
-  cancellationReason           String?              @map("cancellation_reason")
-  cancelledBy                  String?              @map("cancelled_by")
-  paymentMethod                String?              @map("payment_method")
-  transactionId                String?              @map("transaction_id")
-  paidAt                       DateTime?            @map("paid_at")
-  paymentStatus                String?              @map("payment_status")
-  adminRemark                  String?              @map("admin_remark")
-  trackingNumber               String?              @map("tracking_number")
-  carrierCode                  String?              @map("carrier_code")
-  shippedAt                    DateTime?            @map("shipped_at")
-  completedAt                  DateTime?            @map("completed_at")
-  createdAt                    DateTime             @default(now()) @map("created_at")
-  aftersaleType                AftersaleType?       @map("aftersale_type")
-  freezingSince                DateTime?            @map("freezing_since")
-  aftersaleSince               DateTime?            @map("aftersale_since")
-  aftersaleReason              String?              @map("aftersale_reason")
-  aftersalePhotos              String[]             @default([]) @map("aftersale_photos")
-  originalTargetProductionDate DateTime?            @map("original_target_production_date") @db.Timestamp(6)
-  address                      Address?             @relation(fields: [addressId], references: [id])
-  customer                     User                 @relation(fields: [customerId], references: [id], onDelete: Cascade)
-  dog                          Dog?                 @relation(fields: [dogId], references: [id])
+  targetProductionDate         DateTime?                   @map("target_production_date")
+  amountProduct                Decimal                     @map("amount_product")
+  amountShipping               Decimal                     @map("amount_shipping")
+  amountTotal                  Decimal                     @map("amount_total")
+  totalAmount                  Decimal?                    @map("total_amount")
+  pricingBreakdownSnapshot     Json?                       @map("pricing_breakdown_snapshot")
+  shippingAddressSnapshot      Json?                       @map("shipping_address_snapshot")
+  addressId                    String?                     @map("address_id")
+  dogId                        String?                     @map("dog_id")
+  cancelledAt                  DateTime?                   @map("cancelled_at")
+  cancellationReason           String?                     @map("cancellation_reason")
+  cancelledBy                  String?                     @map("cancelled_by")
+  paymentMethod                String?                     @map("payment_method")
+  transactionId                String?                     @map("transaction_id")
+  paidAt                       DateTime?                   @map("paid_at")
+  paymentStatus                String?                     @map("payment_status")
+  adminRemark                  String?                     @map("admin_remark")
+  trackingNumber               String?                     @map("tracking_number")
+  carrierCode                  String?                     @map("carrier_code")
+  shippedAt                    DateTime?                   @map("shipped_at")
+  completedAt                  DateTime?                   @map("completed_at")
+  createdAt                    DateTime                    @default(now()) @map("created_at")
+  aftersaleType                AftersaleType?              @map("aftersale_type")
+  freezingSince                DateTime?                   @map("freezing_since")
+  aftersaleSince               DateTime?                   @map("aftersale_since")
+  aftersaleReason              String?                     @map("aftersale_reason")
+  aftersalePhotos              String[]                    @default([]) @map("aftersale_photos")
+  originalTargetProductionDate DateTime?                   @map("original_target_production_date") @db.Timestamp(6)
+  address                      Address?                    @relation(fields: [addressId], references: [id])
+  customer                     User                        @relation(fields: [customerId], references: [id], onDelete: Cascade)
+  dog                          Dog?                        @relation(fields: [dogId], references: [id])
   items                        OrderItem[]
   statusHistory                OrderStatusHistory[]
   costSettlements              OrderCostSettlement[]
   settlementAdjustments        OrderSettlementAdjustment[]
+  refundRecords                OrderRefundRecord[]
 
   photoShareTokens PhotoShareToken[]
 
@@ -128,35 +129,78 @@ model OrderItem {
 }
 
 model User {
-  id                      String              @id @default(uuid()) @map("id")
-  phone                   String?             @unique @map("phone") @db.VarChar(20)
-  wechatOpenid            String?             @unique @map("wechat_openid") @db.VarChar(100)
-  nickname                String?             @map("nickname") @db.VarChar(100)
-  role                    UserRole            @default(CUSTOMER) @map("role")
-  createdAt               DateTime            @default(now()) @map("created_at")
-  updatedAt               DateTime            @updatedAt @map("updated_at")
-  avatarUrl               String?             @map("avatar_url")
-  lastLoginAt             DateTime?           @map("last_login_at")
-  status                  UserStatus          @default(ACTIVE) @map("status")
-  wechatUnionid           String?             @unique @map("wechat_unionid") @db.VarChar(100)
-  password                String?             @map("password") @db.VarChar(255)
+  id                      String               @id @default(uuid()) @map("id")
+  phone                   String?              @unique @map("phone") @db.VarChar(20)
+  wechatOpenid            String?              @unique @map("wechat_openid") @db.VarChar(100)
+  nickname                String?              @map("nickname") @db.VarChar(100)
+  role                    UserRole             @default(CUSTOMER) @map("role")
+  createdAt               DateTime             @default(now()) @map("created_at")
+  updatedAt               DateTime             @updatedAt @map("updated_at")
+  avatarUrl               String?              @map("avatar_url")
+  lastLoginAt             DateTime?            @map("last_login_at")
+  status                  UserStatus           @default(ACTIVE) @map("status")
+  wechatUnionid           String?              @unique @map("wechat_unionid") @db.VarChar(100)
+  password                String?              @map("password") @db.VarChar(255)
   addresses               Address[]
-  customRecipeOrders      CustomRecipeOrder[] @relation("CustomRecipeOrderCustomer")
+  customRecipeOrders      CustomRecipeOrder[]  @relation("CustomRecipeOrderCustomer")
   diySheets               DIYSheet[]
   dogs                    Dog[]
   favoriteRecipes         FavoriteRecipe[]
   orders                  Order[]
   recipeReviews           RecipeReview[]
-  createdPurchaseLists    PurchaseList[]      @relation("PurchaseListCreator")
-  paidReimbursements      Reimbursement[]     @relation("ReimbursementPayer")
-  reviewedReimbursements  Reimbursement[]     @relation("ReimbursementReviewer")
-  submittedReimbursements Reimbursement[]     @relation("ReimbursementSubmitter")
+  createdPurchaseLists    PurchaseList[]       @relation("PurchaseListCreator")
+  paidReimbursements      Reimbursement[]      @relation("ReimbursementPayer")
+  reviewedReimbursements  Reimbursement[]      @relation("ReimbursementReviewer")
+  submittedReimbursements Reimbursement[]      @relation("ReimbursementSubmitter")
+  operatedRefundRecords   OrderRefundRecord[]  @relation("OrderRefundRecordOperator")
   feedbacks               Feedback[]
   feedbackReplies         FeedbackReply[]
+  wechatIdentities        UserWechatIdentity[]
 
   @@index([wechatOpenid])
   @@index([phone])
   @@map("user")
+}
+
+model UserWechatIdentity {
+  id          String   @id @default(uuid()) @map("id")
+  userId      String   @map("user_id")
+  appId       String   @map("app_id") @db.VarChar(80)
+  openid      String   @map("openid") @db.VarChar(100)
+  unionid     String?  @map("unionid") @db.VarChar(100)
+  sessionKey  String?  @map("session_key") @db.VarChar(255)
+  lastLoginAt DateTime @default(now()) @map("last_login_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([appId, openid])
+  @@index([userId])
+  @@index([unionid])
+  @@map("user_wechat_identity")
+}
+
+model AccountMigration {
+  id             String                 @id @default(uuid()) @map("id")
+  token          String                 @unique @map("token") @db.VarChar(80)
+  sourceUserId   String                 @map("source_user_id")
+  verifiedUserId String?                @map("verified_user_id")
+  targetUserId   String?                @map("target_user_id")
+  phone          String?                @map("phone") @db.VarChar(20)
+  status         AccountMigrationStatus @default(PENDING) @map("status")
+  metadata       Json?                  @map("metadata")
+  createdAt      DateTime               @default(now()) @map("created_at")
+  updatedAt      DateTime               @updatedAt @map("updated_at")
+  expiresAt      DateTime               @map("expires_at")
+  verifiedAt     DateTime?              @map("verified_at")
+  confirmedAt    DateTime?              @map("confirmed_at")
+  cancelledAt    DateTime?              @map("cancelled_at")
+
+  @@index([sourceUserId, status])
+  @@index([verifiedUserId])
+  @@index([targetUserId])
+  @@index([expiresAt])
+  @@map("account_migration")
 }
 
 model DogProfileEvent {
@@ -562,30 +606,30 @@ model RecommendedProduct {
 }
 
 model ProcurementSku {
-  id                            String   @id @default(uuid()) @db.VarChar(36)
-  ingredientId                  String   @map("ingredient_id") @db.VarChar(36)
+  id                            String                    @id @default(uuid()) @db.VarChar(36)
+  ingredientId                  String                    @map("ingredient_id") @db.VarChar(36)
   name                          String
-  brand                         String?  @db.VarChar(100)
-  productModel                  String?  @map("product_model") @db.VarChar(100)
-  purchaseChannel               String?  @map("purchase_channel") @db.VarChar(200)
-  supplierName                  String?  @map("supplier_name") @db.VarChar(200)
-  purchaseUnit                  String?  @map("purchase_unit") @db.VarChar(50)
-  purchaseToBaseRatio           Float?   @map("purchase_to_base_ratio")
-  currentPurchasePrice          Decimal? @map("current_purchase_price") @db.Decimal(10, 2)
-  referencePurchasePrice        Decimal? @map("reference_purchase_price") @db.Decimal(10, 2)
-  referencePricePerPurchaseUnit Decimal? @map("reference_price_per_purchase_unit") @db.Decimal(10, 2)
+  brand                         String?                   @db.VarChar(100)
+  productModel                  String?                   @map("product_model") @db.VarChar(100)
+  purchaseChannel               String?                   @map("purchase_channel") @db.VarChar(200)
+  supplierName                  String?                   @map("supplier_name") @db.VarChar(200)
+  purchaseUnit                  String?                   @map("purchase_unit") @db.VarChar(50)
+  purchaseToBaseRatio           Float?                    @map("purchase_to_base_ratio")
+  currentPurchasePrice          Decimal?                  @map("current_purchase_price") @db.Decimal(10, 2)
+  referencePurchasePrice        Decimal?                  @map("reference_purchase_price") @db.Decimal(10, 2)
+  referencePricePerPurchaseUnit Decimal?                  @map("reference_price_per_purchase_unit") @db.Decimal(10, 2)
   sourceTier                    ProcurementSkuSourceTier? @map("source_tier")
   notes                         String?
-  isDefault                     Boolean  @default(false) @map("is_default")
-  isActive                      Boolean  @default(true) @map("is_active")
-  sortOrder                     Int      @default(0) @map("sort_order")
-  safetyStock                   Float?   @map("safety_stock")
-  reorderPoint                  Float?   @map("reorder_point")
-  targetStock                   Float?   @map("target_stock")
-  createdAt                     DateTime @default(now()) @map("created_at")
-  updatedAt                     DateTime @default(now()) @updatedAt @map("updated_at")
+  isDefault                     Boolean                   @default(false) @map("is_default")
+  isActive                      Boolean                   @default(true) @map("is_active")
+  sortOrder                     Int                       @default(0) @map("sort_order")
+  safetyStock                   Float?                    @map("safety_stock")
+  reorderPoint                  Float?                    @map("reorder_point")
+  targetStock                   Float?                    @map("target_stock")
+  createdAt                     DateTime                  @default(now()) @map("created_at")
+  updatedAt                     DateTime                  @default(now()) @updatedAt @map("updated_at")
 
-  ingredient   Ingredient                    @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
+  ingredient   Ingredient                   @relation(fields: [ingredientId], references: [id], onDelete: Cascade)
   priceHistory ProcurementSkuPriceHistory[]
 
   @@index([ingredientId])
@@ -639,21 +683,21 @@ model InventoryLedgerEntry {
 }
 
 model ProductionBatchCostSettlement {
-  id                     String          @id @default(uuid()) @map("id")
-  productionBatchId      String          @unique @map("production_batch_id")
-  plannedOutputG         Float           @map("planned_output_g")
-  actualOutputG          Float           @map("actual_output_g")
-  surplusG               Float           @default(0) @map("surplus_g")
-  shortageG              Float           @default(0) @map("shortage_g")
-  inventoryCost          Decimal         @default(0) @map("inventory_cost") @db.Decimal(10, 2)
-  purchaseCost           Decimal         @default(0) @map("purchase_cost") @db.Decimal(10, 2)
-  lossCost               Decimal         @default(0) @map("loss_cost") @db.Decimal(10, 2)
-  totalActualCost        Decimal         @default(0) @map("total_actual_cost") @db.Decimal(10, 2)
-  suggestedRefundAmount  Decimal         @default(0) @map("suggested_refund_amount") @db.Decimal(10, 2)
-  snapshot               Json            @map("snapshot")
-  settledAt              DateTime        @default(now()) @map("settled_at")
-  productionBatch        ProductionBatch @relation(fields: [productionBatchId], references: [id], onDelete: Cascade)
-  orderCostSettlements   OrderCostSettlement[]
+  id                    String                @id @default(uuid()) @map("id")
+  productionBatchId     String                @unique @map("production_batch_id")
+  plannedOutputG        Float                 @map("planned_output_g")
+  actualOutputG         Float                 @map("actual_output_g")
+  surplusG              Float                 @default(0) @map("surplus_g")
+  shortageG             Float                 @default(0) @map("shortage_g")
+  inventoryCost         Decimal               @default(0) @map("inventory_cost") @db.Decimal(10, 2)
+  purchaseCost          Decimal               @default(0) @map("purchase_cost") @db.Decimal(10, 2)
+  lossCost              Decimal               @default(0) @map("loss_cost") @db.Decimal(10, 2)
+  totalActualCost       Decimal               @default(0) @map("total_actual_cost") @db.Decimal(10, 2)
+  suggestedRefundAmount Decimal               @default(0) @map("suggested_refund_amount") @db.Decimal(10, 2)
+  snapshot              Json                  @map("snapshot")
+  settledAt             DateTime              @default(now()) @map("settled_at")
+  productionBatch       ProductionBatch       @relation(fields: [productionBatchId], references: [id], onDelete: Cascade)
+  orderCostSettlements  OrderCostSettlement[]
 
   @@index([settledAt])
   @@map("production_batch_cost_settlement")
@@ -684,28 +728,63 @@ model OrderCostSettlement {
 }
 
 model OrderSettlementAdjustment {
-  id                      String   @id @default(uuid()) @map("id")
-  orderId                 String   @map("order_id")
-  sourceType              String   @map("source_type") @db.VarChar(40)
-  sourceId                String?  @map("source_id") @db.VarChar(80)
-  adjustmentType          String   @map("adjustment_type") @db.VarChar(40)
-  amount                  Decimal  @map("amount") @db.Decimal(10, 2)
-  reason                  String   @map("reason") @db.VarChar(200)
-  status                  String   @default("PENDING") @map("status") @db.VarChar(20)
-  requiresCustomerPayment Boolean  @default(false) @map("requires_customer_payment")
-  visibleToCustomer       Boolean  @default(true) @map("visible_to_customer")
-  createdBy               String   @default("system") @map("created_by") @db.VarChar(20)
-  createdById             String?  @map("created_by_id") @db.VarChar(80)
-  metadata                Json?    @map("metadata")
+  id                      String    @id @default(uuid()) @map("id")
+  orderId                 String    @map("order_id")
+  sourceType              String    @map("source_type") @db.VarChar(40)
+  sourceId                String?   @map("source_id") @db.VarChar(80)
+  adjustmentType          String    @map("adjustment_type") @db.VarChar(40)
+  amount                  Decimal   @map("amount") @db.Decimal(10, 2)
+  reason                  String    @map("reason") @db.VarChar(200)
+  status                  String    @default("PENDING") @map("status") @db.VarChar(20)
+  requiresCustomerPayment Boolean   @default(false) @map("requires_customer_payment")
+  visibleToCustomer       Boolean   @default(true) @map("visible_to_customer")
+  createdBy               String    @default("system") @map("created_by") @db.VarChar(20)
+  createdById             String?   @map("created_by_id") @db.VarChar(80)
+  metadata                Json?     @map("metadata")
   settledAt               DateTime? @map("settled_at")
-  createdAt               DateTime @default(now()) @map("created_at")
-  updatedAt               DateTime @updatedAt @map("updated_at")
-  order                   Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  createdAt               DateTime  @default(now()) @map("created_at")
+  updatedAt               DateTime  @updatedAt @map("updated_at")
+  order                   Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
 
   @@unique([orderId, sourceType, sourceId])
   @@index([orderId, status])
   @@index([createdAt])
   @@map("order_settlement_adjustment")
+}
+
+model OrderRefundRecord {
+  id                   String    @id @default(uuid()) @map("id") @db.VarChar(36)
+  orderId              String    @map("order_id")
+  outTradeNo           String    @map("out_trade_no") @db.VarChar(80)
+  outRefundNo          String    @unique @map("out_refund_no") @db.VarChar(80)
+  refundId             String?   @map("refund_id") @db.VarChar(120)
+  amount               Decimal   @map("amount") @db.Decimal(10, 2)
+  totalAmount          Decimal   @map("total_amount") @db.Decimal(10, 2)
+  reason               String    @map("reason") @db.VarChar(200)
+  source               String    @default("ADMIN_RETRY") @map("source") @db.VarChar(40)
+  status               String    @default("PENDING") @map("status") @db.VarChar(30)
+  statusText           String?   @map("status_text") @db.VarChar(200)
+  success              Boolean   @default(false) @map("success")
+  operatorId           String?   @map("operator_id") @db.VarChar(36)
+  operatorNameSnapshot String?   @map("operator_name_snapshot") @db.VarChar(120)
+  adjustmentId         String?   @map("adjustment_id") @db.VarChar(36)
+  requestPayload       Json?     @map("request_payload")
+  responsePayload      Json?     @map("response_payload")
+  notifyPayload        Json?     @map("notify_payload")
+  errorMessage         String?   @map("error_message")
+  requestedAt          DateTime  @default(now()) @map("requested_at")
+  notifiedAt           DateTime? @map("notified_at")
+  successTime          DateTime? @map("success_time")
+  createdAt            DateTime  @default(now()) @map("created_at")
+  updatedAt            DateTime  @updatedAt @map("updated_at")
+  order                Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  operator             User?     @relation("OrderRefundRecordOperator", fields: [operatorId], references: [id], onDelete: SetNull)
+
+  @@index([orderId, createdAt])
+  @@index([orderId, success])
+  @@index([status])
+  @@index([operatorId])
+  @@map("order_refund_record")
 }
 
 model InventoryAllocation {
@@ -918,6 +997,113 @@ model GlobalConfig {
   @@map("global_config")
 }
 
+model PaymentConfig {
+  id                    String   @id @default("singleton") @map("id")
+  enabled               Boolean  @default(false) @map("enabled")
+  provider              String   @default("WECHAT_PAY") @map("provider") @db.VarChar(40)
+  mode                  String   @default("SANDBOX") @map("mode") @db.VarChar(20)
+  appId                 String?  @map("app_id") @db.VarChar(80)
+  mchId                 String?  @map("mch_id") @db.VarChar(64)
+  merchantSerialNumber  String?  @map("merchant_serial_number") @db.VarChar(128)
+  apiV3Key              String?  @map("api_v3_key") @db.VarChar(255)
+  privateKeyPem         String?  @map("private_key_pem")
+  notifyUrl             String?  @map("notify_url") @db.VarChar(500)
+  refundNotifyUrl       String?  @map("refund_notify_url") @db.VarChar(500)
+  paymentTimeoutMinutes Int      @default(30) @map("payment_timeout_minutes")
+  autoCloseUnpaid       Boolean  @default(true) @map("auto_close_unpaid")
+  allowRefund           Boolean  @default(false) @map("allow_refund")
+  requireRefundReview   Boolean  @default(true) @map("require_refund_review")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  @@map("payment_config")
+}
+
+model CustomerServiceConfig {
+  id                       String   @id @default("singleton") @map("id")
+  enabled                  Boolean  @default(false) @map("enabled")
+  provider                 String   @default("WECHAT_CUSTOMER_SERVICE") @map("provider") @db.VarChar(60)
+  corpId                   String?  @map("corp_id") @db.VarChar(80)
+  openKfid                 String?  @map("open_kfid") @db.VarChar(120)
+  customerServiceUrl       String?  @map("customer_service_url") @db.VarChar(500)
+  customerServiceSecret    String?  @map("customer_service_secret") @db.VarChar(255)
+  token                    String?  @map("token") @db.VarChar(255)
+  encodingAesKey           String?  @map("encoding_aes_key") @db.VarChar(255)
+  orderCardTitleTemplate   String   @default("订单 {orderNo}") @map("order_card_title_template") @db.VarChar(120)
+  orderCardPathTemplate    String   @default("/pages/order-detail/index?id={orderId}") @map("order_card_path_template") @db.VarChar(300)
+  productCardTitleTemplate String   @default("咨询商品 {productName}") @map("product_card_title_template") @db.VarChar(120)
+  productCardPathTemplate  String   @default("/pages/recipe-detail/index?recipeId={productId}") @map("product_card_path_template") @db.VarChar(300)
+  defaultCardTitleTemplate String   @default("SevenKitchen 客服咨询") @map("default_card_title_template") @db.VarChar(120)
+  defaultCardPathTemplate  String   @default("/pages/home/index") @map("default_card_path_template") @db.VarChar(300)
+  welcomeMessage           String?  @map("welcome_message") @db.VarChar(500)
+  orderDetailDeliveryNote  String?  @map("order_detail_delivery_note") @db.VarChar(500)
+  orderDetailAftersaleNote String?  @map("order_detail_aftersale_note") @db.VarChar(500)
+  orderDetailMerchantNote  String?  @map("order_detail_merchant_note") @db.VarChar(500)
+  floatingButtonEnabled    Boolean  @default(true) @map("floating_button_enabled")
+  floatingButtonText       String   @default("客服") @map("floating_button_text") @db.VarChar(20)
+  floatingButtonIconUrl    String?  @map("floating_button_icon_url") @db.VarChar(500)
+  floatingButtonSize       Int      @default(56) @map("floating_button_size")
+  floatingButtonPosition   String   @default("RIGHT_BOTTOM") @map("floating_button_position") @db.VarChar(30)
+  floatingButtonBottom     Int      @default(128) @map("floating_button_bottom")
+  floatingButtonRight      Int      @default(18) @map("floating_button_right")
+  floatingButtonStyle      String   @default("LIGHT") @map("floating_button_style") @db.VarChar(30)
+  autoAssignEnabled        Boolean  @default(true) @map("auto_assign_enabled")
+  sameCustomerPriority     Boolean  @default(true) @map("same_customer_priority")
+  serviceTimeoutMinutes    Int      @default(10) @map("service_timeout_minutes")
+  createdAt                DateTime @default(now()) @map("created_at")
+  updatedAt                DateTime @updatedAt @map("updated_at")
+
+  @@map("customer_service_config")
+}
+
+model CustomerServiceConversation {
+  id                     String                   @id @default(uuid()) @map("id")
+  provider               String                   @default("WECHAT_CUSTOMER_SERVICE") @map("provider") @db.VarChar(60)
+  externalConversationId String?                  @map("external_conversation_id") @db.VarChar(180)
+  openKfid               String?                  @map("open_kfid") @db.VarChar(120)
+  externalUserId         String?                  @map("external_user_id") @db.VarChar(180)
+  customerId             String?                  @map("customer_id")
+  orderId                String?                  @map("order_id")
+  productId              String?                  @map("product_id")
+  sourceType             String                   @default("GENERAL") @map("source_type") @db.VarChar(40)
+  sourceTitle            String?                  @map("source_title") @db.VarChar(200)
+  sourcePath             String?                  @map("source_path") @db.VarChar(500)
+  status                 String                   @default("OPEN") @map("status") @db.VarChar(40)
+  assignedStaffId        String?                  @map("assigned_staff_id")
+  lastMessageAt          DateTime?                @map("last_message_at")
+  metadata               Json?                    @map("metadata")
+  createdAt              DateTime                 @default(now()) @map("created_at")
+  updatedAt              DateTime                 @updatedAt @map("updated_at")
+  messages               CustomerServiceMessage[]
+
+  @@unique([provider, externalConversationId])
+  @@index([customerId])
+  @@index([orderId])
+  @@index([productId])
+  @@index([status, lastMessageAt])
+  @@index([externalUserId])
+  @@map("customer_service_conversation")
+}
+
+model CustomerServiceMessage {
+  id                String                      @id @default(uuid()) @map("id")
+  conversationId    String                      @map("conversation_id")
+  provider          String                      @default("WECHAT_CUSTOMER_SERVICE") @map("provider") @db.VarChar(60)
+  providerMessageId String?                     @map("provider_message_id") @db.VarChar(180)
+  direction         String                      @default("INBOUND") @map("direction") @db.VarChar(20)
+  eventType         String?                     @map("event_type") @db.VarChar(80)
+  messageType       String?                     @map("message_type") @db.VarChar(80)
+  content           String?                     @map("content")
+  rawPayload        Json?                       @map("raw_payload")
+  createdAt         DateTime                    @default(now()) @map("created_at")
+  conversation      CustomerServiceConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([conversationId, createdAt])
+  @@index([providerMessageId])
+  @@index([eventType])
+  @@map("customer_service_message")
+}
+
 model DIYSheet {
   id              String   @id @default(uuid()) @map("id")
   userId          String   @map("user_id")
@@ -1016,25 +1202,25 @@ model NutritionAgentReviewJob {
 }
 
 model PurchaseList {
-  id                 String             @id @default(uuid()) @map("id")
-  targetDate         DateTime           @map("target_date")
-  kind               PurchaseListKind   @default(ORDER_DEMAND) @map("kind")
-  status             PurchaseListStatus @map("status")
-  totalEstimatedCost Decimal            @map("total_estimated_cost") @db.Decimal(10, 2)
-  itemCount          Int                @map("item_count")
-  createdById        String             @map("created_by_id")
-  sourceOrderIds     String[]           @map("source_order_ids")
-  reimbursementId    String?            @map("reimbursement_id")
-  createdAt          DateTime           @default(now()) @map("created_at")
-  updatedAt          DateTime           @updatedAt @map("updated_at")
-  completedAt        DateTime?          @map("completed_at")
-  startedAt          DateTime?          @map("started_at")
-  orderDateSnapshot  Json?              @map("order_date_snapshot")
-  items              PurchaseItem[]
+  id                   String                @id @default(uuid()) @map("id")
+  targetDate           DateTime              @map("target_date")
+  kind                 PurchaseListKind      @default(ORDER_DEMAND) @map("kind")
+  status               PurchaseListStatus    @map("status")
+  totalEstimatedCost   Decimal               @map("total_estimated_cost") @db.Decimal(10, 2)
+  itemCount            Int                   @map("item_count")
+  createdById          String                @map("created_by_id")
+  sourceOrderIds       String[]              @map("source_order_ids")
+  reimbursementId      String?               @map("reimbursement_id")
+  createdAt            DateTime              @default(now()) @map("created_at")
+  updatedAt            DateTime              @updatedAt @map("updated_at")
+  completedAt          DateTime?             @map("completed_at")
+  startedAt            DateTime?             @map("started_at")
+  orderDateSnapshot    Json?                 @map("order_date_snapshot")
+  items                PurchaseItem[]
   inventoryAllocations InventoryAllocation[]
-  createdBy          User               @relation("PurchaseListCreator", fields: [createdById], references: [id])
-  reimbursement      Reimbursement?     @relation(fields: [reimbursementId], references: [id])
-  records            PurchaseRecord[]   @relation("PurchaseListRecords")
+  createdBy            User                  @relation("PurchaseListCreator", fields: [createdById], references: [id])
+  reimbursement        Reimbursement?        @relation(fields: [reimbursementId], references: [id])
+  records              PurchaseRecord[]      @relation("PurchaseListRecords")
 
   @@index([targetDate])
   @@index([kind])
@@ -1044,36 +1230,36 @@ model PurchaseList {
 }
 
 model PurchaseItem {
-  id                   String       @id @default(uuid()) @map("id")
-  purchaseListId       String       @map("purchase_list_id")
-  ingredientId         String       @map("ingredient_id")
-  procurementSkuId     String?      @map("procurement_sku_id") @db.VarChar(36)
-  procurementSkuName   String?      @map("procurement_sku_name") @db.VarChar(200)
-  suggestedProductId   String?      @map("suggested_product_id") @db.VarChar(36)
-  suggestedProductName String?      @map("suggested_product_name") @db.VarChar(200)
-  quantityNeeded       Float        @map("quantity_needed")
-  quantityUnit         String       @map("quantity_unit")
-  estimatedCost        Decimal      @map("estimated_cost") @db.Decimal(10, 2)
-  grossQuantityNeeded      Float?  @map("gross_quantity_needed")
-  stockDeductedQuantity    Float?  @map("stock_deducted_quantity")
-  purchaseShortageQuantity Float?  @map("purchase_shortage_quantity")
-  onHandQuantity           Float?  @map("on_hand_quantity")
-  allocatedQuantity        Float?  @map("allocated_quantity")
-  availableQuantity        Float?  @map("available_quantity")
-  usesInventory            Boolean @default(false) @map("uses_inventory")
-  noPurchaseNeeded         Boolean @default(false) @map("no_purchase_needed")
-  noPurchaseReason         String? @map("no_purchase_reason") @db.VarChar(120)
-  noPurchaseMarkedAt       DateTime? @map("no_purchase_marked_at")
-  noPurchaseMarkedById     String? @map("no_purchase_marked_by_id") @db.VarChar(80)
-  purchaseChannel      String?      @map("purchase_channel") @db.VarChar(200)
-  productModel         String?      @map("product_model") @db.VarChar(100)
-  notes                String?      @map("notes")
-  createdAt            DateTime     @default(now()) @map("created_at")
-  ingredientName       String       @default("") @map("ingredient_name") @db.VarChar(200)
-  displayUnit          String?      @map("display_unit") @db.VarChar(20)
-  type                 String?      @map("type") @db.VarChar(20)
-  ingredient           Ingredient   @relation(fields: [ingredientId], references: [id])
-  purchaseList         PurchaseList @relation(fields: [purchaseListId], references: [id], onDelete: Cascade)
+  id                       String       @id @default(uuid()) @map("id")
+  purchaseListId           String       @map("purchase_list_id")
+  ingredientId             String       @map("ingredient_id")
+  procurementSkuId         String?      @map("procurement_sku_id") @db.VarChar(36)
+  procurementSkuName       String?      @map("procurement_sku_name") @db.VarChar(200)
+  suggestedProductId       String?      @map("suggested_product_id") @db.VarChar(36)
+  suggestedProductName     String?      @map("suggested_product_name") @db.VarChar(200)
+  quantityNeeded           Float        @map("quantity_needed")
+  quantityUnit             String       @map("quantity_unit")
+  estimatedCost            Decimal      @map("estimated_cost") @db.Decimal(10, 2)
+  grossQuantityNeeded      Float?       @map("gross_quantity_needed")
+  stockDeductedQuantity    Float?       @map("stock_deducted_quantity")
+  purchaseShortageQuantity Float?       @map("purchase_shortage_quantity")
+  onHandQuantity           Float?       @map("on_hand_quantity")
+  allocatedQuantity        Float?       @map("allocated_quantity")
+  availableQuantity        Float?       @map("available_quantity")
+  usesInventory            Boolean      @default(false) @map("uses_inventory")
+  noPurchaseNeeded         Boolean      @default(false) @map("no_purchase_needed")
+  noPurchaseReason         String?      @map("no_purchase_reason") @db.VarChar(120)
+  noPurchaseMarkedAt       DateTime?    @map("no_purchase_marked_at")
+  noPurchaseMarkedById     String?      @map("no_purchase_marked_by_id") @db.VarChar(80)
+  purchaseChannel          String?      @map("purchase_channel") @db.VarChar(200)
+  productModel             String?      @map("product_model") @db.VarChar(100)
+  notes                    String?      @map("notes")
+  createdAt                DateTime     @default(now()) @map("created_at")
+  ingredientName           String       @default("") @map("ingredient_name") @db.VarChar(200)
+  displayUnit              String?      @map("display_unit") @db.VarChar(20)
+  type                     String?      @map("type") @db.VarChar(20)
+  ingredient               Ingredient   @relation(fields: [ingredientId], references: [id])
+  purchaseList             PurchaseList @relation(fields: [purchaseListId], references: [id], onDelete: Cascade)
 
   @@index([purchaseListId])
   @@index([ingredientId])
@@ -1347,6 +1533,14 @@ enum UserStatus {
   ACTIVE
   INACTIVE
   BANNED
+}
+
+enum AccountMigrationStatus {
+  PENDING
+  PHONE_VERIFIED
+  CONFIRMED
+  EXPIRED
+  CANCELLED
 }
 
 enum LifeStageOverride {

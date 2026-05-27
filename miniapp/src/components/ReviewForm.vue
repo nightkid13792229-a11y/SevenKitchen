@@ -349,7 +349,11 @@ async function submit() {
 .btn-submit {
   width: 100%;
   height: 88rpx;
-  line-height: 88rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   background-color: #07c160;
   color: #fff;
   font-size: 32rpx;

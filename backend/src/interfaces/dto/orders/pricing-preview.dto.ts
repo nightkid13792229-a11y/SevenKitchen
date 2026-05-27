@@ -12,6 +12,8 @@ import {
   IsNumber,
   IsInt,
   Min,
+  IsString,
+  MaxLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { OrderType } from '../../../domain';
@@ -110,6 +112,16 @@ export class PricingPreviewItemDto {
   @IsOptional()
   @IsEnum(CookingMethod)
   cookingMethod?: CookingMethod;
+
+  @ApiPropertyOptional({
+    description: 'Customer-facing order note or special requirement',
+    example: '狗狗对鸡肉敏感，请优先客服复核',
+    maxLength: 200,
+  })
+  @IsOptional()
+  @IsString()
+  @MaxLength(200)
+  customRequirements?: string;
 }
 
 export class PricingPreviewRequestDto {

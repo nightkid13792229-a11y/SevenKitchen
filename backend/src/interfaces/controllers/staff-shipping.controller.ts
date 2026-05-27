@@ -9,6 +9,7 @@ import {
   Post,
   Param,
   Body,
+  Query,
   HttpCode,
   HttpStatus,
   UsePipes,
@@ -106,15 +107,21 @@ export class StaffShippingController {
       trackingNumber: string;
       carrierCode: string;
       shippedAt: string;
+      wechatShippingUpload: {
+        success: boolean;
+        skipped?: boolean;
+        message: string;
+      };
     }>
   > {
     try {
-      const order = await this.shippingFulfillmentService.markOrderAsShipped(
+      const result = await this.shippingFulfillmentService.markOrderAsShipped(
         orderId,
         dto,
         'staff', // Phase 8.18: Actor attribution
         null, // Staff ID not available in current implementation
       );
+      const order = result.order;
 
       return ApiResponseDto.success({
         id: order.id,
@@ -122,6 +129,11 @@ export class StaffShippingController {
         trackingNumber: order.trackingNumber ?? '',
         carrierCode: order.carrierCode ?? '',
         shippedAt: order.shippedAt?.toISOString() ?? '',
+        wechatShippingUpload: {
+          success: result.wechatShippingUpload.success,
+          skipped: result.wechatShippingUpload.skipped,
+          message: result.wechatShippingUpload.message,
+        },
       });
     } catch (error: any) {
       if (error instanceof BadRequestException) {
@@ -129,5 +141,135 @@ export class StaffShippingController {
       }
       throw error;
     }
+  }
+
+  @Post('orders/:orderId/wechat-shipping-upload')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Upload or retry WeChat shipping info for an order' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  async uploadWechatShippingInfo(
+    @Param('orderId') orderId: string,
+  ): Promise<
+    ApiResponseDto<{
+      success: boolean;
+      skipped?: boolean;
+      message: string;
+      response?: unknown;
+    }>
+  > {
+    const result =
+      await this.shippingFulfillmentService.uploadWechatShippingInfo(
+        orderId,
+        'staff',
+        null,
+      );
+    return ApiResponseDto.success(result);
+  }
+
+  @Get('wechat-shipping-uploads/pending')
+  @ApiOperation({ summary: 'List WeChat shipping upload pending or failed orders' })
+  async listPendingWechatShippingUploads(
+    @Query('limit') limit?: string,
+  ): Promise<
+    ApiResponseDto<{
+      pendingCount: number;
+      candidates: Array<{
+        orderId: string;
+        status: string;
+        paymentStatus: string | null;
+        transactionId: string | null;
+        trackingNumber: string | null;
+        carrierCode: string | null;
+        shippedAt: string | null;
+        customerName: string | null;
+        customerPhone: string | null;
+        lastUploadAt: string | null;
+        lastSuccess: boolean | null;
+        lastSkipped: boolean | null;
+        lastMessage: string | null;
+        reason: string;
+      }>;
+    }>
+  > {
+    const data =
+      await this.shippingFulfillmentService.listPendingWechatShippingUploads(
+        Number(limit) || 100,
+      );
+    return ApiResponseDto.success(data);
+  }
+
+  @Post('wechat-shipping-uploads/retry-all')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Retry all pending WeChat shipping uploads' })
+  async retryPendingWechatShippingUploads(
+    @Query('limit') limit?: string,
+  ): Promise<
+    ApiResponseDto<{
+      total: number;
+      success: number;
+      failed: number;
+      skipped: number;
+      results: Array<{
+        orderId: string;
+        success: boolean;
+        skipped?: boolean;
+        message: string;
+      }>;
+    }>
+  > {
+    const data =
+      await this.shippingFulfillmentService.uploadPendingWechatShippingInfo(
+        Number(limit) || 100,
+      );
+    return ApiResponseDto.success(data);
+  }
+
+  @Post('orders/:orderId/wechat-special-shipping-report')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Report delayed/unshipped WeChat order to platform' })
+  @ApiParam({ name: 'orderId', description: 'Order ID' })
+  async reportWechatSpecialShippingOrder(
+    @Param('orderId') orderId: string,
+  ): Promise<
+    ApiResponseDto<{
+      success: boolean;
+      skipped?: boolean;
+      message: string;
+      response?: unknown;
+    }>
+  > {
+    const result =
+      await this.shippingFulfillmentService.reportWechatSpecialShippingOrder(
+        orderId,
+        'staff',
+        null,
+      );
+    return ApiResponseDto.success(result);
+  }
+
+  @Post('wechat-special-shipping-reports/retry-all')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Report all paid but unshipped WeChat orders' })
+  async reportPendingWechatSpecialShippingOrders(
+    @Query('limit') limit?: string,
+  ): Promise<
+    ApiResponseDto<{
+      total: number;
+      success: number;
+      failed: number;
+      skipped: number;
+      results: Array<{
+        orderId: string;
+        success: boolean;
+        skipped?: boolean;
+        message: string;
+      }>;
+    }>
+  > {
+    const data =
+      await this.shippingFulfillmentService.reportPendingWechatSpecialShippingOrders(
+        Number(limit) || 100,
+      );
+    return ApiResponseDto.success(data);
   }
 }

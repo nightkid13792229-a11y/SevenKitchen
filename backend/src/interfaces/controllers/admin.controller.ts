@@ -29,7 +29,7 @@ import {
   ApiParam,
   ApiBody,
 } from '@nestjs/swagger';
-import type { Prisma } from '@prisma/client';
+import type { Prisma, User } from '@prisma/client';
 import { IngredientService } from '../../application/ingredient/ingredient.service';
 import {
   RecommendedProductService,
@@ -92,6 +92,7 @@ import {
 } from '../dto/admin/staff.dto';
 import { AdminGuard, StaffGuard } from '../guards/role.guard';
 import { AuthGuard } from '../auth/auth.guard';
+import { CurrentUser, type RequestUser } from '../auth';
 import { RecipeService } from '../../application/recipe/recipe.service';
 import { CoverImageService } from '../../application/recipe/cover-image.service';
 import { ImageOptimizationService } from '../../infrastructure/services/image-optimization.service';
@@ -158,6 +159,41 @@ export class AdminController {
           }
         : undefined,
     }));
+  }
+
+  private parseShanghaiDateStart(dateStr: string): Date {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateStr);
+    if (!match) {
+      const parsed = new Date(dateStr);
+      if (Number.isNaN(parsed.getTime())) {
+        throw new BadRequestException(`Invalid date: ${dateStr}`);
+      }
+      return parsed;
+    }
+
+    const [, year, month, day] = match;
+    const utcTime =
+      Date.UTC(Number(year), Number(month) - 1, Number(day)) -
+      8 * 60 * 60 * 1000;
+    return new Date(utcTime);
+  }
+
+  private parseOrderCreatedAtRange(startDate?: string, endDate?: string) {
+    const start = startDate
+      ? this.parseShanghaiDateStart(startDate)
+      : undefined;
+    const endExclusive = endDate
+      ? new Date(
+          this.parseShanghaiDateStart(endDate).getTime() +
+            24 * 60 * 60 * 1000,
+        )
+      : undefined;
+
+    if (start && endExclusive && start >= endExclusive) {
+      throw new BadRequestException('Start date must be before end date');
+    }
+
+    return { start, endExclusive };
   }
 
   private async buildIngredientDetailResponse(ingredient: Ingredient) {
@@ -1217,15 +1253,38 @@ export class AdminController {
       const keyword =
         typeof query.keyword === 'string' ? query.keyword.trim() : undefined;
 
+      const page = Math.max(1, parseInt(String(query.page || '1'), 10) || 1);
+      const pageSize = Math.min(
+        100,
+        Math.max(10, parseInt(String(query.pageSize || '20'), 10) || 20),
+      );
+
+      const createdAtRange = this.parseOrderCreatedAtRange(
+        typeof query.startDate === 'string' ? query.startDate : undefined,
+        typeof query.endDate === 'string' ? query.endDate : undefined,
+      );
+
+      const statusValues = Array.isArray(query.status)
+        ? query.status
+        : typeof query.status === 'string'
+          ? query.status
+              .split(',')
+              .map((status: string) => status.trim())
+              .filter(Boolean)
+          : [];
+
       // Parse query parameters
       const params = {
         keyword,
-        status: query.status,
+        status:
+          statusValues.length > 1
+            ? statusValues
+            : statusValues[0] ?? query.status,
         type: query.type,
-        startDate: query.startDate ? new Date(query.startDate) : undefined,
-        endDate: query.endDate ? new Date(query.endDate) : undefined,
-        page: query.page ? parseInt(query.page, 10) : 1,
-        pageSize: query.pageSize ? parseInt(query.pageSize, 10) : 20,
+        startDate: createdAtRange.start,
+        endDateExclusive: createdAtRange.endExclusive,
+        page,
+        pageSize,
       };
 
       const { list: orders, total } = await this.orderService.listAllOrders(
@@ -1361,6 +1420,8 @@ export class AdminController {
       return ApiResponseDto.success({
         list,
         total,
+        page: params.page,
+        pageSize: params.pageSize,
       });
     } catch (error: any) {
       if (error instanceof BadRequestException) {
@@ -2110,22 +2171,40 @@ export class AdminController {
 
   private async mapOrderToAdminDto(order: any): Promise<AdminOrderDto> {
     const addressSource = order.shippingAddressSnapshot ?? order.address;
+    const currentAddress = order.address;
+    const addressPhone =
+      addressSource?.phone && !this.isMaskedPhone(addressSource.phone)
+        ? addressSource.phone
+        : currentAddress?.phone;
     const address = addressSource
       ? {
           id: addressSource.id ?? order.addressId,
           recipientName: addressSource.recipientName,
-          phone: addressSource.phone,
+          phone: addressPhone ?? addressSource.phone,
           region: addressSource.region,
           regionText: this.formatAddressRegionText(addressSource.region),
           detailAddress: addressSource.detail,
         }
       : null;
+    const customer =
+      order.customerId && this.prisma.user?.findUnique
+        ? await this.prisma.user.findUnique({
+            where: { id: order.customerId },
+            select: {
+              id: true,
+              nickname: true,
+              phone: true,
+              avatarUrl: true,
+            },
+          })
+        : (order.customer ?? null);
 
     const productionPhotos = await this.getOrderProductionPhotos(order);
 
     return {
       id: order.id,
       customerId: order.customerId,
+      customer,
       dogId: order.dogId,
       addressId: order.addressId,
       address,
@@ -2180,6 +2259,10 @@ export class AdminController {
       detail: address.detail,
       isDefault: address.isDefault ?? false,
     };
+  }
+
+  private isMaskedPhone(phone?: string | null): boolean {
+    return !!phone && phone.includes('*');
   }
 
   private formatAddressRegionText(region: any): string {
@@ -2814,18 +2897,52 @@ export class AdminController {
   @ApiResponse({ status: 200, description: '用户列表' })
   async getUsers(
     @Query('role') role?: string,
-  ): Promise<ApiResponseDto<StaffResponseDto[]>> {
+    @Query('status') status?: string,
+    @Query('keyword') keyword?: string,
+    @Query('page') page?: string,
+    @Query('pageSize') pageSize?: string,
+  ): Promise<
+    ApiResponseDto<{
+      data: StaffResponseDto[];
+      total: number;
+      page: number;
+      pageSize: number;
+    }>
+  > {
+    const pageNum = Math.max(1, Number.parseInt(page || '1', 10) || 1);
+    const pageSizeNum = Math.min(
+      100,
+      Math.max(10, Number.parseInt(pageSize || '20', 10) || 20),
+    );
+
     // 构建查询条件
-    const where: any = {};
+    const where: Prisma.UserWhereInput = {};
 
     if (role && ['CUSTOMER', 'STAFF', 'ADMIN'].includes(role)) {
-      where.role = role;
+      where.role = role as Prisma.EnumUserRoleFilter['equals'];
     }
 
-    const userList = await this.prisma.user.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-    });
+    if (status && ['ACTIVE', 'INACTIVE', 'BANNED'].includes(status)) {
+      where.status = status as Prisma.EnumUserStatusFilter['equals'];
+    }
+
+    const trimmedKeyword = keyword?.trim();
+    if (trimmedKeyword) {
+      where.OR = [
+        { phone: { contains: trimmedKeyword, mode: 'insensitive' } },
+        { nickname: { contains: trimmedKeyword, mode: 'insensitive' } },
+      ];
+    }
+
+    const [userList, total] = await Promise.all([
+      this.prisma.user.findMany({
+        where,
+        orderBy: { createdAt: 'desc' },
+        skip: (pageNum - 1) * pageSizeNum,
+        take: pageSizeNum,
+      }),
+      this.prisma.user.count({ where }),
+    ]);
 
     const data = userList.map((user) => ({
       id: user.id,
@@ -2837,7 +2954,341 @@ export class AdminController {
       createdAt: user.createdAt,
     }));
 
-    return ApiResponseDto.success(data);
+    return ApiResponseDto.success({
+      data,
+      total,
+      page: pageNum,
+      pageSize: pageSizeNum,
+    });
+  }
+
+  private userSummaryInclude() {
+    return {
+      _count: {
+        select: {
+          dogs: true,
+          orders: true,
+          addresses: true,
+          diySheets: true,
+          favoriteRecipes: true,
+          customRecipeOrders: true,
+        },
+      },
+    } as const;
+  }
+
+  private buildUserSummary(user: any) {
+    return {
+      id: user.id,
+      nickname: user.nickname || '微信用户',
+      avatarUrl: user.avatarUrl,
+      role: user.role,
+      phone: user.phone,
+      phoneBound: !!user.phone,
+      dogCount: user._count?.dogs || 0,
+      orderCount: user._count?.orders || 0,
+      addressCount: user._count?.addresses || 0,
+      diySheetCount: user._count?.diySheets || 0,
+      favoriteRecipeCount: user._count?.favoriteRecipes || 0,
+      customRecipeOrderCount: user._count?.customRecipeOrders || 0,
+    };
+  }
+
+  private getSyncableUserDataCount(summary: any): number {
+    return [
+      summary.dogCount,
+      summary.orderCount,
+      summary.addressCount,
+      summary.diySheetCount,
+      summary.favoriteRecipeCount,
+      summary.customRecipeOrderCount,
+    ].reduce((total, count) => total + Number(count || 0), 0);
+  }
+
+  private resolveMergedRole(
+    ...roles: Array<User['role'] | string | null | undefined>
+  ): User['role'] {
+    if (roles.includes('ADMIN')) return 'ADMIN' as User['role'];
+    if (roles.includes('STAFF')) return 'STAFF' as User['role'];
+    return 'CUSTOMER' as User['role'];
+  }
+
+  private maskPhone(phone: string): string {
+    if (phone.length !== 11) return phone;
+    return phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2');
+  }
+
+  private async findManualLegacyMigrationCandidate(targetUserId: string) {
+    const targetUser = await this.prisma.user.findUnique({
+      where: { id: targetUserId },
+      include: this.userSummaryInclude(),
+    });
+
+    if (!targetUser) {
+      throw new NotFoundException('目标用户不存在');
+    }
+
+    if (!targetUser.phone) {
+      throw new BadRequestException('目标用户还没有手机号，无法按手机号匹配旧版资料');
+    }
+
+    const migration = await this.prisma.accountMigration.findFirst({
+      where: {
+        phone: targetUser.phone,
+        status: { in: ['PENDING', 'PHONE_VERIFIED', 'EXPIRED'] },
+        sourceUserId: { not: targetUser.id },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    if (!migration) {
+      throw new NotFoundException('未找到该手机号对应的旧版待同步资料');
+    }
+
+    if (
+      migration.targetUserId &&
+      migration.targetUserId !== targetUser.id
+    ) {
+      throw new BadRequestException('该旧版资料已关联到其他新版账号，不能在这里手动同步');
+    }
+
+    if (
+      migration.verifiedUserId &&
+      migration.verifiedUserId !== targetUser.id
+    ) {
+      throw new BadRequestException('该旧版资料已由其他账号验证，不能在这里手动同步');
+    }
+
+    const sourceUser = await this.prisma.user.findUnique({
+      where: { id: migration.sourceUserId },
+      include: this.userSummaryInclude(),
+    });
+
+    if (!sourceUser) {
+      throw new NotFoundException('旧版来源账号不存在');
+    }
+
+    const sourceSummary = this.buildUserSummary(sourceUser);
+    const sourceDataCount = this.getSyncableUserDataCount(sourceSummary);
+    if (sourceDataCount <= 0) {
+      throw new BadRequestException('旧版账号没有可同步资料，无需手动同步');
+    }
+
+    return {
+      migration,
+      sourceUser,
+      targetUser,
+      sourceSummary,
+      targetSummary: this.buildUserSummary(targetUser),
+      sourceDataCount,
+    };
+  }
+
+  private async mergeUserAccounts(
+    sourceUserId: string,
+    targetUserId: string,
+    phone: string,
+  ): Promise<any> {
+    if (sourceUserId === targetUserId) {
+      return this.prisma.user.update({
+        where: { id: targetUserId },
+        data: { phone },
+        include: this.userSummaryInclude(),
+      });
+    }
+
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const [sourceUser, targetUser] = await Promise.all([
+        tx.user.findUnique({ where: { id: sourceUserId } }),
+        tx.user.findUnique({ where: { id: targetUserId } }),
+      ]);
+
+      if (!sourceUser || !targetUser) {
+        throw new Error('待同步账号不存在，请重新确认后再试');
+      }
+
+      const mergedRole = this.resolveMergedRole(
+        sourceUser.role,
+        targetUser.role,
+      );
+
+      const targetFavorites = await tx.favoriteRecipe.findMany({
+        where: { userId: targetUserId },
+        select: { recipeId: true },
+      });
+      const targetFavoriteIds = targetFavorites.map((item) => item.recipeId);
+      if (targetFavoriteIds.length > 0) {
+        await tx.favoriteRecipe.deleteMany({
+          where: {
+            userId: sourceUserId,
+            recipeId: { in: targetFavoriteIds },
+          },
+        });
+      }
+
+      await Promise.all([
+        tx.dog.updateMany({
+          where: { ownerId: sourceUserId },
+          data: { ownerId: targetUserId },
+        }),
+        tx.address.updateMany({
+          where: { userId: sourceUserId },
+          data: { userId: targetUserId },
+        }),
+        tx.order.updateMany({
+          where: { customerId: sourceUserId },
+          data: { customerId: targetUserId },
+        }),
+        tx.orderPricingSnapshot.updateMany({
+          where: { customerId: sourceUserId },
+          data: { customerId: targetUserId },
+        }),
+        tx.dIYSheet.updateMany({
+          where: { userId: sourceUserId },
+          data: { userId: targetUserId },
+        }),
+        tx.customRecipeOrder.updateMany({
+          where: { customerId: sourceUserId },
+          data: { customerId: targetUserId },
+        }),
+        tx.favoriteRecipe.updateMany({
+          where: { userId: sourceUserId },
+          data: { userId: targetUserId },
+        }),
+        tx.recipeReview.updateMany({
+          where: { userId: sourceUserId },
+          data: { userId: targetUserId },
+        }),
+        tx.feedback.updateMany({
+          where: { userId: sourceUserId },
+          data: { userId: targetUserId },
+        }),
+        tx.feedbackReply.updateMany({
+          where: { userId: sourceUserId },
+          data: { userId: targetUserId },
+        }),
+        tx.feedbackReply.updateMany({
+          where: { replyToUserId: sourceUserId },
+          data: { replyToUserId: targetUserId },
+        }),
+        tx.userWechatIdentity.updateMany({
+          where: { userId: sourceUserId },
+          data: { userId: targetUserId },
+        }),
+      ]);
+
+      await tx.user.update({
+        where: { id: sourceUserId },
+        data: {
+          phone: null,
+          wechatOpenid: null,
+          wechatUnionid: null,
+          status: 'INACTIVE',
+          nickname: sourceUser.nickname
+            ? `${sourceUser.nickname}(已合并)`
+            : '已合并账号',
+        },
+      });
+
+      return tx.user.update({
+        where: { id: targetUserId },
+        data: {
+          role: mergedRole,
+          phone,
+          wechatOpenid: sourceUser.wechatOpenid || targetUser.wechatOpenid,
+          wechatUnionid: targetUser.wechatUnionid || sourceUser.wechatUnionid,
+          lastLoginAt: new Date(),
+        },
+        include: this.userSummaryInclude(),
+      });
+    });
+  }
+
+  @Get('users/:id/legacy-migration-candidate')
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiOperation({ summary: '预览用户可手动同步的旧版资料' })
+  async previewUserLegacyMigration(
+    @Param('id') id: string,
+  ): Promise<ApiResponseDto<any>> {
+    try {
+      const candidate = await this.findManualLegacyMigrationCandidate(id);
+      return ApiResponseDto.success({
+        migrationId: candidate.migration.id,
+        migrationStatus: candidate.migration.status,
+        phone: candidate.targetUser.phone
+          ? this.maskPhone(candidate.targetUser.phone)
+          : null,
+        sourceUser: candidate.sourceSummary,
+        targetUser: candidate.targetSummary,
+        sourceDataCount: candidate.sourceDataCount,
+      });
+    } catch (error: any) {
+      return ApiResponseDto.error(
+        error?.status || 500,
+        error?.message || '查询旧版资料失败',
+      );
+    }
+  }
+
+  @Post('users/:id/legacy-migration-sync')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiOperation({ summary: '管理员手动同步旧版资料到指定用户' })
+  async syncUserLegacyMigration(
+    @CurrentUser() currentUser: RequestUser,
+    @Param('id') id: string,
+    @Body('migrationId') migrationId?: string,
+  ): Promise<ApiResponseDto<any>> {
+    try {
+      const candidate = await this.findManualLegacyMigrationCandidate(id);
+
+      if (migrationId && migrationId !== candidate.migration.id) {
+        return ApiResponseDto.error(409, '迁移记录已变化，请刷新后重新确认');
+      }
+
+      if (!candidate.targetUser.phone) {
+        return ApiResponseDto.error(400, '目标用户还没有手机号');
+      }
+
+      const mergedUser = await this.mergeUserAccounts(
+        candidate.migration.sourceUserId,
+        candidate.targetUser.id,
+        candidate.targetUser.phone,
+      );
+
+      const metadata =
+        (candidate.migration.metadata as Record<string, unknown> | null) || {};
+      await this.prisma.accountMigration.update({
+        where: { id: candidate.migration.id },
+        data: {
+          status: 'CONFIRMED',
+          verifiedUserId: candidate.targetUser.id,
+          targetUserId: candidate.targetUser.id,
+          verifiedAt: candidate.migration.verifiedAt || new Date(),
+          confirmedAt: new Date(),
+          metadata: {
+            ...metadata,
+            adminManualSync: true,
+            adminUserId: currentUser.userId,
+            adminSyncedAt: new Date().toISOString(),
+            phoneMasked: this.maskPhone(candidate.targetUser.phone),
+            sourceDataCount: candidate.sourceDataCount,
+          },
+        },
+      });
+
+      return ApiResponseDto.success({
+        status: 'CONFIRMED',
+        mergedSourceCount: 1,
+        sourceDataCount: candidate.sourceDataCount,
+        user: this.buildUserSummary(mergedUser),
+      });
+    } catch (error: any) {
+      return ApiResponseDto.error(
+        error?.status || 500,
+        error?.message || '手动同步旧版资料失败',
+      );
+    }
   }
 
   @Post('users')
@@ -2885,10 +3336,46 @@ export class AdminController {
   async updateUser(
     @Param('id') id: string,
     @Body() dto: UpdateStaffDto,
-  ): Promise<ApiResponseDto<StaffResponseDto>> {
+  ): Promise<ApiResponseDto<StaffResponseDto | null>> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { role: true, status: true },
+    });
+
+    if (!user) {
+      return ApiResponseDto.error(404, '用户不存在');
+    }
+
+    const nextRole = dto.role ?? user.role;
+    const nextStatus = dto.status ?? user.status;
+    const willLoseUsableAdmin =
+      user.role === 'ADMIN' &&
+      (nextRole !== 'ADMIN' || nextStatus !== 'ACTIVE');
+
+    if (willLoseUsableAdmin) {
+      const otherActiveAdminCount = await this.prisma.user.count({
+        where: {
+          id: { not: id },
+          role: 'ADMIN',
+          status: 'ACTIVE',
+        },
+      });
+
+      if (otherActiveAdminCount === 0) {
+        return ApiResponseDto.error(
+          400,
+          '至少需要保留一个正常状态的管理员账号',
+        );
+      }
+    }
+
     const updatedUser = await this.prisma.user.update({
       where: { id },
-      data: dto,
+      data: {
+        ...(dto.nickname !== undefined && { nickname: dto.nickname }),
+        ...(dto.status !== undefined && { status: dto.status }),
+        ...(dto.role !== undefined && { role: dto.role }),
+      },
     });
 
     const data: StaffResponseDto = {
@@ -2909,6 +3396,19 @@ export class AdminController {
   @ApiOperation({ summary: '删除用户账号' })
   @ApiResponse({ status: 200, description: '删除成功' })
   async deleteUser(@Param('id') id: string): Promise<ApiResponseDto<void>> {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+      select: { role: true },
+    });
+
+    if (!user) {
+      return ApiResponseDto.error(404, '用户不存在');
+    }
+
+    if (user.role === 'ADMIN') {
+      return ApiResponseDto.error(400, '管理员账号受保护，不能删除');
+    }
+
     await this.prisma.user.delete({
       where: { id },
     });
@@ -2988,7 +3488,20 @@ export class AdminController {
   async updateStaff(
     @Param('id') id: string,
     @Body() dto: UpdateStaffDto,
-  ): Promise<ApiResponseDto<StaffResponseDto>> {
+  ): Promise<ApiResponseDto<StaffResponseDto | null>> {
+    const staff = await this.prisma.user.findUnique({
+      where: { id },
+      select: { role: true },
+    });
+
+    if (!staff) {
+      return ApiResponseDto.error(404, '用户不存在');
+    }
+
+    if (staff.role === 'ADMIN') {
+      return ApiResponseDto.error(400, '管理员账号受保护，不能编辑');
+    }
+
     const updatedStaff = await this.prisma.user.update({
       where: { id },
       data: dto,
@@ -3012,6 +3525,19 @@ export class AdminController {
   @ApiOperation({ summary: '删除员工账号' })
   @ApiResponse({ status: 200, description: '删除成功' })
   async deleteStaff(@Param('id') id: string): Promise<ApiResponseDto<void>> {
+    const staff = await this.prisma.user.findUnique({
+      where: { id },
+      select: { role: true },
+    });
+
+    if (!staff) {
+      return ApiResponseDto.error(404, '用户不存在');
+    }
+
+    if (staff.role === 'ADMIN') {
+      return ApiResponseDto.error(400, '管理员账号受保护，不能删除');
+    }
+
     await this.prisma.user.delete({
       where: { id },
     });
@@ -3115,6 +3641,49 @@ export class AdminController {
         'shipping-logos',
       );
       return ApiResponseDto.success(result);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  @Post('upload-customer-service-icon')
+  @UseGuards(AuthGuard, AdminGuard)
+  @UseInterceptors(FileInterceptor('file'))
+  @ApiOperation({ summary: 'Upload customer service floating button icon to Tencent COS' })
+  @ApiResponse({ status: 201, description: 'Icon uploaded successfully' })
+  @ApiResponse({ status: 400, description: 'Upload failed' })
+  async uploadCustomerServiceIcon(
+    @UploadedFile() file: Express.Multer.File,
+  ): Promise<ApiResponseDto<any>> {
+    if (!file) {
+      return ApiResponseDto.error(400, '请选择要上传的图片');
+    }
+
+    const allowedMimeTypes = new Set([
+      'image/png',
+      'image/jpeg',
+      'image/jpg',
+      'image/webp',
+    ]);
+    if (!allowedMimeTypes.has(file.mimetype)) {
+      return ApiResponseDto.error(400, '仅支持 PNG、JPG、WebP 格式图片');
+    }
+
+    const maxSizeBytes = 1 * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      return ApiResponseDto.error(400, '图片大小不能超过 1MB');
+    }
+
+    try {
+      const result = await this.cosService.uploadImage(
+        file.buffer,
+        file.originalname || 'customer-service-icon.png',
+        'customer-service-icons',
+      );
+      return ApiResponseDto.success(result, '上传成功');
     } catch (error) {
       if (error instanceof BadRequestException) {
         return ApiResponseDto.error(400, error.message);

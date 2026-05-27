@@ -45,10 +45,83 @@ export class WechatLoginRequestDto {
   @IsString()
   code!: string;
 
+  @ApiProperty({
+    description:
+      'Mini Program AppID, used when multiple AppIDs share this backend',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  appId?: string;
+
   @ApiProperty({ description: 'User info from WeChat', required: false })
   @IsOptional()
   @IsObject()
   userInfo?: WechatUserInfo;
+}
+
+export class BindWechatPhoneRequestDto {
+  @ApiProperty({ description: 'Code from wx.getPhoneNumber' })
+  @IsString()
+  code!: string;
+
+  @ApiProperty({ description: 'Current Mini Program AppID', required: false })
+  @IsString()
+  @IsOptional()
+  appId?: string;
+}
+
+export class ConfirmPhoneMergeRequestDto {
+  @ApiProperty({
+    description: 'Merge confirmation token returned by bind-phone',
+  })
+  @IsString()
+  mergeToken!: string;
+}
+
+export class StartAccountMigrationRequestDto {
+  @ApiProperty({
+    description: 'Mini Program AppID that starts migration',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  appId?: string;
+
+  @ApiProperty({
+    description:
+      'Phone number voluntarily entered in the legacy miniapp for migration matching',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  phone?: string;
+}
+
+export class VerifyMigrationPhoneRequestDto {
+  @ApiProperty({
+    description:
+      'Migration token created by the legacy miniapp. Optional when matching by phone.',
+    required: false,
+  })
+  @IsString()
+  @IsOptional()
+  migrationToken?: string;
+
+  @ApiProperty({ description: 'Code from wx.getPhoneNumber in the new miniapp' })
+  @IsString()
+  code!: string;
+
+  @ApiProperty({ description: 'Current Mini Program AppID', required: false })
+  @IsString()
+  @IsOptional()
+  appId?: string;
+}
+
+export class ConfirmAccountMigrationRequestDto {
+  @ApiProperty({ description: 'Migration token created by the legacy miniapp' })
+  @IsString()
+  migrationToken!: string;
 }
 
 export class WechatLoginResponseDto {

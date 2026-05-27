@@ -53,7 +53,7 @@
 
       <div class="login-tips">
         <el-alert
-          title="提示：默认用户名 admin，密码 admin123"
+          title="请输入管理员账号和密码"
           type="info"
           :closable="false"
         />
@@ -79,7 +79,7 @@ const loading = ref(false)
 
 const loginForm = reactive({
   username: 'admin',
-  password: 'admin123'
+  password: ''
 })
 
 const loginRules: FormRules = {

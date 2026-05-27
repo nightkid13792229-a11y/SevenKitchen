@@ -67,4 +67,43 @@ export interface UserListParams {
   role?: UserRole;
   status?: UserStatus;
   keyword?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+// 用户分页列表
+export interface UserListResponse {
+  data: User[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface LegacyMigrationUserSummary {
+  id: string;
+  nickname: string;
+  phone?: string | null;
+  role: UserRole;
+  dogCount: number;
+  orderCount: number;
+  addressCount: number;
+  diySheetCount: number;
+  favoriteRecipeCount: number;
+  customRecipeOrderCount: number;
+}
+
+export interface LegacyMigrationCandidate {
+  migrationId: string;
+  migrationStatus: string;
+  phone: string | null;
+  sourceUser: LegacyMigrationUserSummary;
+  targetUser: LegacyMigrationUserSummary;
+  sourceDataCount: number;
+}
+
+export interface LegacyMigrationSyncResult {
+  status: string;
+  mergedSourceCount: number;
+  sourceDataCount: number;
+  user: LegacyMigrationUserSummary;
 }

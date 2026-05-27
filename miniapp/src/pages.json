@@ -50,6 +50,12 @@
       }
     },
     {
+      "path": "pages/customer-service-entry/index",
+      "style": {
+        "navigationBarTitleText": "客服咨询"
+      }
+    },
+    {
       "path": "pages/address-list/index",
       "style": {
         "navigationBarTitleText": "收货地址"
@@ -71,6 +77,18 @@
       "path": "pages/orders-list/index",
       "style": {
         "navigationBarTitleText": "我的订单"
+      }
+    },
+    {
+      "path": "pages/cart/index",
+      "style": {
+        "navigationBarTitleText": "购物车"
+      }
+    },
+    {
+      "path": "pages/aftersale-apply/index",
+      "style": {
+        "navigationBarTitleText": "申请售后"
       }
     },
     {
@@ -106,7 +124,7 @@
     {
       "path": "pages/login/index",
       "style": {
-        "navigationBarTitleText": "微信登录"
+        "navigationBarTitleText": "登录"
       }
     },
     {
@@ -119,6 +137,18 @@
       "path": "pages/profile-setup/index",
       "style": {
         "navigationBarTitleText": "完善个人资料"
+      }
+    },
+    {
+      "path": "pages/phone-bind/index",
+      "style": {
+        "navigationBarTitleText": "手机号快捷登录"
+      }
+    },
+    {
+      "path": "pages/migration/index",
+      "style": {
+        "navigationBarTitleText": "旧版资料迁移"
       }
     },
     {
@@ -346,6 +376,37 @@
       ]
     },
     {
+      "root": "pages/staff-customer-service",
+      "pages": [
+        {
+          "path": "order",
+          "style": {
+            "navigationBarTitleText": "客服订单处理",
+            "enablePullDownRefresh": true
+          }
+        },
+        {
+          "path": "product",
+          "style": {
+            "navigationBarTitleText": "客服商品咨询",
+            "enablePullDownRefresh": true
+          }
+        }
+      ]
+    },
+    {
+      "root": "pages/staff-refunds",
+      "pages": [
+        {
+          "path": "index",
+          "style": {
+            "navigationBarTitleText": "退款管理",
+            "enablePullDownRefresh": true
+          }
+        }
+      ]
+    },
+    {
       "root": "pages/staff-shipping",
       "pages": [
         {
@@ -395,7 +456,7 @@
         {
           "path": "index",
           "style": {
-            "navigationBarTitleText": "订购成品"
+            "navigationBarTitleText": "成品配置页面"
           }
         }
       ]

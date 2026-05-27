@@ -7,6 +7,9 @@ import type {
   CreateUserForm,
   UpdateUserForm,
   UserListParams,
+  UserListResponse,
+  LegacyMigrationCandidate,
+  LegacyMigrationSyncResult,
 } from '@/types/user';
 
 export const userApi = {
@@ -14,7 +17,7 @@ export const userApi = {
    * 获取用户列表
    * @param params 查询参数（角色筛选、状态筛选、关键词搜索）
    */
-  list: (params?: UserListParams): Promise<User[]> =>
+  list: (params?: UserListParams): Promise<UserListResponse> =>
     api.get('/admin/users', { params }),
 
   /**
@@ -38,4 +41,13 @@ export const userApi = {
    */
   delete: (id: string): Promise<void> =>
     api.delete(`/admin/users/${id}`),
+
+  legacyMigrationCandidate: (id: string): Promise<LegacyMigrationCandidate> =>
+    api.get(`/admin/users/${id}/legacy-migration-candidate`),
+
+  syncLegacyMigration: (
+    id: string,
+    migrationId: string
+  ): Promise<LegacyMigrationSyncResult> =>
+    api.post(`/admin/users/${id}/legacy-migration-sync`, { migrationId }),
 };

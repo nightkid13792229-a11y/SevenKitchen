@@ -14,6 +14,7 @@ import {
   HttpStatus,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   UseGuards,
 } from '@nestjs/common';
 import {
@@ -26,6 +27,7 @@ import {
   ApiHeader,
 } from '@nestjs/swagger';
 import { OrderService } from '../../application/order/order.service';
+import { WechatPaymentService } from '../../application/payment/wechat-payment.service';
 import { RecipeService } from '../../application/recipe/recipe.service';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { Inject } from '@nestjs/common';
@@ -37,7 +39,10 @@ import type { DogRepository } from '../../domain/dog/dog.repository';
 import type { ProductionBatchRepository } from '../../domain/production/production.repository';
 import { Order, OrderItem } from '../../domain/order';
 import { OrderStatus } from '../../domain';
-import { InvalidStateTransitionError } from '../../domain/common/errors';
+import {
+  InvalidStateTransitionError,
+  ValidationError,
+} from '../../domain/common/errors';
 import { CreateOrderDto } from '../dto/orders/create-order.dto';
 import {
   OrderDto,
@@ -57,6 +62,7 @@ import { SharePhotosResponseDto } from '../dto/orders/share-photos.dto';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import type { RecipeSnapshot } from '../../domain/recipe/types';
 import { AuthGuard, CurrentUser } from '../auth';
+import { StaffGuard } from '../guards/role.guard';
 import type { RequestUser } from '../auth';
 import { resolveOrderProductionPhotos } from './order-production-photos';
 
@@ -65,6 +71,7 @@ import { resolveOrderProductionPhotos } from './order-production-photos';
 export class OrdersController {
   constructor(
     private readonly orderService: OrderService,
+    private readonly wechatPaymentService: WechatPaymentService,
     private readonly recipeService: RecipeService,
     private readonly prisma: PrismaService,
     @Inject(ORDER_REPOSITORY)
@@ -227,6 +234,38 @@ export class OrdersController {
         return ApiResponseDto.error(404, error.message);
       }
       if (error instanceof InvalidStateTransitionError) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  @Post(':id/wechat-pay')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Create WeChat JSAPI payment params' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiHeader({
+    name: 'X-Customer-Id',
+    description: 'Customer ID for authentication',
+    required: true,
+  })
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  async createWechatPayment(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ) {
+    try {
+      const payment = await this.wechatPaymentService.createJsapiPayment(
+        id,
+        user.customerId,
+      );
+      return ApiResponseDto.success(payment);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (error instanceof BadRequestException) {
         return ApiResponseDto.error(400, error.message);
       }
       throw error;
@@ -411,6 +450,7 @@ export class OrdersController {
       shortageAdjustmentAmount: summary.shortageAdjustmentAmount,
       requiresCustomerPayment:
         customerAdjustmentSummary.pendingExtraPaymentAmount > 0,
+      refundStatus: summary.refundStatus,
       adjustmentSummary: customerAdjustmentSummary,
       adjustments: visibleAdjustments.map((adjustment) => ({
         id: adjustment.id,
@@ -512,7 +552,7 @@ export class OrdersController {
     @Param('id') id: string,
     @CurrentUser() user: RequestUser,
   ): Promise<ApiResponseDto<OrderDto> | ApiResponseDto<null>> {
-    const order = await this.orderService.getOrderById(id);
+    const order = await this.orderService.getOrderById(this.normalizeOrderId(id));
     if (!order) {
       return ApiResponseDto.error(404, 'Order not found');
     }
@@ -525,6 +565,17 @@ export class OrdersController {
 
     const response = await this.mapOrderToDto(order);
     return ApiResponseDto.success(response);
+  }
+
+  private normalizeOrderId(id: string) {
+    const normalized = String(id || '').trim();
+    if (/^[0-9a-f]{32}$/i.test(normalized)) {
+      return normalized.replace(
+        /^(.{8})(.{4})(.{4})(.{4})(.{12})$/,
+        '$1-$2-$3-$4-$5',
+      );
+    }
+    return normalized;
   }
 
   @Get(':id/pricing-breakdown')
@@ -688,6 +739,60 @@ export class OrdersController {
     }
   }
 
+  @Post(':id/complete')
+  @UseGuards(AuthGuard)
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Customer confirms receipt and completes order' })
+  @ApiSecurity('X-Customer-Id')
+  @ApiParam({ name: 'id', description: 'Order ID' })
+  @ApiResponse({
+    status: 200,
+    description: 'Order completed successfully',
+    type: OrderDto,
+  })
+  @ApiResponse({ status: 400, description: 'Invalid order status' })
+  @ApiResponse({ status: 404, description: 'Order not found' })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - X-Customer-Id header required',
+  })
+  async completeOrderByCustomer(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<OrderDto> | ApiResponseDto<null>> {
+    try {
+      const order = await this.orderService.getOrderById(id);
+      if (!order) {
+        return ApiResponseDto.error(404, 'Order not found');
+      }
+
+      if (order.customerId !== user.customerId) {
+        return ApiResponseDto.error(404, 'Order not found');
+      }
+
+      const completedOrder = await this.orderService.completeOrder(
+        id,
+        'customer',
+        user.customerId,
+        { source: 'miniapp_confirm_receipt' },
+      );
+      const response = await this.mapOrderToDto(completedOrder);
+      return ApiResponseDto.success(response);
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (
+        error instanceof BadRequestException ||
+        error instanceof InvalidStateTransitionError ||
+        error instanceof ValidationError
+      ) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
   @Post('pricing/preview')
   @UseGuards(AuthGuard)
   @HttpCode(HttpStatus.OK)
@@ -827,6 +932,16 @@ export class OrdersController {
   }
 
   private async mapOrderToDto(order: Order): Promise<OrderDto> {
+    const customer = await this.prisma.user.findUnique({
+      where: { id: order.customerId },
+      select: {
+        id: true,
+        nickname: true,
+        phone: true,
+        avatarUrl: true,
+      },
+    });
+
     // Map pricing breakdown snapshot if available
     const pricingBreakdown = order.pricingBreakdownSnapshot
       ? {
@@ -874,6 +989,21 @@ export class OrdersController {
     }
 
     const productionPhotos = await this.getOrderProductionPhotos(order);
+    const paymentWindow =
+      order.status === OrderStatus.PENDING_PAYMENT
+        ? await this.wechatPaymentService.getPaymentWindowForOrder(
+            order.createdAt,
+          )
+        : {
+            paymentDeadline: null,
+            paymentRemainingSeconds: null,
+            paymentTimeoutMinutes: null,
+            paymentAutoCloseEnabled: null,
+          };
+    const refundStatus = await this.getRefundStatusForResponse(order);
+    const refundRecords = refundStatus
+      ? await this.orderService.getOrderRefundRecords(order.id)
+      : [];
 
     return {
       id: order.id,
@@ -888,6 +1018,14 @@ export class OrdersController {
             region: order.address.region,
             regionText: `${order.address.region.province} ${order.address.region.city}${order.address.region.district ? ' ' + order.address.region.district : ''}`,
             detailAddress: order.address.detail,
+          }
+        : null,
+      customer: customer
+        ? {
+            id: customer.id,
+            nickname: customer.nickname,
+            phone: customer.phone,
+            avatarUrl: customer.avatarUrl,
           }
         : null,
       status: order.status,
@@ -922,6 +1060,18 @@ export class OrdersController {
       transactionId: order.transactionId ?? null,
       paidAt: order.paidAt ? order.paidAt.toISOString() : null,
       paymentStatus: order.paymentStatus ?? null,
+      paymentDeadline: paymentWindow.paymentDeadline,
+      paymentRemainingSeconds: paymentWindow.paymentRemainingSeconds,
+      paymentTimeoutMinutes: paymentWindow.paymentTimeoutMinutes,
+      paymentAutoCloseEnabled: paymentWindow.paymentAutoCloseEnabled,
+      aftersaleType: order.aftersaleType ?? null,
+      aftersaleReason: order.aftersaleReason ?? null,
+      aftersaleSince: order.aftersaleSince
+        ? order.aftersaleSince.toISOString()
+        : null,
+      aftersalePhotos: order.aftersalePhotos ?? [],
+      refundStatus,
+      refundRecords,
       createdAt: order.createdAt.toISOString(),
     };
   }
@@ -1058,16 +1208,53 @@ export class OrdersController {
       // For now, we'll return undefined
     }
 
+    const paymentWindow =
+      order.status === OrderStatus.PENDING_PAYMENT
+        ? await this.wechatPaymentService.getPaymentWindowForOrder(
+            order.createdAt,
+          )
+        : {
+            paymentDeadline: null,
+            paymentRemainingSeconds: null,
+            paymentTimeoutMinutes: null,
+            paymentAutoCloseEnabled: null,
+          };
+    const refundStatus = await this.getRefundStatusForResponse(order);
+
     return {
       id: order.id,
       status: order.status,
       type: order.type,
+      cancellationReason: order.cancellationReason ?? null,
+      aftersaleType: order.aftersaleType ?? null,
       totalAmount: order.totalAmount ?? order.amountTotal,
       itemCount: order.items.length,
       createdAt: order.createdAt.toISOString(),
+      paymentDeadline: paymentWindow.paymentDeadline,
+      paymentRemainingSeconds: paymentWindow.paymentRemainingSeconds,
+      paymentTimeoutMinutes: paymentWindow.paymentTimeoutMinutes,
+      paymentAutoCloseEnabled: paymentWindow.paymentAutoCloseEnabled,
+      refundStatus,
       firstItem,
       address,
     };
+  }
+
+  private async getRefundStatusForResponse(order: Order) {
+    if (order.paymentMethod !== 'WECHAT_PAY') {
+      return null;
+    }
+
+    const looksLikeRefundFlow =
+      order.status === OrderStatus.AFTERSALE ||
+      order.status === OrderStatus.CANCELLED ||
+      (order.cancellationReason || '').includes('售后退款');
+
+    if (!looksLikeRefundFlow) {
+      return null;
+    }
+
+    return this.orderService.getOrderRefundStatus(order.id);
   }
 
   /**
@@ -1112,14 +1299,28 @@ export class OrdersController {
     @Body() dto: CreateAftersaleDto,
     @CurrentUser() user: RequestUser,
   ) {
-    const order = await this.orderService.applyForAftersale(
-      orderId,
-      user.userId,
-      dto.type as any,
-      dto.reason,
-      dto.photos || [],
-    );
-    return this.mapOrderToDto(order);
+    try {
+      const order = await this.orderService.applyForAftersale(
+        orderId,
+        user.userId,
+        dto.type as any,
+        dto.reason,
+        dto.photos || [],
+      );
+      return ApiResponseDto.success(await this.mapOrderToDto(order));
+    } catch (error) {
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (
+        error instanceof BadRequestException ||
+        error instanceof InvalidStateTransitionError ||
+        error instanceof ValidationError
+      ) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
   }
 
   /**
@@ -1127,7 +1328,7 @@ export class OrdersController {
    * Phase 9.1: Admin/Staff endpoint to resolve aftersale request
    */
   @Post(':id/aftersale/resolve')
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, StaffGuard)
   @ApiOperation({ summary: 'Resolve aftersale (解决售后)' })
   @ApiSecurity('X-Customer-Id')
   @ApiParam({ name: 'id', description: 'Order ID' })
@@ -1142,13 +1343,64 @@ export class OrdersController {
     @Body() dto: ResolveAftersaleDto,
     @CurrentUser() user: RequestUser,
   ) {
-    const order = await this.orderService.resolveAftersale(
-      orderId,
-      dto.resolutionType,
-      user.userId,
-      dto.adminNote,
-    );
-    return this.mapOrderToDto(order);
+    try {
+      let adminNote = dto.adminNote;
+      if (dto.resolutionType === 'refunded') {
+        if (user.role !== 'ADMIN') {
+          return ApiResponseDto.error(403, '退款申请仅管理员可以审核');
+        }
+        const order = await this.orderRepository.findById(orderId);
+        if (!order) {
+          return ApiResponseDto.error(404, `Order not found: ${orderId}`);
+        }
+        const refund = await this.wechatPaymentService.createRefund({
+          orderId,
+          amount: order.amountTotal,
+          reason: dto.adminNote || order.aftersaleReason || '售后退款',
+          adminId: user.userId,
+          source: 'AFTERSALE_APPROVE',
+        });
+        const refundNote = `微信原路退款已发起；退款单号：${refund.outRefundNo}`;
+        adminNote = [dto.adminNote, refundNote].filter(Boolean).join('\n');
+      }
+
+      const order = await this.orderService.resolveAftersale(
+        orderId,
+        dto.resolutionType,
+        user.userId,
+        adminNote,
+        user.role,
+      );
+      return ApiResponseDto.success(await this.mapOrderToDto(order));
+    } catch (error) {
+      if (error instanceof ForbiddenException) {
+        return ApiResponseDto.error(403, error.message);
+      }
+      if (error instanceof NotFoundException) {
+        return ApiResponseDto.error(404, error.message);
+      }
+      if (
+        error instanceof BadRequestException ||
+        error instanceof InvalidStateTransitionError ||
+        error instanceof ValidationError
+      ) {
+        return ApiResponseDto.error(400, error.message);
+      }
+      throw error;
+    }
+  }
+
+  @Get('aftersale/refunds')
+  @UseGuards(AuthGuard, StaffGuard)
+  @ApiOperation({ summary: 'Get refund aftersale records including resolved refunds' })
+  @ApiSecurity('X-Customer-Id')
+  async getRefundAftersaleRecords(@CurrentUser() user: RequestUser) {
+    if (user.role !== 'ADMIN') {
+      return ApiResponseDto.success([]);
+    }
+    const orders = await this.orderService.getRefundAftersaleRecords();
+    const data = await Promise.all(orders.map((order) => this.mapOrderToDto(order)));
+    return ApiResponseDto.success(data);
   }
 
   /**
@@ -1156,7 +1408,7 @@ export class OrdersController {
    * Phase 9.1: Admin/Staff endpoint to get list of orders in AFTERSALE status
    */
   @Get('aftersale/pending')
-  @UseGuards(AuthGuard)
+  @UseGuards(AuthGuard, StaffGuard)
   @ApiOperation({ summary: 'Get pending aftersale orders' })
   @ApiSecurity('X-Customer-Id')
   @ApiResponse({
@@ -1166,7 +1418,14 @@ export class OrdersController {
   })
   async getPendingAftersales(@CurrentUser() user: RequestUser) {
     const orders = await this.orderService.getPendingAftersales();
-    return Promise.all(orders.map((order) => this.mapOrderToDto(order)));
+    const visibleOrders =
+      user.role === 'ADMIN'
+        ? orders
+        : orders.filter((order) => order.aftersaleType !== 'REFUND');
+    const data = await Promise.all(
+      visibleOrders.map((order) => this.mapOrderToDto(order)),
+    );
+    return ApiResponseDto.success(data);
   }
 
   /**

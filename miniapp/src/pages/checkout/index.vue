@@ -10,10 +10,18 @@
       <view v-if="selectedAddress" class="address-card">
         <view class="address-info">
           <view class="address-header">
-            <text class="recipient">{{ selectedAddress.recipientName }} {{ selectedAddress.phone }}</text>
-            <text v-if="selectedAddress.isDefault" class="default-badge">默认</text>
+            <text class="recipient"
+              >{{ selectedAddress.recipientName }}
+              {{ selectedAddress.phone }}</text
+            >
+            <text v-if="selectedAddress.isDefault" class="default-badge"
+              >默认</text
+            >
           </view>
-          <text class="detail">{{ selectedAddress.regionText }} {{ selectedAddress.detailAddress }}</text>
+          <text class="detail"
+            >{{ selectedAddress.regionText }}
+            {{ selectedAddress.detailAddress }}</text
+          >
         </view>
         <text class="arrow">›</text>
       </view>
@@ -22,7 +30,9 @@
       <view v-else class="no-address-card">
         <view class="empty-content">
           <text class="empty-text">暂无收货地址</text>
-          <button class="btn-add-address" @tap.stop="goToAddAddress">新增地址</button>
+          <button class="btn-add-address" @tap.stop="goToAddAddress">
+            新增地址
+          </button>
         </view>
       </view>
 
@@ -48,18 +58,18 @@
         @cancel="showProductionDatePicker = false"
       >
         <view class="date-picker-button">
-          <text class="date-value">{{ formatDisplayDate(selectedProductionDate) }}</text>
+          <text class="date-value">{{
+            formatDisplayDate(selectedProductionDate)
+          }}</text>
           <text class="picker-arrow">▼</text>
         </view>
       </picker>
 
-      <view
-        v-else
-        class="date-display-button"
-        @tap="openProductionDatePicker"
-      >
+      <view v-else class="date-display-button" @tap="openProductionDatePicker">
         <text class="date-label">制作日期：</text>
-        <text class="date-value">{{ formatDisplayDate(selectedProductionDate) }}</text>
+        <text class="date-value">{{
+          formatDisplayDate(selectedProductionDate)
+        }}</text>
         <text class="auto-tag">预约制作日期</text>
         <text class="picker-arrow">▼</text>
       </view>
@@ -73,7 +83,9 @@
       <view class="date-info-row">
         <view class="date-info-item-left">
           <text class="date-info-label">预计发货日期</text>
-          <text class="date-info-value">{{ formatDisplayDate(calculatedShippingDate) }}</text>
+          <text class="date-info-value">{{
+            formatDisplayDate(calculatedShippingDate)
+          }}</text>
         </view>
         <view class="date-info-item-right">
           <text class="date-info-label">预计收货日期</text>
@@ -118,7 +130,9 @@
           </view>
           <view class="config-item">
             <text class="config-label">体重</text>
-            <text class="config-value">{{ orderConfig.weightKg ? orderConfig.weightKg + 'kg' : '-' }}</text>
+            <text class="config-value">{{
+              orderConfig.weightKg ? orderConfig.weightKg + 'kg' : '-'
+            }}</text>
           </view>
           <view class="config-item">
             <text class="config-label">每日餐数</text>
@@ -137,7 +151,9 @@
         <view class="config-grid">
           <view class="config-item">
             <text class="config-label">预计可喂</text>
-            <text class="config-value">{{ orderConfig.estimatedFeedDays }}天</text>
+            <text class="config-value"
+              >{{ orderConfig.estimatedFeedDays }}天</text
+            >
           </view>
           <view class="config-item">
             <text class="config-label">总分装数</text>
@@ -149,18 +165,25 @@
           </view>
           <view class="config-item">
             <text class="config-label">来源方案</text>
-            <text class="config-value">{{ orderConfig.ingredientSourcePlanLabel || '-' }}</text>
+            <text class="config-value">{{
+              orderConfig.ingredientSourcePlanLabel || '-'
+            }}</text>
           </view>
         </view>
 
-        <view v-if="orderConfig.packagePlan.length" class="package-plan-section">
+        <view
+          v-if="orderConfig.packagePlan.length"
+          class="package-plan-section"
+        >
           <text class="info-card-subtitle">分装明细</text>
           <view
             v-for="(row, index) in orderConfig.packagePlan"
             :key="`${row.packageSpecG}-${row.packageCount}-${index}`"
             class="package-plan-row"
           >
-            <text class="package-plan-row-text">{{ row.packageSpecG }}g × {{ row.packageCount }}袋</text>
+            <text class="package-plan-row-text"
+              >{{ row.packageSpecG }}g × {{ row.packageCount }}袋</text
+            >
           </view>
         </view>
       </view>
@@ -171,13 +194,36 @@
         <view class="config-grid">
           <view class="config-item">
             <text class="config-label">加工方式</text>
-            <text class="config-value">{{ orderConfig.preparationMethod === 'CHOPPED' ? '打碎' : '切丁' }}</text>
+            <text class="config-value">{{
+              orderConfig.preparationMethod === 'CHOPPED' ? '打碎' : '切丁'
+            }}</text>
           </view>
           <view class="config-item">
             <text class="config-label">烹饪要求</text>
-            <text class="config-value">{{ orderConfig.cookingMethod === 'RAW' ? '蒸/炖/低温慢煮' : '预加热' }}</text>
+            <text class="config-value">{{
+              orderConfig.cookingMethod === 'RAW' ? '蒸/炖/低温慢煮' : '预加热'
+            }}</text>
           </view>
         </view>
+      </view>
+    </view>
+
+    <view class="section order-note-section">
+      <view class="section-title">
+        <text class="title-text">订单备注</text>
+      </view>
+      <textarea
+        v-model="customerNote"
+        class="order-note-input"
+        maxlength="200"
+        auto-height
+        placeholder="可填写过敏提醒、分装标签、配送时间等特殊要求"
+      />
+      <view class="order-note-footer">
+        <text class="order-note-hint"
+          >备注会展示在订单详情页，便于客服和制作人员核对。</text
+        >
+        <text class="order-note-count">{{ customerNote.length }}/200</text>
       </view>
     </view>
 
@@ -208,8 +254,21 @@
       </button>
     </view>
 
+    <CustomerServiceFloatButton
+      source-type="PRODUCT"
+      :product-id="orderConfig.recipeId"
+      :product-name="orderConfig.recipeName"
+      :image-url="orderConfig.recipeCoverImage"
+      title="确认订单咨询"
+      path="/pages/checkout/index"
+    />
+
     <!-- 地址选择器弹窗 -->
-    <view v-if="showAddressSelector" class="address-selector-overlay" @tap="closeAddressSelector">
+    <view
+      v-if="showAddressSelector"
+      class="address-selector-overlay"
+      @tap="closeAddressSelector"
+    >
       <view class="address-selector" @tap.stop>
         <view class="selector-header">
           <text class="selector-title">选择收货地址</text>
@@ -225,16 +284,24 @@
           >
             <view class="list-address-info">
               <view class="list-address-header">
-                <text class="list-recipient">{{ addr.recipientName }} {{ addr.phone }}</text>
+                <text class="list-recipient"
+                  >{{ addr.recipientName }} {{ addr.phone }}</text
+                >
                 <text v-if="addr.isDefault" class="default-badge">默认</text>
               </view>
-              <text class="list-detail">{{ addr.regionText }} {{ addr.detailAddress }}</text>
+              <text class="list-detail"
+                >{{ addr.regionText }} {{ addr.detailAddress }}</text
+              >
             </view>
-            <view v-if="selectedAddress?.id === addr.id" class="check-icon">✓</view>
+            <view v-if="selectedAddress?.id === addr.id" class="check-icon"
+              >✓</view
+            >
           </view>
         </scroll-view>
         <view class="selector-footer">
-          <button class="btn-manage-address" @tap="goToAddressList">管理地址</button>
+          <button class="btn-manage-address" @tap="goToAddressList">
+            管理地址
+          </button>
         </view>
       </view>
     </view>
@@ -242,75 +309,77 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { onShow } from '@dcloudio/uni-app'
-import { request } from '../../utils/api'
+import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { onShow } from '@dcloudio/uni-app';
+import { request } from '../../utils/api';
+import { ensurePhoneBound } from '../../utils/account';
+import CustomerServiceFloatButton from '../../components/CustomerServiceFloatButton.vue';
 import {
   buildDefaultPackagePlan,
   estimateFeedDays,
   getPackagePlanTotal,
   getSourcePlanLabel,
-} from '../../utils/order-package-plan'
+} from '../../utils/order-package-plan';
 
 interface CartItem {
-  id: string
-  dogId: string
-  dogName: string
-  dogBreedName?: string
-  dogWeightKg?: number
-  recipeId: string
-  recipeName: string
-  recipeCoverImage?: string
-  cycleDays: number
-  dailyIntakeG: number
-  totalGrams: number
-  packageCount: number
-  packageSpecG: number
-  unitPrice: number
-  totalPrice: number
-  preparationMethod?: string
-  cookingMethod?: string
+  id: string;
+  dogId: string;
+  dogName: string;
+  dogBreedName?: string;
+  dogWeightKg?: number;
+  recipeId: string;
+  recipeName: string;
+  recipeCoverImage?: string;
+  cycleDays: number;
+  dailyIntakeG: number;
+  totalGrams: number;
+  packageCount: number;
+  packageSpecG: number;
+  unitPrice: number;
+  totalPrice: number;
+  preparationMethod?: string;
+  cookingMethod?: string;
 }
 
 interface PackagePlanItem {
-  packageSpecG: number
-  packageCount: number
+  packageSpecG: number;
+  packageCount: number;
 }
 
 interface Address {
-  id: string
-  recipientName: string
-  phone: string
-  regionText: string
-  detailAddress: string
-  isDefault?: boolean
+  id: string;
+  recipientName: string;
+  phone: string;
+  regionText: string;
+  detailAddress: string;
+  isDefault?: boolean;
 }
 
 interface OrderConfig {
-  dogId?: string
-  dogName: string
-  breedName?: string
-  weightKg?: number
-  mealsPerDay: number
-  dailyIntakeG: number
-  perMealG: number
-  totalPackages: number
-  cycleDays: number
-  totalGrams: number
-  estimatedFeedDays: string
-  packagePlan: PackagePlanItem[]
-  ingredientSourcePlan?: string
-  ingredientSourcePlanLabel: string
-  preparationMethod: 'CHOPPED' | 'DICED'
-  cookingMethod: 'RAW' | 'COOKED'
-  recipeId?: string
-  recipeName: string
-  recipeCoverImage?: string
+  dogId?: string;
+  dogName: string;
+  breedName?: string;
+  weightKg?: number;
+  mealsPerDay: number;
+  dailyIntakeG: number;
+  perMealG: number;
+  totalPackages: number;
+  cycleDays: number;
+  totalGrams: number;
+  estimatedFeedDays: string;
+  packagePlan: PackagePlanItem[];
+  ingredientSourcePlan?: string;
+  ingredientSourcePlanLabel: string;
+  preparationMethod: 'CHOPPED' | 'DICED';
+  cookingMethod: 'RAW' | 'COOKED';
+  recipeId?: string;
+  recipeName: string;
+  recipeCoverImage?: string;
 }
 
-const cartItems = ref<CartItem[]>([])
-const selectedAddress = ref<Address | null>(null)
-const pricingSnapshotId = ref<string | null>(null)
+const cartItems = ref<CartItem[]>([]);
+const selectedAddress = ref<Address | null>(null);
+const pricingSnapshotId = ref<string | null>(null);
 const orderConfig = ref<OrderConfig>({
   dogId: '',
   dogName: '',
@@ -330,212 +399,226 @@ const orderConfig = ref<OrderConfig>({
   cookingMethod: 'RAW',
   recipeId: '',
   recipeName: '',
-  recipeCoverImage: ''
-})
+  recipeCoverImage: '',
+});
 
 // 立即购买模式的价格显示（从URL参数获取，仅用于显示）
 const directBuyPrice = ref({
   amountProduct: 0,
   amountShipping: 0,
   amountTotal: 0,
-})
+});
 
 // ========== 地址选择器相关 ==========
-const showAddressSelector = ref(false)
-const addressList = ref<Address[]>([])
+const showAddressSelector = ref(false);
+const addressList = ref<Address[]>([]);
+const customerNote = ref('');
 
 // ========== 制作日期相关 ==========
-const showProductionDatePicker = ref(false)
+const showProductionDatePicker = ref(false);
 
 // 判断当前时间是否在6点前
 const isBefore6AM = computed(() => {
-  const now = new Date()
-  const hour = now.getHours()
-  return hour < 6
-})
+  const now = new Date();
+  const hour = now.getHours();
+  return hour < 6;
+});
 
 // 计算最小可选制作日期（可以选择当天，不能选昨天及以前）
 const minProductionDate = computed(() => {
-  const now = new Date()
-  return formatDateToString(now)
-})
+  const now = new Date();
+  return formatDateToString(now);
+});
 
 // 默认制作日期：根据当前时间判断（0-6点当日，6-24点次日）
 const defaultProductionDate = computed(() => {
-  const now = new Date()
-  const hour = now.getHours() // 使用本地时间
+  const now = new Date();
+  const hour = now.getHours(); // 使用本地时间
 
   if (hour >= 0 && hour < 6) {
     // 0-6点：当日制作
-    return formatDateToString(now)
+    return formatDateToString(now);
   } else {
     // 6-24点：次日制作
-    const tomorrow = new Date()
-    tomorrow.setDate(tomorrow.getDate() + 1)
-    return formatDateToString(tomorrow)
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return formatDateToString(tomorrow);
   }
-})
+});
 
 // 选中的制作日期
-const selectedProductionDate = ref(defaultProductionDate.value)
+const selectedProductionDate = ref(defaultProductionDate.value);
 
 // 计算发货日期（制作日期 + 1天）
 const calculatedShippingDate = computed(() => {
-  if (!selectedProductionDate.value) return ''
-  const productionDate = new Date(selectedProductionDate.value)
-  const shippingDate = new Date(productionDate)
-  shippingDate.setDate(shippingDate.getDate() + 1)
-  return formatDateToString(shippingDate)
-})
+  if (!selectedProductionDate.value) return '';
+  const productionDate = new Date(selectedProductionDate.value);
+  const shippingDate = new Date(productionDate);
+  shippingDate.setDate(shippingDate.getDate() + 1);
+  return formatDateToString(shippingDate);
+});
 
 // 计算预计收货日期范围（发货日期 + 1~2天）
 const estimatedDeliveryDateRange = computed(() => {
-  if (!calculatedShippingDate.value) return ''
-  const shipping = new Date(calculatedShippingDate.value)
-  const start = new Date(shipping)
-  start.setDate(start.getDate() + 1)
-  const end = new Date(shipping)
-  end.setDate(end.getDate() + 2)
-  return `${formatDisplayDate(formatDateToString(start))}-${formatDisplayDate(formatDateToString(end))}`
-})
+  if (!calculatedShippingDate.value) return '';
+  const shipping = new Date(calculatedShippingDate.value);
+  const start = new Date(shipping);
+  start.setDate(start.getDate() + 1);
+  const end = new Date(shipping);
+  end.setDate(end.getDate() + 2);
+  return `${formatDisplayDate(formatDateToString(start))}-${formatDisplayDate(formatDateToString(end))}`;
+});
 
 // ========== 计算属性 ==========
 const totalAmount = computed(() => {
-  return directBuyPrice.value.amountTotal
-})
+  return directBuyPrice.value.amountTotal;
+});
 
 const averagePricePerPackage = computed(() => {
-  if (orderConfig.value.totalPackages <= 0) return 0
-  return totalAmount.value / orderConfig.value.totalPackages
-})
+  if (orderConfig.value.totalPackages <= 0) return 0;
+  return totalAmount.value / orderConfig.value.totalPackages;
+});
 
-const isSinglePackageSpec = computed(() => orderConfig.value.packagePlan.length === 1)
+const isSinglePackageSpec = computed(
+  () => orderConfig.value.packagePlan.length === 1,
+);
 
 const packagePlanSummaryText = computed(() => {
   if (isSinglePackageSpec.value) {
-    const row = orderConfig.value.packagePlan[0]
-    if (!row) return ''
-    return `${row.packageSpecG}g × ${row.packageCount}袋`
+    const row = orderConfig.value.packagePlan[0];
+    if (!row) return '';
+    return `${row.packageSpecG}g × ${row.packageCount}袋`;
   }
 
-  return `多规格共 ${orderConfig.value.totalPackages}袋`
-})
+  return `多规格共 ${orderConfig.value.totalPackages}袋`;
+});
 
 const bottomPriceTitle = computed(() => {
-  return `¥${totalAmount.value.toFixed(2)}`
-})
+  return `¥${totalAmount.value.toFixed(2)}`;
+});
 
 const bottomPriceSubtitle = computed(() => {
-  if (orderConfig.value.totalPackages <= 0 || orderConfig.value.packagePlan.length === 0) {
-    return '等待分装信息'
+  if (
+    orderConfig.value.totalPackages <= 0 ||
+    orderConfig.value.packagePlan.length === 0
+  ) {
+    return '等待分装信息';
   }
 
   if (isSinglePackageSpec.value) {
-    return `¥${averagePricePerPackage.value.toFixed(2)}/袋 · ${packagePlanSummaryText.value}`
+    return `¥${averagePricePerPackage.value.toFixed(2)}/袋 · ${packagePlanSummaryText.value}`;
   }
 
-  return `均价 ¥${averagePricePerPackage.value.toFixed(2)}/袋 · ${packagePlanSummaryText.value}`
-})
+  return `均价 ¥${averagePricePerPackage.value.toFixed(2)}/袋 · ${packagePlanSummaryText.value}`;
+});
 
 const canSubmitOrder = computed(() => {
-  return selectedAddress.value && pricingSnapshotId.value && selectedProductionDate.value
-})
+  return (
+    selectedAddress.value &&
+    pricingSnapshotId.value &&
+    selectedProductionDate.value
+  );
+});
 
 // ========== 工具函数 ==========
 function formatDateToString(date: Date): string {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function formatDisplayDate(dateStr: string): string {
-  if (!dateStr) return '请选择日期'
-  const date = new Date(dateStr)
-  const month = date.getMonth() + 1
-  const day = date.getDate()
-  return `${month}月${day}日`
+  if (!dateStr) return '请选择日期';
+  const date = new Date(dateStr);
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+  return `${month}月${day}日`;
 }
 
 function normalizeText(value: unknown): string {
   if (typeof value === 'string') {
-    return value.trim()
+    return value.trim();
   }
 
   if (value === null || value === undefined) {
-    return ''
+    return '';
   }
 
-  return String(value).trim()
+  return String(value).trim();
 }
 
 function decodeURLText(value: unknown): string {
-  const text = normalizeText(value)
+  const text = normalizeText(value);
   if (!text) {
-    return ''
+    return '';
   }
 
   try {
-    return decodeURIComponent(text)
+    return decodeURIComponent(text);
   } catch (error) {
-    return text
+    return text;
   }
 }
 
 function readTextValue(primary: unknown, fallback: unknown = ''): string {
-  const primaryText = normalizeText(primary)
+  const primaryText = normalizeText(primary);
   if (primaryText) {
-    return primaryText
+    return primaryText;
   }
 
-  return decodeURLText(fallback)
+  return decodeURLText(fallback);
 }
 
 function readNumberValue(primary: unknown, fallback: unknown = 0): number {
-  const primaryNumber = Number(primary)
+  const primaryNumber = Number(primary);
   if (Number.isFinite(primaryNumber)) {
-    return primaryNumber
+    return primaryNumber;
   }
 
-  const fallbackNumber = Number(fallback)
-  return Number.isFinite(fallbackNumber) ? fallbackNumber : 0
+  const fallbackNumber = Number(fallback);
+  return Number.isFinite(fallbackNumber) ? fallbackNumber : 0;
 }
 
 function readPositiveNumber(primary: unknown, fallback: unknown = 0): number {
-  const primaryNumber = Number(primary)
+  const primaryNumber = Number(primary);
   if (Number.isFinite(primaryNumber) && primaryNumber > 0) {
-    return primaryNumber
+    return primaryNumber;
   }
 
-  const fallbackNumber = Number(fallback)
-  return Number.isFinite(fallbackNumber) && fallbackNumber > 0 ? fallbackNumber : 0
+  const fallbackNumber = Number(fallback);
+  return Number.isFinite(fallbackNumber) && fallbackNumber > 0
+    ? fallbackNumber
+    : 0;
 }
 
 function readPositiveInteger(primary: unknown, fallback: unknown = 0): number {
-  const primaryNumber = Math.floor(Number(primary))
+  const primaryNumber = Math.floor(Number(primary));
   if (Number.isFinite(primaryNumber) && primaryNumber > 0) {
-    return primaryNumber
+    return primaryNumber;
   }
 
-  const fallbackNumber = Math.floor(Number(fallback))
-  return Number.isFinite(fallbackNumber) && fallbackNumber > 0 ? fallbackNumber : 0
+  const fallbackNumber = Math.floor(Number(fallback));
+  return Number.isFinite(fallbackNumber) && fallbackNumber > 0
+    ? fallbackNumber
+    : 0;
 }
 
 function normalizePackagePlanRows(rows: unknown): PackagePlanItem[] {
   if (!Array.isArray(rows)) {
-    return []
+    return [];
   }
 
   return rows.reduce<PackagePlanItem[]>((plan, row: any) => {
-    const packageSpecG = readPositiveInteger(row?.packageSpecG)
-    const packageCount = readPositiveInteger(row?.packageCount)
+    const packageSpecG = readPositiveInteger(row?.packageSpecG);
+    const packageCount = readPositiveInteger(row?.packageCount);
 
     if (packageSpecG > 0 && packageCount > 0) {
-      plan.push({ packageSpecG, packageCount })
+      plan.push({ packageSpecG, packageCount });
     }
 
-    return plan
-  }, [])
+    return plan;
+  }, []);
 }
 
 function resolvePackagePlan(
@@ -547,36 +630,38 @@ function resolvePackagePlan(
   totalPackages: number,
   perMealG: number,
 ): PackagePlanItem[] {
-  const storedPlan = normalizePackagePlanRows(storedConfig.packagePlan)
+  const storedPlan = normalizePackagePlanRows(storedConfig.packagePlan);
   if (storedPlan.length > 0) {
-    return storedPlan
+    return storedPlan;
   }
 
-  const storedRowPackageSpecG = readPositiveInteger(storedConfig.packageSpecG)
-  const storedRowPackageCount = readPositiveInteger(storedConfig.packageCount)
+  const storedRowPackageSpecG = readPositiveInteger(storedConfig.packageSpecG);
+  const storedRowPackageCount = readPositiveInteger(storedConfig.packageCount);
   if (storedRowPackageSpecG > 0 && storedRowPackageCount > 0) {
     return [
       {
         packageSpecG: storedRowPackageSpecG,
         packageCount: storedRowPackageCount,
       },
-    ]
+    ];
   }
 
-  const optionPlan = normalizePackagePlanRows(options.packagePlan)
+  const optionPlan = normalizePackagePlanRows(options.packagePlan);
   if (optionPlan.length > 0) {
-    return optionPlan
+    return optionPlan;
   }
 
-  const optionRowPackageSpecG = readPositiveInteger(options.packageSpecG)
-  const optionRowPackageCount = readPositiveInteger(options.packageCount || options.totalPackages)
+  const optionRowPackageSpecG = readPositiveInteger(options.packageSpecG);
+  const optionRowPackageCount = readPositiveInteger(
+    options.packageCount || options.totalPackages,
+  );
   if (optionRowPackageSpecG > 0 && optionRowPackageCount > 0) {
     return [
       {
         packageSpecG: optionRowPackageSpecG,
         packageCount: optionRowPackageCount,
       },
-    ]
+    ];
   }
 
   if (dailyIntakeG > 0 && mealsPerDay > 0) {
@@ -584,7 +669,7 @@ function resolvePackagePlan(
       dailyIntakeG,
       mealsPerDay,
       days: cycleDays,
-    })
+    });
   }
 
   if (perMealG > 0 && totalPackages > 0) {
@@ -593,10 +678,10 @@ function resolvePackagePlan(
         packageSpecG: perMealG,
         packageCount: totalPackages,
       },
-    ]
+    ];
   }
 
-  return []
+  return [];
 }
 
 function buildDirectBuyPrice(
@@ -605,47 +690,64 @@ function buildDirectBuyPrice(
 ) {
   const amountProduct = Math.max(
     0,
-    readNumberValue(storedConfig.amountProduct, readNumberValue(options.amountProduct, 0)),
-  )
+    readNumberValue(
+      storedConfig.amountProduct,
+      readNumberValue(options.amountProduct, 0),
+    ),
+  );
   const amountShipping = Math.max(
     0,
-    readNumberValue(storedConfig.amountShipping, readNumberValue(options.amountShipping, 0)),
-  )
-  const amountTotalFallback = amountProduct + amountShipping
+    readNumberValue(
+      storedConfig.amountShipping,
+      readNumberValue(options.amountShipping, 0),
+    ),
+  );
+  const amountTotalFallback = amountProduct + amountShipping;
   const amountTotal = Math.max(
     0,
-    readNumberValue(storedConfig.amountTotal, readNumberValue(options.amountTotal, amountTotalFallback)),
-  )
+    readNumberValue(
+      storedConfig.amountTotal,
+      readNumberValue(options.amountTotal, amountTotalFallback),
+    ),
+  );
 
   return {
     amountProduct,
     amountShipping,
     amountTotal: amountTotal > 0 ? amountTotal : amountTotalFallback,
-  }
+  };
 }
 
 function buildDirectBuyOrderConfig(
   storedConfig: Record<string, any>,
   options: Record<string, any>,
 ): OrderConfig {
-  const dogId = readTextValue(storedConfig.dogId, options.dogId)
-  const dogName = readTextValue(storedConfig.dogName, options.dogName)
-  const breedName = readTextValue(storedConfig.breedName, options.breedName)
-  const weightKg = readPositiveNumber(storedConfig.weightKg, options.weightKg)
-  const mealsPerDay = readPositiveInteger(storedConfig.mealsPerDay, options.mealsPerDay || 2) || 2
+  const dogId = readTextValue(storedConfig.dogId, options.dogId);
+  const dogName = readTextValue(storedConfig.dogName, options.dogName);
+  const breedName = readTextValue(storedConfig.breedName, options.breedName);
+  const weightKg = readPositiveNumber(storedConfig.weightKg, options.weightKg);
+  const mealsPerDay =
+    readPositiveInteger(storedConfig.mealsPerDay, options.mealsPerDay || 2) ||
+    2;
   const optionDailyIntakeG = readPositiveNumber(
     options.dailyIntakeG,
     readPositiveNumber(options.perMealG, 0) * mealsPerDay,
-  )
-  const dailyIntakeG = readPositiveNumber(storedConfig.dailyIntakeG, optionDailyIntakeG)
+  );
+  const dailyIntakeG = readPositiveNumber(
+    storedConfig.dailyIntakeG,
+    optionDailyIntakeG,
+  );
   const perMealG = readPositiveNumber(
     storedConfig.perMealG,
     readPositiveNumber(
       options.perMealG,
       dailyIntakeG > 0 && mealsPerDay > 0 ? dailyIntakeG / mealsPerDay : 0,
     ),
-  )
-  const cycleDays = readPositiveInteger(storedConfig.cycleDays, options.cycleDays)
+  );
+  const cycleDays = readPositiveInteger(
+    storedConfig.cycleDays,
+    options.cycleDays,
+  );
   const packagePlan = resolvePackagePlan(
     storedConfig,
     options,
@@ -654,25 +756,37 @@ function buildDirectBuyOrderConfig(
     cycleDays,
     readPositiveInteger(storedConfig.totalPackages, options.totalPackages),
     perMealG || readPositiveInteger(options.perMealG),
-  )
-  const packagePlanTotal = getPackagePlanTotal(packagePlan)
-  const totalPackages = readPositiveInteger(storedConfig.totalPackages, options.totalPackages) || packagePlanTotal.totalPackages
-  const totalGrams = readPositiveNumber(storedConfig.totalGrams, readPositiveNumber(options.totalGrams, packagePlanTotal.totalGrams))
+  );
+  const packagePlanTotal = getPackagePlanTotal(packagePlan);
+  const totalPackages =
+    readPositiveInteger(storedConfig.totalPackages, options.totalPackages) ||
+    packagePlanTotal.totalPackages;
+  const totalGrams = readPositiveNumber(
+    storedConfig.totalGrams,
+    readPositiveNumber(options.totalGrams, packagePlanTotal.totalGrams),
+  );
   const estimatedFeedDays = readTextValue(
     storedConfig.estimatedFeedDays,
-    options.estimatedFeedDays || estimateFeedDays(totalGrams, dailyIntakeG || optionDailyIntakeG),
-  )
+    options.estimatedFeedDays ||
+      estimateFeedDays(totalGrams, dailyIntakeG || optionDailyIntakeG),
+  );
   const ingredientSourcePlan = readTextValue(
     storedConfig.ingredientSourcePlan,
     options.ingredientSourcePlan,
-  )
+  );
   const ingredientSourcePlanLabel = readTextValue(
     storedConfig.ingredientSourcePlanLabel,
-    options.ingredientSourcePlanLabel || (ingredientSourcePlan ? getSourcePlanLabel(ingredientSourcePlan as any) : ''),
-  )
-  const recipeId = readTextValue(storedConfig.recipeId, options.recipeId)
-  const recipeName = readTextValue(storedConfig.recipeName, options.recipeName)
-  const recipeCoverImage = readTextValue(storedConfig.recipeCoverImage, options.recipeCoverImage)
+    options.ingredientSourcePlanLabel ||
+      (ingredientSourcePlan
+        ? getSourcePlanLabel(ingredientSourcePlan as any)
+        : ''),
+  );
+  const recipeId = readTextValue(storedConfig.recipeId, options.recipeId);
+  const recipeName = readTextValue(storedConfig.recipeName, options.recipeName);
+  const recipeCoverImage = readTextValue(
+    storedConfig.recipeCoverImage,
+    options.recipeCoverImage,
+  );
 
   return {
     dogId,
@@ -685,30 +799,38 @@ function buildDirectBuyOrderConfig(
     totalPackages,
     cycleDays,
     totalGrams,
-    estimatedFeedDays: estimatedFeedDays || estimateFeedDays(totalGrams, dailyIntakeG || optionDailyIntakeG),
+    estimatedFeedDays:
+      estimatedFeedDays ||
+      estimateFeedDays(totalGrams, dailyIntakeG || optionDailyIntakeG),
     packagePlan,
     ingredientSourcePlan,
     ingredientSourcePlanLabel,
-    preparationMethod: (readTextValue(storedConfig.preparationMethod, options.preparationMethod) || 'CHOPPED') as 'CHOPPED' | 'DICED',
-    cookingMethod: (readTextValue(storedConfig.cookingMethod, options.cookingMethod) || 'RAW') as 'RAW' | 'COOKED',
+    preparationMethod: (readTextValue(
+      storedConfig.preparationMethod,
+      options.preparationMethod,
+    ) || 'CHOPPED') as 'CHOPPED' | 'DICED',
+    cookingMethod: (readTextValue(
+      storedConfig.cookingMethod,
+      options.cookingMethod,
+    ) || 'RAW') as 'RAW' | 'COOKED',
     recipeId,
     recipeName,
     recipeCoverImage,
-  }
+  };
 }
 
 // ========== 地址选择器相关 ==========
 async function openAddressSelector() {
   if (!selectedAddress.value) {
-    goToAddressList()
-    return
+    goToAddressList();
+    return;
   }
 
   try {
     const res = await request({
       url: '/addresses',
-      method: 'GET'
-    })
+      method: 'GET',
+    });
 
     if (res.code === 0 && res.data && res.data.length > 0) {
       addressList.value = res.data.map((addr: any) => ({
@@ -717,92 +839,95 @@ async function openAddressSelector() {
         phone: addr.phone,
         regionText: formatRegionText(addr.region),
         detailAddress: addr.detailAddress,
-        isDefault: addr.isDefault
-      }))
-      showAddressSelector.value = true
+        isDefault: addr.isDefault,
+      }));
+      showAddressSelector.value = true;
     }
   } catch (error) {
-    console.error('Load address list error:', error)
+    console.error('Load address list error:', error);
   }
 }
 
 function closeAddressSelector() {
-  showAddressSelector.value = false
+  showAddressSelector.value = false;
 }
 
 function selectAddress(addr: Address) {
-  selectedAddress.value = addr
-  showAddressSelector.value = false
+  selectedAddress.value = addr;
+  showAddressSelector.value = false;
   uni.showToast({
     title: '已切换地址',
-    icon: 'success'
-  })
+    icon: 'success',
+  });
 }
 
 // ========== 制作日期相关 ==========
 function openProductionDatePicker() {
-  showProductionDatePicker.value = true
+  showProductionDatePicker.value = true;
 }
 
 function onProductionDateChange(e: any) {
-  selectedProductionDate.value = e.detail.value
-  showProductionDatePicker.value = false
+  selectedProductionDate.value = e.detail.value;
+  showProductionDatePicker.value = false;
   console.log('[Checkout] Production date changed:', {
     productionDate: selectedProductionDate.value,
-    shippingDate: calculatedShippingDate.value
-  })
+    shippingDate: calculatedShippingDate.value,
+  });
 }
 
 // ========== 数据加载 ==========
 onMounted(() => {
-  const pages = getCurrentPages()
-  const currentPage = pages[pages.length - 1] as any
-  const options = currentPage.options || {}
+  const pages = getCurrentPages();
+  const currentPage = pages[pages.length - 1] as any;
+  const options = currentPage.options || {};
 
-  console.log('[Checkout] URL options:', options)
+  console.log('[Checkout] URL options:', options);
 
-  loadDirectBuyItem(options)
-  loadDefaultAddress()
-  selectedProductionDate.value = defaultProductionDate.value
-})
+  loadDirectBuyItem(options);
+  loadDefaultAddress();
+  selectedProductionDate.value = defaultProductionDate.value;
+});
 
 // onShow - 每次页面显示时重新加载地址
-onShow(() => {
+onShow(async () => {
+  if (!(await ensurePhoneBound())) {
+    return;
+  }
   // 只在已经加载过订单配置后才重新加载地址（避免首次加载时重复请求）
   if (pricingSnapshotId.value) {
-    console.log('[Checkout] onShow - reloading default address')
-    loadDefaultAddress()
+    console.log('[Checkout] onShow - reloading default address');
+    loadDefaultAddress();
   }
-})
+});
 
 // 监听地址选择事件（从地址列表返回时）
 onMounted(() => {
   const handleAddressSelected = (data: any) => {
-    console.log('[Checkout] Address selected event:', data)
+    console.log('[Checkout] Address selected event:', data);
     if (data && data.addressId) {
       // 加载选中的地址
-      loadAddressById(data.addressId)
+      loadAddressById(data.addressId);
     }
-  }
+  };
 
-  uni.$on('address-selected', handleAddressSelected)
+  uni.$on('address-selected', handleAddressSelected);
 
   // 清理事件监听器
   onUnmounted(() => {
-    uni.$off('address-selected', handleAddressSelected)
-  })
-})
+    uni.$off('address-selected', handleAddressSelected);
+  });
+});
 
 // 根据ID加载地址
 async function loadAddressById(addressId: string) {
   try {
     const res = await request({
       url: '/addresses',
-      method: 'GET'
-    })
+      method: 'GET',
+    });
 
     if (res.code === 0 && res.data && res.data.length > 0) {
-      const address = res.data.find((addr: any) => addr.id === addressId)
+      const address = res.data.find((addr: any) => addr.id === addressId);
       if (address) {
         selectedAddress.value = {
           id: address.id,
@@ -810,33 +935,35 @@ async function loadAddressById(addressId: string) {
           phone: address.phone,
           regionText: formatRegionText(address.region),
           detailAddress: address.detailAddress,
-          isDefault: address.isDefault
-        }
+          isDefault: address.isDefault,
+        };
         uni.showToast({
           title: '已选择地址',
-          icon: 'success'
-        })
+          icon: 'success',
+        });
       }
     }
   } catch (error) {
-    console.error('Load address by ID error:', error)
+    console.error('Load address by ID error:', error);
   }
 }
 
 function loadDirectBuyItem(options: any) {
-  const rawStoredConfig = (uni.getStorageSync('direct_buy_order_config') || {}) as Record<string, any>
-  const optionSnapshotId = readTextValue(options.snapshotId)
-  const storedSnapshotId = readTextValue(rawStoredConfig.snapshotId)
+  const rawStoredConfig = (uni.getStorageSync('direct_buy_order_config') ||
+    {}) as Record<string, any>;
+  const optionSnapshotId = readTextValue(options.snapshotId);
+  const storedSnapshotId = readTextValue(rawStoredConfig.snapshotId);
   const shouldUseStoredConfig = Boolean(
-    storedSnapshotId && (!optionSnapshotId || storedSnapshotId === optionSnapshotId),
-  )
-  const storedConfig = shouldUseStoredConfig ? rawStoredConfig : {}
+    storedSnapshotId &&
+    (!optionSnapshotId || storedSnapshotId === optionSnapshotId),
+  );
+  const storedConfig = shouldUseStoredConfig ? rawStoredConfig : {};
 
-  pricingSnapshotId.value = optionSnapshotId || storedSnapshotId || null
-  console.log('[Checkout] Pricing Snapshot ID:', pricingSnapshotId.value)
+  pricingSnapshotId.value = optionSnapshotId || storedSnapshotId || null;
+  console.log('[Checkout] Pricing Snapshot ID:', pricingSnapshotId.value);
 
-  directBuyPrice.value = buildDirectBuyPrice(storedConfig, options)
-  orderConfig.value = buildDirectBuyOrderConfig(storedConfig, options)
+  directBuyPrice.value = buildDirectBuyPrice(storedConfig, options);
+  orderConfig.value = buildDirectBuyOrderConfig(storedConfig, options);
 
   const item: CartItem = {
     id: 'direct-buy-temp',
@@ -851,30 +978,33 @@ function loadDirectBuyItem(options: any) {
     dailyIntakeG: orderConfig.value.dailyIntakeG,
     totalGrams: orderConfig.value.totalGrams,
     packageCount: orderConfig.value.totalPackages,
-    packageSpecG: orderConfig.value.packagePlan[0]?.packageSpecG || orderConfig.value.perMealG,
+    packageSpecG:
+      orderConfig.value.packagePlan[0]?.packageSpecG ||
+      orderConfig.value.perMealG,
     unitPrice: 0,
     totalPrice: directBuyPrice.value.amountTotal,
     preparationMethod: orderConfig.value.preparationMethod,
-    cookingMethod: orderConfig.value.cookingMethod
-  }
+    cookingMethod: orderConfig.value.cookingMethod,
+  };
 
-  cartItems.value = [item]
+  cartItems.value = [item];
   console.log('[Checkout] Price display:', {
     amountProduct: directBuyPrice.value.amountProduct,
     amountShipping: directBuyPrice.value.amountShipping,
-    amountTotal: directBuyPrice.value.amountTotal
-  })
+    amountTotal: directBuyPrice.value.amountTotal,
+  });
 }
 
 async function loadDefaultAddress() {
   try {
     const res = await request({
       url: '/addresses',
-      method: 'GET'
-    })
+      method: 'GET',
+    });
 
     if (res.code === 0 && res.data && res.data.length > 0) {
-      const defaultAddr = res.data.find((addr: any) => addr.isDefault) || res.data[0]
+      const defaultAddr =
+        res.data.find((addr: any) => addr.isDefault) || res.data[0];
       if (defaultAddr) {
         selectedAddress.value = {
           id: defaultAddr.id,
@@ -882,30 +1012,30 @@ async function loadDefaultAddress() {
           phone: defaultAddr.phone,
           regionText: formatRegionText(defaultAddr.region),
           detailAddress: defaultAddr.detailAddress,
-          isDefault: defaultAddr.isDefault
-        }
+          isDefault: defaultAddr.isDefault,
+        };
       }
     }
   } catch (error) {
-    console.error('Load address error:', error)
+    console.error('Load address error:', error);
   }
 }
 
 function formatRegionText(region: any): string {
-  if (!region) return ''
-  if (typeof region === 'string') return region
-  const parts = [region.province, region.city, region.district].filter(Boolean)
-  return parts.join('')
+  if (!region) return '';
+  if (typeof region === 'string') return region;
+  const parts = [region.province, region.city, region.district].filter(Boolean);
+  return parts.join('');
 }
 
 function getPrimaryPackageSpecG(plan: PackagePlanItem[]): number {
   const primaryRow = [...plan].sort(
     (left, right) =>
-      right.packageCount - left.packageCount
-      || right.packageSpecG - left.packageSpecG,
-  )[0]
+      right.packageCount - left.packageCount ||
+      right.packageSpecG - left.packageSpecG,
+  )[0];
 
-  return primaryRow?.packageSpecG || orderConfig.value.perMealG || 1
+  return primaryRow?.packageSpecG || orderConfig.value.perMealG || 1;
 }
 
 function buildPricingPreviewItemFromOrderConfig() {
@@ -919,29 +1049,39 @@ function buildPricingPreviewItemFromOrderConfig() {
     dailyIntakeG: orderConfig.value.dailyIntakeG,
     preparationMethod: orderConfig.value.preparationMethod || undefined,
     cookingMethod: orderConfig.value.cookingMethod || undefined,
-  }
+    customRequirements: customerNote.value.trim() || undefined,
+  };
 }
 
 function isPricingSnapshotExpiredError(error: any): boolean {
-  const message = normalizeText(error?.message || error)
-  return message.includes('Pricing snapshot has expired')
-    || message.includes('Pricing snapshot not found or expired')
-    || message.includes('价格快照已失效')
+  const message = normalizeText(error?.message || error);
+  return (
+    message.includes('Pricing snapshot has expired') ||
+    message.includes('Pricing snapshot not found or expired') ||
+    message.includes('价格快照已失效')
+  );
 }
 
-async function refreshDirectBuyPricingSnapshot(): Promise<{ success: boolean; priceChanged: boolean }> {
-  if (!orderConfig.value.dogId || !orderConfig.value.recipeId || orderConfig.value.packagePlan.length === 0) {
+async function refreshDirectBuyPricingSnapshot(): Promise<{
+  success: boolean;
+  priceChanged: boolean;
+}> {
+  if (
+    !orderConfig.value.dogId ||
+    !orderConfig.value.recipeId ||
+    orderConfig.value.packagePlan.length === 0
+  ) {
     uni.showToast({
       title: '价格已过期，请返回重新下单',
       icon: 'none',
-    })
-    return { success: false, priceChanged: false }
+    });
+    return { success: false, priceChanged: false };
   }
 
-  const previousAmount = directBuyPrice.value.amountTotal
+  const previousAmount = directBuyPrice.value.amountTotal;
 
   try {
-    uni.showLoading({ title: '更新价格...' })
+    uni.showLoading({ title: '更新价格...' });
     const res = await request({
       url: '/orders/pricing/preview',
       method: 'POST',
@@ -953,67 +1093,71 @@ async function refreshDirectBuyPricingSnapshot(): Promise<{ success: boolean; pr
         addressId: selectedAddress.value?.id,
         items: [buildPricingPreviewItemFromOrderConfig()],
       },
-    })
+    });
 
     if (res.code !== 0 || !res.data?.snapshotId) {
-      throw new Error(res.message || '价格刷新失败')
+      throw new Error(res.message || '价格刷新失败');
     }
 
     const refreshedPrice = {
       amountProduct: res.data.amountProduct || 0,
       amountShipping: res.data.amountShipping || 0,
       amountTotal: res.data.amountTotal || 0,
-    }
+    };
 
-    pricingSnapshotId.value = res.data.snapshotId
-    directBuyPrice.value = refreshedPrice
-    const storedConfig = (uni.getStorageSync('direct_buy_order_config') || {}) as Record<string, any>
+    pricingSnapshotId.value = res.data.snapshotId;
+    directBuyPrice.value = refreshedPrice;
+    const storedConfig = (uni.getStorageSync('direct_buy_order_config') ||
+      {}) as Record<string, any>;
     uni.setStorageSync('direct_buy_order_config', {
       ...storedConfig,
       snapshotId: pricingSnapshotId.value,
       amountProduct: refreshedPrice.amountProduct,
       amountShipping: refreshedPrice.amountShipping,
       amountTotal: refreshedPrice.amountTotal,
-    })
+    });
 
     return {
       success: true,
-      priceChanged: Math.abs(refreshedPrice.amountTotal - previousAmount) >= 0.01,
-    }
+      priceChanged:
+        Math.abs(refreshedPrice.amountTotal - previousAmount) >= 0.01,
+    };
   } catch (error) {
-    console.error('Refresh pricing snapshot error:', error)
+    console.error('Refresh pricing snapshot error:', error);
     uni.showToast({
       title: '价格已过期，请返回重新下单',
       icon: 'none',
-    })
-    return { success: false, priceChanged: false }
+    });
+    return { success: false, priceChanged: false };
   } finally {
-    uni.hideLoading()
+    uni.hideLoading();
   }
 }
 
-// ========== 订单提交和支付 ==========
+// ========== 订单提交 ==========
 async function submitOrder(hasRefreshedSnapshot = false) {
-  if (!canSubmitOrder.value) return
+  if (!canSubmitOrder.value) return;
 
   if (!selectedAddress.value) {
     uni.showToast({
       title: '请先选择收货地址',
-      icon: 'none'
-    })
-    return
+      icon: 'none',
+    });
+    return;
   }
 
   if (!pricingSnapshotId.value) {
     uni.showToast({
       title: '价格快照已失效',
-      icon: 'none'
-    })
-    return
+      icon: 'none',
+    });
+    return;
   }
 
+  let submittedOrderId = '';
+
   try {
-    uni.showLoading({ title: '提交中...' })
+    uni.showLoading({ title: '提交中...' });
 
     // 1. 创建订单
     const createRes = await request({
@@ -1024,68 +1168,87 @@ async function submitOrder(hasRefreshedSnapshot = false) {
         type: 'FRESH_FOOD',
         addressId: selectedAddress.value!.id,
         snapshotId: pricingSnapshotId.value,
-        targetProductionDate: selectedProductionDate.value
-      }
-    })
+        targetProductionDate: selectedProductionDate.value,
+      },
+    });
 
     if (createRes.code !== 0) {
-      throw new Error(createRes.message || '创建订单失败')
+      throw new Error(createRes.message || '创建订单失败');
     }
 
-    const orderId = createRes.data.id
+    const orderId = createRes.data.id;
+    submittedOrderId = orderId;
 
     // 2. 确认订单
     const confirmRes = await request({
       url: `/orders/${orderId}/confirm`,
-      method: 'POST'
-    })
+      method: 'POST',
+    });
 
     if (confirmRes.code !== 0) {
-      throw new Error(confirmRes.message || '确认订单失败')
+      throw new Error(confirmRes.message || '确认订单失败');
     }
 
-    // 3. 跳转到订单详情页（不再调用支付接口）
-    uni.hideLoading()
+    uni.hideLoading();
+    uni.showToast({
+      title: '订单已生成',
+      icon: 'success',
+      duration: 1500,
+    });
+
     uni.redirectTo({
-      url: `/pages/order-detail/index?orderId=${orderId}`
-    })
+      url: `/pages/order-detail/index?orderId=${orderId}`,
+    });
   } catch (error: any) {
-    console.error('Submit order error:', error)
+    console.error('Submit order error:', error);
     if (isPricingSnapshotExpiredError(error) && !hasRefreshedSnapshot) {
-      uni.hideLoading()
-      const refreshed = await refreshDirectBuyPricingSnapshot()
-      if (!refreshed.success) return
+      uni.hideLoading();
+      const refreshed = await refreshDirectBuyPricingSnapshot();
+      if (!refreshed.success) return;
       if (refreshed.priceChanged) {
         uni.showToast({
           title: '价格已更新，请确认后重新提交',
           icon: 'none',
-        })
-        return
+        });
+        return;
       }
-      await submitOrder(true)
-      return
+      await submitOrder(true);
+      return;
     }
 
-    uni.showToast({
-      title: error.message || '提交失败',
-      icon: 'none'
-    })
+    if (submittedOrderId) {
+      uni.showModal({
+        title: '订单已生成',
+        content: `${error.message || '订单确认未完成'}，请前往订单详情核对后继续处理。`,
+        showCancel: false,
+        success: () => {
+          uni.redirectTo({
+            url: `/pages/order-detail/index?orderId=${submittedOrderId}`,
+          });
+        },
+      });
+    } else {
+      uni.showToast({
+        title: error.message || '提交失败',
+        icon: 'none',
+      });
+    }
   } finally {
-    uni.hideLoading()
+    uni.hideLoading();
   }
 }
 
 // ========== 页面跳转 ==========
 function goToAddressList() {
   uni.navigateTo({
-    url: '/pages/address-list/index?mode=select'
-  })
+    url: '/pages/address-list/index?mode=select',
+  });
 }
 
 function goToAddAddress() {
   uni.navigateTo({
-    url: '/pages/address-edit/index'
-  })
+    url: '/pages/address-edit/index',
+  });
 }
 </script>
 
@@ -1113,6 +1276,44 @@ function goToAddAddress() {
   font-size: 30rpx;
   font-weight: bold;
   color: #333;
+}
+
+.order-note-section {
+  display: flex;
+  flex-direction: column;
+}
+
+.order-note-input {
+  width: 100%;
+  min-height: 150rpx;
+  padding: 20rpx;
+  box-sizing: border-box;
+  border-radius: 12rpx;
+  background-color: #f8fafc;
+  font-size: 28rpx;
+  line-height: 1.6;
+  color: #333;
+}
+
+.order-note-footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20rpx;
+  margin-top: 14rpx;
+}
+
+.order-note-hint {
+  flex: 1;
+  font-size: 24rpx;
+  color: #8c8c8c;
+  line-height: 1.45;
+}
+
+.order-note-count {
+  flex-shrink: 0;
+  font-size: 24rpx;
+  color: #999;
 }
 
 /* 收货地址 */
@@ -1313,7 +1514,11 @@ function goToAddAddress() {
 .btn-manage-address {
   width: 100%;
   height: 88rpx;
-  line-height: 88rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   background-color: #fff;
   color: #1890ff;
   border: 2rpx solid #1890ff;
@@ -1765,7 +1970,7 @@ function goToAddAddress() {
   flex-shrink: 0;
   margin: 0;
   height: 84rpx;
-  line-height: 84rpx;
+  line-height: 1;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1969,7 +2174,11 @@ function goToAddAddress() {
 .btn-pay-confirm {
   width: 100%;
   height: 88rpx;
-  line-height: 88rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   background-color: #1890ff;
   color: #fff;
   border-radius: 44rpx;

@@ -71,6 +71,14 @@ export interface OrderItem {
   dailyIntakeG: number
   productionBatchId?: string
   allocatedAt?: string
+  dog?: {
+    id: string
+    name: string
+    breedName?: string
+    weightKg?: number
+    gender?: string
+  }
+  totalPrice?: number
 }
 
 /**
@@ -101,6 +109,7 @@ export interface OrderFinancialSummary {
   actualMargin: number | null
   shortageAdjustmentAmount: number
   requiresCustomerPayment: boolean
+  refundStatus: OrderRefundStatus | null
   adjustmentSummary: {
     totalIncreaseAmount: number
     totalDecreaseAmount: number
@@ -123,6 +132,44 @@ export interface OrderFinancialSummary {
     settledAt: string | null
     createdAt: string | null
   } | null
+}
+
+export interface OrderRefundStatus {
+  exists: boolean
+  success: boolean
+  status: string
+  statusText: string
+  amount: number
+  outRefundNo: string | null
+  refundId: string | null
+  successTime: string | null
+  createdAt: string | null
+  updatedAt: string | null
+}
+
+export interface OrderRefundRecord {
+  id: string
+  orderId: string
+  outRefundNo: string
+  refundId: string | null
+  amount: number
+  totalAmount: number
+  reason: string
+  source: string
+  status: string
+  statusText: string
+  success: boolean
+  operatorId: string | null
+  operatorName: string | null
+  operatorPhone: string | null
+  operatorRole: string | null
+  adjustmentId: string | null
+  errorMessage: string | null
+  requestedAt: string | null
+  notifiedAt: string | null
+  successTime: string | null
+  createdAt: string | null
+  updatedAt: string | null
 }
 
 export interface OrderSettlementAdjustment {
@@ -161,6 +208,24 @@ export interface Order {
   pricingBreakdownSnapshot?: PricingBreakdown
   dogId?: string
   addressId?: string
+  address?: {
+    id: string
+    recipientName: string
+    phone: string
+    region?: {
+      province?: string
+      city?: string
+      district?: string
+    }
+    regionText?: string
+    detailAddress?: string
+  } | null
+  customer?: {
+    id: string
+    nickname?: string | null
+    phone?: string | null
+    avatarUrl?: string | null
+  } | null
   trackingNumber?: string
   carrierCode?: string
   shippedAt?: string | null
@@ -172,7 +237,13 @@ export interface Order {
   transactionId?: string
   paidAt?: string | null
   paymentStatus?: PaymentStatus
+  refundStatus?: OrderRefundStatus | null
+  refundRecords?: OrderRefundRecord[]
   adminRemark?: string | null
+  aftersaleType?: string
+  aftersaleReason?: string
+  aftersaleSince?: string | null
+  aftersalePhotos?: string[]
 }
 
 /**
@@ -196,6 +267,8 @@ export interface OrderListItem extends Order {
  */
 export interface OrderStats {
   total: number
+  todayNew: number
+  paidRevenue: number
   pendingPayment: number
   paid: number
   purchasing: number
@@ -268,6 +341,51 @@ export interface CarrierConfig {
 export interface ShipRequest {
   carrierCode: string
   trackingNumber: string
+}
+
+/**
+ * 微信发货信息上传结果
+ */
+export interface WechatShippingUploadResult {
+  success: boolean
+  skipped?: boolean
+  message: string
+  response?: unknown
+}
+
+export interface WechatShippingUploadCandidate {
+  orderId: string
+  status: string
+  paymentStatus: string | null
+  transactionId: string | null
+  trackingNumber: string | null
+  carrierCode: string | null
+  shippedAt: string | null
+  customerName: string | null
+  customerPhone: string | null
+  lastUploadAt: string | null
+  lastSuccess: boolean | null
+  lastSkipped: boolean | null
+  lastMessage: string | null
+  reason: 'NO_UPLOAD_RECORD' | 'UPLOAD_FAILED' | 'UPLOAD_SKIPPED'
+}
+
+export interface WechatShippingUploadPendingSummary {
+  pendingCount: number
+  candidates: WechatShippingUploadCandidate[]
+}
+
+export interface WechatShippingBatchUploadResult {
+  total: number
+  success: number
+  failed: number
+  skipped: number
+  results: Array<{
+    orderId: string
+    success: boolean
+    skipped?: boolean
+    message: string
+  }>
 }
 
 /**

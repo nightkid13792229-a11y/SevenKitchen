@@ -10,6 +10,7 @@ import {
   BadRequestException,
   Optional,
   Logger,
+  ForbiddenException,
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import type { OrderRepository } from '../../domain/order/order.repository';
@@ -33,6 +34,7 @@ import {
 import type { OrderPackagePlanItem } from '../../domain/order';
 import type { PriceExplanationDto } from '../../interfaces/dto/orders/pricing-preview.dto';
 import {
+  AftersaleType,
   OrderType,
   OrderStatus,
   calculateDogEnergy,
@@ -130,6 +132,7 @@ export interface OrderFinancialSummaryDto {
   actualMargin: number | null;
   shortageAdjustmentAmount: number;
   requiresCustomerPayment: boolean;
+  refundStatus: OrderRefundStatusDto | null;
   adjustmentSummary: OrderSettlementAdjustmentSummaryDto;
   adjustments: OrderSettlementAdjustmentDto[];
   settlementStatus: 'PENDING' | 'SETTLED';
@@ -143,6 +146,44 @@ export interface OrderFinancialSummaryDto {
     settledAt: string | null;
     createdAt: string | null;
   } | null;
+}
+
+export interface OrderRefundStatusDto {
+  exists: boolean;
+  success: boolean;
+  status: string;
+  statusText: string;
+  amount: number;
+  outRefundNo: string | null;
+  refundId: string | null;
+  successTime: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface OrderRefundRecordDto {
+  id: string;
+  orderId: string;
+  outRefundNo: string;
+  refundId: string | null;
+  amount: number;
+  totalAmount: number;
+  reason: string;
+  source: string;
+  status: string;
+  statusText: string;
+  success: boolean;
+  operatorId: string | null;
+  operatorName: string | null;
+  operatorPhone: string | null;
+  operatorRole: string | null;
+  adjustmentId: string | null;
+  errorMessage: string | null;
+  requestedAt: string | null;
+  notifiedAt: string | null;
+  successTime: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
 }
 
 export interface OrderSettlementAdjustmentDto {
@@ -448,6 +489,7 @@ export class OrderService {
       adjustments,
       revenue,
     );
+    const refundStatus = this.getWechatRefundStatus(adjustments);
 
     return {
       orderId: order.id,
@@ -466,6 +508,7 @@ export class OrderService {
       requiresCustomerPayment:
         (latestSettlement?.requiresCustomerPayment ?? false) ||
         adjustmentSummary.pendingExtraPaymentAmount > 0,
+      refundStatus,
       adjustmentSummary,
       adjustments: adjustments.map((adjustment: any) =>
         this.mapOrderSettlementAdjustment(adjustment),
@@ -488,6 +531,49 @@ export class OrderService {
           }
         : null,
     };
+  }
+
+  async getOrderRefundStatus(
+    orderId: string,
+  ): Promise<OrderRefundStatusDto | null> {
+    const records = await this.prisma.orderRefundRecord.findMany({
+      where: { orderId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const recordStatus = this.getWechatRefundStatusFromRecords(records);
+    if (recordStatus) {
+      return recordStatus;
+    }
+
+    const adjustments = await this.prisma.orderSettlementAdjustment.findMany({
+      where: {
+        orderId,
+        sourceType: 'WECHAT_REFUND',
+        status: { not: 'CANCELLED' },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return this.getWechatRefundStatus(adjustments);
+  }
+
+  async getOrderRefundRecords(orderId: string): Promise<OrderRefundRecordDto[]> {
+    const records = await this.prisma.orderRefundRecord.findMany({
+      where: { orderId },
+      include: {
+        operator: {
+          select: {
+            nickname: true,
+            phone: true,
+            role: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return records.map((record) => this.mapOrderRefundRecord(record));
   }
 
   async createOrderSettlementAdjustment(
@@ -749,6 +835,124 @@ export class OrderService {
     }
 
     return computed;
+  }
+
+  private getWechatRefundStatus(adjustments: any[]): OrderRefundStatusDto | null {
+    const adjustment = adjustments.find(
+      (item) => item.sourceType === 'WECHAT_REFUND' && item.status !== 'CANCELLED',
+    );
+    if (!adjustment) return null;
+
+    const metadata = (adjustment.metadata ?? {}) as Record<string, any>;
+    const status = String(
+      metadata.refundStatus || metadata.wechatStatus || adjustment.status || 'PENDING',
+    );
+    const success = adjustment.status === 'SETTLED' || status === 'SUCCESS';
+
+    return {
+      exists: true,
+      success,
+      status,
+      statusText: this.getRefundStatusText(status, success),
+      amount: Math.abs(this.roundMoney(this.toNumber(adjustment.amount))),
+      outRefundNo: adjustment.sourceId ?? metadata.outRefundNo ?? null,
+      refundId: metadata.refundId ?? null,
+      successTime: metadata.successTime ?? adjustment.settledAt?.toISOString() ?? null,
+      createdAt: adjustment.createdAt?.toISOString() ?? null,
+      updatedAt: adjustment.updatedAt?.toISOString() ?? null,
+    };
+  }
+
+  private getWechatRefundStatusFromRecords(records: any[]): OrderRefundStatusDto | null {
+    if (records.length === 0) return null;
+
+    const record = records.find((item) => item.success) ?? records[0];
+    const status = String(record.status || 'PENDING');
+    const success = record.success === true || status === 'SUCCESS';
+
+    return {
+      exists: true,
+      success,
+      status,
+      statusText: record.statusText || this.getRefundStatusText(status, success),
+      amount: Math.abs(this.roundMoney(this.toNumber(record.amount))),
+      outRefundNo: record.outRefundNo ?? null,
+      refundId: record.refundId ?? null,
+      successTime: record.successTime?.toISOString() ?? null,
+      createdAt: record.createdAt?.toISOString() ?? null,
+      updatedAt: record.updatedAt?.toISOString() ?? null,
+    };
+  }
+
+  private mapOrderRefundRecord(record: any): OrderRefundRecordDto {
+    return {
+      id: record.id,
+      orderId: record.orderId,
+      outRefundNo: record.outRefundNo,
+      refundId: record.refundId ?? null,
+      amount: Math.abs(this.roundMoney(this.toNumber(record.amount))),
+      totalAmount: this.roundMoney(this.toNumber(record.totalAmount)),
+      reason: record.reason,
+      source: record.source,
+      status: record.status,
+      statusText:
+        record.statusText ||
+        this.getRefundStatusText(record.status, record.success === true),
+      success: record.success === true,
+      operatorId: record.operatorId ?? null,
+      operatorName:
+        record.operator?.nickname || record.operatorNameSnapshot || null,
+      operatorPhone: record.operator?.phone ?? null,
+      operatorRole: record.operator?.role ?? null,
+      adjustmentId: record.adjustmentId ?? null,
+      errorMessage: record.errorMessage ?? null,
+      requestedAt: record.requestedAt?.toISOString() ?? null,
+      notifiedAt: record.notifiedAt?.toISOString() ?? null,
+      successTime: record.successTime?.toISOString() ?? null,
+      createdAt: record.createdAt?.toISOString() ?? null,
+      updatedAt: record.updatedAt?.toISOString() ?? null,
+    };
+  }
+
+  private getRefundStatusText(status: string, success: boolean): string {
+    if (success) return '退款成功，钱款已原路退回';
+    const statusMap: Record<string, string> = {
+      PENDING: '退款处理中，等待微信确认',
+      PROCESSING: '退款处理中，等待微信确认',
+      ABNORMAL: '退款异常，请管理员到微信商户平台核查',
+      CLOSED: '退款已关闭，请管理员核查',
+      FAILED: '退款发起失败，未确认钱款退回',
+    };
+    return statusMap[status] || `退款状态：${status}`;
+  }
+
+  private async findStatusBeforeLatestAftersale(
+    orderId: string,
+  ): Promise<OrderStatus | null> {
+    try {
+      const history = await this.statusHistoryRepository.findByOrderId(orderId);
+      for (let index = history.length - 1; index >= 0; index--) {
+        const record = history[index];
+        if (record.toStatus === OrderStatus.AFTERSALE) {
+          return record.fromStatus;
+        }
+      }
+    } catch (error) {
+      console.error(
+        `[History] ERROR: Failed to find original aftersale status for order ${orderId}:`,
+        error,
+      );
+      throw error;
+    }
+
+    return null;
+  }
+
+  private normalizeOrderNote(value: unknown): string | null {
+    if (value === null || value === undefined) return null;
+    const text =
+      typeof value === 'string' ? value.trim() : JSON.stringify(value).trim();
+    return text ? text.slice(0, 200) : null;
   }
 
   private resolveOrderItemPackageInput(
@@ -1085,7 +1289,7 @@ export class OrderService {
       itemParams.quantityG,
       itemParams.packageCount,
       itemParams.packageSpecG,
-      null, // customRequirements
+      this.normalizeOrderNote(itemParams.customRequirements),
       dailyIntakeG,
       vacuumBagSpec, // vacuum bag specification
       null,
@@ -1661,6 +1865,7 @@ export class OrderService {
     paymentMethod: string = 'WECHAT',
     actor: 'customer' | 'staff' | 'admin' | 'system' = 'customer',
     actorId?: string | null,
+    transactionIdOverride?: string,
   ): Promise<Order> {
     const order = await this.orderRepository.findById(orderId);
     if (!order) {
@@ -1674,10 +1879,12 @@ export class OrderService {
 
     const fromStatus = order.status;
 
-    // Generate mock transaction ID: MOCK_<timestamp>_<random>
+    // Online payment callbacks provide the payment platform transaction ID.
+    // Legacy mock/manual calls keep the previous generated transaction format.
     const timestamp = Date.now();
     const random = Math.random().toString(36).substring(2, 9);
-    const transactionId = `MOCK_${timestamp}_${random}`;
+    const transactionId =
+      transactionIdOverride || `MOCK_${timestamp}_${random}`;
 
     // Record payment (sets paymentStatus, paidAt, transactionId, paymentMethod, and transitions to PAID)
     order.recordPayment(paymentMethod, transactionId);
@@ -2264,6 +2471,7 @@ export class OrderService {
     keyword?: string;
     startDate?: Date;
     endDate?: Date;
+    endDateExclusive?: Date;
     page?: number;
     pageSize?: number;
   }): Promise<{ list: any[]; total: number }> {
@@ -2287,13 +2495,16 @@ export class OrderService {
       where.type = params.type;
     }
 
-    if (params?.startDate || params?.endDate) {
+    if (params?.startDate || params?.endDate || params?.endDateExclusive) {
       where.createdAt = {};
       if (params.startDate) {
         where.createdAt.gte = params.startDate;
       }
       if (params.endDate) {
         where.createdAt.lte = params.endDate;
+      }
+      if (params.endDateExclusive) {
+        where.createdAt.lt = params.endDateExclusive;
       }
     }
 
@@ -2499,6 +2710,8 @@ export class OrderService {
    */
   async getOrderStats(): Promise<{
     total: number;
+    todayNew: number;
+    paidRevenue: number;
     pendingPayment: number;
     paid: number;
     purchasing: number;
@@ -2602,17 +2815,19 @@ export class OrderService {
     resolutionType: 'refunded' | 'remade' | 'resolved',
     actorId: string,
     adminNote?: string,
+    actorRole?: string,
   ): Promise<Order> {
     const order = await this.orderRepository.findById(orderId);
     if (!order) {
       throw new NotFoundException(`Order not found: ${orderId}`);
     }
 
-    const fromStatus = order.status;
-    order.resolveAftersale(resolutionType);
-    const savedOrder = await this.orderRepository.save(order);
+    if (order.aftersaleType === AftersaleType.REFUND && actorRole !== 'ADMIN') {
+      throw new ForbiddenException('退款申请仅管理员可以审核');
+    }
 
-    // Determine target status based on resolution type
+    const aftersaleType = order.aftersaleType;
+
     let targetStatus: OrderStatus;
     switch (resolutionType) {
       case 'refunded':
@@ -2622,9 +2837,15 @@ export class OrderService {
         targetStatus = OrderStatus.IN_PRODUCTION;
         break;
       case 'resolved':
-        targetStatus = OrderStatus.COMPLETED;
+        targetStatus =
+          (await this.findStatusBeforeLatestAftersale(orderId)) ??
+          OrderStatus.COMPLETED;
         break;
     }
+
+    const fromStatus = order.status;
+    order.resolveAftersale(resolutionType, targetStatus);
+    const savedOrder = await this.orderRepository.save(order);
 
     // Log status transition
     await this.logStatusTransition(
@@ -2714,6 +2935,45 @@ export class OrderService {
    */
   async getPendingAftersales(): Promise<Order[]> {
     return this.orderRepository.findByStatus(OrderStatus.AFTERSALE);
+  }
+
+  async getRefundAftersaleRecords(): Promise<Order[]> {
+    const pending = (await this.orderRepository.findByStatus(OrderStatus.AFTERSALE)).filter(
+      (order) => order.aftersaleType === AftersaleType.REFUND,
+    );
+
+    const refundedRecords = await this.prisma.order.findMany({
+      where: {
+        status: OrderStatus.CANCELLED,
+        cancellationReason: {
+          contains: '售后退款',
+        },
+      },
+      select: { id: true },
+      orderBy: [{ cancelledAt: 'desc' }, { createdAt: 'desc' }],
+      take: 100,
+    });
+
+    const refundRecordOrders = await this.prisma.orderRefundRecord.findMany({
+      select: { orderId: true },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+
+    const refunded = (
+      await Promise.all(
+        [...refundedRecords.map((record) => record.id), ...refundRecordOrders.map((record) => record.orderId)]
+          .map((orderId) => this.orderRepository.findById(orderId)),
+      )
+    ).filter((order): order is Order => Boolean(order));
+
+    const byId = new Map<string, Order>();
+    [...pending, ...refunded].forEach((order) => byId.set(order.id, order));
+    return Array.from(byId.values()).sort((a, b) => {
+      const aTime = (a.aftersaleSince || a.createdAt).getTime();
+      const bTime = (b.aftersaleSince || b.createdAt).getTime();
+      return bTime - aTime;
+    });
   }
 
   async listOrderCustomerAddresses(orderId: string): Promise<Address[]> {

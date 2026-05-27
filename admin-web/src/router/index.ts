@@ -126,6 +126,12 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "编辑食谱" },
       },
       {
+        path: "reviews",
+        name: "Reviews",
+        component: () => import("@/views/Reviews/index.vue"),
+        meta: { title: "评价管理" },
+      },
+      {
         path: "orders",
         name: "Orders",
         component: () => import("@/views/Orders/index.vue"),
@@ -136,6 +142,18 @@ const routes: RouteRecordRaw[] = [
         name: "OrderDetail",
         component: () => import("@/views/Orders/Detail.vue"),
         meta: { title: "订单详情" },
+      },
+      {
+        path: "aftersale",
+        name: "AftersaleManagement",
+        component: () => import("@/views/Aftersale/AftersaleManagement.vue"),
+        meta: { title: "售后工单" },
+      },
+      {
+        path: "refunds",
+        name: "RefundManagement",
+        component: () => import("@/views/Aftersale/RefundManagement.vue"),
+        meta: { title: "退款管理" },
       },
       {
         path: "inventory",
@@ -156,11 +174,35 @@ const routes: RouteRecordRaw[] = [
         meta: { title: "全局配置" },
       },
       {
+        path: "payment-config",
+        name: "PaymentConfig",
+        component: () => import("@/views/PaymentConfig.vue"),
+        meta: { title: "支付配置" },
+      },
+      {
+        path: "customer-service-config",
+        name: "CustomerServiceConfig",
+        component: () => import("@/views/CustomerServiceConfig.vue"),
+        meta: { title: "客服配置" },
+      },
+      {
+        path: "customer-service",
+        name: "CustomerServiceConversations",
+        component: () => import("@/views/CustomerServiceConversations.vue"),
+        meta: { title: "客服会话" },
+      },
+      {
         path: "purchasing",
         name: "Purchasing",
-        redirect: "/purchasing/reimbursements",
+        redirect: "/purchasing/lists",
         meta: { title: "采购管理" },
         children: [
+          {
+            path: "lists",
+            name: "PurchaseLists",
+            component: () => import("@/views/Purchasing/PurchaseLists.vue"),
+            meta: { title: "采购单管理" },
+          },
           {
             path: "reimbursements",
             name: "ReimbursementList",

@@ -3,7 +3,16 @@
  * Handles authentication endpoints
  */
 
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Body,
+  Query,
+  HttpCode,
+  HttpStatus,
+  UseGuards,
+} from '@nestjs/common';
 import {
   ApiTags,
   ApiOperation,
@@ -12,18 +21,30 @@ import {
   ApiProperty,
 } from '@nestjs/swagger';
 import { IsString } from 'class-validator';
+import type { AccountMigration, AccountMigrationStatus, Prisma, User } from '@prisma/client';
 import { JwtAuthService } from '../auth/jwt.service';
 import { ApiResponseDto } from '../dto/common/response.dto';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import { WechatService } from '../../infrastructure/wechat/wechat.service';
 import { SmsService } from '../../infrastructure/sms/sms.service';
-import { WechatLoginRequestDto } from '../dto/auth/wechat-login.dto';
+import {
+  BindWechatPhoneRequestDto,
+  ConfirmAccountMigrationRequestDto,
+  ConfirmPhoneMergeRequestDto,
+  StartAccountMigrationRequestDto,
+  VerifyMigrationPhoneRequestDto,
+  WechatLoginRequestDto,
+} from '../dto/auth/wechat-login.dto';
 import {
   PhoneLoginRequestDto,
   SendSmsRequestDto,
   SendSmsResponseDto,
 } from '../dto/auth/phone-login.dto';
 import * as bcrypt from 'bcrypt';
+import { AuthGuard, CurrentUser } from '../auth';
+import type { RequestUser } from '../auth';
+import { AdminGuard } from '../guards/role.guard';
+import { randomBytes } from 'crypto';
 
 export class LoginRequestDto {
   @ApiProperty({
@@ -55,9 +76,28 @@ export class AdminLoginRequestDto {
   password!: string;
 }
 
+export class AdminChangePasswordRequestDto {
+  @ApiProperty({
+    description: 'Current admin password',
+    example: 'admin123',
+  })
+  @IsString()
+  currentPassword!: string;
+
+  @ApiProperty({
+    description: 'New admin password',
+    example: 'new-password-123',
+  })
+  @IsString()
+  newPassword!: string;
+}
+
 @ApiTags('Auth')
 @Controller('api/v1/auth')
 export class AuthController {
+  private readonly migrationTokenTtlMs = 15 * 60 * 1000;
+  private readonly manualPhoneMigrationTtlMs = 7 * 24 * 60 * 60 * 1000;
+
   constructor(
     private readonly jwtAuthService: JwtAuthService,
     private readonly prisma: PrismaService,
@@ -161,14 +201,21 @@ export class AuthController {
       console.log('[WeChat Login] Received userInfo:', dto.userInfo);
 
       // Get WeChat user info
-      const wechatUser = await this.wechatService.code2Session(dto.code);
+      const wechatUser = await this.wechatService.code2Session(
+        dto.code,
+        this.normalizeAppId(dto.appId),
+      );
+      const appId = wechatUser.appId || this.normalizeAppId(dto.appId) || '';
+      console.log('[WeChat Login] Resolved AppID:', appId);
       console.log('[WeChat Login] WeChat openid:', wechatUser.openid);
       console.log('[WeChat Login] WeChat unionid:', wechatUser.unionid);
 
       // Find or create user
-      let user = await this.prisma.user.findUnique({
-        where: { wechatOpenid: wechatUser.openid },
-      });
+      let user = await this.findUserByWechatIdentity(
+        appId,
+        wechatUser.openid,
+        wechatUser.unionid,
+      );
 
       console.log('[WeChat Login] Found existing user:', !!user);
       if (user) {
@@ -219,6 +266,14 @@ export class AuthController {
         console.log('[WeChat Login] Updated user avatarUrl:', user.avatarUrl);
       }
 
+      user = await this.attachWechatIdentity(user, {
+        appId,
+        openid: wechatUser.openid,
+        unionid: wechatUser.unionid,
+        sessionKey: wechatUser.sessionKey,
+      });
+      const legacyMigration = await this.buildLegacyMigrationState(user.id);
+
       // Verify user is actually in database
       const verifyUser = await this.prisma.user.findUnique({
         where: { id: user.id },
@@ -267,12 +322,652 @@ export class AuthController {
           nickname: user.nickname || '微信用户',
           avatarUrl: user.avatarUrl,
           role: user.role,
+          phone: user.phone,
+          phoneBound: !!user.phone,
+          legacyMigrationStatus: legacyMigration.status,
+          legacyMigrationCompleted: legacyMigration.completed,
+          legacyMigration,
         },
+        appId,
+        phoneBound: !!user.phone,
+        legacyMigrationStatus: legacyMigration.status,
+        legacyMigrationCompleted: legacyMigration.completed,
       });
     } catch (error: any) {
       console.log('[WeChat Login] ERROR:', error.message);
       console.log('[WeChat Login] ERROR stack:', error.stack);
       return ApiResponseDto.error(500, error.message || 'WeChat login failed');
+    }
+  }
+
+  @Post('bind-phone')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Bind WeChat authorized phone number' })
+  async bindWechatPhone(
+    @CurrentUser() requestUser: RequestUser,
+    @Body() dto: BindWechatPhoneRequestDto,
+  ): Promise<any> {
+    try {
+      const phoneInfo = await this.wechatService.getPhoneNumber(
+        dto.code,
+        this.normalizeAppId(dto.appId),
+      );
+      const phone = phoneInfo.phoneNumber;
+      const currentUser = await this.prisma.user.findUnique({
+        where: { id: requestUser.userId },
+        include: this.userSummaryInclude(),
+      });
+
+      if (!currentUser) {
+        return ApiResponseDto.error(404, '当前用户不存在');
+      }
+
+      const pendingLegacyMigration =
+        await this.findLatestPendingMigrationByPhone(phone);
+      if (
+        pendingLegacyMigration &&
+        pendingLegacyMigration.sourceUserId !== currentUser.id
+      ) {
+        const sourceUser = await this.prisma.user.findUnique({
+          where: { id: pendingLegacyMigration.sourceUserId },
+          include: this.userSummaryInclude(),
+        });
+        if (sourceUser) {
+          const sourceSummary = this.buildUserSummary(sourceUser);
+          const sourceDataCount = this.getSyncableUserDataCount(sourceSummary);
+          if (sourceDataCount > 0) {
+            const updatedMigration = await this.prisma.accountMigration.update({
+              where: { id: pendingLegacyMigration.id },
+              data: {
+                status: 'PHONE_VERIFIED',
+                phone,
+                verifiedUserId: currentUser.id,
+                targetUserId: currentUser.id,
+                verifiedAt: new Date(),
+                metadata: {
+                  ...((pendingLegacyMigration.metadata as Record<
+                    string,
+                    unknown
+                  >) || {}),
+                  verifiedAppId: this.normalizeAppId(dto.appId) || null,
+                  phoneMasked: this.maskPhone(phone),
+                  sourceDataCount,
+                  matchedByBoundPhone: true,
+                },
+              },
+            });
+
+            return ApiResponseDto.success({
+              status: 'NEEDS_LEGACY_MIGRATION',
+              migrationToken: updatedMigration.token,
+              phone: this.maskPhone(phone),
+              sourceUser: sourceSummary,
+              sourceDataCount,
+              syncableSourceData: true,
+              needsConfirmation: true,
+              message: '发现旧版待同步资料，请确认是否同步到当前账号',
+            });
+          }
+        }
+      }
+
+      if (currentUser.phone === phone) {
+        return ApiResponseDto.success(this.buildBoundResponse(currentUser));
+      }
+
+      const existingUser = await this.prisma.user.findUnique({
+        where: { phone },
+        include: this.userSummaryInclude(),
+      });
+
+      if (existingUser && existingUser.id !== currentUser.id) {
+        const mergeToken = this.jwtAuthService.generatePhoneMergeToken({
+          sourceUserId: currentUser.id,
+          targetUserId: existingUser.id,
+          phone,
+        });
+
+        return ApiResponseDto.success({
+          status: 'NEEDS_CONFIRMATION',
+          phone: this.maskPhone(phone),
+          mergeToken,
+          targetUser: this.buildUserSummary(existingUser),
+          message: '检测到该手机号已有历史资料，请确认是否同步到当前账号',
+        });
+      }
+
+      const updatedUser = await this.prisma.user.update({
+        where: { id: currentUser.id },
+        data: { phone },
+        include: this.userSummaryInclude(),
+      });
+
+      return ApiResponseDto.success(this.buildBoundResponse(updatedUser));
+    } catch (error: any) {
+      console.error('[Bind Phone] ERROR:', error);
+      return ApiResponseDto.error(500, error.message || '绑定手机号失败');
+    }
+  }
+
+  @Post('confirm-phone-merge')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Confirm phone-based historical data merge' })
+  async confirmPhoneMerge(
+    @CurrentUser() requestUser: RequestUser,
+    @Body() dto: ConfirmPhoneMergeRequestDto,
+  ): Promise<any> {
+    try {
+      const payload = this.jwtAuthService.validatePhoneMergeToken(
+        dto.mergeToken,
+      );
+
+      if (payload.sourceUserId !== requestUser.userId) {
+        return ApiResponseDto.error(403, '合并确认已失效，请重新绑定手机号');
+      }
+
+      const mergedUser = await this.mergeUserAccounts(
+        payload.sourceUserId,
+        payload.targetUserId,
+        payload.phone,
+      );
+      const token = this.jwtAuthService.generateTokenForUser(
+        mergedUser.id,
+        mergedUser.role,
+      );
+
+      return ApiResponseDto.success({
+        status: 'MERGED',
+        token,
+        userId: mergedUser.id,
+        role: mergedUser.role,
+        phoneBound: true,
+        user: this.buildUserSummary(mergedUser),
+      });
+    } catch (error: any) {
+      console.error('[Confirm Phone Merge] ERROR:', error);
+      return ApiResponseDto.error(500, error.message || '同步历史资料失败');
+    }
+  }
+
+  @Post('migration/start')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Create a short-lived account migration token' })
+  async startAccountMigration(
+    @CurrentUser() requestUser: RequestUser,
+    @Body() dto: StartAccountMigrationRequestDto,
+  ): Promise<any> {
+    try {
+      const submittedPhone = this.normalizePhone(dto.phone);
+      if (dto.phone && !submittedPhone) {
+        return ApiResponseDto.error(400, '请输入正确的手机号');
+      }
+
+      const sourceUser = await this.prisma.user.findUnique({
+        where: { id: requestUser.userId },
+        include: this.userSummaryInclude(),
+      });
+      if (!sourceUser) {
+        return ApiResponseDto.error(403, '旧版账号不可用，请重新登录后再试');
+      }
+
+      const currentMigrationState = await this.buildLegacyMigrationState(
+        requestUser.userId,
+      );
+      if (currentMigrationState.completed) {
+        return ApiResponseDto.success({
+          status: 'CONFIRMED',
+          alreadyMigrated: true,
+          legacyMigrationCompleted: true,
+          legacyMigration: currentMigrationState,
+          sourceUser: this.buildUserSummary(sourceUser),
+        });
+      }
+      if (currentMigrationState.noSyncableData) {
+        return ApiResponseDto.success({
+          status: 'CONFIRMED',
+          noSyncableSourceData: true,
+          legacyMigrationCompleted: false,
+          legacyMigration: currentMigrationState,
+          sourceUser: this.buildUserSummary(sourceUser),
+          message: '未发现可同步的旧版资料，请直接使用新版小程序',
+        });
+      }
+      if (sourceUser.status !== 'ACTIVE') {
+        return ApiResponseDto.error(403, '旧版账号不可用，请重新登录后再试');
+      }
+
+      const now = new Date();
+      const reusableMigration = await this.prisma.accountMigration.findFirst({
+        where: {
+          sourceUserId: requestUser.userId,
+          status: { in: ['PENDING', 'PHONE_VERIFIED'] },
+          expiresAt: { gt: now },
+        },
+        orderBy: { updatedAt: 'desc' },
+      });
+      if (reusableMigration) {
+        const migration = submittedPhone
+          ? await this.prisma.accountMigration.update({
+              where: { id: reusableMigration.id },
+              data: {
+                phone: submittedPhone,
+                metadata: {
+                  ...((reusableMigration.metadata as Record<string, unknown>) ||
+                    {}),
+                  sourceAppId: this.normalizeAppId(dto.appId) || null,
+                  sourcePhoneSubmitted: true,
+                  sourcePhoneSubmittedAt: now.toISOString(),
+                },
+              },
+            })
+          : reusableMigration;
+
+        return ApiResponseDto.success({
+          status: migration.status,
+          migrationToken: migration.token,
+          expiresAt: migration.expiresAt,
+          phone: migration.phone
+            ? this.maskPhone(migration.phone)
+            : null,
+          phoneVerified: migration.status === 'PHONE_VERIFIED',
+          needsConfirmation: migration.status === 'PHONE_VERIFIED',
+          sourceUser: this.buildUserSummary(sourceUser),
+        });
+      }
+
+      await this.prisma.accountMigration.updateMany({
+        where: {
+          sourceUserId: requestUser.userId,
+          status: { in: ['PENDING', 'PHONE_VERIFIED'] },
+        },
+        data: {
+          status: 'CANCELLED',
+          cancelledAt: now,
+        },
+      });
+
+      const token = randomBytes(24).toString('hex');
+      const expiresAt = new Date(
+        now.getTime() +
+          (submittedPhone
+            ? this.manualPhoneMigrationTtlMs
+            : this.migrationTokenTtlMs),
+      );
+      const migration = await this.prisma.accountMigration.create({
+        data: {
+          token,
+          sourceUserId: requestUser.userId,
+          phone: submittedPhone,
+          status: 'PENDING',
+          expiresAt,
+          metadata: {
+            sourceAppId: this.normalizeAppId(dto.appId) || null,
+            sourcePhoneSubmitted: !!submittedPhone,
+            sourcePhoneSubmittedAt: submittedPhone ? now.toISOString() : null,
+          },
+        },
+      });
+
+      return ApiResponseDto.success({
+        status: migration.status,
+        migrationToken: migration.token,
+        expiresAt: migration.expiresAt,
+        phone: migration.phone ? this.maskPhone(migration.phone) : null,
+        sourceUser: this.buildUserSummary(sourceUser),
+      });
+    } catch (error: any) {
+      console.error('[Account Migration Start] ERROR:', error);
+      return ApiResponseDto.error(500, error.message || '创建迁移凭证失败');
+    }
+  }
+
+  @Post('migration/verify-phone')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  @ApiOperation({
+    summary:
+      'Verify phone in the new miniapp and prepare account migration confirmation',
+  })
+  async verifyAccountMigrationPhone(
+    @CurrentUser() requestUser: RequestUser,
+    @Body() dto: VerifyMigrationPhoneRequestDto,
+  ): Promise<any> {
+    try {
+      const phoneInfo = await this.wechatService.getPhoneNumber(
+        dto.code,
+        this.normalizeAppId(dto.appId),
+      );
+      const phone = phoneInfo.phoneNumber;
+
+      const migration = dto.migrationToken
+        ? await this.getUsableMigration(dto.migrationToken)
+        : await this.findLatestPendingMigrationByPhone(phone);
+      if (!migration) {
+        return ApiResponseDto.error(
+          404,
+          '没有找到旧版待迁移资料，请先在旧版小程序填写同一个手机号',
+        );
+      }
+      if (migration.phone && migration.phone !== phone) {
+        return ApiResponseDto.error(
+          400,
+          '新版授权手机号与旧版填写手机号不一致，请返回旧版重新填写',
+        );
+      }
+
+      const [sourceUser, verifiedUser] = await Promise.all([
+        this.prisma.user.findUnique({
+          where: { id: migration.sourceUserId },
+          include: this.userSummaryInclude(),
+        }),
+        this.prisma.user.findUnique({
+          where: { id: requestUser.userId },
+          include: this.userSummaryInclude(),
+        }),
+      ]);
+
+      if (!sourceUser) {
+        return ApiResponseDto.error(400, '旧版客户资料不存在，请重新从旧版小程序进入');
+      }
+      if (!verifiedUser) {
+        return ApiResponseDto.error(400, '新版客户账号不存在，请重新登录新版小程序');
+      }
+
+      const existingPhoneUser = await this.prisma.user.findUnique({
+        where: { phone },
+        include: this.userSummaryInclude(),
+      });
+
+      const finalTargetUser = existingPhoneUser || verifiedUser;
+      const sourceSummary = this.buildUserSummary(sourceUser);
+      const verifiedSummary = this.buildUserSummary(verifiedUser);
+      const targetSummary = this.buildUserSummary(finalTargetUser);
+      const sourceDataCount = this.getSyncableUserDataCount(sourceSummary);
+      const baseMigrationMetadata = {
+        ...((migration.metadata as Record<string, unknown>) || {}),
+        verifiedAppId: this.normalizeAppId(dto.appId) || null,
+        phoneMasked: this.maskPhone(phone),
+        sourceDataCount,
+      };
+
+      if (sourceDataCount <= 0) {
+        const updatedMigration = await this.prisma.accountMigration.update({
+          where: { id: migration.id },
+          data: {
+            status: 'CONFIRMED',
+            phone,
+            verifiedUserId: requestUser.userId,
+            targetUserId: finalTargetUser.id,
+            verifiedAt: new Date(),
+            confirmedAt: new Date(),
+            metadata: {
+              ...baseMigrationMetadata,
+              migrationOutcome: 'NO_LEGACY_DATA',
+            },
+          },
+        });
+
+        return ApiResponseDto.success({
+          status: updatedMigration.status,
+          migrationToken: updatedMigration.token,
+          phone: this.maskPhone(phone),
+          sourceUser: sourceSummary,
+          verifiedUser: verifiedSummary,
+          targetUser: targetSummary,
+          sourceDataCount,
+          syncableSourceData: false,
+          noSyncableSourceData: true,
+          needsConfirmation: false,
+          migrationOutcome: 'NO_LEGACY_DATA',
+          message: '未发现可同步的旧版资料，请直接使用新版小程序',
+        });
+      }
+
+      if (sourceUser.id === finalTargetUser.id) {
+        const updatedMigration = await this.prisma.accountMigration.update({
+          where: { id: migration.id },
+          data: {
+            status: 'CONFIRMED',
+            phone,
+            verifiedUserId: requestUser.userId,
+            targetUserId: finalTargetUser.id,
+            verifiedAt: new Date(),
+            confirmedAt: new Date(),
+            metadata: {
+              ...baseMigrationMetadata,
+              migrationOutcome: 'ALREADY_LINKED',
+            },
+          },
+        });
+
+        return ApiResponseDto.success({
+          status: updatedMigration.status,
+          migrationToken: updatedMigration.token,
+          phone: this.maskPhone(phone),
+          sourceUser: sourceSummary,
+          verifiedUser: verifiedSummary,
+          targetUser: targetSummary,
+          sourceDataCount,
+          syncableSourceData: false,
+          alreadyLinked: true,
+          needsConfirmation: false,
+          migrationOutcome: 'ALREADY_LINKED',
+          message: '旧版资料已在当前新版账号中，无需重复同步',
+        });
+      }
+
+      const updatedMigration = await this.prisma.accountMigration.update({
+        where: { id: migration.id },
+        data: {
+          status: 'PHONE_VERIFIED',
+          phone,
+          verifiedUserId: requestUser.userId,
+          targetUserId: finalTargetUser.id,
+          verifiedAt: new Date(),
+          metadata: baseMigrationMetadata,
+        },
+      });
+
+      return ApiResponseDto.success({
+        status: updatedMigration.status,
+        migrationToken: updatedMigration.token,
+        phone: this.maskPhone(phone),
+        sourceUser: sourceSummary,
+        verifiedUser: verifiedSummary,
+        targetUser: targetSummary,
+        sourceDataCount,
+        syncableSourceData: true,
+        needsConfirmation: true,
+        willMergeVerifiedAccount: finalTargetUser.id !== verifiedUser.id,
+      });
+    } catch (error: any) {
+      console.error('[Account Migration Verify Phone] ERROR:', error);
+      return ApiResponseDto.error(500, error.message || '验证手机号失败');
+    }
+  }
+
+  @Post('migration/confirm')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Confirm account migration after phone verification' })
+  async confirmAccountMigration(
+    @CurrentUser() requestUser: RequestUser,
+    @Body() dto: ConfirmAccountMigrationRequestDto,
+  ): Promise<any> {
+    try {
+      const migration = await this.getUsableMigration(dto.migrationToken, [
+        'PHONE_VERIFIED',
+      ]);
+      if (!migration) {
+        return ApiResponseDto.error(404, '迁移凭证不存在或已失效，请重新进入迁移流程');
+      }
+      if (!migration.phone || !migration.targetUserId) {
+        return ApiResponseDto.error(400, '请先完成新版小程序手机号授权');
+      }
+      if (
+        migration.verifiedUserId !== requestUser.userId &&
+        migration.targetUserId !== requestUser.userId
+      ) {
+        return ApiResponseDto.error(403, '当前账号不能确认这次迁移');
+      }
+
+      const targetUser = await this.prisma.user.findUnique({
+        where: { id: migration.targetUserId },
+      });
+      if (!targetUser) {
+        return ApiResponseDto.error(400, '目标客户账号不存在，请重新进入迁移流程');
+      }
+
+      const sourceIds = [
+        migration.sourceUserId,
+        migration.verifiedUserId,
+      ].filter((id): id is string => !!id && id !== migration.targetUserId);
+      const uniqueSourceIds = [...new Set(sourceIds)];
+
+      let mergedUser: any = await this.prisma.user.findUnique({
+        where: { id: migration.targetUserId },
+        include: this.userSummaryInclude(),
+      });
+
+      for (const sourceUserId of uniqueSourceIds) {
+        mergedUser = await this.mergeUserAccounts(
+          sourceUserId,
+          migration.targetUserId,
+          migration.phone,
+        );
+      }
+
+      if (uniqueSourceIds.length === 0) {
+        mergedUser = await this.prisma.user.update({
+          where: { id: migration.targetUserId },
+          data: { phone: migration.phone, lastLoginAt: new Date() },
+          include: this.userSummaryInclude(),
+        });
+      }
+
+      await this.prisma.accountMigration.update({
+        where: { id: migration.id },
+        data: {
+          status: 'CONFIRMED',
+          confirmedAt: new Date(),
+        },
+      });
+
+      const token = this.jwtAuthService.generateTokenForUser(
+        mergedUser.id,
+        mergedUser.role,
+      );
+
+      return ApiResponseDto.success({
+        status: 'CONFIRMED',
+        token,
+        userId: mergedUser.id,
+        role: mergedUser.role,
+        phoneBound: true,
+        mergedSourceCount: uniqueSourceIds.length,
+        user: this.buildUserSummary(mergedUser),
+      });
+    } catch (error: any) {
+      console.error('[Account Migration Confirm] ERROR:', error);
+      return ApiResponseDto.error(500, error.message || '确认迁移失败');
+    }
+  }
+
+  @Get('migration/status')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Get current account migration status' })
+  async getAccountMigrationStatus(
+    @CurrentUser() requestUser: RequestUser,
+    @Query('migrationToken') migrationToken?: string,
+  ): Promise<any> {
+    try {
+      if (!migrationToken) {
+        return ApiResponseDto.error(400, 'migrationToken is required');
+      }
+
+      const migration = await this.prisma.accountMigration.findUnique({
+        where: { token: migrationToken },
+      });
+      if (!migration) {
+        return ApiResponseDto.error(404, '迁移凭证不存在');
+      }
+      const currentMigration = await this.expireMigrationIfNeeded(migration);
+
+      if (
+        currentMigration.status !== 'PENDING' &&
+        ![
+          currentMigration.sourceUserId,
+          currentMigration.verifiedUserId,
+          currentMigration.targetUserId,
+        ].includes(requestUser.userId)
+      ) {
+        return ApiResponseDto.error(403, '当前账号不能查看这次迁移');
+      }
+
+      const [sourceUser, verifiedUser, targetUser] = await Promise.all([
+        this.prisma.user.findUnique({
+          where: { id: currentMigration.sourceUserId },
+          include: this.userSummaryInclude(),
+        }),
+        currentMigration.verifiedUserId
+          ? this.prisma.user.findUnique({
+              where: { id: currentMigration.verifiedUserId },
+              include: this.userSummaryInclude(),
+            })
+          : Promise.resolve(null),
+        currentMigration.targetUserId
+          ? this.prisma.user.findUnique({
+              where: { id: currentMigration.targetUserId },
+              include: this.userSummaryInclude(),
+            })
+          : Promise.resolve(null),
+      ]);
+      const sourceSummary = sourceUser ? this.buildUserSummary(sourceUser) : null;
+      const metadata = (currentMigration.metadata as Record<string, unknown> | null) || {};
+
+      return ApiResponseDto.success({
+        status: currentMigration.status,
+        migrationToken: currentMigration.token,
+        expiresAt: currentMigration.expiresAt,
+        phone: currentMigration.phone ? this.maskPhone(currentMigration.phone) : null,
+        sourceUser: sourceSummary,
+        verifiedUser: verifiedUser ? this.buildUserSummary(verifiedUser) : null,
+        targetUser: targetUser ? this.buildUserSummary(targetUser) : null,
+        sourceDataCount: sourceSummary
+          ? this.getSyncableUserDataCount(sourceSummary)
+          : Number(metadata.sourceDataCount || 0),
+        syncableSourceData:
+          currentMigration.status === 'PHONE_VERIFIED' ||
+          (sourceSummary ? this.getSyncableUserDataCount(sourceSummary) > 0 : false),
+        noSyncableSourceData: metadata.migrationOutcome === 'NO_LEGACY_DATA',
+        alreadyLinked: metadata.migrationOutcome === 'ALREADY_LINKED',
+        migrationOutcome:
+          typeof metadata.migrationOutcome === 'string'
+            ? metadata.migrationOutcome
+            : undefined,
+        needsConfirmation: currentMigration.status === 'PHONE_VERIFIED',
+      });
+    } catch (error: any) {
+      console.error('[Account Migration Status] ERROR:', error);
+      return ApiResponseDto.error(500, error.message || '查询迁移状态失败');
+    }
+  }
+
+  @Get('migration/legacy-status')
+  @UseGuards(AuthGuard)
+  @ApiOperation({ summary: 'Get current user legacy migration status' })
+  async getLegacyMigrationStatus(
+    @CurrentUser() requestUser: RequestUser,
+  ): Promise<any> {
+    try {
+      const migration = await this.buildLegacyMigrationState(requestUser.userId);
+      return ApiResponseDto.success(migration);
+    } catch (error: any) {
+      console.error('[Legacy Migration Status] ERROR:', error);
+      return ApiResponseDto.error(500, error.message || '查询旧版迁移状态失败');
     }
   }
 
@@ -450,5 +1145,472 @@ export class AuthController {
     } catch (error: any) {
       return ApiResponseDto.error(500, error.message || '登录失败');
     }
+  }
+
+  @Post('change-password')
+  @HttpCode(HttpStatus.OK)
+  @UseGuards(AuthGuard, AdminGuard)
+  @ApiOperation({ summary: 'Change current admin password' })
+  @ApiResponse({
+    status: 200,
+    description: 'Password changed successfully',
+  })
+  async changeAdminPassword(
+    @CurrentUser() currentUser: RequestUser,
+    @Body() dto: AdminChangePasswordRequestDto,
+  ): Promise<any> {
+    try {
+      const currentPassword = dto.currentPassword?.trim();
+      const newPassword = dto.newPassword?.trim();
+
+      if (!currentPassword || !newPassword) {
+        return ApiResponseDto.error(400, '当前密码和新密码不能为空');
+      }
+
+      if (newPassword.length < 8 || newPassword.length > 64) {
+        return ApiResponseDto.error(400, '新密码长度需为8-64位');
+      }
+
+      const user = await this.prisma.user.findUnique({
+        where: { id: currentUser.userId },
+        select: {
+          id: true,
+          password: true,
+          status: true,
+        },
+      });
+
+      if (!user) {
+        return ApiResponseDto.error(404, '账号不存在');
+      }
+
+      if (user.status !== 'ACTIVE') {
+        return ApiResponseDto.error(403, '账号已被禁用');
+      }
+
+      if (!user.password) {
+        return ApiResponseDto.error(
+          400,
+          '当前账号未设置密码，请先联系管理员初始化密码',
+        );
+      }
+
+      const isCurrentPasswordValid = await bcrypt.compare(
+        currentPassword,
+        user.password,
+      );
+      if (!isCurrentPasswordValid) {
+        return ApiResponseDto.error(401, '当前密码错误');
+      }
+
+      const isSamePassword = await bcrypt.compare(newPassword, user.password);
+      if (isSamePassword) {
+        return ApiResponseDto.error(400, '新密码不能与当前密码相同');
+      }
+
+      const hashedPassword = await bcrypt.hash(newPassword, 10);
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { password: hashedPassword },
+      });
+
+      return ApiResponseDto.success({ changed: true });
+    } catch (error: any) {
+      return ApiResponseDto.error(500, error.message || '修改密码失败');
+    }
+  }
+
+  private normalizeAppId(appId?: string | null): string | undefined {
+    const normalized = appId?.trim();
+    return normalized || undefined;
+  }
+
+  private isPrimaryApp(appId: string): boolean {
+    return appId === this.wechatService.getPrimaryAppId();
+  }
+
+  private async expireMigrationIfNeeded(
+    migration: AccountMigration,
+  ): Promise<AccountMigration> {
+    if (
+      ['PENDING', 'PHONE_VERIFIED'].includes(migration.status) &&
+      migration.expiresAt.getTime() <= Date.now()
+    ) {
+      return this.prisma.accountMigration.update({
+        where: { id: migration.id },
+        data: { status: 'EXPIRED' },
+      });
+    }
+
+    return migration;
+  }
+
+  private async getUsableMigration(
+    migrationToken: string,
+    allowedStatuses: AccountMigrationStatus[] = ['PENDING', 'PHONE_VERIFIED'],
+  ): Promise<AccountMigration | null> {
+    const token = migrationToken?.trim();
+    if (!token) {
+      return null;
+    }
+
+    const migration = await this.prisma.accountMigration.findUnique({
+      where: { token },
+    });
+    if (!migration) {
+      return null;
+    }
+
+    const normalized = await this.expireMigrationIfNeeded(migration);
+    if (!allowedStatuses.includes(normalized.status)) {
+      return null;
+    }
+
+    return normalized;
+  }
+
+  private async findLatestPendingMigrationByPhone(
+    phone: string,
+  ): Promise<AccountMigration | null> {
+    const migration = await this.prisma.accountMigration.findFirst({
+      where: {
+        phone,
+        status: { in: ['PENDING', 'PHONE_VERIFIED'] },
+        expiresAt: { gt: new Date() },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    return migration ? this.expireMigrationIfNeeded(migration) : null;
+  }
+
+  private async findLatestMigrationForUser(
+    userId: string,
+  ): Promise<AccountMigration | null> {
+    return this.prisma.accountMigration.findFirst({
+      where: {
+        OR: [
+          { sourceUserId: userId },
+          { verifiedUserId: userId },
+          { targetUserId: userId },
+        ],
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+  }
+
+  private async buildLegacyMigrationState(userId: string): Promise<{
+    status: AccountMigrationStatus | 'NONE';
+    completed: boolean;
+    noSyncableData: boolean;
+    outcome: string | null;
+    phone: string | null;
+    confirmedAt: Date | null;
+    expiresAt: Date | null;
+  }> {
+    const migration = await this.findLatestMigrationForUser(userId);
+    if (!migration) {
+      return {
+        status: 'NONE',
+        completed: false,
+        noSyncableData: false,
+        outcome: null,
+        phone: null,
+        confirmedAt: null,
+        expiresAt: null,
+      };
+    }
+
+    const current = await this.expireMigrationIfNeeded(migration);
+    const metadata = (current.metadata as Record<string, unknown>) || {};
+    const outcome =
+      typeof metadata.migrationOutcome === 'string'
+        ? metadata.migrationOutcome
+        : null;
+    return {
+      status: current.status,
+      completed:
+        current.status === 'CONFIRMED' && outcome !== 'NO_LEGACY_DATA',
+      noSyncableData:
+        current.status === 'CONFIRMED' && outcome === 'NO_LEGACY_DATA',
+      outcome,
+      phone: current.phone ? this.maskPhone(current.phone) : null,
+      confirmedAt: current.confirmedAt,
+      expiresAt: current.expiresAt,
+    };
+  }
+
+  private async findUserByWechatIdentity(
+    appId: string,
+    openid: string,
+    unionid?: string,
+  ): Promise<User | null> {
+    const identity = await this.prisma.userWechatIdentity.findUnique({
+      where: {
+        appId_openid: {
+          appId,
+          openid,
+        },
+      },
+      include: { user: true },
+    });
+
+    if (identity?.user) {
+      return identity.user;
+    }
+
+    const legacyOpenidUser = await this.prisma.user.findUnique({
+      where: { wechatOpenid: openid },
+    });
+    if (legacyOpenidUser) {
+      return legacyOpenidUser;
+    }
+
+    if (unionid) {
+      return this.prisma.user.findUnique({
+        where: { wechatUnionid: unionid },
+      });
+    }
+
+    return null;
+  }
+
+  private async attachWechatIdentity(
+    user: User,
+    input: {
+      appId: string;
+      openid: string;
+      unionid?: string;
+      sessionKey?: string;
+    },
+  ): Promise<User> {
+    await this.prisma.userWechatIdentity.upsert({
+      where: {
+        appId_openid: {
+          appId: input.appId,
+          openid: input.openid,
+        },
+      },
+      create: {
+        userId: user.id,
+        appId: input.appId,
+        openid: input.openid,
+        unionid: input.unionid,
+        sessionKey: input.sessionKey,
+        lastLoginAt: new Date(),
+      },
+      update: {
+        userId: user.id,
+        unionid: input.unionid,
+        sessionKey: input.sessionKey,
+        lastLoginAt: new Date(),
+      },
+    });
+
+    const shouldRefreshLegacyOpenid =
+      this.isPrimaryApp(input.appId) || !user.wechatOpenid;
+    return this.prisma.user.update({
+      where: { id: user.id },
+      data: {
+        ...(shouldRefreshLegacyOpenid && { wechatOpenid: input.openid }),
+        ...(!user.wechatUnionid &&
+          input.unionid && { wechatUnionid: input.unionid }),
+        lastLoginAt: new Date(),
+      },
+    });
+  }
+
+  private userSummaryInclude() {
+    return {
+      _count: {
+        select: {
+          dogs: true,
+          orders: true,
+          addresses: true,
+          diySheets: true,
+          favoriteRecipes: true,
+          customRecipeOrders: true,
+        },
+      },
+    } as const;
+  }
+
+  private buildUserSummary(user: any) {
+    return {
+      id: user.id,
+      nickname: user.nickname || '微信用户',
+      avatarUrl: user.avatarUrl,
+      role: user.role,
+      phone: user.phone,
+      phoneBound: !!user.phone,
+      dogCount: user._count?.dogs || 0,
+      orderCount: user._count?.orders || 0,
+      addressCount: user._count?.addresses || 0,
+      diySheetCount: user._count?.diySheets || 0,
+      favoriteRecipeCount: user._count?.favoriteRecipes || 0,
+      customRecipeOrderCount: user._count?.customRecipeOrders || 0,
+    };
+  }
+
+  private getSyncableUserDataCount(summary: any): number {
+    return [
+      summary.dogCount,
+      summary.orderCount,
+      summary.addressCount,
+      summary.diySheetCount,
+      summary.favoriteRecipeCount,
+      summary.customRecipeOrderCount,
+    ].reduce((total, count) => total + Number(count || 0), 0);
+  }
+
+  private buildBoundResponse(user: any) {
+    const token = this.jwtAuthService.generateTokenForUser(user.id, user.role);
+    return {
+      status: 'BOUND',
+      token,
+      userId: user.id,
+      role: user.role,
+      phoneBound: true,
+      user: this.buildUserSummary(user),
+    };
+  }
+
+  private maskPhone(phone: string): string {
+    if (phone.length !== 11) return phone;
+    return phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2');
+  }
+
+  private normalizePhone(phone?: string | null): string | null {
+    const normalized = phone?.replace(/\s+/g, '').trim();
+    if (!normalized) return null;
+    return /^1[3-9]\d{9}$/.test(normalized) ? normalized : null;
+  }
+
+  private resolveMergedRole(
+    ...roles: Array<User['role'] | string | null | undefined>
+  ): User['role'] {
+    if (roles.includes('ADMIN')) return 'ADMIN' as User['role'];
+    if (roles.includes('STAFF')) return 'STAFF' as User['role'];
+    return 'CUSTOMER' as User['role'];
+  }
+
+  private async mergeUserAccounts(
+    sourceUserId: string,
+    targetUserId: string,
+    phone: string,
+  ): Promise<any> {
+    if (sourceUserId === targetUserId) {
+      return this.prisma.user.update({
+        where: { id: targetUserId },
+        data: { phone },
+        include: this.userSummaryInclude(),
+      });
+    }
+
+    return this.prisma.$transaction(async (tx: Prisma.TransactionClient) => {
+      const [sourceUser, targetUser] = await Promise.all([
+        tx.user.findUnique({ where: { id: sourceUserId } }),
+        tx.user.findUnique({ where: { id: targetUserId } }),
+      ]);
+
+      if (!sourceUser || !targetUser) {
+        throw new Error('待同步账号不存在，请重新登录后再试');
+      }
+
+      const mergedRole = this.resolveMergedRole(
+        sourceUser.role,
+        targetUser.role,
+      );
+
+      const targetFavorites = await tx.favoriteRecipe.findMany({
+        where: { userId: targetUserId },
+        select: { recipeId: true },
+      });
+      const targetFavoriteIds = targetFavorites.map((item) => item.recipeId);
+      if (targetFavoriteIds.length > 0) {
+        await tx.favoriteRecipe.deleteMany({
+          where: {
+            userId: sourceUserId,
+            recipeId: { in: targetFavoriteIds },
+          },
+        });
+      }
+
+      await Promise.all([
+        tx.dog.updateMany({
+          where: { ownerId: sourceUserId },
+          data: { ownerId: targetUserId },
+        }),
+        tx.address.updateMany({
+          where: { userId: sourceUserId },
+          data: { userId: targetUserId },
+        }),
+        tx.order.updateMany({
+          where: { customerId: sourceUserId },
+          data: { customerId: targetUserId },
+        }),
+        tx.orderPricingSnapshot.updateMany({
+          where: { customerId: sourceUserId },
+          data: { customerId: targetUserId },
+        }),
+        tx.dIYSheet.updateMany({
+          where: { userId: sourceUserId },
+          data: { userId: targetUserId },
+        }),
+        tx.customRecipeOrder.updateMany({
+          where: { customerId: sourceUserId },
+          data: { customerId: targetUserId },
+        }),
+        tx.favoriteRecipe.updateMany({
+          where: { userId: sourceUserId },
+          data: { userId: targetUserId },
+        }),
+        tx.recipeReview.updateMany({
+          where: { userId: sourceUserId },
+          data: { userId: targetUserId },
+        }),
+        tx.feedback.updateMany({
+          where: { userId: sourceUserId },
+          data: { userId: targetUserId },
+        }),
+        tx.feedbackReply.updateMany({
+          where: { userId: sourceUserId },
+          data: { userId: targetUserId },
+        }),
+        tx.feedbackReply.updateMany({
+          where: { replyToUserId: sourceUserId },
+          data: { replyToUserId: targetUserId },
+        }),
+        tx.userWechatIdentity.updateMany({
+          where: { userId: sourceUserId },
+          data: { userId: targetUserId },
+        }),
+      ]);
+
+      await tx.user.update({
+        where: { id: sourceUserId },
+        data: {
+          phone: null,
+          wechatOpenid: null,
+          wechatUnionid: null,
+          status: 'INACTIVE',
+          nickname: sourceUser.nickname
+            ? `${sourceUser.nickname}(已合并)`
+            : '已合并账号',
+        },
+      });
+
+      return tx.user.update({
+        where: { id: targetUserId },
+        data: {
+          role: mergedRole,
+          phone,
+          wechatOpenid: sourceUser.wechatOpenid || targetUser.wechatOpenid,
+          wechatUnionid: targetUser.wechatUnionid || sourceUser.wechatUnionid,
+          lastLoginAt: new Date(),
+        },
+        include: this.userSummaryInclude(),
+      });
+    });
   }
 }

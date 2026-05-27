@@ -67,9 +67,35 @@ export class UsersController {
       return new ApiResponseDto(404, '用户不存在', null);
     }
 
+    const migration = await this.prisma.accountMigration.findFirst({
+      where: {
+        OR: [
+          { sourceUserId: userData.id },
+          { verifiedUserId: userData.id },
+          { targetUserId: userData.id },
+        ],
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+    let migrationStatus = migration?.status || 'NONE';
+    if (
+      migration &&
+      ['PENDING', 'PHONE_VERIFIED'].includes(migration.status) &&
+      migration.expiresAt.getTime() <= Date.now()
+    ) {
+      const expiredMigration = await this.prisma.accountMigration.update({
+        where: { id: migration.id },
+        data: { status: 'EXPIRED' },
+      });
+      migrationStatus = expiredMigration.status;
+    }
+
     const response: UserResponseDto = {
       id: userData.id,
       phone: userData.phone ?? undefined,
+      phoneBound: !!userData.phone,
+      legacyMigrationStatus: migrationStatus,
+      legacyMigrationCompleted: migrationStatus === 'CONFIRMED',
       nickname: userData.nickname ?? undefined,
       avatarUrl: userData.avatarUrl ?? undefined,
       role: userData.role,
@@ -144,6 +170,7 @@ export class UsersController {
     const response: UserResponseDto = {
       id: updatedUser.id,
       phone: updatedUser.phone ?? undefined,
+      phoneBound: !!updatedUser.phone,
       nickname: updatedUser.nickname ?? undefined,
       avatarUrl: updatedUser.avatarUrl ?? undefined,
       role: updatedUser.role,

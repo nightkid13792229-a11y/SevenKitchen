@@ -519,7 +519,7 @@ describe('AdminController', () => {
         expect.objectContaining({
           status: 'PAID',
           page: 2,
-          pageSize: 5,
+          pageSize: 10,
         }),
       );
       expect(result.code).toBe(0);

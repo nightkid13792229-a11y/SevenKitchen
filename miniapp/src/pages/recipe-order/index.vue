@@ -192,6 +192,9 @@
           <text class="source-plan-price">{{ formatSourcePlanPrice(option.code) }}</text>
         </view>
       </view>
+      <text class="source-plan-safety-copy">
+        所有档位均满足或高于人类食品安全标准，差异主要在采购渠道、溯源完整度和批次稳定性；选择安心基础也不是降低安全标准。
+      </text>
 
       <view v-if="totalIngredientCount === 0" class="ingredient-empty-state">
         <text class="ingredient-empty-text">原料清单生成中，请稍后查看</text>
@@ -441,9 +444,17 @@
         :disabled="!canBuyNow"
         @tap="buyNow"
       >
-        立即下单
+        去确认订单
       </button>
     </view>
+
+    <CustomerServiceFloatButton
+      source-type="PRODUCT"
+      :product-id="recipeId"
+      :product-name="recipe.name"
+      :image-url="normalizeImageUrl(recipe.coverImageUrl || '')"
+      title="下单配置咨询"
+    />
   </view>
 </template>
 
@@ -476,6 +487,7 @@ import {
   buildIngredientDisplayName,
   buildIngredientPurchaseChannelText,
 } from './ingredientDisplay'
+import CustomerServiceFloatButton from '../../components/CustomerServiceFloatButton.vue'
 
 interface Dog {
   id: string
@@ -966,9 +978,9 @@ function getIngredientTypeClass(type: string): string {
 
 function formatSourcePlanShortName(code: IngredientSourcePlanCode): string {
   const map: Record<IngredientSourcePlanCode, string> = {
-    ORGANIC: '有机优先',
-    MARKET_PREMIUM: '超市优先',
-    WHOLESALE: '批发市场优先',
+    ORGANIC: '溯源优选',
+    MARKET_PREMIUM: '精选日常',
+    WHOLESALE: '安心基础',
   }
   return map[code]
 }
@@ -1957,7 +1969,11 @@ function goToCreateDog() {
 .btn-create-dog {
   width: 240rpx;
   height: 70rpx;
-  line-height: 70rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   background-color: #1890ff;
   color: #fff;
   border-radius: 35rpx;
@@ -2343,7 +2359,11 @@ function goToCreateDog() {
 .btn-add-row {
   min-width: 112rpx;
   height: 56rpx;
-  line-height: 56rpx;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   padding: 0 20rpx;
   background-color: #1890ff;
   color: #fff;
@@ -2355,7 +2375,11 @@ function goToCreateDog() {
 .btn-remove-row {
   min-width: 96rpx;
   height: 56rpx;
-  line-height: 56rpx;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   padding: 0 16rpx;
   background-color: #fff;
   color: #ff4d4f;
@@ -3279,13 +3303,21 @@ function goToCreateDog() {
 .hero-dog-action {
   min-width: 104rpx;
   height: 60rpx;
-  line-height: 60rpx;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .section-action-button {
   min-width: 136rpx;
   height: 60rpx;
-  line-height: 60rpx;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   padding: 0 18rpx;
 }
 
@@ -3526,7 +3558,11 @@ function goToCreateDog() {
 .package-edit-button {
   min-width: 172rpx;
   height: 60rpx;
-  line-height: 60rpx;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   padding: 0 18rpx;
   border-radius: 8rpx;
   border: 2rpx solid #2f8f4e;
@@ -3616,7 +3652,11 @@ function goToCreateDog() {
 .btn-secondary-full {
   width: 100%;
   height: 76rpx;
-  line-height: 76rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   margin-top: 20rpx;
 }
 
@@ -3665,7 +3705,11 @@ function goToCreateDog() {
 .btn-remove-row {
   min-width: 118rpx;
   height: 60rpx;
-  line-height: 60rpx;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   padding: 0 16rpx;
   border-radius: 8rpx;
   font-size: 24rpx;
@@ -3758,6 +3802,17 @@ function goToCreateDog() {
 .source-plan-card.compact .source-plan-price {
   font-size: 25rpx;
   line-height: 1.25;
+}
+
+.source-plan-safety-copy {
+  display: block;
+  margin-top: 16rpx;
+  padding: 18rpx;
+  border-radius: 14rpx;
+  background: #fff7ef;
+  color: #7a5b43;
+  font-size: 24rpx;
+  line-height: 1.45;
 }
 
 .source-plan-check {

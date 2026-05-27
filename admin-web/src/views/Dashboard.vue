@@ -1,57 +1,25 @@
 <template>
   <div class="dashboard">
-    <el-row :gutter="20">
-      <el-col :span="6">
-        <el-card class="stat-card">
+    <el-row :gutter="16" class="stats-row">
+      <el-col
+        v-for="card in statCards"
+        :key="card.label"
+        :xs="24"
+        :sm="12"
+        :md="8"
+        :lg="6"
+      >
+        <el-card class="stat-card" @click="handleStatCardClick(card)">
           <div class="stat-content">
-            <div class="stat-icon" style="background: #409eff">
-              <el-icon :size="24"><List /></el-icon>
+            <div class="stat-icon" :style="{ background: card.color }">
+              <el-icon :size="24">
+                <component :is="card.icon" />
+              </el-icon>
             </div>
             <div class="stat-info">
-              <div class="stat-label">总订单数</div>
-              <div class="stat-value">{{ stats.totalOrders }}</div>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-
-      <el-col :span="6">
-        <el-card class="stat-card">
-          <div class="stat-content">
-            <div class="stat-icon" style="background: #67c23a">
-              <el-icon :size="24"><Money /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-label">总收入</div>
-              <div class="stat-value">¥{{ stats.totalRevenue }}</div>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-
-      <el-col :span="6">
-        <el-card class="stat-card">
-          <div class="stat-content">
-            <div class="stat-icon" style="background: #e6a23c">
-              <el-icon :size="24"><Clock /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-label">待处理订单</div>
-              <div class="stat-value">{{ stats.pendingOrders }}</div>
-            </div>
-          </div>
-        </el-card>
-      </el-col>
-
-      <el-col :span="6">
-        <el-card class="stat-card">
-          <div class="stat-content">
-            <div class="stat-icon" style="background: #f56c6c">
-              <el-icon :size="24"><User /></el-icon>
-            </div>
-            <div class="stat-info">
-              <div class="stat-label">活跃用户</div>
-              <div class="stat-value">{{ stats.activeUsers }}</div>
+              <div class="stat-label">{{ card.label }}</div>
+              <div class="stat-value">{{ card.value }}</div>
+              <div v-if="card.note" class="stat-note">{{ card.note }}</div>
             </div>
           </div>
         </el-card>
@@ -67,7 +35,11 @@
             </div>
           </template>
           <el-table :data="recentOrders" style="width: 100%">
-            <el-table-column prop="id" label="订单ID" width="120" />
+            <el-table-column prop="id" label="订单号" width="132">
+              <template #default="{ row }">
+                {{ formatOrderId(row.id) }}
+              </template>
+            </el-table-column>
             <el-table-column prop="status" label="状态" width="100">
               <template #default="{ row }">
                 <el-tag :type="getStatusType(row.status)">
@@ -75,8 +47,16 @@
                 </el-tag>
               </template>
             </el-table-column>
-            <el-table-column prop="amountTotal" label="金额" />
-            <el-table-column prop="createdAt" label="创建时间" />
+            <el-table-column prop="amountTotal" label="金额" width="110" align="right">
+              <template #default="{ row }">
+                {{ formatCurrency(row.amountTotal) }}
+              </template>
+            </el-table-column>
+            <el-table-column prop="createdAt" label="下单时间">
+              <template #default="{ row }">
+                {{ formatDateTime(row.createdAt) }}
+              </template>
+            </el-table-column>
           </el-table>
         </el-card>
       </el-col>
@@ -94,7 +74,7 @@
             <el-table-column prop="status" label="状态" width="100">
               <template #default="{ row }">
                 <el-tag :type="getBatchStatusType(row.status)">
-                  {{ row.status }}
+                  {{ getBatchStatusText(row.status) }}
                 </el-tag>
               </template>
             </el-table-column>
@@ -107,39 +87,224 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { List, Money, Clock, User } from '@element-plus/icons-vue'
+import { computed, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import {
+  Box,
+  Calendar,
+  CircleCheck,
+  Clock,
+  ForkSpoon,
+  List,
+  Money,
+  Service,
+  ShoppingCart,
+  Van
+} from '@element-plus/icons-vue'
 import { productionApi } from '@/api'
 import { orderApi } from '@/api/orders'
+import { OrderStatus } from '@/types/order'
+import type { OrderListItem, OrderStats } from '@/types/order'
 
-const stats = ref({
-  totalOrders: 0,
-  totalRevenue: '0',
-  pendingOrders: 0,
-  activeUsers: 0
+type DashboardCard = {
+  label: string
+  value: string | number
+  icon: any
+  color: string
+  note?: string
+  route?: {
+    path: string
+    query?: Record<string, string>
+  }
+}
+
+const router = useRouter()
+const stats = ref<OrderStats>({
+  total: 0,
+  todayNew: 0,
+  paidRevenue: 0,
+  pendingPayment: 0,
+  paid: 0,
+  purchasing: 0,
+  inProduction: 0,
+  freezing: 0,
+  shipped: 0,
+  completed: 0,
+  cancelled: 0,
+  aftersale: 0
 })
 
-const recentOrders = ref<any[]>([])
+const recentOrders = ref<OrderListItem[]>([])
 const recentBatches = ref<any[]>([])
+
+const statCards = computed<DashboardCard[]>(() => [
+  {
+    label: '总订单数',
+    value: stats.value.total,
+    icon: List,
+    color: '#409eff',
+    route: {
+      path: '/orders'
+    }
+  },
+  {
+    label: '今日新增订单',
+    value: stats.value.todayNew,
+    icon: Calendar,
+    color: '#00a870',
+    route: {
+      path: '/orders',
+      query: getTodayOrderQuery()
+    }
+  },
+  {
+    label: '已付款订单金额',
+    value: formatCurrency(stats.value.paidRevenue),
+    icon: Money,
+    color: '#67c23a',
+    note: '未扣除售后退款',
+    route: {
+      path: '/orders',
+      query: {
+        status: [
+          OrderStatus.PAID,
+          OrderStatus.PURCHASING,
+          OrderStatus.IN_PRODUCTION,
+          OrderStatus.FREEZING,
+          OrderStatus.SHIPPED,
+          OrderStatus.COMPLETED,
+          OrderStatus.AFTERSALE
+        ].join(',')
+      }
+    }
+  },
+  {
+    label: '待付款',
+    value: stats.value.pendingPayment,
+    icon: Clock,
+    color: '#e6a23c',
+    route: {
+      path: '/orders',
+      query: { status: OrderStatus.PENDING_PAYMENT }
+    }
+  },
+  {
+    label: '待采购',
+    value: stats.value.paid,
+    icon: ShoppingCart,
+    color: '#7c3aed',
+    route: {
+      path: '/orders',
+      query: { status: OrderStatus.PAID }
+    }
+  },
+  {
+    label: '采购中',
+    value: stats.value.purchasing,
+    icon: Box,
+    color: '#0f766e',
+    route: {
+      path: '/orders',
+      query: { status: OrderStatus.PURCHASING }
+    }
+  },
+  {
+    label: '制作中',
+    value: stats.value.inProduction,
+    icon: ForkSpoon,
+    color: '#f97316',
+    route: {
+      path: '/orders',
+      query: { status: OrderStatus.IN_PRODUCTION }
+    }
+  },
+  {
+    label: '急冻中',
+    value: stats.value.freezing,
+    icon: Box,
+    color: '#2563eb',
+    route: {
+      path: '/orders',
+      query: { status: OrderStatus.FREEZING }
+    }
+  },
+  {
+    label: '待收货',
+    value: stats.value.shipped,
+    icon: Van,
+    color: '#0ea5e9',
+    route: {
+      path: '/orders',
+      query: { status: OrderStatus.SHIPPED }
+    }
+  },
+  {
+    label: '已完成',
+    value: stats.value.completed,
+    icon: CircleCheck,
+    color: '#16a34a',
+    route: {
+      path: '/orders',
+      query: { status: OrderStatus.COMPLETED }
+    }
+  },
+  {
+    label: '售后中',
+    value: stats.value.aftersale,
+    icon: Service,
+    color: '#dc2626',
+    route: {
+      path: '/aftersale'
+    }
+  }
+])
+
+function getTodayOrderQuery() {
+  const today = new Date()
+  const yyyy = today.getFullYear()
+  const mm = String(today.getMonth() + 1).padStart(2, '0')
+  const dd = String(today.getDate()).padStart(2, '0')
+  const date = `${yyyy}-${mm}-${dd}`
+
+  return {
+    startDate: date,
+    endDate: date
+  }
+}
+
+function handleStatCardClick(card: DashboardCard) {
+  if (!card.route) return
+  router.push(card.route)
+}
 
 const getStatusType = (status: string): '' | 'success' | 'warning' | 'info' | 'danger' | 'primary' | undefined => {
   const typeMap: Record<string, 'success' | 'warning' | 'info' | 'danger' | 'primary'> = {
-    PAID: 'success',
+    INIT: 'info',
     PENDING_PAYMENT: 'warning',
+    PAID: 'success',
+    PURCHASING: 'primary',
     IN_PRODUCTION: 'primary',
+    FREEZING: 'primary',
     SHIPPED: 'info',
-    COMPLETED: 'success'
+    COMPLETED: 'success',
+    CANCELLED: 'danger',
+    AFTERSALE: 'warning'
   }
   return typeMap[status]
 }
 
 const getStatusText = (status: string) => {
   const textMap: Record<string, string> = {
-    PAID: '已支付',
-    PENDING_PAYMENT: '待支付',
-    IN_PRODUCTION: '生产中',
-    SHIPPED: '已发货',
-    COMPLETED: '已完成'
+    INIT: '订单创建',
+    PENDING_PAYMENT: '待付款',
+    PAID: '待采购',
+    PURCHASING: '采购中',
+    IN_PRODUCTION: '制作中',
+    FREEZING: '急冻中',
+    SHIPPED: '待收货',
+    COMPLETED: '已收货',
+    CANCELLED: '已取消',
+    AFTERSALE: '售后中'
   }
   return textMap[status] || status
 }
@@ -153,25 +318,50 @@ const getBatchStatusType = (status: string): '' | 'success' | 'warning' | 'info'
   return typeMap[status]
 }
 
+const getBatchStatusText = (status: string) => {
+  const textMap: Record<string, string> = {
+    PLANNED: '待生产',
+    IN_PRODUCTION: '生产中',
+    COMPLETED: '已完成'
+  }
+  return textMap[status] || status
+}
+
+const formatCurrency = (value: number | string | null | undefined) => {
+  return `¥${Number(value || 0).toFixed(2)}`
+}
+
+const formatOrderId = (id: string) => {
+  if (!id) return ''
+  return id.length > 12 ? `${id.slice(0, 8)}...` : id
+}
+
+const formatDateTime = (value: string | null | undefined) => {
+  if (!value) return '-'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
 const loadData = async () => {
   try {
-    const [ordersData, batchesData] = await Promise.all([
-      orderApi.list(),
+    const [orderStats, ordersData, batchesData] = await Promise.all([
+      orderApi.getStats(),
+      orderApi.list({ page: 1, pageSize: 5 }),
       productionApi.getBatches()
     ])
 
-    // orderApi.list() 返回 {list: [...], total: number}
-    const ordersList = Array.isArray(ordersData) ? ordersData : ordersData.list || []
-
-    recentOrders.value = ordersList.slice(0, 5)
-    stats.value.totalOrders = ordersList.length
-    stats.value.pendingOrders = ordersList.filter(
-      (o: any) => o.status === 'PENDING_PAYMENT'
-    ).length
-    stats.value.totalRevenue = ordersList
-      .reduce((sum: number, o: any) => sum + Number(o.amountTotal || 0), 0)
-      .toFixed(2)
-
+    stats.value = {
+      ...stats.value,
+      ...orderStats
+    }
+    recentOrders.value = ordersData.list || []
     recentBatches.value = batchesData.slice(0, 5)
   } catch (error) {
     console.error('Failed to load dashboard data:', error)
@@ -188,6 +378,10 @@ onMounted(() => {
   padding: 0;
 }
 
+.stats-row {
+  row-gap: 16px;
+}
+
 .stat-card {
   cursor: pointer;
   transition: all 0.3s;
@@ -201,33 +395,46 @@ onMounted(() => {
 .stat-content {
   display: flex;
   align-items: center;
-  gap: 15px;
+  gap: 14px;
+  min-height: 72px;
 }
 
 .stat-icon {
-  width: 60px;
-  height: 60px;
+  width: 52px;
+  height: 52px;
   border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: #fff;
+  flex: 0 0 auto;
 }
 
 .stat-info {
   flex: 1;
+  min-width: 0;
 }
 
 .stat-label {
   font-size: 14px;
-  color: #999;
+  color: #6b7280;
   margin-bottom: 8px;
+  line-height: 1.2;
 }
 
 .stat-value {
   font-size: 24px;
-  font-weight: bold;
-  color: #333;
+  font-weight: 700;
+  color: #1f2937;
+  line-height: 1.2;
+  word-break: break-all;
+}
+
+.stat-note {
+  margin-top: 4px;
+  color: #909399;
+  font-size: 12px;
+  line-height: 1.2;
 }
 
 .card-header {

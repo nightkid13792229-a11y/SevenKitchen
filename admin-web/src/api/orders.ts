@@ -7,6 +7,9 @@ import type {
   OrderStats,
   OrderHistory,
   OrderFinancialSummary,
+  WechatShippingBatchUploadResult,
+  WechatShippingUploadPendingSummary,
+  WechatShippingUploadResult,
   ShipRequest,
   CancelRequest
 } from '@/types/order'
@@ -85,6 +88,21 @@ export const orderApi = {
   },
 
   /**
+   * 补传微信发货信息
+   */
+  uploadWechatShippingInfo: (id: string): Promise<WechatShippingUploadResult> => {
+    return api.post(`/staff/shipping/orders/${id}/wechat-shipping-upload`)
+  },
+
+  getWechatShippingUploadPending: (): Promise<WechatShippingUploadPendingSummary> => {
+    return api.get('/staff/shipping/wechat-shipping-uploads/pending')
+  },
+
+  retryPendingWechatShippingUploads: (): Promise<WechatShippingBatchUploadResult> => {
+    return api.post('/staff/shipping/wechat-shipping-uploads/retry-all')
+  },
+
+  /**
    * 确认支付
    */
   confirmPayment: (id: string): Promise<void> => {
@@ -96,6 +114,47 @@ export const orderApi = {
    */
   confirmOfflinePayment: (id: string, data: { actualAmount?: number }): Promise<void> => {
     return api.post(`/admin/orders/${id}/confirm-offline-payment`, data)
+  },
+
+  /**
+   * 发起微信线上退款
+   */
+  createWechatRefund: (
+    id: string,
+    data: { amount: number; reason: string; adminNote?: string }
+  ): Promise<{
+    outRefundNo: string
+    refundId: string | null
+    status: string | null
+    adjustmentId: string
+    recordId: string | null
+    reused?: boolean
+  }> => {
+    return api.post(`/admin/orders/${id}/wechat-refund`, data)
+  },
+
+  /**
+   * 获取待处理售后工单
+   */
+  listPendingAftersales: (): Promise<Order[]> => {
+    return api.get('/orders/aftersale/pending')
+  },
+
+  /**
+   * 获取退款售后记录（含待审核与已退款）
+   */
+  listRefundAftersales: (): Promise<Order[]> => {
+    return api.get('/orders/aftersale/refunds')
+  },
+
+  /**
+   * 处理售后工单
+   */
+  resolveAftersale: (
+    id: string,
+    data: { resolutionType: 'refunded' | 'remade' | 'resolved'; adminNote?: string }
+  ): Promise<Order> => {
+    return api.post(`/orders/${id}/aftersale/resolve`, data)
   },
 
   /**

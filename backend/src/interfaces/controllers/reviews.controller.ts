@@ -31,6 +31,7 @@ import { ApiResponseDto } from '../dto/common/response.dto';
 import { CreateReviewDto } from '../dto/reviews/create-review.dto';
 import { AuthGuard, CurrentUser } from '../auth';
 import type { RequestUser } from '../auth';
+import { StaffGuard } from '../guards/role.guard';
 
 @ApiTags('Reviews')
 @Controller('api/v1')
@@ -39,6 +40,13 @@ export class ReviewsController {
     private readonly prisma: PrismaService,
     private readonly cosService: TencentCosService,
   ) {}
+
+  private ensureAdmin(user: RequestUser): ApiResponseDto<null> | null {
+    if (user.role !== 'ADMIN') {
+      return ApiResponseDto.error(403, 'Only admin can manage reviews');
+    }
+    return null;
+  }
 
   /**
    * 检查用户是否有权限评价某个食谱
@@ -197,6 +205,119 @@ export class ReviewsController {
       console.error('获取评论列表失败:', error);
       return new ApiResponseDto(500, '获取评论列表失败', null);
     }
+  }
+
+  @Get('admin/reviews')
+  @UseGuards(AuthGuard, StaffGuard)
+  @ApiSecurity('wechat-auth')
+  @ApiOperation({ summary: 'Admin list recipe reviews' })
+  async listAdminReviews(
+    @CurrentUser() user: RequestUser,
+    @Query('page') page: string = '1',
+    @Query('pageSize') pageSize: string = '20',
+    @Query('keyword') keyword?: string,
+  ) {
+    const forbidden = this.ensureAdmin(user);
+    if (forbidden) return forbidden;
+
+    const parsedPage = Math.max(1, Number(page) || 1);
+    const parsedPageSize = Math.min(100, Math.max(1, Number(pageSize) || 20));
+    const skip = (parsedPage - 1) * parsedPageSize;
+    const where: any = keyword?.trim()
+      ? {
+          OR: [
+            { content: { contains: keyword.trim(), mode: 'insensitive' } },
+            { recipe: { name: { contains: keyword.trim(), mode: 'insensitive' } } },
+            { user: { nickname: { contains: keyword.trim(), mode: 'insensitive' } } },
+          ],
+        }
+      : {};
+
+    const [list, total] = await Promise.all([
+      this.prisma.recipeReview.findMany({
+        where,
+        include: {
+          recipe: { select: { id: true, name: true, recipeId: true } },
+          user: { select: { id: true, nickname: true, phone: true, avatarUrl: true } },
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take: parsedPageSize,
+      }),
+      this.prisma.recipeReview.count({ where }),
+    ]);
+
+    return ApiResponseDto.success({
+      list,
+      total,
+      page: parsedPage,
+      pageSize: parsedPageSize,
+    });
+  }
+
+  @Post('admin/reviews')
+  @UseGuards(AuthGuard, StaffGuard)
+  @ApiSecurity('wechat-auth')
+  @ApiOperation({ summary: 'Admin create recipe review' })
+  async createAdminReview(
+    @CurrentUser() user: RequestUser,
+    @Body()
+    dto: CreateReviewDto & {
+      recipeId: string;
+      userId?: string;
+    },
+  ) {
+    const forbidden = this.ensureAdmin(user);
+    if (forbidden) return forbidden;
+
+    const recipe = await this.prisma.recipe.findFirst({
+      where: { OR: [{ id: dto.recipeId }, { recipeId: dto.recipeId }] },
+      select: { id: true },
+    });
+    if (!recipe) {
+      return ApiResponseDto.error(404, 'Recipe not found');
+    }
+
+    const review = await this.prisma.recipeReview.create({
+      data: {
+        userId: dto.userId || user.customerId,
+        recipeId: recipe.id,
+        ratingEase: dto.ratingEase,
+        ratingValue: dto.ratingValue,
+        ratingTaste: dto.ratingTaste,
+        content: dto.content,
+        photos: dto.photos || [],
+        source: 'ADMIN',
+      },
+      include: {
+        recipe: { select: { id: true, name: true, recipeId: true } },
+        user: { select: { id: true, nickname: true, phone: true, avatarUrl: true } },
+      },
+    });
+
+    return ApiResponseDto.success(review);
+  }
+
+  @Delete('admin/reviews/:reviewId')
+  @UseGuards(AuthGuard, StaffGuard)
+  @ApiSecurity('wechat-auth')
+  @ApiOperation({ summary: 'Admin delete any recipe review' })
+  async deleteAdminReview(
+    @CurrentUser() user: RequestUser,
+    @Param('reviewId') reviewId: string,
+  ) {
+    const forbidden = this.ensureAdmin(user);
+    if (forbidden) return forbidden;
+
+    const review = await this.prisma.recipeReview.findUnique({
+      where: { id: reviewId },
+    });
+    if (!review) {
+      return ApiResponseDto.error(404, 'Review not found');
+    }
+
+    await this.prisma.recipeReview.delete({ where: { id: reviewId } });
+    return ApiResponseDto.success(null);
   }
 
   /**

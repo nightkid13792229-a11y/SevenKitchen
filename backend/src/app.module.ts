@@ -26,6 +26,7 @@ import { DIYSheetsController } from './interfaces/controllers/diy-sheets.control
 import { StaffProductionPhotosController } from './interfaces/controllers/staff-production-photos.controller';
 import { AftersalePhotosController } from './interfaces/controllers/aftersale-photos.controller';
 import { FavoritesController } from './interfaces/controllers/favorites.controller';
+import { StaffWorkbenchController } from './interfaces/controllers/staff-workbench.controller';
 import { StaffPurchasingController } from './interfaces/controllers/staff-purchasing.controller';
 import { StaffInventoryController } from './interfaces/controllers/staff-inventory.controller';
 import { AdminPurchasingController } from './interfaces/controllers/admin-purchasing.controller';
@@ -88,6 +89,7 @@ import { PricingService } from './domain/pricing/pricing.service';
 import { ShippingFeeService } from './domain/shipping/shipping-fee.service';
 import { ShippingService } from './application/shipping/shipping.service';
 import { ShippingFulfillmentService } from './application/shipping/shipping-fulfillment.service';
+import { WechatShippingUploadService } from './application/shipping/wechat-shipping-upload.service';
 import { InMemoryShippingTemplateRepository } from './infrastructure/repositories/in-memory-shipping-template.repository';
 import { PrismaShippingTemplateRepository } from './infrastructure/repositories/prisma-shipping-template.repository';
 import { SHIPPING_TEMPLATE_REPOSITORY } from './application/shipping/shipping.service.tokens';
@@ -195,6 +197,22 @@ import {
   FEDIAF_TARGET_PROVIDER,
   PrismaFediafTargetProvider,
 } from './application/recipe-designer/fediaf-target-provider';
+import {
+  PlatformConfigController,
+  PublicPlatformConfigController,
+} from './interfaces/controllers/platform-config.controller';
+import { PlatformConfigService } from './application/platform-config/platform-config.service';
+import {
+  AdminCustomerServiceController,
+  CustomerServiceController,
+} from './interfaces/controllers/customer-service.controller';
+import { StaffCustomerServiceController } from './interfaces/controllers/staff-customer-service.controller';
+import { CustomerServiceService } from './application/customer-service/customer-service.service';
+import {
+  AdminWechatRefundController,
+  WechatPayController,
+} from './interfaces/controllers/payments/wechat-pay.controller';
+import { WechatPaymentService } from './application/payment/wechat-payment.service';
 import { loadEnvConfig } from './utils/env-config';
 
 // Load environment variables before module-level Prisma validation runs.
@@ -279,6 +297,7 @@ validatePrismaConfig();
     StaffProductionPhotosController,
     AftersalePhotosController,
     FavoritesController,
+    StaffWorkbenchController,
     StaffProductionController,
     CustomRecipeController,
     AdminCustomRecipeController,
@@ -295,6 +314,13 @@ validatePrismaConfig();
     NutritionStandardController,
     RecipeDesignerController,
     IngredientCreationController,
+    PlatformConfigController,
+    PublicPlatformConfigController,
+    CustomerServiceController,
+    AdminCustomerServiceController,
+    StaffCustomerServiceController,
+    WechatPayController,
+    AdminWechatRefundController,
     ...(isPrismaEnabled()
       ? [DogProfileAnalyticsController, AdminDogProfileAnalyticsController]
       : []),
@@ -443,6 +469,7 @@ validatePrismaConfig();
     InventoryService,
     // Phase 8.14: Shipping Fulfillment Service
     ShippingFulfillmentService,
+    WechatShippingUploadService,
     {
       provide: PRODUCTION_BATCH_REPOSITORY,
       useFactory: (prismaService?: PrismaService) => {
@@ -686,6 +713,9 @@ validatePrismaConfig();
       provide: FEDIAF_TARGET_PROVIDER,
       useClass: PrismaFediafTargetProvider,
     },
+    PlatformConfigService,
+    CustomerServiceService,
+    WechatPaymentService,
   ],
 })
 export class AppModule implements OnModuleInit {

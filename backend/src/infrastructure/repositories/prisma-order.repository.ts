@@ -515,6 +515,8 @@ export class PrismaOrderRepository implements OrderRepository {
    */
   async getStats(): Promise<{
     total: number;
+    todayNew: number;
+    paidRevenue: number;
     pendingPayment: number;
     paid: number;
     purchasing: number;
@@ -531,6 +533,37 @@ export class PrismaOrderRepository implements OrderRepository {
         status: true,
       },
     });
+    const { start, end } = this.getShanghaiTodayBounds();
+    const paidRevenueStatuses = [
+      OrderStatus.PAID,
+      OrderStatus.PURCHASING,
+      OrderStatus.IN_PRODUCTION,
+      OrderStatus.FREEZING,
+      OrderStatus.SHIPPED,
+      OrderStatus.COMPLETED,
+      OrderStatus.AFTERSALE,
+    ];
+    const [total, todayNew, revenue] = await Promise.all([
+      this.prisma.order.count(),
+      this.prisma.order.count({
+        where: {
+          createdAt: {
+            gte: start,
+            lt: end,
+          },
+        },
+      }),
+      this.prisma.order.aggregate({
+        where: {
+          status: {
+            in: paidRevenueStatuses,
+          },
+        },
+        _sum: {
+          amountTotal: true,
+        },
+      }),
+    ]);
 
     const countMap = stats.reduce(
       (acc, item) => {
@@ -541,7 +574,9 @@ export class PrismaOrderRepository implements OrderRepository {
     );
 
     return {
-      total: await this.prisma.order.count(),
+      total,
+      todayNew,
+      paidRevenue: Number(revenue._sum.amountTotal ?? 0),
       pendingPayment: countMap[OrderStatus.PENDING_PAYMENT] ?? 0,
       paid: countMap[OrderStatus.PAID] ?? 0,
       purchasing: countMap[OrderStatus.PURCHASING] ?? 0,
@@ -552,6 +587,22 @@ export class PrismaOrderRepository implements OrderRepository {
       cancelled: countMap[OrderStatus.CANCELLED] ?? 0,
       aftersale: countMap[OrderStatus.AFTERSALE] ?? 0,
     };
+  }
+
+  private getShanghaiTodayBounds(): { start: Date; end: Date } {
+    const now = new Date();
+    const shanghaiNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+    const start = new Date(
+      Date.UTC(
+        shanghaiNow.getUTCFullYear(),
+        shanghaiNow.getUTCMonth(),
+        shanghaiNow.getUTCDate(),
+      ) -
+        8 * 60 * 60 * 1000,
+    );
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+
+    return { start, end };
   }
 
   /**

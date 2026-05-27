@@ -58,4 +58,73 @@ describe('RecipeDesignSessionService', () => {
       },
     });
   });
+
+  it('stores messages with default metadata', async () => {
+    prisma.agentRecipeDesignMessage.create.mockResolvedValue({
+      id: 'message-1',
+    });
+    const service = new RecipeDesignSessionService(prisma);
+
+    await service.addMessage({
+      sessionId: 'session-1',
+      role: 'ADMIN',
+      content: '请生成配方初稿',
+    });
+
+    expect(prisma.agentRecipeDesignMessage.create).toHaveBeenCalledWith({
+      data: {
+        sessionId: 'session-1',
+        role: 'ADMIN',
+        content: '请生成配方初稿',
+        metadata: {},
+      },
+    });
+  });
+
+  it('rejects invalid nested JSON payloads before storing candidates', async () => {
+    const service = new RecipeDesignSessionService(prisma);
+
+    await expect(
+      service.createCandidate({
+        sessionId: 'session-1',
+        label: '初稿',
+        recipeDraft: { items: [{ value: BigInt(1) }] } as any,
+        calculation: { fediaf: 'not-run' },
+        resultStatus: AiRecipeResultStatus.LIMITED_DRAFT,
+        changeSummary: { reason: '缺少营养数据' },
+      }),
+    ).rejects.toThrow('Invalid JSON payload');
+
+    expect(prisma.agentRecipeDesignCandidate.create).not.toHaveBeenCalled();
+  });
+
+  it('omits undefined nested object properties before storing candidates', async () => {
+    prisma.agentRecipeDesignCandidate.create.mockResolvedValue({
+      id: 'candidate-1',
+    });
+    const service = new RecipeDesignSessionService(prisma);
+
+    await service.createCandidate({
+      sessionId: 'session-1',
+      label: '初稿',
+      recipeDraft: {
+        items: [{ name: 'chicken', notes: undefined }],
+        omitted: undefined,
+      } as any,
+      calculation: { fediaf: 'not-run' },
+      resultStatus: AiRecipeResultStatus.LIMITED_DRAFT,
+      changeSummary: { reason: '缺少营养数据', optional: undefined } as any,
+    });
+
+    expect(prisma.agentRecipeDesignCandidate.create).toHaveBeenCalledWith({
+      data: {
+        sessionId: 'session-1',
+        label: '初稿',
+        recipeDraft: { items: [{ name: 'chicken' }] },
+        calculation: { fediaf: 'not-run' },
+        resultStatus: 'LIMITED_DRAFT',
+        changeSummary: { reason: '缺少营养数据' },
+      },
+    });
+  });
 });

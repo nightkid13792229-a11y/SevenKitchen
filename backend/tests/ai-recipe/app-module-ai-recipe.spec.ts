@@ -37,6 +37,9 @@ describe('AppModule AI recipe conditional metadata registration', () => {
       KnowledgeBaseService,
     } = require('../../src/application/ai-recipe/knowledge-base.service');
     const {
+      RecipeDesignSessionService,
+    } = require('../../src/application/ai-recipe/recipe-design-session.service');
+    const {
       EvidenceService,
     } = require('../../src/application/ai-recipe/evidence.service');
     const {
@@ -53,6 +56,7 @@ describe('AppModule AI recipe conditional metadata registration', () => {
       AppModule,
       AiRecipeController,
       KnowledgeBaseService,
+      RecipeDesignSessionService,
       EvidenceService,
       NutritionAssessmentService,
       ConstraintSynthesisService,
@@ -67,6 +71,7 @@ describe('AppModule AI recipe conditional metadata registration', () => {
       AppModule,
       AiRecipeController,
       KnowledgeBaseService,
+      RecipeDesignSessionService,
       EvidenceService,
       NutritionAssessmentService,
       ConstraintSynthesisService,
@@ -81,6 +86,7 @@ describe('AppModule AI recipe conditional metadata registration', () => {
 
     expect(controllers).not.toContain(AiRecipeController);
     expect(providers).not.toContain(KnowledgeBaseService);
+    expect(providers).not.toContain(RecipeDesignSessionService);
     expect(providers).toEqual(
       expect.arrayContaining([
         AdminGuard,
@@ -92,8 +98,12 @@ describe('AppModule AI recipe conditional metadata registration', () => {
   });
 
   it('includes Prisma-backed AI recipe metadata when Prisma is enabled', () => {
-    const { AppModule, AiRecipeController, KnowledgeBaseService } =
-      loadAppModuleWithRepoModes('prisma');
+    const {
+      AppModule,
+      AiRecipeController,
+      KnowledgeBaseService,
+      RecipeDesignSessionService,
+    } = loadAppModuleWithRepoModes('prisma');
 
     const controllers = Reflect.getMetadata(
       MODULE_METADATA.CONTROLLERS,
@@ -103,5 +113,6 @@ describe('AppModule AI recipe conditional metadata registration', () => {
 
     expect(controllers).toContain(AiRecipeController);
     expect(providers).toContain(KnowledgeBaseService);
+    expect(providers).toContain(RecipeDesignSessionService);
   });
 });

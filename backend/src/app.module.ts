@@ -169,6 +169,7 @@ import { KnowledgeBaseService } from './application/ai-recipe/knowledge-base.ser
 import { EvidenceService } from './application/ai-recipe/evidence.service';
 import { NutritionAssessmentService } from './application/ai-recipe/nutrition-assessment.service';
 import { ConstraintSynthesisService } from './application/ai-recipe/constraint-synthesis.service';
+import { AdminGuard } from './interfaces/guards/role.guard';
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -259,9 +260,12 @@ validatePrismaConfig();
     FeedbackController,
     ProcurementSkuController,
     IngredientSuggestionsController,
-    AiRecipeController,
     ...(isPrismaEnabled()
-      ? [DogProfileAnalyticsController, AdminDogProfileAnalyticsController]
+      ? [
+          DogProfileAnalyticsController,
+          AdminDogProfileAnalyticsController,
+          AiRecipeController,
+        ]
       : []),
   ],
   providers: [
@@ -346,6 +350,7 @@ validatePrismaConfig();
     DIYSheetStorageService,
     JwtAuthService,
     AuthGuard,
+    AdminGuard,
     IngredientService,
     IngredientPricingService,
     {
@@ -621,10 +626,10 @@ validatePrismaConfig();
     RecommendedProductService,
     DogProfileAnalyticsService,
     ProcurementSkuService,
-    KnowledgeBaseService,
     EvidenceService,
     NutritionAssessmentService,
     ConstraintSynthesisService,
+    ...(isPrismaEnabled() ? [KnowledgeBaseService] : []),
   ],
 })
 export class AppModule implements OnModuleInit {

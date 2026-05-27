@@ -30,5 +30,6 @@ export class AddAssessmentEvidenceDto {
 
   @IsOptional()
   @IsArray()
+  @IsString({ each: true })
   attachmentUrls?: string[];
 }

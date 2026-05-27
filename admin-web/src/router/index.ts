@@ -93,6 +93,24 @@ const routes: RouteRecordRaw[] = [
         meta: { title: '编辑食谱' }
       },
       {
+        path: 'ai-recipe/knowledge-sources',
+        name: 'AiRecipeKnowledgeSources',
+        component: () => import('@/views/AiRecipe/KnowledgeSources.vue'),
+        meta: { title: 'AI 食谱知识源' }
+      },
+      {
+        path: 'ai-recipe/rule-packages',
+        name: 'AiRecipeRulePackages',
+        component: () => import('@/views/AiRecipe/RulePackages.vue'),
+        meta: { title: 'AI 食谱规则包' }
+      },
+      {
+        path: 'ai-recipe/assessments/:id',
+        name: 'AiRecipeAssessmentDetail',
+        component: () => import('@/views/AiRecipe/AssessmentDetail.vue'),
+        meta: { title: '营养评估详情' }
+      },
+      {
         path: 'orders',
         name: 'Orders',
         component: () => import('@/views/Orders/index.vue'),

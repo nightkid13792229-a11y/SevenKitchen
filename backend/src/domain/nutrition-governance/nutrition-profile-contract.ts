@@ -91,13 +91,16 @@ const META_KEYS = [
   'externalId',
   'sourceRecordId',
   'sourceForms',
+  'fieldSources',
   'conversionNotes',
   'sourceTitle',
   'sourceProvider',
+  'sourceDetail',
   'attachments',
   'confidenceLevel',
   'fieldDisplayUnits',
   'versionNote',
+  'reviewNotes',
 ] as const;
 
 const TAB_KEY_SETS: Record<NutritionFieldTab, ReadonlySet<string>> = {

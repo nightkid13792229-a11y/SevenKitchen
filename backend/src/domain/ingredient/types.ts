@@ -90,7 +90,8 @@ export interface NutritionMeta {
     | 'AIR_DRIED'
     | 'POWDER'
     | 'OIL'
-    | 'CONCENTRATE';
+    | 'CONCENTRATE'
+    | 'SOAKED';
   isEdiblePortionBasis?: boolean;
   ediblePortionRate?: number | null;
   densityGPerMl?: number | null;
@@ -103,6 +104,8 @@ export interface NutritionMeta {
     | 'MANUAL_ESTIMATE'
     | 'USDA'
     | 'NZFCD'
+    | 'NEVO'
+    | 'TFDA'
     | 'CFCT'
     | 'SUPPLEMENT_LABEL'
     | 'MANUAL'
@@ -117,10 +120,12 @@ export interface NutritionMeta {
   conversionNotes?: Record<string, string>;
   sourceTitle?: string | null;
   sourceProvider?: string | null;
+  sourceDetail?: Record<string, unknown> | null;
   attachments?: string[];
   confidenceLevel?: 'HIGH' | 'MEDIUM' | 'LOW' | null;
   fieldDisplayUnits?: Record<string, string>;
   versionNote?: string | null;
+  reviewNotes?: string | string[] | Record<string, unknown> | null;
 }
 
 type NutritionTabValue = number | null;

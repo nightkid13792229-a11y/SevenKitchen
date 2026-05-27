@@ -103,6 +103,30 @@ describe('nutrition profile contract', () => {
     expect(missingEvidenceFields).not.toContain('vitamins.vitaminD');
   });
 
+  it('accepts structured source details and review notes in profile metadata', () => {
+    const profile = createEmptyNutritionProfile();
+    profile.meta.sourceDetail = {
+      providerUrl: 'https://fdc.nal.usda.gov/',
+      dataset: 'FoodData Central',
+    };
+    profile.meta.reviewNotes = ['水煮鹌鹑蛋缺失字段已由生鹌鹑蛋近似补源。'];
+
+    const issues = validateNutritionProfileContract(profile);
+
+    expect(issues).not.toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'UNKNOWN_PROFILE_FIELD',
+          fieldPath: 'meta.sourceDetail',
+        }),
+        expect.objectContaining({
+          code: 'UNKNOWN_PROFILE_FIELD',
+          fieldPath: 'meta.reviewNotes',
+        }),
+      ]),
+    );
+  });
+
   it('requires a specific vitamin E source form when product labels provide mg values', () => {
     const profile = createEmptyNutritionProfile();
     profile.meta.sourceKind = 'PRODUCT_LABEL';

@@ -98,6 +98,44 @@ describe('RecipeDesignSessionService', () => {
     expect(prisma.agentRecipeDesignCandidate.create).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ['null', null],
+    ['array', []],
+  ])(
+    'rejects top-level %s recipe draft payloads before storing candidates',
+    async (_label, recipeDraft) => {
+      const service = new RecipeDesignSessionService(prisma);
+
+      await expect(
+        service.createCandidate({
+          sessionId: 'session-1',
+          label: '初稿',
+          recipeDraft: recipeDraft as any,
+          calculation: { fediaf: 'not-run' },
+          resultStatus: AiRecipeResultStatus.LIMITED_DRAFT,
+          changeSummary: { reason: '缺少营养数据' },
+        }),
+      ).rejects.toThrow('Invalid JSON payload at recipeDraft: expected object');
+
+      expect(prisma.agentRecipeDesignCandidate.create).not.toHaveBeenCalled();
+    },
+  );
+
+  it('rejects top-level array metadata payloads before storing messages', async () => {
+    const service = new RecipeDesignSessionService(prisma);
+
+    await expect(
+      service.addMessage({
+        sessionId: 'session-1',
+        role: 'ADMIN',
+        content: '请生成配方初稿',
+        metadata: [] as any,
+      }),
+    ).rejects.toThrow('Invalid JSON payload at metadata: expected object');
+
+    expect(prisma.agentRecipeDesignMessage.create).not.toHaveBeenCalled();
+  });
+
   it('omits undefined nested object properties before storing candidates', async () => {
     prisma.agentRecipeDesignCandidate.create.mockResolvedValue({
       id: 'candidate-1',

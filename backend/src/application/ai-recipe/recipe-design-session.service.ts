@@ -60,6 +60,12 @@ export class RecipeDesignSessionService {
     value: Record<string, unknown>,
     fieldName: string,
   ): Prisma.InputJsonObject {
+    if (!this.isPlainObject(value)) {
+      throw new BadRequestException(
+        `Invalid JSON payload at ${fieldName}: expected object`,
+      );
+    }
+
     return this.normalizeJsonValue(value, fieldName) as Prisma.InputJsonObject;
   }
 

@@ -326,6 +326,12 @@ ALTER TABLE ONLY "custom_recipe_attachment"
     FOREIGN KEY ("order_id") REFERENCES "custom_recipe_order"("id")
     ON UPDATE CASCADE ON DELETE CASCADE;
 
+-- reimbursement relations
+ALTER TABLE ONLY "purchase_list"
+    ADD CONSTRAINT "purchase_list_reimbursement_id_fkey"
+    FOREIGN KEY ("reimbursement_id") REFERENCES "reimbursement"("id")
+    ON UPDATE CASCADE ON DELETE SET NULL;
+
 -- diy_sheet foreign keys
 ALTER TABLE ONLY "diy_sheet"
     ADD CONSTRAINT "diy_sheet_user_id_fkey"

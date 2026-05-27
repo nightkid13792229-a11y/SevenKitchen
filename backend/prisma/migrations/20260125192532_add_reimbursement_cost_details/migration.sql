@@ -2,17 +2,24 @@
 -- Date: 2026-01-25
 -- Description: Add platform_fee and custom cost detail fields to reimbursement table
 
-DO $$
-BEGIN
-    IF to_regclass('public.reimbursement') IS NOT NULL THEN
-        ALTER TABLE "reimbursement"
-            ADD COLUMN IF NOT EXISTS "platform_shipping_fee" numeric(10,2),
-            ADD COLUMN IF NOT EXISTS "platform_packaging_fee" numeric(10,2),
-            ADD COLUMN IF NOT EXISTS "custom_fees" jsonb,
-            ADD COLUMN IF NOT EXISTS "payment_proof_urls" text[] DEFAULT '{}'::text[],
-            ADD COLUMN IF NOT EXISTS "payment_proof_keys" text[] DEFAULT '{}'::text[];
+-- Add platform shipping fee
+ALTER TABLE "reimbursement"
+ADD COLUMN "platform_shipping_fee" numeric(10,2);
 
-        CREATE INDEX IF NOT EXISTS "reimbursement_payment_proof_urls_idx"
-            ON "reimbursement" USING GIN ("payment_proof_urls");
-    END IF;
-END $$;
+-- Add platform packaging fee
+ALTER TABLE "reimbursement"
+ADD COLUMN "platform_packaging_fee" numeric(10,2);
+
+-- Add custom_fees column for flexible fee structure
+ALTER TABLE "reimbursement"
+ADD COLUMN "custom_fees" jsonb;
+
+-- Add payment proof columns with defaults
+ALTER TABLE "reimbursement"
+ADD COLUMN "payment_proof_urls" text[] DEFAULT '{}'::text[];
+ALTER TABLE "reimbursement"
+ADD COLUMN "payment_proof_keys" text[] DEFAULT '{}'::text[];
+
+-- Create index for payment proof queries
+CREATE INDEX "reimbursement_payment_proof_urls_idx"
+ON "reimbursement" USING GIN ("payment_proof_urls");

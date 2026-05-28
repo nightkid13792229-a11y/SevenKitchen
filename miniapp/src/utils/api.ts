@@ -383,12 +383,16 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
         resolve(response)
       },
       fail: (err: any) => {
+        const enrichedErr = err && typeof err === 'object'
+          ? { ...err, requestUrl: url }
+          : { errMsg: String(err), requestUrl: url }
+
         if (!options.quiet) {
-          console.error('Request failed:', err)
+          console.error('Request failed:', enrichedErr)
         }
         
         // Determine error type for better user feedback
-        const errMsg = err?.errMsg || String(err) || ''
+        const errMsg = enrichedErr?.errMsg || String(err) || ''
         let errorTitle = '网络错误'
         
         if (errMsg.includes('timeout') || errMsg.includes('超时')) {
@@ -409,7 +413,7 @@ export function request<T = any>(options: RequestOptions): Promise<ApiResponse<T
         }
         
         // Reject with error but don't crash - caller handles gracefully
-        reject(err)
+        reject(enrichedErr)
       }
     })
   })

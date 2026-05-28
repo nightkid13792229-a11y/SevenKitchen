@@ -106,4 +106,33 @@ describe('api request data normalization', () => {
       }),
     }))
   })
+
+  it('includes the resolved request URL when a runtime request fails', async () => {
+    const wxRequest = vi.fn((options: any) => {
+      options.fail({
+        errMsg: 'request:fail -109:net::ERR_ADDRESS_UNREACHABLE',
+        errno: 600001,
+      })
+    })
+
+    vi.stubGlobal('uni', {
+      getStorageSync: vi.fn(() => ''),
+      showToast: vi.fn(),
+    })
+    vi.stubGlobal('wx', {
+      request: wxRequest,
+    })
+
+    await expect(
+      request({
+        url: '/recipes',
+        method: 'GET',
+        quiet: true,
+      }),
+    ).rejects.toMatchObject({
+      errMsg: 'request:fail -109:net::ERR_ADDRESS_UNREACHABLE',
+      errno: 600001,
+      requestUrl: 'https://api.example.com/api/v1/recipes',
+    })
+  })
 })

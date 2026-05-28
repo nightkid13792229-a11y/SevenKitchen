@@ -828,6 +828,7 @@ import {
   appendPreparationMethodText,
 } from '@/utils/preparationMethodText';
 import { validateElementForm } from '@/utils/elementFormValidation';
+import { buildRecipeSubmitData } from '@/utils/recipeFormPayload';
 import {
   RecipeStatus,
   NutritionStandard,
@@ -1427,11 +1428,12 @@ const handleSubmit = async () => {
 
   submitting.value = true;
   try {
-    // Combine nutrition data into form
-    const submitData: RecipeForm = {
-      ...form,
-      nutritionDetailedData: { ...nutritionData },
-    };
+    const submitData = buildRecipeSubmitData(
+      form,
+      nutritionData,
+      {},
+      lifeStageOptions.value.map((option) => option.value),
+    );
 
     if (isEdit.value) {
       await recipeApi.update(recipeId.value!, submitData);
@@ -1454,11 +1456,12 @@ const handleSaveDraft = async () => {
 
   submitting.value = true;
   try {
-    const submitData: RecipeForm = {
-      ...form,
-      nutritionDetailedData: { ...nutritionData },
-      status: RecipeStatus.DRAFT,
-    };
+    const submitData = buildRecipeSubmitData(
+      form,
+      nutritionData,
+      { status: RecipeStatus.DRAFT },
+      lifeStageOptions.value.map((option) => option.value),
+    );
 
     if (isEdit.value) {
       await recipeApi.update(recipeId.value!, submitData);

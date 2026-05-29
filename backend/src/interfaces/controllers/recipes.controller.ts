@@ -209,7 +209,7 @@ export class RecipesController {
       }));
 
     return {
-      id: recipe.id,
+      id: recipe.recipeId || recipe.id,
       version: recipe.version,
       name: recipe.name,
       status: recipe.status,

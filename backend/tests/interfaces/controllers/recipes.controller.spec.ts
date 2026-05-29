@@ -68,6 +68,9 @@ describe('RecipesController (e2e)', () => {
       findFirst: jest.fn(),
       update: jest.fn(),
     },
+    dog: {
+      findFirst: jest.fn(),
+    },
     preparationMethod: {
       findMany: jest.fn().mockResolvedValue([]),
     },
@@ -134,6 +137,7 @@ describe('RecipesController (e2e)', () => {
     mockDogBreedRepository.findById.mockResolvedValue(mockBreed);
     mockDogBreedRepository.findAll.mockResolvedValue([mockBreed]);
     mockPrismaService.preparationMethod.findMany.mockResolvedValue([]);
+    mockPrismaService.dog.findFirst.mockResolvedValue(null);
     mockPrismaService.recipe.findFirst.mockImplementation(
       async (args?: { where?: { recipeId?: string } }) => {
         const recipeId = args?.where?.recipeId;
@@ -224,6 +228,63 @@ describe('RecipesController (e2e)', () => {
       expect(Array.isArray(response.body.data.data)).toBe(true);
       expect(response.body.data.data).toHaveLength(0);
       expect(response.body.data.total).toBe(0);
+    });
+  });
+
+  describe('GET /api/v1/recipes/recommendations/:dogId', () => {
+    it('returns business recipe ids so recommended recipe cards can open detail and DIY pages', async () => {
+      const dogId = '550e8400-e29b-41d4-a716-446655440021';
+      const customerId = '550e8400-e29b-41d4-a716-446655440022';
+      const internalRecipeId = '550e8400-e29b-41d4-a716-446655440023';
+      const businessRecipeId = '550e8400-e29b-41d4-a716-446655440024';
+
+      mockPrismaService.dog.findFirst.mockResolvedValue({
+        id: dogId,
+        name: '面包',
+        birthday: new Date('2021-01-01T00:00:00.000Z'),
+        currentWeightKg: 1.3,
+        mealsPerDay: 2,
+        lifeStageOverride: 'NONE',
+        cachedTargetFoodKcal: 180,
+        allergyFoods: null,
+        pickyFoods: null,
+        avatarUrl: null,
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        {
+          id: internalRecipeId,
+          recipeId: businessRecipeId,
+          version: 12,
+          name: '鸭胸猪里脊鸡蛋青花鱼',
+          status: 'PUBLIC',
+          energyDensityKcalPerKg: 1244,
+          coverImageUrl: 'http://img.example.com/recipe.jpg',
+          coverTitle: '约克夏友好',
+          targetHealthTags: [],
+          applicableLifeStages: ['ADULT'],
+          favoriteCount: 20,
+          diyGenCount: 10,
+          items: [
+            {
+              ingredientId: 'ingredient-duck',
+              ratioPercent: 60,
+              ingredient: {
+                name: '鸭胸肉',
+                type: 'FOOD',
+              },
+            },
+          ],
+        },
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/recommendations/${dogId}`)
+        .set('X-Customer-Id', customerId)
+        .expect(200);
+
+      expect(response.body.code).toBe(0);
+      expect(response.body.data.exclusive[0].id).toBe(businessRecipeId);
+      expect(response.body.data.exclusive[0].id).not.toBe(internalRecipeId);
     });
   });
 

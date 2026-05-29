@@ -1105,6 +1105,16 @@ export class RecipeDesignerService {
     return this.buildDesignRecipeWorkbenchCards(drafts);
   }
 
+  async getDraft(id: string, userId: string) {
+    const draft = await this.loadDraft(id);
+
+    if (draft.createdBy !== userId && !this.isPublishedDraft(draft)) {
+      throw new NotFoundException(`Design recipe ${id} not found`);
+    }
+
+    return draft;
+  }
+
   private buildDesignRecipeWorkbenchCards(
     drafts: DesignRecipeWithItems[],
   ): DesignRecipeWorkbenchCard[] {

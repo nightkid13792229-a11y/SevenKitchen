@@ -162,6 +162,16 @@ export class RecipeDesignerController {
     return ApiResponseDto.success(drafts);
   }
 
+  @Get('drafts/:id')
+  @ApiOperation({ summary: 'Get one recipe design draft detail' })
+  async getDraft(
+    @Param('id') id: string,
+    @CurrentUser() user: RequestUser,
+  ): Promise<ApiResponseDto<any>> {
+    const draft = await this.recipeDesignerService.getDraft(id, user.userId);
+    return ApiResponseDto.success(draft);
+  }
+
   @Post('drafts')
   @ApiOperation({ summary: 'Create a recipe design draft' })
   async createDraft(

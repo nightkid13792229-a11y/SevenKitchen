@@ -32,6 +32,18 @@ describe('RecipeDesignerController authorization', () => {
       /@Post\('drafts\/:id\/publish'\)\s+@Roles\('ADMIN'\)/,
     );
   });
+
+  it('exposes a draft detail route for editor pages opened by id', () => {
+    const source = readFileSync(
+      resolve(
+        process.cwd(),
+        'src/interfaces/controllers/recipe-designer.controller.ts',
+      ),
+      'utf8',
+    );
+
+    expect(source).toMatch(/@Get\('drafts\/:id'\)/);
+  });
 });
 
 describe('RecipeDesignerController', () => {
@@ -40,6 +52,7 @@ describe('RecipeDesignerController', () => {
   const service = {
     listIngredientOptions: jest.fn(),
     listDrafts: jest.fn(),
+    getDraft: jest.fn(),
     createDraft: jest.fn(),
     updateDraft: jest.fn(),
     deleteDraft: jest.fn(),
@@ -95,12 +108,18 @@ describe('RecipeDesignerController', () => {
 
   it('delegates draft CRUD with CurrentUser ids', async () => {
     service.listDrafts.mockResolvedValue([{ id: 'design-1' }]);
+    service.getDraft.mockResolvedValue({ id: 'design-1' });
     service.createDraft.mockResolvedValue({ id: 'design-2' });
     service.updateDraft.mockResolvedValue({ id: 'design-1', name: 'new' });
     service.deleteDraft.mockResolvedValue({ id: 'design-1' });
 
     await expect(controller.listDrafts(currentUser)).resolves.toEqual(
       expect.objectContaining({ code: 0, data: [{ id: 'design-1' }] }),
+    );
+    await expect(
+      (controller as any).getDraft('design-1', currentUser),
+    ).resolves.toEqual(
+      expect.objectContaining({ code: 0, data: { id: 'design-1' } }),
     );
     await expect(
       controller.createDraft(
@@ -116,6 +135,7 @@ describe('RecipeDesignerController', () => {
     ).resolves.toEqual(expect.objectContaining({ code: 0 }));
 
     expect(service.listDrafts).toHaveBeenCalledWith('staff-1');
+    expect(service.getDraft).toHaveBeenCalledWith('design-1', 'staff-1');
     expect(service.createDraft).toHaveBeenCalledWith(
       { name: 'new', scenario: 'ADULT_MER_110' },
       'staff-1',

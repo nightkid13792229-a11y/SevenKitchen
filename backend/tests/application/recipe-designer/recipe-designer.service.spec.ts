@@ -1370,6 +1370,52 @@ describe('RecipeDesignerService', () => {
     expect(prisma.designRecipe.update).not.toHaveBeenCalled();
   });
 
+  it('loads a draft detail for the current staff user', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({ id: 'design-1', createdBy: 'staff-1', status: 'DRAFT' }),
+    );
+
+    await expect((service as any).getDraft('design-1', 'staff-1')).resolves.toEqual(
+      expect.objectContaining({ id: 'design-1', createdBy: 'staff-1' }),
+    );
+
+    expect(prisma.designRecipe.findUnique).toHaveBeenCalledWith({
+      where: { id: 'design-1' },
+      include: expect.any(Object),
+    });
+  });
+
+  it('does not reveal unpublished draft details owned by another staff user', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({ id: 'design-other', createdBy: 'staff-2', status: 'DRAFT' }),
+    );
+
+    await expect(
+      (service as any).getDraft('design-other', 'staff-1'),
+    ).rejects.toThrow(NotFoundException);
+  });
+
+  it('allows staff to load published draft details from shared recipe series', async () => {
+    prisma.designRecipe.findUnique.mockResolvedValue(
+      draft({
+        id: 'design-published',
+        createdBy: 'staff-2',
+        status: 'PUBLISHED',
+        publishedRecipeId: 'recipe-series-1',
+        publishedAt: new Date('2026-05-20T00:00:00.000Z'),
+      }),
+    );
+
+    await expect(
+      (service as any).getDraft('design-published', 'staff-1'),
+    ).resolves.toEqual(
+      expect.objectContaining({
+        id: 'design-published',
+        publishedRecipeId: 'recipe-series-1',
+      }),
+    );
+  });
+
   it('rejects adding items to another staff user draft', async () => {
     prisma.designRecipe.findUnique.mockResolvedValue(
       draft({ id: 'design-other', createdBy: 'staff-2', status: 'DRAFT' }),

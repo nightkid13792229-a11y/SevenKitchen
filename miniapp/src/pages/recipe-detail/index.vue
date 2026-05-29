@@ -49,44 +49,6 @@
       </text>
     </view>
 
-    <view class="dog-fit-card" v-if="dogs.length > 0">
-      <view class="dog-fit-header">
-        <view>
-          <text class="dog-fit-title">按狗狗重算喂食量</text>
-          <text class="dog-fit-subtitle">切换宠物后，饭量和阶段提醒会自动更新</text>
-        </view>
-      </view>
-      <scroll-view scroll-x class="detail-dog-scroll">
-        <view
-          v-for="dog in dogs"
-          :key="dog.id"
-          :class="['detail-dog-chip', { active: dog.id === selectedDogId }]"
-          @tap="selectDetailDog(dog.id)"
-        >
-          <image class="detail-dog-avatar" :src="resolveDogAvatarSrc(dog.avatarUrl)" mode="aspectFill" />
-          <text class="detail-dog-name">{{ dog.name }}</text>
-        </view>
-      </scroll-view>
-      <view v-if="dogCalcLoading" class="dog-fit-loading">正在重算...</view>
-      <view v-else-if="dogRecipeCalc" class="dog-fit-result">
-        <view class="dog-fit-metric">
-          <text class="dog-fit-label">每日参考</text>
-          <text class="dog-fit-value">{{ Math.round(dogRecipeCalc.dailyIntakeG) }}g</text>
-        </view>
-        <view class="dog-fit-metric">
-          <text class="dog-fit-label">每餐约</text>
-          <text class="dog-fit-value">{{ Math.round(dogRecipeCalc.perMealIntakeG) }}g</text>
-        </view>
-        <view class="dog-fit-metric">
-          <text class="dog-fit-label">每日热量</text>
-          <text class="dog-fit-value">{{ Math.round(dogRecipeCalc.finalFoodKcal) }}kcal</text>
-        </view>
-      </view>
-      <view v-if="lifeStageWarning" class="life-stage-warning">
-        {{ lifeStageWarning }}
-      </view>
-    </view>
-
     <!-- 营养数据卡片 -->
     <view class="nutrition-card">
       <view class="nutrition-item">
@@ -383,7 +345,6 @@ import { request, addFavorite, removeFavorite, checkFavorite, createRecipeShareT
 import { normalizeImageUrl } from '../../utils/config'
 import { addCartItem, getCartItems, removeCartItem } from '../../utils/cart'
 import { formatSupplementTargets } from '../../utils/supplement-nutrients'
-import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
 import ReviewList from '../../components/ReviewList.vue'
 import ReviewForm from '../../components/ReviewForm.vue'
 import CustomerServiceFloatButton from '../../components/CustomerServiceFloatButton.vue'
@@ -453,10 +414,6 @@ const isInCart = ref(false)
 const recipeId = ref('')
 const shareToken = ref('')
 const dogId = ref<string | null>(null)
-const dogs = ref<any[]>([])
-const selectedDogId = ref('')
-const dogRecipeCalc = ref<any | null>(null)
-const dogCalcLoading = ref(false)
 const showReviewForm = ref(false)
 const reviewListRef = ref<InstanceType<typeof ReviewList> | null>(null)
 const HOME_RECIPE_STATS_DIRTY_KEY = 'home_recipe_stats_dirty'
@@ -467,19 +424,6 @@ const healthTagUuidLabelMap = ref<Record<string, string>>({})
 // 原料排序（按sortOrder升序）
 const sortedItems = computed(() => {
   return [...recipe.value.items].sort((a, b) => a.sortOrder - b.sortOrder)
-})
-
-const selectedDog = computed(() => {
-  return dogs.value.find((dog) => dog.id === selectedDogId.value) || null
-})
-
-const lifeStageWarning = computed(() => {
-  if (!selectedDog.value || !recipe.value.applicableLifeStages?.length) return ''
-  const stage = selectedDog.value.lifeStageOverride && selectedDog.value.lifeStageOverride !== 'NONE'
-    ? selectedDog.value.lifeStageOverride
-    : ''
-  if (!stage || recipe.value.applicableLifeStages.includes(stage)) return ''
-  return '这道食谱的适配阶段与当前狗狗档案不完全一致，下单前建议确认阶段和喂食目标。'
 })
 
 onMounted(async () => {
@@ -496,7 +440,6 @@ onMounted(async () => {
 
   if (recipeId.value) {
     updateCartStatus()
-    loadDogsForDetail()
     loadRecipeDetail()
     // 只有登录时才检查收藏状态，避免显示"请先登录"提示
     const token = uni.getStorageSync('token')
@@ -542,10 +485,6 @@ function loadRecipeDetail() {
       // 非公开食谱：预生成分享令牌（仅登录员工可操作）
       if (res.data.status !== 'PUBLIC') {
         preGenerateShareToken()
-      }
-
-      if (selectedDogId.value) {
-        calcSelectedDogForRecipe()
       }
     }
   }).catch((err: any) => {
@@ -598,63 +537,6 @@ function loadHealthTagMapping(): Promise<void> {
   }).catch((err: any) => {
     console.error('Load health tag mapping error:', err)
   })
-}
-
-async function loadDogsForDetail() {
-  const token = uni.getStorageSync('token')
-  if (!token) return
-
-  try {
-    const res: any = await request({
-      url: '/dogs',
-      method: 'GET',
-      quiet: true,
-      suppressErrorToast: true
-    })
-    if (res.code === 0 && Array.isArray(res.data)) {
-      dogs.value = res.data
-      if (dogs.value.length > 0) {
-        selectedDogId.value = dogId.value || uni.getStorageSync('dogId') || dogs.value[0].id
-        if (!dogs.value.some((dog) => dog.id === selectedDogId.value)) {
-          selectedDogId.value = dogs.value[0].id
-        }
-        calcSelectedDogForRecipe()
-      }
-    }
-  } catch (error) {
-    console.warn('[RecipeDetail] Load dogs failed:', error)
-  }
-}
-
-function selectDetailDog(id: string) {
-  if (!id || selectedDogId.value === id) return
-  selectedDogId.value = id
-  dogId.value = id
-  uni.setStorageSync('dogId', id)
-  calcSelectedDogForRecipe()
-}
-
-async function calcSelectedDogForRecipe() {
-  if (!selectedDogId.value || !recipeId.value || !recipe.value.id) return
-
-  dogCalcLoading.value = true
-  try {
-    const res: any = await request({
-      url: `/dogs/${selectedDogId.value}/calc-for-recipe`,
-      method: 'POST',
-      data: { recipeId: recipeId.value },
-      quiet: true,
-      suppressErrorToast: true
-    })
-    if (res.code === 0 && res.data) {
-      dogRecipeCalc.value = res.data
-    }
-  } catch (error) {
-    console.warn('[RecipeDetail] Calc dog for recipe failed:', error)
-    dogRecipeCalc.value = null
-  } finally {
-    dogCalcLoading.value = false
-  }
 }
 
 async function checkFavoriteStatus() {
@@ -1149,109 +1031,6 @@ function onReviewSubmitted() {
 }
 
 /* 营养数据卡片 */
-.dog-fit-card {
-  margin: 24rpx;
-  padding: 28rpx;
-  background: #fff;
-  border-radius: 16rpx;
-}
-
-.dog-fit-title {
-  display: block;
-  font-size: 32rpx;
-  font-weight: 700;
-  color: #2f261f;
-}
-
-.dog-fit-subtitle {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 24rpx;
-  color: #7a6a5d;
-}
-
-.detail-dog-scroll {
-  margin-top: 22rpx;
-  white-space: nowrap;
-}
-
-.detail-dog-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 12rpx;
-  margin-right: 18rpx;
-  padding: 10rpx 18rpx 10rpx 10rpx;
-  border-radius: 999rpx;
-  background: #f7f2ed;
-  color: #7a5b43;
-  vertical-align: middle;
-}
-
-.detail-dog-chip.active {
-  background: #f08a3c;
-  color: #fff;
-}
-
-.detail-dog-avatar {
-  width: 52rpx;
-  height: 52rpx;
-  border-radius: 50%;
-}
-
-.detail-dog-chip.active .detail-dog-avatar {
-  width: 64rpx;
-  height: 64rpx;
-}
-
-.detail-dog-name {
-  font-size: 24rpx;
-  font-weight: 600;
-}
-
-.dog-fit-loading {
-  margin-top: 22rpx;
-  color: #8a7a6c;
-  font-size: 24rpx;
-}
-
-.dog-fit-result {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 16rpx;
-  margin-top: 22rpx;
-}
-
-.dog-fit-metric {
-  padding: 18rpx 12rpx;
-  border-radius: 14rpx;
-  background: #fff7ef;
-  text-align: center;
-}
-
-.dog-fit-label {
-  display: block;
-  font-size: 22rpx;
-  color: #8a7a6c;
-}
-
-.dog-fit-value {
-  display: block;
-  margin-top: 8rpx;
-  font-size: 30rpx;
-  font-weight: 800;
-  color: #2f261f;
-}
-
-.life-stage-warning {
-  margin-top: 18rpx;
-  padding: 18rpx;
-  border-radius: 12rpx;
-  background: #fff3df;
-  color: #8a5a16;
-  font-size: 24rpx;
-  line-height: 1.45;
-}
-
 .nutrition-card {
   background-color: #fff;
   border-radius: 16rpx;

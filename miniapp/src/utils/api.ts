@@ -1392,36 +1392,6 @@ export const reviewApi = {
   },
 }
 
-// ==================== Recipe Recommendations API ====================
-
-export const recipeRecommendationApi = {
-  getForDog: (dogId: string) => {
-    return request<{
-      dog: {
-        id: string
-        name: string
-        avatarUrl?: string | null
-        currentWeightKg?: number
-        mealsPerDay?: number
-        lifeStage?: string
-        targetFoodKcal?: number | null
-      }
-      exclusive: any[]
-      general: any[]
-    }>({
-      url: `/recipes/recommendations/${dogId}`,
-      method: 'GET',
-      quiet: true,
-      suppressErrorToast: true,
-    }).then((res) => {
-      if (res.code !== 0) {
-        throw new Error(res.message || '推荐食谱加载失败')
-      }
-      return res.data
-    })
-  },
-}
-
 // ==================== Feedback ====================
 
 /**

@@ -36,18 +36,18 @@ export const SOURCE_PLAN_OPTIONS: Array<{
 }> = [
   {
     code: 'ORGANIC',
-    label: '溯源优选',
-    description: '所有档位均满足或高于人类食品安全标准；本档优先选择溯源更完整、批次更稳定的原料。',
+    label: '有机优先',
+    description: '优先选择有机、草饲、散养、非转基因来源',
   },
   {
     code: 'MARKET_PREMIUM',
-    label: '精选日常',
-    description: '日常推荐档位，安全标准不降级，主要区别在采购渠道、批次稳定性和价格结构。',
+    label: '超市优先',
+    description: '优先选择山姆、盒马、沃集鲜等商超来源',
   },
   {
     code: 'WHOLESALE',
-    label: '安心基础',
-    description: '以人食级安全为底线，优先选择成熟生鲜渠道；价格更轻，但不是安全标准更低。',
+    label: '批发市场优先',
+    description: '人食级原料，优先选择生鲜批发来源',
   },
 ]
 

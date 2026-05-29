@@ -192,9 +192,6 @@
           <text class="source-plan-price">{{ formatSourcePlanPrice(option.code) }}</text>
         </view>
       </view>
-      <text class="source-plan-safety-copy">
-        所有档位均满足或高于人类食品安全标准，差异主要在采购渠道、溯源完整度和批次稳定性；选择安心基础也不是降低安全标准。
-      </text>
 
       <view v-if="totalIngredientCount === 0" class="ingredient-empty-state">
         <text class="ingredient-empty-text">原料清单生成中，请稍后查看</text>
@@ -973,9 +970,9 @@ function getIngredientTypeClass(type: string): string {
 
 function formatSourcePlanShortName(code: IngredientSourcePlanCode): string {
   const map: Record<IngredientSourcePlanCode, string> = {
-    ORGANIC: '溯源优选',
-    MARKET_PREMIUM: '精选日常',
-    WHOLESALE: '安心基础',
+    ORGANIC: '有机优先',
+    MARKET_PREMIUM: '超市优先',
+    WHOLESALE: '批发市场优先',
   }
   return map[code]
 }
@@ -3793,17 +3790,6 @@ function goToCreateDog() {
 .source-plan-card.compact .source-plan-price {
   font-size: 25rpx;
   line-height: 1.25;
-}
-
-.source-plan-safety-copy {
-  display: block;
-  margin-top: 16rpx;
-  padding: 18rpx;
-  border-radius: 14rpx;
-  background: #fff7ef;
-  color: #7a5b43;
-  font-size: 24rpx;
-  line-height: 1.45;
 }
 
 .source-plan-check {

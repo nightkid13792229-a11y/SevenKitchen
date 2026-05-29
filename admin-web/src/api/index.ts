@@ -265,7 +265,4 @@ export { platformConfigApi } from './platformConfig'
 // Re-export customer service API
 export { customerServiceApi } from './customerService'
 
-// Re-export review API
-export { reviewApi } from './reviews'
-
 export default api

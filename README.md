@@ -1,5 +1,7 @@
 # SevenKitchen - 狗狗鲜食 SaaS & ERP
 
+> 合并、部署、上传小程序审核前，必须先读：[Release Stability Notice](./IMPORTANT_RELEASE_STABILITY_NOTICE.md)。
+
 ## 🚨 重要提示（AI开发者必读）
 
 ### 在操作数据库前，必须阅读：

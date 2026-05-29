@@ -122,6 +122,26 @@ export function getBaseUrl(): string {
     return LAN_BASE_URL
   }
 
+  if (isDevTools()) {
+    try {
+      const stored = uni.getStorageSync(STORAGE_KEY)
+      const migratedStored = migrateLegacyDevBaseUrl(stored)
+      if (migratedStored && !migratedStored.includes('api.sevenkitchen.cloud/api/v1')) {
+        if (migratedStored !== stored) {
+          uni.setStorageSync(STORAGE_KEY, migratedStored)
+        }
+        return migratedStored
+      }
+      if (stored) {
+        uni.removeStorageSync(STORAGE_KEY)
+      }
+    } catch (err) {
+      console.warn('Failed to read BASE_URL from storage:', err)
+    }
+
+    return DEV_BASE_URL
+  }
+
   // 优先级3: 手动配置的地址（Storage）
   try {
     const stored = uni.getStorageSync(STORAGE_KEY)
@@ -137,10 +157,6 @@ export function getBaseUrl(): string {
   }
 
   // 优先级4: 开发者工具 → 使用localhost
-  if (isDevTools()) {
-    return DEV_BASE_URL
-  }
-
   // 优先级5: 默认开发环境地址
   return DEFAULT_BASE_URL
 }
@@ -198,6 +214,10 @@ export function normalizeImageUrl(imageUrl: string | undefined | null): string {
   // Fix historical data: replace HTTP CDN URL with HTTPS
   if (imageUrl.includes('http://img.sevenkitchen.cloud')) {
     return imageUrl.replace('http://img.sevenkitchen.cloud', 'https://img.sevenkitchen.cloud')
+  }
+
+  if (imageUrl.includes('static.sevenkitchen.local')) {
+    return ''
   }
 
   // If URL is not from localhost, return as-is

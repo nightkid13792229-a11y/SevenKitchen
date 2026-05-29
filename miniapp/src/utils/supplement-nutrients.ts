@@ -93,6 +93,29 @@ function getNutritionProfile(item: any): any {
   )
 }
 
+function getRawBasisType(item: any): string {
+  const nutritionProfile = getNutritionProfile(item)
+  if (Array.isArray(nutritionProfile?.items)) {
+    return mapLegacyBasisType(nutritionProfile.items[0]?.basisType)
+  }
+
+  return nutritionProfile?.meta?.rawBasisType || 'PER_100_G'
+}
+
+function hasUnsupportedExplicitRawBasisType(nutritionProfile: any): boolean {
+  const rawBasisType = nutritionProfile?.meta?.rawBasisType
+  return (
+    typeof rawBasisType === 'string' &&
+    ![
+      'PER_100_G',
+      'PER_100_ML',
+      'PER_1_G',
+      'PER_1_ML',
+      'PER_SERVING'
+    ].includes(rawBasisType)
+  )
+}
+
 export function getNutritionProfileFieldValue(
   nutritionProfile: any,
   fieldPath: string
@@ -103,13 +126,108 @@ export function getNutritionProfileFieldValue(
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined
 }
 
+function normalizeNutritionKey(value: unknown): string {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[.\s_-]+/g, '')
+}
+
+function mapLegacyBasisType(value: unknown): string {
+  if (value === 'PER_1_PCS') {
+    return 'PER_SERVING'
+  }
+
+  return [
+    'PER_100_G',
+    'PER_100_ML',
+    'PER_1_G',
+    'PER_1_ML',
+    'PER_SERVING'
+  ].includes(String(value))
+    ? String(value)
+    : 'PER_100_G'
+}
+
+function resolveValueByBasis(value: number, rawBasisType: string): number | undefined {
+  switch (rawBasisType) {
+    case 'PER_100_G':
+    case 'PER_100_ML':
+      return value / 100
+    case 'PER_1_G':
+    case 'PER_1_ML':
+    case 'PER_SERVING':
+      return value
+    default:
+      return undefined
+  }
+}
+
+function resolveLegacyNutritionItemConcentration(
+  nutritionProfile: any,
+  target: SupplementTarget
+): number | undefined {
+  if (!Array.isArray(nutritionProfile?.items)) {
+    return undefined
+  }
+
+  const [, fieldKey = target.fieldPath] = target.fieldPath.split('.')
+  const targetKeys = new Set(
+    [
+      target.fieldPath,
+      fieldKey,
+      target.label
+    ].map(normalizeNutritionKey)
+  )
+  const item = nutritionProfile.items.find((item: any) =>
+    [
+      item?.nutrientCode,
+      item?.nutrientName
+    ].map(normalizeNutritionKey).some((key) => targetKeys.has(key))
+  )
+  const value = Number(item?.value)
+  if (!Number.isFinite(value) || value <= 0) {
+    return undefined
+  }
+
+  return resolveValueByBasis(value, mapLegacyBasisType(item?.basisType))
+}
+
+function resolveNutritionProfileConcentration(
+  nutritionProfile: any,
+  fieldPath: string
+): number | undefined {
+  const value = getNutritionProfileFieldValue(nutritionProfile, fieldPath)
+  if (value === undefined || value <= 0) {
+    return undefined
+  }
+
+  const rawBasisType =
+    nutritionProfile?.meta?.rawBasisType || 'PER_100_G'
+
+  return resolveValueByBasis(value, rawBasisType)
+}
+
 function getSupplementConcentration(item: any, target: SupplementTarget): number | undefined {
-  const nutritionProfileValue = getNutritionProfileFieldValue(
-    getNutritionProfile(item),
+  const nutritionProfile = getNutritionProfile(item)
+  if (hasUnsupportedExplicitRawBasisType(nutritionProfile)) {
+    return undefined
+  }
+
+  const nutritionProfileValue = resolveNutritionProfileConcentration(
+    nutritionProfile,
     target.fieldPath
   )
   if (nutritionProfileValue !== undefined) {
     return nutritionProfileValue
+  }
+
+  const legacyNutritionProfileValue = resolveLegacyNutritionItemConcentration(
+    nutritionProfile,
+    target
+  )
+  if (legacyNutritionProfileValue !== undefined) {
+    return legacyNutritionProfileValue
   }
 
   const activeNutrients = getLegacyActiveNutrients(item)
@@ -173,6 +291,14 @@ export function getResolvedSupplementNutrientUnit(item: any): string {
 }
 
 export function getResolvedSupplementDisplayUnit(item: any): string {
+  const rawBasisType = getRawBasisType(item)
+  const fallbackUnit =
+    rawBasisType === 'PER_1_ML' || rawBasisType === 'PER_100_ML'
+      ? 'ml'
+      : rawBasisType === 'PER_SERVING'
+        ? 'serving'
+        : 'g'
+
   return (
     item?.displayUnit ||
     item?.unit_display_label ||
@@ -180,7 +306,7 @@ export function getResolvedSupplementDisplayUnit(item: any): string {
     item?.ingredient?.displayUnit ||
     item?.ingredient?.unitDisplayLabel ||
     item?.unit ||
-    'g'
+    fallbackUnit
   )
 }
 

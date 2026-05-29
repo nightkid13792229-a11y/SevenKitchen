@@ -192,6 +192,9 @@
           <text class="source-plan-price">{{ formatSourcePlanPrice(option.code) }}</text>
         </view>
       </view>
+      <text class="source-plan-safety-copy">
+        所有档位均满足或高于人类食品安全标准，差异主要在采购渠道、溯源完整度和批次稳定性；选择安心基础也不是降低安全标准。
+      </text>
 
       <view v-if="totalIngredientCount === 0" class="ingredient-empty-state">
         <text class="ingredient-empty-text">原料清单生成中，请稍后查看</text>
@@ -431,29 +434,6 @@
       </view>
     </view>
 
-    <view
-      v-if="showSaveSuccessDialog"
-      class="save-success-overlay"
-      @tap="closeSaveSuccessDialog"
-    >
-      <view class="save-success-dialog" @tap.stop>
-        <text class="save-success-title">保存成功</text>
-        <view class="save-success-content">
-          <text class="save-success-line">成品配置方案已经保存。</text>
-          <text class="save-success-line">请联系Seven爸爸了解制作信息。</text>
-          <view class="save-success-wechat-row">
-            <text class="save-success-wechat">微信号：{{ SEVEN_DAD_WECHAT_ID }}</text>
-            <button class="btn-copy-wechat button-reset" @tap="copySevenDadWechatId">
-              复制微信号
-            </button>
-          </view>
-        </view>
-        <button class="btn-save-success-confirm button-reset" @tap="closeSaveSuccessDialog">
-          知道了
-        </button>
-      </view>
-    </view>
-
     <view class="bottom-bar">
       <view class="bottom-price">
         <text class="bottom-total">{{ bottomPriceTitle }}</text>
@@ -464,9 +444,17 @@
         :disabled="!canBuyNow"
         @tap="buyNow"
       >
-        保存采购及分装配置
+        去确认订单
       </button>
     </view>
+
+    <CustomerServiceFloatButton
+      source-type="PRODUCT"
+      :product-id="recipeId"
+      :product-name="recipe.name"
+      :image-url="normalizeImageUrl(recipe.coverImageUrl || '')"
+      title="下单配置咨询"
+    />
   </view>
 </template>
 
@@ -479,6 +467,7 @@ import {
   getLifeStageLabel,
   isRecipeLifeStageMatch,
   resolveDogLifeStage,
+  resolveDogRecipeLifeStage,
 } from '../../utils/life-stage-match'
 import {
   DEFAULT_ORDER_CYCLE_DAYS,
@@ -498,6 +487,7 @@ import {
   buildIngredientDisplayName,
   buildIngredientPurchaseChannelText,
 } from './ingredientDisplay'
+import CustomerServiceFloatButton from '../../components/CustomerServiceFloatButton.vue'
 
 interface Dog {
   id: string
@@ -509,6 +499,7 @@ interface Dog {
   birthday?: string
   ageText?: string
   gender?: string
+  activityLevel?: string
   lifeStageOverride?: string
 }
 
@@ -678,7 +669,6 @@ interface OverheadCostDetail {
 type PreparationMethod = 'CHOPPED' | 'DICED'
 type CookingMethod = 'RAW' | 'COOKED'
 
-const SEVEN_DAD_WECHAT_ID = 'zhaochengccc'
 const recipeId = ref('')
 const recipe = ref<Recipe>({
   id: '',
@@ -710,7 +700,6 @@ const isPricePreviewLoading = ref(false)
 const pricePreviewError = ref('')
 const showPackageEditor = ref(false)
 const isCustomPackagePlan = ref(false)
-const showSaveSuccessDialog = ref(false)
 let pricingPreviewRequestSeq = 0
 let dogCalcRequestSeq = 0
 let sourcePlanPriceRequestSeq = 0
@@ -813,9 +802,12 @@ const selectedDog = computed(() => {
   return dogs.value.find(d => d.id === selectedDogId.value)
 })
 const selectedDogLifeStage = computed(() => resolveDogLifeStage(selectedDog.value, breeds.value))
+const selectedDogRecipeLifeStage = computed(() =>
+  resolveDogRecipeLifeStage(selectedDog.value, breeds.value),
+)
 const lifeStageReminderText = computed(() => buildLifeStageReminderText({
   applicableStages: recipe.value.applicableLifeStages || [],
-  dogLifeStage: selectedDogLifeStage.value,
+  dogLifeStage: selectedDogRecipeLifeStage.value,
   dogName: selectedDog.value?.name,
 }))
 
@@ -986,9 +978,9 @@ function getIngredientTypeClass(type: string): string {
 
 function formatSourcePlanShortName(code: IngredientSourcePlanCode): string {
   const map: Record<IngredientSourcePlanCode, string> = {
-    ORGANIC: '有机优先',
-    MARKET_PREMIUM: '超市优先',
-    WHOLESALE: '批发市场优先',
+    ORGANIC: '溯源优选',
+    MARKET_PREMIUM: '精选日常',
+    WHOLESALE: '安心基础',
   }
   return map[code]
 }
@@ -1229,6 +1221,7 @@ function checkLifeStageMatch() {
   }
 
   const dogLifeStage = selectedDogLifeStage.value
+  const dogRecipeLifeStage = selectedDogRecipeLifeStage.value
   const applicableStages = recipe.value.applicableLifeStages || []
 
   // 详细调试日志
@@ -1238,14 +1231,15 @@ function checkLifeStageMatch() {
     '狗狗品种ID': selectedDog.value.breedId,
     '生命阶段覆盖值': selectedDog.value.lifeStageOverride,
     '计算的狗狗生命阶段': dogLifeStage,
+    '食谱匹配生命阶段': dogRecipeLifeStage,
     '食谱适用生命阶段': applicableStages,
     '食谱名称': recipe.value.name,
-    '检查结果': isRecipeLifeStageMatch(applicableStages, dogLifeStage),
+    '检查结果': isRecipeLifeStageMatch(applicableStages, dogRecipeLifeStage),
     'breeds列表长度': breeds.value.length,
     'breeds列表': breeds.value.map(b => ({ id: b.id, name: b.name, adultAgeMonths: b.adultAgeMonths }))
   })
 
-  isLifeStageMatch.value = isRecipeLifeStageMatch(applicableStages, dogLifeStage)
+  isLifeStageMatch.value = isRecipeLifeStageMatch(applicableStages, dogRecipeLifeStage)
   console.log('[RecipeOrder] 校验结果:', isLifeStageMatch.value ? '匹配' : '不匹配')
 
   // 每次切换狗狗时重置警告状态
@@ -1301,6 +1295,7 @@ function getInitials(value: string): string {
 function getNutritionStandardLabel(standard: string): string {
   const map: Record<string, string> = {
     'FEDIAF_2021': 'FEDIAF 2021',
+    'FEDIAF_2025': 'FEDIAF 2025',
     'AAFCO_2019': 'AAFCO 2019',
     'AAFCO_2021': 'AAFCO 2021',
     'AAFCO_2022': 'AAFCO 2022',
@@ -1760,28 +1755,6 @@ function buyNow() {
   void continueBuyNow()
 }
 
-function closeSaveSuccessDialog() {
-  showSaveSuccessDialog.value = false
-}
-
-function copySevenDadWechatId() {
-  uni.setClipboardData({
-    data: SEVEN_DAD_WECHAT_ID,
-    success: () => {
-      uni.showToast({
-        title: '微信号已复制',
-        icon: 'success',
-      })
-    },
-    fail: () => {
-      uni.showToast({
-        title: '复制失败，请手动复制',
-        icon: 'none',
-      })
-    },
-  })
-}
-
 async function continueBuyNow() {
   // ✅ 安全改进：使用快照ID而不是传递所有参数（防止价格篡改）
   if (!pricingSnapshotId.value) {
@@ -1818,44 +1791,9 @@ async function continueBuyNow() {
 
   uni.setStorageSync('direct_buy_order_config', orderConfig)
 
-  try {
-    uni.showLoading({ title: '保存中...' })
-
-    const createRes = await request({
-      url: '/orders',
-      method: 'POST',
-      suppressErrorToast: true,
-      data: {
-        type: 'FRESH_FOOD',
-        snapshotId: pricingSnapshotId.value,
-      },
-    })
-
-    if (createRes.code !== 0 || !createRes.data?.id) {
-      throw new Error(createRes.message || '创建订单失败')
-    }
-
-    const orderId = createRes.data.id
-    const confirmRes = await request({
-      url: `/orders/${orderId}/confirm`,
-      method: 'POST',
-      suppressErrorToast: true,
-    })
-
-    if (confirmRes.code !== 0) {
-      throw new Error(confirmRes.message || '确认订单失败')
-    }
-
-    uni.hideLoading()
-    showSaveSuccessDialog.value = true
-  } catch (error: any) {
-    console.error('[RecipeOrder] Save purchase and package configuration failed:', error)
-    uni.hideLoading()
-    uni.showToast({
-      title: error.message || '保存失败',
-      icon: 'none',
-    })
-  }
+  uni.navigateTo({
+    url: `/pages/checkout/index?mode=directBuy&snapshotId=${encodeURIComponent(pricingSnapshotId.value)}`
+  })
 }
 
 function goToCreateDog() {
@@ -2031,7 +1969,11 @@ function goToCreateDog() {
 .btn-create-dog {
   width: 240rpx;
   height: 70rpx;
-  line-height: 70rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   background-color: #1890ff;
   color: #fff;
   border-radius: 35rpx;
@@ -2417,7 +2359,11 @@ function goToCreateDog() {
 .btn-add-row {
   min-width: 112rpx;
   height: 56rpx;
-  line-height: 56rpx;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   padding: 0 20rpx;
   background-color: #1890ff;
   color: #fff;
@@ -2429,7 +2375,11 @@ function goToCreateDog() {
 .btn-remove-row {
   min-width: 96rpx;
   height: 56rpx;
-  line-height: 56rpx;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   padding: 0 16rpx;
   background-color: #fff;
   color: #ff4d4f;
@@ -3096,7 +3046,7 @@ function goToCreateDog() {
 
 .bottom-price {
   min-width: 0;
-  max-width: calc(100% - 354rpx);
+  max-width: calc(100% - 258rpx);
   flex: 0 1 auto;
   display: flex;
   flex-direction: column;
@@ -3122,7 +3072,7 @@ function goToCreateDog() {
 
 .btn-buy-now {
   flex-shrink: 0;
-  width: 336rpx;
+  width: 240rpx;
   margin: 0;
   height: 88rpx;
   display: flex;
@@ -3353,13 +3303,21 @@ function goToCreateDog() {
 .hero-dog-action {
   min-width: 104rpx;
   height: 60rpx;
-  line-height: 60rpx;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
 }
 
 .section-action-button {
   min-width: 136rpx;
   height: 60rpx;
-  line-height: 60rpx;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   padding: 0 18rpx;
 }
 
@@ -3600,7 +3558,11 @@ function goToCreateDog() {
 .package-edit-button {
   min-width: 172rpx;
   height: 60rpx;
-  line-height: 60rpx;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   padding: 0 18rpx;
   border-radius: 8rpx;
   border: 2rpx solid #2f8f4e;
@@ -3690,7 +3652,11 @@ function goToCreateDog() {
 .btn-secondary-full {
   width: 100%;
   height: 76rpx;
-  line-height: 76rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   margin-top: 20rpx;
 }
 
@@ -3739,7 +3705,11 @@ function goToCreateDog() {
 .btn-remove-row {
   min-width: 118rpx;
   height: 60rpx;
-  line-height: 60rpx;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   padding: 0 16rpx;
   border-radius: 8rpx;
   font-size: 24rpx;
@@ -3832,6 +3802,17 @@ function goToCreateDog() {
 .source-plan-card.compact .source-plan-price {
   font-size: 25rpx;
   line-height: 1.25;
+}
+
+.source-plan-safety-copy {
+  display: block;
+  margin-top: 16rpx;
+  padding: 18rpx;
+  border-radius: 14rpx;
+  background: #fff7ef;
+  color: #7a5b43;
+  font-size: 24rpx;
+  line-height: 1.45;
 }
 
 .source-plan-check {
@@ -4368,94 +4349,6 @@ function goToCreateDog() {
   color: #e6543f;
 }
 
-.save-success-overlay {
-  position: fixed;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 40rpx;
-  background-color: rgba(0, 0, 0, 0.45);
-  box-sizing: border-box;
-}
-
-.save-success-dialog {
-  width: 100%;
-  max-width: 620rpx;
-  overflow: hidden;
-  border-radius: 16rpx;
-  background-color: #fff;
-  box-shadow: 0 20rpx 56rpx rgba(18, 24, 31, 0.18);
-}
-
-.save-success-title {
-  display: block;
-  padding: 48rpx 40rpx 20rpx;
-  color: #1f2329;
-  font-size: 34rpx;
-  font-weight: 800;
-  line-height: 1.35;
-  text-align: center;
-}
-
-.save-success-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 12rpx;
-  padding: 0 44rpx 42rpx;
-}
-
-.save-success-line,
-.save-success-wechat {
-  color: #5f6670;
-  font-size: 29rpx;
-  line-height: 1.55;
-  text-align: center;
-}
-
-.save-success-wechat-row {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-wrap: wrap;
-  gap: 12rpx;
-  max-width: 100%;
-}
-
-.btn-copy-wechat {
-  min-width: 150rpx;
-  height: 54rpx;
-  line-height: 54rpx;
-  padding: 0 18rpx;
-  border-radius: 8rpx;
-  background-color: #eef6ff;
-  color: #1677d2;
-  font-size: 24rpx;
-  font-weight: 700;
-}
-
-.btn-save-success-confirm {
-  width: 100%;
-  height: 92rpx;
-  line-height: 92rpx;
-  border-top: 1rpx solid #eef0f2;
-  border-radius: 0;
-  background-color: #fff;
-  color: #4d6394;
-  font-size: 30rpx;
-  font-weight: 800;
-}
-
-.btn-copy-wechat::after,
-.btn-save-success-confirm::after {
-  border: none;
-}
-
 .bottom-bar {
   position: fixed;
   left: 0;
@@ -4473,7 +4366,7 @@ function goToCreateDog() {
 
 .bottom-price {
   min-width: 0;
-  max-width: calc(100% - 354rpx);
+  max-width: calc(100% - 258rpx);
   flex: 0 1 auto;
   display: flex;
   flex-direction: column;
@@ -4500,7 +4393,7 @@ function goToCreateDog() {
 }
 
 .btn-buy-now {
-  width: 336rpx;
+  width: 240rpx;
   flex-shrink: 0;
   margin: 0;
   height: 84rpx;

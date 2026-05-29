@@ -14,9 +14,13 @@
           </el-select>
         </div>
 
-        <div class="meta-item">
+        <div v-if="showSampleState" class="meta-item">
           <div class="meta-label">样品状态</div>
-          <el-select v-model="formValue.meta.sampleState" clearable placeholder="可选">
+          <el-select
+            v-model="formValue.meta.sampleState"
+            clearable
+            placeholder="可选"
+          >
             <el-option
               v-for="option in INGREDIENT_NUTRITION_SAMPLE_STATE_OPTIONS"
               :key="option.value"
@@ -28,7 +32,11 @@
 
         <div class="meta-item">
           <div class="meta-label">来源</div>
-          <el-select v-model="formValue.meta.sourceType" clearable placeholder="可选">
+          <el-select
+            v-model="formValue.meta.sourceType"
+            clearable
+            placeholder="可选"
+          >
             <el-option
               v-for="option in INGREDIENT_NUTRITION_SOURCE_TYPE_OPTIONS"
               :key="option.value"
@@ -48,7 +56,9 @@
             controls-position="right"
             placeholder="g/ml"
           />
-          <div class="meta-hint">仅液体、浆体或油脂类原料需要填写，单位为 g/ml。</div>
+          <div class="meta-hint">
+            仅液体、浆体或油脂类原料需要填写，单位为 g/ml。
+          </div>
         </div>
 
         <div class="meta-item">
@@ -84,7 +94,7 @@
             v-model="formValue.meta.versionNote"
             type="textarea"
             :rows="2"
-            maxlength="200"
+            maxlength="1000"
             placeholder="记录换算说明、异常口径、核对结论等"
             show-word-limit
           />
@@ -100,29 +110,48 @@
         :name="tab.key"
       >
         <div class="tab-grid">
-          <div
-            v-for="field in tab.fields"
-            :key="field.key"
-            class="tab-field"
-          >
-            <div class="field-label">
-              {{ field.label }}
-              <span v-if="field.englishLabel" class="field-english-inline">({{ field.englishLabel }})</span>
+          <div v-for="field in tab.fields" :key="field.key" class="tab-field">
+            <div class="field-label-row">
+              <div class="field-label">
+                {{ field.label }}
+                <span v-if="field.englishLabel" class="field-english-inline"
+                  >({{ field.englishLabel }})</span
+                >
+              </div>
+              <el-tooltip
+                v-if="getFieldSource(tab.key, field.key)"
+                placement="top"
+                :content="getFieldSourceTooltip(tab.key, field.key)"
+              >
+                <el-tag
+                  class="field-source-tag"
+                  size="small"
+                  :type="getFieldSourceTagType(tab.key, field.key)"
+                >
+                  {{ getFieldSourceLabel(tab.key, field.key) }}
+                </el-tag>
+              </el-tooltip>
             </div>
             <div class="field-input">
               <el-input-number
                 :model-value="getDisplayedFieldValue(tab.key, field.key)"
                 :min="0"
                 :step="getUnitStep(getFieldDisplayUnit(field.key, field.unit))"
-                :precision="getUnitPrecision(getFieldDisplayUnit(field.key, field.unit))"
+                :precision="
+                  getUnitPrecision(getFieldDisplayUnit(field.key, field.unit))
+                "
                 :controls="false"
-                @update:model-value="setDisplayedFieldValue(tab.key, field.key, $event)"
+                @update:model-value="
+                  setDisplayedFieldValue(tab.key, field.key, $event)
+                "
               />
               <el-select
                 v-if="field.unitOptions && field.unitOptions.length > 1"
                 :model-value="getFieldDisplayUnit(field.key, field.unit)"
                 class="field-unit-select"
-                @update:model-value="setFieldDisplayUnit(field.key, field.unit, $event)"
+                @update:model-value="
+                  setFieldDisplayUnit(field.key, field.unit, $event)
+                "
               >
                 <el-option
                   v-for="unit in field.unitOptions"
@@ -143,9 +172,17 @@
       <div class="custom-header">
         <div>
           <div class="custom-title">自定义营养项</div>
-          <div class="custom-desc">用于补充当前结构中未覆盖的成分、菌株或品牌自定义指标。</div>
+          <div class="custom-desc">
+            用于补充当前结构中未覆盖的成分、菌株或品牌自定义指标。
+          </div>
         </div>
-        <el-button size="small" type="primary" :icon="Plus" @click="addCustomItem">新增一项</el-button>
+        <el-button
+          size="small"
+          type="primary"
+          :icon="Plus"
+          @click="addCustomItem"
+          >新增一项</el-button
+        >
       </div>
 
       <div v-if="formValue.customItems.length === 0" class="custom-empty">
@@ -167,7 +204,13 @@
               :precision="4"
               :controls="false"
             />
-            <el-select v-model="item.unit" filterable allow-create default-first-option placeholder="单位">
+            <el-select
+              v-model="item.unit"
+              filterable
+              allow-create
+              default-first-option
+              placeholder="单位"
+            >
               <el-option
                 v-for="unit in INGREDIENT_NUTRITION_CUSTOM_ITEM_UNIT_OPTIONS"
                 :key="unit"
@@ -175,7 +218,9 @@
                 :value="unit"
               />
             </el-select>
-            <el-tag class="custom-basis-tag" type="info">{{ rawBasisLabel }}</el-tag>
+            <el-tag class="custom-basis-tag" type="info">{{
+              rawBasisLabel
+            }}</el-tag>
             <el-button :icon="Delete" circle @click="removeCustomItem(index)" />
           </div>
         </div>
@@ -185,8 +230,8 @@
 </template>
 
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue'
-import { Delete, Plus } from '@element-plus/icons-vue'
+import { computed, reactive, ref, watch } from "vue";
+import { Delete, Plus } from "@element-plus/icons-vue";
 import {
   getIngredientNutritionResolvedDisplayUnit,
   INGREDIENT_NUTRITION_CUSTOM_ITEM_UNIT_OPTIONS,
@@ -196,54 +241,62 @@ import {
   INGREDIENT_NUTRITION_SOURCE_TYPE_OPTIONS,
   INGREDIENT_NUTRITION_TAB_DEFINITIONS,
   INGREDIENT_NUTRITION_TAB_KEYS,
-  type IngredientNutritionTabKey
-} from '@/constants/ingredientNutrition'
-import { IngredientType, type NutritionProfile } from '@/types/ingredient'
+  type IngredientNutritionTabKey,
+} from "@/constants/ingredientNutrition";
+import { IngredientType, type NutritionProfile } from "@/types/ingredient";
 import {
   buildIngredientNutritionPayload,
   createEmptyIngredientNutritionFormValue,
   normalizeIngredientNutritionProfileToForm,
-  type IngredientNutritionFormValue
-} from '@/utils/ingredientNutrition'
+  type IngredientNutritionFormValue,
+} from "@/utils/ingredientNutrition";
 import {
   convertIngredientNutritionFieldValue,
   getIngredientNutritionUnitPrecision,
-  getIngredientNutritionUnitStep
-} from '@/utils/ingredientNutritionUnits'
+  getIngredientNutritionUnitStep,
+} from "@/utils/ingredientNutritionUnits";
 
 interface Props {
-  modelValue: NutritionProfile | null | undefined
-  ingredientType: IngredientType
+  modelValue: NutritionProfile | null | undefined;
+  ingredientType: IngredientType;
+  showSampleState?: boolean;
 }
 
 interface Emits {
-  (e: 'update:modelValue', value: NutritionProfile | null): void
+  (e: "update:modelValue", value: NutritionProfile | null): void;
 }
 
-const props = defineProps<Props>()
-const emit = defineEmits<Emits>()
+const props = defineProps<Props>();
+const emit = defineEmits<Emits>();
 
-const activeTab = ref<IngredientNutritionTabKey>('macros')
-const attachmentsText = ref('')
-const formValue = reactive<IngredientNutritionFormValue>(createEmptyIngredientNutritionFormValue())
-const fieldDisplayUnits = reactive<Record<string, string>>({})
+const activeTab = ref<IngredientNutritionTabKey>("macros");
+const attachmentsText = ref("");
+const formValue = reactive<IngredientNutritionFormValue>(
+  createEmptyIngredientNutritionFormValue(),
+);
+const fieldDisplayUnits = reactive<Record<string, string>>({});
 
-const rawBasisLabel = computed(() => (
-  INGREDIENT_NUTRITION_RAW_BASIS_OPTIONS.find((option) => option.value === formValue.meta.rawBasisType)?.label || '原始基准'
-))
+const showSampleState = computed(() => props.showSampleState ?? true);
 
-let syncingFromProps = false
-let lastAppliedPayloadSnapshot = JSON.stringify(null)
+const rawBasisLabel = computed(
+  () =>
+    INGREDIENT_NUTRITION_RAW_BASIS_OPTIONS.find(
+      (option) => option.value === formValue.meta.rawBasisType,
+    )?.label || "原始基准",
+);
+
+let syncingFromProps = false;
+let lastAppliedPayloadSnapshot = JSON.stringify(null);
 
 function serializeValue(value: unknown): string {
-  return JSON.stringify(value ?? null)
+  return JSON.stringify(value ?? null);
 }
 
 function applyFormValue(nextValue: IngredientNutritionFormValue) {
-  Object.assign(formValue.meta, nextValue.meta)
+  Object.assign(formValue.meta, nextValue.meta);
 
   for (const tabKey of INGREDIENT_NUTRITION_TAB_KEYS) {
-    Object.assign(formValue[tabKey], nextValue[tabKey])
+    Object.assign(formValue[tabKey], nextValue[tabKey]);
   }
 
   formValue.customItems.splice(
@@ -252,132 +305,211 @@ function applyFormValue(nextValue: IngredientNutritionFormValue) {
     ...nextValue.customItems.map((item) => ({
       ...item,
       rawBasisType: item.rawBasisType ?? formValue.meta.rawBasisType,
-      note: item.note ?? null
-    }))
-  )
+      note: item.note ?? null,
+    })),
+  );
 
   for (const tab of INGREDIENT_NUTRITION_TAB_DEFINITIONS) {
     for (const field of tab.fields) {
-      fieldDisplayUnits[field.key] = getIngredientNutritionResolvedDisplayUnit(
-        field.key,
-        nextValue.meta.fieldDisplayUnits?.[field.key]
-      ) || field.unit
+      fieldDisplayUnits[field.key] =
+        getIngredientNutritionResolvedDisplayUnit(
+          field.key,
+          nextValue.meta.fieldDisplayUnits?.[field.key],
+        ) || field.unit;
     }
   }
 }
 
 function addCustomItem() {
   formValue.customItems.push({
-    name: '',
+    name: "",
     value: 0,
-    unit: 'mg',
+    unit: "mg",
     rawBasisType: formValue.meta.rawBasisType,
-    note: null
-  })
+    note: null,
+  });
 }
 
 function removeCustomItem(index: number) {
-  formValue.customItems.splice(index, 1)
+  formValue.customItems.splice(index, 1);
 }
 
 function getFieldDisplayUnit(fieldKey: string, fallbackUnit: string) {
-  return fieldDisplayUnits[fieldKey] || fallbackUnit
+  return fieldDisplayUnits[fieldKey] || fallbackUnit;
 }
 
-function setFieldDisplayUnit(fieldKey: string, fallbackUnit: string, nextUnit: string) {
-  const resolvedUnit = nextUnit || fallbackUnit
-  fieldDisplayUnits[fieldKey] = resolvedUnit
+function setFieldDisplayUnit(
+  fieldKey: string,
+  fallbackUnit: string,
+  nextUnit: string,
+) {
+  const resolvedUnit = nextUnit || fallbackUnit;
+  fieldDisplayUnits[fieldKey] = resolvedUnit;
   formValue.meta.fieldDisplayUnits = {
     ...(formValue.meta.fieldDisplayUnits || {}),
-    [fieldKey]: resolvedUnit
-  }
+    [fieldKey]: resolvedUnit,
+  };
 }
 
-function getDisplayedFieldValue(tabKey: IngredientNutritionTabKey, fieldKey: string) {
-  const value = (formValue[tabKey] as Record<string, number | null>)[fieldKey]
-  if (typeof value !== 'number' || !Number.isFinite(value)) {
-    return null
+function getDisplayedFieldValue(
+  tabKey: IngredientNutritionTabKey,
+  fieldKey: string,
+) {
+  const value = (formValue[tabKey] as Record<string, number | null>)[fieldKey];
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return null;
   }
 
-  const field = INGREDIENT_NUTRITION_FIELD_DEFINITION_MAP[fieldKey]
-  const displayUnit = getFieldDisplayUnit(fieldKey, field?.unit || '')
-  return convertIngredientNutritionFieldValue(fieldKey, value, field?.unit || displayUnit, displayUnit)
-}
-
-function setDisplayedFieldValue(tabKey: IngredientNutritionTabKey, fieldKey: string, value: number | undefined) {
-  if (value === undefined || value === null) {
-    ;(formValue[tabKey] as Record<string, number | null>)[fieldKey] = null
-    return
-  }
-
-  const field = INGREDIENT_NUTRITION_FIELD_DEFINITION_MAP[fieldKey]
-  const displayUnit = getFieldDisplayUnit(fieldKey, field?.unit || '')
-  ;(formValue[tabKey] as Record<string, number | null>)[fieldKey] = convertIngredientNutritionFieldValue(
+  const field = INGREDIENT_NUTRITION_FIELD_DEFINITION_MAP[fieldKey];
+  const displayUnit = getFieldDisplayUnit(fieldKey, field?.unit || "");
+  return convertIngredientNutritionFieldValue(
     fieldKey,
     value,
+    field?.unit || displayUnit,
     displayUnit,
-    field?.unit || displayUnit
-  )
+  );
+}
+
+function setDisplayedFieldValue(
+  tabKey: IngredientNutritionTabKey,
+  fieldKey: string,
+  value: number | undefined,
+) {
+  if (value === undefined || value === null) {
+    (formValue[tabKey] as Record<string, number | null>)[fieldKey] = null;
+    return;
+  }
+
+  const field = INGREDIENT_NUTRITION_FIELD_DEFINITION_MAP[fieldKey];
+  const displayUnit = getFieldDisplayUnit(fieldKey, field?.unit || "");
+  (formValue[tabKey] as Record<string, number | null>)[fieldKey] =
+    convertIngredientNutritionFieldValue(
+      fieldKey,
+      value,
+      displayUnit,
+      field?.unit || displayUnit,
+    );
 }
 
 function getUnitStep(unit: string) {
-  return getIngredientNutritionUnitStep(unit)
+  return getIngredientNutritionUnitStep(unit);
 }
 
 function getUnitPrecision(unit: string) {
-  return getIngredientNutritionUnitPrecision(unit)
+  return getIngredientNutritionUnitPrecision(unit);
+}
+
+function getFieldPath(tabKey: IngredientNutritionTabKey, fieldKey: string) {
+  return `${tabKey}.${fieldKey}`;
+}
+
+function getFieldSource(tabKey: IngredientNutritionTabKey, fieldKey: string) {
+  return formValue.meta.fieldSources?.[getFieldPath(tabKey, fieldKey)];
+}
+
+function getFieldSourceLabel(
+  tabKey: IngredientNutritionTabKey,
+  fieldKey: string,
+) {
+  const source = getFieldSource(tabKey, fieldKey);
+  if (!source) return "";
+
+  if (source.compatibility === "APPROXIMATE_SPECIES") {
+    return `${source.sourceType || "来源"} 近似补源`;
+  }
+
+  if (source.sourceRole === "FIELD_SUPPLEMENT") {
+    return `${source.sourceType || "来源"} 补源`;
+  }
+
+  return source.sourceType || source.sourceCode || "字段来源";
+}
+
+function getFieldSourceTagType(
+  tabKey: IngredientNutritionTabKey,
+  fieldKey: string,
+) {
+  const source = getFieldSource(tabKey, fieldKey);
+  if (source?.compatibility === "APPROXIMATE_SPECIES") {
+    return "warning";
+  }
+  if (source?.confidenceLevel === "HIGH") {
+    return "success";
+  }
+  return "info";
+}
+
+function getFieldSourceTooltip(
+  tabKey: IngredientNutritionTabKey,
+  fieldKey: string,
+) {
+  const source = getFieldSource(tabKey, fieldKey);
+  if (!source) return "";
+
+  return [
+    source.sourceTitle || source.sourceKey || source.sourceType,
+    source.compatibility === "APPROXIMATE_SPECIES" ? "近似物种补源" : null,
+    source.noteZh,
+  ]
+    .filter(Boolean)
+    .join("；");
 }
 
 watch(
   () => props.modelValue,
   (modelValue) => {
-    const normalized = normalizeIngredientNutritionProfileToForm(modelValue)
+    const normalized = normalizeIngredientNutritionProfileToForm(modelValue);
 
-    syncingFromProps = true
-    applyFormValue(normalized)
-    attachmentsText.value = (normalized.meta.attachments ?? []).join('\n')
-    lastAppliedPayloadSnapshot = serializeValue(buildIngredientNutritionPayload(formValue))
-    syncingFromProps = false
+    syncingFromProps = true;
+    applyFormValue(normalized);
+    attachmentsText.value = (normalized.meta.attachments ?? []).join("\n");
+    lastAppliedPayloadSnapshot = serializeValue(
+      buildIngredientNutritionPayload(formValue),
+    );
+    syncingFromProps = false;
   },
-  { immediate: true, deep: true }
-)
+  { immediate: true, deep: true },
+);
 
 watch(attachmentsText, (value) => {
   if (syncingFromProps) {
-    return
+    return;
   }
 
   formValue.meta.attachments = value
-    .split('\n')
+    .split("\n")
     .map((item) => item.trim())
-    .filter((item) => item.length > 0)
-})
+    .filter((item) => item.length > 0);
+});
 
 watch(
   () => formValue.meta.rawBasisType,
   (rawBasisType) => {
-    if (rawBasisType !== 'PER_SERVING') {
-      formValue.meta.servingWeightG = null
+    if (rawBasisType !== "PER_SERVING") {
+      formValue.meta.servingWeightG = null;
     }
 
     for (const item of formValue.customItems) {
-      item.rawBasisType = rawBasisType
+      item.rawBasisType = rawBasisType;
     }
-  }
-)
+  },
+);
 
 watch(
   () => serializeValue(buildIngredientNutritionPayload(formValue)),
   (payloadSnapshot) => {
     if (syncingFromProps || payloadSnapshot === lastAppliedPayloadSnapshot) {
-      return
+      return;
     }
 
-    lastAppliedPayloadSnapshot = payloadSnapshot
-    emit('update:modelValue', JSON.parse(payloadSnapshot) as NutritionProfile | null)
+    lastAppliedPayloadSnapshot = payloadSnapshot;
+    emit(
+      "update:modelValue",
+      JSON.parse(payloadSnapshot) as NutritionProfile | null,
+    );
   },
-  { immediate: false }
-)
+  { immediate: false },
+);
 </script>
 
 <style scoped>
@@ -455,10 +587,22 @@ watch(
   background: #fafafa;
 }
 
+.field-label-row {
+  display: flex;
+  min-height: 22px;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
 .field-label {
   font-size: 13px;
   font-weight: 600;
   color: #303133;
+}
+
+.field-source-tag {
+  flex: 0 0 auto;
 }
 
 .field-english-inline {
@@ -545,7 +689,9 @@ watch(
 .custom-row-main {
   display: grid;
   gap: 12px;
-  grid-template-columns: minmax(140px, 1.5fr) minmax(160px, 1.2fr) 88px 110px 40px;
+  grid-template-columns:
+    minmax(140px, 1.5fr) minmax(160px, 1.2fr)
+    88px 110px 40px;
   align-items: center;
 }
 

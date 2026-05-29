@@ -21,12 +21,19 @@ import {
   LifeStageOverride,
   TreatInputMode,
   TreatLevel,
+  DogSizeCategory,
+  GrowthCurveType,
 } from 'src/domain';
+import { DogBreed } from 'src/domain/dog/dog-breed.entity';
+import { SearchGovernanceService } from 'src/application/search-governance/search-governance.service';
 
 describe('DogService', () => {
   let service: DogService;
   let dogRepository: jest.Mocked<DogRepository>;
   let dogBreedRepository: jest.Mocked<DogBreedRepository>;
+  let searchGovernance: jest.Mocked<
+    Pick<SearchGovernanceService, 'expandQuery' | 'recordSearchEvent'>
+  >;
 
   const createDogForUpdate = (overrides?: {
     breedId?: string;
@@ -93,7 +100,30 @@ describe('DogService', () => {
     },
   };
 
+  const createBreed = (
+    id: string,
+    name: string,
+    aliases: string[] = [],
+    isCommon = false,
+  ) =>
+    new DogBreed(
+      id,
+      name,
+      aliases,
+      DogSizeCategory.LARGE,
+      GrowthCurveType.STANDARD,
+      18,
+      8,
+      30,
+      isCommon,
+    );
+
   beforeEach(async () => {
+    searchGovernance = {
+      expandQuery: jest.fn(async (_domain, rawQuery) => (rawQuery ? [rawQuery] : [])),
+      recordSearchEvent: jest.fn().mockResolvedValue({ id: 'query-log-1' }),
+    };
+
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         DogService,
@@ -113,6 +143,10 @@ describe('DogService', () => {
           provide: PRISMA_SERVICE,
           useValue: mockPrismaService,
         },
+        {
+          provide: SearchGovernanceService,
+          useValue: searchGovernance,
+        },
       ],
     }).compile();
 
@@ -122,6 +156,117 @@ describe('DogService', () => {
 
     // Reset mocks
     jest.clearAllMocks();
+  });
+
+  describe('searchBreeds', () => {
+    it('expands breed keywords through search governance', async () => {
+      searchGovernance.expandQuery.mockResolvedValue(['拉布拉多犬', 'labrador']);
+      dogBreedRepository.findAll.mockResolvedValue([
+        createBreed('labrador', 'Labrador Retriever'),
+        createBreed('golden', '金毛寻回犬'),
+      ]);
+
+      const result = await service.searchBreeds('拉布拉多犬');
+
+      expect(searchGovernance.expandQuery).toHaveBeenCalledWith(
+        'BREED',
+        '拉布拉多犬',
+      );
+      expect(result.map((breed) => breed.id)).toEqual(['labrador']);
+    });
+
+    it('records breed searches with the final result count', async () => {
+      searchGovernance.expandQuery.mockResolvedValue(['拉布拉多犬', 'labrador']);
+      dogBreedRepository.findAll.mockResolvedValue([
+        createBreed('labrador', 'Labrador Retriever'),
+        createBreed('golden', '金毛寻回犬'),
+      ]);
+
+      await service.searchBreeds(' 拉布拉多犬 ');
+
+      expect(searchGovernance.recordSearchEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          domain: 'BREED',
+          source: 'DOG_BREED_SEARCH',
+          rawQuery: '拉布拉多犬',
+          resultCount: 1,
+        }),
+      );
+    });
+
+    it('matches breeds by expanded aliases', async () => {
+      searchGovernance.expandQuery.mockResolvedValue(['金毛犬', 'golden retriever']);
+      dogBreedRepository.findAll.mockResolvedValue([
+        createBreed('labrador', '拉布拉多寻回犬'),
+        createBreed('golden', 'Golden Retriever'),
+      ]);
+
+      const result = await service.searchBreeds('金毛犬');
+
+      expect(result[0]?.name).toBe('Golden Retriever');
+    });
+
+    it('falls back to the original keyword when breed governance expansion fails', async () => {
+      searchGovernance.expandQuery.mockRejectedValue(new Error('alias unavailable'));
+      dogBreedRepository.findAll.mockResolvedValue([
+        createBreed('labrador', '拉布拉多寻回犬'),
+        createBreed('golden', '金毛寻回犬'),
+      ]);
+
+      const result = await service.searchBreeds('金毛');
+
+      expect(result.map((breed) => breed.id)).toEqual(['golden']);
+    });
+
+    it('ranks a primary breed name exact match before another breed alias exact match', async () => {
+      searchGovernance.expandQuery.mockResolvedValue(['拉布拉多寻回犬']);
+      dogBreedRepository.findAll.mockResolvedValue([
+        createBreed('primary-name', '拉布拉多寻回犬'),
+        createBreed('alias-match', '金毛', ['拉布拉多寻回犬'], true),
+      ]);
+
+      const result = await service.searchBreeds('拉布拉多寻回犬');
+
+      expect(result.map((breed) => breed.id)).toEqual([
+        'primary-name',
+        'alias-match',
+      ]);
+    });
+
+    it('keeps the original keyword first and limits expanded breed terms', async () => {
+      searchGovernance.expandQuery.mockResolvedValue([
+        '金毛',
+        'alias-1',
+        'alias-2',
+        'alias-3',
+        'alias-4',
+        'alias-5',
+        'alias-6',
+        'alias-7',
+        'alias-8',
+      ]);
+      dogBreedRepository.findAll.mockResolvedValue([
+        createBreed('original', '拉布拉多寻回犬', ['拉拉']),
+        createBreed('expanded', '金毛寻回犬'),
+        createBreed('first-excluded-expanded-term', 'alias-7'),
+      ]);
+
+      const result = await service.searchBreeds('拉拉');
+
+      expect(result.map((breed) => breed.id)).toEqual(['original', 'expanded']);
+    });
+
+    it('returns the default breed list for blank keywords', async () => {
+      const breeds = [
+        createBreed('labrador', '拉布拉多寻回犬'),
+        createBreed('golden', '金毛寻回犬'),
+      ];
+      dogBreedRepository.findAll.mockResolvedValue(breeds);
+
+      await expect(service.searchBreeds('   ')).resolves.toEqual(breeds);
+      expect(searchGovernance.expandQuery).not.toHaveBeenCalled();
+      expect(searchGovernance.recordSearchEvent).not.toHaveBeenCalled();
+    });
   });
 
   describe('calcPreview', () => {

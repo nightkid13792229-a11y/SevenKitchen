@@ -26,12 +26,12 @@
 3. **默认不要把小程序构建产物同步到统一预览目录** `/Users/zhaochen/Documents/SevenKitchen-miniapp-preview`；只有用户明确要求“同步到预览目录”时才执行同步
 4. **默认优先告知用户微信开发者工具应打开实际构建目录**：预览构建打开 `miniapp/dist/dev/mp-weixin`，发布构建打开 `miniapp/dist/build/mp-weixin`
 5. **如果预览、构建或用户明确要求的预览目录同步失败，必须明确告知失败原因**，不能让用户自己猜测是不是没编译、目录不对、同步没完成或输出没更新
-6. **凡是小程序本地开发默认 API 地址，都以** `http://127.0.0.1:3000/api/v1` **为准**，除非用户明确要求切换
+6. **凡是小程序本地开发默认 API 地址，都以** `http://127.0.0.1:3011/api/v1` **为准**，除非用户明确要求切换
 
 ## 本地后端协作硬规则
 
-1. **启动前先检查本地后端是否已可用**：`cd backend && npm run start:check`
-2. **需要启动本地后端时，统一使用** `cd backend && npm run start:dev`
+1. **启动小程序联调后端前先检查本地后端是否已可用**：`cd backend && npm run start:check:miniapp`
+2. **需要启动小程序联调用本地后端时，统一使用** `cd backend && npm run start:dev:miniapp`
 3. **如果本地后端已经健康运行，必须优先复用，而不是再启动第二个**
 4. **如果当前线程需要切换到另一份 worktree 的后端代码，必须先停止旧进程，再在目标 worktree 重新执行** `cd backend && npm run start:dev`
 

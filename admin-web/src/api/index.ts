@@ -96,7 +96,7 @@ http.interceptors.response.use(
 
 type RequestConfig = AxiosRequestConfig
 
-const api = {
+export const api = {
   request<T = any>(config: RequestConfig): Promise<T> {
     return http.request<any, T>(config)
   },
@@ -117,11 +117,88 @@ const api = {
   }
 }
 
+const legacyHttp = axios.create({
+  baseURL: '',
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json'
+  },
+  paramsSerializer: {
+    serialize: (params) => {
+      const parts: string[] = []
+      Object.keys(params).forEach(key => {
+        const value = params[key]
+        if (value !== undefined && value !== null) {
+          if (Array.isArray(value)) {
+            value.forEach(v => parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(v)}`))
+          } else {
+            parts.push(`${encodeURIComponent(key)}=${encodeURIComponent(value)}`)
+          }
+        }
+      })
+      return parts.join('&')
+    }
+  }
+})
+
+legacyHttp.interceptors.request.use(
+  (config: InternalAxiosRequestConfig) => {
+    const token = localStorage.getItem('admin_token')
+    if (token && config.headers) {
+      config.headers['Authorization'] = `Bearer ${token}`
+    }
+
+    if (!token && config.headers) {
+      config.headers['X-Customer-Id'] = 'admin-system'
+    }
+
+    return config
+  },
+  (error) => Promise.reject(error)
+)
+
+legacyHttp.interceptors.response.use(
+  (response: AxiosResponse) => response.data,
+  (error) => {
+    if (error.response?.status !== 401) {
+      ElMessage.error(error.response?.data?.message || error.message || '缃戠粶閿欒')
+    }
+
+    if (error.response?.status === 401) {
+      ElMessage.error('登录已过期，请重新登录')
+      localStorage.removeItem('admin_token')
+      window.location.href = '/login'
+    }
+
+    return Promise.reject(error)
+  }
+)
+
+export const legacyApi = {
+  get<T = any>(url: string, config?: RequestConfig): Promise<T> {
+    return legacyHttp.get<any, T>(url, config)
+  },
+  post<T = any>(url: string, data?: any, config?: RequestConfig): Promise<T> {
+    return legacyHttp.post<any, T>(url, data, config)
+  },
+  patch<T = any>(url: string, data?: any, config?: RequestConfig): Promise<T> {
+    return legacyHttp.patch<any, T>(url, data, config)
+  },
+  delete<T = any>(url: string, config?: RequestConfig): Promise<T> {
+    return legacyHttp.delete<any, T>(url, config)
+  }
+}
+
 // Export API methods with proper typing
 // Note: Response interceptor already extracts data, so we don't need .then(res => res.data)
 export const authApi = {
   login: (username: string, password: string): Promise<{ token: string; username: string }> =>
-    api.post('/auth/login', { username, password })
+    api.post('/auth/login', { username, password }),
+  changePassword: (data: {
+    currentPassword: string
+    newPassword: string
+  }): Promise<{ changed: boolean }> =>
+    api.post('/auth/change-password', data)
 }
 
 export const dashboardApi = {
@@ -181,5 +258,20 @@ export { purchasingApi } from './purchasing'
 
 // Re-export finance API
 export { financeApi } from './finance'
+
+// Re-export nutrition governance API
+export { nutritionGovernanceApi } from './nutritionGovernance'
+
+// Re-export search governance API
+export { searchGovernanceApi } from './searchGovernance'
+
+// Re-export platform configuration API
+export { platformConfigApi } from './platformConfig'
+
+// Re-export customer service API
+export { customerServiceApi } from './customerService'
+
+// Re-export review API
+export { reviewApi } from './reviews'
 
 export default api

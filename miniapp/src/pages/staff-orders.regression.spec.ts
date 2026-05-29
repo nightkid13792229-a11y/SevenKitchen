@@ -16,8 +16,8 @@ const ordersApiSource = readFileSync(
 );
 
 describe('staff orders quick search', () => {
-  it('searches by order number or dog name through the common keyword query', () => {
-    expect(source).toContain('placeholder="按订单号/狗狗名称快速搜索，支持模糊匹配"');
+  it('searches by order number, dog name, phone suffix, or status through the common keyword query', () => {
+    expect(source).toContain('按订单号/狗狗名/手机号后四位/状态搜索');
     expect(source).toContain('v-model="searchKeyword"');
     expect(source).toContain('params.keyword = keyword');
     expect(source).not.toContain('params.orderId =');

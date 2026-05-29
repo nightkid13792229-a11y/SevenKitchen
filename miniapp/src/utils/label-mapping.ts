@@ -69,6 +69,11 @@ export function getHealthTagLabel(tagOrUuid: string): string {
  */
 export function getLifeStageLabel(stage: string): string {
   const map: Record<string, string> = {
+    'PUPPY_UNDER_14_WEEKS': '小于14周幼犬',
+    'PUPPY_14_WEEKS_PLUS': '大于等于14周幼犬',
+    'LOW_ACTIVITY_ADULT_OR_SENIOR': '低运动量成犬或老年犬',
+    'HIGH_ACTIVITY_ADULT': '普通或高运动量成犬',
+    'REPRODUCTION': '繁殖期',
     'PUPPY': '幼犬期',
     'ADULT': '成犬期',
     'SENIOR': '老年犬期',
@@ -86,6 +91,7 @@ export function getLifeStageLabel(stage: string): string {
 export function getNutritionStandardLabel(standard: string): string {
   const map: Record<string, string> = {
     'FEDIAF_2021': 'FEDIAF 2021',
+    'FEDIAF_2025': 'FEDIAF 2025',
     'AAFCO_2019': 'AAFCO 2019',
     'GB_T_31216': '国标 GB/T 31216',
   };

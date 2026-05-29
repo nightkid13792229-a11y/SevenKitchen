@@ -7,16 +7,16 @@
       <text class="hint">即将返回首页...</text>
     </view>
 
-    <!-- 员工工作台 -->
+    <!-- 工作台 -->
     <view v-else class="workbench-container">
       <!-- 顶部信息 -->
       <view class="header">
-        <text class="title">员工工作台</text>
+        <text class="title">{{ workbenchTitle }}</text>
         <text class="welcome">欢迎，{{ user?.nickname || '员工' }}</text>
         <view class="role-badge">{{ roleText }}</view>
       </view>
 
-      <!-- 功能模块（采购、生产、订单、报销、库存、食谱） -->
+      <!-- 功能模块（采购、生产、订单、报销、库存、食谱、AI食材） -->
       <view class="modules">
         <!-- 采购管理 -->
         <view class="module" @tap="goToPurchasing">
@@ -27,6 +27,9 @@
             <text class="module-title">采购管理</text>
             <text class="module-desc">查看采购清单与原料需求</text>
           </view>
+          <text v-if="badgeCount('purchasing') > 0" class="module-badge">{{
+            formatBadge(badgeCount('purchasing'))
+          }}</text>
           <text class="module-arrow">›</text>
         </view>
 
@@ -39,6 +42,9 @@
             <text class="module-title">生产管理</text>
             <text class="module-desc">查看生产任务与分锅清单</text>
           </view>
+          <text v-if="badgeCount('production') > 0" class="module-badge">{{
+            formatBadge(badgeCount('production'))
+          }}</text>
           <text class="module-arrow">›</text>
         </view>
 
@@ -51,6 +57,24 @@
             <text class="module-title">订单管理</text>
             <text class="module-desc">查看后台订单与订单状态</text>
           </view>
+          <text v-if="badgeCount('orders') > 0" class="module-badge">{{
+            formatBadge(badgeCount('orders'))
+          }}</text>
+          <text class="module-arrow">›</text>
+        </view>
+
+        <!-- 退款管理 -->
+        <view v-if="isAdmin" class="module" @tap="goToRefunds">
+          <view class="module-icon refunds">
+            <text class="module-icon-symbol">审</text>
+          </view>
+          <view class="module-content">
+            <text class="module-title">退款管理</text>
+            <text class="module-desc">审核客户退款申请并保留审核人记录</text>
+          </view>
+          <text v-if="badgeCount('refunds') > 0" class="module-badge">{{
+            formatBadge(badgeCount('refunds'))
+          }}</text>
           <text class="module-arrow">›</text>
         </view>
 
@@ -63,6 +87,9 @@
             <text class="module-title">报销管理</text>
             <text class="module-desc">采购报销、行政杂费与工资登记</text>
           </view>
+          <text v-if="badgeCount('reimbursement') > 0" class="module-badge">{{
+            formatBadge(badgeCount('reimbursement'))
+          }}</text>
           <text class="module-arrow">›</text>
         </view>
 
@@ -75,17 +102,44 @@
             <text class="module-title">库存管理</text>
             <text class="module-desc">查看库存预警、补货建议和盘点记录</text>
           </view>
+          <text v-if="badgeCount('inventory') > 0" class="module-badge">{{
+            formatBadge(badgeCount('inventory'))
+          }}</text>
           <text class="module-arrow">›</text>
         </view>
 
         <!-- 食谱管理 -->
         <view class="module" @tap="goToStaffRecipes">
           <view class="module-icon recipes">
-            <text style="font-size: 48rpx;">📋</text>
+            <text style="font-size: 48rpx">📋</text>
           </view>
           <view class="module-content">
             <text class="module-title">食谱管理</text>
             <text class="module-desc">查看所有食谱与分享</text>
+          </view>
+          <text class="module-arrow">›</text>
+        </view>
+
+        <!-- 食谱设计器 -->
+        <view class="module" @tap="goToRecipeDesigner">
+          <view class="module-icon recipe-designer">
+            <text class="module-icon-symbol">配</text>
+          </view>
+          <view class="module-content">
+            <text class="module-title">食谱设计器</text>
+            <text class="module-desc">维护草稿配方与营养评估</text>
+          </view>
+          <text class="module-arrow">›</text>
+        </view>
+
+        <!-- AI 新增食材 -->
+        <view class="module" @tap="goToIngredientCreation">
+          <view class="module-icon ingredient-creation">
+            <text class="module-icon-symbol">AI</text>
+          </view>
+          <view class="module-content">
+            <text class="module-title">AI 新增食材</text>
+            <text class="module-desc">提交新增食材需求并审核草稿</text>
           </view>
           <text class="module-arrow">›</text>
         </view>
@@ -124,10 +178,27 @@ const isStaff = ref(false);
 
 console.log('[StaffWorkbench] Component initializing...');
 
-// UI 框架数据（待对接后端 API）
 const todayOrders = ref(0);
 const pendingTasks = ref(0);
 const shippingCount = ref(0);
+
+type WorkbenchBadgeKey =
+  | 'purchasing'
+  | 'production'
+  | 'orders'
+  | 'refunds'
+  | 'reimbursement'
+  | 'inventory';
+type WorkbenchBadges = Record<WorkbenchBadgeKey, number>;
+
+interface WorkbenchSummary {
+  todayOrders: number;
+  pendingTasks: number;
+  shippingCount: number;
+  badges?: Partial<WorkbenchBadges>;
+}
+
+const todoCounts = ref<Partial<WorkbenchBadges>>({});
 
 const roleText = computed(() => {
   if (!user.value) return '';
@@ -138,18 +209,20 @@ const isAdmin = computed(() => {
   return user.value?.role === 'ADMIN';
 });
 
+const workbenchTitle = computed(() => {
+  return isAdmin.value ? '管理员工作台' : '员工工作台';
+});
+
 onMounted(() => {
   console.log('[StaffWorkbench] onMounted - checking permission...');
   checkPermission();
-  // TODO: 后续对接后端 API
-  // loadStats();
 });
 
 onShow(() => {
   console.log('[StaffWorkbench] onShow - checking permission...');
-  refreshCurrentTabBar()
+  refreshCurrentTabBar();
 
-  checkPermission()
+  checkPermission();
 });
 
 const checkPermission = () => {
@@ -178,13 +251,19 @@ const checkPermission = () => {
   }
 
   // 验证用户角色
-  if (!userData || !userData.role || (userData.role !== 'STAFF' && userData.role !== 'ADMIN')) {
+  if (
+    !userData ||
+    !userData.role ||
+    (userData.role !== 'STAFF' && userData.role !== 'ADMIN')
+  ) {
     console.log('[StaffWorkbench] Permission denied - user:', userData);
 
     // 如果有token但用户信息无效，尝试从API重新加载
     const token = uni.getStorageSync('token');
     if (token && (!userData || !userData.role)) {
-      console.log('[StaffWorkbench] Has token but no user data, fetching from API');
+      console.log(
+        '[StaffWorkbench] Has token but no user data, fetching from API'
+      );
       loadUserInfoFromApi();
       return;
     }
@@ -192,7 +271,7 @@ const checkPermission = () => {
     isStaff.value = false;
     uni.showToast({
       title: '权限不足',
-      icon: 'none'
+      icon: 'none',
     });
     setTimeout(() => {
       uni.switchTab({ url: '/pages/home/index' });
@@ -203,20 +282,21 @@ const checkPermission = () => {
   console.log('[StaffWorkbench] Permission granted - user:', userData);
   user.value = userData;
   isStaff.value = true;
+  loadStats();
 };
 
 const loadUserInfoFromApi = async () => {
   try {
     const res = await request({
       url: '/users/me',
-      method: 'GET'
+      method: 'GET',
     });
 
     if (res.code === 0 && res.data) {
       console.log('[StaffWorkbench] User info loaded from API:', res.data);
       // 更新storage
       uni.setStorageSync('user', res.data);
-      refreshCurrentTabBar()
+      refreshCurrentTabBar();
 
       // 重新检查权限
       checkPermission();
@@ -227,7 +307,7 @@ const loadUserInfoFromApi = async () => {
     console.error('[StaffWorkbench] Failed to load user info from API:', error);
     uni.showToast({
       title: '加载用户信息失败',
-      icon: 'none'
+      icon: 'none',
     });
     setTimeout(() => {
       uni.switchTab({ url: '/pages/home/index' });
@@ -237,14 +317,28 @@ const loadUserInfoFromApi = async () => {
 
 const loadStats = async () => {
   try {
-    // TODO: 调用后端 API 获取统计数据
-    // const response = await request({ url: '/staff/stats' });
-    // todayOrders.value = response.data.todayOrders;
-    // pendingTasks.value = response.data.pendingTasks;
-    // shippingCount.value = response.data.shippingCount;
+    const response = await request<WorkbenchSummary>({
+      url: '/staff/workbench/summary',
+      method: 'GET',
+      quiet: true,
+      suppressErrorToast: true,
+    });
+
+    todayOrders.value = response.data?.todayOrders || 0;
+    pendingTasks.value = response.data?.pendingTasks || 0;
+    shippingCount.value = response.data?.shippingCount || 0;
+    todoCounts.value = response.data?.badges || {};
   } catch (error) {
     console.error('[StaffWorkbench] Failed to load stats:', error);
   }
+};
+
+const badgeCount = (key: WorkbenchBadgeKey) => {
+  return Number(todoCounts.value[key] || 0);
+};
+
+const formatBadge = (count: number) => {
+  return count > 99 ? '99+' : String(count);
 };
 
 const goToPurchasing = () => {
@@ -259,6 +353,10 @@ const viewTodayOrders = () => {
   uni.navigateTo({ url: '/pages/staff-orders/index' });
 };
 
+const goToRefunds = () => {
+  uni.navigateTo({ url: '/pages/staff-refunds/index' });
+};
+
 const goToReimbursement = () => {
   uni.navigateTo({ url: '/pages/staff-purchasing/reimbursement/list' });
 };
@@ -269,6 +367,14 @@ const goToInventory = () => {
 
 const goToStaffRecipes = () => {
   uni.navigateTo({ url: '/pages/staff-recipes/index' });
+};
+
+const goToRecipeDesigner = () => {
+  uni.navigateTo({ url: '/pages/recipe-designer/list' });
+};
+
+const goToIngredientCreation = () => {
+  uni.navigateTo({ url: '/pages/ingredient-creation/list' });
 };
 </script>
 
@@ -350,8 +456,9 @@ const goToStaffRecipes = () => {
 }
 
 .module {
+  position: relative;
   background-color: #fff;
-  padding: 32rpx;
+  padding: 32rpx 88rpx 32rpx 32rpx;
   border-radius: 16rpx;
   display: flex;
   align-items: center;
@@ -386,6 +493,10 @@ const goToStaffRecipes = () => {
     background: linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%);
   }
 
+  &.refunds {
+    background: linear-gradient(135deg, #dbeafe 0%, #93c5fd 100%);
+  }
+
   &.reimbursement {
     background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
   }
@@ -396,6 +507,16 @@ const goToStaffRecipes = () => {
 
   &.recipes {
     background: linear-gradient(135deg, #c3cfe2 0%, #f5f7fa 100%);
+  }
+
+  &.recipe-designer {
+    background: linear-gradient(135deg, #e6f4ff 0%, #bae0ff 100%);
+    color: #1677ff;
+  }
+
+  &.ingredient-creation {
+    background: linear-gradient(135deg, #f6ffed 0%, #b7eb8f 100%);
+    color: #389e0d;
   }
 }
 
@@ -425,9 +546,28 @@ const goToStaffRecipes = () => {
 }
 
 .module-arrow {
+  position: absolute;
+  right: 32rpx;
   font-size: 48rpx;
   color: #ccc;
   font-weight: 300;
+}
+
+.module-badge {
+  position: absolute;
+  top: 22rpx;
+  right: 54rpx;
+  min-width: 34rpx;
+  height: 34rpx;
+  padding: 0 10rpx;
+  border-radius: 999rpx;
+  background: #ff4d4f;
+  color: #fff;
+  font-size: 22rpx;
+  font-weight: 700;
+  line-height: 34rpx;
+  text-align: center;
+  box-shadow: 0 4rpx 10rpx rgba(255, 77, 79, 0.28);
 }
 
 .stats-section {

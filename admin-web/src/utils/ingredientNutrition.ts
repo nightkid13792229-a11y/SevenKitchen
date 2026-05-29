@@ -3,8 +3,8 @@ import {
   INGREDIENT_NUTRITION_TAB_DEFINITIONS,
   INGREDIENT_NUTRITION_FIELD_UNITS,
   INGREDIENT_NUTRITION_TAB_EMPTY_RECORDS,
-  type IngredientNutritionTabKey
-} from '@/constants/ingredientNutrition'
+  type IngredientNutritionTabKey,
+} from "../constants/ingredientNutrition.ts";
 import type {
   ActiveNutrientValue,
   AminoAcidNutritionProfileTab,
@@ -12,223 +12,449 @@ import type {
   MacroNutritionProfileTab,
   MineralNutritionProfileTab,
   NutritionCustomItem,
+  NutritionFieldSource,
   NutritionItem,
   NutritionProfile,
   NutritionProfileV2,
   NutritionRawBasisType,
-  VitaminNutritionProfileTab
-} from '@/types/ingredient'
+  NutritionSourceForm,
+  VitaminNutritionProfileTab,
+} from "../types/ingredient.ts";
 
 interface LegacyNutritionProfile {
-  items: NutritionItem[]
+  items: NutritionItem[];
 }
 
-type NutritionProfileInput = NutritionProfile | LegacyNutritionProfile
+type NutritionProfileInput = NutritionProfile | LegacyNutritionProfile;
 
 function createAliasMap<TKey extends string>(
   tabKey: IngredientNutritionTabKey,
-  extraAliases: Record<string, TKey>
+  extraAliases: Record<string, TKey>,
 ): Record<string, TKey> {
-  const tabDefinition = INGREDIENT_NUTRITION_TAB_DEFINITIONS.find((tab) => tab.key === tabKey)
+  const tabDefinition = INGREDIENT_NUTRITION_TAB_DEFINITIONS.find(
+    (tab) => tab.key === tabKey,
+  );
   const baseAliases = Object.fromEntries(
-    (tabDefinition?.fields ?? []).flatMap((field) => ([
+    (tabDefinition?.fields ?? []).flatMap((field) => [
       [normalizeAlias(field.key), field.key as TKey],
-      [normalizeAlias(field.label), field.key as TKey]
-    ]))
-  ) as Record<string, TKey>
+      [normalizeAlias(field.label), field.key as TKey],
+    ]),
+  ) as Record<string, TKey>;
 
   return {
     ...baseAliases,
-    ...extraAliases
-  }
+    ...extraAliases,
+  };
 }
 
-const MACRO_ALIASES = createAliasMap<keyof NutritionProfileV2['macros']>('macros', {
-  protein: 'crudeProtein',
-  proteincontent: 'crudeProtein',
-  fiber: 'fiber',
-  solublefiber: 'solubleFiber',
-  insolublefiber: 'insolubleFiber'
-})
+const MACRO_ALIASES = createAliasMap<keyof NutritionProfileV2["macros"]>(
+  "macros",
+  {
+    protein: "crudeProtein",
+    proteincontent: "crudeProtein",
+    fiber: "fiber",
+    solublefiber: "solubleFiber",
+    insolublefiber: "insolubleFiber",
+  },
+);
 
-const MINERAL_ALIASES = createAliasMap<keyof NutritionProfileV2['minerals']>('minerals', {
-  ca: 'calcium',
-  p: 'phosphorus',
-  i: 'iodine',
-  '氯化物': 'chloride'
-})
+const MINERAL_ALIASES = createAliasMap<keyof NutritionProfileV2["minerals"]>(
+  "minerals",
+  {
+    ca: "calcium",
+    p: "phosphorus",
+    i: "iodine",
+    氯化物: "chloride",
+  },
+);
 
-const VITAMIN_ALIASES = createAliasMap<keyof NutritionProfileV2['vitamins']>('vitamins', {
-  vitaminb1: 'vitaminB1',
-  thiamine: 'vitaminB1',
-  vitaminb2: 'vitaminB2',
-  riboflavin: 'vitaminB2',
-  vitaminb3: 'vitaminB3',
-  niacin: 'vitaminB3',
-  vitaminb5: 'vitaminB5',
-  pantothenicacid: 'vitaminB5',
-  vitaminb6: 'vitaminB6',
-  pyridoxine: 'vitaminB6',
-  vitaminb7: 'vitaminB7',
-  biotin: 'vitaminB7',
-  vitaminb9: 'vitaminB9',
-  folate: 'vitaminB9',
-  folicacid: 'vitaminB9',
-  vitaminb12: 'vitaminB12',
-  cobalamin: 'vitaminB12',
-  b7: 'vitaminB7',
-  b9: 'vitaminB9'
-})
+const VITAMIN_ALIASES = createAliasMap<keyof NutritionProfileV2["vitamins"]>(
+  "vitamins",
+  {
+    vitaminb1: "vitaminB1",
+    thiamine: "vitaminB1",
+    vitaminb2: "vitaminB2",
+    riboflavin: "vitaminB2",
+    vitaminb3: "vitaminB3",
+    niacin: "vitaminB3",
+    vitaminb5: "vitaminB5",
+    pantothenicacid: "vitaminB5",
+    vitaminb6: "vitaminB6",
+    pyridoxine: "vitaminB6",
+    vitaminb7: "vitaminB7",
+    biotin: "vitaminB7",
+    vitaminb9: "vitaminB9",
+    folate: "vitaminB9",
+    folicacid: "vitaminB9",
+    vitaminb12: "vitaminB12",
+    cobalamin: "vitaminB12",
+    b7: "vitaminB7",
+    b9: "vitaminB9",
+  },
+);
 
-const FATTY_ACID_ALIASES = createAliasMap<keyof NutritionProfileV2['fattyAcids']>('fattyAcids', {
-  alphalinolenicacid: 'alphaLinolenicAcid',
-  'α亚麻酸': 'alphaLinolenicAcid',
-  omega3: 'alphaLinolenicAcid'
-})
+const FATTY_ACID_ALIASES = createAliasMap<
+  keyof NutritionProfileV2["fattyAcids"]
+>("fattyAcids", {
+  alphalinolenicacid: "alphaLinolenicAcid",
+  α亚麻酸: "alphaLinolenicAcid",
+  omega3: "alphaLinolenicAcid",
+});
 
-const AMINO_ACID_ALIASES = createAliasMap<keyof NutritionProfileV2['aminoAcids']>('aminoAcids', {})
+const AMINO_ACID_ALIASES = createAliasMap<
+  keyof NutritionProfileV2["aminoAcids"]
+>("aminoAcids", {});
 
-type IngredientNutritionFormValue = NutritionProfileV2
+type IngredientNutritionFormValue = NutritionProfileV2;
 
 function cloneTabRecord(tabKey: IngredientNutritionTabKey) {
-  return { ...INGREDIENT_NUTRITION_TAB_EMPTY_RECORDS[tabKey] }
+  return { ...INGREDIENT_NUTRITION_TAB_EMPTY_RECORDS[tabKey] };
 }
 
 function isRawBasisType(value: unknown): value is NutritionRawBasisType {
   return (
-    value === 'PER_100_G' ||
-    value === 'PER_100_ML' ||
-    value === 'PER_1_G' ||
-    value === 'PER_1_ML' ||
-    value === 'PER_SERVING'
-  )
+    value === "PER_100_G" ||
+    value === "PER_100_ML" ||
+    value === "PER_1_G" ||
+    value === "PER_1_ML" ||
+    value === "PER_SERVING"
+  );
 }
 
 function normalizeAlias(value: string | null | undefined): string {
-  return (value ?? '').trim().toLowerCase().replace(/[_\s-]+/g, '')
+  return (value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[_\s-]+/g, "");
 }
 
 function mapLegacyBasisType(
-  basisType: NutritionItem['basisType'] | undefined
+  basisType: NutritionItem["basisType"] | undefined,
 ): NutritionRawBasisType {
-  if (basisType === 'PER_1_PCS') {
-    return 'PER_SERVING'
+  if (basisType === "PER_1_PCS") {
+    return "PER_SERVING";
   }
 
-  return isRawBasisType(basisType) ? basisType : 'PER_100_G'
+  return isRawBasisType(basisType) ? basisType : "PER_100_G";
 }
 
 function normalizeNumber(value: unknown): number | null {
-  if (typeof value === 'number') {
-    return Number.isFinite(value) ? value : null
+  if (typeof value === "number") {
+    return Number.isFinite(value) ? value : null;
   }
 
-  if (typeof value === 'string' && value.trim().length > 0) {
-    const parsed = Number(value)
-    return Number.isFinite(parsed) ? parsed : null
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : null;
   }
 
-  return null
+  return null;
 }
 
 function normalizeUnitLabel(unit: string | null | undefined): string {
-  const normalized = (unit ?? '').trim()
-  const compact = normalized.toLowerCase()
+  const normalized = (unit ?? "").trim();
+  const compact = normalized.toLowerCase();
 
-  if (compact === 'ug' || compact === 'μg' || compact === 'mcg') {
-    return 'μg'
+  if (compact === "ug" || compact === "μg" || compact === "mcg") {
+    return "μg";
   }
 
-  if (compact === 'iu') {
-    return 'IU'
+  if (compact === "iu") {
+    return "IU";
   }
 
-  return normalized
+  return normalized;
 }
 
 function hasCompatibleCanonicalUnit(fieldKey: string, unit: string): boolean {
-  return normalizeUnitLabel(INGREDIENT_NUTRITION_FIELD_UNITS[fieldKey]) === normalizeUnitLabel(unit)
+  return (
+    normalizeUnitLabel(INGREDIENT_NUTRITION_FIELD_UNITS[fieldKey]) ===
+    normalizeUnitLabel(unit)
+  );
 }
 
-function normalizeCustomItem(item: NutritionCustomItem): NutritionCustomItem | null {
-  const name = item.name?.trim()
-  const unit = item.unit?.trim()
-  const value = normalizeNumber(item.value)
+function normalizeCustomItem(
+  item: NutritionCustomItem,
+): NutritionCustomItem | null {
+  const name = item.name?.trim();
+  const unit = item.unit?.trim();
+  const value = normalizeNumber(item.value);
 
   if (!name || !unit || value === null) {
-    return null
+    return null;
   }
 
   return {
     name,
     value,
     unit,
-    rawBasisType: isRawBasisType(item.rawBasisType) ? item.rawBasisType : undefined,
-    note: item.note?.trim() || null
-  }
+    rawBasisType: isRawBasisType(item.rawBasisType)
+      ? item.rawBasisType
+      : undefined,
+    note: item.note?.trim() || null,
+  };
 }
 
 function normalizeFieldDisplayUnits(input: unknown): Record<string, string> {
-  if (!input || typeof input !== 'object' || Array.isArray(input)) {
-    return {}
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return {};
   }
 
-  return Object.entries(input as Record<string, unknown>).reduce<Record<string, string>>((result, [fieldKey, unit]) => {
-    if (fieldKey.trim().length === 0 || typeof unit !== 'string' || unit.trim().length === 0) {
-      return result
+  return Object.entries(input as Record<string, unknown>).reduce<
+    Record<string, string>
+  >((result, [fieldKey, unit]) => {
+    if (
+      fieldKey.trim().length === 0 ||
+      typeof unit !== "string" ||
+      unit.trim().length === 0
+    ) {
+      return result;
     }
 
-    const resolvedUnit = getIngredientNutritionResolvedDisplayUnit(fieldKey, unit)
+    const resolvedUnit = getIngredientNutritionResolvedDisplayUnit(
+      fieldKey,
+      unit,
+    );
     if (!resolvedUnit) {
-      return result
+      return result;
     }
 
-    result[fieldKey] = resolvedUnit
-    return result
-  }, {})
+    result[fieldKey] = resolvedUnit;
+    return result;
+  }, {});
 }
 
-function assignLegacyItem(profile: NutritionProfileV2, item: NutritionItem): void {
-  const nutrientCode = normalizeAlias(item.nutrientCode)
-  const nutrientName = normalizeAlias(item.nutrientName)
-  const macroKey = MACRO_ALIASES[nutrientCode] ?? MACRO_ALIASES[nutrientName]
+function normalizeNullableString(value: unknown): string | null {
+  return typeof value === "string" && value.trim().length > 0
+    ? value.trim()
+    : null;
+}
+
+function assignStringValue(
+  result: NutritionSourceForm,
+  key: keyof NutritionSourceForm,
+  value: unknown,
+): void {
+  if (typeof value === "string" && value.trim().length > 0) {
+    result[key] = value.trim();
+  }
+}
+
+function assignNumberValue(
+  result: NutritionSourceForm,
+  key: keyof NutritionSourceForm,
+  value: unknown,
+): void {
+  const normalized = normalizeNumber(value);
+  if (normalized !== null) {
+    result[key] = normalized;
+  }
+}
+
+function normalizeSourceForm(input: unknown): NutritionSourceForm | null {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return null;
+  }
+
+  const form = input as Record<string, unknown>;
+  const result: NutritionSourceForm = {};
+  const sourceNutrientId = form.sourceNutrientId;
+
+  if (
+    typeof sourceNutrientId === "number" &&
+    Number.isFinite(sourceNutrientId)
+  ) {
+    result.sourceNutrientId = sourceNutrientId;
+  } else if (
+    typeof sourceNutrientId === "string" &&
+    sourceNutrientId.trim().length > 0
+  ) {
+    result.sourceNutrientId = sourceNutrientId.trim();
+  }
+
+  assignStringValue(result, "sourceNutrientName", form.sourceNutrientName);
+  assignNumberValue(result, "originalValue", form.originalValue);
+  assignStringValue(result, "originalUnit", form.originalUnit);
+  assignNumberValue(result, "canonicalValue", form.canonicalValue);
+  assignStringValue(result, "canonicalUnit", form.canonicalUnit);
+  assignStringValue(result, "basisType", form.basisType);
+  assignStringValue(result, "notes", form.notes);
+
+  for (const [key, value] of Object.entries(form)) {
+    if (
+      key in result ||
+      [
+        "sourceNutrientId",
+        "sourceNutrientName",
+        "originalValue",
+        "originalUnit",
+        "canonicalValue",
+        "canonicalUnit",
+        "basisType",
+        "notes",
+      ].includes(key)
+    ) {
+      continue;
+    }
+
+    if (typeof value === "number" && Number.isFinite(value)) {
+      result[key] = value;
+    } else if (typeof value === "boolean") {
+      result[key] = value;
+    } else if (typeof value === "string" && value.trim().length > 0) {
+      result[key] = value.trim();
+    }
+  }
+
+  return Object.keys(result).length > 0 ? result : null;
+}
+
+function normalizeSourceForms(
+  input: unknown,
+): Record<string, NutritionSourceForm> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return {};
+  }
+
+  return Object.entries(input as Record<string, unknown>).reduce<
+    Record<string, NutritionSourceForm>
+  >((result, [fieldPath, form]) => {
+    const normalizedFieldPath = fieldPath.trim();
+    if (!normalizedFieldPath) {
+      return result;
+    }
+
+    const normalizedForm = normalizeSourceForm(form);
+    if (!normalizedForm) {
+      return result;
+    }
+
+    result[normalizedFieldPath] = normalizedForm;
+    return result;
+  }, {});
+}
+
+function normalizeFieldSource(input: unknown): NutritionFieldSource | null {
+  const normalizedForm = normalizeSourceForm(input);
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return null;
+  }
+
+  const form = input as Record<string, unknown>;
+  const result: NutritionFieldSource = {
+    ...(normalizedForm ?? {}),
+  };
+
+  for (const key of [
+    "sourceRole",
+    "sourceType",
+    "sourceKind",
+    "sourceCode",
+    "sourceVersion",
+    "sourceKey",
+    "externalId",
+    "sourceTitle",
+    "sourceProvider",
+    "compatibility",
+    "confidenceLevel",
+    "noteZh",
+  ] as const) {
+    assignStringValue(result, key, form[key]);
+  }
+
+  return Object.keys(result).length > 0 ? result : null;
+}
+
+function normalizeFieldSources(
+  input: unknown,
+): Record<string, NutritionFieldSource> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return {};
+  }
+
+  return Object.entries(input as Record<string, unknown>).reduce<
+    Record<string, NutritionFieldSource>
+  >((result, [fieldPath, source]) => {
+    const normalizedFieldPath = fieldPath.trim();
+    if (!normalizedFieldPath) {
+      return result;
+    }
+
+    const normalizedSource = normalizeFieldSource(source);
+    if (!normalizedSource) {
+      return result;
+    }
+
+    result[normalizedFieldPath] = normalizedSource;
+    return result;
+  }, {});
+}
+
+function normalizeConversionNotes(input: unknown): Record<string, string> {
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return {};
+  }
+
+  return Object.entries(input as Record<string, unknown>).reduce<
+    Record<string, string>
+  >((result, [fieldPath, note]) => {
+    if (!fieldPath.trim() || typeof note !== "string" || !note.trim()) {
+      return result;
+    }
+
+    result[fieldPath] = note.trim();
+    return result;
+  }, {});
+}
+
+function assignLegacyItem(
+  profile: NutritionProfileV2,
+  item: NutritionItem,
+): void {
+  const nutrientCode = normalizeAlias(item.nutrientCode);
+  const nutrientName = normalizeAlias(item.nutrientName);
+  const macroKey = MACRO_ALIASES[nutrientCode] ?? MACRO_ALIASES[nutrientName];
 
   if (macroKey) {
     if (hasCompatibleCanonicalUnit(macroKey, item.unit)) {
-      profile.macros[macroKey] = item.value
-      return
+      profile.macros[macroKey] = item.value;
+      return;
     }
   }
 
-  const mineralKey = MINERAL_ALIASES[nutrientCode] ?? MINERAL_ALIASES[nutrientName]
+  const mineralKey =
+    MINERAL_ALIASES[nutrientCode] ?? MINERAL_ALIASES[nutrientName];
   if (mineralKey) {
     if (hasCompatibleCanonicalUnit(mineralKey, item.unit)) {
-      profile.minerals[mineralKey] = item.value
-      return
+      profile.minerals[mineralKey] = item.value;
+      return;
     }
   }
 
-  const vitaminKey = VITAMIN_ALIASES[nutrientCode] ?? VITAMIN_ALIASES[nutrientName]
+  const vitaminKey =
+    VITAMIN_ALIASES[nutrientCode] ?? VITAMIN_ALIASES[nutrientName];
   if (vitaminKey) {
     if (hasCompatibleCanonicalUnit(vitaminKey, item.unit)) {
-      profile.vitamins[vitaminKey] = item.value
-      return
+      profile.vitamins[vitaminKey] = item.value;
+      return;
     }
   }
 
-  const fattyAcidKey = FATTY_ACID_ALIASES[nutrientCode] ?? FATTY_ACID_ALIASES[nutrientName]
+  const fattyAcidKey =
+    FATTY_ACID_ALIASES[nutrientCode] ?? FATTY_ACID_ALIASES[nutrientName];
   if (fattyAcidKey) {
     if (hasCompatibleCanonicalUnit(fattyAcidKey, item.unit)) {
-      profile.fattyAcids[fattyAcidKey] = item.value
-      return
+      profile.fattyAcids[fattyAcidKey] = item.value;
+      return;
     }
   }
 
-  const aminoAcidKey = AMINO_ACID_ALIASES[nutrientCode] ?? AMINO_ACID_ALIASES[nutrientName]
+  const aminoAcidKey =
+    AMINO_ACID_ALIASES[nutrientCode] ?? AMINO_ACID_ALIASES[nutrientName];
   if (aminoAcidKey) {
     if (hasCompatibleCanonicalUnit(aminoAcidKey, item.unit)) {
-      profile.aminoAcids[aminoAcidKey] = item.value
-      return
+      profile.aminoAcids[aminoAcidKey] = item.value;
+      return;
     }
   }
 
@@ -237,72 +463,90 @@ function assignLegacyItem(profile: NutritionProfileV2, item: NutritionItem): voi
     value: item.value,
     unit: item.unit,
     rawBasisType: mapLegacyBasisType(item.basisType),
-    note: item.notes ?? null
-  })
+    note: item.notes ?? null,
+  });
 }
 
-function isLegacyNutritionProfile(input: unknown): input is LegacyNutritionProfile {
-  return !!input && typeof input === 'object' && Array.isArray((input as LegacyNutritionProfile).items)
+function isLegacyNutritionProfile(
+  input: unknown,
+): input is LegacyNutritionProfile {
+  return (
+    !!input &&
+    typeof input === "object" &&
+    Array.isArray((input as LegacyNutritionProfile).items)
+  );
 }
 
 function hasMixedLegacyBasisType(items: NutritionItem[]): boolean {
-  return new Set(items.map((item) => mapLegacyBasisType(item.basisType))).size > 1
+  return (
+    new Set(items.map((item) => mapLegacyBasisType(item.basisType))).size > 1
+  );
 }
 
 function cleanTabRecord<TTab extends Record<string, number | null>>(
   tabKey: IngredientNutritionTabKey,
-  input: Record<string, unknown> | null | undefined
+  input: Record<string, unknown> | null | undefined,
 ): TTab {
-  const nextRecord = cloneTabRecord(tabKey) as TTab
-  const writableRecord = nextRecord as Record<string, number | null>
+  const nextRecord = cloneTabRecord(tabKey) as TTab;
+  const writableRecord = nextRecord as Record<string, number | null>;
 
-  for (const field of INGREDIENT_NUTRITION_TAB_DEFINITIONS.find((tab) => tab.key === tabKey)?.fields ?? []) {
-    writableRecord[field.key] = normalizeNumber(input?.[field.key])
+  for (const field of INGREDIENT_NUTRITION_TAB_DEFINITIONS.find(
+    (tab) => tab.key === tabKey,
+  )?.fields ?? []) {
+    writableRecord[field.key] = normalizeNumber(input?.[field.key]);
   }
 
-  return nextRecord
+  return nextRecord;
 }
 
 export function createEmptyIngredientNutritionFormValue(): IngredientNutritionFormValue {
   return {
     meta: {
-      rawBasisType: 'PER_100_G',
+      rawBasisType: "PER_100_G",
       sampleState: undefined,
       isEdiblePortionBasis: false,
       ediblePortionRate: null,
       densityGPerMl: null,
       servingWeightG: null,
       sourceType: null,
+      sourceKind: null,
+      sourceCode: null,
+      sourceVersion: null,
+      externalId: null,
+      sourceRecordId: null,
+      sourceForms: {},
+      fieldSources: {},
+      conversionNotes: {},
       sourceTitle: null,
       sourceProvider: null,
       attachments: [],
       confidenceLevel: null,
       fieldDisplayUnits: {},
-      versionNote: null
+      versionNote: null,
     },
-    macros: cloneTabRecord('macros') as MacroNutritionProfileTab,
-    minerals: cloneTabRecord('minerals') as MineralNutritionProfileTab,
-    vitamins: cloneTabRecord('vitamins') as VitaminNutritionProfileTab,
-    fattyAcids: cloneTabRecord('fattyAcids') as FattyAcidNutritionProfileTab,
-    aminoAcids: cloneTabRecord('aminoAcids') as AminoAcidNutritionProfileTab,
-    customItems: []
-  }
+    macros: cloneTabRecord("macros") as MacroNutritionProfileTab,
+    minerals: cloneTabRecord("minerals") as MineralNutritionProfileTab,
+    vitamins: cloneTabRecord("vitamins") as VitaminNutritionProfileTab,
+    fattyAcids: cloneTabRecord("fattyAcids") as FattyAcidNutritionProfileTab,
+    aminoAcids: cloneTabRecord("aminoAcids") as AminoAcidNutritionProfileTab,
+    customItems: [],
+  };
 }
 
 export function normalizeIngredientNutritionProfileToForm(
-  input: NutritionProfileInput | null | undefined
+  input: NutritionProfileInput | null | undefined,
 ): IngredientNutritionFormValue {
   if (!input) {
-    return createEmptyIngredientNutritionFormValue()
+    return createEmptyIngredientNutritionFormValue();
   }
 
   if (isLegacyNutritionProfile(input)) {
-    const profile = createEmptyIngredientNutritionFormValue()
-    const mixedBasisType = hasMixedLegacyBasisType(input.items)
+    const profile = createEmptyIngredientNutritionFormValue();
+    const mixedBasisType = hasMixedLegacyBasisType(input.items);
     if (!mixedBasisType) {
-      profile.meta.rawBasisType = mapLegacyBasisType(input.items[0]?.basisType)
+      profile.meta.rawBasisType = mapLegacyBasisType(input.items[0]?.basisType);
     } else {
-      profile.meta.versionNote = '历史营养数据存在混合口径，请人工复核'
+      profile.meta.versionNote = "历史营养数据存在混合口径，请人工复核";
     }
 
     for (const item of input.items) {
@@ -312,18 +556,18 @@ export function normalizeIngredientNutritionProfileToForm(
           value: item.value,
           unit: item.unit,
           rawBasisType: mapLegacyBasisType(item.basisType),
-          note: item.notes ?? null
-        })
-        continue
+          note: item.notes ?? null,
+        });
+        continue;
       }
 
-      assignLegacyItem(profile, item)
+      assignLegacyItem(profile, item);
     }
 
-    return profile
+    return profile;
   }
 
-  const empty = createEmptyIngredientNutritionFormValue()
+  const empty = createEmptyIngredientNutritionFormValue();
 
   return {
     meta: {
@@ -331,61 +575,112 @@ export function normalizeIngredientNutritionProfileToForm(
       ...(input.meta ?? {}),
       rawBasisType: isRawBasisType(input.meta?.rawBasisType)
         ? input.meta.rawBasisType
-        : 'PER_100_G',
+        : "PER_100_G",
       isEdiblePortionBasis: !!input.meta?.isEdiblePortionBasis,
       ediblePortionRate: normalizeNumber(input.meta?.ediblePortionRate),
       densityGPerMl: normalizeNumber(input.meta?.densityGPerMl),
       servingWeightG: normalizeNumber(input.meta?.servingWeightG),
-      fieldDisplayUnits: normalizeFieldDisplayUnits(input.meta?.fieldDisplayUnits),
+      sourceKind: normalizeNullableString(input.meta?.sourceKind),
+      sourceCode: normalizeNullableString(input.meta?.sourceCode),
+      sourceVersion: normalizeNullableString(input.meta?.sourceVersion),
+      externalId: normalizeNullableString(input.meta?.externalId),
+      sourceRecordId: normalizeNullableString(input.meta?.sourceRecordId),
+      sourceTitle: normalizeNullableString(input.meta?.sourceTitle),
+      sourceProvider: normalizeNullableString(input.meta?.sourceProvider),
+      confidenceLevel: input.meta?.confidenceLevel ?? null,
+      sourceForms: normalizeSourceForms(input.meta?.sourceForms),
+      fieldSources: normalizeFieldSources(input.meta?.fieldSources),
+      conversionNotes: normalizeConversionNotes(input.meta?.conversionNotes),
+      fieldDisplayUnits: normalizeFieldDisplayUnits(
+        input.meta?.fieldDisplayUnits,
+      ),
       attachments: Array.isArray(input.meta?.attachments)
-        ? input.meta.attachments.filter((attachment): attachment is string => typeof attachment === 'string' && attachment.trim().length > 0)
-        : []
+        ? input.meta.attachments.filter(
+            (attachment): attachment is string =>
+              typeof attachment === "string" && attachment.trim().length > 0,
+          )
+        : [],
     },
-    macros: cleanTabRecord<MacroNutritionProfileTab>('macros', input.macros),
-    minerals: cleanTabRecord<MineralNutritionProfileTab>('minerals', input.minerals),
-    vitamins: cleanTabRecord<VitaminNutritionProfileTab>('vitamins', input.vitamins),
-    fattyAcids: cleanTabRecord<FattyAcidNutritionProfileTab>('fattyAcids', input.fattyAcids),
-    aminoAcids: cleanTabRecord<AminoAcidNutritionProfileTab>('aminoAcids', input.aminoAcids),
+    macros: cleanTabRecord<MacroNutritionProfileTab>("macros", input.macros),
+    minerals: cleanTabRecord<MineralNutritionProfileTab>(
+      "minerals",
+      input.minerals,
+    ),
+    vitamins: cleanTabRecord<VitaminNutritionProfileTab>(
+      "vitamins",
+      input.vitamins,
+    ),
+    fattyAcids: cleanTabRecord<FattyAcidNutritionProfileTab>(
+      "fattyAcids",
+      input.fattyAcids,
+    ),
+    aminoAcids: cleanTabRecord<AminoAcidNutritionProfileTab>(
+      "aminoAcids",
+      input.aminoAcids,
+    ),
     customItems: Array.isArray(input.customItems)
       ? input.customItems
           .map((item) => normalizeCustomItem(item))
           .filter((item): item is NutritionCustomItem => item !== null)
-      : []
-  }
+      : [],
+  };
 }
 
-function hasAnyStructuredNutritionValue(profile: IngredientNutritionFormValue): boolean {
-  const tabKeys: IngredientNutritionTabKey[] = ['macros', 'minerals', 'vitamins', 'fattyAcids', 'aminoAcids']
+function hasAnyStructuredNutritionValue(
+  profile: IngredientNutritionFormValue,
+): boolean {
+  const tabKeys: IngredientNutritionTabKey[] = [
+    "macros",
+    "minerals",
+    "vitamins",
+    "fattyAcids",
+    "aminoAcids",
+  ];
 
-  return tabKeys.some((tabKey) =>
-    Object.values(profile[tabKey]).some((value) => value !== null)
-  ) || profile.customItems.length > 0
-}
-
-function hasMeaningfulMetaValue(profile: IngredientNutritionFormValue): boolean {
   return (
-    profile.meta.rawBasisType !== 'PER_100_G' ||
+    tabKeys.some((tabKey) =>
+      Object.values(profile[tabKey]).some((value) => value !== null),
+    ) || profile.customItems.length > 0
+  );
+}
+
+function hasMeaningfulMetaValue(
+  profile: IngredientNutritionFormValue,
+): boolean {
+  return (
+    profile.meta.rawBasisType !== "PER_100_G" ||
     !!profile.meta.sampleState ||
     profile.meta.densityGPerMl !== null ||
     profile.meta.servingWeightG !== null ||
     !!profile.meta.sourceType ||
+    !!profile.meta.sourceKind ||
+    !!profile.meta.sourceCode ||
+    !!profile.meta.sourceVersion ||
+    !!profile.meta.externalId ||
+    !!profile.meta.sourceRecordId ||
+    !!profile.meta.sourceTitle ||
+    !!profile.meta.sourceProvider ||
+    !!profile.meta.confidenceLevel ||
+    Object.keys(profile.meta.sourceForms ?? {}).length > 0 ||
+    Object.keys(profile.meta.fieldSources ?? {}).length > 0 ||
+    Object.keys(profile.meta.conversionNotes ?? {}).length > 0 ||
     (profile.meta.attachments?.length ?? 0) > 0 ||
     !!profile.meta.versionNote?.trim()
-  )
+  );
 }
 
 export function buildIngredientNutritionPayload(
-  formValue: IngredientNutritionFormValue | null | undefined
+  formValue: IngredientNutritionFormValue | null | undefined,
 ): NutritionProfileV2 | null {
   if (!formValue) {
-    return null
+    return null;
   }
 
-  const normalized = normalizeIngredientNutritionProfileToForm(formValue)
+  const normalized = normalizeIngredientNutritionProfileToForm(formValue);
 
   if (!hasAnyStructuredNutritionValue(normalized)) {
     if (!hasMeaningfulMetaValue(normalized)) {
-      return null
+      return null;
     }
   }
 
@@ -396,63 +691,108 @@ export function buildIngredientNutritionPayload(
       densityGPerMl: normalized.meta.densityGPerMl,
       servingWeightG: normalized.meta.servingWeightG,
       sourceType: normalized.meta.sourceType ?? null,
-      fieldDisplayUnits: normalizeFieldDisplayUnits(normalized.meta.fieldDisplayUnits),
+      sourceKind: normalized.meta.sourceKind ?? null,
+      sourceCode: normalized.meta.sourceCode ?? null,
+      sourceVersion: normalized.meta.sourceVersion ?? null,
+      externalId: normalized.meta.externalId ?? null,
+      sourceRecordId: normalized.meta.sourceRecordId ?? null,
+      sourceForms: normalizeSourceForms(normalized.meta.sourceForms),
+      fieldSources: normalizeFieldSources(normalized.meta.fieldSources),
+      conversionNotes: normalizeConversionNotes(
+        normalized.meta.conversionNotes,
+      ),
+      sourceTitle: normalized.meta.sourceTitle ?? null,
+      sourceProvider: normalized.meta.sourceProvider ?? null,
+      confidenceLevel: normalized.meta.confidenceLevel ?? null,
+      fieldDisplayUnits: normalizeFieldDisplayUnits(
+        normalized.meta.fieldDisplayUnits,
+      ),
       attachments: normalized.meta.attachments ?? [],
-      versionNote: normalized.meta.versionNote?.trim() || null
+      versionNote: normalized.meta.versionNote?.trim() || null,
     },
-    macros: cleanTabRecord<MacroNutritionProfileTab>('macros', normalized.macros),
-    minerals: cleanTabRecord<MineralNutritionProfileTab>('minerals', normalized.minerals),
-    vitamins: cleanTabRecord<VitaminNutritionProfileTab>('vitamins', normalized.vitamins),
-    fattyAcids: cleanTabRecord<FattyAcidNutritionProfileTab>('fattyAcids', normalized.fattyAcids),
-    aminoAcids: cleanTabRecord<AminoAcidNutritionProfileTab>('aminoAcids', normalized.aminoAcids),
+    macros: cleanTabRecord<MacroNutritionProfileTab>(
+      "macros",
+      normalized.macros,
+    ),
+    minerals: cleanTabRecord<MineralNutritionProfileTab>(
+      "minerals",
+      normalized.minerals,
+    ),
+    vitamins: cleanTabRecord<VitaminNutritionProfileTab>(
+      "vitamins",
+      normalized.vitamins,
+    ),
+    fattyAcids: cleanTabRecord<FattyAcidNutritionProfileTab>(
+      "fattyAcids",
+      normalized.fattyAcids,
+    ),
+    aminoAcids: cleanTabRecord<AminoAcidNutritionProfileTab>(
+      "aminoAcids",
+      normalized.aminoAcids,
+    ),
     customItems: normalized.customItems
       .map((item) => normalizeCustomItem(item))
-      .filter((item): item is NutritionCustomItem => item !== null)
-  }
+      .filter((item): item is NutritionCustomItem => item !== null),
+  };
 }
 
 export function buildSupplementActiveNutrientsFromNutritionProfile(
   nutritionProfile: NutritionProfile | null | undefined,
-  fallback: Record<string, ActiveNutrientValue> = {}
+  fallback: Record<string, ActiveNutrientValue> = {},
 ): Record<string, ActiveNutrientValue> {
   if (!nutritionProfile) {
-    return { ...(fallback || {}) }
+    return { ...(fallback || {}) };
   }
 
-  const activeNutrients: Record<string, ActiveNutrientValue> = {}
-  const normalizedProfile = normalizeIngredientNutritionProfileToForm(nutritionProfile)
-  const normalizeLegacyTargetKey = (label: string) => label.replace(/\s+/g, '')
+  const activeNutrients: Record<string, ActiveNutrientValue> = {};
+  const normalizedProfile =
+    normalizeIngredientNutritionProfileToForm(nutritionProfile);
+  const normalizeLegacyTargetKey = (label: string) => label.replace(/\s+/g, "");
 
   for (const tab of INGREDIENT_NUTRITION_TAB_DEFINITIONS) {
-    const tabValues = normalizedProfile[tab.key] as Record<string, number | null>
+    const tabValues = normalizedProfile[tab.key] as Record<
+      string,
+      number | null
+    >;
 
     for (const field of tab.fields) {
-      const value = tabValues[field.key]
-      if (typeof value === 'number' && Number.isFinite(value)) {
-        activeNutrients[normalizeLegacyTargetKey(field.label)] = { value, unit: field.unit }
+      const value = tabValues[field.key];
+      if (typeof value === "number" && Number.isFinite(value)) {
+        activeNutrients[normalizeLegacyTargetKey(field.label)] = {
+          value,
+          unit: field.unit,
+        };
       }
     }
   }
 
-  const epa = normalizedProfile.fattyAcids.epa
-  const dha = normalizedProfile.fattyAcids.dha
+  const epa = normalizedProfile.fattyAcids.epa;
+  const dha = normalizedProfile.fattyAcids.dha;
   const combinedOmega3 = [epa, dha]
-    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value))
-    .reduce((sum, value) => sum + value, 0)
+    .filter(
+      (value): value is number =>
+        typeof value === "number" && Number.isFinite(value),
+    )
+    .reduce((sum, value) => sum + value, 0);
 
   if (combinedOmega3 > 0) {
-    activeNutrients['EPA+DHA'] = { value: combinedOmega3, unit: 'g' }
+    activeNutrients["EPA+DHA"] = { value: combinedOmega3, unit: "g" };
   }
 
   for (const item of normalizedProfile.customItems ?? []) {
-    const name = item.name.trim()
-    const unit = item.unit.trim()
-    if (name && unit && typeof item.value === 'number' && Number.isFinite(item.value)) {
-      activeNutrients[name] = { value: item.value, unit }
+    const name = item.name.trim();
+    const unit = item.unit.trim();
+    if (
+      name &&
+      unit &&
+      typeof item.value === "number" &&
+      Number.isFinite(item.value)
+    ) {
+      activeNutrients[name] = { value: item.value, unit };
     }
   }
 
-  return activeNutrients
+  return activeNutrients;
 }
 
-export type { IngredientNutritionFormValue }
+export type { IngredientNutritionFormValue };

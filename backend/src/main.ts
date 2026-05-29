@@ -7,6 +7,7 @@ import { AllExceptionsFilter } from './interfaces/common/all-exceptions.filter';
 import { BadRequestExceptionFilter } from './interfaces/common/bad-request-exception.filter';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { join } from 'path';
+import * as express from 'express';
 import { resolveCorsOrigin } from './utils/cors.util';
 import { loadEnvConfig } from './utils/env-config';
 
@@ -64,6 +65,10 @@ async function bootstrap() {
 
   // 配置静态文件服务（使用项目根目录）
   app.useStaticAssets(join(process.cwd(), 'public'));
+  app.use(
+    '/api/v1/customer-service/wechat/callback',
+    express.text({ type: ['text/*', 'application/xml', 'application/*+xml'] }),
+  );
 
   // Enable CORS for cross-origin requests
   app.enableCors({

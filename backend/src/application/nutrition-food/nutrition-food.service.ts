@@ -7,6 +7,8 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  Logger,
+  Optional,
 } from '@nestjs/common';
 import { PrismaService } from '../../infrastructure/prisma.service';
 import {
@@ -19,15 +21,113 @@ import {
   CreateNutritionFoodDto,
   UpdateNutritionFoodDto,
   CreateNutritionFoodMappingDto,
+  UpdateNutritionFoodMappingDto,
   NutritionFoodResponseDto,
   NutritionFoodMappingResponseDto,
   USDAFoodSearchResultDto,
   PaginatedNutritionFoodResponseDto,
 } from '../../interfaces/dto/nutrition-food/nutrition-food.dto';
+import { normalizeChineseDisplayName } from './nutrition-food-display-name';
+import {
+  attachUsdaFdcProfileMetadata,
+  buildUsdaFdcSourceVersion,
+  mapUsdaNutrientsToNutritionProfile,
+} from '../../domain/nutrition-governance/nutrition-governance.utils';
+import { SearchGovernanceService } from '../search-governance/search-governance.service';
+
+const MANUAL_DISPLAY_NAME_SOURCE = 'MANUAL';
+const MAX_SEARCH_EXPANSION_TERMS = 8;
+
+function buildChineseDisplayNameWrite(
+  displayNameZh: string | undefined,
+  userId?: string,
+) {
+  if (displayNameZh === undefined) {
+    return {};
+  }
+
+  const normalized = normalizeChineseDisplayName(displayNameZh);
+  if (!normalized) {
+    return {
+      displayNameZh: null,
+      displayNameZhSource: null,
+      displayNameZhReviewedAt: null,
+      displayNameZhReviewedBy: null,
+    };
+  }
+
+  return {
+    displayNameZh: normalized,
+    displayNameZhSource: MANUAL_DISPLAY_NAME_SOURCE,
+    displayNameZhReviewedAt: new Date(),
+    displayNameZhReviewedBy: userId ?? null,
+  };
+}
 
 @Injectable()
 export class NutritionFoodService {
-  constructor(private readonly prisma: PrismaService) {}
+  private readonly logger = new Logger(NutritionFoodService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional()
+    private readonly searchGovernanceService?: SearchGovernanceService,
+  ) {}
+
+  private async expandSearchTerms(search?: string) {
+    const trimmed = search?.trim();
+    if (!trimmed) {
+      return [];
+    }
+
+    let expanded: string[] = [];
+    try {
+      expanded =
+        (await this.searchGovernanceService?.expandQuery(
+          'NUTRITION_FOOD',
+          trimmed,
+        )) ?? [];
+    } catch {
+      this.logger.warn(
+        'Nutrition food search governance expansion failed; falling back to original query',
+      );
+    }
+    const terms = [trimmed, ...expanded];
+    const seen = new Set<string>();
+
+    return terms
+      .map((term) => term.trim())
+      .filter((term) => {
+        const normalized = term.toLocaleLowerCase();
+        if (!normalized || seen.has(normalized)) {
+          return false;
+        }
+        seen.add(normalized);
+        return true;
+      })
+      .slice(0, MAX_SEARCH_EXPANSION_TERMS);
+  }
+
+  private async recordNutritionFoodSearch(
+    search: string | undefined,
+    resultCount: number,
+  ) {
+    const rawQuery = search?.trim();
+    if (!rawQuery) {
+      return;
+    }
+
+    try {
+      await this.searchGovernanceService?.recordSearchEvent({
+        domain: 'NUTRITION_FOOD',
+        source: 'ADMIN_NUTRITION_FOOD_LIST',
+        rawQuery,
+        resultCount,
+      });
+    } catch {
+      this.logger.warn('Nutrition food search logging failed');
+    }
+  }
 
   /**
    * 获取营养原料列表（分页）
@@ -42,15 +142,17 @@ export class NutritionFoodService {
     const page = params.page || 1;
     const pageSize = params.pageSize || 20;
     const skip = (page - 1) * pageSize;
+    const searchTerms = await this.expandSearchTerms(params.search);
 
     const where: Prisma.NutritionFoodWhereInput = {
       ...(params.category && { category: params.category }),
       ...(params.status && { status: params.status }),
-      ...(params.search && {
-        OR: [
-          { name: { contains: params.search, mode: 'insensitive' } },
-          { nameEn: { contains: params.search, mode: 'insensitive' } },
-        ],
+      ...(searchTerms.length && {
+        OR: searchTerms.flatMap((term) => [
+          { name: { contains: term, mode: 'insensitive' as const } },
+          { nameEn: { contains: term, mode: 'insensitive' as const } },
+          { displayNameZh: { contains: term, mode: 'insensitive' as const } },
+        ]),
       }),
     };
 
@@ -77,6 +179,7 @@ export class NutritionFoodService {
         },
       }),
     ]);
+    await this.recordNutritionFoodSearch(params.search, total);
 
     return {
       data: items.map(this.toResponseDto),
@@ -141,9 +244,14 @@ export class NutritionFoodService {
       data: {
         name: dto.name,
         nameEn: dto.nameEn,
+        ...buildChineseDisplayNameWrite(dto.displayNameZh, userId),
         category: dto.category,
         dataSource: dto.dataSource,
         externalId: dto.externalId,
+        preparationState: dto.preparationState,
+        preparationStateLabel: dto.preparationStateLabel,
+        ediblePortionLabel: dto.ediblePortionLabel,
+        processingLabel: dto.processingLabel,
         nutritionData: dto.nutritionData as any,
         notes: dto.notes,
         createdBy: userId,
@@ -163,6 +271,7 @@ export class NutritionFoodService {
   async update(
     id: string,
     dto: UpdateNutritionFoodDto,
+    userId?: string,
   ): Promise<NutritionFoodResponseDto> {
     const existing = await this.prisma.nutritionFood.findUnique({
       where: { id },
@@ -176,7 +285,20 @@ export class NutritionFoodService {
       where: { id },
       data: {
         ...(dto.nameEn !== undefined && { nameEn: dto.nameEn }),
+        ...buildChineseDisplayNameWrite(dto.displayNameZh, userId),
         ...(dto.category !== undefined && { category: dto.category }),
+        ...(dto.preparationState !== undefined && {
+          preparationState: dto.preparationState,
+        }),
+        ...(dto.preparationStateLabel !== undefined && {
+          preparationStateLabel: dto.preparationStateLabel,
+        }),
+        ...(dto.ediblePortionLabel !== undefined && {
+          ediblePortionLabel: dto.ediblePortionLabel,
+        }),
+        ...(dto.processingLabel !== undefined && {
+          processingLabel: dto.processingLabel,
+        }),
         ...(dto.nutritionData !== undefined && {
           nutritionData: dto.nutritionData as any,
         }),
@@ -197,6 +319,19 @@ export class NutritionFoodService {
         },
       },
     });
+
+    if (dto.nutritionData !== undefined) {
+      const primaryIngredientIds = (item.mappings || [])
+        .filter((mapping: any) => mapping.isPrimary)
+        .map((mapping: any) => mapping.ingredientId);
+
+      if (primaryIngredientIds.length > 0) {
+        await this.prisma.ingredient.updateMany({
+          where: { id: { in: primaryIngredientIds } },
+          data: { nutritionProfile: item.nutritionData as any },
+        });
+      }
+    }
 
     return this.toResponseDto(item);
   }
@@ -312,7 +447,7 @@ export class NutritionFoodService {
     // 如果设置为主要映射，先取消其他主要映射
     if (dto.isPrimary) {
       await this.prisma.nutritionFoodMapping.updateMany({
-        where: { nutritionFoodId, isPrimary: true },
+        where: { ingredientId: dto.ingredientId, isPrimary: true },
         data: { isPrimary: false },
       });
     }
@@ -337,6 +472,13 @@ export class NutritionFoodService {
       },
     });
 
+    if (dto.isPrimary) {
+      await this.prisma.ingredient.update({
+        where: { id: dto.ingredientId },
+        data: { nutritionProfile: nutritionFood.nutritionData as any },
+      });
+    }
+
     return {
       id: mapping.id,
       nutritionFoodId: mapping.nutritionFoodId,
@@ -355,13 +497,157 @@ export class NutritionFoodService {
     nutritionFoodId: string,
     ingredientId: string,
   ): Promise<void> {
-    await this.prisma.nutritionFoodMapping.delete({
+    await this.prisma.$transaction(async (tx) => {
+      const existingMapping = await tx.nutritionFoodMapping.findUnique({
+        where: {
+          nutritionFoodId_ingredientId: {
+            nutritionFoodId,
+            ingredientId,
+          },
+        },
+      });
+
+      if (!existingMapping) {
+        throw new NotFoundException('营养档案映射不存在');
+      }
+
+      let fallbackMapping:
+        | {
+            id: string;
+            nutritionFood: { nutritionData: Prisma.JsonValue };
+          }
+        | undefined;
+
+      if (existingMapping.isPrimary) {
+        const fallbackMappings = await tx.nutritionFoodMapping.findMany({
+          where: {
+            ingredientId,
+            NOT: { nutritionFoodId },
+          },
+          include: {
+            nutritionFood: true,
+          },
+          orderBy: [{ createdAt: 'asc' }],
+          take: 1,
+        });
+        fallbackMapping = fallbackMappings[0];
+
+        if (!fallbackMapping) {
+          throw new BadRequestException(
+            '不能删除唯一营养档案，请先新增其他档案或保留当前档案',
+          );
+        }
+      }
+
+      await tx.nutritionFoodMapping.delete({
+        where: {
+          nutritionFoodId_ingredientId: {
+            nutritionFoodId,
+            ingredientId,
+          },
+        },
+      });
+
+      if (fallbackMapping) {
+        await tx.nutritionFoodMapping.update({
+          where: { id: fallbackMapping.id },
+          data: { isPrimary: true },
+        });
+        await tx.ingredient.update({
+          where: { id: ingredientId },
+          data: {
+            nutritionProfile: fallbackMapping.nutritionFood
+              .nutritionData as any,
+          },
+        });
+      }
+    });
+  }
+
+  async updateMapping(
+    nutritionFoodId: string,
+    ingredientId: string,
+    dto: UpdateNutritionFoodMappingDto,
+  ): Promise<NutritionFoodMappingResponseDto> {
+    const existingMapping = await this.prisma.nutritionFoodMapping.findUnique({
       where: {
         nutritionFoodId_ingredientId: {
           nutritionFoodId,
           ingredientId,
         },
       },
+      include: {
+        nutritionFood: true,
+        ingredient: {
+          select: {
+            id: true,
+            name: true,
+            type: true,
+            purchaseUnit: true,
+          },
+        },
+      },
+    });
+
+    if (!existingMapping) {
+      throw new NotFoundException('营养档案映射不存在');
+    }
+
+    return this.prisma.$transaction(async (tx) => {
+      if (dto.isPrimary) {
+        await tx.nutritionFoodMapping.updateMany({
+          where: {
+            ingredientId,
+            isPrimary: true,
+            NOT: { nutritionFoodId },
+          },
+          data: { isPrimary: false },
+        });
+      }
+
+      const mapping = await tx.nutritionFoodMapping.update({
+        where: {
+          nutritionFoodId_ingredientId: {
+            nutritionFoodId,
+            ingredientId,
+          },
+        },
+        data: {
+          ...(dto.yieldRate !== undefined && { yieldRate: dto.yieldRate }),
+          ...(dto.isPrimary !== undefined && { isPrimary: dto.isPrimary }),
+          ...(dto.notes !== undefined && { notes: dto.notes }),
+        },
+        include: {
+          ingredient: {
+            select: {
+              id: true,
+              name: true,
+              type: true,
+              purchaseUnit: true,
+            },
+          },
+        },
+      });
+
+      if (dto.isPrimary) {
+        await tx.ingredient.update({
+          where: { id: ingredientId },
+          data: {
+            nutritionProfile: existingMapping.nutritionFood
+              .nutritionData as any,
+          },
+        });
+      }
+
+      return {
+        id: mapping.id,
+        nutritionFoodId: mapping.nutritionFoodId,
+        ingredientId: mapping.ingredientId,
+        yieldRate: mapping.yieldRate,
+        isPrimary: mapping.isPrimary,
+        notes: mapping.notes ?? undefined,
+        ingredient: mapping.ingredient,
+      };
     });
   }
 
@@ -441,8 +727,17 @@ export class NutritionFoodService {
 
       const food = await response.json();
 
-      // 解析营养数据
-      const nutritionData = this.parseUSDANutrients(food.foodNutrients || []);
+      // New USDA imports use the structured governance mapping so source units
+      // and conversion evidence are retained for later confirmation.
+      const nutritionData = mapUsdaNutrientsToNutritionProfile(
+        food.foodNutrients || [],
+      );
+      attachUsdaFdcProfileMetadata(nutritionData, {
+        externalId: String(food.fdcId ?? fdcId),
+        sourceVersion: buildUsdaFdcSourceVersion(food.publicationDate),
+        sourceTitle: food.description ?? name,
+        confidenceLevel: 'MEDIUM',
+      });
 
       // 创建营养原料
       const item = await this.prisma.nutritionFood.create({
@@ -470,7 +765,8 @@ export class NutritionFoodService {
   }
 
   /**
-   * 解析USDA营养数据
+   * Legacy flat USDA parser retained only for historical payload
+   * compatibility. New imports must use mapUsdaNutrientsToNutritionProfile().
    */
   private parseUSDANutrients(nutrients: any[]): Record<string, number> {
     const result: Record<string, number> = {};
@@ -526,8 +822,16 @@ export class NutritionFoodService {
       id: item.id,
       name: item.name,
       nameEn: item.nameEn ?? undefined,
+      displayNameZh: item.displayNameZh ?? undefined,
+      displayNameZhSource: item.displayNameZhSource ?? undefined,
+      displayNameZhReviewedAt: item.displayNameZhReviewedAt ?? undefined,
+      displayNameZhReviewedBy: item.displayNameZhReviewedBy ?? undefined,
       category: item.category,
       dataSource: item.dataSource,
+      preparationState: item.preparationState ?? undefined,
+      preparationStateLabel: item.preparationStateLabel ?? undefined,
+      ediblePortionLabel: item.ediblePortionLabel ?? undefined,
+      processingLabel: item.processingLabel ?? undefined,
       externalId: item.externalId ?? undefined,
       version: item.version,
       status: item.status,

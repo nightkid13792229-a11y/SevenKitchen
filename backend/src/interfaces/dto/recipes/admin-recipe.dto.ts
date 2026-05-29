@@ -46,6 +46,10 @@ export class RecipeItemDto {
 
   @IsOptional()
   @IsString()
+  nutritionFoodId?: string;
+
+  @IsOptional()
+  @IsString()
   preparationMethod?: string;
 
   @IsOptional()
@@ -111,10 +115,6 @@ export class CreateRecipeDto {
   @IsOptional()
   @IsString()
   designSource?: string;
-
-  @IsOptional()
-  @IsString()
-  nutritionReportUrl?: string;
 
   @IsString()
   nutritionStandard!: string;
@@ -193,10 +193,6 @@ export class UpdateRecipeDto {
   @IsOptional()
   @IsString()
   designSource?: string;
-
-  @IsOptional()
-  @IsString()
-  nutritionReportUrl?: string | null;
 
   @IsOptional()
   @IsString()
@@ -280,8 +276,18 @@ export class RecipeQueryDto {
 /**
  * Recipe Summary Response DTO
  */
+export interface RecipeVersionSummaryDto {
+  id: string;
+  name: string;
+  version: number;
+  status: RecipeStatus;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface RecipeSummaryResponseDto {
   id: string;
+  recipeId?: string;
   name: string;
   version: number;
   status: RecipeStatus;
@@ -297,6 +303,9 @@ export interface RecipeSummaryResponseDto {
   designSource?: string;
   createdAt: string;
   updatedAt: string;
+  currentPublicVersion?: RecipeVersionSummaryDto;
+  pendingDraftVersion?: RecipeVersionSummaryDto;
+  versionHistory?: RecipeVersionSummaryDto[];
 }
 
 /**
@@ -307,7 +316,6 @@ export interface RecipeDetailResponseDto extends RecipeSummaryResponseDto {
   videoUrl?: string;
   description?: string;
   designSource?: string;
-  nutritionReportUrl?: string;
   nutritionStandard: NutritionStandard;
   nutritionDetailedData?: NutritionDetailedData;
   productionSteps?: string;
@@ -326,6 +334,14 @@ export interface IngredientReference {
   properties?: any; // Prisma JsonValue
 }
 
+export interface NutritionFoodReference {
+  id: string;
+  name: string;
+  nameEn?: string;
+  preparationState?: string;
+  preparationStateLabel?: string;
+}
+
 /**
  * Recipe Item Response DTO
  */
@@ -334,6 +350,10 @@ export interface RecipeItemResponseDto {
   ingredientId: string;
   ingredientName?: string;
   ingredientType?: string;
+  nutritionFoodId?: string;
+  nutritionState?: string;
+  nutritionStateLabel?: string;
+  nutritionFood?: NutritionFoodReference;
   ingredient?: IngredientReference; // 完整的原料对象，包含properties
   preparationMethod?: string;
   exampleWeight?: number;

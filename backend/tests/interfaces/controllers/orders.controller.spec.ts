@@ -70,6 +70,7 @@ import {
   PreparationMethod,
   CookingMethod,
 } from 'src/domain/order';
+import { WechatPaymentService } from 'src/application/payment/wechat-payment.service';
 
 describe('OrdersController (e2e)', () => {
   let app: INestApplication;
@@ -159,7 +160,40 @@ describe('OrdersController (e2e)', () => {
       .fn()
       .mockResolvedValue({ amountShipping: 12, templateId: 'template-1' }),
   };
+  const mockWechatPaymentService = {
+    createJsapiPayment: jest.fn().mockResolvedValue({
+      appId: 'wx-test',
+      timeStamp: '1710000000',
+      nonceStr: 'nonce',
+      package: 'prepay_id=test',
+      signType: 'RSA',
+      paySign: 'signature',
+      outTradeNo: 'ORDER-TEST',
+      amountCents: 11167,
+    }),
+    getPaymentWindowForOrder: jest.fn().mockResolvedValue({
+      paymentDeadline: null,
+      paymentRemainingSeconds: null,
+      paymentTimeoutMinutes: 30,
+      paymentAutoCloseEnabled: false,
+    }),
+    createRefund: jest.fn().mockResolvedValue({
+      success: true,
+      refundId: 'refund-test',
+      outRefundNo: 'refund-out-test',
+      status: 'SUCCESS',
+      message: 'ok',
+    }),
+  };
   const mockPrismaService = {
+    user: {
+      findUnique: jest.fn().mockResolvedValue({
+        id: 'test-customer-id',
+        nickname: 'Test Customer',
+        phone: '13800000000',
+        avatarUrl: null,
+      }),
+    },
     preparationMethod: {
       findMany: jest.fn().mockResolvedValue([]),
     },
@@ -262,6 +296,10 @@ describe('OrdersController (e2e)', () => {
                 }),
             } as jest.Mocked<OrderStatusHistoryRepository>;
           })(),
+        },
+        {
+          provide: WechatPaymentService,
+          useValue: mockWechatPaymentService,
         },
         PackagingService,
         {

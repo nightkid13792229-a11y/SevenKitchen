@@ -23,6 +23,10 @@ describe('life-stage warning page integration', () => {
   it('routes both pages through the shared life-stage match helper', () => {
     expect(diySource).toContain('../../utils/life-stage-match');
     expect(orderSource).toContain('../../utils/life-stage-match');
+    expect(diySource).toContain('resolveDogRecipeLifeStage');
+    expect(orderSource).toContain('resolveDogRecipeLifeStage');
+    expect(diySource).toContain('selectedDogRecipeLifeStage');
+    expect(orderSource).toContain('selectedDogRecipeLifeStage');
     expect(diySource).toContain('isRecipeLifeStageMatch(');
     expect(orderSource).toContain('isRecipeLifeStageMatch(');
   });

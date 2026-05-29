@@ -109,7 +109,14 @@ describe('StaffShippingController - Phase 8.14', () => {
         shippedAt: new Date('2025-12-17T10:00:00Z'),
       };
       shippingFulfillmentService.markOrderAsShipped.mockResolvedValue(
-        mockOrder as any,
+        {
+          order: mockOrder,
+          wechatShippingUpload: {
+            success: true,
+            skipped: true,
+            message: 'Skipped in unit test',
+          },
+        } as any,
       );
 
       // Act
@@ -126,6 +133,11 @@ describe('StaffShippingController - Phase 8.14', () => {
         trackingNumber: 'SF1234567890',
         carrierCode: 'SF',
         shippedAt: '2025-12-17T10:00:00.000Z',
+        wechatShippingUpload: {
+          success: true,
+          skipped: true,
+          message: 'Skipped in unit test',
+        },
       });
       expect(shippingFulfillmentService.markOrderAsShipped).toHaveBeenCalledWith(
         'order-1',
@@ -210,7 +222,14 @@ describe('StaffShippingController - Phase 8.14', () => {
         shippedAt: new Date(),
       };
       shippingFulfillmentService.markOrderAsShipped.mockResolvedValue(
-        mockOrder as any,
+        {
+          order: mockOrder,
+          wechatShippingUpload: {
+            success: true,
+            skipped: true,
+            message: 'Skipped in unit test',
+          },
+        } as any,
       );
 
       // Act

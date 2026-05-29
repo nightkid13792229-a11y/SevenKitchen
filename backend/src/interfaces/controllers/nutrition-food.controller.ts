@@ -32,6 +32,7 @@ import {
   CreateNutritionFoodDto,
   UpdateNutritionFoodDto,
   CreateNutritionFoodMappingDto,
+  UpdateNutritionFoodMappingDto,
   NutritionFoodResponseDto,
   PaginatedNutritionFoodResponseDto,
   USDAFoodSearchResultDto,
@@ -128,9 +129,14 @@ export class NutritionFoodController {
   async update(
     @Param('id') id: string,
     @Body() dto: UpdateNutritionFoodDto,
+    @CurrentUser() user?: RequestUser,
   ): Promise<ApiResponseDto<NutritionFoodResponseDto | null>> {
     try {
-      const result = await this.nutritionFoodService.update(id, dto);
+      const result = await this.nutritionFoodService.update(
+        id,
+        dto,
+        user?.userId,
+      );
       return new ApiResponseDto(0, '更新成功', result);
     } catch (error) {
       const message = error instanceof Error ? error.message : '更新失败';
@@ -260,6 +266,31 @@ export class NutritionFoodController {
     }
   }
 
+  @Patch(':id/mappings/:ingredientId')
+  @ApiOperation({ summary: '更新营养原料与采购原料的映射' })
+  @ApiParam({ name: 'id', description: '营养原料ID' })
+  @ApiParam({ name: 'ingredientId', description: '采购原料ID' })
+  @ApiResponse({ status: 200, description: '更新成功' })
+  @ApiResponse({ status: 404, description: '映射不存在' })
+  async updateMapping(
+    @Param('id') id: string,
+    @Param('ingredientId') ingredientId: string,
+    @Body() dto: UpdateNutritionFoodMappingDto,
+  ): Promise<ApiResponseDto<any>> {
+    try {
+      const result = await this.nutritionFoodService.updateMapping(
+        id,
+        ingredientId,
+        dto,
+      );
+      return new ApiResponseDto(0, '更新成功', result);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : '更新映射失败';
+      const code = message.includes('不存在') ? 404 : 400;
+      return new ApiResponseDto(code, message, null);
+    }
+  }
+
   @Delete(':id/mappings/:ingredientId')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: '删除营养原料与采购原料的映射' })
@@ -275,7 +306,12 @@ export class NutritionFoodController {
       return new ApiResponseDto(0, '删除成功', null);
     } catch (error) {
       const message = error instanceof Error ? error.message : '删除映射失败';
-      return new ApiResponseDto(500, message, null);
+      const code = message.includes('不存在')
+        ? 404
+        : message.includes('不能删除')
+          ? 400
+          : 500;
+      return new ApiResponseDto(code, message, null);
     }
   }
 }

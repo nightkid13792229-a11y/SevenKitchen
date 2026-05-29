@@ -5,11 +5,44 @@
 
 import { request } from '../utils/api';
 
+export interface WechatPaymentResult {
+  provider: 'WECHAT_PAY';
+  mode: string;
+  orderId: string;
+  status: string;
+  amountTotal: number;
+  paymentDeadline: string | null;
+  paymentRemainingSeconds: number | null;
+  paymentTimeoutMinutes: number;
+  autoCloseUnpaid: boolean;
+  payParams: {
+    appId: string;
+    timeStamp: string;
+    nonceStr: string;
+    package: string;
+    signType: 'RSA';
+    paySign: string;
+  } | null;
+  orderInfo?: Record<string, any> | null;
+}
+
 export interface CustomerOrderFinancialSummary {
   orderId: string;
   settlementStatus: 'PENDING' | 'SETTLED';
   shortageAdjustmentAmount: number;
   requiresCustomerPayment: boolean;
+  refundStatus: {
+    exists: boolean;
+    success: boolean;
+    status: string;
+    statusText: string;
+    amount: number;
+    outRefundNo: string | null;
+    refundId: string | null;
+    successTime: string | null;
+    createdAt: string | null;
+    updatedAt: string | null;
+  } | null;
   adjustmentSummary: {
     totalIncreaseAmount: number;
     totalDecreaseAmount: number;
@@ -101,6 +134,16 @@ export function getOrderFinancialSummary(orderId: string) {
 }
 
 /**
+ * 创建微信小程序支付参数
+ */
+export function createWechatPayment(orderId: string) {
+  return request<WechatPaymentResult>({
+    url: `/orders/${orderId}/wechat-pay`,
+    method: 'POST',
+  });
+}
+
+/**
  * 确认线下收款
  * @param orderId 订单ID
  * @param actualAmount 实际收款金额（可选，用于记录优惠/折扣）
@@ -167,5 +210,72 @@ export function updateOrderCustomerAddress(
     url: `/admin/orders/${orderId}/addresses/${addressId}`,
     method: 'PUT',
     data,
+  });
+}
+
+export function getStaffCustomerServiceOrder(orderId: string) {
+  return request({
+    url: `/staff/customer-service/orders/${orderId}`,
+    method: 'GET',
+    quiet: true,
+    suppressErrorToast: true,
+  });
+}
+
+export function updateStaffCustomerServiceRemark(
+  orderId: string,
+  adminRemark?: string | null,
+) {
+  return request({
+    url: `/staff/customer-service/orders/${orderId}/remark`,
+    method: 'PUT',
+    data: {
+      adminRemark: adminRemark ?? null,
+    },
+  });
+}
+
+export function updateStaffCustomerServiceAmount(
+  orderId: string,
+  amount: number,
+  reason?: string,
+) {
+  return request({
+    url: `/staff/customer-service/orders/${orderId}/amount`,
+    method: 'PUT',
+    data: {
+      amount,
+      reason,
+    },
+  });
+}
+
+export function resolveOrderAftersale(
+  orderId: string,
+  resolutionType: 'refunded' | 'remade' | 'resolved',
+  adminNote?: string,
+) {
+  return request({
+    url: `/orders/${orderId}/aftersale/resolve`,
+    method: 'POST',
+    data: {
+      resolutionType,
+      adminNote,
+    },
+  });
+}
+
+export function retryWechatRefund(
+  orderId: string,
+  amount: number,
+  reason: string,
+) {
+  return request({
+    url: `/admin/orders/${orderId}/wechat-refund`,
+    method: 'POST',
+    data: {
+      amount,
+      reason,
+    },
   });
 }

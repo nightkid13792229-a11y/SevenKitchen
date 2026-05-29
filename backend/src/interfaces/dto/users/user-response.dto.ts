@@ -4,6 +4,9 @@ import { IsString, IsOptional, Length, Matches } from 'class-validator';
 export class UserResponseDto {
   id!: string;
   phone?: string;
+  phoneBound?: boolean;
+  legacyMigrationStatus?: string;
+  legacyMigrationCompleted?: boolean;
   nickname?: string;
   avatarUrl?: string;
   role!: UserRole;

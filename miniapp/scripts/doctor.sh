@@ -29,7 +29,7 @@ CRITICAL_FAIL=0
 
 # Check 1: Default BASE_URL configuration
 echo -e "${BLUE}[1/7]${NC} Checking BASE_URL configuration..."
-DEFAULT_URL="http://127.0.0.1:3000/api/v1"
+DEFAULT_URL="http://127.0.0.1:3011/api/v1"
 if grep -q "127.0.0.1" src/utils/config.ts 2>/dev/null; then
     echo -e "${GREEN}✓${NC} BASE_URL uses 127.0.0.1 (WeChat DevTools compatible)"
 else
@@ -50,7 +50,7 @@ echo ""
 
 # Check 2: Backend health endpoint
 echo -e "${BLUE}[2/7]${NC} Testing backend health endpoint..."
-BACKEND_URL="http://127.0.0.1:3000"
+BACKEND_URL="http://127.0.0.1:3011"
 HEALTH_URL="$BACKEND_URL/api/v1/health"
 
 if command -v curl &> /dev/null; then
@@ -68,7 +68,7 @@ if command -v curl &> /dev/null; then
         echo -e "${RED}✗${NC} Backend is NOT reachable at $BACKEND_URL"
         echo -e "${RED}  CRITICAL: Cannot proceed without backend${NC}"
         echo -e "${YELLOW}  Action: Start the backend server:${NC}"
-        echo -e "    cd backend && pnpm start:dev"
+        echo -e "    cd backend && npm run start:dev:miniapp"
         ISSUES=$((ISSUES + 1))
         CRITICAL_FAIL=1
     elif [ "$HTTP_CODE" == "404" ]; then
@@ -85,52 +85,43 @@ else
 fi
 echo ""
 
-# Check 3: JWT login availability
-echo -e "${BLUE}[3/7]${NC} Testing JWT login endpoint..."
-LOGIN_URL="$BACKEND_URL/api/v1/auth/login"
-LOGIN_PAYLOAD='{"customerId":"mvp-user-001"}'
+# Check 3: Home page API availability
+echo -e "${BLUE}[3/7]${NC} Testing home page API endpoints..."
 
 if command -v curl &> /dev/null; then
-    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 \
-        -X POST \
-        -H "Content-Type: application/json" \
-        -d "$LOGIN_PAYLOAD" \
-        "$LOGIN_URL" 2>/dev/null || echo "000")
-    HTTP_BODY=$(curl -s --max-time 3 \
-        -X POST \
-        -H "Content-Type: application/json" \
-        -d "$LOGIN_PAYLOAD" \
-        "$LOGIN_URL" 2>/dev/null || echo "")
-    
-    if [ "$HTTP_CODE" == "200" ] || [ "$HTTP_CODE" == "201" ]; then
-        if echo "$HTTP_BODY" | grep -q "token" 2>/dev/null || echo "$HTTP_BODY" | grep -q '"code":0' 2>/dev/null; then
-            echo -e "${GREEN}✓${NC} JWT login endpoint is available and working"
+    HOME_ENDPOINTS=(
+        "/api/v1/global-config"
+        "/api/v1/recipes/filter-options"
+        "/api/v1/recipes?page=1&pageSize=1"
+    )
+
+    for endpoint in "${HOME_ENDPOINTS[@]}"; do
+        ENDPOINT_URL="$BACKEND_URL$endpoint"
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 3 "$ENDPOINT_URL" 2>/dev/null || echo "000")
+        HTTP_BODY=$(curl -s --max-time 3 "$ENDPOINT_URL" 2>/dev/null || echo "")
+
+        if [ "$HTTP_CODE" == "200" ] && echo "$HTTP_BODY" | grep -q '"code":0' 2>/dev/null; then
+            echo -e "${GREEN}✓${NC} $endpoint"
+        elif [ "$HTTP_CODE" == "000" ]; then
+            echo -e "${RED}✗${NC} Cannot reach $endpoint"
+            ISSUES=$((ISSUES + 1))
+            CRITICAL_FAIL=1
         else
-            echo -e "${YELLOW}⚠${NC} Login endpoint responded but format may be unexpected"
-            WARNINGS=$((WARNINGS + 1))
+            echo -e "${RED}✗${NC} $endpoint responded with HTTP $HTTP_CODE"
+            echo -e "${YELLOW}  Response: ${HTTP_BODY:0:100}${NC}"
+            ISSUES=$((ISSUES + 1))
+            CRITICAL_FAIL=1
         fi
-    elif [ "$HTTP_CODE" == "000" ]; then
-        echo -e "${RED}✗${NC} Cannot reach login endpoint (backend not running?)"
-        ISSUES=$((ISSUES + 1))
-        CRITICAL_FAIL=1
-    elif [ "$HTTP_CODE" == "404" ]; then
-        echo -e "${RED}✗${NC} Login endpoint not found (404) - API may be misconfigured"
-        ISSUES=$((ISSUES + 1))
-        CRITICAL_FAIL=1
-    else
-        echo -e "${YELLOW}⚠${NC} Login endpoint responded with HTTP $HTTP_CODE"
-        echo -e "${YELLOW}  Response: ${HTTP_BODY:0:100}${NC}"
-        WARNINGS=$((WARNINGS + 1))
-    fi
+    done
 else
-    echo -e "${YELLOW}⚠${NC} curl not found - skipping login test"
+    echo -e "${YELLOW}⚠${NC} curl not found - skipping home API endpoint tests"
     WARNINGS=$((WARNINGS + 1))
 fi
 echo ""
 
 # Check 4: BASE_URL resolution (storage vs default)
 echo -e "${BLUE}[4/7]${NC} Checking BASE_URL resolution logic..."
-if grep -q "getStorageSync.*api_base_url" src/utils/config.ts 2>/dev/null; then
+if grep -q "STORAGE_KEY = 'api_base_url'" src/utils/config.ts 2>/dev/null && grep -q "getStorageSync(STORAGE_KEY)" src/utils/config.ts 2>/dev/null; then
     echo -e "${GREEN}✓${NC} BASE_URL can be overridden via storage (runtime config)"
 else
     echo -e "${YELLOW}⚠${NC} Storage-based BASE_URL override not found"
@@ -241,4 +232,3 @@ else
     echo -e "${YELLOW}Please fix the issues above before proceeding.${NC}\n"
     exit 1
 fi
-

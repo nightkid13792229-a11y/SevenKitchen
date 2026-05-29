@@ -1,0 +1,331 @@
+import {
+  buildAssessmentCategories,
+  formatAssessmentRatioValue,
+  getAssessmentDisplayEntry,
+  getAssessmentDisplayStatusClass,
+  type AssessmentCategoryKey,
+  type AssessmentEntryLike,
+} from './assessment'
+
+export interface PublishIngredientReportRow {
+  ingredientName: string
+  amountLabel: string
+  weightPercentLabel: string
+}
+
+export interface PublishMacroReportRow {
+  key: string
+  name: string
+  weightPercentLabel: string
+  dryMatterLabel: string
+  energyPercentLabel: string
+}
+
+export interface PublishEnergyDensityRow {
+  label: string
+  value: string
+}
+
+export interface PublishNutrientReportRow {
+  key: string
+  name: string
+  unit: string
+  minLabel: string
+  maxLabel: string
+  currentLabel: string
+  dryMatterLabel: string
+  statusClass: string
+}
+
+export interface PublishNutrientSection {
+  key: string
+  title: string
+  dryMatterHeader: string
+  rows: PublishNutrientReportRow[]
+}
+
+export interface PublishNutritionReport {
+  ingredientRows: PublishIngredientReportRow[]
+  macroRows: PublishMacroReportRow[]
+  energyDensityRows: PublishEnergyDensityRow[]
+  nutrientSections: {
+    minerals: PublishNutrientSection
+    vitamins: PublishNutrientSection
+    aminoAcids: PublishNutrientSection
+    fattyAcids: PublishNutrientSection
+  }
+}
+
+interface BuildPublishNutritionReportInput {
+  draft?: any
+  assessment?: any
+}
+
+const MACRO_ROW_DEFINITIONS = [
+  { key: 'crudeProtein', name: '蛋白质', energyFactor: 3.5 },
+  { key: 'crudeFat', name: '脂肪', energyFactor: 8.5 },
+  { key: 'ash', name: '灰分', energyFactor: 0 },
+  { key: 'moisture', name: '水分', energyFactor: 0 },
+  { key: 'fiber', name: '膳食纤维', energyFactor: 0 },
+  { key: 'carbohydrate', name: '碳水', energyFactor: 3.5 },
+] as const
+
+const NUTRIENT_SECTION_DEFINITIONS: Array<{
+  key: keyof PublishNutritionReport['nutrientSections']
+  category: AssessmentCategoryKey
+  title: string
+  dryMatterHeader: string
+}> = [
+  { key: 'minerals', category: 'MINERAL', title: '微量元素', dryMatterHeader: '干物质/100g' },
+  { key: 'vitamins', category: 'VITAMIN', title: '维生素', dryMatterHeader: '干物质/100g' },
+  { key: 'aminoAcids', category: 'AMINO_ACID', title: '氨基酸', dryMatterHeader: '干物质/100g' },
+  { key: 'fattyAcids', category: 'FATTY_ACID', title: '脂肪酸', dryMatterHeader: '干物质/100g' },
+]
+
+export function buildPublishNutritionReport(
+  input: BuildPublishNutritionReportInput,
+): PublishNutritionReport {
+  const assessment = input.assessment || {}
+  const draft = input.draft || {}
+  const draftItems = Array.isArray(draft.items) ? draft.items : []
+  const assessedItems = Array.isArray(assessment.items) ? assessment.items : []
+  const draftItemById = new Map(draftItems.map((item: any) => [String(item.id || ''), item]))
+
+  return {
+    ingredientRows: buildIngredientRows(draftItems, assessedItems, draftItemById),
+    macroRows: buildMacroRows(assessment),
+    energyDensityRows: buildEnergyDensityRows(assessment),
+    nutrientSections: buildNutrientSections(assessment),
+  }
+}
+
+function buildIngredientRows(
+  draftItems: any[],
+  assessedItems: any[],
+  draftItemById: Map<string, any>,
+): PublishIngredientReportRow[] {
+  const sourceItems = assessedItems.length > 0 ? assessedItems : draftItems
+
+  return sourceItems.map((item: any) => {
+    const draftItem = draftItemById.get(String(item.id || '')) || item
+    const supplement = isSupplementItem(draftItem) || isSupplementItem(item)
+    return {
+      ingredientName: getIngredientProfileName(draftItem, item),
+      amountLabel: getIngredientAmountLabel(draftItem, item),
+      weightPercentLabel: supplement
+        ? '-'
+        : formatPercent(readNumber(item.ratioPercent ?? draftItem.ratioPercent), 1),
+    }
+  })
+}
+
+function buildMacroRows(assessment: any): PublishMacroReportRow[] {
+  const macroMetrics = assessment?.macroMetrics || {}
+  const totalWeightG = readNumber(assessment?.totalWeightG)
+  const totalEnergyKcal = readNumber(assessment?.totalEnergyKcal)
+
+  return MACRO_ROW_DEFINITIONS.map((definition) => {
+    const metric = macroMetrics[definition.key] || {}
+    const total = readNumber(metric.total)
+    const dryMatterPercent = readNumber(metric.dryMatterPercent)
+    const energyPercent =
+      total !== null && totalEnergyKcal !== null && totalEnergyKcal > 0
+        ? (total * definition.energyFactor * 100) / totalEnergyKcal
+        : null
+
+    return {
+      key: definition.key,
+      name: definition.name,
+      weightPercentLabel:
+        total !== null && totalWeightG !== null && totalWeightG > 0
+          ? formatPercent((total * 100) / totalWeightG, 1)
+          : '-',
+      dryMatterLabel: dryMatterPercent === null ? '-' : formatPercent(dryMatterPercent, 1),
+      energyPercentLabel: energyPercent === null ? '-' : formatPercent(energyPercent, 1),
+    }
+  })
+}
+
+function buildEnergyDensityRows(assessment: any): PublishEnergyDensityRow[] {
+  const energyDensity = readNumber(assessment?.energyDensityKcalPerKg)
+  const dryMatterEnergyPerKg = readDryMatterEnergyDensityPerKg(assessment)
+
+  return [
+    { label: '每公斤配方', value: formatEnergyDensity(energyDensity, 'kcal/kg') },
+    { label: '每公斤干物质', value: formatEnergyDensity(dryMatterEnergyPerKg, 'kcal/kg DM') },
+  ]
+}
+
+function buildNutrientSections(assessment: any): PublishNutritionReport['nutrientSections'] {
+  const entries = assessment?.groupedEntries || assessment?.entries || assessment?.nutrients || []
+  const categories = buildAssessmentCategories(Array.isArray(entries) ? entries : [], assessment || {})
+  const categoryByKey = new Map(categories.map((category) => [category.key, category.entries]))
+
+  return NUTRIENT_SECTION_DEFINITIONS.reduce((sections, definition) => {
+    sections[definition.key] = {
+      key: definition.key,
+      title: definition.title,
+      dryMatterHeader: definition.dryMatterHeader,
+      rows: (categoryByKey.get(definition.category) || []).map((entry) => buildNutrientRow(entry)),
+    }
+    return sections
+  }, {} as PublishNutritionReport['nutrientSections'])
+}
+
+function buildNutrientRow(entry: AssessmentEntryLike): PublishNutrientReportRow {
+  const display = getAssessmentDisplayEntry(entry)
+  const basisEntry = display.basisEntry
+  const ratio = isRatioEntry(basisEntry)
+  const unit = ratio ? '比例' : cleanText(basisEntry.unit || entry.unit)
+
+  return {
+    key: cleanText(basisEntry.nutrientKey || entry.nutrientKey || entry.key),
+    name: cleanText(basisEntry.label || entry.label || entry.name || entry.nutrientName || entry.key),
+    unit: unit || '-',
+    minLabel: formatNutrientValue(readTargetNumber(basisEntry, ['minValue', 'targetMin', 'min']), ratio),
+    maxLabel: formatNutrientValue(readTargetNumber(basisEntry, ['maxValue', 'targetMax', 'max']), ratio),
+    currentLabel: formatNutrientValue(readCurrentNumber(basisEntry), ratio),
+    dryMatterLabel: ratio ? '' : formatDryMatterValue(display.dryMatterValue),
+    statusClass: getAssessmentDisplayStatusClass(entry),
+  }
+}
+
+function getIngredientProfileName(draftItem: any, assessedItem: any) {
+  return (
+    cleanText(draftItem?.nutritionProfileDisplayName) ||
+    cleanText(draftItem?.nutritionFoodName) ||
+    cleanText(draftItem?.nutritionFood?.displayNameZh) ||
+    cleanText(draftItem?.nutritionFood?.name) ||
+    cleanText(assessedItem?.nutritionProfileDisplayName) ||
+    cleanText(assessedItem?.name) ||
+    cleanText(draftItem?.ingredientName) ||
+    cleanText(draftItem?.ingredient?.name) ||
+    '未命名原料'
+  )
+}
+
+function isSupplementItem(item: any) {
+  return cleanText(item?.ingredient?.type || item?.ingredientType).toUpperCase() === 'SUPPLEMENT'
+}
+
+function getIngredientAmountLabel(draftItem: any, assessedItem: any) {
+  const amount = readNumber(
+    assessedItem?.weightG ??
+      assessedItem?.amount ??
+      assessedItem?.quantity ??
+      draftItem?.weightG ??
+      draftItem?.amount ??
+      draftItem?.quantity,
+  )
+  if (amount === null) return '-'
+  return `${formatCompactNumber(amount)}${getIngredientAmountUnit(draftItem, assessedItem)}`
+}
+
+function getIngredientAmountUnit(draftItem: any, assessedItem: any) {
+  if (!isSupplementItem(draftItem) && !isSupplementItem(assessedItem)) return 'g'
+  return (
+    readIngredientDisplayUnit(draftItem?.ingredient) ||
+    readIngredientDisplayUnit(assessedItem?.ingredient) ||
+    readIngredientDisplayUnit(draftItem) ||
+    readIngredientDisplayUnit(assessedItem) ||
+    'g'
+  )
+}
+
+function readIngredientDisplayUnit(source: any) {
+  const directUnit =
+    cleanText(source?.unitDisplayLabel) ||
+    cleanText(source?.purchaseUnit) ||
+    cleanText(source?.amountUnit) ||
+    cleanText(source?.unit)
+  if (directUnit) return directUnit
+
+  const properties = typeof source?.properties === 'string' ? safeParseJson(source.properties) : source?.properties
+  return (
+    cleanText(properties?.unitDisplayLabel) ||
+    cleanText(properties?.purchaseUnit) ||
+    cleanText(properties?.amountUnit) ||
+    cleanText(properties?.unit)
+  )
+}
+
+function safeParseJson(value: string) {
+  try {
+    return JSON.parse(value)
+  } catch {
+    return null
+  }
+}
+
+function formatDryMatterValue(value: number | null | undefined) {
+  const numericValue = readNumber(value)
+  if (numericValue === null) return '-'
+  return formatCompactNumber(numericValue)
+}
+
+function readDryMatterEnergyDensityPerKg(assessment: any) {
+  const direct = readNumber(assessment?.dryMatterEnergyKcalPerKg)
+  if (direct !== null) return direct
+
+  const per100g = readNumber(assessment?.dryMatterEnergyKcalPer100g)
+  if (per100g !== null) return per100g * 10
+
+  const totalEnergy = readNumber(assessment?.totalEnergyKcal)
+  const dryMatterG = readNumber(assessment?.dryMatterG)
+  if (totalEnergy !== null && dryMatterG !== null && dryMatterG > 0) {
+    return (totalEnergy / dryMatterG) * 1000
+  }
+
+  return null
+}
+
+function formatEnergyDensity(value: number | null, unit: string) {
+  if (value === null || !Number.isFinite(value)) return '-'
+  return `${Math.round(value)} ${unit}`
+}
+
+function formatNutrientValue(value: number | null, ratio: boolean) {
+  if (value === null) return '-'
+  return ratio ? formatAssessmentRatioValue(value) : formatCompactNumber(value)
+}
+
+function formatPercent(value: number | null, precision: number) {
+  if (value === null || !Number.isFinite(value)) return '-'
+  return `${value.toFixed(precision)}%`
+}
+
+function formatCompactNumber(value: number) {
+  if (!Number.isFinite(value)) return '-'
+  const rounded = Math.round(value * 100) / 100
+  return Number.isInteger(rounded)
+    ? String(rounded)
+    : String(rounded).replace(/0+$/, '').replace(/\.$/, '')
+}
+
+function readCurrentNumber(entry: AssessmentEntryLike) {
+  return readNumber(entry.currentValue ?? entry.current ?? entry.actual ?? entry.value)
+}
+
+function readTargetNumber(entry: AssessmentEntryLike, keys: Array<keyof AssessmentEntryLike>) {
+  for (const key of keys) {
+    const value = readNumber(entry[key])
+    if (value !== null) return value
+  }
+  return null
+}
+
+function readNumber(value: unknown) {
+  if (value === null || value === undefined || value === '') return null
+  const numeric = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(numeric) ? numeric : null
+}
+
+function cleanText(value: unknown) {
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function isRatioEntry(entry: AssessmentEntryLike) {
+  const key = cleanText(entry.nutrientKey || entry.key).toLowerCase()
+  const unit = cleanText(entry.unit).toLowerCase()
+  return entry.expressionBasis === 'RATIO' || key.includes('ratio') || unit === 'ratio'
+}

@@ -12,6 +12,7 @@ describe('diy-sheet fallback helpers', () => {
         ingredientId: 'food-1',
         ingredientType: 'FOOD',
         ratioPercent: 60,
+        nutritionStateLabel: '熟重',
         preparationMethod: '去油筋、切块',
         ingredient: {
           id: 'food-1',
@@ -45,6 +46,7 @@ describe('diy-sheet fallback helpers', () => {
         ingredientId: 'food-1',
         name: '牛霖',
         type: 'FOOD',
+        nutritionStateLabel: '熟重',
         preparationMethod: '去油筋、切块',
         netAmount: 0.42,
         brand: '无',

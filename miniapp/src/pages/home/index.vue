@@ -72,6 +72,74 @@
       <button v-else class="create-btn" @tap="goToDogCreate">创建档案</button>
     </view>
 
+    <view class="personalized-section" v-if="dogs.length > 0">
+      <view class="section-header">
+        <view>
+          <text class="section-title">专属食谱推荐</text>
+          <text class="personalized-subtitle">
+            {{ recommendedDog?.name || activeDog?.name || '当前狗狗' }} 的阶段、热量和口味一起看
+          </text>
+        </view>
+      </view>
+
+      <scroll-view scroll-x class="dog-switch-scroll">
+        <view
+          v-for="dog in dogs"
+          :key="dog.id"
+          :class="['dog-switch-chip', { active: dog.id === activeDogId }]"
+          @tap="selectDogForRecommendations(dog)"
+        >
+          <image class="dog-switch-avatar" :src="resolveDogAvatarSrc(dog.avatarUrl)" mode="aspectFill" />
+          <text class="dog-switch-name">{{ dog.name }}</text>
+        </view>
+      </scroll-view>
+
+      <view v-if="recommendationLoading" class="recommendation-loading">正在挑选更合适的食谱...</view>
+
+      <view v-else-if="hasPersonalizedRecommendations">
+        <view v-if="exclusiveRecipes.length" class="recommend-group">
+          <view class="recommend-group-title">专属优先</view>
+          <scroll-view scroll-x class="recommend-scroll">
+            <view
+              v-for="recipe in exclusiveRecipes"
+              :key="`exclusive-${recipe.id}`"
+              class="recommend-card"
+              @tap="viewRecipe(recipe.id)"
+            >
+              <image v-if="recipe.displayCoverUrl" class="recommend-cover" :src="recipe.displayCoverUrl" mode="aspectFill" />
+              <view v-else class="recommend-cover placeholder">
+                <text>{{ recipe.name?.charAt(0) || '?' }}</text>
+              </view>
+              <view class="recommend-body">
+                <text class="recommend-name">{{ recipe.name }}</text>
+                <text class="recommend-stars">{{ formatRecommendStars(recipe.matchStars) }}</text>
+                <text class="recommend-reason">{{ getRecommendReason(recipe) }}</text>
+                <text v-if="recipe.dailyIntakeG" class="recommend-meta">约 {{ recipe.dailyIntakeG }}g/天</text>
+              </view>
+            </view>
+          </scroll-view>
+        </view>
+
+        <view v-if="generalRecommendedRecipes.length" class="recommend-group">
+          <view class="recommend-group-title">通用也适合</view>
+          <scroll-view scroll-x class="recommend-scroll">
+            <view
+              v-for="recipe in generalRecommendedRecipes"
+              :key="`general-${recipe.id}`"
+              class="recommend-card compact"
+              @tap="viewRecipe(recipe.id)"
+            >
+              <image v-if="recipe.displayCoverUrl" class="recommend-cover" :src="recipe.displayCoverUrl" mode="aspectFill" />
+              <view class="recommend-body">
+                <text class="recommend-name">{{ recipe.name }}</text>
+                <text class="recommend-reason">{{ getRecommendReason(recipe) }}</text>
+              </view>
+            </view>
+          </scroll-view>
+        </view>
+      </view>
+    </view>
+
     <!-- 食谱橱窗标题 -->
     <view class="recipe-showcase-header">
       <text class="section-title">食谱橱窗</text>
@@ -338,8 +406,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted, computed } from 'vue'
-import { onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
-import { request, getToken } from '../../utils/api'
+import { onLoad, onShow, onPullDownRefresh, onReachBottom } from '@dcloudio/uni-app'
+import { request, getToken, recipeRecommendationApi } from '../../utils/api'
 import { getRecipeCoverImageUrl, isKnownStaleRecipeCoverUrl, normalizeImageUrl } from '../../utils/config'
 import { resolveDogProfileEntryRoute } from '../../utils/dog-profile-form'
 import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
@@ -367,6 +435,11 @@ interface Recipe {
   viewCount?: number
   favoriteCount?: number
   diyGenCount?: number
+  matchScore?: number
+  matchStars?: number
+  matchReasons?: string[]
+  dailyIntakeG?: number | null
+  section?: string
 }
 
 // 筛选选项类型
@@ -405,6 +478,11 @@ const RECIPE_COVER_ORIGINAL_ONLY_STORAGE_KEY = 'home_recipe_cover_original_only_
 
 // 狗狗列表
 const dogs = ref<any[]>([])
+const activeDogId = ref('')
+const recommendedDog = ref<any | null>(null)
+const exclusiveRecipes = ref<Recipe[]>([])
+const generalRecommendedRecipes = ref<Recipe[]>([])
+const recommendationLoading = ref(false)
 
 // 食谱数据
 const recipes = ref<Recipe[]>([])
@@ -421,6 +499,7 @@ const hasMountedHome = ref(false)
 const visibleRecipesCount = ref(pageSize)
 let recipeRenderRevealTimer: ReturnType<typeof setTimeout> | null = null
 let staleRecipeCoverRevealTimer: ReturnType<typeof setTimeout> | null = null
+let customerServiceRouteHandled = false
 
 // 筛选相关
 const showLifeStageDrawer = ref(false)
@@ -471,6 +550,14 @@ const renderedRecipes = computed(() => {
   return recipes.value.slice(0, visibleRecipesCount.value)
 })
 
+const activeDog = computed(() => {
+  return dogs.value.find((dog) => dog.id === activeDogId.value) || null
+})
+
+const hasPersonalizedRecommendations = computed(() => {
+  return exclusiveRecipes.value.length > 0 || generalRecommendedRecipes.value.length > 0
+})
+
 const headerSectionStyle = computed(() => {
   if (!homeHeaderBgImageUrl.value) {
     return {}
@@ -491,6 +578,42 @@ const checkLoginStatus = () => {
 }
 
 // 页面加载
+function getQueryStringValue(value: unknown) {
+  if (Array.isArray(value)) return String(value[0] || '')
+  return String(value || '')
+}
+
+function handleCustomerServiceEntry(options: Record<string, unknown> = {}) {
+  if (customerServiceRouteHandled) return
+
+  const csType = getQueryStringValue(options.csType)
+  const csProductId = getQueryStringValue(options.csProductId)
+  const csOrderId = getQueryStringValue(options.csOrderId)
+
+  let targetUrl = ''
+  if (csType === 'PRODUCT' && csProductId) {
+    targetUrl = `/pages/recipe-detail/index?recipeId=${encodeURIComponent(csProductId)}`
+  } else if ((csType === 'ORDER' || csType === 'AFTERSALE' || csType === 'REFUND') && csOrderId) {
+    targetUrl = `/pages/order-detail/index?id=${encodeURIComponent(csOrderId)}`
+  }
+
+  if (!targetUrl) return
+
+  customerServiceRouteHandled = true
+  setTimeout(() => {
+    uni.navigateTo({
+      url: targetUrl,
+      fail: (error) => {
+        console.warn('[Home] customer service card navigation failed:', error)
+      },
+    })
+  }, 200)
+}
+
+onLoad((options = {}) => {
+  handleCustomerServiceEntry(options as Record<string, unknown>)
+})
+
 onMounted(() => {
   hasMountedHome.value = true
   checkLoginStatus()
@@ -591,6 +714,19 @@ const loadDogList = async () => {
     })
     if (res.code === 0 && res.data) {
       dogs.value = Array.isArray(res.data) ? res.data : []
+      if (dogs.value.length === 0) {
+        activeDogId.value = ''
+        recommendedDog.value = null
+        exclusiveRecipes.value = []
+        generalRecommendedRecipes.value = []
+        return
+      }
+
+      if (!activeDogId.value || !dogs.value.some((dog) => dog.id === activeDogId.value)) {
+        activeDogId.value = uni.getStorageSync('dogId') || dogs.value[0].id
+      }
+
+      loadPersonalizedRecommendations()
     }
   } catch (err) {
     console.error('加载狗狗列表失败:', err)
@@ -598,6 +734,52 @@ const loadDogList = async () => {
 }
 
 // ==================== 食谱相关方法 ====================
+
+function decorateRecommendedRecipe(recipe: Recipe): Recipe {
+  return {
+    ...recipe,
+    displayCoverUrl: isKnownStaleRecipeCoverUrl(recipe.coverImageUrl)
+      ? ''
+      : getRecipeCoverImageUrl(recipe.coverImageUrl, {
+        skipOptimization: shouldUseOriginalRecipeCover(recipe.coverImageUrl)
+      })
+  }
+}
+
+async function loadPersonalizedRecommendations() {
+  if (!activeDogId.value || recommendationLoading.value) return
+
+  recommendationLoading.value = true
+  try {
+    const data = await recipeRecommendationApi.getForDog(activeDogId.value)
+    recommendedDog.value = data.dog
+    exclusiveRecipes.value = (data.exclusive || []).map(decorateRecommendedRecipe)
+    generalRecommendedRecipes.value = (data.general || []).map(decorateRecommendedRecipe)
+  } catch (error) {
+    console.warn('[Home] Load personalized recommendations failed:', error)
+    recommendedDog.value = activeDog.value
+    exclusiveRecipes.value = []
+    generalRecommendedRecipes.value = []
+  } finally {
+    recommendationLoading.value = false
+  }
+}
+
+function selectDogForRecommendations(dog: any) {
+  if (!dog?.id || activeDogId.value === dog.id) return
+  activeDogId.value = dog.id
+  uni.setStorageSync('dogId', dog.id)
+  loadPersonalizedRecommendations()
+}
+
+function formatRecommendStars(stars?: number) {
+  const count = Math.max(3, Math.min(5, Number(stars || 3)))
+  return '★'.repeat(count)
+}
+
+function getRecommendReason(recipe: Recipe) {
+  return recipe.matchReasons?.[0] || '适合作为日常鲜食候选'
+}
 
 function getRecipeCoverStorageKey(imageUrl: string | undefined | null): string {
   return normalizeImageUrl(imageUrl)
@@ -1167,6 +1349,11 @@ function formatStatNum(num: number | undefined): string {
 
 function getLifeStageLabel(stage: string): string {
   const map: Record<string, string> = {
+    'PUPPY_UNDER_14_WEEKS': '小于14周幼犬',
+    'PUPPY_14_WEEKS_PLUS': '大于等于14周幼犬',
+    'LOW_ACTIVITY_ADULT_OR_SENIOR': '低运动量成犬或老年犬',
+    'HIGH_ACTIVITY_ADULT': '普通或高运动量成犬',
+    'REPRODUCTION': '繁殖期',
     'PUPPY': '幼犬',
     'ADULT': '成犬',
     'SENIOR': '老年犬',
@@ -1897,6 +2084,140 @@ defineOptions({
 /* ==================== 筛选相关样式 ==================== */
 
 /* 食谱橱窗标题 */
+.personalized-section {
+  margin: 24rpx;
+  padding: 28rpx 0 30rpx;
+  background: #fff;
+  border-radius: 16rpx;
+  overflow: hidden;
+}
+
+.personalized-section .section-header {
+  padding: 0 28rpx;
+  margin-bottom: 18rpx;
+}
+
+.personalized-subtitle {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #7a6a5d;
+}
+
+.dog-switch-scroll,
+.recommend-scroll {
+  white-space: nowrap;
+}
+
+.dog-switch-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-left: 24rpx;
+  padding: 10rpx 18rpx 10rpx 10rpx;
+  border-radius: 999rpx;
+  background: #f7f2ed;
+  color: #7a5b43;
+  vertical-align: middle;
+}
+
+.dog-switch-chip.active {
+  background: #f08a3c;
+  color: #fff;
+  transform: scale(1.06);
+}
+
+.dog-switch-avatar {
+  width: 48rpx;
+  height: 48rpx;
+  border-radius: 50%;
+}
+
+.dog-switch-chip.active .dog-switch-avatar {
+  width: 64rpx;
+  height: 64rpx;
+}
+
+.dog-switch-name {
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.recommendation-loading {
+  padding: 28rpx;
+  color: #8a7a6c;
+  font-size: 24rpx;
+}
+
+.recommend-group {
+  margin-top: 22rpx;
+}
+
+.recommend-group-title {
+  padding: 0 28rpx 14rpx;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #34251b;
+}
+
+.recommend-card {
+  display: inline-block;
+  width: 330rpx;
+  margin-left: 24rpx;
+  border-radius: 16rpx;
+  background: #fffaf5;
+  overflow: hidden;
+  border: 1rpx solid #f0dfcf;
+  vertical-align: top;
+}
+
+.recommend-card.compact {
+  width: 280rpx;
+}
+
+.recommend-cover {
+  width: 100%;
+  height: 190rpx;
+  background: #f3e7dc;
+}
+
+.recommend-cover.placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #b8845a;
+  font-size: 52rpx;
+  font-weight: 700;
+}
+
+.recommend-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+  padding: 18rpx;
+}
+
+.recommend-name {
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #2f261f;
+  white-space: normal;
+  line-height: 1.3;
+}
+
+.recommend-stars {
+  color: #f08a3c;
+  font-size: 24rpx;
+}
+
+.recommend-reason,
+.recommend-meta {
+  color: #7a6a5d;
+  font-size: 22rpx;
+  line-height: 1.35;
+  white-space: normal;
+}
+
 .recipe-showcase-header {
   display: flex;
   justify-content: space-between;

@@ -104,10 +104,6 @@ export class CreateRecipeDTO {
   @IsOptional()
   videoUrl?: string;
 
-  @ApiPropertyOptional({ description: 'Nutrition report URL' })
-  @IsString()
-  @IsOptional()
-  nutritionReportUrl?: string;
 }
 
 export class UpdateScheduleDTO {

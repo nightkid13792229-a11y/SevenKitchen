@@ -183,7 +183,6 @@ export class AdminCustomRecipeController {
         status: 'PUBLIC',
         isCustomRecipe: true,
         customOrderId: orderId,
-        nutritionReportUrl: dto.nutritionReportUrl,
         energyDensityKcalPerKg:
           dto.nutritionTarget?.energy_density_kcal_per_kg || 3200,
         productionLossRate: 1.07,

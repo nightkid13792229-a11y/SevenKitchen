@@ -9,6 +9,68 @@
         <OrderProgressBar :status="order.status" />
       </view>
 
+      <view class="section order-center-section">
+        <view class="order-center-header">
+          <view class="order-center-title-block">
+            <text class="order-center-title">{{ orderCenterTitle }}</text>
+            <text class="order-center-subtitle"
+              >微信订单中心可查看的商品订单详情</text
+            >
+          </view>
+          <text
+            class="order-center-status"
+              :style="{ color: getStatusColor(order) }"
+            >
+              {{ getStatusText(order) }}
+          </text>
+        </view>
+
+        <view class="order-center-goods">
+          <view class="goods-main">
+            <image
+              v-if="orderCenterCover"
+              class="goods-cover"
+              :src="orderCenterCover"
+              mode="aspectFill"
+            />
+            <view v-else class="goods-cover-placeholder">
+              <text>{{ orderCenterTitle.charAt(0) }}</text>
+            </view>
+            <view class="goods-text">
+              <text class="goods-name">{{ orderCenterTitle }}</text>
+              <text class="goods-desc">{{ orderCenterDescription }}</text>
+            </view>
+          </view>
+          <view class="goods-amount-row">
+            <text class="goods-amount-label">实付/应付金额</text>
+            <text class="goods-amount-value"
+              >¥{{ formatAmount(order.amountTotal || order.totalAmount) }}</text
+            >
+          </view>
+        </view>
+
+        <view class="order-center-grid">
+          <view class="order-center-cell">
+            <text class="cell-label">订单编号</text>
+            <text class="cell-value">{{ order.id }}</text>
+          </view>
+          <view class="order-center-cell">
+            <text class="cell-label">下单时间</text>
+            <text class="cell-value">{{
+              formatDateTime(order.createdAt)
+            }}</text>
+          </view>
+          <view class="order-center-cell">
+            <text class="cell-label">购买账号</text>
+            <text class="cell-value">{{ customerDisplayName }}</text>
+          </view>
+          <view class="order-center-cell">
+            <text class="cell-label">联系电话</text>
+            <text class="cell-value">{{ customerPhoneText }}</text>
+          </view>
+        </view>
+      </view>
+
       <!-- 订单基本信息 -->
       <view class="section info-section">
         <view class="section-title">基本信息</view>
@@ -19,8 +81,11 @@
         </view>
         <view class="info-row">
           <text class="label">订单状态:</text>
-          <text class="value status" :style="{ color: getStatusColor(order.status) }">
-            {{ getStatusText(order.status) }}
+          <text
+            class="value status"
+            :style="{ color: getStatusColor(order) }"
+          >
+            {{ getStatusText(order) }}
           </text>
         </view>
         <view class="info-row">
@@ -29,7 +94,9 @@
         </view>
         <view class="info-row" v-if="order.targetProductionDate">
           <text class="label">目标制作日期:</text>
-          <text class="value">{{ formatDate(order.targetProductionDate) }}</text>
+          <text class="value">{{
+            formatDate(order.targetProductionDate)
+          }}</text>
           <picker
             v-if="canEditDate"
             mode="date"
@@ -45,14 +112,13 @@
           <view class="address-content">
             <template v-if="order.address">
               <text class="value address-value">
-                {{ order.address.recipientName }} {{ getOrderAddressPhone(order.address) }}
-                {{ getOrderAddressRegionText(order.address) }} {{ getOrderAddressDetail(order.address) }}
+                {{ order.address.recipientName }}
+                {{ getOrderAddressPhone(order.address) }}
+                {{ getOrderAddressRegionText(order.address) }}
+                {{ getOrderAddressDetail(order.address) }}
               </text>
               <view class="address-actions">
-                <button
-                  class="btn-copy-address"
-                  @tap="copyAddress"
-                >
+                <button class="btn-copy-address" @tap="copyAddress">
                   复制
                 </button>
                 <button
@@ -72,7 +138,9 @@
               </view>
             </template>
             <template v-else>
-              <text class="value address-value address-empty-text">暂未录入收货地址</text>
+              <text class="value address-value address-empty-text"
+                >暂未录入收货地址</text
+              >
               <view v-if="canEditAddress" class="address-actions">
                 <button
                   v-if="isStaffOrAdmin"
@@ -88,11 +156,7 @@
                 >
                   录入新地址
                 </button>
-                <button
-                  v-else
-                  class="btn-edit"
-                  @tap="changeAddress"
-                >
+                <button v-else class="btn-edit" @tap="changeAddress">
                   添加地址
                 </button>
               </view>
@@ -102,33 +166,165 @@
         </view>
         <view class="info-row">
           <text class="label">订单金额:</text>
-          <text class="value amount">¥{{ formatAmount(order.amountTotal || order.totalAmount) }}</text>
+          <text class="value amount"
+            >¥{{ formatAmount(order.amountTotal || order.totalAmount) }}</text
+          >
         </view>
       </view>
 
-      <view v-if="shouldShowFinancialSummary" class="section settlement-section">
-        <view class="section-title">生产结算</view>
+      <view class="section buyer-section">
+        <view class="section-title">购买人与配送</view>
+        <view class="buyer-card">
+          <view class="buyer-row">
+            <text class="buyer-label">购买人</text>
+            <text class="buyer-value">{{ customerDisplayName }}</text>
+          </view>
+          <view class="buyer-row">
+            <text class="buyer-label">联系方式</text>
+            <text class="buyer-value">{{ customerPhoneText }}</text>
+          </view>
+          <view class="buyer-row">
+            <text class="buyer-label">收货人</text>
+            <text class="buyer-value">{{
+              order.address?.recipientName || '-'
+            }}</text>
+          </view>
+          <view class="buyer-row">
+            <text class="buyer-label">收货电话</text>
+            <text class="buyer-value">{{
+              order.address ? getOrderAddressPhone(order.address) : '-'
+            }}</text>
+          </view>
+          <view class="buyer-row address-line">
+            <text class="buyer-label">收货地址</text>
+            <text class="buyer-value">{{ fullAddressText }}</text>
+          </view>
+          <view class="buyer-row">
+            <text class="buyer-label">预计制作</text>
+            <text class="buyer-value">{{
+              formatDate(order.targetProductionDate)
+            }}</text>
+          </view>
+          <view class="buyer-row">
+            <text class="buyer-label">预计发货</text>
+            <text class="buyer-value">{{
+              formatDate(order.estimatedShippingDate)
+            }}</text>
+          </view>
+        </view>
+      </view>
+
+      <view class="section merchant-note-section">
+        <view class="section-title">商家说明</view>
+        <view class="merchant-note-list">
+          <view class="merchant-note-item">
+            <text class="merchant-note-label">订单备注</text>
+            <text class="merchant-note-value">{{
+              customerRequirementText
+            }}</text>
+          </view>
+          <view class="merchant-note-item">
+            <text class="merchant-note-label">配送说明</text>
+            <text class="merchant-note-value">{{
+              orderDetailDeliveryNote
+            }}</text>
+          </view>
+          <view class="merchant-note-item">
+            <text class="merchant-note-label">售后说明</text>
+            <text class="merchant-note-value">{{
+              orderDetailAftersaleNote
+            }}</text>
+          </view>
+          <view
+            class="merchant-note-item"
+            v-if="customerServiceConfig.orderDetailMerchantNote"
+          >
+            <text class="merchant-note-label">商家补充</text>
+            <text class="merchant-note-value">{{
+              customerServiceConfig.orderDetailMerchantNote
+            }}</text>
+          </view>
+          <view
+            class="merchant-note-item"
+            v-if="customerServiceConfig.welcomeMessage"
+          >
+            <text class="merchant-note-label">客服提示</text>
+            <text class="merchant-note-value">{{
+              customerServiceConfig.welcomeMessage
+            }}</text>
+          </view>
+        </view>
+      </view>
+
+      <view v-if="orderRefundStatus" class="section refund-status-section">
+        <view class="section-title">退款进度</view>
         <view
-          class="settlement-card"
-          :class="settlementAdjustmentClass"
+          class="refund-status-card"
+          :class="{ success: orderRefundStatus.success }"
         >
+          <view class="refund-status-header">
+            <text class="refund-status-title">{{
+              orderRefundStatus.statusText
+            }}</text>
+            <text class="refund-status-amount"
+              >¥{{ formatAmount(orderRefundStatus.amount) }}</text
+            >
+          </view>
+          <text v-if="orderRefundStatus.outRefundNo" class="refund-status-row">
+            退款单号：{{ orderRefundStatus.outRefundNo }}
+          </text>
+          <text v-if="orderRefundStatus.successTime" class="refund-status-row">
+            成功时间：{{ formatDateTime(orderRefundStatus.successTime) }}
+          </text>
+        </view>
+      </view>
+
+      <view
+        v-if="shouldShowFinancialSummary"
+        class="section settlement-section"
+      >
+        <view class="section-title">生产结算</view>
+        <view class="settlement-card" :class="settlementAdjustmentClass">
           <view class="settlement-header">
             <text class="settlement-title">{{ formatAdjustmentText() }}</text>
-            <text class="settlement-status">{{ orderFinancialSummary?.settlementStatus === 'SETTLED' ? '已结算' : '待结算' }}</text>
+            <text class="settlement-status">{{
+              orderFinancialSummary?.settlementStatus === 'SETTLED'
+                ? '已结算'
+                : '待结算'
+            }}</text>
           </view>
           <text class="settlement-desc">{{ settlementDescription }}</text>
-          <view v-if="orderFinancialSummary?.latestSettlement" class="settlement-metrics">
+          <view
+            v-if="orderFinancialSummary?.latestSettlement"
+            class="settlement-metrics"
+          >
             <view class="settlement-metric">
               <text class="metric-label">计划成品</text>
-              <text class="metric-value">{{ Math.round(orderFinancialSummary.latestSettlement.plannedOutputG) }}g</text>
+              <text class="metric-value"
+                >{{
+                  Math.round(
+                    orderFinancialSummary.latestSettlement.plannedOutputG,
+                  )
+                }}g</text
+              >
             </view>
             <view class="settlement-metric">
               <text class="metric-label">实际成品</text>
-              <text class="metric-value">{{ Math.round(orderFinancialSummary.latestSettlement.actualOutputG) }}g</text>
+              <text class="metric-value"
+                >{{
+                  Math.round(
+                    orderFinancialSummary.latestSettlement.actualOutputG,
+                  )
+                }}g</text
+              >
             </view>
             <view class="settlement-metric">
               <text class="metric-label">成品缺口</text>
-              <text class="metric-value">{{ Math.round(orderFinancialSummary.latestSettlement.shortageG) }}g</text>
+              <text class="metric-value"
+                >{{
+                  Math.round(orderFinancialSummary.latestSettlement.shortageG)
+                }}g</text
+              >
             </view>
           </view>
           <view
@@ -142,7 +338,9 @@
             >
               <view class="adjustment-main">
                 <text class="adjustment-reason">{{ adjustment.reason }}</text>
-                <text class="adjustment-status">{{ getAdjustmentStatusText(adjustment.status) }}</text>
+                <text class="adjustment-status">{{
+                  getAdjustmentStatusText(adjustment.status)
+                }}</text>
               </view>
               <text
                 class="adjustment-amount"
@@ -165,7 +363,9 @@
           placeholder="填写分装要求、制作顺序、特殊提醒"
         />
         <view class="remark-meta">
-          <text class="remark-hint">仅员工/管理员可见，会同步到生产制作单和打印版</text>
+          <text class="remark-hint"
+            >仅员工/管理员可见，会同步到生产制作单和打印版</text
+          >
           <text class="remark-count">{{ remarkDraft.length }}/200</text>
         </view>
         <view class="remark-actions">
@@ -186,60 +386,58 @@
         </view>
       </view>
 
-      <!-- 待付款状态下的支付引导 -->
+      <!-- 待付款状态下的在线支付 -->
       <view
         class="section payment-guide-section"
         v-if="order.status === 'PENDING_PAYMENT'"
       >
-        <view class="section-title">支付方式</view>
+        <view class="section-title">订单支付</view>
 
         <view class="payment-guide-card">
           <view class="guide-header">
-            <text class="guide-title">支持微信及支付宝支付</text>
+            <text class="guide-title">微信支付</text>
           </view>
 
-          <view class="guide-steps">
-            <view class="step-item">
-              <text class="step-number">1</text>
-              <text class="step-text">添加Seven爸爸的微信</text>
-            </view>
-            <view class="step-item">
-              <text class="step-number">2</text>
-              <text class="step-text">复制订单号发送给Seven爸爸, 以确认优惠及最终付款金额</text>
-            </view>
-            <view class="step-item">
-              <text class="step-number">3</text>
-              <text class="step-text">完成支付</text>
-            </view>
-          </view>
-
-          <view class="wechat-contact">
-            <text class="contact-label">Seven爸爸微信号:</text>
-            <text class="contact-value">zhaochengccc</text>
-            <button
-              class="btn-copy-wechat"
-              @tap="copyWechatId"
+          <view class="order-amount-info">
+            <text class="amount-label">待支付金额</text>
+            <text class="amount-value"
+              >¥{{ formatAmount(order.amountTotal || order.totalAmount) }}</text
             >
-              复制微信号
-            </button>
+          </view>
+
+          <view
+            class="payment-deadline-card"
+            v-if="order.paymentAutoCloseEnabled"
+          >
+            <text class="deadline-label">剩余支付时间</text>
+            <text class="deadline-value">{{ paymentCountdownText }}</text>
           </view>
 
           <view class="order-id-copy">
             <text class="order-id-label">订单号:</text>
             <text class="order-id-value">{{ formatOrderId(order.id) }}</text>
-            <button
-              class="btn-copy-order-id"
-              @tap="copyOrderId"
-            >
+            <button class="btn-copy-order-id" @tap="copyOrderId">
               复制订单号
             </button>
           </view>
 
           <view class="payment-tip">
-            <text class="tip-icon">⏰</text>
-            <text class="tip-text">请尽快完成支付，订单长时间未付款可能会被取消</text>
+            <text class="tip-text"
+              >支付完成后订单会由微信支付回调确认，请稍后刷新查看状态。</text
+            >
           </view>
         </view>
+      </view>
+
+      <view class="section service-section">
+        <view class="section-title">客服</view>
+        <button
+          class="btn-service-contact"
+          :class="{ secondary: !customerServiceConfig.enabled }"
+          @tap="contactService"
+        >
+          联系客服
+        </button>
       </view>
 
       <!-- 商品信息 -->
@@ -278,17 +476,26 @@
             <!-- 第1层：食谱基本信息 -->
             <view class="item-header">
               <text class="recipe-name">{{ item.recipeSnapshot?.name }}</text>
-              <text class="recipe-version">v{{ item.recipeSnapshot?.version }}</text>
-              <text class="nutrition-standard">{{ getNutritionStandardLabel(item.recipeSnapshot?.nutrition_standard || '') }}</text>
+              <text class="recipe-version"
+                >v{{ item.recipeSnapshot?.version }}</text
+              >
+              <text class="nutrition-standard">{{
+                getNutritionStandardLabel(item.recipeSnapshot?.nutrition_standard || '')
+              }}</text>
             </view>
 
             <!-- 第2层：订购信息 -->
             <view class="package-info-card">
               <view class="package-row">
                 <text class="package-label">总净重:</text>
-                <text class="package-value">{{ Math.round(item.quantityG) }}g</text>
+                <text class="package-value"
+                  >{{ Math.round(item.quantityG) }}g</text
+                >
               </view>
-              <view class="package-row" v-if="item.packagePlan && item.packagePlan.length > 0">
+              <view
+                class="package-row"
+                v-if="item.packagePlan && item.packagePlan.length > 0"
+              >
                 <text class="package-label">分装明细:</text>
                 <text class="package-value">{{ formatPackagePlan(item) }}</text>
               </view>
@@ -304,18 +511,28 @@
               </template>
               <view class="package-row" v-if="item.ingredientSourcePlan">
                 <text class="package-label">原料方案:</text>
-                <text class="package-value">{{ formatIngredientSourcePlan(item.ingredientSourcePlan) }}</text>
+                <text class="package-value">{{
+                  formatIngredientSourcePlan(item.ingredientSourcePlan)
+                }}</text>
               </view>
-              <view class="package-row" v-if="order.amountTotal && getTotalPackageCount()">
+              <view
+                class="package-row"
+                v-if="order.amountTotal && getTotalPackageCount()"
+              >
                 <text class="package-label">单价:</text>
-                <text class="package-value price">¥{{ calculatePricePerPackage() }}/袋</text>
+                <text class="package-value price"
+                  >¥{{ calculatePricePerPackage() }}/袋</text
+                >
               </view>
             </view>
 
             <!-- 第4层：原料清单（可展开/收起） -->
             <view
               class="ingredients-section"
-              v-if="item.recipeSnapshot?.items && item.recipeSnapshot.items.length > 0"
+              v-if="
+                item.recipeSnapshot?.items &&
+                item.recipeSnapshot.items.length > 0
+              "
             >
               <view
                 class="ingredients-header"
@@ -323,9 +540,13 @@
               >
                 <view class="ingredients-title-row">
                   <text class="ingredients-title">原料清单</text>
-                  <text class="ingredients-count">（共{{ item.recipeSnapshot.items.length }}种）</text>
+                  <text class="ingredients-count"
+                    >（共{{ item.recipeSnapshot.items.length }}种）</text
+                  >
                 </view>
-                <text class="expand-icon">{{ expandedIngredients[item.id] ? '收起' : '展开' }}</text>
+                <text class="expand-icon">{{
+                  expandedIngredients[item.id] ? '收起' : '展开'
+                }}</text>
               </view>
 
               <view
@@ -334,18 +555,24 @@
                 v-if="expandedIngredients[item.id]"
               >
                 <view
-                  v-for="(category, idx) in getGroupedIngredients(item.recipeSnapshot.items)"
+                  v-for="(category, idx) in getGroupedIngredients(
+                    item.recipeSnapshot.items,
+                  )"
                   :key="idx"
                   class="ingredient-category"
                 >
-                  <view class="category-title">【{{ category.typeName }}】</view>
+                  <view class="category-title"
+                    >【{{ category.typeName }}】</view
+                  >
                   <view
                     v-for="(ingredient, iIdx) in category.items"
                     :key="iIdx"
                     class="ingredient-item"
                     @longpress="showIngredientDetail(ingredient, item)"
                   >
-                    <text class="ingredient-text">{{ formatIngredientDisplay(ingredient, item) }}</text>
+                    <text class="ingredient-text">{{
+                      formatIngredientDisplay(ingredient, item)
+                    }}</text>
                   </view>
                 </view>
               </view>
@@ -357,12 +584,16 @@
       <!-- 原料照片（所有状态下都显示，如果有照片的话） -->
       <view
         class="section production-photos-section"
-        v-if="order.productionPhotos && order.productionPhotos.photos.length > 0"
+        v-if="
+          order.productionPhotos && order.productionPhotos.photos.length > 0
+        "
       >
         <view class="section-title-row">
           <view class="section-title-left">
             <text class="section-title-text">原料照片</text>
-            <text class="photos-time">{{ formatDateTime(order.productionPhotos.uploadedAt) }}</text>
+            <text class="photos-time">{{
+              formatDateTime(order.productionPhotos.uploadedAt)
+            }}</text>
           </view>
           <button
             v-if="shareToken"
@@ -391,41 +622,64 @@
         </view>
       </view>
 
-      <!-- 售后服务（FREEZING、SHIPPED或COMPLETED状态可申请） -->
-      <!-- 已关闭售后入口 -->
-      <!-- <view class="section aftersale-section" v-if="canApplyAftersale(order.status)">
+      <!-- 售后服务（付款后到完成前后均可申请） -->
+      <view
+        class="section aftersale-section"
+        v-if="canApplyAftersale(order.status)"
+      >
         <view class="section-title">售后服务</view>
         <view class="aftersale-buttons">
-          <button class="btn-aftersale" @tap="applyAftersaleType('REFUND')">
+          <button
+            v-if="canApplyRefund(order.status)"
+            class="btn-aftersale"
+            @tap="applyAftersaleType('REFUND')"
+          >
             <text class="btn-text">申请退款</text>
           </button>
-          <button class="btn-aftersale" @tap="applyAftersaleType('REMAKE')">
+          <button
+            v-if="canApplyRemake(order.status)"
+            class="btn-aftersale"
+            @tap="applyAftersaleType('REMAKE')"
+          >
             <text class="btn-text">申请重做</text>
           </button>
-          <button class="btn-aftersale" @tap="applyAftersaleType('COMPLAINT')">
+          <button
+            v-if="canApplyComplaint(order.status)"
+            class="btn-aftersale"
+            @tap="applyAftersaleType('COMPLAINT')"
+          >
             <text class="btn-text">投诉建议</text>
           </button>
         </view>
-      </view> -->
+      </view>
 
       <!-- 售后信息（AFTERSALE状态显示） -->
-      <!-- 已关闭售后信息展示 -->
-      <!-- <view class="section aftersale-info-section" v-if="order.status === 'AFTERSALE'">
+      <view
+        class="section aftersale-info-section"
+        v-if="order.status === 'AFTERSALE'"
+      >
         <view class="section-title">售后信息</view>
         <view class="aftersale-info">
           <view class="info-row">
             <text class="label">售后类型:</text>
-            <text class="value">{{ getAftersaleTypeText(order.aftersaleType) }}</text>
+            <text class="value">{{
+              getAftersaleTypeText(order.aftersaleType)
+            }}</text>
           </view>
           <view class="info-row">
             <text class="label">申请时间:</text>
-            <text class="value">{{ formatDateTime(order.aftersaleSince) }}</text>
+            <text class="value">{{
+              formatDateTime(order.aftersaleSince)
+            }}</text>
           </view>
           <view class="info-row">
             <text class="label">售后原因:</text>
             <text class="value">{{ order.aftersaleReason }}</text>
           </view>
-          <view class="aftersale-photos" v-if="order.aftersalePhotos && order.aftersalePhotos.length > 0">
+          <view
+            class="aftersale-photos"
+            v-if="order.aftersalePhotos && order.aftersalePhotos.length > 0"
+          >
             <text class="photos-label">凭证图片:</text>
             <view class="photos-grid">
               <image
@@ -439,10 +693,13 @@
             </view>
           </view>
         </view>
-      </view> -->
+      </view>
 
       <!-- 物流信息（仅在SHIPPED状态显示）-->
-      <view class="section shipping-section" v-if="order.status === 'SHIPPED' && order.trackingNumber">
+      <view
+        class="section shipping-section"
+        v-if="order.status === 'SHIPPED' && order.trackingNumber"
+      >
         <view class="section-title">物流信息</view>
         <view class="info-row">
           <text class="label">快递公司:</text>
@@ -460,72 +717,137 @@
       </view>
     </view>
 
-    <view v-if="addressSelectVisible" class="address-modal-mask" @tap="closeAddressSelect">
+    <view
+      v-if="addressSelectVisible"
+      class="address-modal-mask"
+      @tap="closeAddressSelect"
+      @touchmove.stop.prevent
+    >
       <view class="address-modal-panel" @tap.stop>
         <view class="address-modal-header">
           <text class="address-modal-title">选择已有地址</text>
-          <text class="address-modal-close" @tap="closeAddressSelect">×</text>
+          <text class="address-modal-close" @tap.stop="closeAddressSelect"
+            >×</text
+          >
         </view>
-        <view v-if="addressLoading" class="address-modal-loading">加载中...</view>
-        <view v-else-if="customerAddresses.length === 0" class="address-modal-empty">
+        <view v-if="addressLoading" class="address-modal-loading"
+          >加载中...</view
+        >
+        <view
+          v-else-if="customerAddresses.length === 0"
+          class="address-modal-empty"
+        >
           <text>该客户暂无地址</text>
-          <button class="address-action-btn primary" @tap="openCreateAddressFormFromSelect">录入新地址</button>
+          <button
+            class="address-action-btn primary"
+            @tap.stop="openCreateAddressFormFromSelect"
+          >
+            录入新地址
+          </button>
         </view>
         <view v-else class="address-select-list">
           <view
             v-for="address in customerAddresses"
             :key="address.id"
             class="address-select-item"
-            @tap="selectCustomerAddress(address)"
+            @tap.stop="selectCustomerAddress(address)"
           >
             <view class="address-select-header">
-              <text class="address-recipient-name">{{ address.recipientName }}</text>
-              <text class="address-recipient-phone">{{ formatPhone(address.phone) }}</text>
-              <text v-if="address.isDefault" class="address-default-tag">默认</text>
+              <text class="address-recipient-name">{{
+                address.recipientName
+              }}</text>
+              <text class="address-recipient-phone">{{
+                formatPhoneForOrderStaff(address.phone)
+              }}</text>
+              <text v-if="address.isDefault" class="address-default-tag"
+                >默认</text
+              >
             </view>
-            <text class="address-select-text">{{ formatRegionText(address.region) }} {{ address.detail }}</text>
+            <text class="address-select-text"
+              >{{ formatRegionText(address.region) }} {{ address.detail }}</text
+            >
           </view>
-          <button class="address-action-btn primary full" @tap="openCreateAddressFormFromSelect">录入新地址</button>
+          <button
+            class="address-action-btn primary full"
+            @tap.stop="openCreateAddressFormFromSelect"
+          >
+            录入新地址
+          </button>
         </view>
       </view>
     </view>
 
-    <view v-if="addressFormVisible" class="address-modal-mask" @tap="closeAddressForm">
+    <view
+      v-if="addressFormVisible"
+      class="address-modal-mask"
+      @tap="closeAddressForm"
+      @touchmove.stop.prevent
+    >
       <view class="address-modal-panel address-form-panel" @tap.stop>
         <view class="address-modal-header">
-          <text class="address-modal-title">{{ addressFormMode === 'edit' ? '编辑地址' : '录入新地址' }}</text>
-          <text class="address-modal-close" @tap="closeAddressForm">×</text>
+          <text class="address-modal-title">{{
+            addressFormMode === 'edit' ? '编辑地址' : '录入新地址'
+          }}</text>
+          <text class="address-modal-close" @tap.stop="closeAddressForm"
+            >×</text
+          >
         </view>
         <view class="address-form-item">
           <text class="address-form-label">收货人姓名</text>
-          <input class="address-form-input" v-model="addressForm.recipientName" placeholder="请输入收货人姓名" />
+          <input
+            class="address-form-input"
+            v-model="addressForm.recipientName"
+            placeholder="请输入收货人姓名"
+          />
         </view>
         <view class="address-form-item">
           <text class="address-form-label">手机号</text>
-          <input class="address-form-input" v-model="addressForm.phone" type="number" placeholder="请输入手机号" />
+          <input
+            class="address-form-input"
+            v-model="addressForm.phone"
+            type="number"
+            placeholder="请输入手机号"
+          />
         </view>
         <view class="address-form-item">
           <text class="address-form-label">所在地区</text>
-          <picker mode="region" :value="addressRegionValue" @change="onAddressRegionChange">
+          <picker
+            mode="region"
+            :value="addressRegionValue"
+            @change="onAddressRegionChange"
+          >
             <view class="address-form-picker">
               <text v-if="addressRegionText">{{ addressRegionText }}</text>
-              <text v-else class="address-form-placeholder">请选择省/市/区</text>
+              <text v-else class="address-form-placeholder"
+                >请选择省/市/区</text
+              >
               <text class="address-picker-arrow">▼</text>
             </view>
           </picker>
         </view>
         <view class="address-form-item">
           <text class="address-form-label">详细地址</text>
-          <textarea class="address-form-textarea" v-model="addressForm.detail" placeholder="请输入详细地址" />
+          <textarea
+            class="address-form-textarea"
+            v-model="addressForm.detail"
+            placeholder="请输入详细地址"
+          />
         </view>
         <view class="address-form-switch-row">
           <text class="address-form-label">设为默认地址</text>
-          <switch :checked="addressForm.isDefault" @change="onAddressDefaultChange" />
+          <view class="compact-switch-wrap">
+            <switch
+              class="compact-switch"
+              color="#07c160"
+              :checked="addressForm.isDefault"
+              @change="onAddressDefaultChange"
+            />
+          </view>
         </view>
         <button
           class="address-save-btn"
           :disabled="savingAddress"
-          @tap="saveAddressForm"
+          @tap.stop="saveAddressForm"
         >
           {{ savingAddress ? '保存中...' : '保存地址' }}
         </button>
@@ -536,20 +858,46 @@
     <!-- Phase 9: Simplified action buttons aligned with e-commerce standards -->
     <!-- Phase 9.1: Added FREEZING and AFTERSALE status actions -->
     <view class="bottom-actions" v-if="order">
+      <!-- 待付款状态 -->
+      <view v-if="order.status === 'PENDING_PAYMENT'" class="action-buttons">
+        <button class="btn-action btn-cancel" @tap="cancelOrder">
+          取消订单
+        </button>
+        <button
+          class="btn-action btn-primary"
+          :disabled="paying || paymentExpired"
+          @tap="payOrder"
+        >
+          {{ paymentExpired ? '已超时' : '立即支付' }}
+        </button>
+      </view>
+
       <!-- 生产中状态 (合并PAID和IN_PRODUCTION) -->
-      <view v-if="order.status === 'PAID' || order.status === 'IN_PRODUCTION'" class="action-buttons">
+      <view
+        v-else-if="order.status === 'PAID' || order.status === 'IN_PRODUCTION'"
+        class="action-buttons"
+      >
         <!-- 移除联系客服按钮 -->
       </view>
 
       <!-- 急冻中状态 -->
       <view v-else-if="order.status === 'FREEZING'" class="action-buttons">
-        <!-- 移除联系客服按钮 -->
+        <button class="btn-action btn-secondary" @tap="applyAftersale">
+          申请售后
+        </button>
       </view>
 
       <!-- 已发货状态 -->
       <view v-else-if="order.status === 'SHIPPED'" class="action-buttons">
-        <button class="btn-action btn-secondary" @tap="viewLogistics">查看物流</button>
-        <button class="btn-action btn-primary" @tap="confirmReceived">确认收货</button>
+        <button class="btn-action btn-secondary" @tap="viewLogistics">
+          查看物流
+        </button>
+        <button class="btn-action btn-secondary" @tap="applyAftersale">
+          申请售后
+        </button>
+        <button class="btn-action btn-primary" @tap="confirmReceived">
+          确认收货
+        </button>
       </view>
 
       <!-- 售后中状态 -->
@@ -559,25 +907,29 @@
 
       <!-- 已完成状态 -->
       <view v-else-if="order.status === 'COMPLETED'" class="action-buttons">
-        <button class="btn-action btn-secondary" @tap="buyAgain">再次购买</button>
+        <button class="btn-action btn-secondary" @tap="buyAgain">
+          再次购买
+        </button>
       </view>
 
       <!-- 已取消状态 -->
       <view v-else-if="order.status === 'CANCELLED'" class="action-buttons">
-        <button class="btn-action btn-secondary" @tap="buyAgain">再次购买</button>
+        <button class="btn-action btn-secondary" @tap="buyAgain">
+          再次购买
+        </button>
       </view>
     </view>
-
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
-import { onShow, onShareAppMessage } from '@dcloudio/uni-app'
-import { request } from '../../utils/api'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { onShow, onShareAppMessage } from '@dcloudio/uni-app';
+import { request } from '../../utils/api';
 import {
   bindOrderCustomerAddress as bindExistingOrderAddress,
   createOrderCustomerAddress,
+  createWechatPayment,
   getAdminOrderDetail,
   getAdminOrderFinancialSummary,
   getOrderFinancialSummary,
@@ -585,132 +937,183 @@ import {
   updateAdminOrderRemark,
   updateOrderCustomerAddress,
   type CustomerOrderFinancialSummary,
-  type StaffOrderAddress
-} from '../../api/orders'
-import OrderProgressBar from '../../components/OrderProgressBar.vue'
-import { normalizeImageUrl } from '../../utils/config'
-import { formatDateTime } from '../../utils/date'
-import { getNutritionStandardLabel } from '../../utils/label-mapping'
+  type StaffOrderAddress,
+  type WechatPaymentResult,
+} from '../../api/orders';
+import OrderProgressBar from '../../components/OrderProgressBar.vue';
+import { normalizeImageUrl } from '../../utils/config';
+import { formatDateTime } from '../../utils/date';
+import { getNutritionStandardLabel } from '../../utils/label-mapping';
+import { requestWechatOrderPayment } from '../../utils/wechat-payment';
+import { ensurePhoneBound } from '../../utils/account';
+import { openCustomerServiceChat } from '../../utils/customer-service';
 import {
   getSourcePlanLabel,
-  type IngredientSourcePlanCode
-} from '../../utils/order-package-plan'
+  type IngredientSourcePlanCode,
+} from '../../utils/order-package-plan';
 
 interface RecipeSnapshotItem {
-  ingredient_id: string
-  name: string
-  ratio: number
-  ingredient_type?: string
-  nutrient_target_key?: string
-  nutrient_target_value?: number
-  properties?: any
-  preparation_methods?: string[]
-  sort_order?: number
-  unit_display_label?: string
+  ingredient_id: string;
+  name: string;
+  ratio: number;
+  ingredient_type?: string;
+  nutrient_target_key?: string;
+  nutrient_target_value?: number;
+  properties?: any;
+  preparation_methods?: string[];
+  sort_order?: number;
+  unit_display_label?: string;
 }
 
 interface OrderItem {
-  id: string
-  dogId?: string
-  dogName?: string
-  dogBreedName?: string
-  dogWeightKg?: number
+  id: string;
+  dogId?: string;
+  dogName?: string;
+  dogBreedName?: string;
+  dogWeightKg?: number;
   dog?: {
-    name?: string
-    breedName?: string
-    weightKg?: number
-    mealsPerDay?: number
-    gender?: 'MALE' | 'FEMALE'
-  }
+    name?: string;
+    breedName?: string;
+    weightKg?: number;
+    mealsPerDay?: number;
+    gender?: 'MALE' | 'FEMALE';
+  };
   recipeSnapshot?: {
-    id: string
-    version: number
-    name: string
-    nutrition_standard: string
-    energy_density_kcal_per_kg: number
-    production_loss_rate: number
-    items: RecipeSnapshotItem[]
-  }
-  dailyIntakeG?: number
-  quantityG: number
-  packageCount: number
-  packageSpecG: number
-  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
-  ingredientSourcePlan?: string | null
-  totalPrice?: number
+    id: string;
+    version: number;
+    name: string;
+    coverImageUrl?: string | null;
+    nutrition_standard: string;
+    energy_density_kcal_per_kg: number;
+    production_loss_rate: number;
+    items: RecipeSnapshotItem[];
+  };
+  dailyIntakeG?: number;
+  quantityG: number;
+  packageCount: number;
+  packageSpecG: number;
+  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>;
+  ingredientSourcePlan?: string | null;
+  customRequirements?: string | null;
+  totalPrice?: number;
 }
 
 interface Order {
-  id: string
-  customerId?: string // 添加customerId字段用于权限验证
-  type: string
-  status: string
-  createdAt: string
-  targetProductionDate?: string | null
-  amountTotal?: number
-  totalAmount?: number
-  amountProduct?: number
-  amountShipping?: number
-  adminRemark?: string | null
-  items?: OrderItem[]
-  addressId?: string | null
+  id: string;
+  customerId?: string; // 添加customerId字段用于权限验证
+  type: string;
+  status: string;
+  createdAt: string;
+  targetProductionDate?: string | null;
+  estimatedShippingDate?: string | null;
+  amountTotal?: number;
+  totalAmount?: number;
+  amountProduct?: number;
+  amountShipping?: number;
+  adminRemark?: string | null;
+  cancellationReason?: string | null;
+  items?: OrderItem[];
+  addressId?: string | null;
   address?: {
-    id?: string
-    recipientName: string
-    phone?: string
-    recipientPhone?: string
+    id?: string;
+    recipientName: string;
+    phone?: string;
+    recipientPhone?: string;
     region?: {
-      province?: string
-      city?: string
-      district?: string
-    }
-    regionText?: string
-    detail?: string
-    detailAddress?: string
-    isDefault?: boolean
-  }
-  trackingNumber?: string
-  carrierCode?: string
-  shippedAt?: string
-  paymentMethod?: string
-  transactionId?: string
-  paidAt?: string
+      province?: string;
+      city?: string;
+      district?: string;
+    };
+    regionText?: string;
+    detail?: string;
+    detailAddress?: string;
+    isDefault?: boolean;
+  };
+  customer?: {
+    id: string;
+    nickname?: string | null;
+    phone?: string | null;
+    avatarUrl?: string | null;
+  } | null;
+  trackingNumber?: string;
+  carrierCode?: string;
+  shippedAt?: string;
+  paymentMethod?: string;
+  transactionId?: string;
+  paidAt?: string;
+  paymentDeadline?: string | null;
+  paymentRemainingSeconds?: number | null;
+  paymentTimeoutMinutes?: number | null;
+  paymentAutoCloseEnabled?: boolean | null;
+  refundStatus?: {
+    success: boolean;
+  } | null;
   // Phase 9.1: Aftersale fields
-  aftersaleType?: string
-  aftersaleSince?: string
-  aftersaleReason?: string
-  aftersalePhotos?: string[]
+  aftersaleType?: string;
+  aftersaleSince?: string;
+  aftersaleReason?: string;
+  aftersalePhotos?: string[];
   // 原料照片
   productionPhotos?: {
-    unitId: string
-    photos: string[]
-    uploadedAt: string
-  }
+    unitId: string;
+    photos: string[];
+    uploadedAt: string;
+  };
   // 定价快照（驼峰式，与后端保持一致）
   pricingBreakdownSnapshot?: {
     ingredientDetails?: Array<{
-      ingredientId: string
-      name: string
-      amount: number
-      unit: string
-      type?: string
-    }>
-  }
+      ingredientId: string;
+      name: string;
+      amount: number;
+      unit: string;
+      type?: string;
+    }>;
+  };
 }
 
-const order = ref<Order | null>(null)
-const orderId = ref('')
-const orderFinancialSummary = ref<CustomerOrderFinancialSummary | null>(null)
-const remarkDraft = ref('')
-const savingAdminRemark = ref(false)
-const customerAddresses = ref<StaffOrderAddress[]>([])
-const addressSelectVisible = ref(false)
-const addressFormVisible = ref(false)
-const addressLoading = ref(false)
-const savingAddress = ref(false)
-const addressFormMode = ref<'create' | 'edit'>('create')
-const editingAddressId = ref('')
-const addressRegionValue = ref<string[]>([])
+interface CustomerServiceConfig {
+  enabled: boolean;
+  provider: string;
+  corpId?: string | null;
+  openKfid?: string | null;
+  customerServiceUrl?: string | null;
+  orderCardTitleTemplate: string;
+  orderCardPathTemplate: string;
+  welcomeMessage?: string | null;
+  orderDetailDeliveryNote?: string | null;
+  orderDetailAftersaleNote?: string | null;
+  orderDetailMerchantNote?: string | null;
+}
+
+const order = ref<Order | null>(null);
+const orderId = ref('');
+const orderFinancialSummary = ref<CustomerOrderFinancialSummary | null>(null);
+const customerServiceConfig = ref<CustomerServiceConfig>({
+  enabled: false,
+  provider: 'WECHAT_CUSTOMER_SERVICE',
+  customerServiceUrl: null,
+  orderCardTitleTemplate: '订单 {orderNo}',
+  orderCardPathTemplate: '/pages/order-detail/index?id={orderId}',
+  welcomeMessage: null,
+  orderDetailDeliveryNote: null,
+  orderDetailAftersaleNote: null,
+  orderDetailMerchantNote: null,
+});
+const paying = ref(false);
+const paymentRemainingSeconds = ref<number | null>(null);
+let paymentTimer: ReturnType<typeof setInterval> | null = null;
+let addressModalClosingTimer: ReturnType<typeof setTimeout> | null = null;
+const remarkDraft = ref('');
+const savingAdminRemark = ref(false);
+const customerAddresses = ref<StaffOrderAddress[]>([]);
+const addressSelectVisible = ref(false);
+const addressFormVisible = ref(false);
+const addressLoading = ref(false);
+const savingAddress = ref(false);
+const addressModalClosing = ref(false);
+const addressFormMode = ref<'create' | 'edit'>('create');
+const editingAddressId = ref('');
+const addressRegionValue = ref<string[]>([]);
 const addressForm = ref({
   recipientName: '',
   phone: '',
@@ -719,95 +1122,187 @@ const addressForm = ref({
   district: '',
   detail: '',
   isDefault: false,
-})
+});
 
 // 获取当前用户信息
 const userInfo = ref({
   id: '',
-  role: ''
-})
+  role: '',
+});
 
 const isStaffOrAdmin = computed(() => {
-  return userInfo.value.role === 'STAFF' || userInfo.value.role === 'ADMIN'
-})
+  return userInfo.value.role === 'STAFF' || userInfo.value.role === 'ADMIN';
+});
 
-const normalizedRemarkDraft = computed(() => remarkDraft.value.trim())
-const currentAdminRemark = computed(() => (order.value?.adminRemark ?? '').trim())
+const paymentExpired = computed(() => {
+  return (
+    order.value?.status === 'PENDING_PAYMENT' &&
+    order.value?.paymentAutoCloseEnabled === true &&
+    paymentRemainingSeconds.value !== null &&
+    paymentRemainingSeconds.value <= 0
+  );
+});
+
+const paymentCountdownText = computed(() => {
+  if (paymentRemainingSeconds.value === null) {
+    return '不限时';
+  }
+
+  if (paymentRemainingSeconds.value <= 0) {
+    return '已超时';
+  }
+
+  const minutes = Math.floor(paymentRemainingSeconds.value / 60);
+  const seconds = paymentRemainingSeconds.value % 60;
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+});
+
+const customerServiceOrderTitle = computed(() => {
+  const orderNo = order.value?.id ? formatOrderId(order.value.id) : '';
+  return customerServiceConfig.value.orderCardTitleTemplate
+    .split('{orderNo}')
+    .join(orderNo)
+    .split('{orderId}')
+    .join(order.value?.id || '');
+});
+
+const customerServiceOrderPath = computed(() => {
+  return customerServiceConfig.value.orderCardPathTemplate
+    .split('{orderId}')
+    .join(order.value?.id || orderId.value)
+    .split('{orderNo}')
+    .join(order.value?.id ? formatOrderId(order.value.id) : '');
+});
+
+function syncPaymentTimer() {
+  if (paymentTimer) {
+    clearInterval(paymentTimer);
+    paymentTimer = null;
+  }
+
+  if (!order.value || order.value.status !== 'PENDING_PAYMENT') {
+    paymentRemainingSeconds.value = null;
+    return;
+  }
+
+  if (!order.value.paymentAutoCloseEnabled) {
+    paymentRemainingSeconds.value = null;
+    return;
+  }
+
+  const computeRemaining = () => {
+    if (order.value?.paymentDeadline) {
+      return Math.max(
+        0,
+        Math.floor(
+          (new Date(order.value.paymentDeadline).getTime() - Date.now()) / 1000,
+        ),
+      );
+    }
+
+    return Math.max(0, Number(order.value?.paymentRemainingSeconds ?? 0));
+  };
+
+  paymentRemainingSeconds.value = computeRemaining();
+  paymentTimer = setInterval(() => {
+    paymentRemainingSeconds.value = Math.max(
+      0,
+      (paymentRemainingSeconds.value ?? 0) - 1,
+    );
+    if (paymentRemainingSeconds.value <= 0 && paymentTimer) {
+      clearInterval(paymentTimer);
+      paymentTimer = null;
+    }
+  }, 1000);
+}
+
+const normalizedRemarkDraft = computed(() => remarkDraft.value.trim());
+const currentAdminRemark = computed(() =>
+  (order.value?.adminRemark ?? '').trim(),
+);
 const isAdminRemarkDirty = computed(() => {
-  return normalizedRemarkDraft.value !== currentAdminRemark.value
-})
+  return normalizedRemarkDraft.value !== currentAdminRemark.value;
+});
 const canClearAdminRemark = computed(() => {
-  return Boolean(normalizedRemarkDraft.value || currentAdminRemark.value)
-})
+  return Boolean(normalizedRemarkDraft.value || currentAdminRemark.value);
+});
 
 const addressRegionText = computed(() => {
-  return [addressForm.value.province, addressForm.value.city, addressForm.value.district]
+  return [
+    addressForm.value.province,
+    addressForm.value.city,
+    addressForm.value.district,
+  ]
     .filter(Boolean)
-    .join(' ')
-})
+    .join(' ');
+});
 
 const shouldShowFinancialSummary = computed(() => {
-  return orderFinancialSummary.value?.settlementStatus === 'SETTLED'
-})
+  return orderFinancialSummary.value?.settlementStatus === 'SETTLED';
+});
+
+const orderRefundStatus = computed(() => {
+  return orderFinancialSummary.value?.refundStatus || null;
+});
 
 const visibleSettlementAdjustments = computed(() => {
-  return orderFinancialSummary.value?.adjustments || []
-})
+  return orderFinancialSummary.value?.adjustments || [];
+});
 
 const displayAdjustmentAmount = computed(() => {
-  const adjustmentSummary = orderFinancialSummary.value?.adjustmentSummary
+  const adjustmentSummary = orderFinancialSummary.value?.adjustmentSummary;
   if (adjustmentSummary) {
-    return adjustmentSummary.pendingExtraPaymentAmount - adjustmentSummary.pendingRefundAmount
+    return adjustmentSummary.pendingExtraPaymentAmount - adjustmentSummary.pendingRefundAmount;
   }
-  return orderFinancialSummary.value?.shortageAdjustmentAmount || 0
-})
+  return orderFinancialSummary.value?.shortageAdjustmentAmount || 0;
+});
 
 const settlementAdjustmentClass = computed(() => {
-  const amount = displayAdjustmentAmount.value
-  if (amount < 0) return 'refund'
-  if (amount > 0) return 'extra-payment'
-  return 'balanced'
-})
+  const amount = displayAdjustmentAmount.value;
+  if (amount < 0) return 'refund';
+  if (amount > 0) return 'extra-payment';
+  return 'balanced';
+});
 
 const settlementDescription = computed(() => {
-  const adjustmentSummary = orderFinancialSummary.value?.adjustmentSummary
+  const adjustmentSummary = orderFinancialSummary.value?.adjustmentSummary;
   if (adjustmentSummary?.pendingRefundAmount) {
-    return '本次生产存在成品缺口，客服会联系您确认退差价或抵扣方式。'
+    return '本次生产存在成品缺口，客服会联系您确认退差价或抵扣方式。';
   }
   if (adjustmentSummary?.pendingExtraPaymentAmount) {
-    return '本次生产结算后需要补收差价，客服会联系您确认补款方式。'
+    return '本次生产结算后需要补收差价，客服会联系您确认补款方式。';
   }
-  return '本次生产已完成结算，无需补收或退差价。'
-})
+  return '本次生产已完成结算，无需补收或退差价。';
+});
 
 function shouldFetchOrderFinancialSummary(status?: string | null): boolean {
-  return ['IN_PRODUCTION', 'FREEZING', 'SHIPPED', 'COMPLETED', 'AFTERSALE'].includes(status)
+  return ['IN_PRODUCTION', 'FREEZING', 'SHIPPED', 'COMPLETED', 'AFTERSALE'].includes(status);
 }
 
 function formatIngredientSourcePlan(plan?: string | null): string {
-  if (!plan) return ''
-  return getSourcePlanLabel(plan as IngredientSourcePlanCode) || plan
+  if (!plan) return '';
+  return getSourcePlanLabel(plan as IngredientSourcePlanCode) || plan;
 }
 
 // 原料清单展开状态
-const expandedIngredients = ref<Record<string, boolean>>({})
+const expandedIngredients = ref<Record<string, boolean>>({});
 
 // 原料类型映射
 const ingredientTypeMap: Record<string, string> = {
-  'FOOD': '食材',
-  'VEGETABLE': '食材',
-  'SUPPLEMENT': '补剂',
-  'PACKAGING': '包装'
-}
+  FOOD: '食材',
+  VEGETABLE: '食材',
+  SUPPLEMENT: '补剂',
+  PACKAGING: '包装',
+};
 
 // 按狗狗分组
 const groupedItems = computed(() => {
-  if (!order.value?.items) return []
+  if (!order.value?.items) return [];
 
-  const groups = new Map()
+  const groups = new Map();
 
   order.value.items.forEach((item: any) => {
-    const dogId = item.dogId || 'unknown'
+    const dogId = item.dogId || 'unknown';
     if (!groups.has(dogId)) {
       groups.set(dogId, {
         dogId,
@@ -815,101 +1310,197 @@ const groupedItems = computed(() => {
         dogBreedName: item.dog?.breedName || item.dogBreedName || '',
         dogWeightKg: item.dog?.weightKg || item.dogWeightKg || 0,
         dogGender: item.dog?.gender || 'MALE',
-        items: []
-      })
+        items: [],
+      });
     }
-    groups.get(dogId).items.push(item)
-  })
+    groups.get(dogId).items.push(item);
+  });
 
-  return Array.from(groups.values())
-})
+  return Array.from(groups.values());
+});
+
+const orderCenterTitle = computed(() => {
+  const firstName = order.value?.items?.[0]?.recipeSnapshot?.name?.trim();
+  if (!firstName) return 'SevenKitchen 鲜食订单';
+  const itemCount = order.value?.items?.length || 1;
+  return itemCount > 1 ? `${firstName}等${itemCount}件` : firstName;
+});
+
+const orderCenterCover = computed(() => {
+  const raw = order.value?.items?.[0]?.recipeSnapshot?.coverImageUrl;
+  return raw ? normalizeImageUrl(raw) : '';
+});
+
+const totalPackageCount = computed(() => {
+  return (order.value?.items || []).reduce((sum, item) => {
+    return sum + Math.max(0, Number(item.packageCount || 0));
+  }, 0);
+});
+
+const totalQuantityKg = computed(() => {
+  const grams = (order.value?.items || []).reduce((sum, item) => {
+    return sum + Math.max(0, Number(item.quantityG || 0));
+  }, 0);
+  return grams > 0 ? Number((grams / 1000).toFixed(1)) : 0;
+});
+
+const orderCenterDescription = computed(() => {
+  const parts = [
+    `${order.value?.items?.length || 0}件商品`,
+    totalPackageCount.value > 0 ? `${totalPackageCount.value}袋` : '',
+    totalQuantityKg.value > 0 ? `约${totalQuantityKg.value}kg` : '',
+  ].filter(Boolean);
+  return parts.join(' · ') || '宠物鲜食定制商品';
+});
+
+const customerDisplayName = computed(() => {
+  return (
+    order.value?.customer?.nickname?.trim() ||
+    order.value?.address?.recipientName ||
+    '微信用户'
+  );
+});
+
+const customerPhoneText = computed(() => {
+  return (
+    order.value?.customer?.phone ||
+    (order.value?.address ? getOrderAddressPhone(order.value.address) : '') ||
+    '未填写'
+  );
+});
+
+const fullAddressText = computed(() => {
+  if (!order.value?.address) return '暂未录入收货地址';
+  return [
+    getOrderAddressRegionText(order.value.address),
+    getOrderAddressDetail(order.value.address),
+  ]
+    .filter(Boolean)
+    .join(' ');
+});
+
+const customerRequirementText = computed(() => {
+  const requirements = (order.value?.items || [])
+    .map((item) => item.customRequirements?.trim())
+    .filter(Boolean);
+
+  if (requirements.length > 0) {
+    return requirements.join('；');
+  }
+
+  return '无特殊备注';
+});
+
+const orderDetailDeliveryNote = computed(() => {
+  return (
+    customerServiceConfig.value.orderDetailDeliveryNote ||
+    '默认顺丰冷链/特快配送，制作完成急冻后发出。'
+  );
+});
+
+const orderDetailAftersaleNote = computed(() => {
+  return (
+    customerServiceConfig.value.orderDetailAftersaleNote ||
+    '如需退款、重做或反馈问题，可在订单详情页售后区域提交申请。'
+  );
+});
 
 // 判断是否有编辑权限（订单所有者或管理员，不包括员工）
 const canEditOrder = computed(() => {
   if (!order.value || !userInfo.value.id) {
     console.log('[Order Detail] canEditOrder: false - missing data', {
       hasOrder: !!order.value,
-      hasUserId: !!userInfo.value.id
-    })
-    return false
+      hasUserId: !!userInfo.value.id,
+    });
+    return false;
   }
 
   // 员工（STAFF）不能编辑
   if (userInfo.value.role === 'STAFF') {
-    console.log('[Order Detail] canEditOrder: false - user is STAFF')
-    return false
+    console.log('[Order Detail] canEditOrder: false - user is STAFF');
+    return false;
   }
 
   // 管理员可以编辑任何订单
-  const isAdmin = userInfo.value.role === 'ADMIN'
+  const isAdmin = userInfo.value.role === 'ADMIN';
   if (isAdmin) {
-    console.log('[Order Detail] canEditOrder: true - user is ADMIN')
-    return true
+    console.log('[Order Detail] canEditOrder: true - user is ADMIN');
+    return true;
   }
 
   // 普通用户：检查是否是订单所有者
-  const orderData = order.value as any
-  const isOwner = orderData.customerId === userInfo.value.id
+  const orderData = order.value as any;
+  const isOwner = orderData.customerId === userInfo.value.id;
 
   console.log('[Order Detail] canEditOrder:', {
     isOwner,
     isAdmin,
     orderCustomerId: orderData.customerId,
-    userId: userInfo.value.id
-  })
+    userId: userInfo.value.id,
+  });
 
-  return isOwner
-})
+  return isOwner;
+});
 
 // 判断是否可以修改地址（状态 < SHIPPED）
 const canEditAddress = computed(() => {
-  if (!order.value) return false
-  const editableStatuses = ['INIT', 'PENDING_PAYMENT', 'PAID', 'PURCHASING', 'IN_PRODUCTION', 'FREEZING']
-  if (!editableStatuses.includes(order.value.status)) return false
-  return isStaffOrAdmin.value || canEditOrder.value
-})
+  if (!order.value) return false;
+  const editableStatuses = [
+    'INIT',
+    'PENDING_PAYMENT',
+    'PAID',
+    'PURCHASING',
+    'IN_PRODUCTION',
+    'FREEZING',
+  ];
+  if (!editableStatuses.includes(order.value.status)) return false;
+  return isStaffOrAdmin.value || canEditOrder.value;
+});
 
 // 判断是否可以修改日期（状态 < PURCHASING）
 const canEditDate = computed(() => {
-  if (!order.value || !canEditOrder.value) return false
-  const editableStatuses = ['INIT', 'PENDING_PAYMENT', 'PAID']
-  return editableStatuses.includes(order.value.status)
-})
+  if (!order.value || !canEditOrder.value) return false;
+  const editableStatuses = ['INIT', 'PENDING_PAYMENT', 'PAID'];
+  return editableStatuses.includes(order.value.status);
+});
 
 // 日期选择器状态
-const selectedDate = ref('')
-const minDateStr = ref('')
+const selectedDate = ref('');
+const minDateStr = ref('');
 
 // 监控计算属性的变化
-watch([canEditOrder, canEditAddress, canEditDate], ([canEdit, canAddr, canDate]) => {
-  console.log('[Order Detail] Edit permissions:', {
-    canEditOrder: canEdit,
-    canEditAddress: canAddr,
-    canEditDate: canDate,
-    orderStatus: order.value?.status,
-    userInfo: userInfo.value
-  })
-})
+watch(
+  [canEditOrder, canEditAddress, canEditDate],
+  ([canEdit, canAddr, canDate]) => {
+    console.log('[Order Detail] Edit permissions:', {
+      canEditOrder: canEdit,
+      canEditAddress: canAddr,
+      canEditDate: canDate,
+      orderStatus: order.value?.status,
+      userInfo: userInfo.value,
+    });
+  },
+);
 
 // 切换原料清单展开/收起
 function toggleIngredients(itemId: string) {
-  expandedIngredients.value[itemId] = !expandedIngredients.value[itemId]
+  expandedIngredients.value[itemId] = !expandedIngredients.value[itemId];
 }
 
 // 获取分组后的原料
 function getGroupedIngredients(items: RecipeSnapshotItem[]) {
-  const groups = new Map<string, RecipeSnapshotItem[]>()
+  const groups = new Map<string, RecipeSnapshotItem[]>();
 
-  items.forEach(ingredient => {
-    const type = ingredient.ingredient_type || 'FOOD'
-    const typeName = ingredientTypeMap[type] || '其他'
+  items.forEach((ingredient) => {
+    const type = ingredient.ingredient_type || 'FOOD';
+    const typeName = ingredientTypeMap[type] || '其他';
 
     if (!groups.has(typeName)) {
-      groups.set(typeName, [])
+      groups.set(typeName, []);
     }
 
-    groups.get(typeName)!.push(ingredient)
-  })
+    groups.get(typeName)!.push(ingredient);
+  });
 
   // 转换为数组并排序
   return Array.from(groups.entries()).map(([typeName, items]) => ({
@@ -917,33 +1508,36 @@ function getGroupedIngredients(items: RecipeSnapshotItem[]) {
     items: items.sort((a, b) => {
       // 优先按sort_order排序
       if (a.sort_order !== undefined && b.sort_order !== undefined) {
-        return a.sort_order - b.sort_order
+        return a.sort_order - b.sort_order;
       }
       // 然后按ratio降序排序
-      return b.ratio - a.ratio
-    })
-  }))
+      return b.ratio - a.ratio;
+    }),
+  }));
 }
 
 // 格式化原料显示
-function formatIngredientDisplay(ingredient: RecipeSnapshotItem, item: OrderItem): string {
-  const isSupplement = ingredient.ingredient_type === 'SUPPLEMENT'
+function formatIngredientDisplay(
+  ingredient: RecipeSnapshotItem,
+  item: OrderItem,
+): string {
+  const isSupplement = ingredient.ingredient_type === 'SUPPLEMENT';
 
   if (isSupplement) {
     // 补剂类型：从pricing_breakdown中获取实际用量
-    const actualAmount = getSupplementActualAmount(ingredient)
-    const unit = ingredient.unit_display_label || 'g'
+    const actualAmount = getSupplementActualAmount(ingredient);
+    const unit = ingredient.unit_display_label || 'g';
 
     if (actualAmount > 0) {
-      return `${ingredient.name} ${actualAmount}${unit}`
+      return `${ingredient.name} ${actualAmount}${unit}`;
     } else {
-      return `${ingredient.name}`
+      return `${ingredient.name}`;
     }
   } else {
     // 普通原料：计算实际用量（克数）
     // ratio在数据库中存储的是百分比（如42.83），需要除以100
-    const actualAmountG = Math.round(item.quantityG * (ingredient.ratio / 100))
-    return `${ingredient.name} ${actualAmountG}g`
+    const actualAmountG = Math.round(item.quantityG * (ingredient.ratio / 100));
+    return `${ingredient.name} ${actualAmountG}g`;
   }
 }
 
@@ -951,246 +1545,285 @@ function formatIngredientDisplay(ingredient: RecipeSnapshotItem, item: OrderItem
 // 使用netAmount（不含损耗）而不是amount（含损耗）
 function getSupplementActualAmount(ingredient: RecipeSnapshotItem): number {
   if (!order.value?.pricingBreakdownSnapshot?.ingredientDetails) {
-    return 0
+    return 0;
   }
 
-  const ingredientDetails = order.value.pricingBreakdownSnapshot.ingredientDetails
-  const detail = ingredientDetails.find((d: any) => d.ingredientId === ingredient.ingredient_id)
+  const ingredientDetails =
+    order.value.pricingBreakdownSnapshot.ingredientDetails;
+  const detail = ingredientDetails.find(
+    (d: any) => d.ingredientId === ingredient.ingredient_id,
+  );
 
   if (detail) {
     // 使用netAmount（净需求，不含制作损耗）
-    const amount = detail.netAmount !== undefined ? detail.netAmount : detail.amount
+    const amount =
+      detail.netAmount !== undefined ? detail.netAmount : detail.amount;
     // 根据单位决定保留小数位数
     if (detail.unit === '片' || detail.unit === '粒') {
-      return Math.round(amount * 100) / 100 // 保留两位小数
+      return Math.round(amount * 100) / 100; // 保留两位小数
     } else if (detail.unit === 'kg') {
       // kg转换为g
-      return Math.round(amount * 1000)
+      return Math.round(amount * 1000);
     } else {
-      return Math.round(amount * 10) / 10 // 保留一位小数
+      return Math.round(amount * 10) / 10; // 保留一位小数
     }
   }
 
-  return 0
+  return 0;
 }
 
 // 长按查看原料详情
 function showIngredientDetail(ingredient: RecipeSnapshotItem, item: OrderItem) {
-  const isSupplement = ingredient.ingredient_type === 'SUPPLEMENT'
-  const typeName = ingredientTypeMap[ingredient.ingredient_type || ''] || '其他'
+  const isSupplement = ingredient.ingredient_type === 'SUPPLEMENT';
+  const typeName =
+    ingredientTypeMap[ingredient.ingredient_type || ''] || '其他';
 
-  let content = `类型：${typeName}\n`
+  let content = `类型：${typeName}\n`;
 
   if (isSupplement) {
-    const actualAmount = getSupplementActualAmount(ingredient)
-    const unit = ingredient.unit_display_label || 'g'
-    content += `实际用量：${actualAmount}${unit}\n`
+    const actualAmount = getSupplementActualAmount(ingredient);
+    const unit = ingredient.unit_display_label || 'g';
+    content += `实际用量：${actualAmount}${unit}\n`;
   } else {
-    const ratio = Math.round(ingredient.ratio)
-    const actualAmountG = Math.round(item.quantityG * (ingredient.ratio / 100))
-    content += `比例：${ratio}%\n`
-    content += `实际用量：${actualAmountG}g\n`
+    const ratio = Math.round(ingredient.ratio);
+    const actualAmountG = Math.round(item.quantityG * (ingredient.ratio / 100));
+    content += `比例：${ratio}%\n`;
+    content += `实际用量：${actualAmountG}g\n`;
   }
 
   uni.showModal({
     title: ingredient.name,
     content: content.trim(),
     showCancel: false,
-    confirmText: '关闭'
-  })
+    confirmText: '关闭',
+  });
 }
 
-onMounted(() => {
-  const pages = getCurrentPages()
-  const currentPage = pages[pages.length - 1] as any
-  orderId.value = currentPage.options?.id || currentPage.options?.orderId || ''
+onMounted(async () => {
+  if (!(await ensurePhoneBound())) {
+    return;
+  }
+
+  const pages = getCurrentPages();
+  const currentPage = pages[pages.length - 1] as any;
+  orderId.value = currentPage.options?.id || currentPage.options?.orderId || '';
 
   // 获取用户信息 - 使用正确的存储key 'user'（与TabBar一致）
   try {
     // 尝试从 'user' key 读取（TabBar使用的key）
-    let user = uni.getStorageSync('user') || '{}'
-    console.log('[Order Detail] Raw user from storage:', user)
+    let user = uni.getStorageSync('user') || '{}';
+    console.log('[Order Detail] Raw user from storage:', user);
 
     // 如果 'user' key 为空，尝试 'userInfo' key
     if (user === '{}' || user === '' || !user) {
-      user = uni.getStorageSync('userInfo') || '{}'
-      console.log('[Order Detail] Trying userInfo key:', user)
+      user = uni.getStorageSync('userInfo') || '{}';
+      console.log('[Order Detail] Trying userInfo key:', user);
     }
 
     // 处理存储的数据：可能是对象或JSON字符串
-    let userData
+    let userData;
     if (typeof user === 'string') {
-      userData = JSON.parse(user)
+      userData = JSON.parse(user);
     } else {
-      userData = user
+      userData = user;
     }
-    console.log('[Order Detail] Parsed userData:', userData)
+    console.log('[Order Detail] Parsed userData:', userData);
 
     // 尝试多个可能的字段名
-    const userId = userData.id || userData.userId || userData.customerId || userData.user?.id || ''
-    const userRole = userData.role || userData.user?.role || 'CUSTOMER'
+    const userId =
+      userData.id ||
+      userData.userId ||
+      userData.customerId ||
+      userData.user?.id ||
+      '';
+    const userRole = userData.role || userData.user?.role || 'CUSTOMER';
 
     userInfo.value = {
       id: userId,
-      role: userRole
-    }
-    console.log('[Order Detail] User info loaded:', userInfo.value)
+      role: userRole,
+    };
+    console.log('[Order Detail] User info loaded:', userInfo.value);
 
     // 如果还是没有用户ID，尝试从 API 获取
     if (!userId) {
-      console.log('[Order Detail] No user ID in storage, fetching from API')
-      loadUserInfoFromApi()
+      console.log('[Order Detail] No user ID in storage, fetching from API');
+      loadUserInfoFromApi();
     }
   } catch (err) {
-    console.error('Failed to load userInfo:', err)
+    console.error('Failed to load userInfo:', err);
     // 如果解析失败，尝试从 API 获取
-    loadUserInfoFromApi()
+    loadUserInfoFromApi();
   }
 
   if (orderId.value) {
-    loadOrderDetail()
+    loadOrderDetail();
+    loadCustomerServiceConfig();
   }
-})
+});
+
+onUnmounted(() => {
+  if (paymentTimer) {
+    clearInterval(paymentTimer);
+    paymentTimer = null;
+  }
+  if (addressModalClosingTimer) {
+    clearTimeout(addressModalClosingTimer);
+    addressModalClosingTimer = null;
+  }
+});
 
 async function loadUserInfoFromApi() {
   try {
     const res = await request({
       url: '/users/me',
-      method: 'GET'
-    })
+      method: 'GET',
+    });
 
     if (res.code === 0 && res.data) {
       userInfo.value = {
         id: res.data.id || res.data.userId || res.data.customerId || '',
-        role: res.data.role || 'CUSTOMER'
-      }
-      console.log('[Order Detail] User info loaded from API:', userInfo.value)
+        role: res.data.role || 'CUSTOMER',
+      };
+      console.log('[Order Detail] User info loaded from API:', userInfo.value);
 
       // 保存到两个key，确保兼容性；user 保持对象格式，避免 TabBar 角色判断失效
-      uni.setStorageSync('user', res.data)
-      uni.setStorageSync('userInfo', res.data)
+      uni.setStorageSync('user', res.data);
+      uni.setStorageSync('userInfo', res.data);
 
       if (orderId.value) {
-        await loadOrderDetail()
+        await loadOrderDetail();
       }
     }
   } catch (error) {
-    console.error('[Order Detail] Failed to load user info from API:', error)
+    console.error('[Order Detail] Failed to load user info from API:', error);
   }
 }
 
 async function fetchOrderDetailResponse() {
   if (isStaffOrAdmin.value) {
     try {
-      const adminRes = await getAdminOrderDetail(orderId.value)
+      const adminRes = await getAdminOrderDetail(orderId.value);
       if (adminRes.code === 0 && adminRes.data) {
-        return adminRes
+        return adminRes;
       }
-      console.warn('[Order Detail] Admin detail unavailable, falling back:', adminRes)
+      console.warn(
+        '[Order Detail] Admin detail unavailable, falling back:',
+        adminRes,
+      );
     } catch (error) {
-      console.warn('[Order Detail] Admin detail request failed, fallback to customer detail:', error)
+      console.warn(
+        '[Order Detail] Admin detail request failed, fallback to customer detail:',
+        error,
+      );
     }
   }
 
   return request({
     url: `/orders/${orderId.value}`,
-    method: 'GET'
-  })
+    method: 'GET',
+  });
 }
 
 async function loadOrderDetail() {
   try {
-    uni.showLoading({ title: '加载中...' })
+    uni.showLoading({ title: '加载中...' });
 
-    const res = await fetchOrderDetailResponse()
+    const res = await fetchOrderDetailResponse();
 
     if (res.code === 0 && res.data) {
-      order.value = res.data
-      remarkDraft.value = res.data.adminRemark || ''
+      order.value = res.data;
+      orderId.value = res.data.id || orderId.value;
+      syncPaymentTimer();
+      remarkDraft.value = res.data.adminRemark || '';
       console.log('[Order Detail] Order loaded:', {
         id: order.value.id,
         status: order.value.status,
         customerId: order.value.customerId,
         targetProductionDate: order.value.targetProductionDate,
-        adminRemark: order.value.adminRemark
-      })
-      console.log('[Order Detail] Can edit address:', canEditAddress.value)
-      console.log('[Order Detail] Can edit date:', canEditDate.value)
+        adminRemark: order.value.adminRemark,
+      });
+      console.log('[Order Detail] Can edit address:', canEditAddress.value);
+      console.log('[Order Detail] Can edit date:', canEditDate.value);
 
       // 预获取分享照片的 token
-      prefetchShareToken()
-      prefetchSharePhotoImage()
-      fetchOrderFinancialSummary()
+      prefetchShareToken();
+      prefetchSharePhotoImage();
+      fetchOrderFinancialSummary();
     }
   } catch (error) {
-    console.error('Load order detail error:', error)
+    console.error('Load order detail error:', error);
   } finally {
-    uni.hideLoading()
+    uni.hideLoading();
   }
 }
 
 async function fetchOrderFinancialSummary() {
-  if (!orderId.value) return
+  if (!orderId.value) return;
   if (!shouldFetchOrderFinancialSummary(order.value?.status)) {
-    orderFinancialSummary.value = null
-    return
+    orderFinancialSummary.value = null;
+    return;
   }
 
   try {
     const res = isStaffOrAdmin.value
       ? await getAdminOrderFinancialSummary(orderId.value)
-      : await getOrderFinancialSummary(orderId.value)
-    orderFinancialSummary.value = res.code === 0 && res.data ? res.data : null
+      : await getOrderFinancialSummary(orderId.value);
+    orderFinancialSummary.value = res.code === 0 && res.data ? res.data : null;
   } catch (error) {
-    console.warn('[Order Detail] Failed to load financial summary:', error)
-    orderFinancialSummary.value = null
+    console.warn('[Order Detail] Failed to load financial summary:', error);
+    orderFinancialSummary.value = null;
   }
 }
 
 async function saveAdminRemark() {
-  if (!order.value || !isStaffOrAdmin.value || savingAdminRemark.value || !isAdminRemarkDirty.value) {
-    return
+  if (
+    !order.value ||
+    !isStaffOrAdmin.value ||
+    savingAdminRemark.value ||
+    !isAdminRemarkDirty.value
+  ) {
+    return;
   }
 
   try {
-    savingAdminRemark.value = true
-    uni.showLoading({ title: '保存中...' })
+    savingAdminRemark.value = true;
+    uni.showLoading({ title: '保存中...' });
 
     const res = await updateAdminOrderRemark(
       order.value.id,
       normalizedRemarkDraft.value || null,
-    )
+    );
 
     if (res.code !== 0 || !res.data) {
-      throw new Error(res.message || '保存失败')
+      throw new Error(res.message || '保存失败');
     }
 
     order.value = {
       ...order.value,
       ...res.data,
       adminRemark: res.data.adminRemark ?? null,
-    }
-    remarkDraft.value = res.data.adminRemark || ''
+    };
+    remarkDraft.value = res.data.adminRemark || '';
 
     uni.showToast({
       title: '备注已保存',
       icon: 'success',
-    })
+    });
   } catch (error: any) {
-    console.error('[Order Detail] Update admin remark error:', error)
+    console.error('[Order Detail] Update admin remark error:', error);
     uni.showToast({
       title: error?.message || '保存失败',
       icon: 'none',
-    })
+    });
   } finally {
-    savingAdminRemark.value = false
-    uni.hideLoading()
+    savingAdminRemark.value = false;
+    uni.hideLoading();
   }
 }
 
 function clearAdminRemark() {
   if (!canClearAdminRemark.value || savingAdminRemark.value) {
-    return
+    return;
   }
 
   uni.showModal({
@@ -1198,119 +1831,141 @@ function clearAdminRemark() {
     content: '确定要清空管理员备注吗？',
     success: async (res) => {
       if (!res.confirm) {
-        return
+        return;
       }
 
-      remarkDraft.value = ''
-      await saveAdminRemark()
-    }
-  })
+      remarkDraft.value = '';
+      await saveAdminRemark();
+    },
+  });
 }
 
 // 更换收货地址
 function changeAddress() {
   if (isStaffOrAdmin.value) {
-    openAddressSelect()
-    return
+    openAddressSelect();
+    return;
   }
 
   uni.navigateTo({
-    url: `/pages/address-list/index?mode=select&orderId=${orderId.value}&from=order-detail`
-  })
+    url: `/pages/address-list/index?mode=select&orderId=${orderId.value}&from=order-detail`,
+  });
 }
 
 // 处理地址选择（从地址列表返回）
-async function handleAddressSelected(data: string | { addressId: string; from?: string }) {
+async function handleAddressSelected(
+  data: string | { addressId: string; from?: string },
+) {
   // Handle both string and object formats for compatibility
-  const addressId = typeof data === 'string' ? data : data?.addressId
+  const addressId = typeof data === 'string' ? data : data?.addressId;
 
-  if (!addressId) return
+  if (!addressId) return;
 
-  await updateOrderAddress(addressId)
+  await updateOrderAddress(addressId);
 }
 
 async function updateOrderAddress(addressId: string) {
   try {
-    uni.showLoading({ title: '更新中...' })
+    uni.showLoading({ title: '更新中...' });
 
     const res = isStaffOrAdmin.value
       ? await bindExistingOrderAddress(orderId.value, addressId)
       : await request({
           url: `/orders/${orderId.value}/address`,
           method: 'PUT',
-          data: { addressId }
-        })
+          data: { addressId },
+        });
 
     if (res.code === 0) {
       uni.showToast({
         title: '地址已更新',
-        icon: 'success'
-      })
+        icon: 'success',
+      });
       // 重新加载订单详情
-      await loadOrderDetail()
+      await loadOrderDetail();
     } else {
-      throw new Error(res.message || '更新失败')
+      throw new Error(res.message || '更新失败');
     }
   } catch (error) {
-    console.error('Update address error:', error)
+    console.error('Update address error:', error);
     uni.showToast({
       title: error?.message || '更新失败',
-      icon: 'none'
-    })
+      icon: 'none',
+    });
   } finally {
-    uni.hideLoading()
+    uni.hideLoading();
   }
 }
 
 async function loadCustomerAddresses() {
-  if (!orderId.value) return
+  if (!orderId.value) return;
 
-  addressLoading.value = true
+  addressLoading.value = true;
   try {
-    const response = await listOrderCustomerAddresses(orderId.value)
-    customerAddresses.value = response.data || []
+    const response = await listOrderCustomerAddresses(orderId.value);
+    customerAddresses.value = response.data || [];
   } catch (error) {
-    console.error('[Order Detail] Load customer addresses error:', error)
+    console.error('[Order Detail] Load customer addresses error:', error);
     uni.showToast({
       title: '地址加载失败',
       icon: 'none',
-    })
+    });
   } finally {
-    addressLoading.value = false
+    addressLoading.value = false;
   }
 }
 
 async function openAddressSelect() {
-  if (!canEditAddress.value || !isStaffOrAdmin.value) return
+  if (
+    !canEditAddress.value ||
+    !isStaffOrAdmin.value ||
+    addressModalClosing.value
+  )
+    return;
 
-  addressSelectVisible.value = true
-  await loadCustomerAddresses()
+  addressFormVisible.value = false;
+  addressSelectVisible.value = true;
+  await loadCustomerAddresses();
 }
 
-function closeAddressSelect() {
-  addressSelectVisible.value = false
+function markAddressModalClosing() {
+  addressModalClosing.value = true;
+  if (addressModalClosingTimer) {
+    clearTimeout(addressModalClosingTimer);
+  }
+  addressModalClosingTimer = setTimeout(() => {
+    addressModalClosing.value = false;
+    addressModalClosingTimer = null;
+  }, 350);
+}
+
+function closeAddressSelect(markClosing = true) {
+  addressSelectVisible.value = false;
+  if (markClosing) {
+    markAddressModalClosing();
+  }
 }
 
 async function selectCustomerAddress(address: StaffOrderAddress) {
-  if (!orderId.value || savingAddress.value) return
+  if (!orderId.value || savingAddress.value) return;
 
-  savingAddress.value = true
+  savingAddress.value = true;
   try {
-    await bindExistingOrderAddress(orderId.value, address.id)
+    await bindExistingOrderAddress(orderId.value, address.id);
     uni.showToast({
       title: '地址已绑定',
       icon: 'success',
-    })
-    addressSelectVisible.value = false
-    await loadOrderDetail()
+    });
+    addressSelectVisible.value = false;
+    await loadOrderDetail();
   } catch (error: any) {
-    console.error('[Order Detail] Bind address error:', error)
+    console.error('[Order Detail] Bind address error:', error);
     uni.showToast({
       title: error?.message || '地址绑定失败',
       icon: 'none',
-    })
+    });
   } finally {
-    savingAddress.value = false
+    savingAddress.value = false;
   }
 }
 
@@ -1323,30 +1978,39 @@ function resetAddressForm() {
     district: '',
     detail: '',
     isDefault: false,
-  }
-  addressRegionValue.value = []
-  editingAddressId.value = ''
+  };
+  addressRegionValue.value = [];
+  editingAddressId.value = '';
 }
 
-function openCreateAddressForm() {
-  if (!canEditAddress.value || !isStaffOrAdmin.value) return
+function openCreateAddressForm(options?: { allowDuringModalSwitch?: boolean }) {
+  if (!canEditAddress.value || !isStaffOrAdmin.value) return;
+  if (addressModalClosing.value && !options?.allowDuringModalSwitch) return;
 
-  addressFormMode.value = 'create'
-  resetAddressForm()
-  addressFormVisible.value = true
+  addressFormMode.value = 'create';
+  resetAddressForm();
+  addressSelectVisible.value = false;
+  addressFormVisible.value = true;
 }
 
 function openCreateAddressFormFromSelect() {
-  closeAddressSelect()
-  openCreateAddressForm()
+  closeAddressSelect(false);
+  openCreateAddressForm({ allowDuringModalSwitch: true });
 }
 
 function openEditAddressForm() {
-  if (!canEditAddress.value || !isStaffOrAdmin.value || !order.value?.address) return
+  if (
+    !canEditAddress.value ||
+    !isStaffOrAdmin.value ||
+    !order.value?.address ||
+    addressModalClosing.value
+  )
+    return;
 
-  const address = order.value.address
-  addressFormMode.value = 'edit'
-  editingAddressId.value = address.id || order.value.addressId || ''
+  addressSelectVisible.value = false;
+  const address = order.value.address;
+  addressFormMode.value = 'edit';
+  editingAddressId.value = address.id || order.value.addressId || '';
   addressForm.value = {
     recipientName: address.recipientName || '',
     phone: getOrderAddressPhone(address),
@@ -1355,48 +2019,56 @@ function openEditAddressForm() {
     district: address.region?.district || '',
     detail: getOrderAddressDetail(address),
     isDefault: !!address.isDefault,
-  }
+  };
   addressRegionValue.value = [
     addressForm.value.province,
     addressForm.value.city,
     addressForm.value.district,
-  ].filter(Boolean)
-  addressFormVisible.value = true
+  ].filter(Boolean);
+  addressFormVisible.value = true;
 }
 
 function closeAddressForm() {
-  if (savingAddress.value) return
-  addressFormVisible.value = false
+  if (savingAddress.value) return;
+  addressFormVisible.value = false;
+  markAddressModalClosing();
 }
 
 function onAddressRegionChange(event: any) {
-  const value = event.detail.value || []
-  addressRegionValue.value = value
-  addressForm.value.province = value[0] || ''
-  addressForm.value.city = value[1] || ''
-  addressForm.value.district = value[2] || ''
+  const value = event.detail.value || [];
+  addressRegionValue.value = value;
+  addressForm.value.province = value[0] || '';
+  addressForm.value.city = value[1] || '';
+  addressForm.value.district = value[2] || '';
 }
 
 function onAddressDefaultChange(event: any) {
-  addressForm.value.isDefault = !!event.detail.value
+  addressForm.value.isDefault = !!event.detail.value;
 }
 
 function validateAddressForm(): boolean {
-  const form = addressForm.value
-  if (!form.recipientName || !form.phone || !form.province || !form.city || !form.district || !form.detail) {
+  const form = addressForm.value;
+  if (
+    !form.recipientName ||
+    !form.phone ||
+    !form.province ||
+    !form.city ||
+    !form.district ||
+    !form.detail
+  ) {
     uni.showToast({
       title: '请填写完整收货地址',
       icon: 'none',
-    })
-    return false
+    });
+    return false;
   }
-  return true
+  return true;
 }
 
 async function saveAddressForm() {
-  if (!orderId.value || savingAddress.value || !validateAddressForm()) return
+  if (!orderId.value || savingAddress.value || !validateAddressForm()) return;
 
-  const form = addressForm.value
+  const form = addressForm.value;
   const payload = {
     recipientName: form.recipientName,
     phone: form.phone,
@@ -1407,202 +2079,221 @@ async function saveAddressForm() {
     },
     detail: form.detail,
     isDefault: form.isDefault,
-  }
+  };
 
-  savingAddress.value = true
+  savingAddress.value = true;
   try {
     if (addressFormMode.value === 'edit' && editingAddressId.value) {
-      await updateOrderCustomerAddress(orderId.value, editingAddressId.value, payload)
+      await updateOrderCustomerAddress(
+        orderId.value,
+        editingAddressId.value,
+        payload,
+      );
     } else {
-      await createOrderCustomerAddress(orderId.value, payload)
+      await createOrderCustomerAddress(orderId.value, payload);
     }
 
     uni.showToast({
       title: '地址已保存',
       icon: 'success',
-    })
-    addressFormVisible.value = false
-    await loadOrderDetail()
+    });
+    addressFormVisible.value = false;
+    await loadOrderDetail();
   } catch (error: any) {
-    console.error('[Order Detail] Save address error:', error)
+    console.error('[Order Detail] Save address error:', error);
     uni.showToast({
       title: error?.message || '保存失败',
       icon: 'none',
-    })
+    });
   } finally {
-    savingAddress.value = false
+    savingAddress.value = false;
   }
 }
 
 // 初始化日期选择器的值
-watch(() => order.value?.targetProductionDate, (newDate) => {
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+watch(
+  () => order.value?.targetProductionDate,
+  (newDate) => {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
-  minDateStr.value = formatDateToYYYYMMDD(today)
+    minDateStr.value = formatDateToYYYYMMDD(today);
 
-  const currentDate = newDate ? new Date(newDate) : new Date(today)
-  currentDate.setHours(0, 0, 0, 0)
+    const currentDate = newDate ? new Date(newDate) : new Date(today);
+    currentDate.setHours(0, 0, 0, 0);
 
-  selectedDate.value = formatDateToYYYYMMDD(
-    currentDate < today ? today : currentDate
-  )
-}, { immediate: true })
+    selectedDate.value = formatDateToYYYYMMDD(
+      currentDate < today ? today : currentDate,
+    );
+  },
+  { immediate: true },
+);
 
 function formatDateToYYYYMMDD(date: Date): string {
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 // 日期选择确认
 function onDateSelected(e: any) {
-  const newDateStr = e.detail.value
+  const newDateStr = e.detail.value;
 
   // 调用API更新日期
-  updateOrderDate(newDateStr)
+  updateOrderDate(newDateStr);
 }
 
 async function updateOrderDate(newDateStr: string) {
   try {
-    uni.showLoading({ title: '更新中...' })
+    uni.showLoading({ title: '更新中...' });
 
     const res = await request({
       url: `/orders/${orderId.value}/production-date`,
       method: 'PUT',
       data: {
-        targetProductionDate: newDateStr
-      }
-    })
+        targetProductionDate: newDateStr,
+      },
+    });
 
     if (res.code === 0) {
       uni.showToast({
         title: '修改成功',
-        icon: 'success'
-      })
+        icon: 'success',
+      });
       // 重新加载订单详情
-      await loadOrderDetail()
+      await loadOrderDetail();
     } else {
-      throw new Error(res.message || '修改失败')
+      throw new Error(res.message || '修改失败');
     }
   } catch (error) {
-    console.error('Update production date error:', error)
+    console.error('Update production date error:', error);
     uni.showToast({
       title: error?.message || '修改失败',
-      icon: 'none'
-    })
+      icon: 'none',
+    });
   } finally {
-    uni.hideLoading()
+    uni.hideLoading();
   }
 }
 
 // 监听地址选择事件（从地址列表返回）
 onShow(() => {
   // 监听地址选择事件
-  uni.$on('address-selected', handleAddressSelected)
-})
+  uni.$on('address-selected', handleAddressSelected);
+});
 
 // 分享照片相关 - 预获取的分享 token（只有获取成功时才会有值）
-const shareToken = ref<string>('')
-const shareTokenOrderId = ref<string>('')
-const sharePhotoImageUrl = ref<string>('')
-const sharePhotoSourceUrl = ref<string>('')
-const isPreparingSharePhotoImage = ref(false)
+const shareToken = ref<string>('');
+const shareTokenOrderId = ref<string>('');
+const sharePhotoImageUrl = ref<string>('');
+const sharePhotoSourceUrl = ref<string>('');
+const isPreparingSharePhotoImage = ref(false);
 
 function getFirstProductionPhotoUrl(): string {
-  return order.value?.productionPhotos?.photos?.[0] || ''
+  return order.value?.productionPhotos?.photos?.[0] || '';
 }
 
 function getProductionPhotosShareDogName(): string {
-  const names = new Set<string>()
+  const names = new Set<string>();
 
   order.value?.items?.forEach((item) => {
-    const dogName = (item.dog?.name || item.dogName || '').trim()
+    const dogName = (item.dog?.name || item.dogName || '').trim();
     if (dogName && dogName !== '未知狗狗') {
-      names.add(dogName)
+      names.add(dogName);
     }
-  })
+  });
 
-  const dogNames = Array.from(names)
+  const dogNames = Array.from(names);
   if (dogNames.length === 0) {
-    return 'SevenKitchen'
+    return 'SevenKitchen';
   }
   if (dogNames.length === 1) {
-    return dogNames[0]
+    return dogNames[0];
   }
-  return `${dogNames[0]}等${dogNames.length}只狗狗`
+  return `${dogNames[0]}等${dogNames.length}只狗狗`;
 }
 
 function getProductionPhotosShareTitle(): string {
-  const dogName = getProductionPhotosShareDogName()
-  return `${dogName}原料照片`
+  const dogName = getProductionPhotosShareDogName();
+  return `${dogName}原料照片`;
 }
 
 function getProductionPhotosShareImageUrl(): string {
-  return sharePhotoImageUrl.value || normalizeImageUrl(getFirstProductionPhotoUrl())
+  return (
+    sharePhotoImageUrl.value || normalizeImageUrl(getFirstProductionPhotoUrl())
+  );
 }
 
 async function prefetchSharePhotoImage() {
-  const firstPhoto = getFirstProductionPhotoUrl()
+  const firstPhoto = getFirstProductionPhotoUrl();
   if (!firstPhoto) {
-    sharePhotoImageUrl.value = ''
-    sharePhotoSourceUrl.value = ''
-    isPreparingSharePhotoImage.value = false
-    return
+    sharePhotoImageUrl.value = '';
+    sharePhotoSourceUrl.value = '';
+    isPreparingSharePhotoImage.value = false;
+    return;
   }
 
-  const normalizedPhoto = normalizeImageUrl(firstPhoto)
+  const normalizedPhoto = normalizeImageUrl(firstPhoto);
   if (!normalizedPhoto) {
-    sharePhotoImageUrl.value = ''
-    sharePhotoSourceUrl.value = ''
-    isPreparingSharePhotoImage.value = false
-    return
+    sharePhotoImageUrl.value = '';
+    sharePhotoSourceUrl.value = '';
+    isPreparingSharePhotoImage.value = false;
+    return;
   }
 
-  if (sharePhotoSourceUrl.value === normalizedPhoto && sharePhotoImageUrl.value) {
-    return
+  if (
+    sharePhotoSourceUrl.value === normalizedPhoto &&
+    sharePhotoImageUrl.value
+  ) {
+    return;
   }
-  if (sharePhotoSourceUrl.value === normalizedPhoto && isPreparingSharePhotoImage.value) {
-    return
+  if (
+    sharePhotoSourceUrl.value === normalizedPhoto &&
+    isPreparingSharePhotoImage.value
+  ) {
+    return;
   }
 
-  sharePhotoSourceUrl.value = normalizedPhoto
-  sharePhotoImageUrl.value = ''
+  sharePhotoSourceUrl.value = normalizedPhoto;
+  sharePhotoImageUrl.value = '';
 
   if (!/^https?:\/\//.test(normalizedPhoto)) {
-    sharePhotoImageUrl.value = normalizedPhoto
-    return
+    sharePhotoImageUrl.value = normalizedPhoto;
+    return;
   }
 
-  isPreparingSharePhotoImage.value = true
+  isPreparingSharePhotoImage.value = true;
 
   try {
     const downloadRes = await uni.downloadFile({
       url: normalizedPhoto,
-    })
+    });
 
     if (sharePhotoSourceUrl.value !== normalizedPhoto) {
-      return
+      return;
     }
 
-    const statusCode = Number(downloadRes.statusCode || 0)
+    const statusCode = Number(downloadRes.statusCode || 0);
     if (statusCode >= 200 && statusCode < 300 && downloadRes.tempFilePath) {
-      sharePhotoImageUrl.value = downloadRes.tempFilePath
-      console.log('[Order Detail] Share photo image downloaded successfully')
-      return
+      sharePhotoImageUrl.value = downloadRes.tempFilePath;
+      console.log('[Order Detail] Share photo image downloaded successfully');
+      return;
     }
 
-    sharePhotoImageUrl.value = normalizedPhoto
-    console.warn('[Order Detail] Share photo image download failed:', downloadRes)
+    sharePhotoImageUrl.value = normalizedPhoto;
+    console.warn(
+      '[Order Detail] Share photo image download failed:',
+      downloadRes,
+    );
   } catch (error) {
     if (sharePhotoSourceUrl.value === normalizedPhoto) {
-      sharePhotoImageUrl.value = normalizedPhoto
+      sharePhotoImageUrl.value = normalizedPhoto;
     }
-    console.warn('[Order Detail] Error downloading share photo image:', error)
+    console.warn('[Order Detail] Error downloading share photo image:', error);
   } finally {
     if (sharePhotoSourceUrl.value === normalizedPhoto) {
-      isPreparingSharePhotoImage.value = false
+      isPreparingSharePhotoImage.value = false;
     }
   }
 }
@@ -1611,42 +2302,45 @@ async function prefetchSharePhotoImage() {
 async function prefetchShareToken() {
   // 如果已有 token，不再重复获取
   if (shareToken.value && shareTokenOrderId.value === order.value?.id) {
-    return
+    return;
   }
 
   if (!order.value) {
-    return
+    return;
   }
 
   // 检查是否有照片
   if (!order.value.productionPhotos?.photos?.length) {
-    shareToken.value = ''
-    shareTokenOrderId.value = ''
-    return
+    shareToken.value = '';
+    shareTokenOrderId.value = '';
+    return;
   }
 
   try {
     const response = await request({
       url: `/orders/${order.value.id}/share-photos`,
       method: 'POST',
-    })
+    });
 
     if (response.code === 0 && response.data?.token) {
-      shareToken.value = response.data.token
-      shareTokenOrderId.value = order.value.id
-      console.log('[Order Detail] Share token prefetched successfully')
+      shareToken.value = response.data.token;
+      shareTokenOrderId.value = order.value.id;
+      console.log('[Order Detail] Share token prefetched successfully');
     } else {
-      console.log('[Order Detail] Failed to prefetch share token:', response.message)
+      console.log(
+        '[Order Detail] Failed to prefetch share token:',
+        response.message,
+      );
     }
   } catch (error) {
-    console.error('[Order Detail] Error prefetching share token:', error)
+    console.error('[Order Detail] Error prefetching share token:', error);
   }
 }
 
 // 定义分享内容 - 使用预获取的 token（同步返回）
 onShareAppMessage((e: any) => {
   // 判断是否是分享照片按钮触发的
-  const isSharePhotos = e?.target?.dataset?.shareType === 'photos'
+  const isSharePhotos = e?.target?.dataset?.shareType === 'photos';
 
   if (isSharePhotos) {
     // 使用预获取的 token，直接返回同步结果
@@ -1654,135 +2348,163 @@ onShareAppMessage((e: any) => {
     return {
       title: getProductionPhotosShareTitle(),
       path: `/pages/shared-photos/index?token=${shareToken.value}`,
-      imageUrl: getProductionPhotosShareImageUrl()
-    }
+      imageUrl: getProductionPhotosShareImageUrl(),
+    };
   }
 
   // 默认分享订单详情页
   return {
     title: 'SevenKitchen订单详情',
     path: `/pages/order-detail/index?id=${order.value?.id || ''}`,
-    imageUrl: ''
-  }
-})
+    imageUrl: '',
+  };
+});
 
 function formatOrderId(id: string): string {
-  return id.substring(0, 8) + '...'
+  return id.substring(0, 8) + '...';
 }
 
 function formatDate(dateStr?: string | null): string {
-  if (!dateStr) return '-'
-  const date = new Date(dateStr)
-  const year = date.getFullYear()
-  const month = String(date.getMonth() + 1).padStart(2, '0')
-  const day = String(date.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  if (!dateStr) return '-';
+  const date = new Date(dateStr);
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
 }
 
 function formatAmount(amount?: number): string {
-  if (!amount) return '0.00'
-  return amount.toFixed(2)
+  if (!amount) return '0.00';
+  return amount.toFixed(2);
 }
 
 function formatPhone(phone?: string): string {
-  if (!phone) return ''
-  if (phone.length !== 11) return phone
-  return phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2')
+  if (!phone) return '';
+  if (phone.length !== 11) return phone;
+  return phone.replace(/(\d{3})\d{4}(\d{4})/, '$1****$2');
 }
 
-function formatRegionText(region?: { province?: string; city?: string; district?: string }): string {
-  if (!region) return ''
-  return [region.province, region.city, region.district].filter(Boolean).join(' ')
+function formatPhoneForOrderStaff(phone?: string): string {
+  if (!phone) return '';
+  return isStaffOrAdmin.value ? phone : formatPhone(phone);
+}
+
+function formatRegionText(region?: {
+  province?: string;
+  city?: string;
+  district?: string;
+}): string {
+  if (!region) return '';
+  return [region.province, region.city, region.district]
+    .filter(Boolean)
+    .join(' ');
 }
 
 function getOrderAddressPhone(address: NonNullable<Order['address']>): string {
-  return address.phone || address.recipientPhone || ''
+  return address.phone || address.recipientPhone || '';
 }
 
-function getOrderAddressRegionText(address: NonNullable<Order['address']>): string {
-  return address.regionText || formatRegionText(address.region)
+function getOrderAddressRegionText(
+  address: NonNullable<Order['address']>,
+): string {
+  return address.regionText || formatRegionText(address.region);
 }
 
 function getOrderAddressDetail(address: NonNullable<Order['address']>): string {
-  return address.detailAddress || address.detail || ''
+  return address.detailAddress || address.detail || '';
 }
 
 function formatAdjustmentText(): string {
-  const amount = displayAdjustmentAmount.value
-  const absAmount = Math.abs(amount).toFixed(2)
-  if (amount < 0) return `建议退差价 ¥${absAmount}`
-  if (amount > 0) return `建议补收 ¥${absAmount}`
-  if (visibleSettlementAdjustments.value.length > 0) return '差价已处理'
-  return '无需调整'
+  const amount = displayAdjustmentAmount.value;
+  const absAmount = Math.abs(amount).toFixed(2);
+  if (amount < 0) return `建议退差价 ¥${absAmount}`;
+  if (amount > 0) return `建议补收 ¥${absAmount}`;
+  if (visibleSettlementAdjustments.value.length > 0) return '差价已处理';
+  return '无需调整';
 }
 
 function formatSettlementAdjustmentAmount(amount: number, status: string): string {
-  const absAmount = Math.abs(Number(amount || 0)).toFixed(2)
-  const prefix = getSettlementAdjustmentAmountPrefix(amount, status)
-  if (prefix) return `${prefix} ¥${absAmount}`
-  return '¥0.00'
+  const absAmount = Math.abs(Number(amount || 0)).toFixed(2);
+  const prefix = getSettlementAdjustmentAmountPrefix(amount, status);
+  if (prefix) return `${prefix} ¥${absAmount}`;
+  return '¥0.00';
 }
 
-function getSettlementAdjustmentAmountPrefix(amount: number, status: string): string {
-  if (amount === 0) return ''
+function getSettlementAdjustmentAmountPrefix(
+  amount: number,
+  status: string,
+): string {
+  if (amount === 0) return '';
   if (status === 'SETTLED') {
-    return amount > 0 ? '已补' : '已退'
+    return amount > 0 ? '已补' : '已退';
   }
   if (status === 'CANCELLED') {
-    return '已取消'
+    return '已取消';
   }
-  return amount > 0 ? '待补' : '待退'
+  return amount > 0 ? '待补' : '待退';
 }
 
 function getAdjustmentStatusText(status: string): string {
   const statusMap: Record<string, string> = {
     PENDING: '待处理',
     SETTLED: '已处理',
-    CANCELLED: '已取消'
-  }
-  return statusMap[status] || status
+    CANCELLED: '已取消',
+  };
+  return statusMap[status] || status;
 }
 
 function calculateUnitPrice(item: OrderItem): number {
-  if (!item.packageCount || item.packageCount === 0) return 0
-  return (item.totalPrice || 0) / item.packageCount
+  if (!item.packageCount || item.packageCount === 0) return 0;
+  return (item.totalPrice || 0) / item.packageCount;
 }
 
 function formatPackagePlan(item: {
-  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>
-  packageSpecG?: number
-  packageCount?: number
+  packagePlan?: Array<{ packageSpecG: number; packageCount: number }>;
+  packageSpecG?: number;
+  packageCount?: number;
 }): string {
   const packagePlanRows = (item.packagePlan || [])
-    .map(row => {
-      const packageSpecG = Number(row?.packageSpecG)
-      const packageCount = Number(row?.packageCount)
-      if (!Number.isFinite(packageSpecG) || !Number.isFinite(packageCount) || packageSpecG <= 0 || packageCount <= 0) {
-        return ''
+    .map((row) => {
+      const packageSpecG = Number(row?.packageSpecG);
+      const packageCount = Number(row?.packageCount);
+      if (
+        !Number.isFinite(packageSpecG) ||
+        !Number.isFinite(packageCount) ||
+        packageSpecG <= 0 ||
+        packageCount <= 0
+      ) {
+        return '';
       }
-      return `${packageSpecG}g×${packageCount}袋`
+      return `${packageSpecG}g×${packageCount}袋`;
     })
-    .filter(Boolean)
+    .filter(Boolean);
 
   if (packagePlanRows.length > 0) {
-    return packagePlanRows.join('，')
+    return packagePlanRows.join('，');
   }
 
-  return `${item.packageSpecG || 0}g×${item.packageCount || 0}袋`
+  return `${item.packageSpecG || 0}g×${item.packageCount || 0}袋`;
 }
 
-function getStatusText(status: string): string {
+function getStatusText(orderOrStatus: Order | string): string {
+  const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
+  if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) {
+    return '已退款（钱款原路退回）'
+  }
   // Phase 9: Simplified status text aligned with e-commerce standards
   const statusMap: Record<string, string> = {
     INIT: '待确认',
     PENDING_PAYMENT: '待付款',
     PAID: '已付款',
-    IN_PRODUCTION: '制作中',
+    PURCHASING: '采购中',
+    IN_PRODUCTION: '生产中',
+    FREEZING: '急冻中',
     SHIPPED: '已发货',
     COMPLETED: '已完成',
-    CANCELLED: '已取消'
-  }
-  return statusMap[status] || status
+    CANCELLED: '已取消',
+    AFTERSALE: '售后中',
+  };
+  return statusMap[status] || status;
 }
 
 function getStatusIcon(status: string): string {
@@ -1791,26 +2513,43 @@ function getStatusIcon(status: string): string {
     INIT: '📝',
     PENDING_PAYMENT: '💳',
     PAID: '✓',
+    PURCHASING: '🛒',
     IN_PRODUCTION: '👨‍🍳',
+    FREEZING: '❄️',
     SHIPPED: '🚚',
     COMPLETED: '✅',
-    CANCELLED: '✕'
-  }
-  return iconMap[status] || ''
+    CANCELLED: '✕',
+    AFTERSALE: '!',
+  };
+  return iconMap[status] || '';
 }
 
-function getStatusColor(status: string): string {
+function getStatusColor(orderOrStatus: Order | string): string {
+  const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
+  if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) {
+    return '#16a34a'
+  }
   // Phase 9: Simplified status colors aligned with e-commerce standards
   const colorMap: Record<string, string> = {
     INIT: '#999',
     PENDING_PAYMENT: '#ff9800',
     PAID: '#1890ff',
+    PURCHASING: '#faad14',
     IN_PRODUCTION: '#1890ff',
+    FREEZING: '#722ed1',
     SHIPPED: '#52c41a',
     COMPLETED: '#52c41a',
-    CANCELLED: '#999'
-  }
-  return colorMap[status] || '#999'
+    CANCELLED: '#999',
+    AFTERSALE: '#f5222d',
+  };
+  return colorMap[status] || '#999';
+}
+
+function isRefundedOrder(currentOrder: Order): boolean {
+  return currentOrder.status === 'CANCELLED' && (
+    orderFinancialSummary.value?.refundStatus?.success === true ||
+    currentOrder.refundStatus?.success === true
+  )
 }
 
 function getCarrierName(code?: string): string {
@@ -1819,50 +2558,41 @@ function getCarrierName(code?: string): string {
     STO: '申通快递',
     YTO: '圆通速递',
     ZTO: '中通快递',
-    EMS: 'EMS'
-  }
-  return carrierMap[code || ''] || code || '-'
-}
-
-function copyWechatId() {
-  uni.setClipboardData({
-    data: 'zhaochengccc',
-    success: () => {
-      uni.showToast({ title: '微信号已复制', icon: 'success' })
-    }
-  })
+    EMS: 'EMS',
+  };
+  return carrierMap[code || ''] || code || '-';
 }
 
 function copyOrderId() {
   uni.setClipboardData({
     data: order.value?.id || '',
     success: () => {
-      uni.showToast({ title: '订单号已复制', icon: 'success' })
-    }
-  })
+      uni.showToast({ title: '订单号已复制', icon: 'success' });
+    },
+  });
 }
 
 function copyTrackingNumber() {
   uni.setClipboardData({
     data: order.value?.trackingNumber || '',
     success: () => {
-      uni.showToast({ title: '运单号已复制', icon: 'success' })
-    }
-  })
+      uni.showToast({ title: '运单号已复制', icon: 'success' });
+    },
+  });
 }
 
 function copyAddress() {
-  if (!order.value?.address) return
+  if (!order.value?.address) return;
 
-  const address = order.value.address
-  const fullAddress = `${address.recipientName} ${getOrderAddressPhone(address)} ${getOrderAddressRegionText(address)} ${getOrderAddressDetail(address)}`
+  const address = order.value.address;
+  const fullAddress = `${address.recipientName} ${getOrderAddressPhone(address)} ${getOrderAddressRegionText(address)} ${getOrderAddressDetail(address)}`;
 
   uni.setClipboardData({
     data: fullAddress,
     success: () => {
-      uni.showToast({ title: '地址已复制', icon: 'success' })
-    }
-  })
+      uni.showToast({ title: '地址已复制', icon: 'success' });
+    },
+  });
 }
 
 // 取消订单
@@ -1873,96 +2603,117 @@ async function cancelOrder() {
     success: async (res) => {
       if (res.confirm) {
         try {
-          uni.showLoading({ title: '取消中...' })
+          uni.showLoading({ title: '取消中...' });
           const result = await request({
             url: `/orders/${orderId.value}/cancel`,
-            method: 'POST'
-          })
+            method: 'POST',
+            data: {
+              reason: '用户主动取消',
+            },
+          });
           if (result.code === 0) {
             uni.showToast({
               title: '订单已取消',
-              icon: 'success'
-            })
+              icon: 'success',
+            });
             // 重新加载订单详情
-            loadOrderDetail()
+            loadOrderDetail();
           }
         } catch (error) {
           uni.showToast({
             title: '取消失败',
-            icon: 'none'
-          })
+            icon: 'none',
+          });
         } finally {
-          uni.hideLoading()
+          uni.hideLoading();
         }
       }
+    },
+  });
+}
+
+function requestWechatPayment(payment: WechatPaymentResult): Promise<void> {
+  return requestWechatOrderPayment(payment);
+}
+
+async function loadCustomerServiceConfig() {
+  try {
+    const res = await request<CustomerServiceConfig>({
+      url: '/platform-config/customer-service',
+      method: 'GET',
+      quiet: true,
+      suppressErrorToast: true,
+    } as any);
+
+    if (res.code === 0 && res.data) {
+      customerServiceConfig.value = {
+        ...customerServiceConfig.value,
+        ...res.data,
+      };
     }
-  })
+  } catch (error) {
+    console.warn('[Order Detail] Load customer service config failed:', error);
+  }
 }
 
 // 立即付款
 async function payOrder() {
+  if (paying.value || paymentExpired.value) {
+    return;
+  }
+
   try {
-    // 开发环境：显示模拟支付确认
-    const confirmed = await new Promise<boolean>((resolve) => {
-      uni.showModal({
-        title: '模拟支付',
-        content: '测试环境下使用模拟支付，确定继续吗？',
-        success: (res) => resolve(res.confirm),
-        fail: () => resolve(false)
-      })
-    })
+    paying.value = true;
+    uni.showLoading({ title: '调起支付中...' });
 
-    if (!confirmed) {
-      return
+    const res = await createWechatPayment(orderId.value);
+    if (res.code !== 0 || !res.data) {
+      throw new Error(res.message || '支付失败');
     }
 
-    uni.showLoading({ title: '正在处理支付...' })
+    uni.hideLoading();
+    await requestWechatPayment(res.data);
 
-    // 调用后端支付API
-    const res = await request({
-      url: `/orders/${orderId.value}/pay`,
-      method: 'POST'
-    })
+    uni.showToast({
+      title: '支付处理中',
+      icon: 'success',
+    });
 
-    if (res.code === 0 && res.data) {
-      uni.showToast({
-        title: '支付成功',
-        icon: 'success'
-      })
-
-      // 刷新订单详情
-      await loadOrderDetail()
-    } else {
-      throw new Error(res.message || '支付失败')
-    }
-
-  } catch (error) {
-    console.error('Payment error:', error)
-    const errorMessage = error instanceof Error ? error.message : '支付失败，请重试'
+    await loadOrderDetail();
+  } catch (error: any) {
+    console.error('Payment error:', error);
+    const errorMessage = error?.errMsg?.includes('cancel')
+      ? '已取消支付'
+      : error instanceof Error
+        ? error.message
+        : '支付失败，请重试';
     uni.showToast({
       title: errorMessage,
-      icon: 'none'
-    })
+      icon: 'none',
+    });
   } finally {
-    uni.hideLoading()
+    paying.value = false;
+    uni.hideLoading();
   }
 }
 
 // 联系客服
 function contactService() {
-  uni.showModal({
-    title: '联系客服',
-    content: '客服电话：400-123-4567\n工作时间：9:00-18:00',
-    showCancel: false
-  })
+  openCustomerServiceChat(customerServiceConfig.value as any, {
+    sourceType: 'ORDER',
+    orderId: orderId.value,
+    orderNo: order.value?.orderNo || order.value?.id,
+    title: customerServiceOrderTitle.value,
+    path: customerServiceOrderPath.value,
+    imageUrl: orderCenterCover.value,
+  });
 }
 
-// 查看物流
 function viewLogistics() {
   uni.showToast({
     title: '查看物流...',
-    icon: 'none'
-  })
+    icon: 'none',
+  });
   // TODO: 跳转到物流详情页
 }
 
@@ -1974,29 +2725,29 @@ async function confirmReceived() {
     success: async (res) => {
       if (res.confirm) {
         try {
-          uni.showLoading({ title: '确认中...' })
+          uni.showLoading({ title: '确认中...' });
           const result = await request({
-            url: `/orders/${orderId.value}/confirm`,
-            method: 'POST'
-          })
+            url: `/orders/${orderId.value}/complete`,
+            method: 'POST',
+          });
           if (result.code === 0) {
             uni.showToast({
               title: '已确认收货',
-              icon: 'success'
-            })
-            loadOrderDetail()
+              icon: 'success',
+            });
+            loadOrderDetail();
           }
         } catch (error) {
           uni.showToast({
             title: '确认失败',
-            icon: 'none'
-          })
+            icon: 'none',
+          });
         } finally {
-          uni.hideLoading()
+          uni.hideLoading();
         }
       }
-    }
-  })
+    },
+  });
 }
 
 // 再次购买
@@ -2004,52 +2755,52 @@ async function buyAgain() {
   if (!order.value?.items || order.value.items.length === 0) {
     uni.showToast({
       title: '订单中没有商品',
-      icon: 'none'
-    })
-    return
+      icon: 'none',
+    });
+    return;
   }
 
-  const firstItem = order.value.items[0]
-  const recipeId = firstItem.recipeSnapshot?.id
+  const firstItem = order.value.items[0];
+  const recipeId = firstItem.recipeSnapshot?.id;
 
   if (!recipeId) {
     uni.showToast({
       title: '食谱信息不完整',
-      icon: 'none'
-    })
-    return
+      icon: 'none',
+    });
+    return;
   }
 
   try {
     // 检查食谱状态
-    uni.showLoading({ title: '检查中...' })
+    uni.showLoading({ title: '检查中...' });
 
     const res = await request({
       url: `/recipes/${recipeId}`,
-      method: 'GET'
-    })
+      method: 'GET',
+    });
 
     if (res.code === 0 && res.data) {
-      const recipe = res.data
+      const recipe = res.data;
 
-      // 检查食谱是否已下架
-      if (recipe.status !== 'ACTIVE') {
+      // 后端食谱上架状态使用 PUBLIC；ACTIVE 仅作为旧数据兼容。
+      if (!['PUBLIC', 'ACTIVE'].includes(recipe.status)) {
         uni.showModal({
           title: '提示',
           content: '该食谱已下架，无法再次购买',
-          showCancel: false
-        })
-        return
+          showCancel: false,
+        });
+        return;
       }
 
       // 构建完整参数用于自动配置
-      const dogId = firstItem.dogId || ''
-      const packageCount = firstItem.packageCount || 7
-      const packageSpecG = firstItem.packageSpecG || 100
+      const dogId = firstItem.dogId || '';
+      const packageCount = firstItem.packageCount || 7;
+      const packageSpecG = firstItem.packageSpecG || 100;
 
       // ✅ 修复：直接使用用户配置的 packageSpecG 作为每餐饭量
       // 而不是使用系统推荐值 (dailyIntakeG / mealsPerDay)
-      const perMealG = packageSpecG
+      const perMealG = packageSpecG;
 
       // 构建URL参数
       // Note: WeChat miniprogram doesn't support URLSearchParams
@@ -2058,127 +2809,166 @@ async function buyAgain() {
         `autoConfig=true`,
         `packageCount=${packageCount}`,
         `packageSpecG=${packageSpecG}`,
-        `perMealG=${Math.round(perMealG)}`
-      ]
+        `perMealG=${Math.round(perMealG)}`,
+      ];
       if (dogId) {
-        queryPairs.push(`dogId=${encodeURIComponent(dogId)}`)
+        queryPairs.push(`dogId=${encodeURIComponent(dogId)}`);
       }
-      const queryString = queryPairs.join('&')
+      const queryString = queryPairs.join('&');
 
       // 跳转到订购成品页
-      uni.hideLoading()
+      uni.hideLoading();
       uni.navigateTo({
-        url: `/pages/recipe-order/index?${queryString}`
-      })
+        url: `/pages/recipe-order/index?${queryString}`,
+      });
     } else {
-      throw new Error('获取食谱信息失败')
+      throw new Error('获取食谱信息失败');
     }
   } catch (error) {
-    console.error('Check recipe error:', error)
+    console.error('Check recipe error:', error);
     uni.showToast({
       title: '检查食谱失败',
-      icon: 'none'
-    })
+      icon: 'none',
+    });
   } finally {
-    uni.hideLoading()
+    uni.hideLoading();
   }
 }
 
 // 判断是否可以申请售后
-// Phase 9.1: FREEZING, SHIPPED, COMPLETED status can apply for aftersale
+// Phase 9.1: paid orders can apply for aftersale throughout the fulfillment flow.
 function canApplyAftersale(status: string): boolean {
-  return ['FREEZING', 'SHIPPED', 'COMPLETED'].includes(status)
+  return (
+    canApplyRefund(status) ||
+    canApplyRemake(status) ||
+    canApplyComplaint(status)
+  );
+}
+
+function canApplyRefund(status: string): boolean {
+  return [
+    'PAID',
+    'PURCHASING',
+    'IN_PRODUCTION',
+    'FREEZING',
+    'SHIPPED',
+    'COMPLETED',
+  ].includes(status);
+}
+
+function canApplyRemake(status: string): boolean {
+  return ['FREEZING', 'SHIPPED', 'COMPLETED'].includes(status);
+}
+
+function canApplyComplaint(status: string): boolean {
+  return [
+    'PAID',
+    'PURCHASING',
+    'IN_PRODUCTION',
+    'FREEZING',
+    'SHIPPED',
+    'COMPLETED',
+  ].includes(status);
 }
 
 // 计算总袋数
 function getTotalPackageCount(): number {
-  if (!order.value?.items) return 0
-  return order.value.items.reduce((sum, item) => sum + (item.packageCount || 0), 0)
+  if (!order.value?.items) return 0;
+  return order.value.items.reduce(
+    (sum, item) => sum + (item.packageCount || 0),
+    0,
+  );
 }
 
 // 计算每袋单价（包含运费）
 function calculatePricePerPackage(): string {
-  if (!order.value?.amountTotal || !getTotalPackageCount()) return '0.00'
-  const pricePerPackage = order.value.amountTotal / getTotalPackageCount()
-  return pricePerPackage.toFixed(2)
+  if (!order.value?.amountTotal || !getTotalPackageCount()) return '0.00';
+  const pricePerPackage = order.value.amountTotal / getTotalPackageCount();
+  return pricePerPackage.toFixed(2);
 }
 
 // 获取售后类型文本
 function getAftersaleTypeText(type?: string): string {
   const typeMap: Record<string, string> = {
-    'REFUND': '申请退款',
-    'REMAKE': '申请重做',
-    'COMPLAINT': '投诉建议',
-    'RESOLVED': '已解决',
-  }
-  return typeMap[type || ''] || ''
+    REFUND: '申请退款',
+    REMAKE: '申请重做',
+    COMPLAINT: '投诉建议',
+    RESOLVED: '已解决',
+  };
+  return typeMap[type || ''] || '';
 }
 
 // 申请售后（统一入口）
 function applyAftersaleType(type: 'REFUND' | 'REMAKE' | 'COMPLAINT') {
+  if (type === 'REFUND') {
+    const currentStatusText = order.value
+      ? getStatusText(order.value)
+      : '当前流程';
+    uni.showModal({
+      title: '申请退款前请确认',
+      content: `订单已进入【${currentStatusText}】。建议您先联系客服沟通处理；如仍需退款，可继续提交退款理由，客服/管理员审核后处理。`,
+      cancelText: '联系客服',
+      confirmText: '继续退款',
+      success: (res) => {
+        if (res.confirm) {
+          navigateToAftersaleApply(type);
+        } else if (res.cancel) {
+          contactService();
+        }
+      },
+    });
+    return;
+  }
+
+  navigateToAftersaleApply(type);
+}
+
+function navigateToAftersaleApply(type: 'REFUND' | 'REMAKE' | 'COMPLAINT') {
   uni.navigateTo({
-    url: `/pages/aftersale-apply/index?orderId=${orderId.value}&type=${type}`
-  })
+    url: `/pages/aftersale-apply/index?orderId=${orderId.value}&type=${type}`,
+  });
 }
 
 // 预览售后图片
 function previewAftersaleImage(index: number) {
-  if (!order.value?.aftersalePhotos || order.value.aftersalePhotos.length === 0) {
-    return
+  if (
+    !order.value?.aftersalePhotos ||
+    order.value.aftersalePhotos.length === 0
+  ) {
+    return;
   }
 
   uni.previewImage({
     current: index,
-    urls: order.value.aftersalePhotos
-  })
+    urls: order.value.aftersalePhotos,
+  });
 }
 
 // 预览原料照片
 function previewProductionPhotos(index: number) {
-  if (!order.value?.productionPhotos || !order.value.productionPhotos.photos || order.value.productionPhotos.photos.length === 0) {
-    return
+  if (
+    !order.value?.productionPhotos ||
+    !order.value.productionPhotos.photos ||
+    order.value.productionPhotos.photos.length === 0
+  ) {
+    return;
   }
 
   uni.previewImage({
     current: index,
-    urls: order.value.productionPhotos.photos
-  })
+    urls: order.value.productionPhotos.photos,
+  });
 }
 
 // 申请售后（旧函数，保留向后兼容）
 function applyAftersale() {
-  uni.navigateTo({
-    url: `/pages/aftersale-apply/index?orderId=${orderId.value}&type=COMPLAINT`
-  })
+  applyAftersaleType('COMPLAINT');
 }
 
 // 申请退款（旧函数，保留向后兼容）
 async function applyRefund() {
-  uni.navigateTo({
-    url: `/pages/aftersale-apply/index?orderId=${orderId.value}&type=REFUND`
-  })
+  applyAftersaleType('REFUND');
 }
-
-// 联系Seven爸
-function contactSevenDad() {
-  uni.showModal({
-    title: '联系Seven爸',
-    content: '客服微信：zhaochengccc\n客服电话：400-123-4567\n工作时间：9:00-18:00',
-    confirmText: '复制微信号',
-    cancelText: '关闭',
-    success: (res) => {
-      if (res.confirm) {
-        uni.setClipboardData({
-          data: 'zhaochengccc',
-          success: () => {
-            uni.showToast({ title: '微信号已复制', icon: 'success' })
-          }
-        })
-      }
-    }
-  })
-}
-
 </script>
 
 <style scoped>
@@ -2213,7 +3003,11 @@ function contactSevenDad() {
 .btn-action {
   flex: 1;
   height: 88rpx;
-  line-height: 88rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   border-radius: 44rpx;
   font-size: 28rpx;
   border: none;
@@ -2269,10 +3063,202 @@ function contactSevenDad() {
   margin-bottom: 20rpx;
 }
 
+.order-center-section {
+  display: flex;
+  flex-direction: column;
+  gap: 22rpx;
+}
+
+.order-center-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.order-center-title-block {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.order-center-title {
+  font-size: 34rpx;
+  font-weight: 700;
+  color: #222;
+  line-height: 1.35;
+  word-break: break-word;
+}
+
+.order-center-subtitle {
+  font-size: 24rpx;
+  color: #8c8c8c;
+  line-height: 1.4;
+}
+
+.order-center-status {
+  flex-shrink: 0;
+  font-size: 28rpx;
+  font-weight: 700;
+}
+
+.order-center-goods {
+  padding: 20rpx;
+  border-radius: 12rpx;
+  background-color: #f8fafc;
+}
+
+.goods-main {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+}
+
+.goods-cover,
+.goods-cover-placeholder {
+  width: 112rpx;
+  height: 112rpx;
+  border-radius: 10rpx;
+  flex-shrink: 0;
+}
+
+.goods-cover-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #e6f7ff;
+  color: #1890ff;
+  font-size: 36rpx;
+  font-weight: 700;
+}
+
+.goods-text {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.goods-name {
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #333;
+  line-height: 1.4;
+  word-break: break-word;
+}
+
+.goods-desc {
+  font-size: 25rpx;
+  color: #666;
+  line-height: 1.45;
+}
+
+.goods-amount-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20rpx;
+  margin-top: 20rpx;
+  padding-top: 18rpx;
+  border-top: 1rpx solid #e8edf3;
+}
+
+.goods-amount-label {
+  font-size: 25rpx;
+  color: #666;
+}
+
+.goods-amount-value {
+  font-size: 36rpx;
+  font-weight: 800;
+  color: #ff4d4f;
+}
+
+.order-center-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14rpx;
+}
+
+.order-center-cell,
+.buyer-row,
+.merchant-note-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20rpx;
+}
+
+.cell-label,
+.buyer-label,
+.merchant-note-label {
+  flex-shrink: 0;
+  min-width: 136rpx;
+  font-size: 25rpx;
+  color: #777;
+}
+
+.cell-value,
+.buyer-value,
+.merchant-note-value {
+  flex: 1;
+  min-width: 0;
+  text-align: right;
+  font-size: 25rpx;
+  color: #333;
+  line-height: 1.5;
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.buyer-card,
+.merchant-note-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+  padding: 20rpx;
+  border-radius: 12rpx;
+  background-color: #fafafa;
+}
+
+.address-line .buyer-value {
+  text-align: right;
+}
+
 .remark-section {
   display: flex;
   flex-direction: column;
   gap: 20rpx;
+}
+
+.service-section {
+  display: flex;
+  flex-direction: column;
+  gap: 16rpx;
+}
+
+.btn-service-contact {
+  width: 100%;
+  height: 82rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  border-radius: 12rpx;
+  border: none;
+  background-color: #07c160;
+  color: #fff;
+  font-size: 30rpx;
+}
+
+.btn-service-contact.secondary {
+  background-color: #fff;
+  color: #1890ff;
+  border: 1rpx solid #1890ff;
 }
 
 .remark-textarea {
@@ -2315,7 +3301,11 @@ function contactSevenDad() {
 .remark-btn {
   flex: 1;
   height: 80rpx;
-  line-height: 80rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   border-radius: 12rpx;
   font-size: 28rpx;
   border: none;
@@ -2446,6 +3436,54 @@ function contactSevenDad() {
 .settlement-card.extra-payment {
   border-left-color: #ff4d4f;
   background-color: #fff1f0;
+}
+
+.refund-status-section {
+  margin-bottom: 20rpx;
+}
+
+.refund-status-card {
+  padding: 22rpx;
+  border-radius: 12rpx;
+  border-left: 6rpx solid #52c41a;
+  background-color: #f6ffed;
+}
+
+.refund-status-card.success {
+  border-left-color: #16a34a;
+  background-color: #ecfdf3;
+}
+
+.refund-status-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20rpx;
+  margin-bottom: 12rpx;
+}
+
+.refund-status-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 30rpx;
+  font-weight: 700;
+  color: #166534;
+  word-break: break-word;
+}
+
+.refund-status-amount {
+  flex-shrink: 0;
+  font-size: 28rpx;
+  font-weight: 700;
+  color: #16a34a;
+}
+
+.refund-status-row {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #365314;
+  word-break: break-word;
 }
 
 .settlement-header {
@@ -2780,6 +3818,20 @@ function contactSevenDad() {
   margin: 12rpx 0 28rpx;
 }
 
+.compact-switch-wrap {
+  width: 88rpx;
+  height: 52rpx;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  overflow: visible;
+}
+
+.compact-switch {
+  transform: scale(0.72);
+  transform-origin: right center;
+}
+
 .address-save-btn {
   width: 100%;
   height: 82rpx;
@@ -3091,7 +4143,7 @@ function contactSevenDad() {
 }
 
 .star.active {
-  color: #FFD700;
+  color: #ffd700;
 }
 
 .review-content {
@@ -3202,7 +4254,11 @@ function contactSevenDad() {
 .btn-submit-review {
   width: 100%;
   height: 88rpx;
-  line-height: 88rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   background-color: #1890ff;
   color: #fff;
   border-radius: 44rpx;
@@ -3269,6 +4325,28 @@ function contactSevenDad() {
   font-size: 36rpx;
   font-weight: bold;
   color: #ff4d4f;
+}
+
+.payment-deadline-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16rpx;
+  background-color: #fff;
+  border-radius: 8rpx;
+  margin-bottom: 16rpx;
+}
+
+.deadline-label {
+  font-size: 26rpx;
+  color: #666;
+}
+
+.deadline-value {
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #ff4d4f;
+  font-family: monospace;
 }
 
 .guide-steps {

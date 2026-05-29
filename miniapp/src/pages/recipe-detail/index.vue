@@ -49,6 +49,44 @@
       </text>
     </view>
 
+    <view class="dog-fit-card" v-if="dogs.length > 0">
+      <view class="dog-fit-header">
+        <view>
+          <text class="dog-fit-title">按狗狗重算喂食量</text>
+          <text class="dog-fit-subtitle">切换宠物后，饭量和阶段提醒会自动更新</text>
+        </view>
+      </view>
+      <scroll-view scroll-x class="detail-dog-scroll">
+        <view
+          v-for="dog in dogs"
+          :key="dog.id"
+          :class="['detail-dog-chip', { active: dog.id === selectedDogId }]"
+          @tap="selectDetailDog(dog.id)"
+        >
+          <image class="detail-dog-avatar" :src="resolveDogAvatarSrc(dog.avatarUrl)" mode="aspectFill" />
+          <text class="detail-dog-name">{{ dog.name }}</text>
+        </view>
+      </scroll-view>
+      <view v-if="dogCalcLoading" class="dog-fit-loading">正在重算...</view>
+      <view v-else-if="dogRecipeCalc" class="dog-fit-result">
+        <view class="dog-fit-metric">
+          <text class="dog-fit-label">每日参考</text>
+          <text class="dog-fit-value">{{ Math.round(dogRecipeCalc.dailyIntakeG) }}g</text>
+        </view>
+        <view class="dog-fit-metric">
+          <text class="dog-fit-label">每餐约</text>
+          <text class="dog-fit-value">{{ Math.round(dogRecipeCalc.perMealIntakeG) }}g</text>
+        </view>
+        <view class="dog-fit-metric">
+          <text class="dog-fit-label">每日热量</text>
+          <text class="dog-fit-value">{{ Math.round(dogRecipeCalc.finalFoodKcal) }}kcal</text>
+        </view>
+      </view>
+      <view v-if="lifeStageWarning" class="life-stage-warning">
+        {{ lifeStageWarning }}
+      </view>
+    </view>
+
     <!-- 营养数据卡片 -->
     <view class="nutrition-card">
       <view class="nutrition-item">
@@ -87,6 +125,9 @@
             :class="['ingredient-type-tag', getIngredientTypeClass(item.ingredientType)]"
           >
             {{ getIngredientTypeLabel(item.ingredientType) }}
+          </text>
+          <text v-if="item.nutritionStateLabel" class="nutrition-state-tag">
+            {{ item.nutritionStateLabel }}
           </text>
         </view>
         <view class="preparation-method">
@@ -179,7 +220,7 @@
           <text class="nutrition-label">能量密度</text>
           <view class="nutrition-value-with-unit">
             <text class="nutrition-value">
-              {{ recipe.energyDensityKcalPerKg || recipe.nutritionDetailedData?.energyDensityKcalPerKg }}
+              {{ formatEnergyDensity(recipe.energyDensityKcalPerKg || recipe.nutritionDetailedData?.energyDensityKcalPerKg) }}
             </text>
             <text class="nutrition-unit">kcal/kg</text>
           </view>
@@ -196,18 +237,18 @@
       </view>
     </view>
 
-    <!-- 详细营养报告下载 -->
+    <!-- 详细营养报告入口 -->
     <view
-      v-if="recipe.nutritionReportUrl"
+      v-if="hasStructuredNutritionReport"
       class="nutrition-report-card"
-      @tap="openNutritionReport"
+      @tap="openNutritionReportPage"
     >
-      <view class="report-icon">PDF</view>
+      <view class="report-icon">营养</view>
       <view class="report-copy">
         <text class="report-title">详细营养报告</text>
-        <text class="report-subtitle">查看PDF格式报告</text>
+        <text class="report-subtitle">查看 Setar 生成的完整营养评估</text>
       </view>
-      <text class="report-action">下载</text>
+      <text class="report-action">查看完整报告</text>
     </view>
 
     <!-- 用户评价板块 -->
@@ -229,22 +270,51 @@
 
     <!-- 底部操作按钮 -->
     <view class="bottom-actions">
-      <button
-        class="btn-favorite"
-        :class="{ active: isFavorite }"
-        @tap="toggleFavorite"
-      >
-        <text class="icon">{{ isFavorite ? '⭐' : '☆' }}</text>
-      </button>
+      <view class="quick-actions">
+        <button
+          class="quick-action btn-favorite"
+          :class="{ active: isFavorite }"
+          @tap="toggleFavorite"
+        >
+          <text class="icon">{{ isFavorite ? '★' : '☆' }}</text>
+          <text class="quick-label">收藏</text>
+        </button>
 
-      <button class="btn-diy" @tap="generateDiySheet">
-        自己做
-      </button>
+        <button
+          class="quick-action btn-cart"
+          :class="{ active: isInCart }"
+          @tap="handleCartTap"
+          aria-label="加入购物车"
+        >
+          <view class="cart-icon-wrap">
+            <image
+              class="cart-icon"
+              src="/static/icons/cart-orange.png"
+              mode="aspectFit"
+            />
+            <text v-if="isInCart" class="cart-added-mark">✓</text>
+          </view>
+          <text class="quick-label">购物车</text>
+        </button>
+      </view>
 
-      <button class="btn-order" @tap="goToOrder">
-        成品
-      </button>
+      <view class="action-buttons">
+        <button class="btn-diy" @tap="generateDiySheet">
+          自己制作
+        </button>
+
+        <button class="btn-order" @tap="goToOrder">
+          现做成品
+        </button>
+      </view>
     </view>
+
+    <CustomerServiceFloatButton
+      source-type="PRODUCT"
+      :product-id="recipeId"
+      :product-name="recipe.name"
+      :image-url="normalizeImageUrl(recipe.coverImageUrl || '')"
+    />
   </view>
 </template>
 
@@ -311,15 +381,22 @@ export default {
 <!-- Setup script：业务逻辑 -->
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { onShow } from '@dcloudio/uni-app'
 import { request, addFavorite, removeFavorite, checkFavorite, createRecipeShareToken, reviewApi, trackRecipeView } from '../../utils/api'
 import { normalizeImageUrl } from '../../utils/config'
+import { addCartItem, getCartItems, removeCartItem } from '../../utils/cart'
 import { formatSupplementTargets } from '../../utils/supplement-nutrients'
+import { resolveDogAvatarSrc } from '../../utils/dog-avatar'
 import ReviewList from '../../components/ReviewList.vue'
 import ReviewForm from '../../components/ReviewForm.vue'
+import CustomerServiceFloatButton from '../../components/CustomerServiceFloatButton.vue'
 
 interface RecipeItem {
   ingredientId: string
   name: string
+  nutritionFoodId?: string
+  nutritionState?: string
+  nutritionStateLabel?: string
   preparationMethod?: string
   ratio?: number  // 食材类型才有此字段
   sortOrder: number
@@ -339,6 +416,25 @@ interface NutritionDetailedData {
   crudeFiberPercent?: number
   carbohydratePercent?: number
   calciumPhosphorusRatio?: string
+  source?: string
+  schemaVersion?: number
+  standard?: string
+  scenario?: string
+  report?: SetarNutritionReport
+}
+
+interface SetarNutritionReport {
+  ingredientRows?: Array<Record<string, any>>
+  macroRows?: Array<Record<string, any>>
+  energyDensityRows?: Array<Record<string, any>>
+  nutrientSections?: Record<string, SetarNutrientSection>
+}
+
+interface SetarNutrientSection {
+  key: string
+  title: string
+  dryMatterHeader: string
+  rows: Array<Record<string, any>>
 }
 
 interface RecipeDetail {
@@ -355,7 +451,6 @@ interface RecipeDetail {
   targetHealthTags: string[]
   applicableLifeStages: string[]
   nutritionDetailedData?: NutritionDetailedData
-  nutritionReportUrl?: string
   items: RecipeItem[]
 }
 
@@ -373,14 +468,18 @@ const recipe = ref<RecipeDetail>({
   targetHealthTags: [],
   applicableLifeStages: [],
   nutritionDetailedData: undefined,
-  nutritionReportUrl: undefined,
   items: []
 })
 
 const isFavorite = ref(false)
+const isInCart = ref(false)
 const recipeId = ref('')
 const shareToken = ref('')
 const dogId = ref<string | null>(null)
+const dogs = ref<any[]>([])
+const selectedDogId = ref('')
+const dogRecipeCalc = ref<any | null>(null)
+const dogCalcLoading = ref(false)
 const showReviewForm = ref(false)
 const reviewListRef = ref<InstanceType<typeof ReviewList> | null>(null)
 const HOME_RECIPE_STATS_DIRTY_KEY = 'home_recipe_stats_dirty'
@@ -393,10 +492,34 @@ const sortedItems = computed(() => {
   return [...recipe.value.items].sort((a, b) => a.sortOrder - b.sortOrder)
 })
 
+const hasStructuredNutritionReport = computed(() => {
+  const report = recipe.value.nutritionDetailedData?.report
+  return Boolean(
+    report &&
+      ((report.macroRows && report.macroRows.length > 0) ||
+        Object.values(report.nutrientSections || {}).some(
+          (section: any) => Array.isArray(section?.rows) && section.rows.length > 0,
+        )),
+  )
+})
+
+const selectedDog = computed(() => {
+  return dogs.value.find((dog) => dog.id === selectedDogId.value) || null
+})
+
+const lifeStageWarning = computed(() => {
+  if (!selectedDog.value || !recipe.value.applicableLifeStages?.length) return ''
+  const stage = selectedDog.value.lifeStageOverride && selectedDog.value.lifeStageOverride !== 'NONE'
+    ? selectedDog.value.lifeStageOverride
+    : ''
+  if (!stage || recipe.value.applicableLifeStages.includes(stage)) return ''
+  return '这道食谱的适配阶段与当前狗狗档案不完全一致，下单前建议确认阶段和喂食目标。'
+})
+
 onMounted(async () => {
   const pages = getCurrentPages()
   const currentPage = pages[pages.length - 1] as any
-  recipeId.value = currentPage.options?.recipeId || ''
+  recipeId.value = currentPage.options?.recipeId || currentPage.options?.id || ''
   shareToken.value = currentPage.options?.shareToken || ''
 
   dogId.value = uni.getStorageSync('dogId') || null
@@ -406,6 +529,8 @@ onMounted(async () => {
   await loadHealthTagMapping()
 
   if (recipeId.value) {
+    updateCartStatus()
+    loadDogsForDetail()
     loadRecipeDetail()
     // 只有登录时才检查收藏状态，避免显示"请先登录"提示
     const token = uni.getStorageSync('token')
@@ -413,6 +538,10 @@ onMounted(async () => {
       checkFavoriteStatus()
     }
   }
+})
+
+onShow(() => {
+  updateCartStatus()
 })
 
 function loadRecipeDetail() {
@@ -447,6 +576,10 @@ function loadRecipeDetail() {
       // 非公开食谱：预生成分享令牌（仅登录员工可操作）
       if (res.data.status !== 'PUBLIC') {
         preGenerateShareToken()
+      }
+
+      if (selectedDogId.value) {
+        calcSelectedDogForRecipe()
       }
     }
   }).catch((err: any) => {
@@ -499,6 +632,63 @@ function loadHealthTagMapping(): Promise<void> {
   }).catch((err: any) => {
     console.error('Load health tag mapping error:', err)
   })
+}
+
+async function loadDogsForDetail() {
+  const token = uni.getStorageSync('token')
+  if (!token) return
+
+  try {
+    const res: any = await request({
+      url: '/dogs',
+      method: 'GET',
+      quiet: true,
+      suppressErrorToast: true
+    })
+    if (res.code === 0 && Array.isArray(res.data)) {
+      dogs.value = res.data
+      if (dogs.value.length > 0) {
+        selectedDogId.value = dogId.value || uni.getStorageSync('dogId') || dogs.value[0].id
+        if (!dogs.value.some((dog) => dog.id === selectedDogId.value)) {
+          selectedDogId.value = dogs.value[0].id
+        }
+        calcSelectedDogForRecipe()
+      }
+    }
+  } catch (error) {
+    console.warn('[RecipeDetail] Load dogs failed:', error)
+  }
+}
+
+function selectDetailDog(id: string) {
+  if (!id || selectedDogId.value === id) return
+  selectedDogId.value = id
+  dogId.value = id
+  uni.setStorageSync('dogId', id)
+  calcSelectedDogForRecipe()
+}
+
+async function calcSelectedDogForRecipe() {
+  if (!selectedDogId.value || !recipeId.value || !recipe.value.id) return
+
+  dogCalcLoading.value = true
+  try {
+    const res: any = await request({
+      url: `/dogs/${selectedDogId.value}/calc-for-recipe`,
+      method: 'POST',
+      data: { recipeId: recipeId.value },
+      quiet: true,
+      suppressErrorToast: true
+    })
+    if (res.code === 0 && res.data) {
+      dogRecipeCalc.value = res.data
+    }
+  } catch (error) {
+    console.warn('[RecipeDetail] Calc dog for recipe failed:', error)
+    dogRecipeCalc.value = null
+  } finally {
+    dogCalcLoading.value = false
+  }
 }
 
 async function checkFavoriteStatus() {
@@ -583,44 +773,13 @@ function previewImage() {
   })
 }
 
-function openNutritionReport() {
-  const reportUrl = recipe.value.nutritionReportUrl
-  if (!reportUrl) return
-
-  uni.showLoading({ title: '下载中...' })
-  uni.downloadFile({
-    url: reportUrl,
-    success: (downloadRes: any) => {
-      if (downloadRes.statusCode !== 200 || !downloadRes.tempFilePath) {
-        uni.showToast({
-          title: '报告打开失败',
-          icon: 'none'
-        })
-        return
-      }
-
-      uni.openDocument({
-        filePath: downloadRes.tempFilePath,
-        fileType: 'pdf',
-        fail: (err: any) => {
-          console.error('[RecipeDetail] Open nutrition report failed:', err)
-          uni.showToast({
-            title: '报告打开失败',
-            icon: 'none'
-          })
-        }
-      })
-    },
-    fail: (err: any) => {
-      console.error('[RecipeDetail] Download nutrition report failed:', err)
-      uni.showToast({
-        title: '报告打开失败',
-        icon: 'none'
-      })
-    },
-    complete: () => {
-      uni.hideLoading()
-    }
+function openNutritionReportPage() {
+  const query = [`recipeId=${encodeURIComponent(recipeId.value)}`]
+  if (shareToken.value) {
+    query.push(`shareToken=${encodeURIComponent(shareToken.value)}`)
+  }
+  uni.navigateTo({
+    url: `/pages/recipe-nutrition-report/index?${query.join('&')}`
   })
 }
 
@@ -670,8 +829,73 @@ function goToOrder() {
   })
 }
 
+function updateCartStatus() {
+  if (!recipeId.value) {
+    isInCart.value = false
+    return
+  }
+
+  isInCart.value = getCartItems().some((item) => item.recipeId === recipeId.value)
+}
+
+function goToCart() {
+  uni.navigateTo({
+    url: '/pages/cart/index',
+  })
+}
+
+function handleCartTap() {
+  if (!recipeId.value || !recipe.value?.name) {
+    uni.showToast({
+      title: '食谱信息未加载',
+      icon: 'none',
+    })
+    return
+  }
+
+  if (isInCart.value) {
+    uni.showActionSheet({
+      itemList: ['查看购物车', '移出购物车'],
+      itemColor: '#1f2933',
+      success: (res) => {
+        if (res.tapIndex === 0) {
+          goToCart()
+          return
+        }
+
+        removeCartItem(recipeId.value)
+        isInCart.value = false
+        uni.showToast({
+          title: '已移出购物车',
+          icon: 'success',
+        })
+      },
+    })
+    return
+  }
+
+  addCartItem({
+    recipeId: recipeId.value,
+    name: recipe.value.name,
+    coverImageUrl: normalizeImageUrl(recipe.value.coverImageUrl || ''),
+    description: recipe.value.description || '',
+    energyDensityKcalPerKg: recipe.value.energyDensityKcalPerKg || 0,
+  })
+  isInCart.value = true
+
+  uni.showToast({
+    title: '已加入购物车',
+    icon: 'success',
+  })
+}
+
 function getLifeStageLabel(stage: string): string {
   const map: Record<string, string> = {
+    'PUPPY_UNDER_14_WEEKS': '小于14周幼犬',
+    'PUPPY_14_WEEKS_PLUS': '大于等于14周幼犬',
+    'LOW_ACTIVITY_ADULT_OR_SENIOR': '低运动量成犬或老年犬',
+    'HIGH_ACTIVITY_ADULT': '普通或高运动量成犬',
+    'REPRODUCTION': '繁殖期',
     'PUPPY': '幼犬',
     'ADULT': '成犬',
     'SENIOR': '老年犬',
@@ -713,6 +937,7 @@ function getHealthTagLabel(tagOrUuid: string): string {
 function getNutritionStandardLabel(standard: string): string {
   const map: Record<string, string> = {
     'FEDIAF_2021': 'FEDIAF 2021',
+    'FEDIAF_2025': 'FEDIAF 2025',
     'AAFCO_2019': 'AAFCO 2019',
     'GB_T_31216': '国标 GB/T 31216',
   }
@@ -747,6 +972,11 @@ function getNutrientTargetText(item: RecipeItem): string {
 function formatNumber(value: number | undefined | null): string {
   if (value === null || value === undefined) return '-'
   return value.toFixed(1)
+}
+
+function formatEnergyDensity(value: number | undefined | null): string {
+  if (value === null || value === undefined) return '-'
+  return String(Math.round(Number(value)))
 }
 
 function formatRatio(value: number | undefined | null): string {
@@ -799,7 +1029,7 @@ function onReviewSubmitted() {
 .recipe-detail-page {
   min-height: 100vh;
   background-color: #f5f5f5;
-  padding-bottom: 120rpx;
+  padding-bottom: 190rpx;
 }
 
 /* 封面图区 */
@@ -933,6 +1163,109 @@ function onReviewSubmitted() {
 }
 
 /* 营养数据卡片 */
+.dog-fit-card {
+  margin: 24rpx;
+  padding: 28rpx;
+  background: #fff;
+  border-radius: 16rpx;
+}
+
+.dog-fit-title {
+  display: block;
+  font-size: 32rpx;
+  font-weight: 700;
+  color: #2f261f;
+}
+
+.dog-fit-subtitle {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 24rpx;
+  color: #7a6a5d;
+}
+
+.detail-dog-scroll {
+  margin-top: 22rpx;
+  white-space: nowrap;
+}
+
+.detail-dog-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 12rpx;
+  margin-right: 18rpx;
+  padding: 10rpx 18rpx 10rpx 10rpx;
+  border-radius: 999rpx;
+  background: #f7f2ed;
+  color: #7a5b43;
+  vertical-align: middle;
+}
+
+.detail-dog-chip.active {
+  background: #f08a3c;
+  color: #fff;
+}
+
+.detail-dog-avatar {
+  width: 52rpx;
+  height: 52rpx;
+  border-radius: 50%;
+}
+
+.detail-dog-chip.active .detail-dog-avatar {
+  width: 64rpx;
+  height: 64rpx;
+}
+
+.detail-dog-name {
+  font-size: 24rpx;
+  font-weight: 600;
+}
+
+.dog-fit-loading {
+  margin-top: 22rpx;
+  color: #8a7a6c;
+  font-size: 24rpx;
+}
+
+.dog-fit-result {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16rpx;
+  margin-top: 22rpx;
+}
+
+.dog-fit-metric {
+  padding: 18rpx 12rpx;
+  border-radius: 14rpx;
+  background: #fff7ef;
+  text-align: center;
+}
+
+.dog-fit-label {
+  display: block;
+  font-size: 22rpx;
+  color: #8a7a6c;
+}
+
+.dog-fit-value {
+  display: block;
+  margin-top: 8rpx;
+  font-size: 30rpx;
+  font-weight: 800;
+  color: #2f261f;
+}
+
+.life-stage-warning {
+  margin-top: 18rpx;
+  padding: 18rpx;
+  border-radius: 12rpx;
+  background: #fff3df;
+  color: #8a5a16;
+  font-size: 24rpx;
+  line-height: 1.45;
+}
+
 .nutrition-card {
   background-color: #fff;
   border-radius: 16rpx;
@@ -1097,6 +1430,16 @@ function onReviewSubmitted() {
   font-weight: normal;
 }
 
+.nutrition-state-tag {
+  display: inline-block;
+  padding: 2rpx 10rpx;
+  border-radius: 4rpx;
+  font-size: 20rpx;
+  font-weight: normal;
+  background-color: #f4f4f5;
+  color: #606266;
+}
+
 .type-food {
   background-color: #e8f5e9;
   color: #2e7d32;
@@ -1209,7 +1552,11 @@ function onReviewSubmitted() {
 .btn-write-review {
   width: 100%;
   height: 88rpx;
-  line-height: 88rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   background-color: #fff;
   color: #07c160;
   font-size: 30rpx;
@@ -1231,59 +1578,144 @@ function onReviewSubmitted() {
   left: 0;
   right: 0;
   display: flex;
+  align-items: center;
   gap: 16rpx;
-  padding: 16rpx 20rpx;
+  padding: 10rpx 20rpx calc(12rpx + constant(safe-area-inset-bottom));
+  padding-bottom: calc(12rpx + env(safe-area-inset-bottom));
   background-color: #fff;
   border-top: 1rpx solid #e5e5e5;
+  box-shadow: 0 -8rpx 22rpx rgba(15, 23, 42, 0.06);
+  box-sizing: border-box;
 }
 
-.btn-favorite,
-.btn-diy,
-.btn-order {
-  flex: 1;
-  height: 88rpx;
+.quick-actions {
+  flex: 0 0 176rpx;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 44rpx;
-  font-size: 28rpx;
+  gap: 0;
+}
+
+.action-buttons {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: 0;
+  border-radius: 42rpx;
+  overflow: hidden;
+  box-shadow: 0 8rpx 18rpx rgba(24, 144, 255, 0.12);
+}
+
+.quick-action,
+.btn-diy,
+.btn-order {
+  height: 84rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   /* 重置微信小程序button默认样式 */
   padding: 0;
   margin: 0;
-  line-height: normal;
+  line-height: 1;
 }
 
-.btn-favorite::after,
+.quick-action::after,
 .btn-diy::after,
 .btn-order::after {
   border: none;
 }
 
-/* 收藏按钮 - 小红书风格 */
-.btn-favorite {
+.quick-action {
   flex: 0 0 88rpx;
-  width: 88rpx;
-  height: 88rpx;
-  background-color: #f5f5f5;
-  border-radius: 50%;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8rpx;
+  background: transparent;
+  color: #606266;
+  font-size: 22rpx;
+  border-radius: 0;
 }
 
-.btn-favorite .icon {
-  font-size: 48rpx;
+.quick-action .icon {
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 40rpx;
   color: #999;
+  line-height: 1;
 }
 
 .btn-favorite.active .icon {
-  color: #FFD700;
+  color: #f6ad00;
+}
+
+.quick-label {
+  display: block;
+  font-size: 22rpx;
+  color: #606266;
+  line-height: 1;
 }
 
 .btn-diy {
+  flex: 1;
+  border-radius: 42rpx 0 0 42rpx;
+  font-size: 26rpx;
+  font-weight: 600;
   background-color: #07c160;
   color: #fff;
 }
 
+.btn-cart {
+  position: relative;
+}
+
+.btn-cart.active {
+  color: #f97316;
+}
+
+.btn-cart.active .quick-label {
+  color: #f97316;
+}
+
+.cart-icon-wrap {
+  position: relative;
+  width: 52rpx;
+  height: 48rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cart-icon {
+  width: 50rpx;
+  height: 50rpx;
+  display: block;
+}
+
+.cart-added-mark {
+  position: absolute;
+  top: -5rpx;
+  right: -9rpx;
+  width: 24rpx;
+  height: 24rpx;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background-color: #07c160;
+  color: #fff;
+  font-size: 19rpx;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .btn-order {
+  flex: 1;
+  border-radius: 0 42rpx 42rpx 0;
+  font-size: 26rpx;
+  font-weight: 600;
   background-color: #1890ff;
   color: #fff;
 }

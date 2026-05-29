@@ -1,7 +1,3 @@
-import * as dotenv from 'dotenv';
-// 加载.env文件（必须在所有其他导入之前）
-dotenv.config();
-
 import { Module, OnModuleInit, Inject } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
@@ -30,6 +26,7 @@ import { DIYSheetsController } from './interfaces/controllers/diy-sheets.control
 import { StaffProductionPhotosController } from './interfaces/controllers/staff-production-photos.controller';
 import { AftersalePhotosController } from './interfaces/controllers/aftersale-photos.controller';
 import { FavoritesController } from './interfaces/controllers/favorites.controller';
+import { StaffWorkbenchController } from './interfaces/controllers/staff-workbench.controller';
 import { StaffPurchasingController } from './interfaces/controllers/staff-purchasing.controller';
 import { StaffInventoryController } from './interfaces/controllers/staff-inventory.controller';
 import { AdminPurchasingController } from './interfaces/controllers/admin-purchasing.controller';
@@ -92,6 +89,7 @@ import { PricingService } from './domain/pricing/pricing.service';
 import { ShippingFeeService } from './domain/shipping/shipping-fee.service';
 import { ShippingService } from './application/shipping/shipping.service';
 import { ShippingFulfillmentService } from './application/shipping/shipping-fulfillment.service';
+import { WechatShippingUploadService } from './application/shipping/wechat-shipping-upload.service';
 import { InMemoryShippingTemplateRepository } from './infrastructure/repositories/in-memory-shipping-template.repository';
 import { PrismaShippingTemplateRepository } from './infrastructure/repositories/prisma-shipping-template.repository';
 import { SHIPPING_TEMPLATE_REPOSITORY } from './application/shipping/shipping.service.tokens';
@@ -154,6 +152,20 @@ import { PrismaPurchaseRecordRepository } from './infrastructure/repositories/pr
 import { StaffProductionService } from './application/production/kitchen.service';
 import { NutritionFoodController } from './interfaces/controllers/nutrition-food.controller';
 import { NutritionFoodService } from './application/nutrition-food/nutrition-food.service';
+import { NutritionGovernanceController } from './interfaces/controllers/nutrition-governance.controller';
+import { NutritionGovernanceService } from './application/nutrition-governance/nutrition-governance.service';
+import { SearchGovernanceController } from './interfaces/controllers/search-governance.controller';
+import { SearchGovernanceService } from './application/search-governance/search-governance.service';
+import { AgentProviderConfigService } from './application/nutrition-governance/agent-provider-config.service';
+import { TrustedNutritionWebSearchService } from './application/nutrition-governance/trusted-nutrition-web-search.service';
+import {
+  DisabledLabelRecognitionProvider,
+  LABEL_RECOGNITION_PROVIDER,
+} from './application/nutrition-governance/label-recognition.provider';
+import {
+  createNutritionCandidateReviewProvider,
+  NUTRITION_CANDIDATE_REVIEW_PROVIDER,
+} from './application/nutrition-governance/nutrition-candidate-review.provider';
 import { RecommendedProductController } from './interfaces/controllers/recommended-product.controller';
 import { ProcurementSkuController } from './interfaces/controllers/procurement-sku.controller';
 import { RecommendedProductService } from './application/ingredient/recommended-product.service';
@@ -164,6 +176,47 @@ import { DogProfileAnalyticsController } from './interfaces/controllers/dog-prof
 import { AdminDogProfileAnalyticsController } from './interfaces/controllers/admin-dog-profile-analytics.controller';
 import { ProcurementSkuService } from './application/ingredient/procurement-sku.service';
 import { IngredientSuggestionsController } from './interfaces/controllers/ingredient-suggestions.controller';
+import { NutritionCalculationController } from './interfaces/controllers/nutrition-calculation.controller';
+import { NutritionStandardController } from './interfaces/controllers/nutrition-standard.controller';
+import { RecipeDesignerController } from './interfaces/controllers/recipe-designer.controller';
+import { IngredientCreationController } from './interfaces/controllers/ingredient-creation.controller';
+import { FediafTargetSelectorService } from './application/nutrition-calculation/fediaf-target-selector.service';
+import { IngredientReadinessService } from './application/nutrition-calculation/ingredient-readiness.service';
+import { NutrientMappingAuditService } from './application/nutrition-calculation/nutrient-mapping-audit.service';
+import { NutritionUnitNormalizerService } from './application/nutrition-calculation/nutrition-unit-normalizer.service';
+import { NutritionStandardService } from './application/nutrition-standard/nutrition-standard.service';
+import { RecipeDesignerService } from './application/recipe-designer/recipe-designer.service';
+import { IngredientCreationService } from './application/ingredient-creation/ingredient-creation.service';
+import { IngredientCreationAgentService } from './application/ingredient-creation/ingredient-creation-agent.service';
+import {
+  SupplementLabelExtractionService,
+  SUPPLEMENT_LABEL_OCR_PROVIDER,
+  TencentCloudSupplementLabelOcrProvider,
+} from './application/recipe-designer/supplement-label-extraction.service';
+import {
+  FEDIAF_TARGET_PROVIDER,
+  PrismaFediafTargetProvider,
+} from './application/recipe-designer/fediaf-target-provider';
+import {
+  PlatformConfigController,
+  PublicPlatformConfigController,
+} from './interfaces/controllers/platform-config.controller';
+import { PlatformConfigService } from './application/platform-config/platform-config.service';
+import {
+  AdminCustomerServiceController,
+  CustomerServiceController,
+} from './interfaces/controllers/customer-service.controller';
+import { StaffCustomerServiceController } from './interfaces/controllers/staff-customer-service.controller';
+import { CustomerServiceService } from './application/customer-service/customer-service.service';
+import {
+  AdminWechatRefundController,
+  WechatPayController,
+} from './interfaces/controllers/payments/wechat-pay.controller';
+import { WechatPaymentService } from './application/payment/wechat-payment.service';
+import { loadEnvConfig } from './utils/env-config';
+
+// Load environment variables before module-level Prisma validation runs.
+loadEnvConfig();
 
 // Compute if Prisma is enabled based on repo switches
 const isPrismaEnabled = (): boolean => {
@@ -244,16 +297,30 @@ validatePrismaConfig();
     StaffProductionPhotosController,
     AftersalePhotosController,
     FavoritesController,
+    StaffWorkbenchController,
     StaffProductionController,
     CustomRecipeController,
     AdminCustomRecipeController,
     SharedPhotosController,
     NutritionFoodController,
+    NutritionGovernanceController,
+    SearchGovernanceController,
     RecommendedProductController,
     ReviewsController,
     FeedbackController,
     ProcurementSkuController,
     IngredientSuggestionsController,
+    NutritionCalculationController,
+    NutritionStandardController,
+    RecipeDesignerController,
+    IngredientCreationController,
+    PlatformConfigController,
+    PublicPlatformConfigController,
+    CustomerServiceController,
+    AdminCustomerServiceController,
+    StaffCustomerServiceController,
+    WechatPayController,
+    AdminWechatRefundController,
     ...(isPrismaEnabled()
       ? [DogProfileAnalyticsController, AdminDogProfileAnalyticsController]
       : []),
@@ -263,7 +330,8 @@ validatePrismaConfig();
     {
       provide: DOG_REPOSITORY,
       useFactory: (prismaService?: PrismaService) => {
-        const mode = process.env.DOG_REPO ?? (isPrismaEnabled() ? 'prisma' : 'memory');
+        const mode =
+          process.env.DOG_REPO ?? (isPrismaEnabled() ? 'prisma' : 'memory');
         if (mode === 'prisma') {
           if (!prismaService) {
             throw new Error(
@@ -401,6 +469,7 @@ validatePrismaConfig();
     InventoryService,
     // Phase 8.14: Shipping Fulfillment Service
     ShippingFulfillmentService,
+    WechatShippingUploadService,
     {
       provide: PRODUCTION_BATCH_REPOSITORY,
       useFactory: (prismaService?: PrismaService) => {
@@ -611,10 +680,42 @@ validatePrismaConfig();
     CustomRecipeService,
     // Nutrition Food Service (Recipe Designer)
     NutritionFoodService,
+    SupplementLabelExtractionService,
+    {
+      provide: SUPPLEMENT_LABEL_OCR_PROVIDER,
+      useClass: TencentCloudSupplementLabelOcrProvider,
+    },
+    AgentProviderConfigService,
+    TrustedNutritionWebSearchService,
+    NutritionGovernanceService,
+    SearchGovernanceService,
+    {
+      provide: LABEL_RECOGNITION_PROVIDER,
+      useClass: DisabledLabelRecognitionProvider,
+    },
+    {
+      provide: NUTRITION_CANDIDATE_REVIEW_PROVIDER,
+      useFactory: createNutritionCandidateReviewProvider,
+    },
     // Recommended Product Service
     RecommendedProductService,
     DogProfileAnalyticsService,
     ProcurementSkuService,
+    NutrientMappingAuditService,
+    IngredientReadinessService,
+    FediafTargetSelectorService,
+    NutritionUnitNormalizerService,
+    NutritionStandardService,
+    RecipeDesignerService,
+    IngredientCreationService,
+    IngredientCreationAgentService,
+    {
+      provide: FEDIAF_TARGET_PROVIDER,
+      useClass: PrismaFediafTargetProvider,
+    },
+    PlatformConfigService,
+    CustomerServiceService,
+    WechatPaymentService,
   ],
 })
 export class AppModule implements OnModuleInit {

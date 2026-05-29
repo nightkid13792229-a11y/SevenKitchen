@@ -1,7 +1,5 @@
-import {
-  findNutritionField,
-  getNutritionProfileFieldValue,
-} from './nutrition-field-catalog';
+import { findNutritionField } from './nutrition-field-catalog';
+import { resolveSupplementConcentration } from './supplement-concentration-resolver';
 import type { NutritionProfile, SupplementTarget } from './types';
 
 export interface SupplementDoseTargetBreakdown {
@@ -10,6 +8,9 @@ export interface SupplementDoseTargetBreakdown {
   targetUnit: string;
   concentration: number;
   concentrationUnit: string;
+  doseUnit: 'g' | 'ml' | 'serving';
+  concentrationPerG?: number;
+  servingWeightG?: number;
   totalNutrientNeeded: number;
   requiredAmount: number;
 }
@@ -65,12 +66,12 @@ export function calculateSupplementDose(
   const lossRate = input.lossRate ?? 1;
   const targetBreakdown = input.targets.map((target) => {
     const field = findNutritionField(target.fieldPath)!;
-    const concentration = getNutritionProfileFieldValue(
+    const resolution = resolveSupplementConcentration(
       input.nutritionProfile,
       target.fieldPath,
     );
 
-    if (!(concentration && concentration > 0)) {
+    if (!resolution) {
       throw new Error(
         `Missing concentration for supplement target: ${target.fieldPath}`,
       );
@@ -83,14 +84,18 @@ export function calculateSupplementDose(
     }
 
     const totalNutrientNeeded = basisWeightKg * target.targetValuePerKg;
-    const requiredAmount = (totalNutrientNeeded / concentration) * lossRate;
+    const requiredAmount =
+      (totalNutrientNeeded / resolution.concentrationPerUnit) * lossRate;
 
     return {
       fieldPath: target.fieldPath,
       label: target.label || field.label,
       targetUnit: target.unit,
-      concentration,
+      concentration: resolution.concentrationPerUnit,
       concentrationUnit: field.unit,
+      doseUnit: resolution.doseUnit,
+      concentrationPerG: resolution.concentrationPerG,
+      servingWeightG: resolution.servingWeightG,
       totalNutrientNeeded,
       requiredAmount,
     };
@@ -102,7 +107,7 @@ export function calculateSupplementDose(
 
   return {
     amount: limitingTarget.requiredAmount,
-    unit: input.displayUnit || '份',
+    unit: input.displayUnit || limitingTarget.doseUnit,
     limitingTarget,
     targetBreakdown,
   };

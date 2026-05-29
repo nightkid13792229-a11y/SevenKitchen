@@ -285,6 +285,7 @@ import {
   getLifeStageLabel,
   isRecipeLifeStageMatch,
   resolveDogLifeStage,
+  resolveDogRecipeLifeStage,
 } from '../../utils/life-stage-match'
 
 interface Dog {
@@ -295,6 +296,7 @@ interface Dog {
   currentWeightKg: number
   mealsPerDay: number
   birthday: string
+  activityLevel?: string
   lifeStageOverride: string
   breed: {
     adultAgeMonths: number
@@ -348,9 +350,12 @@ const dogPickerOptions = computed(() => {
 const isLifeStageMatch = ref(true)
 const showWarning = ref(true)
 const selectedDogLifeStage = computed(() => resolveDogLifeStage(selectedDog.value, breeds.value))
+const selectedDogRecipeLifeStage = computed(() =>
+  resolveDogRecipeLifeStage(selectedDog.value, breeds.value),
+)
 const lifeStageReminderText = computed(() => buildLifeStageReminderText({
   applicableStages: recipe.value.applicableLifeStages,
-  dogLifeStage: selectedDogLifeStage.value,
+  dogLifeStage: selectedDogRecipeLifeStage.value,
   dogName: selectedDog.value?.name,
 }))
 
@@ -612,14 +617,16 @@ function checkLifeStageMatch() {
   }
 
   const dogLifeStage = selectedDogLifeStage.value
+  const dogRecipeLifeStage = selectedDogRecipeLifeStage.value
 
   console.log('[RecipeDiy] 生命阶段校验:', {
     dogLifeStage,
+    dogRecipeLifeStage,
     applicableStages: recipe.value.applicableLifeStages,
     dogName: selectedDog.value.name
   })
 
-  isLifeStageMatch.value = isRecipeLifeStageMatch(recipe.value.applicableLifeStages, dogLifeStage)
+  isLifeStageMatch.value = isRecipeLifeStageMatch(recipe.value.applicableLifeStages, dogRecipeLifeStage)
   console.log('[RecipeDiy] 校验结果:', isLifeStageMatch.value ? '匹配' : '不匹配')
 
   // 修复：切换狗狗时重置警告状态
@@ -858,6 +865,7 @@ function getHealthTagLabel(tagOrUuid: string): string {
 function getNutritionStandardLabel(standard: string): string {
   const map: Record<string, string> = {
     'FEDIAF_2021': 'FEDIAF 2021',
+    'FEDIAF_2025': 'FEDIAF 2025',
     'AAFCO_2021': 'AAFCO 2021',
   }
   return map[standard] || standard

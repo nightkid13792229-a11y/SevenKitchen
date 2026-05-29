@@ -3,7 +3,7 @@
 /**
  * 微信小程序构建后配置修正
  * 1. 清理 app.json 中微信开发者工具不支持的字段
- * 2. 同步 project.config.json 中的依赖分析相关设置，避免 dist 目录被直接打开时误过滤依赖文件
+ * 2. 同步 project.config.json 中的基础库版本和依赖分析设置，避免 dist 目录被直接打开时 DevTools 读取空配置
  * 3. 补齐 uni 构建未稳定复制的静态资源目录，避免微信开发者工具启动失败
  * 4. 补齐 app.json 的微信开发者工具兼容默认值，避免 WXSS 编译器读取空配置时报错
  * 5. 移除微信代码质量扫描会标记为无依赖的可选生成文件
@@ -64,6 +64,24 @@ const findStaticSourceDir = (assetDirName) => {
   return null;
 };
 
+const copyDirectoryRecursive = (sourceDir, targetDir) => {
+  fs.mkdirSync(targetDir, { recursive: true });
+
+  for (const entry of fs.readdirSync(sourceDir, { withFileTypes: true })) {
+    const sourcePath = path.join(sourceDir, entry.name);
+    const targetPath = path.join(targetDir, entry.name);
+
+    if (entry.isDirectory()) {
+      copyDirectoryRecursive(sourcePath, targetPath);
+      continue;
+    }
+
+    if (entry.isFile()) {
+      fs.copyFileSync(sourcePath, targetPath);
+    }
+  }
+};
+
 const syncStaticAssetDirectory = (distDir, assetDirName) => {
   const sourceDir = findStaticSourceDir(assetDirName);
 
@@ -75,7 +93,7 @@ const syncStaticAssetDirectory = (distDir, assetDirName) => {
   const targetDir = path.join(distDir, 'static', assetDirName);
   fs.rmSync(targetDir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
   fs.mkdirSync(path.dirname(targetDir), { recursive: true });
-  fs.cpSync(sourceDir, targetDir, { recursive: true });
+  copyDirectoryRecursive(sourceDir, targetDir);
   console.log(`✅ 已同步静态资源 ${assetDirName}: ${distDir}`);
 };
 
@@ -113,6 +131,26 @@ const removeCodeQualityNoDependencyFiles = (distDir) => {
     fs.rmSync(filePath, { force: true });
     console.log(`✅ 已移除无依赖生成文件 ${fileName}: ${distDir}`);
   }
+};
+
+const syncProjectConfig = (projectConfig, rootProjectConfig, normalizedProjectSetting) => {
+  const syncedConfig = {
+    ...projectConfig,
+    miniprogramRoot: './',
+    setting: {
+      ...(projectConfig.setting || {}),
+      ...normalizedProjectSetting,
+    },
+    packOptions: projectConfig.packOptions || { ignore: [] },
+  };
+
+  for (const key of ['compileType', 'libVersion', 'appid', 'projectname']) {
+    if (rootProjectConfig[key]) {
+      syncedConfig[key] = rootProjectConfig[key];
+    }
+  }
+
+  return syncedConfig;
 };
 
 const toPosixPath = (filePath) => filePath.split(path.sep).join('/');
@@ -384,6 +422,12 @@ const run = () => {
         console.log(`✅ 已移除无效的 component2Dir 配置: ${distDir}`);
       }
 
+      if (appJson && Object.prototype.hasOwnProperty.call(appJson, 'usingShopPlugin')) {
+        delete appJson.usingShopPlugin;
+        appJsonChanged = true;
+        console.log(`✅ 已移除无效的 usingShopPlugin 配置: ${distDir}`);
+      }
+
       if (appJson && !Object.prototype.hasOwnProperty.call(appJson, 'functionalPages')) {
         appJson.functionalPages = false;
         appJsonChanged = true;
@@ -403,13 +447,10 @@ const run = () => {
 
     if (fs.existsSync(projectConfigPath)) {
       const projectConfig = safeReadJson(projectConfigPath) || {};
-      projectConfig.miniprogramRoot = './';
-      projectConfig.setting = {
-        ...(projectConfig.setting || {}),
-        ...normalizedProjectSetting,
-      };
-      projectConfig.packOptions = projectConfig.packOptions || { ignore: [] };
-      safeWriteJson(projectConfigPath, projectConfig);
+      safeWriteJson(
+        projectConfigPath,
+        syncProjectConfig(projectConfig, rootProjectConfig, normalizedProjectSetting),
+      );
       console.log(`✅ 已同步 project.config.json: ${distDir}`);
     }
 
@@ -430,5 +471,6 @@ if (require.main === module) {
 
 module.exports = {
   localizeSubpackageOnlyModules,
+  syncProjectConfig,
   run,
 };

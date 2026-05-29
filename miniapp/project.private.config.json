@@ -9,11 +9,11 @@
     "preloadBackgroundData": false,
     "autoAudits": false,
     "showShadowRootInWxmlPanel": true,
-    "compileHotReLoad": true,
+    "compileHotReLoad": false,
     "ignoreDevUnusedFiles": false,
     "ignoreUploadUnusedFiles": false,
     "ignoreUnusedFiles": false,
-    "useApiHook": true,
+    "useApiHook": false,
     "useStaticServer": false,
     "useLanDebug": false,
     "showES6CompileOption": false,
@@ -21,16 +21,21 @@
     "bigPackageSizeSupport": false
   },
   "condition": {
+    "search": {
+      "current": -1,
+      "list": []
+    },
+    "conversation": {
+      "current": -1,
+      "list": []
+    },
+    "game": {
+      "current": -1,
+      "list": []
+    },
     "miniprogram": {
-      "list": [
-        {
-          "name": "pages/recipe-order/index",
-          "pathName": "pages/recipe-order/index",
-          "query": "recipeId=c8362aad-2a39-4823-b3ef-d06e798dc793",
-          "scene": null,
-          "launchMode": "default"
-        }
-      ]
+      "current": -1,
+      "list": []
     }
   }
 }

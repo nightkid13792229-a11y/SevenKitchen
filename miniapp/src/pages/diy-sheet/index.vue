@@ -99,7 +99,7 @@
               <text class="header-item actual-col">采购量</text>
             </view>
             <view v-for="(item, idx) in foodItemsDetailed" :key="'food-' + idx" class="table-row food-table">
-              <text class="row-item name-col">{{ item.ingredientName }}</text>
+              <text class="row-item name-col">{{ item.nutritionStateLabel ? `${item.ingredientName}（${item.nutritionStateLabel}）` : item.ingredientName }}</text>
               <view
                 v-if="item.selectedProductDisplayText !== '-' && item.hasSpecDetail"
                 class="row-item recommend-col recommend-choice"
@@ -117,7 +117,7 @@
               <view v-else class="row-item recommend-col">
                 <text class="recommend-main">{{ item.selectedProductDisplayText }}</text>
               </view>
-              <text class="row-item method-col">{{ item.preparationMethod || '-' }}</text>
+              <text class="row-item method-col">{{ item.preparationMethod || item.nutritionStateLabel || '-' }}</text>
               <text
                 class="row-item actual-col highlight amount-link"
                 @tap.stop="showAmountDetailModal(item)"
@@ -517,7 +517,7 @@ import {
   buildLifeStageReminderText,
   getLifeStageLabel,
   isRecipeLifeStageMatch,
-  resolveDogLifeStage
+  resolveDogRecipeLifeStage
 } from '../../utils/life-stage-match'
 import ShareButton from '../../components/ShareButton.vue'
 import ImagePreviewModal from '../../components/ImagePreviewModal.vue'
@@ -676,15 +676,17 @@ const supplementNutrientBaseWeightG = computed(() => {
   return foodItemsTotal.value.theoreticalAmount || totalFoodNetWeightG.value
 })
 
-const selectedDogLifeStage = computed(() => resolveDogLifeStage(dog.value, breeds.value))
+const selectedDogRecipeLifeStage = computed(() =>
+  resolveDogRecipeLifeStage(dog.value, breeds.value),
+)
 
 const isLifeStageMatch = computed(() => {
-  return isRecipeLifeStageMatch(recipe.value.applicableLifeStages || [], selectedDogLifeStage.value)
+  return isRecipeLifeStageMatch(recipe.value.applicableLifeStages || [], selectedDogRecipeLifeStage.value)
 })
 
 const lifeStageReminderText = computed(() => buildLifeStageReminderText({
   applicableStages: recipe.value.applicableLifeStages || [],
-  dogLifeStage: selectedDogLifeStage.value,
+  dogLifeStage: selectedDogRecipeLifeStage.value,
   dogName: dog.value?.name,
 }))
 
@@ -708,6 +710,11 @@ const foodItemsDetailed = computed(() => {
   return foodSourceItems.value
     .map((item: any) => {
       const base = buildPurchaseListItem(item)
+      const recipeItem = (recipe.value.items || []).find((candidate: any) => {
+        return candidate.ingredientId === item.ingredientId
+      })
+      const nutritionStateLabel =
+        base.nutritionStateLabel || formatNutritionStateForDisplay(recipeItem)
       const rps = recommendedProductsMap.value[item.ingredientId] || []
       const selectedRpIndex = selectedRpIndexMap.value[item.ingredientId] ?? 0
       const selectedRp = rps[selectedRpIndex] || rps[0]
@@ -720,6 +727,7 @@ const foodItemsDetailed = computed(() => {
         selectionKey: item.ingredientId,
         ingredientId: item.ingredientId,
         ingredientName: item.name,
+        nutritionStateLabel,
         name: selectedRp?.name || item.name,
         brand: selectedRp?.brand || '-',
         productModel: selectedRp?.productModel,
@@ -1225,10 +1233,10 @@ async function handlePrint() {
       builder.drawSectionTitle('食材清单')
 
       const foodRows = foodItemsDetailed.value.map(item => [
-        item.ingredientName,
+        item.nutritionStateLabel ? `${item.ingredientName}（${item.nutritionStateLabel}）` : item.ingredientName,
         item.recommendedPrintText,
         formatFoodPrepAmountForPrint(item.actualAmount),
-        item.preparationMethod || '-'
+        item.preparationMethod || item.nutritionStateLabel || '-'
       ])
 
       builder.drawTable(
@@ -1573,6 +1581,18 @@ function getRecipeLossRate(): number {
   return recipe.value?.productionLossRate ? recipe.value.productionLossRate - 1 : 0.07
 }
 
+function formatNutritionStateForDisplay(item: any): string {
+  return (
+    item?.nutritionStateLabel ||
+    item?.nutrition_state_label ||
+    item?.nutritionFood?.preparationStateLabel ||
+    item?.nutritionState ||
+    item?.nutrition_state ||
+    item?.nutritionFood?.preparationState ||
+    ''
+  )
+}
+
 function buildPurchaseListItem(item: any) {
   const isFood = item.type === 'FOOD'
   const lossRate = isFood ? getRecipeLossRate() : globalSupplementLossRate.value
@@ -1586,6 +1606,7 @@ function buildPurchaseListItem(item: any) {
     actualAmount,
     lossRate,
     displayUnit: item.displayUnit || item.unit || 'g',
+    nutritionStateLabel: formatNutritionStateForDisplay(item),
     preparationMethod: item.preparationMethod || null,
     theoreticalAmountStr: formatAmount(theoreticalAmount, isFood),
     actualAmountStr: formatAmount(actualAmount, isFood),
@@ -1643,6 +1664,7 @@ function getHealthTagLabel(tagOrUuid: string): string {
 function getNutritionStandardLabel(standard: string): string {
   const map: Record<string, string> = {
     'FEDIAF_2021': 'FEDIAF 2021',
+    'FEDIAF_2025': 'FEDIAF 2025',
     'AAFCO_2021': 'AAFCO 2021',
     'NRC_2006': 'NRC 2006',
   }

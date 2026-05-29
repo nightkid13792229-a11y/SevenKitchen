@@ -133,6 +133,8 @@ export class InMemoryOrderRepository implements OrderRepository {
 
   async getStats(): Promise<{
     total: number;
+    todayNew: number;
+    paidRevenue: number;
     pendingPayment: number;
     paid: number;
     purchasing: number;
@@ -147,10 +149,26 @@ export class InMemoryOrderRepository implements OrderRepository {
 
     const countByStatus = (status: OrderStatus) =>
       orders.filter((o) => o.status === status).length;
+    const { start, end } = this.getShanghaiTodayBounds();
+    const paidRevenueStatuses = new Set([
+      OrderStatus.PAID,
+      OrderStatus.PURCHASING,
+      OrderStatus.IN_PRODUCTION,
+      OrderStatus.FREEZING,
+      OrderStatus.SHIPPED,
+      OrderStatus.COMPLETED,
+      OrderStatus.AFTERSALE,
+    ]);
 
     // Phase 9: Simplified statistics aligned with e-commerce standards
     return Promise.resolve({
       total: orders.length,
+      todayNew: orders.filter(
+        (o) => o.createdAt >= start && o.createdAt < end,
+      ).length,
+      paidRevenue: orders
+        .filter((o) => paidRevenueStatuses.has(o.status))
+        .reduce((sum, o) => sum + Number(o.amountTotal || 0), 0),
       pendingPayment: countByStatus(OrderStatus.PENDING_PAYMENT),
       paid: countByStatus(OrderStatus.PAID),
       purchasing: countByStatus(OrderStatus.PURCHASING),
@@ -161,6 +179,22 @@ export class InMemoryOrderRepository implements OrderRepository {
       cancelled: countByStatus(OrderStatus.CANCELLED),
       aftersale: countByStatus(OrderStatus.AFTERSALE),
     });
+  }
+
+  private getShanghaiTodayBounds(): { start: Date; end: Date } {
+    const now = new Date();
+    const shanghaiNow = new Date(now.getTime() + 8 * 60 * 60 * 1000);
+    const start = new Date(
+      Date.UTC(
+        shanghaiNow.getUTCFullYear(),
+        shanghaiNow.getUTCMonth(),
+        shanghaiNow.getUTCDate(),
+      ) -
+        8 * 60 * 60 * 1000,
+    );
+    const end = new Date(start.getTime() + 24 * 60 * 60 * 1000);
+
+    return { start, end };
   }
 
   async findOrderItemById(orderItemId: string): Promise<any | null> {

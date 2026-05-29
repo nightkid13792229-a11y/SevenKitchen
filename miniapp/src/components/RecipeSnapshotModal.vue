@@ -137,6 +137,7 @@ function getNutrientTargetText(item: RecipeSnapshotItem): string {
 function getNutritionStandardLabel(standard: string): string {
   const map: Record<string, string> = {
     'FEDIAF_2021': 'FEDIAF 2021',
+    'FEDIAF_2025': 'FEDIAF 2025',
     'AAFCO_2019': 'AAFCO 2019',
     'GB_T_31216': '国标 GB/T 31216',
   }
@@ -330,7 +331,11 @@ defineExpose({
 .btn-close-footer {
   width: 100%;
   height: 88rpx;
-  line-height: 88rpx;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
   background-color: #f5f5f5;
   color: #333;
   border-radius: 44rpx;

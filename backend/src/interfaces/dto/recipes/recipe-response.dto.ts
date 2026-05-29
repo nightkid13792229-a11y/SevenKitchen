@@ -75,13 +75,15 @@ export class RecipeDetailDto extends RecipeSummaryDto {
   @ApiPropertyOptional({ example: '七厨房' })
   designSource?: string;
 
-  @ApiPropertyOptional({
-    example: 'https://example.com/recipe-nutrition-reports/report.pdf',
-  })
-  nutritionReportUrl?: string;
-
   @ApiPropertyOptional({ description: 'Detailed nutrition data' })
   nutritionDetailedData?: {
+    source?: string;
+    schemaVersion?: number;
+    standard?: string;
+    scenario?: string;
+    generatedAt?: string;
+    report?: Record<string, any>;
+    summary?: Record<string, any>;
     energyDensityKcalPerKg?: number;
     proteinPercent?: number;
     fatPercent?: number;
@@ -100,6 +102,16 @@ export class RecipeDetailDto extends RecipeSummaryDto {
     id: string;
     ingredientId: string;
     name: string;
+    nutritionFoodId?: string;
+    nutritionState?: string;
+    nutritionStateLabel?: string;
+    nutritionFood?: {
+      id: string;
+      name: string;
+      nameEn?: string | null;
+      preparationState?: string | null;
+      preparationStateLabel?: string | null;
+    };
     preparationMethod?: string;
     ratio: number;
     sortOrder: number;

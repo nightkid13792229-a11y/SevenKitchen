@@ -12,6 +12,7 @@ import type { OrderStatusHistoryRepository } from 'src/domain/order/order-status
 import { Order, OrderItem } from 'src/domain/order';
 import { OrderStatus, OrderType } from 'src/domain';
 import type { RecipeSnapshot } from 'src/domain/recipe/types';
+import { WechatShippingUploadService } from 'src/application/shipping/wechat-shipping-upload.service';
 
 describe('ShippingFulfillmentService - Phase 8.14', () => {
   let service: ShippingFulfillmentService;
@@ -28,6 +29,25 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
     append: jest.fn(),
     findByOrderId: jest.fn(),
   };
+  const mockWechatShippingUploadService = {
+    uploadForOrder: jest.fn().mockResolvedValue({
+      success: true,
+      skipped: true,
+      message: 'Skipped in unit test',
+    }),
+    listPendingUploads: jest.fn().mockResolvedValue([]),
+    reportPendingSpecialOrders: jest.fn().mockResolvedValue({
+      total: 0,
+      success: 0,
+      failed: 0,
+      skipped: 0,
+    }),
+    reportSpecialOrderForOrder: jest.fn().mockResolvedValue({
+      success: true,
+      skipped: true,
+      message: 'Skipped in unit test',
+    }),
+  };
 
   beforeEach(async () => {
     mockOrderRepository.findById.mockReset();
@@ -36,6 +56,10 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
     mockOrderRepository.save.mockReset();
     mockStatusHistoryRepository.append.mockReset();
     mockStatusHistoryRepository.findByOrderId.mockReset();
+    mockWechatShippingUploadService.uploadForOrder.mockClear();
+    mockWechatShippingUploadService.listPendingUploads.mockClear();
+    mockWechatShippingUploadService.reportPendingSpecialOrders.mockClear();
+    mockWechatShippingUploadService.reportSpecialOrderForOrder.mockClear();
 
     // Suppress console logs during tests
     jest.spyOn(console, 'log').mockImplementation(() => {});
@@ -52,6 +76,10 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
         {
           provide: ORDER_STATUS_HISTORY_REPOSITORY,
           useValue: mockStatusHistoryRepository,
+        },
+        {
+          provide: WechatShippingUploadService,
+          useValue: mockWechatShippingUploadService,
         },
       ],
     }).compile();
@@ -208,12 +236,13 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
       });
 
       // Assert
-      expect(orderRepository.findById).toHaveBeenCalledTimes(2); // Once to get, once to reload
+      expect(orderRepository.findById).toHaveBeenCalledWith('order-1');
       expect(orderRepository.save).toHaveBeenCalled();
-      expect(result.status).toBe(OrderStatus.SHIPPED);
-      expect(result.trackingNumber).toBe('SF1234567890');
-      expect(result.carrierCode).toBe('SF');
-      expect(result.shippedAt).toBeInstanceOf(Date);
+      expect(result.order.status).toBe(OrderStatus.SHIPPED);
+      expect(result.order.trackingNumber).toBe('SF1234567890');
+      expect(result.order.carrierCode).toBe('SF');
+      expect(result.order.shippedAt).toBeInstanceOf(Date);
+      expect(result.wechatShippingUpload.success).toBe(true);
     });
 
     it('should throw NotFoundException when order not found', async () => {
@@ -286,8 +315,8 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
       });
 
       // Assert
-      expect(result.trackingNumber).toBe('SF1234567890');
-      expect(result.carrierCode).toBe('SF');
+      expect(result.order.trackingNumber).toBe('SF1234567890');
+      expect(result.order.carrierCode).toBe('SF');
     });
 
     it('should fail gracefully when order is already SHIPPED (idempotency)', async () => {
@@ -336,10 +365,10 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
       const afterTime = new Date();
 
       // Assert
-      expect(result.shippedAt).toBeInstanceOf(Date);
+      expect(result.order.shippedAt).toBeInstanceOf(Date);
       // Allow small timing variance (100ms)
-      expect(result.shippedAt!.getTime()).toBeGreaterThanOrEqual(beforeTime.getTime() - 100);
-      expect(result.shippedAt!.getTime()).toBeLessThanOrEqual(afterTime.getTime() + 100);
+      expect(result.order.shippedAt!.getTime()).toBeGreaterThanOrEqual(beforeTime.getTime() - 100);
+      expect(result.order.shippedAt!.getTime()).toBeLessThanOrEqual(afterTime.getTime() + 100);
     });
 
     it('should persist and reload shipping fields correctly', async () => {
@@ -364,11 +393,11 @@ describe('ShippingFulfillmentService - Phase 8.14', () => {
       });
 
       // Assert: Verify that reloaded order contains shipping fields
-      expect(orderRepository.findById).toHaveBeenCalledTimes(2);
+      expect(orderRepository.findById).toHaveBeenCalledWith('order-1');
       expect(orderRepository.save).toHaveBeenCalled();
-      expect(result.trackingNumber).toBe('SF1234567890');
-      expect(result.carrierCode).toBe('SF');
-      expect(result.shippedAt).toBeInstanceOf(Date);
+      expect(result.order.trackingNumber).toBe('SF1234567890');
+      expect(result.order.carrierCode).toBe('SF');
+      expect(result.order.shippedAt).toBeInstanceOf(Date);
       // Verify that save was called with order containing shipping fields
       const savedOrder = orderRepository.save.mock.calls[0][0] as Order;
       expect(savedOrder.trackingNumber).toBe('SF1234567890');

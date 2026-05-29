@@ -40,3 +40,22 @@ export const appendPreparationMethodText = (
 
   return [...currentSegments, ...newSegments].join('、');
 };
+
+export interface PreparationMethodHistoryItemLike {
+  text?: string;
+}
+
+export const getDefaultPreparationMethodFromHistory = (
+  currentText: string,
+  history: PreparationMethodHistoryItemLike[],
+): string => {
+  if (splitPreparationMethodSegments(currentText).length > 0) {
+    return currentText;
+  }
+
+  const firstHistoryText = history.find((item) =>
+    splitPreparationMethodSegments(item.text || '').length > 0,
+  )?.text;
+
+  return firstHistoryText ? normalizePreparationMethodText(firstHistoryText) : currentText;
+};

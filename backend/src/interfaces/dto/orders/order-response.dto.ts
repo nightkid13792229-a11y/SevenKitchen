@@ -103,6 +103,106 @@ export class OrderItemDto {
   totalPrice?: number;
 }
 
+export class OrderRefundStatusResponseDto {
+  @ApiProperty({ example: true })
+  exists!: boolean;
+
+  @ApiProperty({ example: true })
+  success!: boolean;
+
+  @ApiProperty({ example: 'SUCCESS' })
+  status!: string;
+
+  @ApiProperty({ example: '退款成功，钱款已原路退回' })
+  statusText!: string;
+
+  @ApiProperty({ example: 596.57 })
+  amount!: number;
+
+  @ApiPropertyOptional({ nullable: true })
+  outRefundNo?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  refundId?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  successTime?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  createdAt?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  updatedAt?: string | null;
+}
+
+export class OrderRefundRecordResponseDto {
+  @ApiProperty({ example: 'uuid' })
+  id!: string;
+
+  @ApiProperty({ example: 'uuid' })
+  orderId!: string;
+
+  @ApiProperty({ example: 'RF1234567890' })
+  outRefundNo!: string;
+
+  @ApiPropertyOptional({ nullable: true })
+  refundId?: string | null;
+
+  @ApiProperty({ example: 596.57 })
+  amount!: number;
+
+  @ApiProperty({ example: 596.57 })
+  totalAmount!: number;
+
+  @ApiProperty({ example: '客户申请售后退款' })
+  reason!: string;
+
+  @ApiProperty({ example: 'AFTERSALE_APPROVE' })
+  source!: string;
+
+  @ApiProperty({ example: 'PROCESSING' })
+  status!: string;
+
+  @ApiProperty({ example: '退款处理中，等待微信确认' })
+  statusText!: string;
+
+  @ApiProperty({ example: false })
+  success!: boolean;
+
+  @ApiPropertyOptional({ nullable: true })
+  operatorId?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  operatorName?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  operatorPhone?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  operatorRole?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  adjustmentId?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  errorMessage?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  requestedAt?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  notifiedAt?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  successTime?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  createdAt?: string | null;
+
+  @ApiPropertyOptional({ nullable: true })
+  updatedAt?: string | null;
+}
+
 export class OrderDto {
   @ApiProperty({ example: 'uuid' })
   id!: string;
@@ -131,6 +231,17 @@ export class OrderDto {
     };
     regionText: string;
     detailAddress: string;
+  } | null;
+
+  @ApiPropertyOptional({
+    description: 'Customer information for order center display',
+    nullable: true,
+  })
+  customer?: {
+    id: string;
+    nickname: string | null;
+    phone: string | null;
+    avatarUrl: string | null;
   } | null;
 
   @ApiProperty({ enum: OrderStatus })
@@ -287,6 +398,72 @@ export class OrderDto {
   paymentStatus?: 'PENDING' | 'SUCCESS' | 'FAILED' | null;
 
   @ApiPropertyOptional({
+    description: 'Payment deadline for pending online payment orders',
+    example: '2025-01-20T11:00:00.000Z',
+    nullable: true,
+  })
+  paymentDeadline?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Remaining seconds before pending payment order is closed',
+    example: 1800,
+    nullable: true,
+  })
+  paymentRemainingSeconds?: number | null;
+
+  @ApiPropertyOptional({
+    description: 'Configured payment timeout in minutes',
+    example: 30,
+    nullable: true,
+  })
+  paymentTimeoutMinutes?: number | null;
+
+  @ApiPropertyOptional({
+    description: 'Whether unpaid orders are auto-closed by payment config',
+    example: true,
+    nullable: true,
+  })
+  paymentAutoCloseEnabled?: boolean | null;
+
+  @ApiPropertyOptional({
+    description: 'Aftersale type',
+    example: 'REFUND',
+    nullable: true,
+  })
+  aftersaleType?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Aftersale reason submitted by customer',
+    nullable: true,
+  })
+  aftersaleReason?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Aftersale application timestamp',
+    nullable: true,
+  })
+  aftersaleSince?: string | null;
+
+  @ApiPropertyOptional({
+    description: 'Aftersale evidence photo URLs',
+    type: [String],
+  })
+  aftersalePhotos?: string[];
+
+  @ApiPropertyOptional({
+    description: 'Wechat refund status. Only success=true means money has been returned.',
+    nullable: true,
+    type: OrderRefundStatusResponseDto,
+  })
+  refundStatus?: OrderRefundStatusResponseDto | null;
+
+  @ApiPropertyOptional({
+    description: 'Wechat refund attempt records for audit and retry.',
+    type: [OrderRefundRecordResponseDto],
+  })
+  refundRecords?: OrderRefundRecordResponseDto[];
+
+  @ApiPropertyOptional({
     description: 'Production photos (原料照片)',
     nullable: true,
   })
@@ -316,6 +493,10 @@ export class OrderSummaryDto {
   @ApiProperty({ enum: OrderType })
   type!: OrderType;
 
+  cancellationReason?: string | null;
+  aftersaleType?: string | null;
+  refundStatus?: OrderRefundStatusResponseDto | null;
+
   @ApiProperty({ example: 299.99 })
   totalAmount!: number;
 
@@ -327,6 +508,11 @@ export class OrderSummaryDto {
     example: '2025-01-20T10:30:00.000Z',
   })
   createdAt!: string;
+
+  paymentDeadline?: string | null;
+  paymentRemainingSeconds?: number | null;
+  paymentTimeoutMinutes?: number | null;
+  paymentAutoCloseEnabled?: boolean | null;
 
   firstItem?: {
     dog?: {

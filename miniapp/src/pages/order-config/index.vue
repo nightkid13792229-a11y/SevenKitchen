@@ -3,7 +3,7 @@
     <view class="order-form">
       <view class="form-section">
         <view class="section-title">订单配置</view>
-        
+
         <view class="form-item">
           <text class="label">食谱ID</text>
           <text class="value">{{ recipeId }}</text>
@@ -16,12 +16,22 @@
 
         <view class="form-item">
           <text class="label">每日克数(g) *</text>
-          <input class="input" type="digit" placeholder="请输入每日克数" v-model="dailyGrams" />
+          <input
+            class="input"
+            type="digit"
+            placeholder="请输入每日克数"
+            v-model="dailyGrams"
+          />
         </view>
 
         <view class="form-item">
           <text class="label">订购周期(天) *</text>
-          <input class="input" type="number" placeholder="请输入周期天数" v-model="cycleDays" />
+          <input
+            class="input"
+            type="number"
+            placeholder="请输入周期天数"
+            v-model="cycleDays"
+          />
         </view>
 
         <view class="form-item">
@@ -42,23 +52,29 @@
       <view class="price-section" v-if="pricingPreview">
         <view class="price-item">
           <text class="price-label">商品金额:</text>
-          <text class="price-value">¥{{ formatPrice(pricingPreview.amountProduct) }}</text>
+          <text class="price-value"
+            >¥{{ formatPrice(pricingPreview.amountProduct) }}</text
+          >
         </view>
         <view class="price-item">
           <text class="price-label">运费:</text>
-          <text class="price-value">¥{{ formatPrice(pricingPreview.amountShipping) }}</text>
+          <text class="price-value"
+            >¥{{ formatPrice(pricingPreview.amountShipping) }}</text
+          >
         </view>
         <view class="price-item total">
           <text class="price-label">合计:</text>
-          <text class="price-value">¥{{ formatPrice(pricingPreview.amountTotal) }}</text>
+          <text class="price-value"
+            >¥{{ formatPrice(pricingPreview.amountTotal) }}</text
+          >
         </view>
       </view>
-      
+
       <!-- Neutral hint when inputs don't meet minimum requirements -->
       <view v-if="pricingHint" class="pricing-hint">
         <text>{{ pricingHint }}</text>
       </view>
-      
+
       <!-- Only show error for unexpected failures, not validation errors -->
       <view v-if="pricingError && !isValidationError" class="pricing-error">
         <text>{{ pricingError }}</text>
@@ -69,19 +85,34 @@
         @tap="createOrder"
         :disabled="orderCreated || isDemo || addressLoading"
       >
-        {{ addressLoading ? '地址加载中...' : orderCreated ? '订单已创建' : isDemo ? 'Demo Mode: Order Creation Disabled' : '创建订单 -> 确认 -> 支付（测试）' }}
+        {{
+          addressLoading
+            ? '地址加载中...'
+            : orderCreated
+              ? '订单已创建'
+              : isDemo
+                ? 'Demo Mode: Order Creation Disabled'
+                : '提交订单并支付'
+        }}
       </button>
-      
+
       <!-- Demo Mode Modal -->
       <view v-if="showDemoModal" class="modal-overlay" @tap="closeDemoModal">
         <view class="modal-content" @tap.stop>
           <view class="modal-title">Backend has no real recipes yet</view>
           <view class="modal-body">
-            <text>Demo mode cannot create a real order. The backend requires a real recipeId.</text>
+            <text
+              >Demo mode cannot create a real order. The backend requires a real
+              recipeId.</text
+            >
           </view>
           <view class="modal-actions">
-            <button class="modal-btn secondary" @tap="goToNetworkSettings">Go to Network Settings</button>
-            <button class="modal-btn primary" @tap="backToRecipes">Back to Recipes</button>
+            <button class="modal-btn secondary" @tap="goToNetworkSettings">
+              Go to Network Settings
+            </button>
+            <button class="modal-btn primary" @tap="backToRecipes">
+              Back to Recipes
+            </button>
           </view>
         </view>
       </view>
@@ -98,274 +129,318 @@
         </view>
       </view>
     </view>
+
+    <CustomerServiceFloatButton
+      source-type="PRODUCT"
+      :product-id="recipeId"
+      title="订单配置咨询"
+    />
   </view>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
-import { request, normalizeToUuid } from '../../utils/api'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { request, normalizeToUuid } from '../../utils/api';
+import {
+  createWechatPayment,
+  type WechatPaymentResult,
+} from '../../api/orders';
+import { requestWechatOrderPayment } from '../../utils/wechat-payment';
+import { ensurePhoneBound } from '../../utils/account';
+import CustomerServiceFloatButton from '../../components/CustomerServiceFloatButton.vue';
 
-const recipeId = ref('')
-const dogId = ref('')
-const addressId = ref('')
-const dailyGrams = ref('')
-const cycleDays = ref('')
-const orderId = ref<string | null>(null)
-const orderStatus = ref<string | null>(null)
-const orderCreated = ref(false)
-const isDemo = ref(false)
-const showDemoModal = ref(false)
-const addressLoading = ref(true) // 新增：地址加载状态
+const recipeId = ref('');
+const dogId = ref('');
+const addressId = ref('');
+const dailyGrams = ref('');
+const cycleDays = ref('');
+const orderId = ref<string | null>(null);
+const orderStatus = ref<string | null>(null);
+const orderCreated = ref(false);
+const isDemo = ref(false);
+const showDemoModal = ref(false);
+const addressLoading = ref(true); // 新增：地址加载状态
 const pricingPreview = ref<{
-  amountProduct: number
-  amountShipping: number
-  amountTotal: number
-} | null>(null)
-const pricingSnapshotId = ref<string | null>(null)
-const pricingError = ref<string | null>(null)
-const pricingHint = ref<string | null>(null)
-const isValidationError = ref(false)
-let previewDebounceTimer: ReturnType<typeof setTimeout> | null = null
-let previewRequestSeq = 0
+  amountProduct: number;
+  amountShipping: number;
+  amountTotal: number;
+} | null>(null);
+const pricingSnapshotId = ref<string | null>(null);
+const pricingError = ref<string | null>(null);
+const pricingHint = ref<string | null>(null);
+const isValidationError = ref(false);
+let previewDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+let previewRequestSeq = 0;
 
-const handleAddressSelected = (data: string | { addressId: string; from?: string }) => {
+const handleAddressSelected = (
+  data: string | { addressId: string; from?: string },
+) => {
   // Handle both string and object formats for compatibility
-  const selectedAddressId = typeof data === 'string' ? data : data?.addressId
-  addressId.value = selectedAddressId
-}
+  const selectedAddressId = typeof data === 'string' ? data : data?.addressId;
+  addressId.value = selectedAddressId;
+};
 
 function resetPricingState() {
-  pricingError.value = null
-  pricingHint.value = null
-  isValidationError.value = false
-  pricingPreview.value = null
-  pricingSnapshotId.value = null
+  pricingError.value = null;
+  pricingHint.value = null;
+  isValidationError.value = false;
+  pricingPreview.value = null;
+  pricingSnapshotId.value = null;
 }
 
 function invalidatePricingPreview() {
-  previewRequestSeq += 1
-  resetPricingState()
+  previewRequestSeq += 1;
+  resetPricingState();
 }
 
 function schedulePricingPreview() {
-  invalidatePricingPreview()
+  invalidatePricingPreview();
 
   if (previewDebounceTimer) {
-    clearTimeout(previewDebounceTimer)
-    previewDebounceTimer = null
+    clearTimeout(previewDebounceTimer);
+    previewDebounceTimer = null;
   }
 
   previewDebounceTimer = setTimeout(() => {
-    loadPricingPreview(previewRequestSeq)
-  }, 500)
+    loadPricingPreview(previewRequestSeq);
+  }, 500);
 }
 
 // Computed total grams (UI display only, backend will recalculate)
 const totalGrams = computed(() => {
-  const daily = parseFloat(dailyGrams.value) || 0
-  const cycle = parseInt(cycleDays.value) || 0
-  return Math.round(daily * cycle)
-})
+  const daily = parseFloat(dailyGrams.value) || 0;
+  const cycle = parseInt(cycleDays.value) || 0;
+  return Math.round(daily * cycle);
+});
 
-onMounted(() => {
-  const pages = getCurrentPages()
-  const currentPage = pages[pages.length - 1] as any
-  
+onMounted(async () => {
+  if (!(await ensurePhoneBound())) {
+    return;
+  }
+
+  const pages = getCurrentPages();
+  const currentPage = pages[pages.length - 1] as any;
+
   // Normalize recipeId from query params (may be string, array, or object)
-  const rawRecipeId = currentPage.options?.recipeId || ''
+  const rawRecipeId = currentPage.options?.recipeId || '';
   try {
-    recipeId.value = normalizeToUuid(rawRecipeId, 'recipeId')
+    recipeId.value = normalizeToUuid(rawRecipeId, 'recipeId');
   } catch (err: any) {
-    console.warn('[OrderConfig] Invalid recipeId from query:', rawRecipeId, err)
-    recipeId.value = ''
+    console.warn(
+      '[OrderConfig] Invalid recipeId from query:',
+      rawRecipeId,
+      err,
+    );
+    recipeId.value = '';
   }
-  
+
   // Normalize dogId
-  const rawDogId = currentPage.options?.dogId || uni.getStorageSync('dogId') || ''
+  const rawDogId =
+    currentPage.options?.dogId || uni.getStorageSync('dogId') || '';
   try {
-    dogId.value = normalizeToUuid(rawDogId, 'dogId')
+    dogId.value = normalizeToUuid(rawDogId, 'dogId');
   } catch (err: any) {
-    console.warn('[OrderConfig] Invalid dogId:', rawDogId, err)
-    dogId.value = ''
+    console.warn('[OrderConfig] Invalid dogId:', rawDogId, err);
+    dogId.value = '';
   }
-  
-  const demoParam = currentPage.options?.demo
-  
+
+  const demoParam = currentPage.options?.demo;
+
   if (demoParam === '1' || demoParam === 'true') {
-    isDemo.value = true
-    console.info('[OrderConfig] demo mode -> real order disabled until backend has recipes')
+    isDemo.value = true;
+    console.info(
+      '[OrderConfig] demo mode -> real order disabled until backend has recipes',
+    );
   }
-  
+
   // Load default address
-  loadDefaultAddress()
-  
+  loadDefaultAddress();
+
   // Listen for address selection
-  uni.$on('address-selected', handleAddressSelected)
-  
+  uni.$on('address-selected', handleAddressSelected);
+
   // Initial pricing preview load will be triggered by watch
-})
+});
 
 onUnmounted(() => {
   if (previewDebounceTimer) {
-    clearTimeout(previewDebounceTimer)
-    previewDebounceTimer = null
+    clearTimeout(previewDebounceTimer);
+    previewDebounceTimer = null;
   }
 
-  uni.$off('address-selected', handleAddressSelected)
-})
+  uni.$off('address-selected', handleAddressSelected);
+});
 
 // Watch for changes to trigger pricing preview reload (debounced)
 watch([dailyGrams, cycleDays, dogId, addressId, recipeId], () => {
-  schedulePricingPreview()
-})
+  schedulePricingPreview();
+});
 
 function loadDefaultAddress() {
-  addressLoading.value = true
+  addressLoading.value = true;
   request({
     url: '/addresses',
-    method: 'GET'
-  }).then((res: any) => {
-    if (res.code === 0 && res.data && res.data.length > 0) {
-      const defaultAddr = res.data.find((addr: any) => addr.isDefault) || res.data[0]
-      if (defaultAddr) {
-        addressId.value = defaultAddr.id
-        console.log('[OrderConfig] Default address loaded:', defaultAddr.id)
-      } else {
-        console.warn('[OrderConfig] No address found')
-      }
-    } else {
-      console.warn('[OrderConfig] No addresses in response')
-    }
-  }).catch((err: any) => {
-    console.error('[OrderConfig] Load address error:', err)
-    uni.showToast({
-      title: '地址加载失败',
-      icon: 'none'
-    })
-  }).finally(() => {
-    addressLoading.value = false
+    method: 'GET',
   })
+    .then((res: any) => {
+      if (res.code === 0 && res.data && res.data.length > 0) {
+        const defaultAddr =
+          res.data.find((addr: any) => addr.isDefault) || res.data[0];
+        if (defaultAddr) {
+          addressId.value = defaultAddr.id;
+          console.log('[OrderConfig] Default address loaded:', defaultAddr.id);
+        } else {
+          console.warn('[OrderConfig] No address found');
+        }
+      } else {
+        console.warn('[OrderConfig] No addresses in response');
+      }
+    })
+    .catch((err: any) => {
+      console.error('[OrderConfig] Load address error:', err);
+      uni.showToast({
+        title: '地址加载失败',
+        icon: 'none',
+      });
+    })
+    .finally(() => {
+      addressLoading.value = false;
+    });
 }
 
 function selectAddress() {
   uni.navigateTo({
-    url: '/pages/address-list/index?mode=select'
-  })
+    url: '/pages/address-list/index?mode=select',
+  });
 }
 
 function formatPrice(price: number): string {
-  return price.toFixed(2)
+  return price.toFixed(2);
 }
 
 function loadPricingPreview(requestSeq = previewRequestSeq) {
-  resetPricingState()
+  resetPricingState();
 
   // Pre-flight guard: Check required fields
-  if (!dogId.value || !recipeId.value || !dailyGrams.value || !cycleDays.value) {
-    return
+  if (
+    !dogId.value ||
+    !recipeId.value ||
+    !dailyGrams.value ||
+    !cycleDays.value
+  ) {
+    return;
   }
 
-  const totalGramsValue = totalGrams.value
-  
+  const totalGramsValue = totalGrams.value;
+
   // Pre-flight guard: quantityG must be >= 1000
   if (totalGramsValue < 1000) {
-    pricingHint.value = '未满足起订量，暂不显示价格预览'
-    return
+    pricingHint.value = '未满足起订量，暂不显示价格预览';
+    return;
   }
 
   // Calculate package count and spec
-  const packageSpecG = 100 // Default package spec
-  
+  const packageSpecG = 100; // Default package spec
+
   // Pre-flight guard: packageSpecG must be > 0
   if (packageSpecG <= 0) {
-    pricingHint.value = '未满足起订量，暂不显示价格预览'
-    return
+    pricingHint.value = '未满足起订量，暂不显示价格预览';
+    return;
   }
 
-  const packageCount = Math.ceil(totalGramsValue / packageSpecG)
-  
+  const packageCount = Math.ceil(totalGramsValue / packageSpecG);
+
   // Pre-flight guard: packageCount must be >= 1
   if (packageCount < 1) {
-    pricingHint.value = '未满足起订量，暂不显示价格预览'
-    return
+    pricingHint.value = '未满足起订量，暂不显示价格预览';
+    return;
   }
 
   const payload = {
     dogId: dogId.value,
     type: 'FRESH_FOOD',
-    items: [{
-      recipeId: recipeId.value,
-      quantityG: totalGramsValue,
-      packageCount: packageCount,
-      packageSpecG: packageSpecG
-    }],
-    ...(addressId.value && { addressId: addressId.value })
-  }
+    items: [
+      {
+        recipeId: recipeId.value,
+        quantityG: totalGramsValue,
+        packageCount: packageCount,
+        packageSpecG: packageSpecG,
+      },
+    ],
+    ...(addressId.value && { addressId: addressId.value }),
+  };
 
   request({
     url: '/orders/pricing/preview',
     method: 'POST',
-    data: payload
-  }).then((res: any) => {
-    if (requestSeq !== previewRequestSeq) {
-      return
-    }
-
-    if (res.code === 0 && res.data) {
-      pricingPreview.value = {
-        amountProduct: res.data.amountProduct || 0,
-        amountShipping: res.data.amountShipping || 0,
-        amountTotal: res.data.amountTotal || 0
-      }
-      pricingSnapshotId.value = res.data.snapshotId || null
-    } else {
-      // Non-zero code indicates validation or business logic error
-      // Treat as expected user-input state, not system error
-      isValidationError.value = true
-      pricingPreview.value = null
-      pricingSnapshotId.value = null
-      // Don't show error message for validation failures - just hide preview
-    }
-  }).catch((err: any) => {
-    if (requestSeq !== previewRequestSeq) {
-      return
-    }
-
-    // Handle HTTP 400 (validation errors) gracefully
-    const statusCode = err?.statusCode || err?.status || err?.response?.status
-    if (statusCode === 400) {
-      // Validation error - treat as expected user-input state
-      isValidationError.value = true
-      pricingPreview.value = null
-      pricingSnapshotId.value = null
-      // No console.error for validation errors - they're expected
-    } else {
-      // Only log unexpected errors (5xx, network errors, etc.)
-      console.warn('[OrderConfig] Pricing preview unexpected error:', {
-        statusCode,
-        message: err?.message || String(err)
-      })
-      pricingError.value = '获取价格失败，请稍后重试'
-      pricingPreview.value = null
-      pricingSnapshotId.value = null
-    }
+    data: payload,
   })
+    .then((res: any) => {
+      if (requestSeq !== previewRequestSeq) {
+        return;
+      }
+
+      if (res.code === 0 && res.data) {
+        pricingPreview.value = {
+          amountProduct: res.data.amountProduct || 0,
+          amountShipping: res.data.amountShipping || 0,
+          amountTotal: res.data.amountTotal || 0,
+        };
+        pricingSnapshotId.value = res.data.snapshotId || null;
+      } else {
+        // Non-zero code indicates validation or business logic error
+        // Treat as expected user-input state, not system error
+        isValidationError.value = true;
+        pricingPreview.value = null;
+        pricingSnapshotId.value = null;
+        // Don't show error message for validation failures - just hide preview
+      }
+    })
+    .catch((err: any) => {
+      if (requestSeq !== previewRequestSeq) {
+        return;
+      }
+
+      // Handle HTTP 400 (validation errors) gracefully
+      const statusCode =
+        err?.statusCode || err?.status || err?.response?.status;
+      if (statusCode === 400) {
+        // Validation error - treat as expected user-input state
+        isValidationError.value = true;
+        pricingPreview.value = null;
+        pricingSnapshotId.value = null;
+        // No console.error for validation errors - they're expected
+      } else {
+        // Only log unexpected errors (5xx, network errors, etc.)
+        console.warn('[OrderConfig] Pricing preview unexpected error:', {
+          statusCode,
+          message: err?.message || String(err),
+        });
+        pricingError.value = '获取价格失败，请稍后重试';
+        pricingPreview.value = null;
+        pricingSnapshotId.value = null;
+      }
+    });
+}
+
+function requestWechatPayment(payment: WechatPaymentResult): Promise<void> {
+  return requestWechatOrderPayment(payment);
 }
 
 function createOrder() {
   // Block order creation in demo mode
   if (isDemo.value) {
-    showDemoModal.value = true
-    return
+    showDemoModal.value = true;
+    return;
   }
 
   // 等待地址加载完成
   if (addressLoading.value) {
     uni.showToast({
       title: '地址加载中，请稍候...',
-      icon: 'none'
-    })
-    return
+      icon: 'none',
+    });
+    return;
   }
 
   if (!dogId.value) {
@@ -375,12 +450,12 @@ function createOrder() {
       success: (res) => {
         if (res.confirm) {
           uni.navigateTo({
-            url: `/pages/dog-create/index?redirect=order&recipeId=${recipeId.value}`
-          })
+            url: `/pages/dog-create/index?redirect=order&recipeId=${recipeId.value}`,
+          });
         }
-      }
-    })
-    return
+      },
+    });
+    return;
   }
 
   if (!addressId.value) {
@@ -390,122 +465,147 @@ function createOrder() {
       success: (res) => {
         if (res.confirm) {
           uni.navigateTo({
-            url: '/pages/address-edit/index'
-          })
+            url: '/pages/address-edit/index',
+          });
         }
-      }
-    })
-    return
+      },
+    });
+    return;
   }
 
   if (!dailyGrams.value || !cycleDays.value) {
     uni.showToast({
       title: '请填写完整信息',
-      icon: 'none'
-    })
-    return
+      icon: 'none',
+    });
+    return;
   }
 
   if (!pricingSnapshotId.value || !pricingPreview.value) {
     uni.showToast({
       title: '请先等待价格试算完成',
-      icon: 'none'
-    })
-    return
+      icon: 'none',
+    });
+    return;
   }
 
   // Normalize and validate UUID fields before sending
-  let normalizedAddressId: string | undefined
+  let normalizedAddressId: string | undefined;
 
   if (addressId.value) {
     try {
-      normalizedAddressId = normalizeToUuid(addressId.value, 'addressId')
+      normalizedAddressId = normalizeToUuid(addressId.value, 'addressId');
     } catch (err: any) {
-      console.warn('[OrderConfig] Invalid addressId, proceeding without it:', err)
-      normalizedAddressId = undefined
+      console.warn(
+        '[OrderConfig] Invalid addressId, proceeding without it:',
+        err,
+      );
+      normalizedAddressId = undefined;
     }
   }
 
-  uni.showLoading({ title: '创建订单中...' })
+  uni.showLoading({ title: '提交订单中...' });
 
   const payload = {
     type: 'FRESH_FOOD',
     snapshotId: pricingSnapshotId.value,
-    ...(normalizedAddressId && { addressId: normalizedAddressId })
-  } as any
+    ...(normalizedAddressId && { addressId: normalizedAddressId }),
+  } as any;
 
   // Log payload before sending
-  console.log('[OrderCreate] payload =', JSON.stringify(payload, null, 2))
+  console.log('[OrderCreate] payload =', JSON.stringify(payload, null, 2));
 
   // Create order draft
   request({
     url: '/orders',
     method: 'POST',
-    data: payload
-  }).then((res: any) => {
-    if (res.code === 0 && res.data) {
-      orderId.value = res.data.id
-
-      // Confirm order
-      return request({
-        url: `/orders/${orderId.value}/confirm`,
-        method: 'POST'
-      })
-    } else {
-      throw new Error(res.message || '创建订单失败')
-    }
-  }).then((res: any) => {
-    if (res.code === 0 && res.data) {
-      // Pay order (mock)
-      return request({
-        url: `/orders/${orderId.value}/pay`,
-        method: 'POST'
-      })
-    }
-  }).then((res: any) => {
-    if (res.code === 0 && res.data) {
-      orderStatus.value = res.data.status
-      orderCreated.value = true
-      uni.showToast({
-        title: '订单创建成功',
-        icon: 'success',
-        duration: 2000
-      })
-      
-      // Navigate to orders list after a short delay
-      setTimeout(() => {
-        uni.navigateTo({
-          url: '/pages/orders-list/index'
-        })
-      }, 2000)
-    }
-  }).catch((err: any) => {
-    console.error('Create order error:', err)
-    const errorMsg = err?.message || String(err) || '订单创建失败'
-    uni.showToast({
-      title: errorMsg,
-      icon: 'none',
-      duration: 3000
-    })
-  }).finally(() => {
-    uni.hideLoading()
+    data: payload,
   })
+    .then((res: any) => {
+      if (res.code === 0 && res.data) {
+        orderId.value = res.data.id;
+
+        // Confirm order
+        return request({
+          url: `/orders/${orderId.value}/confirm`,
+          method: 'POST',
+        });
+      } else {
+        throw new Error(res.message || '创建订单失败');
+      }
+    })
+    .then((res: any) => {
+      if (res.code === 0 && res.data) {
+        orderStatus.value = res.data.status;
+        return createWechatPayment(orderId.value!);
+      }
+    })
+    .then((res: any) => {
+      if (res.code === 0 && res.data) {
+        uni.hideLoading();
+        return requestWechatPayment(res.data);
+      }
+    })
+    .then(() => {
+      if (orderId.value) {
+        orderCreated.value = true;
+        uni.showToast({
+          title: '支付处理中',
+          icon: 'success',
+          duration: 2000,
+        });
+
+        setTimeout(() => {
+          uni.navigateTo({
+            url: `/pages/order-detail/index?id=${orderId.value}`,
+          });
+        }, 2000);
+      }
+    })
+    .catch((err: any) => {
+      console.error('Create order error:', err);
+      const errorMsg = err?.errMsg?.includes('cancel')
+        ? '已取消支付'
+        : err?.message || String(err) || '订单创建失败';
+
+      if (orderId.value) {
+        uni.showModal({
+          title: '订单已保留',
+          content: `${errorMsg}，可稍后在订单详情继续支付。`,
+          showCancel: false,
+          success: () => {
+            uni.navigateTo({
+              url: `/pages/order-detail/index?id=${orderId.value}`,
+            });
+          },
+        });
+      } else {
+        uni.showToast({
+          title: errorMsg,
+          icon: 'none',
+          duration: 3000,
+        });
+      }
+    })
+    .finally(() => {
+      uni.hideLoading();
+    });
 }
 
 function closeDemoModal() {
-  showDemoModal.value = false
+  showDemoModal.value = false;
 }
 
 function goToNetworkSettings() {
-  showDemoModal.value = false
+  showDemoModal.value = false;
   uni.navigateTo({
-    url: '/pages/network-settings/index'
-  })
+    url: '/pages/network-settings/index',
+  });
 }
 
 function backToRecipes() {
-  showDemoModal.value = false
-  uni.navigateBack()
+  showDemoModal.value = false;
+  uni.navigateBack();
 }
 </script>
 

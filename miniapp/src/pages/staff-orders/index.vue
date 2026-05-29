@@ -17,7 +17,7 @@
     </view>
 
     <!-- 占位元素，防止内容被header遮挡 -->
-    <view class="header-placeholder" :style="{ height: (statusBarHeight + 88) + 'px' }"></view>
+    <view class="header-placeholder" :style="{ height: statusBarHeight + 88 + 'px' }"></view>
 
     <!-- 今日统计卡片 -->
     <view class="stats-card">
@@ -58,34 +58,23 @@
         <input
           class="quick-search-input"
           v-model="searchKeyword"
-          placeholder="按订单号/狗狗名称快速搜索，支持模糊匹配"
+          placeholder="按订单号/狗狗名/手机号后四位/状态搜索"
           confirm-type="search"
           @confirm="performSearch"
         />
-        <text
-          v-if="searchKeyword"
-          class="quick-search-clear"
-          @tap.stop="clearSearchKeyword"
-        >
-          ×
-        </text>
+        <text v-if="searchKeyword" class="quick-search-clear" @tap.stop="clearSearchKeyword"> × </text>
       </view>
       <button class="quick-search-btn" @tap="performSearch">搜索</button>
     </view>
 
     <!-- 订单列表 -->
     <view class="order-list">
-      <view
-        v-for="order in orders"
-        :key="order.id"
-        class="order-card"
-        @tap="viewOrderDetail(order.id)"
-      >
+      <view v-for="order in orders" :key="order.id" class="order-card" @tap="viewOrderDetail(order.id)">
         <!-- 订单头部：订单编号 + 状态 -->
         <view class="order-header">
           <text class="order-id">{{ order.id }}</text>
-          <text class="order-status" :style="{ color: getStatusColor(order.status) }">
-            {{ getStatusText(order.status) }}
+          <text class="order-status" :style="{ color: getStatusColor(order) }">
+            {{ getStatusText(order) }}
           </text>
         </view>
 
@@ -126,22 +115,11 @@
             </view>
           </view>
 
-          <view
-            v-if="hasDogProfile(order) || hasRecipeDetail(order)"
-            class="quick-entry-row"
-          >
-            <view
-              v-if="hasDogProfile(order)"
-              class="quick-entry-chip pet"
-              @tap.stop="openDogProfile(order)"
-            >
+          <view v-if="hasDogProfile(order) || hasRecipeDetail(order)" class="quick-entry-row">
+            <view v-if="hasDogProfile(order)" class="quick-entry-chip pet" @tap.stop="openDogProfile(order)">
               宠物档案
             </view>
-            <view
-              v-if="hasRecipeDetail(order)"
-              class="quick-entry-chip recipe"
-              @tap.stop="openRecipeDetail(order)"
-            >
+            <view v-if="hasRecipeDetail(order)" class="quick-entry-chip recipe" @tap.stop="openRecipeDetail(order)">
               食谱详情
             </view>
           </view>
@@ -152,34 +130,10 @@
           <view class="amount-row-top">
             <view class="amount-info">
               <text class="amount-label">订单金额:</text>
-              <!-- 可编辑状态 -->
-              <input
-                v-if="editingOrderId === order.id"
-                v-model="editingAmount"
-                class="amount-input"
-                type="digit"
-                @tap.stop
-                @confirm="confirmAmountChange(order)"
-              />
-              <text v-else class="amount-value">¥{{ formatAmount(order.totalAmount || order.amountTotal) }}</text>
+              <text class="amount-value">¥{{ formatAmount(order.totalAmount || order.amountTotal) }}</text>
             </view>
             <!-- 按钮组 -->
             <view class="button-group">
-              <!-- 修改金额/确认修改按钮（待支付状态不显示） -->
-              <button
-                v-if="editingOrderId === order.id && order.status !== 'PENDING_PAYMENT'"
-                class="edit-amount-btn confirm-btn"
-                @tap.stop="confirmAmountChange(order)"
-              >
-                确认修改
-              </button>
-              <button
-                v-if="editingOrderId !== order.id && order.status !== 'PENDING_PAYMENT'"
-                class="edit-amount-btn"
-                @tap.stop="startEditingAmount(order)"
-              >
-                修改金额
-              </button>
               <!-- 确认付款按钮（仅待支付状态显示） -->
               <button
                 v-if="order.status === 'PENDING_PAYMENT'"
@@ -199,24 +153,13 @@
 
         <!-- 操作按钮 -->
         <view class="order-actions">
-          <button
-            v-if="canShip(order)"
-            class="action-btn cyan"
-            @tap.stop="shipOrder(order)"
-          >
-            发货
-          </button>
+          <button v-if="canShip(order)" class="action-btn cyan" @tap.stop="shipOrder(order)">发货</button>
         </view>
       </view>
 
       <view v-if="orders.length > 0" class="pagination-section">
         <text class="pagination-text">已显示 {{ orders.length }} / {{ totalOrders }} 条订单</text>
-        <view
-          v-if="hasMore"
-          class="load-more"
-          :class="{ disabled: loadingMore }"
-          @tap="loadMoreOrders"
-        >
+        <view v-if="hasMore" class="load-more" :class="{ disabled: loadingMore }" @tap="loadMoreOrders">
           <text class="load-more-text">{{ loadingMore ? '加载中...' : '加载更多' }}</text>
         </view>
         <view v-else class="no-more">
@@ -322,12 +265,7 @@
           <!-- 物流单号输入 -->
           <view class="form-item">
             <text class="form-label">物流单号</text>
-            <input
-              v-model="trackingNumber"
-              class="form-input"
-              placeholder="请输入物流单号"
-              :maxlength="50"
-            />
+            <input v-model="trackingNumber" class="form-input" placeholder="请输入物流单号" :maxlength="50" />
           </view>
         </view>
 
@@ -355,7 +293,7 @@ const DEBUG = true
 const statusBarHeight = ref(0)
 
 function getOrderListFromResponse(data: any): any[] {
-  return Array.isArray(data) ? data : (data?.list || [])
+  return Array.isArray(data) ? data : data?.list || []
 }
 
 function getOrderAmountNumber(order?: Partial<Order> | null): number {
@@ -381,6 +319,10 @@ function isTodayOrder(dateStr?: string): boolean {
 interface Order {
   id: string
   status: string
+  cancellationReason?: string | null
+  refundStatus?: {
+    success: boolean
+  } | null
   totalAmount?: number | string
   amountTotal?: number | string
   amountProduct?: number | string
@@ -425,7 +367,7 @@ const statusOptions = ref([
   { label: '急冻中', value: 'FREEZING', count: 0 },
   { label: '已发货', value: 'SHIPPED', count: 0 },
   { label: '已完成', value: 'COMPLETED', count: 0 },
-  { label: '售后中', value: 'AFTERSALE', count: 0 }
+  { label: '售后中', value: 'AFTERSALE', count: 0 },
 ])
 
 // 日期筛选选项
@@ -433,7 +375,7 @@ const dateOptions = ref([
   { label: '全部时间', value: 'all' },
   { label: '今天', value: 'today' },
   { label: '最近7天', value: 'week' },
-  { label: '最近30天', value: 'month' }
+  { label: '最近30天', value: 'month' },
 ])
 
 // 数据
@@ -460,38 +402,32 @@ const showShippingModal = ref(false)
 const currentShippingOrder = ref<Order | null>(null)
 const carriers = [
   { name: '顺丰速运', code: 'SF' },
-  { name: '京东物流', code: 'JD' }
+  { name: '京东物流', code: 'JD' },
 ]
 const selectedCarrierIndex = ref(0)
 const trackingNumber = ref('')
 const isShipping = ref(false)
 
-// 金额编辑状态
-const editingOrderId = ref<string | null>(null)
-const editingAmount = ref<string>('')
-
 // 统计数据
 const stats = ref({
   todayOrders: 0,
   pendingOrders: 0,
-  todayRevenue: '0.00'
+  todayRevenue: '0.00',
 })
 
 // 计算属性
 const statusFilterText = computed(() => {
-  const option = statusOptions.value.find(s => s.value === selectedStatus.value)
+  const option = statusOptions.value.find((s) => s.value === selectedStatus.value)
   return option ? option.label : '状态'
 })
 
 const dateFilterText = computed(() => {
-  const option = dateOptions.value.find(d => d.value === selectedDate.value)
+  const option = dateOptions.value.find((d) => d.value === selectedDate.value)
   return option ? option.label : '日期'
 })
 
 const hasActiveFilters = computed(() => {
-  return selectedStatus.value !== 'ALL' ||
-         selectedDate.value !== 'all' ||
-         searchKeyword.value.trim() !== ''
+  return selectedStatus.value !== 'ALL' || selectedDate.value !== 'all' || searchKeyword.value.trim() !== ''
 })
 
 const hasMore = computed(() => {
@@ -533,8 +469,8 @@ async function fetchAllAdminOrders(params: Record<string, any>): Promise<any[]> 
       data: {
         ...params,
         page,
-        pageSize
-      }
+        pageSize,
+      },
     })
 
     if (response.code !== 0) {
@@ -542,9 +478,7 @@ async function fetchAllAdminOrders(params: Record<string, any>): Promise<any[]> 
     }
 
     const list = getOrderListFromResponse(response.data)
-    total = Array.isArray(response.data)
-      ? list.length
-      : Number(response.data?.total || 0)
+    total = Array.isArray(response.data) ? list.length : Number(response.data?.total || 0)
 
     collected.push(...list)
 
@@ -575,7 +509,7 @@ async function loadOrders(reset = true) {
       date: selectedDate.value,
       keyword,
       page: targetPage,
-      pageSize
+      pageSize,
     })
   }
 
@@ -621,7 +555,7 @@ async function loadOrders(reset = true) {
     const response = await request({
       url: '/admin/orders',
       method: 'GET',
-      data: params
+      data: params,
     })
 
     if (DEBUG) {
@@ -635,9 +569,7 @@ async function loadOrders(reset = true) {
     }
 
     const orderList = getOrderListFromResponse(response.data)
-    totalOrders.value = Array.isArray(response.data)
-      ? orderList.length
-      : Number(response.data.total || 0)
+    totalOrders.value = Array.isArray(response.data) ? orderList.length : Number(response.data.total || 0)
 
     if (DEBUG) {
       console.log('[StaffOrders] Parsed order list:', orderList)
@@ -651,23 +583,21 @@ async function loadOrders(reset = true) {
       ...order,
       totalAmount: getOrderAmountNumber({
         totalAmount: order.totalAmount,
-        amountTotal: order.amountTotal
+        amountTotal: order.amountTotal,
       }),
       amountTotal: getOrderAmountNumber({
         totalAmount: order.amountTotal,
-        amountTotal: order.totalAmount
+        amountTotal: order.totalAmount,
       }),
       amountProduct: getOrderAmountNumber({
-        totalAmount: order.amountProduct
+        totalAmount: order.amountProduct,
       }),
       amountShipping: getOrderAmountNumber({
-        totalAmount: order.amountShipping
-      })
+        totalAmount: order.amountShipping,
+      }),
     }))
 
-    allOrders.value = reset
-      ? processedOrders
-      : [...allOrders.value, ...processedOrders]
+    allOrders.value = reset ? processedOrders : [...allOrders.value, ...processedOrders]
     currentPage.value = targetPage
     filterOrders()
 
@@ -679,11 +609,11 @@ async function loadOrders(reset = true) {
     console.error('[StaffOrders] Load orders error:', error)
     console.error('[StaffOrders] Error details:', {
       message: error.message,
-      stack: error.stack
+      stack: error.stack,
     })
     uni.showToast({
       title: error.message || '加载失败',
-      icon: 'none'
+      icon: 'none',
     })
   } finally {
     if (reset) {
@@ -699,7 +629,7 @@ async function loadStatusCounts() {
   try {
     const response = await request({
       url: '/admin/orders/stats',
-      method: 'GET'
+      method: 'GET',
     })
 
     if (response.code !== 0 || !response.data) return
@@ -733,7 +663,7 @@ async function loadStats() {
 
     const orderList = await fetchAllAdminOrders({
       startDate: todayStart,
-      endDate: todayEnd
+      endDate: todayEnd,
     })
 
     if (DEBUG) {
@@ -741,8 +671,8 @@ async function loadStats() {
     }
 
     stats.value.todayOrders = orderList.length
-    stats.value.pendingOrders = orderList.filter((o: any) =>
-      o.status === 'PENDING_PAYMENT' || o.status === 'PAID'
+    stats.value.pendingOrders = orderList.filter(
+      (o: any) => o.status === 'PENDING_PAYMENT' || o.status === 'PAID',
     ).length
 
     const revenue = orderList
@@ -832,13 +762,42 @@ function loadMoreOrders() {
 // 查看订单详情
 function viewOrderDetail(orderId: string) {
   uni.navigateTo({
-    url: `/pages/order-detail/index?id=${orderId}`
+    url: `/pages/staff-orders/detail?id=${orderId}`,
   })
 }
 
 // 格式化函数
 function formatAmount(amount?: number | string): string {
   return getOrderAmountNumber({ totalAmount: amount }).toFixed(2)
+}
+
+function shortOrderId(orderId: string): string {
+  return orderId ? orderId.slice(-8).toUpperCase() : '-'
+}
+
+function getOrderConfirmContent(order: Order, actionText: string): string {
+  return [
+    actionText,
+    `订单：#${shortOrderId(order.id)}`,
+    `客户：${getOrderCustomerText(order)}`,
+    `商品：${getOrderProductText(order)}`,
+    `金额：¥${formatAmount(order.totalAmount || order.amountTotal)}`,
+  ].join('\n')
+}
+
+function getOrderCustomerText(order: Order): string {
+  const name = order.customerName || order.address?.recipientName || '未记录客户'
+  const phone = order.customerPhone || ''
+  return phone ? `${name} ${formatPhone(phone)}` : name
+}
+
+function getOrderProductText(order: Order): string {
+  const recipeName = getRecipeName(order) || '未记录商品'
+  const dogName = order.firstItem?.dog?.name ? `（${order.firstItem.dog.name}）` : ''
+  const packageCount = getTotalMeals(order)
+  const mealWeight = getMealWeight(order)
+  const spec = packageCount && mealWeight ? ` ${packageCount}餐/${mealWeight}g` : ''
+  return `${recipeName}${dogName}${spec}`
 }
 
 function formatPhone(phone?: string): string {
@@ -924,13 +883,13 @@ function openDogProfile(order: Order) {
   if (!dogId) {
     uni.showToast({
       title: '宠物档案不存在',
-      icon: 'none'
+      icon: 'none',
     })
     return
   }
 
   uni.navigateTo({
-    url: `/pages/dog-create/index?dogId=${dogId}`
+    url: `/pages/dog-create/index?dogId=${dogId}`,
   })
 }
 
@@ -939,13 +898,13 @@ function openRecipeDetail(order: Order) {
   if (!recipeId) {
     uni.showToast({
       title: '食谱信息不完整',
-      icon: 'none'
+      icon: 'none',
     })
     return
   }
 
   uni.navigateTo({
-    url: `/pages/recipe-detail/index?recipeId=${recipeId}`
+    url: `/pages/recipe-detail/index?recipeId=${recipeId}`,
   })
 }
 
@@ -955,7 +914,11 @@ function formatAddress(address?: { regionText?: string }): string {
   return regions[0] || address.regionText
 }
 
-function getStatusText(status: string): string {
+function getStatusText(orderOrStatus: Order | string): string {
+  const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
+  if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) {
+    return '已退款（钱款原路退回）'
+  }
   const statusMap: Record<string, string> = {
     INIT: '待确认',
     PENDING_PAYMENT: '待付款',
@@ -966,12 +929,16 @@ function getStatusText(status: string): string {
     SHIPPED: '已发货',
     COMPLETED: '已完成',
     CANCELLED: '已取消',
-    AFTERSALE: '售后中'
+    AFTERSALE: '售后中',
   }
   return statusMap[status] || status
 }
 
-function getStatusColor(status: string): string {
+function getStatusColor(orderOrStatus: Order | string): string {
+  const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
+  if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) {
+    return '#16a34a'
+  }
   const colorMap: Record<string, string> = {
     INIT: '#999',
     PENDING_PAYMENT: '#ff9800',
@@ -982,9 +949,13 @@ function getStatusColor(status: string): string {
     SHIPPED: '#52c41a',
     COMPLETED: '#52c41a',
     CANCELLED: '#999',
-    AFTERSALE: '#f5222d'
+    AFTERSALE: '#f5222d',
   }
   return colorMap[status] || '#999'
+}
+
+function isRefundedOrder(order: Order): boolean {
+  return order.status === 'CANCELLED' && order.refundStatus?.success === true
 }
 
 // 操作权限判断
@@ -1000,14 +971,14 @@ function canShip(order: Order): boolean {
 async function confirmPayment(order: Order) {
   uni.showModal({
     title: '确认收款',
-    content: `确认收到订单 #${order.id.slice(-8)} 的款项？`,
+    content: getOrderConfirmContent(order, '确认收到该订单款项？'),
     success: async (res) => {
       if (res.confirm) {
         try {
           await confirmOfflinePayment(order.id, order.totalAmount || order.amountTotal || 0)
           uni.showToast({
             title: '收款成功',
-            icon: 'success'
+            icon: 'success',
           })
           loadOrders(true)
           loadStats()
@@ -1016,21 +987,15 @@ async function confirmPayment(order: Order) {
           console.error('[StaffOrders] Confirm payment error:', error)
         }
       }
-    }
+    },
   })
-}
-
-// 开始编辑金额
-function startEditingAmount(order: Order) {
-  editingOrderId.value = order.id
-  editingAmount.value = formatAmount(order.totalAmount || order.amountTotal)
 }
 
 // 确认订单付款
 async function confirmOrderPayment(order: Order) {
   uni.showModal({
     title: '确认付款',
-    content: `确认订单 #${order.id.slice(-8)} 已付款？\n订单金额: ¥${formatAmount(order.totalAmount || order.amountTotal)}`,
+    content: getOrderConfirmContent(order, '确认将该订单标记为已付款？'),
     confirmText: '确认',
     cancelText: '取消',
     success: async (res) => {
@@ -1045,7 +1010,7 @@ async function confirmOrderPayment(order: Order) {
           uni.showToast({
             title: '付款确认成功',
             icon: 'success',
-            duration: 2000
+            duration: 2000,
           })
 
           // 刷新订单列表
@@ -1059,109 +1024,12 @@ async function confirmOrderPayment(order: Order) {
           console.error('[StaffOrders] Confirm payment error:', error)
           uni.showToast({
             title: error.message || '确认失败',
-            icon: 'none'
+            icon: 'none',
           })
         }
       }
-    }
+    },
   })
-}
-
-// 取消编辑金额
-function cancelEditingAmount() {
-  editingOrderId.value = null
-  editingAmount.value = ''
-}
-
-// 确认修改金额
-async function confirmAmountChange(order: Order) {
-  const newAmount = parseFloat(editingAmount.value)
-
-  if (isNaN(newAmount) || newAmount < 0) {
-    uni.showToast({
-      title: '金额不能小于0',
-      icon: 'none'
-    })
-    return
-  }
-
-  const originalAmount = getOrderAmountNumber(order)
-
-  // 如果金额有变化，显示确认提示
-  if (Math.abs(newAmount - originalAmount) > 0.01) {
-    const diff = newAmount - originalAmount
-    const diffText = diff > 0 ? `增加 ¥${diff.toFixed(2)}` : `减少 ¥${Math.abs(diff).toFixed(2)}`
-
-    uni.showModal({
-      title: '确认修改金额',
-      content: `订单: ${order.id}\n原金额: ¥${originalAmount.toFixed(2)}\n新金额: ¥${newAmount.toFixed(2)}\n\n${diffText}\n\n确认修改?`,
-      success: async (res) => {
-        if (res.confirm) {
-          await submitAmountChange(order.id, newAmount)
-        }
-      }
-    })
-  } else {
-    // 金额没有变化，直接关闭编辑状态
-    cancelEditingAmount()
-  }
-}
-
-// 提交金额修改
-async function submitAmountChange(orderId: string, newAmount: number) {
-  uni.showLoading({ title: '修改中...' })
-
-  try {
-    await request({
-      url: `/admin/orders/${orderId}/amount`,
-      method: 'PUT',
-      data: { amount: newAmount }
-    })
-
-    uni.hideLoading()
-
-    uni.showToast({
-      title: '修改成功',
-      icon: 'success',
-      duration: 2000
-    })
-
-    // 关闭编辑状态
-    cancelEditingAmount()
-
-    const targetOrder =
-      allOrders.value.find(order => order.id === orderId) ||
-      orders.value.find(order => order.id === orderId) ||
-      null
-
-    const previousAmount = getOrderAmountNumber(targetOrder)
-
-    allOrders.value = allOrders.value.map(order =>
-      order.id === orderId
-        ? { ...order, totalAmount: newAmount, amountTotal: newAmount }
-        : order
-    )
-    orders.value = orders.value.map(order =>
-      order.id === orderId
-        ? { ...order, totalAmount: newAmount, amountTotal: newAmount }
-        : order
-    )
-
-    if (shouldCountTodayRevenue(targetOrder)) {
-      const currentRevenue = parseFloat(stats.value.todayRevenue || '0')
-      const nextRevenue = currentRevenue - previousAmount + newAmount
-      stats.value.todayRevenue = Math.max(nextRevenue, 0).toFixed(2)
-    }
-
-    await loadStats()
-  } catch (error: any) {
-    uni.hideLoading()
-    console.error('[StaffOrders] Update amount error:', error)
-    uni.showToast({
-      title: error.message || '修改失败',
-      icon: 'none'
-    })
-  }
 }
 
 function shipOrder(order: Order) {
@@ -1191,7 +1059,7 @@ async function confirmShipping() {
   if (!trackingNumber.value || trackingNumber.value.trim().length < 5) {
     uni.showToast({
       title: '请输入有效的物流单号',
-      icon: 'none'
+      icon: 'none',
     })
     return
   }
@@ -1205,13 +1073,13 @@ async function confirmShipping() {
       method: 'POST',
       data: {
         carrierCode: carriers[selectedCarrierIndex.value].code,
-        trackingNumber: trackingNumber.value.trim()
-      }
+        trackingNumber: trackingNumber.value.trim(),
+      },
     })
 
     uni.showToast({
       title: '发货成功',
-      icon: 'success'
+      icon: 'success',
     })
 
     closeShippingModal()
@@ -1221,7 +1089,7 @@ async function confirmShipping() {
   } catch (error: any) {
     uni.showToast({
       title: error.message || '发货失败',
-      icon: 'none'
+      icon: 'none',
     })
   } finally {
     isShipping.value = false

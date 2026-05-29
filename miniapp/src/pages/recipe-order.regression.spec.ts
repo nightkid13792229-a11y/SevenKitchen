@@ -61,7 +61,7 @@ describe('recipe-order phase one UI contract', () => {
 
   it('invalidates stale preview state before debounced package row repricing', () => {
     const updatePackagePlanRowSource = source.match(
-      /function updatePackagePlanRow[\s\S]*?\n}\n\nfunction removePackagePlanRow/,
+      /function updatePackagePlanRow[\s\S]*?\r?\n}\r?\n\r?\nfunction removePackagePlanRow/,
     )?.[0] || '';
 
     expect(source).toContain('function invalidatePackagePlanPricingPreview');
@@ -103,11 +103,12 @@ describe('recipe-order phase one UI contract', () => {
     }
 
     expect(pagesJsonSource).toContain('"navigationBarTitleText": "成品配置页面"');
-    expect(templateSource).toContain('保存采购及分装配置');
+    expect(templateSource).toContain('去确认订单');
+    expect(templateSource).not.toContain('立即下单');
+    expect(templateSource).not.toContain('保存采购及分装配置');
     expect(templateSource).not.toContain('订购天数');
     expect(templateSource).not.toContain('原料采购来源');
     expect(templateSource).not.toContain('产品说明');
-    expect(templateSource).not.toContain('确认订单');
   });
 
   it('renders all recipe life-stage tags in Chinese on the order page', () => {
@@ -201,9 +202,9 @@ describe('recipe-order phase one UI contract', () => {
     expect(templateSource).not.toContain('当前部分原料暂无替代来源时');
     expect(templateSource).not.toContain('>已选</text>');
     expect(source).toContain('function formatSourcePlanShortName');
-    expect(source).toContain("ORGANIC: '有机优先'");
-    expect(source).toContain("MARKET_PREMIUM: '超市优先'");
-    expect(source).toContain("WHOLESALE: '批发市场优先'");
+    expect(source).toContain("ORGANIC: '溯源优选'");
+    expect(source).toContain("MARKET_PREMIUM: '精选日常'");
+    expect(source).toContain("WHOLESALE: '安心基础'");
     expect(source).not.toContain("WHOLESALE: '性价比优先'");
     expect(source).not.toContain('function getSourcePlanDescription');
     expect(source).not.toContain('优先选择有机、草饲、散养、非转基因来源');
@@ -374,9 +375,9 @@ describe('recipe-order phase one UI contract', () => {
   });
 
   it('keeps the bottom pricing summary next to the confirmation button and right aligned', () => {
-    expect(templateSource).toContain('保存采购及分装配置');
+    expect(templateSource).toContain('去确认订单');
     expect(templateSource).not.toContain('立即下单');
-    expect(templateSource).not.toContain('确认订单');
+    expect(templateSource).not.toContain('保存采购及分装配置');
 
     const bottomBarBlocks = [...source.matchAll(/\.bottom-bar\s*\{([\s\S]*?)\}/g)]
       .map((match) => match[1]);
@@ -405,57 +406,53 @@ describe('recipe-order phase one UI contract', () => {
     });
   });
 
-  it('keeps the long save configuration button label on one line', () => {
+  it('keeps the direct checkout button compact and one line', () => {
     const buyButtonBlocks = [...source.matchAll(/\.btn-buy-now\s*\{([\s\S]*?)\}/g)]
       .map((match) => match[1]);
 
     expect(buyButtonBlocks.length).toBeGreaterThan(0);
 
     buyButtonBlocks.forEach((block) => {
-      expect(block).toContain('width: 336rpx;');
+      expect(block).toContain('width: 240rpx;');
       expect(block).toContain('display: flex;');
       expect(block).toContain('align-items: center;');
       expect(block).toContain('justify-content: center;');
       expect(block).toContain('white-space: nowrap;');
       expect(block).toContain('line-height: 1;');
-      expect(block).not.toContain('width: 240rpx;');
+      expect(block).not.toContain('width: 336rpx;');
       expect(block).not.toContain('line-height: 84rpx;');
     });
   });
 
-  it('submits the saved purchase and package configuration directly with contact details', () => {
+  it('saves the purchase configuration and continues to checkout before payment', () => {
     const continueBuyNowSource = source.match(
-      /async function continueBuyNow[\s\S]*?\n}\n\nfunction goToCreateDog/,
+      /async function continueBuyNow[\s\S]*?\r?\n}\r?\n\r?\nfunction goToCreateDog/,
     )?.[0] || '';
 
-    expect(continueBuyNowSource).toContain("url: '/orders'");
-    expect(continueBuyNowSource).toContain("method: 'POST'");
-    expect(continueBuyNowSource).toContain("type: 'FRESH_FOOD'");
     expect(continueBuyNowSource).toContain('snapshotId: pricingSnapshotId.value');
+    expect(continueBuyNowSource).toContain("uni.setStorageSync('direct_buy_order_config', orderConfig)");
+    expect(continueBuyNowSource).toContain('uni.navigateTo({');
+    expect(continueBuyNowSource).toContain('/pages/checkout/index?mode=directBuy&snapshotId=');
+    expect(continueBuyNowSource).not.toContain("url: '/orders'");
+    expect(continueBuyNowSource).not.toContain("url: `/orders/${orderId}/confirm`");
+    expect(continueBuyNowSource).not.toContain('showSaveSuccessDialog.value = true');
     expect(continueBuyNowSource).not.toContain('addressId:');
     expect(continueBuyNowSource).not.toContain('targetProductionDate:');
-    expect(continueBuyNowSource).toContain("url: `/orders/${orderId}/confirm`");
-    expect(continueBuyNowSource).toContain('showSaveSuccessDialog.value = true');
-    expect(continueBuyNowSource).not.toContain("title: '保存成功'");
-    expect(continueBuyNowSource).not.toContain('Seven爸爸的微信号：zhaochengccc');
-    expect(continueBuyNowSource).not.toContain('/pages/checkout/index');
-    expect(source).not.toContain('uni.navigateTo({\n    url: `/pages/checkout/index');
+    expect(continueBuyNowSource).not.toContain('createWechatPayment(orderId)');
+    expect(continueBuyNowSource).not.toContain('requestOrderWechatPayment(paymentRes.data)');
+    expect(continueBuyNowSource).not.toContain("url: `/pages/order-detail/index?orderId=${orderId}`");
   });
 
-  it('shows the saved configuration success copy with one-tap WeChat ID copying', () => {
-    expect(templateSource).toContain('v-if="showSaveSuccessDialog"');
-    expect(templateSource).toContain('保存成功');
-    expect(templateSource).toContain('成品配置方案已经保存。');
-    expect(templateSource).toContain('请联系Seven爸爸了解制作信息。');
-    expect(templateSource).toContain('微信号：{{ SEVEN_DAD_WECHAT_ID }}');
-    expect(templateSource).toContain('@tap="copySevenDadWechatId"');
-    expect(templateSource).toContain('复制微信号');
-    expect(templateSource).toContain('@tap="closeSaveSuccessDialog"');
-    expect(templateSource).toContain('知道了');
-    expect(source).toContain("const SEVEN_DAD_WECHAT_ID = 'zhaochengccc'");
-    expect(source).toContain('function copySevenDadWechatId()');
-    expect(source).toContain('uni.setClipboardData');
-    expect(source).toContain('data: SEVEN_DAD_WECHAT_ID');
-    expect(source).toContain("title: '微信号已复制'");
+  it('does not show the old add-friend WeChat contact payment path', () => {
+    expect(templateSource).not.toContain('v-if="showSaveSuccessDialog"');
+    expect(templateSource).not.toContain('请联系Seven爸爸了解制作信息。');
+    expect(templateSource).not.toContain('微信号：{{ SEVEN_DAD_WECHAT_ID }}');
+    expect(templateSource).not.toContain('@tap="copySevenDadWechatId"');
+    expect(templateSource).not.toContain('复制微信号');
+    expect(templateSource).not.toContain('@tap="closeSaveSuccessDialog"');
+    expect(source).not.toContain("const SEVEN_DAD_WECHAT_ID = 'zhaochengccc'");
+    expect(source).not.toContain('showSaveSuccessDialog');
+    expect(source).not.toContain('function copySevenDadWechatId()');
+    expect(source).not.toContain('data: SEVEN_DAD_WECHAT_ID');
   });
 });

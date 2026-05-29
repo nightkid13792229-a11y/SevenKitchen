@@ -26,6 +26,7 @@ describe('supplement alternatives helpers', () => {
         imageUrl: 'https://cdn.example.com/default-square.jpg',
         preparationMethod: '随餐',
         nutrition_profile_snapshot: {
+          meta: { rawBasisType: 'PER_SERVING' },
           vitamins: { vitaminE: 200 }
         },
         properties: {
@@ -39,6 +40,7 @@ describe('supplement alternatives helpers', () => {
           imageUrl: 'https://cdn.example.com/default-square.jpg',
           addTimingLabel: '随餐',
           nutritionProfile: {
+            meta: { rawBasisType: 'PER_SERVING' },
             vitamins: {
               vitaminE: 200
             }
@@ -65,6 +67,7 @@ describe('supplement alternatives helpers', () => {
               },
               addTimingLabel: '随餐',
               nutritionProfile: {
+                meta: { rawBasisType: 'PER_SERVING' },
                 vitamins: {
                   vitaminE: 400
                 }
@@ -183,6 +186,7 @@ describe('supplement alternatives helpers', () => {
       ingredientId: 'supp-alt-1',
       name: '维生素E-400',
       nutritionProfile: {
+        meta: { rawBasisType: 'PER_SERVING' },
         vitamins: {
           vitaminE: 400
         }
@@ -218,6 +222,7 @@ describe('supplement alternatives helpers', () => {
       ingredientId: 'kelp-tablet',
       name: '海带片',
       nutritionProfile: {
+        meta: { rawBasisType: 'PER_SERVING' },
         minerals: {
           iodine: 150
         }

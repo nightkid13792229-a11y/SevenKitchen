@@ -43,8 +43,8 @@
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="订单状态">
-            <el-tag :type="getStatusType(order.status)">
-              {{ getStatusText(order.status) }}
+            <el-tag :type="getStatusType(order)">
+              {{ getStatusText(order) }}
             </el-tag>
           </el-descriptions-item>
           <el-descriptions-item label="创建时间" :span="2">
@@ -54,12 +54,12 @@
             {{ order.targetProductionDate ? formatDate(order.targetProductionDate) : '未设置' }}
           </el-descriptions-item>
           <el-descriptions-item label="支付方式">
-            {{ order.paymentMethod || '-' }}
+            {{ getPaymentMethodText(order.paymentMethod) }}
           </el-descriptions-item>
           <el-descriptions-item v-if="order.cancelledAt" label="取消时间" :span="2">
             {{ formatTime(order.cancelledAt) }}
           </el-descriptions-item>
-          <el-descriptions-item v-if="order.cancellationReason" label="取消原因" :span="2">
+          <el-descriptions-item v-if="order.cancellationReason" :label="isRefundedOrder(order) ? '退款说明' : '取消原因'" :span="2">
             {{ order.cancellationReason }}
           </el-descriptions-item>
           <el-descriptions-item v-if="order.cancelledBy" label="取消操作者">
@@ -105,17 +105,20 @@
       <!-- 客户和狗狗信息 -->
       <el-card class="info-card" shadow="never">
         <template #header>
-          <span class="card-title">客户和狗狗信息</span>
+          <span class="card-title">客户和收货信息</span>
         </template>
         <el-descriptions :column="2" border>
-          <el-descriptions-item label="客户ID">
-            {{ order.customerId }}
+          <el-descriptions-item label="客户">
+            {{ getCustomerName() }}
           </el-descriptions-item>
-          <el-descriptions-item label="狗狗ID">
-            {{ order.dogId || '-' }}
+          <el-descriptions-item label="联系电话">
+            {{ getCustomerPhone() }}
           </el-descriptions-item>
-          <el-descriptions-item label="收货地址ID">
-            {{ order.addressId || '-' }}
+          <el-descriptions-item label="狗狗">
+            {{ getDogSummary() }}
+          </el-descriptions-item>
+          <el-descriptions-item label="收货地址">
+            {{ getAddressText() }}
           </el-descriptions-item>
         </el-descriptions>
       </el-card>
@@ -127,7 +130,7 @@
         </template>
         <el-descriptions :column="2" border>
           <el-descriptions-item label="支付方式">
-            {{ order.paymentMethod || '-' }}
+            {{ getPaymentMethodText(order.paymentMethod) }}
           </el-descriptions-item>
           <el-descriptions-item label="支付状态">
             <el-tag
@@ -155,6 +158,15 @@
             >
               修改物流信息
             </el-button>
+            <el-button
+              v-if="canUploadWechatShipping"
+              type="warning"
+              size="small"
+              :loading="wechatShippingUploading"
+              @click="handleUploadWechatShipping"
+            >
+              微信发货异常重试
+            </el-button>
           </div>
         </template>
         <el-descriptions :column="2" border>
@@ -176,10 +188,15 @@
           <span class="card-title">商品信息</span>
         </template>
         <el-table :data="order.items" style="width: 100%">
+          <el-table-column label="狗狗" width="120">
+            <template #default="{ row }">
+              {{ row.dog?.name || '-' }}
+            </template>
+          </el-table-column>
           <el-table-column prop="recipeSnapshot.name" label="食谱名称" width="200" />
           <el-table-column label="版本号" width="80">
             <template #default="{ row }">
-              v{{ row.recipeSnapshot.version }}
+              {{ row.recipeSnapshot.version ? `v${row.recipeSnapshot.version}` : '-' }}
             </template>
           </el-table-column>
           <el-table-column prop="quantityG" label="总净重" width="100">
@@ -293,6 +310,13 @@
             :closable="false"
             class="financial-alert"
           />
+          <el-alert
+            v-if="financialSummary.refundStatus"
+            :title="financialSummary.refundStatus.statusText"
+            :type="financialSummary.refundStatus.success ? 'success' : 'warning'"
+            :closable="false"
+            class="financial-alert"
+          />
 
           <el-descriptions :column="2" border>
             <el-descriptions-item label="结算状态">
@@ -314,6 +338,17 @@
             </el-descriptions-item>
             <el-descriptions-item label="实际毛利">
               {{ formatFinancialAmount(financialSummary.actualMargin) }}
+            </el-descriptions-item>
+            <el-descriptions-item v-if="financialSummary.refundStatus" label="退款状态" :span="2">
+              <el-tag :type="financialSummary.refundStatus.success ? 'success' : 'warning'">
+                {{ financialSummary.refundStatus.statusText }}
+              </el-tag>
+            </el-descriptions-item>
+            <el-descriptions-item v-if="financialSummary.refundStatus" label="退款单号">
+              {{ financialSummary.refundStatus.outRefundNo || '-' }}
+            </el-descriptions-item>
+            <el-descriptions-item v-if="financialSummary.refundStatus" label="退款金额">
+              {{ formatFinancialAmount(financialSummary.refundStatus.amount) }}
             </el-descriptions-item>
             <el-descriptions-item label="差价建议">
               <el-tag :type="getAdjustmentTagType(financialSummary.shortageAdjustmentAmount)">
@@ -610,6 +645,7 @@ const financialSummary = ref<OrderFinancialSummary | null>(null)
 const financialLoading = ref(false)
 const remarkDraft = ref('')
 const savingRemark = ref(false)
+const wechatShippingUploading = ref(false)
 const adjustmentDialogVisible = ref(false)
 const savingAdjustment = ref(false)
 const adjustmentForm = reactive({
@@ -806,7 +842,9 @@ const goBack = () => {
 const formatTime = (time: string | Date) => formatDateTime(time)
 
 // 获取状态类型
-const getStatusType = (status: OrderStatus) => {
+const getStatusType = (orderOrStatus: Order | OrderStatus) => {
+  const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
+  if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) return 'success'
   const typeMap: Record<string, any> = {
     INIT: 'info',
     PENDING_PAYMENT: 'warning',
@@ -823,7 +861,11 @@ const getStatusType = (status: OrderStatus) => {
 }
 
 // 获取状态文本
-const getStatusText = (status: OrderStatus) => {
+const getStatusText = (orderOrStatus: Order | OrderStatus) => {
+  const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
+  if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) {
+    return '已退款（钱款原路退回）'
+  }
   const textMap: Record<string, string> = {
     INIT: '订单创建',
     PENDING_PAYMENT: '待付款',
@@ -839,6 +881,10 @@ const getStatusText = (status: OrderStatus) => {
   return textMap[status] || status
 }
 
+const isRefundedOrder = (currentOrder: Order) => {
+  return currentOrder.status === OrderStatusEnum.CANCELLED && currentOrder.refundStatus?.success === true
+}
+
 // 获取支付状态文本
 const getPaymentStatusText = (status?: PaymentStatus) => {
   if (!status) return '-'
@@ -848,6 +894,51 @@ const getPaymentStatusText = (status?: PaymentStatus) => {
     [PaymentStatus.FAILED]: '支付失败'
   }
   return map[status] || status
+}
+
+const getPaymentMethodText = (method?: string | null) => {
+  if (!method) return '-'
+  const map: Record<string, string> = {
+    WECHAT_PAY: '微信支付',
+    WECHAT: '微信支付',
+    OFFLINE: '线下支付',
+    CASH: '现金',
+    BANK_TRANSFER: '银行转账'
+  }
+  return map[method] || method
+}
+
+const getCustomerName = () => {
+  return order.value?.address?.recipientName || '未记录'
+}
+
+const getCustomerPhone = () => {
+  return order.value?.address?.phone || '未记录'
+}
+
+const getAddressText = () => {
+  const address = order.value?.address
+  if (!address) return '未记录'
+
+  const region = address.regionText || [
+    address.region?.province,
+    address.region?.city,
+    address.region?.district
+  ].filter(Boolean).join(' ')
+
+  return [region, address.detailAddress].filter(Boolean).join(' ') || '未记录'
+}
+
+const getDogSummary = () => {
+  const dogNames = (order.value?.items || [])
+    .map((item) => item.dog?.name)
+    .filter(Boolean)
+
+  if (dogNames.length > 0) {
+    return Array.from(new Set(dogNames)).join('、')
+  }
+
+  return '未记录'
 }
 
 // 获取取消操作者文本
@@ -872,6 +963,16 @@ const canEditShipping = computed(() => {
   return order.value?.status === OrderStatusEnum.SHIPPED
 })
 
+const canUploadWechatShipping = computed(() => {
+  return Boolean(
+    order.value &&
+      order.value.status === OrderStatusEnum.SHIPPED &&
+      order.value.trackingNumber &&
+      order.value.carrierCode &&
+      order.value.paymentMethod === 'WECHAT_PAY'
+  )
+})
+
 // 发货
 const handleShip = () => {
   shippingDialogVisible.value = true
@@ -881,7 +982,16 @@ const handleShip = () => {
 const handleShippingSubmit = async (data: { carrierCode: string; trackingNumber: string }) => {
   try {
     await orderApi.ship(orderId.value, data)
-    ElMessage.success('发货成功')
+    try {
+      const result = await orderApi.uploadWechatShippingInfo(orderId.value)
+      if (result.success) {
+        ElMessage.success('发货成功，微信发货信息已上传')
+      } else {
+        ElMessage.warning(`发货成功，但微信发货信息未上传：${result.message}`)
+      }
+    } catch (uploadError: any) {
+      ElMessage.warning(uploadError?.message || '发货成功，但微信发货信息上传失败')
+    }
     loadOrder()
     loadHistory()
   } catch (error) {
@@ -892,6 +1002,39 @@ const handleShippingSubmit = async (data: { carrierCode: string; trackingNumber:
 // 编辑物流信息
 const handleEditShipping = () => {
   shippingDialogVisible.value = true
+}
+
+const handleUploadWechatShipping = async () => {
+  if (!order.value) return
+
+  try {
+    await ElMessageBox.confirm(
+      '系统发货时会自动上传微信发货信息。只有当微信后台提示未收到、自动上传失败，或历史订单需要修复时，才需要在这里重试上传。确认现在重试吗？',
+      '微信发货异常重试',
+      {
+        type: 'warning',
+        confirmButtonText: '确认重试',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch (error) {
+    return
+  }
+
+  wechatShippingUploading.value = true
+  try {
+    const result = await orderApi.uploadWechatShippingInfo(order.value.id)
+    if (result.success) {
+      ElMessage.success(result.message || '微信发货信息已上传')
+    } else {
+      ElMessage.warning(result.message || '微信发货信息上传未成功，请检查订单和支付配置')
+    }
+    loadHistory()
+  } catch (error: any) {
+    ElMessage.error(error?.message || '上传失败')
+  } finally {
+    wechatShippingUploading.value = false
+  }
 }
 
 // 完成订单

@@ -2,6 +2,19 @@ import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { fileURLToPath, URL } from 'node:url'
 
+const DEFAULT_API_PROXY_TARGET = 'http://localhost:3011'
+const DEFAULT_API_BASE_URL = `${DEFAULT_API_PROXY_TARGET}/api/v1`
+
+function resolveApiProxyTarget(apiBaseUrl = DEFAULT_API_BASE_URL) {
+  if (/^https?:\/\//.test(apiBaseUrl)) {
+    return new URL(apiBaseUrl).origin
+  }
+
+  return DEFAULT_API_PROXY_TARGET
+}
+
+const apiProxyTarget = resolveApiProxyTarget(process.env.VITE_API_BASE_URL)
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [vue()],
@@ -14,7 +27,7 @@ export default defineConfig({
     port: 5173,
     proxy: {
       '/api': {
-        target: 'http://localhost:3001',  // 本地后端 API
+        target: apiProxyTarget,
         changeOrigin: true
       }
     }

@@ -5,7 +5,7 @@
     <el-row :gutter="20" class="stats-row">
       <el-col :span="4">
         <order-stat-card
-          label="全部订单"
+          label="我的订单"
           :value="stats.total"
           type="primary"
           :icon="Document"
@@ -41,7 +41,7 @@
       </el-col>
       <el-col :span="4">
         <order-stat-card
-          label="已发货"
+          label="待收货"
           :value="stats.shipped"
           type="success"
           :icon="Van"
@@ -50,7 +50,7 @@
       </el-col>
       <el-col :span="4">
         <order-stat-card
-          label="已完成"
+          label="已收货"
           :value="stats.completed"
           type="success"
           :icon="CircleCheck"
@@ -65,12 +65,63 @@
         <div class="card-header">
           <span class="title">订单列表</span>
           <div class="header-actions">
+            <el-badge
+              v-if="wechatShippingPending.pendingCount > 0"
+              :value="wechatShippingPending.pendingCount > 99 ? '99+' : wechatShippingPending.pendingCount"
+            >
+              <el-button
+                type="warning"
+                :icon="RefreshRight"
+                :loading="wechatShippingRetrying"
+                @click="handleRetryPendingWechatShipping"
+              >
+                一键重试微信发货同步
+              </el-button>
+            </el-badge>
+            <el-button
+              v-else
+              type="success"
+              plain
+              :icon="CircleCheck"
+              :loading="wechatShippingLoading"
+              @click="loadWechatShippingPending"
+            >
+              微信发货同步正常
+            </el-button>
             <el-button type="primary" :icon="Download" @click="handleExport">
               导出Excel
             </el-button>
           </div>
         </div>
       </template>
+
+      <div class="order-scope-tabs">
+        <el-radio-group v-model="activeOrderScope" size="large" @change="handleOrderScopeChange">
+          <el-radio-button
+            v-for="item in orderScopeOptions"
+            :key="item.key"
+            :label="item.key"
+          >
+            <span>{{ item.label }}</span>
+            <span class="scope-count">{{ item.count }}</span>
+          </el-radio-button>
+        </el-radio-group>
+      </div>
+
+      <el-alert
+        v-if="wechatShippingPending.pendingCount > 0"
+        class="wechat-shipping-alert"
+        type="warning"
+        show-icon
+        :closable="false"
+      >
+        <template #title>
+          有 {{ wechatShippingPending.pendingCount }} 笔微信支付已发货订单需要同步或重试发货信息
+        </template>
+        <template #default>
+          系统发货时会自动上传；这里仅处理自动上传失败、历史订单未记录等异常情况。
+        </template>
+      </el-alert>
 
       <!-- 筛选和搜索区域 -->
       <el-form :inline="true" :model="filterForm" class="filter-form">
@@ -169,8 +220,8 @@
 
         <el-table-column prop="status" label="状态" width="100">
           <template #default="{ row }">
-            <el-tag :type="getStatusType(row.status)">
-              {{ getStatusText(row.status) }}
+            <el-tag :type="getStatusType(row)">
+              {{ getStatusText(row) }}
             </el-tag>
           </template>
         </el-table-column>
@@ -236,6 +287,16 @@
             >
               发货
             </el-button>
+            <el-button
+              v-if="isWechatShippingPending(row.id)"
+              type="warning"
+              size="small"
+              plain
+              :loading="wechatShippingRetrying"
+              @click="handleRetrySingleWechatShipping(row)"
+            >
+              重试同步
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -248,8 +309,8 @@
         :total="pagination.total"
         layout="total, sizes, prev, pager, next, jumper"
         style="margin-top: 20px; justify-content: flex-end"
-        @size-change="loadOrders"
-        @current-change="loadOrders"
+        @size-change="handlePageSizeChange"
+        @current-change="handlePageChange"
       />
     </el-card>
 
@@ -277,9 +338,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { ref, reactive, computed, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import {
   Document,
   Clock,
@@ -288,6 +349,7 @@ import {
   Van,
   CircleCheck,
   Download,
+  RefreshRight,
   Search
 } from '@element-plus/icons-vue'
 import OrderStatCard from './components/OrderStatCard.vue'
@@ -296,7 +358,11 @@ import ShippingDialog from './components/ShippingDialog.vue'
 import ConfirmPaymentDialog from './components/ConfirmPaymentDialog.vue'
 import { orderApi } from '@/api/orders'
 import { OrderStatus, OrderType } from '@/types/order'
-import type { OrderListItem, OrderStats } from '@/types/order'
+import type {
+  OrderListItem,
+  OrderStats,
+  WechatShippingUploadPendingSummary
+} from '@/types/order'
 import { formatDateTime, formatDate } from '@/utils/date'
 
 // 使枚举在模板中可用
@@ -304,6 +370,7 @@ const OrderStatusEnum = OrderStatus
 const OrderTypeEnum = OrderType
 
 const router = useRouter()
+const route = useRoute()
 
 // 数据
 const loading = ref(false)
@@ -314,6 +381,8 @@ const selectedOrders = ref<OrderListItem[]>([])
 // Phase 9: Simplified statistics aligned with e-commerce standards
 const stats = ref<OrderStats>({
   total: 0,
+  todayNew: 0,
+  paidRevenue: 0,
   pendingPayment: 0,
   paid: 0,
   purchasing: 0,
@@ -335,6 +404,8 @@ const filterForm = reactive({
 })
 
 const dateRange = ref<[string, string] | null>(null)
+type OrderScopeKey = 'all' | 'pendingReceive' | 'received' | 'aftersale'
+const activeOrderScope = ref<OrderScopeKey>('all')
 
 // 分页
 const pagination = reactive({
@@ -348,23 +419,71 @@ const cancelDialogVisible = ref(false)
 const shippingDialogVisible = ref(false)
 const confirmPaymentDialogVisible = ref(false)
 const currentOrder = ref<OrderListItem | null>(null)
+const wechatShippingLoading = ref(false)
+const wechatShippingRetrying = ref(false)
+const wechatShippingPending = ref<WechatShippingUploadPendingSummary>({
+  pendingCount: 0,
+  candidates: []
+})
 
 // 状态选项（仅显示管理员需要关注的状态）
 // Phase 9: Simplified status options aligned with e-commerce standards
 const statusOptions = [
+  { label: '待付款', value: OrderStatusEnum.PENDING_PAYMENT },
   { label: '已付款', value: OrderStatusEnum.PAID },
   { label: '采购中', value: OrderStatusEnum.PURCHASING },
   { label: '生产中', value: OrderStatusEnum.IN_PRODUCTION },
   { label: '急冻中', value: OrderStatusEnum.FREEZING },
-  { label: '已发货', value: OrderStatusEnum.SHIPPED },
-  { label: '已完成', value: OrderStatusEnum.COMPLETED },
-  { label: '已取消', value: OrderStatusEnum.CANCELLED }
+  { label: '待收货', value: OrderStatusEnum.SHIPPED },
+  { label: '已收货', value: OrderStatusEnum.COMPLETED },
+  { label: '售后中', value: OrderStatusEnum.AFTERSALE },
+  { label: '已取消/退款', value: OrderStatusEnum.CANCELLED }
 ]
+
+const orderScopeOptions = computed(() => [
+  {
+    key: 'all' as const,
+    label: '我的订单',
+    count: stats.value.total,
+    statuses: [] as OrderStatus[]
+  },
+  {
+    key: 'pendingReceive' as const,
+    label: '待收货',
+    count: stats.value.shipped,
+    statuses: [OrderStatusEnum.SHIPPED]
+  },
+  {
+    key: 'received' as const,
+    label: '已收货',
+    count: stats.value.completed,
+    statuses: [OrderStatusEnum.COMPLETED]
+  },
+  {
+    key: 'aftersale' as const,
+    label: '售后中',
+    count: stats.value.aftersale,
+    statuses: [OrderStatusEnum.AFTERSALE]
+  }
+])
+
+const hasSameStatuses = (left: OrderStatus[], right: OrderStatus[]) => {
+  if (left.length !== right.length) return false
+  return left.every((status) => right.includes(status))
+}
+
+const syncActiveOrderScopeFromStatus = () => {
+  const match = orderScopeOptions.value.find((item) =>
+    hasSameStatuses(filterForm.status, item.statuses)
+  )
+  activeOrderScope.value = match?.key || 'all'
+}
 
 // 状态卡片点击筛选映射
 // Phase 9: Simplified status mapping aligned with e-commerce standards
 const statCardStatusMap: Record<string, OrderStatus[]> = {
   '全部订单': [],
+  '我的订单': [],
   '已付款': [OrderStatusEnum.PAID],
   '生产中': [
     OrderStatusEnum.PURCHASING,
@@ -372,7 +491,47 @@ const statCardStatusMap: Record<string, OrderStatus[]> = {
     OrderStatusEnum.FREEZING
   ],
   '已发货': [OrderStatusEnum.SHIPPED],
-  '已完成': [OrderStatusEnum.COMPLETED]
+  '待收货': [OrderStatusEnum.SHIPPED],
+  '已完成': [OrderStatusEnum.COMPLETED],
+  '已收货': [OrderStatusEnum.COMPLETED],
+  '售后中': [OrderStatusEnum.AFTERSALE]
+}
+
+const handleOrderScopeChange = (key: OrderScopeKey) => {
+  const option = orderScopeOptions.value.find((item) => item.key === key)
+  filterForm.status = option ? [...option.statuses] : []
+  pagination.page = 1
+  loadOrders()
+}
+
+const normalizeQueryValue = (value: unknown): string => {
+  if (Array.isArray(value)) {
+    return String(value[0] || '')
+  }
+  return typeof value === 'string' ? value : ''
+}
+
+const applyRouteFilters = () => {
+  const statusParam = normalizeQueryValue(route.query.status)
+  const startDate = normalizeQueryValue(route.query.startDate)
+  const endDate = normalizeQueryValue(route.query.endDate)
+
+  if (statusParam) {
+    filterForm.status = statusParam
+      .split(',')
+      .map((status) => status.trim())
+      .filter((status): status is OrderStatus =>
+        Object.values(OrderStatusEnum).includes(status as OrderStatus)
+      )
+  }
+
+  if (startDate || endDate) {
+    filterForm.startDate = startDate
+    filterForm.endDate = endDate || startDate
+    dateRange.value = [filterForm.startDate, filterForm.endDate]
+  }
+
+  syncActiveOrderScopeFromStatus()
 }
 
 // 加载订单列表
@@ -392,6 +551,13 @@ const loadOrders = async () => {
     const response = await orderApi.list(params)
     orderList.value = response.list
     pagination.total = response.total
+    pagination.page = response.page || pagination.page
+    pagination.pageSize = response.pageSize || pagination.pageSize
+
+    if (orderList.value.length === 0 && pagination.total > 0 && pagination.page > 1) {
+      pagination.page = Math.max(1, Math.ceil(pagination.total / pagination.pageSize))
+      await loadOrders()
+    }
   } catch (error) {
     ElMessage.error('加载订单列表失败')
   } finally {
@@ -410,13 +576,92 @@ const loadStats = async () => {
 }
 
 // 搜索
+const loadWechatShippingPending = async () => {
+  wechatShippingLoading.value = true
+  try {
+    wechatShippingPending.value = await orderApi.getWechatShippingUploadPending()
+  } catch (error) {
+    console.error('加载微信发货同步状态失败:', error)
+  } finally {
+    wechatShippingLoading.value = false
+  }
+}
+
+const isWechatShippingPending = (orderId: string) => {
+  return wechatShippingPending.value.candidates.some((item) => item.orderId === orderId)
+}
+
+const handleRetryPendingWechatShipping = async () => {
+  if (wechatShippingPending.value.pendingCount <= 0) {
+    await loadWechatShippingPending()
+    return
+  }
+
+  try {
+    await ElMessageBox.confirm(
+      `系统会重新上传 ${wechatShippingPending.value.pendingCount} 笔微信支付已发货订单的发货信息。正常发货会自动上传，这里只处理异常或历史漏传记录。确认继续吗？`,
+      '一键重试微信发货同步',
+      {
+        type: 'warning',
+        confirmButtonText: '确认重试',
+        cancelButtonText: '取消'
+      }
+    )
+  } catch (error) {
+    return
+  }
+
+  wechatShippingRetrying.value = true
+  try {
+    const result = await orderApi.retryPendingWechatShippingUploads()
+    if (result.failed > 0) {
+      ElMessage.warning(`已处理 ${result.total} 笔，成功 ${result.success} 笔，失败 ${result.failed} 笔`)
+    } else {
+      ElMessage.success(`微信发货同步完成，成功 ${result.success} 笔`)
+    }
+    await loadWechatShippingPending()
+    loadOrders()
+  } catch (error: any) {
+    ElMessage.error(error?.message || '微信发货同步重试失败')
+  } finally {
+    wechatShippingRetrying.value = false
+  }
+}
+
+const handleRetrySingleWechatShipping = async (order: OrderListItem) => {
+  wechatShippingRetrying.value = true
+  try {
+    const result = await orderApi.uploadWechatShippingInfo(order.id)
+    if (result.success && !result.skipped) {
+      ElMessage.success(result.message || '微信发货信息已同步')
+    } else {
+      ElMessage.warning(result.message || '微信发货信息未同步成功')
+    }
+    await loadWechatShippingPending()
+  } catch (error: any) {
+    ElMessage.error(error?.message || '微信发货同步失败')
+  } finally {
+    wechatShippingRetrying.value = false
+  }
+}
+
 const handleSearch = () => {
+  pagination.page = 1
+  loadOrders()
+}
+
+const handlePageChange = () => {
+  loadOrders()
+}
+
+const handlePageSizeChange = () => {
   pagination.page = 1
   loadOrders()
 }
 
 // 筛选
 const handleFilter = () => {
+  syncActiveOrderScopeFromStatus()
   pagination.page = 1
   loadOrders()
 }
@@ -441,6 +686,7 @@ const handleReset = () => {
   filterForm.startDate = ''
   filterForm.endDate = ''
   dateRange.value = null
+  activeOrderScope.value = 'all'
   pagination.page = 1
   loadOrders()
 }
@@ -450,6 +696,7 @@ const handleStatCardClick = (label: string) => {
   const statuses = statCardStatusMap[label]
   if (statuses) {
     filterForm.status = statuses
+    syncActiveOrderScopeFromStatus()
     pagination.page = 1
     loadOrders()
   }
@@ -497,6 +744,7 @@ const handleCancelSubmit = async (reason: string) => {
     ElMessage.success('订单已取消')
     loadOrders()
     loadStats()
+    loadWechatShippingPending()
   } catch (error) {
     ElMessage.error('取消订单失败')
   }
@@ -517,6 +765,7 @@ const handleShippingSubmit = async (data: { carrierCode: string; trackingNumber:
     ElMessage.success('发货成功')
     loadOrders()
     loadStats()
+    loadWechatShippingPending()
   } catch (error) {
     ElMessage.error('发货失败')
   }
@@ -574,7 +823,9 @@ const handleExport = async () => {
 
 // 获取状态类型
 // Phase 9: Simplified status types aligned with e-commerce standards
-const getStatusType = (status: OrderStatus) => {
+const getStatusType = (orderOrStatus: OrderListItem | OrderStatus) => {
+  const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
+  if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) return 'success'
   const typeMap: Record<string, any> = {
     INIT: 'info',
     PENDING_PAYMENT: 'warning',
@@ -592,7 +843,11 @@ const getStatusType = (status: OrderStatus) => {
 
 // 获取状态文本（仅显示管理员需要的状态）
 // Phase 9: Simplified status text aligned with e-commerce standards
-const getStatusText = (status: OrderStatus) => {
+const getStatusText = (orderOrStatus: OrderListItem | OrderStatus) => {
+  const status = typeof orderOrStatus === 'string' ? orderOrStatus : orderOrStatus.status
+  if (typeof orderOrStatus !== 'string' && isRefundedOrder(orderOrStatus)) {
+    return '已退款（钱款原路退回）'
+  }
   const textMap: Record<string, string> = {
     INIT: '订单创建',
     PENDING_PAYMENT: '待付款',
@@ -600,23 +855,57 @@ const getStatusText = (status: OrderStatus) => {
     PURCHASING: '采购中',
     IN_PRODUCTION: '制作中',
     FREEZING: '急冻中',
-    SHIPPED: '已发货',
-    COMPLETED: '已完成',
+    SHIPPED: '待收货',
+    COMPLETED: '已收货',
     CANCELLED: '已取消',
     AFTERSALE: '售后中'
   }
   return textMap[status] || status
 }
 
+const isRefundedOrder = (order: OrderListItem) => {
+  return order.status === OrderStatusEnum.CANCELLED && order.refundStatus?.success === true
+}
+
 onMounted(() => {
+  applyRouteFilters()
   loadOrders()
   loadStats()
+  loadWechatShippingPending()
 })
 </script>
 
 <style scoped>
 .orders-page {
   padding: 0;
+}
+
+.order-scope-tabs {
+  margin-bottom: 16px;
+}
+
+.order-scope-tabs :deep(.el-radio-button__inner) {
+  min-width: 104px;
+}
+
+.scope-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 20px;
+  padding: 0 6px;
+  margin-left: 8px;
+  border-radius: 999px;
+  background: rgba(64, 158, 255, 0.12);
+  color: #409eff;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+:deep(.el-radio-button.is-active .scope-count) {
+  background: rgba(255, 255, 255, 0.24);
+  color: #fff;
 }
 
 .stats-row {
@@ -641,7 +930,12 @@ onMounted(() => {
 
 .header-actions {
   display: flex;
+  align-items: center;
   gap: 10px;
+}
+
+.wechat-shipping-alert {
+  margin-bottom: 16px;
 }
 
 .filter-form {

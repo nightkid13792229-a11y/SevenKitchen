@@ -8,6 +8,7 @@ import { OrderService, ORDER_REPOSITORY, ORDER_STATUS_HISTORY_REPOSITORY } from 
 import { OrderSourcePlanService } from 'src/order/order-source-plan.service';
 import type { OrderRepository } from 'src/domain/order/order.repository';
 import type { OrderStatusHistoryRepository } from 'src/domain/order/order-status-history.repository';
+import { OrderStatusHistory } from 'src/domain/order/order-status-history.entity';
 import type { RecipeRepository } from 'src/domain/recipe/recipe.repository';
 import type { IngredientRepository } from 'src/domain/ingredient/ingredient.repository';
 import type { DogRepository } from 'src/domain/dog/dog.repository';
@@ -18,7 +19,7 @@ import {
   PreparationMethod,
   CookingMethod,
 } from 'src/domain/order';
-import { OrderType, OrderStatus, calculateDogEnergy } from 'src/domain';
+import { AftersaleType, OrderType, OrderStatus, calculateDogEnergy } from 'src/domain';
 import { Ingredient } from 'src/domain/ingredient/ingredient.entity';
 import {
   BaseUnit,
@@ -43,17 +44,22 @@ import { INGREDIENT_REPOSITORY } from 'src/ingredient/ingredient.service';
 import { ProcurementSkuService } from 'src/ingredient/procurement-sku.service';
 import { DOG_REPOSITORY } from 'src/dog/dog.service';
 import { ADDRESS_REPOSITORY } from 'src/address/address.service';
+import { SearchGovernanceService } from 'src/application/search-governance/search-governance.service';
 
 describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
   let service: OrderService;
   let orderRepository: jest.Mocked<OrderRepository>;
   let recipeRepository: jest.Mocked<RecipeRepository>;
   let dogRepository: jest.Mocked<DogRepository>;
+  let searchGovernance: jest.Mocked<
+    Pick<SearchGovernanceService, 'expandQuery' | 'recordSearchEvent'>
+  >;
 
   const mockOrderRepository: jest.Mocked<OrderRepository> = {
     findById: jest.fn(),
     findByCustomerId: jest.fn(),
     findByStatus: jest.fn(),
+    findAll: jest.fn(),
     save: jest.fn(),
   };
 
@@ -123,9 +129,25 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
     },
     order: {
       findUnique: jest.fn(),
+      findMany: jest.fn().mockResolvedValue([]),
+      count: jest.fn().mockResolvedValue(0),
       update: jest.fn(),
     },
+    dog: {
+      findUnique: jest.fn(),
+    },
+    recipe: {
+      findUnique: jest.fn(),
+      findFirst: jest.fn(),
+    },
   };
+
+  const mockSearchGovernance = {
+    expandQuery: jest.fn(),
+    recordSearchEvent: jest.fn(),
+  } as jest.Mocked<
+    Pick<SearchGovernanceService, 'expandQuery' | 'recordSearchEvent'>
+  >;
 
   const mockStatusHistoryRepository: jest.Mocked<OrderStatusHistoryRepository> = {
     append: jest.fn(),
@@ -209,6 +231,10 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
           provide: PrismaService,
           useValue: mockPrismaService,
         },
+        {
+          provide: SearchGovernanceService,
+          useValue: mockSearchGovernance,
+        },
       ],
     }).compile();
 
@@ -216,8 +242,16 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
     orderRepository = module.get(ORDER_REPOSITORY);
     recipeRepository = module.get(RECIPE_REPOSITORY);
     dogRepository = module.get(DOG_REPOSITORY);
+    searchGovernance = module.get(SearchGovernanceService);
 
     jest.clearAllMocks();
+    mockOrderRepository.findAll.mockResolvedValue({ list: [], total: 0 });
+    mockPrismaService.order.count.mockResolvedValue(0);
+    mockPrismaService.order.findMany.mockResolvedValue([]);
+    searchGovernance.expandQuery.mockImplementation(async (_domain, rawQuery) =>
+      rawQuery ? [rawQuery] : [],
+    );
+    searchGovernance.recordSearchEvent.mockResolvedValue({ id: 'query-log-1' });
     mockProcurementSkuService.batchFindActive.mockResolvedValue({
       'ingredient-1': [createMockProcurementSku()],
     });
@@ -346,6 +380,150 @@ describe('OrderService - Phase 8.9: dailyIntakeG Calculation', () => {
         minerals: { calcium: 360 },
       } as any,
     );
+
+  describe('listAllOrders - governed keyword search', () => {
+    const getLastOrderWhere = () =>
+      mockPrismaService.order.findMany.mock.calls.at(-1)?.[0]?.where;
+
+    const getIdSearchTerms = () =>
+      (getLastOrderWhere()?.OR ?? [])
+        .map((clause: any) => clause.id?.contains)
+        .filter(Boolean);
+
+    it('expands ORDER keyword aliases and maps status labels to exact order statuses', async () => {
+      searchGovernance.expandQuery.mockResolvedValue([
+        '待支付',
+        '未付款',
+        '未支付',
+      ]);
+
+      await service.listAllOrders({ keyword: '未付款' });
+
+      expect(searchGovernance.expandQuery).toHaveBeenCalledWith(
+        'ORDER',
+        '未付款',
+      );
+      expect(getLastOrderWhere()?.OR).toContainEqual({
+        status: OrderStatus.PENDING_PAYMENT,
+      });
+    });
+
+    it('matches customer phone suffix through the searchable order projection', async () => {
+      searchGovernance.expandQuery.mockResolvedValue(['1388']);
+
+      await service.listAllOrders({ keyword: '1388' });
+
+      expect(getLastOrderWhere()?.OR).toContainEqual({
+        customer: {
+          phone: {
+            contains: '1388',
+            mode: 'insensitive',
+          },
+        },
+      });
+    });
+
+    it('falls back to the original keyword when order query expansion fails', async () => {
+      searchGovernance.expandQuery.mockRejectedValue(
+        new Error('alias unavailable'),
+      );
+
+      await expect(
+        service.listAllOrders({ keyword: 'SK-ORDER-001' }),
+      ).resolves.toEqual({ list: [], total: 0 });
+
+      expect(getIdSearchTerms()).toContain('SK-ORDER-001');
+    });
+
+    it('keeps the original keyword first and caps expanded terms at eight unique values', async () => {
+      searchGovernance.expandQuery.mockResolvedValue([
+        '扩展1',
+        '扩展2',
+        '扩展3',
+        '原始',
+        '扩展4',
+        '扩展5',
+        '扩展6',
+        '扩展7',
+        '扩展8',
+        '扩展9',
+      ]);
+
+      await service.listAllOrders({ keyword: '原始' });
+
+      expect(getIdSearchTerms()).toEqual([
+        '原始',
+        '扩展1',
+        '扩展2',
+        '扩展3',
+        '扩展4',
+        '扩展5',
+        '扩展6',
+        '扩展7',
+      ]);
+    });
+
+    it('records admin order list searches with the total result count', async () => {
+      mockPrismaService.order.count.mockResolvedValue(7);
+      mockPrismaService.order.findMany.mockResolvedValue([]);
+
+      await service.listAllOrders({ keyword: ' 未付款 ' });
+
+      expect(searchGovernance.recordSearchEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          domain: 'ORDER',
+          source: 'ADMIN_ORDER_LIST',
+          rawQuery: '未付款',
+          resultCount: 7,
+        }),
+      );
+    });
+
+    it('preserves the exact status filter when keyword aliases also map to a status', async () => {
+      searchGovernance.expandQuery.mockResolvedValue(['待支付']);
+
+      await service.listAllOrders({
+        status: OrderStatus.PAID,
+        keyword: '未付款',
+      });
+
+      expect(getLastOrderWhere()?.status).toBe(OrderStatus.PAID);
+      expect(getLastOrderWhere()?.OR).toContainEqual({
+        status: OrderStatus.PENDING_PAYMENT,
+      });
+    });
+
+    it('keeps multi-status filters as an exact Prisma in-clause', async () => {
+      await service.listAllOrders({
+        status: [OrderStatus.PURCHASING, OrderStatus.IN_PRODUCTION] as any,
+      });
+
+      expect(getLastOrderWhere()?.status).toEqual({
+        in: [OrderStatus.PURCHASING, OrderStatus.IN_PRODUCTION],
+      });
+    });
+
+    it('keeps multi-status filters when keyword search clauses are present', async () => {
+      searchGovernance.expandQuery.mockResolvedValue(['1388']);
+
+      await service.listAllOrders({
+        status: [OrderStatus.PURCHASING, OrderStatus.IN_PRODUCTION] as any,
+        keyword: '1388',
+      });
+
+      expect(getLastOrderWhere()?.status).toEqual({
+        in: [OrderStatus.PURCHASING, OrderStatus.IN_PRODUCTION],
+      });
+      expect(getLastOrderWhere()?.OR).toContainEqual({
+        customer: {
+          phone: {
+            contains: '1388',
+            mode: 'insensitive',
+          },
+        },
+      });
+    });
+  });
 
   describe('createOrderDraft - dailyIntakeG calculation', () => {
     it('should calculate dailyIntakeG from DogCalc.finalFoodKcal and Recipe.energyDensityKcalPerKg', async () => {
@@ -1709,6 +1887,236 @@ describe('OrderService - Phase 8.16: Order Cancellation', () => {
       expect(result.status).toBe(OrderStatus.CANCELLED);
       expect(result.cancelledBy).toBe('system');
     });
+  });
+});
+
+describe('OrderService - Aftersale resolution state restoration', () => {
+  let service: OrderService;
+  let orderRepository: jest.Mocked<OrderRepository>;
+  let statusHistoryRepository: jest.Mocked<OrderStatusHistoryRepository>;
+
+  const createMockRecipeSnapshot = () => ({
+    id: 'recipe-1',
+    version: 1,
+    name: 'Test Recipe',
+    production_loss_rate: 1.07,
+    energy_density_kcal_per_kg: 1450,
+    nutrition_standard: 'FEDIAF_2021',
+    items: [],
+  });
+
+  const createMockOrder = (status: OrderStatus) => {
+    const item = new OrderItem(
+      'item-1',
+      'order-1',
+      'dog-1',
+      createMockRecipeSnapshot(),
+      1000,
+      10,
+      100,
+      null,
+      310.34,
+    );
+
+    return new Order(
+      'order-1',
+      'customer-1',
+      status,
+      OrderType.FRESH_FOOD,
+      new Date('2025-01-01T00:00:00Z'),
+      null,
+      null,
+      100,
+      10,
+      110,
+      [item],
+    );
+  };
+
+  const mockOrderRepository: jest.Mocked<OrderRepository> = {
+    findById: jest.fn(),
+    findByCustomerId: jest.fn(),
+    findByStatus: jest.fn(),
+    save: jest.fn(),
+  };
+
+  const mockStatusHistoryRepository: jest.Mocked<OrderStatusHistoryRepository> = {
+    append: jest.fn(),
+    findByOrderId: jest.fn(),
+  };
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        OrderService,
+        {
+          provide: ORDER_REPOSITORY,
+          useValue: mockOrderRepository,
+        },
+        {
+          provide: ORDER_STATUS_HISTORY_REPOSITORY,
+          useValue: mockStatusHistoryRepository,
+        },
+        {
+          provide: RECIPE_REPOSITORY,
+          useValue: {},
+        },
+        {
+          provide: INGREDIENT_REPOSITORY,
+          useValue: {},
+        },
+        {
+          provide: DOG_REPOSITORY,
+          useValue: {},
+        },
+        {
+          provide: ADDRESS_REPOSITORY,
+          useValue: {},
+        },
+        {
+          provide: PricingService,
+          useValue: {},
+        },
+        {
+          provide: GlobalConfigService,
+          useValue: {},
+        },
+        {
+          provide: ShippingService,
+          useValue: {},
+        },
+        {
+          provide: OrderSourcePlanService,
+          useValue: { applySourcePlanToIngredients: jest.fn() },
+        },
+        {
+          provide: 'IOrderPricingSnapshotRepository',
+          useValue: {
+            findById: jest.fn(),
+            create: jest.fn(),
+            markAsUsed: jest.fn(),
+          },
+        },
+        {
+          provide: PrismaService,
+          useValue: {
+            preparationMethod: { findMany: jest.fn().mockResolvedValue([]) },
+            order: { findUnique: jest.fn(), update: jest.fn() },
+          },
+        },
+      ],
+    }).compile();
+
+    service = module.get<OrderService>(OrderService);
+    orderRepository = module.get(ORDER_REPOSITORY);
+    statusHistoryRepository = module.get(ORDER_STATUS_HISTORY_REPOSITORY);
+    orderRepository.save.mockImplementation(async (order) => order);
+    statusHistoryRepository.append.mockResolvedValue(
+      new OrderStatusHistory(
+        'history-resolve',
+        'order-1',
+        OrderStatus.AFTERSALE,
+        OrderStatus.PAID,
+        new Date('2025-01-02T00:00:00Z'),
+        'admin',
+        'admin-1',
+        null,
+      ),
+    );
+  });
+
+  afterEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('restores a rejected refund to the status before aftersale', async () => {
+    const order = createMockOrder(OrderStatus.PURCHASING);
+    order.applyForAftersale(AftersaleType.REFUND, '想退款', []);
+    orderRepository.findById.mockResolvedValue(order);
+    statusHistoryRepository.findByOrderId.mockResolvedValue([
+      new OrderStatusHistory(
+        'history-apply',
+        'order-1',
+        OrderStatus.PURCHASING,
+        OrderStatus.AFTERSALE,
+        new Date('2025-01-01T00:00:00Z'),
+        'customer',
+        'customer-1',
+        { type: AftersaleType.REFUND },
+      ),
+    ]);
+
+    const result = await service.resolveAftersale(
+      'order-1',
+      'resolved',
+      'admin-1',
+      '退款驳回',
+      'ADMIN',
+    );
+
+    expect(result.status).toBe(OrderStatus.PURCHASING);
+    expect(result.completedAt).toBeFalsy();
+    expect(statusHistoryRepository.append).toHaveBeenCalledWith(
+      'order-1',
+      OrderStatus.AFTERSALE,
+      OrderStatus.PURCHASING,
+      'admin',
+      'admin-1',
+      { resolutionType: 'resolved', adminNote: '退款驳回' },
+    );
+  });
+
+  it('restores complaint resolution to the status before aftersale', async () => {
+    const order = createMockOrder(OrderStatus.SHIPPED);
+    order.applyForAftersale(AftersaleType.COMPLAINT, '有问题', []);
+    orderRepository.findById.mockResolvedValue(order);
+    statusHistoryRepository.findByOrderId.mockResolvedValue([
+      new OrderStatusHistory(
+        'history-apply',
+        'order-1',
+        OrderStatus.SHIPPED,
+        OrderStatus.AFTERSALE,
+        new Date('2025-01-01T00:00:00Z'),
+        'customer',
+        'customer-1',
+        { type: AftersaleType.COMPLAINT },
+      ),
+    ]);
+
+    const result = await service.resolveAftersale(
+      'order-1',
+      'resolved',
+      'admin-1',
+      '已沟通',
+      'ADMIN',
+    );
+
+    expect(result.status).toBe(OrderStatus.SHIPPED);
+    expect(result.completedAt).toBeFalsy();
+  });
+
+  it('rejects remake requests before production output exists', () => {
+    const order = createMockOrder(OrderStatus.PAID);
+
+    expect(() =>
+      order.applyForAftersale(AftersaleType.REMAKE, '想重做', []),
+    ).toThrow('Cannot apply for REMAKE aftersale from status: PAID');
+  });
+
+  it('blocks staff from resolving refund requests', async () => {
+    const order = createMockOrder(OrderStatus.PAID);
+    order.applyForAftersale(AftersaleType.REFUND, '想退款', []);
+    orderRepository.findById.mockResolvedValue(order);
+
+    await expect(
+      service.resolveAftersale(
+        'order-1',
+        'resolved',
+        'staff-1',
+        '员工驳回',
+        'STAFF',
+      ),
+    ).rejects.toThrow('退款申请仅管理员可以审核');
   });
 });
 

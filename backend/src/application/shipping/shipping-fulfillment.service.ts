@@ -18,6 +18,13 @@ import {
   ORDER_REPOSITORY,
   ORDER_STATUS_HISTORY_REPOSITORY,
 } from '../order/order.service';
+import {
+  WechatShippingBatchUploadResult,
+  WechatShippingUploadPendingSummary,
+  WechatShippingUploadResult,
+  WechatShippingUploadService,
+  WechatSpecialShippingReportResult,
+} from './wechat-shipping-upload.service';
 
 export interface OrderReadyForShipmentDto {
   id: string;
@@ -35,6 +42,11 @@ export interface OrderReadyForShipmentDto {
   }>;
 }
 
+export interface MarkOrderAsShippedResult {
+  order: Order;
+  wechatShippingUpload: WechatShippingUploadResult;
+}
+
 export interface MarkOrderAsShippedDto {
   trackingNumber: string;
   carrierCode: string;
@@ -49,6 +61,7 @@ export class ShippingFulfillmentService {
     private readonly orderRepository: OrderRepository,
     @Inject(ORDER_STATUS_HISTORY_REPOSITORY)
     private readonly statusHistoryRepository: OrderStatusHistoryRepository,
+    private readonly wechatShippingUploadService: WechatShippingUploadService,
   ) {}
 
   /**
@@ -88,7 +101,7 @@ export class ShippingFulfillmentService {
     dto: MarkOrderAsShippedDto,
     actor: 'customer' | 'staff' | 'admin' | 'system' = 'staff',
     actorId?: string | null,
-  ): Promise<Order> {
+  ): Promise<MarkOrderAsShippedResult> {
     const order = await this.orderRepository.findById(orderId);
     if (!order) {
       throw new NotFoundException(`Order not found: ${orderId}`);
@@ -146,13 +159,188 @@ export class ShippingFulfillmentService {
       this.logger.warn(
         `Order ${orderId} not found after save. Returning saved order.`,
       );
-      return savedOrder;
+      return {
+        order: savedOrder,
+        wechatShippingUpload: await this.uploadWechatShippingInfoSafely(
+          savedOrder.id,
+          actor,
+          actorId,
+        ),
+      };
     }
 
     this.logger.log(
       `Order ${orderId} marked as shipped with tracking number ${dto.trackingNumber} (carrier: ${dto.carrierCode})`,
     );
 
-    return reloadedOrder;
+    return {
+      order: reloadedOrder,
+      wechatShippingUpload: await this.uploadWechatShippingInfoSafely(
+        reloadedOrder.id,
+        actor,
+        actorId,
+      ),
+    };
+  }
+
+  async uploadWechatShippingInfo(
+    orderId: string,
+    actor: 'customer' | 'staff' | 'admin' | 'system' = 'staff',
+    actorId?: string | null,
+  ): Promise<WechatShippingUploadResult> {
+    return this.uploadWechatShippingInfoSafely(orderId, actor, actorId);
+  }
+
+  async listPendingWechatShippingUploads(
+    limit = 100,
+  ): Promise<WechatShippingUploadPendingSummary> {
+    return this.wechatShippingUploadService.listPendingUploads(limit);
+  }
+
+  async uploadPendingWechatShippingInfo(
+    limit = 100,
+  ): Promise<WechatShippingBatchUploadResult> {
+    const pending =
+      await this.wechatShippingUploadService.listPendingUploads(limit);
+    const results: WechatShippingBatchUploadResult['results'] = [];
+
+    for (const candidate of pending.candidates) {
+      const result = await this.uploadWechatShippingInfoSafely(
+        candidate.orderId,
+        'admin',
+        null,
+      );
+      results.push({
+        orderId: candidate.orderId,
+        success: result.success,
+        skipped: result.skipped,
+        message: result.message,
+      });
+    }
+
+    return {
+      total: results.length,
+      success: results.filter((item) => item.success && !item.skipped).length,
+      failed: results.filter((item) => !item.success).length,
+      skipped: results.filter((item) => item.skipped).length,
+      results,
+    };
+  }
+
+  async reportWechatSpecialShippingOrder(
+    orderId: string,
+    actor: 'customer' | 'staff' | 'admin' | 'system' = 'system',
+    actorId?: string | null,
+  ): Promise<WechatSpecialShippingReportResult> {
+    return this.reportWechatSpecialShippingOrderSafely(orderId, actor, actorId);
+  }
+
+  async reportPendingWechatSpecialShippingOrders(
+    limit = 100,
+  ): Promise<WechatShippingBatchUploadResult> {
+    const summary = await this.wechatShippingUploadService.reportPendingSpecialOrders(
+      limit,
+    );
+    return summary;
+  }
+
+  private async reportWechatSpecialShippingOrderSafely(
+    orderId: string,
+    actor: 'customer' | 'staff' | 'admin' | 'system',
+    actorId?: string | null,
+  ): Promise<WechatSpecialShippingReportResult> {
+    let result: WechatSpecialShippingReportResult;
+    try {
+      result = await this.wechatShippingUploadService.reportSpecialOrderForOrder(
+        orderId,
+        actor,
+        actorId,
+      );
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      result = {
+        success: false,
+        message,
+      };
+      this.logger.error(
+        `[WeChatShipping] Failed to report special shipping order ${orderId}: ${message}`,
+      );
+
+      try {
+        const currentOrder = await this.orderRepository.findById(orderId);
+        if (currentOrder) {
+          await this.statusHistoryRepository.append(
+            orderId,
+            currentOrder.status,
+            currentOrder.status,
+            actor,
+            actorId,
+            {
+              event: 'WECHAT_SPECIAL_SHIPPING_REPORT',
+              success: false,
+              skipped: false,
+              message,
+            },
+          );
+        }
+      } catch (historyError) {
+        this.logger.warn(
+          `[WeChatShipping] Failed to append special report failure history for order ${orderId}: ${
+            historyError instanceof Error
+              ? historyError.message
+              : String(historyError)
+          }`,
+        );
+      }
+    }
+
+    return result;
+  }
+
+  private async uploadWechatShippingInfoSafely(
+    orderId: string,
+    actor: 'customer' | 'staff' | 'admin' | 'system',
+    actorId?: string | null,
+  ): Promise<WechatShippingUploadResult> {
+    let result: WechatShippingUploadResult;
+    try {
+      result = await this.wechatShippingUploadService.uploadForOrder(orderId);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      result = {
+        success: false,
+        message,
+      };
+      this.logger.error(
+        `[WeChatShipping] Failed to upload shipping info for order ${orderId}: ${message}`,
+      );
+    }
+
+    try {
+      const currentOrder = await this.orderRepository.findById(orderId);
+      if (currentOrder) {
+        await this.statusHistoryRepository.append(
+          orderId,
+          currentOrder.status,
+          currentOrder.status,
+          actor,
+          actorId,
+          {
+            event: 'WECHAT_SHIPPING_UPLOAD',
+            success: result.success,
+            skipped: Boolean(result.skipped),
+            message: result.message,
+          },
+        );
+      }
+    } catch (historyError) {
+      this.logger.warn(
+        `[WeChatShipping] Failed to append upload history for order ${orderId}: ${
+          historyError instanceof Error ? historyError.message : String(historyError)
+        }`,
+      );
+    }
+
+    return result;
   }
 }

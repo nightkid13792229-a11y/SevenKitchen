@@ -8,6 +8,7 @@ import type {
   FilterOptions,
   IngredientGroup,
 } from '../../domain/recipe/recipe.repository';
+import { getRecipeLifeStageLabel } from '../../domain/recipe/enums';
 import { PrismaService } from '../prisma.service';
 
 // Type for Recipe with items included
@@ -16,6 +17,7 @@ type RecipeWithItems = Prisma.RecipeGetPayload<{
     items: {
       include: {
         ingredient: true;
+        nutritionFood: true;
         supplementAlternatives: {
           include: {
             alternativeIngredient: true;
@@ -50,6 +52,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
         items: {
           include: {
             ingredient: true,
+            nutritionFood: true,
             supplementAlternatives: {
               include: {
                 alternativeIngredient: true,
@@ -88,6 +91,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
         items: {
           include: {
             ingredient: true,
+            nutritionFood: true,
             supplementAlternatives: {
               include: {
                 alternativeIngredient: true,
@@ -134,6 +138,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
                 tags: true,
               },
             },
+            nutritionFood: true,
             supplementAlternatives: {
               include: {
                 alternativeIngredient: true,
@@ -250,6 +255,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
                 tags: true,
               },
             },
+            nutritionFood: true,
             supplementAlternatives: {
               include: {
                 alternativeIngredient: true,
@@ -524,14 +530,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
 
   // Helper methods for label translation
   private getLifeStageLabel(stage: string): string {
-    const labels: Record<string, string> = {
-      PUPPY: '幼犬',
-      ADULT: '成犬',
-      SENIOR: '老年犬',
-      PREGNANCY: '妊娠期',
-      LACTATION: '哺乳期',
-    };
-    return labels[stage] || stage;
+    return getRecipeLifeStageLabel(stage);
   }
 
   private getHealthTagLabel(tag: string): string {
@@ -566,7 +565,6 @@ export class PrismaRecipeRepository implements RecipeRepository {
       energyDensityKcalPerKg: recipe.energyDensityKcalPerKg,
       productionLossRate: recipe.productionLossRate,
       batchLaborHours: recipe.batchLaborHours,
-      nutritionReportUrl: recipe.nutritionReportUrl,
     };
 
     if (!existing) {
@@ -581,6 +579,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
             recipeId: recipe.id,
             recipeVersion: recipe.version,
             ingredientId: item.ingredientId,
+            nutritionFoodId: item.nutritionFoodId,
             preparationMethod: item.preparationMethod,
             exampleWeight: item.exampleWeight,
             ratioPercent: item.ratioPercent,
@@ -616,6 +615,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
             recipeId: recipe.id,
             recipeVersion: recipe.version,
             ingredientId: item.ingredientId,
+            nutritionFoodId: item.nutritionFoodId,
             preparationMethod: item.preparationMethod,
             exampleWeight: item.exampleWeight,
             ratioPercent: item.ratioPercent,
@@ -640,6 +640,7 @@ export class PrismaRecipeRepository implements RecipeRepository {
         items: {
           include: {
             ingredient: true,
+            nutritionFood: true,
             supplementAlternatives: {
               include: {
                 alternativeIngredient: true,
@@ -679,7 +680,6 @@ export class PrismaRecipeRepository implements RecipeRepository {
       designSource: record.designSource,
       nutritionStandard: record.nutritionStandard,
       nutritionDetailedData: record.nutritionDetailedData,
-      nutritionReportUrl: record.nutritionReportUrl,
       description: record.description,
       viewCount: record.viewCount ?? 0,
       favoriteCount: record.favoriteCount ?? 0,
@@ -688,6 +688,21 @@ export class PrismaRecipeRepository implements RecipeRepository {
         (item): RecipeItem => ({
           id: item.id,
           ingredientId: item.ingredientId,
+          nutritionFoodId: item.nutritionFoodId,
+          nutritionState: item.nutritionFood?.preparationState ?? null,
+          nutritionStateLabel:
+            item.nutritionFood?.preparationStateLabel ??
+            item.nutritionFood?.preparationState ??
+            null,
+          nutritionFood: item.nutritionFood
+            ? {
+                id: item.nutritionFood.id,
+                name: item.nutritionFood.name,
+                nameEn: item.nutritionFood.nameEn,
+                preparationState: item.nutritionFood.preparationState,
+                preparationStateLabel: item.nutritionFood.preparationStateLabel,
+              }
+            : null,
           preparationMethod: item.preparationMethod,
           exampleWeight: item.exampleWeight ? Number(item.exampleWeight) : null,
           ratioPercent: item.ratioPercent ? Number(item.ratioPercent) : null,

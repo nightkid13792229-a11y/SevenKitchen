@@ -226,25 +226,34 @@ export class Order {
     const validTransitions: Record<OrderStatus, OrderStatus[]> = {
       [OrderStatus.INIT]: [OrderStatus.PENDING_PAYMENT, OrderStatus.CANCELLED],
       [OrderStatus.PENDING_PAYMENT]: [OrderStatus.PAID, OrderStatus.CANCELLED],
-      [OrderStatus.PAID]: [OrderStatus.PURCHASING, OrderStatus.CANCELLED],
+      [OrderStatus.PAID]: [
+        OrderStatus.PURCHASING,
+        OrderStatus.CANCELLED,
+        OrderStatus.AFTERSALE,
+      ],
       [OrderStatus.PURCHASING]: [
         OrderStatus.PAID,
         OrderStatus.IN_PRODUCTION,
         OrderStatus.CANCELLED,
+        OrderStatus.AFTERSALE,
       ],
       // Allow IN_PRODUCTION → PURCHASING for batch deletion (undo production)
       [OrderStatus.IN_PRODUCTION]: [
         OrderStatus.PURCHASING,
         OrderStatus.FREEZING,
         OrderStatus.CANCELLED,
+        OrderStatus.AFTERSALE,
       ],
       [OrderStatus.FREEZING]: [OrderStatus.SHIPPED, OrderStatus.AFTERSALE],
       [OrderStatus.SHIPPED]: [OrderStatus.COMPLETED, OrderStatus.AFTERSALE],
       [OrderStatus.COMPLETED]: [OrderStatus.AFTERSALE],
       [OrderStatus.AFTERSALE]: [
+        OrderStatus.PAID,
+        OrderStatus.PURCHASING,
+        OrderStatus.IN_PRODUCTION,
+        OrderStatus.FREEZING,
         OrderStatus.SHIPPED,
         OrderStatus.COMPLETED,
-        OrderStatus.IN_PRODUCTION,
         OrderStatus.CANCELLED,
       ],
       [OrderStatus.CANCELLED]: [],
@@ -472,15 +481,30 @@ export class Order {
     reason: string,
     photos: string[] = [],
   ): void {
-    const allowedStatuses = [
+    const refundStatuses = [
+      OrderStatus.PAID,
+      OrderStatus.PURCHASING,
+      OrderStatus.IN_PRODUCTION,
       OrderStatus.FREEZING,
       OrderStatus.SHIPPED,
       OrderStatus.COMPLETED,
     ];
+    const remakeStatuses = [
+      OrderStatus.FREEZING,
+      OrderStatus.SHIPPED,
+      OrderStatus.COMPLETED,
+    ];
+    const complaintStatuses = refundStatuses;
+    const allowedStatuses =
+      type === AftersaleType.REMAKE
+        ? remakeStatuses
+        : type === AftersaleType.COMPLAINT
+          ? complaintStatuses
+          : refundStatuses;
 
     if (!allowedStatuses.includes(this.status)) {
       throw new InvalidStateTransitionError(
-        `Cannot apply for aftersale from status: ${this.status}. Order must be in FREEZING, SHIPPED, or COMPLETED status.`,
+        `Cannot apply for ${type} aftersale from status: ${this.status}.`,
       );
     }
 
@@ -501,7 +525,10 @@ export class Order {
    * @param resolutionType Type of resolution (refunded, remade, resolved)
    * @throws InvalidStateTransitionError if order is not in AFTERSALE status
    */
-  resolveAftersale(resolutionType: 'refunded' | 'remade' | 'resolved'): void {
+  resolveAftersale(
+    resolutionType: 'refunded' | 'remade' | 'resolved',
+    resolvedTargetStatus: OrderStatus = OrderStatus.COMPLETED,
+  ): void {
     if (this.status !== OrderStatus.AFTERSALE) {
       throw new InvalidStateTransitionError(
         `Cannot resolve aftersale from status: ${this.status}. Order must be in AFTERSALE status.`,
@@ -513,6 +540,9 @@ export class Order {
     switch (resolutionType) {
       case 'refunded':
         // Transition to CANCELLED status for refund
+        this.cancelledAt = new Date();
+        this.cancelledBy = 'admin';
+        this.cancellationReason = '售后退款审核通过';
         this.transitionTo(OrderStatus.CANCELLED);
         break;
       case 'remade':
@@ -520,11 +550,15 @@ export class Order {
         this.transitionTo(OrderStatus.IN_PRODUCTION);
         break;
       case 'resolved':
-        // Mark as completed (complaint resolved)
-        if (!this.completedAt) {
+        if (resolvedTargetStatus === OrderStatus.CANCELLED) {
+          throw new InvalidStateTransitionError(
+            'Resolved aftersale cannot target CANCELLED status',
+          );
+        }
+        if (resolvedTargetStatus === OrderStatus.COMPLETED && !this.completedAt) {
           this.completedAt = new Date();
         }
-        this.transitionTo(OrderStatus.COMPLETED);
+        this.transitionTo(resolvedTargetStatus);
         break;
     }
   }

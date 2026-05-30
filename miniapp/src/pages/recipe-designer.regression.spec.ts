@@ -433,15 +433,21 @@ describe('recipe designer editor guardrails', () => {
 
   it('restores the nutrition assessment category scroll position after ingredient edits', () => {
     expect(editorSource).toContain('<scroll-view v-if="assessmentListVisible" scroll-y class="assessment-list"')
+    expect(editorSource).toContain(':key="selectedAssessmentCategory"')
     expect(editorSource).toContain(':scroll-top="assessmentScrollTop"')
     expect(editorSource).toContain('@scroll="onAssessmentListScroll"')
     expect(editorSource).toContain('const assessmentScrollTopByCategory = ref<Partial<Record<AssessmentCategoryKey, number>>>({})')
     expect(editorSource).toContain('const assessmentScrollTop = ref(0)')
+    expect(editorSource).toContain('const assessmentCurrentScrollTop = ref(0)')
     expect(editorSource).toContain('function onAssessmentListScroll')
     expect(editorSource).toContain('function restoreAssessmentScrollPosition')
     expect(editorSource).toContain('rememberAssessmentScrollPosition()')
     expect(editorSource).toContain('restoreAssessmentScrollPosition(selectedAssessmentCategory.value)')
     expect(editorSource).not.toContain('<view v-if="assessmentListVisible" class="assessment-list">')
+
+    const scrollHandler = editorSource.match(/function onAssessmentListScroll[\s\S]*?\n}/)?.[0] || ''
+    expect(scrollHandler).toContain('assessmentCurrentScrollTop.value = scrollTop')
+    expect(scrollHandler).not.toContain('assessmentScrollTop.value = scrollTop')
   })
 
   it('renders supplemental macro metrics as overview rows instead of standard range rows', () => {
@@ -510,13 +516,13 @@ describe('recipe designer editor guardrails', () => {
   })
 
   it('uses scenario for draft updates and never sends legacy scenario or nutrition ids while changing weight', () => {
-    const updateDraftCall = editorSource.match(/recipeDesignerApi\.updateDraft\([\s\S]*?\)/)?.[0] || ''
+    const updateDraftCalls = editorSource.match(/recipeDesignerApi\.updateDraft\([\s\S]*?\)/g) || []
     const updateWeightBlock = editorSource.match(/(?:async\s+)?function updateWeight[\s\S]*?\n}/)?.[0] || ''
 
-    expect(updateDraftCall).not.toContain('scenario')
-    expect(updateDraftCall).not.toContain('fediafDogScenario')
+    expect(updateDraftCalls.join('\n')).not.toContain('fediafDogScenario')
     expect(updateWeightBlock).toContain('recipeDesignerApi.updateItem')
     expect(updateWeightBlock).toContain('weightG')
+    expect(updateWeightBlock).not.toContain('scenario')
     expect(updateWeightBlock).not.toContain('nutritionFoodId')
   })
 
@@ -546,6 +552,86 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).not.toContain('上拉查看')
     expect(editorSource).not.toContain('下拉收起')
     expect(editorSource).not.toContain('@tap="assessmentExpanded = !assessmentExpanded"')
+  })
+
+  it('adds editor-wide undo and redo controls for recipe item changes', () => {
+    expect(editorSource).toContain("from './editor-history'")
+    expect(editorSource).toContain('history-controls')
+    expect(editorSource).toContain('undoRecipeDesignerHistory')
+    expect(editorSource).toContain('redoRecipeDesignerHistory')
+    expect(editorSource).toContain('canUndoRecipeDesignerHistory')
+    expect(editorSource).toContain('canRedoRecipeDesignerHistory')
+    expect(editorSource).toContain('撤回')
+    expect(editorSource).toContain('前进')
+    expect(editorSource).toContain('undoRecipeDesignerHistoryLabel')
+    expect(editorSource).toContain('redoRecipeDesignerHistoryLabel')
+    expect(editorSource).toContain('撤回中')
+    expect(editorSource).toContain('前进中')
+    expect(editorSource).not.toContain('history-feedback-bar')
+    expect(editorSource).not.toContain('historyFeedbackMessage')
+    expect(editorSource).not.toContain('history-feedback-action')
+  })
+
+  it('lets editable drafts switch FEDIAF 2025 life stages from the assessment drawer', () => {
+    expect(editorSource).toContain('FEDIAF_DOG_SCENARIO_DESCRIPTIONS')
+    expect(editorSource).toContain('FEDIAF_DOG_SCENARIO_LABELS')
+    expect(editorSource).toContain('const scenarioOptions: Array<{ label: string; value: FediafDogScenario }>')
+    expect(editorSource).toContain('scenario-switch-btn')
+    expect(editorSource).toContain('v-if="!isEditorReadOnly"')
+    expect(editorSource).toContain('@tap.stop="openScenarioSwitchSheet"')
+    const standardContextStyle = editorSource.match(/\.standard-context\s*\{[\s\S]*?\n\}/)?.[0] || ''
+    expect(standardContextStyle).toContain('text-align: right;')
+    expect(standardContextStyle).toContain('max-width:')
+    expect(editorSource).toContain(`class="drawer-drag-zone"
+        @touchstart.stop="onAssessmentTouchStart"
+        @touchmove.stop.prevent="onAssessmentTouchMove"
+        @touchend.stop="onAssessmentTouchEnd"
+      >
+        <view class="drawer-grip"></view>
+      </view>
+
+      <view class="drawer-handle">`)
+    expect(editorSource).toContain('scenario-switch-mask')
+    expect(editorSource).toContain('scenario-switch-panel')
+    expect(editorSource).toContain('切换生命阶段')
+    expect(editorSource).toContain('pendingScenario')
+    expect(editorSource).toContain('scenarioSwitching')
+    expect(editorSource).toContain('selectScenarioOption(option.value)')
+    expect(editorSource).toContain('confirmScenarioSwitch')
+    expect(editorSource).toContain('recipeDesignerApi.updateDraft(draftId.value, { scenario: pendingScenario.value })')
+    expect(editorSource).toContain('scenario.value = pendingScenario.value')
+    expect(editorSource).toContain('let scenarioPersisted = false')
+    expect(editorSource).toContain('if (!scenarioPersisted) {')
+    expect(editorSource).toContain('rememberAssessmentScrollPosition()')
+    expect(editorSource).toContain('await refreshAssessment()')
+    expect(editorSource).toContain('scenarioSwitchSheetVisible.value = false')
+  })
+
+  it('records undo history for weight, assessment switch, add, remove, and reorder edits', () => {
+    expect(editorSource).toContain('createUpdateItemHistoryEntry')
+    expect(editorSource).toContain('createAddItemHistoryEntry')
+    expect(editorSource).toContain('createRemoveItemHistoryEntry')
+    expect(editorSource).toContain('createReorderItemsHistoryEntry')
+    expect(editorSource).toContain('pushEditorHistory')
+    expect(editorSource).toContain('recordHistoryItemIdReplacement')
+    expect(editorSource).toContain('executeHistoryEntry')
+    expect(editorSource).toContain('applyHistoryOrder')
+    expect(editorSource).toContain('itemWeightEditBaselines')
+  })
+
+  it('applies undo and redo optimistically while preserving rollback on failure', () => {
+    expect(editorSource).toContain('historyActionDirection')
+    expect(editorSource).toContain('type HistoryActionDirection')
+    expect(editorSource).toContain('type RecipeDesignerEditorStateSnapshot')
+    expect(editorSource).toContain('snapshotRecipeDesignerEditorState')
+    expect(editorSource).toContain('restoreRecipeDesignerEditorState')
+    expect(editorSource).toContain('applyHistoryEntryOptimistically')
+    expect(editorSource).toContain('applyOptimisticHistoryItemPatch')
+    expect(editorSource).toContain('insertOptimisticHistoryItem')
+    expect(editorSource).toContain('removeOptimisticHistoryItem')
+    expect(editorSource).toContain('const snapshot = snapshotRecipeDesignerEditorState()')
+    expect(editorSource).toContain('applyHistoryEntryOptimistically(entry, direction)')
+    expect(editorSource).toContain('restoreRecipeDesignerEditorState(snapshot)')
   })
 
   it('lets the assessment panel rest at dragged positions instead of snapping only open or closed', () => {

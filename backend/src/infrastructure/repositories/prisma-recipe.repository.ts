@@ -309,18 +309,12 @@ export class PrismaRecipeRepository implements RecipeRepository {
     // Filter out recipes that contain excluded ingredients
     if (options?.excludeIngredients && options.excludeIngredients.length > 0) {
       const excludeSet = new Set(options.excludeIngredients);
-      console.log(`[PrismaRecipeRepo] PAGINATED excludeIngredients:`, [...excludeSet]);
-      const beforeCount = filteredRecipes.length;
       filteredRecipes = filteredRecipes.filter((recipe) => {
         const hasExcluded = recipe.items?.some(
           (item) => item.ingredientId && excludeSet.has(item.ingredientId),
         );
-        if (hasExcluded) {
-          console.log(`[PrismaRecipeRepo] Excluding recipe "${recipe.name}" - items:`, recipe.items?.map(i => ({ ingId: i.ingredientId, name: i.ingredient?.name })));
-        }
         return !hasExcluded;
       });
-      console.log(`[PrismaRecipeRepo] After excludeIngredients filter: ${beforeCount} -> ${filteredRecipes.length}`);
     }
 
     // Group by seriesId when present, otherwise recipeId, and take one representative.

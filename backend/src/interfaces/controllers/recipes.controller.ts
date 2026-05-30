@@ -821,17 +821,26 @@ export class RecipesController {
     const exactMatch = requestedLifeStage
       ? seriesRecipes.find((recipe) => recipe.seriesLifeStage === requestedLifeStage)
       : null;
+    const concreteRecipeMatch = !requestedLifeStage
+      ? seriesRecipes.find(
+          (recipe) =>
+            recipe.recipeId === id && recipe.seriesId && recipe.seriesId !== id,
+        )
+      : null;
     const fallbackLifeStage = resolveDefaultSeriesLifeStage(configuredStages);
     const selectedRecipe =
       exactMatch ??
+      concreteRecipeMatch ??
       seriesRecipes.find((recipe) => recipe.seriesLifeStage === fallbackLifeStage) ??
       seriesRecipes[0];
     const selectedLifeStage = selectedRecipe.seriesLifeStage;
     const matchType: RecipeLifeStageMatchDto['matchType'] = exactMatch
       ? 'MATCHED'
-      : selectedLifeStage === 'HIGH_ACTIVITY_ADULT'
-        ? 'FALLBACK_ADULT'
-        : 'FALLBACK_FIRST';
+      : concreteRecipeMatch
+        ? 'MATCHED'
+        : selectedLifeStage === 'HIGH_ACTIVITY_ADULT'
+          ? 'FALLBACK_ADULT'
+          : 'FALLBACK_FIRST';
 
     const availableLifeStageVersions = seriesRecipes.map((recipe) => ({
       lifeStage: recipe.seriesLifeStage,

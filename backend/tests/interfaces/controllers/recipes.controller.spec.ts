@@ -266,6 +266,38 @@ describe('RecipesController (e2e)', () => {
       expect(response.body.data.data).toHaveLength(1);
       expect(response.body.data.data[0].seriesId).toBe('series-1');
     });
+
+    it('uses the newest same-series public recipe as the list representative', async () => {
+      await recipeRepository.save({
+        id: 'adult-recipe-id',
+        version: 10,
+        name: '牛肉南瓜鲜食 成犬旧代表',
+        status: 'PUBLIC',
+        energyDensityKcalPerKg: 1200,
+        productionLossRate: 1.07,
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        createdAt: new Date('2024-01-01T00:00:00.000Z'),
+      } as Recipe & { createdAt: Date });
+      await recipeRepository.save({
+        id: 'senior-recipe-id',
+        version: 1,
+        name: '牛肉南瓜鲜食 老年犬新代表',
+        status: 'PUBLIC',
+        energyDensityKcalPerKg: 1100,
+        productionLossRate: 1.07,
+        seriesId: 'series-1',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        createdAt: new Date('2024-02-01T00:00:00.000Z'),
+      } as Recipe & { createdAt: Date });
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes')
+        .expect(200);
+
+      expect(response.body.data.total).toBe(1);
+      expect(response.body.data.data[0].id).toBe('senior-recipe-id');
+    });
   });
 
   describe('GET /api/v1/recipes/recommendations/:dogId', () => {
@@ -507,6 +539,118 @@ describe('RecipesController (e2e)', () => {
         expect.objectContaining({
           requestedLifeStage: 'PUPPY_14_WEEKS_PLUS',
           selectedLifeStage: 'PUPPY_14_WEEKS_PLUS',
+          matchType: 'MATCHED',
+        }),
+      );
+    });
+
+    it('opens the requested public concrete recipe stage when no dog or manual stage is usable', async () => {
+      const seniorRecipe = publicSeriesRecipe({
+        id: 'row-senior',
+        recipeId: 'senior-recipe-id',
+        name: '牛肉南瓜鲜食 老年犬',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+      });
+      mockPrismaService.recipe.findMany
+        .mockResolvedValueOnce([seniorRecipe])
+        .mockResolvedValueOnce([
+          publicSeriesRecipe({}),
+          seniorRecipe,
+          publicSeriesRecipe({
+            id: 'row-puppy',
+            recipeId: 'puppy-recipe-id',
+            name: '牛肉南瓜鲜食 幼犬',
+            seriesLifeStage: 'PUPPY_14_WEEKS_PLUS',
+            applicableLifeStages: ['PUPPY_14_WEEKS_PLUS'],
+          }),
+        ]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes/senior-recipe-id')
+        .expect(200);
+
+      expect(response.body.data.id).toBe('senior-recipe-id');
+      expect(response.body.data.selectedRecipeId).toBe('senior-recipe-id');
+      expect(response.body.data.selectedLifeStage).toBe(
+        'LOW_ACTIVITY_ADULT_OR_SENIOR',
+      );
+      expect(response.body.data.lifeStageMatch).not.toHaveProperty(
+        'requestedLifeStage',
+      );
+    });
+
+    it('allows manual lifeStage query to switch away from a public concrete recipe id', async () => {
+      const seniorRecipe = publicSeriesRecipe({
+        id: 'row-senior',
+        recipeId: 'senior-recipe-id',
+        name: '牛肉南瓜鲜食 老年犬',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+      });
+      mockPrismaService.recipe.findMany
+        .mockResolvedValueOnce([seniorRecipe])
+        .mockResolvedValueOnce([
+          publicSeriesRecipe({}),
+          seniorRecipe,
+          publicSeriesRecipe({
+            id: 'row-puppy',
+            recipeId: 'puppy-recipe-id',
+            name: '牛肉南瓜鲜食 幼犬',
+            seriesLifeStage: 'PUPPY_14_WEEKS_PLUS',
+            applicableLifeStages: ['PUPPY_14_WEEKS_PLUS'],
+          }),
+        ]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes/senior-recipe-id?lifeStage=PUPPY_14_WEEKS_PLUS')
+        .expect(200);
+
+      expect(response.body.data.id).toBe('puppy-recipe-id');
+      expect(response.body.data.selectedLifeStage).toBe('PUPPY_14_WEEKS_PLUS');
+      expect(response.body.data.lifeStageMatch).toEqual(
+        expect.objectContaining({
+          requestedLifeStage: 'PUPPY_14_WEEKS_PLUS',
+          selectedLifeStage: 'PUPPY_14_WEEKS_PLUS',
+          matchType: 'MATCHED',
+        }),
+      );
+    });
+
+    it('uses an owned dog life stage before a public concrete recipe id default', async () => {
+      mockJwtAuthService.validateToken.mockReturnValue({
+        userId: 'customer-1',
+        customerId: 'customer-1',
+        role: 'CUSTOMER',
+      });
+      mockPrismaService.dog.findFirst.mockResolvedValue({
+        id: 'dog-1',
+        birthday: new Date('2020-01-01T00:00:00.000Z'),
+        lifeStageOverride: 'ADULT',
+        activityLevel: 'HIGH',
+      });
+      const seniorRecipe = publicSeriesRecipe({
+        id: 'row-senior',
+        recipeId: 'senior-recipe-id',
+        name: '牛肉南瓜鲜食 老年犬',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+      });
+      mockPrismaService.recipe.findMany
+        .mockResolvedValueOnce([seniorRecipe])
+        .mockResolvedValueOnce([publicSeriesRecipe({}), seniorRecipe]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes/senior-recipe-id?dogId=dog-1')
+        .set('Authorization', 'Bearer customer-token')
+        .expect(200);
+
+      expect(response.body.data.id).toBe('adult-recipe-id');
+      expect(response.body.data.selectedLifeStage).toBe('HIGH_ACTIVITY_ADULT');
+      expect(response.body.data.lifeStageMatch).toEqual(
+        expect.objectContaining({
+          requestedLifeStage: 'HIGH_ACTIVITY_ADULT',
+          selectedLifeStage: 'HIGH_ACTIVITY_ADULT',
           matchType: 'MATCHED',
         }),
       );

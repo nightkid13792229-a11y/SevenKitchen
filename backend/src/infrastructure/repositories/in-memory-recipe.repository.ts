@@ -113,6 +113,34 @@ export class InMemoryRecipeRepository implements RecipeRepository {
     if (candidate.id === existing.id && candidate.version !== existing.version) {
       return candidate.version > existing.version;
     }
+
+    const candidateTime = this.getCreatedAtTime(candidate);
+    const existingTime = this.getCreatedAtTime(existing);
+    if (
+      candidateTime !== null &&
+      existingTime !== null &&
+      candidateTime !== existingTime
+    ) {
+      return candidateTime > existingTime;
+    }
+    if (candidateTime !== null && existingTime === null) {
+      return true;
+    }
+
     return candidate.version > existing.version;
+  }
+
+  private getCreatedAtTime(recipe: Recipe): number | null {
+    const createdAt = (recipe as Recipe & { createdAt?: Date | string }).createdAt;
+    if (!createdAt) {
+      return null;
+    }
+
+    const time =
+      createdAt instanceof Date
+        ? createdAt.getTime()
+        : new Date(createdAt).getTime();
+
+    return Number.isNaN(time) ? null : time;
   }
 }

@@ -64,6 +64,15 @@ export class RecipeService {
     },
   };
 
+  private readonly recipeListInclude = {
+    series: true,
+    healthTagAssignments: {
+      include: {
+        healthTag: true,
+      },
+    },
+  };
+
   private normalizeSupplementAlternativeIngredientIds(
     ingredientIds?: string[] | null,
   ): string[] {
@@ -407,18 +416,18 @@ export class RecipeService {
 
     const recipes = await this.prisma.recipe.findMany({
       where,
-      include: {
-        series: true,
-        healthTagAssignments: {
-          include: {
-            healthTag: true,
-          },
-        },
-      },
+      include: this.recipeListInclude,
       orderBy: { createdAt: 'desc' },
     });
+    const fullSeriesRecipes = await this.loadFullSeriesRecipesForAdminList(
+      recipes,
+      Boolean(status || lifeStage || healthTag || search),
+    );
 
-    const groupedRecipes = this.buildRecipeSeriesListRows(recipes);
+    const groupedRecipes = this.buildRecipeSeriesListRows(
+      recipes,
+      fullSeriesRecipes,
+    );
     const total = groupedRecipes.length;
     const data = groupedRecipes.slice(
       (page - 1) * pageSize,
@@ -435,8 +444,10 @@ export class RecipeService {
 
   private buildRecipeSeriesListRows(
     recipes: any[],
+    fullSeriesRecipes: any[] = recipes,
   ): RecipeSummaryResponseDto[] {
     const groups = new Map<string, any[]>();
+    const fullSeriesGroups = new Map<string, any[]>();
 
     for (const recipe of recipes) {
       const key = recipe.seriesId
@@ -445,12 +456,28 @@ export class RecipeService {
       groups.set(key, [...(groups.get(key) ?? []), recipe]);
     }
 
+    for (const recipe of fullSeriesRecipes) {
+      if (!recipe.seriesId) {
+        continue;
+      }
+      const key = `series:${recipe.seriesId}`;
+      fullSeriesGroups.set(key, [
+        ...(fullSeriesGroups.get(key) ?? []),
+        recipe,
+      ]);
+    }
+
     return [...groups.values()]
-      .map((group) =>
-        group.some((recipe) => recipe.seriesId)
-          ? this.buildRecipeSeriesListRow(group)
-          : this.buildRecipeVersionListRow(group),
-      )
+      .map((group) => {
+        const seriesId = group.find((recipe) => recipe.seriesId)?.seriesId;
+        if (!seriesId) {
+          return this.buildRecipeVersionListRow(group);
+        }
+
+        return this.buildRecipeSeriesListRow(
+          fullSeriesGroups.get(`series:${seriesId}`) ?? group,
+        );
+      })
       .sort((left, right) => {
         const leftTime = new Date(left.createdAt).getTime();
         const rightTime = new Date(right.createdAt).getTime();
@@ -486,6 +513,37 @@ export class RecipeService {
     };
   }
 
+  private async loadFullSeriesRecipesForAdminList(
+    matchingRecipes: any[],
+    hasFilter: boolean,
+  ): Promise<any[]> {
+    if (!hasFilter) {
+      return matchingRecipes.filter((recipe) => recipe.seriesId);
+    }
+
+    const seriesIds = [
+      ...new Set(
+        matchingRecipes
+          .map((recipe) => recipe.seriesId)
+          .filter((seriesId): seriesId is string => Boolean(seriesId)),
+      ),
+    ];
+
+    if (seriesIds.length === 0) {
+      return [];
+    }
+
+    return await this.prisma.recipe.findMany({
+      where: {
+        seriesId: {
+          in: seriesIds,
+        },
+      },
+      include: this.recipeListInclude,
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   private buildRecipeSeriesListRow(group: any[]): RecipeSummaryResponseDto {
     const pendingDraft = this.findNewestRecipeByStatus(
       group,
@@ -500,8 +558,7 @@ export class RecipeService {
       currentPublic ??
       [...group].sort(
         (left, right) =>
-          this.getRecipeTimestamp(right.updatedAt ?? right.createdAt) -
-          this.getRecipeTimestamp(left.updatedAt ?? left.createdAt),
+          this.compareRecipeVersionThenUpdatedAt(right, left),
       )[0];
     const summary = this.mapToSummaryDto(current);
     const seriesName =
@@ -520,10 +577,8 @@ export class RecipeService {
         ? this.mapToVersionSummaryDto(pendingDraft)
         : undefined,
       versionHistory: [...group]
-        .sort(
-          (left, right) =>
-            this.getRecipeTimestamp(right.updatedAt ?? right.createdAt) -
-            this.getRecipeTimestamp(left.updatedAt ?? left.createdAt),
+        .sort((left, right) =>
+          this.compareRecipeVersionThenUpdatedAt(right, left),
         )
         .map((recipe) => this.mapToVersionSummaryDto(recipe)),
       seriesStages: this.buildRecipeSeriesStageSummaries(group),
@@ -546,8 +601,7 @@ export class RecipeService {
         this.findNewestRecipeByStatus(stageRecipes, RecipeStatus.PUBLIC) ??
         [...stageRecipes].sort(
           (left, right) =>
-            this.getRecipeTimestamp(right.updatedAt ?? right.createdAt) -
-            this.getRecipeTimestamp(left.updatedAt ?? left.createdAt),
+            this.compareRecipeVersionThenUpdatedAt(right, left),
         )[0];
 
       if (!stageRecipe) {
@@ -576,11 +630,21 @@ export class RecipeService {
     return (
       recipes
         .filter((recipe) => recipe.status === status)
-        .sort(
-          (left, right) =>
-            this.getRecipeTimestamp(right.updatedAt ?? right.createdAt) -
-            this.getRecipeTimestamp(left.updatedAt ?? left.createdAt),
+        .sort((left, right) =>
+          this.compareRecipeVersionThenUpdatedAt(right, left),
         )[0] ?? null
+    );
+  }
+
+  private compareRecipeVersionThenUpdatedAt(left: any, right: any): number {
+    const byVersion = (left.version ?? 0) - (right.version ?? 0);
+    if (byVersion !== 0) {
+      return byVersion;
+    }
+
+    return (
+      this.getRecipeTimestamp(left.updatedAt ?? left.createdAt) -
+      this.getRecipeTimestamp(right.updatedAt ?? right.createdAt)
     );
   }
 

@@ -583,6 +583,22 @@ describe('recipe designer editor guardrails', () => {
     expect(stickyHeaderStyle).toContain('background: #fff;')
   })
 
+  it('shows clear visual feedback while dragging recipe ingredients in reorder mode', () => {
+    expect(editorSource).toContain('dragTargetIndex')
+    expect(editorSource).toContain('showDragInsertionMarker(index)')
+    expect(editorSource).toContain('class="drag-insertion-marker"')
+    expect(editorSource).toContain('pulseItemDragFeedback()')
+    expect(editorSource).toContain('dragTargetIndex.value = targetIndex')
+    expect(editorSource).toContain('dragTargetIndex.value = -1')
+    const draggingStyle = editorSource.match(/\.item-row\.dragging\s*\{[\s\S]*?\n\}/)?.[0] || ''
+    expect(draggingStyle).toContain('border-color: #1677ff;')
+    expect(draggingStyle).toContain('box-shadow:')
+    expect(draggingStyle).toContain('transform: scale')
+    const markerStyle = editorSource.match(/\.drag-insertion-marker\s*\{[\s\S]*?\n\}/)?.[0] || ''
+    expect(markerStyle).toContain('background: #1677ff;')
+    expect(markerStyle).toContain('box-shadow:')
+  })
+
   it('lets editable drafts switch FEDIAF 2025 life stages from the assessment drawer', () => {
     expect(editorSource).toContain('FEDIAF_DOG_SCENARIO_DESCRIPTIONS')
     expect(editorSource).toContain('FEDIAF_DOG_SCENARIO_LABELS')

@@ -72,63 +72,68 @@
         <view
           v-for="(item, index) in items"
           :key="item.id"
-          class="item-row"
-          :class="{
-            'item-row-excluded': !isItemIncludedInAssessment(item),
-            'item-row-reordering': reorderMode,
-            dragging: draggingItemId === item.id,
-          }"
+          class="item-row-frame"
         >
-          <view v-if="reorderMode" class="item-drag-handle-shell">
-            <button
-              class="drag-handle"
-              hover-class="none"
-              @touchstart.stop.prevent="startItemDrag(item, index, $event)"
-              @touchmove.stop.prevent="onItemTouchMove"
-              @touchend.stop.prevent="finishItemDrag($event)"
-              @touchcancel.stop.prevent="cancelItemDrag($event)"
-            >
-              <view class="drag-handle-bar"></view>
-              <view class="drag-handle-bar"></view>
-              <view class="drag-handle-bar"></view>
-            </button>
-          </view>
-          <view class="item-leading">
-            <text class="item-type-tag" :class="getItemTypeTagClass(item)">
-              {{ getItemTypeLabel(item) }}
-            </text>
-          </view>
-          <view class="item-main">
-            <text class="item-name">{{ getItemName(item) }}</text>
-            <text class="item-meta">{{ getItemNutritionProfileName(item) }}</text>
-          </view>
-          <view class="weight-editor">
-            <input
-              class="weight-input"
-              type="digit"
-              :value="formatItemWeightInput(item.weightG)"
-              :disabled="isEditorReadOnly || reorderMode"
-              @input="onWeightInput(item, $event)"
-              @blur="updateWeight(item)"
-              @confirm="updateWeight(item)"
-            />
-            <text class="weight-unit">{{ getItemUnit(item) }}</text>
-          </view>
-          <view class="item-ratio-column">
-            <text v-if="shouldShowItemWeightRatio(item)" class="item-ratio">
-              {{ getItemWeightPercentLabel(item) }}
-            </text>
-          </view>
-          <view v-if="!reorderMode && !isEditorReadOnly" class="item-action-stack" @tap.stop>
-            <view class="include-control">
-              <switch
-                class="include-switch"
-                :checked="isItemIncludedInAssessment(item)"
-                color="#1677ff"
-                @change="toggleItemAssessment(item, $event)"
-              />
+          <view v-if="showDragInsertionMarker(index)" class="drag-insertion-marker"></view>
+          <view
+            class="item-row"
+            :class="{
+              'item-row-excluded': !isItemIncludedInAssessment(item),
+              'item-row-reordering': reorderMode,
+              dragging: draggingItemId === item.id,
+            }"
+          >
+            <view v-if="reorderMode" class="item-drag-handle-shell">
+              <button
+                class="drag-handle"
+                hover-class="none"
+                @touchstart.stop.prevent="startItemDrag(item, index, $event)"
+                @touchmove.stop.prevent="onItemTouchMove"
+                @touchend.stop.prevent="finishItemDrag($event)"
+                @touchcancel.stop.prevent="cancelItemDrag($event)"
+              >
+                <view class="drag-handle-bar"></view>
+                <view class="drag-handle-bar"></view>
+                <view class="drag-handle-bar"></view>
+              </button>
             </view>
-            <button class="icon-text-btn" @tap.stop="removeIngredient(item)">删除</button>
+            <view class="item-leading">
+              <text class="item-type-tag" :class="getItemTypeTagClass(item)">
+                {{ getItemTypeLabel(item) }}
+              </text>
+            </view>
+            <view class="item-main">
+              <text class="item-name">{{ getItemName(item) }}</text>
+              <text class="item-meta">{{ getItemNutritionProfileName(item) }}</text>
+            </view>
+            <view class="weight-editor">
+              <input
+                class="weight-input"
+                type="digit"
+                :value="formatItemWeightInput(item.weightG)"
+                :disabled="isEditorReadOnly || reorderMode"
+                @input="onWeightInput(item, $event)"
+                @blur="updateWeight(item)"
+                @confirm="updateWeight(item)"
+              />
+              <text class="weight-unit">{{ getItemUnit(item) }}</text>
+            </view>
+            <view class="item-ratio-column">
+              <text v-if="shouldShowItemWeightRatio(item)" class="item-ratio">
+                {{ getItemWeightPercentLabel(item) }}
+              </text>
+            </view>
+            <view v-if="!reorderMode && !isEditorReadOnly" class="item-action-stack" @tap.stop>
+              <view class="include-control">
+                <switch
+                  class="include-switch"
+                  :checked="isItemIncludedInAssessment(item)"
+                  color="#1677ff"
+                  @change="toggleItemAssessment(item, $event)"
+                />
+              </view>
+              <button class="icon-text-btn" @tap.stop="removeIngredient(item)">删除</button>
+            </view>
           </view>
         </view>
       </view>
@@ -836,6 +841,7 @@ const addingItem = ref(false)
 const creatingRevision = ref(false)
 const reorderMode = ref(false)
 const draggingItemId = ref('')
+const dragTargetIndex = ref(-1)
 const dragPersisting = ref(false)
 const ingredientNutrientSearchTarget = ref<AssessmentNutrientSearchTarget | null>(null)
 const ingredientSearchKeyword = ref('')
@@ -1342,11 +1348,12 @@ function startItemDrag(item: DesignerItem, index: number, event: any) {
   stopItemDragEvent(event)
   if (draggingItemId.value === item.id) return
   draggingItemId.value = item.id
+  dragTargetIndex.value = index
   dragPreparedIndex = index
   dragStartY = getTouchClientY(event) || dragStartY
   dragOriginalOrderIds = items.value.map((candidate) => candidate.id)
   captureItemRowRects()
-  uni.vibrateShort?.({ type: 'light' })
+  pulseItemDragFeedback()
 }
 
 function onItemTouchMove(event: any) {
@@ -1356,7 +1363,9 @@ function onItemTouchMove(event: any) {
   if (currentIndex < 0) return
   const targetIndex = getDragTargetIndex(getTouchClientY(event), currentIndex)
   if (targetIndex === currentIndex) return
+  dragTargetIndex.value = targetIndex
   items.value = moveItem(items.value, currentIndex, targetIndex)
+  pulseItemDragFeedback()
   void nextTick(() => captureItemRowRects())
 }
 
@@ -1395,8 +1404,17 @@ function lockEditorScrollWhileItemDragging(event: any) {
   stopItemDragEvent(event)
 }
 
+function showDragInsertionMarker(index: number) {
+  return Boolean(reorderMode.value && draggingItemId.value && dragTargetIndex.value === index)
+}
+
+function pulseItemDragFeedback() {
+  uni.vibrateShort?.({ type: 'light' })
+}
+
 function clearItemDragState() {
   draggingItemId.value = ''
+  dragTargetIndex.value = -1
   dragPreparedIndex = -1
   dragOriginalOrderIds = []
   itemRowRects = []
@@ -2886,6 +2904,19 @@ function formatAssessmentNumber(value: unknown) {
   margin-top: 20rpx;
 }
 
+.item-row-frame {
+  display: flex;
+  flex-direction: column;
+}
+
+.drag-insertion-marker {
+  height: 6rpx;
+  margin: 0 8rpx 10rpx;
+  border-radius: 999rpx;
+  background: #1677ff;
+  box-shadow: 0 0 0 6rpx rgba(22, 119, 255, 0.12);
+}
+
 .ingredient-list-actions {
   margin-top: 22rpx;
 }
@@ -2903,20 +2934,27 @@ function formatAssessmentNumber(value: unknown) {
   position: relative;
   justify-content: space-between;
   gap: 14rpx;
-  padding: 20rpx 0;
-  border-top: 1rpx solid #f0f0f0;
-  transition: background-color 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease, transform 0.16s ease;
-}
-
-.item-row.dragging {
-  background: #eef6ff;
-  box-shadow: 0 8rpx 20rpx rgba(24, 144, 255, 0.14);
-  transform: scale(1.015);
-  z-index: 2;
+  padding: 20rpx 12rpx;
+  border: 1rpx solid transparent;
+  border-top-color: #f0f0f0;
+  border-radius: 12rpx;
+  box-sizing: border-box;
+  transition: background-color 0.16s ease, border-color 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease, transform 0.16s ease;
 }
 
 .item-row-reordering {
   gap: 10rpx;
+  background: #fbfdff;
+  border-color: #e5edf7;
+}
+
+.item-row.dragging {
+  border-color: #1677ff;
+  background: #eef6ff;
+  box-shadow: 0 12rpx 28rpx rgba(24, 144, 255, 0.22);
+  opacity: 0.96;
+  transform: scale(1.018);
+  z-index: 2;
 }
 
 .item-row-excluded {

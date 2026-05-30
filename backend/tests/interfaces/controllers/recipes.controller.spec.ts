@@ -68,6 +68,9 @@ describe('RecipesController (e2e)', () => {
       findFirst: jest.fn(),
       update: jest.fn(),
     },
+    recipeShareToken: {
+      findFirst: jest.fn(),
+    },
     dog: {
       findFirst: jest.fn(),
     },
@@ -139,6 +142,7 @@ describe('RecipesController (e2e)', () => {
     mockPrismaService.recipe.findMany.mockResolvedValue([]);
     mockPrismaService.preparationMethod.findMany.mockResolvedValue([]);
     mockPrismaService.dog.findFirst.mockResolvedValue(null);
+    mockPrismaService.recipeShareToken.findFirst.mockResolvedValue(null);
     mockPrismaService.recipe.findFirst.mockImplementation(
       async (args?: { where?: { recipeId?: string } }) => {
         const recipeId = args?.where?.recipeId;
@@ -404,6 +408,83 @@ describe('RecipesController (e2e)', () => {
       ]);
     });
 
+    it('returns an accessible private concrete recipe before public series selection', async () => {
+      const concreteRecipeId = 'private-recipe-id';
+      await recipeRepository.save({
+        id: concreteRecipeId,
+        version: 2,
+        name: '牛肉南瓜鲜食 私有新版',
+        status: 'DRAFT',
+        energyDensityKcalPerKg: 1300,
+        productionLossRate: 1.07,
+        seriesId: 'series-1',
+        seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+        items: [],
+      } as Recipe);
+      mockJwtAuthService.validateToken.mockReturnValue({
+        userId: 'staff-1',
+        role: 'STAFF',
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        publicSeriesRecipe({
+          recipeId: concreteRecipeId,
+          version: 1,
+          name: '牛肉南瓜鲜食 公开旧版',
+        }),
+        publicSeriesRecipe({
+          id: 'row-puppy',
+          recipeId: 'puppy-recipe-id',
+          name: '牛肉南瓜鲜食 幼犬',
+          seriesLifeStage: 'PUPPY_14_WEEKS_PLUS',
+          applicableLifeStages: ['PUPPY_14_WEEKS_PLUS'],
+        }),
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/${concreteRecipeId}`)
+        .set('Authorization', 'Bearer staff-token')
+        .expect(200);
+
+      expect(response.body.data.id).toBe(concreteRecipeId);
+      expect(response.body.data.name).toBe('牛肉南瓜鲜食 私有新版');
+      expect(response.body.data.status).toBe('DRAFT');
+      expect(response.body.data.lifeStageMatch.matchType).toBe('LEGACY');
+    });
+
+    it('allows share-token access to a private concrete recipe without public series override', async () => {
+      const concreteRecipeId = 'shared-private-recipe-id';
+      await recipeRepository.save({
+        id: concreteRecipeId,
+        version: 3,
+        name: '分享私有新版',
+        status: 'DRAFT',
+        energyDensityKcalPerKg: 1280,
+        productionLossRate: 1.07,
+        seriesId: 'series-1',
+        seriesLifeStage: 'HIGH_ACTIVITY_ADULT',
+        items: [],
+      } as Recipe);
+      mockPrismaService.recipeShareToken.findFirst.mockResolvedValue({
+        id: 'share-token-row',
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        publicSeriesRecipe({
+          recipeId: concreteRecipeId,
+          version: 1,
+          name: '分享公开旧版',
+        }),
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get(`/api/v1/recipes/${concreteRecipeId}?shareToken=valid-share-token`)
+        .expect(200);
+
+      expect(response.body.data.id).toBe(concreteRecipeId);
+      expect(response.body.data.name).toBe('分享私有新版');
+      expect(response.body.data.status).toBe('DRAFT');
+      expect(mockPrismaService.recipeShareToken.findFirst).toHaveBeenCalled();
+    });
+
     it('uses manual lifeStage query before dog profile selection', async () => {
       mockPrismaService.recipe.findMany.mockResolvedValue([
         publicSeriesRecipe({}),
@@ -428,6 +509,103 @@ describe('RecipesController (e2e)', () => {
           selectedLifeStage: 'PUPPY_14_WEEKS_PLUS',
           matchType: 'MATCHED',
         }),
+      );
+    });
+
+    it('does not use dog profile selection without an authenticated customer', async () => {
+      mockPrismaService.dog.findFirst.mockResolvedValue({
+        id: 'foreign-dog',
+        birthday: new Date('2020-01-01T00:00:00.000Z'),
+        lifeStageOverride: 'SENIOR',
+        activityLevel: 'LOW',
+      });
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        publicSeriesRecipe({}),
+        publicSeriesRecipe({
+          id: 'row-senior',
+          recipeId: 'senior-recipe-id',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+        }),
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes/series-1?dogId=foreign-dog')
+        .expect(200);
+
+      expect(mockPrismaService.dog.findFirst).not.toHaveBeenCalled();
+      expect(response.body.data.id).toBe('adult-recipe-id');
+      expect(response.body.data.lifeStageMatch).toEqual(
+        expect.objectContaining({
+          selectedLifeStage: 'HIGH_ACTIVITY_ADULT',
+          matchType: 'FALLBACK_ADULT',
+          message: '当前狗狗档案没有完全匹配版本，已展示可用替代版本。',
+        }),
+      );
+    });
+
+    it('does not let a foreign dog id influence customer series selection', async () => {
+      mockJwtAuthService.validateToken.mockReturnValue({
+        userId: 'customer-1',
+        customerId: 'customer-1',
+        role: 'CUSTOMER',
+      });
+      mockPrismaService.dog.findFirst.mockResolvedValue(null);
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        publicSeriesRecipe({}),
+        publicSeriesRecipe({
+          id: 'row-senior',
+          recipeId: 'senior-recipe-id',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+        }),
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes/series-1?dogId=foreign-dog')
+        .set('Authorization', 'Bearer customer-token')
+        .expect(200);
+
+      expect(mockPrismaService.dog.findFirst).toHaveBeenCalledWith({
+        where: { id: 'foreign-dog', ownerId: 'customer-1' },
+        select: {
+          id: true,
+          birthday: true,
+          lifeStageOverride: true,
+          activityLevel: true,
+        },
+      });
+      expect(response.body.data.id).toBe('adult-recipe-id');
+      expect(response.body.data.lifeStageMatch.matchType).toBe(
+        'FALLBACK_ADULT',
+      );
+    });
+
+    it('marks default public series selection as a fallback when no dog or manual stage is usable', async () => {
+      mockPrismaService.recipe.findMany.mockResolvedValue([
+        publicSeriesRecipe({}),
+        publicSeriesRecipe({
+          id: 'row-senior',
+          recipeId: 'senior-recipe-id',
+          seriesLifeStage: 'LOW_ACTIVITY_ADULT_OR_SENIOR',
+          applicableLifeStages: ['LOW_ACTIVITY_ADULT_OR_SENIOR'],
+        }),
+      ]);
+
+      const response = await request(app.getHttpServer())
+        .get('/api/v1/recipes/series-1')
+        .expect(200);
+
+      expect(response.body.data.id).toBe('adult-recipe-id');
+      expect(response.body.data.lifeStageMatch).toEqual(
+        expect.objectContaining({
+          selectedLifeStage: 'HIGH_ACTIVITY_ADULT',
+          matchType: 'FALLBACK_ADULT',
+          message: '当前狗狗档案没有完全匹配版本，已展示可用替代版本。',
+        }),
+      );
+      expect(response.body.data.lifeStageMatch).not.toHaveProperty(
+        'requestedLifeStage',
       );
     });
 

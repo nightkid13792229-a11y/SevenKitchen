@@ -775,12 +775,14 @@ export class RecipesController {
     }
 
     const user = this.getRequestUser(req);
+    if (user?.role !== 'CUSTOMER' || !user.customerId) {
+      return undefined;
+    }
+
     const dog = await this.prisma.dog.findFirst({
       where: {
         id: dogId,
-        ...(user?.role === 'CUSTOMER' && user.customerId
-          ? { ownerId: user.customerId }
-          : {}),
+        ownerId: user.customerId,
       },
       select: {
         id: true,
@@ -827,11 +829,9 @@ export class RecipesController {
     const selectedLifeStage = selectedRecipe.seriesLifeStage;
     const matchType: RecipeLifeStageMatchDto['matchType'] = exactMatch
       ? 'MATCHED'
-      : requestedLifeStage && fallbackLifeStage === 'HIGH_ACTIVITY_ADULT'
+      : selectedLifeStage === 'HIGH_ACTIVITY_ADULT'
         ? 'FALLBACK_ADULT'
-        : requestedLifeStage
-          ? 'FALLBACK_FIRST'
-          : 'MATCHED';
+        : 'FALLBACK_FIRST';
 
     const availableLifeStageVersions = seriesRecipes.map((recipe) => ({
       lifeStage: recipe.seriesLifeStage,
@@ -1017,6 +1017,13 @@ export class RecipesController {
     @Query('lifeStage') lifeStage?: string,
     @Req() req?: any,
   ): Promise<ApiResponseDto<RecipeDetailDto> | ApiResponseDto<null>> {
+    const accessibleRecipe = await this.getAccessibleRecipe(id, shareToken, req);
+    if (accessibleRecipe && accessibleRecipe.status !== 'PUBLIC') {
+      return ApiResponseDto.success(
+        await this.buildRecipeDetail(accessibleRecipe),
+      );
+    }
+
     const seriesSelection = await this.resolvePublicSeriesSelection(
       id,
       lifeStage,
@@ -1033,7 +1040,7 @@ export class RecipesController {
       );
     }
 
-    const recipe = await this.getAccessibleRecipe(id, shareToken, req);
+    const recipe = accessibleRecipe;
     if (!recipe) {
       return ApiResponseDto.error(404, 'Recipe not found');
     }

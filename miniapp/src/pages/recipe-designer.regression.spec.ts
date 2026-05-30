@@ -561,15 +561,26 @@ describe('recipe designer editor guardrails', () => {
     expect(editorSource).toContain('redoRecipeDesignerHistory')
     expect(editorSource).toContain('canUndoRecipeDesignerHistory')
     expect(editorSource).toContain('canRedoRecipeDesignerHistory')
-    expect(editorSource).toContain('撤回')
-    expect(editorSource).toContain('前进')
-    expect(editorSource).toContain('undoRecipeDesignerHistoryLabel')
-    expect(editorSource).toContain('redoRecipeDesignerHistoryLabel')
-    expect(editorSource).toContain('撤回中')
-    expect(editorSource).toContain('前进中')
+    expect(editorSource).toContain('aria-label="撤回"')
+    expect(editorSource).toContain('aria-label="前进"')
+    expect(editorSource).toContain('history-icon history-icon-undo')
+    expect(editorSource).toContain('history-icon history-icon-redo')
+    expect(editorSource).not.toContain('{{ undoRecipeDesignerHistoryLabel }}')
+    expect(editorSource).not.toContain('{{ redoRecipeDesignerHistoryLabel }}')
+    expect(editorSource).not.toContain('undoRecipeDesignerHistoryLabel')
+    expect(editorSource).not.toContain('redoRecipeDesignerHistoryLabel')
     expect(editorSource).not.toContain('history-feedback-bar')
     expect(editorSource).not.toContain('historyFeedbackMessage')
     expect(editorSource).not.toContain('history-feedback-action')
+  })
+
+  it('keeps the ingredient action header sticky while editing long recipes', () => {
+    expect(editorSource).toContain('class="section-header ingredient-action-header"')
+    const stickyHeaderStyle = editorSource.match(/\.ingredient-action-header\s*\{[\s\S]*?\n\}/)?.[0] || ''
+    expect(stickyHeaderStyle).toContain('position: sticky;')
+    expect(stickyHeaderStyle).toContain('top: 0;')
+    expect(stickyHeaderStyle).toContain('z-index:')
+    expect(stickyHeaderStyle).toContain('background: #fff;')
   })
 
   it('lets editable drafts switch FEDIAF 2025 life stages from the assessment drawer', () => {

@@ -21,25 +21,33 @@
     </view>
 
     <view class="section">
-      <view class="section-header">
+      <view class="section-header ingredient-action-header">
         <view class="section-heading">
           <text class="section-title">原料</text>
           <text class="section-total">{{ items.length }}种 · 总重量 {{ currentTotalWeightG.toFixed(0) }}g</text>
         </view>
         <view class="history-controls" @tap.stop>
           <button
-            class="history-btn"
+            class="history-btn history-icon-btn"
             :disabled="!canUndoRecipeDesignerHistory"
+            aria-label="撤回"
             @tap.stop="undoRecipeDesignerHistory"
           >
-            {{ undoRecipeDesignerHistoryLabel }}
+            <view class="history-icon history-icon-undo" aria-hidden="true">
+              <view class="history-icon-arc"></view>
+              <view class="history-icon-arrow"></view>
+            </view>
           </button>
           <button
-            class="history-btn"
+            class="history-btn history-icon-btn"
             :disabled="!canRedoRecipeDesignerHistory"
+            aria-label="前进"
             @tap.stop="redoRecipeDesignerHistory"
           >
-            {{ redoRecipeDesignerHistoryLabel }}
+            <view class="history-icon history-icon-redo" aria-hidden="true">
+              <view class="history-icon-arc"></view>
+              <view class="history-icon-arrow"></view>
+            </view>
           </button>
         </view>
         <button
@@ -1019,14 +1027,6 @@ const canUndoRecipeDesignerHistory = computed(() => {
 const canRedoRecipeDesignerHistory = computed(() => {
   return !historyControlsDisabled.value && Boolean(getRedoRecipeDesignerHistoryEntry(historyState.value))
 })
-
-const undoRecipeDesignerHistoryLabel = computed(() =>
-  historyActionDirection.value === 'undo' ? '撤回中' : '撤回',
-)
-
-const redoRecipeDesignerHistoryLabel = computed(() =>
-  historyActionDirection.value === 'redo' ? '前进中' : '前进',
-)
 
 const canConfirmScenarioSwitch = computed(() => {
   return (
@@ -2715,6 +2715,19 @@ function formatAssessmentNumber(value: unknown) {
   gap: 16rpx;
 }
 
+.ingredient-action-header {
+  position: sticky;
+  top: 0;
+  z-index: 24;
+  margin: -28rpx -28rpx 20rpx;
+  padding: 24rpx 28rpx 18rpx;
+  border-bottom: 1rpx solid #eef0f3;
+  border-radius: 12rpx 12rpx 0 0;
+  background: #fff;
+  box-shadow: 0 6rpx 14rpx rgba(15, 23, 42, 0.04);
+  box-sizing: border-box;
+}
+
 .primary-btn,
 .secondary-btn,
 .plain-btn,
@@ -2787,7 +2800,7 @@ function formatAssessmentNumber(value: unknown) {
 }
 
 .history-btn {
-  width: 74rpx;
+  width: 54rpx;
   height: 54rpx;
   margin: 0;
   padding: 0;
@@ -2795,9 +2808,49 @@ function formatAssessmentNumber(value: unknown) {
   border-radius: 8rpx;
   background: #fff;
   color: #1677ff;
-  font-size: 22rpx;
-  font-weight: 700;
-  line-height: 54rpx;
+  font-size: 0;
+  line-height: 1;
+}
+
+.history-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.history-icon {
+  position: relative;
+  width: 30rpx;
+  height: 26rpx;
+  color: inherit;
+}
+
+.history-icon-redo {
+  transform: scaleX(-1);
+}
+
+.history-icon-arc {
+  position: absolute;
+  left: 7rpx;
+  top: 6rpx;
+  width: 17rpx;
+  height: 14rpx;
+  border: 4rpx solid currentColor;
+  border-left-color: transparent;
+  border-radius: 999rpx;
+  transform: rotate(-28deg);
+  box-sizing: border-box;
+}
+
+.history-icon-arrow {
+  position: absolute;
+  left: 2rpx;
+  top: 2rpx;
+  width: 0;
+  height: 0;
+  border-top: 7rpx solid transparent;
+  border-bottom: 7rpx solid transparent;
+  border-right: 10rpx solid currentColor;
 }
 
 .history-btn[disabled] {

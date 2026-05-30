@@ -187,4 +187,22 @@ describe('recipe detail nutrition report regressions', () => {
     expect(source).toContain('selectedRecipeIdForActions')
     expect(source).toContain('recipeId=${encodeURIComponent(selectedRecipeIdForActions.value)}')
   })
+
+  it('uses a non-matched default life stage copy before dog-specific matched copy', () => {
+    const source = readFileSync(
+      resolve(process.cwd(), 'src/pages/recipe-detail/index.vue'),
+      'utf-8',
+    )
+    const copySource = source.match(
+      /const lifeStageVersionCopy = computed\(\(\) => \{[\s\S]*?\n}\)/,
+    )?.[0] || ''
+
+    expect(source).toContain('当前狗狗档案没有完全匹配版本，已展示可用替代版本。')
+    expect(copySource).toContain('recipe.value.lifeStageMatch?.message')
+    expect(copySource).toContain('!isCurrentLifeStageMatched.value')
+    expect(copySource.indexOf('recipe.value.lifeStageMatch?.message'))
+      .toBeLessThan(copySource.indexOf('!isCurrentLifeStageMatched.value'))
+    expect(copySource.indexOf('!isCurrentLifeStageMatched.value'))
+      .toBeLessThan(copySource.indexOf('selectedDog.value'))
+  })
 })

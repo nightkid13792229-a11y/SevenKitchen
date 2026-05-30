@@ -49,7 +49,9 @@ describe('recipe stats regressions', () => {
 
     expect(apiSource).toContain('export function trackRecipeView(recipeId: string, shareToken?: string): Promise<void>')
     expect(apiSource).toContain("url: `/recipes/${recipeId}/view`")
-    expect(detailSource).toContain('trackRecipeView(recipeId.value, shareToken.value)')
+    expect(detailSource).toContain('const actionRecipeId = selectedRecipeIdForActions.value')
+    expect(detailSource).toContain('trackRecipeView(actionRecipeId, shareToken.value)')
+    expect(detailSource).not.toContain('trackRecipeView(recipeId.value, shareToken.value)')
     expect(diySource).not.toContain('trackRecipeView(')
     expect(diySheetSource).not.toContain('trackRecipeView(')
   })

@@ -607,6 +607,18 @@ const isCurrentLifeStageMatched = computed(() => {
   )
 })
 
+const hasResolvedLifeStageMatch = computed(() => {
+  const match = recipe.value.lifeStageMatch
+  return Boolean(
+    match &&
+      (
+        match.matched !== undefined ||
+        match.status ||
+        match.matchType
+      ),
+  )
+})
+
 const lifeStageVersionTitle = computed(() => {
   const label = selectedLifeStageLabel.value || '当前版本'
   return `${isCurrentLifeStageMatched.value ? '已匹配' : '当前展示'}：${label}`
@@ -614,7 +626,10 @@ const lifeStageVersionTitle = computed(() => {
 
 const lifeStageVersionCopy = computed(() => {
   if (recipe.value.lifeStageMatch?.message) return recipe.value.lifeStageMatch.message
-  if (selectedDog.value) {
+  if (hasResolvedLifeStageMatch.value && !isCurrentLifeStageMatched.value) {
+    return '当前狗狗档案没有完全匹配版本，已展示可用替代版本。'
+  }
+  if (isCurrentLifeStageMatched.value && selectedDog.value) {
     return `根据${selectedDog.value.name}的档案自动展示该生命阶段版本。`
   }
   return '可切换查看该食谱已开放的生命阶段版本。'
